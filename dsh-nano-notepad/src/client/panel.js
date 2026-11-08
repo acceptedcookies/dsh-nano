@@ -147,6 +147,7 @@ ${NANO_STYLES}
 .np-transfer-row[data-active="true"] { background: var(--dsw-alias-interactive-bg-active); }
 .np-transfer-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .np-transfer-check { display: none; color: var(--dsw-alias-link); }
+.np-transfer-check svg { width: 16px; height: 16px; display: block; fill: currentColor; }
 .np-transfer-row[data-active="true"] .np-transfer-check { display: inline-flex; }
 .np-transfer-empty { margin: 8px 0; color: var(--dsw-alias-label-secondary); font-size: 12px; }
 .np-caret { display: inline-flex; width: 16px; height: 16px; align-items: center; justify-content: center; border: 0; background: transparent; color: var(--dsw-alias-label-tertiary); padding: 0; cursor: pointer; }
@@ -180,7 +181,7 @@ ${NANO_STYLES}
 .np-tool:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 .np-tool svg { width: 18px; height: 18px; }
 .np-tool-sep { width: 1px; height: 18px; margin: 6px 4px; background: var(--dsw-alias-border-l2); flex: none; }
-.np-window button:not([class]):not(.np-tree-tools button):not(.np-node-actions button):not(.np-slash button):not(.np-versions button), .np-footer-actions button.np-danger, .np-dlg-body button:not(.np-switch) { border: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); border-radius: var(--dsw-radius-sm); padding: 4px 10px; cursor: pointer; font: inherit; line-height: 20px; }
+.np-window button:not([class]):not(.np-tree-tools button):not(.np-node-actions button):not(.np-slash button):not(.np-versions button), .np-footer-actions button.np-danger, .np-dlg-body button:not(.np-switch):not(.np-transfer-row) { border: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); border-radius: var(--dsw-radius-sm); padding: 4px 10px; cursor: pointer; font: inherit; line-height: 20px; }
 .np-window button:hover, .np-dlg-body button:not(.np-switch):hover { background: var(--dsw-alias-interactive-bg-hover); }
 /* keep the row/tab as the only hover surface; inner buttons must not double-fill
    — scoped to .np-window so we beat the generic .np-window button:hover rule */

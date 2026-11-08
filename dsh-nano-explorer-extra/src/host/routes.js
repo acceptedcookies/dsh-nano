@@ -296,15 +296,20 @@ export function createRoutes(ctx, config) {
         if (!isLexicallyInside(root, requested) && body.allowOutsideWorkspace !== true) {
           throw new Error(`"${path}" is outside the workspace`)
         }
-        const resolved = fs().processPath(await fs().resolve(requested))
+        // `resolve` answers a target object `{targetKey, displayPath}`; `stat`/`readByteRange`
+        // read `targetKey`/`displayPath` off it, so the object itself goes through — passing the
+        // processPath string instead made `stat(undefined)` throw "path must be string/Buffer/URL".
+        const target = await fs().resolve(requested)
+        const resolved = fs().processPath(target)
         if (!isLexicallyInside(root, resolved) && body.allowOutsideWorkspace !== true) {
           throw new Error(`"${path}" resolves outside the workspace`)
         }
-        const info = await fs().stat(resolved)
+        const info = await fs().stat(target)
+        if (info === undefined || info === null) throw new Error(`"${path}" does not exist`)
         if (info.type !== 'file') throw new Error(`"${path}" is not a file`)
         const limit = 1 * 1024 * 1024
         if (info.size > limit) throw new Error(`"${path}" is larger than ${limit} bytes`)
-        const bytes = await fs().readByteRange(resolved, { offset: 0, length: limit })
+        const bytes = await fs().readByteRange(target, { offset: 0, length: limit })
         try { new TextDecoder('utf-8', { fatal: true }).decode(bytes) }
         catch { throw new Error(`"${path}" is not UTF-8 text`) }
         return { ok: true, content: new TextDecoder('utf-8').decode(bytes) }

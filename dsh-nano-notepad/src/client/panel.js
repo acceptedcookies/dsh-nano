@@ -32,7 +32,7 @@ const STYLE = `
 .np-entry, .np-window { position: absolute; }
 .np-entry { z-index: 3; }
 .np-window { z-index: 2; }
-.np-window { --np-pad-x: 12px; --np-gap: 8px; --np-row-h: 40px; --np-node-h: 28px; --np-icon-btn: 28px; --np-icon-btn-sm: 22px; --np-indent: 16px; --np-rail: 52px; --np-menu-w: 220px; }
+.np-window { --np-pad-x: 12px; --np-gap: 8px; --np-row-h: 40px; --np-node-h: 28px; --np-icon-btn: 28px; --np-icon-btn-sm: 22px; --np-indent: 16px; --np-rail: 52px; --np-menu-w: 220px; --np-foot-h: 52px; }
 .np-dialog[hidden], .np-slash[hidden], .np-window[hidden], .np-read[hidden], .np-error[hidden] { display: none !important; }
 .np-window[data-theme="dark"], .np-entry[data-theme="dark"] { color-scheme: dark; --dsw-alias-bg-layer-1: #1e1e24; --dsw-alias-bg-layer-2: #26262d; --dsw-alias-bg-layer-3: #2e2e36; --dsw-alias-bg-mask-1: rgba(12, 12, 16, .55); --dsw-alias-label-primary: #ececf0; --dsw-alias-label-secondary: #a9a9b3; --dsw-alias-label-tertiary: #767680; --dsw-alias-border-l2: #3a3a42; --dsw-alias-border-l3: #484852; --dsw-alias-interactive-bg-hover: rgba(255,255,255,.07); --dsw-alias-interactive-bg-active: rgba(255,255,255,.13); --dsw-alias-brand-primary: #6ea0ff; --dsw-alias-link: #6ea0ff; }
 .np-window[data-theme="light"], .np-entry[data-theme="light"] { color-scheme: light; --dsw-alias-bg-layer-1: #ffffff; --dsw-alias-bg-layer-2: #f5f5f7; --dsw-alias-bg-layer-3: #ececef; --dsw-alias-bg-mask-1: rgba(30, 30, 36, .35); --dsw-alias-label-primary: #1f1f24; --dsw-alias-label-secondary: #55555e; --dsw-alias-label-tertiary: #8a8a93; --dsw-alias-border-l2: #e2e2e7; --dsw-alias-border-l3: #d0d0d7; --dsw-alias-interactive-bg-hover: rgba(0,0,0,.05); --dsw-alias-interactive-bg-active: rgba(0,0,0,.09); --dsw-alias-brand-primary: #3468d8; --dsw-alias-link: #3468d8; }
@@ -67,7 +67,7 @@ const STYLE = `
 .np-body { display: flex; min-height: 0; flex: 1; }
 .np-tree { box-sizing: border-box; width: 248px; display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--dsw-alias-border-l2); background: transparent; }
 .np-tree[data-collapsed="true"] { width: var(--np-rail); align-items: stretch; }
-.np-tree[data-collapsed="true"] .np-workspace, .np-tree[data-collapsed="true"] .np-tree-tools, .np-tree[data-collapsed="true"] .np-tree-head > span, .np-tree[data-collapsed="true"] .np-nodes { display: none; }
+.np-tree[data-collapsed="true"] .np-ws, .np-tree[data-collapsed="true"] .np-tree-tools, .np-tree[data-collapsed="true"] .np-tree-head > span, .np-tree[data-collapsed="true"] .np-nodes { display: none; }
 .np-tree[data-collapsed="true"] .np-tree-head { width: 100%; justify-content: center; padding: 0 var(--np-pad-x); }
 .np-tree-head { box-sizing: border-box; display: flex; align-items: center; gap: 4px; width: 100%; height: var(--np-row-h); padding: 0 var(--np-pad-x); color: var(--dsw-alias-label-tertiary); font-size: 12px; border-bottom: 1px solid var(--dsw-alias-border-l2); }
 .np-tree-toggle { box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; width: var(--np-icon-btn); height: var(--np-icon-btn); flex: none; padding: 0; border: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); cursor: pointer; }
@@ -77,10 +77,10 @@ const STYLE = `
 .np-tree-tools button svg { width: 16px; height: 16px; display: block; }
 .np-tree-tools button:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 .np-nodes { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; padding: 6px var(--np-pad-x) var(--np-pad-x); }
-.np-tree-foot { display: flex; align-items: center; gap: var(--np-gap); flex: none; padding: 8px var(--np-pad-x) var(--np-pad-x); border-top: 1px solid var(--dsw-alias-border-l2); }
+.np-tree-foot { box-sizing: border-box; display: flex; align-items: center; gap: var(--np-gap); flex: none; min-height: var(--np-foot-h); padding: 0 var(--np-pad-x); border-top: 1px solid var(--dsw-alias-border-l2); }
 .np-tree-foot button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 30px; }
 .np-tree-foot svg { width: 16px; height: 16px; display: block; }
-.np-tree[data-collapsed="true"] .np-tree-foot { flex-direction: column; margin-top: auto; padding: 8px 0 var(--np-pad-x); border-top: 0; }
+.np-tree[data-collapsed="true"] .np-tree-foot { flex-direction: column; margin-top: auto; min-height: 0; padding: 8px 0 var(--np-pad-x); border-top: 0; }
 .np-tree[data-collapsed="true"] .np-tree-foot span { display: none; }
 .np-tree[data-collapsed="true"] .np-tree-foot button { width: var(--np-icon-btn); height: var(--np-icon-btn); padding: 0; }
 .np-node { position: relative; box-sizing: border-box; display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; height: var(--np-node-h); margin: 1px 0; padding-right: 8px; border-radius: var(--dsw-radius-sm); color: var(--dsw-alias-label-secondary); overflow: hidden; }
@@ -102,7 +102,18 @@ const STYLE = `
 .np-node-name[data-fade="true"] { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 18px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 18px), transparent); }
 .np-entry svg, .np-node-icon svg, .np-tree-tools svg, .np-tree-toggle svg, .np-tree-foot svg, .np-caret svg, .np-node-actions svg, .np-tool svg, .np-slash svg { fill: currentColor; stroke: none; }
 .np-node-icon svg, .np-tree-tools svg, .np-tree-toggle svg, .np-caret svg, .np-node-actions svg, .np-tool svg, .np-slash svg { width: 16px; height: 16px; display: block; }
-.np-workspace { max-width: 150px; min-width: 0; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); font: inherit; font-size: 12px; padding: 3px 4px; }
+.np-ws { position: relative; flex: 1 1 auto; min-width: 0; max-width: 170px; }
+.np-ws-btn { display: flex; align-items: center; gap: 6px; width: 100%; height: var(--np-icon-btn); box-sizing: border-box; padding: 0 8px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); font: inherit; font-size: 12px; cursor: pointer; }
+.np-ws-btn:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.np-ws-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
+.np-ws-caret { display: inline-flex; width: 14px; height: 14px; flex: none; color: var(--dsw-alias-label-tertiary); }
+.np-ws-caret svg { width: 14px; height: 14px; }
+.np-ws-menu { position: absolute; top: calc(100% + 4px); left: 0; min-width: 190px; max-width: 260px; max-height: 260px; overflow-y: auto; padding: 4px; display: flex; flex-direction: column; gap: 1px; z-index: 8; background: var(--dsw-menu-surface-fill, var(--dsw-alias-bg-layer-3)); color: var(--dsw-alias-label-primary); border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-lg); box-shadow: var(--dsw-elevation-prominent); backdrop-filter: var(--dsw-menu-backdrop-filter); }
+.np-ws-menu[hidden] { display: none !important; }
+.np-ws-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); padding: 6px 8px; font: inherit; text-align: left; cursor: pointer; }
+.np-ws-item:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+.np-ws-item[data-active="true"] { color: var(--dsw-alias-label-primary); }
+.np-ws-item svg { width: 14px; height: 14px; flex: none; color: var(--dsw-alias-brand-primary); fill: currentColor; }
 .np-group { display: flex; align-items: center; gap: 6px; margin: 12px 0 4px; padding-left: 8px; color: var(--dsw-alias-label-tertiary); font-size: 11px; font-weight: 600; letter-spacing: .04em; line-height: 20px; }
 .np-nodes > .np-group:first-child { margin-top: 2px; }
 .np-group[data-active="true"] { color: var(--dsw-alias-label-primary); }
@@ -170,7 +181,7 @@ const STYLE = `
 .np-slash button svg { width: 16px; height: 16px; flex: none; color: var(--dsw-alias-label-tertiary); }
 .np-slash button[data-active="true"], .np-slash button:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 .np-slash .np-slash-empty { padding: 8px; color: var(--dsw-alias-label-tertiary); font-size: 12px; }
-.np-footer { display: flex; align-items: center; gap: var(--np-gap); min-height: var(--np-row-h); padding: 6px var(--np-pad-x); border-top: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-2); }
+.np-footer { box-sizing: border-box; display: flex; align-items: center; gap: var(--np-gap); min-height: var(--np-foot-h); padding: 0 var(--np-pad-x); border-top: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-2); }
 /* Panel-width responsiveness: container queries react to the floating window, not the viewport. */
 @container np (max-width: 720px) {
   .np-tree { width: 200px; }
@@ -287,7 +298,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
   panel.innerHTML = `
     <div class="np-tabs"><div class="np-tablist"></div><button type="button" data-action="new-file" data-i18n="newFile" data-i18n-mode="title">+</button></div>
     <div class="np-body">
-      <aside class="np-tree"><div class="np-tree-head"><button type="button" class="np-tree-toggle" data-action="toggle-tree"></button><select class="np-workspace" aria-label="Workspace"></select><span style="flex:1"></span><span class="np-tree-tools"><button type="button" data-action="new-file" data-i18n="newFile" data-i18n-mode="title">${PLUS_ICON}</button><button type="button" data-action="new-folder" data-i18n="newFolder" data-i18n-mode="title">${FOLDER_PLUS_ICON}</button><button type="button" class="np-danger" data-action="delete" data-i18n="delete" data-i18n-mode="title">${CLOSE_ICON}</button></span></div><div class="np-nodes" data-root="true"></div><div class="np-tree-foot"><button type="button" data-action="settings" data-i18n="settings" data-i18n-mode="label">${SETTINGS_ICON}<span data-i18n="settings"></span></button><button type="button" data-action="close" data-i18n="close" data-i18n-mode="label">${CLOSE_ICON}<span data-i18n="close"></span></button></div></aside>
+      <aside class="np-tree"><div class="np-tree-head"><button type="button" class="np-tree-toggle" data-action="toggle-tree"></button><div class="np-ws"><button type="button" class="np-ws-btn" data-action="ws-toggle" aria-haspopup="listbox" aria-expanded="false"><span class="np-ws-label"></span><span class="np-ws-caret" aria-hidden="true">${CHEVRON_ICON}</span></button><div class="np-ws-menu" role="listbox" hidden></div></div><span style="flex:1"></span><span class="np-tree-tools"><button type="button" data-action="new-file" data-i18n="newFile" data-i18n-mode="title">${PLUS_ICON}</button><button type="button" data-action="new-folder" data-i18n="newFolder" data-i18n-mode="title">${FOLDER_PLUS_ICON}</button><button type="button" class="np-danger" data-action="delete" data-i18n="delete" data-i18n-mode="title">${CLOSE_ICON}</button></span></div><div class="np-nodes" data-root="true"></div><div class="np-tree-foot"><button type="button" data-action="settings" data-i18n="settings" data-i18n-mode="label">${SETTINGS_ICON}<span data-i18n="settings"></span></button><button type="button" data-action="close" data-i18n="close" data-i18n-mode="label">${CLOSE_ICON}<span data-i18n="close"></span></button></div></aside>
       <div class="np-editor">
         <div class="np-path"><span class="np-pathname"></span><span class="np-modes" role="group"><button type="button" data-action="view" data-view="source" data-i18n="source"></button><button type="button" data-action="view" data-view="rendered" data-i18n="preview"></button></span><button type="button" data-action="rename" data-i18n="rename"></button></div>
         <div class="np-toolbar">${toolbar}</div>
@@ -532,24 +543,29 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     return appTheme.scheme() === 'light' ? 'light' : 'dark'
   }
 
-  function paintWorkspaceChoices() {
-    const select = panel.querySelector('.np-workspace')
-    if (!(select instanceof HTMLSelectElement)) return
+  const CHECK_ICON = googleIcon('M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z')
+
+  function workspaceOptions() {
     const copy = text()
     const catalog = workspaceCatalog()
-    const options = [
+    return [
       ['current', copy.currentWorkspace],
       ['all', copy.allWorkspaces],
       ...catalog.items.map(item => [item.workspaceId, item.title || item.workspaceId]),
       ['unassigned', copy.unassigned],
     ]
-    select.replaceChildren(...options.map(([value, label]) => {
-      const option = document.createElement('option')
-      option.value = value
-      option.textContent = label
-      return option
-    }))
-    select.value = state.ui.workspaceChoice ?? 'all'
+  }
+
+  function paintWorkspaceChoices() {
+    const label = panel.querySelector('.np-ws-label')
+    const menu = panel.querySelector('.np-ws-menu')
+    if (!label || !menu) return
+    const current = state.ui.workspaceChoice ?? 'all'
+    const options = workspaceOptions()
+    label.textContent = options.find(([value]) => value === current)?.[1] ?? options[1][1]
+    menu.innerHTML = options.map(([value, name]) =>
+      `<button type="button" class="np-ws-item" role="option" data-ws-choice="${escapeHtml(value)}" data-active="${value === current}" aria-selected="${value === current}"><span>${escapeHtml(name)}</span>${value === current ? CHECK_ICON : ''}</button>`
+    ).join('')
   }
 
   function render() {
@@ -1091,6 +1107,22 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     const target = event.target instanceof Element ? event.target.closest('[data-action], [data-format], [data-tab], [data-close], [data-id]') : null
     if (!(target instanceof HTMLElement)) return
     const action = target.dataset.action
+    if (action === 'ws-toggle') {
+      const menu = must(panel, '.np-ws-menu')
+      menu.hidden = !menu.hidden
+      target.setAttribute('aria-expanded', String(!menu.hidden))
+      return
+    }
+    const choice = target.closest?.('[data-ws-choice]')
+    if (choice instanceof HTMLElement) {
+      must(panel, '.np-ws-menu').hidden = true
+      flushSave()
+      state.ui.workspaceChoice = choice.dataset.wsChoice
+      state.ui.currentId = null
+      render()
+      void persistUi()
+      return
+    }
     if (action === 'close' || action === 'tree') {
       flushSave()
       state.ui.open = false
@@ -1148,15 +1180,13 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       else { state.ui.currentId = id; render() }
     }
   })
-  must(panel, '.np-workspace').addEventListener('change', event => {
-    const select = event.target
-    if (!(select instanceof HTMLSelectElement)) return
-    flushSave()
-    state.ui.workspaceChoice = select.value
-    state.ui.currentId = null
-    render()
-    void persistUi()
-  })
+  on(document, 'click', event => {
+    const menu = panel.querySelector('.np-ws-menu')
+    if (menu && !menu.hidden && !(event.target instanceof Element && event.target.closest('.np-ws'))) {
+      menu.hidden = true
+      panel.querySelector('.np-ws-btn')?.setAttribute('aria-expanded', 'false')
+    }
+  }, true)
 
   const slashMenu = must(panel, '.np-slash')
 

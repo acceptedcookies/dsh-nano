@@ -1054,10 +1054,13 @@ window.__ModuleLoader__.load({
 .np-menu button[data-selected="true"] { color: var(--dsw-alias-label-primary); }
 .np-menu button[data-selected="true"]::after { content: '\u2713'; margin-left: auto; color: var(--dsw-alias-link); font-size: 12px; }
 /* segmented control matching the app's color-scheme switch */
-.np-seg { flex: none; display: inline-flex; background: var(--dsw-alias-interactive-bg-hover); border-radius: var(--dsw-radius-md); padding: 2px; gap: 0; }
-.np-seg button { border: 0; background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; font-size: 12px; padding: 4px 14px; border-radius: var(--dsw-radius-sm); cursor: pointer; }
+/* segmented sliding control \u2014 same anatomy as .np-switch, sized for settings */
+.np-seg { position: relative; flex: none; display: inline-grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 2px; background: var(--dsw-alias-interactive-bg-hover); border-radius: var(--dsw-radius-md); padding: 4px; min-width: 148px; }
+.np-seg::before { content: ''; position: absolute; top: 4px; left: 4px; width: calc(50% - 5px); height: calc(100% - 8px); box-sizing: border-box; background: var(--dsw-alias-bg-layer-1); border-radius: var(--dsw-radius-sm); box-shadow: var(--dsw-elevation-soft); transition: transform .16s ease; }
+.np-seg[data-active="1"]::before { transform: translateX(calc(100% + 2px)); }
+.np-seg button { position: relative; z-index: 1; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; font-size: 13px; font-weight: 500; height: 28px; padding: 0 14px; border-radius: var(--dsw-radius-sm); cursor: pointer; }
 .np-seg button:hover { color: var(--dsw-alias-label-primary); }
-.np-seg button[aria-checked="true"] { background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); box-shadow: 0 1px 2px rgba(0,0,0,.2); }
+.np-seg button[aria-checked="true"] { color: var(--dsw-alias-label-primary); }
 .np-card input, .np-card select { width: 100%; box-sizing: border-box; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); padding: 8px 10px; font: inherit; }
 .np-card input[type="number"] { max-width: 200px; }
 .np-card input:focus, .np-card select:focus { outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, var(--dsw-alias-link)); }
@@ -1908,7 +1911,7 @@ window.__ModuleLoader__.load({
       dialog(`<h3>${escapeHtml(copy.settingsTitle)}</h3>
       <section class="np-section">
         <div class="np-field"><div class="np-field-text"><span class="np-field-name">${escapeHtml(copy.autoSave)}</span><span class="np-field-desc">${escapeHtml(copy.autoSaveHint)}</span></div>
-        <span class="np-seg" role="radiogroup">
+        <span class="np-seg" role="radiogroup" data-active="${values.autoSave === false ? 1 : 0}">
           <button type="button" role="radio" aria-checked="${values.autoSave !== false}" data-seg-field="autoSave" data-seg-value="on">${escapeHtml(copy.autoSaveOn)}</button><button type="button" role="radio" aria-checked="${values.autoSave === false}" data-seg-field="autoSave" data-seg-value="off">${escapeHtml(copy.autoSaveOff)}</button>
         </span></div>
         ${num("draftIntervalMs", "ms", values.draftIntervalMs, copy.draftInterval, copy.draftIntervalHint)}
@@ -1928,7 +1931,7 @@ window.__ModuleLoader__.load({
       </section>
       <section class="np-section">
         <div class="np-field"><div class="np-field-text"><span class="np-field-name">${escapeHtml(copy.chromeStyle)}</span><span class="np-field-desc">${escapeHtml(copy.chromeStyleHint)}</span></div>
-        <span class="np-seg" role="radiogroup">
+        <span class="np-seg" role="radiogroup" data-active="${values.chromeStyle === "windows" ? 1 : 0}">
           <button type="button" role="radio" aria-checked="${values.chromeStyle === "mac"}" data-seg-value="mac">${escapeHtml(copy.mac)}</button><button type="button" role="radio" aria-checked="${values.chromeStyle === "windows"}" data-seg-value="windows">${escapeHtml(copy.windows)}</button>
         </span></div>
       </section>
@@ -1979,10 +1982,14 @@ window.__ModuleLoader__.load({
             else merged.chromeStyle = seg.dataset.segValue;
             state.settings = normalizeSettings(merged);
             if (state.db) void writeSettings(state.db, state.settings).catch(showError);
-            card.querySelectorAll("[data-seg-value]").forEach((b) => {
-              const f = b.dataset.segField ?? "chromeStyle";
-              b.setAttribute("aria-checked", String(f === "autoSave" ? b.dataset.segValue === "on" === state.settings.autoSave : b.dataset.segValue === state.settings.chromeStyle));
-            });
+            for (const group of card.querySelectorAll(".np-seg")) {
+              group.querySelectorAll("[data-seg-value]").forEach((b, i) => {
+                const f = b.dataset.segField ?? "chromeStyle";
+                const checked = f === "autoSave" ? b.dataset.segValue === "on" === state.settings.autoSave : b.dataset.segValue === state.settings.chromeStyle;
+                b.setAttribute("aria-checked", String(checked));
+                if (checked) group.dataset.active = String(i);
+              });
+            }
             render();
             return;
           }

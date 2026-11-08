@@ -89,6 +89,8 @@ export const COPY = {
     saveFailed: '保存没有成功',
     saveVersionShortcut: '保存版本 (⌘S)',
     unitBytes: '字节',
+    loadRemote: '载入最新',
+    keepMine: '保留我的',
   },
   en: {
     files: 'Files',
@@ -179,6 +181,8 @@ export const COPY = {
     saveFailed: 'The save did not go through',
     saveVersionShortcut: 'Save version (⌘S)',
     unitBytes: 'bytes',
+    loadRemote: 'Load latest',
+    keepMine: 'Keep mine',
   },
 }
 

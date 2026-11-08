@@ -183,6 +183,9 @@ const STYLE = `
 .np-card p, .np-card pre { margin: 0; color: var(--dsw-alias-label-secondary); line-height: 22px; }
 .np-card pre { max-height: 240px; overflow: auto; white-space: pre-wrap; font-family: var(--dsw-font-markdown-code-font-family); }
 .np-card label { display: flex; flex-direction: column; align-items: stretch; gap: 6px; margin: 0; color: var(--dsw-alias-label-secondary); }
+.np-card label.np-field { flex-direction: row; align-items: center; gap: 12px; }
+.np-card .np-field .np-field-label { flex: 1; min-width: 0; }
+.np-card .np-field input[type="number"], .np-card .np-field select { width: auto; max-width: 160px; flex: none; }
 .np-card input, .np-card select { width: 100%; box-sizing: border-box; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); padding: 8px 10px; font: inherit; }
 .np-card input[type="number"] { max-width: 200px; }
 .np-card input:focus, .np-card select:focus { outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, var(--dsw-alias-link)); }
@@ -196,6 +199,7 @@ const STYLE = `
 .np-error button { display: inline-flex; align-items: center; justify-content: center; width: var(--np-icon-btn-sm); height: var(--np-icon-btn-sm); flex: none; padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-tertiary); border-radius: var(--dsw-radius-xs, 4px); cursor: pointer; }
 .np-error button:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 .np-error button svg { width: 14px; height: 14px; fill: currentColor; }
+.np-error button[data-action="load-remote"], .np-error button[data-action="keep-mine"] { width: auto; height: auto; flex: none; padding: 4px 10px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); color: var(--dsw-alias-label-primary); font: inherit; line-height: 20px; }
 .np-slash { position: absolute; width: var(--np-menu-w); max-height: 260px; overflow-y: auto; padding: 4px; display: flex; flex-direction: column; gap: 1px; z-index: 4; }
 .np-slash button { display: flex; align-items: center; gap: 8px; width: 100%; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); padding: 6px 8px; font: inherit; text-align: left; cursor: pointer; }
 .np-slash button svg { width: 16px; height: 16px; flex: none; color: var(--dsw-alias-label-tertiary); }
@@ -345,7 +349,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
         <textarea class="np-write"></textarea>
         <div class="np-slash" hidden></div>
         <div class="np-read" tabindex="0" hidden></div>
-        <div class="np-error" role="alert" hidden><span class="np-error-text"></span><button type="button" data-action="dismiss-error" data-i18n="close" data-i18n-mode="title">${CLOSE_ICON}</button></div>
+        <div class="np-error" role="alert" hidden><span class="np-error-text"></span><button type="button" data-action="load-remote" data-i18n="loadRemote" hidden></button><button type="button" data-action="keep-mine" data-i18n="keepMine" hidden></button><button type="button" data-action="dismiss-error" data-i18n="close" data-i18n-mode="title">${CLOSE_ICON}</button></div>
         <footer class="np-footer"><span class="np-sync"><i class="np-beat" data-state="idle"></i><span class="np-status-text" role="status" aria-live="polite"></span></span><span class="np-footer-actions"><button type="button" data-action="copy" data-i18n="copyPath"></button><button type="button" data-action="history" data-i18n="history"></button><button type="button" data-action="save-version" data-i18n="saveVersion"></button><button type="button" class="np-danger" data-action="clear-file" data-i18n="clearFile"></button></span></footer>
       </div>
     </div>
@@ -419,14 +423,18 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
   const write = () => /** @type {HTMLTextAreaElement} */ (must(panel, '.np-write'))
   const current = () => state.nodes.find(node => node.id === state.ui.currentId && node.kind === 'file')
 
-  function showError(error) {
+  function showError(error, conflict = false) {
     const node = must(panel, '.np-error')
     node.hidden = false
     const full = error?.name === 'QuotaExceededError'
     const message = full ? text().quota : (error instanceof Error ? error.message : String(error))
-    const shown = full ? message : text().saveFailed
-    node.querySelector('.np-error-text').textContent = full ? message : `${shown}：${message}`
+    const shown = full ? message : (conflict ? message : `${text().saveFailed}：${message}`)
+    node.querySelector('.np-error-text').textContent = shown
     node.querySelector('.np-error-text').title = message
+    for (const action of ['load-remote', 'keep-mine']) {
+      const btn = node.querySelector(`[data-action="${action}"]`)
+      if (btn) btn.hidden = !conflict
+    }
     setSync('error', message)
   }
 
@@ -858,16 +866,16 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     const copy = text()
     dialog(`<h3>${escapeHtml(copy.settingsTitle)}</h3>
       <section class="np-section"><h4>${escapeHtml(copy.saveHeading)}</h4>
-        <label>${escapeHtml(copy.saveDelay)} <i class="np-unit">ms (200–5000)</i><input name="saveDelayMs" type="number" min="200" max="5000" value="${values.saveDelayMs}"></label>
-        <label>${escapeHtml(copy.commitInterval)} <i class="np-unit">s (15–3600)</i><input name="commitIntervalSec" type="number" min="15" max="3600" value="${values.commitIntervalSec}"></label>
-        <label>${escapeHtml(copy.versionLimit)} <i class="np-unit">5–500</i><input name="versionLimit" type="number" min="5" max="500" value="${values.versionLimit}"></label>
+        <label class="np-field"><span class="np-field-label">${escapeHtml(copy.saveDelay)} <i class="np-unit">ms (200–5000)</i></span><input name="saveDelayMs" type="number" min="200" max="5000" value="${values.saveDelayMs}"></label>
+        <label class="np-field"><span class="np-field-label">${escapeHtml(copy.commitInterval)} <i class="np-unit">s (15–3600)</i></span><input name="commitIntervalSec" type="number" min="15" max="3600" value="${values.commitIntervalSec}"></label>
+        <label class="np-field"><span class="np-field-label">${escapeHtml(copy.versionLimit)} <i class="np-unit">5–500</i></span><input name="versionLimit" type="number" min="5" max="500" value="${values.versionLimit}"></label>
       </section>
       <section class="np-section"><h4>${escapeHtml(copy.appearanceHeading)}</h4>
-        <label>${escapeHtml(copy.openAs)}<select name="defaultView"><option value="rendered">${escapeHtml(copy.rendered)}</option><option value="source">${escapeHtml(copy.source)}</option></select></label>
-        <label>${escapeHtml(copy.windowTheme)}<select name="theme"><option value="dark">${escapeHtml(copy.dark)}</option><option value="light">${escapeHtml(copy.light)}</option><option value="system">${escapeHtml(copy.followApp)}</option></select></label>
+        <label class="np-field"><span class="np-field-label">${escapeHtml(copy.openAs)}</span><select name="defaultView"><option value="rendered">${escapeHtml(copy.rendered)}</option><option value="source">${escapeHtml(copy.source)}</option></select></label>
+        <label class="np-field"><span class="np-field-label">${escapeHtml(copy.windowTheme)}</span><select name="theme"><option value="dark">${escapeHtml(copy.dark)}</option><option value="light">${escapeHtml(copy.light)}</option><option value="system">${escapeHtml(copy.followApp)}</option></select></label>
       </section>
       <section class="np-section"><h4>${escapeHtml(copy.imageHeading)}</h4>
-        <label>${escapeHtml(copy.imageLimit)} <i class="np-unit">${escapeHtml(copy.unitBytes)} (0.25–20 MB)</i><input name="imageLimitBytes" type="number" min="262144" max="20971520" value="${values.imageLimitBytes}"></label>
+        <label class="np-field"><span class="np-field-label">${escapeHtml(copy.imageLimit)} <i class="np-unit">${escapeHtml(copy.unitBytes)} (0.25–20 MB)</i></span><input name="imageLimitBytes" type="number" min="262144" max="20971520" value="${values.imageLimitBytes}"></label>
         <p class="np-usage"></p>
       </section>
       <section class="np-section"><h4>${escapeHtml(copy.positionHeading)}</h4><div class="np-actions"><button type="button" data-go="reset-position">${escapeHtml(copy.resetPosition)}</button></div></section>
@@ -1246,7 +1254,17 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     }
     if (action === 'copy') void navigator.clipboard?.writeText(must(panel, '.np-pathname').textContent ?? '')
     if (action === 'history') void openHistory().catch(showError)
-    if (action === 'dismiss-error') must(panel, '.np-error').hidden = true
+    if (action === 'dismiss-error' || action === 'keep-mine') must(panel, '.np-error').hidden = true
+    if (action === 'load-remote' && state.db) {
+      must(panel, '.np-error').hidden = true
+      state.dirty = false
+      state.pendingDraft = null
+      state.pendingFileId = null
+      void loadSnapshot(state.db).then(snapshot => {
+        state.nodes = snapshot.nodes
+        render()
+      }).catch(showError)
+    }
     if (action === 'image') must(panel, '.np-file').click()
     const format = target.dataset.format
     if (format) {
@@ -1555,7 +1573,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
   if (channel) {
     const onMessage = event => {
       if (state.dirty && event.data?.fileId === state.ui.currentId) {
-        showError(new Error(text().otherTab))
+        showError(new Error(text().otherTab), true)
         return
       }
       if (state.db) void loadSnapshot(state.db).then(snapshot => {

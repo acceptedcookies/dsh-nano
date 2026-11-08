@@ -7,6 +7,7 @@
 - `dsh-nano-notepad/` — dsh overlay 插件（cordis.patch 插件），源码位于 `src/`、`lib/`、`index.js`
 - `context/` — 各目录下的参考资料（git 忽略，不入库）
 - `AGENTS.md` — 本文件
+- `release.md` — 发布流程与安全信任链规范（CI 构建、SHA-256 校验、attestation 签名）
 
 ## 本地环境
 

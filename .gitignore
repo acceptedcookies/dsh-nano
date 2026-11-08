@@ -46,3 +46,14 @@ context/
 
 # Local environment setup doc (machine-specific)
 .local-dsh-setup.md
+
+# Release artifacts (produced by CI, published to GitHub Releases)
+*.tgz
+SHA256SUMS.txt
+SHA256SUMS.sigstore.json
+release/
+
+# Rust / Wasm (future plugins)
+# NOTE: Cargo.lock stays committed — reproducible builds depend on it.
+target/
+**/*.wasm

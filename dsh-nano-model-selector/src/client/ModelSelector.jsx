@@ -124,14 +124,24 @@ export function ModelSelector({ locked, available, directory, load, select, lang
   React.useEffect(() => language.subscribe(() => setCopy(copyFor(language.current()))), [])
   React.useEffect(() => { if (available) load() }, [available])
 
+  // The stylesheet belongs to the mounted selector, so disabling the plugin
+  // takes its rules away with it instead of leaking them into the page.
   React.useEffect(() => {
-    if (!document.getElementById(STYLE_ID)) {
-      const style = document.createElement('style')
-      style.id = STYLE_ID
-      style.textContent = STYLE
-      document.head.append(style)
-    }
+    if (document.getElementById(STYLE_ID) !== null) return undefined
+    const style = document.createElement('style')
+    style.id = STYLE_ID
+    style.textContent = STYLE
+    document.head.append(style)
+    return () => { style.remove() }
   }, [])
+
+  // A selection failure stays until its own timer clears it; the panel may be
+  // closed or unmounted in between, so the timer lives on the toast identity.
+  React.useEffect(() => {
+    if (toast === null) return undefined
+    const timer = window.setTimeout(() => { setToast(null) }, 6000)
+    return () => { window.clearTimeout(timer) }
+  }, [toast])
 
   React.useEffect(() => {
     if (!open) return undefined

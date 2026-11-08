@@ -19,7 +19,6 @@ export const COPY = {
     effort: '推理等级',
     providerDefault: '默认',
     noEffort: '该模型不提供推理等级',
-    current: '当前',
     favorite: '收藏',
     unfavorite: '取消收藏',
     context: '上下文',
@@ -35,7 +34,6 @@ export const COPY = {
     triggerSelectAria: '选择模型',
     switching: '正在切换…',
     selectionError: '切换模型失败',
-    defaultBadge: '默认',
   },
   en: {
     title: 'Model selection',
@@ -55,7 +53,6 @@ export const COPY = {
     effort: 'Reasoning effort',
     providerDefault: 'Default',
     noEffort: 'This model has no reasoning levels',
-    current: 'Current',
     favorite: 'Add to favorites',
     unfavorite: 'Remove from favorites',
     context: 'Context',
@@ -71,7 +68,6 @@ export const COPY = {
     triggerSelectAria: 'Select model',
     switching: 'Switching…',
     selectionError: 'Could not switch model',
-    defaultBadge: 'Default',
   },
 }
 

@@ -61,7 +61,6 @@ window.__ModuleLoader__.load({
       effort: "\u63A8\u7406\u7B49\u7EA7",
       providerDefault: "\u9ED8\u8BA4",
       noEffort: "\u8BE5\u6A21\u578B\u4E0D\u63D0\u4F9B\u63A8\u7406\u7B49\u7EA7",
-      current: "\u5F53\u524D",
       favorite: "\u6536\u85CF",
       unfavorite: "\u53D6\u6D88\u6536\u85CF",
       context: "\u4E0A\u4E0B\u6587",
@@ -76,8 +75,7 @@ window.__ModuleLoader__.load({
       triggerAria: (model, effort) => `\u9009\u62E9\u6A21\u578B\uFF0C\u5F53\u524D ${model}${effort ? `\uFF0C\u63A8\u7406\u7B49\u7EA7 ${effort}` : ""}`,
       triggerSelectAria: "\u9009\u62E9\u6A21\u578B",
       switching: "\u6B63\u5728\u5207\u6362\u2026",
-      selectionError: "\u5207\u6362\u6A21\u578B\u5931\u8D25",
-      defaultBadge: "\u9ED8\u8BA4"
+      selectionError: "\u5207\u6362\u6A21\u578B\u5931\u8D25"
     },
     en: {
       title: "Model selection",
@@ -97,7 +95,6 @@ window.__ModuleLoader__.load({
       effort: "Reasoning effort",
       providerDefault: "Default",
       noEffort: "This model has no reasoning levels",
-      current: "Current",
       favorite: "Add to favorites",
       unfavorite: "Remove from favorites",
       context: "Context",
@@ -112,8 +109,7 @@ window.__ModuleLoader__.load({
       triggerAria: (model, effort) => `Select model, current ${model}${effort ? `, reasoning effort ${effort}` : ""}`,
       triggerSelectAria: "Select model",
       switching: "Switching\u2026",
-      selectionError: "Could not switch model",
-      defaultBadge: "Default"
+      selectionError: "Could not switch model"
     }
   };
   function languageOf(language) {
@@ -297,7 +293,6 @@ window.__ModuleLoader__.load({
 .nms-rail-item[data-active="true"] { border-color: color-mix(in srgb, var(--dsw-alias-state-business-primary) 36%, var(--dsw-alias-border-l2)); background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 14%, transparent); color: var(--dsw-alias-label-primary); }
 .nms-rail-item[data-favorite="true"] { color: #e6b84a; }
 .nms-rail-sep { width: 24px; height: 1px; margin: 3px 0; flex: none; background: var(--dsw-alias-border-l2); }
-.nms-rail-count { position: absolute; right: 1px; bottom: 1px; min-width: 14px; height: 14px; padding: 0 3px; box-sizing: border-box; border-radius: 7px; background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-tertiary); font-size: 9px; line-height: 14px; text-align: center; }
 .nms-provider-mark { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 8px; background: var(--nms-provider-bg, var(--dsw-alias-interactive-bg-active)); color: var(--nms-provider-fg, var(--dsw-alias-label-primary)); font-size: 10px; line-height: 1; font-weight: 700; letter-spacing: -.02em; }
 .nms-provider-logo { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; flex: none; border-radius: 7px; overflow: hidden; }
 .nms-provider-logo svg { display: block; width: 100%; height: 100%; }
@@ -344,7 +339,6 @@ window.__ModuleLoader__.load({
 .nms-effort-button[data-active="true"] { border-color: var(--dsw-alias-state-business-primary); background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 15%, transparent); color: var(--dsw-alias-label-primary); }
 .nms-effort-button:disabled { color: var(--dsw-alias-label-dimmed); cursor: default; }
 .nms-effort-note { color: var(--dsw-alias-label-tertiary); font-size: 11px; }
-.nms-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 .nms-toast { position: fixed; z-index: 1300; left: 50%; bottom: 24px; transform: translateX(-50%); max-width: min(480px, calc(100vw - 32px)); padding: 8px 12px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-layer-3); color: var(--dsw-alias-state-error-primary); box-shadow: var(--dsw-elevation-prominent); font-size: 12px; line-height: 18px; }
 @keyframes nms-spin { to { transform: rotate(360deg); } }
 @keyframes nms-pop { from { opacity: 0; transform: translateY(6px) scale(.985); } to { opacity: 1; transform: none; } }
@@ -428,13 +422,24 @@ window.__ModuleLoader__.load({
       if (available) load();
     }, [available]);
     React3.useEffect(() => {
-      if (!document.getElementById(STYLE_ID)) {
-        const style = document.createElement("style");
-        style.id = STYLE_ID;
-        style.textContent = STYLE;
-        document.head.append(style);
-      }
+      if (document.getElementById(STYLE_ID) !== null) return void 0;
+      const style = document.createElement("style");
+      style.id = STYLE_ID;
+      style.textContent = STYLE;
+      document.head.append(style);
+      return () => {
+        style.remove();
+      };
     }, []);
+    React3.useEffect(() => {
+      if (toast === null) return void 0;
+      const timer = window.setTimeout(() => {
+        setToast(null);
+      }, 6e3);
+      return () => {
+        window.clearTimeout(timer);
+      };
+    }, [toast]);
     React3.useEffect(() => {
       if (!open) return void 0;
       let cancelled = false;

@@ -847,7 +847,7 @@ window.__ModuleLoader__.load({
 .np-modes, .np-path > button { flex: 0 0 auto; white-space: nowrap; }
 .np-modes { display: inline-flex; align-items: center; gap: 4px; }
 .np-modes button { height: 30px; padding: 0 10px; line-height: 20px; color: var(--dsw-alias-label-secondary); }
-.np-modes button[data-active="true"] { background: var(--dsw-alias-interactive-bg-active); color: var(--dsw-alias-label-primary); border-color: var(--dsw-alias-border-l3); }
+.np-modes button[data-active="true"] { background: var(--dsw-alias-interactive-bg-active); color: var(--dsw-alias-label-primary); border-color: var(--dsw-alias-brand-primary); box-shadow: inset 0 0 0 1px var(--dsw-alias-brand-primary); }
 .np-path > button[data-action="rename"] { flex: 0 0 auto; height: 30px; min-width: max-content; }
 .np-toolbar { flex-wrap: wrap; gap: 2px; border-bottom: 1px solid var(--dsw-alias-border-l2); }
 .np-tool { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); cursor: pointer; }

@@ -20,6 +20,11 @@ export function createAccessory(api) {
     const isFile = entry.meta?.kind !== 'directory'
     const folderStatus = isFile ? undefined : api.folderStatusOf(entry.path)
     const showGit = api.showGit() && !ignored
+    // Both sides of the porcelain pair, so a reader can tell staged work from unstaged work.
+    const staged = showGit ? api.stagedOf(entry.path) : undefined
+    const unstaged = showGit ? api.unstagedOf(entry.path) : undefined
+    // Divergence from the upstream, which is a different fact from a local edit.
+    const remote = showGit ? api.remoteOf(entry.path) : undefined
 
     return React.createElement('span', {
       className: 'nxe-acc',
@@ -37,12 +42,23 @@ export function createAccessory(api) {
         strokeWidth: 2, strokeLinecap: 'round', 'aria-hidden': 'true',
       }, React.createElement('path', { d: 'M10 13a5 5 0 0 0 7 0l2-2a5 5 0 0 0-7-7l-1 1' }),
       React.createElement('path', { d: 'M14 11a5 5 0 0 0-7 0l-2 2a5 5 0 0 0 7 7l1-1' }))),
+      // Remote divergence sits left of the local letter: it answers "what changed on the other side".
+      remote === undefined ? null : React.createElement('span', {
+        className: 'nxe-acc-remote',
+        'data-status': remote.status,
+        'data-direction': remote.direction,
+        title: remote.direction === 'pulled' ? copy.remotePulled(remote.status) : copy.remotePushed(remote.status),
+        'aria-label': remote.direction === 'pulled' ? copy.remotePulled(remote.status) : copy.remotePushed(remote.status),
+      }, `${remote.direction === 'pulled' ? '↓' : '↑'}${remote.status}`),
       showGit && status !== undefined
         ? React.createElement('span', {
           className: 'nxe-acc-letter',
           'data-status': status,
-          title: api.statusLabel(status),
-          'aria-label': api.statusLabel(status),
+          // The dimmed form means "the working tree has changes the index does not", which is what
+          // an unstaged edit is; a fully staged file keeps the solid letter.
+          'data-staged': staged === undefined ? 'false' : 'true',
+          title: api.statusLabel(status, staged, unstaged),
+          'aria-label': api.statusLabel(status, staged, unstaged),
         }, status)
         : null,
       // A folder reports the strongest status anywhere below it; the dot stays visible when collapsed.
@@ -54,9 +70,13 @@ export function createAccessory(api) {
           'aria-label': api.statusLabel(folderStatus),
         })
         : null,
-      ignored && api.showIgnoredBadge()
-        ? React.createElement('span', { className: 'nxe-acc-ignored', title: copy.ignoredBadge }, copy.ignoredBadge)
-        : null,
+      // An ignored row keeps a mark of its own, so the reason it is dimmed is visible rather than implied.
+      ignored ? React.createElement('span', {
+        className: 'nxe-acc-ignored-letter',
+        'data-status': '!',
+        title: copy.ignoredBadge,
+        'aria-label': copy.ignoredBadge,
+      }, '!') : null,
       isFile && api.showOpenButton()
         ? React.createElement('button', {
           type: 'button',

@@ -1,6 +1,9 @@
 /** Every style the explorer adds. Colors come from --dsw-* tokens; the Git palette is this plugin's own. */
 
-export const STYLE = `
+import { NANO_STYLES } from 'dsh-nano-ui'
+
+export const STYLE = `${NANO_STYLES}
+
 [data-nxe] {
   display: flex; flex-direction: column; height: 100%; min-height: 0;
   /* The sidebar inherits the shell's 16px body size; a file tree reads at the shipped 13px scale. */
@@ -312,4 +315,38 @@ button.nxe-commit, button.nxe-sync { cursor: pointer; }
 .nxe-reveal-main:focus-visible, .nxe-reveal-more:focus-visible {
   outline: 2px solid var(--dsw-alias-brand-primary, var(--dsw-alias-link)); outline-offset: 1px;
 }
+
+/* The chip's folder sheet sits inline before the label, exactly as the builtin draws it. */
+.nxe-title-icon { flex: none; }
+
+/* Remote divergence: a two-character mark (arrow plus letter) that says the other side of the
+   upstream changed this path. It sits left of the local letter and reads as metadata, not as a
+   second status. */
+.nxe-acc-remote {
+  font-size: 10px; font-weight: 600; line-height: 1; letter-spacing: 0;
+  display: inline-flex; align-items: center; white-space: nowrap;
+  color: var(--dsw-alias-label-tertiary); opacity: .95;
+}
+.nxe-acc-remote[data-direction="pulled"] { color: var(--dsw-alias-link, #2f81f7); }
+.nxe-acc-remote[data-direction="pushed"] { color: var(--nxe-git-modified); }
+
+/* A local letter that came through the index keeps full weight; one that lives only in the working
+   tree is drawn lighter, so "already staged" is visible without a second glyph. */
+.nxe-acc-letter[data-staged="false"] { opacity: .62; }
+
+/* An ignored row's own mark, drawn where the status letter would be. */
+.nxe-acc-ignored-letter {
+  font-size: 11px; font-weight: 700; line-height: 1;
+  display: inline-flex; align-items: center;
+  color: var(--nxe-ignored-ink);
+}
+
+/* Stashed work, shown beside the branch because a clean tree can still hold a shelf. */
+.nxe-stash {
+  display: inline-flex; align-items: center; gap: 3px;
+  color: var(--dsw-alias-label-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+.nxe-stash svg { width: 14px; height: 14px; flex: none; }
+.nxe-stash-count { font-size: 11px; line-height: 1; }
 `

@@ -1,36 +1,21 @@
-/** The commit and name-entry cards, drawn with the shell's own modal, button, and input primitives. */
+/** The commit and name-entry cards, drawn through the shared nano-ui primitives. */
 
 import React from 'react'
-import { Button, Input, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Input } from '@deepseek-ai/dsh-client-ui-primitives'
+import { NanoDialog } from 'dsh-nano-ui'
 
 const { useState } = React
 
 /**
- * One modal card.
- *
- * The chrome, the mask, Escape handling, focus return, and the action row all come from the shell's
- * Modal and Button primitives, so this plugin adds no dialog styling of its own.
+ * One modal card. The chrome, the mask, Escape handling, focus return, and the outline+primary
+ * action row all come from `dsh-nano-ui`'s NanoDialog, which is a thin forwarder over the shell's
+ * Modal and Button, so this plugin adds no dialog styling of its own.
  *
  * @param props - copy, title, body, and the two actions.
  * @returns the dialog.
  */
-export function Dialog({ copy, title, children, confirmDisabled, busy, error, onConfirm, onCancel, confirmLabel }) {
-  return React.createElement(Modal, {
-    open: true,
-    onClose: onCancel,
-    title,
-    closeLabel: copy.cancel,
-    // The shipped modal takes a fragment, and its own action rows pair `outline` with `primary`.
-    footer: React.createElement(React.Fragment, null,
-      React.createElement(Button, { variant: 'outline', className: 'nxe-modal-action', onClick: onCancel }, copy.cancel),
-      React.createElement(Button, {
-        variant: 'primary', className: 'nxe-modal-action',
-        disabled: confirmDisabled === true || busy === true,
-        onClick: onConfirm,
-      }, confirmLabel ?? copy.confirm)),
-  },
-  children,
-  error === undefined ? null : React.createElement('p', { className: 'nxe-dialog-error', role: 'alert' }, error))
+export function Dialog(props) {
+  return React.createElement(NanoDialog, props)
 }
 
 /**
@@ -41,6 +26,7 @@ export function Dialog({ copy, title, children, confirmDisabled, busy, error, on
 function Field({ children }) {
   return React.createElement('div', { className: 'nxe-dialog-field' }, children)
 }
+
 
 /**
  * The commit dialog: one message field over the changed-file summary.

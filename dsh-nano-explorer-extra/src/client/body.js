@@ -6,6 +6,7 @@ import { createAccessory } from './accessory.js'
 import { StatusBar } from './statusbar.js'
 import { RowMenu } from './menu.js'
 import * as primitives from '@deepseek-ai/dsh-client-ui-primitives'
+import { NanoToast } from 'dsh-nano-ui'
 import { useTree } from './tree.js'
 import { absoluteOf, basenameOf, parentOf, relativeTo, treeKeyOf } from './paths.js'
 import { checkName, nextName } from './names.js'
@@ -172,7 +173,8 @@ export function ExplorerBody(props) {
   const changed = useMemo(() => Array.isArray(git?.files) ? git.files : [], [git])
   const changedByPath = useMemo(() => {
     const map = new Map()
-    for (const file of changed) map.set(file.path, file.status)
+    // The entry keeps both porcelain sides, so the row can show staged work differently from unstaged.
+    for (const file of changed) map.set(file.path, file)
     return map
   }, [changed])
   // Ignored paths are asked for by directory, bounded by what the tree draws: a repository-wide
@@ -217,8 +219,41 @@ export function ExplorerBody(props) {
   const statusOf = useCallback(key => {
     const relative = statusKeyOf(key)
     if (relative === undefined) return undefined
-    return statusMap.get(relative)
+    return statusMap.get(relative)?.status
   }, [statusMap, statusKeyOf])
+
+  /** The index-side letter for one path, when the entry carries it. */
+  const stagedOf = useCallback(key => {
+    const relative = statusKeyOf(key)
+    if (relative === undefined) return undefined
+    return statusMap.get(relative)?.staged
+  }, [statusMap, statusKeyOf])
+
+  /** The working-tree-side letter for one path, when the entry carries it. */
+  const unstagedOf = useCallback(key => {
+    const relative = statusKeyOf(key)
+    if (relative === undefined) return undefined
+    return statusMap.get(relative)?.unstaged
+  }, [statusMap, statusKeyOf])
+
+  /**
+   * Which side of the upstream holds this path, and how it changed there.
+   *
+   * The two lists come from range diffs measured at the merge base, so a path appears on exactly one
+   * side unless both branches touched it. A local edit that is also unpublished shows both facts.
+   */
+  const remoteByPath = useMemo(() => {
+    const map = new Map()
+    for (const entry of git?.remote?.pushed ?? []) map.set(entry.path, { status: entry.status, direction: 'pushed' })
+    for (const entry of git?.remote?.pulled ?? []) map.set(entry.path, { status: entry.status, direction: 'pulled' })
+    return map
+  }, [git])
+
+  const remoteOf = useCallback(key => {
+    const relative = statusKeyOf(key)
+    if (relative === undefined) return undefined
+    return remoteByPath.get(relative)
+  }, [remoteByPath, statusKeyOf])
 
   /** Open one entry in the resource viewer the same way the shipped tree does. */
   const openEntry = useCallback(entry => {
@@ -251,7 +286,9 @@ export function ExplorerBody(props) {
         // workspace root: a repository opened from a subdirectory would otherwise never line up.
         const base = checkoutRootRef.current ?? cwd
         const relative = relativeTo(base, absolute)
-        if (relative !== absolute) next.set(relative, file.status)
+        // Store the whole entry, not just its letter: `statusMap` holds entries from both sources and
+        // every reader takes `.status` off one. A bare string here made them read `undefined`.
+        if (relative !== absolute) next.set(relative, file)
       }
       return next
     })
@@ -409,17 +446,17 @@ export function ExplorerBody(props) {
     const prefix = relative === '' ? '' : `${relative}/`
     let best
     let bestRank = -1
-    for (const [path, status] of statusMap) {
+    for (const [path, entry] of statusMap) {
       if (prefix !== '' && !path.startsWith(prefix)) continue
-      const rank = SEVERITY.indexOf(status)
-      if (rank > bestRank) { bestRank = rank; best = status }
+      const rank = SEVERITY.indexOf(entry.status)
+      if (rank > bestRank) { bestRank = rank; best = entry.status }
     }
     return best
   }, [statusMap, statusKeyOf])
 
   const accessory = useMemo(() => createAccessory({
     copy: () => copy,
-    statusOf, ignoredOf, folderStatusOf,
+    statusOf, stagedOf, unstagedOf, remoteOf, ignoredOf, folderStatusOf,
     linkOf: key => tree.levels.get(treeKeyOf(cwd ?? '', key))?.outside === true ? true : undefined,
     showGit: () => prefs.showGitStatus,
     showIgnoredBadge: () => prefs.showIgnoredBadge,
@@ -559,6 +596,17 @@ export function ExplorerBody(props) {
         run: () => { void copyPath(menu.path, menu.path) } },
       { id: 'copy-relative', label: copy.copyRelative, icon: React.createElement(primitives.IconLinkOutlineRegular, { width: 14, height: 14 }),
         run: () => { void copyPath(menu.path, relativeTo(cwd ?? '', menu.path)) } },
+      /* Seed a notepad note from this file's content; the note is a draft, so the
+         source on disk stays untouched until the user saves elsewhere. */
+      menu.kind !== 'file' || window.__nanoNotepad === undefined ? null : {
+        id: 'open-in-notepad', label: copy.openInNotepad,
+        icon: React.createElement(primitives.IconEditOutlineRegular, { width: 14, height: 14 }),
+        run: async () => {
+          const read = await request('/read', { sessionId, path: menu.path })
+          if (!read.ok) { setLinkNote(read.message ?? copy.openInNotepadFail); return }
+          setLinkNote(undefined)
+          await window.__nanoNotepad.import(menu.name, read.content)
+        } },
       { id: 'rename', label: copy.rename, icon: React.createElement(primitives.IconEditOutlineRegular, { width: 14, height: 14 }),
         run: () => { setDialogError(undefined); setDialog({ kind: 'rename', entry: { ...target, meta: { kind: menu.kind } } }) } },
       { id: 'delete', label: copy.delete, tone: 'danger', icon: React.createElement(primitives.IconTrashOutlineRegular, { width: 14, height: 14 }),
@@ -602,9 +650,7 @@ export function ExplorerBody(props) {
       onCancel: () => { setCreateRequest(null); setLinkNote(undefined) },
     }),
     React.createElement('div', { className: 'nxe-tree', 'data-nxe-tree': 'true', onKeyDown: onTreeKeyDown }, content),
-    toast === undefined ? null : React.createElement('div', {
-      className: 'nxe-toast', role: 'status', 'aria-live': 'polite', 'data-nxe-toast': 'true',
-    }, toast),
+    React.createElement(NanoToast, { text: toast }),
     React.createElement(StatusBar, {
       copy, git, stats, statsState, prefs,
       onCommit: () => { setDialogError(undefined); setDialog({ kind: 'commit' }) },
@@ -732,14 +778,14 @@ function RevealButton({ copy, cwd, apps }) {
       onClick: () => setMenuOpen(v => !v),
     }, React.createElement('svg', { viewBox: '0 0 10 10', width: 10, height: 10, fill: 'none', stroke: 'currentColor', strokeWidth: 1.4, strokeLinecap: 'round', 'aria-hidden': 'true' },
       React.createElement('path', { d: 'M2.5 4L5 6.5 7.5 4' }))),
-    menuOpen ? React.createElement('div', { className: 'nxe-menu', role: 'menu', style: { position: 'absolute', right: 0, top: '26px' } },
+    menuOpen ? React.createElement('div', { className: 'nano-menu', role: 'menu', style: { position: 'absolute', right: 0, top: '26px' } },
       list.map(app => React.createElement('button', {
-        key: app, type: 'button', role: 'menuitem', className: 'nxe-menu-item',
+        key: app, type: 'button', role: 'menuitem', className: 'nano-menu-item',
         onClick: () => { setChoice(app); setMenuOpen(false); open(app) },
       },
-      React.createElement('span', { className: 'nxe-menu-icon', 'aria-hidden': 'true' },
+      React.createElement('span', { className: 'nano-menu-icon', 'aria-hidden': 'true' },
         React.createElement('img', { src: `/open-in-app/icon/${encodeURIComponent(app)}`, alt: '', width: 14, height: 14 })),
-      React.createElement('span', { className: 'nxe-menu-label' }, APP_LABELS[app] ?? app)))) : null)
+      React.createElement('span', { className: 'nano-menu-label' }, APP_LABELS[app] ?? app)))) : null)
 }
 
 /**

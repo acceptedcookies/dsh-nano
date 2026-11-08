@@ -1,7 +1,7 @@
 /** The six HTTP routes: one request gate, one JSON envelope, and the session-scoped work behind them. */
 
 import { commitAll, ignoredAmong, readStatus } from './git.js'
-import { listDirectory } from './listing.js'
+import { absoluteOf, isLexicallyInside, listDirectory } from './listing.js'
 import { createFile, createFolder, removeEntry, rename } from './mutate.js'
 import { statisticsOf } from './stats.js'
 
@@ -281,6 +281,33 @@ export function createRoutes(ctx, config) {
           followSymlinks: body.followSymlinks !== false,
           allowOutsideWorkspace: body.allowOutsideWorkspace === true,
         }, { maxEntries: config.listingMaxEntries })
+      },
+    },
+    /* Read one file as UTF-8, capped — enough to seed a notepad note.
+       Same lexical + resolved boundary checks the lister uses, so a symlink
+       out of the workspace cannot be smuggled through an allow flag. */
+    '/read': {
+      method: 'POST',
+      async run(req) {
+        const body = await jsonBody(req)
+        const { root } = await scopeOf(ctx, body.sessionId)
+        const path = typeof body.path === 'string' ? body.path : ''
+        const requested = absoluteOf(root, path)
+        if (!isLexicallyInside(root, requested) && body.allowOutsideWorkspace !== true) {
+          throw new Error(`"${path}" is outside the workspace`)
+        }
+        const resolved = fs().processPath(await fs().resolve(requested))
+        if (!isLexicallyInside(root, resolved) && body.allowOutsideWorkspace !== true) {
+          throw new Error(`"${path}" resolves outside the workspace`)
+        }
+        const info = await fs().stat(resolved)
+        if (info.type !== 'file') throw new Error(`"${path}" is not a file`)
+        const limit = 1 * 1024 * 1024
+        if (info.size > limit) throw new Error(`"${path}" is larger than ${limit} bytes`)
+        const bytes = await fs().readByteRange(resolved, { offset: 0, length: limit })
+        try { new TextDecoder('utf-8', { fatal: true }).decode(bytes) }
+        catch { throw new Error(`"${path}" is not UTF-8 text`) }
+        return { ok: true, content: new TextDecoder('utf-8').decode(bytes) }
       },
     },
   }

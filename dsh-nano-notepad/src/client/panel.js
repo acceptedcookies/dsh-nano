@@ -24,8 +24,11 @@ import {
 } from './db.js'
 import { applyFormat, escapeHtml, renderMarkdown } from './markdown.js'
 import { copyFor } from './i18n.js'
+import React from 'react'
+import { openNanoDialog, openNanoMenu, NANO_STYLES } from 'dsh-nano-ui'
 
 const STYLE = `
+${NANO_STYLES}
 [data-nano-notepad] { pointer-events: none; }
 .np-layer { position: fixed; inset: 0; pointer-events: none; z-index: 30; color: var(--dsw-alias-label-primary); font-family: var(--dsw-font-family); font-size: 13px; }
 .np-entry, .np-window, .np-slash { pointer-events: auto; }
@@ -33,7 +36,7 @@ const STYLE = `
 .np-entry { z-index: 3; }
 .np-window { z-index: 2; }
 .np-window { --np-pad-x: 12px; --np-gap: 8px; --np-row-h: 40px; --np-node-h: 28px; --np-icon-btn: 28px; --np-icon-btn-sm: 22px; --np-indent: 16px; --np-rail: 52px; --np-menu-w: 220px; --np-foot-h: 52px; }
-.np-dialog[hidden], .np-slash[hidden], .np-window[hidden], .np-read[hidden], .np-error[hidden] { display: none !important; }
+.np-slash[hidden], .np-window[hidden], .np-read[hidden], .np-error[hidden] { display: none !important; }
 .np-window[data-theme="dark"], .np-entry[data-theme="dark"] { color-scheme: dark; --dsw-alias-bg-layer-1: #232324; --dsw-alias-bg-layer-2: #2c2c2e; --dsw-alias-bg-layer-3: #353638; --dsw-alias-bg-mask-1: #00000080; --dsw-alias-label-primary: #f9fafb; --dsw-alias-label-secondary: #cfd3d6; --dsw-alias-label-tertiary: #adb2b8; --dsw-alias-border-l2: #ffffff1f; --dsw-alias-border-l3: #ffffff29; --dsw-alias-interactive-bg-hover: #ffffff14; --dsw-alias-interactive-bg-active: #ffffff24; --dsw-alias-brand-primary: #f9fafb; --dsw-alias-brand-primary-invert: #0f1115; --dsw-alias-link: #7aaaff; --dsw-alias-state-error-primary: #f25a5a; --dsw-alias-state-error-secondary: #f25a5a; --dsw-alias-state-success-primary: #22c55e; --dsw-alias-state-success-secondary: #4ed17e; --dsw-alias-state-warn-primary: #f59e0b; --dsw-alias-state-warn-secondary: #f7ad31; --dsw-alias-interactive-bg-hover-danger: #f25a5a26; --dsw-alias-label-error: #f25a5a; --dsw-alias-tooltip-bg: #43454a; --dsw-alias-tooltip-label: #f9fafb; --dsw-alias-markdown-inline-code: #43454a; }
 .np-window[data-theme="light"], .np-entry[data-theme="light"] { color-scheme: light; --dsw-alias-bg-layer-1: #ffffff; --dsw-alias-bg-layer-2: #ffffff; --dsw-alias-bg-layer-3: #ffffff; --dsw-alias-bg-mask-1: #0000003d; --dsw-alias-label-primary: #0f1115; --dsw-alias-label-secondary: #61666b; --dsw-alias-label-tertiary: #81858c; --dsw-alias-border-l2: #0000001a; --dsw-alias-border-l3: #0000001f; --dsw-alias-interactive-bg-hover: #2631480f; --dsw-alias-interactive-bg-active: #2631481a; --dsw-alias-brand-primary: #0f1115; --dsw-alias-brand-primary-invert: #f9fafb; --dsw-alias-link: #4176e6; --dsw-alias-state-error-primary: #ec1313; --dsw-alias-state-error-secondary: #f25a5a; --dsw-alias-state-success-primary: #22c55e; --dsw-alias-state-success-secondary: #4ed17e; --dsw-alias-state-warn-primary: #f59e0b; --dsw-alias-state-warn-secondary: #f7ad31; --dsw-alias-interactive-bg-hover-danger: #ec13130d; --dsw-alias-label-error: #ec1313; --dsw-alias-tooltip-bg: #43454a; --dsw-alias-tooltip-label: #f9fafb; --dsw-alias-markdown-inline-code: #f5f6f7; }
 .np-entry { width: 36px; height: 36px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-primary); cursor: grab; box-shadow: var(--dsw-elevation-soft); }
@@ -124,7 +127,7 @@ const STYLE = `
 .np-node[data-active="true"] { background: var(--dsw-alias-interactive-bg-active); color: var(--dsw-alias-label-primary); }
 .np-node[data-drop="true"] { box-shadow: inset 0 0 0 1.5px var(--dsw-alias-link); }
 .np-node-main { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; border: 0; background: transparent; color: inherit; padding: 0; text-align: left; font: inherit; cursor: pointer; overflow: hidden; }
-.np-node-main:focus, .np-node-actions button:focus, .np-tab:focus, .np-ws-item:focus, .np-caret:focus { outline: none; }
+.np-node-main:focus, .np-node-actions button:focus, .np-tab:focus, .np-caret:focus { outline: none; }
 .np-window :focus-visible, .np-entry:focus-visible { outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, var(--dsw-alias-link)); outline-offset: -2px; }
 .np-node[data-pinned="true"] .np-node-main { padding-right: 28px; }
 .np-node:hover .np-node-main, .np-node:focus-within .np-node-main { padding-right: 84px; }
@@ -149,12 +152,6 @@ const STYLE = `
 .np-ws-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
 .np-ws-caret { display: inline-flex; width: 14px; height: 14px; flex: none; color: var(--dsw-alias-label-tertiary); }
 .np-ws-caret svg { width: 14px; height: 14px; }
-.np-ws-menu { position: absolute; top: calc(100% + 4px); left: 0; min-width: 190px; max-width: 260px; max-height: 260px; overflow-y: auto; padding: 4px; display: flex; flex-direction: column; gap: 1px; z-index: 8; background: var(--dsw-menu-surface-fill, var(--dsw-alias-bg-layer-3)); color: var(--dsw-alias-label-primary); border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-lg); box-shadow: var(--dsw-elevation-prominent); backdrop-filter: var(--dsw-menu-backdrop-filter); }
-.np-ws-menu[hidden] { display: none !important; }
-.np-ws-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); padding: 6px 8px; font: inherit; text-align: left; cursor: pointer; }
-.np-ws-item:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
-.np-ws-item[data-active="true"] { color: var(--dsw-alias-label-primary); }
-.np-ws-item svg { width: 14px; height: 14px; flex: none; color: var(--dsw-alias-link); fill: currentColor; }
 .np-group { display: flex; align-items: center; gap: 6px; margin: 12px 0 4px; padding-left: 8px; color: var(--dsw-alias-label-tertiary); font-size: 11px; font-weight: 600; letter-spacing: .04em; line-height: 20px; }
 .np-nodes > .np-group:first-child { margin-top: 2px; }
 .np-group[data-active="true"] { color: var(--dsw-alias-label-primary); }
@@ -173,8 +170,8 @@ const STYLE = `
 .np-tool:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 .np-tool svg { width: 18px; height: 18px; }
 .np-tool-sep { width: 1px; height: 18px; margin: 6px 4px; background: var(--dsw-alias-border-l2); flex: none; }
-.np-window button:not([class]):not(.np-tree-tools button):not(.np-node-actions button):not(.np-slash button):not(.np-versions button), .np-footer-actions button.np-danger, .np-card button:not(.np-switch) { border: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); border-radius: var(--dsw-radius-sm); padding: 4px 10px; cursor: pointer; font: inherit; line-height: 20px; }
-.np-window button:hover, .np-card button:not(.np-switch):hover { background: var(--dsw-alias-interactive-bg-hover); }
+.np-window button:not([class]):not(.np-tree-tools button):not(.np-node-actions button):not(.np-slash button):not(.np-versions button), .np-footer-actions button.np-danger, .np-body button:not(.np-switch) { border: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); border-radius: var(--dsw-radius-sm); padding: 4px 10px; cursor: pointer; font: inherit; line-height: 20px; }
+.np-window button:hover, .np-body button:not(.np-switch):hover { background: var(--dsw-alias-interactive-bg-hover); }
 /* keep the row/tab as the only hover surface; inner buttons must not double-fill
    — scoped to .np-window so we beat the generic .np-window button:hover rule */
 .np-window .np-node-main:hover, .np-window .np-node-actions button:hover, .np-window .np-tab-btn:hover { background: transparent; }
@@ -182,7 +179,7 @@ const STYLE = `
 .np-tabs > button, .np-tab { background: transparent; }
 .np-danger { color: var(--dsw-alias-label-error); }
 .np-footer-actions button.np-danger { color: var(--dsw-alias-label-error); }
-.np-footer-actions button.np-danger:hover, .np-card button.np-danger:hover { border-color: var(--dsw-alias-state-error-secondary); color: var(--dsw-alias-state-error-secondary); background: var(--dsw-alias-interactive-bg-hover-danger); }
+.np-footer-actions button.np-danger:hover, .np-body button.np-danger:hover { border-color: var(--dsw-alias-state-error-secondary); color: var(--dsw-alias-state-error-secondary); background: var(--dsw-alias-interactive-bg-hover-danger); }
 .np-write, .np-read { flex: 1; min-height: 0; margin: 0; }
 .np-write { box-sizing: border-box; width: 100%; max-width: 100%; resize: none; border: 0; outline: 0; background: transparent; color: var(--dsw-alias-label-primary); caret-color: var(--dsw-alias-label-primary); padding: var(--np-pad-x); font: var(--dsw-font-markdown-code); overflow-wrap: anywhere; }
 .np-write:focus-visible { outline: none; box-shadow: inset 0 0 0 1px var(--dsw-alias-border-l3); }
@@ -203,53 +200,37 @@ const STYLE = `
 .np-read img { display: block; max-width: min(100%, 640px); margin: 8px 0; border-radius: var(--dsw-radius-md); }
 .np-read .missing-image { border: 1px dashed var(--dsw-alias-border-l3); padding: 2px 4px; }
 .np-read .np-placeholder { color: var(--dsw-alias-label-secondary); }
-.np-dialog { position: absolute; inset: 0; z-index: 20; border-radius: inherit; background: var(--dsw-alias-bg-mask-1); display: flex; align-items: center; justify-content: center; padding: 16px; pointer-events: auto; }
-.np-slash { background: var(--dsw-menu-surface-fill, var(--dsw-alias-bg-layer-3)); color: var(--dsw-alias-label-primary); border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-lg); box-shadow: var(--dsw-elevation-prominent); backdrop-filter: var(--dsw-menu-backdrop-filter); }
-.np-card { box-sizing: border-box; display: flex; flex-direction: column; width: min(560px, calc(100% - 32px)); max-height: calc(100% - 32px); padding: 0; overflow: hidden; border: 0; border-radius: var(--dsw-radius-panel, 28px); background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-primary); box-shadow: var(--dsw-elevation-prominent); }
-.np-card-scroll { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 12px 24px 24px; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; }
-.np-card-scroll > * + * { margin-top: 10px; }
-.np-card-scroll h3 { display: none; }
-.np-card-head { flex: none; display: flex; align-items: center; gap: 12px; padding: 14px 12px 12px 24px; border-bottom: 1px solid var(--dsw-alias-border-l2); }
-.np-card-head h3 { flex: 1; margin: 0; font-size: 15px; font-weight: 600; }
-.np-card-close { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border: 0; background: transparent; color: var(--dsw-alias-label-tertiary); border-radius: var(--dsw-radius-sm); cursor: pointer; font-size: 16px; line-height: 1; }
-.np-card-close:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
-.np-card-scroll::-webkit-scrollbar { width: 8px; }
-.np-card-scroll::-webkit-scrollbar-thumb { background: var(--dsw-alias-scrollbar-bg-l1, var(--dsw-alias-border-l3)); border-radius: 4px; }
-.np-card h3 { margin: 0; font-size: 16px; line-height: 24px; font-weight: 600; }
-.np-card p, .np-card pre { margin: 0; color: var(--dsw-alias-label-secondary); line-height: 22px; }
-.np-card pre { max-height: 240px; overflow: auto; white-space: pre-wrap; font-family: var(--dsw-font-markdown-code-font-family); }
-.np-card label { display: flex; flex-direction: column; align-items: stretch; gap: 6px; margin: 0; color: var(--dsw-alias-label-secondary); }
+.np-slash { position: absolute; z-index: 4; background: var(--dsw-menu-surface-fill, var(--dsw-alias-bg-layer-3)); color: var(--dsw-alias-label-primary); border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-lg); box-shadow: var(--dsw-elevation-prominent); backdrop-filter: var(--dsw-menu-backdrop-filter); }
+/* .np-body wraps every NanoDialog's injected children: stacked content with the
+   old .np-card-scroll rhythm, so settings/history/rename bodies look unchanged. */
+.np-body { display: flex; flex-direction: column; margin: 0; }
+.np-body > * + * { margin-top: 10px; }
+.np-body p, .np-body pre { margin: 0; color: var(--dsw-alias-label-secondary); line-height: 22px; }
+.np-body pre { max-height: 240px; overflow: auto; white-space: pre-wrap; font-family: var(--dsw-font-markdown-code-font-family); }
+.np-body label { display: flex; flex-direction: column; align-items: stretch; gap: 6px; margin: 0; color: var(--dsw-alias-label-secondary); }
 /* DSH-native settings row: title + description left, control right, hairline row */
 /* uniform rows: same container height for every field, dividers sit centered
    in the equal gap between them */
-.np-card .np-field { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 56px; padding: 10px 0; margin: 0; }
-.np-card .np-field + .np-field { border-top: 1px solid var(--dsw-alias-border-l2); }
-.np-card .np-field-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.np-card .np-field-name { color: var(--dsw-alias-label-primary); line-height: 20px; }
-.np-card .np-field-desc { font-size: 12px; color: var(--dsw-alias-label-tertiary); line-height: 18px; }
+.np-body .np-field { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 56px; padding: 10px 0; margin: 0; }
+.np-body .np-field + .np-field { border-top: 1px solid var(--dsw-alias-border-l2); }
+.np-body .np-field-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.np-body .np-field-name { color: var(--dsw-alias-label-primary); line-height: 20px; }
+.np-body .np-field-desc { font-size: 12px; color: var(--dsw-alias-label-tertiary); line-height: 18px; }
 /* pill number input with embedded unit */
-.np-card input[type="number"] { appearance: none; -webkit-appearance: none; }
-.np-card input::-webkit-outer-spin-button, .np-card input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.np-body input[type="number"] { appearance: none; -webkit-appearance: none; }
+.np-body input::-webkit-outer-spin-button, .np-body input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .np-num { flex: none; display: inline-flex; align-items: center; gap: 6px; background: var(--dsw-alias-interactive-bg-hover); border: 1px solid transparent; border-radius: var(--dsw-radius-full, 999px); padding: 3px 12px; color: var(--dsw-alias-label-primary); }
 .np-num:focus-within { border-color: var(--dsw-focus-ring-color, var(--dsw-alias-link)); }
 .np-num input { width: auto; min-width: 4.5em; field-sizing: content; border: 0; background: transparent; padding: 2px 0; font: inherit; color: inherit; text-align: right; }
 .np-num input:focus { outline: none; }
 .np-num .np-num-unit { color: var(--dsw-alias-label-tertiary); font-size: 12px; white-space: nowrap; }
-/* pill select + popover */
-.np-menu { position: absolute; min-width: 140px; max-width: 260px; max-height: 260px; overflow-y: auto; padding: 4px; display: flex; flex-direction: column; gap: 1px; z-index: 30; background: var(--dsw-menu-surface-fill, var(--dsw-alias-bg-layer-3)); color: var(--dsw-alias-label-primary); border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-lg); box-shadow: var(--dsw-elevation-prominent); backdrop-filter: var(--dsw-menu-backdrop-filter); }
-.np-menu button { display: flex; align-items: center; gap: 8px; width: 100%; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); padding: 6px 8px; font: inherit; text-align: left; cursor: pointer; }
-.np-menu button:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
-.np-menu button[data-selected="true"] { color: var(--dsw-alias-label-primary); }
-.np-menu button[data-selected="true"]::after { content: '✓'; margin-left: auto; color: var(--dsw-alias-link); font-size: 12px; }
 /* segmented control matching the app's color-scheme switch */
 /* settings switches carry their index in --np-switch-i: thumb steps by
    (segment width + 2px gap), generic for N segments */
 .np-switch[data-seg-field] .np-switch-thumb { transform: translateX(calc(var(--np-switch-i) * (100% + 2px))); }
-.np-card input, .np-card select { width: 100%; box-sizing: border-box; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); padding: 8px 10px; font: inherit; }
-.np-card input[type="number"] { max-width: 200px; }
-.np-card input:focus, .np-card select:focus { outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, var(--dsw-alias-link)); }
-.np-actions { display: flex; justify-content: flex-end; gap: var(--np-gap); margin: 0; }
-.np-actions button[data-go="ok"], .np-actions button[data-go="confirm"], .np-actions button[data-go="restore"] { background: var(--dsw-alias-button-primary-fill, var(--dsw-alias-brand-primary)); color: var(--dsw-alias-button-primary-label, var(--dsw-alias-brand-primary-invert)); border-color: transparent; }
+.np-body input, .np-body select { width: 100%; box-sizing: border-box; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); padding: 8px 10px; font: inherit; }
+.np-body input[type="number"] { max-width: 200px; }
+.np-body input:focus, .np-body select:focus { outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, var(--dsw-alias-link)); }
 .np-versions { max-height: 240px; overflow: auto; display: flex; flex-direction: column; }
 .np-versions button { display: block; width: 100%; border: 0; background: transparent; color: var(--dsw-alias-label-primary); border-radius: var(--dsw-radius-sm); padding: 6px 8px; text-align: left; font: inherit; cursor: pointer; }
 .np-versions button:hover { background: var(--dsw-alias-interactive-bg-hover); }
@@ -259,10 +240,7 @@ const STYLE = `
 .np-error button:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 .np-error button svg { width: 14px; height: 14px; fill: currentColor; }
 .np-error button[data-action="load-remote"], .np-error button[data-action="keep-mine"] { width: auto; height: auto; flex: none; padding: 4px 10px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); color: var(--dsw-alias-label-primary); font: inherit; line-height: 20px; }
-.np-slash { position: absolute; width: var(--np-menu-w); max-height: 260px; overflow-y: auto; padding: 4px; display: flex; flex-direction: column; gap: 1px; z-index: 4; }
-.np-slash button { display: flex; align-items: center; gap: 8px; width: 100%; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); padding: 6px 8px; font: inherit; text-align: left; cursor: pointer; }
-.np-slash button svg { width: 16px; height: 16px; flex: none; color: var(--dsw-alias-label-tertiary); }
-.np-slash button[data-active="true"], .np-slash button:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+.np-slash { width: var(--np-menu-w); max-height: 260px; overflow-y: auto; padding: 4px; display: flex; flex-direction: column; gap: 1px; }
 .np-slash .np-slash-empty { padding: 8px; color: var(--dsw-alias-label-tertiary); font-size: 12px; }
 .np-footer { box-sizing: border-box; display: flex; align-items: center; gap: var(--np-gap); min-height: var(--np-foot-h); padding: 0 var(--np-pad-x); border-top: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-2); }
 /* Panel-width responsiveness: container queries react to the floating window, not the viewport. */
@@ -306,12 +284,12 @@ const STYLE = `
 @keyframes np-pulse { 50% { opacity: .25; } }
 .np-footer-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
 .np-section { border-top: 1px solid var(--dsw-alias-border-l2); padding-top: 2px; }
-.np-card-scroll > .np-section:first-child { border-top: 0; padding-top: 0; }
+.np-body > .np-section:first-child { border-top: 0; padding-top: 0; }
 .np-section h4 { margin: 0 0 8px; font-size: 12px; font-weight: 600; color: var(--dsw-alias-label-tertiary); }
 /* informational row: same row height/rhythm, label left, value right */
 .np-stat { display: inline-flex; align-items: baseline; gap: 6px; flex: none; color: var(--dsw-alias-label-secondary); font-size: inherit; white-space: nowrap; }
 /* --- motion: quiet utility language — opacity/transform only, ≤200ms --- */
-.np-tab, .np-tab-x, .np-tab-minimize, .np-tool, .np-caret, .np-node-main, .np-node-actions button, .np-tree-tools button, .np-tree-toggle, .np-ws-btn, .np-ws-item, .np-node, .np-versions button, .np-slash button, .np-entry { transition: background-color .12s ease, color .12s ease, border-color .12s ease, box-shadow .12s ease; }
+.np-tab, .np-tab-x, .np-tab-minimize, .np-tool, .np-caret, .np-node-main, .np-node-actions button, .np-tree-tools button, .np-tree-toggle, .np-ws-btn, .np-node, .np-versions button, .np-slash button, .np-entry { transition: background-color .12s ease, color .12s ease, border-color .12s ease, box-shadow .12s ease; }
 .np-caret svg, .np-ws-caret svg { transition: transform .15s ease; }
 .np-tree { transition: width .18s ease; }
 .np-entry { transition: background-color .12s ease, color .12s ease, border-color .12s ease, transform .1s ease; }
@@ -320,12 +298,10 @@ const STYLE = `
 @keyframes np-rise { from { opacity: 0; transform: translateY(6px); } }
 .np-window:not([hidden]) { animation: np-rise .16s cubic-bezier(.2, .8, .3, 1); }
 @keyframes np-fade { from { opacity: 0; } }
-.np-dialog:not([hidden]) { animation: np-fade .14s ease; }
 @keyframes np-pop { from { opacity: 0; transform: scale(.97) translateY(4px); } }
-.np-card { animation: np-pop .16s cubic-bezier(.2, .8, .3, 1); }
-.np-ws-menu.np-pop-in, .np-slash.np-pop-in { animation: np-pop .12s cubic-bezier(.2, .8, .3, 1); }
+.np-slash.np-pop-in { animation: np-pop .12s cubic-bezier(.2, .8, .3, 1); }
 @media (prefers-reduced-motion: reduce) {
-  .np-window:not([hidden]), .np-card, .np-ws-menu.np-pop-in, .np-slash.np-pop-in { animation: np-fade .12s ease; }
+  .np-window:not([hidden]), .np-slash.np-pop-in { animation: np-fade .12s ease; }
   .np-caret svg, .np-ws-caret svg, .np-tree, .np-entry { transition: background-color .12s ease, color .12s ease, border-color .12s ease; }
   .np-entry:hover, .np-entry:active { transform: none; }
 }
@@ -408,7 +384,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
   panel.innerHTML = `
     <div class="np-tabs"><div class="np-tablist"></div><button type="button" class="np-add" data-action="new-file" data-i18n="newFile" data-i18n-mode="title">+</button><span class="np-tabs-spacer"></span></div>
     <div class="np-body">
-      <aside class="np-tree"><div class="np-tree-head"><button type="button" class="np-tree-toggle" data-action="toggle-tree"></button><div class="np-ws"><button type="button" class="np-ws-btn" data-action="ws-toggle" aria-haspopup="listbox" aria-expanded="false"><span class="np-ws-label"></span><span class="np-ws-caret" aria-hidden="true">${CHEVRON_ICON}</span></button><div class="np-ws-menu" role="listbox" hidden></div></div><span style="flex:1"></span><span class="np-tree-tools"><button type="button" data-action="new-file" data-i18n="newFile" data-i18n-mode="title">${PLUS_ICON}</button><button type="button" data-action="new-folder" data-i18n="newFolder" data-i18n-mode="title">${FOLDER_PLUS_ICON}</button><button type="button" class="np-danger" data-action="delete" data-i18n="delete" data-i18n-mode="title">${TRASH_ICON}</button></span></div><div class="np-nodes" data-root="true"></div><div class="np-tree-foot"><button type="button" data-action="settings" data-i18n="settings" data-i18n-mode="label">${SETTINGS_ICON}<span data-i18n="settings"></span></button><button type="button" data-action="close" data-i18n="close" data-i18n-mode="label">${CLOSE_ICON}<span data-i18n="close"></span></button></div></aside>
+      <aside class="np-tree"><div class="np-tree-head"><button type="button" class="np-tree-toggle" data-action="toggle-tree"></button><div class="np-ws"><button type="button" class="np-ws-btn" data-action="ws-toggle" aria-haspopup="listbox" aria-expanded="false"><span class="np-ws-label"></span><span class="np-ws-caret" aria-hidden="true">${CHEVRON_ICON}</span></button></div><span style="flex:1"></span><span class="np-tree-tools"><button type="button" data-action="new-file" data-i18n="newFile" data-i18n-mode="title">${PLUS_ICON}</button><button type="button" data-action="new-folder" data-i18n="newFolder" data-i18n-mode="title">${FOLDER_PLUS_ICON}</button><button type="button" class="np-danger" data-action="delete" data-i18n="delete" data-i18n-mode="title">${TRASH_ICON}</button></span></div><div class="np-nodes" data-root="true"></div><div class="np-tree-foot"><button type="button" data-action="settings" data-i18n="settings" data-i18n-mode="label">${SETTINGS_ICON}<span data-i18n="settings"></span></button><button type="button" data-action="close" data-i18n="close" data-i18n-mode="label">${CLOSE_ICON}<span data-i18n="close"></span></button></div></aside>
       <div class="np-editor">
         <div class="np-toolbar">${toolbar}<button type="button" class="np-switch" data-action="view" role="switch" aria-checked="false" data-i18n="viewGroup" data-i18n-mode="title"><span class="np-switch-label" data-i18n="source"></span><span class="np-switch-label" data-i18n="preview"></span><span class="np-switch-thumb" data-i18n="source"></span></button></div>
         <textarea class="np-write"></textarea>
@@ -419,10 +395,8 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       </div>
     </div>
     <div class="np-resize" data-edge="n"></div><div class="np-resize" data-edge="s"></div><div class="np-resize" data-edge="e"></div><div class="np-resize" data-edge="w"></div><div class="np-resize" data-edge="nw"></div><div class="np-resize" data-edge="ne"></div><div class="np-resize" data-edge="sw"></div><div class="np-resize" data-edge="se"></div>
-    <div class="np-dialog" hidden><div class="np-card"></div></div>
     <input class="np-file" type="file" accept="image/png,image/jpeg,image/gif,image/webp" hidden>
   `
-  const dialogMask = must(panel, '.np-dialog')
   const style = document.createElement('style')
   style.textContent = STYLE
   host.append(style)
@@ -838,14 +812,10 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
 
   function paintWorkspaceChoices() {
     const label = panel.querySelector('.np-ws-label')
-    const menu = panel.querySelector('.np-ws-menu')
-    if (!label || !menu) return
+    if (!label) return
     const current = state.ui.workspaceChoice ?? 'all'
     const options = workspaceOptions()
     label.textContent = options.find(([value]) => value === current)?.[1] ?? options[1][1]
-    menu.innerHTML = options.map(([value, name]) =>
-      `<button type="button" class="np-ws-item" role="option" data-ws-choice="${escapeHtml(value)}" data-active="${value === current}" aria-selected="${value === current}"><span>${escapeHtml(name)}</span>${value === current ? CHECK_ICON : ''}</button>`
-    ).join('')
   }
 
   function render() {
@@ -944,114 +914,114 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     source.focus()
   }
 
-  let closeDialog = /** @type {(() => void) | null} */ (null)
   let closeMenu = /** @type {(() => void) | null} */ (null)
-  let dialogSeq = 0
-  const DIALOG_PARTS = '.np-tabs, .np-body'
+  let dialogOpen = false
+  /* the ws button sits outside the anchored menu, so its own pointerdown makes
+     NanoMenu close the menu before the click — suppress the immediate reopen. */
+  let wsToggleJustClosed = false
 
-  function dialog(html, setup) {
-    const mask = dialogMask
-    const card = document.createElement('div')
-    card.className = 'np-card'
-    must(mask, '.np-card').replaceWith(card)
-    // inner scroll wrapper keeps .np-card's border-radius clean; a scrollbar on
-    // the card itself would square off the right corners. Caller h3 lifts into
-    // a fixed header with a close button, matching the app chrome.
-    card.innerHTML = `<div class="np-card-head"><h3 class="np-card-title"></h3><button type="button" class="np-card-close" aria-label="${escapeHtml(text().close)}" title="${escapeHtml(text().close)}">×</button></div><div class="np-card-scroll">${html}</div>`
-    mask.setAttribute('role', 'dialog')
-    mask.setAttribute('aria-modal', 'true')
-    const heading = card.querySelector('.np-card-scroll h3')
-    const title = card.querySelector('.np-card-title')
-    if (heading) {
-      title.textContent = heading.textContent
-      heading.remove()
-    } else {
-      title.textContent = text().settings
-    }
-    title.id = `np-dlg-${++dialogSeq}`
-    mask.setAttribute('aria-labelledby', title.id)
-    card.querySelector('.np-card-close').addEventListener('click', () => closeDialog?.())
-    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
-    for (const part of panel.querySelectorAll(DIALOG_PARTS)) {
-      part.inert = true
-      part.setAttribute('aria-hidden', 'true')
-    }
-    mask.hidden = false
+  /**
+   * Every card is a shared NanoDialog now (mounted into document.body by the
+   * adapter). `spec.body` is the old inner HTML; `spec.setup(el, close)` runs on
+   * the live content node so callers keep wiring the same inputs/switches.
+   * Escape, mask click, focus trap, and focus return are the Modal's job.
+   */
+  function dialog(spec) {
     closeSlash()
     closeMenu?.()
-    closeDialog = () => {
-      closeMenu?.()
-      mask.hidden = true
-      closeDialog = null
-      for (const part of panel.querySelectorAll(DIALOG_PARTS)) {
-        part.inert = false
-        part.removeAttribute('aria-hidden')
-      }
-      if (previousFocus?.isConnected) previousFocus.focus()
-    }
-    setup(card, () => { closeDialog?.() })
-    if (!card.contains(document.activeElement)) {
-      card.querySelector('.np-card-scroll input, .np-card-scroll [autofocus], .np-card-scroll button, .np-card-close')?.focus?.()
-    }
+    let handle = /** @type {{ close: () => void } | undefined} */ (undefined)
+    const finish = () => { dialogOpen = false }
+    // every exit path — footer buttons, Escape, mask, programmatic close —
+    // funnels through finish()+adapter close so the panel guards release.
+    const closeSelf = () => { if (!dialogOpen || !handle) return; finish(); handle.close() }
+    dialogOpen = true
+    handle = openNanoDialog({
+      copy: text(),
+      title: spec.title,
+      confirmLabel: spec.confirmLabel,
+      danger: spec.danger === true,
+      onConfirm: () => spec.onConfirm?.(closeSelf),
+      onCancel: () => { finish(); spec.onCancel?.() },
+      children: React.createElement('div', {
+        className: 'np-body',
+        dangerouslySetInnerHTML: { __html: spec.body },
+        ref: el => { if (el) spec.setup?.(el, closeSelf) },
+      }),
+    })
   }
 
-  // Native-style popover menu anchored to a trigger; one open at a time.
-  function openMenuList(anchor, items) {
+  /**
+   * Workspace switcher as a shared NanoMenu. NanoMenu self-closes on Escape,
+   * outside press, or an item running; `done(unmount)` tracks whether the menu
+   * is actually gone so we never unmount twice and always release aria/focus.
+   */
+  function openWorkspaceMenu(anchor) {
     closeMenu?.()
-    const host = dialogMask.hidden ? panel : dialogMask
-    const menu = document.createElement('div')
-    menu.className = 'np-menu np-pop-in'
-    menu.setAttribute('role', 'listbox')
-    const mr = host.getBoundingClientRect()
-    const ar = anchor.getBoundingClientRect()
-    menu.style.left = `${Math.max(0, ar.left - mr.left)}px`
-    menu.style.top = `${ar.bottom - mr.top + 4}px`
-    menu.style.minWidth = `${ar.width}px`
-    for (const item of items) {
-      const button = document.createElement('button')
-      button.type = 'button'
-      button.dataset.selected = String(!!item.selected)
-      button.textContent = item.label
-      button.addEventListener('click', () => { close(); item.onPick?.() })
-      menu.append(button)
-    }
-    host.append(menu)
     anchor.setAttribute('aria-expanded', 'true')
-    const close = () => {
-      if (closeMenu !== close) return
+    const current = state.ui.workspaceChoice ?? 'all'
+    const check = React.createElement('span', { dangerouslySetInnerHTML: { __html: CHECK_ICON } })
+    const items = workspaceOptions().map(([value, name]) => ({
+      id: value,
+      label: name,
+      icon: value === current ? check : undefined,
+      run: () => {
+        flushSave()
+        state.ui.workspaceChoice = value
+        state.ui.currentId = null
+        render()
+        void persistUi()
+        // NanoMenu unmounts itself before run(); release our bookkeeping too.
+        done(false)
+      },
+    }))
+    const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), items, width: 190 })
+    let closed = false
+    const done = (unmount) => {
+      if (closed) return
+      closed = true
       closeMenu = null
-      menu.remove()
       anchor.setAttribute('aria-expanded', 'false')
+      document.removeEventListener('keydown', esc, true)
+      document.removeEventListener('pointerdown', out, true)
+      if (unmount) raw.close()
+      if (anchor.isConnected) anchor.focus()
     }
-    closeMenu = close
-    menu.addEventListener('keydown', event => {
-      const buttons = [...menu.querySelectorAll('button')]
-      const at = buttons.indexOf(document.activeElement)
-      if (event.key === 'ArrowDown') { event.preventDefault(); buttons[Math.min(buttons.length - 1, at + 1)]?.focus() }
-      else if (event.key === 'ArrowUp') { event.preventDefault(); buttons[Math.max(0, at - 1)]?.focus() }
-      else if (event.key === 'Home') { event.preventDefault(); buttons[0]?.focus() }
-      else if (event.key === 'End') { event.preventDefault(); buttons[buttons.length - 1]?.focus() }
-    })
-    menu.querySelector('button[data-selected="true"]')?.focus() ?? menu.querySelector('button')?.focus()
-    return close
+    const esc = event => {
+      if (event.key !== 'Escape' || !closeMenu) return
+      event.stopPropagation()
+      event.preventDefault()
+      // the notepad's own Esc listener fires first and already called done(true);
+      // this is only a fallback for orderings where NanoMenu handled it instead.
+      done(false)
+    }
+    const out = event => {
+      if (!closeMenu || !(event.target instanceof Element)) return
+      if (event.target.closest('.nano-menu')) return
+      // NanoMenu's own outside handler already unmounted; just release state. A
+      // press on the switcher button itself counts as "click again to close".
+      if (event.target.closest('.np-ws')) wsToggleJustClosed = true
+      done(false)
+    }
+    closeMenu = () => done(true)
+    document.addEventListener('keydown', esc, true)
+    document.addEventListener('pointerdown', out, true)
   }
 
   function askName(title, initial, done) {
-    const copy = text()
-    dialog(`<h3>${escapeHtml(title)}</h3><input name="node-name" value="${escapeHtml(initial)}" aria-label="${escapeHtml(title)}"><div class="np-actions"><button type="button" data-go="cancel">${escapeHtml(copy.cancel)}</button><button type="button" data-go="ok">${escapeHtml(copy.confirm)}</button></div>`, (card, close) => {
-      const input = card.querySelector('[name="node-name"]')
-      if (!(input instanceof HTMLInputElement)) return
-      input.focus()
-      input.select()
-      const submit = () => { close(); void done(input.value).catch(showError) }
-      input.addEventListener('keydown', event => {
-        if (event.key === 'Enter' && !event.isComposing) { event.preventDefault(); submit() }
-      })
-      card.addEventListener('click', event => {
-        const action = event.target instanceof HTMLElement ? event.target.dataset.go : undefined
-        if (action === 'cancel') close()
-        if (action === 'ok') submit()
-      })
+    let input = /** @type {HTMLInputElement | null} */ (null)
+    const submit = close => { if (input) { close(); void done(input.value).catch(showError) } }
+    dialog({
+      title,
+      body: `<input name="node-name" value="${escapeHtml(initial)}" aria-label="${escapeHtml(title)}" data-modal-autofocus>`,
+      onConfirm: close => submit(close),
+      setup: (el, close) => {
+        input = el.querySelector('[name="node-name"]')
+        if (!(input instanceof HTMLInputElement)) return
+        input.select()
+        input.addEventListener('keydown', event => {
+          if (event.key === 'Enter' && !event.isComposing) { event.preventDefault(); submit(close) }
+        })
+      },
     })
   }
 
@@ -1151,8 +1121,9 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       <div class="np-field"><div class="np-field-text"><span class="np-field-name">${escapeHtml(desc)}</span><span class="np-field-desc">${escapeHtml(hint)}</span></div>
       <button type="button" class="np-switch" data-seg-field="${field}" role="switch" aria-checked="${index === 0}" style="--np-switch-n:${options.length};--np-switch-i:${index}"><span class="np-switch-thumb">${escapeHtml(options[index].label)}</span>${labels}</button></div>`
     }
-    dialog(`<h3>${escapeHtml(copy.settingsTitle)}</h3>
-      <section class="np-section">
+    dialog({
+      title: copy.settingsTitle,
+      body: `<section class="np-section">
         ${sw('autoSave', copy.autoSave, copy.autoSaveHint, [
           { value: 'true', label: copy.autoSaveOn },
           { value: 'false', label: copy.autoSaveOff },
@@ -1187,7 +1158,9 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       </section>
       <section class="np-section">
         <div class="np-field"><div class="np-field-text"><span class="np-field-name">${escapeHtml(copy.dangerHeading)}</span><span class="np-field-desc">${escapeHtml(copy.dangerBody)}</span></div><button type="button" class="np-danger" data-go="clear">${escapeHtml(copy.clearAllTitle)}</button></div>
-      </section>`, (card, close) => {
+      </section>`,
+      onConfirm: close => close(),
+      setup: (el, close) => {
       /* segment option tables — values mirror normalizeSettings */
       const SW_OPTIONS = {
         autoSave: [
@@ -1210,9 +1183,9 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       }
       if (state.db) void counts(state.db).then(async value => {
         const estimate = navigator.storage?.estimate ? await navigator.storage.estimate() : {}
-        must(card, '.np-usage-val').textContent = `${value.files} ${text().usageFiles} · ${value.versions} ${text().usageVersions} · ${value.images} ${text().usageImages} · ${formatBytes(estimate.usage ?? text().unknown)}`
+        must(el, '.np-usage-val').textContent = `${value.files} ${text().usageFiles} · ${value.versions} ${text().usageVersions} · ${value.images} ${text().usageImages} · ${formatBytes(estimate.usage ?? text().unknown)}`
       })
-      card.addEventListener('click', event => {
+      el.addEventListener('click', event => {
         /* N-segment switch: pick the segment under the pointer, slide the labelled thumb */
         const seg = event.target instanceof HTMLElement ? event.target.closest('.np-switch[data-seg-field]') : null
         if (seg) {
@@ -1250,10 +1223,10 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
         if (action === 'clear') confirmClear(close)
       })
       const settingNames = ['saveDelayMs', 'draftIntervalMs', 'commitIntervalSec', 'versionLimit', 'imageLimitBytes']
-      card.addEventListener('change', () => {
+      el.addEventListener('change', () => {
         const merged = { ...state.settings }
         let rejected = false
-        for (const input of card.querySelectorAll('input, select')) {
+        for (const input of el.querySelectorAll('input, select')) {
           if (!settingNames.includes(input.name)) continue
           const value = input.type === 'number' ? Number(input.value) : input.value
           const trial = normalizeSettings({ ...state.settings, [input.name]: value })
@@ -1261,15 +1234,15 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
           else rejected = true
         }
         state.settings = merged
-        for (const input of card.querySelectorAll('input, select')) {
+        for (const input of el.querySelectorAll('input, select')) {
           if (settingNames.includes(input.name)) input.value = merged[input.name]
         }
-        let note = card.querySelector('.np-setting-note')
+        let note = el.querySelector('.np-setting-note')
         if (rejected) {
           if (!note) {
             note = document.createElement('p')
             note.className = 'np-setting-note'
-            card.querySelector('.np-card-scroll')?.append(note)
+            el.append(note)
           }
           note.textContent = text().invalidSetting
           return
@@ -1279,6 +1252,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
         armCommit()
         render()
       })
+      },
     })
   }
 
@@ -1286,35 +1260,34 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     const file = current()
     if (!file) return
     const copy = text()
-    dialog(`<h3>${escapeHtml(copy.clearFileTitle)}</h3><p>${escapeHtml(copy.clearFileBody(file.name))}</p><div class="np-actions"><button type="button" data-go="cancel">${escapeHtml(copy.cancel)}</button><button type="button" class="np-danger" data-go="confirm">${escapeHtml(copy.clear)}</button></div>`, (card, close) => {
-      card.querySelector('[data-go="cancel"]').focus()
-      card.addEventListener('click', event => {
-        const choice = event.target instanceof HTMLElement ? event.target.dataset.go : undefined
-        if (choice === 'cancel') close()
-        if (choice === 'confirm') void clearCurrentFile().then(close).catch(showError)
-      })
+    dialog({
+      title: copy.clearFileTitle,
+      body: `<p>${escapeHtml(copy.clearFileBody(file.name))}</p>`,
+      danger: true,
+      confirmLabel: copy.clear,
+      onConfirm: close => void clearCurrentFile().then(close).catch(showError),
     })
   }
 
   function confirmClear(closeSettings) {
     const copy = text()
-    dialog(`<h3>${escapeHtml(copy.clearAllTitle)}</h3><p>${escapeHtml(copy.clearAllBody)}</p><div class="np-actions"><button type="button" data-go="cancel">${escapeHtml(copy.cancel)}</button><button type="button" class="np-danger" data-go="confirm">${escapeHtml(copy.deleteAll)}</button></div>`, (card, close) => {
-      card.querySelector('[data-go="cancel"]').focus()
-      card.addEventListener('click', event => {
-        const action = event.target instanceof HTMLElement ? event.target.dataset.go : undefined
-        if (action === 'cancel') close()
-        if (action === 'confirm' && state.db) {
-          flushSave()
-          void clearContent(state.db).then(() => {
-            state.nodes = []
-            state.ui.tabs = []
-            state.ui.currentId = null
-            close()
-            closeSettings()
-            render()
-          }).catch(showError)
-        }
-      })
+    dialog({
+      title: copy.clearAllTitle,
+      body: `<p>${escapeHtml(copy.clearAllBody)}</p>`,
+      danger: true,
+      confirmLabel: copy.deleteAll,
+      onConfirm: close => {
+        if (!state.db) return
+        flushSave()
+        void clearContent(state.db).then(() => {
+          state.nodes = []
+          state.ui.tabs = []
+          state.ui.currentId = null
+          close()
+          closeSettings()
+          render()
+        }).catch(showError)
+      },
     })
   }
 
@@ -1324,32 +1297,43 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     const versions = await versionsOf(state.db, file.id)
     const copy = text()
     const rows = versions.map(version => `<button type="button" data-version="${version.id}">${escapeHtml(new Date(version.createdAt).toLocaleString())} · ${escapeHtml(copy.reasons[version.reason] ?? version.reason)} · ${version.markdown.length} chars</button>`).join('')
-    dialog(`<h3>${escapeHtml(copy.historyTitle)}</h3><div class="np-versions">${rows || `<p>${escapeHtml(copy.noVersions)}</p>`}</div><div class="np-actions"><button type="button" data-go="close">${escapeHtml(copy.close)}</button></div>`, (card, close) => {
-      card.addEventListener('click', event => {
-        const target = event.target instanceof HTMLElement ? event.target : null
-        if (target?.dataset.go === 'close') close()
-        const id = target?.dataset.version
-        const version = versions.find(item => item.id === id)
-        if (!version) return
-        const previewCopy = text()
-        dialog(`<h3>${escapeHtml(previewCopy.previewAt(new Date(version.createdAt).toLocaleString()))}</h3><pre>${escapeHtml(version.markdown)}</pre><div class="np-actions"><button type="button" data-go="back">${escapeHtml(previewCopy.back)}</button><button type="button" data-go="restore">${escapeHtml(previewCopy.restore)}</button></div>`, (preview, closePreview) => {
-          preview.addEventListener('click', previewEvent => {
-            const target = previewEvent.target instanceof HTMLElement ? previewEvent.target : null
-            const action = target?.dataset.go
-            if (action === 'back') { closePreview(); void openHistory().catch(showError) }
-            if (action === 'restore') {
-              if (target?.dataset.arm !== 'true') {
-                if (target) { target.dataset.arm = 'true'; target.textContent = text().confirmRestore }
+    dialog({
+      title: copy.historyTitle,
+      body: `<div class="np-versions">${rows || `<p>${escapeHtml(copy.noVersions)}</p>`}</div>`,
+      confirmLabel: copy.close,
+      onConfirm: close => close(),
+      setup: (el, close) => {
+        el.addEventListener('click', event => {
+          const target = event.target instanceof HTMLElement ? event.target : null
+          const id = target?.dataset.version
+          const version = versions.find(item => item.id === id)
+          if (!version) return
+          // one card at a time, like the old mask — close history, show preview.
+          close()
+          const previewCopy = text()
+          let armed = false
+          let note = /** @type {HTMLElement | null} */ (null)
+          dialog({
+            title: previewCopy.previewAt(new Date(version.createdAt).toLocaleString()),
+            body: `<pre>${escapeHtml(version.markdown)}</pre><p class="np-restore-note" hidden>${escapeHtml(previewCopy.confirmRestore)}</p>`,
+            confirmLabel: previewCopy.restore,
+            onCancel: () => void openHistory().catch(showError),
+            onConfirm: closePreview => {
+              // restore needs a second click, like the old inline armed button.
+              if (!armed) {
+                armed = true
+                note?.removeAttribute('hidden')
                 return
               }
               write().value = version.markdown
               const live = current()
               if (live) live.draft = version.markdown
-              void commit('restore').then(() => { closePreview(); close(); render() }).catch(showError)
-            }
+              void commit('restore').then(() => { closePreview(); render() }).catch(showError)
+            },
+            setup: el => { note = el.querySelector('.np-restore-note') },
           })
         })
-      })
+      },
     })
   }
 
@@ -1507,13 +1491,12 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     const nested = state.nodes.some(item => item.parentId === id)
     const title = node.kind === 'folder' ? copy.deleteFolderTitle : copy.deleteFileTitle
     const body = node.kind === 'folder' ? (nested ? copy.deleteFolderBody : copy.deleteEmptyFolderBody) : copy.deleteFileBody(node.name)
-    dialog(`<h3>${escapeHtml(title)}</h3><p>${escapeHtml(body)}</p><div class="np-actions"><button type="button" data-go="cancel">${escapeHtml(copy.cancel)}</button><button type="button" class="np-danger" data-go="confirm">${escapeHtml(copy.delete)}</button></div>`, (card, close) => {
-      card.querySelector('[data-go="cancel"]').focus()
-      card.addEventListener('click', click => {
-        const choice = click.target instanceof HTMLElement ? click.target.dataset.go : undefined
-        if (choice === 'cancel') close()
-        if (choice === 'confirm') { close(); void forget(id) }
-      })
+    dialog({
+      title,
+      body: `<p>${escapeHtml(body)}</p>`,
+      danger: true,
+      confirmLabel: copy.delete,
+      onConfirm: close => { close(); void forget(id) },
     })
   }
 
@@ -1548,24 +1531,12 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       requestDelete(rowAction.dataset.remove)
       return
     }
-    const target = event.target instanceof Element ? event.target.closest('[data-action], [data-format], [data-tab], [data-close], [data-id], [data-ws-choice], [data-ws]') : null
+    const target = event.target instanceof Element ? event.target.closest('[data-action], [data-format], [data-tab], [data-close], [data-id], [data-ws]') : null
     if (!(target instanceof HTMLElement)) return
     const action = target.dataset.action
     if (action === 'ws-toggle') {
-      const menu = must(panel, '.np-ws-menu')
-      menu.hidden = !menu.hidden
-      target.setAttribute('aria-expanded', String(!menu.hidden))
-      if (!menu.hidden) { menu.classList.remove('np-pop-in'); void menu.offsetWidth; menu.classList.add('np-pop-in') }
-      return
-    }
-    if (target.dataset.wsChoice !== undefined) {
-      must(panel, '.np-ws-menu').hidden = true
-      panel.querySelector('.np-ws-btn')?.setAttribute('aria-expanded', 'false')
-      flushSave()
-      state.ui.workspaceChoice = target.dataset.wsChoice
-      state.ui.currentId = null
-      render()
-      void persistUi()
+      if (wsToggleJustClosed) { wsToggleJustClosed = false; return }
+      openWorkspaceMenu(target)
       return
     }
     if (action === 'close' || action === 'tree') {
@@ -1647,53 +1618,10 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     }
   })
   panel.addEventListener('keydown', event => {
-    if ((event.key !== 'Enter' && event.key !== ' ') || !dialogMask.hidden) return
+    if ((event.key !== 'Enter' && event.key !== ' ') || dialogOpen) return
     const node = event.target instanceof Element ? event.target.closest('[data-ws]') : null
     if (node) { event.preventDefault(); node.click() }
   })
-  panel.querySelector('.np-ws-btn')?.addEventListener('keydown', event => {
-    const menu = must(panel, '.np-ws-menu')
-    if (event.key === 'Escape') {
-      if (menu.hidden) return
-      event.preventDefault()
-      menu.hidden = true
-      panel.querySelector('.np-ws-btn')?.setAttribute('aria-expanded', 'false')
-      return
-    }
-    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-      if (!menu.hidden) return
-      event.preventDefault()
-      menu.hidden = false
-      menu.classList.remove('np-pop-in'); void menu.offsetWidth; menu.classList.add('np-pop-in')
-      panel.querySelector('.np-ws-btn')?.setAttribute('aria-expanded', 'true')
-      menu.querySelector('.np-ws-item')?.focus?.()
-      return
-    }
-  })
-  must(panel, '.np-ws-menu').addEventListener('keydown', event => {
-    const menu = /** @type {HTMLElement} */ (event.currentTarget)
-    const items = [...menu.querySelectorAll('.np-ws-item')]
-    const index = items.indexOf(/** @type {HTMLElement} */ (document.activeElement))
-    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-      event.preventDefault()
-      const next = items[(index + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length] ?? items[0]
-      next?.focus()
-    } else if (event.key === 'Home') { event.preventDefault(); items[0]?.focus() }
-    else if (event.key === 'End') { event.preventDefault(); items.at(-1)?.focus() }
-    else if (event.key === 'Escape') {
-      event.preventDefault()
-      menu.hidden = true
-      panel.querySelector('.np-ws-btn')?.setAttribute('aria-expanded', 'false')
-      panel.querySelector('.np-ws-btn')?.focus?.()
-    }
-  })
-  on(document, 'click', event => {
-    const menu = panel.querySelector('.np-ws-menu')
-    if (menu && !menu.hidden && !(event.target instanceof Element && event.target.closest('.np-ws'))) {
-      menu.hidden = true
-      panel.querySelector('.np-ws-btn')?.setAttribute('aria-expanded', 'false')
-    }
-  }, true)
 
   const slashMenu = must(panel, '.np-slash')
 
@@ -1718,7 +1646,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     state.slashIndex = clamp(state.slashIndex, 0, Math.max(0, items.length - 1))
     slashMenu.innerHTML = items.length === 0
       ? `<p class="np-slash-empty">${escapeHtml(text().noMatches)}</p>`
-      : items.map((def, index) => `<button type="button" data-slash="${def.kind}" data-active="${index === state.slashIndex}">${def.icon}<span>${escapeHtml(formatLabel(def.kind))}</span></button>`).join('')
+      : items.map((def, index) => `<button type="button" class="nano-menu-item" data-slash="${def.kind}" data-active="${index === state.slashIndex}"><span class="nano-menu-icon" aria-hidden="true">${def.icon}</span><span class="nano-menu-label">${escapeHtml(formatLabel(def.kind))}</span></button>`).join('')
     slashMenu.querySelector('[data-active="true"]')?.scrollIntoView({ block: 'nearest' })
   }
 
@@ -1865,7 +1793,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     if ([...(event.dataTransfer?.files ?? [])].some(file => file.type.startsWith('image/'))) event.preventDefault()
   })
   panel.addEventListener('drop', event => {
-    if (!dialogMask.hidden) return
+    if (dialogOpen) return
     const image = [...(event.dataTransfer?.files ?? [])].find(file => file.type.startsWith('image/'))
     if (!image) return
     event.preventDefault()
@@ -1873,7 +1801,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     insertStoredImage(image)
   })
   panel.addEventListener('paste', event => {
-    if (!dialogMask.hidden) return
+    if (dialogOpen) return
     if (event.target !== write()) return
     const image = [...(event.clipboardData?.files ?? [])].find(file => file.type.startsWith('image/'))
     if (!image || !state.db) return
@@ -1901,34 +1829,8 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       event.stopPropagation()
       event.preventDefault()
       closeMenu()
-      return
-    }
-    if (event.key === 'Escape' && !dialogMask.hidden) {
-      event.stopPropagation()
-      closeDialog?.()
     }
   }, true)
-  dialogMask.addEventListener('pointerdown', event => {
-    if (closeMenu && !(event.target instanceof Element && event.target.closest('.np-menu, .np-sel'))) closeMenu()
-    if (event.target === dialogMask) closeDialog?.()
-  })
-  on(panel, 'pointerdown', event => {
-    if (closeMenu && !(event.target instanceof Element && event.target.closest('.np-menu, .np-sel'))) closeMenu()
-  }, true)
-  dialogMask.addEventListener('keydown', event => {
-    if (event.key !== 'Tab') return
-    const card = dialogMask.querySelector('.np-card')
-    if (!(card instanceof HTMLElement)) return
-    const focusables = [...card.querySelectorAll('button, input, select, textarea, [tabindex]')].filter(el => el instanceof HTMLElement && !/** @type {HTMLButtonElement} */ (el).disabled && el.offsetParent !== null)
-    if (focusables.length === 0) { event.preventDefault(); return }
-    const first = focusables[0]
-    const last = focusables[focusables.length - 1]
-    if (event.shiftKey && (document.activeElement === first || !card.contains(document.activeElement))) {
-      event.preventDefault(); last.focus()
-    } else if (!event.shiftKey && (document.activeElement === last || !card.contains(document.activeElement))) {
-      event.preventDefault(); first.focus()
-    }
-  })
 
   const channel = typeof BroadcastChannel === 'function' ? new BroadcastChannel(CHANNEL) : null
   if (channel) {
@@ -1986,6 +1888,27 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
   entry.addEventListener('pointerenter', () => { tip.hidden = false })
   entry.addEventListener('pointerleave', () => { tip.hidden = true })
 
+  /* Cross-plugin import surface: other bundles (explorer-extra) hand a file over as a
+     * fresh top-level note without touching the source on disk. The import lands as a
+     * draft, so edits stay local until "save as" picks a real target. */
+  const dbReady = new Promise((resolve, reject) => { state.dbReadyResolve = resolve; state.dbReadyReject = reject })
+  window.__nanoNotepad = {
+    async import(name, content) {
+      await dbReady
+      const siblings = state.nodes.filter(node => node.parentId === null && (node.workspaceId ?? null) === activeWorkspace().id && node.kind === 'file')
+      const base = String(name || 'note').replace(/\.md$/i, '') || 'note'
+      let candidate = `${base}.md`, i = 1
+      while (siblings.some(s => s.name === candidate)) candidate = `${base}-${++i}.md`
+      const node = await createNode(state.db, 'file', null, candidate, activeWorkspace().id)
+      state.nodes.push(node)
+      await saveDraft(state.db, node.id, String(content ?? ''))
+      node.draft = String(content ?? '')
+      openFile(node.id)
+      channel?.postMessage({ type: 'changed' })
+      return node
+    },
+  }
+
   void openDatabase().then(async db => {
     state.db = db
     const snapshot = await loadSnapshot(db)
@@ -2004,7 +1927,8 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     armCommit()
     render()
     void navigator.storage?.persist?.()
-  }).catch(error => api.failed(error))
+    state.dbReadyResolve?.()
+  }).catch(error => { state.dbReadyReject?.(error); api.failed(error) })
   render()
   return api
 }

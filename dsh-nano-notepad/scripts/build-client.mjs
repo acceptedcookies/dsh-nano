@@ -9,7 +9,7 @@ const body = join(root, 'lib/client.body.js')
 // Prefer the locked devDependency binary; fall back to npx only when it is not
 // installed, so a release build never pulls a drifted toolchain (review-01 R12).
 const local = join(root, 'node_modules', '.bin', 'esbuild')
-const args = ['src/client/index.js', '--bundle', '--format=iife', '--global-name=__notepadExport', '--minify', '--platform=browser', '--external:react', `--outfile=${body}`]
+const args = ['src/client/index.js', '--bundle', '--format=iife', '--global-name=__notepadExport', '--minify', '--platform=browser', '--external:react', '--external:react-dom', '--external:react-dom/client', '--external:@deepseek-ai/dsh-client-ui-primitives', `--outfile=${body}`]
 const built = existsSync(local)
   ? spawnSync(local, args, { cwd: root, stdio: 'inherit' })
   : spawnSync('npx', ['--yes', 'esbuild@0.25.0', ...args], { cwd: root, stdio: 'inherit' })

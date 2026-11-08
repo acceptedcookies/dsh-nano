@@ -2,7 +2,7 @@
 
 import React from 'react'
 import { formatBytes, formatSync } from './format.js'
-import { IconBranchOutlineRegular, IconRefreshOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconArchiveOutlineRegular, IconBranchOutlineRegular, IconRefreshOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 
 /**
  * The status bar.
@@ -27,6 +27,15 @@ export function StatusBar(props) {
     },
     React.createElement(IconBranchOutlineRegular, { width: 14, height: 14 }),
     React.createElement('span', { className: 'nxe-branch-name', 'data-nxe-branch': git.branch ?? '' }, name)))
+    if (typeof git.stashed === 'number' && git.stashed > 0) {
+      left.push(React.createElement('span', {
+        key: 'stash', className: 'nxe-stash', 'data-nxe-stash': String(git.stashed),
+        title: copy.stashBadge(git.stashed),
+        'aria-label': copy.stashBadge(git.stashed),
+      },
+      React.createElement(IconArchiveOutlineRegular, { width: 14, height: 14 }),
+      React.createElement('span', { className: 'nxe-stash-count' }, String(git.stashed))))
+    }
     const dirty = (git.files?.length ?? 0) > 0
     const label = dirty ? copy.commitTooltip : copy.commitTooltipNone
     if (git.upstream !== null && git.upstream !== undefined) {

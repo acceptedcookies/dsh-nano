@@ -7,6 +7,7 @@ import { relativeTo } from './paths.js'
 import { DEFAULT_PREFS, readPrefs, writePrefs } from './prefs.js'
 import { SettingsPage } from './settings.js'
 import { STYLE } from './styles.js'
+import * as primitives from '@deepseek-ai/dsh-client-ui-primitives'
 
 const { createElement, useCallback, useEffect, useState } = React
 
@@ -100,6 +101,18 @@ export function apply(ctx) {
     key: OWN_ID,
     inject: () => ({ nxe: face() }),
   }, ExplorerBody)), 'nano-explorer-extra: files body')
+
+  // The chip's title is its own seat. Taking over the body does not carry the shipped title with it,
+  // and without this the tab label lost the folder sheet that the builtin draws before it.
+  ctx.effect(() => ctx.slots.inject('sidebar.right.pane.tab.title', () => ctx.slots.register({
+    name: 'sidebar.right.pane.tab.title',
+    key: OWN_ID,
+  }, function ExplorerTitle({ useTabInfo }) {
+    const { tab } = useTabInfo()
+    return createElement(React.Fragment, null,
+      createElement(primitives.FileTypeIcon, { kind: 'folder', size: 16, className: 'nxe-title-icon' }),
+      tab.title)
+  })), 'nano-explorer-extra: files tab title')
 
   // Row menus. The shipped menu already offers the absolute path, so this adds only what it lacks:
   // a workspace-relative path with the `/` separators a model or a markdown link wants, and rename.

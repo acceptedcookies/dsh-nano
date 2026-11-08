@@ -18,6 +18,52 @@ const LINEFEED = String.fromCharCode(10)
 const NOT_A_CHECKOUT = /not a git repository|must be run in a work tree/i
 
 /**
+ * Read which files differ between this checkout and its upstream, per side.
+ *
+ * `pushed` lists paths this branch has committed that the upstream lacks; `pulled` lists paths the
+ * upstream has committed that this branch lacks. Both sides are measured from the merge base, not
+ * from each other: `A..B` still walks both trees, so a direct upstream-to-HEAD comparison reports the
+ * same paths in both directions and cannot say which side changed them. Each side costs one
+ * `git diff --name-status`, so the whole comparison stays at three processes however many files change.
+ *
+ * @param ctx - context providing `subprocess`, `sandbox`, and `sandboxPolicy`.
+ * @param config - executable and process limits.
+ * @param request - Git working directory, policy, and cancellation.
+ * @returns the per-side path lists, or undefined when the comparison cannot run.
+ */
+async function remoteDivergence(ctx, config, request) {
+  const read = async range => {
+    const result = await runGit(ctx, config, {
+      ...request,
+      args: ['diff', '--name-status', '--no-renames', range],
+      allowedExitCodes: [0, 128],
+    }).catch(() => undefined)
+    if (result === undefined || result.exitCode !== 0) return undefined
+    const entries = []
+    for (const line of result.stdout.split('\n')) {
+      if (line.trim() === '') continue
+      const [letter, ...rest] = line.split('\t')
+      const path = rest.join('\t')
+      if (path === '') continue
+      // A diff letter means the same three things to a reader: added, removed, or changed.
+      const status = letter.startsWith('A') ? 'A' : letter.startsWith('D') ? 'D' : letter.startsWith('R') ? 'R' : 'M'
+      entries.push({ path, status })
+    }
+    return entries
+  }
+  const base = await runGit(ctx, config, {
+    ...request, args: ['merge-base', 'HEAD', '@{u}'], allowedExitCodes: [0, 128],
+  }).catch(() => undefined)
+  if (base === undefined || base.exitCode !== 0) return undefined
+  const forkPoint = base.stdout.trim()
+  if (forkPoint === '') return undefined
+  const pushed = await read(`${forkPoint}..HEAD`)
+  const pulled = await read(`${forkPoint}..@{u}`)
+  if (pushed === undefined && pulled === undefined) return undefined
+  return { pushed: pushed ?? [], pulled: pulled ?? [] }
+}
+
+/**
  * Build the environment a Git child runs with.
  * @returns tombstoned selectors plus the prompt, lock, and locale policy.
  */
@@ -100,17 +146,44 @@ function firstLine(text) {
 }
 
 /**
- * Normalize one porcelain v2 status pair to the single letter the tree draws.
+ * Split one porcelain v2 status pair into its two sides.
+ *
+ * The columns mean different things: `x` is what the index holds (already staged with `git add`) and
+ * `y` is what the working tree holds (edited but not staged). Collapsing them lost the distinction
+ * between "prepared for the next commit" and "not prepared yet".
+ *
  * @param x - staged status character (or a space).
  * @param y - working-tree status character (or a space).
+ * @returns the staged and unstaged letters, each absent when that side is clean.
+ */
+function sidesOf(x, y) {
+  const letter = c => {
+    if (c === undefined || c === ' ' || c === '.') return undefined
+    if (c === 'C') return 'A'
+    if (c === 'T') return 'M'
+    if (c === 'R' || c === 'D' || c === 'A' || c === 'M' || c === 'U') return c
+    return undefined
+  }
+  return { staged: letter(x), unstaged: letter(y) }
+}
+
+/**
+ * Choose the single letter the row draws from both sides.
+ *
+ * A rename or a delete is a shape change and wins; an addition is new; a modification is the quiet
+ * case. The full pair still travels on the entry, so the row can show both.
+ *
+ * @param staged - index-side letter.
+ * @param unstaged - working-tree-side letter.
  * @returns the display letter, or `undefined` when both sides are clean.
  */
-function letterOf(x, y) {
-  if (x === 'R' || y === 'R') return 'R'
-  if (x === 'D' || y === 'D') return 'D'
-  if (x === 'A' || y === 'A') return 'A'
-  if (x === 'M' || y === 'M' || x === 'T' || y === 'T') return 'M'
-  if (x === 'C' || y === 'C') return 'A'
+function letterOf(staged, unstaged) {
+  const both = [staged, unstaged]
+  if (both.includes('R')) return 'R'
+  if (both.includes('D')) return 'D'
+  if (both.includes('U')) return 'U'
+  if (both.includes('A')) return 'A'
+  if (both.includes('M')) return 'M'
   return undefined
 }
 
@@ -144,16 +217,18 @@ export function parseStatus(stdout) {
       const fields = record.split(' ')
       const xy = fields[1] ?? '..'
       const path = fields.slice(8).join(' ')
-      const letter = letterOf(xy[0], xy[1])
-      if (letter !== undefined && path !== '') result.files.push({ path, status: letter })
+      const sides = sidesOf(xy[0], xy[1])
+      const letter = letterOf(sides.staged, sides.unstaged)
+      if (letter !== undefined && path !== '') result.files.push({ path, status: letter, ...sides })
       continue
     }
     if (kind === '2') {
       const fields = record.split(' ')
       const xy = fields[1] ?? '..'
       const [path] = fields.slice(9).join(' ').split('\t')
-      const letter = letterOf(xy[0], xy[1]) ?? 'R'
-      if (path !== undefined && path !== '') result.files.push({ path, status: letter })
+      const sides = sidesOf(xy[0], xy[1])
+      const letter = letterOf(sides.staged, sides.unstaged) ?? 'R'
+      if (path !== undefined && path !== '') result.files.push({ path, status: letter, ...sides })
       continue
     }
     if (kind === '?') {
@@ -201,7 +276,24 @@ export async function readStatus(ctx, config, request) {
     ...(scoped ? ['--', request.path] : []),
   ]
   const status = await runGit(ctx, config, { ...request, args })
-  return { root, ...parseStatus(status.stdout) }
+  const parsed = parseStatus(status.stdout)
+
+  // Stashed work is invisible to `status`: the tree looks clean while a shelf of commits waits to be
+  // restored. One extra command reports how many are shelved, which the status bar shows as a badge.
+  const stash = await runGit(ctx, config, {
+    ...request, args: ['stash', 'list', '--format=%gd'], allowedExitCodes: [0, 128],
+  }).catch(() => undefined)
+  const stashed = stash === undefined || stash.exitCode !== 0
+    ? 0
+    : stash.stdout.split('\n').filter(line => line.trim() !== '').length
+
+  // Per-file divergence from the upstream, only when the branch tracks one. Two range diffs answer
+  // every path in one call each rather than a `log` per file.
+  const remote = typeof parsed.upstream !== 'string' || parsed.upstream === ''
+    ? undefined
+    : await remoteDivergence(ctx, config, request)
+
+  return { root, ...parsed, stashed, ...(remote === undefined ? {} : { remote }) }
 }
 
 /**

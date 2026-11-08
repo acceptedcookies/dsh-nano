@@ -21,6 +21,8 @@ export const COPY = {
     rename: '重命名',
     copyRelative: '复制相对路径',
     copyAbsolute: '复制绝对路径',
+    openInNotepad: '复制到 notepad 中打开',
+    openInNotepadFail: '读取失败，未导入',
     copyFailed: '复制失败',
     renameFailed: '重命名失败',
     copied: '已复制',
@@ -83,6 +85,12 @@ export const COPY = {
     statusDeleted: '已删除',
     statusRenamed: '重命名',
     statusConflicted: '冲突',
+    statusStaged: label => `${label}（已暂存）`,
+    statusUnstaged: label => `${label}（未暂存）`,
+    statusBoth: label => `${label}（部分已暂存）`,
+    remotePushed: status => `本地已提交未推送：${status}`,
+    remotePulled: status => `远端已提交未拉取：${status}`,
+    stashBadge: count => `有 ${count} 个 stash`,
     statusUntracked: '未跟踪',
   },
   en: {
@@ -105,6 +113,8 @@ export const COPY = {
     rename: 'Rename',
     copyRelative: 'Copy relative path',
     copyAbsolute: 'Copy absolute path',
+    openInNotepad: 'Copy to notepad',
+    openInNotepadFail: 'Read failed; not imported',
     copyFailed: 'Copy failed',
     renameFailed: 'Rename failed',
     copied: 'Copied',
@@ -167,6 +177,12 @@ export const COPY = {
     statusDeleted: 'Deleted',
     statusRenamed: 'Renamed',
     statusConflicted: 'Conflicted',
+    statusStaged: label => `${label} (staged)`,
+    statusUnstaged: label => `${label} (unstaged)`,
+    statusBoth: label => `${label} (partly staged)`,
+    remotePushed: status => `Committed locally, not pushed: ${status}`,
+    remotePulled: status => `Committed upstream, not pulled: ${status}`,
+    stashBadge: count => `${count} stashed`,
     statusUntracked: 'Untracked',
   },
 }
@@ -182,8 +198,8 @@ export function copyFor(language) {
 }
 
 /** @param {string} status */
-export function statusLabel(copy, status) {
-  return {
+export function statusLabel(copy, status, staged, unstaged) {
+  const base = {
     M: copy.statusModified,
     A: copy.statusAdded,
     D: copy.statusDeleted,
@@ -191,4 +207,10 @@ export function statusLabel(copy, status) {
     U: copy.statusConflicted,
     '?': copy.statusUntracked,
   }[status] ?? status
+  // When both porcelain sides are known, say which of them hold changes: the distinction decides
+  // whether the next commit will include the file at all.
+  if (staged !== undefined && unstaged !== undefined) return copy.statusBoth(base)
+  if (staged !== undefined) return copy.statusStaged(base)
+  if (unstaged !== undefined) return copy.statusUnstaged(base)
+  return base
 }

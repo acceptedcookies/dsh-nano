@@ -19,6 +19,38 @@ var GIT_TOMBSTONES = [
 var GIT_PREFIX = ["--no-optional-locks", "-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false"];
 var LINEFEED = String.fromCharCode(10);
 var NOT_A_CHECKOUT = /not a git repository|must be run in a work tree/i;
+async function remoteDivergence(ctx, config, request) {
+  const read = async (range) => {
+    const result = await runGit(ctx, config, {
+      ...request,
+      args: ["diff", "--name-status", "--no-renames", range],
+      allowedExitCodes: [0, 128]
+    }).catch(() => void 0);
+    if (result === void 0 || result.exitCode !== 0) return void 0;
+    const entries = [];
+    for (const line of result.stdout.split("\n")) {
+      if (line.trim() === "") continue;
+      const [letter, ...rest] = line.split("	");
+      const path = rest.join("	");
+      if (path === "") continue;
+      const status = letter.startsWith("A") ? "A" : letter.startsWith("D") ? "D" : letter.startsWith("R") ? "R" : "M";
+      entries.push({ path, status });
+    }
+    return entries;
+  };
+  const base = await runGit(ctx, config, {
+    ...request,
+    args: ["merge-base", "HEAD", "@{u}"],
+    allowedExitCodes: [0, 128]
+  }).catch(() => void 0);
+  if (base === void 0 || base.exitCode !== 0) return void 0;
+  const forkPoint = base.stdout.trim();
+  if (forkPoint === "") return void 0;
+  const pushed = await read(`${forkPoint}..HEAD`);
+  const pulled = await read(`${forkPoint}..@{u}`);
+  if (pushed === void 0 && pulled === void 0) return void 0;
+  return { pushed: pushed ?? [], pulled: pulled ?? [] };
+}
 function gitEnvironment() {
   const env = {};
   for (const key of GIT_TOMBSTONES) env[key] = void 0;
@@ -79,12 +111,23 @@ async function runGit(ctx, config, request) {
 function firstLine(text) {
   return text.split(/\r?\n/u).map((line) => line.trim()).find((line) => line.length > 0) ?? "no diagnostic";
 }
-function letterOf(x, y) {
-  if (x === "R" || y === "R") return "R";
-  if (x === "D" || y === "D") return "D";
-  if (x === "A" || y === "A") return "A";
-  if (x === "M" || y === "M" || x === "T" || y === "T") return "M";
-  if (x === "C" || y === "C") return "A";
+function sidesOf(x, y) {
+  const letter = (c) => {
+    if (c === void 0 || c === " " || c === ".") return void 0;
+    if (c === "C") return "A";
+    if (c === "T") return "M";
+    if (c === "R" || c === "D" || c === "A" || c === "M" || c === "U") return c;
+    return void 0;
+  };
+  return { staged: letter(x), unstaged: letter(y) };
+}
+function letterOf(staged, unstaged) {
+  const both = [staged, unstaged];
+  if (both.includes("R")) return "R";
+  if (both.includes("D")) return "D";
+  if (both.includes("U")) return "U";
+  if (both.includes("A")) return "A";
+  if (both.includes("M")) return "M";
   return void 0;
 }
 function parseStatus(stdout) {
@@ -112,16 +155,18 @@ function parseStatus(stdout) {
       const fields = record.split(" ");
       const xy = fields[1] ?? "..";
       const path = fields.slice(8).join(" ");
-      const letter = letterOf(xy[0], xy[1]);
-      if (letter !== void 0 && path !== "") result.files.push({ path, status: letter });
+      const sides = sidesOf(xy[0], xy[1]);
+      const letter = letterOf(sides.staged, sides.unstaged);
+      if (letter !== void 0 && path !== "") result.files.push({ path, status: letter, ...sides });
       continue;
     }
     if (kind === "2") {
       const fields = record.split(" ");
       const xy = fields[1] ?? "..";
       const [path] = fields.slice(9).join(" ").split("	");
-      const letter = letterOf(xy[0], xy[1]) ?? "R";
-      if (path !== void 0 && path !== "") result.files.push({ path, status: letter });
+      const sides = sidesOf(xy[0], xy[1]);
+      const letter = letterOf(sides.staged, sides.unstaged) ?? "R";
+      if (path !== void 0 && path !== "") result.files.push({ path, status: letter, ...sides });
       continue;
     }
     if (kind === "?") {
@@ -155,7 +200,15 @@ async function readStatus(ctx, config, request) {
     ...scoped ? ["--", request.path] : []
   ];
   const status = await runGit(ctx, config, { ...request, args });
-  return { root, ...parseStatus(status.stdout) };
+  const parsed = parseStatus(status.stdout);
+  const stash = await runGit(ctx, config, {
+    ...request,
+    args: ["stash", "list", "--format=%gd"],
+    allowedExitCodes: [0, 128]
+  }).catch(() => void 0);
+  const stashed = stash === void 0 || stash.exitCode !== 0 ? 0 : stash.stdout.split("\n").filter((line) => line.trim() !== "").length;
+  const remote = typeof parsed.upstream !== "string" || parsed.upstream === "" ? void 0 : await remoteDivergence(ctx, config, request);
+  return { root, ...parsed, stashed, ...remote === void 0 ? {} : { remote } };
 }
 async function commitAll(ctx, config, request) {
   const { message } = request;
@@ -661,6 +714,36 @@ function createRoutes(ctx, config) {
           followSymlinks: body.followSymlinks !== false,
           allowOutsideWorkspace: body.allowOutsideWorkspace === true
         }, { maxEntries: config.listingMaxEntries });
+      }
+    },
+    /* Read one file as UTF-8, capped — enough to seed a notepad note.
+       Same lexical + resolved boundary checks the lister uses, so a symlink
+       out of the workspace cannot be smuggled through an allow flag. */
+    "/read": {
+      method: "POST",
+      async run(req) {
+        const body = await jsonBody(req);
+        const { root } = await scopeOf(ctx, body.sessionId);
+        const path = typeof body.path === "string" ? body.path : "";
+        const requested = absoluteOf(root, path);
+        if (!isLexicallyInside(root, requested) && body.allowOutsideWorkspace !== true) {
+          throw new Error(`"${path}" is outside the workspace`);
+        }
+        const resolved = fs().processPath(await fs().resolve(requested));
+        if (!isLexicallyInside(root, resolved) && body.allowOutsideWorkspace !== true) {
+          throw new Error(`"${path}" resolves outside the workspace`);
+        }
+        const info = await fs().stat(resolved);
+        if (info.type !== "file") throw new Error(`"${path}" is not a file`);
+        const limit = 1 * 1024 * 1024;
+        if (info.size > limit) throw new Error(`"${path}" is larger than ${limit} bytes`);
+        const bytes = await fs().readByteRange(resolved, { offset: 0, length: limit });
+        try {
+          new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+        } catch {
+          throw new Error(`"${path}" is not UTF-8 text`);
+        }
+        return { ok: true, content: new TextDecoder("utf-8").decode(bytes) };
       }
     }
   };

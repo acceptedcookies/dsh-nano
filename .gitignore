@@ -60,3 +60,6 @@ release/
 # NOTE: Cargo.lock stays committed — reproducible builds depend on it.
 target/
 **/*.wasm
+
+# 业主文件
+.adocs

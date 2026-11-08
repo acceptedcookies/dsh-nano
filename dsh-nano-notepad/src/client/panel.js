@@ -192,15 +192,15 @@ ${NANO_STYLES}
 .np-footer-actions button.np-danger { color: var(--dsw-alias-label-error); }
 .np-footer-actions button.np-danger:hover, .np-dlg-body button.np-danger:hover { border-color: var(--dsw-alias-state-error-secondary); color: var(--dsw-alias-state-error-secondary); background: var(--dsw-alias-interactive-bg-hover-danger); }
 .np-write, .np-read { flex: 1; min-height: 0; margin: 0; }
-.np-write { box-sizing: border-box; width: 100%; max-width: 100%; resize: none; border: 0; outline: 0; background: transparent; color: var(--dsw-alias-label-primary); caret-color: var(--dsw-alias-label-primary); padding: var(--np-pad-x); font: var(--dsw-font-markdown-code); overflow-wrap: anywhere; }
+.np-write { box-sizing: border-box; width: 100%; max-width: 100%; resize: none; border: 0; outline: 0; background: transparent; color: var(--dsw-alias-label-primary); caret-color: var(--dsw-alias-label-primary); padding: var(--np-pad-x); font-family: var(--dsw-font-markdown-code-font-family); font-size: var(--np-editor-font-size, 14px); overflow-wrap: anywhere; }
 .np-write:focus-visible { outline: none; box-shadow: inset 0 0 0 1px var(--dsw-alias-border-l3); }
 .np-read:focus-visible { outline: none; box-shadow: inset 0 0 0 1px var(--dsw-alias-border-l3); }
 .np-write:disabled { color: var(--dsw-alias-label-tertiary); }
 .np-tool:disabled, .np-footer-actions button:disabled { opacity: .45; pointer-events: none; }
-.np-read { box-sizing: border-box; max-width: 100%; overflow: auto; overflow-wrap: anywhere; padding: var(--np-pad-x); color: var(--dsw-alias-label-primary); cursor: text; line-height: 1.65; }
-.np-read h1 { margin: 16px 0 8px; font-size: 20px; line-height: 28px; font-weight: 600; }
-.np-read h2 { margin: 14px 0 6px; font-size: 17px; line-height: 24px; font-weight: 600; }
-.np-read h3 { margin: 12px 0 6px; font-size: 15px; line-height: 22px; font-weight: 600; }
+.np-read { box-sizing: border-box; max-width: 100%; overflow: auto; overflow-wrap: anywhere; padding: var(--np-pad-x); color: var(--dsw-alias-label-primary); cursor: text; font-size: var(--np-editor-font-size, 14px); line-height: 1.65; }
+.np-read h1 { margin: 16px 0 8px; font-size: 1.45em; line-height: 28px; font-weight: 600; }
+.np-read h2 { margin: 14px 0 6px; font-size: 1.22em; line-height: 24px; font-weight: 600; }
+.np-read h3 { margin: 12px 0 6px; font-size: 1.08em; line-height: 22px; font-weight: 600; }
 .np-read p { margin: 6px 0; }
 .np-read blockquote { margin: 8px 0; padding: 2px 12px; border-left: 3px solid var(--dsw-alias-border-l3); color: var(--dsw-alias-label-secondary); }
 .np-read ul, .np-read ol { margin: 6px 0; padding-left: 22px; }
@@ -837,6 +837,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     const theme = resolvedTheme()
     panel.dataset.theme = theme
     entry.dataset.theme = theme
+    panel.style.setProperty('--np-editor-font-size', `${state.settings.editorFontSizePx}px`)
     applyCopy()
     const tree = must(panel, '.np-tree')
     const treeCollapsed = state.ui.treeOpen === false
@@ -1165,6 +1166,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
           { value: 'light', label: copy.light },
           { value: 'system', label: copy.followApp },
         ])}
+        ${num('editorFontSizePx', 'px', values.editorFontSizePx, copy.editorFontSize, copy.editorFontSizeHint)}
       </section>
       <section class="np-section">
         ${sw('chromeStyle', copy.chromeStyle, copy.chromeStyleHint, [
@@ -1245,7 +1247,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
         }
         if (action === 'clear') { close(); confirmClear() }
       })
-      const settingNames = ['saveDelayMs', 'draftIntervalMs', 'commitIntervalSec', 'versionLimit', 'imageLimitBytes']
+      const settingNames = ['saveDelayMs', 'draftIntervalMs', 'commitIntervalSec', 'versionLimit', 'imageLimitBytes', 'editorFontSizePx']
       el.addEventListener('change', () => {
         const merged = { ...state.settings }
         let rejected = false

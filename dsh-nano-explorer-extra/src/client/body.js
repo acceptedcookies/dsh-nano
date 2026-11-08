@@ -564,7 +564,8 @@ export function ExplorerBody(props) {
       void tree.loadLevel(target, false, true).then(() => tree.toggle(target, true))
     },
     onCancel: () => setOutsidePrompt(null),
-  }, React.createElement('p', null, copy.symlinkOutsideBody(outsidePrompt.name)))
+    description: copy.symlinkOutsideBody(outsidePrompt.name),
+  })
 
   const dialogNode = dialog === null ? null : dialog.kind === 'commit'
     ? React.createElement(CommitDialog, {
@@ -642,8 +643,14 @@ export function ExplorerBody(props) {
       copy, title: copy.deleteTitle, busy, confirmLabel: copy.delete,
       onConfirm: () => { void doDelete(deleteRequest) },
       onCancel: () => { setDeleteRequest(null); setLinkNote(undefined) },
-    }, React.createElement('p', null, copy.deleteBody(deleteRequest.name)),
-    deleteRequest.kind === 'directory' ? React.createElement('p', { className: 'nxe-dialog-note' }, copy.deleteFolderNote) : null),
+      // The confirmation line is the title's explanation, so it goes into the Modal's own
+      // description slot; the destructive warning stays a muted note under it.
+      description: React.createElement(React.Fragment, null,
+        copy.deleteBody(deleteRequest.name),
+        deleteRequest.kind === 'directory'
+          ? React.createElement('span', { className: 'nxe-dialog-note-inline' }, ` ${copy.deleteFolderNote}`)
+          : null),
+    }),
     createRequest === null ? null : React.createElement(RenameDialog, {
       copy, mode: 'create', busy,
       currentName: createRequest.proposed,

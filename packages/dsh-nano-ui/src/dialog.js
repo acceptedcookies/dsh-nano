@@ -8,6 +8,9 @@ import { Button, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
  * @param {object} props
  * @param {object} props.copy - `{ cancel, confirm, close }` plus plugin-specific labels.
  * @param {string} props.title - card heading.
+ * @param {React.ReactNode} [props.description] - secondary line under the title, rendered in the
+ *   shell Modal's own description slot (correct hierarchy + spacing). Prefer it over a trailing
+ *   `<p>` child for the gray hint line.
  * @param {string} [props.confirmLabel] - primary action text; defaults to `copy.confirm`.
  * @param {boolean} [props.confirmDisabled] - disable the primary action.
  * @param {boolean} [props.busy] - in-flight guard shared by every card.
@@ -25,11 +28,12 @@ import { Button, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
  * @param {() => void} props.onCancel - cancel action.
  * @param {React.ReactNode} [props.children] - the body.
  */
-export function NanoDialog({ copy, title, confirmLabel, confirmDisabled, busy, error, danger, footer, maxHeight, width, region, onConfirm, onCancel, children }) {
+export function NanoDialog({ copy, title, description, confirmLabel, confirmDisabled, busy, error, danger, footer, maxHeight, width, region, onConfirm, onCancel, children }) {
   return React.createElement(Modal, {
     open: true,
     onClose: onCancel,
     title,
+    description,
     closeLabel: copy.cancel,
     className: [
       'nano-dialog-card',

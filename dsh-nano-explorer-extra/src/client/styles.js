@@ -18,7 +18,7 @@ export const STYLE = `
   --nxe-git-renamed: #0969da;
   --nxe-git-conflicted: #bc4c00;
   --nxe-git-untracked: #1a7f37;
-  --nxe-ignored-opacity: .5;
+  --nxe-ignored-ink: #6a6f76;
 }
 [data-nxe][data-theme="dark"] {
   --nxe-git-modified: #d9a63b;
@@ -27,7 +27,7 @@ export const STYLE = `
   --nxe-git-renamed: #58a6ff;
   --nxe-git-conflicted: #f0883e;
   --nxe-git-untracked: #3fb950;
-  --nxe-ignored-opacity: .55;
+  --nxe-ignored-ink: #9aa0a8;
 }
 
 .nxe-header {
@@ -234,4 +234,12 @@ button.nxe-commit { cursor: pointer; }
   padding-right: 10px;
 }
 [data-nxe] .nxe-tree li[data-files-entry] > div > button + div:empty { display: none; }
+
+/* Ignored entries: a dedicated muted ink instead of an opacity blend. An opacity overlay sinks into the
+   panel and reads as "nearly invisible" on dark; this ink stays clearly readable while obviously
+   subordinate to a tracked row in both themes. */
+[data-nxe] .nxe-tree li[data-files-entry] > div > button > span:last-child,
+[data-nxe] .nxe-tree li[data-files-entry] > div > button > svg { transition: color .12s ease; }
+[data-nxe] .nxe-tree li[data-files-entry]:has([data-nxe-ignored]) > div > button > span:last-child,
+[data-nxe] .nxe-tree li[data-files-entry]:has([data-nxe-ignored]) > div > button > svg { color: var(--nxe-ignored-ink); }
 `

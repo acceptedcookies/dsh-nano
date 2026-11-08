@@ -21,7 +21,12 @@ export function createAccessory(api) {
     const folderStatus = isFile ? undefined : api.folderStatusOf(entry.path)
     const showGit = api.showGit() && !ignored
 
-    return React.createElement('span', { className: 'nxe-acc' },
+    return React.createElement('span', {
+      className: 'nxe-acc',
+      // A zero-size flag the row CSS reads with :has(), so an ignored row de-emphasizes its own label
+      // and glyph without the plugin needing to reach into the shared tree's markup.
+      ...(ignored ? { 'data-nxe-ignored': 'true' } : {}),
+    },
       link === undefined ? null : React.createElement('span', {
         className: 'nxe-acc-link',
         title: link ? copy.symlinkOutside : copy.symlinkBadge,

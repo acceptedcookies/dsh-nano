@@ -4,9 +4,13 @@ import { createRoutes, registerRoutes } from './routes.js'
 
 export const name = 'nano-explorer-extra'
 
-// Every service this plugin reads through `ctx.get` must be declared here: the accessor only
-// exposes declared injections, so an undeclared read throws instead of yielding undefined.
-export const inject = ['fs', 'sessions', 'webServer', 'subprocess', 'sandbox', 'sandboxPolicy', 'connection']
+// `ctx.get` reads the registry without an inject requirement, but declaring a
+// service here makes the plugin wait for it before `apply` runs — so every
+// service this plugin reads is listed to keep activation ordering explicit and
+// to fail the plugin (not a single request) when one is absent. (review-01 R5:
+// `sessionPersistence` was read but undeclared, so cold sessions silently lost
+// the persisted-header fallback.)
+export const inject = ['fs', 'sessions', 'webServer', 'subprocess', 'sandbox', 'sandboxPolicy', 'connection', 'sessionPersistence']
 
 export const Config = {
   '~standard': {

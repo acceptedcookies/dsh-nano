@@ -5,6 +5,8 @@ export const STYLE = `
   display: flex; flex-direction: column; height: 100%; min-height: 0;
   /* The sidebar inherits the shell's 16px body size; a file tree reads at the shipped 13px scale. */
   font-size: 13px; line-height: 18px;
+  /* Anchors the transient confirmation, which is taken out of the flow below. */
+  position: relative;
 }
 [data-nxe] .nxe-tree button { font-size: 13px; line-height: 18px; }
 [data-nxe] .nxe-tree [data-files-path] { font-size: 13px; }
@@ -90,24 +92,28 @@ export const STYLE = `
 }
 .nxe-status-left, .nxe-status-right { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .nxe-status-right { font-variant-numeric: tabular-nums; }
-.nxe-branch, .nxe-commit, .nxe-ab, .nxe-status-stat {
+.nxe-branch, .nxe-commit, .nxe-sync, .nxe-ab, .nxe-status-stat {
   display: inline-flex; align-items: center; gap: 6px;
   box-sizing: border-box; padding: 1px 8px;
   border: none; border-radius: var(--dsw-radius-sm);
   background: transparent; color: inherit;
   font: inherit; font-variant-numeric: tabular-nums; line-height: inherit; white-space: nowrap;
 }
-.nxe-branch svg { width: 14px; height: 14px; flex: none; }
+.nxe-branch svg, .nxe-sync svg { width: 14px; height: 14px; flex: none; }
+.nxe-sync-counts { font-variant-numeric: tabular-nums; letter-spacing: .01em; }
+.nxe-sync[data-behind="0"][data-ahead="0"] { color: var(--dsw-alias-label-tertiary); }
+/* The no-upstream stand-in is a label, not a control. */
+.nxe-sync[data-nxe-sync="none"] { color: var(--dsw-alias-label-tertiary); cursor: default; }
 .nxe-branch { min-width: 0; }
 .nxe-branch-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 180px; }
 .nxe-branch[data-detached="true"] { color: var(--dsw-alias-label-tertiary); }
 .nxe-ab { color: var(--dsw-alias-label-tertiary); }
-button.nxe-commit { cursor: pointer; }
+button.nxe-commit, button.nxe-sync { cursor: pointer; }
 @media (hover: hover) {
-  button.nxe-commit:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-secondary); }
+  button.nxe-commit:hover:not(:disabled), button.nxe-sync:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-secondary); }
 }
 .nxe-commit:disabled { opacity: .55; cursor: default; }
-.nxe-commit:focus-visible, .nxe-branch:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary, var(--dsw-alias-link)); outline-offset: 1px; }
+.nxe-commit:focus-visible, .nxe-sync:focus-visible, .nxe-branch:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary, var(--dsw-alias-link)); outline-offset: 1px; }
 .nxe-status-sep { color: var(--dsw-alias-border-l3); }
 .nxe-retry {
   border: 0; background: transparent; color: var(--dsw-alias-link); cursor: pointer;
@@ -215,12 +221,28 @@ button.nxe-commit { cursor: pointer; }
   box-shadow: var(--dsw-elevation-prominent); display: flex; flex-direction: column;
 }
 .nxe-menu-item {
-  display: block; width: 100%; text-align: left; border: 0; background: transparent;
-  color: var(--dsw-alias-label-primary); font: inherit; font-size: 13px;
-  padding: 6px 10px; border-radius: var(--dsw-radius-sm); cursor: pointer;
+  display: flex; align-items: center; gap: 8px;
+  width: 100%; text-align: left; border: 0; background: transparent;
+  color: var(--dsw-alias-label-primary);
+  /* The whole row is one line box, so the label and its glyph share a centre whatever the glyph is. */
+  font-family: inherit; font-size: 13px; line-height: 16px;
+  padding: 5px 10px; border-radius: var(--dsw-radius-sm); cursor: pointer;
 }
+/* The icon column is fixed so every label starts on one line whatever the glyph is. */
+.nxe-menu-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 16px; height: 16px; flex: none;
+  color: var(--dsw-alias-label-secondary);
+}
+.nxe-menu-icon img { display: block; border-radius: 3px; }
+.nxe-menu-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nxe-menu-item[data-active="true"] { background: var(--dsw-alias-interactive-bg-hover); }
 .nxe-menu-item:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary, var(--dsw-alias-link)); outline-offset: -2px; }
+/* A destructive row is marked by ink, not by a filled background, so it stays a quiet list entry. */
+.nxe-menu-item[data-tone="danger"] { color: var(--dsw-alias-label-error, #e5534b); }
+.nxe-menu-item[data-tone="danger"] .nxe-menu-icon { color: inherit; }
+.nxe-menu-item[data-tone="danger"][data-active="true"] { background: color-mix(in oklab, var(--dsw-alias-label-error, #e5534b) 14%, transparent); }
+.nxe-dialog-note { margin: 8px 0 0; color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 18px; }
 
 /* One right rail for status marks. The shipped accessory is as wide as its content, so a folder's
    dot and a file's letter landed on different x positions; a fixed-width rail with its content pushed
@@ -242,4 +264,52 @@ button.nxe-commit { cursor: pointer; }
 [data-nxe] .nxe-tree li[data-files-entry] > div > button > svg { transition: color .12s ease; }
 [data-nxe] .nxe-tree li[data-files-entry]:has([data-nxe-ignored]) > div > button > span:last-child,
 [data-nxe] .nxe-tree li[data-files-entry]:has([data-nxe-ignored]) > div > button > svg { color: var(--nxe-ignored-ink); }
+
+/* Transient confirmation. Out of the flow and over the tree's lower edge, so showing and hiding it
+   never moves a row: an inline row here shifted the whole tree when a copy confirmed. */
+.nxe-toast {
+  position: absolute; left: 50%; bottom: 40px; transform: translateX(-50%);
+  z-index: 5; pointer-events: none;
+  padding: 4px 12px; border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-3); color: var(--dsw-alias-label-primary);
+  box-shadow: var(--dsw-elevation-panel);
+  font-size: 12px; line-height: 18px; white-space: nowrap;
+  animation: nxe-toast-in .12s ease-out;
+}
+@keyframes nxe-toast-in {
+  from { opacity: 0; transform: translate(-50%, 4px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nxe-toast { animation: none; }
+}
+
+/* The modal's own chrome comes from the shell; this only sets the action button width and the gap
+   between the body and its field, matching how the shipped dialogs compose theirs. */
+.nxe-modal-action { min-width: 72px; }
+.nxe-dialog-field { display: flex; flex-direction: column; gap: 8px; }
+.nxe-dialog-field > p { margin: 0; color: var(--dsw-alias-label-secondary); font-size: 13px; line-height: 18px; }
+.nxe-dialog-error { margin: 8px 0 0; color: var(--dsw-alias-label-error, #e5534b); font-size: 12px; line-height: 18px; }
+
+/* The reveal control mirrors the shipped split button: an application icon, a hairline divider, and a
+   chevron, all inside one outlined pill. Geometry follows the shell's toolbar buttons. */
+.nxe-reveal {
+  position: relative; display: inline-flex; align-items: stretch;
+  height: 22px; border: 1px solid var(--dsw-alias-border-subtle, rgba(128,128,128,.28));
+  border-radius: var(--dsw-radius-md); overflow: visible;
+  background: transparent;
+}
+.nxe-reveal:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.nxe-reveal-main, .nxe-reveal-more {
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 0; background: transparent; padding: 0 4px; cursor: pointer;
+  color: var(--dsw-alias-label-secondary);
+}
+.nxe-reveal-main { padding-left: 6px; }
+.nxe-reveal-main img { display: block; }
+.nxe-reveal-more { padding-right: 5px; padding-left: 3px; }
+.nxe-reveal-divider { width: 1px; align-self: center; height: 12px; background: var(--dsw-alias-border-subtle, rgba(128,128,128,.28)); }
+.nxe-reveal-main:focus-visible, .nxe-reveal-more:focus-visible {
+  outline: 2px solid var(--dsw-alias-brand-primary, var(--dsw-alias-link)); outline-offset: 1px;
+}
 `

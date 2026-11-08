@@ -2,7 +2,7 @@
 
 import { commitAll, ignoredAmong, readStatus } from './git.js'
 import { listDirectory } from './listing.js'
-import { createFile, createFolder, rename } from './mutate.js'
+import { createFile, createFolder, removeEntry, rename } from './mutate.js'
 import { statisticsOf } from './stats.js'
 
 /** Route prefix owned by this plugin. */
@@ -59,6 +59,9 @@ function messageOf(error) {
 async function scopeOf(ctx, sessionId) {
   if (typeof sessionId !== 'string' || sessionId === '') throw new Error('sessionId is required')
   const live = ctx.get('sessions')?.get(sessionId)
+  // `sessionPersistence` is declared in `inject`, so this service is guaranteed
+  // present by activation time — the persisted-header fallback now actually
+  // resolves cold sessions instead of reading `undefined` (review-01 R5).
   const header = live?.header ?? (await ctx.get('sessionPersistence')?.stat(sessionId))?.header
   if (header === undefined || header === null) throw new Error(`unknown session "${sessionId}"`)
   const root = header.cwd ?? ctx.get('sandboxPolicy')?.workspaceRoot
@@ -124,6 +127,35 @@ export async function runExternal(ctx, config, request) {
  * @param config - validated plugin configuration.
  * @returns path → { method, run } for registration.
  */
+
+/**
+ * Short-lived memo for reads that spawn a process.
+ *
+ * Every expanded folder asked Git for its own status, and a menu that opens asks again. Each miss
+ * spawns `git`; that contention is what pushes an unrelated provider past its one-second deadline.
+ * One entry per key for a few seconds keeps the process count proportional to real changes.
+ */
+const memo = new Map()
+const MEMO_MS = 3000
+
+/**
+ * Answer from the memo, or run the reader and remember its answer briefly.
+ * @param key - cache identity for the read.
+ * @param read - performs the read when the memo misses.
+ * @returns the memoized value.
+ */
+async function memoized(key, read) {
+  const hit = memo.get(key)
+  const now = Date.now()
+  if (hit !== undefined && now - hit.at < MEMO_MS) return hit.value
+  const value = await read()
+  memo.set(key, { at: Date.now(), value })
+  if (memo.size > 64) {
+    for (const [entryKey, entry] of memo) if (now - entry.at >= MEMO_MS) memo.delete(entryKey)
+  }
+  return value
+}
+
 export function createRoutes(ctx, config) {
   const fs = () => ctx.fs
   const external = request => runExternal(ctx, config, request)
@@ -147,7 +179,11 @@ export function createRoutes(ctx, config) {
         let git = null
         let gitError
         try {
-          git = await readStatus(ctx, config, { cwd: root, policy, signal: undefined }) ?? null
+          // `path` scopes the query to one directory and asks Git for per-file untracked entries,
+          // which is what a freshly expanded folder needs.
+          const scopedPath = url.searchParams.get('path') ?? undefined
+          git = await memoized(`status:${root}:${scopedPath ?? ''}`, () =>
+            readStatus(ctx, config, { cwd: root, policy, signal: undefined, path: scopedPath ?? undefined })) ?? null
         } catch (error) {
           gitError = messageOf(error)
         }
@@ -208,13 +244,29 @@ export function createRoutes(ctx, config) {
         })
       },
     },
+    '/delete': {
+      method: 'POST',
+      async run(req) {
+        const body = await jsonBody(req)
+        const { session, root, policy } = await scopeOf(ctx, body.sessionId)
+        return removeEntry(fs(), {
+          workspaceRoot: root,
+          path: body.path,
+          kind: body.kind === 'directory' ? 'directory' : 'file',
+          sandboxPolicy: policy,
+          session,
+          runExternal: external,
+        }, undefined)
+      },
+    },
     '/ignored': {
       method: 'POST',
       async run(req) {
         const body = await jsonBody(req)
         const { root, policy } = await scopeOf(ctx, body.sessionId)
         const paths = Array.isArray(body.paths) ? body.paths.filter(item => typeof item === 'string') : []
-        const ignored = await ignoredAmong(ctx, config, { cwd: root, policy, paths, signal: undefined })
+        const ignored = await memoized(`ignored:${root}:${paths.join('|')}`, () =>
+          ignoredAmong(ctx, config, { cwd: root, policy, paths, signal: undefined }))
         return { ignored }
       },
     },

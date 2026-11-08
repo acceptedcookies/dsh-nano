@@ -1,73 +1,45 @@
-/** The two dialogs: one commit message, one rename. Both share the same modal material. */
+/** The commit and name-entry cards, drawn with the shell's own modal, button, and input primitives. */
 
 import React from 'react'
+import { Button, Input, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 
-const { useEffect, useRef } = React
+const { useState } = React
 
 /**
- * Trap focus inside one dialog and answer Escape.
- * @param ref - the dialog card element.
- * @param onEscape - called for an Escape press.
+ * One modal card.
+ *
+ * The chrome, the mask, Escape handling, focus return, and the action row all come from the shell's
+ * Modal and Button primitives, so this plugin adds no dialog styling of its own.
+ *
+ * @param props - copy, title, body, and the two actions.
+ * @returns the dialog.
  */
-function useDialogFocus(ref, onEscape) {
-  useEffect(() => {
-    const node = ref.current
-    if (node === null) return undefined
-    const previous = document.activeElement
-    const focusable = () => [...node.querySelectorAll('input, textarea, button, [tabindex]:not([tabindex="-1"])')]
-      .filter(item => !item.disabled && item.offsetParent !== null)
-    const first = focusable()[0]
-    first?.focus()
-    const onKey = (event) => {
-      if (event.key === 'Escape') {
-        event.stopPropagation()
-        onEscape()
-        return
-      }
-      if (event.key !== 'Tab') return
-      const items = focusable()
-      if (items.length === 0) return
-      const head = items[0]
-      const tail = items[items.length - 1]
-      if (event.shiftKey && document.activeElement === head) {
-        event.preventDefault()
-        tail.focus()
-      } else if (!event.shiftKey && document.activeElement === tail) {
-        event.preventDefault()
-        head.focus()
-      }
-    }
-    node.addEventListener('keydown', onKey)
-    return () => {
-      node.removeEventListener('keydown', onKey)
-      if (previous instanceof HTMLElement) previous.focus()
-    }
-  }, [ref, onEscape])
+export function Dialog({ copy, title, children, confirmDisabled, busy, error, onConfirm, onCancel, confirmLabel }) {
+  return React.createElement(Modal, {
+    open: true,
+    onClose: onCancel,
+    title,
+    closeLabel: copy.cancel,
+    // The shipped modal takes a fragment, and its own action rows pair `outline` with `primary`.
+    footer: React.createElement(React.Fragment, null,
+      React.createElement(Button, { variant: 'outline', className: 'nxe-modal-action', onClick: onCancel }, copy.cancel),
+      React.createElement(Button, {
+        variant: 'primary', className: 'nxe-modal-action',
+        disabled: confirmDisabled === true || busy === true,
+        onClick: onConfirm,
+      }, confirmLabel ?? copy.confirm)),
+  },
+  children,
+  error === undefined ? null : React.createElement('p', { className: 'nxe-dialog-error', role: 'alert' }, error))
 }
 
 /**
- * One modal shell: mask, card, heading, body, and actions.
- * @param props - copy, title, children, and the two actions.
- * @returns the dialog element.
+ * A labelled field: the sentence that explains the input, then the input itself.
+ * @param props - the explaining line and the control.
+ * @returns the stacked field.
  */
-export function Dialog({ copy, title, children, confirmDisabled, busy, error, onConfirm, onCancel, confirmLabel }) {
-  const ref = useRef(null)
-  useDialogFocus(ref, onCancel)
-  return React.createElement('div', { className: 'nxe-mask', role: 'presentation', onMouseDown: event => { if (event.target === event.currentTarget) onCancel() } },
-    React.createElement('div', {
-      className: 'nxe-dialog', role: 'dialog', 'aria-modal': 'true', 'aria-label': title, ref,
-    },
-    React.createElement('h2', null, title),
-    children,
-    error === undefined ? null : React.createElement('p', { className: 'nxe-dialog-error', role: 'alert' }, error),
-    React.createElement('div', { className: 'nxe-dialog-actions' },
-      React.createElement('button', { type: 'button', className: 'nxe-btn', onClick: onCancel }, copy.cancel),
-      // The confirming button is last and never the initially focused element: the input takes focus.
-      React.createElement('button', {
-        type: 'button', className: 'nxe-btn', 'data-primary': 'true',
-        disabled: confirmDisabled === true || busy === true,
-        onClick: onConfirm,
-      }, confirmLabel ?? copy.confirm))))
+function Field({ children }) {
+  return React.createElement('div', { className: 'nxe-dialog-field' }, children)
 }
 
 /**
@@ -76,36 +48,52 @@ export function Dialog({ copy, title, children, confirmDisabled, busy, error, on
  * @returns the dialog.
  */
 export function CommitDialog({ copy, files, busy, error, onConfirm, onCancel }) {
-  const [message, setMessage] = React.useState('')
+  const [message, setMessage] = useState('')
   const empty = message.trim() === ''
   return React.createElement(Dialog, {
-    copy, title: copy.commitTitle, confirmLabel: copy.commit, confirmDisabled: empty, busy, error, onConfirm: () => onConfirm(message), onCancel,
+    copy, title: copy.commitTitle, confirmLabel: copy.commit, confirmDisabled: empty, busy, error,
+    onConfirm: () => onConfirm(message), onCancel,
   },
-  React.createElement('p', null, copy.commitBody(files.length)),
-  React.createElement('ul', { className: 'nxe-dialog-changed' }, files.slice(0, 40).map(file =>
-    React.createElement('li', { key: file.path, title: file.path }, `${file.status} ${file.path}`))),
-  React.createElement('label', { htmlFor: 'nxe-commit-message', style: { fontSize: 12, color: 'var(--dsw-alias-label-secondary)' } }, copy.commitMessage),
-  React.createElement('textarea', {
-    id: 'nxe-commit-message', value: message, placeholder: copy.commitPlaceholder,
-    onChange: event => setMessage(event.currentTarget.value),
-  }))
+  React.createElement(Field, null,
+    React.createElement('p', null, copy.commitBody(files.length)),
+    React.createElement('ul', { className: 'nxe-dialog-changed' }, files.slice(0, 40).map(file =>
+      React.createElement('li', { key: file.path, title: file.path }, `${file.status} ${file.path}`))),
+    React.createElement(Input, {
+      value: message,
+      placeholder: copy.commitPlaceholder,
+      'data-modal-autofocus': true,
+      onChange: event => setMessage(event.currentTarget.value),
+    })))
 }
 
 /**
- * The rename dialog: one name field.
- * @param props - copy, the current name, busy flag, error, and actions.
+ * The name card: rename an existing entry, or name a new one.
+ *
+ * One component serves both because the field and its rules are identical; only the wording and the
+ * result differ, and the reader is told which task they are in.
+ *
+ * @param props - copy, the current name, busy flag, error, actions, and the task kind.
  * @returns the dialog.
  */
-export function RenameDialog({ copy, currentName, busy, error, onConfirm, onCancel }) {
-  const [name, setName] = React.useState(currentName)
+export function RenameDialog({ copy, currentName, busy, error, onConfirm, onCancel, mode = 'rename' }) {
+  const [name, setName] = useState(currentName)
   const invalid = name.trim() === ''
+  const creating = mode === 'create'
   return React.createElement(Dialog, {
-    copy, title: copy.renameTitle, busy, error, confirmDisabled: invalid, onConfirm: () => onConfirm(name), onCancel,
+    copy,
+    title: creating ? copy.newEntryTitle : copy.renameTitle,
+    confirmLabel: creating ? copy.create : copy.confirm,
+    busy, error, confirmDisabled: invalid,
+    onConfirm: () => onConfirm(name), onCancel,
   },
-  React.createElement('p', null, copy.renameBody(currentName)),
-  React.createElement('input', {
-    type: 'text', value: name, spellCheck: false, autoComplete: 'off',
-    onChange: event => setName(event.currentTarget.value),
-    onKeyDown: event => { if (event.key === 'Enter' && !invalid) { event.preventDefault(); onConfirm(name) } },
-  }))
+  React.createElement(Field, null,
+    React.createElement('p', null, creating ? copy.newEntryBody(currentName) : copy.renameBody(currentName)),
+    React.createElement(Input, {
+      value: name,
+      'data-modal-autofocus': true,
+      spellCheck: false,
+      autoComplete: 'off',
+      onChange: event => setName(event.currentTarget.value),
+      onKeyDown: event => { if (event.key === 'Enter' && !invalid) { event.preventDefault(); onConfirm(name) } },
+    })))
 }

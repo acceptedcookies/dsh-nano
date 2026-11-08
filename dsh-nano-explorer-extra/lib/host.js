@@ -145,10 +145,16 @@ async function readStatus(ctx, config, request) {
     throw new Error(`git rev-parse failed: ${firstLine(probe.stderr)}`);
   }
   const root = probe.stdout.trim();
-  const status = await runGit(ctx, config, {
-    ...request,
-    args: ["status", "--porcelain=v2", "--branch", "--untracked-files=normal", "-z"]
-  });
+  const scoped = typeof request.path === "string" && request.path !== "";
+  const args = [
+    "status",
+    "--porcelain=v2",
+    "--branch",
+    scoped ? "--untracked-files=all" : "--untracked-files=normal",
+    "-z",
+    ...scoped ? ["--", request.path] : []
+  ];
+  const status = await runGit(ctx, config, { ...request, args });
   return { root, ...parseStatus(status.stdout) };
 }
 async function commitAll(ctx, config, request) {
@@ -274,16 +280,29 @@ function absoluteOf(root, path) {
   const normalizedRoot = trimSlash(root);
   const normalizedPath = path.replace(/\\/gu, "/");
   if (normalizedPath === "") return normalizedRoot;
-  if (normalizedPath.startsWith("/") || /^[A-Za-z]:\//u.test(normalizedPath)) return trimSlash(normalizedPath);
-  return `${normalizedRoot}/${normalizedPath}`.replace(/\/{2,}/gu, "/");
+  const composed = normalizedPath.startsWith("/") || /^[A-Za-z]:\//u.test(normalizedPath) ? trimSlash(normalizedPath) : `${normalizedRoot}/${normalizedPath}`.replace(/\/{2,}/gu, "/");
+  return foldSegments(composed);
 }
 function trimSlash(path) {
   const trimmed = path.replace(/\\/gu, "/").replace(/\/+$/u, "");
   return trimmed === "" ? "/" : trimmed;
 }
+function foldSegments(path) {
+  const absolute = path.startsWith("/");
+  const out = [];
+  for (const segment of path.split("/")) {
+    if (segment === "" || segment === ".") continue;
+    if (segment === "..") {
+      out.pop();
+      continue;
+    }
+    out.push(segment);
+  }
+  return `${absolute ? "/" : ""}${out.join("/")}`;
+}
 function isLexicallyInside(root, candidate) {
-  const base = trimSlash(root);
-  const target = trimSlash(candidate);
+  const base = foldSegments(trimSlash(root));
+  const target = foldSegments(trimSlash(candidate));
   if (base === target) return true;
   const separator = base === "/" ? "" : "/";
   return target.startsWith(`${base}${separator}`);
@@ -372,6 +391,27 @@ function translate(error, path) {
   if (code === "FS_NOT_OBSERVED") return new Error(`"${path}" already exists`);
   if (typeof code === "string" && code.startsWith("FS_")) return new Error(`${path}: ${error.message}`);
   return error;
+}
+async function removeEntry(fs, request, signal) {
+  const { workspaceRoot, path, kind, sandboxPolicy, session, runExternal: runExternal2 } = request;
+  if (typeof path !== "string" || path.trim() === "") throw new Error("a path is required");
+  const target = absoluteOf(workspaceRoot, path);
+  assertInside(fs, workspaceRoot, target);
+  const normalizedRoot = workspaceRoot.replace(/\/+$/u, "");
+  const normalizedTarget = target.replace(/\/+$/u, "");
+  if (normalizedTarget === normalizedRoot) throw new Error("the workspace root cannot be deleted");
+  const existing = await fs.lstat(target, {}, signal).catch(() => void 0);
+  if (existing === void 0) throw new Error(`"${path}" does not exist`);
+  const directory = kind === "directory" || existing.isDirectory === true;
+  const parent = normalizedTarget.slice(0, normalizedTarget.lastIndexOf("/")) || "/";
+  await runExternal2({
+    session,
+    sandboxPolicy,
+    cwd: parent,
+    argv: directory ? ["rm", "-rf", "--", normalizedTarget] : ["rm", "-f", "--", normalizedTarget],
+    args: ["rm"]
+  });
+  return { path: normalizedTarget, directory };
 }
 
 // src/host/stats.js
@@ -490,6 +530,19 @@ async function runExternal(ctx, config, request) {
     clearTimeout(timer);
   }
 }
+var memo = /* @__PURE__ */ new Map();
+var MEMO_MS = 3e3;
+async function memoized(key, read) {
+  const hit = memo.get(key);
+  const now = Date.now();
+  if (hit !== void 0 && now - hit.at < MEMO_MS) return hit.value;
+  const value = await read();
+  memo.set(key, { at: Date.now(), value });
+  if (memo.size > 64) {
+    for (const [entryKey, entry] of memo) if (now - entry.at >= MEMO_MS) memo.delete(entryKey);
+  }
+  return value;
+}
 function createRoutes(ctx, config) {
   const fs = () => ctx.fs;
   const external = (request) => runExternal(ctx, config, request);
@@ -510,7 +563,8 @@ function createRoutes(ctx, config) {
         let git = null;
         let gitError;
         try {
-          git = await readStatus(ctx, config, { cwd: root, policy, signal: void 0 }) ?? null;
+          const scopedPath = url.searchParams.get("path") ?? void 0;
+          git = await memoized(`status:${root}:${scopedPath ?? ""}`, () => readStatus(ctx, config, { cwd: root, policy, signal: void 0, path: scopedPath ?? void 0 })) ?? null;
         } catch (error) {
           gitError = messageOf2(error);
         }
@@ -571,13 +625,28 @@ function createRoutes(ctx, config) {
         });
       }
     },
+    "/delete": {
+      method: "POST",
+      async run(req) {
+        const body = await jsonBody(req);
+        const { session, root, policy } = await scopeOf(ctx, body.sessionId);
+        return removeEntry(fs(), {
+          workspaceRoot: root,
+          path: body.path,
+          kind: body.kind === "directory" ? "directory" : "file",
+          sandboxPolicy: policy,
+          session,
+          runExternal: external
+        }, void 0);
+      }
+    },
     "/ignored": {
       method: "POST",
       async run(req) {
         const body = await jsonBody(req);
         const { root, policy } = await scopeOf(ctx, body.sessionId);
         const paths = Array.isArray(body.paths) ? body.paths.filter((item) => typeof item === "string") : [];
-        const ignored = await ignoredAmong(ctx, config, { cwd: root, policy, paths, signal: void 0 });
+        const ignored = await memoized(`ignored:${root}:${paths.join("|")}`, () => ignoredAmong(ctx, config, { cwd: root, policy, paths, signal: void 0 }));
         return { ignored };
       }
     },
@@ -628,7 +697,7 @@ function registerRoutes(ctx, routes) {
 
 // src/host/entry.js
 var name = "nano-explorer-extra";
-var inject = ["fs", "sessions", "webServer", "subprocess", "sandbox", "sandboxPolicy", "connection"];
+var inject = ["fs", "sessions", "webServer", "subprocess", "sandbox", "sandboxPolicy", "connection", "sessionPersistence"];
 var Config = {
   "~standard": {
     version: 1,

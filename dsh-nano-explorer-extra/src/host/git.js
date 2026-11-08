@@ -189,10 +189,18 @@ export async function readStatus(ctx, config, request) {
   // `--untracked-files=normal` reports a wholly untracked directory as one entry, while `all`
   // enumerates every file under it: on a workspace with a large generated tree that difference is
   // 49 KB versus 32 MB, and the tree only ever draws the directories that were reported.
-  const status = await runGit(ctx, config, {
-    ...request,
-    args: ['status', '--porcelain=v2', '--branch', '--untracked-files=normal', '-z'],
-  })
+  // Workspace-wide reads keep the summarised mode: `all` enumerates every file under an untracked
+  // directory (tens of megabytes on a large tree). A caller that names one directory asks for `all`
+  // instead, so opening a folder reveals each changed file inside it without ever walking the whole
+  // repository that way.
+  const scoped = typeof request.path === 'string' && request.path !== ''
+  const args = [
+    'status', '--porcelain=v2', '--branch',
+    scoped ? '--untracked-files=all' : '--untracked-files=normal',
+    '-z',
+    ...(scoped ? ['--', request.path] : []),
+  ]
+  const status = await runGit(ctx, config, { ...request, args })
   return { root, ...parseStatus(status.stdout) }
 }
 

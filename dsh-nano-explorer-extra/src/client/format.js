@@ -30,3 +30,18 @@ export function formatAheadBehind(ahead, behind) {
   if (Number.isFinite(behind) && behind > 0) parts.push(`↓${behind}`)
   return parts.join(' ')
 }
+
+/**
+ * Render the sync block the footer shows: the incoming count first, then the outgoing one.
+ *
+ * Both numbers always appear, including zero, so the reader can tell "nothing to pull" from
+ * "no upstream configured" — the two look identical when a zero count is hidden.
+ * @param ahead - local commits not yet pushed.
+ * @param behind - remote commits not yet pulled.
+ * @returns the text for the sync block.
+ */
+export function formatSync(ahead, behind) {
+  const local = Number.isFinite(ahead) && ahead > 0 ? ahead : 0
+  const remote = Number.isFinite(behind) && behind > 0 ? behind : 0
+  return `${remote}↓ ${local}↑`
+}

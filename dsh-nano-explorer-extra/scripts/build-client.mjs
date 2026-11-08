@@ -1,9 +1,13 @@
 import { spawnSync } from 'node:child_process'
-import { readFileSync, writeFileSync, rmSync } from 'node:fs'
+import { readFileSync, writeFileSync, rmSync, existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
+
+// Prefer the locked devDependency binary; fall back to npx only when it is not
+// installed, so a release build never pulls a drifted toolchain (review-01 R12).
+const local = join(root, 'node_modules', '.bin', 'esbuild')
 
 /**
  * Bundle one entry and fail the build when esbuild rejects it.
@@ -12,10 +16,10 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..')
  * @param {string[]} extra - additional esbuild flags.
  */
 function bundle(entry, outfile, extra) {
-  const built = spawnSync('npx', ['--yes', 'esbuild@0.25.0', entry, '--bundle', ...extra, `--outfile=${join(root, outfile)}`], {
-    cwd: root,
-    stdio: 'inherit',
-  })
+  const argv = [entry, '--bundle', ...extra, `--outfile=${join(root, outfile)}`]
+  const built = existsSync(local)
+    ? spawnSync(local, argv, { cwd: root, stdio: 'inherit' })
+    : spawnSync('npx', ['--yes', 'esbuild@0.25.0', ...argv], { cwd: root, stdio: 'inherit' })
   if (built.status !== 0) process.exit(built.status ?? 1)
 }
 
@@ -31,6 +35,8 @@ bundle('src/host/entry.js', 'lib/host.js', [
 // Browser half: an IIFE wrapped in the client module-loader factory format.
 bundle('src/client/index.js', 'lib/client.body.js', [
   '--format=iife',
+  '--global-name=__nxeExport',
+  '--minify',
   '--platform=browser',
   '--external:react',
   '--external:react-dom',
@@ -40,21 +46,15 @@ bundle('src/client/index.js', 'lib/client.body.js', [
 ])
 
 const body = join(root, 'lib/client.body.js')
-const source = readFileSync(body, 'utf8')
-const start = source.indexOf('{')
-const end = source.lastIndexOf('}')
-const inner = source.slice(start + 1, end)
+// The bundle assigns its exports to one named global, so the factory returns that object rather than
+// guessing at internal binding names: those survive minification only by luck.
+const source = readFileSync(body, 'utf8').trim()
 writeFileSync(join(root, 'lib/client.js'), `window.__ModuleLoader__.load({
-\tid: "dsh-nano-explorer-extra",
-\tfactory: (require) => {
-\t\tvar module = { exports: {} };
-\t\tvar exports = module.exports;
-\t\tObject.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
-${inner}
-\texports.apply = apply;
-\texports.inject = inject;
-\t\treturn module.exports;
-\t}
+	id: "dsh-nano-explorer-extra",
+	factory: (require) => {
+${source}
+		return __nxeExport;
+	}
 });
 `)
 rmSync(body)

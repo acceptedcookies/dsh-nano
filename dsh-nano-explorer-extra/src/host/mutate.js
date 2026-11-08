@@ -145,3 +145,45 @@ function translate(error, path) {
   if (typeof code === 'string' && code.startsWith('FS_')) return new Error(`${path}: ${error.message}`)
   return error
 }
+
+/**
+ * Delete one file or one directory tree.
+ *
+ * Deleting is the only operation here that cannot be undone, so it takes the narrowest route the
+ * platform offers: `ctx.fs` has no removal abstraction, and the external command is sandboxed and
+ * confined exactly like the `mv` that rename already uses. Four guards run before that command:
+ * the path must be absolute and inside the workspace, it must not be the workspace root itself, the
+ * session sandbox must be able to confine it, and the entry must actually exist.
+ *
+ * @param fs - filesystem provider.
+ * @param request - workspace root, target path, entry kind, session policy, and the runner.
+ * @param signal - caller cancellation.
+ * @returns the path that was removed.
+ */
+export async function removeEntry(fs, request, signal) {
+  const { workspaceRoot, path, kind, sandboxPolicy, session, runExternal } = request
+  if (typeof path !== 'string' || path.trim() === '') throw new Error('a path is required')
+  const target = absoluteOf(workspaceRoot, path)
+  assertInside(fs, workspaceRoot, target)
+
+  // The workspace root is the one entry this tool must never delete: `rm -rf` there would take the
+  // whole session with it, and every path below is already reachable on its own.
+  const normalizedRoot = workspaceRoot.replace(/\/+$/u, '')
+  const normalizedTarget = target.replace(/\/+$/u, '')
+  if (normalizedTarget === normalizedRoot) throw new Error('the workspace root cannot be deleted')
+
+  const existing = await fs.lstat(target, {}, signal).catch(() => undefined)
+  if (existing === undefined) throw new Error(`"${path}" does not exist`)
+
+  // Trust the observed entry over the caller, so a directory is never removed as a plain file.
+  const directory = kind === 'directory' || existing.isDirectory === true
+  const parent = normalizedTarget.slice(0, normalizedTarget.lastIndexOf('/')) || '/'
+  await runExternal({
+    session,
+    sandboxPolicy,
+    cwd: parent,
+    argv: directory ? ['rm', '-rf', '--', normalizedTarget] : ['rm', '-f', '--', normalizedTarget],
+    args: ['rm'],
+  })
+  return { path: normalizedTarget, directory }
+}

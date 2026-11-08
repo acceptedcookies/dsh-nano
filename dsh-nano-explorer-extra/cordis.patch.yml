@@ -3,3 +3,11 @@
 - insert:
     - id: nano-explorer-extra
       name: dsh-nano-explorer-extra
+
+# The shipped menu gives each contribution one second to prepare. The native opener's provider does a
+# host-side application probe, which on this machine lands just past that budget: the menu then opens
+# late and reports a failure for actions that actually resolved. Widen the budget so a slow but healthy
+# provider still contributes its rows.
+- id: ui-context-menu
+  config:
+    resolutionTimeoutMs: 4000

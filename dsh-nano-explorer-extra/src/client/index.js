@@ -3,6 +3,7 @@
 import React from 'react'
 import { ExplorerBody } from './body.js'
 import { COPY, copyFor, statusLabel } from './i18n.js'
+import { relativeTo } from './paths.js'
 import { DEFAULT_PREFS, readPrefs, writePrefs } from './prefs.js'
 import { SettingsPage } from './settings.js'
 import { STYLE } from './styles.js'
@@ -10,7 +11,7 @@ import { STYLE } from './styles.js'
 const { createElement, useCallback, useEffect, useState } = React
 
 /** Services this plugin needs before it can register anything. */
-export const inject = ['slots', 'locale', 'sidebarRightTabs', 'sidebarRight', 'sessions', 'contextMenus', 'theme']
+export const inject = ['slots', 'locale', 'sidebarRightTabs', 'sidebarRight', 'sessions', 'theme']
 
 const NS = 'nanoExplorerExtra'
 const FILES_KIND = 'files'
@@ -44,14 +45,6 @@ export function apply(ctx) {
   ctx.effect(() => () => style.remove())
 
   const store = createPrefStore()
-  if (typeof window !== 'undefined') window.__nxeContextMenus = ctx.contextMenus
-
-  ;(window.__nxeMenuDiag ||= []).push({
-    hasService: typeof ctx.contextMenus === 'object' && ctx.contextMenus !== null,
-    hasOpen: typeof ctx.contextMenus?.open === 'function',
-    hasRegister: typeof ctx.contextMenus?.register === 'function',
-    kinds: (() => { try { return [...(ctx.contextMenus.registeredKinds.getSnapshot() ?? [])] } catch { return null } })(),
-  })
 
 
   /**
@@ -110,8 +103,11 @@ export function apply(ctx) {
 
   // Row menus. The shipped menu already offers the absolute path, so this adds only what it lacks:
   // a workspace-relative path with the `/` separators a model or a markdown link wants, and rename.
-  for (const target of ['file', 'directory']) {
-    ctx.effect(() => ctx.contextMenus.register({
+  // The service is read through `ctx.get` so a deployment without it still mounts everything else.
+  const menus = ctx.get('contextMenus')
+  if (menus !== undefined && menus !== null) {
+    for (const target of ['file', 'directory']) {
+      ctx.effect(() => menus.register({
       id: `nano-explorer-extra.${target}`,
       target,
       order: 900,
@@ -137,6 +133,7 @@ export function apply(ctx) {
         ]
       },
     }), `nano-explorer-extra: ${target} menu`)
+    }
   }
 
   // The menu icons this plugin contributes, keyed by the actions above.

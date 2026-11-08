@@ -1,8 +1,8 @@
-/** The footer: Git branch and commit control on the left, workspace totals on the right. */
+/** The footer: Git branch and sync state on the left, workspace totals on the right. */
 
 import React from 'react'
-import { formatAheadBehind, formatBytes } from './format.js'
-import { IconBranchOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { formatBytes, formatSync } from './format.js'
+import { IconBranchOutlineRegular, IconRefreshOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 
 /**
  * The status bar.
@@ -10,7 +10,7 @@ import { IconBranchOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
  * @returns the footer, or null when the reader switched it off.
  */
 export function StatusBar(props) {
-  const { copy, git, stats, statsState, prefs, onCommit, onRetryStats } = props
+  const { copy, git, stats, statsState, prefs, onCommit, onRefreshGit, onRetryStats } = props
   if (!prefs.showStatusBar) return null
 
   const left = []
@@ -27,14 +27,34 @@ export function StatusBar(props) {
     },
     React.createElement(IconBranchOutlineRegular, { width: 14, height: 14 }),
     React.createElement('span', { className: 'nxe-branch-name', 'data-nxe-branch': git.branch ?? '' }, name)))
-    if (git.upstream !== null && git.upstream !== undefined) {
-      const pair = formatAheadBehind(git.ahead, git.behind)
-      if (pair !== '') left.push(React.createElement('span', { key: 'ab', className: 'nxe-ab', title: copy.aheadBehindTooltip(git.ahead, git.behind) }, pair))
-    }
     const dirty = (git.files?.length ?? 0) > 0
+    const label = dirty ? copy.commitTooltip : copy.commitTooltipNone
+    if (git.upstream !== null && git.upstream !== undefined) {
+      // The sync block reports what the remote has that this checkout lacks and vice versa; it also
+      // re-reads the counts when pressed.
+      left.push(React.createElement('button', {
+        key: 'sync', type: 'button', className: 'nxe-sync',
+        'data-nxe-sync': 'true',
+        'data-ahead': String(git.ahead ?? 0),
+        'data-behind': String(git.behind ?? 0),
+        title: copy.syncTooltip(git.ahead ?? 0, git.behind ?? 0, git.upstream),
+        'aria-label': copy.syncTooltip(git.ahead ?? 0, git.behind ?? 0, git.upstream),
+        onClick: onRefreshGit,
+      },
+      React.createElement(IconRefreshOutlineRegular, { width: 14, height: 14 }),
+      React.createElement('span', { className: 'nxe-sync-counts' }, formatSync(git.ahead ?? 0, git.behind ?? 0))))
+    } else {
+      // A branch with no upstream has no counts to compare, but the reader still needs to see that
+      // and still needs the commit action, so the row keeps a labelled stand-in.
+      left.push(React.createElement('span', {
+        key: 'nosync', className: 'nxe-sync', 'data-nxe-sync': 'none',
+        title: copy.noUpstream, 'aria-label': copy.noUpstream,
+      }, copy.noUpstream))
+    }
+    // A tracked change is what a commit acts on, so the commit affordance stays beside the counts.
     left.push(React.createElement('button', {
       key: 'commit', type: 'button', className: 'nxe-commit',
-      disabled: !dirty, title: dirty ? copy.commitTooltip : copy.commitTooltipNone,
+      disabled: !dirty, title: label,
       'data-nxe-commit': 'true',
       onClick: onCommit,
     }, copy.commit))

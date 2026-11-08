@@ -105,8 +105,13 @@ export function absoluteOf(root, path) {
   const normalizedRoot = trimSlash(root)
   const normalizedPath = path.replace(/\\/gu, '/')
   if (normalizedPath === '') return normalizedRoot
-  if (normalizedPath.startsWith('/') || /^[A-Za-z]:\//u.test(normalizedPath)) return trimSlash(normalizedPath)
-  return `${normalizedRoot}/${normalizedPath}`.replace(/\/{2,}/gu, '/')
+  const composed = normalizedPath.startsWith('/') || /^[A-Za-z]:\//u.test(normalizedPath)
+    ? trimSlash(normalizedPath)
+    : `${normalizedRoot}/${normalizedPath}`.replace(/\/{2,}/gu, '/')
+  // Collapse `.` and `..` segments so `isLexicallyInside` cannot be bypassed by a
+  // request that names `root/../outside` — the lexical prefix check must see the
+  // real destination, not a traversal that still starts with the root (review-01 R4).
+  return foldSegments(composed)
 }
 
 /** @param {string} path */
@@ -116,14 +121,33 @@ function trimSlash(path) {
 }
 
 /**
+ * Collapse `.` and `..` segments without touching the filesystem.
+ *
+ * A lexical prefix test alone accepted `/ws/../elsewhere` as living under `/ws`, because the string
+ * still starts with the root. Folding the segments first is what makes that test mean what it says.
+ * @param path - absolute path to normalize.
+ * @returns the path with every `.` and `..` segment resolved.
+ */
+function foldSegments(path) {
+  const absolute = path.startsWith('/')
+  const out = []
+  for (const segment of path.split('/')) {
+    if (segment === '' || segment === '.') continue
+    if (segment === '..') { out.pop(); continue }
+    out.push(segment)
+  }
+  return `${absolute ? '/' : ''}${out.join('/')}`
+}
+
+/**
  * Report whether a path is the root or lies below it, by lexical prefix only.
  * @param root - workspace root.
  * @param candidate - absolute candidate path.
  * @returns true when the candidate is the root or one of its descendants.
  */
 export function isLexicallyInside(root, candidate) {
-  const base = trimSlash(root)
-  const target = trimSlash(candidate)
+  const base = foldSegments(trimSlash(root))
+  const target = foldSegments(trimSlash(candidate))
   if (base === target) return true
   const separator = base === '/' ? '' : '/'
   return target.startsWith(`${base}${separator}`)

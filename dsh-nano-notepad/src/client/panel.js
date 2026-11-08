@@ -473,6 +473,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     saveTimer: /** @type {number | undefined} */ (undefined),
     commitTimer: /** @type {number | undefined} */ (undefined),
     dirty: false,
+    lastDraftWrite: /** @type {Record<string, number>} */ ({}),
     pendingFileId: /** @type {string | null} */ (null),
     pendingDraft: /** @type {string | null} */ (null),
     sync: { phase: 'idle', at: null, detail: '' },
@@ -740,7 +741,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       if (thumb) thumb.textContent = rendered ? text().preview : text().source
     }
     if (!rendered || state.db === null) return
-    const markdown = source.value || file.draft || ''
+    const markdown = state.pendingDraft ?? (source.value || file.draft || '')
     const images = await imagesById(state.db, imageIdsIn(markdown))
     read.innerHTML = markdown === ''
       ? `<p class="np-placeholder">${escapeHtml(text().placeholder)}</p>`
@@ -831,6 +832,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     state.pendingDraft = null
     if (!file || !state.db) return
     file.draft = draft
+    state.lastDraftWrite[file.id] = Date.now()
     setSync('saving')
     void saveDraft(state.db, file.id, draft).then(() => {
       setSync('saved')
@@ -999,6 +1001,11 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     state.pendingDraft = write().value
     setSync('dirty')
     window.clearTimeout(state.saveTimer)
+    if (state.settings.autoSave === false) return
+    /* rolling draft slot: DB overwrite at most once per draftIntervalMs (default 3 min) */
+    const fileId = state.pendingFileId
+    const elapsed = Date.now() - (state.lastDraftWrite[fileId] ?? 0)
+    const wait = Math.max(state.settings.saveDelayMs, state.settings.draftIntervalMs - elapsed)
     state.saveTimer = window.setTimeout(() => {
       const file = state.nodes.find(node => node.id === state.pendingFileId)
       const draft = state.pendingDraft ?? ''
@@ -1007,12 +1014,13 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       state.pendingDraft = null
       if (!file || !state.db) return
       file.draft = draft
+      state.lastDraftWrite[file.id] = Date.now()
       setSync('saving')
       void saveDraft(state.db, file.id, draft).then(() => {
         setSync('saved')
         channel?.postMessage({ type: 'changed', fileId: file.id })
       }).catch(showError)
-    }, state.settings.saveDelayMs)
+    }, wait)
   }
 
   async function commit(reason) {
@@ -1080,7 +1088,11 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       <button type="button" class="np-sel" data-sel="${name}"><span>${escapeHtml(options.find(o => o.selected)?.label ?? options[0].label)}</span>${CHEVRON_ICON}</button></div>`
     dialog(`<h3>${escapeHtml(copy.settingsTitle)}</h3>
       <section class="np-section">
-        ${num('saveDelayMs', 'ms', values.saveDelayMs, copy.saveDelay, copy.saveDelayHint)}
+        <div class="np-field"><div class="np-field-text"><span class="np-field-name">${escapeHtml(copy.autoSave)}</span><span class="np-field-desc">${escapeHtml(copy.autoSaveHint)}</span></div>
+        <span class="np-seg" role="radiogroup">
+          <button type="button" role="radio" aria-checked="${values.autoSave !== false}" data-seg-field="autoSave" data-seg-value="on">${escapeHtml(copy.autoSaveOn)}</button><button type="button" role="radio" aria-checked="${values.autoSave === false}" data-seg-field="autoSave" data-seg-value="off">${escapeHtml(copy.autoSaveOff)}</button>
+        </span></div>
+        ${num('draftIntervalMs', 'ms', values.draftIntervalMs, copy.draftInterval, copy.draftIntervalHint)}
         ${num('commitIntervalSec', 's', values.commitIntervalSec, copy.commitInterval, copy.commitIntervalHint)}
         ${num('versionLimit', '', values.versionLimit, copy.versionLimit, copy.versionLimitHint)}
       </section>
@@ -1139,10 +1151,16 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       card.addEventListener('click', event => {
         const seg = event.target instanceof HTMLElement ? event.target.closest('[data-seg-value]') : null
         if (seg) {
-          const merged = { ...state.settings, chromeStyle: seg.dataset.segValue }
+          const field = seg.dataset.segField ?? 'chromeStyle'
+          const merged = { ...state.settings }
+          if (field === 'autoSave') merged.autoSave = seg.dataset.segValue === 'on'
+          else merged.chromeStyle = seg.dataset.segValue
           state.settings = normalizeSettings(merged)
           if (state.db) void writeSettings(state.db, state.settings).catch(showError)
-          card.querySelectorAll('[data-seg-value]').forEach(b => b.setAttribute('aria-checked', String(b.dataset.segValue === state.settings.chromeStyle)))
+          card.querySelectorAll('[data-seg-value]').forEach(b => {
+            const f = b.dataset.segField ?? 'chromeStyle'
+            b.setAttribute('aria-checked', String(f === 'autoSave' ? (b.dataset.segValue === 'on') === state.settings.autoSave : b.dataset.segValue === state.settings.chromeStyle))
+          })
           render()
           return
         }
@@ -1161,7 +1179,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
         }
         if (action === 'clear') confirmClear(close)
       })
-      const settingNames = ['saveDelayMs', 'commitIntervalSec', 'versionLimit', 'imageLimitBytes', 'defaultView', 'theme']
+      const settingNames = ['saveDelayMs', 'draftIntervalMs', 'commitIntervalSec', 'versionLimit', 'imageLimitBytes', 'defaultView', 'theme']
       card.addEventListener('change', () => {
         const merged = { ...state.settings }
         let rejected = false

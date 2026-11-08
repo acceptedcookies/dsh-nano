@@ -42,14 +42,17 @@ window.__ModuleLoader__.load({
   var DB_VERSION = 2;
   var CHANNEL = "dsh-nano-notepad";
   var DEFAULT_SETTINGS = {
+    autoSave: true,
+    draftIntervalMs: 3 * 60 * 1e3,
     saveDelayMs: 800,
-    commitIntervalSec: 60,
+    commitIntervalSec: 3600,
     versionLimit: 50,
     imageLimitBytes: 5 * 1024 * 1024,
     defaultView: "rendered",
     theme: "system",
     chromeStyle: "mac",
-    followApp: true
+    followApp: true,
+    settingsVersion: 2
   };
   var IMAGE_TYPES = /* @__PURE__ */ new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
   function record(value) {
@@ -62,15 +65,19 @@ window.__ModuleLoader__.load({
       if (typeof value !== "number" || !Number.isInteger(value) || value < min || value > max) return fallback;
       return value;
     };
+    const legacy = source.settingsVersion !== 2 && source.commitIntervalSec === 60;
     return {
+      autoSave: source.autoSave !== false,
+      draftIntervalMs: number("draftIntervalMs", DEFAULT_SETTINGS.draftIntervalMs, 30 * 1e3, 30 * 60 * 1e3),
       saveDelayMs: number("saveDelayMs", DEFAULT_SETTINGS.saveDelayMs, 200, 5e3),
-      commitIntervalSec: number("commitIntervalSec", DEFAULT_SETTINGS.commitIntervalSec, 15, 3600),
+      commitIntervalSec: legacy ? 3600 : number("commitIntervalSec", DEFAULT_SETTINGS.commitIntervalSec, 15, 86400),
       versionLimit: number("versionLimit", DEFAULT_SETTINGS.versionLimit, 5, 500),
       imageLimitBytes: number("imageLimitBytes", DEFAULT_SETTINGS.imageLimitBytes, 256 * 1024, 20 * 1024 * 1024),
       defaultView: source.defaultView === "source" ? "source" : "rendered",
       theme: source.theme === "light" || source.theme === "dark" ? source.theme : "system",
       chromeStyle: source.chromeStyle === "windows" ? "windows" : "mac",
-      followApp: source.followApp !== false
+      followApp: source.followApp !== false,
+      settingsVersion: 2
     };
   }
   function requestToPromise(request) {
@@ -652,6 +659,12 @@ window.__ModuleLoader__.load({
       imageHeading: "\u56FE\u7247\u4E0E\u7A7A\u95F4",
       positionHeading: "\u4F4D\u7F6E",
       dangerHeading: "\u5371\u9669\u64CD\u4F5C",
+      autoSave: "\u81EA\u52A8\u4FDD\u5B58",
+      autoSaveHint: "\u5173\u95ED\u540E\u8349\u7A3F\u53EA\u7559\u5728\u5185\u5B58\uFF0C\u5207\u6587\u4EF6/\u63D0\u4EA4\u65F6\u624D\u5199\u76D8",
+      autoSaveOn: "\u5F00",
+      autoSaveOff: "\u5173",
+      draftInterval: "\u8349\u7A3F\u8986\u76D6\u95F4\u9694",
+      draftIntervalHint: "\u6BCF 3 \u5206\u949F\u6EDA\u52A8\u8986\u76D6\u4E00\u6B21\u8349\u7A3F\u5E2D\u4F4D\uFF0830000\u20131800000\uFF09",
       saveDelay: "\u505C\u6B62\u8F93\u5165\u540E\u4FDD\u5B58",
       commitInterval: "\u81EA\u52A8\u63D0\u4EA4\u95F4\u9694",
       versionLimit: "\u6BCF\u4E2A\u6587\u4EF6\u4FDD\u7559\u7248\u672C",
@@ -689,8 +702,8 @@ window.__ModuleLoader__.load({
       loadRemote: "\u8F7D\u5165\u6700\u65B0",
       keepMine: "\u4FDD\u7559\u6211\u7684",
       reset: "\u91CD\u7F6E",
-      saveDelayHint: "\u952E\u5165\u505C\u6B62\u540E\u81EA\u52A8\u4FDD\u5B58\u8349\u7A3F\u7684\u7B49\u5F85\u65F6\u957F\uFF08200\u20135000\uFF09",
-      commitIntervalHint: "\u81EA\u52A8\u63D0\u4EA4\u5386\u53F2\u7248\u672C\u7684\u95F4\u9694\uFF0815\u20133600\uFF09",
+      saveDelayHint: "\u952E\u5165\u505C\u6B62\u540E\u843D\u76D8\u7684\u6700\u5C0F\u7B49\u5F85\uFF08200\u20135000\uFF09",
+      commitIntervalHint: "\u81EA\u52A8\u63D0\u4EA4\u5386\u53F2\u7248\u672C\u7684\u95F4\u9694\uFF0C\u9ED8\u8BA4 1 \u5C0F\u65F6\uFF0815\u201386400 \u79D2\uFF09",
       versionLimitHint: "\u6BCF\u4E2A\u6587\u4EF6\u6700\u591A\u4FDD\u7559\u7684\u5386\u53F2\u7248\u672C\u6570\uFF085\u2013500\uFF09",
       openAsHint: "\u65B0\u6253\u5F00\u7684\u4FBF\u7B7E\u9ED8\u8BA4\u8FDB\u5165\u54EA\u4E2A\u89C6\u56FE",
       windowThemeHint: "\u6D6E\u7A97\u4F7F\u7528\u6DF1\u8272\u3001\u6D45\u8272\uFF0C\u8FD8\u662F\u8DDF\u968F\u5E94\u7528",
@@ -763,6 +776,12 @@ window.__ModuleLoader__.load({
       imageHeading: "Images and space",
       positionHeading: "Position",
       dangerHeading: "Danger",
+      autoSave: "Autosave",
+      autoSaveHint: "When off, drafts stay in memory and flush only on file switch or commit",
+      autoSaveOn: "On",
+      autoSaveOff: "Off",
+      draftInterval: "Draft slot interval",
+      draftIntervalHint: "Draft slot is overwritten at most once every 3 min (30000\u20131800000)",
       saveDelay: "Save after typing stops",
       commitInterval: "Automatic version interval",
       versionLimit: "Versions kept per file",
@@ -801,8 +820,8 @@ window.__ModuleLoader__.load({
       loadRemote: "Load latest",
       keepMine: "Keep mine",
       reset: "Reset",
-      saveDelayHint: "Wait after typing stops before the draft autosaves (200\u20135000)",
-      commitIntervalHint: "How often versions are committed automatically (15\u20133600)",
+      saveDelayHint: "Minimum wait before a paused draft is written (200\u20135000)",
+      commitIntervalHint: "How often versions are committed automatically, default 1 h (15\u201386400 s)",
       versionLimitHint: "Maximum history versions kept per file (5\u2013500)",
       openAsHint: "Which view a newly opened note starts in",
       windowThemeHint: "Float the window in dark, light, or follow the app",
@@ -1272,6 +1291,10 @@ window.__ModuleLoader__.load({
         void 0
       ),
       dirty: false,
+      lastDraftWrite: (
+        /** @type {Record<string, number>} */
+        {}
+      ),
       pendingFileId: (
         /** @type {string | null} */
         null
@@ -1528,7 +1551,7 @@ window.__ModuleLoader__.load({
         if (thumb) thumb.textContent = rendered ? text().preview : text().source;
       }
       if (!rendered || state.db === null) return;
-      const markdown = source.value || file.draft || "";
+      const markdown = state.pendingDraft ?? (source.value || file.draft || "");
       const images = await imagesById(state.db, imageIdsIn(markdown));
       read.innerHTML = markdown === "" ? `<p class="np-placeholder">${escapeHtml(text().placeholder)}</p>` : renderMarkdown(markdown, images);
     }
@@ -1607,6 +1630,7 @@ window.__ModuleLoader__.load({
       state.pendingDraft = null;
       if (!file || !state.db) return;
       file.draft = draft;
+      state.lastDraftWrite[file.id] = Date.now();
       setSync("saving");
       void saveDraft(state.db, file.id, draft).then(() => {
         setSync("saved");
@@ -1791,6 +1815,10 @@ window.__ModuleLoader__.load({
       state.pendingDraft = write().value;
       setSync("dirty");
       window.clearTimeout(state.saveTimer);
+      if (state.settings.autoSave === false) return;
+      const fileId = state.pendingFileId;
+      const elapsed = Date.now() - (state.lastDraftWrite[fileId] ?? 0);
+      const wait = Math.max(state.settings.saveDelayMs, state.settings.draftIntervalMs - elapsed);
       state.saveTimer = window.setTimeout(() => {
         const file = state.nodes.find((node) => node.id === state.pendingFileId);
         const draft = state.pendingDraft ?? "";
@@ -1799,12 +1827,13 @@ window.__ModuleLoader__.load({
         state.pendingDraft = null;
         if (!file || !state.db) return;
         file.draft = draft;
+        state.lastDraftWrite[file.id] = Date.now();
         setSync("saving");
         void saveDraft(state.db, file.id, draft).then(() => {
           setSync("saved");
           channel?.postMessage({ type: "changed", fileId: file.id });
         }).catch(showError);
-      }, state.settings.saveDelayMs);
+      }, wait);
     }
     async function commit(reason) {
       flushSave();
@@ -1867,7 +1896,11 @@ window.__ModuleLoader__.load({
       <button type="button" class="np-sel" data-sel="${name}"><span>${escapeHtml(options.find((o) => o.selected)?.label ?? options[0].label)}</span>${CHEVRON_ICON}</button></div>`;
       dialog(`<h3>${escapeHtml(copy.settingsTitle)}</h3>
       <section class="np-section">
-        ${num("saveDelayMs", "ms", values.saveDelayMs, copy.saveDelay, copy.saveDelayHint)}
+        <div class="np-field"><div class="np-field-text"><span class="np-field-name">${escapeHtml(copy.autoSave)}</span><span class="np-field-desc">${escapeHtml(copy.autoSaveHint)}</span></div>
+        <span class="np-seg" role="radiogroup">
+          <button type="button" role="radio" aria-checked="${values.autoSave !== false}" data-seg-field="autoSave" data-seg-value="on">${escapeHtml(copy.autoSaveOn)}</button><button type="button" role="radio" aria-checked="${values.autoSave === false}" data-seg-field="autoSave" data-seg-value="off">${escapeHtml(copy.autoSaveOff)}</button>
+        </span></div>
+        ${num("draftIntervalMs", "ms", values.draftIntervalMs, copy.draftInterval, copy.draftIntervalHint)}
         ${num("commitIntervalSec", "s", values.commitIntervalSec, copy.commitInterval, copy.commitIntervalHint)}
         ${num("versionLimit", "", values.versionLimit, copy.versionLimit, copy.versionLimitHint)}
       </section>
@@ -1929,10 +1962,16 @@ window.__ModuleLoader__.load({
         card.addEventListener("click", (event) => {
           const seg = event.target instanceof HTMLElement ? event.target.closest("[data-seg-value]") : null;
           if (seg) {
-            const merged = { ...state.settings, chromeStyle: seg.dataset.segValue };
+            const field = seg.dataset.segField ?? "chromeStyle";
+            const merged = { ...state.settings };
+            if (field === "autoSave") merged.autoSave = seg.dataset.segValue === "on";
+            else merged.chromeStyle = seg.dataset.segValue;
             state.settings = normalizeSettings(merged);
             if (state.db) void writeSettings(state.db, state.settings).catch(showError);
-            card.querySelectorAll("[data-seg-value]").forEach((b) => b.setAttribute("aria-checked", String(b.dataset.segValue === state.settings.chromeStyle)));
+            card.querySelectorAll("[data-seg-value]").forEach((b) => {
+              const f = b.dataset.segField ?? "chromeStyle";
+              b.setAttribute("aria-checked", String(f === "autoSave" ? b.dataset.segValue === "on" === state.settings.autoSave : b.dataset.segValue === state.settings.chromeStyle));
+            });
             render();
             return;
           }
@@ -1951,7 +1990,7 @@ window.__ModuleLoader__.load({
           }
           if (action === "clear") confirmClear(close);
         });
-        const settingNames = ["saveDelayMs", "commitIntervalSec", "versionLimit", "imageLimitBytes", "defaultView", "theme"];
+        const settingNames = ["saveDelayMs", "draftIntervalMs", "commitIntervalSec", "versionLimit", "imageLimitBytes", "defaultView", "theme"];
         card.addEventListener("change", () => {
           const merged = { ...state.settings };
           let rejected = false;

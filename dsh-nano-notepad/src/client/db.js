@@ -5,14 +5,17 @@ export const DB_VERSION = 2
 export const CHANNEL = 'dsh-nano-notepad'
 
 export const DEFAULT_SETTINGS = {
+  autoSave: true,
+  draftIntervalMs: 3 * 60 * 1000,
   saveDelayMs: 800,
-  commitIntervalSec: 60,
+  commitIntervalSec: 3600,
   versionLimit: 50,
   imageLimitBytes: 5 * 1024 * 1024,
   defaultView: 'rendered',
   theme: 'system',
   chromeStyle: 'mac',
   followApp: true,
+  settingsVersion: 2,
 }
 
 const IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp'])
@@ -30,15 +33,20 @@ export function normalizeSettings(config) {
     if (typeof value !== 'number' || !Number.isInteger(value) || value < min || value > max) return fallback
     return value
   }
+  /* schema v2: default commit interval 1h; migrate old default 60 → 3600 */
+  const legacy = source.settingsVersion !== 2 && source.commitIntervalSec === 60
   return {
+    autoSave: source.autoSave !== false,
+    draftIntervalMs: number('draftIntervalMs', DEFAULT_SETTINGS.draftIntervalMs, 30 * 1000, 30 * 60 * 1000),
     saveDelayMs: number('saveDelayMs', DEFAULT_SETTINGS.saveDelayMs, 200, 5000),
-    commitIntervalSec: number('commitIntervalSec', DEFAULT_SETTINGS.commitIntervalSec, 15, 3600),
+    commitIntervalSec: legacy ? 3600 : number('commitIntervalSec', DEFAULT_SETTINGS.commitIntervalSec, 15, 86400),
     versionLimit: number('versionLimit', DEFAULT_SETTINGS.versionLimit, 5, 500),
     imageLimitBytes: number('imageLimitBytes', DEFAULT_SETTINGS.imageLimitBytes, 256 * 1024, 20 * 1024 * 1024),
     defaultView: source.defaultView === 'source' ? 'source' : 'rendered',
     theme: source.theme === 'light' || source.theme === 'dark' ? source.theme : 'system',
     chromeStyle: source.chromeStyle === 'windows' ? 'windows' : 'mac',
     followApp: source.followApp !== false,
+    settingsVersion: 2,
   }
 }
 

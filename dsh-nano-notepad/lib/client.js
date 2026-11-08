@@ -1829,7 +1829,7 @@ window.__ModuleLoader__.load({
         requestDelete(rowAction.dataset.remove);
         return;
       }
-      const target = event.target instanceof Element ? event.target.closest("[data-action], [data-format], [data-tab], [data-close], [data-id]") : null;
+      const target = event.target instanceof Element ? event.target.closest("[data-action], [data-format], [data-tab], [data-close], [data-id], [data-ws-choice]") : null;
       if (!(target instanceof HTMLElement)) return;
       const action = target.dataset.action;
       if (action === "ws-toggle") {
@@ -1838,11 +1838,11 @@ window.__ModuleLoader__.load({
         target.setAttribute("aria-expanded", String(!menu.hidden));
         return;
       }
-      const choice = target.closest?.("[data-ws-choice]");
-      if (choice instanceof HTMLElement) {
+      if (target.dataset.wsChoice !== void 0) {
         must(panel, ".np-ws-menu").hidden = true;
+        panel.querySelector(".np-ws-btn")?.setAttribute("aria-expanded", "false");
         flushSave();
-        state.ui.workspaceChoice = choice.dataset.wsChoice;
+        state.ui.workspaceChoice = target.dataset.wsChoice;
         state.ui.currentId = null;
         render();
         void persistUi();

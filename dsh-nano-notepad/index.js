@@ -27,7 +27,7 @@ export const Config = {
         .map(([, field]) => ({ message: field.issue }))
       if (issues.length > 0) return { issues }
       const view = source.defaultView ?? 'rendered'
-      const theme = source.theme ?? 'dark'
+      const theme = source.theme ?? 'system'
       if (view !== 'rendered' && view !== 'source') issues.push({ message: 'defaultView must be rendered or source' })
       if (!['dark', 'light', 'system'].includes(theme)) issues.push({ message: 'theme must be dark, light, or system' })
       if (issues.length > 0) return { issues }

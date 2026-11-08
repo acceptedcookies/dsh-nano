@@ -22,7 +22,7 @@ import {
   writeSettings,
   writeUi,
 } from './db.js'
-import { applyFormat, renderMarkdown } from './markdown.js'
+import { applyFormat, escapeHtml, renderMarkdown } from './markdown.js'
 import { copyFor } from './i18n.js'
 
 const STYLE = `
@@ -32,72 +32,81 @@ const STYLE = `
 .np-entry, .np-window { position: absolute; }
 .np-entry { z-index: 3; }
 .np-window { z-index: 2; }
+.np-window { --np-pad-x: 12px; --np-gap: 8px; --np-row-h: 40px; --np-node-h: 28px; --np-icon-btn: 28px; --np-icon-btn-sm: 22px; --np-indent: 16px; --np-rail: 52px; --np-menu-w: 220px; }
 .np-dialog[hidden], .np-slash[hidden], .np-window[hidden], .np-read[hidden], .np-error[hidden] { display: none !important; }
+.np-window[data-theme="dark"], .np-entry[data-theme="dark"] { color-scheme: dark; --dsw-alias-bg-layer-1: #1e1e24; --dsw-alias-bg-layer-2: #26262d; --dsw-alias-bg-layer-3: #2e2e36; --dsw-alias-bg-mask-1: rgba(12, 12, 16, .55); --dsw-alias-label-primary: #ececf0; --dsw-alias-label-secondary: #a9a9b3; --dsw-alias-label-tertiary: #767680; --dsw-alias-border-l2: #3a3a42; --dsw-alias-border-l3: #484852; --dsw-alias-interactive-bg-hover: rgba(255,255,255,.07); --dsw-alias-interactive-bg-active: rgba(255,255,255,.13); --dsw-alias-brand-primary: #6ea0ff; --dsw-alias-link: #6ea0ff; }
+.np-window[data-theme="light"], .np-entry[data-theme="light"] { color-scheme: light; --dsw-alias-bg-layer-1: #ffffff; --dsw-alias-bg-layer-2: #f5f5f7; --dsw-alias-bg-layer-3: #ececef; --dsw-alias-bg-mask-1: rgba(30, 30, 36, .35); --dsw-alias-label-primary: #1f1f24; --dsw-alias-label-secondary: #55555e; --dsw-alias-label-tertiary: #8a8a93; --dsw-alias-border-l2: #e2e2e7; --dsw-alias-border-l3: #d0d0d7; --dsw-alias-interactive-bg-hover: rgba(0,0,0,.05); --dsw-alias-interactive-bg-active: rgba(0,0,0,.09); --dsw-alias-brand-primary: #3468d8; --dsw-alias-link: #3468d8; }
 .np-entry { width: 36px; height: 36px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-primary); cursor: grab; box-shadow: var(--dsw-elevation-soft); }
 .np-entry:active { cursor: grabbing; }
 .np-entry svg { width: 18px; height: 18px; display: block; margin: auto; }
 .np-tip { position: absolute; right: 44px; top: 2px; white-space: nowrap; background: var(--dsw-alias-tooltip-bg); color: var(--dsw-alias-tooltip-label, var(--dsw-alias-label-primary-foreground)); border-radius: var(--dsw-radius-sm); padding: 4px 8px; }
 .np-window { width: min(920px, calc(100vw - 48px)); height: min(640px, calc(100vh - 48px)); min-width: 320px; min-height: 240px; display: flex; flex-direction: column; background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-panel, 16px); box-shadow: var(--dsw-elevation-prominent); overflow: hidden; }
 .np-resize { position: absolute; z-index: 6; pointer-events: auto; }
-.np-resize[data-edge="n"], .np-resize[data-edge="s"] { left: 14px; right: 14px; height: 8px; cursor: ns-resize; }
-.np-resize[data-edge="n"] { top: -4px; }
-.np-resize[data-edge="s"] { bottom: -4px; }
-.np-resize[data-edge="e"], .np-resize[data-edge="w"] { top: 14px; bottom: 14px; width: 8px; cursor: ew-resize; }
-.np-resize[data-edge="e"] { right: -4px; }
-.np-resize[data-edge="w"] { left: -4px; }
-.np-resize[data-edge="nw"], .np-resize[data-edge="ne"], .np-resize[data-edge="sw"], .np-resize[data-edge="se"] { width: 14px; height: 14px; }
-.np-resize[data-edge="nw"] { top: -4px; left: -4px; cursor: nwse-resize; }
-.np-resize[data-edge="se"] { right: -4px; bottom: -4px; cursor: nwse-resize; }
-.np-resize[data-edge="ne"] { top: -4px; right: -4px; cursor: nesw-resize; }
-.np-resize[data-edge="sw"] { left: -4px; bottom: -4px; cursor: nesw-resize; }
+.np-resize[data-edge="n"], .np-resize[data-edge="s"] { left: 16px; right: 16px; height: 10px; cursor: ns-resize; }
+.np-resize[data-edge="n"] { top: -5px; }
+.np-resize[data-edge="s"] { bottom: -5px; }
+.np-resize[data-edge="e"], .np-resize[data-edge="w"] { top: 16px; bottom: 16px; width: 10px; cursor: ew-resize; }
+.np-resize[data-edge="e"] { right: -5px; }
+.np-resize[data-edge="w"] { left: -5px; }
+.np-resize[data-edge="nw"], .np-resize[data-edge="ne"], .np-resize[data-edge="sw"], .np-resize[data-edge="se"] { width: 16px; height: 16px; }
+.np-resize[data-edge="nw"] { top: -5px; left: -5px; cursor: nwse-resize; }
+.np-resize[data-edge="se"] { right: -5px; bottom: -5px; cursor: nwse-resize; }
+.np-resize[data-edge="ne"] { top: -5px; right: -5px; cursor: nesw-resize; }
+.np-resize[data-edge="sw"] { left: -5px; bottom: -5px; cursor: nesw-resize; }
 .np-body, .np-editor { min-width: 0; overflow: hidden; }
 .np-read, .np-write { overflow: auto; }
 .np-nodes { overflow-x: hidden; overflow-y: auto; }
-.np-tabs { display: flex; align-items: center; gap: 4px; min-height: 40px; padding: 6px 12px; cursor: grab; border-bottom: 1px solid var(--dsw-alias-border-l2); }
-.np-tablist { display: flex; min-width: 0; gap: 2px; }
-.np-tab { border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); padding: 4px 8px; }
+.np-tabs { display: flex; align-items: center; gap: 4px; min-height: var(--np-row-h); padding: 6px var(--np-pad-x); cursor: grab; border-bottom: 1px solid var(--dsw-alias-border-l2); }
+.np-tablist { display: flex; min-width: 0; gap: 2px; overflow-x: auto; scrollbar-width: thin; }
+.np-tab { display: inline-flex; align-items: center; gap: 6px; flex: none; max-width: 180px; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); padding: 4px 8px; cursor: pointer; font: inherit; }
+.np-tab-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.np-tab-x { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex: none; border-radius: var(--dsw-radius-xs, 4px); color: var(--dsw-alias-label-tertiary); }
+.np-tab-x:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 .np-tab[data-active="true"] { background: var(--dsw-alias-interactive-bg-active); color: var(--dsw-alias-label-primary); }
 .np-body { display: flex; min-height: 0; flex: 1; }
 .np-tree { box-sizing: border-box; width: 248px; display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--dsw-alias-border-l2); background: transparent; }
-.np-tree[data-collapsed="true"] { width: 53px; align-items: stretch; }
+.np-tree[data-collapsed="true"] { width: var(--np-rail); align-items: stretch; }
 .np-tree[data-collapsed="true"] .np-workspace, .np-tree[data-collapsed="true"] .np-tree-tools, .np-tree[data-collapsed="true"] .np-tree-head > span, .np-tree[data-collapsed="true"] .np-nodes { display: none; }
-.np-tree[data-collapsed="true"] .np-tree-head { width: 100%; justify-content: center; padding: 0 12px; }
-.np-tree-head { box-sizing: border-box; display: flex; align-items: center; gap: 4px; width: 100%; height: 40px; padding: 0 12px; color: var(--dsw-alias-label-tertiary); font-size: 12px; }
-.np-tree-toggle { box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; flex: none; padding: 0; border: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); }
+.np-tree[data-collapsed="true"] .np-tree-head { width: 100%; justify-content: center; padding: 0 var(--np-pad-x); }
+.np-tree-head { box-sizing: border-box; display: flex; align-items: center; gap: 4px; width: 100%; height: var(--np-row-h); padding: 0 var(--np-pad-x); color: var(--dsw-alias-label-tertiary); font-size: 12px; }
+.np-tree-toggle { box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; width: var(--np-icon-btn); height: var(--np-icon-btn); flex: none; padding: 0; border: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); cursor: pointer; }
 .np-tree-toggle:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 .np-tree-tools { display: flex; align-items: center; gap: 2px; }
-.np-tree-tools button { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); }
+.np-tree-tools button { display: inline-flex; align-items: center; justify-content: center; width: var(--np-icon-btn); height: var(--np-icon-btn); padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); cursor: pointer; }
 .np-tree-tools button svg { width: 16px; height: 16px; display: block; }
 .np-tree-tools button:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
-.np-nodes { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; padding: 0 12px 12px; }
-.np-tree-foot { display: flex; align-items: center; gap: 8px; flex: none; padding: 8px 12px 12px; border-top: 1px solid var(--dsw-alias-border-l2); }
+.np-nodes { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; padding: 0 var(--np-pad-x) var(--np-pad-x); }
+.np-tree-foot { display: flex; align-items: center; gap: var(--np-gap); flex: none; padding: 8px var(--np-pad-x) var(--np-pad-x); border-top: 1px solid var(--dsw-alias-border-l2); }
 .np-tree-foot button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 30px; }
 .np-tree-foot svg { width: 16px; height: 16px; display: block; }
-.np-tree[data-collapsed="true"] .np-tree-foot { flex-direction: column; margin-top: auto; padding: 8px 0 12px; border-top: 0; }
+.np-tree[data-collapsed="true"] .np-tree-foot { flex-direction: column; margin-top: auto; padding: 8px 0 var(--np-pad-x); border-top: 0; }
 .np-tree[data-collapsed="true"] .np-tree-foot span { display: none; }
-.np-tree[data-collapsed="true"] .np-tree-foot button { width: 28px; height: 28px; padding: 0; }
-.np-node { position: relative; box-sizing: border-box; display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; height: 28px; margin: 0; padding-right: 8px; border: 0 !important; background: transparent !important; box-shadow: none; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); text-align: left; font-weight: 400; overflow: hidden; }
-.np-node:hover { background: var(--dsw-alias-interactive-bg-hover) !important; color: var(--dsw-alias-label-primary); }
-.np-node[data-active="true"] { background: var(--dsw-alias-interactive-bg-active) !important; color: var(--dsw-alias-label-primary); }
-.np-node-main { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; border: 0; background: transparent; color: inherit; padding: 0; text-align: left; overflow: hidden; }
+.np-tree[data-collapsed="true"] .np-tree-foot button { width: var(--np-icon-btn); height: var(--np-icon-btn); padding: 0; }
+.np-node { position: relative; box-sizing: border-box; display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; height: var(--np-node-h); margin: 0; padding-right: 8px; border-radius: var(--dsw-radius-sm); color: var(--dsw-alias-label-secondary); overflow: hidden; }
+.np-node:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+.np-node[data-active="true"] { background: var(--dsw-alias-interactive-bg-active); color: var(--dsw-alias-label-primary); }
+.np-node[data-drop="true"] { box-shadow: inset 0 0 0 1.5px var(--dsw-alias-brand-primary); }
+.np-node-main { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; border: 0; background: transparent; color: inherit; padding: 0; text-align: left; font: inherit; cursor: pointer; overflow: hidden; }
 .np-node:hover .np-node-main, .np-node:focus-within .np-node-main { padding-right: 70px; }
+@media (hover: none) { .np-node .np-node-main { padding-right: 70px; } .np-node .np-node-actions { display: flex; } }
 .np-node-actions { position: absolute; right: 4px; top: 0; height: 100%; display: none; align-items: center; gap: 2px; }
 .np-node:hover .np-node-actions, .np-node:focus-within .np-node-actions { display: flex; }
-.np-node-actions button { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; padding: 0; border: 0 !important; background: transparent !important; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-xs, 4px); }
+.np-node-actions button { display: inline-flex; align-items: center; justify-content: center; width: var(--np-icon-btn-sm); height: var(--np-icon-btn-sm); padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-xs, 4px); cursor: pointer; }
 .np-node-actions button[data-active="true"] { color: var(--dsw-alias-brand-primary); }
-.np-node-actions button:hover { background: var(--dsw-alias-bg-layer-1) !important; color: var(--dsw-alias-label-primary); }
-.np-caret { display: inline-flex; width: 16px; height: 16px; align-items: center; justify-content: center; border: 0; background: transparent; color: var(--dsw-alias-label-tertiary); padding: 0; }
+.np-node-actions button:hover { background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); }
+.np-caret { display: inline-flex; width: 16px; height: 16px; align-items: center; justify-content: center; border: 0; background: transparent; color: var(--dsw-alias-label-tertiary); padding: 0; cursor: pointer; }
 .np-caret[data-open="false"] svg { transform: rotate(-90deg); }
 .np-node-icon { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex: none; color: var(--dsw-alias-label-tertiary); }
 .np-node-name { display: block; min-width: 0; overflow: hidden; white-space: nowrap; -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 18px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 18px), transparent); }
-.np-entry svg, .np-node-icon svg, .np-tree-tools svg, .np-tree-toggle svg, .np-tree-foot svg, .np-caret svg, .np-node-actions svg { fill: currentColor; stroke: none; }
-.np-node-icon svg, .np-tree-tools svg, .np-tree-toggle svg, .np-caret svg, .np-node-actions svg { width: 16px; height: 16px; display: block; }
-.np-workspace { max-width: 132px; border: 0; background: transparent; color: var(--dsw-alias-label-primary); font: inherit; font-size: 12px; }
-.np-group { margin: 8px 0 2px; color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 20px; }
+.np-entry svg, .np-node-icon svg, .np-tree-tools svg, .np-tree-toggle svg, .np-tree-foot svg, .np-caret svg, .np-node-actions svg, .np-tool svg, .np-slash svg { fill: currentColor; stroke: none; }
+.np-node-icon svg, .np-tree-tools svg, .np-tree-toggle svg, .np-caret svg, .np-node-actions svg, .np-tool svg, .np-slash svg { width: 16px; height: 16px; display: block; }
+.np-workspace { max-width: 150px; min-width: 0; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); font: inherit; font-size: 12px; padding: 3px 4px; }
+.np-group { display: flex; align-items: center; gap: 6px; margin: 8px 0 2px; color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 20px; }
 .np-group[data-active="true"] { color: var(--dsw-alias-label-primary); }
+.np-group-count { font-size: 11px; color: var(--dsw-alias-label-tertiary); background: var(--dsw-alias-interactive-bg-active); border-radius: 8px; padding: 0 6px; line-height: 16px; }
 .np-editor { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
 .np-path, .np-toolbar, .np-footer { min-width: 0; }
-.np-path, .np-toolbar { display: flex; gap: 8px; align-items: center; padding: 6px 12px; }
+.np-path, .np-toolbar { display: flex; gap: var(--np-gap); align-items: center; padding: 6px var(--np-pad-x); }
 .np-path { color: var(--dsw-alias-label-tertiary); font-family: var(--dsw-font-markdown-code-font-family); font-size: 12px; }
 .np-path span:not(.np-modes) { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .np-modes, .np-path > button { flex: 0 0 auto; white-space: nowrap; }
@@ -105,19 +114,33 @@ const STYLE = `
 .np-modes button { height: 30px; padding: 0 10px; line-height: 20px; color: var(--dsw-alias-label-secondary); }
 .np-modes button[data-active="true"] { background: var(--dsw-alias-interactive-bg-active); color: var(--dsw-alias-label-primary); border-color: var(--dsw-alias-border-l3); }
 .np-path > button[data-action="rename"] { flex: 0 0 auto; height: 30px; min-width: max-content; }
-.np-toolbar { flex-wrap: wrap; border-bottom: 1px solid var(--dsw-alias-border-l2); }
-.np-window button:not(.np-node-main):not(.np-caret):not(.np-tree-tools button):not(.np-tree-toggle):not(.np-node-actions button), .np-card button, .np-slash button { border: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); border-radius: var(--dsw-radius-sm); padding: 4px 10px; cursor: pointer; font: inherit; line-height: 20px; }
-.np-tree[data-collapsed="true"] .np-tree-foot button { padding: 0; }
-.np-node-main, .np-caret { border: 0 !important; background: transparent !important; box-shadow: none; }
-.np-window button:hover, .np-card button:hover, .np-slash button:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.np-toolbar { flex-wrap: wrap; gap: 2px; border-bottom: 1px solid var(--dsw-alias-border-l2); }
+.np-tool { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); cursor: pointer; }
+.np-tool:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+.np-tool svg { width: 18px; height: 18px; }
+.np-tool-sep { width: 1px; height: 18px; margin: 6px 4px; background: var(--dsw-alias-border-l2); flex: none; }
+.np-window button:not([class]):not(.np-tree-tools button):not(.np-node-actions button):not(.np-slash button):not(.np-versions button), .np-card button { border: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); border-radius: var(--dsw-radius-sm); padding: 4px 10px; cursor: pointer; font: inherit; line-height: 20px; }
+.np-window button:hover, .np-card button:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.np-node-main, .np-caret, .np-node { border: 0; background: transparent; box-shadow: none; }
 .np-tabs > button, .np-tab { background: transparent; }
 .np-danger { color: var(--dsw-alias-label-error); border-color: var(--dsw-alias-state-error-primary); }
 .np-write, .np-read { flex: 1; min-height: 0; margin: 0; }
-.np-write { box-sizing: border-box; width: 100%; max-width: 100%; resize: none; border: 0; outline: 0; background: transparent; color: var(--dsw-alias-label-primary); caret-color: var(--dsw-alias-label-primary); padding: 12px; font: var(--dsw-font-markdown-code); overflow-wrap: anywhere; }
+.np-write { box-sizing: border-box; width: 100%; max-width: 100%; resize: none; border: 0; outline: 0; background: transparent; color: var(--dsw-alias-label-primary); caret-color: var(--dsw-alias-label-primary); padding: var(--np-pad-x); font: var(--dsw-font-markdown-code); overflow-wrap: anywhere; }
 .np-write:disabled { color: var(--dsw-alias-label-tertiary); }
-.np-read { box-sizing: border-box; max-width: 100%; overflow: auto; overflow-wrap: anywhere; padding: 12px; color: var(--dsw-alias-label-primary); cursor: text; }
+.np-read { box-sizing: border-box; max-width: 100%; overflow: auto; overflow-wrap: anywhere; padding: 6px var(--np-pad-x) var(--np-pad-x); color: var(--dsw-alias-label-primary); cursor: text; line-height: 1.65; }
+.np-read h1 { margin: 16px 0 8px; font-size: 20px; line-height: 28px; font-weight: 600; }
+.np-read h2 { margin: 14px 0 6px; font-size: 17px; line-height: 24px; font-weight: 600; }
+.np-read h3 { margin: 12px 0 6px; font-size: 15px; line-height: 22px; font-weight: 600; }
+.np-read p { margin: 6px 0; }
+.np-read blockquote { margin: 8px 0; padding: 2px 12px; border-left: 3px solid var(--dsw-alias-border-l3); color: var(--dsw-alias-label-secondary); }
+.np-read ul, .np-read ol { margin: 6px 0; padding-left: 22px; }
+.np-read li { margin: 2px 0; }
+.np-read li input[type="checkbox"] { margin: 0 6px 0 0; vertical-align: -1px; }
+.np-read code { background: var(--dsw-alias-markdown-inline-code, var(--dsw-alias-bg-layer-3)); border-radius: var(--dsw-radius-sm); padding: 1px 5px; font-family: var(--dsw-font-markdown-code-font-family); font-size: .92em; }
+.np-read a { color: var(--dsw-alias-link); }
 .np-read img { display: block; max-width: min(100%, 640px); margin: 8px 0; border-radius: var(--dsw-radius-md); }
 .np-read .missing-image { border: 1px dashed var(--dsw-alias-border-l3); padding: 2px 4px; }
+.np-read .np-placeholder { color: var(--dsw-alias-label-tertiary); }
 .np-dialog { position: absolute; inset: 0; z-index: 20; border-radius: inherit; background: var(--dsw-alias-bg-mask-1); display: flex; align-items: center; justify-content: center; padding: 16px; pointer-events: auto; }
 .np-slash { background: var(--dsw-menu-surface-fill, var(--dsw-alias-bg-layer-3)); color: var(--dsw-alias-label-primary); border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-lg); box-shadow: var(--dsw-elevation-prominent); backdrop-filter: var(--dsw-menu-backdrop-filter); }
 .np-card { box-sizing: border-box; display: flex; flex-direction: column; gap: 16px; width: min(560px, calc(100% - 32px)); max-height: calc(100% - 32px); padding: 22px 24px 24px; overflow: auto; border: 0; border-radius: var(--dsw-radius-panel, 16px); background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-primary); box-shadow: var(--dsw-elevation-prominent); }
@@ -127,17 +150,23 @@ const STYLE = `
 .np-card label { display: flex; flex-direction: column; align-items: stretch; gap: 6px; margin: 0; color: var(--dsw-alias-label-secondary); }
 .np-card input, .np-card select { width: 100%; box-sizing: border-box; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); padding: 8px 10px; font: inherit; }
 .np-card input:focus, .np-card select:focus { outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, var(--dsw-alias-brand-primary)); }
-.np-actions { display: flex; justify-content: flex-end; gap: 8px; margin: 0; }
+.np-actions { display: flex; justify-content: flex-end; gap: var(--np-gap); margin: 0; }
 .np-actions button[data-go="ok"], .np-actions button[data-go="confirm"], .np-actions button[data-go="restore"] { background: var(--dsw-alias-button-primary-fill); color: var(--dsw-alias-label-primary-foreground); border-color: transparent; }
 .np-versions { max-height: 240px; overflow: auto; display: flex; flex-direction: column; }
-.np-error { color: var(--dsw-alias-label-error); padding: 0 12px 8px; }
-.np-slash { position: absolute; left: 16px; bottom: 52px; padding: 6px; display: grid; grid-template-columns: repeat(4, max-content); gap: 4px; z-index: 4; }
-.np-footer { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 6px 12px; border-top: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-2); }
+.np-versions button { display: block; width: 100%; border: 0; background: transparent; color: var(--dsw-alias-label-primary); border-radius: var(--dsw-radius-sm); padding: 6px 8px; text-align: left; font: inherit; cursor: pointer; }
+.np-versions button:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.np-error { color: var(--dsw-alias-label-error); padding: 0 var(--np-pad-x) 8px; }
+.np-slash { position: absolute; width: var(--np-menu-w); max-height: 260px; overflow-y: auto; padding: 4px; display: flex; flex-direction: column; gap: 1px; z-index: 4; }
+.np-slash button { display: flex; align-items: center; gap: 8px; width: 100%; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); padding: 6px 8px; font: inherit; text-align: left; cursor: pointer; }
+.np-slash button svg { width: 16px; height: 16px; flex: none; color: var(--dsw-alias-label-tertiary); }
+.np-slash button[data-active="true"], .np-slash button:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+.np-slash .np-slash-empty { padding: 8px; color: var(--dsw-alias-label-tertiary); font-size: 12px; }
+.np-footer { display: flex; align-items: center; gap: var(--np-gap); min-height: var(--np-row-h); padding: 6px var(--np-pad-x); border-top: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-2); }
 @media (max-width: 760px) {
   .np-window { inset: 12px auto auto 12px; width: calc(100% - 24px); height: min(82dvh, calc(100% - 24px)); }
   .np-body { flex-direction: column; }
   .np-tree { width: auto; max-height: 34%; border-right: 0; border-bottom: 1px solid var(--dsw-alias-border-l2); }
-  .np-tree[data-collapsed="true"] { width: 53px; max-height: none; }
+  .np-tree[data-collapsed="true"] { width: var(--np-rail); max-height: none; }
   .np-footer { flex-direction: column; align-items: stretch; }
   .np-footer-actions { justify-content: flex-start; }
   .np-footer-actions button { min-height: 36px; }
@@ -154,12 +183,10 @@ const STYLE = `
 .np-footer-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
 .np-section { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--dsw-alias-border-l2); }
 .np-section h4 { margin: 0 0 8px; font-size: 12px; font-weight: 600; color: var(--dsw-alias-label-tertiary); }
-
 `
 
-const FORMAT_KINDS = ['paragraph', 'h1', 'h2', 'h3', 'bold', 'italic', 'strike', 'bullet', 'numbered', 'task', 'quote', 'link']
-
 const googleIcon = (path) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${path}"></path></svg>`
+const textIcon = (label) => `<svg viewBox="0 0 24 24" aria-hidden="true"><text x="12" y="16.5" text-anchor="middle" font-size="10" font-weight="700" font-family="inherit">${label}</text></svg>`
 const FILE_ICON = googleIcon('M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8zm2 16H8v-2h8zm0-4H8v-2h8zm-3-5V3.5L18.5 9z')
 const FOLDER_ICON = googleIcon('M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8z')
 const PLUS_ICON = googleIcon('M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z')
@@ -173,11 +200,51 @@ const CHEVRON_LEFT = googleIcon('M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z')
 const CHEVRON_RIGHT = googleIcon('M10 6 8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z')
 const ICON = FILE_ICON
 
+/** Format toolbar + slash menu share one definition list. */
+const FORMAT_DEFS = [
+  { kind: 'paragraph', icon: googleIcon('M3 18h12v-2H3v2zM3 6v2h18V6H3zm0 7h18v-2H3v2z') },
+  { kind: 'h1', icon: textIcon('H1') },
+  { kind: 'h2', icon: textIcon('H2') },
+  { kind: 'h3', icon: textIcon('H3') },
+  { kind: 'bold', icon: googleIcon('M15.6 10.79c.97-.67 1.65-1.77 1.65-2.79 0-2.26-1.75-4-4-4H7v14h7.04c2.09 0 3.71-1.7 3.71-3.79 0-1.52-.86-2.82-2.15-3.42M10 6.5h3c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5h-3v-3m3.5 9H10v-3h3.5c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5') },
+  { kind: 'italic', icon: googleIcon('M10 4v3h2.21l-3.42 8H6v3h8v-3h-2.21l3.42-8H18V4z') },
+  { kind: 'strike', icon: googleIcon('M10 19h4v-3h-4v3zM5 4v3h5v3h4V7h5V4H5zM3 14h18v-2H3v2z') },
+  { kind: 'bullet', icon: googleIcon('M4 10.5c-.83 0-1.5.67-1.5 1.5s.67 1.5 1.5 1.5 1.5-.67 1.5-1.5-.67-1.5-1.5-1.5zm0-6c-.83 0-1.5.67-1.5 1.5S3.17 7.5 4 7.5 5.5 6.83 5.5 6 4.83 4.5 4 4.5zm0 12c-.83 0-1.5.68-1.5 1.5s.68 1.5 1.5 1.5 1.5-.68 1.5-1.5-.67-1.5-1.5-1.5zM7 19h14v-2H7v2zm0-6h14v-2H7v2zm0-8v2h14V5H7z') },
+  { kind: 'numbered', icon: googleIcon('M2 17h2v.5H3v1h1v.5H2v1h3v-4H2v1zm1-9h1V4H2v1h1v3zm-1 3h1.8L2 13.1v.9h3v-1H3.2L5 10.9V10H2v1z') },
+  { kind: 'task', icon: googleIcon('M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-9 14l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z') },
+  { kind: 'quote', icon: googleIcon('M6 17h3l2-4V7H5v6h3l-2 4zm8 0h3l2-4V7h-6v6h3l-2 4z') },
+  { kind: 'link', icon: googleIcon('M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z') },
+  { kind: 'image', icon: googleIcon('M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z') },
+]
+
 /** @param {ParentNode} root @param {string} selector */
 function must(root, selector) {
   const node = root.querySelector(selector)
   if (!(node instanceof HTMLElement)) throw new Error(`notepad missing ${selector}`)
   return node
+}
+
+/** Measure caret coordinates inside a textarea via a mirror element. */
+function caretRect(area, position) {
+  const style = getComputedStyle(area)
+  const div = document.createElement('div')
+  for (const prop of ['boxSizing', 'width', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth', 'fontFamily', 'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing', 'tabSize']) {
+    div.style[prop] = style[prop]
+  }
+  div.style.position = 'absolute'
+  div.style.visibility = 'hidden'
+  div.style.top = '0'
+  div.style.left = '0'
+  div.style.whiteSpace = 'pre-wrap'
+  div.style.overflowWrap = 'anywhere'
+  div.textContent = area.value.slice(0, position)
+  const marker = document.createElement('span')
+  marker.textContent = '​'
+  div.append(marker)
+  area.parentElement?.append(div)
+  const rect = { top: marker.offsetTop, left: marker.offsetLeft, height: marker.offsetHeight || 18 }
+  div.remove()
+  return rect
 }
 
 export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', subscribe: () => () => {} }, language = { current: () => 'en', subscribe: () => () => {} }, workspaces = { current: () => ({ items: [], currentId: null }), subscribe: () => () => {} }) {
@@ -186,14 +253,17 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
   const entry = must(host, '.np-entry')
   const tip = must(host, '.np-tip')
   const panel = must(host, '.np-window')
+  const toolbar = FORMAT_DEFS.map(def => def.kind === 'image'
+    ? `<button type="button" class="np-tool" data-action="image" data-format-kind="image">${def.icon}</button>`
+    : `<button type="button" class="np-tool" data-format="${def.kind}" data-format-kind="${def.kind}">${def.icon}</button>`).join('')
   panel.innerHTML = `
     <div class="np-tabs"><div class="np-tablist"></div><button type="button" data-action="new-file" data-i18n="newFile" data-i18n-mode="title">+</button></div>
     <div class="np-body">
       <aside class="np-tree"><div class="np-tree-head"><button type="button" class="np-tree-toggle" data-action="toggle-tree"></button><select class="np-workspace" aria-label="Workspace"></select><span style="flex:1"></span><span class="np-tree-tools"><button type="button" data-action="new-file" data-i18n="newFile" data-i18n-mode="title">${PLUS_ICON}</button><button type="button" data-action="new-folder" data-i18n="newFolder" data-i18n-mode="title">${FOLDER_PLUS_ICON}</button><button type="button" class="np-danger" data-action="delete" data-i18n="delete" data-i18n-mode="title">${CLOSE_ICON}</button></span></div><div class="np-nodes" data-root="true"></div><div class="np-tree-foot"><button type="button" data-action="settings" data-i18n="settings" data-i18n-mode="label">${SETTINGS_ICON}<span data-i18n="settings"></span></button><button type="button" data-action="close" data-i18n="close" data-i18n-mode="label">${CLOSE_ICON}<span data-i18n="close"></span></button></div></aside>
       <div class="np-editor">
         <div class="np-path"><span class="np-pathname"></span><span class="np-modes" role="group"><button type="button" data-action="view" data-view="source" data-i18n="source"></button><button type="button" data-action="view" data-view="rendered" data-i18n="preview"></button></span><button type="button" data-action="rename" data-i18n="rename"></button></div>
-        <div class="np-toolbar">${FORMAT_KINDS.map(kind => `<button type="button" data-format="${kind}" data-format-kind="${kind}"></button>`).join('')}<button type="button" data-action="image" data-i18n="image"></button></div>
-        <textarea class="np-write" placeholder="Write markdown... Type / for blocks."></textarea>
+        <div class="np-toolbar">${toolbar}</div>
+        <textarea class="np-write"></textarea>
         <div class="np-slash" hidden></div>
         <div class="np-read" hidden></div>
         <div class="np-error" hidden></div>
@@ -211,6 +281,11 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
 
   const text = () => copyFor(language.current())
 
+  function formatLabel(kind) {
+    const copy = text()
+    return kind === 'image' ? copy.image : (copy.formats[kind] ?? kind.toUpperCase())
+  }
+
   function applyCopy() {
     const copy = text()
     for (const node of panel.querySelectorAll('[data-i18n]')) {
@@ -223,8 +298,10 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       if (node.dataset.i18nMode !== 'title' && node.dataset.i18nMode !== 'label') node.textContent = value
     }
     for (const node of panel.querySelectorAll('[data-format-kind]')) {
-      const kind = node.dataset.formatKind
-      node.textContent = copy.formats[kind] ?? kind.toUpperCase()
+      const label = formatLabel(node.dataset.formatKind)
+      node.title = label
+      node.setAttribute('aria-label', label)
+      if (!node.querySelector('svg')) node.textContent = label
     }
     panel.querySelector('.np-modes')?.setAttribute('aria-label', copy.viewGroup)
     write().placeholder = copy.placeholder
@@ -237,12 +314,22 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     settings: defaults,
     ui: { id: 'ui', open: false, tabs: /** @type {string[]} */ ([]), currentId: /** @type {string | null} */ (null), entryX: null, entryY: null, panelX: null, panelY: null },
     view: defaults.defaultView,
-    slash: false,
+    slash: null,
+    slashIndex: 0,
     saveTimer: /** @type {number | undefined} */ (undefined),
     commitTimer: /** @type {number | undefined} */ (undefined),
     dirty: false,
+    pendingFileId: /** @type {string | null} */ (null),
+    pendingDraft: /** @type {string | null} */ (null),
     sync: { phase: 'idle', at: null, detail: '' },
     collapsed: new Set(),
+  }
+
+  const disposers = []
+  /** @param {any} target @param {string} type @param {any} fn @param {any} [opts] */
+  const on = (target, type, fn, opts) => {
+    target.addEventListener(type, fn, opts)
+    disposers.push(() => target.removeEventListener(type, fn, opts))
   }
 
   const write = () => /** @type {HTMLTextAreaElement} */ (must(panel, '.np-write'))
@@ -338,10 +425,11 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       nodes.sort((a, b) => Number(b.pinned === true) - Number(a.pinned === true) || a.name.localeCompare(b.name))
       for (const node of nodes) {
         const icon = node.kind === 'folder' ? FOLDER_ICON : FILE_ICON
-        const caret = node.kind === 'folder' ? `<button type="button" class="np-caret" data-caret="${node.id}" data-open="${!state.collapsed.has(node.id)}" aria-label="${text().collapse}">${CHEVRON_ICON}</button>` : ''
+        const name = escapeHtml(node.name)
+        const caret = node.kind === 'folder' ? `<button type="button" class="np-caret" data-caret="${node.id}" data-open="${!state.collapsed.has(node.id)}" aria-label="${escapeHtml(text().collapse)}">${CHEVRON_ICON}</button>` : ''
         const pinLabel = node.pinned === true ? text().unpin : text().pin
-        const pin = node.kind === 'file' ? `<button type="button" data-pin="${node.id}" data-active="${node.pinned === true}" title="${pinLabel}" aria-label="${pinLabel}">${PIN_ICON}</button>` : ''
-        lines.push(`<div class="np-node" data-kind="${node.kind}" data-active="${node.id === state.ui.currentId}" style="padding-left:${8 + depth * 16}px">${caret}<button class="np-node-main" type="button" draggable="true" data-id="${node.id}"><span class="np-node-icon" aria-hidden="true">${icon}</span><span class="np-node-name">${node.name}</span></button><span class="np-node-actions">${pin}<button type="button" data-rename="${node.id}" title="${text().rename}" aria-label="${text().rename}">${EDIT_ICON}</button><button type="button" class="np-danger" data-remove="${node.id}" title="${text().delete}" aria-label="${text().delete}">${CLOSE_ICON}</button></span></div>`)
+        const pin = node.kind === 'file' ? `<button type="button" data-pin="${node.id}" data-active="${node.pinned === true}" title="${escapeHtml(pinLabel)}" aria-label="${escapeHtml(pinLabel)}">${PIN_ICON}</button>` : ''
+        lines.push(`<div class="np-node" data-kind="${node.kind}" data-active="${node.id === state.ui.currentId}" style="padding-left:${8 + depth * 16}px">${caret}<button class="np-node-main" type="button" draggable="true" data-id="${node.id}"><span class="np-node-icon" aria-hidden="true">${icon}</span><span class="np-node-name">${name}</span></button><span class="np-node-actions">${pin}<button type="button" data-rename="${node.id}" title="${escapeHtml(text().rename)}" aria-label="${escapeHtml(text().rename)}">${EDIT_ICON}</button><button type="button" class="np-danger" data-remove="${node.id}" title="${escapeHtml(text().delete)}" aria-label="${escapeHtml(text().delete)}">${CLOSE_ICON}</button></span></div>`)
         if (node.kind === 'folder' && !state.collapsed.has(node.id)) visit(node.id, depth + 1, workspaceId)
       }
     }
@@ -353,7 +441,10 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       const key = workspaceId ?? ''
       if (seen.has(key)) continue
       seen.add(key)
-      if (active.mode === 'all') lines.push(`<div class="np-group" data-active="${workspaceId === workspaceCatalog().currentId}">${workspaceTitle(workspaceId)}</div>`)
+      if (active.mode === 'all') {
+        const count = state.nodes.filter(node => node.parentId === null && (node.workspaceId ?? null) === workspaceId).length
+        lines.push(`<div class="np-group" data-ws="${key}" data-active="${workspaceId === workspaceCatalog().currentId}"><span class="np-group-title">${escapeHtml(workspaceTitle(workspaceId))}</span><span class="np-group-count">${count}</span></div>`)
+      }
       visit(null, 0, workspaceId)
     }
     box.innerHTML = lines.join('')
@@ -364,7 +455,8 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     box.innerHTML = state.ui.tabs.map(id => {
       const node = state.nodes.find(item => item.id === id)
       if (!node) return ''
-      return `<button class="np-tab" type="button" data-tab="${id}" data-active="${id === state.ui.currentId}">${node.name} <span data-close="${id}">×</span></button>`
+      const name = escapeHtml(node.name)
+      return `<button class="np-tab" type="button" data-tab="${id}" data-active="${id === state.ui.currentId}"><span class="np-tab-name">${name}</span><span class="np-tab-x" data-close="${id}" aria-hidden="true">×</span></button>`
     }).join('')
   }
 
@@ -393,7 +485,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     const markdown = source.value || file.draft || ''
     const images = await imagesById(state.db, imageIdsIn(markdown))
     read.innerHTML = markdown === ''
-      ? `<p class="np-placeholder">${text().placeholder}</p>`
+      ? `<p class="np-placeholder">${escapeHtml(text().placeholder)}</p>`
       : renderMarkdown(markdown, images)
   }
 
@@ -401,6 +493,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     if (state.settings.followApp === false && (state.settings.theme === 'light' || state.settings.theme === 'dark')) {
       return state.settings.theme
     }
+    if (state.settings.theme === 'light' || state.settings.theme === 'dark') return state.settings.theme
     return appTheme.scheme() === 'light' ? 'light' : 'dark'
   }
 
@@ -426,7 +519,9 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
 
   function render() {
     panel.hidden = !state.ui.open
-    panel.dataset.theme = resolvedTheme()
+    const theme = resolvedTheme()
+    panel.dataset.theme = theme
+    entry.dataset.theme = theme
     applyCopy()
     const tree = must(panel, '.np-tree')
     const treeCollapsed = state.ui.treeOpen === false
@@ -451,11 +546,29 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     if (state.db) await writeUi(state.db, state.ui)
   }
 
+  /** Write any pending draft immediately so switching files never loses input. */
+  function flushSave() {
+    window.clearTimeout(state.saveTimer)
+    if (!state.dirty) return
+    state.dirty = false
+    const file = state.nodes.find(node => node.id === state.pendingFileId) ?? current()
+    const draft = state.pendingDraft ?? write().value
+    state.pendingFileId = null
+    state.pendingDraft = null
+    if (!file || !state.db) return
+    file.draft = draft
+    setSync('saving')
+    void saveDraft(state.db, file.id, draft).then(() => {
+      setSync('saved')
+      channel?.postMessage({ type: 'changed', fileId: file.id })
+    }).catch(showError)
+  }
+
   function openFile(id) {
+    flushSave()
     if (!state.ui.tabs.includes(id)) state.ui.tabs.push(id)
     state.ui.currentId = id
     state.ui.open = true
-    state.dirty = false
     render()
     void persistUi()
   }
@@ -487,8 +600,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     if (!state.db) return
     if (!current()) await add('file')
     state.view = 'source'
-    state.slash = false
-    must(panel, '.np-slash').hidden = true
+    closeSlash()
     await renderBody()
     const source = write()
     source.hidden = false
@@ -496,34 +608,55 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     source.focus()
   }
 
+  let closeDialog = /** @type {(() => void) | null} */ (null)
+
+  function dialog(html, setup) {
+    const mask = dialogMask
+    const card = document.createElement('div')
+    card.className = 'np-card'
+    must(mask, '.np-card').replaceWith(card)
+    card.innerHTML = html
+    mask.hidden = false
+    closeSlash()
+    closeDialog = () => { mask.hidden = true; closeDialog = null }
+    setup(card, () => { closeDialog?.() })
+  }
+
   function askName(title, initial, done) {
     const copy = text()
-    dialog(`<h3>${title}</h3><input name="node-name" value="${initial.replace(/"/gu, '&quot;')}" aria-label="${title}"><div class="np-actions"><button type="button" data-go="cancel">${copy.cancel}</button><button type="button" data-go="ok">${copy.confirm}</button></div>`, (card, close) => {
+    dialog(`<h3>${escapeHtml(title)}</h3><input name="node-name" value="${escapeHtml(initial)}" aria-label="${escapeHtml(title)}"><div class="np-actions"><button type="button" data-go="cancel">${escapeHtml(copy.cancel)}</button><button type="button" data-go="ok">${escapeHtml(copy.confirm)}</button></div>`, (card, close) => {
       const input = card.querySelector('[name="node-name"]')
+      if (!(input instanceof HTMLInputElement)) return
       input.focus()
+      input.select()
+      const submit = () => { close(); void done(input.value).catch(showError) }
+      input.addEventListener('keydown', event => {
+        if (event.key === 'Enter' && !event.isComposing) { event.preventDefault(); submit() }
+      })
       card.addEventListener('click', event => {
         const action = event.target instanceof HTMLElement ? event.target.dataset.go : undefined
         if (action === 'cancel') close()
-        if (action === 'ok') {
-          close()
-          void done(input.value).catch(showError)
-        }
+        if (action === 'ok') submit()
       })
     })
   }
 
   function scheduleSave() {
     state.dirty = true
+    state.pendingFileId = state.ui.currentId
+    state.pendingDraft = write().value
     setSync('dirty')
     window.clearTimeout(state.saveTimer)
     state.saveTimer = window.setTimeout(() => {
-      const file = current()
+      const file = state.nodes.find(node => node.id === state.pendingFileId)
+      const draft = state.pendingDraft ?? ''
+      state.dirty = false
+      state.pendingFileId = null
+      state.pendingDraft = null
       if (!file || !state.db) return
-      const draft = write().value
       file.draft = draft
       setSync('saving')
       void saveDraft(state.db, file.id, draft).then(() => {
-        state.dirty = false
         setSync('saved')
         channel?.postMessage({ type: 'changed', fileId: file.id })
       }).catch(showError)
@@ -531,13 +664,9 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
   }
 
   async function commit(reason) {
+    flushSave()
     const file = current()
     if (!file || !state.db) return null
-    if (state.dirty) {
-      file.draft = write().value
-      await saveDraft(state.db, file.id, file.draft)
-      state.dirty = false
-    }
     const text = file.draft ?? ''
     if (text === '' && reason === 'interval') return null
     setSync('saving')
@@ -548,6 +677,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
 
   async function forget(id) {
     if (!state.db) return
+    flushSave()
     await deleteNode(state.db, id)
     const removed = new Set([id])
     let grew = true
@@ -561,6 +691,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       }
     }
     state.nodes = state.nodes.filter(node => !removed.has(node.id))
+    for (const gone of removed) state.collapsed.delete(gone)
     state.ui.tabs = state.ui.tabs.filter(tab => !removed.has(tab))
     if (state.ui.currentId && removed.has(state.ui.currentId)) state.ui.currentId = state.ui.tabs.at(-1) ?? null
     render()
@@ -585,36 +716,26 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     }, state.settings.commitIntervalSec * 1000)
   }
 
-  function dialog(html, setup) {
-    const mask = dialogMask
-    const card = document.createElement('div')
-    card.className = 'np-card'
-    must(mask, '.np-card').replaceWith(card)
-    card.innerHTML = html
-    mask.hidden = false
-    setup(card, () => { mask.hidden = true })
-  }
-
   function openSettings() {
     const values = state.settings
     const copy = text()
-    dialog(`<h3>${copy.settingsTitle}</h3>
-      <section class="np-section"><h4>${copy.saveHeading}</h4>
-        <label>${copy.saveDelay}<input name="saveDelayMs" type="number" min="200" max="5000" value="${values.saveDelayMs}"></label>
-        <label>${copy.commitInterval}<input name="commitIntervalSec" type="number" min="15" max="3600" value="${values.commitIntervalSec}"></label>
-        <label>${copy.versionLimit}<input name="versionLimit" type="number" min="5" max="500" value="${values.versionLimit}"></label>
+    dialog(`<h3>${escapeHtml(copy.settingsTitle)}</h3>
+      <section class="np-section"><h4>${escapeHtml(copy.saveHeading)}</h4>
+        <label>${escapeHtml(copy.saveDelay)}<input name="saveDelayMs" type="number" min="200" max="5000" value="${values.saveDelayMs}"></label>
+        <label>${escapeHtml(copy.commitInterval)}<input name="commitIntervalSec" type="number" min="15" max="3600" value="${values.commitIntervalSec}"></label>
+        <label>${escapeHtml(copy.versionLimit)}<input name="versionLimit" type="number" min="5" max="500" value="${values.versionLimit}"></label>
       </section>
-      <section class="np-section"><h4>${copy.appearanceHeading}</h4>
-        <label>${copy.openAs}<select name="defaultView"><option value="rendered">${copy.rendered}</option><option value="source">${copy.source}</option></select></label>
-        <label>${copy.windowTheme}<select name="theme"><option value="dark">${copy.dark}</option><option value="light">${copy.light}</option><option value="system">${copy.followApp}</option></select></label>
+      <section class="np-section"><h4>${escapeHtml(copy.appearanceHeading)}</h4>
+        <label>${escapeHtml(copy.openAs)}<select name="defaultView"><option value="rendered">${escapeHtml(copy.rendered)}</option><option value="source">${escapeHtml(copy.source)}</option></select></label>
+        <label>${escapeHtml(copy.windowTheme)}<select name="theme"><option value="dark">${escapeHtml(copy.dark)}</option><option value="light">${escapeHtml(copy.light)}</option><option value="system">${escapeHtml(copy.followApp)}</option></select></label>
       </section>
-      <section class="np-section"><h4>${copy.imageHeading}</h4>
-        <label>${copy.imageLimit}<input name="imageLimitBytes" type="number" min="262144" max="20971520" value="${values.imageLimitBytes}"></label>
+      <section class="np-section"><h4>${escapeHtml(copy.imageHeading)}</h4>
+        <label>${escapeHtml(copy.imageLimit)}<input name="imageLimitBytes" type="number" min="262144" max="20971520" value="${values.imageLimitBytes}"></label>
         <p class="np-usage"></p>
       </section>
-      <section class="np-section"><h4>${copy.positionHeading}</h4><div class="np-actions"><button type="button" data-go="reset-position">${copy.resetPosition}</button></div></section>
-      <section class="np-section"><h4>${copy.dangerHeading}</h4><p>${copy.dangerBody}</p><div class="np-actions"><button type="button" class="np-danger" data-go="clear">${copy.clearAllTitle}</button></div></section>
-      <div class="np-actions"><button type="button" data-go="close">${copy.close}</button></div>`, (card, close) => {
+      <section class="np-section"><h4>${escapeHtml(copy.positionHeading)}</h4><div class="np-actions"><button type="button" data-go="reset-position">${escapeHtml(copy.resetPosition)}</button></div></section>
+      <section class="np-section"><h4>${escapeHtml(copy.dangerHeading)}</h4><p>${escapeHtml(copy.dangerBody)}</p><div class="np-actions"><button type="button" class="np-danger" data-go="clear">${escapeHtml(copy.clearAllTitle)}</button></div></section>
+      <div class="np-actions"><button type="button" data-go="close">${escapeHtml(copy.close)}</button></div>`, (card, close) => {
       card.querySelector('[name="defaultView"]').value = values.defaultView
       card.querySelector('[name="theme"]').value = values.theme
       if (state.db) void counts(state.db).then(async value => {
@@ -675,7 +796,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     const file = current()
     if (!file) return
     const copy = text()
-    dialog(`<h3>${copy.clearFileTitle}</h3><p>${copy.clearFileBody(file.name)}</p><div class="np-actions"><button type="button" data-go="cancel">${copy.cancel}</button><button type="button" class="np-danger" data-go="confirm">${copy.clear}</button></div>`, (card, close) => {
+    dialog(`<h3>${escapeHtml(copy.clearFileTitle)}</h3><p>${escapeHtml(copy.clearFileBody(file.name))}</p><div class="np-actions"><button type="button" data-go="cancel">${escapeHtml(copy.cancel)}</button><button type="button" class="np-danger" data-go="confirm">${escapeHtml(copy.clear)}</button></div>`, (card, close) => {
       card.querySelector('[data-go="cancel"]').focus()
       card.addEventListener('click', event => {
         const choice = event.target instanceof HTMLElement ? event.target.dataset.go : undefined
@@ -687,12 +808,13 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
 
   function confirmClear(closeSettings) {
     const copy = text()
-    dialog(`<h3>${copy.clearAllTitle}</h3><p>${copy.clearAllBody}</p><div class="np-actions"><button type="button" data-go="cancel">${copy.cancel}</button><button type="button" class="np-danger" data-go="confirm">${copy.deleteAll}</button></div>`, (card, close) => {
+    dialog(`<h3>${escapeHtml(copy.clearAllTitle)}</h3><p>${escapeHtml(copy.clearAllBody)}</p><div class="np-actions"><button type="button" data-go="cancel">${escapeHtml(copy.cancel)}</button><button type="button" class="np-danger" data-go="confirm">${escapeHtml(copy.deleteAll)}</button></div>`, (card, close) => {
       card.querySelector('[data-go="cancel"]').focus()
       card.addEventListener('click', event => {
         const action = event.target instanceof HTMLElement ? event.target.dataset.go : undefined
         if (action === 'cancel') close()
         if (action === 'confirm' && state.db) {
+          flushSave()
           void clearContent(state.db).then(() => {
             state.nodes = []
             state.ui.tabs = []
@@ -711,8 +833,8 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     if (!file || !state.db) return
     const versions = await versionsOf(state.db, file.id)
     const copy = text()
-    const rows = versions.map(version => `<button type="button" data-version="${version.id}">${new Date(version.createdAt).toLocaleString()} · ${copy.reasons[version.reason] ?? version.reason} · ${version.markdown.length}</button>`).join('')
-    dialog(`<h3>${copy.historyTitle}</h3><div class="np-versions">${rows || `<p>${copy.noVersions}</p>`}</div><div class="np-actions"><button type="button" data-go="close">${copy.close}</button></div>`, (card, close) => {
+    const rows = versions.map(version => `<button type="button" data-version="${version.id}">${escapeHtml(new Date(version.createdAt).toLocaleString())} · ${escapeHtml(copy.reasons[version.reason] ?? version.reason)} · ${version.markdown.length}</button>`).join('')
+    dialog(`<h3>${escapeHtml(copy.historyTitle)}</h3><div class="np-versions">${rows || `<p>${escapeHtml(copy.noVersions)}</p>`}</div><div class="np-actions"><button type="button" data-go="close">${escapeHtml(copy.close)}</button></div>`, (card, close) => {
       card.addEventListener('click', event => {
         const target = event.target instanceof HTMLElement ? event.target : null
         if (target?.dataset.go === 'close') close()
@@ -720,7 +842,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
         const version = versions.find(item => item.id === id)
         if (!version) return
         const previewCopy = text()
-        dialog(`<h3>${previewCopy.previewAt(new Date(version.createdAt).toLocaleString())}</h3><pre>${version.markdown.replace(/[&<>]/gu, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[char])}</pre><div class="np-actions"><button type="button" data-go="back">${previewCopy.back}</button><button type="button" data-go="restore">${previewCopy.restore}</button></div>`, (preview, closePreview) => {
+        dialog(`<h3>${escapeHtml(previewCopy.previewAt(new Date(version.createdAt).toLocaleString()))}</h3><pre>${escapeHtml(version.markdown)}</pre><div class="np-actions"><button type="button" data-go="back">${escapeHtml(previewCopy.back)}</button><button type="button" data-go="restore">${escapeHtml(previewCopy.restore)}</button></div>`, (preview, closePreview) => {
           preview.addEventListener('click', previewEvent => {
             const action = previewEvent.target instanceof HTMLElement ? previewEvent.target.dataset.go : undefined
             if (action === 'back') closePreview()
@@ -755,7 +877,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     }
     node.addEventListener('pointerdown', event => {
       if (event.button !== 0) return
-      if (event.target instanceof HTMLElement && event.target.closest('button, input, textarea, a') && event.target !== node) return
+      if (event.target instanceof HTMLElement && event.target.closest('button, input, textarea, a, select') && event.target !== node) return
       startX = event.clientX
       startY = event.clientY
       originX = node.offsetLeft
@@ -785,21 +907,49 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     event.dataTransfer.setData('text/plain', row.dataset.id ?? '')
     event.dataTransfer.effectAllowed = 'move'
   })
-  tree.addEventListener('dragover', event => { event.preventDefault() })
-  tree.addEventListener('drop', event => {
+  let dropRow = null
+  const clearDropMark = () => {
+    dropRow?.removeAttribute('data-drop')
+    dropRow = null
+  }
+  const markDrop = event => {
+    clearDropMark()
+    const row = event.target instanceof HTMLElement ? event.target.closest('[data-id]') : null
+    if (row) {
+      dropRow = row
+      row.dataset.drop = 'true'
+    }
+  }
+  tree.addEventListener('dragover', event => {
+    if (!event.dataTransfer?.types.includes('text/plain')) return
     event.preventDefault()
+    event.dataTransfer.dropEffect = 'move'
+    markDrop(event)
+  })
+  tree.addEventListener('dragleave', event => {
+    if (event.relatedTarget instanceof Node && tree.contains(event.relatedTarget)) return
+    clearDropMark()
+  })
+  tree.addEventListener('drop', event => {
+    if (!event.dataTransfer?.types.includes('text/plain')) return
+    event.preventDefault()
+    event.stopPropagation()
+    clearDropMark()
     const id = event.dataTransfer?.getData('text/plain')
     if (!id || !state.db) return
-    const row = event.target instanceof HTMLElement ? event.target.closest('[data-id]') : null
-    const target = row ? state.nodes.find(node => node.id === row.dataset.id) : null
-    const parentId = target ? (target.kind === 'folder' ? target.id : target.parentId) : null
-    const workspaceId = target ? target.workspaceId ?? null : activeWorkspace().id
-    void moveNode(state.db, id, parentId, workspaceId).then(moved => {
-      const node = state.nodes.find(item => item.id === id)
-      if (node) {
-        node.parentId = moved.parentId
-        node.workspaceId = moved.workspaceId
-      }
+    const target = event.target instanceof HTMLElement ? event.target : null
+    const group = target?.closest?.('[data-ws]')
+    const row = target?.closest?.('[data-id]')
+    const node = row ? state.nodes.find(item => item.id === row.dataset.id) : null
+    const parentId = node ? (node.kind === 'folder' ? node.id : node.parentId) : null
+    const workspaceId = node ? node.workspaceId ?? null
+      : group ? (group.dataset.ws || null)
+      : activeWorkspace().id
+    void moveNode(state.db, id, parentId, workspaceId).then(async moved => {
+      // reload from db: moving a folder cascades workspaceId onto its descendants
+      const snapshot = await loadSnapshot(state.db)
+      state.nodes = snapshot.nodes
+      void moved
       render()
       channel?.postMessage({ type: 'changed' })
     }).catch(showError)
@@ -860,7 +1010,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     const nested = state.nodes.some(item => item.parentId === id)
     const title = node.kind === 'folder' ? copy.deleteFolderTitle : copy.deleteFileTitle
     const body = node.kind === 'folder' ? (nested ? copy.deleteFolderBody : copy.deleteEmptyFolderBody) : copy.deleteFileBody(node.name)
-    dialog(`<h3>${title}</h3><p>${body}</p><div class="np-actions"><button type="button" data-go="cancel">${copy.cancel}</button><button type="button" class="np-danger" data-go="confirm">${copy.delete}</button></div>`, (card, close) => {
+    dialog(`<h3>${escapeHtml(title)}</h3><p>${escapeHtml(body)}</p><div class="np-actions"><button type="button" data-go="cancel">${escapeHtml(copy.cancel)}</button><button type="button" class="np-danger" data-go="confirm">${escapeHtml(copy.delete)}</button></div>`, (card, close) => {
       card.querySelector('[data-go="cancel"]').focus()
       card.addEventListener('click', click => {
         const choice = click.target instanceof HTMLElement ? click.target.dataset.go : undefined
@@ -905,6 +1055,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     if (!(target instanceof HTMLElement)) return
     const action = target.dataset.action
     if (action === 'close' || action === 'tree') {
+      flushSave()
       state.ui.open = false
       write().blur()
       render()
@@ -944,12 +1095,14 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       source.setSelectionRange(applied.cursor, applied.cursor)
       scheduleSave()
     }
-    const tab = target.dataset.tab ?? target.dataset.close
     if (target.dataset.close) {
+      if (state.ui.currentId === target.dataset.close) flushSave()
       state.ui.tabs = state.ui.tabs.filter(id => id !== target.dataset.close)
       if (state.ui.currentId === target.dataset.close) state.ui.currentId = state.ui.tabs.at(-1) ?? null
       render(); void persistUi()
-    } else if (target.dataset.tab) openFile(tab)
+    } else if (target.dataset.tab) {
+      openFile(target.dataset.tab)
+    }
     const row = target.closest('[data-id]')
     const id = row?.dataset.id
     if (id) {
@@ -961,54 +1114,118 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
   must(panel, '.np-workspace').addEventListener('change', event => {
     const select = event.target
     if (!(select instanceof HTMLSelectElement)) return
+    flushSave()
     state.ui.workspaceChoice = select.value
     state.ui.currentId = null
     render()
     void persistUi()
   })
+
   const slashMenu = must(panel, '.np-slash')
-  function paintSlash() {
-    const copy = text()
-    slashMenu.innerHTML = [...FORMAT_KINDS, 'image'].map(kind => `<button type="button" data-slash="${kind}">${kind === 'image' ? copy.image : (copy.formats[kind] ?? kind.toUpperCase())}</button>`).join('')
-  }
-  paintSlash()
-  function slashOpen() {
+
+  function slashQuery() {
     const source = write()
     const before = source.value.slice(0, source.selectionStart)
-    return before.endsWith('\n/') || before === '/'
+    const match = /(?:^|\n)\/([^\n/]*)$/.exec(before)
+    if (!match) return null
+    return { start: source.selectionStart - match[1].length - 1, query: match[1].toLowerCase() }
   }
+
+  function slashItems() {
+    const query = state.slash?.query ?? ''
+    return FORMAT_DEFS.filter(def => {
+      const label = formatLabel(def.kind).toLowerCase()
+      return query === '' || label.includes(query) || def.kind.includes(query)
+    })
+  }
+
+  function paintSlash() {
+    const items = slashItems()
+    state.slashIndex = clamp(state.slashIndex, 0, Math.max(0, items.length - 1))
+    slashMenu.innerHTML = items.length === 0
+      ? `<p class="np-slash-empty">${escapeHtml(text().noMatches)}</p>`
+      : items.map((def, index) => `<button type="button" data-slash="${def.kind}" data-active="${index === state.slashIndex}">${def.icon}<span>${escapeHtml(formatLabel(def.kind))}</span></button>`).join('')
+    slashMenu.querySelector('[data-active="true"]')?.scrollIntoView({ block: 'nearest' })
+  }
+
+  function placeSlash() {
+    const source = write()
+    const rect = caretRect(source, source.selectionStart)
+    const editor = must(panel, '.np-editor')
+    const top = source.offsetTop + rect.top - source.scrollTop + rect.height + 4
+    const left = clamp(rect.left, 8, Math.max(8, editor.clientWidth - 236))
+    slashMenu.style.left = `${left}px`
+    const below = top + 260 > editor.clientHeight
+    slashMenu.style.top = below ? `${Math.max(4, source.offsetTop + rect.top - source.scrollTop - 264)}px` : `${top}px`
+    slashMenu.style.bottom = 'auto'
+  }
+
+  function closeSlash() {
+    state.slash = null
+    state.slashIndex = 0
+    slashMenu.hidden = true
+  }
+
+  function refreshSlash() {
+    const query = slashQuery()
+    if (!query) { closeSlash(); return }
+    state.slash = query
+    state.slashIndex = clamp(state.slashIndex, 0, 100)
+    paintSlash()
+    placeSlash()
+    slashMenu.hidden = false
+  }
+
   write().addEventListener('input', () => {
-    state.slash = slashOpen()
-    slashMenu.hidden = !state.slash
+    refreshSlash()
     scheduleSave()
   })
+  write().addEventListener('scroll', () => {
+    if (state.slash) placeSlash()
+  })
+
   function insertSlash(kind) {
     const source = write()
-    source.setRangeText('', source.selectionStart - 1, source.selectionStart)
-    state.slash = false
-    slashMenu.hidden = true
+    const start = state.slash?.start ?? source.selectionStart - 1
+    source.setRangeText('', start, source.selectionStart)
+    closeSlash()
+    scheduleSave()
+    if (kind === 'image') {
+      must(panel, '.np-file').click()
+      return
+    }
     const applied = applyFormat(source.value, source.selectionStart, source.selectionStart, kind)
     source.value = applied.text
     source.setSelectionRange(applied.cursor, applied.cursor)
     scheduleSave()
   }
+
   write().addEventListener('keydown', event => {
     if (!state.slash) return
     if (event.key === 'Escape') {
-      state.slash = false
-      slashMenu.hidden = true
+      event.preventDefault()
+      closeSlash()
       return
     }
-    if (event.key !== 'Enter') return
-    event.preventDefault()
-    insertSlash('bullet')
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      const items = slashItems()
+      if (items.length === 0) return
+      event.preventDefault()
+      state.slashIndex = (state.slashIndex + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length
+      paintSlash()
+      return
+    }
+    if (event.key === 'Enter' || event.key === 'Tab') {
+      const items = slashItems()
+      if (items.length === 0) return
+      event.preventDefault()
+      insertSlash(items[state.slashIndex]?.kind ?? 'bullet')
+    }
   })
+  slashMenu.addEventListener('pointerdown', event => event.preventDefault())
   slashMenu.addEventListener('click', event => {
-    const kind = event.target instanceof HTMLElement ? event.target.dataset.slash : undefined
-    if (kind === 'image') must(panel, '.np-file').click()
-    else if (kind) insertSlash(kind)
-    state.slash = false
-    slashMenu.hidden = true
+    const kind = event.target instanceof HTMLElement ? event.target.closest('[data-slash]')?.dataset.slash : undefined
+    if (kind) insertSlash(kind)
   })
   must(panel, '.np-read').addEventListener('pointerdown', event => {
     if (event.target instanceof HTMLElement && event.target.closest('a')) return
@@ -1017,10 +1234,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
   })
   panel.addEventListener('click', event => {
     if (!(event.target instanceof HTMLElement) || event.target.closest('.np-slash')) return
-    if (state.slash && event.target !== write()) {
-      state.slash = false
-      slashMenu.hidden = true
-    }
+    if (state.slash && event.target !== write()) closeSlash()
   })
   must(panel, '.np-file').addEventListener('change', event => {
     const input = /** @type {HTMLInputElement} */ (event.target)
@@ -1049,6 +1263,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     if ([...(event.dataTransfer?.files ?? [])].some(file => file.type.startsWith('image/'))) event.preventDefault()
   })
   panel.addEventListener('drop', event => {
+    if (!dialogMask.hidden) return
     const image = [...(event.dataTransfer?.files ?? [])].find(file => file.type.startsWith('image/'))
     if (!image) return
     event.preventDefault()
@@ -1056,6 +1271,8 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     insertStoredImage(image)
   })
   panel.addEventListener('paste', event => {
+    if (!dialogMask.hidden) return
+    if (event.target !== write()) return
     const image = [...(event.clipboardData?.files ?? [])].find(file => file.type.startsWith('image/'))
     if (!image || !state.db) return
     event.preventDefault()
@@ -1067,34 +1284,59 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       void renderBody()
     }).catch(showError)
   })
-  document.addEventListener('visibilitychange', () => {
+
+  on(document, 'visibilitychange', () => {
     if (document.visibilityState === 'hidden') void commit('interval').catch(showError)
   })
-  window.addEventListener('resize', () => render())
+  let resizeFrame = 0
+  on(window, 'resize', () => {
+    cancelAnimationFrame(resizeFrame)
+    resizeFrame = requestAnimationFrame(() => render())
+  })
+  on(document, 'keydown', event => {
+    if (event.key === 'Escape' && !dialogMask.hidden) {
+      event.stopPropagation()
+      closeDialog?.()
+    }
+  }, true)
+  dialogMask.addEventListener('pointerdown', event => {
+    if (event.target === dialogMask) closeDialog?.()
+  })
 
   const channel = typeof BroadcastChannel === 'function' ? new BroadcastChannel(CHANNEL) : null
-  channel?.addEventListener('message', event => {
-    if (state.dirty && event.data?.fileId === state.ui.currentId) {
-      showError(new Error(text().otherTab))
-      return
+  if (channel) {
+    const onMessage = event => {
+      if (state.dirty && event.data?.fileId === state.ui.currentId) {
+        showError(new Error(text().otherTab))
+        return
+      }
+      if (state.db) void loadSnapshot(state.db).then(snapshot => {
+        state.nodes = snapshot.nodes
+        state.settings = { ...defaults, ...snapshot.settings }
+        render()
+      })
     }
-    if (state.db) void loadSnapshot(state.db).then(snapshot => {
-      state.nodes = snapshot.nodes
-      state.settings = { ...defaults, ...snapshot.settings }
-      render()
-    })
-  })
+    channel.addEventListener('message', onMessage)
+    disposers.push(() => channel.close())
+  }
 
   const stop = appTheme.subscribe(() => render())
   const stopThemeInner = typeof stop === 'function' ? stop : () => {}
-  const languageStop = language.subscribe(() => { paintSlash(); render() })
+  const languageStop = language.subscribe(() => render())
   const stopLanguage = typeof languageStop === 'function' ? languageStop : () => {}
-
   const workspaceStop = workspaces.subscribe(() => render())
   const stopWorkspaces = typeof workspaceStop === 'function' ? workspaceStop : () => {}
 
   const api = {
-    stopTheme() { stopThemeInner(); stopLanguage(); stopWorkspaces() },
+    stopTheme() {
+      stopThemeInner()
+      stopLanguage()
+      stopWorkspaces()
+      window.clearTimeout(state.saveTimer)
+      window.clearInterval(state.commitTimer)
+      flushSave()
+      for (const dispose of disposers) dispose()
+    },
     toggle() {
       state.ui.open = !state.ui.open
       render()

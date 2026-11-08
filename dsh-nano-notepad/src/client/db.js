@@ -124,6 +124,25 @@ async function readAll(db, storeName) {
   return rows
 }
 
+/** Coerce stored nodes into the shape the UI expects; bad rows are skipped. @param {any[]} rows */
+export function sanitizeNodes(rows) {
+  const clean = []
+  const seen = new Set()
+  for (const node of Array.isArray(rows) ? rows : []) {
+    if (!record(node) || typeof node.id !== 'string' || seen.has(node.id)) continue
+    if (node.kind !== 'file' && node.kind !== 'folder') continue
+    if (typeof node.name !== 'string' || node.name.trim() === '') {
+      node.name = node.kind === 'file' ? 'untitled.md' : 'folder'
+    }
+    node.parentId = typeof node.parentId === 'string' ? node.parentId : null
+    node.workspaceId = typeof node.workspaceId === 'string' ? node.workspaceId : null
+    if (typeof node.draft !== 'string') node.draft = node.kind === 'file' ? '' : undefined
+    seen.add(node.id)
+    clean.push(node)
+  }
+  return clean
+}
+
 /** @param {IDBDatabase} db */
 export async function loadSnapshot(db) {
   const [nodes, settingsRows, uiRows] = await Promise.all([
@@ -132,8 +151,8 @@ export async function loadSnapshot(db) {
     readAll(db, 'ui'),
   ])
   const settings = normalizeSettings(settingsRows[0])
-  const ui = uiRows[0] ?? { id: 'ui', open: false, tabs: [] }
-  return { nodes, settings, ui }
+  const ui = record(uiRows[0]) ? uiRows[0] : { id: 'ui', open: false, tabs: [] }
+  return { nodes: sanitizeNodes(nodes), settings, ui }
 }
 
 /** @param {IDBDatabase} db @param {string} parentId */
@@ -204,7 +223,7 @@ export async function pinNode(db, id, pinned) {
 }
 
 /** @param {any[]} nodes @param {string} id */
-function descendantIds(nodes, id) {
+export function descendantIds(nodes, id) {
   const result = []
   const visit = current => {
     for (const node of nodes) {
@@ -234,8 +253,18 @@ export async function moveNode(db, id, parentId, workspaceId = undefined) {
   node.parentId = parentId
   node.workspaceId = destination
   node.updatedAt = Date.now()
+  const descendants = descendantIds(nodes, id)
   const transaction = db.transaction('nodes', 'readwrite')
-  transaction.objectStore('nodes').put(node)
+  const store = transaction.objectStore('nodes')
+  store.put(node)
+  for (const childId of descendants) {
+    const child = nodes.find(item => item.id === childId)
+    if (child && (child.workspaceId ?? null) !== destination) {
+      child.workspaceId = destination
+      child.updatedAt = node.updatedAt
+      store.put(child)
+    }
+  }
   await transactionDone(transaction)
   return node
 }

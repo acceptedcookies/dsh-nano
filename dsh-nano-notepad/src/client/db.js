@@ -219,6 +219,19 @@ export async function renameNode(db, id, name) {
   return node
 }
 
+/** @param {IDBDatabase} db @param {string} id @param {Record<string, unknown>} fields */
+export async function updateNodeMeta(db, id, fields) {
+  const transaction = db.transaction('nodes', 'readwrite')
+  const store = transaction.objectStore('nodes')
+  const node = await requestToPromise(store.get(id))
+  if (!node) throw new Error('notepad item no longer exists')
+  Object.assign(node, fields)
+  node.updatedAt = Date.now()
+  store.put(node)
+  await transactionDone(transaction)
+  return node
+}
+
 /** @param {IDBDatabase} db @param {string} id @param {boolean} pinned */
 export async function pinNode(db, id, pinned) {
   const transaction = db.transaction('nodes', 'readwrite')

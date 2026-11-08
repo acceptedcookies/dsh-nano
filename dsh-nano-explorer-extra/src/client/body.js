@@ -605,7 +605,8 @@ export function ExplorerBody(props) {
           const read = await request('/read', { sessionId, path: menu.path })
           if (!read.ok) { setLinkNote(read.message ?? copy.openInNotepadFail); return }
           setLinkNote(undefined)
-          await window.__nanoNotepad.import(menu.name, read.content)
+          const absolute = menu.path.startsWith('/') ? menu.path : `${cwd ?? ''}/${menu.path}`
+          await window.__nanoNotepad.import(menu.name, read.content, { sourcePath: absolute })
         } },
       { id: 'rename', label: copy.rename, icon: React.createElement(primitives.IconEditOutlineRegular, { width: 14, height: 14 }),
         run: () => { setDialogError(undefined); setDialog({ kind: 'rename', entry: { ...target, meta: { kind: menu.kind } } }) } },

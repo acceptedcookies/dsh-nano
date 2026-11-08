@@ -12,6 +12,7 @@ import {
   loadSnapshot,
   moveNode,
   nextUntitled,
+  updateNodeMeta,
   normalizeSettings,
   openDatabase,
   renameNode,
@@ -567,7 +568,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       const res = await fetch('/nano-notepad/save', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ name, content }),
+        body: JSON.stringify({ name, content, dir: current()?.sourcePath?.replace(/\/[^/]*$/, '') }),
       })
       const out = await res.json().catch(() => ({}))
       if (out.ok) { setSync('exported', out.path || name); return }
@@ -983,8 +984,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       anchor.setAttribute('aria-expanded', 'false')
       document.removeEventListener('keydown', esc, true)
       document.removeEventListener('pointerdown', out, true)
-      if (unmount) raw.close()
-      if (anchor.isConnected) anchor.focus()
+      if (unmount) { raw.close(); if (anchor.isConnected) anchor.focus() }
     }
     const esc = event => {
       if (event.key !== 'Escape' || !closeMenu) return
@@ -1220,7 +1220,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
           render()
           void persistUi()
         }
-        if (action === 'clear') confirmClear(close)
+        if (action === 'clear') { close(); confirmClear() }
       })
       const settingNames = ['saveDelayMs', 'draftIntervalMs', 'commitIntervalSec', 'versionLimit', 'imageLimitBytes']
       el.addEventListener('change', () => {
@@ -1269,7 +1269,10 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     })
   }
 
-  function confirmClear(closeSettings) {
+  /* `closeSettings` is invoked by the caller BEFORE this opens — the old mask
+     swapped cards in place, so the settings card has to be gone before the
+     clear-all card mounts, not after. */
+  function confirmClear() {
     const copy = text()
     dialog({
       title: copy.clearAllTitle,
@@ -1284,7 +1287,6 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
           state.ui.tabs = []
           state.ui.currentId = null
           close()
-          closeSettings()
           render()
         }).catch(showError)
       },
@@ -1893,15 +1895,17 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
      * draft, so edits stay local until "save as" picks a real target. */
   const dbReady = new Promise((resolve, reject) => { state.dbReadyResolve = resolve; state.dbReadyReject = reject })
   window.__nanoNotepad = {
-    async import(name, content) {
+    async import(name, content, meta = {}) {
       await dbReady
       const siblings = state.nodes.filter(node => node.parentId === null && (node.workspaceId ?? null) === activeWorkspace().id && node.kind === 'file')
       const base = String(name || 'note').replace(/\.md$/i, '') || 'note'
       let candidate = `${base}.md`, i = 1
       while (siblings.some(s => s.name === candidate)) candidate = `${base}-${++i}.md`
       const node = await createNode(state.db, 'file', null, candidate, activeWorkspace().id)
+      if (typeof meta.sourcePath === 'string' && meta.sourcePath) node.sourcePath = meta.sourcePath
       state.nodes.push(node)
       await saveDraft(state.db, node.id, String(content ?? ''))
+      if (node.sourcePath !== undefined) await updateNodeMeta(state.db, node.id, { sourcePath: node.sourcePath })
       node.draft = String(content ?? '')
       openFile(node.id)
       channel?.postMessage({ type: 'changed' })

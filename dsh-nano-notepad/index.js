@@ -81,7 +81,13 @@ const SAVE_SCRIPT = [
   'on run argv',
   'try',
   'set dflt to item 1 of argv',
+  'set loc to ""',
+  'if (count of argv) > 1 then set loc to item 2 of argv',
+  'if loc is not "" then',
+  'set f to choose file name with prompt "存储为" default name dflt default location (POSIX file loc)',
+  'else',
   'set f to choose file name with prompt "存储为" default name dflt',
+  'end if',
   'POSIX path of f',
   'on error',
   '"__cancelled__"',
@@ -102,10 +108,20 @@ function dialogBase(name) {
  * static {@link SAVE_SCRIPT} with the name on argv, so nothing the caller sends
  * is ever compiled as AppleScript.
  */
-function nativeSave(ctx, { name, content }) {
-  return new Promise(resolve => {
+/** Directories the dialog accepts as its start point: absolute, exists, is a dir. */
+async function validStartDir(dir) {
+  if (typeof dir !== 'string' || !dir.startsWith('/') || dir.includes('\0')) return ''
+  try {
+    const fs = await import('node:fs/promises')
+    return (await fs.stat(dir)).isDirectory() ? dir : ''
+  } catch { return '' }
+}
+
+function nativeSave(ctx, { name, content, dir }) {
+  return new Promise(async resolve => {
     if (process.platform !== 'darwin') { resolve({ ok: false, reason: 'unsupported' }); return }
     const base = dialogBase(name)
+    const startDir = await validStartDir(dir)
     const finish = async (err, stdout) => {
       const out = String(stdout || '').trim()
       if (err && !out) { resolve({ ok: false, reason: 'failed', message: messageOf(err).slice(0, 200) }); return }
@@ -127,14 +143,14 @@ function nativeSave(ctx, { name, content }) {
     }
     const subprocess = ctx.get('subprocess')
     if (subprocess !== undefined && subprocess !== null) {
-      void runViaSubprocess(subprocess, base).then(
+      void runViaSubprocess(subprocess, base, startDir).then(
         ({ stdout }) => finish(null, stdout),
         error => finish(error, ''),
       )
       return
     }
     void import('node:child_process').then(({ execFile }) => {
-      execFile('/usr/bin/osascript', ['-e', SAVE_SCRIPT, base], { timeout: DIALOG_TIMEOUT_MS, maxBuffer: 64 * 1024 },
+      execFile('/usr/bin/osascript', ['-e', SAVE_SCRIPT, base, startDir], { timeout: DIALOG_TIMEOUT_MS, maxBuffer: 64 * 1024 },
         (err, stdout) => { void finish(err, stdout) })
     })
   })
@@ -144,10 +160,10 @@ function nativeSave(ctx, { name, content }) {
  * Run the dialog through the managed subprocess seam (byte caps, graceful
  * terminate, abort) instead of a raw `execFile`.
  */
-async function runViaSubprocess(subprocess, base) {
+async function runViaSubprocess(subprocess, base, startDir) {
   const program = await subprocess.resolveExecutable('osascript', undefined, undefined)
   const child = subprocess.spawn({
-    argv: [program, '-e', SAVE_SCRIPT, base],
+    argv: [program, '-e', SAVE_SCRIPT, base, startDir],
     cwd: process.env.HOME ?? '/',
     env: {},
     graceMs: 5000,
@@ -187,7 +203,7 @@ export function apply(ctx) {
       if (!type.toLowerCase().startsWith('application/json')) { sendJson(res, 415, { ok: false, reason: 'content-type' }); return }
       try {
         const body = await jsonBody(req)
-        const result = await nativeSave(ctx, { name: body.name, content: body.content })
+        const result = await nativeSave(ctx, { name: body.name, content: body.content, dir: body.dir })
         sendJson(res, result.ok ? 200 : result.reason === 'cancelled' ? 200 : 500, result)
       } catch (error) {
         sendJson(res, 500, { ok: false, reason: 'failed', message: messageOf(error).slice(0, 200) })

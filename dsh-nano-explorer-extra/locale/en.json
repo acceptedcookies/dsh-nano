@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Explorer Extra",
+    "description": "Adds git status, a footer status bar, and inline create and rename to the workspace file explorer."
+  }
+}

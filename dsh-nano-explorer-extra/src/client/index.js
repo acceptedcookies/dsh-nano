@@ -1,0 +1,199 @@
+/** Browser half: take over the `files` tab type, add row menus, and publish a settings page. */
+
+import React from 'react'
+import { ExplorerBody } from './body.js'
+import { COPY, copyFor, statusLabel } from './i18n.js'
+import { DEFAULT_PREFS, readPrefs, writePrefs } from './prefs.js'
+import { SettingsPage } from './settings.js'
+import { STYLE } from './styles.js'
+
+const { createElement, useCallback, useEffect, useState } = React
+
+/** Services this plugin needs before it can register anything. */
+export const inject = ['slots', 'locale', 'sidebarRightTabs', 'sidebarRight', 'sessions', 'contextMenus', 'theme']
+
+const NS = 'nanoExplorerExtra'
+const FILES_KIND = 'files'
+const OWN_ID = 'nano-explorer-extra'
+
+/** One live page's rename handler; the menu actions forward into it. */
+const renameRequest = { handler: undefined }
+
+
+/** One observable wrapper around the browser-local preferences. */
+function createPrefStore() {
+  let current = readPrefs()
+  const listeners = new Set()
+  return {
+    get: () => current,
+    set: next => { current = next; writePrefs(current); for (const listener of listeners) listener() },
+    subscribe: listener => { listeners.add(listener); return () => listeners.delete(listener) },
+  }
+}
+
+/**
+ * Client plugin body.
+ * @param ctx - client root context.
+ */
+export function apply(ctx) {
+  const style = document.createElement('style')
+  // A distinct attribute keeps the style tag from matching the body root's [data-nxe] selectors.
+  style.dataset.nxeStyle = 'true'
+  style.textContent = STYLE
+  document.head.append(style)
+  ctx.effect(() => () => style.remove())
+
+  const store = createPrefStore()
+  if (typeof window !== 'undefined') window.__nxeContextMenus = ctx.contextMenus
+
+  ;(window.__nxeMenuDiag ||= []).push({
+    hasService: typeof ctx.contextMenus === 'object' && ctx.contextMenus !== null,
+    hasOpen: typeof ctx.contextMenus?.open === 'function',
+    hasRegister: typeof ctx.contextMenus?.register === 'function',
+    kinds: (() => { try { return [...(ctx.contextMenus.registeredKinds.getSnapshot() ?? [])] } catch { return null } })(),
+  })
+
+
+  /**
+   * Read one Session's workspace root.
+   * @param sessionId - the Session whose root relativizes the menu path.
+   * @returns the root, or undefined when the Session is unknown or has no directory.
+   */
+  const cwdOf = sessionId => ctx.sessions.list.getSnapshot().byId[sessionId]?.cwd
+
+  /**
+   * Ask the open files page to start a rename for one entry.
+   *
+   * The page owns the dialog, the tree, and the refresh, so a menu action only names the target.
+   * @param target - entry path and kind.
+   */
+  const requestRename = target => { renameRequest.handler?.(target) }
+
+  const languageOf = () => ctx.locale.getSnapshot().active
+  const schemeOf = () => (ctx.theme.getTheme().colorScheme === 'light' ? 'light' : 'dark')
+
+  /** The live copy and preference snapshot the body reads on every render. */
+  const face = () => ({
+    copy: copyFor(languageOf()),
+    prefs: store.get(),
+    scheme: schemeOf,
+    statusLabel,
+    onListed: () => {},
+    /** The open page lends its rename dialog to the row menus. */
+    setRenameHandler: handler => { renameRequest.handler = handler },
+  })
+
+  // The `files` kind is registered by ui-sidebar-files as a `builtin`; this extension takes it over
+  // until the plugin unloads, at which point the builtin resumes.
+  ctx.effect(() => ctx.sidebarRightTabs.register({
+    id: OWN_ID,
+    kind: FILES_KIND,
+    priority: 'extension',
+    title: () => copyFor(languageOf()).typeLabel,
+    guide: [{
+      id: 'explorer',
+      order: 10,
+      title: () => copyFor(languageOf()).typeLabel,
+      description: () => copyFor(languageOf()).typeDescription,
+    }],
+  }), 'nano-explorer-extra: files type')
+
+  // No `children` declaration: a child slot has exactly one declaring owner, and the shipped body
+  // still holds `sidebar.right.tab.files.actions`. Declaring it here fails the whole entry, so this
+  // page cannot host that seat. The directory opener is therefore missing while this extension is
+  // mounted; see the spec's Known Limitations.
+  ctx.effect(() => ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register({
+    name: 'sidebar.right.pane.tab',
+    key: OWN_ID,
+    inject: () => ({ nxe: face() }),
+  }, ExplorerBody)), 'nano-explorer-extra: files body')
+
+  // Row menus. The shipped menu already offers the absolute path, so this adds only what it lacks:
+  // a workspace-relative path with the `/` separators a model or a markdown link wants, and rename.
+  for (const target of ['file', 'directory']) {
+    ctx.effect(() => ctx.contextMenus.register({
+      id: `nano-explorer-extra.${target}`,
+      target,
+      order: 900,
+      resolve: async value => {
+        const copy = copyFor(languageOf())
+        const root = value.sessionId === undefined ? undefined : cwdOf(value.sessionId)
+        const relative = root === undefined ? value.path : relativeTo(root, value.path)
+        return [
+          {
+            id: 'copy-relative',
+            icon: { key: 'nano-explorer-extra.copy-relative' },
+            label: copy.copyRelative,
+            failureLabel: copy.copyFailed,
+            run: () => copyText(relative),
+          },
+          {
+            id: 'rename',
+            icon: { key: 'nano-explorer-extra.rename' },
+            label: copy.rename,
+            failureLabel: copy.renameFailed,
+            run: () => requestRename?.({ path: value.path, kind: target === 'directory' ? 'directory' : 'file' }),
+          },
+        ]
+      },
+    }), `nano-explorer-extra: ${target} menu`)
+  }
+
+  // The menu icons this plugin contributes, keyed by the actions above.
+  ctx.slots.inject('contextMenu.icon', () => {
+    const disposers = [
+      ctx.slots.register({ name: 'contextMenu.icon', key: 'nano-explorer-extra.copy-relative' }, CopyRelativeIcon),
+      ctx.slots.register({ name: 'contextMenu.icon', key: 'nano-explorer-extra.rename' }, RenameIcon),
+    ]
+    return () => { for (const dispose of disposers) dispose() }
+  })
+
+  // The settings page lives in the Plugins section: these are this plugin's own viewing switches.
+  // Register the copy dictionary the settings page labels itself from.
+  ctx.effect(() => ctx.locale.register(NS, {
+    zh: { title: COPY.zh.settingsTitle, description: COPY.zh.settingsDescription },
+    en: { title: COPY.en.settingsTitle, description: COPY.en.settingsDescription },
+  }), 'nano-explorer-extra: dictionaries')
+
+  // A settings page in its own right: the Plugins section lists feature tabs, but this plugin owns
+  // a coherent surface of viewing switches, so it reads best as a named section.
+  ctx.effect(() => ctx.slots.inject('settings.section', () => ctx.slots.register({
+    name: 'settings.section',
+    id: OWN_ID,
+    order: 40,
+    locale: NS,
+    label: () => copyFor(languageOf()).settingsTitle,
+  }, function ExplorerSettings() {
+    const [prefs, setPrefs] = useState(() => store.get())
+    useEffect(() => store.subscribe(() => setPrefs(store.get())), [])
+    const setPref = useCallback((key, value) => store.set({ ...store.get(), [key]: value }), [])
+    return createElement(SettingsPage, { copy: copyFor(languageOf()), prefs, setPref })
+  })), 'nano-explorer-extra: settings section')
+}
+
+/** Copy a path with a short, non-blocking failure path. */
+async function copyText(value) {
+  try {
+    await navigator.clipboard.writeText(String(value ?? ''))
+  } catch {
+    // A refused clipboard is reported by the browser; nothing else to do here.
+  }
+}
+
+export { DEFAULT_PREFS }
+
+/** Glyph for "copy relative path": a link mark, distinct from the shipped copy glyph. */
+function CopyRelativeIcon() {
+  return createElement('svg', { viewBox: '0 0 24 24', width: 16, height: 16, fill: 'none',
+    stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': 'true' },
+  createElement('path', { d: 'M10 13a5 5 0 0 0 7 0l2-2a5 5 0 0 0-7-7l-1 1' }),
+  createElement('path', { d: 'M14 11a5 5 0 0 0-7 0l-2 2a5 5 0 0 0 7 7l1-1' }))
+}
+
+/** Glyph for "rename": a pencil over a line. */
+function RenameIcon() {
+  return createElement('svg', { viewBox: '0 0 24 24', width: 16, height: 16, fill: 'none',
+    stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': 'true' },
+  createElement('path', { d: 'M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z' }),
+  createElement('path', { d: 'M13.5 6.5 17.5 10.5' }))
+}

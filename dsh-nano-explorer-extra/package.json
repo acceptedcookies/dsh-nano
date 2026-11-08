@@ -1,0 +1,46 @@
+{
+  "name": "dsh-nano-explorer-extra",
+  "version": "0.1.0",
+  "description": "A richer workspace file explorer: git status in the file tree, a footer status bar, and inline create and rename.",
+  "type": "module",
+  "icon": "./icon.svg",
+  "main": "./index.js",
+  "scripts": {
+    "build": "node scripts/build-client.mjs"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./client": "./lib/client.js",
+    "./icon": "./icon.svg",
+    "./locale/*.json": "./locale/*.json",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "cordis.patch.yml",
+    "icon.svg",
+    "locale",
+    "lib/client.js"
+  ],
+  "engines": {
+    "dsh": ">=0.2.2-rc.1 <0.3.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-api-workspace-files",
+        "@deepseek-ai/dsh-client-ui-sidebar-files",
+        "@deepseek-ai/dsh-client-ui-sidebar-right",
+        "@deepseek-ai/dsh-client-ui-session",
+        "@deepseek-ai/dsh-client-ui-context-menu",
+        "@deepseek-ai/dsh-client-ui-primitives",
+        "@deepseek-ai/dsh-client-shortcuts",
+        "@deepseek-ai/dsh-api-remotes"
+      ]
+    }
+  }
+}

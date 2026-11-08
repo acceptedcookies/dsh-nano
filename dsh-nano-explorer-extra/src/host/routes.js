@@ -1,0 +1,271 @@
+/** The six HTTP routes: one request gate, one JSON envelope, and the session-scoped work behind them. */
+
+import { commitAll, ignoredAmong, readStatus } from './git.js'
+import { listDirectory } from './listing.js'
+import { createFile, createFolder, rename } from './mutate.js'
+import { statisticsOf } from './stats.js'
+
+/** Route prefix owned by this plugin. */
+export const PREFIX = '/nano-explorer-extra'
+
+/** Request bodies are small JSON objects; anything larger is hostile. */
+const MAX_BODY_BYTES = 64 * 1024
+
+/**
+ * Read a bounded JSON body.
+ * @param req - inbound request.
+ * @returns the parsed object, or an empty object when the body is absent.
+ * @throws when the body exceeds the cap or is not a JSON object.
+ */
+async function jsonBody(req) {
+  const chunks = []
+  let total = 0
+  for await (const chunk of req) {
+    total += chunk.length
+    if (total > MAX_BODY_BYTES) throw new Error('request body is too large')
+    chunks.push(chunk)
+  }
+  if (total === 0) return {}
+  const parsed = JSON.parse(Buffer.concat(chunks).toString('utf8'))
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('request body must be a JSON object')
+  return parsed
+}
+
+/**
+ * Write one JSON response with the same no-store policy the other Host routes use.
+ * @param res - outbound response.
+ * @param status - HTTP status.
+ * @param payload - JSON-serializable body.
+ */
+function sendJson(res, status, payload) {
+  res.statusCode = status
+  res.setHeader('content-type', 'application/json; charset=utf-8')
+  res.setHeader('cache-control', 'no-store')
+  res.end(JSON.stringify(payload))
+}
+
+/** @param {unknown} error */
+function messageOf(error) {
+  return error instanceof Error ? error.message : String(error)
+}
+
+/**
+ * Resolve one session's workspace root and sandbox policy.
+ * @param ctx - host context.
+ * @param sessionId - Session identity from the request.
+ * @returns the live Session, its root, and its policy.
+ * @throws when the Session is unknown or has no working directory.
+ */
+async function scopeOf(ctx, sessionId) {
+  if (typeof sessionId !== 'string' || sessionId === '') throw new Error('sessionId is required')
+  const live = ctx.get('sessions')?.get(sessionId)
+  const header = live?.header ?? (await ctx.get('sessionPersistence')?.stat(sessionId))?.header
+  if (header === undefined || header === null) throw new Error(`unknown session "${sessionId}"`)
+  const root = header.cwd ?? ctx.get('sandboxPolicy')?.workspaceRoot
+  // A cold Session has no live header to resolve from, so the policy is rebuilt around the root the
+  // stored header names; without it `resolve({})` would fall back to the launch directory and every
+  // write would be fenced away from the workspace the user is actually browsing.
+  const livePolicy = live === undefined ? undefined : ctx.get('sandboxPolicy')?.resolve({ session: live })
+  const policy = livePolicy ?? (root === undefined ? undefined : { ...ctx.get('sandboxPolicy')?.resolve({}), workspaceRoot: root })
+  if (typeof root !== 'string' || root === '') throw new Error('this session has no working directory')
+  return { session: live, root, policy }
+}
+
+/**
+ * Run one external command under the session's confinement, never through a shell.
+ * @param ctx - host context.
+ * @param config - executable and process limits.
+ * @param request - argv, working directory, and the session it runs for.
+ * @returns nothing; throws with the first stderr line on a non-zero exit.
+ */
+export async function runExternal(ctx, config, request) {
+  const { argv, cwd, session, sandboxPolicy: policy } = request
+  // A relative or empty directory makes the spawn fail with an opaque ENOTDIR; refuse it with a
+  // message that names the operation instead.
+  if (typeof cwd !== 'string' || cwd === '' || !cwd.startsWith('/')) throw new Error(`${argv[0]} needs an absolute working directory, got ${JSON.stringify(cwd)}`)
+  const subprocess = ctx.get('subprocess')
+  const sandbox = ctx.get('sandbox')
+  if (subprocess === undefined || subprocess === null) throw new Error('this deployment has no subprocess service')
+  const stop = new AbortController()
+  const timer = setTimeout(() => stop.abort(new Error('command timed out')), config.gitTimeoutMs)
+  timer.unref?.()
+  try {
+    const program = await subprocess.resolveExecutable(argv[0], undefined, stop.signal)
+    const command = [program, ...argv.slice(1)]
+    const confined = sandbox !== undefined && sandbox !== null && policy !== undefined && policy.mode !== 'danger-full-access'
+      ? (await sandbox.confine(command, policy, stop.signal)).argv
+      : command
+    const child = subprocess.spawn({
+      argv: confined,
+      cwd,
+      signal: stop.signal,
+      graceMs: 5000,
+      stdio: { stdin: 'ignore', stdout: { maxBytes: 65536 }, stderr: { maxBytes: 65536 } },
+    })
+    try {
+      const outcome = await child.done
+      const stderr = child.collected.stderr.readFrom(0).text
+      if (outcome.exitCode !== 0) {
+        const line = stderr.split(/\r?\n/u).map(item => item.trim()).find(item => item.length > 0)
+        throw new Error(line ?? `${argv[0]} failed (${outcome.signal ?? outcome.exitCode})`)
+      }
+    } finally {
+      child.terminate()
+      await child.waitForExit().catch(() => {})
+    }
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/**
+ * Build the six route handlers bound to one context and configuration.
+ * @param ctx - host context.
+ * @param config - validated plugin configuration.
+ * @returns path → { method, run } for registration.
+ */
+export function createRoutes(ctx, config) {
+  const fs = () => ctx.fs
+  const external = request => runExternal(ctx, config, request)
+
+  return {
+    '/status': {
+      method: 'GET',
+      async run(req) {
+        const url = new URL(String(req.url), 'http://localhost')
+        const { root, policy } = await scopeOf(ctx, url.searchParams.get('sessionId') ?? '')
+        // Git state and workspace totals are asked for separately: a tree with tens of thousands
+        // of files spends seconds walking directories, and the branch line must not wait for it.
+        if (url.searchParams.get('only') === 'stats') {
+          const stats = await statisticsOf(fs(), root, {
+            maxDepth: config.statsMaxDepth,
+            maxEntries: config.statsMaxEntries,
+            excludeGit: config.statsExcludeGit,
+          })
+          return { root, stats }
+        }
+        let git = null
+        let gitError
+        try {
+          git = await readStatus(ctx, config, { cwd: root, policy, signal: undefined }) ?? null
+        } catch (error) {
+          gitError = messageOf(error)
+        }
+        return { root, git, ...(gitError === undefined ? {} : { gitError }) }
+      },
+    },
+    '/commit': {
+      method: 'POST',
+      async run(req) {
+        const body = await jsonBody(req)
+        const { session, root, policy } = await scopeOf(ctx, body.sessionId)
+        const message = typeof body.message === 'string' ? body.message.trim() : ''
+        if (message === '') throw new Error('a commit message is required')
+        const subject = await commitAll(ctx, config, { cwd: root, policy, message, signal: undefined })
+        return { subject }
+      },
+    },
+    '/create-file': {
+      method: 'POST',
+      async run(req) {
+        const body = await jsonBody(req)
+        const { root, policy } = await scopeOf(ctx, body.sessionId)
+        return createFile(fs(), {
+          workspaceRoot: root,
+          directory: typeof body.directory === 'string' ? body.directory : '',
+          name: body.name,
+          sandboxPolicy: policy,
+        })
+      },
+    },
+    '/create-folder': {
+      method: 'POST',
+      async run(req) {
+        const body = await jsonBody(req)
+        const { session, root, policy } = await scopeOf(ctx, body.sessionId)
+        return createFolder(fs(), {
+          workspaceRoot: root,
+          directory: typeof body.directory === 'string' ? body.directory : '',
+          name: body.name,
+          sandboxPolicy: policy,
+          session,
+        }, external)
+      },
+    },
+    '/rename': {
+      method: 'POST',
+      async run(req) {
+        const body = await jsonBody(req)
+        const { session, root, policy } = await scopeOf(ctx, body.sessionId)
+        return rename(fs(), ctx, config, {
+          workspaceRoot: root,
+          path: body.path,
+          name: body.name,
+          kind: body.kind === 'directory' ? 'directory' : 'file',
+          sandboxPolicy: policy,
+          session,
+          runExternal: external,
+        })
+      },
+    },
+    '/ignored': {
+      method: 'POST',
+      async run(req) {
+        const body = await jsonBody(req)
+        const { root, policy } = await scopeOf(ctx, body.sessionId)
+        const paths = Array.isArray(body.paths) ? body.paths.filter(item => typeof item === 'string') : []
+        const ignored = await ignoredAmong(ctx, config, { cwd: root, policy, paths, signal: undefined })
+        return { ignored }
+      },
+    },
+    '/list': {
+      method: 'POST',
+      async run(req) {
+        const body = await jsonBody(req)
+        const { root } = await scopeOf(ctx, body.sessionId)
+        return listDirectory(fs(), {
+          workspaceRoot: root,
+          path: typeof body.path === 'string' ? body.path : '',
+          followSymlinks: body.followSymlinks !== false,
+          allowOutsideWorkspace: body.allowOutsideWorkspace === true,
+        }, { maxEntries: config.listingMaxEntries })
+      },
+    },
+  }
+}
+
+/**
+ * Register every route on the web server, gated by the connection's request admission.
+ * @param ctx - host context providing `webServer` and `connection`.
+ * @param routes - the handlers built by {@link createRoutes}.
+ * @returns one disposer per registered route.
+ */
+export function registerRoutes(ctx, routes) {
+  const connection = () => ctx.get('connection')
+  const disposers = []
+  for (const [suffix, route] of Object.entries(routes)) {
+    disposers.push(ctx.webServer.register({
+      kind: 'exact',
+      path: `${PREFIX}${suffix}`,
+      handler: async (req, res) => {
+        const rejection = connection()?.requestRejection(req)
+        if (rejection !== undefined) {
+          res.statusCode = rejection
+          res.end()
+          return
+        }
+        if (req.method !== route.method) {
+          res.setHeader('allow', route.method)
+          sendJson(res, 405, { error: `method ${req.method} is not allowed` })
+          return
+        }
+        try {
+          sendJson(res, 200, await route.run(req))
+        } catch (error) {
+          sendJson(res, 400, { error: messageOf(error) })
+        }
+      },
+    }))
+  }
+  return disposers
+}

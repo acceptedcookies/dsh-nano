@@ -1,0 +1,4 @@
+# Development overlay. A bare package name resolves only after `dsh plugin add`.
+- insert:
+    - id: nano-explorer-extra
+      name: /Users/seanz/Documents/dsh-plugins/dsh-nano-explorer-extra/index.js

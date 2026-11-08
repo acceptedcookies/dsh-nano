@@ -820,19 +820,21 @@ window.__ModuleLoader__.load({
 .np-node[data-active="true"] { background: var(--dsw-alias-interactive-bg-active); color: var(--dsw-alias-label-primary); }
 .np-node[data-drop="true"] { box-shadow: inset 0 0 0 1.5px var(--dsw-alias-brand-primary); }
 .np-node-main { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; border: 0; background: transparent; color: inherit; padding: 0; text-align: left; font: inherit; cursor: pointer; overflow: hidden; }
-.np-node:hover .np-node-main, .np-node:focus-within .np-node-main { padding-right: 70px; }
-@media (hover: none) { .np-node .np-node-main { padding-right: 70px; } .np-node .np-node-actions { display: flex; } }
-.np-node-actions { position: absolute; right: 4px; top: 0; height: 100%; display: none; align-items: center; gap: 2px; }
-.np-node:hover .np-node-actions, .np-node:focus-within .np-node-actions { display: flex; }
-.np-node-actions button { display: inline-flex; align-items: center; justify-content: center; width: var(--np-icon-btn-sm); height: var(--np-icon-btn-sm); padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-xs, 4px); cursor: pointer; }
-.np-node-actions button[data-active="true"] { color: var(--dsw-alias-brand-primary); }
+.np-node[data-pinned="true"] .np-node-main { padding-right: 28px; }
+.np-node:hover .np-node-main, .np-node:focus-within .np-node-main { padding-right: 84px; }
+@media (hover: none) { .np-node .np-node-main { padding-right: 84px; } .np-node .np-node-actions button { display: inline-flex; } }
+.np-node-actions { position: absolute; right: 0; top: 0; height: 100%; display: flex; align-items: center; }
+.np-node-actions button { display: none; align-items: center; justify-content: center; width: var(--np-icon-btn); height: 100%; box-sizing: border-box; padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); cursor: pointer; }
+.np-node:hover .np-node-actions button, .np-node:focus-within .np-node-actions button { display: inline-flex; }
+.np-node-actions button[data-pin][data-active="true"] { display: inline-flex; color: var(--dsw-alias-brand-primary); }
 .np-node-actions button:hover { background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); }
+.np-node-actions button[data-pin][data-active="true"]:hover { color: var(--dsw-alias-brand-primary); }
 .np-caret { display: inline-flex; width: 16px; height: 16px; align-items: center; justify-content: center; border: 0; background: transparent; color: var(--dsw-alias-label-tertiary); padding: 0; cursor: pointer; }
 .np-caret[data-open="false"] svg { transform: rotate(-90deg); }
 .np-node-icon { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex: none; color: var(--dsw-alias-label-tertiary); }
 .np-node-name { display: block; min-width: 0; overflow: hidden; white-space: nowrap; }
 .np-node-name[data-fade="true"] { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 18px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 18px), transparent); }
-.np-entry svg, .np-node-icon svg, .np-tree-tools svg, .np-tree-toggle svg, .np-tree-foot svg, .np-caret svg, .np-node-actions svg, .np-tool svg, .np-slash svg { fill: currentColor; stroke: none; }
+.np-entry svg, .np-node-icon svg, .np-tree-tools svg, .np-tree-toggle svg, .np-tree-foot svg, .np-caret svg, .np-node-actions svg, .np-tool svg, .np-slash svg, .np-ws-caret svg { fill: currentColor; stroke: none; }
 .np-node-icon svg, .np-tree-tools svg, .np-tree-toggle svg, .np-caret svg, .np-node-actions svg, .np-tool svg, .np-slash svg { width: 16px; height: 16px; display: block; }
 .np-ws { position: relative; flex: 1 1 auto; min-width: 0; max-width: 170px; }
 .np-ws-btn { display: flex; align-items: center; gap: 6px; width: 100%; height: var(--np-icon-btn); box-sizing: border-box; padding: 0 8px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); font: inherit; font-size: 12px; cursor: pointer; }
@@ -1202,7 +1204,7 @@ window.__ModuleLoader__.load({
           const caret = node.kind === "folder" ? `<button type="button" class="np-caret" data-caret="${node.id}" data-open="${!state.collapsed.has(node.id)}" aria-label="${escapeHtml(text().collapse)}">${CHEVRON_ICON}</button>` : "";
           const pinLabel = node.pinned === true ? text().unpin : text().pin;
           const pin = node.kind === "file" ? `<button type="button" data-pin="${node.id}" data-active="${node.pinned === true}" title="${escapeHtml(pinLabel)}" aria-label="${escapeHtml(pinLabel)}">${PIN_ICON}</button>` : "";
-          lines.push(`<div class="np-node" data-kind="${node.kind}" data-active="${node.id === state.ui.currentId}" style="padding-left:${8 + depth * 16}px">${caret}<button class="np-node-main" type="button" draggable="true" data-id="${node.id}"><span class="np-node-icon" aria-hidden="true">${icon}</span><span class="np-node-name">${name}</span></button><span class="np-node-actions">${pin}<button type="button" data-rename="${node.id}" title="${escapeHtml(text().rename)}" aria-label="${escapeHtml(text().rename)}">${EDIT_ICON}</button><button type="button" class="np-danger" data-remove="${node.id}" title="${escapeHtml(text().delete)}" aria-label="${escapeHtml(text().delete)}">${CLOSE_ICON}</button></span></div>`);
+          lines.push(`<div class="np-node" data-kind="${node.kind}" data-pinned="${node.kind === "file" && node.pinned === true}" data-active="${node.id === state.ui.currentId}" style="padding-left:${8 + depth * 16}px">${caret}<button class="np-node-main" type="button" draggable="true" data-id="${node.id}"><span class="np-node-icon" aria-hidden="true">${icon}</span><span class="np-node-name">${name}</span></button><span class="np-node-actions">${pin}<button type="button" data-rename="${node.id}" title="${escapeHtml(text().rename)}" aria-label="${escapeHtml(text().rename)}">${EDIT_ICON}</button><button type="button" class="np-danger" data-remove="${node.id}" title="${escapeHtml(text().delete)}" aria-label="${escapeHtml(text().delete)}">${CLOSE_ICON}</button></span></div>`);
           if (node.kind === "folder" && !state.collapsed.has(node.id)) visit(node.id, depth + 1, workspaceId);
         }
       };

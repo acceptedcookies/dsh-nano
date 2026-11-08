@@ -1,0 +1,4 @@
+# Development overlay. A bare package name resolves only after `dsh plugin add`.
+- insert:
+    - id: nano-model-selector
+      name: /Users/seanz/Documents/dsh-plugins/dsh-nano-model-selector/index.js

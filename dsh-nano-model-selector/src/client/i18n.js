@@ -1,0 +1,86 @@
+/** Chinese and English copy for the model selector. The selector follows DSH's active language. */
+
+export const COPY = {
+  zh: {
+    title: '模型选择',
+    searchPlaceholder: '搜索模型、提供商或说明…',
+    searchClear: '清除搜索',
+    allProviders: '全部',
+    favorites: '收藏',
+    refresh: '刷新模型目录',
+    close: '关闭',
+    loading: '正在加载模型…',
+    loadError: '模型目录加载失败',
+    retry: '重试',
+    noModels: '没有可用模型',
+    noMatches: '没有匹配的模型',
+    noFavorites: '还没有收藏模型',
+    selectModel: '选择模型',
+    effort: '推理等级',
+    providerDefault: '默认',
+    noEffort: '该模型不提供推理等级',
+    current: '当前',
+    favorite: '收藏',
+    unfavorite: '取消收藏',
+    context: '上下文',
+    maxOutput: '输出上限',
+    textInput: '文本',
+    imageInput: '图片',
+    providerFailure: (name, message) => `${name} 加载失败：${message}`,
+    modelCount: count => `${count} 个模型`,
+    favoriteCount: count => `${count} 项`,
+    triggerSelect: '选择模型',
+    triggerLoading: '加载模型…',
+    triggerAria: (model, effort) => `选择模型，当前 ${model}${effort ? `，推理等级 ${effort}` : ''}`,
+    triggerSelectAria: '选择模型',
+    switching: '正在切换…',
+    selectionError: '切换模型失败',
+    defaultBadge: '默认',
+  },
+  en: {
+    title: 'Model selection',
+    searchPlaceholder: 'Search models, providers, or descriptions…',
+    searchClear: 'Clear search',
+    allProviders: 'All',
+    favorites: 'Favorites',
+    refresh: 'Refresh model catalog',
+    close: 'Close',
+    loading: 'Loading models…',
+    loadError: 'Could not load the model catalog',
+    retry: 'Retry',
+    noModels: 'No models available',
+    noMatches: 'No matching models',
+    noFavorites: 'No favorite models yet',
+    selectModel: 'Select model',
+    effort: 'Reasoning effort',
+    providerDefault: 'Default',
+    noEffort: 'This model has no reasoning levels',
+    current: 'Current',
+    favorite: 'Add to favorites',
+    unfavorite: 'Remove from favorites',
+    context: 'Context',
+    maxOutput: 'Max output',
+    textInput: 'Text',
+    imageInput: 'Images',
+    providerFailure: (name, message) => `${name} failed to load: ${message}`,
+    modelCount: count => `${count} ${count === 1 ? 'model' : 'models'}`,
+    favoriteCount: count => `${count} ${count === 1 ? 'item' : 'items'}`,
+    triggerSelect: 'Select model',
+    triggerLoading: 'Loading model…',
+    triggerAria: (model, effort) => `Select model, current ${model}${effort ? `, reasoning effort ${effort}` : ''}`,
+    triggerSelectAria: 'Select model',
+    switching: 'Switching…',
+    selectionError: 'Could not switch model',
+    defaultBadge: 'Default',
+  },
+}
+
+/** @param {string | undefined} language */
+export function languageOf(language) {
+  return typeof language === 'string' && language.toLowerCase().startsWith('zh') ? 'zh' : 'en'
+}
+
+/** @param {string} language */
+export function copyFor(language) {
+  return COPY[languageOf(language)]
+}

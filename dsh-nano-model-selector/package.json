@@ -1,0 +1,40 @@
+{
+  "name": "dsh-nano-model-selector",
+  "version": "0.1.0",
+  "description": "A richer model selector for DeepSeek Harness Web: provider filters, favorites, direct effort selection, and detailed model information.",
+  "type": "module",
+  "icon": "./icon.svg",
+  "main": "./index.js",
+  "scripts": {
+    "build": "node scripts/build-client.mjs"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./client": "./lib/client.js",
+    "./icon": "./icon.svg",
+    "./locale/*.json": "./locale/*.json",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "cordis.patch.yml",
+    "icon.svg",
+    "locale",
+    "lib/client.js"
+  ],
+  "engines": {
+    "dsh": ">=0.2.2-rc.1 <0.3.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-model-selection"
+      ]
+    }
+  }
+}

@@ -1031,7 +1031,9 @@ window.__ModuleLoader__.load({
 .np-card pre { max-height: 240px; overflow: auto; white-space: pre-wrap; font-family: var(--dsw-font-markdown-code-font-family); }
 .np-card label { display: flex; flex-direction: column; align-items: stretch; gap: 6px; margin: 0; color: var(--dsw-alias-label-secondary); }
 /* DSH-native settings row: title + description left, control right, hairline row */
-.np-card .np-field { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 44px; padding: 6px 0; margin: 0; }
+/* uniform rows: same container height for every field, dividers sit centered
+   in the equal gap between them */
+.np-card .np-field { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 56px; padding: 10px 0; margin: 0; }
 .np-card .np-field + .np-field { border-top: 1px solid var(--dsw-alias-border-l2); }
 .np-card .np-field-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .np-card .np-field-name { color: var(--dsw-alias-label-primary); line-height: 20px; }

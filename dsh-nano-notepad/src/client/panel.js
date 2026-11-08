@@ -1082,7 +1082,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
   }
 
   panel.addEventListener('click', event => {
-    const caret = event.target instanceof HTMLElement ? event.target.closest('[data-caret]') : null
+    const caret = event.target instanceof Element ? event.target.closest('[data-caret]') : null
     if (caret?.dataset.caret) {
       const id = caret.dataset.caret
       if (state.collapsed.has(id)) state.collapsed.delete(id)
@@ -1090,7 +1090,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       render()
       return
     }
-    const rowAction = event.target instanceof HTMLElement ? event.target.closest('[data-rename], [data-pin], [data-remove]') : null
+    const rowAction = event.target instanceof Element ? event.target.closest('[data-rename], [data-pin], [data-remove]') : null
     if (rowAction?.dataset.rename && state.db) {
       const node = state.nodes.find(item => item.id === rowAction.dataset.rename)
       if (node) askName(text().renameTitle, node.name, async name => {

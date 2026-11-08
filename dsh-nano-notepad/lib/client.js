@@ -1799,7 +1799,7 @@ window.__ModuleLoader__.load({
       });
     }
     panel.addEventListener("click", (event) => {
-      const caret = event.target instanceof HTMLElement ? event.target.closest("[data-caret]") : null;
+      const caret = event.target instanceof Element ? event.target.closest("[data-caret]") : null;
       if (caret?.dataset.caret) {
         const id2 = caret.dataset.caret;
         if (state.collapsed.has(id2)) state.collapsed.delete(id2);
@@ -1807,7 +1807,7 @@ window.__ModuleLoader__.load({
         render();
         return;
       }
-      const rowAction = event.target instanceof HTMLElement ? event.target.closest("[data-rename], [data-pin], [data-remove]") : null;
+      const rowAction = event.target instanceof Element ? event.target.closest("[data-rename], [data-pin], [data-remove]") : null;
       if (rowAction?.dataset.rename && state.db) {
         const node = state.nodes.find((item) => item.id === rowAction.dataset.rename);
         if (node) askName(text().renameTitle, node.name, async (name) => {

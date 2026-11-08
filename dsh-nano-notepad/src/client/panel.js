@@ -524,7 +524,6 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     }
     source.disabled = state.db === null
     if (document.activeElement !== source && !state.dirty) source.value = file.draft ?? ''
-    if ((file.draft ?? '') === '' && !state.dirty) state.view = 'source'
     const rendered = state.view === 'rendered'
     source.hidden = rendered
     read.hidden = !rendered

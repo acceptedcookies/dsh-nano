@@ -1,7 +1,7 @@
 /** Browser database for the notepad. One origin, one database. */
 
 export const DB_NAME = 'dsh-nano-notepad'
-export const DB_VERSION = 1
+export const DB_VERSION = 2
 export const CHANNEL = 'dsh-nano-notepad'
 
 export const DEFAULT_SETTINGS = {
@@ -10,7 +10,8 @@ export const DEFAULT_SETTINGS = {
   versionLimit: 50,
   imageLimitBytes: 5 * 1024 * 1024,
   defaultView: 'rendered',
-  theme: 'dark',
+  theme: 'system',
+  followApp: true,
 }
 
 const IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp'])
@@ -34,7 +35,8 @@ export function normalizeSettings(config) {
     versionLimit: number('versionLimit', DEFAULT_SETTINGS.versionLimit, 5, 500),
     imageLimitBytes: number('imageLimitBytes', DEFAULT_SETTINGS.imageLimitBytes, 256 * 1024, 20 * 1024 * 1024),
     defaultView: source.defaultView === 'source' ? 'source' : 'rendered',
-    theme: source.theme === 'light' || source.theme === 'system' ? source.theme : 'dark',
+    theme: source.theme === 'light' || source.theme === 'dark' ? source.theme : 'system',
+    followApp: source.followApp !== false,
   }
 }
 
@@ -63,6 +65,9 @@ export function openDatabase() {
       if (!db.objectStoreNames.contains('nodes')) {
         const nodes = db.createObjectStore('nodes', { keyPath: 'id' })
         nodes.createIndex('parentId', 'parentId', { unique: false })
+        nodes.createIndex('workspaceId', 'workspaceId', { unique: false })
+      } else if (!request.transaction.objectStore('nodes').indexNames.contains('workspaceId')) {
+        request.transaction.objectStore('nodes').createIndex('workspaceId', 'workspaceId', { unique: false })
       }
       if (!db.objectStoreNames.contains('versions')) {
         const versions = db.createObjectStore('versions', { keyPath: 'id' })
@@ -139,21 +144,22 @@ async function childrenOf(db, parentId) {
   return rows
 }
 
-/** @param {IDBDatabase} db @param {string | null} parentId */
-async function siblingsOf(db, parentId) {
+/** @param {IDBDatabase} db @param {string | null} parentId @param {string | null} workspaceId */
+async function siblingsOf(db, parentId, workspaceId) {
   const nodes = await readAll(db, 'nodes')
-  return nodes.filter(node => node.parentId === parentId)
+  return nodes.filter(node => node.parentId === parentId && (node.workspaceId ?? null) === workspaceId)
 }
 
-/** @param {IDBDatabase} db @param {'folder' | 'file'} kind @param {string | null} parentId @param {string} name */
-export async function createNode(db, kind, parentId, name) {
-  const siblings = await siblingsOf(db, parentId)
+/** @param {IDBDatabase} db @param {'folder' | 'file'} kind @param {string | null} parentId @param {string} name @param {string | null} workspaceId */
+export async function createNode(db, kind, parentId, name, workspaceId = null) {
+  const siblings = await siblingsOf(db, parentId, workspaceId)
   const finalName = kind === 'file' ? fileName(name) : validateName(name)
   if (taken(siblings, finalName)) throw new Error('notepad name is already used in this folder')
   const now = Date.now()
   const node = {
     id: crypto.randomUUID(),
     parentId,
+    workspaceId,
     kind,
     name: finalName,
     createdAt: now,
@@ -168,17 +174,29 @@ export async function createNode(db, kind, parentId, name) {
 
 /** @param {IDBDatabase} db @param {string} id @param {string} name */
 export async function renameNode(db, id, name) {
-  const transaction = db.transaction('nodes', 'readwrite')
-  const store = transaction.objectStore('nodes')
-  const node = await requestToPromise(store.get(id))
+  const rows = await readAll(db, 'nodes')
+  const node = rows.find(item => item.id === id)
   if (!node) throw new Error('notepad item no longer exists')
   const finalName = node.kind === 'file' ? fileName(name) : validateName(name)
-  const siblings = await siblingsOf(db, node.parentId)
+  const siblings = rows.filter(item => item.parentId === node.parentId && (item.workspaceId ?? null) === (node.workspaceId ?? null))
   if (siblings.some(item => item.id !== id && item.name.toLowerCase() === finalName.toLowerCase())) {
-    transaction.abort()
     throw new Error('notepad name is already used in this folder')
   }
   node.name = finalName
+  node.updatedAt = Date.now()
+  const transaction = db.transaction('nodes', 'readwrite')
+  transaction.objectStore('nodes').put(node)
+  await transactionDone(transaction)
+  return node
+}
+
+/** @param {IDBDatabase} db @param {string} id @param {boolean} pinned */
+export async function pinNode(db, id, pinned) {
+  const transaction = db.transaction('nodes', 'readwrite')
+  const store = transaction.objectStore('nodes')
+  const node = await requestToPromise(store.get(id))
+  if (!node || node.kind !== 'file') throw new Error('notepad file no longer exists')
+  node.pinned = pinned
   node.updatedAt = Date.now()
   store.put(node)
   await transactionDone(transaction)
@@ -199,8 +217,8 @@ function descendantIds(nodes, id) {
   return result
 }
 
-/** @param {IDBDatabase} db @param {string} id @param {string | null} parentId */
-export async function moveNode(db, id, parentId) {
+/** @param {IDBDatabase} db @param {string} id @param {string | null} parentId @param {string | null} workspaceId */
+export async function moveNode(db, id, parentId, workspaceId = undefined) {
   const nodes = await readAll(db, 'nodes')
   const node = nodes.find(item => item.id === id)
   if (!node) throw new Error('notepad item no longer exists')
@@ -210,9 +228,11 @@ export async function moveNode(db, id, parentId) {
   if (parentId === id || descendantIds(nodes, id).includes(parentId)) {
     throw new Error('notepad cannot move a folder into itself')
   }
-  const siblings = nodes.filter(item => item.parentId === parentId && item.id !== id)
+  const destination = workspaceId === undefined ? node.workspaceId ?? null : workspaceId
+  const siblings = nodes.filter(item => item.parentId === parentId && (item.workspaceId ?? null) === destination && item.id !== id)
   if (taken(siblings, node.name)) throw new Error('notepad name is already used in this folder')
   node.parentId = parentId
+  node.workspaceId = destination
   node.updatedAt = Date.now()
   const transaction = db.transaction('nodes', 'readwrite')
   transaction.objectStore('nodes').put(node)

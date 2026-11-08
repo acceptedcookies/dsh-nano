@@ -1,8 +1,9 @@
 {
   "name": "dsh-nano-notepad",
   "version": "0.1.0",
-  "description": "Floating Markdown notepad stored in the browser database.",
+  "description": "A floating Markdown notepad. Files, history, and images stay in this browser.",
   "type": "module",
+  "icon": "./icon.svg",
   "main": "./index.js",
   "scripts": {
     "build": "node scripts/build-client.mjs"
@@ -10,11 +11,15 @@
   "exports": {
     ".": "./index.js",
     "./client": "./lib/client.js",
+    "./icon": "./icon.svg",
+    "./locale/*.json": "./locale/*.json",
     "./package.json": "./package.json"
   },
   "files": [
     "index.js",
     "cordis.patch.yml",
+    "icon.svg",
+    "locale",
     "lib/client.js"
   ],
   "engines": {

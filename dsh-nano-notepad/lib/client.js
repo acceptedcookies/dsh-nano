@@ -39,7 +39,7 @@ window.__ModuleLoader__.load({
 
   // src/client/db.js
   var DB_NAME = "dsh-nano-notepad";
-  var DB_VERSION = 1;
+  var DB_VERSION = 2;
   var CHANNEL = "dsh-nano-notepad";
   var DEFAULT_SETTINGS = {
     saveDelayMs: 800,
@@ -47,7 +47,8 @@ window.__ModuleLoader__.load({
     versionLimit: 50,
     imageLimitBytes: 5 * 1024 * 1024,
     defaultView: "rendered",
-    theme: "dark"
+    theme: "system",
+    followApp: true
   };
   var IMAGE_TYPES = /* @__PURE__ */ new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
   function record(value) {
@@ -66,7 +67,8 @@ window.__ModuleLoader__.load({
       versionLimit: number("versionLimit", DEFAULT_SETTINGS.versionLimit, 5, 500),
       imageLimitBytes: number("imageLimitBytes", DEFAULT_SETTINGS.imageLimitBytes, 256 * 1024, 20 * 1024 * 1024),
       defaultView: source.defaultView === "source" ? "source" : "rendered",
-      theme: source.theme === "light" || source.theme === "system" ? source.theme : "dark"
+      theme: source.theme === "light" || source.theme === "dark" ? source.theme : "system",
+      followApp: source.followApp !== false
     };
   }
   function requestToPromise(request) {
@@ -90,6 +92,9 @@ window.__ModuleLoader__.load({
         if (!db.objectStoreNames.contains("nodes")) {
           const nodes = db.createObjectStore("nodes", { keyPath: "id" });
           nodes.createIndex("parentId", "parentId", { unique: false });
+          nodes.createIndex("workspaceId", "workspaceId", { unique: false });
+        } else if (!request.transaction.objectStore("nodes").indexNames.contains("workspaceId")) {
+          request.transaction.objectStore("nodes").createIndex("workspaceId", "workspaceId", { unique: false });
         }
         if (!db.objectStoreNames.contains("versions")) {
           const versions = db.createObjectStore("versions", { keyPath: "id" });
@@ -145,18 +150,19 @@ window.__ModuleLoader__.load({
     const ui = uiRows[0] ?? { id: "ui", open: false, tabs: [] };
     return { nodes, settings, ui };
   }
-  async function siblingsOf(db, parentId) {
+  async function siblingsOf(db, parentId, workspaceId) {
     const nodes = await readAll(db, "nodes");
-    return nodes.filter((node) => node.parentId === parentId);
+    return nodes.filter((node) => node.parentId === parentId && (node.workspaceId ?? null) === workspaceId);
   }
-  async function createNode(db, kind, parentId, name) {
-    const siblings = await siblingsOf(db, parentId);
+  async function createNode(db, kind, parentId, name, workspaceId = null) {
+    const siblings = await siblingsOf(db, parentId, workspaceId);
     const finalName = kind === "file" ? fileName(name) : validateName(name);
     if (taken(siblings, finalName)) throw new Error("notepad name is already used in this folder");
     const now = Date.now();
     const node = {
       id: crypto.randomUUID(),
       parentId,
+      workspaceId,
       kind,
       name: finalName,
       createdAt: now,
@@ -169,17 +175,27 @@ window.__ModuleLoader__.load({
     return node;
   }
   async function renameNode(db, id, name) {
-    const transaction = db.transaction("nodes", "readwrite");
-    const store = transaction.objectStore("nodes");
-    const node = await requestToPromise(store.get(id));
+    const rows = await readAll(db, "nodes");
+    const node = rows.find((item) => item.id === id);
     if (!node) throw new Error("notepad item no longer exists");
     const finalName = node.kind === "file" ? fileName(name) : validateName(name);
-    const siblings = await siblingsOf(db, node.parentId);
+    const siblings = rows.filter((item) => item.parentId === node.parentId && (item.workspaceId ?? null) === (node.workspaceId ?? null));
     if (siblings.some((item) => item.id !== id && item.name.toLowerCase() === finalName.toLowerCase())) {
-      transaction.abort();
       throw new Error("notepad name is already used in this folder");
     }
     node.name = finalName;
+    node.updatedAt = Date.now();
+    const transaction = db.transaction("nodes", "readwrite");
+    transaction.objectStore("nodes").put(node);
+    await transactionDone(transaction);
+    return node;
+  }
+  async function pinNode(db, id, pinned) {
+    const transaction = db.transaction("nodes", "readwrite");
+    const store = transaction.objectStore("nodes");
+    const node = await requestToPromise(store.get(id));
+    if (!node || node.kind !== "file") throw new Error("notepad file no longer exists");
+    node.pinned = pinned;
     node.updatedAt = Date.now();
     store.put(node);
     await transactionDone(transaction);
@@ -197,7 +213,7 @@ window.__ModuleLoader__.load({
     visit(id);
     return result;
   }
-  async function moveNode(db, id, parentId) {
+  async function moveNode(db, id, parentId, workspaceId = void 0) {
     const nodes = await readAll(db, "nodes");
     const node = nodes.find((item) => item.id === id);
     if (!node) throw new Error("notepad item no longer exists");
@@ -207,9 +223,11 @@ window.__ModuleLoader__.load({
     if (parentId === id || descendantIds(nodes, id).includes(parentId)) {
       throw new Error("notepad cannot move a folder into itself");
     }
-    const siblings = nodes.filter((item) => item.parentId === parentId && item.id !== id);
+    const destination = workspaceId === void 0 ? node.workspaceId ?? null : workspaceId;
+    const siblings = nodes.filter((item) => item.parentId === parentId && (item.workspaceId ?? null) === destination && item.id !== id);
     if (taken(siblings, node.name)) throw new Error("notepad name is already used in this folder");
     node.parentId = parentId;
+    node.workspaceId = destination;
     node.updatedAt = Date.now();
     const transaction = db.transaction("nodes", "readwrite");
     transaction.objectStore("nodes").put(node);
@@ -536,75 +554,381 @@ window.__ModuleLoader__.load({
     };
   }
 
+  // src/client/i18n.js
+  var COPY = {
+    zh: {
+      files: "\u6587\u4EF6",
+      collapseTree: "\u6536\u8D77\u6587\u4EF6\u6811",
+      expandTree: "\u5C55\u5F00\u6587\u4EF6\u6811",
+      newFile: "\u65B0\u5EFA\u6587\u4EF6",
+      newFolder: "\u65B0\u5EFA\u6587\u4EF6\u5939",
+      delete: "\u5220\u9664",
+      collapse: "\u6536\u8D77",
+      theme: "\u4E3B\u9898",
+      settings: "\u8BBE\u7F6E",
+      close: "\u5173\u95ED",
+      follow: "\u8DDF\u968F",
+      dark: "\u6DF1\u8272",
+      light: "\u6D45\u8272",
+      rename: "\u6539\u540D",
+      pin: "\u56FA\u5B9A",
+      unpin: "\u53D6\u6D88\u56FA\u5B9A",
+      source: "\u7EAF\u6587\u672C",
+      preview: "\u9884\u89C8",
+      image: "\u56FE\u7247",
+      copyPath: "\u590D\u5236\u8DEF\u5F84",
+      history: "\u5386\u53F2\u7248\u672C",
+      saveVersion: "\u4FDD\u5B58\u7248\u672C",
+      clearFile: "\u6E05\u7A7A\u5F53\u524D\u6587\u4EF6",
+      noFile: "\u672A\u6253\u5F00\u6587\u4EF6",
+      placeholder: "Write markdown... Type / for blocks.",
+      viewGroup: "\u7F16\u8F91\u89C6\u56FE",
+      formats: { paragraph: "\u6B63\u6587", bullet: "\u5217\u8868", numbered: "\u7F16\u53F7", task: "\u5F85\u529E", quote: "\u5F15\u7528", link: "\u94FE\u63A5" },
+      status: {
+        idle: "\u5C1A\u672A\u6539\u52A8",
+        dirty: "\u6B63\u5728\u7F16\u8F91\uFF0C\u5C1A\u672A\u4FDD\u5B58",
+        saving: "\u6B63\u5728\u4FDD\u5B58\u2026",
+        saved: (time) => `\u5DF2\u4FDD\u5B58 ${time}`,
+        committed: (time) => `\u5DF2\u63D0\u4EA4\u7248\u672C ${time}`,
+        error: (detail) => `\u4FDD\u5B58\u5931\u8D25 ${detail}`
+      },
+      reasons: { interval: "\u81EA\u52A8", manual: "\u624B\u52A8", restore: "\u56DE\u9000" },
+      quota: "\u7A7A\u95F4\u4E0D\u591F\uFF0C\u8FD9\u6B21\u6CA1\u6709\u5199\u5165\u3002",
+      otherTab: "\u5176\u4ED6\u6807\u7B7E\u9875\u5DF2\u66F4\u65B0\u8FD9\u4E2A\u6587\u4EF6",
+      invalidSetting: "\u8FD9\u4E2A\u6570\u503C\u8D85\u51FA\u8303\u56F4\uFF0C\u5DF2\u4FDD\u7559\u4E0A\u4E00\u4E2A\u6709\u6548\u503C\u3002",
+      cancel: "\u53D6\u6D88",
+      confirm: "\u786E\u5B9A",
+      clear: "\u6E05\u7A7A",
+      deleteAll: "\u5220\u9664\u5168\u90E8",
+      back: "\u8FD4\u56DE",
+      restore: "\u56DE\u9000\u5230\u8FD9\u4E00\u7248",
+      noVersions: "\u8FD8\u6CA1\u6709\u7248\u672C",
+      previewAt: (time) => `\u9884\u89C8 ${time}`,
+      renameTitle: "\u91CD\u547D\u540D",
+      clearFileTitle: "\u6E05\u7A7A\u5F53\u524D\u6587\u4EF6",
+      clearFileBody: (name) => `\u300C${name}\u300D\u7684\u6B63\u6587\u4F1A\u53D8\u6210\u7A7A\u7684\uFF0C\u5E76\u8BB0\u6210\u4E00\u4E2A\u624B\u52A8\u7248\u672C\u3002\u4EE5\u524D\u7684\u7248\u672C\u8FD8\u5728\uFF0C\u53EF\u4EE5\u4ECE\u5386\u53F2\u7248\u672C\u56DE\u53BB\u3002`,
+      clearAllTitle: "\u6E05\u7A7A\u5168\u90E8\u5185\u5BB9",
+      clearAllBody: "\u6587\u4EF6\u5939\u3001\u6587\u4EF6\u3001\u5386\u53F2\u7248\u672C\u548C\u56FE\u7247\u90FD\u4F1A\u5220\u9664\u3002\u6570\u636E\u53EA\u5728\u8FD9\u53F0\u6D4F\u89C8\u5668\u7684\u8FD9\u4E2A\u7F51\u7AD9\u91CC\uFF0C\u5220\u9664\u540E\u4E0D\u80FD\u6062\u590D\u3002",
+      deleteFileTitle: "\u5220\u9664\u6587\u4EF6",
+      deleteFileBody: (name) => `\u300C${name}\u300D\u548C\u5B83\u7684\u5386\u53F2\u7248\u672C\u90FD\u4F1A\u5220\u9664\uFF0C\u4E0D\u80FD\u6062\u590D\u3002`,
+      deleteFolderTitle: "\u5220\u9664\u6587\u4EF6\u5939",
+      deleteFolderBody: "\u8FD9\u4E2A\u6587\u4EF6\u5939\u91CC\u8FD8\u6709\u6587\u4EF6\u6216\u5B50\u6587\u4EF6\u5939\u3002\u786E\u8BA4\u540E\u4F1A\u4E00\u5E76\u5220\u9664\uFF0C\u5305\u62EC\u5B83\u4EEC\u7684\u5386\u53F2\u7248\u672C\u3002",
+      deleteEmptyFolderBody: "\u8FD9\u4E2A\u6587\u4EF6\u5939\u4F1A\u88AB\u5220\u9664\uFF0C\u4E0D\u80FD\u6062\u590D\u3002",
+      settingsTitle: "\u8BBE\u7F6E",
+      saveHeading: "\u4FDD\u5B58",
+      appearanceHeading: "\u5916\u89C2",
+      imageHeading: "\u56FE\u7247\u4E0E\u7A7A\u95F4",
+      positionHeading: "\u4F4D\u7F6E",
+      dangerHeading: "\u5371\u9669\u64CD\u4F5C",
+      saveDelay: "\u505C\u6B62\u8F93\u5165\u540E\u4FDD\u5B58",
+      commitInterval: "\u81EA\u52A8\u63D0\u4EA4\u95F4\u9694",
+      versionLimit: "\u6BCF\u4E2A\u6587\u4EF6\u4FDD\u7559\u7248\u672C",
+      openAs: "\u6253\u5F00\u6587\u4EF6\u65F6",
+      rendered: "\u6E32\u67D3",
+      windowTheme: "\u6D6E\u7A97\u4E3B\u9898",
+      followApp: "\u8DDF\u968F\u5E94\u7528",
+      imageLimit: "\u5355\u5F20\u56FE\u7247\u4E0A\u9650",
+      resetPosition: "\u91CD\u7F6E\u4F4D\u7F6E",
+      dangerBody: "\u6E05\u7A7A\u4F1A\u5220\u9664\u5168\u90E8\u6587\u4EF6\u5939\u3001\u6587\u4EF6\u3001\u7248\u672C\u548C\u56FE\u7247\uFF0C\u4E0D\u80FD\u6062\u590D\u3002",
+      usage: (files, versions, images, bytes) => `\u6587\u4EF6 ${files}\uFF0C\u7248\u672C ${versions}\uFF0C\u56FE\u7247 ${images}\uFF0C\u5DF2\u7528 ${bytes} \u5B57\u8282`,
+      unassigned: "\u672A\u5F52\u5C5E",
+      removedWorkspace: "\u5DF2\u5220\u9664\u7684\u5DE5\u4F5C\u533A",
+      currentWorkspace: "\u5F53\u524D\u5DE5\u4F5C\u533A",
+      allWorkspaces: "\u5168\u90E8\u5DE5\u4F5C\u533A",
+      historyTitle: "\u5386\u53F2\u7248\u672C"
+    },
+    en: {
+      files: "Files",
+      collapseTree: "Hide files",
+      expandTree: "Show files",
+      newFile: "New file",
+      newFolder: "New folder",
+      delete: "Delete",
+      collapse: "Hide",
+      theme: "Theme",
+      settings: "Settings",
+      close: "Close",
+      follow: "Follow",
+      dark: "Dark",
+      light: "Light",
+      rename: "Rename",
+      pin: "Pin",
+      unpin: "Unpin",
+      source: "Plain text",
+      preview: "Preview",
+      image: "Image",
+      copyPath: "Copy path",
+      history: "History",
+      saveVersion: "Save version",
+      clearFile: "Clear file",
+      noFile: "No file open",
+      placeholder: "Write markdown... Type / for blocks.",
+      viewGroup: "Editor view",
+      formats: { paragraph: "Text", bullet: "List", numbered: "Numbered", task: "Task", quote: "Quote", link: "Link" },
+      status: {
+        idle: "No changes",
+        dirty: "Editing, not saved yet",
+        saving: "Saving\u2026",
+        saved: (time) => `Saved ${time}`,
+        committed: (time) => `Version saved ${time}`,
+        error: (detail) => `Save failed ${detail}`
+      },
+      reasons: { interval: "Auto", manual: "Manual", restore: "Restore" },
+      quota: "Not enough space. This write was not stored.",
+      otherTab: "Another tab updated this file",
+      invalidSetting: "That value is out of range. The previous value was kept.",
+      cancel: "Cancel",
+      confirm: "OK",
+      clear: "Clear",
+      deleteAll: "Delete all",
+      back: "Back",
+      restore: "Restore this version",
+      noVersions: "No versions yet",
+      previewAt: (time) => `Preview ${time}`,
+      renameTitle: "Rename",
+      clearFileTitle: "Clear this file",
+      clearFileBody: (name) => `The text in \u201C${name}\u201D will become empty and be stored as a manual version. Earlier versions remain in History.`,
+      clearAllTitle: "Clear everything",
+      clearAllBody: "Folders, files, versions, and images will be deleted. The data stays in this browser and this site, and cannot be restored.",
+      deleteFileTitle: "Delete file",
+      deleteFileBody: (name) => `\u201C${name}\u201D and its history will be deleted. This cannot be undone.`,
+      deleteFolderTitle: "Delete folder",
+      deleteFolderBody: "This folder still contains files or folders. Confirming deletes them, including their history.",
+      deleteEmptyFolderBody: "This folder will be deleted. This cannot be undone.",
+      settingsTitle: "Settings",
+      saveHeading: "Saving",
+      appearanceHeading: "Appearance",
+      imageHeading: "Images and space",
+      positionHeading: "Position",
+      dangerHeading: "Danger",
+      saveDelay: "Save after typing stops",
+      commitInterval: "Automatic version interval",
+      versionLimit: "Versions kept per file",
+      openAs: "When opening a file",
+      rendered: "Rendered",
+      windowTheme: "Window theme",
+      followApp: "Follow app",
+      imageLimit: "Maximum image size",
+      resetPosition: "Reset position",
+      dangerBody: "Clearing deletes every folder, file, version, and image. It cannot be restored.",
+      usage: (files, versions, images, bytes) => `${files} files, ${versions} versions, ${images} images, ${bytes} bytes used`,
+      unknown: "unknown",
+      unassigned: "Unassigned",
+      removedWorkspace: "Removed workspace",
+      currentWorkspace: "Current workspace",
+      allWorkspaces: "All workspaces",
+      historyTitle: "History"
+    }
+  };
+  function languageOf(language) {
+    return typeof language === "string" && language.toLowerCase().startsWith("zh") ? "zh" : "en";
+  }
+  function copyFor(language) {
+    return COPY[languageOf(language)];
+  }
+
   // src/client/panel.js
   var STYLE = `
-.np-layer { position: absolute; inset: 0; pointer-events: none; z-index: 30; }
-.np-entry, .np-window { pointer-events: auto; position: absolute; }
-.np-entry { width: 36px; height: 36px; border: 0; border-radius: 10px; background: #3a3a3a; color: #fff; cursor: grab; }
+[data-nano-notepad] { pointer-events: none; }
+.np-layer { position: fixed; inset: 0; pointer-events: none; z-index: 30; color: var(--dsw-alias-label-primary); font-family: var(--dsw-font-family); font-size: 13px; }
+.np-entry, .np-window, .np-slash { pointer-events: auto; }
+.np-entry, .np-window { position: absolute; }
+.np-entry { z-index: 3; }
+.np-window { z-index: 2; }
+.np-dialog[hidden], .np-slash[hidden], .np-window[hidden], .np-read[hidden], .np-error[hidden] { display: none !important; }
+.np-entry { width: 36px; height: 36px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-primary); cursor: grab; box-shadow: var(--dsw-elevation-soft); }
 .np-entry:active { cursor: grabbing; }
 .np-entry svg { width: 18px; height: 18px; display: block; margin: auto; }
-.np-tip { position: absolute; right: 44px; top: 4px; white-space: nowrap; background: #fff; color: #222; border-radius: 8px; padding: 4px 8px; font: 12px/1.4 sans-serif; }
-.np-window { width: min(920px, calc(100% - 48px)); height: min(640px, calc(100% - 48px)); display: flex; flex-direction: column; background: #1e1e1e; color: #e8e8e8; border-radius: 14px; box-shadow: 0 18px 50px rgba(0,0,0,.45); overflow: hidden; font: 13px/1.5 sans-serif; }
-.np-window[data-theme="light"] { background: #f7f7f5; color: #222; }
-.np-tabs { display: flex; align-items: center; gap: 6px; padding: 8px; cursor: grab; }
-.np-tab { border: 0; background: transparent; color: inherit; padding: 4px 8px; border-bottom: 2px solid transparent; }
-.np-tab[data-active="true"] { border-bottom-color: currentColor; }
+.np-tip { position: absolute; right: 44px; top: 2px; white-space: nowrap; background: var(--dsw-alias-tooltip-bg); color: var(--dsw-alias-tooltip-label, var(--dsw-alias-label-primary-foreground)); border-radius: var(--dsw-radius-sm); padding: 4px 8px; }
+.np-window { width: min(920px, calc(100vw - 48px)); height: min(640px, calc(100vh - 48px)); min-width: 320px; min-height: 240px; display: flex; flex-direction: column; background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-panel, 16px); box-shadow: var(--dsw-elevation-prominent); overflow: hidden; }
+.np-resize { position: absolute; z-index: 6; pointer-events: auto; }
+.np-resize[data-edge="n"], .np-resize[data-edge="s"] { left: 14px; right: 14px; height: 8px; cursor: ns-resize; }
+.np-resize[data-edge="n"] { top: -4px; }
+.np-resize[data-edge="s"] { bottom: -4px; }
+.np-resize[data-edge="e"], .np-resize[data-edge="w"] { top: 14px; bottom: 14px; width: 8px; cursor: ew-resize; }
+.np-resize[data-edge="e"] { right: -4px; }
+.np-resize[data-edge="w"] { left: -4px; }
+.np-resize[data-edge="nw"], .np-resize[data-edge="ne"], .np-resize[data-edge="sw"], .np-resize[data-edge="se"] { width: 14px; height: 14px; }
+.np-resize[data-edge="nw"] { top: -4px; left: -4px; cursor: nwse-resize; }
+.np-resize[data-edge="se"] { right: -4px; bottom: -4px; cursor: nwse-resize; }
+.np-resize[data-edge="ne"] { top: -4px; right: -4px; cursor: nesw-resize; }
+.np-resize[data-edge="sw"] { left: -4px; bottom: -4px; cursor: nesw-resize; }
+.np-body, .np-editor { min-width: 0; overflow: hidden; }
+.np-read, .np-write { overflow: auto; }
+.np-nodes { overflow-x: hidden; overflow-y: auto; }
+.np-tabs { display: flex; align-items: center; gap: 4px; min-height: 40px; padding: 6px 12px; cursor: grab; border-bottom: 1px solid var(--dsw-alias-border-l2); }
+.np-tablist { display: flex; min-width: 0; gap: 2px; }
+.np-tab { border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); padding: 4px 8px; }
+.np-tab[data-active="true"] { background: var(--dsw-alias-interactive-bg-active); color: var(--dsw-alias-label-primary); }
 .np-body { display: flex; min-height: 0; flex: 1; }
-.np-tree { width: 210px; overflow: auto; border-right: 1px solid rgba(127,127,127,.3); padding: 8px; }
-.np-editor { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.np-path, .np-toolbar, .np-status { display: flex; gap: 6px; align-items: center; padding: 6px 8px; }
-.np-path { font-family: ui-monospace, monospace; font-size: 12px; opacity: .75; }
-.np-path span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.np-toolbar button, .np-tree button, .np-status button, .np-tabs button, .np-dialog button { border: 0; background: transparent; color: inherit; border-radius: 6px; padding: 3px 6px; cursor: pointer; }
-.np-toolbar button:hover, .np-tree button:hover, .np-status button:hover { background: rgba(127,127,127,.2); }
-.np-write, .np-read { flex: 1; min-height: 0; margin: 0 8px 8px; }
-.np-write { width: calc(100% - 16px); resize: none; border: 0; outline: 0; background: transparent; color: inherit; font: 14px/1.6 ui-monospace, monospace; }
-.np-read { overflow: auto; padding: 8px 12px; }
-.np-read img { max-width: 100%; }
-.np-read .missing-image { border: 1px dashed currentColor; padding: 2px 4px; }
-.np-node { display: flex; width: 100%; text-align: left; }
-.np-node[data-active="true"] { background: rgba(127,127,127,.25); }
-.np-dialog { position: absolute; inset: 0; background: rgba(0,0,0,.35); display: flex; align-items: center; justify-content: center; pointer-events: auto; }
-.np-card { width: min(420px, calc(100% - 32px)); background: #2a2a2a; color: #eee; border-radius: 12px; padding: 16px; }
-.np-window[data-theme="light"] .np-card { background: #fff; color: #222; }
-.np-card label { display: block; margin: 8px 0; }
-.np-card input, .np-card select { margin-left: 8px; }
-.np-versions { max-height: 240px; overflow: auto; }
-.np-error { color: #ffb4b4; padding: 0 8px 8px; }
-.np-slash { position: absolute; left: 230px; bottom: 72px; background: #2a2a2a; border-radius: 8px; padding: 6px; display: flex; flex-wrap: wrap; gap: 4px; max-width: 360px; }
-.np-window[data-theme="light"] .np-slash { background: #fff; }
+.np-tree { box-sizing: border-box; width: 248px; display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--dsw-alias-border-l2); background: transparent; }
+.np-tree[data-collapsed="true"] { width: 53px; align-items: stretch; }
+.np-tree[data-collapsed="true"] .np-workspace, .np-tree[data-collapsed="true"] .np-tree-tools, .np-tree[data-collapsed="true"] .np-tree-head > span, .np-tree[data-collapsed="true"] .np-nodes { display: none; }
+.np-tree[data-collapsed="true"] .np-tree-head { width: 100%; justify-content: center; padding: 0 12px; }
+.np-tree-head { box-sizing: border-box; display: flex; align-items: center; gap: 4px; width: 100%; height: 40px; padding: 0 12px; color: var(--dsw-alias-label-tertiary); font-size: 12px; }
+.np-tree-toggle { box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; flex: none; padding: 0; border: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); }
+.np-tree-toggle:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+.np-tree-tools { display: flex; align-items: center; gap: 2px; }
+.np-tree-tools button { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); }
+.np-tree-tools button svg { width: 16px; height: 16px; display: block; }
+.np-tree-tools button:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+.np-nodes { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; padding: 0 12px 12px; }
+.np-tree-foot { display: flex; align-items: center; gap: 8px; flex: none; padding: 8px 12px 12px; border-top: 1px solid var(--dsw-alias-border-l2); }
+.np-tree-foot button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 30px; }
+.np-tree-foot svg { width: 16px; height: 16px; display: block; }
+.np-tree[data-collapsed="true"] .np-tree-foot { flex-direction: column; margin-top: auto; padding: 8px 0 12px; border-top: 0; }
+.np-tree[data-collapsed="true"] .np-tree-foot span { display: none; }
+.np-tree[data-collapsed="true"] .np-tree-foot button { width: 28px; height: 28px; padding: 0; }
+.np-node { position: relative; box-sizing: border-box; display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; height: 28px; margin: 0; padding-right: 8px; border: 0 !important; background: transparent !important; box-shadow: none; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); text-align: left; font-weight: 400; overflow: hidden; }
+.np-node:hover { background: var(--dsw-alias-interactive-bg-hover) !important; color: var(--dsw-alias-label-primary); }
+.np-node[data-active="true"] { background: var(--dsw-alias-interactive-bg-active) !important; color: var(--dsw-alias-label-primary); }
+.np-node-main { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; border: 0; background: transparent; color: inherit; padding: 0; text-align: left; overflow: hidden; }
+.np-node:hover .np-node-main, .np-node:focus-within .np-node-main { padding-right: 70px; }
+.np-node-actions { position: absolute; right: 4px; top: 0; height: 100%; display: none; align-items: center; gap: 2px; }
+.np-node:hover .np-node-actions, .np-node:focus-within .np-node-actions { display: flex; }
+.np-node-actions button { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; padding: 0; border: 0 !important; background: transparent !important; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-xs, 4px); }
+.np-node-actions button[data-active="true"] { color: var(--dsw-alias-brand-primary); }
+.np-node-actions button:hover { background: var(--dsw-alias-bg-layer-1) !important; color: var(--dsw-alias-label-primary); }
+.np-caret { display: inline-flex; width: 16px; height: 16px; align-items: center; justify-content: center; border: 0; background: transparent; color: var(--dsw-alias-label-tertiary); padding: 0; }
+.np-caret[data-open="false"] svg { transform: rotate(-90deg); }
+.np-node-icon { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex: none; color: var(--dsw-alias-label-tertiary); }
+.np-node-name { display: block; min-width: 0; overflow: hidden; white-space: nowrap; -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 18px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 18px), transparent); }
+.np-entry svg, .np-node-icon svg, .np-tree-tools svg, .np-tree-toggle svg, .np-tree-foot svg, .np-caret svg, .np-node-actions svg { fill: currentColor; stroke: none; }
+.np-node-icon svg, .np-tree-tools svg, .np-tree-toggle svg, .np-caret svg, .np-node-actions svg { width: 16px; height: 16px; display: block; }
+.np-workspace { max-width: 132px; border: 0; background: transparent; color: var(--dsw-alias-label-primary); font: inherit; font-size: 12px; }
+.np-group { margin: 8px 0 2px; color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 20px; }
+.np-group[data-active="true"] { color: var(--dsw-alias-label-primary); }
+.np-editor { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
+.np-path, .np-toolbar, .np-footer { min-width: 0; }
+.np-path, .np-toolbar { display: flex; gap: 8px; align-items: center; padding: 6px 12px; }
+.np-path { color: var(--dsw-alias-label-tertiary); font-family: var(--dsw-font-markdown-code-font-family); font-size: 12px; }
+.np-path span:not(.np-modes) { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.np-modes, .np-path > button { flex: 0 0 auto; white-space: nowrap; }
+.np-modes { display: inline-flex; align-items: center; gap: 4px; }
+.np-modes button { height: 30px; padding: 0 10px; line-height: 20px; color: var(--dsw-alias-label-secondary); }
+.np-modes button[data-active="true"] { background: var(--dsw-alias-interactive-bg-active); color: var(--dsw-alias-label-primary); border-color: var(--dsw-alias-border-l3); }
+.np-path > button[data-action="rename"] { flex: 0 0 auto; height: 30px; min-width: max-content; }
+.np-toolbar { flex-wrap: wrap; border-bottom: 1px solid var(--dsw-alias-border-l2); }
+.np-window button:not(.np-node-main):not(.np-caret):not(.np-tree-tools button):not(.np-tree-toggle):not(.np-node-actions button), .np-card button, .np-slash button { border: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); border-radius: var(--dsw-radius-sm); padding: 4px 10px; cursor: pointer; font: inherit; line-height: 20px; }
+.np-tree[data-collapsed="true"] .np-tree-foot button { padding: 0; }
+.np-node-main, .np-caret { border: 0 !important; background: transparent !important; box-shadow: none; }
+.np-window button:hover, .np-card button:hover, .np-slash button:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.np-tabs > button, .np-tab { background: transparent; }
+.np-danger { color: var(--dsw-alias-label-error); border-color: var(--dsw-alias-state-error-primary); }
+.np-write, .np-read { flex: 1; min-height: 0; margin: 0; }
+.np-write { box-sizing: border-box; width: 100%; max-width: 100%; resize: none; border: 0; outline: 0; background: transparent; color: var(--dsw-alias-label-primary); caret-color: var(--dsw-alias-label-primary); padding: 12px; font: var(--dsw-font-markdown-code); overflow-wrap: anywhere; }
+.np-write:disabled { color: var(--dsw-alias-label-tertiary); }
+.np-read { box-sizing: border-box; max-width: 100%; overflow: auto; overflow-wrap: anywhere; padding: 12px; color: var(--dsw-alias-label-primary); cursor: text; }
+.np-read img { display: block; max-width: min(100%, 640px); margin: 8px 0; border-radius: var(--dsw-radius-md); }
+.np-read .missing-image { border: 1px dashed var(--dsw-alias-border-l3); padding: 2px 4px; }
+.np-dialog { position: absolute; inset: 0; z-index: 20; border-radius: inherit; background: var(--dsw-alias-bg-mask-1); display: flex; align-items: center; justify-content: center; padding: 16px; pointer-events: auto; }
+.np-slash { background: var(--dsw-menu-surface-fill, var(--dsw-alias-bg-layer-3)); color: var(--dsw-alias-label-primary); border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-lg); box-shadow: var(--dsw-elevation-prominent); backdrop-filter: var(--dsw-menu-backdrop-filter); }
+.np-card { box-sizing: border-box; display: flex; flex-direction: column; gap: 16px; width: min(560px, calc(100% - 32px)); max-height: calc(100% - 32px); padding: 22px 24px 24px; overflow: auto; border: 0; border-radius: var(--dsw-radius-panel, 16px); background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-primary); box-shadow: var(--dsw-elevation-prominent); }
+.np-card h3 { margin: 0; font-size: 16px; line-height: 24px; font-weight: 600; }
+.np-card p, .np-card pre { margin: 0; color: var(--dsw-alias-label-secondary); line-height: 22px; }
+.np-card pre { max-height: 240px; overflow: auto; white-space: pre-wrap; font-family: var(--dsw-font-markdown-code-font-family); }
+.np-card label { display: flex; flex-direction: column; align-items: stretch; gap: 6px; margin: 0; color: var(--dsw-alias-label-secondary); }
+.np-card input, .np-card select { width: 100%; box-sizing: border-box; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); padding: 8px 10px; font: inherit; }
+.np-card input:focus, .np-card select:focus { outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, var(--dsw-alias-brand-primary)); }
+.np-actions { display: flex; justify-content: flex-end; gap: 8px; margin: 0; }
+.np-actions button[data-go="ok"], .np-actions button[data-go="confirm"], .np-actions button[data-go="restore"] { background: var(--dsw-alias-button-primary-fill); color: var(--dsw-alias-label-primary-foreground); border-color: transparent; }
+.np-versions { max-height: 240px; overflow: auto; display: flex; flex-direction: column; }
+.np-error { color: var(--dsw-alias-label-error); padding: 0 12px 8px; }
+.np-slash { position: absolute; left: 16px; bottom: 52px; padding: 6px; display: grid; grid-template-columns: repeat(4, max-content); gap: 4px; z-index: 4; }
+.np-footer { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 6px 12px; border-top: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-2); }
+@media (max-width: 760px) {
+  .np-window { inset: 12px auto auto 12px; width: calc(100% - 24px); height: min(82dvh, calc(100% - 24px)); }
+  .np-body { flex-direction: column; }
+  .np-tree { width: auto; max-height: 34%; border-right: 0; border-bottom: 1px solid var(--dsw-alias-border-l2); }
+  .np-tree[data-collapsed="true"] { width: 53px; max-height: none; }
+  .np-footer { flex-direction: column; align-items: stretch; }
+  .np-footer-actions { justify-content: flex-start; }
+  .np-footer-actions button { min-height: 36px; }
+  .np-tabs { flex-wrap: wrap; }
+  .np-card { padding: 18px 16px 24px; }
+}
+.np-sync { display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1; color: var(--dsw-alias-label-secondary); font-size: 12px; }
+.np-beat { width: 8px; height: 8px; flex: none; border-radius: 50%; background: var(--dsw-alias-label-tertiary); }
+.np-beat[data-state="saved"], .np-beat[data-state="committed"] { background: var(--dsw-alias-state-success-primary); }
+.np-beat[data-state="dirty"] { background: var(--dsw-alias-state-warn-primary); }
+.np-beat[data-state="saving"] { background: var(--dsw-alias-brand-primary); animation: np-pulse 1s ease-in-out infinite; }
+.np-beat[data-state="error"] { background: var(--dsw-alias-state-error-primary); }
+@keyframes np-pulse { 50% { opacity: .25; } }
+.np-footer-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
+.np-section { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--dsw-alias-border-l2); }
+.np-section h4 { margin: 0 0 8px; font-size: 12px; font-weight: 600; color: var(--dsw-alias-label-tertiary); }
+
 `;
-  var ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M7 3.5h7l4 4V20a1.5 1.5 0 0 1-1.5 1.5h-9.5A1.5 1.5 0 0 1 5.5 20V5A1.5 1.5 0 0 1 7 3.5z"></path><path d="M14 3.5V8h4.5"></path></svg>';
+  var FORMAT_KINDS = ["paragraph", "h1", "h2", "h3", "bold", "italic", "strike", "bullet", "numbered", "task", "quote", "link"];
+  var googleIcon = (path) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${path}"></path></svg>`;
+  var FILE_ICON = googleIcon("M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8zm2 16H8v-2h8zm0-4H8v-2h8zm-3-5V3.5L18.5 9z");
+  var FOLDER_ICON = googleIcon("M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8z");
+  var PLUS_ICON = googleIcon("M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z");
+  var FOLDER_PLUS_ICON = googleIcon("M20 6h-8l-2-2H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2m-1 8h-3v3h-2v-3h-3v-2h3V9h2v3h3z");
+  var CLOSE_ICON = googleIcon("M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z");
+  var SETTINGS_ICON = googleIcon("M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.48.48 0 0 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z");
+  var PIN_ICON = googleIcon("M16 9V4h1c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1 1 1-1v-7H19v-2c-1.66 0-3-1.34-3-3");
+  var EDIT_ICON = googleIcon("M3 17.25V21h3.75L17.81 9.94l-3.75-3.75zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75z");
+  var CHEVRON_ICON = googleIcon("M16.59 8.59 12 13.17 7.41 8.59 6 10l6 6 6-6z");
+  var CHEVRON_LEFT = googleIcon("M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z");
+  var CHEVRON_RIGHT = googleIcon("M10 6 8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z");
+  var ICON = FILE_ICON;
   function must(root, selector) {
     const node = root.querySelector(selector);
     if (!(node instanceof HTMLElement)) throw new Error(`notepad missing ${selector}`);
     return node;
   }
-  function mountNotepad(host, defaults) {
+  function mountNotepad(host, defaults, appTheme = { scheme: () => "dark", subscribe: () => () => {
+  } }, language = { current: () => "en", subscribe: () => () => {
+  } }, workspaces = { current: () => ({ items: [], currentId: null }), subscribe: () => () => {
+  } }) {
     host.innerHTML = `<div class="np-layer"><button class="np-entry" type="button">${ICON}<span class="np-tip" hidden></span></button><section class="np-window" hidden></section></div>`;
     const layer = must(host, ".np-layer");
     const entry = must(host, ".np-entry");
     const tip = must(host, ".np-tip");
     const panel = must(host, ".np-window");
     panel.innerHTML = `
-    <div class="np-tabs"><button type="button" data-action="tree">\u6536\u8D77</button><div class="np-tablist"></div><button type="button" data-action="new-file">+</button><span style="flex:1"></span><button type="button" data-action="theme">\u4E3B\u9898</button><button type="button" data-action="settings">\u8BBE\u7F6E</button><button type="button" data-action="close">\u6536\u56DE</button></div>
+    <div class="np-tabs"><div class="np-tablist"></div><button type="button" data-action="new-file" data-i18n="newFile" data-i18n-mode="title">+</button></div>
     <div class="np-body">
-      <aside class="np-tree"><div><button type="button" data-action="new-folder">\u65B0\u5EFA\u6587\u4EF6\u5939</button><button type="button" data-action="new-file">\u65B0\u5EFA\u6587\u4EF6</button><button type="button" data-action="rename">\u91CD\u547D\u540D</button><button type="button" data-action="delete">\u5220\u9664</button></div><div class="np-nodes" data-root="true"></div></aside>
+      <aside class="np-tree"><div class="np-tree-head"><button type="button" class="np-tree-toggle" data-action="toggle-tree"></button><select class="np-workspace" aria-label="Workspace"></select><span style="flex:1"></span><span class="np-tree-tools"><button type="button" data-action="new-file" data-i18n="newFile" data-i18n-mode="title">${PLUS_ICON}</button><button type="button" data-action="new-folder" data-i18n="newFolder" data-i18n-mode="title">${FOLDER_PLUS_ICON}</button><button type="button" class="np-danger" data-action="delete" data-i18n="delete" data-i18n-mode="title">${CLOSE_ICON}</button></span></div><div class="np-nodes" data-root="true"></div><div class="np-tree-foot"><button type="button" data-action="settings" data-i18n="settings" data-i18n-mode="label">${SETTINGS_ICON}<span data-i18n="settings"></span></button><button type="button" data-action="close" data-i18n="close" data-i18n-mode="label">${CLOSE_ICON}<span data-i18n="close"></span></button></div></aside>
       <div class="np-editor">
-        <div class="np-path"><span class="np-pathname"></span><button type="button" data-action="view">\u6E32\u67D3</button><button type="button" data-action="copy">\u590D\u5236\u8DEF\u5F84</button><button type="button" data-action="history">\u5386\u53F2\u7248\u672C</button><button type="button" data-action="settings">\u8BBE\u7F6E</button><button type="button" data-action="close">\u6536\u56DE</button></div>
-        <div class="np-toolbar">${["paragraph", "h1", "h2", "h3", "bold", "italic", "strike", "bullet", "numbered", "task", "quote", "link"].map((kind) => `<button type="button" data-format="${kind}">${kind}</button>`).join("")}<button type="button" data-action="image">\u56FE\u7247</button></div>
+        <div class="np-path"><span class="np-pathname"></span><span class="np-modes" role="group"><button type="button" data-action="view" data-view="source" data-i18n="source"></button><button type="button" data-action="view" data-view="rendered" data-i18n="preview"></button></span><button type="button" data-action="rename" data-i18n="rename"></button></div>
+        <div class="np-toolbar">${FORMAT_KINDS.map((kind) => `<button type="button" data-format="${kind}" data-format-kind="${kind}"></button>`).join("")}<button type="button" data-action="image" data-i18n="image"></button></div>
         <textarea class="np-write" placeholder="Write markdown... Type / for blocks."></textarea>
         <div class="np-slash" hidden></div>
         <div class="np-read" hidden></div>
         <div class="np-error" hidden></div>
+        <footer class="np-footer"><span class="np-sync"><i class="np-beat" data-state="idle"></i><span class="np-status-text"></span></span><span class="np-footer-actions"><button type="button" data-action="copy" data-i18n="copyPath"></button><button type="button" data-action="history" data-i18n="history"></button><button type="button" data-action="save-version" data-i18n="saveVersion"></button><button type="button" class="np-danger" data-action="clear-file" data-i18n="clearFile"></button></span></footer>
       </div>
     </div>
+    <div class="np-resize" data-edge="n"></div><div class="np-resize" data-edge="s"></div><div class="np-resize" data-edge="e"></div><div class="np-resize" data-edge="w"></div><div class="np-resize" data-edge="nw"></div><div class="np-resize" data-edge="ne"></div><div class="np-resize" data-edge="sw"></div><div class="np-resize" data-edge="se"></div>
     <div class="np-dialog" hidden><div class="np-card"></div></div>
     <input class="np-file" type="file" accept="image/png,image/jpeg,image/gif,image/webp" hidden>
   `;
+    const dialogMask = must(panel, ".np-dialog");
     const style = document.createElement("style");
     style.textContent = STYLE;
     host.append(style);
+    const text = () => copyFor(language.current());
+    function applyCopy() {
+      const copy = text();
+      for (const node of panel.querySelectorAll("[data-i18n]")) {
+        const value = copy[node.dataset.i18n];
+        if (typeof value !== "string") continue;
+        if (node.dataset.i18nMode === "title" || node.dataset.i18nMode === "label") {
+          node.title = value;
+          node.setAttribute("aria-label", value);
+        }
+        if (node.dataset.i18nMode !== "title" && node.dataset.i18nMode !== "label") node.textContent = value;
+      }
+      for (const node of panel.querySelectorAll("[data-format-kind]")) {
+        const kind = node.dataset.formatKind;
+        node.textContent = copy.formats[kind] ?? kind.toUpperCase();
+      }
+      panel.querySelector(".np-modes")?.setAttribute("aria-label", copy.viewGroup);
+      write().placeholder = copy.placeholder;
+      paintStatus();
+    }
     const state = {
       db: (
         /** @type {IDBDatabase | null} */
@@ -632,7 +956,9 @@ window.__ModuleLoader__.load({
         /** @type {number | undefined} */
         void 0
       ),
-      dirty: false
+      dirty: false,
+      sync: { phase: "idle", at: null, detail: "" },
+      collapsed: /* @__PURE__ */ new Set()
     };
     const write = () => (
       /** @type {HTMLTextAreaElement} */
@@ -643,7 +969,42 @@ window.__ModuleLoader__.load({
       const node = must(panel, ".np-error");
       node.hidden = false;
       const full = error?.name === "QuotaExceededError";
-      node.textContent = full ? "\u7A7A\u95F4\u4E0D\u591F\uFF0C\u8FD9\u6B21\u6CA1\u6709\u5199\u5165\u3002" : error instanceof Error ? error.message : String(error);
+      const message = full ? text().quota : error instanceof Error ? error.message : String(error);
+      node.textContent = message;
+      setSync("error", message);
+    }
+    function setSync(phase, detail = "") {
+      state.sync = { phase, at: Date.now(), detail };
+      paintStatus();
+    }
+    function paintStatus() {
+      const beat = panel.querySelector(".np-beat");
+      const label = panel.querySelector(".np-status-text");
+      if (!beat || !label) return;
+      beat.dataset.state = state.sync.phase;
+      const time = state.sync.at ? new Date(state.sync.at).toLocaleTimeString() : "";
+      const status = text().status;
+      const value = status[state.sync.phase];
+      label.textContent = typeof value === "function" ? value(state.sync.phase === "error" ? state.sync.detail : time) : value ?? status.idle;
+    }
+    function workspaceCatalog() {
+      const snapshot = workspaces.current();
+      return {
+        items: snapshot.items ?? [],
+        currentId: snapshot.currentId ?? null
+      };
+    }
+    function activeWorkspace() {
+      const choice = state.ui.workspaceChoice ?? "all";
+      if (choice === "all") return { mode: "all", id: null };
+      if (choice === "unassigned") return { mode: "one", id: null };
+      if (choice === "current") return { mode: "one", id: workspaceCatalog().currentId };
+      return { mode: "one", id: choice };
+    }
+    function workspaceTitle(id) {
+      const copy = text();
+      if (!id) return copy.unassigned;
+      return workspaceCatalog().items.find((item) => item.workspaceId === id)?.title || copy.removedWorkspace;
     }
     function pathOf(id) {
       const names = [];
@@ -656,25 +1017,50 @@ window.__ModuleLoader__.load({
       }
       return `/${names.join("/")}`;
     }
+    function clamp(value, min, max) {
+      return Math.min(Math.max(value, min), Math.max(min, max));
+    }
     function place(node, x, y, fallbackRight) {
-      const bounds = layer.getBoundingClientRect();
       const width = node.offsetWidth || 36;
       const height = node.offsetHeight || 36;
-      const left = x ?? Math.max(8, bounds.width - width - (fallbackRight ?? 24));
-      const top = y ?? Math.max(8, bounds.height - height - 24);
-      node.style.left = `${Math.min(Math.max(8, left), Math.max(8, bounds.width - width - 8))}px`;
-      node.style.top = `${Math.min(Math.max(8, top), Math.max(8, bounds.height - height - 8))}px`;
+      const limitWidth = window.innerWidth;
+      const limitHeight = window.innerHeight;
+      const left = x ?? Math.max(8, limitWidth - width - (fallbackRight ?? 24));
+      const top = y ?? Math.max(8, limitHeight - height - 24);
+      node.style.left = `${Math.min(Math.max(8, left), Math.max(8, limitWidth - width - 8))}px`;
+      node.style.top = `${Math.min(Math.max(8, top), Math.max(8, limitHeight - height - 8))}px`;
+    }
+    function applyWindowSize() {
+      const maxWidth = Math.max(320, window.innerWidth - 16);
+      const maxHeight = Math.max(240, window.innerHeight - 16);
+      if (Number.isFinite(state.ui.panelW)) panel.style.width = `${clamp(state.ui.panelW, 320, maxWidth)}px`;
+      if (Number.isFinite(state.ui.panelH)) panel.style.height = `${clamp(state.ui.panelH, 240, maxHeight)}px`;
     }
     function renderTree() {
       const box = must(panel, ".np-nodes");
       const lines = [];
-      const visit = (parentId, depth) => {
-        for (const node of state.nodes.filter((item) => item.parentId === parentId).sort((a, b) => a.name.localeCompare(b.name))) {
-          lines.push(`<button class="np-node" type="button" draggable="true" data-id="${node.id}" data-active="${node.id === state.ui.currentId}" style="padding-left:${8 + depth * 14}px">${node.kind === "folder" ? "\u25B8 " : ""}${node.name}</button>`);
-          if (node.kind === "folder") visit(node.id, depth + 1);
+      const active = activeWorkspace();
+      const visit = (parentId, depth, workspaceId) => {
+        const nodes = state.nodes.filter((item) => item.parentId === parentId && (item.workspaceId ?? null) === workspaceId);
+        nodes.sort((a, b) => Number(b.pinned === true) - Number(a.pinned === true) || a.name.localeCompare(b.name));
+        for (const node of nodes) {
+          const icon = node.kind === "folder" ? FOLDER_ICON : FILE_ICON;
+          const caret = node.kind === "folder" ? `<button type="button" class="np-caret" data-caret="${node.id}" data-open="${!state.collapsed.has(node.id)}" aria-label="${text().collapse}">${CHEVRON_ICON}</button>` : "";
+          const pinLabel = node.pinned === true ? text().unpin : text().pin;
+          const pin = node.kind === "file" ? `<button type="button" data-pin="${node.id}" data-active="${node.pinned === true}" title="${pinLabel}" aria-label="${pinLabel}">${PIN_ICON}</button>` : "";
+          lines.push(`<div class="np-node" data-kind="${node.kind}" data-active="${node.id === state.ui.currentId}" style="padding-left:${8 + depth * 16}px">${caret}<button class="np-node-main" type="button" draggable="true" data-id="${node.id}"><span class="np-node-icon" aria-hidden="true">${icon}</span><span class="np-node-name">${node.name}</span></button><span class="np-node-actions">${pin}<button type="button" data-rename="${node.id}" title="${text().rename}" aria-label="${text().rename}">${EDIT_ICON}</button><button type="button" class="np-danger" data-remove="${node.id}" title="${text().delete}" aria-label="${text().delete}">${CLOSE_ICON}</button></span></div>`);
+          if (node.kind === "folder" && !state.collapsed.has(node.id)) visit(node.id, depth + 1, workspaceId);
         }
       };
-      visit(null, 0);
+      const groups = active.mode === "all" ? [...workspaceCatalog().items.map((item) => item.workspaceId), null, ...new Set(state.nodes.map((node) => node.workspaceId ?? null))] : [active.id];
+      const seen = /* @__PURE__ */ new Set();
+      for (const workspaceId of groups) {
+        const key = workspaceId ?? "";
+        if (seen.has(key)) continue;
+        seen.add(key);
+        if (active.mode === "all") lines.push(`<div class="np-group" data-active="${workspaceId === workspaceCatalog().currentId}">${workspaceTitle(workspaceId)}</div>`);
+        visit(null, 0, workspaceId);
+      }
       box.innerHTML = lines.join("");
     }
     function renderTabs() {
@@ -687,33 +1073,73 @@ window.__ModuleLoader__.load({
     }
     async function renderBody() {
       const file = current();
-      must(panel, ".np-pathname").textContent = file ? pathOf(file.id) : "\u672A\u6253\u5F00\u6587\u4EF6";
+      must(panel, ".np-pathname").textContent = file ? pathOf(file.id) : text().noFile;
       const source = write();
       const read = must(panel, ".np-read");
       if (!file) {
         source.value = "";
-        source.disabled = true;
+        source.disabled = state.db === null;
+        source.hidden = false;
         read.hidden = true;
         return;
       }
       source.disabled = state.db === null;
       if (document.activeElement !== source && !state.dirty) source.value = file.draft ?? "";
+      if ((file.draft ?? "") === "" && !state.dirty) state.view = "source";
       const rendered = state.view === "rendered";
       source.hidden = rendered;
       read.hidden = !rendered;
-      must(panel, '[data-action="view"]').textContent = rendered ? "\u6E90\u7801" : "\u6E32\u67D3";
+      for (const button of panel.querySelectorAll(".np-modes button")) {
+        button.dataset.active = String(button.dataset.view === state.view);
+      }
       if (!rendered || state.db === null) return;
-      const images = await imagesById(state.db, imageIdsIn(file.draft ?? ""));
-      const markdown = file.draft ?? "";
-      read.innerHTML = markdown === "" ? '<p class="np-placeholder">Write markdown... Type / for blocks.</p>' : renderMarkdown(markdown, images);
+      const markdown = source.value || file.draft || "";
+      const images = await imagesById(state.db, imageIdsIn(markdown));
+      read.innerHTML = markdown === "" ? `<p class="np-placeholder">${text().placeholder}</p>` : renderMarkdown(markdown, images);
+    }
+    function resolvedTheme() {
+      if (state.settings.followApp === false && (state.settings.theme === "light" || state.settings.theme === "dark")) {
+        return state.settings.theme;
+      }
+      return appTheme.scheme() === "light" ? "light" : "dark";
+    }
+    function paintWorkspaceChoices() {
+      const select = panel.querySelector(".np-workspace");
+      if (!(select instanceof HTMLSelectElement)) return;
+      const copy = text();
+      const catalog = workspaceCatalog();
+      const options = [
+        ["current", copy.currentWorkspace],
+        ["all", copy.allWorkspaces],
+        ...catalog.items.map((item) => [item.workspaceId, item.title || item.workspaceId]),
+        ["unassigned", copy.unassigned]
+      ];
+      select.replaceChildren(...options.map(([value, label]) => {
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = label;
+        return option;
+      }));
+      select.value = state.ui.workspaceChoice ?? "all";
     }
     function render() {
       panel.hidden = !state.ui.open;
-      panel.dataset.theme = state.settings.theme === "system" ? matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light" : state.settings.theme;
+      panel.dataset.theme = resolvedTheme();
+      applyCopy();
+      const tree2 = must(panel, ".np-tree");
+      const treeCollapsed = state.ui.treeOpen === false;
+      tree2.dataset.collapsed = String(treeCollapsed);
+      const treeToggle = must(panel, ".np-tree-toggle");
+      treeToggle.innerHTML = treeCollapsed ? CHEVRON_RIGHT : CHEVRON_LEFT;
+      treeToggle.title = treeCollapsed ? text().expandTree : text().collapseTree;
+      treeToggle.setAttribute("aria-label", treeToggle.title);
+      paintWorkspaceChoices();
       renderTree();
       renderTabs();
       void renderBody();
+      paintStatus();
       requestAnimationFrame(() => {
+        applyWindowSize();
         place(entry, state.ui.entryX, state.ui.entryY, 72);
         place(panel, state.ui.panelX, state.ui.panelY, 80);
       });
@@ -731,24 +1157,43 @@ window.__ModuleLoader__.load({
     }
     function selectedParent() {
       const selected = state.nodes.find((node) => node.id === state.ui.currentId);
-      return selected?.kind === "folder" ? selected.id : selected?.parentId ?? null;
+      return {
+        parentId: selected?.kind === "folder" ? selected.id : selected?.parentId ?? null,
+        workspaceId: selected ? selected.workspaceId ?? null : activeWorkspace().id
+      };
     }
     async function add(kind) {
       if (!state.db) return;
-      const parentId = selectedParent();
-      const siblings = state.nodes.filter((node2) => node2.parentId === parentId);
+      const destination = selectedParent();
+      const siblings = state.nodes.filter((node2) => node2.parentId === destination.parentId && (node2.workspaceId ?? null) === destination.workspaceId);
       const name = kind === "file" ? nextUntitled(siblings) : `folder-${siblings.length + 1}`;
-      const node = await createNode(state.db, kind, parentId, name);
+      const node = await createNode(state.db, kind, destination.parentId, name, destination.workspaceId);
       state.nodes.push(node);
-      if (kind === "file") openFile(node.id);
-      else {
+      if (kind === "file") {
+        state.view = "source";
+        openFile(node.id);
+      } else {
         state.ui.currentId = node.id;
         render();
       }
       channel?.postMessage({ type: "changed" });
+      return node;
+    }
+    async function beginWriting() {
+      if (!state.db) return;
+      if (!current()) await add("file");
+      state.view = "source";
+      state.slash = false;
+      must(panel, ".np-slash").hidden = true;
+      await renderBody();
+      const source = write();
+      source.hidden = false;
+      source.disabled = false;
+      source.focus();
     }
     function askName(title, initial, done) {
-      dialog(`<h3>${title}</h3><input name="node-name" value="${initial.replace(/"/gu, "&quot;")}"><button type="button" data-go="cancel">\u53D6\u6D88</button><button type="button" data-go="ok">\u786E\u5B9A</button>`, (card, close) => {
+      const copy = text();
+      dialog(`<h3>${title}</h3><input name="node-name" value="${initial.replace(/"/gu, "&quot;")}" aria-label="${title}"><div class="np-actions"><button type="button" data-go="cancel">${copy.cancel}</button><button type="button" data-go="ok">${copy.confirm}</button></div>`, (card, close) => {
         const input = card.querySelector('[name="node-name"]');
         input.focus();
         card.addEventListener("click", (event) => {
@@ -763,14 +1208,17 @@ window.__ModuleLoader__.load({
     }
     function scheduleSave() {
       state.dirty = true;
+      setSync("dirty");
       window.clearTimeout(state.saveTimer);
       state.saveTimer = window.setTimeout(() => {
         const file = current();
         if (!file || !state.db) return;
         const draft = write().value;
         file.draft = draft;
+        setSync("saving");
         void saveDraft(state.db, file.id, draft).then(() => {
           state.dirty = false;
+          setSync("saved");
           channel?.postMessage({ type: "changed", fileId: file.id });
         }).catch(showError);
       }, state.settings.saveDelayMs);
@@ -783,9 +1231,12 @@ window.__ModuleLoader__.load({
         await saveDraft(state.db, file.id, file.draft);
         state.dirty = false;
       }
-      const text = file.draft ?? "";
-      if (text === "" && reason === "interval") return null;
-      return commitVersion(state.db, file.id, text, reason, state.settings.versionLimit);
+      const text2 = file.draft ?? "";
+      if (text2 === "" && reason === "interval") return null;
+      setSync("saving");
+      const version = await commitVersion(state.db, file.id, text2, reason, state.settings.versionLimit);
+      setSync(version ? "committed" : "saved");
+      return version;
     }
     async function forget(id) {
       if (!state.db) return;
@@ -824,8 +1275,10 @@ window.__ModuleLoader__.load({
       }, state.settings.commitIntervalSec * 1e3);
     }
     function dialog(html, setup) {
-      const mask = must(panel, ".np-dialog");
-      const card = must(panel, ".np-card");
+      const mask = dialogMask;
+      const card = document.createElement("div");
+      card.className = "np-card";
+      must(mask, ".np-card").replaceWith(card);
       card.innerHTML = html;
       mask.hidden = false;
       setup(card, () => {
@@ -834,61 +1287,95 @@ window.__ModuleLoader__.load({
     }
     function openSettings() {
       const values = state.settings;
-      dialog(`<h3>\u4FBF\u7B7E\u8BBE\u7F6E</h3>
-      <label>\u81EA\u52A8\u4FDD\u5B58\u5EF6\u8FDF\uFF08\u6BEB\u79D2\uFF09<input name="saveDelayMs" type="number" min="200" max="5000" value="${values.saveDelayMs}"></label>
-      <label>\u81EA\u52A8\u63D0\u4EA4\u95F4\u9694\uFF08\u79D2\uFF09<input name="commitIntervalSec" type="number" min="15" max="3600" value="${values.commitIntervalSec}"></label>
-      <label>\u6BCF\u4E2A\u6587\u4EF6\u4FDD\u7559\u7248\u672C\u6570<input name="versionLimit" type="number" min="5" max="500" value="${values.versionLimit}"></label>
-      <label>\u5355\u5F20\u56FE\u7247\u4E0A\u9650\uFF08\u5B57\u8282\uFF09<input name="imageLimitBytes" type="number" min="262144" max="20971520" value="${values.imageLimitBytes}"></label>
-      <label>\u6253\u5F00\u6587\u4EF6\u65F6\u7684\u89C6\u56FE<select name="defaultView"><option value="rendered">\u6E32\u67D3</option><option value="source">\u6E90\u7801</option></select></label>
-      <label>\u6D6E\u7A97\u4E3B\u9898<select name="theme"><option value="dark">\u6DF1\u8272</option><option value="light">\u6D45\u8272</option><option value="system">\u8DDF\u968F\u5E94\u7528</option></select></label>
-      <p class="np-usage"></p>
-      <button type="button" data-go="save-version">\u4FDD\u5B58\u7248\u672C</button>
-      <button type="button" data-go="clear-file">\u6E05\u7A7A\u5F53\u524D\u6587\u4EF6</button>
-      <button type="button" data-go="reset-position">\u91CD\u7F6E\u4F4D\u7F6E</button>
-      <button type="button" data-go="clear">\u6E05\u7A7A\u5168\u90E8\u5185\u5BB9</button>
-      <button type="button" data-go="close">\u5173\u95ED</button>`, (card, close) => {
+      const copy = text();
+      dialog(`<h3>${copy.settingsTitle}</h3>
+      <section class="np-section"><h4>${copy.saveHeading}</h4>
+        <label>${copy.saveDelay}<input name="saveDelayMs" type="number" min="200" max="5000" value="${values.saveDelayMs}"></label>
+        <label>${copy.commitInterval}<input name="commitIntervalSec" type="number" min="15" max="3600" value="${values.commitIntervalSec}"></label>
+        <label>${copy.versionLimit}<input name="versionLimit" type="number" min="5" max="500" value="${values.versionLimit}"></label>
+      </section>
+      <section class="np-section"><h4>${copy.appearanceHeading}</h4>
+        <label>${copy.openAs}<select name="defaultView"><option value="rendered">${copy.rendered}</option><option value="source">${copy.source}</option></select></label>
+        <label>${copy.windowTheme}<select name="theme"><option value="dark">${copy.dark}</option><option value="light">${copy.light}</option><option value="system">${copy.followApp}</option></select></label>
+      </section>
+      <section class="np-section"><h4>${copy.imageHeading}</h4>
+        <label>${copy.imageLimit}<input name="imageLimitBytes" type="number" min="262144" max="20971520" value="${values.imageLimitBytes}"></label>
+        <p class="np-usage"></p>
+      </section>
+      <section class="np-section"><h4>${copy.positionHeading}</h4><div class="np-actions"><button type="button" data-go="reset-position">${copy.resetPosition}</button></div></section>
+      <section class="np-section"><h4>${copy.dangerHeading}</h4><p>${copy.dangerBody}</p><div class="np-actions"><button type="button" class="np-danger" data-go="clear">${copy.clearAllTitle}</button></div></section>
+      <div class="np-actions"><button type="button" data-go="close">${copy.close}</button></div>`, (card, close) => {
         card.querySelector('[name="defaultView"]').value = values.defaultView;
         card.querySelector('[name="theme"]').value = values.theme;
         if (state.db) void counts(state.db).then(async (value) => {
           const estimate = navigator.storage?.estimate ? await navigator.storage.estimate() : {};
-          must(card, ".np-usage").textContent = `\u6587\u4EF6 ${value.files}\uFF0C\u7248\u672C ${value.versions}\uFF0C\u56FE\u7247 ${value.images}\uFF0C\u5DF2\u7528 ${estimate.usage ?? "\u672A\u77E5"} \u5B57\u8282`;
+          must(card, ".np-usage").textContent = text().usage(value.files, value.versions, value.images, estimate.usage ?? text().unknown);
         });
         card.addEventListener("click", (event) => {
           const action = event.target instanceof HTMLElement ? event.target.dataset.go : void 0;
           if (action === "close") close();
-          if (action === "save-version") void commit("manual").catch(showError);
-          if (action === "clear-file") void clearCurrentFile().catch(showError);
           if (action === "reset-position") {
             state.ui.entryX = null;
             state.ui.entryY = null;
             state.ui.panelX = null;
             state.ui.panelY = null;
+            state.ui.panelW = null;
+            state.ui.panelH = null;
+            panel.style.width = "";
+            panel.style.height = "";
             render();
             void persistUi();
           }
           if (action === "clear") confirmClear(close);
         });
+        const settingNames = ["saveDelayMs", "commitIntervalSec", "versionLimit", "imageLimitBytes", "defaultView", "theme"];
         card.addEventListener("change", () => {
-          const next = {};
-          for (const input of card.querySelectorAll("input, select")) next[input.name] = input.type === "number" ? Number(input.value) : input.value;
           const merged = { ...state.settings };
           let rejected = false;
-          for (const [key, value] of Object.entries(next)) {
-            const trial = normalizeSettings({ ...state.settings, [key]: value });
-            if (trial[key] === value) merged[key] = value;
+          for (const input of card.querySelectorAll("input, select")) {
+            if (!settingNames.includes(input.name)) continue;
+            const value = input.type === "number" ? Number(input.value) : input.value;
+            const trial = normalizeSettings({ ...state.settings, [input.name]: value });
+            if (trial[input.name] === value) merged[input.name] = value;
             else rejected = true;
           }
           state.settings = merged;
-          for (const input of card.querySelectorAll("input, select")) input.value = merged[input.name];
-          if (rejected) showError(new Error("notepad kept the previous valid setting"));
+          for (const input of card.querySelectorAll("input, select")) {
+            if (settingNames.includes(input.name)) input.value = merged[input.name];
+          }
+          let note = card.querySelector(".np-setting-note");
+          if (rejected) {
+            if (!note) {
+              note = document.createElement("p");
+              note.className = "np-setting-note";
+              card.append(note);
+            }
+            note.textContent = text().invalidSetting;
+            return;
+          }
+          note?.remove();
           if (state.db) void writeSettings(state.db, merged).catch(showError);
           armCommit();
           render();
         });
       });
     }
+    function confirmClearFile() {
+      const file = current();
+      if (!file) return;
+      const copy = text();
+      dialog(`<h3>${copy.clearFileTitle}</h3><p>${copy.clearFileBody(file.name)}</p><div class="np-actions"><button type="button" data-go="cancel">${copy.cancel}</button><button type="button" class="np-danger" data-go="confirm">${copy.clear}</button></div>`, (card, close) => {
+        card.querySelector('[data-go="cancel"]').focus();
+        card.addEventListener("click", (event) => {
+          const choice = event.target instanceof HTMLElement ? event.target.dataset.go : void 0;
+          if (choice === "cancel") close();
+          if (choice === "confirm") void clearCurrentFile().then(close).catch(showError);
+        });
+      });
+    }
     function confirmClear(closeSettings) {
-      dialog('<h3>\u6E05\u7A7A\u5168\u90E8\u5185\u5BB9</h3><p>\u6587\u4EF6\u5939\u3001\u6587\u4EF6\u3001\u5386\u53F2\u7248\u672C\u548C\u56FE\u7247\u90FD\u4F1A\u5220\u9664\u3002\u6570\u636E\u53EA\u5728\u8FD9\u53F0\u6D4F\u89C8\u5668\u7684\u8FD9\u4E2A\u7F51\u7AD9\u91CC\uFF0C\u5220\u9664\u540E\u4E0D\u80FD\u6062\u590D\u3002</p><button type="button" data-go="cancel">\u53D6\u6D88</button><button type="button" data-go="confirm">\u5220\u9664\u5168\u90E8</button>', (card, close) => {
+      const copy = text();
+      dialog(`<h3>${copy.clearAllTitle}</h3><p>${copy.clearAllBody}</p><div class="np-actions"><button type="button" data-go="cancel">${copy.cancel}</button><button type="button" class="np-danger" data-go="confirm">${copy.deleteAll}</button></div>`, (card, close) => {
         card.querySelector('[data-go="cancel"]').focus();
         card.addEventListener("click", (event) => {
           const action = event.target instanceof HTMLElement ? event.target.dataset.go : void 0;
@@ -910,16 +1397,17 @@ window.__ModuleLoader__.load({
       const file = current();
       if (!file || !state.db) return;
       const versions = await versionsOf(state.db, file.id);
-      const reasons = { interval: "\u81EA\u52A8", manual: "\u624B\u52A8", restore: "\u56DE\u9000" };
-      const rows = versions.map((version) => `<button type="button" data-version="${version.id}">${new Date(version.createdAt).toLocaleString()} \xB7 ${reasons[version.reason] ?? version.reason} \xB7 ${version.markdown.length}</button>`).join("");
-      dialog(`<h3>\u5386\u53F2\u7248\u672C</h3><div class="np-versions">${rows || "<p>\u8FD8\u6CA1\u6709\u7248\u672C</p>"}</div><button type="button" data-go="close">\u5173\u95ED</button>`, (card, close) => {
+      const copy = text();
+      const rows = versions.map((version) => `<button type="button" data-version="${version.id}">${new Date(version.createdAt).toLocaleString()} \xB7 ${copy.reasons[version.reason] ?? version.reason} \xB7 ${version.markdown.length}</button>`).join("");
+      dialog(`<h3>${copy.historyTitle}</h3><div class="np-versions">${rows || `<p>${copy.noVersions}</p>`}</div><div class="np-actions"><button type="button" data-go="close">${copy.close}</button></div>`, (card, close) => {
         card.addEventListener("click", (event) => {
           const target = event.target instanceof HTMLElement ? event.target : null;
           if (target?.dataset.go === "close") close();
           const id = target?.dataset.version;
           const version = versions.find((item) => item.id === id);
           if (!version) return;
-          dialog(`<h3>\u9884\u89C8 ${new Date(version.createdAt).toLocaleString()}</h3><pre>${version.markdown.replace(/[&<>]/gu, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[char])}</pre><button type="button" data-go="back">\u8FD4\u56DE</button><button type="button" data-go="restore">\u56DE\u9000\u5230\u8FD9\u4E00\u7248</button>`, (preview, closePreview) => {
+          const previewCopy = text();
+          dialog(`<h3>${previewCopy.previewAt(new Date(version.createdAt).toLocaleString())}</h3><pre>${version.markdown.replace(/[&<>]/gu, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[char])}</pre><div class="np-actions"><button type="button" data-go="back">${previewCopy.back}</button><button type="button" data-go="restore">${previewCopy.restore}</button></div>`, (preview, closePreview) => {
             preview.addEventListener("click", (previewEvent) => {
               const action = previewEvent.target instanceof HTMLElement ? previewEvent.target.dataset.go : void 0;
               if (action === "back") closePreview();
@@ -977,7 +1465,7 @@ window.__ModuleLoader__.load({
       state.ui.open = !state.ui.open;
       render();
       void persistUi();
-      if (state.ui.open) write().focus();
+      if (state.ui.open) void beginWriting();
     });
     const tree = must(panel, ".np-tree");
     tree.addEventListener("dragstart", (event) => {
@@ -996,72 +1484,145 @@ window.__ModuleLoader__.load({
       const row = event.target instanceof HTMLElement ? event.target.closest("[data-id]") : null;
       const target = row ? state.nodes.find((node) => node.id === row.dataset.id) : null;
       const parentId = target ? target.kind === "folder" ? target.id : target.parentId : null;
-      void moveNode(state.db, id, parentId).then((moved) => {
+      const workspaceId = target ? target.workspaceId ?? null : activeWorkspace().id;
+      void moveNode(state.db, id, parentId, workspaceId).then((moved) => {
         const node = state.nodes.find((item) => item.id === id);
-        if (node) node.parentId = moved.parentId;
+        if (node) {
+          node.parentId = moved.parentId;
+          node.workspaceId = moved.workspaceId;
+        }
         render();
         channel?.postMessage({ type: "changed" });
       }).catch(showError);
     });
+    for (const handle of panel.querySelectorAll(".np-resize")) {
+      handle.addEventListener("pointerdown", (event) => {
+        if (event.button !== 0) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const edge = handle.dataset.edge ?? "";
+        const startX = event.clientX;
+        const startY = event.clientY;
+        const origin = panel.getBoundingClientRect();
+        const move = (pointer) => {
+          const dx = pointer.clientX - startX;
+          const dy = pointer.clientY - startY;
+          let width = origin.width;
+          let height = origin.height;
+          let left = origin.left;
+          let top = origin.top;
+          if (edge.includes("e")) width = origin.width + dx;
+          if (edge.includes("s")) height = origin.height + dy;
+          if (edge.includes("w")) width = origin.width - dx;
+          if (edge.includes("n")) height = origin.height - dy;
+          width = clamp(width, 320, window.innerWidth - 16);
+          height = clamp(height, 240, window.innerHeight - 16);
+          if (edge.includes("w")) left = origin.right - width;
+          if (edge.includes("n")) top = origin.bottom - height;
+          panel.style.width = `${width}px`;
+          panel.style.height = `${height}px`;
+          place(panel, left, top);
+        };
+        const up = () => {
+          window.removeEventListener("pointermove", move);
+          window.removeEventListener("pointerup", up);
+          state.ui.panelW = panel.offsetWidth;
+          state.ui.panelH = panel.offsetHeight;
+          state.ui.panelX = panel.offsetLeft;
+          state.ui.panelY = panel.offsetTop;
+          void persistUi();
+        };
+        window.addEventListener("pointermove", move);
+        window.addEventListener("pointerup", up);
+      });
+    }
     drag(must(panel, ".np-tabs"), (moved, x, y) => {
       if (!moved) return;
       state.ui.panelX = x;
       state.ui.panelY = y;
       void persistUi();
     });
+    function requestDelete(id) {
+      if (!state.db) return;
+      const node = state.nodes.find((item) => item.id === id);
+      if (!node) return;
+      const copy = text();
+      const nested = state.nodes.some((item) => item.parentId === id);
+      const title = node.kind === "folder" ? copy.deleteFolderTitle : copy.deleteFileTitle;
+      const body = node.kind === "folder" ? nested ? copy.deleteFolderBody : copy.deleteEmptyFolderBody : copy.deleteFileBody(node.name);
+      dialog(`<h3>${title}</h3><p>${body}</p><div class="np-actions"><button type="button" data-go="cancel">${copy.cancel}</button><button type="button" class="np-danger" data-go="confirm">${copy.delete}</button></div>`, (card, close) => {
+        card.querySelector('[data-go="cancel"]').focus();
+        card.addEventListener("click", (click) => {
+          const choice = click.target instanceof HTMLElement ? click.target.dataset.go : void 0;
+          if (choice === "cancel") close();
+          if (choice === "confirm") {
+            close();
+            void forget(id);
+          }
+        });
+      });
+    }
     panel.addEventListener("click", (event) => {
-      const target = event.target instanceof HTMLElement ? event.target : null;
-      if (!target) return;
+      const caret = event.target instanceof HTMLElement ? event.target.closest("[data-caret]") : null;
+      if (caret?.dataset.caret) {
+        const id2 = caret.dataset.caret;
+        if (state.collapsed.has(id2)) state.collapsed.delete(id2);
+        else state.collapsed.add(id2);
+        render();
+        return;
+      }
+      const rowAction = event.target instanceof HTMLElement ? event.target.closest("[data-rename], [data-pin], [data-remove]") : null;
+      if (rowAction?.dataset.rename && state.db) {
+        const node = state.nodes.find((item) => item.id === rowAction.dataset.rename);
+        if (node) askName(text().renameTitle, node.name, async (name) => {
+          const renamed = await renameNode(state.db, node.id, name);
+          Object.assign(node, renamed);
+          render();
+        });
+        return;
+      }
+      if (rowAction?.dataset.pin && state.db) {
+        const node = state.nodes.find((item) => item.id === rowAction.dataset.pin);
+        if (node) void pinNode(state.db, node.id, node.pinned !== true).then((updated) => {
+          Object.assign(node, updated);
+          render();
+        }).catch(showError);
+        return;
+      }
+      if (rowAction?.dataset.remove) {
+        requestDelete(rowAction.dataset.remove);
+        return;
+      }
+      const target = event.target instanceof Element ? event.target.closest("[data-action], [data-format], [data-tab], [data-close], [data-id]") : null;
+      if (!(target instanceof HTMLElement)) return;
       const action = target.dataset.action;
-      if (action === "close") {
+      if (action === "close" || action === "tree") {
         state.ui.open = false;
+        write().blur();
         render();
         void persistUi();
       }
       if (action === "settings") openSettings();
-      if (action === "theme") {
-        state.settings.theme = state.settings.theme === "dark" ? "light" : "dark";
-        if (state.db) void writeSettings(state.db, state.settings);
+      if (action === "toggle-tree") {
+        state.ui.treeOpen = state.ui.treeOpen === false;
         render();
+        void persistUi();
       }
       if (action === "new-file") void add("file").catch(showError);
       if (action === "new-folder") void add("folder").catch(showError);
       if (action === "rename" && state.ui.currentId) {
         const node = state.nodes.find((item) => item.id === state.ui.currentId);
-        if (node && state.db) askName("\u91CD\u547D\u540D", node.name, async (name) => {
+        if (node && state.db) askName(text().renameTitle, node.name, async (name) => {
           const renamed = await renameNode(state.db, node.id, name);
           Object.assign(node, renamed);
           render();
         });
       }
-      if (action === "delete" && state.ui.currentId && state.db) {
-        const id2 = state.ui.currentId;
-        const node = state.nodes.find((item) => item.id === id2);
-        const nested = state.nodes.some((item) => item.parentId === id2);
-        if (node?.kind === "folder" && nested) {
-          dialog('<h3>\u5220\u9664\u6587\u4EF6\u5939</h3><p>\u8FD9\u4E2A\u6587\u4EF6\u5939\u91CC\u8FD8\u6709\u6587\u4EF6\u6216\u5B50\u6587\u4EF6\u5939\u3002\u786E\u8BA4\u540E\u4F1A\u4E00\u5E76\u5220\u9664\uFF0C\u5305\u62EC\u5B83\u4EEC\u7684\u5386\u53F2\u7248\u672C\u3002</p><button type="button" data-go="cancel">\u53D6\u6D88</button><button type="button" data-go="confirm">\u5220\u9664</button>', (card, close) => {
-            card.querySelector('[data-go="cancel"]').focus();
-            card.addEventListener("click", (click) => {
-              const choice = click.target instanceof HTMLElement ? click.target.dataset.go : void 0;
-              if (choice === "cancel") close();
-              if (choice === "confirm") {
-                close();
-                void forget(id2);
-              }
-            });
-          });
-        } else void forget(id2);
-      }
-      if (action === "clear-file") void clearCurrentFile().catch(showError);
-      if (action === "tree") {
-        const column = must(panel, ".np-tree");
-        const hidden = column.dataset.collapsed === "true";
-        column.dataset.collapsed = hidden ? "false" : "true";
-        column.style.display = hidden ? "" : "none";
-        target.textContent = hidden ? "\u6536\u8D77" : "\u6587\u4EF6";
-      }
-      if (action === "view") {
-        state.view = state.view === "rendered" ? "source" : "rendered";
+      if (action === "delete" && state.ui.currentId) requestDelete(state.ui.currentId);
+      if (action === "clear-file") confirmClearFile();
+      if (action === "save-version") void commit("manual").catch(showError);
+      if (action === "view" && target.dataset.view) {
+        state.view = target.dataset.view === "rendered" ? "rendered" : "source";
         void renderBody();
       }
       if (action === "copy") void navigator.clipboard?.writeText(must(panel, ".np-pathname").textContent ?? "");
@@ -1082,7 +1643,8 @@ window.__ModuleLoader__.load({
         render();
         void persistUi();
       } else if (target.dataset.tab) openFile(tab);
-      const id = target.dataset.id;
+      const row = target.closest("[data-id]");
+      const id = row?.dataset.id;
       if (id) {
         const node = state.nodes.find((item) => item.id === id);
         if (node?.kind === "file") openFile(id);
@@ -1092,9 +1654,20 @@ window.__ModuleLoader__.load({
         }
       }
     });
-    const slashKinds = ["paragraph", "h1", "h2", "h3", "bold", "italic", "strike", "bullet", "numbered", "task", "quote", "link"];
+    must(panel, ".np-workspace").addEventListener("change", (event) => {
+      const select = event.target;
+      if (!(select instanceof HTMLSelectElement)) return;
+      state.ui.workspaceChoice = select.value;
+      state.ui.currentId = null;
+      render();
+      void persistUi();
+    });
     const slashMenu = must(panel, ".np-slash");
-    slashMenu.innerHTML = [...slashKinds, "image"].map((kind) => `<button type="button" data-slash="${kind}">${kind}</button>`).join("");
+    function paintSlash() {
+      const copy = text();
+      slashMenu.innerHTML = [...FORMAT_KINDS, "image"].map((kind) => `<button type="button" data-slash="${kind}">${kind === "image" ? copy.image : copy.formats[kind] ?? kind.toUpperCase()}</button>`).join("");
+    }
+    paintSlash();
     function slashOpen() {
       const source = write();
       const before = source.value.slice(0, source.selectionStart);
@@ -1133,6 +1706,11 @@ window.__ModuleLoader__.load({
       state.slash = false;
       slashMenu.hidden = true;
     });
+    must(panel, ".np-read").addEventListener("pointerdown", (event) => {
+      if (event.target instanceof HTMLElement && event.target.closest("a")) return;
+      event.preventDefault();
+      void beginWriting();
+    });
     panel.addEventListener("click", (event) => {
       if (!(event.target instanceof HTMLElement) || event.target.closest(".np-slash")) return;
       if (state.slash && event.target !== write()) {
@@ -1151,7 +1729,9 @@ window.__ModuleLoader__.load({
       void storeImage(state.db, file, state.settings.imageLimitBytes).then((image) => {
         const source = write();
         source.setRangeText(`![${file.name}](notepad-image:${image.id})`, source.selectionStart, source.selectionEnd, "end");
+        state.view = "rendered";
         scheduleSave();
+        void renderBody();
       }).catch(showError);
     });
     function insertStoredImage(file) {
@@ -1159,7 +1739,7 @@ window.__ModuleLoader__.load({
       void storeImage(state.db, file, state.settings.imageLimitBytes).then((image) => {
         const source = write();
         source.setRangeText(`![${file.name || "image"}](notepad-image:${image.id})`, source.selectionStart, source.selectionEnd, "end");
-        state.view = "source";
+        state.view = "rendered";
         scheduleSave();
         void renderBody();
       }).catch(showError);
@@ -1181,7 +1761,9 @@ window.__ModuleLoader__.load({
       void storeImage(state.db, image, state.settings.imageLimitBytes).then((stored) => {
         const source = write();
         source.setRangeText(`![image](notepad-image:${stored.id})`, source.selectionStart, source.selectionEnd, "end");
+        state.view = "rendered";
         scheduleSave();
+        void renderBody();
       }).catch(showError);
     });
     document.addEventListener("visibilitychange", () => {
@@ -1191,7 +1773,7 @@ window.__ModuleLoader__.load({
     const channel = typeof BroadcastChannel === "function" ? new BroadcastChannel(CHANNEL) : null;
     channel?.addEventListener("message", (event) => {
       if (state.dirty && event.data?.fileId === state.ui.currentId) {
-        showError(new Error("\u5176\u4ED6\u6807\u7B7E\u9875\u5DF2\u66F4\u65B0\u8FD9\u4E2A\u6587\u4EF6"));
+        showError(new Error(text().otherTab));
         return;
       }
       if (state.db) void loadSnapshot(state.db).then((snapshot) => {
@@ -1200,12 +1782,29 @@ window.__ModuleLoader__.load({
         render();
       });
     });
+    const stop = appTheme.subscribe(() => render());
+    const stopThemeInner = typeof stop === "function" ? stop : () => {
+    };
+    const languageStop = language.subscribe(() => {
+      paintSlash();
+      render();
+    });
+    const stopLanguage = typeof languageStop === "function" ? languageStop : () => {
+    };
+    const workspaceStop = workspaces.subscribe(() => render());
+    const stopWorkspaces = typeof workspaceStop === "function" ? workspaceStop : () => {
+    };
     const api = {
+      stopTheme() {
+        stopThemeInner();
+        stopLanguage();
+        stopWorkspaces();
+      },
       toggle() {
         state.ui.open = !state.ui.open;
         render();
         void persistUi();
-        if (state.ui.open) write().focus();
+        if (state.ui.open) void beginWriting();
       },
       setShortcut(label, keys) {
         entry.title = label;
@@ -1232,6 +1831,14 @@ window.__ModuleLoader__.load({
       state.settings = { ...defaults, ...snapshot.settings };
       state.ui = { ...state.ui, ...snapshot.ui, tabs: snapshot.ui.tabs ?? [] };
       state.view = state.settings.defaultView;
+      if (!state.nodes.some((node) => node.kind === "file")) {
+        const node = await createNode(state.db, "file", null, "untitled.md", activeWorkspace().id);
+        state.nodes.push(node);
+        state.ui.tabs = [node.id];
+        state.ui.currentId = node.id;
+        state.view = "source";
+        await writeUi(state.db, state.ui);
+      }
       armCommit();
       render();
       void navigator.storage?.persist?.();
@@ -1241,21 +1848,12 @@ window.__ModuleLoader__.load({
   }
 
   // src/client/index.js
-  var inject = ["slots", "shortcuts"];
-  var SHORTCUT = {
-    id: "notepad.toggle",
-    defaults: {
-      "web:macos": { code: "KeyA", modifiers: ["primary", "alt", "shift"] },
-      "web:windows": { code: "KeyA", modifiers: ["primary", "alt"] }
-    }
-  };
+  var inject = ["slots", "shortcuts", "theme", "locale", "workspaces", "sessions"];
   function shortcutLabel(ctx) {
-    const entry = ctx.shortcuts.catalog.getSnapshot().find((item) => item.id === SHORTCUT.id);
-    const keys = entry?.keys?.join(ctx.shortcuts.platform === "windows" ? " + " : "") ?? "";
-    return {
-      text: keys ? `Show \u4FBF\u7B7E (${keys})` : "Show \u4FBF\u7B7E",
-      aria: entry?.aria
-    };
+    const windows = ctx.shortcuts.platform === "windows";
+    const keys = windows ? "Ctrl+E 1" : "\u2318E1";
+    const title = ctx.locale.getSnapshot().active?.startsWith("zh") ? "\u663E\u793A\u4FBF\u7B7E" : "Show notepad";
+    return { text: `${title} (${keys})`, aria: windows ? "Control+E+1" : "Meta+E+1" };
   }
   function apply(ctx, config = {}) {
     const defaults = normalizeSettings(config);
@@ -1268,7 +1866,7 @@ window.__ModuleLoader__.load({
         defaults,
         label: () => shortcutLabel(ctx).text,
         shortcutKeys: () => shortcutLabel(ctx).aria,
-        subscribeShortcut: (listener) => ctx.shortcuts.catalog.subscribe(listener),
+        subscribeShortcut: (listener) => ctx.on("locale/change", listener),
         ready: (next) => {
           api = next;
         }
@@ -1278,27 +1876,59 @@ window.__ModuleLoader__.load({
       import_react.default.useEffect(() => {
         const element = ref.current;
         if (!element) return void 0;
-        const mounted = mountNotepad(element, initial);
+        const mounted = mountNotepad(element, initial, {
+          scheme: () => ctx.theme.getTheme().colorScheme === "light" ? "light" : "dark",
+          subscribe: (listener) => ctx.on("theme/change", listener)
+        }, {
+          current: () => ctx.locale.getSnapshot().active,
+          subscribe: (listener) => ctx.on("locale/change", listener)
+        }, {
+          current: () => {
+            const snapshot = ctx.workspaces?.getSnapshot?.() ?? { items: [] };
+            const session = ctx.sessions?.getSnapshot?.()?.current;
+            const currentId = session ? snapshot.items.find((item) => item.sessionIds?.includes(session.id))?.workspaceId ?? null : null;
+            return { items: snapshot.items ?? [], currentId };
+          },
+          subscribe: (listener) => ctx.workspaces?.subscribe?.(listener) ?? (() => {
+          })
+        });
         mounted.setShortcut(label(), shortcutKeys());
         ready(mounted);
         const stop = subscribeShortcut(() => mounted.setShortcut(label(), shortcutKeys()));
         return () => {
           stop();
+          mounted.stopTheme();
           ready(void 0);
           element.replaceChildren();
         };
       }, []);
       return import_react.default.createElement("div", { ref, "data-nano-notepad": "root" });
     }));
-    ctx.effect(() => ctx.shortcuts.register({
-      id: SHORTCUT.id,
-      label: () => "Show \u4FBF\u7B7E",
-      aliases: ["notepad", "nano notepad"],
-      defaults: SHORTCUT.defaults,
-      regions: ["page", "editable"],
-      modals: [],
-      resolve: ({ modal }) => modal !== null ? { status: "pass" } : { status: "handled", run: () => api?.toggle() }
-    }));
+    ctx.effect(() => {
+      let letterHeld = false;
+      const primaryDown = (event) => ctx.shortcuts.platform === "windows" ? event.ctrlKey && !event.metaKey : event.metaKey && !event.ctrlKey;
+      const down = (event) => {
+        if (event.isComposing) return;
+        if (event.code === "KeyE") {
+          letterHeld = primaryDown(event) && !event.altKey && !event.shiftKey;
+          return;
+        }
+        if (!letterHeld || event.code !== "Digit1" || event.repeat) return;
+        if (!primaryDown(event) || event.altKey || event.shiftKey) return;
+        event.preventDefault();
+        event.stopPropagation();
+        api?.toggle();
+      };
+      const up = (event) => {
+        if (event.code === "KeyE" || event.key === "Meta" || event.key === "Control") letterHeld = false;
+      };
+      document.addEventListener("keydown", down, true);
+      document.addEventListener("keyup", up, true);
+      return () => {
+        document.removeEventListener("keydown", down, true);
+        document.removeEventListener("keyup", up, true);
+      };
+    });
   }
 
 	exports.apply = apply;

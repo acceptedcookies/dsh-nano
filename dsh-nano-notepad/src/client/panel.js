@@ -67,7 +67,7 @@ const STYLE = `
 /* window chrome: two skins share the frame, glyphs differ per os */
 .np-chrome { display: inline-flex; align-items: center; gap: 8px; flex: none; }
 .np-chrome button { display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 0; background: transparent; cursor: pointer; }
-.np-window[data-chrome="mac"] .np-chrome { gap: 8px; }
+.np-window[data-chrome="mac"] .np-chrome { gap: 8px; margin-right: 8px; }
 .np-window[data-chrome="mac"] .np-chrome button { width: 13px; height: 13px; border-radius: 50%; position: relative; }
 .np-window[data-chrome="mac"] .np-chrome button.np-chrome-min { background: #ffbd4e; }
 .np-window[data-chrome="mac"] .np-chrome button.np-chrome-max { background: #35c759; }

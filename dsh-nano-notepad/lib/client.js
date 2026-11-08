@@ -659,6 +659,11 @@ window.__ModuleLoader__.load({
       resetPosition: "\u91CD\u7F6E\u4F4D\u7F6E",
       dangerBody: "\u6E05\u7A7A\u4F1A\u5220\u9664\u5168\u90E8\u6587\u4EF6\u5939\u3001\u6587\u4EF6\u3001\u7248\u672C\u548C\u56FE\u7247\uFF0C\u4E0D\u80FD\u6062\u590D\u3002",
       usage: (files, versions, images, bytes) => `\u6587\u4EF6 ${files}\uFF0C\u7248\u672C ${versions}\uFF0C\u56FE\u7247 ${images}\uFF0C\u5DF2\u7528 ${bytes} \u5B57\u8282`,
+      usageFiles: "\u6587\u4EF6",
+      usageVersions: "\u7248\u672C",
+      usageImages: "\u56FE\u7247",
+      storageHeading: "\u5B58\u50A8\u7528\u91CF",
+      storageHint: "\u5F53\u524D\u5DE5\u4F5C\u533A\u4FBF\u7B7E\u5360\u7528\u7684\u672C\u5730\u7A7A\u95F4",
       unassigned: "\u672A\u5F52\u5C5E",
       removedWorkspace: "\u5DF2\u5220\u9664\u7684\u5DE5\u4F5C\u533A",
       currentWorkspace: "\u5F53\u524D\u5DE5\u4F5C\u533A",
@@ -672,7 +677,14 @@ window.__ModuleLoader__.load({
       saveVersionShortcut: "\u4FDD\u5B58\u7248\u672C (\u2318S)",
       unitBytes: "\u5B57\u8282",
       loadRemote: "\u8F7D\u5165\u6700\u65B0",
-      keepMine: "\u4FDD\u7559\u6211\u7684"
+      keepMine: "\u4FDD\u7559\u6211\u7684",
+      reset: "\u91CD\u7F6E",
+      saveDelayHint: "\u952E\u5165\u505C\u6B62\u540E\u81EA\u52A8\u4FDD\u5B58\u8349\u7A3F\u7684\u7B49\u5F85\u65F6\u957F\uFF08200\u20135000\uFF09",
+      commitIntervalHint: "\u81EA\u52A8\u63D0\u4EA4\u5386\u53F2\u7248\u672C\u7684\u95F4\u9694\uFF0815\u20133600\uFF09",
+      versionLimitHint: "\u6BCF\u4E2A\u6587\u4EF6\u6700\u591A\u4FDD\u7559\u7684\u5386\u53F2\u7248\u672C\u6570\uFF085\u2013500\uFF09",
+      openAsHint: "\u65B0\u6253\u5F00\u7684\u4FBF\u7B7E\u9ED8\u8BA4\u8FDB\u5165\u54EA\u4E2A\u89C6\u56FE",
+      windowThemeHint: "\u6D6E\u7A97\u4F7F\u7528\u6DF1\u8272\u3001\u6D45\u8272\uFF0C\u8FD8\u662F\u8DDF\u968F\u5E94\u7528",
+      imageLimitHint: "\u5355\u5F20\u56FE\u7247\u5141\u8BB8\u7684\u6700\u5927\u5B57\u8282\u6570\uFF080.25\u201320 MB\uFF09"
     },
     en: {
       files: "Files",
@@ -750,6 +762,11 @@ window.__ModuleLoader__.load({
       resetPosition: "Reset position",
       dangerBody: "Clearing deletes every folder, file, version, and image. It cannot be restored.",
       usage: (files, versions, images, bytes) => `${files} files, ${versions} versions, ${images} images, ${bytes} bytes used`,
+      usageFiles: "files",
+      usageVersions: "versions",
+      usageImages: "images",
+      storageHeading: "Storage used",
+      storageHint: "Local space taken by this workspace\u2019s notes",
       unknown: "unknown",
       unassigned: "Unassigned",
       removedWorkspace: "Removed workspace",
@@ -764,7 +781,14 @@ window.__ModuleLoader__.load({
       saveVersionShortcut: "Save version (\u2318S)",
       unitBytes: "bytes",
       loadRemote: "Load latest",
-      keepMine: "Keep mine"
+      keepMine: "Keep mine",
+      reset: "Reset",
+      saveDelayHint: "Wait after typing stops before the draft autosaves (200\u20135000)",
+      commitIntervalHint: "How often versions are committed automatically (15\u20133600)",
+      versionLimitHint: "Maximum history versions kept per file (5\u2013500)",
+      openAsHint: "Which view a newly opened note starts in",
+      windowThemeHint: "Float the window in dark, light, or follow the app",
+      imageLimitHint: "Largest byte size allowed for one image (0.25\u201320 MB)"
     }
   };
   function languageOf(language) {
@@ -926,16 +950,43 @@ window.__ModuleLoader__.load({
 .np-dialog { position: absolute; inset: 0; z-index: 20; border-radius: inherit; background: var(--dsw-alias-bg-mask-1); display: flex; align-items: center; justify-content: center; padding: 16px; pointer-events: auto; }
 .np-slash { background: var(--dsw-menu-surface-fill, var(--dsw-alias-bg-layer-3)); color: var(--dsw-alias-label-primary); border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-lg); box-shadow: var(--dsw-elevation-prominent); backdrop-filter: var(--dsw-menu-backdrop-filter); }
 .np-card { box-sizing: border-box; display: flex; flex-direction: column; width: min(560px, calc(100% - 32px)); max-height: calc(100% - 32px); padding: 0; overflow: hidden; border: 0; border-radius: var(--dsw-radius-panel, 28px); background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-primary); box-shadow: var(--dsw-elevation-prominent); }
-.np-card-scroll { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 16px; padding: 22px 24px 24px; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; }
+.np-card-scroll { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 12px 24px 24px; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; }
+.np-card-scroll > * + * { margin-top: 10px; }
+.np-card-scroll h3 { display: none; }
+.np-card-head { flex: none; display: flex; align-items: center; gap: 12px; padding: 14px 12px 12px 24px; border-bottom: 1px solid var(--dsw-alias-border-l2); }
+.np-card-head h3 { flex: 1; margin: 0; font-size: 15px; font-weight: 600; }
+.np-card-close { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border: 0; background: transparent; color: var(--dsw-alias-label-tertiary); border-radius: var(--dsw-radius-sm); cursor: pointer; font-size: 16px; line-height: 1; }
+.np-card-close:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 .np-card-scroll::-webkit-scrollbar { width: 8px; }
 .np-card-scroll::-webkit-scrollbar-thumb { background: var(--dsw-alias-scrollbar-bg-l1, var(--dsw-alias-border-l3)); border-radius: 4px; }
 .np-card h3 { margin: 0; font-size: 16px; line-height: 24px; font-weight: 600; }
 .np-card p, .np-card pre { margin: 0; color: var(--dsw-alias-label-secondary); line-height: 22px; }
 .np-card pre { max-height: 240px; overflow: auto; white-space: pre-wrap; font-family: var(--dsw-font-markdown-code-font-family); }
 .np-card label { display: flex; flex-direction: column; align-items: stretch; gap: 6px; margin: 0; color: var(--dsw-alias-label-secondary); }
-.np-card label.np-field { flex-direction: row; align-items: center; gap: 12px; }
-.np-card .np-field .np-field-label { flex: 1; min-width: 0; }
-.np-card .np-field input[type="number"], .np-card .np-field select { width: auto; max-width: 160px; flex: none; }
+/* DSH-native settings row: title + description left, control right, hairline row */
+.np-card .np-field { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 44px; padding: 6px 0; margin: 0; }
+.np-card .np-field + .np-field { border-top: 1px solid var(--dsw-alias-border-l2); }
+.np-card .np-field-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.np-card .np-field-name { color: var(--dsw-alias-label-primary); line-height: 20px; }
+.np-card .np-field-desc { font-size: 12px; color: var(--dsw-alias-label-tertiary); line-height: 18px; }
+/* pill number input with embedded unit */
+.np-card input[type="number"] { appearance: none; -webkit-appearance: none; }
+.np-card input::-webkit-outer-spin-button, .np-card input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.np-num { flex: none; display: inline-flex; align-items: center; gap: 6px; background: var(--dsw-alias-interactive-bg-hover); border: 1px solid transparent; border-radius: var(--dsw-radius-full, 999px); padding: 3px 12px; color: var(--dsw-alias-label-primary); }
+.np-num:focus-within { border-color: var(--dsw-focus-ring-color, var(--dsw-alias-link)); }
+.np-num input { width: auto; min-width: 4.5em; field-sizing: content; border: 0; background: transparent; padding: 2px 0; font: inherit; color: inherit; text-align: right; }
+.np-num input:focus { outline: none; }
+.np-num .np-num-unit { color: var(--dsw-alias-label-tertiary); font-size: 12px; white-space: nowrap; }
+/* pill select + popover */
+.np-sel { flex: none; display: inline-flex; align-items: center; gap: 8px; max-width: 220px; background: var(--dsw-alias-interactive-bg-hover); border: 1px solid transparent; border-radius: var(--dsw-radius-full, 999px); padding: 5px 10px 5px 14px; font: inherit; color: var(--dsw-alias-label-primary); cursor: pointer; }
+.np-sel:hover { background: var(--dsw-alias-interactive-bg-active); }
+.np-sel span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.np-sel svg { width: 12px; height: 12px; fill: var(--dsw-alias-label-tertiary); flex: none; }
+.np-menu { position: absolute; min-width: 140px; max-width: 260px; max-height: 260px; overflow-y: auto; padding: 4px; display: flex; flex-direction: column; gap: 1px; z-index: 30; background: var(--dsw-menu-surface-fill, var(--dsw-alias-bg-layer-3)); color: var(--dsw-alias-label-primary); border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-lg); box-shadow: var(--dsw-elevation-prominent); backdrop-filter: var(--dsw-menu-backdrop-filter); }
+.np-menu button { display: flex; align-items: center; gap: 8px; width: 100%; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); padding: 6px 8px; font: inherit; text-align: left; cursor: pointer; }
+.np-menu button:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+.np-menu button[data-selected="true"] { color: var(--dsw-alias-label-primary); }
+.np-menu button[data-selected="true"]::after { content: '\u2713'; margin-left: auto; color: var(--dsw-alias-link); font-size: 12px; }
 .np-card input, .np-card select { width: 100%; box-sizing: border-box; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); padding: 8px 10px; font: inherit; }
 .np-card input[type="number"] { max-width: 200px; }
 .np-card input:focus, .np-card select:focus { outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, var(--dsw-alias-link)); }
@@ -993,8 +1044,11 @@ window.__ModuleLoader__.load({
 .np-beat { transition: background-color .2s ease; }
 @keyframes np-pulse { 50% { opacity: .25; } }
 .np-footer-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
-.np-section { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--dsw-alias-border-l2); }
+.np-section { border-top: 1px solid var(--dsw-alias-border-l2); padding-top: 2px; }
+.np-card-scroll > .np-section:first-child { border-top: 0; padding-top: 0; }
 .np-section h4 { margin: 0 0 8px; font-size: 12px; font-weight: 600; color: var(--dsw-alias-label-tertiary); }
+/* informational row: same row height/rhythm, label left, value right */
+.np-stat { display: inline-flex; align-items: baseline; gap: 6px; flex: none; color: var(--dsw-alias-label-secondary); font-size: inherit; white-space: nowrap; }
 /* --- motion: quiet utility language \u2014 opacity/transform only, \u2264200ms --- */
 .np-tab, .np-tab-x, .np-tab-minimize, .np-tool, .np-caret, .np-node-main, .np-node-actions button, .np-tree-tools button, .np-tree-toggle, .np-ws-btn, .np-ws-item, .np-node, .np-versions button, .np-slash button, .np-entry { transition: background-color .12s ease, color .12s ease, border-color .12s ease, box-shadow .12s ease; }
 .np-caret svg, .np-ws-caret svg { transition: transform .15s ease; }
@@ -1350,6 +1404,12 @@ window.__ModuleLoader__.load({
       return appTheme.scheme() === "light" ? "light" : "dark";
     }
     const CHECK_ICON = googleIcon("M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z");
+    function formatBytes(bytes) {
+      if (typeof bytes !== "number" || Number.isNaN(bytes)) return String(bytes);
+      if (bytes < 1024) return `${bytes} B`;
+      if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
+      return `${(bytes / 1048576).toFixed(1)} MB`;
+    }
     function workspaceOptions() {
       const copy = text();
       const catalog = workspaceCatalog();
@@ -1463,6 +1523,10 @@ window.__ModuleLoader__.load({
       /** @type {(() => void) | null} */
       null
     );
+    let closeMenu = (
+      /** @type {(() => void) | null} */
+      null
+    );
     let dialogSeq = 0;
     const DIALOG_PARTS = ".np-tabs, .np-body";
     function dialog(html, setup) {
@@ -1470,14 +1534,20 @@ window.__ModuleLoader__.load({
       const card = document.createElement("div");
       card.className = "np-card";
       must(mask, ".np-card").replaceWith(card);
-      card.innerHTML = `<div class="np-card-scroll">${html}</div>`;
+      card.innerHTML = `<div class="np-card-head"><h3 class="np-card-title"></h3><button type="button" class="np-card-close" aria-label="${escapeHtml(text().close)}" title="${escapeHtml(text().close)}">\xD7</button></div><div class="np-card-scroll">${html}</div>`;
       mask.setAttribute("role", "dialog");
       mask.setAttribute("aria-modal", "true");
-      const heading = card.querySelector("h3");
+      const heading = card.querySelector(".np-card-scroll h3");
+      const title = card.querySelector(".np-card-title");
       if (heading) {
-        if (!heading.id) heading.id = `np-dlg-${++dialogSeq}`;
-        mask.setAttribute("aria-labelledby", heading.id);
+        title.textContent = heading.textContent;
+        heading.remove();
+      } else {
+        title.textContent = text().settings;
       }
+      title.id = `np-dlg-${++dialogSeq}`;
+      mask.setAttribute("aria-labelledby", title.id);
+      card.querySelector(".np-card-close").addEventListener("click", () => closeDialog?.());
       const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       for (const part of panel.querySelectorAll(DIALOG_PARTS)) {
         part.inert = true;
@@ -1485,7 +1555,9 @@ window.__ModuleLoader__.load({
       }
       mask.hidden = false;
       closeSlash();
+      closeMenu?.();
       closeDialog = () => {
+        closeMenu?.();
         mask.hidden = true;
         closeDialog = null;
         for (const part of panel.querySelectorAll(DIALOG_PARTS)) {
@@ -1498,8 +1570,59 @@ window.__ModuleLoader__.load({
         closeDialog?.();
       });
       if (!card.contains(document.activeElement)) {
-        card.querySelector("input, [autofocus], button")?.focus?.();
+        card.querySelector(".np-card-scroll input, .np-card-scroll [autofocus], .np-card-scroll button, .np-card-close")?.focus?.();
       }
+    }
+    function openMenuList(anchor, items) {
+      closeMenu?.();
+      const host2 = dialogMask.hidden ? panel : dialogMask;
+      const menu = document.createElement("div");
+      menu.className = "np-menu np-pop-in";
+      menu.setAttribute("role", "listbox");
+      const mr = host2.getBoundingClientRect();
+      const ar = anchor.getBoundingClientRect();
+      menu.style.left = `${Math.max(0, ar.left - mr.left)}px`;
+      menu.style.top = `${ar.bottom - mr.top + 4}px`;
+      menu.style.minWidth = `${ar.width}px`;
+      for (const item of items) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.dataset.selected = String(!!item.selected);
+        button.textContent = item.label;
+        button.addEventListener("click", () => {
+          close();
+          item.onPick?.();
+        });
+        menu.append(button);
+      }
+      host2.append(menu);
+      anchor.setAttribute("aria-expanded", "true");
+      const close = () => {
+        if (closeMenu !== close) return;
+        closeMenu = null;
+        menu.remove();
+        anchor.setAttribute("aria-expanded", "false");
+      };
+      closeMenu = close;
+      menu.addEventListener("keydown", (event) => {
+        const buttons = [...menu.querySelectorAll("button")];
+        const at = buttons.indexOf(document.activeElement);
+        if (event.key === "ArrowDown") {
+          event.preventDefault();
+          buttons[Math.min(buttons.length - 1, at + 1)]?.focus();
+        } else if (event.key === "ArrowUp") {
+          event.preventDefault();
+          buttons[Math.max(0, at - 1)]?.focus();
+        } else if (event.key === "Home") {
+          event.preventDefault();
+          buttons[0]?.focus();
+        } else if (event.key === "End") {
+          event.preventDefault();
+          buttons[buttons.length - 1]?.focus();
+        }
+      });
+      menu.querySelector('button[data-selected="true"]')?.focus() ?? menu.querySelector("button")?.focus();
+      return close;
     }
     function askName(title, initial, done) {
       const copy = text();
@@ -1598,32 +1721,70 @@ window.__ModuleLoader__.load({
     function openSettings() {
       const values = state.settings;
       const copy = text();
+      const num = (name, unit, value, desc, range) => `
+      <div class="np-field"><div class="np-field-text"><span class="np-field-name">${escapeHtml(desc)}</span><span class="np-field-desc">${escapeHtml(range)}</span></div>
+      <span class="np-num"><input name="${name}" type="number" value="${value}"><i class="np-num-unit">${escapeHtml(unit)}</i></span></div>`;
+      const sel = (name, desc, hint, options) => `
+      <div class="np-field"><div class="np-field-text"><span class="np-field-name">${escapeHtml(desc)}</span><span class="np-field-desc">${escapeHtml(hint)}</span></div>
+      <input type="hidden" name="${name}" value="${escapeHtml(options.find((o) => o.selected)?.value ?? options[0].value)}">
+      <button type="button" class="np-sel" data-sel="${name}"><span>${escapeHtml(options.find((o) => o.selected)?.label ?? options[0].label)}</span>${CHEVRON_ICON}</button></div>`;
       dialog(`<h3>${escapeHtml(copy.settingsTitle)}</h3>
-      <section class="np-section"><h4>${escapeHtml(copy.saveHeading)}</h4>
-        <label class="np-field"><span class="np-field-label">${escapeHtml(copy.saveDelay)} <i class="np-unit">ms (200\u20135000)</i></span><input name="saveDelayMs" type="number" min="200" max="5000" value="${values.saveDelayMs}"></label>
-        <label class="np-field"><span class="np-field-label">${escapeHtml(copy.commitInterval)} <i class="np-unit">s (15\u20133600)</i></span><input name="commitIntervalSec" type="number" min="15" max="3600" value="${values.commitIntervalSec}"></label>
-        <label class="np-field"><span class="np-field-label">${escapeHtml(copy.versionLimit)} <i class="np-unit">5\u2013500</i></span><input name="versionLimit" type="number" min="5" max="500" value="${values.versionLimit}"></label>
+      <section class="np-section">
+        ${num("saveDelayMs", "ms", values.saveDelayMs, copy.saveDelay, copy.saveDelayHint)}
+        ${num("commitIntervalSec", "s", values.commitIntervalSec, copy.commitInterval, copy.commitIntervalHint)}
+        ${num("versionLimit", "", values.versionLimit, copy.versionLimit, copy.versionLimitHint)}
       </section>
-      <section class="np-section"><h4>${escapeHtml(copy.appearanceHeading)}</h4>
-        <label class="np-field"><span class="np-field-label">${escapeHtml(copy.openAs)}</span><select name="defaultView"><option value="rendered">${escapeHtml(copy.rendered)}</option><option value="source">${escapeHtml(copy.source)}</option></select></label>
-        <label class="np-field"><span class="np-field-label">${escapeHtml(copy.windowTheme)}</span><select name="theme"><option value="dark">${escapeHtml(copy.dark)}</option><option value="light">${escapeHtml(copy.light)}</option><option value="system">${escapeHtml(copy.followApp)}</option></select></label>
+      <section class="np-section">
+        ${sel("defaultView", copy.openAs, copy.openAsHint, [
+        { value: "rendered", label: copy.rendered, selected: values.defaultView === "rendered" },
+        { value: "source", label: copy.source, selected: values.defaultView === "source" }
+      ])}
+        ${sel("theme", copy.windowTheme, copy.windowThemeHint, [
+        { value: "dark", label: copy.dark, selected: values.theme === "dark" },
+        { value: "light", label: copy.light, selected: values.theme === "light" },
+        { value: "system", label: copy.followApp, selected: values.theme === "system" }
+      ])}
       </section>
-      <section class="np-section"><h4>${escapeHtml(copy.imageHeading)}</h4>
-        <label class="np-field"><span class="np-field-label">${escapeHtml(copy.imageLimit)} <i class="np-unit">${escapeHtml(copy.unitBytes)} (0.25\u201320 MB)</i></span><input name="imageLimitBytes" type="number" min="262144" max="20971520" value="${values.imageLimitBytes}"></label>
-        <p class="np-usage"></p>
+      <section class="np-section">
+        ${num("imageLimitBytes", copy.unitBytes, values.imageLimitBytes, copy.imageLimit, copy.imageLimitHint)}
+        <div class="np-field"><div class="np-field-text"><span class="np-field-name">${escapeHtml(copy.storageHeading)}</span><span class="np-field-desc">${escapeHtml(copy.storageHint)}</span></div><span class="np-stat np-usage-val"></span></div>
       </section>
-      <section class="np-section"><h4>${escapeHtml(copy.positionHeading)}</h4><div class="np-actions"><button type="button" data-go="reset-position">${escapeHtml(copy.resetPosition)}</button></div></section>
-      <section class="np-section"><h4>${escapeHtml(copy.dangerHeading)}</h4><p>${escapeHtml(copy.dangerBody)}</p><div class="np-actions"><button type="button" class="np-danger" data-go="clear">${escapeHtml(copy.clearAllTitle)}</button></div></section>
-      <div class="np-actions"><button type="button" data-go="close">${escapeHtml(copy.close)}</button></div>`, (card, close) => {
-        card.querySelector('[name="defaultView"]').value = values.defaultView;
-        card.querySelector('[name="theme"]').value = values.theme;
+      <section class="np-section">
+        <div class="np-field"><div class="np-field-text"><span class="np-field-name">${escapeHtml(copy.positionHeading)}</span><span class="np-field-desc">${escapeHtml(copy.resetPosition)}</span></div><button type="button" data-go="reset-position">${escapeHtml(copy.reset)}</button></div>
+      </section>
+      <section class="np-section">
+        <div class="np-field"><div class="np-field-text"><span class="np-field-name">${escapeHtml(copy.dangerHeading)}</span><span class="np-field-desc">${escapeHtml(copy.dangerBody)}</span></div><button type="button" class="np-danger" data-go="clear">${escapeHtml(copy.clearAllTitle)}</button></div>
+      </section>`, (card, close) => {
+        const SEL_OPTIONS = {
+          defaultView: [{ value: "rendered", label: copy.rendered }, { value: "source", label: copy.source }],
+          theme: [{ value: "dark", label: copy.dark }, { value: "light", label: copy.light }, { value: "system", label: copy.followApp }]
+        };
+        for (const button of card.querySelectorAll(".np-sel")) {
+          const name = button.dataset.sel;
+          const hidden = card.querySelector(`input[name="${name}"]`);
+          const options = SEL_OPTIONS[name] ?? [];
+          button.addEventListener("click", () => {
+            if (closeMenu) {
+              closeMenu();
+              return;
+            }
+            openMenuList(button, options.map((option) => ({
+              label: option.label,
+              selected: hidden.value === option.value,
+              onPick: () => {
+                hidden.value = option.value;
+                button.querySelector("span").textContent = option.label;
+                hidden.dispatchEvent(new Event("change", { bubbles: true }));
+              }
+            })));
+          });
+        }
         if (state.db) void counts(state.db).then(async (value) => {
           const estimate = navigator.storage?.estimate ? await navigator.storage.estimate() : {};
-          must(card, ".np-usage").textContent = text().usage(value.files, value.versions, value.images, estimate.usage ?? text().unknown);
+          must(card, ".np-usage-val").textContent = `${value.files} ${text().usageFiles} \xB7 ${value.versions} ${text().usageVersions} \xB7 ${value.images} ${text().usageImages} \xB7 ${formatBytes(estimate.usage ?? text().unknown)}`;
         });
         card.addEventListener("click", (event) => {
           const action = event.target instanceof HTMLElement ? event.target.dataset.go : void 0;
-          if (action === "close") close();
           if (action === "reset-position") {
             state.ui.entryX = null;
             state.ui.entryY = null;
@@ -2303,14 +2464,24 @@ window.__ModuleLoader__.load({
       resizeFrame = requestAnimationFrame(() => render());
     });
     on(document, "keydown", (event) => {
+      if (event.key === "Escape" && closeMenu) {
+        event.stopPropagation();
+        event.preventDefault();
+        closeMenu();
+        return;
+      }
       if (event.key === "Escape" && !dialogMask.hidden) {
         event.stopPropagation();
         closeDialog?.();
       }
     }, true);
     dialogMask.addEventListener("pointerdown", (event) => {
+      if (closeMenu && !(event.target instanceof Element && event.target.closest(".np-menu, .np-sel"))) closeMenu();
       if (event.target === dialogMask) closeDialog?.();
     });
+    on(panel, "pointerdown", (event) => {
+      if (closeMenu && !(event.target instanceof Element && event.target.closest(".np-menu, .np-sel"))) closeMenu();
+    }, true);
     dialogMask.addEventListener("keydown", (event) => {
       if (event.key !== "Tab") return;
       const card = dialogMask.querySelector(".np-card");

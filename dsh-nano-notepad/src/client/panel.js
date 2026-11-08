@@ -1128,9 +1128,11 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
   function openSettings() {
     const values = state.settings
     const copy = text()
-    const num = (name, unit, value, desc, range) => `
+    /* `factor` converts between the stored unit (ms/s) and what the input
+       * shows: display = value/factor, write-back = input×factor. */
+    const num = (name, unit, value, desc, range, factor = 1) => `
       <div class="np-field"><div class="np-field-text"><span class="np-field-name">${escapeHtml(desc)}</span><span class="np-field-desc">${escapeHtml(range)}</span></div>
-      <span class="np-num"><input name="${name}" type="number" value="${value}"><i class="np-num-unit">${escapeHtml(unit)}</i></span></div>`
+      <span class="np-num"><input name="${name}" type="number" step="${factor > 1 ? 'any' : '1'}" value="${factor > 1 ? value / factor : value}" data-factor="${factor}"><i class="np-num-unit">${escapeHtml(unit)}</i></span></div>`
     /* N-segment sliding switch — same anatomy as the toolbar view switch */
     const sw = (field, desc, hint, options) => {
       const current = field === 'autoSave' ? String(values.autoSave !== false) : String(values[field])
@@ -1147,8 +1149,8 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
           { value: 'true', label: copy.autoSaveOn },
           { value: 'false', label: copy.autoSaveOff },
         ])}
-        ${num('draftIntervalMs', 'ms', values.draftIntervalMs, copy.draftInterval, copy.draftIntervalHint)}
-        ${num('commitIntervalSec', 's', values.commitIntervalSec, copy.commitInterval, copy.commitIntervalHint)}
+        ${num('draftIntervalMs', copy.unitSeconds, values.draftIntervalMs, copy.draftInterval, copy.draftIntervalHint, 1000)}
+        ${num('commitIntervalSec', copy.unitMinutes, values.commitIntervalSec, copy.commitInterval, copy.commitIntervalHint, 60)}
         ${num('versionLimit', '', values.versionLimit, copy.versionLimit, copy.versionLimitHint)}
       </section>
       <section class="np-section">
@@ -1247,14 +1249,15 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
         let rejected = false
         for (const input of el.querySelectorAll('input, select')) {
           if (!settingNames.includes(input.name)) continue
-          const value = input.type === 'number' ? Number(input.value) : input.value
+          const factor = Number(input.dataset.factor ?? 1) || 1
+          const value = input.type === 'number' ? Number(input.value) * factor : input.value
           const trial = normalizeSettings({ ...state.settings, [input.name]: value })
           if (trial[input.name] === value) merged[input.name] = value
           else rejected = true
         }
         state.settings = merged
         for (const input of el.querySelectorAll('input, select')) {
-          if (settingNames.includes(input.name)) input.value = merged[input.name]
+          if (settingNames.includes(input.name)) input.value = merged[input.name] / (Number(input.dataset.factor ?? 1) || 1)
         }
         let note = el.querySelector('.np-setting-note')
         if (rejected) {

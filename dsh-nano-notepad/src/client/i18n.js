@@ -85,6 +85,10 @@ export const COPY = {
     expand: '展开',
     editHint: '点击进入编辑',
     confirmRestore: '确认回退？',
+    minimize: '收起',
+    saveFailed: '保存没有成功',
+    saveVersionShortcut: '保存版本 (⌘S)',
+    unitBytes: '字节',
   },
   en: {
     files: 'Files',
@@ -171,6 +175,10 @@ export const COPY = {
     expand: 'Expand',
     editHint: 'Click to edit',
     confirmRestore: 'Click again to restore',
+    minimize: 'Minimize',
+    saveFailed: 'The save did not go through',
+    saveVersionShortcut: 'Save version (⌘S)',
+    unitBytes: 'bytes',
   },
 }
 

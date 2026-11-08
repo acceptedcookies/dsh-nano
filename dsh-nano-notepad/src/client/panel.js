@@ -40,6 +40,8 @@ const STYLE = `
 .np-entry:active { cursor: grabbing; }
 .np-entry svg { width: 18px; height: 18px; display: block; margin: auto; }
 .np-tip { position: absolute; right: 44px; top: 2px; white-space: nowrap; background: var(--dsw-alias-tooltip-bg); color: var(--dsw-alias-tooltip-label, var(--dsw-alias-label-primary)); border-radius: var(--dsw-radius-sm); padding: 4px 8px; }
+.np-entry.np-tip-left .np-tip { right: auto; left: 44px; }
+.np-unit { color: var(--dsw-alias-label-tertiary); font-style: normal; font-size: .85em; margin-inline-start: .5em; }
 .np-window { width: min(920px, calc(100vw - 48px)); height: min(640px, calc(100vh - 48px)); min-width: 320px; min-height: 240px; display: flex; flex-direction: column; background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-panel, 28px); box-shadow: var(--dsw-elevation-prominent); overflow: hidden; container-type: inline-size; container-name: np; }
 .np-resize { position: absolute; z-index: 6; pointer-events: auto; }
 .np-resize[data-edge="n"], .np-resize[data-edge="s"] { left: 16px; right: 16px; height: 10px; cursor: ns-resize; }
@@ -156,6 +158,7 @@ const STYLE = `
 .np-write:focus-visible { outline: none; box-shadow: inset 0 0 0 1px var(--dsw-alias-border-l3); }
 .np-read:focus-visible { outline: none; box-shadow: inset 0 0 0 1px var(--dsw-alias-border-l3); }
 .np-write:disabled { color: var(--dsw-alias-label-tertiary); }
+.np-tool:disabled, .np-footer-actions button:disabled { opacity: .45; pointer-events: none; }
 .np-read { box-sizing: border-box; max-width: 100%; overflow: auto; overflow-wrap: anywhere; padding: var(--np-pad-x); color: var(--dsw-alias-label-primary); cursor: text; line-height: 1.65; }
 .np-read h1 { margin: 16px 0 8px; font-size: 20px; line-height: 28px; font-weight: 600; }
 .np-read h2 { margin: 14px 0 6px; font-size: 17px; line-height: 24px; font-weight: 600; }
@@ -169,7 +172,7 @@ const STYLE = `
 .np-read a { color: var(--dsw-alias-link); }
 .np-read img { display: block; max-width: min(100%, 640px); margin: 8px 0; border-radius: var(--dsw-radius-md); }
 .np-read .missing-image { border: 1px dashed var(--dsw-alias-border-l3); padding: 2px 4px; }
-.np-read .np-placeholder { color: var(--dsw-alias-label-tertiary); }
+.np-read .np-placeholder { color: var(--dsw-alias-label-secondary); }
 .np-dialog { position: absolute; inset: 0; z-index: 20; border-radius: inherit; background: var(--dsw-alias-bg-mask-1); display: flex; align-items: center; justify-content: center; padding: 16px; pointer-events: auto; }
 .np-slash { background: var(--dsw-menu-surface-fill, var(--dsw-alias-bg-layer-3)); color: var(--dsw-alias-label-primary); border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-lg); box-shadow: var(--dsw-elevation-prominent); backdrop-filter: var(--dsw-menu-backdrop-filter); }
 .np-card { box-sizing: border-box; display: flex; flex-direction: column; width: min(560px, calc(100% - 32px)); max-height: calc(100% - 32px); padding: 0; overflow: hidden; border: 0; border-radius: var(--dsw-radius-panel, 28px); background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-primary); box-shadow: var(--dsw-elevation-prominent); }
@@ -333,7 +336,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     ? `<button type="button" class="np-tool" data-action="image" data-format-kind="image">${def.icon}</button>`
     : `<button type="button" class="np-tool" data-format="${def.kind}" data-format-kind="${def.kind}">${def.icon}</button>`).join('')
   panel.innerHTML = `
-    <div class="np-tabs"><div class="np-tablist"></div><button type="button" data-action="new-file" data-i18n="newFile" data-i18n-mode="title">+</button><span class="np-tabs-spacer"></span><button type="button" class="np-tab-minimize" data-action="close" data-i18n="close" data-i18n-mode="title">${MINIMIZE_ICON}</button></div>
+    <div class="np-tabs"><div class="np-tablist"></div><button type="button" data-action="new-file" data-i18n="newFile" data-i18n-mode="title">+</button><span class="np-tabs-spacer"></span><button type="button" class="np-tab-minimize" data-action="close" data-i18n="minimize" data-i18n-mode="title">${MINIMIZE_ICON}</button></div>
     <div class="np-body">
       <aside class="np-tree"><div class="np-tree-head"><button type="button" class="np-tree-toggle" data-action="toggle-tree"></button><div class="np-ws"><button type="button" class="np-ws-btn" data-action="ws-toggle" aria-haspopup="listbox" aria-expanded="false"><span class="np-ws-label"></span><span class="np-ws-caret" aria-hidden="true">${CHEVRON_ICON}</span></button><div class="np-ws-menu" role="listbox" hidden></div></div><span style="flex:1"></span><span class="np-tree-tools"><button type="button" data-action="new-file" data-i18n="newFile" data-i18n-mode="title">${PLUS_ICON}</button><button type="button" data-action="new-folder" data-i18n="newFolder" data-i18n-mode="title">${FOLDER_PLUS_ICON}</button><button type="button" class="np-danger" data-action="delete" data-i18n="delete" data-i18n-mode="title">${TRASH_ICON}</button></span></div><div class="np-nodes" data-root="true"></div><div class="np-tree-foot"><button type="button" data-action="settings" data-i18n="settings" data-i18n-mode="label">${SETTINGS_ICON}<span data-i18n="settings"></span></button><button type="button" data-action="close" data-i18n="close" data-i18n-mode="label">${CLOSE_ICON}<span data-i18n="close"></span></button></div></aside>
       <div class="np-editor">
@@ -342,7 +345,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
         <textarea class="np-write"></textarea>
         <div class="np-slash" hidden></div>
         <div class="np-read" tabindex="0" hidden></div>
-        <div class="np-error" role="alert" hidden><span class="np-error-text"></span><button type="button" data-action="dismiss-error">${CLOSE_ICON}</button></div>
+        <div class="np-error" role="alert" hidden><span class="np-error-text"></span><button type="button" data-action="dismiss-error" data-i18n="close" data-i18n-mode="title">${CLOSE_ICON}</button></div>
         <footer class="np-footer"><span class="np-sync"><i class="np-beat" data-state="idle"></i><span class="np-status-text" role="status" aria-live="polite"></span></span><span class="np-footer-actions"><button type="button" data-action="copy" data-i18n="copyPath"></button><button type="button" data-action="history" data-i18n="history"></button><button type="button" data-action="save-version" data-i18n="saveVersion"></button><button type="button" class="np-danger" data-action="clear-file" data-i18n="clearFile"></button></span></footer>
       </div>
     </div>
@@ -421,9 +424,9 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     node.hidden = false
     const full = error?.name === 'QuotaExceededError'
     const message = full ? text().quota : (error instanceof Error ? error.message : String(error))
-    node.querySelector('.np-error-text').textContent = message
-    node.querySelector('button')?.setAttribute('aria-label', text().close)
-    node.querySelector('button')?.setAttribute('title', text().close)
+    const shown = full ? message : text().saveFailed
+    node.querySelector('.np-error-text').textContent = full ? message : `${shown}：${message}`
+    node.querySelector('.np-error-text').title = message
     setSync('error', message)
   }
 
@@ -558,14 +561,23 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     const read = must(panel, '.np-read')
     if (!file) {
       source.value = ''
-      source.disabled = state.db === null
+      source.disabled = true
       source.hidden = false
       read.hidden = true
+      for (const button of panel.querySelectorAll('.np-toolbar [data-format], .np-footer-actions [data-action="save-version"], .np-footer-actions [data-action="clear-file"]')) {
+        button.disabled = true
+      }
       return
+    }
+    const rendered = state.view === 'rendered'
+    for (const button of panel.querySelectorAll('.np-toolbar [data-format]')) {
+      button.disabled = rendered
+    }
+    for (const button of panel.querySelectorAll('.np-footer-actions [data-action="save-version"], .np-footer-actions [data-action="clear-file"]')) {
+      button.disabled = false
     }
     source.disabled = state.db === null
     if (document.activeElement !== source && !state.dirty) source.value = file.draft ?? ''
-    const rendered = state.view === 'rendered'
     source.hidden = rendered
     read.hidden = !rendered
     for (const button of panel.querySelectorAll('.np-modes button')) {
@@ -635,6 +647,8 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       applyWindowSize()
       place(entry, state.ui.entryX, state.ui.entryY, 72)
       place(panel, state.ui.panelX, state.ui.panelY, 80)
+      // tooltip reads left of the entry; flip when it would clip offscreen
+      entry.classList.toggle('np-tip-left', entry.getBoundingClientRect().left < 96)
     })
   }
 
@@ -844,16 +858,16 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     const copy = text()
     dialog(`<h3>${escapeHtml(copy.settingsTitle)}</h3>
       <section class="np-section"><h4>${escapeHtml(copy.saveHeading)}</h4>
-        <label>${escapeHtml(copy.saveDelay)}<input name="saveDelayMs" type="number" min="200" max="5000" value="${values.saveDelayMs}"></label>
-        <label>${escapeHtml(copy.commitInterval)}<input name="commitIntervalSec" type="number" min="15" max="3600" value="${values.commitIntervalSec}"></label>
-        <label>${escapeHtml(copy.versionLimit)}<input name="versionLimit" type="number" min="5" max="500" value="${values.versionLimit}"></label>
+        <label>${escapeHtml(copy.saveDelay)} <i class="np-unit">ms (200–5000)</i><input name="saveDelayMs" type="number" min="200" max="5000" value="${values.saveDelayMs}"></label>
+        <label>${escapeHtml(copy.commitInterval)} <i class="np-unit">s (15–3600)</i><input name="commitIntervalSec" type="number" min="15" max="3600" value="${values.commitIntervalSec}"></label>
+        <label>${escapeHtml(copy.versionLimit)} <i class="np-unit">5–500</i><input name="versionLimit" type="number" min="5" max="500" value="${values.versionLimit}"></label>
       </section>
       <section class="np-section"><h4>${escapeHtml(copy.appearanceHeading)}</h4>
         <label>${escapeHtml(copy.openAs)}<select name="defaultView"><option value="rendered">${escapeHtml(copy.rendered)}</option><option value="source">${escapeHtml(copy.source)}</option></select></label>
         <label>${escapeHtml(copy.windowTheme)}<select name="theme"><option value="dark">${escapeHtml(copy.dark)}</option><option value="light">${escapeHtml(copy.light)}</option><option value="system">${escapeHtml(copy.followApp)}</option></select></label>
       </section>
       <section class="np-section"><h4>${escapeHtml(copy.imageHeading)}</h4>
-        <label>${escapeHtml(copy.imageLimit)}<input name="imageLimitBytes" type="number" min="262144" max="20971520" value="${values.imageLimitBytes}"></label>
+        <label>${escapeHtml(copy.imageLimit)} <i class="np-unit">${escapeHtml(copy.unitBytes)} (0.25–20 MB)</i><input name="imageLimitBytes" type="number" min="262144" max="20971520" value="${values.imageLimitBytes}"></label>
         <p class="np-usage"></p>
       </section>
       <section class="np-section"><h4>${escapeHtml(copy.positionHeading)}</h4><div class="np-actions"><button type="button" data-go="reset-position">${escapeHtml(copy.resetPosition)}</button></div></section>
@@ -956,7 +970,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     if (!file || !state.db) return
     const versions = await versionsOf(state.db, file.id)
     const copy = text()
-    const rows = versions.map(version => `<button type="button" data-version="${version.id}">${escapeHtml(new Date(version.createdAt).toLocaleString())} · ${escapeHtml(copy.reasons[version.reason] ?? version.reason)} · ${version.markdown.length}</button>`).join('')
+    const rows = versions.map(version => `<button type="button" data-version="${version.id}">${escapeHtml(new Date(version.createdAt).toLocaleString())} · ${escapeHtml(copy.reasons[version.reason] ?? version.reason)} · ${version.markdown.length} chars</button>`).join('')
     dialog(`<h3>${escapeHtml(copy.historyTitle)}</h3><div class="np-versions">${rows || `<p>${escapeHtml(copy.noVersions)}</p>`}</div><div class="np-actions"><button type="button" data-go="close">${escapeHtml(copy.close)}</button></div>`, (card, close) => {
       card.addEventListener('click', event => {
         const target = event.target instanceof HTMLElement ? event.target : null
@@ -969,7 +983,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
           preview.addEventListener('click', previewEvent => {
             const target = previewEvent.target instanceof HTMLElement ? previewEvent.target : null
             const action = target?.dataset.go
-            if (action === 'back') closePreview()
+            if (action === 'back') { closePreview(); void openHistory().catch(showError) }
             if (action === 'restore') {
               if (target?.dataset.arm !== 'true') {
                 if (target) { target.dataset.arm = 'true'; target.textContent = text().confirmRestore }
@@ -1017,6 +1031,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
   }
 
   drag(entry, (moved, x, y) => {
+    entry.classList.toggle('np-tip-left', entry.getBoundingClientRect().left < 96)
     if (moved) {
       state.ui.entryX = x
       state.ui.entryY = y
@@ -1272,6 +1287,13 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
   })
   panel.querySelector('.np-ws-btn')?.addEventListener('keydown', event => {
     const menu = must(panel, '.np-ws-menu')
+    if (event.key === 'Escape') {
+      if (menu.hidden) return
+      event.preventDefault()
+      menu.hidden = true
+      panel.querySelector('.np-ws-btn')?.setAttribute('aria-expanded', 'false')
+      return
+    }
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       if (!menu.hidden) return
       event.preventDefault()
@@ -1399,6 +1421,11 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
         source.value = applied.text
         source.setSelectionRange(applied.cursor, applied.cursor)
         scheduleSave()
+        return
+      }
+      if (event.key?.toLowerCase() === 's') {
+        event.preventDefault()
+        void commit('manual').catch(showError)
         return
       }
     }

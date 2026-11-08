@@ -859,9 +859,8 @@ window.__ModuleLoader__.load({
 .np-window[data-chrome="mac"] .np-chrome button { width: 13px; height: 13px; border-radius: 50%; position: relative; }
 .np-window[data-chrome="mac"] .np-chrome button.np-chrome-min { background: #ffbd4e; }
 .np-window[data-chrome="mac"] .np-chrome button.np-chrome-max { background: #35c759; }
-.np-window[data-chrome="mac"] .np-chrome button::before { content: ''; position: absolute; inset: 0; opacity: 0; transition: opacity .12s; }
-.np-window[data-chrome="mac"] .np-tabs:hover .np-chrome button.np-chrome-min::before { opacity: 1; content: '\u2212'; color: #00000099; font-size: 9px; line-height: 13px; text-align: center; display: block; }
-.np-window[data-chrome="mac"] .np-tabs:hover .np-chrome button.np-chrome-max::before { opacity: 1; content: '+'; color: #00000099; font-size: 11px; line-height: 13px; text-align: center; display: block; }
+.np-window[data-chrome="mac"] .np-chrome button svg { width: 8px; height: 8px; color: #00000099; opacity: 0; transition: opacity .12s; }
+.np-window[data-chrome="mac"] .np-tabs:hover .np-chrome button svg { opacity: 1; }
 .np-window[data-chrome="windows"] .np-chrome { gap: 0; }
 .np-window[data-chrome="windows"] .np-chrome button { width: 32px; height: 26px; color: var(--dsw-alias-label-secondary); }
 .np-window[data-chrome="windows"] .np-chrome button:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
@@ -951,6 +950,9 @@ window.__ModuleLoader__.load({
 .np-tool-sep { width: 1px; height: 18px; margin: 6px 4px; background: var(--dsw-alias-border-l2); flex: none; }
 .np-window button:not([class]):not(.np-tree-tools button):not(.np-node-actions button):not(.np-slash button):not(.np-versions button), .np-footer-actions button.np-danger, .np-card button { border: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); border-radius: var(--dsw-radius-sm); padding: 4px 10px; cursor: pointer; font: inherit; line-height: 20px; }
 .np-window button:hover, .np-card button:hover { background: var(--dsw-alias-interactive-bg-hover); }
+/* keep the row as the only hover surface; inner buttons must not double-fill */
+.np-node-main:hover { background: transparent; }
+.np-node-actions button:hover { background: transparent; }
 .np-node-main, .np-caret, .np-node { border: 0; background: transparent; box-shadow: none; }
 .np-tabs > button, .np-tab { background: transparent; }
 .np-danger { color: var(--dsw-alias-label-error); }
@@ -1394,7 +1396,7 @@ window.__ModuleLoader__.load({
       const group = document.createElement("span");
       group.className = "np-chrome";
       if (chrome === "mac") {
-        group.innerHTML = `<button type="button" class="np-chrome-min" data-action="close" title="${escapeHtml(copy.minimize)}" aria-label="${escapeHtml(copy.minimize)}"></button><button type="button" class="np-chrome-max" data-action="maximize" title="${escapeHtml(state.maximized ? copy.restoreWindow : copy.maximize)}" aria-label="${escapeHtml(state.maximized ? copy.restoreWindow : copy.maximize)}"></button>`;
+        group.innerHTML = `<button type="button" class="np-chrome-min" data-action="close" title="${escapeHtml(copy.minimize)}" aria-label="${escapeHtml(copy.minimize)}"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6h7" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg></button><button type="button" class="np-chrome-max" data-action="maximize" title="${escapeHtml(state.maximized ? copy.restoreWindow : copy.maximize)}" aria-label="${escapeHtml(state.maximized ? copy.restoreWindow : copy.maximize)}"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M6 2.5v7M2.5 6h7" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg></button>`;
         tabs.prepend(group);
       } else {
         group.innerHTML = `<button type="button" class="np-chrome-min" data-action="close" title="${escapeHtml(copy.minimize)}" aria-label="${escapeHtml(copy.minimize)}">${WIN_MIN_ICON}</button><button type="button" class="np-chrome-max" data-action="maximize" title="${escapeHtml(state.maximized ? copy.restoreWindow : copy.maximize)}" aria-label="${escapeHtml(state.maximized ? copy.restoreWindow : copy.maximize)}"><svg class="np-icon-max" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 2h8v8H2z" fill="none" stroke="currentColor" stroke-width="1.1"/></svg><svg class="np-icon-restore" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 3h6v6H3z M1 5V1h4" fill="none" stroke="currentColor" stroke-width="1.1"/></svg></button>`;

@@ -48,6 +48,7 @@ window.__ModuleLoader__.load({
     imageLimitBytes: 5 * 1024 * 1024,
     defaultView: "rendered",
     theme: "system",
+    chromeStyle: "mac",
     followApp: true
   };
   var IMAGE_TYPES = /* @__PURE__ */ new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
@@ -68,6 +69,7 @@ window.__ModuleLoader__.load({
       imageLimitBytes: number("imageLimitBytes", DEFAULT_SETTINGS.imageLimitBytes, 256 * 1024, 20 * 1024 * 1024),
       defaultView: source.defaultView === "source" ? "source" : "rendered",
       theme: source.theme === "light" || source.theme === "dark" ? source.theme : "system",
+      chromeStyle: source.chromeStyle === "windows" ? "windows" : "mac",
       followApp: source.followApp !== false
     };
   }
@@ -664,6 +666,12 @@ window.__ModuleLoader__.load({
       usageImages: "\u56FE\u7247",
       storageHeading: "\u5B58\u50A8\u7528\u91CF",
       storageHint: "\u5F53\u524D\u5DE5\u4F5C\u533A\u4FBF\u7B7E\u5360\u7528\u7684\u672C\u5730\u7A7A\u95F4",
+      chromeStyle: "\u7A97\u53E3\u6309\u94AE\u98CE\u683C",
+      chromeStyleHint: "mac \u98CE\u683C\u5728\u7A97\u53E3\u5DE6\u4E0A\u89D2\uFF0CWindows \u98CE\u683C\u5728\u53F3\u4E0A\u89D2",
+      mac: "Mac",
+      windows: "Windows",
+      maximize: "\u6700\u5927\u5316",
+      restoreWindow: "\u8FD8\u539F",
       unassigned: "\u672A\u5F52\u5C5E",
       removedWorkspace: "\u5DF2\u5220\u9664\u7684\u5DE5\u4F5C\u533A",
       currentWorkspace: "\u5F53\u524D\u5DE5\u4F5C\u533A",
@@ -767,6 +775,12 @@ window.__ModuleLoader__.load({
       usageImages: "images",
       storageHeading: "Storage used",
       storageHint: "Local space taken by this workspace\u2019s notes",
+      chromeStyle: "Window buttons",
+      chromeStyleHint: "Mac style sits at the top-left, Windows at the top-right",
+      mac: "Mac",
+      windows: "Windows",
+      maximize: "Maximize",
+      restoreWindow: "Restore",
       unknown: "unknown",
       unassigned: "Unassigned",
       removedWorkspace: "Removed workspace",
@@ -838,9 +852,26 @@ window.__ModuleLoader__.load({
 .np-tab-btn { min-width: 0; flex: 1; display: inline-flex; align-items: center; border: 0; background: transparent; color: inherit; font: inherit; padding: 0; cursor: pointer; }
 .np-tabs > button[data-action="new-file"] { display: inline-flex; align-items: center; justify-content: center; height: 30px; box-sizing: border-box; }
 .np-tabs-spacer { flex: 1 1 auto; min-width: 8px; }
-.np-tab-minimize { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; box-sizing: border-box; padding: 0; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-secondary); cursor: pointer; }
-.np-tab-minimize:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); border-color: var(--dsw-alias-border-l3); }
-.np-tab-minimize svg { width: 16px; height: 16px; display: block; }
+/* window chrome: two skins share the frame, glyphs differ per os */
+.np-chrome { display: inline-flex; align-items: center; gap: 8px; flex: none; }
+.np-chrome button { display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 0; background: transparent; cursor: pointer; }
+.np-window[data-chrome="mac"] .np-chrome { gap: 8px; }
+.np-window[data-chrome="mac"] .np-chrome button { width: 13px; height: 13px; border-radius: 50%; position: relative; }
+.np-window[data-chrome="mac"] .np-chrome button.np-chrome-min { background: #ffbd4e; }
+.np-window[data-chrome="mac"] .np-chrome button.np-chrome-max { background: #35c759; }
+.np-window[data-chrome="mac"] .np-chrome button::before { content: ''; position: absolute; inset: 0; opacity: 0; transition: opacity .12s; }
+.np-window[data-chrome="mac"] .np-tabs:hover .np-chrome button.np-chrome-min::before { opacity: 1; content: '\u2212'; color: #00000099; font-size: 9px; line-height: 13px; text-align: center; display: block; }
+.np-window[data-chrome="mac"] .np-tabs:hover .np-chrome button.np-chrome-max::before { opacity: 1; content: '+'; color: #00000099; font-size: 11px; line-height: 13px; text-align: center; display: block; }
+.np-window[data-chrome="windows"] .np-chrome { gap: 0; }
+.np-window[data-chrome="windows"] .np-chrome button { width: 32px; height: 26px; color: var(--dsw-alias-label-secondary); }
+.np-window[data-chrome="windows"] .np-chrome button:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+.np-window[data-chrome="windows"] .np-chrome button.np-chrome-max:hover { color: var(--dsw-alias-label-primary); }
+.np-window[data-chrome="windows"] .np-chrome button.np-chrome-close:hover { background: var(--dsw-alias-state-error-primary, #e81123); color: #fff; }
+.np-window[data-chrome="windows"] .np-chrome button svg { width: 11px; height: 11px; }
+.np-window[data-chrome="windows"] .np-chrome button.np-chrome-close svg { width: 12px; height: 12px; }
+.np-window[data-maximized="true"] .np-chrome button.np-chrome-max svg.np-icon-restore { display: block; }
+.np-window[data-maximized="true"] .np-chrome button.np-chrome-max svg.np-icon-max { display: none; }
+.np-window:not([data-maximized="true"]) .np-chrome button.np-chrome-max svg.np-icon-restore { display: none; }
 .np-tab-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .np-tab-x { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; flex: none; border: 0; background: transparent; border-radius: var(--dsw-radius-xs, 4px); color: var(--dsw-alias-label-tertiary); font: inherit; padding: 0; cursor: pointer; }
 .np-tab-x:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
@@ -987,6 +1018,11 @@ window.__ModuleLoader__.load({
 .np-menu button:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 .np-menu button[data-selected="true"] { color: var(--dsw-alias-label-primary); }
 .np-menu button[data-selected="true"]::after { content: '\u2713'; margin-left: auto; color: var(--dsw-alias-link); font-size: 12px; }
+/* segmented control matching the app's color-scheme switch */
+.np-seg { flex: none; display: inline-flex; background: var(--dsw-alias-interactive-bg-hover); border-radius: var(--dsw-radius-md); padding: 2px; gap: 0; }
+.np-seg button { border: 0; background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; font-size: 12px; padding: 4px 14px; border-radius: var(--dsw-radius-sm); cursor: pointer; }
+.np-seg button:hover { color: var(--dsw-alias-label-primary); }
+.np-seg button[aria-checked="true"] { background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); box-shadow: 0 1px 2px rgba(0,0,0,.2); }
 .np-card input, .np-card select { width: 100%; box-sizing: border-box; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); padding: 8px 10px; font: inherit; }
 .np-card input[type="number"] { max-width: 200px; }
 .np-card input:focus, .np-card select:focus { outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, var(--dsw-alias-link)); }
@@ -1082,6 +1118,7 @@ window.__ModuleLoader__.load({
   var CHEVRON_ICON = googleIcon("M16.59 8.59 12 13.17 7.41 8.59 6 10l6 6 6-6z");
   var CHEVRON_LEFT = googleIcon("M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z");
   var MINIMIZE_ICON = googleIcon("M6 19h12v2H6z");
+  var WIN_MIN_ICON = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M1 6h10" fill="none" stroke="currentColor" stroke-width="1.1"/></svg>';
   var TRASH_ICON = googleIcon("M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6zM19 4h-3.5l-1-1h-5l-1 1H5v2h14z");
   var CHEVRON_RIGHT = googleIcon("M10 6 8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z");
   var ICON = FILE_ICON;
@@ -1137,7 +1174,7 @@ window.__ModuleLoader__.load({
     const panel = must(host, ".np-window");
     const toolbar = FORMAT_DEFS.map((def) => def.kind === "image" ? `<button type="button" class="np-tool" data-action="image" data-format-kind="image">${def.icon}</button>` : `<button type="button" class="np-tool" data-format="${def.kind}" data-format-kind="${def.kind}">${def.icon}</button>`).join("");
     panel.innerHTML = `
-    <div class="np-tabs"><div class="np-tablist"></div><button type="button" data-action="new-file" data-i18n="newFile" data-i18n-mode="title">+</button><span class="np-tabs-spacer"></span><button type="button" class="np-tab-minimize" data-action="close" data-i18n="minimize" data-i18n-mode="title">${MINIMIZE_ICON}</button></div>
+    <div class="np-tabs"><div class="np-tablist"></div><button type="button" data-action="new-file" data-i18n="newFile" data-i18n-mode="title">+</button><span class="np-tabs-spacer"></span></div>
     <div class="np-body">
       <aside class="np-tree"><div class="np-tree-head"><button type="button" class="np-tree-toggle" data-action="toggle-tree"></button><div class="np-ws"><button type="button" class="np-ws-btn" data-action="ws-toggle" aria-haspopup="listbox" aria-expanded="false"><span class="np-ws-label"></span><span class="np-ws-caret" aria-hidden="true">${CHEVRON_ICON}</span></button><div class="np-ws-menu" role="listbox" hidden></div></div><span style="flex:1"></span><span class="np-tree-tools"><button type="button" data-action="new-file" data-i18n="newFile" data-i18n-mode="title">${PLUS_ICON}</button><button type="button" data-action="new-folder" data-i18n="newFolder" data-i18n-mode="title">${FOLDER_PLUS_ICON}</button><button type="button" class="np-danger" data-action="delete" data-i18n="delete" data-i18n-mode="title">${TRASH_ICON}</button></span></div><div class="np-nodes" data-root="true"></div><div class="np-tree-foot"><button type="button" data-action="settings" data-i18n="settings" data-i18n-mode="label">${SETTINGS_ICON}<span data-i18n="settings"></span></button><button type="button" data-action="close" data-i18n="close" data-i18n-mode="label">${CLOSE_ICON}<span data-i18n="close"></span></button></div></aside>
       <div class="np-editor">
@@ -1227,7 +1264,12 @@ window.__ModuleLoader__.load({
         null
       ),
       sync: { phase: "idle", at: null, detail: "" },
-      collapsed: /* @__PURE__ */ new Set()
+      collapsed: /* @__PURE__ */ new Set(),
+      maximized: false,
+      restoreRect: (
+        /** @type {{ left: number, top: number, width: number, height: number } | null} */
+        null
+      )
     };
     const disposers = [];
     const on = (target, type, fn, opts) => {
@@ -1311,10 +1353,54 @@ window.__ModuleLoader__.load({
       node.style.top = `${Math.min(Math.max(8, top), Math.max(8, limitHeight - height - 8))}px`;
     }
     function applyWindowSize() {
+      if (state.maximized) {
+        panel.style.left = "12px";
+        panel.style.top = "12px";
+        panel.style.width = `${window.innerWidth - 24}px`;
+        panel.style.height = `${window.innerHeight - 24}px`;
+        return;
+      }
       const maxWidth = Math.max(320, window.innerWidth - 16);
       const maxHeight = Math.max(240, window.innerHeight - 16);
       if (Number.isFinite(state.ui.panelW)) panel.style.width = `${clamp(state.ui.panelW, 320, maxWidth)}px`;
+      else panel.style.width = "";
       if (Number.isFinite(state.ui.panelH)) panel.style.height = `${clamp(state.ui.panelH, 240, maxHeight)}px`;
+      else panel.style.height = "";
+    }
+    function toggleMaximize() {
+      flushSave();
+      if (state.maximized) {
+        state.maximized = false;
+        if (state.restoreRect) {
+          panel.style.left = `${state.restoreRect.left}px`;
+          panel.style.top = `${state.restoreRect.top}px`;
+          panel.style.width = `${state.restoreRect.width}px`;
+          panel.style.height = `${state.restoreRect.height}px`;
+        }
+      } else {
+        state.restoreRect = { left: panel.offsetLeft, top: panel.offsetTop, width: panel.offsetWidth, height: panel.offsetHeight };
+        state.maximized = true;
+      }
+      render();
+    }
+    function renderChrome() {
+      const tabs = must(panel, ".np-tabs");
+      const copy = text();
+      const chrome = state.settings.chromeStyle === "windows" ? "windows" : "mac";
+      panel.dataset.chrome = chrome;
+      panel.dataset.maximized = String(state.maximized);
+      const prev = tabs.querySelector(".np-chrome");
+      if (prev) prev.remove();
+      const group = document.createElement("span");
+      group.className = "np-chrome";
+      if (chrome === "mac") {
+        group.innerHTML = `<button type="button" class="np-chrome-min" data-action="close" title="${escapeHtml(copy.minimize)}" aria-label="${escapeHtml(copy.minimize)}"></button><button type="button" class="np-chrome-max" data-action="maximize" title="${escapeHtml(state.maximized ? copy.restoreWindow : copy.maximize)}" aria-label="${escapeHtml(state.maximized ? copy.restoreWindow : copy.maximize)}"></button>`;
+        tabs.prepend(group);
+      } else {
+        group.innerHTML = `<button type="button" class="np-chrome-min" data-action="close" title="${escapeHtml(copy.minimize)}" aria-label="${escapeHtml(copy.minimize)}">${WIN_MIN_ICON}</button><button type="button" class="np-chrome-max" data-action="maximize" title="${escapeHtml(state.maximized ? copy.restoreWindow : copy.maximize)}" aria-label="${escapeHtml(state.maximized ? copy.restoreWindow : copy.maximize)}"><svg class="np-icon-max" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 2h8v8H2z" fill="none" stroke="currentColor" stroke-width="1.1"/></svg><svg class="np-icon-restore" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 3h6v6H3z M1 5V1h4" fill="none" stroke="currentColor" stroke-width="1.1"/></svg></button>`;
+        const spacer = tabs.querySelector(".np-tabs-spacer");
+        tabs.insertBefore(group, spacer ? spacer.nextSibling : null);
+      }
     }
     function renderTree() {
       const box = must(panel, ".np-nodes");
@@ -1448,12 +1534,13 @@ window.__ModuleLoader__.load({
       paintWorkspaceChoices();
       renderTree();
       renderTabs();
+      renderChrome();
       void renderBody();
       paintStatus();
       requestAnimationFrame(() => {
         applyWindowSize();
         place(entry, state.ui.entryX, state.ui.entryY, 72);
-        place(panel, state.ui.panelX, state.ui.panelY, 80);
+        if (!state.maximized) place(panel, state.ui.panelX, state.ui.panelY, 80);
         entry.classList.toggle("np-tip-left", entry.getBoundingClientRect().left < 96);
       });
     }
@@ -1746,6 +1833,12 @@ window.__ModuleLoader__.load({
       ])}
       </section>
       <section class="np-section">
+        <div class="np-field"><div class="np-field-text"><span class="np-field-name">${escapeHtml(copy.chromeStyle)}</span><span class="np-field-desc">${escapeHtml(copy.chromeStyleHint)}</span></div>
+        <span class="np-seg" role="radiogroup">
+          <button type="button" role="radio" aria-checked="${values.chromeStyle === "mac"}" data-seg-value="mac">${escapeHtml(copy.mac)}</button><button type="button" role="radio" aria-checked="${values.chromeStyle === "windows"}" data-seg-value="windows">${escapeHtml(copy.windows)}</button>
+        </span></div>
+      </section>
+      <section class="np-section">
         ${num("imageLimitBytes", copy.unitBytes, values.imageLimitBytes, copy.imageLimit, copy.imageLimitHint)}
         <div class="np-field"><div class="np-field-text"><span class="np-field-name">${escapeHtml(copy.storageHeading)}</span><span class="np-field-desc">${escapeHtml(copy.storageHint)}</span></div><span class="np-stat np-usage-val"></span></div>
       </section>
@@ -1784,6 +1877,15 @@ window.__ModuleLoader__.load({
           must(card, ".np-usage-val").textContent = `${value.files} ${text().usageFiles} \xB7 ${value.versions} ${text().usageVersions} \xB7 ${value.images} ${text().usageImages} \xB7 ${formatBytes(estimate.usage ?? text().unknown)}`;
         });
         card.addEventListener("click", (event) => {
+          const seg = event.target instanceof HTMLElement ? event.target.closest("[data-seg-value]") : null;
+          if (seg) {
+            const merged = { ...state.settings, chromeStyle: seg.dataset.segValue };
+            state.settings = normalizeSettings(merged);
+            if (state.db) void writeSettings(state.db, state.settings).catch(showError);
+            card.querySelectorAll("[data-seg-value]").forEach((b) => b.setAttribute("aria-checked", String(b.dataset.segValue === state.settings.chromeStyle)));
+            render();
+            return;
+          }
           const action = event.target instanceof HTMLElement ? event.target.dataset.go : void 0;
           if (action === "reset-position") {
             state.ui.entryX = null;
@@ -2131,6 +2233,7 @@ window.__ModuleLoader__.load({
         render();
         void persistUi();
       }
+      if (action === "maximize") toggleMaximize();
       if (action === "settings") openSettings();
       if (action === "toggle-tree") {
         state.ui.treeOpen = state.ui.treeOpen === false;

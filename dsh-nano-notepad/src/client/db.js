@@ -11,6 +11,7 @@ export const DEFAULT_SETTINGS = {
   imageLimitBytes: 5 * 1024 * 1024,
   defaultView: 'rendered',
   theme: 'system',
+  chromeStyle: 'mac',
   followApp: true,
 }
 
@@ -36,6 +37,7 @@ export function normalizeSettings(config) {
     imageLimitBytes: number('imageLimitBytes', DEFAULT_SETTINGS.imageLimitBytes, 256 * 1024, 20 * 1024 * 1024),
     defaultView: source.defaultView === 'source' ? 'source' : 'rendered',
     theme: source.theme === 'light' || source.theme === 'dark' ? source.theme : 'system',
+    chromeStyle: source.chromeStyle === 'windows' ? 'windows' : 'mac',
     followApp: source.followApp !== false,
   }
 }

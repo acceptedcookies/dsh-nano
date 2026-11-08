@@ -12,9 +12,13 @@ export const inject = ['slots', 'modelDirectories', 'sessions', 'locale']
  * @param {import('@deepseek-ai/cordis').Context} ctx
  */
 export function apply(ctx) {
+  // `priority` is not a slot field: a single-seat slot is elected by
+  // registration order, so registering after the shipped selector shadows it.
+  // We rely on that documented election rule, not an override knob (review-01
+  // R13). The shipped ui-model-selection still owns `ctx.modelDirectories` and
+  // the `/model` command; this plugin only takes over the composer presentation.
   ctx.slots.inject('conversation.input.model', () => ctx.slots.register({
     name: 'conversation.input.model',
-    priority: -1,
     registrant: 'nano-model-selector',
     inject: sessionId => {
       const directory = ctx.modelDirectories.directoryFor(sessionId)

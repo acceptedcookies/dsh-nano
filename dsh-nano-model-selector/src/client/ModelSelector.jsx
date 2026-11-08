@@ -146,22 +146,32 @@ export function ModelSelector({ locked, available, directory, load, select, lang
     return () => { window.clearTimeout(timer) }
   }, [toast])
 
+  // The host caches the catalog briefly; the client mirrors that TTL so each
+  // panel open does not trigger a full registry rebuild on the host (review-01
+  // R8). `detailsFetchedAt` remembers when we last pulled.
+  const detailsFetchedAt = React.useRef(0)
+  const DETAILS_TTL_MS = 15000
+  const fetchDetails = React.useCallback(() => {
+    fetch('/nano-model-selector/catalog', { credentials: 'same-origin', cache: 'no-store' })
+      .then(response => response.ok ? response.json() : undefined)
+      .then(value => { if (value !== undefined) { setDetails(value); detailsFetchedAt.current = Date.now() } })
+      .catch(() => { /* Keep the last good descriptions. */ })
+  }, [])
+
   React.useEffect(() => {
     if (!open) return undefined
+    if (details !== null && Date.now() - detailsFetchedAt.current < DETAILS_TTL_MS) return undefined
     let cancelled = false
     fetch('/nano-model-selector/catalog', { credentials: 'same-origin', cache: 'no-store' })
       .then(response => response.ok ? response.json() : undefined)
-      .then(value => { if (!cancelled) setDetails(value ?? null) })
+      .then(value => { if (!cancelled && value !== undefined) { setDetails(value); detailsFetchedAt.current = Date.now() } })
       .catch(() => { /* The directory already carries the basic catalog. */ })
     return () => { cancelled = true }
-  }, [open])
+  }, [open, details])
 
   const refreshDetails = React.useCallback(() => {
-    fetch('/nano-model-selector/catalog', { credentials: 'same-origin', cache: 'no-store' })
-      .then(response => response.ok ? response.json() : undefined)
-      .then(value => setDetails(value ?? null))
-      .catch(() => { /* Keep the last good descriptions. */ })
-  }, [])
+    fetchDetails()
+  }, [fetchDetails])
 
   React.useEffect(() => {
     if (!open) return undefined
@@ -247,14 +257,16 @@ export function ModelSelector({ locked, available, directory, load, select, lang
     return haystack.includes(wanted)
   }, [filter, favoriteSet, query])
 
-  const visibleFavorites = favoriteItems.filter(matches)
-  const visibleGroups = brands
+  // Memoize the filtered/sorted lists so a keystroke does not re-derive every
+  // row (and re-mount every card) when unrelated state moves (review-01 R8).
+  const visibleFavorites = React.useMemo(() => favoriteItems.filter(matches), [favoriteItems, matches])
+  const visibleGroups = React.useMemo(() => brands
     .filter(brand => filter === 'all' || filter === brand.key)
     .map(brand => ({
       ...brand,
       models: allModels.filter(item => item.brandKey === brand.key && matches(item) && !favoriteSet.has(item.key)),
     }))
-    .filter(group => group.models.length > 0)
+    .filter(group => group.models.length > 0), [brands, filter, allModels, matches, favoriteSet])
   const visibleCount = visibleFavorites.length + visibleGroups.reduce((sum, group) => sum + group.models.length, 0)
 
   React.useLayoutEffect(() => {

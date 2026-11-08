@@ -82,6 +82,8 @@ export const COPY = {
     currentWorkspace: '当前工作区',
     allWorkspaces: '全部工作区',
     historyTitle: '历史版本',
+    expand: '展开',
+    editHint: '点击进入编辑',
   },
   en: {
     files: 'Files',
@@ -165,6 +167,8 @@ export const COPY = {
     currentWorkspace: 'Current workspace',
     allWorkspaces: 'All workspaces',
     historyTitle: 'History',
+    expand: 'Expand',
+    editHint: 'Click to edit',
   },
 }
 

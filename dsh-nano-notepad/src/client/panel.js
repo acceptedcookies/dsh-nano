@@ -714,10 +714,12 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       const name = escapeHtml(node.name)
       return `<span class="np-tab" data-active="${id === state.ui.currentId}"><button class="np-tab-btn" type="button" data-tab="${id}" title="${name}"><span class="np-tab-name">${name}</span></button><button class="np-tab-x" type="button" data-close="${id}" title="${escapeHtml(text().close)}" aria-label="${escapeHtml(text().close)}">×</button></span>`
     }).join('')
-    /* flag clipped names so the close button can fade in without hiding early */
+    /* fade only names whose right edge actually reaches the × zone (tab right - 28px) */
     requestAnimationFrame(() => {
-      for (const name of box.querySelectorAll('.np-tab-name')) {
-        name.dataset.clipped = String(name.scrollWidth > name.clientWidth + 1)
+      for (const tab of box.querySelectorAll('.np-tab')) {
+        const name = tab.querySelector('.np-tab-name')
+        const edge = tab.getBoundingClientRect().right - 28
+        name.dataset.clipped = String(name.getBoundingClientRect().right > edge)
       }
     })
   }

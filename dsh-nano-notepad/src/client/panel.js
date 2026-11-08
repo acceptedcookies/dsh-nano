@@ -24,6 +24,7 @@ import {
   writeUi,
 } from './db.js'
 import { applyFormat, escapeHtml, renderMarkdown } from './markdown.js'
+import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
 import { copyFor } from './i18n.js'
 import React from 'react'
 import { openNanoDialog, openNanoMenu, NANO_STYLES } from 'dsh-nano-ui'
@@ -130,16 +131,24 @@ ${NANO_STYLES}
 .np-node-main { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; border: 0; background: transparent; color: inherit; padding: 0; text-align: left; font: inherit; cursor: pointer; overflow: hidden; }
 .np-node-main:focus, .np-node-actions button:focus, .np-tab:focus, .np-caret:focus { outline: none; }
 .np-window :focus-visible, .np-entry:focus-visible { outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, var(--dsw-alias-link)); outline-offset: -2px; }
-.np-node[data-pinned="true"] .np-node-main { padding-right: 28px; }
-.np-node:hover .np-node-main, .np-node:focus-within .np-node-main { padding-right: 84px; }
-@media (hover: none) { .np-node .np-node-main { padding-right: 84px; } .np-node .np-node-actions button { display: inline-flex; } }
-.np-node-actions { position: absolute; right: 0; top: 0; height: 100%; display: flex; align-items: center; }
-.np-node-actions button { display: none; align-items: center; justify-content: center; width: var(--np-icon-btn); height: 100%; box-sizing: border-box; padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); cursor: pointer; }
+.np-node[data-pinned="true"] .np-node-main { padding-right: 26px; }
+.np-node:hover .np-node-main, .np-node:focus-within .np-node-main { padding-right: 72px; }
+@media (hover: none) { .np-node .np-node-main { padding-right: 72px; } .np-node .np-node-actions button { display: inline-flex; } }
+.np-node-actions { position: absolute; right: 4px; top: 0; height: 100%; display: flex; align-items: center; gap: 0; }
+.np-node-actions button { display: none; align-items: center; justify-content: center; width: 22px; height: 100%; box-sizing: border-box; padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); cursor: pointer; }
 .np-node:hover .np-node-actions button, .np-node:focus-within .np-node-actions button { display: inline-flex; }
 .np-node-actions button[data-pin][data-active="true"] { display: inline-flex; color: var(--dsw-alias-link); }
 .np-node-actions button:hover { background: var(--dsw-alias-interactive-bg-active); color: var(--dsw-alias-label-primary); }
 .np-node-actions button.np-danger:hover { color: var(--dsw-alias-state-error-secondary); background: var(--dsw-alias-interactive-bg-hover-danger); }
 .np-node-actions button[data-pin][data-active="true"]:hover { color: var(--dsw-alias-link); }
+.np-transfer-list { display: flex; flex-direction: column; gap: 2px; margin: 2px 0 4px; }
+.np-transfer-row { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 34px; padding: 6px 10px; border: 0; border-radius: var(--dsw-radius-sm); background: transparent; color: var(--dsw-alias-label-primary); font: inherit; text-align: left; cursor: pointer; }
+.np-transfer-row:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.np-transfer-row[data-active="true"] { background: var(--dsw-alias-interactive-bg-active); }
+.np-transfer-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.np-transfer-check { display: none; color: var(--dsw-alias-link); }
+.np-transfer-row[data-active="true"] .np-transfer-check { display: inline-flex; }
+.np-transfer-empty { margin: 8px 0; color: var(--dsw-alias-label-secondary); font-size: 12px; }
 .np-caret { display: inline-flex; width: 16px; height: 16px; align-items: center; justify-content: center; border: 0; background: transparent; color: var(--dsw-alias-label-tertiary); padding: 0; cursor: pointer; }
 .np-caret[data-open="false"] svg { transform: rotate(-90deg); }
 .np-node-icon { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex: none; color: var(--dsw-alias-label-tertiary); }
@@ -171,8 +180,8 @@ ${NANO_STYLES}
 .np-tool:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 .np-tool svg { width: 18px; height: 18px; }
 .np-tool-sep { width: 1px; height: 18px; margin: 6px 4px; background: var(--dsw-alias-border-l2); flex: none; }
-.np-window button:not([class]):not(.np-tree-tools button):not(.np-node-actions button):not(.np-slash button):not(.np-versions button), .np-footer-actions button.np-danger, .np-body button:not(.np-switch) { border: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); border-radius: var(--dsw-radius-sm); padding: 4px 10px; cursor: pointer; font: inherit; line-height: 20px; }
-.np-window button:hover, .np-body button:not(.np-switch):hover { background: var(--dsw-alias-interactive-bg-hover); }
+.np-window button:not([class]):not(.np-tree-tools button):not(.np-node-actions button):not(.np-slash button):not(.np-versions button), .np-footer-actions button.np-danger, .np-dlg-body button:not(.np-switch) { border: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); border-radius: var(--dsw-radius-sm); padding: 4px 10px; cursor: pointer; font: inherit; line-height: 20px; }
+.np-window button:hover, .np-dlg-body button:not(.np-switch):hover { background: var(--dsw-alias-interactive-bg-hover); }
 /* keep the row/tab as the only hover surface; inner buttons must not double-fill
    — scoped to .np-window so we beat the generic .np-window button:hover rule */
 .np-window .np-node-main:hover, .np-window .np-node-actions button:hover, .np-window .np-tab-btn:hover { background: transparent; }
@@ -180,7 +189,7 @@ ${NANO_STYLES}
 .np-tabs > button, .np-tab { background: transparent; }
 .np-danger { color: var(--dsw-alias-label-error); }
 .np-footer-actions button.np-danger { color: var(--dsw-alias-label-error); }
-.np-footer-actions button.np-danger:hover, .np-body button.np-danger:hover { border-color: var(--dsw-alias-state-error-secondary); color: var(--dsw-alias-state-error-secondary); background: var(--dsw-alias-interactive-bg-hover-danger); }
+.np-footer-actions button.np-danger:hover, .np-dlg-body button.np-danger:hover { border-color: var(--dsw-alias-state-error-secondary); color: var(--dsw-alias-state-error-secondary); background: var(--dsw-alias-interactive-bg-hover-danger); }
 .np-write, .np-read { flex: 1; min-height: 0; margin: 0; }
 .np-write { box-sizing: border-box; width: 100%; max-width: 100%; resize: none; border: 0; outline: 0; background: transparent; color: var(--dsw-alias-label-primary); caret-color: var(--dsw-alias-label-primary); padding: var(--np-pad-x); font: var(--dsw-font-markdown-code); overflow-wrap: anywhere; }
 .np-write:focus-visible { outline: none; box-shadow: inset 0 0 0 1px var(--dsw-alias-border-l3); }
@@ -202,24 +211,25 @@ ${NANO_STYLES}
 .np-read .missing-image { border: 1px dashed var(--dsw-alias-border-l3); padding: 2px 4px; }
 .np-read .np-placeholder { color: var(--dsw-alias-label-secondary); }
 .np-slash { position: absolute; z-index: 4; background: var(--dsw-menu-surface-fill, var(--dsw-alias-bg-layer-3)); color: var(--dsw-alias-label-primary); border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-lg); box-shadow: var(--dsw-elevation-prominent); backdrop-filter: var(--dsw-menu-backdrop-filter); }
-/* .np-body wraps every NanoDialog's injected children: stacked content with the
-   old .np-card-scroll rhythm, so settings/history/rename bodies look unchanged. */
-.np-body { display: flex; flex-direction: column; margin: 0; }
-.np-body > * + * { margin-top: 10px; }
-.np-body p, .np-body pre { margin: 0; color: var(--dsw-alias-label-secondary); line-height: 22px; }
-.np-body pre { max-height: 240px; overflow: auto; white-space: pre-wrap; font-family: var(--dsw-font-markdown-code-font-family); }
-.np-body label { display: flex; flex-direction: column; align-items: stretch; gap: 6px; margin: 0; color: var(--dsw-alias-label-secondary); }
+/* .np-dlg-body wraps every NanoDialog's injected children: stacked content with the
+   old .np-card-scroll rhythm, so settings/history/rename bodies look unchanged.
+   NOTE: must NOT be .np-body — that class is the main tree+editor layout row. */
+.np-dlg-body { display: flex; flex-direction: column; margin: 0; }
+.np-dlg-body > * + * { margin-top: 10px; }
+.np-dlg-body p, .np-dlg-body pre { margin: 0; color: var(--dsw-alias-label-secondary); line-height: 22px; }
+.np-dlg-body pre { max-height: 240px; overflow: auto; white-space: pre-wrap; font-family: var(--dsw-font-markdown-code-font-family); }
+.np-dlg-body label { display: flex; flex-direction: column; align-items: stretch; gap: 6px; margin: 0; color: var(--dsw-alias-label-secondary); }
 /* DSH-native settings row: title + description left, control right, hairline row */
 /* uniform rows: same container height for every field, dividers sit centered
    in the equal gap between them */
-.np-body .np-field { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 56px; padding: 10px 0; margin: 0; }
-.np-body .np-field + .np-field { border-top: 1px solid var(--dsw-alias-border-l2); }
-.np-body .np-field-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.np-body .np-field-name { color: var(--dsw-alias-label-primary); line-height: 20px; }
-.np-body .np-field-desc { font-size: 12px; color: var(--dsw-alias-label-tertiary); line-height: 18px; }
+.np-dlg-body .np-field { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 56px; padding: 10px 0; margin: 0; }
+.np-dlg-body .np-field + .np-field { border-top: 1px solid var(--dsw-alias-border-l2); }
+.np-dlg-body .np-field-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.np-dlg-body .np-field-name { color: var(--dsw-alias-label-primary); line-height: 20px; }
+.np-dlg-body .np-field-desc { font-size: 12px; color: var(--dsw-alias-label-tertiary); line-height: 18px; }
 /* pill number input with embedded unit */
-.np-body input[type="number"] { appearance: none; -webkit-appearance: none; }
-.np-body input::-webkit-outer-spin-button, .np-body input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.np-dlg-body input[type="number"] { appearance: none; -webkit-appearance: none; }
+.np-dlg-body input::-webkit-outer-spin-button, .np-dlg-body input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .np-num { flex: none; display: inline-flex; align-items: center; gap: 6px; background: var(--dsw-alias-interactive-bg-hover); border: 1px solid transparent; border-radius: var(--dsw-radius-full, 999px); padding: 3px 12px; color: var(--dsw-alias-label-primary); }
 .np-num:focus-within { border-color: var(--dsw-focus-ring-color, var(--dsw-alias-link)); }
 .np-num input { width: auto; min-width: 4.5em; field-sizing: content; border: 0; background: transparent; padding: 2px 0; font: inherit; color: inherit; text-align: right; }
@@ -229,9 +239,9 @@ ${NANO_STYLES}
 /* settings switches carry their index in --np-switch-i: thumb steps by
    (segment width + 2px gap), generic for N segments */
 .np-switch[data-seg-field] .np-switch-thumb { transform: translateX(calc(var(--np-switch-i) * (100% + 2px))); }
-.np-body input, .np-body select { width: 100%; box-sizing: border-box; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); padding: 8px 10px; font: inherit; }
-.np-body input[type="number"] { max-width: 200px; }
-.np-body input:focus, .np-body select:focus { outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, var(--dsw-alias-link)); }
+.np-dlg-body input, .np-dlg-body select { width: 100%; box-sizing: border-box; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); padding: 8px 10px; font: inherit; }
+.np-dlg-body input[type="number"] { max-width: 200px; }
+.np-dlg-body input:focus, .np-dlg-body select:focus { outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, var(--dsw-alias-link)); }
 .np-versions { max-height: 240px; overflow: auto; display: flex; flex-direction: column; }
 .np-versions button { display: block; width: 100%; border: 0; background: transparent; color: var(--dsw-alias-label-primary); border-radius: var(--dsw-radius-sm); padding: 6px 8px; text-align: left; font: inherit; cursor: pointer; }
 .np-versions button:hover { background: var(--dsw-alias-interactive-bg-hover); }
@@ -285,7 +295,7 @@ ${NANO_STYLES}
 @keyframes np-pulse { 50% { opacity: .25; } }
 .np-footer-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
 .np-section { border-top: 1px solid var(--dsw-alias-border-l2); padding-top: 2px; }
-.np-body > .np-section:first-child { border-top: 0; padding-top: 0; }
+.np-dlg-body > .np-section:first-child { border-top: 0; padding-top: 0; }
 .np-section h4 { margin: 0 0 8px; font-size: 12px; font-weight: 600; color: var(--dsw-alias-label-tertiary); }
 /* informational row: same row height/rhythm, label left, value right */
 .np-stat { display: inline-flex; align-items: baseline; gap: 6px; flex: none; color: var(--dsw-alias-label-secondary); font-size: inherit; white-space: nowrap; }
@@ -318,6 +328,8 @@ const CLOSE_ICON = googleIcon('M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 
 const SETTINGS_ICON = googleIcon('M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.48.48 0 0 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z')
 const PIN_ICON = googleIcon('M16 9V4h1c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1 1 1-1v-7H19v-2c-1.66 0-3-1.34-3-3')
 const EDIT_ICON = googleIcon('M3 17.25V21h3.75L17.81 9.94l-3.75-3.75zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75z')
+const MOVE_ICON = googleIcon('M20 6h-8l-2-2H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.1.89 2 2 2h16c1.11 0 2-.9 2-2V8c0-1.11-.89-2-2-2zm-6 12v-3h-4v-2h4V10l4 4-4 4z')
+const MORE_ICON = googleIcon('M6 10c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm12 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm-6 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z')
 const CHEVRON_ICON = googleIcon('M16.59 8.59 12 13.17 7.41 8.59 6 10l6 6 6-6z')
 const CHEVRON_LEFT = googleIcon('M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z')
 const MINIMIZE_ICON = googleIcon('M6 19h12v2H6z')
@@ -680,7 +692,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
         const caret = node.kind === 'folder' ? `<button type="button" class="np-caret" data-caret="${node.id}" data-open="${expanded}" aria-expanded="${expanded}" aria-label="${escapeHtml(node.name)} · ${escapeHtml(expanded ? text().collapse : text().expand)}">${CHEVRON_ICON}</button>` : ''
         const pinLabel = node.pinned === true ? text().unpin : text().pin
         const pin = node.kind === 'file' ? `<button type="button" data-pin="${node.id}" data-active="${node.pinned === true}" title="${escapeHtml(pinLabel)}" aria-label="${escapeHtml(pinLabel)}">${PIN_ICON}</button>` : ''
-        lines.push(`<div class="np-node" data-kind="${node.kind}" data-pinned="${node.kind === 'file' && node.pinned === true}" data-active="${node.id === state.ui.currentId}" title="${name}" style="padding-left:${8 + depth * 16}px">${caret}<button class="np-node-main" type="button" draggable="true" data-id="${node.id}" aria-label="${name}"><span class="np-node-icon" aria-hidden="true">${icon}</span><span class="np-node-name">${name}</span></button><span class="np-node-actions">${pin}<button type="button" data-rename="${node.id}" title="${escapeHtml(text().rename)}" aria-label="${escapeHtml(text().rename)}">${EDIT_ICON}</button><button type="button" class="np-danger" data-remove="${node.id}" title="${escapeHtml(text().delete)}" aria-label="${escapeHtml(text().delete)}">${TRASH_ICON}</button></span></div>`)
+        lines.push(`<div class="np-node" data-kind="${node.kind}" data-pinned="${node.kind === 'file' && node.pinned === true}" data-active="${node.id === state.ui.currentId}" title="${name}" style="padding-left:${8 + depth * 16}px">${caret}<button class="np-node-main" type="button" draggable="true" data-id="${node.id}" aria-label="${name}"><span class="np-node-icon" aria-hidden="true">${icon}</span><span class="np-node-name">${name}</span></button><span class="np-node-actions">${pin}<button type="button" data-move="${node.id}" title="${escapeHtml(text().transfer)}" aria-label="${escapeHtml(text().transfer)}">${MOVE_ICON}</button><button type="button" data-more="${node.id}" title="${escapeHtml(text().more)}" aria-label="${escapeHtml(text().more)}" aria-haspopup="menu">${MORE_ICON}</button></span></div>`)
         if (node.kind === 'folder' && !state.collapsed.has(node.id)) visit(node.id, depth + 1, workspaceId)
       }
     }
@@ -941,10 +953,11 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       title: spec.title,
       confirmLabel: spec.confirmLabel,
       danger: spec.danger === true,
+      footer: spec.footer?.(closeSelf),
       onConfirm: () => spec.onConfirm?.(closeSelf),
       onCancel: () => { finish(); spec.onCancel?.() },
       children: React.createElement('div', {
-        className: 'np-body',
+        className: 'np-dlg-body',
         dangerouslySetInnerHTML: { __html: spec.body },
         ref: el => { if (el) spec.setup?.(el, closeSelf) },
       }),
@@ -998,8 +1011,12 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       if (!closeMenu || !(event.target instanceof Element)) return
       if (event.target.closest('.nano-menu')) return
       // NanoMenu's own outside handler already unmounted; just release state. A
-      // press on the switcher button itself counts as "click again to close".
-      if (event.target.closest('.np-ws')) wsToggleJustClosed = true
+      // press on the switcher button itself counts as "click again to close" —
+      // the flag lasts until the next click anywhere so a drag-off can't eat it.
+      if (event.target.closest('.np-ws')) {
+        wsToggleJustClosed = true
+        document.addEventListener('click', () => { wsToggleJustClosed = false }, { once: true })
+      }
       done(false)
     }
     closeMenu = () => done(true)
@@ -1502,6 +1519,83 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     })
   }
 
+  /** Row ⋯ menu: rename/delete live inside so the row itself stays at two icon buttons. */
+  function openNodeMenu(id, anchor) {
+    const node = state.nodes.find(item => item.id === id)
+    if (!node || !state.db) return
+    closeMenu?.()
+    const copy = text()
+    const raw = openNanoMenu({
+      anchor: anchor.getBoundingClientRect(), width: 160,
+      items: [
+        { id: 'rename', label: copy.rename, run: () => askName(copy.renameTitle, node.name, async name => {
+          const renamed = await renameNode(state.db, node.id, name)
+          Object.assign(node, renamed)
+          render()
+        }) },
+        { id: 'delete', label: copy.delete, tone: 'danger', run: () => requestDelete(id) },
+      ],
+    })
+    closeMenu = () => raw.close()
+  }
+
+  /**
+   * Transfer card: pick a workspace row, then footer offers move or copy. Same
+   * NanoDialog shell — the stock Cancel/Confirm footer is replaced because the
+   * dialog carries two primary verbs.
+   */
+  function openTransfer(id) {
+    const node = state.nodes.find(item => item.id === id)
+    if (!node || !state.db) return
+    const copy = text()
+    const items = workspaceCatalog().items.filter(item => (item.workspaceId ?? null) !== (node.workspaceId ?? null))
+    const keyOf = workspaceId => workspaceId ?? '__none__'
+    let picked = items.length > 0 ? keyOf(items[0].workspaceId ?? null) : null
+    dialog({
+      title: copy.transferTitle,
+      body: `<div class="np-transfer-list">${items.length === 0
+        ? `<p class="np-transfer-empty">${escapeHtml(copy.noOtherWorkspace)}</p>`
+        : items.map(item => `<button type="button" class="np-transfer-row" data-ws="${keyOf(item.workspaceId ?? null)}"><span class="np-transfer-name">${escapeHtml(item.title ?? workspaceTitle(item.workspaceId))}</span><span class="np-transfer-check" aria-hidden="true">${CHECK_ICON}</span></button>`).join('')}</div>`,
+      setup: el => {
+        const paint = () => { for (const row of el.querySelectorAll('.np-transfer-row')) row.dataset.active = String(row.dataset.ws === picked) }
+        paint()
+        el.addEventListener('click', event => {
+          const row = event.target instanceof Element ? event.target.closest('.np-transfer-row') : null
+          if (row?.dataset.ws !== undefined) { picked = row.dataset.ws; paint() }
+        })
+      },
+      footer: close => React.createElement(React.Fragment, null,
+        React.createElement(Button, { variant: 'outline', className: 'nano-modal-action', onClick: close }, copy.cancel),
+        React.createElement(Button, {
+          variant: 'outline', className: 'nano-modal-action', disabled: picked === null,
+          onClick: async () => {
+            close()
+            if (picked === null) return
+            const clone = await copyNode(state.db, node.id, picked === '__none__' ? null : picked).catch(showError)
+            if (clone === undefined) return
+            const snapshot = await loadSnapshot(state.db)
+            state.nodes = snapshot.nodes
+            state.renderCache.clear()
+            render()
+            channel?.postMessage({ type: 'changed' })
+          },
+        }, copy.copyAction),
+        React.createElement(Button, {
+          variant: 'primary', className: 'nano-modal-action', disabled: picked === null,
+          onClick: async () => {
+            close()
+            if (picked === null) return
+            await moveNode(state.db, node.id, null, picked === '__none__' ? null : picked).catch(showError)
+            const snapshot = await loadSnapshot(state.db)
+            state.nodes = snapshot.nodes
+            state.renderCache.clear()
+            render()
+            channel?.postMessage({ type: 'changed' })
+          },
+        }, copy.transfer)),
+    })
+  }
+
   panel.addEventListener('click', event => {
     const caret = event.target instanceof Element ? event.target.closest('[data-caret]') : null
     if (caret?.dataset.caret) {
@@ -1511,16 +1605,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       render()
       return
     }
-    const rowAction = event.target instanceof Element ? event.target.closest('[data-rename], [data-pin], [data-remove]') : null
-    if (rowAction?.dataset.rename && state.db) {
-      const node = state.nodes.find(item => item.id === rowAction.dataset.rename)
-      if (node) askName(text().renameTitle, node.name, async name => {
-        const renamed = await renameNode(state.db, node.id, name)
-        Object.assign(node, renamed)
-        render()
-      })
-      return
-    }
+    const rowAction = event.target instanceof Element ? event.target.closest('[data-pin], [data-move], [data-more]') : null
     if (rowAction?.dataset.pin && state.db) {
       const node = state.nodes.find(item => item.id === rowAction.dataset.pin)
       if (node) void pinNode(state.db, node.id, node.pinned !== true).then(updated => {
@@ -1529,8 +1614,12 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       }).catch(showError)
       return
     }
-    if (rowAction?.dataset.remove) {
-      requestDelete(rowAction.dataset.remove)
+    if (rowAction?.dataset.move) {
+      openTransfer(rowAction.dataset.move)
+      return
+    }
+    if (rowAction?.dataset.more) {
+      openNodeMenu(rowAction.dataset.more, rowAction)
       return
     }
     const target = event.target instanceof Element ? event.target.closest('[data-action], [data-format], [data-tab], [data-close], [data-id], [data-ws]') : null

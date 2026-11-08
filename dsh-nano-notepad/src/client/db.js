@@ -292,6 +292,41 @@ export async function moveNode(db, id, parentId, workspaceId = undefined) {
   return node
 }
 
+/**
+ * Deep-copy a file or a whole folder tree into another workspace's top level.
+ * Drafts ride on the node record, so clones carry their text; versions and images
+ * stay with the source. A name collision in the destination gets a `-N` suffix.
+ * @param {IDBDatabase} db @param {string} id @param {string | null} workspaceId
+ */
+export async function copyNode(db, id, workspaceId = null) {
+  const nodes = await readAll(db, 'nodes')
+  const source = nodes.find(item => item.id === id)
+  if (!source) throw new Error('notepad item no longer exists')
+  const destination = workspaceId ?? null
+  const topSiblings = nodes.filter(item => item.parentId === null && (item.workspaceId ?? null) === destination)
+  const isFile = source.kind === 'file'
+  const base = isFile ? source.name.replace(/\.md$/i, '') : source.name
+  const ext = isFile ? '.md' : ''
+  let name = source.name, i = 1
+  while (topSiblings.some(item => item.name === name)) name = `${base}-${++i}${ext}`
+  const now = Date.now()
+  const clones = []
+  const map = new Map()
+  const clone = (node, parentId) => {
+    const copy = { ...node, id: crypto.randomUUID(), parentId, workspaceId: destination, createdAt: now, updatedAt: now }
+    if (parentId === null) copy.name = name
+    map.set(node.id, copy.id)
+    clones.push({ copy, from: node })
+    for (const child of nodes.filter(item => item.parentId === node.id)) clone(child, copy.id)
+  }
+  clone(source, null)
+  const transaction = db.transaction('nodes', 'readwrite')
+  const store = transaction.objectStore('nodes')
+  for (const { copy } of clones) store.put(copy)
+  await transactionDone(transaction)
+  return clones[0].copy
+}
+
 /** @param {string} markdown */
 export function imageIdsIn(markdown) {
   return [...markdown.matchAll(/notepad-image:([0-9a-f-]{36})/gu)].map(match => match[1])

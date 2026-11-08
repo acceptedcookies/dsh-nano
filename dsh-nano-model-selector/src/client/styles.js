@@ -1,7 +1,12 @@
-/** Selector styles. Colors come from the active DSH theme tokens. */
+/** Selector styles. Colors come from the active DSH theme tokens; shared `nano-*` rules come from dsh-nano-ui. */
 
-export const STYLE = `
+import { NANO_STYLES } from 'dsh-nano-ui'
+
+export const STYLE = `${NANO_STYLES}
 .nms-root { position: relative; min-width: 0; }
+/* The shared toast is position:absolute, anchored for relative page bodies; .nms-root is a
+   small inline seat, so this plugin re-anchors it to the viewport like the old .nms-toast. */
+.nms-root .nano-toast { position: fixed; bottom: 24px; z-index: 1300; }
 .nms-trigger {
   display: flex; align-items: center; gap: 4px; min-width: 0; max-width: 360px; height: 28px;
   padding: 0 4px 0 8px; border: 0; border-radius: var(--dsw-radius-sm); outline: none;
@@ -55,7 +60,7 @@ export const STYLE = `
 .nms-provider-logo img { display: block; width: 100%; height: 100%; object-fit: contain; }
 .nms-provider-logo-route { color: var(--dsw-alias-label-secondary); }
 .nms-main { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; }
-.nms-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 8px 16px 10px; scrollbar-gutter: stable both-edges; }
+.nms-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 8px 13px 10px; scrollbar-gutter: stable both-edges; }
 .nms-group { display: flex; align-items: center; gap: 6px; margin: 10px 0 4px; color: var(--dsw-alias-label-tertiary); font-size: 11px; line-height: 16px; font-weight: 600; letter-spacing: .035em; }
 .nms-group:first-child { margin-top: 2px; }
 .nms-group-count { font-weight: 400; color: var(--dsw-alias-label-tertiary); }
@@ -107,7 +112,6 @@ export const STYLE = `
 .nms-effort-button[data-active="true"] { border-color: var(--dsw-alias-state-business-primary); background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 15%, transparent); color: var(--dsw-alias-label-primary); }
 .nms-effort-button:disabled { color: var(--dsw-alias-label-dimmed); cursor: default; }
 .nms-effort-note { color: var(--dsw-alias-label-tertiary); font-size: 11px; }
-.nms-toast { position: fixed; z-index: 1300; left: 50%; bottom: 24px; transform: translateX(-50%); max-width: min(480px, calc(100vw - 32px)); padding: 8px 12px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-layer-3); color: var(--dsw-alias-state-error-primary); box-shadow: var(--dsw-elevation-prominent); font-size: 12px; line-height: 18px; }
 @keyframes nms-spin { to { transform: rotate(360deg); } }
 @keyframes nms-pop { from { opacity: 0; transform: translateY(6px) scale(.985); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .nms-panel { animation: none; } .nms-trigger-chevron { transition: none; } }

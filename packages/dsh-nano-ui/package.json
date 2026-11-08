@@ -1,0 +1,22 @@
+{
+  "name": "dsh-nano-ui",
+  "version": "0.1.0",
+  "description": "Shared UI primitives for the dsh-nano overlay plugins: dialog, menu, toast built on @deepseek-ai/dsh-client-ui-primitives.",
+  "type": "module",
+  "main": "index.js",
+  "module": "index.js",
+  "sideEffects": false,
+  "files": [
+    "index.js",
+    "src"
+  ],
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18",
+    "@deepseek-ai/dsh-client-ui-primitives": ">=0"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "private": false
+}

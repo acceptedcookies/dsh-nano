@@ -41,5 +41,8 @@
   },
   "devDependencies": {
     "esbuild": "0.25.0"
+  },
+  "dependencies": {
+    "dsh-nano-ui": "file:../packages/dsh-nano-ui"
   }
 }

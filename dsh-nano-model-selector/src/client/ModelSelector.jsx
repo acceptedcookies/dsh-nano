@@ -2,6 +2,7 @@
 
 import * as React from 'react'
 import { createPortal } from 'react-dom'
+import { NanoToast } from 'dsh-nano-ui'
 import { copyFor } from './i18n.js'
 import { BrandMark } from './BrandMark.jsx'
 import { readFavorites, writeFavorites } from './favorites.js'
@@ -698,9 +699,7 @@ export function ModelSelector({ locked, available, directory, load, select, lang
         document.body,
       )}
 
-      {toast !== null && (
-        <div className="nms-toast" role="status" key={toast.seq}>{toast.text}</div>
-      )}
+      {toast !== null && <NanoToast key={toast.seq} text={toast.text} />}
     </div>
   )
 

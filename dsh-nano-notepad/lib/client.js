@@ -812,7 +812,7 @@ window.__ModuleLoader__.load({
 .np-tree-tools button { display: inline-flex; align-items: center; justify-content: center; width: var(--np-icon-btn); height: var(--np-icon-btn); padding: 0; border: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); cursor: pointer; }
 .np-tree-tools button svg { width: 16px; height: 16px; display: block; }
 .np-tree-tools button:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); border-color: var(--dsw-alias-border-l3); }
-.np-tree-tools button.np-danger:hover { color: var(--dsw-alias-label-error); border-color: var(--dsw-alias-state-error-primary); background: var(--dsw-alias-state-error-secondary, var(--dsw-alias-interactive-bg-hover)); }
+.np-tree-tools button.np-danger:hover { color: var(--dsw-alias-state-error-secondary); border-color: var(--dsw-alias-state-error-primary); background: var(--dsw-alias-state-error-primary); }
 .np-nodes { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; padding: 6px var(--np-pad-x) var(--np-pad-x); }
 .np-tree-foot { box-sizing: border-box; display: flex; align-items: center; gap: var(--np-gap); flex: none; min-height: var(--np-foot-h); padding: 0 var(--np-pad-x); border-top: 1px solid var(--dsw-alias-border-l2); }
 .np-tree-foot button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 30px; }

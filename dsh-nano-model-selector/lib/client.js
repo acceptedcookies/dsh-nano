@@ -353,6 +353,8 @@ window.__ModuleLoader__.load({
 
   // src/client/ModelSelector.jsx
   var STYLE_ID = "nano-model-selector-style";
+  var MODEL_CARD_HEIGHT = 64;
+  var PANEL_CHROME_HEIGHT = 58 + 46 + 18 + 2;
   function keyOf(provider, model) {
     return `${provider}/${model}`;
   }
@@ -533,7 +535,7 @@ window.__ModuleLoader__.load({
         const margin = 12;
         const width = Math.min(440, window.innerWidth - margin * 2);
         const available2 = window.innerHeight - margin * 2;
-        const height = Math.min(394, available2);
+        const height = Math.min(MODEL_CARD_HEIGHT * 4.5 + PANEL_CHROME_HEIGHT, available2);
         let left = Math.min(Math.max(margin, rect.right - width), Math.max(margin, window.innerWidth - width - margin));
         let top = rect.top - height - 8;
         if (top < margin) top = Math.min(window.innerHeight - height - margin, rect.bottom + 8);

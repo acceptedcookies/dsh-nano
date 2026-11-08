@@ -20,6 +20,12 @@ import { STYLE } from './styles.js'
 
 const STYLE_ID = 'nano-model-selector-style'
 
+/** One model row's fixed height; the panel always shows 4.5 of them. */
+const MODEL_CARD_HEIGHT = 64
+
+/** Top bar, effort footer, list padding, and panel border around the rows. */
+const PANEL_CHROME_HEIGHT = 58 + 46 + 18 + 2
+
 /** @param {string} provider @param {string} model */
 function keyOf(provider, model) {
   return `${provider}/${model}`
@@ -240,9 +246,10 @@ export function ModelSelector({ locked, available, directory, load, select, lang
       const margin = 12
       const width = Math.min(440, window.innerWidth - margin * 2)
       const available = window.innerHeight - margin * 2
-      // Fixed to 4.5 model cards: 4.5 * 64px rows plus the 58px top bar,
-      // 46px effort footer, and 18px list padding.
-      const height = Math.min(394, available)
+      // Fixed to 4.5 model cards so switching filters never resizes the
+      // panel. 4.5 * 64px rows + 58px top bar + 46px effort footer + 18px
+      // list padding + 2px border, all inside the border box.
+      const height = Math.min(MODEL_CARD_HEIGHT * 4.5 + PANEL_CHROME_HEIGHT, available)
       let left = Math.min(Math.max(margin, rect.right - width), Math.max(margin, window.innerWidth - width - margin))
       let top = rect.top - height - 8
       if (top < margin) top = Math.min(window.innerHeight - height - margin, rect.bottom + 8)

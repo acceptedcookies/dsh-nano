@@ -1173,7 +1173,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
         ])}
       </section>
       <section class="np-section">
-        ${num('imageLimitBytes', copy.unitBytes, values.imageLimitBytes, copy.imageLimit, copy.imageLimitHint)}
+        ${num('imageLimitBytes', copy.unitMb, values.imageLimitBytes, copy.imageLimit, copy.imageLimitHint, 1048576)}
         <div class="np-field"><div class="np-field-text"><span class="np-field-name">${escapeHtml(copy.storageHeading)}</span><span class="np-field-desc">${escapeHtml(copy.storageHint)}</span></div><span class="np-stat np-usage-val"></span></div>
       </section>
       <section class="np-section">

@@ -665,7 +665,8 @@ window.__ModuleLoader__.load({
       allWorkspaces: "\u5168\u90E8\u5DE5\u4F5C\u533A",
       historyTitle: "\u5386\u53F2\u7248\u672C",
       expand: "\u5C55\u5F00",
-      editHint: "\u70B9\u51FB\u8FDB\u5165\u7F16\u8F91"
+      editHint: "\u70B9\u51FB\u8FDB\u5165\u7F16\u8F91",
+      confirmRestore: "\u786E\u8BA4\u56DE\u9000\uFF1F"
     },
     en: {
       files: "Files",
@@ -750,7 +751,8 @@ window.__ModuleLoader__.load({
       allWorkspaces: "All workspaces",
       historyTitle: "History",
       expand: "Expand",
-      editHint: "Click to edit"
+      editHint: "Click to edit",
+      confirmRestore: "Click again to restore"
     }
   };
   function languageOf(language) {
@@ -794,14 +796,15 @@ window.__ModuleLoader__.load({
 .np-nodes { overflow-x: hidden; overflow-y: auto; }
 .np-tabs { display: flex; align-items: center; gap: 4px; min-height: var(--np-row-h); padding: 6px var(--np-pad-x); cursor: grab; border-bottom: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-2); }
 .np-tablist { display: flex; min-width: 0; gap: 2px; overflow-x: auto; scrollbar-width: thin; }
-.np-tab { display: inline-flex; align-items: center; gap: 6px; flex: none; max-width: 180px; height: 30px; box-sizing: border-box; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); padding: 0 8px; cursor: pointer; font: inherit; }
+.np-tab { display: inline-flex; align-items: center; gap: 2px; flex: none; max-width: 180px; height: 30px; box-sizing: border-box; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); padding: 0 2px 0 8px; cursor: default; font: inherit; }
+.np-tab-btn { min-width: 0; flex: 1; display: inline-flex; align-items: center; border: 0; background: transparent; color: inherit; font: inherit; padding: 0; cursor: pointer; }
 .np-tabs > button[data-action="new-file"] { display: inline-flex; align-items: center; justify-content: center; height: 30px; box-sizing: border-box; }
 .np-tabs-spacer { flex: 1 1 auto; min-width: 8px; }
 .np-tab-minimize { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; box-sizing: border-box; padding: 0; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-secondary); cursor: pointer; }
 .np-tab-minimize:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); border-color: var(--dsw-alias-border-l3); }
 .np-tab-minimize svg { width: 16px; height: 16px; display: block; }
 .np-tab-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.np-tab-x { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex: none; border-radius: var(--dsw-radius-xs, 4px); color: var(--dsw-alias-label-tertiary); }
+.np-tab-x { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; flex: none; border: 0; background: transparent; border-radius: var(--dsw-radius-xs, 4px); color: var(--dsw-alias-label-tertiary); font: inherit; padding: 0; cursor: pointer; }
 .np-tab-x:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 .np-tab[data-active="true"] { background: var(--dsw-alias-interactive-bg-active); color: var(--dsw-alias-label-primary); }
 .np-body { display: flex; min-height: 0; flex: 1; }
@@ -1071,7 +1074,7 @@ window.__ModuleLoader__.load({
         <div class="np-slash" hidden></div>
         <div class="np-read" tabindex="0" hidden></div>
         <div class="np-error" role="alert" hidden><span class="np-error-text"></span><button type="button" data-action="dismiss-error">${CLOSE_ICON}</button></div>
-        <footer class="np-footer"><span class="np-sync"><i class="np-beat" data-state="idle"></i><span class="np-status-text"></span></span><span class="np-footer-actions"><button type="button" data-action="copy" data-i18n="copyPath"></button><button type="button" data-action="history" data-i18n="history"></button><button type="button" data-action="save-version" data-i18n="saveVersion"></button><button type="button" class="np-danger" data-action="clear-file" data-i18n="clearFile"></button></span></footer>
+        <footer class="np-footer"><span class="np-sync"><i class="np-beat" data-state="idle"></i><span class="np-status-text" role="status" aria-live="polite"></span></span><span class="np-footer-actions"><button type="button" data-action="copy" data-i18n="copyPath"></button><button type="button" data-action="history" data-i18n="history"></button><button type="button" data-action="save-version" data-i18n="saveVersion"></button><button type="button" class="np-danger" data-action="clear-file" data-i18n="clearFile"></button></span></footer>
       </div>
     </div>
     <div class="np-resize" data-edge="n"></div><div class="np-resize" data-edge="s"></div><div class="np-resize" data-edge="e"></div><div class="np-resize" data-edge="w"></div><div class="np-resize" data-edge="nw"></div><div class="np-resize" data-edge="ne"></div><div class="np-resize" data-edge="sw"></div><div class="np-resize" data-edge="se"></div>
@@ -1279,7 +1282,7 @@ window.__ModuleLoader__.load({
         const node = state.nodes.find((item) => item.id === id);
         if (!node) return "";
         const name = escapeHtml(node.name);
-        return `<button class="np-tab" type="button" data-tab="${id}" data-active="${id === state.ui.currentId}"><span class="np-tab-name">${name}</span><span class="np-tab-x" role="button" tabindex="0" data-close="${id}" title="${escapeHtml(text().close)}" aria-label="${escapeHtml(text().close)}">\xD7</span></button>`;
+        return `<span class="np-tab" data-active="${id === state.ui.currentId}"><button class="np-tab-btn" type="button" data-tab="${id}" title="${name}"><span class="np-tab-name">${name}</span></button><button class="np-tab-x" type="button" data-close="${id}" title="${escapeHtml(text().close)}" aria-label="${escapeHtml(text().close)}">\xD7</button></span>`;
       }).join("");
     }
     async function renderBody() {
@@ -1684,9 +1687,17 @@ window.__ModuleLoader__.load({
           const previewCopy = text();
           dialog(`<h3>${escapeHtml(previewCopy.previewAt(new Date(version.createdAt).toLocaleString()))}</h3><pre>${escapeHtml(version.markdown)}</pre><div class="np-actions"><button type="button" data-go="back">${escapeHtml(previewCopy.back)}</button><button type="button" data-go="restore">${escapeHtml(previewCopy.restore)}</button></div>`, (preview, closePreview) => {
             preview.addEventListener("click", (previewEvent) => {
-              const action = previewEvent.target instanceof HTMLElement ? previewEvent.target.dataset.go : void 0;
+              const target2 = previewEvent.target instanceof HTMLElement ? previewEvent.target : null;
+              const action = target2?.dataset.go;
               if (action === "back") closePreview();
               if (action === "restore") {
+                if (target2?.dataset.arm !== "true") {
+                  if (target2) {
+                    target2.dataset.arm = "true";
+                    target2.textContent = text().confirmRestore;
+                  }
+                  return;
+                }
                 write().value = version.markdown;
                 const live = current();
                 if (live) live.draft = version.markdown;
@@ -1987,7 +1998,7 @@ window.__ModuleLoader__.load({
     });
     panel.addEventListener("keydown", (event) => {
       if (event.key !== "Enter" && event.key !== " " || !dialogMask.hidden) return;
-      const node = event.target instanceof Element ? event.target.closest("[data-ws], .np-tab-x") : null;
+      const node = event.target instanceof Element ? event.target.closest("[data-ws]") : null;
       if (node) {
         event.preventDefault();
         node.click();

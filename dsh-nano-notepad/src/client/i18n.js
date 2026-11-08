@@ -84,6 +84,7 @@ export const COPY = {
     historyTitle: '历史版本',
     expand: '展开',
     editHint: '点击进入编辑',
+    confirmRestore: '确认回退？',
   },
   en: {
     files: 'Files',
@@ -169,6 +170,7 @@ export const COPY = {
     historyTitle: 'History',
     expand: 'Expand',
     editHint: 'Click to edit',
+    confirmRestore: 'Click again to restore',
   },
 }
 

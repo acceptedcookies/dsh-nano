@@ -17,8 +17,20 @@ export function openNanoDialog(options) {
   const host = document.createElement('div')
   host.className = 'nano-dialog-host'
   document.body.appendChild(host)
+  /* Modal portals straight into document.body, so the cap can't ride the host:
+     it lives as a document-level custom property while a capped dialog is open,
+     removed on close only if no later dialog has replaced it. */
+  const maxKey = '--nano-dlg-max'
+  const maxValue = typeof options.maxHeight === 'number' ? `${Math.round(options.maxHeight)}px` : null
+  if (maxValue !== null) document.documentElement.style.setProperty(maxKey, maxValue)
   const root = createRoot(host)
-  const close = () => { root.unmount(); host.remove() }
+  const close = () => {
+    root.unmount()
+    host.remove()
+    if (maxValue !== null && document.documentElement.style.getPropertyValue(maxKey) === maxValue) {
+      document.documentElement.style.removeProperty(maxKey)
+    }
+  }
   root.render(React.createElement(NanoDialog, { ...options, onCancel: () => { options.onCancel?.(); close() } }))
   return { close }
 }

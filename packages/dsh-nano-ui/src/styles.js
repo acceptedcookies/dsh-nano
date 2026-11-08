@@ -28,4 +28,10 @@ export const NANO_STYLES = `
 /* ── shared dialog helpers ──────────────────────────────────────────────────── */
 .nano-dialog-host { position: fixed; inset: 0; z-index: 50; }
 .nano-dialog-error { margin: 8px 0 0; font-size: 12px; color: var(--dsw-alias-danger, #cf222e); }
+/* Height cap (e.g. 80% of the owning overlay): the card's own overflow:hidden
+   clips nothing because the body becomes the flex child that scrolls. The last
+   content child is .body — target it structurally since the class is hashed. */
+.nano-dialog-capped { max-height: var(--nano-dlg-max) !important; }
+.nano-dialog-content { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.nano-dialog-content > div:last-child { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 `

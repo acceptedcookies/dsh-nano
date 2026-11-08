@@ -109,7 +109,7 @@ ${NANO_STYLES}
 .np-tree[data-collapsed="true"] .np-node-main { flex: none; justify-content: center; padding-right: 0 !important; }
 .np-tree[data-collapsed="true"] .np-node-name, .np-tree[data-collapsed="true"] .np-caret, .np-tree[data-collapsed="true"] .np-node-actions, .np-tree[data-collapsed="true"] .np-group { display: none; }
 .np-tree[data-collapsed="true"] .np-node-icon svg { width: 18px; height: 18px; }
-.np-tree-head { box-sizing: border-box; display: flex; align-items: center; gap: 4px; width: 100%; height: 43px; padding: 6px var(--np-pad-x); color: var(--dsw-alias-label-tertiary); font-size: 12px; border-bottom: 1px solid var(--dsw-alias-border-l2); }
+.np-tree-head { box-sizing: border-box; display: flex; flex: none; align-items: center; gap: 4px; width: 100%; height: 49px; padding: 6px var(--np-pad-x); color: var(--dsw-alias-label-tertiary); font-size: 12px; border-bottom: 1px solid var(--dsw-alias-border-l2); }
 .np-tree-toggle { box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; width: var(--np-icon-btn); height: var(--np-icon-btn); flex: none; padding: 0; border: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); cursor: pointer; }
 .np-tree-toggle:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 .np-tree-tools { display: flex; align-items: center; gap: 2px; }
@@ -954,6 +954,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       confirmLabel: spec.confirmLabel,
       danger: spec.danger === true,
       footer: spec.footer?.(closeSelf),
+      maxHeight: Math.round(panel.getBoundingClientRect().height * 0.8),
       onConfirm: () => spec.onConfirm?.(closeSelf),
       onCancel: () => { finish(); spec.onCancel?.() },
       children: React.createElement('div', {

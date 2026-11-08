@@ -15,16 +15,20 @@ import { Button, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
  * @param {boolean} [props.danger] - tint the confirm action for destructive cards.
  * @param {React.ReactNode} [props.footer] - replace the stock Cancel/Confirm row (e.g. an action set
  *   whose primary verb differs per body row); leave undefined for the default pair.
+ * @param {number} [props.maxHeight] - cap the card in pixels; the body scrolls when content exceeds
+ *   it (notepad caps at 80% of the floating window so a tall settings card never swallows it).
  * @param {() => void} props.onConfirm - primary action.
  * @param {() => void} props.onCancel - cancel action.
  * @param {React.ReactNode} [props.children] - the body.
  */
-export function NanoDialog({ copy, title, confirmLabel, confirmDisabled, busy, error, danger, footer, onConfirm, onCancel, children }) {
+export function NanoDialog({ copy, title, confirmLabel, confirmDisabled, busy, error, danger, footer, maxHeight, onConfirm, onCancel, children }) {
   return React.createElement(Modal, {
     open: true,
     onClose: onCancel,
     title,
     closeLabel: copy.cancel,
+    className: maxHeight === undefined ? undefined : 'nano-dialog-capped',
+    contentClassName: 'nano-dialog-content',
     footer: footer ?? React.createElement(React.Fragment, null,
       React.createElement(Button, { variant: 'outline', className: 'nano-modal-action', onClick: onCancel }, copy.cancel),
       React.createElement(Button, {

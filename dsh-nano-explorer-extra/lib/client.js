@@ -462,7 +462,7 @@ window.__ModuleLoader__.load({
     useEffect3(() => () => {
       alive.current = false;
     }, []);
-    const loadLevel = useCallback2(async (path, silent = false) => {
+    const loadLevel = useCallback2(async (path, silent = false, allowOutside = void 0) => {
       const key = treeKeyOf(root, path);
       if (!silent) {
         setLevels((current) => {
@@ -476,7 +476,8 @@ window.__ModuleLoader__.load({
         sessionId,
         path,
         followSymlinks: prefs.followSymlinks,
-        allowOutsideWorkspace: prefs.allowOutsideWorkspace
+        // A path the reader explicitly accepted is allowed even when the global switch is off.
+        allowOutsideWorkspace: allowOutside === true || prefs.allowOutsideWorkspace === true || prefs.allowed?.includes(treeKeyOf(root, path)) === true
       });
       if (!alive.current) return;
       setLevels((current) => {
@@ -496,7 +497,8 @@ window.__ModuleLoader__.load({
         return next;
       });
       listed.current?.(path, result.ok ? result.entries.map((entry) => entry.name) : []);
-    }, [root, sessionId, request, prefs.followSymlinks, prefs.allowOutsideWorkspace]);
+      return result;
+    }, [root, sessionId, request, prefs.followSymlinks, prefs.allowOutsideWorkspace, prefs.allowed]);
     useEffect3(() => {
       if (root === void 0) return;
       setLevels(/* @__PURE__ */ new Map());
@@ -622,8 +624,10 @@ window.__ModuleLoader__.load({
     const [dialog, setDialog] = useState3(null);
     const [busy, setBusy] = useState3(false);
     const [dialogError, setDialogError] = useState3(void 0);
+    const allowance = useRef4(/* @__PURE__ */ new Set());
     const [outsideAllowed, setOutsideAllowed] = useState3(() => /* @__PURE__ */ new Set());
     const [linkNote, setLinkNote] = useState3(void 0);
+    const [outsidePrompt, setOutsidePrompt] = useState3(null);
     const lastPress = useRef4({ path: "", at: 0 });
     const prefsRef = useRef4(prefs);
     prefsRef.current = prefs;
@@ -654,11 +658,14 @@ window.__ModuleLoader__.load({
         return next;
       });
     }, [request, sessionId, cwd]);
+    const accepted = useMemo2(() => [...outsideAllowed], [outsideAllowed]);
+    const treePrefs = useMemo2(() => ({ ...prefs, allowed: accepted }), [prefs, accepted]);
     const tree = useTree({
       sessionId,
       root: cwd,
       request,
-      prefs: { ...prefs, allowOutsideWorkspace: prefs.allowOutsideWorkspace || outsideAllowed.size > 0 },
+      // The allowance is per path: accepting one link must not open every other outside link.
+      prefs: treePrefs,
       onListed: (path, names) => {
         void markIgnored(path, names);
       }
@@ -694,7 +701,7 @@ window.__ModuleLoader__.load({
     }, [refreshGit]);
     useEffect4(() => {
       void refreshStats();
-    }, [refreshStats]);
+    }, [cwd]);
     const statsTimer = useRef4(0);
     const queueStats = useCallback3(() => {
       window.clearTimeout(statsTimer.current);
@@ -736,6 +743,18 @@ window.__ModuleLoader__.load({
       if (panel.isFloating) tab.actions.openResource(address);
       else tab.actions.openResource(address, { paneId: panel.id });
     }, [cwd, sessionId, tab.actions, panel.id, panel.isFloating]);
+    const openDirectory = useCallback3(async (entry) => {
+      const result = await tree.loadLevel(entry.path);
+      if (result?.ok) {
+        tree.toggle(entry.path, true);
+        return;
+      }
+      if (result?.code !== "outside-workspace") {
+        tree.toggle(entry.path, true);
+        return;
+      }
+      setOutsidePrompt({ path: entry.path, name: entry.name });
+    }, [tree]);
     const [revealState, setRevealState] = useState3("unknown");
     useEffect4(() => {
       let live = true;
@@ -893,7 +912,13 @@ window.__ModuleLoader__.load({
       // `entry.path` is already the absolute tree key: the tree joins each level key with its child
       // name, so re-resolving it against the root would build `<root>/<root>/<name>` and the level
       // would never be found — which is what made every folder refuse to expand.
-      onToggle: (entry) => tree.toggle(entry.path, !tree.expanded.includes(entry.path)),
+      onToggle: (entry) => {
+        if (outsideAllowed.has(entry.path)) {
+          tree.toggle(entry.path, !tree.expanded.includes(entry.path));
+          return;
+        }
+        void openDirectory(entry);
+      },
       onOpen: (entry) => {
         tree.setSelected(entry.path);
         const now = Date.now();
@@ -964,6 +989,19 @@ window.__ModuleLoader__.load({
       }
       openEntry({ path: key, name: basenameOf(selected), meta: { kind: "file" } });
     }, [tree, cwd, openEntry]);
+    const outsideNode = outsidePrompt === null ? null : import_react6.default.createElement(Dialog, {
+      copy,
+      title: copy.symlinkOutside,
+      confirmLabel: copy.openAnyway,
+      onConfirm: () => {
+        const target = outsidePrompt.path;
+        allowance.current = new Set(allowance.current).add(target);
+        setOutsideAllowed(new Set(allowance.current));
+        setOutsidePrompt(null);
+        void tree.loadLevel(target, false, true).then(() => tree.toggle(target, true));
+      },
+      onCancel: () => setOutsidePrompt(null)
+    }, import_react6.default.createElement("p", null, copy.symlinkOutsideBody(outsidePrompt.name)));
     const dialogNode = dialog === null ? null : dialog.kind === "commit" ? import_react6.default.createElement(CommitDialog, {
       copy,
       files: changed,
@@ -1062,6 +1100,7 @@ window.__ModuleLoader__.load({
         }
       }),
       dialogNode,
+      outsideNode,
       import_react6.default.createElement(RowMenu, {
         menu,
         copy,
@@ -1173,6 +1212,7 @@ window.__ModuleLoader__.load({
       statsExcludeGit: "\u4E0D\u542B .git",
       symlinkOutside: "\u6307\u5411\u5DE5\u4F5C\u533A\u5916\uFF0C\u9ED8\u8BA4\u4E0D\u8DDF\u968F",
       openAnyway: "\u4ECD\u7136\u6253\u5F00",
+      symlinkOutsideBody: (name) => `\u300C${name}\u300D\u6307\u5411\u5DE5\u4F5C\u533A\u4EE5\u5916\u3002\u5217\u76EE\u5F55\u4F1A\u8BFB\u53D6\u90A3\u4E2A\u4F4D\u7F6E\u7684\u5185\u5BB9\uFF0C\u4F46\u4EFB\u4F55\u5199\u5165\u4ECD\u7136\u88AB\u9650\u5236\u5728\u5DE5\u4F5C\u533A\u5185\u3002`,
       symlinkBadge: "\u8F6F\u94FE\u63A5",
       ignoredBadge: "\u5DF2\u5FFD\u7565",
       folderRenameRefresh: "\u6587\u4EF6\u5939\u5DF2\u6539\u540D\uFF0C\u5B50\u8DEF\u5F84\u5DF2\u66F4\u65B0",
@@ -1245,6 +1285,7 @@ window.__ModuleLoader__.load({
       statsExcludeGit: "excluding .git",
       symlinkOutside: "Points outside the workspace; not followed by default",
       openAnyway: "Open anyway",
+      symlinkOutsideBody: (name) => `\u201C${name}\u201D points outside the workspace. Listing reads that location, while every write stays confined to the workspace.`,
       symlinkBadge: "Symbolic link",
       ignoredBadge: "Ignored",
       folderRenameRefresh: "Folder renamed; child paths updated",
@@ -1459,16 +1500,24 @@ window.__ModuleLoader__.load({
 /* Row decorations injected through the tree Factory's accessory seat. */
 .nxe-acc {
   display: inline-flex; align-items: center; justify-content: flex-end; gap: 4px;
-  /* The shipped accessory wrapper is content-sized; without an explicit width its own flex context
-     collapses a width-only child (the folder dot) to zero, so the mark never renders. */
-  flex: 0 0 auto; min-width: 14px;
+  /* The shipped accessory wrapper is content-sized; an explicit width keeps a width-only child (the
+     folder dot) from collapsing to zero, and fixes the column the marks are right-aligned in. */
+  flex: 0 0 auto; min-width: 6px;
 }
 .nxe-acc-letter {
-  font-size: 11px; font-weight: 700; line-height: 1; letter-spacing: .02em;
-  /* A tinted pill keeps the letter readable over hover, selection, and the ignored fade. */
-  padding: 1px 4px; border-radius: var(--dsw-radius-xs);
+  font-size: 12px; font-weight: 800; line-height: 1; letter-spacing: 0;
+  /* No horizontal padding: a letter and a folder dot must share one right edge, and padding would
+     push the glyph inward while leaving the dot flush. The box is fixed so both marks occupy the
+     same column whatever the glyph is. */
+  /* The glyph is narrower than the dot, so it right-aligns to the box end: both inks then end on the
+     same column, which is what the eye compares. */
+  display: inline-flex; align-items: center; justify-content: flex-end;
+  box-sizing: border-box; width: 6px; overflow: visible; padding: 0; white-space: nowrap;
+  text-align: right;
+  font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1;
 }
-.nxe-acc-letter[data-status] { min-width: 14px; text-align: center; }
+/* The mark column is fixed by the letter rule below; this selector only keeps the colour hooks. */
+.nxe-acc-letter[data-status] { text-align: right; }
 .nxe-acc-letter[data-status="M"] { color: var(--nxe-git-modified); }
 .nxe-acc-letter[data-status="A"] { color: var(--nxe-git-added); }
 .nxe-acc-letter[data-status="D"] { color: var(--nxe-git-deleted); }
@@ -1593,7 +1642,11 @@ button.nxe-commit { cursor: pointer; }
 }
 
 /* A folder's summary dot: present whenever anything below it changed, visible while collapsed. */
-.nxe-acc-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none; }
+.nxe-acc-dot {
+  width: 6px; height: 6px; border-radius: 50%; background: currentColor;
+  /* Same 6px column as the letter, flush right. */
+  flex: none; margin: 0;
+}
 .nxe-acc-dot[data-status="M"] { color: var(--nxe-git-modified); }
 .nxe-acc-dot[data-status="A"] { color: var(--nxe-git-added); }
 .nxe-acc-dot[data-status="D"] { color: var(--nxe-git-deleted); }

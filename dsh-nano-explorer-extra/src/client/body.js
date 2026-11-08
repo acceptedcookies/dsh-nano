@@ -1,7 +1,7 @@
 /** The files page this plugin takes over: header controls over the shared tree, and a footer status bar. */
 
 import React from 'react'
-import { CommitDialog, RenameDialog } from './dialogs.js'
+import { CommitDialog, Dialog, RenameDialog } from './dialogs.js'
 import { createAccessory } from './accessory.js'
 import { StatusBar } from './statusbar.js'
 import { RowMenu } from './menu.js'
@@ -41,8 +41,10 @@ export function ExplorerBody(props) {
   const [dialog, setDialog] = useState(null)
   const [busy, setBusy] = useState(false)
   const [dialogError, setDialogError] = useState(undefined)
+  const allowance = useRef(new Set())
   const [outsideAllowed, setOutsideAllowed] = useState(() => new Set())
   const [linkNote, setLinkNote] = useState(undefined)
+  const [outsidePrompt, setOutsidePrompt] = useState(null)
 
   // One gesture clock for the whole tree: the Factory hands the same `onOpen` both presses.
   const lastPress = useRef({ path: '', at: 0 })
@@ -81,11 +83,21 @@ export function ExplorerBody(props) {
     })
   }, [request, sessionId, cwd])
 
+  /**
+   * The preference object the tree reads.
+   *
+   * One identity per real change: a fresh object on every render would rebuild the listing callbacks
+   * and make the tree's initial-load effect clear the levels it had just filled.
+   */
+  const accepted = useMemo(() => [...outsideAllowed], [outsideAllowed])
+  const treePrefs = useMemo(() => ({ ...prefs, allowed: accepted }), [prefs, accepted])
+
   const tree = useTree({
     sessionId,
     root: cwd,
     request,
-    prefs: { ...prefs, allowOutsideWorkspace: prefs.allowOutsideWorkspace || outsideAllowed.size > 0 },
+    // The allowance is per path: accepting one link must not open every other outside link.
+    prefs: treePrefs,
     onListed: (path, names) => { void markIgnored(path, names) },
   })
 
@@ -112,7 +124,10 @@ export function ExplorerBody(props) {
   }, [cwd, sessionId, request])
 
   useEffect(() => { void refreshGit() }, [refreshGit])
-  useEffect(() => { void refreshStats() }, [refreshStats])
+  // Count once per workspace. Keying on the callback identity would re-walk the whole tree after any
+  // re-render, which on a large checkout costs seconds of CPU; later counts come from queueStats.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { void refreshStats() }, [cwd])
 
   // Debounced re-count after directory changes, at least `statsDebounceMs` apart.
   const statsTimer = useRef(0)
@@ -165,6 +180,21 @@ export function ExplorerBody(props) {
     if (panel.isFloating) tab.actions.openResource(address)
     else tab.actions.openResource(address, { paneId: panel.id })
   }, [cwd, sessionId, tab.actions, panel.id, panel.isFloating])
+
+  /**
+   * Expand one directory, or ask once whether to cross the workspace boundary.
+   *
+   * A link into the workspace lists on the first press. One that resolves outside is refused by the
+   * Host, so this asks the reader rather than showing a dead row; an accepted path is remembered for
+   * this page life only, exactly like the spec requires.
+   * @param entry - the row that was pressed.
+   */
+  const openDirectory = useCallback(async entry => {
+    const result = await tree.loadLevel(entry.path)
+    if (result?.ok) { tree.toggle(entry.path, true); return }
+    if (result?.code !== 'outside-workspace') { tree.toggle(entry.path, true); return }
+    setOutsidePrompt({ path: entry.path, name: entry.name })
+  }, [tree])
 
   /** Whether a native directory opener is installed on this host. */
   const [revealState, setRevealState] = useState('unknown')
@@ -326,7 +356,12 @@ export function ExplorerBody(props) {
     // `entry.path` is already the absolute tree key: the tree joins each level key with its child
     // name, so re-resolving it against the root would build `<root>/<root>/<name>` and the level
     // would never be found — which is what made every folder refuse to expand.
-    onToggle: entry => tree.toggle(entry.path, !tree.expanded.includes(entry.path)),
+    onToggle: entry => {
+      // A link that resolves outside the workspace is refused on purpose; the reader gets one prompt
+      // per path for this page life, then the same press expands it.
+      if (outsideAllowed.has(entry.path)) { tree.toggle(entry.path, !tree.expanded.includes(entry.path)); return }
+      void openDirectory(entry)
+    },
     onOpen: entry => {
       tree.setSelected(entry.path)
       const now = Date.now()
@@ -398,6 +433,20 @@ export function ExplorerBody(props) {
     openEntry({ path: key, name: basenameOf(selected), meta: { kind: 'file' } })
   }, [tree, cwd, openEntry])
 
+  const outsideNode = outsidePrompt === null ? null : React.createElement(Dialog, {
+    copy, title: copy.symlinkOutside,
+    confirmLabel: copy.openAnyway,
+    onConfirm: () => {
+      const target = outsidePrompt.path
+      allowance.current = new Set(allowance.current).add(target)
+      setOutsideAllowed(new Set(allowance.current))
+      setOutsidePrompt(null)
+      // Read the allowance from the ref, so this listing already sees the accepted path.
+      void tree.loadLevel(target, false, true).then(() => tree.toggle(target, true))
+    },
+    onCancel: () => setOutsidePrompt(null),
+  }, React.createElement('p', null, copy.symlinkOutsideBody(outsidePrompt.name)))
+
   const dialogNode = dialog === null ? null : dialog.kind === 'commit'
     ? React.createElement(CommitDialog, {
       copy, files: changed, busy, error: dialogError,
@@ -445,6 +494,7 @@ export function ExplorerBody(props) {
       onRetryStats: () => { void refreshStats() },
     }),
     dialogNode,
+    outsideNode,
     React.createElement(RowMenu, {
       menu, copy,
       onClose: () => setMenu(null),

@@ -51,16 +51,24 @@ export const STYLE = `
 /* Row decorations injected through the tree Factory's accessory seat. */
 .nxe-acc {
   display: inline-flex; align-items: center; justify-content: flex-end; gap: 4px;
-  /* The shipped accessory wrapper is content-sized; without an explicit width its own flex context
-     collapses a width-only child (the folder dot) to zero, so the mark never renders. */
-  flex: 0 0 auto; min-width: 14px;
+  /* The shipped accessory wrapper is content-sized; an explicit width keeps a width-only child (the
+     folder dot) from collapsing to zero, and fixes the column the marks are right-aligned in. */
+  flex: 0 0 auto; min-width: 6px;
 }
 .nxe-acc-letter {
-  font-size: 11px; font-weight: 700; line-height: 1; letter-spacing: .02em;
-  /* A tinted pill keeps the letter readable over hover, selection, and the ignored fade. */
-  padding: 1px 4px; border-radius: var(--dsw-radius-xs);
+  font-size: 12px; font-weight: 800; line-height: 1; letter-spacing: 0;
+  /* No horizontal padding: a letter and a folder dot must share one right edge, and padding would
+     push the glyph inward while leaving the dot flush. The box is fixed so both marks occupy the
+     same column whatever the glyph is. */
+  /* The glyph is narrower than the dot, so it right-aligns to the box end: both inks then end on the
+     same column, which is what the eye compares. */
+  display: inline-flex; align-items: center; justify-content: flex-end;
+  box-sizing: border-box; width: 6px; overflow: visible; padding: 0; white-space: nowrap;
+  text-align: right;
+  font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1;
 }
-.nxe-acc-letter[data-status] { min-width: 14px; text-align: center; }
+/* The mark column is fixed by the letter rule below; this selector only keeps the colour hooks. */
+.nxe-acc-letter[data-status] { text-align: right; }
 .nxe-acc-letter[data-status="M"] { color: var(--nxe-git-modified); }
 .nxe-acc-letter[data-status="A"] { color: var(--nxe-git-added); }
 .nxe-acc-letter[data-status="D"] { color: var(--nxe-git-deleted); }
@@ -185,7 +193,11 @@ button.nxe-commit { cursor: pointer; }
 }
 
 /* A folder's summary dot: present whenever anything below it changed, visible while collapsed. */
-.nxe-acc-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none; }
+.nxe-acc-dot {
+  width: 6px; height: 6px; border-radius: 50%; background: currentColor;
+  /* Same 6px column as the letter, flush right. */
+  flex: none; margin: 0;
+}
 .nxe-acc-dot[data-status="M"] { color: var(--nxe-git-modified); }
 .nxe-acc-dot[data-status="A"] { color: var(--nxe-git-added); }
 .nxe-acc-dot[data-status="D"] { color: var(--nxe-git-deleted); }

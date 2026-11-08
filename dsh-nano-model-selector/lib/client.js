@@ -260,7 +260,7 @@ window.__ModuleLoader__.load({
 .nms-trigger-icon { display: var(--dsh-composer-model-icon-display, none); flex: none; }
 .nms-trigger-chevron { flex: none; color: var(--dsw-alias-label-caption); transition: transform 120ms ease; }
 .nms-trigger-open .nms-trigger-chevron { transform: rotate(180deg); }
-.nms-trigger-busy { width: 12px; height: 12px; flex: none; border-radius: 50%; border: 1.5px solid var(--dsw-alias-label-tertiary); border-top-color: transparent; animation: nms-spin .8s linear infinite; }
+.nms-trigger-busy { box-sizing: border-box; width: 14px; height: 14px; flex: none; border-radius: 50%; border: 1.5px solid var(--dsw-alias-label-tertiary); border-top-color: transparent; animation: nms-spin .8s linear infinite; }
 
 .nms-panel {
   box-sizing: border-box; position: fixed; z-index: 1200; display: flex; flex-direction: column;
@@ -485,8 +485,11 @@ window.__ModuleLoader__.load({
       });
       return () => cancelAnimationFrame(frame);
     }, [open]);
+    const lastGroups = React3.useRef([]);
+    if ((state.groups ?? []).length > 0) lastGroups.current = state.groups;
+    const groupSource = (state.groups ?? []).length > 0 ? state.groups : lastGroups.current;
     const detailMap = React3.useMemo(() => detailsIndex(details), [details]);
-    const groups = React3.useMemo(() => (state.groups ?? []).map((group) => ({
+    const groups = React3.useMemo(() => (groupSource ?? []).map((group) => ({
       ...group,
       models: group.models.map((model) => {
         const brand = brandOf(group, model);
@@ -500,7 +503,7 @@ window.__ModuleLoader__.load({
           reasoning: detailMap.get(keyOf(group.id, model.id))?.reasoning ?? model.reasoning
         };
       })
-    })), [state.groups, detailMap]);
+    })), [groupSource, detailMap]);
     const allModels = React3.useMemo(() => groups.flatMap((group) => group.models), [groups]);
     const brands = React3.useMemo(() => {
       const seen = /* @__PURE__ */ new Set();
@@ -561,9 +564,10 @@ window.__ModuleLoader__.load({
     const currentReasoning = reasoningOf(currentItem);
     const effectiveEffort = current?.reasoningEffort ?? currentReasoning?.defaultEffort;
     const effortLabel = currentItem === void 0 ? state.retainedEffort : currentReasoning === void 0 ? state.retainedEffort : effectiveEffort === void 0 ? copy.providerDefault : currentReasoning.efforts.find((level) => level.id === effectiveEffort)?.name ?? effectiveEffort;
-    const triggerText = currentItem?.model.name ?? current?.model ?? (state.status === "loading" ? copy.triggerLoading : copy.triggerSelect);
-    const triggerAria = currentItem === void 0 ? copy.triggerSelectAria : copy.triggerAria(triggerText, effortLabel);
     const busy = state.pending !== null;
+    const reloading = state.status === "loading" && allModels.length > 0;
+    const triggerText = currentItem?.model.name ?? current?.model ?? (state.status === "loading" && !reloading ? copy.triggerLoading : copy.triggerSelect);
+    const triggerAria = currentItem === void 0 ? copy.triggerSelectAria : copy.triggerAria(triggerText, effortLabel);
     const visible = Boolean(available);
     const refresh = () => {
       load();
@@ -726,7 +730,7 @@ window.__ModuleLoader__.load({
             }
           },
           /* @__PURE__ */ React3.createElement(BrandMark, { brandKey: brand.key, brandName: brand.name })
-        ))), /* @__PURE__ */ React3.createElement("section", { className: "nms-main" }, /* @__PURE__ */ React3.createElement("div", { className: "nms-scroll" }, state.status === "loading" && allModels.length === 0 && /* @__PURE__ */ React3.createElement("div", { className: "nms-loading" }, /* @__PURE__ */ React3.createElement("span", { className: "nms-pending-dot" }), copy.loading), state.error !== null && /* @__PURE__ */ React3.createElement("div", { className: "nms-error" }, /* @__PURE__ */ React3.createElement(WarningIcon, { size: 14 }), /* @__PURE__ */ React3.createElement("span", { className: "nms-error-copy" }, copy.loadError, ": ", state.error), /* @__PURE__ */ React3.createElement("button", { type: "button", className: "nms-retry", onClick: refresh }, copy.retry)), visibleFavorites.length > 0 && /* @__PURE__ */ React3.createElement("div", null, /* @__PURE__ */ React3.createElement("div", { className: "nms-group" }, /* @__PURE__ */ React3.createElement(StarIcon, { className: "nms-group-star", size: 12, filled: true }), copy.favorites, /* @__PURE__ */ React3.createElement("span", { className: "nms-group-count" }, copy.favoriteCount(visibleFavorites.length))), visibleFavorites.map((item) => renderModel(item))), filter !== "favorites" && visibleGroups.map((group) => /* @__PURE__ */ React3.createElement("div", { key: group.id }, /* @__PURE__ */ React3.createElement("div", { className: "nms-group" }, group.name, /* @__PURE__ */ React3.createElement("span", { className: "nms-group-count" }, copy.modelCount(group.models.length))), group.models.map((item) => renderModel(item)))), visibleCount === 0 && state.status !== "loading" && /* @__PURE__ */ React3.createElement("div", { className: "nms-empty" }, /* @__PURE__ */ React3.createElement("span", { className: "nms-empty-icon" }, filter === "favorites" ? /* @__PURE__ */ React3.createElement(StarIcon, { size: 17 }) : /* @__PURE__ */ React3.createElement(ModelIcon, { size: 17 })), filter === "favorites" && favorites.length === 0 ? copy.noFavorites : query !== "" ? copy.noMatches : copy.noModels), (state.failures ?? []).map((failure) => /* @__PURE__ */ React3.createElement("div", { className: "nms-error", key: failure.id }, /* @__PURE__ */ React3.createElement(WarningIcon, { size: 14 }), /* @__PURE__ */ React3.createElement("span", { className: "nms-error-copy" }, copy.providerFailure(failure.name, failure.message)), /* @__PURE__ */ React3.createElement("button", { type: "button", className: "nms-retry", onClick: refresh }, copy.retry)))), /* @__PURE__ */ React3.createElement("footer", { className: "nms-effort" }, /* @__PURE__ */ React3.createElement("span", { className: "nms-effort-label" }, copy.effort), current === null || currentItem === void 0 ? /* @__PURE__ */ React3.createElement("span", { className: "nms-effort-note" }, copy.selectModel) : currentReasoning === void 0 ? /* @__PURE__ */ React3.createElement("span", { className: "nms-effort-note" }, copy.noEffort) : /* @__PURE__ */ React3.createElement("div", { className: "nms-effort-list", role: "group", "aria-label": copy.effort }, effortChoices.map((level) => /* @__PURE__ */ React3.createElement(
+        ))), /* @__PURE__ */ React3.createElement("section", { className: "nms-main" }, /* @__PURE__ */ React3.createElement("div", { className: "nms-scroll" }, state.status === "loading" && allModels.length === 0 && !reloading && /* @__PURE__ */ React3.createElement("div", { className: "nms-loading" }, /* @__PURE__ */ React3.createElement("span", { className: "nms-pending-dot" }), copy.loading), state.error !== null && /* @__PURE__ */ React3.createElement("div", { className: "nms-error" }, /* @__PURE__ */ React3.createElement(WarningIcon, { size: 14 }), /* @__PURE__ */ React3.createElement("span", { className: "nms-error-copy" }, copy.loadError, ": ", state.error), /* @__PURE__ */ React3.createElement("button", { type: "button", className: "nms-retry", onClick: refresh }, copy.retry)), visibleFavorites.length > 0 && /* @__PURE__ */ React3.createElement("div", null, /* @__PURE__ */ React3.createElement("div", { className: "nms-group" }, /* @__PURE__ */ React3.createElement(StarIcon, { className: "nms-group-star", size: 12, filled: true }), copy.favorites, /* @__PURE__ */ React3.createElement("span", { className: "nms-group-count" }, copy.favoriteCount(visibleFavorites.length))), visibleFavorites.map((item) => renderModel(item))), filter !== "favorites" && visibleGroups.map((group) => /* @__PURE__ */ React3.createElement("div", { key: group.id }, /* @__PURE__ */ React3.createElement("div", { className: "nms-group" }, group.name, /* @__PURE__ */ React3.createElement("span", { className: "nms-group-count" }, copy.modelCount(group.models.length))), group.models.map((item) => renderModel(item)))), visibleCount === 0 && state.status !== "loading" && !reloading && /* @__PURE__ */ React3.createElement("div", { className: "nms-empty" }, /* @__PURE__ */ React3.createElement("span", { className: "nms-empty-icon" }, filter === "favorites" ? /* @__PURE__ */ React3.createElement(StarIcon, { size: 17 }) : /* @__PURE__ */ React3.createElement(ModelIcon, { size: 17 })), filter === "favorites" && favorites.length === 0 ? copy.noFavorites : query !== "" ? copy.noMatches : copy.noModels), (state.failures ?? []).map((failure) => /* @__PURE__ */ React3.createElement("div", { className: "nms-error", key: failure.id }, /* @__PURE__ */ React3.createElement(WarningIcon, { size: 14 }), /* @__PURE__ */ React3.createElement("span", { className: "nms-error-copy" }, copy.providerFailure(failure.name, failure.message)), /* @__PURE__ */ React3.createElement("button", { type: "button", className: "nms-retry", onClick: refresh }, copy.retry)))), /* @__PURE__ */ React3.createElement("footer", { className: "nms-effort" }, /* @__PURE__ */ React3.createElement("span", { className: "nms-effort-label" }, copy.effort), current === null || currentItem === void 0 ? /* @__PURE__ */ React3.createElement("span", { className: "nms-effort-note" }, copy.selectModel) : currentReasoning === void 0 ? /* @__PURE__ */ React3.createElement("span", { className: "nms-effort-note" }, copy.noEffort) : /* @__PURE__ */ React3.createElement("div", { className: "nms-effort-list", role: "group", "aria-label": copy.effort }, effortChoices.map((level) => /* @__PURE__ */ React3.createElement(
           "button",
           {
             key: level.id ?? "default",

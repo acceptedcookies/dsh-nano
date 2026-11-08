@@ -16,7 +16,7 @@ export const STYLE = `
 .nms-trigger-icon { display: var(--dsh-composer-model-icon-display, none); flex: none; }
 .nms-trigger-chevron { flex: none; color: var(--dsw-alias-label-caption); transition: transform 120ms ease; }
 .nms-trigger-open .nms-trigger-chevron { transform: rotate(180deg); }
-.nms-trigger-busy { width: 12px; height: 12px; flex: none; border-radius: 50%; border: 1.5px solid var(--dsw-alias-label-tertiary); border-top-color: transparent; animation: nms-spin .8s linear infinite; }
+.nms-trigger-busy { box-sizing: border-box; width: 14px; height: 14px; flex: none; border-radius: 50%; border: 1.5px solid var(--dsw-alias-label-tertiary); border-top-color: transparent; animation: nms-spin .8s linear infinite; }
 
 .nms-panel {
   box-sizing: border-box; position: fixed; z-index: 1200; display: flex; flex-direction: column;

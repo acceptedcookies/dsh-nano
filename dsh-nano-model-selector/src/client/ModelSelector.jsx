@@ -195,8 +195,15 @@ export function ModelSelector({ locked, available, directory, load, select, lang
     return () => cancelAnimationFrame(frame)
   }, [open])
 
+  // The Host broadcasts a model update after every successful switch, and the
+  // shared directory drops its groups while that reload is in flight. Keeping
+  // the last non-empty list means the panel never blanks mid-switch.
+  const lastGroups = React.useRef([])
+  if ((state.groups ?? []).length > 0) lastGroups.current = state.groups
+  const groupSource = (state.groups ?? []).length > 0 ? state.groups : lastGroups.current
+
   const detailMap = React.useMemo(() => detailsIndex(details), [details])
-  const groups = React.useMemo(() => (state.groups ?? []).map(group => ({
+  const groups = React.useMemo(() => (groupSource ?? []).map(group => ({
     ...group,
     models: group.models.map(model => {
       const brand = brandOf(group, model)
@@ -210,7 +217,7 @@ export function ModelSelector({ locked, available, directory, load, select, lang
         reasoning: detailMap.get(keyOf(group.id, model.id))?.reasoning ?? model.reasoning,
       }
     }),
-  })), [state.groups, detailMap])
+  })), [groupSource, detailMap])
   const allModels = React.useMemo(() => groups.flatMap(group => group.models), [groups])
   const brands = React.useMemo(() => {
     const seen = new Set()
@@ -292,12 +299,17 @@ export function ModelSelector({ locked, available, directory, load, select, lang
         ? copy.providerDefault
         : currentReasoning.efforts.find(level => level.id === effectiveEffort)?.name ?? effectiveEffort
 
-  const triggerText = currentItem?.model.name ?? current?.model ?? (state.status === 'loading' ? copy.triggerLoading : copy.triggerSelect)
+  const busy = state.pending !== null
+  // A reload keeps the retained rows on screen, so the panel never flashes its
+  // empty state while the Host re-lists models after a switch.
+  const reloading = state.status === 'loading' && allModels.length > 0
+
+  const triggerText = currentItem?.model.name
+    ?? current?.model
+    ?? (state.status === 'loading' && !reloading ? copy.triggerLoading : copy.triggerSelect)
   const triggerAria = currentItem === undefined
     ? copy.triggerSelectAria
     : copy.triggerAria(triggerText, effortLabel)
-
-  const busy = state.pending !== null
   const visible = Boolean(available)
 
   const refresh = () => {
@@ -497,7 +509,7 @@ export function ModelSelector({ locked, available, directory, load, select, lang
 
             <section className="nms-main">
               <div className="nms-scroll">
-                {state.status === 'loading' && allModels.length === 0 && (
+                {state.status === 'loading' && allModels.length === 0 && !reloading && (
                   <div className="nms-loading"><span className="nms-pending-dot" />{copy.loading}</div>
                 )}
                 {state.error !== null && (
@@ -522,7 +534,7 @@ export function ModelSelector({ locked, available, directory, load, select, lang
                   </div>
                 ))}
 
-                {visibleCount === 0 && state.status !== 'loading' && (
+                {visibleCount === 0 && state.status !== 'loading' && !reloading && (
                   <div className="nms-empty">
                     <span className="nms-empty-icon">{filter === 'favorites' ? <StarIcon size={17} /> : <ModelIcon size={17} />}</span>
                     {filter === 'favorites' && favorites.length === 0

@@ -165,7 +165,8 @@ const STYLE = `
 /* native segmented control: hover-gray track + layer-1 thumb sliding by translate */
 .np-switch { flex: none; margin-left: auto; display: inline-grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 2px; position: relative; padding: 4px; border: 0; background: var(--dsw-alias-interactive-bg-hover); border-radius: var(--dsw-radius-md); cursor: pointer; font: inherit; min-width: 148px; }
 .np-switch .np-switch-label { display: inline-flex; align-items: center; justify-content: center; min-width: 0; height: 28px; padding: 0 14px; font-size: 13px; font-weight: 500; color: var(--dsw-alias-label-secondary); z-index: 0; }
-.np-switch .np-switch-thumb { position: absolute; top: 4px; left: 4px; width: calc(50% - 5px); height: calc(100% - 8px); display: flex; align-items: center; justify-content: center; padding: 0 14px; box-sizing: border-box; background: var(--dsw-alias-bg-layer-1); border-radius: var(--dsw-radius-sm); box-shadow: var(--dsw-elevation-soft); font-size: 13px; font-weight: 500; color: var(--dsw-alias-label-primary); white-space: nowrap; overflow: hidden; transition: transform .16s ease; z-index: 1; }
+.np-switch { --np-switch-n: 2; --np-switch-i: 0; }
+.np-switch .np-switch-thumb { position: absolute; top: 4px; left: 4px; width: calc((100% - 8px - (var(--np-switch-n) - 1) * 2px) / var(--np-switch-n)); height: calc(100% - 8px); display: flex; align-items: center; justify-content: center; padding: 0 14px; box-sizing: border-box; background: var(--dsw-alias-bg-layer-1); border-radius: var(--dsw-radius-sm); box-shadow: var(--dsw-elevation-soft); font-size: 13px; font-weight: 500; color: var(--dsw-alias-label-primary); white-space: nowrap; overflow: hidden; transition: transform .16s ease; z-index: 1; }
 .np-switch[data-view="rendered"] .np-switch-thumb { transform: translateX(calc(100% + 2px)); }
 .np-toolbar { flex-wrap: wrap; gap: 2px; border-bottom: 1px solid var(--dsw-alias-border-l2); }
 .np-tool { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); cursor: pointer; }
@@ -233,18 +234,15 @@ const STYLE = `
 .np-num input:focus { outline: none; }
 .np-num .np-num-unit { color: var(--dsw-alias-label-tertiary); font-size: 12px; white-space: nowrap; }
 /* pill select + popover */
-.np-sel { flex: none; display: inline-flex; align-items: center; gap: 8px; max-width: 220px; background: var(--dsw-alias-interactive-bg-hover); border: 1px solid transparent; border-radius: var(--dsw-radius-full, 999px); padding: 5px 10px 5px 14px; font: inherit; color: var(--dsw-alias-label-primary); cursor: pointer; }
-.np-sel:hover { background: var(--dsw-alias-interactive-bg-active); }
-.np-sel span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.np-sel svg { width: 12px; height: 12px; fill: var(--dsw-alias-label-tertiary); flex: none; }
 .np-menu { position: absolute; min-width: 140px; max-width: 260px; max-height: 260px; overflow-y: auto; padding: 4px; display: flex; flex-direction: column; gap: 1px; z-index: 30; background: var(--dsw-menu-surface-fill, var(--dsw-alias-bg-layer-3)); color: var(--dsw-alias-label-primary); border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-lg); box-shadow: var(--dsw-elevation-prominent); backdrop-filter: var(--dsw-menu-backdrop-filter); }
 .np-menu button { display: flex; align-items: center; gap: 8px; width: 100%; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); padding: 6px 8px; font: inherit; text-align: left; cursor: pointer; }
 .np-menu button:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 .np-menu button[data-selected="true"] { color: var(--dsw-alias-label-primary); }
 .np-menu button[data-selected="true"]::after { content: '✓'; margin-left: auto; color: var(--dsw-alias-link); font-size: 12px; }
 /* segmented control matching the app's color-scheme switch */
-/* settings toggles reuse the toolbar .np-switch anatomy; data-active=1 slides the labelled thumb right */
-.np-switch[data-active="1"] .np-switch-thumb { transform: translateX(calc(100% + 2px)); }
+/* settings switches carry their index in --np-switch-i: thumb steps by
+   (segment width + 2px gap), generic for N segments */
+.np-switch[data-seg-field] .np-switch-thumb { transform: translateX(calc(var(--np-switch-i) * (100% + 2px))); }
 .np-card input, .np-card select { width: 100%; box-sizing: border-box; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); padding: 8px 10px; font: inherit; }
 .np-card input[type="number"] { max-width: 200px; }
 .np-card input:focus, .np-card select:focus { outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, var(--dsw-alias-link)); }
@@ -1098,32 +1096,41 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     const num = (name, unit, value, desc, range) => `
       <div class="np-field"><div class="np-field-text"><span class="np-field-name">${escapeHtml(desc)}</span><span class="np-field-desc">${escapeHtml(range)}</span></div>
       <span class="np-num"><input name="${name}" type="number" value="${value}"><i class="np-num-unit">${escapeHtml(unit)}</i></span></div>`
-    const sel = (name, desc, hint, options) => `
+    /* N-segment sliding switch — same anatomy as the toolbar view switch */
+    const sw = (field, desc, hint, options) => {
+      const current = field === 'autoSave' ? String(values.autoSave !== false) : String(values[field])
+      const index = Math.max(0, options.findIndex(o => String(o.value) === current))
+      const labels = options.map(o => `<span class="np-switch-label">${escapeHtml(o.label)}</span>`).join('')
+      return `
       <div class="np-field"><div class="np-field-text"><span class="np-field-name">${escapeHtml(desc)}</span><span class="np-field-desc">${escapeHtml(hint)}</span></div>
-      <input type="hidden" name="${name}" value="${escapeHtml(options.find(o => o.selected)?.value ?? options[0].value)}">
-      <button type="button" class="np-sel" data-sel="${name}"><span>${escapeHtml(options.find(o => o.selected)?.label ?? options[0].label)}</span>${CHEVRON_ICON}</button></div>`
+      <button type="button" class="np-switch" data-seg-field="${field}" role="switch" aria-checked="${index === 0}" style="--np-switch-n:${options.length};--np-switch-i:${index}"><span class="np-switch-thumb">${escapeHtml(options[index].label)}</span>${labels}</button></div>`
+    }
     dialog(`<h3>${escapeHtml(copy.settingsTitle)}</h3>
       <section class="np-section">
-        <div class="np-field"><div class="np-field-text"><span class="np-field-name">${escapeHtml(copy.autoSave)}</span><span class="np-field-desc">${escapeHtml(copy.autoSaveHint)}</span></div>
-        <button type="button" class="np-switch" role="switch" data-seg-field="autoSave" data-active="${values.autoSave === false ? 1 : 0}" aria-checked="${values.autoSave !== false}"><span class="np-switch-label">${escapeHtml(copy.autoSaveOn)}</span><span class="np-switch-label">${escapeHtml(copy.autoSaveOff)}</span><span class="np-switch-thumb">${escapeHtml(values.autoSave === false ? copy.autoSaveOff : copy.autoSaveOn)}</span></button></div>
+        ${sw('autoSave', copy.autoSave, copy.autoSaveHint, [
+          { value: 'true', label: copy.autoSaveOn },
+          { value: 'false', label: copy.autoSaveOff },
+        ])}
         ${num('draftIntervalMs', 'ms', values.draftIntervalMs, copy.draftInterval, copy.draftIntervalHint)}
         ${num('commitIntervalSec', 's', values.commitIntervalSec, copy.commitInterval, copy.commitIntervalHint)}
         ${num('versionLimit', '', values.versionLimit, copy.versionLimit, copy.versionLimitHint)}
       </section>
       <section class="np-section">
-        ${sel('defaultView', copy.openAs, copy.openAsHint, [
-          { value: 'rendered', label: copy.rendered, selected: values.defaultView === 'rendered' },
-          { value: 'source', label: copy.source, selected: values.defaultView === 'source' },
+        ${sw('defaultView', copy.openAs, copy.openAsHint, [
+          { value: 'rendered', label: copy.rendered },
+          { value: 'source', label: copy.source },
         ])}
-        ${sel('theme', copy.windowTheme, copy.windowThemeHint, [
-          { value: 'dark', label: copy.dark, selected: values.theme === 'dark' },
-          { value: 'light', label: copy.light, selected: values.theme === 'light' },
-          { value: 'system', label: copy.followApp, selected: values.theme === 'system' },
+        ${sw('theme', copy.windowTheme, copy.windowThemeHint, [
+          { value: 'dark', label: copy.dark },
+          { value: 'light', label: copy.light },
+          { value: 'system', label: copy.followApp },
         ])}
       </section>
       <section class="np-section">
-        <div class="np-field"><div class="np-field-text"><span class="np-field-name">${escapeHtml(copy.chromeStyle)}</span><span class="np-field-desc">${escapeHtml(copy.chromeStyleHint)}</span></div>
-        <button type="button" class="np-switch" role="switch" data-seg-field="chromeStyle" data-active="${values.chromeStyle === 'windows' ? 1 : 0}" aria-checked="${values.chromeStyle === 'mac'}"><span class="np-switch-label">${escapeHtml(copy.mac)}</span><span class="np-switch-label">${escapeHtml(copy.windows)}</span><span class="np-switch-thumb">${escapeHtml(values.chromeStyle === 'windows' ? copy.windows : copy.mac)}</span></button></div>
+        ${sw('chromeStyle', copy.chromeStyle, copy.chromeStyleHint, [
+          { value: 'mac', label: copy.mac },
+          { value: 'windows', label: copy.windows },
+        ])}
       </section>
       <section class="np-section">
         ${num('imageLimitBytes', copy.unitBytes, values.imageLimitBytes, copy.imageLimit, copy.imageLimitHint)}
@@ -1135,50 +1142,49 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       <section class="np-section">
         <div class="np-field"><div class="np-field-text"><span class="np-field-name">${escapeHtml(copy.dangerHeading)}</span><span class="np-field-desc">${escapeHtml(copy.dangerBody)}</span></div><button type="button" class="np-danger" data-go="clear">${escapeHtml(copy.clearAllTitle)}</button></div>
       </section>`, (card, close) => {
-      const SEL_OPTIONS = {
-        defaultView: [{ value: 'rendered', label: copy.rendered }, { value: 'source', label: copy.source }],
-        theme: [{ value: 'dark', label: copy.dark }, { value: 'light', label: copy.light }, { value: 'system', label: copy.followApp }],
-      }
-      for (const button of card.querySelectorAll('.np-sel')) {
-        const name = button.dataset.sel
-        const hidden = card.querySelector(`input[name="${name}"]`)
-        const options = SEL_OPTIONS[name] ?? []
-        button.addEventListener('click', () => {
-          if (closeMenu) { closeMenu(); return }
-          openMenuList(button, options.map(option => ({
-            label: option.label,
-            selected: hidden.value === option.value,
-            onPick: () => {
-              hidden.value = option.value
-              button.querySelector('span').textContent = option.label
-              hidden.dispatchEvent(new Event('change', { bubbles: true }))
-            },
-          })))
-        })
+      /* segment option tables — values mirror normalizeSettings */
+      const SW_OPTIONS = {
+        autoSave: [
+          { value: 'true', label: copy.autoSaveOn },
+          { value: 'false', label: copy.autoSaveOff },
+        ],
+        defaultView: [
+          { value: 'rendered', label: copy.rendered },
+          { value: 'source', label: copy.source },
+        ],
+        theme: [
+          { value: 'dark', label: copy.dark },
+          { value: 'light', label: copy.light },
+          { value: 'system', label: copy.followApp },
+        ],
+        chromeStyle: [
+          { value: 'mac', label: copy.mac },
+          { value: 'windows', label: copy.windows },
+        ],
       }
       if (state.db) void counts(state.db).then(async value => {
         const estimate = navigator.storage?.estimate ? await navigator.storage.estimate() : {}
         must(card, '.np-usage-val').textContent = `${value.files} ${text().usageFiles} · ${value.versions} ${text().usageVersions} · ${value.images} ${text().usageImages} · ${formatBytes(estimate.usage ?? text().unknown)}`
       })
       card.addEventListener('click', event => {
-        /* .np-switch toggles: flip the value, move the thumb, refresh its label */
+        /* N-segment switch: pick the segment under the pointer, slide the labelled thumb */
         const seg = event.target instanceof HTMLElement ? event.target.closest('.np-switch[data-seg-field]') : null
         if (seg) {
           const field = seg.dataset.segField
+          const options = SW_OPTIONS[field]
+          if (!options) return
+          const rect = seg.getBoundingClientRect()
+          const index = Math.min(options.length - 1, Math.max(0, Math.floor((event.clientX - rect.left) / (rect.width / options.length))))
           const merged = { ...state.settings }
-          if (field === 'autoSave') merged.autoSave = !merged.autoSave
-          else if (field === 'chromeStyle') merged.chromeStyle = merged.chromeStyle === 'mac' ? 'windows' : 'mac'
+          if (field === 'autoSave') merged.autoSave = options[index].value === 'true'
+          else merged[field] = options[index].value
           state.settings = normalizeSettings(merged)
           if (state.db) void writeSettings(state.db, state.settings).catch(showError)
-          /* sync thumb position + label + aria for every switch in the card */
-          const labels = { autoSave: [copy.autoSaveOn, copy.autoSaveOff], chromeStyle: [copy.mac, copy.windows] }
-          for (const sw of card.querySelectorAll('.np-switch[data-seg-field]')) {
-            const f = sw.dataset.segField
-            const onRight = f === 'autoSave' ? state.settings.autoSave === false : state.settings.chromeStyle === 'windows'
-            sw.dataset.active = onRight ? '1' : '0'
-            sw.setAttribute('aria-checked', String(f === 'autoSave' ? state.settings.autoSave : state.settings.chromeStyle === 'mac'))
-            sw.querySelector('.np-switch-thumb').textContent = labels[f][onRight ? 1 : 0]
-          }
+          const value = field === 'autoSave' ? String(state.settings.autoSave !== false) : String(state.settings[field])
+          const active = Math.max(0, options.findIndex(o => String(o.value) === value))
+          seg.style.setProperty('--np-switch-i', String(active))
+          seg.setAttribute('aria-checked', String(active === 0))
+          seg.querySelector('.np-switch-thumb').textContent = options[active].label
           render()
           return
         }
@@ -1197,7 +1203,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
         }
         if (action === 'clear') confirmClear(close)
       })
-      const settingNames = ['saveDelayMs', 'draftIntervalMs', 'commitIntervalSec', 'versionLimit', 'imageLimitBytes', 'defaultView', 'theme']
+      const settingNames = ['saveDelayMs', 'draftIntervalMs', 'commitIntervalSec', 'versionLimit', 'imageLimitBytes']
       card.addEventListener('change', () => {
         const merged = { ...state.settings }
         let rejected = false

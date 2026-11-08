@@ -821,6 +821,7 @@ window.__ModuleLoader__.load({
 .np-node[data-active="true"] { background: var(--dsw-alias-interactive-bg-active); color: var(--dsw-alias-label-primary); }
 .np-node[data-drop="true"] { box-shadow: inset 0 0 0 1.5px var(--dsw-alias-brand-primary); }
 .np-node-main { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; border: 0; background: transparent; color: inherit; padding: 0; text-align: left; font: inherit; cursor: pointer; overflow: hidden; }
+.np-node-main:focus, .np-node-actions button:focus, .np-tab:focus, .np-ws-item:focus, .np-caret:focus { outline: none; }
 .np-node[data-pinned="true"] .np-node-main { padding-right: 28px; }
 .np-node:hover .np-node-main, .np-node:focus-within .np-node-main { padding-right: 84px; }
 @media (hover: none) { .np-node .np-node-main { padding-right: 84px; } .np-node .np-node-actions button { display: inline-flex; } }

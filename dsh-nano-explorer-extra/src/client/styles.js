@@ -50,22 +50,19 @@ export const STYLE = `
 
 /* Row decorations injected through the tree Factory's accessory seat. */
 .nxe-acc {
-  display: inline-flex; align-items: center; justify-content: flex-end; gap: 4px;
-  /* The shipped accessory wrapper is content-sized; an explicit width keeps a width-only child (the
-     folder dot) from collapsing to zero, and fixes the column the marks are right-aligned in. */
-  flex: 0 0 auto; min-width: 6px;
+  /* Sized by its contents: a fixed min-width plus a gap could not hold the glyph and clipped it to a
+     couple of pixels. The rail right-aligns this wrapper, so content size is enough to line the marks
+     up. */
+  display: inline-flex; align-items: center; justify-content: flex-end;
+  flex: 0 0 auto; gap: 0;
 }
 .nxe-acc-letter {
   font-size: 12px; font-weight: 800; line-height: 1; letter-spacing: 0;
-  /* No horizontal padding: a letter and a folder dot must share one right edge, and padding would
-     push the glyph inward while leaving the dot flush. The box is fixed so both marks occupy the
-     same column whatever the glyph is. */
-  /* The glyph is narrower than the dot, so it right-aligns to the box end: both inks then end on the
-     same column, which is what the eye compares. */
-  display: inline-flex; align-items: center; justify-content: flex-end;
-  box-sizing: border-box; width: 6px; overflow: visible; padding: 0; white-space: nowrap;
-  text-align: right;
-  font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1;
+  /* No fixed width and no padding: the glyph keeps its natural ink, which is what the eye lines up
+     against the 6px dot. Tabular figures and a fixed box only squeezed the mark narrower. */
+  display: inline-block; padding: 0; margin: 0;
+  text-align: right; white-space: nowrap;
+  /* The rail right-aligns its content, so a narrower glyph still ends on the dot's edge. */
 }
 /* The mark column is fixed by the letter rule below; this selector only keeps the colour hooks. */
 .nxe-acc-letter[data-status] { text-align: right; }
@@ -157,12 +154,17 @@ button.nxe-commit { cursor: pointer; }
 /* Row-level Git colour, the way VS Code's source-control view tints a changed entry.
    The shared tree does not expose the row name element to its accessory, so the tint is selected
    from the sibling accessory that carries the status letter: the :has() selector keeps the row itself untouched. */
-[data-nxe] .nxe-tree li[data-files-entry]:has(.nxe-acc-letter[data-status="M"]) > div > button > span { color: var(--nxe-git-modified); }
-[data-nxe] .nxe-tree li[data-files-entry]:has(.nxe-acc-letter[data-status="A"]) > div > button > span { color: var(--nxe-git-added); }
-[data-nxe] .nxe-tree li[data-files-entry]:has(.nxe-acc-letter[data-status="?"]) > div > button > span { color: var(--nxe-git-untracked); }
-[data-nxe] .nxe-tree li[data-files-entry]:has(.nxe-acc-letter[data-status="D"]) > div > button > span { color: var(--nxe-git-deleted); }
-[data-nxe] .nxe-tree li[data-files-entry]:has(.nxe-acc-letter[data-status="R"]) > div > button > span { color: var(--nxe-git-renamed); }
-[data-nxe] .nxe-tree li[data-files-entry]:has(.nxe-acc-letter[data-status="U"]) > div > button > span { color: var(--nxe-git-conflicted); }
+/* A row is tinted by the status it reports, whether that is a file's letter or a folder's summary dot.
+   Both mark kinds are matched here, so a folder that contains changes colours like the files inside it. */
+[data-nxe] .nxe-tree li[data-files-entry]:has([data-status="M"]) > div > button > span { color: var(--nxe-git-modified); }
+[data-nxe] .nxe-tree li[data-files-entry]:has([data-status="A"]) > div > button > span { color: var(--nxe-git-added); }
+[data-nxe] .nxe-tree li[data-files-entry]:has([data-status="?"]) > div > button > span { color: var(--nxe-git-untracked); }
+[data-nxe] .nxe-tree li[data-files-entry]:has([data-status="D"]) > div > button > span { color: var(--nxe-git-deleted); }
+[data-nxe] .nxe-tree li[data-files-entry]:has([data-status="R"]) > div > button > span { color: var(--nxe-git-renamed); }
+[data-nxe] .nxe-tree li[data-files-entry]:has([data-status="U"]) > div > button > span { color: var(--nxe-git-conflicted); }
+
+/* The folder's glyph takes the same tint so the row reads as one unit. */
+[data-nxe] .nxe-tree li[data-files-entry="directory"]:has([data-status]) > div > button > svg { color: inherit; opacity: .85; }
 
 
 /* One row geometry for every entry.

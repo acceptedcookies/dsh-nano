@@ -985,9 +985,9 @@ window.__ModuleLoader__.load({
 .np-tool-sep { width: 1px; height: 18px; margin: 6px 4px; background: var(--dsw-alias-border-l2); flex: none; }
 .np-window button:not([class]):not(.np-tree-tools button):not(.np-node-actions button):not(.np-slash button):not(.np-versions button), .np-footer-actions button.np-danger, .np-card button { border: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); border-radius: var(--dsw-radius-sm); padding: 4px 10px; cursor: pointer; font: inherit; line-height: 20px; }
 .np-window button:hover, .np-card button:hover { background: var(--dsw-alias-interactive-bg-hover); }
-/* keep the row as the only hover surface; inner buttons must not double-fill */
-.np-node-main:hover { background: transparent; }
-.np-node-actions button:hover { background: transparent; }
+/* keep the row/tab as the only hover surface; inner buttons must not double-fill
+   \u2014 scoped to .np-window so we beat the generic .np-window button:hover rule */
+.np-window .np-node-main:hover, .np-window .np-node-actions button:hover, .np-window .np-tab-btn:hover { background: transparent; }
 .np-node-main, .np-caret, .np-node { border: 0; background: transparent; box-shadow: none; }
 .np-tabs > button, .np-tab { background: transparent; }
 .np-danger { color: var(--dsw-alias-label-error); }
@@ -1054,13 +1054,8 @@ window.__ModuleLoader__.load({
 .np-menu button[data-selected="true"] { color: var(--dsw-alias-label-primary); }
 .np-menu button[data-selected="true"]::after { content: '\u2713'; margin-left: auto; color: var(--dsw-alias-link); font-size: 12px; }
 /* segmented control matching the app's color-scheme switch */
-/* segmented sliding control \u2014 same anatomy as .np-switch, sized for settings */
-.np-seg { position: relative; flex: none; display: inline-grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 2px; background: var(--dsw-alias-interactive-bg-hover); border-radius: var(--dsw-radius-md); padding: 4px; min-width: 148px; }
-.np-seg::before { content: ''; position: absolute; top: 4px; left: 4px; width: calc(50% - 5px); height: calc(100% - 8px); box-sizing: border-box; background: var(--dsw-alias-bg-layer-1); border-radius: var(--dsw-radius-sm); box-shadow: var(--dsw-elevation-soft); transition: transform .16s ease; }
-.np-seg[data-active="1"]::before { transform: translateX(calc(100% + 2px)); }
-.np-seg button { position: relative; z-index: 1; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; font-size: 13px; font-weight: 500; height: 28px; padding: 0 14px; border-radius: var(--dsw-radius-sm); cursor: pointer; }
-.np-seg button:hover { color: var(--dsw-alias-label-primary); }
-.np-seg button[aria-checked="true"] { color: var(--dsw-alias-label-primary); }
+/* settings toggles reuse the toolbar .np-switch anatomy; data-active=1 slides the labelled thumb right */
+.np-switch[data-active="1"] .np-switch-thumb { transform: translateX(calc(100% + 2px)); }
 .np-card input, .np-card select { width: 100%; box-sizing: border-box; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); padding: 8px 10px; font: inherit; }
 .np-card input[type="number"] { max-width: 200px; }
 .np-card input:focus, .np-card select:focus { outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, var(--dsw-alias-link)); }
@@ -1911,9 +1906,7 @@ window.__ModuleLoader__.load({
       dialog(`<h3>${escapeHtml(copy.settingsTitle)}</h3>
       <section class="np-section">
         <div class="np-field"><div class="np-field-text"><span class="np-field-name">${escapeHtml(copy.autoSave)}</span><span class="np-field-desc">${escapeHtml(copy.autoSaveHint)}</span></div>
-        <span class="np-seg" role="radiogroup" data-active="${values.autoSave === false ? 1 : 0}">
-          <button type="button" role="radio" aria-checked="${values.autoSave !== false}" data-seg-field="autoSave" data-seg-value="on">${escapeHtml(copy.autoSaveOn)}</button><button type="button" role="radio" aria-checked="${values.autoSave === false}" data-seg-field="autoSave" data-seg-value="off">${escapeHtml(copy.autoSaveOff)}</button>
-        </span></div>
+        <button type="button" class="np-switch" role="switch" data-seg-field="autoSave" data-active="${values.autoSave === false ? 1 : 0}" aria-checked="${values.autoSave !== false}"><span class="np-switch-label">${escapeHtml(copy.autoSaveOn)}</span><span class="np-switch-label">${escapeHtml(copy.autoSaveOff)}</span><span class="np-switch-thumb">${escapeHtml(values.autoSave === false ? copy.autoSaveOff : copy.autoSaveOn)}</span></button></div>
         ${num("draftIntervalMs", "ms", values.draftIntervalMs, copy.draftInterval, copy.draftIntervalHint)}
         ${num("commitIntervalSec", "s", values.commitIntervalSec, copy.commitInterval, copy.commitIntervalHint)}
         ${num("versionLimit", "", values.versionLimit, copy.versionLimit, copy.versionLimitHint)}
@@ -1931,9 +1924,7 @@ window.__ModuleLoader__.load({
       </section>
       <section class="np-section">
         <div class="np-field"><div class="np-field-text"><span class="np-field-name">${escapeHtml(copy.chromeStyle)}</span><span class="np-field-desc">${escapeHtml(copy.chromeStyleHint)}</span></div>
-        <span class="np-seg" role="radiogroup" data-active="${values.chromeStyle === "windows" ? 1 : 0}">
-          <button type="button" role="radio" aria-checked="${values.chromeStyle === "mac"}" data-seg-value="mac">${escapeHtml(copy.mac)}</button><button type="button" role="radio" aria-checked="${values.chromeStyle === "windows"}" data-seg-value="windows">${escapeHtml(copy.windows)}</button>
-        </span></div>
+        <button type="button" class="np-switch" role="switch" data-seg-field="chromeStyle" data-active="${values.chromeStyle === "windows" ? 1 : 0}" aria-checked="${values.chromeStyle === "mac"}"><span class="np-switch-label">${escapeHtml(copy.mac)}</span><span class="np-switch-label">${escapeHtml(copy.windows)}</span><span class="np-switch-thumb">${escapeHtml(values.chromeStyle === "windows" ? copy.windows : copy.mac)}</span></button></div>
       </section>
       <section class="np-section">
         ${num("imageLimitBytes", copy.unitBytes, values.imageLimitBytes, copy.imageLimit, copy.imageLimitHint)}
@@ -1974,21 +1965,21 @@ window.__ModuleLoader__.load({
           must(card, ".np-usage-val").textContent = `${value.files} ${text().usageFiles} \xB7 ${value.versions} ${text().usageVersions} \xB7 ${value.images} ${text().usageImages} \xB7 ${formatBytes(estimate.usage ?? text().unknown)}`;
         });
         card.addEventListener("click", (event) => {
-          const seg = event.target instanceof HTMLElement ? event.target.closest("[data-seg-value]") : null;
+          const seg = event.target instanceof HTMLElement ? event.target.closest(".np-switch[data-seg-field]") : null;
           if (seg) {
-            const field = seg.dataset.segField ?? "chromeStyle";
+            const field = seg.dataset.segField;
             const merged = { ...state.settings };
-            if (field === "autoSave") merged.autoSave = seg.dataset.segValue === "on";
-            else merged.chromeStyle = seg.dataset.segValue;
+            if (field === "autoSave") merged.autoSave = !merged.autoSave;
+            else if (field === "chromeStyle") merged.chromeStyle = merged.chromeStyle === "mac" ? "windows" : "mac";
             state.settings = normalizeSettings(merged);
             if (state.db) void writeSettings(state.db, state.settings).catch(showError);
-            for (const group of card.querySelectorAll(".np-seg")) {
-              group.querySelectorAll("[data-seg-value]").forEach((b, i) => {
-                const f = b.dataset.segField ?? "chromeStyle";
-                const checked = f === "autoSave" ? b.dataset.segValue === "on" === state.settings.autoSave : b.dataset.segValue === state.settings.chromeStyle;
-                b.setAttribute("aria-checked", String(checked));
-                if (checked) group.dataset.active = String(i);
-              });
+            const labels = { autoSave: [copy.autoSaveOn, copy.autoSaveOff], chromeStyle: [copy.mac, copy.windows] };
+            for (const sw of card.querySelectorAll(".np-switch[data-seg-field]")) {
+              const f = sw.dataset.segField;
+              const onRight = f === "autoSave" ? state.settings.autoSave === false : state.settings.chromeStyle === "windows";
+              sw.dataset.active = onRight ? "1" : "0";
+              sw.setAttribute("aria-checked", String(f === "autoSave" ? state.settings.autoSave : state.settings.chromeStyle === "mac"));
+              sw.querySelector(".np-switch-thumb").textContent = labels[f][onRight ? 1 : 0];
             }
             render();
             return;

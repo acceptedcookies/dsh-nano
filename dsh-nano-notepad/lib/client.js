@@ -605,7 +605,8 @@ window.__ModuleLoader__.load({
       source: "\u7EAF\u6587\u672C",
       preview: "\u9884\u89C8",
       image: "\u56FE\u7247",
-      copyPath: "\u590D\u5236\u8DEF\u5F84",
+      saveAs: "\u53E6\u5B58\u4E3A",
+      exported: "\u5DF2\u5BFC\u51FA",
       history: "\u5386\u53F2\u7248\u672C",
       saveVersion: "\u4FDD\u5B58\u7248\u672C",
       clearFile: "\u6E05\u7A7A\u5F53\u524D\u6587\u4EF6",
@@ -619,6 +620,7 @@ window.__ModuleLoader__.load({
         dirty: "\u6B63\u5728\u7F16\u8F91\uFF0C\u5C1A\u672A\u4FDD\u5B58",
         saving: "\u6B63\u5728\u4FDD\u5B58\u2026",
         saved: (time) => `\u5DF2\u4FDD\u5B58 ${time}`,
+        exported: (name) => `\u5DF2\u5BFC\u51FA ${name}`,
         committed: (time) => `\u5DF2\u63D0\u4EA4\u7248\u672C ${time}`,
         error: (detail) => `\u4FDD\u5B58\u5931\u8D25 ${detail}`
       },
@@ -714,7 +716,8 @@ window.__ModuleLoader__.load({
       source: "Plain text",
       preview: "Preview",
       image: "Image",
-      copyPath: "Copy path",
+      saveAs: "Save as\u2026",
+      exported: "Exported",
       history: "History",
       saveVersion: "Save version",
       clearFile: "Clear file",
@@ -728,6 +731,7 @@ window.__ModuleLoader__.load({
         dirty: "Editing, not saved yet",
         saving: "Saving\u2026",
         saved: (time) => `Saved ${time}`,
+        exported: (name) => `Exported ${name}`,
         committed: (time) => `Version saved ${time}`,
         error: (detail) => `Save failed ${detail}`
       },
@@ -1197,7 +1201,7 @@ window.__ModuleLoader__.load({
         <div class="np-slash" hidden></div>
         <div class="np-read" tabindex="0" hidden></div>
         <div class="np-error" role="alert" hidden><span class="np-error-text"></span><button type="button" data-action="load-remote" data-i18n="loadRemote" hidden></button><button type="button" data-action="keep-mine" data-i18n="keepMine" hidden></button><button type="button" data-action="dismiss-error" data-i18n="close" data-i18n-mode="title">${CLOSE_ICON}</button></div>
-        <footer class="np-footer"><span class="np-sync"><i class="np-beat" data-state="idle"></i><span class="np-status-text" role="status" aria-live="polite"></span></span><span class="np-footer-actions"><button type="button" data-action="copy" data-i18n="copyPath"></button><button type="button" data-action="history" data-i18n="history"></button><button type="button" data-action="save-version" data-i18n="saveVersion"></button><button type="button" class="np-danger" data-action="clear-file" data-i18n="clearFile"></button></span></footer>
+        <footer class="np-footer"><span class="np-sync"><i class="np-beat" data-state="idle"></i><span class="np-status-text" role="status" aria-live="polite"></span></span><span class="np-footer-actions"><button type="button" data-action="export-file" data-i18n="saveAs"></button><button type="button" data-action="history" data-i18n="history"></button><button type="button" data-action="save-version" data-i18n="saveVersion"></button><button type="button" class="np-danger" data-action="clear-file" data-i18n="clearFile"></button></span></footer>
       </div>
     </div>
     <div class="np-resize" data-edge="n"></div><div class="np-resize" data-edge="s"></div><div class="np-resize" data-edge="e"></div><div class="np-resize" data-edge="w"></div><div class="np-resize" data-edge="nw"></div><div class="np-resize" data-edge="ne"></div><div class="np-resize" data-edge="sw"></div><div class="np-resize" data-edge="se"></div>
@@ -1320,7 +1324,7 @@ window.__ModuleLoader__.load({
       const time = state.sync.at ? new Date(state.sync.at).toLocaleTimeString() : "";
       const status = text().status;
       const value = status[state.sync.phase];
-      label.textContent = typeof value === "function" ? value(state.sync.phase === "error" ? state.sync.detail : time) : value ?? status.idle;
+      label.textContent = typeof value === "function" ? value(state.sync.detail || time) : value ?? status.idle;
     }
     function workspaceCatalog() {
       const snapshot = workspaces.current();
@@ -1351,6 +1355,36 @@ window.__ModuleLoader__.load({
         cursor = state.nodes.find((node) => node.id === cursor.parentId);
       }
       return `/${names.join("/")}`;
+    }
+    async function exportFile() {
+      const file = current();
+      if (!file) return;
+      const content = state.dirty ? write().value ?? file.draft ?? "" : write().value ?? file.draft ?? "";
+      const blob = new Blob([content], { type: "text/markdown" });
+      const name = file.name.endsWith(".md") ? file.name : `${file.name}.md`;
+      if (typeof window.showSaveFilePicker === "function") {
+        try {
+          const handle = await window.showSaveFilePicker({
+            suggestedName: name,
+            types: [{ description: "Markdown", accept: { "text/markdown": [".md", ".markdown", ".txt"] } }]
+          });
+          const writable = await handle.createWritable();
+          await writable.write(blob);
+          await writable.close();
+          setSync("exported", name);
+          return;
+        } catch (error) {
+          if (error?.name === "AbortError") return;
+        }
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = name;
+      a.rel = "noopener";
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 5e3);
+      setSync("exported", name);
     }
     function clamp(value, min, max) {
       return Math.min(Math.max(value, min), Math.max(min, max));
@@ -2273,7 +2307,7 @@ window.__ModuleLoader__.load({
         state.view = state.view === "rendered" ? "source" : "rendered";
         void renderBody();
       }
-      if (action === "copy") void navigator.clipboard?.writeText(current() ? pathOf(current().id) : text().noFile);
+      if (action === "export-file") void exportFile();
       if (action === "history") void openHistory().catch(showError);
       if (action === "dismiss-error" || action === "keep-mine") must(panel, ".np-error").hidden = true;
       if (action === "load-remote" && state.db) {

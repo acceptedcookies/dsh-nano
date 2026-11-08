@@ -2553,7 +2553,7 @@ window.__ModuleLoader__.load({
     write().addEventListener("keydown", (event) => {
       const mod = event.metaKey || event.ctrlKey;
       if (mod && !state.slash) {
-        const map = { b: "bold", i: "italic", k: "link", e: "code" };
+        const map = { b: "bold", i: "italic", k: "link" };
         const kind = event.shiftKey && (event.key === "x" || event.key === "X") ? "strike" : map[event.key?.toLowerCase()];
         if (kind) {
           event.preventDefault();

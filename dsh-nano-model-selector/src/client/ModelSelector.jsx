@@ -12,6 +12,7 @@ import {
   GridIcon,
   ModelIcon,
   RefreshIcon,
+  DragHandleIcon,
   SearchIcon,
   StarIcon,
   WarningIcon,
@@ -118,6 +119,11 @@ export function ModelSelector({ locked, available, directory, load, select, lang
   const panelRef = React.useRef(null)
   const searchRef = React.useRef(null)
   const toastSeq = React.useRef(0)
+  // Favorite reordering: the dragged key and which row edge the pointer is over.
+  const [dragKey, setDragKey] = React.useState(null)
+  const dragKeyRef = React.useRef(null)
+  const [dropTarget, setDropTarget] = React.useState(null)
+  const dropTargetRef = React.useRef(null)
 
   const state = React.useSyncExternalStore(
     listener => directory.store.subscribe(listener),
@@ -344,6 +350,104 @@ export function ModelSelector({ locked, available, directory, load, select, lang
     writeFavorites(next)
   }
 
+  /** Persist one new favorite order. */
+  const commitFavoriteOrder = next => {
+    setFavorites(next)
+    writeFavorites(next)
+  }
+
+  /**
+   * Move one favorite from its current index to a before/after edge of another.
+   * Indices address the whole favorites array, so a reorder survives a filter.
+   * @param fromKey - the dragged favorite.
+   * @param toKey - the favorite whose edge was dropped on.
+   * @param half - drop before or after that favorite.
+   */
+  const moveFavorite = (fromKey, toKey, half) => {
+    if (fromKey === null || fromKey === toKey) return
+    const from = favorites.indexOf(fromKey)
+    const to = favorites.indexOf(toKey)
+    if (from < 0 || to < 0) return
+    const next = [...favorites]
+    next.splice(from, 1)
+    // Removing the source first shifts every later slot left by one.
+    const insertion = to + (half === 'after' ? 1 : 0)
+    next.splice(from < insertion ? insertion - 1 : insertion, 0, fromKey)
+    commitFavoriteOrder(next)
+  }
+
+  /** Arrow-key reordering keeps the affordance usable without a pointer. */
+  const stepFavorite = (key, offset) => {
+    const index = favorites.indexOf(key)
+    const target = index + offset
+    if (index < 0 || target < 0 || target >= favorites.length) return
+    const next = [...favorites]
+    next.splice(index, 1)
+    next.splice(target, 0, key)
+    commitFavoriteOrder(next)
+  }
+
+  /** Record the pointer's drop edge; the ref is what the handlers read. */
+  const pointAt = next => {
+    dropTargetRef.current = next
+    setDropTarget(next)
+  }
+
+  const endFavoriteDrag = () => {
+    dragKeyRef.current = null
+    dropTargetRef.current = null
+    setDragKey(null)
+    setDropTarget(null)
+  }
+
+  /**
+   * Start a pointer-driven reorder. Native HTML5 dragging cannot be exercised
+   * reliably (its `drop` never fires under synthetic input), so the handle
+   * follows the pointer directly and commits on release.
+   * @param event - pointerdown on one favorite's handle.
+   * @param key - that favorite's identity.
+   */
+  const beginFavoriteDrag = (event, key) => {
+    if (event.button !== 0) return
+    event.preventDefault()
+    event.stopPropagation()
+    const handle = event.currentTarget
+    handle.setPointerCapture?.(event.pointerId)
+    dragKeyRef.current = key
+    setDragKey(key)
+
+    const edgeAt = pointer => {
+      const rows = [...(panelRef.current?.querySelectorAll('.nms-model-row[data-reorderable]') ?? [])]
+      for (const row of rows) {
+        const rect = row.getBoundingClientRect()
+        if (pointer.clientY < rect.top || pointer.clientY > rect.bottom) continue
+        const targetKey = row.dataset.key
+        if (targetKey === undefined || targetKey === key) return null
+        return { key: targetKey, half: pointer.clientY < rect.top + rect.height / 2 ? 'before' : 'after' }
+      }
+      return null
+    }
+
+    const onMove = pointer => {
+      const next = edgeAt(pointer)
+      if (next === null) { if (dropTargetRef.current !== null) pointAt(null); return }
+      if (dropTargetRef.current?.key === next.key && dropTargetRef.current.half === next.half) return
+      pointAt(next)
+    }
+    const onUp = pointer => {
+      handle.removeEventListener('pointermove', onMove)
+      handle.removeEventListener('pointerup', onUp)
+      handle.removeEventListener('pointercancel', onUp)
+      handle.releasePointerCapture?.(pointer.pointerId)
+      const target = edgeAt(pointer) ?? dropTargetRef.current
+      if (target !== null && target !== undefined) moveFavorite(key, target.key, target.half)
+      endFavoriteDrag()
+    }
+    handle.addEventListener('pointermove', onMove)
+    handle.addEventListener('pointerup', onUp)
+    handle.addEventListener('pointercancel', onUp)
+  }
+
   const reportError = error => {
     toastSeq.current += 1
     setToast({ seq: toastSeq.current, text: `${copy.selectionError}: ${error instanceof Error ? error.message : String(error)}` })
@@ -535,7 +639,7 @@ export function ModelSelector({ locked, available, directory, load, select, lang
                 {visibleFavorites.length > 0 && (
                   <div>
                     <div className="nms-group"><StarIcon className="nms-group-star" size={12} filled />{copy.favorites}<span className="nms-group-count">{copy.favoriteCount(visibleFavorites.length)}</span></div>
-                    {visibleFavorites.map(item => renderModel(item))}
+                    {visibleFavorites.map(item => renderModel(item, { reorderable: filter === 'favorites' }))}
                   </div>
                 )}
 
@@ -600,7 +704,7 @@ export function ModelSelector({ locked, available, directory, load, select, lang
     </div>
   )
 
-  function renderModel(item) {
+  function renderModel(item, options = {}) {
     const selected = current?.provider === item.group.id && current.model === item.model.id
     const pending = state.pending?.provider === item.group.id && state.pending.model === item.model.id
     const context = formatTokens(item.details?.contextWindow)
@@ -615,7 +719,36 @@ export function ModelSelector({ locked, available, directory, load, select, lang
       ...(Array.isArray(inputs) ? inputs.map(value => value === 'image' ? copy.imageInput : value === 'text' ? copy.textInput : value) : []),
     ].filter(Boolean).join(' · ')
     return (
-      <div className="nms-model-row" data-active={selected} data-pending={pending} key={item.key}>
+      <div
+        className="nms-model-row"
+        data-active={selected}
+        data-pending={pending}
+        data-dragging={dragKey === item.key ? 'true' : undefined}
+        data-drop-target={dropTarget?.key === item.key ? dropTarget.half : undefined}
+        key={item.key}
+        data-reorderable={options.reorderable ? 'true' : undefined}
+        data-key={item.key}
+      >
+        {options.reorderable && (
+          <span
+            className="nms-drag-handle"
+            role="button"
+            tabIndex={0}
+            title={copy.reorderFavorite}
+            aria-label={`${copy.reorderFavorite} ${item.model.name}`}
+            aria-description={copy.reorderFavoriteHelp}
+            aria-keyshortcuts="ArrowUp ArrowDown"
+            onPointerDown={event => beginFavoriteDrag(event, item.key)}
+            onKeyDown={event => {
+              if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return
+              event.preventDefault()
+              event.stopPropagation()
+              stepFavorite(item.key, event.key === 'ArrowUp' ? -1 : 1)
+            }}
+          >
+            <DragHandleIcon size={14} />
+          </span>
+        )}
         <button type="button" className="nms-model-main" disabled={busy} title={description ?? item.model.name} onClick={() => chooseModel(item)}>
           <span className="nms-model-mark"><BrandMark brandKey={item.brandKey} brandName={item.brandName} /></span>
           <span className="nms-model-copy">

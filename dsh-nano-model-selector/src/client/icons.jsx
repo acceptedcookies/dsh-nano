@@ -7,7 +7,8 @@ import {
   IconChevronDownOutlineRegular,
   IconCloseOutlineRegular,
   IconDataOutlineRegular,
-  IconFlatListOutlineRegular,
+  IconDragHandleOutlineRegular,
+  IconAppsAddOutlineRegular,
   IconPinFillRegular,
   IconPinOutlineRegular,
   IconRefreshOutlineRegular,
@@ -17,7 +18,7 @@ import {
 
 /** @param {{ className?: string, size?: number }} props */
 export function GridIcon(props) {
-  return <IconFlatListOutlineRegular {...props} />
+  return <IconAppsAddOutlineRegular {...props} />
 }
 
 /** Favorites are shown as a pin: the DSH icon set has no star glyph. */
@@ -63,4 +64,9 @@ export function WarningIcon(props) {
 /** @param {{ className?: string, size?: number }} props */
 export function RouteIcon(props) {
   return <IconBranchOutlineRegular {...props} />
+}
+
+/** @param {{ className?: string, size?: number }} props */
+export function DragHandleIcon(props) {
+  return <IconDragHandleOutlineRegular {...props} />
 }

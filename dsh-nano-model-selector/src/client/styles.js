@@ -67,6 +67,18 @@ export const STYLE = `
 .nms-model-main { display: flex; align-items: center; gap: 10px; flex: 1; height: 100%; min-width: 0; padding: 6px 6px 6px 8px; border: 0; border-radius: var(--dsw-radius-md); background: transparent; color: inherit; text-align: left; font: inherit; cursor: pointer; overflow: hidden; }
 .nms-model-main:disabled { cursor: default; }
 .nms-model-mark { flex: none; margin-top: 1px; }
+.nms-drag-handle { display: inline-flex; align-items: center; justify-content: center; flex: none; align-self: center; box-sizing: border-box; width: 18px; height: 26px; margin: 0 4px 0 12px; padding: 0; border: 0; border-radius: var(--dsw-radius-xs, 4px); background: transparent; color: var(--dsw-alias-label-tertiary); cursor: grab; opacity: .5; transition: opacity .12s ease; }
+.nms-drag-handle svg { display: block; }
+.nms-drag-handle:hover { opacity: 1; background: transparent; }
+.nms-drag-handle:focus-visible { outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary)); outline-offset: 1px; opacity: 1; }
+.nms-drag-handle:active { cursor: grabbing; }
+.nms-model-row:hover .nms-drag-handle { opacity: 1; }
+.nms-model-row[data-dragging] { opacity: .45; }
+.nms-model-row[data-drop-target] { position: relative; }
+.nms-model-row[data-drop-target="before"]::before,
+.nms-model-row[data-drop-target="after"]::after { content: ""; position: absolute; left: 0; right: 0; height: 2px; border-radius: 1px; background: var(--dsw-alias-state-business-primary); box-shadow: 0 0 0 1px color-mix(in srgb, var(--dsw-alias-state-business-primary) 25%, transparent); }
+.nms-model-row[data-drop-target="before"]::before { top: -3px; }
+.nms-model-row[data-drop-target="after"]::after { bottom: 1px; }
 .nms-model-copy { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; overflow: hidden; }
 .nms-model-line { display: flex; align-items: center; flex-wrap: nowrap; gap: 5px; min-width: 0; overflow: hidden; }
 .nms-model-name { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; line-height: 18px; font-weight: 500; }

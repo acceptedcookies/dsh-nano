@@ -1,0 +1,35 @@
+{
+  "name": "dsh-nano-notepad",
+  "version": "0.1.0",
+  "description": "Floating Markdown notepad stored in the browser database.",
+  "type": "module",
+  "main": "./index.js",
+  "scripts": {
+    "build": "node scripts/build-client.mjs"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "cordis.patch.yml",
+    "lib/client.js"
+  ],
+  "engines": {
+    "dsh": ">=0.2.2-rc.1 <0.3.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-shortcuts"
+      ]
+    }
+  }
+}

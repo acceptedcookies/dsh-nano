@@ -880,12 +880,16 @@ window.__ModuleLoader__.load({
 .np-read .np-placeholder { color: var(--dsw-alias-label-tertiary); }
 .np-dialog { position: absolute; inset: 0; z-index: 20; border-radius: inherit; background: var(--dsw-alias-bg-mask-1); display: flex; align-items: center; justify-content: center; padding: 16px; pointer-events: auto; }
 .np-slash { background: var(--dsw-menu-surface-fill, var(--dsw-alias-bg-layer-3)); color: var(--dsw-alias-label-primary); border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-lg); box-shadow: var(--dsw-elevation-prominent); backdrop-filter: var(--dsw-menu-backdrop-filter); }
-.np-card { box-sizing: border-box; display: flex; flex-direction: column; gap: 16px; width: min(560px, calc(100% - 32px)); max-height: calc(100% - 32px); padding: 22px 24px 24px; overflow: auto; border: 0; border-radius: var(--dsw-radius-panel, 16px); background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-primary); box-shadow: var(--dsw-elevation-prominent); }
+.np-card { box-sizing: border-box; display: flex; flex-direction: column; width: min(560px, calc(100% - 32px)); max-height: calc(100% - 32px); padding: 0; overflow: hidden; border: 0; border-radius: var(--dsw-radius-panel, 16px); background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-primary); box-shadow: var(--dsw-elevation-prominent); }
+.np-card-scroll { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 16px; padding: 22px 24px 24px; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; }
+.np-card-scroll::-webkit-scrollbar { width: 8px; }
+.np-card-scroll::-webkit-scrollbar-thumb { background: var(--dsw-alias-scrollbar-bg-l1, var(--dsw-alias-border-l3)); border-radius: 4px; }
 .np-card h3 { margin: 0; font-size: 16px; line-height: 24px; font-weight: 600; }
 .np-card p, .np-card pre { margin: 0; color: var(--dsw-alias-label-secondary); line-height: 22px; }
 .np-card pre { max-height: 240px; overflow: auto; white-space: pre-wrap; font-family: var(--dsw-font-markdown-code-font-family); }
 .np-card label { display: flex; flex-direction: column; align-items: stretch; gap: 6px; margin: 0; color: var(--dsw-alias-label-secondary); }
 .np-card input, .np-card select { width: 100%; box-sizing: border-box; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); padding: 8px 10px; font: inherit; }
+.np-card input[type="number"] { max-width: 200px; }
 .np-card input:focus, .np-card select:focus { outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, var(--dsw-alias-brand-primary)); }
 .np-actions { display: flex; justify-content: flex-end; gap: var(--np-gap); margin: 0; }
 .np-actions button[data-go="ok"], .np-actions button[data-go="confirm"], .np-actions button[data-go="restore"] { background: var(--dsw-alias-button-primary-fill); color: var(--dsw-alias-label-primary-foreground); border-color: transparent; }
@@ -1366,7 +1370,7 @@ window.__ModuleLoader__.load({
       const card = document.createElement("div");
       card.className = "np-card";
       must(mask, ".np-card").replaceWith(card);
-      card.innerHTML = html;
+      card.innerHTML = `<div class="np-card-scroll">${html}</div>`;
       mask.hidden = false;
       closeSlash();
       closeDialog = () => {
@@ -1534,7 +1538,7 @@ window.__ModuleLoader__.load({
             if (!note) {
               note = document.createElement("p");
               note.className = "np-setting-note";
-              card.append(note);
+              card.querySelector(".np-card-scroll")?.append(note);
             }
             note.textContent = text().invalidSetting;
             return;

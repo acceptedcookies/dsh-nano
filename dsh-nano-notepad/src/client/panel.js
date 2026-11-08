@@ -568,6 +568,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     }
     /* pick the host window first — inside a same-origin iframe the picker
        may be blocked there; parent same-origin call still works */
+    let lastError = null
     for (const host of [window, window.top !== window ? window.top : null].filter(Boolean)) {
       if (typeof host.showSaveFilePicker !== 'function') continue
       try {
@@ -578,13 +579,26 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
         setSync('exported', name)
         return
       } catch (error) {
+        lastError = error
         if (error?.name === 'AbortError') return
-        if (error?.name !== 'SecurityError' && error?.name !== 'NotAllowedError') {
-          /* picker exists but failed for an unexpected reason → still fallback */
-        }
       }
     }
-    /* last resort: tell the user we could only produce a download */
+    /* browser picker refused (iframe/policy) — ask the host for a native macOS
+       dialog via osascript; the dsh daemon shows choose-file-name itself */
+    try {
+      const res = await fetch('/nano-notepad/save', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name, content }),
+      })
+      const out = await res.json().catch(() => ({}))
+      if (out.ok) { setSync('exported', out.path || name); return }
+      if (out.reason === 'cancelled') return
+      console.warn('[notepad] host save 失败：', out.message || out.reason)
+    } catch (error) {
+      console.warn('[notepad] host save 不可达：', String(error?.message || error).slice(0, 120))
+    }
+    /* last resort: browser download */
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
@@ -593,7 +607,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     a.click()
     setTimeout(() => URL.revokeObjectURL(url), 5000)
     setSync('exported', name)
-    console.warn('[notepad] 系统保存对话框不可用，已回退为浏览器下载')
+    console.warn('[notepad] 仅浏览器下载可用')
   }
 
   function clamp(value, min, max) {

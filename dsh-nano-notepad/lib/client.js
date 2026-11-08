@@ -1388,6 +1388,7 @@ window.__ModuleLoader__.load({
         suggestedName: name,
         types: [{ description: "Markdown", accept: { "text/markdown": [".md", ".markdown", ".txt"] } }]
       };
+      let lastError = null;
       for (const host2 of [window, window.top !== window ? window.top : null].filter(Boolean)) {
         if (typeof host2.showSaveFilePicker !== "function") continue;
         try {
@@ -1398,10 +1399,25 @@ window.__ModuleLoader__.load({
           setSync("exported", name);
           return;
         } catch (error) {
+          lastError = error;
           if (error?.name === "AbortError") return;
-          if (error?.name !== "SecurityError" && error?.name !== "NotAllowedError") {
-          }
         }
+      }
+      try {
+        const res = await fetch("/nano-notepad/save", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ name, content })
+        });
+        const out = await res.json().catch(() => ({}));
+        if (out.ok) {
+          setSync("exported", out.path || name);
+          return;
+        }
+        if (out.reason === "cancelled") return;
+        console.warn("[notepad] host save \u5931\u8D25\uFF1A", out.message || out.reason);
+      } catch (error) {
+        console.warn("[notepad] host save \u4E0D\u53EF\u8FBE\uFF1A", String(error?.message || error).slice(0, 120));
       }
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -1411,7 +1427,7 @@ window.__ModuleLoader__.load({
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 5e3);
       setSync("exported", name);
-      console.warn("[notepad] \u7CFB\u7EDF\u4FDD\u5B58\u5BF9\u8BDD\u6846\u4E0D\u53EF\u7528\uFF0C\u5DF2\u56DE\u9000\u4E3A\u6D4F\u89C8\u5668\u4E0B\u8F7D");
+      console.warn("[notepad] \u4EC5\u6D4F\u89C8\u5668\u4E0B\u8F7D\u53EF\u7528");
     }
     function clamp(value, min, max) {
       return Math.min(Math.max(value, min), Math.max(min, max));

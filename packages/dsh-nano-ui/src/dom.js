@@ -23,8 +23,40 @@ export function openNanoDialog(options) {
   const maxKey = '--nano-dlg-max'
   const maxValue = typeof options.maxHeight === 'number' ? `${Math.round(options.maxHeight)}px` : null
   if (maxValue !== null) document.documentElement.style.setProperty(maxKey, maxValue)
+  /* Modal portals into document.body and its .root is a fixed full-viewport
+     layer with a hashed class. To size the card or fence the overlay inside the
+     owning window's rect we flag the card (nano-dialog-sized/regioned), then
+     one MutationObserver applies inline geometry + vars onto .root once React
+     commits it — parentElement is the only reliable way back to .root. */
+  const wantsRegion = options.region instanceof DOMRect
+  const wantsWidth = typeof options.width === 'number'
+  const observer = (wantsRegion || wantsWidth) ? new MutationObserver(() => {
+    for (const card of document.querySelectorAll('.nano-dialog-card')) {
+      if (card instanceof HTMLElement === false || card.dataset.nanoBound === '1') continue
+      const layer = card.parentElement
+      if (!(layer instanceof HTMLElement)) continue
+      card.dataset.nanoBound = '1'
+      if (wantsWidth) layer.style.setProperty('--nano-dlg-w', `${Math.round(options.width)}px`)
+      if (wantsRegion) {
+        const r = options.region
+        layer.classList.add('nano-regioned')
+        Object.assign(layer.style, {
+          position: 'fixed',
+          top: `${r.top}px`,
+          left: `${r.left}px`,
+          right: 'auto',
+          bottom: 'auto',
+          width: `${r.width}px`,
+          height: `${r.height}px`,
+          padding: '12px',
+        })
+      }
+    }
+  }) : null
+  observer?.observe(document.body, { childList: true })
   const root = createRoot(host)
   const close = () => {
+    observer?.disconnect()
     root.unmount()
     host.remove()
     if (maxValue !== null && document.documentElement.style.getPropertyValue(maxKey) === maxValue) {

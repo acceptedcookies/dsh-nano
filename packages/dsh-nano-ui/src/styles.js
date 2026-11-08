@@ -32,6 +32,11 @@ export const NANO_STYLES = `
    clips nothing because the body becomes the flex child that scrolls. The last
    content child is .body — target it structurally since the class is hashed. */
 .nano-dialog-capped { max-height: var(--nano-dlg-max) !important; }
+/* Card width follows the owning overlay (e.g. 60% of the floating window) with
+   a floor so a narrow window still leaves a readable dialog. The value itself
+   is set per dialog on the portal layer (see openNanoDialog). */
+.nano-dialog-sized { width: clamp(320px, var(--nano-dlg-w, 380px), 100%) !important; }
+
 .nano-dialog-content { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .nano-dialog-content > div:last-child { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 `

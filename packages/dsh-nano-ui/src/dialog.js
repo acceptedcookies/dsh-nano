@@ -17,17 +17,26 @@ import { Button, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
  *   whose primary verb differs per body row); leave undefined for the default pair.
  * @param {number} [props.maxHeight] - cap the card in pixels; the body scrolls when content exceeds
  *   it (notepad caps at 80% of the floating window so a tall settings card never swallows it).
+ * @param {number} [props.width] - card width in pixels; .nano-dialog-sized clamps it to a usable
+ *   minimum so the dialog still reads when the owning overlay is narrow.
+ * @param {DOMRect} [props.region] - contain the whole overlay (mask included) inside this rect,
+ *   e.g. the floating window's own bounds so the dialog never paints over the workspace.
  * @param {() => void} props.onConfirm - primary action.
  * @param {() => void} props.onCancel - cancel action.
  * @param {React.ReactNode} [props.children] - the body.
  */
-export function NanoDialog({ copy, title, confirmLabel, confirmDisabled, busy, error, danger, footer, maxHeight, onConfirm, onCancel, children }) {
+export function NanoDialog({ copy, title, confirmLabel, confirmDisabled, busy, error, danger, footer, maxHeight, width, region, onConfirm, onCancel, children }) {
   return React.createElement(Modal, {
     open: true,
     onClose: onCancel,
     title,
     closeLabel: copy.cancel,
-    className: maxHeight === undefined ? undefined : 'nano-dialog-capped',
+    className: [
+      'nano-dialog-card',
+      maxHeight === undefined ? '' : 'nano-dialog-capped',
+      width === undefined ? '' : 'nano-dialog-sized',
+      region === undefined ? '' : 'nano-dialog-regioned',
+    ].filter(Boolean).join(' '),
     contentClassName: 'nano-dialog-content',
     footer: footer ?? React.createElement(React.Fragment, null,
       React.createElement(Button, { variant: 'outline', className: 'nano-modal-action', onClick: onCancel }, copy.cancel),

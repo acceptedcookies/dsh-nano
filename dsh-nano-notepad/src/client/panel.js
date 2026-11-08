@@ -956,6 +956,8 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       danger: spec.danger === true,
       footer: spec.footer?.(closeSelf),
       maxHeight: Math.round(panel.getBoundingClientRect().height * 0.8),
+      width: Math.round(panel.getBoundingClientRect().width * 0.6),
+      region: panel.getBoundingClientRect(),
       onConfirm: () => spec.onConfirm?.(closeSelf),
       onCancel: () => { finish(); spec.onCancel?.() },
       children: React.createElement('div', {

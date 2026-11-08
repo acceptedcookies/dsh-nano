@@ -63,7 +63,7 @@ const STYLE = `
 /* dockkit-style tab: 28px, sm radius, active fills markdown-tag, close fades in */
 .np-tab { position: relative; display: inline-flex; align-items: center; flex: 0 1 auto; min-width: 90px; max-width: 196px; height: 28px; box-sizing: border-box; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); padding: 0 10px; cursor: default; font: inherit; font-size: 13px; line-height: 1; white-space: nowrap; user-select: none; }
 .np-tab:not([data-active="true"]):hover { background: var(--dsw-alias-interactive-bg-hover); }
-.np-tab[data-active="true"] { background: var(--dsw-alias-markdown-tag, var(--dsw-alias-interactive-bg-active)); color: var(--dsw-alias-label-primary); }
+.np-tab[data-active="true"] { background: var(--dsw-alias-interactive-bg-active); color: var(--dsw-alias-label-primary); }
 .np-tab-btn { min-width: 0; flex: 1; height: 100%; display: inline-flex; align-items: center; overflow: hidden; border: 0; background: transparent; color: inherit; font: inherit; padding: 0; cursor: pointer; }
 .np-tabs > button.np-add { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; box-sizing: border-box; padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); cursor: pointer; }
 .np-tabs > button.np-add:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }

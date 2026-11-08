@@ -372,10 +372,13 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       }
       if (node.dataset.i18nMode !== 'title' && node.dataset.i18nMode !== 'label') node.textContent = value
     }
+    const SHORTCUT_HINTS = { bold: '⌘B', italic: '⌘I', link: '⌘K', code: '⌘E', strike: '⌘⇧X' }
     for (const node of panel.querySelectorAll('[data-format-kind]')) {
       const label = formatLabel(node.dataset.formatKind)
-      node.title = label
-      node.setAttribute('aria-label', label)
+      const hint = SHORTCUT_HINTS[node.dataset.formatKind]
+      const titled = hint ? `${label} (${hint})` : label
+      node.title = titled
+      node.setAttribute('aria-label', titled)
       if (!node.querySelector('svg')) node.textContent = label
     }
     panel.querySelector('.np-modes')?.setAttribute('aria-label', copy.viewGroup)
@@ -1379,6 +1382,20 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
   }
 
   write().addEventListener('keydown', event => {
+    const mod = event.metaKey || event.ctrlKey
+    if (mod && !state.slash) {
+      const map = { b: 'bold', i: 'italic', k: 'link', e: 'code' }
+      const kind = event.shiftKey && (event.key === 'x' || event.key === 'X') ? 'strike' : map[event.key?.toLowerCase()]
+      if (kind) {
+        event.preventDefault()
+        const source = write()
+        const applied = applyFormat(source.value, source.selectionStart, source.selectionEnd, kind)
+        source.value = applied.text
+        source.setSelectionRange(applied.cursor, applied.cursor)
+        scheduleSave()
+        return
+      }
+    }
     if (!state.slash) return
     if (event.key === 'Escape') {
       event.preventDefault()

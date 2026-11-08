@@ -2210,13 +2210,17 @@ window.__ModuleLoader__.load({
           subscribe: (listener) => ctx.on("locale/change", listener)
         }, {
           current: () => {
-            const snapshot = ctx.workspaces?.getSnapshot?.() ?? { items: [] };
+            const list = ctx.workspaces?.list ?? ctx.workspaces;
+            const snapshot = list?.getSnapshot?.() ?? { items: [] };
             const session = ctx.sessions?.getSnapshot?.()?.current;
             const currentId = session ? snapshot.items.find((item) => item.sessionIds?.includes(session.id))?.workspaceId ?? null : null;
             return { items: snapshot.items ?? [], currentId };
           },
-          subscribe: (listener) => ctx.workspaces?.subscribe?.(listener) ?? (() => {
-          })
+          subscribe: (listener) => {
+            const list = ctx.workspaces?.list ?? ctx.workspaces;
+            return list?.subscribe?.(listener) ?? (() => {
+            });
+          }
         });
         mounted.setShortcut(label(), shortcutKeys());
         ready(mounted);

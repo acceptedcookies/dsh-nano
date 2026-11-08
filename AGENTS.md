@@ -5,6 +5,8 @@
 ## 仓库结构
 
 - `dsh-nano-notepad/` — dsh overlay 插件（cordis.patch 插件），源码位于 `src/`、`lib/`、`index.js`
+- `dsh-nano-model-selector/` — dsh overlay 模型选择器插件，源码位于 `src/`、`lib/`、`index.js`
+- `dsh-nano-explorer-extra/` — dsh overlay 工作区文件浏览器增强插件，源码位于 `src/host`、`src/client`、`lib/`、`index.js`；规格见 `context/spec.md`
 - `context/` — 各目录下的参考资料（git 忽略，不入库）
 - `AGENTS.md` — 本文件
 - `release.md` — 发布流程与安全信任链规范（CI 构建、SHA-256 校验、attestation 签名）

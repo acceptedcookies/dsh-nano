@@ -1,4 +1,5 @@
-# Development overlay. A bare package name resolves only after `dsh plugin add`.
+# Bundle patch: a profile that lists this package as a bundle applies this layer.
+# The row names the package, so resolution runs through the profile's dependency link.
 - insert:
     - id: nano-explorer-extra
-      name: /Users/seanz/Documents/dsh-plugins/dsh-nano-explorer-extra/index.js
+      name: dsh-nano-explorer-extra

@@ -126,16 +126,11 @@ button.nxe-commit, button.nxe-sync { cursor: pointer; }
 /* Dialog, matching the DSH modal material: translucent mask, no blur. */
 .nxe-mask { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; background: var(--dsw-alias-bg-mask-1, rgba(0,0,0,.45)); }
 .nxe-mask[hidden] { display: none !important; }
-.nxe-dialog { width: min(440px, calc(100vw - 32px)); max-height: calc(100vh - 64px); overflow: auto; border-radius: var(--dsw-radius-lg); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); box-shadow: var(--dsw-elevation-prominent); padding: 16px; }
-.nxe-dialog h2 { margin: 0 0 8px; font-size: 14px; font-weight: 600; }
-.nxe-dialog p { margin: 0 0 10px; font-size: 12px; color: var(--dsw-alias-label-secondary); }
-.nxe-dialog textarea, .nxe-dialog input { width: 100%; box-sizing: border-box; border: .5px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-primary); font: inherit; padding: 6px 8px; }
-.nxe-dialog textarea { min-height: 84px; resize: vertical; }
-.nxe-dialog textarea:focus, .nxe-dialog input:focus { outline: 2px solid var(--dsw-alias-brand-primary, var(--dsw-alias-link)); outline-offset: 0; }
+.nxe-dialog-note-inline { color: var(--dsw-alias-label-tertiary); }
 .nxe-dialog-error { margin: 8px 0 0; font-size: 12px; color: var(--dsw-alias-danger, #cf222e); }
 .nxe-dialog-changed { margin: 6px 0 0; padding: 0; list-style: none; max-height: 120px; overflow: auto; font-size: 11px; color: var(--dsw-alias-label-secondary); }
 .nxe-dialog-changed li { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.nxe-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+
 .nxe-btn { border: .5px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-primary); padding: 5px 12px; font: inherit; cursor: pointer; }
 .nxe-btn:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); }
 .nxe-btn[data-primary="true"] { background: var(--dsw-alias-brand-primary, var(--dsw-alias-link)); color: var(--dsw-alias-label-primary-foreground, #fff); border-color: transparent; }
@@ -245,7 +240,7 @@ button.nxe-commit, button.nxe-sync { cursor: pointer; }
 .nxe-menu-item[data-tone="danger"] { color: var(--dsw-alias-label-error, #e5534b); }
 .nxe-menu-item[data-tone="danger"] .nxe-menu-icon { color: inherit; }
 .nxe-menu-item[data-tone="danger"][data-active="true"] { background: color-mix(in oklab, var(--dsw-alias-label-error, #e5534b) 14%, transparent); }
-.nxe-dialog-note { margin: 8px 0 0; color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 18px; }
+
 
 /* One right rail for status marks. The shipped accessory is as wide as its content, so a folder's
    dot and a file's letter landed on different x positions; a fixed-width rail with its content pushed
@@ -291,7 +286,6 @@ button.nxe-commit, button.nxe-sync { cursor: pointer; }
    between the body and its field, matching how the shipped dialogs compose theirs. */
 .nxe-modal-action { min-width: 72px; }
 .nxe-dialog-field { display: flex; flex-direction: column; gap: 8px; }
-.nxe-dialog-field > p { margin: 0; color: var(--dsw-alias-label-secondary); font-size: 13px; line-height: 18px; }
 .nxe-dialog-error { margin: 8px 0 0; color: var(--dsw-alias-label-error, #e5534b); font-size: 12px; line-height: 18px; }
 
 /* The reveal control mirrors the shipped split button: an application icon, a hairline divider, and a

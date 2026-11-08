@@ -953,6 +953,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     handle = openNanoDialog({
       copy: text(),
       title: spec.title,
+      description: spec.description,
       confirmLabel: spec.confirmLabel,
       danger: spec.danger === true,
       footer: spec.footer?.(closeSelf),
@@ -1288,7 +1289,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     const copy = text()
     dialog({
       title: copy.clearFileTitle,
-      body: `<p>${escapeHtml(copy.clearFileBody(file.name))}</p>`,
+      description: copy.clearFileBody(file.name),
       danger: true,
       confirmLabel: copy.clear,
       onConfirm: close => void clearCurrentFile().then(close).catch(showError),
@@ -1302,7 +1303,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     const copy = text()
     dialog({
       title: copy.clearAllTitle,
-      body: `<p>${escapeHtml(copy.clearAllBody)}</p>`,
+      description: copy.clearAllBody,
       danger: true,
       confirmLabel: copy.deleteAll,
       onConfirm: close => {
@@ -1521,7 +1522,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     const body = node.kind === 'folder' ? (nested ? copy.deleteFolderBody : copy.deleteEmptyFolderBody) : copy.deleteFileBody(node.name)
     dialog({
       title,
-      body: `<p>${escapeHtml(body)}</p>`,
+      description: body,
       danger: true,
       confirmLabel: copy.delete,
       onConfirm: close => { close(); void forget(id) },

@@ -39,9 +39,9 @@ export function CommitDialog({ copy, files, busy, error, onConfirm, onCancel }) 
   return React.createElement(Dialog, {
     copy, title: copy.commitTitle, confirmLabel: copy.commit, confirmDisabled: empty, busy, error,
     onConfirm: () => onConfirm(message), onCancel,
+    description: copy.commitBody(files.length),
   },
   React.createElement(Field, null,
-    React.createElement('p', null, copy.commitBody(files.length)),
     React.createElement('ul', { className: 'nxe-dialog-changed' }, files.slice(0, 40).map(file =>
       React.createElement('li', { key: file.path, title: file.path }, `${file.status} ${file.path}`))),
     React.createElement(Input, {
@@ -71,9 +71,9 @@ export function RenameDialog({ copy, currentName, busy, error, onConfirm, onCanc
     confirmLabel: creating ? copy.create : copy.confirm,
     busy, error, confirmDisabled: invalid,
     onConfirm: () => onConfirm(name), onCancel,
+    description: creating ? copy.newEntryBody(currentName) : copy.renameBody(currentName),
   },
   React.createElement(Field, null,
-    React.createElement('p', null, creating ? copy.newEntryBody(currentName) : copy.renameBody(currentName)),
     React.createElement(Input, {
       value: name,
       'data-modal-autofocus': true,

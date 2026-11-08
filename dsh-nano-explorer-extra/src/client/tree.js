@@ -14,6 +14,8 @@ export function useTree(options) {
   const { sessionId, root, request, prefs, onListed } = options
   const [levels, setLevels] = useState(() => new Map())
   const [expanded, setExpanded] = useState(() => new Set())
+  const expandedRef = useRef(expanded)
+  expandedRef.current = expanded
   const [selected, setSelected] = useState(null)
   const [pending, setPending] = useState(null)
   const [token, setToken] = useState(0)
@@ -67,14 +69,36 @@ export function useTree(options) {
     return result
   }, [root, sessionId, request, prefs.followSymlinks, prefs.allowOutsideWorkspace, prefs.allowed])
 
+  /** The workspace the levels currently describe; a change of workspace is what discards them. */
+  const levelsRoot = useRef(undefined)
+  /** The directories that were open when a refresh was requested, read by the refresh effect. */
+  const openAtRefresh = useRef([])
+
   useEffect(() => {
     if (root === undefined) return
-    setLevels(new Map())
-    void loadLevel(root)
+    // A different workspace starts from nothing: its keys belong to the previous tree.
+    if (levelsRoot.current !== root) {
+      levelsRoot.current = root
+      setLevels(new Map())
+      setExpanded(new Set())
+      void loadLevel(root)
+      return
+    }
+    // Same workspace, so this is a reload: keep every open folder open and re-read each level in
+    // place. Clearing the map here collapsed the whole tree on every Git change, which is exactly the
+    // state a reader was trying to keep.
+    void loadLevel(root, true)
+    for (const path of openAtRefresh.current) void loadLevel(path, true)
   }, [root, token, loadLevel])
 
-  /** Reload the root and every expanded directory in place. */
+  /**
+   * Reload the root and every expanded directory in place.
+   *
+   * The open folders are captured before the reload runs, because the effect that performs it sees
+   * `expanded` as it was at render time and the listing work is asynchronous.
+   */
   const refresh = useCallback(async () => {
+    openAtRefresh.current = [...expandedRef.current]
     setToken(value => value + 1)
   }, [])
 

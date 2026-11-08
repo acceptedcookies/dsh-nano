@@ -58,7 +58,8 @@ const STYLE = `
 .np-nodes { overflow-x: hidden; overflow-y: auto; }
 .np-tabs { display: flex; align-items: center; gap: 4px; min-height: var(--np-row-h); padding: 6px var(--np-pad-x); cursor: grab; border-bottom: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-2); }
 .np-tablist { display: flex; min-width: 0; gap: 2px; overflow-x: auto; scrollbar-width: thin; }
-.np-tab { display: inline-flex; align-items: center; gap: 6px; flex: none; max-width: 180px; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); padding: 4px 8px; cursor: pointer; font: inherit; }
+.np-tab { display: inline-flex; align-items: center; gap: 6px; flex: none; max-width: 180px; height: 30px; box-sizing: border-box; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); padding: 0 8px; cursor: pointer; font: inherit; }
+.np-tabs > button[data-action="new-file"] { display: inline-flex; align-items: center; justify-content: center; height: 30px; box-sizing: border-box; }
 .np-tab-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .np-tab-x { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex: none; border-radius: var(--dsw-radius-xs, 4px); color: var(--dsw-alias-label-tertiary); }
 .np-tab-x:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
@@ -97,7 +98,8 @@ const STYLE = `
 .np-caret { display: inline-flex; width: 16px; height: 16px; align-items: center; justify-content: center; border: 0; background: transparent; color: var(--dsw-alias-label-tertiary); padding: 0; cursor: pointer; }
 .np-caret[data-open="false"] svg { transform: rotate(-90deg); }
 .np-node-icon { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex: none; color: var(--dsw-alias-label-tertiary); }
-.np-node-name { display: block; min-width: 0; overflow: hidden; white-space: nowrap; -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 18px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 18px), transparent); }
+.np-node-name { display: block; min-width: 0; overflow: hidden; white-space: nowrap; }
+.np-node-name[data-fade="true"] { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 18px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 18px), transparent); }
 .np-entry svg, .np-node-icon svg, .np-tree-tools svg, .np-tree-toggle svg, .np-tree-foot svg, .np-caret svg, .np-node-actions svg, .np-tool svg, .np-slash svg { fill: currentColor; stroke: none; }
 .np-node-icon svg, .np-tree-tools svg, .np-tree-toggle svg, .np-caret svg, .np-node-actions svg, .np-tool svg, .np-slash svg { width: 16px; height: 16px; display: block; }
 .np-workspace { max-width: 150px; min-width: 0; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); font: inherit; font-size: 12px; padding: 3px 4px; }
@@ -470,6 +472,13 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       visit(null, 0, workspaceId)
     }
     box.innerHTML = lines.join('')
+    // the fade mask is sized to the element, so it would clip short names too;
+    // mark only rows whose text actually overflows
+    requestAnimationFrame(() => {
+      for (const name of box.querySelectorAll('.np-node-name')) {
+        name.dataset.fade = String(name.scrollWidth > name.clientWidth + 1)
+      }
+    })
   }
 
   function renderTabs() {

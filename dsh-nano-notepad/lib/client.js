@@ -937,15 +937,13 @@ window.__ModuleLoader__.load({
 .np-group[data-active="true"] { color: var(--dsw-alias-label-primary); }
 .np-group-count { font-size: 11px; font-weight: 400; color: var(--dsw-alias-label-tertiary); background: var(--dsw-alias-interactive-bg-active); border-radius: 8px; padding: 0 6px; line-height: 16px; }
 .np-editor { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
-.np-path, .np-toolbar, .np-footer { min-width: 0; }
-.np-path, .np-toolbar { display: flex; gap: var(--np-gap); align-items: center; padding: 6px var(--np-pad-x); }
-.np-path { color: var(--dsw-alias-label-tertiary); font-family: var(--dsw-font-markdown-code-font-family); font-size: 12px; }
-.np-path span:not(.np-modes) { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.np-modes, .np-path > button { flex: 0 0 auto; white-space: nowrap; }
-.np-modes { display: inline-flex; align-items: center; gap: 4px; }
-.np-modes button { height: 30px; padding: 0 10px; line-height: 20px; color: var(--dsw-alias-label-secondary); }
-.np-modes button[data-active="true"] { background: var(--dsw-alias-interactive-bg-active); color: var(--dsw-alias-label-primary); }
-.np-path > button[data-action="rename"] { flex: 0 0 auto; height: 30px; min-width: max-content; }
+.np-toolbar, .np-footer { min-width: 0; }
+.np-toolbar { display: flex; gap: var(--np-gap); align-items: center; padding: 6px var(--np-pad-x); }
+/* iOS-style sliding switch; the thumb carries the active label */
+.np-switch { flex: none; margin-left: auto; display: inline-flex; position: relative; padding: 2px; border: 0; background: var(--dsw-alias-interactive-bg-hover); border-radius: var(--dsw-radius-full, 999px); cursor: pointer; font: inherit; min-width: 128px; }
+.np-switch .np-switch-label { flex: 1; display: inline-flex; align-items: center; justify-content: center; min-width: 0; padding: 2px 10px; font-size: 12px; color: var(--dsw-alias-label-tertiary); z-index: 0; }
+.np-switch .np-switch-thumb { position: absolute; top: 2px; left: 2px; width: calc(50% - 2px); height: calc(100% - 4px); display: flex; align-items: center; justify-content: center; padding: 0 10px; box-sizing: border-box; background: var(--dsw-alias-bg-layer-1); border-radius: var(--dsw-radius-full, 999px); box-shadow: 0 1px 3px rgba(0,0,0,.28); font-size: 12px; color: var(--dsw-alias-label-primary); white-space: nowrap; transition: transform .18s cubic-bezier(.3,.9,.35,1); z-index: 1; }
+.np-switch[data-view="rendered"] .np-switch-thumb { transform: translateX(100%); }
 .np-toolbar { flex-wrap: wrap; gap: 2px; border-bottom: 1px solid var(--dsw-alias-border-l2); }
 .np-tool { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); cursor: pointer; }
 .np-tool:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
@@ -1057,7 +1055,10 @@ window.__ModuleLoader__.load({
   .np-tree[data-collapsed="true"] { width: var(--np-rail); max-height: none; }
   .np-toolbar { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
   .np-toolbar::-webkit-scrollbar { display: none; }
-  .np-modes button, .np-path > button[data-action="rename"] { height: 26px; padding: 0 8px; }
+  .np-switch { min-width: 56px; }
+  .np-switch .np-switch-label { display: none; }
+  .np-switch .np-switch-thumb { position: static; transform: none; width: auto; height: auto; padding: 2px 8px; box-shadow: none; }
+  .np-switch[data-view="rendered"] .np-switch-thumb { transform: none; }
 }
 /* Viewport-level mobile layout still applies when the whole page is small. */
 @media (max-width: 760px) {
@@ -1178,8 +1179,7 @@ window.__ModuleLoader__.load({
     <div class="np-body">
       <aside class="np-tree"><div class="np-tree-head"><button type="button" class="np-tree-toggle" data-action="toggle-tree"></button><div class="np-ws"><button type="button" class="np-ws-btn" data-action="ws-toggle" aria-haspopup="listbox" aria-expanded="false"><span class="np-ws-label"></span><span class="np-ws-caret" aria-hidden="true">${CHEVRON_ICON}</span></button><div class="np-ws-menu" role="listbox" hidden></div></div><span style="flex:1"></span><span class="np-tree-tools"><button type="button" data-action="new-file" data-i18n="newFile" data-i18n-mode="title">${PLUS_ICON}</button><button type="button" data-action="new-folder" data-i18n="newFolder" data-i18n-mode="title">${FOLDER_PLUS_ICON}</button><button type="button" class="np-danger" data-action="delete" data-i18n="delete" data-i18n-mode="title">${TRASH_ICON}</button></span></div><div class="np-nodes" data-root="true"></div><div class="np-tree-foot"><button type="button" data-action="settings" data-i18n="settings" data-i18n-mode="label">${SETTINGS_ICON}<span data-i18n="settings"></span></button><button type="button" data-action="close" data-i18n="close" data-i18n-mode="label">${CLOSE_ICON}<span data-i18n="close"></span></button></div></aside>
       <div class="np-editor">
-        <div class="np-path"><span class="np-pathname"></span><span class="np-modes" role="group"><button type="button" data-action="view" data-view="source" data-i18n="source"></button><button type="button" data-action="view" data-view="rendered" data-i18n="preview"></button></span><button type="button" data-action="rename" data-i18n="rename"></button></div>
-        <div class="np-toolbar">${toolbar}</div>
+        <div class="np-toolbar">${toolbar}<button type="button" class="np-switch" data-action="view" role="switch" aria-checked="false" data-i18n="viewGroup" data-i18n-mode="title"><span class="np-switch-label" data-i18n="source"></span><span class="np-switch-label" data-i18n="preview"></span><span class="np-switch-thumb" data-i18n="source"></span></button></div>
         <textarea class="np-write"></textarea>
         <div class="np-slash" hidden></div>
         <div class="np-read" tabindex="0" hidden></div>
@@ -1220,7 +1220,7 @@ window.__ModuleLoader__.load({
         node.setAttribute("aria-label", titled);
         if (!node.querySelector("svg")) node.textContent = label;
       }
-      panel.querySelector(".np-modes")?.setAttribute("aria-label", copy.viewGroup);
+      panel.querySelector(".np-switch")?.setAttribute("aria-label", copy.viewGroup);
       panel.querySelector(".np-read")?.setAttribute("aria-label", copy.editHint);
       panel.querySelector(".np-read")?.setAttribute("title", copy.editHint);
       write().placeholder = copy.placeholder;
@@ -1450,7 +1450,6 @@ window.__ModuleLoader__.load({
     }
     async function renderBody() {
       const file = current();
-      must(panel, ".np-pathname").textContent = file ? pathOf(file.id) : text().noFile;
       const source = write();
       const read = must(panel, ".np-read");
       if (!file) {
@@ -1474,8 +1473,12 @@ window.__ModuleLoader__.load({
       if (document.activeElement !== source && !state.dirty) source.value = file.draft ?? "";
       source.hidden = rendered;
       read.hidden = !rendered;
-      for (const button of panel.querySelectorAll(".np-modes button")) {
-        button.dataset.active = String(button.dataset.view === state.view);
+      const sw = panel.querySelector(".np-switch");
+      if (sw) {
+        sw.dataset.view = state.view;
+        sw.setAttribute("aria-checked", String(rendered));
+        const thumb = sw.querySelector(".np-switch-thumb");
+        if (thumb) thumb.textContent = rendered ? text().preview : text().source;
       }
       if (!rendered || state.db === null) return;
       const markdown = source.value || file.draft || "";
@@ -2253,11 +2256,11 @@ window.__ModuleLoader__.load({
       if (action === "delete" && state.ui.currentId) requestDelete(state.ui.currentId);
       if (action === "clear-file") confirmClearFile();
       if (action === "save-version") void commit("manual").catch(showError);
-      if (action === "view" && target.dataset.view) {
-        state.view = target.dataset.view === "rendered" ? "rendered" : "source";
+      if (action === "view") {
+        state.view = state.view === "rendered" ? "source" : "rendered";
         void renderBody();
       }
-      if (action === "copy") void navigator.clipboard?.writeText(must(panel, ".np-pathname").textContent ?? "");
+      if (action === "copy") void navigator.clipboard?.writeText(current() ? pathOf(current().id) : text().noFile);
       if (action === "history") void openHistory().catch(showError);
       if (action === "dismiss-error" || action === "keep-mine") must(panel, ".np-error").hidden = true;
       if (action === "load-remote" && state.db) {

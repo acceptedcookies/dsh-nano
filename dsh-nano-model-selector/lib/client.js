@@ -290,21 +290,21 @@ window.__ModuleLoader__.load({
 .nms-rail::-webkit-scrollbar { display: none; }
 .nms-rail-item { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; flex: none; padding: 0; border: 1px solid transparent; border-radius: 10px; background: transparent; color: var(--dsw-alias-label-secondary); cursor: pointer; }
 .nms-rail-item:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
-.nms-rail-item[data-active="true"] { border-color: color-mix(in srgb, var(--dsw-alias-state-business-primary) 36%, var(--dsw-alias-border-l2)); background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 14%, transparent); color: var(--dsw-alias-label-primary); }
+.nms-rail-item[data-active="true"] { border-color: color-mix(in srgb, var(--dsw-alias-state-business-primary) 40%, var(--dsw-alias-border-l2)); background: transparent; color: var(--dsw-alias-label-primary); }
 .nms-rail-item[data-favorite="true"] { color: #e6b84a; }
 .nms-rail-sep { width: 24px; height: 1px; margin: 3px 0; flex: none; background: var(--dsw-alias-border-l2); }
 .nms-provider-mark { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 8px; background: var(--nms-provider-bg, var(--dsw-alias-interactive-bg-active)); color: var(--nms-provider-fg, var(--dsw-alias-label-primary)); font-size: 10px; line-height: 1; font-weight: 700; letter-spacing: -.02em; }
-.nms-provider-logo { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; flex: none; border-radius: 7px; overflow: hidden; }
+.nms-provider-logo { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; flex: none; overflow: hidden; }
 .nms-provider-logo svg { display: block; width: 100%; height: 100%; }
 .nms-provider-logo img { display: block; width: 100%; height: 100%; object-fit: contain; }
-.nms-provider-logo-route { background: var(--dsw-alias-interactive-bg-active); color: var(--dsw-alias-label-secondary); }
+.nms-provider-logo-route { color: var(--dsw-alias-label-secondary); }
 .nms-main { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; }
-.nms-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 8px 10px 10px; scrollbar-width: thin; }
-.nms-group { display: flex; align-items: center; gap: 6px; margin: 10px 4px 4px; color: var(--dsw-alias-label-tertiary); font-size: 11px; line-height: 16px; font-weight: 600; letter-spacing: .035em; }
+.nms-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 8px 16px 10px; scrollbar-gutter: stable both-edges; }
+.nms-group { display: flex; align-items: center; gap: 6px; margin: 10px 0 4px; color: var(--dsw-alias-label-tertiary); font-size: 11px; line-height: 16px; font-weight: 600; letter-spacing: .035em; }
 .nms-group:first-child { margin-top: 2px; }
 .nms-group-count { font-weight: 400; color: var(--dsw-alias-label-tertiary); }
 .nms-group-star { color: #e6b84a; }
-.nms-model-row { display: flex; align-items: stretch; gap: 0; width: 100%; height: 64px; box-sizing: border-box; min-width: 0; margin: 0; border-radius: var(--dsw-radius-md); }
+.nms-model-row { display: flex; align-items: stretch; gap: 0; width: 100%; height: 64px; box-sizing: border-box; min-width: 0; margin: 0 0 4px; border-radius: var(--dsw-radius-md); }
 .nms-model-row:hover { background: var(--dsw-alias-interactive-bg-hover); }
 .nms-model-row[data-active="true"] { background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 16%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--dsw-alias-state-business-primary) 24%, transparent); }
 .nms-model-row[data-pending="true"] { opacity: .72; }
@@ -348,6 +348,7 @@ window.__ModuleLoader__.load({
   // src/client/ModelSelector.jsx
   var STYLE_ID = "nano-model-selector-style";
   var MODEL_CARD_HEIGHT = 64;
+  var MODEL_CARD_GAP = 4;
   var PANEL_CHROME_HEIGHT = 58 + 46 + 18 + 2;
   function keyOf(provider, model) {
     return `${provider}/${model}`;
@@ -540,7 +541,7 @@ window.__ModuleLoader__.load({
         const margin = 12;
         const width = Math.min(440, window.innerWidth - margin * 2);
         const available2 = window.innerHeight - margin * 2;
-        const height = Math.min(MODEL_CARD_HEIGHT * 4.5 + PANEL_CHROME_HEIGHT, available2);
+        const height = Math.min((MODEL_CARD_HEIGHT + MODEL_CARD_GAP) * 4.5 + PANEL_CHROME_HEIGHT, available2);
         let left = Math.min(Math.max(margin, rect.right - width), Math.max(margin, window.innerWidth - width - margin));
         let top = rect.top - height - 8;
         if (top < margin) top = Math.min(window.innerHeight - height - margin, rect.bottom + 8);

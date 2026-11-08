@@ -399,6 +399,7 @@ async function statisticsOf(fs, root, options, signal) {
         totals.truncated = true;
         return;
       }
+      if (seen % 200 === 0) await new Promise((resolve) => setImmediate(resolve));
       if (excludeGit && child.name === ".git") continue;
       if (child.type === "directory") {
         totals.directories += 1;

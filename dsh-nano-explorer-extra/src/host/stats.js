@@ -34,6 +34,9 @@ export async function statisticsOf(fs, root, options, signal) {
         totals.truncated = true
         return
       }
+      // Yield between directories so a large workspace never monopolizes the event loop; a blocked
+      // loop stalls the SSE and WebSocket carriers, which the browser reports as a reconnect.
+      if (seen % 200 === 0) await new Promise(resolve => setImmediate(resolve))
       if (excludeGit && child.name === '.git') continue
       if (child.type === 'directory') {
         totals.directories += 1

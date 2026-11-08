@@ -119,11 +119,13 @@ const STYLE = `
 .np-tool:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 .np-tool svg { width: 18px; height: 18px; }
 .np-tool-sep { width: 1px; height: 18px; margin: 6px 4px; background: var(--dsw-alias-border-l2); flex: none; }
-.np-window button:not([class]):not(.np-tree-tools button):not(.np-node-actions button):not(.np-slash button):not(.np-versions button), .np-card button { border: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); border-radius: var(--dsw-radius-sm); padding: 4px 10px; cursor: pointer; font: inherit; line-height: 20px; }
+.np-window button:not([class]):not(.np-tree-tools button):not(.np-node-actions button):not(.np-slash button):not(.np-versions button), .np-footer-actions button.np-danger, .np-card button { border: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); border-radius: var(--dsw-radius-sm); padding: 4px 10px; cursor: pointer; font: inherit; line-height: 20px; }
 .np-window button:hover, .np-card button:hover { background: var(--dsw-alias-interactive-bg-hover); }
 .np-node-main, .np-caret, .np-node { border: 0; background: transparent; box-shadow: none; }
 .np-tabs > button, .np-tab { background: transparent; }
-.np-danger { color: var(--dsw-alias-label-error); border-color: var(--dsw-alias-state-error-primary); }
+.np-danger { color: var(--dsw-alias-label-error); }
+.np-footer-actions button.np-danger { color: var(--dsw-alias-label-error); }
+.np-footer-actions button.np-danger:hover, .np-card button.np-danger:hover { border-color: var(--dsw-alias-state-error-primary); background: var(--dsw-alias-state-error-secondary, var(--dsw-alias-interactive-bg-hover)); }
 .np-write, .np-read { flex: 1; min-height: 0; margin: 0; }
 .np-write { box-sizing: border-box; width: 100%; max-width: 100%; resize: none; border: 0; outline: 0; background: transparent; color: var(--dsw-alias-label-primary); caret-color: var(--dsw-alias-label-primary); padding: var(--np-pad-x); font: var(--dsw-font-markdown-code); overflow-wrap: anywhere; }
 .np-write:disabled { color: var(--dsw-alias-label-tertiary); }

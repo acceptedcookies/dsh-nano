@@ -61,10 +61,10 @@ const STYLE = `
 .np-tabs { display: flex; align-items: center; gap: 4px; min-height: var(--np-row-h); padding: 6px var(--np-pad-x); cursor: grab; border-bottom: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-2); }
 .np-tablist { display: flex; min-width: 0; gap: 2px; overflow-x: auto; scrollbar-width: thin; }
 /* dockkit-style tab: 28px, sm radius, active fills markdown-tag, close fades in */
-.np-tab { position: relative; display: inline-flex; align-items: center; flex: 0 1 auto; min-width: 80px; max-width: 170px; height: 28px; box-sizing: border-box; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); padding: 0 10px; cursor: default; font: inherit; font-size: 13px; line-height: 1; white-space: nowrap; user-select: none; }
-.np-tab:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.np-tab { position: relative; display: inline-flex; align-items: center; flex: 0 1 auto; min-width: 90px; max-width: 196px; height: 28px; box-sizing: border-box; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); padding: 0 10px; cursor: default; font: inherit; font-size: 13px; line-height: 1; white-space: nowrap; user-select: none; }
+.np-tab:not([data-active="true"]):hover { background: var(--dsw-alias-interactive-bg-hover); }
 .np-tab[data-active="true"] { background: var(--dsw-alias-markdown-tag, var(--dsw-alias-interactive-bg-active)); color: var(--dsw-alias-label-primary); }
-.np-tab-btn { min-width: 0; flex: 1; height: 100%; display: inline-flex; align-items: center; border: 0; background: transparent; color: inherit; font: inherit; padding: 0; cursor: pointer; }
+.np-tab-btn { min-width: 0; flex: 1; height: 100%; display: inline-flex; align-items: center; overflow: hidden; border: 0; background: transparent; color: inherit; font: inherit; padding: 0; cursor: pointer; }
 .np-tabs > button.np-add { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; box-sizing: border-box; padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); cursor: pointer; }
 .np-tabs > button.np-add:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 .np-tabs-spacer { flex: 1 1 auto; min-width: 8px; }
@@ -91,7 +91,8 @@ const STYLE = `
 .np-tab-x { position: absolute; top: 4px; right: 4px; display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; flex: none; border: 0; background: transparent; border-radius: var(--dsw-radius-sm); color: var(--dsw-alias-label-tertiary); font: inherit; padding: 0; cursor: pointer; opacity: 0; pointer-events: none; }
 .np-tab-x:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 .np-tab:hover .np-tab-x, .np-tab:focus-within .np-tab-x, .np-tab[data-active="true"] .np-tab-x { opacity: 1; pointer-events: auto; }
-.np-tab:hover .np-tab-name, .np-tab:focus-within .np-tab-name, .np-tab[data-active="true"] .np-tab-name { mask-image: linear-gradient(to right, black calc(100% - 30px), transparent calc(100% - 14px)); -webkit-mask-image: linear-gradient(to right, black calc(100% - 30px), transparent calc(100% - 14px)); }
+/* only fade the name when it actually clips — matches native data-dockkit-tab-clipped */
+.np-tab-name[data-clipped="true"] { mask-image: linear-gradient(to right, black calc(100% - 30px), transparent calc(100% - 14px)); -webkit-mask-image: linear-gradient(to right, black calc(100% - 30px), transparent calc(100% - 14px)); }
 .np-body { display: flex; min-height: 0; flex: 1; }
 .np-tree { box-sizing: border-box; width: 248px; display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--dsw-alias-border-l2); background: transparent; }
 .np-tree[data-collapsed="true"] { width: var(--np-rail); align-items: stretch; }
@@ -560,15 +561,19 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
   async function exportFile() {
     const file = current()
     if (!file) return
-    const content = state.dirty ? (write().value ?? file.draft ?? '') : (write().value ?? file.draft ?? '')
+    const content = write().value ?? file.draft ?? ''
     const blob = new Blob([content], { type: 'text/markdown' })
     const name = file.name.endsWith('.md') ? file.name : `${file.name}.md`
-    if (typeof window.showSaveFilePicker === 'function') {
+    const opts = {
+      suggestedName: name,
+      types: [{ description: 'Markdown', accept: { 'text/markdown': ['.md', '.markdown', '.txt'] } }],
+    }
+    /* pick the host window first — inside a same-origin iframe the picker
+       may be blocked there; parent same-origin call still works */
+    for (const host of [window, window.top !== window ? window.top : null].filter(Boolean)) {
+      if (typeof host.showSaveFilePicker !== 'function') continue
       try {
-        const handle = await window.showSaveFilePicker({
-          suggestedName: name,
-          types: [{ description: 'Markdown', accept: { 'text/markdown': ['.md', '.markdown', '.txt'] } }],
-        })
+        const handle = await host.showSaveFilePicker(opts)
         const writable = await handle.createWritable()
         await writable.write(blob)
         await writable.close()
@@ -576,8 +581,12 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
         return
       } catch (error) {
         if (error?.name === 'AbortError') return
+        if (error?.name !== 'SecurityError' && error?.name !== 'NotAllowedError') {
+          /* picker exists but failed for an unexpected reason → still fallback */
+        }
       }
     }
+    /* last resort: tell the user we could only produce a download */
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
@@ -586,6 +595,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     a.click()
     setTimeout(() => URL.revokeObjectURL(url), 5000)
     setSync('exported', name)
+    console.warn('[notepad] 系统保存对话框不可用，已回退为浏览器下载')
   }
 
   function clamp(value, min, max) {
@@ -706,6 +716,12 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       const name = escapeHtml(node.name)
       return `<span class="np-tab" data-active="${id === state.ui.currentId}"><button class="np-tab-btn" type="button" data-tab="${id}" title="${name}"><span class="np-tab-name">${name}</span></button><button class="np-tab-x" type="button" data-close="${id}" title="${escapeHtml(text().close)}" aria-label="${escapeHtml(text().close)}">×</button></span>`
     }).join('')
+    /* flag clipped names so the close button can fade in without hiding early */
+    requestAnimationFrame(() => {
+      for (const name of box.querySelectorAll('.np-tab-name')) {
+        name.dataset.clipped = String(name.scrollWidth > name.clientWidth + 1)
+      }
+    })
   }
 
   async function renderBody() {

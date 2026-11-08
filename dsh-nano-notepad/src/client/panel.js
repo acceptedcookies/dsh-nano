@@ -40,7 +40,7 @@ const STYLE = `
 .np-entry:active { cursor: grabbing; }
 .np-entry svg { width: 18px; height: 18px; display: block; margin: auto; }
 .np-tip { position: absolute; right: 44px; top: 2px; white-space: nowrap; background: var(--dsw-alias-tooltip-bg); color: var(--dsw-alias-tooltip-label, var(--dsw-alias-label-primary-foreground)); border-radius: var(--dsw-radius-sm); padding: 4px 8px; }
-.np-window { width: min(920px, calc(100vw - 48px)); height: min(640px, calc(100vh - 48px)); min-width: 320px; min-height: 240px; display: flex; flex-direction: column; background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-panel, 16px); box-shadow: var(--dsw-elevation-prominent); overflow: hidden; }
+.np-window { width: min(920px, calc(100vw - 48px)); height: min(640px, calc(100vh - 48px)); min-width: 320px; min-height: 240px; display: flex; flex-direction: column; background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-panel, 16px); box-shadow: var(--dsw-elevation-prominent); overflow: hidden; container-type: inline-size; container-name: np; }
 .np-resize { position: absolute; z-index: 6; pointer-events: auto; }
 .np-resize[data-edge="n"], .np-resize[data-edge="s"] { left: 16px; right: 16px; height: 10px; cursor: ns-resize; }
 .np-resize[data-edge="n"] { top: -5px; }
@@ -56,7 +56,7 @@ const STYLE = `
 .np-body, .np-editor { min-width: 0; overflow: hidden; }
 .np-read, .np-write { overflow: auto; }
 .np-nodes { overflow-x: hidden; overflow-y: auto; }
-.np-tabs { display: flex; align-items: center; gap: 4px; min-height: var(--np-row-h); padding: 6px var(--np-pad-x); cursor: grab; border-bottom: 1px solid var(--dsw-alias-border-l2); }
+.np-tabs { display: flex; align-items: center; gap: 4px; min-height: var(--np-row-h); padding: 6px var(--np-pad-x); cursor: grab; border-bottom: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-2); }
 .np-tablist { display: flex; min-width: 0; gap: 2px; overflow-x: auto; scrollbar-width: thin; }
 .np-tab { display: inline-flex; align-items: center; gap: 6px; flex: none; max-width: 180px; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); padding: 4px 8px; cursor: pointer; font: inherit; }
 .np-tab-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -68,21 +68,21 @@ const STYLE = `
 .np-tree[data-collapsed="true"] { width: var(--np-rail); align-items: stretch; }
 .np-tree[data-collapsed="true"] .np-workspace, .np-tree[data-collapsed="true"] .np-tree-tools, .np-tree[data-collapsed="true"] .np-tree-head > span, .np-tree[data-collapsed="true"] .np-nodes { display: none; }
 .np-tree[data-collapsed="true"] .np-tree-head { width: 100%; justify-content: center; padding: 0 var(--np-pad-x); }
-.np-tree-head { box-sizing: border-box; display: flex; align-items: center; gap: 4px; width: 100%; height: var(--np-row-h); padding: 0 var(--np-pad-x); color: var(--dsw-alias-label-tertiary); font-size: 12px; }
+.np-tree-head { box-sizing: border-box; display: flex; align-items: center; gap: 4px; width: 100%; height: var(--np-row-h); padding: 0 var(--np-pad-x); color: var(--dsw-alias-label-tertiary); font-size: 12px; border-bottom: 1px solid var(--dsw-alias-border-l2); }
 .np-tree-toggle { box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; width: var(--np-icon-btn); height: var(--np-icon-btn); flex: none; padding: 0; border: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); cursor: pointer; }
 .np-tree-toggle:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 .np-tree-tools { display: flex; align-items: center; gap: 2px; }
 .np-tree-tools button { display: inline-flex; align-items: center; justify-content: center; width: var(--np-icon-btn); height: var(--np-icon-btn); padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); cursor: pointer; }
 .np-tree-tools button svg { width: 16px; height: 16px; display: block; }
 .np-tree-tools button:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
-.np-nodes { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; padding: 0 var(--np-pad-x) var(--np-pad-x); }
+.np-nodes { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; padding: 6px var(--np-pad-x) var(--np-pad-x); }
 .np-tree-foot { display: flex; align-items: center; gap: var(--np-gap); flex: none; padding: 8px var(--np-pad-x) var(--np-pad-x); border-top: 1px solid var(--dsw-alias-border-l2); }
 .np-tree-foot button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 30px; }
 .np-tree-foot svg { width: 16px; height: 16px; display: block; }
 .np-tree[data-collapsed="true"] .np-tree-foot { flex-direction: column; margin-top: auto; padding: 8px 0 var(--np-pad-x); border-top: 0; }
 .np-tree[data-collapsed="true"] .np-tree-foot span { display: none; }
 .np-tree[data-collapsed="true"] .np-tree-foot button { width: var(--np-icon-btn); height: var(--np-icon-btn); padding: 0; }
-.np-node { position: relative; box-sizing: border-box; display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; height: var(--np-node-h); margin: 0; padding-right: 8px; border-radius: var(--dsw-radius-sm); color: var(--dsw-alias-label-secondary); overflow: hidden; }
+.np-node { position: relative; box-sizing: border-box; display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; height: var(--np-node-h); margin: 1px 0; padding-right: 8px; border-radius: var(--dsw-radius-sm); color: var(--dsw-alias-label-secondary); overflow: hidden; }
 .np-node:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 .np-node[data-active="true"] { background: var(--dsw-alias-interactive-bg-active); color: var(--dsw-alias-label-primary); }
 .np-node[data-drop="true"] { box-shadow: inset 0 0 0 1.5px var(--dsw-alias-brand-primary); }
@@ -101,9 +101,10 @@ const STYLE = `
 .np-entry svg, .np-node-icon svg, .np-tree-tools svg, .np-tree-toggle svg, .np-tree-foot svg, .np-caret svg, .np-node-actions svg, .np-tool svg, .np-slash svg { fill: currentColor; stroke: none; }
 .np-node-icon svg, .np-tree-tools svg, .np-tree-toggle svg, .np-caret svg, .np-node-actions svg, .np-tool svg, .np-slash svg { width: 16px; height: 16px; display: block; }
 .np-workspace { max-width: 150px; min-width: 0; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); font: inherit; font-size: 12px; padding: 3px 4px; }
-.np-group { display: flex; align-items: center; gap: 6px; margin: 8px 0 2px; color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 20px; }
+.np-group { display: flex; align-items: center; gap: 6px; margin: 12px 0 4px; padding-left: 8px; color: var(--dsw-alias-label-tertiary); font-size: 11px; font-weight: 600; letter-spacing: .04em; line-height: 20px; }
+.np-nodes > .np-group:first-child { margin-top: 2px; }
 .np-group[data-active="true"] { color: var(--dsw-alias-label-primary); }
-.np-group-count { font-size: 11px; color: var(--dsw-alias-label-tertiary); background: var(--dsw-alias-interactive-bg-active); border-radius: 8px; padding: 0 6px; line-height: 16px; }
+.np-group-count { font-size: 11px; font-weight: 400; color: var(--dsw-alias-label-tertiary); background: var(--dsw-alias-interactive-bg-active); border-radius: 8px; padding: 0 6px; line-height: 16px; }
 .np-editor { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
 .np-path, .np-toolbar, .np-footer { min-width: 0; }
 .np-path, .np-toolbar { display: flex; gap: var(--np-gap); align-items: center; padding: 6px var(--np-pad-x); }
@@ -164,6 +165,24 @@ const STYLE = `
 .np-slash button[data-active="true"], .np-slash button:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 .np-slash .np-slash-empty { padding: 8px; color: var(--dsw-alias-label-tertiary); font-size: 12px; }
 .np-footer { display: flex; align-items: center; gap: var(--np-gap); min-height: var(--np-row-h); padding: 6px var(--np-pad-x); border-top: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-2); }
+/* Panel-width responsiveness: container queries react to the floating window, not the viewport. */
+@container np (max-width: 720px) {
+  .np-tree { width: 200px; }
+}
+@container np (max-width: 640px) {
+  .np-footer { flex-wrap: wrap; }
+  .np-sync { flex-basis: 100%; }
+}
+@container np (max-width: 560px) {
+  .np-body { flex-direction: column; }
+  .np-tree { width: auto; max-height: 40%; border-right: 0; border-bottom: 1px solid var(--dsw-alias-border-l2); }
+  .np-tree[data-collapsed="true"] { width: var(--np-rail); max-height: none; }
+  .np-toolbar { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .np-toolbar::-webkit-scrollbar { display: none; }
+  .np-modes button, .np-path > button[data-action="rename"] { height: 26px; padding: 0 8px; }
+  .np-card { padding: 18px 16px 24px; }
+}
+/* Viewport-level mobile layout still applies when the whole page is small. */
 @media (max-width: 760px) {
   .np-window { inset: 12px auto auto 12px; width: calc(100% - 24px); height: min(82dvh, calc(100% - 24px)); }
   .np-body { flex-direction: column; }
@@ -175,7 +194,8 @@ const STYLE = `
   .np-tabs { flex-wrap: wrap; }
   .np-card { padding: 18px 16px 24px; }
 }
-.np-sync { display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1; color: var(--dsw-alias-label-secondary); font-size: 12px; }
+.np-sync { display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1; overflow: hidden; color: var(--dsw-alias-label-secondary); font-size: 12px; }
+.np-status-text { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .np-beat { width: 8px; height: 8px; flex: none; border-radius: 50%; background: var(--dsw-alias-label-tertiary); }
 .np-beat[data-state="saved"], .np-beat[data-state="committed"] { background: var(--dsw-alias-state-success-primary); }
 .np-beat[data-state="dirty"] { background: var(--dsw-alias-state-warn-primary); }

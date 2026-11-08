@@ -1,7 +1,7 @@
 /** Host half. Notes stay in the browser database, so this side only supplies defaults. */
 
 export const name = 'nano-notepad'
-export const inject = ['webServer']
+export const inject = ['webServer', 'connection', 'subprocess']
 
 export const Config = {
   '~standard': {
@@ -48,6 +48,8 @@ export const Config = {
 
 const SAVE_ROUTE = '/nano-notepad/save'
 const MAX_SAVE_BYTES = 8 * 1024 * 1024
+const DIALOG_TIMEOUT_MS = 600000
+const MAX_NAME_BYTES = 512
 
 async function jsonBody(req) {
   const chunks = []
@@ -68,30 +70,105 @@ function sendJson(res, status, payload) {
   res.end(JSON.stringify(payload))
 }
 
-function asString(s) { const q = JSON.stringify(String(s)); return q.slice(1, -1).replace(/"/g, '\\"') }
+function messageOf(value) { return value instanceof Error ? value.message : String(value) }
 
-/** Native macOS save dialog: ask the Finder for a target path, then write it. */
-function nativeSave({ name, content }) {
+/**
+ * The AppleScript program the save dialog runs. The proposed filename is passed
+ * as `argv` item 1 — never interpolated into the source — so a hostile name is
+ * inert text instead of a string-literal breakout (review-01 R2).
+ */
+const SAVE_SCRIPT = [
+  'on run argv',
+  'try',
+  'set dflt to item 1 of argv',
+  'set f to choose file name with prompt "存储为" default name dflt',
+  'POSIX path of f',
+  'on error',
+  '"__cancelled__"',
+  'end try',
+  'end run',
+].join('\n')
+
+/** The name the dialog proposes: extension stripped, empty/oversized refused. */
+function dialogBase(name) {
+  if (typeof name !== 'string') throw new Error('name must be a string')
+  const trimmed = name.endsWith('.md') ? name.slice(0, -3) : name
+  if (trimmed === '' || trimmed.length > MAX_NAME_BYTES) throw new Error('name must be 1..512 characters')
+  return trimmed
+}
+
+/**
+ * Ask Finder for a target path, then write the note there. `osascript` runs the
+ * static {@link SAVE_SCRIPT} with the name on argv, so nothing the caller sends
+ * is ever compiled as AppleScript.
+ */
+function nativeSave(ctx, { name, content }) {
   return new Promise(resolve => {
     if (process.platform !== 'darwin') { resolve({ ok: false, reason: 'unsupported' }); return }
-    const base = name.endsWith('.md') ? name.slice(0, -3) : name
-    const script = `try\nset f to choose file name with prompt "存储为" default name "${asString(base)}"\nPOSIX path of f\non error\n"__cancelled__"\nend try`
-    import('node:child_process').then(({ execFile }) => {
-      execFile('/usr/bin/osascript', ['-e', script], { timeout: 600000, maxBuffer: 64 * 1024 }, async (err, stdout) => {
-        const out = String(stdout || '').trim()
-        if (err && !out) { resolve({ ok: false, reason: 'failed', message: String(err.message || err).slice(0, 200) }); return }
-        if (!out || out === '__cancelled__' || /user canceled|User canceled|已取消/i.test(String(err?.message || ''))) { resolve({ ok: false, reason: 'cancelled' }); return }
-        try {
-          const fs = await import('node:fs/promises')
-          const target = out.endsWith('.md') ? out : `${out}.md`
-          await fs.writeFile(target, content, 'utf8')
-          resolve({ ok: true, path: target })
-        } catch (werr) {
-          resolve({ ok: false, reason: 'failed', message: String(werr.message || werr).slice(0, 200) })
-        }
-      })
+    const base = dialogBase(name)
+    const finish = async (err, stdout) => {
+      const out = String(stdout || '').trim()
+      if (err && !out) { resolve({ ok: false, reason: 'failed', message: messageOf(err).slice(0, 200) }); return }
+      if (!out || out === '__cancelled__' || /user canceled|已取消/i.test(messageOf(err ?? ''))) {
+        resolve({ ok: false, reason: 'cancelled' })
+        return
+      }
+      try {
+        // The path is user-chosen via the native dialog, so it may lie outside the
+        // workspace; `ctx.fs` would fence it, so the write stays on the platform
+        // file seam the dialog itself authorizes.
+        const fs = await import('node:fs/promises')
+        const target = out.endsWith('.md') ? out : `${out}.md`
+        await fs.writeFile(target, content, 'utf8')
+        resolve({ ok: true, path: target })
+      } catch (werr) {
+        resolve({ ok: false, reason: 'failed', message: messageOf(werr).slice(0, 200) })
+      }
+    }
+    const subprocess = ctx.get('subprocess')
+    if (subprocess !== undefined && subprocess !== null) {
+      void runViaSubprocess(subprocess, base).then(
+        ({ stdout }) => finish(null, stdout),
+        error => finish(error, ''),
+      )
+      return
+    }
+    void import('node:child_process').then(({ execFile }) => {
+      execFile('/usr/bin/osascript', ['-e', SAVE_SCRIPT, base], { timeout: DIALOG_TIMEOUT_MS, maxBuffer: 64 * 1024 },
+        (err, stdout) => { void finish(err, stdout) })
     })
   })
+}
+
+/**
+ * Run the dialog through the managed subprocess seam (byte caps, graceful
+ * terminate, abort) instead of a raw `execFile`.
+ */
+async function runViaSubprocess(subprocess, base) {
+  const program = await subprocess.resolveExecutable('osascript', undefined, undefined)
+  const child = subprocess.spawn({
+    argv: [program, '-e', SAVE_SCRIPT, base],
+    cwd: process.env.HOME ?? '/',
+    env: {},
+    graceMs: 5000,
+    stdio: {
+      stdin: 'ignore',
+      stdout: { maxBytes: 64 * 1024 },
+      stderr: { maxBytes: 16 * 1024 },
+    },
+  })
+  try {
+    const outcome = await child.done
+    const stdout = child.collected.stdout.readFrom(0).text
+    const stderr = child.collected.stderr.readFrom(0).text
+    if (outcome.exitCode !== 0 && stdout.trim() === '') {
+      throw new Error(stderr.split(/\r?\n/u).find(line => line.trim() !== '') ?? `osascript exited ${outcome.exitCode}`)
+    }
+    return { stdout }
+  } finally {
+    child.terminate()
+    await child.waitForExit().catch(() => {})
+  }
 }
 
 /** @param {import('@deepseek-ai/cordis').Context} ctx */
@@ -100,13 +177,20 @@ export function apply(ctx) {
     kind: 'exact',
     path: SAVE_ROUTE,
     handler: async (req, res) => {
+      // Every write-capable route sits behind the connection's request admission
+      // (Host/Origin fence + authenticated Peer); without it any web page or LAN
+      // client could drive the native save dialog (review-01 R1).
+      const rejection = ctx.get('connection')?.requestRejection(req)
+      if (rejection !== undefined) { res.statusCode = rejection; res.end(); return }
       if (req.method !== 'POST') { res.setHeader('allow', 'POST'); sendJson(res, 405, { ok: false, reason: 'method' }); return }
+      const type = String(req.headers['content-type'] ?? '')
+      if (!type.toLowerCase().startsWith('application/json')) { sendJson(res, 415, { ok: false, reason: 'content-type' }); return }
       try {
         const body = await jsonBody(req)
-        const result = await nativeSave({ name: body.name, content: body.content })
+        const result = await nativeSave(ctx, { name: body.name, content: body.content })
         sendJson(res, result.ok ? 200 : result.reason === 'cancelled' ? 200 : 500, result)
       } catch (error) {
-        sendJson(res, 500, { ok: false, reason: 'failed', message: String(error.message || error).slice(0, 200) })
+        sendJson(res, 500, { ok: false, reason: 'failed', message: messageOf(error).slice(0, 200) })
       }
     },
   }), 'nano-notepad: save route')

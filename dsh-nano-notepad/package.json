@@ -1,6 +1,6 @@
 {
   "name": "dsh-nano-notepad",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A floating Markdown notepad. Files, history, and images stay in this browser.",
   "type": "module",
   "icon": "./icon.svg",
@@ -33,8 +33,15 @@
       "platform": "web",
       "inject": [
         "@deepseek-ai/dsh-client-ui-layout",
-        "@deepseek-ai/dsh-client-shortcuts"
+        "@deepseek-ai/dsh-client-shortcuts",
+        "@deepseek-ai/dsh-client-ui-theme",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-api-workspace-controller",
+        "@deepseek-ai/dsh-api-session-controller"
       ]
     }
+  },
+  "devDependencies": {
+    "esbuild": "0.25.0"
   }
 }

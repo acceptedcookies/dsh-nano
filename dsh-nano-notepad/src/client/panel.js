@@ -478,6 +478,10 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     sync: { phase: 'idle', at: null, detail: '' },
     collapsed: new Set(),
     maximized: false,
+    /** Bumped whenever an image is stored; part of the rendered-body cache key. */
+    imageEpoch: 0,
+    /** file.id + epoch + markdown → rendered HTML, so non-edit renders reuse it. */
+    renderCache: new Map(),
     restoreRect: /** @type {{ left: number, top: number, width: number, height: number } | null} */ (null),
   }
 
@@ -682,8 +686,17 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     const box = must(panel, '.np-nodes')
     const lines = []
     const active = activeWorkspace()
+    // Group children once by (workspace, parent) so `visit` is O(1) per node
+    // instead of re-filtering the whole list at every depth (was O(N²)).
+    const byParent = new Map()
+    for (const node of state.nodes) {
+      const key = `${node.workspaceId ?? ''}${node.parentId ?? ''}`
+      let bucket = byParent.get(key)
+      if (bucket === undefined) { bucket = []; byParent.set(key, bucket) }
+      bucket.push(node)
+    }
     const visit = (parentId, depth, workspaceId) => {
-      const nodes = state.nodes.filter(item => item.parentId === parentId && (item.workspaceId ?? null) === workspaceId)
+      const nodes = byParent.get(`${workspaceId ?? ''}${parentId ?? ''}`) ?? []
       nodes.sort((a, b) => Number(b.pinned === true) - Number(a.pinned === true) || a.name.localeCompare(b.name))
       for (const node of nodes) {
         const icon = node.kind === 'folder' ? FOLDER_ICON : FILE_ICON
@@ -705,7 +718,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       if (seen.has(key)) continue
       seen.add(key)
       if (active.mode === 'all') {
-        const count = state.nodes.filter(node => node.parentId === null && (node.workspaceId ?? null) === workspaceId).length
+        const count = (byParent.get(`${workspaceId ?? ''}`) ?? []).length
         lines.push(`<div class="np-group" role="button" tabindex="0" data-ws="${key}" data-active="${workspaceId === workspaceCatalog().currentId}"><span class="np-group-title">${escapeHtml(workspaceTitle(workspaceId))}</span><span class="np-group-count">${count}</span></div>`)
       }
       visit(null, 0, workspaceId)
@@ -772,10 +785,27 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     }
     if (!rendered || state.db === null) return
     const markdown = state.pendingDraft ?? (source.value || file.draft || '')
+    // Cache rendered HTML per (file, image-set, markdown): tree toggles, tab
+    // clicks, and theme/locale events re-render without the markdown changing,
+    // so they must not re-fetch images or re-decode every data: URL (review-01
+    // R10). The key includes imageEpoch so a newly stored image re-renders.
+    const cacheKey = `${file.id}${state.imageEpoch}${markdown}`
+    const cached = state.renderCache.get(cacheKey)
+    if (cached !== undefined) {
+      read.innerHTML = cached
+      return
+    }
     const images = await imagesById(state.db, imageIdsIn(markdown))
-    read.innerHTML = markdown === ''
+    const html = markdown === ''
       ? `<p class="np-placeholder">${escapeHtml(text().placeholder)}</p>`
       : renderMarkdown(markdown, images)
+    // Bound the cache; the freshest key is re-inserted last, evict oldest first.
+    if (state.renderCache.size >= 64) {
+      const oldest = state.renderCache.keys().next().value
+      if (oldest !== undefined) state.renderCache.delete(oldest)
+    }
+    state.renderCache.set(cacheKey, html)
+    read.innerHTML = html
   }
 
   function resolvedTheme() {
@@ -1415,6 +1445,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       // reload from db: moving a folder cascades workspaceId onto its descendants
       const snapshot = await loadSnapshot(state.db)
       state.nodes = snapshot.nodes
+      state.renderCache.clear()
       void moved
       render()
       channel?.postMessage({ type: 'changed' })
@@ -1578,6 +1609,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       state.pendingFileId = null
       void loadSnapshot(state.db).then(snapshot => {
         state.nodes = snapshot.nodes
+        state.renderCache.clear()
         render()
       }).catch(showError)
     }
@@ -1810,6 +1842,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     input.value = ''
     if (!file || !state.db) return
     void storeImage(state.db, file, state.settings.imageLimitBytes).then(image => {
+      state.imageEpoch += 1
       const source = write()
       source.setRangeText(`![${file.name}](notepad-image:${image.id})`, source.selectionStart, source.selectionEnd, 'end')
       state.view = 'rendered'
@@ -1820,6 +1853,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
   function insertStoredImage(file) {
     if (!state.db) return
     void storeImage(state.db, file, state.settings.imageLimitBytes).then(image => {
+      state.imageEpoch += 1
       const source = write()
       source.setRangeText(`![${file.name || 'image'}](notepad-image:${image.id})`, source.selectionStart, source.selectionEnd, 'end')
       state.view = 'rendered'
@@ -1845,6 +1879,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     if (!image || !state.db) return
     event.preventDefault()
     void storeImage(state.db, image, state.settings.imageLimitBytes).then(stored => {
+      state.imageEpoch += 1
       const source = write()
       source.setRangeText(`![image](notepad-image:${stored.id})`, source.selectionStart, source.selectionEnd, 'end')
       state.view = 'rendered'
@@ -1905,6 +1940,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       if (state.db) void loadSnapshot(state.db).then(snapshot => {
         state.nodes = snapshot.nodes
         state.settings = { ...defaults, ...snapshot.settings }
+        state.renderCache.clear()
         render()
       })
     }

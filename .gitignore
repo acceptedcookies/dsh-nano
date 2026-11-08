@@ -47,6 +47,9 @@ context/
 # Local environment setup doc (machine-specific)
 .local-dsh-setup.md
 
+# Impeccable skill working files
+.impeccable/
+
 # Release artifacts (produced by CI, published to GitHub Releases)
 *.tgz
 SHA256SUMS.txt

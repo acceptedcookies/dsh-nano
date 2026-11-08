@@ -60,9 +60,13 @@ const STYLE = `
 .np-nodes { overflow-x: hidden; overflow-y: auto; }
 .np-tabs { display: flex; align-items: center; gap: 4px; min-height: var(--np-row-h); padding: 6px var(--np-pad-x); cursor: grab; border-bottom: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-2); }
 .np-tablist { display: flex; min-width: 0; gap: 2px; overflow-x: auto; scrollbar-width: thin; }
-.np-tab { display: inline-flex; align-items: center; gap: 2px; flex: none; max-width: 180px; height: 30px; box-sizing: border-box; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); padding: 0 2px 0 8px; cursor: default; font: inherit; }
-.np-tab-btn { min-width: 0; flex: 1; display: inline-flex; align-items: center; border: 0; background: transparent; color: inherit; font: inherit; padding: 0; cursor: pointer; }
-.np-tabs > button[data-action="new-file"] { display: inline-flex; align-items: center; justify-content: center; height: 30px; box-sizing: border-box; }
+/* dockkit-style tab: 28px, sm radius, active fills markdown-tag, close fades in */
+.np-tab { position: relative; display: inline-flex; align-items: center; flex: 0 1 auto; min-width: 80px; max-width: 170px; height: 28px; box-sizing: border-box; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); padding: 0 10px; cursor: default; font: inherit; font-size: 13px; line-height: 1; white-space: nowrap; user-select: none; }
+.np-tab:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.np-tab[data-active="true"] { background: var(--dsw-alias-markdown-tag, var(--dsw-alias-interactive-bg-active)); color: var(--dsw-alias-label-primary); }
+.np-tab-btn { min-width: 0; flex: 1; height: 100%; display: inline-flex; align-items: center; border: 0; background: transparent; color: inherit; font: inherit; padding: 0; cursor: pointer; }
+.np-tabs > button.np-add { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; box-sizing: border-box; padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); cursor: pointer; }
+.np-tabs > button.np-add:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 .np-tabs-spacer { flex: 1 1 auto; min-width: 8px; }
 /* window chrome: two skins share the frame, glyphs differ per os */
 .np-chrome { display: inline-flex; align-items: center; gap: 8px; flex: none; }
@@ -84,9 +88,10 @@ const STYLE = `
 .np-window[data-maximized="true"] .np-chrome button.np-chrome-max svg.np-icon-max { display: none; }
 .np-window:not([data-maximized="true"]) .np-chrome button.np-chrome-max svg.np-icon-restore { display: none; }
 .np-tab-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.np-tab-x { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; flex: none; border: 0; background: transparent; border-radius: var(--dsw-radius-xs, 4px); color: var(--dsw-alias-label-tertiary); font: inherit; padding: 0; cursor: pointer; }
+.np-tab-x { position: absolute; top: 4px; right: 4px; display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; flex: none; border: 0; background: transparent; border-radius: var(--dsw-radius-sm); color: var(--dsw-alias-label-tertiary); font: inherit; padding: 0; cursor: pointer; opacity: 0; pointer-events: none; }
 .np-tab-x:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
-.np-tab[data-active="true"] { background: var(--dsw-alias-interactive-bg-active); color: var(--dsw-alias-label-primary); }
+.np-tab:hover .np-tab-x, .np-tab:focus-within .np-tab-x, .np-tab[data-active="true"] .np-tab-x { opacity: 1; pointer-events: auto; }
+.np-tab:hover .np-tab-name, .np-tab:focus-within .np-tab-name, .np-tab[data-active="true"] .np-tab-name { mask-image: linear-gradient(to right, black calc(100% - 30px), transparent calc(100% - 14px)); -webkit-mask-image: linear-gradient(to right, black calc(100% - 30px), transparent calc(100% - 14px)); }
 .np-body { display: flex; min-height: 0; flex: 1; }
 .np-tree { box-sizing: border-box; width: 248px; display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--dsw-alias-border-l2); background: transparent; }
 .np-tree[data-collapsed="true"] { width: var(--np-rail); align-items: stretch; }
@@ -156,11 +161,11 @@ const STYLE = `
 .np-editor { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
 .np-toolbar, .np-footer { min-width: 0; }
 .np-toolbar { display: flex; gap: var(--np-gap); align-items: center; padding: 6px var(--np-pad-x); }
-/* iOS-style sliding switch; the thumb carries the active label */
-.np-switch { flex: none; margin-left: auto; display: inline-flex; position: relative; padding: 2px; border: 0; background: var(--dsw-alias-interactive-bg-hover); border-radius: var(--dsw-radius-full, 999px); cursor: pointer; font: inherit; min-width: 128px; }
-.np-switch .np-switch-label { flex: 1; display: inline-flex; align-items: center; justify-content: center; min-width: 0; padding: 2px 10px; font-size: 12px; color: var(--dsw-alias-label-tertiary); z-index: 0; }
-.np-switch .np-switch-thumb { position: absolute; top: 2px; left: 2px; width: calc(50% - 2px); height: calc(100% - 4px); display: flex; align-items: center; justify-content: center; padding: 0 10px; box-sizing: border-box; background: var(--dsw-alias-bg-layer-1); border-radius: var(--dsw-radius-full, 999px); box-shadow: 0 1px 3px rgba(0,0,0,.28); font-size: 12px; color: var(--dsw-alias-label-primary); white-space: nowrap; transition: transform .18s cubic-bezier(.3,.9,.35,1); z-index: 1; }
-.np-switch[data-view="rendered"] .np-switch-thumb { transform: translateX(100%); }
+/* native segmented control: hover-gray track + layer-1 thumb sliding by translate */
+.np-switch { flex: none; margin-left: auto; display: inline-grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 2px; position: relative; padding: 4px; border: 0; background: var(--dsw-alias-interactive-bg-hover); border-radius: var(--dsw-radius-md); cursor: pointer; font: inherit; min-width: 148px; }
+.np-switch .np-switch-label { display: inline-flex; align-items: center; justify-content: center; min-width: 0; height: 28px; padding: 0 14px; font-size: 13px; font-weight: 500; color: var(--dsw-alias-label-secondary); z-index: 0; }
+.np-switch .np-switch-thumb { position: absolute; top: 4px; left: 4px; width: calc(50% - 5px); height: calc(100% - 8px); display: flex; align-items: center; justify-content: center; padding: 0 14px; box-sizing: border-box; background: var(--dsw-alias-bg-layer-1); border-radius: var(--dsw-radius-sm); box-shadow: var(--dsw-elevation-soft); font-size: 13px; font-weight: 500; color: var(--dsw-alias-label-primary); white-space: nowrap; overflow: hidden; transition: transform .16s ease; z-index: 1; }
+.np-switch[data-view="rendered"] .np-switch-thumb { transform: translateX(calc(100% + 2px)); }
 .np-toolbar { flex-wrap: wrap; gap: 2px; border-bottom: 1px solid var(--dsw-alias-border-l2); }
 .np-tool { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); cursor: pointer; }
 .np-tool:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
@@ -275,9 +280,9 @@ const STYLE = `
   .np-tree[data-collapsed="true"] { width: var(--np-rail); max-height: none; }
   .np-toolbar { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
   .np-toolbar::-webkit-scrollbar { display: none; }
-  .np-switch { min-width: 56px; }
+  .np-switch { min-width: 62px; grid-auto-columns: auto; }
   .np-switch .np-switch-label { display: none; }
-  .np-switch .np-switch-thumb { position: static; transform: none; width: auto; height: auto; padding: 2px 8px; box-shadow: none; }
+  .np-switch .np-switch-thumb { position: static; transform: none; width: auto; height: 22px; padding: 0 8px; box-shadow: none; font-size: 12px; }
   .np-switch[data-view="rendered"] .np-switch-thumb { transform: none; }
 }
 /* Viewport-level mobile layout still applies when the whole page is small. */
@@ -402,7 +407,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     ? `<button type="button" class="np-tool" data-action="image" data-format-kind="image">${def.icon}</button>`
     : `<button type="button" class="np-tool" data-format="${def.kind}" data-format-kind="${def.kind}">${def.icon}</button>`).join('')
   panel.innerHTML = `
-    <div class="np-tabs"><div class="np-tablist"></div><button type="button" data-action="new-file" data-i18n="newFile" data-i18n-mode="title">+</button><span class="np-tabs-spacer"></span></div>
+    <div class="np-tabs"><div class="np-tablist"></div><button type="button" class="np-add" data-action="new-file" data-i18n="newFile" data-i18n-mode="title">+</button><span class="np-tabs-spacer"></span></div>
     <div class="np-body">
       <aside class="np-tree"><div class="np-tree-head"><button type="button" class="np-tree-toggle" data-action="toggle-tree"></button><div class="np-ws"><button type="button" class="np-ws-btn" data-action="ws-toggle" aria-haspopup="listbox" aria-expanded="false"><span class="np-ws-label"></span><span class="np-ws-caret" aria-hidden="true">${CHEVRON_ICON}</span></button><div class="np-ws-menu" role="listbox" hidden></div></div><span style="flex:1"></span><span class="np-tree-tools"><button type="button" data-action="new-file" data-i18n="newFile" data-i18n-mode="title">${PLUS_ICON}</button><button type="button" data-action="new-folder" data-i18n="newFolder" data-i18n-mode="title">${FOLDER_PLUS_ICON}</button><button type="button" class="np-danger" data-action="delete" data-i18n="delete" data-i18n-mode="title">${TRASH_ICON}</button></span></div><div class="np-nodes" data-root="true"></div><div class="np-tree-foot"><button type="button" data-action="settings" data-i18n="settings" data-i18n-mode="label">${SETTINGS_ICON}<span data-i18n="settings"></span></button><button type="button" data-action="close" data-i18n="close" data-i18n-mode="label">${CLOSE_ICON}<span data-i18n="close"></span></button></div></aside>
       <div class="np-editor">

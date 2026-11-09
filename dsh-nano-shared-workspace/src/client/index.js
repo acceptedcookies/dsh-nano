@@ -24,7 +24,7 @@ function readSectionPrefs() {
 
 /** One observable wrapper around the settings snapshot the section header reads. */
 function createSettingsStore() {
-  let current = { open: false, loaded: false, configured: false, username: null, ...readSectionPrefs() }
+  let current = { open: false, loaded: false, configured: false, username: null, sessionsReady: false, pulling: {}, ...readSectionPrefs() }
   const listeners = new Set()
   const emit = () => { for (const listener of listeners) listener() }
   return {
@@ -114,8 +114,15 @@ export function apply(ctx) {
       .catch(() => store.set({ loaded: true, listReady: true }))
     fetchStatus().catch(() => {})
     fetchRemoteSessions()
-      .then(payload => { store.set({ sessions: payload.sessions ?? [] }); separateFromLocal() })
-      .catch(() => {})
+      .then(payload => { store.set({ sessions: payload.sessions ?? [], sessionsReady: true }); separateFromLocal() })
+      .catch(() => store.set({ sessionsReady: true }))
+  }
+
+  const setPulling = (workspaceId, on) => {
+    const pulling = { ...(store.current.pulling ?? {}) }
+    if (on) pulling[workspaceId] = true
+    else delete pulling[workspaceId]
+    store.set({ pulling })
   }
 
   let holdTimer = 0
@@ -146,6 +153,13 @@ export function apply(ctx) {
 
   const face = {
     copy: () => copyFor(languageOf()),
+    currentSessionId: () => {
+      const byId = ctx.sessions.list.getSnapshot().byId ?? {}
+      return Object.values(byId).find(session => (session.retainedBy?.mainView ?? 0) > 0)?.id ?? null
+    },
+    subscribeSession: listener => ctx.sessions.list.subscribe(() => listener(
+      Object.values(ctx.sessions.list.getSnapshot().byId ?? {}).find(session => (session.retainedBy?.mainView ?? 0) > 0)?.id ?? null,
+    )),
     settings: {
       get current() { return store.current },
       get open() { return store.current.open === true },
@@ -188,7 +202,9 @@ export function apply(ctx) {
         sectionOpen: true,
         expanded: { ...(store.current.expanded ?? {}), [sharedId]: true },
       })
+      setPulling(sharedId, true)
       apiPullWorkspace(sharedId)
+        .finally(() => setPulling(sharedId, false))
         .then(() => bindReplica(path))
         .then(host => ctx.sessions.create({ workspaceId: host.workspaceId }))
         .then(sessionId => apiClaimSession(sharedId, sessionId).then(claim => {
@@ -218,35 +234,39 @@ export function apply(ctx) {
     },
     onOpenSession: session => {
       store.set({ notice: null, sectionOpen: true, expanded: { ...(store.current.expanded ?? {}), [session.workspaceId]: true } })
-      apiPullWorkspace(session.workspaceId)
-        .then(() => apiClaimSession(session.workspaceId, session.sessionId))
-        .then(claim => {
-          if (claim?.busy === true) {
-            store.set({ notice: copyFor(languageOf()).readOnlyBusy.replace('{holder}', claim.holder ?? '') })
-            return 'busy'
-          }
-          holdSession(session.workspaceId, session.sessionId)
-          return prepareChat(session.workspaceId, session.sessionId)
-        })
-        .then(async ready => {
-          if (ready === 'busy') return 'busy'
-          const path = memberPath(
-            (store.current.sharedWorkspaces ?? []).find(item => item.workspaceId === session.workspaceId),
-            store.current.username,
-          )
-          if (path !== '') {
-            const host = await bindReplica(path)
-            const accounted = ctx.workspaces.list.getSnapshot().items
-              ?.find(item => item.workspaceId === host.workspaceId)?.sessionIds?.includes(session.sessionId) === true
-            if (!accounted) await apiBindSession(path, session.sessionId)
-          }
-        })
-        .then(ready => {
-          if (ready === 'busy') return
-          store.set({ ownedSessionIds: [...(store.current.ownedSessionIds ?? []), session.sessionId] })
-          separateFromLocal()
-          ctx.uiWorkspace.openSession(session.sessionId)
-        })
+      const known = () => ctx.sessions.list.getSnapshot().byId?.[session.sessionId] != null
+      const pathOf = () => memberPath(
+        (store.current.sharedWorkspaces ?? []).find(item => item.workspaceId === session.workspaceId),
+        store.current.username,
+      )
+      const reveal = async () => {
+        const path = pathOf()
+        if (path !== '') {
+          const host = await bindReplica(path)
+          const accounted = ctx.workspaces.list.getSnapshot().items
+            ?.find(item => item.workspaceId === host.workspaceId)?.sessionIds?.includes(session.sessionId) === true
+          if (!accounted) await apiBindSession(path, session.sessionId)
+        }
+        store.set({ ownedSessionIds: [...(store.current.ownedSessionIds ?? []), session.sessionId] })
+        separateFromLocal()
+        ctx.uiWorkspace.openSession(session.sessionId)
+      }
+      const finishLease = claim => {
+        if (claim?.busy === true) {
+          store.set({ notice: copyFor(languageOf()).readOnlyBusy.replace('{holder}', claim.holder ?? '') })
+          return
+        }
+        holdSession(session.workspaceId, session.sessionId)
+      }
+      // Open a local log immediately. Pulling the replica and taking the lease
+      // are S3 round-trips; waiting for them makes the click look dead.
+      setPulling(session.workspaceId, true)
+      const openNow = known() ? reveal() : prepareChat(session.workspaceId, session.sessionId).then(reveal)
+      openNow
+        .then(() => Promise.all([
+          apiPullWorkspace(session.workspaceId).finally(() => setPulling(session.workspaceId, false)).catch(() => {}),
+          apiClaimSession(session.workspaceId, session.sessionId).then(finishLease),
+        ]))
         .catch(cause => store.set({
           notice: `${copyFor(languageOf()).pullFailed}: ${cause instanceof Error ? cause.message : String(cause)}`,
         }))

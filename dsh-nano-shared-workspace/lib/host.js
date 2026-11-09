@@ -1002,14 +1002,12 @@ function createRoutes(ctx, config) {
         const me = (await instanceId(ctx)).slice(0, 8);
         const member = Object.values(marker.members ?? {}).find((item) => item?.username === identity.username && String(item.instance ?? "").startsWith(me)) ?? Object.values(marker.members ?? {}).find((item) => item?.username === identity.username);
         if (typeof member?.localPath !== "string" || member.localPath === "") return { ok: false, error: "join this shared workspace before opening its sessions" };
-        const pull = await pullWorkspace(client, dshHome, workspaceId, member.localPath);
         const claim = await acquireClaim(client, ctx, sessionId, `${identity.username}@${me}`, 1);
         return {
           ok: claim.acquired === true,
           busy: claim.acquired !== true,
           holder: claim.holder ?? null,
-          expiresAt: claim.expiresAt ?? null,
-          pull
+          expiresAt: claim.expiresAt ?? null
         };
       }
     },

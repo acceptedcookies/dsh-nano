@@ -91,9 +91,11 @@ function readChrome() {
     projectText: classOf(projectText),
     title: classOf(titleEl) || withLocal(rowToken, 'title'),
     rowActions: classOf([...row.children].find(child => /Actions/.test(classOf(child)))),
+    rowButton: stripWide(classOf(row.querySelector('[class*="rowActions"] button'))),
     arrow: arrowToken,
     arrowOpen: arrowToken ? withLocal(arrowToken, 'arrowOpen') : '',
     sessionRow: sessionClass || withLocal(rowToken, 'sessionRow'),
+    selected: withLocal(tokens(sessionClass).find(token => /sessionRow/.test(token)) || withLocal(rowToken, 'sessionRow'), 'selected'),
     sessionSlot: classOf(sessionEl?.querySelector('[class*="slot"]')) || withLocal(rowToken, 'slot'),
     sessionTitle: classOf(sessionEl?.querySelector('[class*="title"]')) || withLocal(rowToken, 'title'),
     resting: classOf(sessionEl?.querySelector('[class*="Resting"]')) || withLocal(rowToken, 'rowResting'),
@@ -139,12 +141,14 @@ const iconButton = (labelText, icon, extra, cls) => createElement('button', {
 export function SharedSection({ face, wide }) {
   const copy = face.copy()
   const [settings, setSettings] = useState(face.settings.current)
+  const [currentId, setCurrentId] = useState(() => face.currentSessionId?.() ?? null)
   const [showRest, setShowRest] = useState(false)
   const [revealHeight, setRevealHeight] = useState(0)
   const revealRef = useRef(null)
   const chrome = useNativeChrome()
 
   useLayoutEffect(() => face.settings.subscribe(setSettings), [])
+  useEffect(() => face.subscribeSession?.(setCurrentId), [])
 
   const listReady = settings?.listReady === true
   const sectionOpen = listReady && settings?.sectionOpen === true
@@ -221,7 +225,8 @@ export function SharedSection({ face, wide }) {
     const sessionRows = isOpen ? wsSessions.map(session => createElement('div', {
       role: 'treeitem',
       key: session.sessionId,
-      className: chrome.sessionRow,
+      className: session.sessionId === currentId && chrome.selected ? `${chrome.sessionRow} ${chrome.selected}` : chrome.sessionRow,
+      'aria-selected': session.sessionId === currentId,
       title: session.mtime ?? '',
       onClick: () => face.onOpenSession?.(session),
     },
@@ -233,8 +238,8 @@ export function SharedSection({ face, wide }) {
       createElement('div', {
         role: 'treeitem',
         className: chrome.row,
+        'data-nsw-loading': (settings?.sessionsReady !== true || settings?.pulling?.[row.workspaceId] === true) ? 'true' : undefined,
         'aria-expanded': isOpen,
-        title: mine ? `${copy.stateJoined} · ${myLocalPath(row, username)}` : copy.joinHint,
         onClick: () => mine ? face.onToggleWorkspace?.(row.workspaceId) : face.onJoinWorkspace?.(row.workspaceId),
       },
         createElement('span', { className: chrome.folder },
@@ -245,16 +250,21 @@ export function SharedSection({ face, wide }) {
           createElement('span', { className: chrome.title }, row?.title ?? row?.workspaceId)),
         !mine ? createElement('span', { className: chrome.time }, copy.stateIdle) : null,
         createElement('span', { className: chrome.rowActions, onClick: event => event.stopPropagation() },
-          mine ? createElement('button', {
-            type: 'button',
-            className: chrome.button,
-            title: copy.newSession,
-            'aria-label': copy.newSession,
-            onClick: event => {
-              event.stopPropagation()
-              face.onCreateSession?.(row.workspaceId)
-            },
-          }, createElement(IconNewChatOutlineRegular, { size: 14 })) : null)),
+          (settings?.sessionsReady !== true || settings?.pulling?.[row.workspaceId] === true)
+            ? createElement('span', {
+              className: chrome.rowButton,
+              role: 'status',
+              'aria-label': copy.sectionLoading,
+            }, createElement(IconRefreshOutlineRegular, { size: 14, className: 'nsw-spin' }))
+            : mine && chrome.rowButton !== '' ? createElement('button', {
+              type: 'button',
+              className: chrome.rowButton,
+              'aria-label': copy.newSession,
+              onClick: event => {
+                event.stopPropagation()
+                face.onCreateSession?.(row.workspaceId)
+              },
+            }, createElement(IconNewChatOutlineRegular, { size: 14 })) : null)),
       sessionRows.length > 0 ? createElement('div', { role: 'group' }, sessionRows) : null)
   })
 

@@ -98,6 +98,12 @@ export const STYLE = `
 .nsw-expand { width: 16px; height: 16px; }
 .nsw-expand:disabled { opacity: .35; cursor: default; }
 .nsw-spin { animation: nsw-spin .8s linear infinite; transform-origin: center; }
+/* Row padding keeps a trailing icon inside the row. The section header pulls its
+   buttons out to the sidebar edge, so the loading mark uses that same inset. */
+[data-nsw-loading="true"] [class*="rowActions"] {
+  display: inline-flex;
+  margin-right: calc(var(--dsh-sidebar-paint-inset, 4px) - (var(--dsh-sidebar-row-padding, 12px)));
+}
 @keyframes nsw-spin { to { transform: rotate(360deg); } }
 /* Duration covers the real height, not a 70vh ceiling. A short declared time
    on an oversized max-height finishes the visible push in a few frames. */

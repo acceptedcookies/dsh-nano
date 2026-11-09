@@ -6,7 +6,8 @@ import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 import { clearIdentity, readIdentity, writeIdentity } from './credentials.js'
 import { createS3 } from './s3.js'
 import { createWorkspace, instanceId, joinWorkspace, listWorkspaces } from './workspaces.js'
-import { fetchTranscript, listRemoteSessions, materializeSession, syncAll } from './session-io.js'
+import { acquireClaim, fetchTranscript, listRemoteSessions, materializeSession, renewClaim, syncAll } from './session-io.js'
+import { pullWorkspace, pushWorkspace, registerIdentity } from './tree.js'
 
 export const PREFIX = '/nano-shared-workspace'
 
@@ -60,9 +61,18 @@ export function createRoutes(ctx, config) {
       method: 'GET',
       async run() {
         const identity = await readIdentity(ctx)
+        let registered = false
+        if (identity?.configured === true && identity.username) {
+          try {
+            const client = createS3(config, identity)
+            const row = await client.getJson(`identities/${encodeURIComponent(identity.username)}.json`)
+            registered = row !== undefined
+          } catch { registered = false }
+        }
         return {
           endpoint: config.endpoint,
           bucket: config.bucket,
+          registered,
           region: config.region,
           username: identity?.username ?? null,
           configured: identity?.configured === true,
@@ -82,6 +92,10 @@ export function createRoutes(ctx, config) {
           return { ok: false, error: 'nothing to update' }
         }
         await writeIdentity(ctx, { username, token, accessKey })
+        try {
+          const { client, identity } = await s3()
+          await registerIdentity(client, identity)
+        } catch { /* registration is retried on the next authenticated call */ }
         return { ok: true }
       },
     },
@@ -110,7 +124,9 @@ export function createRoutes(ctx, config) {
       async run() {
         const identity = await readIdentity(ctx)
         if (identity?.configured !== true) return { workspaces: [] }
-        const rows = await listWorkspaces(createS3(config, identity))
+        const client = createS3(config, identity)
+        await registerIdentity(client, identity).catch(() => {})
+        const rows = await listWorkspaces(client)
         return { workspaces: rows }
       },
     },
@@ -150,10 +166,137 @@ export function createRoutes(ctx, config) {
       async run() {
         const { client, identity } = await s3()
         const results = await syncAll(client, ctx, identity, dshHome, syncState)
+        const me = (await instanceId(ctx)).slice(0, 8)
+        const trees = []
+        for (const marker of await listWorkspaces(client)) {
+          const member = Object.values(marker.members ?? {}).find(item => item?.username === identity.username && String(item.instance ?? '').startsWith(me))
+            ?? Object.values(marker.members ?? {}).find(item => item?.username === identity.username)
+          if (typeof member?.localPath !== 'string' || member.localPath === '') continue
+          try {
+            trees.push({ workspaceId: marker.workspaceId, ...await pushWorkspace(client, dshHome, marker.workspaceId, member.localPath, `${identity.username}@${me}`) })
+          } catch (error) {
+            trees.push({ workspaceId: marker.workspaceId, ok: false, error: messageOf(error) })
+          }
+        }
         return {
           ok: true,
           pushed: results.filter(r => r.outcome.startsWith('pushed')).length,
           outcomes: results.slice(0, 50),
+          trees,
+        }
+      },
+    },
+    '/tree/pull': {
+      method: 'POST',
+      async run(req) {
+        const { client, identity } = await s3()
+        const body = JSON.parse(await readBody(req) || '{}')
+        const workspaceId = typeof body?.workspaceId === 'string' ? body.workspaceId : ''
+        const marker = (await listWorkspaces(client)).find(row => row.workspaceId === workspaceId)
+        if (marker === undefined) return { ok: false, error: 'shared workspace not found' }
+        const me = (await instanceId(ctx)).slice(0, 8)
+        const member = Object.values(marker.members ?? {}).find(item => item?.username === identity.username && String(item.instance ?? '').startsWith(me))
+          ?? Object.values(marker.members ?? {}).find(item => item?.username === identity.username)
+        if (typeof member?.localPath !== 'string' || member.localPath === '') return { ok: false, error: 'join this shared workspace before syncing files' }
+        return pullWorkspace(client, dshHome, workspaceId, member.localPath)
+      },
+    },
+    '/tree/push': {
+      method: 'POST',
+      async run(req) {
+        const { client, identity } = await s3()
+        const body = JSON.parse(await readBody(req) || '{}')
+        const workspaceId = typeof body?.workspaceId === 'string' ? body.workspaceId : ''
+        const marker = (await listWorkspaces(client)).find(row => row.workspaceId === workspaceId)
+        if (marker === undefined) return { ok: false, error: 'shared workspace not found' }
+        const me = (await instanceId(ctx)).slice(0, 8)
+        const member = Object.values(marker.members ?? {}).find(item => item?.username === identity.username && String(item.instance ?? '').startsWith(me))
+          ?? Object.values(marker.members ?? {}).find(item => item?.username === identity.username)
+        if (typeof member?.localPath !== 'string' || member.localPath === '') return { ok: false, error: 'join this shared workspace before syncing files' }
+        return pushWorkspace(client, dshHome, workspaceId, member.localPath, `${identity.username}@${me}`)
+      },
+    },
+    // Harness only enables the composer for a session a Host workspace accounts.
+    // The replica workspace stays hidden from the local sidebar; this is not a
+    // second source of truth.
+    '/sessions/bind': {
+      method: 'POST',
+      async run(req) {
+        const body = JSON.parse(await readBody(req) || '{}')
+        const localPath = typeof body?.path === 'string' ? body.path : ''
+        const sessionId = typeof body?.sessionId === 'string' ? body.sessionId : ''
+        if (localPath === '' || sessionId === '') return { ok: false, error: 'path and sessionId are required' }
+        const registry = ctx.get('workspaceRegistry')
+        const workspace = await registry.resolveByPath(localPath)
+        if (workspace === undefined) return { ok: false, error: 'replica is not registered' }
+        if (!workspace.sessionIds.includes(sessionId)) await workspace.attachSession(sessionId)
+        return { ok: true, workspaceId: workspace.id }
+      },
+    },
+    '/sessions/claim': {
+      method: 'POST',
+      async run(req) {
+        const { client, identity } = await s3()
+        const body = JSON.parse(await readBody(req) || '{}')
+        const workspaceId = typeof body?.workspaceId === 'string' ? body.workspaceId : ''
+        const sessionId = typeof body?.sessionId === 'string' ? body.sessionId : ''
+        if (workspaceId === '' || sessionId === '') return { ok: false, error: 'workspaceId and sessionId are required' }
+        const marker = (await listWorkspaces(client)).find(row => row.workspaceId === workspaceId)
+        if (marker === undefined) return { ok: false, error: 'shared workspace not found' }
+        const me = (await instanceId(ctx)).slice(0, 8)
+        const member = Object.values(marker.members ?? {}).find(item => item?.username === identity.username && String(item.instance ?? '').startsWith(me))
+          ?? Object.values(marker.members ?? {}).find(item => item?.username === identity.username)
+        if (typeof member?.localPath !== 'string' || member.localPath === '') return { ok: false, error: 'join this shared workspace before opening its sessions' }
+        const pull = await pullWorkspace(client, dshHome, workspaceId, member.localPath)
+        const claim = await acquireClaim(client, ctx, sessionId, `${identity.username}@${me}`, 1)
+        return {
+          ok: claim.acquired === true,
+          busy: claim.acquired !== true,
+          holder: claim.holder ?? null,
+          expiresAt: claim.expiresAt ?? null,
+          pull,
+        }
+      },
+    },
+    '/sessions/heartbeat': {
+      method: 'POST',
+      async run(req) {
+        const { client, identity } = await s3()
+        const body = JSON.parse(await readBody(req) || '{}')
+        const workspaceId = typeof body?.workspaceId === 'string' ? body.workspaceId : ''
+        const sessionId = typeof body?.sessionId === 'string' ? body.sessionId : ''
+        if (sessionId === '') return { ok: false, error: 'sessionId is required' }
+        const me = (await instanceId(ctx)).slice(0, 8)
+        const writerId = `${identity.username}@${me}`
+        const renewed = await renewClaim(client, sessionId, writerId)
+        if (renewed.renewed !== true) return { ok: false, busy: true, holder: renewed.holder, expiresAt: renewed.expiresAt }
+        let tree = null
+        if (workspaceId !== '') {
+          const marker = (await listWorkspaces(client)).find(row => row.workspaceId === workspaceId)
+          const member = Object.values(marker?.members ?? {}).find(item => item?.username === identity.username && String(item.instance ?? '').startsWith(me))
+            ?? Object.values(marker?.members ?? {}).find(item => item?.username === identity.username)
+          if (typeof member?.localPath === 'string' && member.localPath !== '') {
+            tree = await pushWorkspace(client, dshHome, workspaceId, member.localPath, writerId)
+          }
+        }
+        return { ok: true, expiresAt: renewed.expiresAt, tree }
+      },
+    },
+    '/sessions/lease': {
+      method: 'POST',
+      async run(req) {
+        const { client, identity } = await s3()
+        const body = JSON.parse(await readBody(req) || '{}')
+        const sessionId = typeof body?.sessionId === 'string' ? body.sessionId : ''
+        if (sessionId === '') return { ok: false, error: 'sessionId is required' }
+        const claim = await client.getJson(`claims/${sessionId}.json`)
+        const me = (await instanceId(ctx)).slice(0, 8)
+        return {
+          ok: true,
+          holder: claim?.writerId ?? null,
+          expiresAt: claim?.expiresAt ?? null,
+          heartbeatRev: claim?.heartbeatRev ?? null,
+          mine: claim?.writerId === `${identity.username}@${me}`,
         }
       },
     },
@@ -289,4 +432,33 @@ export function registerRoutes(ctx, routes) {
     }))
   }
   return disposers
+}
+
+/** Every 30s, push session logs and replica files for workspaces this instance has joined. */
+export function startBackgroundSync(ctx, config) {
+  const dshHome = process.env.DSH_HOME ?? `${homedir()}/.dsh`
+  const syncState = { bySession: new Map() }
+  let running = false
+  const tick = async () => {
+    if (running) return
+    running = true
+    try {
+      const identity = await readIdentity(ctx)
+      if (identity?.configured !== true) return
+      const client = createS3(config, identity)
+      const me = (await instanceId(ctx)).slice(0, 8)
+      await syncAll(client, ctx, identity, dshHome, syncState).catch(() => {})
+      for (const marker of await listWorkspaces(client)) {
+        const member = Object.values(marker.members ?? {}).find(item => item?.username === identity.username && String(item.instance ?? '').startsWith(me))
+          ?? Object.values(marker.members ?? {}).find(item => item?.username === identity.username)
+        if (typeof member?.localPath !== 'string' || member.localPath === '') continue
+        await pushWorkspace(client, dshHome, marker.workspaceId, member.localPath, `${identity.username}@${me}`).catch(() => {})
+      }
+    } finally {
+      running = false
+    }
+  }
+  const timer = setInterval(() => { tick().catch(() => {}) }, 30_000)
+  timer.unref?.()
+  return () => clearInterval(timer)
 }

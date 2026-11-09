@@ -13,10 +13,10 @@
 
 **目标**：多台 dsh 客户端通过同一个 S3 兼容端点（Cloudflare R2 / 自托管 pgs3 / 任意 SigV4 端点）共享 session 历史。A 机产生的 session 自动出现在 B 机的 Shared workspace 里；S3 是唯一真源。
 
-**非目标（本期）**：
+**非目标（本期，已被 §13 业主心智模型覆盖的部分不再当作永久非目标）**：
 
 - 鉴权与用户权限管理（桶凭证即全部身份；后期再加对象签名/多角色）
-- 工作区源文件同步（LayerFS 类版本树 —— 未来重型方向，见 §10）
+- 工作区源文件同步曾列为本期非目标。§13.3 / §13.4 / §13.6 / §13.8 要求 S3 上的 workspace 是带状态的工作目录，文件经版本控制下发与回传。该能力**尚未实现**，不再写成永久非目标。
 - attachment（图片/媒体）同步 —— v2
 - 远端 session 在本机"继续对话"（需要 cwd 重映射）—— Phase B
 - 删除传播（本期只进不出）
@@ -340,3 +340,235 @@ dsh-nano-shared-workspace/
 ├── scripts/build-client.mjs
 └── docs/specs/dsh-nano-shared-workspace/spec.md  ← 本文件（仓库 docs/ 下）
 ```
+
+## 13. 业主心智模型（2026-11-09 登记）
+
+本节是业主对共享工作区的权威心智模型。它覆盖 §0 里把「只同步 session 历史、不同步工作区文件」当成产品边界的写法。下文每一条都按同一结构拆开：对象、真源、不变量、失败时怎么办；然后对照三样已经存在的东西——对象拓扑、上海 MinIO、本地插件——给出符合 / 部分符合 / 不符合。
+
+对照时用的事实，只来自本文件 §1.5 的部署记录和 `dsh-nano-shared-workspace/src/host/` 的现行代码，不把规格里的愿望当成已上线。
+
+### 13.0 三份对照物分别是什么
+
+**拓扑（现在实际写在桶里的形状）**
+
+```
+dsh 插件  --SigV4 HTTPS-->  Cloudflare（nano-shared-workspace.saobao.com，橙色代理，SSL strict）
+                         -->  shv1 49.235.109.23  nginx :443
+                         -->  MinIO 127.0.0.1:9000
+                         -->  bucket dsh-shared-workspace
+
+workspaces/{workspaceId}.json                          成员与每人的 localPath
+workspaces/{workspaceId}/sessions/{sessionId}/meta.json
+workspaces/{workspaceId}/sessions/{sessionId}/body/{i}.part
+claims/{sessionId}.json                                写租约，TTL 90s
+```
+
+这是一组会话日志对象加一张成员表。它不是一个带目录项、代际和合并的工作目录。
+
+**上海 MinIO（2026-11-09 部署记录）**
+
+`RELEASE.2025-07-23`，systemd，只听 `127.0.0.1:9000`（API）和 `:9001`（控制台），数据在 `/data/minio`，环境文件 `/etc/minio.env`（0600）。桶 `dsh-shared-workspace`。公网入口是 Cloudflare 代理加本机 nginx Let's Encrypt。部署记录里没有打开 bucket versioning，没有对象锁，没有生命周期里的代际策略。pgs3 没有跑在这台机器上。
+
+**本地插件（`dsh-dev.local` 上的 `dsh-nano-shared-workspace`）**
+
+能做的：S3 先写 workspace marker、选一个本地目录记成 `members[].localPath`、按 cwd 前缀把本机 session 日志推上去、用 `claims/{id}.json` 做先读后写的 90 秒租约、把远端 session 日志拉下来改写 cwd 再打开。不能做的：同步 workspace 里的普通文件、打开 session 时登记忙态、按版本合并冲突、用条件写保证单写者。
+
+pgs3（`context/pgs3`）在这里的角色是**状态引擎的参考实现**，不是现网进程。它把对象放在 Postgres 里，`If-Match` / `If-None-Match` 落在同一个事务里：写要么整笔提交，要么一行都不改（`store.rs`：条件写改不到行就拒绝）。这是「带状态」的最小引擎。现网 MinIO 只被当成无条件 PUT 的对象盘在用。
+
+### 13.1 共享工作区必须能创建 workspace，其下可以有多条 session，对应这个 workspace 里的文件
+
+**原文。** 共享工作区必须可以创建 workspace。workspace 下面可以有多条 session，对应该 workspace 内的文件。
+
+**拆解。**
+
+- 对象有两个，不能并成一个。workspace 是一份文件集合的身份；session 是在这份文件集合上发生的一次对话。一个 workspace 对多条 session，一条 session 只属于一个 workspace。
+- 「对应 workspace 内的文件」意味着 session 的工具读写落在这个 workspace 的目录里，而不是落在随便一个本机项目里。对应关系是目录成员资格，不是把 session id 写进某个列表就算数。
+- 不变量：创建 workspace 不依赖本机已经有一个 Host「工作区」记录。session 列表挂在共享 workspace 上，不挂在本地「工作区」上。
+- 失败：没有 workspace 身份就创建的 session，无法判断它在改哪一棵文件树，也不能被其他成员按 workspace 找回来。
+
+**对照。**
+
+| 对照物 | 结论 | 依据 |
+|---|---|---|
+| 拓扑 | 部分符合 | `workspaces/{id}.json` 是 workspace 身份；其下 `sessions/` 可以有多条。对象里没有「这个 workspace 的文件清单」，session 与文件的对应只靠每条 meta 里的 `cwd` 字符串。 |
+| 上海 MinIO | 符合存储、不符合语义 | 桶能放下 marker 和任意条 session。MinIO 不理解 workspace，也不会拒绝「session 的 cwd 不属于该 workspace」。 |
+| 本地插件 | 部分符合 | `POST /workspaces/create` 先写 S3 marker，不调用 `ctx.workspaces.create`。侧栏能在一个共享 workspace 下列出多条 session，新建会话用该成员的 `localPath` 当 cwd。会话日志不等于 workspace 文件；文件本身没有进这个 workspace 对象。 |
+
+### 13.2 每个 workspace 必须能创建 session；同一条 session 同时只有一个已加入的同事可写；忙或 cool-off 期间其他人只读，并自动把 workspace 内容同步到本地
+
+**原文。** 共享工作区的 workspace 必须可以创建 session。每一个 session 同时可以有 1 个加入到共享工作区的同事在工作。当前 session 正忙的时候，或者 cool-off 的时候，其他同事只能只读，和自动同步工作区中的内容到本地。
+
+**拆解。**
+
+- 写权的粒度是 **session**，不是整个 workspace。同一个 workspace 里，甲写 session A、乙写 session B，这两件事不互相挡住。
+- 「已加入」是前提。没在 marker 的 `members` 里的人不能拿写权。
+- 忙：写者活着，租约未过期。其他人可以拉、不可以推。
+- cool-off：写者已经停手，但租约还没到期。这段时间仍然只读，避免两个客户端都以为自己是写者。到期之后才允许下一个人登记为忙。
+- 「自动同步工作区中的内容」同步的是 workspace 的文件，不只是这条 session 的 jsonl。只读端拿到的本地副本要跟上真源，否则只读看到的是过期树。
+- 不变量：任意时刻，一条 session 的有效写者 ∈ {0, 1}。0 只出现在无人持有或租约已过期。
+- 失败：两人同时认为自己持有写权，后写的覆盖先写的，丢失没有版本可回放。先读后写的窗口就是这个失败。
+
+**对照。**
+
+| 对照物 | 结论 | 依据 |
+|---|---|---|
+| 拓扑 | 部分符合 | `claims/{sessionId}.json` 表达了「一条 session 一把锁」，字段有 `writerId`、`expiresAt`、`heartbeatRev`。没有对象表达「只读端正在把 workspace 文件拉到本地」，也没有对象能原子地把锁交出去。 |
+| 上海 MinIO | 不符合单写者 | MinIO 只保存我们 PUT 上去的 JSON。插件没有使用 `If-Match`。两个客户端可以同时读到「锁空着」，然后都写成功。pgs3 的事务条件写能关掉这个窗口；现网没有这层。 |
+| 本地插件 | 不符合 | 共享行上可以新建 session。`acquireClaim` 自己写明 `No CAS in v1`：读到未过期的别人锁就跳过推送，否则直接覆盖。没有打开 session 时的忙态登记，没有只读 UI，没有 cool-off 倒计时，没有把 workspace 文件自动同步到本地。租约只在「推 session 日志」时看一眼，TTL 90 秒，没有工作期间的续租循环。 |
+
+### 13.3 创建 workspace 时可以指定一个本地文件夹，用来承接真源下发的副本
+
+**原文。** workspace 创建的时候，可以指定本地文件夹作为真源同步下放到本地的副本。
+
+**拆解。**
+
+结合 §13.6 读这一句，避免把它理解成「本地文件夹才是真源」。真源仍是 S3 上的 workspace。本地文件夹是**副本落点**：创建或加入时选定，随后真源的内容下发到这个目录。
+
+- 对象：`members[user@instance].localPath`。每个已加入的实例可以有自己的路径，因为两台机器的家目录不同。
+- 不变量：`localPath` 只命名副本，不参与 workspace 身份。换一台机器、换一个路径，仍然是同一个 `workspaceId`。
+- 下发是创建之后的动作，不是把路径字符串写进 marker 就算下发完成。副本目录在下发前可以是空的。
+- 失败：路径写了，目录是空的，用户以为已经有一份真源。之后在空目录里开工，再推回去，会把远端真源盖成空树。
+
+**对照。**
+
+| 对照物 | 结论 | 依据 |
+|---|---|---|
+| 拓扑 | 部分符合 | marker 里有 `localPath`，身份是随机 `workspaceId`，不由路径哈希决定（遗留的 path-hash 只用于旧 marker 的匹配）。对象里没有「下发进度」或「这份副本对应真源的哪一代」。 |
+| 上海 MinIO | 符合「能记下路径」 | 它只存 marker JSON。路径是否存在、目录里有没有文件，MinIO 既不知道也不检查。 |
+| 本地插件 | 部分符合 | 新建/加入对话框可以选择本地目录，`POST /workspaces/create` 与 `/workspaces/join` 把路径写进 marker。没有任何文件从 S3 下发到这个目录。选完路径只是登记，不是同步。 |
+
+### 13.4 创建一个共享工作区，就是在 S3 上创建一个带状态的工作目录；状态引擎以 context/pgs3 为参考系
+
+**原文。** 创建共享工作区等于就是在 S3 上创建了一个带有状态的工作目录。状态的引擎是 `context/pgs3` 这个参考系提供的。
+
+**拆解。**
+
+- 「工作目录」指有路径、有文件、有当前一代内容的树，不是一条聊天记录。
+- 「带状态」指每一次变更都有一代：谁写的、基于哪一代、成功还是被拒绝。读到的永远是某一代完整快照，不会读到写了一半的树。
+- pgs3 提供的引擎能力，对照 `store.rs`，是：对象字节在 Postgres；`If-None-Match: *` 只在键不存在时写入；`If-Match` 只在 etag 仍是期望值时写入；条件失败则整笔事务不改行。这就是状态转移，而不是「最后一次 PUT 赢」。
+- 参考系不等于必须把进程换成 pgs3。MinIO 若要充当同一角色，插件必须把 workspace 的每一次状态转移做成条件写（或等价的代际对象：`generations/{n}` 只追加、当前指针用条件写切换）。现在两种都没有。
+- 不变量：状态转移对并发读者是原子的。失败的转移不留下半棵树。
+- 失败：无条件 PUT `workspaces/{id}.json` 会丢成员；无条件 PUT 文件对象会丢另一端刚写的内容，且没有一代可以指回去。
+
+**对照。**
+
+| 对照物 | 结论 | 依据 |
+|---|---|---|
+| 拓扑 | 不符合 | 创建一个 workspace 只 PUT 一份成员 JSON。没有目录项，没有 generation，没有当前指针。session 的 `body/*.part` 是日志字节前缀，不是工作目录的状态。 |
+| 上海 MinIO | 不符合该角色 | 进程是 MinIO，不是 pgs3。部署没有使用版本化，插件也没有发 `If-Match` / `If-None-Match`。MinIO 在这里是字节盘。pgs3 那种「条件不满足就整笔作废」的引擎不在链路上。 |
+| 本地插件 | 不符合 | `s3.putJson` 是无条件覆盖。`createWorkspace` / `joinWorkspace` 读改写 marker，没有代际。代码注释写明 v1 不做 CAS。 |
+
+### 13.5 操作某条共享 session 之前，必须先把 workspace 文件完整同步到本地，并把自己登记为忙，使其他人在此时段不能占用这条 session
+
+**原文。** 用户如果要操作共享工作区的 session，需要先完整同步 workspace 的文件到本地，并且注册当前用户为忙时状态，以便禁止其他用户在当前时段占用该 session。
+
+**拆解。**
+
+顺序是硬的，不能颠倒：
+
+1. 该用户已经是这个 workspace 的成员，并且有 `localPath`。
+2. workspace 文件完整到达 `localPath`。没完成就不能开写。只拉 session 日志不算完成。
+3. 对这条 session 登记忙（claim 成功，`expiresAt` 在未来，`writerId` 是自己）。登记失败就停在只读。
+4. 之后本机 harness 才对这个目录里的文件和这条 session 做写。工作期间续租，结束或崩溃后进入 §13.2 的 cool-off，而不是立刻把锁送人。
+
+- 不变量：写会话开始时，本地树与当时的真源一代一致，且写者唯一。
+- 失败：跳过第 2 步，工具改的是空目录或旧树，推回去就用旧树覆盖真源。跳过第 3 步，另一个同事同时写同一条 session。
+
+**对照。**
+
+| 对照物 | 结论 | 依据 |
+|---|---|---|
+| 拓扑 | 不符合 | 没有「文件一代已同步」的对象，也没有「打开即占用」的状态。`claims/` 只表示有人曾经推过日志。 |
+| 上海 MinIO | 不符合 | 服务器不会在用户打开会话时做任何登记。忙态如果存在，只能是插件写进去的对象；现网没有这个写点被强制执行。 |
+| 本地插件 | 不符合 | 打开共享 session 会 `materialize` 会话日志（把 zstd 落到 `$DSH_HOME/sessions/`，并改写 header 的 cwd），然后 `openSession`。不拉 workspace 文件，不写 claim。新建 session 直接 `sessions.create({ cwd })`。忙态没有发生。 |
+
+### 13.6 人在本地副本上通过 harness 工作；增量备份和版本管理把文件同步回 S3。操作的是副本，真源仍是远端 workspace
+
+**原文。** 用户用本地的 llm 通过 harness 进行工作，并使用增量备份以及版本管理把文件同步回 S3。也就是用户操作的是本地副本，真源仍然是远端 S3 内的 workspace。
+
+**拆解。**
+
+- 运行面在本地：模型、工具、文件读写都发生在 `localPath`。远端不执行工具。
+- 真源在 S3 workspace。本地副本是缓存加工作区，不是另一份权威。
+- 回传是两类记录，缺一不可。增量备份：这一代相对上一代的文件变化。版本管理：这一代的身份（父代、作者、时间），使下一轮能判断自己是不是从最新一代岔出去的。
+- session 日志是工作的旁录，不是 workspace 本身。只推 `session.v4.jsonl.zstd` 不等于完成了本条。
+- 不变量：推上去的一代指向它的父代。不能把「当前桶里的文件」直接覆盖成「我磁盘上现在的样子」还叫版本管理。
+- 失败：无父代的覆盖把另一端的增量丢掉，而且丢完没有父指针可找。
+
+**对照。**
+
+| 对照物 | 结论 | 依据 |
+|---|---|---|
+| 拓扑 | 不符合文件，部分符合日志 | session `body/*.part` 是日志的追加前缀，`meta.committedBytes` 是已提交长度。这是日志的增量，不是文件树的增量，也没有父代指针。 |
+| 上海 MinIO | 不符合 | 未开启、插件也未使用 bucket versioning。对象覆盖不保留上一代。MinIO 有能力做版本化，当前配置没有把它变成版本库。 |
+| 本地插件 | 不符合 | 上行只有 `pushSession`：按 cwd 找到 marker，把 session 工件切成 64KB 前缀推上去。没有文件扫描，没有增量块，没有 generation。本地副本之所以能被 harness 用，只是因为 cwd 指向那个目录，不是因为有一条同步协议。 |
+
+### 13.7 本地 session 内容如果没有及时同步到 S3，丢失就是永久丢失。业主接受这个方式
+
+**原文。** 如果本地 session 的内容没有及时同步到远端 S3，那么丢失就是永久丢失。这是业主认可的方式。
+
+**拆解。**
+
+- 这是一条被接受的失败政策，不是待修复的缺陷。不要求写前先同步成功，不要求异地多副本。
+- 范围是 session 内容。它不推翻 §13.6 的文件版本管理：文件走代际；session 日志允许「没推上去就没了」。
+- 不变量：已经进入 S3 且 `committedBytes` 覆盖到的前缀，才算没有丢。本地多出来的尾部，在下一次成功推送之前不算数。
+- 必须让用户看得见「尚未推送」，否则这条政策是隐蔽丢数据，而不是业主认可的取舍。
+- 失败的正确表现：客户端崩溃、推送前杀进程、推送被别人的租约跳过。这些都不自动补洞。
+
+**对照。**
+
+| 对照物 | 结论 | 依据 |
+|---|---|---|
+| 拓扑 | 符合政策的形状 | 只有 part 写完再推进 `committedBytes` 的前缀算数（§2 不变量）。没写进桶的字节不存在于真源。拓扑没有隐藏的第二份副本。 |
+| 上海 MinIO | 符合政策 | 单机磁盘 `/data/minio`，没有跨机复制。磁盘没了，桶没了。这与「没到 S3 就是没有」一致，也意味着 S3 本身仍是单点。 |
+| 本地插件 | 部分符合 | 推送是手动刷新，或新建会话后的后台 `triggerSync`。推送走完全部本地 session，新会话可能久未进桶。跳过条件（别人持锁、cwd 对不上）只记在同步结果里，界面没有「未推送、丢掉就没了」的状态。政策本身符合业主，告知和及时性不符合。 |
+
+### 13.8 多条 session 发生冲突时，由版本控制做冲突消融
+
+**原文。** 多 session 出现 conflict 的时候，由版本控制进行冲突消融。
+
+**拆解。**
+
+- 冲突的单位要先定。两条不同 session 同时改**同一批文件**，是文件树冲突。两条写入抢**同一条 session 日志**，是日志分叉。业主这句话放在多 session 的语境里，指的是前者：多个 session 的工作改到了同一 workspace 的文件。
+- 「版本控制消融」不是弹窗让人选一边，也不是后写覆盖。每一边保留自己的代，共同祖先已知，消融产出新的一代，父指针同时指向冲突的双方或指向消融结果所依据的那几代。
+- session 日志本身仍是单写者（§13.2）。日志不靠三方合并来拼事件流。冲突消融发生在文件版本上。
+- 不变量：消融不丢任何一边已经形成的代。失败时两代都还在，而不是只剩后一次 PUT。
+- 本文件 §6 写过「分叉绝不自动合并、用户选边」。那条对**无版本的日志分叉**仍然成立。它不能拿来代替本条的文件版本消融，两套规则作用在不同对象上。
+
+**对照。**
+
+| 对照物 | 结论 | 依据 |
+|---|---|---|
+| 拓扑 | 不符合 | 没有 generation、没有父指针、没有 merge 对象。两个 session 的文件改动无处相遇，因为文件改动根本没有进桶。 |
+| 上海 MinIO | 不符合 | 无版本化配置。即使打开 bucket versioning，也只是保留对象的旧字节，不会按 workspace 一代做合并。那不是冲突消融。 |
+| 本地插件 | 不符合 | 无版本图，无合并。§6 的 `diverged` 红标和手动选边也还没做成。现状是后一次无条件 PUT 赢，输的一边没有代可回放。 |
+
+### 13.9 总表
+
+| # | 业主要求 | 拓扑 | 上海 MinIO | 本地插件 |
+|---|---|---|---|---|
+| 1 | 可创建 workspace，其下多条 session 对应其中的文件 | 部分符合 | 符合存储 | 部分符合 |
+| 2 | 可创建 session；单写者；忙与 cool-off 只读；自动同步 workspace 内容 | 部分符合 | 不符合 | 不符合 |
+| 3 | 创建时指定本地目录，承接真源下发的副本 | 部分符合 | 符合存储 | 部分符合 |
+| 4 | S3 上的带状态工作目录，状态引擎参考 pgs3 | 不符合 | 不符合 | 不符合 |
+| 5 | 操作前完整同步文件，并登记忙态 | 不符合 | 不符合 | 不符合 |
+| 6 | 本地副本上工作，增量备份 + 版本管理回传，真源在 S3 | 不符合 | 不符合 | 不符合 |
+| 7 | 未及时上云的 session 内容永久丢失（业主接受） | 符合 | 符合 | 部分符合 |
+| 8 | 多 session 的文件冲突由版本控制消融 | 不符合 | 不符合 | 不符合 |
+
+结论：现网是「会话日志的对象同步」，不是业主描述的「带状态的共享工作目录」。三份对照物里，没有任何一份同时满足 §13.4、§13.5、§13.6、§13.8。
+
+### 13.10 已落地切片与 e2e（2026-11-09）
+
+相对 §13.9，插件补上了一条能跑通的竖切，不是八条全部做完。
+
+- 用户登记：`GET /workspaces` 会把用户名写成 `identities/{username}.json`。`GET /settings` 对 `seanz-dev` 返回 `registered: true`，端点 `https://nano-shared-workspace.saobao.com`，桶 `dsh-shared-workspace`。
+- 文件代际：`workspaces/{id}/tree/generations/{n}.json`（`If-None-Match: *`）+ `HEAD.json` + `blobs/{sha256}`。双方都改过的文本写成 `<<<<<<< local` 冲突标记，不静默覆盖。
+- 操作会话前：`POST /tree/pull` 把 HEAD 下到副本，`POST /sessions/claim` 登记忙态。新建会话再用 Host workspace 挂上这条 session，只为让 harness 输入框可用；对应本地「工作区」行继续隐藏。
+- e2e：向 `demo-shared`（`2f08f7d46d420e0e`）推送 `nsw-sync.txt`，删除本地文件后再拉，内容恢复为 `nsw-sync-1794206622`，generation 1。随后新建 `session-64af8458-3a09-418e-aeef-c259bf0b2b25`，输入「只回复一个词：pong」，5 秒内完成，回复 `pong`。
+
+续租与 cool-off（同日补测）：`POST /sessions/heartbeat` 把 `session-64af8458-…` 的 `expiresAt` 从 `1794207094712` 续到 `1794207098469`，`heartbeatRev` 1→2，并顺带推了文件树（generation 1，未变化）。把租约改成 `other@deadbeef` 且未过期后，`POST /sessions/claim` 返回 `busy: true`，同时仍然 pull 了文件。把 `expiresAt` 改到过去后再 claim，写权回到 `seanz-dev@fba3fbd5`。
+
+冲突消融：远端 generation 2 把 `nsw-sync.txt` 写成 `remote-side`，本地同时改成 `local-side`。push 产出 generation 3，`conflicts: ["nsw-sync.txt"]`，副本内容是 `<<<<<<< local` / `local-side` / `=======` / `remote-side` / `>>>>>>> remote`。
+
+后台每 30 秒对已加入的 workspace 推会话日志和文件树（`startBackgroundSync`）。持有写权的客户端每 25 秒心跳。还没有第二台 dsh 实例参与同一次实测。

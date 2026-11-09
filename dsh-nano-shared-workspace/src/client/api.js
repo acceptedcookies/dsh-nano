@@ -65,6 +65,48 @@ export const listDirectory = path =>
 export const fetchRemoteSessions = () => call('/sessions')
 
 /** Write a shared session into the local session tree and return `{sessionId, cwd, path}`. */
+export function pullWorkspace(workspaceId) {
+  return call('/tree/pull', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ workspaceId }),
+  }).then(response => {
+    if (response?.ok !== true) throw new Error(response?.error ?? 'pull failed')
+    return response
+  })
+}
+
+export function bindSession(path, sessionId) {
+  return call('/sessions/bind', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ path, sessionId }),
+  }).then(response => {
+    if (response?.ok !== true) throw new Error(response?.error ?? 'bind failed')
+    return response
+  })
+}
+
+export function claimSession(workspaceId, sessionId) {
+  return call('/sessions/claim', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ workspaceId, sessionId }),
+  }).then(response => {
+    if (response?.busy === true) return response
+    if (response?.ok !== true) throw new Error(response?.error ?? 'claim failed')
+    return response
+  })
+}
+
+export function heartbeatSession(workspaceId, sessionId) {
+  return call('/sessions/heartbeat', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ workspaceId, sessionId }),
+  })
+}
+
 export function materializeSession(workspaceId, sessionId) {
   return call('/materialize', {
     method: 'POST',

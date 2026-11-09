@@ -94,6 +94,65 @@ export const STYLE = `
   cursor: pointer;
   text-align: left;
 }
+.nsw-label-with-expand { display: inline-flex; align-items: center; gap: 2px; }
+.nsw-expand { width: 16px; height: 16px; }
+.nsw-expand:disabled { opacity: .35; cursor: default; }
+.nsw-spin { animation: nsw-spin .8s linear infinite; transform-origin: center; }
+@keyframes nsw-spin { to { transform: rotate(360deg); } }
+/* Duration covers the real height, not a 70vh ceiling. A short declared time
+   on an oversized max-height finishes the visible push in a few frames. */
+.nsw-reveal { overflow: hidden; max-height: 0; transition: max-height 680ms cubic-bezier(0.22, 1, 0.36, 1); }
+.nsw-reveal-inner { min-height: 0; }
+.nsw-more {
+  display: block; width: 100%; height: 28px; margin-top: 2px;
+  border: none; background: transparent; cursor: pointer; text-align: left;
+  padding: 0 var(--dsh-sidebar-row-padding, 12px);
+  font: inherit; font-size: 12px; color: var(--dsw-alias-label-tertiary, #999);
+}
+.nsw-more:hover { color: var(--dsw-alias-label-secondary, #ccc); }
+.nsw-pref { display: flex; align-items: flex-start; gap: 8px; margin: 4px 0 12px; font-size: 12.5px; }
+.nsw-pref input { margin-top: 2px; }
+@media (prefers-reduced-motion: reduce) {
+  .nsw-spin { animation: none; }
+  .nsw-reveal { transition: none; }
+}
+/* Same pulse as the workspace search skeleton (opacity 1 → .6 → 1 over 2s).
+   It runs only while the shared list is unresolved, then the nodes unmount. */
+.nsw-bone {
+  flex: none;
+  background: var(--dsw-alias-bg-skeleton, rgba(255,255,255,.08));
+  animation: nsw-heartbeat 2s cubic-bezier(0.36, 0, 0.64, 1) infinite;
+}
+.nsw-bone-row {
+  display: flex;
+  align-items: center;
+  height: 34px;
+  gap: var(--dsh-sidebar-label-gap, 8px);
+  padding-inline-start: var(--dsh-sidebar-row-padding, 12px);
+  box-sizing: border-box;
+}
+.nsw-bone-dot { width: 16px; height: 16px; border-radius: 4px; }
+.nsw-bone-bar { height: 14px; width: 42%; border-radius: var(--dsw-radius-xs, 4px); }
+.nsw-bone-bar[data-width="mid"] { width: 58%; }
+.nsw-bone-bar[data-width="short"] { width: 30%; }
+.nsw-bone-header {
+  display: flex;
+  align-items: center;
+  height: 36px;
+  padding-left: var(--dsh-sidebar-row-padding, 12px);
+  gap: 8px;
+}
+.nsw-bone-label { width: 72px; height: 14px; border-radius: var(--dsw-radius-xs, 4px); }
+.nsw-bone-actions { margin-left: auto; display: inline-flex; gap: 4px; }
+.nsw-bone-icon { width: 16px; height: 16px; border-radius: 4px; }
+@keyframes nsw-heartbeat {
+  0% { opacity: 1; }
+  40% { opacity: .6; }
+  80%, 100% { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nsw-bone { animation: none; }
+}
 .nsw-notice { margin: 4px 0 0; font-size: 11px; color: var(--dsw-alias-label-secondary, #888); }
 .nsw-row {
   display: flex;

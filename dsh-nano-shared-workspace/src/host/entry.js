@@ -1,6 +1,6 @@
 /** Host half entry: the plugin's exported name, inject list, Config, and apply. */
 
-import { createRoutes, registerRoutes } from './routes.js'
+import { createRoutes, registerRoutes, startBackgroundSync } from './routes.js'
 
 export const name = 'nano-shared-workspace'
 
@@ -8,7 +8,7 @@ export const name = 'nano-shared-workspace'
 // service here makes the plugin wait for it before `apply` runs — so every
 // service this plugin reads is listed to keep activation ordering explicit and
 // to fail the plugin (not a single request) when one is absent.
-export const inject = ['webServer', 'connection', 'credentials']
+export const inject = ['webServer', 'connection', 'credentials', 'workspaceRegistry']
 
 export const Config = {
   '~standard': {
@@ -54,6 +54,7 @@ export function apply(ctx, raw) {
   const routes = createRoutes(ctx, config)
   ctx.effect(() => {
     const disposers = registerRoutes(ctx, routes)
-    return () => { for (const dispose of disposers) dispose() }
+    const stopSync = startBackgroundSync(ctx, config)
+    return () => { stopSync(); for (const dispose of disposers) dispose() }
   }, 'nano-shared-workspace: routes')
 }

@@ -4,16 +4,27 @@ import React from 'react'
 import { openNanoMenu } from 'dsh-nano-ui'
 import { SidebarGraft } from './graft.js'
 import { copyFor } from './i18n.js'
-import { createDirectory as apiCreateDirectory, createWorkspace as apiCreateWorkspace, fetchRemoteSessions, fetchSettings, fetchSharedWorkspaces, fetchStatus, joinWorkspace as apiJoinWorkspace, listDirectory as apiListDirectory, materializeSession as apiMaterializeSession, triggerSync } from './api.js'
+import { bindSession as apiBindSession, claimSession as apiClaimSession, createDirectory as apiCreateDirectory, createWorkspace as apiCreateWorkspace, fetchRemoteSessions, fetchSettings, fetchSharedWorkspaces, fetchStatus, heartbeatSession as apiHeartbeatSession, joinWorkspace as apiJoinWorkspace, listDirectory as apiListDirectory, materializeSession as apiMaterializeSession, pullWorkspace as apiPullWorkspace, triggerSync } from './api.js'
 import { STYLE } from './styles.js'
 
 export const inject = ['slots', 'locale', 'layout', 'uiWorkspace', 'workspaces', 'sessions']
 
 const NS = 'nanoSharedWorkspace'
+const PREFS_KEY = 'nsw-section-prefs'
+const EXPAND_LIMIT = 3
+
+function readSectionPrefs() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(PREFS_KEY) || '')
+    return { expandOnLoad: parsed?.expandOnLoad !== false, expandLimit: EXPAND_LIMIT }
+  } catch {
+    return { expandOnLoad: true, expandLimit: EXPAND_LIMIT }
+  }
+}
 
 /** One observable wrapper around the settings snapshot the section header reads. */
 function createSettingsStore() {
-  let current = { open: false, loaded: false, configured: false, username: null }
+  let current = { open: false, loaded: false, configured: false, username: null, ...readSectionPrefs() }
   const listeners = new Set()
   const emit = () => { for (const listener of listeners) listener() }
   return {
@@ -40,22 +51,48 @@ export function apply(ctx) {
   const memberPath = (row, username) =>
     Object.values(row?.members ?? {}).find(member => member?.username === username)?.localPath ?? ''
 
-  /** The composer menu only lists Host workspaces. Register the replica path (idempotent) so it can be selected. */
-  const localWorkspaceFor = async localPath => {
-    const wanted = localPath.replace(/\/+$/, '')
-    const existing = ctx.workspaces.list.getSnapshot().items
-      ?.find(item => item.path?.replace(/\/+$/, '') === wanted)
-    if (existing) return existing
-    return ctx.workspaces.create({ path: localPath })
-  }
-
-  const enterPath = localPath => localWorkspaceFor(localPath)
-    .then(workspace => ctx.uiWorkspace.openWorkspace(workspace.workspaceId))
-
-  const registerJoined = (workspaces, username) => {
-    for (const row of workspaces) {
+  /**
+   * Shared workspaces are not Host workspaces. A replica path may already be
+   * registered locally; those rows and their sessions stay out of 「工作区」.
+   */
+  const separateFromLocal = () => {
+    const graft = document.querySelector('[data-nano-shared-workspace]')
+    const username = store.current.username
+    const paths = new Set()
+    for (const row of store.current.sharedWorkspaces ?? []) {
       const path = memberPath(row, username)
-      if (path) localWorkspaceFor(path).catch(() => {})
+      if (path) paths.add(path.replace(/\/+$/, ''))
+    }
+    const sessionIds = new Set([
+      ...(store.current.sessions ?? []).map(session => session.sessionId),
+      ...(store.current.ownedSessionIds ?? []),
+    ])
+    const mirrorIds = new Set(
+      (ctx.workspaces.list.getSnapshot().items ?? [])
+        .filter(item => paths.has(item.path?.replace(/\/+$/, '')))
+        .map(item => item.workspaceId),
+    )
+    for (const row of document.querySelectorAll('[data-row-key^="workspace:"]')) {
+      if (graft?.contains(row)) continue
+      const id = row.getAttribute('data-row-key').slice('workspace:'.length)
+      const group = row.closest('[class*="groupSection"]') ?? row
+      const hide = mirrorIds.has(id)
+      if (group.hidden !== hide) group.hidden = hide
+    }
+    for (const row of document.querySelectorAll('[data-row-key^="session:"]')) {
+      if (graft?.contains(row)) continue
+      const id = row.getAttribute('data-row-key').slice('session:'.length)
+      const hide = sessionIds.has(id)
+      if (row.hidden !== hide) row.hidden = hide
+    }
+    // An ungrouped bucket whose sessions are all shared has nothing local left to show.
+    for (const row of document.querySelectorAll('[data-row-key="workspace:"]')) {
+      if (graft?.contains(row)) continue
+      const group = row.closest('[class*="groupSection"]') ?? row.parentElement
+      if (group == null) continue
+      const sessions = [...group.querySelectorAll('[data-row-key^="session:"]')]
+      const hide = sessions.length > 0 && sessions.every(item => item.hidden)
+      if (group.hidden !== hide) group.hidden = hide
     }
   }
 
@@ -65,15 +102,46 @@ export function apply(ctx) {
         store.set({ ...payload, loaded: true })
         return fetchSharedWorkspaces().then(shared => {
           const workspaces = shared.workspaces ?? []
-          store.set({ sharedWorkspaces: workspaces })
-          registerJoined(workspaces, payload.username)
-        })
+          const first = store.current.listReady !== true
+          store.set({
+            sharedWorkspaces: workspaces,
+            listReady: true,
+            ...(first ? { sectionOpen: readSectionPrefs().expandOnLoad } : {}),
+          })
+          separateFromLocal()
+        }).catch(() => store.set({ listReady: true, ...(store.current.listReady !== true ? { sectionOpen: false } : {}) }))
       })
-      .catch(() => store.set({ loaded: true }))
+      .catch(() => store.set({ loaded: true, listReady: true }))
     fetchStatus().catch(() => {})
     fetchRemoteSessions()
-      .then(payload => store.set({ sessions: payload.sessions ?? [] }))
+      .then(payload => { store.set({ sessions: payload.sessions ?? [] }); separateFromLocal() })
       .catch(() => {})
+  }
+
+  let holdTimer = 0
+  const holdSession = (workspaceId, sessionId) => {
+    window.clearInterval(holdTimer)
+    holdTimer = window.setInterval(() => {
+      apiHeartbeatSession(workspaceId, sessionId).catch(() => window.clearInterval(holdTimer))
+    }, 25_000)
+  }
+
+  /** The composer stays disabled until a Host workspace accounts the session. The row is hidden from 「工作区」. */
+  const bindReplica = async localPath => {
+    const wanted = localPath.replace(/\/+$/, '')
+    const existing = ctx.workspaces.list.getSnapshot().items
+      ?.find(item => item.path?.replace(/\/+$/, '') === wanted)
+    if (existing) return existing
+    return ctx.workspaces.create({ path: localPath })
+  }
+
+  /** Pull a remote log onto the replica when this machine doesn't have it yet. */
+  const prepareChat = async (sharedId, sessionId) => {
+    const known = sessionId != null && ctx.sessions.list.getSnapshot().byId?.[sessionId] != null
+    if (sessionId != null && !known) {
+      await apiMaterializeSession(sharedId, sessionId)
+      await ctx.sessions.refresh()
+    }
   }
 
   const face = {
@@ -85,6 +153,15 @@ export function apply(ctx) {
       close: () => store.set({ open: false }),
     },
     onOpenSettings: () => { refresh(); store.set({ open: true }) },
+    onToggleSection: () => {
+      if (store.current.listReady !== true) return
+      store.set({ sectionOpen: store.current.sectionOpen !== true })
+    },
+    setExpandOnLoad: expandOnLoad => {
+      const next = { expandOnLoad: expandOnLoad === true, expandLimit: EXPAND_LIMIT }
+      localStorage.setItem(PREFS_KEY, JSON.stringify(next))
+      store.set(next)
+    },
     /** Refresh = push local sessions first, then re-read the remote lists. */
     onRefresh: () => {
       store.set({ syncing: true })
@@ -96,38 +173,83 @@ export function apply(ctx) {
         .finally(() => { store.set({ syncing: false }); refresh() })
     },
     onToggleWorkspace: workspaceId => {
-      store.set({ expanded: { ...(store.current.expanded ?? {}), [workspaceId]: true } })
-      const row = (store.current.sharedWorkspaces ?? []).find(item => item.workspaceId === workspaceId)
-      const path = memberPath(row, store.current.username)
-      if (path === '') return
-      store.set({ notice: null })
-      enterPath(path).catch(cause => store.set({
-        notice: `${copyFor(languageOf()).enterFailed}: ${cause instanceof Error ? cause.message : String(cause)}`,
-      }))
+      const open = store.current.expanded?.[workspaceId] === true
+      store.set({ expanded: { ...(store.current.expanded ?? {}), [workspaceId]: !open } })
     },
-    onOpenSession: session => {
-      const known = () => ctx.sessions.list.getSnapshot().byId?.[session.sessionId] != null
-      const open = () => {
-        ctx.uiWorkspace.openSession(session.sessionId)
-        store.set({ notice: null })
-      }
-      const fail = cause => store.set({
-        notice: `${copyFor(languageOf()).pullFailed}: ${cause instanceof Error ? cause.message : String(cause)}`,
-      })
-      if (known()) {
-        try { open() } catch (cause) { fail(cause) }
+    onCreateSession: sharedId => {
+      const row = (store.current.sharedWorkspaces ?? []).find(item => item.workspaceId === sharedId)
+      const path = memberPath(row, store.current.username)
+      if (path === '') {
+        store.set({ notice: copyFor(languageOf()).joinHint })
         return
       }
-      // Another member's session lives in S3. Land it on this machine, then
-      // ask the Host to rescan so it can be opened like a local session.
-      store.set({ notice: null })
-      apiMaterializeSession(session.workspaceId, session.sessionId)
-        .then(() => ctx.sessions.refresh())
-        .then(() => {
-          if (!known()) throw new Error(copyFor(languageOf()).pullFailed)
-          open()
+      store.set({
+        notice: null,
+        sectionOpen: true,
+        expanded: { ...(store.current.expanded ?? {}), [sharedId]: true },
+      })
+      apiPullWorkspace(sharedId)
+        .then(() => bindReplica(path))
+        .then(host => ctx.sessions.create({ workspaceId: host.workspaceId }))
+        .then(sessionId => apiClaimSession(sharedId, sessionId).then(claim => {
+          if (claim?.busy === true) throw new Error(copyFor(languageOf()).readOnlyBusy.replace('{holder}', claim.holder ?? ''))
+          holdSession(sharedId, sessionId)
+          return sessionId
+        }))
+        .then(sessionId => {
+          const provisional = {
+            workspaceId: sharedId,
+            sessionId,
+            title: '',
+            writerName: store.current.username ?? '',
+            cwd: path,
+          }
+          store.set({
+            ownedSessionIds: [...(store.current.ownedSessionIds ?? []), sessionId],
+            sessions: [provisional, ...(store.current.sessions ?? []).filter(item => item.sessionId !== sessionId)],
+          })
+          separateFromLocal()
+          ctx.uiWorkspace.openSession(sessionId)
+          triggerSync().finally(() => refresh())
         })
-        .catch(fail)
+        .catch(cause => store.set({
+          notice: `${copyFor(languageOf()).enterFailed}: ${cause instanceof Error ? cause.message : String(cause)}`,
+        }))
+    },
+    onOpenSession: session => {
+      store.set({ notice: null, sectionOpen: true, expanded: { ...(store.current.expanded ?? {}), [session.workspaceId]: true } })
+      apiPullWorkspace(session.workspaceId)
+        .then(() => apiClaimSession(session.workspaceId, session.sessionId))
+        .then(claim => {
+          if (claim?.busy === true) {
+            store.set({ notice: copyFor(languageOf()).readOnlyBusy.replace('{holder}', claim.holder ?? '') })
+            return 'busy'
+          }
+          holdSession(session.workspaceId, session.sessionId)
+          return prepareChat(session.workspaceId, session.sessionId)
+        })
+        .then(async ready => {
+          if (ready === 'busy') return 'busy'
+          const path = memberPath(
+            (store.current.sharedWorkspaces ?? []).find(item => item.workspaceId === session.workspaceId),
+            store.current.username,
+          )
+          if (path !== '') {
+            const host = await bindReplica(path)
+            const accounted = ctx.workspaces.list.getSnapshot().items
+              ?.find(item => item.workspaceId === host.workspaceId)?.sessionIds?.includes(session.sessionId) === true
+            if (!accounted) await apiBindSession(path, session.sessionId)
+          }
+        })
+        .then(ready => {
+          if (ready === 'busy') return
+          store.set({ ownedSessionIds: [...(store.current.ownedSessionIds ?? []), session.sessionId] })
+          separateFromLocal()
+          ctx.uiWorkspace.openSession(session.sessionId)
+        })
+        .catch(cause => store.set({
+          notice: `${copyFor(languageOf()).pullFailed}: ${cause instanceof Error ? cause.message : String(cause)}`,
+        }))
     },
     dismissNotice: () => store.set({ notice: null }),
     onCloseTranscript: () => store.set({ transcript: null }),
@@ -154,11 +276,11 @@ export function apply(ctx) {
     },
     createWorkspace: (name, localPath) => {
       store.set({ creating: true })
-      return apiCreateWorkspace(name, localPath).then(result => enterPath(localPath).then(() => result))
+      return apiCreateWorkspace(name, localPath)
     },
     joinWorkspace: (workspaceId, localPath) => {
       store.set({ creating: true })
-      return apiJoinWorkspace(workspaceId, localPath).then(result => enterPath(localPath).then(() => result))
+      return apiJoinWorkspace(workspaceId, localPath)
     },
     createDirectory: apiCreateDirectory,
     listDirectory: apiListDirectory,
@@ -194,6 +316,10 @@ export function apply(ctx) {
 
   // Dev seam: lets an automated driver inspect the claim pipeline.
   window.__nsw = { store, ctx, face }
+
+  const localList = new MutationObserver(() => separateFromLocal())
+  localList.observe(document.body, { childList: true, subtree: true })
+  ctx.effect(() => () => localList.disconnect())
 
   refresh()
 }

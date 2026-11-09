@@ -7,9 +7,9 @@
  */
 
 import React from 'react'
-import { IconFolderCloseRegular, IconFolderOpenRegular, IconGlobeOutlineRegular, IconProjectAddOutlineRegular, IconRefreshOutlineRegular, IconSlidersTwoOutlineRegular, IconTriangleRightFillRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconFolderCloseRegular, IconFolderOpenRegular, IconGlobeOutlineRegular, IconNewChatOutlineRegular, IconProjectAddOutlineRegular, IconRefreshOutlineRegular, IconSlidersTwoOutlineRegular, IconTriangleRightFillRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 
-const { createElement, useLayoutEffect, useState } = React
+const { createElement, useEffect, useLayoutEffect, useRef, useState } = React
 
 /** This member's localPath, for the joined-row tooltip. */
 const myLocalPath = (row, username) =>
@@ -118,6 +118,12 @@ function useNativeChrome() {
   return chrome
 }
 
+/** Header-height hold while native chrome classes are still unread. No body rows, so load cannot jump. */
+function LoadingHeader({ label }) {
+  return createElement('div', { className: 'nsw-bone-header', role: 'status', 'aria-busy': 'true', 'aria-label': label },
+    createElement('span', { className: 'nsw-bone nsw-bone-label' }))
+}
+
 const iconButton = (labelText, icon, extra, cls) => createElement('button', {
   type: 'button',
   className: cls,
@@ -133,9 +139,27 @@ const iconButton = (labelText, icon, extra, cls) => createElement('button', {
 export function SharedSection({ face, wide }) {
   const copy = face.copy()
   const [settings, setSettings] = useState(face.settings.current)
+  const [showRest, setShowRest] = useState(false)
+  const [revealHeight, setRevealHeight] = useState(0)
+  const revealRef = useRef(null)
   const chrome = useNativeChrome()
 
   useLayoutEffect(() => face.settings.subscribe(setSettings), [])
+
+  const listReady = settings?.listReady === true
+  const sectionOpen = listReady && settings?.sectionOpen === true
+  useEffect(() => {
+    const node = revealRef.current
+    if (node == null) return
+    if (!sectionOpen) {
+      setRevealHeight(0)
+      return
+    }
+    // After the closed frame paints, grow to the content height so the
+    // workspace list below is pushed for the whole transition.
+    const next = node.firstElementChild?.scrollHeight ?? 0
+    setRevealHeight(next)
+  }, [sectionOpen, showRest, settings?.sharedWorkspaces, settings?.sessions, settings?.expanded])
 
   if (!wide) {
     return createElement('div', { className: 'nsw-rail', role: 'complementary', 'aria-label': copy.railTitle },
@@ -147,10 +171,11 @@ export function SharedSection({ face, wide }) {
         onClick: face.onToggleRail,
       }, createElement(IconGlobeOutlineRegular, { size: 16 })))
   }
-  // No fallback skin: painting nsw-* metrics and then swapping in the native
-  // classes is the load shift.
-  if (chrome == null) return null
+  // Chrome classes are not ready yet: hold the section's box with the
+  // heartbeat so the wait is visible, without painting the fallback skin.
+  if (chrome == null) return createElement(LoadingHeader, { label: copy.sectionLoading })
 
+  const expandLimit = settings?.expandLimit ?? 3
   const configured = settings?.configured === true
   const username = settings?.username
   const filter = settings?.viewFilter ?? 'all'
@@ -165,12 +190,23 @@ export function SharedSection({ face, wide }) {
     iconButton(copy.addWorkspace, createElement(IconProjectAddOutlineRegular, { size: 16 }), { onClick: face.onCreateWorkspace }, chrome.button))
 
   const headerChildren = chrome.template.map((cell, index) => {
-    if (cell.slot === 'label') return createElement('span', { key: index, className: cell.cls }, copy.title)
+    if (cell.slot === 'label') return createElement('span', { key: index, className: `${cell.cls} nsw-label-with-expand` },
+      copy.title,
+      createElement('button', {
+        type: 'button',
+        className: `${chrome.button} nsw-expand`,
+        title: sectionOpen ? copy.collapseSection : copy.expandSection,
+        'aria-label': sectionOpen ? copy.collapseSection : copy.expandSection,
+        'aria-expanded': sectionOpen,
+        disabled: !listReady,
+        onClick: face.onToggleSection,
+      }, createElement(IconTriangleRightFillRegular, { className: sectionOpen ? `${chrome.arrow} ${chrome.arrowOpen}` : chrome.arrow })))
     if (cell.slot === 'search') {
       // Same nesting as the workspace search control: slot > search > button.
       // The button keeps the searchButton class only; iconButton is a
       // different control and pulls the glyph off the header baseline.
-      const button = iconButton(copy.refresh, createElement(IconRefreshOutlineRegular, { size: 14 }), { onClick: face.onRefresh }, chrome.searchButton)
+      const spinning = !listReady || settings?.syncing === true
+      const button = iconButton(copy.refresh, createElement(IconRefreshOutlineRegular, { size: 14, className: spinning ? 'nsw-spin' : undefined }), { onClick: face.onRefresh }, chrome.searchButton)
       return createElement('div', { key: index, className: cell.cls },
         chrome.search ? createElement('div', { className: chrome.search }, button) : button)
     }
@@ -208,7 +244,17 @@ export function SharedSection({ face, wide }) {
         createElement('span', { className: chrome.projectText },
           createElement('span', { className: chrome.title }, row?.title ?? row?.workspaceId)),
         !mine ? createElement('span', { className: chrome.time }, copy.stateIdle) : null,
-        createElement('span', { className: chrome.rowActions })),
+        createElement('span', { className: chrome.rowActions, onClick: event => event.stopPropagation() },
+          mine ? createElement('button', {
+            type: 'button',
+            className: chrome.button,
+            title: copy.newSession,
+            'aria-label': copy.newSession,
+            onClick: event => {
+              event.stopPropagation()
+              face.onCreateSession?.(row.workspaceId)
+            },
+          }, createElement(IconNewChatOutlineRegular, { size: 14 })) : null)),
       sessionRows.length > 0 ? createElement('div', { role: 'group' }, sessionRows) : null)
   })
 
@@ -225,14 +271,32 @@ export function SharedSection({ face, wide }) {
           createElement('span', { className: chrome.title }, copy.emptyHint))))
     : null
 
+  const shown = showRest ? groups : groups.slice(0, expandLimit)
+  const hidden = groups.length - shown.length
+  const more = hidden > 0
+    ? createElement('button', {
+      type: 'button',
+      key: 'more',
+      className: 'nsw-more',
+      onClick: () => setShowRest(true),
+    }, copy.showMore.replace('{n}', String(hidden)))
+    : null
   const list = createElement('div', { className: chrome.list, role: 'tree' },
-    groups,
-    empty)
+    shown,
+    more,
+    groups.length === 0 ? empty : null)
   const seated = chrome.treeBody
     ? createElement('div', { className: chrome.treeBody }, list)
     : list
 
   return createElement('div', { className: `nsw-root ${chrome.root}`, role: 'complementary', 'aria-label': copy.title },
     createElement('div', { className: chrome.header }, ...headerChildren),
-    createElement('div', { className: chrome.listArea }, seated))
+    createElement('div', {
+      ref: revealRef,
+      className: 'nsw-reveal',
+      'data-open': sectionOpen ? 'true' : 'false',
+      style: sectionOpen ? { maxHeight: revealHeight } : undefined,
+    },
+      createElement('div', { className: 'nsw-reveal-inner' },
+        createElement('div', { className: chrome.listArea }, seated))))
 }

@@ -1,7 +1,7 @@
 // src/host/routes.js
 import { mkdir as mkdir2, opendir } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename as basename2, dirname, isAbsolute, join as join2, resolve as resolve2 } from "node:path";
+import { basename as basename2, dirname as dirname2, isAbsolute, join as join3, resolve as resolve3 } from "node:path";
 
 // src/host/credentials.js
 var IDENTITY_REF = "DSH_NSW_IDENTITY";
@@ -71,7 +71,7 @@ function signingPair(identity) {
   }
   return void 0;
 }
-async function request(config, keys, method, keyPath, params = {}, body = void 0) {
+async function request(config, keys, method, keyPath, params = {}, body = void 0, extra = {}) {
   const url = new URL(config.endpoint.replace(/\/+$/, "") + "/" + keyPath.split("/").map(encodeSegment).join("/"));
   for (const [name2, value] of Object.entries(params)) {
     if (value !== void 0) url.searchParams.set(name2, value);
@@ -89,6 +89,8 @@ async function request(config, keys, method, keyPath, params = {}, body = void 0
     "x-amz-date": amzDate
   };
   if (typeof config.sessionToken === "string") headers["x-amz-security-token"] = config.sessionToken;
+  if (typeof extra.ifNoneMatch === "string") headers["if-none-match"] = extra.ifNoneMatch;
+  if (typeof extra.ifMatch === "string") headers["if-match"] = extra.ifMatch;
   const signedNames = Object.keys(headers).sort();
   const canonicalHeaders = signedNames.map((n) => `${n}:${headers[n]}
 `).join("");
@@ -109,14 +111,17 @@ async function request(config, keys, method, keyPath, params = {}, body = void 0
   const kService = hmac(kRegion, "s3");
   const kSigning = hmac(kService, "aws4_request");
   const signature = hmacHex(kSigning, stringToSign);
+  const sent = {
+    "x-amz-date": amzDate,
+    "x-amz-content-sha256": payloadHash,
+    "user-agent": UA,
+    authorization: `AWS4-HMAC-SHA256 Credential=${keys.accessKey}/${scope}, SignedHeaders=${signedHeaders}, Signature=${signature}`
+  };
+  if (typeof extra.ifNoneMatch === "string") sent["if-none-match"] = extra.ifNoneMatch;
+  if (typeof extra.ifMatch === "string") sent["if-match"] = extra.ifMatch;
   return fetch(url, {
     method,
-    headers: {
-      "x-amz-date": amzDate,
-      "x-amz-content-sha256": payloadHash,
-      "user-agent": UA,
-      authorization: `AWS4-HMAC-SHA256 Credential=${keys.accessKey}/${scope}, SignedHeaders=${signedHeaders}, Signature=${signature}`
-    },
+    headers: sent,
     body: payload === "" ? void 0 : payload
   });
 }
@@ -140,20 +145,24 @@ function createS3(config, identity) {
   const keys = keysOrThrow(identity);
   return {
     /** PUT a JSON object under the bucket prefix. */
-    async putJson(key, value) {
-      const res = await request(config, keys, "PUT", `${bucketPath(config)}/${key}`, {}, JSON.stringify(value));
+    async putJson(key, value, extra) {
+      const res = await request(config, keys, "PUT", `${bucketPath(config)}/${key}`, {}, JSON.stringify(value), extra);
+      if (res.status === 412) return { conflict: true };
       if (!res.ok) {
         const body = await res.text();
         throw new Error(`S3 PUT ${key} failed: HTTP ${res.status} ${body.slice(0, 200)}`);
       }
+      return { conflict: false };
     },
     /** PUT raw bytes (session artifact slices). */
-    async putBytes(key, buf) {
-      const res = await request(config, keys, "PUT", `${bucketPath(config)}/${key}`, {}, buf);
+    async putBytes(key, buf, extra) {
+      const res = await request(config, keys, "PUT", `${bucketPath(config)}/${key}`, {}, buf, extra);
+      if (res.status === 412) return { conflict: true };
       if (!res.ok) {
         const body = await res.text();
         throw new Error(`S3 PUT ${key} failed: HTTP ${res.status} ${body.slice(0, 200)}`);
       }
+      return { conflict: false };
     },
     /** GET raw bytes; `undefined` when 404. */
     async getBytes(key) {
@@ -398,7 +407,22 @@ async function acquireClaim(s3, ctx, sessionId, writerId, heartbeatRev) {
     expiresAt: now + CLAIM_TTL_MS,
     heartbeatRev
   });
-  return { acquired: true, heartbeatRev };
+  return { acquired: true, heartbeatRev, expiresAt: now + CLAIM_TTL_MS };
+}
+async function renewClaim(s3, sessionId, writerId) {
+  const key = `claims/${sessionId}.json`;
+  const existing = await s3.getJson(key).catch(() => void 0);
+  const now = Date.now();
+  if (existing === void 0 || existing.writerId !== writerId || !(existing.expiresAt > now)) {
+    return { renewed: false, holder: existing?.writerId ?? null, expiresAt: existing?.expiresAt ?? null };
+  }
+  const expiresAt = now + CLAIM_TTL_MS;
+  await s3.putJson(key, {
+    ...existing,
+    expiresAt,
+    heartbeatRev: (existing.heartbeatRev ?? 0) + 1
+  });
+  return { renewed: true, holder: writerId, expiresAt };
 }
 async function pushSession(s3, ctx, identity, local, markers, state) {
   const me = await instanceId(ctx);
@@ -535,6 +559,223 @@ async function materializeSession(s3, dshHome, { workspaceId, sessionId, localPa
   return { sessionId, cwd: localPath, path };
 }
 
+// src/host/tree.js
+import { createHash as createHash3 } from "node:crypto";
+import { mkdirSync, readFileSync as readFileSync2, readdirSync as readdirSync2, statSync as statSync2, unlinkSync, writeFileSync } from "node:fs";
+import { dirname, join as join2, relative, resolve as resolve2, sep } from "node:path";
+var SKIP = /* @__PURE__ */ new Set([".git", "node_modules", ".nsw", ".DS_Store"]);
+var MAX_FILE = 2 * 1024 * 1024;
+var MAX_FILES = 200;
+var headKey = (id) => `workspaces/${id}/tree/HEAD.json`;
+var genKey = (id, n) => `workspaces/${id}/tree/generations/${n}.json`;
+var blobKey = (id, sha) => `workspaces/${id}/tree/blobs/${sha}`;
+var sha256 = (buf) => createHash3("sha256").update(buf).digest("hex");
+function inside(root, rel) {
+  const dest = resolve2(root, rel);
+  const base = resolve2(root);
+  return dest === base || dest.startsWith(base + sep) ? dest : void 0;
+}
+function scan(root) {
+  const files = [];
+  const walk = (dir) => {
+    let names = [];
+    try {
+      names = readdirSync2(dir);
+    } catch {
+      return;
+    }
+    for (const name2 of names) {
+      if (SKIP.has(name2) || files.length >= MAX_FILES) continue;
+      const abs = join2(dir, name2);
+      let st;
+      try {
+        st = statSync2(abs);
+      } catch {
+        continue;
+      }
+      if (st.isDirectory()) walk(abs);
+      else if (st.isFile() && st.size <= MAX_FILE) {
+        const buf = readFileSync2(abs);
+        files.push({
+          rel: relative(root, abs).split("\\").join("/"),
+          sha256: sha256(buf),
+          size: buf.length
+        });
+      }
+    }
+  };
+  walk(root);
+  files.sort((a, b) => a.rel.localeCompare(b.rel));
+  return files;
+}
+function byRel(files) {
+  return new Map((files ?? []).map((file) => [file.rel, file]));
+}
+function isText(buf) {
+  return !buf.includes(0);
+}
+function readRel(root, rel) {
+  const dest = inside(root, rel);
+  if (dest === void 0) return void 0;
+  try {
+    return readFileSync2(dest);
+  } catch {
+    return void 0;
+  }
+}
+function dissolve(root, parent, remote, local) {
+  const p = byRel(parent);
+  const r = byRel(remote);
+  const l = byRel(local);
+  const paths = /* @__PURE__ */ new Set([...p.keys(), ...r.keys(), ...l.keys()]);
+  const files = [];
+  const conflicts = [];
+  for (const rel of [...paths].sort()) {
+    const ps = p.get(rel)?.sha256;
+    const rs = r.get(rel)?.sha256;
+    const ls = l.get(rel)?.sha256;
+    if (ls === rs) {
+      if (ls !== void 0) files.push(l.get(rel));
+      continue;
+    }
+    if (ls === ps) {
+      if (rs !== void 0) files.push(r.get(rel));
+      continue;
+    }
+    if (rs === ps || rs === void 0 && ps === void 0) {
+      if (ls !== void 0) files.push(l.get(rel));
+      continue;
+    }
+    const localBuf = ls !== void 0 ? readRel(root, rel) : void 0;
+    const remoteSha = rs;
+    conflicts.push(rel);
+    if (localBuf !== void 0 && remoteSha !== void 0 && isText(localBuf)) {
+      files.push({ rel, sha256: null, size: 0, pending: "text", remoteSha, localBuf });
+    } else if (remoteSha !== void 0) {
+      files.push({ rel, sha256: remoteSha, size: r.get(rel).size });
+      if (localBuf !== void 0) {
+        const side = `${rel}.nsw-local`;
+        files.push({ rel: side, sha256: sha256(localBuf), size: localBuf.length, buf: localBuf });
+      }
+    } else if (ls !== void 0) {
+      files.push(l.get(rel));
+    }
+  }
+  return { files, conflicts, writes: [] };
+}
+async function materializePending(s3, workspaceId, root, dissolved) {
+  const out = [];
+  for (const file of dissolved.files) {
+    if (file.pending !== "text") {
+      out.push({ rel: file.rel, sha256: file.sha256, size: file.size, buf: file.buf });
+      continue;
+    }
+    const remoteBuf = await s3.getBytes(blobKey(workspaceId, file.remoteSha));
+    const merged = Buffer.from(`<<<<<<< local
+${file.localBuf.toString("utf8")}=======
+${(remoteBuf ?? Buffer.alloc(0)).toString("utf8")}>>>>>>> remote
+`);
+    const dest = inside(root, file.rel);
+    if (dest !== void 0) {
+      mkdirSync(dirname(dest), { recursive: true });
+      writeFileSync(dest, merged);
+    }
+    out.push({ rel: file.rel, sha256: sha256(merged), size: merged.length, buf: merged });
+    dissolved.writes.push(file.rel);
+  }
+  return out;
+}
+function basePath(dshHome, workspaceId) {
+  return join2(dshHome, "nsw", `${workspaceId}.json`);
+}
+function loadBase(dshHome, workspaceId) {
+  try {
+    return JSON.parse(readFileSync2(basePath(dshHome, workspaceId), "utf8"));
+  } catch {
+    return { generation: 0, files: [] };
+  }
+}
+function saveBase(dshHome, workspaceId, record) {
+  const dest = basePath(dshHome, workspaceId);
+  mkdirSync(dirname(dest), { recursive: true });
+  writeFileSync(dest, JSON.stringify({ generation: record.generation, files: record.files }));
+}
+async function ensureBlobs(s3, workspaceId, root, files) {
+  for (const file of files) {
+    const buf = file.buf ?? readRel(root, file.rel);
+    if (buf === void 0) continue;
+    await s3.putBytes(blobKey(workspaceId, file.sha256), buf);
+  }
+}
+async function pullWorkspace(s3, dshHome, workspaceId, localPath) {
+  const head = await s3.getJson(headKey(workspaceId));
+  if (head === void 0) return { ok: true, generation: 0, files: 0 };
+  mkdirSync(localPath, { recursive: true });
+  const base = loadBase(dshHome, workspaceId);
+  const next = new Set((head.files ?? []).map((file) => file.rel));
+  for (const old of base.files ?? []) {
+    if (next.has(old.rel)) continue;
+    const dest = inside(localPath, old.rel);
+    if (dest === void 0) continue;
+    try {
+      unlinkSync(dest);
+    } catch {
+    }
+  }
+  for (const file of head.files ?? []) {
+    const dest = inside(localPath, file.rel);
+    if (dest === void 0) continue;
+    const have = readRel(localPath, file.rel);
+    if (have !== void 0 && sha256(have) === file.sha256) continue;
+    const blob = await s3.getBytes(blobKey(workspaceId, file.sha256));
+    if (blob === void 0) continue;
+    mkdirSync(dirname(dest), { recursive: true });
+    writeFileSync(dest, blob);
+  }
+  saveBase(dshHome, workspaceId, head);
+  return { ok: true, generation: head.generation ?? 0, files: (head.files ?? []).length, conflicts: head.conflicts ?? [] };
+}
+async function pushWorkspace(s3, dshHome, workspaceId, localPath, writerId, attempt = 0) {
+  mkdirSync(localPath, { recursive: true });
+  const head = await s3.getJson(headKey(workspaceId));
+  const base = loadBase(dshHome, workspaceId);
+  const local = scan(localPath);
+  const remote = head?.files ?? [];
+  const same = JSON.stringify(local.map(({ rel, sha256: sha, size }) => ({ rel, sha256: sha, size }))) === JSON.stringify(remote.map(({ rel, sha256: sha, size }) => ({ rel, sha256: sha, size })));
+  if (same && head !== void 0) return { ok: true, generation: head.generation, files: remote.length, unchanged: true, conflicts: [] };
+  let parentFiles = base.files ?? [];
+  if (head !== void 0 && base.generation !== head.generation) {
+    const parent = head.parent ? await s3.getJson(genKey(workspaceId, head.parent)) : void 0;
+    parentFiles = parent?.files ?? [];
+  }
+  const dissolved = dissolve(localPath, parentFiles, remote, local);
+  const files = await materializePending(s3, workspaceId, localPath, dissolved);
+  await ensureBlobs(s3, workspaceId, localPath, files);
+  const generation = (head?.generation ?? 0) + 1;
+  const record = {
+    v: 1,
+    generation,
+    parent: head?.generation ?? null,
+    writerId,
+    files: files.map(({ rel, sha256: sha, size }) => ({ rel, sha256: sha, size })),
+    conflicts: dissolved.conflicts,
+    at: (/* @__PURE__ */ new Date()).toISOString()
+  };
+  const put = await s3.putJson(genKey(workspaceId, generation), record, { ifNoneMatch: "*" });
+  if (put?.conflict === true && attempt < 1) return pushWorkspace(s3, dshHome, workspaceId, localPath, writerId, attempt + 1);
+  await s3.putJson(headKey(workspaceId), record);
+  saveBase(dshHome, workspaceId, record);
+  return { ok: true, generation, files: record.files.length, conflicts: dissolved.conflicts };
+}
+async function registerIdentity(s3, identity) {
+  if (typeof identity?.username !== "string" || identity.username === "") return { ok: false };
+  const key = `identities/${encodeURIComponent(identity.username)}.json`;
+  const existing = await s3.getJson(key);
+  if (existing !== void 0) return { ok: true, existed: true };
+  await s3.putJson(key, { username: identity.username, claimedAt: (/* @__PURE__ */ new Date()).toISOString() });
+  return { ok: true, existed: false };
+}
+
 // src/host/routes.js
 var PREFIX = "/nano-shared-workspace";
 function messageOf(error) {
@@ -572,9 +813,20 @@ function createRoutes(ctx, config) {
       method: "GET",
       async run() {
         const identity = await readIdentity(ctx);
+        let registered = false;
+        if (identity?.configured === true && identity.username) {
+          try {
+            const client = createS3(config, identity);
+            const row = await client.getJson(`identities/${encodeURIComponent(identity.username)}.json`);
+            registered = row !== void 0;
+          } catch {
+            registered = false;
+          }
+        }
         return {
           endpoint: config.endpoint,
           bucket: config.bucket,
+          registered,
           region: config.region,
           username: identity?.username ?? null,
           configured: identity?.configured === true,
@@ -594,6 +846,11 @@ function createRoutes(ctx, config) {
           return { ok: false, error: "nothing to update" };
         }
         await writeIdentity(ctx, { username, token, accessKey });
+        try {
+          const { client, identity } = await s3();
+          await registerIdentity(client, identity);
+        } catch {
+        }
         return { ok: true };
       }
     },
@@ -622,7 +879,10 @@ function createRoutes(ctx, config) {
       async run() {
         const identity = await readIdentity(ctx);
         if (identity?.configured !== true) return { workspaces: [] };
-        const rows = await listWorkspaces(createS3(config, identity));
+        const client = createS3(config, identity);
+        await registerIdentity(client, identity).catch(() => {
+        });
+        const rows = await listWorkspaces(client);
         return { workspaces: rows };
       }
     },
@@ -665,10 +925,132 @@ function createRoutes(ctx, config) {
       async run() {
         const { client, identity } = await s3();
         const results = await syncAll(client, ctx, identity, dshHome, syncState);
+        const me = (await instanceId(ctx)).slice(0, 8);
+        const trees = [];
+        for (const marker of await listWorkspaces(client)) {
+          const member = Object.values(marker.members ?? {}).find((item) => item?.username === identity.username && String(item.instance ?? "").startsWith(me)) ?? Object.values(marker.members ?? {}).find((item) => item?.username === identity.username);
+          if (typeof member?.localPath !== "string" || member.localPath === "") continue;
+          try {
+            trees.push({ workspaceId: marker.workspaceId, ...await pushWorkspace(client, dshHome, marker.workspaceId, member.localPath, `${identity.username}@${me}`) });
+          } catch (error) {
+            trees.push({ workspaceId: marker.workspaceId, ok: false, error: messageOf(error) });
+          }
+        }
         return {
           ok: true,
           pushed: results.filter((r) => r.outcome.startsWith("pushed")).length,
-          outcomes: results.slice(0, 50)
+          outcomes: results.slice(0, 50),
+          trees
+        };
+      }
+    },
+    "/tree/pull": {
+      method: "POST",
+      async run(req) {
+        const { client, identity } = await s3();
+        const body = JSON.parse(await readBody(req) || "{}");
+        const workspaceId = typeof body?.workspaceId === "string" ? body.workspaceId : "";
+        const marker = (await listWorkspaces(client)).find((row) => row.workspaceId === workspaceId);
+        if (marker === void 0) return { ok: false, error: "shared workspace not found" };
+        const me = (await instanceId(ctx)).slice(0, 8);
+        const member = Object.values(marker.members ?? {}).find((item) => item?.username === identity.username && String(item.instance ?? "").startsWith(me)) ?? Object.values(marker.members ?? {}).find((item) => item?.username === identity.username);
+        if (typeof member?.localPath !== "string" || member.localPath === "") return { ok: false, error: "join this shared workspace before syncing files" };
+        return pullWorkspace(client, dshHome, workspaceId, member.localPath);
+      }
+    },
+    "/tree/push": {
+      method: "POST",
+      async run(req) {
+        const { client, identity } = await s3();
+        const body = JSON.parse(await readBody(req) || "{}");
+        const workspaceId = typeof body?.workspaceId === "string" ? body.workspaceId : "";
+        const marker = (await listWorkspaces(client)).find((row) => row.workspaceId === workspaceId);
+        if (marker === void 0) return { ok: false, error: "shared workspace not found" };
+        const me = (await instanceId(ctx)).slice(0, 8);
+        const member = Object.values(marker.members ?? {}).find((item) => item?.username === identity.username && String(item.instance ?? "").startsWith(me)) ?? Object.values(marker.members ?? {}).find((item) => item?.username === identity.username);
+        if (typeof member?.localPath !== "string" || member.localPath === "") return { ok: false, error: "join this shared workspace before syncing files" };
+        return pushWorkspace(client, dshHome, workspaceId, member.localPath, `${identity.username}@${me}`);
+      }
+    },
+    // Harness only enables the composer for a session a Host workspace accounts.
+    // The replica workspace stays hidden from the local sidebar; this is not a
+    // second source of truth.
+    "/sessions/bind": {
+      method: "POST",
+      async run(req) {
+        const body = JSON.parse(await readBody(req) || "{}");
+        const localPath = typeof body?.path === "string" ? body.path : "";
+        const sessionId = typeof body?.sessionId === "string" ? body.sessionId : "";
+        if (localPath === "" || sessionId === "") return { ok: false, error: "path and sessionId are required" };
+        const registry = ctx.get("workspaceRegistry");
+        const workspace = await registry.resolveByPath(localPath);
+        if (workspace === void 0) return { ok: false, error: "replica is not registered" };
+        if (!workspace.sessionIds.includes(sessionId)) await workspace.attachSession(sessionId);
+        return { ok: true, workspaceId: workspace.id };
+      }
+    },
+    "/sessions/claim": {
+      method: "POST",
+      async run(req) {
+        const { client, identity } = await s3();
+        const body = JSON.parse(await readBody(req) || "{}");
+        const workspaceId = typeof body?.workspaceId === "string" ? body.workspaceId : "";
+        const sessionId = typeof body?.sessionId === "string" ? body.sessionId : "";
+        if (workspaceId === "" || sessionId === "") return { ok: false, error: "workspaceId and sessionId are required" };
+        const marker = (await listWorkspaces(client)).find((row) => row.workspaceId === workspaceId);
+        if (marker === void 0) return { ok: false, error: "shared workspace not found" };
+        const me = (await instanceId(ctx)).slice(0, 8);
+        const member = Object.values(marker.members ?? {}).find((item) => item?.username === identity.username && String(item.instance ?? "").startsWith(me)) ?? Object.values(marker.members ?? {}).find((item) => item?.username === identity.username);
+        if (typeof member?.localPath !== "string" || member.localPath === "") return { ok: false, error: "join this shared workspace before opening its sessions" };
+        const pull = await pullWorkspace(client, dshHome, workspaceId, member.localPath);
+        const claim = await acquireClaim(client, ctx, sessionId, `${identity.username}@${me}`, 1);
+        return {
+          ok: claim.acquired === true,
+          busy: claim.acquired !== true,
+          holder: claim.holder ?? null,
+          expiresAt: claim.expiresAt ?? null,
+          pull
+        };
+      }
+    },
+    "/sessions/heartbeat": {
+      method: "POST",
+      async run(req) {
+        const { client, identity } = await s3();
+        const body = JSON.parse(await readBody(req) || "{}");
+        const workspaceId = typeof body?.workspaceId === "string" ? body.workspaceId : "";
+        const sessionId = typeof body?.sessionId === "string" ? body.sessionId : "";
+        if (sessionId === "") return { ok: false, error: "sessionId is required" };
+        const me = (await instanceId(ctx)).slice(0, 8);
+        const writerId = `${identity.username}@${me}`;
+        const renewed = await renewClaim(client, sessionId, writerId);
+        if (renewed.renewed !== true) return { ok: false, busy: true, holder: renewed.holder, expiresAt: renewed.expiresAt };
+        let tree = null;
+        if (workspaceId !== "") {
+          const marker = (await listWorkspaces(client)).find((row) => row.workspaceId === workspaceId);
+          const member = Object.values(marker?.members ?? {}).find((item) => item?.username === identity.username && String(item.instance ?? "").startsWith(me)) ?? Object.values(marker?.members ?? {}).find((item) => item?.username === identity.username);
+          if (typeof member?.localPath === "string" && member.localPath !== "") {
+            tree = await pushWorkspace(client, dshHome, workspaceId, member.localPath, writerId);
+          }
+        }
+        return { ok: true, expiresAt: renewed.expiresAt, tree };
+      }
+    },
+    "/sessions/lease": {
+      method: "POST",
+      async run(req) {
+        const { client, identity } = await s3();
+        const body = JSON.parse(await readBody(req) || "{}");
+        const sessionId = typeof body?.sessionId === "string" ? body.sessionId : "";
+        if (sessionId === "") return { ok: false, error: "sessionId is required" };
+        const claim = await client.getJson(`claims/${sessionId}.json`);
+        const me = (await instanceId(ctx)).slice(0, 8);
+        return {
+          ok: true,
+          holder: claim?.writerId ?? null,
+          expiresAt: claim?.expiresAt ?? null,
+          heartbeatRev: claim?.heartbeatRev ?? null,
+          mine: claim?.writerId === `${identity.username}@${me}`
         };
       }
     },
@@ -687,13 +1069,13 @@ function createRoutes(ctx, config) {
       method: "POST",
       async run(req) {
         const body = JSON.parse(await readBody(req) || "{}");
-        const parent = typeof body?.parent === "string" && isAbsolute(body.parent) ? resolve2(body.parent) : void 0;
+        const parent = typeof body?.parent === "string" && isAbsolute(body.parent) ? resolve3(body.parent) : void 0;
         const name2 = typeof body?.name === "string" ? body.name.trim() : "";
         if (parent === void 0) return { ok: false, error: "parent must be an absolute path" };
         if (name2 === "" || name2 === "." || name2 === ".." || /[/\\]/.test(name2)) {
           return { ok: false, error: "name must be a single path segment" };
         }
-        const target = join2(parent, name2);
+        const target = join3(parent, name2);
         await mkdir2(target, { recursive: false });
         return { ok: true, path: target };
       }
@@ -706,7 +1088,7 @@ function createRoutes(ctx, config) {
       async run(req) {
         const body = JSON.parse(await readBody(req) || "{}");
         const home = homedir();
-        const path = typeof body?.path === "string" && isAbsolute(body.path) ? resolve2(body.path) : home;
+        const path = typeof body?.path === "string" && isAbsolute(body.path) ? resolve3(body.path) : home;
         const dir = await opendir(path);
         const entries = [];
         try {
@@ -714,7 +1096,7 @@ function createRoutes(ctx, config) {
             const dirent = await dir.read();
             if (dirent === null) break;
             if (!dirent.isDirectory() && !dirent.isSymbolicLink()) continue;
-            entries.push({ name: dirent.name, path: join2(path, dirent.name), hidden: dirent.name.startsWith(".") });
+            entries.push({ name: dirent.name, path: join3(path, dirent.name), hidden: dirent.name.startsWith(".") });
           }
         } finally {
           await dir.close();
@@ -723,7 +1105,7 @@ function createRoutes(ctx, config) {
         const crumbs = [];
         for (let node = path; ; ) {
           crumbs.unshift({ name: node === "/" ? "" : basename2(node), path: node });
-          const parent = dirname(node);
+          const parent = dirname2(node);
           if (parent === node) break;
           node = parent;
         }
@@ -799,10 +1181,41 @@ function registerRoutes(ctx, routes) {
   }
   return disposers;
 }
+function startBackgroundSync(ctx, config) {
+  const dshHome = process.env.DSH_HOME ?? `${homedir()}/.dsh`;
+  const syncState = { bySession: /* @__PURE__ */ new Map() };
+  let running = false;
+  const tick = async () => {
+    if (running) return;
+    running = true;
+    try {
+      const identity = await readIdentity(ctx);
+      if (identity?.configured !== true) return;
+      const client = createS3(config, identity);
+      const me = (await instanceId(ctx)).slice(0, 8);
+      await syncAll(client, ctx, identity, dshHome, syncState).catch(() => {
+      });
+      for (const marker of await listWorkspaces(client)) {
+        const member = Object.values(marker.members ?? {}).find((item) => item?.username === identity.username && String(item.instance ?? "").startsWith(me)) ?? Object.values(marker.members ?? {}).find((item) => item?.username === identity.username);
+        if (typeof member?.localPath !== "string" || member.localPath === "") continue;
+        await pushWorkspace(client, dshHome, marker.workspaceId, member.localPath, `${identity.username}@${me}`).catch(() => {
+        });
+      }
+    } finally {
+      running = false;
+    }
+  };
+  const timer = setInterval(() => {
+    tick().catch(() => {
+    });
+  }, 3e4);
+  timer.unref?.();
+  return () => clearInterval(timer);
+}
 
 // src/host/entry.js
 var name = "nano-shared-workspace";
-var inject = ["webServer", "connection", "credentials"];
+var inject = ["webServer", "connection", "credentials", "workspaceRegistry"];
 var Config = {
   "~standard": {
     version: 1,
@@ -840,7 +1253,9 @@ function apply(ctx, raw) {
   const routes = createRoutes(ctx, config);
   ctx.effect(() => {
     const disposers = registerRoutes(ctx, routes);
+    const stopSync = startBackgroundSync(ctx, config);
     return () => {
+      stopSync();
       for (const dispose of disposers) dispose();
     };
   }, "nano-shared-workspace: routes");

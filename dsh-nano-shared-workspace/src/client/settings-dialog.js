@@ -100,5 +100,14 @@ export function SettingsDialog({ face, settings }) {
         placeholder: copy.accessKeyPlaceholder,
         onChange: event => setAccessKey(event.currentTarget.value),
       })),
+    createElement('label', { className: 'nsw-pref' },
+      createElement('input', {
+        type: 'checkbox',
+        checked: settings?.expandOnLoad !== false,
+        onChange: event => face.setExpandOnLoad(event.currentTarget.checked),
+      }),
+      createElement('span', null,
+        createElement('span', { className: 'nsw-field-label' }, copy.expandOnLoad),
+        createElement('span', { className: 'nsw-join-hint' }, copy.expandOnLoadHint))),
     createElement('p', { className: 'nsw-join-hint' }, copy.joinHint))
 }

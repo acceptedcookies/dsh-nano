@@ -143,7 +143,24 @@ export async function acquireClaim(s3, ctx, sessionId, writerId, heartbeatRev) {
     expiresAt: now + CLAIM_TTL_MS,
     heartbeatRev,
   })
-  return { acquired: true, heartbeatRev }
+  return { acquired: true, heartbeatRev, expiresAt: now + CLAIM_TTL_MS }
+}
+
+/** Extend a lease we already hold. A foreign unexpired lease is not renewed. */
+export async function renewClaim(s3, sessionId, writerId) {
+  const key = `claims/${sessionId}.json`
+  const existing = await s3.getJson(key).catch(() => undefined)
+  const now = Date.now()
+  if (existing === undefined || existing.writerId !== writerId || !(existing.expiresAt > now)) {
+    return { renewed: false, holder: existing?.writerId ?? null, expiresAt: existing?.expiresAt ?? null }
+  }
+  const expiresAt = now + CLAIM_TTL_MS
+  await s3.putJson(key, {
+    ...existing,
+    expiresAt,
+    heartbeatRev: (existing.heartbeatRev ?? 0) + 1,
+  })
+  return { renewed: true, holder: writerId, expiresAt }
 }
 
 /**

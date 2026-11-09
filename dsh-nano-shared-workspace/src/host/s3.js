@@ -40,7 +40,7 @@ function signingPair(identity) {
  * `body` is a Buffer/string payload.
  * @returns the fetch Response (caller checks .ok); never throws on HTTP errors.
  */
-async function request(config, keys, method, keyPath, params = {}, body = undefined) {
+async function request(config, keys, method, keyPath, params = {}, body = undefined, extra = {}) {
   const url = new URL(config.endpoint.replace(/\/+$/, '') + '/' + keyPath.split('/').map(encodeSegment).join('/'))
   for (const [name, value] of Object.entries(params)) {
     if (value !== undefined) url.searchParams.set(name, value)
@@ -59,6 +59,8 @@ async function request(config, keys, method, keyPath, params = {}, body = undefi
     'x-amz-date': amzDate,
   }
   if (typeof config.sessionToken === 'string') headers['x-amz-security-token'] = config.sessionToken
+  if (typeof extra.ifNoneMatch === 'string') headers['if-none-match'] = extra.ifNoneMatch
+  if (typeof extra.ifMatch === 'string') headers['if-match'] = extra.ifMatch
 
   const signedNames = Object.keys(headers).sort()
   const canonicalHeaders = signedNames.map(n => `${n}:${headers[n]}\n`).join('')
@@ -82,14 +84,17 @@ async function request(config, keys, method, keyPath, params = {}, body = undefi
   const kSigning = hmac(kService, 'aws4_request')
   const signature = hmacHex(kSigning, stringToSign)
 
+  const sent = {
+    'x-amz-date': amzDate,
+    'x-amz-content-sha256': payloadHash,
+    'user-agent': UA,
+    authorization: `AWS4-HMAC-SHA256 Credential=${keys.accessKey}/${scope}, SignedHeaders=${signedHeaders}, Signature=${signature}`,
+  }
+  if (typeof extra.ifNoneMatch === 'string') sent['if-none-match'] = extra.ifNoneMatch
+  if (typeof extra.ifMatch === 'string') sent['if-match'] = extra.ifMatch
   return fetch(url, {
     method,
-    headers: {
-      'x-amz-date': amzDate,
-      'x-amz-content-sha256': payloadHash,
-      'user-agent': UA,
-      authorization: `AWS4-HMAC-SHA256 Credential=${keys.accessKey}/${scope}, SignedHeaders=${signedHeaders}, Signature=${signature}`,
-    },
+    headers: sent,
     body: payload === '' ? undefined : payload,
   })
 }
@@ -119,20 +124,24 @@ export function createS3(config, identity) {
   const keys = keysOrThrow(identity)
   return {
     /** PUT a JSON object under the bucket prefix. */
-    async putJson(key, value) {
-      const res = await request(config, keys, 'PUT', `${bucketPath(config)}/${key}`, {}, JSON.stringify(value))
+    async putJson(key, value, extra) {
+      const res = await request(config, keys, 'PUT', `${bucketPath(config)}/${key}`, {}, JSON.stringify(value), extra)
+      if (res.status === 412) return { conflict: true }
       if (!res.ok) {
         const body = await res.text()
         throw new Error(`S3 PUT ${key} failed: HTTP ${res.status} ${body.slice(0, 200)}`)
       }
+      return { conflict: false }
     },
     /** PUT raw bytes (session artifact slices). */
-    async putBytes(key, buf) {
-      const res = await request(config, keys, 'PUT', `${bucketPath(config)}/${key}`, {}, buf)
+    async putBytes(key, buf, extra) {
+      const res = await request(config, keys, 'PUT', `${bucketPath(config)}/${key}`, {}, buf, extra)
+      if (res.status === 412) return { conflict: true }
       if (!res.ok) {
         const body = await res.text()
         throw new Error(`S3 PUT ${key} failed: HTTP ${res.status} ${body.slice(0, 200)}`)
       }
+      return { conflict: false }
     },
     /** GET raw bytes; `undefined` when 404. */
     async getBytes(key) {

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "共享工作区",
+    "description": "通过 S3 兼容端点（MinIO/R2）在多台客户端之间同步 dsh 会话。"
+  }
+}

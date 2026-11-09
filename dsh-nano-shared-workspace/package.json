@@ -1,0 +1,49 @@
+{
+    "name": "dsh-nano-shared-workspace",
+    "version": "0.1.0",
+    "description": "Shared workspace: sync dsh sessions across clients through an S3-compatible endpoint (MinIO/R2), listed as a mirrored section above the workspace browser.",
+    "type": "module",
+    "icon": "./icon.svg",
+    "main": "./index.js",
+    "scripts": {
+        "build": "node scripts/build-client.mjs"
+    },
+    "exports": {
+        ".": "./index.js",
+        "./client": "./lib/client.js",
+        "./icon": "./icon.svg",
+        "./locale/*.json": "./locale/*.json",
+        "./package.json": "./package.json"
+    },
+    "files": [
+        "index.js",
+        "cordis.patch.yml",
+        "icon.svg",
+        "locale",
+        "lib/host.js",
+        "lib/client.js"
+    ],
+    "engines": {
+        "dsh": ">=0.2.2-rc.1 <0.3.0"
+    },
+    "dsh": {
+        "bundle": {
+            "patch": "./cordis.patch.yml"
+        },
+        "client": {
+            "platform": "web",
+            "inject": [
+                "@deepseek-ai/dsh-client-ui-renderer",
+                "@deepseek-ai/dsh-client-ui-layout",
+                "@deepseek-ai/dsh-client-locale",
+                "@deepseek-ai/dsh-client-ui-primitives"
+            ]
+        }
+    },
+    "devDependencies": {
+        "esbuild": "0.25.0"
+    },
+    "dependencies": {
+        "dsh-nano-ui": "file:../packages/dsh-nano-ui"
+    }
+}

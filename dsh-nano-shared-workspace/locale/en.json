@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Shared Workspace",
+    "description": "Sync dsh sessions across clients through an S3-compatible endpoint (MinIO/R2)."
+  }
+}

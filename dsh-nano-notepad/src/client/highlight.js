@@ -25,9 +25,10 @@ function inlineMd(text) {
     } else if (m[3] !== undefined) {
       out += s('nm-mk', '[') + escapeHtml(m[3]) + s('nm-mk', '](') + s('nm-link', escapeHtml(m[4])) + s('nm-mk', ')')
     } else if (m[5] !== undefined) {
-      out += s('nm-mk', '`') + s('nm-code', escapeHtml(m[5])) + s('nm-mk', '`')
+      /* Backticks sit inside the chip so `code` reads as one tinted segment. */
+      out += s('nm-code', '`' + escapeHtml(m[5]) + '`')
     } else if (m[6] !== undefined) {
-      out += s('nm-mk', '**') + s('nm-strong', escapeHtml(m[6])) + s('nm-mk', '**')
+      out += s('nm-strong', '**' + escapeHtml(m[6]) + '**')
     } else if (m[7] !== undefined) {
       out += s('nm-mk', '~~') + s('nm-strike', escapeHtml(m[7])) + s('nm-mk', '~~')
     } else if (m[8] !== undefined) {

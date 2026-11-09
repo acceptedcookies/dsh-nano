@@ -21,6 +21,20 @@ export function validateName(name) {
 }
 
 /**
+ * Report whether two absolute paths name the same entry when casing is the only difference.
+ *
+ * This is not a filesystem query: it answers whether the rename is a pure case change of the entry
+ * being renamed, which is the one case where an existing destination is not a collision.
+ *
+ * @param source - the path being renamed.
+ * @param destination - the proposed path.
+ * @returns true when both paths differ only in letter case.
+ */
+function sameEntryIgnoringCase(source, destination) {
+  return source !== destination && source.toLowerCase() === destination.toLowerCase()
+}
+
+/**
  * Refuse a write whose parent lies outside the workspace.
  * @param fs - filesystem provider.
  * @param workspaceRoot - session workspace root.
@@ -71,7 +85,28 @@ export async function rename(fs, ctx, config, request, signal) {
   const destination = `${parent}/${finalName}`
   if (source === destination) return { path: source }
   const existing = await fs.lstat(destination, {}, signal).catch(() => undefined)
-  if (existing !== undefined) throw new Error(`"${finalName}" already exists in this folder`)
+  // A case-insensitive filesystem answers a lookup of the new name with the file being renamed, so
+  // `RELEASE.md` looked like an existing entry and the rename was refused. The two paths are the same
+  // file when only their casing differs, and that is exactly the rename the reader is asking for.
+  if (existing !== undefined && !sameEntryIgnoringCase(source, destination)) {
+    throw new Error(`"${finalName}" already exists in this folder`)
+  }
+
+  // A pure case change needs two steps on a case-insensitive filesystem: moving `release.md` to
+  // `RELEASE.md` in one call resolves both names to the same entry, so the move is a no-op and the
+  // old casing survives. A unique intermediate name breaks that bond.
+  if (sameEntryIgnoringCase(source, destination)) {
+    const staging = `${parent}/.nxe-case-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+    await runExternal({
+      session, sandboxPolicy, cwd: parent,
+      argv: ['mv', '--', source, staging], args: ['mv'],
+    })
+    await runExternal({
+      session, sandboxPolicy, cwd: parent,
+      argv: ['mv', '--', staging, destination], args: ['mv'],
+    })
+    return { path: destination }
+  }
 
   // A text file keeps `ctx.fs`'s own atomic move; everything else needs the external command,
   // because `moveFile` is contracted for UTF-8 text sources and has no directory form.

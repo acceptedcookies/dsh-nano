@@ -208,7 +208,16 @@ async function readStatus(ctx, config, request) {
   }).catch(() => void 0);
   const stashed = stash === void 0 || stash.exitCode !== 0 ? 0 : stash.stdout.split("\n").filter((line) => line.trim() !== "").length;
   const remote = typeof parsed.upstream !== "string" || parsed.upstream === "" ? void 0 : await remoteDivergence(ctx, config, request);
-  return { root, ...parsed, stashed, ...remote === void 0 ? {} : { remote } };
+  const worktrees = await listWorktrees(ctx, config, request);
+  const conflicts = parsed.files.filter((file) => file.status === "U").map((file) => file.path);
+  return {
+    root,
+    ...parsed,
+    stashed,
+    worktrees,
+    conflicts,
+    ...remote === void 0 ? {} : { remote }
+  };
 }
 async function commitAll(ctx, config, request) {
   const { message } = request;
@@ -252,6 +261,46 @@ async function ignoredAmong(ctx, config, request) {
   } finally {
     scope.dispose();
   }
+}
+async function listWorktrees(ctx, config, request) {
+  const result = await runGit(ctx, config, {
+    ...request,
+    args: ["worktree", "list", "--porcelain"],
+    allowedExitCodes: [0, 128]
+  }).catch(() => void 0);
+  if (result === void 0 || result.exitCode !== 0) return [];
+  const rows = [];
+  let current = null;
+  for (const line of result.stdout.split("\n")) {
+    if (line.trim() === "") {
+      if (current !== null) rows.push(current);
+      current = null;
+      continue;
+    }
+    const space = line.indexOf(" ");
+    const key = space === -1 ? line : line.slice(0, space);
+    const value = space === -1 ? "" : line.slice(space + 1);
+    current ??= { path: "", head: "", branch: null, detached: false, bare: false };
+    if (key === "worktree") current.path = value;
+    else if (key === "HEAD") current.head = value;
+    else if (key === "branch") current.branch = value.replace(/^refs\/heads\//u, "");
+    else if (key === "detached") current.detached = true;
+    else if (key === "bare") current.bare = true;
+  }
+  if (current !== null) rows.push(current);
+  return rows.filter((row) => row.path !== "");
+}
+async function pullUpstream(ctx, config, request) {
+  const result = await runGit(ctx, config, {
+    ...request,
+    args: ["pull", "--ff-only"],
+    allowedExitCodes: [0, 1, 128]
+  });
+  if (result.exitCode !== 0) {
+    const detail = firstLine(result.stderr) || firstLine(result.stdout);
+    throw new Error(detail === "" ? "git pull failed" : detail);
+  }
+  return firstLine(result.stdout) || firstLine(result.stderr);
 }
 
 // src/host/listing.js
@@ -371,6 +420,9 @@ function validateName(name2) {
   if (BAD_NAME.test(trimmed)) throw new Error("name must not contain a path separator");
   return trimmed;
 }
+function sameEntryIgnoringCase(source, destination) {
+  return source !== destination && source.toLowerCase() === destination.toLowerCase();
+}
 function assertInside(fs, workspaceRoot, path) {
   if (!isLexicallyInside(workspaceRoot, path)) throw new Error(`"${path}" is outside the workspace`);
 }
@@ -397,7 +449,27 @@ async function rename(fs, ctx, config, request, signal) {
   const destination = `${parent}/${finalName}`;
   if (source === destination) return { path: source };
   const existing = await fs.lstat(destination, {}, signal).catch(() => void 0);
-  if (existing !== void 0) throw new Error(`"${finalName}" already exists in this folder`);
+  if (existing !== void 0 && !sameEntryIgnoringCase(source, destination)) {
+    throw new Error(`"${finalName}" already exists in this folder`);
+  }
+  if (sameEntryIgnoringCase(source, destination)) {
+    const staging = `${parent}/.nxe-case-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    await runExternal2({
+      session,
+      sandboxPolicy,
+      cwd: parent,
+      argv: ["mv", "--", source, staging],
+      args: ["mv"]
+    });
+    await runExternal2({
+      session,
+      sandboxPolicy,
+      cwd: parent,
+      argv: ["mv", "--", staging, destination],
+      args: ["mv"]
+    });
+    return { path: destination };
+  }
   if (kind === "file" && await isTextFile(fs, source, signal)) {
     const from = await fs.resolve(source, { signal });
     const to = await fs.resolve(destination, { signal });
@@ -633,6 +705,20 @@ function createRoutes(ctx, config) {
         if (message === "") throw new Error("a commit message is required");
         const subject = await commitAll(ctx, config, { cwd: root, policy, message, signal: void 0 });
         return { subject };
+      }
+    },
+    "/pull": {
+      method: "POST",
+      async run(req) {
+        const body = await jsonBody(req);
+        const { root, policy, session } = await scopeOf(ctx, body.sessionId);
+        const summary = await pullUpstream(ctx, config, {
+          cwd: root,
+          policy,
+          session,
+          signal: void 0
+        });
+        return { summary };
       }
     },
     "/create-file": {

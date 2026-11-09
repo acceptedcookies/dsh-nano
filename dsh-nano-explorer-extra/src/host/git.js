@@ -293,7 +293,15 @@ export async function readStatus(ctx, config, request) {
     ? undefined
     : await remoteDivergence(ctx, config, request)
 
-  return { root, ...parsed, stashed, ...(remote === undefined ? {} : { remote }) }
+  // The footer draws two buttons from this one payload: a branch button that opens worktrees and a
+  // commit button that opens the pending work. Both need facts the plain status does not carry.
+  const worktrees = await listWorktrees(ctx, config, request)
+  const conflicts = parsed.files.filter(file => file.status === 'U').map(file => file.path)
+
+  return {
+    root, ...parsed, stashed, worktrees, conflicts,
+    ...(remote === undefined ? {} : { remote }),
+  }
 }
 
 /**
@@ -363,4 +371,81 @@ export async function ignoredAmong(ctx, config, request) {
   } finally {
     scope.dispose()
   }
+}
+
+/**
+ * List the worktrees attached to this checkout.
+ *
+ * A repository can be checked out in several places at once, each on its own branch. `list
+ * --porcelain` reports them as blank-line separated blocks, which this turns into rows for a picker.
+ *
+ * @param ctx - context providing the process services.
+ * @param config - executable and process limits.
+ * @param request - working directory and cancellation.
+ * @returns one row per worktree, or an empty list when the command cannot run.
+ */
+export async function listWorktrees(ctx, config, request) {
+  const result = await runGit(ctx, config, {
+    ...request, args: ['worktree', 'list', '--porcelain'], allowedExitCodes: [0, 128],
+  }).catch(() => undefined)
+  if (result === undefined || result.exitCode !== 0) return []
+  const rows = []
+  let current = null
+  for (const line of result.stdout.split('\n')) {
+    if (line.trim() === '') {
+      if (current !== null) rows.push(current)
+      current = null
+      continue
+    }
+    const space = line.indexOf(' ')
+    const key = space === -1 ? line : line.slice(0, space)
+    const value = space === -1 ? '' : line.slice(space + 1)
+    current ??= { path: '', head: '', branch: null, detached: false, bare: false }
+    if (key === 'worktree') current.path = value
+    else if (key === 'HEAD') current.head = value
+    else if (key === 'branch') current.branch = value.replace(/^refs\/heads\//u, '')
+    else if (key === 'detached') current.detached = true
+    else if (key === 'bare') current.bare = true
+  }
+  if (current !== null) rows.push(current)
+  return rows.filter(row => row.path !== '')
+}
+
+/**
+ * Fetch and fast-forward the current branch from its upstream.
+ *
+ * `pull --ff-only` refuses to create a merge commit, so a diverged branch reports the refusal
+ * instead of quietly leaving the reader inside a merge they did not ask for.
+ *
+ * @param ctx - context providing the process services.
+ * @param config - executable and process limits.
+ * @param request - working directory and cancellation.
+ * @returns the summary line Git printed.
+ * @throws when the branch has no upstream or cannot be fast-forwarded.
+ */
+export async function pullUpstream(ctx, config, request) {
+  const result = await runGit(ctx, config, {
+    ...request, args: ['pull', '--ff-only'], allowedExitCodes: [0, 1, 128],
+  })
+  if (result.exitCode !== 0) {
+    const detail = firstLine(result.stderr) || firstLine(result.stdout)
+    throw new Error(detail === '' ? 'git pull failed' : detail)
+  }
+  return firstLine(result.stdout) || firstLine(result.stderr)
+}
+
+/**
+ * Describe the paths currently in an unresolved merge.
+ *
+ * @param ctx - context providing the process services.
+ * @param config - executable and process limits.
+ * @param request - working directory and cancellation.
+ * @returns one path per conflicted file.
+ */
+export async function listConflicts(ctx, config, request) {
+  const result = await runGit(ctx, config, {
+    ...request, args: ['diff', '--name-only', '--diff-filter=U'], allowedExitCodes: [0, 128],
+  }).catch(() => undefined)
+  if (result === undefined || result.exitCode !== 0) return []
+  return result.stdout.split('\n').map(line => line.trim()).filter(line => line !== '')
 }

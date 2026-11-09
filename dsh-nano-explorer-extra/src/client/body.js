@@ -2,6 +2,7 @@
 
 import React from 'react'
 import { CommitDialog, Dialog, RenameDialog } from './dialogs.js'
+import { BranchDrawer, CommitDrawer } from './drawers.js'
 import { createAccessory } from './accessory.js'
 import { StatusBar } from './statusbar.js'
 import { RowMenu } from './menu.js'
@@ -73,6 +74,11 @@ export function ExplorerBody(props) {
   const [menu, setMenu] = useState(null)
   // A delete the reader has not confirmed; the entry is untouched until they do.
   const [deleteRequest, setDeleteRequest] = useState(null)
+  // Which footer drawer is open, if any: `branch` shows worktrees and remote state, `commit` shows the
+  // pending work. One at a time, so a reader never faces two stacked panels.
+  const [drawer, setDrawer] = useState(null)
+  const [drawerBusy, setDrawerBusy] = useState(false)
+  const [drawerError, setDrawerError] = useState(undefined)
   const toastTimer = useRef(0)
   const [outsidePrompt, setOutsidePrompt] = useState(null)
   // Per-directory answers from loadDirectoryStatus, keyed like the workspace map.
@@ -406,6 +412,35 @@ export function ExplorerBody(props) {
     await refreshStats()
   }, [sessionId, request, tree, refreshGit, refreshStats])
 
+  /**
+   * Fast-forward the current branch from its upstream.
+   *
+   * A refusal is reported inside the panel rather than as a toast: the reason (no upstream, or a
+   * branch that would need a real merge) is what the reader needs to act on.
+   */
+  const doPull = useCallback(async () => {
+    setDrawerBusy(true)
+    setDrawerError(undefined)
+    const result = await request('/pull', { sessionId })
+    setDrawerBusy(false)
+    if (!result.ok) { setDrawerError(result.message); return }
+    await tree.refresh()
+    await refreshGit()
+    await refreshStats()
+  }, [sessionId, request, tree, refreshGit, refreshStats])
+
+  /** Commit from inside the panel, keeping the panel open so its list refreshes in place. */
+  const doDrawerCommit = useCallback(async message => {
+    setDrawerBusy(true)
+    setDrawerError(undefined)
+    const result = await request('/commit', { sessionId, message })
+    setDrawerBusy(false)
+    if (!result.ok) { setDrawerError(result.message); return }
+    await tree.refresh()
+    await refreshGit()
+    await refreshStats()
+  }, [sessionId, request, tree, refreshGit, refreshStats])
+
   /** Copy one path. Success is a floating toast; a failure stays as an inline note. */
   const copyPath = useCallback(async (absolute, relative) => {
     try {
@@ -661,12 +696,25 @@ export function ExplorerBody(props) {
     React.createElement(NanoToast, { text: toast }),
     React.createElement(StatusBar, {
       copy, git, stats, statsState, prefs,
-      onCommit: () => { setDialogError(undefined); setDialog({ kind: 'commit' }) },
-      onRefreshGit: () => { void refreshGit() },
+      onOpenBranch: () => setDrawer('branch'),
+      onOpenCommit: () => setDrawer('commit'),
       onRetryStats: () => { void refreshStats() },
     }),
     dialogNode,
     outsideNode,
+    React.createElement(BranchDrawer, {
+      copy, open: drawer === 'branch', git, busy: drawerBusy, error: drawerError,
+      onClose: () => { setDrawer(null); setDrawerError(undefined) },
+      onPull: doPull,
+      onRefresh: async () => { await refreshGit() },
+    }),
+    React.createElement(CommitDrawer, {
+      copy, open: drawer === 'commit', git, busy: drawerBusy, error: drawerError,
+      onClose: () => { setDrawer(null); setDrawerError(undefined) },
+      onCommit: doDrawerCommit,
+      onPull: doPull,
+      onOpenConflict: path => { openEntry({ path: absoluteOf(cwd ?? '', path) }); setDrawer(null) },
+    }),
     React.createElement(RowMenu, { menu, copy, actions: rowActions, onClose: () => setMenu(null) }))
 }
 

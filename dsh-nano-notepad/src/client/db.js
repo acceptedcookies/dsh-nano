@@ -106,10 +106,14 @@ export function validateName(name) {
   return trimmed
 }
 
-/** @param {string} name */
+/**
+ * A note keeps a recognised extension as typed/imported (.md, .json, .markdown);
+ * only extensionless names are completed to .md.
+ * @param {string} name
+ */
 export function fileName(name) {
   const trimmed = validateName(name)
-  return trimmed.toLowerCase().endsWith('.md') ? trimmed : `${trimmed}.md`
+  return /\.(md|markdown|json)$/i.test(trimmed) ? trimmed : `${trimmed}.md`
 }
 
 /** @param {{ name: string }[]} siblings @param {string} name */
@@ -307,8 +311,9 @@ export async function copyNode(db, id, workspaceId = null) {
   const destination = workspaceId ?? null
   const topSiblings = nodes.filter(item => item.parentId === null && (item.workspaceId ?? null) === destination)
   const isFile = source.kind === 'file'
-  const base = isFile ? source.name.replace(/\.md$/i, '') : source.name
-  const ext = isFile ? '.md' : ''
+  const m = isFile ? source.name.match(/\.(md|markdown|json)$/i) : null
+  const base = m ? source.name.slice(0, -m[0].length) : source.name
+  const ext = m ? m[0] : ''
   let name = source.name, i = 1
   while (topSiblings.some(item => item.name === name)) name = `${base}-${++i}${ext}`
   const now = Date.now()

@@ -94,29 +94,75 @@ export const STYLE = `${NANO_STYLES}
   color: var(--dsw-alias-label-tertiary);
 }
 .nxe-status-left, .nxe-status-right { display: flex; align-items: center; gap: 6px; min-width: 0; }
-.nxe-status-right { font-variant-numeric: tabular-nums; }
-.nxe-branch, .nxe-commit, .nxe-sync, .nxe-ab, .nxe-status-stat {
-  display: inline-flex; align-items: center; gap: 6px;
-  box-sizing: border-box; padding: 1px 8px;
-  border: none; border-radius: var(--dsw-radius-sm);
-  background: transparent; color: inherit;
-  font: inherit; font-variant-numeric: tabular-nums; line-height: inherit; white-space: nowrap;
+.nxe-status-right { font-variant-numeric: tabular-nums; color: var(--dsw-alias-label-tertiary); }
+
+/* One chip family for both footer controls: same height, same padding, same glyph gap, so the two
+   buttons read as a pair instead of two different widgets. */
+.nxe-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  box-sizing: border-box; height: 20px; padding: 0 7px;
+  border: 1px solid transparent; border-radius: var(--dsw-radius-sm);
+  background: transparent; color: var(--dsw-alias-label-secondary);
+  font: inherit; font-variant-numeric: tabular-nums; line-height: 1; white-space: nowrap;
 }
-.nxe-branch svg, .nxe-sync svg { width: 14px; height: 14px; flex: none; }
-.nxe-sync-counts { font-variant-numeric: tabular-nums; letter-spacing: .01em; }
-.nxe-sync[data-behind="0"][data-ahead="0"] { color: var(--dsw-alias-label-tertiary); }
-/* The no-upstream stand-in is a label, not a control. */
-.nxe-sync[data-nxe-sync="none"] { color: var(--dsw-alias-label-tertiary); cursor: default; }
-.nxe-branch { min-width: 0; }
-.nxe-branch-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 180px; }
-.nxe-branch[data-detached="true"] { color: var(--dsw-alias-label-tertiary); }
-.nxe-ab { color: var(--dsw-alias-label-tertiary); }
-button.nxe-commit, button.nxe-sync { cursor: pointer; }
+.nxe-chip svg { width: 14px; height: 14px; flex: none; }
+.nxe-chip-label { overflow: hidden; text-overflow: ellipsis; max-width: 150px; }
+.nxe-chip-count { font-weight: 600; }
+.nxe-chip-sync { color: var(--dsw-alias-label-tertiary); font-size: 11px; }
+.nxe-chip[data-nxe-git="none"] { color: var(--dsw-alias-label-tertiary); }
+.nxe-chip-button { cursor: pointer; }
 @media (hover: hover) {
-  button.nxe-commit:hover:not(:disabled), button.nxe-sync:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-secondary); }
+  .nxe-chip-button:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 }
-.nxe-commit:disabled { opacity: .55; cursor: default; }
-.nxe-commit:focus-visible, .nxe-sync:focus-visible, .nxe-branch:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary, var(--dsw-alias-link)); outline-offset: 1px; }
+.nxe-chip-button:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary, var(--dsw-alias-link)); outline-offset: 1px; }
+/* The two flags a reader scans for: uncommitted work, and an unresolved merge. */
+.nxe-chip-flag { font-weight: 700; line-height: 1; }
+.nxe-chip-flag[data-kind="dirty"] { color: var(--nxe-git-modified); }
+.nxe-chip-flag[data-kind="conflict"] { color: var(--dsw-alias-label-error, #e5534b); }
+.nxe-chip-static { cursor: default; }
+
+/* Each totals figure is glyph plus number; a bare number said nothing about what it counted. */
+.nxe-figure { display: inline-flex; align-items: center; gap: 4px; }
+.nxe-figure svg { width: 13px; height: 13px; flex: none; opacity: .8; }
+.nxe-figure-value { font-variant-numeric: tabular-nums; }
+
+/* Drawer contents: facts, then the two lists. */
+.nxe-fact-group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.nxe-fact { display: flex; align-items: baseline; gap: 10px; font-size: 13px; line-height: 18px; }
+.nxe-fact-label { flex: 0 0 64px; color: var(--dsw-alias-label-tertiary); }
+.nxe-fact-value { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nxe-fact[data-tone="muted"] .nxe-fact-value { color: var(--dsw-alias-label-tertiary); }
+.nxe-fact[data-tone="emphasis"] .nxe-fact-value { color: var(--nxe-git-modified); }
+.nxe-fact[data-tone="danger"] .nxe-fact-value { color: var(--dsw-alias-label-error, #e5534b); }
+.nxe-drawer-heading {
+  margin: 14px 0 6px; font-size: 12px; font-weight: 600;
+  color: var(--dsw-alias-label-tertiary); text-transform: none;
+}
+.nxe-drawer-empty { margin: 0; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-tertiary); }
+.nxe-drawer-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 2px; }
+.nxe-drawer-scroll { max-height: 220px; overflow: auto; }
+.nxe-drawer-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 3px 6px; border-radius: var(--dsw-radius-sm); font-size: 12px; line-height: 18px;
+}
+.nxe-drawer-row[data-current="true"] { background: var(--dsw-alias-interactive-bg-hover); }
+.nxe-drawer-row-main { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nxe-drawer-row-path { flex: 0 0 auto; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--dsw-alias-label-tertiary); font-size: 11px; }
+.nxe-drawer-row-status {
+  flex: 0 0 auto; width: 12px; text-align: center; font-weight: 700;
+  color: var(--dsw-alias-label-secondary);
+}
+.nxe-drawer-row-status[data-status="M"] { color: var(--nxe-git-modified); }
+.nxe-drawer-row-status[data-status="A"], .nxe-drawer-row-status[data-status="?"] { color: var(--nxe-git-added); }
+.nxe-drawer-row-status[data-status="D"] { color: var(--nxe-git-deleted); }
+.nxe-drawer-row-status[data-status="R"] { color: var(--nxe-git-renamed); }
+.nxe-drawer-row-status[data-status="U"] { color: var(--nxe-git-conflicted); }
+.nxe-drawer-link {
+  flex: 1; min-width: 0; text-align: left; border: 0; background: transparent; padding: 0;
+  color: var(--dsw-alias-label-error, #e5534b); font: inherit; cursor: pointer;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.nxe-conflict-block { margin-top: 4px; }
 .nxe-status-sep { color: var(--dsw-alias-border-l3); }
 .nxe-retry {
   border: 0; background: transparent; color: var(--dsw-alias-link); cursor: pointer;

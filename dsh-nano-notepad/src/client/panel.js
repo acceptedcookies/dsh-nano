@@ -24,6 +24,7 @@ import {
   writeUi,
 } from './db.js'
 import { applyFormat, escapeHtml, renderMarkdown } from './markdown.js'
+import { validateJson, positionOf, formatJson, minifyJson, escapeJson, renderJsonTree } from './json.js'
 import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
 import { copyFor } from './i18n.js'
 import React from 'react'
@@ -317,6 +318,34 @@ ${NANO_STYLES}
   .np-caret svg, .np-ws-caret svg, .np-tree, .np-entry { transition: background-color .12s ease, color .12s ease, border-color .12s ease; }
   .np-entry:hover, .np-entry:active { transform: none; }
 }
+/* JSON support: tool cluster, lint badge, collapsible tree. */
+.np-json-tools { display: inline-flex; align-items: center; gap: 2px; }
+.np-json-tools[hidden] { display: none; }
+.np-md-tools { display: inline-flex; align-items: center; gap: 2px; }
+.np-md-tools[hidden] { display: none; }
+.np-lint { border: 0; background: transparent; font: inherit; font-size: 11px; padding: 0 6px; border-radius: 6px; cursor: pointer; white-space: nowrap; flex: none; }
+.np-lint[data-state="ok"] { color: var(--dsw-alias-state-success-primary); }
+.np-lint[data-state="err"] { color: var(--dsw-alias-state-error-primary); }
+.np-lint[data-state="err"]:hover { background: var(--dsw-alias-interactive-bg-hover-danger); }
+.nj-tree { font-family: var(--dsw-font-markdown-code-font-family); font-size: var(--np-editor-font-size, 14px); line-height: 1.7; }
+.nj-node { display: flex; align-items: baseline; gap: 2px; cursor: pointer; list-style: none; padding: 1px 4px; border-radius: 4px; user-select: none; }
+.nj-node:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.nj-node::-webkit-details-marker { display: none; }
+.nj-caret { display: inline-block; width: 12px; flex: none; transition: transform .12s ease; }
+.nj-caret::before { content: '▸'; color: var(--dsw-alias-label-tertiary); font-size: 10px; }
+details[open] > .nj-node > .nj-caret { transform: rotate(90deg); }
+.nj-preview { color: var(--dsw-alias-label-tertiary); font-size: .85em; margin-left: 6px; }
+details[open] > .nj-node > .nj-preview { display: none; }
+.nj-children { margin-left: 16px; border-left: 1px solid var(--dsw-alias-border-l2); padding-left: 8px; }
+.nj-leaf { padding: 1px 4px; }
+.nj-key { color: var(--dsw-alias-label-secondary); }
+.nj-p { color: var(--dsw-alias-label-tertiary); }
+.nj-str { color: var(--dsw-alias-state-success-primary); }
+.nj-num { color: var(--dsw-alias-link); }
+.nj-bool { color: var(--dsw-alias-state-warn-primary); }
+.nj-null { color: var(--dsw-alias-label-tertiary); font-style: italic; }
+.nj-type { color: var(--dsw-alias-label-tertiary); }
+.nj-count { color: var(--dsw-alias-label-tertiary); font-size: .8em; }
 `
 
 const googleIcon = (path) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${path}"></path></svg>`
@@ -331,6 +360,11 @@ const PIN_ICON = googleIcon('M16 9V4h1c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45
 const EDIT_ICON = googleIcon('M3 17.25V21h3.75L17.81 9.94l-3.75-3.75zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75z')
 const MOVE_ICON = googleIcon('M20 6h-8l-2-2H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.1.89 2 2 2h16c1.11 0 2-.9 2-2V8c0-1.11-.89-2-2-2zm-6 12v-3h-4v-2h4V10l4 4-4 4z')
 const MORE_ICON = googleIcon('M6 10c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm12 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm-6 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z')
+const EXPAND_ICON = googleIcon('M12 5.83 15.17 9l1.41-1.41L12 3 7.41 7.59 8.83 9 12 5.83zm0 12.34L8.83 15l-1.41 1.41L12 21l4.59-4.59L15.17 15 12 18.17z')
+const COLLAPSE_ICON = googleIcon('M7.41 15.41 12 10.83l4.59 4.58L18 14l-6-6-6 6 1.41 1.41zm0-6L12 4.83l4.59-4.58L18 1.66l-6 6-6-6 1.41-1.41z')
+const FORMAT_ICON = googleIcon('M3 21h18v-2H3v2zM6.5 12l2.83 2.83 1.41-1.41L7.91 10.59l2.83-2.83-1.41-1.41L6.5 8.59 3.67 11.41zM13 6h8v2h-8V6zm0 4h6v2h-6v-2zm0 4h4v2h-4v-2z')
+const MINIFY_ICON = googleIcon('M3 5h18v2H3V5zm0 4h14v2H3V9zm0 4h10v2H3v-2zm0 4h6v2H3v-2z')
+const ESCAPE_ICON = googleIcon('M8 5 4 12h4v7l4-9H8z')
 const CHEVRON_ICON = googleIcon('M16.59 8.59 12 13.17 7.41 8.59 6 10l6 6 6-6z')
 const CHEVRON_LEFT = googleIcon('M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z')
 const MINIMIZE_ICON = googleIcon('M6 19h12v2H6z')
@@ -400,12 +434,12 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     <div class="np-body">
       <aside class="np-tree"><div class="np-tree-head"><button type="button" class="np-tree-toggle" data-action="toggle-tree"></button><div class="np-ws"><button type="button" class="np-ws-btn" data-action="ws-toggle" aria-haspopup="listbox" aria-expanded="false"><span class="np-ws-label"></span><span class="np-ws-caret" aria-hidden="true">${CHEVRON_ICON}</span></button></div><span style="flex:1"></span><span class="np-tree-tools"><button type="button" data-action="new-file" data-i18n="newFile" data-i18n-mode="title">${PLUS_ICON}</button><button type="button" data-action="new-folder" data-i18n="newFolder" data-i18n-mode="title">${FOLDER_PLUS_ICON}</button><button type="button" class="np-danger" data-action="delete" data-i18n="delete" data-i18n-mode="title">${TRASH_ICON}</button></span></div><div class="np-nodes" data-root="true"></div><div class="np-tree-foot"><button type="button" data-action="settings" data-i18n="settings" data-i18n-mode="label">${SETTINGS_ICON}<span data-i18n="settings"></span></button><button type="button" data-action="close" data-i18n="close" data-i18n-mode="label">${CLOSE_ICON}<span data-i18n="close"></span></button></div></aside>
       <div class="np-editor">
-        <div class="np-toolbar">${toolbar}<button type="button" class="np-switch" data-action="view" role="switch" aria-checked="false" data-i18n="viewGroup" data-i18n-mode="title"><span class="np-switch-label" data-i18n="source"></span><span class="np-switch-label" data-i18n="preview"></span><span class="np-switch-thumb" data-i18n="source"></span></button></div>
+        <div class="np-toolbar"><span class="np-md-tools">${toolbar}</span><span class="np-json-tools" hidden><button type="button" class="np-tool" data-json="expand" data-i18n="jsonExpand" data-i18n-mode="title">${EXPAND_ICON}</button><button type="button" class="np-tool" data-json="collapse" data-i18n="jsonCollapse" data-i18n-mode="title">${COLLAPSE_ICON}</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-json="format" data-i18n="jsonFormat" data-i18n-mode="title">${FORMAT_ICON}</button><button type="button" class="np-tool" data-json="minify" data-i18n="jsonMinify" data-i18n-mode="title">${MINIFY_ICON}</button><button type="button" class="np-tool" data-json="escape" data-i18n="jsonEscape" data-i18n-mode="title">${ESCAPE_ICON}</button></span><button type="button" class="np-switch" data-action="view" role="switch" aria-checked="false" data-i18n="viewGroup" data-i18n-mode="title"><span class="np-switch-label" data-i18n="source"></span><span class="np-switch-label" data-i18n="preview"></span><span class="np-switch-thumb" data-i18n="source"></span></button></div>
         <textarea class="np-write"></textarea>
         <div class="np-slash" hidden></div>
         <div class="np-read" tabindex="0" hidden></div>
         <div class="np-error" role="alert" hidden><span class="np-error-text"></span><button type="button" data-action="load-remote" data-i18n="loadRemote" hidden></button><button type="button" data-action="keep-mine" data-i18n="keepMine" hidden></button><button type="button" data-action="dismiss-error" data-i18n="close" data-i18n-mode="title">${CLOSE_ICON}</button></div>
-        <footer class="np-footer"><span class="np-sync"><i class="np-beat" data-state="idle"></i><span class="np-status-text" role="status" aria-live="polite"></span></span><span class="np-footer-actions"><button type="button" data-action="export-file" data-i18n="saveAs"></button><button type="button" data-action="history" data-i18n="history"></button><button type="button" data-action="save-version" data-i18n="saveVersion"></button><button type="button" class="np-danger" data-action="clear-file" data-i18n="clearFile"></button></span></footer>
+        <footer class="np-footer"><span class="np-sync"><i class="np-beat" data-state="idle"></i><button type="button" class="np-lint" role="status" hidden></button><span class="np-status-text" role="status" aria-live="polite"></span></span><span class="np-footer-actions"><button type="button" data-action="export-file" data-i18n="saveAs"></button><button type="button" data-action="history" data-i18n="history"></button><button type="button" data-action="save-version" data-i18n="saveVersion"></button><button type="button" class="np-danger" data-action="clear-file" data-i18n="clearFile"></button></span></footer>
       </div>
     </div>
     <div class="np-resize" data-edge="n"></div><div class="np-resize" data-edge="s"></div><div class="np-resize" data-edge="e"></div><div class="np-resize" data-edge="w"></div><div class="np-resize" data-edge="nw"></div><div class="np-resize" data-edge="ne"></div><div class="np-resize" data-edge="sw"></div><div class="np-resize" data-edge="se"></div>
@@ -465,6 +499,8 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     pendingDraft: /** @type {string | null} */ (null),
     sync: { phase: 'idle', at: null, detail: '' },
     collapsed: new Set(),
+    /** fileId → Set<json-pointer path> for the JSON tree's folded nodes. */
+    jsonCollapsed: new Map(),
     maximized: false,
     /** Bumped whenever an image is stored; part of the rendered-body cache key. */
     imageEpoch: 0,
@@ -482,6 +518,11 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
 
   const write = () => /** @type {HTMLTextAreaElement} */ (must(panel, '.np-write'))
   const current = () => state.nodes.find(node => node.id === state.ui.currentId && node.kind === 'file')
+  const isJson = () => (current()?.name ?? '').toLowerCase().endsWith('.json')
+  const jsonCollapsedFor = id => {
+    if (!state.jsonCollapsed.has(id)) state.jsonCollapsed.set(id, new Set())
+    return state.jsonCollapsed.get(id)
+  }
 
   function showError(error, conflict = false) {
     const node = must(panel, '.np-error')
@@ -754,8 +795,30 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       return
     }
     const rendered = state.view === 'rendered'
+    const json = isJson()
+    /* JSON files swap the markdown-format cluster for JSON tools. */
+    const mdTools = panel.querySelector('.np-md-tools')
+    const jsonTools = panel.querySelector('.np-json-tools')
+    if (mdTools) mdTools.hidden = json
+    if (jsonTools) jsonTools.hidden = !json
     for (const button of panel.querySelectorAll('.np-toolbar [data-format]')) {
-      button.disabled = rendered
+      button.disabled = rendered || json
+    }
+    /* Lint badge: strict JSON validation, clicking it jumps to the offset. */
+    const lint = panel.querySelector('.np-lint')
+    let lintResult = null
+    if (json && state.db !== null) {
+      lintResult = validateJson(source.value || file.draft || '')
+    }
+    if (lint) {
+      lint.hidden = !json
+      if (json && lintResult !== null) {
+        const { line, col } = lintResult.ok === false ? positionOf(source.value || file.draft || '', lintResult.pos) : { line: 0, col: 0 }
+        lint.dataset.state = lintResult.ok ? 'ok' : 'err'
+        lint.dataset.pos = lintResult.ok === false ? String(lintResult.pos) : ''
+        lint.textContent = lintResult.ok ? text().jsonOk : `${text().jsonErr} ${line}:${col}`
+        lint.title = lintResult.ok ? '' : String(lintResult.message)
+      }
     }
     for (const button of panel.querySelectorAll('.np-footer-actions [data-action="save-version"], .np-footer-actions [data-action="clear-file"]')) {
       button.disabled = false
@@ -769,9 +832,20 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       sw.dataset.view = state.view
       sw.setAttribute('aria-checked', String(rendered))
       const thumb = sw.querySelector('.np-switch-thumb')
-      if (thumb) thumb.textContent = rendered ? text().preview : text().source
+      if (thumb) thumb.textContent = rendered ? (json ? text().jsonTree : text().preview) : text().source
+      const copy = text()
+      const segLabels = json ? [copy.source, copy.jsonTree] : [copy.source, copy.preview]
+      sw.querySelectorAll('.np-switch-label').forEach((label, i) => { label.textContent = segLabels[i] ?? segLabels[0] })
     }
     if (!rendered || state.db === null) return
+    if (json) {
+      const collapsed = jsonCollapsedFor(file.id)
+      const parsed = lintResult && lintResult.ok ? lintResult : validateJson(source.value || file.draft || '')
+      read.innerHTML = parsed.ok
+        ? renderJsonTree(parsed.value, collapsed, escapeHtml)
+        : `<p class="np-placeholder">${escapeHtml(text().jsonInvalid)}</p>`
+      return
+    }
     const markdown = state.pendingDraft ?? (source.value || file.draft || '')
     // Cache rendered HTML per (file, image-set, markdown): tree toggles, tab
     // clicks, and theme/locale events re-render without the markdown changing,
@@ -1632,7 +1706,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       openNodeMenu(rowAction.dataset.more, rowAction)
       return
     }
-    const target = event.target instanceof Element ? event.target.closest('[data-action], [data-format], [data-tab], [data-close], [data-id], [data-ws]') : null
+    const target = event.target instanceof Element ? event.target.closest('[data-action], [data-format], [data-json], [data-tab], [data-close], [data-id], [data-ws], .np-lint') : null
     if (!(target instanceof HTMLElement)) return
     const action = target.dataset.action
     if (action === 'ws-toggle') {
@@ -1686,6 +1760,54 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       }).catch(showError)
     }
     if (action === 'image') must(panel, '.np-file').click()
+    /* Lint badge click: jump the source caret to the reported offset. */
+    if (target.classList.contains('np-lint') && target.dataset.pos !== '') {
+      const pos = Number(target.dataset.pos)
+      if (Number.isFinite(pos)) {
+        write().focus()
+        write().setSelectionRange(pos, pos)
+      }
+      return
+    }
+    /* JSON tool cluster: tree fold controls run only in the tree view; the
+       text tools rewrite the source and mark it dirty via scheduleSave. */
+    const jsonOp = target.dataset.json
+    if (jsonOp && isJson() && state.db) {
+      const file = current()
+      if (!file) return
+      const source = write()
+      const collapsed = jsonCollapsedFor(file.id)
+      if (jsonOp === 'expand') {
+        collapsed.clear()
+        state.view = 'rendered'
+        render()
+      } else if (jsonOp === 'collapse') {
+        const parsed = validateJson(source.value || file.draft || '')
+        if (parsed.ok) {
+          const collect = (v, path) => {
+            if (v !== null && typeof v === 'object') {
+              collapsed.add(path)
+              const entries = Array.isArray(v) ? v.entries() : Object.entries(v)
+              for (const [k, child] of entries) collect(child, `${path}/${String(k).replace(/~/g, '~0').replace(/\//g, '~1')}`)
+            }
+          }
+          collect(parsed.value, '')
+        }
+        state.view = 'rendered'
+        render()
+      } else {
+        const helpers = { format: formatJson, minify: minifyJson, escape: escapeJson }
+        const next = helpers[jsonOp]?.(source.value)
+        if (typeof next === 'string' && next !== source.value) {
+          source.value = next
+          scheduleSave()
+        }
+        state.view = 'source'
+        render()
+        write().focus()
+      }
+      return
+    }
     const format = target.dataset.format
     if (format) {
       const source = write()
@@ -1717,6 +1839,17 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       if (node?.kind === 'file') openFile(id)
       else { state.ui.currentId = id; render() }
     }
+  })
+  /* Keep per-file JSON fold state in sync: toggling a <details> updates the
+     file's collapsed path set, so re-renders preserve the user's folds. */
+  on(panel, 'toggle', event => {
+    const details = event.target instanceof HTMLElement ? event.target.closest('details[data-nj-path]') : null
+    if (!details || !isJson()) return
+    const file = current()
+    if (!file) return
+    const collapsed = jsonCollapsedFor(file.id)
+    if (details.open) collapsed.delete(details.dataset.njPath)
+    else collapsed.add(details.dataset.njPath)
   })
   panel.addEventListener('keydown', event => {
     if ((event.key !== 'Enter' && event.key !== ' ') || dialogOpen) return
@@ -1783,6 +1916,19 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
   write().addEventListener('input', () => {
     refreshSlash()
     scheduleSave()
+    /* Live-lint JSON files so the badge tracks what is being typed. */
+    if (isJson()) {
+      const lint = panel.querySelector('.np-lint')
+      if (lint instanceof HTMLElement) {
+        const source = write()
+        const result = validateJson(source.value)
+        lint.dataset.state = result.ok ? 'ok' : 'err'
+        lint.dataset.pos = result.ok ? '' : String(result.pos)
+        const { line, col } = result.ok ? { line: 0, col: 0 } : positionOf(source.value, result.pos)
+        lint.textContent = result.ok ? text().jsonOk : `${text().jsonErr} ${line}:${col}`
+        lint.title = result.ok ? '' : String(result.message)
+      }
+    }
   })
   write().addEventListener('scroll', () => {
     if (state.slash) placeSlash()
@@ -1997,9 +2143,12 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     async import(name, content, meta = {}) {
       await dbReady
       const siblings = state.nodes.filter(node => node.parentId === null && (node.workspaceId ?? null) === activeWorkspace().id && node.kind === 'file')
-      const base = String(name || 'note').replace(/\.md$/i, '') || 'note'
-      let candidate = `${base}.md`, i = 1
-      while (siblings.some(s => s.name === candidate)) candidate = `${base}-${++i}.md`
+      const raw = String(name || 'note').trim() || 'note'
+      const hasExt = /\.(md|markdown|json)$/i.test(raw)
+      const base = raw.replace(/\.(md|markdown|json)$/i, '') || 'note'
+      const ext = hasExt ? raw.match(/\.(md|markdown|json)$/i)[0] : '.md'
+      let candidate = `${base}${ext}`, i = 1
+      while (siblings.some(s => s.name === candidate)) candidate = `${base}-${++i}${ext}`
       const node = await createNode(state.db, 'file', null, candidate, activeWorkspace().id)
       if (typeof meta.sourcePath === 'string' && meta.sourcePath) node.sourcePath = meta.sourcePath
       state.nodes.push(node)

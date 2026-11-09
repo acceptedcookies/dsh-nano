@@ -67,9 +67,14 @@ export function usePanelConfinedLayer() {
           layer.style.display = 'flex'
           layer.style.flexDirection = 'column'
           layer.style.justifyContent = 'flex-end'
+          // The working-tree card stays a short change list. The repository card is taller because
+          // it carries the history graph, but neither one takes the whole files pane.
+          const kind = card.querySelector('[data-nxe-scm]')?.getAttribute('data-nxe-scm')
+          const ratio = kind === 'commit' ? 0.46 : 0.68
           Object.assign(card.style, {
             width: '100%', maxWidth: '100%',
-            height: 'auto', maxHeight: '100%',
+            height: 'auto',
+            maxHeight: `${Math.max(260, Math.round((rect.height - 24) * ratio))}px`,
             minHeight: '0', minWidth: '0',
             margin: '0',
           })

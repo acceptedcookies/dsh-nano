@@ -773,6 +773,7 @@ export function ExplorerBody(props) {
       onPull: doPull,
       onCheckout: doCheckout,
       onRefresh: async () => { await refreshGit() },
+      onOpenConflict: path => { openEntry({ path: absoluteOf(cwd ?? '', path) }); setDrawer(null) },
     }),
     React.createElement(CommitDrawer, {
       copy, open: drawer === 'commit', git, busy: drawerBusy, error: drawerError,

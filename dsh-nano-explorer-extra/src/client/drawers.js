@@ -1,9 +1,8 @@
-/** The two footer panels: branch and worktrees, and the pending work.
+/** The two footer panels. They are not two sizes of the same card.
  *
- * Both fill the files pane. The branch panel is a worktree-first switcher: each checkout is a row
- * you can tell apart by branch, short hash, and path, which is the distinction that gets lost once
- * a repository has more than one working tree. The commit panel is a source-control preview: the
- * message, the change grouped the way an editor groups it, and the commits this change will sit on.
+ * The commit panel is the working tree: which paths are staged, unstaged, untracked, or in conflict.
+ * The branch panel is the repository: the history graph, the branch you can switch to, and every
+ * worktree on this machine. Pull lives only on the second, because it is a remote action.
  */
 
 import React from 'react'
@@ -70,10 +69,12 @@ function ChangeRow({ file }) {
  * @param props - the heading and the rows.
  * @returns the section, or null.
  */
-function ChangeGroup({ heading, files, tone }) {
+function ChangeGroup({ label, count, files, tone }) {
   if (files.length === 0) return null
   return React.createElement('section', { className: 'nxe-scm-group', 'data-tone': tone ?? 'default' },
-    React.createElement('h3', { className: 'nxe-drawer-heading' }, heading),
+    React.createElement('h3', { className: 'nxe-local-head', 'data-tone': tone ?? 'default' },
+      React.createElement('span', null, label),
+      React.createElement('span', { className: 'nxe-local-badge' }, String(count))),
     React.createElement('ul', { className: 'nxe-drawer-list' }, files.slice(0, 400).map(file =>
       React.createElement(ChangeRow, { key: `${tone ?? ''}:${file.path}`, file }))))
 }
@@ -117,7 +118,7 @@ function HistoryRail({ copy, history, currentBranch }) {
  * @param props - copy, Git summary, and the actions the panel can start.
  * @returns the panel, or null while closed.
  */
-export function BranchDrawer({ copy, open, git, onClose, onPull, onRefresh, onCheckout, busy, error }) {
+export function BranchDrawer({ copy, open, git, onClose, onPull, onRefresh, onCheckout, onOpenConflict, busy, error }) {
   usePanelConfinedLayer()
   const [query, setQuery] = useState('')
   useEffect(() => { if (!open) setQuery('') }, [open])
@@ -136,14 +137,16 @@ export function BranchDrawer({ copy, open, git, onClose, onPull, onRefresh, onCh
     row.branch, row.path, row.head, shortenPath(row.path),
   ]))
   const filteredOut = query.trim() !== '' && branches.length === 0 && worktrees.length === 0
+  const conflicts = git?.conflicts ?? []
+  const summary = copy.branchDrawerSummary(
+    current ?? copy.detached,
+    upstream === null ? copy.noUpstream : `${upstream} · ${copy.factSyncValue(behind, ahead)}`,
+    copy.worktreesHeadingCount((git?.worktrees ?? []).length),
+  )
   return React.createElement(NanoDialog, {
     copy,
     title: copy.branchDrawerTitle,
-    description: copy.branchDrawerSummary(
-      current ?? copy.detached,
-      upstream === null ? copy.noUpstream : `${upstream} · ${copy.factSyncValue(behind, ahead)}`,
-      (git?.files?.length ?? 0) === 0 ? copy.factClean : copy.factDirty(git?.files?.length ?? 0),
-    ),
+    description: conflicts.length === 0 ? summary : `${summary} · ${copy.factConflicted(conflicts.length)}`,
     error,
     footer: React.createElement(React.Fragment, null,
       React.createElement(Button, { variant: 'outline', className: 'nano-modal-action', onClick: () => { void onRefresh() } }, copy.refreshGit),
@@ -157,7 +160,23 @@ export function BranchDrawer({ copy, open, git, onClose, onPull, onRefresh, onCh
         }, behind > 0 ? `${copy.pullNow} ${behind}` : copy.pullNow)),
     onCancel: onClose,
   },
-  React.createElement('div', { className: 'nxe-scm', 'data-nxe-scm': 'branch' },
+  React.createElement('div', { className: 'nxe-scm nxe-repo', 'data-nxe-scm': 'branch' },
+    conflicts.length === 0 ? null : React.createElement('section', {
+      className: 'nxe-repo-conflict', 'data-nxe-conflicts': String(conflicts.length),
+    },
+    React.createElement('p', { className: 'nxe-repo-conflict-title' },
+      React.createElement('span', { className: 'nxe-chip-flag', 'data-kind': 'conflict', 'aria-hidden': 'true' }, '!'),
+      ' ',
+      copy.factConflicted(conflicts.length)),
+    React.createElement('p', { className: 'nxe-drawer-empty' }, copy.branchConflictBlocks),
+    React.createElement('ul', { className: 'nxe-drawer-list nxe-repo-conflict-list' }, conflicts.map(path =>
+      React.createElement('li', { key: path, className: 'nxe-change', 'data-status': 'U' },
+        React.createElement('span', { className: 'nxe-change-status', 'data-status': 'U' }, 'U'),
+        React.createElement('button', {
+          type: 'button', className: 'nxe-drawer-link', title: path,
+          onClick: () => onOpenConflict?.(path),
+        }, path))))),
+    React.createElement(HistoryRail, { copy, history, currentBranch: current }),
     React.createElement(Input, {
       value: query,
       placeholder: copy.branchFilter,
@@ -180,13 +199,18 @@ export function BranchDrawer({ copy, open, git, onClose, onPull, onRefresh, onCh
             },
             React.createElement('button', {
               type: 'button', className: 'nxe-drawer-branch',
-              disabled: row.current === true || row.inOtherWorktree === true || busy === true,
-              title: row.inOtherWorktree === true ? copy.branchHeldElsewhere : row.name,
+              disabled: row.current === true || row.inOtherWorktree === true || busy === true || conflicts.length > 0,
+              title: conflicts.length > 0
+                ? copy.branchConflictBlocks
+                : row.inOtherWorktree === true ? copy.branchHeldElsewhere : row.name,
               onClick: () => { void onCheckout(row.name) },
               'data-nxe-checkout': row.name,
             }, row.name),
             row.commit === '' ? null : React.createElement('span', { className: 'nxe-graph-hash' }, row.commit),
             row.upstream === null ? null : React.createElement('span', { className: 'nxe-drawer-row-path', title: row.upstream }, row.upstream),
+            conflicts.length > 0 && row.current === true
+              ? React.createElement('span', { className: 'nxe-drawer-row-badge', 'data-tone': 'danger' }, '!')
+              : null,
             row.inOtherWorktree === true
               ? React.createElement('span', { className: 'nxe-drawer-row-badge' }, copy.branchHeldShort)
               : row.current === true
@@ -212,26 +236,25 @@ export function BranchDrawer({ copy, open, git, onClose, onPull, onRefresh, onCh
                 hash === '' ? null : React.createElement('span', { className: 'nxe-graph-hash' }, hash),
                 here ? React.createElement('span', { className: 'nxe-drawer-row-badge', 'data-tone': 'current' }, copy.branchCurrentShort) : null),
               React.createElement('span', { className: 'nxe-worktree-path' }, shortenPath(row.path))))
-          })),
-        React.createElement(HistoryRail, { copy, history, currentBranch: current }))))
+          })))))
 }
 
 /**
- * The commit panel: message, grouped changes, and the commits this one will follow.
+ * The commit panel: the working tree only. No history graph and no pull.
  *
  * @param props - copy, Git summary, and the actions the panel can start.
  * @returns the panel, or null while closed.
  */
-export function CommitDrawer({ copy, open, git, onClose, onCommit, onPull, busy, error, onOpenConflict }) {
+export function CommitDrawer({ copy, open, git, onClose, onCommit, busy, error, onOpenConflict }) {
   usePanelConfinedLayer()
   const [message, setMessage] = useState('')
+  const [filter, setFilter] = useState('all')
+  useEffect(() => { if (!open) setFilter('all') }, [open])
   if (!open) return null
   const files = git?.files ?? []
   const groups = partitionChanges(files)
   const conflicts = groups.conflicts.length > 0 ? groups.conflicts : (git?.conflicts ?? []).map(path => ({ path, status: 'U' }))
   const pending = files.length
-  const upstream = git?.upstream ?? null
-  const behind = git?.behind ?? 0
   const current = branchName(git)
   const canCommit = pending > 0 && conflicts.length === 0 && message.trim() !== '' && busy !== true
   const submit = () => {
@@ -243,23 +266,14 @@ export function CommitDrawer({ copy, open, git, onClose, onCommit, onPull, busy,
     title: copy.commitDrawerTitle,
     description: copy.commitDrawerBody(pending, current ?? (git?.detached ? copy.detached : null)),
     error,
-    footer: React.createElement(React.Fragment, null,
-      upstream === null
-        ? null
-        : React.createElement(Button, {
-          variant: 'outline', className: 'nano-modal-action',
-          disabled: busy === true || behind === 0,
-          title: behind === 0 ? copy.pullNothing : copy.pullNow,
-          onClick: () => { void onPull() },
-        }, behind > 0 ? `${copy.pullNow} ${behind}` : copy.pullNow),
-      React.createElement(Button, {
-        variant: 'primary', className: 'nano-modal-action',
-        disabled: !canCommit,
-        onClick: submit,
-      }, copy.commit)),
+    footer: React.createElement(Button, {
+      variant: 'primary', className: 'nano-modal-action',
+      disabled: !canCommit,
+      onClick: submit,
+    }, copy.commit),
     onCancel: onClose,
   },
-  React.createElement('div', { className: 'nxe-scm', 'data-nxe-scm': 'commit' },
+  React.createElement('div', { className: 'nxe-scm nxe-local', 'data-nxe-scm': 'commit' },
     React.createElement(Input, {
       value: message,
       placeholder: current === null ? copy.commitPlaceholder : copy.commitPlaceholderOn(current),
@@ -274,14 +288,25 @@ export function CommitDrawer({ copy, open, git, onClose, onCommit, onPull, busy,
         }
       },
     }),
-    React.createElement('p', { className: 'nxe-scm-counts' },
-      React.createElement('span', { className: 'nxe-scm-count' }, copy.countStaged(groups.staged.length)),
-      React.createElement('span', { className: 'nxe-scm-count' }, copy.countUnstaged(groups.unstaged.length)),
-      React.createElement('span', { className: 'nxe-scm-count' }, copy.countUntracked(groups.untracked.length)),
-      conflicts.length === 0 ? null : React.createElement('span', { className: 'nxe-scm-count', 'data-tone': 'danger' }, copy.countConflict(conflicts.length))),
-    React.createElement(HistoryRail, { copy, history: git?.history, currentBranch: current }),
-    conflicts.length === 0 ? null : React.createElement('section', { className: 'nxe-scm-group', 'data-tone': 'danger' },
-      React.createElement('h3', { className: 'nxe-drawer-heading' }, copy.conflictsHeading(conflicts.length)),
+    React.createElement('div', { className: 'nxe-local-filters', role: 'group', 'aria-label': copy.filterChanges },
+      [
+        { id: 'all', label: copy.filterAll, count: pending },
+        { id: 'staged', label: copy.localStaged, count: groups.staged.length },
+        { id: 'unstaged', label: copy.localUnstaged, count: groups.unstaged.length },
+        { id: 'untracked', label: copy.localUntracked, count: groups.untracked.length },
+        ...(conflicts.length === 0 ? [] : [{ id: 'conflict', label: copy.localConflicts, count: conflicts.length }]),
+      ].map(item => React.createElement(Button, {
+        key: item.id,
+        variant: filter === item.id ? 'primary' : 'outline',
+        className: 'nxe-local-filter',
+        disabled: item.id !== 'all' && item.count === 0,
+        'aria-pressed': String(filter === item.id),
+        onClick: () => setFilter(item.id),
+      }, `${item.label} ${item.count}`))),
+    filter !== 'all' && filter !== 'conflict' ? null : conflicts.length === 0 ? null : React.createElement('section', { className: 'nxe-scm-group', 'data-tone': 'danger' },
+      React.createElement('h3', { className: 'nxe-local-head', 'data-tone': 'danger' },
+        React.createElement('span', null, copy.localConflicts),
+        React.createElement('span', { className: 'nxe-local-badge' }, String(conflicts.length))),
       React.createElement('p', { className: 'nxe-drawer-empty' }, copy.conflictsBody),
       React.createElement('ul', { className: 'nxe-drawer-list' }, conflicts.map(file => React.createElement('li', {
         key: file.path, className: 'nxe-change', 'data-status': 'U',
@@ -294,7 +319,13 @@ export function CommitDrawer({ copy, open, git, onClose, onCommit, onPull, busy,
     pending === 0
       ? React.createElement('p', { className: 'nxe-drawer-empty' }, copy.pendingEmpty)
       : React.createElement(React.Fragment, null,
-        React.createElement(ChangeGroup, { heading: copy.groupStaged(groups.staged.length), files: groups.staged, tone: 'staged' }),
-        React.createElement(ChangeGroup, { heading: copy.groupUnstaged(groups.unstaged.length), files: groups.unstaged, tone: 'unstaged' }),
-        React.createElement(ChangeGroup, { heading: copy.groupUntracked(groups.untracked.length), files: groups.untracked, tone: 'untracked' }))))
+        filter === 'all' || filter === 'staged'
+          ? React.createElement(ChangeGroup, { label: copy.localStaged, count: groups.staged.length, files: groups.staged, tone: 'staged' })
+          : null,
+        filter === 'all' || filter === 'unstaged'
+          ? React.createElement(ChangeGroup, { label: copy.localUnstaged, count: groups.unstaged.length, files: groups.unstaged, tone: 'unstaged' })
+          : null,
+        filter === 'all' || filter === 'untracked'
+          ? React.createElement(ChangeGroup, { label: copy.localUntracked, count: groups.untracked.length, files: groups.untracked, tone: 'untracked' })
+          : null)))
 }

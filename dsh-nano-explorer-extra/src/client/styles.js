@@ -55,19 +55,15 @@ export const STYLE = `${NANO_STYLES}
 
 /* Row decorations injected through the tree Factory's accessory seat. */
 .nxe-acc {
-  /* Sized by its contents: a fixed min-width plus a gap could not hold the glyph and clipped it to a
-     couple of pixels. The rail right-aligns this wrapper, so content size is enough to line the marks
-     up. */
+  /* Every mark sits in the same 14px cell. The gap is what keeps a link glyph off the status dot. */
   display: inline-flex; align-items: center; justify-content: flex-end;
-  flex: 0 0 auto; gap: 0;
+  flex: 0 0 auto; gap: 4px;
 }
 .nxe-acc-letter {
-  font-size: 12px; font-weight: 800; line-height: 1; letter-spacing: 0;
-  /* No fixed width and no padding: the glyph keeps its natural ink, which is what the eye lines up
-     against the 6px dot. Tabular figures and a fixed box only squeezed the mark narrower. */
-  display: inline-block; padding: 0; margin: 0;
-  text-align: right; white-space: nowrap;
-  /* The rail right-aligns its content, so a narrower glyph still ends on the dot's edge. */
+  box-sizing: border-box; width: 14px; height: 14px; flex: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 650; line-height: 14px; letter-spacing: 0;
+  padding: 0; margin: 0; text-align: center; white-space: nowrap;
 }
 /* The mark column is fixed by the letter rule below; this selector only keeps the colour hooks. */
 .nxe-acc-letter[data-status] { text-align: right; }
@@ -77,7 +73,12 @@ export const STYLE = `${NANO_STYLES}
 .nxe-acc-letter[data-status="R"] { color: var(--nxe-git-renamed); }
 .nxe-acc-letter[data-status="U"] { color: var(--nxe-git-conflicted); }
 .nxe-acc-letter[data-status="?"] { color: var(--nxe-git-untracked); }
-.nxe-acc-link { display: inline-flex; color: var(--dsw-alias-label-tertiary); }
+.nxe-acc-link {
+  box-sizing: border-box; width: 14px; height: 14px; flex: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--dsw-alias-label-tertiary);
+}
+.nxe-acc-link svg { width: 12px; height: 12px; flex: none; }
 .nxe-acc-ignored { font: 400 9px/1 var(--dsw-font-family); color: var(--dsw-alias-label-tertiary); border: .5px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-xs); padding: 1px 3px; }
 .nxe-open { display: none; }
 [data-nxe-hover] .nxe-open, [data-nxe-focus] .nxe-open { display: inline-flex; }
@@ -246,9 +247,12 @@ export const STYLE = `${NANO_STYLES}
 
 /* A folder's summary dot: present whenever anything below it changed, visible while collapsed. */
 .nxe-acc-dot {
-  width: 6px; height: 6px; border-radius: 50%; background: currentColor;
-  /* Same 6px column as the letter, flush right. */
-  flex: none; margin: 0;
+  box-sizing: border-box; width: 14px; height: 14px; flex: none; margin: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: transparent; border-radius: 0;
+}
+.nxe-acc-dot::after {
+  content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor;
 }
 .nxe-acc-dot[data-status="M"] { color: var(--nxe-git-modified); }
 .nxe-acc-dot[data-status="A"] { color: var(--nxe-git-added); }
@@ -363,8 +367,9 @@ export const STYLE = `${NANO_STYLES}
    upstream changed this path. It sits left of the local letter and reads as metadata, not as a
    second status. */
 .nxe-acc-remote {
-  font-size: 10px; font-weight: 600; line-height: 1; letter-spacing: 0;
-  display: inline-flex; align-items: center; white-space: nowrap;
+  box-sizing: border-box; height: 14px; min-width: 14px; flex: none;
+  font-size: 11px; font-weight: 650; line-height: 14px; letter-spacing: 0;
+  display: inline-flex; align-items: center; justify-content: center; white-space: nowrap;
   color: var(--dsw-alias-label-tertiary); opacity: .95;
 }
 .nxe-acc-remote[data-direction="pulled"] { color: var(--dsw-alias-link, #2f81f7); }
@@ -376,9 +381,11 @@ export const STYLE = `${NANO_STYLES}
 
 /* An ignored row's own mark, drawn where the status letter would be. */
 .nxe-acc-ignored-letter {
-  /* Quiet by design: an ignored entry is muted, so its mark must not read as an alert. */
-  font-size: 11px; font-weight: 400; line-height: 1;
-  display: inline-flex; align-items: center;
+  /* Same 14px cell as the status letter. The slashed circle draws smaller than a bold M, so the
+     glyph is one step larger to match the letter's cap height. Quiet ink, not an alert. */
+  box-sizing: border-box; width: 14px; height: 14px; flex: none;
+  font-size: 13px; font-weight: 500; line-height: 14px;
+  display: inline-flex; align-items: center; justify-content: center;
   color: var(--nxe-ignored-ink); opacity: .8;
 }
 
@@ -455,6 +462,34 @@ export const STYLE = `${NANO_STYLES}
 }
 .nxe-scm-count[data-tone="danger"] { color: var(--dsw-alias-label-error, #e5534b); }
 .nxe-scm-group { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.nxe-local-filters { display: flex; flex-wrap: wrap; gap: 6px; }
+.nxe-local-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  margin: 10px 0 2px; font-size: 11px; font-weight: 600; line-height: 16px;
+  color: var(--dsw-alias-label-tertiary);
+}
+.nxe-local-badge {
+  flex: none; min-width: 1.4em; padding: 0 6px; border-radius: 999px;
+  font-size: 11px; line-height: 16px; text-align: center; font-variant-numeric: tabular-nums;
+  color: var(--dsw-alias-label-secondary); background: var(--dsw-alias-interactive-bg-hover);
+}
+.nxe-local-head[data-tone="danger"] { color: var(--dsw-alias-label-error, #e5534b); }
+.nxe-local-head[data-tone="danger"] .nxe-local-badge {
+  color: var(--dsw-alias-label-error, #e5534b);
+  background: color-mix(in oklab, var(--dsw-alias-label-error, #e5534b) 16%, transparent);
+}
+.nxe-repo .nxe-graph { max-height: 220px; overflow: auto; }
+.nxe-repo-conflict {
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 8px; border-radius: var(--dsw-radius-sm);
+  background: color-mix(in oklab, var(--dsw-alias-label-error, #e5534b) 14%, transparent);
+}
+.nxe-repo-conflict-title {
+  margin: 0; font-size: 12px; font-weight: 600; line-height: 18px;
+  color: var(--dsw-alias-label-error, #e5534b);
+}
+.nxe-repo-conflict-list { max-height: 120px; overflow: auto; }
+.nxe-drawer-row-badge[data-tone="danger"] { color: var(--dsw-alias-label-error, #e5534b); }
 .nxe-change {
   display: grid; grid-template-columns: 14px minmax(0, 1fr); gap: 6px; align-items: baseline;
   min-height: 20px; padding: 1px 4px; border-radius: var(--dsw-radius-sm);

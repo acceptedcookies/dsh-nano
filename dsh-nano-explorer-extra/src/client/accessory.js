@@ -42,7 +42,7 @@ export function createAccessory(api) {
         'aria-label': broken ? copy.linkBroken : (link ? copy.symlinkOutsideBadge : copy.symlinkBadge),
         'data-nxe-symlink': broken ? 'broken' : (link ? 'outside' : 'inside'),
       }, React.createElement('svg', {
-        viewBox: '0 0 24 24', width: 11, height: 11, fill: 'none', stroke: 'currentColor',
+        viewBox: '0 0 24 24', width: 12, height: 12, fill: 'none', stroke: 'currentColor',
         strokeWidth: 2, strokeLinecap: 'round', 'aria-hidden': 'true',
       },
       React.createElement('path', { d: 'M10 13a5 5 0 0 0 7 0l2-2a5 5 0 0 0-7-7l-1 1' }),

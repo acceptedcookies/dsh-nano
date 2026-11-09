@@ -11,6 +11,7 @@ import * as primitives from '@deepseek-ai/dsh-client-ui-primitives'
 import { NanoToast } from 'dsh-nano-ui'
 import { useTree } from './tree.js'
 import { absoluteOf, basenameOf, parentOf, relativeTo, treeKeyOf } from './paths.js'
+import { replaceDirectoryStatus } from './format.js'
 import { checkName, nextName } from './names.js'
 
 const { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } = React
@@ -146,14 +147,28 @@ export function ExplorerBody(props) {
 
 
 
+  // Bumped on every workspace-wide read. A directory query that started against the previous
+  // snapshot is discarded, so a late answer cannot paint a letter the new footer no longer counts.
+  const gitEpoch = useRef(0)
+  const treeRef = useRef(null)
+  treeRef.current = tree
+  const loadDirectoryStatusRef = useRef(async () => {})
+
   /** Re-read Git state alone: it answers in one command and the branch line waits on nothing. */
   const refreshGit = useCallback(async () => {
     if (cwd === undefined) return
-    if (!prefsRef.current.showGitStatus) { setGit(null); setGitError(undefined); return }
+    if (!prefsRef.current.showGitStatus) { setGit(null); setGitError(undefined); setDirectoryStatus(new Map()); return }
+    const epoch = gitEpoch.current + 1
+    gitEpoch.current = epoch
     const result = await request(`/status?sessionId=${encodeURIComponent(sessionId)}`)
+    if (epoch !== gitEpoch.current) return
     if (!result.ok) { setGitError(result.message); return }
     setGit(result.git ?? null)
     setGitError(result.gitError)
+    // The per-directory map is a refinement of this snapshot, not a second source of truth. Leaving
+    // it in place is how a row kept "M" after the footer had already returned to 0.
+    setDirectoryStatus(new Map())
+    for (const path of treeRef.current?.expanded ?? []) void loadDirectoryStatusRef.current(path)
   }, [cwd, sessionId, request])
 
   /** Re-count the workspace; a large tree takes seconds, so this is separate and cancellable. */
@@ -304,24 +319,30 @@ export function ExplorerBody(props) {
    */
   const loadDirectoryStatus = useCallback(async directory => {
     if (cwd === undefined || !prefsRef.current.showGitStatus) return
+    const epoch = gitEpoch.current
     const result = await request(`/status?sessionId=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(directory)}`)
+    // A workspace-wide refresh started while this was in flight. Its answer describes the old tree.
+    if (epoch !== gitEpoch.current) return
     if (!result.ok || result.git === null || result.git === undefined) return
     const root = result.git.root
-    setDirectoryStatus(current => {
-      const next = new Map(current)
-      for (const file of result.git.files ?? []) {
-        const absolute = root === undefined ? file.path : `${root.replace(/\/+$/u, '')}/${file.path}`
-        // Keys must match `statusKeyOf`, which relativizes against the checkout root, not the
-        // workspace root: a repository opened from a subdirectory would otherwise never line up.
-        const base = checkoutRootRef.current ?? cwd
-        const relative = relativeTo(base, absolute)
-        // Store the whole entry, not just its letter: `statusMap` holds entries from both sources and
-        // every reader takes `.status` off one. A bare string here made them read `undefined`.
-        if (relative !== absolute) next.set(relative, file)
-      }
-      return next
-    })
+    const base = checkoutRootRef.current ?? cwd
+    const directoryRelative = relativeTo(base, directory)
+    // Outside the checkout there is nothing to key, and wiping the map from a bad prefix would hide
+    // letters that still belong to this workspace.
+    if (directoryRelative === directory && directoryRelative !== '') return
+    const files = []
+    for (const file of result.git.files ?? []) {
+      const absolute = root === undefined ? file.path : `${root.replace(/\/+$/u, '')}/${file.path}`
+      // Keys must match `statusKeyOf`, which relativizes against the checkout root, not the
+      // workspace root: a repository opened from a subdirectory would otherwise never line up.
+      const relative = relativeTo(base, absolute)
+      // Store the whole entry, not just its letter: `statusMap` holds entries from both sources and
+      // every reader takes `.status` off one. A bare string here made them read `undefined`.
+      if (relative !== absolute) files.push({ ...file, path: relative })
+    }
+    setDirectoryStatus(current => replaceDirectoryStatus(current, directoryRelative, files))
   }, [cwd, sessionId, request])
+  loadDirectoryStatusRef.current = loadDirectoryStatus
 
   /**
    * Expand one directory, or ask once whether to cross the workspace boundary.

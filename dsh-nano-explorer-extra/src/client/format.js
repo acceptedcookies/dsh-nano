@@ -105,6 +105,29 @@ export function shortenPath(path) {
  * @param nowMs - clock, injectable so a test does not depend on the wall time.
  * @returns `{ unit, value }` where `unit` is `now`, `minutes`, `hours`, `days`, `date`, or `unknown`.
  */
+/**
+ * Replace one directory's slice of the per-directory Git map.
+ *
+ * The workspace-wide status is the footer. A directory query only adds the files inside a folder the
+ * wide query had collapsed, and it used to be merged by insertion alone: a file that later became
+ * clean stayed in the map, so the row kept its letter after the footer had gone back to zero.
+ * @param current - the map the tree is drawing, keyed by checkout-relative path.
+ * @param directoryRelative - the directory just read, relative to the checkout root. `''` is the root.
+ * @param files - the fresh entries for that directory, already keyed the same way.
+ * @returns the next map. The previous map is left untouched.
+ */
+export function replaceDirectoryStatus(current, directoryRelative, files) {
+  const next = new Map(current)
+  const prefix = directoryRelative === '' ? '' : `${directoryRelative}/`
+  for (const key of next.keys()) {
+    if (prefix === '' || key === directoryRelative || key.startsWith(prefix)) next.delete(key)
+  }
+  for (const file of files) {
+    if (typeof file?.path === 'string' && file.path !== '') next.set(file.path, file)
+  }
+  return next
+}
+
 export function ageParts(unixSeconds, nowMs = Date.now()) {
   if (!Number.isFinite(unixSeconds) || unixSeconds <= 0) return { unit: 'unknown', value: '' }
   const minutes = Math.floor(Math.max(0, nowMs - unixSeconds * 1000) / 60000)

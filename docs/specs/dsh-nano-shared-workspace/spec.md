@@ -294,6 +294,27 @@ nano-shared-workspace/
 
 ## 11. 落地顺序（P0 → Phase A → B → C）
 
+**已落地（2026-11-09，Phase-0 骨架）**：`dsh-nano-shared-workspace/` 插件已建并在 `dsh-dev.local` 端到端验证——
+
+- **侧栏镜像区块**：`sidebar.workspaces` 是单席位槽，无法注册并列区块；实现改为 `shell.overlay` 常驻 + DOM graft——从 `[role="tree"]`（session 树根，生产 bundle 仍保留）向上爬到「parent 含全局面板 `<nav>`」的 regionArea，prepend host 元素再 portal `SharedSection`。**注意**：生产版移除了 `data-sidebar-workspace-header` 与 `data-sidebar-scrollport`，不能依赖；`data-collapsed` 属于 Settings 按钮而非侧栏。宽窄判断实测 region 宽度 >80px；rail 兜底从 `nav.nextElementSibling` 取 region。
+- **设置弹窗**：`NanoDialog`（`dsh-nano-ui` 共享包）+ `Input`；字段 = 用户名 / MinIO Token / 可选 accessKey；端点+bucket 只读展示。
+- **凭据**：`ctx.credentials.set('DSH_NSW_IDENTITY', {username,token,accessKey})` + `'DSH_NSW_USERNAME'`；GET settings 返回 `maskedSecret`（前4…后4），凭据落 `~/.dsh-dev/.credentials.yaml`。
+- **路由**：`GET/PUT /nano-shared-workspace/settings`、`POST /settings/clear`、`GET /status`，经 `connection.requestRejection` 门禁。
+- **profile 注册**：`~/.dsh-dev/profiles/web/package.json` 的 `dsh.profile.bundles` + `dependencies` + `node_modules` 符号链接（`../../../plugins/<name>`，两级目录深度）——`--patch` 在进程命令行未出现，加载走的是 profile bundle 路径。
+- **验证**：PUT 写 → GET 回读 `configured:true`；「已配置 · seanz」状态、rail↔wide 切换、NanoDialog 保存、掩码展示截图确认。
+
+**Phase-0.5 增量（2026-11-09 同日）——共享工作区 = 云端真源 + 本地副本，绝不落本地「工作区」列表**：
+
+业主纠正后的正确模型：**workspaceId 云端生成（randomBytes(8).hex），正本在 S3；`members[].localPath` 只是各端副本位置**。曾错误地把「先建本地 workspace 再打标」当共享——已废弃。
+
+- **新建** = 自建 NanoDialog（`src/client/create-dialog.js`：名称输入 + 面包屑目录浏览，`ctx.uiWorkspace.listDirectory`/`createDirectory` RPC，与 BrowseDirectoryFlow 同后端，非 OS 选择器）→ `POST /workspaces/create` **S3 先写** `workspaces/{randhex}.json` → 本地仅普通目录，`ctx.workspaces.create` 永不调用。
+- **加入** = 未加入行点击 → 同对话框 join 模式 → `POST /workspaces/join` 把 `member+localPath` merge 进 marker（无 CAS，v1 竞态取并集）。
+- **session→workspace 映射**：`matchWorkspace(cwd, markers)` = member `localPath` 前缀匹配（最长前缀优先），兼客 legacy path-hash id（`git remote hash > basename hash`）。
+- **上行**（`src/host/session-io.js`）：`POST /sync` 扫 `$DSH_HOME/sessions/*/*/session.v4.jsonl.zstd` → matchWorkspace → claim 租约（`claims/{id}.json`，TTL 90s）→ `body/{i}.part`（64KB 对齐前缀切片）→ `meta.json`。被 foreign writer/claim 占着则跳过。
+- **下行**：`GET /sessions` 列全远端 meta（delimiter 让 session 目录进 `prefixes` 而非 `keys`）；`POST /transcript` 拼 part → zstd 解码 → JSONL 事件数组。
+- **客户端**：工作区行展开会话列表（session 行）→ 点击 `TranscriptDialog` 只读投影 user/assistant/tool 行；`window.__nsw` 调试钩子。
+- **端到端验证**：E2E 创建 `e2e-shared-ws` marker 落桶且本地工作区无泄漏；副本目录造 session → `pushed:419b` → `/sessions` 列出 → transcript 弹窗读出 user/assistant 消息；他人 marker（`alice`）`未加入`→ 选副本 → members merge 双键 → `已加入`。
+
 | 阶段 | 内容 | 验收 |
 |---|---|---|
 | **P0 spike** | ①外部工件落盘后 `stat()` 是否可见；②`open(id,'read')`+`read` 链能读到落盘工件；③迷你 S3 客户端打 R2/pgs3 的 ListV2+PUT+GET 往返 | 三个都绿才进 Phase A |
@@ -313,8 +334,8 @@ dsh-nano-shared-workspace/
 ├── README.md
 ├── locale/{en,zh}.json
 ├── src/
-│   ├── host/{entry,s3,sync,session-io,routes,state}.js
-│   └── client/{index,panel,settings,prefs,i18n,styles}.js(x)
+│   ├── host/{entry,s3,sync,session-io,routes,state,credentials}.js
+│   └── client/{index,graft,section,settings-dialog,api,i18n,styles}.js
 ├── lib/{host.js,client.js}
 ├── scripts/build-client.mjs
 └── docs/specs/dsh-nano-shared-workspace/spec.md  ← 本文件（仓库 docs/ 下）

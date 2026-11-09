@@ -40,6 +40,10 @@ export function usePanelConfinedLayer() {
       const rect = panel.getBoundingClientRect()
       if (rect.width < 1 || rect.height < 1) return
       for (const card of document.querySelectorAll('.nano-dialog-card')) {
+        // Only fence cards this plugin drew: every dialog here renders nxe-*
+        // classes inside the body. Other plugins' cards (e.g. the shared
+        // workspace settings) stay full-viewport centered.
+        if (card.querySelector('[class*="nxe-"]') === null) continue
         const layer = card.parentElement
         if (!(layer instanceof HTMLElement)) continue
         layer.classList.add('nxe-confined-layer')

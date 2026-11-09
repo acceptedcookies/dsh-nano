@@ -1,6 +1,12 @@
 /** HTTP routes the client half calls: settings read/write and a status probe. */
 
+import { mkdir, opendir } from 'node:fs/promises'
+import { homedir } from 'node:os'
+import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 import { clearIdentity, readIdentity, writeIdentity } from './credentials.js'
+import { createS3 } from './s3.js'
+import { createWorkspace, instanceId, joinWorkspace, listWorkspaces } from './workspaces.js'
+import { fetchTranscript, listRemoteSessions, materializeSession, syncAll } from './session-io.js'
 
 export const PREFIX = '/nano-shared-workspace'
 
@@ -42,6 +48,13 @@ const mask = secret => (typeof secret === 'string' && secret.length >= 8
  * @param config - validated Config value `{endpoint, bucket, region, prefix}`.
  */
 export function createRoutes(ctx, config) {
+  const dshHome = process.env.DSH_HOME ?? `${homedir()}/.dsh`
+  const syncState = { bySession: new Map() }
+  const s3 = async () => {
+    const identity = await readIdentity(ctx)
+    if (identity?.configured !== true) throw new Error('join identity is not configured')
+    return { client: createS3(config, identity), identity }
+  }
   return {
     '/settings': {
       method: 'GET',
@@ -90,6 +103,153 @@ export function createRoutes(ctx, config) {
           state: identity?.configured === true ? 'idle' : 'unconfigured',
           sessions: [],
         }
+      },
+    },
+    '/workspaces': {
+      method: 'GET',
+      async run() {
+        const identity = await readIdentity(ctx)
+        if (identity?.configured !== true) return { workspaces: [] }
+        const rows = await listWorkspaces(createS3(config, identity))
+        return { workspaces: rows }
+      },
+    },
+    // Cloud canonical first: the marker is created on S3 BEFORE the client
+    // picks a local replica path, so the workspace is born remote. The local
+    // workspace list is deliberately untouched.
+    '/workspaces/create': {
+      method: 'POST',
+      async run(req) {
+        const { client, identity } = await s3()
+        const body = JSON.parse(await readBody(req) || '{}')
+        const name = typeof body?.name === 'string' && body.name.trim() !== '' ? body.name.trim() : undefined
+        const localPath = typeof body?.localPath === 'string' && body.localPath.trim() !== '' ? body.localPath.trim() : undefined
+        if (name === undefined || localPath === undefined) {
+          return { ok: false, error: 'name and localPath are required' }
+        }
+        const marker = await createWorkspace(client, ctx, identity, { name, localPath })
+        return { ok: true, workspace: marker }
+      },
+    },
+    '/workspaces/join': {
+      method: 'POST',
+      async run(req) {
+        const { client, identity } = await s3()
+        const body = JSON.parse(await readBody(req) || '{}')
+        if (typeof body?.workspaceId !== 'string' || typeof body?.localPath !== 'string'
+            || body.localPath.trim() === '') {
+          return { ok: false, error: 'workspaceId and localPath are required' }
+        }
+        const marker = await joinWorkspace(client, ctx, identity,
+          { workspaceId: body.workspaceId, localPath: body.localPath.trim() })
+        return { ok: true, workspace: marker }
+      },
+    },
+    '/sync': {
+      method: 'POST',
+      async run() {
+        const { client, identity } = await s3()
+        const results = await syncAll(client, ctx, identity, dshHome, syncState)
+        return {
+          ok: true,
+          pushed: results.filter(r => r.outcome.startsWith('pushed')).length,
+          outcomes: results.slice(0, 50),
+        }
+      },
+    },
+    '/sessions': {
+      method: 'GET',
+      async run() {
+        const { client } = await s3()
+        return { sessions: await listRemoteSessions(client) }
+      },
+    },
+    // Host-side mkdir: the directoryPicker/browse backend (which owns
+    // `directoryPicker/createDirectory`) is not composed on every instance —
+    // the native picker's host lacks it and the remote call 502s. This route
+    // always works on our host plugin.
+    '/mkdir': {
+      method: 'POST',
+      async run(req) {
+        const body = JSON.parse(await readBody(req) || '{}')
+        const parent = typeof body?.parent === 'string' && isAbsolute(body.parent) ? resolve(body.parent) : undefined
+        const name = typeof body?.name === 'string' ? body.name.trim() : ''
+        if (parent === undefined) return { ok: false, error: 'parent must be an absolute path' }
+        if (name === '' || name === '.' || name === '..' || /[/\\]/.test(name)) {
+          return { ok: false, error: 'name must be a single path segment' }
+        }
+        const target = join(parent, name)
+        await mkdir(target, { recursive: false })
+        return { ok: true, path: target }
+      },
+    },
+    // Host-side directory listing — the browse backend also owns
+    // `directoryPicker/list`, so call it the same way `/mkdir` is called:
+    // one level, dirs only, with breadcrumbs for the dialog's navigation.
+    '/ls': {
+      method: 'POST',
+      async run(req) {
+        const body = JSON.parse(await readBody(req) || '{}')
+        const home = homedir()
+        const path = typeof body?.path === 'string' && isAbsolute(body.path) ? resolve(body.path) : home
+        const dir = await opendir(path)
+        const entries = []
+        try {
+          for (;;) {
+            const dirent = await dir.read()
+            if (dirent === null) break
+            if (!dirent.isDirectory() && !dirent.isSymbolicLink()) continue
+            entries.push({ name: dirent.name, path: join(path, dirent.name), hidden: dirent.name.startsWith('.') })
+          }
+        } finally { await dir.close() }
+        entries.sort((a, b) => a.name.localeCompare(b.name))
+        const crumbs = []
+        for (let node = path; ; ) {
+          crumbs.unshift({ name: node === '/' ? '' : basename(node), path: node })
+          const parent = dirname(node)
+          if (parent === node) break
+          node = parent
+        }
+        return { path, home, crumbs, entries, truncated: false }
+      },
+    },
+    '/transcript': {
+      method: 'POST',
+      async run(req) {
+        const { client } = await s3()
+        const body = JSON.parse(await readBody(req) || '{}')
+        if (typeof body?.workspaceId !== 'string' || typeof body?.sessionId !== 'string') {
+          return { ok: false, error: 'workspaceId and sessionId are required' }
+        }
+        const { meta, events } = await fetchTranscript(client, body.workspaceId, body.sessionId)
+        return { ok: true, meta, events }
+      },
+    },
+    // Copy a shared session onto this machine's session tree, with cwd rewritten
+    // to the local replica, so the Host can open it like any other session.
+    '/materialize': {
+      method: 'POST',
+      async run(req) {
+        const { client, identity } = await s3()
+        const body = JSON.parse(await readBody(req) || '{}')
+        if (typeof body?.workspaceId !== 'string' || typeof body?.sessionId !== 'string') {
+          return { ok: false, error: 'workspaceId and sessionId are required' }
+        }
+        const marker = (await listWorkspaces(client)).find(row => row.workspaceId === body.workspaceId)
+        if (marker === undefined) return { ok: false, error: 'shared workspace not found' }
+        const me = (await instanceId(ctx)).slice(0, 8)
+        const member = Object.values(marker.members ?? {}).find(item => item?.username === identity.username && String(item.instance ?? '').startsWith(me))
+          ?? Object.values(marker.members ?? {}).find(item => item?.username === identity.username)
+        const localPath = member?.localPath
+        if (typeof localPath !== 'string' || localPath === '') {
+          return { ok: false, error: 'join this shared workspace before opening its sessions' }
+        }
+        const landed = await materializeSession(client, dshHome, {
+          workspaceId: body.workspaceId,
+          sessionId: body.sessionId,
+          localPath,
+        })
+        return { ok: true, ...landed }
       },
     },
   }

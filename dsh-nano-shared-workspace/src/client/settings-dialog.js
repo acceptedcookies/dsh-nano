@@ -63,6 +63,17 @@ export function SettingsDialog({ face, settings }) {
     onCancel: face.settings.close,
   },
     createElement('div', { className: 'nsw-endpoint' },
+      // Identity row: the joined state lives here, not under the section
+      // header — the sidebar body only shows the join prompt.
+      createElement('span', { className: 'nsw-endpoint-row nsw-identity' },
+        createElement('span', { className: 'nsw-endpoint-key' }, copy.status),
+        createElement('span', { className: 'nsw-identity-value' },
+          settings?.configured === true
+            ? `${copy.configured} · ${settings.username ?? '—'}`
+            : copy.unconfigured),
+        settings?.configured === true && settings?.maskedSecret != null
+          ? createElement('span', { className: 'nsw-identity-value', 'data-masked': 'true' }, settings.maskedSecret)
+          : null),
       createElement('span', { className: 'nsw-endpoint-row' },
         createElement('span', { className: 'nsw-endpoint-key' }, copy.endpointLabel),
         createElement('code', { className: 'nsw-endpoint-value' }, settings?.endpoint ?? '—')),

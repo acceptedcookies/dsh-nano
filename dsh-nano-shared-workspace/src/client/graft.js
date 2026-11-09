@@ -15,8 +15,11 @@
 
 import React from 'react'
 import { createPortal } from 'react-dom'
+import { NanoDialog } from 'dsh-nano-ui'
 import { SharedSection } from './section.js'
 import { SettingsDialog } from './settings-dialog.js'
+import { TranscriptDialog } from './transcript-dialog.js'
+import { CreateWorkspaceDialog } from './create-dialog.js'
 
 const HOST_ATTR = 'data-nano-shared-workspace'
 
@@ -80,10 +83,12 @@ function graftHost() {
 }
 
 /**
- * Props: `{ face }` — the apply-time object supplying `copy()`, `prefs`,
- * `onToggleRail`, and `settings` (the dialog controller + latest settings).
+ * Props: `{ face, renderSlot }` — `face` supplies copy(), the settings store,
+ * and the header actions; `renderSlot` comes with the entry registration (the
+ * entry declares `sidebar.workspaces.directoryFlow` as a child so this
+ * component can raise the same picker the local "添加工作区" button renders).
  */
-export function SidebarGraft({ face }) {
+export function SidebarGraft({ face, renderSlot }) {
   const [host, setHost] = React.useState(() => graftHost())
   const [wide, setWide] = React.useState(() => sidebarIsWide())
   // The settings flag lives on the store, not React state: without this
@@ -116,5 +121,20 @@ export function SidebarGraft({ face }) {
   if (host === null) return null
   return React.createElement(React.Fragment, null,
     createPortal(React.createElement(SharedSection, { face, wide }), host),
-    settings?.open === true ? createPortal(React.createElement(SettingsDialog, { face, settings }), document.body) : null)
+    settings?.open === true ? createPortal(React.createElement(SettingsDialog, { face, settings }), document.body) : null,
+    settings?.transcript != null ? createPortal(React.createElement(TranscriptDialog, { face, transcript: settings.transcript }), document.body) : null,
+    typeof settings?.notice === 'string' && settings.notice !== ''
+      ? createPortal(React.createElement(NanoDialog, {
+        copy: face.copy(),
+        title: face.copy().noticeTitle,
+        confirmLabel: face.copy().closeLabel,
+        onConfirm: face.dismissNotice,
+        onCancel: face.dismissNotice,
+      }, settings.notice), document.body)
+      : null,
+    settings?.createDialog != null ? createPortal(React.createElement(CreateWorkspaceDialog, {
+      face,
+      mode: settings.createDialog.mode,
+      workspaceId: settings.createDialog.workspaceId,
+    }), document.body) : null)
 }

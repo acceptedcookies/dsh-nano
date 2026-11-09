@@ -29,7 +29,7 @@ function Fact({ label, value, tone }) {
  * @param props - copy, Git summary, and the actions the panel can start.
  * @returns the panel, or null while closed.
  */
-export function BranchDrawer({ copy, open, git, onClose, onPull, onRefresh, busy, error }) {
+export function BranchDrawer({ copy, open, git, onClose, onPull, onRefresh, onCheckout, busy, error }) {
   if (!open) return null
   const worktrees = git?.worktrees ?? []
   const upstream = git?.upstream ?? null
@@ -67,6 +67,28 @@ export function BranchDrawer({ copy, open, git, onClose, onPull, onRefresh, busy
         : (git?.files?.length ?? 0) > 0 ? copy.factDirty(git.files.length) : copy.factClean,
       tone: (git?.conflicts?.length ?? 0) > 0 ? 'danger' : 'default',
     })),
+  React.createElement('h3', { className: 'nxe-drawer-heading' }, copy.branchesHeading),
+  (git?.branches ?? []).length === 0
+    ? React.createElement('p', { className: 'nxe-drawer-empty' }, copy.branchesEmpty)
+    : React.createElement('ul', { className: 'nxe-drawer-list nxe-drawer-scroll' }, (git?.branches ?? []).map(row =>
+      React.createElement('li', {
+        key: row.name, className: 'nxe-drawer-row',
+        'data-current': String(row.current === true),
+        'data-blocked': String(row.inOtherWorktree === true),
+      },
+      React.createElement('button', {
+        type: 'button', className: 'nxe-drawer-branch',
+        disabled: row.current === true || row.inOtherWorktree === true || busy === true,
+        title: row.inOtherWorktree === true ? copy.branchHeldElsewhere : row.name,
+        onClick: () => { void onCheckout(row.name) },
+        'data-nxe-checkout': row.name,
+      }, row.name),
+      row.upstream === null ? null : React.createElement('span', { className: 'nxe-drawer-row-path' }, row.upstream),
+      row.inOtherWorktree === true
+        ? React.createElement('span', { className: 'nxe-drawer-row-badge' }, copy.branchHeldShort)
+        : row.current === true
+          ? React.createElement('span', { className: 'nxe-drawer-row-badge', 'data-tone': 'current' }, copy.branchCurrentShort)
+          : null))),
   React.createElement('h3', { className: 'nxe-drawer-heading' }, copy.worktreesHeading),
   worktrees.length === 0
     ? React.createElement('p', { className: 'nxe-drawer-empty' }, copy.worktreesEmpty)

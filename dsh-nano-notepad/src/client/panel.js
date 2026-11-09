@@ -24,7 +24,7 @@ import {
   writeUi,
 } from './db.js'
 import { applyFormat, escapeHtml, renderMarkdown } from './markdown.js'
-import { validateJson, positionOf, formatJson, minifyJson, escapeJson, renderJsonTree } from './json.js'
+import { validateJson, positionOf, formatJson, minifyJson, escapeJson, unescapeJson, decodeEscapes, renderJsonTree } from './json.js'
 import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
 import { copyFor } from './i18n.js'
 import React from 'react'
@@ -365,6 +365,8 @@ const COLLAPSE_ICON = googleIcon('M7.41 15.41 12 10.83l4.59 4.58L18 14l-6-6-6 6 
 const FORMAT_ICON = googleIcon('M3 21h18v-2H3v2zM6.5 12l2.83 2.83 1.41-1.41L7.91 10.59l2.83-2.83-1.41-1.41L6.5 8.59 3.67 11.41zM13 6h8v2h-8V6zm0 4h6v2h-6v-2zm0 4h4v2h-4v-2z')
 const MINIFY_ICON = googleIcon('M3 5h18v2H3V5zm0 4h14v2H3V9zm0 4h10v2H3v-2zm0 4h6v2H3v-2z')
 const ESCAPE_ICON = googleIcon('M8 5 4 12h4v7l4-9H8z')
+const UNESCAPE_ICON = googleIcon('M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z')
+const STRIP_ICON = googleIcon('M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z')
 const CHEVRON_ICON = googleIcon('M16.59 8.59 12 13.17 7.41 8.59 6 10l6 6 6-6z')
 const CHEVRON_LEFT = googleIcon('M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z')
 const MINIMIZE_ICON = googleIcon('M6 19h12v2H6z')
@@ -434,7 +436,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     <div class="np-body">
       <aside class="np-tree"><div class="np-tree-head"><button type="button" class="np-tree-toggle" data-action="toggle-tree"></button><div class="np-ws"><button type="button" class="np-ws-btn" data-action="ws-toggle" aria-haspopup="listbox" aria-expanded="false"><span class="np-ws-label"></span><span class="np-ws-caret" aria-hidden="true">${CHEVRON_ICON}</span></button></div><span style="flex:1"></span><span class="np-tree-tools"><button type="button" data-action="new-file" data-i18n="newFile" data-i18n-mode="title">${PLUS_ICON}</button><button type="button" data-action="new-folder" data-i18n="newFolder" data-i18n-mode="title">${FOLDER_PLUS_ICON}</button><button type="button" class="np-danger" data-action="delete" data-i18n="delete" data-i18n-mode="title">${TRASH_ICON}</button></span></div><div class="np-nodes" data-root="true"></div><div class="np-tree-foot"><button type="button" data-action="settings" data-i18n="settings" data-i18n-mode="label">${SETTINGS_ICON}<span data-i18n="settings"></span></button><button type="button" data-action="close" data-i18n="close" data-i18n-mode="label">${CLOSE_ICON}<span data-i18n="close"></span></button></div></aside>
       <div class="np-editor">
-        <div class="np-toolbar"><span class="np-md-tools">${toolbar}</span><span class="np-json-tools" hidden><button type="button" class="np-tool" data-json="expand" data-i18n="jsonExpand" data-i18n-mode="title">${EXPAND_ICON}</button><button type="button" class="np-tool" data-json="collapse" data-i18n="jsonCollapse" data-i18n-mode="title">${COLLAPSE_ICON}</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-json="format" data-i18n="jsonFormat" data-i18n-mode="title">${FORMAT_ICON}</button><button type="button" class="np-tool" data-json="minify" data-i18n="jsonMinify" data-i18n-mode="title">${MINIFY_ICON}</button><button type="button" class="np-tool" data-json="escape" data-i18n="jsonEscape" data-i18n-mode="title">${ESCAPE_ICON}</button></span><button type="button" class="np-switch" data-action="view" role="switch" aria-checked="false" data-i18n="viewGroup" data-i18n-mode="title"><span class="np-switch-label" data-i18n="source"></span><span class="np-switch-label" data-i18n="preview"></span><span class="np-switch-thumb" data-i18n="source"></span></button></div>
+        <div class="np-toolbar"><span class="np-md-tools">${toolbar}</span><span class="np-json-tools" hidden><button type="button" class="np-tool" data-json="expand" data-i18n="jsonExpand" data-i18n-mode="title">${EXPAND_ICON}</button><button type="button" class="np-tool" data-json="collapse" data-i18n="jsonCollapse" data-i18n-mode="title">${COLLAPSE_ICON}</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-json="format" data-i18n="jsonFormat" data-i18n-mode="title">${FORMAT_ICON}</button><button type="button" class="np-tool" data-json="minify" data-i18n="jsonMinify" data-i18n-mode="title">${MINIFY_ICON}</button><button type="button" class="np-tool" data-json="escape" data-i18n="jsonEscape" data-i18n-mode="title">${ESCAPE_ICON}</button><button type="button" class="np-tool" data-json="unescape" data-i18n="jsonUnescape" data-i18n-mode="title">${UNESCAPE_ICON}</button><button type="button" class="np-tool" data-json="strip" data-i18n="jsonStrip" data-i18n-mode="title">${STRIP_ICON}</button></span><button type="button" class="np-switch" data-action="view" role="switch" aria-checked="false" data-i18n="viewGroup" data-i18n-mode="title"><span class="np-switch-label" data-i18n="source"></span><span class="np-switch-label" data-i18n="preview"></span><span class="np-switch-thumb" data-i18n="source"></span></button></div>
         <textarea class="np-write"></textarea>
         <div class="np-slash" hidden></div>
         <div class="np-read" tabindex="0" hidden></div>
@@ -1796,7 +1798,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
         state.view = 'rendered'
         render()
       } else {
-        const helpers = { format: formatJson, minify: minifyJson, escape: escapeJson }
+        const helpers = { format: formatJson, minify: minifyJson, escape: escapeJson, unescape: unescapeJson, strip: decodeEscapes }
         const next = helpers[jsonOp]?.(source.value)
         if (typeof next === 'string' && next !== source.value) {
           source.value = next

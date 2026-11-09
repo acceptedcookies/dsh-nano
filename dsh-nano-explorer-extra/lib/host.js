@@ -209,12 +209,14 @@ async function readStatus(ctx, config, request) {
   const stashed = stash === void 0 || stash.exitCode !== 0 ? 0 : stash.stdout.split("\n").filter((line) => line.trim() !== "").length;
   const remote = typeof parsed.upstream !== "string" || parsed.upstream === "" ? void 0 : await remoteDivergence(ctx, config, request);
   const worktrees = await listWorktrees(ctx, config, request);
+  const branches = await listBranches(ctx, config, request);
   const conflicts = parsed.files.filter((file) => file.status === "U").map((file) => file.path);
   return {
     root,
     ...parsed,
     stashed,
     worktrees,
+    branches,
     conflicts,
     ...remote === void 0 ? {} : { remote }
   };
@@ -301,6 +303,47 @@ async function pullUpstream(ctx, config, request) {
     throw new Error(detail === "" ? "git pull failed" : detail);
   }
   return firstLine(result.stdout) || firstLine(result.stderr);
+}
+async function listBranches(ctx, config, request) {
+  const result = await runGit(ctx, config, {
+    ...request,
+    args: ["for-each-ref", "--format=%(refname:short)%09%(HEAD)%09%(upstream:short)%09%(objectname:short)", "refs/heads"],
+    allowedExitCodes: [0, 128]
+  }).catch(() => void 0);
+  if (result === void 0 || result.exitCode !== 0) return [];
+  const worktrees = await listWorktrees(ctx, config, request);
+  const held = new Set(worktrees.map((row) => row.branch).filter((name2) => typeof name2 === "string"));
+  const rows = [];
+  for (const line of result.stdout.split("\n")) {
+    if (line.trim() === "") continue;
+    const [name2, head, upstream, commit] = line.split("	");
+    if (name2 === void 0 || name2 === "") continue;
+    rows.push({
+      name: name2,
+      current: head === "*",
+      upstream: upstream === void 0 || upstream === "" ? null : upstream,
+      commit: commit ?? "",
+      // The current branch is of course held by this worktree; that is not a conflict.
+      inOtherWorktree: held.has(name2) && head !== "*"
+    });
+  }
+  return rows;
+}
+async function checkoutBranch(ctx, config, request) {
+  const { branch } = request;
+  const name2 = typeof branch === "string" ? branch.trim() : "";
+  if (name2 === "") throw new Error("a branch name is required");
+  if (name2.startsWith("-")) throw new Error("a branch name must not begin with a dash");
+  const result = await runGit(ctx, config, {
+    ...request,
+    args: ["checkout", name2],
+    allowedExitCodes: [0, 1, 128]
+  });
+  if (result.exitCode !== 0) {
+    const detail = firstLine(result.stderr) || firstLine(result.stdout);
+    throw new Error(detail === "" ? "git checkout failed" : detail);
+  }
+  return { branch: name2 };
 }
 
 // src/host/listing.js
@@ -719,6 +762,20 @@ function createRoutes(ctx, config) {
           signal: void 0
         });
         return { summary };
+      }
+    },
+    "/checkout": {
+      method: "POST",
+      async run(req) {
+        const body = await jsonBody(req);
+        const { root, policy, session } = await scopeOf(ctx, body.sessionId);
+        return checkoutBranch(ctx, config, {
+          cwd: root,
+          policy,
+          session,
+          branch: body.branch,
+          signal: void 0
+        });
       }
     },
     "/create-file": {

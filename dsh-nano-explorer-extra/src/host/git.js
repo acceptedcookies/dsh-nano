@@ -296,10 +296,11 @@ export async function readStatus(ctx, config, request) {
   // The footer draws two buttons from this one payload: a branch button that opens worktrees and a
   // commit button that opens the pending work. Both need facts the plain status does not carry.
   const worktrees = await listWorktrees(ctx, config, request)
+  const branches = await listBranches(ctx, config, request)
   const conflicts = parsed.files.filter(file => file.status === 'U').map(file => file.path)
 
   return {
-    root, ...parsed, stashed, worktrees, conflicts,
+    root, ...parsed, stashed, worktrees, branches, conflicts,
     ...(remote === undefined ? {} : { remote }),
   }
 }
@@ -448,4 +449,73 @@ export async function listConflicts(ctx, config, request) {
   }).catch(() => undefined)
   if (result === undefined || result.exitCode !== 0) return []
   return result.stdout.split('\n').map(line => line.trim()).filter(line => line !== '')
+}
+
+/**
+ * List the branches in this repository, marking the one this worktree has checked out.
+ *
+ * `for-each-ref` reports every local branch with its own upstream and head marker, so one call
+ * answers the whole picker. A branch that another worktree holds is flagged, because Git refuses to
+ * check it out here and the reader should see why before pressing it.
+ *
+ * @param ctx - context providing the process services.
+ * @param config - executable and process limits.
+ * @param request - working directory and cancellation.
+ * @returns one row per local branch.
+ */
+export async function listBranches(ctx, config, request) {
+  const result = await runGit(ctx, config, {
+    ...request,
+    args: ['for-each-ref', '--format=%(refname:short)%09%(HEAD)%09%(upstream:short)%09%(objectname:short)', 'refs/heads'],
+    allowedExitCodes: [0, 128],
+  }).catch(() => undefined)
+  if (result === undefined || result.exitCode !== 0) return []
+  // A branch checked out in another worktree cannot be taken here; Git reports that only on the
+  // checkout attempt, so the held set comes from the worktree listing.
+  const worktrees = await listWorktrees(ctx, config, request)
+  const held = new Set(worktrees.map(row => row.branch).filter(name => typeof name === 'string'))
+  const rows = []
+  for (const line of result.stdout.split('\n')) {
+    if (line.trim() === '') continue
+    const [name, head, upstream, commit] = line.split('\t')
+    if (name === undefined || name === '') continue
+    rows.push({
+      name,
+      current: head === '*',
+      upstream: upstream === undefined || upstream === '' ? null : upstream,
+      commit: commit ?? '',
+      // The current branch is of course held by this worktree; that is not a conflict.
+      inOtherWorktree: held.has(name) && head !== '*',
+    })
+  }
+  return rows
+}
+
+/**
+ * Check out one branch in this worktree.
+ *
+ * Git refuses on its own terms — a branch held by another worktree, or local changes the switch would
+ * overwrite — and its message names the reason, so the refusal is surfaced verbatim instead of being
+ * guessed at beforehand.
+ *
+ * @param ctx - context providing the process services.
+ * @param config - executable and process limits.
+ * @param request - working directory, branch name, and cancellation.
+ * @returns the branch that is now current.
+ * @throws with Git's own explanation when the switch is refused.
+ */
+export async function checkoutBranch(ctx, config, request) {
+  const { branch } = request
+  const name = typeof branch === 'string' ? branch.trim() : ''
+  if (name === '') throw new Error('a branch name is required')
+  // The value reaches a process argument, so it must not look like an option.
+  if (name.startsWith('-')) throw new Error('a branch name must not begin with a dash')
+  const result = await runGit(ctx, config, {
+    ...request, args: ['checkout', name], allowedExitCodes: [0, 1, 128],
+  })
+  if (result.exitCode !== 0) {
+    const detail = firstLine(result.stderr) || firstLine(result.stdout)
+    throw new Error(detail === '' ? 'git checkout failed' : detail)
+  }
+  return { branch: name }
 }

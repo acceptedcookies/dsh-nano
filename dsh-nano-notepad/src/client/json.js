@@ -154,6 +154,31 @@ export function escapeJson(text) {
   return JSON.stringify(text)
 }
 
+/**
+ * Reverse of {@link escapeJson}: when the buffer is a JSON string literal,
+ * unwrap it back to raw text; otherwise decode escape sequences in place so
+ * the action is still useful on partially-escaped content.
+ */
+export function unescapeJson(text) {
+  try {
+    const parsed = JSON.parse(text)
+    if (typeof parsed === 'string') return parsed
+  } catch { /* fall through to inline decoding */ }
+  return decodeEscapes(text)
+}
+
+/**
+ * Decode JSON escape sequences in place without requiring valid JSON:
+ * \n \t \r \b \f \/ \\ \" and \uXXXX become their literal characters.
+ */
+export function decodeEscapes(text) {
+  return text.replace(/\\u([0-9a-fA-F]{4})|\\([ntrbf"'\\/])/g, (match, hex, single) => {
+    if (hex !== undefined) return String.fromCharCode(parseInt(hex, 16))
+    const table = { n: '\n', t: '\t', r: '\r', b: '\b', f: '\f', '"': '"', "'": "'", '\\': '\\', '/': '/' }
+    return table[single] ?? match
+  })
+}
+
 /** @param {unknown} value */
 function typeOf(value) {
   if (value === null) return 'null'

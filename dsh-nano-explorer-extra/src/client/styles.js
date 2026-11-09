@@ -389,4 +389,21 @@ export const STYLE = `${NANO_STYLES}
 }
 .nxe-stash svg { width: 14px; height: 14px; flex: none; }
 .nxe-stash-count { font-size: 11px; line-height: 1; }
+
+/* Branch rows: the name is the control, the trailing badge explains why a row is unavailable. */
+.nxe-drawer-branch {
+  flex: 1; min-width: 0; text-align: left; border: 0; background: transparent; padding: 0;
+  color: var(--dsw-alias-label-primary); font: inherit; cursor: pointer;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.nxe-drawer-branch:disabled { cursor: default; }
+.nxe-drawer-row[data-current="true"] .nxe-drawer-branch { font-weight: 600; }
+.nxe-drawer-row[data-blocked="true"] .nxe-drawer-branch { color: var(--dsw-alias-label-tertiary); }
+.nxe-drawer-branch:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary, var(--dsw-alias-link)); outline-offset: 1px; }
+.nxe-drawer-row-badge {
+  flex: 0 0 auto; font-size: 10px; line-height: 1; padding: 2px 5px;
+  border-radius: var(--dsw-radius-sm);
+  color: var(--dsw-alias-label-tertiary); background: var(--dsw-alias-interactive-bg-hover);
+}
+.nxe-drawer-row-badge[data-tone="current"] { color: var(--nxe-git-added); }
 `

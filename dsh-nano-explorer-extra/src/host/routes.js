@@ -1,6 +1,6 @@
 /** The six HTTP routes: one request gate, one JSON envelope, and the session-scoped work behind them. */
 
-import { commitAll, ignoredAmong, listConflicts, listWorktrees, pullUpstream, readStatus } from './git.js'
+import { checkoutBranch, commitAll, ignoredAmong, listBranches, listConflicts, listWorktrees, pullUpstream, readStatus } from './git.js'
 import { absoluteOf, isLexicallyInside, listDirectory } from './listing.js'
 import { createFile, createFolder, removeEntry, rename } from './mutate.js'
 import { statisticsOf } from './stats.js'
@@ -210,6 +210,16 @@ export function createRoutes(ctx, config) {
           cwd: root, policy, session, signal: undefined,
         })
         return { summary }
+      },
+    },
+    '/checkout': {
+      method: 'POST',
+      async run(req) {
+        const body = await jsonBody(req)
+        const { root, policy, session } = await scopeOf(ctx, body.sessionId)
+        return checkoutBranch(ctx, config, {
+          cwd: root, policy, session, branch: body.branch, signal: undefined,
+        })
       },
     },
     '/create-file': {

@@ -429,6 +429,26 @@ export function ExplorerBody(props) {
     await refreshStats()
   }, [sessionId, request, tree, refreshGit, refreshStats])
 
+  /**
+   * Switch this worktree to another branch.
+   *
+   * Git refuses when local changes would be overwritten or the branch is held by another worktree; its
+   * message names which, and it is shown inside the panel so the reader can act on it.
+   */
+  const doCheckout = useCallback(async branch => {
+    setDrawerBusy(true)
+    setDrawerError(undefined)
+    const result = await request('/checkout', { sessionId, branch })
+    setDrawerBusy(false)
+    if (!result.ok) { setDrawerError(result.message); return }
+    setToast(copy.branchSwitched(branch))
+    window.clearTimeout(toastTimer.current)
+    toastTimer.current = window.setTimeout(() => setToast(undefined), 2000)
+    await tree.refresh()
+    await refreshGit()
+    await refreshStats()
+  }, [sessionId, request, tree, refreshGit, refreshStats, copy])
+
   /** Commit from inside the panel, keeping the panel open so its list refreshes in place. */
   const doDrawerCommit = useCallback(async message => {
     setDrawerBusy(true)
@@ -706,6 +726,7 @@ export function ExplorerBody(props) {
       copy, open: drawer === 'branch', git, busy: drawerBusy, error: drawerError,
       onClose: () => { setDrawer(null); setDrawerError(undefined) },
       onPull: doPull,
+      onCheckout: doCheckout,
       onRefresh: async () => { await refreshGit() },
     }),
     React.createElement(CommitDrawer, {

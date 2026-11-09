@@ -1,10 +1,22 @@
-/** Host half. Exposes an enriched model catalog for the browser selector. */
+/** Host half. Exposes an enriched model catalog and the media engine routes for the browser selector. */
+
+import { homedir } from 'node:os'
+import { join } from 'node:path'
+import { imagineSkill, readEngine, scanEngines, writeEngine } from './lib/host-media.js'
 
 export const name = 'nano-model-selector'
 
-export const inject = ['llm', 'webServer', 'connection']
+export const inject = ['llm', 'webServer', 'connection', 'skills']
 
 const ROUTE = '/nano-model-selector/catalog'
+const ENGINES_ROUTE = '/nano-model-selector/media-engines'
+const ENGINE_ROUTE = '/nano-model-selector/media-engine'
+
+/** Plugin-private state file holding the chosen media engine. */
+const STATE_PATH = join(
+  process.env.DSH_DATA_DIR ?? join(homedir(), '.dsh'),
+  'plugins', 'nano-model-selector', 'media-engine.json',
+)
 
 /** Reuse a built catalog this long; the selector does not need per-open freshness. */
 const CATALOG_TTL_MS = 15000
@@ -118,6 +130,90 @@ function catalogHandler(ctx) {
   }
 }
 
+/** Read at most 16 KiB of request body as UTF-8 JSON. */
+function readBody(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = []
+    let size = 0
+    req.on('data', chunk => {
+      size += chunk.length
+      if (size > 16384) { req.destroy(); reject(new Error('body too large')); return }
+      chunks.push(chunk)
+    })
+    req.on('end', () => {
+      try { resolve(chunks.length === 0 ? {} : JSON.parse(Buffer.concat(chunks).toString('utf8'))) }
+      catch { reject(new Error('invalid JSON body')) }
+    })
+    req.on('error', reject)
+  })
+}
+
+/**
+ * Register (or re-register) the `imagine` skill for the persisted engine.
+ * @param ctx - host context.
+ */
+function registerImagine(ctx) {
+  let dispose = null
+  const refresh = () => {
+    dispose?.()
+    dispose = null
+    const engine = readEngine(STATE_PATH)
+    const skill = engine === null ? null : imagineSkill(engine)
+    if (skill !== null) {
+      dispose = ctx.skills.register({
+        ...skill,
+        source: 'runtime',
+        invocation: { modelInvocable: false, userInvocable: true },
+        provider: 'nano-model-selector',
+      })
+    }
+  }
+  refresh()
+  return { refresh, dispose: () => dispose?.() }
+}
+
+/** @param ctx - host context. */
+function mediaHandler(ctx, imagine) {
+  return async (req, res) => {
+    const rejection = ctx.get('connection')?.requestRejection(req)
+    if (rejection !== undefined) { res.statusCode = rejection; res.end(); return }
+    const url = new URL(req.url ?? '/', 'http://localhost')
+    if (url.pathname === ENGINES_ROUTE) {
+      if (req.method !== 'GET' && req.method !== 'HEAD') {
+        res.setHeader('allow', 'GET, HEAD')
+        sendJson(res, 405, { error: `method ${req.method} is not allowed` })
+        return
+      }
+      sendJson(res, 200, scanEngines())
+      return
+    }
+    if (url.pathname === ENGINE_ROUTE) {
+      if (req.method === 'GET' || req.method === 'HEAD') {
+        sendJson(res, 200, { engine: readEngine(STATE_PATH) })
+        return
+      }
+      if (req.method === 'PUT') {
+        try {
+          const body = await readBody(req)
+          const engines = scanEngines().engines
+          const wanted = engines.find(engine => engine.key === body.engine)
+          if (wanted === undefined) { sendJson(res, 400, { error: 'unknown media engine' }); return }
+          writeEngine(STATE_PATH, wanted.key)
+          imagine.refresh()
+          sendJson(res, 200, { engine: wanted.key })
+        } catch (error) {
+          sendJson(res, 400, { error: messageOf(error) })
+        }
+        return
+      }
+      res.setHeader('allow', 'GET, HEAD, PUT')
+      sendJson(res, 405, { error: `method ${req.method} is not allowed` })
+      return
+    }
+    sendJson(res, 404, { error: 'not found' })
+  }
+}
+
 /** @param {import('@deepseek-ai/cordis').Context} ctx */
 export function apply(ctx) {
   ctx.effect(() => ctx.webServer.register({
@@ -125,4 +221,12 @@ export function apply(ctx) {
     path: ROUTE,
     handler: catalogHandler(ctx),
   }), 'nano-model-selector: catalog route')
+
+  const imagine = registerImagine(ctx)
+  ctx.effect(() => () => imagine.dispose(), 'nano-model-selector: imagine skill')
+
+  const media = mediaHandler(ctx, imagine)
+  for (const path of [ENGINES_ROUTE, ENGINE_ROUTE]) {
+    ctx.effect(() => ctx.webServer.register({ kind: 'exact', path, handler: media }), `nano-model-selector: ${path}`)
+  }
 }

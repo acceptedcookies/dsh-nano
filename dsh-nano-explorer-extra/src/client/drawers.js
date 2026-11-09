@@ -9,6 +9,7 @@
 import React from 'react'
 import { Button, Input } from '@deepseek-ai/dsh-client-ui-primitives'
 import { NanoDialog } from 'dsh-nano-ui'
+import { usePanelConfinedLayer } from './dialogs.js'
 
 const { useState } = React
 
@@ -30,6 +31,7 @@ function Fact({ label, value, tone }) {
  * @returns the panel, or null while closed.
  */
 export function BranchDrawer({ copy, open, git, onClose, onPull, onRefresh, onCheckout, busy, error }) {
+  usePanelConfinedLayer()
   if (!open) return null
   const worktrees = git?.worktrees ?? []
   const upstream = git?.upstream ?? null
@@ -106,6 +108,7 @@ export function BranchDrawer({ copy, open, git, onClose, onPull, onRefresh, onCh
  * @returns the panel, or null while closed.
  */
 export function CommitDrawer({ copy, open, git, onClose, onCommit, onPull, busy, error, onOpenConflict }) {
+  usePanelConfinedLayer()
   const [message, setMessage] = useState('')
   if (!open) return null
   const files = git?.files ?? []

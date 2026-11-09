@@ -6,11 +6,13 @@ import { NanoToast } from 'dsh-nano-ui'
 import { copyFor } from './i18n.js'
 import { BrandMark } from './BrandMark.jsx'
 import { readFavorites, writeFavorites } from './favorites.js'
+import { fetchEngine, fetchEngines, readEngineCache, selectEngine, writeEngineCache } from './media.js'
 import {
   CheckIcon,
   ChevronDownIcon,
   CloseIcon,
   GridIcon,
+  MediaIcon,
   ModelIcon,
   RefreshIcon,
   DragHandleIcon,
@@ -114,6 +116,12 @@ export function ModelSelector({ locked, available, directory, load, select, lang
   const [query, setQuery] = React.useState('')
   const [favorites, setFavorites] = React.useState(() => readFavorites())
   const [details, setDetails] = React.useState(null)
+  // Media engines: the cache paints the last choice instantly, the host's
+  // state file is authoritative once its answer arrives.
+  const [engines, setEngines] = React.useState(null)
+  const [mediaEngine, setMediaEngine] = React.useState(() => readEngineCache())
+  const [mediaBusy, setMediaBusy] = React.useState(null)
+  const enginesFetchedAt = React.useRef(0)
   const [position, setPosition] = React.useState(null)
   const [toast, setToast] = React.useState(null)
   const triggerRef = React.useRef(null)
@@ -179,6 +187,38 @@ export function ModelSelector({ locked, available, directory, load, select, lang
   const refreshDetails = React.useCallback(() => {
     fetchDetails()
   }, [fetchDetails])
+
+  // Engine list + persisted choice refresh together, behind the same short TTL
+  // the catalog uses so each panel open stays one cheap fetch.
+  const refreshEngines = React.useCallback(() => {
+    let cancelled = false
+    fetchEngines()
+      .then(value => { if (!cancelled) { setEngines(value.engines); enginesFetchedAt.current = Date.now() } })
+      .catch(() => { /* Keep the last scan. */ })
+    fetchEngine()
+      .then(value => { if (!cancelled && value !== null) { setMediaEngine(value); writeEngineCache(value) } })
+      .catch(() => { /* Keep the cached choice. */ })
+    return () => { cancelled = true }
+  }, [])
+
+  React.useEffect(() => {
+    if (!open) return undefined
+    if (engines !== null && Date.now() - enginesFetchedAt.current < DETAILS_TTL_MS) return undefined
+    return refreshEngines()
+  }, [open, engines, refreshEngines])
+
+  const chooseEngine = key => {
+    if (mediaBusy !== null) return
+    if (mediaEngine === key) { close(true); return }
+    setMediaBusy(key)
+    selectEngine(key)
+      .then(() => setMediaEngine(key))
+      .catch(error => {
+        toastSeq.current += 1
+        setToast({ seq: toastSeq.current, text: `${copy.mediaSelectError}: ${error instanceof Error ? error.message : String(error)}` })
+      })
+      .finally(() => setMediaBusy(null))
+  }
 
   React.useEffect(() => {
     if (!open) return undefined
@@ -285,10 +325,10 @@ export function ModelSelector({ locked, available, directory, load, select, lang
       const margin = 12
       const width = Math.min(440, window.innerWidth - margin * 2)
       const available = window.innerHeight - margin * 2
-      // Fixed to 4.5 model cards so switching filters never resizes the
+      // Fixed to 5.5 model cards so switching filters never resizes the
       // panel. Each card occupies its height plus the gap below it, followed
       // by the top bar, effort footer, list padding, and 2px border.
-      const height = Math.min((MODEL_CARD_HEIGHT + MODEL_CARD_GAP) * 4.5 + PANEL_CHROME_HEIGHT, available)
+      const height = Math.min((MODEL_CARD_HEIGHT + MODEL_CARD_GAP) * 5.5 + PANEL_CHROME_HEIGHT, available)
       let left = Math.min(Math.max(margin, rect.right - width), Math.max(margin, window.innerWidth - width - margin))
       let top = rect.top - height - 8
       if (top < margin) top = Math.min(window.innerHeight - height - margin, rect.bottom + 8)
@@ -607,6 +647,17 @@ export function ModelSelector({ locked, available, directory, load, select, lang
               >
                 <StarIcon size={17} filled={filter === 'favorites'} />
               </button>
+              <button
+                type="button"
+                className="nms-rail-item"
+                data-active={filter === 'media'}
+                title={copy.mediaGeneration}
+                aria-label={copy.mediaGeneration}
+                aria-pressed={filter === 'media'}
+                onClick={() => { setFilter('media'); setQuery('') }}
+              >
+                <MediaIcon size={17} />
+              </button>
               <span className="nms-rail-sep" aria-hidden="true" />
               {brands.map(brand => (
                 <button
@@ -637,21 +688,66 @@ export function ModelSelector({ locked, available, directory, load, select, lang
                   </div>
                 )}
 
-                {visibleFavorites.length > 0 && (
+                {filter === 'media' && (
+                  <div>
+                    <div className="nms-group"><MediaIcon className="nms-group-star" size={12} />{copy.mediaTitle}<span className="nms-group-count">{copy.mediaSubtitle}</span></div>
+                    {engines === null && (
+                      <div className="nms-loading"><span className="nms-pending-dot" />{copy.loading}</div>
+                    )}
+                    {(engines ?? [])
+                      .filter(engine => {
+                        const wanted = query.trim().toLowerCase()
+                        return wanted === '' || `${engine.label} ${engine.key}`.toLowerCase().includes(wanted)
+                      })
+                      .map(engine => {
+                        const selected = mediaEngine === engine.key
+                        const pending = mediaBusy === engine.key
+                        return (
+                          <div className="nms-model-row" data-active={selected} data-pending={pending} key={engine.key}>
+                            <button
+                              type="button"
+                              className="nms-model-main"
+                              disabled={mediaBusy !== null}
+                              title={engine.path ?? engine.detail}
+                              onClick={() => chooseEngine(engine.key)}
+                            >
+                              <span className="nms-model-mark"><BrandMark brandKey={engine.key} brandName={engine.label} /></span>
+                              <span className="nms-model-copy">
+                                <span className="nms-model-line">
+                                  <span className="nms-model-name">{engine.label}</span>
+                                  <span className={`nms-tag ${engine.available ? 'nms-tag-success' : 'nms-tag-warning'}`}>
+                                    {engine.available ? copy.mediaEngineDetected : copy.mediaEngineMissing}
+                                  </span>
+                                </span>
+                                <span className="nms-model-desc">{engine.available ? engine.path : engine.detail}</span>
+                                <span className="nms-model-meta">{copy.mediaHint}</span>
+                              </span>
+                            </button>
+                            <span className="nms-model-side">
+                              {pending && <span className="nms-pending-dot" aria-label={copy.switching} />}
+                              {selected && !pending && <span className="nms-check"><CheckIcon size={16} /></span>}
+                            </span>
+                          </div>
+                        )
+                      })}
+                  </div>
+                )}
+
+                {filter !== 'media' && visibleFavorites.length > 0 && (
                   <div>
                     <div className="nms-group"><StarIcon className="nms-group-star" size={12} filled />{copy.favorites}<span className="nms-group-count">{copy.favoriteCount(visibleFavorites.length)}</span></div>
                     {visibleFavorites.map(item => renderModel(item, { reorderable: filter === 'favorites' }))}
                   </div>
                 )}
 
-                {filter !== 'favorites' && visibleGroups.map(group => (
+                {filter !== 'favorites' && filter !== 'media' && visibleGroups.map(group => (
                   <div key={group.id}>
                     <div className="nms-group">{group.name}<span className="nms-group-count">{copy.modelCount(group.models.length)}</span></div>
                     {group.models.map(item => renderModel(item))}
                   </div>
                 ))}
 
-                {visibleCount === 0 && state.status !== 'loading' && !reloading && (
+                {filter !== 'media' && visibleCount === 0 && state.status !== 'loading' && !reloading && (
                   <div className="nms-empty">
                     <span className="nms-empty-icon">{filter === 'favorites' ? <StarIcon size={17} /> : <ModelIcon size={17} />}</span>
                     {filter === 'favorites' && favorites.length === 0
@@ -669,6 +765,7 @@ export function ModelSelector({ locked, available, directory, load, select, lang
                 ))}
               </div>
 
+              {filter !== 'media' && (
               <footer className="nms-effort">
                 <span className="nms-effort-label">{copy.effort}</span>
                 {current === null || currentItem === undefined
@@ -693,6 +790,7 @@ export function ModelSelector({ locked, available, directory, load, select, lang
                       </div>
                     )}
               </footer>
+              )}
             </section>
           </div>
         </div>,

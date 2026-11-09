@@ -13,6 +13,7 @@ import {
   IconPinOutlineRegular,
   IconRefreshOutlineRegular,
   IconSearchOutlineRegular,
+  IconSparkleRegular,
   IconWarningTriangleOutlineRegular,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 
@@ -69,4 +70,9 @@ export function RouteIcon(props) {
 /** @param {{ className?: string, size?: number }} props */
 export function DragHandleIcon(props) {
   return <IconDragHandleOutlineRegular {...props} />
+}
+
+/** @param {{ className?: string, size?: number }} props */
+export function MediaIcon(props) {
+  return <IconSparkleRegular {...props} />
 }

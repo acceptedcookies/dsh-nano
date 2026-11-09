@@ -96,35 +96,36 @@ export const STYLE = `${NANO_STYLES}
 .nxe-status-left, .nxe-status-right { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .nxe-status-right { font-variant-numeric: tabular-nums; color: var(--dsw-alias-label-tertiary); }
 
-/* One chip family for both footer controls: same height, same padding, same glyph gap, so the two
-   buttons read as a pair instead of two different widgets. */
-.nxe-chip {
-  display: inline-flex; align-items: center; gap: 5px;
-  box-sizing: border-box; height: 20px; padding: 0 7px;
-  border: 1px solid transparent; border-radius: var(--dsw-radius-sm);
-  background: transparent; color: var(--dsw-alias-label-secondary);
-  font: inherit; font-variant-numeric: tabular-nums; line-height: 1; white-space: nowrap;
+/* The footer follows the composer's own statistics row verbatim, so the two read as one surface:
+   same size, same line box, same glyph box, same padding, same tertiary ink. Every value below is
+   copied from the shipped StatsPills stylesheet rather than chosen here. */
+.nxe-status, .nxe-status-left, .nxe-status-right {
+  font-size: calc(var(--dsh-content-font-size-secondary, 13px) - 1px);
+  line-height: calc(20px + var(--dsh-content-font-delta-secondary, 0px));
 }
-.nxe-chip svg { width: 14px; height: 14px; flex: none; }
-.nxe-chip-label { overflow: hidden; text-overflow: ellipsis; max-width: 150px; }
-.nxe-chip-count { font-weight: 600; }
-.nxe-chip-sync { color: var(--dsw-alias-label-tertiary); font-size: 11px; }
+.nxe-chip, .nxe-figure {
+  display: inline-flex; align-items: center; gap: 6px;
+  box-sizing: border-box; max-width: 100%;
+  padding: 1px 8px; border: none; border-radius: var(--dsw-radius-sm);
+  background: transparent; color: var(--dsw-alias-label-tertiary);
+  font: inherit; font-variant-numeric: tabular-nums; line-height: inherit; white-space: nowrap;
+}
+.nxe-chip svg, .nxe-figure svg { width: 14px; height: 14px; flex: none; }
+.nxe-chip-label, .nxe-figure-value { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .nxe-chip[data-nxe-git="none"] { color: var(--dsw-alias-label-tertiary); }
 .nxe-chip-button { cursor: pointer; }
 @media (hover: hover) {
-  .nxe-chip-button:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+  .nxe-chip-button:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-secondary); }
 }
 .nxe-chip-button:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary, var(--dsw-alias-link)); outline-offset: 1px; }
-/* The two flags a reader scans for: uncommitted work, and an unresolved merge. */
-.nxe-chip-flag { font-weight: 700; line-height: 1; }
+/* The two flags a reader scans for: uncommitted work, and an unresolved merge. Both sit inside the
+   line box, so they inherit the same size as every other mark in this row. */
+.nxe-chip-flag { font-weight: 700; }
 .nxe-chip-flag[data-kind="dirty"] { color: var(--nxe-git-modified); }
 .nxe-chip-flag[data-kind="conflict"] { color: var(--dsw-alias-label-error, #e5534b); }
 .nxe-chip-static { cursor: default; }
-
-/* Each totals figure is glyph plus number; a bare number said nothing about what it counted. */
-.nxe-figure { display: inline-flex; align-items: center; gap: 4px; }
-.nxe-figure svg { width: 13px; height: 13px; flex: none; opacity: .8; }
-.nxe-figure-value { font-variant-numeric: tabular-nums; }
+.nxe-chip-count { font-variant-numeric: tabular-nums; }
+.nxe-chip-sync { font-variant-numeric: tabular-nums; }
 
 /* Drawer contents: facts, then the two lists. */
 .nxe-fact-group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }

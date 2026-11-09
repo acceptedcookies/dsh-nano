@@ -7,6 +7,35 @@ import cursor from './logos/Cursor.svg'
 import devin from './logos/Devin.svg'
 import copilot from './logos/GithubCopilot.svg'
 import gemini from './logos/Gemini-CLI.svg'
+import grok from './logos/grok.svg'
+import codex from './logos/codex.svg'
+import anthropic from './logos/anthropic.svg'
+import claude from './logos/claude.svg'
+import openai from './logos/openai.svg'
+import google from './logos/google.svg'
+import qwen from './logos/qwen.svg'
+import kimi from './logos/kimi.svg'
+import moonshot from './logos/moonshotai.svg'
+import doubao from './logos/doubao.svg'
+import zhipu from './logos/zhipu.svg'
+import minimax from './logos/minimax.svg'
+import openrouter from './logos/openrouter.svg'
+import siliconflow from './logos/siliconcloud.svg'
+import volcengine from './logos/volcengine.svg'
+import azure from './logos/azure.svg'
+import aws from './logos/aws.svg'
+import vertexai from './logos/vertexai.svg'
+import ollama from './logos/ollama.svg'
+import lmstudio from './logos/lm-studio.svg'
+import vllm from './logos/vllm.svg'
+import fireworks from './logos/fireworks.svg'
+import cerebras from './logos/cerebras.svg'
+import sambanova from './logos/sambanova.svg'
+import groq from './logos/groq.svg'
+import together from './logos/together-ai.svg'
+import deepinfra from './logos/deepinfra.svg'
+import cohere from './logos/cohere.svg'
+import perplexity from './logos/perplexity.svg'
 import workbuddy from './logos/WorkBuddy.png'
 import magpie from './logos/Magpie.png'
 import { RouteIcon } from './icons.jsx'
@@ -22,6 +51,40 @@ const SVG_LOGOS = {
   githubcopilot: copilot,
   gemini,
   geminicli: gemini,
+  grok,
+  xai: grok,
+  codex,
+  anthropic,
+  claude,
+  'claude-code': claude,
+  openai,
+  google,
+  qwen,
+  kimi,
+  moonshot,
+  doubao,
+  zhipu,
+  minimax,
+  openrouter,
+  siliconflow,
+  siliconcloud: siliconflow,
+  volcengine,
+  azure,
+  azureai: azure,
+  aws,
+  bedrock: aws,
+  vertexai,
+  ollama,
+  lmstudio,
+  vllm,
+  fireworks,
+  cerebras,
+  sambanova,
+  groq,
+  together,
+  deepinfra,
+  cohere,
+  perplexity,
 }
 
 const IMAGE_LOGOS = {

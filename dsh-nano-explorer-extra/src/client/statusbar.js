@@ -105,19 +105,19 @@ export function StatusBar(props) {
     const excluded = prefs.statsExcludeGit ? ` · ${copy.statsExcludeGit}` : ''
     right.push(React.createElement(Figure, {
       key: 'dirs', scope: 'directories',
-      icon: React.createElement(IconFolderCloseRegular, { width: 13, height: 13 }),
+      icon: React.createElement(IconFolderCloseRegular, { width: 14, height: 14 }),
       value: `${stats.directories}${suffix}`,
       title: copy.statsTooltip(stats.files, stats.directories, formatBytes(stats.bytes)) + excluded,
     }))
     right.push(React.createElement(Figure, {
       key: 'files', scope: 'files',
-      icon: React.createElement(IconDeliverDocRegular, { width: 13, height: 13 }),
+      icon: React.createElement(IconDeliverDocRegular, { width: 14, height: 14 }),
       value: `${stats.files}${suffix}`,
       title: copy.statsTooltip(stats.files, stats.directories, formatBytes(stats.bytes)) + excluded,
     }))
     right.push(React.createElement(Figure, {
       key: 'bytes', scope: 'bytes',
-      icon: React.createElement(IconGaugeOutlineRegular, { width: 13, height: 13 }),
+      icon: React.createElement(IconGaugeOutlineRegular, { width: 14, height: 14 }),
       value: formatBytes(stats.bytes),
       title: copy.statsSizeTooltip(formatBytes(stats.bytes)) + excluded,
     }))

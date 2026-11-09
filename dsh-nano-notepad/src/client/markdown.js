@@ -7,6 +7,30 @@ export function escapeHtml(value) {
   return value.replace(/[&<>"]/gu, char => ESCAPE[char])
 }
 
+/** @param {string} line */
+const FENCE = /^```([\w-]*)\s*$/
+/** @param {string} line */
+const TABLE_SEP = /^\s*\|?[\s:|-]*-[\s:|-]*-[\s:|-]*\|?\s*$/
+/** A separator row only marks a table when it carries at least one pipe. */
+function isTableSep(line) { return line.includes('|') && TABLE_SEP.test(line) }
+/** @param {string} line */
+const HR = /^\s*(?:-{3,}|\*{3,}|_{3,})\s*$/
+
+/** Split a `|`-row into cells, honouring escaped \|. Leading/trailing pipes are optional. */
+function tableCells(row) {
+  const trimmed = row.trim().replace(/^\|/, '').replace(/\|$/, '')
+  const cells = []
+  let cell = '', escaped = false
+  for (const ch of trimmed) {
+    if (escaped) { cell += ch === '|' ? '|' : `\\${ch}`; escaped = false; continue }
+    if (ch === '\\') { escaped = true; continue }
+    if (ch === '|') { cells.push(cell); cell = ''; continue }
+    cell += ch
+  }
+  cells.push(cell)
+  return cells.map(item => item.trim())
+}
+
 /** @param {string} markdown @param {Map<string, { mime: string, base64: string }>} images */
 export function renderMarkdown(markdown, images) {
   const lines = markdown.replace(/\r\n/gu, '\n').split('\n')
@@ -18,17 +42,53 @@ export function renderMarkdown(markdown, images) {
       index += 1
       continue
     }
-    const heading = /^(#{1,3})\s+(.+)$/u.exec(line)
+    /* Fenced code block: ```lang … ``` — verbatim, escaped, language class. */
+    const fence = FENCE.exec(line)
+    if (fence) {
+      const body = []
+      index += 1
+      while (index < lines.length && !/^```\s*$/.test(lines[index])) {
+        body.push(lines[index])
+        index += 1
+      }
+      index += 1 // consume the closing ```
+      const lang = fence[1] ? ` class="language-${escapeHtml(fence[1])}"` : ''
+      html.push(`<pre class="np-fence"><code${lang}>${escapeHtml(body.join('\n'))}</code></pre>`)
+      continue
+    }
+    /* GFM table: a |row whose next line is a ---|--- separator. */
+    if (line.includes('|') && index + 1 < lines.length && isTableSep(lines[index + 1])) {
+      const header = tableCells(line)
+      const align = tableCells(lines[index + 1]).map(cell =>
+        cell.startsWith(':') && cell.endsWith(':') ? 'center' : cell.endsWith(':') ? 'right' : 'left')
+      index += 2
+      const rows = []
+      while (index < lines.length && lines[index].includes('|') && lines[index].trim() !== '') {
+        rows.push(tableCells(lines[index]))
+        index += 1
+      }
+      const head = `<tr>${header.map((cell, i) => `<th style="text-align:${align[i] ?? 'left'}">${inline(cell, images)}</th>`).join('')}</tr>`
+      const bodyRows = rows.map(row =>
+        `<tr>${header.map((_, i) => `<td style="text-align:${align[i] ?? 'left'}">${inline(row[i] ?? '', images)}</td>`).join('')}</tr>`).join('')
+      html.push(`<table><thead>${head}</thead><tbody>${bodyRows}</tbody></table>`)
+      continue
+    }
+    if (HR.test(line)) {
+      html.push('<hr>')
+      index += 1
+      continue
+    }
+    const heading = /^(#{1,6})\s+(.+)$/u.exec(line)
     if (heading) {
       const level = heading[1].length
       html.push(`<h${level}>${inline(heading[2], images)}</h${level}>`)
       index += 1
       continue
     }
-    if (line.startsWith('> ')) {
+    if (/^>\s?/.test(line)) {
       const quoted = []
-      while (index < lines.length && lines[index].startsWith('> ')) {
-        quoted.push(lines[index].slice(2))
+      while (index < lines.length && /^>\s?/.test(lines[index])) {
+        quoted.push(lines[index].replace(/^>\s?/, ''))
         index += 1
       }
       html.push(`<blockquote><p>${quoted.map(item => inline(item, images)).join('<br>')}</p></blockquote>`)
@@ -59,7 +119,7 @@ export function renderMarkdown(markdown, images) {
       continue
     }
     const paragraph = []
-    while (index < lines.length && lines[index].trim() !== '' && !blockStart(lines[index])) {
+    while (index < lines.length && lines[index].trim() !== '' && !blockStart(lines[index], lines[index + 1])) {
       paragraph.push(lines[index])
       index += 1
     }
@@ -68,9 +128,11 @@ export function renderMarkdown(markdown, images) {
   return html.join('')
 }
 
-/** @param {string} line */
-function blockStart(line) {
-  return /^(#{1,3})\s+/u.test(line) || line.startsWith('> ') || /^[-*]\s+/u.test(line) || /^\d+\.\s+/u.test(line)
+/** @param {string} line @param {string} [next] */
+function blockStart(line, next) {
+  if (FENCE.test(line) || HR.test(line)) return true
+  if (line.includes('|') && typeof next === 'string' && isTableSep(next)) return true
+  return /^(#{1,6})\s+/u.test(line) || /^>\s?/.test(line) || /^[-*]\s+/u.test(line) || /^\d+\.\s+/u.test(line)
 }
 
 /** @param {string} text @param {Map<string, { mime: string, base64: string }>} images */

@@ -15,7 +15,64 @@ const { useState } = React
  * @returns the dialog.
  */
 export function Dialog(props) {
+  usePanelConfinedLayer()
   return React.createElement(NanoDialog, props)
+}
+
+/**
+ * Keep the open card inside this plugin's own panel instead of the whole workspace.
+ *
+ * The shell's Modal portals to `document.body` and its layer is a fixed full-viewport box, so a card
+ * raised from the files panel covered the conversation too. The shared declarative dialog only tags a
+ * class for this; the geometry that class describes is applied by the imperative opener. This reads
+ * the panel's rect and mirrors that same geometry onto the portaled layer, following the panel while
+ * it is open.
+ *
+ * @returns nothing; it only affects the DOM.
+ */
+export function usePanelConfinedLayer() {
+  React.useEffect(() => {
+    let live = true
+    const apply = () => {
+      if (!live) return
+      const panel = document.querySelector('[data-nxe]')?.closest('[data-sidebar-right-pane]') ?? document.querySelector('[data-nxe]')
+      if (!(panel instanceof HTMLElement)) return
+      const rect = panel.getBoundingClientRect()
+      if (rect.width < 1 || rect.height < 1) return
+      for (const card of document.querySelectorAll('.nano-dialog-card')) {
+        const layer = card.parentElement
+        if (!(layer instanceof HTMLElement)) continue
+        layer.classList.add('nxe-confined-layer')
+        Object.assign(layer.style, {
+          position: 'fixed',
+          top: `${rect.top}px`, left: `${rect.left}px`,
+          right: 'auto', bottom: 'auto',
+          // Border-box, so the padding below insets the card instead of growing the fence past the
+          // panel's own edges.
+          boxSizing: 'border-box',
+          width: `${rect.width}px`, height: `${rect.height}px`,
+          padding: '12px',
+        })
+      }
+    }
+    // The card mounts after this effect on the first open, so watch for it, and keep the fence in
+    // step with the panel while the reader resizes it.
+    const observer = new MutationObserver(apply)
+    observer.observe(document.body, { childList: true })
+    window.addEventListener('resize', apply)
+    apply()
+    return () => {
+      live = false
+      observer.disconnect()
+      window.removeEventListener('resize', apply)
+      for (const layer of document.querySelectorAll('.nxe-confined-layer')) {
+        layer.classList.remove('nxe-confined-layer')
+        for (const key of ['position', 'top', 'left', 'right', 'bottom', 'width', 'height', 'padding', 'box-sizing']) {
+          layer.style.removeProperty(key)
+        }
+      }
+    }
+  }, [])
 }
 
 /**

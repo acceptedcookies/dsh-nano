@@ -1,11 +1,16 @@
 /** Browser-local viewing preferences. These never travel to the Host. */
 
-const KEY = 'dsh-nano-explorer-extra:prefs.v1'
+// The key carries its version: v1 stored the opposite click default, and a stored v1 value would
+// otherwise keep every existing reader on the old behaviour forever.
+const KEY = 'dsh-nano-explorer-extra:prefs.v2'
+const LEGACY_KEY = 'dsh-nano-explorer-extra:prefs.v1'
 
 /** Every viewing switch the settings page edits, with the spec defaults. */
 export const DEFAULT_PREFS = {
-  openPreviewOnClick: false,
-  openPreviewOnDoubleClick: true,
+  // A single press opens, matching the builtin explorer: the row is a file, and pressing a file is
+  // how it is read. The double-click switch starts off so one press never opens two previews.
+  openPreviewOnClick: true,
+  openPreviewOnDoubleClick: false,
   showOpenButton: true,
   followSymlinks: true,
   allowOutsideWorkspace: false,
@@ -38,7 +43,16 @@ export function normalizePrefs(raw) {
 export function readPrefs() {
   try {
     const raw = window.localStorage?.getItem(KEY)
-    return raw === null || raw === undefined ? { ...DEFAULT_PREFS } : normalizePrefs(JSON.parse(raw))
+    if (raw !== null && raw !== undefined) return normalizePrefs(JSON.parse(raw))
+    // Carry a v1 record forward for everything except the click switches: v1 meant "a press only
+    // selects", which is no longer the shipped behaviour, so those two start from the new defaults.
+    const legacy = window.localStorage?.getItem(LEGACY_KEY)
+    if (legacy === null || legacy === undefined) return { ...DEFAULT_PREFS }
+    const parsed = JSON.parse(legacy)
+    const carried = record(parsed) ? { ...parsed } : {}
+    delete carried.openPreviewOnClick
+    delete carried.openPreviewOnDoubleClick
+    return normalizePrefs(carried)
   } catch {
     return { ...DEFAULT_PREFS }
   }

@@ -99,8 +99,9 @@ ${NANO_STYLES}
 .np-tab-x { position: absolute; top: 4px; right: 4px; display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; flex: none; border: 0; background: transparent; border-radius: var(--dsw-radius-sm); color: var(--dsw-alias-label-tertiary); font: inherit; padding: 0; cursor: pointer; opacity: 0; pointer-events: none; }
 .np-tab-x:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 .np-tab:hover .np-tab-x, .np-tab:focus-within .np-tab-x, .np-tab[data-active="true"] .np-tab-x { opacity: 1; pointer-events: auto; }
-/* only fade the name when it actually clips — matches native data-dockkit-tab-clipped */
-.np-tab-name[data-clipped="true"] { mask-image: linear-gradient(to right, black calc(100% - 30px), transparent calc(100% - 14px)); -webkit-mask-image: linear-gradient(to right, black calc(100% - 30px), transparent calc(100% - 14px)); }
+/* A short fade only where the glyphs run into the close button. A long ramp
+   erased letters that still had room before the ×. */
+.np-tab-name[data-clipped="true"] { text-overflow: clip; mask-image: linear-gradient(to right, #000 calc(100% - 12px), transparent); -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 12px), transparent); }
 .np-body { display: flex; min-height: 0; flex: 1; }
 .np-tree { box-sizing: border-box; width: 248px; display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--dsw-alias-border-l2); background: transparent; }
 .np-tree[data-collapsed="true"] { width: var(--np-rail); align-items: stretch; }
@@ -117,7 +118,7 @@ ${NANO_STYLES}
 .np-tree-toggle:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 .np-tree-toggle svg { width: 16px; height: 16px; display: block; fill: none; stroke: currentColor; stroke-width: 1; }
 .np-tree-toggle svg .np-panel-fill { fill: currentColor; stroke: none; }
-.np-tree-tools { display: flex; align-items: center; gap: 2px; }
+.np-tree-tools { display: flex; align-items: center; gap: 4px; flex: none; }
 .np-tree-tools button { display: inline-flex; align-items: center; justify-content: center; width: var(--np-icon-btn); height: var(--np-icon-btn); padding: 0; border: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); cursor: pointer; }
 .np-tree-tools button svg { width: 16px; height: 16px; display: block; }
 .np-tree-tools button:hover { background: var(--dsw-alias-interactive-bg-active); color: var(--dsw-alias-label-primary); border-color: var(--dsw-alias-border-l3); }
@@ -164,7 +165,7 @@ ${NANO_STYLES}
 .np-tree-toggle svg { fill: none; stroke: currentColor; stroke-width: 1; }
 .np-tree-toggle svg .np-panel-fill { fill: currentColor; stroke: none; }
 .np-node-icon svg, .np-tree-tools svg, .np-tree-toggle svg, .np-caret svg, .np-node-actions svg, .np-tool svg, .np-slash svg { width: 16px; height: 16px; display: block; }
-.np-ws { position: relative; flex: 1 1 auto; min-width: 0; max-width: 170px; }
+.np-ws { position: relative; flex: 1 1 auto; min-width: 0; }
 .np-ws-btn { display: flex; align-items: center; gap: 6px; width: 100%; height: var(--np-icon-btn); box-sizing: border-box; padding: 0 8px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); font: inherit; font-size: 12px; cursor: pointer; }
 .np-ws-btn:hover { background: var(--dsw-alias-interactive-bg-active); }
 .np-ws-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
@@ -225,7 +226,6 @@ ${NANO_STYLES}
 .nm-key { color: var(--dsw-alias-label-secondary); }
 .np-write:focus-visible { outline: none; box-shadow: inset 0 0 0 1px var(--dsw-alias-border-l3); }
 .np-read:focus-visible { outline: none; box-shadow: inset 0 0 0 1px var(--dsw-alias-border-l3); }
-.np-write:disabled { color: var(--dsw-alias-label-tertiary); }
 .np-tool:disabled, .np-footer-actions button:disabled { opacity: .45; pointer-events: none; }
 .np-read { box-sizing: border-box; max-width: 100%; overflow: auto; overflow-wrap: anywhere; padding: var(--np-pad-x); color: var(--dsw-alias-label-primary); cursor: text; font-size: var(--np-editor-font-size, 14px); line-height: 1.65; }
 .np-read h1 { margin: 16px 0 8px; font-size: 1.45em; line-height: 28px; font-weight: 600; }
@@ -469,7 +469,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
   panel.innerHTML = `
     <div class="np-tabs"><button type="button" class="np-tree-toggle" data-action="toggle-tree"></button><div class="np-tablist"></div><button type="button" class="np-add" data-action="new-file" data-i18n="newFile" data-i18n-mode="title">+</button><span class="np-tabs-spacer"></span></div>
     <div class="np-body">
-      <aside class="np-tree"><div class="np-tree-head"><div class="np-ws"><button type="button" class="np-ws-btn" data-action="ws-toggle" aria-haspopup="listbox" aria-expanded="false"><span class="np-ws-label"></span><span class="np-ws-caret" aria-hidden="true">${CHEVRON_ICON}</span></button></div><span style="flex:1"></span><span class="np-tree-tools"><button type="button" data-action="new-item" data-i18n="newItem" data-i18n-mode="title" aria-haspopup="menu">${PLUS_ICON}</button><button type="button" class="np-danger" data-action="delete" data-i18n="delete" data-i18n-mode="title">${TRASH_ICON}</button></span></div><div class="np-nodes" data-root="true"></div><div class="np-tree-foot"><button type="button" data-action="settings" data-i18n="settings" data-i18n-mode="label">${SETTINGS_ICON}<span data-i18n="settings"></span></button><button type="button" data-action="close" data-i18n="close" data-i18n-mode="label">${CLOSE_ICON}<span data-i18n="close"></span></button></div></aside>
+      <aside class="np-tree"><div class="np-tree-head"><div class="np-ws"><button type="button" class="np-ws-btn" data-action="ws-toggle" aria-haspopup="listbox" aria-expanded="false"><span class="np-ws-label"></span><span class="np-ws-caret" aria-hidden="true">${CHEVRON_ICON}</span></button></div><span class="np-tree-tools"><button type="button" data-action="new-item" data-i18n="newItem" data-i18n-mode="title" aria-haspopup="menu">${PLUS_ICON}</button><button type="button" class="np-danger" data-action="delete" data-i18n="delete" data-i18n-mode="title">${TRASH_ICON}</button></span></div><div class="np-nodes" data-root="true"></div><div class="np-tree-foot"><button type="button" data-action="settings" data-i18n="settings" data-i18n-mode="label">${SETTINGS_ICON}<span data-i18n="settings"></span></button><button type="button" data-action="close" data-i18n="close" data-i18n-mode="label">${CLOSE_ICON}<span data-i18n="close"></span></button></div></aside>
       <div class="np-editor">
         <div class="np-toolbar"><span class="np-md-tools">${toolbar}</span><span class="np-json-tools" hidden><button type="button" class="np-tool" data-json="expand" data-i18n="jsonExpand" data-i18n-mode="title">${EXPAND_ICON}</button><button type="button" class="np-tool" data-json="collapse" data-i18n="jsonCollapse" data-i18n-mode="title">${COLLAPSE_ICON}</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-json="format" data-i18n="jsonFormat" data-i18n-mode="title">${FORMAT_ICON}</button><button type="button" class="np-tool" data-json="minify" data-i18n="jsonMinify" data-i18n-mode="title">${MINIFY_ICON}</button><button type="button" class="np-tool" data-json="escape" data-i18n="jsonEscape" data-i18n-mode="title">${ESCAPE_ICON}</button><button type="button" class="np-tool" data-json="unescape" data-i18n="jsonUnescape" data-i18n-mode="title">${UNESCAPE_ICON}</button><button type="button" class="np-tool" data-json="strip" data-i18n="jsonStrip" data-i18n-mode="title">${STRIP_ICON}</button></span><button type="button" class="np-switch" data-action="view" role="switch" aria-checked="false" data-i18n="viewGroup" data-i18n-mode="title"><span class="np-switch-label" data-i18n="source"></span><span class="np-switch-label" data-i18n="preview"></span><span class="np-switch-thumb" data-i18n="source"></span></button></div>
         <div class="np-mirror" aria-hidden="true"></div>
@@ -832,25 +832,41 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       const name = escapeHtml(node.name)
       return `<span class="np-tab" data-active="${id === state.ui.currentId}"><button class="np-tab-btn" type="button" data-tab="${id}" title="${name}"><span class="np-tab-name">${name}</span></button><button class="np-tab-x" type="button" data-close="${id}" title="${escapeHtml(text().close)}" aria-label="${escapeHtml(text().close)}">×</button></span>`
     }).join('')
-    /* fade only names whose right edge actually reaches the × zone (tab right - 28px) */
+    /* Fade only when the text itself overflows into the close control. */
     requestAnimationFrame(() => {
       for (const tab of box.querySelectorAll('.np-tab')) {
         const name = tab.querySelector('.np-tab-name')
-        const edge = tab.getBoundingClientRect().right - 28
-        name.dataset.clipped = String(name.getBoundingClientRect().right > edge)
+        const close = tab.querySelector('.np-tab-x')
+        if (!name || !close) continue
+        const overflows = name.scrollWidth > name.clientWidth + 1
+        const hitsClose = name.getBoundingClientRect().right > close.getBoundingClientRect().left - 2
+        name.dataset.clipped = String(overflows && hitsClose)
       }
     })
   }
 
+  let renderToken = 0
+
+  function clearEditorSurface() {
+    const source = write()
+    const read = must(panel, '.np-read')
+    const layer = mirror()
+    source.value = ''
+    source.disabled = false
+    source.hidden = false
+    read.hidden = true
+    read.replaceChildren()
+    layer.hidden = true
+    layer.replaceChildren()
+  }
+
   async function renderBody() {
+    const token = ++renderToken
     const file = current()
     const source = write()
     const read = must(panel, '.np-read')
     if (!file) {
-      source.value = ''
-      source.disabled = true
-      source.hidden = false
-      read.hidden = true
+      clearEditorSurface()
       for (const button of panel.querySelectorAll('.np-toolbar [data-format], .np-footer-actions [data-action="save-version"], .np-footer-actions [data-action="clear-file"]')) {
         button.disabled = true
       }
@@ -925,6 +941,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       return
     }
     const images = await imagesById(state.db, imageIdsIn(markdown))
+    if (token !== renderToken) return
     const html = markdown === ''
       ? `<p class="np-placeholder">${escapeHtml(text().placeholder)}</p>`
       : renderMarkdown(markdown, images)
@@ -2002,7 +2019,21 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     slashMenu.hidden = false
   }
 
+  write().addEventListener('focus', () => {
+    if (!current() && state.db) void beginWriting()
+  })
   write().addEventListener('input', () => {
+    if (!current() && state.db) {
+      const typed = write().value
+      void beginWriting().then(() => {
+        if (typed && write().value !== typed) {
+          write().value = typed
+          scheduleSave()
+          paintMirror()
+        }
+      })
+      return
+    }
     refreshSlash()
     scheduleSave()
     paintMirror()

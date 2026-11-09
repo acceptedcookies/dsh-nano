@@ -7,7 +7,7 @@
  */
 
 import React from 'react'
-import { IconFolderCloseRegular, IconFolderOpenRegular, IconGlobeOutlineRegular, IconNewChatOutlineRegular, IconProjectAddOutlineRegular, IconRefreshOutlineRegular, IconSlidersTwoOutlineRegular, IconTriangleRightFillRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconArchiveOutlineRegular, IconFolderCloseRegular, IconFolderOpenRegular, IconGlobeOutlineRegular, IconNewChatOutlineRegular, IconPinFillRegular, IconPinOutlineRegular, IconProjectAddOutlineRegular, IconRefreshOutlineRegular, IconSlidersTwoOutlineRegular, IconTriangleRightFillRegular, IconUnarchiveOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 
 const { createElement, useEffect, useLayoutEffect, useRef, useState } = React
 
@@ -96,6 +96,7 @@ function readChrome() {
     arrowOpen: arrowToken ? withLocal(arrowToken, 'arrowOpen') : '',
     sessionRow: sessionClass || withLocal(rowToken, 'sessionRow'),
     selected: withLocal(tokens(sessionClass).find(token => /sessionRow/.test(token)) || withLocal(rowToken, 'sessionRow'), 'selected'),
+    archived: withLocal(tokens(sessionClass).find(token => /sessionRow/.test(token)) || withLocal(rowToken, 'sessionRow'), 'archived'),
     sessionSlot: classOf(sessionEl?.querySelector('[class*="slot"]')) || withLocal(rowToken, 'slot'),
     sessionTitle: classOf(sessionEl?.querySelector('[class*="title"]')) || withLocal(rowToken, 'title'),
     resting: classOf(sessionEl?.querySelector('[class*="Resting"]')) || withLocal(rowToken, 'rowResting'),
@@ -222,18 +223,54 @@ export function SharedSection({ face, wide }) {
     const mine = Object.values(row?.members ?? {}).some(member => member?.username === username)
     const wsSessions = sessionsFor(row.workspaceId)
     const isOpen = expanded[row.workspaceId] === true
-    const sessionRows = isOpen ? wsSessions.map(session => createElement('div', {
-      role: 'treeitem',
-      key: session.sessionId,
-      className: session.sessionId === currentId && chrome.selected ? `${chrome.sessionRow} ${chrome.selected}` : chrome.sessionRow,
-      'aria-selected': session.sessionId === currentId,
-      title: session.mtime ?? '',
-      onClick: () => face.onOpenSession?.(session),
-    },
-      createElement('span', { className: chrome.sessionSlot }),
-      createElement('span', { className: chrome.sessionTitle }, session.title || session.sessionId),
-      createElement('span', { className: chrome.resting },
-        createElement('span', { className: chrome.time }, session.writerName ?? '')))) : []
+    const pinnedIds = new Set(settings?.pinnedSessionIds ?? [])
+    const archivedIds = new Set(settings?.archivedSessionIds ?? [])
+    const ordered = [...wsSessions].sort((a, b) => {
+      const rank = item => archivedIds.has(item.sessionId) ? 2 : pinnedIds.has(item.sessionId) ? 0 : 1
+      return rank(a) - rank(b)
+    })
+    const sessionRows = isOpen ? ordered.map(session => {
+      const pinned = pinnedIds.has(session.sessionId)
+      const archived = archivedIds.has(session.sessionId)
+      const loading = settings?.sessionsReady !== true || settings?.pulling?.[row.workspaceId] === true
+      return createElement('div', {
+        role: 'treeitem',
+        key: session.sessionId,
+        className: [
+          chrome.sessionRow,
+          session.sessionId === currentId && chrome.selected ? chrome.selected : '',
+          archived && chrome.archived ? chrome.archived : '',
+        ].filter(Boolean).join(' '),
+        'aria-selected': session.sessionId === currentId,
+        title: session.mtime ?? '',
+        onClick: () => { if (!archived) face.onOpenSession?.(session) },
+      },
+        createElement('span', { className: chrome.sessionSlot }),
+        createElement('span', {
+          className: chrome.sessionTitle,
+          onDoubleClick: event => {
+            event.stopPropagation()
+            face.onRenameSession?.(session)
+          },
+        }, session.title || session.sessionId),
+        createElement('span', { className: chrome.resting },
+          pinned && !archived ? createElement(IconPinFillRegular, { size: 14 }) : null,
+          createElement('span', { className: chrome.time }, session.writerName ?? '')),
+        createElement('span', { className: chrome.rowActions, onClick: event => event.stopPropagation() },
+          loading || chrome.rowButton === '' ? null : createElement(React.Fragment, null,
+            createElement('button', {
+              type: 'button',
+              className: chrome.rowButton,
+              'aria-label': archived ? copy.unarchiveSession : copy.archiveSession,
+              onClick: event => { event.stopPropagation(); face.onToggleArchive?.(session) },
+            }, createElement(archived ? IconUnarchiveOutlineRegular : IconArchiveOutlineRegular, { size: 14 })),
+            createElement('button', {
+              type: 'button',
+              className: chrome.rowButton,
+              'aria-label': pinned ? copy.unpinSession : copy.pinSession,
+              onClick: event => { event.stopPropagation(); face.onTogglePin?.(session) },
+            }, createElement(pinned ? IconPinFillRegular : IconPinOutlineRegular, { size: 14 })))))
+    }) : []
     return createElement('div', { key: row.workspaceId, className: chrome.group },
       createElement('div', {
         role: 'treeitem',

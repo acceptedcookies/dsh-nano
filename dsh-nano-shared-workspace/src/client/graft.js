@@ -16,6 +16,7 @@
 import React from 'react'
 import { createPortal } from 'react-dom'
 import { NanoDialog } from 'dsh-nano-ui'
+import { Input } from '@deepseek-ai/dsh-client-ui-primitives'
 import { SharedSection } from './section.js'
 import { SettingsDialog } from './settings-dialog.js'
 import { TranscriptDialog } from './transcript-dialog.js'
@@ -88,6 +89,37 @@ function graftHost() {
  * entry declares `sidebar.workspaces.directoryFlow` as a child so this
  * component can raise the same picker the local "添加工作区" button renders).
  */
+function RenameDialog({ face, rename }) {
+  const copy = face.copy()
+  const [title, setTitle] = React.useState(rename?.title ?? '')
+  const [error, setError] = React.useState(undefined)
+  const [busy, setBusy] = React.useState(false)
+  const submit = async () => {
+    setBusy(true)
+    setError(undefined)
+    try {
+      await face.confirmRename(title)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause))
+      setBusy(false)
+    }
+  }
+  return React.createElement(NanoDialog, {
+    copy,
+    title: copy.renameSessionTitle,
+    confirmLabel: copy.renameSession,
+    confirmDisabled: title.trim() === '' || busy,
+    busy,
+    error,
+    onConfirm: submit,
+    onCancel: face.cancelRename,
+  }, React.createElement(Input, {
+    value: title,
+    'data-modal-autofocus': true,
+    onChange: event => setTitle(event.currentTarget.value),
+  }))
+}
+
 export function SidebarGraft({ face, renderSlot }) {
   const [host, setHost] = React.useState(() => graftHost())
   const [wide, setWide] = React.useState(() => sidebarIsWide())
@@ -132,6 +164,7 @@ export function SidebarGraft({ face, renderSlot }) {
         onCancel: face.dismissNotice,
       }, settings.notice), document.body)
       : null,
+    settings?.rename != null ? createPortal(React.createElement(RenameDialog, { face, rename: settings.rename }), document.body) : null,
     settings?.createDialog != null ? createPortal(React.createElement(CreateWorkspaceDialog, {
       face,
       mode: settings.createDialog.mode,

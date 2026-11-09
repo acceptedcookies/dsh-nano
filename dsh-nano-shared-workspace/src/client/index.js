@@ -118,6 +118,16 @@ export function apply(ctx) {
       .catch(() => store.set({ sessionsReady: true }))
   }
 
+  const publishSessionFlags = () => {
+    const snap = ctx.workspaces.list.getSnapshot()
+    store.set({
+      pinnedSessionIds: [...(snap.pinnedSessionIds ?? [])],
+      archivedSessionIds: [...(snap.archivedSessionIds ?? [])],
+    })
+  }
+  if (typeof ctx.workspaces.list.subscribe === 'function') ctx.workspaces.list.subscribe(publishSessionFlags)
+  publishSessionFlags()
+
   const setPulling = (workspaceId, on) => {
     const pulling = { ...(store.current.pulling ?? {}) }
     if (on) pulling[workspaceId] = true
@@ -271,6 +281,39 @@ export function apply(ctx) {
           notice: `${copyFor(languageOf()).pullFailed}: ${cause instanceof Error ? cause.message : String(cause)}`,
         }))
     },
+    onTogglePin: session => {
+      const pinned = (store.current.pinnedSessionIds ?? []).includes(session.sessionId)
+      const run = pinned ? ctx.uiWorkspace.unpinSession(session.sessionId) : ctx.uiWorkspace.pinSession(session.sessionId)
+      Promise.resolve(run).catch(cause => store.set({
+        notice: `${copyFor(languageOf()).pinSession}: ${cause instanceof Error ? cause.message : String(cause)}`,
+      }))
+    },
+    onToggleArchive: session => {
+      const archived = (store.current.archivedSessionIds ?? []).includes(session.sessionId)
+      const run = archived ? ctx.uiWorkspace.unarchiveSession(session.sessionId) : ctx.uiWorkspace.archiveSession(session.sessionId)
+      Promise.resolve(run).catch(cause => store.set({
+        notice: `${copyFor(languageOf()).archiveSession}: ${cause instanceof Error ? cause.message : String(cause)}`,
+      }))
+    },
+    onRenameSession: session => store.set({
+      rename: { workspaceId: session.workspaceId, sessionId: session.sessionId, title: session.title || '' },
+    }),
+    confirmRename: title => {
+      const target = store.current.rename
+      if (target == null) return Promise.resolve()
+      const next = title.trim()
+      if (next === '') return Promise.resolve()
+      return ctx.sessions.using(target.sessionId, { source: 'workspaceOperation' }, reference => reference.binding.session.rename(next))
+        .then(result => {
+          if (result?.ok === false) throw new Error(result.error?.message ?? 'rename failed')
+          store.set({
+            rename: null,
+            sessions: (store.current.sessions ?? []).map(item => item.sessionId === target.sessionId ? { ...item, title: next } : item),
+          })
+          triggerSync().catch(() => {})
+        })
+    },
+    cancelRename: () => store.set({ rename: null }),
     dismissNotice: () => store.set({ notice: null }),
     onCloseTranscript: () => store.set({ transcript: null }),
     onToggleRail: () => ctx.layout?.toggleSidebar?.(),

@@ -465,7 +465,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       <div class="np-editor">
         <div class="np-toolbar"><span class="np-md-tools">${toolbar}</span><span class="np-json-tools" hidden><button type="button" class="np-tool" data-json="expand" data-i18n="jsonExpand" data-i18n-mode="title">${EXPAND_ICON}</button><button type="button" class="np-tool" data-json="collapse" data-i18n="jsonCollapse" data-i18n-mode="title">${COLLAPSE_ICON}</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-json="format" data-i18n="jsonFormat" data-i18n-mode="title">${FORMAT_ICON}</button><button type="button" class="np-tool" data-json="minify" data-i18n="jsonMinify" data-i18n-mode="title">${MINIFY_ICON}</button><button type="button" class="np-tool" data-json="escape" data-i18n="jsonEscape" data-i18n-mode="title">${ESCAPE_ICON}</button><button type="button" class="np-tool" data-json="unescape" data-i18n="jsonUnescape" data-i18n-mode="title">${UNESCAPE_ICON}</button><button type="button" class="np-tool" data-json="strip" data-i18n="jsonStrip" data-i18n-mode="title">${STRIP_ICON}</button></span><button type="button" class="np-switch" data-action="view" role="switch" aria-checked="false" data-i18n="viewGroup" data-i18n-mode="title"><span class="np-switch-label" data-i18n="source"></span><span class="np-switch-label" data-i18n="preview"></span><span class="np-switch-thumb" data-i18n="source"></span></button></div>
         <div class="np-mirror" aria-hidden="true"></div>
-        <textarea class="np-write"></textarea>
+        <textarea class="np-write" spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
         <div class="np-slash" hidden></div>
         <div class="np-read" tabindex="0" hidden></div>
         <div class="np-error" role="alert" hidden><span class="np-error-text"></span><button type="button" data-action="load-remote" data-i18n="loadRemote" hidden></button><button type="button" data-action="keep-mine" data-i18n="keepMine" hidden></button><button type="button" data-action="dismiss-error" data-i18n="close" data-i18n-mode="title">${CLOSE_ICON}</button></div>
@@ -554,6 +554,11 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     const source = write()
     const layer = mirror()
     layer.innerHTML = highlightSource(source.value, isJson())
+    /* .np-mirror is inset:0 inside .np-editor, which also owns the toolbar —
+       anchor the layer onto the textarea's own box so line 1 sits under
+       line 1, not on the toolbar row. */
+    layer.style.top = `${source.offsetTop}px`
+    layer.style.left = `${source.offsetLeft}px`
     layer.scrollTop = source.scrollTop
     layer.scrollLeft = source.scrollLeft
     layer.hidden = source.hidden

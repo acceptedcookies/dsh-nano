@@ -53,10 +53,14 @@ function regionArea() {
   return null
 }
 
-/** Whether the sidebar renders wide (false = 56px rail). The scrollport marker exists only when wide. */
+/**
+ * Whether the sidebar renders wide (false = 56px rail). Neither the DOM nor
+ * `ctx.layout` exposes the collapsed flag, and `data-sidebar-scrollport` is
+ * wide-only but unreliable across builds — measure the region instead.
+ */
 function sidebarIsWide() {
   const region = regionArea()
-  return region === null ? true : region.parentElement?.hasAttribute('data-sidebar-scrollport') === true
+  return region === null ? true : region.getBoundingClientRect().width > 80
 }
 
 /** Ensure the graft host is the first child of the region area; returns it or null. */
@@ -82,6 +86,11 @@ function graftHost() {
 export function SidebarGraft({ face }) {
   const [host, setHost] = React.useState(() => graftHost())
   const [wide, setWide] = React.useState(() => sidebarIsWide())
+  // The settings flag lives on the store, not React state: without this
+  // subscription the dialog flag toggles without a render and never opens.
+  const [settings, setSettings] = React.useState(face.settings.current)
+
+  React.useEffect(() => face.settings.subscribe(setSettings), [])
 
   React.useEffect(() => {
     const observer = new MutationObserver(() => {
@@ -91,8 +100,9 @@ export function SidebarGraft({ face }) {
     observer.observe(document.body, {
       childList: true,
       subtree: true,
+      // Width changes arrive as style/class mutations on ancestors, so watch
+      // attributes broadly; the callbacks only re-measure, never re-render DOM.
       attributes: true,
-      attributeFilter: ['data-sidebar-scrollport'],
     })
     setHost(graftHost())
     setWide(sidebarIsWide())
@@ -106,5 +116,5 @@ export function SidebarGraft({ face }) {
   if (host === null) return null
   return React.createElement(React.Fragment, null,
     createPortal(React.createElement(SharedSection, { face, wide }), host),
-    face.settings.open ? createPortal(React.createElement(SettingsDialog, { face }), document.body) : null)
+    settings?.open === true ? createPortal(React.createElement(SettingsDialog, { face, settings }), document.body) : null)
 }

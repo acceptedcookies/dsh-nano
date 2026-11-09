@@ -48,7 +48,7 @@ export function apply(ctx) {
     settings: {
       get current() { return store.current },
       get open() { return store.current.open === true },
-      subscribe: store.subscribe,
+      subscribe: listener => store.subscribe(() => listener(store.current)),
       close: () => store.set({ open: false }),
     },
     onOpenSettings: () => { refresh(); store.set({ open: true }) },

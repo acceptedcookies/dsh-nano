@@ -18,9 +18,8 @@ function Field({ label, children }) {
     children)
 }
 
-export function SettingsDialog({ face }) {
+export function SettingsDialog({ face, settings }) {
   const copy = face.copy()
-  const settings = face.settings.current
   const [username, setUsername] = useState(settings?.username ?? '')
   const [token, setToken] = useState('')
   const [accessKey, setAccessKey] = useState('')

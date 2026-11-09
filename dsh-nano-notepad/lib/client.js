@@ -221,9 +221,9 @@ ${ot}
 .nm-mk { color: var(--dsw-alias-label-tertiary); }
 .nm-h { color: var(--dsw-alias-link); font-weight: 700; }
 .nm-quote { color: var(--dsw-alias-state-success-primary); font-style: italic; }
-.nm-strong { font-weight: 700; color: var(--dsw-alias-state-warn-primary); }
+.nm-strong { font-weight: 700; color: #fbbf24; }
 .nm-em { font-style: italic; }
-.nm-angle { color: var(--dsw-alias-state-warn-primary); }
+.nm-angle { color: var(--dsw-alias-state-error-primary); }
 .nm-bracket { color: var(--dsw-alias-link); }
 .nm-brace { color: var(--dsw-alias-state-success-primary); }
 .nm-strike { text-decoration: line-through; color: var(--dsw-alias-label-tertiary); }

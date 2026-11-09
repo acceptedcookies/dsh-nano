@@ -36,41 +36,38 @@
 | F9 | `dsh-session-log-export` 已有 zip 打包导出；它证明"字节级搬运工件"是官方承认的迁移方式 | `dsh-session-log-export` |
 | F10 | dsh 运行中的 backend 是否会重新扫盘尚未证实 → **P0-1 spike** | — |
 
-## 1.5 Infraestructura de red (verificado 2026-11-09)
+## 1.5 网络基础设施（2026-11-09 已部署验证）
 
-**Endpoint público**: `https://nano-shared-workspace.saobao.com` → MinIO en `shv1` (Shanghai, Tencent `49.235.109.23`).
+**公网端点**：`https://nano-shared-workspace.saobao.com` → `shv1`（上海，腾讯云 `49.235.109.23`）上的 MinIO。
 
 ```
-dsh plugin (host, SigV4 fetch)
-  → https://nano-shared-workspace.saobao.com   Cloudflare edge (TLS, proxy naranja)
-  → origin shv1 49.235.109.23                  Caddy/nginx → MinIO :9000
+dsh 插件（host 半侧，SigV4 fetch）
+  → https://nano-shared-workspace.saobao.com   Cloudflare 边缘（TLS，橙色代理）
+  → 源站 shv1 49.235.109.23                     nginx :443 → MinIO :9000
   → bucket: dsh-shared-workspace
 ```
 
-### Estado verificado
+### 已验证状态（2026-11-09 部署）
 
-| Componente | Estado | Detalle |
+| 组件 | 状态 | 详情 |
 |---|---|---|
-| CF API token (`.env.cloudflare`) | ✅ válido | scope de cuenta; permisos: `dns_records:edit`, `zone:edit`, `zone_settings`, `ssl:read` — alcanza para DNS. **No** cubre Workers ni CF Tunnel (no necesarios) |
-| Zona `saobao.com` | ✅ activa | id `95a207649ec68f6f6cb2a258c9b2e7d1`, plan Free |
-| WireGuard `utun0` (10.10.0.3/24) | ⚠️ interfaz up, **peers no responden** | ping/TCP a `10.10.0.1–.30` todo timeout; sin `wg` CLI ni acceso a `/etc/wireguard` para ver handshake. El wg **no se usa para tráfico S3**, solo como acceso admin alternativo |
-| Acceso a shv1 | pendiente | por IP pública `49.235.109.23` (ssh) o wg si revive |
+| CF API token（`.env.cloudflare`） | ✅ 有效 | 权限：`dns_records:edit`、`zone:edit`、`zone_settings`、`ssl:read`——足够做 DNS/SSL（不含 Workers/Tunnel，也不需要） |
+| `saobao.com` 域名区 | ✅ 激活 | zone id `95a207649ec68f6f6cb2a258c9b2e7d1`，Free 套餐，**SSL mode = strict** |
+| DNS | ✅ 已建 | `A nano-shared-workspace.saobao.com → 49.235.109.23`，record id `d1448731e64b23c9c0b90311359864fc`，`proxied=true`（验证时传播仍在进行；dns-only 直连同样可用） |
+| 上海服务器 | ✅ `shv1` = `VM-0-4-ubuntu` | `49.235.109.23`，wg0 `10.10.0.1`（本机 `10.10.0.3` 的 wg 对端），Ubuntu，nginx 1.24 + certbot，磁盘 57G 可用；**root SSH 免密** |
+| MinIO | ✅ 运行中 | `RELEASE.2025-07-23`，systemd `minio.service`，`127.0.0.1:9000`（S3 API）/ `:9001`（控制台），数据目录 `/data/minio`，环境文件 `/etc/minio.env`（0600） |
+| Bucket + 应用密钥 | ✅ | `dsh-shared-workspace`；svcacct 密钥存于本地 `.env.s3`（git 忽略）——**禁止提交入库** |
+| 源站 TLS | ✅ Let's Encrypt | `/etc/letsencrypt/live/nano-shared-workspace.saobao.com/`，nginx `sites-available/nano-shared-workspace`（443→`127.0.0.1:9000`，80→301 跳转 + ACME webroot `/var/www/acme`） |
+| SigV4 冒烟测试 | ✅ PUT/GET/LIST/DELETE 返回 200/204 | 从本机经 HTTPS 验证；UA 为 `python-urllib` 等可拦截值时会返 `error code: 1010` → **插件的 S3 客户端必须带 `User-Agent: dsh-nano-shared-workspace/<ver>`** |
+| WireGuard | ⚠️ 接口在，peer 无握手 | 服务器是 `10.10.0.1`；本机隧道收不到流量——**不依赖**（管理走 SSH 直连，S3 流量走公网 HTTPS） |
 
-### Plan de despliegue (en orden)
+### 运维备注
 
-1. **DNS**: `A nano-shared-workspace.saobao.com → 49.235.109.23`, `proxied=true`, TTL auto. (Alternativa dns-only si el proxy CF interfiere SigV4 — probar primero con proxy).
-2. **MinIO en shv1**: `minio server /data --console-address :9001`, systemd unit, credenciales root en `/etc/minio.env`, bucket `dsh-shared-workspace` + user/app keys.
-3. **TLS origen**: Caddy en shv1 con cert CF Origin (15 años) o `tls internal`; MinIO queda en `127.0.0.1:9000`, Caddy expone 443.
-4. **CF edge**: SSL mode `Full (strict)`; S3 pasa por headers intactos; desactivar cache para el hostname (`Cache Rules` o page rule "Bypass cache" — el plan Free tiene 3 page rules).
-5. **Smoke test**: desde el plugin host — `ListBuckets`, `PUT/GET/HEAD` un objeto, `ListObjectsV2` con prefix. Registrar resultado.
-6. **Alternativa pgs3**: si se prefiere pgs3 en vez de MinIO, correrlo en shv1 con Postgres local, mismo Caddy delante (pgs3 no tiene auth → Caddy debe exigir `Authorization` SigV4-compatible o un bearer propio; **MinIO es la opción recomendada** porque trae auth SigV4 nativa y consola).
-
-### Riesgos de red
-
-- **CF proxy Free**: límite ~100MB por request — los part son ≤4MiB, holgado.
-- **SigV4 a través del proxy**: CF no altera headers firmados; region `us-east-1` en config aunque el server esté en Shanghai.
-- **Latencia**: Shanghai ↔ cliente vía CF edge ~cientos de ms; aceptable para poll 30s, no para sync en tiempo real (no lo necesitamos).
-- **wg caído**: si se requiere wg para ssh-admin, hay que levantarlo antes del paso 2; si no, ssh directo a `49.235.109.23`.
+- **CF 代理 + SigV4**：可用；CF 不改动已签名 header。Free 套餐单请求上限（~100MB）对 ≤4MiB 的 part 很宽裕。
+- **LE 证书续期**：certbot 已装，systemd timer 自动续；ACME webroot 保留在 HTTP。
+- **MinIO 控制台**（`:9001`）：仅监听 localhost——本地访问用 `ssh -L 9001:127.0.0.1:9001 root@49.235.109.23`。
+- **延迟**：上海 ↔ 客户端经 CF 边缘约几百 ms；对 30s/60s 轮询足够，不适合实时同步（本设计也不需要）。
+- **pgs3**：保留为自建备选，但**实际部署用 MinIO**（原生 SigV4 鉴权、`mc` 管理、带控制台）。pgs3 无鉴权，只有藏在自有 bearer 代理后才有意义——不推荐。
 
 ## 2. 同步模型（核心决策）
 
@@ -253,7 +250,7 @@ nano-shared-workspace/
 ├── lib/{host.js,client.js}
 ```
 
-**Config（`~standard` 非密项）**：`endpoint`、`region`、`bucket`、`prefix`、`declaredName`、`workspaceId`（空=自动推断）、`pollIntervalSec`(15-300, 默认30)、`pushIntervalSec`(15-600, 默认60)、`partSizeTarget`(64KiB-4MiB, 默认256KiB)、`claimTtlSec`(30-600, 默认90)、`autoImport`(bool, Phase B)。
+**Config（`~standard` 非密项）**：`endpoint`（默认 `https://nano-shared-workspace.saobao.com`）、`region`（默认 `us-east-1`）、`bucket`（默认 `dsh-shared-workspace`）、`prefix`、`declaredName`、`workspaceId`（空=自动推断）、`pollIntervalSec`(15-300, 默认30)、`pushIntervalSec`(15-600, 默认60)、`partSizeTarget`(64KiB-4MiB, 默认256KiB)、`claimTtlSec`(30-600, 默认90)、`autoImport`(bool, Phase B)。
 **凭证**：`credentials.set(credentialKey("nano-shared-workspace:s3-access-key"), …)` / `s3-secret-key`。禁止写进 Config/日志/客户端包。
 
 **inject**：`fs sessions webServer connection sessionPersistence credentials`（`subprocess`/`sandbox` 不需要——网络 I/O 直接 fetch）。

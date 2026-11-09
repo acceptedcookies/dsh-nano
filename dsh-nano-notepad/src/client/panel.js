@@ -204,8 +204,11 @@ ${NANO_STYLES}
 .nm-mk { color: var(--dsw-alias-label-tertiary); }
 .nm-h { color: var(--dsw-alias-link); font-weight: 700; }
 .nm-quote { color: var(--dsw-alias-state-success-primary); font-style: italic; }
-.nm-strong { font-weight: 700; }
+.nm-strong { font-weight: 700; background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 22%, transparent); border-radius: 3px; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
 .nm-em { font-style: italic; }
+.nm-angle { color: var(--dsw-alias-state-warn-primary); }
+.nm-bracket { color: var(--dsw-alias-link); }
+.nm-brace { color: var(--dsw-alias-state-success-primary); }
 .nm-strike { text-decoration: line-through; color: var(--dsw-alias-label-tertiary); }
 .nm-code { color: var(--dsw-alias-state-warn-primary); }
 .nm-link { color: var(--dsw-alias-link); text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--dsw-alias-link) 55%, transparent); }

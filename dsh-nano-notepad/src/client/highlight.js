@@ -16,7 +16,7 @@ const sRaw = (cls, html) => `<span class="${cls}">${html}</span>`
  * @param {string} text
  */
 function inlineMd(text) {
-  const pattern = /!\[([^\]]*)\]\(([^)]+)\)|\[([^\]]+)\]\(([^)]+)\)|`([^`]+)`|\*\*([^*]+)\*\*|~~([^~]+)~~|\*([^*]+)\*/gu
+  const pattern = /!\[([^\]]*)\]\(([^)]+)\)|\[([^\]]+)\]\(([^)]+)\)|`([^`]+)`|\*\*([^*]+)\*\*|~~([^~]+)~~|\*([^*]+)\*|<([^<>\n]+)>|\[([^\]\n]+)\]|\{([^{}\n]+)\}/gu
   let out = '', cursor = 0
   for (const m of text.matchAll(pattern)) {
     out += escapeHtml(text.slice(cursor, m.index))
@@ -32,6 +32,12 @@ function inlineMd(text) {
       out += s('nm-mk', '~~') + s('nm-strike', escapeHtml(m[7])) + s('nm-mk', '~~')
     } else if (m[8] !== undefined) {
       out += s('nm-mk', '*') + s('nm-em', escapeHtml(m[8])) + s('nm-mk', '*')
+    } else if (m[9] !== undefined) {
+      out += s('nm-mk', '<') + s('nm-angle', escapeHtml(m[9])) + s('nm-mk', '>')
+    } else if (m[10] !== undefined) {
+      out += s('nm-mk', '[') + s('nm-bracket', escapeHtml(m[10])) + s('nm-mk', ']')
+    } else if (m[11] !== undefined) {
+      out += s('nm-mk', '{') + s('nm-brace', escapeHtml(m[11])) + s('nm-mk', '}')
     }
     cursor = m.index + m[0].length
   }

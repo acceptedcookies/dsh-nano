@@ -1,7 +1,7 @@
 /** Browser database for the notepad. One origin, one database. */
 
 export const DB_NAME = 'dsh-nano-notepad'
-export const DB_VERSION = 2
+export const DB_VERSION = 3
 export const CHANNEL = 'dsh-nano-notepad'
 
 export const DEFAULT_SETTINGS = {
@@ -91,6 +91,8 @@ export function openDatabase() {
       }
       if (!db.objectStoreNames.contains('settings')) db.createObjectStore('settings', { keyPath: 'id' })
       if (!db.objectStoreNames.contains('ui')) db.createObjectStore('ui', { keyPath: 'id' })
+      /* v3. Kept so databases already opened at this version do not downgrade. */
+      if (!db.objectStoreNames.contains('blobs')) db.createObjectStore('blobs', { keyPath: 'id' })
     }
     request.onsuccess = () => resolve(request.result)
     request.onerror = () => reject(request.error ?? new Error('notepad database failed to open'))
@@ -111,9 +113,11 @@ export function validateName(name) {
  * only extensionless names are completed to .md.
  * @param {string} name
  */
+const KNOWN_EXT = /\.(md|markdown|json)$/i
+
 export function fileName(name) {
   const trimmed = validateName(name)
-  return /\.(md|markdown|json)$/i.test(trimmed) ? trimmed : `${trimmed}.md`
+  return KNOWN_EXT.test(trimmed) ? trimmed : `${trimmed}.md`
 }
 
 /** @param {{ name: string }[]} siblings @param {string} name */
@@ -243,7 +247,7 @@ export async function pinNode(db, id, pinned) {
   const transaction = db.transaction('nodes', 'readwrite')
   const store = transaction.objectStore('nodes')
   const node = await requestToPromise(store.get(id))
-  if (!node || node.kind !== 'file') throw new Error('notepad file no longer exists')
+  if (!node || (node.kind !== 'file' && node.kind !== 'folder')) throw new Error('notepad item no longer exists')
   node.pinned = pinned
   node.updatedAt = Date.now()
   store.put(node)
@@ -311,7 +315,7 @@ export async function copyNode(db, id, workspaceId = null) {
   const destination = workspaceId ?? null
   const topSiblings = nodes.filter(item => item.parentId === null && (item.workspaceId ?? null) === destination)
   const isFile = source.kind === 'file'
-  const m = isFile ? source.name.match(/\.(md|markdown|json)$/i) : null
+  const m = isFile ? source.name.match(KNOWN_EXT) : null
   const base = m ? source.name.slice(0, -m[0].length) : source.name
   const ext = m ? m[0] : ''
   let name = source.name, i = 1

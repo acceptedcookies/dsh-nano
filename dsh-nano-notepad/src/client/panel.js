@@ -15,6 +15,7 @@ import {
   updateNodeMeta,
   normalizeSettings,
   openDatabase,
+
   renameNode,
   pinNode,
   saveDraft,
@@ -40,7 +41,7 @@ ${NANO_STYLES}
 .np-entry { z-index: 3; }
 .np-window { z-index: 2; }
 .np-window { --np-pad-x: 12px; --np-gap: 8px; --np-row-h: 40px; --np-node-h: 28px; --np-icon-btn: 28px; --np-icon-btn-sm: 22px; --np-indent: 16px; --np-rail: 52px; --np-menu-w: 220px; --np-foot-h: 52px; }
-.np-slash[hidden], .np-window[hidden], .np-read[hidden], .np-error[hidden] { display: none !important; }
+.np-slash[hidden], .np-window[hidden], .np-read[hidden], .np-write[hidden], .np-mirror[hidden], .np-error[hidden] { display: none !important; }
 .np-window[data-theme="dark"], .np-entry[data-theme="dark"] { color-scheme: dark; --dsw-alias-bg-layer-1: #232324; --dsw-alias-bg-layer-2: #2c2c2e; --dsw-alias-bg-layer-3: #353638; --dsw-alias-bg-mask-1: #00000080; --dsw-alias-label-primary: #f9fafb; --dsw-alias-label-secondary: #cfd3d6; --dsw-alias-label-tertiary: #adb2b8; --dsw-alias-border-l2: #ffffff1f; --dsw-alias-border-l3: #ffffff29; --dsw-alias-interactive-bg-hover: #ffffff14; --dsw-alias-interactive-bg-active: #ffffff24; --dsw-alias-brand-primary: #f9fafb; --dsw-alias-brand-primary-invert: #0f1115; --dsw-alias-link: #7aaaff; --dsw-alias-state-error-primary: #f25a5a; --dsw-alias-state-error-secondary: #f25a5a; --dsw-alias-state-success-primary: #22c55e; --dsw-alias-state-success-secondary: #4ed17e; --dsw-alias-state-warn-primary: #f59e0b; --dsw-alias-state-warn-secondary: #f7ad31; --dsw-alias-interactive-bg-hover-danger: #f25a5a26; --dsw-alias-label-error: #f25a5a; --dsw-alias-tooltip-bg: #43454a; --dsw-alias-tooltip-label: #f9fafb; --dsw-alias-markdown-inline-code: #43454a; }
 .np-window[data-theme="light"], .np-entry[data-theme="light"] { color-scheme: light; --dsw-alias-bg-layer-1: #ffffff; --dsw-alias-bg-layer-2: #ffffff; --dsw-alias-bg-layer-3: #ffffff; --dsw-alias-bg-mask-1: #0000003d; --dsw-alias-label-primary: #0f1115; --dsw-alias-label-secondary: #61666b; --dsw-alias-label-tertiary: #81858c; --dsw-alias-border-l2: #0000001a; --dsw-alias-border-l3: #0000001f; --dsw-alias-interactive-bg-hover: #2631480f; --dsw-alias-interactive-bg-active: #2631481a; --dsw-alias-brand-primary: #0f1115; --dsw-alias-brand-primary-invert: #f9fafb; --dsw-alias-link: #4176e6; --dsw-alias-state-error-primary: #ec1313; --dsw-alias-state-error-secondary: #f25a5a; --dsw-alias-state-success-primary: #22c55e; --dsw-alias-state-success-secondary: #4ed17e; --dsw-alias-state-warn-primary: #f59e0b; --dsw-alias-state-warn-secondary: #f7ad31; --dsw-alias-interactive-bg-hover-danger: #ec13130d; --dsw-alias-label-error: #ec1313; --dsw-alias-tooltip-bg: #43454a; --dsw-alias-tooltip-label: #f9fafb; --dsw-alias-markdown-inline-code: #f5f6f7; }
 .np-entry { width: 36px; height: 36px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-primary); cursor: grab; box-shadow: var(--dsw-elevation-soft); }
@@ -104,7 +105,7 @@ ${NANO_STYLES}
 .np-tree { box-sizing: border-box; width: 248px; display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--dsw-alias-border-l2); background: transparent; }
 .np-tree[data-collapsed="true"] { width: var(--np-rail); align-items: stretch; }
 .np-tree[data-collapsed="true"] .np-ws, .np-tree[data-collapsed="true"] .np-tree-tools, .np-tree[data-collapsed="true"] .np-tree-head > span { display: none; }
-.np-tree[data-collapsed="true"] .np-tree-head { width: 100%; justify-content: center; padding: 6px var(--np-pad-x); }
+.np-tree[data-collapsed="true"] .np-tree-head { display: none; }
 /* collapsed rail still shows file icons for switching */
 .np-tree[data-collapsed="true"] .np-nodes { display: flex; flex-direction: column; align-items: center; padding: 6px 0 var(--np-pad-x); }
 .np-tree[data-collapsed="true"] .np-node { width: 40px; padding-left: 0 !important; padding-right: 0; justify-content: center; gap: 0; }
@@ -112,8 +113,10 @@ ${NANO_STYLES}
 .np-tree[data-collapsed="true"] .np-node-name, .np-tree[data-collapsed="true"] .np-caret, .np-tree[data-collapsed="true"] .np-node-actions, .np-tree[data-collapsed="true"] .np-group { display: none; }
 .np-tree[data-collapsed="true"] .np-node-icon svg { width: 18px; height: 18px; }
 .np-tree-head { box-sizing: border-box; display: flex; flex: none; align-items: center; gap: 4px; width: 100%; height: 49px; padding: 6px var(--np-pad-x); color: var(--dsw-alias-label-tertiary); font-size: 12px; border-bottom: 1px solid var(--dsw-alias-border-l2); }
-.np-tree-toggle { box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; width: var(--np-icon-btn); height: var(--np-icon-btn); flex: none; padding: 0; border: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); cursor: pointer; }
+.np-tree-toggle { box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; flex: none; padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); cursor: pointer; }
 .np-tree-toggle:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+.np-tree-toggle svg { width: 16px; height: 16px; display: block; fill: none; stroke: currentColor; stroke-width: 1; }
+.np-tree-toggle svg .np-panel-fill { fill: currentColor; stroke: none; }
 .np-tree-tools { display: flex; align-items: center; gap: 2px; }
 .np-tree-tools button { display: inline-flex; align-items: center; justify-content: center; width: var(--np-icon-btn); height: var(--np-icon-btn); padding: 0; border: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); cursor: pointer; }
 .np-tree-tools button svg { width: 16px; height: 16px; display: block; }
@@ -158,6 +161,8 @@ ${NANO_STYLES}
 .np-node-name { display: block; min-width: 0; overflow: hidden; white-space: nowrap; }
 .np-node-name[data-fade="true"] { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 18px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 18px), transparent); }
 .np-entry svg, .np-node-icon svg, .np-tree-tools svg, .np-tree-toggle svg, .np-tree-foot svg, .np-caret svg, .np-node-actions svg, .np-tool svg, .np-slash svg, .np-ws-caret svg { fill: currentColor; stroke: none; }
+.np-tree-toggle svg { fill: none; stroke: currentColor; stroke-width: 1; }
+.np-tree-toggle svg .np-panel-fill { fill: currentColor; stroke: none; }
 .np-node-icon svg, .np-tree-tools svg, .np-tree-toggle svg, .np-caret svg, .np-node-actions svg, .np-tool svg, .np-slash svg { width: 16px; height: 16px; display: block; }
 .np-ws { position: relative; flex: 1 1 auto; min-width: 0; max-width: 170px; }
 .np-ws-btn { display: flex; align-items: center; gap: 6px; width: 100%; height: var(--np-icon-btn); box-sizing: border-box; padding: 0 8px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); font: inherit; font-size: 12px; cursor: pointer; }
@@ -194,12 +199,13 @@ ${NANO_STYLES}
 .np-footer-actions button.np-danger { color: var(--dsw-alias-label-error); }
 .np-footer-actions button.np-danger:hover, .np-dlg-body button.np-danger:hover { border-color: var(--dsw-alias-state-error-secondary); color: var(--dsw-alias-state-error-secondary); background: var(--dsw-alias-interactive-bg-hover-danger); }
 .np-write, .np-read { flex: 1; min-height: 0; margin: 0; }
+.np-switch[hidden], .np-md-tools[hidden], .np-json-tools[hidden] { display: none !important; }
 .np-write { box-sizing: border-box; width: 100%; max-width: 100%; resize: none; border: 0; outline: 0; background: transparent; color: transparent; caret-color: var(--dsw-alias-label-primary); padding: var(--np-pad-x); font-family: var(--dsw-font-markdown-code-font-family); font-size: var(--np-editor-font-size, 14px); line-height: 1.45; overflow-wrap: anywhere; position: relative; }
 /* Transparent text over a colourised mirror: keep the caret crisp and let the
    selection paint show through so the mirror reads underneath it. */
 .np-write::selection { background: color-mix(in srgb, var(--dsw-alias-brand-primary) 28%, transparent); color: transparent; }
 .np-write:disabled { color: transparent; }
-.np-mirror { position: absolute; inset: 0; z-index: 0; padding: var(--np-pad-x); box-sizing: border-box; overflow: hidden; font-family: var(--dsw-font-markdown-code-font-family); font-size: var(--np-editor-font-size, 14px); line-height: 1.45; overflow-wrap: anywhere; color: var(--dsw-alias-label-primary); pointer-events: none; white-space: pre-wrap; }
+.np-mirror { position: absolute; z-index: 0; top: 0; left: 0; width: 0; height: 0; padding: var(--np-pad-x); box-sizing: border-box; overflow: hidden; font-family: var(--dsw-font-markdown-code-font-family); font-size: var(--np-editor-font-size, 14px); line-height: 1.45; overflow-wrap: anywhere; color: var(--dsw-alias-label-primary); pointer-events: none; white-space: pre-wrap; }
 .np-mirror > div { min-height: 1.45em; }
 .nm-mk { color: var(--dsw-alias-label-tertiary); }
 .nm-h { color: var(--dsw-alias-link); font-weight: 700; }
@@ -285,7 +291,7 @@ ${NANO_STYLES}
 .np-error button[data-action="load-remote"], .np-error button[data-action="keep-mine"] { width: auto; height: auto; flex: none; padding: 4px 10px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); color: var(--dsw-alias-label-primary); font: inherit; line-height: 20px; }
 .np-slash { width: var(--np-menu-w); max-height: 260px; overflow-y: auto; padding: 4px; display: flex; flex-direction: column; gap: 1px; }
 .np-slash .np-slash-empty { padding: 8px; color: var(--dsw-alias-label-tertiary); font-size: 12px; }
-.np-footer { box-sizing: border-box; display: flex; align-items: center; gap: var(--np-gap); min-height: var(--np-foot-h); padding: 0 var(--np-pad-x); border-top: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-2); }
+.np-footer { position: relative; z-index: 1; box-sizing: border-box; display: flex; align-items: center; gap: var(--np-gap); min-height: var(--np-foot-h); padding: 0 var(--np-pad-x); border-top: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-2); }
 /* Panel-width responsiveness: container queries react to the floating window, not the viewport. */
 @container np (max-width: 720px) {
   .np-tree { width: 200px; }
@@ -383,7 +389,6 @@ const textIcon = (label) => `<svg viewBox="0 0 24 24" aria-hidden="true"><text x
 const FILE_ICON = googleIcon('M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8zm2 16H8v-2h8zm0-4H8v-2h8zm-3-5V3.5L18.5 9z')
 const FOLDER_ICON = googleIcon('M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8z')
 const PLUS_ICON = googleIcon('M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z')
-const FOLDER_PLUS_ICON = googleIcon('M20 6h-8l-2-2H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2m-1 8h-3v3h-2v-3h-3v-2h3V9h2v3h3z')
 const CLOSE_ICON = googleIcon('M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z')
 const SETTINGS_ICON = googleIcon('M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.48.48 0 0 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z')
 const PIN_ICON = googleIcon('M16 9V4h1c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1 1 1-1v-7H19v-2c-1.66 0-3-1.34-3-3')
@@ -398,11 +403,11 @@ const ESCAPE_ICON = googleIcon('M8 5 4 12h4v7l4-9H8z')
 const UNESCAPE_ICON = googleIcon('M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z')
 const STRIP_ICON = googleIcon('M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z')
 const CHEVRON_ICON = googleIcon('M16.59 8.59 12 13.17 7.41 8.59 6 10l6 6 6-6z')
-const CHEVRON_LEFT = googleIcon('M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z')
+/* DSH sidebar glyph (panel-left-outline, 16px). Open fills the left pane; closed is the outline. */
+const PANEL_ICON = (filled) => `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 1.5H2.5C1.94772 1.5 1.5 1.94772 1.5 2.5V13.5C1.5 14.0523 1.94772 14.5 2.5 14.5H13.5C14.0523 14.5 14.5 14.0523 14.5 13.5V2.5C14.5 1.94772 14.0523 1.5 13.5 1.5Z"></path><path d="M5.5 1.5V14.5"></path>${filled ? '<path class="np-panel-fill" d="M2.5 1.5H5.5V14.5H2.5C1.94772 14.5 1.5 14.0523 1.5 13.5V2.5C1.5 1.94772 1.94772 1.5 2.5 1.5Z"></path>' : ''}</svg>`
 const MINIMIZE_ICON = googleIcon('M6 19h12v2H6z')
 const WIN_MIN_ICON = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M1 6h10" fill="none" stroke="currentColor" stroke-width="1.1"/></svg>'
 const TRASH_ICON = googleIcon('M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6zM19 4h-3.5l-1-1h-5l-1 1H5v2h14z')
-const CHEVRON_RIGHT = googleIcon('M10 6 8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z')
 const ICON = FILE_ICON
 
 /** Format toolbar + slash menu share one definition list. */
@@ -462,9 +467,9 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     ? `<button type="button" class="np-tool" data-action="image" data-format-kind="image">${def.icon}</button>`
     : `<button type="button" class="np-tool" data-format="${def.kind}" data-format-kind="${def.kind}">${def.icon}</button>`).join('')
   panel.innerHTML = `
-    <div class="np-tabs"><div class="np-tablist"></div><button type="button" class="np-add" data-action="new-file" data-i18n="newFile" data-i18n-mode="title">+</button><span class="np-tabs-spacer"></span></div>
+    <div class="np-tabs"><button type="button" class="np-tree-toggle" data-action="toggle-tree"></button><div class="np-tablist"></div><button type="button" class="np-add" data-action="new-file" data-i18n="newFile" data-i18n-mode="title">+</button><span class="np-tabs-spacer"></span></div>
     <div class="np-body">
-      <aside class="np-tree"><div class="np-tree-head"><button type="button" class="np-tree-toggle" data-action="toggle-tree"></button><div class="np-ws"><button type="button" class="np-ws-btn" data-action="ws-toggle" aria-haspopup="listbox" aria-expanded="false"><span class="np-ws-label"></span><span class="np-ws-caret" aria-hidden="true">${CHEVRON_ICON}</span></button></div><span style="flex:1"></span><span class="np-tree-tools"><button type="button" data-action="new-file" data-i18n="newFile" data-i18n-mode="title">${PLUS_ICON}</button><button type="button" data-action="new-folder" data-i18n="newFolder" data-i18n-mode="title">${FOLDER_PLUS_ICON}</button><button type="button" class="np-danger" data-action="delete" data-i18n="delete" data-i18n-mode="title">${TRASH_ICON}</button></span></div><div class="np-nodes" data-root="true"></div><div class="np-tree-foot"><button type="button" data-action="settings" data-i18n="settings" data-i18n-mode="label">${SETTINGS_ICON}<span data-i18n="settings"></span></button><button type="button" data-action="close" data-i18n="close" data-i18n-mode="label">${CLOSE_ICON}<span data-i18n="close"></span></button></div></aside>
+      <aside class="np-tree"><div class="np-tree-head"><div class="np-ws"><button type="button" class="np-ws-btn" data-action="ws-toggle" aria-haspopup="listbox" aria-expanded="false"><span class="np-ws-label"></span><span class="np-ws-caret" aria-hidden="true">${CHEVRON_ICON}</span></button></div><span style="flex:1"></span><span class="np-tree-tools"><button type="button" data-action="new-item" data-i18n="newItem" data-i18n-mode="title" aria-haspopup="menu">${PLUS_ICON}</button><button type="button" class="np-danger" data-action="delete" data-i18n="delete" data-i18n-mode="title">${TRASH_ICON}</button></span></div><div class="np-nodes" data-root="true"></div><div class="np-tree-foot"><button type="button" data-action="settings" data-i18n="settings" data-i18n-mode="label">${SETTINGS_ICON}<span data-i18n="settings"></span></button><button type="button" data-action="close" data-i18n="close" data-i18n-mode="label">${CLOSE_ICON}<span data-i18n="close"></span></button></div></aside>
       <div class="np-editor">
         <div class="np-toolbar"><span class="np-md-tools">${toolbar}</span><span class="np-json-tools" hidden><button type="button" class="np-tool" data-json="expand" data-i18n="jsonExpand" data-i18n-mode="title">${EXPAND_ICON}</button><button type="button" class="np-tool" data-json="collapse" data-i18n="jsonCollapse" data-i18n-mode="title">${COLLAPSE_ICON}</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-json="format" data-i18n="jsonFormat" data-i18n-mode="title">${FORMAT_ICON}</button><button type="button" class="np-tool" data-json="minify" data-i18n="jsonMinify" data-i18n-mode="title">${MINIFY_ICON}</button><button type="button" class="np-tool" data-json="escape" data-i18n="jsonEscape" data-i18n-mode="title">${ESCAPE_ICON}</button><button type="button" class="np-tool" data-json="unescape" data-i18n="jsonUnescape" data-i18n-mode="title">${UNESCAPE_ICON}</button><button type="button" class="np-tool" data-json="strip" data-i18n="jsonStrip" data-i18n-mode="title">${STRIP_ICON}</button></span><button type="button" class="np-switch" data-action="view" role="switch" aria-checked="false" data-i18n="viewGroup" data-i18n-mode="title"><span class="np-switch-label" data-i18n="source"></span><span class="np-switch-label" data-i18n="preview"></span><span class="np-switch-thumb" data-i18n="source"></span></button></div>
         <div class="np-mirror" aria-hidden="true"></div>
@@ -557,14 +562,20 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     const source = write()
     const layer = mirror()
     layer.innerHTML = highlightSource(source.value, isJson())
-    /* .np-mirror is inset:0 inside .np-editor, which also owns the toolbar —
-       anchor the layer onto the textarea's own box so line 1 sits under
-       line 1, not on the toolbar row. */
+    fitMirror()
+    layer.hidden = source.hidden
+  }
+  /** Keep the colour layer the same rectangle as the textarea. A box that
+      runs to the editor's bottom paints the last lines across the footer. */
+  const fitMirror = () => {
+    const source = write()
+    const layer = mirror()
     layer.style.top = `${source.offsetTop}px`
     layer.style.left = `${source.offsetLeft}px`
+    layer.style.width = `${source.offsetWidth}px`
+    layer.style.height = `${source.offsetHeight}px`
     layer.scrollTop = source.scrollTop
     layer.scrollLeft = source.scrollLeft
-    layer.hidden = source.hidden
   }
   const current = () => state.nodes.find(node => node.id === state.ui.currentId && node.kind === 'file')
   const isJson = () => (current()?.name ?? '').toLowerCase().endsWith('.json')
@@ -775,15 +786,17 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     }
     const visit = (parentId, depth, workspaceId) => {
       const nodes = byParent.get(`${workspaceId ?? ''}${parentId ?? ''}`) ?? []
-      nodes.sort((a, b) => Number(b.pinned === true) - Number(a.pinned === true) || a.name.localeCompare(b.name))
+      /* Folders sit above every file, pinned files included. Pin only reorders
+         within the same kind. */
+      nodes.sort((a, b) => Number(a.kind === 'file') - Number(b.kind === 'file') || Number(b.pinned === true) - Number(a.pinned === true) || a.name.localeCompare(b.name))
       for (const node of nodes) {
         const icon = node.kind === 'folder' ? FOLDER_ICON : FILE_ICON
         const name = escapeHtml(node.name)
         const expanded = !state.collapsed.has(node.id)
         const caret = node.kind === 'folder' ? `<button type="button" class="np-caret" data-caret="${node.id}" data-open="${expanded}" aria-expanded="${expanded}" aria-label="${escapeHtml(node.name)} · ${escapeHtml(expanded ? text().collapse : text().expand)}">${CHEVRON_ICON}</button>` : ''
         const pinLabel = node.pinned === true ? text().unpin : text().pin
-        const pin = node.kind === 'file' ? `<button type="button" data-pin="${node.id}" data-active="${node.pinned === true}" title="${escapeHtml(pinLabel)}" aria-label="${escapeHtml(pinLabel)}">${PIN_ICON}</button>` : ''
-        lines.push(`<div class="np-node" data-kind="${node.kind}" data-pinned="${node.kind === 'file' && node.pinned === true}" data-active="${node.id === state.ui.currentId}" title="${name}" style="padding-left:${8 + depth * 16}px">${caret}<button class="np-node-main" type="button" draggable="true" data-id="${node.id}" aria-label="${name}"><span class="np-node-icon" aria-hidden="true">${icon}</span><span class="np-node-name">${name}</span></button><span class="np-node-actions">${pin}<button type="button" data-move="${node.id}" title="${escapeHtml(text().transfer)}" aria-label="${escapeHtml(text().transfer)}">${MOVE_ICON}</button><button type="button" data-more="${node.id}" title="${escapeHtml(text().more)}" aria-label="${escapeHtml(text().more)}" aria-haspopup="menu">${MORE_ICON}</button></span></div>`)
+        const pin = `<button type="button" data-pin="${node.id}" data-active="${node.pinned === true}" title="${escapeHtml(pinLabel)}" aria-label="${escapeHtml(pinLabel)}">${PIN_ICON}</button>`
+        lines.push(`<div class="np-node" data-kind="${node.kind}" data-pinned="${node.pinned === true}" data-active="${node.id === state.ui.currentId}" title="${name}" style="padding-left:${8 + depth * 16}px">${caret}<button class="np-node-main" type="button" draggable="true" data-id="${node.id}" aria-label="${name}"><span class="np-node-icon" aria-hidden="true">${icon}</span><span class="np-node-name">${name}</span></button><span class="np-node-actions">${pin}<button type="button" data-move="${node.id}" title="${escapeHtml(text().transfer)}" aria-label="${escapeHtml(text().transfer)}">${MOVE_ICON}</button><button type="button" data-more="${node.id}" title="${escapeHtml(text().more)}" aria-label="${escapeHtml(text().more)}" aria-haspopup="menu">${MORE_ICON}</button></span></div>`)
         if (node.kind === 'folder' && !state.collapsed.has(node.id)) visit(node.id, depth + 1, workspaceId)
       }
     }
@@ -848,6 +861,8 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     /* JSON files swap the markdown-format cluster for JSON tools. */
     const mdTools = panel.querySelector('.np-md-tools')
     const jsonTools = panel.querySelector('.np-json-tools')
+    const viewSwitch = panel.querySelector('.np-switch')
+    if (viewSwitch) viewSwitch.hidden = false
     if (mdTools) mdTools.hidden = json
     if (jsonTools) jsonTools.hidden = !json
     for (const button of panel.querySelectorAll('.np-toolbar [data-format]')) {
@@ -969,7 +984,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     const treeCollapsed = state.ui.treeOpen === false
     tree.dataset.collapsed = String(treeCollapsed)
     const treeToggle = must(panel, '.np-tree-toggle')
-    treeToggle.innerHTML = treeCollapsed ? CHEVRON_RIGHT : CHEVRON_LEFT
+    treeToggle.innerHTML = treeCollapsed ? PANEL_ICON(false) : PANEL_ICON(true)
     treeToggle.title = treeCollapsed ? text().expandTree : text().collapseTree
     treeToggle.setAttribute('aria-label', treeToggle.title)
     treeToggle.setAttribute('aria-expanded', String(!treeCollapsed))
@@ -1154,6 +1169,27 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     closeMenu = () => done(true)
     document.addEventListener('keydown', esc, true)
     document.addEventListener('pointerdown', out, true)
+  }
+
+  /** One + button: blank file or blank folder. */
+  function openCreateMenu(anchor) {
+    closeMenu?.()
+    anchor.setAttribute('aria-expanded', 'true')
+    const icon = markup => React.createElement('span', { dangerouslySetInnerHTML: { __html: markup } })
+    const items = [
+      { id: 'file', label: text().newBlankFile, icon: icon(FILE_ICON), run: () => { done(false); void add('file').catch(showError) } },
+      { id: 'folder', label: text().newBlankFolder, icon: icon(FOLDER_ICON), run: () => { done(false); void add('folder').catch(showError) } },
+    ]
+    const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), items, width: 180 })
+    let closed = false
+    const done = (unmount) => {
+      if (closed) return
+      closed = true
+      closeMenu = null
+      anchor.setAttribute('aria-expanded', 'false')
+      if (unmount) raw.close()
+    }
+    closeMenu = () => done(true)
   }
 
   function askName(title, initial, done) {
@@ -1780,6 +1816,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       render()
       void persistUi()
     }
+    if (action === 'new-item') { openCreateMenu(target); return }
     if (action === 'new-file') void add('file').catch(showError)
     if (action === 'new-folder') void add('folder').catch(showError)
     if (action === 'rename' && state.ui.currentId) {
@@ -1985,10 +2022,13 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
   })
   write().addEventListener('scroll', () => {
     if (state.slash) placeSlash()
-    const layer = mirror()
-    layer.scrollTop = write().scrollTop
-    layer.scrollLeft = write().scrollLeft
+    fitMirror()
   })
+  if (typeof ResizeObserver === 'function') {
+    const mirrorBox = new ResizeObserver(() => fitMirror())
+    mirrorBox.observe(write())
+    disposers.push(() => mirrorBox.disconnect())
+  }
 
   function insertSlash(kind) {
     const source = write()

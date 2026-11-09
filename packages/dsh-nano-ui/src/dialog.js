@@ -45,8 +45,8 @@ export function NanoDialog({ copy, title, description, confirmLabel, confirmDisa
     footer: footer ?? React.createElement(React.Fragment, null,
       React.createElement(Button, { variant: 'outline', className: 'nano-modal-action', onClick: onCancel }, copy.cancel),
       React.createElement(Button, {
-        variant: danger ? 'danger' : 'primary',
-        className: 'nano-modal-action',
+        variant: danger ? 'outline' : 'primary',
+        className: danger ? 'nano-modal-action nano-modal-danger' : 'nano-modal-action',
         disabled: confirmDisabled === true || busy === true,
         onClick: onConfirm,
       }, confirmLabel ?? copy.confirm)),

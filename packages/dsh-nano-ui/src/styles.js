@@ -38,5 +38,19 @@ export const NANO_STYLES = `
 .nano-dialog-sized { width: clamp(320px, var(--nano-dlg-w, 380px), 100%) !important; }
 
 .nano-dialog-content { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+/* The shell Button has no danger variant, so a destructive confirm was plain text
+   with no hover. Keep the outline metrics and paint the warning color ourselves. */
+.nano-modal-action.nano-modal-danger {
+  color: var(--dsw-alias-state-error-primary, #f25a5a);
+  box-shadow: inset 0 0 0 var(--dsh-hairline-width, .5px) var(--dsw-alias-state-error-primary, #f25a5a);
+  transition: background-color .12s ease, color .12s ease, box-shadow .12s ease;
+}
+@media (hover: hover) {
+  .nano-modal-action.nano-modal-danger:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover-danger, rgba(242, 90, 90, .15));
+    color: var(--dsw-alias-state-error-secondary, #f25a5a);
+    box-shadow: inset 0 0 0 var(--dsh-hairline-width, .5px) var(--dsw-alias-state-error-secondary, #f25a5a);
+  }
+}
 .nano-dialog-content > div:last-child { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 `

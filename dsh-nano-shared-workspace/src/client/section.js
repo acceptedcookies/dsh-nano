@@ -310,10 +310,10 @@ export function SharedSection({ face, wide }) {
       createElement('div', {
         role: 'button',
         className: chrome.row,
-        onClick: configured ? face.onCreateWorkspace : face.onOpenSettings,
+        onClick: face.onCreateWorkspace,
       },
-        createElement('span', { className: chrome.folder }),
-        createElement('span', { className: chrome.chevron }),
+        createElement('span', { className: chrome.folder },
+          createElement(IconProjectAddOutlineRegular, { size: 16 })),
         createElement('span', { className: chrome.projectText },
           createElement('span', { className: chrome.title }, copy.emptyHint))))
     : null

@@ -184,7 +184,10 @@ export function apply(ctx) {
     setExpandOnLoad: expandOnLoad => {
       const next = { expandOnLoad: expandOnLoad === true, expandLimit: EXPAND_LIMIT }
       localStorage.setItem(PREFS_KEY, JSON.stringify(next))
-      store.set(next)
+      store.set({
+        ...next,
+        ...(store.current.listReady === true ? { sectionOpen: next.expandOnLoad } : {}),
+      })
     },
     /** Refresh = push local sessions first, then re-read the remote lists. */
     onRefresh: () => {
@@ -325,6 +328,11 @@ export function apply(ctx) {
      * session can actually open.
      */
     onCreateWorkspace: () => {
+      if (store.current.configured !== true) {
+        refresh()
+        store.set({ open: true })
+        return
+      }
       if (store.current.creating === true) return
       store.set({ createDialog: { mode: 'create' } })
     },

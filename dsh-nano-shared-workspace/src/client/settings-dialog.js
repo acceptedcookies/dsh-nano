@@ -7,7 +7,7 @@
 
 import React from 'react'
 import { NanoDialog } from 'dsh-nano-ui'
-import { Input } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Input, Switch } from '@deepseek-ai/dsh-client-ui-primitives'
 import { saveSettings } from './api.js'
 
 const { createElement, useState } = React
@@ -100,14 +100,14 @@ export function SettingsDialog({ face, settings }) {
         placeholder: copy.accessKeyPlaceholder,
         onChange: event => setAccessKey(event.currentTarget.value),
       })),
-    createElement('label', { className: 'nsw-pref' },
-      createElement('input', {
-        type: 'checkbox',
-        checked: settings?.expandOnLoad !== false,
-        onChange: event => face.setExpandOnLoad(event.currentTarget.checked),
-      }),
+    createElement('div', { className: 'nsw-switch-row' },
       createElement('span', null,
         createElement('span', { className: 'nsw-field-label' }, copy.expandOnLoad),
-        createElement('span', { className: 'nsw-join-hint' }, copy.expandOnLoadHint))),
+        createElement('span', { className: 'nsw-join-hint' }, copy.expandOnLoadHint)),
+      createElement(Switch, {
+        checked: settings?.expandOnLoad !== false,
+        label: copy.expandOnLoad,
+        onChange: checked => face.setExpandOnLoad(checked),
+      })),
     createElement('p', { className: 'nsw-join-hint' }, copy.joinHint))
 }

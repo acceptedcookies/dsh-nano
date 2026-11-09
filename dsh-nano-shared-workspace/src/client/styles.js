@@ -116,8 +116,8 @@ export const STYLE = `
   font: inherit; font-size: 12px; color: var(--dsw-alias-label-tertiary, #999);
 }
 .nsw-more:hover { color: var(--dsw-alias-label-secondary, #ccc); }
-.nsw-pref { display: flex; align-items: flex-start; gap: 8px; margin: 4px 0 12px; font-size: 12.5px; }
-.nsw-pref input { margin-top: 2px; }
+.nsw-switch-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 4px 0 12px; }
+.nsw-switch-row .nsw-join-hint { display: block; margin: 2px 0 0; }
 @media (prefers-reduced-motion: reduce) {
   .nsw-spin { animation: none; }
   .nsw-reveal { transition: none; }

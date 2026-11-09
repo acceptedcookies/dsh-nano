@@ -129,3 +129,36 @@ export function imagineSkill(engineKey) {
     content,
   }
 }
+
+/**
+ * Engine auto-pick for installs that never opened the Media tab: prefer grok,
+ * otherwise the first detected binary. The pick is not persisted — an explicit
+ * user selection still wins and is what `readEngine` reports.
+ * @returns {string | null} an engine key whose binary exists, or null.
+ */
+export function defaultEngine() {
+  const available = scanEngines().engines.filter(engine => engine.available)
+  const preferred = available.find(engine => engine.key === 'grok') ?? available[0]
+  return preferred?.key ?? null
+}
+
+/**
+ * The skill when no usable engine exists yet. It stays user-invocable so typing
+ * `/imagine` still surfaces actionable guidance instead of silently missing.
+ * @returns {{ name: string, description: string, content: string }}
+ */
+export function imagineStub() {
+  return {
+    name: 'imagine',
+    description: 'Generate an image — no media engine configured yet (pick one in the model selector Media tab)',
+    content: [
+      'The imagine skill cannot generate an image yet because no media engine is configured.',
+      'Tell the user:',
+      '1. Open the model selector and switch to the 媒体生成 / Media tab.',
+      '2. Pick an engine marked as detected (for example Grok).',
+      '   If every engine shows "not installed", the CLI binary is missing —',
+      '   on macOS the Grok CLI lives at ~/.grok/bin/grok once installed.',
+      '3. Re-run /imagine after a detected engine is selected.',
+    ].join('\n'),
+  }
+}

@@ -2,7 +2,7 @@
 
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { imagineSkill, readEngine, scanEngines, writeEngine } from './lib/host-media.js'
+import { defaultEngine, imagineSkill, imagineStub, readEngine, scanEngines, writeEngine } from './lib/host-media.js'
 
 export const name = 'nano-model-selector'
 
@@ -14,7 +14,7 @@ const ENGINE_ROUTE = '/nano-model-selector/media-engine'
 
 /** Plugin-private state file holding the chosen media engine. */
 const STATE_PATH = join(
-  process.env.DSH_DATA_DIR ?? join(homedir(), '.dsh'),
+  process.env.DSH_DATA_DIR ?? process.env.DSH_HOME ?? join(homedir(), '.dsh'),
   'plugins', 'nano-model-selector', 'media-engine.json',
 )
 
@@ -149,7 +149,10 @@ function readBody(req) {
 }
 
 /**
- * Register (or re-register) the `imagine` skill for the persisted engine.
+ * Register (or re-register) the `imagine` skill.
+ * Resolution order: the persisted user choice → auto-pick a detected engine
+ * (grok first) → a stub that guides the user to the Media tab. A stub is
+ * always registered so `/imagine` exists even on a fresh install.
  * @param ctx - host context.
  */
 function registerImagine(ctx) {
@@ -157,16 +160,15 @@ function registerImagine(ctx) {
   const refresh = () => {
     dispose?.()
     dispose = null
-    const engine = readEngine(STATE_PATH)
-    const skill = engine === null ? null : imagineSkill(engine)
-    if (skill !== null) {
-      dispose = ctx.skills.register({
-        ...skill,
-        source: 'runtime',
-        invocation: { modelInvocable: false, userInvocable: true },
-        provider: 'nano-model-selector',
-      })
-    }
+    const persisted = readEngine(STATE_PATH)
+    const engine = persisted ?? defaultEngine()
+    const skill = engine !== null ? imagineSkill(engine) ?? imagineStub() : imagineStub()
+    dispose = ctx.skills.register({
+      ...skill,
+      source: 'runtime',
+      invocation: { modelInvocable: false, userInvocable: true },
+      provider: 'nano-model-selector',
+    })
   }
   refresh()
   return { refresh, dispose: () => dispose?.() }
@@ -189,7 +191,10 @@ function mediaHandler(ctx, imagine) {
     }
     if (url.pathname === ENGINE_ROUTE) {
       if (req.method === 'GET' || req.method === 'HEAD') {
-        sendJson(res, 200, { engine: readEngine(STATE_PATH) })
+        // Report the persisted choice, falling back to the auto-picked engine so
+        // a fresh install still shows which engine `/imagine` is wired to.
+        const persisted = readEngine(STATE_PATH)
+        sendJson(res, 200, { engine: persisted ?? defaultEngine(), explicit: persisted !== null })
         return
       }
       if (req.method === 'PUT') {

@@ -2,6 +2,16 @@
 
 本仓库插件的发布流程、打包方式和完整性校验规范。所有插件共用这一套流程，不随单个插件变化。
 
+## 适用的包
+
+下面的命令用 `dsh-nano-notepad` 做例子。另外两个已经对齐 onboarding 的 overlay 插件，把包名换掉即可。`dsh-nano-shared-workspace` 还没有包内 AGENTS.md，尚未纳入这条发布示例。状态汇总在仓库根 [AGENTS.md](AGENTS.md) 的「A2A onboarding 状态」。安装合同以各包 AGENTS.md 的「安装」和 [母版](docs/agents/TEMPLATE.md) 为准，命令是 `dsh plugin --profile web add <spec>`。
+
+| 包 | 接入 | 规格 | tarball 必须含有 |
+|---|---|---|---|
+| `dsh-nano-notepad` | [AGENTS.md](dsh-nano-notepad/AGENTS.md) | [规格](docs/specs/dsh-nano-notepad/README.md) | `index.js`、`lib/client.js`、`cordis.patch.yml`、`AGENTS.md` |
+| `dsh-nano-model-selector` | [AGENTS.md](dsh-nano-model-selector/AGENTS.md) | [规格](docs/specs/dsh-nano-model-selector/README.md) | 同上，另加 `lib/host-media.js`（`index.js` 直接 import） |
+| `dsh-nano-explorer-extra` | [AGENTS.md](dsh-nano-explorer-extra/AGENTS.md) | [规格](docs/specs/dsh-nano-explorer-extra/README.md) | `index.js`、`lib/host.js`、`lib/client.js`、`cordis.patch.yml`、`AGENTS.md` |
+
 ## 信任链总览
 
 ```
@@ -14,7 +24,7 @@ git tag（源代码可信根）
 安装侧（校验发生在包外，不在包内）
   → 验证签名或 attestation → 确认哈希清单可信
   → sha256sum -c SHA256SUMS.txt → 确认产物未被篡改
-  → dsh plugin add
+  → dsh plugin --profile web add
 ```
 
 三条原则：
@@ -33,11 +43,12 @@ npm run build      # 重建 lib/client.js 等构建产物
 npm pack           # 产出 dsh-nano-notepad-<version>.tgz
 ```
 
-`package.json` 的 `files` 字段决定 tarball 内容。当前 nano-notepad 包含：`index.js`、`cordis.patch.yml`、`icon.svg`、`locale/`、`lib/client.js`。注意：
+`package.json` 的 `files` 字段决定 tarball 内容。各包必须带上的运行时文件见上面的表，也见各包 AGENTS.md 的「交付物」。共同规则：
 
-- 构建产物（`lib/client.js`）必须在 `files` 里，源文件（`src/`）不进包。
+- 构建产物必须在 `files` 里：三个包都有 `lib/client.js`；explorer 另有 `lib/host.js`；model-selector 另有 `lib/host-media.js`。源文件（`src/`）不进包。
+- `AGENTS.md` 必须在 `files` 里。安装方拿到的是包内这一份，不是仓库根的 [AGENTS.md](AGENTS.md)，也不是 [docs/agents/TEMPLATE.md](docs/agents/TEMPLATE.md)。
 - 版本号与 git tag 对齐：`package.json` 的 `version` = tag 去掉 `v` 前缀，CI 里断言一致（见 workflow）。
-- `cordis.patch.yml` 里开发期写绝对路径；打包发布前必须确认 `name` 写的是包名（见「安装」一节）。
+- `cordis.patch.yml` 的 `name` 必须是包名。开发启动器会在本机把它改写成这份副本的 `index.js`；不要把绝对路径提交进仓库。见各包 `cordis.patch.yml` 文件头，以及母版「安装」一节。
 
 将来如果某个插件包含 wasm，`npm pack` 同样适用——把 `.wasm` 列入 `files`，或者用 base64 内联进 `lib/client.js` 保持单 JS 文件。**安全链作用在最外层 tarball 上，与内部格式无关，不需要为完整性目的转 wasm。**
 
@@ -92,7 +103,7 @@ jobs:
             dsh-nano-notepad/SHA256SUMS.txt
 ```
 
-多插件时把 build/pack/checksum 三步抽成 matrix（`plugin: [dsh-nano-notepad, ...]`），每个插件一个 tarball。
+多插件时把 build/pack/checksum 三步抽成 matrix（`plugin: [dsh-nano-notepad, dsh-nano-model-selector, dsh-nano-explorer-extra]`），每个插件一个 tarball。各包的构建入口都是 `npm run build`，见各包 AGENTS.md 的「构建」。
 
 ### attestation 与 cosign 二选一
 
@@ -123,8 +134,8 @@ gh attestation verify dsh-nano-notepad-*.tgz -R "$REPO"
 # 2. 验哈希：文件未被篡改
 sha256sum -c SHA256SUMS.txt
 
-# 3. 安装
-dsh plugin add ./dsh-nano-notepad-*.tgz
+# 3. 安装。profile 与重启规则见该包 AGENTS.md 的「安装」
+dsh plugin --profile web add ./dsh-nano-notepad-*.tgz
 ```
 
 ### 方案 B：cosign
@@ -143,14 +154,14 @@ sha256sum -c SHA256SUMS.txt
 ```bash
 npm audit signatures        # 验证已装包的 registry 签名与 provenance
 npm install dsh-nano-notepad
-dsh plugin add dsh-nano-notepad
+dsh plugin --profile web add dsh-nano-notepad
 ```
 
 ## 插件安装注意
 
-- 开发期：`cordis.patch.yml` 的 `name` 写本机绝对路径，改完 `npm run build` 后在 `https://dsh-dev.local/` 验证。
-- 发布期：tarball 安装后 patch 里的 `name` 应解析为包名；`dsh plugin add` 改变了 bundle 成员，需要重启 `ai.deepseek.dsh.web`。
-- 卸载不删 IndexedDB 数据，重装后笔记仍在（这是设计行为，见各插件 spec）。
+- `cordis.patch.yml` 的 `name` 已经是包名。不要改回绝对路径再发布。开发启动器只在本机重写这一行。
+- `dsh plugin --profile web add` 写入 profile 的 `dependencies` 和 `dsh.profile.bundles`。没有 HMR 时，重启服务该 profile 的宿主，再刷新页面。只刷新页面不会换宿主路由。细节在各包 AGENTS.md 的「安装」，母版在 [docs/agents/TEMPLATE.md](docs/agents/TEMPLATE.md)。
+- 卸载不删各包「配置与状态」里写明的残留。[notepad](dsh-nano-notepad/AGENTS.md) 的 IndexedDB `dsh-nano-notepad` 还在；[explorer](dsh-nano-explorer-extra/AGENTS.md) 的 `localStorage` 键 `dsh-nano-explorer-extra:prefs.v2` 还在；[model-selector](dsh-nano-model-selector/AGENTS.md) 的 `plugins/nano-model-selector/media-engine.json` 还在。这不是「各插件 spec」里的同一句话。
 
 ## 不做的事
 

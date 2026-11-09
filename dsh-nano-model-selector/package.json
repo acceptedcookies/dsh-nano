@@ -17,10 +17,12 @@
   },
   "files": [
     "index.js",
+    "AGENTS.md",
     "cordis.patch.yml",
     "icon.svg",
     "locale",
-    "lib/client.js"
+    "lib/client.js",
+    "lib/host-media.js"
   ],
   "engines": {
     "dsh": ">=0.2.2-rc.1 <0.3.0"

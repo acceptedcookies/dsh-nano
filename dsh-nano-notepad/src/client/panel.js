@@ -25,6 +25,7 @@ import {
 } from './db.js'
 import { applyFormat, escapeHtml, renderMarkdown } from './markdown.js'
 import { validateJson, positionOf, formatJson, minifyJson, escapeJson, unescapeJson, decodeEscapes, renderJsonTree } from './json.js'
+import { highlightSource } from './highlight.js'
 import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
 import { copyFor } from './i18n.js'
 import React from 'react'
@@ -193,7 +194,26 @@ ${NANO_STYLES}
 .np-footer-actions button.np-danger { color: var(--dsw-alias-label-error); }
 .np-footer-actions button.np-danger:hover, .np-dlg-body button.np-danger:hover { border-color: var(--dsw-alias-state-error-secondary); color: var(--dsw-alias-state-error-secondary); background: var(--dsw-alias-interactive-bg-hover-danger); }
 .np-write, .np-read { flex: 1; min-height: 0; margin: 0; }
-.np-write { box-sizing: border-box; width: 100%; max-width: 100%; resize: none; border: 0; outline: 0; background: transparent; color: var(--dsw-alias-label-primary); caret-color: var(--dsw-alias-label-primary); padding: var(--np-pad-x); font-family: var(--dsw-font-markdown-code-font-family); font-size: var(--np-editor-font-size, 14px); overflow-wrap: anywhere; }
+.np-write { box-sizing: border-box; width: 100%; max-width: 100%; resize: none; border: 0; outline: 0; background: transparent; color: transparent; caret-color: var(--dsw-alias-label-primary); padding: var(--np-pad-x); font-family: var(--dsw-font-markdown-code-font-family); font-size: var(--np-editor-font-size, 14px); line-height: 1.45; overflow-wrap: anywhere; position: relative; }
+/* Transparent text over a colourised mirror: keep the caret crisp and let the
+   selection paint show through so the mirror reads underneath it. */
+.np-write::selection { background: color-mix(in srgb, var(--dsw-alias-brand-primary) 28%, transparent); color: transparent; }
+.np-write:disabled { color: transparent; }
+.np-mirror { position: absolute; inset: 0; z-index: 0; padding: var(--np-pad-x); box-sizing: border-box; overflow: hidden; font-family: var(--dsw-font-markdown-code-font-family); font-size: var(--np-editor-font-size, 14px); line-height: 1.45; overflow-wrap: anywhere; color: var(--dsw-alias-label-primary); pointer-events: none; white-space: pre-wrap; }
+.np-mirror > div { min-height: 1.45em; }
+.nm-mk { color: var(--dsw-alias-label-tertiary); }
+.nm-h { color: var(--dsw-alias-link); font-weight: 700; }
+.nm-quote { color: var(--dsw-alias-state-success-primary); font-style: italic; }
+.nm-strong { font-weight: 700; }
+.nm-em { font-style: italic; }
+.nm-strike { text-decoration: line-through; color: var(--dsw-alias-label-tertiary); }
+.nm-code { color: var(--dsw-alias-state-warn-primary); }
+.nm-link { color: var(--dsw-alias-link); text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--dsw-alias-link) 55%, transparent); }
+.nm-str { color: var(--dsw-alias-state-success-primary); }
+.nm-num { color: var(--dsw-alias-link); }
+.nm-bool { color: var(--dsw-alias-state-warn-primary); }
+.nm-null { color: var(--dsw-alias-label-tertiary); font-style: italic; }
+.nm-key { color: var(--dsw-alias-label-secondary); }
 .np-write:focus-visible { outline: none; box-shadow: inset 0 0 0 1px var(--dsw-alias-border-l3); }
 .np-read:focus-visible { outline: none; box-shadow: inset 0 0 0 1px var(--dsw-alias-border-l3); }
 .np-write:disabled { color: var(--dsw-alias-label-tertiary); }
@@ -444,6 +464,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       <aside class="np-tree"><div class="np-tree-head"><button type="button" class="np-tree-toggle" data-action="toggle-tree"></button><div class="np-ws"><button type="button" class="np-ws-btn" data-action="ws-toggle" aria-haspopup="listbox" aria-expanded="false"><span class="np-ws-label"></span><span class="np-ws-caret" aria-hidden="true">${CHEVRON_ICON}</span></button></div><span style="flex:1"></span><span class="np-tree-tools"><button type="button" data-action="new-file" data-i18n="newFile" data-i18n-mode="title">${PLUS_ICON}</button><button type="button" data-action="new-folder" data-i18n="newFolder" data-i18n-mode="title">${FOLDER_PLUS_ICON}</button><button type="button" class="np-danger" data-action="delete" data-i18n="delete" data-i18n-mode="title">${TRASH_ICON}</button></span></div><div class="np-nodes" data-root="true"></div><div class="np-tree-foot"><button type="button" data-action="settings" data-i18n="settings" data-i18n-mode="label">${SETTINGS_ICON}<span data-i18n="settings"></span></button><button type="button" data-action="close" data-i18n="close" data-i18n-mode="label">${CLOSE_ICON}<span data-i18n="close"></span></button></div></aside>
       <div class="np-editor">
         <div class="np-toolbar"><span class="np-md-tools">${toolbar}</span><span class="np-json-tools" hidden><button type="button" class="np-tool" data-json="expand" data-i18n="jsonExpand" data-i18n-mode="title">${EXPAND_ICON}</button><button type="button" class="np-tool" data-json="collapse" data-i18n="jsonCollapse" data-i18n-mode="title">${COLLAPSE_ICON}</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-json="format" data-i18n="jsonFormat" data-i18n-mode="title">${FORMAT_ICON}</button><button type="button" class="np-tool" data-json="minify" data-i18n="jsonMinify" data-i18n-mode="title">${MINIFY_ICON}</button><button type="button" class="np-tool" data-json="escape" data-i18n="jsonEscape" data-i18n-mode="title">${ESCAPE_ICON}</button><button type="button" class="np-tool" data-json="unescape" data-i18n="jsonUnescape" data-i18n-mode="title">${UNESCAPE_ICON}</button><button type="button" class="np-tool" data-json="strip" data-i18n="jsonStrip" data-i18n-mode="title">${STRIP_ICON}</button></span><button type="button" class="np-switch" data-action="view" role="switch" aria-checked="false" data-i18n="viewGroup" data-i18n-mode="title"><span class="np-switch-label" data-i18n="source"></span><span class="np-switch-label" data-i18n="preview"></span><span class="np-switch-thumb" data-i18n="source"></span></button></div>
+        <div class="np-mirror" aria-hidden="true"></div>
         <textarea class="np-write"></textarea>
         <div class="np-slash" hidden></div>
         <div class="np-read" tabindex="0" hidden></div>
@@ -526,6 +547,17 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
   }
 
   const write = () => /** @type {HTMLTextAreaElement} */ (must(panel, '.np-write'))
+  const mirror = () => /** @type {HTMLElement} */ (must(panel, '.np-mirror'))
+  /** Repaint the colourised layer under the transparent textarea and realign
+     scroll so every glyph stays under its source counterpart. */
+  const paintMirror = () => {
+    const source = write()
+    const layer = mirror()
+    layer.innerHTML = highlightSource(source.value, isJson())
+    layer.scrollTop = source.scrollTop
+    layer.scrollLeft = source.scrollLeft
+    layer.hidden = source.hidden
+  }
   const current = () => state.nodes.find(node => node.id === state.ui.currentId && node.kind === 'file')
   const isJson = () => (current()?.name ?? '').toLowerCase().endsWith('.json')
   const jsonCollapsedFor = id => {
@@ -833,9 +865,12 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       button.disabled = false
     }
     source.disabled = state.db === null
-    if (document.activeElement !== source && !state.dirty) source.value = file.draft ?? ''
+    /* state.dirty already guards in-flight typing; a focused-but-clean textarea
+       must still adopt the file's draft (imports land here mid-focus). */
+    if (!state.dirty) source.value = file.draft ?? ''
     source.hidden = rendered
     read.hidden = !rendered
+    paintMirror()
     const sw = panel.querySelector('.np-switch')
     if (sw) {
       sw.dataset.view = state.view
@@ -1925,6 +1960,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
   write().addEventListener('input', () => {
     refreshSlash()
     scheduleSave()
+    paintMirror()
     /* Live-lint JSON files so the badge tracks what is being typed. */
     if (isJson()) {
       const lint = panel.querySelector('.np-lint')
@@ -1941,6 +1977,9 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
   })
   write().addEventListener('scroll', () => {
     if (state.slash) placeSlash()
+    const layer = mirror()
+    layer.scrollTop = write().scrollTop
+    layer.scrollLeft = write().scrollLeft
   })
 
   function insertSlash(kind) {
@@ -2165,6 +2204,9 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       if (node.sourcePath !== undefined) await updateNodeMeta(state.db, node.id, { sourcePath: node.sourcePath })
       node.draft = String(content ?? '')
       openFile(node.id)
+      /* openFile renders before node.draft lands; repaint both views once the
+         draft exists so the source textarea and mirror show the import. */
+      render()
       channel?.postMessage({ type: 'changed' })
       return node
     },

@@ -36,6 +36,42 @@
 | F9 | `dsh-session-log-export` 已有 zip 打包导出；它证明"字节级搬运工件"是官方承认的迁移方式 | `dsh-session-log-export` |
 | F10 | dsh 运行中的 backend 是否会重新扫盘尚未证实 → **P0-1 spike** | — |
 
+## 1.5 Infraestructura de red (verificado 2026-11-09)
+
+**Endpoint público**: `https://nano-shared-workspace.saobao.com` → MinIO en `shv1` (Shanghai, Tencent `49.235.109.23`).
+
+```
+dsh plugin (host, SigV4 fetch)
+  → https://nano-shared-workspace.saobao.com   Cloudflare edge (TLS, proxy naranja)
+  → origin shv1 49.235.109.23                  Caddy/nginx → MinIO :9000
+  → bucket: dsh-shared-workspace
+```
+
+### Estado verificado
+
+| Componente | Estado | Detalle |
+|---|---|---|
+| CF API token (`.env.cloudflare`) | ✅ válido | scope de cuenta; permisos: `dns_records:edit`, `zone:edit`, `zone_settings`, `ssl:read` — alcanza para DNS. **No** cubre Workers ni CF Tunnel (no necesarios) |
+| Zona `saobao.com` | ✅ activa | id `95a207649ec68f6f6cb2a258c9b2e7d1`, plan Free |
+| WireGuard `utun0` (10.10.0.3/24) | ⚠️ interfaz up, **peers no responden** | ping/TCP a `10.10.0.1–.30` todo timeout; sin `wg` CLI ni acceso a `/etc/wireguard` para ver handshake. El wg **no se usa para tráfico S3**, solo como acceso admin alternativo |
+| Acceso a shv1 | pendiente | por IP pública `49.235.109.23` (ssh) o wg si revive |
+
+### Plan de despliegue (en orden)
+
+1. **DNS**: `A nano-shared-workspace.saobao.com → 49.235.109.23`, `proxied=true`, TTL auto. (Alternativa dns-only si el proxy CF interfiere SigV4 — probar primero con proxy).
+2. **MinIO en shv1**: `minio server /data --console-address :9001`, systemd unit, credenciales root en `/etc/minio.env`, bucket `dsh-shared-workspace` + user/app keys.
+3. **TLS origen**: Caddy en shv1 con cert CF Origin (15 años) o `tls internal`; MinIO queda en `127.0.0.1:9000`, Caddy expone 443.
+4. **CF edge**: SSL mode `Full (strict)`; S3 pasa por headers intactos; desactivar cache para el hostname (`Cache Rules` o page rule "Bypass cache" — el plan Free tiene 3 page rules).
+5. **Smoke test**: desde el plugin host — `ListBuckets`, `PUT/GET/HEAD` un objeto, `ListObjectsV2` con prefix. Registrar resultado.
+6. **Alternativa pgs3**: si se prefiere pgs3 en vez de MinIO, correrlo en shv1 con Postgres local, mismo Caddy delante (pgs3 no tiene auth → Caddy debe exigir `Authorization` SigV4-compatible o un bearer propio; **MinIO es la opción recomendada** porque trae auth SigV4 nativa y consola).
+
+### Riesgos de red
+
+- **CF proxy Free**: límite ~100MB por request — los part son ≤4MiB, holgado.
+- **SigV4 a través del proxy**: CF no altera headers firmados; region `us-east-1` en config aunque el server esté en Shanghai.
+- **Latencia**: Shanghai ↔ cliente vía CF edge ~cientos de ms; aceptable para poll 30s, no para sync en tiempo real (no lo necesitamos).
+- **wg caído**: si se requiere wg para ssh-admin, hay que levantarlo antes del paso 2; si no, ssh directo a `49.235.109.23`.
+
 ## 2. 同步模型（核心决策）
 
 **每个 session = 一个远端"单体文件族"，绝不共享一个全局文件。**
@@ -44,20 +80,33 @@
 
 ```
 {prefix}/
-├── instances/{writerId}.json              # 心跳：{hostname, dshVersion, lastSeen}
-├── sessions/{sessionId}/
-│   ├── meta.json                          # 同步状态 + 展示元数据（唯一被覆写的对象）
-│   └── body/{chunkIndex}.part             # 工件字节前缀切片，append-only，永不覆写
-└── claims/{sessionId}.json                # 写权租约（可选 CAS，默认路径见 §6）
+├── identities/{name}.json                 # 用户名抢注：{writerId, claimedAt} — If-None-Match:* 唯一占用
+├── instances/{writerId}.json              # 心跳：{declaredName, hostname, dshVersion, lastSeen}
+├── workspaces/{workspaceId}/              # 一个工作区一族对象；workspaceId 定义见 §2.1
+│   └── sessions/{sessionId}/
+│       ├── meta.json                      # 同步状态 + 展示元数据（唯一被覆写的对象）
+│       └── body/{chunkIndex}.part         # 工件字节前缀切片，append-only，永不覆写
+└── claims/{sessionId}.json                # 写权租约：{writerId, acquiredAt, expiresAt, heartbeatRev}
 ```
 
 **不变量**（所有可靠性都从这里来）：
 
 1. `body/*.part` 一旦写入**永不改写**——对象的并集始终构成 `session.v4.jsonl.zstd` 的**字节前缀**
 2. `meta.json.committedBytes <= 所有 body chunk 总字节数`，永远成立
-3. **单写者**：`meta.writerId` 唯一者能写；其他端**绝不**写入该 session 的任何对象
+3. **单写者**：`meta.writerId` 唯一者能写；其他端**绝不**写入该 session 的任何对象（业主规则 #1/#2）
 4. `ListObjectsV2(prefix)` 就是远端清单 —— **不维护全局 manifest**（消除单点竞争）
 5. 写序 = 先 part 后 meta（读者永远不会看到指向缺失字节的 meta）
+6. **写入前置校验**：每个 PUSH 周期写任何对象前，先 `HEAD meta` 确认 `writerId==me` 且 `rev` 一致；不一致 → 放弃写权转 WATCH（业主规则 #1"开始写入前再次检查"）
+
+### 2.1 工作区与身份（业主规则 #4/#5）
+
+**workspaceId**（机器无关）：优先级 `git remote URL hash > repo 根目录名 hash > cwd basename hash`；均为 SHA-256 前 16 hex。加入时也可手动指定——同一批文件即使跨机路径不同，也落同一族对象。
+
+**writerId**：`<declaredName>-<instanceUuid>`。`declaredName` 接入时声明，`instanceUuid` 首次启动生成并持久化在 `state.db`。名字唯一性靠 `identities/{name}.json` 的 `If-None-Match:*` 抢注——已被占则 GUI 要求改名。
+
+**token**：v1 = 桶凭证（共享，存 `ctx.credentials`）；v2 演进为 per-user token 验签（对象级 HMAC）。
+
+**cool-off（租约 TTL）**：`expiresAt = now + 90s`；活跃写者每 30s 心跳续租（`heartbeatRev++`）；session 正常结束时显式释放 claim。他人只能在 `expiresAt` 过后接管。
 
 ### meta.json schema
 
@@ -88,8 +137,12 @@
 
 ## 3. 上行管线（本机 → S3）
 
+**接入握手**（插件启用时一次）：声明 `declaredName` → `PUT identities/{name}.json{writerId, claimedAt}`（`If-None-Match:*`）→ 409/412 则弹改名 → 写 `instances/{writerId}.json` 心跳 → 开始 sync 循环。端点无 CAS 时跳过抢注只写心跳（best-effort）。
+
 **触发**：每 `pushIntervalSec`（默认 60s，session 活跃时 15s）扫描一次：
 `sessionPersistence.list()` → 对每个 session 取 `stat()`（revision、sizeBytes、location、header）。
+
+**写入前置校验（业主规则 #1）**：本周期要动任何对象前，`HEAD meta` → `writerId==me && rev==lastKnownRev`？是 → 继续；否 → 放弃写权、state.db 标 WATCH、本周期只读。
 
 **每 session 状态机**（`state.db` 持久化）：
 
@@ -125,7 +178,7 @@ local stat        远端 meta          动作
 每 `pollIntervalSec`（默认 30s）：
 
 ```
-1. ListObjectsV2("{prefix}/sessions/") → 远端 sessionId 集合
+1. ListObjectsV2("{prefix}/workspaces/") → 远端 workspaceId → sessionId 集合
 2. 对每个未导入的 sessionId: GET meta.json
 3. 过滤：writerId != me 且 committedBytes > 0 且 formatVersion <= current
 4. GET 所有 body/*.part（按序号排序）→ 拼成本地工件字节
@@ -165,12 +218,15 @@ local stat        远端 meta          动作
 
 | 场景 | 规则 |
 |---|---|
-| 两端各自写**不同** session | 不同对象，零冲突 |
-| 两端"同时"声称同一 session | `meta` 写入用 `If-None-Match:*`（pgs3/R2 真 CAS）；先成功者 writer，失败者转 WATCH 并拉取远端 |
-| 端点无 CAS（MinIO 等） | 降级为 claim 对象协议：`claims/{id}.json` 含 `writerId+expiresAt`，先读后写、租约 5min、心跳续租；GUI 对这类端点显示 "best-effort" 徽标 |
-| writer 崩溃 | claim 过期后任何端可显式 `Take over`；meta 单写者字段保证同一时刻只有一个活跃 writer |
-| Take over | 新 writer 拉全量 → `PUT claims`（CAS）→ `PUT meta.writerId=me, rev=0` → 后续走 PUSH-DELTA。旧端下次 poll 看到 writerId≠me → 自动放弃写权 |
-| 分叉（违规并发写发生） | 检测 = 远端 committedBytes < 本地 sizeBytes 且远端有我们没有的 chunk → 标 `diverged`，GUI 红标，用户选边，**绝不**自动合并 |
+| 同一 workspace 多人各写各的 session | 写权 per-session —— N 个用户并行写不同 session，零冲突（业主规则 #3） |
+| 有人在写 session | 他人**只读观察**：WATCH + 增量拉 chunk，绝不写入（业主规则 #2） |
+| 两端"同时"声称同一 session | `claims/{id}.json` + `meta` 写入用 CAS；先成功者 writer，失败者转 WATCH |
+| cool-off 后接管 | claim `expiresAt` 过期 → 显式 `Take over` → CAS 抢 claim → 拉全量 → `PUT meta{writerId:me, rev:0}` → PUSH-DELTA。旧端下次 poll 看到 writerId≠me → 放弃写权（业主规则 #1） |
+| 每次写入前 | re-HEAD meta，确认 writerId 仍是自己、rev 未变 —— 被接管立即停写（业主规则 #1"再次检查"） |
+| 端点无 CAS（MinIO 等） | 降级为 claim 先读后写 + TTL 90s；GUI 显示 "best-effort" 徽标，提示可能分叉 |
+| writer 崩溃 | 心跳停 → 90s 后 claim 自然过期 → 可被接管；meta 不会因半写而指向缺失字节（不变量 #2） |
+| 分叉（违规并发写发生） | 检测 = 远端有我们没有的 chunk 且 writerId≠me → 标 `diverged`，GUI 红标，用户选边，**绝不**自动合并 |
+| 用户名冲突 | `identities/{name}` CAS 抢注失败 → 强制改名后才能接入（业主规则 #5） |
 | 删除 | 只写 `meta.deleted=true`（body 保留）；真删对象走"清空远端"管理操作并需二次确认 |
 
 ## 7. host 半侧结构
@@ -197,7 +253,7 @@ nano-shared-workspace/
 ├── lib/{host.js,client.js}
 ```
 
-**Config（`~standard` 非密项）**：`endpoint`、`region`、`bucket`、`prefix`、`pollIntervalSec`(15-300, 默认30)、`pushIntervalSec`(15-600, 默认60)、`chunkThresholdBytes`(默认64KiB…不，对象粒度见§8)、`autoImport`(bool, Phase B)。
+**Config（`~standard` 非密项）**：`endpoint`、`region`、`bucket`、`prefix`、`declaredName`、`workspaceId`（空=自动推断）、`pollIntervalSec`(15-300, 默认30)、`pushIntervalSec`(15-600, 默认60)、`partSizeTarget`(64KiB-4MiB, 默认256KiB)、`claimTtlSec`(30-600, 默认90)、`autoImport`(bool, Phase B)。
 **凭证**：`credentials.set(credentialKey("nano-shared-workspace:s3-access-key"), …)` / `s3-secret-key`。禁止写进 Config/日志/客户端包。
 
 **inject**：`fs sessions webServer connection sessionPersistence credentials`（`subprocess`/`sandbox` 不需要——网络 I/O 直接 fetch）。
@@ -244,7 +300,7 @@ nano-shared-workspace/
 | 阶段 | 内容 | 验收 |
 |---|---|---|
 | **P0 spike** | ①外部工件落盘后 `stat()` 是否可见；②`open(id,'read')`+`read` 链能读到落盘工件；③迷你 S3 客户端打 R2/pgs3 的 ListV2+PUT+GET 往返 | 三个都绿才进 Phase A |
-| **Phase A** | host 半侧全管线 + 只读归档（§5-A）+ 侧栏列表 UI + 设置卡 | A/B 两台 dsh-dev 实例挂同一桶，A 的 session 60s 内出现在 B 的 Shared tab，点开可看 transcript |
+| **Phase A** | 接入握手（identities 抢注）+ host 全管线 + claim 租约/前置校验 + 只读归档（§5-A）+ 侧栏列表 UI + 设置卡 | A/B 两台 dsh-dev 实例挂同一桶：A 的 session 60s 内出现在 B 的 Shared tab 可看 transcript；A 在写期间 B 不能写（只读观察）；cool-off 后 B 可接管写权 |
 | **Phase B** | 增量追加（§5-B）+ diverged 状态机 + Take over + fork-to-local 动作 | 远端 session 增量更新可见；接管后写权正确移交 |
 | **Phase C** | eventCount 级增量（`uncompressedSeqBytes`）、attachment 同步、对象签名、心跳索引、远端删除传播、性能压测 | — |
 

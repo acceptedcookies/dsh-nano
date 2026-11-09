@@ -3,10 +3,9 @@
 /**
  * List one directory, reporting whether the target itself resolves outside the workspace.
  *
- * `ctx.fs.resolve` realpaths its argument, so a symlink pointing outside the workspace
- * resolves to the outside target and `contains` reports the escape. This route therefore
- * cannot rely on `contains` for the decision: it compares the *requested* path against the
- * workspace root lexically, and reports the resolved target separately for the UI badge.
+ * A symbolic link is an ordinary entry here, wherever it points: the reader created it inside the
+ * workspace, so it opens like any other folder. The resolved target is still reported so the row can
+ * show where it leads, and a link whose target is gone reports `broken-link` rather than "not found".
  *
  * @param fs - the mounted filesystem provider.
  * @param request - workspace root, requested path, and policy flags.
@@ -15,43 +14,25 @@
  * @returns entries with symlink and outside markers, or a typed refusal.
  */
 export async function listDirectory(fs, request, limits, signal) {
-  const { workspaceRoot, path, followSymlinks, allowOutsideWorkspace } = request
+  const { workspaceRoot, path } = request
   const requested = absoluteOf(workspaceRoot, path)
-  const lexicalInside = isLexicallyInside(workspaceRoot, requested)
-  if (!lexicalInside && !allowOutsideWorkspace) {
-    return {
-      ok: false,
-      code: 'outside-workspace',
-      message: `"${path}" is outside the workspace`,
-      path,
-    }
-  }
-  if (!followSymlinks) {
-    const link = await fs.lstat(requested, {}, signal).catch(() => undefined)
-    if (link?.type === 'symlink') {
-      return { ok: false, code: 'symlink-disabled', message: `"${path}" is a symbolic link and following is off`, path }
-    }
-  }
   let target
   try {
     target = await fs.resolve(requested, { signal })
   } catch (error) {
+    // A link whose target is gone is a different fact from a path that never existed: the row still
+    // exists and its name still means something, so it reports as a broken link with its target.
+    const link = await fs.lstat(requested, {}, signal).catch(() => undefined)
+    if (link?.type === 'symlink') {
+      return { ok: false, code: 'broken-link', message: `"${path}" points at a missing target`, path, target: requested }
+    }
     return { ok: false, code: 'not-found', message: messageOf(error), path }
   }
   const resolved = fs.processPath(target)
-  // A link inside the workspace can still resolve outside it. The lexical check above only sees the
-  // path the caller asked for, so the resolved target needs the same boundary test before any
-  // listing happens; otherwise `allowOutsideWorkspace: false` would be bypassed by any symlink.
-  const resolvedOutside = !isLexicallyInside(workspaceRoot, resolved)
-  if (resolvedOutside && !allowOutsideWorkspace) {
-    return {
-      ok: false,
-      code: 'outside-workspace',
-      message: `"${path}" resolves outside the workspace`,
-      path,
-      outside: true,
-    }
-  }
+  // A symbolic link is an ordinary entry in this tree, wherever it points: the reader put it there,
+  // and the builtin explorer treats it the same way. Only the link's own name is workspace-scoped;
+  // its target is not re-checked here.
+  const outside = !isLexicallyInside(workspaceRoot, resolved)
   const info = await fs.stat(target, signal).catch(() => undefined)
   if (info === undefined) return { ok: false, code: 'not-found', message: `"${path}" does not exist`, path }
   if (info.type !== 'directory') {
@@ -83,7 +64,7 @@ export async function listDirectory(fs, request, limits, signal) {
     ok: true,
     path,
     resolvedPath: resolved,
-    outside: resolvedOutside,
+    outside,
     entries,
     truncated: children.length > limits.maxEntries,
   }

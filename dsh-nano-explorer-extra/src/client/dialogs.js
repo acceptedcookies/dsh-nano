@@ -57,6 +57,23 @@ export function usePanelConfinedLayer() {
           width: `${rect.width}px`, height: `${rect.height}px`,
           padding: '12px',
         })
+        // The source-control cards rise from the footer and use the pane's width. Height follows
+        // the content up to the pane, so a long change list fills it and a short branch list does
+        // not leave an empty field under one row. Rename and settings stay compact.
+        if (card.querySelector('.nxe-scm') !== null) {
+          card.dataset.nxeFill = '1'
+          const theme = panel.getAttribute('data-theme')
+          if (theme) card.setAttribute('data-theme', theme)
+          layer.style.display = 'flex'
+          layer.style.flexDirection = 'column'
+          layer.style.justifyContent = 'flex-end'
+          Object.assign(card.style, {
+            width: '100%', maxWidth: '100%',
+            height: 'auto', maxHeight: '100%',
+            minHeight: '0', minWidth: '0',
+            margin: '0',
+          })
+        }
       }
     }
     // The card mounts after this effect on the first open, so watch for it, and keep the fence in
@@ -71,8 +88,15 @@ export function usePanelConfinedLayer() {
       window.removeEventListener('resize', apply)
       for (const layer of document.querySelectorAll('.nxe-confined-layer')) {
         layer.classList.remove('nxe-confined-layer')
-        for (const key of ['position', 'top', 'left', 'right', 'bottom', 'width', 'height', 'padding', 'box-sizing']) {
+        for (const key of ['position', 'top', 'left', 'right', 'bottom', 'width', 'height', 'padding', 'box-sizing', 'display', 'align-items', 'justify-content', 'flex-direction']) {
           layer.style.removeProperty(key)
+        }
+      }
+      for (const card of document.querySelectorAll('[data-nxe-fill]')) {
+        if (!(card instanceof HTMLElement)) continue
+        delete card.dataset.nxeFill
+        for (const key of ['width', 'max-width', 'height', 'max-height', 'min-height', 'min-width', 'margin']) {
+          card.style.removeProperty(key)
         }
       }
     }

@@ -3,6 +3,7 @@
 import React from 'react'
 import { CommitDialog, Dialog, RenameDialog } from './dialogs.js'
 import { BranchDrawer, CommitDrawer } from './drawers.js'
+import { SettingsDialog } from './settings.js'
 import { createAccessory } from './accessory.js'
 import { StatusBar } from './statusbar.js'
 import { RowMenu } from './menu.js'
@@ -12,7 +13,7 @@ import { useTree } from './tree.js'
 import { absoluteOf, basenameOf, parentOf, relativeTo, treeKeyOf } from './paths.js'
 import { checkName, nextName } from './names.js'
 
-const { useCallback, useEffect, useMemo, useRef, useState } = React
+const { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } = React
 
 /** Two presses within this window count as one double click, matching the platform default. */
 const DOUBLE_CLICK_MS = 400
@@ -32,12 +33,27 @@ const INTERNAL_NAMES = new Set(['.git', '.DS_Store'])
  * @param props - the composed slot props plus this plugin's injected face.
  * @returns the header, tree, and optional footer.
  */
+/**
+ * Encode a resource path the way the address grammar expects.
+ *
+ * Each segment is component-encoded so a name carrying `#`, `?`, or a space survives the round trip;
+ * `:` stays literal so a Windows drive letter reads as written.
+ *
+ * @param path - `/`-separated path, absolute or workspace-relative.
+ * @returns the encoded path with its segments joined by `/`.
+ */
+function encodePath(path) {
+  return path.split('/').map(segment => encodeURIComponent(segment).replace(/%3A/giu, ':')).join('/')
+}
+
 export function ExplorerBody(props) {
   const { useTabInfo, sessionId, useSessions, renderSlot, renderFactorySlot, useContextMenu, nxe } = props
   const { tab, panel } = useTabInfo()
   const cwd = useSessions(sessions => sessions.byId[sessionId]?.cwd)
   const copy = nxe.copy
-  const prefs = nxe.prefs
+  // The slot hands over a snapshot. The store is what a settings switch actually writes, so the tree
+  // subscribes to it; otherwise the switch changes storage and the rows stay as they were.
+  const prefs = useSyncExternalStore(nxe.subscribePrefs, nxe.getPrefs, nxe.getPrefs)
 
   const [git, setGit] = useState(null)
   const [gitError, setGitError] = useState(undefined)
@@ -46,8 +62,6 @@ export function ExplorerBody(props) {
   const [dialog, setDialog] = useState(null)
   const [busy, setBusy] = useState(false)
   const [dialogError, setDialogError] = useState(undefined)
-  const allowance = useRef(new Set())
-  const [outsideAllowed, setOutsideAllowed] = useState(() => new Set())
   const [linkNote, setLinkNote] = useState(undefined)
   // A transient confirmation that must never reflow the tree: it is drawn as an overlay, not as a
   // row in the panel's flow.
@@ -77,10 +91,10 @@ export function ExplorerBody(props) {
   // Which footer drawer is open, if any: `branch` shows worktrees and remote state, `commit` shows the
   // pending work. One at a time, so a reader never faces two stacked panels.
   const [drawer, setDrawer] = useState(null)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const [drawerBusy, setDrawerBusy] = useState(false)
   const [drawerError, setDrawerError] = useState(undefined)
   const toastTimer = useRef(0)
-  const [outsidePrompt, setOutsidePrompt] = useState(null)
   // Per-directory answers from loadDirectoryStatus, keyed like the workspace map.
   const [directoryStatus, setDirectoryStatus] = useState(() => new Map())
 
@@ -121,21 +135,12 @@ export function ExplorerBody(props) {
     })
   }, [request, sessionId, cwd])
 
-  /**
-   * The preference object the tree reads.
-   *
-   * One identity per real change: a fresh object on every render would rebuild the listing callbacks
-   * and make the tree's initial-load effect clear the levels it had just filled.
-   */
-  const accepted = useMemo(() => [...outsideAllowed], [outsideAllowed])
-  const treePrefs = useMemo(() => ({ ...prefs, allowed: accepted }), [prefs, accepted])
 
   const tree = useTree({
     sessionId,
     root: cwd,
     request,
-    // The allowance is per path: accepting one link must not open every other outside link.
-    prefs: treePrefs,
+    prefs,
     onListed: (path, names) => { void markIgnored(path, names) },
   })
 
@@ -174,6 +179,15 @@ export function ExplorerBody(props) {
     statsTimer.current = window.setTimeout(() => { void refreshStats() }, 2000)
   }, [refreshStats])
   useEffect(() => () => { window.clearTimeout(statsTimer.current); window.clearTimeout(toastTimer.current) }, [])
+
+  /** Which tree entries are symbolic links, and whether each leads outside the workspace. */
+  const linkByPath = useMemo(() => {
+    const map = new Map()
+    for (const entry of tree.entries) {
+      if (entry.symlink === true) map.set(entry.path, { outside: entry.outside === true })
+    }
+    return map
+  }, [tree.entries])
 
   /** Files changed since the last commit, by path relative to the checkout root. */
   const changed = useMemo(() => Array.isArray(git?.files) ? git.files : [], [git])
@@ -264,7 +278,16 @@ export function ExplorerBody(props) {
   /** Open one entry in the resource viewer the same way the shipped tree does. */
   const openEntry = useCallback(entry => {
     const absolute = absoluteOf(cwd ?? '', entry.path)
-    const address = `dsh-resource://file/session/${encodeURIComponent(sessionId)}/${absolute.replace(/^\/+/, '').split('/').map(encodeURIComponent).join('/')}`
+    // A `session` address resolves its path against that session's workspace root, so it must carry a
+    // workspace-relative path. Sending the absolute path with its leading slash stripped made the
+    // Host join it onto the root, and every file read as missing. A path outside the workspace has no
+    // relative form, so it keeps the absolute scope instead.
+    const root = cwd ?? ''
+    const relative = relativeTo(root, absolute)
+    const inside = root !== '' && relative !== absolute
+    const address = inside
+      ? `dsh-resource://file/session/${encodeURIComponent(sessionId)}/${encodePath(relative)}`
+      : `dsh-resource://file/absolute/${encodePath(absolute.replace(/^\/+/, ''))}`
     if (panel.isFloating) tab.actions.openResource(address)
     else tab.actions.openResource(address, { paneId: panel.id })
   }, [cwd, sessionId, tab.actions, panel.id, panel.isFloating])
@@ -310,9 +333,11 @@ export function ExplorerBody(props) {
    */
   const openDirectory = useCallback(async entry => {
     const result = await tree.loadLevel(entry.path)
-    if (result?.ok) { tree.toggle(entry.path, true); void loadDirectoryStatus(entry.path); return }
-    if (result?.code !== 'outside-workspace') { tree.toggle(entry.path, true); return }
-    setOutsidePrompt({ path: entry.path, name: entry.name })
+    // A folder opens whether or not its target lives under the workspace: the entry is the reader's
+    // own, and a link behaves like the directory it points at. Only a failure to read is reported,
+    // and the tree draws that in place of the level.
+    tree.toggle(entry.path, true)
+    if (result?.ok) void loadDirectoryStatus(entry.path)
   }, [tree, loadDirectoryStatus])
 
   /**
@@ -449,16 +474,18 @@ export function ExplorerBody(props) {
     await refreshStats()
   }, [sessionId, request, tree, refreshGit, refreshStats, copy])
 
-  /** Commit from inside the panel, keeping the panel open so its list refreshes in place. */
+  /** Commit from inside the panel, keeping the panel open so its list refreshes in place.
+   *  Resolves `true` only after the commit landed, so the panel can clear its message. */
   const doDrawerCommit = useCallback(async message => {
     setDrawerBusy(true)
     setDrawerError(undefined)
     const result = await request('/commit', { sessionId, message })
     setDrawerBusy(false)
-    if (!result.ok) { setDrawerError(result.message); return }
+    if (!result.ok) { setDrawerError(result.message); return false }
     await tree.refresh()
     await refreshGit()
     await refreshStats()
+    return true
   }, [sessionId, request, tree, refreshGit, refreshStats])
 
   /** Copy one path. Success is a floating toast; a failure stays as an inline note. */
@@ -512,7 +539,16 @@ export function ExplorerBody(props) {
   const accessory = useMemo(() => createAccessory({
     copy: () => copy,
     statusOf, stagedOf, unstagedOf, remoteOf, ignoredOf, folderStatusOf,
-    linkOf: key => tree.levels.get(treeKeyOf(cwd ?? '', key))?.outside === true ? true : undefined,
+    // A link is marked from the listing itself, so the row shows it while still collapsed. `outside`
+    // says where the link leads, not whether it may be opened.
+    // A level that failed with `broken-link` is how a dead link announces itself: the row keeps its
+    // folder glyph and gains a struck link, rather than the row vanishing or reading as a file.
+    linkBrokenOf: key => tree.levels.get(treeKeyOf(cwd ?? '', key))?.code === 'broken-link',
+    linkOf: key => {
+      const info = linkByPath.get(key)
+      if (info === undefined) return undefined
+      return info.outside === true
+    },
     showGit: () => prefs.showGitStatus,
     showIgnoredBadge: () => prefs.showIgnoredBadge,
     showOpenButton: () => prefs.showOpenButton,
@@ -526,10 +562,10 @@ export function ExplorerBody(props) {
     return React.createElement('div', { className: 'nxe-row-note', 'data-nxe': 'true' }, copy.noWorkspace)
   }
 
-  // Repository bookkeeping and the desktop metadata file are never what a reader browses to, so they
-  // are dropped from the drawn tree even though they exist on disk. Matched by name at any depth.
+  // Repository bookkeeping and desktop metadata stay out of the tree until the settings switch
+  // asks for them. Matched by name at any depth; the listing itself is unchanged.
   const entries = tree.entries
-    .filter(entry => !INTERNAL_NAMES.has(entry.name))
+    .filter(entry => prefs.showSystemFiles || !INTERNAL_NAMES.has(entry.name))
     .map(entry => ({
       path: entry.path,
       name: entry.name,
@@ -554,7 +590,6 @@ export function ExplorerBody(props) {
       // A press on an open folder always collapses it. Only opening needs the boundary check, so a
       // folder that was expanded can always be folded back whatever its link target is.
       if (tree.expanded.includes(entry.path)) { tree.toggle(entry.path, false); return }
-      if (outsideAllowed.has(entry.path)) { tree.toggle(entry.path, true); return }
       void openDirectory(entry)
     },
     onOpen: entry => {
@@ -606,21 +641,6 @@ export function ExplorerBody(props) {
     if (isDirectory) { tree.toggle(selected, !tree.expanded.includes(key)); return }
     openEntry({ path: key, name: basenameOf(selected), meta: { kind: 'file' } })
   }, [tree, cwd, openEntry])
-
-  const outsideNode = outsidePrompt === null ? null : React.createElement(Dialog, {
-    copy, title: copy.symlinkOutside,
-    confirmLabel: copy.openAnyway,
-    onConfirm: () => {
-      const target = outsidePrompt.path
-      allowance.current = new Set(allowance.current).add(target)
-      setOutsideAllowed(new Set(allowance.current))
-      setOutsidePrompt(null)
-      // Read the allowance from the ref, so this listing already sees the accepted path.
-      void tree.loadLevel(target, false, true).then(() => tree.toggle(target, true))
-    },
-    onCancel: () => setOutsidePrompt(null),
-    description: copy.symlinkOutsideBody(outsidePrompt.name),
-  })
 
   const dialogNode = dialog === null ? null : dialog.kind === 'commit'
     ? React.createElement(CommitDialog, {
@@ -719,9 +739,13 @@ export function ExplorerBody(props) {
       onOpenBranch: () => setDrawer('branch'),
       onOpenCommit: () => setDrawer('commit'),
       onRetryStats: () => { void refreshStats() },
+      onOpenSettings: () => setSettingsOpen(true),
     }),
     dialogNode,
-    outsideNode,
+    React.createElement(SettingsDialog, {
+      copy, open: settingsOpen, prefs, onClose: () => setSettingsOpen(false),
+      setPref: (key, value) => nxe.setPref(key, value),
+    }),
     React.createElement(BranchDrawer, {
       copy, open: drawer === 'branch', git, busy: drawerBusy, error: drawerError,
       onClose: () => { setDrawer(null); setDrawerError(undefined) },

@@ -247,6 +247,56 @@ export function parseStatus(stdout) {
 }
 
 /**
+ * Parse `git log --pretty=format:%h%x1f%ct%x1f%s%x1f%D`.
+ *
+ * One row is the short hash, the commit time, the subject, and the decoration list. Decorations
+ * arrive as `HEAD -> main, origin/main`; the `HEAD ->` marker is dropped so the pill can name the
+ * branch itself.
+ * @param stdout - one commit per line.
+ * @returns the commits, newest first.
+ */
+export function parseLog(stdout) {
+  const commits = []
+  for (const line of stdout.split('\n')) {
+    if (line.trim() === '') continue
+    const parts = line.split('\x1f')
+    const hash = parts[0] ?? ''
+    if (hash === '') continue
+    const time = Number.parseInt(parts[1] ?? '', 10)
+    const subject = parts[2] ?? ''
+    const refs = []
+    for (const raw of (parts[3] ?? '').split(',')) {
+      const name = raw.trim().replace(/^HEAD -> /u, '').replace(/^tag: /u, '')
+      if (name === '' || name === 'HEAD' || refs.includes(name)) continue
+      refs.push(name)
+      if (refs.length === 3) break
+    }
+    commits.push({ hash, time: Number.isFinite(time) ? time : 0, subject, refs })
+  }
+  return commits
+}
+
+/**
+ * Read the newest commits on the current HEAD.
+ *
+ * A checkout with no commits yet makes `log` exit 128; that is an empty history, not a failure of
+ * the status read that asked for it.
+ * @param ctx - context providing the process services.
+ * @param config - executable and process limits.
+ * @param request - working directory and cancellation.
+ * @returns up to 24 commits, or an empty list when the log cannot be read.
+ */
+async function readHistory(ctx, config, request) {
+  const result = await runGit(ctx, config, {
+    ...request,
+    args: ['log', '-n', '24', '--pretty=format:%h%x1f%ct%x1f%s%x1f%D'],
+    allowedExitCodes: [0, 128],
+  }).catch(() => undefined)
+  if (result === undefined || result.exitCode !== 0) return []
+  return parseLog(result.stdout)
+}
+
+/**
  * Read the checkout state of one workspace.
  * @param ctx - context providing the process services.
  * @param config - executable and process limits.
@@ -297,10 +347,11 @@ export async function readStatus(ctx, config, request) {
   // commit button that opens the pending work. Both need facts the plain status does not carry.
   const worktrees = await listWorktrees(ctx, config, request)
   const branches = await listBranches(ctx, config, request)
+  const history = await readHistory(ctx, config, request)
   const conflicts = parsed.files.filter(file => file.status === 'U').map(file => file.path)
 
   return {
-    root, ...parsed, stashed, worktrees, branches, conflicts,
+    root, ...parsed, stashed, worktrees, branches, history, conflicts,
     ...(remote === undefined ? {} : { remote }),
   }
 }

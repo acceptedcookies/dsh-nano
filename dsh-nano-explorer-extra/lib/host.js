@@ -183,6 +183,35 @@ function parseStatus(stdout) {
   }
   return result;
 }
+function parseLog(stdout) {
+  const commits = [];
+  for (const line of stdout.split("\n")) {
+    if (line.trim() === "") continue;
+    const parts = line.split("");
+    const hash = parts[0] ?? "";
+    if (hash === "") continue;
+    const time = Number.parseInt(parts[1] ?? "", 10);
+    const subject = parts[2] ?? "";
+    const refs = [];
+    for (const raw of (parts[3] ?? "").split(",")) {
+      const name2 = raw.trim().replace(/^HEAD -> /u, "").replace(/^tag: /u, "");
+      if (name2 === "" || name2 === "HEAD" || refs.includes(name2)) continue;
+      refs.push(name2);
+      if (refs.length === 3) break;
+    }
+    commits.push({ hash, time: Number.isFinite(time) ? time : 0, subject, refs });
+  }
+  return commits;
+}
+async function readHistory(ctx, config, request) {
+  const result = await runGit(ctx, config, {
+    ...request,
+    args: ["log", "-n", "24", "--pretty=format:%h%x1f%ct%x1f%s%x1f%D"],
+    allowedExitCodes: [0, 128]
+  }).catch(() => void 0);
+  if (result === void 0 || result.exitCode !== 0) return [];
+  return parseLog(result.stdout);
+}
 async function readStatus(ctx, config, request) {
   const probe = await runGit(ctx, config, { ...request, args: ["rev-parse", "--show-toplevel"], allowedExitCodes: [0, 128] });
   if (probe.exitCode !== 0) {
@@ -210,6 +239,7 @@ async function readStatus(ctx, config, request) {
   const remote = typeof parsed.upstream !== "string" || parsed.upstream === "" ? void 0 : await remoteDivergence(ctx, config, request);
   const worktrees = await listWorktrees(ctx, config, request);
   const branches = await listBranches(ctx, config, request);
+  const history = await readHistory(ctx, config, request);
   const conflicts = parsed.files.filter((file) => file.status === "U").map((file) => file.path);
   return {
     root,
@@ -217,6 +247,7 @@ async function readStatus(ctx, config, request) {
     stashed,
     worktrees,
     branches,
+    history,
     conflicts,
     ...remote === void 0 ? {} : { remote }
   };
@@ -348,40 +379,20 @@ async function checkoutBranch(ctx, config, request) {
 
 // src/host/listing.js
 async function listDirectory(fs, request, limits, signal) {
-  const { workspaceRoot, path, followSymlinks, allowOutsideWorkspace } = request;
+  const { workspaceRoot, path } = request;
   const requested = absoluteOf(workspaceRoot, path);
-  const lexicalInside = isLexicallyInside(workspaceRoot, requested);
-  if (!lexicalInside && !allowOutsideWorkspace) {
-    return {
-      ok: false,
-      code: "outside-workspace",
-      message: `"${path}" is outside the workspace`,
-      path
-    };
-  }
-  if (!followSymlinks) {
-    const link = await fs.lstat(requested, {}, signal).catch(() => void 0);
-    if (link?.type === "symlink") {
-      return { ok: false, code: "symlink-disabled", message: `"${path}" is a symbolic link and following is off`, path };
-    }
-  }
   let target;
   try {
     target = await fs.resolve(requested, { signal });
   } catch (error) {
+    const link = await fs.lstat(requested, {}, signal).catch(() => void 0);
+    if (link?.type === "symlink") {
+      return { ok: false, code: "broken-link", message: `"${path}" points at a missing target`, path, target: requested };
+    }
     return { ok: false, code: "not-found", message: messageOf(error), path };
   }
   const resolved = fs.processPath(target);
-  const resolvedOutside = !isLexicallyInside(workspaceRoot, resolved);
-  if (resolvedOutside && !allowOutsideWorkspace) {
-    return {
-      ok: false,
-      code: "outside-workspace",
-      message: `"${path}" resolves outside the workspace`,
-      path,
-      outside: true
-    };
-  }
+  const outside = !isLexicallyInside(workspaceRoot, resolved);
   const info = await fs.stat(target, signal).catch(() => void 0);
   if (info === void 0) return { ok: false, code: "not-found", message: `"${path}" does not exist`, path };
   if (info.type !== "directory") {
@@ -413,7 +424,7 @@ async function listDirectory(fs, request, limits, signal) {
     ok: true,
     path,
     resolvedPath: resolved,
-    outside: resolvedOutside,
+    outside,
     entries,
     truncated: children.length > limits.maxEntries
   };
@@ -854,7 +865,6 @@ function createRoutes(ctx, config) {
         return listDirectory(fs(), {
           workspaceRoot: root,
           path: typeof body.path === "string" ? body.path : "",
-          followSymlinks: body.followSymlinks !== false,
           allowOutsideWorkspace: body.allowOutsideWorkspace === true
         }, { maxEntries: config.listingMaxEntries });
       }

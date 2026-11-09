@@ -30,7 +30,7 @@ export function useTree(options) {
    * @param path - absolute directory path.
    * @param silent - keep the rows already drawn instead of showing a loading line.
    */
-  const loadLevel = useCallback(async (path, silent = false, allowOutside = undefined) => {
+  const loadLevel = useCallback(async (path, silent = false) => {
     const key = treeKeyOf(root, path)
     if (!silent) {
       setLevels(current => {
@@ -40,13 +40,7 @@ export function useTree(options) {
         return next
       })
     }
-    const result = await request('/list', {
-      sessionId,
-      path,
-      followSymlinks: prefs.followSymlinks,
-      // A path the reader explicitly accepted is allowed even when the global switch is off.
-      allowOutsideWorkspace: allowOutside === true || prefs.allowOutsideWorkspace === true || prefs.allowed?.includes(treeKeyOf(root, path)) === true,
-    })
+    const result = await request('/list', { sessionId, path })
     if (!alive.current) return
     setLevels(current => {
       const next = new Map(current)
@@ -67,7 +61,7 @@ export function useTree(options) {
     // Hand the freshly listed names to the caller so ignored markers follow what is drawn.
     listed.current?.(path, result.ok ? result.entries.map(entry => entry.name) : [])
     return result
-  }, [root, sessionId, request, prefs.followSymlinks, prefs.allowOutsideWorkspace, prefs.allowed])
+  }, [root, sessionId, request])
 
   /** The workspace the levels currently describe; a change of workspace is what discards them. */
   const levelsRoot = useRef(undefined)

@@ -299,7 +299,6 @@ export function createRoutes(ctx, config) {
         return listDirectory(fs(), {
           workspaceRoot: root,
           path: typeof body.path === 'string' ? body.path : '',
-          followSymlinks: body.followSymlinks !== false,
           allowOutsideWorkspace: body.allowOutsideWorkspace === true,
         }, { maxEntries: config.listingMaxEntries })
       },

@@ -17,6 +17,7 @@ export function createAccessory(api) {
     const status = api.statusOf(entry.path)
     const ignored = api.ignoredOf(entry.path)
     const link = api.linkOf(entry.path)
+    const broken = api.linkBrokenOf(entry.path) === true
     const isFile = entry.meta?.kind !== 'directory'
     const folderStatus = isFile ? undefined : api.folderStatusOf(entry.path)
     const showGit = api.showGit() && !ignored
@@ -32,16 +33,21 @@ export function createAccessory(api) {
       // and glyph without the plugin needing to reach into the shared tree's markup.
       ...(ignored ? { 'data-nxe-ignored': 'true' } : {}),
     },
+      // A link keeps the link glyph whatever it points at; where it leads is a tooltip detail, not a
+      // warning. A link whose target is unreachable gets a struck-through variant so the row
+      // explains itself instead of failing only when pressed.
       link === undefined ? null : React.createElement('span', {
         className: 'nxe-acc-link',
-        title: link ? copy.symlinkOutside : copy.symlinkBadge,
-        'aria-label': link ? copy.symlinkOutside : copy.symlinkBadge,
-        'data-nxe-symlink': link ? 'outside' : 'inside',
+        title: broken ? copy.linkBroken : (link ? copy.symlinkOutsideBadge : copy.symlinkBadge),
+        'aria-label': broken ? copy.linkBroken : (link ? copy.symlinkOutsideBadge : copy.symlinkBadge),
+        'data-nxe-symlink': broken ? 'broken' : (link ? 'outside' : 'inside'),
       }, React.createElement('svg', {
         viewBox: '0 0 24 24', width: 11, height: 11, fill: 'none', stroke: 'currentColor',
         strokeWidth: 2, strokeLinecap: 'round', 'aria-hidden': 'true',
-      }, React.createElement('path', { d: 'M10 13a5 5 0 0 0 7 0l2-2a5 5 0 0 0-7-7l-1 1' }),
-      React.createElement('path', { d: 'M14 11a5 5 0 0 0-7 0l-2 2a5 5 0 0 0 7 7l1-1' }))),
+      },
+      React.createElement('path', { d: 'M10 13a5 5 0 0 0 7 0l2-2a5 5 0 0 0-7-7l-1 1' }),
+      React.createElement('path', { d: 'M14 11a5 5 0 0 0-7 0l-2 2a5 5 0 0 0 7 7l1-1' }),
+      broken ? React.createElement('path', { d: 'M3 3l18 18' }) : null)),
       // Remote divergence sits left of the local letter: it answers "what changed on the other side".
       remote === undefined ? null : React.createElement('span', {
         className: 'nxe-acc-remote',
@@ -70,13 +76,15 @@ export function createAccessory(api) {
           'aria-label': api.statusLabel(folderStatus),
         })
         : null,
-      // An ignored row keeps a mark of its own, so the reason it is dimmed is visible rather than implied.
+      // An ignored row keeps a mark of its own, so the reason it is dimmed is visible rather than
+      // implied. It is a slashed circle rather than an exclamation mark: `!` already means a merge
+      // conflict, and two different facts sharing one glyph made a clean tree look broken.
       ignored ? React.createElement('span', {
         className: 'nxe-acc-ignored-letter',
-        'data-status': '!',
+        'data-status': 'ignored',
         title: copy.ignoredBadge,
         'aria-label': copy.ignoredBadge,
-      }, '!') : null,
+      }, '⊘') : null,
       isFile && api.showOpenButton()
         ? React.createElement('button', {
           type: 'button',

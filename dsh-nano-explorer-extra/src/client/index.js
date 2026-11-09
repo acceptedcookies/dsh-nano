@@ -5,7 +5,6 @@ import { ExplorerBody } from './body.js'
 import { COPY, copyFor, statusLabel } from './i18n.js'
 import { relativeTo } from './paths.js'
 import { DEFAULT_PREFS, readPrefs, writePrefs } from './prefs.js'
-import { SettingsPage } from './settings.js'
 import { STYLE } from './styles.js'
 import * as primitives from '@deepseek-ai/dsh-client-ui-primitives'
 
@@ -70,11 +69,16 @@ export function apply(ctx) {
   const face = () => ({
     copy: copyFor(languageOf()),
     prefs: store.get(),
+    /** Live read and subscription, so a settings switch redraws the tree without waiting for another update. */
+    getPrefs: () => store.get(),
+    subscribePrefs: listener => store.subscribe(listener),
     scheme: schemeOf,
     statusLabel,
     onListed: () => {},
     /** The open page lends its rename dialog to the row menus. */
     setRenameHandler: handler => { renameRequest.handler = handler },
+    /** The settings card writes one viewing switch through the same store the page reads. */
+    setPref: (key, value) => store.set({ ...store.get(), [key]: value }),
   })
 
   // The `files` kind is registered by ui-sidebar-files as a `builtin`; this extension takes it over
@@ -83,6 +87,11 @@ export function apply(ctx) {
     id: OWN_ID,
     kind: FILES_KIND,
     priority: 'extension',
+    // The tree's open folders and loaded levels live in this body's own state. Without this the body
+    // unmounts whenever a preview tab is focused, and returning to the files tab rebuilds the tree
+    // collapsed. Keeping it mounted is what makes the tab behave like a workspace view rather than a
+    // page that restarts on every visit.
+    keepMounted: true,
     title: () => copyFor(languageOf()).typeLabel,
     guide: [{
       id: 'explorer',
@@ -160,25 +169,7 @@ export function apply(ctx) {
 
   // The settings page lives in the Plugins section: these are this plugin's own viewing switches.
   // Register the copy dictionary the settings page labels itself from.
-  ctx.effect(() => ctx.locale.register(NS, {
-    zh: { title: COPY.zh.settingsTitle, description: COPY.zh.settingsDescription },
-    en: { title: COPY.en.settingsTitle, description: COPY.en.settingsDescription },
-  }), 'nano-explorer-extra: dictionaries')
 
-  // A settings page in its own right: the Plugins section lists feature tabs, but this plugin owns
-  // a coherent surface of viewing switches, so it reads best as a named section.
-  ctx.effect(() => ctx.slots.inject('settings.section', () => ctx.slots.register({
-    name: 'settings.section',
-    id: OWN_ID,
-    order: 40,
-    locale: NS,
-    label: () => copyFor(languageOf()).settingsTitle,
-  }, function ExplorerSettings() {
-    const [prefs, setPrefs] = useState(() => store.get())
-    useEffect(() => store.subscribe(() => setPrefs(store.get())), [])
-    const setPref = useCallback((key, value) => store.set({ ...store.get(), [key]: value }), [])
-    return createElement(SettingsPage, { copy: copyFor(languageOf()), prefs, setPref })
-  })), 'nano-explorer-extra: settings section')
 }
 
 /** Copy a path with a short, non-blocking failure path. */

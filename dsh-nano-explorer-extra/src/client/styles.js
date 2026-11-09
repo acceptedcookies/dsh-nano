@@ -93,7 +93,8 @@ export const STYLE = `${NANO_STYLES}
   line-height: calc(20px + var(--dsh-content-font-delta-secondary, 0px));
   color: var(--dsw-alias-label-tertiary);
 }
-.nxe-status-left, .nxe-status-right { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.nxe-status-left { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.nxe-status-right { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .nxe-status-right { font-variant-numeric: tabular-nums; color: var(--dsw-alias-label-tertiary); }
 
 /* The footer follows the composer's own statistics row verbatim, so the two read as one surface:
@@ -106,10 +107,14 @@ export const STYLE = `${NANO_STYLES}
 .nxe-chip, .nxe-figure {
   display: inline-flex; align-items: center; gap: 6px;
   box-sizing: border-box; max-width: 100%;
-  padding: 1px 8px; border: none; border-radius: var(--dsw-radius-sm);
+  border: none; border-radius: var(--dsw-radius-sm);
   background: transparent; color: var(--dsw-alias-label-tertiary);
   font: inherit; font-variant-numeric: tabular-nums; line-height: inherit; white-space: nowrap;
 }
+/* A chip is pressable, so it keeps the pill's side padding as a hit area. A figure is read, not
+   pressed, and eight pixels beside every number stacked into the gaps this row showed. */
+.nxe-chip { padding: 1px 8px; }
+.nxe-figure { padding: 1px 0; }
 .nxe-chip svg, .nxe-figure svg { width: 14px; height: 14px; flex: none; }
 .nxe-chip-label, .nxe-figure-value { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .nxe-chip[data-nxe-git="none"] { color: var(--dsw-alias-label-tertiary); }
@@ -153,11 +158,12 @@ export const STYLE = `${NANO_STYLES}
   flex: 0 0 auto; width: 12px; text-align: center; font-weight: 700;
   color: var(--dsw-alias-label-secondary);
 }
-.nxe-drawer-row-status[data-status="M"] { color: var(--nxe-git-modified); }
-.nxe-drawer-row-status[data-status="A"], .nxe-drawer-row-status[data-status="?"] { color: var(--nxe-git-added); }
-.nxe-drawer-row-status[data-status="D"] { color: var(--nxe-git-deleted); }
-.nxe-drawer-row-status[data-status="R"] { color: var(--nxe-git-renamed); }
-.nxe-drawer-row-status[data-status="U"] { color: var(--nxe-git-conflicted); }
+.nxe-drawer-row-status[data-status="M"], .nxe-change-status[data-status="M"] { color: var(--nxe-git-modified); }
+.nxe-drawer-row-status[data-status="A"], .nxe-drawer-row-status[data-status="?"],
+.nxe-change-status[data-status="A"], .nxe-change-status[data-status="?"] { color: var(--nxe-git-added); }
+.nxe-drawer-row-status[data-status="D"], .nxe-change-status[data-status="D"] { color: var(--nxe-git-deleted); }
+.nxe-drawer-row-status[data-status="R"], .nxe-change-status[data-status="R"] { color: var(--nxe-git-renamed); }
+.nxe-drawer-row-status[data-status="U"], .nxe-change-status[data-status="U"] { color: var(--nxe-git-conflicted); }
 .nxe-drawer-link {
   flex: 1; min-width: 0; text-align: left; border: 0; background: transparent; padding: 0;
   color: var(--dsw-alias-label-error, #e5534b); font: inherit; cursor: pointer;
@@ -185,17 +191,10 @@ export const STYLE = `${NANO_STYLES}
 .nxe-btn:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary, var(--dsw-alias-link)); outline-offset: 1px; }
 
 /* Settings page. */
-.nxe-settings { display: flex; flex-direction: column; gap: 10px; padding: 4px 0; }
 .nxe-settings-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 8px 0; border-bottom: .5px solid var(--dsw-alias-border-l2); }
 .nxe-settings-row:last-child { border-bottom: 0; }
 .nxe-settings-label { font-size: 13px; color: var(--dsw-alias-label-primary); }
 .nxe-settings-hint { margin-top: 2px; font-size: 11px; color: var(--dsw-alias-label-tertiary); }
-.nxe-switch { position: relative; flex: none; width: 34px; height: 18px; border-radius: 999px; border: 0; background: var(--dsw-alias-border-l3); cursor: pointer; transition: background .12s ease; }
-.nxe-switch[data-on="true"] { background: var(--dsw-alias-brand-primary, var(--dsw-alias-link)); }
-.nxe-switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: transform .12s ease; }
-.nxe-switch[data-on="true"]::after { transform: translateX(16px); }
-.nxe-switch:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary, var(--dsw-alias-link)); outline-offset: 2px; }
-.nxe-switch { corner-shape: round; }
 .nxe-warn { margin: 0; padding: 8px; border: .5px solid var(--dsw-alias-warn, #bc4c00); border-radius: var(--dsw-radius-sm); font-size: 12px; color: var(--dsw-alias-label-secondary); }
 
 @media (hover: hover) {
@@ -377,9 +376,10 @@ export const STYLE = `${NANO_STYLES}
 
 /* An ignored row's own mark, drawn where the status letter would be. */
 .nxe-acc-ignored-letter {
-  font-size: 11px; font-weight: 700; line-height: 1;
+  /* Quiet by design: an ignored entry is muted, so its mark must not read as an alert. */
+  font-size: 11px; font-weight: 400; line-height: 1;
   display: inline-flex; align-items: center;
-  color: var(--nxe-ignored-ink);
+  color: var(--nxe-ignored-ink); opacity: .8;
 }
 
 /* Stashed work, shown beside the branch because a clean tree can still hold a shelf. */
@@ -407,4 +407,122 @@ export const STYLE = `${NANO_STYLES}
   color: var(--dsw-alias-label-tertiary); background: var(--dsw-alias-interactive-bg-hover);
 }
 .nxe-drawer-row-badge[data-tone="current"] { color: var(--nxe-git-added); }
+
+/* The footer gear: one icon-sized control at the end of the row, matching the figures' line box. */
+.nxe-gear {
+  display: inline-flex; align-items: center; justify-content: center;
+  box-sizing: border-box; width: 22px; height: 20px; padding: 0;
+  border: none; border-radius: var(--dsw-radius-sm);
+  background: transparent; color: var(--dsw-alias-label-tertiary); cursor: pointer;
+  flex: none;
+}
+.nxe-gear svg { width: 14px; height: 14px; flex: none; }
+@media (hover: hover) {
+  .nxe-gear:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-secondary); }
+}
+.nxe-gear:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary, var(--dsw-alias-link)); outline-offset: 1px; }
+
+/* Source-control cards. The Git palette normally lives on [data-nxe], but these cards are portaled
+   outside that subtree, so they carry the same variables. The confinement layer copies data-theme
+   onto the card, which selects the dark set. */
+.nxe-scm {
+  display: flex; flex-direction: column; gap: 8px; min-width: 0;
+  --nxe-git-modified: #bf8700;
+  --nxe-git-added: #1a7f37;
+  --nxe-git-deleted: #cf222e;
+  --nxe-git-renamed: #0969da;
+  --nxe-git-conflicted: #bc4c00;
+  --nxe-git-untracked: #1a7f37;
+}
+[data-theme="dark"] .nxe-scm {
+  --nxe-git-modified: #d9a63b;
+  --nxe-git-added: #4ac26b;
+  --nxe-git-deleted: #f85149;
+  --nxe-git-renamed: #58a6ff;
+  --nxe-git-conflicted: #f0883e;
+  --nxe-git-untracked: #3fb950;
+}
+.nxe-scm-head {
+  margin: 0; font-size: 12px; line-height: 18px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--dsw-alias-label-primary);
+}
+.nxe-scm-age { margin-left: 8px; color: var(--dsw-alias-label-tertiary); }
+.nxe-scm-counts {
+  display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0;
+  font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.nxe-scm-count[data-tone="danger"] { color: var(--dsw-alias-label-error, #e5534b); }
+.nxe-scm-group { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.nxe-change {
+  display: grid; grid-template-columns: 14px minmax(0, 1fr); gap: 6px; align-items: baseline;
+  min-height: 20px; padding: 1px 4px; border-radius: var(--dsw-radius-sm);
+  font-size: 12px; line-height: 18px;
+}
+.nxe-change-status {
+  font-weight: 700; text-align: center; font-variant-numeric: tabular-nums;
+  color: var(--dsw-alias-label-secondary);
+}
+.nxe-change-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nxe-change-dir { margin-left: 8px; color: var(--dsw-alias-label-tertiary); font-size: 11px; }
+.nxe-graph { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.nxe-graph-row {
+  display: grid; grid-template-columns: 14px minmax(0, 1fr) auto;
+  align-items: center; gap: 6px; min-height: 22px;
+}
+.nxe-graph-rail { position: relative; width: 14px; align-self: stretch; }
+.nxe-graph-rail::before {
+  content: ""; position: absolute; left: 6px; top: 0; bottom: 0; width: 1px;
+  background: var(--dsw-alias-border-l2);
+}
+.nxe-graph-row:first-child .nxe-graph-rail::before { top: 50%; }
+.nxe-graph-row:last-child .nxe-graph-rail::before { bottom: 50%; }
+.nxe-graph-row:only-child .nxe-graph-rail::before { display: none; }
+.nxe-graph-dot {
+  position: absolute; left: 3px; top: 50%; width: 7px; height: 7px; margin-top: -3.5px;
+  border-radius: 50%; background: var(--dsw-alias-label-tertiary);
+}
+.nxe-graph-row[data-head="true"] .nxe-graph-dot { background: var(--dsw-alias-brand-primary, var(--dsw-alias-link)); }
+.nxe-graph-subject {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-primary);
+}
+.nxe-graph-hash {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px; line-height: 16px; color: var(--dsw-alias-label-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+.nxe-graph-pills { display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
+.nxe-pill {
+  max-width: 108px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  padding: 0 6px; border-radius: 999px; font-size: 10px; line-height: 16px;
+  color: var(--dsw-alias-label-secondary); background: var(--dsw-alias-interactive-bg-hover);
+}
+.nxe-pill[data-tone="current"] {
+  color: var(--dsw-alias-label-primary);
+  background: color-mix(in oklab, var(--dsw-alias-brand-primary, var(--dsw-alias-link)) 22%, transparent);
+}
+.nxe-worktree {
+  display: grid; grid-template-columns: 14px minmax(0, 1fr); gap: 6px; align-items: start;
+  padding: 3px 4px; border-radius: var(--dsw-radius-sm);
+}
+.nxe-worktree[data-current="true"] { background: var(--dsw-alias-interactive-bg-hover); }
+.nxe-worktree-mark {
+  width: 7px; height: 7px; margin-top: 6px; margin-left: 3px; border-radius: 50%;
+  background: var(--dsw-alias-label-tertiary);
+}
+.nxe-worktree-mark[data-current="true"] { background: var(--dsw-alias-brand-primary, var(--dsw-alias-link)); }
+.nxe-worktree-body { min-width: 0; display: flex; flex-direction: column; }
+.nxe-worktree-line { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.nxe-worktree-branch {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-primary);
+}
+.nxe-worktree[data-current="true"] .nxe-worktree-branch { font-weight: 600; }
+.nxe-worktree-path {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 11px; line-height: 16px; color: var(--dsw-alias-label-tertiary);
+}
+.nxe-confined-layer .nano-dialog-content { scrollbar-width: thin; scrollbar-color: var(--dsw-alias-border-l2) transparent; }
 `

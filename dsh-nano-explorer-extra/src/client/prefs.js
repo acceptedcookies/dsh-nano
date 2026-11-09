@@ -12,12 +12,12 @@ export const DEFAULT_PREFS = {
   openPreviewOnClick: true,
   openPreviewOnDoubleClick: false,
   showOpenButton: true,
-  followSymlinks: true,
-  allowOutsideWorkspace: false,
   showIgnoredBadge: false,
   showGitStatus: true,
   showStatusBar: true,
   statsExcludeGit: true,
+  // .git and desktop metadata stay out of the tree until the reader asks for them.
+  showSystemFiles: false,
 }
 
 /** @param {unknown} value */

@@ -4,7 +4,7 @@ import React from 'react'
 import { formatBytes, formatSync } from './format.js'
 import {
   IconArchiveOutlineRegular, IconBranchOutlineRegular, IconDeliverDocRegular,
-  IconFolderCloseRegular, IconGaugeOutlineRegular, IconRefreshOutlineRegular,
+  IconFolderCloseRegular, IconGaugeOutlineRegular, IconRefreshOutlineRegular, IconSettingsOutlineRegular,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 
 /**
@@ -122,6 +122,15 @@ export function StatusBar(props) {
       title: copy.statsSizeTooltip(formatBytes(stats.bytes)) + excluded,
     }))
   }
+
+  // The gear lives at the very end of the footer: these switches change this panel only, so they sit
+  // as close to it as the row allows.
+  right.push(React.createElement('button', {
+    key: 'settings', type: 'button', className: 'nxe-gear',
+    'data-nxe-settings-button': 'true',
+    title: copy.settingsTitle, 'aria-label': copy.settingsTitle,
+    onClick: props.onOpenSettings,
+  }, React.createElement(IconSettingsOutlineRegular, { width: 14, height: 14 })))
 
   return React.createElement('footer', { className: 'nxe-status', 'data-nxe-status': 'true' },
     React.createElement('div', { className: 'nxe-status-left' }, left),

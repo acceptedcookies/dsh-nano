@@ -163,6 +163,9 @@ export function BranchDrawer({ copy, open, git, onClose, onPull, onRefresh, onCh
     description: conflicts.length === 0 ? summary : `${summary} · ${copy.factConflicted(conflicts.length)}`,
     error,
     footer: React.createElement(React.Fragment, null,
+      // The close action sits at the far left of the footer so it lands under the thumb the moment
+      // the reader is done, matching the spot this panel family reserves for dismissals.
+      React.createElement(Button, { variant: 'outline', className: 'nano-modal-action nxe-drawer-close', onClick: onClose }, copy.cancel),
       React.createElement(Button, { variant: 'outline', className: 'nano-modal-action', onClick: () => { void onRefresh() } }, copy.refreshGit),
       upstream === null
         ? null
@@ -301,11 +304,14 @@ export function CommitDrawer({ copy, open, git, onClose, onCommit, busy, error, 
         : null),
     description: copy.commitDrawerBody(pending, current ?? (git?.detached ? copy.detached : null)),
     error,
-    footer: React.createElement(Button, {
-      variant: 'primary', className: 'nano-modal-action',
-      disabled: !canCommit,
-      onClick: submit,
-    }, copy.commit),
+    footer: React.createElement(React.Fragment, null,
+      // Same dismiss spot as the branch card: left edge of the footer row.
+      React.createElement(Button, { variant: 'outline', className: 'nano-modal-action nxe-drawer-close', onClick: onClose }, copy.cancel),
+      React.createElement(Button, {
+        variant: 'primary', className: 'nano-modal-action',
+        disabled: !canCommit,
+        onClick: submit,
+      }, copy.commit)),
     onCancel: onClose,
   },
   React.createElement('div', { className: 'nxe-scm nxe-local', 'data-nxe-scm': 'commit' },

@@ -9,15 +9,29 @@ import { StatusBar } from './statusbar.js'
 import { RowMenu } from './menu.js'
 import * as primitives from '@deepseek-ai/dsh-client-ui-primitives'
 import { NanoToast } from 'dsh-nano-ui'
-import { useTree } from './tree.js'
+import { getWorkspaceStore } from './workspace-store.js'
 import { absoluteOf, basenameOf, parentOf, relativeTo, treeKeyOf } from './paths.js'
-import { replaceDirectoryStatus } from './format.js'
 import { checkName, nextName } from './names.js'
 
 const { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } = React
 
 /** Two presses within this window count as one double click, matching the platform default. */
 const DOUBLE_CLICK_MS = 400
+
+/** How often a visible pane asks the store for fresh Git state; hidden panes stay silent. */
+const POLL_GIT_MS = 15000
+
+/** The empty snapshot before a workspace is known, kept referentially stable for the hook. */
+const EMPTY_WS = {
+  levels: new Map(), expanded: new Set(), ignoredSet: new Set(), directoryStatus: new Map(),
+  git: null, gitError: undefined, stats: null, statsState: 'idle',
+}
+const EMPTY_TREE = {
+  levels: new Map(), entries: [], directories: {}, expanded: [], selected: null,
+  setSelected: () => {}, loadLevel: () => Promise.resolve(), refreshLevel: () => Promise.resolve(),
+  toggle: () => {}, refresh: () => Promise.resolve(), forget: () => {}, collapseUnder: () => {},
+  knownEmpty: () => {}, pending: null, setPending: () => {},
+}
 
 /** Strongest to weakest Git status, used when a folder summarizes its subtree. */
 const SEVERITY = ['U', 'D', 'M', 'A', 'R', '?']
@@ -56,10 +70,17 @@ export function ExplorerBody(props) {
   // subscribes to it; otherwise the switch changes storage and the rows stay as they were.
   const prefs = useSyncExternalStore(nxe.subscribePrefs, nxe.getPrefs, nxe.getPrefs)
 
-  const [git, setGit] = useState(null)
-  const [gitError, setGitError] = useState(undefined)
-  const [stats, setStats] = useState(null)
-  const [statsState, setStatsState] = useState('idle')
+  // One store per workspace root, shared by every pane mounted on the same directory. The pane
+  // subscribes to the whole snapshot so listings, Git state, and statistics arrive together; with
+  // several sessions on one workspace they now read the same copy instead of each asking the Host.
+  const store = useMemo(() => cwd === undefined ? null : getWorkspaceStore(cwd), [cwd])
+  const ws = useSyncExternalStore(
+    useCallback(listener => store?.subscribe(listener) ?? (() => {}), [store]),
+    useCallback(() => store?.state ?? EMPTY_WS, [store]),
+    () => EMPTY_WS,
+  )
+  const { git, gitError, stats, statsState, ignoredSet, directoryStatus } = ws
+  const [selected, setSelected] = useState(null)
   const [dialog, setDialog] = useState(null)
   const [busy, setBusy] = useState(false)
   const [dialogError, setDialogError] = useState(undefined)
@@ -98,8 +119,6 @@ export function ExplorerBody(props) {
   // True while the status read that opening a drawer asked for is still in flight; the title shows it.
   const [drawerRefresh, setDrawerRefresh] = useState(false)
   const toastTimer = useRef(0)
-  // Per-directory answers from loadDirectoryStatus, keyed like the workspace map.
-  const [directoryStatus, setDirectoryStatus] = useState(() => new Map())
   // The files tab stays mounted across sessions, and its dialog is portaled to the page, not the
   // pane. Without this, a card opened on one workspace stays on screen after the reader moves to
   // another, still showing the previous repository.
@@ -113,8 +132,6 @@ export function ExplorerBody(props) {
     setCreateRequest(null)
     setDeleteRequest(null)
     setMenu(null)
-    setDirectoryStatus(new Map())
-    setGitError(undefined)
   }, [sessionId, cwd, tab.visible])
 
   // One gesture clock for the whole tree: the Factory hands the same `onOpen` both presses.
@@ -141,63 +158,65 @@ export function ExplorerBody(props) {
     }
   }, [])
 
-  /** Ask Git which of one directory's entries it ignores, and merge the answer in. */
-  const markIgnored = useCallback(async (directory, names) => {
-    if (!prefsRef.current.showGitStatus || !Array.isArray(names) || names.length === 0) return
-    const result = await request('/ignored', { sessionId, paths: names })
-    if (!result.ok || !Array.isArray(result.ignored) || result.ignored.length === 0) return
-    setIgnoredSet(current => {
-      const next = new Set(current)
-      const base = relativeTo(cwd ?? '', directory)
-      for (const name of result.ignored) next.add(base === '' ? name : `${base}/${name}`)
-      return next
-    })
-  }, [request, sessionId, cwd])
+  /** Mount on the shared store; the first pane loads the root, a stale store re-reads quietly. */
+  useEffect(() => {
+    if (store === null) return undefined
+    const token = store.mount({ sessionId, showGitStatus: () => prefsRef.current.showGitStatus })
+    return () => store.unmount(token)
+  }, [store, sessionId])
 
+  /**
+   * The tree facade every reader below already names. Levels, expansion, listings, and the
+   * directory-status merge all live in the shared store now; this only adapts the method
+   * signatures the rest of the page calls.
+   */
+  const treeEntries = useMemo(() => {
+    const list = []
+    for (const [levelKey, level] of ws.levels) {
+      for (const entry of level.entries ?? []) {
+        const path = levelKey === '' ? entry.name : `${levelKey}/${entry.name}`
+        list.push({ ...entry, path })
+      }
+    }
+    return list
+  }, [ws.levels])
+  const treeDirectories = useMemo(() => {
+    const states = {}
+    for (const [key, level] of ws.levels) {
+      if (level.loading === true && (level.entries?.length ?? 0) === 0) states[key] = { loading: true }
+      else if (level.failed === true) states[key] = { failure: level.message }
+      else if (level.truncated === true) states[key] = { truncated: true }
+    }
+    return states
+  }, [ws.levels])
+  const tree = useMemo(() => store === null ? EMPTY_TREE : ({
+    levels: ws.levels,
+    entries: treeEntries,
+    directories: treeDirectories,
+    expanded: [...ws.expanded],
+    selected, setSelected,
+    loadLevel: (path, silent) => store.loadLevel(sessionId, path, silent),
+    refreshLevel: path => store.refreshLevel(sessionId, path),
+    toggle: (path, open) => store.toggle(sessionId, path, open),
+    refresh: () => Promise.resolve(store.refresh(sessionId)),
+    forget: path => store.forget(path),
+    collapseUnder: path => store.collapseUnder(path),
+    knownEmpty: path => store.knownEmpty(path),
+    pending: null,
+    setPending: () => {},
+  }), [store, ws.levels, ws.expanded, treeEntries, treeDirectories, selected, sessionId])
 
-  const tree = useTree({
-    sessionId,
-    root: cwd,
-    request,
-    prefs,
-    onListed: (path, names) => { void markIgnored(path, names) },
-  })
-
-
-
-  // Bumped on every workspace-wide read. A directory query that started against the previous
-  // snapshot is discarded, so a late answer cannot paint a letter the new footer no longer counts.
-  const gitEpoch = useRef(0)
-  const treeRef = useRef(null)
-  treeRef.current = tree
-  const loadDirectoryStatusRef = useRef(async () => {})
-
-  /** Re-read Git state alone: it answers in one command and the branch line waits on nothing. */
-  const refreshGit = useCallback(async () => {
-    if (cwd === undefined) return
-    if (!prefsRef.current.showGitStatus) { setGit(null); setGitError(undefined); setDirectoryStatus(new Map()); return }
-    const epoch = gitEpoch.current + 1
-    gitEpoch.current = epoch
-    const result = await request(`/status?sessionId=${encodeURIComponent(sessionId)}`)
-    if (epoch !== gitEpoch.current) return
-    if (!result.ok) { setGitError(result.message); return }
-    setGit(result.git ?? null)
-    setGitError(result.gitError)
-    // The per-directory map is a refinement of this snapshot, not a second source of truth. Leaving
-    // it in place is how a row kept "M" after the footer had already returned to 0.
-    setDirectoryStatus(new Map())
-    for (const path of treeRef.current?.expanded ?? []) void loadDirectoryStatusRef.current(path)
-  }, [cwd, sessionId, request])
-
+  /** Re-read Git state. The store deduplicates, so every visible pane may ask and only one flies. */
+  const refreshGit = useCallback(() => store?.refreshGit(sessionId) ?? Promise.resolve(), [store, sessionId])
   /** Re-count the workspace; a large tree takes seconds, so this is separate and cancellable. */
-  const refreshStats = useCallback(async () => {
-    if (cwd === undefined) return
-    setStatsState('loading')
-    const result = await request(`/status?sessionId=${encodeURIComponent(sessionId)}&only=stats`)
-    if (!result.ok) { setStatsState('failed'); return }
-    setStats(result.stats ?? null)
-    setStatsState('ok')
-  }, [cwd, sessionId, request])
+  const refreshStats = useCallback(() => store?.refreshStats(sessionId) ?? Promise.resolve(), [store, sessionId])
+  /**
+   * One directory's Git state, merged into the shared map. Kept as a callback so `openDirectory`
+   * can name it; the work and its dedupe live in the store.
+   */
+  const loadDirectoryStatus = useCallback(directory => {
+    void store?.loadDirectoryStatus(sessionId, directory)
+  }, [store, sessionId])
 
   /**
    * Open a footer drawer and re-read the repository in the same gesture.
@@ -213,18 +232,27 @@ export function ExplorerBody(props) {
   }, [refreshGit])
 
   useEffect(() => { void refreshGit() }, [refreshGit])
-  // Count once per workspace. Keying on the callback identity would re-walk the whole tree after any
-  // re-render, which on a large checkout costs seconds of CPU; later counts come from queueStats.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { void refreshStats() }, [cwd])
+  // Count once per workspace. The store deduplicates the walk, so panes on one root still pay for
+  // a single pass; later counts come from queueStats.
+  useEffect(() => { void refreshStats() }, [refreshStats])
 
-  // Debounced re-count after directory changes, at least `statsDebounceMs` apart.
-  const statsTimer = useRef(0)
-  const queueStats = useCallback(() => {
-    window.clearTimeout(statsTimer.current)
-    statsTimer.current = window.setTimeout(() => { void refreshStats() }, 2000)
-  }, [refreshStats])
-  useEffect(() => () => { window.clearTimeout(statsTimer.current); window.clearTimeout(toastTimer.current) }, [])
+  // One poller per pane, but a tick only runs while this pane is on screen: hidden sessions share
+  // the store without spending requests. Whichever pane is visible effectively leads, and the
+  // store's in-flight dedupe keeps simultaneous ticks to a single /status round trip.
+  const rootEl = useRef(null)
+  useEffect(() => {
+    if (store === null) return undefined
+    const timer = window.setInterval(() => {
+      const node = rootEl.current
+      if (node === null || node.closest('[hidden], [aria-hidden="true"]') !== null) return
+      void store.refreshGit(sessionId)
+    }, POLL_GIT_MS)
+    return () => window.clearInterval(timer)
+  }, [store, sessionId])
+
+  /** Debounced re-count after directory changes; the debounce lives in the store. */
+  const queueStats = useCallback(() => { store?.queueStats(sessionId) }, [store, sessionId])
+  useEffect(() => () => { window.clearTimeout(toastTimer.current) }, [])
 
   /** Which tree entries are symbolic links, and whether each leads outside the workspace. */
   const linkByPath = useMemo(() => {
@@ -243,16 +271,8 @@ export function ExplorerBody(props) {
     for (const file of changed) map.set(file.path, file)
     return map
   }, [changed])
-  // Ignored paths are asked for by directory, bounded by what the tree draws: a repository-wide
-  // `--ignored` listing is tens of megabytes on a tree with a large vendor directory.
-  const [ignoredSet, setIgnoredSet] = useState(() => new Set())
-
   /** The status route reports paths relative to the checkout root; the tree keys absolute paths. */
   const checkoutRoot = git?.root
-  // `loadDirectoryStatus` keys against the checkout root but must not be rebuilt whenever it arrives,
-  // so the latest value travels through a ref rather than its dependency list.
-  const checkoutRootRef = useRef(checkoutRoot)
-  checkoutRootRef.current = checkoutRoot
   /**
    * Every status the tree may draw, from both sources: the workspace-wide query and each expanded
    * directory's own query. Later per-directory answers win, since they carry more detail.
@@ -348,32 +368,7 @@ export function ExplorerBody(props) {
    * render: a later `const` would be read while still in its temporal dead zone.
    * @param directory - absolute directory path that was just expanded.
    */
-  const loadDirectoryStatus = useCallback(async directory => {
-    if (cwd === undefined || !prefsRef.current.showGitStatus) return
-    const epoch = gitEpoch.current
-    const result = await request(`/status?sessionId=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(directory)}`)
-    // A workspace-wide refresh started while this was in flight. Its answer describes the old tree.
-    if (epoch !== gitEpoch.current) return
-    if (!result.ok || result.git === null || result.git === undefined) return
-    const root = result.git.root
-    const base = checkoutRootRef.current ?? cwd
-    const directoryRelative = relativeTo(base, directory)
-    // Outside the checkout there is nothing to key, and wiping the map from a bad prefix would hide
-    // letters that still belong to this workspace.
-    if (directoryRelative === directory && directoryRelative !== '') return
-    const files = []
-    for (const file of result.git.files ?? []) {
-      const absolute = root === undefined ? file.path : `${root.replace(/\/+$/u, '')}/${file.path}`
-      // Keys must match `statusKeyOf`, which relativizes against the checkout root, not the
-      // workspace root: a repository opened from a subdirectory would otherwise never line up.
-      const relative = relativeTo(base, absolute)
-      // Store the whole entry, not just its letter: `statusMap` holds entries from both sources and
-      // every reader takes `.status` off one. A bare string here made them read `undefined`.
-      if (relative !== absolute) files.push({ ...file, path: relative })
-    }
-    setDirectoryStatus(current => replaceDirectoryStatus(current, directoryRelative, files))
-  }, [cwd, sessionId, request])
-  loadDirectoryStatusRef.current = loadDirectoryStatus
+  /** Read one directory's Git state and merge it into the shared per-directory map. */
 
   /**
    * Expand one directory, or ask once whether to cross the workspace boundary.
@@ -801,9 +796,14 @@ export function ExplorerBody(props) {
     const target = { path: menu.path, name: menu.name, kind: menu.kind }
     const revealId = openApps[0]
     const open = app => {
+      // The launch route only accepts an absolute directory: a file row reveals its containing
+      // folder, and the row path is always workspace-relative so it goes through `absoluteOf`
+      // first. The response is dropped either way — the window appearing is the acknowledgement.
+      const absolute = absoluteOf(cwd ?? '', menu.path)
+      const directory = menu.kind === 'directory' ? absolute : parentOf(absolute)
       void fetch('/open-in-app/open', {
         method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ app, path: menu.path }), credentials: 'same-origin',
+        body: JSON.stringify({ app, path: directory }), credentials: 'same-origin',
       })
     }
     return [
@@ -834,7 +834,7 @@ export function ExplorerBody(props) {
     ].filter(Boolean)
   }, [menu, copy, openApps, cwd, copyPath])
 
-  return React.createElement('div', { className: 'nxe-root', 'data-nxe': 'true', 'data-theme': nxe.scheme() },
+  return React.createElement('div', { className: 'nxe-root', 'data-nxe': 'true', 'data-theme': nxe.scheme(), ref: rootEl },
     React.createElement('div', { className: 'nxe-header' },
       React.createElement('span', { className: 'nxe-path', title: cwd, 'data-nxe-path': 'true' }, cwd),
       React.createElement(ToolButton, { label: copy.newFile, onClick: () => { create('file') } }, iconFilePlus()),
@@ -907,7 +907,7 @@ export function ExplorerBody(props) {
     React.createElement('span', { className: 'nxe-git-alert-text' }, gitError),
     React.createElement('button', {
       type: 'button', className: 'nxe-git-alert-x', title: copy.dismiss,
-      'aria-label': copy.dismiss, onClick: () => setGitError(undefined),
+      'aria-label': copy.dismiss, onClick: () => store?.dismissGitError(),
     }, React.createElement(primitives.IconCloseOutlineRegular, { width: 12, height: 12, 'aria-hidden': 'true' }))),
     React.createElement(StatusBar, {
       copy, git, stats, statsState, prefs,

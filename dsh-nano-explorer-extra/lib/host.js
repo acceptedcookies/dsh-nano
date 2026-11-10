@@ -1,3 +1,6 @@
+// src/host/routes.js
+import { watch } from "node:fs";
+
 // src/host/git.js
 var GIT_TOMBSTONES = [
   "GIT_DIR",
@@ -753,10 +756,11 @@ async function runExternal(ctx, config, request) {
 }
 var memo = /* @__PURE__ */ new Map();
 var MEMO_MS = 3e3;
-function memoized(key, read) {
+var STATS_MEMO_MS = 45 * 1e3;
+function memoized(key, read, ttl = MEMO_MS) {
   const hit = memo.get(key);
   const now = Date.now();
-  if (hit !== void 0 && now - hit.at < MEMO_MS) return hit.value;
+  if (hit !== void 0 && now - hit.at < ttl) return hit.value;
   const value = Promise.resolve().then(read);
   memo.set(key, { at: now, value });
   value.catch(() => {
@@ -769,8 +773,39 @@ function memoized(key, read) {
 }
 function forgetReads(root) {
   for (const key of memo.keys()) {
-    if (key.startsWith(`status:${root}:`) || key.startsWith(`ignored:${root}:`)) memo.delete(key);
+    if (key.startsWith(`status:${root}:`) || key.startsWith(`ignored:${root}:`) || key === `stats:${root}`) memo.delete(key);
   }
+}
+var watchers = /* @__PURE__ */ new Map();
+var watchTimers = /* @__PURE__ */ new Map();
+function watchRoot(root) {
+  if (watchers.has(root)) return;
+  const entries = [];
+  const invalidate = () => {
+    clearTimeout(watchTimers.get(root));
+    watchTimers.set(root, setTimeout(() => {
+      watchTimers.delete(root);
+      forgetReads(root);
+    }, 1e3));
+  };
+  try {
+    entries.push(watch(root, { recursive: true }, invalidate));
+  } catch {
+    try {
+      entries.push(watch(`${root}/.git`, invalidate));
+    } catch {
+    }
+  }
+  watchers.set(root, entries);
+}
+function disposeRootWatchers() {
+  for (const entries of watchers.values()) for (const entry of entries) try {
+    entry.close();
+  } catch {
+  }
+  watchers.clear();
+  for (const timer of watchTimers.values()) clearTimeout(timer);
+  watchTimers.clear();
 }
 function createRoutes(ctx, config) {
   const fs = () => ctx.fs;
@@ -781,12 +816,13 @@ function createRoutes(ctx, config) {
       async run(req) {
         const url = new URL(String(req.url), "http://localhost");
         const { root, policy } = await scopeOf(ctx, url.searchParams.get("sessionId") ?? "");
+        watchRoot(root);
         if (url.searchParams.get("only") === "stats") {
-          const stats = await statisticsOf(fs(), root, {
+          const stats = await memoized(`stats:${root}`, () => statisticsOf(fs(), root, {
             maxDepth: config.statsMaxDepth,
             maxEntries: config.statsMaxEntries,
             excludeGit: config.statsExcludeGit
-          });
+          }), STATS_MEMO_MS);
           return { root, stats };
         }
         let git = null;
@@ -1062,6 +1098,7 @@ function apply(ctx, raw) {
     const disposers = registerRoutes(ctx, routes);
     return () => {
       for (const dispose of disposers) dispose();
+      disposeRootWatchers();
     };
   }, "nano-explorer-extra: routes");
 }

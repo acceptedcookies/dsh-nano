@@ -1,6 +1,6 @@
 /** Host half entry: the plugin's exported name, inject list, Config, and apply. */
 
-import { createRoutes, registerRoutes } from './routes.js'
+import { createRoutes, disposeRootWatchers, registerRoutes } from './routes.js'
 
 export const name = 'nano-explorer-extra'
 
@@ -72,6 +72,6 @@ export function apply(ctx, raw) {
   const routes = createRoutes(ctx, config)
   ctx.effect(() => {
     const disposers = registerRoutes(ctx, routes)
-    return () => { for (const dispose of disposers) dispose() }
+    return () => { for (const dispose of disposers) dispose(); disposeRootWatchers() }
   }, 'nano-explorer-extra: routes')
 }

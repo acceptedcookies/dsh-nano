@@ -1,6 +1,6 @@
 /** The footer: a branch button and a commit button on the left, workspace totals on the right. */
 
-import React from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { formatBytes, formatSync } from './format.js'
 import {
   IconArchiveOutlineRegular, IconBranchOutlineRegular, IconDeliverDocRegular,
@@ -34,6 +34,29 @@ function Figure({ icon, value, title, scope }) {
  */
 export function StatusBar(props) {
   const { copy, git, stats, statsState, prefs, onOpenBranch, onOpenCommit } = props
+  const footRef = useRef(null)
+  // Overflow order is fixed: the figures dissolve first, the two left chips and the gear always
+  // stay. `needRef` caches the width the full row wanted, so widening back past it restores the
+  // figures — the hysteresis keeps a borderline pane from flickering between the two layouts.
+  const [crowded, setCrowded] = useState(false)
+  const needRef = useRef(0)
+  useEffect(() => {
+    const el = footRef.current
+    if (!el) return undefined
+    const check = () => {
+      const width = el.clientWidth
+      if (el.scrollWidth > width + 1) {
+        needRef.current = el.scrollWidth
+        setCrowded(true)
+      } else if (crowded && width >= needRef.current + 32) {
+        setCrowded(false)
+      }
+    }
+    check()
+    const observer = new ResizeObserver(check)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [crowded])
   if (!prefs.showStatusBar) return null
 
   const left = []
@@ -100,7 +123,11 @@ export function StatusBar(props) {
   }
 
   const right = []
-  if (statsState === 'loading') {
+  if (crowded) {
+    // A narrow pane drops the whole statistics group before anything else: it is the widest,
+    // read-only segment, and the tooltip-free numbers it loses are all reachable again by
+    // widening the pane. The gear stays because it is the only way back to the switches.
+  } else if (statsState === 'loading') {
     right.push(React.createElement('span', { key: 'loading', className: 'nxe-figure-value' }, copy.statsLoading))
   } else if (statsState === 'failed') {
     right.push(React.createElement('button', { key: 'retry', type: 'button', className: 'nxe-retry', onClick: props.onRetryStats }, copy.statsFailed))
@@ -136,7 +163,7 @@ export function StatusBar(props) {
     onClick: props.onOpenSettings,
   }, React.createElement(IconSettingsOutlineRegular, { width: 14, height: 14 })))
 
-  return React.createElement('footer', { className: 'nxe-status', 'data-nxe-status': 'true' },
+  return React.createElement('footer', { className: 'nxe-status', 'data-nxe-status': 'true', 'data-crowded': String(crowded), ref: footRef },
     React.createElement('div', { className: 'nxe-status-left' }, left),
     React.createElement('div', { className: 'nxe-status-right' }, right))
 }

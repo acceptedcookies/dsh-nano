@@ -583,6 +583,8 @@ button.nxe-local-filter {
   color: var(--dsw-alias-label-primary);
   background: color-mix(in oklab, var(--dsw-alias-brand-primary, var(--dsw-alias-link)) 22%, transparent);
 }
+/* The footer's dismissal parks at the left edge; the margin pushes the working actions right. */
+.nano-dialog-card .nxe-drawer-close { margin-right: auto; }
 .nxe-worktree {
   display: grid; grid-template-columns: 14px minmax(0, 1fr); gap: 6px; align-items: start;
   padding: 3px 4px; border-radius: var(--dsw-radius-sm);

@@ -1,5 +1,6 @@
 /** The six HTTP routes: one request gate, one JSON envelope, and the session-scoped work behind them. */
 
+import { watch } from 'node:fs'
 import { checkoutBranch, commitAll, ignoredAmong, listBranches, listConflicts, listWorktrees, pullUpstream, readStatus } from './git.js'
 import { absoluteOf, isLexicallyInside, listDirectory } from './listing.js'
 import { createFile, createFolder, moveEntry, removeEntry, rename } from './mutate.js'
@@ -137,17 +138,20 @@ export async function runExternal(ctx, config, request) {
  */
 const memo = new Map()
 const MEMO_MS = 3000
+/** Statistics walk far longer than Git commands do; the memo keeps it fresh without paying per ask. */
+const STATS_MEMO_MS = 45 * 1000
 
 /**
  * Answer from the memo, or run the reader and remember its answer briefly.
  * @param key - cache identity for the read.
  * @param read - performs the read when the memo misses.
+ * @param ttl - how long the answer stays valid; defaults to the Git pacing.
  * @returns a promise for the memoized value.
  */
-function memoized(key, read) {
+function memoized(key, read, ttl = MEMO_MS) {
   const hit = memo.get(key)
   const now = Date.now()
-  if (hit !== undefined && now - hit.at < MEMO_MS) return hit.value
+  if (hit !== undefined && now - hit.at < ttl) return hit.value
   // The in-flight promise itself is what is stored: two requests that miss together share the one
   // Git run instead of each spawning a second copy of a command a large checkout is still running.
   // A rejection is evicted immediately so the next request retries rather than replaying the error.
@@ -163,8 +167,47 @@ function memoized(key, read) {
 /** Drop cached reads for one checkout. A switch or a commit would otherwise be painted with the branch it just left. */
 function forgetReads(root) {
   for (const key of memo.keys()) {
-    if (key.startsWith(`status:${root}:`) || key.startsWith(`ignored:${root}:`)) memo.delete(key)
+    if (key.startsWith(`status:${root}:`) || key.startsWith(`ignored:${root}:`) || key === `stats:${root}`) memo.delete(key)
   }
+}
+
+/** One fs.watch per watched path, keyed by the workspace root it invalidates. */
+const watchers = new Map()
+/** Debounce clocks per root: a burst of events collapses into one invalidation. */
+const watchTimers = new Map()
+
+/**
+ * Observe one checkout and drop its memoized reads when the tree or its Git metadata moves.
+ *
+ * A recursive watch covers the working tree and `.git` together where the platform supports it;
+ * where it does not (Linux without a recursive engine), the Git directory alone still catches
+ * commits, checkouts, and index writes, and the working tree falls back to the poll pacing.
+ * Events are only names — nothing reads file contents, so the watch does not widen the sandbox.
+ * @param root - workspace root that already passed the sandbox scope check.
+ */
+function watchRoot(root) {
+  if (watchers.has(root)) return
+  const entries = []
+  const invalidate = () => {
+    clearTimeout(watchTimers.get(root))
+    watchTimers.set(root, setTimeout(() => { watchTimers.delete(root); forgetReads(root) }, 1000))
+  }
+  try {
+    entries.push(watch(root, { recursive: true }, invalidate))
+  } catch {
+    try {
+      entries.push(watch(`${root}/.git`, invalidate))
+    } catch { /* no .git yet: the next status read retries */ }
+  }
+  watchers.set(root, entries)
+}
+
+/** Close every watcher the plugin opened; called with the routes' lifetime. */
+export function disposeRootWatchers() {
+  for (const entries of watchers.values()) for (const entry of entries) try { entry.close() } catch { /* already gone */ }
+  watchers.clear()
+  for (const timer of watchTimers.values()) clearTimeout(timer)
+  watchTimers.clear()
 }
 
 export function createRoutes(ctx, config) {
@@ -177,14 +220,19 @@ export function createRoutes(ctx, config) {
       async run(req) {
         const url = new URL(String(req.url), 'http://localhost')
         const { root, policy } = await scopeOf(ctx, url.searchParams.get('sessionId') ?? '')
+        // The scope check already accepted this root, so watching it stays inside the sandbox; the
+        // first status read arms the observer that keeps the memo honest between polls.
+        watchRoot(root)
         // Git state and workspace totals are asked for separately: a tree with tens of thousands
         // of files spends seconds walking directories, and the branch line must not wait for it.
         if (url.searchParams.get('only') === 'stats') {
-          const stats = await statisticsOf(fs(), root, {
+          // A full walk on a large checkout takes seconds, and every pane on the same root asks
+          // for it; the memo keeps N sessions to one pass instead of one each.
+          const stats = await memoized(`stats:${root}`, () => statisticsOf(fs(), root, {
             maxDepth: config.statsMaxDepth,
             maxEntries: config.statsMaxEntries,
             excludeGit: config.statsExcludeGit,
-          })
+          }), STATS_MEMO_MS)
           return { root, stats }
         }
         let git = null

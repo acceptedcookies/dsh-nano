@@ -87,8 +87,14 @@ function ChangeGroup({ label, count, files, tone }) {
  * @param props - copy and the history payload.
  * @returns the rail.
  */
-function HistoryRail({ copy, history, currentBranch }) {
+function HistoryRail({ copy, history, currentBranch, upstream }) {
   const commits = history ?? []
+  // The remote tip is the boundary the reader asked about: commits above it have never left this
+  // checkout, everything at and below it is already pushed. Without an upstream there is no
+  // boundary to draw, so the rail stays uniform rather than guessing from a branch-name prefix.
+  const pushedFrom = upstream === null || upstream === undefined
+    ? -1
+    : commits.findIndex(commit => commit.refs.includes(upstream))
   return React.createElement('section', { className: 'nxe-scm-group', 'data-nxe-history': 'true' },
     React.createElement('h3', { className: 'nxe-drawer-heading' }, copy.historyHeading),
     commits.length === 0
@@ -98,6 +104,10 @@ function HistoryRail({ copy, history, currentBranch }) {
           key: `${commit.hash}:${index}`,
           className: 'nxe-graph-row',
           'data-head': String(index === 0),
+          // `ahead` marks a commit the remote does not have yet; `boundary` is the first row it
+          // already has, and the stylesheet draws the divider that separates the two regions.
+          'data-ahead': String(pushedFrom >= 0 && index < pushedFrom || (pushedFrom === -1 && upstream != null)),
+          'data-boundary': String(pushedFrom >= 0 && index === pushedFrom),
           title: [commit.hash, ageLabel(copy, commit.time), commit.subject].filter(part => part !== '').join(' · '),
         },
         React.createElement('span', { className: 'nxe-graph-rail', 'aria-hidden': 'true' },
@@ -110,7 +120,7 @@ function HistoryRail({ copy, history, currentBranch }) {
           React.createElement('span', {
             key: ref,
             className: 'nxe-pill',
-            'data-tone': ref === currentBranch ? 'current' : 'default',
+            'data-tone': ref === currentBranch ? 'current' : ref === upstream ? 'upstream' : 'default',
             title: ref,
           }, ref)))))))
 }
@@ -180,7 +190,7 @@ export function BranchDrawer({ copy, open, git, onClose, onPull, onRefresh, onCh
           type: 'button', className: 'nxe-drawer-link', title: path,
           onClick: () => onOpenConflict?.(path),
         }, path))))),
-    React.createElement(HistoryRail, { copy, history, currentBranch: current }),
+    React.createElement(HistoryRail, { copy, history, currentBranch: current, upstream }),
     React.createElement(Input, {
       value: query,
       placeholder: copy.branchFilter,

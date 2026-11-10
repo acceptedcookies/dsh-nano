@@ -1,7 +1,7 @@
 /** Row decorations for the shared tree: Git letter, ignored badge, link badge, and the open control. */
 
 import React from 'react'
-import { IconCloseCircleOutlineRegular, IconLinkOutlineRegular, IconRightUpOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconCloseCircleFillRegular, IconLinkOutlineRegular, IconRightUpOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 
 /**
  * Build the accessory Component once at module scope, so the Factory never remounts it.
@@ -73,15 +73,16 @@ export function createAccessory(api) {
           'aria-label': api.statusLabel(folderStatus),
         })
         : null,
-      // An ignored row keeps a mark of its own, so the reason it is dimmed is visible rather than
-      // implied. The official close-circle is used instead of a drawn slash: `!` already means a
-      // merge conflict.
-      ignored ? React.createElement('span', {
+      // An ignored row keeps a mark of its own — only when the reader asked for it in settings.
+      // The dim itself is not gated: a hidden file still reads quieter. The filled close-circle is
+      // the exported variant; the Outline name does not exist in the primitive set, and the Factory's
+      // error boundary once swallowed this whole accessory for it.
+      ignored && api.showIgnoredBadge() ? React.createElement('span', {
         className: 'nxe-acc-ignored-letter',
         'data-status': 'ignored',
         title: copy.ignoredBadge,
         'aria-label': copy.ignoredBadge,
-      }, React.createElement(IconCloseCircleOutlineRegular, { width: 14, height: 14, 'aria-hidden': 'true' })) : null,
+      }, React.createElement(IconCloseCircleFillRegular, { width: 14, height: 14, 'aria-hidden': 'true' })) : null,
       isFile && api.showOpenButton()
         ? React.createElement('button', {
           type: 'button',

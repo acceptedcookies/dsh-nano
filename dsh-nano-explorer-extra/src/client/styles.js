@@ -551,6 +551,19 @@ button.nxe-local-filter {
   border-radius: 50%; background: var(--dsw-alias-label-tertiary);
 }
 .nxe-graph-row[data-head="true"] .nxe-graph-dot { background: var(--dsw-alias-brand-primary, var(--dsw-alias-link)); }
+/* Unpushed region: the ahead rows get the accent ink so the eye can follow the local-only segment
+   of the rail; the boundary row is where the remote already has the work. */
+.nxe-graph-row[data-ahead="true"] .nxe-graph-dot { background: var(--dsw-alias-brand-primary, var(--dsw-alias-link)); }
+.nxe-graph-row[data-ahead="true"] .nxe-graph-rail::before,
+.nxe-graph-row[data-boundary="true"] .nxe-graph-rail::before { background: color-mix(in oklab, var(--dsw-alias-brand-primary, var(--dsw-alias-link)) 55%, var(--dsw-alias-border-l2)); }
+.nxe-graph-row[data-ahead="true"] .nxe-graph-subject { color: var(--dsw-alias-label-primary); }
+/* The divider sits on the boundary row's top edge, so pushed history below reads as a separate
+   region even before the eye reaches the ref pill. */
+.nxe-graph-row[data-boundary="true"] { border-top: .5px dashed var(--dsw-alias-border-l2); margin-top: 2px; padding-top: 2px; }
+.nxe-pill[data-tone="upstream"] {
+  color: var(--dsw-alias-link, var(--dsw-alias-label-secondary));
+  background: color-mix(in oklab, var(--dsw-alias-link, #2f81f7) 14%, transparent);
+}
 .nxe-graph-subject {
   min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-primary);

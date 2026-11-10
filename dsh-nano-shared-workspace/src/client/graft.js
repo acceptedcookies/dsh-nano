@@ -21,6 +21,7 @@ import { SharedSection } from './section.js'
 import { SettingsDialog } from './settings-dialog.js'
 import { TranscriptDialog } from './transcript-dialog.js'
 import { CreateWorkspaceDialog } from './create-dialog.js'
+import { perf } from './perf.js'
 
 const HOST_ATTR = 'data-nano-shared-workspace'
 
@@ -130,10 +131,13 @@ export function SidebarGraft({ face, renderSlot }) {
   React.useEffect(() => face.settings.subscribe(setSettings), [])
 
   React.useEffect(() => {
-    const observer = new MutationObserver(() => {
+    // perf: sidebar-graft is the body-wide MutationObserver that keeps the host
+    // pinned; it is only alive while this component is mounted.
+    const graftTrack = perf.track('mutation', 'sidebar-graft')
+    const observer = new MutationObserver(graftTrack.wrap(() => {
       setHost(graftHost())
       setWide(sidebarIsWide())
-    })
+    }))
     observer.observe(document.body, {
       childList: true,
       subtree: true,
@@ -141,10 +145,12 @@ export function SidebarGraft({ face, renderSlot }) {
       // attributes broadly; the callbacks only re-measure, never re-render DOM.
       attributes: true,
     })
+    graftTrack.attach()
     setHost(graftHost())
     setWide(sidebarIsWide())
     return () => {
       observer.disconnect()
+      graftTrack.detach()
       // Remove the graft host so a plugin reload leaves no empty shell behind.
       host?.remove()
     }

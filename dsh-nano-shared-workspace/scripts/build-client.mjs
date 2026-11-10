@@ -9,6 +9,10 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 // installed, so a release build never pulls a drifted toolchain (review-01 R12).
 const local = join(root, 'node_modules', '.bin', 'esbuild')
 
+const { version } = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
+/** Compile-time package version, so both halves can report `meta.version` to perf-review. */
+const versionDefine = '--define:__NSW_VERSION__=' + JSON.stringify(version)
+
 /**
  * Bundle one entry and fail the build when esbuild rejects it.
  * @param {string} entry - source entry, relative to the package root.
@@ -23,13 +27,14 @@ function bundle(entry, outfile, extra) {
   if (built.status !== 0) process.exit(built.status ?? 1)
 }
 
-// Host half: plain ESM for Node, with the Host's own packages left to the runtime resolution.
-// Bundling keeps every source module inside `lib/`, which is the only directory the development
-// instance copies into ~/.dsh-dev/plugins.
+// Host half: plain ESM for Node. No --packages=external: the only bare import the host
+// sources carry is dsh-performance-review/host, and it MUST be bundled — the development
+// instance copies lib/ but not node_modules, so a runtime bare import would fail to
+// resolve (spec §3.3/F3). node:* builtins stay external automatically on platform=node.
 bundle('src/host/entry.js', 'lib/host.js', [
   '--format=esm',
   '--platform=node',
-  '--packages=external',
+  versionDefine,
 ])
 
 // Browser half: an IIFE wrapped in the client module-loader factory format.
@@ -43,6 +48,7 @@ bundle('src/client/index.js', 'lib/client.body.js', [
   '--external:react-dom/client',
   // Shared through PLATFORM_MODULES: the shell seeds this identity, so the bundle must not copy it.
   '--external:@deepseek-ai/dsh-client-ui-primitives',
+  versionDefine,
 ])
 
 const body = join(root, 'lib/client.body.js')

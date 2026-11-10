@@ -6,6 +6,7 @@ import { SidebarGraft } from './graft.js'
 import { copyFor } from './i18n.js'
 import { bindSession as apiBindSession, claimSession as apiClaimSession, createDirectory as apiCreateDirectory, createWorkspace as apiCreateWorkspace, fetchRemoteSessions, fetchSettings, fetchSharedWorkspaces, fetchStatus, heartbeatSession as apiHeartbeatSession, joinWorkspace as apiJoinWorkspace, listDirectory as apiListDirectory, materializeSession as apiMaterializeSession, pullWorkspace as apiPullWorkspace, triggerSync } from './api.js'
 import { STYLE } from './styles.js'
+import { perf } from './perf.js'
 
 export const inject = ['slots', 'locale', 'layout', 'uiWorkspace', 'workspaces', 'sessions']
 
@@ -55,7 +56,7 @@ export function apply(ctx) {
    * Shared workspaces are not Host workspaces. A replica path may already be
    * registered locally; those rows and their sessions stay out of 「工作区」.
    */
-  const separateFromLocal = () => {
+  const separateFromLocal = () => perf.span('apply-separate', () => {
     const graft = document.querySelector('[data-nano-shared-workspace]')
     const username = store.current.username
     const paths = new Set()
@@ -94,7 +95,7 @@ export function apply(ctx) {
       const hide = sessions.length > 0 && sessions.every(item => item.hidden)
       if (group.hidden !== hide) group.hidden = hide
     }
-  }
+  })
 
   const refresh = () => {
     fetchSettings()
@@ -136,11 +137,19 @@ export function apply(ctx) {
   }
 
   let holdTimer = 0
+  let holdAttached = false
+  const holdTrack = perf.track('interval', 'hold')
   const holdSession = (workspaceId, sessionId) => {
     window.clearInterval(holdTimer)
-    holdTimer = window.setInterval(() => {
-      apiHeartbeatSession(workspaceId, sessionId).catch(() => window.clearInterval(holdTimer))
-    }, 25_000)
+    if (holdAttached) { holdTrack.detach(); holdAttached = false }
+    holdTimer = window.setInterval(holdTrack.wrap(() => {
+      apiHeartbeatSession(workspaceId, sessionId).catch(() => {
+        window.clearInterval(holdTimer)
+        if (holdAttached) { holdTrack.detach(); holdAttached = false }
+      })
+    }), 25_000)
+    holdTrack.attach()
+    holdAttached = true
   }
 
   /** The composer stays disabled until a Host workspace accounts the session. The row is hidden from 「工作区」. */
@@ -187,7 +196,9 @@ export function apply(ctx) {
     },
     onToggleSection: () => {
       if (store.current.listReady !== true) return
-      store.set({ sectionOpen: store.current.sectionOpen !== true })
+      const open = store.current.sectionOpen !== true
+      store.set({ sectionOpen: open })
+      if (open) perf.count('section-open')
     },
     setExpandOnLoad: expandOnLoad => {
       const next = { expandOnLoad: expandOnLoad === true, expandLimit: EXPAND_LIMIT }
@@ -365,6 +376,7 @@ export function apply(ctx) {
     },
     joinWorkspace: (workspaceId, localPath) => {
       store.set({ creating: true })
+      perf.count('workspace-join')
       return apiJoinWorkspace(workspaceId, localPath)
     },
     createDirectory: apiCreateDirectory,
@@ -402,9 +414,11 @@ export function apply(ctx) {
   // Dev seam: lets an automated driver inspect the claim pipeline.
   window.__nsw = { store, ctx, face }
 
-  const localList = new MutationObserver(() => separateFromLocal())
+  const dedupeTrack = perf.track('mutation', 'sidebar-dedupe')
+  const localList = new MutationObserver(dedupeTrack.wrap(() => separateFromLocal()))
   localList.observe(document.body, { childList: true, subtree: true })
-  ctx.effect(() => () => localList.disconnect())
+  dedupeTrack.attach()
+  ctx.effect(() => () => { localList.disconnect(); dedupeTrack.detach() })
 
   refresh()
 }

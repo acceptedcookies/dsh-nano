@@ -8,6 +8,7 @@
 
 import React from 'react'
 import { IconArchiveOutlineRegular, IconDatabaseOutlineRegular, IconFolderCloseRegular, IconFolderOpenRegular, IconGlobeOutlineRegular, IconNewChatOutlineRegular, IconPinFillRegular, IconPinOutlineRegular, IconProjectAddOutlineRegular, IconRefreshOutlineRegular, IconSlidersTwoOutlineRegular, IconTriangleRightFillRegular, IconUnarchiveOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { perf } from './perf.js'
 
 const { createElement, useEffect, useLayoutEffect, useRef, useState } = React
 
@@ -139,7 +140,13 @@ const iconButton = (labelText, icon, extra, cls) => createElement('button', {
  * Props: `{ face, wide }`. `face` supplies copy(), the settings store, the
  * view filter, and the header actions.
  */
-export function SharedSection({ face, wide }) {
+export function SharedSection(props) {
+  // perf: time the whole section render. The disabled path is an identity
+  // wrapper — renderSharedSection is still called directly, no marks/clocks.
+  return perf.span('section-render', () => renderSharedSection(props))
+}
+
+function renderSharedSection({ face, wide }) {
   const copy = face.copy()
   const [settings, setSettings] = useState(face.settings.current)
   const [currentId, setCurrentId] = useState(() => face.currentSessionId?.() ?? null)

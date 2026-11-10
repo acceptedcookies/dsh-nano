@@ -8,6 +8,7 @@ import { createS3 } from './s3.js'
 import { createWorkspace, instanceId, joinWorkspace, listWorkspaces } from './workspaces.js'
 import { acquireClaim, fetchTranscript, listRemoteSessions, materializeSession, renewClaim, syncAll } from './session-io.js'
 import { pullWorkspace, pushWorkspace, registerIdentity } from './tree.js'
+import { ensurePerfReviewHost, LIB_VERSION } from 'dsh-performance-review/host'
 
 export const PREFIX = '/nano-shared-workspace'
 
@@ -56,6 +57,13 @@ const SETTINGS_TTL_MS = 60_000
  * @param config - validated Config value `{endpoint, bucket, region, prefix}`.
  */
 export function createRoutes(ctx, config) {
+  // perf-review: identity wrappers unless DSH_PERF_REVIEW=1 (spec §6.2). hostSpan
+  // names stay inside the v1 set — sync-tick / settings / remote-sessions / workspaces.
+  const review = ensurePerfReviewHost().hostJoin('nano-shared-workspace', {
+    version: typeof __NSW_VERSION__ === 'string' ? __NSW_VERSION__ : undefined,
+    // This host bundle's own copy of the library version (A3 / §10.4.4).
+    libVersion: LIB_VERSION,
+  })
   const dshHome = process.env.DSH_HOME ?? `${homedir()}/.dsh`
   const syncState = { bySession: new Map() }
   /** `{ until, body }` for the last probe that did not throw. */
@@ -115,7 +123,7 @@ export function createRoutes(ctx, config) {
     '/settings': {
       method: 'GET',
       run() {
-        return loadSettings()
+        return review.hostSpan('settings', () => loadSettings())
       },
     },
     // Real bucket probe for the staged keys: one signed LIST. Nothing is stored.
@@ -186,12 +194,14 @@ export function createRoutes(ctx, config) {
     '/workspaces': {
       method: 'GET',
       async run() {
-        const identity = await readIdentity(ctx)
-        if (identity?.configured !== true) return { workspaces: [] }
-        const client = createS3(config, identity)
-        await registerIdentity(client, identity).catch(() => {})
-        const rows = await listWorkspaces(client)
-        return { workspaces: rows }
+        return review.hostSpan('workspaces', async () => {
+          const identity = await readIdentity(ctx)
+          if (identity?.configured !== true) return { workspaces: [] }
+          const client = createS3(config, identity)
+          await registerIdentity(client, identity).catch(() => {})
+          const rows = await listWorkspaces(client)
+          return { workspaces: rows }
+        })
       },
     },
     // Cloud canonical first: the marker is created on S3 BEFORE the client
@@ -365,8 +375,10 @@ export function createRoutes(ctx, config) {
     '/sessions': {
       method: 'GET',
       async run() {
-        const { client } = await s3()
-        return { sessions: await listRemoteSessions(client) }
+        return review.hostSpan('remote-sessions', async () => {
+          const { client } = await s3()
+          return { sessions: await listRemoteSessions(client) }
+        })
       },
     },
     // Host-side mkdir: the directoryPicker/browse backend (which owns
@@ -498,10 +510,15 @@ export function registerRoutes(ctx, routes) {
 
 /** Every 30s, push session logs and replica files for workspaces this instance has joined. */
 export function startBackgroundSync(ctx, config) {
+  // Same singleton/row as createRoutes; hostJoin is idempotent per plugin id.
+  const review = ensurePerfReviewHost().hostJoin('nano-shared-workspace', {
+    version: typeof __NSW_VERSION__ === 'string' ? __NSW_VERSION__ : undefined,
+    libVersion: LIB_VERSION,
+  })
   const dshHome = process.env.DSH_HOME ?? `${homedir()}/.dsh`
   const syncState = { bySession: new Map() }
   let running = false
-  const tick = async () => {
+  const tick = () => review.hostSpan('sync-tick', async () => {
     if (running) return
     running = true
     try {
@@ -519,7 +536,7 @@ export function startBackgroundSync(ctx, config) {
     } finally {
       running = false
     }
-  }
+  })
   const timer = setInterval(() => { tick().catch(() => {}) }, 30_000)
   timer.unref?.()
   return () => clearInterval(timer)

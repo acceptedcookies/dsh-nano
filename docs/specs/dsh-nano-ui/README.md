@@ -56,3 +56,17 @@ packages/dsh-nano-ui/
 | 定位 | headless 无样式行为原语 | 成品样式组件 |
 | 形态 | hooks/基础组件 | 声明式 + `open*` 命令式 |
 | 使用方 | 官方 UI 包 | 本仓库三个插件 |
+
+## 排版令牌契约（解耦）
+
+nano-ui 共享样式不再硬编码字号，改为消费一组可选的 `--nano-*` CSS 自定义属性，全部带回退（默认 = shell 值）。宿主插件在自己的根上声明这些令牌即可重定排版，nano-ui 不需要该插件、行为也不变。
+
+| 令牌 | 作用 | 回退 |
+|---|---|---|
+| `--nano-font-family` | 菜单/对话框/toast 字体族 | 继承 |
+| `--nano-font-size` | 菜单/对话框正文、对话框内按钮字号 | 继承 |
+| `--nano-line-height` | 菜单/对话框行高 | 继承 |
+| `--nano-title-size` | 对话框标题字号 | 继承 |
+| `--nano-desc-size` | 对话框描述 / 错误行 / toast 字号 | 继承 / 12px |
+
+注意：`NanoMenu` 与 `NanoDialog` 都 portal 到 `document.body`，不在宿主导出的任意容器内 —— 所以令牌必须声明在 `document.documentElement`（`:root`）或 `body` 上才能到达这些弹层。宿主插件（如 `dsh-nano-notepad`）在自身 `:root` 规则里同时声明 `--np-*`（自身排版）与 `--nano-*`（喂给 nano-ui）即可。

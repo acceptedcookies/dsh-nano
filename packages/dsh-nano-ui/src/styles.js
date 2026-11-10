@@ -3,10 +3,17 @@
 
 export const NANO_STYLES = `
 /* ── anchored popup menu (NanoMenu, NanoMenuItem) ───────────────────────────── */
+/* ── type tokens ──────────────────────────────────────────────────────────────
+   Every shared surface reads from --nano-* custom properties so an owning
+   plugin (e.g. the notepad) can retune typography by declaring them once on its
+   own root. Each falls back to the shell default so nano-ui stays self-contained. */
 .nano-menu { position: fixed; padding: 4px; display: flex; flex-direction: column; gap: 1px; z-index: 30;
   background: var(--dsw-menu-surface-fill, var(--dsw-alias-bg-layer-3)); color: var(--dsw-alias-label-primary);
   border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-lg, 12px);
-  box-shadow: var(--dsw-elevation-prominent); backdrop-filter: var(--dsw-menu-backdrop-filter); }
+  box-shadow: var(--dsw-elevation-prominent); backdrop-filter: var(--dsw-menu-backdrop-filter);
+  font-family: var(--nano-font-family, inherit);
+  font-size: var(--nano-font-size, inherit);
+  line-height: var(--nano-line-height, inherit); }
 .nano-menu-item { display: flex; align-items: center; gap: 8px; width: 100%; border: 0; background: transparent;
   color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm, 8px); padding: 6px 8px;
   font: inherit; text-align: left; cursor: pointer; }
@@ -19,15 +26,28 @@ export const NANO_STYLES = `
 
 /* ── transient toast (NanoToast) ────────────────────────────────────────────── */
 .nano-toast { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); z-index: 40;
-  padding: 6px 12px; border-radius: var(--dsw-radius-sm, 8px); font-size: 12px;
+  padding: 6px 12px; border-radius: var(--dsw-radius-sm, 8px); font-size: var(--nano-toast-size, 12px);
   background: var(--dsw-alias-tooltip-bg, #43454a); color: var(--dsw-alias-tooltip-label, #f9fafb);
   box-shadow: var(--dsw-elevation-prominent); pointer-events: none; }
 @keyframes nano-toast-in { from { opacity: 0; transform: translate(-50%, 4px); } to { opacity: 1; transform: translate(-50%, 0); } }
 .nano-toast { animation: nano-toast-in .12s ease; }
 
 /* ── shared dialog helpers ──────────────────────────────────────────────────── */
-.nano-dialog-host { position: fixed; inset: 0; z-index: 50; }
-.nano-dialog-error { margin: 8px 0 0; font-size: 12px; color: var(--dsw-alias-danger, #cf222e); }
+.nano-dialog-host { position: fixed; inset: 0; z-index: 50;
+  font-family: var(--nano-font-family, inherit);
+  font-size: var(--nano-font-size, inherit);
+  line-height: var(--nano-line-height, inherit); }
+/* The Modal portals straight into document.body, outside .nano-dialog-host, so
+   the card itself must consume the owner tokens — not the host. */
+.nano-dialog-card { font-family: var(--nano-font-family, inherit); font-size: var(--nano-font-size, inherit); line-height: var(--nano-line-height, inherit); }
+/* The Modal title is a hashed class — size it and the description through the
+   shared tokens so dialogs read at the same scale as the owning surface. */
+.nano-dialog-card [class*="title"], .nano-dialog-card [class*="title_"] { font-size: var(--nano-title-size, inherit); }
+.nano-dialog-card [class*="description"], .nano-dialog-card [class*="description_"] { font-size: var(--nano-desc-size, inherit); color: var(--dsw-alias-label-secondary); }
+/* Shell Button defaults to its own size; pull dialog actions down to the owner
+   scale too so the whole card reads at one size. */
+.nano-dialog-card button { font-size: var(--nano-font-size, inherit); font-family: var(--nano-font-family, inherit); }
+.nano-dialog-error { margin: 8px 0 0; font-size: var(--nano-desc-size, 12px); color: var(--dsw-alias-danger, #cf222e); }
 /* Height cap (e.g. 80% of the owning overlay): the card's own overflow:hidden
    clips nothing because the body becomes the flex child that scrolls. The last
    content child is .body — target it structurally since the class is hashed. */

@@ -3,6 +3,7 @@
 import React from 'react'
 import { normalizeSettings } from './db.js'
 import { mountNotepad } from './panel.js'
+import { perf } from './perf.js'
 
 export const inject = ['slots', 'shortcuts', 'theme', 'locale', 'workspaces', 'sessions', 'sidebarRight']
 
@@ -95,6 +96,10 @@ export function apply(ctx, config = {}) {
     return React.createElement('div', { ref, 'data-nano-notepad': 'root' })
   }))
   ctx.effect(() => {
+    // perf-review: one track for the two permanent document capture listeners
+    // (⌘E / 1). wrap() the ORIGINAL callbacks; attach/detach keep the shared
+    // per-name live counter honest — never resetLive() (§6.7 / §10.5-A4).
+    const shortcutTrack = perf.track('listener', 'shortcut-key')
     let letterHeld = false
     const primaryDown = (event) => ctx.shortcuts.platform === 'windows'
       ? event.ctrlKey && !event.metaKey
@@ -114,11 +119,15 @@ export function apply(ctx, config = {}) {
     const up = (event) => {
       if (event.code === 'KeyE' || event.key === 'Meta' || event.key === 'Control') letterHeld = false
     }
-    document.addEventListener('keydown', down, true)
-    document.addEventListener('keyup', up, true)
+    const wrappedDown = shortcutTrack.wrap(down)
+    const wrappedUp = shortcutTrack.wrap(up)
+    document.addEventListener('keydown', wrappedDown, true)
+    document.addEventListener('keyup', wrappedUp, true)
+    shortcutTrack.attach(2)
     return () => {
-      document.removeEventListener('keydown', down, true)
-      document.removeEventListener('keyup', up, true)
+      document.removeEventListener('keydown', wrappedDown, true)
+      document.removeEventListener('keyup', wrappedUp, true)
+      shortcutTrack.detach(2)
     }
   })
 }

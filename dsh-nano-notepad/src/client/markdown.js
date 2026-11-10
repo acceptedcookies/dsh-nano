@@ -192,6 +192,36 @@ export function sanitizeRichHtml(html, opts = {}) {
     img.style.maxWidth = '100%'
     img.style.height = 'auto'
   }
+  /* WeChat's image-slider pattern is `<svg><g><foreignObject><svg
+     style="background-image:url(mmbiz…)">` with `<animateTransform>` doing the
+     slide. Chromium refuses to paint an external `background-image` inside
+     foreignObject in an inline-HTML context, so the whole block stays white.
+     Replace the foreignObject wrapper with a native `<image>`: the same URL
+     renders, and the slide's transform animation still applies. */
+  const SVG_NS = 'http://www.w3.org/2000/svg'
+  for (const fo of [...doc.querySelectorAll('foreignObject')]) {
+    /* Find the deepest element carrying a background-image URL. */
+    let url = null
+    const probe = (el) => {
+      if (url || !(el instanceof Element)) return
+      const m = (el.getAttribute('style') || '').match(/background-image:\s*url\(["']?([^"')]+)/i)
+      if (m) { url = m[1]; return }
+      for (const child of el.children) probe(child)
+    }
+    probe(fo)
+    if (!url) continue
+    const img = doc.createElementNS(SVG_NS, 'image')
+    img.setAttribute('href', url)
+    img.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', url)
+    img.setAttribute('width', fo.getAttribute('width') || '100%')
+    img.setAttribute('height', fo.getAttribute('height') || '100%')
+    img.setAttribute('preserveAspectRatio', 'xMidYMid slice')
+    /* mmbiz hotlink protection 403s any request carrying a non-WeChat
+       Referer — <img> gets no-referrer from the host pass; SVG <image>
+       needs the attribute set explicitly. */
+    img.setAttribute('referrerpolicy', 'no-referrer')
+    fo.replaceWith(img)
+  }
   const dark = opts.dark === true
   for (const el of doc.querySelectorAll('[style]')) {
     const kept = []
@@ -215,7 +245,7 @@ export function sanitizeRichHtml(html, opts = {}) {
   return doc.body.innerHTML
 }
 
-const MP_SAFE_STYLE = /^(color|font-size|font-weight|font-style|font-family|text-align|line-height|margin(-(top|right|bottom|left))?|padding(-(top|right|bottom|left))?|background(-color|-image)?|border(-(top|right|bottom|left)(-(width|style|color))?)?|border-radius|letter-spacing|text-indent|text-decoration(-line)?|width|max-width|height|display|vertical-align|box-sizing|overflow(-x|-y)?|white-space|word-(wrap|break)|opacity|float|clear)$/
+const MP_SAFE_STYLE = /^(color|font-size|font-weight|font-style|font-family|text-align|line-height|margin(-(top|right|bottom|left))?|padding(-(top|right|bottom|left))?|background(-color|-image|-size|-position|-repeat)?|border(-(top|right|bottom|left)(-(width|style|color))?)?|border-radius|letter-spacing|text-indent|text-decoration(-line)?|width|max-width|height|display|vertical-align|box-sizing|overflow(-x|-y)?|white-space|word-(wrap|break)|opacity|float|clear)$/
 
 /* ---------- Source-view HTML utilities (work on the draft string) ---------- */
 

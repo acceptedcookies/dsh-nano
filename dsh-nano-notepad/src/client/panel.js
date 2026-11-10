@@ -19,11 +19,11 @@ import {
 
   renameNode,
   pinNode,
-  saveDraft,
+  saveDraft as saveDraftRaw,
   storeImage,
   versionsOf,
   writeSettings,
-  writeUi,
+  writeUi as writeUiRaw,
 } from './db.js'
 import { applyFormat, escapeHtml, extractImageUrls, formatHtml, htmlToText, minifyHtml, renderMarkdown, sanitizeRichHtml, stripHtmlStyles } from './markdown.js'
 import { validateJson, positionOf, formatJson, minifyJson, escapeJson, unescapeJson, decodeEscapes, renderJsonTree } from './json.js'
@@ -32,6 +32,13 @@ import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
 import { copyFor } from './i18n.js'
 import React from 'react'
 import { openNanoDialog, openNanoMenu, NANO_STYLES } from 'dsh-nano-ui'
+import { perf, setNotepadRoot } from './perf.js'
+
+/* perf-review: one named span for the IndexedDB writers (saveDraft / writeUi /
+ * persistUi). Defined at module scope so every caller routes through it without
+ * touching those call sites — persistUi() calls the wrapped writeUi (§6.7). */
+const saveDraft = (...args) => perf.span('idb-write', () => saveDraftRaw(...args))
+const writeUi = (...args) => perf.span('idb-write', () => writeUiRaw(...args))
 
 const STYLE = `
 ${NANO_STYLES}
@@ -308,8 +315,14 @@ ${NANO_STYLES}
 /* The rendered wrapper carries the preview-only layout vars: font size,
    simulated viewport width, and the theme-fit flag. */
 .np-read-body { font-size: var(--np-read-fs, inherit); line-height: inherit; }
-.np-read-body[data-width="390"] { max-width: 390px; margin-inline: auto; }
-.np-read-body[data-width="820"] { max-width: 820px; margin-inline: auto; }
+/* WeChat pins every element's font-size in inline style — a parent var never
+   reaches it. Zoom scales the rendered subtree instead, keeping each element's
+   relative size (headings stay bigger, captions stay smaller). Only applied
+   when the user overrode the size; leave the default untouched. */
+.np-read[data-fs="on"] .np-read-body { zoom: var(--np-read-zoom, 1); }
+.np-read-body[data-width="50%"] { max-width: 50%; margin-inline: auto; }
+.np-read-body[data-width="75%"] { max-width: 75%; margin-inline: auto; }
+.np-read-body[data-width="100%"] { max-width: 100%; }
 .np-read-body img { max-width: 100%; height: auto; }
 /* Preview toolbar: sits inside .np-toolbar for rich-html files in rendered
    view, so tab switching never strands it and it follows the standard slot. */
@@ -327,10 +340,18 @@ ${NANO_STYLES}
 .np-gallery-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .np-gallery-item { position: relative; aspect-ratio: 1; border-radius: var(--dsw-radius-sm); overflow: hidden; border: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-3); cursor: pointer; }
 .np-gallery-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.np-gallery-item .np-g-act { position: absolute; inset: auto 0 0 0; display: flex; gap: 2px; padding: 3px; background: rgba(0,0,0,.55); opacity: 0; transition: opacity .15s; }
+.np-gallery-item .np-g-act { position: absolute; inset: auto 0 0 0; display: flex; flex-direction: column; gap: 2px; padding: 3px; background: rgba(0,0,0,.55); opacity: 0; transition: opacity .15s; }
 .np-gallery-item:hover .np-g-act, .np-gallery-item:focus-within .np-g-act { opacity: 1; }
-.np-g-act button { flex: 1; border: 0; border-radius: 3px; padding: 2px 0; font-size: 10px; background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-primary); cursor: pointer; }
+.np-g-act button { border: 0; border-radius: 3px; padding: 2px 4px; font-size: 10px; line-height: 1.3; white-space: nowrap; background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-primary); cursor: pointer; }
 .np-g-act button:hover { background: var(--dsw-alias-interactive-bg-hover); }
+/* Custom instant tooltip for np-tool buttons (native title feels absent). */
+.np-tool[data-tip] { position: relative; }
+.np-tool[data-tip]:hover::after, .np-tool[data-tip]:focus-visible::after {
+  content: attr(data-tip); position: absolute; left: 50%; top: calc(100% + 6px); transform: translateX(-50%);
+  z-index: 20; padding: 3px 8px; border-radius: var(--dsw-radius-sm); font-size: 11px; line-height: 1.4;
+  white-space: nowrap; pointer-events: none;
+  background: var(--dsw-alias-tooltip-bg); color: var(--dsw-alias-tooltip-label, var(--dsw-alias-label-primary));
+  box-shadow: 0 4px 12px rgba(0,0,0,.25); }
 .np-gallery-empty { padding: 18px; text-align: center; color: var(--dsw-alias-label-tertiary); font-size: 12px; }
 .np-slash { position: absolute; z-index: 4; background: var(--dsw-menu-surface-fill, var(--dsw-alias-bg-layer-3)); color: var(--dsw-alias-label-primary); border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-lg); box-shadow: var(--dsw-elevation-prominent); backdrop-filter: var(--dsw-menu-backdrop-filter); }
 /* .np-dlg-body wraps every NanoDialog's injected children: stacked content with the
@@ -425,8 +446,11 @@ ${NANO_STYLES}
   .np-foot-tools { display: inline-flex !important; }
   .np-foot-tools button { width: var(--np-icon-btn); height: var(--np-icon-btn); }
   .np-foot-sep { display: block !important; }
-  /* Editing controls hide by default at this width; the toggle re-shows them. */
-  .np-window[data-tools="closed"] .np-toolbar { display: none; }
+  /* Editing controls hide by default at this width; the toggle re-shows them.
+     Rich-html preview has NO source-side tools — rt-tools is the only content
+     of the bar, so closing it would leave preview with no controls at all.
+     Keep it open whenever rt-tools is the active group. */
+  .np-window[data-tools="closed"]:not([data-rtbar="open"]) .np-toolbar { display: none; }
   .np-tree-tools .np-tools-toggle { display: inline-flex; }
   .np-tree[data-collapsed="true"] > .np-tools-toggle { display: inline-flex; }
 }
@@ -612,11 +636,11 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     ? `<button type="button" class="np-tool" data-action="image" data-format-kind="image">${def.icon}</button>`
     : `<button type="button" class="np-tool" data-format="${def.kind}" data-format-kind="${def.kind}">${def.icon}</button>`).join('')
   panel.innerHTML = `
-    <div class="np-tabs"><button type="button" class="np-tree-toggle" data-action="toggle-tree"></button><button type="button" class="np-close-tabs" data-action="close-tabs" data-i18n="saveCloseTabs" data-i18n-mode="title">${dshIcon('archive-check-outline')}</button><div class="np-tablist"></div><span class="np-tabs-spacer"></span><span class="np-rt-tools" hidden><button type="button" class="np-tool" data-rt="gallery" data-i18n="rtGallery" data-i18n-mode="title">${GRID_ICON}</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-rt="font-minus" data-i18n="rtFontMinus" data-i18n-mode="title">A−</button><button type="button" class="np-tool" data-rt="font-plus" data-i18n="rtFontPlus" data-i18n-mode="title">A+</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-rt="width" data-i18n="rtWidth" data-i18n-mode="title">宽</button><button type="button" class="np-tool" data-rt="themefit" data-i18n="rtThemeFit" data-i18n-mode="title" aria-pressed="true">◐</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-rt="copy-rich" data-i18n="rtCopyRich" data-i18n-mode="title">${dshIcon('copy-outline')}</button><button type="button" class="np-tool" data-rt="copy-text" data-i18n="rtCopyText" data-i18n-mode="title">Tx</button><button type="button" class="np-tool" data-rt="links" data-i18n="rtLinks" data-i18n-mode="title">${LINK_ICON}</button></span></div>
+    <div class="np-tabs"><button type="button" class="np-tree-toggle" data-action="toggle-tree"></button><button type="button" class="np-close-tabs" data-action="close-tabs" data-i18n="saveCloseTabs" data-i18n-mode="title">${dshIcon('archive-check-outline')}</button><div class="np-tablist"></div><span class="np-tabs-spacer"></span></div>
     <div class="np-body">
       <aside class="np-tree"><div class="np-tree-head"><div class="np-ws"><button type="button" class="np-ws-btn" data-action="ws-toggle" aria-haspopup="listbox" aria-expanded="false"><span class="np-ws-label"></span><span class="np-ws-caret" aria-hidden="true">${CHEVRON_ICON}</span></button></div><span class="np-tree-tools"><button type="button" data-action="new-item" data-i18n="newItem" data-i18n-mode="title" aria-haspopup="menu">${PLUS_ICON}</button><button type="button" class="np-danger" data-action="delete" data-i18n="clearUnpinned" data-i18n-mode="title">${dshIcon('trash-outline')}</button><button type="button" class="np-tools-toggle" data-action="toggle-tools" data-i18n="expandTools" data-i18n-mode="title" aria-expanded="false">${CHEVRON_ICON}</button></span></div><div class="np-nodes" data-root="true"></div><div class="np-mp-zone"><input class="np-mp-input" type="text" inputmode="url" autocomplete="off" spellcheck="false" data-i18n="importMp" data-i18n-attr="placeholder"><span class="np-mp-hint" data-state="idle" aria-hidden="true"></span></div><button type="button" class="np-tools-toggle" data-action="toggle-tools" data-i18n="expandTools" data-i18n-mode="title" aria-expanded="false">${CHEVRON_ICON}</button><div class="np-tree-foot"><button type="button" data-action="settings" data-i18n="settings" data-i18n-mode="label">${SETTINGS_ICON}<span data-i18n="settings"></span></button><button type="button" data-action="close" data-i18n="close" data-i18n-mode="label">${CLOSE_ICON}<span data-i18n="close"></span></button></div></aside>
       <div class="np-editor" data-themefit="true">
-        <div class="np-toolbar"><span class="np-md-tools">${toolbar}</span><span class="np-json-tools" hidden><button type="button" class="np-tool" data-json="expand" data-i18n="jsonExpand" data-i18n-mode="title">${EXPAND_ICON}</button><button type="button" class="np-tool" data-json="collapse" data-i18n="jsonCollapse" data-i18n-mode="title">${COLLAPSE_ICON}</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-json="format" data-i18n="jsonFormat" data-i18n-mode="title">${FORMAT_ICON}</button><button type="button" class="np-tool" data-json="minify" data-i18n="jsonMinify" data-i18n-mode="title">${MINIFY_ICON}</button><button type="button" class="np-tool" data-json="escape" data-i18n="jsonEscape" data-i18n-mode="title">${ESCAPE_ICON}</button><button type="button" class="np-tool" data-json="unescape" data-i18n="jsonUnescape" data-i18n-mode="title">${UNESCAPE_ICON}</button><button type="button" class="np-tool" data-json="strip" data-i18n="jsonStrip" data-i18n-mode="title">${STRIP_ICON}</button></span><span class="np-ht-tools" hidden><button type="button" class="np-tool" data-ht="format" data-i18n="htFormat" data-i18n-mode="title">${FORMAT_ICON}</button><button type="button" class="np-tool" data-ht="minify" data-i18n="htMinify" data-i18n-mode="title">${MINIFY_ICON}</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-ht="strip-styles" data-i18n="htStripStyles" data-i18n-mode="title">${STRIP_ICON}</button><button type="button" class="np-tool" data-ht="extract-images" data-i18n="htExtractImages" data-i18n-mode="title">${GRID_ICON}</button><button type="button" class="np-tool" data-ht="copy-text" data-i18n="htCopyText" data-i18n-mode="title">${dshIcon('copy-outline')}</button></span><button type="button" class="np-switch" data-action="view" role="switch" aria-checked="false" data-i18n="viewGroup" data-i18n-mode="title"><span class="np-switch-label" data-i18n="source"></span><span class="np-switch-label" data-i18n="preview"></span><span class="np-switch-thumb" data-i18n="source"></span></button></div>
+        <div class="np-toolbar"><span class="np-md-tools">${toolbar}</span><span class="np-json-tools" hidden><button type="button" class="np-tool" data-json="expand" data-i18n="jsonExpand" data-i18n-mode="title">${EXPAND_ICON}</button><button type="button" class="np-tool" data-json="collapse" data-i18n="jsonCollapse" data-i18n-mode="title">${COLLAPSE_ICON}</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-json="format" data-i18n="jsonFormat" data-i18n-mode="title">${FORMAT_ICON}</button><button type="button" class="np-tool" data-json="minify" data-i18n="jsonMinify" data-i18n-mode="title">${MINIFY_ICON}</button><button type="button" class="np-tool" data-json="escape" data-i18n="jsonEscape" data-i18n-mode="title">${ESCAPE_ICON}</button><button type="button" class="np-tool" data-json="unescape" data-i18n="jsonUnescape" data-i18n-mode="title">${UNESCAPE_ICON}</button><button type="button" class="np-tool" data-json="strip" data-i18n="jsonStrip" data-i18n-mode="title">${STRIP_ICON}</button></span><span class="np-ht-tools" hidden><button type="button" class="np-tool" data-ht="format" data-i18n="htFormat" data-i18n-mode="title">${FORMAT_ICON}</button><button type="button" class="np-tool" data-ht="minify" data-i18n="htMinify" data-i18n-mode="title">${MINIFY_ICON}</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-ht="strip-styles" data-i18n="htStripStyles" data-i18n-mode="title">${STRIP_ICON}</button><button type="button" class="np-tool" data-ht="extract-images" data-i18n="htExtractImages" data-i18n-mode="title">${GRID_ICON}</button><button type="button" class="np-tool" data-ht="copy-text" data-i18n="htCopyText" data-i18n-mode="title">${dshIcon('copy-outline')}</button></span><span class="np-rt-tools" hidden><button type="button" class="np-tool" data-rt="gallery" data-i18n="rtGallery" data-i18n-mode="title">${GRID_ICON}</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-rt="font-minus" data-i18n="rtFontMinus" data-i18n-mode="title">A−</button><button type="button" class="np-tool" data-rt="font-plus" data-i18n="rtFontPlus" data-i18n-mode="title">A+</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-rt="width" data-i18n="rtWidth" data-i18n-mode="title">宽</button><button type="button" class="np-tool" data-rt="themefit" data-i18n="rtThemeFit" data-i18n-mode="title" aria-pressed="true">◐</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-rt="copy-rich" data-i18n="rtCopyRich" data-i18n-mode="title">${dshIcon('copy-outline')}</button><button type="button" class="np-tool" data-rt="copy-text" data-i18n="rtCopyText" data-i18n-mode="title">Tx</button><button type="button" class="np-tool" data-rt="links" data-i18n="rtLinks" data-i18n-mode="title">${LINK_ICON}</button></span><button type="button" class="np-switch" data-action="view" role="switch" aria-checked="false" data-i18n="viewGroup" data-i18n-mode="title"><span class="np-switch-label" data-i18n="source"></span><span class="np-switch-label" data-i18n="preview"></span><span class="np-switch-thumb" data-i18n="source"></span></button></div>
         <div class="np-mirror" aria-hidden="true"></div>
         <textarea class="np-write" spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
         <div class="np-slash" hidden></div>
@@ -647,6 +671,9 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       if (node.dataset.i18nMode === 'title' || node.dataset.i18nMode === 'label') {
         node.title = value
         node.setAttribute('aria-label', value)
+        /* Custom tooltip for toolbar tools — native title has a ~1s delay and
+           reads as "no tooltip"; an on-hover label answers instantly. */
+        if (node.classList.contains('np-tool')) node.setAttribute('data-tip', value)
       }
       if (node.dataset.i18nMode !== 'title' && node.dataset.i18nMode !== 'label' && !node.dataset.i18nAttr) node.textContent = value
       if (node.dataset.i18nAttr) node.setAttribute(node.dataset.i18nAttr, value)
@@ -696,11 +723,17 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     restoredKey: /** @type {string | null} */ (null),
     /** Editing-toolbar collapsed flag; only takes effect at ≤560px panel width. */
     toolsOpen: false,
-    /** Simulated preview width for rich-html files: 'auto' | '390' (phone) | '820' (tablet). */
+    /** Simulated preview width for rich-html files: 'auto' | '50%' | '75%' | '100%'. */
     readWidth: 'auto',
     /** Preview font-size override in px; null follows the editor setting. */
     readFontPx: null,
   }
+
+  // perf-review: the panel's own `.np-layer` host is the attribution root while
+  // open. It only exists inside mountNotepad, so register a provider here;
+  // root() in perf.js returns null until this runs. No layout reads — visibility
+  // comes from state.ui.open + isConnected (§6.3 / §6.7).
+  setNotepadRoot(() => (state.ui.open && layer.isConnected ? layer : null))
 
   const disposers = []
   /** @param {any} target @param {string} type @param {any} fn @param {any} [opts] */
@@ -716,7 +749,8 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
   const paintMirror = () => {
     const source = write()
     const layer = mirror()
-    layer.innerHTML = highlightSource(source.value, isJson())
+    // perf-review: time the source highlighting itself (§6.7 highlight).
+    layer.innerHTML = perf.span('highlight', () => highlightSource(source.value, isJson()))
     fitMirror()
     layer.hidden = source.hidden
   }
@@ -1087,8 +1121,14 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     if (!state.dirty) source.value = file.draft ?? ''
     source.hidden = rendered
     read.hidden = !rendered
-    if (state.readFontPx !== null) read.style.setProperty('--np-read-fs', `${state.readFontPx}px`)
-    else read.style.removeProperty('--np-read-fs')
+    if (state.readFontPx !== null) {
+      const base = state.settings.editorFontSizePx || 14
+      read.style.setProperty('--np-read-zoom', String((state.readFontPx / base).toFixed(3)))
+      read.dataset.fs = 'on'
+    } else {
+      read.style.removeProperty('--np-read-zoom')
+      delete read.dataset.fs
+    }
     paintMirror()
     /* Return to the browsing point this file+view had when it was left. The
        key flips on file switch and view toggle, so a paint re-runs exactly
@@ -1182,8 +1222,8 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
           <div class="np-gallery-item" tabindex="0">
             <img src="${escapeHtml(u)}" loading="lazy" referrerpolicy="no-referrer">
             <div class="np-g-act">
-              <button type="button" data-gimg="${escapeHtml(u)}" data-gact="copy">${text().rtCopyLink}</button>
-              <button type="button" data-gimg="${escapeHtml(u)}" data-gact="save">${text().rtSaveToNote}</button>
+              <button type="button" data-gimg="${escapeHtml(u)}" data-gact="b64">${text().gCopyBase64}</button>
+              <button type="button" data-gimg="${escapeHtml(u)}" data-gact="clip">${text().gCopyImage}</button>
             </div>
           </div>`).join('')}</div>`}`
     box.hidden = false
@@ -1207,10 +1247,13 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     if (!tools) return
     const show = isRich === true && state.view === 'rendered'
     tools.hidden = !show
+    /* Rich preview has no source-side tools; its bar must stay open even
+       when the narrow-window tools collapse is active. */
+    panel.dataset.rtbar = show ? 'open' : 'closed'
     if (!show) return
     const widthBtn = tools.querySelector('[data-rt="width"]')
     const themeBtn = tools.querySelector('[data-rt="themefit"]')
-    const labels = { auto: text().rtWidthAuto, '390': '手机 390', '820': '平板 820' }
+    const labels = { auto: text().rtWidthAuto, '50%': '50%', '75%': '75%', '100%': '100%' }
     if (widthBtn) widthBtn.title = `${text().rtWidth}: ${labels[state.readWidth] ?? state.readWidth}`
     if (themeBtn) themeBtn.dataset.on = String(panel.querySelector('.np-editor')?.dataset.themefit !== 'false')
     const fMinus = tools.querySelector('[data-rt="font-minus"]')
@@ -1269,7 +1312,8 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     label.textContent = options.find(([value]) => value === current)?.[1] ?? options[1][1]
   }
 
-  function render() {
+  // perf-review: the whole render pass is one named span (§6.7 render).
+  const render = () => perf.span('render', () => {
     panel.hidden = !state.ui.open
     const theme = resolvedTheme()
     panel.dataset.theme = theme
@@ -1301,7 +1345,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       // tooltip reads left of the entry; flip when it would clip offscreen
       entry.classList.toggle('np-tip-left', entry.getBoundingClientRect().left < 96)
     })
-  }
+  })
 
   async function persistUi() {
     if (state.db) await writeUi(state.db, state.ui)
@@ -1347,6 +1391,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
   }
 
   function openFile(id) {
+    perf.count('tab-open')
     flushSave()
     if (!state.ui.tabs.includes(id)) state.ui.tabs.push(id)
     state.ui.currentId = id
@@ -1442,7 +1487,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     closeMenu?.()
     anchor.setAttribute('aria-expanded', 'true')
     const current = state.ui.workspaceChoice ?? 'all'
-    const check = React.createElement('span', { dangerouslySetInnerHTML: { __html: CHECK_ICON } })
+    const check = React.createElement('span', { className: 'nano-menu-check', dangerouslySetInnerHTML: { __html: CHECK_ICON } })
     const items = workspaceOptions().map(([value, name]) => ({
       id: value,
       label: name,
@@ -1563,7 +1608,8 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     }, wait)
   }
 
-  async function commit(reason) {
+  // perf-review: one named span for a version commit (§6.7 commit).
+  const commit = reason => perf.span('commit', async () => {
     flushSave()
     const file = current()
     if (!file || !state.db) return null
@@ -1573,7 +1619,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     const version = await commitVersion(state.db, file.id, text, reason, state.settings.versionLimit)
     setSync(version ? 'committed' : 'saved')
     return version
-  }
+  })
 
   async function forget(id) {
     if (!state.db) return
@@ -1609,11 +1655,17 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     render()
   }
 
+  // perf-review: one interval track per mounted instance. detach() (never
+  // resetLive) keeps the shared per-name live counter correct across the
+  // clear/re-arm that a settings save performs (§6.7 / §10.5-A4).
+  const commitTrack = perf.track('interval', 'draft-commit')
   function armCommit() {
     window.clearInterval(state.commitTimer)
-    state.commitTimer = window.setInterval(() => {
+    commitTrack.detach()
+    state.commitTimer = window.setInterval(commitTrack.wrap(() => {
       if (state.ui.open) void commit('interval').catch(showError)
-    }, state.settings.commitIntervalSec * 1000)
+    }), state.settings.commitIntervalSec * 1000)
+    commitTrack.attach()
   }
 
   function openSettings() {
@@ -2243,7 +2295,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     }
     if (action === 'delete') confirmClearUnpinned()
     if (action === 'clear-file') confirmClearFile()
-    if (action === 'save-version') void commit('manual').catch(showError)
+    if (action === 'save-version') { perf.count('version-save'); void commit('manual').catch(showError) }
     if (action === 'view') {
       state.view = state.view === 'rendered' ? 'source' : 'rendered'
       void renderBody()
@@ -2343,10 +2395,13 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       if (rtOp === 'font-minus' || rtOp === 'font-plus') {
         const base = state.readFontPx ?? state.settings.editorFontSizePx ?? 14
         state.readFontPx = Math.min(28, Math.max(10, base + (rtOp === 'font-plus' ? 1 : -1)))
-        read.style.setProperty('--np-read-fs', `${state.readFontPx}px`)
+        const def = state.settings.editorFontSizePx || 14
+        read.style.setProperty('--np-read-zoom', String((state.readFontPx / def).toFixed(3)))
+        read.dataset.fs = 'on'
         syncReadTools(true)
       } else if (rtOp === 'width') {
-        state.readWidth = state.readWidth === 'auto' ? '390' : state.readWidth === '390' ? '820' : 'auto'
+        const cycle = ['auto', '50%', '75%', '100%']
+        state.readWidth = cycle[(cycle.indexOf(state.readWidth) + 1) % cycle.length]
         render()
       } else if (rtOp === 'themefit') {
         editor.dataset.themefit = editor.dataset.themefit === 'false' ? 'true' : 'false'
@@ -2373,22 +2428,34 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     const gImg = target.dataset.gimg
     if (gImg) {
       const act = target.dataset.gact
-      if (act === 'copy') {
-        void navigator.clipboard?.writeText(gImg).catch(() => {})
-        flashStatus(text().rtCopied)
-      } else if (act === 'save' && state.db) {
-        const file = current()
+      const flashFail = () => flashStatus(text().gCopyFail)
+      if (act === 'b64') {
         void fetch(gImg)
           .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.blob() })
-          .then(blob => storeImage(state.db, blob, state.settings.imageLimitBytes))
-          .then(image => {
-            const source = write()
-            source.value = source.value.split(gImg).join(`notepad-image:${image.id}`)
-            state.imageEpoch += 1
-            scheduleSave()
-            flashStatus(text().rtImageSaved)
-          })
-          .catch(showError)
+          .then(blob => new Promise((resolve, reject) => {
+            const fr = new FileReader()
+            fr.onload = () => resolve(fr.result)
+            fr.onerror = reject
+            fr.readAsDataURL(blob)
+          }))
+          .then(dataUrl => navigator.clipboard.writeText(dataUrl))
+          .then(() => flashStatus(text().rtCopied))
+          .catch(flashFail)
+      } else if (act === 'clip') {
+        /* ClipboardItem only reliably accepts image/png: re-encode through a
+           canvas so webp/jpeg mmbiz assets copy too. */
+        void fetch(gImg)
+          .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.blob() })
+          .then(blob => createImageBitmap(blob))
+          .then(bitmap => new Promise((resolve, reject) => {
+            const canvas = document.createElement('canvas')
+            canvas.width = bitmap.width; canvas.height = bitmap.height
+            canvas.getContext('2d').drawImage(bitmap, 0, 0)
+            canvas.toBlob(b => b ? resolve(b) : reject(new Error('encode')), 'image/png')
+          }))
+          .then(png => navigator.clipboard.write([new ClipboardItem({ 'image/png': png })]))
+          .then(() => flashStatus(text().rtCopied))
+          .catch(flashFail)
       }
       return
     }
@@ -2533,10 +2600,13 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     if (state.slash) placeSlash()
     fitMirror()
   })
+  // perf-review: the mirror ResizeObserver (§6.7 mirror-resize, kind resize).
+  const mirrorResizeTrack = perf.track('resize', 'mirror-resize')
   if (typeof ResizeObserver === 'function') {
-    const mirrorBox = new ResizeObserver(() => fitMirror())
+    const mirrorBox = new ResizeObserver(mirrorResizeTrack.wrap(() => fitMirror()))
     mirrorBox.observe(write())
-    disposers.push(() => mirrorBox.disconnect())
+    mirrorResizeTrack.attach()
+    disposers.push(() => { mirrorBox.disconnect(); mirrorResizeTrack.detach() })
   }
 
   function insertSlash(kind) {
@@ -2571,6 +2641,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       }
       if (event.key?.toLowerCase() === 's') {
         event.preventDefault()
+        perf.count('version-save')
         void commit('manual').catch(showError)
         return
       }
@@ -2683,24 +2754,40 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     })
   }
 
-  on(document, 'visibilitychange', () => {
+  // perf-review: permanent document/window listeners (§6.7). Each track wraps
+  // the ORIGINAL callback; attach() on creation, detach() via a disposer on
+  // teardown — never resetLive() (the live counter is shared per name).
+  const visibilityTrack = perf.track('listener', 'visibility')
+  on(document, 'visibilitychange', visibilityTrack.wrap(() => {
     if (document.visibilityState === 'hidden') void commit('interval').catch(showError)
-  })
+  }))
+  visibilityTrack.attach()
+  disposers.push(() => visibilityTrack.detach())
+
+  const pageResizeTrack = perf.track('listener', 'page-resize')
   let resizeFrame = 0
-  on(window, 'resize', () => {
+  on(window, 'resize', pageResizeTrack.wrap(() => {
     cancelAnimationFrame(resizeFrame)
     resizeFrame = requestAnimationFrame(() => render())
-  })
-  on(document, 'keydown', event => {
+  }))
+  pageResizeTrack.attach()
+  disposers.push(() => pageResizeTrack.detach())
+
+  const escapeTrack = perf.track('listener', 'escape-key')
+  on(document, 'keydown', escapeTrack.wrap(event => {
     if (event.key === 'Escape' && closeMenu) {
       event.stopPropagation()
       event.preventDefault()
       closeMenu()
     }
-  }, true)
+  }), true)
+  escapeTrack.attach()
+  disposers.push(() => escapeTrack.detach())
 
   const channel = typeof BroadcastChannel === 'function' ? new BroadcastChannel(CHANNEL) : null
   if (channel) {
+    // perf-review: BroadcastChannel messages (§6.7 bc-message, kind broadcast).
+    const bcTrack = perf.track('broadcast', 'bc-message')
     const onMessage = event => {
       if (state.dirty && event.data?.fileId === state.ui.currentId) {
         showError(new Error(text().otherTab), true)
@@ -2713,8 +2800,9 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
         render()
       })
     }
-    channel.addEventListener('message', onMessage)
-    disposers.push(() => channel.close())
+    channel.addEventListener('message', bcTrack.wrap(onMessage))
+    bcTrack.attach()
+    disposers.push(() => { channel.close(); bcTrack.detach() })
   }
 
   const stop = appTheme.subscribe(() => render())
@@ -2731,12 +2819,13 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       stopWorkspaces()
       window.clearTimeout(state.saveTimer)
       window.clearInterval(state.commitTimer)
+      commitTrack.detach()
       flushSave()
       for (const dispose of disposers) dispose()
     },
     toggle() {
       const opening = !state.ui.open
-      if (opening) focusSessionWorkspace()
+      if (opening) { perf.count('panel-open'); focusSessionWorkspace() }
       else dismissOverlays()
       state.ui.open = opening
       render()
@@ -2901,16 +2990,19 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     }
   }
 
+  // perf-review: standing CTA-arrival MutationObserver (§6.7 ctia-watch).
+  const ctaTrack = perf.track('mutation', 'ctia-watch')
   attachNotepadCtas(document)
-  const ctaWatch = new MutationObserver(records => {
+  const ctaWatch = new MutationObserver(ctaTrack.wrap(records => {
     for (const record of records) {
       for (const node of record.addedNodes) {
         if (node instanceof Element) attachNotepadCtas(node)
       }
     }
-  })
+  }))
   ctaWatch.observe(document.body, { childList: true, subtree: true })
-  disposers.push(() => ctaWatch.disconnect())
+  ctaTrack.attach()
+  disposers.push(() => { ctaWatch.disconnect(); ctaTrack.detach() })
 
   void openDatabase().then(async db => {
     state.db = db

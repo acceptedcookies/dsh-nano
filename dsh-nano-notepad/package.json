@@ -21,7 +21,8 @@
     "cordis.patch.yml",
     "icon.svg",
     "locale",
-    "lib/client.js"
+    "lib/client.js",
+    "lib/perf-review-host.js"
   ],
   "engines": {
     "dsh": ">=0.2.2-rc.1 <0.3.0"
@@ -46,6 +47,7 @@
     "esbuild": "0.25.0"
   },
   "dependencies": {
-    "dsh-nano-ui": "file:../packages/dsh-nano-ui"
+    "dsh-nano-ui": "file:../packages/dsh-nano-ui",
+    "dsh-performance-review": "file:../packages/dsh-performance-review"
   }
 }

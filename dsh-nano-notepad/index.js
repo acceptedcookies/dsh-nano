@@ -1,7 +1,17 @@
 /** Host half. Notes stay in the browser database, so this side only supplies defaults. */
 
+import { readFileSync } from 'node:fs'
+import { ensurePerfReviewHost, LIB_VERSION } from './lib/perf-review-host.js'
+
 export const name = 'nano-notepad'
 export const inject = ['webServer', 'connection', 'subprocess']
+
+// perf-review: register a host contributor. index.js is unbundled and the dev
+// instance copies lib/ but not node_modules, so the helper is a bundled file
+// (lib/perf-review-host.js). Disabled path is identity wrappers; DSH_PERF_REVIEW=1
+// enables hostSpan timing + the 30 s host.json writer (spec §6.1 / §6.2).
+const { version } = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'))
+const review = ensurePerfReviewHost().hostJoin('nano-notepad', { version, libVersion: LIB_VERSION })
 
 export const Config = {
   '~standard': {
@@ -218,7 +228,8 @@ export function apply(ctx) {
       if (req.method !== 'POST') { res.setHeader('allow', 'POST'); sendJson(res, 405, { ok: false, reason: 'method' }); return }
       try {
         const body = await jsonBody(req)
-        const file = await readMarkdown(body.path)
+        // perf-review: time the read route's actual work (§6.7 hostSpan read).
+        const file = await review.hostSpan('read', () => readMarkdown(body.path))
         sendJson(res, 200, { ok: true, ...file })
       } catch (error) {
         sendJson(res, 500, { ok: false, reason: 'failed', message: messageOf(error).slice(0, 200) })
@@ -239,7 +250,8 @@ export function apply(ctx) {
       if (!type.toLowerCase().startsWith('application/json')) { sendJson(res, 415, { ok: false, reason: 'content-type' }); return }
       try {
         const body = await jsonBody(req)
-        const result = await nativeSave(ctx, { name: body.name, content: body.content, dir: body.dir })
+        // perf-review: time the save route's actual work (§6.7 hostSpan save).
+        const result = await review.hostSpan('save', () => nativeSave(ctx, { name: body.name, content: body.content, dir: body.dir }))
         sendJson(res, result.ok ? 200 : result.reason === 'cancelled' ? 200 : 500, result)
       } catch (error) {
         sendJson(res, 500, { ok: false, reason: 'failed', message: messageOf(error).slice(0, 200) })
@@ -340,7 +352,31 @@ function mpContent(html) {
  * in the layout whitelist; neutralize positioning. The client re-sanitizes in
  * DOM space before render, so this only has to be a solid first pass.
  */
-const MP_STYLE_ALLOW = /^(color|font-size|font-weight|font-style|font-family|text-align|line-height|margin(-(top|right|bottom|left))?|padding(-(top|right|bottom|left))?|background(-color|-image)?|border(-(top|right|bottom|left)(-(width|style|color))?)?|border-radius|letter-spacing|text-indent|text-decoration(-line)?|width|max-width|height|display|vertical-align|box-sizing|overflow(-x|-y)?|white-space|word-(wrap|break)|opacity|float|clear)\s*$/i
+const MP_STYLE_ALLOW = /^(color|font-size|font-weight|font-style|font-family|text-align|line-height|margin(-(top|right|bottom|left))?|padding(-(top|right|bottom|left))?|background(-color|-image|-size|-position|-repeat)?|border(-(top|right|bottom|left)(-(width|style|color))?)?|border-radius|letter-spacing|text-indent|text-decoration(-line)?|width|max-width|height|display|vertical-align|box-sizing|overflow(-x|-y)?|white-space|word-(wrap|break)|opacity|float|clear)\s*$/i
+
+/* Splitting a style on ';' must not cut inside an entity like `&quot;`:
+   WeChat writes `url(&quot;…&quot;)` into inline styles, and a naive split(';')
+   truncates the URL at the entity's own semicolon. Mask entities, split,
+   restore. */
+function mpStyleSplit(value) {
+  /* Match declarations as `name: value` where value ends at a `;` that is NOT
+     part of an entity: an entity's `;` is preceded only by `&` + word chars. */
+  const parts = String(value).match(/[^;]+(?:;(?!\w*&) [^;]*)*/g)
+  if (!parts) return []
+  /* The lookahead trick above is unreliable; do the explicit scan instead. */
+  const out = []
+  let buf = ''
+  for (let i = 0; i < value.length; i++) {
+    const ch = value[i]
+    if (ch === ';') {
+      const entity = /&[a-zA-Z#\d]*$/.test(buf)
+      if (!entity) { if (buf.trim()) out.push(buf.trim()); buf = ''; continue }
+    }
+    buf += ch
+  }
+  if (buf.trim()) out.push(buf.trim())
+  return out
+}
 
 function sanitizeMpHtml(html) {
   let out = html
@@ -351,19 +387,17 @@ function sanitizeMpHtml(html) {
     /* Promote data-src only on <img>: WeChat also sticks junk data-src values
        (e.g. "position:static") on video/decoration nodes, and promoting those
        turns them into resource URLs — ERR_UNKNOWN_URL_SCHEME noise. */
-    .replace(/(<img\b[^>]*?)\sdata-src\s*=\s*"([^"]*)"/gi, `$1 src="$2" referrerpolicy="no-referrer"`)
-    .replace(/(<img\b[^>]*?)\sdata-src\s*=\s*'([^']*)'/gi, `$1 src='$2' referrerpolicy="no-referrer"`)
+    .replace(/(<img\b[^>]*?)\sdata-src\s*=\s*"([^"]*)"/gi, `$1 src="$2" referrerpolicy="no-referrer" loading="lazy" decoding="async"`)
+    .replace(/(<img\b[^>]*?)\sdata-src\s*=\s*'([^']*)'/gi, `$1 src='$2' referrerpolicy="no-referrer" loading="lazy" decoding="async"`)
     .replace(/\sdata-src\s*=\s*("[^"]*"|'[^']*')/gi, '')
     .replace(/\sstyle\s*=\s*"([^"]*)"/gi, (all, value) => {
-      const kept = value.split(';')
-        .map(d => d.trim()).filter(Boolean)
+      const kept = mpStyleSplit(value)
         .filter(d => MP_STYLE_ALLOW.test(d.split(':')[0]))
         .join('; ')
       return kept ? ` style="${kept}; position: static"` : ''
     })
     .replace(/\sstyle\s*=\s*'([^']*)'/gi, (all, value) => {
-      const kept = value.split(';')
-        .map(d => d.trim()).filter(Boolean)
+      const kept = mpStyleSplit(value)
         .filter(d => MP_STYLE_ALLOW.test(d.split(':')[0]))
         .join('; ')
       return kept ? ` style='${kept}; position: static'` : ''

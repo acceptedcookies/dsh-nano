@@ -37,6 +37,7 @@ client inject 以 `package.json` 的 `dsh.client.inject` 为准，不在这里�
 3. 目标是已经能打开的 Web profile，默认名 `web`。不要装进 headless、sdk 或 acp。
 4. 无。宿主不需要 git 或其他外部命令。
 5. 本包依赖 `dsh-nano-ui`，声明为 `file:../packages/dsh-nano-ui`。`dsh plugin add` 时 pnpm 会解析这个相对路径，目录必须是 `<parent>/packages/dsh-nano-ui` 与 `<parent>/<本包>`。不要改这条依赖。运行中的页面不单独加载它，构建时它被打进 `lib/client.js`。
+6. 本包还依赖构建期库 `dsh-performance-review`，声明为 `file:../packages/dsh-performance-review`，约束同上（`<parent>/packages/dsh-performance-review` 与 `<parent>/<本包>`）。它被打进 `lib/client.js`，宿主侧另由构建生成 `lib/perf-review-host.js` 供 `index.js` 相对 import；两份产物默认是恒等包装，只有页面带 `?perf-review=1` 或 `localStorage['dsh-perf-review']='1'`、宿主带 `DSH_PERF_REVIEW=1` 时才采集。不要改这条依赖。
 
 未被告知 `DSH_HOME` 或 profile 名时，只动默认的 `web`。不要猜第二套实例。
 

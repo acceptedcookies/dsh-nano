@@ -4,7 +4,7 @@ import React from 'react'
 import { normalizeSettings } from './db.js'
 import { mountNotepad } from './panel.js'
 
-export const inject = ['slots', 'shortcuts', 'theme', 'locale', 'workspaces', 'sessions']
+export const inject = ['slots', 'shortcuts', 'theme', 'locale', 'workspaces', 'sessions', 'sidebarRight']
 
 /** @param {import('@deepseek-ai/cordis').Context} ctx */
 function shortcutLabel(ctx) {
@@ -17,6 +17,15 @@ function shortcutLabel(ctx) {
 /** @param {import('@deepseek-ai/cordis').Context} ctx @param {Record<string, unknown>} [config] */
 export function apply(ctx, config = {}) {
   const defaults = normalizeSettings(config)
+  /** The session shown in the main view — the same signal the sidebar's own
+      `mainSessionId` uses. `ctx.sessions` exposes `.list` only; there is no
+      `getSnapshot().current`. */
+  const currentSession = () => {
+    const sessions = ctx.sessions?.list?.getSnapshot?.() ?? {}
+    const rows = sessions.byId ? Object.values(sessions.byId) : []
+    const retained = rows.find(row => (row?.retainedBy?.mainView ?? 0) > 0)
+    return { id: retained?.id ?? null, row: retained ?? null }
+  }
   /** @type {{ toggle: () => void } | undefined} */
   let api
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({
@@ -45,14 +54,33 @@ export function apply(ctx, config = {}) {
         current: () => {
           const list = ctx.workspaces?.list ?? ctx.workspaces
           const snapshot = list?.getSnapshot?.() ?? { items: [] }
-          const session = ctx.sessions?.getSnapshot?.()?.current
-          const currentId = session ? snapshot.items.find(item => item.sessionIds?.includes(session.id))?.workspaceId ?? null : null
+          const { id: sessionId } = currentSession()
+          const currentId = sessionId
+            ? (snapshot.items ?? []).find(item => item.sessionIds?.includes(sessionId))?.workspaceId ?? null
+            : null
           return { items: snapshot.items ?? [], currentId }
         },
         subscribe: listener => {
           const list = ctx.workspaces?.list ?? ctx.workspaces
           return list?.subscribe?.(listener) ?? (() => {})
         },
+      }, (path) => {
+        const { id: sessionId, row } = currentSession()
+        if (!sessionId || typeof ctx.sidebarRight?.openResource !== 'function') return false
+        const cwd = String(row?.cwd ?? '').replace(/\\/g, '/').replace(/\/+$/, '')
+        let normalized = String(path).replace(/\\/g, '/').replace(/^(?:\.\/)+/, '')
+        if (cwd && (normalized === cwd || normalized.startsWith(`${cwd}/`))) {
+          normalized = normalized === cwd ? '' : normalized.slice(cwd.length + 1)
+        }
+        const encode = segment => encodeURIComponent(segment).replace(/%3A/gi, ':')
+        const address = `dsh-resource://file/session/${encode(sessionId)}/${normalized.split('/').filter(Boolean).map(encode).join('/')}`
+        try {
+          ctx.sidebarRight.openResource(address)
+        } catch (error) {
+          if (typeof ctx.sidebarRight.openResourceIn === 'function') ctx.sidebarRight.openResourceIn(sessionId, address)
+          else throw error
+        }
+        return true
       })
       mounted.setShortcut(label(), shortcutKeys())
       ready(mounted)

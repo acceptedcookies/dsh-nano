@@ -102,6 +102,15 @@ ${NANO_STYLES}
 /* Fade only across the close button. The button is 16px of padding; the ramp
    is that same strip, so letters stay solid until they enter the ×. */
 .np-tab-name[data-clipped="true"] { text-overflow: clip; mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent); -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent); }
+[data-changed-files] { position: relative; }
+[data-changed-files]:has(> .np-to-notepad) { padding-right: 128px; }
+.np-to-notepad, .np-change-action { position: absolute; z-index: 2; height: 28px; padding: 0 10px; border: 1px solid var(--dsw-alias-border-l2, #ffffff1f); border-radius: var(--dsw-radius-sm, 8px); background: var(--dsw-alias-bg-layer-1, #232324); color: var(--dsw-alias-label-primary, #f9fafb); font: inherit; font-size: 12px; line-height: 20px; cursor: pointer; }
+.np-to-notepad { right: 12px; top: 50%; transform: translateY(-50%); }
+.np-to-notepad:hover:not(:disabled), .np-change-action:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover, #ffffff14); }
+.np-to-notepad:disabled, .np-change-action:disabled { opacity: .55; cursor: default; }
+[data-changed-files] li { display: flex; align-items: center; gap: 8px; padding-right: 10px; }
+[data-changed-files] li > .np-change-action { position: static; transform: none; flex: none; height: 22px; padding: 0 8px; }
+[data-changed-files] li > :not(.np-change-action) { flex: 1; min-width: 0; }
 .np-body { display: flex; min-height: 0; flex: 1; }
 .np-tree { box-sizing: border-box; width: 248px; display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--dsw-alias-border-l2); background: transparent; }
 .np-tree[data-collapsed="true"] { width: var(--np-rail); align-items: stretch; }
@@ -201,18 +210,20 @@ ${NANO_STYLES}
 .np-footer-actions button.np-danger:hover, .np-dlg-body button.np-danger:hover { border-color: var(--dsw-alias-state-error-secondary); color: var(--dsw-alias-state-error-secondary); background: var(--dsw-alias-interactive-bg-hover-danger); }
 .np-write, .np-read { flex: 1; min-height: 0; margin: 0; }
 .np-switch[hidden], .np-md-tools[hidden], .np-json-tools[hidden] { display: none !important; }
-.np-write { box-sizing: border-box; width: 100%; max-width: 100%; resize: none; border: 0; outline: 0; background: transparent; color: transparent; caret-color: var(--dsw-alias-label-primary); padding: var(--np-pad-x); font-family: var(--dsw-font-markdown-code-font-family); font-size: var(--np-editor-font-size, 14px); line-height: 1.45; overflow-wrap: anywhere; position: relative; }
+.np-write { box-sizing: border-box; width: 100%; max-width: 100%; resize: none; border: 0; outline: 0; background: transparent; color: transparent; caret-color: var(--dsw-alias-label-primary); padding: var(--np-pad-x); margin: 0; font-family: var(--dsw-font-markdown-code-font-family); font-size: var(--np-editor-font-size, 14px); line-height: calc(var(--np-editor-font-size, 14px) * 1.45); letter-spacing: 0; word-spacing: 0; tab-size: 4; overflow-wrap: anywhere; word-break: break-word; white-space: pre-wrap; position: relative; font-kerning: none; font-variant-ligatures: none; font-feature-settings: "liga" 0, "calt" 0; }
 /* Transparent text over a colourised mirror: keep the caret crisp and let the
    selection paint show through so the mirror reads underneath it. */
 .np-write::selection { background: color-mix(in srgb, var(--dsw-alias-brand-primary) 28%, transparent); color: transparent; }
 .np-write:disabled { color: transparent; }
-.np-mirror { position: absolute; z-index: 0; top: 0; left: 0; width: 0; height: 0; padding: var(--np-pad-x); box-sizing: border-box; overflow: hidden; font-family: var(--dsw-font-markdown-code-font-family); font-size: var(--np-editor-font-size, 14px); line-height: 1.45; overflow-wrap: anywhere; color: var(--dsw-alias-label-primary); pointer-events: none; white-space: pre-wrap; }
-.np-mirror > div { min-height: 1.45em; }
+.np-mirror { position: absolute; z-index: 0; top: 0; left: 0; width: 0; height: 0; margin: 0; padding: var(--np-pad-x); box-sizing: border-box; overflow: hidden; font-family: var(--dsw-font-markdown-code-font-family); font-size: var(--np-editor-font-size, 14px); line-height: calc(var(--np-editor-font-size, 14px) * 1.45); letter-spacing: 0; word-spacing: 0; tab-size: 4; overflow-wrap: anywhere; word-break: break-word; color: var(--dsw-alias-label-primary); pointer-events: none; white-space: pre-wrap; font-kerning: none; font-variant-ligatures: none; font-feature-settings: "liga" 0, "calt" 0; }
+/* Spans may only change colour. Anything that changes the advance width
+   moves the coloured glyphs off the textarea caret and the selection. */
+.np-mirror span { font: inherit; letter-spacing: inherit; word-spacing: inherit; line-height: inherit; font-synthesis: none; padding: 0; margin: 0; border: 0; }
 .nm-mk { color: var(--dsw-alias-label-tertiary); }
-.nm-h { color: var(--dsw-alias-link); font-weight: 700; }
-.nm-quote { color: var(--dsw-alias-state-success-primary); font-style: italic; }
-.nm-strong { font-weight: 700; color: #fbbf24; }
-.nm-em { font-style: italic; }
+.nm-h { color: var(--dsw-alias-link); }
+.nm-quote { color: var(--dsw-alias-state-success-primary); }
+.nm-strong { color: #fbbf24; }
+.nm-em { color: var(--dsw-alias-label-primary); }
 .nm-angle { color: var(--dsw-alias-state-error-primary); }
 .nm-bracket { color: var(--dsw-alias-link); }
 .nm-brace { color: var(--dsw-alias-state-success-primary); }
@@ -457,7 +468,7 @@ function caretRect(area, position) {
   return rect
 }
 
-export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', subscribe: () => () => {} }, language = { current: () => 'en', subscribe: () => () => {} }, workspaces = { current: () => ({ items: [], currentId: null }), subscribe: () => () => {} }) {
+export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', subscribe: () => () => {} }, language = { current: () => 'en', subscribe: () => () => {} }, workspaces = { current: () => ({ items: [], currentId: null }), subscribe: () => () => {} }, previewFile = () => false) {
   host.innerHTML = `<div class="np-layer"><button class="np-entry" type="button">${ICON}<span class="np-tip" hidden></span></button><section class="np-window" hidden></section></div>`
   const layer = must(host, '.np-layer')
   const entry = must(host, '.np-entry')
@@ -572,8 +583,10 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     const layer = mirror()
     layer.style.top = `${source.offsetTop}px`
     layer.style.left = `${source.offsetLeft}px`
-    layer.style.width = `${source.offsetWidth}px`
-    layer.style.height = `${source.offsetHeight}px`
+    /* clientWidth excludes the scrollbar. offsetWidth is wider, so the mirror
+       wraps later than the textarea and the selection lands on the wrong glyphs. */
+    layer.style.width = `${source.clientWidth}px`
+    layer.style.height = `${source.clientHeight}px`
     layer.scrollTop = source.scrollTop
     layer.scrollLeft = source.scrollLeft
   }
@@ -584,12 +597,12 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     return state.jsonCollapsed.get(id)
   }
 
-  function showError(error, conflict = false) {
+  function showError(error, conflict = false, bare = false) {
     const node = must(panel, '.np-error')
     node.hidden = false
     const full = error?.name === 'QuotaExceededError'
     const message = full ? text().quota : (error instanceof Error ? error.message : String(error))
-    const shown = full ? message : (conflict ? message : `${text().saveFailed}：${message}`)
+    const shown = full || conflict || bare ? message : `${text().saveFailed}：${message}`
     node.querySelector('.np-error-text').textContent = shown
     node.querySelector('.np-error-text').title = message
     for (const action of ['load-remote', 'keep-mine']) {
@@ -982,6 +995,20 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     ]
   }
 
+  /** Settings and menus are portaled onto document.body, so hiding the panel leaves them on top. */
+  function dismissOverlays() {
+    closeDialog()
+    closeMenu?.()
+    closeSlash()
+  }
+
+  /** On open, show the active session's workspace. No workspace means Unassigned. */
+  function focusSessionWorkspace() {
+    if (state.settings.followSessionWorkspace === false) return
+    const catalog = workspaceCatalog()
+    state.ui.workspaceChoice = catalog.currentId ?? 'unassigned'
+  }
+
   function paintWorkspaceChoices() {
     const label = panel.querySelector('.np-ws-label')
     if (!label) return
@@ -1088,6 +1115,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
   }
 
   let closeMenu = /** @type {(() => void) | null} */ (null)
+  let closeDialog = () => {}
   let dialogOpen = false
   /* the ws button sits outside the anchored menu, so its own pointerdown makes
      NanoMenu close the menu before the click — suppress the immediate reopen. */
@@ -1103,10 +1131,11 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     closeSlash()
     closeMenu?.()
     let handle = /** @type {{ close: () => void } | undefined} */ (undefined)
-    const finish = () => { dialogOpen = false }
+    const finish = () => { dialogOpen = false; if (closeDialog === closeSelf) closeDialog = () => {} }
     // every exit path — footer buttons, Escape, mask, programmatic close —
     // funnels through finish()+adapter close so the panel guards release.
     const closeSelf = () => { if (!dialogOpen || !handle) return; finish(); handle.close() }
+    closeDialog = closeSelf
     dialogOpen = true
     handle = openNanoDialog({
       copy: text(),
@@ -1318,7 +1347,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       <span class="np-num"><input name="${name}" type="number" step="${factor > 1 ? 'any' : '1'}" value="${factor > 1 ? value / factor : value}" data-factor="${factor}"><i class="np-num-unit">${escapeHtml(unit)}</i></span></div>`
     /* N-segment sliding switch — same anatomy as the toolbar view switch */
     const sw = (field, desc, hint, options) => {
-      const current = field === 'autoSave' ? String(values.autoSave !== false) : String(values[field])
+      const current = field === 'autoSave' || field === 'followSessionWorkspace' ? String(values[field] !== false) : String(values[field])
       const index = Math.max(0, options.findIndex(o => String(o.value) === current))
       const labels = options.map(o => `<span class="np-switch-label">${escapeHtml(o.label)}</span>`).join('')
       return `
@@ -1328,6 +1357,10 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     dialog({
       title: copy.settingsTitle,
       body: `<section class="np-section">
+        ${sw('followSessionWorkspace', copy.followSessionWorkspace, copy.followSessionWorkspaceHint, [
+          { value: 'true', label: copy.autoSaveOn },
+          { value: 'false', label: copy.autoSaveOff },
+        ])}
         ${sw('autoSave', copy.autoSave, copy.autoSaveHint, [
           { value: 'true', label: copy.autoSaveOn },
           { value: 'false', label: copy.autoSaveOff },
@@ -1385,6 +1418,10 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
           { value: 'mac', label: copy.mac },
           { value: 'windows', label: copy.windows },
         ],
+        followSessionWorkspace: [
+          { value: 'true', label: copy.autoSaveOn },
+          { value: 'false', label: copy.autoSaveOff },
+        ],
       }
       if (state.db) void counts(state.db).then(async value => {
         const estimate = navigator.storage?.estimate ? await navigator.storage.estimate() : {}
@@ -1400,11 +1437,11 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
           const rect = seg.getBoundingClientRect()
           const index = Math.min(options.length - 1, Math.max(0, Math.floor((event.clientX - rect.left) / (rect.width / options.length))))
           const merged = { ...state.settings }
-          if (field === 'autoSave') merged.autoSave = options[index].value === 'true'
+          if (field === 'autoSave' || field === 'followSessionWorkspace') merged[field] = options[index].value === 'true'
           else merged[field] = options[index].value
           state.settings = normalizeSettings(merged)
           if (state.db) void writeSettings(state.db, state.settings).catch(showError)
-          const value = field === 'autoSave' ? String(state.settings.autoSave !== false) : String(state.settings[field])
+          const value = field === 'autoSave' || field === 'followSessionWorkspace' ? String(state.settings[field] !== false) : String(state.settings[field])
           const active = Math.max(0, options.findIndex(o => String(o.value) === value))
           seg.style.setProperty('--np-switch-i', String(active))
           seg.setAttribute('aria-checked', String(active === 0))
@@ -1583,7 +1620,10 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       void persistUi()
       return
     }
-    state.ui.open = !state.ui.open
+    const opening = !state.ui.open
+    if (opening) focusSessionWorkspace()
+    else dismissOverlays()
+    state.ui.open = opening
     render()
     void persistUi()
     if (state.ui.open) void beginWriting()
@@ -1821,6 +1861,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     }
     if (action === 'close' || action === 'tree') {
       flushSave()
+      dismissOverlays()
       state.ui.open = false
       write().blur()
       render()
@@ -2242,7 +2283,10 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       for (const dispose of disposers) dispose()
     },
     toggle() {
-      state.ui.open = !state.ui.open
+      const opening = !state.ui.open
+      if (opening) focusSessionWorkspace()
+      else dismissOverlays()
+      state.ui.open = opening
       render()
       void persistUi()
       if (state.ui.open) void beginWriting()
@@ -2291,12 +2335,105 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     },
   }
 
+  /** Chat cards named `[data-changed-files]` are one turn's edited files. */
+  async function copyChangedMarkdown(path, button) {
+    button.disabled = true
+    const response = await fetch('/nano-notepad/read', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ path }),
+    })
+    const out = await response.json().catch(() => ({}))
+    if (!response.ok || out.ok !== true) throw new Error(out.message || 'read failed')
+    const workspaceId = workspaceCatalog().currentId
+    state.ui.workspaceChoice = workspaceId ?? 'unassigned'
+    state.ui.open = true
+    await window.__nanoNotepad.import(out.name, out.content, { sourcePath: path })
+    button.textContent = text().copiedToNotepad
+  }
+
+  function attachNotepadCtas(root) {
+    const cards = []
+    if (root instanceof Element) {
+      if (root.matches('[data-changed-files]')) cards.push(root)
+      cards.push(...root.querySelectorAll('[data-changed-files]'))
+      const host = root.closest('[data-changed-files]')
+      if (host instanceof HTMLElement && !cards.includes(host)) cards.push(host)
+    }
+    for (const card of cards) {
+      if (!(card instanceof HTMLElement) || card.querySelector(':scope > .np-to-notepad')) continue
+      if (card.getAttribute('data-single') === null) continue
+      const path = card.querySelector('span[hidden]')?.textContent?.trim() ?? ''
+      if (!/\.(md|markdown)$/i.test(path)) continue
+      const button = document.createElement('button')
+      button.type = 'button'
+      button.className = 'np-to-notepad'
+      button.textContent = text().copyToNotepad
+      button.addEventListener('click', event => {
+        event.preventDefault()
+        event.stopPropagation()
+        void copyChangedMarkdown(path, button).catch(error => {
+          button.disabled = false
+          button.textContent = text().copyToNotepad
+          showError(error)
+        })
+      })
+      card.append(button)
+    }
+    for (const card of cards) {
+      if (!(card instanceof HTMLElement) || card.getAttribute('data-single') !== null) continue
+      for (const row of card.querySelectorAll('li')) {
+        if (!(row instanceof HTMLElement) || row.querySelector(':scope > .np-change-action')) continue
+        const path = row.querySelector('span[hidden]')?.textContent?.trim() ?? ''
+        const shown = row.querySelector('button span')?.textContent?.trim() ?? ''
+        if (!path && !shown) continue
+        const markdown = /\.(md|markdown)$/i.test(path || shown)
+        const button = document.createElement('button')
+        button.type = 'button'
+        button.className = 'np-change-action'
+        button.textContent = markdown ? text().copyChange : text().previewChange
+        const stop = event => { event.preventDefault(); event.stopPropagation() }
+        button.addEventListener('pointerdown', stop)
+        button.addEventListener('click', event => {
+          stop(event)
+          if (!markdown) {
+            const target = shown && !shown.startsWith('/') ? shown : path
+            try {
+              if (previewFile(target) === false) showError(new Error(text().previewFailed), false, true)
+            } catch (error) {
+              showError(error, false, true)
+            }
+            return
+          }
+          void copyChangedMarkdown(path, button).catch(error => {
+            button.disabled = false
+            button.textContent = text().copyChange
+            showError(error)
+          })
+        })
+        row.append(button)
+      }
+    }
+  }
+
+  attachNotepadCtas(document)
+  const ctaWatch = new MutationObserver(records => {
+    for (const record of records) {
+      for (const node of record.addedNodes) {
+        if (node instanceof Element) attachNotepadCtas(node)
+      }
+    }
+  })
+  ctaWatch.observe(document.body, { childList: true, subtree: true })
+  disposers.push(() => ctaWatch.disconnect())
+
   void openDatabase().then(async db => {
     state.db = db
     const snapshot = await loadSnapshot(db)
     state.nodes = snapshot.nodes
     state.settings = { ...defaults, ...snapshot.settings }
     state.ui = { ...state.ui, ...snapshot.ui, tabs: snapshot.ui.tabs ?? [] }
+    state.settings = normalizeSettings(state.settings)
     state.view = state.settings.defaultView
     if (!state.nodes.some(node => node.kind === 'file')) {
       const node = await createNode(state.db, 'file', null, 'untitled.md', activeWorkspace().id)

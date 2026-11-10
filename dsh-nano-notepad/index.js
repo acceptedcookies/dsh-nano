@@ -47,6 +47,8 @@ export const Config = {
 }
 
 const SAVE_ROUTE = '/nano-notepad/save'
+const READ_ROUTE = '/nano-notepad/read'
+const MAX_READ_BYTES = 2 * 1024 * 1024
 const MAX_SAVE_BYTES = 8 * 1024 * 1024
 const DIALOG_TIMEOUT_MS = 600000
 const MAX_NAME_BYTES = 512
@@ -187,8 +189,38 @@ async function runViaSubprocess(subprocess, base, startDir) {
   }
 }
 
+/** Read one markdown file the chat card already named. Authenticated page only. */
+async function readMarkdown(filePath) {
+  if (typeof filePath !== 'string' || filePath.includes('\0')) throw new Error('path is not a markdown file')
+  const path = await import('node:path')
+  const fs = await import('node:fs/promises')
+  const resolved = path.resolve(filePath)
+  if (!/\.(md|markdown)$/i.test(resolved)) throw new Error('path is not a markdown file')
+  const real = await fs.realpath(resolved)
+  if (!/\.(md|markdown)$/i.test(real)) throw new Error('path is not a markdown file')
+  const stat = await fs.stat(real)
+  if (!stat.isFile() || stat.size > MAX_READ_BYTES) throw new Error('markdown file is missing or too large')
+  return { name: path.basename(real), content: await fs.readFile(real, 'utf8') }
+}
+
 /** @param {import('@deepseek-ai/cordis').Context} ctx */
 export function apply(ctx) {
+  ctx.effect(() => ctx.webServer.register({
+    kind: 'exact',
+    path: READ_ROUTE,
+    handler: async (req, res) => {
+      const rejection = ctx.get('connection')?.requestRejection(req)
+      if (rejection !== undefined) { res.statusCode = rejection; res.end(); return }
+      if (req.method !== 'POST') { res.setHeader('allow', 'POST'); sendJson(res, 405, { ok: false, reason: 'method' }); return }
+      try {
+        const body = await jsonBody(req)
+        const file = await readMarkdown(body.path)
+        sendJson(res, 200, { ok: true, ...file })
+      } catch (error) {
+        sendJson(res, 500, { ok: false, reason: 'failed', message: messageOf(error).slice(0, 200) })
+      }
+    },
+  }), 'nano-notepad: read markdown')
   ctx.effect(() => ctx.webServer.register({
     kind: 'exact',
     path: SAVE_ROUTE,

@@ -16,6 +16,7 @@ export const DEFAULT_SETTINGS = {
   theme: 'system',
   chromeStyle: 'mac',
   followApp: true,
+  followSessionWorkspace: true,
   settingsVersion: 2,
 }
 
@@ -48,6 +49,7 @@ export function normalizeSettings(config) {
     theme: source.theme === 'light' || source.theme === 'dark' ? source.theme : 'system',
     chromeStyle: source.chromeStyle === 'windows' ? 'windows' : 'mac',
     followApp: source.followApp !== false,
+    followSessionWorkspace: source.followSessionWorkspace !== false,
     settingsVersion: 2,
   }
 }

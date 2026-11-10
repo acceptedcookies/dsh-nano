@@ -100,5 +100,8 @@ function lineHtml(line, json, ctx) {
  */
 export function highlightSource(text, json) {
   const ctx = { fence: false }
-  return text.split('\n').map(line => `<div>${lineHtml(line, json, ctx) || '&#8203;'}</div>`).join('')
+  /* One pre-wrap flow, same as the textarea. A block per line grows a
+     different line box, so the selection (drawn on the textarea) lands on
+     different glyphs than the coloured text. */
+  return text.split('\n').map(line => lineHtml(line, json, ctx) || '&#8203;').join('\n')
 }

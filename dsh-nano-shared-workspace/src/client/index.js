@@ -350,8 +350,14 @@ export function apply(ctx) {
      */
     onJoinWorkspace: workspaceId => store.set({ createDialog: { mode: 'join', workspaceId } }),
     onCloseCreateDialog: done => {
-      store.set({ createDialog: null, creating: false })
-      if (done) { store.set({ notice: copyFor(languageOf()).workspaceCreated }); refresh() }
+      // Success is the new row in the section. The notice dialog is only for
+      // failures, and its title is "无法打开" — a created workspace must not land there.
+      store.set({
+        createDialog: null,
+        creating: false,
+        ...(done ? { sectionOpen: true } : {}),
+      })
+      if (done) refresh()
     },
     createWorkspace: (name, localPath) => {
       store.set({ creating: true })

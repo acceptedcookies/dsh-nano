@@ -21,6 +21,7 @@ import {
   WarningIcon,
 } from './icons.jsx'
 import { STYLE } from './styles.js'
+import { perf, setModelSelectorRoot } from './perf.js'
 
 const STYLE_ID = 'nano-model-selector-style'
 
@@ -140,7 +141,14 @@ export function ModelSelector({ locked, available, directory, load, select, lang
   )
 
   React.useEffect(() => language.subscribe(() => setCopy(copyFor(language.current()))), [])
-  React.useEffect(() => { if (available) load() }, [available])
+  // Publish the perf-review attribution root: the open panel (portaled to
+  // document.body) while open, otherwise the .nms-trigger host. Never the
+  // composer textarea, and no layout reads (spec §6.7).
+  React.useEffect(() => {
+    setModelSelectorRoot(() => (open ? panelRef.current : triggerRef.current) ?? null)
+    return () => setModelSelectorRoot(null)
+  }, [open])
+  React.useEffect(() => { if (available) perf.span('catalog-fetch', () => load()) }, [available])
 
   // The stylesheet belongs to the mounted selector, so disabling the plugin
   // takes its rules away with it instead of leaking them into the page.
@@ -222,26 +230,36 @@ export function ModelSelector({ locked, available, directory, load, select, lang
 
   React.useEffect(() => {
     if (!open) return undefined
-    const onPointer = event => {
+    const outside = perf.track('listener', 'panel-outside')
+    const onPointer = outside.wrap(event => {
       if (triggerRef.current?.contains(event.target)) return
       if (panelRef.current?.contains(event.target)) return
       setOpen(false)
-    }
+    })
     document.addEventListener('pointerdown', onPointer, true)
-    return () => document.removeEventListener('pointerdown', onPointer, true)
+    outside.attach()
+    return () => {
+      document.removeEventListener('pointerdown', onPointer, true)
+      outside.detach()
+    }
   }, [open])
 
   React.useEffect(() => {
     if (!open) return undefined
-    const onKey = event => {
+    const outside = perf.track('listener', 'panel-outside')
+    const onKey = outside.wrap(event => {
       if (event.key !== 'Escape' || event.isComposing) return
       event.preventDefault()
       event.stopPropagation()
       setOpen(false)
       triggerRef.current?.focus()
-    }
+    })
     document.addEventListener('keydown', onKey, true)
-    return () => document.removeEventListener('keydown', onKey, true)
+    outside.attach()
+    return () => {
+      document.removeEventListener('keydown', onKey, true)
+      outside.detach()
+    }
   }, [open])
 
   React.useEffect(() => {
@@ -306,19 +324,27 @@ export function ModelSelector({ locked, available, directory, load, select, lang
 
   // Memoize the filtered/sorted lists so a keystroke does not re-derive every
   // row (and re-mount every card) when unrelated state moves (review-01 R8).
-  const visibleFavorites = React.useMemo(() => favoriteItems.filter(matches), [favoriteItems, matches])
-  const visibleGroups = React.useMemo(() => brands
-    .filter(brand => filter === 'all' || filter === brand.key)
-    .map(brand => ({
-      ...brand,
-      models: allModels.filter(item => item.brandKey === brand.key && matches(item) && !favoriteSet.has(item.key)),
-    }))
-    .filter(group => group.models.length > 0), [brands, filter, allModels, matches, favoriteSet])
+  // perf: filter-render times each memo recompute (spec §6.7).
+  const visibleFavorites = React.useMemo(
+    () => perf.span('filter-render', () => favoriteItems.filter(matches)),
+    [favoriteItems, matches])
+  const visibleGroups = React.useMemo(
+    () => perf.span('filter-render', () => brands
+      .filter(brand => filter === 'all' || filter === brand.key)
+      .map(brand => ({
+        ...brand,
+        models: allModels.filter(item => item.brandKey === brand.key && matches(item) && !favoriteSet.has(item.key)),
+      }))
+      .filter(group => group.models.length > 0)),
+    [brands, filter, allModels, matches, favoriteSet])
   const visibleCount = visibleFavorites.length + visibleGroups.reduce((sum, group) => sum + group.models.length, 0)
 
   React.useLayoutEffect(() => {
     if (!open) return undefined
-    const place = () => {
+    // perf: panel-place times place() work; the track counts resize/scroll
+    // listener callbacks while the panel is open (spec §6.7).
+    const placeTrack = perf.track('listener', 'panel-place')
+    const place = () => perf.span('panel-place', () => {
       const trigger = triggerRef.current
       if (!trigger) return
       const rect = trigger.getBoundingClientRect()
@@ -334,13 +360,16 @@ export function ModelSelector({ locked, available, directory, load, select, lang
       if (top < margin) top = Math.min(window.innerHeight - height - margin, rect.bottom + 8)
       if (top < margin) top = margin
       setPosition({ left, top, width, height })
-    }
+    })
+    const onPlace = placeTrack.wrap(place)
     place()
-    window.addEventListener('resize', place)
-    window.addEventListener('scroll', place, true)
+    window.addEventListener('resize', onPlace)
+    window.addEventListener('scroll', onPlace, true)
+    placeTrack.attach()
     return () => {
-      window.removeEventListener('resize', place)
-      window.removeEventListener('scroll', place, true)
+      window.removeEventListener('resize', onPlace)
+      window.removeEventListener('scroll', onPlace, true)
+      placeTrack.detach()
     }
   }, [open])
 
@@ -372,7 +401,7 @@ export function ModelSelector({ locked, available, directory, load, select, lang
   const visible = Boolean(available)
 
   const refresh = () => {
-    load()
+    perf.span('catalog-fetch', () => load())
     refreshDetails()
   }
 
@@ -570,7 +599,8 @@ export function ModelSelector({ locked, available, directory, load, select, lang
           else {
             setQuery('')
             setOpen(true)
-            load()
+            perf.count('panel-open')
+            perf.span('catalog-fetch', () => load())
           }
         }}
       >

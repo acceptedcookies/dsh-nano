@@ -2,8 +2,12 @@
 
 import * as React from 'react'
 import { ModelSelector } from './ModelSelector.jsx'
+import { profiler } from './perf.js'
 
 export const inject = ['slots', 'modelDirectories', 'sessions', 'locale']
+
+// Wrap with <React.Profiler> when perf-review is enabled; identity wrapper otherwise.
+const ObservedModelSelector = profiler(ModelSelector)
 
 /**
  * Replace the composer's model seat at a lower slot priority. The shipped
@@ -37,5 +41,5 @@ export function apply(ctx) {
         resolveText: text => ctx.locale.resolveText(text),
       }
     },
-  }, ModelSelector))
+  }, ObservedModelSelector))
 }

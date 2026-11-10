@@ -2,11 +2,28 @@
 
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { readFileSync } from 'node:fs'
 import { defaultEngine, imagineSkill, imagineStub, readEngine, scanEngines, writeEngine } from './lib/host-media.js'
+import { ensurePerfReviewHost, LIB_VERSION } from './lib/perf-review-host.js'
 
 export const name = 'nano-model-selector'
 
 export const inject = ['llm', 'webServer', 'connection', 'skills']
+
+/** Package version for perf-review meta; index.js is unbundled, so read it at runtime. */
+function pluginVersion() {
+  try {
+    return JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')).version
+  } catch {
+    return undefined
+  }
+}
+
+/** Host-side observability; identity wrapper unless DSH_PERF_REVIEW=1. */
+const review = ensurePerfReviewHost().hostJoin('nano-model-selector', {
+  version: pluginVersion(),
+  libVersion: LIB_VERSION,
+})
 
 const ROUTE = '/nano-model-selector/catalog'
 const ENGINES_ROUTE = '/nano-model-selector/media-engines'
@@ -97,6 +114,7 @@ function sendJson(res, status, payload) {
 /**
  * Serve the catalog behind the connection's request admission, with a short
  * cache + in-flight dedupe so each panel open does not rebuild the registry.
+ * The whole route (TTL hit or miss) is timed by review.hostSpan('catalog').
  * @param ctx - host context.
  */
 function catalogHandler(ctx) {
@@ -108,7 +126,7 @@ function catalogHandler(ctx) {
     }
     return inflight
   }
-  return async (req, res) => {
+  return (req, res) => review.hostSpan('catalog', async () => {
     // Gate reads too: the catalog discloses the deployment's provider/model
     // fingerprint, so it must not answer unauthenticated pages or LAN clients.
     const rejection = ctx.get('connection')?.requestRejection(req)
@@ -127,7 +145,7 @@ function catalogHandler(ctx) {
     } catch (error) {
       sendJson(res, 500, { error: messageOf(error) })
     }
-  }
+  })
 }
 
 /** Read at most 16 KiB of request body as UTF-8 JSON. */

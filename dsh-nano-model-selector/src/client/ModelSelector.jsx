@@ -31,7 +31,7 @@ const MODEL_CARD_HEIGHT = 64
 const MODEL_CARD_GAP = 4
 
 /** Top bar, effort footer, list padding, and panel border around the rows. */
-const PANEL_CHROME_HEIGHT = 58 + 46 + 18 + 2
+const PANEL_CHROME_HEIGHT = 54 + 46 + 20 + 2
 
 /** @param {string} provider @param {string} model */
 function keyOf(provider, model) {

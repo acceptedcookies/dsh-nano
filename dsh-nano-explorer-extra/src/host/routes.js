@@ -142,14 +142,18 @@ const MEMO_MS = 3000
  * Answer from the memo, or run the reader and remember its answer briefly.
  * @param key - cache identity for the read.
  * @param read - performs the read when the memo misses.
- * @returns the memoized value.
+ * @returns a promise for the memoized value.
  */
-async function memoized(key, read) {
+function memoized(key, read) {
   const hit = memo.get(key)
   const now = Date.now()
   if (hit !== undefined && now - hit.at < MEMO_MS) return hit.value
-  const value = await read()
-  memo.set(key, { at: Date.now(), value })
+  // The in-flight promise itself is what is stored: two requests that miss together share the one
+  // Git run instead of each spawning a second copy of a command a large checkout is still running.
+  // A rejection is evicted immediately so the next request retries rather than replaying the error.
+  const value = Promise.resolve().then(read)
+  memo.set(key, { at: now, value })
+  value.catch(() => { memo.delete(key) })
   if (memo.size > 64) {
     for (const [entryKey, entry] of memo) if (now - entry.at >= MEMO_MS) memo.delete(entryKey)
   }

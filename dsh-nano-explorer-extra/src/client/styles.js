@@ -50,7 +50,6 @@ export const STYLE = `${NANO_STYLES}
 .nxe-tree [data-custom-tree] { height: auto; }
 
 .nxe-row-note { padding: 8px 12px; font-size: 12px; color: var(--dsw-alias-label-secondary); }
-.nxe-note-error { color: var(--dsw-alias-danger, #cf222e); }
 .nxe-note-action { margin-left: 6px; border: 0; background: transparent; color: var(--dsw-alias-link); cursor: pointer; font: inherit; text-decoration: underline; }
 
 /* Row decorations injected through the tree Factory's accessory seat. */
@@ -131,7 +130,19 @@ export const STYLE = `${NANO_STYLES}
 .nxe-chip-flag[data-kind="conflict"] { color: var(--dsw-alias-label-error, #e5534b); }
 .nxe-chip-static { cursor: default; }
 .nxe-chip-count { font-variant-numeric: tabular-nums; }
-.nxe-chip-sync { font-variant-numeric: tabular-nums; }
+.nxe-chip-sync { font-variant-numeric: tabular-nums; letter-spacing: 0.01em; }
+/* Pending-file count: a filled badge, set off from the bare sync figures like an editor's
+   status-bar badge — the fill is the delimiter, so the chip reads as sync pair, then count. */
+.nxe-chip-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  box-sizing: border-box; min-width: 18px; height: 16px; padding: 0 5px; margin-left: 2px;
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-secondary);
+  font-size: calc(var(--dsh-content-font-size-secondary, 13px) - 2px); font-weight: 600;
+  font-variant-numeric: tabular-nums; line-height: 1;
+}
+.nxe-chip-badge[data-empty="true"] { font-weight: 400; color: var(--dsw-alias-label-tertiary); }
 
 /* Drawer contents: facts, then the two lists. */
 .nxe-fact-group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
@@ -317,24 +328,24 @@ export const STYLE = `${NANO_STYLES}
 [data-nxe] .nxe-tree li[data-files-entry]:has([data-nxe-ignored]) > div > button > span:last-child,
 [data-nxe] .nxe-tree li[data-files-entry]:has([data-nxe-ignored]) > div > button > svg { color: var(--nxe-ignored-ink); }
 
-/* Transient confirmation. Out of the flow and over the tree's lower edge, so showing and hiding it
-   never moves a row: an inline row here shifted the whole tree when a copy confirmed. */
-.nxe-toast {
-  position: absolute; left: 50%; bottom: 40px; transform: translateX(-50%);
-  z-index: 5; pointer-events: none;
-  padding: 4px 12px; border-radius: var(--dsw-radius-md);
-  background: var(--dsw-alias-bg-layer-3); color: var(--dsw-alias-label-primary);
-  box-shadow: var(--dsw-elevation-panel);
-  font-size: 12px; line-height: 18px; white-space: nowrap;
-  animation: nxe-toast-in .12s ease-out;
+/* Persistent Git warning. Same floating surface as the shared toast, but interactive: it carries a
+   dismiss button, stays until the read succeeds or the reader closes it, and floats above the
+   status bar so it never shifts a row. The doubled class beats the shared toast's pointer-events. */
+.nano-toast.nxe-git-alert {
+  bottom: 40px; pointer-events: auto;
+  display: flex; align-items: center; gap: 6px;
+  max-width: min(440px, calc(100% - 32px));
+  padding: 6px 8px 6px 10px;
 }
-@keyframes nxe-toast-in {
-  from { opacity: 0; transform: translate(-50%, 4px); }
-  to { opacity: 1; transform: translate(-50%, 0); }
+.nxe-git-alert-icon { flex: none; color: var(--nxe-git-conflicted); }
+.nxe-git-alert-text { flex: 1; min-width: 0; white-space: normal; text-align: left; }
+.nxe-git-alert-x {
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px; padding: 0; border: 0; border-radius: var(--dsw-radius-sm);
+  background: transparent; color: var(--dsw-alias-tooltip-label, #f9fafb); opacity: .7; cursor: pointer;
 }
-@media (prefers-reduced-motion: reduce) {
-  .nxe-toast { animation: none; }
-}
+.nxe-git-alert-x:hover { opacity: 1; background: color-mix(in oklab, currentColor 14%, transparent); }
+.nxe-git-alert-x:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary, var(--dsw-alias-link)); outline-offset: 1px; }
 
 /* The modal's own chrome comes from the shell; this only sets the action button width and the gap
    between the body and its field, matching how the shipped dialogs compose theirs. */

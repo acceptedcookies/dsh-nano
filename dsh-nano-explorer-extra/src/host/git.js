@@ -92,6 +92,12 @@ function budget(parent, ms) {
 }
 
 /**
+ * The executable lookup is the same answer for every Git call this host makes, and on a PATH with
+ * many entries it was its own process each time. Cache it per configured command name.
+ */
+const resolvedProgram = new Map()
+
+/**
  * Run one Git subcommand.
  * @param ctx - context providing `subprocess`, `sandbox`, and `sandboxPolicy`.
  * @param config - executable and process limits.
@@ -103,7 +109,11 @@ async function runGit(ctx, config, request) {
   const { cwd, policy, args, signal, allowedExitCodes = [0] } = request
   const scope = budget(signal, config.gitTimeoutMs)
   try {
-    const program = await ctx.subprocess.resolveExecutable(config.gitCommand, undefined, scope.signal)
+    let program = resolvedProgram.get(config.gitCommand)
+    if (program === undefined) {
+      program = await ctx.subprocess.resolveExecutable(config.gitCommand, undefined, scope.signal)
+      resolvedProgram.set(config.gitCommand, program)
+    }
     const command = [program, ...GIT_PREFIX, ...args]
     const argv = policy !== undefined && policy.mode !== 'danger-full-access'
       ? (await ctx.sandbox.confine(command, policy, scope.signal)).argv
@@ -325,29 +335,34 @@ export async function readStatus(ctx, config, request) {
     '-z',
     ...(scoped ? ['--', request.path] : []),
   ]
-  const status = await runGit(ctx, config, { ...request, args })
+  // These four reads do not depend on each other: status, stash, and the worktree list all answer
+  // from the repository's own metadata. Running them in line was nine sequential process waits;
+  // overlapping them makes the answer arrive when the slowest read does.
+  const [status, stash, worktrees] = await Promise.all([
+    runGit(ctx, config, { ...request, args }),
+    runGit(ctx, config, {
+      ...request, args: ['stash', 'list', '--format=%gd'], allowedExitCodes: [0, 128],
+    }).catch(() => undefined),
+    listWorktrees(ctx, config, request),
+  ])
   const parsed = parseStatus(status.stdout)
 
   // Stashed work is invisible to `status`: the tree looks clean while a shelf of commits waits to be
   // restored. One extra command reports how many are shelved, which the status bar shows as a badge.
-  const stash = await runGit(ctx, config, {
-    ...request, args: ['stash', 'list', '--format=%gd'], allowedExitCodes: [0, 128],
-  }).catch(() => undefined)
   const stashed = stash === undefined || stash.exitCode !== 0
     ? 0
     : stash.stdout.split('\n').filter(line => line.trim() !== '').length
 
-  // Per-file divergence from the upstream, only when the branch tracks one. Two range diffs answer
-  // every path in one call each rather than a `log` per file.
-  const remote = typeof parsed.upstream !== 'string' || parsed.upstream === ''
-    ? undefined
-    : await remoteDivergence(ctx, config, request)
-
-  // The footer draws two buttons from this one payload: a branch button that opens worktrees and a
-  // commit button that opens the pending work. Both need facts the plain status does not carry.
-  const worktrees = await listWorktrees(ctx, config, request)
-  const branches = await listBranches(ctx, config, request)
-  const history = await readHistory(ctx, config, request)
+  // The branch list, the history rail, and the upstream divergence are independent of each other
+  // and run together. `listBranches` needs the held set the worktree read already produced, so it
+  // takes the rows instead of asking Git a second time.
+  const [branches, history, remote] = await Promise.all([
+    listBranches(ctx, config, request, worktrees),
+    readHistory(ctx, config, request),
+    typeof parsed.upstream !== 'string' || parsed.upstream === ''
+      ? Promise.resolve(undefined)
+      : remoteDivergence(ctx, config, request),
+  ])
   const conflicts = parsed.files.filter(file => file.status === 'U').map(file => file.path)
 
   return {
@@ -512,18 +527,21 @@ export async function listConflicts(ctx, config, request) {
  * @param ctx - context providing the process services.
  * @param config - executable and process limits.
  * @param request - working directory and cancellation.
+ * @param [knownWorktrees] - rows a caller already read; spared `worktree list` runs again.
  * @returns one row per local branch.
  */
-export async function listBranches(ctx, config, request) {
-  const result = await runGit(ctx, config, {
-    ...request,
-    args: ['for-each-ref', '--format=%(refname:short)%09%(HEAD)%09%(upstream:short)%09%(objectname:short)', 'refs/heads'],
-    allowedExitCodes: [0, 128],
-  }).catch(() => undefined)
+export async function listBranches(ctx, config, request, knownWorktrees) {
+  const [result, worktrees] = await Promise.all([
+    runGit(ctx, config, {
+      ...request,
+      args: ['for-each-ref', '--format=%(refname:short)%09%(HEAD)%09%(upstream:short)%09%(objectname:short)', 'refs/heads'],
+      allowedExitCodes: [0, 128],
+    }).catch(() => undefined),
+    knownWorktrees === undefined ? listWorktrees(ctx, config, request) : Promise.resolve(knownWorktrees),
+  ])
   if (result === undefined || result.exitCode !== 0) return []
   // A branch checked out in another worktree cannot be taken here; Git reports that only on the
   // checkout attempt, so the held set comes from the worktree listing.
-  const worktrees = await listWorktrees(ctx, config, request)
   const held = new Set(worktrees.map(row => row.branch).filter(name => typeof name === 'string'))
   const rows = []
   for (const line of result.stdout.split('\n')) {

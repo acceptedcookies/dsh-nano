@@ -69,11 +69,16 @@ function budget(parent, ms) {
     clearTimeout(timer);
   } };
 }
+var resolvedProgram = /* @__PURE__ */ new Map();
 async function runGit(ctx, config, request) {
   const { cwd, policy, args, signal, allowedExitCodes = [0] } = request;
   const scope = budget(signal, config.gitTimeoutMs);
   try {
-    const program = await ctx.subprocess.resolveExecutable(config.gitCommand, void 0, scope.signal);
+    let program = resolvedProgram.get(config.gitCommand);
+    if (program === void 0) {
+      program = await ctx.subprocess.resolveExecutable(config.gitCommand, void 0, scope.signal);
+      resolvedProgram.set(config.gitCommand, program);
+    }
     const command = [program, ...GIT_PREFIX, ...args];
     const argv = policy !== void 0 && policy.mode !== "danger-full-access" ? (await ctx.sandbox.confine(command, policy, scope.signal)).argv : command;
     scope.signal.throwIfAborted();
@@ -228,18 +233,22 @@ async function readStatus(ctx, config, request) {
     "-z",
     ...scoped ? ["--", request.path] : []
   ];
-  const status = await runGit(ctx, config, { ...request, args });
+  const [status, stash, worktrees] = await Promise.all([
+    runGit(ctx, config, { ...request, args }),
+    runGit(ctx, config, {
+      ...request,
+      args: ["stash", "list", "--format=%gd"],
+      allowedExitCodes: [0, 128]
+    }).catch(() => void 0),
+    listWorktrees(ctx, config, request)
+  ]);
   const parsed = parseStatus(status.stdout);
-  const stash = await runGit(ctx, config, {
-    ...request,
-    args: ["stash", "list", "--format=%gd"],
-    allowedExitCodes: [0, 128]
-  }).catch(() => void 0);
   const stashed = stash === void 0 || stash.exitCode !== 0 ? 0 : stash.stdout.split("\n").filter((line) => line.trim() !== "").length;
-  const remote = typeof parsed.upstream !== "string" || parsed.upstream === "" ? void 0 : await remoteDivergence(ctx, config, request);
-  const worktrees = await listWorktrees(ctx, config, request);
-  const branches = await listBranches(ctx, config, request);
-  const history = await readHistory(ctx, config, request);
+  const [branches, history, remote] = await Promise.all([
+    listBranches(ctx, config, request, worktrees),
+    readHistory(ctx, config, request),
+    typeof parsed.upstream !== "string" || parsed.upstream === "" ? Promise.resolve(void 0) : remoteDivergence(ctx, config, request)
+  ]);
   const conflicts = parsed.files.filter((file) => file.status === "U").map((file) => file.path);
   return {
     root,
@@ -335,14 +344,16 @@ async function pullUpstream(ctx, config, request) {
   }
   return firstLine(result.stdout) || firstLine(result.stderr);
 }
-async function listBranches(ctx, config, request) {
-  const result = await runGit(ctx, config, {
-    ...request,
-    args: ["for-each-ref", "--format=%(refname:short)%09%(HEAD)%09%(upstream:short)%09%(objectname:short)", "refs/heads"],
-    allowedExitCodes: [0, 128]
-  }).catch(() => void 0);
+async function listBranches(ctx, config, request, knownWorktrees) {
+  const [result, worktrees] = await Promise.all([
+    runGit(ctx, config, {
+      ...request,
+      args: ["for-each-ref", "--format=%(refname:short)%09%(HEAD)%09%(upstream:short)%09%(objectname:short)", "refs/heads"],
+      allowedExitCodes: [0, 128]
+    }).catch(() => void 0),
+    knownWorktrees === void 0 ? listWorktrees(ctx, config, request) : Promise.resolve(knownWorktrees)
+  ]);
   if (result === void 0 || result.exitCode !== 0) return [];
-  const worktrees = await listWorktrees(ctx, config, request);
   const held = new Set(worktrees.map((row) => row.branch).filter((name2) => typeof name2 === "string"));
   const rows = [];
   for (const line of result.stdout.split("\n")) {
@@ -711,12 +722,15 @@ async function runExternal(ctx, config, request) {
 }
 var memo = /* @__PURE__ */ new Map();
 var MEMO_MS = 3e3;
-async function memoized(key, read) {
+function memoized(key, read) {
   const hit = memo.get(key);
   const now = Date.now();
   if (hit !== void 0 && now - hit.at < MEMO_MS) return hit.value;
-  const value = await read();
-  memo.set(key, { at: Date.now(), value });
+  const value = Promise.resolve().then(read);
+  memo.set(key, { at: now, value });
+  value.catch(() => {
+    memo.delete(key);
+  });
   if (memo.size > 64) {
     for (const [entryKey, entry] of memo) if (now - entry.at >= MEMO_MS) memo.delete(entryKey);
   }
@@ -975,7 +989,7 @@ var Config = {
         issues.push({ message: "gitCommand must be a non-empty string" });
       }
       const fields = {
-        gitTimeoutMs: number("gitTimeoutMs", 1e4, 1e3, 6e4),
+        gitTimeoutMs: number("gitTimeoutMs", 3e4, 1e3, 12e4),
         maxGitOutputBytes: number("maxGitOutputBytes", 8 * 1024 * 1024, 64 * 1024, 64 * 1024 * 1024),
         statsMaxDepth: number("statsMaxDepth", 32, 1, 128),
         statsMaxEntries: number("statsMaxEntries", 5e4, 1e3, 1e6),

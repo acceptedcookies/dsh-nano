@@ -78,7 +78,9 @@ export function StatusBar(props) {
       React.createElement('span', { className: 'nxe-chip-label' }, String(git.stashed))))
     }
 
-    // The commit button: pending files always, remote counts only when a remote exists.
+    // The commit button mirrors the source-control segment of an editor's status bar: the sync
+    // glyph, the remote pair "0↓ 53↑" when an upstream exists, then the pending-file count as a
+    // filled badge — three readable parts inside one button.
     const remote = git.upstream === null || git.upstream === undefined
       ? undefined
       : formatSync(git.ahead ?? 0, git.behind ?? 0)
@@ -91,8 +93,10 @@ export function StatusBar(props) {
       onClick: onOpenCommit,
     },
     React.createElement(IconRefreshOutlineRegular, { width: 14, height: 14 }),
-    React.createElement('span', { className: 'nxe-chip-count', 'data-nxe-pending': String(pending) }, String(pending)),
-    remote === undefined ? null : React.createElement('span', { className: 'nxe-chip-sync', 'data-nxe-sync': 'true' }, remote)))
+    remote === undefined ? null : React.createElement('span', { className: 'nxe-chip-sync', 'data-nxe-sync': 'true' }, remote),
+    React.createElement('span', {
+      className: 'nxe-chip-badge', 'data-nxe-pending': String(pending), 'data-empty': String(pending === 0),
+    }, String(pending))))
   }
 
   const right = []

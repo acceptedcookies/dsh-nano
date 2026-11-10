@@ -118,7 +118,7 @@ dsh plugin --profile web add <spec>
 - id: nano-explorer-extra
   config:
     gitCommand: git
-    gitTimeoutMs: 10000
+    gitTimeoutMs: 30000
     maxGitOutputBytes: 8388608
     statsMaxDepth: 32
     statsMaxEntries: 50000

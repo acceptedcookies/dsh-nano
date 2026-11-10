@@ -111,6 +111,7 @@ export function ExplorerBody(props) {
     setDeleteRequest(null)
     setMenu(null)
     setDirectoryStatus(new Map())
+    setGitError(undefined)
   }, [sessionId, cwd, tab.visible])
 
   // One gesture clock for the whole tree: the Factory hands the same `onOpen` both presses.
@@ -748,7 +749,6 @@ export function ExplorerBody(props) {
       React.createElement(ToolButton, { label: copy.reload, onClick: () => { void tree.refresh(); void refreshGit() } }, iconRefresh()),
     ),
     linkNote === undefined ? null : React.createElement('p', { className: 'nxe-row-note', role: 'status' }, linkNote),
-    gitError === undefined ? null : React.createElement('p', { className: 'nxe-row-note nxe-note-error' }, gitError),
     deleteRequest === null ? null : React.createElement(Dialog, {
       copy, title: copy.deleteTitle, busy, confirmLabel: copy.delete,
       onConfirm: () => { void doDelete(deleteRequest) },
@@ -769,6 +769,19 @@ export function ExplorerBody(props) {
     }),
     React.createElement('div', { className: 'nxe-tree', 'data-nxe-tree': 'true', onKeyDown: onTreeKeyDown }, content),
     React.createElement(NanoToast, { text: toast }),
+    // A Git read failure is a persistent floating warning over the pane's lower edge, not a row in
+    // the flow: an inline line pushed the whole tree down, and it stayed as long as the error did.
+    gitError === undefined ? null : React.createElement('div', {
+      className: 'nano-toast nxe-git-alert', role: 'alert', 'data-nxe-git-alert': 'true',
+    },
+    React.createElement(primitives.IconWarningOutlineRegular, {
+      width: 14, height: 14, className: 'nxe-git-alert-icon', 'aria-hidden': 'true',
+    }),
+    React.createElement('span', { className: 'nxe-git-alert-text' }, gitError),
+    React.createElement('button', {
+      type: 'button', className: 'nxe-git-alert-x', title: copy.dismiss,
+      'aria-label': copy.dismiss, onClick: () => setGitError(undefined),
+    }, React.createElement(primitives.IconCloseOutlineRegular, { width: 12, height: 12, 'aria-hidden': 'true' }))),
     React.createElement(StatusBar, {
       copy, git, stats, statsState, prefs,
       onOpenBranch: () => setDrawer('branch'),

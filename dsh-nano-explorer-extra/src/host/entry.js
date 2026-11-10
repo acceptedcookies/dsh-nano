@@ -42,7 +42,7 @@ export const Config = {
         issues.push({ message: 'gitCommand must be a non-empty string' })
       }
       const fields = {
-        gitTimeoutMs: number('gitTimeoutMs', 10000, 1000, 60000),
+        gitTimeoutMs: number('gitTimeoutMs', 30000, 1000, 120000),
         maxGitOutputBytes: number('maxGitOutputBytes', 8 * 1024 * 1024, 64 * 1024, 64 * 1024 * 1024),
         statsMaxDepth: number('statsMaxDepth', 32, 1, 128),
         statsMaxEntries: number('statsMaxEntries', 50000, 1000, 1000000),

@@ -167,6 +167,127 @@ function inline(text, images) {
   return result + escapeHtml(text.slice(cursor))
 }
 
+/**
+ * Sanitize a rich-text HTML fragment (e.g. a WeChat article body) for direct
+ * injection into `.np-read`: promote `data-src`, strip scripts/iframes/event
+ * handlers, keep only layout-relevant style declarations, neutralize
+ * positioning and lazy-reveal `visibility:hidden`. `dark` remaps the
+ * white-background / black-text values WeChat hardcodes onto dsw tokens.
+ * @param {string} html
+ * @param {{ dark?: boolean }} [opts]
+ */
+export function sanitizeRichHtml(html, opts = {}) {
+  const doc = new DOMParser().parseFromString(String(html ?? ''), 'text/html')
+  for (const bad of doc.querySelectorAll('script, iframe, mpvoice, [onclick], [onload], [onerror]')) bad.remove()
+  for (const el of doc.querySelectorAll('*')) {
+    for (const attr of [...el.attributes]) {
+      if (/^on/i.test(attr.name)) el.removeAttribute(attr.name)
+    }
+  }
+  for (const img of doc.querySelectorAll('img')) {
+    const src = img.getAttribute('data-src') || img.getAttribute('src') || ''
+    if (src) img.setAttribute('src', src)
+    img.removeAttribute('data-src')
+    img.setAttribute('referrerpolicy', 'no-referrer')
+    img.style.maxWidth = '100%'
+    img.style.height = 'auto'
+  }
+  const dark = opts.dark === true
+  for (const el of doc.querySelectorAll('[style]')) {
+    const kept = []
+    for (const decl of el.getAttribute('style').split(';')) {
+      const [prop, ...rest] = decl.split(':')
+      const name = prop.trim().toLowerCase()
+      let value = rest.join(':').trim()
+      if (!name || !MP_SAFE_STYLE.test(name)) continue
+      if (dark) {
+        if (/^background(-color)?$/.test(name) && /^(#fff|#ffffff|white|rgb\(255,\s*255,\s*255\))$/i.test(value)) continue
+        if (name === 'color' && /^(#000|#111|#222|#333|#444|black|rgb\(0,\s*0,\s*0\))$/i.test(value)) continue
+      }
+      kept.push(`${prop.trim()}: ${value}`)
+    }
+    /* The host pass already appends `position: static` — do not stack a
+       second copy when the draft came through /fetch-mp. */
+    if (!kept.some(d => /^position\s*:/i.test(d))) kept.push('position: static')
+    if (kept.length) el.setAttribute('style', kept.join('; '))
+    else el.removeAttribute('style')
+  }
+  return doc.body.innerHTML
+}
+
+const MP_SAFE_STYLE = /^(color|font-size|font-weight|font-style|font-family|text-align|line-height|margin(-(top|right|bottom|left))?|padding(-(top|right|bottom|left))?|background(-color|-image)?|border(-(top|right|bottom|left)(-(width|style|color))?)?|border-radius|letter-spacing|text-indent|text-decoration(-line)?|width|max-width|height|display|vertical-align|box-sizing|overflow(-x|-y)?|white-space|word-(wrap|break)|opacity|float|clear)$/
+
+/* ---------- Source-view HTML utilities (work on the draft string) ---------- */
+
+const HTML_VOID = /^(area|base|br|col|embed|hr|img|input|link|meta|source|track|wbr)$/i
+const HTML_INLINE = /^(a|abbr|b|bdi|bdo|br|cite|code|data|dfn|em|i|img|kbd|mark|q|s|samp|small|span|strong|sub|sup|time|u|var)$/i
+
+/** Pretty-print an HTML fragment: block tags on their own lines, indented. */
+export function formatHtml(html) {
+  const src = String(html ?? '').replace(/>\s+</g, '><').trim()
+  if (!src) return ''
+  const lines = []
+  let depth = 0
+  const chunk = /<!--[\s\S]*?-->|<\/?[a-zA-Z][^>]*>|[^<]+/g
+  let m
+  while ((m = chunk.exec(src)) !== null) {
+    const tok = m[0]
+    if (tok.startsWith('</')) {
+      depth = Math.max(0, depth - 1)
+      lines.push(`${'  '.repeat(depth)}${tok}`)
+    } else if (tok.startsWith('<!--')) {
+      lines.push(`${'  '.repeat(depth)}${tok}`)
+    } else if (tok.startsWith('<')) {
+      const name = tok.match(/^<([a-zA-Z][\w-]*)/)?.[1] ?? ''
+      const selfClose = /\/\s*>$/.test(tok) || HTML_VOID.test(name)
+      lines.push(`${'  '.repeat(depth)}${tok}`)
+      if (!selfClose && !HTML_INLINE.test(name)) depth += 1
+      else if (!selfClose && HTML_INLINE.test(name)) { /* inline stays same line */ }
+    } else {
+      const text = tok.trim()
+      if (text) lines.push(`${'  '.repeat(depth)}${text}`)
+    }
+  }
+  return lines.join('\n')
+}
+
+/** Collapse inter-tag whitespace and line breaks: a compact one-liner draft. */
+export function minifyHtml(html) {
+  return String(html ?? '')
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/>\s+</g, '><')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+}
+
+/** Remove every `style`/`class` attribute: keep only the semantic skeleton. */
+export function stripHtmlStyles(html) {
+  return String(html ?? '')
+    .replace(/\sstyle\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+    .replace(/\sclass\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+}
+
+/** Ordered unique image src list from a fragment. */
+export function extractImageUrls(html) {
+  const urls = []
+  const re = /<img\b[^>]*\bsrc\s*=\s*"([^"]+)"/gi
+  let m
+  while ((m = re.exec(String(html ?? ''))) !== null) {
+    if (!urls.includes(m[1])) urls.push(m[1])
+  }
+  return urls
+}
+
+/** Rendered text of a fragment: blocks separated by blank lines. */
+export function htmlToText(html) {
+  const doc = new DOMParser().parseFromString(String(html ?? ''), 'text/html')
+  for (const br of doc.querySelectorAll('br')) br.replaceWith('\n')
+  for (const el of doc.querySelectorAll('p,section,div,h1,h2,h3,h4,li,blockquote,tr')) {
+    el.append('\n')
+  }
+  return doc.body.textContent.replace(/\n{3,}/g, '\n\n').trim()
+}
+
 /** @param {string} markdown @param {number} start @param {number} end @param {string} kind */
 export function applyFormat(markdown, start, end, kind) {
   const selected = markdown.slice(start, end)

@@ -48,6 +48,10 @@ export const Config = {
 
 const SAVE_ROUTE = '/nano-notepad/save'
 const READ_ROUTE = '/nano-notepad/read'
+const MP_ROUTE = '/nano-notepad/fetch-mp'
+const MP_MAX_HTML_BYTES = 8 * 1024 * 1024
+const MP_TIMEOUT_MS = 20000
+const MP_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 MicroMessenger/8.0.40'
 const MAX_READ_BYTES = 2 * 1024 * 1024
 const MAX_SAVE_BYTES = 8 * 1024 * 1024
 const DIALOG_TIMEOUT_MS = 600000
@@ -242,4 +246,130 @@ export function apply(ctx) {
       }
     },
   }), 'nano-notepad: save route')
+
+  ctx.effect(() => ctx.webServer.register({
+    kind: 'exact',
+    path: MP_ROUTE,
+    handler: async (req, res) => {
+      const rejection = ctx.get('connection')?.requestRejection(req)
+      if (rejection !== undefined) { res.statusCode = rejection; res.end(); return }
+      if (req.method !== 'POST') { res.setHeader('allow', 'POST'); sendJson(res, 405, { ok: false, reason: 'method' }); return }
+      const type = String(req.headers['content-type'] ?? '')
+      if (!type.toLowerCase().startsWith('application/json')) { sendJson(res, 415, { ok: false, reason: 'content-type' }); return }
+      try {
+        const body = await jsonBody(req)
+        const result = await fetchMpArticle(body.url)
+        sendJson(res, result.ok ? 200 : 422, result)
+      } catch (error) {
+        sendJson(res, 500, { ok: false, reason: 'failed', message: messageOf(error).slice(0, 200) })
+      }
+    },
+  }), 'nano-notepad: fetch-mp route')
+}
+
+/* ---------- WeChat MP article fetch ---------- */
+
+/**
+ * A pasted mp.weixin.qq.com link can't be fetched from the page (CORS), so the
+ * host pulls it. A desktop/WeChat-less UA gets the anti-scrape verify page
+ * (~18KB, no js_content); the iPhone+MicroMessenger UA gets the full article.
+ * Non-article or verify-page responses surface as `reason:'not-article'`.
+ */
+async function fetchMpArticle(url) {
+  if (typeof url !== 'string' || !/^https:\/\/mp\.weixin\.qq\.com\/s\//.test(url.trim())) {
+    return { ok: false, reason: 'not-mp-url' }
+  }
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), MP_TIMEOUT_MS)
+  let html = ''
+  try {
+    const response = await fetch(url.trim(), {
+      headers: { 'user-agent': MP_UA, 'accept': 'text/html,application/xhtml+xml' },
+      signal: controller.signal,
+      redirect: 'follow',
+    })
+    if (!response.ok) return { ok: false, reason: 'fetch-failed', status: response.status }
+    html = await response.text()
+  } catch (error) {
+    return { ok: false, reason: 'fetch-failed', message: messageOf(error).slice(0, 200) }
+  } finally {
+    clearTimeout(timer)
+  }
+  if (html.length > MP_MAX_HTML_BYTES) return { ok: false, reason: 'too-large' }
+  const meta = mpMeta(html)
+  const content = mpContent(html)
+  if (content === null) return { ok: false, reason: 'not-article' }
+  const sanitized = sanitizeMpHtml(content)
+  const name = (meta.title || 'wechat-article').replace(/[\\/:*?"<>|\x00-\x1f]/g, '').trim().slice(0, 80) || 'wechat-article'
+  return { ok: true, name: `${name}.html`, content: sanitized, meta }
+}
+
+/** Pull the article's own metadata from the full page. */
+function mpMeta(html) {
+  const pick = (re) => { const m = html.match(re); return m ? m[1].trim() : '' }
+  return {
+    title: pick(/id="activity-name"[^>]*>([\s\S]*?)<\/h1>/).replace(/<[^>]+>/g, '').trim()
+        || pick(/var msg_title = '([^']*)'/),
+    account: pick(/id="js_name"[^>]*>([\s\S]*?)<\//).replace(/<[^>]+>/g, '').trim()
+          || pick(/var nickname = '([^']*)'/),
+    author: pick(/var author = '([^']*)'/) || pick(/id="js_author_name"[^>]*>([\s\S]*?)<\//).replace(/<[^>]+>/g, '').trim(),
+    publishedAt: (() => { const ct = pick(/var ct = '(\d+)'/); return ct ? new Date(Number(ct) * 1000).toISOString() : '' })(),
+    coverUrl: pick(/var msg_cdn_url = '([^']*)'/),
+  }
+}
+
+/** Slice `#js_content`'s inner HTML out of the page (it's a div; walk the tag depth). */
+function mpContent(html) {
+  const start = html.indexOf('id="js_content"')
+  if (start === -1) return null
+  const bodyStart = html.indexOf('>', start) + 1
+  let depth = 1, end = -1
+  const re = /<\/?div\b[^>]*>/g
+  re.lastIndex = bodyStart
+  let m
+  while ((m = re.exec(html)) !== null) {
+    depth += m[0].startsWith('</') ? -1 : 1
+    if (depth === 0) { end = m.index; break }
+  }
+  return end === -1 ? null : html.slice(bodyStart, end)
+}
+
+/**
+ * Host-side regex sanitizer for the WeChat rich-text body: drop scripts,
+ * iframes, event handlers, mpvoice, and every `style` declaration that isn't
+ * in the layout whitelist; neutralize positioning. The client re-sanitizes in
+ * DOM space before render, so this only has to be a solid first pass.
+ */
+const MP_STYLE_ALLOW = /^(color|font-size|font-weight|font-style|font-family|text-align|line-height|margin(-(top|right|bottom|left))?|padding(-(top|right|bottom|left))?|background(-color|-image)?|border(-(top|right|bottom|left)(-(width|style|color))?)?|border-radius|letter-spacing|text-indent|text-decoration(-line)?|width|max-width|height|display|vertical-align|box-sizing|overflow(-x|-y)?|white-space|word-(wrap|break)|opacity|float|clear)\s*$/i
+
+function sanitizeMpHtml(html) {
+  let out = html
+    .replace(/<script\b[\s\S]*?<\/script\s*>/gi, '')
+    .replace(/<iframe\b[\s\S]*?(<\/iframe\s*>|\/?>)/gi, '')
+    .replace(/<\/?mpvoice\b[^>]*>/gi, '')
+    .replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+    /* Promote data-src only on <img>: WeChat also sticks junk data-src values
+       (e.g. "position:static") on video/decoration nodes, and promoting those
+       turns them into resource URLs — ERR_UNKNOWN_URL_SCHEME noise. */
+    .replace(/(<img\b[^>]*?)\sdata-src\s*=\s*"([^"]*)"/gi, `$1 src="$2" referrerpolicy="no-referrer"`)
+    .replace(/(<img\b[^>]*?)\sdata-src\s*=\s*'([^']*)'/gi, `$1 src='$2' referrerpolicy="no-referrer"`)
+    .replace(/\sdata-src\s*=\s*("[^"]*"|'[^']*')/gi, '')
+    .replace(/\sstyle\s*=\s*"([^"]*)"/gi, (all, value) => {
+      const kept = value.split(';')
+        .map(d => d.trim()).filter(Boolean)
+        .filter(d => MP_STYLE_ALLOW.test(d.split(':')[0]))
+        .join('; ')
+      return kept ? ` style="${kept}; position: static"` : ''
+    })
+    .replace(/\sstyle\s*=\s*'([^']*)'/gi, (all, value) => {
+      const kept = value.split(';')
+        .map(d => d.trim()).filter(Boolean)
+        .filter(d => MP_STYLE_ALLOW.test(d.split(':')[0]))
+        .join('; ')
+      return kept ? ` style='${kept}; position: static'` : ''
+    })
+    // Visibility tricks the original page uses for lazy reveal must not hide
+    // the whole body in our pane.
+    .replace(/visibility\s*:\s*hidden/gi, 'visibility: visible')
+  return out
 }

@@ -115,7 +115,7 @@ export function validateName(name) {
  * only extensionless names are completed to .md.
  * @param {string} name
  */
-const KNOWN_EXT = /\.(md|markdown|json)$/i
+const KNOWN_EXT = /\.(md|markdown|json|html|htm|wx)$/i
 
 export function fileName(name) {
   const trimmed = validateName(name)

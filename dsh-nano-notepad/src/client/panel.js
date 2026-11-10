@@ -25,7 +25,7 @@ import {
   writeSettings,
   writeUi,
 } from './db.js'
-import { applyFormat, escapeHtml, renderMarkdown } from './markdown.js'
+import { applyFormat, escapeHtml, extractImageUrls, formatHtml, htmlToText, minifyHtml, renderMarkdown, sanitizeRichHtml, stripHtmlStyles } from './markdown.js'
 import { validateJson, positionOf, formatJson, minifyJson, escapeJson, unescapeJson, decodeEscapes, renderJsonTree } from './json.js'
 import { highlightSource } from './highlight.js'
 import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -167,6 +167,18 @@ ${NANO_STYLES}
 .np-tree > .np-tools-toggle { align-items: center; justify-content: center; width: var(--np-icon-btn); height: var(--np-icon-btn); flex: none; margin-left: auto; padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); cursor: pointer; }
 .np-tree > .np-tools-toggle:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 .np-tools-toggle svg { width: 16px; height: 16px; display: block; }
+/* Paste-a-link strip above the tree foot: only meaningful in the expanded
+   tree, and the whole point is a drop target for mp.weixin.qq.com URLs. */
+.np-mp-zone { box-sizing: border-box; display: flex; align-items: center; gap: 6px; flex: none; margin: 0 var(--np-pad-x) 6px; padding: 0 8px; height: 30px; border: 1px dashed var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); color: var(--dsw-alias-label-tertiary); }
+.np-mp-zone:focus-within { border-color: var(--dsw-alias-border-l3); border-style: solid; }
+.np-mp-input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--dsw-alias-label-primary); font: inherit; font-size: var(--np-font-size-sm); outline: none; }
+.np-mp-input::placeholder { color: var(--dsw-alias-label-tertiary); }
+.np-mp-hint { flex: none; width: 14px; height: 14px; }
+.np-mp-hint[data-state="busy"] { border: 2px solid var(--dsw-alias-border-l3); border-top-color: var(--dsw-alias-label-primary); border-radius: 50%; animation: np-spin 0.7s linear infinite; }
+.np-mp-hint[data-state="fail"] { color: var(--dsw-alias-state-error-secondary); }
+.np-mp-hint[data-state="fail"]::before { content: '✕'; font-size: 11px; line-height: 14px; display: block; text-align: center; }
+@keyframes np-spin { to { transform: rotate(360deg) } }
+.np-tree[data-collapsed="true"] .np-mp-zone { display: none; }
 .np-tree-foot { box-sizing: border-box; display: flex; align-items: center; gap: var(--np-gap); flex: none; min-height: var(--np-foot-h); padding: 0 var(--np-pad-x); border-top: 1px solid var(--dsw-alias-border-l2); }
 .np-tree-foot button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 30px; }
 .np-tree-foot svg { width: 16px; height: 16px; display: block; }
@@ -293,6 +305,33 @@ ${NANO_STYLES}
 .np-read img { display: block; max-width: min(100%, 640px); margin: 8px 0; border-radius: var(--dsw-radius-md); }
 .np-read .missing-image { border: 1px dashed var(--dsw-alias-border-l3); padding: 2px 4px; }
 .np-read .np-placeholder { color: var(--dsw-alias-label-secondary); }
+/* The rendered wrapper carries the preview-only layout vars: font size,
+   simulated viewport width, and the theme-fit flag. */
+.np-read-body { font-size: var(--np-read-fs, inherit); line-height: inherit; }
+.np-read-body[data-width="390"] { max-width: 390px; margin-inline: auto; }
+.np-read-body[data-width="820"] { max-width: 820px; margin-inline: auto; }
+.np-read-body img { max-width: 100%; height: auto; }
+/* Preview toolbar: sits inside .np-toolbar for rich-html files in rendered
+   view, so tab switching never strands it and it follows the standard slot. */
+.np-ht-tools[hidden], .np-rt-tools[hidden] { display: none !important; }
+/* Preview tools live on the tabs row: it is never collapsed by the
+   data-tools=closed rule, and they sit in the space after the tab list. */
+.np-rt-tools { display: inline-flex; align-items: center; gap: 1px; flex: none; }
+.np-rt-tools .np-tool { width: 26px; height: 24px; padding: 0; font-size: 11px; }
+.np-rt-tools .np-tool svg { width: 14px; height: 14px; }
+.np-rt-tools .np-tool-sep { margin: 0 1px; }
+/* Gallery overlay opened from the toolbar. */
+.np-gallery { position: absolute; top: calc(var(--np-toolbar-h, 42px) + 6px); right: 10px; z-index: 7; width: min(340px, 90%); max-height: 60%; overflow: auto; padding: 10px; background: var(--dsw-alias-bg-layer-2); border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md); box-shadow: 0 8px 24px rgba(0,0,0,.3); }
+.np-gallery[hidden] { display: none !important; }
+.np-gallery-head { display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--dsw-alias-label-secondary); margin-bottom: 8px; }
+.np-gallery-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.np-gallery-item { position: relative; aspect-ratio: 1; border-radius: var(--dsw-radius-sm); overflow: hidden; border: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-3); cursor: pointer; }
+.np-gallery-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.np-gallery-item .np-g-act { position: absolute; inset: auto 0 0 0; display: flex; gap: 2px; padding: 3px; background: rgba(0,0,0,.55); opacity: 0; transition: opacity .15s; }
+.np-gallery-item:hover .np-g-act, .np-gallery-item:focus-within .np-g-act { opacity: 1; }
+.np-g-act button { flex: 1; border: 0; border-radius: 3px; padding: 2px 0; font-size: 10px; background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-primary); cursor: pointer; }
+.np-g-act button:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.np-gallery-empty { padding: 18px; text-align: center; color: var(--dsw-alias-label-tertiary); font-size: 12px; }
 .np-slash { position: absolute; z-index: 4; background: var(--dsw-menu-surface-fill, var(--dsw-alias-bg-layer-3)); color: var(--dsw-alias-label-primary); border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-lg); box-shadow: var(--dsw-elevation-prominent); backdrop-filter: var(--dsw-menu-backdrop-filter); }
 /* .np-dlg-body wraps every NanoDialog's injected children: stacked content with the
    old .np-card-scroll rhythm, so settings/history/rename bodies look unchanged.
@@ -506,6 +545,8 @@ const MINIFY_ICON = dshIcon('compact-outline')
 const ESCAPE_ICON = googleIcon('M8 5 4 12h4v7l4-9H8z')
 const UNESCAPE_ICON = googleIcon('M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z')
 const STRIP_ICON = googleIcon('M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z')
+const GRID_ICON = googleIcon('M3 3h8v8H3zM13 3h8v8h-8zM3 13h8v8H3zM13 13h8v8h-8z')
+const LINK_ICON = googleIcon('M10.59 13.41c-.41.39-1.07.39-1.48 0l-4-4c-.39-.41-.39-1.07 0-1.48.41-.39 1.07-.39 1.48 0l4 4c.4.41.4 1.07 0 1.48zm3.41-4.41c.41-.39 1.07-.39 1.48 0l4 4c.39.41.39 1.07 0 1.48-.41.39-1.07.39-1.48 0l-4-4c-.4-.41-.4-1.07 0-1.48zM8 5c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3z')
 const CHEVRON_ICON = dshIcon('chevron-down-outline')
 const CARET_ICON = dshIcon('triangle-right-fill')
 const CHECK_ICON = dshIcon('check-outline')
@@ -571,11 +612,11 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     ? `<button type="button" class="np-tool" data-action="image" data-format-kind="image">${def.icon}</button>`
     : `<button type="button" class="np-tool" data-format="${def.kind}" data-format-kind="${def.kind}">${def.icon}</button>`).join('')
   panel.innerHTML = `
-    <div class="np-tabs"><button type="button" class="np-tree-toggle" data-action="toggle-tree"></button><button type="button" class="np-close-tabs" data-action="close-tabs" data-i18n="saveCloseTabs" data-i18n-mode="title">${dshIcon('archive-check-outline')}</button><div class="np-tablist"></div><span class="np-tabs-spacer"></span></div>
+    <div class="np-tabs"><button type="button" class="np-tree-toggle" data-action="toggle-tree"></button><button type="button" class="np-close-tabs" data-action="close-tabs" data-i18n="saveCloseTabs" data-i18n-mode="title">${dshIcon('archive-check-outline')}</button><div class="np-tablist"></div><span class="np-tabs-spacer"></span><span class="np-rt-tools" hidden><button type="button" class="np-tool" data-rt="gallery" data-i18n="rtGallery" data-i18n-mode="title">${GRID_ICON}</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-rt="font-minus" data-i18n="rtFontMinus" data-i18n-mode="title">A−</button><button type="button" class="np-tool" data-rt="font-plus" data-i18n="rtFontPlus" data-i18n-mode="title">A+</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-rt="width" data-i18n="rtWidth" data-i18n-mode="title">宽</button><button type="button" class="np-tool" data-rt="themefit" data-i18n="rtThemeFit" data-i18n-mode="title" aria-pressed="true">◐</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-rt="copy-rich" data-i18n="rtCopyRich" data-i18n-mode="title">${dshIcon('copy-outline')}</button><button type="button" class="np-tool" data-rt="copy-text" data-i18n="rtCopyText" data-i18n-mode="title">Tx</button><button type="button" class="np-tool" data-rt="links" data-i18n="rtLinks" data-i18n-mode="title">${LINK_ICON}</button></span></div>
     <div class="np-body">
-      <aside class="np-tree"><div class="np-tree-head"><div class="np-ws"><button type="button" class="np-ws-btn" data-action="ws-toggle" aria-haspopup="listbox" aria-expanded="false"><span class="np-ws-label"></span><span class="np-ws-caret" aria-hidden="true">${CHEVRON_ICON}</span></button></div><span class="np-tree-tools"><button type="button" data-action="new-item" data-i18n="newItem" data-i18n-mode="title" aria-haspopup="menu">${PLUS_ICON}</button><button type="button" class="np-danger" data-action="delete" data-i18n="clearUnpinned" data-i18n-mode="title">${dshIcon('trash-outline')}</button><button type="button" class="np-tools-toggle" data-action="toggle-tools" data-i18n="expandTools" data-i18n-mode="title" aria-expanded="false">${CHEVRON_ICON}</button></span></div><div class="np-nodes" data-root="true"></div><button type="button" class="np-tools-toggle" data-action="toggle-tools" data-i18n="expandTools" data-i18n-mode="title" aria-expanded="false">${CHEVRON_ICON}</button><div class="np-tree-foot"><button type="button" data-action="settings" data-i18n="settings" data-i18n-mode="label">${SETTINGS_ICON}<span data-i18n="settings"></span></button><button type="button" data-action="close" data-i18n="close" data-i18n-mode="label">${CLOSE_ICON}<span data-i18n="close"></span></button></div></aside>
-      <div class="np-editor">
-        <div class="np-toolbar"><span class="np-md-tools">${toolbar}</span><span class="np-json-tools" hidden><button type="button" class="np-tool" data-json="expand" data-i18n="jsonExpand" data-i18n-mode="title">${EXPAND_ICON}</button><button type="button" class="np-tool" data-json="collapse" data-i18n="jsonCollapse" data-i18n-mode="title">${COLLAPSE_ICON}</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-json="format" data-i18n="jsonFormat" data-i18n-mode="title">${FORMAT_ICON}</button><button type="button" class="np-tool" data-json="minify" data-i18n="jsonMinify" data-i18n-mode="title">${MINIFY_ICON}</button><button type="button" class="np-tool" data-json="escape" data-i18n="jsonEscape" data-i18n-mode="title">${ESCAPE_ICON}</button><button type="button" class="np-tool" data-json="unescape" data-i18n="jsonUnescape" data-i18n-mode="title">${UNESCAPE_ICON}</button><button type="button" class="np-tool" data-json="strip" data-i18n="jsonStrip" data-i18n-mode="title">${STRIP_ICON}</button></span><button type="button" class="np-switch" data-action="view" role="switch" aria-checked="false" data-i18n="viewGroup" data-i18n-mode="title"><span class="np-switch-label" data-i18n="source"></span><span class="np-switch-label" data-i18n="preview"></span><span class="np-switch-thumb" data-i18n="source"></span></button></div>
+      <aside class="np-tree"><div class="np-tree-head"><div class="np-ws"><button type="button" class="np-ws-btn" data-action="ws-toggle" aria-haspopup="listbox" aria-expanded="false"><span class="np-ws-label"></span><span class="np-ws-caret" aria-hidden="true">${CHEVRON_ICON}</span></button></div><span class="np-tree-tools"><button type="button" data-action="new-item" data-i18n="newItem" data-i18n-mode="title" aria-haspopup="menu">${PLUS_ICON}</button><button type="button" class="np-danger" data-action="delete" data-i18n="clearUnpinned" data-i18n-mode="title">${dshIcon('trash-outline')}</button><button type="button" class="np-tools-toggle" data-action="toggle-tools" data-i18n="expandTools" data-i18n-mode="title" aria-expanded="false">${CHEVRON_ICON}</button></span></div><div class="np-nodes" data-root="true"></div><div class="np-mp-zone"><input class="np-mp-input" type="text" inputmode="url" autocomplete="off" spellcheck="false" data-i18n="importMp" data-i18n-attr="placeholder"><span class="np-mp-hint" data-state="idle" aria-hidden="true"></span></div><button type="button" class="np-tools-toggle" data-action="toggle-tools" data-i18n="expandTools" data-i18n-mode="title" aria-expanded="false">${CHEVRON_ICON}</button><div class="np-tree-foot"><button type="button" data-action="settings" data-i18n="settings" data-i18n-mode="label">${SETTINGS_ICON}<span data-i18n="settings"></span></button><button type="button" data-action="close" data-i18n="close" data-i18n-mode="label">${CLOSE_ICON}<span data-i18n="close"></span></button></div></aside>
+      <div class="np-editor" data-themefit="true">
+        <div class="np-toolbar"><span class="np-md-tools">${toolbar}</span><span class="np-json-tools" hidden><button type="button" class="np-tool" data-json="expand" data-i18n="jsonExpand" data-i18n-mode="title">${EXPAND_ICON}</button><button type="button" class="np-tool" data-json="collapse" data-i18n="jsonCollapse" data-i18n-mode="title">${COLLAPSE_ICON}</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-json="format" data-i18n="jsonFormat" data-i18n-mode="title">${FORMAT_ICON}</button><button type="button" class="np-tool" data-json="minify" data-i18n="jsonMinify" data-i18n-mode="title">${MINIFY_ICON}</button><button type="button" class="np-tool" data-json="escape" data-i18n="jsonEscape" data-i18n-mode="title">${ESCAPE_ICON}</button><button type="button" class="np-tool" data-json="unescape" data-i18n="jsonUnescape" data-i18n-mode="title">${UNESCAPE_ICON}</button><button type="button" class="np-tool" data-json="strip" data-i18n="jsonStrip" data-i18n-mode="title">${STRIP_ICON}</button></span><span class="np-ht-tools" hidden><button type="button" class="np-tool" data-ht="format" data-i18n="htFormat" data-i18n-mode="title">${FORMAT_ICON}</button><button type="button" class="np-tool" data-ht="minify" data-i18n="htMinify" data-i18n-mode="title">${MINIFY_ICON}</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-ht="strip-styles" data-i18n="htStripStyles" data-i18n-mode="title">${STRIP_ICON}</button><button type="button" class="np-tool" data-ht="extract-images" data-i18n="htExtractImages" data-i18n-mode="title">${GRID_ICON}</button><button type="button" class="np-tool" data-ht="copy-text" data-i18n="htCopyText" data-i18n-mode="title">${dshIcon('copy-outline')}</button></span><button type="button" class="np-switch" data-action="view" role="switch" aria-checked="false" data-i18n="viewGroup" data-i18n-mode="title"><span class="np-switch-label" data-i18n="source"></span><span class="np-switch-label" data-i18n="preview"></span><span class="np-switch-thumb" data-i18n="source"></span></button></div>
         <div class="np-mirror" aria-hidden="true"></div>
         <textarea class="np-write" spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
         <div class="np-slash" hidden></div>
@@ -607,7 +648,8 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
         node.title = value
         node.setAttribute('aria-label', value)
       }
-      if (node.dataset.i18nMode !== 'title' && node.dataset.i18nMode !== 'label') node.textContent = value
+      if (node.dataset.i18nMode !== 'title' && node.dataset.i18nMode !== 'label' && !node.dataset.i18nAttr) node.textContent = value
+      if (node.dataset.i18nAttr) node.setAttribute(node.dataset.i18nAttr, value)
     }
     const SHORTCUT_HINTS = { bold: '⌘B', italic: '⌘I', link: '⌘K', code: '⌘E', strike: '⌘⇧X' }
     for (const node of panel.querySelectorAll('[data-format-kind]')) {
@@ -654,6 +696,10 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     restoredKey: /** @type {string | null} */ (null),
     /** Editing-toolbar collapsed flag; only takes effect at ≤560px panel width. */
     toolsOpen: false,
+    /** Simulated preview width for rich-html files: 'auto' | '390' (phone) | '820' (tablet). */
+    readWidth: 'auto',
+    /** Preview font-size override in px; null follows the editor setting. */
+    readFontPx: null,
   }
 
   const disposers = []
@@ -690,6 +736,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
   }
   const current = () => state.nodes.find(node => node.id === state.ui.currentId && node.kind === 'file')
   const isJson = () => (current()?.name ?? '').toLowerCase().endsWith('.json')
+  const isHtml = () => /\.(html|htm|wx)$/i.test(current()?.name ?? '')
   const jsonCollapsedFor = id => {
     if (!state.jsonCollapsed.has(id)) state.jsonCollapsed.set(id, new Set())
     return state.jsonCollapsed.get(id)
@@ -1000,15 +1047,20 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     }
     const rendered = state.view === 'rendered'
     const json = isJson()
+    const richHtml = isHtml()
     /* JSON files swap the markdown-format cluster for JSON tools. */
     const mdTools = panel.querySelector('.np-md-tools')
     const jsonTools = panel.querySelector('.np-json-tools')
     const viewSwitch = panel.querySelector('.np-switch')
     if (viewSwitch) viewSwitch.hidden = false
-    if (mdTools) mdTools.hidden = json
+    const htTools = panel.querySelector('.np-ht-tools')
+    if (mdTools) mdTools.hidden = json || richHtml
     if (jsonTools) jsonTools.hidden = !json
+    if (htTools) htTools.hidden = !richHtml || rendered
+    const rtTools = panel.querySelector('.np-rt-tools')
+    if (rtTools) rtTools.hidden = !(richHtml && rendered)
     for (const button of panel.querySelectorAll('.np-toolbar [data-format]')) {
-      button.disabled = rendered || json
+      button.disabled = rendered || json || richHtml
     }
     /* Lint badge: strict JSON validation, clicking it jumps to the offset. */
     const lint = panel.querySelector('.np-lint')
@@ -1035,6 +1087,8 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     if (!state.dirty) source.value = file.draft ?? ''
     source.hidden = rendered
     read.hidden = !rendered
+    if (state.readFontPx !== null) read.style.setProperty('--np-read-fs', `${state.readFontPx}px`)
+    else read.style.removeProperty('--np-read-fs')
     paintMirror()
     /* Return to the browsing point this file+view had when it was left. The
        key flips on file switch and view toggle, so a paint re-runs exactly
@@ -1066,6 +1120,19 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
         ? renderJsonTree(parsed.value, collapsed, escapeHtml)
         : `<p class="np-placeholder">${escapeHtml(text().jsonInvalid)}</p>`
       if (savedPos) read.scrollTop = savedPos.scrollTop ?? 0
+      syncReadTools(richHtml)
+      return
+    }
+    /* `.html` / `.wx` rich-text files (e.g. fetched WeChat articles): the draft
+       is raw HTML; preview re-sanitizes in DOM space before injection so pasted
+       content that never went through /fetch-mp is still safe. */
+    if (richHtml) {
+      const editor = panel.querySelector('.np-editor')
+      const themeFit = editor?.dataset.themefit !== 'false'
+      const dark = themeFit && resolvedTheme() === 'dark'
+      read.innerHTML = `<div class="np-read-body" data-width="${state.readWidth}">${sanitizeRichHtml(state.pendingDraft ?? (source.value || file.draft || ''), { dark })}</div>`
+      if (savedPos) read.scrollTop = savedPos.scrollTop ?? 0
+      syncReadTools(richHtml)
       return
     }
     const markdown = state.pendingDraft ?? (source.value || file.draft || '')
@@ -1076,8 +1143,9 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     const cacheKey = `${file.id}${state.imageEpoch}${markdown}`
     const cached = state.renderCache.get(cacheKey)
     if (cached !== undefined) {
-      read.innerHTML = cached
+      read.innerHTML = `<div class="np-read-body" data-width="${state.readWidth}">${cached}</div>`
       if (savedPos) read.scrollTop = savedPos.scrollTop ?? 0
+      syncReadTools(false)
       return
     }
     const images = await imagesById(state.db, imageIdsIn(markdown))
@@ -1091,8 +1159,64 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       if (oldest !== undefined) state.renderCache.delete(oldest)
     }
     state.renderCache.set(cacheKey, html)
-    read.innerHTML = html
+    read.innerHTML = `<div class="np-read-body" data-width="${state.readWidth}">${html}</div>`
     if (savedPos) read.scrollTop = savedPos.scrollTop ?? 0
+    syncReadTools(false)
+  }
+
+  /** Build/refresh the floating image gallery from the rendered body's imgs. */
+  function toggleGallery() {
+    let box = panel.querySelector('.np-gallery')
+    if (box && !box.hidden) { box.hidden = true; return }
+    if (!box) {
+      box = document.createElement('div')
+      box.className = 'np-gallery'
+      must(panel, '.np-editor').appendChild(box)
+    }
+    const imgs = [...panel.querySelectorAll('.np-read-body img, .np-read img')].map(i => i.currentSrc || i.src).filter(Boolean)
+    const unique = [...new Set(imgs)]
+    box.innerHTML = `
+      <div class="np-gallery-head"><span>${unique.length} ${text().rtGalleryTitle}</span><button type="button" data-rt="gallery" aria-label="close">✕</button></div>
+      ${unique.length === 0 ? `<div class="np-gallery-empty">${text().rtGalleryEmpty}</div>`
+        : `<div class="np-gallery-grid">${unique.map(u => `
+          <div class="np-gallery-item" tabindex="0">
+            <img src="${escapeHtml(u)}" loading="lazy" referrerpolicy="no-referrer">
+            <div class="np-g-act">
+              <button type="button" data-gimg="${escapeHtml(u)}" data-gact="copy">${text().rtCopyLink}</button>
+              <button type="button" data-gimg="${escapeHtml(u)}" data-gact="save">${text().rtSaveToNote}</button>
+            </div>
+          </div>`).join('')}</div>`}`
+    box.hidden = false
+  }
+
+  /** Brief status-line flash, reused by the copy/save tool actions. */
+  let flashTimer = 0
+  function flashStatus(msg) {
+    const el = panel.querySelector('.np-status-text')
+    if (!el) return
+    const prev = el.textContent
+    el.textContent = msg
+    clearTimeout(flashTimer)
+    flashTimer = setTimeout(() => { el.textContent = prev }, 2400)
+  }
+
+  /** Show the floating preview toolbar only for rich-html files in rendered
+     view, and keep its width/theme-fit buttons reflecting current state. */
+  function syncReadTools(isRich) {
+    const tools = panel.querySelector('.np-rt-tools')
+    if (!tools) return
+    const show = isRich === true && state.view === 'rendered'
+    tools.hidden = !show
+    if (!show) return
+    const widthBtn = tools.querySelector('[data-rt="width"]')
+    const themeBtn = tools.querySelector('[data-rt="themefit"]')
+    const labels = { auto: text().rtWidthAuto, '390': '手机 390', '820': '平板 820' }
+    if (widthBtn) widthBtn.title = `${text().rtWidth}: ${labels[state.readWidth] ?? state.readWidth}`
+    if (themeBtn) themeBtn.dataset.on = String(panel.querySelector('.np-editor')?.dataset.themefit !== 'false')
+    const fMinus = tools.querySelector('[data-rt="font-minus"]')
+    if (fMinus) fMinus.disabled = state.readFontPx !== null && state.readFontPx <= 10
+    const fPlus = tools.querySelector('[data-rt="font-plus"]')
+    if (fPlus) fPlus.disabled = state.readFontPx !== null && state.readFontPx >= 28
   }
 
   function resolvedTheme() {
@@ -2070,7 +2194,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       openNodeMenu(rowAction.dataset.more, rowAction)
       return
     }
-    const target = event.target instanceof Element ? event.target.closest('[data-action], [data-format], [data-json], [data-tab], [data-close], [data-id], [data-ws], .np-lint') : null
+    const target = event.target instanceof Element ? event.target.closest('[data-action], [data-format], [data-json], [data-ht], [data-rt], [data-gimg], [data-tab], [data-close], [data-id], [data-ws], .np-lint') : null
     if (!(target instanceof HTMLElement)) return
     const action = target.dataset.action
     if (action === 'ws-toggle') {
@@ -2184,6 +2308,87 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
         state.view = 'source'
         render()
         write().focus()
+      }
+      return
+    }
+    const htOp = target.dataset.ht
+    if (htOp && isHtml() && state.db) {
+      const source = write()
+      const draft = source.value || current()?.draft || ''
+      if (htOp === 'format') {
+        const next = formatHtml(draft)
+        if (next !== source.value) { source.value = next; scheduleSave() }
+      } else if (htOp === 'minify') {
+        const next = minifyHtml(draft)
+        if (next !== source.value) { source.value = next; scheduleSave() }
+      } else if (htOp === 'strip-styles') {
+        const next = stripHtmlStyles(draft)
+        if (next !== source.value) { source.value = next; scheduleSave() }
+      } else if (htOp === 'extract-images') {
+        const urls = extractImageUrls(draft)
+        if (urls.length === 0) { flashStatus(text().rtNoImages); return }
+        const list = urls.map(u => `- ${u}`).join('\n')
+        void navigator.clipboard?.writeText(list).catch(() => {})
+        flashStatus(`${urls.length} ${text().htImagesCopied}`)
+      } else if (htOp === 'copy-text') {
+        void navigator.clipboard?.writeText(htmlToText(draft)).catch(() => {})
+        flashStatus(text().rtCopied)
+      }
+      return
+    }
+    const rtOp = target.dataset.rt
+    if (rtOp) {
+      const read = must(panel, '.np-read')
+      const editor = panel.querySelector('.np-editor')
+      if (rtOp === 'font-minus' || rtOp === 'font-plus') {
+        const base = state.readFontPx ?? state.settings.editorFontSizePx ?? 14
+        state.readFontPx = Math.min(28, Math.max(10, base + (rtOp === 'font-plus' ? 1 : -1)))
+        read.style.setProperty('--np-read-fs', `${state.readFontPx}px`)
+        syncReadTools(true)
+      } else if (rtOp === 'width') {
+        state.readWidth = state.readWidth === 'auto' ? '390' : state.readWidth === '390' ? '820' : 'auto'
+        render()
+      } else if (rtOp === 'themefit') {
+        editor.dataset.themefit = editor.dataset.themefit === 'false' ? 'true' : 'false'
+        render()
+      } else if (rtOp === 'gallery') {
+        toggleGallery()
+      } else if (rtOp === 'copy-rich') {
+        const body = read.querySelector('.np-read-body') || read
+        void navigator.clipboard?.writeText(body.innerHTML).catch(() => {})
+        flashStatus(text().rtCopied)
+      } else if (rtOp === 'copy-text') {
+        const body = read.querySelector('.np-read-body') || read
+        void navigator.clipboard?.writeText(body.innerText).catch(() => {})
+        flashStatus(text().rtCopied)
+      } else if (rtOp === 'links') {
+        const anchors = [...read.querySelectorAll('a[href]')]
+        if (anchors.length === 0) { flashStatus(text().rtNoLinks); return }
+        const list = anchors.map(a => `- [${a.textContent.trim() || a.href}](${a.href})`).join('\n')
+        void navigator.clipboard?.writeText(list).catch(() => {})
+        flashStatus(`${anchors.length} ${text().rtLinksCopied}`)
+      }
+      return
+    }
+    const gImg = target.dataset.gimg
+    if (gImg) {
+      const act = target.dataset.gact
+      if (act === 'copy') {
+        void navigator.clipboard?.writeText(gImg).catch(() => {})
+        flashStatus(text().rtCopied)
+      } else if (act === 'save' && state.db) {
+        const file = current()
+        void fetch(gImg)
+          .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.blob() })
+          .then(blob => storeImage(state.db, blob, state.settings.imageLimitBytes))
+          .then(image => {
+            const source = write()
+            source.value = source.value.split(gImg).join(`notepad-image:${image.id}`)
+            state.imageEpoch += 1
+            scheduleSave()
+            flashStatus(text().rtImageSaved)
+          })
+          .catch(showError)
       }
       return
     }
@@ -2459,6 +2664,25 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     }).catch(showError)
   })
 
+  const mpInput = panel.querySelector('.np-mp-input')
+  const mpHint = panel.querySelector('.np-mp-hint')
+  if (mpInput && mpHint) {
+    mpInput.addEventListener('paste', event => {
+      const pasted = event.clipboardData?.getData('text/plain') ?? ''
+      if (/mp\.weixin\.qq\.com\/s\//.test(pasted)) {
+        event.preventDefault()
+        mpInput.value = pasted.trim()
+        void importMpArticle(pasted, mpInput, mpHint)
+      }
+    })
+    mpInput.addEventListener('keydown', event => {
+      if (event.key === 'Enter' && mpInput.value.trim()) {
+        event.preventDefault()
+        void importMpArticle(mpInput.value, mpInput, mpHint)
+      }
+    })
+  }
+
   on(document, 'visibilitychange', () => {
     if (document.visibilityState === 'hidden') void commit('interval').catch(showError)
   })
@@ -2542,9 +2766,9 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       await dbReady
       const siblings = state.nodes.filter(node => node.parentId === null && (node.workspaceId ?? null) === activeWorkspace().id && node.kind === 'file')
       const raw = String(name || 'note').trim() || 'note'
-      const hasExt = /\.(md|markdown|json)$/i.test(raw)
-      const base = raw.replace(/\.(md|markdown|json)$/i, '') || 'note'
-      const ext = hasExt ? raw.match(/\.(md|markdown|json)$/i)[0] : '.md'
+      const hasExt = /\.(md|markdown|json|html|htm|wx)$/i.test(raw)
+      const base = raw.replace(/\.(md|markdown|json|html|htm|wx)$/i, '') || 'note'
+      const ext = hasExt ? raw.match(/\.(md|markdown|json|html|htm|wx)$/i)[0] : '.md'
       let candidate = `${base}${ext}`, i = 1
       while (siblings.some(s => s.name === candidate)) candidate = `${base}-${++i}${ext}`
       const node = await createNode(state.db, 'file', null, candidate, activeWorkspace().id)
@@ -2560,6 +2784,40 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       channel?.postMessage({ type: 'changed' })
       return node
     },
+  }
+
+  /** A pasted mp.weixin.qq.com link: host fetches + sanitizes, we file it as
+     `.html` into the current workspace and open it. The strip's hint dot
+     reports busy/fail; the input stays editable throughout. */
+  async function importMpArticle(url, input, hint) {
+    const value = String(url ?? '').trim()
+    if (!/^https:\/\/mp\.weixin\.qq\.com\/s\//.test(value)) {
+      hint.dataset.state = 'fail'
+      input.title = text().importMpFail
+      setTimeout(() => { if (hint.dataset.state === 'fail') hint.dataset.state = 'idle' }, 2500)
+      return
+    }
+    hint.dataset.state = 'busy'
+    input.disabled = true
+    try {
+      const res = await fetch('/nano-notepad/fetch-mp', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ url: value }),
+      })
+      const out = await res.json().catch(() => ({}))
+      if (!res.ok || out.ok !== true) throw new Error(out.message || out.reason || 'fetch failed')
+      const node = await window.__nanoNotepad.import(out.name, out.content, { sourcePath: value })
+      if (out.meta) await updateNodeMeta(state.db, node.id, { mp: out.meta }).catch(() => {})
+      input.value = ''
+      hint.dataset.state = 'idle'
+    } catch (error) {
+      hint.dataset.state = 'fail'
+      input.title = `${text().importMpFail}: ${String(error.message || error).slice(0, 120)}`
+      setTimeout(() => { if (hint.dataset.state === 'fail') hint.dataset.state = 'idle' }, 3000)
+    } finally {
+      input.disabled = false
+    }
   }
 
   /** Chat cards named `[data-changed-files]` are one turn's edited files. */

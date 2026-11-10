@@ -20,8 +20,10 @@ export const NANO_STYLES = `
 .nano-menu-item[data-active="true"], .nano-menu-item:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 .nano-menu-item[data-tone="danger"] { color: var(--dsw-alias-label-error, #e5534b); }
 .nano-menu-item[data-tone="danger"][data-active="true"] { background: color-mix(in oklab, var(--dsw-alias-label-error, #e5534b) 14%, transparent); }
-.nano-menu-icon { display: inline-flex; flex: none; color: var(--dsw-alias-label-tertiary); }
+.nano-menu-icon { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex: none; color: var(--dsw-alias-label-tertiary); }
+.nano-menu-icon svg { display: block; width: 14px; height: 14px; }
 .nano-menu-item[data-active="true"] .nano-menu-icon { color: inherit; }
+.nano-menu-check { display: inline-flex; color: inherit; }
 .nano-menu-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ── transient toast (NanoToast) ────────────────────────────────────────────── */

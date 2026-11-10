@@ -10,8 +10,9 @@ const { useCallback, useEffect, useRef, useState } = React
  * @param {{ x: number, y: number, openedAt?: number } | null} props.menu - anchor + open state; null hides it.
  * @param {Array<{ id: string, label: string, icon?: React.ReactNode, tone?: string, run: () => void }>} props.actions
  * @param {() => void} props.onClose - called by Escape, outside press, or an item running.
+ * @param {number} [props.maxHeight] - cap the popup in pixels; the list scrolls past it.
  */
-export function NanoMenu({ menu, actions, onClose, width = 208 }) {
+export function NanoMenu({ menu, actions, onClose, width = 208, maxHeight }) {
   const ref = useRef(null)
   const [active, setActive] = useState(0)
   const items = menu === null ? [] : actions
@@ -39,7 +40,8 @@ export function NanoMenu({ menu, actions, onClose, width = 208 }) {
   const top = Math.min(menu.y, (window.innerHeight || height) - height - 8)
   return React.createElement('div', {
     className: 'nano-menu', role: 'menu', ref,
-    style: { position: 'fixed', left: `${Math.max(8, left)}px`, top: `${Math.max(8, top)}px`, minWidth: `${width}px` },
+    style: { position: 'fixed', left: `${Math.max(8, left)}px`, top: `${Math.max(8, top)}px`, minWidth: `${width}px`,
+      ...(typeof maxHeight === 'number' ? { maxHeight: `${Math.round(maxHeight)}px`, overflowY: 'auto', overscrollBehavior: 'contain' } : {}) },
     'data-nano-menu': 'true',
   }, items.map((item, index) => React.createElement(NanoMenuItem, {
     key: item.id, item, index, active: index === active, onHover: setActive, onRun: onClose,

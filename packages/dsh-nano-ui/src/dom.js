@@ -73,6 +73,8 @@ export function openNanoDialog(options) {
  * @param {DOMRect | {left:number, top:number, right:number, bottom:number}} options.anchor - rectangle to anchor under.
  * @param {Array<{id:string,label:string,icon?:any,tone?:string,run:()=>void}>} options.items
  * @param {number} [options.width] - menu min-width.
+ * @param {number} [options.maxHeight] - cap the popup; the list scrolls past it.
+ * @param {number} [options.gap] - pixels between the anchor's bottom and the popup's top.
  * @returns {{ close: () => void }}
  */
 export function openNanoMenu(options) {
@@ -83,11 +85,12 @@ export function openNanoMenu(options) {
   const close = () => { root.unmount(); host.remove() }
   const r = options.anchor
   const x = r.left !== undefined ? r.left : r.x
-  const y = r.bottom !== undefined ? r.bottom : (r.y ?? 0) + (r.height ?? 0)
+  const y = (r.bottom !== undefined ? r.bottom : (r.y ?? 0) + (r.height ?? 0)) + (options.gap ?? 0)
   root.render(React.createElement(NanoMenu, {
     menu: { x, y, openedAt: Date.now() },
     actions: options.items ?? [],
     width: options.width,
+    maxHeight: options.maxHeight,
     onClose: close,
   }))
   return { close }

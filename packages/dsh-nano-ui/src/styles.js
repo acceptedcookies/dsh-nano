@@ -7,7 +7,7 @@ export const NANO_STYLES = `
    Every shared surface reads from --nano-* custom properties so an owning
    plugin (e.g. the notepad) can retune typography by declaring them once on its
    own root. Each falls back to the shell default so nano-ui stays self-contained. */
-.nano-menu { position: fixed; padding: 4px; display: flex; flex-direction: column; gap: 1px; z-index: 30;
+.nano-menu { position: fixed; box-sizing: border-box; padding: 4px; display: flex; flex-direction: column; gap: 1px; z-index: 30;
   background: var(--dsw-menu-surface-fill, var(--dsw-alias-bg-layer-3)); color: var(--dsw-alias-label-primary);
   border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-lg, 12px);
   box-shadow: var(--dsw-elevation-prominent); backdrop-filter: var(--dsw-menu-backdrop-filter);
@@ -58,6 +58,10 @@ export const NANO_STYLES = `
 .nano-dialog-sized { width: clamp(320px, var(--nano-dlg-w, 380px), 100%) !important; }
 
 .nano-dialog-content { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+/* The shell Modal's body carries margin-top:20px on top of the header's own
+   12px padding-bottom, so a title-only dialog floats its first row ~32px
+   below the heading. Pull it back to the header's rhythm. */
+.nano-dialog-card [class*="_body_"] { margin-top: 8px; }
 /* The shell Button has no danger variant, so a destructive confirm was plain text
    with no hover. Keep the outline metrics and paint the warning color ourselves. */
 .nano-modal-action.nano-modal-danger {

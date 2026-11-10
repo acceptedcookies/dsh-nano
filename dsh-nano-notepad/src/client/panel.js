@@ -87,7 +87,11 @@ ${NANO_STYLES}
 .np-nodes { overflow-x: hidden; overflow-y: auto; }
 .np-tabs { display: flex; align-items: center; gap: 4px; min-height: var(--np-row-h); padding: 6px var(--np-pad-x); cursor: grab; border-bottom: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-2); }
 .np-toolbar, .np-tree-head { cursor: grab; }
-.np-tablist { display: flex; min-width: 0; gap: 2px; overflow-x: auto; scrollbar-width: thin; }
+/* Classic scrollbars (Windows / macOS "always") eat layout height and would
+   shove the 28px tabs upward inside the 40px row. Hide the scrollbar like the
+   toolbar does and let the right-edge fade signal more tabs. */
+.np-tablist { display: flex; min-width: 0; gap: 2px; overflow-x: auto; scrollbar-width: none; -ms-overflow-style: none; mask-image: linear-gradient(to right, #000 88%, transparent); -webkit-mask-image: linear-gradient(to right, #000 88%, transparent); }
+.np-tablist::-webkit-scrollbar { display: none; }
 /* dockkit-style tab: 28px, sm radius, active fills markdown-tag, close fades in */
 .np-tab { position: relative; display: inline-flex; align-items: center; flex: 0 1 auto; min-width: 90px; max-width: 196px; height: 28px; box-sizing: border-box; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); padding: 0 10px; cursor: default; font: inherit; font-size: var(--np-font-size); line-height: 1; white-space: nowrap; user-select: none; }
 .np-tab:not([data-active="true"]):hover { background: var(--dsw-alias-interactive-bg-hover); }
@@ -156,6 +160,13 @@ ${NANO_STYLES}
 .np-tree-tools button:disabled { opacity: .4; cursor: default; }
 .np-tree-tools button.np-danger:disabled { color: var(--dsw-alias-label-tertiary); }
 .np-nodes { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; padding: 6px var(--np-pad-x) var(--np-pad-x); }
+/* Editing-toolbar toggle: only ever shows at ≤560px where the toolbar row can
+   collapse. Two placements — inside .np-tree-tools for the expanded tree, and
+   as the tree's own last child so it survives when the head is hidden (collapsed). */
+.np-tools-toggle { display: none; }
+.np-tree > .np-tools-toggle { align-items: center; justify-content: center; width: var(--np-icon-btn); height: var(--np-icon-btn); flex: none; margin-left: auto; padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); cursor: pointer; }
+.np-tree > .np-tools-toggle:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+.np-tools-toggle svg { width: 16px; height: 16px; display: block; }
 .np-tree-foot { box-sizing: border-box; display: flex; align-items: center; gap: var(--np-gap); flex: none; min-height: var(--np-foot-h); padding: 0 var(--np-pad-x); border-top: 1px solid var(--dsw-alias-border-l2); }
 .np-tree-foot button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 30px; }
 .np-tree-foot svg { width: 16px; height: 16px; display: block; }
@@ -341,6 +352,9 @@ ${NANO_STYLES}
 @container np (max-width: 560px) {
   .np-body { flex-direction: column; }
   .np-tree { width: auto; max-height: 40%; border-right: 0; border-bottom: 1px solid var(--dsw-alias-border-l2); }
+  /* Cap the file list at 2.5 rows and fade the half-visible third row, so a
+     long list never eats the editor; overflow stays reachable via scrolling. */
+  .np-nodes { max-height: calc(var(--np-node-h) * 2.5 + 10px); mask-image: linear-gradient(to bottom, #000 calc(100% - 16px), transparent); -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 16px), transparent); }
   /* In a column body a collapsed tree stops being a rail and becomes a slim
      horizontal strip of icons pinned to the top. Otherwise the 52px column
      leaves an empty block under it and pushes the whole editor down. */
@@ -360,6 +374,22 @@ ${NANO_STYLES}
   .np-switch .np-switch-label { display: none; }
   .np-switch .np-switch-thumb { position: static; transform: none; width: auto; height: 22px; padding: 0 8px; box-shadow: none; font-size: var(--np-font-size-sm); }
   .np-switch[data-view="rendered"] .np-switch-thumb { transform: none; }
+  /* Four footer actions become icon-only squares like the tree's settings /
+     close buttons; their titles carry the labels for hover + a11y. */
+  .np-footer-actions button { width: var(--np-icon-btn); height: var(--np-icon-btn); padding: 0 !important; gap: 0; justify-content: center; }
+  .np-footer-actions button > span { display: none; }
+  .np-footer-actions svg { width: 15px; height: 15px; }
+  /* Swap the tree's 52px settings/close row for footer icons — saves a whole row. */
+  .np-tree-foot { display: none; }
+  /* The plain unlayered np-foot-tools display:none ships later in the bundle
+     and would win on equal specificity — force the swap. */
+  .np-foot-tools { display: inline-flex !important; }
+  .np-foot-tools button { width: var(--np-icon-btn); height: var(--np-icon-btn); }
+  .np-foot-sep { display: block !important; }
+  /* Editing controls hide by default at this width; the toggle re-shows them. */
+  .np-window[data-tools="closed"] .np-toolbar { display: none; }
+  .np-tree-tools .np-tools-toggle { display: inline-flex; }
+  .np-tree[data-collapsed="true"] > .np-tools-toggle { display: inline-flex; }
 }
 /* Viewport-level mobile layout still applies when the whole page is small. */
 @media (max-width: 760px) {
@@ -390,6 +420,10 @@ ${NANO_STYLES}
 .np-beat { transition: background-color .2s ease; }
 @keyframes np-pulse { 50% { opacity: .25; } }
 .np-footer-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
+/* Settings/close live in the tree's foot row; in the narrow layout that row is
+   hidden and these footer clones take over — so only show them there. */
+.np-foot-tools { display: none; align-items: center; gap: 4px; }
+.np-foot-sep { display: none; width: 1px; height: 20px; background: var(--dsw-alias-label-tertiary); align-self: center; flex: none; }
 .np-footer-actions button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; }
 .np-footer-actions svg { width: 14px; height: 14px; flex: none; fill: currentColor; }
 .np-section { border-top: 1px solid var(--dsw-alias-border-l2); padding-top: 2px; }
@@ -539,7 +573,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
   panel.innerHTML = `
     <div class="np-tabs"><button type="button" class="np-tree-toggle" data-action="toggle-tree"></button><button type="button" class="np-close-tabs" data-action="close-tabs" data-i18n="saveCloseTabs" data-i18n-mode="title">${dshIcon('archive-check-outline')}</button><div class="np-tablist"></div><span class="np-tabs-spacer"></span></div>
     <div class="np-body">
-      <aside class="np-tree"><div class="np-tree-head"><div class="np-ws"><button type="button" class="np-ws-btn" data-action="ws-toggle" aria-haspopup="listbox" aria-expanded="false"><span class="np-ws-label"></span><span class="np-ws-caret" aria-hidden="true">${CHEVRON_ICON}</span></button></div><span class="np-tree-tools"><button type="button" data-action="new-item" data-i18n="newItem" data-i18n-mode="title" aria-haspopup="menu">${PLUS_ICON}</button><button type="button" class="np-danger" data-action="delete" data-i18n="clearUnpinned" data-i18n-mode="title">${dshIcon('trash-outline')}</button></span></div><div class="np-nodes" data-root="true"></div><div class="np-tree-foot"><button type="button" data-action="settings" data-i18n="settings" data-i18n-mode="label">${SETTINGS_ICON}<span data-i18n="settings"></span></button><button type="button" data-action="close" data-i18n="close" data-i18n-mode="label">${CLOSE_ICON}<span data-i18n="close"></span></button></div></aside>
+      <aside class="np-tree"><div class="np-tree-head"><div class="np-ws"><button type="button" class="np-ws-btn" data-action="ws-toggle" aria-haspopup="listbox" aria-expanded="false"><span class="np-ws-label"></span><span class="np-ws-caret" aria-hidden="true">${CHEVRON_ICON}</span></button></div><span class="np-tree-tools"><button type="button" data-action="new-item" data-i18n="newItem" data-i18n-mode="title" aria-haspopup="menu">${PLUS_ICON}</button><button type="button" class="np-danger" data-action="delete" data-i18n="clearUnpinned" data-i18n-mode="title">${dshIcon('trash-outline')}</button><button type="button" class="np-tools-toggle" data-action="toggle-tools" data-i18n="expandTools" data-i18n-mode="title" aria-expanded="false">${CHEVRON_ICON}</button></span></div><div class="np-nodes" data-root="true"></div><button type="button" class="np-tools-toggle" data-action="toggle-tools" data-i18n="expandTools" data-i18n-mode="title" aria-expanded="false">${CHEVRON_ICON}</button><div class="np-tree-foot"><button type="button" data-action="settings" data-i18n="settings" data-i18n-mode="label">${SETTINGS_ICON}<span data-i18n="settings"></span></button><button type="button" data-action="close" data-i18n="close" data-i18n-mode="label">${CLOSE_ICON}<span data-i18n="close"></span></button></div></aside>
       <div class="np-editor">
         <div class="np-toolbar"><span class="np-md-tools">${toolbar}</span><span class="np-json-tools" hidden><button type="button" class="np-tool" data-json="expand" data-i18n="jsonExpand" data-i18n-mode="title">${EXPAND_ICON}</button><button type="button" class="np-tool" data-json="collapse" data-i18n="jsonCollapse" data-i18n-mode="title">${COLLAPSE_ICON}</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-json="format" data-i18n="jsonFormat" data-i18n-mode="title">${FORMAT_ICON}</button><button type="button" class="np-tool" data-json="minify" data-i18n="jsonMinify" data-i18n-mode="title">${MINIFY_ICON}</button><button type="button" class="np-tool" data-json="escape" data-i18n="jsonEscape" data-i18n-mode="title">${ESCAPE_ICON}</button><button type="button" class="np-tool" data-json="unescape" data-i18n="jsonUnescape" data-i18n-mode="title">${UNESCAPE_ICON}</button><button type="button" class="np-tool" data-json="strip" data-i18n="jsonStrip" data-i18n-mode="title">${STRIP_ICON}</button></span><button type="button" class="np-switch" data-action="view" role="switch" aria-checked="false" data-i18n="viewGroup" data-i18n-mode="title"><span class="np-switch-label" data-i18n="source"></span><span class="np-switch-label" data-i18n="preview"></span><span class="np-switch-thumb" data-i18n="source"></span></button></div>
         <div class="np-mirror" aria-hidden="true"></div>
@@ -547,7 +581,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
         <div class="np-slash" hidden></div>
         <div class="np-read" tabindex="0" hidden></div>
         <div class="np-error" role="alert" hidden><span class="np-error-text"></span><button type="button" data-action="load-remote" data-i18n="loadRemote" hidden></button><button type="button" data-action="keep-mine" data-i18n="keepMine" hidden></button><button type="button" data-action="dismiss-error" data-i18n="close" data-i18n-mode="title">${CLOSE_ICON}</button></div>
-        <footer class="np-footer"><span class="np-sync"><i class="np-beat" data-state="idle"></i><button type="button" class="np-lint" role="status" hidden></button><span class="np-status-text" role="status" aria-live="polite"></span></span><span class="np-footer-actions"><button type="button" data-action="export-file" data-i18n="saveAs" data-i18n-mode="label">${dshIcon('download-outline')}<span data-i18n="saveAs"></span></button><button type="button" data-action="history" data-i18n="history" data-i18n-mode="label">${dshIcon('clock-outline')}<span data-i18n="history"></span></button><button type="button" data-action="save-version" data-i18n="saveVersion" data-i18n-mode="label">${dshIcon('save-outline')}<span data-i18n="saveVersion"></span></button><button type="button" class="np-danger" data-action="clear-file" data-i18n="clearFile" data-i18n-mode="label">${dshIcon('trash-outline')}<span data-i18n="clearFile"></span></button></span></footer>
+        <footer class="np-footer"><span class="np-sync"><i class="np-beat" data-state="idle"></i><button type="button" class="np-lint" role="status" hidden></button><span class="np-status-text" role="status" aria-live="polite"></span></span><span class="np-footer-actions"><button type="button" data-action="export-file" data-i18n="saveAs" data-i18n-mode="label">${dshIcon('download-outline')}<span data-i18n="saveAs"></span></button><button type="button" data-action="history" data-i18n="history" data-i18n-mode="label">${dshIcon('clock-outline')}<span data-i18n="history"></span></button><button type="button" data-action="save-version" data-i18n="saveVersion" data-i18n-mode="label">${dshIcon('save-outline')}<span data-i18n="saveVersion"></span></button><button type="button" class="np-danger" data-action="clear-file" data-i18n="clearFile" data-i18n-mode="label">${dshIcon('trash-outline')}<span data-i18n="clearFile"></span></button><span class="np-foot-sep" aria-hidden="true"></span><span class="np-foot-tools" aria-hidden="true"><button type="button" data-action="settings" data-i18n="settings" data-i18n-mode="label">${SETTINGS_ICON}<span data-i18n="settings"></span></button><button type="button" data-action="close" data-i18n="close" data-i18n-mode="label">${CLOSE_ICON}<span data-i18n="close"></span></button></span></span></footer>
       </div>
     </div>
     <div class="np-resize" data-edge="n"></div><div class="np-resize" data-edge="s"></div><div class="np-resize" data-edge="e"></div><div class="np-resize" data-edge="w"></div><div class="np-resize" data-edge="nw"></div><div class="np-resize" data-edge="ne"></div><div class="np-resize" data-edge="sw"></div><div class="np-resize" data-edge="se"></div>
@@ -615,6 +649,11 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     /** file.id + epoch + markdown → rendered HTML, so non-edit renders reuse it. */
     renderCache: new Map(),
     restoreRect: /** @type {{ left: number, top: number, width: number, height: number } | null} */ (null),
+    /** `<fileId>:<view>` already re-scrolled this activation; null asks the next
+       renderBody to apply the saved caret/scroll. */
+    restoredKey: /** @type {string | null} */ (null),
+    /** Editing-toolbar collapsed flag; only takes effect at ≤560px panel width. */
+    toolsOpen: false,
   }
 
   const disposers = []
@@ -829,6 +868,14 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     const chrome = state.settings.chromeStyle === 'windows' ? 'windows' : 'mac'
     panel.dataset.chrome = chrome
     panel.dataset.maximized = String(state.maximized)
+    panel.dataset.tools = state.toolsOpen ? 'open' : 'closed'
+    for (const toggle of panel.querySelectorAll('.np-tools-toggle')) {
+      toggle.innerHTML = state.toolsOpen ? COLLAPSE_ICON : CHEVRON_ICON
+      toggle.setAttribute('aria-expanded', String(state.toolsOpen))
+      const label = state.toolsOpen ? copy.collapseTools : copy.expandTools
+      toggle.title = label
+      toggle.setAttribute('aria-label', label)
+    }
     const prev = tabs.querySelector('.np-chrome')
     if (prev) prev.remove()
     const group = document.createElement('span')
@@ -989,6 +1036,18 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     source.hidden = rendered
     read.hidden = !rendered
     paintMirror()
+    /* Return to the browsing point this file+view had when it was left. The
+       key flips on file switch and view toggle, so a paint re-runs exactly
+       once per activation and later re-renders leave the user's scroll alone. */
+    const posKey = `${file.id}:${rendered ? 'rendered' : 'source'}`
+    const wantRestore = state.restoredKey !== posKey
+    const savedPos = wantRestore ? state.ui.positions?.[posKey] : undefined
+    if (wantRestore) state.restoredKey = posKey
+    if (!rendered && savedPos) {
+      source.scrollTop = savedPos.scrollTop ?? 0
+      if (Number.isFinite(savedPos.selStart)) source.setSelectionRange(savedPos.selStart, savedPos.selEnd ?? savedPos.selStart)
+      paintMirror()
+    }
     const sw = panel.querySelector('.np-switch')
     if (sw) {
       sw.dataset.view = state.view
@@ -1006,6 +1065,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       read.innerHTML = parsed.ok
         ? renderJsonTree(parsed.value, collapsed, escapeHtml)
         : `<p class="np-placeholder">${escapeHtml(text().jsonInvalid)}</p>`
+      if (savedPos) read.scrollTop = savedPos.scrollTop ?? 0
       return
     }
     const markdown = state.pendingDraft ?? (source.value || file.draft || '')
@@ -1017,6 +1077,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     const cached = state.renderCache.get(cacheKey)
     if (cached !== undefined) {
       read.innerHTML = cached
+      if (savedPos) read.scrollTop = savedPos.scrollTop ?? 0
       return
     }
     const images = await imagesById(state.db, imageIdsIn(markdown))
@@ -1031,6 +1092,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     }
     state.renderCache.set(cacheKey, html)
     read.innerHTML = html
+    if (savedPos) read.scrollTop = savedPos.scrollTop ?? 0
   }
 
   function resolvedTheme() {
@@ -1124,6 +1186,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
   /** Write any pending draft immediately so switching files never loses input. */
   function flushSave() {
     window.clearTimeout(state.saveTimer)
+    touchPosition()
     if (!state.dirty) return
     state.dirty = false
     const file = state.nodes.find(node => node.id === state.pendingFileId) ?? current()
@@ -1138,6 +1201,25 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       setSync('saved')
       channel?.postMessage({ type: 'changed', fileId: file.id })
     }).catch(showError)
+  }
+
+  /** fileId → last browse point, kept on `state.ui.positions` so it survives
+      reloads. Source remembers scroll + caret; preview remembers scroll. */
+  function touchPosition() {
+    const file = current()
+    if (!file) return
+    if (state.ui.positions === undefined || state.ui.positions === null || typeof state.ui.positions !== 'object') state.ui.positions = {}
+    const key = `${file.id}:${state.view === 'rendered' ? 'rendered' : 'source'}`
+    state.ui.positions[key] = state.view === 'rendered'
+      ? { scrollTop: must(panel, '.np-read').scrollTop }
+      : { scrollTop: write().scrollTop, selStart: write().selectionStart, selEnd: write().selectionEnd }
+    scheduleUiPersist()
+  }
+  let uiPersistTimer = /** @type {number | undefined} */ (undefined)
+  /** Batched `persistUi` for high-frequency events (scroll, caret moves). */
+  function scheduleUiPersist() {
+    window.clearTimeout(uiPersistTimer)
+    uiPersistTimer = window.setTimeout(() => void persistUi(), 500)
   }
 
   function openFile(id) {
@@ -1251,7 +1333,10 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
         done(false)
       },
     }))
-    const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), items, width: 190 })
+    /* The portal sits on document.body and would happily outgrow the floating
+       window — cap it at the space actually left inside the panel. */
+    const room = panel.getBoundingClientRect().bottom - anchor.getBoundingClientRect().bottom - 10
+    const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), items, width: 190, maxHeight: Math.max(120, room), gap: 4 })
     let closed = false
     const done = (unmount) => {
       if (closed) return
@@ -1754,7 +1839,6 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     state.ui.open = opening
     render()
     void persistUi()
-    if (state.ui.open) void beginWriting()
   })
   const tree = must(panel, '.np-tree')
   tree.addEventListener('dragstart', event => {
@@ -2008,6 +2092,10 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       state.ui.treeOpen = state.ui.treeOpen === false
       render()
       void persistUi()
+    }
+    if (action === 'toggle-tools') {
+      state.toolsOpen = !state.toolsOpen
+      render()
     }
     if (action === 'new-item') { openCreateMenu(target); return }
     if (action === 'new-file') void add('file').catch(showError)
@@ -2303,22 +2391,18 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       insertSlash(items[state.slashIndex]?.kind ?? 'bullet')
     }
   })
-  must(panel, '.np-read').addEventListener('keydown', event => {
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault()
-      void beginWriting()
-    }
-  })
   slashMenu.addEventListener('pointerdown', event => event.preventDefault())
   slashMenu.addEventListener('click', event => {
     const kind = event.target instanceof HTMLElement ? event.target.closest('[data-slash]')?.dataset.slash : undefined
     if (kind) insertSlash(kind)
   })
-  must(panel, '.np-read').addEventListener('pointerdown', event => {
-    if (event.target instanceof HTMLElement && event.target.closest('a')) return
-    event.preventDefault()
-    void beginWriting()
-  })
+  /* Preview is read-only for the mouse: clicking inside it selects text or
+     follows links; returning to the source is the view switch's job alone. */
+  const readPane = must(panel, '.np-read')
+  readPane.addEventListener('scroll', () => touchPosition())
+  write().addEventListener('scroll', () => touchPosition())
+  write().addEventListener('select', () => touchPosition())
+  write().addEventListener('click', () => touchPosition())
   panel.addEventListener('click', event => {
     if (!(event.target instanceof HTMLElement) || event.target.closest('.np-slash')) return
     if (state.slash && event.target !== write()) closeSlash()
@@ -2433,7 +2517,6 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       state.ui.open = opening
       render()
       void persistUi()
-      if (state.ui.open) void beginWriting()
     },
     setShortcut(label, keys) {
       entry.title = label

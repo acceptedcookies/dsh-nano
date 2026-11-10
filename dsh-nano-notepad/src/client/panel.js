@@ -7,6 +7,7 @@ import {
   counts,
   createNode,
   deleteNode,
+  deleteNodes,
   imageIdsIn,
   imagesById,
   loadSnapshot,
@@ -67,6 +68,7 @@ ${NANO_STYLES}
 .np-read, .np-write { overflow: auto; }
 .np-nodes { overflow-x: hidden; overflow-y: auto; }
 .np-tabs { display: flex; align-items: center; gap: 4px; min-height: var(--np-row-h); padding: 6px var(--np-pad-x); cursor: grab; border-bottom: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-2); }
+.np-toolbar, .np-tree-head { cursor: grab; }
 .np-tablist { display: flex; min-width: 0; gap: 2px; overflow-x: auto; scrollbar-width: thin; }
 /* dockkit-style tab: 28px, sm radius, active fills markdown-tag, close fades in */
 .np-tab { position: relative; display: inline-flex; align-items: center; flex: 0 1 auto; min-width: 90px; max-width: 196px; height: 28px; box-sizing: border-box; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); padding: 0 10px; cursor: default; font: inherit; font-size: 13px; line-height: 1; white-space: nowrap; user-select: none; }
@@ -75,7 +77,7 @@ ${NANO_STYLES}
 .np-tab-btn { min-width: 0; flex: 1; height: 100%; display: inline-flex; align-items: center; overflow: hidden; border: 0; background: transparent; color: inherit; font: inherit; padding: 0 16px 0 0; cursor: pointer; }
 .np-tabs > button.np-add { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; box-sizing: border-box; padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); cursor: pointer; }
 .np-tabs > button.np-add:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
-.np-tabs-spacer { flex: 1 1 auto; min-width: 8px; }
+.np-tabs-spacer { flex: 1 1 auto; min-width: 8px; align-self: stretch; cursor: grab; }
 /* window chrome: two skins share the frame, glyphs differ per os */
 .np-chrome { display: inline-flex; align-items: center; gap: 8px; flex: none; }
 .np-chrome button { display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 0; background: transparent; cursor: pointer; }
@@ -130,8 +132,10 @@ ${NANO_STYLES}
 .np-tree-tools { display: flex; align-items: center; gap: 4px; flex: none; }
 .np-tree-tools button { display: inline-flex; align-items: center; justify-content: center; width: var(--np-icon-btn); height: var(--np-icon-btn); padding: 0; border: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); cursor: pointer; }
 .np-tree-tools button svg { width: 16px; height: 16px; display: block; }
-.np-tree-tools button:hover { background: var(--dsw-alias-interactive-bg-active); color: var(--dsw-alias-label-primary); border-color: var(--dsw-alias-border-l3); }
-.np-tree-tools button.np-danger:hover { color: var(--dsw-alias-state-error-secondary); border-color: var(--dsw-alias-state-error-secondary); background: var(--dsw-alias-interactive-bg-hover-danger); }
+.np-tree-tools button:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-active); color: var(--dsw-alias-label-primary); border-color: var(--dsw-alias-border-l3); }
+.np-tree-tools button.np-danger:hover:not(:disabled) { color: var(--dsw-alias-state-error-secondary); border-color: var(--dsw-alias-state-error-secondary); background: var(--dsw-alias-interactive-bg-hover-danger); }
+.np-tree-tools button:disabled { opacity: .4; cursor: default; }
+.np-tree-tools button.np-danger:disabled { color: var(--dsw-alias-label-tertiary); }
 .np-nodes { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; padding: 6px var(--np-pad-x) var(--np-pad-x); }
 .np-tree-foot { box-sizing: border-box; display: flex; align-items: center; gap: var(--np-gap); flex: none; min-height: var(--np-foot-h); padding: 0 var(--np-pad-x); border-top: 1px solid var(--dsw-alias-border-l2); }
 .np-tree-foot button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 30px; }
@@ -310,12 +314,28 @@ ${NANO_STYLES}
 @container np (max-width: 640px) {
   .np-footer { flex-wrap: wrap; }
   .np-sync { flex-basis: 100%; }
+  .np-footer-actions { flex-wrap: nowrap; }
+  /* Keep the danger button grouped apart so a wrap never dumps it alone on
+     a second row mid-row; it stays pinned to the row's end. */
+  .np-footer-actions .np-danger { margin-left: auto; }
 }
 @container np (max-width: 560px) {
   .np-body { flex-direction: column; }
   .np-tree { width: auto; max-height: 40%; border-right: 0; border-bottom: 1px solid var(--dsw-alias-border-l2); }
-  .np-tree[data-collapsed="true"] { width: var(--np-rail); max-height: none; }
-  .np-toolbar { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  /* In a column body a collapsed tree stops being a rail and becomes a slim
+     horizontal strip of icons pinned to the top. Otherwise the 52px column
+     leaves an empty block under it and pushes the whole editor down. */
+  .np-tab { min-width: 64px; }
+  .np-tree[data-collapsed="true"] { width: auto; max-height: none; flex-direction: row; align-items: center; padding: 6px var(--np-pad-x); gap: 4px; border-bottom: 1px solid var(--dsw-alias-border-l2); }
+  .np-tree[data-collapsed="true"] .np-nodes { flex-direction: row; align-items: center; padding: 0; overflow-x: auto; overflow-y: hidden; flex: 1; gap: 2px; }
+  .np-tree[data-collapsed="true"] .np-node { width: 36px; height: 36px; border-radius: var(--dsw-radius-sm); }
+  .np-tree[data-collapsed="true"] .np-node:hover { background: var(--dsw-alias-interactive-bg-hover); }
+  .np-tree[data-collapsed="true"] .np-node[data-active="true"] { background: var(--dsw-alias-interactive-bg-active); }
+  .np-tree[data-collapsed="true"] .np-node-icon svg { width: 20px; height: 20px; }
+  .np-tree[data-collapsed="true"] .np-tree-foot { flex-direction: row; margin-top: 0; margin-left: auto; padding: 0; gap: 6px; flex: none; }
+  .np-tree[data-collapsed="true"] .np-tree-foot button { width: var(--np-icon-btn); height: var(--np-icon-btn); padding: 0 !important; border-radius: var(--dsw-radius-sm); }
+  .np-tree[data-collapsed="true"] .np-tree-foot button:hover { background: var(--dsw-alias-interactive-bg-hover); }
+  .np-toolbar { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; mask-image: linear-gradient(to right, #000 88%, transparent); -webkit-mask-image: linear-gradient(to right, #000 88%, transparent); }
   .np-toolbar::-webkit-scrollbar { display: none; }
   .np-switch { min-width: 62px; grid-auto-columns: auto; }
   .np-switch .np-switch-label { display: none; }
@@ -327,9 +347,17 @@ ${NANO_STYLES}
   .np-window { inset: 12px auto auto 12px; width: calc(100% - 24px); height: min(82dvh, calc(100% - 24px)); }
   .np-body { flex-direction: column; }
   .np-tree { width: auto; max-height: 34%; border-right: 0; border-bottom: 1px solid var(--dsw-alias-border-l2); }
-  .np-tree[data-collapsed="true"] { width: var(--np-rail); max-height: none; }
-  .np-footer { flex-direction: column; align-items: stretch; }
-  .np-footer-actions { justify-content: flex-start; }
+  .np-tree[data-collapsed="true"] { width: auto; max-height: none; flex-direction: row; align-items: center; padding: 6px var(--np-pad-x); gap: 4px; }
+  .np-tree[data-collapsed="true"] .np-nodes { flex-direction: row; align-items: center; padding: 0; overflow-x: auto; overflow-y: hidden; flex: 1; gap: 2px; }
+  .np-tree[data-collapsed="true"] .np-node { width: 36px; height: 36px; border-radius: var(--dsw-radius-sm); }
+  .np-tree[data-collapsed="true"] .np-node:hover { background: var(--dsw-alias-interactive-bg-hover); }
+  .np-tree[data-collapsed="true"] .np-node[data-active="true"] { background: var(--dsw-alias-interactive-bg-active); }
+  .np-tree[data-collapsed="true"] .np-node-icon svg { width: 20px; height: 20px; }
+  .np-tree[data-collapsed="true"] .np-tree-foot { flex-direction: row; margin-top: 0; margin-left: auto; padding: 0; gap: 6px; flex: none; }
+  .np-tree[data-collapsed="true"] .np-tree-foot button { width: var(--np-icon-btn); height: var(--np-icon-btn); padding: 0 !important; border-radius: var(--dsw-radius-sm); }
+  .np-tree[data-collapsed="true"] .np-tree-foot button:hover { background: var(--dsw-alias-interactive-bg-hover); }
+  .np-footer { flex-direction: column; align-items: stretch; gap: 4px; }
+  .np-footer-actions { justify-content: center; }
   .np-footer-actions button { min-height: 36px; }
   .np-tabs { flex-wrap: wrap; }
 }
@@ -480,7 +508,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
   panel.innerHTML = `
     <div class="np-tabs"><button type="button" class="np-tree-toggle" data-action="toggle-tree"></button><div class="np-tablist"></div><button type="button" class="np-add" data-action="new-file" data-i18n="newFile" data-i18n-mode="title">+</button><span class="np-tabs-spacer"></span></div>
     <div class="np-body">
-      <aside class="np-tree"><div class="np-tree-head"><div class="np-ws"><button type="button" class="np-ws-btn" data-action="ws-toggle" aria-haspopup="listbox" aria-expanded="false"><span class="np-ws-label"></span><span class="np-ws-caret" aria-hidden="true">${CHEVRON_ICON}</span></button></div><span class="np-tree-tools"><button type="button" data-action="new-item" data-i18n="newItem" data-i18n-mode="title" aria-haspopup="menu">${PLUS_ICON}</button><button type="button" class="np-danger" data-action="delete" data-i18n="delete" data-i18n-mode="title">${TRASH_ICON}</button></span></div><div class="np-nodes" data-root="true"></div><div class="np-tree-foot"><button type="button" data-action="settings" data-i18n="settings" data-i18n-mode="label">${SETTINGS_ICON}<span data-i18n="settings"></span></button><button type="button" data-action="close" data-i18n="close" data-i18n-mode="label">${CLOSE_ICON}<span data-i18n="close"></span></button></div></aside>
+      <aside class="np-tree"><div class="np-tree-head"><div class="np-ws"><button type="button" class="np-ws-btn" data-action="ws-toggle" aria-haspopup="listbox" aria-expanded="false"><span class="np-ws-label"></span><span class="np-ws-caret" aria-hidden="true">${CHEVRON_ICON}</span></button></div><span class="np-tree-tools"><button type="button" data-action="new-item" data-i18n="newItem" data-i18n-mode="title" aria-haspopup="menu">${PLUS_ICON}</button><button type="button" class="np-danger" data-action="delete" data-i18n="clearUnpinned" data-i18n-mode="title">${TRASH_ICON}</button></span></div><div class="np-nodes" data-root="true"></div><div class="np-tree-foot"><button type="button" data-action="settings" data-i18n="settings" data-i18n-mode="label">${SETTINGS_ICON}<span data-i18n="settings"></span></button><button type="button" data-action="close" data-i18n="close" data-i18n-mode="label">${CLOSE_ICON}<span data-i18n="close"></span></button></div></aside>
       <div class="np-editor">
         <div class="np-toolbar"><span class="np-md-tools">${toolbar}</span><span class="np-json-tools" hidden><button type="button" class="np-tool" data-json="expand" data-i18n="jsonExpand" data-i18n-mode="title">${EXPAND_ICON}</button><button type="button" class="np-tool" data-json="collapse" data-i18n="jsonCollapse" data-i18n-mode="title">${COLLAPSE_ICON}</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-json="format" data-i18n="jsonFormat" data-i18n-mode="title">${FORMAT_ICON}</button><button type="button" class="np-tool" data-json="minify" data-i18n="jsonMinify" data-i18n-mode="title">${MINIFY_ICON}</button><button type="button" class="np-tool" data-json="escape" data-i18n="jsonEscape" data-i18n-mode="title">${ESCAPE_ICON}</button><button type="button" class="np-tool" data-json="unescape" data-i18n="jsonUnescape" data-i18n-mode="title">${UNESCAPE_ICON}</button><button type="button" class="np-tool" data-json="strip" data-i18n="jsonStrip" data-i18n-mode="title">${STRIP_ICON}</button></span><button type="button" class="np-switch" data-action="view" role="switch" aria-checked="false" data-i18n="viewGroup" data-i18n-mode="title"><span class="np-switch-label" data-i18n="source"></span><span class="np-switch-label" data-i18n="preview"></span><span class="np-switch-thumb" data-i18n="source"></span></button></div>
         <div class="np-mirror" aria-hidden="true"></div>
@@ -816,6 +844,13 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     const groups = active.mode === 'all'
       ? [...workspaceCatalog().items.map(item => item.workspaceId), null, ...new Set(state.nodes.map(node => node.workspaceId ?? null))]
       : [active.id]
+    /* The trash button only makes sense for a single scoped view; 'all' would
+       delete files across every workspace, so it disables there. */
+    const trash = panel.querySelector('.np-tree-tools [data-action="delete"]')
+    if (trash) {
+      trash.disabled = active.mode === 'all'
+      trash.title = active.mode === 'all' ? `${text().clearUnpinned} · ${text().clearUnpinnedPick}` : text().clearUnpinned
+    }
     const seen = new Set()
     for (const workspaceId of groups) {
       const key = workspaceId ?? ''
@@ -1036,6 +1071,10 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     renderTree()
     renderTabs()
     renderChrome()
+    /* Reset the scrollable toolbar to its start on every render so a file or
+       view switch never opens already scrolled to the clipped end. */
+    const toolbar = panel.querySelector('.np-toolbar')
+    if (toolbar) toolbar.scrollLeft = 0
     void renderBody()
     paintStatus()
     requestAnimationFrame(() => {
@@ -1536,6 +1575,48 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     })
   }
 
+  /** Header trash button: every unpinned file in the scoped workspace view. */
+  function confirmClearUnpinned() {
+    if (!state.db) return
+    const active = activeWorkspace()
+    if (active.mode !== 'one') return
+    const files = state.nodes.filter(node => node.kind === 'file' && node.pinned !== true && (node.workspaceId ?? null) === active.id)
+    if (files.length === 0) return
+    const copy = text()
+    dialog({
+      title: copy.clearUnpinnedTitle,
+      description: copy.clearUnpinnedBody(files.length, workspaceTitle(active.id)),
+      danger: true,
+      confirmLabel: copy.deleteAll,
+      onConfirm: close => {
+        if (!state.db) return
+        flushSave()
+        const ids = files.map(node => node.id)
+        void deleteNodes(state.db, ids).then(() => {
+          const removed = new Set(ids)
+          let grew = true
+          while (grew) {
+            grew = false
+            for (const node of state.nodes) {
+              if (node.parentId && removed.has(node.parentId) && !removed.has(node.id)) {
+                removed.add(node.id)
+                grew = true
+              }
+            }
+          }
+          state.nodes = state.nodes.filter(node => !removed.has(node.id))
+          for (const gone of removed) state.collapsed.delete(gone)
+          state.ui.tabs = state.ui.tabs.filter(tab => !removed.has(tab))
+          if (state.ui.currentId && removed.has(state.ui.currentId)) state.ui.currentId = state.ui.tabs.at(-1) ?? null
+          close()
+          render()
+          void persistUi()
+          channel?.postMessage({ type: 'changed' })
+        }).catch(showError)
+      },
+    })
+  }
+
   async function openHistory() {
     const file = current()
     if (!file || !state.db) return
@@ -1582,7 +1663,10 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     })
   }
 
-  function drag(node, onEnd) {
+  /* `handle` is the strip that takes pointer events; `target` is what moves.
+     They differ for the window: the grab strips are static-positioned inside
+     it, so styling the handle itself moves nothing. */
+  function drag(handle, onEnd, target = handle) {
     let startX = 0
     let startY = 0
     let originX = 0
@@ -1592,20 +1676,26 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       const dx = event.clientX - startX
       const dy = event.clientY - startY
       if (Math.hypot(dx, dy) > 4) moved = true
-      place(node, originX + dx, originY + dy)
+      place(target, originX + dx, originY + dy)
+      /* Write live coordinates into state too, so any render() landing mid-drag
+         re-places the target where it already is instead of snapping it back. */
+      if (target === panel) { state.ui.panelX = target.offsetLeft; state.ui.panelY = target.offsetTop }
+      if (target === entry) { state.ui.entryX = target.offsetLeft; state.ui.entryY = target.offsetTop }
     }
     const up = () => {
       window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerup', up)
-      onEnd(moved, node.offsetLeft, node.offsetTop)
+      onEnd(moved, target.offsetLeft, target.offsetTop)
     }
-    node.addEventListener('pointerdown', event => {
+    handle.addEventListener('pointerdown', event => {
       if (event.button !== 0) return
-      if (event.target instanceof HTMLElement && event.target.closest('button, input, textarea, a, select') && event.target !== node) return
+      /* The window has no position to move while maximized — ignore the grab. */
+      if (target === panel && state.maximized) return
+      if (event.target instanceof HTMLElement && event.target.closest('button, input, textarea, a, select') && event.target !== handle) return
       startX = event.clientX
       startY = event.clientY
-      originX = node.offsetLeft
-      originY = node.offsetTop
+      originX = target.offsetLeft
+      originY = target.offsetTop
       moved = false
       window.addEventListener('pointermove', move)
       window.addEventListener('pointerup', up)
@@ -1724,12 +1814,19 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       window.addEventListener('pointerup', up)
     })
   }
-  drag(must(panel, '.np-tabs'), (moved, x, y) => {
+  /* Every blank strip along the top edge is a window-grab surface: the tabs
+     bar, the format toolbar, and the workspace tree header. Each moves the
+     panel, not itself. */
+  const grabWindow = (moved, x, y) => {
     if (!moved) return
     state.ui.panelX = x
     state.ui.panelY = y
     void persistUi()
-  })
+  }
+  for (const strip of ['.np-tabs', '.np-toolbar', '.np-tree-head']) {
+    const handle = panel.querySelector(strip)
+    if (handle) drag(handle, grabWindow, panel)
+  }
 
   function requestDelete(id) {
     if (!state.db) return
@@ -1885,7 +1982,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
         render()
       })
     }
-    if (action === 'delete' && state.ui.currentId) requestDelete(state.ui.currentId)
+    if (action === 'delete') confirmClearUnpinned()
     if (action === 'clear-file') confirmClearFile()
     if (action === 'save-version') void commit('manual').catch(showError)
     if (action === 'view') {

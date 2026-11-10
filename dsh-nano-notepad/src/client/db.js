@@ -354,24 +354,41 @@ async function dropOrphanImages(store, live) {
 }
 
 /** @param {IDBDatabase} db @param {string} id */
-export async function deleteNode(db, id) {
+export function deleteNode(db, id) {
+  return deleteNodes(db, [id])
+}
+
+/** Delete several roots (and their descendants) in one transaction.
+ * @param {IDBDatabase} db @param {string[]} ids */
+export async function deleteNodes(db, ids) {
   const nodes = await readAll(db, 'nodes')
-  const target = nodes.find(item => item.id === id)
-  if (!target) return
-  const ids = new Set([id, ...descendantIds(nodes, id)])
-  const removedFiles = nodes.filter(node => ids.has(node.id) && node.kind === 'file').map(node => node.id)
+  const targets = new Set()
+  for (const id of ids) if (nodes.some(item => item.id === id)) targets.add(id)
+  if (targets.size === 0) return
+  const removed = new Set(targets)
+  let grew = true
+  while (grew) {
+    grew = false
+    for (const node of nodes) {
+      if (node.parentId && removed.has(node.parentId) && !removed.has(node.id)) {
+        removed.add(node.id)
+        grew = true
+      }
+    }
+  }
+  const removedFiles = nodes.filter(node => removed.has(node.id) && node.kind === 'file').map(node => node.id)
   const transaction = db.transaction(['nodes', 'versions', 'images'], 'readwrite')
   const nodeStore = transaction.objectStore('nodes')
   const versionStore = transaction.objectStore('versions')
   const imageStore = transaction.objectStore('images')
-  for (const nodeId of ids) nodeStore.delete(nodeId)
+  for (const nodeId of removed) nodeStore.delete(nodeId)
   const versions = await requestToPromise(versionStore.getAll())
   const removedVersions = versions.filter(version => removedFiles.includes(version.fileId))
   for (const version of removedVersions) versionStore.delete(version.id)
   const remaining = versions.filter(version => !removedFiles.includes(version.fileId))
   const live = new Set()
   for (const node of nodes) {
-    if (node.kind !== 'file' || ids.has(node.id)) continue
+    if (node.kind !== 'file' || removed.has(node.id)) continue
     for (const imageId of imageIdsIn(node.draft ?? '')) live.add(imageId)
   }
   for (const version of remaining) {

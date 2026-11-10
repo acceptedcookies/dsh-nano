@@ -222,3 +222,64 @@ export async function removeEntry(fs, request, signal) {
   })
   return { path: normalizedTarget, directory }
 }
+
+/**
+ * Move one file or directory into another directory inside the same workspace.
+ *
+ * This is rename's sibling rather than a flag on it: the name never changes, the parent does. The
+ * same guards apply, plus three that only a move can trip — the destination must be a real resolved
+ * directory, the move must not drop an entry inside itself, and a no-op (same parent) returns
+ * quietly because the tree may legitimately drag a row onto its own folder.
+ *
+ * @param fs - filesystem provider.
+ * @param ctx - context kept for parity with rename; the runExternal runner carries what it needs.
+ * @param config - process limits for the runner's callers; unused directly.
+ * @param request - workspace root, source path, destination directory, and session policy.
+ * @param signal - caller cancellation.
+ * @returns the entry's absolute path after the move (the source when nothing had to happen).
+ */
+export async function moveEntry(fs, ctx, config, request, signal) {
+  const { workspaceRoot, path, directory, sandboxPolicy, session, runExternal } = request
+  if (typeof path !== 'string' || path.trim() === '') throw new Error('a path is required')
+  const source = absoluteOf(workspaceRoot, path).replace(/\/+$/u, '')
+  assertInside(fs, workspaceRoot, source)
+  // The workspace root has no parent to move into within this tree.
+  if (source === workspaceRoot.replace(/\/+$/u, '')) throw new Error('the workspace root cannot be moved')
+
+  const info = await fs.lstat(source, {}, signal).catch(() => undefined)
+  if (info === undefined) throw new Error(`"${path}" does not exist`)
+  const name = source.slice(source.lastIndexOf('/') + 1)
+  const sourceParent = source.slice(0, source.lastIndexOf('/')) || '/'
+
+  const destinationDir = absoluteOf(workspaceRoot, typeof directory === 'string' ? directory : '')
+  assertInside(fs, workspaceRoot, destinationDir)
+  // Resolve the drop target through the provider: a symlinked folder may be the row under the
+  // cursor, and the command must land where the link leads, not beside the link itself. The
+  // resolved path is fenced again, so a link out of the workspace cannot move entries across it.
+  const resolvedDirTarget = await fs.resolve(destinationDir, { signal })
+  const resolvedDir = fs.processPath(resolvedDirTarget).replace(/\/+$/u, '')
+  if (!isLexicallyInside(workspaceRoot, resolvedDir)) throw new Error(`"${directory}" resolves outside the workspace`)
+  // `stat` reads the resolved target object; `processPath` output is what the `mv` command needs,
+  // and `lstat` does not accept that form.
+  const dirInfo = await fs.stat(resolvedDirTarget, {}, signal).catch(() => undefined)
+  if (dirInfo === undefined || dirInfo === null || dirInfo.type !== 'directory') throw new Error(`"${directory}" is not a folder`)
+
+  // Dropping a row onto its own parent is a harmless no-op: the entry is already there.
+  if (resolvedDir === sourceParent) return { path: source }
+
+  // A folder cannot move beneath itself, and neither can the filesystem it rides on.
+  if (isLexicallyInside(source, resolvedDir)) throw new Error('a folder cannot be moved into itself')
+
+  const destination = `${resolvedDir}/${name}`
+  const existing = await fs.lstat(destination, {}, signal).catch(() => undefined)
+  if (existing !== undefined) throw new Error(`"${name}" already exists in that folder`)
+
+  await runExternal({
+    session,
+    sandboxPolicy,
+    cwd: resolvedDir,
+    argv: ['mv', '--', source, destination],
+    args: ['mv'],
+  })
+  return { path: destination }
+}

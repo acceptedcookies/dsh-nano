@@ -2,7 +2,7 @@
 
 import { checkoutBranch, commitAll, ignoredAmong, listBranches, listConflicts, listWorktrees, pullUpstream, readStatus } from './git.js'
 import { absoluteOf, isLexicallyInside, listDirectory } from './listing.js'
-import { createFile, createFolder, removeEntry, rename } from './mutate.js'
+import { createFile, createFolder, moveEntry, removeEntry, rename } from './mutate.js'
 import { statisticsOf } from './stats.js'
 
 /** Route prefix owned by this plugin. */
@@ -278,6 +278,24 @@ export function createRoutes(ctx, config) {
           session,
           runExternal: external,
         })
+      },
+    },
+    '/move': {
+      method: 'POST',
+      async run(req) {
+        const body = await jsonBody(req)
+        const { session, root, policy } = await scopeOf(ctx, body.sessionId)
+        const moved = await moveEntry(fs(), ctx, config, {
+          workspaceRoot: root,
+          path: body.path,
+          directory: body.directory,
+          sandboxPolicy: policy,
+          session,
+          runExternal: external,
+        })
+        // A move rewrites Git's view of the tree the same way a rename does.
+        forgetReads(root)
+        return moved
       },
     },
     '/delete': {

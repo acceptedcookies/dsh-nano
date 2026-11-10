@@ -603,6 +603,37 @@ async function removeEntry(fs, request, signal) {
   });
   return { path: normalizedTarget, directory };
 }
+async function moveEntry(fs, ctx, config, request, signal) {
+  const { workspaceRoot, path, directory, sandboxPolicy, session, runExternal: runExternal2 } = request;
+  if (typeof path !== "string" || path.trim() === "") throw new Error("a path is required");
+  const source = absoluteOf(workspaceRoot, path).replace(/\/+$/u, "");
+  assertInside(fs, workspaceRoot, source);
+  if (source === workspaceRoot.replace(/\/+$/u, "")) throw new Error("the workspace root cannot be moved");
+  const info = await fs.lstat(source, {}, signal).catch(() => void 0);
+  if (info === void 0) throw new Error(`"${path}" does not exist`);
+  const name2 = source.slice(source.lastIndexOf("/") + 1);
+  const sourceParent = source.slice(0, source.lastIndexOf("/")) || "/";
+  const destinationDir = absoluteOf(workspaceRoot, typeof directory === "string" ? directory : "");
+  assertInside(fs, workspaceRoot, destinationDir);
+  const resolvedDirTarget = await fs.resolve(destinationDir, { signal });
+  const resolvedDir = fs.processPath(resolvedDirTarget).replace(/\/+$/u, "");
+  if (!isLexicallyInside(workspaceRoot, resolvedDir)) throw new Error(`"${directory}" resolves outside the workspace`);
+  const dirInfo = await fs.stat(resolvedDirTarget, {}, signal).catch(() => void 0);
+  if (dirInfo === void 0 || dirInfo === null || dirInfo.type !== "directory") throw new Error(`"${directory}" is not a folder`);
+  if (resolvedDir === sourceParent) return { path: source };
+  if (isLexicallyInside(source, resolvedDir)) throw new Error("a folder cannot be moved into itself");
+  const destination = `${resolvedDir}/${name2}`;
+  const existing = await fs.lstat(destination, {}, signal).catch(() => void 0);
+  if (existing !== void 0) throw new Error(`"${name2}" already exists in that folder`);
+  await runExternal2({
+    session,
+    sandboxPolicy,
+    cwd: resolvedDir,
+    argv: ["mv", "--", source, destination],
+    args: ["mv"]
+  });
+  return { path: destination };
+}
 
 // src/host/stats.js
 async function statisticsOf(fs, root, options, signal) {
@@ -853,6 +884,23 @@ function createRoutes(ctx, config) {
           session,
           runExternal: external
         });
+      }
+    },
+    "/move": {
+      method: "POST",
+      async run(req) {
+        const body = await jsonBody(req);
+        const { session, root, policy } = await scopeOf(ctx, body.sessionId);
+        const moved = await moveEntry(fs(), ctx, config, {
+          workspaceRoot: root,
+          path: body.path,
+          directory: body.directory,
+          sandboxPolicy: policy,
+          session,
+          runExternal: external
+        });
+        forgetReads(root);
+        return moved;
       }
     },
     "/delete": {

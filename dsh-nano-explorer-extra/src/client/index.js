@@ -183,18 +183,12 @@ async function copyText(value) {
 
 export { DEFAULT_PREFS }
 
-/** Glyph for "copy relative path": a link mark, distinct from the shipped copy glyph. */
+/** Glyph for "copy relative path": official link mark, distinct from the shipped copy glyph. */
 function CopyRelativeIcon() {
-  return createElement('svg', { viewBox: '0 0 24 24', width: 16, height: 16, fill: 'none',
-    stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': 'true' },
-  createElement('path', { d: 'M10 13a5 5 0 0 0 7 0l2-2a5 5 0 0 0-7-7l-1 1' }),
-  createElement('path', { d: 'M14 11a5 5 0 0 0-7 0l-2 2a5 5 0 0 0 7 7l1-1' }))
+  return createElement(primitives.IconLinkOutlineRegular, { width: 16, height: 16, 'aria-hidden': 'true' })
 }
 
-/** Glyph for "rename": a pencil over a line. */
+/** Glyph for "rename": official pencil. */
 function RenameIcon() {
-  return createElement('svg', { viewBox: '0 0 24 24', width: 16, height: 16, fill: 'none',
-    stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': 'true' },
-  createElement('path', { d: 'M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z' }),
-  createElement('path', { d: 'M13.5 6.5 17.5 10.5' }))
+  return createElement(primitives.IconEditOutlineRegular, { width: 16, height: 16, 'aria-hidden': 'true' })
 }

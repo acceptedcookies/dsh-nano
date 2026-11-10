@@ -1,7 +1,7 @@
 /** Row decorations for the shared tree: Git letter, ignored badge, link badge, and the open control. */
 
 import React from 'react'
-import { IconCloseCircleOutlineRegular, IconLinkOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconCloseCircleOutlineRegular, IconLinkOutlineRegular, IconRightUpOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 
 /**
  * Build the accessory Component once at module scope, so the Factory never remounts it.
@@ -91,12 +91,7 @@ export function createAccessory(api) {
           'aria-label': `${copy.openFile} ${entry.name}`,
           'data-nxe-open': entry.path,
           onClick: event => { event.stopPropagation(); api.open(entry) },
-        }, React.createElement('svg', {
-          viewBox: '0 0 24 24', width: 12, height: 12, fill: 'none', stroke: 'currentColor',
-          strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': 'true',
-        }, React.createElement('path', { d: 'M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6' }),
-        React.createElement('path', { d: 'M15 3h6v6' }),
-        React.createElement('path', { d: 'M10 14 21 3' })))
+        }, React.createElement(IconRightUpOutlineRegular, { width: 12, height: 12, 'aria-hidden': 'true' }))
         : null,
     )
   }

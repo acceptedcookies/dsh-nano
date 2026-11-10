@@ -476,6 +476,34 @@ export function ExplorerBody(props) {
     queueStats()
   }, [cwd, sessionId, request, tree, queueStats])
 
+  /**
+   * Move one entry into another folder, the way a drag-and-drop ends.
+   *
+   * The directory to refresh on the source side is the parent the entry just left; on the
+   * destination side it is only worth reloading when the reader can already see inside it.
+   */
+  const doMove = useCallback(async (entry, targetDir) => {
+    if (cwd === undefined) return
+    const absolute = absoluteOf(cwd, entry.path)
+    const result = await request('/move', { sessionId, path: absolute, directory: targetDir })
+    if (!result.ok) {
+      setToast(result.message)
+      window.clearTimeout(toastTimer.current)
+      toastTimer.current = window.setTimeout(() => setToast(undefined), 4000)
+      return
+    }
+    const sourceParent = parentOf(absolute)
+    // Both sides reload silently: the source level loses a row, and the destination gains one the
+    // reader expects to see right where it landed — the workspace root counts as its own level and
+    // is never inside `expanded`, which is why a root drop once needed a manual refresh.
+    await tree.refreshLevel(sourceParent)
+    await tree.refreshLevel(targetDir)
+    if (entry.meta?.kind === 'directory') tree.collapseUnder(absolute)
+    if (tree.selected === absolute) tree.setSelected(result.path)
+    queueStats()
+    void refreshGit()
+  }, [cwd, sessionId, request, tree, queueStats, refreshGit])
+
   /** Commit every change with one message. */
   const doCommit = useCallback(async message => {
     setBusy(true)
@@ -552,17 +580,80 @@ export function ExplorerBody(props) {
     }
   }, [copy.copied])
 
+  // Drag-and-drop state lives in refs, not render state: a hover mark is a DOM attribute on the row
+  // itself, and the auto-open clock is the only thing a leave or drop must cancel.
+  const hoverTimer = useRef(0)
+  const hovering = useRef(null)
+  const dragKind = useRef('file')
+  const clearHover = useCallback(() => {
+    window.clearTimeout(hoverTimer.current)
+    hoverTimer.current = 0
+    if (hovering.current !== null) hovering.current.removeAttribute('data-nxe-drop')
+    hovering.current = null
+  }, [])
+  const markHover = useCallback((entry, node) => {
+    clearHover()
+    hovering.current = node
+    node.setAttribute('data-nxe-drop', 'true')
+    // Hovering a folded folder long enough opens it, so a move can reach a level the reader is
+    // pointing at without a separate click. A null entry is the container itself (the workspace
+    // root), which is already the open top level.
+    if (entry !== null && !tree.expanded.includes(entry.path)) {
+      hoverTimer.current = window.setTimeout(() => { void openDirectory(entry) }, 650)
+    }
+  }, [clearHover, openDirectory, tree.expanded])
+  const dropOn = useCallback(event => {
+    event.preventDefault()
+    event.stopPropagation()
+    clearHover()
+    const source = event.dataTransfer?.getData('application/x-nxe-move')
+    return source ?? ''
+  }, [clearHover])
+
   // This page owns its row menu instead of going through `contextMenus`: that service gives each
   // contribution a one-second deadline, and the shipped opener provider needs a host round trip plus
   // an application probe, so the menu opened late and reported a failure for rows that had resolved.
   const rowTriggerProps = useCallback((entry, kind) => ({
+    draggable: true,
+    onDragStart: event => {
+      dragKind.current = kind
+      event.dataTransfer?.setData('application/x-nxe-move', entry.path)
+      if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'
+    },
+    onDragEnd: clearHover,
     onContextMenu: event => {
       event.preventDefault()
       event.stopPropagation()
       tree.setSelected(entry.path)
       setMenu({ x: event.clientX, y: event.clientY, path: entry.path, name: entry.name, kind, openedAt: Date.now() })
     },
-  }), [tree])
+    // Only a folder row can catch a drop; a file row leaves the gesture to the container's root drop.
+    onDragOver: kind === 'directory' ? event => {
+      if (event.dataTransfer?.types?.includes('application/x-nxe-move') !== true) return
+      event.preventDefault()
+      event.stopPropagation()
+      event.dataTransfer.dropEffect = 'move'
+      // The mark follows the pointer: a real drag may never deliver a reliable relatedTarget, so the
+      // hover highlight is refreshed here, where the browser is obliged to report every move.
+      if (hovering.current !== event.currentTarget) markHover(entry, event.currentTarget)
+    } : undefined,
+    onDragEnter: kind === 'directory' ? event => {
+      if (event.dataTransfer?.types?.includes('application/x-nxe-move') !== true) return
+      if (event.currentTarget.contains(event.relatedTarget)) return
+      markHover(entry, event.currentTarget)
+    } : undefined,
+    onDragLeave: kind === 'directory' ? event => {
+      // relatedTarget is the element the drag moved onto; null means it left the row entirely in
+      // every engine that reports it. Inside-descendant moves stay marked.
+      if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return
+      if (hovering.current === event.currentTarget) clearHover()
+    } : undefined,
+    onDrop: kind === 'directory' ? event => {
+      const source = dropOn(event)
+      if (source === '') return
+      void doMove({ path: source, meta: { kind: dragKind.current } }, entry.path)
+    } : undefined,
+  }), [tree, clearHover, markHover, dropOn, doMove])
 
   /**
    * The strongest Git status anywhere beneath one directory.
@@ -783,7 +874,27 @@ export function ExplorerBody(props) {
       onConfirm: name => { void doCreate(name) },
       onCancel: () => { setCreateRequest(null); setLinkNote(undefined) },
     }),
-    React.createElement('div', { className: 'nxe-tree', 'data-nxe-tree': 'true', onKeyDown: onTreeKeyDown }, content),
+    React.createElement('div', {
+      className: 'nxe-tree', 'data-nxe-tree': 'true', onKeyDown: onTreeKeyDown,
+      // Empty space below the rows is the workspace root: a drop landing there moves the entry to
+      // the top level, the same destination a root-level folder row offers.
+      onDragOver: event => {
+        if (event.dataTransfer?.types?.includes('application/x-nxe-move') !== true) return
+        event.preventDefault()
+        event.dataTransfer.dropEffect = 'move'
+        if (hovering.current !== event.currentTarget) markHover(null, event.currentTarget)
+      },
+      onDragLeave: event => {
+        if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return
+        if (hovering.current === event.currentTarget) clearHover()
+      },
+      onDrop: event => {
+        // A folder row already claimed this drop — its handler stopped propagation.
+        const source = dropOn(event)
+        if (source === '') return
+        void doMove({ path: source, meta: { kind: dragKind.current } }, cwd)
+      },
+    }, content),
     React.createElement(NanoToast, { text: toast }),
     // A Git read failure is a persistent floating warning over the pane's lower edge, not a row in
     // the flow: an inline line pushed the whole tree down, and it stayed as long as the error did.
@@ -942,8 +1053,7 @@ function RevealButton({ copy, cwd, apps }) {
       'aria-label': copy.revealChoose,
       'aria-expanded': String(menuOpen),
       onClick: () => setMenuOpen(v => !v),
-    }, React.createElement('svg', { viewBox: '0 0 10 10', width: 10, height: 10, fill: 'none', stroke: 'currentColor', strokeWidth: 1.4, strokeLinecap: 'round', 'aria-hidden': 'true' },
-      React.createElement('path', { d: 'M2.5 4L5 6.5 7.5 4' }))),
+    }, React.createElement(primitives.IconChevronDownOutlineRegular, { width: 10, height: 10, 'aria-hidden': 'true' })),
     menuOpen ? React.createElement('div', { className: 'nano-menu', role: 'menu', style: { position: 'absolute', right: 0, top: '26px' } },
       list.map(app => React.createElement('button', {
         key: app, type: 'button', role: 'menuitem', className: 'nano-menu-item',

@@ -522,6 +522,15 @@ button.nxe-local-filter {
   color: var(--dsw-alias-label-secondary);
 }
 .nxe-change-icon { align-self: center; color: var(--dsw-alias-label-secondary); }
+/* A folder catching a dragged row lights up like a drop target should: the hover fill plus a ring
+   that reads as a boundary, not as selection. The container itself wears the same ring with a
+   larger radius, so dropping onto empty space reads as the workspace root. */
+.nxe-tree [data-nxe-drop="true"] {
+  background: var(--dsw-alias-interactive-bg-hover);
+  box-shadow: 0 0 0 1px var(--dsw-alias-brand-primary, var(--dsw-alias-link)) inset;
+  border-radius: var(--dsw-radius-sm);
+}
+.nxe-tree[data-nxe-drop="true"] { border-radius: var(--dsw-radius-md, var(--dsw-radius-sm)); }
 .nxe-change-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nxe-change-dir { margin-left: 8px; color: var(--dsw-alias-label-tertiary); font-size: 11px; }
 .nxe-graph { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }

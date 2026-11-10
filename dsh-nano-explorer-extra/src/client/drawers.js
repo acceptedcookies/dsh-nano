@@ -6,7 +6,7 @@
  */
 
 import React from 'react'
-import { Button, Input } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, FileTypeIcon, IconLoadingOutlineRegular, Input, classifyFileType } from '@deepseek-ai/dsh-client-ui-primitives'
 import { NanoDialog } from 'dsh-nano-ui'
 import { Dialog, usePanelConfinedLayer } from './dialogs.js'
 import { ageParts, partitionChanges, shortenPath, splitPath } from './format.js'
@@ -59,6 +59,9 @@ function ChangeRow({ file }) {
   const { name, dir } = splitPath(file.path)
   return React.createElement('li', { className: 'nxe-change', 'data-status': file.status, title: file.path },
     React.createElement('span', { className: 'nxe-change-status', 'data-status': file.status }, file.status),
+    // The row reads like the source-control row it mirrors: status letter, then the type glyph the
+    // platform classifier picks for this filename — language, test file, lockfile, or generic.
+    React.createElement(FileTypeIcon, { kind: classifyFileType(name), size: 16, className: 'nxe-change-icon' }),
     React.createElement('span', { className: 'nxe-change-name' },
       name,
       dir === '' ? null : React.createElement('span', { className: 'nxe-change-dir' }, dir)))
@@ -259,7 +262,7 @@ export function BranchDrawer({ copy, open, git, onClose, onPull, onRefresh, onCh
  * @param props - copy, Git summary, and the actions the panel can start.
  * @returns the panel, or null while closed.
  */
-export function CommitDrawer({ copy, open, git, onClose, onCommit, busy, error, onOpenConflict }) {
+export function CommitDrawer({ copy, open, git, onClose, onCommit, busy, error, refreshing, onOpenConflict }) {
   usePanelConfinedLayer()
   const [message, setMessage] = useState('')
   const [filter, setFilter] = useState('all')
@@ -277,7 +280,15 @@ export function CommitDrawer({ copy, open, git, onClose, onCommit, busy, error, 
   }
   return React.createElement(NanoDialog, {
     copy,
-    title: copy.commitDrawerTitle,
+    // Opening the panel fires a fresh status read; the spinner sits on the title until it lands.
+    title: React.createElement('span', { className: 'nxe-drawer-title' },
+      copy.commitDrawerTitle,
+      refreshing === true
+        ? React.createElement(IconLoadingOutlineRegular, {
+          width: 15, height: 15, className: 'nxe-drawer-spin',
+          'aria-label': copy.commitRefreshing ?? 'refreshing', role: 'status',
+        })
+        : null),
     description: copy.commitDrawerBody(pending, current ?? (git?.detached ? copy.detached : null)),
     error,
     footer: React.createElement(Button, {
@@ -326,6 +337,7 @@ export function CommitDrawer({ copy, open, git, onClose, onCommit, busy, error, 
         key: file.path, className: 'nxe-change', 'data-status': 'U',
       },
       React.createElement('span', { className: 'nxe-change-status', 'data-status': 'U' }, 'U'),
+      React.createElement(FileTypeIcon, { kind: classifyFileType(file.path), size: 16, className: 'nxe-change-icon' }),
       React.createElement('button', {
         type: 'button', className: 'nxe-drawer-link', title: file.path,
         onClick: () => onOpenConflict(file.path),

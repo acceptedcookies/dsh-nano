@@ -54,8 +54,9 @@ export function usePanelConfinedLayer() {
     }
     let watched = null
     let resize = null
+    const hasCard = () => document.querySelector('.nano-dialog-card [class*="nxe-"]') !== null
     const apply = () => {
-      if (!live) return
+      if (!live || !hasCard()) return
       const panel = filesPanel()
       if (!(panel instanceof HTMLElement)) return
       if (panel !== watched && typeof ResizeObserver === 'function') {
@@ -120,27 +121,65 @@ export function usePanelConfinedLayer() {
         }
       }
     }
-    // The card mounts after this effect on the first open, so watch for it, and keep the fence in
-    // step with the panel while the reader resizes it.
-    const observer = new MutationObserver(apply)
-    // Child list only. Watching every style write on the page re-entered apply forever and froze it.
-    observer.observe(document.body, { childList: true, subtree: true })
-    window.addEventListener('resize', apply)
-    // While a card is open, the shell may recenter it. Re-pin on frames, and stop when it closes.
+    // Idle is almost silent: the only standing listener is the arrival detector below. The
+    // MutationObserver, the resize hook, the ResizeObserver, and the frame chain all live only
+    // while a card does.
+    let observer = null
     let frame = 0
+    let following = false
+    const stop = () => {
+      if (observer !== null) { observer.disconnect(); observer = null }
+      if (frame !== 0) { window.cancelAnimationFrame(frame); frame = 0 }
+      resize?.disconnect()
+      resize = null
+      watched = null
+      window.removeEventListener('resize', apply)
+      following = false
+    }
+    // A mutation batch containing a mounted card: either the layer arriving or content inside it.
+    const cardMutation = mutations => {
+      for (const mutation of mutations) {
+        for (const node of mutation.addedNodes) {
+          if (node instanceof Element && (node.matches('.nano-dialog-card, .nano-dialog-card *') || node.querySelector('.nano-dialog-card') !== null)) return true
+        }
+      }
+      return false
+    }
     const follow = () => {
+      frame = 0
       if (!live) return
-      if (document.querySelector('.nano-dialog-card [class*="nxe-"]') !== null) apply()
+      // The card closed: shed every listener and stop scheduling. Nothing here runs again until
+      // the detector sees the next card.
+      if (!hasCard()) { stop(); return }
+      apply()
       frame = window.requestAnimationFrame(follow)
     }
-    frame = window.requestAnimationFrame(follow)
-    apply()
+    const begin = () => {
+      if (following || !live || !hasCard()) return
+      following = true
+      // Child list only. Watching every style write on the page re-entered apply forever and froze
+      // it. The observer leaves as soon as the card does, so a closed tree costs zero callbacks.
+      observer = new MutationObserver(mutations => { if (cardMutation(mutations)) apply() })
+      observer.observe(document.body, { childList: true, subtree: true })
+      window.addEventListener('resize', apply)
+      apply()
+      frame = window.requestAnimationFrame(follow)
+    }
+    // The standing wake-up: childList on the shell's modal host (under body, subtree needed because
+    // portals nest). A callback here means the page moved, not that a card exists — the cheap
+    // `hasCard()` gate inside keeps an idle files pane's per-mutation cost at one querySelector.
+    const detect = new MutationObserver(mutations => {
+      if (!live || following || !cardMutation(mutations)) return
+      begin()
+    })
+    detect.observe(document.body, { childList: true, subtree: true })
+    // A card mounted between this component's render and effect: the detector still sees it, but
+    // opening directly keeps the first frame from waiting a mutation turn.
+    begin()
     return () => {
       live = false
-      observer.disconnect()
-      resize?.disconnect()
-      window.cancelAnimationFrame(frame)
-      window.removeEventListener('resize', apply)
+      stop()
+      detect.disconnect()
       for (const layer of document.querySelectorAll('.nxe-confined-layer')) {
         layer.classList.remove('nxe-confined-layer')
         for (const key of ['position', 'top', 'left', 'right', 'bottom', 'width', 'height', 'padding', 'box-sizing', 'display', 'align-items', 'justify-content', 'flex-direction', 'overflow']) {

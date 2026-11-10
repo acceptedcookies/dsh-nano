@@ -509,8 +509,11 @@ button.nxe-local-filter {
 }
 .nxe-repo-conflict-list { max-height: 120px; overflow: auto; }
 .nxe-drawer-row-badge[data-tone="danger"] { color: var(--dsw-alias-label-error, #e5534b); }
+.nxe-drawer-title { display: inline-flex; align-items: center; gap: 8px; }
+.nxe-drawer-spin { color: var(--dsw-alias-label-tertiary); animation: nxe-spin 0.9s linear infinite; }
+@keyframes nxe-spin { to { transform: rotate(360deg); } }
 .nxe-change {
-  display: grid; grid-template-columns: 14px minmax(0, 1fr); gap: 6px; align-items: baseline;
+  display: grid; grid-template-columns: 14px 16px minmax(0, 1fr); gap: 6px; align-items: baseline;
   min-height: 20px; padding: 1px 4px; border-radius: var(--dsw-radius-sm);
   font-size: 12px; line-height: 18px;
 }
@@ -518,6 +521,7 @@ button.nxe-local-filter {
   font-weight: 700; text-align: center; font-variant-numeric: tabular-nums;
   color: var(--dsw-alias-label-secondary);
 }
+.nxe-change-icon { align-self: center; color: var(--dsw-alias-label-secondary); }
 .nxe-change-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nxe-change-dir { margin-left: 8px; color: var(--dsw-alias-label-tertiary); font-size: 11px; }
 .nxe-graph { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }

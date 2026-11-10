@@ -95,6 +95,8 @@ export function ExplorerBody(props) {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [drawerBusy, setDrawerBusy] = useState(false)
   const [drawerError, setDrawerError] = useState(undefined)
+  // True while the status read that opening a drawer asked for is still in flight; the title shows it.
+  const [drawerRefresh, setDrawerRefresh] = useState(false)
   const toastTimer = useRef(0)
   // Per-directory answers from loadDirectoryStatus, keyed like the workspace map.
   const [directoryStatus, setDirectoryStatus] = useState(() => new Map())
@@ -104,6 +106,7 @@ export function ExplorerBody(props) {
   useEffect(() => {
     setDrawer(null)
     setDrawerError(undefined)
+    setDrawerRefresh(false)
     setSettingsOpen(false)
     setDialog(null)
     setDialogError(undefined)
@@ -195,6 +198,19 @@ export function ExplorerBody(props) {
     setStats(result.stats ?? null)
     setStatsState('ok')
   }, [cwd, sessionId, request])
+
+  /**
+   * Open a footer drawer and re-read the repository in the same gesture.
+   *
+   * The panel opens on the snapshot already loaded, then swaps in whatever Git reports now — a badge
+   * that was lying when the reader pressed the button never survives the card being open.
+   */
+  const openDrawer = useCallback(which => {
+    setDrawer(which)
+    setDrawerError(undefined)
+    setDrawerRefresh(true)
+    void refreshGit().finally(() => setDrawerRefresh(false))
+  }, [refreshGit])
 
   useEffect(() => { void refreshGit() }, [refreshGit])
   // Count once per workspace. Keying on the callback identity would re-walk the whole tree after any
@@ -784,8 +800,8 @@ export function ExplorerBody(props) {
     }, React.createElement(primitives.IconCloseOutlineRegular, { width: 12, height: 12, 'aria-hidden': 'true' }))),
     React.createElement(StatusBar, {
       copy, git, stats, statsState, prefs,
-      onOpenBranch: () => setDrawer('branch'),
-      onOpenCommit: () => setDrawer('commit'),
+      onOpenBranch: () => openDrawer('branch'),
+      onOpenCommit: () => openDrawer('commit'),
       onRetryStats: () => { void refreshStats() },
       onOpenSettings: () => setSettingsOpen(true),
     }),
@@ -803,7 +819,7 @@ export function ExplorerBody(props) {
       onOpenConflict: path => { openEntry({ path: absoluteOf(cwd ?? '', path) }); setDrawer(null) },
     }),
     React.createElement(CommitDrawer, {
-      copy, open: drawer === 'commit', git, busy: drawerBusy, error: drawerError,
+      copy, open: drawer === 'commit', git, busy: drawerBusy, error: drawerError, refreshing: drawerRefresh,
       onClose: () => { setDrawer(null); setDrawerError(undefined) },
       onCommit: doDrawerCommit,
       onPull: doPull,

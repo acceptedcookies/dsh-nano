@@ -1,6 +1,179 @@
 // src/host/routes.js
 import { watch } from "node:fs";
 
+// ../packages/dsh-performance-review/src/state.js
+var LIB_VERSION = "0.1.0";
+var NAME_RE = /^[a-z0-9][a-z0-9-]{0,39}$/;
+var RESERVOIR_CAP = 64;
+function createSpanRow() {
+  return { n: 0, window: [], reservoir: [] };
+}
+
+// ../packages/dsh-performance-review/src/host.js
+var WRITE_INTERVAL_MS = 3e4;
+var WINDOW_SAMPLE_CAP = 512;
+var isPromiseLike = (value) => value !== null && typeof value === "object" && typeof value.then === "function";
+function hostSnapshot(state) {
+  const plugins = {};
+  for (const [pluginId, row] of state.plugins) {
+    const spans = {};
+    for (const [name2, span] of row.spans) {
+      spans[name2] = {
+        n: span.n,
+        samples: [...span.reservoir],
+        windowN: span.window.length,
+        windowSamples: [...span.window]
+      };
+    }
+    plugins[pluginId] = { version: row.version ?? null, spans };
+  }
+  return {
+    version: 1,
+    enabled: state.enabled,
+    observerVersion: LIB_VERSION,
+    contributors: state.contributors.map((c) => ({ ...c })),
+    sinceStart: state.sinceStart,
+    writtenAt: (/* @__PURE__ */ new Date()).toISOString(),
+    plugins,
+    structure: { hostWriteErrors: state.writeErrors }
+  };
+}
+function takeWindow(state) {
+  const snap = hostSnapshot(state);
+  const plugins = {};
+  for (const [pluginId, row] of state.plugins) {
+    const spans = {};
+    for (const [name2, span] of row.spans) {
+      spans[name2] = { n: span.window.length, samples: [...span.window] };
+    }
+    plugins[pluginId] = { version: row.version ?? null, spans };
+  }
+  for (const row of state.plugins.values()) {
+    for (const span of row.spans.values()) span.window.length = 0;
+  }
+  return { ...snap, window: true, plugins };
+}
+function createPerfReviewHost(env = {}) {
+  const processRef = env.process ?? globalThis.process;
+  const state = {
+    enabled: env.forceEnabled !== void 0 ? env.forceEnabled === true : null,
+    plugins: /* @__PURE__ */ new Map(),
+    contributors: [],
+    writeErrors: 0,
+    sinceStart: (/* @__PURE__ */ new Date()).toISOString(),
+    writer: null
+  };
+  const dataDir = () => processRef.env?.DSH_DATA_DIR ?? processRef.env?.DSH_HOME ?? null;
+  const writeFile = async () => {
+    const fs = env.fs ?? await import("node:fs/promises");
+    const path = env.path ?? await import("node:path");
+    const dir = dataDir() ?? `${processRef.env?.HOME ?? ""}/.dsh`;
+    const target = path.join(dir, "plugins", "perf-review");
+    try {
+      await fs.mkdir(target, { recursive: true });
+      await fs.writeFile(path.join(target, "host.json"), JSON.stringify(hostSnapshot(state), null, 2));
+    } catch {
+      state.writeErrors += 1;
+    }
+  };
+  const startWriter = () => {
+    if (state.writer !== null) return;
+    const setIntervalRef = env.setInterval ?? setInterval;
+    state.writer = setIntervalRef(() => {
+      void writeFile();
+    }, WRITE_INTERVAL_MS);
+    if (typeof state.writer?.unref === "function") state.writer.unref();
+    try {
+      processRef.once?.("beforeExit", () => {
+        void writeFile();
+      });
+    } catch {
+    }
+  };
+  const decideEnabled = () => {
+    if (state.enabled === null) {
+      state.enabled = env.forceEnabled !== void 0 ? env.forceEnabled === true : processRef.env?.DSH_PERF_REVIEW === "1";
+      if (state.enabled) startWriter();
+    }
+    return state.enabled;
+  };
+  const recordSpan = (row, name2, t0, t1) => {
+    if (!NAME_RE.test(name2)) return;
+    let span = row.spans.get(name2);
+    if (span === void 0) {
+      span = createSpanRow();
+      row.spans.set(name2, span);
+    }
+    span.n += 1;
+    const ms = t1 - t0;
+    span.window.push(ms);
+    while (span.window.length > WINDOW_SAMPLE_CAP) span.window.shift();
+    if (span.reservoir.length < RESERVOIR_CAP) span.reservoir.push(ms);
+    else {
+      const slot = Math.floor(Math.random() * span.n);
+      if (slot < RESERVOIR_CAP) span.reservoir[slot] = ms;
+    }
+  };
+  const disabledApi = () => ({
+    hostSpan(_name, fn) {
+      return fn();
+    },
+    count() {
+    },
+    // Diagnostic access stays available even when collection is off: the
+    // browser poll then sees `{enabled:false}` rather than a 404.
+    snapshot: () => hostSnapshot(state),
+    takeWindow: () => takeWindow(state)
+  });
+  const hostJoin = (pluginId, impl = {}) => {
+    decideEnabled();
+    let row = state.plugins.get(pluginId);
+    if (row === void 0) {
+      row = { version: impl.version ?? null, spans: /* @__PURE__ */ new Map() };
+      state.plugins.set(pluginId, row);
+    }
+    state.contributors.push({ pluginId, libVersion: impl.libVersion ?? LIB_VERSION });
+    if (!state.enabled) return disabledApi();
+    const clock = env.performance ?? globalThis.performance;
+    const now = () => clock.now();
+    return {
+      hostSpan(name2, fn) {
+        if (!NAME_RE.test(name2)) return fn();
+        const t0 = now();
+        let result;
+        try {
+          result = fn();
+        } catch (error) {
+          recordSpan(row, name2, t0, now());
+          throw error;
+        }
+        if (isPromiseLike(result)) {
+          return result.finally(() => recordSpan(row, name2, t0, now()));
+        }
+        recordSpan(row, name2, t0, now());
+        return result;
+      },
+      count() {
+      },
+      snapshot: () => hostSnapshot(state),
+      takeWindow: () => takeWindow(state)
+    };
+  };
+  return {
+    hostJoin,
+    snapshot: () => hostSnapshot(state),
+    takeWindow: () => takeWindow(state),
+    flush: () => writeFile(),
+    _state: () => state,
+    libVersion: LIB_VERSION
+  };
+}
+function ensurePerfReviewHost(env = {}) {
+  const global = env.global ?? globalThis;
+  if (global.__perfReviewHost == null) global.__perfReviewHost = createPerfReviewHost(env);
+  return global.__perfReviewHost;
+}
+
 // src/host/git.js
 var GIT_TOMBSTONES = [
   "GIT_DIR",
@@ -810,6 +983,11 @@ function disposeRootWatchers() {
 function createRoutes(ctx, config) {
   const fs = () => ctx.fs;
   const external = (request) => runExternal(ctx, config, request);
+  const review = ensurePerfReviewHost().hostJoin("nano-explorer-extra", {
+    version: true ? "0.1.1" : void 0,
+    // This host bundle's own copy of the library version (A3 / §10.4.4).
+    libVersion: LIB_VERSION
+  });
   return {
     "/status": {
       method: "GET",
@@ -818,18 +996,18 @@ function createRoutes(ctx, config) {
         const { root, policy } = await scopeOf(ctx, url.searchParams.get("sessionId") ?? "");
         watchRoot(root);
         if (url.searchParams.get("only") === "stats") {
-          const stats = await memoized(`stats:${root}`, () => statisticsOf(fs(), root, {
+          const stats = await review.hostSpan("stats", () => memoized(`stats:${root}`, () => statisticsOf(fs(), root, {
             maxDepth: config.statsMaxDepth,
             maxEntries: config.statsMaxEntries,
             excludeGit: config.statsExcludeGit
-          }), STATS_MEMO_MS);
+          }), STATS_MEMO_MS));
           return { root, stats };
         }
         let git = null;
         let gitError;
         try {
           const scopedPath = url.searchParams.get("path") ?? void 0;
-          git = await memoized(`status:${root}:${scopedPath ?? ""}`, () => readStatus(ctx, config, { cwd: root, policy, signal: void 0, path: scopedPath ?? void 0 })) ?? null;
+          git = await review.hostSpan("git-status", () => memoized(`status:${root}:${scopedPath ?? ""}`, () => readStatus(ctx, config, { cwd: root, policy, signal: void 0, path: scopedPath ?? void 0 }))) ?? null;
         } catch (error) {
           gitError = messageOf2(error);
         }
@@ -969,11 +1147,22 @@ function createRoutes(ctx, config) {
       async run(req) {
         const body = await jsonBody(req);
         const { root } = await scopeOf(ctx, body.sessionId);
-        return listDirectory(fs(), {
+        return review.hostSpan("list", () => listDirectory(fs(), {
           workspaceRoot: root,
           path: typeof body.path === "string" ? body.path : "",
           allowOutsideWorkspace: body.allowOutsideWorkspace === true
-        }, { maxEntries: config.listingMaxEntries });
+        }, { maxEntries: config.listingMaxEntries }));
+      }
+    },
+    /* A1: the browser cannot read host.json from disk. This route is the
+       bridge. `mode=window` drains the per-scenario window (lab calls it at
+       scenario start and end); the default returns a non-destructive
+       cumulative snapshot for the page's low-frequency poll. */
+    "/perf-review/host": {
+      method: "GET",
+      async run(req) {
+        const url = new URL(String(req.url), "http://localhost");
+        return url.searchParams.get("mode") === "window" ? review.takeWindow() : review.snapshot();
       }
     },
     /* Read one file as UTF-8, capped — enough to seed a notepad note.

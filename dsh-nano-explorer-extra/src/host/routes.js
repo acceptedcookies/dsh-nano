@@ -1,6 +1,7 @@
 /** The six HTTP routes: one request gate, one JSON envelope, and the session-scoped work behind them. */
 
 import { watch } from 'node:fs'
+import { ensurePerfReviewHost, LIB_VERSION } from 'dsh-performance-review/host'
 import { checkoutBranch, commitAll, ignoredAmong, listBranches, listConflicts, listWorktrees, pullUpstream, readStatus } from './git.js'
 import { absoluteOf, isLexicallyInside, listDirectory } from './listing.js'
 import { createFile, createFolder, moveEntry, removeEntry, rename } from './mutate.js'
@@ -213,6 +214,13 @@ export function disposeRootWatchers() {
 export function createRoutes(ctx, config) {
   const fs = () => ctx.fs
   const external = request => runExternal(ctx, config, request)
+  // perf-review: hostSpan names stay inside the spec's v1 set — git-status / list / stats.
+  // The disabled path is an identity wrapper, so the spans cost nothing by default.
+  const review = ensurePerfReviewHost().hostJoin('nano-explorer-extra', {
+    version: typeof __NXE_VERSION__ === 'string' ? __NXE_VERSION__ : undefined,
+    // This host bundle's own copy of the library version (A3 / §10.4.4).
+    libVersion: LIB_VERSION,
+  })
 
   return {
     '/status': {
@@ -228,11 +236,11 @@ export function createRoutes(ctx, config) {
         if (url.searchParams.get('only') === 'stats') {
           // A full walk on a large checkout takes seconds, and every pane on the same root asks
           // for it; the memo keeps N sessions to one pass instead of one each.
-          const stats = await memoized(`stats:${root}`, () => statisticsOf(fs(), root, {
+          const stats = await review.hostSpan('stats', () => memoized(`stats:${root}`, () => statisticsOf(fs(), root, {
             maxDepth: config.statsMaxDepth,
             maxEntries: config.statsMaxEntries,
             excludeGit: config.statsExcludeGit,
-          }), STATS_MEMO_MS)
+          }), STATS_MEMO_MS))
           return { root, stats }
         }
         let git = null
@@ -241,8 +249,9 @@ export function createRoutes(ctx, config) {
           // `path` scopes the query to one directory and asks Git for per-file untracked entries,
           // which is what a freshly expanded folder needs.
           const scopedPath = url.searchParams.get('path') ?? undefined
-          git = await memoized(`status:${root}:${scopedPath ?? ''}`, () =>
-            readStatus(ctx, config, { cwd: root, policy, signal: undefined, path: scopedPath ?? undefined })) ?? null
+          git = await review.hostSpan('git-status', () =>
+            memoized(`status:${root}:${scopedPath ?? ''}`, () =>
+              readStatus(ctx, config, { cwd: root, policy, signal: undefined, path: scopedPath ?? undefined }))) ?? null
         } catch (error) {
           gitError = messageOf(error)
         }
@@ -377,11 +386,24 @@ export function createRoutes(ctx, config) {
       async run(req) {
         const body = await jsonBody(req)
         const { root } = await scopeOf(ctx, body.sessionId)
-        return listDirectory(fs(), {
+        return review.hostSpan('list', () => listDirectory(fs(), {
           workspaceRoot: root,
           path: typeof body.path === 'string' ? body.path : '',
           allowOutsideWorkspace: body.allowOutsideWorkspace === true,
-        }, { maxEntries: config.listingMaxEntries })
+        }, { maxEntries: config.listingMaxEntries }))
+      },
+    },
+    /* A1: the browser cannot read host.json from disk. This route is the
+       bridge. `mode=window` drains the per-scenario window (lab calls it at
+       scenario start and end); the default returns a non-destructive
+       cumulative snapshot for the page's low-frequency poll. */
+    '/perf-review/host': {
+      method: 'GET',
+      async run(req) {
+        const url = new URL(String(req.url), 'http://localhost')
+        return url.searchParams.get('mode') === 'window'
+          ? review.takeWindow()
+          : review.snapshot()
       },
     },
     /* Read one file as UTF-8, capped — enough to seed a notepad note.

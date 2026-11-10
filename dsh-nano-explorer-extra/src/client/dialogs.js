@@ -3,6 +3,7 @@
 import React from 'react'
 import { Input } from '@deepseek-ai/dsh-client-ui-primitives'
 import { NanoDialog } from 'dsh-nano-ui'
+import { perf } from './perf.js'
 
 const { useState } = React
 
@@ -16,6 +17,7 @@ const { useState } = React
  */
 export function Dialog(props) {
   usePanelConfinedLayer()
+  React.useEffect(() => { perf.count('dialog-open') }, [])
   return React.createElement(NanoDialog, props)
 }
 
@@ -30,8 +32,13 @@ export function Dialog(props) {
  *
  * @returns nothing; it only affects the DOM.
  */
-export function usePanelConfinedLayer() {
+export function usePanelConfinedLayer(active = true) {
   React.useEffect(() => {
+    // D2 (P4, named by the idle-10s budget): a CLOSED drawer must not keep a
+    // document.body childList+subtree observer alive. `active` gates the whole
+    // effect; when it flips, the previous effect's cleanup detaches exactly
+    // once. Dialog passes no argument (always active).
+    if (!active) return undefined
     let live = true
     const write = (element, styles) => {
       for (const [key, value] of Object.entries(styles)) {
@@ -127,14 +134,28 @@ export function usePanelConfinedLayer() {
     let observer = null
     let frame = 0
     let following = false
+    // perf: card-shape watches mutations while a card is open; card-follow is the
+    // rAF chain that pins the layer to the panel; card-wake is the standing
+    // arrival detector (itself only alive while a Dialog is mounted).
+    const shapeTrack = perf.track('mutation', 'card-shape')
+    const followTrack = perf.track('raf', 'card-follow')
+    const wakeTrack = perf.track('mutation', 'card-wake')
     const stop = () => {
+      // `live` is ONE counter shared by every mounted hook instance (drawers
+      // mount two of these even while closed). Detach exactly once per begin()
+      // — resetLive() here would zero the other instance's still-live observer
+      // and hide a leak (§10.5 / A4).
+      if (following) {
+        shapeTrack.detach()
+        followTrack.detach()
+        following = false
+      }
       if (observer !== null) { observer.disconnect(); observer = null }
       if (frame !== 0) { window.cancelAnimationFrame(frame); frame = 0 }
       resize?.disconnect()
       resize = null
       watched = null
       window.removeEventListener('resize', apply)
-      following = false
     }
     // A mutation batch containing a mounted card: either the layer arriving or content inside it.
     const cardMutation = mutations => {
@@ -145,7 +166,7 @@ export function usePanelConfinedLayer() {
       }
       return false
     }
-    const follow = () => {
+    const follow = followTrack.wrap(() => {
       frame = 0
       if (!live) return
       // The card closed: shed every listener and stop scheduling. Nothing here runs again until
@@ -153,14 +174,16 @@ export function usePanelConfinedLayer() {
       if (!hasCard()) { stop(); return }
       apply()
       frame = window.requestAnimationFrame(follow)
-    }
+    })
     const begin = () => {
       if (following || !live || !hasCard()) return
       following = true
       // Child list only. Watching every style write on the page re-entered apply forever and froze
       // it. The observer leaves as soon as the card does, so a closed tree costs zero callbacks.
-      observer = new MutationObserver(mutations => { if (cardMutation(mutations)) apply() })
+      observer = new MutationObserver(shapeTrack.wrap(mutations => { if (cardMutation(mutations)) apply() }))
       observer.observe(document.body, { childList: true, subtree: true })
+      shapeTrack.attach()
+      followTrack.attach()
       window.addEventListener('resize', apply)
       apply()
       frame = window.requestAnimationFrame(follow)
@@ -168,11 +191,12 @@ export function usePanelConfinedLayer() {
     // The standing wake-up: childList on the shell's modal host (under body, subtree needed because
     // portals nest). A callback here means the page moved, not that a card exists — the cheap
     // `hasCard()` gate inside keeps an idle files pane's per-mutation cost at one querySelector.
-    const detect = new MutationObserver(mutations => {
+    const detect = new MutationObserver(wakeTrack.wrap(mutations => {
       if (!live || following || !cardMutation(mutations)) return
       begin()
-    })
+    }))
     detect.observe(document.body, { childList: true, subtree: true })
+    wakeTrack.attach()
     // A card mounted between this component's render and effect: the detector still sees it, but
     // opening directly keeps the first frame from waiting a mutation turn.
     begin()
@@ -180,6 +204,7 @@ export function usePanelConfinedLayer() {
       live = false
       stop()
       detect.disconnect()
+      wakeTrack.detach()
       for (const layer of document.querySelectorAll('.nxe-confined-layer')) {
         layer.classList.remove('nxe-confined-layer')
         for (const key of ['position', 'top', 'left', 'right', 'bottom', 'width', 'height', 'padding', 'box-sizing', 'display', 'align-items', 'justify-content', 'flex-direction', 'overflow']) {
@@ -194,7 +219,7 @@ export function usePanelConfinedLayer() {
         }
       }
     }
-  }, [])
+  }, [active])
 }
 
 /**

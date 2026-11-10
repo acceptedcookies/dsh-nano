@@ -132,7 +132,7 @@ function HistoryRail({ copy, history, currentBranch, upstream }) {
  * @returns the panel, or null while closed.
  */
 export function BranchDrawer({ copy, open, git, onClose, onPull, onRefresh, onCheckout, onOpenConflict, busy, error }) {
-  usePanelConfinedLayer()
+  usePanelConfinedLayer(open)
   const [query, setQuery] = useState('')
   const [pendingBranch, setPendingBranch] = useState(null)
   useEffect(() => { if (!open) { setQuery(''); setPendingBranch(null) } }, [open])
@@ -276,7 +276,7 @@ export function BranchDrawer({ copy, open, git, onClose, onPull, onRefresh, onCh
  * @returns the panel, or null while closed.
  */
 export function CommitDrawer({ copy, open, git, onClose, onCommit, busy, error, refreshing, onOpenConflict }) {
-  usePanelConfinedLayer()
+  usePanelConfinedLayer(open)
   const [message, setMessage] = useState('')
   const [filter, setFilter] = useState('all')
   useEffect(() => { if (!open) setFilter('all') }, [open])

@@ -9,6 +9,7 @@ import { StatusBar } from './statusbar.js'
 import { RowMenu } from './menu.js'
 import * as primitives from '@deepseek-ai/dsh-client-ui-primitives'
 import { NanoToast } from 'dsh-nano-ui'
+import { perf } from './perf.js'
 import { getWorkspaceStore } from './workspace-store.js'
 import { absoluteOf, basenameOf, parentOf, relativeTo, treeKeyOf } from './paths.js'
 import { checkName, nextName } from './names.js'
@@ -242,12 +243,16 @@ export function ExplorerBody(props) {
   const rootEl = useRef(null)
   useEffect(() => {
     if (store === null) return undefined
-    const timer = window.setInterval(() => {
+    // perf: one timer per pane is expected — the leak signal is `live` staying
+    // non-zero after unmount or a hidden pane's tick doing real work.
+    const poll = perf.track('interval', 'git-poll')
+    const timer = window.setInterval(poll.wrap(() => {
       const node = rootEl.current
       if (node === null || node.closest('[hidden], [aria-hidden="true"]') !== null) return
       void store.refreshGit(sessionId)
-    }, POLL_GIT_MS)
-    return () => window.clearInterval(timer)
+    }), POLL_GIT_MS)
+    poll.attach()
+    return () => { window.clearInterval(timer); poll.detach() }
   }, [store, sessionId])
 
   /** Debounced re-count after directory changes; the debounce lives in the store. */
@@ -620,6 +625,7 @@ export function ExplorerBody(props) {
       event.preventDefault()
       event.stopPropagation()
       tree.setSelected(entry.path)
+      perf.count('menu-open')
       setMenu({ x: event.clientX, y: event.clientY, path: entry.path, name: entry.name, kind, openedAt: Date.now() })
     },
     // Only a folder row can catch a drop; a file row leaves the gesture to the container's root drop.

@@ -10,6 +10,7 @@
 
 import { absoluteOf, relativeTo, treeKeyOf } from './paths.js'
 import { replaceDirectoryStatus } from './format.js'
+import { perf } from './perf.js'
 
 /** How long an orphaned store survives after its last pane unmounted. */
 const ORPHAN_TTL_MS = 5 * 60 * 1000
@@ -73,10 +74,10 @@ function createStore(root) {
   let showGitStatus = () => true
 
   /** Swap the whole snapshot so subscribers see one coherent version, and notify them. */
-  const commit = patch => {
+  const commit = patch => perf.span('apply-status', () => {
     state = { ...state, ...patch }
     for (const listener of listeners) listener()
-  }
+  })
 
   /** Run `work` once per key; concurrent callers share the promise. */
   const once = (key, work) => {
@@ -93,7 +94,7 @@ function createStore(root) {
    * @param path - absolute directory path.
    * @param silent - keep the rows already drawn instead of showing a loading line.
    */
-  const loadLevel = (sessionId, path, silent = false) => once(`level:${path}`, async () => {
+  const loadLevel = (sessionId, path, silent = false) => once(`level:${path}`, () => perf.span('list-level', async () => {
     const key = treeKeyOf(root, path)
     if (!silent) {
       const next = new Map(state.levels)
@@ -118,7 +119,7 @@ function createStore(root) {
     // The freshly listed names feed the ignored check; the answer lands in the shared set.
     if (result.ok && result.entries.length > 0) void markIgnored(sessionId, path, result.entries.map(entry => entry.name))
     return result
-  })
+  }))
 
   /**
    * Ask Git which of one directory's entries it ignores, and merge the answer into the shared set.
@@ -144,7 +145,7 @@ function createStore(root) {
    */
   const loadDirectoryStatus = (sessionId, directory) => {
     if (!showGitStatus()) return Promise.resolve()
-    return once(`dirstatus:${directory}:${gitEpoch}`, async () => {
+    return once(`dirstatus:${directory}:${gitEpoch}`, () => perf.span('dir-status', async () => {
       const epoch = gitEpoch
       const result = await request(`/status?sessionId=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(directory)}`)
       if (epoch !== gitEpoch) return
@@ -160,7 +161,7 @@ function createStore(root) {
         if (relative !== absolute) files.push({ ...file, path: relative })
       }
       commit({ directoryStatus: replaceDirectoryStatus(state.directoryStatus, directoryRelative, files) })
-    })
+    }))
   }
 
   /** Re-read Git state alone. Deduped: the leader and a manual refresh share one flight. */
@@ -171,7 +172,7 @@ function createStore(root) {
       }
       return Promise.resolve()
     }
-    return once('git', async () => {
+    return once('git', () => perf.span('git-refresh', async () => {
       const epoch = gitEpoch + 1
       gitEpoch = epoch
       const result = await request(`/status?sessionId=${encodeURIComponent(sessionId)}`)
@@ -181,16 +182,16 @@ function createStore(root) {
       // after the footer had already returned to zero.
       commit({ git: result.git ?? null, gitError: result.gitError, directoryStatus: new Map() })
       for (const path of state.expanded) void loadDirectoryStatus(sessionId, path)
-    })
+    }))
   }
 
   /** Re-count the workspace; a large tree takes seconds, so this is separate and cancellable. */
-  const refreshStats = sessionId => once('stats', async () => {
+  const refreshStats = sessionId => once('stats', () => perf.span('stats-count', async () => {
     commit({ statsState: 'loading' })
     const result = await request(`/status?sessionId=${encodeURIComponent(sessionId)}&only=stats`)
     if (!result.ok) { commit({ statsState: 'failed' }); return }
     commit({ stats: result.stats ?? null, statsState: 'ok' })
-  })
+  }))
 
   /** Debounced re-count after directory changes. */
   const queueStats = sessionId => {
@@ -201,10 +202,14 @@ function createStore(root) {
   /** Expand or collapse a directory, reading it the first time it opens. */
   const toggle = (sessionId, path, open) => {
     const key = treeKeyOf(root, path)
+    // A4: count a state transition (collapsed → expanded), not every call.
+    // `dialog-open` counts mounts, so usage semantics are now consistent.
+    const wasExpanded = state.expanded.has(key)
     const next = new Set(state.expanded)
     if (open) next.add(key)
     else next.delete(key)
     if (next.size !== state.expanded.size || ![...next].every(k => state.expanded.has(k))) commit({ expanded: next })
+    if (open && !wasExpanded) perf.count('files-expand')
     if (open && state.levels.get(key) === undefined) void loadLevel(sessionId, path)
   }
 

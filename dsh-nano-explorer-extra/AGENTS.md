@@ -40,6 +40,7 @@ client inject 以 `package.json` 的 `dsh.client.inject` 为准，不在这里�
 3. 目标是已经能打开的 Web profile，默认名 `web`。不要装进 headless、sdk 或 acp。
 4. `git` 必须在跑宿主的那台机器的 PATH 上。浏览器里没有 git 不影响。状态栏读的是宿主上的仓库。
 5. 本包依赖 `dsh-nano-ui`，声明为 `file:../packages/dsh-nano-ui`。`dsh plugin add` 时 pnpm 会解析这个相对路径，目录必须是 `<parent>/packages/dsh-nano-ui` 与 `<parent>/<本包>`。不要改这条依赖。运行中的页面不单独加载它，构建时它被打进 `lib/client.js`。
+6. 本包还依赖构建期库 `dsh-performance-review`，同样声明为 `file:`，约束同上（`<parent>/packages/dsh-performance-review`）。它被打进 `lib/client.js` 和 `lib/host.js` 两份产物；默认是恒等包装，只有页面带 `?perf-review=1` 或 `localStorage['dsh-perf-review']='1'`、宿主带 `DSH_PERF_REVIEW=1` 时才采集。不要改这条依赖。
 
 未被告知 `DSH_HOME` 或 profile 名时，只动默认的 `web`。不要猜第二套实例。
 
@@ -99,6 +100,7 @@ dsh plugin --profile web add <spec>
 | 方法 | 路径 | 作用 |
 |---|---|---|
 | GET | `/status?sessionId=` | 整仓 Git 状态。`only=stats` 只返回体积。`path=` 只查一个目录 |
+| GET | `/perf-review/host` | 性能观测宿主快照。带 `mode=window` 时排空并返回「上次调用以来的场景窗口」（实验室用），默认返回累计快照。宿主没开 `DSH_PERF_REVIEW=1` 时 `enabled` 为 false，路由仍返回 200 |
 | POST | `/list` | `{ sessionId, path }` |
 | POST | `/commit` | `{ sessionId, message }`。会 `git add --all`。没有「只提交已暂存」 |
 | POST | `/pull` | `{ sessionId }`。快进拉取 |

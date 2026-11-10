@@ -800,9 +800,54 @@ async function readBody(req) {
 }
 var field = (value) => typeof value === "string" && value.trim() !== "" ? value.trim() : void 0;
 var mask = (secret) => typeof secret === "string" && secret.length >= 8 ? `${secret.slice(0, 4)}\u2026${secret.slice(-4)}` : void 0;
+var SETTINGS_TTL_MS = 6e4;
 function createRoutes(ctx, config) {
   const dshHome = process.env.DSH_HOME ?? `${homedir()}/.dsh`;
   const syncState = { bySession: /* @__PURE__ */ new Map() };
+  let settingsCache;
+  let settingsPending;
+  let settingsEpoch = 0;
+  const dropSettingsCache = () => {
+    settingsCache = void 0;
+    settingsEpoch += 1;
+  };
+  const loadSettings = () => {
+    const now = Date.now();
+    if (settingsCache !== void 0 && now < settingsCache.until) return settingsCache.body;
+    if (settingsPending !== void 0 && settingsPending.epoch === settingsEpoch) return settingsPending.promise;
+    const epoch = settingsEpoch;
+    const promise = (async () => {
+      const identity = await readIdentity(ctx);
+      let registered = false;
+      let probed = true;
+      if (identity?.configured === true && identity.username) {
+        try {
+          const client = createS3(config, identity);
+          const row = await client.getJson(`identities/${encodeURIComponent(identity.username)}.json`);
+          registered = row !== void 0;
+        } catch {
+          registered = false;
+          probed = false;
+        }
+      }
+      const body = {
+        endpoint: config.endpoint,
+        bucket: config.bucket,
+        registered,
+        region: config.region,
+        username: identity?.username ?? null,
+        configured: identity?.configured === true,
+        credentialSource: identity?.source ?? null,
+        maskedSecret: mask(identity?.accessKey ?? identity?.token) ?? null
+      };
+      if (probed && epoch === settingsEpoch) settingsCache = { until: Date.now() + SETTINGS_TTL_MS, body };
+      return body;
+    })().finally(() => {
+      if (settingsPending?.epoch === epoch) settingsPending = void 0;
+    });
+    settingsPending = { epoch, promise };
+    return promise;
+  };
   const s3 = async () => {
     const identity = await readIdentity(ctx);
     if (identity?.configured !== true) throw new Error("join identity is not configured");
@@ -811,28 +856,8 @@ function createRoutes(ctx, config) {
   return {
     "/settings": {
       method: "GET",
-      async run() {
-        const identity = await readIdentity(ctx);
-        let registered = false;
-        if (identity?.configured === true && identity.username) {
-          try {
-            const client = createS3(config, identity);
-            const row = await client.getJson(`identities/${encodeURIComponent(identity.username)}.json`);
-            registered = row !== void 0;
-          } catch {
-            registered = false;
-          }
-        }
-        return {
-          endpoint: config.endpoint,
-          bucket: config.bucket,
-          registered,
-          region: config.region,
-          username: identity?.username ?? null,
-          configured: identity?.configured === true,
-          credentialSource: identity?.source ?? null,
-          maskedSecret: mask(identity?.accessKey ?? identity?.token) ?? null
-        };
+      run() {
+        return loadSettings();
       }
     },
     // Real bucket probe for the staged keys: one signed LIST. Nothing is stored.
@@ -876,6 +901,7 @@ function createRoutes(ctx, config) {
           await registerIdentity(client, identity);
         } catch {
         }
+        dropSettingsCache();
         return { ok: true };
       }
     },
@@ -883,6 +909,7 @@ function createRoutes(ctx, config) {
       method: "POST",
       async run() {
         await clearIdentity(ctx);
+        dropSettingsCache();
         return { ok: true };
       }
     },

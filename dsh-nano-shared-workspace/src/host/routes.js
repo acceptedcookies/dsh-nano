@@ -45,12 +45,67 @@ const mask = secret => (typeof secret === 'string' && secret.length >= 8
   : undefined)
 
 /**
+ * GET /settings is static for a profile: patch config plus the stored identity,
+ * and one existence check of `identities/{username}.json`. Opening the section
+ * hits it every time, so keep one in-process copy. Identity writes drop it.
+ */
+const SETTINGS_TTL_MS = 60_000
+
+/**
  * @param ctx - host context.
  * @param config - validated Config value `{endpoint, bucket, region, prefix}`.
  */
 export function createRoutes(ctx, config) {
   const dshHome = process.env.DSH_HOME ?? `${homedir()}/.dsh`
   const syncState = { bySession: new Map() }
+  /** `{ until, body }` for the last probe that did not throw. */
+  let settingsCache
+  /** `{ epoch, promise }` so overlapping opens share one resolve + S3 GET. */
+  let settingsPending
+  /** Bumped on identity writes so an in-flight probe cannot refill a stale body. */
+  let settingsEpoch = 0
+  const dropSettingsCache = () => {
+    settingsCache = undefined
+    settingsEpoch += 1
+  }
+  const loadSettings = () => {
+    const now = Date.now()
+    if (settingsCache !== undefined && now < settingsCache.until) return settingsCache.body
+    if (settingsPending !== undefined && settingsPending.epoch === settingsEpoch) return settingsPending.promise
+    const epoch = settingsEpoch
+    const promise = (async () => {
+      const identity = await readIdentity(ctx)
+      let registered = false
+      let probed = true
+      if (identity?.configured === true && identity.username) {
+        try {
+          const client = createS3(config, identity)
+          const row = await client.getJson(`identities/${encodeURIComponent(identity.username)}.json`)
+          registered = row !== undefined
+        } catch {
+          registered = false
+          probed = false
+        }
+      }
+      const body = {
+        endpoint: config.endpoint,
+        bucket: config.bucket,
+        registered,
+        region: config.region,
+        username: identity?.username ?? null,
+        configured: identity?.configured === true,
+        credentialSource: identity?.source ?? null,
+        maskedSecret: mask(identity?.accessKey ?? identity?.token) ?? null,
+      }
+      // A failed probe stays uncached so the next open retries the bucket.
+      if (probed && epoch === settingsEpoch) settingsCache = { until: Date.now() + SETTINGS_TTL_MS, body }
+      return body
+    })().finally(() => {
+      if (settingsPending?.epoch === epoch) settingsPending = undefined
+    })
+    settingsPending = { epoch, promise }
+    return promise
+  }
   const s3 = async () => {
     const identity = await readIdentity(ctx)
     if (identity?.configured !== true) throw new Error('join identity is not configured')
@@ -59,26 +114,8 @@ export function createRoutes(ctx, config) {
   return {
     '/settings': {
       method: 'GET',
-      async run() {
-        const identity = await readIdentity(ctx)
-        let registered = false
-        if (identity?.configured === true && identity.username) {
-          try {
-            const client = createS3(config, identity)
-            const row = await client.getJson(`identities/${encodeURIComponent(identity.username)}.json`)
-            registered = row !== undefined
-          } catch { registered = false }
-        }
-        return {
-          endpoint: config.endpoint,
-          bucket: config.bucket,
-          registered,
-          region: config.region,
-          username: identity?.username ?? null,
-          configured: identity?.configured === true,
-          credentialSource: identity?.source ?? null,
-          maskedSecret: mask(identity?.accessKey ?? identity?.token) ?? null,
-        }
+      run() {
+        return loadSettings()
       },
     },
     // Real bucket probe for the staged keys: one signed LIST. Nothing is stored.
@@ -121,6 +158,7 @@ export function createRoutes(ctx, config) {
           const { client, identity } = await s3()
           await registerIdentity(client, identity)
         } catch { /* registration is retried on the next authenticated call */ }
+        dropSettingsCache()
         return { ok: true }
       },
     },
@@ -128,6 +166,7 @@ export function createRoutes(ctx, config) {
       method: 'POST',
       async run() {
         await clearIdentity(ctx)
+        dropSettingsCache()
         return { ok: true }
       },
     },

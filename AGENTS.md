@@ -13,6 +13,7 @@
 | [dsh-nano-explorer-extra/](dsh-nano-explorer-extra/AGENTS.md) | 工作区文件浏览器增强。规格见 [docs/specs/dsh-nano-explorer-extra/README.md](docs/specs/dsh-nano-explorer-extra/README.md) |
 | [dsh-nano-shared-workspace/](dsh-nano-shared-workspace/README.md) | 共享工作区。尚无包内 AGENTS.md。规格见 [docs/specs/dsh-nano-shared-workspace/spec.md](docs/specs/dsh-nano-shared-workspace/spec.md) |
 | [packages/dsh-nano-ui/](docs/specs/dsh-nano-ui/README.md) | 构建期共享 UI。打进各插件的 `lib/client.js`，不单独安装 |
+| [packages/dsh-performance-review/](packages/dsh-performance-review/README.md) | 构建期性能观测库。打进各插件的 `lib/client.js` / `lib/host.js`，不单独安装。规格见 [docs/specs/dsh-nano-performance-review/spec-26nov.md](docs/specs/dsh-nano-performance-review/spec-26nov.md) |
 | [docs/agents/TEMPLATE.md](docs/agents/TEMPLATE.md) | 包内 AGENTS.md 的母版 |
 | [docs/specs/](docs/specs/) | 各包规格。notepad、model-selector、explorer-extra、dsh-nano-ui 根目录的 `README.md` 是指向这里的软链接 |
 | [release.md](release.md) | 发布流程与安全信任链 |

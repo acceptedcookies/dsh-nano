@@ -1,0 +1,16 @@
+{
+  "baseUrl": "https://dsh-dev.local",
+  "spaceName": "dnpr-ledger-real-measurement",
+  "pageLabel": "p1",
+  "workspaceDir": "/Users/seanz/Documents/dsh-plugins",
+  "dshBin": "/opt/homebrew/bin/dsh",
+  "egoBrowserBin": "~/.local/bin/ego-browser",
+  "hostRoute": "/nano-explorer-extra/perf-review/host",
+  "plugins": [
+    "dsh-nano-explorer-extra",
+    "dsh-nano-notepad",
+    "dsh-nano-shared-workspace",
+    "dsh-nano-model-selector"
+  ],
+  "_comment": "Copy to config.local.json (gitignored) and adjust. No tokens/cookies live here."
+}

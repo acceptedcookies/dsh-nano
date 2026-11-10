@@ -1,0 +1,21 @@
+{
+  "name": "dsh-performance-review",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Build-time performance observability shared by the dsh-nano plugins. Not a plugin; bundled into each client's lib/client.js and into bundled lib/host.js artifacts.",
+  "exports": {
+    "./client": "./src/client.js",
+    "./host": "./src/host.js",
+    "./aggregate": "./src/aggregate.js",
+    "./markdown": "./src/markdown.js",
+    "./state": "./src/state.js"
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test"
+  }
+}

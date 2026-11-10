@@ -1,0 +1,2188 @@
+{
+  "meta": {
+    "versions": {
+      "chromeMajor": 156,
+      "dshVersion": "0.2.2-rc.1",
+      "observerVersion": "0.1.0",
+      "plugins": {
+        "dsh-nano-explorer-extra": "0.1.1",
+        "dsh-nano-notepad": "0.1.1",
+        "dsh-nano-shared-workspace": "0.1.0",
+        "dsh-nano-model-selector": "0.1.1"
+      }
+    },
+    "generatedAt": "2026-11-10T13:52:54.983Z"
+  },
+  "reports": {
+    "idle-10s": {
+      "version": 1,
+      "meta": {
+        "generatedAt": "2026-11-10T13:49:36.769Z",
+        "scenario": "idle-10s",
+        "arm": "on",
+        "dshVersion": null,
+        "chromeMajor": 156,
+        "observerVersion": "0.1.0",
+        "contributors": [
+          {
+            "pluginId": "nano-notepad",
+            "libVersion": "0.1.0"
+          },
+          {
+            "pluginId": "nano-shared-workspace",
+            "libVersion": "0.1.0"
+          },
+          {
+            "pluginId": "nano-model-selector",
+            "libVersion": "0.1.0"
+          },
+          {
+            "pluginId": "nano-explorer-extra",
+            "libVersion": "0.1.0"
+          }
+        ],
+        "gitSha": null,
+        "labels": {},
+        "hostSinceStart": "2026-11-10T13:31:34.035Z",
+        "hostWrittenAt": "2026-11-10T13:49:36.762Z",
+        "hostEnabled": true,
+        "hostWindow": true,
+        "repeats": 3
+      },
+      "enabled": true,
+      "loafSupported": true,
+      "page": {
+        "nativeInpP75": null,
+        "nativeInpCount": 0,
+        "nativeInpDurationThreshold": 16,
+        "inputDelayP95": null,
+        "processingP95": null,
+        "presentationP95": null,
+        "loafCount": 0,
+        "blockingMs": 0,
+        "forcedLayoutMs": 0,
+        "nanoCombined": {
+          "scriptMs": 0,
+          "loafCount": 0,
+          "blockingMs": 0,
+          "clientJsBytes": 703656,
+          "comboResources": 1
+        },
+        "resources": {
+          "nanoClientJsBytes": 703656,
+          "totalJsBytes": 3364589
+        }
+      },
+      "plugins": {
+        "nano-notepad": {
+          "meta": {
+            "version": "0.1.1",
+            "implantedAt": "2026-11-10T13:49:24.637Z",
+            "implanted": true
+          },
+          "own": {
+            "inpP75": null,
+            "inpCount": 0
+          },
+          "native": {
+            "spanMsP95": null,
+            "trackMsP95": null,
+            "samples": {
+              "spans": 0,
+              "callbacks": 0
+            }
+          },
+          "spans": {
+            "render": {
+              "n": 4,
+              "windowN": 0,
+              "p50": null,
+              "p95": null,
+              "maxMs": null
+            },
+            "highlight": {
+              "n": 2,
+              "windowN": 0,
+              "p50": null,
+              "p95": null,
+              "maxMs": null
+            },
+            "idb-write": {
+              "n": 1,
+              "windowN": 0,
+              "p50": null,
+              "p95": null,
+              "maxMs": null
+            }
+          },
+          "tracks": {
+            "shortcut-key": {
+              "kind": "listener",
+              "callbacks": 0,
+              "live": 2,
+              "callbackMs": 0,
+              "totalCallbacks": 0,
+              "totalCallbackMs": 0
+            },
+            "draft-commit": {
+              "kind": "interval",
+              "callbacks": 0,
+              "live": 1,
+              "callbackMs": 0,
+              "totalCallbacks": 0,
+              "totalCallbackMs": 0
+            },
+            "mirror-resize": {
+              "kind": "resize",
+              "callbacks": 0,
+              "live": 1,
+              "callbackMs": 0,
+              "totalCallbacks": 1,
+              "totalCallbackMs": 0
+            },
+            "visibility": {
+              "kind": "listener",
+              "callbacks": 0,
+              "live": 1,
+              "callbackMs": 0,
+              "totalCallbacks": 0,
+              "totalCallbackMs": 0
+            },
+            "page-resize": {
+              "kind": "listener",
+              "callbacks": 0,
+              "live": 1,
+              "callbackMs": 0,
+              "totalCallbacks": 0,
+              "totalCallbackMs": 0
+            },
+            "escape-key": {
+              "kind": "listener",
+              "callbacks": 0,
+              "live": 1,
+              "callbackMs": 0,
+              "totalCallbacks": 0,
+              "totalCallbackMs": 0
+            },
+            "bc-message": {
+              "kind": "broadcast",
+              "callbacks": 0,
+              "live": 1,
+              "callbackMs": 0,
+              "totalCallbacks": 0,
+              "totalCallbackMs": 0
+            },
+            "ctia-watch": {
+              "kind": "mutation",
+              "callbacks": 3,
+              "live": 1,
+              "callbackMs": 0.1,
+              "totalCallbacks": 14,
+              "totalCallbackMs": 0.6
+            }
+          },
+          "usage": {},
+          "hostSpan": {},
+          "profiler": {
+            "commits": 0,
+            "commitP95": null
+          },
+          "scriptMs": 0
+        },
+        "nano-shared-workspace": {
+          "meta": {
+            "version": "0.1.0",
+            "implantedAt": "2026-11-10T13:49:24.652Z",
+            "implanted": true
+          },
+          "own": {
+            "inpP75": null,
+            "inpCount": 0
+          },
+          "native": {
+            "spanMsP95": null,
+            "trackMsP95": null,
+            "samples": {
+              "spans": 0,
+              "callbacks": 0
+            }
+          },
+          "spans": {
+            "apply-separate": {
+              "n": 16,
+              "windowN": 4,
+              "p50": 0.3,
+              "p95": 0.8,
+              "maxMs": 0.8
+            },
+            "section-render": {
+              "n": 12,
+              "windowN": 5,
+              "p50": 0.1,
+              "p95": 0.5,
+              "maxMs": 0.5
+            }
+          },
+          "tracks": {
+            "hold": {
+              "kind": "interval",
+              "callbacks": 0,
+              "live": 0,
+              "callbackMs": 0,
+              "totalCallbacks": 0,
+              "totalCallbackMs": 0
+            },
+            "sidebar-dedupe": {
+              "kind": "mutation",
+              "callbacks": 3,
+              "live": 1,
+              "callbackMs": 0.6,
+              "totalCallbacks": 14,
+              "totalCallbackMs": 2
+            },
+            "sidebar-graft": {
+              "kind": "mutation",
+              "callbacks": 6,
+              "live": 1,
+              "callbackMs": 10.8,
+              "totalCallbacks": 25,
+              "totalCallbackMs": 55
+            }
+          },
+          "usage": {},
+          "hostSpan": {
+            "settings": {
+              "n": 0,
+              "p50": 3479,
+              "p95": 3479
+            },
+            "workspaces": {
+              "n": 1,
+              "p50": 3039.7,
+              "p95": 3039.7
+            },
+            "remote-sessions": {
+              "n": 1,
+              "p50": 8815.3,
+              "p95": 8815.3
+            },
+            "sync-tick": {
+              "n": 0,
+              "p50": 0,
+              "p95": 0
+            }
+          },
+          "profiler": {
+            "commits": 0,
+            "commitP95": null
+          },
+          "scriptMs": 0
+        },
+        "nano-model-selector": {
+          "meta": {
+            "version": "0.1.1",
+            "implantedAt": "2026-11-10T13:49:24.665Z",
+            "implanted": true
+          },
+          "own": {
+            "inpP75": null,
+            "inpCount": 0
+          },
+          "native": {
+            "spanMsP95": null,
+            "trackMsP95": null,
+            "samples": {
+              "spans": 0,
+              "callbacks": 0
+            }
+          },
+          "spans": {
+            "filter-render": {
+              "n": 2,
+              "windowN": 0,
+              "p50": null,
+              "p95": null,
+              "maxMs": null
+            },
+            "catalog-fetch": {
+              "n": 1,
+              "windowN": 0,
+              "p50": null,
+              "p95": null,
+              "maxMs": null
+            }
+          },
+          "tracks": {},
+          "usage": {},
+          "hostSpan": {
+            "catalog": {
+              "n": 0,
+              "p50": null,
+              "p95": null
+            }
+          },
+          "profiler": {
+            "commits": 0,
+            "commitP95": null
+          },
+          "scriptMs": 0
+        },
+        "nano-explorer-extra": {
+          "meta": {
+            "version": "0.1.1",
+            "implantedAt": "2026-11-10T13:49:24.669Z",
+            "implanted": true
+          },
+          "own": {
+            "inpP75": null,
+            "inpCount": 0
+          },
+          "native": {
+            "spanMsP95": null,
+            "trackMsP95": null,
+            "samples": {
+              "spans": 0,
+              "callbacks": 0
+            }
+          },
+          "spans": {},
+          "tracks": {},
+          "usage": {},
+          "hostSpan": {},
+          "profiler": {
+            "commits": 0,
+            "commitP95": null
+          },
+          "scriptMs": 0
+        }
+      },
+      "counts": {},
+      "structure": {
+        "rootErrors": 0,
+        "badNames": 0,
+        "overflowSpans": 0,
+        "overflowUsage": 0,
+        "observerErrors": 0,
+        "observersMissing": 0,
+        "hostWriteErrors": 0
+      },
+      "notes": [
+        "Event Timing 三段：inputDelay=主线程忙/排队，processing=事件处理器，presentation=等下一次绘制。页级 nativeInpP75 含 presentation，属环境级读数，不抄进插件行（spec §5.1）；插件预算以 inputDelayP95/processingP95 与 native.spanMsP95/trackMsP95 为准。",
+        "lab 的 composer-type 用 CDP 合成按键（page.keyboard.type），抬起的是 presentation 段；读数标注为 synthetic input，不等同真实用户 INP。",
+        "nanoCombined.scriptMs 只统计 >50ms 长帧里 >5ms 的脚本条目，不是总脚本耗时；快而频繁的脚本工作不可见。",
+        "nanoCombined.blockingMs 把「含任一 nano 脚本」的整条 LoAF blockingDuration 计入，含非 nano 部分，属过度归因。",
+        "nanoCombined.clientJsBytes 是所有 dsh-nano-* 包 combo 的 encodedBodySize 合计，不是单个插件的体积。",
+        "逐包 scriptMs 全为 0：combo URL 含多个包名，单包 URL 极少出现；按 §3.1 不予拆分。"
+      ]
+    },
+    "composer-type": {
+      "version": 1,
+      "meta": {
+        "generatedAt": "2026-11-10T13:50:26.333Z",
+        "scenario": "composer-type",
+        "arm": "on",
+        "dshVersion": null,
+        "chromeMajor": 156,
+        "observerVersion": "0.1.0",
+        "contributors": [
+          {
+            "pluginId": "nano-notepad",
+            "libVersion": "0.1.0"
+          },
+          {
+            "pluginId": "nano-shared-workspace",
+            "libVersion": "0.1.0"
+          },
+          {
+            "pluginId": "nano-model-selector",
+            "libVersion": "0.1.0"
+          },
+          {
+            "pluginId": "nano-explorer-extra",
+            "libVersion": "0.1.0"
+          }
+        ],
+        "gitSha": null,
+        "labels": {},
+        "hostSinceStart": "2026-11-10T13:31:34.035Z",
+        "hostWrittenAt": "2026-11-10T13:50:26.325Z",
+        "hostEnabled": true,
+        "hostWindow": true,
+        "repeats": 3
+      },
+      "enabled": true,
+      "loafSupported": true,
+      "page": {
+        "nativeInpP75": 752,
+        "nativeInpCount": 50,
+        "nativeInpDurationThreshold": 16,
+        "inputDelayP95": 1.1,
+        "processingP95": 5.8,
+        "presentationP95": 980.5,
+        "loafCount": 6,
+        "blockingMs": 18.8,
+        "forcedLayoutMs": 59.8,
+        "nanoCombined": {
+          "scriptMs": 73.2,
+          "loafCount": 2,
+          "blockingMs": 18.8,
+          "clientJsBytes": 703656,
+          "comboResources": 1
+        },
+        "resources": {
+          "nanoClientJsBytes": 703656,
+          "totalJsBytes": 3364589
+        }
+      },
+      "plugins": {
+        "nano-notepad": {
+          "meta": {
+            "version": "0.1.1",
+            "implantedAt": "2026-11-10T13:50:10.225Z",
+            "implanted": true
+          },
+          "own": {
+            "inpP75": null,
+            "inpCount": 0
+          },
+          "native": {
+            "spanMsP95": null,
+            "trackMsP95": 0.3,
+            "samples": {
+              "spans": 0,
+              "callbacks": 1417
+            }
+          },
+          "spans": {
+            "render": {
+              "n": 4,
+              "windowN": 0,
+              "p50": null,
+              "p95": null,
+              "maxMs": null
+            },
+            "highlight": {
+              "n": 3,
+              "windowN": 0,
+              "p50": null,
+              "p95": null,
+              "maxMs": null
+            },
+            "idb-write": {
+              "n": 1,
+              "windowN": 0,
+              "p50": null,
+              "p95": null,
+              "maxMs": null
+            }
+          },
+          "tracks": {
+            "shortcut-key": {
+              "kind": "listener",
+              "callbacks": 266,
+              "live": 2,
+              "callbackMs": 2,
+              "totalCallbacks": 266,
+              "totalCallbackMs": 2.1
+            },
+            "draft-commit": {
+              "kind": "interval",
+              "callbacks": 0,
+              "live": 1,
+              "callbackMs": 0,
+              "totalCallbacks": 0,
+              "totalCallbackMs": 0
+            },
+            "mirror-resize": {
+              "kind": "resize",
+              "callbacks": 0,
+              "live": 1,
+              "callbackMs": 0,
+              "totalCallbacks": 1,
+              "totalCallbackMs": 0
+            },
+            "visibility": {
+              "kind": "listener",
+              "callbacks": 0,
+              "live": 1,
+              "callbackMs": 0,
+              "totalCallbacks": 0,
+              "totalCallbackMs": 0
+            },
+            "page-resize": {
+              "kind": "listener",
+              "callbacks": 0,
+              "live": 1,
+              "callbackMs": 0,
+              "totalCallbacks": 0,
+              "totalCallbackMs": 0
+            },
+            "escape-key": {
+              "kind": "listener",
+              "callbacks": 133,
+              "live": 1,
+              "callbackMs": 0,
+              "totalCallbacks": 133,
+              "totalCallbackMs": 0
+            },
+            "bc-message": {
+              "kind": "broadcast",
+              "callbacks": 0,
+              "live": 1,
+              "callbackMs": 0,
+              "totalCallbacks": 0,
+              "totalCallbackMs": 0
+            },
+            "ctia-watch": {
+              "kind": "mutation",
+              "callbacks": 3,
+              "live": 1,
+              "callbackMs": 0,
+              "totalCallbacks": 14,
+              "totalCallbackMs": 1.6
+            }
+          },
+          "usage": {},
+          "hostSpan": {},
+          "profiler": {
+            "commits": 0,
+            "commitP95": null
+          },
+          "scriptMs": 0
+        },
+        "nano-shared-workspace": {
+          "meta": {
+            "version": "0.1.0",
+            "implantedAt": "2026-11-10T13:50:10.234Z",
+            "implanted": true
+          },
+          "own": {
+            "inpP75": null,
+            "inpCount": 0
+          },
+          "native": {
+            "spanMsP95": 0.9,
+            "trackMsP95": 11.1,
+            "samples": {
+              "spans": 14,
+              "callbacks": 22
+            }
+          },
+          "spans": {
+            "apply-separate": {
+              "n": 16,
+              "windowN": 8,
+              "p50": 0.2,
+              "p95": 0.4,
+              "maxMs": 0.4
+            },
+            "section-render": {
+              "n": 13,
+              "windowN": 5,
+              "p50": 0.1,
+              "p95": 0.2,
+              "maxMs": 0.2
+            }
+          },
+          "tracks": {
+            "hold": {
+              "kind": "interval",
+              "callbacks": 0,
+              "live": 0,
+              "callbackMs": 0,
+              "totalCallbacks": 0,
+              "totalCallbackMs": 0
+            },
+            "sidebar-dedupe": {
+              "kind": "mutation",
+              "callbacks": 3,
+              "live": 1,
+              "callbackMs": 0.6,
+              "totalCallbacks": 14,
+              "totalCallbackMs": 1.9
+            },
+            "sidebar-graft": {
+              "kind": "mutation",
+              "callbacks": 6,
+              "live": 1,
+              "callbackMs": 12.8,
+              "totalCallbacks": 30,
+              "totalCallbackMs": 63
+            }
+          },
+          "usage": {},
+          "hostSpan": {
+            "settings": {
+              "n": 0,
+              "p50": 2145.2,
+              "p95": 2145.2
+            },
+            "workspaces": {
+              "n": 1,
+              "p50": 2691.5,
+              "p95": 2691.5
+            },
+            "remote-sessions": {
+              "n": 1,
+              "p50": 10921.6,
+              "p95": 10921.6
+            },
+            "sync-tick": {
+              "n": 0,
+              "p50": 0,
+              "p95": 0
+            }
+          },
+          "profiler": {
+            "commits": 0,
+            "commitP95": null
+          },
+          "scriptMs": 0
+        },
+        "nano-model-selector": {
+          "meta": {
+            "version": "0.1.1",
+            "implantedAt": "2026-11-10T13:50:10.239Z",
+            "implanted": true
+          },
+          "own": {
+            "inpP75": null,
+            "inpCount": 0
+          },
+          "native": {
+            "spanMsP95": null,
+            "trackMsP95": null,
+            "samples": {
+              "spans": 0,
+              "callbacks": 0
+            }
+          },
+          "spans": {
+            "filter-render": {
+              "n": 2,
+              "windowN": 0,
+              "p50": null,
+              "p95": null,
+              "maxMs": null
+            },
+            "catalog-fetch": {
+              "n": 1,
+              "windowN": 0,
+              "p50": null,
+              "p95": null,
+              "maxMs": null
+            }
+          },
+          "tracks": {},
+          "usage": {},
+          "hostSpan": {
+            "catalog": {
+              "n": 0,
+              "p50": null,
+              "p95": null
+            }
+          },
+          "profiler": {
+            "commits": 0,
+            "commitP95": null
+          },
+          "scriptMs": 0
+        },
+        "nano-explorer-extra": {
+          "meta": {
+            "version": "0.1.1",
+            "implantedAt": "2026-11-10T13:50:10.241Z",
+            "implanted": true
+          },
+          "own": {
+            "inpP75": null,
+            "inpCount": 0
+          },
+          "native": {
+            "spanMsP95": null,
+            "trackMsP95": null,
+            "samples": {
+              "spans": 0,
+              "callbacks": 0
+            }
+          },
+          "spans": {},
+          "tracks": {},
+          "usage": {},
+          "hostSpan": {},
+          "profiler": {
+            "commits": 0,
+            "commitP95": null
+          },
+          "scriptMs": 0
+        }
+      },
+      "counts": {},
+      "structure": {
+        "rootErrors": 0,
+        "badNames": 0,
+        "overflowSpans": 0,
+        "overflowUsage": 0,
+        "observerErrors": 0,
+        "observersMissing": 0,
+        "hostWriteErrors": 0
+      },
+      "notes": [
+        "nanoBlockingMs 按整条 LoAF 条目归并；含非 nano 脚本的帧会把那部分时间一并计入。",
+        "Event Timing 三段：inputDelay=主线程忙/排队，processing=事件处理器，presentation=等下一次绘制。页级 nativeInpP75 含 presentation，属环境级读数，不抄进插件行（spec §5.1）；插件预算以 inputDelayP95/processingP95 与 native.spanMsP95/trackMsP95 为准。",
+        "lab 的 composer-type 用 CDP 合成按键（page.keyboard.type），抬起的是 presentation 段；读数标注为 synthetic input，不等同真实用户 INP。",
+        "nanoCombined.scriptMs 只统计 >50ms 长帧里 >5ms 的脚本条目，不是总脚本耗时；快而频繁的脚本工作不可见。",
+        "nanoCombined.blockingMs 把「含任一 nano 脚本」的整条 LoAF blockingDuration 计入，含非 nano 部分，属过度归因。",
+        "nanoCombined.clientJsBytes 是所有 dsh-nano-* 包 combo 的 encodedBodySize 合计，不是单个插件的体积。",
+        "逐包 scriptMs 全为 0：combo URL 含多个包名，单包 URL 极少出现；按 §3.1 不予拆分。"
+      ]
+    },
+    "files-expand": {
+      "version": 1,
+      "meta": {
+        "generatedAt": "2026-11-10T13:51:08.886Z",
+        "scenario": "files-expand",
+        "arm": "on",
+        "dshVersion": null,
+        "chromeMajor": 156,
+        "observerVersion": "0.1.0",
+        "contributors": [
+          {
+            "pluginId": "nano-notepad",
+            "libVersion": "0.1.0"
+          },
+          {
+            "pluginId": "nano-shared-workspace",
+            "libVersion": "0.1.0"
+          },
+          {
+            "pluginId": "nano-model-selector",
+            "libVersion": "0.1.0"
+          },
+          {
+            "pluginId": "nano-explorer-extra",
+            "libVersion": "0.1.0"
+          }
+        ],
+        "gitSha": null,
+        "labels": {},
+        "hostSinceStart": "2026-11-10T13:31:34.035Z",
+        "hostWrittenAt": "2026-11-10T13:51:08.882Z",
+        "hostEnabled": true,
+        "hostWindow": true,
+        "repeats": 3
+      },
+      "enabled": true,
+      "loafSupported": true,
+      "page": {
+        "nativeInpP75": null,
+        "nativeInpCount": 0,
+        "nativeInpDurationThreshold": 16,
+        "inputDelayP95": null,
+        "processingP95": null,
+        "presentationP95": null,
+        "loafCount": 1,
+        "blockingMs": 0,
+        "forcedLayoutMs": 17.8,
+        "nanoCombined": {
+          "scriptMs": 0,
+          "loafCount": 0,
+          "blockingMs": 0,
+          "clientJsBytes": 703656,
+          "comboResources": 1
+        },
+        "resources": {
+          "nanoClientJsBytes": 703656,
+          "totalJsBytes": 3364589
+        }
+      },
+      "plugins": {
+        "nano-notepad": {
+          "meta": {
+            "version": "0.1.1",
+            "implantedAt": "2026-11-10T13:51:02.517Z",
+            "implanted": true
+          },
+          "own": {
+            "inpP75": null,
+            "inpCount": 0
+          },
+          "native": {
+            "spanMsP95": null,
+            "trackMsP95": null,
+            "samples": {
+              "spans": 0,
+              "callbacks": 0
+            }
+          },
+          "spans": {
+            "render": {
+              "n": 4,
+              "windowN": 0,
+              "p50": null,
+              "p95": null,
+              "maxMs": null
+            },
+            "highlight": {
+              "n": 3,
+              "windowN": 0,
+              "p50": null,
+              "p95": null,
+              "maxMs": null
+            },
+            "idb-write": {
+              "n": 1,
+              "windowN": 0,
+              "p50": null,
+              "p95": null,
+              "maxMs": null
+            }
+          },
+          "tracks": {
+            "shortcut-key": {
+              "kind": "listener",
+              "callbacks": 0,
+              "live": 2,
+              "callbackMs": 0,
+              "totalCallbacks": 0,
+              "totalCallbackMs": 0
+            },
+            "draft-commit": {
+              "kind": "interval",
+              "callbacks": 0,
+              "live": 1,
+              "callbackMs": 0,
+              "totalCallbacks": 0,
+              "totalCallbackMs": 0
+            },
+            "mirror-resize": {
+              "kind": "resize",
+              "callbacks": 0,
+              "live": 1,
+              "callbackMs": 0,
+              "totalCallbacks": 1,
+              "totalCallbackMs": 0
+            },
+            "visibility": {
+              "kind": "listener",
+              "callbacks": 0,
+              "live": 1,
+              "callbackMs": 0,
+              "totalCallbacks": 0,
+              "totalCallbackMs": 0
+            },
+            "page-resize": {
+              "kind": "listener",
+              "callbacks": 0,
+              "live": 1,
+              "callbackMs": 0,
+              "totalCallbacks": 0,
+              "totalCallbackMs": 0
+            },
+            "escape-key": {
+              "kind": "listener",
+              "callbacks": 0,
+              "live": 1,
+              "callbackMs": 0,
+              "totalCallbacks": 0,
+              "totalCallbackMs": 0
+            },
+            "bc-message": {
+              "kind": "broadcast",
+              "callbacks": 0,
+              "live": 1,
+              "callbackMs": 0,
+              "totalCallbacks": 0,
+              "totalCallbackMs": 0
+            },
+            "ctia-watch": {
+              "kind": "mutation",
+              "callbacks": 2,
+              "live": 1,
+              "callbackMs": 0.1,
+              "totalCallbacks": 14,
+              "totalCallbackMs": 1.5
+            }
+          },
+          "usage": {},
+          "hostSpan": {},
+          "profiler": {
+            "commits": 0,
+            "commitP95": null
+          },
+          "scriptMs": 0
+        },
+        "nano-shared-workspace": {
+          "meta": {
+            "version": "0.1.0",
+            "implantedAt": "2026-11-10T13:51:02.526Z",
+            "implanted": true
+          },
+          "own": {
+            "inpP75": null,
+            "inpCount": 0
+          },
+          "native": {
+            "spanMsP95": null,
+            "trackMsP95": null,
+            "samples": {
+              "spans": 0,
+              "callbacks": 0
+            }
+          },
+          "spans": {
+            "apply-separate": {
+              "n": 16,
+              "windowN": 5,
+              "p50": 0.4,
+              "p95": 0.6,
+              "maxMs": 0.6
+            },
+            "section-render": {
+              "n": 12,
+              "windowN": 4,
+              "p50": 0.1,
+              "p95": 0.3,
+              "maxMs": 0.3
+            }
+          },
+          "tracks": {
+            "hold": {
+              "kind": "interval",
+              "callbacks": 0,
+              "live": 0,
+              "callbackMs": 0,
+              "totalCallbacks": 0,
+              "totalCallbackMs": 0
+            },
+            "sidebar-dedupe": {
+              "kind": "mutation",
+              "callbacks": 2,
+              "live": 1,
+              "callbackMs": 0.7,
+              "totalCallbacks": 14,
+              "totalCallbackMs": 1.7
+            },
+            "sidebar-graft": {
+              "kind": "mutation",
+              "callbacks": 5,
+              "live": 1,
+              "callbackMs": 12.8,
+              "totalCallbacks": 29,
+              "totalCallbackMs": 58.9
+            }
+          },
+          "usage": {},
+          "hostSpan": {
+            "settings": {
+              "n": 0,
+              "p50": null,
+              "p95": null
+            },
+            "workspaces": {
+              "n": 1,
+              "p50": 5038.3,
+              "p95": 5038.3
+            },
+            "remote-sessions": {
+              "n": 1,
+              "p50": 6184.4,
+              "p95": 8429.6
+            },
+            "sync-tick": {
+              "n": 0,
+              "p50": null,
+              "p95": null
+            }
+          },
+          "profiler": {
+            "commits": 0,
+            "commitP95": null
+          },
+          "scriptMs": 0
+        },
+        "nano-model-selector": {
+          "meta": {
+            "version": "0.1.1",
+            "implantedAt": "2026-11-10T13:51:02.531Z",
+            "implanted": true
+          },
+          "own": {
+            "inpP75": null,
+            "inpCount": 0
+          },
+          "native": {
+            "spanMsP95": null,
+            "trackMsP95": null,
+            "samples": {
+              "spans": 0,
+              "callbacks": 0
+            }
+          },
+          "spans": {
+            "filter-render": {
+              "n": 2,
+              "windowN": 0,
+              "p50": null,
+              "p95": null,
+              "maxMs": null
+            },
+            "catalog-fetch": {
+              "n": 1,
+              "windowN": 0,
+              "p50": null,
+              "p95": null,
+              "maxMs": null
+            }
+          },
+          "tracks": {},
+          "usage": {},
+          "hostSpan": {
+            "catalog": {
+              "n": 0,
+              "p50": null,
+              "p95": null
+            }
+          },
+          "profiler": {
+            "commits": 0,
+            "commitP95": null
+          },
+          "scriptMs": 0
+        },
+        "nano-explorer-extra": {
+          "meta": {
+            "version": "0.1.1",
+            "implantedAt": "2026-11-10T13:51:02.533Z",
+            "implanted": true
+          },
+          "own": {
+            "inpP75": null,
+            "inpCount": 0
+          },
+          "native": {
+            "spanMsP95": null,
+            "trackMsP95": null,
+            "samples": {
+              "spans": 0,
+              "callbacks": 0
+            }
+          },
+          "spans": {},
+          "tracks": {},
+          "usage": {},
+          "hostSpan": {},
+          "profiler": {
+            "commits": 0,
+            "commitP95": null
+          },
+          "scriptMs": 0
+        }
+      },
+      "counts": {},
+      "structure": {
+        "rootErrors": 0,
+        "badNames": 0,
+        "overflowSpans": 0,
+        "overflowUsage": 0,
+        "observerErrors": 0,
+        "observersMissing": 0,
+        "hostWriteErrors": 0
+      },
+      "notes": [
+        "Event Timing 三段：inputDelay=主线程忙/排队，processing=事件处理器，presentation=等下一次绘制。页级 nativeInpP75 含 presentation，属环境级读数，不抄进插件行（spec §5.1）；插件预算以 inputDelayP95/processingP95 与 native.spanMsP95/trackMsP95 为准。",
+        "lab 的 composer-type 用 CDP 合成按键（page.keyboard.type），抬起的是 presentation 段；读数标注为 synthetic input，不等同真实用户 INP。",
+        "nanoCombined.scriptMs 只统计 >50ms 长帧里 >5ms 的脚本条目，不是总脚本耗时；快而频繁的脚本工作不可见。",
+        "nanoCombined.blockingMs 把「含任一 nano 脚本」的整条 LoAF blockingDuration 计入，含非 nano 部分，属过度归因。",
+        "nanoCombined.clientJsBytes 是所有 dsh-nano-* 包 combo 的 encodedBodySize 合计，不是单个插件的体积。",
+        "逐包 scriptMs 全为 0：combo URL 含多个包名，单包 URL 极少出现；按 §3.1 不予拆分。"
+      ]
+    },
+    "notepad-type": {
+      "version": 1,
+      "meta": {
+        "generatedAt": "2026-11-10T13:51:35.787Z",
+        "scenario": "notepad-type",
+        "arm": "on",
+        "dshVersion": null,
+        "chromeMajor": 156,
+        "observerVersion": "0.1.0",
+        "contributors": [
+          {
+            "pluginId": "nano-notepad",
+            "libVersion": "0.1.0"
+          },
+          {
+            "pluginId": "nano-shared-workspace",
+            "libVersion": "0.1.0"
+          },
+          {
+            "pluginId": "nano-model-selector",
+            "libVersion": "0.1.0"
+          },
+          {
+            "pluginId": "nano-explorer-extra",
+            "libVersion": "0.1.0"
+          }
+        ],
+        "gitSha": null,
+        "labels": {},
+        "hostSinceStart": "2026-11-10T13:31:34.035Z",
+        "hostWrittenAt": "2026-11-10T13:51:35.779Z",
+        "hostEnabled": true,
+        "hostWindow": true,
+        "repeats": 3
+      },
+      "enabled": true,
+      "loafSupported": true,
+      "page": {
+        "nativeInpP75": 768,
+        "nativeInpCount": 50,
+        "nativeInpDurationThreshold": 16,
+        "inputDelayP95": 1,
+        "processingP95": 5.4,
+        "presentationP95": 996.9,
+        "loafCount": 5,
+        "blockingMs": 0,
+        "forcedLayoutMs": 0,
+        "nanoCombined": {
+          "scriptMs": 0,
+          "loafCount": 0,
+          "blockingMs": 0,
+          "clientJsBytes": 703656,
+          "comboResources": 1
+        },
+        "resources": {
+          "nanoClientJsBytes": 703656,
+          "totalJsBytes": 3364589
+        }
+      },
+      "plugins": {
+        "nano-notepad": {
+          "meta": {
+            "version": "0.1.1",
+            "implantedAt": "2026-11-10T13:51:23.631Z",
+            "implanted": true
+          },
+          "own": {
+            "inpP75": null,
+            "inpCount": 0
+          },
+          "native": {
+            "spanMsP95": null,
+            "trackMsP95": 0.3,
+            "samples": {
+              "spans": 0,
+              "callbacks": 1605
+            }
+          },
+          "spans": {
+            "render": {
+              "n": 4,
+              "windowN": 0,
+              "p50": null,
+              "p95": null,
+              "maxMs": null
+            },
+            "highlight": {
+              "n": 3,
+              "windowN": 0,
+              "p50": null,
+              "p95": null,
+              "maxMs": null
+            },
+            "idb-write": {
+              "n": 1,
+              "windowN": 0,
+              "p50": null,
+              "p95": null,
+              "maxMs": null
+            }
+          },
+          "tracks": {
+            "shortcut-key": {
+              "kind": "listener",
+              "callbacks": 214,
+              "live": 2,
+              "callbackMs": 1.5,
+              "totalCallbacks": 214,
+              "totalCallbackMs": 1.5
+            },
+            "draft-commit": {
+              "kind": "interval",
+              "callbacks": 0,
+              "live": 1,
+              "callbackMs": 0,
+              "totalCallbacks": 0,
+              "totalCallbackMs": 0
+            },
+            "mirror-resize": {
+              "kind": "resize",
+              "callbacks": 0,
+              "live": 1,
+              "callbackMs": 0,
+              "totalCallbacks": 1,
+              "totalCallbackMs": 0
+            },
+            "visibility": {
+              "kind": "listener",
+              "callbacks": 0,
+              "live": 1,
+              "callbackMs": 0,
+              "totalCallbacks": 0,
+              "totalCallbackMs": 0
+            },
+            "page-resize": {
+              "kind": "listener",
+              "callbacks": 0,
+              "live": 1,
+              "callbackMs": 0,
+              "totalCallbacks": 0,
+              "totalCallbackMs": 0
+            },
+            "escape-key": {
+              "kind": "listener",
+              "callbacks": 107,
+              "live": 1,
+              "callbackMs": 0.2,
+              "totalCallbacks": 107,
+              "totalCallbackMs": 0.2
+            },
+            "bc-message": {
+              "kind": "broadcast",
+              "callbacks": 0,
+              "live": 1,
+              "callbackMs": 0,
+              "totalCallbacks": 0,
+              "totalCallbackMs": 0
+            },
+            "ctia-watch": {
+              "kind": "mutation",
+              "callbacks": 3,
+              "live": 1,
+              "callbackMs": 0,
+              "totalCallbacks": 14,
+              "totalCallbackMs": 0.8
+            }
+          },
+          "usage": {},
+          "hostSpan": {},
+          "profiler": {
+            "commits": 0,
+            "commitP95": null
+          },
+          "scriptMs": 0
+        },
+        "nano-shared-workspace": {
+          "meta": {
+            "version": "0.1.0",
+            "implantedAt": "2026-11-10T13:51:23.644Z",
+            "implanted": true
+          },
+          "own": {
+            "inpP75": null,
+            "inpCount": 0
+          },
+          "native": {
+            "spanMsP95": 0.8,
+            "trackMsP95": 1.3,
+            "samples": {
+              "spans": 20,
+              "callbacks": 18
+            }
+          },
+          "spans": {
+            "apply-separate": {
+              "n": 16,
+              "windowN": 4,
+              "p50": 0.3,
+              "p95": 1,
+              "maxMs": 1
+            },
+            "section-render": {
+              "n": 12,
+              "windowN": 4,
+              "p50": 0.1,
+              "p95": 0.4,
+              "maxMs": 0.4
+            }
+          },
+          "tracks": {
+            "hold": {
+              "kind": "interval",
+              "callbacks": 0,
+              "live": 0,
+              "callbackMs": 0,
+              "totalCallbacks": 0,
+              "totalCallbackMs": 0
+            },
+            "sidebar-dedupe": {
+              "kind": "mutation",
+              "callbacks": 3,
+              "live": 1,
+              "callbackMs": 0.7,
+              "totalCallbacks": 14,
+              "totalCallbackMs": 1.5
+            },
+            "sidebar-graft": {
+              "kind": "mutation",
+              "callbacks": 6,
+              "live": 1,
+              "callbackMs": 13.5,
+              "totalCallbacks": 27,
+              "totalCallbackMs": 55.4
+            }
+          },
+          "usage": {},
+          "hostSpan": {
+            "settings": {
+              "n": 0,
+              "p50": null,
+              "p95": null
+            },
+            "workspaces": {
+              "n": 1,
+              "p50": 4153.8,
+              "p95": 4153.8
+            },
+            "remote-sessions": {
+              "n": 1,
+              "p50": 6710.7,
+              "p95": 6710.7
+            },
+            "sync-tick": {
+              "n": 0,
+              "p50": 0,
+              "p95": 0
+            }
+          },
+          "profiler": {
+            "commits": 0,
+            "commitP95": null
+          },
+          "scriptMs": 0
+        },
+        "nano-model-selector": {
+          "meta": {
+            "version": "0.1.1",
+            "implantedAt": "2026-11-10T13:51:23.650Z",
+            "implanted": true
+          },
+          "own": {
+            "inpP75": null,
+            "inpCount": 0
+          },
+          "native": {
+            "spanMsP95": null,
+            "trackMsP95": null,
+            "samples": {
+              "spans": 0,
+              "callbacks": 0
+            }
+          },
+          "spans": {
+            "filter-render": {
+              "n": 2,
+              "windowN": 0,
+              "p50": null,
+              "p95": null,
+              "maxMs": null
+            },
+            "catalog-fetch": {
+              "n": 1,
+              "windowN": 0,
+              "p50": null,
+              "p95": null,
+              "maxMs": null
+            }
+          },
+          "tracks": {},
+          "usage": {},
+          "hostSpan": {
+            "catalog": {
+              "n": 0,
+              "p50": null,
+              "p95": null
+            }
+          },
+          "profiler": {
+            "commits": 0,
+            "commitP95": null
+          },
+          "scriptMs": 0
+        },
+        "nano-explorer-extra": {
+          "meta": {
+            "version": "0.1.1",
+            "implantedAt": "2026-11-10T13:51:23.652Z",
+            "implanted": true
+          },
+          "own": {
+            "inpP75": null,
+            "inpCount": 0
+          },
+          "native": {
+            "spanMsP95": null,
+            "trackMsP95": null,
+            "samples": {
+              "spans": 0,
+              "callbacks": 0
+            }
+          },
+          "spans": {},
+          "tracks": {},
+          "usage": {},
+          "hostSpan": {},
+          "profiler": {
+            "commits": 0,
+            "commitP95": null
+          },
+          "scriptMs": 0
+        }
+      },
+      "counts": {},
+      "structure": {
+        "rootErrors": 0,
+        "badNames": 0,
+        "overflowSpans": 0,
+        "overflowUsage": 0,
+        "observerErrors": 0,
+        "observersMissing": 0,
+        "hostWriteErrors": 0
+      },
+      "notes": [
+        "Event Timing 三段：inputDelay=主线程忙/排队，processing=事件处理器，presentation=等下一次绘制。页级 nativeInpP75 含 presentation，属环境级读数，不抄进插件行（spec §5.1）；插件预算以 inputDelayP95/processingP95 与 native.spanMsP95/trackMsP95 为准。",
+        "lab 的 composer-type 用 CDP 合成按键（page.keyboard.type），抬起的是 presentation 段；读数标注为 synthetic input，不等同真实用户 INP。",
+        "nanoCombined.scriptMs 只统计 >50ms 长帧里 >5ms 的脚本条目，不是总脚本耗时；快而频繁的脚本工作不可见。",
+        "nanoCombined.blockingMs 把「含任一 nano 脚本」的整条 LoAF blockingDuration 计入，含非 nano 部分，属过度归因。",
+        "nanoCombined.clientJsBytes 是所有 dsh-nano-* 包 combo 的 encodedBodySize 合计，不是单个插件的体积。",
+        "逐包 scriptMs 全为 0：combo URL 含多个包名，单包 URL 极少出现；按 §3.1 不予拆分。"
+      ]
+    },
+    "model-open": {
+      "version": 1,
+      "meta": {
+        "generatedAt": "2026-11-10T13:52:14.234Z",
+        "scenario": "model-open",
+        "arm": "on",
+        "dshVersion": null,
+        "chromeMajor": 156,
+        "observerVersion": "0.1.0",
+        "contributors": [
+          {
+            "pluginId": "nano-notepad",
+            "libVersion": "0.1.0"
+          },
+          {
+            "pluginId": "nano-shared-workspace",
+            "libVersion": "0.1.0"
+          },
+          {
+            "pluginId": "nano-model-selector",
+            "libVersion": "0.1.0"
+          },
+          {
+            "pluginId": "nano-explorer-extra",
+            "libVersion": "0.1.0"
+          }
+        ],
+        "gitSha": null,
+        "labels": {},
+        "hostSinceStart": "2026-11-10T13:31:34.035Z",
+        "hostWrittenAt": "2026-11-10T13:52:14.228Z",
+        "hostEnabled": true,
+        "hostWindow": true,
+        "repeats": 3
+      },
+      "enabled": true,
+      "loafSupported": true,
+      "page": {
+        "nativeInpP75": 144,
+        "nativeInpCount": 4,
+        "nativeInpDurationThreshold": 16,
+        "inputDelayP95": 2.3,
+        "processingP95": 3.5,
+        "presentationP95": 242.2,
+        "loafCount": 2,
+        "blockingMs": 11.7,
+        "forcedLayoutMs": 61.1,
+        "nanoCombined": {
+          "scriptMs": 68.6,
+          "loafCount": 2,
+          "blockingMs": 11.7,
+          "clientJsBytes": 703656,
+          "comboResources": 1
+        },
+        "resources": {
+          "nanoClientJsBytes": 703656,
+          "totalJsBytes": 3364589
+        }
+      },
+      "plugins": {
+        "nano-notepad": {
+          "meta": {
+            "version": "0.1.1",
+            "implantedAt": "2026-11-10T13:52:09.737Z",
+            "implanted": true
+          },
+          "own": {
+            "inpP75": null,
+            "inpCount": 0
+          },
+          "native": {
+            "spanMsP95": null,
+            "trackMsP95": 0.1,
+            "samples": {
+              "spans": 0,
+              "callbacks": 18
+            }
+          },
+          "spans": {
+            "render": {
+              "n": 4,
+              "windowN": 0,
+              "p50": 16.3,
+              "p95": 16.3,
+              "maxMs": 16.3
+            },
+            "highlight": {
+              "n": 3,
+              "windowN": 0,
+              "p50": 0.3,
+              "p95": 0.3,
+              "maxMs": 0.3
+            },
+            "idb-write": {
+              "n": 1,
+              "windowN": 0,
+              "p50": null,
+              "p95": null,
+              "maxMs": null
+            }
+          },
+          "tracks": {
+            "shortcut-key": {
+              "kind": "listener",
+              "callbacks": 8,
+              "live": 2,
+              "callbackMs": 0.1,
+              "totalCallbacks": 8,
+              "totalCallbackMs": 0
+            },
+            "draft-commit": {
+              "kind": "interval",
+              "callbacks": 0,
+              "live": 1,
+              "callbackMs": 0,
+              "totalCallbacks": 0,
+              "totalCallbackMs": 0
+            },
+            "mirror-resize": {
+              "kind": "resize",
+              "callbacks": 0,
+              "live": 1,
+              "callbackMs": 0,
+              "totalCallbacks": 1,
+              "totalCallbackMs": 0.1
+            },
+            "visibility": {
+              "kind": "listener",
+              "callbacks": 0,
+              "live": 1,
+              "callbackMs": 0,
+              "totalCallbacks": 0,
+              "totalCallbackMs": 0
+            },
+            "page-resize": {
+              "kind": "listener",
+              "callbacks": 0,
+              "live": 1,
+              "callbackMs": 0,
+              "totalCallbacks": 0,
+              "totalCallbackMs": 0
+            },
+            "escape-key": {
+              "kind": "listener",
+              "callbacks": 4,
+              "live": 1,
+              "callbackMs": 0,
+              "totalCallbacks": 4,
+              "totalCallbackMs": 0
+            },
+            "bc-message": {
+              "kind": "broadcast",
+              "callbacks": 0,
+              "live": 1,
+              "callbackMs": 0,
+              "totalCallbacks": 0,
+              "totalCallbackMs": 0
+            },
+            "ctia-watch": {
+              "kind": "mutation",
+              "callbacks": 4,
+              "live": 1,
+              "callbackMs": 0,
+              "totalCallbacks": 12,
+              "totalCallbackMs": 2
+            }
+          },
+          "usage": {},
+          "hostSpan": {},
+          "profiler": {
+            "commits": 0,
+            "commitP95": null
+          },
+          "scriptMs": 0
+        },
+        "nano-shared-workspace": {
+          "meta": {
+            "version": "0.1.0",
+            "implantedAt": "2026-11-10T13:52:09.747Z",
+            "implanted": true
+          },
+          "own": {
+            "inpP75": null,
+            "inpCount": 0
+          },
+          "native": {
+            "spanMsP95": null,
+            "trackMsP95": null,
+            "samples": {
+              "spans": 0,
+              "callbacks": 0
+            }
+          },
+          "spans": {
+            "apply-separate": {
+              "n": 11,
+              "windowN": 6,
+              "p50": 0.2,
+              "p95": 0.3,
+              "maxMs": 0.3
+            },
+            "section-render": {
+              "n": 8,
+              "windowN": 5,
+              "p50": 0.1,
+              "p95": 0.1,
+              "maxMs": 0.1
+            }
+          },
+          "tracks": {
+            "hold": {
+              "kind": "interval",
+              "callbacks": 0,
+              "live": 0,
+              "callbackMs": 0,
+              "totalCallbacks": 0,
+              "totalCallbackMs": 0
+            },
+            "sidebar-dedupe": {
+              "kind": "mutation",
+              "callbacks": 4,
+              "live": 1,
+              "callbackMs": 0.8,
+              "totalCallbacks": 12,
+              "totalCallbackMs": 2
+            },
+            "sidebar-graft": {
+              "kind": "mutation",
+              "callbacks": 6,
+              "live": 1,
+              "callbackMs": 18.1,
+              "totalCallbacks": 26,
+              "totalCallbackMs": 54.7
+            }
+          },
+          "usage": {},
+          "hostSpan": {
+            "settings": {
+              "n": 0,
+              "p50": null,
+              "p95": null
+            },
+            "workspaces": {
+              "n": 0,
+              "p50": 3527.4,
+              "p95": 3527.4
+            },
+            "remote-sessions": {
+              "n": 0,
+              "p50": 9606.5,
+              "p95": 9606.5
+            },
+            "sync-tick": {
+              "n": 0,
+              "p50": null,
+              "p95": null
+            }
+          },
+          "profiler": {
+            "commits": 0,
+            "commitP95": null
+          },
+          "scriptMs": 0
+        },
+        "nano-model-selector": {
+          "meta": {
+            "version": "0.1.1",
+            "implantedAt": "2026-11-10T13:52:09.752Z",
+            "implanted": true
+          },
+          "own": {
+            "inpP75": null,
+            "inpCount": 0
+          },
+          "native": {
+            "spanMsP95": null,
+            "trackMsP95": null,
+            "samples": {
+              "spans": 0,
+              "callbacks": 0
+            }
+          },
+          "spans": {
+            "filter-render": {
+              "n": 2,
+              "windowN": 2,
+              "p50": 0,
+              "p95": 0.1,
+              "maxMs": 0.1
+            },
+            "catalog-fetch": {
+              "n": 1,
+              "windowN": 1,
+              "p50": 0,
+              "p95": 0,
+              "maxMs": 0
+            }
+          },
+          "tracks": {},
+          "usage": {},
+          "hostSpan": {
+            "catalog": {
+              "n": 0,
+              "p50": null,
+              "p95": null
+            }
+          },
+          "profiler": {
+            "commits": 0,
+            "commitP95": null
+          },
+          "scriptMs": 0
+        },
+        "nano-explorer-extra": {
+          "meta": {
+            "version": "0.1.1",
+            "implantedAt": "2026-11-10T13:52:09.754Z",
+            "implanted": true
+          },
+          "own": {
+            "inpP75": null,
+            "inpCount": 0
+          },
+          "native": {
+            "spanMsP95": null,
+            "trackMsP95": null,
+            "samples": {
+              "spans": 0,
+              "callbacks": 0
+            }
+          },
+          "spans": {},
+          "tracks": {},
+          "usage": {},
+          "hostSpan": {},
+          "profiler": {
+            "commits": 0,
+            "commitP95": null
+          },
+          "scriptMs": 0
+        }
+      },
+      "counts": {},
+      "structure": {
+        "rootErrors": 0,
+        "badNames": 0,
+        "overflowSpans": 0,
+        "overflowUsage": 0,
+        "observerErrors": 0,
+        "observersMissing": 0,
+        "hostWriteErrors": 0
+      },
+      "notes": [
+        "nanoBlockingMs 按整条 LoAF 条目归并；含非 nano 脚本的帧会把那部分时间一并计入。",
+        "nativeInpCount=4 < 8：p75 仅供参考，不作预算判断；这不是 web-vitals INP。",
+        "Event Timing 三段：inputDelay=主线程忙/排队，processing=事件处理器，presentation=等下一次绘制。页级 nativeInpP75 含 presentation，属环境级读数，不抄进插件行（spec §5.1）；插件预算以 inputDelayP95/processingP95 与 native.spanMsP95/trackMsP95 为准。",
+        "lab 的 composer-type 用 CDP 合成按键（page.keyboard.type），抬起的是 presentation 段；读数标注为 synthetic input，不等同真实用户 INP。",
+        "nanoCombined.scriptMs 只统计 >50ms 长帧里 >5ms 的脚本条目，不是总脚本耗时；快而频繁的脚本工作不可见。",
+        "nanoCombined.blockingMs 把「含任一 nano 脚本」的整条 LoAF blockingDuration 计入，含非 nano 部分，属过度归因。",
+        "nanoCombined.clientJsBytes 是所有 dsh-nano-* 包 combo 的 encodedBodySize 合计，不是单个插件的体积。",
+        "逐包 scriptMs 全为 0：combo URL 含多个包名，单包 URL 极少出现；按 §3.1 不予拆分。"
+      ]
+    },
+    "shared-open": {
+      "version": 1,
+      "meta": {
+        "generatedAt": "2026-11-10T13:52:41.262Z",
+        "scenario": "shared-open",
+        "arm": "on",
+        "dshVersion": null,
+        "chromeMajor": 156,
+        "observerVersion": "0.1.0",
+        "contributors": [
+          {
+            "pluginId": "nano-notepad",
+            "libVersion": "0.1.0"
+          },
+          {
+            "pluginId": "nano-shared-workspace",
+            "libVersion": "0.1.0"
+          },
+          {
+            "pluginId": "nano-model-selector",
+            "libVersion": "0.1.0"
+          },
+          {
+            "pluginId": "nano-explorer-extra",
+            "libVersion": "0.1.0"
+          }
+        ],
+        "gitSha": null,
+        "labels": {},
+        "hostSinceStart": "2026-11-10T13:31:34.035Z",
+        "hostWrittenAt": "2026-11-10T13:52:41.255Z",
+        "hostEnabled": true,
+        "hostWindow": true,
+        "repeats": 3
+      },
+      "enabled": true,
+      "loafSupported": true,
+      "page": {
+        "nativeInpP75": null,
+        "nativeInpCount": 0,
+        "nativeInpDurationThreshold": 16,
+        "inputDelayP95": null,
+        "processingP95": null,
+        "presentationP95": null,
+        "loafCount": 2,
+        "blockingMs": 9.6,
+        "forcedLayoutMs": 60.6,
+        "nanoCombined": {
+          "scriptMs": 68.7,
+          "loafCount": 2,
+          "blockingMs": 9.6,
+          "clientJsBytes": 703656,
+          "comboResources": 1
+        },
+        "resources": {
+          "nanoClientJsBytes": 703656,
+          "totalJsBytes": 3364589
+        }
+      },
+      "plugins": {
+        "nano-notepad": {
+          "meta": {
+            "version": "0.1.1",
+            "implantedAt": "2026-11-10T13:52:36.581Z",
+            "implanted": true
+          },
+          "own": {
+            "inpP75": null,
+            "inpCount": 0
+          },
+          "native": {
+            "spanMsP95": null,
+            "trackMsP95": null,
+            "samples": {
+              "spans": 0,
+              "callbacks": 0
+            }
+          },
+          "spans": {
+            "render": {
+              "n": 4,
+              "windowN": 0,
+              "p50": null,
+              "p95": null,
+              "maxMs": null
+            },
+            "highlight": {
+              "n": 3,
+              "windowN": 0,
+              "p50": null,
+              "p95": null,
+              "maxMs": null
+            },
+            "idb-write": {
+              "n": 1,
+              "windowN": 0,
+              "p50": null,
+              "p95": null,
+              "maxMs": null
+            }
+          },
+          "tracks": {
+            "shortcut-key": {
+              "kind": "listener",
+              "callbacks": 0,
+              "live": 2,
+              "callbackMs": 0,
+              "totalCallbacks": 0,
+              "totalCallbackMs": 0
+            },
+            "draft-commit": {
+              "kind": "interval",
+              "callbacks": 0,
+              "live": 1,
+              "callbackMs": 0,
+              "totalCallbacks": 0,
+              "totalCallbackMs": 0
+            },
+            "mirror-resize": {
+              "kind": "resize",
+              "callbacks": 0,
+              "live": 1,
+              "callbackMs": 0,
+              "totalCallbacks": 1,
+              "totalCallbackMs": 0
+            },
+            "visibility": {
+              "kind": "listener",
+              "callbacks": 0,
+              "live": 1,
+              "callbackMs": 0,
+              "totalCallbacks": 0,
+              "totalCallbackMs": 0
+            },
+            "page-resize": {
+              "kind": "listener",
+              "callbacks": 0,
+              "live": 1,
+              "callbackMs": 0,
+              "totalCallbacks": 0,
+              "totalCallbackMs": 0
+            },
+            "escape-key": {
+              "kind": "listener",
+              "callbacks": 0,
+              "live": 1,
+              "callbackMs": 0,
+              "totalCallbacks": 0,
+              "totalCallbackMs": 0
+            },
+            "bc-message": {
+              "kind": "broadcast",
+              "callbacks": 0,
+              "live": 1,
+              "callbackMs": 0,
+              "totalCallbacks": 0,
+              "totalCallbackMs": 0
+            },
+            "ctia-watch": {
+              "kind": "mutation",
+              "callbacks": 1,
+              "live": 1,
+              "callbackMs": 0,
+              "totalCallbacks": 11,
+              "totalCallbackMs": 1.8
+            }
+          },
+          "usage": {},
+          "hostSpan": {},
+          "profiler": {
+            "commits": 0,
+            "commitP95": null
+          },
+          "scriptMs": 0
+        },
+        "nano-shared-workspace": {
+          "meta": {
+            "version": "0.1.0",
+            "implantedAt": "2026-11-10T13:52:36.589Z",
+            "implanted": true
+          },
+          "own": {
+            "inpP75": null,
+            "inpCount": 0
+          },
+          "native": {
+            "spanMsP95": null,
+            "trackMsP95": null,
+            "samples": {
+              "spans": 0,
+              "callbacks": 0
+            }
+          },
+          "spans": {
+            "apply-separate": {
+              "n": 13,
+              "windowN": 4,
+              "p50": 0.2,
+              "p95": 0.6,
+              "maxMs": 0.6
+            },
+            "section-render": {
+              "n": 10,
+              "windowN": 4,
+              "p50": 0.1,
+              "p95": 0.2,
+              "maxMs": 0.2
+            }
+          },
+          "tracks": {
+            "hold": {
+              "kind": "interval",
+              "callbacks": 0,
+              "live": 0,
+              "callbackMs": 0,
+              "totalCallbacks": 0,
+              "totalCallbackMs": 0
+            },
+            "sidebar-dedupe": {
+              "kind": "mutation",
+              "callbacks": 1,
+              "live": 1,
+              "callbackMs": 0.3,
+              "totalCallbacks": 11,
+              "totalCallbackMs": 2.2
+            },
+            "sidebar-graft": {
+              "kind": "mutation",
+              "callbacks": 3,
+              "live": 1,
+              "callbackMs": 1.6,
+              "totalCallbacks": 23,
+              "totalCallbackMs": 58.2
+            }
+          },
+          "usage": {},
+          "hostSpan": {
+            "settings": {
+              "n": 0,
+              "p50": null,
+              "p95": null
+            },
+            "workspaces": {
+              "n": 1,
+              "p50": 2955.1,
+              "p95": 2955.1
+            },
+            "remote-sessions": {
+              "n": 0,
+              "p50": null,
+              "p95": null
+            },
+            "sync-tick": {
+              "n": 0,
+              "p50": null,
+              "p95": null
+            }
+          },
+          "profiler": {
+            "commits": 0,
+            "commitP95": null
+          },
+          "scriptMs": 0
+        },
+        "nano-model-selector": {
+          "meta": {
+            "version": "0.1.1",
+            "implantedAt": "2026-11-10T13:52:36.594Z",
+            "implanted": true
+          },
+          "own": {
+            "inpP75": null,
+            "inpCount": 0
+          },
+          "native": {
+            "spanMsP95": null,
+            "trackMsP95": null,
+            "samples": {
+              "spans": 0,
+              "callbacks": 0
+            }
+          },
+          "spans": {
+            "filter-render": {
+              "n": 2,
+              "windowN": 2,
+              "p50": 0,
+              "p95": 0.1,
+              "maxMs": 0.1
+            },
+            "catalog-fetch": {
+              "n": 1,
+              "windowN": 1,
+              "p50": 0,
+              "p95": 0,
+              "maxMs": 0
+            }
+          },
+          "tracks": {},
+          "usage": {},
+          "hostSpan": {
+            "catalog": {
+              "n": 0,
+              "p50": null,
+              "p95": null
+            }
+          },
+          "profiler": {
+            "commits": 0,
+            "commitP95": null
+          },
+          "scriptMs": 0
+        },
+        "nano-explorer-extra": {
+          "meta": {
+            "version": "0.1.1",
+            "implantedAt": "2026-11-10T13:52:36.596Z",
+            "implanted": true
+          },
+          "own": {
+            "inpP75": null,
+            "inpCount": 0
+          },
+          "native": {
+            "spanMsP95": null,
+            "trackMsP95": null,
+            "samples": {
+              "spans": 0,
+              "callbacks": 0
+            }
+          },
+          "spans": {},
+          "tracks": {},
+          "usage": {},
+          "hostSpan": {},
+          "profiler": {
+            "commits": 0,
+            "commitP95": null
+          },
+          "scriptMs": 0
+        }
+      },
+      "counts": {},
+      "structure": {
+        "rootErrors": 0,
+        "badNames": 0,
+        "overflowSpans": 0,
+        "overflowUsage": 0,
+        "observerErrors": 0,
+        "observersMissing": 0,
+        "hostWriteErrors": 0
+      },
+      "notes": [
+        "nanoBlockingMs 按整条 LoAF 条目归并；含非 nano 脚本的帧会把那部分时间一并计入。",
+        "Event Timing 三段：inputDelay=主线程忙/排队，processing=事件处理器，presentation=等下一次绘制。页级 nativeInpP75 含 presentation，属环境级读数，不抄进插件行（spec §5.1）；插件预算以 inputDelayP95/processingP95 与 native.spanMsP95/trackMsP95 为准。",
+        "lab 的 composer-type 用 CDP 合成按键（page.keyboard.type），抬起的是 presentation 段；读数标注为 synthetic input，不等同真实用户 INP。",
+        "nanoCombined.scriptMs 只统计 >50ms 长帧里 >5ms 的脚本条目，不是总脚本耗时；快而频繁的脚本工作不可见。",
+        "nanoCombined.blockingMs 把「含任一 nano 脚本」的整条 LoAF blockingDuration 计入，含非 nano 部分，属过度归因。",
+        "nanoCombined.clientJsBytes 是所有 dsh-nano-* 包 combo 的 encodedBodySize 合计，不是单个插件的体积。",
+        "逐包 scriptMs 全为 0：combo URL 含多个包名，单包 URL 极少出现；按 §3.1 不予拆分。"
+      ]
+    }
+  }
+}

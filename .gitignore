@@ -46,6 +46,7 @@ context/
 
 # Local environment setup doc (machine-specific)
 .local-dsh-setup.md
+.local-desktop-setup.md
 
 # Impeccable skill working files
 .impeccable/
@@ -60,6 +61,10 @@ release/
 # NOTE: Cargo.lock stays committed — reproducible builds depend on it.
 target/
 **/*.wasm
+
+# Lab (perf-review). Baseline IS committed; local config and run output are not.
+lab/config.local.json
+lab/out/
 
 # 业主文件
 .adocs

@@ -36,7 +36,25 @@ import { openNanoDialog, openNanoMenu, NANO_STYLES } from 'dsh-nano-ui'
 const STYLE = `
 ${NANO_STYLES}
 [data-nano-notepad] { pointer-events: none; }
-.np-layer { position: fixed; inset: 0; pointer-events: none; z-index: 30; color: var(--dsw-alias-label-primary); font-family: var(--dsw-font-family); font-size: 13px; }
+/* ── notepad typography tokens ────────────────────────────────────────────────
+   Declared on :root because nano-ui menus/dialogs portal to document.body —
+   outside .np-layer — so only a document-level custom property reaches them.
+   nano-ui reads the --nano-* vars (fallback = shell default); --np-* retunes
+   the notepad's own text. Both stay on --dsw-* for theme colours. */
+:root {
+  --np-font-family: var(--dsw-font-family);
+  --np-font-size: 13px;
+  --np-font-size-sm: 12px;
+  --np-font-size-xs: 11px;
+  --np-font-size-xxs: 10px;
+  --nano-font-family: var(--np-font-family);
+  --nano-font-size: var(--np-font-size);
+  --nano-line-height: 20px;
+  --nano-title-size: 15px;
+  --nano-desc-size: var(--np-font-size-sm);
+  --nano-toast-size: var(--np-font-size-sm);
+}
+.np-layer { position: fixed; inset: 0; pointer-events: none; z-index: 30; color: var(--dsw-alias-label-primary); font-family: var(--np-font-family); font-size: var(--np-font-size); }
 .np-entry, .np-window, .np-slash { pointer-events: auto; }
 .np-entry, .np-window { position: absolute; }
 .np-entry { z-index: 3; }
@@ -71,12 +89,13 @@ ${NANO_STYLES}
 .np-toolbar, .np-tree-head { cursor: grab; }
 .np-tablist { display: flex; min-width: 0; gap: 2px; overflow-x: auto; scrollbar-width: thin; }
 /* dockkit-style tab: 28px, sm radius, active fills markdown-tag, close fades in */
-.np-tab { position: relative; display: inline-flex; align-items: center; flex: 0 1 auto; min-width: 90px; max-width: 196px; height: 28px; box-sizing: border-box; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); padding: 0 10px; cursor: default; font: inherit; font-size: 13px; line-height: 1; white-space: nowrap; user-select: none; }
+.np-tab { position: relative; display: inline-flex; align-items: center; flex: 0 1 auto; min-width: 90px; max-width: 196px; height: 28px; box-sizing: border-box; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); padding: 0 10px; cursor: default; font: inherit; font-size: var(--np-font-size); line-height: 1; white-space: nowrap; user-select: none; }
 .np-tab:not([data-active="true"]):hover { background: var(--dsw-alias-interactive-bg-hover); }
 .np-tab[data-active="true"] { background: var(--dsw-alias-interactive-bg-active); color: var(--dsw-alias-label-primary); }
 .np-tab-btn { min-width: 0; flex: 1; height: 100%; display: inline-flex; align-items: center; overflow: hidden; border: 0; background: transparent; color: inherit; font: inherit; padding: 0 16px 0 0; cursor: pointer; }
-.np-tabs > button.np-add { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; box-sizing: border-box; padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); cursor: pointer; }
-.np-tabs > button.np-add:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+.np-tabs > button.np-close-tabs { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; flex: none; box-sizing: border-box; padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); cursor: pointer; }
+.np-tabs > button.np-close-tabs svg { width: 16px; height: 16px; }
+.np-tabs > button.np-close-tabs:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 .np-tabs-spacer { flex: 1 1 auto; min-width: 8px; align-self: stretch; cursor: grab; }
 /* window chrome: two skins share the frame, glyphs differ per os */
 .np-chrome { display: inline-flex; align-items: center; gap: 8px; flex: none; }
@@ -87,8 +106,8 @@ ${NANO_STYLES}
 .np-window[data-chrome="mac"] .np-chrome button.np-chrome-max { background: #35c759; }
 .np-window[data-chrome="mac"] .np-chrome button svg { width: 8px; height: 8px; color: #00000099; opacity: 0; transition: opacity .12s; }
 .np-window[data-chrome="mac"] .np-tabs:hover .np-chrome button svg { opacity: 1; }
-.np-window[data-chrome="windows"] .np-chrome { gap: 0; }
-.np-window[data-chrome="windows"] .np-chrome button { width: 32px; height: 26px; color: var(--dsw-alias-label-secondary); }
+.np-window[data-chrome="windows"] .np-chrome { gap: 4px; }
+.np-window[data-chrome="windows"] .np-chrome button { width: 28px; height: 24px; border-radius: var(--dsw-radius-sm); color: var(--dsw-alias-label-secondary); transition: background-color .12s ease, color .12s ease; }
 .np-window[data-chrome="windows"] .np-chrome button:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 .np-window[data-chrome="windows"] .np-chrome button.np-chrome-max:hover { color: var(--dsw-alias-label-primary); }
 .np-window[data-chrome="windows"] .np-chrome button.np-chrome-close:hover { background: var(--dsw-alias-state-error-primary, #e81123); color: #fff; }
@@ -106,7 +125,7 @@ ${NANO_STYLES}
 .np-tab-name[data-clipped="true"] { text-overflow: clip; mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent); -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent); }
 [data-changed-files] { position: relative; }
 [data-changed-files]:has(> .np-to-notepad) { padding-right: 128px; }
-.np-to-notepad, .np-change-action { position: absolute; z-index: 2; height: 28px; padding: 0 10px; border: 1px solid var(--dsw-alias-border-l2, #ffffff1f); border-radius: var(--dsw-radius-sm, 8px); background: var(--dsw-alias-bg-layer-1, #232324); color: var(--dsw-alias-label-primary, #f9fafb); font: inherit; font-size: 12px; line-height: 20px; cursor: pointer; }
+.np-to-notepad, .np-change-action { position: absolute; z-index: 2; height: 28px; padding: 0 10px; border: 1px solid var(--dsw-alias-border-l2, #ffffff1f); border-radius: var(--dsw-radius-sm, 8px); background: var(--dsw-alias-bg-layer-1, #232324); color: var(--dsw-alias-label-primary, #f9fafb); font: inherit; font-size: var(--np-font-size-sm); line-height: 20px; cursor: pointer; }
 .np-to-notepad { right: 12px; top: 50%; transform: translateY(-50%); }
 .np-to-notepad:hover:not(:disabled), .np-change-action:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover, #ffffff14); }
 .np-to-notepad:disabled, .np-change-action:disabled { opacity: .55; cursor: default; }
@@ -124,7 +143,7 @@ ${NANO_STYLES}
 .np-tree[data-collapsed="true"] .np-node-main { flex: none; justify-content: center; padding-right: 0 !important; }
 .np-tree[data-collapsed="true"] .np-node-name, .np-tree[data-collapsed="true"] .np-caret, .np-tree[data-collapsed="true"] .np-node-actions, .np-tree[data-collapsed="true"] .np-group { display: none; }
 .np-tree[data-collapsed="true"] .np-node-icon svg { width: 18px; height: 18px; }
-.np-tree-head { box-sizing: border-box; display: flex; flex: none; align-items: center; gap: 4px; width: 100%; height: 49px; padding: 6px var(--np-pad-x); color: var(--dsw-alias-label-tertiary); font-size: 12px; border-bottom: 1px solid var(--dsw-alias-border-l2); }
+.np-tree-head { box-sizing: border-box; display: flex; flex: none; align-items: center; gap: 4px; width: 100%; height: 49px; padding: 6px var(--np-pad-x); color: var(--dsw-alias-label-tertiary); font-size: var(--np-font-size-sm); border-bottom: 1px solid var(--dsw-alias-border-l2); }
 .np-tree-toggle { box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; flex: none; padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); cursor: pointer; }
 .np-tree-toggle:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 .np-tree-toggle svg { width: 16px; height: 16px; display: block; fill: none; stroke: currentColor; stroke-width: 1; }
@@ -168,9 +187,9 @@ ${NANO_STYLES}
 .np-transfer-check { display: none; color: var(--dsw-alias-link); }
 .np-transfer-check svg { width: 16px; height: 16px; display: block; fill: currentColor; }
 .np-transfer-row[data-active="true"] .np-transfer-check { display: inline-flex; }
-.np-transfer-empty { margin: 8px 0; color: var(--dsw-alias-label-secondary); font-size: 12px; }
+.np-transfer-empty { margin: 8px 0; color: var(--dsw-alias-label-secondary); font-size: var(--np-font-size-sm); }
 .np-caret { display: inline-flex; width: 16px; height: 16px; align-items: center; justify-content: center; border: 0; background: transparent; color: var(--dsw-alias-label-tertiary); padding: 0; cursor: pointer; }
-.np-caret[data-open="false"] svg { transform: rotate(-90deg); }
+.np-caret[data-open="true"] svg { transform: rotate(90deg); }
 .np-node-icon { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex: none; color: var(--dsw-alias-label-tertiary); }
 .np-node-name { display: block; min-width: 0; overflow: hidden; white-space: nowrap; }
 .np-node-name[data-fade="true"] { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 18px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 18px), transparent); }
@@ -179,23 +198,23 @@ ${NANO_STYLES}
 .np-tree-toggle svg .np-panel-fill { fill: currentColor; stroke: none; }
 .np-node-icon svg, .np-tree-tools svg, .np-tree-toggle svg, .np-caret svg, .np-node-actions svg, .np-tool svg, .np-slash svg { width: 16px; height: 16px; display: block; }
 .np-ws { position: relative; flex: 1 1 auto; min-width: 0; }
-.np-ws-btn { display: flex; align-items: center; gap: 6px; width: 100%; height: var(--np-icon-btn); box-sizing: border-box; padding: 0 8px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); font: inherit; font-size: 12px; cursor: pointer; }
+.np-ws-btn { display: flex; align-items: center; gap: 6px; width: 100%; height: var(--np-icon-btn); box-sizing: border-box; padding: 0 8px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); font: inherit; font-size: var(--np-font-size-sm); cursor: pointer; }
 .np-ws-btn:hover { background: var(--dsw-alias-interactive-bg-active); }
 .np-ws-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
 .np-ws-caret { display: inline-flex; width: 14px; height: 14px; flex: none; color: var(--dsw-alias-label-tertiary); }
 .np-ws-caret svg { width: 14px; height: 14px; }
-.np-group { display: flex; align-items: center; gap: 6px; margin: 12px 0 4px; padding-left: 8px; color: var(--dsw-alias-label-tertiary); font-size: 11px; font-weight: 600; letter-spacing: .04em; line-height: 20px; }
+.np-group { display: flex; align-items: center; gap: 6px; margin: 12px 0 4px; padding-left: 8px; color: var(--dsw-alias-label-tertiary); font-size: var(--np-font-size-xs); font-weight: 600; letter-spacing: .04em; line-height: 20px; }
 .np-nodes > .np-group:first-child { margin-top: 2px; }
 .np-group[data-active="true"] { color: var(--dsw-alias-label-primary); }
-.np-group-count { font-size: 11px; font-weight: 400; color: var(--dsw-alias-label-tertiary); background: var(--dsw-alias-interactive-bg-active); border-radius: 8px; padding: 0 6px; line-height: 16px; }
+.np-group-count { font-size: var(--np-font-size-xs); font-weight: 400; color: var(--dsw-alias-label-tertiary); background: var(--dsw-alias-interactive-bg-active); border-radius: 8px; padding: 0 6px; line-height: 16px; }
 .np-editor { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
 .np-toolbar, .np-footer { min-width: 0; }
 .np-toolbar { display: flex; gap: var(--np-gap); align-items: center; padding: 6px var(--np-pad-x); }
 /* native segmented control: hover-gray track + layer-1 thumb sliding by translate */
 .np-switch { flex: none; margin-left: auto; display: inline-grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 2px; position: relative; padding: 4px; border: 0; background: var(--dsw-alias-interactive-bg-hover); border-radius: var(--dsw-radius-md); cursor: pointer; font: inherit; min-width: 148px; }
-.np-switch .np-switch-label { display: inline-flex; align-items: center; justify-content: center; min-width: 0; height: 28px; padding: 0 14px; font-size: 13px; font-weight: 500; color: var(--dsw-alias-label-secondary); z-index: 0; }
+.np-switch .np-switch-label { display: inline-flex; align-items: center; justify-content: center; min-width: 0; height: 28px; padding: 0 14px; font-size: var(--np-font-size); font-weight: 500; color: var(--dsw-alias-label-secondary); z-index: 0; }
 .np-switch { --np-switch-n: 2; --np-switch-i: 0; }
-.np-switch .np-switch-thumb { position: absolute; top: 4px; left: 4px; width: calc((100% - 8px - (var(--np-switch-n) - 1) * 2px) / var(--np-switch-n)); height: calc(100% - 8px); display: flex; align-items: center; justify-content: center; padding: 0 14px; box-sizing: border-box; background: var(--dsw-alias-bg-layer-1); border-radius: var(--dsw-radius-sm); box-shadow: var(--dsw-elevation-soft); font-size: 13px; font-weight: 500; color: var(--dsw-alias-label-primary); white-space: nowrap; overflow: hidden; transition: transform .16s ease; z-index: 1; }
+.np-switch .np-switch-thumb { position: absolute; top: 4px; left: 4px; width: calc((100% - 8px - (var(--np-switch-n) - 1) * 2px) / var(--np-switch-n)); height: calc(100% - 8px); display: flex; align-items: center; justify-content: center; padding: 0 14px; box-sizing: border-box; background: var(--dsw-alias-bg-layer-1); border-radius: var(--dsw-radius-sm); box-shadow: var(--dsw-elevation-soft); font-size: var(--np-font-size); font-weight: 500; color: var(--dsw-alias-label-primary); white-space: nowrap; overflow: hidden; transition: transform .16s ease; z-index: 1; }
 .np-switch[data-view="rendered"] .np-switch-thumb { transform: translateX(calc(100% + 2px)); }
 .np-toolbar { flex-wrap: wrap; gap: 2px; border-bottom: 1px solid var(--dsw-alias-border-l2); }
 .np-tool { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); cursor: pointer; }
@@ -275,11 +294,11 @@ ${NANO_STYLES}
 /* DSH-native settings row: title + description left, control right, hairline row */
 /* uniform rows: same container height for every field, dividers sit centered
    in the equal gap between them */
-.np-dlg-body .np-field { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 56px; padding: 10px 0; margin: 0; }
+.np-dlg-body .np-field { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; min-height: 56px; padding: 10px 0; margin: 0; }
 .np-dlg-body .np-field + .np-field { border-top: 1px solid var(--dsw-alias-border-l2); }
-.np-dlg-body .np-field-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.np-dlg-body .np-field-text { flex: 1 1 140px; min-width: 140px; display: flex; flex-direction: column; gap: 2px; }
 .np-dlg-body .np-field-name { color: var(--dsw-alias-label-primary); line-height: 20px; }
-.np-dlg-body .np-field-desc { font-size: 12px; color: var(--dsw-alias-label-tertiary); line-height: 18px; }
+.np-dlg-body .np-field-desc { font-size: var(--np-font-size-sm); color: var(--dsw-alias-label-tertiary); line-height: 18px; }
 /* pill number input with embedded unit */
 .np-dlg-body input[type="number"] { appearance: none; -webkit-appearance: none; }
 .np-dlg-body input::-webkit-outer-spin-button, .np-dlg-body input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
@@ -287,7 +306,7 @@ ${NANO_STYLES}
 .np-num:focus-within { border-color: var(--dsw-focus-ring-color, var(--dsw-alias-link)); }
 .np-num input { width: auto; min-width: 4.5em; field-sizing: content; border: 0; background: transparent; padding: 2px 0; font: inherit; color: inherit; text-align: right; }
 .np-num input:focus { outline: none; }
-.np-num .np-num-unit { color: var(--dsw-alias-label-tertiary); font-size: 12px; white-space: nowrap; }
+.np-num .np-num-unit { color: var(--dsw-alias-label-tertiary); font-size: var(--np-font-size-sm); white-space: nowrap; }
 /* segmented control matching the app's color-scheme switch */
 /* settings switches carry their index in --np-switch-i: thumb steps by
    (segment width + 2px gap), generic for N segments */
@@ -305,7 +324,7 @@ ${NANO_STYLES}
 .np-error button svg { width: 14px; height: 14px; fill: currentColor; }
 .np-error button[data-action="load-remote"], .np-error button[data-action="keep-mine"] { width: auto; height: auto; flex: none; padding: 4px 10px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); color: var(--dsw-alias-label-primary); font: inherit; line-height: 20px; }
 .np-slash { width: var(--np-menu-w); max-height: 260px; overflow-y: auto; padding: 4px; display: flex; flex-direction: column; gap: 1px; }
-.np-slash .np-slash-empty { padding: 8px; color: var(--dsw-alias-label-tertiary); font-size: 12px; }
+.np-slash .np-slash-empty { padding: 8px; color: var(--dsw-alias-label-tertiary); font-size: var(--np-font-size-sm); }
 .np-footer { position: relative; z-index: 1; box-sizing: border-box; display: flex; align-items: center; gap: var(--np-gap); min-height: var(--np-foot-h); padding: 0 var(--np-pad-x); border-top: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-2); }
 /* Panel-width responsiveness: container queries react to the floating window, not the viewport. */
 @container np (max-width: 720px) {
@@ -339,7 +358,7 @@ ${NANO_STYLES}
   .np-toolbar::-webkit-scrollbar { display: none; }
   .np-switch { min-width: 62px; grid-auto-columns: auto; }
   .np-switch .np-switch-label { display: none; }
-  .np-switch .np-switch-thumb { position: static; transform: none; width: auto; height: 22px; padding: 0 8px; box-shadow: none; font-size: 12px; }
+  .np-switch .np-switch-thumb { position: static; transform: none; width: auto; height: 22px; padding: 0 8px; box-shadow: none; font-size: var(--np-font-size-sm); }
   .np-switch[data-view="rendered"] .np-switch-thumb { transform: none; }
 }
 /* Viewport-level mobile layout still applies when the whole page is small. */
@@ -361,7 +380,7 @@ ${NANO_STYLES}
   .np-footer-actions button { min-height: 36px; }
   .np-tabs { flex-wrap: wrap; }
 }
-.np-sync { display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1; overflow: hidden; color: var(--dsw-alias-label-secondary); font-size: 12px; }
+.np-sync { display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1; overflow: hidden; color: var(--dsw-alias-label-secondary); font-size: var(--np-font-size-sm); }
 .np-status-text { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .np-beat { width: 8px; height: 8px; flex: none; border-radius: 50%; background: var(--dsw-alias-label-tertiary); }
 .np-beat[data-state="saved"], .np-beat[data-state="committed"] { background: var(--dsw-alias-state-success-primary); }
@@ -371,11 +390,17 @@ ${NANO_STYLES}
 .np-beat { transition: background-color .2s ease; }
 @keyframes np-pulse { 50% { opacity: .25; } }
 .np-footer-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
+.np-footer-actions button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; }
+.np-footer-actions svg { width: 14px; height: 14px; flex: none; fill: currentColor; }
 .np-section { border-top: 1px solid var(--dsw-alias-border-l2); padding-top: 2px; }
 .np-dlg-body > .np-section:first-child { border-top: 0; padding-top: 0; }
-.np-section h4 { margin: 0 0 8px; font-size: 12px; font-weight: 600; color: var(--dsw-alias-label-tertiary); }
+.np-section h4 { margin: 0 0 8px; font-size: var(--np-font-size-sm); font-weight: 600; color: var(--dsw-alias-label-tertiary); }
 /* informational row: same row height/rhythm, label left, value right */
 .np-stat { display: inline-flex; align-items: baseline; gap: 6px; flex: none; color: var(--dsw-alias-label-secondary); font-size: inherit; white-space: nowrap; }
+.np-usage-val { display: inline-flex; align-items: center; gap: 6px; flex: none; flex-wrap: wrap; justify-content: flex-end; margin-left: auto; }
+.np-usage-chip { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 8px; border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-secondary); font-size: var(--np-font-size-sm); font-weight: 500; white-space: nowrap; }
+.np-usage-chip svg { width: 13px; height: 13px; flex: none; fill: currentColor; }
+.np-usage-chip b { font-weight: 600; color: var(--dsw-alias-label-primary); }
 /* --- motion: quiet utility language — opacity/transform only, ≤200ms --- */
 .np-tab, .np-tab-x, .np-tab-minimize, .np-tool, .np-caret, .np-node-main, .np-node-actions button, .np-tree-tools button, .np-tree-toggle, .np-ws-btn, .np-node, .np-versions button, .np-slash button, .np-entry { transition: background-color .12s ease, color .12s ease, border-color .12s ease, box-shadow .12s ease; }
 .np-caret svg, .np-ws-caret svg { transition: transform .15s ease; }
@@ -398,7 +423,7 @@ ${NANO_STYLES}
 .np-json-tools[hidden] { display: none; }
 .np-md-tools { display: inline-flex; align-items: center; gap: 2px; }
 .np-md-tools[hidden] { display: none; }
-.np-lint { border: 0; background: transparent; font: inherit; font-size: 11px; padding: 0 6px; border-radius: 6px; cursor: pointer; white-space: nowrap; flex: none; }
+.np-lint { border: 0; background: transparent; font: inherit; font-size: var(--np-font-size-xs); padding: 0 6px; border-radius: 6px; cursor: pointer; white-space: nowrap; flex: none; }
 .np-lint[data-state="ok"] { color: var(--dsw-alias-state-success-primary); }
 .np-lint[data-state="err"] { color: var(--dsw-alias-state-error-primary); }
 .np-lint[data-state="err"]:hover { background: var(--dsw-alias-interactive-bg-hover-danger); }
@@ -407,7 +432,7 @@ ${NANO_STYLES}
 .nj-node:hover { background: var(--dsw-alias-interactive-bg-hover); }
 .nj-node::-webkit-details-marker { display: none; }
 .nj-caret { display: inline-block; width: 12px; flex: none; transition: transform .12s ease; }
-.nj-caret::before { content: '▸'; color: var(--dsw-alias-label-tertiary); font-size: 10px; }
+.nj-caret::before { content: '▸'; color: var(--dsw-alias-label-tertiary); font-size: var(--np-font-size-xxs); }
 details[open] > .nj-node > .nj-caret { transform: rotate(90deg); }
 .nj-preview { color: var(--dsw-alias-label-tertiary); font-size: .85em; margin-left: 6px; }
 details[open] > .nj-node > .nj-preview { display: none; }
@@ -425,28 +450,34 @@ details[open] > .nj-node > .nj-preview { display: none; }
 
 const googleIcon = (path) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${path}"></path></svg>`
 const textIcon = (label) => `<svg viewBox="0 0 24 24" aria-hidden="true"><text x="12" y="16.5" text-anchor="middle" font-size="10" font-weight="700" font-family="inherit">${label}</text></svg>`
-const FILE_ICON = googleIcon('M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8zm2 16H8v-2h8zm0-4H8v-2h8zm-3-5V3.5L18.5 9z')
-const FOLDER_ICON = googleIcon('M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8z')
-const PLUS_ICON = googleIcon('M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z')
-const CLOSE_ICON = googleIcon('M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z')
-const SETTINGS_ICON = googleIcon('M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.48.48 0 0 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z')
-const PIN_ICON = googleIcon('M16 9V4h1c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1 1 1-1v-7H19v-2c-1.66 0-3-1.34-3-3')
-const EDIT_ICON = googleIcon('M3 17.25V21h3.75L17.81 9.94l-3.75-3.75zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75z')
-const MOVE_ICON = googleIcon('M20 6h-8l-2-2H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.1.89 2 2 2h16c1.11 0 2-.9 2-2V8c0-1.11-.89-2-2-2zm-6 12v-3h-4v-2h4V10l4 4-4 4z')
-const MORE_ICON = googleIcon('M6 10c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm12 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm-6 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z')
-const EXPAND_ICON = googleIcon('M12 5.83 15.17 9l1.41-1.41L12 3 7.41 7.59 8.83 9 12 5.83zm0 12.34L8.83 15l-1.41 1.41L12 21l4.59-4.59L15.17 15 12 18.17z')
-const COLLAPSE_ICON = googleIcon('M7.41 15.41 12 10.83l4.59 4.58L18 14l-6-6-6 6 1.41 1.41zm0-6L12 4.83l4.59-4.58L18 1.66l-6 6-6-6 1.41-1.41z')
-const FORMAT_ICON = googleIcon('M3 21h18v-2H3v2zM6.5 12l2.83 2.83 1.41-1.41L7.91 10.59l2.83-2.83-1.41-1.41L6.5 8.59 3.67 11.41zM13 6h8v2h-8V6zm0 4h6v2h-6v-2zm0 4h4v2h-4v-2z')
-const MINIFY_ICON = googleIcon('M3 5h18v2H3V5zm0 4h14v2H3V9zm0 4h10v2H3v-2zm0 4h6v2H3v-2z')
+/* dsh-native product glyph: renders a <use> against the document icon sprite
+   maintained by ui-theme (symbol id dsw-icon-<glyph>-<weight>). Falls back
+   silently when the shell predates the sprite. */
+const dshIcon = (glyph, weight = 'regular', size = 16) => `<svg width="${size}" height="${size}" data-icon="dsw-icon-${glyph}-${weight}" aria-hidden="true"><use href="#dsw-icon-${glyph}-${weight}"/></svg>`
+const FILE_ICON = dshIcon('browse-outline')
+const FOLDER_ICON = dshIcon('folder-close')
+const PLUS_ICON = dshIcon('plus-outline')
+const CLOSE_ICON = dshIcon('close-outline')
+const SETTINGS_ICON = dshIcon('settings-outline')
+const PIN_ON_ICON = dshIcon('pin-fill')
+const PIN_OFF_ICON = dshIcon('pin-outline')
+const MOVE_ICON = dshIcon('deliver-doc')
+const MORE_ICON = dshIcon('ellipsis-outline')
+/* Expand/collapse-all in the JSON tools: single chevrons read as "open /
+   fold everything"; the dedicated all-all glyph does not exist in the set. */
+const EXPAND_ICON = dshIcon('chevron-down-outline')
+const COLLAPSE_ICON = dshIcon('chevron-up-outline')
+const FORMAT_ICON = dshIcon('wrap-lines-outline')
+const MINIFY_ICON = dshIcon('compact-outline')
 const ESCAPE_ICON = googleIcon('M8 5 4 12h4v7l4-9H8z')
 const UNESCAPE_ICON = googleIcon('M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z')
 const STRIP_ICON = googleIcon('M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z')
-const CHEVRON_ICON = googleIcon('M16.59 8.59 12 13.17 7.41 8.59 6 10l6 6 6-6z')
+const CHEVRON_ICON = dshIcon('chevron-down-outline')
+const CARET_ICON = dshIcon('triangle-right-fill')
+const CHECK_ICON = dshIcon('check-outline')
 /* DSH sidebar glyph (panel-left-outline, 16px). Open fills the left pane; closed is the outline. */
 const PANEL_ICON = (filled) => `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 1.5H2.5C1.94772 1.5 1.5 1.94772 1.5 2.5V13.5C1.5 14.0523 1.94772 14.5 2.5 14.5H13.5C14.0523 14.5 14.5 14.0523 14.5 13.5V2.5C14.5 1.94772 14.0523 1.5 13.5 1.5Z"></path><path d="M5.5 1.5V14.5"></path>${filled ? '<path class="np-panel-fill" d="M2.5 1.5H5.5V14.5H2.5C1.94772 14.5 1.5 14.0523 1.5 13.5V2.5C1.5 1.94772 1.94772 1.5 2.5 1.5Z"></path>' : ''}</svg>`
-const MINIMIZE_ICON = googleIcon('M6 19h12v2H6z')
 const WIN_MIN_ICON = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M1 6h10" fill="none" stroke="currentColor" stroke-width="1.1"/></svg>'
-const TRASH_ICON = googleIcon('M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6zM19 4h-3.5l-1-1h-5l-1 1H5v2h14z')
 const ICON = FILE_ICON
 
 /** Format toolbar + slash menu share one definition list. */
@@ -458,12 +489,12 @@ const FORMAT_DEFS = [
   { kind: 'bold', icon: googleIcon('M15.6 10.79c.97-.67 1.65-1.77 1.65-2.79 0-2.26-1.75-4-4-4H7v14h7.04c2.09 0 3.71-1.7 3.71-3.79 0-1.52-.86-2.82-2.15-3.42M10 6.5h3c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5h-3v-3m3.5 9H10v-3h3.5c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5') },
   { kind: 'italic', icon: googleIcon('M10 4v3h2.21l-3.42 8H6v3h8v-3h-2.21l3.42-8H18V4z') },
   { kind: 'strike', icon: googleIcon('M10 19h4v-3h-4v3zM5 4v3h5v3h4V7h5V4H5zM3 14h18v-2H3v2z') },
-  { kind: 'bullet', icon: googleIcon('M4 10.5c-.83 0-1.5.67-1.5 1.5s.67 1.5 1.5 1.5 1.5-.67 1.5-1.5-.67-1.5-1.5-1.5zm0-6c-.83 0-1.5.67-1.5 1.5S3.17 7.5 4 7.5 5.5 6.83 5.5 6 4.83 4.5 4 4.5zm0 12c-.83 0-1.5.68-1.5 1.5s.68 1.5 1.5 1.5 1.5-.68 1.5-1.5-.67-1.5-1.5-1.5zM7 19h14v-2H7v2zm0-6h14v-2H7v2zm0-8v2h14V5H7z') },
+  { kind: 'bullet', icon: dshIcon('flat-list-outline') },
   { kind: 'numbered', icon: googleIcon('M2 17h2v.5H3v1h1v.5H2v1h3v-4H2v1zm1-9h1V4H2v1h1v3zm-1 3h1.8L2 13.1v.9h3v-1H3.2L5 10.9V10H2v1z') },
-  { kind: 'task', icon: googleIcon('M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-9 14l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z') },
+  { kind: 'task', icon: dshIcon('checklist-outline') },
   { kind: 'quote', icon: googleIcon('M6 17h3l2-4V7H5v6h3l-2 4zm8 0h3l2-4V7h-6v6h3l-2 4z') },
-  { kind: 'link', icon: googleIcon('M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z') },
-  { kind: 'image', icon: googleIcon('M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z') },
+  { kind: 'link', icon: dshIcon('link-outline') },
+  { kind: 'image', icon: dshIcon('apps-add-outline') },
 ]
 
 /** @param {ParentNode} root @param {string} selector */
@@ -506,9 +537,9 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     ? `<button type="button" class="np-tool" data-action="image" data-format-kind="image">${def.icon}</button>`
     : `<button type="button" class="np-tool" data-format="${def.kind}" data-format-kind="${def.kind}">${def.icon}</button>`).join('')
   panel.innerHTML = `
-    <div class="np-tabs"><button type="button" class="np-tree-toggle" data-action="toggle-tree"></button><div class="np-tablist"></div><button type="button" class="np-add" data-action="new-file" data-i18n="newFile" data-i18n-mode="title">+</button><span class="np-tabs-spacer"></span></div>
+    <div class="np-tabs"><button type="button" class="np-tree-toggle" data-action="toggle-tree"></button><button type="button" class="np-close-tabs" data-action="close-tabs" data-i18n="saveCloseTabs" data-i18n-mode="title">${dshIcon('archive-check-outline')}</button><div class="np-tablist"></div><span class="np-tabs-spacer"></span></div>
     <div class="np-body">
-      <aside class="np-tree"><div class="np-tree-head"><div class="np-ws"><button type="button" class="np-ws-btn" data-action="ws-toggle" aria-haspopup="listbox" aria-expanded="false"><span class="np-ws-label"></span><span class="np-ws-caret" aria-hidden="true">${CHEVRON_ICON}</span></button></div><span class="np-tree-tools"><button type="button" data-action="new-item" data-i18n="newItem" data-i18n-mode="title" aria-haspopup="menu">${PLUS_ICON}</button><button type="button" class="np-danger" data-action="delete" data-i18n="clearUnpinned" data-i18n-mode="title">${TRASH_ICON}</button></span></div><div class="np-nodes" data-root="true"></div><div class="np-tree-foot"><button type="button" data-action="settings" data-i18n="settings" data-i18n-mode="label">${SETTINGS_ICON}<span data-i18n="settings"></span></button><button type="button" data-action="close" data-i18n="close" data-i18n-mode="label">${CLOSE_ICON}<span data-i18n="close"></span></button></div></aside>
+      <aside class="np-tree"><div class="np-tree-head"><div class="np-ws"><button type="button" class="np-ws-btn" data-action="ws-toggle" aria-haspopup="listbox" aria-expanded="false"><span class="np-ws-label"></span><span class="np-ws-caret" aria-hidden="true">${CHEVRON_ICON}</span></button></div><span class="np-tree-tools"><button type="button" data-action="new-item" data-i18n="newItem" data-i18n-mode="title" aria-haspopup="menu">${PLUS_ICON}</button><button type="button" class="np-danger" data-action="delete" data-i18n="clearUnpinned" data-i18n-mode="title">${dshIcon('trash-outline')}</button></span></div><div class="np-nodes" data-root="true"></div><div class="np-tree-foot"><button type="button" data-action="settings" data-i18n="settings" data-i18n-mode="label">${SETTINGS_ICON}<span data-i18n="settings"></span></button><button type="button" data-action="close" data-i18n="close" data-i18n-mode="label">${CLOSE_ICON}<span data-i18n="close"></span></button></div></aside>
       <div class="np-editor">
         <div class="np-toolbar"><span class="np-md-tools">${toolbar}</span><span class="np-json-tools" hidden><button type="button" class="np-tool" data-json="expand" data-i18n="jsonExpand" data-i18n-mode="title">${EXPAND_ICON}</button><button type="button" class="np-tool" data-json="collapse" data-i18n="jsonCollapse" data-i18n-mode="title">${COLLAPSE_ICON}</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-json="format" data-i18n="jsonFormat" data-i18n-mode="title">${FORMAT_ICON}</button><button type="button" class="np-tool" data-json="minify" data-i18n="jsonMinify" data-i18n-mode="title">${MINIFY_ICON}</button><button type="button" class="np-tool" data-json="escape" data-i18n="jsonEscape" data-i18n-mode="title">${ESCAPE_ICON}</button><button type="button" class="np-tool" data-json="unescape" data-i18n="jsonUnescape" data-i18n-mode="title">${UNESCAPE_ICON}</button><button type="button" class="np-tool" data-json="strip" data-i18n="jsonStrip" data-i18n-mode="title">${STRIP_ICON}</button></span><button type="button" class="np-switch" data-action="view" role="switch" aria-checked="false" data-i18n="viewGroup" data-i18n-mode="title"><span class="np-switch-label" data-i18n="source"></span><span class="np-switch-label" data-i18n="preview"></span><span class="np-switch-thumb" data-i18n="source"></span></button></div>
         <div class="np-mirror" aria-hidden="true"></div>
@@ -516,7 +547,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
         <div class="np-slash" hidden></div>
         <div class="np-read" tabindex="0" hidden></div>
         <div class="np-error" role="alert" hidden><span class="np-error-text"></span><button type="button" data-action="load-remote" data-i18n="loadRemote" hidden></button><button type="button" data-action="keep-mine" data-i18n="keepMine" hidden></button><button type="button" data-action="dismiss-error" data-i18n="close" data-i18n-mode="title">${CLOSE_ICON}</button></div>
-        <footer class="np-footer"><span class="np-sync"><i class="np-beat" data-state="idle"></i><button type="button" class="np-lint" role="status" hidden></button><span class="np-status-text" role="status" aria-live="polite"></span></span><span class="np-footer-actions"><button type="button" data-action="export-file" data-i18n="saveAs"></button><button type="button" data-action="history" data-i18n="history"></button><button type="button" data-action="save-version" data-i18n="saveVersion"></button><button type="button" class="np-danger" data-action="clear-file" data-i18n="clearFile"></button></span></footer>
+        <footer class="np-footer"><span class="np-sync"><i class="np-beat" data-state="idle"></i><button type="button" class="np-lint" role="status" hidden></button><span class="np-status-text" role="status" aria-live="polite"></span></span><span class="np-footer-actions"><button type="button" data-action="export-file" data-i18n="saveAs" data-i18n-mode="label">${dshIcon('download-outline')}<span data-i18n="saveAs"></span></button><button type="button" data-action="history" data-i18n="history" data-i18n-mode="label">${dshIcon('clock-outline')}<span data-i18n="history"></span></button><button type="button" data-action="save-version" data-i18n="saveVersion" data-i18n-mode="label">${dshIcon('save-outline')}<span data-i18n="saveVersion"></span></button><button type="button" class="np-danger" data-action="clear-file" data-i18n="clearFile" data-i18n-mode="label">${dshIcon('trash-outline')}<span data-i18n="clearFile"></span></button></span></footer>
       </div>
     </div>
     <div class="np-resize" data-edge="n"></div><div class="np-resize" data-edge="s"></div><div class="np-resize" data-edge="e"></div><div class="np-resize" data-edge="w"></div><div class="np-resize" data-edge="nw"></div><div class="np-resize" data-edge="ne"></div><div class="np-resize" data-edge="sw"></div><div class="np-resize" data-edge="se"></div>
@@ -834,9 +865,9 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
         const icon = node.kind === 'folder' ? FOLDER_ICON : FILE_ICON
         const name = escapeHtml(node.name)
         const expanded = !state.collapsed.has(node.id)
-        const caret = node.kind === 'folder' ? `<button type="button" class="np-caret" data-caret="${node.id}" data-open="${expanded}" aria-expanded="${expanded}" aria-label="${escapeHtml(node.name)} · ${escapeHtml(expanded ? text().collapse : text().expand)}">${CHEVRON_ICON}</button>` : ''
+        const caret = node.kind === 'folder' ? `<button type="button" class="np-caret" data-caret="${node.id}" data-open="${expanded}" aria-expanded="${expanded}" aria-label="${escapeHtml(node.name)} · ${escapeHtml(expanded ? text().collapse : text().expand)}">${CARET_ICON}</button>` : ''
         const pinLabel = node.pinned === true ? text().unpin : text().pin
-        const pin = `<button type="button" data-pin="${node.id}" data-active="${node.pinned === true}" title="${escapeHtml(pinLabel)}" aria-label="${escapeHtml(pinLabel)}">${PIN_ICON}</button>`
+        const pin = `<button type="button" data-pin="${node.id}" data-active="${node.pinned === true}" title="${escapeHtml(pinLabel)}" aria-label="${escapeHtml(pinLabel)}">${node.pinned === true ? PIN_ON_ICON : PIN_OFF_ICON}</button>`
         lines.push(`<div class="np-node" data-kind="${node.kind}" data-pinned="${node.pinned === true}" data-active="${node.id === state.ui.currentId}" title="${name}" style="padding-left:${8 + depth * 16}px">${caret}<button class="np-node-main" type="button" draggable="true" data-id="${node.id}" aria-label="${name}"><span class="np-node-icon" aria-hidden="true">${icon}</span><span class="np-node-name">${name}</span></button><span class="np-node-actions">${pin}<button type="button" data-move="${node.id}" title="${escapeHtml(text().transfer)}" aria-label="${escapeHtml(text().transfer)}">${MOVE_ICON}</button><button type="button" data-more="${node.id}" title="${escapeHtml(text().more)}" aria-label="${escapeHtml(text().more)}" aria-haspopup="menu">${MORE_ICON}</button></span></div>`)
         if (node.kind === 'folder' && !state.collapsed.has(node.id)) visit(node.id, depth + 1, workspaceId)
       }
@@ -1010,7 +1041,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     return appTheme.scheme() === 'light' ? 'light' : 'dark'
   }
 
-  const CHECK_ICON = googleIcon('M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z')
+  const CHECK_ICON = dshIcon('check-outline')
 
   function formatBytes(bytes) {
     if (typeof bytes !== 'number' || Number.isNaN(bytes)) return String(bytes)
@@ -1428,7 +1459,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       </section>
       <section class="np-section">
         ${num('imageLimitBytes', copy.unitMb, values.imageLimitBytes, copy.imageLimit, copy.imageLimitHint, 1048576)}
-        <div class="np-field"><div class="np-field-text"><span class="np-field-name">${escapeHtml(copy.storageHeading)}</span><span class="np-field-desc">${escapeHtml(copy.storageHint)}</span></div><span class="np-stat np-usage-val"></span></div>
+        <div class="np-field"><div class="np-field-text"><span class="np-field-name">${escapeHtml(copy.storageHeading)}</span><span class="np-field-desc">${escapeHtml(copy.storageHint)}</span></div><span class="np-usage-val"><span class="np-usage-chip u-files">${dshIcon('browse-outline')}<b></b></span><span class="np-usage-chip u-versions">${dshIcon('clock-outline')}<b></b></span><span class="np-usage-chip u-images">${dshIcon('apps-add-outline')}<b></b></span><span class="np-usage-chip u-size">${dshIcon('database-outline')}<b></b></span></span></div>
       </section>
       <section class="np-section">
         <div class="np-field"><div class="np-field-text"><span class="np-field-name">${escapeHtml(copy.positionHeading)}</span><span class="np-field-desc">${escapeHtml(copy.resetPosition)}</span></div><button type="button" data-go="reset-position">${escapeHtml(copy.reset)}</button></div>
@@ -1464,7 +1495,14 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       }
       if (state.db) void counts(state.db).then(async value => {
         const estimate = navigator.storage?.estimate ? await navigator.storage.estimate() : {}
-        must(el, '.np-usage-val').textContent = `${value.files} ${text().usageFiles} · ${value.versions} ${text().usageVersions} · ${value.images} ${text().usageImages} · ${formatBytes(estimate.usage ?? text().unknown)}`
+        const chips = { '.u-files': [value.files, text().usageFiles], '.u-versions': [value.versions, text().usageVersions], '.u-images': [value.images, text().usageImages], '.u-size': [formatBytes(estimate.usage ?? 0), text().storageHeading] }
+        for (const [sel, [val, label]] of Object.entries(chips)) {
+          const chip = el.querySelector(`.np-usage-chip${sel}`)
+          if (!chip) continue
+          chip.title = `${val} ${label}`
+          chip.setAttribute('aria-label', `${val} ${label}`)
+          chip.querySelector('b').textContent = String(val)
+        }
       })
       el.addEventListener('click', event => {
         /* N-segment switch: pick the segment under the pointer, slide the labelled thumb */
@@ -1973,6 +2011,15 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     }
     if (action === 'new-item') { openCreateMenu(target); return }
     if (action === 'new-file') void add('file').catch(showError)
+    if (action === 'close-tabs') {
+      /* Save the active draft first (other tabs were already flushed when the
+         user last left them), then drop every tab — no confirmation. */
+      flushSave()
+      state.ui.tabs = []
+      state.ui.currentId = null
+      render()
+      void persistUi()
+    }
     if (action === 'new-folder') void add('folder').catch(showError)
     if (action === 'rename' && state.ui.currentId) {
       const node = state.nodes.find(item => item.id === state.ui.currentId)

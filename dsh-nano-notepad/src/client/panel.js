@@ -72,7 +72,7 @@ ${NANO_STYLES}
 .np-tab { position: relative; display: inline-flex; align-items: center; flex: 0 1 auto; min-width: 90px; max-width: 196px; height: 28px; box-sizing: border-box; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); padding: 0 10px; cursor: default; font: inherit; font-size: 13px; line-height: 1; white-space: nowrap; user-select: none; }
 .np-tab:not([data-active="true"]):hover { background: var(--dsw-alias-interactive-bg-hover); }
 .np-tab[data-active="true"] { background: var(--dsw-alias-interactive-bg-active); color: var(--dsw-alias-label-primary); }
-.np-tab-btn { min-width: 0; flex: 1; height: 100%; display: inline-flex; align-items: center; overflow: hidden; border: 0; background: transparent; color: inherit; font: inherit; padding: 0; cursor: pointer; }
+.np-tab-btn { min-width: 0; flex: 1; height: 100%; display: inline-flex; align-items: center; overflow: hidden; border: 0; background: transparent; color: inherit; font: inherit; padding: 0 16px 0 0; cursor: pointer; }
 .np-tabs > button.np-add { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; box-sizing: border-box; padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); cursor: pointer; }
 .np-tabs > button.np-add:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 .np-tabs-spacer { flex: 1 1 auto; min-width: 8px; }
@@ -99,9 +99,9 @@ ${NANO_STYLES}
 .np-tab-x { position: absolute; top: 4px; right: 4px; display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; flex: none; border: 0; background: transparent; border-radius: var(--dsw-radius-sm); color: var(--dsw-alias-label-tertiary); font: inherit; padding: 0; cursor: pointer; opacity: 0; pointer-events: none; }
 .np-tab-x:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 .np-tab:hover .np-tab-x, .np-tab:focus-within .np-tab-x, .np-tab[data-active="true"] .np-tab-x { opacity: 1; pointer-events: auto; }
-/* A short fade only where the glyphs run into the close button. A long ramp
-   erased letters that still had room before the ×. */
-.np-tab-name[data-clipped="true"] { text-overflow: clip; mask-image: linear-gradient(to right, #000 calc(100% - 12px), transparent); -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 12px), transparent); }
+/* Fade only across the close button. The button is 16px of padding; the ramp
+   is that same strip, so letters stay solid until they enter the ×. */
+.np-tab-name[data-clipped="true"] { text-overflow: clip; mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent); -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent); }
 .np-body { display: flex; min-height: 0; flex: 1; }
 .np-tree { box-sizing: border-box; width: 248px; display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--dsw-alias-border-l2); background: transparent; }
 .np-tree[data-collapsed="true"] { width: var(--np-rail); align-items: stretch; }
@@ -839,8 +839,8 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
         const close = tab.querySelector('.np-tab-x')
         if (!name || !close) continue
         const overflows = name.scrollWidth > name.clientWidth + 1
-        const hitsClose = name.getBoundingClientRect().right > close.getBoundingClientRect().left - 2
-        name.dataset.clipped = String(overflows && hitsClose)
+        const hitsClose = name.getBoundingClientRect().right > close.getBoundingClientRect().left + 1
+        name.dataset.clipped = String(overflows || hitsClose)
       }
     })
   }

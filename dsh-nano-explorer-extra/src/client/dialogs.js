@@ -33,10 +33,37 @@ export function Dialog(props) {
 export function usePanelConfinedLayer() {
   React.useEffect(() => {
     let live = true
+    const write = (element, styles) => {
+      for (const [key, value] of Object.entries(styles)) {
+        if (element.style[key] !== value) element.style[key] = value
+      }
+    }
+    // Several files pages can stay mounted. The first [data-nxe] is often a hidden session
+    // with a zero rect, and sizing against that leaves the card as tall as its content.
+    const filesPanel = () => {
+      let best = null
+      let bestArea = 0
+      for (const node of document.querySelectorAll('[data-nxe]')) {
+        const host = node.closest('[data-sidebar-right-pane]') ?? node
+        if (!(host instanceof HTMLElement)) continue
+        const box = host.getBoundingClientRect()
+        const area = box.width * box.height
+        if (area > bestArea) { best = host; bestArea = area }
+      }
+      return best
+    }
+    let watched = null
+    let resize = null
     const apply = () => {
       if (!live) return
-      const panel = document.querySelector('[data-nxe]')?.closest('[data-sidebar-right-pane]') ?? document.querySelector('[data-nxe]')
+      const panel = filesPanel()
       if (!(panel instanceof HTMLElement)) return
+      if (panel !== watched && typeof ResizeObserver === 'function') {
+        resize?.disconnect()
+        watched = panel
+        resize = new ResizeObserver(apply)
+        resize.observe(panel)
+      }
       const rect = panel.getBoundingClientRect()
       if (rect.width < 1 || rect.height < 1) return
       for (const card of document.querySelectorAll('.nano-dialog-card')) {
@@ -47,7 +74,7 @@ export function usePanelConfinedLayer() {
         const layer = card.parentElement
         if (!(layer instanceof HTMLElement)) continue
         layer.classList.add('nxe-confined-layer')
-        Object.assign(layer.style, {
+        write(layer, {
           position: 'fixed',
           top: `${rect.top}px`, left: `${rect.left}px`,
           right: 'auto', bottom: 'auto',
@@ -64,43 +91,66 @@ export function usePanelConfinedLayer() {
           card.dataset.nxeFill = '1'
           const theme = panel.getAttribute('data-theme')
           if (theme) card.setAttribute('data-theme', theme)
-          layer.style.display = 'flex'
-          layer.style.flexDirection = 'column'
-          layer.style.justifyContent = 'flex-end'
-          // The working-tree card stays a short change list. The repository card is taller because
-          // it carries the history graph, but neither one takes the whole files pane.
-          const kind = card.querySelector('[data-nxe-scm]')?.getAttribute('data-nxe-scm')
-          const ratio = kind === 'commit' ? 0.46 : 0.68
-          Object.assign(card.style, {
-            width: '100%', maxWidth: '100%',
-            height: 'auto',
-            maxHeight: `${Math.max(260, Math.round((rect.height - 24) * ratio))}px`,
-            minHeight: '0', minWidth: '0',
-            margin: '0',
+          write(layer, {
+            display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
+            alignItems: 'center', overflow: 'hidden',
           })
+          // The shell centers the card on the viewport with its own inline position. Pin it back into
+          // this layer so a short card cannot drift out of the files pane.
+          write(card, { position: 'relative', top: 'auto', left: 'auto', right: 'auto', transform: 'none' })
+          // The working-tree card is a fixed half of the window. Filter tabs must not resize it.
+          // The repository card still follows its content, capped so it stays inside the pane.
+          const kind = card.querySelector('[data-nxe-scm]')?.getAttribute('data-nxe-scm')
+          const room = Math.max(240, rect.height - 24)
+          if (kind === 'commit') {
+            const fixed = `${Math.min(Math.round(window.innerHeight * 0.5), room)}px`
+            write(card, {
+              width: '100%', maxWidth: '100%', minWidth: '0', margin: '0',
+              height: fixed, minHeight: fixed, maxHeight: fixed,
+              display: 'flex', flexDirection: 'column', overflow: 'hidden',
+            })
+          } else {
+            write(card, {
+              width: '100%', maxWidth: '100%', minWidth: '0', margin: '0',
+              height: 'auto', minHeight: '0',
+              maxHeight: `${Math.min(room, Math.round(rect.height * 0.68))}px`,
+              display: '', flexDirection: '', overflow: '',
+            })
+          }
         }
       }
     }
     // The card mounts after this effect on the first open, so watch for it, and keep the fence in
     // step with the panel while the reader resizes it.
     const observer = new MutationObserver(apply)
-    observer.observe(document.body, { childList: true })
+    // Child list only. Watching every style write on the page re-entered apply forever and froze it.
+    observer.observe(document.body, { childList: true, subtree: true })
     window.addEventListener('resize', apply)
+    // While a card is open, the shell may recenter it. Re-pin on frames, and stop when it closes.
+    let frame = 0
+    const follow = () => {
+      if (!live) return
+      if (document.querySelector('.nano-dialog-card [class*="nxe-"]') !== null) apply()
+      frame = window.requestAnimationFrame(follow)
+    }
+    frame = window.requestAnimationFrame(follow)
     apply()
     return () => {
       live = false
       observer.disconnect()
+      resize?.disconnect()
+      window.cancelAnimationFrame(frame)
       window.removeEventListener('resize', apply)
       for (const layer of document.querySelectorAll('.nxe-confined-layer')) {
         layer.classList.remove('nxe-confined-layer')
-        for (const key of ['position', 'top', 'left', 'right', 'bottom', 'width', 'height', 'padding', 'box-sizing', 'display', 'align-items', 'justify-content', 'flex-direction']) {
+        for (const key of ['position', 'top', 'left', 'right', 'bottom', 'width', 'height', 'padding', 'box-sizing', 'display', 'align-items', 'justify-content', 'flex-direction', 'overflow']) {
           layer.style.removeProperty(key)
         }
       }
       for (const card of document.querySelectorAll('[data-nxe-fill]')) {
         if (!(card instanceof HTMLElement)) continue
         delete card.dataset.nxeFill
-        for (const key of ['width', 'max-width', 'height', 'max-height', 'min-height', 'min-width', 'margin']) {
+        for (const key of ['width', 'max-width', 'height', 'max-height', 'min-height', 'min-width', 'margin', 'position', 'top', 'left', 'right', 'transform', 'display', 'flex-direction', 'overflow']) {
           card.style.removeProperty(key)
         }
       }

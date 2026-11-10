@@ -78,7 +78,7 @@ export const STYLE = `${NANO_STYLES}
   display: inline-flex; align-items: center; justify-content: center;
   color: var(--dsw-alias-label-tertiary);
 }
-.nxe-acc-link svg { width: 12px; height: 12px; flex: none; }
+.nxe-acc-link svg, .nxe-acc-ignored-letter svg { width: 14px; height: 14px; flex: none; }
 .nxe-acc-ignored { font: 400 9px/1 var(--dsw-font-family); color: var(--dsw-alias-label-tertiary); border: .5px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-xs); padding: 1px 3px; }
 .nxe-open { display: none; }
 [data-nxe-hover] .nxe-open, [data-nxe-focus] .nxe-open { display: inline-flex; }
@@ -295,13 +295,17 @@ export const STYLE = `${NANO_STYLES}
 /* One right rail for status marks. The shipped accessory is as wide as its content, so a folder's
    dot and a file's letter landed on different x positions; a fixed-width rail with its content pushed
    to the end puts every mark on one vertical line. */
+/* Same 24px column as the header refresh button, which is the last 24px control inside the
+   header's 8px right inset. Centering the mark here puts it on that button's midline. */
 [data-nxe] .nxe-tree li[data-files-entry] > div > button + div {
-  flex: 0 0 auto;
+  flex: 0 0 24px;
+  width: 24px;
+  min-width: 24px;
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  min-width: 22px;
-  padding-right: 10px;
+  justify-content: center;
+  padding: 0;
+  overflow: visible;
 }
 [data-nxe] .nxe-tree li[data-files-entry] > div > button + div:empty { display: none; }
 
@@ -381,10 +385,8 @@ export const STYLE = `${NANO_STYLES}
 
 /* An ignored row's own mark, drawn where the status letter would be. */
 .nxe-acc-ignored-letter {
-  /* Same 14px cell as the status letter. The slashed circle draws smaller than a bold M, so the
-     glyph is one step larger to match the letter's cap height. Quiet ink, not an alert. */
+  /* Same 14px cell and the same official icon size as the link mark. Quiet ink, not an alert. */
   box-sizing: border-box; width: 14px; height: 14px; flex: none;
-  font-size: 13px; font-weight: 500; line-height: 14px;
   display: inline-flex; align-items: center; justify-content: center;
   color: var(--nxe-ignored-ink); opacity: .8;
 }
@@ -462,7 +464,13 @@ export const STYLE = `${NANO_STYLES}
 }
 .nxe-scm-count[data-tone="danger"] { color: var(--dsw-alias-label-error, #e5534b); }
 .nxe-scm-group { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.nxe-local-filters { display: flex; flex-wrap: wrap; gap: 6px; }
+.nxe-local-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+/* The shared Button is the dialog-footer size. These filters sit on a 12px file list, so the same
+   control is drawn at the row's height. Colour and shape still come from the button variant. */
+button.nxe-local-filter {
+  box-sizing: border-box; height: 24px; min-height: 0; padding: 0 8px;
+  font-size: 12px; line-height: 22px; font-weight: 500;
+}
 .nxe-local-head {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
   margin: 10px 0 2px; font-size: 11px; font-weight: 600; line-height: 16px;

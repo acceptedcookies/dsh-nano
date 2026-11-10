@@ -33,7 +33,7 @@ export function SettingsDialog({ copy, open, prefs, setPref, onClose }) {
   const bothOff = prefs.openPreviewOnClick === false && prefs.openPreviewOnDoubleClick === false
   return React.createElement(NanoDialog, {
     copy, title: copy.settingsTitle, description: copy.settingsDescription,
-    maxHeight: 520, onCancel: onClose,
+    maxHeight: 520, onCancel: onClose, onConfirm: onClose,
   },
     React.createElement(Row, {
       label: copy.settingsOpenOnClick, hint: copy.settingsOpenOnClickHint,

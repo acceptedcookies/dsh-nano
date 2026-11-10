@@ -156,6 +156,13 @@ async function memoized(key, read) {
   return value
 }
 
+/** Drop cached reads for one checkout. A switch or a commit would otherwise be painted with the branch it just left. */
+function forgetReads(root) {
+  for (const key of memo.keys()) {
+    if (key.startsWith(`status:${root}:`) || key.startsWith(`ignored:${root}:`)) memo.delete(key)
+  }
+}
+
 export function createRoutes(ctx, config) {
   const fs = () => ctx.fs
   const external = request => runExternal(ctx, config, request)
@@ -198,6 +205,7 @@ export function createRoutes(ctx, config) {
         const message = typeof body.message === 'string' ? body.message.trim() : ''
         if (message === '') throw new Error('a commit message is required')
         const subject = await commitAll(ctx, config, { cwd: root, policy, message, signal: undefined })
+        forgetReads(root)
         return { subject }
       },
     },
@@ -209,6 +217,7 @@ export function createRoutes(ctx, config) {
         const summary = await pullUpstream(ctx, config, {
           cwd: root, policy, session, signal: undefined,
         })
+        forgetReads(root)
         return { summary }
       },
     },
@@ -217,9 +226,11 @@ export function createRoutes(ctx, config) {
       async run(req) {
         const body = await jsonBody(req)
         const { root, policy, session } = await scopeOf(ctx, body.sessionId)
-        return checkoutBranch(ctx, config, {
+        const switched = await checkoutBranch(ctx, config, {
           cwd: root, policy, session, branch: body.branch, signal: undefined,
         })
+        forgetReads(root)
+        return switched
       },
     },
     '/create-file': {

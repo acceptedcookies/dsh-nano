@@ -1,6 +1,7 @@
 /** Row decorations for the shared tree: Git letter, ignored badge, link badge, and the open control. */
 
 import React from 'react'
+import { IconCloseCircleOutlineRegular, IconLinkOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 
 /**
  * Build the accessory Component once at module scope, so the Factory never remounts it.
@@ -41,13 +42,9 @@ export function createAccessory(api) {
         title: broken ? copy.linkBroken : (link ? copy.symlinkOutsideBadge : copy.symlinkBadge),
         'aria-label': broken ? copy.linkBroken : (link ? copy.symlinkOutsideBadge : copy.symlinkBadge),
         'data-nxe-symlink': broken ? 'broken' : (link ? 'outside' : 'inside'),
-      }, React.createElement('svg', {
-        viewBox: '0 0 24 24', width: 12, height: 12, fill: 'none', stroke: 'currentColor',
-        strokeWidth: 2, strokeLinecap: 'round', 'aria-hidden': 'true',
-      },
-      React.createElement('path', { d: 'M10 13a5 5 0 0 0 7 0l2-2a5 5 0 0 0-7-7l-1 1' }),
-      React.createElement('path', { d: 'M14 11a5 5 0 0 0-7 0l-2 2a5 5 0 0 0 7 7l1-1' }),
-      broken ? React.createElement('path', { d: 'M3 3l18 18' }) : null)),
+      }, React.createElement(IconLinkOutlineRegular, {
+        width: 14, height: 14, 'aria-hidden': 'true',
+      })),
       // Remote divergence sits left of the local letter: it answers "what changed on the other side".
       remote === undefined ? null : React.createElement('span', {
         className: 'nxe-acc-remote',
@@ -77,14 +74,14 @@ export function createAccessory(api) {
         })
         : null,
       // An ignored row keeps a mark of its own, so the reason it is dimmed is visible rather than
-      // implied. It is a slashed circle rather than an exclamation mark: `!` already means a merge
-      // conflict, and two different facts sharing one glyph made a clean tree look broken.
+      // implied. The official close-circle is used instead of a drawn slash: `!` already means a
+      // merge conflict.
       ignored ? React.createElement('span', {
         className: 'nxe-acc-ignored-letter',
         'data-status': 'ignored',
         title: copy.ignoredBadge,
         'aria-label': copy.ignoredBadge,
-      }, '⊘') : null,
+      }, React.createElement(IconCloseCircleOutlineRegular, { width: 14, height: 14, 'aria-hidden': 'true' })) : null,
       isFile && api.showOpenButton()
         ? React.createElement('button', {
           type: 'button',

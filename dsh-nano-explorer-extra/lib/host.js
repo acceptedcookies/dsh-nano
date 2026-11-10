@@ -722,6 +722,11 @@ async function memoized(key, read) {
   }
   return value;
 }
+function forgetReads(root) {
+  for (const key of memo.keys()) {
+    if (key.startsWith(`status:${root}:`) || key.startsWith(`ignored:${root}:`)) memo.delete(key);
+  }
+}
 function createRoutes(ctx, config) {
   const fs = () => ctx.fs;
   const external = (request) => runExternal(ctx, config, request);
@@ -758,6 +763,7 @@ function createRoutes(ctx, config) {
         const message = typeof body.message === "string" ? body.message.trim() : "";
         if (message === "") throw new Error("a commit message is required");
         const subject = await commitAll(ctx, config, { cwd: root, policy, message, signal: void 0 });
+        forgetReads(root);
         return { subject };
       }
     },
@@ -772,6 +778,7 @@ function createRoutes(ctx, config) {
           session,
           signal: void 0
         });
+        forgetReads(root);
         return { summary };
       }
     },
@@ -780,13 +787,15 @@ function createRoutes(ctx, config) {
       async run(req) {
         const body = await jsonBody(req);
         const { root, policy, session } = await scopeOf(ctx, body.sessionId);
-        return checkoutBranch(ctx, config, {
+        const switched = await checkoutBranch(ctx, config, {
           cwd: root,
           policy,
           session,
           branch: body.branch,
           signal: void 0
         });
+        forgetReads(root);
+        return switched;
       }
     },
     "/create-file": {

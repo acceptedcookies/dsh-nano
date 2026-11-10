@@ -8,7 +8,7 @@
 import React from 'react'
 import { Button, Input } from '@deepseek-ai/dsh-client-ui-primitives'
 import { NanoDialog } from 'dsh-nano-ui'
-import { usePanelConfinedLayer } from './dialogs.js'
+import { Dialog, usePanelConfinedLayer } from './dialogs.js'
 import { ageParts, partitionChanges, shortenPath, splitPath } from './format.js'
 
 const { useEffect, useState } = React
@@ -121,7 +121,8 @@ function HistoryRail({ copy, history, currentBranch }) {
 export function BranchDrawer({ copy, open, git, onClose, onPull, onRefresh, onCheckout, onOpenConflict, busy, error }) {
   usePanelConfinedLayer()
   const [query, setQuery] = useState('')
-  useEffect(() => { if (!open) setQuery('') }, [open])
+  const [pendingBranch, setPendingBranch] = useState(null)
+  useEffect(() => { if (!open) { setQuery(''); setPendingBranch(null) } }, [open])
   if (!open) return null
   const current = branchName(git)
   const upstream = git?.upstream ?? null
@@ -203,7 +204,7 @@ export function BranchDrawer({ copy, open, git, onClose, onPull, onRefresh, onCh
               title: conflicts.length > 0
                 ? copy.branchConflictBlocks
                 : row.inOtherWorktree === true ? copy.branchHeldElsewhere : row.name,
-              onClick: () => { void onCheckout(row.name) },
+              onClick: () => setPendingBranch(row.name),
               'data-nxe-checkout': row.name,
             }, row.name),
             row.commit === '' ? null : React.createElement('span', { className: 'nxe-graph-hash' }, row.commit),
@@ -236,7 +237,20 @@ export function BranchDrawer({ copy, open, git, onClose, onPull, onRefresh, onCh
                 hash === '' ? null : React.createElement('span', { className: 'nxe-graph-hash' }, hash),
                 here ? React.createElement('span', { className: 'nxe-drawer-row-badge', 'data-tone': 'current' }, copy.branchCurrentShort) : null),
               React.createElement('span', { className: 'nxe-worktree-path' }, shortenPath(row.path))))
-          })))))
+          })))),
+    pendingBranch === null ? null : React.createElement(Dialog, {
+      copy,
+      title: copy.checkoutTitle(pendingBranch),
+      description: copy.checkoutBody(pendingBranch),
+      confirmLabel: copy.checkoutConfirm,
+      busy,
+      onConfirm: () => {
+        const name = pendingBranch
+        setPendingBranch(null)
+        void onCheckout(name)
+      },
+      onCancel: () => setPendingBranch(null),
+    }, React.createElement('p', { className: 'nxe-drawer-empty' }, copy.checkoutBody(pendingBranch))))
 }
 
 /**

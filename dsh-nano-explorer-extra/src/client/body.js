@@ -98,6 +98,20 @@ export function ExplorerBody(props) {
   const toastTimer = useRef(0)
   // Per-directory answers from loadDirectoryStatus, keyed like the workspace map.
   const [directoryStatus, setDirectoryStatus] = useState(() => new Map())
+  // The files tab stays mounted across sessions, and its dialog is portaled to the page, not the
+  // pane. Without this, a card opened on one workspace stays on screen after the reader moves to
+  // another, still showing the previous repository.
+  useEffect(() => {
+    setDrawer(null)
+    setDrawerError(undefined)
+    setSettingsOpen(false)
+    setDialog(null)
+    setDialogError(undefined)
+    setCreateRequest(null)
+    setDeleteRequest(null)
+    setMenu(null)
+    setDirectoryStatus(new Map())
+  }, [sessionId, cwd, tab.visible])
 
   // One gesture clock for the whole tree: the Factory hands the same `onOpen` both presses.
   const lastPress = useRef({ path: '', at: 0 })
@@ -731,7 +745,7 @@ export function ExplorerBody(props) {
       // a look-alike this page would have to maintain. `renderSlot` reads the entries other packages
       // registered, so declaring the child slot here is neither needed nor allowed.
       React.createElement(RevealButton, { copy, cwd: cwd ?? '', apps: openApps }),
-      React.createElement(ToolButton, { label: copy.reload, onClick: () => { void tree.refresh(); void refreshGit(); void refreshStats() } }, iconRefresh()),
+      React.createElement(ToolButton, { label: copy.reload, onClick: () => { void tree.refresh(); void refreshGit() } }, iconRefresh()),
     ),
     linkNote === undefined ? null : React.createElement('p', { className: 'nxe-row-note', role: 'status' }, linkNote),
     gitError === undefined ? null : React.createElement('p', { className: 'nxe-row-note nxe-note-error' }, gitError),

@@ -835,6 +835,31 @@ function createRoutes(ctx, config) {
         };
       }
     },
+    // Real bucket probe for the staged keys: one signed LIST. Nothing is stored.
+    "/settings/test": {
+      method: "POST",
+      async run(req) {
+        const body = JSON.parse(await readBody(req) || "{}");
+        const username = field(body?.username);
+        const token = field(body?.token);
+        const accessKey = field(body?.accessKey);
+        const current = await readIdentity(ctx) ?? {};
+        const candidate = {
+          username: username ?? current.username,
+          token: token ?? current.token,
+          accessKey: accessKey ?? current.accessKey
+        };
+        if (candidate.token === void 0) return { ok: false, error: "Access Key and Secret Key are required" };
+        if (candidate.username === void 0) return { ok: false, error: "username is required" };
+        try {
+          const client = createS3(config, candidate);
+          await client.list("");
+          return { ok: true, bucket: config.bucket, region: config.region };
+        } catch (error) {
+          return { ok: false, error: messageOf(error) };
+        }
+      }
+    },
     "/settings/update": {
       method: "PUT",
       async run(req) {
@@ -1221,18 +1246,17 @@ var Config = {
     validate(value) {
       const source = value && typeof value === "object" ? value : {};
       const issues = [];
-      const text = (key, fallback) => {
+      const required = (key) => {
         const candidate = source[key];
-        if (candidate === void 0) return fallback;
         if (typeof candidate !== "string" || candidate.trim() === "") {
-          issues.push({ message: `${key} must be a non-empty string` });
-          return fallback;
+          issues.push({ message: `${key} is required` });
+          return "";
         }
         return candidate.trim();
       };
-      const endpoint = text("endpoint", "https://nano-shared-workspace.saobao.com");
-      const bucket = text("bucket", "dsh-shared-workspace");
-      const region = text("region", "us-east-1");
+      const endpoint = required("endpoint");
+      const bucket = required("bucket");
+      const region = required("region");
       const prefix = source.prefix === void 0 ? "" : source.prefix;
       if (typeof prefix !== "string" || !/^[A-Za-z0-9\-_/]*$/.test(prefix)) {
         issues.push({ message: "prefix must be a simple S3 key prefix" });

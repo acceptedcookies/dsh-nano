@@ -7,7 +7,7 @@
  */
 
 import React from 'react'
-import { IconArchiveOutlineRegular, IconFolderCloseRegular, IconFolderOpenRegular, IconGlobeOutlineRegular, IconNewChatOutlineRegular, IconPinFillRegular, IconPinOutlineRegular, IconProjectAddOutlineRegular, IconRefreshOutlineRegular, IconSlidersTwoOutlineRegular, IconTriangleRightFillRegular, IconUnarchiveOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconArchiveOutlineRegular, IconDatabaseOutlineRegular, IconFolderCloseRegular, IconFolderOpenRegular, IconGlobeOutlineRegular, IconNewChatOutlineRegular, IconPinFillRegular, IconPinOutlineRegular, IconProjectAddOutlineRegular, IconRefreshOutlineRegular, IconSlidersTwoOutlineRegular, IconTriangleRightFillRegular, IconUnarchiveOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 
 const { createElement, useEffect, useLayoutEffect, useRef, useState } = React
 
@@ -305,17 +305,25 @@ export function SharedSection({ face, wide }) {
       sessionRows.length > 0 ? createElement('div', { role: 'group' }, sessionRows) : null)
   })
 
+  // Unbound shows the bind glyph; bound with no workspace shows the create glyph.
+  const bound = configured === true
+  const loading = settings?.sessionsReady !== true || Object.keys(settings?.pulling ?? {}).length > 0
   const empty = rows.length === 0
     ? createElement('div', { className: chrome.group },
       createElement('div', {
         role: 'button',
         className: chrome.row,
-        onClick: face.onCreateWorkspace,
+        'data-nsw-loading': loading ? 'true' : undefined,
+        onClick: () => { if (!loading) face.onCreateWorkspace?.() },
       },
-        createElement('span', { className: chrome.folder },
-          createElement(IconProjectAddOutlineRegular, { size: 16 })),
+        // `.folder` is hidden on row hover in favor of `.chevron`. This row has
+        // no chevron, so keep only the slot class or the icon vanishes.
+        createElement('span', { className: tokens(chrome.folder).filter(token => !/folder/i.test(token)).join(' ') || chrome.sessionSlot },
+          loading
+            ? createElement(IconRefreshOutlineRegular, { size: 16, className: 'nsw-spin' })
+            : createElement(bound ? IconProjectAddOutlineRegular : IconDatabaseOutlineRegular, { size: 16 })),
         createElement('span', { className: chrome.projectText },
-          createElement('span', { className: chrome.title }, copy.emptyHint))))
+          createElement('span', { className: chrome.title }, loading ? copy.sectionLoading : bound ? copy.emptyHint : copy.bindEmptyHint))))
     : null
 
   const shown = showRest ? groups : groups.slice(0, expandLimit)

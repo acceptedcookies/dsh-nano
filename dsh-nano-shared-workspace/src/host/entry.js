@@ -17,18 +17,20 @@ export const Config = {
     validate(value) {
       const source = value && typeof value === 'object' ? value : {}
       const issues = []
-      const text = (key, fallback) => {
+      // Deployment values have no defaults. A missing one is a configuration
+      // error: a fallback baked into the build would silently point an instance
+      // at another environment's bucket.
+      const required = key => {
         const candidate = source[key]
-        if (candidate === undefined) return fallback
         if (typeof candidate !== 'string' || candidate.trim() === '') {
-          issues.push({ message: `${key} must be a non-empty string` })
-          return fallback
+          issues.push({ message: `${key} is required` })
+          return ''
         }
         return candidate.trim()
       }
-      const endpoint = text('endpoint', 'https://nano-shared-workspace.saobao.com')
-      const bucket = text('bucket', 'dsh-shared-workspace')
-      const region = text('region', 'us-east-1')
+      const endpoint = required('endpoint')
+      const bucket = required('bucket')
+      const region = required('region')
       const prefix = source.prefix === undefined ? '' : source.prefix
       if (typeof prefix !== 'string' || !/^[A-Za-z0-9\-_/]*$/.test(prefix)) {
         issues.push({ message: 'prefix must be a simple S3 key prefix' })

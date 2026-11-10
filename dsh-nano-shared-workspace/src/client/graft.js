@@ -153,7 +153,15 @@ export function SidebarGraft({ face, renderSlot }) {
   if (host === null) return null
   return React.createElement(React.Fragment, null,
     createPortal(React.createElement(SharedSection, { face, wide }), host),
-    settings?.open === true ? createPortal(React.createElement(SettingsDialog, { face, settings }), document.body) : null,
+    settings?.open === true
+      ? createPortal(React.createElement(SettingsDialog, {
+        face,
+        settings,
+        stage: settings.setupStage === 'workspace' ? 'workspace' : 'bind',
+        onBound: () => { face.finishBind?.() },
+        onOpenCreate: () => { face.onCreateWorkspace?.() },
+      }), document.body)
+      : null,
     settings?.transcript != null ? createPortal(React.createElement(TranscriptDialog, { face, transcript: settings.transcript }), document.body) : null,
     typeof settings?.notice === 'string' && settings.notice !== ''
       ? createPortal(React.createElement(NanoDialog, {

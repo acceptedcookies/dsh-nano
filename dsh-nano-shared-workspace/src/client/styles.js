@@ -116,6 +116,11 @@ export const STYLE = `
   font: inherit; font-size: 12px; color: var(--dsw-alias-label-tertiary, #999);
 }
 .nsw-more:hover { color: var(--dsw-alias-label-secondary, #ccc); }
+.nsw-stage-title { display: inline-flex; align-items: center; gap: 8px; }
+.nsw-stage-done { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; color: var(--dsw-alias-label-secondary, #aaa); font-size: 12.5px; }
+.nsw-probe { display: flex; align-items: center; gap: 8px; margin: 2px 0 10px; font-size: 12.5px; color: var(--dsw-alias-label-secondary, #aaa); }
+.nsw-probe-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dsw-alias-state-business-primary, #4a9eff); animation: nsw-heartbeat 1.2s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .nsw-probe-dot { animation: none; } }
 .nsw-switch-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 4px 0 12px; }
 .nsw-switch-row .nsw-join-hint { display: block; margin: 2px 0 0; }
 @media (prefers-reduced-motion: reduce) {

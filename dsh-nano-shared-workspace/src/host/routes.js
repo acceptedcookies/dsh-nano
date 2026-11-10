@@ -81,6 +81,31 @@ export function createRoutes(ctx, config) {
         }
       },
     },
+    // Real bucket probe for the staged keys: one signed LIST. Nothing is stored.
+    '/settings/test': {
+      method: 'POST',
+      async run(req) {
+        const body = JSON.parse(await readBody(req) || '{}')
+        const username = field(body?.username)
+        const token = field(body?.token)
+        const accessKey = field(body?.accessKey)
+        const current = (await readIdentity(ctx)) ?? {}
+        const candidate = {
+          username: username ?? current.username,
+          token: token ?? current.token,
+          accessKey: accessKey ?? current.accessKey,
+        }
+        if (candidate.token === undefined) return { ok: false, error: 'Access Key and Secret Key are required' }
+        if (candidate.username === undefined) return { ok: false, error: 'username is required' }
+        try {
+          const client = createS3(config, candidate)
+          await client.list('')
+          return { ok: true, bucket: config.bucket, region: config.region }
+        } catch (error) {
+          return { ok: false, error: messageOf(error) }
+        }
+      },
+    },
     '/settings/update': {
       method: 'PUT',
       async run(req) {

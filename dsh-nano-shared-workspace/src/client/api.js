@@ -18,6 +18,17 @@ async function call(path, init) {
 export const fetchSettings = () => call('/settings')
 export const fetchStatus = () => call('/status')
 
+export function testSettings({ username, token, accessKey }) {
+  return call('/settings/test', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ username, token, accessKey }),
+  }).then(response => {
+    if (response?.ok !== true) throw new Error(response?.error ?? 'bucket probe failed')
+    return response
+  })
+}
+
 export function saveSettings({ username, token, accessKey }) {
   return call('/settings/update', {
     method: 'PUT',

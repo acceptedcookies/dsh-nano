@@ -176,7 +176,15 @@ export function apply(ctx) {
       subscribe: listener => store.subscribe(() => listener(store.current)),
       close: () => store.set({ open: false }),
     },
-    onOpenSettings: () => { refresh(); store.set({ open: true }) },
+    onOpenSettings: () => {
+      refresh()
+      store.set({ open: true, setupStage: store.current.configured === true ? 'workspace' : 'bind' })
+    },
+    // Probe + save succeeded: advance the dialog to stage 2 and repaint the section.
+    finishBind: () => {
+      store.set({ setupStage: 'workspace', listReady: false, sessionsReady: false })
+      refresh()
+    },
     onToggleSection: () => {
       if (store.current.listReady !== true) return
       store.set({ sectionOpen: store.current.sectionOpen !== true })
@@ -330,7 +338,7 @@ export function apply(ctx) {
     onCreateWorkspace: () => {
       if (store.current.configured !== true) {
         refresh()
-        store.set({ open: true })
+        store.set({ open: true, setupStage: 'bind' })
         return
       }
       if (store.current.creating === true) return

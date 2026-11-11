@@ -5,10 +5,16 @@
  */
 
 import { createHash } from 'node:crypto'
-import { mkdirSync, readFileSync, readdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
-import { dirname, join, relative, resolve, sep } from 'node:path'
+import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, unlinkSync, writeFileSync } from 'node:fs'
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { validate, SchemaReject, WORKSPACE_ID_RE } from 'dsh-remote-data-schema'
 
-const SKIP = new Set(['.git', 'node_modules', '.nsw', '.DS_Store'])
+/* SKIP (P2-05 + P4-04 `imagine`): entries under these top-level segments are
+ * never pulled to the host (a remote HEAD carrying `imagine/.grok/auth.json`
+ * must not land on this disk) and never enumerated for push (a local
+ * `imagine/.grok/` credentials dir must not reach the bucket). `.DS_Store`
+ * remains a scan-time name skip. */
+const SKIP = new Set(['.git', 'node_modules', '.nsw', '.DS_Store', 'imagine'])
 const MAX_FILE = 2 * 1024 * 1024
 const MAX_FILES = 200
 
@@ -18,10 +24,66 @@ const blobKey = (id, sha) => `workspaces/${id}/tree/blobs/${sha}`
 
 const sha256 = buf => createHash('sha256').update(buf).digest('hex')
 
+/**
+ * Normalize + fence the replica root (P2-05): absolute, resolved, and NOT a
+ * pre-existing symlink (a symlinked root would make the realpath fence point
+ * anywhere). The directory is created as before; the returned root is its
+ * real path so every descendant check is against the true location.
+ */
+function replicaRoot(localPath) {
+  if (typeof localPath !== 'string' || !isAbsolute(localPath) || resolve(localPath) !== localPath) {
+    throw new SchemaReject('schema:localPath', 'localPath must be an absolute normalized path')
+  }
+  const root = resolve(localPath)
+  try {
+    if (lstatSync(root).isSymbolicLink()) {
+      throw new SchemaReject('schema:localPath', 'localPath must not be a symlink')
+    }
+  } catch (error) {
+    if (error?.code !== 'ENOENT') throw error
+  }
+  mkdirSync(root, { recursive: true })
+  return realpathSync(root)
+}
+
+/** Top-level SKIP test for a remote rel (POSIX separators, as written in HEADs). */
+const skippedRel = rel => SKIP.has(String(rel).split('/')[0])
+
+/**
+ * The realpath fence (P2-05): `inside()` upgraded from lexical to
+ * filesystem-aware. `base` must already be the replica's realpath.
+ * Returns the absolute destination only when ALL hold:
+ *   - rel resolves strictly inside base (lexical, `..`/abs rejected)
+ *   - its top-level segment is not in SKIP
+ *   - the destination itself is not a symlink (lstat — incl. dangling links)
+ *   - the deepest existing ancestor's realpath IS that ancestor — i.e. no
+ *     symlink anywhere inside the replica redirects the write/read outside.
+ */
 function inside(root, rel) {
+  if (typeof rel !== 'string' || rel === '') return undefined
+  // Canonicalize the base defensively: `replicaRoot` already realpaths, but
+  // a caller passing an unresolved path (e.g. under a symlinked /var) must
+  // still land the walk on the true location, not fail the probe compare.
+  try { root = realpathSync(root) } catch { return undefined }
   const dest = resolve(root, rel)
-  const base = resolve(root)
-  return dest === base || dest.startsWith(base + sep) ? dest : undefined
+  if (!dest.startsWith(root + sep)) return undefined
+  if (skippedRel(rel)) return undefined
+  try {
+    if (lstatSync(dest).isSymbolicLink()) return undefined
+  } catch (error) {
+    if (error?.code !== 'ENOENT') return undefined
+  }
+  let probe = dest
+  while (!existsSync(probe)) {
+    const parent = dirname(probe)
+    if (parent === probe) return undefined
+    probe = parent
+    if (probe !== root && !probe.startsWith(root + sep)) return undefined
+  }
+  try {
+    if (realpathSync(probe) !== probe) return undefined
+  } catch { return undefined }
+  return dest
 }
 
 function scan(root) {
@@ -33,7 +95,10 @@ function scan(root) {
       if (SKIP.has(name) || files.length >= MAX_FILES) continue
       const abs = join(dir, name)
       let st
-      try { st = statSync(abs) } catch { continue }
+      try { st = lstatSync(abs) } catch { continue }
+      // lstat (P2-05): symlinks are never followed — a link pointing outside
+      // the replica is skipped, not read into a blob upload.
+      if (st.isSymbolicLink()) continue
       if (st.isDirectory()) walk(abs)
       else if (st.isFile() && st.size <= MAX_FILE) {
         const buf = readFileSync(abs)
@@ -155,21 +220,25 @@ async function ensureBlobs(s3, workspaceId, root, files) {
 
 /** Download HEAD into the replica. Files this replica previously synced and the new HEAD dropped are removed. */
 export async function pullWorkspace(s3, dshHome, workspaceId, localPath) {
+  if (!WORKSPACE_ID_RE.test(workspaceId)) throw new SchemaReject('schema:workspaceId', 'workspaceId has a bad charset')
   const head = await s3.getJson(headKey(workspaceId))
   if (head === undefined) return { ok: true, generation: 0, files: 0 }
-  mkdirSync(localPath, { recursive: true })
+  const root = replicaRoot(localPath)
+  // Remote HEAD crosses the boundary only after the v1 whitelist (P2-05).
+  validate('tree-head', head)
   const base = loadBase(dshHome, workspaceId)
   const next = new Set((head.files ?? []).map(file => file.rel))
   for (const old of base.files ?? []) {
     if (next.has(old.rel)) continue
-    const dest = inside(localPath, old.rel)
+    // Stale-delete uses the same fence: SKIP/`..`/symlink targets are not touched.
+    const dest = inside(root, old.rel)
     if (dest === undefined) continue
     try { unlinkSync(dest) } catch { /* already gone */ }
   }
   for (const file of head.files ?? []) {
-    const dest = inside(localPath, file.rel)
+    const dest = inside(root, file.rel)
     if (dest === undefined) continue
-    const have = readRel(localPath, file.rel)
+    const have = readRel(root, file.rel)
     if (have !== undefined && sha256(have) === file.sha256) continue
     const blob = await s3.getBytes(blobKey(workspaceId, file.sha256))
     if (blob === undefined) continue
@@ -182,11 +251,17 @@ export async function pullWorkspace(s3, dshHome, workspaceId, localPath) {
 
 /** Push the replica. Divergent HEAD is dissolved into a child generation instead of a blind overwrite. */
 export async function pushWorkspace(s3, dshHome, workspaceId, localPath, writerId, attempt = 0) {
-  mkdirSync(localPath, { recursive: true })
+  if (!WORKSPACE_ID_RE.test(workspaceId)) throw new SchemaReject('schema:workspaceId', 'workspaceId has a bad charset')
+  const root = replicaRoot(localPath)
   const head = await s3.getJson(headKey(workspaceId))
+  if (head !== undefined) {
+    // A poisoned remote HEAD is rejected whole — its rels cannot steer the
+    // merge (P2-05) even though `dissolve` would SKIP-filter them anyway.
+    validate('tree-head', head)
+  }
   const base = loadBase(dshHome, workspaceId)
-  const local = scan(localPath)
-  const remote = head?.files ?? []
+  const local = scan(root)
+  const remote = (head?.files ?? []).filter(file => !skippedRel(file.rel))
   const same = JSON.stringify(local.map(({ rel, sha256: sha, size }) => ({ rel, sha256: sha, size })))
     === JSON.stringify(remote.map(({ rel, sha256: sha, size }) => ({ rel, sha256: sha, size })))
   if (same && head !== undefined) return { ok: true, generation: head.generation, files: remote.length, unchanged: true, conflicts: [] }
@@ -194,11 +269,14 @@ export async function pushWorkspace(s3, dshHome, workspaceId, localPath, writerI
   let parentFiles = base.files ?? []
   if (head !== undefined && base.generation !== head.generation) {
     const parent = head.parent ? await s3.getJson(genKey(workspaceId, head.parent)) : undefined
-    parentFiles = parent?.files ?? []
+    if (parent !== undefined) {
+      validate('tree-head', parent)
+      parentFiles = parent.files ?? []
+    }
   }
-  const dissolved = dissolve(localPath, parentFiles, remote, local)
-  const files = await materializePending(s3, workspaceId, localPath, dissolved)
-  await ensureBlobs(s3, workspaceId, localPath, files)
+  const dissolved = dissolve(root, parentFiles, remote, local)
+  const files = await materializePending(s3, workspaceId, root, dissolved)
+  await ensureBlobs(s3, workspaceId, root, files)
   const generation = (head?.generation ?? 0) + 1
   const record = {
     v: 1,

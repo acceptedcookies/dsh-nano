@@ -67,6 +67,7 @@ const S3_TEST_ROUTE = '/nano-notepad/s3/test'
 const S3_OBJECT_ROUTE = '/nano-notepad/s3/object'
 const S3_CONFIG_ROUTE = '/nano-notepad/s3/config'
 const MP_MAX_HTML_BYTES = 8 * 1024 * 1024
+const MP_MAX_REDIRECTS = 5
 const MP_TIMEOUT_MS = 20000
 const MP_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 MicroMessenger/8.0.40'
 const MAX_READ_BYTES = 2 * 1024 * 1024
@@ -315,26 +316,62 @@ export function apply(ctx) {
 /* ---------- WeChat MP article fetch ---------- */
 
 /**
+ * The mp allowlist gate, shared by the initial request and every redirect
+ * hop (P2-07 / fetch-mp-redirect-ssrf): scheme-pinned https, literal host
+ * `mp.weixin.qq.com`, article path `/s/…`. Applied to the raw input string
+ * and to each resolved `Location` target — `new URL(loc, base)` already
+ * normalizes relative targets, `//host` protocol-relative ones, and
+ * case/trailing-dot quirks, so any hop that escapes the gate is rejected
+ * before its request is ever issued.
+ */
+function allowedMpTarget(url) {
+  return typeof url === 'string' && /^https:\/\/mp\.weixin\.qq\.com\/s\//.test(url.trim())
+}
+
+/**
  * A pasted mp.weixin.qq.com link can't be fetched from the page (CORS), so the
  * host pulls it. A desktop/WeChat-less UA gets the anti-scrape verify page
  * (~18KB, no js_content); the iPhone+MicroMessenger UA gets the full article.
  * Non-article or verify-page responses surface as `reason:'not-article'`.
+ *
+ * Redirects are followed manually (redirect:'manual') and EVERY hop's target
+ * is re-validated against the mp allowlist before fetching — a 30x can no
+ * longer borrow the allowlisted origin to reach a loopback/LAN/metadata
+ * endpoint (P2-07; the cap, timeout, size limit and UA are unchanged).
  */
-async function fetchMpArticle(url) {
-  if (typeof url !== 'string' || !/^https:\/\/mp\.weixin\.qq\.com\/s\//.test(url.trim())) {
+export async function fetchMpArticle(url) {
+  if (!allowedMpTarget(url)) {
     return { ok: false, reason: 'not-mp-url' }
   }
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), MP_TIMEOUT_MS)
   let html = ''
   try {
-    const response = await fetch(url.trim(), {
-      headers: { 'user-agent': MP_UA, 'accept': 'text/html,application/xhtml+xml' },
-      signal: controller.signal,
-      redirect: 'follow',
-    })
-    if (!response.ok) return { ok: false, reason: 'fetch-failed', status: response.status }
-    html = await response.text()
+    let target = url.trim()
+    for (let redirects = 0; ; redirects++) {
+      const response = await fetch(target, {
+        headers: { 'user-agent': MP_UA, 'accept': 'text/html,application/xhtml+xml' },
+        signal: controller.signal,
+        redirect: 'manual',
+      })
+      if (response.status >= 300 && response.status < 400) {
+        const location = response.headers.get('location')
+        /* Drain the redirect body so the underlying socket can be reused. */
+        await response.arrayBuffer().catch(() => {})
+        if (redirects >= MP_MAX_REDIRECTS) return { ok: false, reason: 'too-many-redirects' }
+        if (!location || !location.trim()) return { ok: false, reason: 'fetch-failed', status: response.status }
+        let next
+        try { next = new URL(location, target).href }
+        catch { return { ok: false, reason: 'fetch-failed', status: response.status } }
+        /* Per-hop re-validation: any hop escaping the mp allowlist fails. */
+        if (!allowedMpTarget(next)) return { ok: false, reason: 'not-mp-url' }
+        target = next
+        continue
+      }
+      if (!response.ok) return { ok: false, reason: 'fetch-failed', status: response.status }
+      html = await response.text()
+      break
+    }
   } catch (error) {
     return { ok: false, reason: 'fetch-failed', message: messageOf(error).slice(0, 200) }
   } finally {

@@ -41,7 +41,9 @@ tmp/
 temp/
 *.tmp
 
-# All context directories at any depth (reference material)
+# All context directories at any depth (reference material).
+# `context` without a slash also covers a symlink of that name; `context/` does not.
+context
 context/
 
 # Local environment setup doc (machine-specific)

@@ -12,13 +12,20 @@
  *   1. body parts are never rewritten — every object is a byte prefix.
  *   2. part write precedes meta write (a meta never points at missing bytes).
  *   3. single writer: a meta whose writerId is not ours stops the push.
- *   4. claim = read-modify-write lease with a 90s TTL (no CAS in v1).
+ *   4. claim = read-modify-write lease with a 90s TTL, guarded by ETag CAS
+ *      (P2-04): every acquire/renew write carries the etag it was computed
+ *      from (or If-None-Match:* for create) — a 412 conflict means another
+ *      writer raced us and we must NOT silently merge writes.
  */
 
 import { mkdir, writeFile } from 'node:fs/promises'
-import { readdirSync, readFileSync, statSync } from 'node:fs'
-import { join } from 'node:path'
+import { lstatSync, mkdirSync, realpathSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { isAbsolute, join, resolve, sep } from 'node:path'
 import { constants, zstdCompressSync, zstdDecompressSync } from 'node:zlib'
+import {
+  validate, SchemaReject,
+  SESSION_ID_RE, WORKSPACE_ID_RE, PART_BYTES,
+} from 'dsh-remote-data-schema'
 
 /** Same checksummed frame the JSONL backend appends. An unchecked frame is read as a torn record. */
 const zstdFrame = bytes => zstdCompressSync(bytes, { params: { [constants.ZSTD_c_checksumFlag]: 1 } })
@@ -124,43 +131,95 @@ export function listLocalSessions(dshHome) {
 }
 
 /**
+ * The literal claim shape written by acquire/renew below; a remote object
+ * outside this whitelist is co-tenant corruption, not a lease.
+ */
+const CLAIM_KEYS = new Set(['writerId', 'acquiredAt', 'expiresAt', 'heartbeatRev'])
+
+function validClaim(obj) {
+  if (obj === null || typeof obj !== 'object' || Array.isArray(obj)) return false
+  for (const key of Object.keys(obj)) if (!CLAIM_KEYS.has(key)) return false
+  if (typeof obj.writerId !== 'string' || obj.writerId === '') return false
+  if (typeof obj.acquiredAt !== 'string' || Number.isNaN(Date.parse(obj.acquiredAt))) return false
+  if (typeof obj.expiresAt !== 'number' || !Number.isFinite(obj.expiresAt)) return false
+  if (obj.heartbeatRev !== undefined && !Number.isInteger(obj.heartbeatRev)) return false
+  return true
+}
+
+/** One conditional write; `{conflict}`/throw propagates to the CAS loop. */
+async function casPut(s3, key, value, etag) {
+  return etag === undefined
+    ? s3.putJson(key, value, { ifNoneMatch: '*' })
+    : s3.putJson(key, value, { ifMatch: etag })
+}
+
+/** CAS retry bound: a losing race re-reads and recomputes instead of mixing. */
+const CAS_ATTEMPTS = 4
+
+/**
  * The write lease. A live claim held by another writer stops the push;
- * an expired or absent claim is ours to take. No CAS in v1 — the
- * read-check-write window is the documented best-effort path.
+ * an expired or absent claim is ours to take.
+ *
+ * P2-04 CAS: the read-modify-write is performed under the object's ETag —
+ * `putJson(key, value, {ifMatch: etag})`, or `{ifNoneMatch:'*'}` when the
+ * claim does not exist. On 412 (`{conflict:true}`) the loop re-reads and
+ * recomputes; an out-of-retries conflict surfaces as not-acquired rather
+ * than overwriting a racing writer's lease.
  * @returns `{acquired: boolean, heartbeatRev, holder}`
  */
 export async function acquireClaim(s3, ctx, sessionId, writerId, heartbeatRev) {
+  if (!SESSION_ID_RE.test(sessionId)) throw new SchemaReject('schema:sessionId', 'claim sessionId has a bad charset')
   const key = `claims/${sessionId}.json`
-  const existing = await s3.getJson(key).catch(() => undefined)
-  const now = Date.now()
-  if (existing !== undefined && existing.writerId !== writerId
-      && typeof existing.expiresAt === 'number' && existing.expiresAt > now) {
-    return { acquired: false, holder: existing.writerId, heartbeatRev: existing.heartbeatRev ?? 0 }
+  for (let attempt = 0; attempt < CAS_ATTEMPTS; attempt += 1) {
+    const got = await s3.getJson(key, { withMeta: true }).catch(() => undefined)
+    const existing = validClaim(got?.value) ? got.value : undefined
+    // CAS precondition is the etag of whatever we read — even a malformed
+    // claim is only replaced atomically (a concurrent write still 412s).
+    const etag = got?.value === undefined ? undefined : got.etag
+    const now = Date.now()
+    if (existing !== undefined && existing.writerId !== writerId && existing.expiresAt > now) {
+      return { acquired: false, holder: existing.writerId, heartbeatRev: existing.heartbeatRev ?? 0 }
+    }
+    const claim = {
+      writerId,
+      acquiredAt: new Date(now).toISOString(),
+      expiresAt: now + CLAIM_TTL_MS,
+      heartbeatRev,
+    }
+    const put = await casPut(s3, key, claim, etag)
+    if (put?.conflict === true) continue // lost the race — re-read and recompute
+    return { acquired: true, heartbeatRev, expiresAt: claim.expiresAt }
   }
-  await s3.putJson(key, {
-    writerId,
-    acquiredAt: new Date(now).toISOString(),
-    expiresAt: now + CLAIM_TTL_MS,
-    heartbeatRev,
-  })
-  return { acquired: true, heartbeatRev, expiresAt: now + CLAIM_TTL_MS }
+  // All attempts raced: refuse rather than overwrite a concurrent writer.
+  return { acquired: false, holder: null, heartbeatRev }
 }
 
-/** Extend a lease we already hold. A foreign unexpired lease is not renewed. */
+/**
+ * Extend a lease we already hold — CAS (P2-04). The renewal write carries
+ * the etag of the claim it extends: a concurrent change between read and
+ * write is a conflict, never a silent mixed write. A foreign, malformed, or
+ * expired claim is never renewed or resurrected.
+ */
 export async function renewClaim(s3, sessionId, writerId) {
+  if (!SESSION_ID_RE.test(sessionId)) throw new SchemaReject('schema:sessionId', 'claim sessionId has a bad charset')
   const key = `claims/${sessionId}.json`
-  const existing = await s3.getJson(key).catch(() => undefined)
-  const now = Date.now()
-  if (existing === undefined || existing.writerId !== writerId || !(existing.expiresAt > now)) {
-    return { renewed: false, holder: existing?.writerId ?? null, expiresAt: existing?.expiresAt ?? null }
+  for (let attempt = 0; attempt < CAS_ATTEMPTS; attempt += 1) {
+    const got = await s3.getJson(key, { withMeta: true }).catch(() => undefined)
+    const existing = validClaim(got?.value) ? got.value : undefined
+    const now = Date.now()
+    if (existing === undefined || existing.writerId !== writerId || !(existing.expiresAt > now)) {
+      return { renewed: false, holder: existing?.writerId ?? null, expiresAt: existing?.expiresAt ?? null }
+    }
+    const expiresAt = now + CLAIM_TTL_MS
+    const put = await casPut(s3, key, {
+      ...existing,
+      expiresAt,
+      heartbeatRev: (existing.heartbeatRev ?? 0) + 1,
+    }, got.etag)
+    if (put?.conflict === true) continue
+    return { renewed: true, holder: writerId, expiresAt }
   }
-  const expiresAt = now + CLAIM_TTL_MS
-  await s3.putJson(key, {
-    ...existing,
-    expiresAt,
-    heartbeatRev: (existing.heartbeatRev ?? 0) + 1,
-  })
-  return { renewed: true, holder: writerId, expiresAt }
+  return { renewed: false, holder: writerId, expiresAt: null }
 }
 
 /**
@@ -170,23 +229,39 @@ export async function renewClaim(s3, sessionId, writerId) {
  * @param state - mutable `{bySession: Map}` the caller persists between calls.
  */
 export async function pushSession(s3, ctx, identity, local, markers, state) {
+  // Consumer-layer charset (P2-06): a sessionId that cannot form a safe S3
+  // key never reaches one.
+  if (!SESSION_ID_RE.test(local.sessionId)) return { sessionId: local.sessionId, outcome: 'skip:schema:sessionId' }
   const me = await instanceId(ctx)
   const writerId = `${identity.username}@${me.slice(0, 8)}`
   const buf = readFileSync(local.filePath)
   const head = summarize(buf)
   if (head.cwd === null) return { sessionId: local.sessionId, outcome: 'skip:unparsable' }
 
-  // Sessions only sync when the session's cwd sits inside a shared
-  // workspace's local replica path (member.localPath), with the legacy
-  // path-hash id as a fallback for pre-localPath markers.
-  const marker = await matchWorkspace(head.cwd, markers)
+  // Sessions only sync when the session's cwd sits inside THIS member's own
+  // local replica path — strict memberId binding (P2-03, audit §4.9); the
+  // legacy path-hash fallback is gated on our own member row too.
+  const marker = await matchWorkspace(head.cwd, markers, { identity, me })
   if (marker === null) return { sessionId: local.sessionId, outcome: 'skip:not-shared' }
   const workspaceId = marker.workspaceId
 
   const metaKey = `workspaces/${workspaceId}/sessions/${local.sessionId}/meta.json`
   const remote = await s3.getJson(metaKey).catch(() => undefined)
-  if (remote !== undefined && remote.writerId !== writerId) {
-    return { sessionId: local.sessionId, outcome: 'skip:foreign-writer' }
+  if (remote !== undefined) {
+    // Remote meta crosses the trust boundary only after the v1 whitelist
+    // (P2-04): a poisoned meta is skipped, never read as a writer/byte hint.
+    try {
+      validate('session-meta', remote)
+    } catch (error) {
+      if (error instanceof SchemaReject) return { sessionId: local.sessionId, outcome: `skip:${error.reason}` }
+      throw error
+    }
+    if (remote.sessionId !== local.sessionId) {
+      return { sessionId: local.sessionId, outcome: 'skip:schema:sessionId' }
+    }
+    if (remote.writerId !== writerId) {
+      return { sessionId: local.sessionId, outcome: 'skip:foreign-writer' }
+    }
   }
 
   const tracked = state.bySession.get(local.sessionId) ?? { heartbeatRev: 0, pushedBytes: 0 }
@@ -260,14 +335,59 @@ export async function listRemoteSessions(s3) {
   const out = []
   for (const wsPrefix of prefixes) {
     const workspaceId = wsPrefix.replace(/^workspaces\//, '').replace(/\/$/, '')
+    if (!WORKSPACE_ID_RE.test(workspaceId)) continue
     const inner = await s3.list(`workspaces/${workspaceId}/sessions/`).catch(() => ({ prefixes: [] }))
     for (const sessionPrefix of inner.prefixes ?? []) {
       const sessionId = sessionPrefix.replace(/\/$/, '').split('/').pop()
+      if (!SESSION_ID_RE.test(sessionId)) continue
       const meta = await s3.getJson(`workspaces/${workspaceId}/sessions/${sessionId}/meta.json`).catch(() => undefined)
-      if (meta !== undefined) out.push({ workspaceId, ...meta })
+      if (meta === undefined) continue
+      try {
+        validate('session-meta', meta)
+      } catch (error) {
+        if (error instanceof SchemaReject) continue
+        throw error
+      }
+      if (meta.sessionId !== sessionId) continue // key↔object binding
+      out.push({ workspaceId, ...meta })
     }
   }
   return out
+}
+
+/**
+ * Read + validate the remote meta (P2-04): the whole-object whitelist,
+ * `committedBytes ≤ MAX_COMMITTED_BYTES`, key↔object sessionId binding.
+ * @returns the validated meta; `undefined` when absent.
+ */
+async function readSessionMeta(s3, workspaceId, sessionId) {
+  const meta = await s3.getJson(`workspaces/${workspaceId}/sessions/${sessionId}/meta.json`)
+  if (meta === undefined) return undefined
+  validate('session-meta', meta)
+  if (meta.sessionId !== sessionId) {
+    throw new SchemaReject('schema:sessionId', 'meta sessionId does not match its key')
+  }
+  return meta
+}
+
+/**
+ * Read the body parts a validated meta points at. The schema-derived part
+ * count is `ceil(committedBytes / PART_BYTES)` (parts-count limit) and every
+ * fetched part must be `≤ PART_BYTES` — a co-tenant cannot inflate a part
+ * into an unbounded fetch/decompress (audit §: remote-meta-unbounded-fetch).
+ */
+async function readBodyParts(s3, workspaceId, sessionId, meta) {
+  const parts = Math.ceil(meta.committedBytes / CHUNK)
+  const buffers = []
+  for (let index = 0; index < parts; index += 1) {
+    const part = await s3.getBytes(`workspaces/${workspaceId}/sessions/${sessionId}/body/${index}.part`)
+    if (part === undefined) throw new Error(`missing body part ${index}`)
+    if (part.length > PART_BYTES) {
+      throw new SchemaReject('schema:parts', `body part ${index} exceeds ${PART_BYTES} bytes`)
+    }
+    buffers.push(part)
+  }
+  return Buffer.concat(buffers)
 }
 
 /**
@@ -276,17 +396,11 @@ export async function listRemoteSessions(s3) {
  * @returns `{meta, events}` — `events` is the raw parsed JSONL rows.
  */
 export async function fetchTranscript(s3, workspaceId, sessionId) {
-  const meta = await s3.getJson(`workspaces/${workspaceId}/sessions/${sessionId}/meta.json`)
+  if (!WORKSPACE_ID_RE.test(workspaceId)) throw new SchemaReject('schema:workspaceId', 'workspaceId has a bad charset')
+  if (!SESSION_ID_RE.test(sessionId)) throw new SchemaReject('schema:sessionId', 'sessionId has a bad charset')
+  const meta = await readSessionMeta(s3, workspaceId, sessionId)
   if (meta === undefined) throw new Error('no such session')
-  const parts = Math.ceil((meta.committedBytes ?? 0) / CHUNK)
-  const buffers = []
-  for (let index = 0; index < parts; index += 1) {
-    const part = await s3.getBytes(`workspaces/${workspaceId}/sessions/${sessionId}/body/${index}.part`)
-    if (part === undefined) throw new Error(`missing body part ${index}`)
-    buffers.push(part)
-  }
-  const joined = Buffer.concat(buffers)
-  const text = decode(joined)
+  const text = decode(await readBodyParts(s3, workspaceId, sessionId, meta))
   if (text === undefined) throw new Error('artifact failed to decode')
   const events = []
   for (const line of text.split('\n')) {
@@ -304,16 +418,16 @@ export async function fetchTranscript(s3, workspaceId, sessionId) {
  * @returns `{sessionId, cwd, path}`
  */
 export async function materializeSession(s3, dshHome, { workspaceId, sessionId, localPath }) {
-  const meta = await s3.getJson(`workspaces/${workspaceId}/sessions/${sessionId}/meta.json`)
-  if (meta === undefined) throw new Error('no such session')
-  const parts = Math.ceil((meta.committedBytes ?? 0) / CHUNK)
-  const buffers = []
-  for (let index = 0; index < parts; index += 1) {
-    const part = await s3.getBytes(`workspaces/${workspaceId}/sessions/${sessionId}/body/${index}.part`)
-    if (part === undefined) throw new Error(`missing body part ${index}`)
-    buffers.push(part)
+  // Consumer-layer boundary (P2-06 second layer; the route checks too):
+  // a `..`/`/`-carrying sessionId can never reach the S3 key or the fs path.
+  if (!WORKSPACE_ID_RE.test(workspaceId)) throw new SchemaReject('schema:workspaceId', 'workspaceId has a bad charset')
+  if (!SESSION_ID_RE.test(sessionId)) throw new SchemaReject('schema:sessionId', 'sessionId has a bad charset')
+  if (typeof localPath !== 'string' || !isAbsolute(localPath) || resolve(localPath) !== localPath) {
+    throw new SchemaReject('schema:localPath', 'localPath must be an absolute normalized path')
   }
-  const text = decode(Buffer.concat(buffers))
+  const meta = await readSessionMeta(s3, workspaceId, sessionId)
+  if (meta === undefined) throw new Error('no such session')
+  const text = decode(await readBodyParts(s3, workspaceId, sessionId, meta))
   if (text === undefined) throw new Error('artifact failed to decode')
   const newline = text.indexOf('\n')
   if (newline < 0) throw new Error('remote artifact has no session header')
@@ -323,9 +437,29 @@ export async function materializeSession(s3, dshHome, { workspaceId, sessionId, 
   const headerFrame = zstdFrame(Buffer.from(`${JSON.stringify(header)}\n`))
   const rest = text.slice(newline + 1)
   const body = rest === '' ? Buffer.alloc(0) : zstdFrame(Buffer.from(rest.endsWith('\n') ? rest : `${rest}\n`))
-  const dir = join(dshHome, 'sessions', projectKey(localPath), sessionId)
-  await mkdir(dir, { recursive: true })
+  // realpath fence (P2-06): the unpack target must stay inside
+  // `dshHome/sessions/<projectKey>/<sessionId>` — no lexical or symlink
+  // escape, and a pre-existing symlinked session dir is never written into.
+  const sessionsRoot = resolve(dshHome, 'sessions')
+  const projectRoot = join(sessionsRoot, projectKey(localPath))
+  const dir = join(projectRoot, sessionId)
+  mkdirSync(dir, { recursive: true })
+  let realDir
+  let realRoot
+  try {
+    realDir = realpathSync(dir)
+    realRoot = realpathSync(sessionsRoot)
+  } catch { throw new Error('materialize target failed the realpath fence') }
+  if (!(realDir === realRoot || realDir.startsWith(realRoot + sep))
+      || lstatSync(dir).isSymbolicLink()) {
+    throw new Error('materialize target escaped the session tree')
+  }
   const path = join(dir, 'session.v4.jsonl.zstd')
+  try {
+    if (lstatSync(path).isSymbolicLink()) throw new Error('materialize target is a symlink')
+  } catch (error) {
+    if (error?.code !== 'ENOENT') throw error
+  }
   await writeFile(path, Buffer.concat([headerFrame, body]))
   return { sessionId, cwd: localPath, path }
 }

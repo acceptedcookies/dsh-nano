@@ -10,11 +10,13 @@
 - 纯 ESM，零外部依赖（只用 `node:*`）。`node --test` 跑测试。
 - 职责：宿主侧远端数据 schema 校验（26-nov-security-fix / P1-06 骨架，T-O-8）。
 
-## 状态：Phase 1 骨架
+## 状态：Phase 2 已实现（P2-01）
 
-`validate` / `SchemaReject` 已可用；`src/schema/v1.js` 与 `src/schema/v0.js` 是占位实现：
-- **v1 规则在 Phase 2（P2-01）填写**，当前 `validateV1` 一律抛 `SchemaReject('schema:unimplemented')` —— fail-closed，绝不静默放行。
-- **v0 只读兼容**：缺判别字段的对象按 v0 处理，返回 `compat:'v0-backfill'`。
+`validate` / `SchemaReject` 已实现全部六类 v1 规则，白名单按现写字面（errata A1）：
+- **导出常量**：`MAX_FILE_BYTES` 2MiB、`MAX_IMAGE_BYTES` 5MB、`MAX_COMMITTED_BYTES` 2GiB、`PART_BYTES` 64KiB、`MAX_DEPTH` 32、`SESSION_ID_RE`、`WORKSPACE_ID_RE`。
+- **版本识别**：`schemaVersion` > `v`；缺判别字段时按 kind 决定——`manifest` → v0（存量 manifest 无 `schemaVersion`），`file`/`image`/`marker`/`session-meta`/`tree-head` → v1（这些类从无 v0 形态或恒带 `v`，缺省回退到 v0 会绕过白名单）。
+- **file 是原始 UTF-8 字节**（`files/<id>.md` 存的草稿正文，不是 JSON）。可传 `{context:{key,id,manifest}}` 交叉校验 id 字符集与 manifest 归属；`session-meta` 可传 `{context:{parts}}` 校验分片大小。
+- **v0 只读兼容**：仅 manifest 自动落 v0；返回 `compat:'v0-backfill'`，绝不就地升级、绝不静默写 v1。v0 也过 `MAX_DEPTH` 深度守卫。
 
 ## 消费方式
 
@@ -24,8 +26,10 @@
 import { validate, SchemaReject } from 'dsh-remote-data-schema'
 
 try {
-  validate('manifest', obj)                  // {v} 缺省自动识别
-  validate('session-meta', meta, { v: 1 })   // 显式版本
+  validate('manifest', obj)                                       // 无 schemaVersion → v0-backfill
+  validate('image', payload)                                      // file/image 无 v0，直接走 v1
+  validate('file', text, { v: 1, context: { key, manifest } })    // key 交叉校验
+  validate('session-meta', meta, { context: { parts: sizes } })   // 分片限额
 } catch (e) {
   if (e instanceof SchemaReject) { /* e.reason === 'schema:<field>' */ }
 }
@@ -44,10 +48,11 @@ try {
 
 | 路径 | 角色 |
 |---|---|
-| `src/index.js` | 导出 `validate`、`SchemaReject`、`SUPPORTED_KINDS` |
+| `src/index.js` | 导出 `validate`、`SchemaReject`、`SUPPORTED_KINDS`、限额常量 |
 | `src/reject.js` | `SchemaReject` 类型与 `reject(field)` 辅助 |
-| `src/schema/v1.js`、`src/schema/v0.js` | 版本校验器（骨架） |
-| `test/schema.test.mjs` | B1-T01 骨架单测 |
+| `src/schema/v1.js` | 六类 v1 校验器 + `assertDepth` 深度守卫 + 限额常量 |
+| `src/schema/v0.js` | v0 只读兼容（`compat:'v0-backfill'` + 深度守卫） |
+| `test/schema.test.mjs` | B1-T01 单测（正/负样本，含存量桶字面形状） |
 
 ## 不要
 

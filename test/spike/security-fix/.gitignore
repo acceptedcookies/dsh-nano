@@ -1,0 +1,4 @@
+evidence/
+samples/
+tmp/
+# fixtures/ stays in-repo: B3-T08 positive-render snapshot + B3-T02 negative corpus live here

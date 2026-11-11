@@ -34,14 +34,14 @@ PH1 batch0-baseline ──▶ PH2 batch1-host-data ──▶ PH3 batch2-content-
 ## 3. 工作项清单
 
 ### PH1 `batch0-baseline`（门禁 B0）
-- [ ] `P1-01` — `dsh-host-route-guard` 骨架 + `registerRoutes`（fail-closed connection、405/JSON、bodyLimit、未登记/陈旧 throw、route-inventory）
-- [ ] `P1-02` — `security/route-sensitivity.json` 43 行（每注册路由一行+`methods` 列）+ gen/check 脚本
-- [ ] `P1-03` — `security/feature-contract.json`（43 路由 bodyLimit/UI/数据位置逐字段）+ check 脚本
-- [ ] `P1-04` — 分发通道（四 `package.json` file:→devDeps+三包；`build-client.mjs` 新增 bundle；无 schema-shim；静态断言无裸 import）
-- [ ] `P1-05` — 四插件 43 路由迁移到 guard（零行为）
-- [ ] `P1-06` — `dsh-remote-data-schema` 骨架（validate/SchemaReject）
-- [ ] `P1-07` — `dsh-html-policy` 骨架（ALLOWED_* 常量）
-- [ ] `P1-08` — `security/accepted-risks.json` 9 条骨架
+- [x] `P1-01` — `dsh-host-route-guard` 骨架 + `registerRoutes`（fail-closed connection、405/JSON、bodyLimit、未登记/陈旧 throw、route-inventory） — pass `bd4d6ad` · node --test 14/14
+- [x] `P1-02` — `security/route-sensitivity.json` 43 行（每注册路由一行+`methods` 列）+ gen/check 脚本 — pass `bd4d6ad` · check-route-sensitivity 0-drift
+- [x] `P1-03` — `security/feature-contract.json`（43 路由 bodyLimit/UI/数据位置逐字段）+ check 脚本 — pass `bd4d6ad` · check-feature-contract PASS
+- [x] `P1-04` — 分发通道（四 `package.json` file:→devDeps+三包；`build-client.mjs` 新增 bundle；无 schema-shim；静态断言无裸 import） — pass `bd4d6ad` · check-clean-lib PASS + pack dry-run
+- [x] `P1-05` — 四插件 43 路由迁移到 guard（零行为） — pass `bd4d6ad` · dsh-dev restart: all routes 401 gated, /bogus 404
+- [x] `P1-06` — `dsh-remote-data-schema` 骨架（validate/SchemaReject） — pass `bd4d6ad` · node --test 6/6
+- [x] `P1-07` — `dsh-html-policy` 骨架（ALLOWED_* 常量） — pass `bd4d6ad` · node --test 7/7
+- [x] `P1-08` — `security/accepted-risks.json` 9 条骨架（4 harden/5 accept） — pass `bd4d6ad`
 - [ ] `P1-09` — `test/spike/security-fix/` 宪章 + `test/remote-schema/compat/` + `scripts/security-regression/` 基座
 
 ### PH2 `batch1-host-data`（门禁 B1；P0 remote-cross 7）
@@ -97,8 +97,8 @@ PH1 batch0-baseline ──▶ PH2 batch1-host-data ──▶ PH3 batch2-content-
 
 ## 5. 当前状态与交接
 
-- **当前节点**：PH1 未开始（上下文建立完成 STEP.1–3 ✓）
-- **下一动作**：生成 route-sensitivity/feature-contract 基线 → 三包骨架 → 分发+迁移
+- **当前节点**：PH1 `P1-01..P1-08` 完成并提交 `bd4d6ad`；B0 门禁（check-route-sensitivity 0-drift / feature-contract / clean-lib / node --test 三包 / dsh-dev 401-gated smoke）全过
+- **下一动作**：`P1-09` 测试基座（test/spike + remote-schema/compat + security-regression）→ PH2 batch1（P2-01..P2-08，P0 remote-cross 7）
 - **当前阻塞**：无
 - **待 owner**：无（`foundation/` 不存在，已以 AGENTS.md 为准）
 - **最终交接**：closure + 发布 checklist（`v*` tag 由业主推送触发 release CI）

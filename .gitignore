@@ -47,9 +47,13 @@ context/
 # Local environment setup doc (machine-specific)
 .local-dsh-setup.md
 .local-desktop-setup.md
+.local-perf-review.md
 
-# Impeccable skill working files
+# skill working files
 .impeccable/
+.dsh/
+# cf CLI local cache (account id etc; token lives in .env.cloudflare)
+.cloudflare/
 
 # Release artifacts (produced by CI, published to GitHub Releases)
 *.tgz
@@ -68,3 +72,6 @@ lab/out/
 
 # 业主文件
 .adocs
+.anote
+.output
+.temp

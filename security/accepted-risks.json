@@ -1,0 +1,105 @@
+{
+  "version": 1,
+  "purpose": "P2 disposition ledger (T-O-11). harden = apply a low-cost fence/validation that does not change the feature contract; accept = record as accepted local self-impact because a fix would change the feature (per T-O-3 a contract-changing fix must not ship). optionalHardening/monitoring/ownerSignoff/reviewDate are filled in Phase 4.",
+  "risks": [
+    {
+      "fingerprint": "nxe:mutate-symlink-escape",
+      "subject": "dsh-nano-explorer-extra /create-file /create-folder /rename /move /delete",
+      "existingFeature": "Workspace file mutations follow symlinks as ordinary entries; a link pointing outside the workspace is currently followed.",
+      "disposition": "harden",
+      "rationale": "Realpath fence at the last trusted decision point so mutations cannot escape the workspace root via symlink. Registered as 'harden + edge behaviour change' per T-O-14-3: links pointing outside the workspace will start being refused.",
+      "optionalHardening": null,
+      "monitoring": null,
+      "ownerSignoff": null,
+      "reviewDate": null
+    },
+    {
+      "fingerprint": "nxe:git-config-filter-exec",
+      "subject": "dsh-nano-explorer-extra /commit /pull /checkout",
+      "existingFeature": "Git add/commit/checkout runs `git` as the host user; an attacker-planted .git/config filter driver or smudge/clean filter executes during these ops.",
+      "disposition": "harden",
+      "rationale": "Refuse to run git write ops against a worktree whose .git/** content can be planted by page routes (deny .git mutation / scrub filter config) without removing the SCM UI.",
+      "optionalHardening": null,
+      "monitoring": null,
+      "ownerSignoff": null,
+      "reviewDate": null
+    },
+    {
+      "fingerprint": "hunter-e:grok-creds-workspace-copy",
+      "subject": "dsh-nano-model-selector /imagine (grok engine template)",
+      "existingFeature": "The grok template copies live ~/.grok/{auth.json,config.toml} into workspace imagine/.grok so the CLI can run sandboxed.",
+      "disposition": "harden",
+      "rationale": "Stop copying live credentials into the workspace: write a .gitignore for imagine/.grok and/or add a SKIP path so the real token is not planted in a synced/commit-able directory.",
+      "optionalHardening": null,
+      "monitoring": null,
+      "ownerSignoff": null,
+      "reviewDate": null
+    },
+    {
+      "fingerprint": "nxe:scopeof-cross-session",
+      "subject": "dsh-nano-explorer-extra scopeOf() (all session routes)",
+      "existingFeature": "scopeOf resolves ANY existing sessionId, letting a page script adopt another session's workspace and weakest sandboxPolicy.",
+      "disposition": "harden",
+      "rationale": "Add observability/limited binding (log + warn on foreign sessionId) — only logging, since the explorer intentionally lets the page pick any session and tightening could break multi-session use.",
+      "optionalHardening": null,
+      "monitoring": null,
+      "ownerSignoff": null,
+      "reviewDate": null
+    },
+    {
+      "fingerprint": "nxe:routes-read-arbitrary-file",
+      "subject": "dsh-nano-explorer-extra /read /list",
+      "existingFeature": "/read returns any UTF-8 host file (≤1MiB) when client sends allowOutsideWorkspace:true; /list enumerates arbitrary host directories.",
+      "disposition": "accept",
+      "rationale": "Removing outside-workspace reads would break documented preview/open behaviours (same-user page self-impact, P2). requestRejection is the gate; accept and note optional fence.",
+      "optionalHardening": null,
+      "monitoring": null,
+      "ownerSignoff": null,
+      "reviewDate": null
+    },
+    {
+      "fingerprint": "nano-notepad:read-arbitrary-md-read",
+      "subject": "dsh-nano-notepad /read",
+      "existingFeature": "/read returns any host UTF-8 text file (≤2MiB, previously *.md/*.markdown) without workspace confinement.",
+      "disposition": "accept",
+      "rationale": "Arbitrary-text-file open is the feature (open any note path). Confining it would remove the open-anywhere workflow; same-user self-impact, accept.",
+      "optionalHardening": null,
+      "monitoring": null,
+      "ownerSignoff": null,
+      "reviewDate": null
+    },
+    {
+      "fingerprint": "nsw:ls-mkdir-any-absolute-path",
+      "subject": "dsh-nano-shared-workspace /ls /mkdir",
+      "existingFeature": "/ls and /mkdir accept arbitrary absolute paths so the join/create dialog can browse and create a replica dir anywhere.",
+      "disposition": "accept",
+      "rationale": "Free directory browsing/mkdir is the documented join workflow; fencing to the workspace would remove it. Same-user self-impact, accept.",
+      "optionalHardening": null,
+      "monitoring": null,
+      "ownerSignoff": null,
+      "reviewDate": null
+    },
+    {
+      "fingerprint": "nano-notepad:s3-config-endpoint-ssrf",
+      "subject": "dsh-nano-notepad /s3/config",
+      "existingFeature": "Settings UI lets the user set any S3-compatible endpoint; the host signs probes with stored credentials, making a signed-SSRF oracle.",
+      "disposition": "accept",
+      "rationale": "Multi-endpoint cloud sync is the feature; restricting endpoints would change it. Same-user config of own storage, accept (cross-tenant write abuse is covered by the P0 schema work, not this route).",
+      "optionalHardening": null,
+      "monitoring": null,
+      "ownerSignoff": null,
+      "reviewDate": null
+    },
+    {
+      "fingerprint": "nxe:perf-review-window-drain",
+      "subject": "dsh-nano-explorer-extra /perf-review/host?mode=window",
+      "existingFeature": "mode=window drains and returns the process-global perf window (cross-plugin/session samples) for lab use.",
+      "disposition": "accept",
+      "rationale": "Window drain is the intended lab observability behaviour and only active when DSH_PERF_REVIEW=1; low severity, accept.",
+      "optionalHardening": null,
+      "monitoring": null,
+      "ownerSignoff": null,
+      "reviewDate": null
+    }
+  ]
+}

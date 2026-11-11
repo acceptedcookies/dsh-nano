@@ -2,6 +2,8 @@
 
 import { watch } from 'node:fs'
 import { ensurePerfReviewHost, LIB_VERSION } from 'dsh-performance-review/host'
+import { registerRoutes as registerGuardedRoutes } from 'dsh-host-route-guard'
+import { ROUTE_TABLE, PLUGIN } from './route-table.js'
 import { checkoutBranch, commitAll, ignoredAmong, listBranches, listConflicts, listWorktrees, pullUpstream, readStatus } from './git.js'
 import { absoluteOf, isLexicallyInside, listDirectory } from './listing.js'
 import { createFile, createFolder, moveEntry, removeEntry, rename } from './mutate.js'
@@ -442,37 +444,25 @@ export function createRoutes(ctx, config) {
 }
 
 /**
- * Register every route on the web server, gated by the connection's request admission.
+ * Register every route on the web server through dsh-host-route-guard
+ * (P1-05 / T-O-7): the guard owns requestRejection (Host/Origin fence +
+ * authenticated Peer) and the uniform 405; handlers keep `route.run` and the
+ * 200/400 response shapes.
  * @param ctx - host context providing `webServer` and `connection`.
  * @param routes - the handlers built by {@link createRoutes}.
  * @returns one disposer per registered route.
  */
 export function registerRoutes(ctx, routes) {
-  const connection = () => ctx.get('connection')
-  const disposers = []
-  for (const [suffix, route] of Object.entries(routes)) {
-    disposers.push(ctx.webServer.register({
-      kind: 'exact',
-      path: `${PREFIX}${suffix}`,
-      handler: async (req, res) => {
-        const rejection = connection()?.requestRejection(req)
-        if (rejection !== undefined) {
-          res.statusCode = rejection
-          res.end()
-          return
-        }
-        if (req.method !== route.method) {
-          res.setHeader('allow', route.method)
-          sendJson(res, 405, { error: `method ${req.method} is not allowed` })
-          return
-        }
-        try {
-          sendJson(res, 200, await route.run(req))
-        } catch (error) {
-          sendJson(res, 400, { error: messageOf(error) })
-        }
-      },
-    }))
-  }
-  return disposers
+  const specs = Object.entries(routes).map(([suffix, route]) => ({
+    path: `${PREFIX}${suffix}`,
+    methods: [route.method],
+    handler: async (req, res) => {
+      try {
+        sendJson(res, 200, await route.run(req))
+      } catch (error) {
+        sendJson(res, 400, { error: messageOf(error) })
+      }
+    },
+  }))
+  return registerGuardedRoutes(ctx, specs, { table: ROUTE_TABLE, plugin: PLUGIN })
 }

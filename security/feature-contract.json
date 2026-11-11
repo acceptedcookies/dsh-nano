@@ -1,0 +1,99 @@
+{
+  "version": 1,
+  "purpose": "Feature contract snapshot (T-O-3 / T-O-14). Locks the observable contract of every route plus UI entry points and data locations so hardening can prove zero functional regression. bodyLimit is per-method (bytes accepted by the request-body reader); GET/HEAD accept no body.",
+  "generatedBy": "scripts/gen-route-sensitivity.mjs (route paths/methods) — bodyLimit/responseShape hand-verified from code",
+  "routes": [
+    { "plugin": "dsh-nano-notepad", "path": "/nano-notepad/save", "methods": ["POST"], "bodyLimit": { "POST": 8388608 }, "responseShape": "200 {ok:true,path} | 4xx/5xx {error}" },
+    { "plugin": "dsh-nano-notepad", "path": "/nano-notepad/read", "methods": ["POST"], "bodyLimit": { "POST": 8388608 }, "responseShape": "200 {ok:true,path,name,content,mtimeMs?} | 4xx {error}" },
+    { "plugin": "dsh-nano-notepad", "path": "/nano-notepad/fetch-mp", "methods": ["POST"], "bodyLimit": { "POST": 8388608 }, "responseShape": "200 {ok:true,url,name,content} | 422 {error}" },
+    { "plugin": "dsh-nano-notepad", "path": "/nano-notepad/s3/status", "methods": ["POST"], "bodyLimit": { "POST": 33554432 }, "responseShape": "200 {ok:true,profiles,activeId,ledger?}" },
+    { "plugin": "dsh-nano-notepad", "path": "/nano-notepad/s3/test", "methods": ["POST"], "bodyLimit": { "POST": 33554432 }, "responseShape": "200 {ok:true,latencyMs?} | {ok:false,error}" },
+    { "plugin": "dsh-nano-notepad", "path": "/nano-notepad/s3/object", "methods": ["POST"], "bodyLimit": { "POST": 33554432 }, "responseShape": "200 {ok:true,bodyB64?,etag?,notFound?} | {ok:false,error}" },
+    { "plugin": "dsh-nano-notepad", "path": "/nano-notepad/s3/config", "methods": ["POST"], "bodyLimit": { "POST": 33554432 }, "responseShape": "200 {ok:true,profiles?,activeId?,pending?} | {ok:false,error}" },
+    { "plugin": "dsh-nano-explorer-extra", "path": "/nano-explorer-extra/status", "methods": ["GET"], "bodyLimit": { "GET": 0 }, "responseShape": "200 {ok:true,...gitStatus|stats} | 400 {error}" },
+    { "plugin": "dsh-nano-explorer-extra", "path": "/nano-explorer-extra/commit", "methods": ["POST"], "bodyLimit": { "POST": 65536 }, "responseShape": "200 {ok:true,...commitResult} | 400 {error}" },
+    { "plugin": "dsh-nano-explorer-extra", "path": "/nano-explorer-extra/pull", "methods": ["POST"], "bodyLimit": { "POST": 65536 }, "responseShape": "200 {ok:true,output?} | 400 {error}" },
+    { "plugin": "dsh-nano-explorer-extra", "path": "/nano-explorer-extra/checkout", "methods": ["POST"], "bodyLimit": { "POST": 65536 }, "responseShape": "200 {ok:true} | 400 {error}" },
+    { "plugin": "dsh-nano-explorer-extra", "path": "/nano-explorer-extra/create-file", "methods": ["POST"], "bodyLimit": { "POST": 65536 }, "responseShape": "200 {ok:true,entry} | 400 {error}" },
+    { "plugin": "dsh-nano-explorer-extra", "path": "/nano-explorer-extra/create-folder", "methods": ["POST"], "bodyLimit": { "POST": 65536 }, "responseShape": "200 {ok:true,entry} | 400 {error}" },
+    { "plugin": "dsh-nano-explorer-extra", "path": "/nano-explorer-extra/rename", "methods": ["POST"], "bodyLimit": { "POST": 65536 }, "responseShape": "200 {ok:true,entry} | 400 {error}" },
+    { "plugin": "dsh-nano-explorer-extra", "path": "/nano-explorer-extra/move", "methods": ["POST"], "bodyLimit": { "POST": 65536 }, "responseShape": "200 {ok:true,entry} | 400 {error}" },
+    { "plugin": "dsh-nano-explorer-extra", "path": "/nano-explorer-extra/delete", "methods": ["POST"], "bodyLimit": { "POST": 65536 }, "responseShape": "200 {ok:true} | 400 {error}" },
+    { "plugin": "dsh-nano-explorer-extra", "path": "/nano-explorer-extra/ignored", "methods": ["POST"], "bodyLimit": { "POST": 65536 }, "responseShape": "200 {ok:true,ignored:[path]} | 400 {error}" },
+    { "plugin": "dsh-nano-explorer-extra", "path": "/nano-explorer-extra/list", "methods": ["POST"], "bodyLimit": { "POST": 65536 }, "responseShape": "200 {ok:true,entries:[{name,kind,...}],resolvedPath} | 400 {error}" },
+    { "plugin": "dsh-nano-explorer-extra", "path": "/nano-explorer-extra/perf-review/host", "methods": ["GET"], "bodyLimit": { "GET": 0 }, "responseShape": "200 {ok:true,enabled,samples|snapshot} | 400 {error}" },
+    { "plugin": "dsh-nano-explorer-extra", "path": "/nano-explorer-extra/read", "methods": ["POST"], "bodyLimit": { "POST": 65536 }, "responseShape": "200 {ok:true,content,resolvedPath} | 400 {error}" },
+    { "plugin": "dsh-nano-shared-workspace", "path": "/nano-shared-workspace/settings", "methods": ["GET"], "bodyLimit": { "GET": 0 }, "responseShape": "200 {ok:true,endpoint,bucket,region,prefix,identity:{username,maskedSecret?,registered}} | {error}" },
+    { "plugin": "dsh-nano-shared-workspace", "path": "/nano-shared-workspace/settings/test", "methods": ["POST"], "bodyLimit": { "POST": 65536 }, "responseShape": "200 {ok:true} | {ok:false,error}" },
+    { "plugin": "dsh-nano-shared-workspace", "path": "/nano-shared-workspace/settings/update", "methods": ["PUT"], "bodyLimit": { "PUT": 65536 }, "responseShape": "200 {ok:true} | {ok:false,error}" },
+    { "plugin": "dsh-nano-shared-workspace", "path": "/nano-shared-workspace/settings/clear", "methods": ["POST"], "bodyLimit": { "POST": 65536 }, "responseShape": "200 {ok:true} | {ok:false,error}" },
+    { "plugin": "dsh-nano-shared-workspace", "path": "/nano-shared-workspace/status", "methods": ["GET"], "bodyLimit": { "GET": 0 }, "responseShape": "200 {ok:true,...syncStatus} | {error}" },
+    { "plugin": "dsh-nano-shared-workspace", "path": "/nano-shared-workspace/workspaces", "methods": ["GET"], "bodyLimit": { "GET": 0 }, "responseShape": "200 {ok:true,workspaces:[marker]} | {error}" },
+    { "plugin": "dsh-nano-shared-workspace", "path": "/nano-shared-workspace/workspaces/create", "methods": ["POST"], "bodyLimit": { "POST": 65536 }, "responseShape": "200 {ok:true,workspaceId} | {ok:false,error}" },
+    { "plugin": "dsh-nano-shared-workspace", "path": "/nano-shared-workspace/workspaces/join", "methods": ["POST"], "bodyLimit": { "POST": 65536 }, "responseShape": "200 {ok:true,workspaceId,localPath} | {ok:false,error}" },
+    { "plugin": "dsh-nano-shared-workspace", "path": "/nano-shared-workspace/sync", "methods": ["POST"], "bodyLimit": { "POST": 65536 }, "responseShape": "200 {ok:true} | {ok:false,error}" },
+    { "plugin": "dsh-nano-shared-workspace", "path": "/nano-shared-workspace/tree/pull", "methods": ["POST"], "bodyLimit": { "POST": 65536 }, "responseShape": "200 {ok:true,files?,generation?} | {ok:false,error}" },
+    { "plugin": "dsh-nano-shared-workspace", "path": "/nano-shared-workspace/tree/push", "methods": ["POST"], "bodyLimit": { "POST": 65536 }, "responseShape": "200 {ok:true,generation?} | {ok:false,error}" },
+    { "plugin": "dsh-nano-shared-workspace", "path": "/nano-shared-workspace/sessions/bind", "methods": ["POST"], "bodyLimit": { "POST": 65536 }, "responseShape": "200 {ok:true,sessionId} | {ok:false,error}" },
+    { "plugin": "dsh-nano-shared-workspace", "path": "/nano-shared-workspace/sessions/claim", "methods": ["POST"], "bodyLimit": { "POST": 65536 }, "responseShape": "200 {ok:true,busy?,expiresAt?} | {ok:false,error}" },
+    { "plugin": "dsh-nano-shared-workspace", "path": "/nano-shared-workspace/sessions/heartbeat", "methods": ["POST"], "bodyLimit": { "POST": 65536 }, "responseShape": "200 {ok:true,expiresAt?,heartbeatRev?} | {ok:false,error}" },
+    { "plugin": "dsh-nano-shared-workspace", "path": "/nano-shared-workspace/sessions/lease", "methods": ["POST"], "bodyLimit": { "POST": 65536 }, "responseShape": "200 {ok:true,expiresAt?} | {ok:false,error}" },
+    { "plugin": "dsh-nano-shared-workspace", "path": "/nano-shared-workspace/sessions", "methods": ["GET"], "bodyLimit": { "GET": 0 }, "responseShape": "200 {ok:true,sessions:[meta]} | {error}" },
+    { "plugin": "dsh-nano-shared-workspace", "path": "/nano-shared-workspace/mkdir", "methods": ["POST"], "bodyLimit": { "POST": 65536 }, "responseShape": "200 {ok:true,path} | {ok:false,error}" },
+    { "plugin": "dsh-nano-shared-workspace", "path": "/nano-shared-workspace/ls", "methods": ["POST"], "bodyLimit": { "POST": 65536 }, "responseShape": "200 {ok:true,entries:[name|{name,kind}]} | {ok:false,error}" },
+    { "plugin": "dsh-nano-shared-workspace", "path": "/nano-shared-workspace/transcript", "methods": ["POST"], "bodyLimit": { "POST": 65536 }, "responseShape": "200 {ok:true,transcript|body} | {ok:false,error}" },
+    { "plugin": "dsh-nano-shared-workspace", "path": "/nano-shared-workspace/materialize", "methods": ["POST"], "bodyLimit": { "POST": 65536 }, "responseShape": "200 {ok:true,sessionId,cwd,path} | {ok:false,error}" },
+    { "plugin": "dsh-nano-model-selector", "path": "/nano-model-selector/catalog", "methods": ["GET", "HEAD"], "bodyLimit": { "GET": 0, "HEAD": 0 }, "responseShape": "200 {ok:true,providers:[{id,name,models:[...]}]} | {error}" },
+    { "plugin": "dsh-nano-model-selector", "path": "/nano-model-selector/media-engines", "methods": ["GET", "HEAD"], "bodyLimit": { "GET": 0, "HEAD": 0 }, "responseShape": "200 {ok:true,engines:[{key,label,detail,path,available}]} | {error}" },
+    { "plugin": "dsh-nano-model-selector", "path": "/nano-model-selector/media-engine", "methods": ["GET", "HEAD", "PUT"], "bodyLimit": { "GET": 0, "HEAD": 0, "PUT": 16384 }, "responseShape": "GET/HEAD 200 {ok:true,engine,explicit} ; PUT 200 {ok:true,engine} | {ok:false,error}" }
+  ],
+  "ui": {
+    "dsh-nano-notepad": {
+      "launcher": "⌘E then 1 (Ctrl+E then 1) toggles floating panel; circular launcher button",
+      "panel": "floating notepad panel: tabs, source/rendered markdown view, format toolbar (.md/.markdown only), JSON tree view (.json), image notes (png/jpeg/gif/webp) in same IndexedDB",
+      "settings": "openSettings(initialTab) dialog incl. 'integrate' + 'cloud' tabs; cloud-settings.js edits S3 endpoint profiles via /s3/* routes",
+      "pageGlobal": "window.__nanoNotepad.import(name, content, meta) — programmatic draft import",
+      "saveDialog": "macOS 'save as' native dialog via POST /nano-notepad/save (osascript), not storage",
+      "fetchMp": "mp.weixin.qq.com article import via POST /nano-notepad/fetch-mp"
+    },
+    "dsh-nano-explorer-extra": {
+      "filesType": "takes over the 'Files' right-sidebar tab (sidebarRightTabs.register id nano-explorer-extra, kind files)",
+      "tree": "workspace file tree: expand/collapse, click/double-click preview (prefs), context menu (Finder/copy-path/rename/delete/view-diff)",
+      "scm": "branch button + commit drawer + worktree list + pull; status bar with branch/conflicts; stats bubble",
+      "prefs": "footer gear → per-browser display prefs (localStorage dsh-nano-explorer-extra:prefs.v2, v1 fallback once)",
+      "contextMenus": "file/directory context-menu items incl. copy-relative, rename, copy-to-notepad"
+    },
+    "dsh-nano-shared-workspace": {
+      "sidebarGraft": "SidebarGraft injected into workspace/section region (data-nano-shared-workspace); settings modal id 'settings'",
+      "workspaces": "create/join shared-workspace rows, directory picker + host /ls+/mkdir fallback browser",
+      "sessions": "remote shared-session list with claim/lease/heartbeat, materialize into local session tree, transcript view",
+      "settings": "two-step settings (probe+edit) → /settings/test then /settings/update or /settings/clear",
+      "pageGlobal": "window.__nsw = { store, ctx, face }"
+    },
+    "dsh-nano-model-selector": {
+      "trigger": "composer '.nms-trigger' opens single-column icon rail + model list + detail/effort",
+      "mediaRail": "'媒体生成' rail section scans & selects local image CLIs",
+      "imagine": "/imagine skill registered in composer; injects engine command template ({prompt}/{out}/{cwd}); grok copies ~/.grok creds into workspace imagine/.grok"
+    }
+  },
+  "dataLocations": {
+    "dsh-nano-notepad": {
+      "notes": "IndexedDB 'dsh-nano-notepad' (schema v4: nodes, versions, images, sync cursor store) — per browser origin",
+      "s3Profiles": "${DSH_HOME}/nano-notepad-s3.json (mode 0600), seeded from S3_NOTEPAD_* env / ${DSH_HOME}/nano-notepad.env",
+      "config": "host Config defaults only (saveDelayMs 800, commitIntervalSec 60, versionLimit 50, imageLimitBytes 5MB, defaultView, theme); panel overrides after first save"
+    },
+    "dsh-nano-explorer-extra": {
+      "prefs": "localStorage 'dsh-nano-explorer-extra:prefs.v2' (v1 read-once fallback)",
+      "hostState": "none (no DB); reads session cwd via sessions/sessionPersistence"
+    },
+    "dsh-nano-shared-workspace": {
+      "identity": "host credentials store refs DSH_NSW_IDENTITY + DSH_NSW_USERNAME (ctx.credentials)",
+      "replicas": "member.localPath directory per workspace + local session tree under DSH_HOME",
+      "config": "patch Config: endpoint/bucket/region required + optional prefix"
+    },
+    "dsh-nano-model-selector": {
+      "engineState": "${DSH_DATA_DIR||DSH_HOME||~/.dsh}/plugins/nano-model-selector/media-engine.json",
+      "clientCache": "localStorage 'dsh-nano-model-selector:media-engine.v1' + favorites key"
+    }
+  }
+}

@@ -949,12 +949,408 @@ function ensurePerfReviewHost(env = {}) {
   return global.__perfReviewHost;
 }
 
+// ../packages/dsh-host-route-guard/src/route-guard.js
+var RouteGuardError = class extends Error {
+  constructor(reason, detail = "") {
+    super(detail ? `route-guard: ${reason} \u2014 ${detail}` : `route-guard: ${reason}`);
+    this.name = "RouteGuardError";
+    this.reason = reason;
+  }
+};
+var ROUTE_KIND = "exact";
+function sendJson(res, status, body) {
+  if (res.writableEnded || res.destroyed) return;
+  res.statusCode = status;
+  res.setHeader("content-type", "application/json; charset=utf-8");
+  res.end(JSON.stringify(body));
+}
+function indexTable(table, plugin) {
+  if (!Array.isArray(table)) {
+    throw new RouteGuardError("table-invalid", "table must be an array of route rows");
+  }
+  const byPath = /* @__PURE__ */ new Map();
+  for (const row of table) {
+    if (!row || typeof row.path !== "string" || row.path === "") {
+      throw new RouteGuardError("table-invalid", "every row needs a non-empty path");
+    }
+    const methods = Array.isArray(row.methods) ? row.methods.map((m) => String(m).toUpperCase()) : [];
+    if (methods.length === 0) {
+      throw new RouteGuardError("table-invalid", `${row.path}: methods list is empty`);
+    }
+    if (byPath.has(row.path)) {
+      throw new RouteGuardError("table-invalid", `${row.path}: duplicate table row`);
+    }
+    byPath.set(row.path, {
+      path: row.path,
+      methods,
+      sensitivity: row.sensitivity,
+      capability: row.capability,
+      bodyLimit: row.bodyLimit,
+      sessionBinding: row.sessionBinding,
+      justification: row.justification,
+      plugin: row.plugin ?? plugin
+    });
+  }
+  return byPath;
+}
+function normalizeSpec(spec) {
+  if (!spec || typeof spec.path !== "string" || spec.path === "") {
+    throw new RouteGuardError("route-spec-invalid", "every spec needs a non-empty path");
+  }
+  const methods = /* @__PURE__ */ new Set();
+  if (Array.isArray(spec.methods)) {
+    for (const m of spec.methods) methods.add(String(m).toUpperCase());
+  }
+  if (spec.method !== void 0) methods.add(String(spec.method).toUpperCase());
+  if (methods.size === 0) {
+    throw new RouteGuardError("route-spec-invalid", `${spec.path}: declare method or methods`);
+  }
+  if (typeof spec.handler !== "function") {
+    throw new RouteGuardError("route-spec-invalid", `${spec.path}: handler must be a function`);
+  }
+  return { ...spec, methods: [...methods] };
+}
+function createGuard({ table, plugin } = {}) {
+  const byPath = indexTable(table ?? [], plugin);
+  const records = [];
+  function registerRoutes3(ctx, specs) {
+    const conn = ctx.get("connection");
+    if (!conn) throw new RouteGuardError("no-connection", "no connection service");
+    const normalized = specs.map(normalizeSpec);
+    const wanted = /* @__PURE__ */ new Map();
+    for (const spec of normalized) {
+      const row = byPath.get(spec.path);
+      for (const method of spec.methods) {
+        const key = `${method} ${spec.path}`;
+        if (!row) {
+          throw new RouteGuardError("route-not-listed", `${method} ${spec.path} is not in the route table`);
+        }
+        if (!row.methods.includes(method)) {
+          throw new RouteGuardError("route-not-listed", `${method} ${spec.path}: method not covered by the table row`);
+        }
+        if (wanted.has(key)) {
+          throw new RouteGuardError("route-duplicate", `${method} ${spec.path} declared twice`);
+        }
+        wanted.set(key, spec);
+      }
+      for (const field2 of ["sensitivity", "capability", "sessionBinding"]) {
+        if (spec[field2] !== void 0 && row[field2] !== spec[field2]) {
+          throw new RouteGuardError("route-drift", `${spec.path}: ${field2} declares "${spec[field2]}" but the table row has "${row[field2]}"`);
+        }
+      }
+    }
+    for (const row of byPath.values()) {
+      for (const method of row.methods) {
+        if (!wanted.has(`${method} ${row.path}`)) {
+          throw new RouteGuardError("route-stale", `${method} ${row.path}: table row has no matching route spec`);
+        }
+      }
+    }
+    const disposers = [];
+    for (const spec of normalized) {
+      const row = byPath.get(spec.path);
+      const route = Object.freeze({
+        path: spec.path,
+        methods: Object.freeze([...spec.methods]),
+        sensitivity: row.sensitivity,
+        capability: row.capability,
+        bodyLimit: spec.bodyLimit ?? row.bodyLimit,
+        sessionBinding: row.sessionBinding,
+        justification: row.justification,
+        plugin: row.plugin
+      });
+      records.push(route);
+      const handler = async (req, res) => {
+        const rejection = conn.requestRejection?.(req);
+        if (rejection !== void 0) {
+          res.statusCode = rejection;
+          res.end();
+          return;
+        }
+        if (!route.methods.includes(String(req.method ?? "").toUpperCase())) {
+          res.setHeader("allow", route.methods.join(", "));
+          sendJson(res, 405, { ok: false, reason: "method-not-allowed" });
+          return;
+        }
+        try {
+          await spec.handler(req, res, route);
+        } catch (error) {
+          const reason = error instanceof RouteGuardError ? error.reason : "failed";
+          sendJson(res, 500, { ok: false, reason });
+        }
+      };
+      const register = () => ctx.webServer.register({ kind: ROUTE_KIND, path: spec.path, handler });
+      if (typeof ctx.effect === "function") {
+        disposers.push(ctx.effect(register, `route-guard: ${spec.path}`));
+      } else {
+        disposers.push(register());
+      }
+    }
+    return disposers;
+  }
+  function inventory() {
+    return Object.freeze([...records]);
+  }
+  function lookup(path) {
+    return records.find((r) => r.path === path);
+  }
+  return { registerRoutes: registerRoutes3, inventory, lookup };
+}
+function registerRoutes(ctx, specs, { table, plugin } = {}) {
+  return createGuard({ table, plugin }).registerRoutes(ctx, specs);
+}
+
+// src/host/route-table.js
+var PLUGIN = "dsh-nano-shared-workspace";
+var ROUTE_TABLE = [
+  {
+    "plugin": "dsh-nano-shared-workspace",
+    "path": "/nano-shared-workspace/settings",
+    "methods": [
+      "GET"
+    ],
+    "sensitivity": "L0",
+    "capability": "credential:read",
+    "bodyLimit": 0,
+    "sessionBinding": false,
+    "justification": "dsh-nano-shared-workspace/src/host/routes.js:123 \u2014 returns masked identity + deployment config (endpoint/bucket/region), secret masked by mask(); read-only, no plaintext secret."
+  },
+  {
+    "plugin": "dsh-nano-shared-workspace",
+    "path": "/nano-shared-workspace/settings/test",
+    "methods": [
+      "POST"
+    ],
+    "sensitivity": "L2",
+    "capability": "credential:probe",
+    "bodyLimit": 65536,
+    "sessionBinding": false,
+    "justification": "dsh-nano-shared-workspace/src/host/routes.js:130 \u2014 real signed S3 LIST probe using submitted/stored credentials against the configured endpoint; exercises secrets + outbound net."
+  },
+  {
+    "plugin": "dsh-nano-shared-workspace",
+    "path": "/nano-shared-workspace/settings/update",
+    "methods": [
+      "PUT"
+    ],
+    "sensitivity": "L2",
+    "capability": "credential:write",
+    "bodyLimit": 65536,
+    "sessionBinding": false,
+    "justification": "dsh-nano-shared-workspace/src/host/routes.js:154 \u2014 writes identity {username,token,accessKey} to the host credentials store (DSH_NSW_IDENTITY/USERNAME refs); page-callable credential write."
+  },
+  {
+    "plugin": "dsh-nano-shared-workspace",
+    "path": "/nano-shared-workspace/settings/clear",
+    "methods": [
+      "POST"
+    ],
+    "sensitivity": "L2",
+    "capability": "credential:write",
+    "bodyLimit": 65536,
+    "sessionBinding": false,
+    "justification": "dsh-nano-shared-workspace/src/host/routes.js:173 \u2014 deletes the stored identity from the credentials store and drops the settings cache; credential mutation."
+  },
+  {
+    "plugin": "dsh-nano-shared-workspace",
+    "path": "/nano-shared-workspace/status",
+    "methods": [
+      "GET"
+    ],
+    "sensitivity": "L0",
+    "capability": "read:host",
+    "bodyLimit": 0,
+    "sessionBinding": false,
+    "justification": "dsh-nano-shared-workspace/src/host/routes.js:181 \u2014 local sync/status probe (registered identity presence + counters); read-only, no secret plaintext."
+  },
+  {
+    "plugin": "dsh-nano-shared-workspace",
+    "path": "/nano-shared-workspace/workspaces",
+    "methods": [
+      "GET"
+    ],
+    "sensitivity": "L0",
+    "capability": "s3:read",
+    "bodyLimit": 0,
+    "sessionBinding": false,
+    "justification": "dsh-nano-shared-workspace/src/host/routes.js:194 \u2014 lists workspace markers the member belongs to; read-only S3 marker enumeration, no secret, remote-cross boundary is the data side not the route."
+  },
+  {
+    "plugin": "dsh-nano-shared-workspace",
+    "path": "/nano-shared-workspace/workspaces/create",
+    "methods": [
+      "POST"
+    ],
+    "sensitivity": "L2",
+    "capability": "s3:write",
+    "bodyLimit": 65536,
+    "sessionBinding": false,
+    "justification": "dsh-nano-shared-workspace/src/host/routes.js:210 \u2014 PUTs a new workspace marker to S3 and registers the local replica; signed write + member.localPath handling."
+  },
+  {
+    "plugin": "dsh-nano-shared-workspace",
+    "path": "/nano-shared-workspace/workspaces/join",
+    "methods": [
+      "POST"
+    ],
+    "sensitivity": "L2",
+    "capability": "write:host",
+    "bodyLimit": 65536,
+    "sessionBinding": false,
+    "justification": "dsh-nano-shared-workspace/src/host/routes.js:224 \u2014 accepts a caller-supplied localPath and materializes the remote workspace into it (P0 workspaceId/localPath traversal + arbitrary-fs-write findings); host fs write driven by remote data."
+  },
+  {
+    "plugin": "dsh-nano-shared-workspace",
+    "path": "/nano-shared-workspace/sync",
+    "methods": [
+      "POST"
+    ],
+    "sensitivity": "L2",
+    "capability": "s3:write",
+    "bodyLimit": 65536,
+    "sessionBinding": false,
+    "justification": "dsh-nano-shared-workspace/src/host/routes.js:238 \u2014 triggers a signed S3 sync cycle (pull + push) using stored identity; outbound net + remote object writes."
+  },
+  {
+    "plugin": "dsh-nano-shared-workspace",
+    "path": "/nano-shared-workspace/tree/pull",
+    "methods": [
+      "POST"
+    ],
+    "sensitivity": "L2",
+    "capability": "write:host",
+    "bodyLimit": 65536,
+    "sessionBinding": false,
+    "justification": "dsh-nano-shared-workspace/src/host/routes.js:263 \u2014 writes the remote file tree (incl. .git/*) into member.localPath on the host (finding remote-member-localPath-arbitrary-fs-write); host fs write from remote data."
+  },
+  {
+    "plugin": "dsh-nano-shared-workspace",
+    "path": "/nano-shared-workspace/tree/push",
+    "methods": [
+      "POST"
+    ],
+    "sensitivity": "L2",
+    "capability": "s3:write",
+    "bodyLimit": 65536,
+    "sessionBinding": false,
+    "justification": "dsh-nano-shared-workspace/src/host/routes.js:278 \u2014 reads the local replica tree and PUTs generations to S3; host fs read + signed outbound write."
+  },
+  {
+    "plugin": "dsh-nano-shared-workspace",
+    "path": "/nano-shared-workspace/sessions/bind",
+    "methods": [
+      "POST"
+    ],
+    "sensitivity": "L2",
+    "capability": "write:host",
+    "bodyLimit": 65536,
+    "sessionBinding": true,
+    "justification": "dsh-nano-shared-workspace/src/host/routes.js:296 \u2014 binds a session to a workspace/localPath and writes binding state; cross-session host write."
+  },
+  {
+    "plugin": "dsh-nano-shared-workspace",
+    "path": "/nano-shared-workspace/sessions/claim",
+    "methods": [
+      "POST"
+    ],
+    "sensitivity": "L2",
+    "capability": "s3:write",
+    "bodyLimit": 65536,
+    "sessionBinding": true,
+    "justification": "dsh-nano-shared-workspace/src/host/routes.js:310 \u2014 acquireClaim writes session meta to S3 (read-modify-write, no CAS = P0 race); signed remote write + session takeover surface."
+  },
+  {
+    "plugin": "dsh-nano-shared-workspace",
+    "path": "/nano-shared-workspace/sessions/heartbeat",
+    "methods": [
+      "POST"
+    ],
+    "sensitivity": "L2",
+    "capability": "s3:write",
+    "bodyLimit": 65536,
+    "sessionBinding": true,
+    "justification": "dsh-nano-shared-workspace/src/host/routes.js:333 \u2014 renews the claim lease + bumps heartbeatRev on the remote session object; signed S3 write."
+  },
+  {
+    "plugin": "dsh-nano-shared-workspace",
+    "path": "/nano-shared-workspace/sessions/lease",
+    "methods": [
+      "POST"
+    ],
+    "sensitivity": "L2",
+    "capability": "s3:write",
+    "bodyLimit": 65536,
+    "sessionBinding": true,
+    "justification": "dsh-nano-shared-workspace/src/host/routes.js:357 \u2014 renewClaim mutates the remote lease/expiresAt for a session; signed S3 write affecting other members' view."
+  },
+  {
+    "plugin": "dsh-nano-shared-workspace",
+    "path": "/nano-shared-workspace/sessions",
+    "methods": [
+      "GET"
+    ],
+    "sensitivity": "L0",
+    "capability": "s3:read",
+    "bodyLimit": 0,
+    "sessionBinding": false,
+    "justification": "dsh-nano-shared-workspace/src/host/routes.js:375 \u2014 lists remote session records for the member's workspaces; read-only enumeration, no secret plaintext."
+  },
+  {
+    "plugin": "dsh-nano-shared-workspace",
+    "path": "/nano-shared-workspace/mkdir",
+    "methods": [
+      "POST"
+    ],
+    "sensitivity": "L2",
+    "capability": "write:host",
+    "bodyLimit": 65536,
+    "sessionBinding": false,
+    "justification": "dsh-nano-shared-workspace/src/host/routes.js:388 \u2014 creates a directory at any writable absolute host path (finding ls-mkdir-any-absolute-path, accepted); host-level write."
+  },
+  {
+    "plugin": "dsh-nano-shared-workspace",
+    "path": "/nano-shared-workspace/ls",
+    "methods": [
+      "POST"
+    ],
+    "sensitivity": "L2",
+    "capability": "read:host",
+    "bodyLimit": 65536,
+    "sessionBinding": false,
+    "justification": "dsh-nano-shared-workspace/src/host/routes.js:406 \u2014 lists directory entries for any absolute host path (same finding, accepted); host-level read/enumeration."
+  },
+  {
+    "plugin": "dsh-nano-shared-workspace",
+    "path": "/nano-shared-workspace/transcript",
+    "methods": [
+      "POST"
+    ],
+    "sensitivity": "L2",
+    "capability": "s3:read",
+    "bodyLimit": 65536,
+    "sessionBinding": true,
+    "justification": "dsh-nano-shared-workspace/src/host/routes.js:433 \u2014 fetchTranscript reads a remote session body and can decompress/fetch it onto the host (remote meta unbounded-fetch finding); remote object ingress + host write."
+  },
+  {
+    "plugin": "dsh-nano-shared-workspace",
+    "path": "/nano-shared-workspace/materialize",
+    "methods": [
+      "POST"
+    ],
+    "sensitivity": "L2",
+    "capability": "write:host",
+    "bodyLimit": 65536,
+    "sessionBinding": true,
+    "justification": "dsh-nano-shared-workspace/src/host/routes.js:447 \u2014 writes a remote session into the local session tree under a caller/sessionId-derived path (materialize-sessionId-path-traversal finding); host fs write from remote data."
+  }
+];
+
 // src/host/routes.js
 var PREFIX = "/nano-shared-workspace";
 function messageOf(error) {
   return error instanceof Error ? error.message : String(error);
 }
-function sendJson(res, status, body) {
+function sendJson2(res, status, body) {
   const payload = JSON.stringify(body);
   res.statusCode = status;
   res.setHeader("content-type", "application/json; charset=utf-8");
@@ -1384,34 +1780,19 @@ function createRoutes(ctx, config) {
     }
   };
 }
-function registerRoutes(ctx, routes) {
-  const connection = () => ctx.get("connection");
-  const disposers = [];
-  for (const [suffix, route] of Object.entries(routes)) {
-    disposers.push(ctx.webServer.register({
-      kind: "exact",
-      path: `${PREFIX}${suffix}`,
-      handler: async (req, res) => {
-        const rejection = connection()?.requestRejection(req);
-        if (rejection !== void 0) {
-          res.statusCode = rejection;
-          res.end();
-          return;
-        }
-        if (req.method !== route.method) {
-          res.setHeader("allow", route.method);
-          sendJson(res, 405, { error: `method ${req.method} is not allowed` });
-          return;
-        }
-        try {
-          sendJson(res, 200, await route.run(req));
-        } catch (error) {
-          sendJson(res, 400, { error: messageOf(error) });
-        }
+function registerRoutes2(ctx, routes) {
+  const specs = Object.entries(routes).map(([suffix, route]) => ({
+    path: `${PREFIX}${suffix}`,
+    methods: [route.method],
+    handler: async (req, res) => {
+      try {
+        sendJson2(res, 200, await route.run(req));
+      } catch (error) {
+        sendJson2(res, 400, { error: messageOf(error) });
       }
-    }));
-  }
-  return disposers;
+    }
+  }));
+  return registerRoutes(ctx, specs, { table: ROUTE_TABLE, plugin: PLUGIN });
 }
 function startBackgroundSync(ctx, config) {
   const review = ensurePerfReviewHost().hostJoin("nano-shared-workspace", {
@@ -1487,7 +1868,7 @@ function apply(ctx, raw) {
   const config = resolved.value;
   const routes = createRoutes(ctx, config);
   ctx.effect(() => {
-    const disposers = registerRoutes(ctx, routes);
+    const disposers = registerRoutes2(ctx, routes);
     const stopSync = startBackgroundSync(ctx, config);
     return () => {
       stopSync();

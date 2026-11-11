@@ -75,3 +75,7 @@ lab/out/
 .anote
 .output
 .temp
+
+# 开发工作树 dev worktree
+.worktree/
+

@@ -3,6 +3,8 @@
 import { readFileSync } from 'node:fs'
 import { ensurePerfReviewHost, LIB_VERSION } from './lib/perf-review-host.js'
 import { createSyncEngine } from './lib/s3-sync-host.js'
+import { registerRoutes } from './lib/route-guard.js'
+import { ROUTE_TABLE, PLUGIN } from './lib/route-table.js'
 
 export const name = 'nano-notepad'
 export const inject = ['webServer', 'connection', 'subprocess']
@@ -70,7 +72,9 @@ const MP_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKi
 const MAX_READ_BYTES = 2 * 1024 * 1024
 const MAX_SAVE_BYTES = 8 * 1024 * 1024
 /* Images may be up to 20 MB; base64 expands them by ~4/3, so the S3 proxy
-   needs a larger envelope than the native save dialog. */
+   needs a larger envelope than the native save dialog. Routes now read their
+   cap from the baked route table (route.bodyLimit); this constant stays the
+   scanner's code truth for the S3 rows (scripts/route-scan.mjs). */
 const MAX_S3_BODY_BYTES = 32 * 1024 * 1024
 const DIALOG_TIMEOUT_MS = 600000
 const MAX_NAME_BYTES = 512
@@ -231,94 +235,81 @@ async function readMarkdown(filePath) {
 
 /** @param {import('@deepseek-ai/cordis').Context} ctx */
 export function apply(ctx) {
-  ctx.effect(() => ctx.webServer.register({
-    kind: 'exact',
-    path: READ_ROUTE,
-    handler: async (req, res) => {
-      const rejection = ctx.get('connection')?.requestRejection(req)
-      if (rejection !== undefined) { res.statusCode = rejection; res.end(); return }
-      if (req.method !== 'POST') { res.setHeader('allow', 'POST'); sendJson(res, 405, { ok: false, reason: 'method' }); return }
-      try {
-        const body = await jsonBody(req)
-        // perf-review: time the read route's actual work (§6.7 hostSpan read).
-        const file = await review.hostSpan('read', () => readMarkdown(body.path))
-        sendJson(res, 200, { ok: true, ...file })
-      } catch (error) {
-        sendJson(res, 500, { ok: false, reason: 'failed', message: messageOf(error).slice(0, 200) })
-      }
-    },
-  }), 'nano-notepad: read markdown')
-  ctx.effect(() => ctx.webServer.register({
-    kind: 'exact',
-    path: SAVE_ROUTE,
-    handler: async (req, res) => {
-      // Every write-capable route sits behind the connection's request admission
-      // (Host/Origin fence + authenticated Peer); without it any web page or LAN
-      // client could drive the native save dialog (review-01 R1).
-      const rejection = ctx.get('connection')?.requestRejection(req)
-      if (rejection !== undefined) { res.statusCode = rejection; res.end(); return }
-      if (req.method !== 'POST') { res.setHeader('allow', 'POST'); sendJson(res, 405, { ok: false, reason: 'method' }); return }
-      const type = String(req.headers['content-type'] ?? '')
-      if (!type.toLowerCase().startsWith('application/json')) { sendJson(res, 415, { ok: false, reason: 'content-type' }); return }
-      try {
-        const body = await jsonBody(req)
-        // perf-review: time the save route's actual work (§6.7 hostSpan save).
-        const result = await review.hostSpan('save', () => nativeSave(ctx, { name: body.name, content: body.content, dir: body.dir }))
-        sendJson(res, result.ok ? 200 : result.reason === 'cancelled' ? 200 : 500, result)
-      } catch (error) {
-        sendJson(res, 500, { ok: false, reason: 'failed', message: messageOf(error).slice(0, 200) })
-      }
-    },
-  }), 'nano-notepad: save route')
+  /* Every route registers through dsh-host-route-guard (P1-05 / T-O-7): the
+     guard owns requestRejection (Host/Origin fence + authenticated Peer, so
+     no web page or LAN client can drive the native save dialog) and the
+     uniform 405. Handlers keep their exact response work; only registration
+     moved. `route.bodyLimit` carries the baked per-route byte cap. */
 
-  ctx.effect(() => ctx.webServer.register({
-    kind: 'exact',
-    path: MP_ROUTE,
-    handler: async (req, res) => {
-      const rejection = ctx.get('connection')?.requestRejection(req)
-      if (rejection !== undefined) { res.statusCode = rejection; res.end(); return }
-      if (req.method !== 'POST') { res.setHeader('allow', 'POST'); sendJson(res, 405, { ok: false, reason: 'method' }); return }
-      const type = String(req.headers['content-type'] ?? '')
-      if (!type.toLowerCase().startsWith('application/json')) { sendJson(res, 415, { ok: false, reason: 'content-type' }); return }
-      try {
-        const body = await jsonBody(req)
-        const result = await fetchMpArticle(body.url)
-        sendJson(res, result.ok ? 200 : 422, result)
-      } catch (error) {
-        sendJson(res, 500, { ok: false, reason: 'failed', message: messageOf(error).slice(0, 200) })
-      }
-    },
-  }), 'nano-notepad: fetch-mp route')
-
-  /* S3 sync: the host is a signed proxy — credentials never reach the browser.
-     All three routes sit behind connection.requestRejection (Host/Origin fence
-     + authenticated Peer), same as the save route. */
+  /* S3 sync: the host is a signed proxy — credentials never reach the browser. */
   const s3 = createSyncEngine()
-  const s3Route = (path, label, work) => ctx.effect(() => ctx.webServer.register({
-    kind: 'exact',
-    path,
-    handler: async (req, res) => {
-      const rejection = ctx.get('connection')?.requestRejection(req)
-      if (rejection !== undefined) { res.statusCode = rejection; res.end(); return }
-      if (req.method !== 'POST') { res.setHeader('allow', 'POST'); sendJson(res, 405, { ok: false, reason: 'method' }); return }
-      try {
-        const body = await jsonBody(req, MAX_S3_BODY_BYTES)
-        const result = await work(body)
-        /* A missing object is a legitimate `null` result — do not coerce it
-           into a truthy object, or the client tries to base64-decode it. */
-        sendJson(res, 200, result === undefined ? { ok: true } : result)
-      } catch (error) {
-        sendJson(res, 500, { ok: false, reason: 'failed', message: messageOf(error).slice(0, 200) })
-      }
-    },
-  }), label)
+  const s3Work = work => async (req, res, route) => {
+    try {
+      const body = await jsonBody(req, route.bodyLimit)
+      const result = await work(body)
+      /* A missing object is a legitimate `null` result — do not coerce it
+         into a truthy object, or the client tries to base64-decode it. */
+      sendJson(res, 200, result === undefined ? { ok: true } : result)
+    } catch (error) {
+      sendJson(res, 500, { ok: false, reason: 'failed', message: messageOf(error).slice(0, 200) })
+    }
+  }
 
-  s3Route(S3_STATUS_ROUTE, 'nano-notepad: s3 status', () => s3.status())
-  s3Route(S3_TEST_ROUTE, 'nano-notepad: s3 test', () => s3.test())
-  s3Route(S3_OBJECT_ROUTE, 'nano-notepad: s3 object', body => s3.object(body))
-  /* Multi-endpoint config + the guarded switch handshake. Secrets are
-     write-only: `list` returns hasSecret, never the key material. */
-  s3Route(S3_CONFIG_ROUTE, 'nano-notepad: s3 config', body => s3.config(body))
+  const SPECS = [
+    {
+      path: READ_ROUTE,
+      methods: ['POST'],
+      handler: async (req, res, route) => {
+        try {
+          const body = await jsonBody(req, route.bodyLimit)
+          // perf-review: time the read route's actual work (§6.7 hostSpan read).
+          const file = await review.hostSpan('read', () => readMarkdown(body.path))
+          sendJson(res, 200, { ok: true, ...file })
+        } catch (error) {
+          sendJson(res, 500, { ok: false, reason: 'failed', message: messageOf(error).slice(0, 200) })
+        }
+      },
+    },
+    {
+      path: SAVE_ROUTE,
+      methods: ['POST'],
+      handler: async (req, res, route) => {
+        const type = String(req.headers['content-type'] ?? '')
+        if (!type.toLowerCase().startsWith('application/json')) { sendJson(res, 415, { ok: false, reason: 'content-type' }); return }
+        try {
+          const body = await jsonBody(req, route.bodyLimit)
+          // perf-review: time the save route's actual work (§6.7 hostSpan save).
+          const result = await review.hostSpan('save', () => nativeSave(ctx, { name: body.name, content: body.content, dir: body.dir }))
+          sendJson(res, result.ok ? 200 : result.reason === 'cancelled' ? 200 : 500, result)
+        } catch (error) {
+          sendJson(res, 500, { ok: false, reason: 'failed', message: messageOf(error).slice(0, 200) })
+        }
+      },
+    },
+    {
+      path: MP_ROUTE,
+      methods: ['POST'],
+      handler: async (req, res, route) => {
+        const type = String(req.headers['content-type'] ?? '')
+        if (!type.toLowerCase().startsWith('application/json')) { sendJson(res, 415, { ok: false, reason: 'content-type' }); return }
+        try {
+          const body = await jsonBody(req, route.bodyLimit)
+          const result = await fetchMpArticle(body.url)
+          sendJson(res, result.ok ? 200 : 422, result)
+        } catch (error) {
+          sendJson(res, 500, { ok: false, reason: 'failed', message: messageOf(error).slice(0, 200) })
+        }
+      },
+    },
+    { path: S3_STATUS_ROUTE, methods: ['POST'], handler: s3Work(() => s3.status()) },
+    { path: S3_TEST_ROUTE, methods: ['POST'], handler: s3Work(() => s3.test()) },
+    { path: S3_OBJECT_ROUTE, methods: ['POST'], handler: s3Work(body => s3.object(body)) },
+    /* Multi-endpoint config + the guarded switch handshake. Secrets are
+       write-only: `list` returns hasSecret, never the key material. */
+    { path: S3_CONFIG_ROUTE, methods: ['POST'], handler: s3Work(body => s3.config(body)) },
+  ]
+
+  registerRoutes(ctx, SPECS, { table: ROUTE_TABLE, plugin: PLUGIN })
 }
 
 /* ---------- WeChat MP article fetch ---------- */

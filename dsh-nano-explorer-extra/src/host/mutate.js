@@ -65,9 +65,15 @@ async function assertInside(fs, workspaceRoot, path, signal) {
     || /\/\.git(?:\/|$)/u.test(path)) {
     throw new Error('writes inside .git are refused')
   }
-  const rootTarget = await fs.resolve(workspaceRoot, { signal }).catch(() => undefined)
-  const pathTarget = await fs.resolve(path, { signal }).catch(() => undefined)
-  if (rootTarget === undefined || pathTarget === undefined) return
+  /* Fail CLOSED (review 7788 W1): fs.resolve() returns the realpath of the
+   * deepest existing ancestor + the missing tail, so it never throws for a
+   * merely-absent leaf — a throw is a real failure (perm, hop-limit, abort).
+   * Treating it as "can't resolve, allow" would let a write slip past the
+   * real-root fence. A resolve error must REFUSE the write, not skip it. */
+  const rootTarget = await fs.resolve(workspaceRoot, { signal })
+    .catch(error => { throw new Error(`cannot verify workspace root — write refused (${error.message})`) })
+  const pathTarget = await fs.resolve(path, { signal })
+    .catch(error => { throw new Error(`cannot verify target path — write refused (${error.message})`) })
   const realRoot = fs.processPath(rootTarget).replace(/\/+$/u, '')
   const realPath = fs.processPath(pathTarget)
   if (/\/\.git(?:\/|$)/u.test(realPath)) throw new Error('writes inside .git are refused')

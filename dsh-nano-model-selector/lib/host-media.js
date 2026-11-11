@@ -36,6 +36,23 @@ export const IMAGINE_PROMPT_FILE = 'imagine/.prompt.txt'
 export const IMAGINE_OUT_FILE = 'imagine/.out.txt'
 
 /**
+ * Staging-channel .gitignore (review 7788 F3): imagine/ lives inside a USER
+ * workspace — a repo-anchored `.gitignore` at the workspace root does not
+ * cover a nested imagine/, so the grok template's `imagine/.grok` credential
+ * copy and the `.prompt.txt`/`.out.txt` channel files would be swept by
+ * `git add --all` into a repo. Written (once) at stage time so the secret +
+ * channel files are never commit-eligible; generated images stay visible.
+ */
+export const IMAGINE_GITIGNORE = 'imagine/.gitignore'
+const IMAGINE_GITIGNORE_BODY = [
+  '# dsh-nano-model-selector — imagine staging channel (do not commit secrets)',
+  '.grok/',
+  '.prompt.txt',
+  '.out.txt',
+  '',
+].join('\n')
+
+/**
  * Single source for the `{out}` allowlist, shared by the JS validator and
  * the `grep -Eq` runtime gate in the command template (ERE in both).
  */
@@ -218,6 +235,13 @@ export function imagineRun(engineKey, { prompt, out, cwd } = {}, deps = {}) {
   const promptFile = join(cwd, IMAGINE_PROMPT_FILE)
   const outFile = join(cwd, IMAGINE_OUT_FILE)
   mkdirSync(join(promptFile, '..'), { recursive: true })
+  /* Fence the staging channel from `git add --all` (review 7788 F3): drop a
+   * .gitignore pinning the credential copy + prompt/out files out of any
+   * repo the workspace may live in. Best-effort — a failed write never
+   * blocks a generation, but when it succeeds the secrets stay out of git. */
+  try {
+    writeFileSync(join(cwd, IMAGINE_GITIGNORE), IMAGINE_GITIGNORE_BODY, 'utf8')
+  } catch { /* non-fatal: a read-only workspace still generates */ }
   writeFileSync(promptFile, prompt, 'utf8')
   writeFileSync(outFile, `${out}\n`, 'utf8')
   return { ok: true, engine: engine.key, binary, command: engine.command(binary), files: { prompt: promptFile, out: outFile } }

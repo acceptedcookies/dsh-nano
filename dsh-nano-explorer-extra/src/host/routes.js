@@ -81,6 +81,11 @@ async function scopeOf(ctx, sessionId) {
   const ownRoot = ctx.get('sandboxPolicy')?.workspaceRoot
   if (typeof ownRoot === 'string' && ownRoot !== '' && root !== ownRoot) {
     console.warn(`[nxe] scopeOf cross-session: session "${sessionId}" adopted workspace "${root}" (own "${ownRoot}")`)
+  } else if (ownRoot === undefined) {
+    /* W5: no host own-root to compare against — adoption is invisible without
+     * an audit line. Info (not warn): we can't call it cross-session, but a
+     * session's workspace should never be adopted in silence. */
+    console.info(`[nxe] scopeOf: session "${sessionId}" adopted workspace "${root}" (no host own-root baseline)`)
   }
   return { session: live, root, policy }
 }

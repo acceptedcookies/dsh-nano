@@ -980,14 +980,20 @@ function validateName(name2) {
 function sameEntryIgnoringCase(source, destination) {
   return source !== destination && source.toLowerCase() === destination.toLowerCase();
 }
+function foldRoot(root) {
+  return root.replace(/\\/gu, "/").replace(/\/+$/u, "") || "/";
+}
 async function assertInside(fs, workspaceRoot, path, signal) {
   if (!isLexicallyInside(workspaceRoot, path)) throw new Error(`"${path}" is outside the workspace`);
   if (isLexicallyInside(`${workspaceRoot.replace(/\/+$/u, "")}/.git`, path) || /\/\.git(?:\/|$)/u.test(path)) {
     throw new Error("writes inside .git are refused");
   }
-  const rootTarget = await fs.resolve(workspaceRoot, { signal }).catch(() => void 0);
-  const pathTarget = await fs.resolve(path, { signal }).catch(() => void 0);
-  if (rootTarget === void 0 || pathTarget === void 0) return;
+  const rootTarget = await fs.resolve(workspaceRoot, { signal }).catch((error) => {
+    throw new Error(`cannot verify workspace root \u2014 write refused (${error.message})`);
+  });
+  const pathTarget = await fs.resolve(path, { signal }).catch((error) => {
+    throw new Error(`cannot verify target path \u2014 write refused (${error.message})`);
+  });
   const realRoot = fs.processPath(rootTarget).replace(/\/+$/u, "");
   const realPath = fs.processPath(pathTarget);
   if (/\/\.git(?:\/|$)/u.test(realPath)) throw new Error("writes inside .git are refused");
@@ -999,6 +1005,7 @@ async function createFile(fs, request, signal) {
   const parent = absoluteOf(workspaceRoot, directory);
   await assertInside(fs, workspaceRoot, parent, signal);
   const path = `${parent}/${finalName}`;
+  await assertInside(fs, workspaceRoot, path, signal);
   const target = await fs.resolve(path, { signal });
   try {
     await fs.writeText(target, "", { kind: "createIfAbsent" }, signal, sandboxPolicy);
@@ -1014,6 +1021,7 @@ async function rename(fs, ctx, config, request, signal) {
   await assertInside(fs, workspaceRoot, source, signal);
   const parent = source.slice(0, source.lastIndexOf("/")) || "/";
   const destination = `${parent}/${finalName}`;
+  await assertInside(fs, workspaceRoot, destination, signal);
   if (source === destination) return { path: source };
   const existing = await fs.lstat(destination, {}, signal).catch(() => void 0);
   if (existing !== void 0 && !sameEntryIgnoringCase(source, destination)) {
@@ -1068,6 +1076,13 @@ async function createFolder(fs, request, runExternal2) {
     void 0
   );
   const path = `${parent}/${finalName}`;
+  await assertInside(
+    fs,
+    workspaceRoot,
+    path,
+    /* signal */
+    void 0
+  );
   const existing = await fs.lstat(path).catch(() => void 0);
   if (existing !== void 0) throw new Error(`"${finalName}" already exists in this folder`);
   await runExternal2({ session, sandboxPolicy, cwd: parent, argv: ["mkdir", "--", path], args: ["mkdir"] });
@@ -1125,12 +1140,17 @@ async function moveEntry(fs, ctx, config, request, signal) {
   await assertInside(fs, workspaceRoot, destinationDir, signal);
   const resolvedDirTarget = await fs.resolve(destinationDir, { signal });
   const resolvedDir = fs.processPath(resolvedDirTarget).replace(/\/+$/u, "");
-  if (!isLexicallyInside(workspaceRoot, resolvedDir)) throw new Error(`"${directory}" resolves outside the workspace`);
+  const realRootTarget = await fs.resolve(workspaceRoot, { signal }).catch(() => void 0);
+  const realRoot = realRootTarget === void 0 ? foldRoot(workspaceRoot) : fs.processPath(realRootTarget).replace(/\/+$/u, "");
+  if (/\/\.git(?:\/|$)/u.test(resolvedDir)) throw new Error("writes inside .git are refused");
+  if (!isLexicallyInside(realRoot, resolvedDir)) throw new Error(`"${directory}" resolves outside the workspace`);
   const dirInfo = await fs.stat(resolvedDirTarget, {}, signal).catch(() => void 0);
   if (dirInfo === void 0 || dirInfo === null || dirInfo.type !== "directory") throw new Error(`"${directory}" is not a folder`);
   if (resolvedDir === sourceParent) return { path: source };
   if (isLexicallyInside(source, resolvedDir)) throw new Error("a folder cannot be moved into itself");
   const destination = `${resolvedDir}/${name2}`;
+  if (/\/\.git(?:\/|$)/u.test(destination)) throw new Error("writes inside .git are refused");
+  if (!isLexicallyInside(realRoot, destination)) throw new Error(`"${name2}" would move outside the workspace`);
   const existing = await fs.lstat(destination, {}, signal).catch(() => void 0);
   if (existing !== void 0) throw new Error(`"${name2}" already exists in that folder`);
   await runExternal2({
@@ -1224,6 +1244,8 @@ async function scopeOf(ctx, sessionId) {
   const ownRoot = ctx.get("sandboxPolicy")?.workspaceRoot;
   if (typeof ownRoot === "string" && ownRoot !== "" && root !== ownRoot) {
     console.warn(`[nxe] scopeOf cross-session: session "${sessionId}" adopted workspace "${root}" (own "${ownRoot}")`);
+  } else if (ownRoot === void 0) {
+    console.info(`[nxe] scopeOf: session "${sessionId}" adopted workspace "${root}" (no host own-root baseline)`);
   }
   return { session: live, root, policy };
 }

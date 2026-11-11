@@ -65,13 +65,13 @@ PH1 batch0-baseline ──▶ PH2 batch1-host-data ──▶ PH3 batch2-content-
 - [x] `P3-08` — mp 正向渲染快照回归 — pass `1ed3827` · fixtures/mp-article.html · 双 renderer 快照一致
 
 ### PH4 `batch3-p2-supply`（门禁 B4；P2 9 + supply 2）
-- [ ] `P4-01` — mutate realpath 围栏（mutate.js assertInside 词法→realpath）
-- [ ] `P4-02` — `.git` 拒绝（mutate + git add 前置）
-- [ ] `P4-03` — scopeOf 跨会话日志
-- [ ] `P4-04` — grok-creds `.gitignore`+SKIP 阻止外泄
-- [ ] `P4-05` — `accepted-risks.json` 成文（4 加固+5 接受）
-- [ ] `P4-06` — esbuild npx 回退移除
-- [ ] `P4-07` — release CI + clean-lib + attestation
+- [x] `P4-01` — mutate realpath 围栏（mutate.js assertInside 词法→realpath） — pass `10e2f79` · async fs.resolve realRoot+realPath · 5 mutators
+- [x] `P4-02` — `.git` 拒绝（mutate + git add 前置） — pass `10e2f79` · assertInside .git segment + commitAll cached-names guard
+- [x] `P4-03` — scopeOf 跨会话日志 — pass `10e2f79` · warn on root≠workspaceRoot · 不阻断
+- [x] `P4-04` — grok-creds `.gitignore`+SKIP 阻止外泄 — pass `10e2f79` · .gitignore+=imagine/.grok/ (nsw SKIP 已 P2-05)
+- [x] `P4-05` — `accepted-risks.json` 成文（4 加固+5 接受） — pass `10e2f79` · 9条 optionalHardening/monitoring/signoff/reviewDate
+- [x] `P4-06` — esbuild npx 回退移除 — pass `10e2f79` · 4 build-client 无 npx · 缺 esbuild exit1+npm ci
+- [x] `P4-07` — release CI + clean-lib + attestation — pass `10e2f79` · v* tag workflow · npm ci→build→diff lib→pack→attest
 
 ### PH5 `release-closure`（门禁 B5）
 - [ ] `P5-01` — 版本 bump（四插件→0.2.0、三包 0.1.0）+ files 一致
@@ -97,8 +97,8 @@ PH1 batch0-baseline ──▶ PH2 batch1-host-data ──▶ PH3 batch2-content-
 
 ## 5. 当前状态与交接
 
-- **当前节点**：PH2 `batch1` 全收口 `68cc0e8`（P0 remote-cross 7 全拒，security-regression 6/6）；PH3 `batch2` 全收口 `1ed3827`（P0 remote→page 6 全拒，dual renderer+zero-placeholder imagine）
-- **下一动作**：PH4 `batch3-p2-supply`（P4-01..P4-07：harden 4 + accept 5）→ B4 门禁 → PH5 release
+- **当前节点**：PH2 `68cc0e8` · PH3 `1ed3827` · PH4 `10e2f79` 全收口（P0 13/13 + P2 加固4+接受5 + supply 2）；explorer mutate-fence 5/5
+- **下一动作**：PH5 `release-closure`（P5-02 tarball 隔离安装 → P5-03 dsh-dev 全量 smoke）→ B5 门禁 → REVIEW ≥3 → closure
 - **当前阻塞**：无
 - **待 owner**：无（`foundation/` 不存在，已以 AGENTS.md 为准）
 - **最终交接**：closure + 发布 checklist（`v*` tag 由业主推送触发 release CI）

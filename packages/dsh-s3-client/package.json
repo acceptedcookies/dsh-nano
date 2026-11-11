@@ -1,0 +1,23 @@
+{
+  "name": "dsh-s3-client",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Host-side S3 client shared by dsh-nano plugins: SigV4 signing, token-bucket rate limiting, and a JSON usage ledger. Not a plugin; consumed by host index.js or bundled into lib/host.js.",
+  "exports": {
+    "./client": "./src/client.js",
+    "./sign": "./src/sign.js",
+    "./rate": "./src/rate.js",
+    "./ledger": "./src/ledger.js"
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

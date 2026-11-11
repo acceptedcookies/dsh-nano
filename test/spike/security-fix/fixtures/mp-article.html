@@ -1,12 +1,6 @@
 <!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>mp-article fixture (P3-08 synthetic)</title></head><body>
 <div id="js_content" class="rich_media_content " style="visibility: hidden">
-<!-- B3-T08 positive fixture: synthetic WeChat-article fragment inside the
-     js_content slice, exercising every transform the renderers own:
-     data-src promotion, <svg><foreignObject>, table, pre/code, allowed
-     styles, and the visibility:hidden lazy-reveal sweep. Every element and
-     attribute here is inside the allowlist so old and new sanitizers can be
-     compared byte-for-byte (排版零回退). -->
 <section style="color: #3f3f3f; font-size: 16px; line-height: 1.75">
   <h1 style="font-size: 22px; font-weight: bold; text-align: center">示例标题 Sample Title</h1>
   <p>第一段正文，含<a href="https://mp.weixin.qq.com/s/abc123def" title="站内">站内链接</a>与<strong>加粗</strong>、<em>斜体</em>、<del>删除线</del>。</p>
@@ -23,6 +17,5 @@ console.log(&quot;done&quot;, x)</code></pre>
   <hr>
   <ul><li>无序项一</li><li>无序项二</li></ul>
   <ol><li>有序项一</li></ol>
-  <!-- tail-marker: visibility:hidden inside a comment still gets swept -->
 </section>
 </div></body></html>

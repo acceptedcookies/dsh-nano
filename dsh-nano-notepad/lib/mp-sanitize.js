@@ -212,6 +212,7 @@ function sanitizeStyle(cssText, { mapDecl } = {}) {
     if (!name || name === "position") continue;
     if (!ALLOWED_STYLE_PROPS.has(name)) continue;
     const decoded = decodeEntities(value);
+    if (decoded.includes(";")) continue;
     const probe = decoded.replace(/[\x00-\x20\x7f]+/g, "");
     if (EVIL_STYLE_VALUE.test(probe) || /[<>]/.test(decoded)) continue;
     if (mapDecl) {
@@ -373,7 +374,7 @@ function sanitizeHtml(html) {
     if (tok === "<!--") {
       const close = input.indexOf("-->", start + 4);
       const end = close === -1 ? len : close + 3;
-      out += input.slice(pos, end);
+      out += input.slice(pos, start);
       pos = end;
       TAG_RE.lastIndex = end;
       continue;

@@ -199,8 +199,13 @@ test('sanitizeHtml keeps the allowlist and drops the rest', () => {
     sanitizeHtml('<p style="visibility:hidden;color:#fff">v</p>'),
     '<p style="color: #fff; position: static">v</p>',
   )
-  /* comments pass verbatim */
-  assert.equal(sanitizeHtml('<!-- note --><p>x</p>'), '<!-- note --><p>x</p>')
+  /* comments are dropped (review 3456 F1): `<!-->`/`--!>` also close a comment,
+   * so verbatim re-emit could smuggle an element out in a single-pass consumer */
+  assert.equal(sanitizeHtml('<!-- note --><p>x</p>'), '<p>x</p>')
+  /* `<!--` …`--!>`…`-->`: our scanner reads to the LAST `-->`, so the whole
+   * span drops — the smuggled <img> never reaches the output. */
+  assert.equal(sanitizeHtml('<!-- --!><img src=x onerror=mark(1)> -->'), '')
+  assert.equal(sanitizeHtml('<!--><img src=x onerror=mark(2)>-->'), '')
 })
 
 test('sanitizeHtml: drop elements take their subtree; unclosed swallows to EOF', () => {

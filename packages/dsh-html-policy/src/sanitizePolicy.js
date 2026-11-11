@@ -218,9 +218,14 @@ export function sanitizeHtml(html) {
       continue
     }
     if (tok === '<!--') {
+      /* Drop comments entirely (review 3456 F1): Chrome also terminates a
+       * comment on `<!-->` and `--!>`, so emitting one verbatim lets a
+       * smuggled `<img onerror>` escape the comment early and run in any
+       * single-pass consumer. Comments carry no rendered content — drop the
+       * whole span, copy the text before it, skip to the comment close. */
       const close = input.indexOf('-->', start + 4)
       const end = close === -1 ? len : close + 3
-      out += input.slice(pos, end) // comments keep verbatim (layout parity)
+      out += input.slice(pos, start) // text before the comment, verbatim
       pos = end
       TAG_RE.lastIndex = end
       continue

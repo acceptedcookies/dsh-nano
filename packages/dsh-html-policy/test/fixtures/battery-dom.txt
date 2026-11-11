@@ -55,6 +55,11 @@ const P = {
  'a-data':          '<a href="data:text/html,<title>A-DATA</title>">click a-data</a>',
  'video-ext':       '<video src="https://attacker.invalid/v.mp4" autoplay></video>',
  'input-isindex':   '<isindex action="javascript:mark(\'isindex\')">',
+ /* review 3456 F1: comments also close on `<!-->`/`--!>` in Chrome, so a
+  * smuggled <img onerror> escapes a verbatim comment in single-pass output */
+ 'comment-bang-close':   '<!-- --!><img src=x onerror="mark(\'comment-bang-close\')"> -->',
+ 'comment-open-close':   '<!--><img src=x onerror="mark(\'comment-open-close\')">-->',
+ 'comment-dash-close':   '<!---><img src=x onerror="mark(\'comment-dash-close\')"><!-->',
 };
 
 /* Faithful fetchMpArticle extraction path: mpContent slices js_content,

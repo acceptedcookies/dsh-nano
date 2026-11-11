@@ -248,6 +248,12 @@ export function sanitizeStyle(cssText, { mapDecl } = {}) {
     if (!name || name === 'position') continue
     if (!ALLOWED_STYLE_PROPS.has(name)) continue
     const decoded = decodeEntities(value)
+    /* A `;` inside the DECODED value is a smuggled declaration boundary —
+     * `&#59;` survives the styleDecls split as an "entity tail" then decodes
+     * to a real `;`, folding an arbitrary `name:value` (e.g.
+     * `position:fixed!important`) inside one allowlisted decl (review 3456
+     * F2). Any decl whose decoded value contains `;` is dropped. */
+    if (decoded.includes(';')) continue
     const probe = decoded.replace(/[\x00-\x20\x7f]+/g, '')
     if (EVIL_STYLE_VALUE.test(probe) || /[<>]/.test(decoded)) continue
     if (mapDecl) {

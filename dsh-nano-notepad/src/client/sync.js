@@ -13,6 +13,7 @@
  *  is pushed before a remote diff is applied, so neither side loses edits. */
 
 import { readSyncMeta, writeSyncMeta, applyRemoteFiles, putImageFromRemote, allImages, createNode, saveDraft, deleteNode } from './db.js'
+import { checkImage } from 'dsh-remote-data-schema/image-check.js'
 
 const MANIFEST_KEY = 'manifest.json'
 const STATUS_ROUTE = '/nano-notepad/s3/status'
@@ -21,6 +22,33 @@ const OBJECT_ROUTE = '/nano-notepad/s3/object'
 const CONFIG_ROUTE = '/nano-notepad/s3/config'
 const PUSH_DEBOUNCE_MS = 2000
 const MAX_CAS_RETRIES = 3
+
+/* P3-04/P3-05 consumption-point boundaries. The host already schema-checks
+   remote objects at /s3/object ingress; these re-checks keep the client
+   safe even when a payload bypasses that boundary (older bundle, direct
+   IDB seeding) — same charset the v1 schema enforces. */
+const FILE_ID_RE = /^[A-Za-z0-9_-]{1,128}$/
+const SHA256_RE = /^[0-9a-f]{64}$/
+
+/**
+ * Sanitize a manifest `files` entry before it becomes a node (P3-05): the
+ * id charset is enforced (it is also the S3 key segment), parentId /
+ * workspaceId degrade to null on a bad charset, and non-string name/
+ * updatedAt values drop to their defaults — nothing hostile reaches
+ * applyRemoteFiles or a data-* attribute downstream.
+ * Exported for the node test harness; pure, no browser surface.
+ */
+export function cleanRemoteFile(id, entry) {
+  if (!FILE_ID_RE.test(id) || id.includes('..') || entry === null || typeof entry !== 'object') return null
+  const clean = v => (typeof v === 'string' && FILE_ID_RE.test(v) ? v : null)
+  return {
+    id,
+    name: typeof entry.name === 'string' ? entry.name : 'untitled.md',
+    parentId: clean(entry.parentId),
+    workspaceId: clean(entry.workspaceId),
+    updatedAt: typeof entry.updatedAt === 'number' ? entry.updatedAt : undefined,
+  }
+}
 
 async function rpc(path, body) {
   const response = await fetch(path, {
@@ -193,13 +221,15 @@ export function createSync({ getDb, getNodes, getEnabled, getIntervalSec, onStat
       const localById = new Map(getNodes().filter(node => node.kind === 'file').map(node => [node.id, node]))
       const remotes = []
       for (const [id, entry] of Object.entries(data.files ?? {})) {
-        const local = localById.get(id)
+        const file = cleanRemoteFile(id, entry)
+        if (!file) continue
+        const local = localById.get(file.id)
         if (local && await sha256Hex(local.draft ?? '') === entry.sha256) continue
-        const got = await object({ op: 'get', key: `files/${id}.md` })
+        const got = await object({ op: 'get', key: `files/${file.id}.md` })
         if (!got) continue
         remotes.push({
-          id, name: entry.name, parentId: entry.parentId, workspaceId: entry.workspaceId,
-          draft: decode(got.bodyB64), updatedAt: entry.updatedAt,
+          id: file.id, name: file.name, parentId: file.parentId, workspaceId: file.workspaceId,
+          draft: decode(got.bodyB64), updatedAt: file.updatedAt,
         })
       }
 
@@ -207,12 +237,18 @@ export function createSync({ getDb, getNodes, getEnabled, getIntervalSec, onStat
       const have = new Set(images.map(image => image.sha256))
       let imageCount = 0
       for (const [sha, info] of Object.entries(data.images ?? {})) {
-        if (have.has(sha)) continue
+        if (!SHA256_RE.test(sha) || have.has(sha)) continue
         const got = await object({ op: 'get', key: `images/${sha}` })
         if (!got) continue
         try {
           const payload = JSON.parse(decode(got.bodyB64))
-          await putImageFromRemote(db, { ...payload, sha256: sha, byteLength: info.byteLength, createdAt: Date.now() })
+          /* P3-04: the payload itself must be a clean {mime, base64} before
+             it is stored — only validated mime reaches img src downstream. */
+          if (!checkImage(payload)) continue
+          await putImageFromRemote(db, {
+            mime: payload.mime, base64: payload.base64,
+            sha256: sha, byteLength: info?.byteLength, createdAt: Date.now(),
+          })
           imageCount += 1
         } catch { /* malformed remote image: skip, not fatal to text sync */ }
       }

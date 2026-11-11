@@ -1,0 +1,25 @@
+
+<!-- B3-T08 positive fixture: synthetic WeChat-article fragment inside the
+     js_content slice, exercising every transform the renderers own:
+     data-src promotion, <svg><foreignObject>, table, pre/code, allowed
+     styles, and the visibility: visible lazy-reveal sweep. Every element and
+     attribute here is inside the allowlist so old and new sanitizers can be
+     compared byte-for-byte (排版零回退). -->
+<section style="color: #3f3f3f; font-size: 16px; line-height: 1.75; position: static">
+  <h1 style="font-size: 22px; font-weight: bold; text-align: center; position: static">示例标题 Sample Title</h1>
+  <p>第一段正文，含<a href="https://mp.weixin.qq.com/s/abc123def" title="站内">站内链接</a>与<strong>加粗</strong>、<em>斜体</em>、<del>删除线</del>。</p>
+  <p style="text-indent: 2em; position: static">懒加载段落（visibility: visible 会被抹成 visible）。</p>
+  <blockquote><p>引用块：border、padding、margin 白名单样式。</p></blockquote>
+  <pre class="code-snippet__fix" style="font-family: Menlo, monospace; font-size: 14px; position: static"><code>const x = 1 &lt; 2 &amp;&amp; 3 &gt; 2
+console.log(&quot;done&quot;, x)</code></pre>
+  <table style="width: 100%; position: static"><thead><tr><th style="text-align: left; position: static">列A</th><th colspan="2" style="text-align: center; position: static">列BC</th></tr></thead><tbody><tr><td style="text-align: left; position: static">1</td><td rowspan="2" style="vertical-align: middle; position: static">合</td><td>2</td></tr><tr><td>3</td><td>4</td></tr></tbody></table>
+  <figure>
+    <img src="https://mmbiz.qpic.cn/mmbiz_png/abcDEF/640?wx_fmt=png" referrerpolicy="no-referrer" loading="lazy" decoding="async" alt="示意图" style="max-width: 100%; position: static">
+    <figcaption style="text-align: center; color: #888; position: static">图 1：data-src 提升为 src。</figcaption>
+  </figure>
+  <svg width="400" height="120" preserveAspectRatio="xMidYMid slice"><g><foreignObject width="400" height="120"><svg style="background-image: url(https://mmbiz.qpic.cn/mmbiz_jpg/slide01/640); position: static"><animateTransform></animateTransform></svg></foreignObject></g></svg>
+  <hr>
+  <ul><li>无序项一</li><li>无序项二</li></ul>
+  <ol><li>有序项一</li></ol>
+  <!-- tail-marker: visibility: visible inside a comment still gets swept -->
+</section>

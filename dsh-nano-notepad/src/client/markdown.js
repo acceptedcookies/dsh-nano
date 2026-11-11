@@ -1,10 +1,24 @@
 /** Minimal Markdown used by the notepad. It renders only its own image links. */
 
+import { elementAction, attrPolicy, sanitizeStyle } from 'dsh-html-policy'
+import { checkImage } from 'dsh-remote-data-schema/image-check.js'
+
 const ESCAPE = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }
 
 /** @param {string} value */
 export function escapeHtml(value) {
   return value.replace(/[&<>"]/gu, char => ESCAPE[char])
+}
+
+/**
+ * Attribute-side escaping (P3-05): identical to escapeHtml — every `data-*`,
+ * `title`, `aria-*` and dataset-bound interpolation goes through this so a
+ * remote manifest field can never terminate a quoted attribute. Named
+ * separately so call sites read as deliberate attr context.
+ * @param {string} value
+ */
+export function escapeAttr(value) {
+  return escapeHtml(String(value ?? ''))
 }
 
 /** @param {string} line */
@@ -144,7 +158,11 @@ function inline(text, images) {
     result += escapeHtml(text.slice(cursor, match.index))
     if (match[2]) {
       const image = images.get(match[2])
-      result += image
+      /* P3-04: only a schema-clean payload reaches src — mime whitelisted,
+         base64 canonical, decoded bytes ≤ cap. The 20 MB client-side cap is
+         the Config imageLimitBytes ceiling (remote ingress already enforces
+         the schema's 5 MB). */
+      result += image && checkImage(image, { maxBytes: 20 * 1024 * 1024 })
         ? `<img alt="${escapeHtml(match[1])}" src="data:${image.mime};base64,${image.base64}">`
         : `<span class="missing-image">${escapeHtml(match[2])}</span>`
     } else if (match[4]) {
@@ -169,21 +187,28 @@ function inline(text, images) {
 
 /**
  * Sanitize a rich-text HTML fragment (e.g. a WeChat article body) for direct
- * injection into `.np-read`: promote `data-src`, strip scripts/iframes/event
- * handlers, keep only layout-relevant style declarations, neutralize
- * positioning and lazy-reveal `visibility:hidden`. `dark` remaps the
- * white-background / black-text values WeChat hardcodes onto dsw tokens.
+ * injection into `.np-read` (P3-02). The keep/drop decisions come from the
+ * shared `dsh-html-policy` table — the same one the host serializer applies —
+ * so both renderers strip an identical surface:
+ *
+ *   - elementAction: DROP elements lose their subtree, allowlisted tags are
+ *     kept, everything else is unwrapped (children survive, sanitized);
+ *   - attrPolicy: only allowlisted attributes survive; `on*`/`srcdoc` are
+ *     always dropped; href/src/xlink:href go through the URL scheme gate
+ *     (entity-decoded, so `&#106;avascript:` cannot slip through);
+ *   - style: declarations filtered to ALLOWED_STYLE_PROPS with `position`
+ *     forced to static; `dark` remaps the white-background / black-text
+ *     values WeChat hardcodes onto dsw tokens (unchanged from before);
+ *   - the mp transforms are verbatim: data-src promotion on <img> and the
+ *     foreignObject → <image> rewrite run BEFORE the policy walk so their
+ *     output still goes through the same gate.
+ *
+ * Signature + callers (panel.js) unchanged.
  * @param {string} html
  * @param {{ dark?: boolean }} [opts]
  */
 export function sanitizeRichHtml(html, opts = {}) {
   const doc = new DOMParser().parseFromString(String(html ?? ''), 'text/html')
-  for (const bad of doc.querySelectorAll('script, iframe, mpvoice, [onclick], [onload], [onerror]')) bad.remove()
-  for (const el of doc.querySelectorAll('*')) {
-    for (const attr of [...el.attributes]) {
-      if (/^on/i.test(attr.name)) el.removeAttribute(attr.name)
-    }
-  }
   for (const img of doc.querySelectorAll('img')) {
     const src = img.getAttribute('data-src') || img.getAttribute('src') || ''
     if (src) img.setAttribute('src', src)
@@ -222,30 +247,40 @@ export function sanitizeRichHtml(html, opts = {}) {
     img.setAttribute('referrerpolicy', 'no-referrer')
     fo.replaceWith(img)
   }
+  /* Policy walk in document order: parents decide before their children, so
+     a dropped subtree skips every descendant (disconnected, isConnected
+     false) and an unwrapped element's children are visited in place. */
   const dark = opts.dark === true
-  for (const el of doc.querySelectorAll('[style]')) {
-    const kept = []
-    for (const decl of el.getAttribute('style').split(';')) {
-      const [prop, ...rest] = decl.split(':')
-      const name = prop.trim().toLowerCase()
-      let value = rest.join(':').trim()
-      if (!name || !MP_SAFE_STYLE.test(name)) continue
-      if (dark) {
-        if (/^background(-color)?$/.test(name) && /^(#fff|#ffffff|white|rgb\(255,\s*255,\s*255\))$/i.test(value)) continue
-        if (name === 'color' && /^(#000|#111|#222|#333|#444|black|rgb\(0,\s*0,\s*0\))$/i.test(value)) continue
+  const styleMap = dark
+    ? (name, value) => {
+        if (/^background(-color)?$/.test(name) && /^(#fff|#ffffff|white|rgb\(255,\s*255,\s*255\))$/i.test(value)) return null
+        if (name === 'color' && /^(#000|#111|#222|#333|#444|black|rgb\(0,\s*0,\s*0\))$/i.test(value)) return null
+        return value
       }
-      kept.push(`${prop.trim()}: ${value}`)
+    : undefined
+  for (const el of [...doc.body.querySelectorAll('*')]) {
+    if (!el.isConnected) continue
+    const name = el.localName
+    const action = elementAction(name)
+    if (action === 'drop') { el.remove(); continue }
+    if (action === 'unwrap') {
+      el.replaceWith(...el.childNodes)
+      continue
     }
-    /* The host pass already appends `position: static` — do not stack a
-       second copy when the draft came through /fetch-mp. */
-    if (!kept.some(d => /^position\s*:/i.test(d))) kept.push('position: static')
-    if (kept.length) el.setAttribute('style', kept.join('; '))
-    else el.removeAttribute('style')
+    /* keep: filter attributes through the policy. */
+    for (const attr of [...el.attributes]) {
+      if (attrPolicy(name, attr.name, attr.value) === 'drop') el.removeAttribute(attr.name)
+    }
+    if (el.hasAttribute('style')) {
+      const kept = sanitizeStyle(el.getAttribute('style'), { mapDecl: styleMap })
+      /* The client always leaves a style attribute with position:static —
+         same as the historical client pass; the host serializer instead
+         drops an emptied style attr (its verbatim behavior). */
+      el.setAttribute('style', kept || 'position: static')
+    }
   }
   return doc.body.innerHTML
 }
-
-const MP_SAFE_STYLE = /^(color|font-size|font-weight|font-style|font-family|text-align|line-height|margin(-(top|right|bottom|left))?|padding(-(top|right|bottom|left))?|background(-color|-image|-size|-position|-repeat)?|border(-(top|right|bottom|left)(-(width|style|color))?)?|border-radius|letter-spacing|text-indent|text-decoration(-line)?|width|max-width|height|display|vertical-align|box-sizing|overflow(-x|-y)?|white-space|word-(wrap|break)|opacity|float|clear)$/
 
 /* ---------- Source-view HTML utilities (work on the draft string) ---------- */
 

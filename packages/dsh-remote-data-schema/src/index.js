@@ -38,6 +38,7 @@ export {
   validateManifestEntry,
   assertDepth,
 } from './schema/v1.js'
+export { checkImage, IMAGE_MIMES } from './image-check.js'
 
 const VALIDATORS = {
   1: validateV1,

@@ -6,7 +6,8 @@
   "description": "Build-time shared library: host-side schema validation for remote (S3-bucket) data in the dsh-nano plugins. Not a plugin; bundled into each plugin's lib/ artifacts via esbuild (devDependency, never resolved at runtime).",
   "main": "./src/index.js",
   "exports": {
-    ".": "./src/index.js"
+    ".": "./src/index.js",
+    "./image-check.js": "./src/image-check.js"
   },
   "files": [
     "src",

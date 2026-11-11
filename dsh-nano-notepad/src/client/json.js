@@ -18,6 +18,12 @@ export function validateJson(text) {
   const fail = (message, at = pos) => ({ ok: false, pos: at, message })
   const ws = () => { while (pos < len && ' \t\n\r'.includes(text[pos])) pos += 1 }
 
+  /* P3-06: unbounded recursion let a crafted 1e5-deep document throw
+     RangeError and take the parse path down with it. Containers nested
+     beyond MAX_DEPTH reject as a controlled {ok:false} at the exact
+     character — a lint error, not a crash. */
+  const MAX_DEPTH = 32
+
   function parseString() {
     const start = pos
     pos += 1 // opening quote
@@ -69,11 +75,12 @@ export function validateJson(text) {
     return Number(text.slice(start, pos))
   }
 
-  function parseValue() {
+  function parseValue(depth = 0) {
     ws()
     if (pos >= len) return fail('expected a value', pos)
     const ch = text[pos]
     if (ch === '{') {
+      if (depth + 1 > MAX_DEPTH) return fail(`nesting exceeds ${MAX_DEPTH}`, pos)
       const object = {}
       pos += 1
       ws()
@@ -86,7 +93,7 @@ export function validateJson(text) {
         ws()
         if (text[pos] !== ':') return fail('expected ":" after object key', pos)
         pos += 1
-        const value = parseValue()
+        const value = parseValue(depth + 1)
         if (value && typeof value === 'object' && 'ok' in value && value.ok === false) return value
         object[key] = value
         ws()
@@ -96,12 +103,13 @@ export function validateJson(text) {
       }
     }
     if (ch === '[') {
+      if (depth + 1 > MAX_DEPTH) return fail(`nesting exceeds ${MAX_DEPTH}`, pos)
       const array = []
       pos += 1
       ws()
       if (text[pos] === ']') { pos += 1; return array }
       while (true) {
-        const value = parseValue()
+        const value = parseValue(depth + 1)
         if (value && typeof value === 'object' && 'ok' in value && value.ok === false) return value
         array.push(value)
         ws()

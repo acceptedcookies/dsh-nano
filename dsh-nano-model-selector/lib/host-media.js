@@ -5,6 +5,95 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
+/* ------------------------------------------------------------------ *
+ * Imagine boundary (P3-07 / hunter-e:imagine-template-shell-injection)
+ *
+ * The rendered command runs in the SESSION AGENT's bash tool, not here —
+ * the old skill body told the agent to literally replace {prompt}/{out}/
+ * {cwd} inside double-quoted shell segments, so `"; rm -rf`, `$(...)`, or
+ * backticks in any of them executed with the agent's tool authority (and
+ * a `'`-containing value breaks a single-quoted context the same way, so
+ * no quoting style can make text-substitution safe).
+ *
+ * The template below therefore carries NO placeholders: untrusted text
+ * never becomes shell syntax again.
+ *   - prompt and out-name travel as DATA in `imagine/.prompt.txt` /
+ *     `imagine/.out.txt` and are read back with $(cat)/$(tr) — file bytes
+ *     are never re-parsed as shell;
+ *   - the out name is validated twice: here (validateImagineArgs) and
+ *     inside the template by a `grep -Eq` gate that exits 64 BEFORE the
+ *     CLI runs and before any credentials are copied — an injection
+ *     attempt is a boundary violation, never silently sanitized;
+ *   - `{cwd}` is gone: the template uses "$PWD" — the bash tool already
+ *     runs at the workspace root — so there is nothing left to substitute;
+ *   - isValidImagineCwd still guards the host-side boundary for callers
+ *     that stage the files under a real path (imagineRun).
+ * ------------------------------------------------------------------ */
+
+/** Workspace-relative file the prompt text travels through. */
+export const IMAGINE_PROMPT_FILE = 'imagine/.prompt.txt'
+/** Workspace-relative file the generated-image name travels through. */
+export const IMAGINE_OUT_FILE = 'imagine/.out.txt'
+
+/**
+ * Single source for the `{out}` allowlist, shared by the JS validator and
+ * the `grep -Eq` runtime gate in the command template (ERE in both).
+ */
+const OUT_ERE = 'imagine/[a-z0-9-]{1,64}\\.(png|jpg|jpeg|webp)'
+export const IMAGINE_OUT_RE = new RegExp(`^${OUT_ERE}$`)
+
+/**
+ * `{cwd}` boundary rule: absolute POSIX path, no spaces, quotes, `$`, `\`,
+ * or backticks (the characters that break a quoted shell argument), and no
+ * `..` segments so staging cannot escape the workspace root.
+ */
+const CWD_RE = /^\/[A-Za-z0-9._/-]{1,1024}$/
+
+/** @param {unknown} out @returns {boolean} */
+export function isValidImagineOut(out) {
+  return typeof out === 'string' && IMAGINE_OUT_RE.test(out)
+}
+
+/** @param {unknown} cwd @returns {boolean} */
+export function isValidImagineCwd(cwd) {
+  return typeof cwd === 'string' && CWD_RE.test(cwd) && !cwd.split('/').includes('..')
+}
+
+/**
+ * Boundary validation for one imagine run. Rejects — never sanitizes —
+ * with the `{ok:false, reason}` shape the route family uses for input
+ * violations; an injection attempt is a boundary violation.
+ * @param {{ prompt?: unknown, out?: unknown, cwd?: unknown }} [args]
+ * @returns {{ ok: true } | { ok: false, reason: string, detail: string }}
+ */
+export function validateImagineArgs({ prompt, out, cwd } = {}) {
+  if (typeof prompt !== 'string' || prompt.length === 0 || prompt.length > 16384) {
+    return { ok: false, reason: 'imagine-prompt', detail: 'prompt must be a non-empty string of at most 16384 characters' }
+  }
+  if (!isValidImagineOut(out)) {
+    return { ok: false, reason: 'imagine-out', detail: `out must match ${OUT_ERE}` }
+  }
+  if (!isValidImagineCwd(cwd)) {
+    return { ok: false, reason: 'imagine-cwd', detail: 'cwd must be an absolute path without spaces, quotes, $, `, \\, or .. segments' }
+  }
+  return { ok: true }
+}
+
+/**
+ * Shared template prelude: read the out-name and prompt back as DATA and
+ * fail closed before the CLI (and before credentials are copied) when the
+ * staged files are missing or the out-name leaves the allowlist. Nothing
+ * in the rendered command is substituted text — "$PWD" resolves at run
+ * time inside the agent's own workspace shell.
+ */
+const IMAGINE_PREAMBLE =
+  `OUT=$(tr -d '[:space:]' < "$PWD/${IMAGINE_OUT_FILE}" 2>/dev/null); ` +
+  `printf '%s' "$OUT" | grep -Eq '^${OUT_ERE}$' || ` +
+  `{ echo "imagine: ${IMAGINE_OUT_FILE} must contain a single ${OUT_ERE} line" >&2; exit 64; }; ` +
+  `[ -s "$PWD/${IMAGINE_PROMPT_FILE}" ] || ` +
+  `{ echo "imagine: write the user description to ${IMAGINE_PROMPT_FILE} first" >&2; exit 64; }; ` +
+  `PROMPT=$(cat "$PWD/${IMAGINE_PROMPT_FILE}"); `
+
 /** Candidate binaries probed for one engine, in priority order. */
 const CANDIDATES = {
   grok: () => [
@@ -30,14 +119,18 @@ const ENGINES = [
     healthcheck: 'https://api.x.ai/',
     detect: () => firstBinary('grok', CANDIDATES.grok()),
     /**
-     * Command template the agent runs; `{prompt}`, `{out}`, `{cwd}` are substituted.
-     * Pointing GROK_HOME into the workspace keeps every write (auth seed, sessions,
-     * bundled assets) inside the sandbox, so the run never needs danger-full-access.
+     * Command template the agent runs VERBATIM at the workspace root; the
+     * prompt and out name arrive as files (`imagine/.prompt.txt` /
+     * `imagine/.out.txt`) so no user/agent text is substituted into shell
+     * syntax (P3-07). Pointing GROK_HOME into the workspace keeps every
+     * write (auth seed, sessions, bundled assets) inside the sandbox, so
+     * the run never needs danger-full-access.
      */
     command: binary =>
-      `mkdir -p "{cwd}/imagine/.grok" && ` +
-      `cp -f "$HOME/.grok/auth.json" "$HOME/.grok/config.toml" "{cwd}/imagine/.grok/" 2>/dev/null; ` +
-      `GROK_HOME="{cwd}/imagine/.grok" ${binary} -p "{prompt}. Save the image file to {out}" --always-approve --cwd "{cwd}"`,
+      IMAGINE_PREAMBLE +
+      `mkdir -p "$PWD/imagine/.grok" && ` +
+      `cp -f "$HOME/.grok/auth.json" "$HOME/.grok/config.toml" "$PWD/imagine/.grok/" 2>/dev/null; ` +
+      `GROK_HOME="$PWD/imagine/.grok" "${binary}" -p "$PROMPT. Save the image file to $OUT" --always-approve --cwd "$PWD"`,
   },
   {
     key: 'codex',
@@ -45,7 +138,7 @@ const ENGINES = [
     detail: 'OpenAI Codex CLI — image generation (placeholder, binary not required yet)',
     healthcheck: 'https://api.openai.com/',
     detect: () => firstBinary('codex', CANDIDATES.codex()),
-    command: binary => `${binary} exec "{prompt}. Save the image file to {out}"`,
+    command: binary => IMAGINE_PREAMBLE + `"${binary}" exec "$PROMPT. Save the image file to $OUT"`,
   },
 ]
 
@@ -98,6 +191,39 @@ export function writeEngine(statePath, key) {
 }
 
 /**
+ * Host-side boundary for one imagine run — the code equivalent of what the
+ * skill body asks the session agent to do by hand: validate the inputs,
+ * stage the prompt and out name as data files under `<cwd>/imagine/`, and
+ * hand back the verbatim command to execute at `cwd`. Invalid input is
+ * rejected with `{ok:false, reason}` before anything touches the
+ * filesystem or the shell.
+ * @param {string} engineKey
+ * @param {{ prompt: string, out: string, cwd: string }} [args]
+ * @param {{ binary?: string | null }} [deps] - test seam for the detected binary.
+ * @returns {{ ok: true, engine: string, binary: string, command: string,
+ *             files: { prompt: string, out: string } }
+ *          | { ok: false, reason: string, detail: string }}
+ */
+export function imagineRun(engineKey, { prompt, out, cwd } = {}, deps = {}) {
+  const engine = ENGINES.find(candidate => candidate.key === engineKey)
+  if (engine === undefined) {
+    return { ok: false, reason: 'imagine-engine', detail: `unknown engine '${engineKey}'` }
+  }
+  const check = validateImagineArgs({ prompt, out, cwd })
+  if (!check.ok) return check
+  const binary = deps.binary === undefined ? engine.detect() : deps.binary
+  if (binary === null) {
+    return { ok: false, reason: 'imagine-engine-missing', detail: `no ${engine.label} CLI detected on this host` }
+  }
+  const promptFile = join(cwd, IMAGINE_PROMPT_FILE)
+  const outFile = join(cwd, IMAGINE_OUT_FILE)
+  mkdirSync(join(promptFile, '..'), { recursive: true })
+  writeFileSync(promptFile, prompt, 'utf8')
+  writeFileSync(outFile, `${out}\n`, 'utf8')
+  return { ok: true, engine: engine.key, binary, command: engine.command(binary), files: { prompt: promptFile, out: outFile } }
+}
+
+/**
  * Render the `imagine` skill body for the chosen engine. The body is a static
  * instruction the agent follows verbatim, so the resolved binary path and the
  * command template are baked in at registration time.
@@ -129,16 +255,23 @@ export function imagineSkill(engineKey) {
     '  user the network to the image API is down (proxy/VPN off or DNS poisoned),',
     '  ask them to restore connectivity, and stop. Do not retry more than once.',
     '',
-    '## Step 1 — prepare',
-    '- The command template already creates `imagine/` and `imagine/.grok/` itself —',
-    '  no separate `mkdir` call is needed.',
-    '- Pick a short kebab-case file name from the user\'s description, e.g. `imagine/<slug>.jpg`.',
+    '## Step 1 — stage the inputs as files (the command reads them as data)',
+    `- Write the user's description VERBATIM to \`${IMAGINE_PROMPT_FILE}\` —`,
+    '  every quote, `$`, or backtick included, unescaped. Create `imagine/`',
+    '  first if your file tool does not create parent directories.',
+    '  **Never paste the description into a command line** — the file carries',
+    '  it safely, whatever it contains.',
+    `- Pick a short kebab-case slug and write ONE line to \`${IMAGINE_OUT_FILE}\`:`,
+    '  `imagine/<slug>.<ext>` where the slug is lowercase `[a-z0-9-]` (1–64',
+    '  chars) and ext is `png`, `jpg`, `jpeg`, or `webp`. The command',
+    '  re-validates this line at run time and refuses anything else.',
     '',
     '## Step 2 — generate (with a real timeout, never run it unbounded)',
-    `Run the command template, replacing \`{prompt}\` with the user's description,`,
-    '   `{out}` with the chosen `imagine/<slug>.jpg` path, and `{cwd}` with the workspace root.',
-    '   Wrap it in a 120-second timeout so a hung CLI fails fast instead of idling',
-    '   forever (macOS has no `timeout`; use `perl -e alarm` or a manual `kill` fallback):',
+    'Run the command template VERBATIM at the workspace root — it has NO',
+    '   `{placeholder}` tokens to substitute; `$PWD` already resolves to the',
+    '   workspace root where your shell runs. Wrap it in a 120-second timeout',
+    '   so a hung CLI fails fast instead of idling forever (macOS has no',
+    '   `timeout`; use `perl -e alarm` or a manual `kill` fallback):',
     '',
     '   ```',
     `   ${command}`,
@@ -150,6 +283,10 @@ export function imagineSkill(engineKey) {
     '   The template pins `GROK_HOME` to `imagine/.grok` inside the workspace and seeds',
     '   it with the user\'s `~/.grok` credentials, so **no `danger-full-access` approval',
     '   is required** — all of the CLI\'s writes stay in the sandbox.',
+    '',
+    '   If the command exits `64` with an `imagine:` message, a staged file was',
+    `   missing or malformed — fix \`${IMAGINE_PROMPT_FILE}\`/\`${IMAGINE_OUT_FILE}\` and`,
+    '   re-run the template; do NOT hand-edit the command.',
     '',
     '   A healthy run takes tens of seconds. The **first** run in a workspace is slower',
     '   (~40–60s) because the CLI seeds its bundled agents/plugins into `imagine/.grok`;',
@@ -165,6 +302,8 @@ export function imagineSkill(engineKey) {
     '  - command exited 0 but no file → retry **once** with a simplified prompt; if it',
     '    still produces nothing, report the CLI output and stop.',
     '  - command exited non-zero → show its stderr and stop; do not guess.',
+    `  - command exited 64 with an \`imagine:\` message → re-stage the two input files`,
+    '    exactly as Step 1 specifies; do not retry the edited text.',
     '- On success, report the final workspace-relative path to the user.',
   ].join('\n')
   return {

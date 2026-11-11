@@ -98,7 +98,7 @@ media-engine.json 里的显式选择
 | 「媒体生成」 | 扫描并选择本机图片 CLI |
 | composer 里 `/imagine` | 把所选引擎的命令模板注入会话 |
 
-技能要求会话 agent：用 kebab-case 文件名，按模板执行，核对产物非空并汇报相对路径。grok 模板把 `GROK_HOME` 指到工作区内的 `imagine/.grok`（并把 `~/.grok` 的凭证拷过去），形如 `mkdir -p imagine/.grok && cp … ; GROK_HOME=imagine/.grok <binary> -p "<prompt>. Save the image file to <out>" --always-approve --cwd "<cwd>"`，因此不需要 `danger-full-access`——所有写入都在工作区内。用户没要求就不要跑。
+技能要求会话 agent：把描述原样写进 `imagine/.prompt.txt`、把 `imagine/<slug>.<ext>` 写进 `imagine/.out.txt`（kebab-case slug，运行时 `grep -E` 门禁校验），然后**原样**执行模板——模板无占位符可替换。grok 模板把 `GROK_HOME` 指到工作区内的 `imagine/.grok`（并把 `~/.grok` 的凭证拷过去），形如 `OUT=$(tr … < "$PWD/imagine/.out.txt"); … ; mkdir -p "$PWD/imagine/.grok" && cp … ; GROK_HOME="$PWD/imagine/.grok" <binary> -p "$PROMPT. Save the image file to $OUT" --always-approve --cwd "$PWD"`，因此不需要 `danger-full-access`——所有写入都在工作区内。用户没要求就不要跑。
 
 路由都有 `connection.requestRejection`。裸调用被拒不是故障。
 

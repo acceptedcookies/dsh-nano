@@ -22,6 +22,7 @@
     "icon.svg",
     "locale",
     "lib/client.js",
+    "lib/mp-sanitize.js",
     "lib/perf-review-host.js",
     "lib/route-guard.js",
     "lib/route-table.js",

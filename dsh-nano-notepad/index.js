@@ -5,6 +5,7 @@ import { ensurePerfReviewHost, LIB_VERSION } from './lib/perf-review-host.js'
 import { createSyncEngine } from './lib/s3-sync-host.js'
 import { registerRoutes } from './lib/route-guard.js'
 import { ROUTE_TABLE, PLUGIN } from './lib/route-table.js'
+import { sanitizeMpHtml } from './lib/mp-sanitize.js'
 
 export const name = 'nano-notepad'
 export const inject = ['webServer', 'connection', 'subprocess']
@@ -417,63 +418,10 @@ function mpContent(html) {
 }
 
 /**
- * Host-side regex sanitizer for the WeChat rich-text body: drop scripts,
- * iframes, event handlers, mpvoice, and every `style` declaration that isn't
- * in the layout whitelist; neutralize positioning. The client re-sanitizes in
- * DOM space before render, so this only has to be a solid first pass.
+ * The mp sanitizer lives in `src/host/mp-sanitize.js`, bundled to
+ * `lib/mp-sanitize.js` (P3-03): it is the shared `dsh-html-policy`
+ * serializer — same ALLOWED/DROP tables the client renderer walks, same
+ * data-src promotion and visibility sweep the historical regex pass ran.
+ * `sanitizeMpHtml` is imported above; the client re-sanitizes in DOM space
+ * before render, so this remains a solid first pass.
  */
-const MP_STYLE_ALLOW = /^(color|font-size|font-weight|font-style|font-family|text-align|line-height|margin(-(top|right|bottom|left))?|padding(-(top|right|bottom|left))?|background(-color|-image|-size|-position|-repeat)?|border(-(top|right|bottom|left)(-(width|style|color))?)?|border-radius|letter-spacing|text-indent|text-decoration(-line)?|width|max-width|height|display|vertical-align|box-sizing|overflow(-x|-y)?|white-space|word-(wrap|break)|opacity|float|clear)\s*$/i
-
-/* Splitting a style on ';' must not cut inside an entity like `&quot;`:
-   WeChat writes `url(&quot;…&quot;)` into inline styles, and a naive split(';')
-   truncates the URL at the entity's own semicolon. Mask entities, split,
-   restore. */
-function mpStyleSplit(value) {
-  /* Match declarations as `name: value` where value ends at a `;` that is NOT
-     part of an entity: an entity's `;` is preceded only by `&` + word chars. */
-  const parts = String(value).match(/[^;]+(?:;(?!\w*&) [^;]*)*/g)
-  if (!parts) return []
-  /* The lookahead trick above is unreliable; do the explicit scan instead. */
-  const out = []
-  let buf = ''
-  for (let i = 0; i < value.length; i++) {
-    const ch = value[i]
-    if (ch === ';') {
-      const entity = /&[a-zA-Z#\d]*$/.test(buf)
-      if (!entity) { if (buf.trim()) out.push(buf.trim()); buf = ''; continue }
-    }
-    buf += ch
-  }
-  if (buf.trim()) out.push(buf.trim())
-  return out
-}
-
-function sanitizeMpHtml(html) {
-  let out = html
-    .replace(/<script\b[\s\S]*?<\/script\s*>/gi, '')
-    .replace(/<iframe\b[\s\S]*?(<\/iframe\s*>|\/?>)/gi, '')
-    .replace(/<\/?mpvoice\b[^>]*>/gi, '')
-    .replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
-    /* Promote data-src only on <img>: WeChat also sticks junk data-src values
-       (e.g. "position:static") on video/decoration nodes, and promoting those
-       turns them into resource URLs — ERR_UNKNOWN_URL_SCHEME noise. */
-    .replace(/(<img\b[^>]*?)\sdata-src\s*=\s*"([^"]*)"/gi, `$1 src="$2" referrerpolicy="no-referrer" loading="lazy" decoding="async"`)
-    .replace(/(<img\b[^>]*?)\sdata-src\s*=\s*'([^']*)'/gi, `$1 src='$2' referrerpolicy="no-referrer" loading="lazy" decoding="async"`)
-    .replace(/\sdata-src\s*=\s*("[^"]*"|'[^']*')/gi, '')
-    .replace(/\sstyle\s*=\s*"([^"]*)"/gi, (all, value) => {
-      const kept = mpStyleSplit(value)
-        .filter(d => MP_STYLE_ALLOW.test(d.split(':')[0]))
-        .join('; ')
-      return kept ? ` style="${kept}; position: static"` : ''
-    })
-    .replace(/\sstyle\s*=\s*'([^']*)'/gi, (all, value) => {
-      const kept = mpStyleSplit(value)
-        .filter(d => MP_STYLE_ALLOW.test(d.split(':')[0]))
-        .join('; ')
-      return kept ? ` style='${kept}; position: static'` : ''
-    })
-    // Visibility tricks the original page uses for lazy reveal must not hide
-    // the whole body in our pane.
-    .replace(/visibility\s*:\s*hidden/gi, 'visibility: visible')
-  return out
-}

@@ -11,7 +11,18 @@ export {
   TEXT_ONLY_ELEMENTS,
   DROP_ELEMENTS,
   DROP_SCHEMES,
+  PASSTHROUGH_ELEMENTS,
+  ALLOWED_DATA_IMAGE_RE,
+  DATA_IMAGE_ATTRS,
+  DATA_IMAGE_ELEMENTS,
   isDropAttr,
   isDropScheme,
+  elementAction,
+  attrPolicy,
+  urlPolicy,
+  sanitizeStyle,
+  styleDecls,
+  decodeEntities,
+  POLICY,
 } from './policy.js'
-export { sanitizePolicy } from './sanitizePolicy.js'
+export { sanitizePolicy, sanitizeHtml } from './sanitizePolicy.js'

@@ -83,6 +83,16 @@ build([
   `--outfile=${join(root, 'lib/route-guard.js')}`,
 ])
 
+// mp-sanitize-entry (P3-03): same constraint — index.js imports
+// ./lib/mp-sanitize.js at runtime, so dsh-html-policy (the shared ALLOWED/DROP
+// policy table + string serializer) is bundled here; only node:* bare imports
+// survive. The client renderer consumes the same policy inside lib/client.js.
+build([
+  'src/host/mp-sanitize.js',
+  '--bundle', '--format=esm', '--platform=node',
+  `--outfile=${join(root, 'lib/mp-sanitize.js')}`,
+])
+
 // Browser half: an IIFE wrapped in the client module-loader factory format.
 // dsh-performance-review/client is a source dependency (NOT external), so it is
 // bundled into lib/client.js. Keep all existing externals unchanged.

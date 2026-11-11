@@ -73,7 +73,7 @@
     "dsh-nano-model-selector": {
       "trigger": "composer '.nms-trigger' opens single-column icon rail + model list + detail/effort",
       "mediaRail": "'媒体生成' rail section scans & selects local image CLIs",
-      "imagine": "/imagine skill registered in composer; injects engine command template ({prompt}/{out}/{cwd}); grok copies ~/.grok creds into workspace imagine/.grok"
+      "imagine": "/imagine skill registered in composer; injects engine command template — placeholder-free (P3-07): prompt/out stage via imagine/.prompt.txt + imagine/.out.txt, template reads them as data + grep-gates the out name; grok copies ~/.grok creds into workspace imagine/.grok"
     }
   },
   "dataLocations": {

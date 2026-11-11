@@ -97,8 +97,8 @@ PH1 batch0-baseline ──▶ PH2 batch1-host-data ──▶ PH3 batch2-content-
 
 ## 5. 当前状态与交接
 
-- **当前节点**：PH1 `batch0-baseline` **全部收口** `bd4d6ad`+`ecf16f5`；B0 门禁（0-drift/feature-contract/clean-lib/node --test 27/43路由401-gated）全过
-- **下一动作**：PH2 `batch1-host-data`（P0 remote-cross 7 条；内序 `P2-08` 存量兼容前置闸→冻结 `P2-01` v1 schema→P2-02..07）
+- **当前节点**：`P2-01`+`P2-08` 完成 `e402df7`（schema v1 engine + compat 7/7 GREEN）；`P2-02`/`P2-07`（notepad）+ `P2-03..P2-06`（nsw）并行执行中
+- **下一动作**：消费点接线完成后跑 B1 门禁（fake-S3 6类恶意全拒 + feature-contract 0-drift + compat 7/7 + sync smoke）→ PH3
 - **当前阻塞**：无
 - **待 owner**：无（`foundation/` 不存在，已以 AGENTS.md 为准）
 - **最终交接**：closure + 发布 checklist（`v*` tag 由业主推送触发 release CI）

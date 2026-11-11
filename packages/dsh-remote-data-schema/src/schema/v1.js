@@ -63,9 +63,9 @@ const MAX_PARTS = MAX_COMMITTED_BYTES / PART_BYTES // 32768
 const SHA256_RE = /^[0-9a-f]{64}$/
 const FILE_ID_RE = /^[A-Za-z0-9_-]{1,128}$/ // manifest files[id] + files/<id>.md
 /* memberId / writerId / createdBy = `${username}@${instance8}` (workspaces.js:50).
- * Real data: 'seanz-dev@fba3fbd5'. username is free text minus whitespace;
- * instance prefix is a UUID fragment — charset [A-Za-z0-9_-]. */
-const MEMBER_ID_RE = /^[^\s@/]{1,96}@[A-Za-z0-9_-]{1,64}$/
+ * Real data: 'seanz-dev@fba3fbd5'. The username half is user-entered free
+ * text (email-style 'a@b' is plausible → split at the LAST '@'); the suffix
+ * is the instance id prefix — charset [A-Za-z0-9_-]. */
 const INSTANCE_RE = /^[A-Za-z0-9_-]{1,64}$/ // randomUUID or credential-resolved id
 const PROJECT_DIR_RE = /^--[^\n\r]{0,252}--$/ // projectKey(): '--'+slug(≤251)+'--'
 const IMAGE_MIMES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp'])
@@ -135,10 +135,17 @@ function needIso(value, field) {
   return s
 }
 
-/** memberId / writerId / createdBy — `username@instance8`. */
+/** memberId / writerId / createdBy — `username@instance8` (last '@' splits). */
 function needMemberId(value, field) {
-  const s = needString(value, field, { min: 1, max: 128 })
-  if (!MEMBER_ID_RE.test(s) || s.includes('..')) reject(field, `${field} is not a member id`)
+  const s = needString(value, field, { min: 3, max: 128 })
+  const at = s.lastIndexOf('@')
+  if (at <= 0 || at === s.length - 1) reject(field, `${field} is not a member id`)
+  if (s.includes('..') || s.includes('/') || s.includes('\\')) {
+    reject(field, `${field} contains a path segment`)
+  }
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(s.slice(at + 1))) {
+    reject(field, `${field} instance suffix has a bad charset`)
+  }
   return s
 }
 
@@ -397,8 +404,11 @@ function validateSessionMeta(obj, ctx) {
   if (typeof obj.deleted !== 'boolean') reject('deleted', 'deleted must be a boolean')
   if (!Array.isArray(obj.attachmentRefs)) reject('attachmentRefs', 'attachmentRefs must be an array')
   if (obj.attachmentRefs.length > MAX_ENTRIES) reject('attachmentRefs', 'too many attachment refs')
+  /* writers emit [] today; tolerate object or short-string refs, depth-capped */
   for (const ref of obj.attachmentRefs) {
-    if (!isObj(ref)) reject('attachmentRefs', 'attachment ref must be an object')
+    if (!isObj(ref) && !(typeof ref === 'string' && ref.length <= 512)) {
+      reject('attachmentRefs', 'attachment ref must be an object or a short string')
+    }
   }
   /* Part sizes travel separately from the meta (context.parts) or, for
      callers that aggregate them, as an optional `parts` array. */

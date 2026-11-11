@@ -46,23 +46,23 @@ PH1 batch0-baseline ──▶ PH2 batch1-host-data ──▶ PH3 batch2-content-
 
 ### PH2 `batch1-host-data`（门禁 B1；P0 remote-cross 7）
 - [x] `P2-01` — schema v1 六类规则 + v0 只读兼容 + reject — pass `e402df7` · node --test 24/24 · svg-mime/depth/committedBytes/traversal 全拒
-- [ ] `P2-02` — notepad `/s3/object` 消费点接 schema（s3-sync.js import→s3-sync-host bundle；put/get 不对称）
-- [ ] `P2-03` — nsw marker 校验 + localPath 严格 memberId 绑定（join 边界）
-- [ ] `P2-04` — nsw session meta/parts/claim 校验 + acquire+renew CAS + committedBytes/parts 限额 + claim/heartbeat/lease 边界
-- [ ] `P2-05` — nsw tree HEAD/pull/push 校验 + realpath 围栏（SKIP/symlink/stale/localPath）
-- [ ] `P2-06` — materialize + 路由边界 charset 双层（sessionId/workspaceId `^[A-Za-z0-9_-]{1,128}$`）
-- [ ] `P2-07` — fetch-mp 30x 逐跳复验
+- [x] `P2-02` — notepad `/s3/object` 消费点接 schema（s3-sync.js import→s3-sync-host bundle；put/get 不对称） — pass `68cc0e8` · 37/37 tests · kindOfKey+validateRemoteBody
+- [x] `P2-03` — nsw marker 校验 + localPath 严格 memberId 绑定（join 边界） — pass `68cc0e8` · readMarker+ownMember strict+instance · exfil closed
+- [x] `P2-04` — nsw session meta/parts/claim 校验 + acquire+renew CAS + committedBytes/parts 限额 + claim/heartbeat/lease 边界 — pass `68cc0e8` · ifMatch/ifNoneMatch CAS loop
+- [x] `P2-05` — nsw tree HEAD/pull/push 校验 + realpath 围栏（SKIP/symlink/stale/localPath） — pass `68cc0e8`+inside-fix · realpathSync fence + SKIP+=imagine
+- [x] `P2-06` — materialize + 路由边界 charset 双层（sessionId/workspaceId `^[A-Za-z0-9_-]{1,128}$`） — pass `68cc0e8` · route+consumer双层 · 29 tests
+- [x] `P2-07` — fetch-mp 30x 逐跳复验 — pass `68cc0e8` · redirect:manual + allowedMpTarget per-hop · cap5
 - [x] `P2-08` — 存量桶兼容回归（真桶导出、N≥K、v1-freeze 前置闸） — pass `4894a49`+`e402df7` · compat-regression 7/7 (6 v1 + 1 v0-backfill manifest)
 
 ### PH3 `batch2-content-render`（门禁 B3；P0 remote→page 6）
-- [ ] `P3-01` — html-policy 策略表实现
-- [ ] `P3-02` — 客户端 `sanitizeRichHtml` 重写（allowlist）
-- [ ] `P3-03` — 宿主 `sanitizeMpHtml` 重写 → `src/host/mp-sanitize.js`→`lib/mp-sanitize.js`
-- [ ] `P3-04` — image mime/base64 严格校验
-- [ ] `P3-05` — manifest/workspaceId 属性转义
-- [ ] `P3-06` — validateJson 深度上限
-- [ ] `P3-07` — imagine 模板注入收口
-- [ ] `P3-08` — mp 正向渲染快照回归
+- [x] `P3-01` — html-policy 策略表实现 — pass `1ed3827` · ALLOWED_*+POLICY+sanitizeStyle+urlPolicy+elementAction+attrPolicy · 15/15
+- [x] `P3-02` — 客户端 `sanitizeRichHtml` 重写（allowlist） — pass `1ed3827` · DOMParser+shared policy · foreignObject→image kept
+- [x] `P3-03` — 宿主 `sanitizeMpHtml` 重写 → `src/host/mp-sanitize.js`→`lib/mp-sanitize.js` — pass `1ed3827` · shared serializer · data-src/visibility kept
+- [x] `P3-04` — image mime/base64 严格校验 — pass `1ed3827` · schema/image-check.js export · mime∈4+base64+≤5MB
+- [x] `P3-05` — manifest/workspaceId 属性转义 — pass `1ed3827` · sync/db/panel escapeAttr · data-* 不裸插
+- [x] `P3-06` — validateJson 深度上限 — pass `1ed3827` · MAX_DEPTH=32 受控拒绝
+- [x] `P3-07` — imagine 模板注入收口 — pass `1ed3827` · zero-placeholder: prompt/out→.prompt.txt/.out.txt+cwd→$PWD · grep out-gate · 7/7
+- [x] `P3-08` — mp 正向渲染快照回归 — pass `1ed3827` · fixtures/mp-article.html · 双 renderer 快照一致
 
 ### PH4 `batch3-p2-supply`（门禁 B4；P2 9 + supply 2）
 - [ ] `P4-01` — mutate realpath 围栏（mutate.js assertInside 词法→realpath）
@@ -97,8 +97,8 @@ PH1 batch0-baseline ──▶ PH2 batch1-host-data ──▶ PH3 batch2-content-
 
 ## 5. 当前状态与交接
 
-- **当前节点**：`P2-01`+`P2-08` 完成 `e402df7`（schema v1 engine + compat 7/7 GREEN）；`P2-02`/`P2-07`（notepad）+ `P2-03..P2-06`（nsw）并行执行中
-- **下一动作**：消费点接线完成后跑 B1 门禁（fake-S3 6类恶意全拒 + feature-contract 0-drift + compat 7/7 + sync smoke）→ PH3
+- **当前节点**：PH2 `batch1` 全收口 `68cc0e8`（P0 remote-cross 7 全拒，security-regression 6/6）；PH3 `batch2` 全收口 `1ed3827`（P0 remote→page 6 全拒，dual renderer+zero-placeholder imagine）
+- **下一动作**：PH4 `batch3-p2-supply`（P4-01..P4-07：harden 4 + accept 5）→ B4 门禁 → PH5 release
 - **当前阻塞**：无
 - **待 owner**：无（`foundation/` 不存在，已以 AGENTS.md 为准）
 - **最终交接**：closure + 发布 checklist（`v*` tag 由业主推送触发 release CI）

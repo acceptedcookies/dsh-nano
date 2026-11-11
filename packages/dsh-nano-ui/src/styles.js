@@ -35,7 +35,10 @@ export const NANO_STYLES = `
 .nano-toast { animation: nano-toast-in .12s ease; }
 
 /* ── shared dialog helpers ──────────────────────────────────────────────────── */
-.nano-dialog-host { position: fixed; inset: 0; z-index: 50;
+.nano-dialog-host { position: fixed; inset: 0; z-index: 50; pointer-events: none;
+  /* This host is only the React mount point — NanoDialog/Modal portals the card
+     into document.body at a separate layer. Leaving pointer-events on here
+     makes the empty fullscreen host sit above its own card and eat every click. */
   font-family: var(--nano-font-family, inherit);
   font-size: var(--nano-font-size, inherit);
   line-height: var(--nano-line-height, inherit); }

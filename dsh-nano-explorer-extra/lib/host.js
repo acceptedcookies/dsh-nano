@@ -351,7 +351,7 @@ function parseStatus(stdout) {
       continue;
     }
     if (kind === "?") {
-      result.files.push({ path: record.slice(2), status: "?" });
+      result.files.push({ path: record.slice(2).replace(/\/$/u, ""), status: "?" });
       continue;
     }
     if (kind === "u") {

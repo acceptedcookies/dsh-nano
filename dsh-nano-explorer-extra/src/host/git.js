@@ -242,7 +242,10 @@ export function parseStatus(stdout) {
       continue
     }
     if (kind === '?') {
-      result.files.push({ path: record.slice(2), status: '?' })
+      // `--untracked-files=normal` collapses a wholly untracked directory into one entry whose path
+      // ends with `/`; kept verbatim it renders as an empty name in the commit drawer (the trailing
+      // slash becomes the split point). Strip it exactly like the `!` records below.
+      result.files.push({ path: record.slice(2).replace(/\/$/u, ''), status: '?' })
       continue
     }
     if (kind === 'u') {

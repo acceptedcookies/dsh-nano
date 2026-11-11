@@ -20,6 +20,7 @@ packages/dsh-nano-ui/
     ├── menu.js               # NanoMenu / NanoMenuItem：下拉与上下文菜单
     ├── toast.js              # NanoToast：轻提示
     ├── dom.js                # openNanoDialog / openNanoMenu：命令式挂载辅助
+    ├── tabs.js               # nanoTabs：纯 DOM 分段 tab（ARIA tablist/tab/tabpanel）
     └── styles.js             # NANO_STYLES：共享 CSS（含 .np-switch N 段滑轨）
 ```
 
@@ -35,7 +36,12 @@ packages/dsh-nano-ui/
 | `NanoMenu` / `NanoMenuItem` | React 组件 | 菜单渲染 |
 | `openNanoMenu` | 命令式 | 手动挂载菜单 |
 | `NanoToast` | React 组件 | toast |
-| `NANO_STYLES` | CSS 字符串 | 共享样式（`.np-switch` 等） |
+| `nanoTabs` | 命令式 | 纯 DOM tab 条：`nanoTabs({items:[{value,label,panel}],value,onChange,label})`，管理 ARIA 与 hidden，支持 ←/→/Home/End 与横向溢出滚动 |
+| `NANO_STYLES` | CSS 字符串 | 共享样式（`.np-switch`、`.nano-tabs` 等） |
+
+- **tab 视觉契约**：`.nano-tab[aria-selected="true"]` 是反白实心 pill（亮底深字 + 底部 accent 线），是 tab 条里唯一的亮块；tab 等宽 `flex:1 1 0`，窄容器才横向滚动。消费方若给对话框内 `button` 加通用皮肤，必须排除 `.nano-tab`。
+- **固定高度对话框**：`openNanoDialog({ fixedHeight })` 设置 `--nano-dlg-h` 并给卡片加 `.nano-dialog-fixed`；该 class 关闭 shell body 的滚动、把注入的 `.np-dlg-body` 变成 flex 列，由消费方把 tab 条与面板拆成两个兄弟容器（`.np-dlg-tabs` 固定 + `.np-dlg-panels` 滚动），这样滚动内容不会与 tab 重叠、切 tab 也不会改变卡片高度。
+- **分隔线唯一性**：tab 条只挂一条 `border-bottom: 1px`。面板被包进 `.np-tab-panel` 后，任何基于「直接子元素 first-child」去掉首行 `border-top` 的规则都会失效；必须显式给 `.np-dlg-panels > .np-tab-panel > .np-section` 也清零，否则首行顶边框与 tab 条下边框贴成 2px 双线，且滚动后才变回 1px。
 
 - **发布**：`publishConfig.registry = https://npm.pkg.github.com`；`files` 仅 `index.js` + `src/`；`private: false`。
 

@@ -61,6 +61,9 @@ export const NANO_STYLES = `
    a floor so a narrow window still leaves a readable dialog. The value itself
    is set per dialog on the portal layer (see openNanoDialog). */
 .nano-dialog-sized { width: clamp(320px, var(--nano-dlg-w, 380px), 100%) !important; }
+/* A tabbed dialog owns a fixed height so switching panels never resizes the
+   card under the pointer. The variable is set per dialog (see openNanoDialog). */
+.nano-dialog-card { height: var(--nano-dlg-h, auto); }
 
 .nano-dialog-content { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 /* The shell Modal's body carries margin-top:20px on top of the header's own
@@ -82,4 +85,41 @@ export const NANO_STYLES = `
   }
 }
 .nano-dialog-content > div:last-child { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+/* Fixed-height tabbed dialog: the shell's body stops scrolling; the card's
+   injected body becomes a flex column and its panels own the scroll. */
+.nano-dialog-fixed .nano-dialog-content > div:last-child { overflow: hidden; }
+.nano-dialog-fixed .np-dlg-body { display: flex; flex-direction: column; height: 100%; min-height: 0; overflow: hidden; }
+
+/* ── tab strip (nanoTabs) ─────────────────────────────────────────────────────
+   Follows the DSH settings mobile pattern: one row of pill cells that scroll
+   horizontally past the edge instead of wrapping. Sticky so the strip stays
+   reachable while a long tab panel scrolls. */
+.nano-tabs { position: relative; z-index: 2; display: flex; gap: 2px;
+  margin: 0; padding: 4px; border-radius: var(--dsw-radius-md, 10px);
+  /* Opaque track: a translucent token lets scrolling panel text show through. */
+  background: var(--dsw-alias-bg-layer-1, #202020); overflow-x: auto; scrollbar-width: none;
+  font-family: var(--nano-font-family, inherit); font-size: var(--nano-font-size, inherit); }
+.nano-tabs::-webkit-scrollbar { display: none; }
+/* Equal-width cells fill the strip; horizontal scrolling only kicks in when
+   the strip itself is narrower than the labels (mobile / narrow window). */
+.nano-tab { flex: 1 1 0; min-width: 0; display: inline-flex; align-items: center; justify-content: center;
+  height: 28px; padding: 0 8px; border: 0; border-radius: var(--dsw-radius-sm, 8px);
+  background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; cursor: pointer;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (hover: hover) {
+  .nano-tab:hover:not([aria-selected="true"]) { color: var(--dsw-alias-label-primary); }
+}
+/* Selected tab is an inverted solid pill — the only bright element in the
+   strip, so the active section is unmistakable at a glance (and in both
+   themes, since both tokens invert together). */
+.nano-tab[aria-selected="true"] {
+  background: var(--dsw-alias-label-primary, #f7f8f8);
+  color: var(--dsw-alias-bg-layer-1, #191919);
+  font-weight: 600;
+  box-shadow: var(--dsw-elevation-soft);
+  position: relative;
+}
+.nano-tab[aria-selected="true"]::after { content: ''; position: absolute; left: 22%; right: 22%; bottom: -3px;
+  height: 2px; border-radius: 1px; background: var(--dsw-alias-focus-ring, #4c9aff); }
+.nano-tab:focus-visible { outline: 2px solid var(--dsw-alias-focus-ring, #4c9aff); outline-offset: -2px; }
 `

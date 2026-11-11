@@ -23,6 +23,10 @@ export function openNanoDialog(options) {
   const maxKey = '--nano-dlg-max'
   const maxValue = typeof options.maxHeight === 'number' ? `${Math.round(options.maxHeight)}px` : null
   if (maxValue !== null) document.documentElement.style.setProperty(maxKey, maxValue)
+  /* Tabbed dialogs opt into a fixed height; the panels scroll inside it. */
+  const heightKey = '--nano-dlg-h'
+  const heightValue = typeof options.fixedHeight === 'number' ? `${Math.round(options.fixedHeight)}px` : null
+  if (heightValue !== null) document.documentElement.style.setProperty(heightKey, heightValue)
   /* Modal portals into document.body and its .root is a fixed full-viewport
      layer with a hashed class. To size the card or fence the overlay inside the
      owning window's rect we flag the card (nano-dialog-sized/regioned), then
@@ -36,6 +40,8 @@ export function openNanoDialog(options) {
       const layer = card.parentElement
       if (!(layer instanceof HTMLElement)) continue
       card.dataset.nanoBound = '1'
+      /* Fixed-height (tabbed) dialogs move scrolling into their own panels. */
+      if (heightValue !== null) card.classList.add('nano-dialog-fixed')
       if (wantsWidth) layer.style.setProperty('--nano-dlg-w', `${Math.round(options.width)}px`)
       if (wantsRegion) {
         const r = options.region
@@ -61,6 +67,9 @@ export function openNanoDialog(options) {
     host.remove()
     if (maxValue !== null && document.documentElement.style.getPropertyValue(maxKey) === maxValue) {
       document.documentElement.style.removeProperty(maxKey)
+    }
+    if (heightValue !== null && document.documentElement.style.getPropertyValue(heightKey) === heightValue) {
+      document.documentElement.style.removeProperty(heightKey)
     }
   }
   root.render(React.createElement(NanoDialog, { ...options, onCancel: () => { options.onCancel?.(); close() } }))

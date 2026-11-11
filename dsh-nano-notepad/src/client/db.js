@@ -50,6 +50,9 @@ export function normalizeSettings(config) {
     chromeStyle: source.chromeStyle === 'windows' ? 'windows' : 'mac',
     followApp: source.followApp !== false,
     followSessionWorkspace: source.followSessionWorkspace !== false,
+    /* WeChat MP integration (paste-import + rich .html preview) is opt-in:
+       default off so the feature is invisible until the user enables it. */
+    mpEnabled: source.mpEnabled === true,
     settingsVersion: 2,
   }
 }

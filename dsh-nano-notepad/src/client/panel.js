@@ -771,6 +771,9 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
   const current = () => state.nodes.find(node => node.id === state.ui.currentId && node.kind === 'file')
   const isJson = () => (current()?.name ?? '').toLowerCase().endsWith('.json')
   const isHtml = () => /\.(html|htm|wx)$/i.test(current()?.name ?? '')
+  /* The WeChat integration is opt-in (settings.mpEnabled). When off, .html
+     files keep their source tools but preview/markdown-render as plain text. */
+  const mpEnabled = () => state.settings.mpEnabled === true
   const jsonCollapsedFor = id => {
     if (!state.jsonCollapsed.has(id)) state.jsonCollapsed.set(id, new Set())
     return state.jsonCollapsed.get(id)
@@ -1081,20 +1084,33 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     }
     const rendered = state.view === 'rendered'
     const json = isJson()
-    const richHtml = isHtml()
+    const htmlFile = isHtml()
+    /* mpEnabled gates the WeChat preview path only; source tools stay so a
+       plain .html file remains editable regardless of the integration. */
+    const richHtml = htmlFile && mpEnabled()
     /* JSON files swap the markdown-format cluster for JSON tools. */
     const mdTools = panel.querySelector('.np-md-tools')
     const jsonTools = panel.querySelector('.np-json-tools')
     const viewSwitch = panel.querySelector('.np-switch')
-    if (viewSwitch) viewSwitch.hidden = false
+    if (viewSwitch) viewSwitch.hidden = htmlFile && !mpEnabled()
     const htTools = panel.querySelector('.np-ht-tools')
     if (mdTools) mdTools.hidden = json || richHtml
     if (jsonTools) jsonTools.hidden = !json
-    if (htTools) htTools.hidden = !richHtml || rendered
+    if (htTools) htTools.hidden = !htmlFile || rendered
     const rtTools = panel.querySelector('.np-rt-tools')
     if (rtTools) rtTools.hidden = !(richHtml && rendered)
+    /* The whole WeChat surface disappears when the integration is off — the
+       paste zone is part of it, not just the preview. */
+    const mpZone = panel.querySelector('.np-mp-zone')
+    if (mpZone) mpZone.hidden = !mpEnabled()
     for (const button of panel.querySelectorAll('.np-toolbar [data-format]')) {
-      button.disabled = rendered || json || richHtml
+      button.disabled = rendered || json || htmlFile
+    }
+    /* With the integration off there is no preview to switch to — park the
+       .html file on its source view. */
+    if (htmlFile && !mpEnabled() && rendered) {
+      state.view = 'source'
+      return renderBody()
     }
     /* Lint badge: strict JSON validation, clicking it jumps to the offset. */
     const lint = panel.querySelector('.np-lint')
@@ -1451,6 +1467,10 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
   function dialog(spec) {
     closeSlash()
     closeMenu?.()
+    /* A second dialog() call would orphan the previous handle — its empty
+       .nano-dialog-host overlay then sits fullscreen on top and eats clicks
+       meant for the new card. Close any open one first. */
+    closeDialog?.()
     let handle = /** @type {{ close: () => void } | undefined} */ (undefined)
     const finish = () => { dialogOpen = false; if (closeDialog === closeSelf) closeDialog = () => {} }
     // every exit path — footer buttons, Escape, mask, programmatic close —
@@ -1696,6 +1716,10 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
           { value: 'true', label: copy.autoSaveOn },
           { value: 'false', label: copy.autoSaveOff },
         ])}
+        ${sw('mpEnabled', copy.mpEnabled, copy.mpEnabledHint, [
+          { value: 'false', label: copy.autoSaveOff },
+          { value: 'true', label: copy.autoSaveOn },
+        ])}
         ${num('draftIntervalMs', copy.unitSeconds, values.draftIntervalMs, copy.draftInterval, copy.draftIntervalHint, 1000)}
         ${num('commitIntervalSec', copy.unitMinutes, values.commitIntervalSec, copy.commitInterval, copy.commitIntervalHint, 60)}
         ${num('versionLimit', '', values.versionLimit, copy.versionLimit, copy.versionLimitHint)}
@@ -1753,6 +1777,10 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
           { value: 'true', label: copy.autoSaveOn },
           { value: 'false', label: copy.autoSaveOff },
         ],
+        mpEnabled: [
+          { value: 'false', label: copy.autoSaveOff },
+          { value: 'true', label: copy.autoSaveOn },
+        ],
       }
       if (state.db) void counts(state.db).then(async value => {
         const estimate = navigator.storage?.estimate ? await navigator.storage.estimate() : {}
@@ -1775,11 +1803,16 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
           const rect = seg.getBoundingClientRect()
           const index = Math.min(options.length - 1, Math.max(0, Math.floor((event.clientX - rect.left) / (rect.width / options.length))))
           const merged = { ...state.settings }
-          if (field === 'autoSave' || field === 'followSessionWorkspace') merged[field] = options[index].value === 'true'
+          const isBoolField = field === 'autoSave' || field === 'followSessionWorkspace' || field === 'mpEnabled'
+          if (isBoolField) merged[field] = options[index].value === 'true'
           else merged[field] = options[index].value
           state.settings = normalizeSettings(merged)
           if (state.db) void writeSettings(state.db, state.settings).catch(showError)
-          const value = field === 'autoSave' || field === 'followSessionWorkspace' ? String(state.settings[field] !== false) : String(state.settings[field])
+          /* Readback differs: autoSave-family defaults ON (off only when
+             explicitly false), mpEnabled defaults OFF (on only when true). */
+          const value = field === 'mpEnabled'
+            ? String(state.settings[field] === true)
+            : (isBoolField ? String(state.settings[field] !== false) : String(state.settings[field]))
           const active = Math.max(0, options.findIndex(o => String(o.value) === value))
           seg.style.setProperty('--np-switch-i', String(active))
           seg.setAttribute('aria-checked', String(active === 0))
@@ -2873,6 +2906,8 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       channel?.postMessage({ type: 'changed' })
       return node
     },
+    /** Debug handle for live settings (used by E2E verification). */
+    settings() { return { ...state.settings } },
   }
 
   /** A pasted mp.weixin.qq.com link: host fetches + sanitizes, we file it as

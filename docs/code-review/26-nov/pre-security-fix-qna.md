@@ -4,8 +4,8 @@
 > **qna 位点**：`pre-charter`（多轮 deep-dive）
 > **角色配置（自填）**：提问 `security-fix agent（DeepSeek Harness）` · second-opinion `none` · 裁决 `owner`
 > **second-opinion 模式（逐轮）**：`waived`（按业主指示，全程不提供 second-opinion 槽位）
-> **下游消费者**：`MS01 执行计划 / todo`
-> **文档状态**：`frozen`（已冻结；全轮收口，v1.0）
+> **下游消费者**：`26-nov-security-fix`（修复执行计划 / todo；v1.1 起本阶段代号统一为此，原 `MS01` 为误记）
+> **文档状态**：`frozen`（已冻结；全轮收口；v1.1 含 errata 修订——见 §9.0a）
 
 ---
 
@@ -19,6 +19,8 @@
 | Round 4 | `Q8–Q10` | executional：P0 批次与门禁、P2 接受清单、供应链与发布链 | `waived` | **已冻结（T-O-10 / T-O-11 / T-O-12）** |
 
 > 分轮纪律：全部四轮已完成并冻结；本文件为 `frozen` 状态，后续任何新增/变更按 §10「变更控制」执行，不得静默修改已冻结真相。
+>
+> **v1.1 errata 说明**：冻结后经业主指令做 `file:line` 级深度联级核查（跨 plugin、宿主与浏览器两面），发现并更正了若干事实性错误与陈旧引用，同时按 §9.3 追加了两条执行级真相 `T-O-13` / `T-O-14` 并把下游阶段代号修正为 `26-nov-security-fix`（原 `MS01` 误记）。所有已冻结的 T-O-1–T-O-12 决策**未改动**，仅其下的执行细节/证据按事实更新；新增修订逐条登记于 §9.0a。
 
 ---
 
@@ -105,18 +107,20 @@ OS 用户（如 seanz）的权限边界
 
 | Truth-ID | 子类型 | 已锁定真相（一句话） | 来源（Round / Q） | 驱动了哪些后续题 | 下游约束 |
 |----------|--------|----------------------|--------------------|------------------|----------|
-| `T-O-1` | `foundational` | **页面脚本（同源 Web 页面内任意 JS）是较低信任主体；不得以「同源即同主体」为由把它与 owner 等价；插件对页面可调用的每项宿主能力都必须按「可能被任意脚本调用」来设计。** | `Round 1 / Q1`（业主选 C） | `Q3`、`Q4`、Round 3+ 全部 executional 题 | MS01 的主体矩阵与验收基线 |
-| `T-O-2` | `foundational` | **修复采用能力分层 L0/L1/L2/L3（敏感度分级）：L0 会话内只读 / L1 工作区内有界写 / L2 宿主级能力 / L3 运维配置；分类用于决定加固强度与审查级别，不作为删除功能的依据（v0.5 修订：原「L2 硬退役」被 `T-O-3` 取代）。** | `Round 1 / Q2`（业主选 B，v0.5 修订） | `Q3`、`Q4`、Round 3+ 全部 executional 题 | MS01 的路由敏感度清单与加固强度 |
-| `T-O-3` | `foundational` | **功能零回退：所有已交付的核心功能、入口、工作流与价值不得减少或降级；安全修复只能叠加，不得以删除/隐藏/迁移功能为手段。** | 业主变更令 `2026-11-11`（v0.5） | `Q3`、`Q4`、Round 3+ 全部 executional 题 | MS01 的功能合同与验收 |
-| `T-O-4` | `foundational` | **本地威胁模型：插件主要运行于本地单用户、默认 loopback、无公网暴露；安全优先级按本地跨主体面校准（remote-bucket / remote-web / 本机其他用户），同用户页面脚本的纯 page→host 行为视为自影响，仅做不改变功能的加固。** | 业主变更令 `2026-11-11`（v0.5） | `Q3`、`Q4`、Round 3+ 全部 executional 题 | MS01 的风险分桶 |
-| `T-O-5` | `execution` | **P0 必修只覆盖 `remote-cross` 与 `remote→page`（含 remote→agent 注入链）；`page-self` 仅做不改变功能的加固，其余登记 `accepted-local-self-impact`；所有现有路由/UI/工作流/数据位置保留。** | `Round 2 / Q3`（业主选 C） | `Q5`、`Q6`、`Q7`、Round 4+ | MS01 的三桶清单与功能合同 |
-| `T-O-6` | `execution` | **加固落在三个共享包：`dsh-host-route-guard`（统一注册，敏感度声明）、`dsh-remote-data-schema`（宿主侧远端数据 schema 校验）、`dsh-html-policy`（共享 HTML allowlist）；全部增量，不迁移数据流、不删路由、不改 UI。** | `Round 2 / Q4`（业主选 A） | `Q5`、`Q6`、`Q7`、Round 4+ | MS01 的包结构与实施顺序 |
-| `T-O-7` | `execution` | **`dsh-host-route-guard` 采用 43 条路由逐条显式 `sensitivity` 清单（`security/route-sensitivity.json`），guard 启动强校验；未列入/过期路由禁止注册。** | `Round 3 / Q5`（业主选 B） | `Q8`、`Q9`、`Q10` | MS01 路由清单与 CI 门禁 |
-| `T-O-8` | `execution` | **`dsh-remote-data-schema` 采用严格整对象拒绝 + 保留最后好状态：任一字段非法即拒绝该 manifest/file/image/marker/session meta；历史对象缺失 `schemaVersion` 视为 v0 只读兼容并一次性补写。** | `Round 3 / Q6`（业主选 A） | `Q8`、`Q9`、`Q10` | MS01 的 schema 规则与兼容性回归 |
-| `T-O-9` | `execution` | **`dsh-html-policy` 采用一套共享 allowlist 策略表 + 双 renderer（客户端 DOM `sanitizeRichHtml` + 宿主 regex `sanitizeMpHtml`），只过滤活动内容、保留现有 mp 文章排版能力。** | `Round 3 / Q7`（业主选 A） | `Q8`、`Q9`、`Q10` | MS01 的 HTML 策略与回归语料 |
-| `T-O-10` | `execution` | **P0 修复采用内部四批（Batch 0 基础 → Batch 1 host-data 7 条 → Batch 2 content-render 6 条 → Batch 3 P2/local-supply），每批独立门禁；每个插件最终只发一次 minor 版本，无数据迁移、可回滚。** | `Round 4 / Q8`（业主选 B） | — | MS01 的批次/门禁/发布清单 |
-| `T-O-11` | `execution` | **P2（8 条 `page-self` + 本地凭据 `grok-creds`）采用逐项清单：能零成本加固就加固（realpath 围栏、`.git` 拒绝、`.gitignore`/SKIP、日志），改变功能则登记 `accepted-local-self-impact`；清单入 `security/accepted-risks.json`，每 release 复核。** | `Round 4 / Q9`（业主选 B） | — | MS01 的 P2 清单与发布说明 |
-| `T-O-12` | `execution` | **供应链完整修复：四个 `build-client.mjs` 删除 npx 回退（缺本地 esbuild 即失败）；提交全部随包源；补 release CI（`npm ci && npm run build && npm pack` + clean-lib gate + SHA256/attestation）。** | `Round 4 / Q10`（业主选 A） | — | MS01 的 build/release 改造 |
+| `T-O-1` | `foundational` | **页面脚本（同源 Web 页面内任意 JS）是较低信任主体；不得以「同源即同主体」为由把它与 owner 等价；插件对页面可调用的每项宿主能力都必须按「可能被任意脚本调用」来设计。** | `Round 1 / Q1`（业主选 C） | `Q3`、`Q4`、Round 3+ 全部 executional 题 | 26-nov-security-fix 的主体矩阵与验收基线 |
+| `T-O-2` | `foundational` | **修复采用能力分层 L0/L1/L2/L3（敏感度分级）：L0 会话内只读 / L1 工作区内有界写 / L2 宿主级能力 / L3 运维配置；分类用于决定加固强度与审查级别，不作为删除功能的依据（v0.5 修订：原「L2 硬退役」被 `T-O-3` 取代）。** | `Round 1 / Q2`（业主选 B，v0.5 修订） | `Q3`、`Q4`、Round 3+ 全部 executional 题 | 26-nov-security-fix 的路由敏感度清单与加固强度 |
+| `T-O-3` | `foundational` | **功能零回退：所有已交付的核心功能、入口、工作流与价值不得减少或降级；安全修复只能叠加，不得以删除/隐藏/迁移功能为手段。** | 业主变更令 `2026-11-11`（v0.5） | `Q3`、`Q4`、Round 3+ 全部 executional 题 | 26-nov-security-fix 的功能合同与验收 |
+| `T-O-4` | `foundational` | **本地威胁模型：插件主要运行于本地单用户、默认 loopback、无公网暴露；安全优先级按本地跨主体面校准（remote-bucket / remote-web / 本机其他用户），同用户页面脚本的纯 page→host 行为视为自影响，仅做不改变功能的加固。** | 业主变更令 `2026-11-11`（v0.5） | `Q3`、`Q4`、Round 3+ 全部 executional 题 | 26-nov-security-fix 的风险分桶 |
+| `T-O-5` | `execution` | **P0 必修只覆盖 `remote-cross` 与 `remote→page`（含 remote→agent 注入链）；`page-self` 仅做不改变功能的加固，其余登记 `accepted-local-self-impact`；所有现有路由/UI/工作流/数据位置保留。** | `Round 2 / Q3`（业主选 C） | `Q5`、`Q6`、`Q7`、Round 4+ | 26-nov-security-fix 的三桶清单与功能合同 |
+| `T-O-6` | `execution` | **加固落在三个共享包：`dsh-host-route-guard`（统一注册，敏感度声明）、`dsh-remote-data-schema`（宿主侧远端数据 schema 校验）、`dsh-html-policy`（共享 HTML allowlist）；全部增量，不迁移数据流、不删路由、不改 UI。** | `Round 2 / Q4`（业主选 A） | `Q5`、`Q6`、`Q7`、Round 4+ | 26-nov-security-fix 的包结构与实施顺序 |
+| `T-O-7` | `execution` | **`dsh-host-route-guard` 采用 43 条路由逐条显式 `sensitivity` 清单（`security/route-sensitivity.json`），guard 启动强校验；未列入/过期路由禁止注册。** | `Round 3 / Q5`（业主选 B） | `Q8`、`Q9`、`Q10` | 26-nov-security-fix 路由清单与 CI 门禁 |
+| `T-O-8` | `execution` | **`dsh-remote-data-schema` 采用严格整对象拒绝 + 保留最后好状态：任一字段非法即拒绝该 manifest/file/image/marker/session meta；历史对象缺失 `schemaVersion` 视为 v0 只读兼容并一次性补写。** | `Round 3 / Q6`（业主选 A） | `Q8`、`Q9`、`Q10` | 26-nov-security-fix 的 schema 规则与兼容性回归 |
+| `T-O-9` | `execution` | **`dsh-html-policy` 采用一套共享 allowlist 策略表 + 双 renderer（客户端 DOM `sanitizeRichHtml` + 宿主 regex `sanitizeMpHtml`），只过滤活动内容、保留现有 mp 文章排版能力。** | `Round 3 / Q7`（业主选 A） | `Q8`、`Q9`、`Q10` | 26-nov-security-fix 的 HTML 策略与回归语料 |
+| `T-O-10` | `execution` | **P0 修复采用内部四批（Batch 0 基础 → Batch 1 host-data 7 条 → Batch 2 content-render 6 条 → Batch 3 P2/local-supply），每批独立门禁；每个插件最终只发一次 minor 版本，无数据迁移、可回滚。** | `Round 4 / Q8`（业主选 B） | — | 26-nov-security-fix 的批次/门禁/发布清单 |
+| `T-O-11` | `execution` | **P2（8 条 `page-self` + 本地凭据 `grok-creds`）采用逐项清单：能零成本加固就加固（realpath 围栏、`.git` 拒绝、`.gitignore`/SKIP、日志），改变功能则登记 `accepted-local-self-impact`；清单入 `security/accepted-risks.json`，每 release 复核。** | `Round 4 / Q9`（业主选 B） | — | 26-nov-security-fix 的 P2 清单与发布说明 |
+| `T-O-12` | `execution` | **供应链完整修复：四个 `build-client.mjs` 删除 npx 回退（缺本地 esbuild 即失败）；随包源已全部提交（v1.1 核实 350c6c8 已入库）；补 release CI（`npm ci && npm run build && npm pack` + clean-lib gate + SHA256/attestation）。** | `Round 4 / Q10`（业主选 A） | — | 26-nov-security-fix 的 build/release 改造 |
+| `T-O-13` | `execution` | **三共享包的分发通道：声明为 `devDependencies`（非 `dependencies`）；运行时一律经 `lib/` bundle 产物消费，宿主侧不裸 import 共享包；`security/route-sensitivity.json` 仅以**生成 JS 常量**形式打进 guard 产物。**（v1.1 追加；分发归属约束的执行固化） | `v1.1 errata`（业主指令 + file:line 核查） | — | 26-nov-security-fix 的包结构与 `package.json` |
+| `T-O-14` | `execution` | **回归门禁三件套：`security/feature-contract.json` 逐字段锁定（含每路由现有 `bodyLimit`）；Batch 1 前现有桶导出样本 v1 校验全量通过；`nxe:mutate-symlink-escape` realpath 围栏登记为「加固+边缘行为变化」进 `accepted-risks.json`。**（v1.1 追加；功能零回退的可验证判据） | `v1.1 errata`（业主指令 + file:line 核查） | — | 26-nov-security-fix 的验收与 Batch 1 门禁 |
 
 > **修订说明（v0.5）**：`T-O-2` 的「L2 一律硬退役」条款自 v0.5 起由 `T-O-3` 取代；L0/L1/L2/L3 分类继续作为**敏感度分级**使用（决定加固强度与审查级别），不再作为删除功能的依据。`T-O-1` 的主体判定保留，但其处置强度由 `T-O-4` 校准。
 
@@ -139,14 +143,14 @@ OS 用户（如 seanz）的权限边界
 
 - **默认声明**：未分类路由 = 敏感度最高，必须显式声明后方可注册（不得静默注册）。
 - **禁止绕过**：加固不设 feature flag 分支、不保留「关闭校验」的兼容开关。
-- **版本**：patch/minor 发布（无 breaking change；具体版本由 MS01 按变更类型确定）。
+- **版本**：patch/minor 发布（无 breaking change；具体版本由 26-nov-security-fix 按变更类型确定）。
 
 ### 1.3 `T-O-3` 细则（功能零回退 · NORMATIVE）
 
 1. **功能合同的定义**：用户可见的路由入口、UI 入口、按钮/菜单/工作流、默认行为、数据存放位置（IndexedDB vs 宿主文件系统）、离线能力、同步节奏与性能语义，全部属于「功能」。
 2. **允许的改动**：内部实现、校验逻辑、错误提示、日志、限流/限额、清洗规则（只过滤恶意内容）、路径围栏（只拒绝越界）。
 3. **禁止的改动**：删除任何路由/方法、移除或隐藏任何 UI 入口、改变默认行为、改变数据存放位置（如 IndexedDB→宿主 DB）、要求用户改变现有工作流或增加步骤、降低离线/性能能力。
-4. **执行约束**：MS01 必须产出 `security/feature-contract.json`（43 条路由 + 全部客户端入口的快照）；每条 finding 的修复必须标注「功能影响：无 / 有（有则不得实施）」，且 CI 的 feature-contract 测试必须通过。
+4. **执行约束**：26-nov-security-fix 必须产出 `security/feature-contract.json`（43 条路由 + 全部客户端入口的快照）；每条 finding 的修复必须标注「功能影响：无 / 有（有则不得实施）」，且 CI 的 feature-contract 测试必须通过。
 5. **冲突处理**：若某安全修复必须改变功能才能成立，则该修复不得实施，转为「已接受风险（local self-impact）」登记；只有跨主体（remote-bucket/remote-web→本地）的必修项在无法兼顾时才上报业主重新裁决。
 
 ### 1.4 `T-O-4` 细则（本地威胁模型 · NORMATIVE）
@@ -165,7 +169,7 @@ OS 用户（如 seanz）的权限边界
 2. **`remote→page`（P0）**：远程内容必须先转化为页面脚本（XSS）才能触达宿主；判据是「remote principal 可执行页面代码」。代表：4 条 XSS、`nano-notepad/sanitizeMpHtml-active-content`、`nano-notepad/fetch-mp-redirect-ssrf`、`hunter-e:imagine-template-shell-injection`（远程文档/网页经 agent prompt 注入）。
 3. **`page-self`（P2）**：同用户页面脚本 → 宿主，属本地自影响。代表：`nxe:routes-read-arbitrary-file`、`notepad:read-arbitrary-md-read`、`nsw:ls-mkdir-any-absolute-path`、`nxe:mutate-symlink-escape`、`nxe:git-config-filter-exec`、`nano-notepad/s3-config-endpoint-ssrf`、`hunter-e:grok-creds-workspace-copy`。
 4. **P2 接受登记**：凡修复需要改变功能（删除路由/UI、改默认行为、改数据位置、增加用户步骤）的，登记 `accepted-local-self-impact`，注明「现有功能依赖、接受理由、可选低成本加固、复发监控」；不得静默忽略。
-5. **功能合同**：MS01 必须产出 `security/feature-contract.json`（43 条路由 + 客户端入口 + 数据位置 + 默认行为），CI `test:feature-contract` 必须通过；任何修复的功能影响必须为「无」。
+5. **功能合同**：26-nov-security-fix 必须产出 `security/feature-contract.json`（43 条路由 + 客户端入口 + 数据位置 + 默认行为），CI `test:feature-contract` 必须通过；任何修复的功能影响必须为「无」。
 
 ### 1.6 `T-O-6` 细则（三包加固架构 · NORMATIVE）
 
@@ -173,16 +177,16 @@ OS 用户（如 seanz）的权限边界
    - `packages/dsh-host-route-guard`：唯一 web 路由注册入口；`RouteSpec {path, method, sensitivity: 'L0'|'L1'|'L2'|'L3', capability, bodyLimit?, sessionBinding}`；fail-closed 获取 `connection`；统一 method/JSON/错误；生成 route inventory。
    - `packages/dsh-remote-data-schema`：纯 JS schema 校验（无 DOM）；覆盖 notepad manifest/files/images 与 shared-workspace marker/meta/parts；在宿主消费点执行。
    - `packages/dsh-html-policy`：共享 HTML allowlist 常量与纯函数策略；客户端 DOMParser 渲染器与宿主 regex 渲染器共用同一策略表。
-2. **依赖方向**：三个包只依赖平台公开契约（`ctx.webServer`/`ctx.connection`/`ctx.sessions` 等）与标准库；不依赖任何插件内部实现；四插件通过 `file:../packages/...` 依赖。
+2. **依赖方向**：三个包只依赖平台公开契约（`ctx.webServer`/`ctx.connection`/`ctx.sessions` 等）与标准库；不依赖任何插件内部实现；四插件以 `devDependencies` 形式的 `file:../packages/...` 引用（**构建期**依赖，运行时经 `lib/` bundle 产物消费，宿主侧不裸 import——分发通道详见 `T-O-13` / §1.13）。
 3. **硬约束**：不迁移任何现有数据流（IndexedDB 保持）、不删除/隐藏任何路由/UI、不改变默认行为；加固只增加校验/清洗/限额。
 4. **落地顺序**：guard（零行为变化）→ remote-data-schema（只拒绝恶意对象）→ html-policy（只剥活动内容）→ feature-contract + P0 回归。
-5. **MS01 交付物**：`security/route-sensitivity.json`、`security/feature-contract.json`、三个包的 API 与单测、四插件迁移 diff、P0/P2 清单。
+5. **26-nov-security-fix 交付物**：`security/route-sensitivity.json`、`security/feature-contract.json`、三个包的 API 与单测、四插件迁移 diff、P0/P2 清单。
 
 ---
 
 ### 1.7 `T-O-7` 细则（路由敏感度清单 · NORMATIVE）
 
-1. **清单文件**：`security/route-sensitivity.json`，43 行，字段 `plugin/path/method/sensitivity/capability/bodyLimit/sessionBinding/justification`。
+1. **清单文件**：`security/route-sensitivity.json`，43 行，字段 `plugin/path/method/sensitivity/capability/bodyLimit/sessionBinding/justification`；`bodyLimit` 逐路由继承现有常量（见 `T-O-14`）。**运行时侧**：该 JSON 在 repo 根、不在任何插件 `files` 内，运行中的宿主不可达；guard 在**构建期**把 43 行烤进产物为 JS 常量（见 `T-O-13` / §1.13），repo 侧 JSON 只作 CI 真源。
 2. **`sensitivity` 语义**：L0 只读无 secret；L1 工作区内有界写；L2 宿主级（fs/git/net/credentials/DSH_HOME/跨会话）；L3 配置。分级只决定加固强度，不删除路由。
 3. **生成与校验**：`scripts/gen-route-sensitivity.mjs` 从代码枚举；guard 启动时严格比对，未列入/过期即抛错；CI `check-route-sensitivity` 防漂移。
 4. **禁止规则化偷懒**：不得按插件/前缀/HTTP 方法批量赋级；每个 path+method 单独一行。
@@ -192,7 +196,8 @@ OS 用户（如 seanz）的权限边界
 1. **对象与规则**：notepad manifest/files/images、shared-workspace marker/session meta/tree HEAD 的字段、类型、字符集、大小上限按 Q6 的 v1 schema 执行。
 2. **拒绝语义**：任一字段非法 → 整对象拒绝；宿主返回 `{ok:false,reason:'schema'}`；notepad 客户端 `sync.cycle` 捕获并显示 error，IndexedDB 保留最后好状态；shared-workspace 宿主同步记录并跳过，不影响其他对象。
 3. **版本化**：新对象 `schemaVersion:1`；历史对象缺失视为 v0 只读兼容并一次性补写；未知版本拒绝并提示升级。
-4. **配置**：`maxFileBytes/maxImageBytes/maxCommittedBytes` 为 L3 `Config`，默认保守可调；不改变现有 UI。
+4. **`/s3/object` 的 put/get 校验不对称**（v1.1 核查 `dsh-nano-notepad/src/host/s3-sync.js:231-242`）：`put` 接受**任意 `key`** 的写入（客户端本就用它写 `manifest.json`、`files/`、`images/` 等已知形态）。schema 校验只施加于 **`get` 返回的 known-key 形态**；`put` 对已知形态按 schema 校验、对未知 key 仅保留现有 key 形态/长度限制——不新增「任意 key 即拒」，否则会收窄现有写入能力，违反 `T-O-3`。
+5. **配置**：`maxFileBytes/maxImageBytes/maxCommittedBytes` 为 L3 `Config`，默认保守可调；不改变现有 UI。
 
 ### 1.9 `T-O-9` 细则（HTML allowlist · NORMATIVE）
 
@@ -206,11 +211,11 @@ OS 用户（如 seanz）的权限边界
 1. **批次**：Batch 0 基础（guard + route-sensitivity + feature-contract，零行为）→ Batch 1 P0 host-data 7 条 → Batch 2 P0 content-render 6 条 → Batch 3 P2/local-supply。每批门禁：`test:feature-contract` + 本批 `test:security-regression` + `test:smoke` + build 校验。
 2. **发布**：每个插件最终只发一次 minor 版本；三共享包 0.1.0；不设 feature flag/关闭开关；release note 统一「功能无变化 + 安全加固」。
 3. **回滚**：无数据迁移（T-O-8 的 v0 兼容只读），回滚 = 安装前一版本；`feature-contract` 保留为回归基线。
-4. **MS01 交付**：Batch 0–3 任务表、负责人/预估、门禁脚本、发布 checklist、回滚步骤。
+4. **26-nov-security-fix 交付**：Batch 0–3 任务表、负责人/预估、门禁脚本、发布 checklist、回滚步骤。
 
 ### 1.11 `T-O-11` 细则（P2 清单与 accepted 登记 · NORMATIVE）
 
-1. **9 项清单**：`nxe:mutate-symlink-escape`（realpath 围栏）、`nxe:git-config-filter-exec`（拒绝 `.git/**`）、`hunter-e:grok-creds-workspace-copy`（`.gitignore` + `SKIP`）、`nxe:scopeof-cross-session`（仅日志）为加固；`nxe:routes-read-arbitrary-file`、`notepad:read-arbitrary-md-read`、`nsw:ls-mkdir-any-absolute-path`、`nano-notepad/s3-config-endpoint-ssrf`、`nxe:perf-review-window-drain` 为接受。
+1. **9 项清单**：`nxe:mutate-symlink-escape`（realpath 围栏；属「加固+边缘行为变化」并登记 `accepted-risks.json`，见 `T-O-14`）、`nxe:git-config-filter-exec`（拒绝 `.git/**`）、`hunter-e:grok-creds-workspace-copy`（`.gitignore` + `SKIP`）、`nxe:scopeof-cross-session`（仅日志）为加固；`nxe:routes-read-arbitrary-file`、`notepad:read-arbitrary-md-read`、`nsw:ls-mkdir-any-absolute-path`、`nano-notepad/s3-config-endpoint-ssrf`、`nxe:perf-review-window-drain` 为接受。
 2. **登记**：`security/accepted-risks.json` 字段 `fingerprint/主体/现有功能/接受理由/可选加固/监控方式/owner 签字/复核日期`；发布说明列入「已知本地风险」。
 3. **监控**：每次 release 跑 P2 子集的 `test:security-regression`，确认仍为本地自影响、无新增远程触发路径；新路由改变主体则升级 P0 复审。
 4. **禁止**：不得用「接受」掩盖 P0；不得为 P2 加固而删除/隐藏现有功能。
@@ -218,9 +223,32 @@ OS 用户（如 seanz）的权限边界
 ### 1.12 `T-O-12` 细则（供应链与发布链 · NORMATIVE）
 
 1. **esbuild**：四个 `build-client.mjs` 删除 `npx --yes esbuild@0.25.0` 回退；`node_modules/.bin/esbuild` 缺失即报错并提示 `npm ci`；release 流程加 `npm ci`。
-2. **源文件入库**：提交 `src/host/s3-sync.js`、`packages/dsh-s3-client/**`、`src/client/{sync,cloud-settings}.js`、`packages/dsh-nano-ui/src/tabs.js` 等未跟踪随包源；`git status` 清洁后才打包。
+2. **源文件入库（v1.1 更正：已完成大半）**：`src/host/s3-sync.js`、`packages/dsh-s3-client/**`、`src/client/{sync,cloud-settings}.js`、`packages/dsh-nano-ui/src/tabs.js` 及全部 `lib/` 产物在 `350c6c8` 已入库、worktree 干净。剩余面 = 新增 CI 校验「随包源与产物均已提交」（防回归）+ `npm ci`/clean-lib/attestation；`git status` 清洁后才打包。
 3. **CI/证明**：`v*` tag 触发 `npm ci && npm run build && npm pack`；clean-lib gate（`git diff --exit-code -- lib/` 或哈希比对）；`SHA256SUMS` + `actions/attest-build-provenance`（或 cosign keyless）。
 4. **发布门禁**：`npm pack --dry-run --json` 与 `files` 一致；`lib/` 由当前源重建；版本号与 tag 一致；无未跟踪文件。
+
+---
+
+### 1.13 `T-O-13` 细则（共享包分发通道 · NORMATIVE · v1.1）
+
+> 解决约束「插件可独立 build / pack / install」。v0.x 只定了「三个共享包 + `file:` 依赖」，没定运行时通道；`file:line` 核查确认裸 import 会在运行时解析失败。
+
+1. **运行时通道 = `lib/` bundle**：开发实例只拷贝 `lib/`、不拷贝 `node_modules`；宿主侧 `index.js` 是未打包源码，只允许 `node:*` 与 `./lib/*` 相对导入。证据：`dsh-nano-notepad/scripts/build-client.mjs:30-31`、`dsh-nano-shared-workspace/scripts/build-client.mjs:30-33`、`dsh-nano-model-selector/scripts/build-client.mjs:25-27`（三处注释均写明「the dev instance copies lib/ but not node_modules」）；`dsh-nano-explorer-extra/index.js:3` 与 `dsh-nano-shared-workspace/index.js:3` 已是「`index.js` 薄 re-export `./lib/host.js`」先例。
+2. **逐包落点**：
+   - `dsh-host-route-guard`：explorer / shared-workspace 打进 `lib/host.js`；notepad / model-selector 的 `index.js` 未打包，须新增 `lib/route-guard.js` 产物、或将 `index.js` 改为 re-export `./lib/host.js` 式结构。
+   - `dsh-remote-data-schema`：notepad 打进 `lib/s3-sync-host.js`（消费点 `dsh-nano-notepad/src/host/s3-sync.js:231-250`）；shared-workspace 打进 `lib/host.js`（消费点 `workspaces.js` / `session-io.js` / `tree.js`）。
+   - `dsh-html-policy`：浏览器侧打进 `lib/client.js`（同 `dsh-nano-ui` 先例）；宿主侧新增 bundle 产物供 `index.js` 相对 import。
+3. **`package.json` 声明 = `devDependencies`**：三个共享包是构建期依赖，运行时无裸 import；放 `devDependencies` 使 tarball 自足（`dsh plugin add .tgz` 不再依赖宿主 `<parent>/packages/` 布局）。**既有 `dependencies` 里的 `file:`（`dsh-nano-ui`/`dsh-performance-review`/`dsh-s3-client`）随 T-O-12 一并迁到 `devDependencies`**——它们同样只进构建产物，此迁移**修复**而非新增「`.tgz` 安装依赖目录布局」的既有缺口。
+4. **`security/*.json` 是 CI 真源、非运行时文件**：`route-sensitivity.json`、`feature-contract.json`、`accepted-risks.json` 在 repo 根、不在任何插件 `files`；运行时 guard 用**构建期烤进的 JS 常量**，repo 侧 JSON 由 `scripts/check-route-sensitivity.mjs` 在 CI 比对防漂移。
+5. **平台中立**：三包不依赖任何私有部署事实（不写死 `dsh.local`、`DSH_HOME` 路径、registry 地址）；只用公开 `ctx.*` 契约。
+
+### 1.14 `T-O-14` 细则（回归门禁三件套 · NORMATIVE · v1.1）
+
+> 把「功能零回退」落成可验证判据；三条均对应 `file:line` 核查发现的具体回退风险。
+
+1. **`feature-contract.json` 逐字段锁定**：每条路由固定 `path / method / bodyLimit / response shape`；`bodyLimit` **继承现有常量**——`/save` 8 MB、`/s3/object` 32 MB（`dsh-nano-notepad/index.js:70-74`）、explorer POST 64 KB、`media-engine` PUT 16384 B（`dsh-nano-model-selector/AGENTS.md` 使用表）——不得套统一 64 KiB 默认，否则 `/save` 大笔记存不下即回退。同步锁定 UI 入口与数据位置。
+2. **存量数据全量回归**：Batch 1 前以现有桶导出样本对 v1 schema 全量回归，**100% 通过**方可冻结 v1 规则；不足则按合法样本最小收紧校准，再回归。防止「历史合法对象被 v1 整对象拒」变成只读/失联（`T-O-8` v0 兼容的兜底前提）。
+3. **行为变化显式登记**：`nxe:mutate-symlink-escape` 的 realpath 围栏使「指向工作区外的符号链接」被拒——explorer 现行行为是「软链接当作普通条目跟随」（`dsh-nano-explorer-extra/AGENTS.md` 使用表），这是**有功能影响的边缘变化**，登记进 `security/accepted-risks.json` 作「加固+边缘变化」而非「功能无影响」。
 
 ---
 
@@ -239,7 +267,7 @@ OS 用户（如 seanz）的权限边界
 | 5 | `dsh-nano-notepad/src/client/markdown.js:148`、`dsh-nano-notepad/src/client/panel.js:1342/1371` | 远程图片 `mime`/`base64` 未转义进入 `src="data:..."` 并经 `read.innerHTML` 注入——已确认的存储型 XSS，可直接获得页面脚本执行。 |
 | 6 | `dsh-nano-notepad/src/client/sync.js:195-203`、`dsh-nano-notepad/src/client/db.js:655-665` | 远程 manifest 的 `id`/`name`/`workspaceId` 原样落到 IndexedDB，再被渲染进 `data-*` 属性——第二条页面脚本执行链。 |
 | 7 | `dsh-nano-shared-workspace/src/client/index.js:415` | `window.__nsw = { store, ctx, face }` 直接把插件 face 暴露在页面全局；同 realm 内无脚本隔离。 |
-| 8 | `dsh-nano-notepad/src/host/s3-sync.js:73-76`、`dsh-nano-notepad/src/host/s3-sync.js:108`；`dsh-nano-notepad/index.js:319` | S3 endpoint/bucket/密钥由页面 `POST /s3/config` 写入 `~/nano-notepad-s3.json`；endpoint 只校验 `http(s)://` 前缀，编辑时省略 secret 会沿用旧密钥。 |
+| 8 | `dsh-nano-notepad/src/host/s3-sync.js:73-76`、`dsh-nano-notepad/src/host/s3-sync.js:108`；`dsh-nano-notepad/index.js:319` | S3 endpoint/bucket/密钥由页面 `POST /s3/config` 写入 `${DSH_HOME}/nano-notepad-s3.json`（0600）；endpoint 只校验 `http(s)://` 前缀，编辑时省略 secret 会沿用旧密钥。 |
 | 9 | `dsh-nano-shared-workspace/src/host/entry.js:13-48`；`dsh-nano-shared-workspace/src/host/routes.js:229-234` | shared-workspace 的 endpoint/bucket/region 是 **operator Config**（`required`、无默认值）；但 `localPath` 仍是页面 body 传入。 |
 | 10 | `dsh-nano-notepad/index.js:132-210`（`nativeSave`/`runViaSubprocess`，尤其 `dsh-nano-notepad/index.js:164-166`、`dsh-nano-notepad/index.js:179`） | 已有的「L1 用户确认写」范例：目标路径由 macOS 原生保存对话框选择，`osascript` 走 argv 而非 shell 字符串。 |
 | 11 | `dsh-nano-explorer-extra/src/host/routes.js:392/419/427` | `allowOutsideWorkspace` 是 **请求体布尔值**——一个由页面自行设置的「关闭围栏」开关，是「路由级授权」不可依赖请求体的直接反例。 |
@@ -251,7 +279,7 @@ OS 用户（如 seanz）的权限边界
 
 > **v0.5 校准**：T-O-1 的主体判定保留；处置强度由 T-O-4/T-O-5 校准；本记录中「一律进入修复清单」以 §1.1 修订后的「进入处置清单」为准。
 
-- **影响范围**：24 条 confirmed 的 **主体判定与修复形态**；四插件 43 条 web 路由的授权设计；MS01 的威胁模型、验收口径与回归用例；后续所有 executional-qna 的选项空间。
+- **影响范围**：24 条 confirmed 的 **主体判定与修复形态**；四插件 43 条 web 路由的授权设计；26-nov-security-fix 的威胁模型、验收口径与回归用例；后续所有 executional-qna 的选项空间。
 - **为什么必须确认**：这是整份审计的分水岭。审计的 16 条 high 中，绝大多数以「同源页面 JS 可调用宿主路由」为攻击链的第一跳或收口跳；而 dsh 平台在 `connection` 层只承认一个 `browserPeer`（owner），代码层面无法区分「插件自己的页面代码」与「任意注入脚本」。如果业主认为「同源页面 = 同主体」，这些 high 会被整体降级为 hardening，修复范围将缩减到只剩远程桶/远程文章类问题；反之，若承认页面脚本是较低信任主体，则 43 条路由都必须重新按能力分级。**这个前提不先冻结，后面每个执行题都会变成重复争论同一件事。**
 - **当前建议 / 倾向**（`security-fix agent`）：**选 C**——页面脚本是较低信任主体，并且承认「同一 JS realm 内无法区分脚本来源」，因此修复以「撤走页面可达的危险能力 / 改换发起端」为主，路由级校验只作为残余 L0/L1 路由的兜底。
 - **Reasoning**：平台事实（单一 `browserPeer`、无 per-tab/plugin 身份）、代码事实（4 条已确认存储型 XSS 证明远程桶写入者可以让脚本在页面 realm 执行）、以及同 realm 事实（`window.__nsw`、`fetch` + same-origin cookie 对任何页面脚本一视同仁）三者叠加，推出「以页面为信任边界」的模型不可实现；能实现的只有「以能力为边界」的模型。选 C 不是保守，而是唯一自洽的模型。
@@ -274,15 +302,15 @@ OS 用户（如 seanz）的权限边界
 
 **【推荐选项的详细执行说明】**（推荐选项 C）
 
-1. **建立主体矩阵（MS01 第一步）**：固定五类主体——`owner-operator`、`agent`、`page`、`remote-bucket`、`remote-web`。每条 finding 必须标注「第一入口主体」与「最终受影响主体」；只有 `owner-operator` 单一主体的项才允许关闭为 non-issue。
-2. **路由可达性盘点**：以 `webServer.register` 为唯一入口，列出 43 条路由的 method、参数来源、当前是否页面可达、调用的宿主能力（fs / git / net / credentials / DSH_HOME / global）。产出 `security/route-inventory.md`（MS01 附件）。
+1. **建立主体矩阵（26-nov-security-fix 第一步）**：固定五类主体——`owner-operator`、`agent`、`page`、`remote-bucket`、`remote-web`。每条 finding 必须标注「第一入口主体」与「最终受影响主体」；只有 `owner-operator` 单一主体的项才允许关闭为 non-issue。
+2. **路由可达性盘点**：以 `webServer.register` 为唯一入口，列出 43 条路由的 method、参数来源、当前是否页面可达、调用的宿主能力（fs / git / net / credentials / DSH_HOME / global）。产出 `security/route-inventory.md`（26-nov-security-fix 附件）。
 3. **修复顺序固定为三段**：
    - 第一段（L2 撤除）：`nxe:git-config-filter-exec`、`nxe:mutate-symlink-escape`、`nano-notepad/s3-config-endpoint-ssrf`、`nsw:materialize-sessionId-path-traversal`、`nsw:workspaceId-join-s3key-traversal`、`nsw:remote-member-localPath-arbitrary-fs-write`、`nsw:ls-mkdir-any-absolute-path` 等页面可直达宿主能力的路由。
    - 第二段（XSS 收口）：4 条 XSS + `nano-notepad/sanitizeMpHtml-active-content`——它们是 `page` 主体的放大器，必须在 L2 撤除后立即修。
    - 第三段（L0/L1 收紧）：`nano-notepad/read-arbitrary-md-read`、`nxe:routes-read-arbitrary-file`、`nxe:scopeof-cross-session`、`nsw:acquireClaim-rmw-no-cas` 等。
 4. **验收口径**：以审计 PoC 为回归用例，在 page-origin harness 中重放；L2 路由返回 404/403/405 且无宿主副作用；L1 仅工作区 realpath 内生效；L0 仅 session 作用域内有界数据。`remote-bucket` 类用 fake S3/loopback 重放。
 5. **例外处理**：本阶段不设「保留 L2 但加校验」的例外；确需保留的进入 Round 3+ 单独立项，记录为「已接受风险」而非「已修复」。
-6. **文档化**：MS01 每条 finding 的修复项必须引用 `T-O-1`，并附「主体矩阵 → 路由层级 → 修复动作」三列表。
+6. **文档化**：26-nov-security-fix 每条 finding 的修复项必须引用 `T-O-1`，并附「主体矩阵 → 路由层级 → 修复动作」三列表。
 
 **【推荐选项的支持证据 / 其他选项的反例】**
 
@@ -298,7 +326,7 @@ OS 用户（如 seanz）的权限边界
 
 > **v0.5 修订**：本记录中 Q2 选项 B 的「L2 硬退役」已被 T-O-3 取代；L0–L3 仅作敏感度分级。下列原文保留历史，执行以 §1.2 与 T-O-5/T-O-10 为准。
 
-- **影响范围**：四插件 43 条 web 路由的最终去留；每个插件的 UI/产品面（notepad 云设置、explorer 文件操作、shared-workspace 工作区管理、model-selector 引擎选择）；MS01 的删除/迁移清单与版本策略。
+- **影响范围**：四插件 43 条 web 路由的最终去留；每个插件的 UI/产品面（notepad 云设置、explorer 文件操作、shared-workspace 工作区管理、model-selector 引擎选择）；26-nov-security-fix 的删除/迁移清单与版本策略。
 - **为什么必须确认**：Q1 冻结「以能力为边界」后，马上要回答「能力怎么分、哪些能留、留下的怎么实现」。如果每个 finding 各自决定，会出现两类系统性错误：① 把本该退役的宿主能力用「加校验」保下来（假安全）；② 把本来安全的 L1 能力（如原生保存对话框）也砍掉（过度收紧、产品受损）。需要一条**整场修复一致的分类规则**。
 - **当前建议 / 倾向**（`security-fix agent`）：**选 B**——建立 L0/L1/L2/L3 四层，L2 一律硬退役（删除路由或改由 operator/agent 发起），L1 用 realpath+工作区根围栏，L0 保持只读且有界，L3 只走 operator Config；默认拒绝未分类路由。
 - **Reasoning**：现有代码同时存在「可以安全留在页面」的 L1 范例（`nativeSave` 的 macOS 原生对话框）和「无论怎么加校验都不该由页面发起」的 L2 范例（`/s3/config` 的任意 endpoint 签名代理、`/materialize` 的 DSH_HOME 写）。按**能力的作用域与后果**分层，才能既守住宿主边界又保留产品核心。治理原则「能硬切就不要双写、能彻底退役就不要提供兼容」直接指向 B。
@@ -322,7 +350,7 @@ OS 用户（如 seanz）的权限边界
 **【推荐选项的详细执行说明】**（推荐选项 B）
 
 1. **定义四层**：见 §1.2（NORMATIVE）。示例归属最终以 `security/route-inventory.md` 为准。
-2. **逐路由分类与处置（MS01 必产）**：每条路由固定五列 `route | method | 参数来源 | 当前层级 | 处置`；处置只有 `keep-L0`、`harden-L1`、`retire-L2`、`move-L3`，**禁止 keep-L2**。
+2. **逐路由分类与处置（26-nov-security-fix 必产）**：每条路由固定五列 `route | method | 参数来源 | 当前层级 | 处置`；处置只有 `keep-L0`、`harden-L1`、`retire-L2`、`move-L3`，**禁止 keep-L2**。
 3. **L2 退役的三种标准动作**（按优先级）：
    - **删除**：能力本身不必要（如 `allowOutsideWorkspace` 分支、`/nano-explorer-extra/perf-review/host?mode=window` 破坏性排空）——删路由 + 删客户端调用 + 删 i18n 文案。
    - **改由 operator 发起**：能力必要但不应由页面触发（如 notepad 的 S3 endpoint/bucket 配置 → `Config`；shared-workspace 的 `localPath` 选择 → 安装/运维时的 Config 或 CLI）。
@@ -359,10 +387,10 @@ OS 用户（如 seanz）的权限边界
 
 ### 3.3 诚实反方制衡
 
-1. **C+B 的代价是真实的产品面收缩**：notepad 多 endpoint 云设置、shared-workspace 的目录选择、explorer 的 Git 操作都会从页面消失或改由 operator/agent 发起。若业主的实际使用强依赖这些页面入口，B 的执行会产生明显迁移摩擦；MS01 必须把「删除的路由 → 替代操作路径」逐条写清，不能只说「退役」。
+1. **C+B 的代价是真实的产品面收缩**：notepad 多 endpoint 云设置、shared-workspace 的目录选择、explorer 的 Git 操作都会从页面消失或改由 operator/agent 发起。若业主的实际使用强依赖这些页面入口，B 的执行会产生明显迁移摩擦；26-nov-security-fix 必须把「删除的路由 → 替代操作路径」逐条写清，不能只说「退役」。
 2. **「同 realm 不可区分」也可能被误读为「页面什么都做不了」**：C 并不否定插件客户端需要功能，而是要求把功能压缩到 L0/L1；L1 的 realpath 围栏必须真的严密（symlink、大小写、UNC/网络盘），否则会退化成「假 L1」。
-3. **单一守卫包（Q3 若选共享包）会成为单点**：它本身必须极简、无业务逻辑、有完整单测；否则一个 guard bug 影响四插件。需要在 MS01 中把它列为「安全关键基础件」，按发布门禁管理。
-4. **本版 Q4 已排除数据面迁移（选项 D）**：notepad 保持客户端 IndexedDB + 客户端同步，离线行为不变；新的风险转为「共享包误杀合法远端数据」与「schema 版本漂移」，MS01 必须用合法样本回归 + schema 版本化控制。
+3. **单一守卫包（Q3 若选共享包）会成为单点**：它本身必须极简、无业务逻辑、有完整单测；否则一个 guard bug 影响四插件。需要在 26-nov-security-fix 中把它列为「安全关键基础件」，按发布门禁管理。
+4. **本版 Q4 已排除数据面迁移（选项 D）**：notepad 保持客户端 IndexedDB + 客户端同步，离线行为不变；新的风险转为「共享包误杀合法远端数据」与「schema 版本漂移」，26-nov-security-fix 必须用合法样本回归 + schema 版本化控制。
 
 ### 3.4 为什么提出 Round 2（重写 Q3、Q4，及各自驱动的 T-O）
 
@@ -379,7 +407,7 @@ OS 用户（如 seanz）的权限边界
 
 1. 新增 `T-O-3`（功能零回退）与 `T-O-4`（本地威胁模型）为 NORMATIVE；`T-O-2` 的「L2 硬退役」条款失效，仅保留 L0–L3 作为敏感度分级。
 2. **原 Q3/Q4 作废**（v0.2 的「共享守卫包 + 数据面迁移」方案不再成立），以 v0.5 的 Q3/Q4 重写替代。
-3. MS01 的验收口径改为「功能合同测试通过 + P0 跨主体 PoC 失败」；P2 自影响允许保留并登记。
+3. 26-nov-security-fix 的验收口径改为「功能合同测试通过 + P0 跨主体 PoC 失败」；P2 自影响允许保留并登记。
 4. 原审计的 severity 不重算（`docs/code-review/26-nov/security-audit.md` 仍为事实记录），但修复优先级按 `T-O-4` 的主体分桶执行。
 
 ---
@@ -390,7 +418,7 @@ OS 用户（如 seanz）的权限边界
 
 ### Q3 — 本地部署威胁模型与「功能零回退」边界：哪些必修、哪些只做加固（**驱动真相：`T-O-1` + `T-O-3` + `T-O-4`**）
 
-- **影响范围**：24 条 confirmed 的处置分类（必修 / 加固 / 已接受）；是否允许改变任何 UI、路由、数据流；MS01 的范围、优先级与验收；后续全部 executional 题。
+- **影响范围**：24 条 confirmed 的处置分类（必修 / 加固 / 已接受）；是否允许改变任何 UI、路由、数据流；26-nov-security-fix 的范围、优先级与验收；后续全部 executional 题。
 - **为什么必须确认**：Round 1 的 `T-O-1`/`T-O-2` 是在「安全优先、可删功能」假设下冻结的；`T-O-3`（功能零回退）与 `T-O-4`（本地单用户、默认 loopback、无公网）改变了优化目标。若照原审计的 L2 硬退役执行，会删除 notepad 多 endpoint 云设置（`dsh-nano-notepad/src/client/cloud-settings.js:1-196`、`dsh-nano-notepad/src/client/panel.js:2028`）、shared-workspace 的 join 目录选择（`dsh-nano-shared-workspace/src/client/index.js:373-377`）、explorer 的文件/Git 操作（`dsh-nano-explorer-extra/src/client/body.js:151`）——直接违反 `T-O-3`。但若完全不修，远程桶写入者仍可经 XSS 拿到页面权限（`dsh-nano-notepad/src/client/sync.js:195-215` + `dsh-nano-notepad/src/client/markdown.js:148` + `dsh-nano-notepad/src/client/panel.js:1371`）。必须先定义「哪些主体仍是跨主体、哪些只是同用户自影响」。
 - **当前建议 / 倾向**（`security-fix agent`）：**选 C**——按主体分三桶：`remote-cross`（P0 必修：remote-bucket/remote-web → 本地宿主数据）、`remote→page`（P0 必修：远程内容转化为页面脚本，含经 agent 提示词注入进入执行链的同类）、`page-self`（P2 仅加固：同用户页面脚本 → 宿主，属自影响，只做不改变功能的加固）。所有现有路由、UI、工作流、数据位置全部保留。
 - **Reasoning**：本地单用户、默认 loopback 时，唯一真实的跨主体入口是「远程桶/远程网页 → 本机」以及它们经 XSS 转化出的页面脚本；同用户页面脚本调宿主路由，等同于用户自己在控制台操作，不应为它牺牲功能。把 P0 收窄到这两类，既守住真实攻击面，又满足 `T-O-3`。P2 的加固（路径围栏、参数校验、限额）只要不改变功能就做，改变功能的则登记为已接受风险。
@@ -402,7 +430,7 @@ OS 用户（如 seanz）的权限边界
 1. **这不是降低审计结论，而是改变修复的目标函数**：审计报告仍记录 24 条 confirmed 的事实与 severity；本阶段只决定「哪些必须修、哪些作为本地自影响接受」。`T-O-3` 明确功能不能回退，`T-O-4` 明确本地部署事实，二者共同要求分桶。
 2. **分桶标准是「是否跨主体」，不是「是否严重」**：一条 high 可能只是同用户自影响（如 explorer 的任意读），一条 medium 可能仍是跨主体（如 shared-workspace 的远程 marker 注入）。所以不能按 severity 直接排序，必须按主体。
 3. **`remote→page` 必须算 P0**：远程 S3 桶写入者或 mp 文章作者一旦通过 XSS 在页面执行脚本，就获得了与用户页面相同的 `fetch`/cookie/Peer，能把 P2 的 page-self 能力全部用一遍；不修 XSS 等于把 P2 暴露给远程攻击者。
-4. **`page-self` 的接受不是忽略**：能零成本加固的（路径 realpath 围栏、参数 schema、body 限额）仍然做；需要改变功能/工作流的（如移除 `allowOutsideWorkspace`、删除 `/s3/config`）不做，登记为 `accepted-local-self-impact` 并在 MS01 中列明。
+4. **`page-self` 的接受不是忽略**：能零成本加固的（路径 realpath 围栏、参数 schema、body 限额）仍然做；需要改变功能/工作流的（如移除 `allowOutsideWorkspace`、删除 `/s3/config`）不做，登记为 `accepted-local-self-impact` 并在 26-nov-security-fix 中列明。
 
 **【可选选项清单】**
 
@@ -414,14 +442,14 @@ OS 用户（如 seanz）的权限边界
 
 **【推荐选项的详细执行说明】**（推荐选项 C）
 
-1. **分桶清单（MS01 必产）**：以 `findings.json` 的 24 条 confirmed 为输入，逐条填 `主体桶 / 是否 P0 / 修复手段 / 功能影响`。代表项：
+1. **分桶清单（26-nov-security-fix 必产）**：以 `findings.json` 的 24 条 confirmed 为输入，逐条填 `主体桶 / 是否 P0 / 修复手段 / 功能影响`。代表项：
    - `remote-cross`：`nsw:matchWorkspace-member-localPath-session-exfil`（`dsh-nano-shared-workspace/src/host/workspaces.js:120-130`）、`nsw:remote-member-localPath-arbitrary-fs-write`（`dsh-nano-shared-workspace/src/host/tree.js:157-217`）、`nsw:remote-meta-unbounded-fetch-decompress`（`dsh-nano-shared-workspace/src/host/session-io.js:199`、`:281`）、`nsw:acquireClaim-rmw-no-cas`（共租户并发写）、`nsw:workspaceId-join-s3key-traversal`（bucket 侧）。
    - `remote→page`：`notepad:sync-manifest-id-unescaped-attr-xss`（`dsh-nano-notepad/src/client/sync.js:195-215` → `dsh-nano-notepad/src/client/db.js:655-665`）、`notepad:sync-remote-image-mime-unescaped-attr-xss`（`dsh-nano-notepad/src/client/markdown.js:148` → `dsh-nano-notepad/src/client/panel.js:1371`）、`notepad:sanitizeRichHtml-keeps-js-href-active-dom`（`dsh-nano-notepad/src/client/markdown.js:179`）、`nano-notepad/sanitizeMpHtml-active-content`（`dsh-nano-notepad/index.js:423`）、`nano-notepad/fetch-mp-redirect-ssrf`（远程文章 30x → 宿主网络）、`hunter-e:imagine-template-shell-injection`（远程文档/网页被 agent 读入 prompt 的间接注入链）。
    - `page-self`：`nxe:routes-read-arbitrary-file`（`dsh-nano-explorer-extra/src/host/routes.js:412-449`）、`notepad:read-arbitrary-md-read`（`dsh-nano-notepad/index.js:219-230`）、`nsw:ls-mkdir-any-absolute-path`（`dsh-nano-shared-workspace/src/host/routes.js:388-410`）、`nxe:mutate-symlink-escape`、`nxe:git-config-filter-exec`、`nano-notepad/s3-config-endpoint-ssrf`、`hunter-e:grok-creds-workspace-copy`（本地凭据处理，按自影响登记）。
 2. **`remote-cross` 的修复纪律**：只加 schema 校验、身份绑定（memberId 完整匹配/createdBy）、路径限制（realpath 围栏）、大小上限（`committedBytes`/part/解压输出）；不改 join/pull/push 的 UI 与工作流。
 3. **`remote→page` 的修复纪律**：只加输出编码/HTML allowlist（剥活动内容）、URL scheme 校验、DOM 属性转义；不改变正常文章/笔记的渲染能力（图片、样式、表格、代码块保留）。
 4. **`page-self` 的修复纪律**：只做不改变功能的加固——路径 realpath 围栏（拒绝越界，不拒绝合法路径）、参数 schema、body 限额、错误脱敏；涉及删除/隐藏/迁移的（如 `allowOutsideWorkspace` 的合法用途、`/s3/config` 多端点管理、`/workspaces/join` 的本地目录选择）保留原功能，登记 `accepted-local-self-impact`。
-5. **功能合同基线**：MS01 产出 `security/feature-contract.json`，固定 43 条路由 + 客户端入口 + 数据位置；任何修复提交必须跑 `test:feature-contract`，不得改变 path/method/response shape/UI 入口/存储位置。
+5. **功能合同基线**：26-nov-security-fix 产出 `security/feature-contract.json`，固定 43 条路由 + 客户端入口 + 数据位置；任何修复提交必须跑 `test:feature-contract`，不得改变 path/method/response shape/UI 入口/存储位置。
 6. **验收**：P0 两桶的审计 PoC 必须失败（远程桶写入被拒、XSS 不执行、mp 重定向不复验通过即拒绝）；P2 桶的 PoC 允许仍成功，但必须记录「已接受风险 + 加固措施 + 复发监控」；所有功能 smoke 必须通过（notepad save/read/cloud settings/sync、explorer 文件与 Git、shared-workspace join/pull/push、model-selector 引擎切换）。
 
 **【推荐选项的支持证据 / 其他选项的反例】**
@@ -437,7 +465,7 @@ OS 用户（如 seanz）的权限边界
 
 ### Q4 — 功能零回退下的加固落点：共享守卫 + 宿主侧远端数据校验 + 共享 HTML 策略（**驱动真相：`T-O-2`（敏感度分级）+ `T-O-3` + `T-O-4`**）
 
-- **影响范围**：43 条 web 路由的注册方式与加固代码位置；`packages/` 的包结构；notepad 客户端同步与 shared-workspace 宿主同步的校验点；HTML 清洗策略；MS01 的工程拆分、测试与发布版本。
+- **影响范围**：43 条 web 路由的注册方式与加固代码位置；`packages/` 的包结构；notepad 客户端同步与 shared-workspace 宿主同步的校验点；HTML 清洗策略；26-nov-security-fix 的工程拆分、测试与发布版本。
 - **为什么必须确认**：Q3 只决定「修哪些」，Q4 决定「加固代码放在哪」。`T-O-3` 禁止迁移数据面（会改变 IndexedDB/离线/UI），所以不能沿用 v0.2 的 Q4「宿主唯一数据面」；但加固仍需单一实现点——否则 43 条路由各自写校验会漂移，remote-data 校验会在 N 个消费点重复。必须选一个「不改变功能、可审计、可回归」的落点。
 - **当前建议 / 倾向**（`security-fix agent`）：**选 A**——三层加固，全部为增量、不改变数据流与 UI：
   1. `packages/dsh-host-route-guard`：统一 `registerRoutes`，所有现有路由保留，声明 `sensitivity`（`public`/`owner`/`sensitive`）与 `bodyLimit`；fail-closed 获取 `connection`，统一 method/JSON 错误。
@@ -508,7 +536,7 @@ OS 用户（如 seanz）的权限边界
 
 ### 5.3 诚实反方制衡
 
-1. **P2 接受意味着部分审计发现仍然可被同用户脚本利用**：`nxe:routes-read-arbitrary-file`、`notepad:read-arbitrary-md-read` 等在本地同用户模型下不会强制修复；MS01 必须逐条登记「接受理由 + 低成本加固 + 复发监控」，不能写成「已修复」。
+1. **P2 接受意味着部分审计发现仍然可被同用户脚本利用**：`nxe:routes-read-arbitrary-file`、`notepad:read-arbitrary-md-read` 等在本地同用户模型下不会强制修复；26-nov-security-fix 必须逐条登记「接受理由 + 低成本加固 + 复发监控」，不能写成「已修复」。
 2. **schema 严格拒绝可能误伤历史数据**：现有桶里可能存在缺字段的旧 manifest/图片；Q6 必须先做「现有数据兼容性检查」与 schema 版本化，否则修复本身造成功能回退。
 3. **三包增加依赖面**：guard/schema/html-policy 都是安全关键基础件，需单点评审、单测、版本锁定；否则新包本身成为供应链风险。
 4. **feature-contract 测试可能脆弱**：必须由代码生成（`registerRoutes` 清单）而不是手工维护，否则会阻碍正常开发、被开发者绕过。
@@ -558,11 +586,11 @@ OS 用户（如 seanz）的权限边界
    - `bodyLimit`：默认 64KiB；`/s3/object` 用现有 `MAX_S3_BODY_BYTES`；`/save` 按 `imageLimitBytes`/笔记大小。
    - `sessionBinding`：`required`（explorer/shared-workspace 的会话路由）、`none`（notepad/model-selector 的页面全局路由）。
 3. **guard 校验**：启动时读取清单；任何 `webServer.register` 的 path/method 不在清单 → `throw route-not-listed`；清单中不存在于代码 → `throw route-stale`（防漂移）。
-4. **分级示例**（完整 43 行由 MS01 产出）：
+4. **分级示例**（完整 43 行由 26-nov-security-fix 产出）：
    - L0：`GET /nano-model-selector/catalog`、`GET /nano-explorer-extra/status`、`POST /nano-notepad/read`（若最终按 Q3 归入 page-self，仅加固）。
    - L1：`POST /nano-explorer-extra/create-file|create-folder|rename|move|delete`（realpath 围栏后）、`POST /nano-notepad/save`（原生对话框）。
-   - L2：`POST /nano-explorer-extra/commit|pull|checkout`（git）、`POST /nano-shared-workspace/tree/pull|push|materialize|ls|mkdir`、`POST /nano-notepad/fetch-mp|s3/object|s3/config`、`GET/PUT /nano-model-selector/media-engine`（宿主状态文件写）。
-   - L3：`POST /nano-shared-workspace/settings/update`（身份）、`POST /nano-notepad/s3/config`（endpoint 配置）。
+   - L2：`POST /nano-explorer-extra/commit|pull|checkout`（git）、`POST /nano-shared-workspace/tree/pull|push|materialize|ls|mkdir`、`POST /nano-notepad/fetch-mp|s3/object|s3/config`、`PUT /nano-shared-workspace/settings/update`（页面可写的身份写）、`GET/PUT /nano-model-selector/media-engine`（宿主状态文件写）。
+   - L3：仅 operator Config 通道（无页面路由）。**（v1.1 更正：`/settings/update` 实为 `PUT`（`dsh-nano-shared-workspace/src/host/routes.js:154-155`）、且属页面可写的 L2 身份写、非 L3；`POST /nano-notepad/s3/config` 亦属 L2，已并入上条 L2 行、删除本行重复条目。）**
 5. **CI 门禁**：`scripts/check-route-sensitivity.mjs` 比对代码注册与清单；`test:feature-contract` 同时锁定 path/method 不变。
 6. **版本**：清单文件随 guard 包 0.1.0 发布；后续新增路由必须先改清单才能启动。
 
@@ -612,7 +640,7 @@ OS 用户（如 seanz）的权限边界
    - shared-workspace `dsh-nano-shared-workspace/src/host/workspaces.js:103-130`（marker list）、`dsh-nano-shared-workspace/src/host/session-io.js:172-281`（push/pull meta/parts）、`dsh-nano-shared-workspace/src/host/tree.js:157-217`（HEAD/pull/push）。
 3. **拒绝语义**：返回 `{ ok:false, reason:'schema', detail:'<field>' }`；notepad 客户端 `sync.cycle` 捕获（`dsh-nano-notepad/src/client/sync.js:239-251`）→ `onState({phase:'error', detail})`，IndexedDB 保持最后好状态；shared-workspace 宿主同步记录 warning 并跳过该对象，不影响其他对象。
 4. **版本化**：所有对象带 `schemaVersion`/`v`；未知版本拒绝并提示升级；未来版本通过新 schema 版本 + 迁移函数，不做「静默兼容」。**历史对象缺失 `schemaVersion` 视为 v0**：按 v0 宽松规则读取并一次性补写（迁移期只读兼容，不对新写入放行 v0），避免已有合法数据被误拒。
-5. **兼容性回归**：MS01 收集现有合法样本（本地测试 fixture + 现有桶导出）作为 `test/remote-schema/compat/`；所有样本必须通过；新增恶意样本（id 逃逸、mime 逃逸、深嵌套、超 committedBytes）必须被拒绝。
+5. **兼容性回归**：26-nov-security-fix 收集现有合法样本（本地测试 fixture + 现有桶导出）作为 `test/remote-schema/compat/`；所有样本必须通过；新增恶意样本（id 逃逸、mime 逃逸、深嵌套、超 committedBytes）必须被拒绝。
 6. **配置**：`maxFileBytes`、`maxImageBytes`、`maxCommittedBytes` 作为 L3 `Config` 字段，默认值保守但可调；不改变现有 UI。
 
 **【推荐选项的支持证据 / 其他选项的反例】**
@@ -695,7 +723,7 @@ OS 用户（如 seanz）的权限边界
 1. **43 行清单会随代码演进变旧**：必须由 `registerRoutes`/`ROUTE` 常量生成并在 CI 比对；否则新路由绕过或旧条目失效。
 2. **严格 schema 对历史桶数据有真实风险**：v0 只读兼容与一次性补写必须先在生产数据副本上演练；否则可能让用户升级后看不到旧笔记。
 3. **共享 HTML 策略可能改变极端文章的渲染**：allowlist 需要以现有 mp 文章快照做正向回归；否则修复 XSS 可能以排版回退为代价。
-4. **三包之间版本耦合**：guard/schema/html-policy 任一升级需联动四插件；MS01 必须给出兼容矩阵与独立可回滚点。
+4. **三包之间版本耦合**：guard/schema/html-policy 任一升级需联动四插件；26-nov-security-fix 必须给出兼容矩阵与独立可回滚点。
 
 ### 7.4 为什么提出 Round 4（注入 Q8–Q10，及各自驱动的 T-O）
 
@@ -714,7 +742,7 @@ OS 用户（如 seanz）的权限边界
 
 ### Q8 — P0 修复的批次、功能合同与发布门禁（**驱动真相：`T-O-3` + `T-O-5` + `T-O-6`**）
 
-- **影响范围**：13 条 P0（`remote-cross` 7 条 + `remote→page`/`remote→agent` 6 条）的修复顺序；四插件 release 版本；CI 门禁；`security/feature-contract.json`；MS01 的批次与验收。
+- **影响范围**：13 条 P0（`remote-cross` 7 条 + `remote→page`/`remote→agent` 6 条）的修复顺序；四插件 release 版本；CI 门禁；`security/feature-contract.json`；26-nov-security-fix 的批次与验收。
 - **为什么必须确认**：P0 数量多、跨四个插件与三个共享包，且修复必须零功能回退。若不先定批次与门禁，可能出现「先改渲染导致旧数据不可读」「先上 schema 导致同步 UI 报错」等返工；也可能一次性大爆炸发布，出问题无法定位。必须锁定：批次顺序、每批门禁、发布粒度、回滚方式。
 - **当前建议 / 倾向**（`security-fix agent`）：**选 B**——内部四批、每批独立门禁，最终每个插件一次 minor 发布（不拆多次用户可见发布）：
   1. **Batch 0（基础，零行为）**：guard 包 + `route-sensitivity.json` + `feature-contract.json` 基线 + CI。
@@ -748,7 +776,7 @@ OS 用户（如 seanz）的权限边界
 
 2. **每批门禁**：`test:feature-contract`（无 path/method/UI/存储变化）、`test:security-regression`（本批 P0 PoC 失败）、`test:smoke`（四插件核心功能）、`npm run build` 产物校验。全部通过才进入下一批。
 3. **发布**：每个插件最终只发一个 minor 版本；release note 按「功能无变化 + 安全加固」表述；不提供关闭开关；回滚仅回退版本（无数据迁移，回滚安全）。
-4. **MS01 交付**：Batch 0–3 的任务表、每批负责人/预估、门禁脚本、发布 checklist、回滚步骤。
+4. **26-nov-security-fix 交付**：Batch 0–3 的任务表、每批负责人/预估、门禁脚本、发布 checklist、回滚步骤。
 
 **【可选选项清单】**
 
@@ -764,7 +792,7 @@ OS 用户（如 seanz）的权限边界
 2. **Batch 1（P0 host-data）**：`dsh-remote-data-schema` 先接 `dsh-nano-notepad/src/host/s3-sync.js:231-250` 与 shared-workspace 的 `dsh-nano-shared-workspace/src/host/workspaces.js:103-130`、`dsh-nano-shared-workspace/src/host/session-io.js:172-281`、`dsh-nano-shared-workspace/src/host/tree.js:157-217`；修复 7 条（表 1–7）；不改 UI、不改 join/pull/push 流程。门禁：fake S3 恶意对象被拒 + 正常对象通过 + shared-workspace 全功能 smoke。
 3. **Batch 2（P0 content-render）**：`dsh-html-policy` 接 `dsh-nano-notepad/src/client/markdown.js:179`/`dsh-nano-notepad/index.js:423`；修复 6 条（表 8–13）；门禁：负向 XSS 语料 0 执行 + 正向文章快照一致 + notepad 渲染 smoke。
 4. **Batch 3（P2/local-supply）**：按 Q9 的 accepted/加固清单与 Q10 的 build/release 清单执行；门禁：P2 记录仍为 accepted（不强制 PoC 失败）、供应链 clean checkout 可重建。
-5. **发布**：四插件各一个 minor（notepad/model-selector/explorer 0.1.1→0.2.0；shared-workspace 0.1.0→0.2.0 或 patch，由 MS01 按变更面定）；三包 0.1.0；同一天发布，release note 统一。
+5. **发布**：四插件各一个 minor（notepad/model-selector/explorer 0.1.1→0.2.0；shared-workspace 0.1.0→0.2.0 或 patch，由 26-nov-security-fix 按变更面定）；三包 0.1.0；同一天发布，release note 统一。
 6. **回滚**：无数据迁移（T-O-8 的 v0 兼容只读不写），回滚 = 安装前一版本；`security/feature-contract.json` 保留为回归基线。
 
 **【推荐选项的支持证据 / 其他选项的反例】**
@@ -779,7 +807,7 @@ OS 用户（如 seanz）的权限边界
 ### Q9 — P2 `accepted-local-self-impact` 清单、低成本加固与监控（**驱动真相：`T-O-3` + `T-O-4` + `T-O-5`**）
 
 - **影响范围**：8 条 `page-self` + `hunter-e:grok-creds-workspace-copy`（共 9 条）的逐项处置；`security/accepted-risks.json`；发布说明；后续复发监控。
-- **为什么必须确认**：`T-O-5` 只说「page-self 只做不改变功能的加固，其余登记 accepted」，但没定逐项清单。没有逐项决定，MS01 要么过度加固导致功能回退，要么漏登记导致审计发现被当成「已修复」。必须锁定：哪些做低成本加固、哪些纯接受、接受如何监控。
+- **为什么必须确认**：`T-O-5` 只说「page-self 只做不改变功能的加固，其余登记 accepted」，但没定逐项清单。没有逐项决定，26-nov-security-fix 要么过度加固导致功能回退，要么漏登记导致审计发现被当成「已修复」。必须锁定：哪些做低成本加固、哪些纯接受、接受如何监控。
 - **当前建议 / 倾向**（`security-fix agent`）：**选 B**——逐项「能零成本加固就加固，改动功能就接受」；完整清单入 `security/accepted-risks.json`，每次 release 前复核。
 - **Reasoning**：P2 是本地同用户自影响，安全收益有限；但有些加固（路径 realpath 围栏、`.git` 拒绝、sync SKIP）不改变正常用户行为，应顺手做掉；涉及删除 `allowOutsideWorkspace`、限制 `/s3/config` endpoint、迁移数据位置的，坚决不做，登记接受。这样既最大化安全收益，又守住 `T-O-3`。
 - **问题（请业主裁决）**：**你是否确认 B：P2 逐项按「零成本加固优先、改变功能则接受」处理，并接受清单与监控登记？**
@@ -801,7 +829,7 @@ OS 用户（如 seanz）的权限边界
 
 **【推荐选项的详细执行说明】**（推荐选项 B）
 
-1. **逐项清单（初版，MS01 复核）**：
+1. **逐项清单（初版，26-nov-security-fix 复核）**：
 
 | 指纹 | 处置 | 具体动作 | 功能影响 |
 |---|---|---|---|
@@ -858,16 +886,16 @@ OS 用户（如 seanz）的权限边界
 **【推荐选项的详细执行说明】**（推荐选项 A）
 
 1. **esbuild**：四个 `build-client.mjs`（`dsh-nano-notepad/scripts/build-client.mjs:25`、`dsh-nano-model-selector/scripts/build-client.mjs:21`、`dsh-nano-explorer-extra/scripts/build-client.mjs:26`、`dsh-nano-shared-workspace/scripts/build-client.mjs:26`）改为：`const local = join(root,'node_modules','.bin','esbuild'); if (!existsSync(local)) { console.error('run npm ci first'); process.exit(1) }`；删除 `npx` 分支；`release.md` 的构建步骤加 `npm ci`。
-2. **提交未跟踪源**：`git add` `dsh-nano-notepad/src/host/s3-sync.js`、`packages/dsh-s3-client/**`、`dsh-nano-notepad/src/client/{sync,cloud-settings}.js`、`packages/dsh-nano-ui/src/tabs.js`、`dsh-nano-notepad/lib/s3-sync-host.js`（若作为产物则改为构建生成并校验）等；`git status` 清洁后才能打包。
+2. **提交未跟踪源（v1.1 更正：已完成大半）**：上述文件及 `lib/` 产物在 `350c6c8` 已入库；本步改为「CI 校验随包源与产物均已提交 + `git status` 清洁后才能打包」的**防回归**门禁，而非一次性 `git add`。
 3. **CI**：新增 `.github/workflows/release.yml`（或仓库实际 CI）：checkout tag → `npm ci` → `npm run build` → `git diff --exit-code -- lib/`（或重建哈希比对）→ `npm pack` → `SHA256SUMS` + `actions/attest-build-provenance`（或 cosign keyless）。
 4. **发布门禁**：`npm pack --dry-run --json` 的文件列表必须与 `package.json files` 一致；`lib/` 必须由当前源重建；无未跟踪文件；版本号与 tag 一致。
 5. **版本**：四个插件 patch/minor 版本；三包 0.1.0；不改变 `dsh.bundle.patch`/`dsh.client`/`files` 结构。
-6. **MS01 交付**：修改四个 build 脚本、提交清单、CI YAML、发布 checklist、clean-checkout 重建测试。
+6. **26-nov-security-fix 交付**：修改四个 build 脚本、提交清单、CI YAML、发布 checklist、clean-checkout 重建测试。
 
 **【推荐选项的支持证据 / 其他选项的反例】**
 
 - **支持 A 的 esbuild 现状**：四个 build 脚本的 npx 行（`dsh-nano-notepad/scripts/build-client.mjs:25`、`dsh-nano-model-selector/scripts/build-client.mjs:21`、`dsh-nano-explorer-extra/scripts/build-client.mjs:26`、`dsh-nano-shared-workspace/scripts/build-client.mjs:26`）；四个包都有 `package-lock.json`，npx 不读取它。
-- **支持 A 的未跟踪现状**：`dsh-nano-notepad/package.json:26` 的 `files` 包含 `lib/s3-sync-host.js`；`dsh-nano-notepad/index.js:5` 导入它；`git ls-files` 显示其未跟踪；`dsh-nano-notepad/src/client/panel.js:34` 依赖 `nanoTabs`，该导出只存在于工作区 `packages/dsh-nano-ui/src/tabs.js`（未跟踪）。
+- **支持 A 的未跟踪现状（v1.1 更正）**：`dsh-nano-notepad/package.json:26` 的 `files` 含 `lib/s3-sync-host.js`、`dsh-nano-notepad/index.js:5` 导入它；撰写时 `git ls-files` 显示未跟踪、且 `panel.js:34` 的 `nanoTabs` 只存在于工作区 `packages/dsh-nano-ui/src/tabs.js`——**此状态在 `350c6c8` 已修复**：这些源与 `lib/` 产物现均已入库。故本项保留为「为何当时需要补 CI/入库门禁」的历史证据；当前剩余工作见 §1.12-2。
 - **支持 A 的 CI 缺失**：`release.md:42` 描述本地 `npm run build` + `npm pack`；`release.md:170` 要求「all artifacts must come from CI」，但仓库无 `.github/workflows/`（此前审计已核）。
 - **反例 B**：digest 校验只能保证 npx 拉到的字节与某个哈希一致，但 npx 仍绕过 lockfile、仍可能在构建时联网；且未跟踪产物/无 CI 的 provenance 问题完全没解决。
 - **反例 C**：两个 medium 属长期治理缺口；延后会让每次发布都重复「tag 不可重建」的风险。
@@ -887,7 +915,35 @@ OS 用户（如 seanz）的权限边界
 - **竞态检查**：Q1–Q10 单线程顺序决断，无并发轮次；T-O 编号不重用；无重复/冲突 owner 答复；无未冻结题。
 - **结论**：无残留内部冲突、无竞态、无欠登记；满足全轮冻结条件。
 
-**冻结状态：`frozen`**（v1.0，2026-11-11）。本文件作为安全修复执行层的单一真源，后续 MS01 直接引用，不再新增方向性真相。
+**冻结状态：`frozen`**（v1.0，2026-11-11）。本文件作为安全修复执行层的单一真源，后续 26-nov-security-fix 直接引用，不再新增方向性真相。
+
+### 9.0a v1.1 errata（冻结后 file:line 级核查修订）
+
+> 业主指令做跨 plugin、`file:line` 级联级核查（宿主与浏览器两面），对已冻结文档中的**事实性错误与陈旧引用**做完全 coherent 修订。T-O-1–T-O-12 的**决策未改动**；修订分三类逐条登记如下。
+
+**A. 代号更正**
+- `MS01` → `26-nov-security-fix`（46 处；下游阶段代号统一，见文档头「下游消费者」与各处）。
+
+**B. 事实性错误更正**
+
+| # | 位置 | 原文 | 更正为 | 证据 |
+|---|---|---|---|---|
+| B1 | Q5 分级示例 | `POST /nano-shared-workspace/settings/update` 且列 L3 | `PUT` 方法、且属页面可写 **L2**（身份写），移入 L2 行 | `dsh-nano-shared-workspace/src/host/routes.js:154-155` |
+| B2 | Q5 分级示例 | `POST /nano-notepad/s3/config` 同列 L2 与 L3 两处 | 仅保留 L2 一处；L3 行改为「无页面路由」 | `dsh-nano-notepad/index.js:66`、`§1.7` 每 path+method 一行 |
+| B3 | §2.0 检索清单 | 写入 `~/nano-notepad-s3.json` | `${DSH_HOME}/nano-notepad-s3.json`（0600） | `dsh-nano-notepad/AGENTS.md` 前置第 7 条 |
+| B4 | §1.12 / Q10 | 「提交全部未跟踪随包源」为待办 | 已于 `350c6c8` 入库；改为「CI 校验已提交」防回归 | `git ls-files` 实测 |
+| B5 | §1.7 / T-O-7 | guard「启动时读 `security/route-sensitivity.json`」 | repo 根文件运行时不可达；清单以**构建期 JS 常量**打进产物 | `T-O-13`；三处 build 注释「copies lib/ but not node_modules」 |
+
+**C. 新增执行真相（append-only）**
+
+| # | Truth-ID | 内容 |
+|---|---|---|
+| C1 | `T-O-13` | 共享包分发通道：`devDependencies` + `lib/` bundle + 清单生成 JS 常量（§1.13） |
+| C2 | `T-O-14` | 回归门禁三件套：feature-contract 逐字段、存量桶全量回归、行为变化显式登记（§1.14） |
+
+**D. 澄清（不改决策）**
+- `/s3/object` 的 `put`/`get` 校验不对称：`put` 任意 `key`，schema 仅作用于 `get` 的 known-key 形态（§1.8-4）。
+- 三包的 `file:` 依赖声明位置改为 `devDependencies`（§1.6-2，配合 `T-O-13`）。
 
 ### 9.1 全部 Truth-Gate 清单
 
@@ -905,6 +961,8 @@ OS 用户（如 seanz）的权限边界
 | `T-O-10` | P0 内部四批 + 每批门禁 + 每插件一次 minor 发布 | `frozen` |
 | `T-O-11` | P2 逐项零成本加固/接受 + `accepted-risks.json` + 监控 | `frozen` |
 | `T-O-12` | 供应链完整修复（npx 移除 + 源入库 + CI/attestation） | `frozen` |
+| `T-O-13` | 共享包分发通道（devDeps + `lib/` bundle + 清单生成常量） | `frozen`（v1.1 errata 追加） |
+| `T-O-14` | 回归门禁三件套（feature-contract 逐字段 / 存量回归 / 行为变化登记） | `frozen`（v1.1 errata 追加） |
 
 ### 9.2 覆盖核对
 
@@ -916,7 +974,7 @@ OS 用户（如 seanz）的权限边界
 ### 9.3 交接
 
 - **冻结判据**：§1 Truth-Gate 全部 `T-O` 冻结；无 OPEN 残题；四层敏感度清单、各 L2 的加固方式、守卫载体与三包架构均已定稿。
-- **下游**：`MS01 执行计划 / todo`，按 T-O-10 的四批、T-O-11 的 P2 清单、T-O-12 的 build/release 改造逐项展开；MS01 不得绕开本文另立口径。
+- **下游**：`26-nov-security-fix` 执行计划 / todo，按 T-O-10 的四批、T-O-11 的 P2 清单、T-O-12 的 build/release 改造逐项展开，并以 T-O-13 的包分发通道、T-O-14 的回归门禁为执行前提；26-nov-security-fix 不得绕开本文另立口径。
 - **变更控制**：本文件冻结后，任何新功能/新路由/新 finding 需新开 QNA campaign 或在本文追加 `T-O-13+` 修订；不得静默修改已冻结真相。
 
 ---
@@ -943,3 +1001,4 @@ OS 用户（如 seanz）的权限边界
 | v0.6 | `2026-11-11` | `security-fix agent（DeepSeek Harness）` | Round 2 业主裁决（Q3=C、Q4=A）；T-O-5/T-O-6 冻结并补 §1.5/§1.6；补中场评估 II；新增 Round 3（Q5 路由敏感度、Q6 远端 schema、Q7 HTML allowlist） |
 | v0.7 | `2026-11-11` | `security-fix agent（DeepSeek Harness）` | Round 3 业主裁决（Q5=B、Q6=A、Q7=A）；T-O-7/T-O-8/T-O-9 冻结并补 §1.7–§1.9；补中场评估 III；新增 Round 4（Q8 P0 批次/门禁、Q9 P2 接受清单、Q10 供应链发布链） |
 | v1.0 | `2026-11-11` | `security-fix agent（DeepSeek Harness）` | Round 4 业主裁决（Q8=B、Q9=B、Q10=A）；T-O-10/T-O-11/T-O-12 冻结并补 §1.10–§1.12；全轮收口；文档状态 `frozen` |
+| v1.1 | `2026-11-11` | `security-fix agent（DeepSeek Harness）` | errata：下游代号 `MS01`→`26-nov-security-fix`；更正 `/settings/update` 方法(POST→PUT)与 L3→L2、`/s3/config` L2/L3 重复、`~/`→`${DSH_HOME}/`、随包源已入库(T-O-12 收窄)、清单运行时不可达(改构建期常量)；`file:` 依赖改 `devDependencies` 并固化 `T-O-13` 分发通道；新增 `T-O-14` 回归门禁；补 §1.13/§1.14、§9.0a、§9.1 两行 |

@@ -42,7 +42,7 @@ PH1 batch0-baseline ──▶ PH2 batch1-host-data ──▶ PH3 batch2-content-
 - [x] `P1-06` — `dsh-remote-data-schema` 骨架（validate/SchemaReject） — pass `bd4d6ad` · node --test 6/6
 - [x] `P1-07` — `dsh-html-policy` 骨架（ALLOWED_* 常量） — pass `bd4d6ad` · node --test 7/7
 - [x] `P1-08` — `security/accepted-risks.json` 9 条骨架（4 harden/5 accept） — pass `bd4d6ad`
-- [ ] `P1-09` — `test/spike/security-fix/` 宪章 + `test/remote-schema/compat/` + `scripts/security-regression/` 基座
+- [x] `P1-09` — `test/spike/security-fix/` 宪章 + `test/remote-schema/compat/` + `scripts/security-regression/` 基座 — pass `ecf16f5` · 宪章判读门槛写死+fake-S3 CAS验证(304/412)
 
 ### PH2 `batch1-host-data`（门禁 B1；P0 remote-cross 7）
 - [ ] `P2-01` — schema v1 六类规则 + v0 只读兼容 + reject
@@ -89,7 +89,7 @@ PH1 batch0-baseline ──▶ PH2 batch1-host-data ──▶ PH3 batch2-content-
 
 | Check | 验证什么 | 方法 | 预期 | 实际 | 证据 | 状态 |
 |-------|----------|------|------|------|------|------|
-| B0-T01..T05 | guard 单测 / 清单 0 漂移 / 合同一致 / 无裸 import / 43 路由可达 | `node --test` + `check-*` + dsh-dev | 全过 | - | - | pending |
+| B0-T01..T05 | guard 单测 / 清单 0 漂移 / 合同一致 / 无裸 import / 43 路由可达 | `node --test` + `check-*` + dsh-dev | 全过 | 14+6+7 unit · 0-drift · contract OK · clean-lib OK · 43路由401-gated | `bd4d6ad`/`ecf16f5` + node --test + D1 dsh-dev.local + 2026-11-11T15:56Z | pass |
 | B1-T01..T08 | schema 正负样本 / s3-object / 6 PoC 子断言 / put 任意 key / CAS / fetch-mp 逐跳 / 存量兼容 / 批门禁 | node --test + fake S3 + compat | 全拒+100% | - | - | pending |
 | B3-T01..T09 | 策略表 / 双 renderer 负向 0 执行 / mime / 转义 / 深度 / imagine / 正向快照 / 批门禁 | node --test + DOM + snapshot | 0 执行 | - | - | pending |
 | B4-T01..T06 | P2 加固 / scopeOf 日志 / accepted 语义断言 / npx 移除 / release dry-run / 批门禁 | node --test + lint | PASS | - | - | pending |
@@ -97,8 +97,8 @@ PH1 batch0-baseline ──▶ PH2 batch1-host-data ──▶ PH3 batch2-content-
 
 ## 5. 当前状态与交接
 
-- **当前节点**：PH1 `P1-01..P1-08` 完成并提交 `bd4d6ad`；B0 门禁（check-route-sensitivity 0-drift / feature-contract / clean-lib / node --test 三包 / dsh-dev 401-gated smoke）全过
-- **下一动作**：`P1-09` 测试基座（test/spike + remote-schema/compat + security-regression）→ PH2 batch1（P2-01..P2-08，P0 remote-cross 7）
+- **当前节点**：PH1 `batch0-baseline` **全部收口** `bd4d6ad`+`ecf16f5`；B0 门禁（0-drift/feature-contract/clean-lib/node --test 27/43路由401-gated）全过
+- **下一动作**：PH2 `batch1-host-data`（P0 remote-cross 7 条；内序 `P2-08` 存量兼容前置闸→冻结 `P2-01` v1 schema→P2-02..07）
 - **当前阻塞**：无
 - **待 owner**：无（`foundation/` 不存在，已以 AGENTS.md 为准）
 - **最终交接**：closure + 发布 checklist（`v*` tag 由业主推送触发 release CI）

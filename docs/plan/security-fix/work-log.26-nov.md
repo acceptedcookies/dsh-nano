@@ -66,3 +66,14 @@ route-sensitivity 0-drift（43 路由）· feature-contract PASS · clean-lib 17
 ## REVIEW + closure
 
 见 `.anote/reviews/security-fix/26-nov/{9012,3456,7788}/report.md`（≥3 对抗审查）与 `docs/closure/security-fix/26-nov-closure.md`（五态归类 + handoff）。
+
+## REVIEW fix↔test 收口（`503945d`→`e3ec789`）
+
+三份对抗审查（9012/3456/7788）逐条 fix↔test，全绿后收口：
+
+- **9012 F1/F7** nsw 成员信任锚 → 本地 pin（`dshHome/nsw-pins/`），pin 为唯一成员证明；pull/push/match 全走 pin；regression 08。
+- **9012 P1** v0 鉴别器收敛 manifest-only；**F3/F4/F5** SKIP 大小写、dangling-symlink wedge、整 part 重写 — 全 PoC 死。
+- **3456 F1/F2** 注释早闭逃逸（丢注释）+ `&#59;` 样式值 smuggle（解码值含 `;` 即丢 decl）。
+- **7788 F1/F2/W2** rename/createFile/createFolder leaf+destination 围 `.git`，moveEntry 对 realRoot；**F3** imagine/.gitignore staging；**W3** release 用 `git status --porcelain`；**W1** assertInside fail-closed；**W5** scopeOf 无 baseline 时 audit info。
+- 门禁终态：route 0-drift · contract PASS · clean-lib 17 · compat 7/7 · regression **8/8** · tests **126**。
+- 收口文档 `docs/closure/security-fix/26-nov-closure.md`（五态 + 残留 + handoff）。

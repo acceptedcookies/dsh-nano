@@ -57,6 +57,12 @@ const VALIDATORS = {
  */
 const UNVERSIONED_DEFAULT = { manifest: 0, file: 1, image: 1, marker: 1, 'session-meta': 1, 'tree-head': 1 }
 
+/* The only kind that ever had a v0 wire form. `file`/`image`/`marker`/
+ * `session-meta`/`tree-head` were born versioned or carry a discriminant; a
+ * literal `v:0`/`schemaVersion:0` on them is attacker input that must NOT be
+ * allowed to dispatch to the shapeless v0 path (review 9012 P1). */
+const V0_KINDS = new Set(['manifest'])
+
 function detectVersion(kind, obj) {
   if (obj && typeof obj === 'object') {
     if (typeof obj.schemaVersion === 'number') return obj.schemaVersion
@@ -80,6 +86,11 @@ export function validate(kind, obj, { v, context } = {}) {
   const run = VALIDATORS[version]
   if (!run) {
     throw new SchemaReject('schema:unknown-version', `${kind} schema version ${version}`)
+  }
+  /* v0 is manifest-only: an attacker cannot smuggle a marker/session-meta/
+   * tree-head/image/file past the whitelist by stamping `v:0` on it. */
+  if (version === 0 && !V0_KINDS.has(kind)) {
+    throw new SchemaReject('schema:v', `${kind} does not accept schema version 0`)
   }
   const result = run(kind, obj, context)
   return { v: version, ...result }

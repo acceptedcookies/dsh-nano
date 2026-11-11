@@ -285,8 +285,13 @@ test('depth guard: >MAX_DEPTH nesting rejects schema:depth on every kind', () =>
 
 test('v0 backfill: no discriminant → read-only pass + compat tag (manifest only)', () => {
   assert.deepEqual(validate('manifest', V0_MANIFEST), { ok: true, v: 0, compat: 'v0-backfill' })
-  /* explicit v:0 is honored for any kind (read-only) */
-  assert.deepEqual(validate('marker', { title: 'old' }, { v: 0 }), { ok: true, v: 0, compat: 'v0-backfill' })
+  /* v0 is manifest-ONLY: an explicit v:0 on a versioned kind is attacker input
+   * that must NOT reach the depth-only v0 path (review 9012 P1). */
+  rejects(() => validate('marker', { v: 0, members: 'garbage' }), 'schema:v')
+  rejects(() => validate('marker', { schemaVersion: 0 }), 'schema:v')
+  rejects(() => validate('session-meta', { v: 0, committedBytes: 'x' }), 'schema:v')
+  rejects(() => validate('tree-head', { v: 0, files: [{ rel: '../../etc/passwd' }] }), 'schema:v')
+  rejects(() => validate('marker', { title: 'old' }, { v: 0 }), 'schema:v')
   /* v0 is never auto-upgraded: a v0-looking object never returns v:1. */
   assert.equal(validate('manifest', { anything: 1 }).v, 0)
   /* versioned kinds without `v` fail closed inside v1, not v0 pass */

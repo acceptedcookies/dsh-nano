@@ -19,6 +19,12 @@ export function validateV0(kind, obj) {
   if (!SUPPORTED_KINDS.includes(kind)) {
     throw new SchemaReject('schema:kind', `unknown kind "${kind}"`)
   }
+  /* Defence-in-depth: only `manifest` ever had a real v0 form. Even if a
+   * caller reaches validateV0 directly (bypassing the gate in index.js) a
+   * non-manifest kind must not get a free pass through the depth-only path. */
+  if (kind !== 'manifest') {
+    throw new SchemaReject('schema:v', `${kind} does not accept schema version 0`)
+  }
   assertDepth(obj)
   return { ok: true, compat: 'v0-backfill' }
 }

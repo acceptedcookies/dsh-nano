@@ -704,6 +704,9 @@ function validateV0(kind, obj) {
   if (!SUPPORTED_KINDS.includes(kind)) {
     throw new SchemaReject("schema:kind", `unknown kind "${kind}"`);
   }
+  if (kind !== "manifest") {
+    throw new SchemaReject("schema:v", `${kind} does not accept schema version 0`);
+  }
   assertDepth(obj);
   return { ok: true, compat: "v0-backfill" };
 }
@@ -714,6 +717,7 @@ var VALIDATORS = {
   0: validateV0
 };
 var UNVERSIONED_DEFAULT = { manifest: 0, file: 1, image: 1, marker: 1, "session-meta": 1, "tree-head": 1 };
+var V0_KINDS = /* @__PURE__ */ new Set(["manifest"]);
 function detectVersion(kind, obj) {
   if (obj && typeof obj === "object") {
     if (typeof obj.schemaVersion === "number") return obj.schemaVersion;
@@ -729,6 +733,9 @@ function validate(kind, obj, { v, context } = {}) {
   const run = VALIDATORS[version];
   if (!run) {
     throw new SchemaReject("schema:unknown-version", `${kind} schema version ${version}`);
+  }
+  if (version === 0 && !V0_KINDS.has(kind)) {
+    throw new SchemaReject("schema:v", `${kind} does not accept schema version 0`);
   }
   const result = run(kind, obj, context);
   return { v: version, ...result };

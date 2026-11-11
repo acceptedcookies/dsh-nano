@@ -574,6 +574,9 @@ function validateV0(kind, obj) {
   if (!SUPPORTED_KINDS.includes(kind)) {
     throw new SchemaReject("schema:kind", `unknown kind "${kind}"`);
   }
+  if (kind !== "manifest") {
+    throw new SchemaReject("schema:v", `${kind} does not accept schema version 0`);
+  }
   assertDepth(obj);
   return { ok: true, compat: "v0-backfill" };
 }
@@ -584,6 +587,7 @@ var VALIDATORS = {
   0: validateV0
 };
 var UNVERSIONED_DEFAULT = { manifest: 0, file: 1, image: 1, marker: 1, "session-meta": 1, "tree-head": 1 };
+var V0_KINDS = /* @__PURE__ */ new Set(["manifest"]);
 function detectVersion(kind, obj) {
   if (obj && typeof obj === "object") {
     if (typeof obj.schemaVersion === "number") return obj.schemaVersion;
@@ -599,6 +603,9 @@ function validate(kind, obj, { v, context } = {}) {
   const run = VALIDATORS[version];
   if (!run) {
     throw new SchemaReject("schema:unknown-version", `${kind} schema version ${version}`);
+  }
+  if (version === 0 && !V0_KINDS.has(kind)) {
+    throw new SchemaReject("schema:v", `${kind} does not accept schema version 0`);
   }
   const result = run(kind, obj, context);
   return { v: version, ...result };
@@ -1942,7 +1949,7 @@ var mask = (secret) => typeof secret === "string" && secret.length >= 8 ? `${sec
 var SETTINGS_TTL_MS = 6e4;
 function createRoutes(ctx, config) {
   const review = ensurePerfReviewHost().hostJoin("nano-shared-workspace", {
-    version: true ? "0.1.0" : void 0,
+    version: true ? "0.2.0" : void 0,
     // This host bundle's own copy of the library version (A3 / §10.4.4).
     libVersion: LIB_VERSION
   });
@@ -2381,7 +2388,7 @@ function registerRoutes2(ctx, routes) {
 }
 function startBackgroundSync(ctx, config) {
   const review = ensurePerfReviewHost().hostJoin("nano-shared-workspace", {
-    version: true ? "0.1.0" : void 0,
+    version: true ? "0.2.0" : void 0,
     libVersion: LIB_VERSION
   });
   const dshHome = process.env.DSH_HOME ?? `${homedir()}/.dsh`;

@@ -1,7 +1,9 @@
 /** Browser database for the notepad. One origin, one database. */
 
 export const DB_NAME = 'dsh-nano-notepad'
-export const DB_VERSION = 3
+/* v4 adds the `sync` store (cloud cursor + outbox). Existing v3 databases keep
+   every note; onupgradeneeded only creates the new store. */
+export const DB_VERSION = 4
 export const CHANNEL = 'dsh-nano-notepad'
 
 export const DEFAULT_SETTINGS = {
@@ -17,6 +19,11 @@ export const DEFAULT_SETTINGS = {
   chromeStyle: 'mac',
   followApp: true,
   followSessionWorkspace: true,
+  /* Cloud sync is opt-in, like the WeChat integration. */
+  s3Enabled: false,
+  s3IntervalSec: 30,
+  /* Syncing micro-motion: a=breath, b=sweep (default), c=orbit. */
+  cloudMotion: 'b',
   settingsVersion: 2,
 }
 
@@ -53,6 +60,9 @@ export function normalizeSettings(config) {
     /* WeChat MP integration (paste-import + rich .html preview) is opt-in:
        default off so the feature is invisible until the user enables it. */
     mpEnabled: source.mpEnabled === true,
+    s3Enabled: source.s3Enabled === true,
+    s3IntervalSec: number('s3IntervalSec', DEFAULT_SETTINGS.s3IntervalSec, 10, 300),
+    cloudMotion: ['a', 'b', 'c'].includes(source.cloudMotion) ? source.cloudMotion : DEFAULT_SETTINGS.cloudMotion,
     settingsVersion: 2,
   }
 }
@@ -98,8 +108,18 @@ export function openDatabase() {
       if (!db.objectStoreNames.contains('ui')) db.createObjectStore('ui', { keyPath: 'id' })
       /* v3. Kept so databases already opened at this version do not downgrade. */
       if (!db.objectStoreNames.contains('blobs')) db.createObjectStore('blobs', { keyPath: 'id' })
+      /* v4: one row for the cloud cursor (id 'meta') plus outbox rows (id 'op-*'). */
+      if (!db.objectStoreNames.contains('sync')) db.createObjectStore('sync', { keyPath: 'id' })
     }
-    request.onsuccess = () => resolve(request.result)
+    /* A second notepad instance (HMR, another tab) opening a newer schema must
+       not be blocked forever by this connection. Releasing on versionchange is
+       the standard handshake; without it `indexedDB.open` hangs with no event. */
+    request.onblocked = () => { /* observable in devtools; the old owner closes below */ }
+    request.onsuccess = () => {
+      const db = request.result
+      db.onversionchange = () => db.close()
+      resolve(db)
+    }
     request.onerror = () => reject(request.error ?? new Error('notepad database failed to open'))
   })
 }
@@ -114,15 +134,33 @@ export function validateName(name) {
 }
 
 /**
- * A note keeps a recognised extension as typed/imported (.md, .json, .markdown);
- * only extensionless names are completed to .md.
+ * The notepad is a text editor: a file keeps exactly the name it was given.
+ * No extension is implied or appended — `.env`, `config.yaml`, `notes` and
+ * `README.md` all stay as typed. Markdown rendering is a view capability,
+ * not the storage format.
  * @param {string} name
  */
-const KNOWN_EXT = /\.(md|markdown|json|html|htm|wx)$/i
-
 export function fileName(name) {
-  const trimmed = validateName(name)
-  return KNOWN_EXT.test(trimmed) ? trimmed : `${trimmed}.md`
+  return validateName(name)
+}
+
+/**
+ * Return `name`, or `base-2.ext` / `base-3.ext` … when the folder already has
+ * that name. Dotfiles keep their leading dot as part of the base.
+ * @param {string[]} names sibling names already in use
+ * @param {string} name the desired name
+ */
+export function nextAvailableName(names, name) {
+  const lower = new Set(names.map(value => value.toLowerCase()))
+  if (!lower.has(name.toLowerCase())) return name
+  const dot = name.lastIndexOf('.')
+  const base = dot > 0 ? name.slice(0, dot) : name
+  const ext = dot > 0 ? name.slice(dot) : ''
+  for (let index = 2; index < 10000; index += 1) {
+    const candidate = `${base}-${index}${ext}`
+    if (!lower.has(candidate.toLowerCase())) return candidate
+  }
+  throw new Error('notepad cannot find an unused name')
 }
 
 /** @param {{ name: string }[]} siblings @param {string} name */
@@ -584,5 +622,64 @@ export async function counts(db) {
     images: images.length,
   }
 }
+
+/* ── cloud sync state ───────────────────────────────────────────────────── */
+
+const SYNC_META_DEFAULT = { id: 'meta', rev: 0, etag: null, lastPushAt: 0, lastPullAt: 0, dirty: {} }
+
+/** Read the cloud cursor and the not-yet-pushed file ids. */
+export async function readSyncMeta(db) {
+  const rows = await readAll(db, 'sync')
+  const meta = rows.find(row => row.id === 'meta')
+  return { ...SYNC_META_DEFAULT, ...(meta ?? {}) }
+}
+
+/** Merge a patch into the cursor row. */
+export async function writeSyncMeta(db, patch) {
+  const current = await readSyncMeta(db)
+  const next = { ...current, ...patch, id: 'meta' }
+  const transaction = db.transaction('sync', 'readwrite')
+  transaction.objectStore('sync').put(next)
+  await transactionDone(transaction)
+  return next
+}
+
+/** Create or overwrite files from a remote manifest diff. */
+export async function applyRemoteFiles(db, remotes) {
+  if (!remotes.length) return
+  const transaction = db.transaction('nodes', 'readwrite')
+  const store = transaction.objectStore('nodes')
+  for (const remote of remotes) {
+    const existing = await requestToPromise(store.get(remote.id))
+    const node = existing ?? {
+      id: remote.id,
+      kind: 'file',
+      name: remote.name ?? 'untitled.md',
+      parentId: remote.parentId ?? null,
+      workspaceId: remote.workspaceId ?? null,
+      createdAt: remote.updatedAt ?? Date.now(),
+      pinned: false,
+    }
+    if (remote.name !== undefined) node.name = remote.name
+    if (remote.parentId !== undefined) node.parentId = remote.parentId
+    if (remote.workspaceId !== undefined) node.workspaceId = remote.workspaceId
+    node.draft = remote.draft ?? ''
+    node.updatedAt = remote.updatedAt ?? Date.now()
+    store.put(node)
+  }
+  await transactionDone(transaction)
+}
+
+/** Insert a remote image if its content hash is not already present. */
+export async function putImageFromRemote(db, image) {
+  const transaction = db.transaction('images', 'readwrite')
+  const store = transaction.objectStore('images')
+  const existing = await requestToPromise(store.index('sha256').get(image.sha256))
+  if (!existing) store.put({ ...image, id: image.id ?? crypto.randomUUID() })
+  await transactionDone(transaction)
+}
+
+/** @param {IDBDatabase} db */
+export async function allImages(db) { return readAll(db, 'images') }
 
 export const testables = { childrenOf }

@@ -1,6 +1,6 @@
 # dsh-nano-notepad
 
-悬浮 Markdown 记事本 overlay 插件。笔记内容、版本历史与图片全部驻留浏览器（IndexedDB），不写入服务端工作区。
+悬浮文本记事本 overlay 插件（内置 Markdown 渲染）。任意后缀的文本文件都按原名保存与编辑；Markdown 只是 `.md` / `.markdown` 的可选视图。笔记内容、版本历史与图片全部驻留浏览器（IndexedDB），不写入服务端工作区。
 
 | 元信息 | 值 |
 |---|---|
@@ -38,6 +38,9 @@ dsh-nano-notepad/
 
 ## 详细说明
 
+- **文件名**：原样保存调用方给的名字，不追加/改写扩展名（`.env`、`config.yaml`、无后缀都可以）；重名只加 `-2` 序号。`fileName()` 只校验非法字符。
+- **视图能力**：`.md` / `.markdown` 有 Markdown 预览；`.json` 有树工具；`.html`/`.htm`/`.wx` 在公众号接入开启时有富文本预览。其余后缀是纯文本，只开源码视图且不显示 Markdown 工具栏。
+- **另存为**：使用文件原名与真实后缀，选择器不限制扩展名；宿主按用户选定的完整路径写入，不再补 `.md`。
 - **持久化**：全部数据在浏览器 IndexedDB，host 侧无存储；host 只提供配置默认值与「另存为」路由。
 - **配置项**（`Config`，cordis standard schema）：
   - `saveDelayMs` 800（200–5000）自动保存防抖
@@ -45,6 +48,7 @@ dsh-nano-notepad/
   - `versionLimit` 50（5–500）历史版本上限
   - `imageLimitBytes` 5 MB（256 KB–20 MB）图片上限
   - `defaultView` rendered/source
+- **同步动效**（设置 →「云同步」）：云端同步进行时的非侵入微动效，三选一 —— `a` 呼吸点 / `b` 流光扫过（默认）/ `c` 环弧旋转。**该特效由腾讯 Hy4 制作**。仅在 `syncing` 状态生效，不改布局、不动文字，并尊重系统的「减少动态效果」偏好；详见 [s3-sync-design.md](s3-sync-design.md) §12。
 - **另存为**：host 路由调 `osascript choose file name`，弹 macOS 原生保存对话框。
 - **inject**：`ui-layout`、`client-shortcuts`、`ui-theme`、`client-locale`、`api-workspace-controller`、`api-session-controller`。
 

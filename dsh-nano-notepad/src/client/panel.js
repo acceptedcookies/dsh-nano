@@ -12,6 +12,7 @@ import {
   imagesById,
   loadSnapshot,
   moveNode,
+  nextAvailableName,
   nextUntitled,
   updateNodeMeta,
   normalizeSettings,
@@ -31,8 +32,10 @@ import { highlightSource } from './highlight.js'
 import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
 import { copyFor } from './i18n.js'
 import React from 'react'
-import { openNanoDialog, openNanoMenu, NANO_STYLES } from 'dsh-nano-ui'
+import { openNanoDialog, openNanoMenu, nanoTabs, NANO_STYLES } from 'dsh-nano-ui'
 import { perf, setNotepadRoot } from './perf.js'
+import { createSync } from './sync.js'
+import { mountCloudSettings } from './cloud-settings.js'
 
 /* perf-review: one named span for the IndexedDB writers (saveDraft / writeUi /
  * persistUi). Defined at module scope so every caller routes through it without
@@ -68,6 +71,11 @@ ${NANO_STYLES}
 .np-window { z-index: 2; }
 .np-window { --np-pad-x: 12px; --np-gap: 8px; --np-row-h: 40px; --np-node-h: 28px; --np-icon-btn: 28px; --np-icon-btn-sm: 22px; --np-indent: 16px; --np-rail: 52px; --np-menu-w: 220px; --np-foot-h: 52px; }
 .np-slash[hidden], .np-window[hidden], .np-read[hidden], .np-write[hidden], .np-mirror[hidden], .np-error[hidden] { display: none !important; }
+/* The HTML hidden attribute loses to an author display:flex rule. Every
+   element we toggle via .hidden needs an explicit override, otherwise
+   setting the property has no visual effect (the WeChat paste zone stayed
+   visible with the integration switched off). */
+.np-mp-zone[hidden], .np-cloud[hidden], .np-tab-panel[hidden], .np-dlg-body [hidden] { display: none !important; }
 .np-window[data-theme="dark"], .np-entry[data-theme="dark"] { color-scheme: dark; --dsw-alias-bg-layer-1: #232324; --dsw-alias-bg-layer-2: #2c2c2e; --dsw-alias-bg-layer-3: #353638; --dsw-alias-bg-mask-1: #00000080; --dsw-alias-label-primary: #f9fafb; --dsw-alias-label-secondary: #cfd3d6; --dsw-alias-label-tertiary: #adb2b8; --dsw-alias-border-l2: #ffffff1f; --dsw-alias-border-l3: #ffffff29; --dsw-alias-interactive-bg-hover: #ffffff14; --dsw-alias-interactive-bg-active: #ffffff24; --dsw-alias-brand-primary: #f9fafb; --dsw-alias-brand-primary-invert: #0f1115; --dsw-alias-link: #7aaaff; --dsw-alias-state-error-primary: #f25a5a; --dsw-alias-state-error-secondary: #f25a5a; --dsw-alias-state-success-primary: #22c55e; --dsw-alias-state-success-secondary: #4ed17e; --dsw-alias-state-warn-primary: #f59e0b; --dsw-alias-state-warn-secondary: #f7ad31; --dsw-alias-interactive-bg-hover-danger: #f25a5a26; --dsw-alias-label-error: #f25a5a; --dsw-alias-tooltip-bg: #43454a; --dsw-alias-tooltip-label: #f9fafb; --dsw-alias-markdown-inline-code: #43454a; }
 .np-window[data-theme="light"], .np-entry[data-theme="light"] { color-scheme: light; --dsw-alias-bg-layer-1: #ffffff; --dsw-alias-bg-layer-2: #ffffff; --dsw-alias-bg-layer-3: #ffffff; --dsw-alias-bg-mask-1: #0000003d; --dsw-alias-label-primary: #0f1115; --dsw-alias-label-secondary: #61666b; --dsw-alias-label-tertiary: #81858c; --dsw-alias-border-l2: #0000001a; --dsw-alias-border-l3: #0000001f; --dsw-alias-interactive-bg-hover: #2631480f; --dsw-alias-interactive-bg-active: #2631481a; --dsw-alias-brand-primary: #0f1115; --dsw-alias-brand-primary-invert: #f9fafb; --dsw-alias-link: #4176e6; --dsw-alias-state-error-primary: #ec1313; --dsw-alias-state-error-secondary: #f25a5a; --dsw-alias-state-success-primary: #22c55e; --dsw-alias-state-success-secondary: #4ed17e; --dsw-alias-state-warn-primary: #f59e0b; --dsw-alias-state-warn-secondary: #f7ad31; --dsw-alias-interactive-bg-hover-danger: #ec13130d; --dsw-alias-label-error: #ec1313; --dsw-alias-tooltip-bg: #43454a; --dsw-alias-tooltip-label: #f9fafb; --dsw-alias-markdown-inline-code: #f5f6f7; }
 .np-entry { width: 36px; height: 36px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-primary); cursor: grab; box-shadow: var(--dsw-elevation-soft); }
@@ -243,6 +251,10 @@ ${NANO_STYLES}
 /* native segmented control: hover-gray track + layer-1 thumb sliding by translate */
 .np-switch { flex: none; margin-left: auto; display: inline-grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 2px; position: relative; padding: 4px; border: 0; background: var(--dsw-alias-interactive-bg-hover); border-radius: var(--dsw-radius-md); cursor: pointer; font: inherit; min-width: 148px; }
 .np-switch .np-switch-label { display: inline-flex; align-items: center; justify-content: center; min-width: 0; height: 28px; padding: 0 14px; font-size: var(--np-font-size); font-weight: 500; color: var(--dsw-alias-label-secondary); z-index: 0; }
+/* Three-segment controls (sync motion) need a wider track and tighter labels. */
+.np-switch[data-segments="3"] { min-width: 186px; }
+.np-switch[data-segments="3"] .np-switch-label,
+.np-switch[data-segments="3"] .np-switch-thumb { padding: 0 8px; }
 .np-switch { --np-switch-n: 2; --np-switch-i: 0; }
 .np-switch .np-switch-thumb { position: absolute; top: 4px; left: 4px; width: calc((100% - 8px - (var(--np-switch-n) - 1) * 2px) / var(--np-switch-n)); height: calc(100% - 8px); display: flex; align-items: center; justify-content: center; padding: 0 14px; box-sizing: border-box; background: var(--dsw-alias-bg-layer-1); border-radius: var(--dsw-radius-sm); box-shadow: var(--dsw-elevation-soft); font-size: var(--np-font-size); font-weight: 500; color: var(--dsw-alias-label-primary); white-space: nowrap; overflow: hidden; transition: transform .16s ease; z-index: 1; }
 .np-switch[data-view="rendered"] .np-switch-thumb { transform: translateX(calc(100% + 2px)); }
@@ -251,8 +263,8 @@ ${NANO_STYLES}
 .np-tool:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 .np-tool svg { width: 18px; height: 18px; }
 .np-tool-sep { width: 1px; height: 18px; margin: 6px 4px; background: var(--dsw-alias-border-l2); flex: none; }
-.np-window button:not([class]):not(.np-tree-tools button):not(.np-node-actions button):not(.np-slash button):not(.np-versions button), .np-footer-actions button.np-danger, .np-dlg-body button:not(.np-switch):not(.np-transfer-row) { border: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); border-radius: var(--dsw-radius-sm); padding: 4px 10px; cursor: pointer; font: inherit; line-height: 20px; }
-.np-window button:hover, .np-dlg-body button:not(.np-switch):hover { background: var(--dsw-alias-interactive-bg-hover); }
+.np-window button:not([class]):not(.np-tree-tools button):not(.np-node-actions button):not(.np-slash button):not(.np-versions button), .np-footer-actions button.np-danger, .np-dlg-body button:not(.np-switch):not(.np-transfer-row):not(.nano-tab) { border: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); border-radius: var(--dsw-radius-sm); padding: 4px 10px; cursor: pointer; font: inherit; line-height: 20px; }
+.np-window button:hover, .np-dlg-body button:not(.np-switch):not(.nano-tab):hover { background: var(--dsw-alias-interactive-bg-hover); }
 /* keep the row/tab as the only hover surface; inner buttons must not double-fill
    — scoped to .np-window so we beat the generic .np-window button:hover rule */
 .np-window .np-node-main:hover, .np-window .np-node-actions button:hover, .np-window .np-tab-btn:hover { background: transparent; }
@@ -474,8 +486,96 @@ ${NANO_STYLES}
   .np-tabs { flex-wrap: wrap; }
 }
 .np-sync { display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1; overflow: hidden; color: var(--dsw-alias-label-secondary); font-size: var(--np-font-size-sm); }
-.np-status-text { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.np-beat { width: 8px; height: 8px; flex: none; border-radius: 50%; background: var(--dsw-alias-label-tertiary); }
+.np-status-text { display: inline-block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Cloud-sync chip: a separate indicator so local save status stays untouched. */
+/* Both footer indicators are the same pill: identical type, dot, radius,
+   height and background. The status chip doubles as the Save control. */
+.np-status-chip, .np-cloud { display: inline-flex; align-items: center; gap: 5px; flex: none;
+  height: 22px; padding: 0 8px; border: 0; border-radius: 11px;
+  background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-secondary);
+  font: inherit; font-size: 11px; line-height: 1; cursor: pointer; }
+@media (hover: hover) {
+  /* Outrank the generic .np-window button:hover skin. */
+  .np-window .np-status-chip:hover, .np-window .np-cloud:hover { background: var(--dsw-alias-interactive-bg-active); }
+}
+.np-cloud-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--dsw-alias-label-tertiary); flex: none; }
+.np-cloud[data-state="ok"] .np-cloud-dot { background: #3fb950; }
+.np-cloud[data-state="syncing"] .np-cloud-dot { background: #d29922; }
+.np-cloud[data-state="error"] .np-cloud-dot { background: #f85149; }
+.np-cloud[data-state="idle"] .np-cloud-dot { background: var(--dsw-alias-label-tertiary); }
+/* ── syncing micro-motion ───────────────────────────────────────────────────
+   Three selectable treatments (data-motion=a|b|c), crafted by Tencent Hy4.
+   Default is 'b' (sweep), set in DEFAULT_SETTINGS.cloudMotion. All are
+   confined to the 22px chip, keep the label static, cause no layout shift,
+   and stop entirely when the sync finishes. Reduced-motion disables them. */
+/* A · Breath: the dot alone dims and swells. Quietest. */
+.np-cloud[data-state="syncing"][data-motion="a"] .np-cloud-dot { animation: np-cloud-breath 1.8s ease-in-out infinite; }
+@keyframes np-cloud-breath { 0%,100% { opacity: .4; transform: scale(.82) } 50% { opacity: 1; transform: scale(1.2) } }
+/* B · Sweep: one faint highlight crosses a themed track.
+   A white sheen vanishes on the light theme's pure-white surface, so the
+   sheen and its track are theme-aware: warm white on dark, a cool blue tint
+   on light. The track also gives the sweep something to travel across. */
+.np-window[data-theme="dark"] { --np-cloud-sheen: rgba(255,255,255,.18); --np-cloud-sheen-track: rgba(255,255,255,.055); }
+.np-window[data-theme="light"] { --np-cloud-sheen: rgba(65,118,230,.22); --np-cloud-sheen-track: rgba(38,49,72,.055); }
+.np-cloud[data-state="syncing"][data-motion="b"] { position: relative; overflow: hidden;
+  background: var(--np-cloud-sheen-track); }
+.np-cloud[data-state="syncing"][data-motion="b"]::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(100deg, transparent 34%, var(--np-cloud-sheen) 50%, transparent 66%);
+  transform: translateX(-100%); animation: np-cloud-sweep 2s ease-in-out infinite;
+}
+@keyframes np-cloud-sweep { to { transform: translateX(100%) } }
+/* C · Orbit: a hairline arc rotates around the dot (absolute, no reflow). */
+.np-cloud[data-state="syncing"][data-motion="c"] .np-cloud-dot { position: relative; }
+.np-cloud[data-state="syncing"][data-motion="c"] .np-cloud-dot::after {
+  content: ''; position: absolute; inset: -3px; border-radius: 50%;
+  border: 1px solid transparent; border-top-color: #d29922;
+  animation: np-cloud-spin 1.1s linear infinite;
+}
+@keyframes np-cloud-spin { to { transform: rotate(360deg) } }
+@media (prefers-reduced-motion: reduce) {
+  .np-cloud[data-state="syncing"] .np-cloud-dot,
+  .np-cloud[data-state="syncing"] .np-cloud-dot::after,
+  .np-cloud[data-state="syncing"]::after { animation: none !important; }
+}
+.np-cloud-state, .np-cloud-usage { font-size: 11px; color: var(--dsw-alias-label-secondary); text-align: right; }
+/* Settings dialog: fixed card height + two independent flex rows. The tab
+   strip never scrolls and is never painted over by panel content. */
+.np-dlg-tabs { flex: none; padding-bottom: 10px; border-bottom: 1px solid var(--dsw-alias-border-l2); }
+.np-dlg-body > .np-dlg-panels { margin-top: 0; flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+/* The shared tab control must not inherit the dialog's generic button skin. */
+.np-dlg-body .nano-tab { border: 0; padding: 0 8px; }
+/* ── S3 endpoint management + switch wizard ─────────────────────────────── */
+.np-cloud-settings { margin-top: 4px; }
+.np-endpoint-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.np-endpoint-row { display: flex; align-items: center; gap: 6px; padding: 8px 10px;
+  border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm, 8px); }
+.np-endpoint-row[data-active="true"] { border-color: var(--dsw-alias-focus-ring, #4c9aff); }
+.np-endpoint-meta { flex: 1; min-width: 0; }
+.np-endpoint-meta b { display: block; font-size: 12px; font-weight: 600; }
+.np-endpoint-meta small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--dsw-alias-label-secondary); font-size: 11px; }
+.np-endpoint-form, .np-switch-wizard { display: flex; flex-direction: column; gap: 8px;
+  padding: 10px; margin-bottom: 10px; border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm, 8px); }
+.np-endpoint-form label span, .np-check span { color: var(--dsw-alias-label-secondary); font-size: 11px; }
+.np-endpoint-form input[type="text"], .np-endpoint-form input[type="password"] { box-sizing: border-box;
+  width: 100%; height: 28px; padding: 0 8px; border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm, 8px); background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary); font: inherit; font-size: 12px; }
+.np-check, .np-radio { display: flex !important; flex-direction: row !important; align-items: center; gap: 6px !important; }
+.np-form-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+.np-cloud-note { font-size: 11px; color: var(--dsw-alias-label-secondary); margin: 6px 0 0; }
+.np-cloud-note.error, .np-wizard-warn { color: var(--dsw-alias-state-error-secondary, #f25a5a); }
+.np-wizard-head { font-size: 13px; font-weight: 600; }
+.np-wizard-note, .np-wizard-warn, .np-wizard-ok { font-size: 11px; line-height: 1.5; margin: 0; color: var(--dsw-alias-label-secondary); }
+.np-wizard-ok { color: #3fb950; }
+.np-wizard-diff { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.np-wizard-diff > div { padding: 6px 8px; border-radius: var(--dsw-radius-sm, 8px); background: var(--dsw-alias-bg-layer-1); }
+.np-wizard-diff b { display: block; font-size: 11px; }
+.np-wizard-diff span { display: block; font-size: 11px; color: var(--dsw-alias-label-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.np-wizard-result { font-size: 11px; color: var(--dsw-alias-label-secondary); min-height: 14px; }
+.np-beat { width: 6px; height: 6px; flex: none; border-radius: 50%; background: var(--dsw-alias-label-tertiary); }
 .np-beat[data-state="saved"], .np-beat[data-state="committed"] { background: var(--dsw-alias-state-success-primary); }
 .np-beat[data-state="dirty"] { background: var(--dsw-alias-state-warn-primary); }
 .np-beat[data-state="saving"] { background: var(--dsw-alias-link); animation: np-pulse 1s ease-in-out infinite; }
@@ -491,6 +591,11 @@ ${NANO_STYLES}
 .np-footer-actions svg { width: 14px; height: 14px; flex: none; fill: currentColor; }
 .np-section { border-top: 1px solid var(--dsw-alias-border-l2); padding-top: 2px; }
 .np-dlg-body > .np-section:first-child { border-top: 0; padding-top: 0; }
+/* Tabbed settings wrap each section in .np-tab-panel, so the direct-child
+   rule above no longer matches. Without this, the visible section's 1px
+   top border sits flush against the tab strip's 1px bottom border and reads
+   as a 2px divider — which disappears as soon as the panel scrolls. */
+.np-dlg-panels > .np-tab-panel > .np-section { border-top: 0; padding-top: 0; }
 .np-section h4 { margin: 0 0 8px; font-size: var(--np-font-size-sm); font-weight: 600; color: var(--dsw-alias-label-tertiary); }
 /* informational row: same row height/rhythm, label left, value right */
 .np-stat { display: inline-flex; align-items: baseline; gap: 6px; flex: none; color: var(--dsw-alias-label-secondary); font-size: inherit; white-space: nowrap; }
@@ -646,7 +751,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
         <div class="np-slash" hidden></div>
         <div class="np-read" tabindex="0" hidden></div>
         <div class="np-error" role="alert" hidden><span class="np-error-text"></span><button type="button" data-action="load-remote" data-i18n="loadRemote" hidden></button><button type="button" data-action="keep-mine" data-i18n="keepMine" hidden></button><button type="button" data-action="dismiss-error" data-i18n="close" data-i18n-mode="title">${CLOSE_ICON}</button></div>
-        <footer class="np-footer"><span class="np-sync"><i class="np-beat" data-state="idle"></i><button type="button" class="np-lint" role="status" hidden></button><span class="np-status-text" role="status" aria-live="polite"></span></span><span class="np-footer-actions"><button type="button" data-action="export-file" data-i18n="saveAs" data-i18n-mode="label">${dshIcon('download-outline')}<span data-i18n="saveAs"></span></button><button type="button" data-action="history" data-i18n="history" data-i18n-mode="label">${dshIcon('clock-outline')}<span data-i18n="history"></span></button><button type="button" data-action="save-version" data-i18n="saveVersion" data-i18n-mode="label">${dshIcon('save-outline')}<span data-i18n="saveVersion"></span></button><button type="button" class="np-danger" data-action="clear-file" data-i18n="clearFile" data-i18n-mode="label">${dshIcon('trash-outline')}<span data-i18n="clearFile"></span></button><span class="np-foot-sep" aria-hidden="true"></span><span class="np-foot-tools" aria-hidden="true"><button type="button" data-action="settings" data-i18n="settings" data-i18n-mode="label">${SETTINGS_ICON}<span data-i18n="settings"></span></button><button type="button" data-action="close" data-i18n="close" data-i18n-mode="label">${CLOSE_ICON}<span data-i18n="close"></span></button></span></span></footer>
+        <footer class="np-footer"><span class="np-sync"><button type="button" class="np-status-chip" data-action="save-now"><i class="np-beat" data-state="idle"></i><span class="np-status-text" role="status" aria-live="polite"></span></button><button type="button" class="np-lint" role="status" hidden></button><button type="button" class="np-cloud" data-action="cloud-status" hidden><i class="np-cloud-dot"></i><span class="np-cloud-label"></span></button></span><span class="np-footer-actions"><button type="button" data-action="export-file" data-i18n="saveAs" data-i18n-mode="label">${dshIcon('download-outline')}<span data-i18n="saveAs"></span></button><button type="button" data-action="history" data-i18n="history" data-i18n-mode="label">${dshIcon('clock-outline')}<span data-i18n="history"></span></button><button type="button" class="np-danger" data-action="clear-file" data-i18n="clearFile" data-i18n-mode="label">${dshIcon('trash-outline')}<span data-i18n="clearFile"></span></button><span class="np-foot-sep" aria-hidden="true"></span><span class="np-foot-tools" aria-hidden="true"><button type="button" data-action="settings" data-i18n="settings" data-i18n-mode="label">${SETTINGS_ICON}<span data-i18n="settings"></span></button><button type="button" data-action="close" data-i18n="close" data-i18n-mode="label">${CLOSE_ICON}<span data-i18n="close"></span></button></span></span></footer>
       </div>
     </div>
     <div class="np-resize" data-edge="n"></div><div class="np-resize" data-edge="s"></div><div class="np-resize" data-edge="e"></div><div class="np-resize" data-edge="w"></div><div class="np-resize" data-edge="nw"></div><div class="np-resize" data-edge="ne"></div><div class="np-resize" data-edge="sw"></div><div class="np-resize" data-edge="se"></div>
@@ -736,6 +841,43 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
   setNotepadRoot(() => (state.ui.open && layer.isConnected ? layer : null))
 
   const disposers = []
+
+  /* Cloud sync engine. `render` is declared further down but only referenced
+     from onApplied, which runs after the database is ready — no TDZ hit. */
+  function paintCloud(info) {
+    const chip = panel.querySelector('.np-cloud')
+    if (!chip) return
+    chip.hidden = info.phase === 'off'
+    if (chip.hidden) return
+    chip.dataset.state = info.phase
+    chip.dataset.motion = state.settings.cloudMotion || 'b'
+    const copy = text()
+    const label = chip.querySelector('.np-cloud-label')
+    label.textContent = info.phase === 'paused' ? copy.cloudPaused
+      : info.phase === 'syncing' ? copy.cloudSyncing
+        : info.phase === 'error' ? copy.cloudError
+          : info.pending > 0 ? copy.cloudPending(info.pending)
+            : copy.cloudOk
+    chip.title = info.phase === 'error'
+      ? String(info.detail || copy.cloudError)
+      : [copy.cloudReady, info.config?.bucket, info.lastSyncAt ? new Date(info.lastSyncAt).toLocaleTimeString() : ''].filter(Boolean).join(' · ')
+  }
+  const sync = createSync({
+    getDb: () => state.db,
+    getNodes: () => state.nodes,
+    getEnabled: () => state.settings.s3Enabled === true,
+    getIntervalSec: () => state.settings.s3IntervalSec,
+    onState: paintCloud,
+    onApplied: async () => {
+      if (!state.db) return
+      const snapshot = await loadSnapshot(state.db)
+      state.nodes = snapshot.nodes
+      state.renderCache.clear()
+      render()
+    },
+  })
+  disposers.push(() => sync.stop())
+
   /** @param {any} target @param {string} type @param {any} fn @param {any} [opts] */
   const on = (target, type, fn, opts) => {
     target.addEventListener(type, fn, opts)
@@ -750,7 +892,8 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     const source = write()
     const layer = mirror()
     // perf-review: time the source highlighting itself (§6.7 highlight).
-    layer.innerHTML = perf.span('highlight', () => highlightSource(source.value, isJson()))
+    /* Markdown tinting only for markdown files; other text stays plain. */
+    layer.innerHTML = perf.span('highlight', () => highlightSource(source.value, isJson(), isMarkdownFile() ? 'md' : 'text'))
     fitMirror()
     layer.hidden = source.hidden
   }
@@ -771,6 +914,10 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
   const current = () => state.nodes.find(node => node.id === state.ui.currentId && node.kind === 'file')
   const isJson = () => (current()?.name ?? '').toLowerCase().endsWith('.json')
   const isHtml = () => /\.(html|htm|wx)$/i.test(current()?.name ?? '')
+  /* Markdown is a rendering capability, not the storage format: only these
+     suffixes get a preview and the markdown format toolbar. Everything else
+     is plain text and opens in the source editor. */
+  const isMarkdownFile = () => /\.(md|markdown)$/i.test(current()?.name ?? '')
   /* The WeChat integration is opt-in (settings.mpEnabled). When off, .html
      files keep their source tools but preview/markdown-render as plain text. */
   const mpEnabled = () => state.settings.mpEnabled === true
@@ -808,6 +955,8 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     const status = text().status
     const value = status[state.sync.phase]
     label.textContent = typeof value === 'function' ? value(state.sync.detail || time) : (value ?? status.idle)
+    const chip = panel.querySelector('.np-status-chip')
+    if (chip) chip.title = `${label.textContent} · ${text().clickToSave}`
   }
 
   function workspaceCatalog() {
@@ -848,12 +997,11 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     const file = current()
     if (!file) return
     const content = write().value ?? file.draft ?? ''
-    const blob = new Blob([content], { type: 'text/markdown' })
-    const name = file.name.endsWith('.md') ? file.name : `${file.name}.md`
-    const opts = {
-      suggestedName: name,
-      types: [{ description: 'Markdown', accept: { 'text/markdown': ['.md', '.markdown', '.txt'] } }],
-    }
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
+    /* Save under the file's real name and extension. No `types` filter: the
+       picker must accept whatever suffix the user wants (including none). */
+    const name = file.name
+    const opts = { suggestedName: name }
     /* pick the host window first — inside a same-origin iframe the picker
        may be blocked there; parent same-origin call still works */
     let lastError = null
@@ -1077,24 +1225,29 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     const read = must(panel, '.np-read')
     if (!file) {
       clearEditorSurface()
-      for (const button of panel.querySelectorAll('.np-toolbar [data-format], .np-footer-actions [data-action="save-version"], .np-footer-actions [data-action="clear-file"]')) {
+      for (const button of panel.querySelectorAll('.np-toolbar [data-format], .np-status-chip, .np-footer-actions [data-action="clear-file"]')) {
         button.disabled = true
       }
       return
     }
-    const rendered = state.view === 'rendered'
     const json = isJson()
     const htmlFile = isHtml()
+    const markdownFile = isMarkdownFile()
     /* mpEnabled gates the WeChat preview path only; source tools stay so a
        plain .html file remains editable regardless of the integration. */
     const richHtml = htmlFile && mpEnabled()
+    /* Only markdown / JSON / rich HTML have a rendered view. A `.env`, `.txt`
+       or any other suffix is plain text: no preview switch, source only. */
+    const previewable = markdownFile || json || richHtml
+    if (!previewable && state.view === 'rendered') state.view = 'source'
+    const rendered = state.view === 'rendered'
     /* JSON files swap the markdown-format cluster for JSON tools. */
     const mdTools = panel.querySelector('.np-md-tools')
     const jsonTools = panel.querySelector('.np-json-tools')
     const viewSwitch = panel.querySelector('.np-switch')
-    if (viewSwitch) viewSwitch.hidden = htmlFile && !mpEnabled()
+    if (viewSwitch) viewSwitch.hidden = !previewable
     const htTools = panel.querySelector('.np-ht-tools')
-    if (mdTools) mdTools.hidden = json || richHtml
+    if (mdTools) mdTools.hidden = json || richHtml || !markdownFile
     if (jsonTools) jsonTools.hidden = !json
     if (htTools) htTools.hidden = !htmlFile || rendered
     const rtTools = panel.querySelector('.np-rt-tools')
@@ -1128,7 +1281,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
         lint.title = lintResult.ok ? '' : String(lintResult.message)
       }
     }
-    for (const button of panel.querySelectorAll('.np-footer-actions [data-action="save-version"], .np-footer-actions [data-action="clear-file"]')) {
+    for (const button of panel.querySelectorAll('.np-status-chip, .np-footer-actions [data-action="clear-file"]')) {
       button.disabled = false
     }
     source.disabled = state.db === null
@@ -1348,6 +1501,10 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     renderTree()
     renderTabs()
     renderChrome()
+    /* Gating the WeChat surface must not depend on the async renderBody(),
+       which returns early when no file is open. Keep it synchronous here. */
+    const mpZone = panel.querySelector('.np-mp-zone')
+    if (mpZone) mpZone.hidden = !mpEnabled()
     /* Reset the scrollable toolbar to its start on every render so a file or
        view switch never opens already scrolled to the clipped end. */
     const toolbar = panel.querySelector('.np-toolbar')
@@ -1478,6 +1635,8 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     const closeSelf = () => { if (!dialogOpen || !handle) return; finish(); handle.close() }
     closeDialog = closeSelf
     dialogOpen = true
+    const rect = panel.getBoundingClientRect()
+    const cap = Math.min(520, Math.round(rect.height * 0.8))
     handle = openNanoDialog({
       copy: text(),
       title: spec.title,
@@ -1485,9 +1644,11 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       confirmLabel: spec.confirmLabel,
       danger: spec.danger === true,
       footer: spec.footer?.(closeSelf),
-      maxHeight: Math.round(panel.getBoundingClientRect().height * 0.8),
-      width: Math.round(panel.getBoundingClientRect().width * 0.6),
-      region: panel.getBoundingClientRect(),
+      maxHeight: cap + 24,
+      width: Math.round(rect.width * 0.6),
+      region: rect,
+      /* Tabbed dialogs get one fixed height; panels scroll inside it. */
+      fixedHeight: spec.fixedHeight === true ? cap : undefined,
       onConfirm: () => spec.onConfirm?.(closeSelf),
       onCancel: () => { finish(); spec.onCancel?.() },
       children: React.createElement('div', {
@@ -1624,6 +1785,8 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       void saveDraft(state.db, file.id, draft).then(() => {
         setSync('saved')
         channel?.postMessage({ type: 'changed', fileId: file.id })
+        /* Queue the same draft for the cloud manifest (debounced). */
+        void sync.noteChange(file.id)
       }).catch(showError)
     }, wait)
   }
@@ -1688,7 +1851,8 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     commitTrack.attach()
   }
 
-  function openSettings() {
+  /** @param {string} [initialTab] tab id to activate (the cloud chip jumps straight to 'cloud'). */
+  function openSettings(initialTab = 'integrate') {
     const values = state.settings
     const copy = text()
     /* `factor` converts between the stored unit (ms/s) and what the input
@@ -1703,16 +1867,13 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       const labels = options.map(o => `<span class="np-switch-label">${escapeHtml(o.label)}</span>`).join('')
       return `
       <div class="np-field"><div class="np-field-text"><span class="np-field-name">${escapeHtml(desc)}</span><span class="np-field-desc">${escapeHtml(hint)}</span></div>
-      <button type="button" class="np-switch" data-seg-field="${field}" role="switch" aria-checked="${index === 0}" style="--np-switch-n:${options.length};--np-switch-i:${index}"><span class="np-switch-thumb">${escapeHtml(options[index].label)}</span>${labels}</button></div>`
+      <button type="button" class="np-switch" data-seg-field="${field}" data-segments="${options.length}" role="switch" aria-checked="${index === 0}" style="--np-switch-n:${options.length};--np-switch-i:${index}"><span class="np-switch-thumb">${escapeHtml(options[index].label)}</span>${labels}</button></div>`
     }
     dialog({
       title: copy.settingsTitle,
-      body: `<section class="np-section">
+      fixedHeight: true,
+      body: `<section class="np-section" data-tab="integrate">
         ${sw('followSessionWorkspace', copy.followSessionWorkspace, copy.followSessionWorkspaceHint, [
-          { value: 'true', label: copy.autoSaveOn },
-          { value: 'false', label: copy.autoSaveOff },
-        ])}
-        ${sw('autoSave', copy.autoSave, copy.autoSaveHint, [
           { value: 'true', label: copy.autoSaveOn },
           { value: 'false', label: copy.autoSaveOff },
         ])}
@@ -1720,11 +1881,17 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
           { value: 'false', label: copy.autoSaveOff },
           { value: 'true', label: copy.autoSaveOn },
         ])}
+      </section>
+      <section class="np-section" data-tab="saving">
+        ${sw('autoSave', copy.autoSave, copy.autoSaveHint, [
+          { value: 'true', label: copy.autoSaveOn },
+          { value: 'false', label: copy.autoSaveOff },
+        ])}
         ${num('draftIntervalMs', copy.unitSeconds, values.draftIntervalMs, copy.draftInterval, copy.draftIntervalHint, 1000)}
         ${num('commitIntervalSec', copy.unitMinutes, values.commitIntervalSec, copy.commitInterval, copy.commitIntervalHint, 60)}
         ${num('versionLimit', '', values.versionLimit, copy.versionLimit, copy.versionLimitHint)}
       </section>
-      <section class="np-section">
+      <section class="np-section" data-tab="appearance">
         ${sw('defaultView', copy.openAs, copy.openAsHint, [
           { value: 'rendered', label: copy.rendered },
           { value: 'source', label: copy.source },
@@ -1734,26 +1901,66 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
           { value: 'light', label: copy.light },
           { value: 'system', label: copy.followApp },
         ])}
-        ${num('editorFontSizePx', 'px', values.editorFontSizePx, copy.editorFontSize, copy.editorFontSizeHint)}
-      </section>
-      <section class="np-section">
         ${sw('chromeStyle', copy.chromeStyle, copy.chromeStyleHint, [
           { value: 'mac', label: copy.mac },
           { value: 'windows', label: copy.windows },
         ])}
+        ${num('editorFontSizePx', 'px', values.editorFontSizePx, copy.editorFontSize, copy.editorFontSizeHint)}
       </section>
-      <section class="np-section">
+      <section class="np-section" data-tab="storage">
         ${num('imageLimitBytes', copy.unitMb, values.imageLimitBytes, copy.imageLimit, copy.imageLimitHint, 1048576)}
         <div class="np-field"><div class="np-field-text"><span class="np-field-name">${escapeHtml(copy.storageHeading)}</span><span class="np-field-desc">${escapeHtml(copy.storageHint)}</span></div><span class="np-usage-val"><span class="np-usage-chip u-files">${dshIcon('browse-outline')}<b></b></span><span class="np-usage-chip u-versions">${dshIcon('clock-outline')}<b></b></span><span class="np-usage-chip u-images">${dshIcon('apps-add-outline')}<b></b></span><span class="np-usage-chip u-size">${dshIcon('database-outline')}<b></b></span></span></div>
-      </section>
-      <section class="np-section">
         <div class="np-field"><div class="np-field-text"><span class="np-field-name">${escapeHtml(copy.positionHeading)}</span><span class="np-field-desc">${escapeHtml(copy.resetPosition)}</span></div><button type="button" data-go="reset-position">${escapeHtml(copy.reset)}</button></div>
-      </section>
-      <section class="np-section">
         <div class="np-field"><div class="np-field-text"><span class="np-field-name">${escapeHtml(copy.dangerHeading)}</span><span class="np-field-desc">${escapeHtml(copy.dangerBody)}</span></div><button type="button" class="np-danger" data-go="clear">${escapeHtml(copy.clearAllTitle)}</button></div>
+      </section>
+      <section class="np-section" data-tab="cloud">
+        ${sw('s3Enabled', copy.s3Enabled, copy.s3EnabledHint, [
+          { value: 'false', label: copy.autoSaveOff },
+          { value: 'true', label: copy.autoSaveOn },
+        ])}
+        ${num('s3IntervalSec', copy.unitSeconds, values.s3IntervalSec, copy.s3Interval, copy.s3IntervalHint)}
+        ${sw('cloudMotion', copy.cloudMotion, copy.cloudMotionHint, [
+          { value: 'a', label: copy.cloudMotionA },
+          { value: 'b', label: copy.cloudMotionB },
+          { value: 'c', label: copy.cloudMotionC },
+        ])}
+        <div class="np-field"><div class="np-field-text"><span class="np-field-name">${escapeHtml(copy.s3State)}</span><span class="np-field-desc">${escapeHtml(copy.s3StateHint)}</span></div><span class="np-cloud-state">—</span></div>
+        <div class="np-field"><div class="np-field-text"><span class="np-field-name">${escapeHtml(copy.s3Usage)}</span><span class="np-field-desc">${escapeHtml(copy.s3UsageHint)}</span></div><span class="np-cloud-usage">—</span></div>
+        <div class="np-field"><div class="np-field-text"><span class="np-field-name">${escapeHtml(copy.s3Test)}</span><span class="np-field-desc">—</span></div><span><button type="button" data-go="s3-test">${escapeHtml(copy.s3Test)}</button> <button type="button" data-go="s3-sync">${escapeHtml(copy.s3SyncNow)}</button></span></div>
+        <div class="np-cloud-settings"></div>
       </section>`,
       onConfirm: close => close(),
       setup: (el, close) => {
+      /* Semantic tabs: each `.np-section[data-tab]` becomes one tab panel.
+         Panels stay mounted (hidden attr) so the existing click/change
+         delegation below keeps working without re-wiring. */
+      const TAB_ORDER = ['integrate', 'saving', 'appearance', 'storage', 'cloud']
+      const TAB_LABEL = { integrate: copy.tabIntegrate, saving: copy.tabSaving, appearance: copy.tabAppearance, storage: copy.tabStorage, cloud: copy.tabCloud }
+      const sections = [...el.querySelectorAll('.np-section[data-tab]')]
+      if (sections.length > 1) {
+        /* Two siblings, not a sticky header inside the scroller: the tab strip
+           owns its own flex row and the panels own the scroll, so scrolling
+           content can never paint under / overlap the tabs. */
+        const tabsHost = document.createElement('div')
+        tabsHost.className = 'np-dlg-tabs'
+        const panelsHost = document.createElement('div')
+        panelsHost.className = 'np-dlg-panels'
+        const panels = new Map(sections.map(section => {
+          const panel = document.createElement('div')
+          panel.className = 'np-tab-panel'
+          section.replaceWith(panel)
+          panel.append(section)
+          return [section.dataset.tab, panel]
+        }))
+        const tabs = nanoTabs({
+          label: copy.settingsTitle,
+          value: panels.has(initialTab) ? initialTab : TAB_ORDER[0],
+          items: TAB_ORDER.filter(id => panels.has(id)).map(id => ({ value: id, label: TAB_LABEL[id], panel: panels.get(id) })),
+        })
+        tabsHost.append(tabs.el)
+        for (const panel of panels.values()) panelsHost.append(panel)
+        el.replaceChildren(tabsHost, panelsHost)
+      }
       /* segment option tables — values mirror normalizeSettings */
       const SW_OPTIONS = {
         autoSave: [
@@ -1781,6 +1988,15 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
           { value: 'false', label: copy.autoSaveOff },
           { value: 'true', label: copy.autoSaveOn },
         ],
+        s3Enabled: [
+          { value: 'false', label: copy.autoSaveOff },
+          { value: 'true', label: copy.autoSaveOn },
+        ],
+        cloudMotion: [
+          { value: 'a', label: copy.cloudMotionA },
+          { value: 'b', label: copy.cloudMotionB },
+          { value: 'c', label: copy.cloudMotionC },
+        ],
       }
       if (state.db) void counts(state.db).then(async value => {
         const estimate = navigator.storage?.estimate ? await navigator.storage.estimate() : {}
@@ -1793,6 +2009,28 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
           chip.querySelector('b').textContent = String(val)
         }
       })
+      const refreshCloudInfo = () => {
+        void sync.status().then(status => {
+          const stateEl = el.querySelector('.np-cloud-state')
+          const usageEl = el.querySelector('.np-cloud-usage')
+          if (stateEl) stateEl.textContent = status.ok ? `${copy.cloudReady} · ${status.config?.bucket ?? ''}` : copy.cloudNotReady
+          if (usageEl) {
+            const ledger = status.ledger
+            usageEl.textContent = ledger
+              ? `${ledger.objects} objs · ${formatBytes(ledger.bytes)} · ↑${formatBytes(ledger.dailyUpBytes)}/d`
+              : '—'
+          }
+        }).catch(() => {})
+      }
+      refreshCloudInfo()
+
+      const cloudMount = el.querySelector('.np-cloud-settings')
+      if (cloudMount) mountCloudSettings({
+        host: cloudMount, sync, copy, escapeHtml,
+        onChanged: () => refreshCloudInfo(),
+        showError,
+      })
+
       el.addEventListener('click', event => {
         /* N-segment switch: pick the segment under the pointer, slide the labelled thumb */
         const seg = event.target instanceof HTMLElement ? event.target.closest('.np-switch[data-seg-field]') : null
@@ -1803,20 +2041,24 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
           const rect = seg.getBoundingClientRect()
           const index = Math.min(options.length - 1, Math.max(0, Math.floor((event.clientX - rect.left) / (rect.width / options.length))))
           const merged = { ...state.settings }
-          const isBoolField = field === 'autoSave' || field === 'followSessionWorkspace' || field === 'mpEnabled'
+          const isBoolField = field === 'autoSave' || field === 'followSessionWorkspace' || field === 'mpEnabled' || field === 's3Enabled'
           if (isBoolField) merged[field] = options[index].value === 'true'
           else merged[field] = options[index].value
           state.settings = normalizeSettings(merged)
           if (state.db) void writeSettings(state.db, state.settings).catch(showError)
           /* Readback differs: autoSave-family defaults ON (off only when
              explicitly false), mpEnabled defaults OFF (on only when true). */
-          const value = field === 'mpEnabled'
+          const value = field === 'mpEnabled' || field === 's3Enabled'
             ? String(state.settings[field] === true)
             : (isBoolField ? String(state.settings[field] !== false) : String(state.settings[field]))
           const active = Math.max(0, options.findIndex(o => String(o.value) === value))
           seg.style.setProperty('--np-switch-i', String(active))
           seg.setAttribute('aria-checked', String(active === 0))
           seg.querySelector('.np-switch-thumb').textContent = options[active].label
+          /* Turning cloud sync on/off starts or stops the polling loop. */
+          if (field === 's3Enabled') sync.start()
+          /* Repaint the chip immediately so the new motion is visible. */
+          if (field === 'cloudMotion') paintCloud(sync.info())
           render()
           return
         }
@@ -1834,9 +2076,26 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
           void persistUi()
         }
         if (action === 'clear') { close(); confirmClear() }
+        if (action === 's3-test') {
+          void sync.test().then(result => {
+            const stateEl = el.querySelector('.np-cloud-state')
+            if (stateEl) stateEl.textContent = result.ok
+              ? `${copy.cloudReady} · ${result.latencyMs}ms`
+              : String(result.message || copy.cloudNotReady)
+          }).catch(error => {
+            const stateEl = el.querySelector('.np-cloud-state')
+            if (stateEl) stateEl.textContent = String(error?.message || copy.cloudNotReady)
+          })
+        }
+        if (action === 's3-sync') {
+          const stateEl = el.querySelector('.np-cloud-state')
+          if (stateEl) stateEl.textContent = copy.cloudSyncing
+          void sync.cycle().then(() => { refreshCloudInfo() })
+        }
       })
-      const settingNames = ['saveDelayMs', 'draftIntervalMs', 'commitIntervalSec', 'versionLimit', 'imageLimitBytes', 'editorFontSizePx']
+      const settingNames = ['saveDelayMs', 'draftIntervalMs', 'commitIntervalSec', 'versionLimit', 'imageLimitBytes', 'editorFontSizePx', 's3IntervalSec']
       el.addEventListener('change', () => {
+        const previousInterval = state.settings.s3IntervalSec
         const merged = { ...state.settings }
         let rejected = false
         for (const input of el.querySelectorAll('input, select')) {
@@ -1864,6 +2123,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
         note?.remove()
         if (state.db) void writeSettings(state.db, merged).catch(showError)
         armCommit()
+        if (merged.s3IntervalSec !== previousInterval) sync.start()
         render()
       })
       },
@@ -2297,6 +2557,8 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     }
     if (action === 'maximize') toggleMaximize()
     if (action === 'settings') openSettings()
+    /* The footer cloud chip is a shortcut into the cloud section. */
+    if (action === 'cloud-status') openSettings('cloud')
     if (action === 'toggle-tree') {
       state.ui.treeOpen = state.ui.treeOpen === false
       render()
@@ -2328,7 +2590,9 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     }
     if (action === 'delete') confirmClearUnpinned()
     if (action === 'clear-file') confirmClearFile()
-    if (action === 'save-version') { perf.count('version-save'); void commit('manual').catch(showError) }
+    /* The status chip replaces the old footer Save button: one click flushes
+       the draft and commits a manual version. */
+    if (action === 'save-now') { perf.count('version-save'); void commit('manual').catch(showError) }
     if (action === 'view') {
       state.view = state.view === 'rendered' ? 'source' : 'rendered'
       void renderBody()
@@ -2887,12 +3151,10 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     async import(name, content, meta = {}) {
       await dbReady
       const siblings = state.nodes.filter(node => node.parentId === null && (node.workspaceId ?? null) === activeWorkspace().id && node.kind === 'file')
+      /* Keep the caller's name verbatim — a workspace `.env` or `config.yaml`
+         stays that, and only a real collision gets a `-2` suffix. */
       const raw = String(name || 'note').trim() || 'note'
-      const hasExt = /\.(md|markdown|json|html|htm|wx)$/i.test(raw)
-      const base = raw.replace(/\.(md|markdown|json|html|htm|wx)$/i, '') || 'note'
-      const ext = hasExt ? raw.match(/\.(md|markdown|json|html|htm|wx)$/i)[0] : '.md'
-      let candidate = `${base}${ext}`, i = 1
-      while (siblings.some(s => s.name === candidate)) candidate = `${base}-${++i}${ext}`
+      const candidate = nextAvailableName(siblings.map(node => node.name), raw)
       const node = await createNode(state.db, 'file', null, candidate, activeWorkspace().id)
       if (typeof meta.sourcePath === 'string' && meta.sourcePath) node.sourcePath = meta.sourcePath
       state.nodes.push(node)
@@ -2908,6 +3170,35 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     },
     /** Debug handle for live settings (used by E2E verification). */
     settings() { return { ...state.settings } },
+    /** Cloud sync status + current file list (E2E verification). */
+    cloud() { return { ...sync.info(), files: state.nodes.filter(n => n.kind === 'file').map(n => ({ id: n.id, name: n.name })) } },
+    /** Awaitable sync cycle + persisted cursor, for deterministic E2E. */
+    cloudCycle() { return sync.cycle() },
+    /** Set the syncing micro-motion ('a' | 'b' | 'c'), same path as the UI. */
+    setCloudMotion(value) {
+      if (!['a', 'b', 'c'].includes(value)) return state.settings.cloudMotion
+      state.settings = normalizeSettings({ ...state.settings, cloudMotion: value })
+      if (state.db) void writeSettings(state.db, state.settings)
+      paintCloud(sync.info())
+      return state.settings.cloudMotion
+    },
+    cloudMeta() {
+      return new Promise(resolve => {
+        if (!state.db) return resolve(null)
+        const request = state.db.transaction('sync', 'readonly').objectStore('sync').getAll()
+        request.onsuccess = () => resolve(request.result)
+        request.onerror = () => resolve(null)
+      })
+    },
+    /** Read the persisted settings row through the page's own IDB connection. */
+    dbSettings() {
+      return new Promise(resolve => {
+        if (!state.db) return resolve(null)
+        const request = state.db.transaction('settings', 'readonly').objectStore('settings').getAll()
+        request.onsuccess = () => resolve(request.result)
+        request.onerror = () => resolve(null)
+      })
+    },
   }
 
   /** A pasted mp.weixin.qq.com link: host fetches + sanitizes, we file it as
@@ -3057,6 +3348,8 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     }
     armCommit()
     render()
+    /* Start cloud polling once settings and the database are both ready. */
+    sync.start()
     void navigator.storage?.persist?.()
     state.dbReadyResolve?.()
   }).catch(error => { state.dbReadyReject?.(error); api.failed(error) })

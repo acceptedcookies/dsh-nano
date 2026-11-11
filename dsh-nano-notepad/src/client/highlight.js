@@ -96,9 +96,12 @@ function lineHtml(line, json, ctx) {
 
 /**
  * @param {string} text @param {boolean} json
+ * @param {'md'|'text'} [mode] `text` escapes without markdown tinting, for
+ *   files whose suffix has no markdown meaning (`.env`, `.txt`, source code).
  * @returns {string} HTML for the mirror layer — one <div> per source line.
  */
-export function highlightSource(text, json) {
+export function highlightSource(text, json, mode = 'md') {
+  if (mode === 'text') return text.split('\n').map(line => escapeHtml(line) || '&#8203;').join('\n')
   const ctx = { fence: false }
   /* One pre-wrap flow, same as the textarea. A block per line grows a
      different line box, so the selection (drawn on the textarea) lands on

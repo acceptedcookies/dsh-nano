@@ -25,6 +25,7 @@
 | `cordis.patch.yml` | 插入插件 id。`name` 是包名 |
 | `index.js` | 宿主。运行时必需 |
 | `lib/client.js` | 浏览器包。运行时必需。安装时不重建 |
+| `lib/s3-sync-host.js` | 宿主 S3 签名代理 bundle。运行时必需（宿主 `index.js` 相对 import） |
 | `icon.svg`、`locale/` | 图标与中英文案 |
 | `src/` | 作者树。已有 `lib/client.js` 时安装不需要它 |
 
@@ -38,6 +39,7 @@ client inject 以 `package.json` 的 `dsh.client.inject` 为准，不在这里�
 4. 无。宿主不需要 git 或其他外部命令。
 5. 本包依赖 `dsh-nano-ui`，声明为 `file:../packages/dsh-nano-ui`。`dsh plugin add` 时 pnpm 会解析这个相对路径，目录必须是 `<parent>/packages/dsh-nano-ui` 与 `<parent>/<本包>`。不要改这条依赖。运行中的页面不单独加载它，构建时它被打进 `lib/client.js`。
 6. 本包还依赖构建期库 `dsh-performance-review`，声明为 `file:../packages/dsh-performance-review`，约束同上（`<parent>/packages/dsh-performance-review` 与 `<parent>/<本包>`）。它被打进 `lib/client.js`，宿主侧另由构建生成 `lib/perf-review-host.js` 供 `index.js` 相对 import；两份产物默认是恒等包装，只有页面带 `?perf-review=1` 或 `localStorage['dsh-perf-review']='1'`、宿主带 `DSH_PERF_REVIEW=1` 时才采集。不要改这条依赖。
+7. 本包还依赖宿主构建期库 `dsh-s3-client`，声明为 `file:../packages/dsh-s3-client`，约束同上。宿主侧由构建生成 `lib/s3-sync-host.js` 供 `index.js` 相对 import（开发实例只拷贝 `lib/`、不拷贝 `node_modules`，所以必须 bundle）。它提供 SigV4 签名、令牌桶限速与用量账本；密钥只在宿主，不进浏览器。多端点配置存 `${DSH_HOME}/nano-notepad-s3.json`（0600），首次启动从环境变量 `S3_NOTEPAD_*` / `${DSH_HOME}/nano-notepad.env` 种子；之后在设置「云同步」tab 内填写、新增、切换。切换端点经过「本地为真源 → 预检差异 → 一致性确认 → 策略执行 → 提交或回滚」，宿主用 `pending` 记录保证崩溃时回滚。不要改这条依赖。
 
 未被告知 `DSH_HOME` 或 profile 名时，只动默认的 `web`。不要猜第二套实例。
 
@@ -72,7 +74,7 @@ dsh plugin --profile web add <spec>
 
 无宿主初始化命令。记事本挂上页面时就打开库，不必先按快捷键。
 
-- 库名 `dsh-nano-notepad`，schema 3，每个浏览器源一个库。
+- 库名 `dsh-nano-notepad`，schema 4，每个浏览器源一个库（v4 增加 `sync` 云同步游标 store；旧库平滑升级，不丢笔记）。
 - 该源没有文件时创建 `untitled.md` 并打开。
 - 草稿在浏览器里自动保存。版本按面板里的间隔拍摄（默认 3600 秒），也可手动保存版本。
 - 卸载不删除这个库。重装后笔记还在。
@@ -84,7 +86,7 @@ dsh plugin --profile web add <spec>
 | 动作 | 结果 |
 |---|---|
 | 圆形启动器，或 `⌘E` 然后 `1` | 开关浮层。Windows 为 `Ctrl+E` 然后 `1` |
-| Markdown | 源码与预览 |
+| 任意文本（`.env`、`.yaml`、`.sh`…） | 源码编辑；仅 `.md` / `.markdown` 提供 Markdown 预览与格式工具栏 |
 | `.json` | 保留后缀，打开树和 JSON 工具 |
 | 笔记内图片 | png、jpeg、gif、webp，存在同一个库 |
 
@@ -94,7 +96,7 @@ dsh plugin --profile web add <spec>
 await window.__nanoNotepad.import(name, content, meta)
 ```
 
-- `name`：`.md`、`.markdown`、`.json` 保留。其他后缀改存为 `.md`。
+- `name`：**原样保留任意后缀**（`.env`、`config.yaml`、`script.sh`、无后缀均可）。记事本是文本编辑器，不会追加或改写扩展名；重名时只加 `-2` 之类序号。Markdown 只是可选的渲染视图，仅 `.md` / `.markdown` 提供预览与 Markdown 工具栏。
 - `content`：整篇草稿字符串。
 - `meta.sourcePath`：可选，记在节点上，不写该路径。
 

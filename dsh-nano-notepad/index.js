@@ -2,6 +2,7 @@
 
 import { readFileSync } from 'node:fs'
 import { ensurePerfReviewHost, LIB_VERSION } from './lib/perf-review-host.js'
+import { createSyncEngine } from './lib/s3-sync-host.js'
 
 export const name = 'nano-notepad'
 export const inject = ['webServer', 'connection', 'subprocess']
@@ -59,20 +60,27 @@ export const Config = {
 const SAVE_ROUTE = '/nano-notepad/save'
 const READ_ROUTE = '/nano-notepad/read'
 const MP_ROUTE = '/nano-notepad/fetch-mp'
+const S3_STATUS_ROUTE = '/nano-notepad/s3/status'
+const S3_TEST_ROUTE = '/nano-notepad/s3/test'
+const S3_OBJECT_ROUTE = '/nano-notepad/s3/object'
+const S3_CONFIG_ROUTE = '/nano-notepad/s3/config'
 const MP_MAX_HTML_BYTES = 8 * 1024 * 1024
 const MP_TIMEOUT_MS = 20000
 const MP_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 MicroMessenger/8.0.40'
 const MAX_READ_BYTES = 2 * 1024 * 1024
 const MAX_SAVE_BYTES = 8 * 1024 * 1024
+/* Images may be up to 20 MB; base64 expands them by ~4/3, so the S3 proxy
+   needs a larger envelope than the native save dialog. */
+const MAX_S3_BODY_BYTES = 32 * 1024 * 1024
 const DIALOG_TIMEOUT_MS = 600000
 const MAX_NAME_BYTES = 512
 
-async function jsonBody(req) {
+async function jsonBody(req, maxBytes = MAX_SAVE_BYTES) {
   const chunks = []
   let total = 0
   for await (const chunk of req) {
     total += chunk.length
-    if (total > MAX_SAVE_BYTES) throw new Error('request body is too large')
+    if (total > maxBytes) throw new Error('request body is too large')
     chunks.push(chunk)
   }
   if (total === 0) return {}
@@ -111,10 +119,11 @@ const SAVE_SCRIPT = [
   'end run',
 ].join('\n')
 
-/** The name the dialog proposes: extension stripped, empty/oversized refused. */
+/** The name the dialog proposes: kept verbatim so the chosen extension
+ *  survives, empty/oversized refused. */
 function dialogBase(name) {
   if (typeof name !== 'string') throw new Error('name must be a string')
-  const trimmed = name.endsWith('.md') ? name.slice(0, -3) : name
+  const trimmed = name.trim()
   if (trimmed === '' || trimmed.length > MAX_NAME_BYTES) throw new Error('name must be 1..512 characters')
   return trimmed
 }
@@ -150,9 +159,10 @@ function nativeSave(ctx, { name, content, dir }) {
         // workspace; `ctx.fs` would fence it, so the write stays on the platform
         // file seam the dialog itself authorizes.
         const fs = await import('node:fs/promises')
-        const target = out.endsWith('.md') ? out : `${out}.md`
-        await fs.writeFile(target, content, 'utf8')
-        resolve({ ok: true, path: target })
+        /* Write exactly the path the user picked — appending `.md` here
+           silently renamed every non-markdown file. */
+        await fs.writeFile(out, content, 'utf8')
+        resolve({ ok: true, path: out })
       } catch (werr) {
         resolve({ ok: false, reason: 'failed', message: messageOf(werr).slice(0, 200) })
       }
@@ -203,18 +213,20 @@ async function runViaSubprocess(subprocess, base, startDir) {
   }
 }
 
-/** Read one markdown file the chat card already named. Authenticated page only. */
+/** Read one text file the chat card already named. Authenticated page only.
+ *  The notepad is a text editor, so any text suffix is accepted; binary
+ *  content is rejected by the NUL-byte check rather than by extension. */
 async function readMarkdown(filePath) {
-  if (typeof filePath !== 'string' || filePath.includes('\0')) throw new Error('path is not a markdown file')
+  if (typeof filePath !== 'string' || filePath.includes('\0')) throw new Error('path is not a text file')
   const path = await import('node:path')
   const fs = await import('node:fs/promises')
   const resolved = path.resolve(filePath)
-  if (!/\.(md|markdown)$/i.test(resolved)) throw new Error('path is not a markdown file')
   const real = await fs.realpath(resolved)
-  if (!/\.(md|markdown)$/i.test(real)) throw new Error('path is not a markdown file')
   const stat = await fs.stat(real)
-  if (!stat.isFile() || stat.size > MAX_READ_BYTES) throw new Error('markdown file is missing or too large')
-  return { name: path.basename(real), content: await fs.readFile(real, 'utf8') }
+  if (!stat.isFile() || stat.size > MAX_READ_BYTES) throw new Error('text file is missing or too large')
+  const bytes = await fs.readFile(real)
+  if (bytes.includes(0)) throw new Error('file is not text')
+  return { name: path.basename(real), content: bytes.toString('utf8') }
 }
 
 /** @param {import('@deepseek-ai/cordis').Context} ctx */
@@ -277,6 +289,36 @@ export function apply(ctx) {
       }
     },
   }), 'nano-notepad: fetch-mp route')
+
+  /* S3 sync: the host is a signed proxy — credentials never reach the browser.
+     All three routes sit behind connection.requestRejection (Host/Origin fence
+     + authenticated Peer), same as the save route. */
+  const s3 = createSyncEngine()
+  const s3Route = (path, label, work) => ctx.effect(() => ctx.webServer.register({
+    kind: 'exact',
+    path,
+    handler: async (req, res) => {
+      const rejection = ctx.get('connection')?.requestRejection(req)
+      if (rejection !== undefined) { res.statusCode = rejection; res.end(); return }
+      if (req.method !== 'POST') { res.setHeader('allow', 'POST'); sendJson(res, 405, { ok: false, reason: 'method' }); return }
+      try {
+        const body = await jsonBody(req, MAX_S3_BODY_BYTES)
+        const result = await work(body)
+        /* A missing object is a legitimate `null` result — do not coerce it
+           into a truthy object, or the client tries to base64-decode it. */
+        sendJson(res, 200, result === undefined ? { ok: true } : result)
+      } catch (error) {
+        sendJson(res, 500, { ok: false, reason: 'failed', message: messageOf(error).slice(0, 200) })
+      }
+    },
+  }), label)
+
+  s3Route(S3_STATUS_ROUTE, 'nano-notepad: s3 status', () => s3.status())
+  s3Route(S3_TEST_ROUTE, 'nano-notepad: s3 test', () => s3.test())
+  s3Route(S3_OBJECT_ROUTE, 'nano-notepad: s3 object', body => s3.object(body))
+  /* Multi-endpoint config + the guarded switch handshake. Secrets are
+     write-only: `list` returns hasSecret, never the key material. */
+  s3Route(S3_CONFIG_ROUTE, 'nano-notepad: s3 config', body => s3.config(body))
 }
 
 /* ---------- WeChat MP article fetch ---------- */

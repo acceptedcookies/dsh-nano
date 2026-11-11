@@ -36,6 +36,15 @@ build([
   `--outfile=${join(root, 'lib/perf-review-host.js')}`,
 ])
 
+// Host S3 engine: same reason as above — the dev instance copies lib/ but not
+// node_modules, so dsh-s3-client/* must be bundled into a single relative
+// import for index.js. Only node:* builtins survive as externals.
+build([
+  'src/host/s3-sync.js',
+  '--bundle', '--format=esm', '--platform=node',
+  `--outfile=${join(root, 'lib/s3-sync-host.js')}`,
+])
+
 // Browser half: an IIFE wrapped in the client module-loader factory format.
 // dsh-performance-review/client is a source dependency (NOT external), so it is
 // bundled into lib/client.js. Keep all existing externals unchanged.

@@ -399,19 +399,23 @@ function diffRows(diff) {
  */
 export function DiffDialog({ copy, view, onClose }) {
   const open = view !== null
-  const rows = view?.state === 'ready' ? diffRows(view.diff) : null
+  usePanelConfinedLayer(open)
+  // NanoDialog mounts an always-open Modal — it has no open gate of its own. Returning it while
+  // nothing is open left a titleless card that no dismiss path could remove; the footer's null
+  // also fell through to the confirm/cancel pair the card family shows for real dialogs.
+  if (!open) return null
+  const rows = view.state === 'ready' ? diffRows(view.diff) : null
   return React.createElement(NanoDialog, {
     copy,
-    title: open ? `${copy.viewDiffTitle} · ${view.name}` : '',
-    description: open ? view.path : undefined,
-    error: view?.state === 'error' ? (view.message ?? copy.viewDiffFailed) : undefined,
-    footer: open ? React.createElement(Button, {
+    title: `${copy.viewDiffTitle} · ${view.name}`,
+    description: view.path,
+    error: view.state === 'error' ? (view.message ?? copy.viewDiffFailed) : undefined,
+    footer: React.createElement(Button, {
       variant: 'outline', className: 'nano-modal-action nxe-drawer-close', onClick: onClose,
-    }, copy.cancel) : null,
+    }, copy.cancel),
     onCancel: onClose,
   },
-  open !== true ? null
-    : view.state === 'loading'
+  view.state === 'loading'
       ? React.createElement('p', { className: 'nxe-drawer-empty' }, copy.loading)
       : rows === null
         ? React.createElement('p', { className: 'nxe-drawer-empty' }, copy.viewDiffEmpty)

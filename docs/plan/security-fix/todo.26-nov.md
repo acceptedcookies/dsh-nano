@@ -79,9 +79,9 @@ PH1 batch0-baseline ──▶ PH2 batch1-host-data ──▶ PH3 batch2-content-
 - [x] `P5-03` — dsh-dev 全量 smoke — pass · 4 host 载入 · notepad s3-status 真桶 + model-selector catalog + nsw status + explorer 注册+scopeOf log
 
 ### 收口工件
-- [ ] `DOC-01` — 工作日志回填至 AP 底部（code-execution-log 模板）
-- [ ] `DOC-02` — closure 文件 `docs/closure/security-fix/26-nov-closure.md`
-- [ ] `REVIEW` — ≥3 路对抗审查子代理（真相层对账 / 工作完成度 / 防测试假绿）→ 汇聚修复 → 收口
+- [x] `DOC-01` — 工作日志回填至 AP 底部（code-execution-log 模板）
+- [x] `DOC-02` — closure 文件 `docs/closure/security-fix/26-nov-closure.md`
+- [x] `REVIEW` — 3 路对抗审查（9012 nsw-wire / 3456 content-render / 7788 explorer+release）→ 汇聚修复 → 收口
 
 ## 4. 验收与证据（Check ledger）
 
@@ -97,8 +97,8 @@ PH1 batch0-baseline ──▶ PH2 batch1-host-data ──▶ PH3 batch2-content-
 
 ## 5. 当前状态与交接
 
-- **当前节点**：PH1-PH5 全收口 `10e2f79` — P0 13/13 + P2 9 (harden4+accept5) + supply 2 · 全门禁绿 · dsh-dev 4插件功能正常
-- **下一动作**：REVIEW — ≥3 个对抗性审查 subagent 独立验证全部改动 → 复核报告 → 修-测循环收口 → 工作日志 + closure 文档
+- **当前节点**：REVIEW→closure 全收口 `9e2fbdc` — 3 审查报告 15 actionable 全修 · 门禁 4/4 · regression 8/8 · tests 126
+- **下一动作**：无（closure 落盘；待 owner 推首个 `v*` tag 触发 release attestation — B4-T05 唯一 observed-OK 项）
 - **当前阻塞**：无
 - **待 owner**：无（`foundation/` 不存在，已以 AGENTS.md 为准）
 - **最终交接**：closure + 发布 checklist（`v*` tag 由业主推送触发 release CI）

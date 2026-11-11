@@ -274,9 +274,16 @@ export async function pushSession(s3, ctx, identity, local, markers, state) {
   const committed = remote?.committedBytes ?? 0
   let written = 0
   if (buf.length > committed) {
-    for (let offset = committed; offset < buf.length; offset += CHUNK) {
-      const index = Math.floor(offset / CHUNK)
-      const slice = buf.subarray(offset, Math.min(offset + CHUNK, buf.length))
+    /* Write WHOLE parts from each part boundary (index*CHUNK), not from the
+     * committed offset. Writing `buf.subarray(committed, …)` into part
+     * floor(committed/CHUNK) drops that part's leading bytes — and a
+     * co-tenant can plant a meta whose committedBytes is deliberately
+     * mid-part (writerId is self-asserted, so the foreign-writer gate can't
+     * catch it) to corrupt the boundary part and permanently tear the body
+     * (review 9012 P5). Rewriting the boundary part whole makes the append
+     * self-healing for ANY committed value, spoofed or not. */
+    for (let index = Math.floor(committed / CHUNK); index * CHUNK < buf.length; index += 1) {
+      const slice = buf.subarray(index * CHUNK, Math.min((index + 1) * CHUNK, buf.length))
       await s3.putBytes(`workspaces/${workspaceId}/sessions/${local.sessionId}/body/${index}.part`, slice)
       written += slice.length
     }

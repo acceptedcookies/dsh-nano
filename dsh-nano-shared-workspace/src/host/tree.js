@@ -14,7 +14,10 @@ import { validate, SchemaReject, WORKSPACE_ID_RE } from 'dsh-remote-data-schema'
  * must not land on this disk) and never enumerated for push (a local
  * `imagine/.grok/` credentials dir must not reach the bucket). `.DS_Store`
  * remains a scan-time name skip. */
-const SKIP = new Set(['.git', 'node_modules', '.nsw', '.DS_Store', 'imagine'])
+/* All-lowercase members: SKIP comparisons are made case-insensitive so a
+ * remote rel like `ImAgInE/.grok/…` cannot smuggle into the imagine/.git/
+ * node_modules trees on case-folding filesystems (APFS) — review 9012 P4. */
+const SKIP = new Set(['.git', 'node_modules', '.nsw', '.ds_store', 'imagine'])
 const MAX_FILE = 2 * 1024 * 1024
 const MAX_FILES = 200
 
@@ -46,8 +49,11 @@ function replicaRoot(localPath) {
   return realpathSync(root)
 }
 
-/** Top-level SKIP test for a remote rel (POSIX separators, as written in HEADs). */
-const skippedRel = rel => SKIP.has(String(rel).split('/')[0])
+/** Top-level SKIP test for a remote rel (POSIX separators, as written in
+ * HEADs). Case-insensitive: on APFS `ImAgInE` resolves to `imagine`, so a
+ * literal-match SKIP would let a remote HEAD plant files into the protected
+ * credential/.git/node_modules trees (review 9012 P4). */
+const skippedRel = rel => SKIP.has(String(rel).split('/')[0].toLowerCase())
 
 /**
  * The realpath fence (P2-05): `inside()` upgraded from lexical to
@@ -73,8 +79,24 @@ function inside(root, rel) {
   } catch (error) {
     if (error?.code !== 'ENOENT') return undefined
   }
-  let probe = dest
-  while (!existsSync(probe)) {
+  /* Deepest-existing-ancestor walk over the PARENT chain (P3). `dest` itself
+   * may be a regular file we are about to overwrite/stale-delete — that's
+   * legal — and its own symlink case is already fenced above. What we must
+   * verify here is the directory chain that mkdir({recursive}) will create
+   * through: no ancestor may be a symlink (live or dangling) or a non-dir.
+   * lstatSync — NOT existsSync — is the probe: existsSync follows the final
+   * link and reports a DANGLING symlink as "missing", letting the walk climb
+   * past it and approve `dest`, after which mkdirSync(dirname) throws and
+   * wedges the pull mid-loop (review 9012 P3). lstat sees the link object. */
+  let probe = dirname(dest)
+  for (;;) {
+    let st
+    try { st = lstatSync(probe) } catch { st = undefined }
+    if (st !== undefined) {
+      /* Ancestor must be a real directory that is not a link. */
+      if (st.isSymbolicLink() || !st.isDirectory()) return undefined
+      break
+    }
     const parent = dirname(probe)
     if (parent === probe) return undefined
     probe = parent
@@ -92,7 +114,9 @@ function scan(root) {
     let names = []
     try { names = readdirSync(dir) } catch { return }
     for (const name of names) {
-      if (SKIP.has(name) || files.length >= MAX_FILES) continue
+      /* case-insensitive SKIP (P4): a local `ImAgInE/` folds to `imagine/` on
+       * APFS and would otherwise be scanned + uploaded past the guard. */
+      if (SKIP.has(name.toLowerCase()) || files.length >= MAX_FILES) continue
       const abs = join(dir, name)
       let st
       try { st = lstatSync(abs) } catch { continue }

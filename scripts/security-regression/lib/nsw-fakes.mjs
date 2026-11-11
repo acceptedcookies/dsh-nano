@@ -12,6 +12,11 @@
  */
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
+
+/* Isolate the membership-pin store from the real profile: pinHome() reads
+ * process.env.DSH_HOME, so point every PoC at a throwaway home before any
+ * host module that consults the pin is imported. */
+process.env.DSH_HOME = mkdtempSync(join(tmpdir(), 'nsw-fakes-home-'))
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Readable } from 'node:stream'

@@ -27,6 +27,11 @@ import {
 } from '../src/host/session-io.js'
 import { pullWorkspace, pushWorkspace } from '../src/host/tree.js'
 import { createRoutes } from '../src/host/routes.js'
+import { pinWorkspaceLocalPath } from '../src/host/workspaces.js'
+
+/* Isolate the membership-pin store (review 9012 F1) from the real profile —
+ * pinHome() reads process.env.DSH_HOME at call time. */
+process.env.DSH_HOME = mkdtempSync(join(tmpdir(), 'nsw-boundary-home-'))
 
 /* ------------------------------------------------------------------ *
  * Test scaffolding
@@ -217,6 +222,8 @@ test('P2-03: our own member row still matches (legit sync preserved)', async () 
       [MEMBER_ID]: memberRow(USERNAME, INSTANCE, root),
     },
   })
+  /* Local pin (F1): membership requires the pin we wrote at join. */
+  pinWorkspaceLocalPath(marker.workspaceId, root)
   const hit = await matchWorkspace(join(root, 'sub', 'dir'), [marker], { identity: { username: USERNAME }, me: INSTANCE })
   assert.equal(hit?.workspaceId, marker.workspaceId)
 })
@@ -375,6 +382,7 @@ test('P2-04: pushSession skips a schema-poisoned remote meta', async () => {
   const s3 = fakeS3({
     [`workspaces/${wsId}/sessions/${sid}/meta.json`]: poisoned,
   })
+  pinWorkspaceLocalPath(wsId, cwd)
   const res = await pushSession(s3, fakeCtx(), { username: USERNAME },
     { sessionId: sid, filePath: join(dshHome, 'sessions', projectKey(cwd), sid, 'session.v4.jsonl.zstd') },
     [marker], { bySession: new Map() })

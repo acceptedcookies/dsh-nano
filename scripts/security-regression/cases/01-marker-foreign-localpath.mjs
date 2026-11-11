@@ -22,7 +22,7 @@ import {
   INSTANCE, USERNAME, MEMBER_ID, WS, SID,
   tmp, projectKey, verdicts,
 } from '../lib/nsw-fakes.mjs'
-import { listWorkspaces, joinWorkspace, matchWorkspace, ownMember } from '../../../dsh-nano-shared-workspace/src/host/workspaces.js'
+import { listWorkspaces, joinWorkspace, matchWorkspace, ownMember, pinWorkspaceLocalPath } from '../../../dsh-nano-shared-workspace/src/host/workspaces.js'
 import { syncAll } from '../../../dsh-nano-shared-workspace/src/host/session-io.js'
 import { join } from 'node:path'
 
@@ -76,6 +76,7 @@ export async function run() {
         [MEMBER_ID]: memberRow(USERNAME, INSTANCE, root),
       },
     })
+    pinWorkspaceLocalPath(marker.workspaceId, root) // F1: membership needs the pin
     const hit = await matchWorkspace(join(root, 'sub', 'dir'), [marker], { identity, me: INSTANCE })
     v.check('own-row-still-matches', hit?.workspaceId === marker.workspaceId, `match=${hit?.workspaceId}`)
   }

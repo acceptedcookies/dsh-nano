@@ -10,7 +10,9 @@
 
 import { execFile } from 'node:child_process'
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
-import { basename, resolve } from 'node:path'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { basename, join, resolve } from 'node:path'
 import { validate, SchemaReject, WORKSPACE_ID_RE } from 'dsh-remote-data-schema'
 
 const hash16 = input => createHash('sha256').update(input).digest('hex').slice(0, 16)
@@ -72,6 +74,73 @@ export async function workspaceIdFor(path) {
 
 const memberKeyOf = (identity, me) => `${identity.username}@${me.slice(0, 8)}`
 
+/* ------------------------------------------------------------------ *
+ * Local membership pin (review 9012 F1/P2 + F7).
+ *
+ * `member.instance` is PUBLISHED in the marker (see createWorkspace), so the
+ * strict `ownMember` check `member.instance === me` is not a secret — a
+ * co-tenant of the shared bucket copies our row verbatim, rewrites
+ * `localPath` to an attacker-chosen directory, and our pull writes remote
+ * blobs into it while our push exfiltrates from it. The member row alone
+ * cannot bind a trust decision; only a LOCAL fact the remote cannot touch
+ * can. At create/join we pin the `localPath` this host chose under
+ * `dshHome/nsw-pins/<workspaceId>.json`. From then on the PINNED path — not
+ * whatever the remote marker currently claims — is this instance's replica
+ * root, and a remote `localPath` that diverges is refused (log + ignore).
+ * ------------------------------------------------------------------ */
+
+const pinHome = () => process.env.DSH_HOME ?? join(homedir(), '.dsh')
+const pinPath = workspaceId => join(pinHome(), 'nsw-pins', `${workspaceId}.json`)
+
+function pinDir() {
+  const dir = join(pinHome(), 'nsw-pins')
+  mkdirSync(dir, { recursive: true })
+  return dir
+}
+
+/** Record the localPath this host chose for `workspaceId` (create/join). */
+export function pinWorkspaceLocalPath(workspaceId, localPath) {
+  if (typeof workspaceId !== 'string' || !WORKSPACE_ID_RE.test(workspaceId)) return
+  const file = join(pinDir(), `${workspaceId}.json`)
+  writeFileSync(file, JSON.stringify({ workspaceId, localPath, pinnedAt: new Date().toISOString() }))
+}
+
+/** The localPath we pinned for `workspaceId`, or undefined when never pinned. */
+export function readWorkspacePin(workspaceId) {
+  if (typeof workspaceId !== 'string' || !WORKSPACE_ID_RE.test(workspaceId)) return undefined
+  try {
+    const row = JSON.parse(readFileSync(pinPath(workspaceId), 'utf8'))
+    if (row?.workspaceId !== workspaceId || typeof row?.localPath !== 'string' || row.localPath === '') return undefined
+    return row.localPath
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * The localPath this instance should actually sync against for `marker`.
+ * Pin wins over the remote member row: a co-tenant who repointed our
+ * `localPath` is ignored (and logged), so pull/push/match can never be
+ * steered to an attacker-chosen directory. Returns our own member row with
+ * `localPath` replaced by the pinned value, or `undefined` when this
+ * instance never joined.
+ */
+export function trustedMember(marker, identity, me) {
+  const own = ownMember(marker, identity, me)
+  if (own === undefined) return undefined
+  const pin = readWorkspacePin(marker.workspaceId)
+  /* No pin ⇒ we never joined this workspace locally ⇒ the member row is
+   * unverifiable attacker-controlled data: it must not drive pull/push/match.
+   * Re-joining (joinWorkspace) writes the pin and restores membership —
+   * pre-upgrade members re-join once. */
+  if (pin === undefined) return undefined
+  if (own.member.localPath !== pin) {
+    console.warn(`[nsw] remote localPath diverges from local pin for ${marker.workspaceId} — using pinned ${pin} (remote claims ${own.member.localPath})`)
+    return { ...own, member: { ...own.member, localPath: pin } }
+  }
+  return own
+}
+
 /**
  * This instance's own member row in a marker — strict `memberId`
  * (`username@instance8`) lookup ONLY (P2-03, audit §4.9/§4.11). The previous
@@ -121,6 +190,7 @@ export async function createWorkspace(s3, ctx, identity, { name, localPath }) {
     },
   }
   await s3.putJson(`workspaces/${marker.workspaceId}.json`, marker)
+  pinWorkspaceLocalPath(marker.workspaceId, localPath)
   return marker
 }
 
@@ -148,6 +218,7 @@ export async function joinWorkspace(s3, ctx, identity, { workspaceId, localPath 
   members[memberId].localPath = localPath
   const marker = { ...existing, members }
   await s3.putJson(key, marker)
+  pinWorkspaceLocalPath(workspaceId, localPath)
   return marker
 }
 
@@ -187,10 +258,14 @@ export async function matchWorkspace(cwd, markers, { identity, me } = {}) {
   const legacy = await workspaceIdFor(cwd)
   let prefixBest = null
   for (const marker of markers) {
-    const own = ownMember(marker, identity, me)
+    /* trustedMember (review 9012 F1): the remote member row is co-tenant
+     * writable, so the PINNED localPath — not the remote claim — decides
+     * whether `cwd` is ours. A repointed remote row cannot claim this host. */
+    const own = trustedMember(marker, identity, me)
     if (own === undefined) continue
-    // Legacy path-hash fallback still requires our own member row — a planted
-    // marker sharing the hash never claims this session for a foreign writer.
+    /* Legacy path-hash fallback (F7): a pin existing (trustedMember already
+     * required it) is the only proof this hash-match is ours — a planted
+     * marker that hash-matches our project basename can't claim the session. */
     if (marker.workspaceId === legacy) return marker
     const localPath = own.member.localPath
     if (typeof localPath !== 'string' || localPath === '') continue

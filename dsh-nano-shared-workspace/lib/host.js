@@ -1,7 +1,7 @@
 // src/host/routes.js
 import { mkdir as mkdir2, opendir } from "node:fs/promises";
-import { homedir } from "node:os";
-import { basename as basename2, dirname as dirname2, isAbsolute as isAbsolute3, join as join3, resolve as resolve4 } from "node:path";
+import { homedir as homedir2 } from "node:os";
+import { basename as basename2, dirname as dirname2, isAbsolute as isAbsolute3, join as join4, resolve as resolve4 } from "node:path";
 
 // src/host/credentials.js
 var IDENTITY_REF = "DSH_NSW_IDENTITY";
@@ -211,7 +211,9 @@ function createS3(config, identity) {
 // src/host/workspaces.js
 import { execFile } from "node:child_process";
 import { createHash as createHash2, randomBytes, randomUUID } from "node:crypto";
-import { basename, resolve } from "node:path";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { basename, join, resolve } from "node:path";
 
 // ../packages/dsh-remote-data-schema/src/reject.js
 var SchemaReject = class extends Error {
@@ -648,6 +650,39 @@ async function workspaceIdFor(path) {
   return hash16(leaf === "" ? resolve(path) : leaf);
 }
 var memberKeyOf = (identity, me) => `${identity.username}@${me.slice(0, 8)}`;
+var pinHome = () => process.env.DSH_HOME ?? join(homedir(), ".dsh");
+var pinPath = (workspaceId) => join(pinHome(), "nsw-pins", `${workspaceId}.json`);
+function pinDir() {
+  const dir = join(pinHome(), "nsw-pins");
+  mkdirSync(dir, { recursive: true });
+  return dir;
+}
+function pinWorkspaceLocalPath(workspaceId, localPath) {
+  if (typeof workspaceId !== "string" || !WORKSPACE_ID_RE.test(workspaceId)) return;
+  const file = join(pinDir(), `${workspaceId}.json`);
+  writeFileSync(file, JSON.stringify({ workspaceId, localPath, pinnedAt: (/* @__PURE__ */ new Date()).toISOString() }));
+}
+function readWorkspacePin(workspaceId) {
+  if (typeof workspaceId !== "string" || !WORKSPACE_ID_RE.test(workspaceId)) return void 0;
+  try {
+    const row = JSON.parse(readFileSync(pinPath(workspaceId), "utf8"));
+    if (row?.workspaceId !== workspaceId || typeof row?.localPath !== "string" || row.localPath === "") return void 0;
+    return row.localPath;
+  } catch {
+    return void 0;
+  }
+}
+function trustedMember(marker, identity, me) {
+  const own = ownMember(marker, identity, me);
+  if (own === void 0) return void 0;
+  const pin = readWorkspacePin(marker.workspaceId);
+  if (pin === void 0) return void 0;
+  if (own.member.localPath !== pin) {
+    console.warn(`[nsw] remote localPath diverges from local pin for ${marker.workspaceId} \u2014 using pinned ${pin} (remote claims ${own.member.localPath})`);
+    return { ...own, member: { ...own.member, localPath: pin } };
+  }
+  return own;
+}
 function ownMember(marker, identity, me) {
   const memberId = memberKeyOf(identity, me);
   const member = marker?.members?.[memberId];
@@ -675,6 +710,7 @@ async function createWorkspace(s3, ctx, identity, { name: name2, localPath }) {
     }
   };
   await s3.putJson(`workspaces/${marker.workspaceId}.json`, marker);
+  pinWorkspaceLocalPath(marker.workspaceId, localPath);
   return marker;
 }
 async function joinWorkspace(s3, ctx, identity, { workspaceId, localPath }) {
@@ -693,6 +729,7 @@ async function joinWorkspace(s3, ctx, identity, { workspaceId, localPath }) {
   members[memberId].localPath = localPath;
   const marker = { ...existing, members };
   await s3.putJson(key, marker);
+  pinWorkspaceLocalPath(workspaceId, localPath);
   return marker;
 }
 async function listWorkspaces(s3) {
@@ -710,7 +747,7 @@ async function matchWorkspace(cwd, markers, { identity, me } = {}) {
   const legacy = await workspaceIdFor(cwd);
   let prefixBest = null;
   for (const marker of markers) {
-    const own = ownMember(marker, identity, me);
+    const own = trustedMember(marker, identity, me);
     if (own === void 0) continue;
     if (marker.workspaceId === legacy) return marker;
     const localPath = own.member.localPath;
@@ -726,8 +763,8 @@ async function matchWorkspace(cwd, markers, { identity, me } = {}) {
 
 // src/host/session-io.js
 import { mkdir, writeFile } from "node:fs/promises";
-import { lstatSync, mkdirSync, realpathSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { isAbsolute, join, resolve as resolve2, sep } from "node:path";
+import { lstatSync, mkdirSync as mkdirSync2, realpathSync, readdirSync, readFileSync as readFileSync2, statSync } from "node:fs";
+import { isAbsolute, join as join2, resolve as resolve2, sep } from "node:path";
 import { constants, zstdCompressSync, zstdDecompressSync } from "node:zlib";
 var zstdFrame = (bytes) => zstdCompressSync(bytes, { params: { [constants.ZSTD_c_checksumFlag]: 1 } });
 function projectKey(cwd) {
@@ -753,7 +790,7 @@ function projectKey(cwd) {
 }
 var CHUNK = 64 * 1024;
 var CLAIM_TTL_MS = 9e4;
-var sessionDir = (home) => join(home, "sessions");
+var sessionDir = (home) => join2(home, "sessions");
 function decode(buf) {
   try {
     return zstdDecompressSync(buf).toString("utf8");
@@ -801,13 +838,13 @@ function listLocalSessions(dshHome) {
     if (!project.isDirectory()) continue;
     let sessions = [];
     try {
-      sessions = readdirSync(join(root, project.name), { withFileTypes: true });
+      sessions = readdirSync(join2(root, project.name), { withFileTypes: true });
     } catch {
       continue;
     }
     for (const dir of sessions) {
       if (!dir.isDirectory() || !dir.name.startsWith("session-")) continue;
-      const filePath = join(root, project.name, dir.name, "session.v4.jsonl.zstd");
+      const filePath = join2(root, project.name, dir.name, "session.v4.jsonl.zstd");
       try {
         const stat = statSync(filePath);
         out.push({
@@ -885,7 +922,7 @@ async function pushSession(s3, ctx, identity, local, markers, state) {
   if (!SESSION_ID_RE.test(local.sessionId)) return { sessionId: local.sessionId, outcome: "skip:schema:sessionId" };
   const me = await instanceId(ctx);
   const writerId = `${identity.username}@${me.slice(0, 8)}`;
-  const buf = readFileSync(local.filePath);
+  const buf = readFileSync2(local.filePath);
   const head = summarize(buf);
   if (head.cwd === null) return { sessionId: local.sessionId, outcome: "skip:unparsable" };
   const marker = await matchWorkspace(head.cwd, markers, { identity, me });
@@ -916,9 +953,8 @@ async function pushSession(s3, ctx, identity, local, markers, state) {
   const committed = remote?.committedBytes ?? 0;
   let written = 0;
   if (buf.length > committed) {
-    for (let offset = committed; offset < buf.length; offset += CHUNK) {
-      const index = Math.floor(offset / CHUNK);
-      const slice = buf.subarray(offset, Math.min(offset + CHUNK, buf.length));
+    for (let index = Math.floor(committed / CHUNK); index * CHUNK < buf.length; index += 1) {
+      const slice = buf.subarray(index * CHUNK, Math.min((index + 1) * CHUNK, buf.length));
       await s3.putBytes(`workspaces/${workspaceId}/sessions/${local.sessionId}/body/${index}.part`, slice);
       written += slice.length;
     }
@@ -1046,9 +1082,9 @@ async function materializeSession(s3, dshHome, { workspaceId, sessionId, localPa
   const body = rest === "" ? Buffer.alloc(0) : zstdFrame(Buffer.from(rest.endsWith("\n") ? rest : `${rest}
 `));
   const sessionsRoot = resolve2(dshHome, "sessions");
-  const projectRoot = join(sessionsRoot, projectKey(localPath));
-  const dir = join(projectRoot, sessionId);
-  mkdirSync(dir, { recursive: true });
+  const projectRoot = join2(sessionsRoot, projectKey(localPath));
+  const dir = join2(projectRoot, sessionId);
+  mkdirSync2(dir, { recursive: true });
   let realDir;
   let realRoot;
   try {
@@ -1060,7 +1096,7 @@ async function materializeSession(s3, dshHome, { workspaceId, sessionId, localPa
   if (!(realDir === realRoot || realDir.startsWith(realRoot + sep)) || lstatSync(dir).isSymbolicLink()) {
     throw new Error("materialize target escaped the session tree");
   }
-  const path = join(dir, "session.v4.jsonl.zstd");
+  const path = join2(dir, "session.v4.jsonl.zstd");
   try {
     if (lstatSync(path).isSymbolicLink()) throw new Error("materialize target is a symlink");
   } catch (error) {
@@ -1072,9 +1108,9 @@ async function materializeSession(s3, dshHome, { workspaceId, sessionId, localPa
 
 // src/host/tree.js
 import { createHash as createHash3 } from "node:crypto";
-import { existsSync, lstatSync as lstatSync2, mkdirSync as mkdirSync2, readFileSync as readFileSync2, readdirSync as readdirSync2, realpathSync as realpathSync2, unlinkSync, writeFileSync } from "node:fs";
-import { dirname, isAbsolute as isAbsolute2, join as join2, relative, resolve as resolve3, sep as sep2 } from "node:path";
-var SKIP = /* @__PURE__ */ new Set([".git", "node_modules", ".nsw", ".DS_Store", "imagine"]);
+import { existsSync, lstatSync as lstatSync2, mkdirSync as mkdirSync3, readFileSync as readFileSync3, readdirSync as readdirSync2, realpathSync as realpathSync2, unlinkSync, writeFileSync as writeFileSync2 } from "node:fs";
+import { dirname, isAbsolute as isAbsolute2, join as join3, relative, resolve as resolve3, sep as sep2 } from "node:path";
+var SKIP = /* @__PURE__ */ new Set([".git", "node_modules", ".nsw", ".ds_store", "imagine"]);
 var MAX_FILE = 2 * 1024 * 1024;
 var MAX_FILES = 200;
 var headKey = (id) => `workspaces/${id}/tree/HEAD.json`;
@@ -1093,10 +1129,10 @@ function replicaRoot(localPath) {
   } catch (error) {
     if (error?.code !== "ENOENT") throw error;
   }
-  mkdirSync2(root, { recursive: true });
+  mkdirSync3(root, { recursive: true });
   return realpathSync2(root);
 }
-var skippedRel = (rel) => SKIP.has(String(rel).split("/")[0]);
+var skippedRel = (rel) => SKIP.has(String(rel).split("/")[0].toLowerCase());
 function inside(root, rel) {
   if (typeof rel !== "string" || rel === "") return void 0;
   try {
@@ -1112,8 +1148,18 @@ function inside(root, rel) {
   } catch (error) {
     if (error?.code !== "ENOENT") return void 0;
   }
-  let probe = dest;
-  while (!existsSync(probe)) {
+  let probe = dirname(dest);
+  for (; ; ) {
+    let st;
+    try {
+      st = lstatSync2(probe);
+    } catch {
+      st = void 0;
+    }
+    if (st !== void 0) {
+      if (st.isSymbolicLink() || !st.isDirectory()) return void 0;
+      break;
+    }
     const parent = dirname(probe);
     if (parent === probe) return void 0;
     probe = parent;
@@ -1136,8 +1182,8 @@ function scan(root) {
       return;
     }
     for (const name2 of names) {
-      if (SKIP.has(name2) || files.length >= MAX_FILES) continue;
-      const abs = join2(dir, name2);
+      if (SKIP.has(name2.toLowerCase()) || files.length >= MAX_FILES) continue;
+      const abs = join3(dir, name2);
       let st;
       try {
         st = lstatSync2(abs);
@@ -1147,7 +1193,7 @@ function scan(root) {
       if (st.isSymbolicLink()) continue;
       if (st.isDirectory()) walk(abs);
       else if (st.isFile() && st.size <= MAX_FILE) {
-        const buf = readFileSync2(abs);
+        const buf = readFileSync3(abs);
         files.push({
           rel: relative(root, abs).split("\\").join("/"),
           sha256: sha256(buf),
@@ -1170,7 +1216,7 @@ function readRel(root, rel) {
   const dest = inside(root, rel);
   if (dest === void 0) return void 0;
   try {
-    return readFileSync2(dest);
+    return readFileSync3(dest);
   } catch {
     return void 0;
   }
@@ -1229,8 +1275,8 @@ ${(remoteBuf ?? Buffer.alloc(0)).toString("utf8")}>>>>>>> remote
 `);
     const dest = inside(root, file.rel);
     if (dest !== void 0) {
-      mkdirSync2(dirname(dest), { recursive: true });
-      writeFileSync(dest, merged);
+      mkdirSync3(dirname(dest), { recursive: true });
+      writeFileSync2(dest, merged);
     }
     out.push({ rel: file.rel, sha256: sha256(merged), size: merged.length, buf: merged });
     dissolved.writes.push(file.rel);
@@ -1238,19 +1284,19 @@ ${(remoteBuf ?? Buffer.alloc(0)).toString("utf8")}>>>>>>> remote
   return out;
 }
 function basePath(dshHome, workspaceId) {
-  return join2(dshHome, "nsw", `${workspaceId}.json`);
+  return join3(dshHome, "nsw", `${workspaceId}.json`);
 }
 function loadBase(dshHome, workspaceId) {
   try {
-    return JSON.parse(readFileSync2(basePath(dshHome, workspaceId), "utf8"));
+    return JSON.parse(readFileSync3(basePath(dshHome, workspaceId), "utf8"));
   } catch {
     return { generation: 0, files: [] };
   }
 }
 function saveBase(dshHome, workspaceId, record) {
   const dest = basePath(dshHome, workspaceId);
-  mkdirSync2(dirname(dest), { recursive: true });
-  writeFileSync(dest, JSON.stringify({ generation: record.generation, files: record.files }));
+  mkdirSync3(dirname(dest), { recursive: true });
+  writeFileSync2(dest, JSON.stringify({ generation: record.generation, files: record.files }));
 }
 async function ensureBlobs(s3, workspaceId, root, files) {
   for (const file of files) {
@@ -1283,8 +1329,8 @@ async function pullWorkspace(s3, dshHome, workspaceId, localPath) {
     if (have !== void 0 && sha256(have) === file.sha256) continue;
     const blob = await s3.getBytes(blobKey(workspaceId, file.sha256));
     if (blob === void 0) continue;
-    mkdirSync2(dirname(dest), { recursive: true });
-    writeFileSync(dest, blob);
+    mkdirSync3(dirname(dest), { recursive: true });
+    writeFileSync2(dest, blob);
   }
   saveBase(dshHome, workspaceId, head);
   return { ok: true, generation: head.generation ?? 0, files: (head.files ?? []).length, conflicts: head.conflicts ?? [] };
@@ -1923,7 +1969,7 @@ var assertLocalPath = (value) => {
   }
   return value;
 };
-var localMember = (marker, identity, instance) => instance === "" ? void 0 : ownMember(marker, identity, instance)?.member;
+var localMember = (marker, identity, instance) => instance === "" ? void 0 : trustedMember(marker, identity, instance)?.member;
 function messageOf(error) {
   return error instanceof Error ? error.message : String(error);
 }
@@ -1953,7 +1999,7 @@ function createRoutes(ctx, config) {
     // This host bundle's own copy of the library version (A3 / §10.4.4).
     libVersion: LIB_VERSION
   });
-  const dshHome = process.env.DSH_HOME ?? `${homedir()}/.dsh`;
+  const dshHome = process.env.DSH_HOME ?? `${homedir2()}/.dsh`;
   const syncState = { bySession: /* @__PURE__ */ new Map() };
   let settingsCache;
   let settingsPending;
@@ -2292,7 +2338,7 @@ function createRoutes(ctx, config) {
         if (name2 === "" || name2 === "." || name2 === ".." || /[/\\]/.test(name2)) {
           return { ok: false, error: "name must be a single path segment" };
         }
-        const target = join3(parent, name2);
+        const target = join4(parent, name2);
         await mkdir2(target, { recursive: false });
         return { ok: true, path: target };
       }
@@ -2304,7 +2350,7 @@ function createRoutes(ctx, config) {
       method: "POST",
       async run(req) {
         const body = JSON.parse(await readBody(req) || "{}");
-        const home = homedir();
+        const home = homedir2();
         const path = typeof body?.path === "string" && isAbsolute3(body.path) ? resolve4(body.path) : home;
         const dir = await opendir(path);
         const entries = [];
@@ -2313,7 +2359,7 @@ function createRoutes(ctx, config) {
             const dirent = await dir.read();
             if (dirent === null) break;
             if (!dirent.isDirectory() && !dirent.isSymbolicLink()) continue;
-            entries.push({ name: dirent.name, path: join3(path, dirent.name), hidden: dirent.name.startsWith(".") });
+            entries.push({ name: dirent.name, path: join4(path, dirent.name), hidden: dirent.name.startsWith(".") });
           }
         } finally {
           await dir.close();
@@ -2391,7 +2437,7 @@ function startBackgroundSync(ctx, config) {
     version: true ? "0.2.0" : void 0,
     libVersion: LIB_VERSION
   });
-  const dshHome = process.env.DSH_HOME ?? `${homedir()}/.dsh`;
+  const dshHome = process.env.DSH_HOME ?? `${homedir2()}/.dsh`;
   const syncState = { bySession: /* @__PURE__ */ new Map() };
   let running = false;
   const tick = () => review.hostSpan("sync-tick", async () => {

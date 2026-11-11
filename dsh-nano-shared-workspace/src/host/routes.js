@@ -5,7 +5,7 @@ import { homedir } from 'node:os'
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 import { clearIdentity, readIdentity, writeIdentity } from './credentials.js'
 import { createS3 } from './s3.js'
-import { createWorkspace, instanceId, joinWorkspace, listWorkspaces, ownMember } from './workspaces.js'
+import { createWorkspace, instanceId, joinWorkspace, listWorkspaces, ownMember, trustedMember } from './workspaces.js'
 import { acquireClaim, fetchTranscript, listRemoteSessions, materializeSession, renewClaim, syncAll } from './session-io.js'
 import { pullWorkspace, pushWorkspace, registerIdentity } from './tree.js'
 import { ensurePerfReviewHost, LIB_VERSION } from 'dsh-performance-review/host'
@@ -40,9 +40,11 @@ const assertLocalPath = value => {
   return value
 }
 
-/** This instance's own member row — strict memberId binding, no username fallback (P2-03). */
+/** This instance's own member row — strict memberId binding (P2-03) PLUS the
+ * local pin (review 9012 F1): the PINNED localPath, not the co-tenant-writable
+ * remote row, is the replica root pull/push/sync use. */
 const localMember = (marker, identity, instance) =>
-  instance === '' ? undefined : ownMember(marker, identity, instance)?.member
+  instance === '' ? undefined : trustedMember(marker, identity, instance)?.member
 
 /** Error message extraction that never leaks a stack to the response. */
 function messageOf(error) {

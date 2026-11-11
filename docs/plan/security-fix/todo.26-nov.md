@@ -45,14 +45,14 @@ PH1 batch0-baseline ──▶ PH2 batch1-host-data ──▶ PH3 batch2-content-
 - [x] `P1-09` — `test/spike/security-fix/` 宪章 + `test/remote-schema/compat/` + `scripts/security-regression/` 基座 — pass `ecf16f5` · 宪章判读门槛写死+fake-S3 CAS验证(304/412)
 
 ### PH2 `batch1-host-data`（门禁 B1；P0 remote-cross 7）
-- [ ] `P2-01` — schema v1 六类规则 + v0 只读兼容 + reject
+- [x] `P2-01` — schema v1 六类规则 + v0 只读兼容 + reject — pass `e402df7` · node --test 24/24 · svg-mime/depth/committedBytes/traversal 全拒
 - [ ] `P2-02` — notepad `/s3/object` 消费点接 schema（s3-sync.js import→s3-sync-host bundle；put/get 不对称）
 - [ ] `P2-03` — nsw marker 校验 + localPath 严格 memberId 绑定（join 边界）
 - [ ] `P2-04` — nsw session meta/parts/claim 校验 + acquire+renew CAS + committedBytes/parts 限额 + claim/heartbeat/lease 边界
 - [ ] `P2-05` — nsw tree HEAD/pull/push 校验 + realpath 围栏（SKIP/symlink/stale/localPath）
 - [ ] `P2-06` — materialize + 路由边界 charset 双层（sessionId/workspaceId `^[A-Za-z0-9_-]{1,128}$`）
 - [ ] `P2-07` — fetch-mp 30x 逐跳复验
-- [ ] `P2-08` — 存量桶兼容回归（真桶导出、N≥K、v1-freeze 前置闸）
+- [x] `P2-08` — 存量桶兼容回归（真桶导出、N≥K、v1-freeze 前置闸） — pass `4894a49`+`e402df7` · compat-regression 7/7 (6 v1 + 1 v0-backfill manifest)
 
 ### PH3 `batch2-content-render`（门禁 B3；P0 remote→page 6）
 - [ ] `P3-01` — html-policy 策略表实现

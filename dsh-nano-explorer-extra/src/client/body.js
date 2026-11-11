@@ -1,8 +1,8 @@
 /** The files page this plugin takes over: header controls over the shared tree, and a footer status bar. */
 
 import React from 'react'
-import { CommitDialog, Dialog, RenameDialog } from './dialogs.js'
-import { BranchDrawer, CommitDrawer, DiffDialog } from './drawers.js'
+import { CommitDialog, Dialog, MoveConfirmDialog, RenameDialog } from './dialogs.js'
+import { BranchDrawer, CommitDrawer } from './drawers.js'
 import { SettingsDialog } from './settings.js'
 import { createAccessory } from './accessory.js'
 import { StatusBar } from './statusbar.js'
@@ -111,12 +111,12 @@ export function ExplorerBody(props) {
   const [menu, setMenu] = useState(null)
   // A delete the reader has not confirmed; the entry is untouched until they do.
   const [deleteRequest, setDeleteRequest] = useState(null)
+  // A folder drop the reader has not confirmed: a drop alone never writes, because a folder can
+  // stand for thousands of files and a move has no one-click undo. Files still move on the drop.
+  const [moveRequest, setMoveRequest] = useState(null)
   // Which footer drawer is open, if any: `branch` shows worktrees and remote state, `commit` shows the
   // pending work. One at a time, so a reader never faces two stacked panels.
   const [drawer, setDrawer] = useState(null)
-  // The diff overlay the row menu opened: which path, and its loaded state. The panel-local layer
-  // pattern keeps it inside the pane like every other card here.
-  const [diffView, setDiffView] = useState(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [drawerBusy, setDrawerBusy] = useState(false)
   const [drawerError, setDrawerError] = useState(undefined)
@@ -135,8 +135,8 @@ export function ExplorerBody(props) {
     setDialogError(undefined)
     setCreateRequest(null)
     setDeleteRequest(null)
+    setMoveRequest(null)
     setMenu(null)
-    setDiffView(null)
   }, [sessionId, cwd, tab.visible])
 
   // One gesture clock for the whole tree: the Factory hands the same `onOpen` both presses.
@@ -368,6 +368,29 @@ export function ExplorerBody(props) {
   }, [cwd, sessionId, tab.actions, panel.id, panel.isFloating])
 
   /**
+   * Open one changed file in the native diff view the experimental forge panel owns.
+   *
+   * That panel's changes tab reads a Session's local changes itself and takes a repository-relative
+   * path through `params`, so this only supplies the address and the file to focus. The address
+   * carries no file name: one tab per Session is reused and re-navigated, so repeated right-clicks
+   * never pile up tabs. A profile without the forge bundle registers no type for this address and
+   * `openResource` throws; the inline note then names the switch that turns it on.
+   */
+  const openDiff = useCallback(key => {
+    const absolute = absoluteOf(cwd ?? '', key)
+    const root = checkoutRoot ?? cwd ?? ''
+    const path = relativeTo(root, absolute)
+    const address = `dsh-resource://forge-changes/${encodeURIComponent(sessionId)}/local`
+    try {
+      if (panel.isFloating) tab.actions.openResource(address, { params: { path } })
+      else tab.actions.openResource(address, { params: { path }, paneId: panel.id })
+      setLinkNote(undefined)
+    } catch {
+      setLinkNote(copy.viewDiffUnavailable)
+    }
+  }, [cwd, checkoutRoot, sessionId, tab.actions, panel.id, panel.isFloating, copy.viewDiffUnavailable])
+
+  /**
    * Read one directory's Git state and merge it into the map the tree draws from.
    *
    * The workspace-wide query summarizes an untracked directory as a single entry, which is why a
@@ -507,6 +530,19 @@ export function ExplorerBody(props) {
     queueStats()
     void refreshGit()
   }, [cwd, sessionId, request, tree, queueStats, refreshGit])
+
+  /**
+   * Gate a drop by what is being dragged. A file lands where it was dropped; a folder waits for the
+   * confirmation card, whether the destination was another folder row or the workspace root, since
+   * either move can carry an arbitrarily large subtree.
+   */
+  const requestMove = useCallback((entry, targetDir) => {
+    if (entry.meta?.kind === 'directory') {
+      setMoveRequest({ entry, targetDir })
+      return
+    }
+    void doMove(entry, targetDir)
+  }, [doMove])
 
   /** Commit every change with one message. */
   const doCommit = useCallback(async message => {
@@ -656,9 +692,9 @@ export function ExplorerBody(props) {
     onDrop: kind === 'directory' ? event => {
       const source = dropOn(event)
       if (source === '') return
-      void doMove({ path: source, meta: { kind: dragKind.current } }, entry.path)
+      requestMove({ path: source, meta: { kind: dragKind.current } }, entry.path)
     } : undefined,
-  }), [tree, clearHover, markHover, dropOn, doMove])
+  }), [tree, clearHover, markHover, dropOn, requestMove])
 
   /**
    * The strongest Git status anywhere beneath one directory.
@@ -837,29 +873,20 @@ export function ExplorerBody(props) {
           const absolute = menu.path.startsWith('/') ? menu.path : `${cwd ?? ''}/${menu.path}`
           await window.__nanoNotepad.import(menu.name, read.content, { sourcePath: absolute })
         } },
-      /* A changed file gets its unified diff in a panel card. The menu path is the tree key the
-         status index already uses, so `statusOf` needs no translation. Directories stay out: a
-         per-file view answers what the reader actually pointed at. */
+      /* A changed file opens in the native diff tab: the experimental forge panel's local-changes
+         view draws it with the shell's own FileDiff — hunks, line numbers, two columns, the real
+         palette. Directories stay out, since that view focuses one file at a time. */
       menu.kind !== 'file' || statusOf(menu.path) === undefined ? null : {
         id: 'view-diff', label: copy.viewDiff,
         icon: React.createElement(primitives.IconCompareSplitOutlineRegular, { width: 14, height: 14 }),
-        run: () => {
-          const path = menu.path
-          setDiffView({ path, name: menu.name, state: 'loading' })
-          void request('/diff', { sessionId, path }).then(result => {
-            setDiffView(current => current?.path === path
-              ? result.ok
-                ? { ...current, state: 'ready', diff: result.diff ?? '' }
-                : { ...current, state: 'error', message: result.message }
-              : current)
-          })
-        } },
+        run: () => openDiff(menu.path),
+      },
       { id: 'rename', label: copy.rename, icon: React.createElement(primitives.IconEditOutlineRegular, { width: 14, height: 14 }),
         run: () => { setDialogError(undefined); setDialog({ kind: 'rename', entry: { ...target, meta: { kind: menu.kind } } }) } },
       { id: 'delete', label: copy.delete, tone: 'danger', icon: React.createElement(primitives.IconTrashOutlineRegular, { width: 14, height: 14 }),
         run: () => { setLinkNote(undefined); setDeleteRequest(target) } },
     ].filter(Boolean)
-  }, [menu, copy, openApps, cwd, copyPath, statusOf, request, sessionId])
+  }, [menu, copy, openApps, cwd, copyPath, statusOf, openDiff])
 
   return React.createElement('div', { className: 'nxe-root', 'data-nxe': 'true', 'data-theme': nxe.scheme(), ref: rootEl },
     React.createElement('div', { className: 'nxe-header' },
@@ -895,6 +922,21 @@ export function ExplorerBody(props) {
           ? React.createElement('span', { className: 'nxe-dialog-note-inline' }, ` ${copy.deleteFolderNote}`)
           : null),
     }),
+    // A folder drop is staged here until the reader confirms; the card remounts per request so its
+    // two-second countdown always starts fresh. The destination is shown relative to the workspace
+    // root, with the root itself named instead of left as an empty string.
+    moveRequest === null ? null : React.createElement(MoveConfirmDialog, {
+      key: `${moveRequest.entry.path}->${moveRequest.targetDir}`,
+      copy,
+      name: basenameOf(moveRequest.entry.path),
+      destination: relativeTo(cwd ?? '', moveRequest.targetDir) || copy.moveFolderRoot,
+      onConfirm: () => {
+        const pending = moveRequest
+        setMoveRequest(null)
+        void doMove(pending.entry, pending.targetDir)
+      },
+      onCancel: () => setMoveRequest(null),
+    }),
     createRequest === null ? null : React.createElement(RenameDialog, {
       copy, mode: 'create', busy,
       currentName: createRequest.proposed,
@@ -919,7 +961,7 @@ export function ExplorerBody(props) {
         // A folder row already claimed this drop — its handler stopped propagation.
         const source = dropOn(event)
         if (source === '') return
-        void doMove({ path: source, meta: { kind: dragKind.current } }, cwd)
+        requestMove({ path: source, meta: { kind: dragKind.current } }, cwd)
       },
     }, content),
     React.createElement(NanoToast, { text: toast }),
@@ -963,7 +1005,6 @@ export function ExplorerBody(props) {
       onPull: doPull,
       onOpenConflict: path => { openEntry({ path: absoluteOf(cwd ?? '', path) }); setDrawer(null) },
     }),
-    React.createElement(DiffDialog, { copy, view: diffView, onClose: () => setDiffView(null) }),
     React.createElement(RowMenu, { menu, copy, actions: rowActions, onClose: () => setMenu(null) }))
 }
 

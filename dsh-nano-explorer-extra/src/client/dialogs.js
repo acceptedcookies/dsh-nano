@@ -257,6 +257,44 @@ export function CommitDialog({ copy, files, busy, error, onConfirm, onCancel }) 
 }
 
 /**
+ * The second confirmation a folder move asks for.
+ *
+ * A dropped folder can stand for thousands of files, and a move has no one-click undo, so the
+ * gesture alone never writes. The confirm action stays disabled through a two-second countdown:
+ * long enough to read where the folder is going, short enough not to become a ritual. The clock is
+ * a deadline rather than N one-second ticks, so a throttled background tab cannot let the button
+ * unlock early, and the component remounts on every new request to restart it.
+ *
+ * @param props - copy, the folder name, its destination label, and the two actions.
+ * @returns the dialog.
+ */
+export function MoveConfirmDialog({ copy, name, destination, onConfirm, onCancel }) {
+  const [remaining, setRemaining] = useState(2)
+  React.useEffect(() => {
+    const deadline = Date.now() + 2000
+    const timer = window.setInterval(() => {
+      const left = Math.max(0, Math.ceil((deadline - Date.now()) / 1000))
+      setRemaining(left)
+      if (left === 0) window.clearInterval(timer)
+    }, 100)
+    return () => window.clearInterval(timer)
+  }, [])
+  const waiting = remaining > 0
+  return React.createElement(Dialog, {
+    copy, title: copy.moveFolderTitle,
+    confirmLabel: waiting ? copy.moveFolderWait(remaining) : copy.moveFolderConfirm,
+    confirmDisabled: waiting,
+    onConfirm, onCancel,
+    description: React.createElement(React.Fragment, null,
+      copy.moveFolderBody(name, destination),
+      React.createElement('span', { className: 'nxe-dialog-note-inline' }, ` ${copy.moveFolderNote}`)),
+  },
+  waiting ? React.createElement('p', {
+    className: 'nxe-move-countdown', role: 'status', 'data-nxe-move-countdown': 'true',
+  }, copy.moveFolderCountdown(remaining)) : null)
+}
+
+/**
  * The name card: rename an existing entry, or name a new one.
  *
  * One component serves both because the field and its rules are identical; only the wording and the

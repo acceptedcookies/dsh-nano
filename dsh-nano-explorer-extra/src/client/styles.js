@@ -54,9 +54,13 @@ export const STYLE = `${NANO_STYLES}
 
 /* Row decorations injected through the tree Factory's accessory seat. */
 .nxe-acc {
-  /* Every mark sits in the same 14px cell. The gap is what keeps a link glyph off the status dot. */
+  /* One fixed 14px cell at the right of the rail, not an auto-width group. An auto-width group was
+     centred in the 24px seat, so a row with two marks (a symlink glyph plus the ignored close-circle)
+     grew to 32px, shifted right by half the growth, and put its last mark 9px off the single-mark
+     rows. Anchoring the rail to a fixed cell keeps the rightmost mark on one vertical line; any
+     extra marks overflow to the left, into the row's slack, instead of pushing it sideways. */
   display: inline-flex; align-items: center; justify-content: flex-end;
-  flex: 0 0 auto; gap: 4px;
+  box-sizing: border-box; width: 14px; min-width: 14px; flex: 0 0 14px; gap: 4px;
 }
 .nxe-acc-letter {
   box-sizing: border-box; width: 14px; height: 14px; flex: none;
@@ -176,16 +180,6 @@ export const STYLE = `${NANO_STYLES}
 .nxe-drawer-row-status[data-status="D"], .nxe-change-status[data-status="D"] { color: var(--nxe-git-deleted); }
 .nxe-drawer-row-status[data-status="R"], .nxe-change-status[data-status="R"] { color: var(--nxe-git-renamed); }
 .nxe-drawer-row-status[data-status="U"], .nxe-change-status[data-status="U"] { color: var(--nxe-git-conflicted); }
-.nxe-diff {
-  margin: 0; padding: 8px 0; max-height: 340px; overflow: auto;
-  font: 12px/18px var(--dsw-font-family-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
-  border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-bg-layer-1);
-}
-.nxe-diff-line { display: block; white-space: pre-wrap; overflow-wrap: anywhere; padding: 0 10px; }
-.nxe-diff-line[data-tone="added"] { color: var(--nxe-git-added); background: var(--dsw-alias-green-bg, transparent); }
-.nxe-diff-line[data-tone="removed"] { color: var(--nxe-git-deleted); background: var(--dsw-alias-red-bg, transparent); }
-.nxe-diff-line[data-tone="hunk"] { color: var(--dsw-alias-label-brand, var(--dsw-alias-link)); }
-.nxe-diff-line[data-tone="meta"] { color: var(--dsw-alias-label-tertiary); }
 .nxe-drawer-link {
   flex: 1; min-width: 0; text-align: left; border: 0; background: transparent; padding: 0;
   color: var(--dsw-alias-label-error, #e5534b); font: inherit; cursor: pointer;
@@ -202,6 +196,7 @@ export const STYLE = `${NANO_STYLES}
 .nxe-mask { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; background: var(--dsw-alias-bg-mask-1, rgba(0,0,0,.45)); }
 .nxe-mask[hidden] { display: none !important; }
 .nxe-dialog-note-inline { color: var(--dsw-alias-label-tertiary); }
+.nxe-move-countdown { margin: 8px 0 0; font-size: 12px; color: var(--dsw-alias-label-secondary); }
 .nxe-dialog-error { margin: 8px 0 0; font-size: 12px; color: var(--dsw-alias-danger, #cf222e); }
 .nxe-dialog-changed { margin: 6px 0 0; padding: 0; list-style: none; max-height: 120px; overflow: auto; font-size: 11px; color: var(--dsw-alias-label-secondary); }
 .nxe-dialog-changed li { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -227,16 +222,19 @@ export const STYLE = `${NANO_STYLES}
    The shared tree does not expose the row name element to its accessory, so the tint is selected
    from the sibling accessory that carries the status letter: the :has() selector keeps the row itself untouched. */
 /* A row is tinted by the status it reports, whether that is a file's letter or a folder's summary dot.
-   Both mark kinds are matched here, so a folder that contains changes colours like the files inside it. */
-[data-nxe] .nxe-tree li[data-files-entry]:has([data-status="M"]) > div > button > span { color: var(--nxe-git-modified); }
-[data-nxe] .nxe-tree li[data-files-entry]:has([data-status="A"]) > div > button > span { color: var(--nxe-git-added); }
-[data-nxe] .nxe-tree li[data-files-entry]:has([data-status="?"]) > div > button > span { color: var(--nxe-git-untracked); }
-[data-nxe] .nxe-tree li[data-files-entry]:has([data-status="D"]) > div > button > span { color: var(--nxe-git-deleted); }
-[data-nxe] .nxe-tree li[data-files-entry]:has([data-status="R"]) > div > button > span { color: var(--nxe-git-renamed); }
-[data-nxe] .nxe-tree li[data-files-entry]:has([data-status="U"]) > div > button > span { color: var(--nxe-git-conflicted); }
+   Both mark kinds are matched here, so a folder that contains changes colours like the files inside it.
+   The accessory scope is the row div's direct child: an expanded folder keeps its children in a
+   sibling UL, so a bare :has([data-status]) also matched a descendant row and tinted the parent
+   with the wrong child's status — or, for [data-nxe-ignored], greyed out the whole subtree's root. */
+[data-nxe] .nxe-tree li[data-files-entry]:has(> div > div [data-status="M"]) > div > button > span { color: var(--nxe-git-modified); }
+[data-nxe] .nxe-tree li[data-files-entry]:has(> div > div [data-status="A"]) > div > button > span { color: var(--nxe-git-added); }
+[data-nxe] .nxe-tree li[data-files-entry]:has(> div > div [data-status="?"]) > div > button > span { color: var(--nxe-git-untracked); }
+[data-nxe] .nxe-tree li[data-files-entry]:has(> div > div [data-status="D"]) > div > button > span { color: var(--nxe-git-deleted); }
+[data-nxe] .nxe-tree li[data-files-entry]:has(> div > div [data-status="R"]) > div > button > span { color: var(--nxe-git-renamed); }
+[data-nxe] .nxe-tree li[data-files-entry]:has(> div > div [data-status="U"]) > div > button > span { color: var(--nxe-git-conflicted); }
 
 /* The folder's glyph takes the same tint so the row reads as one unit. */
-[data-nxe] .nxe-tree li[data-files-entry="directory"]:has([data-status]) > div > button > svg { color: inherit; opacity: .85; }
+[data-nxe] .nxe-tree li[data-files-entry="directory"]:has(> div > div [data-status]) > div > button > svg { color: inherit; opacity: .85; }
 
 
 /* One row geometry for every entry.
@@ -335,8 +333,8 @@ export const STYLE = `${NANO_STYLES}
    subordinate to a tracked row in both themes. */
 [data-nxe] .nxe-tree li[data-files-entry] > div > button > span:last-child,
 [data-nxe] .nxe-tree li[data-files-entry] > div > button > svg { transition: color .12s ease; }
-[data-nxe] .nxe-tree li[data-files-entry]:has([data-nxe-ignored]) > div > button > span:last-child,
-[data-nxe] .nxe-tree li[data-files-entry]:has([data-nxe-ignored]) > div > button > svg { color: var(--nxe-ignored-ink); }
+[data-nxe] .nxe-tree li[data-files-entry]:has(> div > div [data-nxe-ignored]) > div > button > span:last-child,
+[data-nxe] .nxe-tree li[data-files-entry]:has(> div > div [data-nxe-ignored]) > div > button > svg { color: var(--nxe-ignored-ink); }
 
 /* Persistent Git warning. Same floating surface as the shared toast, but interactive: it carries a
    dismiss button, stays until the read succeeds or the reader closes it, and floats above the

@@ -133,11 +133,19 @@ function createStore(root) {
   const markIgnored = (sessionId, directory, names) => {
     if (!showGitStatus() || !Array.isArray(names) || names.length === 0) return Promise.resolve()
     return once(`ignored:${directory}:${names.join(',')}`, async () => {
-      const result = await request('/ignored', { sessionId, paths: names })
-      if (!result.ok || !Array.isArray(result.ignored) || result.ignored.length === 0) return
-      const next = new Set(state.ignoredSet)
+      // Ask about each entry where it actually lives. Sending bare names made Git answer about
+      // same-named entries at the workspace root: a nested `dist` stayed lit while an unrelated
+      // root `node_modules` marked every nested `node_modules` ignored.
       const base = relativeTo(root, directory)
-      for (const name of result.ignored) next.add(base === '' ? name : `${base}/${name}`)
+      const paths = names.map(name => base === '' ? name : `${base}/${name}`)
+      const result = await request('/ignored', { sessionId, paths })
+      if (!result.ok || !Array.isArray(result.ignored) || result.ignored.length === 0) return
+      // The set is keyed like the status map — relative to the checkout root — so a workspace that
+      // is a subdirectory of its repository still compares equal in `ignoredOf`.
+      const checkoutRoot = state.git?.root
+      const prefix = checkoutRoot === undefined ? '' : relativeTo(checkoutRoot, root)
+      const next = new Set(state.ignoredSet)
+      for (const path of result.ignored) next.add(prefix === '' ? path : `${prefix}/${path}`)
       commit({ ignoredSet: next })
     })
   }

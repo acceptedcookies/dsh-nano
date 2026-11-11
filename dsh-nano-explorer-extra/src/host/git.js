@@ -379,48 +379,6 @@ export async function readStatus(ctx, config, request) {
  * @returns the new commit subject line.
  * @throws with Git's own diagnostic when either step fails.
  */
-/**
- * The unified diff of one workspace path against HEAD, or the whole file when it is untracked.
- *
- * `git status --porcelain=v2 -- <path>` answers which case applies in one process: an untracked
- * file has no index entry, so `git diff HEAD` prints nothing for it; everything else — modified,
- * staged, deleted, renamed, conflicted — is one `git diff HEAD` call either way. The untracked
- * branch diffs `/dev/null` against the working copy, then rewrites the `a/`/`b/` paths the
- * `--no-index` form labels with device and absolute names back to the workspace-relative path the
- * caller sent.
- * @param ctx - execution context.
- * @param config - executable and process limits.
- * @param request - working directory, the path's display form, its absolute form, and cancellation.
- * @returns the diff text; an empty string means the file is clean.
- */
-export async function fileDiff(ctx, config, request) {
-  const { cwd, policy, path, absolute, signal } = request
-  const status = await runGit(ctx, config, {
-    cwd, policy, signal, args: ['status', '--porcelain=v2', '--', path], allowedExitCodes: [0, 128],
-  })
-  if (status.stdout.trim() === '') return ''
-  const untracked = status.stdout.split('\n').some(line => line.startsWith('? '))
-  if (untracked === true) {
-    const diff = await runGit(ctx, config, {
-      cwd, policy, signal,
-      args: ['diff', '--no-index', '--', '/dev/null', absolute],
-      allowedExitCodes: [0, 1],
-    })
-    // `--no-index` invents `a/dev/null` and `b/<absolute>` headers; the reader knows the file by
-    // its workspace path, so the `diff --git` and `-/+/` headers are rewritten with the same
-    // `a/`/`b/` prefixes a tracked diff prints. `/dev/null` still names the absent side.
-    return diff.stdout
-      .split(`diff --git a${absolute} b${absolute}`).join(`diff --git a/${path} b/${path}`)
-      .split(`--- /dev/null`).join(`--- a/${path}`)
-      .split(`+++ b${absolute}`).join(`+++ b/${path}`)
-  }
-  const diff = await runGit(ctx, config, {
-    cwd, policy, signal,
-    args: ['diff', 'HEAD', '--', path], allowedExitCodes: [0, 128],
-  })
-  return diff.stdout
-}
-
 export async function commitAll(ctx, config, request) {
   const { message } = request
   await runGit(ctx, config, { ...request, args: ['add', '--all'] })

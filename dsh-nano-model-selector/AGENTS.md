@@ -66,7 +66,7 @@ dsh plugin --profile web add <spec>
 
 1. profile 的 `package.json` 里，`dependencies` 和 `dsh.profile.bundles` 都有本包名。
 2. 重启并刷新后，页面里能找到本包的 client 模块（包名）。找不到说明 client 没进页面。
-3. composer 出现 `.nms-trigger`。rail 上有「全部」「收藏」「媒体生成」。
+3. composer 出现 `.nms-trigger`。rail 为单列图标栏，首排是「全部」「收藏」「媒体生成」。
 4. 已登录页面里 `GET /nano-model-selector/catalog` 返回 200 JSON。裸 curl 被拒是鉴权，不是没装上。composer 输入 `/i` 能看到 `imagine`。
 
 ## 初次运行
@@ -90,7 +90,7 @@ media-engine.json 里的显式选择
 
 | 动作 | 结果 |
 |---|---|
-| 点 `.nms-trigger` | 三栏面板：分组、模型卡片、详情与 effort |
+| 点 `.nms-trigger` | 单列图标 rail（超出高度可滚动、底部渐隐并有下拉指示）+ 模型列表 + 详情与 effort；`deepseek`/`deepseek-account`/`deepseek-official` 合并为单一「DeepSeek」品牌 |
 | 「媒体生成」 | 扫描并选择本机图片 CLI |
 | composer 里 `/imagine` | 把所选引擎的命令模板注入会话 |
 

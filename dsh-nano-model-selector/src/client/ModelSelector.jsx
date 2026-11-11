@@ -89,12 +89,23 @@ const BRAND_NAMES = {
   'deepseek-account': 'DeepSeek Account',
 }
 
+/**
+ * Brands that share one rail icon + list section. `deepseek-account` (OAuth)
+ * and `deepseek`/`deepseek-official` (API key) are the same provider behind two
+ * credentials; the user asked for a single DeepSeek entry instead of two tabs.
+ */
+const BRAND_MERGE = {
+  'deepseek-account': 'deepseek',
+  'deepseek-official': 'deepseek',
+}
+
 /** Split a gateway model id into the provider-like brand shown in the left rail. */
 function brandOf(group, model) {
   const id = String(model.id ?? '')
   const slash = id.indexOf('/')
-  const key = slash > 0 ? id.slice(0, slash) : group.id
-  const mapped = BRAND_NAMES[key] ?? BRAND_NAMES[group.id]
+  const raw = slash > 0 ? id.slice(0, slash) : group.id
+  const key = BRAND_MERGE[raw] ?? raw
+  const mapped = BRAND_NAMES[key] ?? BRAND_NAMES[group.id] ?? BRAND_NAMES[raw]
   const name = mapped ?? key.replace(/[-_]+/gu, ' ').replace(/\b[a-z]/gu, char => char.toUpperCase())
   return { key, name }
 }
@@ -134,6 +145,18 @@ export function ModelSelector({ locked, available, directory, load, select, lang
   const dragKeyRef = React.useRef(null)
   const [dropTarget, setDropTarget] = React.useState(null)
   const dropTargetRef = React.useRef(null)
+  // Rail overflow: the brand list scrolls inside the rail (no scrollbar); when
+  // more providers sit below the fold the bottom edge fades and a chevron
+  // points the way down. Extra top utility buttons shrink the brand area via
+  // flex, so no constant needs to track them.
+  const railBrandsRef = React.useRef(null)
+  const [railMore, setRailMore] = React.useState(false)
+  const updateRailOverflow = React.useCallback(() => {
+    const el = railBrandsRef.current
+    if (el === null) return
+    const more = el.scrollHeight - el.scrollTop - el.clientHeight > 1
+    setRailMore(prev => (prev === more ? prev : more))
+  }, [])
 
   const state = React.useSyncExternalStore(
     listener => directory.store.subscribe(listener),
@@ -308,6 +331,20 @@ export function ModelSelector({ locked, available, directory, load, select, lang
     }
     return result
   }, [allModels])
+
+  // Recompute "more providers below" on open, on brand-count change, and when
+  // the panel height moves (ResizeObserver also covers a taller top section
+  // squeezing the scroll area).
+  React.useEffect(() => {
+    if (!open) return undefined
+    const el = railBrandsRef.current
+    if (el === null) return undefined
+    updateRailOverflow()
+    const observer = new ResizeObserver(updateRailOverflow)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [open, brands.length, updateRailOverflow])
+
   const favoriteSet = React.useMemo(() => new Set(favorites), [favorites])
   const favoriteItems = React.useMemo(() => favorites
     .map(key => allModels.find(item => item.key === key))
@@ -689,20 +726,32 @@ export function ModelSelector({ locked, available, directory, load, select, lang
                 <MediaIcon size={17} />
               </button>
               <span className="nms-rail-sep" aria-hidden="true" />
-              {brands.map(brand => (
+              <div className="nms-rail-brands" ref={railBrandsRef} data-more={railMore || undefined} onScroll={updateRailOverflow}>
+                {brands.map(brand => (
+                  <button
+                    key={brand.key}
+                    type="button"
+                    className="nms-rail-item"
+                    data-active={filter === brand.key}
+                    title={`${brand.name} (${copy.modelCount(brand.count)})`}
+                    aria-label={`${brand.name} (${copy.modelCount(brand.count)})`}
+                    aria-pressed={filter === brand.key}
+                    onClick={() => { setFilter(brand.key); setQuery('') }}
+                  >
+                    <BrandMark brandKey={brand.key} brandName={brand.name} />
+                  </button>
+                ))}
+              </div>
+              {railMore && (
                 <button
-                  key={brand.key}
                   type="button"
-                  className="nms-rail-item"
-                  data-active={filter === brand.key}
-                  title={`${brand.name} (${copy.modelCount(brand.count)})`}
-                  aria-label={`${brand.name} (${copy.modelCount(brand.count)})`}
-                  aria-pressed={filter === brand.key}
-                  onClick={() => { setFilter(brand.key); setQuery('') }}
+                  className="nms-rail-more"
+                  aria-label={copy.moreProviders}
+                  onClick={() => railBrandsRef.current?.scrollBy({ top: railBrandsRef.current.clientHeight, behavior: 'smooth' })}
                 >
-                  <BrandMark brandKey={brand.key} brandName={brand.name} />
+                  <ChevronDownIcon size={13} />
                 </button>
-              ))}
+              )}
             </nav>
 
             <section className="nms-main">

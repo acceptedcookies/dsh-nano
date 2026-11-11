@@ -1,6 +1,6 @@
 {
   "name": "dsh-nano-explorer-extra",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "A richer workspace file explorer: git status in the file tree, a footer status bar, and inline create and rename.",
   "type": "module",
   "icon": "./icon.svg",

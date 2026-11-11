@@ -46,6 +46,11 @@ temp/
 context
 context/
 
+# Grok agent credentials staged into a workspace by the imagine engine — never
+# commit. Belt-and-suspenders with nsw SKIP (tree.js) so `imagine/.grok/` can't
+# be pushed to the shared bucket either. (P4-04)
+imagine/.grok/
+
 # Local environment setup doc (machine-specific)
 .local-dsh-setup.md
 .local-desktop-setup.md

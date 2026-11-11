@@ -385,6 +385,14 @@ export async function readStatus(ctx, config, request) {
 export async function commitAll(ctx, config, request) {
   const { message } = request
   await runGit(ctx, config, { ...request, args: ['add', '--all'] })
+  // P4-02: `git add --all` can never stage `.git/**` (it is the repository
+  // dir, not a worktree path), but assert the invariant so a future call-site
+  // passing a narrower pathspec cannot reintroduce a `.git` write that arms a
+  // filter/smudge driver the commit then executes.
+  const staged = await runGit(ctx, config, { ...request, args: ['diff', '--cached', '--name-only'] })
+  if (String(staged.stdout).split('\n').some((line) => /(?:^|\/)\.git(?:\/|$)/u.test(line.trim()))) {
+    throw new Error('refusing to commit: a .git path entered the index')
+  }
   const committed = await runGit(ctx, config, { ...request, args: ['commit', '--message', message] })
   return firstLine(committed.stdout)
 }

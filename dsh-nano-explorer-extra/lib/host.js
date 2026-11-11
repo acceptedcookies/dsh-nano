@@ -752,6 +752,10 @@ async function readStatus(ctx, config, request) {
 async function commitAll(ctx, config, request) {
   const { message } = request;
   await runGit(ctx, config, { ...request, args: ["add", "--all"] });
+  const staged = await runGit(ctx, config, { ...request, args: ["diff", "--cached", "--name-only"] });
+  if (String(staged.stdout).split("\n").some((line) => /(?:^|\/)\.git(?:\/|$)/u.test(line.trim()))) {
+    throw new Error("refusing to commit: a .git path entered the index");
+  }
   const committed = await runGit(ctx, config, { ...request, args: ["commit", "--message", message] });
   return firstLine(committed.stdout);
 }
@@ -976,14 +980,24 @@ function validateName(name2) {
 function sameEntryIgnoringCase(source, destination) {
   return source !== destination && source.toLowerCase() === destination.toLowerCase();
 }
-function assertInside(fs, workspaceRoot, path) {
+async function assertInside(fs, workspaceRoot, path, signal) {
   if (!isLexicallyInside(workspaceRoot, path)) throw new Error(`"${path}" is outside the workspace`);
+  if (isLexicallyInside(`${workspaceRoot.replace(/\/+$/u, "")}/.git`, path) || /\/\.git(?:\/|$)/u.test(path)) {
+    throw new Error("writes inside .git are refused");
+  }
+  const rootTarget = await fs.resolve(workspaceRoot, { signal }).catch(() => void 0);
+  const pathTarget = await fs.resolve(path, { signal }).catch(() => void 0);
+  if (rootTarget === void 0 || pathTarget === void 0) return;
+  const realRoot = fs.processPath(rootTarget).replace(/\/+$/u, "");
+  const realPath = fs.processPath(pathTarget);
+  if (/\/\.git(?:\/|$)/u.test(realPath)) throw new Error("writes inside .git are refused");
+  if (!isLexicallyInside(realRoot, realPath)) throw new Error(`"${path}" is outside the workspace`);
 }
 async function createFile(fs, request, signal) {
   const { workspaceRoot, directory, name: name2, sandboxPolicy } = request;
   const finalName = validateName(name2);
   const parent = absoluteOf(workspaceRoot, directory);
-  assertInside(fs, workspaceRoot, parent);
+  await assertInside(fs, workspaceRoot, parent, signal);
   const path = `${parent}/${finalName}`;
   const target = await fs.resolve(path, { signal });
   try {
@@ -997,7 +1011,7 @@ async function rename(fs, ctx, config, request, signal) {
   const { workspaceRoot, path, name: name2, kind, sandboxPolicy, session, runExternal: runExternal2 } = request;
   const finalName = validateName(name2);
   const source = absoluteOf(workspaceRoot, path);
-  assertInside(fs, workspaceRoot, source);
+  await assertInside(fs, workspaceRoot, source, signal);
   const parent = source.slice(0, source.lastIndexOf("/")) || "/";
   const destination = `${parent}/${finalName}`;
   if (source === destination) return { path: source };
@@ -1046,7 +1060,13 @@ async function createFolder(fs, request, runExternal2) {
   const { workspaceRoot, directory, name: name2, sandboxPolicy, session } = request;
   const finalName = validateName(name2);
   const parent = absoluteOf(workspaceRoot, directory);
-  assertInside(fs, workspaceRoot, parent);
+  await assertInside(
+    fs,
+    workspaceRoot,
+    parent,
+    /* signal */
+    void 0
+  );
   const path = `${parent}/${finalName}`;
   const existing = await fs.lstat(path).catch(() => void 0);
   if (existing !== void 0) throw new Error(`"${finalName}" already exists in this folder`);
@@ -1074,7 +1094,7 @@ async function removeEntry(fs, request, signal) {
   const { workspaceRoot, path, kind, sandboxPolicy, session, runExternal: runExternal2 } = request;
   if (typeof path !== "string" || path.trim() === "") throw new Error("a path is required");
   const target = absoluteOf(workspaceRoot, path);
-  assertInside(fs, workspaceRoot, target);
+  await assertInside(fs, workspaceRoot, target, signal);
   const normalizedRoot = workspaceRoot.replace(/\/+$/u, "");
   const normalizedTarget = target.replace(/\/+$/u, "");
   if (normalizedTarget === normalizedRoot) throw new Error("the workspace root cannot be deleted");
@@ -1095,14 +1115,14 @@ async function moveEntry(fs, ctx, config, request, signal) {
   const { workspaceRoot, path, directory, sandboxPolicy, session, runExternal: runExternal2 } = request;
   if (typeof path !== "string" || path.trim() === "") throw new Error("a path is required");
   const source = absoluteOf(workspaceRoot, path).replace(/\/+$/u, "");
-  assertInside(fs, workspaceRoot, source);
+  await assertInside(fs, workspaceRoot, source, signal);
   if (source === workspaceRoot.replace(/\/+$/u, "")) throw new Error("the workspace root cannot be moved");
   const info = await fs.lstat(source, {}, signal).catch(() => void 0);
   if (info === void 0) throw new Error(`"${path}" does not exist`);
   const name2 = source.slice(source.lastIndexOf("/") + 1);
   const sourceParent = source.slice(0, source.lastIndexOf("/")) || "/";
   const destinationDir = absoluteOf(workspaceRoot, typeof directory === "string" ? directory : "");
-  assertInside(fs, workspaceRoot, destinationDir);
+  await assertInside(fs, workspaceRoot, destinationDir, signal);
   const resolvedDirTarget = await fs.resolve(destinationDir, { signal });
   const resolvedDir = fs.processPath(resolvedDirTarget).replace(/\/+$/u, "");
   if (!isLexicallyInside(workspaceRoot, resolvedDir)) throw new Error(`"${directory}" resolves outside the workspace`);
@@ -1201,6 +1221,10 @@ async function scopeOf(ctx, sessionId) {
   const livePolicy = live === void 0 ? void 0 : ctx.get("sandboxPolicy")?.resolve({ session: live });
   const policy = livePolicy ?? (root === void 0 ? void 0 : { ...ctx.get("sandboxPolicy")?.resolve({}), workspaceRoot: root });
   if (typeof root !== "string" || root === "") throw new Error("this session has no working directory");
+  const ownRoot = ctx.get("sandboxPolicy")?.workspaceRoot;
+  if (typeof ownRoot === "string" && ownRoot !== "" && root !== ownRoot) {
+    console.warn(`[nxe] scopeOf cross-session: session "${sessionId}" adopted workspace "${root}" (own "${ownRoot}")`);
+  }
   return { session: live, root, policy };
 }
 async function runExternal(ctx, config, request) {
@@ -1296,7 +1320,7 @@ function createRoutes(ctx, config) {
   const fs = () => ctx.fs;
   const external = (request) => runExternal(ctx, config, request);
   const review = ensurePerfReviewHost().hostJoin("nano-explorer-extra", {
-    version: true ? "0.1.1" : void 0,
+    version: true ? "0.2.0" : void 0,
     // This host bundle's own copy of the library version (A3 / §10.4.4).
     libVersion: LIB_VERSION
   });

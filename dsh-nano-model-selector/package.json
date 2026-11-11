@@ -1,6 +1,6 @@
 {
   "name": "dsh-nano-model-selector",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "A richer model selector for DeepSeek Harness Web: provider filters, favorites, direct effort selection, and detailed model information.",
   "type": "module",
   "icon": "./icon.svg",

@@ -1,6 +1,6 @@
 {
   "name": "dsh-nano-notepad",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "A floating Markdown notepad. Files, history, and images stay in this browser.",
   "type": "module",
   "icon": "./icon.svg",

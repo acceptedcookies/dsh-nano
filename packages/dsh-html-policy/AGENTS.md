@@ -10,11 +10,11 @@
 - 纯 ESM，零外部依赖（只用 `node:*`，不依赖 DOM）。`node --test` 跑测试。
 - 职责：共享 HTML allowlist 策略表（26-nov-security-fix / P1-07 骨架，T-O-9）。
 
-## 状态：Phase 1 骨架
+## 状态：Phase 3 已实现
 
-- `ALLOWED_ELEMENTS` / `ALLOWED_ATTRS` / `ALLOWED_SCHEMES` / `ALLOWED_STYLE_PROPS` 是**空占位 Set**，策略内容在 Phase 3（P3-01）填写。
-- **强制丢弃集已生效**：`DROP_ELEMENTS`（script/iframe/object/embed/base/meta/form/input/button/textarea/select/link/style）、`isDropAttr`（全部 `on*` + `srcdoc`）、`isDropScheme`（`javascript:`/`data:text`/`vbscript:`/`file:`、非 image 的 `data:`）。
-- `sanitizePolicy({kind,name,value,el})` 是**纯函数签名 stub**，当前调用即抛 `not implemented` —— fail-closed，绝不静默放行。
+- `ALLOWED_ELEMENTS`（39 个，含 `animateTransform` camelCase + `ALLOWED_ELEMENTS_LC` 小写镜像）、`ALLOWED_ATTRS`（15 个小写键）、`ALLOWED_SCHEMES`（`http`/`https`）、`ALLOWED_STYLE_PROPS`（约 50 个，MP 安全样式并集）已按规格填充（P3-01）。`PASSTHROUGH_ELEMENTS = {foreignobject}` 保 client 的 foreignObject→image 变换。
+- **强制丢弃集**保持不变：`DROP_ELEMENTS`（script/iframe/object/embed/base/meta/form/input/button/textarea/select/link/style）、`isDropAttr`（全部 `on*` + `srcdoc`）、`isDropScheme`（`javascript:`/`data:text`/`vbscript:`/`file:`、非 image 的 `data:`）。
+- `sanitizePolicy({kind,name,value,el})` 已实现：element/attr/url/style-prop 四类判定的纯函数分发；`sanitizeHtml(html)` 是宿主字符串序列化器（字节保留引号风格；attr 值仅实体编码 `<`/`>`/`"`/`&`——mXSS 闸门）；`sanitizeStyle(cssText,{mapDecl})` 声明级过滤、`position` 强制 `static`、支持客户端 dark-remap 钩子。
 
 ## 消费方式
 
@@ -34,13 +34,14 @@
 
 | 路径 | 角色 |
 |---|---|
-| `src/index.js` | 汇总导出 `ALLOWED_*`、`DROP_*`、`isDropAttr`、`isDropScheme`、`sanitizePolicy` |
-| `src/policy.js` | 常量表（含 Phase 3 填充清单）+ 丢弃判定 |
-| `src/sanitizePolicy.js` | 纯函数签名（stub） |
-| `test/policy.test.mjs` | B3-T01 骨架单测 |
+| `src/index.js` | 汇总导出 `ALLOWED_*`、`DROP_*`、`isDropAttr`、`isDropScheme`、`elementAction`、`attrPolicy`、`urlPolicy`、`sanitizeStyle`、`sanitizePolicy`、`sanitizeHtml`、`POLICY` |
+| `src/policy.js` | 策略常量表 + 丢弃判定 + `decodeEntities`/`urlPolicy`/`styleDecls`/`sanitizeStyle`/`elementAction`/`attrPolicy` |
+| `src/sanitizePolicy.js` | `sanitizePolicy` 分发器 + `sanitizeHtml` 宿主字符串序列化器 |
+| `test/policy.test.mjs` | B3-T01 单测：表内容、`sanitizePolicy` 判定、battery-dom 攻击语料 0-执行 |
+| `test/fixtures/battery-dom.txt` | v-mpsan 攻击语料（负样本） |
 
 ## 不要
 
-- 不要在骨架阶段放行活动内容；`sanitizePolicy` 的「抛错 stub」是设计。
-- 不要依赖 DOM API；宿主 regex renderer 也消费本包。
-- 不要为「兼容」把活动元素/属性/scheme 移出丢弃集。
+- 不要放行活动内容；attr 序列化必须实体编码 `<`/`>`/`"`/`&`，绝不原样回填（mXSS 重建防护）。
+- 不要依赖 DOM API；宿主字符串 renderer 也消费本包。
+- 不要为「兼容」把活动元素/属性/scheme 移出丢弃集，也不要把 `data-*`/`id`/`target`/动画属性加回 allowlist（spec 有意省略，animateTransform 因此惰性）。

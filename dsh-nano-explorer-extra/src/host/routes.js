@@ -75,6 +75,13 @@ async function scopeOf(ctx, sessionId) {
   const livePolicy = live === undefined ? undefined : ctx.get('sandboxPolicy')?.resolve({ session: live })
   const policy = livePolicy ?? (root === undefined ? undefined : { ...ctx.get('sandboxPolicy')?.resolve({}), workspaceRoot: root })
   if (typeof root !== 'string' || root === '') throw new Error('this session has no working directory')
+  // P4-03: observability only — the explorer intentionally lets a page adopt
+  // any session's workspace, but adopting a root that is not the host's own
+  // workspace is a cross-session signal worth an audit line (never blocked).
+  const ownRoot = ctx.get('sandboxPolicy')?.workspaceRoot
+  if (typeof ownRoot === 'string' && ownRoot !== '' && root !== ownRoot) {
+    console.warn(`[nxe] scopeOf cross-session: session "${sessionId}" adopted workspace "${root}" (own "${ownRoot}")`)
+  }
   return { session: live, root, policy }
 }
 

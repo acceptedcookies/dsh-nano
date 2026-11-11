@@ -35,19 +35,24 @@ function bakeRouteTable() {
 // Route table first: both the route-guard bundle and lib/route-table.js read it.
 bakeRouteTable()
 
-// Prefer the locked devDependency binary; fall back to npx only when it is not
-// installed, so a release build never pulls a drifted toolchain (review-01 R12).
+// Locked devDependency binary only — a release build never pulls a drifted
+// toolchain; missing binary exits with an npm ci hint (P4-06, review-01 R12).
 const local = join(root, 'node_modules', '.bin', 'esbuild')
 
 const { version } = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
 /** Compile-time package version, so the client bundle reports `meta.version` to perf-review. */
 const versionDefine = `--define:__NMS_VERSION__=${JSON.stringify(version)}`
 
-/** Run esbuild with the local binary (or a pinned npx fallback), failing the build on error. */
+/** Run esbuild with the local locked binary, failing the build on error (no npx fallback). */
 function esbuild(argv) {
-  const built = existsSync(local)
-    ? spawnSync(local, argv, { cwd: root, stdio: 'inherit' })
-    : spawnSync('npx', ['--yes', 'esbuild@0.25.0', ...argv], { cwd: root, stdio: 'inherit' })
+  // P4-06: no npx fallback — a release build must never pull a drifted
+  // toolchain. Require the locked devDependency; missing → tell the user to
+  // npm ci, not silently fetch esbuild@0.25.0 from the network.
+  if (!existsSync(local)) {
+    console.error('[build] esbuild not installed at node_modules/.bin — run `npm ci` first (no npx fallback)')
+    process.exit(1)
+  }
+  const built = spawnSync(local, argv, { cwd: root, stdio: 'inherit' })
   if (built.status !== 0) process.exit(built.status ?? 1)
 }
 

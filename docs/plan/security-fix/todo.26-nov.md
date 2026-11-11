@@ -74,9 +74,9 @@ PH1 batch0-baseline ──▶ PH2 batch1-host-data ──▶ PH3 batch2-content-
 - [x] `P4-07` — release CI + clean-lib + attestation — pass `10e2f79` · v* tag workflow · npm ci→build→diff lib→pack→attest
 
 ### PH5 `release-closure`（门禁 B5）
-- [ ] `P5-01` — 版本 bump（四插件→0.2.0、三包 0.1.0）+ files 一致
-- [ ] `P5-02` — tarball 隔离安装验收
-- [ ] `P5-03` — dsh-dev 全量 smoke
+- [x] `P5-01` — 版本 bump（四插件→0.2.0、三包 0.1.0）+ files 一致 — pass `10e2f79` · 4 插件→0.2.0 · files 覆盖全部 lib 产物
+- [x] `P5-02` — tarball 隔离安装验收 — pass · 4 tgz 自足（0 runtime dep, 0 file:, 0 bare import）+ ~/.dsh-dev 重装激活
+- [x] `P5-03` — dsh-dev 全量 smoke — pass · 4 host 载入 · notepad s3-status 真桶 + model-selector catalog + nsw status + explorer 注册+scopeOf log
 
 ### 收口工件
 - [ ] `DOC-01` — 工作日志回填至 AP 底部（code-execution-log 模板）
@@ -97,8 +97,8 @@ PH1 batch0-baseline ──▶ PH2 batch1-host-data ──▶ PH3 batch2-content-
 
 ## 5. 当前状态与交接
 
-- **当前节点**：PH2 `68cc0e8` · PH3 `1ed3827` · PH4 `10e2f79` 全收口（P0 13/13 + P2 加固4+接受5 + supply 2）；explorer mutate-fence 5/5
-- **下一动作**：PH5 `release-closure`（P5-02 tarball 隔离安装 → P5-03 dsh-dev 全量 smoke）→ B5 门禁 → REVIEW ≥3 → closure
+- **当前节点**：PH1-PH5 全收口 `10e2f79` — P0 13/13 + P2 9 (harden4+accept5) + supply 2 · 全门禁绿 · dsh-dev 4插件功能正常
+- **下一动作**：REVIEW — ≥3 个对抗性审查 subagent 独立验证全部改动 → 复核报告 → 修-测循环收口 → 工作日志 + closure 文档
 - **当前阻塞**：无
 - **待 owner**：无（`foundation/` 不存在，已以 AGENTS.md 为准）
 - **最终交接**：closure + 发布 checklist（`v*` tag 由业主推送触发 release CI）

@@ -371,3 +371,52 @@ export function CommitDrawer({ copy, open, git, onClose, onCommit, busy, error, 
           ? React.createElement(ChangeGroup, { label: copy.localUntracked, count: groups.untracked.length, files: groups.untracked, tone: 'untracked' })
           : null)))
 }
+
+/**
+ * Split one unified diff into renderable rows so each hunk line carries its own tint.
+ * @param diff - unified diff text.
+ * @returns one entry per line, `null` when nothing was produced.
+ */
+function diffRows(diff) {
+  if (diff === '') return null
+  const rows = []
+  for (const line of diff.split('\n')) {
+    let tone
+    if (line.startsWith('@@')) tone = 'hunk'
+    else if (line.startsWith('+')) tone = 'added'
+    else if (line.startsWith('-')) tone = 'removed'
+    else if (line.startsWith('diff ') || line.startsWith('index ') || line.startsWith('--- ') || line.startsWith('+++ ') || line.startsWith('rename ') || line.startsWith('similarity ') || line.startsWith('old mode') || line.startsWith('new mode') || line.startsWith('deleted file') || line.startsWith('new file')) tone = 'meta'
+    else tone = 'context'
+    rows.push({ line, tone })
+  }
+  return rows
+}
+
+/**
+ * One file's diff against HEAD, in the same panel-confined card the footer drawers use.
+ * @param props - language copy, the view state the menu opened, and a close callback.
+ * @returns the card, or null while nothing is open.
+ */
+export function DiffDialog({ copy, view, onClose }) {
+  const open = view !== null
+  const rows = view?.state === 'ready' ? diffRows(view.diff) : null
+  return React.createElement(NanoDialog, {
+    copy,
+    title: open ? `${copy.viewDiffTitle} · ${view.name}` : '',
+    description: open ? view.path : undefined,
+    error: view?.state === 'error' ? (view.message ?? copy.viewDiffFailed) : undefined,
+    footer: open ? React.createElement(Button, {
+      variant: 'outline', className: 'nano-modal-action nxe-drawer-close', onClick: onClose,
+    }, copy.cancel) : null,
+    onCancel: onClose,
+  },
+  open !== true ? null
+    : view.state === 'loading'
+      ? React.createElement('p', { className: 'nxe-drawer-empty' }, copy.loading)
+      : rows === null
+        ? React.createElement('p', { className: 'nxe-drawer-empty' }, copy.viewDiffEmpty)
+        : React.createElement('pre', { className: 'nxe-diff', 'data-nxe-diff': 'true' },
+          rows.map((row, index) => React.createElement('span', {
+            key: index, className: 'nxe-diff-line', 'data-tone': row.tone,
+          }, `${row.line}\n`))))
+}

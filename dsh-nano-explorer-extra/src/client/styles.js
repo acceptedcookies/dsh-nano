@@ -176,6 +176,16 @@ export const STYLE = `${NANO_STYLES}
 .nxe-drawer-row-status[data-status="D"], .nxe-change-status[data-status="D"] { color: var(--nxe-git-deleted); }
 .nxe-drawer-row-status[data-status="R"], .nxe-change-status[data-status="R"] { color: var(--nxe-git-renamed); }
 .nxe-drawer-row-status[data-status="U"], .nxe-change-status[data-status="U"] { color: var(--nxe-git-conflicted); }
+.nxe-diff {
+  margin: 0; padding: 8px 0; max-height: 340px; overflow: auto;
+  font: 12px/18px var(--dsw-font-family-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-bg-layer-1);
+}
+.nxe-diff-line { display: block; white-space: pre-wrap; overflow-wrap: anywhere; padding: 0 10px; }
+.nxe-diff-line[data-tone="added"] { color: var(--nxe-git-added); background: var(--dsw-alias-green-bg, transparent); }
+.nxe-diff-line[data-tone="removed"] { color: var(--nxe-git-deleted); background: var(--dsw-alias-red-bg, transparent); }
+.nxe-diff-line[data-tone="hunk"] { color: var(--dsw-alias-label-brand, var(--dsw-alias-link)); }
+.nxe-diff-line[data-tone="meta"] { color: var(--dsw-alias-label-tertiary); }
 .nxe-drawer-link {
   flex: 1; min-width: 0; text-align: left; border: 0; background: transparent; padding: 0;
   color: var(--dsw-alias-label-error, #e5534b); font: inherit; cursor: pointer;

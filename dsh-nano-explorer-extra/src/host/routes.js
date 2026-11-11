@@ -2,8 +2,8 @@
 
 import { watch } from 'node:fs'
 import { ensurePerfReviewHost, LIB_VERSION } from 'dsh-performance-review/host'
-import { checkoutBranch, commitAll, ignoredAmong, listBranches, listConflicts, listWorktrees, pullUpstream, readStatus } from './git.js'
-import { absoluteOf, isLexicallyInside, listDirectory } from './listing.js'
+import { checkoutBranch, commitAll, fileDiff, ignoredAmong, listBranches, listConflicts, listWorktrees, pullUpstream, readStatus } from './git.js'
+import { absoluteOf, isLexicallyInside, listDirectory, relativeTo } from './listing.js'
 import { createFile, createFolder, moveEntry, removeEntry, rename } from './mutate.js'
 import { statisticsOf } from './stats.js'
 
@@ -404,6 +404,26 @@ export function createRoutes(ctx, config) {
         return url.searchParams.get('mode') === 'window'
           ? review.takeWindow()
           : review.snapshot()
+      },
+    },
+    /* The unified diff of one path against HEAD. The row menu only offers it for changed rows, so
+       the empty answer means the file turned clean between listing and opening rather than "nothing
+       changed since HEAD" in a misleading way. `git status` decides the untracked case, and the
+       path stays inside the scope the listing routes already enforce. */
+    '/diff': {
+      method: 'POST',
+      async run(req) {
+        const body = await jsonBody(req)
+        const { root, policy } = await scopeOf(ctx, body.sessionId)
+        const path = typeof body.path === 'string' ? body.path : ''
+        const absolute = absoluteOf(root, path)
+        if (!isLexicallyInside(root, absolute)) throw new Error(`"${path}" is outside the workspace`)
+        const diff = await fileDiff(ctx, config, {
+          cwd: root, policy,
+          path: path.startsWith('/') ? relativeTo(root, absolute) : path,
+          absolute, signal: undefined,
+        })
+        return { ok: true, diff }
       },
     },
     /* Read one file as UTF-8, capped — enough to seed a notepad note.

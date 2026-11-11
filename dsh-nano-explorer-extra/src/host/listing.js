@@ -133,3 +133,16 @@ export function isLexicallyInside(root, candidate) {
   const separator = base === '/' ? '' : '/'
   return target.startsWith(`${base}${separator}`)
 }
+
+/**
+ * The path relative to `root`, unchanged when the candidate sits outside it.
+ * @param root - workspace root.
+ * @param candidate - absolute candidate path.
+ * @returns the relative form, or the absolute input untouched.
+ */
+export function relativeTo(root, candidate) {
+  const base = foldSegments(trimSlash(root))
+  const target = foldSegments(trimSlash(candidate))
+  const separator = base === '/' ? '' : '/'
+  return target.startsWith(`${base}${separator}`) ? target.slice(base.length + separator.length) : candidate
+}

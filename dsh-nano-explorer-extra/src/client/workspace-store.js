@@ -8,7 +8,7 @@
  * panes mounting at once still cost one listing, one status read, and one statistics walk.
  */
 
-import { absoluteOf, relativeTo, treeKeyOf } from './paths.js'
+import { absoluteOf, basenameOf, parentOf, relativeTo, treeKeyOf } from './paths.js'
 import { replaceDirectoryStatus } from './format.js'
 import { perf } from './perf.js'
 
@@ -116,6 +116,10 @@ function createStore(root) {
       next.set(key, { entries: previous?.entries ?? [], failed: true, message: result.message, code: result.code })
     }
     commit({ levels: next })
+    // The directory is gone (deleted outside the app, or replaced by a file): keeping its stale
+    // entries drew a ghost row forever, and the level map kept listing children of nothing.
+    // Prune the whole subtree and the row in the parent instead of showing a dead level.
+    if ((result.code === 'not-found' || result.code === 'not-directory') && path !== root) pruneEntry(path)
     // The freshly listed names feed the ignored check; the answer lands in the shared set.
     if (result.ok && result.entries.length > 0) void markIgnored(sessionId, path, result.entries.map(entry => entry.name))
     return result
@@ -240,6 +244,27 @@ function createStore(root) {
     const next = new Map(state.levels)
     next.delete(key)
     commit({ levels: next })
+  }
+
+  /**
+   * Remove a vanished entry entirely: its level, every descendant level and expansion, and the row
+   * its parent's listing still carries. The parent is left listed, so the next refresh simply
+   * confirms what the prune already removed.
+   */
+  const pruneEntry = path => {
+    const key = treeKeyOf(root, path)
+    const nextLevels = new Map()
+    for (const [itemKey, level] of state.levels) if (itemKey !== key && !itemKey.startsWith(`${key}/`)) nextLevels.set(itemKey, level)
+    const nextExpanded = new Set()
+    for (const item of state.expanded) if (item !== key && !item.startsWith(`${key}/`)) nextExpanded.add(item)
+    const parentKey = treeKeyOf(root, parentOf(key))
+    const parent = nextLevels.get(parentKey)
+    if (parent?.entries !== undefined) {
+      const name = basenameOf(key)
+      const filtered = parent.entries.filter(entry => entry.name !== name)
+      if (filtered.length !== parent.entries.length) nextLevels.set(parentKey, { ...parent, entries: filtered })
+    }
+    commit({ levels: nextLevels, expanded: nextExpanded })
   }
 
   /** Collapse a whole subtree after its paths changed. */

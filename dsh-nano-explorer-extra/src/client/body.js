@@ -2,7 +2,7 @@
 
 import React from 'react'
 import { CommitDialog, Dialog, RenameDialog } from './dialogs.js'
-import { BranchDrawer, CommitDrawer } from './drawers.js'
+import { BranchDrawer, CommitDrawer, DiffDialog } from './drawers.js'
 import { SettingsDialog } from './settings.js'
 import { createAccessory } from './accessory.js'
 import { StatusBar } from './statusbar.js'
@@ -114,6 +114,9 @@ export function ExplorerBody(props) {
   // Which footer drawer is open, if any: `branch` shows worktrees and remote state, `commit` shows the
   // pending work. One at a time, so a reader never faces two stacked panels.
   const [drawer, setDrawer] = useState(null)
+  // The diff overlay the row menu opened: which path, and its loaded state. The panel-local layer
+  // pattern keeps it inside the pane like every other card here.
+  const [diffView, setDiffView] = useState(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [drawerBusy, setDrawerBusy] = useState(false)
   const [drawerError, setDrawerError] = useState(undefined)
@@ -133,6 +136,7 @@ export function ExplorerBody(props) {
     setCreateRequest(null)
     setDeleteRequest(null)
     setMenu(null)
+    setDiffView(null)
   }, [sessionId, cwd, tab.visible])
 
   // One gesture clock for the whole tree: the Factory hands the same `onOpen` both presses.
@@ -833,12 +837,29 @@ export function ExplorerBody(props) {
           const absolute = menu.path.startsWith('/') ? menu.path : `${cwd ?? ''}/${menu.path}`
           await window.__nanoNotepad.import(menu.name, read.content, { sourcePath: absolute })
         } },
+      /* A changed file gets its unified diff in a panel card. The menu path is the tree key the
+         status index already uses, so `statusOf` needs no translation. Directories stay out: a
+         per-file view answers what the reader actually pointed at. */
+      menu.kind !== 'file' || statusOf(menu.path) === undefined ? null : {
+        id: 'view-diff', label: copy.viewDiff,
+        icon: React.createElement(primitives.IconCompareSplitOutlineRegular, { width: 14, height: 14 }),
+        run: () => {
+          const path = menu.path
+          setDiffView({ path, name: menu.name, state: 'loading' })
+          void request('/diff', { sessionId, path }).then(result => {
+            setDiffView(current => current?.path === path
+              ? result.ok
+                ? { ...current, state: 'ready', diff: result.diff ?? '' }
+                : { ...current, state: 'error', message: result.message }
+              : current)
+          })
+        } },
       { id: 'rename', label: copy.rename, icon: React.createElement(primitives.IconEditOutlineRegular, { width: 14, height: 14 }),
         run: () => { setDialogError(undefined); setDialog({ kind: 'rename', entry: { ...target, meta: { kind: menu.kind } } }) } },
       { id: 'delete', label: copy.delete, tone: 'danger', icon: React.createElement(primitives.IconTrashOutlineRegular, { width: 14, height: 14 }),
         run: () => { setLinkNote(undefined); setDeleteRequest(target) } },
     ].filter(Boolean)
-  }, [menu, copy, openApps, cwd, copyPath])
+  }, [menu, copy, openApps, cwd, copyPath, statusOf, request, sessionId])
 
   return React.createElement('div', { className: 'nxe-root', 'data-nxe': 'true', 'data-theme': nxe.scheme(), ref: rootEl },
     React.createElement('div', { className: 'nxe-header' },
@@ -942,6 +963,7 @@ export function ExplorerBody(props) {
       onPull: doPull,
       onOpenConflict: path => { openEntry({ path: absoluteOf(cwd ?? '', path) }); setDrawer(null) },
     }),
+    React.createElement(DiffDialog, { copy, view: diffView, onClose: () => setDiffView(null) }),
     React.createElement(RowMenu, { menu, copy, actions: rowActions, onClose: () => setMenu(null) }))
 }
 

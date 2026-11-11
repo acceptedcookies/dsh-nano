@@ -437,6 +437,36 @@ async function readStatus(ctx, config, request) {
     ...remote === void 0 ? {} : { remote }
   };
 }
+async function fileDiff(ctx, config, request) {
+  const { cwd, policy, path, absolute, signal } = request;
+  const status = await runGit(ctx, config, {
+    cwd,
+    policy,
+    signal,
+    args: ["status", "--porcelain=v2", "--", path],
+    allowedExitCodes: [0, 128]
+  });
+  if (status.stdout.trim() === "") return "";
+  const untracked = status.stdout.split("\n").some((line) => line.startsWith("? "));
+  if (untracked === true) {
+    const diff2 = await runGit(ctx, config, {
+      cwd,
+      policy,
+      signal,
+      args: ["diff", "--no-index", "--", "/dev/null", absolute],
+      allowedExitCodes: [0, 1]
+    });
+    return diff2.stdout.split(`diff --git a${absolute} b${absolute}`).join(`diff --git a/${path} b/${path}`).split(`--- /dev/null`).join(`--- a/${path}`).split(`+++ b${absolute}`).join(`+++ b/${path}`);
+  }
+  const diff = await runGit(ctx, config, {
+    cwd,
+    policy,
+    signal,
+    args: ["diff", "HEAD", "--", path],
+    allowedExitCodes: [0, 128]
+  });
+  return diff.stdout;
+}
 async function commitAll(ctx, config, request) {
   const { message } = request;
   await runGit(ctx, config, { ...request, args: ["add", "--all"] });
@@ -649,6 +679,12 @@ function isLexicallyInside(root, candidate) {
   if (base === target) return true;
   const separator = base === "/" ? "" : "/";
   return target.startsWith(`${base}${separator}`);
+}
+function relativeTo(root, candidate) {
+  const base = foldSegments(trimSlash(root));
+  const target = foldSegments(trimSlash(candidate));
+  const separator = base === "/" ? "" : "/";
+  return target.startsWith(`${base}${separator}`) ? target.slice(base.length + separator.length) : candidate;
 }
 
 // src/host/mutate.js
@@ -1163,6 +1199,28 @@ function createRoutes(ctx, config) {
       async run(req) {
         const url = new URL(String(req.url), "http://localhost");
         return url.searchParams.get("mode") === "window" ? review.takeWindow() : review.snapshot();
+      }
+    },
+    /* The unified diff of one path against HEAD. The row menu only offers it for changed rows, so
+       the empty answer means the file turned clean between listing and opening rather than "nothing
+       changed since HEAD" in a misleading way. `git status` decides the untracked case, and the
+       path stays inside the scope the listing routes already enforce. */
+    "/diff": {
+      method: "POST",
+      async run(req) {
+        const body = await jsonBody(req);
+        const { root, policy } = await scopeOf(ctx, body.sessionId);
+        const path = typeof body.path === "string" ? body.path : "";
+        const absolute = absoluteOf(root, path);
+        if (!isLexicallyInside(root, absolute)) throw new Error(`"${path}" is outside the workspace`);
+        const diff = await fileDiff(ctx, config, {
+          cwd: root,
+          policy,
+          path: path.startsWith("/") ? relativeTo(root, absolute) : path,
+          absolute,
+          signal: void 0
+        });
+        return { ok: true, diff };
       }
     },
     /* Read one file as UTF-8, capped — enough to seed a notepad note.

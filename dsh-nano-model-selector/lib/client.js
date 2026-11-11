@@ -1,7 +1,7 @@
 window.__ModuleLoader__.load({
 	id: "dsh-nano-model-selector",
 	factory: (require) => {
-var __modelSelectorExport=(()=>{var Bt=Object.create;var ze=Object.defineProperty;var Vt=Object.getOwnPropertyDescriptor;var $t=Object.getOwnPropertyNames;var jt=Object.getPrototypeOf,Gt=Object.prototype.hasOwnProperty;var Z=(e=>typeof require<"u"?require:typeof Proxy<"u"?new Proxy(e,{get:(a,o)=>(typeof require<"u"?require:a)[o]}):e)(function(e){if(typeof require<"u")return require.apply(this,arguments);throw Error('Dynamic require of "'+e+'" is not supported')});var Ut=(e,a)=>{for(var o in a)ze(e,o,{get:a[o],enumerable:!0})},v0=(e,a,o,l)=>{if(a&&typeof a=="object"||typeof a=="function")for(let u of $t(a))!Gt.call(e,u)&&u!==o&&ze(e,u,{get:()=>a[u],enumerable:!(l=Vt(a,u))||l.enumerable});return e};var me=(e,a,o)=>(o=e!=null?Bt(jt(e)):{},v0(a||!e||!e.__esModule?ze(o,"default",{value:e,enumerable:!0}):o,e)),Wt=e=>v0(ze({},"__esModule",{value:!0}),e);var dn={};Ut(dn,{apply:()=>cn,inject:()=>sn});var l2=Z("react");var n=me(Z("react"),1),kt=Z("react-dom");var w0=me(Z("react"),1);function Le({text:e}){return e==null?null:w0.default.createElement("div",{className:"nano-toast",role:"status","aria-live":"polite","data-nano-toast":"true"},e)}var Fe=`
+var __modelSelectorExport=(()=>{var Bt=Object.create;var ze=Object.defineProperty;var Vt=Object.getOwnPropertyDescriptor;var $t=Object.getOwnPropertyNames;var jt=Object.getPrototypeOf,Gt=Object.prototype.hasOwnProperty;var Z=(e=>typeof require<"u"?require:typeof Proxy<"u"?new Proxy(e,{get:(a,o)=>(typeof require<"u"?require:a)[o]}):e)(function(e){if(typeof require<"u")return require.apply(this,arguments);throw Error('Dynamic require of "'+e+'" is not supported')});var Ut=(e,a)=>{for(var o in a)ze(e,o,{get:a[o],enumerable:!0})},v0=(e,a,o,l)=>{if(a&&typeof a=="object"||typeof a=="function")for(let u of $t(a))!Gt.call(e,u)&&u!==o&&ze(e,u,{get:()=>a[u],enumerable:!(l=Vt(a,u))||l.enumerable});return e};var me=(e,a,o)=>(o=e!=null?Bt(jt(e)):{},v0(a||!e||!e.__esModule?ze(o,"default",{value:e,enumerable:!0}):o,e)),Wt=e=>v0(ze({},"__esModule",{value:!0}),e);var dn={};Ut(dn,{apply:()=>cn,inject:()=>sn});var lo=Z("react");var n=me(Z("react"),1),kt=Z("react-dom");var w0=me(Z("react"),1);function Le({text:e}){return e==null?null:w0.default.createElement("div",{className:"nano-toast",role:"status","aria-live":"polite","data-nano-toast":"true"},e)}var Fe=`
 /* \u2500\u2500 anchored popup menu (NanoMenu, NanoMenuItem) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
 /* \u2500\u2500 type tokens \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
    Every shared surface reads from --nano-* custom properties so an owning
@@ -35,7 +35,10 @@ var __modelSelectorExport=(()=>{var Bt=Object.create;var ze=Object.definePropert
 .nano-toast { animation: nano-toast-in .12s ease; }
 
 /* \u2500\u2500 shared dialog helpers \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
-.nano-dialog-host { position: fixed; inset: 0; z-index: 50;
+.nano-dialog-host { position: fixed; inset: 0; z-index: 50; pointer-events: none;
+  /* This host is only the React mount point \u2014 NanoDialog/Modal portals the card
+     into document.body at a separate layer. Leaving pointer-events on here
+     makes the empty fullscreen host sit above its own card and eat every click. */
   font-family: var(--nano-font-family, inherit);
   font-size: var(--nano-font-size, inherit);
   line-height: var(--nano-line-height, inherit); }

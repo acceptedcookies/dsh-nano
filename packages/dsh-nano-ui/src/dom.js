@@ -18,6 +18,8 @@ import { NanoMenu } from './menu.js'
  * @param {'light' | 'dark'} [options.theme] - owning surface's resolved scheme. The shell Modal
  *   portals into `document.body`, so the card would otherwise inherit the shell's palette; the
  *   scheme is stamped on the portal layer (card and mask alike) for the owner to scope its tokens.
+ * @param {number} [options.z] - z-index for the portal layer. The shell Modal bakes z-index:1000
+ *   into its root; an owner that must sit above shell modals raises it here (inline beats sheet).
  * @returns {{ close: () => void }}
  */
 export function openNanoDialog(options) {
@@ -48,12 +50,14 @@ export function openNanoDialog(options) {
   const wantsTheme = theme === 'light' || theme === 'dark'
   /** The portal layer once React has committed the card; `setTheme` writes here. */
   let layerEl = /** @type {HTMLElement | null} */ (null)
-  const observer = (wantsRegion || wantsWidth || wantsTheme) ? new MutationObserver(() => {
+  const wantsZ = typeof options.z === 'number'
+  const observer = (wantsRegion || wantsWidth || wantsTheme || wantsZ) ? new MutationObserver(() => {
     for (const card of document.querySelectorAll('.nano-dialog-card')) {
       if (card instanceof HTMLElement === false || card.dataset.nanoBound === '1') continue
       const layer = card.parentElement
       if (!(layer instanceof HTMLElement)) continue
       card.dataset.nanoBound = '1'
+      if (wantsZ) layer.style.zIndex = String(Math.round(options.z))
       if (wantsTheme) {
         layerEl = layer
         layer.setAttribute('data-nano-theme', theme)
@@ -119,6 +123,7 @@ export function openNanoDialog(options) {
  * @param {number} [options.maxHeight] - cap the popup; the list scrolls past it.
  * @param {number} [options.gap] - pixels between the anchor's bottom and the popup's top.
  * @param {'light' | 'dark'} [options.theme] - owning surface's resolved scheme; see NanoMenu.
+ * @param {number} [options.z] - z-index for the popup root (inline style); see NanoMenu.
  * @returns {{ close: () => void }}
  */
 export function openNanoMenu(options) {
@@ -136,6 +141,7 @@ export function openNanoMenu(options) {
     width: options.width,
     maxHeight: options.maxHeight,
     theme: options.theme,
+    z: options.z,
     onClose: close,
   }))
   return { close }

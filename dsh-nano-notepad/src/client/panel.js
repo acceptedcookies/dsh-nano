@@ -70,7 +70,11 @@ ${NANO_STYLES}
   --nano-desc-size: var(--np-font-size-sm);
   --nano-toast-size: var(--np-font-size-sm);
 }
-.np-layer { position: fixed; inset: 0; pointer-events: none; z-index: 30; color: var(--dsw-alias-label-primary); font-family: var(--np-font-family); font-size: var(--np-font-size); }
+/* The layer must outrank the shell's own overlays: the shell modal root and
+   backdrop sit at z-index:1000, its toasts/portals at 1100. 1200 beats both.
+   z-index only applies once the layer escapes the shell.overlay slot's own
+   stacking context — see the document.body reparent in mountNotepad. */
+.np-layer { position: fixed; inset: 0; pointer-events: none; z-index: 1200; color: var(--dsw-alias-label-primary); font-family: var(--np-font-family); font-size: var(--np-font-size); }
 .np-entry, .np-window, .np-slash { pointer-events: auto; }
 .np-entry, .np-window { position: absolute; }
 .np-entry { z-index: 3; }
@@ -751,6 +755,13 @@ function caretRect(area, position) {
   return rect
 }
 
+/* Z-index scale for the notepad's own surface and its body-level portals.
+   .np-layer sits at 1200 (see the stylesheet) — above the shell modal root
+   (1000) and toast/portal band (1100). Notepad dialogs and menus must clear
+   the layer too: a portal on document.body at the shell default (1000/30)
+   would sink beneath the window that opened it. */
+const NP_PORTAL_Z = 1210
+
 export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', subscribe: () => () => {} }, language = { current: () => 'en', subscribe: () => () => {} }, workspaces = { current: () => ({ items: [], currentId: null }), subscribe: () => () => {} }, previewFile = () => false) {
   host.innerHTML = `<div class="np-layer"><button class="np-entry" type="button">${ICON}<span class="np-tip" hidden></span></button><section class="np-window" hidden></section></div>`
   const layer = must(host, '.np-layer')
@@ -861,6 +872,14 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
   setNotepadRoot(() => (state.ui.open && layer.isConnected ? layer : null))
 
   const disposers = []
+  /* The shell.overlay slot mounts us inside its own overlayLayer div, which is
+     position:absolute + z-index:20 — a stacking context. Inside it our layer's
+     z-index can never beat the shell's z-index:1000 modals, so a shell dialog
+     (e.g. the pending-changes panel) dropped its mask and card over the
+     notepad. Reparenting to document.body lets .np-layer's z-index compete at
+     the top level; removal rides the normal disposer list. */
+  document.body.append(layer)
+  disposers.push(() => layer.remove())
 
   /* Cloud sync engine. `render` is declared further down but only referenced
      from onApplied, which runs after the database is ready — no TDZ hit. */
@@ -1812,8 +1831,10 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       width: Math.round(rect.width * 0.6),
       region: rect,
       /* The card portals to document.body: name our scheme so a light notepad
-         inside a dark shell still paints a light card. */
+         inside a dark shell still paints a light card, and raise it over both
+         the shell's modal band and our own 1200 layer. */
       theme: resolvedTheme(),
+      z: NP_PORTAL_Z,
       /* Tabbed dialogs get one fixed height; panels scroll inside it. */
       fixedHeight: spec.fixedHeight === true ? cap : undefined,
       onConfirm: () => spec.onConfirm?.(closeSelf),
@@ -1854,7 +1875,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     /* The portal sits on document.body and would happily outgrow the floating
        window — cap it at the space actually left inside the panel. */
     const room = panel.getBoundingClientRect().bottom - anchor.getBoundingClientRect().bottom - 10
-    const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), items, width: 190, maxHeight: Math.max(120, room), gap: 4, theme: resolvedTheme() })
+    const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), items, width: 190, maxHeight: Math.max(120, room), gap: 4, theme: resolvedTheme(), z: NP_PORTAL_Z })
     let closed = false
     const done = (unmount) => {
       if (closed) return
@@ -1899,7 +1920,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       { id: 'file', label: text().newBlankFile, icon: icon(FILE_ICON), run: () => { done(false); void add('file').catch(showError) } },
       { id: 'folder', label: text().newBlankFolder, icon: icon(FOLDER_ICON), run: () => { done(false); void add('folder').catch(showError) } },
     ]
-    const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), items, width: 180, theme: resolvedTheme() })
+    const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), items, width: 180, theme: resolvedTheme(), z: NP_PORTAL_Z })
     let closed = false
     const done = (unmount) => {
       if (closed) return
@@ -2611,7 +2632,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     closeMenu?.()
     const copy = text()
     const raw = openNanoMenu({
-      anchor: anchor.getBoundingClientRect(), width: 160, theme: resolvedTheme(),
+      anchor: anchor.getBoundingClientRect(), width: 160, theme: resolvedTheme(), z: NP_PORTAL_Z,
       items: [
         { id: 'rename', label: copy.rename, run: () => askName(copy.renameTitle, node.name, async name => {
           const renamed = await renameNode(state.db, node.id, name)

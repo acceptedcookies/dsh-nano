@@ -104,7 +104,7 @@ test('nano-ui threads the scheme onto the portaled dialog layer', () => {
   assert.match(NANO_DOM, /layer\.setAttribute\('data-nano-theme', theme\)/)
   assert.match(
     NANO_DOM,
-    /\(wantsRegion \|\| wantsWidth \|\| wantsTheme\)/,
+    /\(wantsRegion \|\| wantsWidth \|\| wantsTheme[^)]*\)/,
     'the portal observer must also run when only a theme is requested',
   )
 })

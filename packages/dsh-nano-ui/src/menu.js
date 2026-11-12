@@ -14,8 +14,10 @@ const { useCallback, useEffect, useRef, useState } = React
  * @param {'light' | 'dark'} [props.theme] - the owning surface's resolved scheme. The popup
  *   portals to `document.body`, so it inherits the shell's palette, not the owner's; declaring
  *   the scheme here lets the owner scope its light/dark tokens over this subtree.
+ * @param {number} [props.z] - z-index override for the popup root; the stylesheet default is 30,
+ *   an owner whose own layer must outrank shell modals raises it here (inline beats sheet).
  */
-export function NanoMenu({ menu, actions, onClose, width = 208, maxHeight, theme }) {
+export function NanoMenu({ menu, actions, onClose, width = 208, maxHeight, theme, z }) {
   const ref = useRef(null)
   const [active, setActive] = useState(0)
   const items = menu === null ? [] : actions
@@ -44,6 +46,7 @@ export function NanoMenu({ menu, actions, onClose, width = 208, maxHeight, theme
   return React.createElement('div', {
     className: 'nano-menu', role: 'menu', ref,
     style: { position: 'fixed', left: `${Math.max(8, left)}px`, top: `${Math.max(8, top)}px`, minWidth: `${width}px`,
+      ...(typeof z === 'number' ? { zIndex: String(Math.round(z)) } : {}),
       ...(typeof maxHeight === 'number' ? { maxHeight: `${Math.round(maxHeight)}px`, overflowY: 'auto', overscrollBehavior: 'contain' } : {}) },
     'data-nano-menu': 'true',
     /* Undefined is dropped by React, so an owner that follows the shell simply omits it. */

@@ -100,3 +100,16 @@ nano-ui 共享样式不再硬编码字号，改为消费一组可选的 `--nano-
 - 省略 `theme` 时不写该属性，弹层继续跟随 shell —— 这是 `dsh-nano-explorer-extra`、`dsh-nano-shared-workspace` 的现状，不需要改。
 - 卡片必须自己解析文字颜色：`.nano-dialog-card` 显式声明 `color: var(--dsw-alias-label-primary)`。否则 `color` 从 shell 继承成已计算值，浅色卡片上会留下近白字。
 - `.nano-menu` 自身已声明 `color`，菜单不受此影响。
+
+## 弹层层级契约（`z`）
+
+portal 到 `document.body` 的弹层与 shell 自己的弹窗同台竞争：shell 的 modal 根层与遮罩是 `z-index:1000`，toast/portal 带是 `1100`，`.nano-menu` 样式表默认 `30`。拥有者若自身也停在更高层（如 notepad 的 `.np-layer` 为 `1200`），它打开的弹层会被压在自家窗口下面。
+
+因此 `NanoMenu` / `openNanoMenu` / `openNanoDialog` 接受可选的 `z: number`：
+
+| 弹层 | 落点 | 说明 |
+|---|---|---|
+| 菜单 | `.nano-menu` 根节点内联 `zIndex` | React style 属性直接下发 |
+| 对话框 | portal 层内联 `z-index` | shell `Modal` 的 `._root_` 把 1000 写死在哈希 class 里，inline 才能稳定压过它；由 `openNanoDialog` 的 MutationObserver 在卡片提交后设置 |
+
+省略 `z` 时保持默认（菜单 30、对话框 1000），跟随 shell 的拥有者不需要传。

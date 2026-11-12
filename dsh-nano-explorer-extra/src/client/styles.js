@@ -40,6 +40,11 @@ export const STYLE = `${NANO_STYLES}
   /* The shipped files page insets its header by 16px left and 6px right; the tree and the status bar
      below reuse the same pair so the tab, the path, the rows, and the footer share one left edge. */
   padding: 6px 8px 6px 16px; border-bottom: .5px solid var(--dsw-alias-border-l2);
+  /* The shell draws the pane divider 76px from the top: 38px tab strip plus a 38px header. At the
+     natural 36.5px this rule's bottom border sat 1.5px above that line whenever a file was only
+     selected, and the split visibly broke; pinning the box to the same 38px keeps both edges on
+     one line in every pane state. */
+  box-sizing: border-box; min-height: 38px;
 }
 .nxe-path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; font-size: 12px; color: var(--dsw-alias-label-secondary); }
 .nxe-tool { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: var(--dsw-radius-sm); background: transparent; color: var(--dsw-alias-label-secondary); cursor: pointer; }

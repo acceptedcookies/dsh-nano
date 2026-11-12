@@ -135,7 +135,7 @@ export async function rename(fs, ctx, config, request, signal) {
     throw new Error(`"${finalName}" already exists in this folder`)
   }
 
-  // A pure case change needs two steps on a case-insensitive filesystem: moving `release.md` to
+  // A pure case change needs two steps on a case-insensitive filesystem: moving `RELEASE.md` to
   // `RELEASE.md` in one call resolves both names to the same entry, so the move is a no-op and the
   // old casing survives. A unique intermediate name breaks that bond.
   if (sameEntryIgnoringCase(source, destination)) {

@@ -64,15 +64,24 @@ export function openNanoDialog(options) {
       if (wantsRegion) {
         const r = options.region
         layer.classList.add('nano-regioned')
+        /* The shell's .root is content-box with its own 24px padding, and the
+           mask is an absolutely positioned child: `inset: 0` resolves against
+           the padding box. Without border-box the 12px padding below grows the
+           layer to r + 24px, so the mask (and the dimmed area) hangs 24px past
+           the owning window's right and bottom edges. Rounding the layer to the
+           same radius keeps the mask inside the window's rounded corners too. */
         Object.assign(layer.style, {
           position: 'fixed',
           top: `${r.top}px`,
           left: `${r.left}px`,
           right: 'auto',
           bottom: 'auto',
+          boxSizing: 'border-box',
           width: `${r.width}px`,
           height: `${r.height}px`,
           padding: '12px',
+          borderRadius: 'var(--dsw-radius-panel, 28px)',
+          overflow: 'hidden',
         })
       }
     }

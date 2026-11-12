@@ -409,7 +409,10 @@ ${NANO_STYLES}
 /* settings switches carry their index in --np-switch-i: thumb steps by
    (segment width + 2px gap), generic for N segments */
 .np-switch[data-seg-field] .np-switch-thumb { transform: translateX(calc(var(--np-switch-i) * (100% + 2px))); }
-.np-dlg-body input, .np-dlg-body select { width: 100%; box-sizing: border-box; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); padding: 8px 10px; font: inherit; }
+/* Text-like controls fill the row; a checkbox or radio must keep its intrinsic
+   box, or the 100% width turns it into a 300px slab and the 8px padding makes it
+   taller than the label it belongs to. */
+.np-dlg-body input:not([type="checkbox"]):not([type="radio"]), .np-dlg-body select { width: 100%; box-sizing: border-box; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); padding: 8px 10px; font: inherit; }
 .np-dlg-body input[type="number"] { max-width: 200px; }
 .np-dlg-body input:focus, .np-dlg-body select:focus { outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, var(--dsw-alias-link)); }
 .np-versions { max-height: 240px; overflow: auto; display: flex; flex-direction: column; }
@@ -578,7 +581,9 @@ ${NANO_STYLES}
   width: 100%; height: 28px; padding: 0 8px; border: 1px solid var(--dsw-alias-border-l2);
   border-radius: var(--dsw-radius-sm, 8px); background: var(--dsw-alias-bg-layer-1);
   color: var(--dsw-alias-label-primary); font: inherit; font-size: 12px; }
-.np-check, .np-radio { display: flex !important; flex-direction: row !important; align-items: center; gap: 6px !important; }
+/* .np-dlg-body label is a column flex with align-items:stretch and outranks a
+   bare class, so the row variant has to force its own cross-axis alignment. */
+.np-check, .np-radio { display: flex !important; flex-direction: row !important; align-items: center !important; gap: 6px !important; }
 .np-form-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
 .np-cloud-note { font-size: 11px; color: var(--dsw-alias-label-secondary); margin: 6px 0 0; }
 .np-cloud-note.error, .np-wizard-warn { color: var(--dsw-alias-state-error-secondary, #f25a5a); }

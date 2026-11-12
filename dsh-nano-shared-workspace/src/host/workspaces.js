@@ -10,7 +10,7 @@
 
 import { execFile } from 'node:child_process'
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
 import { validate, SchemaReject, WORKSPACE_ID_RE } from 'dsh-remote-data-schema'
@@ -18,14 +18,13 @@ import { validate, SchemaReject, WORKSPACE_ID_RE } from 'dsh-remote-data-schema'
 const hash16 = input => createHash('sha256').update(input).digest('hex').slice(0, 16)
 
 /**
- * Read + validate one remote marker (P2-03). A marker is co-tenant writable,
- * so it crosses the remote→host boundary only after the v1 whole-object
- * whitelist: `{v:1, workspaceId, title, pathHint, createdAt, createdBy,
- * members:{[memberId]:{username,instance,localPath,joinedAt}}}`.
- * @returns the validated marker; `undefined` on fetch failure / schema reject.
+ * Validate one remote marker value against its storage key (P2-03). A marker
+ * is co-tenant writable, so it crosses the remote→host boundary only after the
+ * v1 whole-object whitelist: `{v:1, workspaceId, title, pathHint, createdAt,
+ * createdBy, members:{[memberId]:{username,instance,localPath,joinedAt}}}`.
+ * @returns the validated marker; `undefined` on schema reject / foreign key.
  */
-export async function readMarker(s3, key) {
-  const row = await s3.getJson(key).catch(() => undefined)
+function parseMarker(row, key) {
   if (row === undefined) return undefined
   try {
     validate('marker', row)
@@ -38,6 +37,21 @@ export async function readMarker(s3, key) {
   if (row.workspaceId !== basename(key, '.json')) return undefined
   return row
 }
+
+/** Read + validate one remote marker; `undefined` when absent or malformed. */
+export async function readMarker(s3, key) {
+  const row = await s3.getJson(key).catch(() => undefined)
+  return parseMarker(row, key)
+}
+
+/** Read a marker together with its ETag, the token a CAS write consumes. */
+async function readMarkerWithMeta(s3, key) {
+  const got = await s3.getJson(key, { withMeta: true }).catch(() => undefined)
+  return got === undefined ? undefined : { marker: parseMarker(got.value, key), etag: got.etag }
+}
+
+/** Bounded retries for a lost CAS race; the caller re-reads between attempts. */
+const MARKER_CAS_ATTEMPTS = 4
 
 const INSTANCE_REF = 'DSH_NSW_INSTANCE_ID'
 
@@ -105,6 +119,12 @@ export function pinWorkspaceLocalPath(workspaceId, localPath) {
   writeFileSync(file, JSON.stringify({ workspaceId, localPath, pinnedAt: new Date().toISOString() }))
 }
 
+/** Drop this host's replica pin when the workspace is deleted. */
+export function unpinWorkspaceLocalPath(workspaceId) {
+  if (typeof workspaceId !== 'string' || !WORKSPACE_ID_RE.test(workspaceId)) return
+  rmSync(pinPath(workspaceId), { force: true })
+}
+
 /** The localPath we pinned for `workspaceId`, or undefined when never pinned. */
 export function readWorkspacePin(workspaceId) {
   if (typeof workspaceId !== 'string' || !WORKSPACE_ID_RE.test(workspaceId)) return undefined
@@ -168,14 +188,22 @@ export function ownMember(marker, identity, me) {
  * Create the cloud canonical marker, then record this instance's membership
  * with the chosen local replica path. S3 write happens FIRST — the workspace
  * is born on the remote, not locally.
- * @returns the marker as persisted.
+ *
+ * `requestId` (client-generated per create attempt) makes the create
+ * idempotent: the workspace id is derived from creator + request id and the
+ * write is `If-None-Match: *`. A retry of the same attempt re-reads and
+ * returns the existing marker instead of creating a second one.
+ * @returns the marker as persisted, with `deduplicated` on a replay.
  */
-export async function createWorkspace(s3, ctx, identity, { name, localPath }) {
+export async function createWorkspace(s3, ctx, identity, { name, localPath, requestId }) {
   const me = await instanceId(ctx)
   const memberId = memberKeyOf(identity, me)
+  const idempotent = typeof requestId === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(requestId)
+  const workspaceId = idempotent ? hash16(`${memberId}:${requestId}`) : randomBytes(8).toString('hex')
+  const key = `workspaces/${workspaceId}.json`
   const marker = {
     v: 1,
-    workspaceId: randomBytes(8).toString('hex'),
+    workspaceId,
     title: name,
     pathHint: name,
     createdAt: new Date().toISOString(),
@@ -189,14 +217,24 @@ export async function createWorkspace(s3, ctx, identity, { name, localPath }) {
       },
     },
   }
-  await s3.putJson(`workspaces/${marker.workspaceId}.json`, marker)
-  pinWorkspaceLocalPath(marker.workspaceId, localPath)
+  const put = await s3.putJson(key, marker, idempotent ? { ifNoneMatch: '*' } : {})
+  if (put?.conflict === true) {
+    const existing = await readMarker(s3, key)
+    if (existing === undefined || existing.createdBy !== memberId || existing.title !== name) {
+      throw new Error('workspace id collision; retry with a fresh request')
+    }
+    pinWorkspaceLocalPath(workspaceId, existing.members[memberId].localPath ?? localPath)
+    return { ...existing, deduplicated: true }
+  }
+  pinWorkspaceLocalPath(workspaceId, localPath)
   return marker
 }
 
 /**
  * Join an existing shared workspace: merge this instance's member row (with
- * its local replica path) into the remote marker.
+ * its local replica path) into the remote marker. The read-modify-write is
+ * guarded by the marker's ETag, so two clients joining at once cannot erase
+ * each other's member row (T-B06 / F-07).
  * @returns the merged marker.
  */
 export async function joinWorkspace(s3, ctx, identity, { workspaceId, localPath }) {
@@ -205,21 +243,28 @@ export async function joinWorkspace(s3, ctx, identity, { workspaceId, localPath 
     throw new SchemaReject('schema:workspaceId', 'workspaceId has a bad charset')
   }
   const key = `workspaces/${workspaceId}.json`
-  const existing = await readMarker(s3, key)
-  if (existing === undefined) throw new Error('shared workspace not found')
   const me = await instanceId(ctx)
   const memberId = memberKeyOf(identity, me)
-  const members = { ...(existing.members ?? {}) }
-  if (members[memberId] === undefined) {
-    members[memberId] = { username: identity.username, instance: me, joinedAt: new Date().toISOString() }
+  for (let attempt = 0; attempt < MARKER_CAS_ATTEMPTS; attempt += 1) {
+    const got = await readMarkerWithMeta(s3, key)
+    if (got?.marker === undefined) throw new Error('shared workspace not found')
+    if (typeof got.etag !== 'string' || got.etag === '') {
+      throw new Error('shared workspace has no ETag; refusing an unsafe join')
+    }
+    const members = { ...(got.marker.members ?? {}) }
+    if (members[memberId] === undefined) {
+      members[memberId] = { username: identity.username, instance: me, joinedAt: new Date().toISOString() }
+    }
+    // Only THIS member's row is mutated — remote members' rows pass through
+    // untouched (foreign localPath is never a write target).
+    members[memberId].localPath = localPath
+    const marker = { ...got.marker, members }
+    const put = await s3.putJson(key, marker, { ifMatch: got.etag })
+    if (put?.conflict === true) continue // lost the race — re-read and recompute
+    pinWorkspaceLocalPath(workspaceId, localPath)
+    return marker
   }
-  // Only THIS member's row is mutated — remote members' rows pass through
-  // untouched (foreign localPath is never a write target).
-  members[memberId].localPath = localPath
-  const marker = { ...existing, members }
-  await s3.putJson(key, marker)
-  pinWorkspaceLocalPath(workspaceId, localPath)
-  return marker
+  throw new Error('another client is updating this workspace; retry the join')
 }
 
 /**
@@ -253,9 +298,18 @@ export async function listWorkspaces(s3) {
  * @param markers - rows from {@link listWorkspaces} (schema-validated).
  * @param me - identity `{identity, me}` for strict memberId binding.
  */
-export async function matchWorkspace(cwd, markers, { identity, me } = {}) {
+export async function matchWorkspace(cwd, markers, { identity, me, legacyCache } = {}) {
   if (identity === undefined || me === undefined) return null
-  const legacy = await workspaceIdFor(cwd)
+  /* The legacy path-hash needs one `git remote get-url` subprocess per cwd.
+   * A sync pass walks every local session, so the same cwd repeats; caching by
+   * cwd turns N spawns into the number of distinct directories (F-28). */
+  let legacy
+  if (legacyCache !== undefined && legacyCache.has(cwd)) {
+    legacy = legacyCache.get(cwd)
+  } else {
+    legacy = await workspaceIdFor(cwd)
+    legacyCache?.set(cwd, legacy)
+  }
   let prefixBest = null
   for (const marker of markers) {
     /* trustedMember (review 9012 F1): the remote member row is co-tenant
@@ -270,8 +324,17 @@ export async function matchWorkspace(cwd, markers, { identity, me } = {}) {
     const localPath = own.member.localPath
     if (typeof localPath !== 'string' || localPath === '') continue
     if (cwd === localPath || cwd.startsWith(`${localPath}/`)) {
-      if (prefixBest === null || localPath.length > (prefixBest.__matchLength ?? 0)) {
-        prefixBest = { ...marker, __matchLength: localPath.length }
+      /* Two workspaces may legitimately share one replica root (the create
+       * dialog lets a user reuse a directory). Longest prefix wins; an exact
+       * tie falls back to the OLDEST marker, because a session written under
+       * one workspace must keep resolving to it instead of flip-flopping with
+       * bucket listing order (F-27). */
+      const length = localPath.length
+      const bestLength = prefixBest?.__matchLength ?? -1
+      const older = prefixBest === null
+        || String(marker.createdAt ?? '') < String(prefixBest.createdAt ?? '')
+      if (length > bestLength || (length === bestLength && older)) {
+        prefixBest = { ...marker, __matchLength: length }
       }
     }
   }

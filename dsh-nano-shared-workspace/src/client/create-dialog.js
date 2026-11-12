@@ -69,8 +69,10 @@ export function CreateWorkspaceDialog({ face, mode, workspaceId }) {
       createElement('p', { className: 'nsw-field-label' }, copy.pickReplicaHint),
       // Breadcrumb
       createElement('div', { className: 'nsw-crumbs' },
-        (listing?.crumbs ?? []).map((crumb, index) => createElement(React.Fragment, { key: crumb.path },
-          index > 0 ? createElement('span', { className: 'nsw-crumb-sep' }, '/') : null,
+        (listing?.crumbs ?? []).map((crumb, index, all) => createElement(React.Fragment, { key: crumb.path },
+          // The root crumb is already printed as "/", so the next separator
+          // would render "// Users" (F-11).
+          index > 0 && !(index === 1 && all[0]?.name === '') ? createElement('span', { className: 'nsw-crumb-sep' }, '/') : null,
           createElement('button', {
             type: 'button',
             className: 'nsw-crumb',

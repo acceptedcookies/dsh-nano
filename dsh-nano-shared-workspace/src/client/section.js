@@ -7,7 +7,7 @@
  */
 
 import React from 'react'
-import { IconArchiveOutlineRegular, IconDatabaseOutlineRegular, IconFolderCloseRegular, IconFolderOpenRegular, IconGlobeOutlineRegular, IconNewChatOutlineRegular, IconPinFillRegular, IconPinOutlineRegular, IconProjectAddOutlineRegular, IconRefreshOutlineRegular, IconSlidersTwoOutlineRegular, IconTriangleRightFillRegular, IconUnarchiveOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconArchiveOutlineRegular, IconDatabaseOutlineRegular, IconDeliverDocRegular, IconFolderCloseRegular, IconFolderOpenRegular, IconGlobeOutlineRegular, IconNewChatOutlineRegular, IconPinFillRegular, IconPinOutlineRegular, IconProjectAddOutlineRegular, IconRefreshOutlineRegular, IconSlidersTwoOutlineRegular, IconTrashOutlineRegular, IconTriangleRightFillRegular, IconUnarchiveOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import { perf } from './perf.js'
 
 const { createElement, useEffect, useLayoutEffect, useRef, useState } = React
@@ -268,6 +268,12 @@ function renderSharedSection({ face, wide }) {
             createElement('button', {
               type: 'button',
               className: chrome.rowButton,
+              'aria-label': copy.viewTranscript,
+              onClick: event => { event.stopPropagation(); face.onViewTranscript?.(session) },
+            }, createElement(IconDeliverDocRegular, { size: 14 })),
+            createElement('button', {
+              type: 'button',
+              className: chrome.rowButton,
               'aria-label': archived ? copy.unarchiveSession : copy.archiveSession,
               onClick: event => { event.stopPropagation(); face.onToggleArchive?.(session) },
             }, createElement(archived ? IconUnarchiveOutlineRegular : IconArchiveOutlineRegular, { size: 14 })),
@@ -300,15 +306,25 @@ function renderSharedSection({ face, wide }) {
               role: 'status',
               'aria-label': copy.sectionLoading,
             }, createElement(IconRefreshOutlineRegular, { size: 14, className: 'nsw-spin' }))
-            : mine && chrome.rowButton !== '' ? createElement('button', {
-              type: 'button',
-              className: chrome.rowButton,
-              'aria-label': copy.newSession,
-              onClick: event => {
-                event.stopPropagation()
-                face.onCreateSession?.(row.workspaceId)
-              },
-            }, createElement(IconNewChatOutlineRegular, { size: 14 })) : null)),
+            : mine && chrome.rowButton !== '' ? createElement(React.Fragment, null,
+              createElement('button', {
+                type: 'button',
+                className: chrome.rowButton,
+                'aria-label': copy.newSession,
+                onClick: event => {
+                  event.stopPropagation()
+                  face.onCreateSession?.(row.workspaceId)
+                },
+              }, createElement(IconNewChatOutlineRegular, { size: 14 })),
+              createElement('button', {
+                type: 'button',
+                className: `${chrome.rowButton} nsw-row-delete`,
+                'aria-label': copy.deleteWorkspaceTitle,
+                onClick: event => {
+                  event.stopPropagation()
+                  face.onDeleteWorkspace?.(row.workspaceId)
+                },
+              }, createElement(IconTrashOutlineRegular, { size: 14 }))) : null)),
       sessionRows.length > 0 ? createElement('div', { role: 'group' }, sessionRows) : null)
   })
 

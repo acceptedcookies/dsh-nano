@@ -16,7 +16,7 @@
 import React from 'react'
 import { createPortal } from 'react-dom'
 import { NanoDialog } from 'dsh-nano-ui'
-import { Input } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, Input } from '@deepseek-ai/dsh-client-ui-primitives'
 import { SharedSection } from './section.js'
 import { SettingsDialog } from './settings-dialog.js'
 import { TranscriptDialog } from './transcript-dialog.js'
@@ -164,16 +164,45 @@ export function SidebarGraft({ face, renderSlot }) {
         face,
         settings,
         stage: settings.setupStage === 'workspace' ? 'workspace' : 'bind',
-        onBound: () => { face.finishBind?.() },
+        onBound: bound => { face.finishBind?.(bound) },
         onOpenCreate: () => { face.onCreateWorkspace?.() },
+        onRequestRebind: () => { face.onRequestRebind?.() },
+      }), document.body)
+      : null,
+    settings?.rebindConfirm === true
+      ? createPortal(React.createElement(NanoDialog, {
+        copy: face.copy(),
+        title: face.copy().clearTitle,
+        description: face.copy().clearBody,
+        confirmLabel: face.copy().clear,
+        danger: true,
+        onConfirm: () => { face.confirmRebind?.() },
+        onCancel: () => { face.cancelRebind?.() },
+      }), document.body)
+      : null,
+    settings?.deleteTarget != null
+      ? createPortal(React.createElement(NanoDialog, {
+        copy: face.copy(),
+        title: face.copy().deleteWorkspaceTitle,
+        description: face.copy().deleteWorkspaceBody.replace('{name}',
+          (settings.sharedWorkspaces ?? []).find(row => row.workspaceId === settings.deleteTarget)?.title ?? settings.deleteTarget),
+        confirmLabel: face.copy().deleteWorkspaceConfirm,
+        danger: true,
+        onConfirm: () => { face.confirmDeleteWorkspace?.() },
+        onCancel: () => { face.cancelDeleteWorkspace?.() },
       }), document.body)
       : null,
     settings?.transcript != null ? createPortal(React.createElement(TranscriptDialog, { face, transcript: settings.transcript }), document.body) : null,
     typeof settings?.notice === 'string' && settings.notice !== ''
       ? createPortal(React.createElement(NanoDialog, {
         copy: face.copy(),
-        title: face.copy().noticeTitle,
+        // A held lease is a "try again later" state, not a failure, and it has
+        // exactly one sensible action (F-23).
+        title: settings.noticeKind === 'busy' ? face.copy().noticeTitleBusy : face.copy().noticeTitle,
         confirmLabel: face.copy().closeLabel,
+        footer: React.createElement(Button, {
+          variant: 'primary', className: 'nano-modal-action', onClick: face.dismissNotice,
+        }, face.copy().closeLabel),
         onConfirm: face.dismissNotice,
         onCancel: face.dismissNotice,
       }, settings.notice), document.body)

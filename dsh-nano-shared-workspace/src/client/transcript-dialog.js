@@ -5,6 +5,7 @@
 
 import React from 'react'
 import { NanoDialog } from 'dsh-nano-ui'
+import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
 
 const { createElement } = React
 
@@ -30,13 +31,25 @@ export function TranscriptDialog({ face, transcript }) {
   const copy = face.copy()
   const events = transcript?.events ?? []
   const projected = events.map(projectEvent).filter(row => row !== null && row.text.trim() !== '')
+  // A remote title is untrusted, arbitrarily long text; the dialog header is a
+  // single line (F-26). Trim it so the close affordance never gets pushed out.
+  const rawTitle = transcript?.meta?.title ?? ''
+  const title = rawTitle === '' ? copy.transcriptFallback
+    : (rawTitle.length > 60 ? `${rawTitle.slice(0, 59)}…` : rawTitle)
   return createElement(NanoDialog, {
     copy,
-    title: transcript?.meta?.title ?? copy.transcriptFallback,
-    confirmLabel: copy.closeLabel ?? 'Close',
+    title,
+    // Read-only view: there is nothing to cancel, so a single Close action is
+    // the whole footer (same reason as the cool-off notice, F-23).
+    footer: createElement(Button, {
+      variant: 'primary', className: 'nano-modal-action', onClick: face.onCloseTranscript,
+    }, copy.closeLabel ?? 'Close'),
     onConfirm: face.onCloseTranscript,
     onCancel: face.onCloseTranscript,
   },
+    transcript?.loading === true
+      ? createElement('p', { className: 'nsw-notice' }, copy.transcriptLoading)
+      : null,
     createElement('div', { className: 'nsw-transcript-meta' },
       `${transcript?.meta?.writerName ?? '?'} · ${transcript?.meta?.mtime ?? ''} · ${events.length} events · ${transcript?.meta?.committedBytes ?? 0}B`),
     createElement('div', { className: 'nsw-transcript-body' },

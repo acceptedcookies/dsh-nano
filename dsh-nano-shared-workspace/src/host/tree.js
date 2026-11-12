@@ -196,10 +196,15 @@ function dissolve(root, parent, remote, local) {
       files.push(l.get(rel))
     }
   }
-  return { files, conflicts, writes: [] }
+  return { files, conflicts }
 }
 
-async function materializePending(s3, workspaceId, root, dissolved) {
+/**
+ * Resolve pending text conflicts into merged bytes held in memory. Writing
+ * them into the replica is deferred until the generation and HEAD CAS writes
+ * both succeed, so a lost race never leaves half-merged bytes on disk.
+ */
+async function materializePending(s3, workspaceId, dissolved) {
   const out = []
   for (const file of dissolved.files) {
     if (file.pending !== 'text') {
@@ -208,15 +213,20 @@ async function materializePending(s3, workspaceId, root, dissolved) {
     }
     const remoteBuf = await s3.getBytes(blobKey(workspaceId, file.remoteSha))
     const merged = Buffer.from(`<<<<<<< local\n${file.localBuf.toString('utf8')}=======\n${(remoteBuf ?? Buffer.alloc(0)).toString('utf8')}>>>>>>> remote\n`)
-    const dest = inside(root, file.rel)
-    if (dest !== undefined) {
-      mkdirSync(dirname(dest), { recursive: true })
-      writeFileSync(dest, merged)
-    }
-    out.push({ rel: file.rel, sha256: sha256(merged), size: merged.length, buf: merged })
-    dissolved.writes.push(file.rel)
+    out.push({ rel: file.rel, sha256: sha256(merged), size: merged.length, buf: merged, writeToReplica: true })
   }
   return out
+}
+
+/** Commit the merged bytes to this replica only after the remote CAS wins. */
+function writePending(root, files) {
+  for (const file of files) {
+    if (file.writeToReplica !== true) continue
+    const dest = inside(root, file.rel)
+    if (dest === undefined) continue
+    mkdirSync(dirname(dest), { recursive: true })
+    writeFileSync(dest, file.buf)
+  }
 }
 
 function basePath(dshHome, workspaceId) {
@@ -234,12 +244,39 @@ function saveBase(dshHome, workspaceId, record) {
   writeFileSync(dest, JSON.stringify({ generation: record.generation, files: record.files }))
 }
 
-async function ensureBlobs(s3, workspaceId, root, files) {
+/**
+ * Bounded worker pool. Blob transfers are independent per file, so the serial
+ * loop made a 200-file push take ~110s (measured T-E02). The cap keeps the
+ * host from opening an unbounded number of sockets to one endpoint.
+ */
+const BLOB_CONCURRENCY = 8
+
+async function mapLimit(items, limit, worker) {
+  const results = new Array(items.length)
+  let next = 0
+  const runners = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    for (;;) {
+      const index = next
+      next += 1
+      if (index >= items.length) return
+      results[index] = await worker(items[index], index)
+    }
+  })
+  await Promise.all(runners)
+  return results
+}
+
+/** Blobs are content-addressed, so a key that already exists needs no resend. */
+async function ensureBlobs(s3, workspaceId, root, files, knownShas) {
+  const uploads = []
   for (const file of files) {
+    if (knownShas !== undefined && knownShas.has(file.sha256)) continue
     const buf = file.buf ?? readRel(root, file.rel)
     if (buf === undefined) continue
-    await s3.putBytes(blobKey(workspaceId, file.sha256), buf)
+    uploads.push({ key: blobKey(workspaceId, file.sha256), buf })
   }
+  await mapLimit(uploads, BLOB_CONCURRENCY, ({ key, buf }) => s3.putBytes(key, buf))
+  return uploads.length
 }
 
 /** Download HEAD into the replica. Files this replica previously synced and the new HEAD dropped are removed. */
@@ -259,16 +296,21 @@ export async function pullWorkspace(s3, dshHome, workspaceId, localPath) {
     if (dest === undefined) continue
     try { unlinkSync(dest) } catch { /* already gone */ }
   }
+  const downloads = []
   for (const file of head.files ?? []) {
     const dest = inside(root, file.rel)
     if (dest === undefined) continue
     const have = readRel(root, file.rel)
     if (have !== undefined && sha256(have) === file.sha256) continue
-    const blob = await s3.getBytes(blobKey(workspaceId, file.sha256))
-    if (blob === undefined) continue
+    downloads.push({ dest, key: blobKey(workspaceId, file.sha256) })
+  }
+  const blobs = await mapLimit(downloads, BLOB_CONCURRENCY, ({ key }) => s3.getBytes(key))
+  downloads.forEach(({ dest }, index) => {
+    const blob = blobs[index]
+    if (blob === undefined) return
     mkdirSync(dirname(dest), { recursive: true })
     writeFileSync(dest, blob)
-  }
+  })
   saveBase(dshHome, workspaceId, head)
   return { ok: true, generation: head.generation ?? 0, files: (head.files ?? []).length, conflicts: head.conflicts ?? [] }
 }
@@ -277,7 +319,8 @@ export async function pullWorkspace(s3, dshHome, workspaceId, localPath) {
 export async function pushWorkspace(s3, dshHome, workspaceId, localPath, writerId, attempt = 0) {
   if (!WORKSPACE_ID_RE.test(workspaceId)) throw new SchemaReject('schema:workspaceId', 'workspaceId has a bad charset')
   const root = replicaRoot(localPath)
-  const head = await s3.getJson(headKey(workspaceId))
+  const got = await s3.getJson(headKey(workspaceId), { withMeta: true })
+  const head = got?.value
   if (head !== undefined) {
     // A poisoned remote HEAD is rejected whole — its rels cannot steer the
     // merge (P2-05) even though `dissolve` would SKIP-filter them anyway.
@@ -299,8 +342,14 @@ export async function pushWorkspace(s3, dshHome, workspaceId, localPath, writerI
     }
   }
   const dissolved = dissolve(root, parentFiles, remote, local)
-  const files = await materializePending(s3, workspaceId, root, dissolved)
-  await ensureBlobs(s3, workspaceId, root, files)
+  const files = await materializePending(s3, workspaceId, dissolved)
+  // Every sha already referenced by the current HEAD has a blob in the bucket,
+  // so a repeat push re-uploads only genuinely new content.
+  const knownShas = new Set([
+    ...(head?.files ?? []).map(file => file.sha256),
+    ...parentFiles.map(file => file.sha256),
+  ])
+  const uploaded = await ensureBlobs(s3, workspaceId, root, files, knownShas)
   const generation = (head?.generation ?? 0) + 1
   const record = {
     v: 1,
@@ -311,11 +360,61 @@ export async function pushWorkspace(s3, dshHome, workspaceId, localPath, writerI
     conflicts: dissolved.conflicts,
     at: new Date().toISOString(),
   }
-  const put = await s3.putJson(genKey(workspaceId, generation), record, { ifNoneMatch: '*' })
-  if (put?.conflict === true && attempt < 1) return pushWorkspace(s3, dshHome, workspaceId, localPath, writerId, attempt + 1)
-  await s3.putJson(headKey(workspaceId), record)
+  // Generation objects are immutable; HEAD is a CAS write. A racing client
+  // either wins the generation slot or re-reads the new HEAD and dissolves
+  // against it — it can never overwrite the winner's HEAD with stale bytes.
+  const MAX_ATTEMPTS = 3
+  const genPut = await s3.putJson(genKey(workspaceId, generation), record, { ifNoneMatch: '*' })
+  if (genPut?.conflict === true) {
+    if (attempt >= MAX_ATTEMPTS) throw new Error('tree generation is racing another writer; retry the push')
+    return pushWorkspace(s3, dshHome, workspaceId, localPath, writerId, attempt + 1)
+  }
+  const headPut = await s3.putJson(headKey(workspaceId), record,
+    got?.etag === undefined ? { ifNoneMatch: '*' } : { ifMatch: got.etag })
+  if (headPut?.conflict === true) {
+    if (attempt >= MAX_ATTEMPTS) throw new Error('tree HEAD changed during push; retry the push')
+    return pushWorkspace(s3, dshHome, workspaceId, localPath, writerId, attempt + 1)
+  }
+  writePending(root, files)
   saveBase(dshHome, workspaceId, record)
-  return { ok: true, generation, files: record.files.length, conflicts: dissolved.conflicts }
+  return { ok: true, generation, files: record.files.length, conflicts: dissolved.conflicts, uploaded }
+}
+
+/**
+ * Delete every object under `workspaces/{id}/` (F-12). `list()` is one level
+ * deep because it asks S3 for a delimiter, so the walk recurses on prefixes
+ * and deletes the keys of each leaf level. Bounded by a depth and a key budget
+ * so a pathological bucket cannot turn a delete into an unbounded sweep.
+ *
+ * MinIO echoes the request's own prefix inside `<CommonPrefixes>` when the
+ * directory holds only deeper directories; recursing into that self-reference
+ * would loop until the depth cap, so any child equal to the current prefix is
+ * skipped.
+ * @returns `{keys, truncated}` actually removed.
+ */
+export async function purgeWorkspaceObjects(s3, workspaceId, { maxDepth = 8, maxKeys = 5000 } = {}) {
+  if (!WORKSPACE_ID_RE.test(workspaceId)) throw new SchemaReject('schema:workspaceId', 'workspaceId has a bad charset')
+  let deleted = 0
+  let visited = 0
+  const seen = new Set()
+  const walk = async (prefix, depth) => {
+    if (depth > maxDepth || visited >= maxKeys || seen.has(prefix)) return
+    seen.add(prefix)
+    const page = await s3.list(prefix).catch(() => undefined)
+    if (page === undefined) return
+    for (const key of page.keys ?? []) {
+      if (visited >= maxKeys) return
+      visited += 1
+      await s3.del(key).catch(() => {})
+      deleted += 1
+    }
+    for (const child of page.prefixes ?? []) {
+      if (child === prefix) continue
+      await walk(child, depth + 1)
+    }
+  }
+  await walk(`workspaces/${workspaceId}/`, 0)
+  return { keys: deleted, truncated: visited >= maxKeys }
 }
 
 /** Record the username once. A second client keeps the first claim. */

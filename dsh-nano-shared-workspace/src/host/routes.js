@@ -5,9 +5,9 @@ import { homedir } from 'node:os'
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 import { clearIdentity, readIdentity, writeIdentity } from './credentials.js'
 import { createS3 } from './s3.js'
-import { createWorkspace, instanceId, joinWorkspace, listWorkspaces, ownMember, trustedMember } from './workspaces.js'
+import { createWorkspace, instanceId, joinWorkspace, listWorkspaces, ownMember, readMarker, trustedMember, unpinWorkspaceLocalPath } from './workspaces.js'
 import { acquireClaim, fetchTranscript, listRemoteSessions, materializeSession, renewClaim, syncAll } from './session-io.js'
-import { pullWorkspace, pushWorkspace, registerIdentity } from './tree.js'
+import { purgeWorkspaceObjects, pullWorkspace, pushWorkspace, registerIdentity } from './tree.js'
 import { ensurePerfReviewHost, LIB_VERSION } from 'dsh-performance-review/host'
 import { registerRoutes as registerGuardedRoutes } from 'dsh-host-route-guard'
 import { ROUTE_TABLE, PLUGIN } from './route-table.js'
@@ -46,9 +46,14 @@ const assertLocalPath = value => {
 const localMember = (marker, identity, instance) =>
   instance === '' ? undefined : trustedMember(marker, identity, instance)?.member
 
-/** Error message extraction that never leaks a stack to the response. */
+/** Error text for responses: never leak a raw S3 XML body or a stack (F-19). */
 function messageOf(error) {
-  return error instanceof Error ? error.message : String(error)
+  const raw = error instanceof Error ? error.message : String(error)
+  const code = /<Code>([^<]+)<\/Code>/.exec(raw)?.[1]
+  const status = /HTTP (\d{3})/.exec(raw)?.[1]
+  if (code !== undefined) return `S3 ${status ?? ''} ${code}`.trim()
+  const clean = raw.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+  return clean.length > 180 ? `${clean.slice(0, 177)}…` : clean
 }
 
 function sendJson(res, status, body) {
@@ -232,7 +237,9 @@ export function createRoutes(ctx, config) {
           const identity = await readIdentity(ctx)
           if (identity?.configured !== true) return { workspaces: [] }
           const client = createS3(config, identity)
-          await registerIdentity(client, identity).catch(() => {})
+          await registerIdentity(client, identity)
+            .then(result => { if (result?.ok === true && result.existed === false) dropSettingsCache() })
+            .catch(() => {})
           const rows = await listWorkspaces(client)
           return { workspaces: rows }
         })
@@ -252,7 +259,10 @@ export function createRoutes(ctx, config) {
           return { ok: false, error: 'name and localPath are required' }
         }
         assertLocalPath(localPath)
-        const marker = await createWorkspace(client, ctx, identity, { name, localPath })
+        // A client-generated idempotency key makes a retried create return the
+        // same marker instead of a second one (T-B02).
+        const requestId = typeof body?.requestId === 'string' ? body.requestId : undefined
+        const marker = await createWorkspace(client, ctx, identity, { name, localPath, requestId })
         return { ok: true, workspace: marker }
       },
     },
@@ -274,15 +284,39 @@ export function createRoutes(ctx, config) {
         return { ok: true, workspace: marker }
       },
     },
+    // Delete the cloud marker. The local replica directory is left in place;
+    // remote tree/session objects under this id are orphaned (documented gap).
+    '/workspaces/delete': {
+      method: 'POST',
+      async run(req) {
+        const { client, identity } = await s3()
+        const body = JSON.parse(await readBody(req) || '{}')
+        const workspaceId = assertWorkspaceId(body?.workspaceId)
+        const key = `workspaces/${workspaceId}.json`
+        const marker = await readMarker(client, key)
+        if (marker === undefined) return { ok: false, error: 'shared workspace not found' }
+        const isMember = Object.values(marker.members ?? {}).some(member => member?.username === identity.username)
+        if (!isMember) return { ok: false, error: 'only members can delete this shared workspace' }
+        await client.del(key)
+        unpinWorkspaceLocalPath(workspaceId)
+        // The marker is gone; the tree generations, blobs and session chunks
+        // under this id would otherwise stay in the bucket forever (F-12).
+        const purged = await purgeWorkspaceObjects(client, workspaceId).catch(() => undefined)
+        return { ok: true, workspaceId, purged: purged ?? null }
+      },
+    },
     '/sync': {
       method: 'POST',
       async run() {
         const { client, identity } = await s3()
-        const results = await syncAll(client, ctx, identity, dshHome, syncState)
+        // One marker listing feeds both halves of the pass; listing twice cost
+        // a second LIST plus a GET per marker on every refresh (F-28).
+        const markers = await listWorkspaces(client)
+        const results = await syncAll(client, ctx, identity, dshHome, syncState, markers)
         const instance = await instanceId(ctx)
         const me = instance.slice(0, 8)
         const trees = []
-        for (const marker of await listWorkspaces(client)) {
+        for (const marker of markers) {
           // Strict memberId binding (P2-03): only our own row's localPath is a sync target.
           const member = localMember(marker, identity, instance)
           if (typeof member?.localPath !== 'string' || member.localPath === '') continue
@@ -549,8 +583,9 @@ export function registerRoutes(ctx, routes) {
   return registerGuardedRoutes(ctx, specs, { table: ROUTE_TABLE, plugin: PLUGIN })
 }
 
-/** Every 30s, push session logs and replica files for workspaces this instance has joined. */
+/** Push session logs and replica files on the configured interval; 0 disables it. */
 export function startBackgroundSync(ctx, config) {
+  if (config.backgroundSyncMs === 0) return () => {}
   // Same singleton/row as createRoutes; hostJoin is idempotent per plugin id.
   const review = ensurePerfReviewHost().hostJoin('nano-shared-workspace', {
     version: typeof __NSW_VERSION__ === 'string' ? __NSW_VERSION__ : undefined,
@@ -579,7 +614,7 @@ export function startBackgroundSync(ctx, config) {
       running = false
     }
   })
-  const timer = setInterval(() => { tick().catch(() => {}) }, 30_000)
+  const timer = setInterval(() => { tick().catch(() => {}) }, config.backgroundSyncMs)
   timer.unref?.()
   return () => clearInterval(timer)
 }

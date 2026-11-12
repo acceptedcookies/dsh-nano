@@ -62,10 +62,37 @@ const CLAIM_TTL_MS = 90_000
 
 const sessionDir = home => join(home, 'sessions')
 
-/** Decode one artifact; tolerate truncation mid-write. */
+/**
+ * Decode one artifact; tolerate truncation mid-write.
+ *
+ * A DSH session log is a CONCATENATION of checksummed zstd frames (one per
+ * append). `zstdDecompressSync` yields every frame on Node >= 24.22 but only
+ * the FIRST frame on the Node bundled with Electron 44 (24.21) — the desktop
+ * host would therefore read a 21-event session as its 1-line header and
+ * materialize a truncated copy (F-22). Splitting on the frame magic and
+ * decoding each frame keeps both runtimes identical.
+ */
+const ZSTD_MAGIC = Buffer.from([0x28, 0xb5, 0x2f, 0xfd])
+
+/** Byte offsets of every zstd frame in `buf`. */
+function frameOffsets(buf) {
+  const offsets = []
+  for (let i = 0; i + 4 <= buf.length; i += 1) {
+    if (buf.compare(ZSTD_MAGIC, 0, 4, i, i + 4) === 0) offsets.push(i)
+  }
+  return offsets
+}
+
 function decode(buf) {
   try {
-    return zstdDecompressSync(buf).toString('utf8')
+    const offsets = frameOffsets(buf)
+    if (offsets.length <= 1) return zstdDecompressSync(buf).toString('utf8')
+    let text = ''
+    for (let i = 0; i < offsets.length; i += 1) {
+      const end = i + 1 < offsets.length ? offsets[i + 1] : buf.length
+      text += zstdDecompressSync(buf.subarray(offsets[i], end)).toString('utf8')
+    }
+    return text
   } catch {
     return undefined
   }
@@ -136,12 +163,24 @@ export function listLocalSessions(dshHome) {
  */
 const CLAIM_KEYS = new Set(['writerId', 'acquiredAt', 'expiresAt', 'heartbeatRev'])
 
+/**
+ * A claim's expiry may not exceed one TTL beyond now (F-24). Without this a
+ * co-tenant could write `expiresAt: now + 400 days` and make the session
+ * permanently read-only for every legitimate writer; the same shape appears
+ * from a badly skewed clock. A claim past the bound is treated as malformed,
+ * which the CAS loop already replaces atomically.
+ */
+function claimExpiryIsSane(expiresAt) {
+  return typeof expiresAt === 'number' && Number.isFinite(expiresAt)
+    && expiresAt <= Date.now() + CLAIM_TTL_MS * 2
+}
+
 function validClaim(obj) {
   if (obj === null || typeof obj !== 'object' || Array.isArray(obj)) return false
   for (const key of Object.keys(obj)) if (!CLAIM_KEYS.has(key)) return false
   if (typeof obj.writerId !== 'string' || obj.writerId === '') return false
   if (typeof obj.acquiredAt !== 'string' || Number.isNaN(Date.parse(obj.acquiredAt))) return false
-  if (typeof obj.expiresAt !== 'number' || !Number.isFinite(obj.expiresAt)) return false
+  if (!claimExpiryIsSane(obj.expiresAt)) return false
   if (obj.heartbeatRev !== undefined && !Number.isInteger(obj.heartbeatRev)) return false
   return true
 }
@@ -179,6 +218,13 @@ export async function acquireClaim(s3, ctx, sessionId, writerId, heartbeatRev) {
     const now = Date.now()
     if (existing !== undefined && existing.writerId !== writerId && existing.expiresAt > now) {
       return { acquired: false, holder: existing.writerId, heartbeatRev: existing.heartbeatRev ?? 0 }
+    }
+    /* Already ours with plenty of lease left: skip the write. A sync pass
+     * touches every shared session, and each avoided PUT saves one ~1.1s
+     * round trip through the proxy (F-28). */
+    if (existing !== undefined && existing.writerId === writerId
+        && existing.expiresAt > now + CLAIM_TTL_MS / 2) {
+      return { acquired: true, heartbeatRev: existing.heartbeatRev ?? heartbeatRev, expiresAt: existing.expiresAt, reused: true }
     }
     const claim = {
       writerId,
@@ -228,10 +274,19 @@ export async function renewClaim(s3, sessionId, writerId) {
  * @param markers - rows from `listWorkspaces` (fetched once per sync pass).
  * @param state - mutable `{bySession: Map}` the caller persists between calls.
  */
-export async function pushSession(s3, ctx, identity, local, markers, state) {
+export async function pushSession(s3, ctx, identity, local, markers, state, legacyCache) {
   // Consumer-layer charset (P2-06): a sessionId that cannot form a safe S3
   // key never reaches one.
   if (!SESSION_ID_RE.test(local.sessionId)) return { sessionId: local.sessionId, outcome: 'skip:schema:sessionId' }
+  /* Cheapest possible answer first: the stat fingerprint from the directory
+   * scan. A session whose bytes and mtime are unchanged since the last pass
+   * that reached the bucket has nothing to send, so skip the file read, the
+   * zstd decode, the marker match and every S3 call (F-28). */
+  const seen = state.bySession.get(local.sessionId)
+  if (seen !== undefined && seen.mtimeMs === local.mtimeMs && seen.size === local.sizeBytes
+      && typeof seen.workspaceId === 'string') {
+    return { sessionId: local.sessionId, workspaceId: seen.workspaceId, outcome: 'unchanged' }
+  }
   const me = await instanceId(ctx)
   const writerId = `${identity.username}@${me.slice(0, 8)}`
   const buf = readFileSync(local.filePath)
@@ -241,7 +296,7 @@ export async function pushSession(s3, ctx, identity, local, markers, state) {
   // Sessions only sync when the session's cwd sits inside THIS member's own
   // local replica path — strict memberId binding (P2-03, audit §4.9); the
   // legacy path-hash fallback is gated on our own member row too.
-  const marker = await matchWorkspace(head.cwd, markers, { identity, me })
+  const marker = await matchWorkspace(head.cwd, markers, { identity, me, legacyCache })
   if (marker === null) return { sessionId: local.sessionId, outcome: 'skip:not-shared' }
   const workspaceId = marker.workspaceId
 
@@ -289,6 +344,23 @@ export async function pushSession(s3, ctx, identity, local, markers, state) {
     }
   }
 
+  /* The local artifact is an append-only log, so an unchanged byte length
+   * means unchanged content. Rewriting meta anyway bumped `rev` on every
+   * background sync and cost one proxy round trip per shared session for
+   * nothing (F-28). */
+  const unchanged = remote !== undefined
+    && buf.length === remote.committedBytes
+    && (head.events ?? 0) === remote.eventCount
+    && (head.title ?? '') === (remote.title ?? '')
+  if (unchanged) {
+    tracked.pushedBytes = buf.length
+    tracked.mtimeMs = local.mtimeMs
+    tracked.size = buf.length
+    tracked.workspaceId = workspaceId
+    state.bySession.set(local.sessionId, tracked)
+    return { sessionId: local.sessionId, workspaceId, outcome: 'unchanged' }
+  }
+
   const rev = (remote?.rev ?? 0) + 1
   await s3.putJson(metaKey, {
     v: 1,
@@ -309,6 +381,9 @@ export async function pushSession(s3, ctx, identity, local, markers, state) {
     attachmentRefs: [],
   })
   tracked.pushedBytes = buf.length
+  tracked.mtimeMs = local.mtimeMs
+  tracked.size = buf.length
+  tracked.workspaceId = workspaceId
   state.bySession.set(local.sessionId, tracked)
   return {
     sessionId: local.sessionId,
@@ -318,12 +393,14 @@ export async function pushSession(s3, ctx, identity, local, markers, state) {
 }
 
 /** Push every local session whose cwd maps to a claimed workspace marker. */
-export async function syncAll(s3, ctx, identity, dshHome, state) {
-  const markers = await listWorkspacesFrom(s3)
+export async function syncAll(s3, ctx, identity, dshHome, state, knownMarkers) {
+  const markers = knownMarkers ?? await listWorkspacesFrom(s3)
   const results = []
+  // One git lookup per distinct cwd for the whole pass (F-28).
+  const legacyCache = new Map()
   for (const local of listLocalSessions(dshHome)) {
     try {
-      results.push(await pushSession(s3, ctx, identity, local, markers, state))
+      results.push(await pushSession(s3, ctx, identity, local, markers, state, legacyCache))
     } catch (error) {
       results.push({ sessionId: local.sessionId, outcome: `error:${error instanceof Error ? error.message : String(error)}` })
     }

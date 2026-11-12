@@ -4,7 +4,7 @@ import React from 'react'
 import { openNanoMenu } from 'dsh-nano-ui'
 import { SidebarGraft } from './graft.js'
 import { copyFor } from './i18n.js'
-import { bindSession as apiBindSession, claimSession as apiClaimSession, createDirectory as apiCreateDirectory, createWorkspace as apiCreateWorkspace, fetchRemoteSessions, fetchSettings, fetchSharedWorkspaces, fetchStatus, heartbeatSession as apiHeartbeatSession, joinWorkspace as apiJoinWorkspace, listDirectory as apiListDirectory, materializeSession as apiMaterializeSession, pullWorkspace as apiPullWorkspace, triggerSync } from './api.js'
+import { bindSession as apiBindSession, claimSession as apiClaimSession, clearSettings as apiClearSettings, createDirectory as apiCreateDirectory, createWorkspace as apiCreateWorkspace, deleteWorkspace as apiDeleteWorkspace, fetchRemoteSessions, fetchSettings, fetchSharedWorkspaces, fetchStatus, fetchTranscript as apiFetchTranscript, heartbeatSession as apiHeartbeatSession, joinWorkspace as apiJoinWorkspace, listDirectory as apiListDirectory, materializeSession as apiMaterializeSession, pullWorkspace as apiPullWorkspace, triggerSync } from './api.js'
 import { STYLE } from './styles.js'
 import { perf } from './perf.js'
 
@@ -119,8 +119,16 @@ export function apply(ctx) {
       .catch(() => store.set({ sessionsReady: true }))
   }
 
-  const publishSessionFlags = () => {
-    const snap = ctx.workspaces.list.getSnapshot()
+  /** Settings opens at the stage matching the stored identity; every entry
+   * point (menu, empty state, face API) goes through here (F-04). */
+  const openSettings = () => {
+    refresh()
+    store.set({ open: true, setupStage: store.current.configured === true ? 'workspace' : 'bind' })
+  }
+  /** One idempotency key per create-dialog session; a retried submit reuses it. */
+  let createRequestId = null
+
+  const publishSessionFlags = () => {    const snap = ctx.workspaces.list.getSnapshot()
     store.set({
       pinnedSessionIds: [...(snap.pinnedSessionIds ?? [])],
       archivedSessionIds: [...(snap.archivedSessionIds ?? [])],
@@ -185,13 +193,16 @@ export function apply(ctx) {
       subscribe: listener => store.subscribe(() => listener(store.current)),
       close: () => store.set({ open: false }),
     },
-    onOpenSettings: () => {
-      refresh()
-      store.set({ open: true, setupStage: store.current.configured === true ? 'workspace' : 'bind' })
-    },
-    // Probe + save succeeded: advance the dialog to stage 2 and repaint the section.
-    finishBind: () => {
-      store.set({ setupStage: 'workspace', listReady: false, sessionsReady: false })
+    onOpenSettings: openSettings,
+    // Probe + save succeeded: advance to stage 2. Publish the just-saved
+    // identity immediately so a fast click on "新建共享工作区" is not bounced
+    // back to stage 1 while refresh() is still in flight (F-18).
+    finishBind: bound => {
+      store.set({
+        setupStage: 'workspace', listReady: false, sessionsReady: false,
+        ...(typeof bound?.username === 'string' && bound.username !== ''
+          ? { configured: true, username: bound.username } : {}),
+      })
       refresh()
     },
     onToggleSection: () => {
@@ -226,7 +237,7 @@ export function apply(ctx) {
       const row = (store.current.sharedWorkspaces ?? []).find(item => item.workspaceId === sharedId)
       const path = memberPath(row, store.current.username)
       if (path === '') {
-        store.set({ notice: copyFor(languageOf()).joinHint })
+        store.set({ notice: copyFor(languageOf()).joinHintPick })
         return
       }
       store.set({
@@ -265,7 +276,7 @@ export function apply(ctx) {
         }))
     },
     onOpenSession: session => {
-      store.set({ notice: null, sectionOpen: true, expanded: { ...(store.current.expanded ?? {}), [session.workspaceId]: true } })
+      store.set({ notice: null, noticeKind: null, sectionOpen: true, expanded: { ...(store.current.expanded ?? {}), [session.workspaceId]: true } })
       const known = () => ctx.sessions.list.getSnapshot().byId?.[session.sessionId] != null
       const pathOf = () => memberPath(
         (store.current.sharedWorkspaces ?? []).find(item => item.workspaceId === session.workspaceId),
@@ -285,7 +296,10 @@ export function apply(ctx) {
       }
       const finishLease = claim => {
         if (claim?.busy === true) {
-          store.set({ notice: copyFor(languageOf()).readOnlyBusy.replace('{holder}', claim.holder ?? '') })
+          store.set({
+            notice: copyFor(languageOf()).readOnlyBusy.replace('{holder}', claim.holder ?? ''),
+            noticeKind: 'busy',
+          })
           return
         }
         holdSession(session.workspaceId, session.sessionId)
@@ -336,8 +350,55 @@ export function apply(ctx) {
         })
     },
     cancelRename: () => store.set({ rename: null }),
-    dismissNotice: () => store.set({ notice: null }),
+    dismissNotice: () => store.set({ notice: null, noticeKind: null }),
+    /** Delete is destructive: the row action opens a confirmation dialog first. */
+    onDeleteWorkspace: workspaceId => store.set({ deleteTarget: workspaceId }),
+    cancelDeleteWorkspace: () => store.set({ deleteTarget: null }),
+    confirmDeleteWorkspace: () => {
+      const id = store.current.deleteTarget
+      if (typeof id !== 'string') return Promise.resolve()
+      return apiDeleteWorkspace(id)
+        .then(() => {
+          store.set({ deleteTarget: null, notice: null, sectionOpen: true, expanded: { ...(store.current.expanded ?? {}) } })
+          refresh()
+        })
+        .catch(cause => store.set({
+          deleteTarget: null,
+          notice: `${copyFor(languageOf()).deleteFailed}: ${cause instanceof Error ? cause.message : String(cause)}`,
+        }))
+    },
+    /** Stage 2 has no key inputs; clearing the identity returns to stage 1. */
+    onRequestRebind: () => store.set({ open: false, rebindConfirm: true }),
+    cancelRebind: () => store.set({ rebindConfirm: false, open: true, setupStage: 'workspace' }),
+    confirmRebind: () => apiClearSettings()
+      .then(() => {
+        store.set({
+          rebindConfirm: false, open: true, setupStage: 'bind',
+          configured: false, username: null, listReady: false, sessionsReady: false,
+          sharedWorkspaces: [], sessions: [],
+        })
+        refresh()
+      })
+      .catch(cause => store.set({
+        rebindConfirm: false,
+        notice: `${copyFor(languageOf()).errorSave}: ${cause instanceof Error ? cause.message : String(cause)}`,
+      })),
     onCloseTranscript: () => store.set({ transcript: null }),
+    /**
+     * Read-only replay of a shared session, straight from the bucket. This is
+     * the only path a reader has: opening the session itself takes the lease
+     * (or is refused while someone else writes). Fetches through the host so
+     * the S3 credentials never reach the page.
+     */
+    onViewTranscript: session => {
+      store.set({ transcript: { loading: true, meta: { title: session.title || session.sessionId }, events: [] } })
+      apiFetchTranscript(session.workspaceId, session.sessionId)
+        .then(result => store.set({ transcript: { meta: result.meta ?? {}, events: result.events ?? [] } }))
+        .catch(cause => store.set({
+          transcript: null,
+          notice: `${copyFor(languageOf()).transcriptFailed}: ${cause instanceof Error ? cause.message : String(cause)}`,
+        }))
+    },
     onToggleRail: () => ctx.layout?.toggleSidebar?.(),
     /**
      * A shared workspace is born on the remote: open the in-app directory
@@ -348,11 +409,11 @@ export function apply(ctx) {
      */
     onCreateWorkspace: () => {
       if (store.current.configured !== true) {
-        refresh()
-        store.set({ open: true, setupStage: 'bind' })
+        openSettings()
         return
       }
       if (store.current.creating === true) return
+      createRequestId = globalThis.crypto?.randomUUID?.() ?? `r${Date.now()}${Math.random().toString(36).slice(2)}`
       store.set({ createDialog: { mode: 'create' } })
     },
     /**
@@ -372,7 +433,8 @@ export function apply(ctx) {
     },
     createWorkspace: (name, localPath) => {
       store.set({ creating: true })
-      return apiCreateWorkspace(name, localPath)
+      const requestId = createRequestId ?? globalThis.crypto?.randomUUID?.() ?? `r${Date.now()}`
+      return apiCreateWorkspace(name, localPath, requestId)
     },
     joinWorkspace: (workspaceId, localPath) => {
       store.set({ creating: true })
@@ -392,7 +454,7 @@ export function apply(ctx) {
         items: [
           { id: 'all', label: copy.filterAll, run: () => store.set({ viewFilter: 'all' }) },
           { id: 'mine', label: copy.filterMine, run: () => store.set({ viewFilter: 'mine' }) },
-          { id: 'settings', label: copy.settingsTitle ?? copy.settings, run: () => store.set({ open: true }) },
+          { id: 'settings', label: copy.settingsTitle ?? copy.settings, run: openSettings },
         ],
       })
     },

@@ -1,0 +1,134 @@
+{
+  "version": 1,
+  "enabled": true,
+  "page": {
+    "nativeInpP75": 72,
+    "nativeInpCount": 11,
+    "inputDelayP95": 0.2,
+    "processingP95": 11.2,
+    "presentationP95": 79.8,
+    "loafCount": 2,
+    "blockingMs": 37.4,
+    "forcedLayoutMs": 34.4
+  },
+  "nanoCombined": {
+    "scriptMs": 55.2,
+    "loafCount": 1,
+    "blockingMs": 7.4,
+    "clientJsBytes": 864779,
+    "comboResources": 1
+  },
+  "plugins": [
+    {
+      "name": "nano-notepad",
+      "own": {
+        "inpP75": null,
+        "inpCount": 0
+      },
+      "scriptMs": 0,
+      "spans": {
+        "render": {
+          "n": 4,
+          "windowN": 4,
+          "p50": 5.2,
+          "p95": 8.1,
+          "maxMs": 8.1
+        },
+        "highlight": {
+          "n": 3,
+          "windowN": 3,
+          "p50": 0,
+          "p95": 0.1,
+          "maxMs": 0.1
+        },
+        "highlight-dom": {
+          "n": 3,
+          "windowN": 3,
+          "p50": 0,
+          "p95": 0.1,
+          "maxMs": 0.1
+        }
+      },
+      "tracks": [
+        "shortcut-key",
+        "draft-commit",
+        "keystroke-input",
+        "mirror-resize",
+        "visibility",
+        "page-resize"
+      ]
+    },
+    {
+      "name": "nano-shared-workspace",
+      "own": {
+        "inpP75": 72,
+        "inpCount": 5
+      },
+      "scriptMs": 0,
+      "spans": {
+        "apply-separate": {
+          "n": 29,
+          "windowN": 29,
+          "p50": 0.1,
+          "p95": 0.5,
+          "maxMs": 0.6
+        },
+        "section-render": {
+          "n": 30,
+          "windowN": 30,
+          "p50": 0.1,
+          "p95": 0.2,
+          "maxMs": 0.3
+        }
+      },
+      "tracks": [
+        "hold",
+        "sidebar-dedupe",
+        "sidebar-graft"
+      ]
+    },
+    {
+      "name": "nano-model-selector",
+      "own": {
+        "inpP75": null,
+        "inpCount": 0
+      },
+      "scriptMs": 0,
+      "spans": {
+        "react-render": {
+          "n": 1,
+          "windowN": 1,
+          "p50": 0,
+          "p95": 0,
+          "maxMs": 0
+        },
+        "filter-render": {
+          "n": 2,
+          "windowN": 2,
+          "p50": 0,
+          "p95": 0,
+          "maxMs": 0
+        },
+        "catalog-fetch": {
+          "n": 1,
+          "windowN": 1,
+          "p50": 0,
+          "p95": 0,
+          "maxMs": 0
+        }
+      },
+      "tracks": []
+    },
+    {
+      "name": "nano-explorer-extra",
+      "own": {
+        "inpP75": null,
+        "inpCount": 0
+      },
+      "scriptMs": 0,
+      "spans": {},
+      "tracks": []
+    }
+  ],
+  "noteCount": 7
+}

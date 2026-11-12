@@ -241,6 +241,7 @@
 | `scripts/eval/negative-cases.mjs` | 密钥吊销/重绑、7 种畸形请求体、租约时钟徏移、删除与 push 交错、重试幂等、大量工作区（T-G01…G06） |
 | `screenshots/R7-desktop-transcript.png` | 桌面只读回放（修复前 footer 有「取消/关闭」两个同义按钮） |
 | `screenshots/R7-transcript-single-close.png` | 修复后：单一「关闭」+ 完整会话内容 |
+| `screenshots/R8-final-desktop-transcript.png` | 最终构建下的桌面只读回放（U-20 之后复测） |
 | `logs/perf-report.json` | `window.__perfReview.report()` 原始快照（T-H01） |
 | `scripts/eval/session-sync.mjs` | 会话日志推送/远端列举/transcript/materialize/外部写者拒写（T-F01…F05，含 F-22 回归） |
 | `scripts/eval/race-markers.mjs` | 无条件并发 join 丢成员 + CAS 控制组（F-07 / U-01 / U-02） |
@@ -373,3 +374,10 @@
 - 发现 28 项：**全部已修复并复测**，待裁定 0。
 - 回归：`multi-user-files` 26/26、`negative-cases` 20/20、`session-sync` 16/16、`multi-user-leases` 14/14、`race-markers` 2/2、`join-cas` 1/1。
 - `dsh.local` 全程未触碰（PID 47398）。
+
+### 收尾（2026-11-12 14:30）
+
+- 最终构建下重跑桌面 UI 冒烟：`dasw-b` / `dasw-1112-shared` / 只读回放 5 行 + 单一「关闭」，正常。
+- 桶内清理到只剩 `multi-user:9167ab8d56346228`（用级联删除，7 个 fixture 一次清完）。
+- 三端构建哈希一致：`lib/client.js` `4e1e32c55409…`、`lib/host.js` `8a8324d0cd0f…`。
+- 分支 `dasw-1112-automation` 共 10 个提交，工作区干净，`main` 未被污染。

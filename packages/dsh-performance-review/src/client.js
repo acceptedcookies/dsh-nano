@@ -486,9 +486,7 @@ export function createPerfReview(env = {}) {
      */
     profiler(Component) {
       const React = row._react
-      // React.Profiler is a symbol (Symbol.for('react.profiler')), not a
-      // function — a typeof guard wrongly unwraps every call site.
-      if (React == null || React.Profiler == null) return Component
+      if (React == null || typeof React.Profiler !== 'function') return Component
       const capture = (...args) => {
         // onRender(id, phase, actualDuration, baseDuration, startTime, commitTime)
         const actualDuration = args[2]
@@ -496,21 +494,11 @@ export function createPerfReview(env = {}) {
         row.profiler.durations.push(actualDuration ?? 0)
         while (row.profiler.durations.length > PROFILER_SAMPLE_CAP) row.profiler.durations.shift()
       }
-      // React 18's production build keeps <Profiler> as a structural element but
-      // never calls onRender — the callback fires only in the profiling build.
-      // Time the component's render body ourselves and record it as a span so
-      // `react-render` shows up under spans; commits stays 0 on React ≤18 prod.
-      const Timed = props => {
-        const start = now(perf)
-        const out = React.createElement(Component, props)
-        recordSpan(row, pluginId, 'react-render', start, now(perf))
-        return out
-      }
       return function PerfReviewProfiler(props) {
         return React.createElement(
           React.Profiler,
           { id: `nano:${pluginId}:root`, onRender: capture },
-          React.createElement(Timed, props),
+          React.createElement(Component, props),
         )
       }
     },

@@ -43,8 +43,8 @@ const assertLocalPath = value => {
 /** This instance's own member row — strict memberId binding (P2-03) PLUS the
  * local pin (review 9012 F1): the PINNED localPath, not the co-tenant-writable
  * remote row, is the replica root pull/push/sync use. */
-const localMember = (marker, identity, instance) =>
-  instance === '' ? undefined : trustedMember(marker, identity, instance)?.member
+const localMember = async (marker, identity, instance) =>
+  instance === '' ? undefined : (await trustedMember(marker, identity, instance))?.member
 
 /** Error text for responses: never leak a raw S3 XML body or a stack (F-19). */
 function messageOf(error) {
@@ -298,7 +298,7 @@ export function createRoutes(ctx, config) {
         const isMember = Object.values(marker.members ?? {}).some(member => member?.username === identity.username)
         if (!isMember) return { ok: false, error: 'only members can delete this shared workspace' }
         await client.del(key)
-        unpinWorkspaceLocalPath(workspaceId)
+        await unpinWorkspaceLocalPath(workspaceId)
         // The marker is gone; the tree generations, blobs and session chunks
         // under this id would otherwise stay in the bucket forever (F-12).
         const purged = await purgeWorkspaceObjects(client, workspaceId).catch(() => undefined)
@@ -318,7 +318,7 @@ export function createRoutes(ctx, config) {
         const trees = []
         for (const marker of markers) {
           // Strict memberId binding (P2-03): only our own row's localPath is a sync target.
-          const member = localMember(marker, identity, instance)
+          const member = await localMember(marker, identity, instance)
           if (typeof member?.localPath !== 'string' || member.localPath === '') continue
           try {
             trees.push({ workspaceId: marker.workspaceId, ...await pushWorkspace(client, dshHome, marker.workspaceId, member.localPath, `${identity.username}@${me}`) })
@@ -343,7 +343,7 @@ export function createRoutes(ctx, config) {
         if (workspaceId !== '') assertWorkspaceId(workspaceId)
         const marker = (await listWorkspaces(client)).find(row => row.workspaceId === workspaceId)
         if (marker === undefined) return { ok: false, error: 'shared workspace not found' }
-        const member = localMember(marker, identity, await instanceId(ctx))
+        const member = await localMember(marker, identity, await instanceId(ctx))
         if (typeof member?.localPath !== 'string' || member.localPath === '') return { ok: false, error: 'join this shared workspace before syncing files' }
         return pullWorkspace(client, dshHome, workspaceId, member.localPath)
       },
@@ -358,7 +358,7 @@ export function createRoutes(ctx, config) {
         const marker = (await listWorkspaces(client)).find(row => row.workspaceId === workspaceId)
         if (marker === undefined) return { ok: false, error: 'shared workspace not found' }
         const instance = await instanceId(ctx)
-        const member = localMember(marker, identity, instance)
+        const member = await localMember(marker, identity, instance)
         if (typeof member?.localPath !== 'string' || member.localPath === '') return { ok: false, error: 'join this shared workspace before syncing files' }
         return pushWorkspace(client, dshHome, workspaceId, member.localPath, `${identity.username}@${instance.slice(0, 8)}`)
       },
@@ -395,7 +395,7 @@ export function createRoutes(ctx, config) {
         const marker = (await listWorkspaces(client)).find(row => row.workspaceId === workspaceId)
         if (marker === undefined) return { ok: false, error: 'shared workspace not found' }
         const instance = await instanceId(ctx)
-        const member = localMember(marker, identity, instance)
+        const member = await localMember(marker, identity, instance)
         if (typeof member?.localPath !== 'string' || member.localPath === '') return { ok: false, error: 'join this shared workspace before opening its sessions' }
         const claim = await acquireClaim(client, ctx, sessionId, `${identity.username}@${instance.slice(0, 8)}`, 1)
         return {
@@ -423,7 +423,7 @@ export function createRoutes(ctx, config) {
         let tree = null
         if (workspaceId !== '') {
           const marker = (await listWorkspaces(client)).find(row => row.workspaceId === workspaceId)
-          const member = localMember(marker, identity, instance)
+          const member = await localMember(marker, identity, instance)
           if (typeof member?.localPath === 'string' && member.localPath !== '') {
             tree = await pushWorkspace(client, dshHome, workspaceId, member.localPath, writerId)
           }
@@ -543,7 +543,7 @@ export function createRoutes(ctx, config) {
         if (marker === undefined) return { ok: false, error: 'shared workspace not found' }
         // The materialize localPath is OUR member row's only — a foreign
         // member's localPath is never a write target (P2-03, audit §4.11).
-        const member = localMember(marker, identity, await instanceId(ctx))
+        const member = await localMember(marker, identity, await instanceId(ctx))
         const localPath = member?.localPath
         if (typeof localPath !== 'string' || localPath === '') {
           return { ok: false, error: 'join this shared workspace before opening its sessions' }
@@ -573,9 +573,18 @@ export function registerRoutes(ctx, routes) {
     path: `${PREFIX}${suffix}`,
     methods: [route.method],
     handler: async (req, res) => {
+      const started = Date.now()
       try {
-        sendJson(res, 200, await route.run(req))
+        const body = await route.run(req)
+        const ms = Date.now() - started
+        // Slow-but-ok routes are visible too — the stall that turns a client
+        // dialog into a 502 shows up here before Caddy resets the socket.
+        if (ms > 2000) console.warn(`[nsw:route] ${route.method} ${suffix} -> 200 ${ms}ms`)
+        sendJson(res, 200, body)
       } catch (error) {
+        // Every handler failure is logged server-side: previously a route that
+        // threw surfaced only as a bare client "HTTP <status>" with no trace.
+        console.error(`[nsw:route] ${route.method} ${suffix} -> 400 ${Date.now() - started}ms :: ${messageOf(error)}`)
         sendJson(res, 400, { error: messageOf(error) })
       }
     },
@@ -606,7 +615,7 @@ export function startBackgroundSync(ctx, config) {
       for (const marker of await listWorkspaces(client)) {
         // Strict memberId binding (P2-03): a foreign member's localPath is
         // never a push target — no username-only fallback.
-        const member = localMember(marker, identity, instance)
+        const member = await localMember(marker, identity, instance)
         if (typeof member?.localPath !== 'string' || member.localPath === '') continue
         await pushWorkspace(client, dshHome, marker.workspaceId, member.localPath, `${identity.username}@${instance.slice(0, 8)}`).catch(() => {})
       }

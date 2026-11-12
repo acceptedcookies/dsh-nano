@@ -5,7 +5,7 @@
  */
 
 import { createHash } from 'node:crypto'
-import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, unlinkSync, writeFileSync } from 'node:fs'
+import { lstat, mkdir, readFile, readdir, realpath, unlink, writeFile } from 'node:fs/promises'
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { validate, SchemaReject, WORKSPACE_ID_RE } from 'dsh-remote-data-schema'
 
@@ -33,20 +33,20 @@ const sha256 = buf => createHash('sha256').update(buf).digest('hex')
  * anywhere). The directory is created as before; the returned root is its
  * real path so every descendant check is against the true location.
  */
-function replicaRoot(localPath) {
+async function replicaRoot(localPath) {
   if (typeof localPath !== 'string' || !isAbsolute(localPath) || resolve(localPath) !== localPath) {
     throw new SchemaReject('schema:localPath', 'localPath must be an absolute normalized path')
   }
   const root = resolve(localPath)
   try {
-    if (lstatSync(root).isSymbolicLink()) {
+    if ((await lstat(root)).isSymbolicLink()) {
       throw new SchemaReject('schema:localPath', 'localPath must not be a symlink')
     }
   } catch (error) {
     if (error?.code !== 'ENOENT') throw error
   }
-  mkdirSync(root, { recursive: true })
-  return realpathSync(root)
+  await mkdir(root, { recursive: true })
+  return realpath(root)
 }
 
 /** Top-level SKIP test for a remote rel (POSIX separators, as written in
@@ -65,17 +65,17 @@ const skippedRel = rel => SKIP.has(String(rel).split('/')[0].toLowerCase())
  *   - the deepest existing ancestor's realpath IS that ancestor — i.e. no
  *     symlink anywhere inside the replica redirects the write/read outside.
  */
-function inside(root, rel) {
+async function inside(root, rel) {
   if (typeof rel !== 'string' || rel === '') return undefined
   // Canonicalize the base defensively: `replicaRoot` already realpaths, but
   // a caller passing an unresolved path (e.g. under a symlinked /var) must
   // still land the walk on the true location, not fail the probe compare.
-  try { root = realpathSync(root) } catch { return undefined }
+  try { root = await realpath(root) } catch { return undefined }
   const dest = resolve(root, rel)
   if (!dest.startsWith(root + sep)) return undefined
   if (skippedRel(rel)) return undefined
   try {
-    if (lstatSync(dest).isSymbolicLink()) return undefined
+    if ((await lstat(dest)).isSymbolicLink()) return undefined
   } catch (error) {
     if (error?.code !== 'ENOENT') return undefined
   }
@@ -84,14 +84,14 @@ function inside(root, rel) {
    * legal — and its own symlink case is already fenced above. What we must
    * verify here is the directory chain that mkdir({recursive}) will create
    * through: no ancestor may be a symlink (live or dangling) or a non-dir.
-   * lstatSync — NOT existsSync — is the probe: existsSync follows the final
-   * link and reports a DANGLING symlink as "missing", letting the walk climb
-   * past it and approve `dest`, after which mkdirSync(dirname) throws and
-   * wedges the pull mid-loop (review 9012 P3). lstat sees the link object. */
+   * lstat — NOT access — is the probe: access follows the final link and
+   * reports a DANGLING symlink as "missing", letting the walk climb past it
+   * and approve `dest`, after which mkdir(dirname) throws and wedges the pull
+   * mid-loop (review 9012 P3). lstat sees the link object. */
   let probe = dirname(dest)
   for (;;) {
     let st
-    try { st = lstatSync(probe) } catch { st = undefined }
+    try { st = await lstat(probe) } catch { st = undefined }
     if (st !== undefined) {
       /* Ancestor must be a real directory that is not a link. */
       if (st.isSymbolicLink() || !st.isDirectory()) return undefined
@@ -103,29 +103,29 @@ function inside(root, rel) {
     if (probe !== root && !probe.startsWith(root + sep)) return undefined
   }
   try {
-    if (realpathSync(probe) !== probe) return undefined
+    if (await realpath(probe) !== probe) return undefined
   } catch { return undefined }
   return dest
 }
 
-function scan(root) {
+async function scan(root) {
   const files = []
-  const walk = dir => {
+  const walk = async dir => {
     let names = []
-    try { names = readdirSync(dir) } catch { return }
+    try { names = await readdir(dir) } catch { return }
     for (const name of names) {
       /* case-insensitive SKIP (P4): a local `ImAgInE/` folds to `imagine/` on
        * APFS and would otherwise be scanned + uploaded past the guard. */
       if (SKIP.has(name.toLowerCase()) || files.length >= MAX_FILES) continue
       const abs = join(dir, name)
       let st
-      try { st = lstatSync(abs) } catch { continue }
+      try { st = await lstat(abs) } catch { continue }
       // lstat (P2-05): symlinks are never followed — a link pointing outside
       // the replica is skipped, not read into a blob upload.
       if (st.isSymbolicLink()) continue
-      if (st.isDirectory()) walk(abs)
+      if (st.isDirectory()) await walk(abs)
       else if (st.isFile() && st.size <= MAX_FILE) {
-        const buf = readFileSync(abs)
+        const buf = await readFile(abs)
         files.push({
           rel: relative(root, abs).split('\\').join('/'),
           sha256: sha256(buf),
@@ -134,7 +134,7 @@ function scan(root) {
       }
     }
   }
-  walk(root)
+  await walk(root)
   files.sort((a, b) => a.rel.localeCompare(b.rel))
   return files
 }
@@ -147,10 +147,10 @@ function isText(buf) {
   return !buf.includes(0)
 }
 
-function readRel(root, rel) {
-  const dest = inside(root, rel)
+async function readRel(root, rel) {
+  const dest = await inside(root, rel)
   if (dest === undefined) return undefined
-  try { return readFileSync(dest) } catch { return undefined }
+  try { return await readFile(dest) } catch { return undefined }
 }
 
 /**
@@ -158,7 +158,7 @@ function readRel(root, rel) {
  * (a new generation, neither side discarded) or the remote bytes plus a
  * sibling `*.nsw-local` for binary.
  */
-function dissolve(root, parent, remote, local) {
+async function dissolve(root, parent, remote, local) {
   const p = byRel(parent)
   const r = byRel(remote)
   const l = byRel(local)
@@ -181,7 +181,7 @@ function dissolve(root, parent, remote, local) {
       if (ls !== undefined) files.push(l.get(rel))
       continue
     }
-    const localBuf = ls !== undefined ? readRel(root, rel) : undefined
+    const localBuf = ls !== undefined ? await readRel(root, rel) : undefined
     const remoteSha = rs
     conflicts.push(rel)
     if (localBuf !== undefined && remoteSha !== undefined && isText(localBuf)) {
@@ -219,13 +219,13 @@ async function materializePending(s3, workspaceId, dissolved) {
 }
 
 /** Commit the merged bytes to this replica only after the remote CAS wins. */
-function writePending(root, files) {
+async function writePending(root, files) {
   for (const file of files) {
     if (file.writeToReplica !== true) continue
-    const dest = inside(root, file.rel)
+    const dest = await inside(root, file.rel)
     if (dest === undefined) continue
-    mkdirSync(dirname(dest), { recursive: true })
-    writeFileSync(dest, file.buf)
+    await mkdir(dirname(dest), { recursive: true })
+    await writeFile(dest, file.buf)
   }
 }
 
@@ -233,15 +233,15 @@ function basePath(dshHome, workspaceId) {
   return join(dshHome, 'nsw', `${workspaceId}.json`)
 }
 
-function loadBase(dshHome, workspaceId) {
-  try { return JSON.parse(readFileSync(basePath(dshHome, workspaceId), 'utf8')) }
+async function loadBase(dshHome, workspaceId) {
+  try { return JSON.parse(await readFile(basePath(dshHome, workspaceId), 'utf8')) }
   catch { return { generation: 0, files: [] } }
 }
 
-function saveBase(dshHome, workspaceId, record) {
+async function saveBase(dshHome, workspaceId, record) {
   const dest = basePath(dshHome, workspaceId)
-  mkdirSync(dirname(dest), { recursive: true })
-  writeFileSync(dest, JSON.stringify({ generation: record.generation, files: record.files }))
+  await mkdir(dirname(dest), { recursive: true })
+  await writeFile(dest, JSON.stringify({ generation: record.generation, files: record.files }))
 }
 
 /**
@@ -271,7 +271,7 @@ async function ensureBlobs(s3, workspaceId, root, files, knownShas) {
   const uploads = []
   for (const file of files) {
     if (knownShas !== undefined && knownShas.has(file.sha256)) continue
-    const buf = file.buf ?? readRel(root, file.rel)
+    const buf = file.buf ?? await readRel(root, file.rel)
     if (buf === undefined) continue
     uploads.push({ key: blobKey(workspaceId, file.sha256), buf })
   }
@@ -284,41 +284,41 @@ export async function pullWorkspace(s3, dshHome, workspaceId, localPath) {
   if (!WORKSPACE_ID_RE.test(workspaceId)) throw new SchemaReject('schema:workspaceId', 'workspaceId has a bad charset')
   const head = await s3.getJson(headKey(workspaceId))
   if (head === undefined) return { ok: true, generation: 0, files: 0 }
-  const root = replicaRoot(localPath)
+  const root = await replicaRoot(localPath)
   // Remote HEAD crosses the boundary only after the v1 whitelist (P2-05).
   validate('tree-head', head)
-  const base = loadBase(dshHome, workspaceId)
+  const base = await loadBase(dshHome, workspaceId)
   const next = new Set((head.files ?? []).map(file => file.rel))
   for (const old of base.files ?? []) {
     if (next.has(old.rel)) continue
     // Stale-delete uses the same fence: SKIP/`..`/symlink targets are not touched.
-    const dest = inside(root, old.rel)
+    const dest = await inside(root, old.rel)
     if (dest === undefined) continue
-    try { unlinkSync(dest) } catch { /* already gone */ }
+    try { await unlink(dest) } catch { /* already gone */ }
   }
   const downloads = []
   for (const file of head.files ?? []) {
-    const dest = inside(root, file.rel)
+    const dest = await inside(root, file.rel)
     if (dest === undefined) continue
-    const have = readRel(root, file.rel)
+    const have = await readRel(root, file.rel)
     if (have !== undefined && sha256(have) === file.sha256) continue
     downloads.push({ dest, key: blobKey(workspaceId, file.sha256) })
   }
   const blobs = await mapLimit(downloads, BLOB_CONCURRENCY, ({ key }) => s3.getBytes(key))
-  downloads.forEach(({ dest }, index) => {
+  for (let index = 0; index < downloads.length; index += 1) {
     const blob = blobs[index]
-    if (blob === undefined) return
-    mkdirSync(dirname(dest), { recursive: true })
-    writeFileSync(dest, blob)
-  })
-  saveBase(dshHome, workspaceId, head)
+    if (blob === undefined) continue
+    await mkdir(dirname(downloads[index].dest), { recursive: true })
+    await writeFile(downloads[index].dest, blob)
+  }
+  await saveBase(dshHome, workspaceId, head)
   return { ok: true, generation: head.generation ?? 0, files: (head.files ?? []).length, conflicts: head.conflicts ?? [] }
 }
 
 /** Push the replica. Divergent HEAD is dissolved into a child generation instead of a blind overwrite. */
 export async function pushWorkspace(s3, dshHome, workspaceId, localPath, writerId, attempt = 0) {
   if (!WORKSPACE_ID_RE.test(workspaceId)) throw new SchemaReject('schema:workspaceId', 'workspaceId has a bad charset')
-  const root = replicaRoot(localPath)
+  const root = await replicaRoot(localPath)
   const got = await s3.getJson(headKey(workspaceId), { withMeta: true })
   const head = got?.value
   if (head !== undefined) {
@@ -326,8 +326,8 @@ export async function pushWorkspace(s3, dshHome, workspaceId, localPath, writerI
     // merge (P2-05) even though `dissolve` would SKIP-filter them anyway.
     validate('tree-head', head)
   }
-  const base = loadBase(dshHome, workspaceId)
-  const local = scan(root)
+  const base = await loadBase(dshHome, workspaceId)
+  const local = await scan(root)
   const remote = (head?.files ?? []).filter(file => !skippedRel(file.rel))
   const same = JSON.stringify(local.map(({ rel, sha256: sha, size }) => ({ rel, sha256: sha, size })))
     === JSON.stringify(remote.map(({ rel, sha256: sha, size }) => ({ rel, sha256: sha, size })))
@@ -341,7 +341,7 @@ export async function pushWorkspace(s3, dshHome, workspaceId, localPath, writerI
       parentFiles = parent.files ?? []
     }
   }
-  const dissolved = dissolve(root, parentFiles, remote, local)
+  const dissolved = await dissolve(root, parentFiles, remote, local)
   const files = await materializePending(s3, workspaceId, dissolved)
   // Every sha already referenced by the current HEAD has a blob in the bucket,
   // so a repeat push re-uploads only genuinely new content.
@@ -375,8 +375,8 @@ export async function pushWorkspace(s3, dshHome, workspaceId, localPath, writerI
     if (attempt >= MAX_ATTEMPTS) throw new Error('tree HEAD changed during push; retry the push')
     return pushWorkspace(s3, dshHome, workspaceId, localPath, writerId, attempt + 1)
   }
-  writePending(root, files)
-  saveBase(dshHome, workspaceId, record)
+  await writePending(root, files)
+  await saveBase(dshHome, workspaceId, record)
   return { ok: true, generation, files: record.files.length, conflicts: dissolved.conflicts, uploaded }
 }
 

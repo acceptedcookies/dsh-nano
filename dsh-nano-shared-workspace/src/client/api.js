@@ -43,11 +43,11 @@ export function clearSettings() {
 
 export const fetchSharedWorkspaces = () => call('/workspaces')
 
-export function createWorkspace(name, localPath) {
+export function createWorkspace(name, localPath, requestId) {
   return call('/workspaces/create', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ name, localPath }),
+    body: JSON.stringify({ name, localPath, requestId }),
   })
 }
 
@@ -56,6 +56,18 @@ export function joinWorkspace(workspaceId, localPath) {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ workspaceId, localPath }),
+  })
+}
+
+/** Delete the cloud marker. The local replica directory is left in place. */
+export function deleteWorkspace(workspaceId) {
+  return call('/workspaces/delete', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ workspaceId }),
+  }).then(response => {
+    if (response?.ok !== true) throw new Error(response?.error ?? 'delete failed')
+    return response
   })
 }
 

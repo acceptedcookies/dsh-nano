@@ -101,6 +101,18 @@ export const ROUTE_TABLE = [
   },
   {
     "plugin": "dsh-nano-shared-workspace",
+    "path": "/nano-shared-workspace/workspaces/delete",
+    "methods": [
+      "POST"
+    ],
+    "sensitivity": "L2",
+    "capability": "s3:write",
+    "bodyLimit": 65536,
+    "sessionBinding": false,
+    "justification": "DASW-1112: deletes a workspace marker on S3 after a member check; signed DELETE + local pin removal. Local replica directory is preserved; remote tree/session objects under the id are orphaned."
+  },
+  {
+    "plugin": "dsh-nano-shared-workspace",
     "path": "/nano-shared-workspace/sync",
     "methods": [
       "POST"

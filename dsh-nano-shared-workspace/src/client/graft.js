@@ -166,6 +166,30 @@ export function SidebarGraft({ face, renderSlot }) {
         stage: settings.setupStage === 'workspace' ? 'workspace' : 'bind',
         onBound: () => { face.finishBind?.() },
         onOpenCreate: () => { face.onCreateWorkspace?.() },
+        onRequestRebind: () => { face.onRequestRebind?.() },
+      }), document.body)
+      : null,
+    settings?.rebindConfirm === true
+      ? createPortal(React.createElement(NanoDialog, {
+        copy: face.copy(),
+        title: face.copy().clearTitle,
+        description: face.copy().clearBody,
+        confirmLabel: face.copy().clear,
+        danger: true,
+        onConfirm: () => { face.confirmRebind?.() },
+        onCancel: () => { face.cancelRebind?.() },
+      }), document.body)
+      : null,
+    settings?.deleteTarget != null
+      ? createPortal(React.createElement(NanoDialog, {
+        copy: face.copy(),
+        title: face.copy().deleteWorkspaceTitle,
+        description: face.copy().deleteWorkspaceBody.replace('{name}',
+          (settings.sharedWorkspaces ?? []).find(row => row.workspaceId === settings.deleteTarget)?.title ?? settings.deleteTarget),
+        confirmLabel: face.copy().deleteWorkspaceConfirm,
+        danger: true,
+        onConfirm: () => { face.confirmDeleteWorkspace?.() },
+        onCancel: () => { face.cancelDeleteWorkspace?.() },
       }), document.body)
       : null,
     settings?.transcript != null ? createPortal(React.createElement(TranscriptDialog, { face, transcript: settings.transcript }), document.body) : null,

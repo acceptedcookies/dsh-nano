@@ -60,7 +60,10 @@ async function request(config, keys, method, keyPath, params = {}, body = undefi
   }
   if (typeof config.sessionToken === 'string') headers['x-amz-security-token'] = config.sessionToken
   if (typeof extra.ifNoneMatch === 'string') headers['if-none-match'] = extra.ifNoneMatch
-  if (typeof extra.ifMatch === 'string') headers['if-match'] = extra.ifMatch
+  // Cloudflare/nginx may answer a GET with a weak ETag (`W/"…"`). MinIO's
+  // If-Match only accepts a strong validator, so a weak one makes every CAS
+  // write 412 and silently disables claim leases and marker merges.
+  if (typeof extra.ifMatch === 'string') headers['if-match'] = extra.ifMatch.replace(/^W\//, '')
 
   const signedNames = Object.keys(headers).sort()
   const canonicalHeaders = signedNames.map(n => `${n}:${headers[n]}\n`).join('')
@@ -91,7 +94,7 @@ async function request(config, keys, method, keyPath, params = {}, body = undefi
     authorization: `AWS4-HMAC-SHA256 Credential=${keys.accessKey}/${scope}, SignedHeaders=${signedHeaders}, Signature=${signature}`,
   }
   if (typeof extra.ifNoneMatch === 'string') sent['if-none-match'] = extra.ifNoneMatch
-  if (typeof extra.ifMatch === 'string') sent['if-match'] = extra.ifMatch
+  if (typeof extra.ifMatch === 'string') sent['if-match'] = extra.ifMatch.replace(/^W\//, '')
   return fetch(url, {
     method,
     headers: sent,
@@ -161,7 +164,8 @@ export function createS3(config, identity) {
       if (res.status === 404) return undefined
       if (!res.ok) throw new Error(`S3 GET ${key} failed: HTTP ${res.status}`)
       const value = await res.json()
-      return opts?.withMeta === true ? { value, etag: res.headers.get('etag') ?? undefined } : value
+      if (opts?.withMeta !== true) return value
+      return { value, etag: res.headers.get('etag')?.replace(/^W\//, '') ?? undefined }
     },
     /** DELETE one object; 204/404 both mean "gone". */
     async del(key) {

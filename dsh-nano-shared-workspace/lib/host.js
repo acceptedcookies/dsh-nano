@@ -90,7 +90,7 @@ async function request(config, keys, method, keyPath, params = {}, body = void 0
   };
   if (typeof config.sessionToken === "string") headers["x-amz-security-token"] = config.sessionToken;
   if (typeof extra.ifNoneMatch === "string") headers["if-none-match"] = extra.ifNoneMatch;
-  if (typeof extra.ifMatch === "string") headers["if-match"] = extra.ifMatch;
+  if (typeof extra.ifMatch === "string") headers["if-match"] = extra.ifMatch.replace(/^W\//, "");
   const signedNames = Object.keys(headers).sort();
   const canonicalHeaders = signedNames.map((n) => `${n}:${headers[n]}
 `).join("");
@@ -118,7 +118,7 @@ async function request(config, keys, method, keyPath, params = {}, body = void 0
     authorization: `AWS4-HMAC-SHA256 Credential=${keys.accessKey}/${scope}, SignedHeaders=${signedHeaders}, Signature=${signature}`
   };
   if (typeof extra.ifNoneMatch === "string") sent["if-none-match"] = extra.ifNoneMatch;
-  if (typeof extra.ifMatch === "string") sent["if-match"] = extra.ifMatch;
+  if (typeof extra.ifMatch === "string") sent["if-match"] = extra.ifMatch.replace(/^W\//, "");
   return fetch(url, {
     method,
     headers: sent,
@@ -182,7 +182,8 @@ function createS3(config, identity) {
       if (res.status === 404) return void 0;
       if (!res.ok) throw new Error(`S3 GET ${key} failed: HTTP ${res.status}`);
       const value = await res.json();
-      return opts?.withMeta === true ? { value, etag: res.headers.get("etag") ?? void 0 } : value;
+      if (opts?.withMeta !== true) return value;
+      return { value, etag: res.headers.get("etag")?.replace(/^W\//, "") ?? void 0 };
     },
     /** DELETE one object; 204/404 both mean "gone". */
     async del(key) {
@@ -211,7 +212,7 @@ function createS3(config, identity) {
 // src/host/workspaces.js
 import { execFile } from "node:child_process";
 import { createHash as createHash2, randomBytes, randomUUID } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join, resolve } from "node:path";
 
@@ -615,8 +616,7 @@ function validate(kind, obj, { v, context } = {}) {
 
 // src/host/workspaces.js
 var hash16 = (input) => createHash2("sha256").update(input).digest("hex").slice(0, 16);
-async function readMarker(s3, key) {
-  const row = await s3.getJson(key).catch(() => void 0);
+function parseMarker(row, key) {
   if (row === void 0) return void 0;
   try {
     validate("marker", row);
@@ -627,6 +627,15 @@ async function readMarker(s3, key) {
   if (row.workspaceId !== basename(key, ".json")) return void 0;
   return row;
 }
+async function readMarker(s3, key) {
+  const row = await s3.getJson(key).catch(() => void 0);
+  return parseMarker(row, key);
+}
+async function readMarkerWithMeta(s3, key) {
+  const got = await s3.getJson(key, { withMeta: true }).catch(() => void 0);
+  return got === void 0 ? void 0 : { marker: parseMarker(got.value, key), etag: got.etag };
+}
+var MARKER_CAS_ATTEMPTS = 4;
 var INSTANCE_REF = "DSH_NSW_INSTANCE_ID";
 async function instanceId(ctx) {
   const credentials = ctx.get("credentials");
@@ -662,6 +671,10 @@ function pinWorkspaceLocalPath(workspaceId, localPath) {
   const file = join(pinDir(), `${workspaceId}.json`);
   writeFileSync(file, JSON.stringify({ workspaceId, localPath, pinnedAt: (/* @__PURE__ */ new Date()).toISOString() }));
 }
+function unpinWorkspaceLocalPath(workspaceId) {
+  if (typeof workspaceId !== "string" || !WORKSPACE_ID_RE.test(workspaceId)) return;
+  rmSync(pinPath(workspaceId), { force: true });
+}
 function readWorkspacePin(workspaceId) {
   if (typeof workspaceId !== "string" || !WORKSPACE_ID_RE.test(workspaceId)) return void 0;
   try {
@@ -690,12 +703,15 @@ function ownMember(marker, identity, me) {
   if (member.instance !== me) return void 0;
   return { memberId, member };
 }
-async function createWorkspace(s3, ctx, identity, { name: name2, localPath }) {
+async function createWorkspace(s3, ctx, identity, { name: name2, localPath, requestId }) {
   const me = await instanceId(ctx);
   const memberId = memberKeyOf(identity, me);
+  const idempotent = typeof requestId === "string" && /^[A-Za-z0-9_-]{8,64}$/.test(requestId);
+  const workspaceId = idempotent ? hash16(`${memberId}:${requestId}`) : randomBytes(8).toString("hex");
+  const key = `workspaces/${workspaceId}.json`;
   const marker = {
     v: 1,
-    workspaceId: randomBytes(8).toString("hex"),
+    workspaceId,
     title: name2,
     pathHint: name2,
     createdAt: (/* @__PURE__ */ new Date()).toISOString(),
@@ -709,8 +725,16 @@ async function createWorkspace(s3, ctx, identity, { name: name2, localPath }) {
       }
     }
   };
-  await s3.putJson(`workspaces/${marker.workspaceId}.json`, marker);
-  pinWorkspaceLocalPath(marker.workspaceId, localPath);
+  const put = await s3.putJson(key, marker, idempotent ? { ifNoneMatch: "*" } : {});
+  if (put?.conflict === true) {
+    const existing = await readMarker(s3, key);
+    if (existing === void 0 || existing.createdBy !== memberId || existing.title !== name2) {
+      throw new Error("workspace id collision; retry with a fresh request");
+    }
+    pinWorkspaceLocalPath(workspaceId, existing.members[memberId].localPath ?? localPath);
+    return { ...existing, deduplicated: true };
+  }
+  pinWorkspaceLocalPath(workspaceId, localPath);
   return marker;
 }
 async function joinWorkspace(s3, ctx, identity, { workspaceId, localPath }) {
@@ -718,19 +742,26 @@ async function joinWorkspace(s3, ctx, identity, { workspaceId, localPath }) {
     throw new SchemaReject("schema:workspaceId", "workspaceId has a bad charset");
   }
   const key = `workspaces/${workspaceId}.json`;
-  const existing = await readMarker(s3, key);
-  if (existing === void 0) throw new Error("shared workspace not found");
   const me = await instanceId(ctx);
   const memberId = memberKeyOf(identity, me);
-  const members = { ...existing.members ?? {} };
-  if (members[memberId] === void 0) {
-    members[memberId] = { username: identity.username, instance: me, joinedAt: (/* @__PURE__ */ new Date()).toISOString() };
+  for (let attempt = 0; attempt < MARKER_CAS_ATTEMPTS; attempt += 1) {
+    const got = await readMarkerWithMeta(s3, key);
+    if (got?.marker === void 0) throw new Error("shared workspace not found");
+    if (typeof got.etag !== "string" || got.etag === "") {
+      throw new Error("shared workspace has no ETag; refusing an unsafe join");
+    }
+    const members = { ...got.marker.members ?? {} };
+    if (members[memberId] === void 0) {
+      members[memberId] = { username: identity.username, instance: me, joinedAt: (/* @__PURE__ */ new Date()).toISOString() };
+    }
+    members[memberId].localPath = localPath;
+    const marker = { ...got.marker, members };
+    const put = await s3.putJson(key, marker, { ifMatch: got.etag });
+    if (put?.conflict === true) continue;
+    pinWorkspaceLocalPath(workspaceId, localPath);
+    return marker;
   }
-  members[memberId].localPath = localPath;
-  const marker = { ...existing, members };
-  await s3.putJson(key, marker);
-  pinWorkspaceLocalPath(workspaceId, localPath);
-  return marker;
+  throw new Error("another client is updating this workspace; retry the join");
 }
 async function listWorkspaces(s3) {
   const { keys } = await s3.list("workspaces/");
@@ -1808,6 +1839,18 @@ var ROUTE_TABLE = [
   },
   {
     "plugin": "dsh-nano-shared-workspace",
+    "path": "/nano-shared-workspace/workspaces/delete",
+    "methods": [
+      "POST"
+    ],
+    "sensitivity": "L2",
+    "capability": "s3:write",
+    "bodyLimit": 65536,
+    "sessionBinding": false,
+    "justification": "DASW-1112: deletes a workspace marker on S3 after a member check; signed DELETE + local pin removal. Local replica directory is preserved; remote tree/session objects under the id are orphaned."
+  },
+  {
+    "plugin": "dsh-nano-shared-workspace",
     "path": "/nano-shared-workspace/sync",
     "methods": [
       "POST"
@@ -2130,7 +2173,9 @@ function createRoutes(ctx, config) {
           const identity = await readIdentity(ctx);
           if (identity?.configured !== true) return { workspaces: [] };
           const client = createS3(config, identity);
-          await registerIdentity(client, identity).catch(() => {
+          await registerIdentity(client, identity).then((result) => {
+            if (result?.ok === true && result.existed === false) dropSettingsCache();
+          }).catch(() => {
           });
           const rows = await listWorkspaces(client);
           return { workspaces: rows };
@@ -2151,7 +2196,8 @@ function createRoutes(ctx, config) {
           return { ok: false, error: "name and localPath are required" };
         }
         assertLocalPath(localPath);
-        const marker = await createWorkspace(client, ctx, identity, { name: name2, localPath });
+        const requestId = typeof body?.requestId === "string" ? body.requestId : void 0;
+        const marker = await createWorkspace(client, ctx, identity, { name: name2, localPath, requestId });
         return { ok: true, workspace: marker };
       }
     },
@@ -2172,6 +2218,24 @@ function createRoutes(ctx, config) {
           { workspaceId, localPath }
         );
         return { ok: true, workspace: marker };
+      }
+    },
+    // Delete the cloud marker. The local replica directory is left in place;
+    // remote tree/session objects under this id are orphaned (documented gap).
+    "/workspaces/delete": {
+      method: "POST",
+      async run(req) {
+        const { client, identity } = await s3();
+        const body = JSON.parse(await readBody(req) || "{}");
+        const workspaceId = assertWorkspaceId(body?.workspaceId);
+        const key = `workspaces/${workspaceId}.json`;
+        const marker = await readMarker(client, key);
+        if (marker === void 0) return { ok: false, error: "shared workspace not found" };
+        const isMember = Object.values(marker.members ?? {}).some((member) => member?.username === identity.username);
+        if (!isMember) return { ok: false, error: "only members can delete this shared workspace" };
+        await client.del(key);
+        unpinWorkspaceLocalPath(workspaceId);
+        return { ok: true, workspaceId };
       }
     },
     "/sync": {

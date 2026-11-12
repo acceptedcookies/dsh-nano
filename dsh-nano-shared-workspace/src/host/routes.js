@@ -5,7 +5,7 @@ import { homedir } from 'node:os'
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 import { clearIdentity, readIdentity, writeIdentity } from './credentials.js'
 import { createS3 } from './s3.js'
-import { createWorkspace, instanceId, joinWorkspace, listWorkspaces, ownMember, trustedMember } from './workspaces.js'
+import { createWorkspace, instanceId, joinWorkspace, listWorkspaces, ownMember, readMarker, trustedMember, unpinWorkspaceLocalPath } from './workspaces.js'
 import { acquireClaim, fetchTranscript, listRemoteSessions, materializeSession, renewClaim, syncAll } from './session-io.js'
 import { pullWorkspace, pushWorkspace, registerIdentity } from './tree.js'
 import { ensurePerfReviewHost, LIB_VERSION } from 'dsh-performance-review/host'
@@ -232,7 +232,9 @@ export function createRoutes(ctx, config) {
           const identity = await readIdentity(ctx)
           if (identity?.configured !== true) return { workspaces: [] }
           const client = createS3(config, identity)
-          await registerIdentity(client, identity).catch(() => {})
+          await registerIdentity(client, identity)
+            .then(result => { if (result?.ok === true && result.existed === false) dropSettingsCache() })
+            .catch(() => {})
           const rows = await listWorkspaces(client)
           return { workspaces: rows }
         })
@@ -252,7 +254,10 @@ export function createRoutes(ctx, config) {
           return { ok: false, error: 'name and localPath are required' }
         }
         assertLocalPath(localPath)
-        const marker = await createWorkspace(client, ctx, identity, { name, localPath })
+        // A client-generated idempotency key makes a retried create return the
+        // same marker instead of a second one (T-B02).
+        const requestId = typeof body?.requestId === 'string' ? body.requestId : undefined
+        const marker = await createWorkspace(client, ctx, identity, { name, localPath, requestId })
         return { ok: true, workspace: marker }
       },
     },
@@ -272,6 +277,24 @@ export function createRoutes(ctx, config) {
         const marker = await joinWorkspace(client, ctx, identity,
           { workspaceId, localPath })
         return { ok: true, workspace: marker }
+      },
+    },
+    // Delete the cloud marker. The local replica directory is left in place;
+    // remote tree/session objects under this id are orphaned (documented gap).
+    '/workspaces/delete': {
+      method: 'POST',
+      async run(req) {
+        const { client, identity } = await s3()
+        const body = JSON.parse(await readBody(req) || '{}')
+        const workspaceId = assertWorkspaceId(body?.workspaceId)
+        const key = `workspaces/${workspaceId}.json`
+        const marker = await readMarker(client, key)
+        if (marker === undefined) return { ok: false, error: 'shared workspace not found' }
+        const isMember = Object.values(marker.members ?? {}).some(member => member?.username === identity.username)
+        if (!isMember) return { ok: false, error: 'only members can delete this shared workspace' }
+        await client.del(key)
+        unpinWorkspaceLocalPath(workspaceId)
+        return { ok: true, workspaceId }
       },
     },
     '/sync': {

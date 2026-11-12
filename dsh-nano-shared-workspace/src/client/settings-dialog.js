@@ -10,7 +10,7 @@
 
 import React from 'react'
 import { NanoDialog } from 'dsh-nano-ui'
-import { IconDatabaseOutlineRegular, IconLinkOutlineRegular, Input, Switch } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, IconDatabaseOutlineRegular, IconLinkOutlineRegular, Input, Switch } from '@deepseek-ai/dsh-client-ui-primitives'
 import { saveSettings, testSettings } from './api.js'
 
 const { createElement, useState } = React
@@ -27,7 +27,7 @@ function Field({ label, children }) {
  * @param props.stage - `'bind'` or `'workspace'`.
  * @param props.onBound - called with `{username}` after the probe succeeds.
  */
-export function SettingsDialog({ face, settings, stage = 'bind', onBound, onOpenCreate }) {
+export function SettingsDialog({ face, settings, stage = 'bind', onBound, onOpenCreate, onRequestRebind }) {
   const copy = face.copy()
   const [username, setUsername] = useState(settings?.username ?? '')
   const [accessKey, setAccessKey] = useState('')
@@ -82,23 +82,35 @@ export function SettingsDialog({ face, settings, stage = 'bind', onBound, onOpen
 
   const probing = phase === 'probe'
   const saving = phase === 'save'
-  const bindTitle = createElement('span', { className: 'nsw-stage-title' },
-    createElement(IconLinkOutlineRegular, { size: 16 }),
-    createElement('span', null, copy.bindStage))
-  const workspaceTitle = createElement('span', { className: 'nsw-stage-title' },
-    createElement(IconDatabaseOutlineRegular, { size: 16 }),
-    createElement('span', null, copy.workspaceStage))
+  // Modal.title is a string and doubles as the dialog's aria-label. Passing a
+  // React element here used to produce an "[object Object]" accessible name.
+  const stageHead = (Icon, text) => createElement('div', { className: 'nsw-stage-head' },
+    createElement(Icon, { size: 16, 'aria-hidden': 'true' }),
+    createElement('span', null, text))
 
   if (stage === 'workspace') {
+    const create = () => { face.settings.close(); onOpenCreate?.() }
     return createElement(NanoDialog, {
       copy,
-      title: workspaceTitle,
-      description: copy.workspaceStageDescription,
+      title: copy.workspaceStage,
       confirmLabel: copy.newWorkspace,
       width: 420,
-      onConfirm: () => { face.settings.close(); onOpenCreate?.() },
+      footer: createElement(React.Fragment, null,
+        createElement(Button, {
+          variant: 'outline', className: 'nano-modal-action nano-modal-danger',
+          onClick: onRequestRebind,
+        }, copy.rebind),
+        createElement(Button, {
+          variant: 'outline', className: 'nano-modal-action',
+          onClick: face.settings.close,
+        }, copy.cancel),
+        createElement(Button, {
+          variant: 'primary', className: 'nano-modal-action', onClick: create,
+        }, copy.newWorkspace)),
+      onConfirm: create,
       onCancel: face.settings.close,
     },
+      stageHead(IconDatabaseOutlineRegular, copy.workspaceStageDescription),
       createElement('div', { className: 'nsw-stage-done', role: 'status' },
         createElement(IconLinkOutlineRegular, { size: 16 }),
         createElement('span', null, copy.bindSucceeded.replace('{bucket}', settings?.bucket ?? ''))),
@@ -107,8 +119,7 @@ export function SettingsDialog({ face, settings, stage = 'bind', onBound, onOpen
 
   return createElement(NanoDialog, {
     copy,
-    title: bindTitle,
-    description: copy.bindStageDescription,
+    title: copy.bindStage,
     confirmLabel: probing ? copy.binding : saving ? copy.binding : copy.bindConfirm,
     confirmDisabled: !canSubmit,
     busy,
@@ -117,6 +128,7 @@ export function SettingsDialog({ face, settings, stage = 'bind', onBound, onOpen
     onConfirm: submit,
     onCancel: face.settings.close,
   },
+    stageHead(IconLinkOutlineRegular, copy.bindStageDescription),
     createElement('div', { className: 'nsw-endpoint' },
       createElement('span', { className: 'nsw-endpoint-row nsw-identity' },
         createElement('span', { className: 'nsw-endpoint-key' }, copy.status),

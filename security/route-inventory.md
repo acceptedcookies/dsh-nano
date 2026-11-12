@@ -1,4 +1,4 @@
-# Route inventory — 43 host routes
+# Route inventory — 44 host routes
 
 Static enumeration of every `webServer.register` path across the four plugins, in registration order. Source of truth for paths/methods/bodyLimit: `scripts/route-scan.mjs` → `security/route-sensitivity.json` (sensitivity) and `security/feature-contract.json` (contract). Re-run `node scripts/gen-route-sensitivity.mjs` after any registration change; `node scripts/check-route-sensitivity.mjs` must report 0 drift.
 
@@ -34,7 +34,7 @@ Static enumeration of every `webServer.register` path across the four plugins, i
 | /nano-explorer-extra/perf-review/host | GET | L2 | read:host | 0 | – | process-global perf snapshot/window drain |
 | /nano-explorer-extra/read | POST | L2 | read:host | 65536 | ✓ | read any UTF-8 host file ≤1MiB |
 
-## dsh-nano-shared-workspace — 20 (`src/host/routes.js:123-470` map)
+## dsh-nano-shared-workspace — 21 (`src/host/routes.js:123-470` map)
 
 | path | methods | sensitivity | capability | bodyLimit | session | what it does |
 |---|---|---|---|---|---|---|
@@ -45,12 +45,13 @@ Static enumeration of every `webServer.register` path across the four plugins, i
 | /nano-shared-workspace/status | GET | L0 | read:host | 0 | – | local sync/status probe |
 | /nano-shared-workspace/workspaces | GET | L0 | s3:read | 0 | – | list member workspaces (markers) |
 | /nano-shared-workspace/workspaces/create | POST | L2 | s3:write | 65536 | – | PUT new workspace marker |
-| /nano-shared-workspace/workspaces/join | POST | L2 | write:host | 65536 | – | materialize remote ws into localPath |
+| /nano-shared-workspace/workspaces/join | POST | L2 | write:host | 65536 | – | CAS merge member row into marker |
+| /nano-shared-workspace/workspaces/delete | POST | L2 | s3:write | 65536 | – | delete cloud marker after member check |
 | /nano-shared-workspace/sync | POST | L2 | s3:write | 65536 | – | trigger signed sync cycle |
 | /nano-shared-workspace/tree/pull | POST | L2 | write:host | 65536 | – | write remote tree (incl .git) to localPath |
 | /nano-shared-workspace/tree/push | POST | L2 | s3:write | 65536 | – | read replica + PUT generations |
 | /nano-shared-workspace/sessions/bind | POST | L2 | write:host | 65536 | ✓ | bind session to workspace/localPath |
-| /nano-shared-workspace/sessions/claim | POST | L2 | s3:write | 65536 | ✓ | acquireClaim write to S3 (no CAS) |
+| /nano-shared-workspace/sessions/claim | POST | L2 | s3:write | 65536 | ✓ | acquireClaim write to S3 (ETag CAS) |
 | /nano-shared-workspace/sessions/heartbeat | POST | L2 | s3:write | 65536 | ✓ | renew lease + heartbeatRev |
 | /nano-shared-workspace/sessions/lease | POST | L2 | s3:write | 65536 | ✓ | mutate remote lease/expiresAt |
 | /nano-shared-workspace/sessions | GET | L0 | s3:read | 0 | – | list remote session records |

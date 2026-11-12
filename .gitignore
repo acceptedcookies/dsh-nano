@@ -87,3 +87,6 @@ lab/out/
 # 开发工作树 dev worktree
 .worktree/
 
+
+# DASW-1112 eval logs may contain credential backups; keep them out of git.
+docs/eval/26-nov/logs/

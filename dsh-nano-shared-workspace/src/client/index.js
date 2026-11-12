@@ -194,9 +194,15 @@ export function apply(ctx) {
       close: () => store.set({ open: false }),
     },
     onOpenSettings: openSettings,
-    // Probe + save succeeded: advance the dialog to stage 2 and repaint the section.
-    finishBind: () => {
-      store.set({ setupStage: 'workspace', listReady: false, sessionsReady: false })
+    // Probe + save succeeded: advance to stage 2. Publish the just-saved
+    // identity immediately so a fast click on "新建共享工作区" is not bounced
+    // back to stage 1 while refresh() is still in flight (F-18).
+    finishBind: bound => {
+      store.set({
+        setupStage: 'workspace', listReady: false, sessionsReady: false,
+        ...(typeof bound?.username === 'string' && bound.username !== ''
+          ? { configured: true, username: bound.username } : {}),
+      })
       refresh()
     },
     onToggleSection: () => {

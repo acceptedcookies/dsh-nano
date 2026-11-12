@@ -164,7 +164,7 @@ export function SidebarGraft({ face, renderSlot }) {
         face,
         settings,
         stage: settings.setupStage === 'workspace' ? 'workspace' : 'bind',
-        onBound: () => { face.finishBind?.() },
+        onBound: bound => { face.finishBind?.(bound) },
         onOpenCreate: () => { face.onCreateWorkspace?.() },
         onRequestRebind: () => { face.onRequestRebind?.() },
       }), document.body)

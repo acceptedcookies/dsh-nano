@@ -46,9 +46,14 @@ const assertLocalPath = value => {
 const localMember = (marker, identity, instance) =>
   instance === '' ? undefined : trustedMember(marker, identity, instance)?.member
 
-/** Error message extraction that never leaks a stack to the response. */
+/** Error text for responses: never leak a raw S3 XML body or a stack (F-19). */
 function messageOf(error) {
-  return error instanceof Error ? error.message : String(error)
+  const raw = error instanceof Error ? error.message : String(error)
+  const code = /<Code>([^<]+)<\/Code>/.exec(raw)?.[1]
+  const status = /HTTP (\d{3})/.exec(raw)?.[1]
+  if (code !== undefined) return `S3 ${status ?? ''} ${code}`.trim()
+  const clean = raw.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+  return clean.length > 180 ? `${clean.slice(0, 177)}…` : clean
 }
 
 function sendJson(res, status, body) {
@@ -572,8 +577,9 @@ export function registerRoutes(ctx, routes) {
   return registerGuardedRoutes(ctx, specs, { table: ROUTE_TABLE, plugin: PLUGIN })
 }
 
-/** Every 30s, push session logs and replica files for workspaces this instance has joined. */
+/** Push session logs and replica files on the configured interval; 0 disables it. */
 export function startBackgroundSync(ctx, config) {
+  if (config.backgroundSyncMs === 0) return () => {}
   // Same singleton/row as createRoutes; hostJoin is idempotent per plugin id.
   const review = ensurePerfReviewHost().hostJoin('nano-shared-workspace', {
     version: typeof __NSW_VERSION__ === 'string' ? __NSW_VERSION__ : undefined,
@@ -602,7 +608,7 @@ export function startBackgroundSync(ctx, config) {
       running = false
     }
   })
-  const timer = setInterval(() => { tick().catch(() => {}) }, 30_000)
+  const timer = setInterval(() => { tick().catch(() => {}) }, config.backgroundSyncMs)
   timer.unref?.()
   return () => clearInterval(timer)
 }

@@ -35,8 +35,14 @@ export const Config = {
       if (typeof prefix !== 'string' || !/^[A-Za-z0-9\-_/]*$/.test(prefix)) {
         issues.push({ message: 'prefix must be a simple S3 key prefix' })
       }
+      // Deployment-varying tunable: 0 disables the timer (deterministic test
+      // nodes); the default keeps shipped behaviour. No per-instance const.
+      const rawInterval = source.backgroundSyncMs === undefined ? 30_000 : source.backgroundSyncMs
+      if (!Number.isInteger(rawInterval) || rawInterval < 0 || rawInterval > 86_400_000) {
+        issues.push({ message: 'backgroundSyncMs must be an integer between 0 and 86400000' })
+      }
       if (issues.length > 0) return { issues }
-      return { value: { endpoint, bucket, region, prefix: prefix ?? '' } }
+      return { value: { endpoint, bucket, region, prefix: prefix ?? '', backgroundSyncMs: rawInterval } }
     },
   },
 }

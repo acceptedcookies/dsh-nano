@@ -1290,9 +1290,9 @@ function dissolve(root, parent, remote, local) {
       files.push(l.get(rel));
     }
   }
-  return { files, conflicts, writes: [] };
+  return { files, conflicts };
 }
-async function materializePending(s3, workspaceId, root, dissolved) {
+async function materializePending(s3, workspaceId, dissolved) {
   const out = [];
   for (const file of dissolved.files) {
     if (file.pending !== "text") {
@@ -1304,15 +1304,18 @@ async function materializePending(s3, workspaceId, root, dissolved) {
 ${file.localBuf.toString("utf8")}=======
 ${(remoteBuf ?? Buffer.alloc(0)).toString("utf8")}>>>>>>> remote
 `);
-    const dest = inside(root, file.rel);
-    if (dest !== void 0) {
-      mkdirSync3(dirname(dest), { recursive: true });
-      writeFileSync2(dest, merged);
-    }
-    out.push({ rel: file.rel, sha256: sha256(merged), size: merged.length, buf: merged });
-    dissolved.writes.push(file.rel);
+    out.push({ rel: file.rel, sha256: sha256(merged), size: merged.length, buf: merged, writeToReplica: true });
   }
   return out;
+}
+function writePending(root, files) {
+  for (const file of files) {
+    if (file.writeToReplica !== true) continue;
+    const dest = inside(root, file.rel);
+    if (dest === void 0) continue;
+    mkdirSync3(dirname(dest), { recursive: true });
+    writeFileSync2(dest, file.buf);
+  }
 }
 function basePath(dshHome, workspaceId) {
   return join3(dshHome, "nsw", `${workspaceId}.json`);
@@ -1329,12 +1332,31 @@ function saveBase(dshHome, workspaceId, record) {
   mkdirSync3(dirname(dest), { recursive: true });
   writeFileSync2(dest, JSON.stringify({ generation: record.generation, files: record.files }));
 }
-async function ensureBlobs(s3, workspaceId, root, files) {
+var BLOB_CONCURRENCY = 8;
+async function mapLimit(items, limit, worker) {
+  const results = new Array(items.length);
+  let next = 0;
+  const runners = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    for (; ; ) {
+      const index = next;
+      next += 1;
+      if (index >= items.length) return;
+      results[index] = await worker(items[index], index);
+    }
+  });
+  await Promise.all(runners);
+  return results;
+}
+async function ensureBlobs(s3, workspaceId, root, files, knownShas) {
+  const uploads = [];
   for (const file of files) {
+    if (knownShas !== void 0 && knownShas.has(file.sha256)) continue;
     const buf = file.buf ?? readRel(root, file.rel);
     if (buf === void 0) continue;
-    await s3.putBytes(blobKey(workspaceId, file.sha256), buf);
+    uploads.push({ key: blobKey(workspaceId, file.sha256), buf });
   }
+  await mapLimit(uploads, BLOB_CONCURRENCY, ({ key, buf }) => s3.putBytes(key, buf));
+  return uploads.length;
 }
 async function pullWorkspace(s3, dshHome, workspaceId, localPath) {
   if (!WORKSPACE_ID_RE.test(workspaceId)) throw new SchemaReject("schema:workspaceId", "workspaceId has a bad charset");
@@ -1353,23 +1375,29 @@ async function pullWorkspace(s3, dshHome, workspaceId, localPath) {
     } catch {
     }
   }
+  const downloads = [];
   for (const file of head.files ?? []) {
     const dest = inside(root, file.rel);
     if (dest === void 0) continue;
     const have = readRel(root, file.rel);
     if (have !== void 0 && sha256(have) === file.sha256) continue;
-    const blob = await s3.getBytes(blobKey(workspaceId, file.sha256));
-    if (blob === void 0) continue;
+    downloads.push({ dest, key: blobKey(workspaceId, file.sha256) });
+  }
+  const blobs = await mapLimit(downloads, BLOB_CONCURRENCY, ({ key }) => s3.getBytes(key));
+  downloads.forEach(({ dest }, index) => {
+    const blob = blobs[index];
+    if (blob === void 0) return;
     mkdirSync3(dirname(dest), { recursive: true });
     writeFileSync2(dest, blob);
-  }
+  });
   saveBase(dshHome, workspaceId, head);
   return { ok: true, generation: head.generation ?? 0, files: (head.files ?? []).length, conflicts: head.conflicts ?? [] };
 }
 async function pushWorkspace(s3, dshHome, workspaceId, localPath, writerId, attempt = 0) {
   if (!WORKSPACE_ID_RE.test(workspaceId)) throw new SchemaReject("schema:workspaceId", "workspaceId has a bad charset");
   const root = replicaRoot(localPath);
-  const head = await s3.getJson(headKey(workspaceId));
+  const got = await s3.getJson(headKey(workspaceId), { withMeta: true });
+  const head = got?.value;
   if (head !== void 0) {
     validate("tree-head", head);
   }
@@ -1387,8 +1415,12 @@ async function pushWorkspace(s3, dshHome, workspaceId, localPath, writerId, atte
     }
   }
   const dissolved = dissolve(root, parentFiles, remote, local);
-  const files = await materializePending(s3, workspaceId, root, dissolved);
-  await ensureBlobs(s3, workspaceId, root, files);
+  const files = await materializePending(s3, workspaceId, dissolved);
+  const knownShas = /* @__PURE__ */ new Set([
+    ...(head?.files ?? []).map((file) => file.sha256),
+    ...parentFiles.map((file) => file.sha256)
+  ]);
+  const uploaded = await ensureBlobs(s3, workspaceId, root, files, knownShas);
   const generation = (head?.generation ?? 0) + 1;
   const record = {
     v: 1,
@@ -1399,11 +1431,24 @@ async function pushWorkspace(s3, dshHome, workspaceId, localPath, writerId, atte
     conflicts: dissolved.conflicts,
     at: (/* @__PURE__ */ new Date()).toISOString()
   };
-  const put = await s3.putJson(genKey(workspaceId, generation), record, { ifNoneMatch: "*" });
-  if (put?.conflict === true && attempt < 1) return pushWorkspace(s3, dshHome, workspaceId, localPath, writerId, attempt + 1);
-  await s3.putJson(headKey(workspaceId), record);
+  const MAX_ATTEMPTS = 3;
+  const genPut = await s3.putJson(genKey(workspaceId, generation), record, { ifNoneMatch: "*" });
+  if (genPut?.conflict === true) {
+    if (attempt >= MAX_ATTEMPTS) throw new Error("tree generation is racing another writer; retry the push");
+    return pushWorkspace(s3, dshHome, workspaceId, localPath, writerId, attempt + 1);
+  }
+  const headPut = await s3.putJson(
+    headKey(workspaceId),
+    record,
+    got?.etag === void 0 ? { ifNoneMatch: "*" } : { ifMatch: got.etag }
+  );
+  if (headPut?.conflict === true) {
+    if (attempt >= MAX_ATTEMPTS) throw new Error("tree HEAD changed during push; retry the push");
+    return pushWorkspace(s3, dshHome, workspaceId, localPath, writerId, attempt + 1);
+  }
+  writePending(root, files);
   saveBase(dshHome, workspaceId, record);
-  return { ok: true, generation, files: record.files.length, conflicts: dissolved.conflicts };
+  return { ok: true, generation, files: record.files.length, conflicts: dissolved.conflicts, uploaded };
 }
 async function registerIdentity(s3, identity) {
   if (typeof identity?.username !== "string" || identity.username === "") return { ok: false };
@@ -2014,7 +2059,12 @@ var assertLocalPath = (value) => {
 };
 var localMember = (marker, identity, instance) => instance === "" ? void 0 : trustedMember(marker, identity, instance)?.member;
 function messageOf(error) {
-  return error instanceof Error ? error.message : String(error);
+  const raw = error instanceof Error ? error.message : String(error);
+  const code = /<Code>([^<]+)<\/Code>/.exec(raw)?.[1];
+  const status = /HTTP (\d{3})/.exec(raw)?.[1];
+  if (code !== void 0) return `S3 ${status ?? ""} ${code}`.trim();
+  const clean = raw.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+  return clean.length > 180 ? `${clean.slice(0, 177)}\u2026` : clean;
 }
 function sendJson2(res, status, body) {
   const payload = JSON.stringify(body);
@@ -2497,6 +2547,8 @@ function registerRoutes2(ctx, routes) {
   return registerRoutes(ctx, specs, { table: ROUTE_TABLE, plugin: PLUGIN });
 }
 function startBackgroundSync(ctx, config) {
+  if (config.backgroundSyncMs === 0) return () => {
+  };
   const review = ensurePerfReviewHost().hostJoin("nano-shared-workspace", {
     version: true ? "0.2.0" : void 0,
     libVersion: LIB_VERSION
@@ -2527,7 +2579,7 @@ function startBackgroundSync(ctx, config) {
   const timer = setInterval(() => {
     tick().catch(() => {
     });
-  }, 3e4);
+  }, config.backgroundSyncMs);
   timer.unref?.();
   return () => clearInterval(timer);
 }
@@ -2557,8 +2609,12 @@ var Config = {
       if (typeof prefix !== "string" || !/^[A-Za-z0-9\-_/]*$/.test(prefix)) {
         issues.push({ message: "prefix must be a simple S3 key prefix" });
       }
+      const rawInterval = source.backgroundSyncMs === void 0 ? 3e4 : source.backgroundSyncMs;
+      if (!Number.isInteger(rawInterval) || rawInterval < 0 || rawInterval > 864e5) {
+        issues.push({ message: "backgroundSyncMs must be an integer between 0 and 86400000" });
+      }
       if (issues.length > 0) return { issues };
-      return { value: { endpoint, bucket, region, prefix: prefix ?? "" } };
+      return { value: { endpoint, bucket, region, prefix: prefix ?? "", backgroundSyncMs: rawInterval } };
     }
   }
 };

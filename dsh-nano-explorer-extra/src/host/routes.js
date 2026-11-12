@@ -4,7 +4,7 @@ import { watch } from 'node:fs'
 import { ensurePerfReviewHost, LIB_VERSION } from 'dsh-performance-review/host'
 import { registerRoutes as registerGuardedRoutes } from 'dsh-host-route-guard'
 import { ROUTE_TABLE, PLUGIN } from './route-table.js'
-import { checkoutBranch, commitAll, ignoredAmong, listBranches, listConflicts, listWorktrees, pullUpstream, pushUpstream, readStatus, writeRemote, writeAuthor } from './git.js'
+import { checkoutBranch, commitAll, ignoredAmong, listBranches, listConflicts, listWorktrees, pullUpstream, pushUpstream, readStatus, writeRemote, writeAuthor, writeSshKey } from './git.js'
 import { absoluteOf, isLexicallyInside, listDirectory } from './listing.js'
 import { createFile, createFolder, moveEntry, removeEntry, rename } from './mutate.js'
 import { statisticsOf } from './stats.js'
@@ -400,6 +400,20 @@ export function createRoutes(ctx, config) {
         })
         forgetReads(root)
         return { author }
+      },
+    },
+    '/ssh-key': {
+      method: 'POST',
+      async run(req) {
+        const body = await jsonBody(req)
+        const { root, policy, session } = await scopeOf(ctx, body.sessionId)
+        // `keyPath` writes `core.sshCommand`; an empty path clears it back to the default.
+        const sshKey = await writeSshKey(ctx, config, {
+          cwd: root, policy, session, signal: undefined,
+          keyPath: body.keyPath,
+        })
+        forgetReads(root)
+        return { sshKey }
       },
     },
     '/checkout': {

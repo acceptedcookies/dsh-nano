@@ -333,7 +333,7 @@ function HistoryRail({ copy, history, currentBranch, upstream, remotes }) {
  * @param props - copy, Git summary, and the actions the panel can start.
  * @returns the panel, or null while closed.
  */
-export function BranchDrawer({ copy, open, git, onClose, onPull, onPush, onRefresh, onCheckout, onOpenConflict, onRemote, onAuthor, busy, error }) {
+export function BranchDrawer({ copy, open, git, onClose, onPull, onPush, onRefresh, onCheckout, onOpenConflict, onRemote, onAuthor, onSshKey, busy, error }) {
   usePanelConfinedLayer(open)
   const [query, setQuery] = useState('')
   const [pendingBranch, setPendingBranch] = useState(null)
@@ -520,8 +520,8 @@ export function BranchDrawer({ copy, open, git, onClose, onPull, onPush, onRefre
       },
     })),
     settingsOpen ? React.createElement(RepoSettingsDialog, {
-      copy, remotes, author: git?.author, busy, error,
-      onRemote, onAuthor,
+      copy, remotes, author: git?.author, sshKey: git?.sshKey, busy, error,
+      onRemote, onAuthor, onSshKey,
       onCancel: () => setSettingsOpen(false),
     }) : null)
 }
@@ -584,13 +584,15 @@ function RemoteRow({ copy, remote, busy, onRemote }) {
  * @param props - copy, remotes, author, busy/error, and the save callbacks.
  * @returns the dialog, or null while closed.
  */
-function RepoSettingsDialog({ copy, remotes, author, busy, error, onRemote, onAuthor, onCancel }) {
+function RepoSettingsDialog({ copy, remotes, author, sshKey, busy, error, onRemote, onAuthor, onSshKey, onCancel }) {
   const [remoteName, setRemoteName] = useState('')
   const [remoteUrl, setRemoteUrl] = useState('')
   const [authorName, setAuthorName] = useState(author?.name ?? '')
   const [authorEmail, setAuthorEmail] = useState(author?.email ?? '')
+  const [sshPath, setSshPath] = useState(sshKey?.keyPath ?? '')
   const [remoteError, setRemoteError] = useState(undefined)
   const [authorError, setAuthorError] = useState(undefined)
+  const [sshError, setSshError] = useState(undefined)
 
   const submitRemote = async () => {
     const name = remoteName.trim()
@@ -609,6 +611,12 @@ function RepoSettingsDialog({ copy, remotes, author, busy, error, onRemote, onAu
     const email = authorEmail.trim()
     if (name === '' && email === '') { setAuthorError(copy.authorEmpty); return }
     await onAuthor(name, email)
+  }
+  const submitSsh = async () => {
+    setSshError(undefined)
+    const path = sshPath.trim()
+    if (path !== '' && /[\n\r'`"\\]/u.test(path)) { setSshError(copy.sshPathBad); return }
+    await onSshKey(path)
   }
 
   return React.createElement(Dialog, {
@@ -673,7 +681,34 @@ function RepoSettingsDialog({ copy, remotes, author, busy, error, onRemote, onAu
         disabled: busy === true,
         onClick: () => { void submitAuthor() },
       }, copy.authorSave)),
-    authorError === undefined ? null : React.createElement('p', { className: 'nxe-dialog-error' }, authorError)))
+    authorError === undefined ? null : React.createElement('p', { className: 'nxe-dialog-error' }, authorError)),
+  React.createElement('section', { className: 'nxe-scm-group' },
+    React.createElement('h3', { className: 'nxe-drawer-heading' }, copy.sshHeading),
+    React.createElement('p', { className: 'nxe-drawer-empty' },
+      sshKey?.source === 'global' ? copy.sshInherited : sshKey?.source === 'unset' ? copy.sshUnset : copy.sshLocal),
+    sshKey?.command ? React.createElement('p', {
+      className: 'nxe-drawer-empty', title: sshKey.command,
+      style: { fontFamily: 'monospace', wordBreak: 'break-all' },
+    }, sshKey.command) : null,
+    React.createElement('div', { className: 'nxe-remote-add' },
+      React.createElement(Input, {
+        value: sshPath,
+        placeholder: copy.sshPathPh,
+        'aria-label': copy.sshPathPh,
+        spellCheck: false,
+        onChange: event => setSshPath(event.currentTarget.value),
+      }),
+      React.createElement(Button, {
+        variant: 'outline', className: 'nano-modal-action',
+        disabled: busy === true || sshPath.trim() === '' || sshPath.trim() === (sshKey?.keyPath ?? ''),
+        onClick: () => { void submitSsh() },
+      }, copy.sshSave),
+      React.createElement(Button, {
+        variant: 'outline', className: 'nano-modal-action',
+        disabled: busy === true || (sshKey?.command ?? '') === '',
+        onClick: () => { setSshPath(''); void onSshKey('') },
+      }, copy.sshClear)),
+    sshError === undefined ? null : React.createElement('p', { className: 'nxe-dialog-error' }, sshError)))
 }
 
 /**

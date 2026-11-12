@@ -614,6 +614,19 @@ export function ExplorerBody(props) {
   }, [sessionId, request, refreshGit])
 
   /**
+   * Bind or clear the SSH identity this checkout's network verbs run under.
+   * Writes `core.sshCommand` in the repo config so pull and push pick it up themselves.
+   */
+  const doSshKey = useCallback(async keyPath => {
+    setDrawerBusy(true)
+    setDrawerError(undefined)
+    const result = await request('/ssh-key', { sessionId, keyPath })
+    setDrawerBusy(false)
+    if (!result.ok) { setDrawerError(result.message); return }
+    await refreshGit()
+  }, [sessionId, request, refreshGit])
+
+  /**
    * Switch this worktree to another branch.
    *
    * Git refuses when local changes would be overwritten or the branch is held by another worktree; its
@@ -1039,6 +1052,7 @@ export function ExplorerBody(props) {
       onPush: doPush,
       onRemote: doRemote,
       onAuthor: doAuthor,
+      onSshKey: doSshKey,
       onCheckout: doCheckout,
       onRefresh: async () => { await refreshGit() },
       onOpenConflict: path => { openEntry({ path: absoluteOf(cwd ?? '', path) }); setDrawer(null) },

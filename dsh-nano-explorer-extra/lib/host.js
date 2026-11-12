@@ -402,6 +402,18 @@ var ROUTE_TABLE = [
   },
   {
     "plugin": "dsh-nano-explorer-extra",
+    "path": "/nano-explorer-extra/ssh-key",
+    "methods": [
+      "POST"
+    ],
+    "sensitivity": "L1",
+    "capability": "proc:git",
+    "bodyLimit": 65536,
+    "sessionBinding": true,
+    "justification": "dsh-nano-explorer-extra/src/host/routes.js \u2014 writes  (local only) to .git/config: binds a repo-local SSH identity; key path is validated against quotes/newlines before being embedded; no process exec beyond the config setter itself."
+  },
+  {
+    "plugin": "dsh-nano-explorer-extra",
     "path": "/nano-explorer-extra/checkout",
     "methods": [
       "POST"
@@ -770,13 +782,15 @@ async function readStatus(ctx, config, request) {
   ]);
   const parsed = parseStatus(status.stdout);
   const stashed = stash === void 0 || stash.exitCode !== 0 ? 0 : stash.stdout.split("\n").filter((line) => line.trim() !== "").length;
-  const [branches, history, remote, remotes, author] = scoped ? [[], [], void 0, [], void 0] : await Promise.all([
+  const [branches, history, remote, remotes, repoConfig] = scoped ? [[], [], void 0, [], void 0] : await Promise.all([
     listBranches(ctx, config, request, worktrees),
     readHistory(ctx, config, request),
     typeof parsed.upstream !== "string" || parsed.upstream === "" ? Promise.resolve(void 0) : remoteDivergence(ctx, config, request),
     readRemotes(ctx, config, request),
-    readAuthor(ctx, config, request)
+    readRepoConfig(ctx, config, request)
   ]);
+  const author = repoConfig === void 0 ? void 0 : authorOf(repoConfig);
+  const sshKey = repoConfig === void 0 ? void 0 : sshKeyOf(repoConfig);
   const conflicts = parsed.files.filter((file) => file.status === "U").map((file) => file.path);
   return {
     root,
@@ -788,7 +802,8 @@ async function readStatus(ctx, config, request) {
     conflicts,
     ...remote === void 0 ? {} : { remote },
     remotes,
-    author
+    author,
+    ...sshKey === void 0 ? {} : { sshKey }
   };
 }
 async function commitAll(ctx, config, request) {
@@ -975,22 +990,30 @@ async function writeRemote(ctx, config, request) {
   }
   return readRemotes(ctx, config, request);
 }
-async function readAuthor(ctx, config, request) {
-  const probe = async (key, scope) => {
+async function readRepoConfig(ctx, config, request) {
+  const dump = async (scope) => {
     const result = await runGit(ctx, config, {
       ...request,
-      args: ["config", ...scope === null ? [] : [`--${scope}`], "--get", key],
+      args: ["config", `--${scope}`, "--list"],
       allowedExitCodes: [0, 1, 128]
     }).catch(() => void 0);
-    if (result === void 0 || result.exitCode !== 0) return "";
-    return result.stdout.trim();
+    const map = /* @__PURE__ */ new Map();
+    if (result === void 0 || result.exitCode !== 0) return map;
+    for (const line of result.stdout.split("\n")) {
+      const eq = line.indexOf("=");
+      if (eq <= 0) continue;
+      map.set(line.slice(0, eq), line.slice(eq + 1));
+    }
+    return map;
   };
-  const [localName, localEmail, globalName, globalEmail] = await Promise.all([
-    probe("user.name", "local"),
-    probe("user.email", "local"),
-    probe("user.name", "global"),
-    probe("user.email", "global")
-  ]);
+  const [local, global] = await Promise.all([dump("local"), dump("global")]);
+  return { local, global };
+}
+function authorOf(maps) {
+  const localName = maps.local.get("user.name") ?? "";
+  const localEmail = maps.local.get("user.email") ?? "";
+  const globalName = maps.global.get("user.name") ?? "";
+  const globalEmail = maps.global.get("user.email") ?? "";
   const source = localName !== "" || localEmail !== "" ? "local" : globalName !== "" || globalEmail !== "" ? "global" : "unset";
   return {
     name: localName !== "" ? localName : globalName,
@@ -999,6 +1022,31 @@ async function readAuthor(ctx, config, request) {
     global: { name: globalName, email: globalEmail },
     source
   };
+}
+function sshKeyOf(maps) {
+  const local = maps.local.get("core.sshcommand") ?? "";
+  const global = maps.global.get("core.sshcommand") ?? "";
+  const command = local !== "" ? local : global;
+  const source = local !== "" ? "local" : global !== "" ? "global" : "unset";
+  const match = command.match(/(?:^|\s)-i\s+(?:'([^']+)'|"([^"]+)"|(\S+))/u);
+  const keyPath = match === null ? "" : match[1] ?? match[2] ?? match[3] ?? "";
+  return { command, keyPath, source };
+}
+async function readAuthor(ctx, config, request) {
+  return authorOf(await readRepoConfig(ctx, config, request));
+}
+async function writeSshKey(ctx, config, request) {
+  const keyPath = typeof request.keyPath === "string" ? request.keyPath.trim() : "";
+  let args;
+  if (keyPath === "") {
+    args = ["config", "--local", "--unset", "core.sshCommand"];
+  } else {
+    if (/[\n\r'`"\\]/u.test(keyPath)) throw new Error("the key path cannot contain quotes, backticks, or newlines");
+    args = ["config", "--local", "core.sshCommand", `ssh -i '${keyPath}' -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new`];
+  }
+  const result = await runGit(ctx, config, { ...request, args, allowedExitCodes: [0, 1, 5, 128] });
+  if (result.exitCode !== 0 && result.exitCode !== 5) throw new Error(firstLine(result.stderr) || "git config core.sshCommand failed");
+  return sshKeyOf(await readRepoConfig(ctx, config, request));
 }
 async function writeAuthor(ctx, config, request) {
   const name2 = typeof request.name === "string" ? request.name.trim() : void 0;
@@ -1626,6 +1674,22 @@ function createRoutes(ctx, config) {
         });
         forgetReads(root);
         return { author };
+      }
+    },
+    "/ssh-key": {
+      method: "POST",
+      async run(req) {
+        const body = await jsonBody(req);
+        const { root, policy, session } = await scopeOf(ctx, body.sessionId);
+        const sshKey = await writeSshKey(ctx, config, {
+          cwd: root,
+          policy,
+          session,
+          signal: void 0,
+          keyPath: body.keyPath
+        });
+        forgetReads(root);
+        return { sshKey };
       }
     },
     "/checkout": {

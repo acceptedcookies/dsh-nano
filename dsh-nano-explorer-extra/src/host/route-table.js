@@ -77,6 +77,18 @@ export const ROUTE_TABLE = [
   },
   {
     "plugin": "dsh-nano-explorer-extra",
+    "path": "/nano-explorer-extra/ssh-key",
+    "methods": [
+      "POST"
+    ],
+    "sensitivity": "L1",
+    "capability": "proc:git",
+    "bodyLimit": 65536,
+    "sessionBinding": true,
+    "justification": "dsh-nano-explorer-extra/src/host/routes.js — writes  (local only) to .git/config: binds a repo-local SSH identity; key path is validated against quotes/newlines before being embedded; no process exec beyond the config setter itself."
+  },
+  {
+    "plugin": "dsh-nano-explorer-extra",
     "path": "/nano-explorer-extra/checkout",
     "methods": [
       "POST"

@@ -161,6 +161,18 @@
     },
     {
       "plugin": "dsh-nano-explorer-extra",
+      "path": "/nano-explorer-extra/ssh-key",
+      "methods": [
+        "POST"
+      ],
+      "sensitivity": "L1",
+      "capability": "proc:git",
+      "bodyLimit": 65536,
+      "sessionBinding": true,
+      "justification": "dsh-nano-explorer-extra/src/host/routes.js — writes  (local only) to .git/config: binds a repo-local SSH identity; key path is validated against quotes/newlines before being embedded; no process exec beyond the config setter itself."
+    },
+    {
+      "plugin": "dsh-nano-explorer-extra",
       "path": "/nano-explorer-extra/checkout",
       "methods": [
         "POST"
@@ -318,6 +330,68 @@
       "bodyLimit": 16384,
       "sessionBinding": false,
       "justification": "dsh-nano-model-selector/index.js:30,252 — GET reads {engine,explicit}; PUT (16384-byte cap) writes DSH_HOME/plugins/nano-model-selector/media-engine.json and re-registers the /imagine skill = DSH_HOME write + skill mutation."
+    },
+    {
+      "plugin": "dsh-nano-kitesurf",
+      "path": "/nano-kitesurf/status",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "sensitivity": "L0",
+      "capability": "read:kitesurf",
+      "bodyLimit": 0,
+      "sessionBinding": false,
+      "justification": "dsh-nano-kitesurf/index.js STATUS_ROUTE — probes the configured loopback Kitesurf /health. Read-only, no secret, host cannot be chosen by the page."
+    },
+    {
+      "plugin": "dsh-nano-kitesurf",
+      "path": "/nano-kitesurf/last",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "sensitivity": "L0",
+      "capability": "read:kitesurf",
+      "bodyLimit": 0,
+      "sessionBinding": false,
+      "justification": "dsh-nano-kitesurf/index.js LAST_ROUTE — returns the in-memory element packet from the last pick. No host write."
+    },
+    {
+      "plugin": "dsh-nano-kitesurf",
+      "path": "/nano-kitesurf/open",
+      "methods": [
+        "POST"
+      ],
+      "sensitivity": "L2",
+      "capability": "net:kitesurf",
+      "bodyLimit": 4096,
+      "sessionBinding": false,
+      "justification": "dsh-nano-kitesurf/index.js OPEN_ROUTE — asks the configured Kitesurf engine to navigate to an http(s) URL, which makes that engine fetch the network."
+    },
+    {
+      "plugin": "dsh-nano-kitesurf",
+      "path": "/nano-kitesurf/shot",
+      "methods": [
+        "POST"
+      ],
+      "sensitivity": "L0",
+      "capability": "read:kitesurf",
+      "bodyLimit": 4096,
+      "sessionBinding": false,
+      "justification": "dsh-nano-kitesurf/index.js SHOT_ROUTE — Page.captureScreenshot of the current Kitesurf page. Read of the configured engine."
+    },
+    {
+      "plugin": "dsh-nano-kitesurf",
+      "path": "/nano-kitesurf/pick",
+      "methods": [
+        "POST"
+      ],
+      "sensitivity": "L0",
+      "capability": "read:kitesurf",
+      "bodyLimit": 4096,
+      "sessionBinding": false,
+      "justification": "dsh-nano-kitesurf/index.js PICK_ROUTE — Runtime.evaluate at a viewport point and stores the packet in memory. Does not navigate."
     }
   ]
 }

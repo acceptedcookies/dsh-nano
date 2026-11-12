@@ -368,7 +368,7 @@ export async function readStatus(ctx, config, request) {
   // rail, divergence, remotes, and the author do not change with the directory, so asking for
   // them here would spend four extra Git processes per folder the reader opens. The whole-suite
   // reads stay on the unscoped path that feeds the drawer.
-  const [branches, history, remote, remotes, author] = scoped
+  const [branches, history, remote, remotes, repoConfig] = scoped
     ? [[], [], undefined, [], undefined]
     : await Promise.all([
       listBranches(ctx, config, request, worktrees),
@@ -377,14 +377,17 @@ export async function readStatus(ctx, config, request) {
         ? Promise.resolve(undefined)
         : remoteDivergence(ctx, config, request),
       readRemotes(ctx, config, request),
-      readAuthor(ctx, config, request),
+      readRepoConfig(ctx, config, request),
     ])
+  const author = repoConfig === undefined ? undefined : authorOf(repoConfig)
+  const sshKey = repoConfig === undefined ? undefined : sshKeyOf(repoConfig)
   const conflicts = parsed.files.filter(file => file.status === 'U').map(file => file.path)
 
   return {
     root, ...parsed, stashed, worktrees, branches, history, conflicts,
     ...(remote === undefined ? {} : { remote }),
     remotes, author,
+    ...(sshKey === undefined ? {} : { sshKey }),
   }
 }
 
@@ -699,6 +702,79 @@ export async function writeRemote(ctx, config, request) {
 }
 
 /**
+ * Read this checkout's local and global config maps in two processes.
+ *
+ * A `--list` dumps every key a scope holds, so one pair of runs answers the author block and the
+ * SSH key row together — the panel used to pay four probes for the same facts. The last entry for
+ * a repeated key wins, which is exactly how `git config --get` resolves multi-valued files.
+ * @param ctx - context providing the process services.
+ * @param config - executable and process limits.
+ * @param request - working directory and cancellation.
+ * @returns `{ local, global }` as plain key → value maps.
+ */
+async function readRepoConfig(ctx, config, request) {
+  const dump = async scope => {
+    const result = await runGit(ctx, config, {
+      ...request,
+      args: ['config', `--${scope}`, '--list'],
+      allowedExitCodes: [0, 1, 128],
+    }).catch(() => undefined)
+    const map = new Map()
+    if (result === undefined || result.exitCode !== 0) return map
+    for (const line of result.stdout.split('\n')) {
+      const eq = line.indexOf('=')
+      if (eq <= 0) continue
+      // `--list` prints `key=value`; the keys this plugin reads never carry a newline.
+      map.set(line.slice(0, eq), line.slice(eq + 1))
+    }
+    return map
+  }
+  const [local, global] = await Promise.all([dump('local'), dump('global')])
+  return { local, global }
+}
+
+/**
+ * Derive the commit identity from the repo config maps.
+ * @param maps - `{ local, global }` from `readRepoConfig`.
+ * @returns `{ name, email, local, global, source }`.
+ */
+function authorOf(maps) {
+  const localName = maps.local.get('user.name') ?? ''
+  const localEmail = maps.local.get('user.email') ?? ''
+  const globalName = maps.global.get('user.name') ?? ''
+  const globalEmail = maps.global.get('user.email') ?? ''
+  const source = localName !== '' || localEmail !== '' ? 'local'
+    : globalName !== '' || globalEmail !== '' ? 'global' : 'unset'
+  return {
+    name: localName !== '' ? localName : globalName,
+    email: localEmail !== '' ? localEmail : globalEmail,
+    local: { name: localName, email: localEmail },
+    global: { name: globalName, email: globalEmail },
+    source,
+  }
+}
+
+/**
+ * Derive the SSH key injection state from the repo config maps.
+ *
+ * `core.sshCommand` is the one setting every network verb honours — pull, push, and any future
+ * fetch — so the panel edits that rather than an env var the spawn layer would have to thread
+ * through every call site. The value's `-i <path>` is surfaced separately so the row can show a
+ * plain key path next to the raw command.
+ * @param maps - `{ local, global }` from `readRepoConfig`.
+ * @returns `{ command, keyPath, source: 'local'|'global'|'unset' }`.
+ */
+function sshKeyOf(maps) {
+  const local = maps.local.get('core.sshcommand') ?? ''
+  const global = maps.global.get('core.sshcommand') ?? ''
+  const command = local !== '' ? local : global
+  const source = local !== '' ? 'local' : global !== '' ? 'global' : 'unset'
+  const match = command.match(/(?:^|\s)-i\s+(?:'([^']+)'|"([^"]+)"|(\S+))/u)
+  const keyPath = match === null ? '' : (match[1] ?? match[2] ?? match[3] ?? '')
+  return { command, keyPath, source }
+}
+
+/**
  * Read the commit identity this checkout would use.
  *
  * Local config wins; when it is absent the global value is reported as `fallback` so the panel can
@@ -709,28 +785,37 @@ export async function writeRemote(ctx, config, request) {
  * @returns `{ name, email, source: 'local'|'global'|'unset' }`.
  */
 export async function readAuthor(ctx, config, request) {
-  const probe = async (key, scope) => {
-    const result = await runGit(ctx, config, {
-      ...request,
-      args: ['config', ...(scope === null ? [] : [`--${scope}`]), '--get', key],
-      allowedExitCodes: [0, 1, 128],
-    }).catch(() => undefined)
-    if (result === undefined || result.exitCode !== 0) return ''
-    return result.stdout.trim()
+  return authorOf(await readRepoConfig(ctx, config, request))
+}
+
+/**
+ * Point this checkout's network verbs at one SSH identity file.
+ *
+ * The write lands on `core.sshCommand` as `ssh -i '<key>' -o IdentitiesOnly=yes`: quoting the path
+ * keeps spaces working, `IdentitiesOnly` stops the agent's other keys being offered first, and
+ * `accept-new` turns a first-contact host-key prompt into a recorded fact instead of a hang under
+ * `GIT_TERMINAL_PROMPT=0`. An empty path clears the key so the repo falls back to the default.
+ * @param ctx - context providing the process services.
+ * @param config - executable and process limits.
+ * @param request - `{ keyPath }`; empty clears `core.sshCommand`.
+ * @returns the SSH injection state after the write.
+ * @throws on a path that cannot be embedded safely or when Git refuses.
+ */
+export async function writeSshKey(ctx, config, request) {
+  const keyPath = typeof request.keyPath === 'string' ? request.keyPath.trim() : ''
+  let args
+  if (keyPath === '') {
+    args = ['config', '--local', '--unset', 'core.sshCommand']
+  } else {
+    // Shell metacharacters would execute inside the single-quoted string; reject them rather than
+    // escaping, because a path that needs them is never a plain key file.
+    if (/[\n\r'`"\\]/u.test(keyPath)) throw new Error('the key path cannot contain quotes, backticks, or newlines')
+    args = ['config', '--local', 'core.sshCommand', `ssh -i '${keyPath}' -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new`]
   }
-  const [localName, localEmail, globalName, globalEmail] = await Promise.all([
-    probe('user.name', 'local'), probe('user.email', 'local'),
-    probe('user.name', 'global'), probe('user.email', 'global'),
-  ])
-  const source = localName !== '' || localEmail !== '' ? 'local'
-    : globalName !== '' || globalEmail !== '' ? 'global' : 'unset'
-  return {
-    name: localName !== '' ? localName : globalName,
-    email: localEmail !== '' ? localEmail : globalEmail,
-    local: { name: localName, email: localEmail },
-    global: { name: globalName, email: globalEmail },
-    source,
-  }
+  const result = await runGit(ctx, config, { ...request, args, allowedExitCodes: [0, 1, 5, 128] })
+  // Exit 5 is `--unset` on a key that was already absent — a clear that reached its goal anyway.
+  if (result.exitCode !== 0 && result.exitCode !== 5) throw new Error(firstLine(result.stderr) || 'git config core.sshCommand failed')
+  return sshKeyOf(await readRepoConfig(ctx, config, request))
 }
 
 /**

@@ -141,6 +141,7 @@
 | T-E02 | 大目录 / 大量会话下列表渲染与滚动 | 🔧 | 200 文件：push **111s → 25.8s**、pull **108s → 9.6s**（U-08 有界并发）；重复 push 只传变更 blob（`uploaded:1`）；`/workspaces` 200 marker 8.3s→6.5s |
 | T-E03 | perf-review instrumentation（`?perf-review=1`） | ✅ | 无页面埋点时不采集（恒等包装）；`/settings`、`/workspaces`、`/sessions`、`sync-tick` 均有 `hostSpan` 包裹点 |
 | T-E04 | 后台同步 30s / 心跳 25s 的重复与节流 | ✅ | 新增 `backgroundSyncMs`（0 关闭）；实测关后 35s 内 generation 不变；开时 30s 内会主动推 |
+| T-E05 | `/sync` 在 43 个本地会话下的耗时 | 🔧 | 优化前 11–19s，优化后中位数 4.8s（F-28 / U-20）；剩余成本是 3 次代理往返（LIST + marker GET + tree HEAD GET），单次约 1.1–1.6s |
 
 ### G. 负向与失败模式（T-Gxx，Round 5 新增）
 
@@ -196,6 +197,7 @@
 | F-20 | 中 | 同步性能 | 200 文件 push 111s / pull 108s：blob 串行传输；且重复 push 重传所有未变文件 | 有界并发池（8）；sha 已在 HEAD/parent 则跳过上传；返回 `uploaded` 供观测 | 🔧 U-08 |
 | F-25 | **高** | 只读回放不可达 | `TranscriptDialog`、`api.fetchTranscript`、`face.onCloseTranscript`、`graft` 的 portal 全部实现，但**没有任何 UI 入口调用它们**——整条只读回放是死代码。读者既不能占用租约，也就完全没有办法看到共享会话的内容 | 行操作列新增「只读查看内容」按钮（`IconDeliverDocRegular`），`onViewTranscript` 走 host 路由取数；footer 收成单一「关闭」（与 F-23 同类问题） | 🔧 U-18 |
 | F-26 | 中 | 回放弹窗的健壮性 | 标题直接取远端 `meta.title`（不可信、可任意长），会挤掉关闭按钮；取数期间没有任何加载反馈 | 标题截断到 60 字；新增 `transcriptLoading` 文案与 loading 分支 | 🔧 U-18 |
+| F-28 | **高** | `/sync` 性能 | 43 个本地会话时一次 `/sync` 要 11–19 秒。四处浪费：① 每个会话都 spawn 一次 `git remote get-url`（43 次，实际只有 17 个不同 cwd）；② 未变化的会话仍重写 `meta.json` 并递增 `rev`；③ 未变化的会话仍付一次远端 meta GET + 一次 claim 写；④ `/sync` 路由把 `listWorkspaces` 调了两次（第二次多付一个 LIST + 每个 marker 一个 GET） | ① 按 cwd 缓存 legacy 哈希；② 字节数/事件数/标题不变则跳过 meta 写；③ 用目录扫描的 `mtimeMs + sizeBytes` 指纹在**解码之前**短路；④ 一次列举喂给两半 | 🔧 U-20 |
 | F-27 | **高** | 会话归属不确定 | 两个共享工作区声明同一个 `localPath` 时（创建对话框允许复用目录），`matchWorkspace` 的 `>` 比较无法决出胜者，结果取决于桶的列举顺序。实测同一会话在两次 `/sync` 中被匹配到不同 workspaceId（`8a77424e…` vs `9167ab8d…`），`/sessions` 与 `/tree/push` 因此指向不同 workspace | 等长前缀时用 `createdAt` 取更早的 marker 作为确定性 tie-break | 🔧 U-19 |
 | F-24 | 中 | 租约可被恶意/异常预占 | claim 的 `expiresAt` 只校验是有限数字，无合理上限；写入 400 天后的 claim 会让该会话对所有合法写者永久 `busy` | Round 6 裁定：**不接受到永久阻塞**。`validClaim` 增加上限 `now + 2×TTL`，超限的 claim 视为畸形，由已有的 CAS 循环原子替换 | 🔧 U-16 |
 | F-23 | 中 | cool-off 的 UI 表达 | 租约被占时弹窗标题是「无法打开」，底部同时给「取消」和「关闭」两个同义按钮；语义上是「稍后重试」而非失败 | 新增 ``noticeKind: 'busy'``，标题改「会话正在被占用」，footer 只留一个「关闭」 | 🔧 U-15 |
@@ -219,6 +221,7 @@
 | U-12 | F-15 | 新增 `scripts/eval/desktop-auth.mjs`（自签 cookie、固定 `~/.dsh-desktop`、动态端口）；`clients.mjs` 统一 A/B 两端 | 两端 `/settings` 均 200 且分别返回 `dasw-a` / `dasw-b` |
 | U-13 | F-21 | `entry.js` 新增 `Config.backgroundSyncMs` 校验；`routes.js` `startBackgroundSync` 读该值，0 时直接返回 | 关后 35s generation 不变；两个测试节点均已设 0 |
 | U-18 | F-25/26 | `section.js` 会话行新增只读查看按钮；`index.js` 新增 `onViewTranscript`（loading → fetch → dialog，失败落 notice）；`transcript-dialog.js` 标题截断 + loading 分支 + 单按钮 footer；i18n 新增 `viewTranscript` / `transcriptLoading` | 桌面 UI 实测：行内出现「只读查看内容」；点击后弹窗标题「单词回复请求」、meta 行 `dasw-a · … · 22 events · 16062B`、5 条可读行（用户×4 + 助手×1）、footer 仅「关闭」（`R7-transcript-single-close.png`） |
+| U-20 | F-28 | `session-io.js`：`matchWorkspace` 接受 `legacyCache`（按 cwd 缓存）；`pushSession` 顶部加 stat 指纹短路、`acquireClaim` 在已持有且余量 > TTL/2 时跳过写、内容未变不写 meta；`syncAll` 接受外部 marker 列表；`routes.js` `/sync` 只列举一次 | `/sync` 中位数 **11–19s → 4.8s**（6 次采样 3.5/3.6/4.6/4.8/5.9/9.8s）；`unchanged` 不再递增 `rev`；回归 `multi-user-files` 26/26、`negative-cases` 20/20、`session-sync` 16/16、`multi-user-leases` 14/14 |
 | U-19 | F-27 | `workspaces.js` `matchWorkspace`：同长度前缀时按 `createdAt` 取更早的 marker | 修复后同一会话稳定匹配到 `9167ab8d…`；`session-sync` 17 项全绿，`multi-user-files` 全绿 |
 | U-16 | F-24 | `session-io.js` 新增 `claimExpiryIsSane`：`expiresAt <= now + 2×TTL_MS`，否则 `validClaim` 返回 false，CAS 循环重新取租约 | 400 天后的幽灵 claim → A `claim` 返回 `ok:true`，桶内 writerId 变为 `dasw-a@…`；租约回归套件 14 项仍全绿 |
 | U-17 | F-12 | `tree.js` 新增 `purgeWorkspaceObjects`（跳过 MinIO 回显的自引用前缀，防死循环）；`routes.js` 删除后调用并在响应里返回 `purged` | 含 tree/sessions 的 fixture 删除后报 `purged.keys:11`，桶内该 id 下 0 对象；竞争中的 push 也不会留下孤儿 |
@@ -354,4 +357,19 @@
 - 发现 27 项：**全部已修复并复测**。
 - 回归：`session-sync` 17/17、`multi-user-files` 全绿、`multi-user-leases` 14/14、`negative-cases` 20/20（单次运行）。
 - 桶内只剩 `multi-user:9167ab8d56346228`。
+- `dsh.local` 全程未触碰（PID 47398）。
+
+### Round 7 续：`/sync` 性能（2026-11-12 13:45–14:25）
+
+- 起因：`session-sync` 偶发拿到空响应，追下去发现 `/sync` 在 43 个本地会话下要 **11–19 秒**。
+- 定位到四处浪费（F-28）：每个会话一次 git 子进程（43 次，实际 17 个不同 cwd）；未变化的会话仍重写 meta 并递增 `rev`；未变化的会话仍付远端 meta GET + claim 写；路由把 `listWorkspaces` 调了两次。
+- 四项都修（U-20）。`/sync` 中位数 **11–19s → 4.8s**。剩余 3 次代理往返是下限。
+- 期间观察到一次**偶发空响应**：同步解码 43 个会话会阻塞宿主事件循环，排在其后的请求可能被拖到超时。指纹短路后大部分解码被跳过，重跑三套件均稳定全绿。
+- 测试侧修 1 处：`session-sync` 的「外部写者」用例要先 bump 本地 mtime，否则会命中新的「未变化」快路径而测不到写者门禁。
+
+### Round 7 最终状态
+
+- 构建：`lib/host.js` 已含 U-20；`lib/client.js` 含 U-18。dev 与 desktop 均已同步。
+- 发现 28 项：**全部已修复并复测**，待裁定 0。
+- 回归：`multi-user-files` 26/26、`negative-cases` 20/20、`session-sync` 16/16、`multi-user-leases` 14/14、`race-markers` 2/2、`join-cas` 1/1。
 - `dsh.local` 全程未触碰（PID 47398）。

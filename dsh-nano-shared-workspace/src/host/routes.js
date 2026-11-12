@@ -309,11 +309,14 @@ export function createRoutes(ctx, config) {
       method: 'POST',
       async run() {
         const { client, identity } = await s3()
-        const results = await syncAll(client, ctx, identity, dshHome, syncState)
+        // One marker listing feeds both halves of the pass; listing twice cost
+        // a second LIST plus a GET per marker on every refresh (F-28).
+        const markers = await listWorkspaces(client)
+        const results = await syncAll(client, ctx, identity, dshHome, syncState, markers)
         const instance = await instanceId(ctx)
         const me = instance.slice(0, 8)
         const trees = []
-        for (const marker of await listWorkspaces(client)) {
+        for (const marker of markers) {
           // Strict memberId binding (P2-03): only our own row's localPath is a sync target.
           const member = localMember(marker, identity, instance)
           if (typeof member?.localPath !== 'string' || member.localPath === '') continue

@@ -773,9 +773,15 @@ async function listWorkspaces(s3) {
   }
   return rows;
 }
-async function matchWorkspace(cwd, markers, { identity, me } = {}) {
+async function matchWorkspace(cwd, markers, { identity, me, legacyCache } = {}) {
   if (identity === void 0 || me === void 0) return null;
-  const legacy = await workspaceIdFor(cwd);
+  let legacy;
+  if (legacyCache !== void 0 && legacyCache.has(cwd)) {
+    legacy = legacyCache.get(cwd);
+  } else {
+    legacy = await workspaceIdFor(cwd);
+    legacyCache?.set(cwd, legacy);
+  }
   let prefixBest = null;
   for (const marker of markers) {
     const own = trustedMember(marker, identity, me);
@@ -937,6 +943,9 @@ async function acquireClaim(s3, ctx, sessionId, writerId, heartbeatRev) {
     if (existing !== void 0 && existing.writerId !== writerId && existing.expiresAt > now) {
       return { acquired: false, holder: existing.writerId, heartbeatRev: existing.heartbeatRev ?? 0 };
     }
+    if (existing !== void 0 && existing.writerId === writerId && existing.expiresAt > now + CLAIM_TTL_MS / 2) {
+      return { acquired: true, heartbeatRev: existing.heartbeatRev ?? heartbeatRev, expiresAt: existing.expiresAt, reused: true };
+    }
     const claim = {
       writerId,
       acquiredAt: new Date(now).toISOString(),
@@ -970,14 +979,18 @@ async function renewClaim(s3, sessionId, writerId) {
   }
   return { renewed: false, holder: writerId, expiresAt: null };
 }
-async function pushSession(s3, ctx, identity, local, markers, state) {
+async function pushSession(s3, ctx, identity, local, markers, state, legacyCache) {
   if (!SESSION_ID_RE.test(local.sessionId)) return { sessionId: local.sessionId, outcome: "skip:schema:sessionId" };
+  const seen = state.bySession.get(local.sessionId);
+  if (seen !== void 0 && seen.mtimeMs === local.mtimeMs && seen.size === local.sizeBytes && typeof seen.workspaceId === "string") {
+    return { sessionId: local.sessionId, workspaceId: seen.workspaceId, outcome: "unchanged" };
+  }
   const me = await instanceId(ctx);
   const writerId = `${identity.username}@${me.slice(0, 8)}`;
   const buf = readFileSync2(local.filePath);
   const head = summarize(buf);
   if (head.cwd === null) return { sessionId: local.sessionId, outcome: "skip:unparsable" };
-  const marker = await matchWorkspace(head.cwd, markers, { identity, me });
+  const marker = await matchWorkspace(head.cwd, markers, { identity, me, legacyCache });
   if (marker === null) return { sessionId: local.sessionId, outcome: "skip:not-shared" };
   const workspaceId = marker.workspaceId;
   const metaKey = `workspaces/${workspaceId}/sessions/${local.sessionId}/meta.json`;
@@ -1011,6 +1024,15 @@ async function pushSession(s3, ctx, identity, local, markers, state) {
       written += slice.length;
     }
   }
+  const unchanged = remote !== void 0 && buf.length === remote.committedBytes && (head.events ?? 0) === remote.eventCount && (head.title ?? "") === (remote.title ?? "");
+  if (unchanged) {
+    tracked.pushedBytes = buf.length;
+    tracked.mtimeMs = local.mtimeMs;
+    tracked.size = buf.length;
+    tracked.workspaceId = workspaceId;
+    state.bySession.set(local.sessionId, tracked);
+    return { sessionId: local.sessionId, workspaceId, outcome: "unchanged" };
+  }
   const rev = (remote?.rev ?? 0) + 1;
   await s3.putJson(metaKey, {
     v: 1,
@@ -1031,6 +1053,9 @@ async function pushSession(s3, ctx, identity, local, markers, state) {
     attachmentRefs: []
   });
   tracked.pushedBytes = buf.length;
+  tracked.mtimeMs = local.mtimeMs;
+  tracked.size = buf.length;
+  tracked.workspaceId = workspaceId;
   state.bySession.set(local.sessionId, tracked);
   return {
     sessionId: local.sessionId,
@@ -1038,12 +1063,13 @@ async function pushSession(s3, ctx, identity, local, markers, state) {
     workspaceId
   };
 }
-async function syncAll(s3, ctx, identity, dshHome, state) {
-  const markers = await listWorkspaces(s3);
+async function syncAll(s3, ctx, identity, dshHome, state, knownMarkers) {
+  const markers = knownMarkers ?? await listWorkspaces(s3);
   const results = [];
+  const legacyCache = /* @__PURE__ */ new Map();
   for (const local of listLocalSessions(dshHome)) {
     try {
-      results.push(await pushSession(s3, ctx, identity, local, markers, state));
+      results.push(await pushSession(s3, ctx, identity, local, markers, state, legacyCache));
     } catch (error) {
       results.push({ sessionId: local.sessionId, outcome: `error:${error instanceof Error ? error.message : String(error)}` });
     }
@@ -2339,11 +2365,12 @@ function createRoutes(ctx, config) {
       method: "POST",
       async run() {
         const { client, identity } = await s3();
-        const results = await syncAll(client, ctx, identity, dshHome, syncState);
+        const markers = await listWorkspaces(client);
+        const results = await syncAll(client, ctx, identity, dshHome, syncState, markers);
         const instance = await instanceId(ctx);
         const me = instance.slice(0, 8);
         const trees = [];
-        for (const marker of await listWorkspaces(client)) {
+        for (const marker of markers) {
           const member = localMember(marker, identity, instance);
           if (typeof member?.localPath !== "string" || member.localPath === "") continue;
           try {

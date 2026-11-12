@@ -219,6 +219,13 @@ export async function acquireClaim(s3, ctx, sessionId, writerId, heartbeatRev) {
     if (existing !== undefined && existing.writerId !== writerId && existing.expiresAt > now) {
       return { acquired: false, holder: existing.writerId, heartbeatRev: existing.heartbeatRev ?? 0 }
     }
+    /* Already ours with plenty of lease left: skip the write. A sync pass
+     * touches every shared session, and each avoided PUT saves one ~1.1s
+     * round trip through the proxy (F-28). */
+    if (existing !== undefined && existing.writerId === writerId
+        && existing.expiresAt > now + CLAIM_TTL_MS / 2) {
+      return { acquired: true, heartbeatRev: existing.heartbeatRev ?? heartbeatRev, expiresAt: existing.expiresAt, reused: true }
+    }
     const claim = {
       writerId,
       acquiredAt: new Date(now).toISOString(),
@@ -267,10 +274,19 @@ export async function renewClaim(s3, sessionId, writerId) {
  * @param markers - rows from `listWorkspaces` (fetched once per sync pass).
  * @param state - mutable `{bySession: Map}` the caller persists between calls.
  */
-export async function pushSession(s3, ctx, identity, local, markers, state) {
+export async function pushSession(s3, ctx, identity, local, markers, state, legacyCache) {
   // Consumer-layer charset (P2-06): a sessionId that cannot form a safe S3
   // key never reaches one.
   if (!SESSION_ID_RE.test(local.sessionId)) return { sessionId: local.sessionId, outcome: 'skip:schema:sessionId' }
+  /* Cheapest possible answer first: the stat fingerprint from the directory
+   * scan. A session whose bytes and mtime are unchanged since the last pass
+   * that reached the bucket has nothing to send, so skip the file read, the
+   * zstd decode, the marker match and every S3 call (F-28). */
+  const seen = state.bySession.get(local.sessionId)
+  if (seen !== undefined && seen.mtimeMs === local.mtimeMs && seen.size === local.sizeBytes
+      && typeof seen.workspaceId === 'string') {
+    return { sessionId: local.sessionId, workspaceId: seen.workspaceId, outcome: 'unchanged' }
+  }
   const me = await instanceId(ctx)
   const writerId = `${identity.username}@${me.slice(0, 8)}`
   const buf = readFileSync(local.filePath)
@@ -280,7 +296,7 @@ export async function pushSession(s3, ctx, identity, local, markers, state) {
   // Sessions only sync when the session's cwd sits inside THIS member's own
   // local replica path — strict memberId binding (P2-03, audit §4.9); the
   // legacy path-hash fallback is gated on our own member row too.
-  const marker = await matchWorkspace(head.cwd, markers, { identity, me })
+  const marker = await matchWorkspace(head.cwd, markers, { identity, me, legacyCache })
   if (marker === null) return { sessionId: local.sessionId, outcome: 'skip:not-shared' }
   const workspaceId = marker.workspaceId
 
@@ -328,6 +344,23 @@ export async function pushSession(s3, ctx, identity, local, markers, state) {
     }
   }
 
+  /* The local artifact is an append-only log, so an unchanged byte length
+   * means unchanged content. Rewriting meta anyway bumped `rev` on every
+   * background sync and cost one proxy round trip per shared session for
+   * nothing (F-28). */
+  const unchanged = remote !== undefined
+    && buf.length === remote.committedBytes
+    && (head.events ?? 0) === remote.eventCount
+    && (head.title ?? '') === (remote.title ?? '')
+  if (unchanged) {
+    tracked.pushedBytes = buf.length
+    tracked.mtimeMs = local.mtimeMs
+    tracked.size = buf.length
+    tracked.workspaceId = workspaceId
+    state.bySession.set(local.sessionId, tracked)
+    return { sessionId: local.sessionId, workspaceId, outcome: 'unchanged' }
+  }
+
   const rev = (remote?.rev ?? 0) + 1
   await s3.putJson(metaKey, {
     v: 1,
@@ -348,6 +381,9 @@ export async function pushSession(s3, ctx, identity, local, markers, state) {
     attachmentRefs: [],
   })
   tracked.pushedBytes = buf.length
+  tracked.mtimeMs = local.mtimeMs
+  tracked.size = buf.length
+  tracked.workspaceId = workspaceId
   state.bySession.set(local.sessionId, tracked)
   return {
     sessionId: local.sessionId,
@@ -357,12 +393,14 @@ export async function pushSession(s3, ctx, identity, local, markers, state) {
 }
 
 /** Push every local session whose cwd maps to a claimed workspace marker. */
-export async function syncAll(s3, ctx, identity, dshHome, state) {
-  const markers = await listWorkspacesFrom(s3)
+export async function syncAll(s3, ctx, identity, dshHome, state, knownMarkers) {
+  const markers = knownMarkers ?? await listWorkspacesFrom(s3)
   const results = []
+  // One git lookup per distinct cwd for the whole pass (F-28).
+  const legacyCache = new Map()
   for (const local of listLocalSessions(dshHome)) {
     try {
-      results.push(await pushSession(s3, ctx, identity, local, markers, state))
+      results.push(await pushSession(s3, ctx, identity, local, markers, state, legacyCache))
     } catch (error) {
       results.push({ sessionId: local.sessionId, outcome: `error:${error instanceof Error ? error.message : String(error)}` })
     }

@@ -298,9 +298,18 @@ export async function listWorkspaces(s3) {
  * @param markers - rows from {@link listWorkspaces} (schema-validated).
  * @param me - identity `{identity, me}` for strict memberId binding.
  */
-export async function matchWorkspace(cwd, markers, { identity, me } = {}) {
+export async function matchWorkspace(cwd, markers, { identity, me, legacyCache } = {}) {
   if (identity === undefined || me === undefined) return null
-  const legacy = await workspaceIdFor(cwd)
+  /* The legacy path-hash needs one `git remote get-url` subprocess per cwd.
+   * A sync pass walks every local session, so the same cwd repeats; caching by
+   * cwd turns N spawns into the number of distinct directories (F-28). */
+  let legacy
+  if (legacyCache !== undefined && legacyCache.has(cwd)) {
+    legacy = legacyCache.get(cwd)
+  } else {
+    legacy = await workspaceIdFor(cwd)
+    legacyCache?.set(cwd, legacy)
+  }
   let prefixBest = null
   for (const marker of markers) {
     /* trustedMember (review 9012 F1): the remote member row is co-tenant

@@ -6,7 +6,7 @@
  * member replica; `prepare` mode prints the UI steps when none exists.
  * Run: node scripts/eval/session-sync.mjs
  */
-import { readFileSync, existsSync, rmSync } from 'node:fs'
+import { readFileSync, existsSync, rmSync, utimesSync } from 'node:fs'
 import { zstdDecompressSync } from 'node:zlib'
 import { devNsw, desktopNsw, post, check } from './clients.mjs'
 import { env, clientFor } from './lib.mjs'
@@ -71,6 +71,11 @@ if (existsSync(B_ARTIFACT)) {
 }
 
 // ---- T-F05: foreign writer is refused ----
+// The unchanged-fingerprint fast path would answer before the writer gate, so
+// bump the local mtime to force a real push attempt.
+const localArtifact = `/Users/seanz/.dsh-dev/sessions/--Users-seanz-dasw-1112-mu-a--/${SID}/session.v4.jsonl.zstd`
+const bumped = new Date(Date.now() + 1000)
+utimesSync(localArtifact, bumped, bumped)
 const foreign = { ...meta, writerId: 'dasw-x@deadbeef', rev: meta.rev + 5, committedBytes: 10 }
 await s3.putJson(`workspaces/${WS}/sessions/${SID}/meta.json`, foreign)
 const blocked = await post(devNsw, '/sync')

@@ -409,3 +409,19 @@ Owner-reported gaps → fixes, verified on dsh-dev.local + desktop.
 
 Extra: `syncAll`/`readBodyParts`/`listRemoteSessions` bounded-parallel; `.nsw-meta.json` durable pull fingerprint survives restarts; 3-strike poison-artifact skip; `backgroundSyncMs` back to 15000 on dev.
 Eval: multi-user-files 26/26 green over direct path.
+
+## §9 Round 10 (2026-11-12 evening) — cold-start "shared workspace blocks the UI"
+
+Owner report: loading the shared workspace blocks the workspace view; local should be primary, shared a side-load.
+
+Root cause (two amplifiers):
+1. Cold-start full-corpus re-decode. `syncState.bySession` was in-memory only, so the first tick after a restart stat-skip-missed EVERY local session → `readFile` + full multi-frame zstd `summarize` on a large corpus = hundreds of MB IO+CPU burst. The tick already had a `running` guard, so it was not overlap — it was one giant first pass.
+2. 15s full remote-index sweep. `pullRemoteSessions` called `listRemoteSessions` every tick = LIST + one GET per session meta; and `/sessions` fired the same sweep on every panel mount — dozens of round trips crowding the keep-alive pool that interactive routes share.
+
+Fixes (all consumption-receipt, 单一真源 preserved):
+- `sync-state.json` under `$DSH_HOME/.nsw/` persists `{mtimeMs,size,workspaceId}` + remoteRev so a restarted host stat-skips the unchanged corpus on the FIRST tick.
+- `pushSession` `peekCwd` decodes only the header zstd frame to get cwd before the expensive full `summarize`; non-shared sessions never decode their whole log. Negative decisions are NOT persisted (a later join must re-evaluate them).
+- `/sessions` + `pullRemoteSessions` share a 60s `remoteIndex` cache; panel mount is now a cache hit.
+- `SHARED_SYNC` (Symbol) lets `startBackgroundSync` share the route-table's fingerprint maps + index + persist — one copy, no double-pull.
+
+Verified: dev cold-start `/ls` probes 5–1942ms across the first tick (no multi-second stall); multi-user-files 26/26 on dev+desktop with endpointDirect.

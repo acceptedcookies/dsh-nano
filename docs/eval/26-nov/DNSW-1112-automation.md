@@ -140,6 +140,34 @@
 | T-E03 | perf-review instrumentation（`?perf-review=1`） | ✅ | 无页面埋点时不采集（恒等包装）；`/settings`、`/workspaces`、`/sessions`、`sync-tick` 均有 `hostSpan` 包裹点 |
 | T-E04 | 后台同步 30s / 心跳 25s 的重复与节流 | ✅ | 新增 `backgroundSyncMs`（0 关闭）；实测关后 35s 内 generation 不变；开时 30s 内会主动推 |
 
+### G. 负向与失败模式（T-Gxx，Round 5 新增）
+
+| ID | 场景 | 状态 | 证据 / 结论 |
+|---|---|---|---|
+| T-G01 | 密钥被吊销后重新绑定 | ✅ | 换错误密钥：`/workspaces` → 400 `S3 403 InvalidAccessKeyId`（有界、不挂死、不回 XML）；改回真密钥后立即恢复 |
+| T-G02 | 破坏性路由的畸形请求体 | ✅ | 无 id / 非 16-hex / 缺 name / 相对路径 / `../../etc` / 缺 sessionId / 短 id 共 7 种全部被拒 |
+| T-G03 | 租约时钟徏移 | ⚠️ | **已知风险 F-24**：把 claim 的 `expiresAt` 设到 400 天后，合法写者会被永久阻塞 |
+| T-G04 | 删除与 push 交错 | ✅ | 两者同时发出：push 200、delete 200，不互相崩溃；删除后列表消失、再 push 返回 `shared workspace not found`。但竞争中的 push 仍写下了孤儿 tree 对象（F-12） |
+| T-G05 | 成功后重试幂等 | ✅ | 第二次 push `generation` 不变且 `unchanged:true`，不产生新代 |
+| T-G06 | 大量工作区下列表 | ✅ | 14 个工作区时 `/workspaces` 11.6s 返回（Cloudflare 单次往返 ~1.1s × 逐 marker 读取，属已知线性成本） |
+
+### H. 性能观测（T-Hxx，Round 5 新增）
+
+启用方式：dev LaunchAgent 已带 `DSH_PERF_REVIEW=1`；页面带 `?perf-review=1`。
+证据：`logs/perf-report.json`（`window.__perfReview.report()` 原始输出）。
+
+| 指标 | 读数 | 说明 |
+|---|---|---|
+| `nativeInpCount` / `p75` | 11 / 72ms | 含 presentation，属环境级，不进插件预算 |
+| `inputDelayP95` / `processingP95` | 0.2ms / 11.2ms | 主线程处理很轻 |
+| `presentationP95` | 79.8ms | 环境级（Electron/浏览器合成） |
+| `loafCount` / `blockingMs` | 2 / 37.4ms | 全局长帧 |
+| `nanoCombined.scriptMs` | 55.2ms | 仅统计 >50ms 长帧里的 >5ms 脚本条目 |
+| `nanoCombined.clientJsBytes` | 864779 | 四个 nano 包 combo 合计 |
+| **nano-shared-workspace `section-render` p95** | **0.2ms** | 自身渲染开销可忽略 |
+| nano-shared-workspace `apply-separate` p95 | 0.5ms | 隐藏本地镜像行的 DOM 遍历 |
+| nano-shared-workspace tracks | `hold` / `sidebar-dedupe` / `sidebar-graft` | 心跳、去重、graft 观察器 |
+
 ## 3. 发现登记
 
 | ID | 严重度 | 场景 | 现象 | 裁定 | 状态 |
@@ -164,6 +192,7 @@
 | F-18 | 中 | 绑定竞态 | 探测成功后 `finishBind` 只置 `setupStage`，`configured/username` 要等 `refresh()`；用户立即点「新建共享工作区」会被弹回第 1 步 | `finishBind(bound)` 接受刚落库的用户名并立即置 `configured:true` | 🔧 U-11 |
 | F-19 | 中 | 错误文案 | 错密钥时对话框直接展示 S3 原始 XML（几百字 `<Error><Code>…`） | `messageOf` 抽 `<Code>` + HTTP 状态，其余去标签并截断 180 字 | 🔧 U-09 |
 | F-20 | 中 | 同步性能 | 200 文件 push 111s / pull 108s：blob 串行传输；且重复 push 重传所有未变文件 | 有界并发池（8）；sha 已在 HEAD/parent 则跳过上传；返回 `uploaded` 供观测 | 🔧 U-08 |
+| F-24 | 中 | 租约可被恶意/异常预占 | claim 的 `expiresAt` 只校验是有限数字，不校验合理上限。写入一个 400 天后的 claim 会让该会话对该工作区内所有合法写者永久 `busy`（实测 `holder: ghost@deadbeef`）。测试/时钟偏差也会触发同类问题 | 裁定：**接受为已知限制**（claim 属同桶协作者可写，彻底防住需服务端可信时钟），在 ledger 与 README 里明示；缓解手段是删除 `claims/{sessionId}.json` | 已登记 |
 | F-23 | 中 | cool-off 的 UI 表达 | 租约被占时弹窗标题是「无法打开」，底部同时给「取消」和「关闭」两个同义按钮；语义上是「稍后重试」而非失败 | 新增 ``noticeKind: 'busy'``，标题改「会话正在被占用」，footer 只留一个「关闭」 | 🔧 U-15 |
 | F-22 | **严重** | 会话日志回放（跨运行时） | Electron 44 内置 Node 24.21 的 `zstdDecompressSync` **只解第一个帧**；DSH 会话日志是逐次追加的多帧 zstd。桌面版读到 21 事件的会话时只拿到 1 行 header，`/transcript` 返回 1 条、`/materialize` 产出 176 字节残缺副本。系统 Node 24.22 能解全部 7 帧，所以**只在桌面/Electron 端复现** | `decode()` 按 zstd magic 切帧后逐帧解码；两运行时均得 21 行 | 🔧 U-14 |
 
@@ -197,6 +226,8 @@
 | `scripts/eval/multi-user-files.mjs` | 双客户端 join、文件同步、冲突消融、二进制、超限、symlink、恶意 HEAD、并发 push（T-B04 / T-C04 / C05 / C06） |
 | `scripts/eval/multi-user-leases.mjs` | cool-off、心跳、过期回收、并发 claim、非法 id（T-C01 / C02 / C03 / C07） |
 | `scripts/eval/scale-and-perf.mjs` | 200 文件规模、深层嵌套、`/workspaces` 大列表、会话路由、后台同步关闭（T-E02 / E03 / E04） |
+| `scripts/eval/negative-cases.mjs` | 密钥吊销/重绑、7 种畸形请求体、租约时钟徏移、删除与 push 交错、重试幂等、大量工作区（T-G01…G06） |
+| `logs/perf-report.json` | `window.__perfReview.report()` 原始快照（T-H01） |
 | `scripts/eval/session-sync.mjs` | 会话日志推送/远端列举/transcript/materialize/外部写者拒写（T-F01…F05，含 F-22 回归） |
 | `scripts/eval/race-markers.mjs` | 无条件并发 join 丢成员 + CAS 控制组（F-07 / U-01 / U-02） |
 | `scripts/eval/join-cas.mjs` | 三方并发 join 保留全部 member（U-02） |
@@ -263,3 +294,19 @@
 
 - 三端构建哈希：`lib/host.js` `6d092f312280…`；两测试节点已同步。
 - 测试矩阵：A 6 / B 6 / C 7 / D 6 / E 4 / F 6 = **35 个用例**，除 F-12 裁定项外全部有结论。
+
+### Round 5（2026-11-12 12:22–12:35）
+
+- **真实 perf 采集**：dev 宿主已带 `DSH_PERF_REVIEW=1`，用 ego 带 `?perf-review=1` 做三轮弹窗开关 + 折叠展开，然后 `window.__perfReview.report()` 取快照存 `logs/perf-report.json`。
+  关键读数：`section-render` p95 **0.2ms**、`apply-separate` p95 0.5ms、`inputDelayP95` 0.2ms、`processingP95` 11.2ms；`nanoCombined.clientJsBytes` 864779。插件自身渲染开销可忽略，主要成本在云端往返（见 §1.5）。
+- **负向套件** `scripts/eval/negative-cases.mjs`（17 断言全绿）：密钥吊销后干净报错且可重绑恢复、7 种畸形请求体全部拒绝、删除与 push 交错不互崩、重试幂等、14 工作区列表 11.6s。
+- **F-24（已登记为已知限制）**：claim 的 `expiresAt` 无合理上限校验，写入 400 天后的 claim 会永久阻塞该会话。属同桶协作者可写导致的可信时钟问题，裁定接受并在 ledger 明示；缓解手段是删 `claims/{id}.json`。
+- 过程中修正了两处**测试断言自身**的错误（吊销密钥应返回 400 而非 200；把正常结果误判为失败），不是产品缺陷。
+- 清理了累积的测试工作区，桶内只剩 `multi-user`（`9167ab8d56346228`）。
+- 未触碰 `dsh.local`。
+
+### Round 5 末状态
+
+- 测试矩阵：A 6 / B 6 / C 7 / D 6 / E 4 / F 6 / G 6 / H 2 = **43 个用例**。
+- 发现 24 项：22 项已修并复测，F-12（级联删除）与 F-24（租约上限）为已登记的待裁定/已接受项。
+- 脚本 10 个（`scripts/eval/`），截图 22 张，perf 快照 1 份。

@@ -447,7 +447,7 @@ dsh-nano-notepad/
 | | 宿主 `index.js` | 浏览器 `src/client/index.js` |
 |---|---|---|
 | 导出 | `name='nano-notepad'`、`inject=['webServer','connection','subprocess']`、`Config`、`apply` | `inject=['slots','shortcuts','theme','locale','workspaces','sessions','sidebarRight']`、`apply` |
-| 干什么 | `Config` 给六个面板默认值；注册 `/nano-notepad/read|save|fetch-mp|s3/*` 路由；`osascript` 原生另存为；公众号文章抓取与消毒；S3 签名代理 | 注入 `shell.overlay` 浮层；监听 `⌘E`→`1`（Windows `Ctrl+E`→`1`）；Markdown/JSON 编辑、IndexedDB、图片、版本历史、i18n、云同步 |
+| 干什么 | `Config` 给六个面板默认值；注册 `/nano-notepad/read|save|fetch-mp|s3/*` 路由；`osascript` 原生另存为；公众号文章抓取与消毒；S3 签名代理 | 注入 `shell.overlay` 浮层；监听 `⌘E`→`1`（Windows `Alt+E`→`1`，`Ctrl+E`→`1` 回退）；Markdown/JSON 编辑、IndexedDB、图片、版本历史、i18n、云同步 |
 | 不干什么 | 不存笔记（数据在浏览器）、不把密钥送进页面 | 不直接访问 S3、不碰宿主文件系统 |
 
 安全细节值得抄：另存为把文件名作为 `osascript` 的 **argv** 传入，绝不拼进 AppleScript 源码（[dsh-nano-notepad/index.js](dsh-nano-notepad/index.js) 第 99–133 行）；每条可写路由开头都是 `ctx.get('connection')?.requestRejection(req)`；body 有 8MB / 32MB 上限。

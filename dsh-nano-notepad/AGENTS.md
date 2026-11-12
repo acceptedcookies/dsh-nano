@@ -2,7 +2,7 @@
 
 只处理这一个包。不要安装、不要修改、也不要假设旁边还有别的 nano 插件。
 周围仓库、`context/`、本机手册都不在这个包里。
-装好的标志：按 `⌘E` 然后 `1`（Windows 为 `Ctrl+E` 然后 `1`）打开悬浮记事本。两键是先后按下，不是同时按住。
+装好的标志：按 `⌘E` 然后 `1`（Windows 为 `Alt+E` 然后 `1`，`Ctrl+E` 然后 `1` 同样有效）打开悬浮记事本。两键是先后按下，不是同时按住。
 
 ## 身份
 
@@ -73,7 +73,7 @@ dsh plugin --profile web add <spec>
 
 1. profile 的 `package.json` 里，`dependencies` 和 `dsh.profile.bundles` 都有本包名。
 2. 重启并刷新后，页面里能找到本包的 client 模块（包名）。找不到说明 client 没进页面。
-3. 按 `⌘E` 然后 `1`（Windows 为 `Ctrl+E` 然后 `1`）。浮层打开。
+3. 按 `⌘E` 然后 `1`（Windows 为 `Alt+E` 然后 `1`）。浮层打开。
 4. 该浏览器源出现 IndexedDB 库 `dsh-nano-notepad`。快捷键无反应时，先确认包内有 `lib/client.js`，再重启一次。不要另找一条安装路径。
 
 ## 初次运行
@@ -91,7 +91,7 @@ dsh plugin --profile web add <spec>
 
 | 动作 | 结果 |
 |---|---|
-| 圆形启动器，或 `⌘E` 然后 `1` | 开关浮层。Windows 为 `Ctrl+E` 然后 `1` |
+| 圆形启动器，或 `⌘E` 然后 `1` | 开关浮层。Windows 为 `Alt+E` 然后 `1`（Alt 与 Mac 的 ⌘ 同键位）；`Ctrl+E` 然后 `1` 仍可用作回退 |
 | 任意文本（`.env`、`.yaml`、`.sh`…） | 源码编辑；仅 `.md` / `.markdown` 提供 Markdown 预览与格式工具栏 |
 | `.json` | 保留后缀，打开树和 JSON 工具 |
 | 笔记内图片 | png、jpeg、gif、webp，存在同一个库 |

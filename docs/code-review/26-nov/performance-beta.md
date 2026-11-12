@@ -180,3 +180,144 @@
 5. 陷阱记录：`document.querySelector('[data-nxe-tree]')` 会命中**隐藏 pane**（keepMounted 每会话一个），其零翻动是「隐藏 pane 不轮询」的正确行为，不是修复证据（本轮首轮两次采样因此作废）。
 
 > 一句话收口：**α 册证明了「测得到的 NDEE」很便宜；β 册实测了「测不到的 NDEE」——每 15 秒把整棵树的 accessory 拆了重建、每个展开目录跑一遍 9 进程 Git 全套电池，而数据一个字都没变。E0 先把这两件事变成可复跑判据，E1–E7 再逐项拆弹，每项带 before/after 退出码。**
+
+---
+
+## §9 β 工况实测：其他三插件接入与评分（2026-11-12 凌晨，dsh-dev）
+
+E0–E11 落地后复测通过（`lab/diagnose-render.mjs --check`：accMounted/accUnmounted **225 → 0**，fiberTypeStable **true**，scoped `status?path` 2867 ms → **226 ms**，退避 15→30→60 s 生效，`ignored` 合批到 1 次）。本节按 goal 把同一工况推到其余三个 nano 插件：先修一处仪器盲区，再逐个采集、评分、提出新优化方案。测试床同 §2，页面带 `dsh-perf-review=1`，ego lite / Chromium 156，TaskSpace `nxe-perf-render`。快照 `lab/out/beta-other-plugins.json`。
+
+### 9.0 接入前发现的仪器盲区（已修复）
+
+`perf.profiler()`（`packages/dsh-performance-review/src/client.js`）旧守卫是 `typeof React.Profiler !== 'function'`——**`React.Profiler` 是 `Symbol.for('react.profiler')`，不是函数**，所以该守卫永远为真，`profiler()` 对每个调用方都原样返回组件。后果：model-selector 早已包的 `ObservedModelSelector` 从未真正观测，三插件 `profiler.commits` 恒为 0。修复：守卫改为 `React.Profiler == null` 判空；并在 `<Profiler>` 内部增加一个手动计时壳 `Timed`，把每次 render 时长记为 `react-render` span——因为 **React 18.3.1 生产构建下 `<Profiler>.onRender` 本身不触发**（该回调只在 profiling 构建启用），`<Profiler>` 只起结构标记作用，数据改由 span 承载。此修复对本册 §1 的「仪器盲区」是直接补洞：React 渲染路径从此有 `react-render` 读数。
+
+### 9.1 接入改动（本轮已落地）
+
+| 插件 | 改动 | 文件 |
+|---|---|---|
+| `nano-explorer-extra` | E11：`ObservedExplorerBody = perf.profiler(ExplorerBody)` 注册进 files body slot | `src/client/index.js` |
+| `nano-shared-workspace` | `perf.js` 补 `export const profiler`；`index.js` 用 `profiler(SidebarGraft)` 注册 graft | `src/client/perf.js`、`src/client/index.js` |
+| `nano-notepad` | DOM 实现无 React 树可包；打字热路径加 `perf.track('listener', 'keystroke-input')` | `src/client/panel.js` |
+| `nano-model-selector` | 已有 `ObservedModelSelector`；随仪器修复后读数自动开始采集 | — |
+
+### 9.2 实测数据（同一窗口，`beta-other-plugins.json`）
+
+场景：notepad ⌘E→1 开面板并打 103 键（文档 28.2 KB）；model-selector 打开一次面板；shared-workspace 静置侧栏；页面全程无人工滚动。
+
+| 插件 | 证据 | 读数 |
+|---|---|---|
+| `nano-notepad` | `keystroke-input` track | **103 次回调 / 1509.6 ms → 均值 ~14.7 ms/键击**；另做 20 键受控 burst 得 309.8 ms → **~15.5 ms/键** |
+| | `highlight` span n=107 | span 只包 `highlightSource()` 字符串生成（reservoir 中位 ~0.05 ms）；**每键 `layer.innerHTML = …` 的整串重建 + 解析不在 span 内**，是 15 ms 的大头 |
+| | `escape-key` / `page-resize` / `visibility` / `bc-message` | 常挂全局监听；合计 146 次调用 0.1 ms，可忽略 |
+| `nano-shared-workspace` | `apply-separate` span | **132 次 / p50 0.3 ms**——`sidebar-dedupe` 与 `sidebar-graft` **两个 body 级 MutationObserver**（`childList+subtree+attributes`），页面任何 DOM 变动都触发分离扫描 |
+| | `section-render` n=13；`react-render` n=2 | 每次渲染整段 innerHTML 重建；React 侧接近 0 |
+| | `hold` interval | live=1，0 回调成本 |
+| `nano-model-selector` | `react-render` n=2 | ~0 ms |
+| | `panel-place` | **单次 19.5 ms**（开面板时的定位布局读），一次性成本 |
+| | `filter-render` / `catalog-fetch` | n=4 / n=2，p50 ≈ 0；catalog 有缓存 |
+| `nano-explorer-extra`（对照） | `react-render` n=4 p50≈0；`git-refresh` p50 530 ms；`stats-count` **28.9 s 一次** | 宿主侧全仓 `fs.listDir` 递归仍是全库最大的单笔 span（memoized 45 s，与轮询无关，§3.3/E9 只减了每目录的 `resolve`） |
+
+页级：`nanoCombined.scriptMs` 6.2 ms（4 帧 >50 ms LoAF），`forcedLayoutMs` 1 ms——主线程脚本负担仍很轻，与 §1 结论一致；本轮新增负担集中在「每键 DOM 重建」与「body 级观察者频次」这类**测不到 span 的结构成本**。
+
+### 9.3 评分（5 分制，按 β 工况证据；维度：渲染/事件/扇出/观察者表面积）
+
+| 插件 | 渲染成本 | 事件与热路径 | 宿主扇出 | 观察者表面积 | 总分 / 结论 |
+|---|---|---|---|---|---|
+| `nano-notepad` | 2/5 | 2/5 | 5/5 | 4/5 | **3.2** — 唯一的热路径缺陷是每键全量 `innerHTML` 重建，大文档下 15 ms/键已接近 60 fps 预算 |
+| `nano-shared-workspace` | 3/5 | 4/5 | 5/5 | 1/5 | **3.4** — React 渲染与 span 都很便宜，但两个 body 级 MutationObserver 把它变成「页面 DOM 变动 ×132」的放大器 |
+| `nano-model-selector` | 5/5 | 4/5 | 5/5 | 5/5 | **4.7** — 最干净；唯一可挑的是 `panel-place` 19.5 ms 的一次性布局读 |
+
+### 9.4 新优化方案（按证据提出，待业主审查；标 [P1]=高收益低风险，[P2]=中，[P3]=观察项）
+
+**notepad**
+- [P1] `paintMirror` 的 `layer.innerHTML = …` 移出按键热路径：`perf.span('highlight')` 只测了字符串生成，真正的 15 ms 在 innerHTML 解析 + 文本树重建。方案：按键后把 `paintMirror` 合并进下一帧 `requestAnimationFrame`（同帧连打只画一次），并把 `innerHTML` 赋值本身纳入 span；或改差量更新（只换变化的行节点）而非整串重建。
+- [P2] `escape-key`/`page-resize`/`visibility` 三个全局监听在面板关闭期仍 attach——成本已测 ≈0，但建议面板隐藏时 `detach`（一致性、也为未来更贵的处理预留）。
+- [P3] `ctia-watch` MutationObserver 132 次 1.3 ms，暂无必要动；保留观察。
+
+**shared-workspace**
+- [P1] `sidebar-dedupe` 与 `sidebar-graft` **合并为单个 body MutationObserver**：同一份 mutation 触发两套 wrap+扫描，是 132 次 `apply-separate` 的直接成因；合并后回调减半，且 `graftHost()`/`separateFromLocal()` 顺序在同一回调里可控。
+- [P1] 观察者回调加微任务/rAF 合流：`apply-separate` 单回调仅 0.3 ms，但同一批 mutation 会连发——合流后 132 → ~实际帧数。
+- [P2] `section-render` 每次都整段重建 `innerHTML`（n=13）；数据变更稀疏时可按 row 复用 DOM 或在 `SharedSection` 里 `React.memo` 行组件。
+- [P3] `readChrome()` 每次 render 都做 `[...document.querySelectorAll('span')]` 全页找「工作区」标题——在 132 次 observer 触发链路上是隐藏成本；建议 chrome 只读一次并缓存失效。
+
+**model-selector**
+- [P2] `panel-place` 19.5 ms：开面板时对 anchor 做若干 `getBoundingClientRect`/`offset*` 读。建议缓存 anchor rect，仅在 `resize`/`scroll`/composer 布局变化时重算；或把测量挪进 `requestAnimationFrame` 让首帧先出。
+- [P3] `catalog-fetch` 有缓存（n=2 而非每开一次），维持现状。
+
+**perf-review 库（本轮仪器修复的后续建议）**
+- [P1] 文档层：`React.Profiler` 在生产 React ≤18 只起结构作用，`profiler()` 的 `commits`/`commitP95` 恒 0 不是异常；报告行应改以 `react-render` span 为主读数（本轮已让数据实际流入该 span）。建议在 spec-26nov.md 或 README 注明「React 19 profiling 构建才有 `commits`，生产构建看 `react-render`」。
+- [P2] `profiler()` 现在对「非 React 组件（DOM-rendered 插件）」无意义——notepad 这类应沿用 track/span；已在 §9.1 记录。
+
+**NDEE 残留（对照栏，不在三插件评分内）**
+- `stats-count` 28.9 s 一次的宿主 `fs.listDir` 全仓递归是全库最大单笔 span；已被 `STATS_MEMO_MS=45 s` 与 `status?only=stats` 隔离，不在轮询链路上，但仍是「打开文件页首屏」的最大尾延迟候选，值得在下一轮单独设计（例如 `statfs`/`du` 近似或后台预聚合），本册不展开。
+
+### 9.5 复跑方法
+
+1. 页面 `localStorage['dsh-perf-review']='1'` 后 `location.reload()`；ego TaskSpace `nxe-perf-render`，页面 `p1`。
+2. notepad：⌘E→1 开面板，`page.keyboard.type` 打 ≥100 键；读 `_state().plugins.get('nano-notepad').tracks.get('keystroke-input').totalCallbackMs / totalCallbacks`。
+3. shared-workspace：静置侧栏 30 s；读 `spans['apply-separate'].n` 与 `tracks['sidebar-dedupe'/'sidebar-graft']`。
+4. model-selector：点 `.nms-trigger`；读 `spans['react-render'/'panel-place'/'filter-render']`。
+5. 快照写 `lab/out/beta-other-plugins.json`；NDEE 对照复跑 `node lab/diagnose-render.mjs --check`。
+
+---
+
+## §10 P1 落地：前后对照与 P2 证据分析（2026-11-12 凌晨，dsh-dev）
+
+按 §9.4 的 [P1] 项完成新一轮落地，同口径实测验证。本节先列改动，再摆前后对照，最后回答两个问题：P1 是否有效、证据是否支撑 P2 规划。
+
+### 10.1 落地改动
+
+| 项 | 插件 | 改动 | 文件 |
+|---|---|---|---|
+| P1-a | `nano-notepad` | `paintMirror` 拆为「字符串生成 `highlight` + DOM 写入 `highlight-dom`」两个 span；按键路径改用 `schedulePaintMirror`——`requestAnimationFrame` 合流，一帧内连打只重绘一次；`disposers` 里取消悬挂帧 | `src/client/panel.js` |
+| P1-b | `nano-shared-workspace` | 新建 `src/client/dom-watch.js`：**单个** `document.body` MutationObserver，订阅制 + rAF 合流；`graft.js` 的 sidebar-graft 与 `index.js` 的 sidebar-dedupe 两个独立 observer 合并订阅同一源 | `src/client/dom-watch.js`、`graft.js`、`index.js` |
+| P1-c | `dsh-performance-review` | README 记两条真机边界：`React.Profiler` 是 Symbol 不能 `typeof` 守卫；生产 React ≤18 `onRender` 不触发、读数看 `react-render` span；纯 DOM 插件沿用 track/span | `packages/dsh-performance-review/README.md` |
+
+构建复跑：`lib/client.js` 内 `MutationObserver` 出现次数 **2 → 1**；`highlight-dom`/`schedulePaintMirror` 符号入 bundle；notepad mirror 功能验证 `textContent` 28293 字符 ≈ textarea 28292（rAF 合流未丢帧）。
+
+### 10.2 前后对照（同文档 28.2 KB、46 键 × 35 ms 合成键击）
+
+**notepad 打字热路径：**
+
+| 指标 | 落地前 | 落地后 | 变化 |
+|---|---|---|---|
+| `keystroke-input` 回调 | 46 次 | 46 次 | — |
+| handler 累计 | **762.2 ms** | **6.6 ms** | **−99.1%** |
+| 每键均值 | **~16.6 ms** | **~0.14 ms** | 一个数量级 |
+| `highlight`（字符串生成） | 46 次 / reservoir ~0.7 ms | 29 次 / ~0.7 ms | 同步减少（rAF 合流） |
+| `highlight-dom`（innerHTML 重建） | 未测量（混在 handler 内） | 29 次 / 4.7 ms，max 0.3 ms | 首次可测：每帧一次而非每键一次 |
+
+机制上说得通：落地前每键同步 `layer.innerHTML = 28 KB HTML`（解析 + 文本树重建），46 键 = 46 次全量重建；落地后输入 handler 不再碰 DOM，mirror 一帧至多重建一次。46 键打在 35 ms 间隔 ≈ 2 帧/键，合流成 29 次 `highlight-dom`——**DOM 重建总量从 46 次/762 ms 降为零头，且不随键速线性增长**（键速越快，合流收益越大）。
+
+**shared-workspace 观察者链：**
+
+| 指标 | 落地前 | 落地后 | 说明 |
+|---|---|---|---|
+| body MutationObserver 数 | **2**（dedupe + graft 各自 observe） | **1** | 结构性：Chrome 投递的 mutation 批减半 |
+| 回调时机 | 每 microtask flush ×2 | 每 frame ×1，两条订阅共享 | 回调频率封顶 60/s |
+| churn 场景（20 次点击）`apply-separate` | 无前值（见 10.4 诚实边界） | 21 次 / dedupe 8.3 ms + graft 3 ms | 每帧仍跑一次分离扫描 |
+| 静态 30 s `apply-separate` | 5 次 | 7 次 | 差值 = 后台真变（session 行 tick），不属回归 |
+
+**结论：P1 三项均有效，但有效形态不同。** P1-a 是数量级收益——notepad 每键主线程成本从 ~16.6 ms（已触 60 fps 预算红线）降到 ~0.14 ms + 每帧摊销 ~0.16 ms 的 DOM 重建。P1-b 收益主要在**结构**而非毫秒：回调数本身 ms 就小（apply-separate p50 0.3 ms），但观察者从 2 → 1、回调从「每 flush」收敛为「每帧」，消除了它随页面复杂度线性放大的放大器结构；在 DOM 高频变动页面上收益会放大。P1-c 消除的是「下一个读 `commits` 恒 0 的人会误判」的坑。
+
+### 10.3 证据对 P2 规划的支持
+
+**P1 测量结果直接改变了 P2 的优先级排序：**
+
+1. **notepad 差量更新（原 P2）降级为观察项。** 原本担心 28 KB 文档的每键重建必须做行级差量；实测 `highlight-dom` 每帧 0.16 ms 均值、0.3 ms 峰值——**rAF 合流 + 整串重建已经足够便宜**。真正剩下的成本是 `highlightSource` 字符串生成（0.7 ms / 29 次 ≈ 0.024 ms/次）与渲染合成层的绘制，差量 DOM 的预期收益上限只有 ~0.3 ms/帧，不值得复杂度。建议把「行级差量」从 P2 降到 P3，改为监控 `highlight-dom` 的 p95 再决定。
+2. **shared-workspace 的 P2 反而被 P1 强化。** 观察者合并后 `apply-separate` 仍每帧跑一遍整段分离 + `section-render` 每 flush 整段重建：churn 下 21 次 ×（0.4 ms 分离 + 渲染）——观察者已经不是瓶颈，**「每次触发做多少工作」才是**。P2 三项（行级 DOM 复用 / `readChrome` 全页 `querySelectorAll('span')` 缓存 / `section-render` 差量）的证据链完整：单回调便宜 × 触发频繁 = 累计可观，下一步应测「整段重建一次多少 ms」作为 P2 的验收基线（`section-render` span 已有，本轮窗口内样本过少，需补长窗口）。
+3. **model-selector `panel-place`（P2）优先级不变。** 19.5 ms 一次性成本与本轮改动无交叉，anchor rect 缓存方案照旧。
+4. **新增 P2 候选：perf-review span reservoir 口径。** `highlight-dom` 的 p95 依赖 window 样本，无 INP 交互时 `windowN=0`、p50/p95 为 null——合成输入场景下只能用 reservoir 均值/峰值。P2 可给 span 行补「窗口外样本也进 p50/p95」或 lab 端用 `totalCallbackMs/n` 的现成均值口径（本轮即用此法）。
+
+### 10.4 诚实边界
+
+- **NSW 前后不是严格同场景对照**：20 次点击的 churn 协议是落地后才设计的，before 侧只有前一轮混合场景的 132 次 `apply-separate`（含 notepad 开合等重 DOM 动作），无法逐次配对。落地后的 21 次/20 点击只能证明「每帧一次」的封顶生效，不能给出 ms 级 before/after 差。结构证据（observer 数 2→1、回调时机由 flush 变帧）独立于场景，仍然成立。
+- **notepad 对照严格**：同文档、同 46 键、同 35 ms 间隔、同 snap 字段，762.2 → 6.6 ms 可直接对比。
+- 合成键击不产生 INP（`nativeInpCount=0` 依旧），16.6 → 0.14 ms 是 track 累计均值而非交互窗口 p95；`highlight-dom` 的 reservoir 峰值 0.3 ms 是 29 个样本的最大值。
+- `apply-separate` 静态窗口 5 → 7 次是后台真实 DOM 变动（session 时间戳刷新），属环境噪音，非优化引入的额外工作。
+
+### 10.5 复跑口径
+
+- notepad：`__perfReview._state().plugins.get('nano-notepad').tracks.get('keystroke-input')` 读 `totalCallbacks/totalCallbackMs` 差值；`highlight-dom`/`highlight` span reservoir。
+- NSW churn：页面内 `MouseEvent` 点击 `[data-nano-shared-workspace] button` 与 `.np-entry` 各 20 次 × 600 ms；读 `sidebar-dedupe`/`sidebar-graft` 的 `totalCallbacks`（应 ≈ 点击触发的帧数而非 flush 数）与 `apply-separate.n`。
+- 结构验证：`lib/client.js` 里 `MutationObserver` 出现次数应为 1；页面 `(new MutationObserver)` 无法计数时以 source 为准。

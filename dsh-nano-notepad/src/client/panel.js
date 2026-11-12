@@ -47,11 +47,15 @@ const writeUi = (...args) => perf.span('idb-write', () => writeUiRaw(...args))
 const STYLE = `
 ${NANO_STYLES}
 [data-nano-notepad] { pointer-events: none; }
-/* ── notepad typography tokens ────────────────────────────────────────────────
+/* ── notepad typography + portal theme tokens ──────────────────────────────────
    Declared on :root because nano-ui menus/dialogs portal to document.body —
    outside .np-layer — so only a document-level custom property reaches them.
    nano-ui reads the --nano-* vars (fallback = shell default); --np-* retunes
-   the notepad's own text. Both stay on --dsw-* for theme colours. */
+   the notepad's own text. Both stay on --dsw-* for theme colours.
+   Colours cannot ride :root, though: the portaled surface must follow the
+   notepad's own scheme, which can differ from the host's (light notepad inside
+   a dark shell). So every portal call passes resolvedTheme(), nano-ui stamps
+   it as [data-nano-theme], and the palette rules below repaint that subtree. */
 :root {
   --np-font-family: var(--dsw-font-family);
   --np-font-size: 13px;
@@ -77,8 +81,8 @@ ${NANO_STYLES}
    setting the property has no visual effect (the WeChat paste zone stayed
    visible with the integration switched off). */
 .np-mp-zone[hidden], .np-cloud[hidden], .np-tab-panel[hidden], .np-dlg-body [hidden] { display: none !important; }
-.np-window[data-theme="dark"], .np-entry[data-theme="dark"] { color-scheme: dark; --dsw-alias-bg-layer-1: #232324; --dsw-alias-bg-layer-2: #2c2c2e; --dsw-alias-bg-layer-3: #353638; --dsw-alias-bg-mask-1: #00000080; --dsw-alias-label-primary: #f9fafb; --dsw-alias-label-secondary: #cfd3d6; --dsw-alias-label-tertiary: #adb2b8; --dsw-alias-border-l2: #ffffff1f; --dsw-alias-border-l3: #ffffff29; --dsw-alias-interactive-bg-hover: #ffffff14; --dsw-alias-interactive-bg-active: #ffffff24; --dsw-alias-brand-primary: #f9fafb; --dsw-alias-brand-primary-invert: #0f1115; --dsw-alias-link: #7aaaff; --dsw-alias-state-error-primary: #f25a5a; --dsw-alias-state-error-secondary: #f25a5a; --dsw-alias-state-success-primary: #22c55e; --dsw-alias-state-success-secondary: #4ed17e; --dsw-alias-state-warn-primary: #f59e0b; --dsw-alias-state-warn-secondary: #f7ad31; --dsw-alias-interactive-bg-hover-danger: #f25a5a26; --dsw-alias-label-error: #f25a5a; --dsw-alias-tooltip-bg: #43454a; --dsw-alias-tooltip-label: #f9fafb; --dsw-alias-markdown-inline-code: #43454a; }
-.np-window[data-theme="light"], .np-entry[data-theme="light"] { color-scheme: light; --dsw-alias-bg-layer-1: #ffffff; --dsw-alias-bg-layer-2: #ffffff; --dsw-alias-bg-layer-3: #ffffff; --dsw-alias-bg-mask-1: #0000003d; --dsw-alias-label-primary: #0f1115; --dsw-alias-label-secondary: #61666b; --dsw-alias-label-tertiary: #81858c; --dsw-alias-border-l2: #0000001a; --dsw-alias-border-l3: #0000001f; --dsw-alias-interactive-bg-hover: #2631480f; --dsw-alias-interactive-bg-active: #2631481a; --dsw-alias-brand-primary: #0f1115; --dsw-alias-brand-primary-invert: #f9fafb; --dsw-alias-link: #4176e6; --dsw-alias-state-error-primary: #ec1313; --dsw-alias-state-error-secondary: #f25a5a; --dsw-alias-state-success-primary: #22c55e; --dsw-alias-state-success-secondary: #4ed17e; --dsw-alias-state-warn-primary: #f59e0b; --dsw-alias-state-warn-secondary: #f7ad31; --dsw-alias-interactive-bg-hover-danger: #ec13130d; --dsw-alias-label-error: #ec1313; --dsw-alias-tooltip-bg: #43454a; --dsw-alias-tooltip-label: #f9fafb; --dsw-alias-markdown-inline-code: #f5f6f7; }
+.np-window[data-theme="dark"], .np-entry[data-theme="dark"], [data-nano-theme="dark"] { color-scheme: dark; --dsw-menu-surface-fill: #303136a3; --dsw-alias-button-primary-fill: #f9fafb; --dsw-alias-button-primary-hover: #ebeef2; --dsw-alias-label-primary-foreground: #0f1115; --dsw-alias-bg-layer-1: #232324; --dsw-alias-bg-layer-2: #2c2c2e; --dsw-alias-bg-layer-3: #353638; --dsw-alias-bg-mask-1: #00000080; --dsw-alias-label-primary: #f9fafb; --dsw-alias-label-secondary: #cfd3d6; --dsw-alias-label-tertiary: #adb2b8; --dsw-alias-border-l2: #ffffff1f; --dsw-alias-border-l3: #ffffff29; --dsw-alias-interactive-bg-hover: #ffffff14; --dsw-alias-interactive-bg-active: #ffffff24; --dsw-alias-brand-primary: #f9fafb; --dsw-alias-brand-primary-invert: #0f1115; --dsw-alias-link: #7aaaff; --dsw-alias-state-error-primary: #f25a5a; --dsw-alias-state-error-secondary: #f25a5a; --dsw-alias-state-success-primary: #22c55e; --dsw-alias-state-success-secondary: #4ed17e; --dsw-alias-state-warn-primary: #f59e0b; --dsw-alias-state-warn-secondary: #f7ad31; --dsw-alias-interactive-bg-hover-danger: #f25a5a26; --dsw-alias-label-error: #f25a5a; --dsw-alias-tooltip-bg: #43454a; --dsw-alias-tooltip-label: #f9fafb; --dsw-alias-markdown-inline-code: #43454a; }
+.np-window[data-theme="light"], .np-entry[data-theme="light"], [data-nano-theme="light"] { color-scheme: light; --dsw-menu-surface-fill: #fcfdfeb3; --dsw-alias-button-primary-fill: #0f1115; --dsw-alias-button-primary-hover: #43454a; --dsw-alias-label-primary-foreground: #ffffff; --dsw-alias-bg-layer-1: #ffffff; --dsw-alias-bg-layer-2: #ffffff; --dsw-alias-bg-layer-3: #ffffff; --dsw-alias-bg-mask-1: #0000003d; --dsw-alias-label-primary: #0f1115; --dsw-alias-label-secondary: #61666b; --dsw-alias-label-tertiary: #81858c; --dsw-alias-border-l2: #0000001a; --dsw-alias-border-l3: #0000001f; --dsw-alias-interactive-bg-hover: #2631480f; --dsw-alias-interactive-bg-active: #2631481a; --dsw-alias-brand-primary: #0f1115; --dsw-alias-brand-primary-invert: #f9fafb; --dsw-alias-link: #4176e6; --dsw-alias-state-error-primary: #ec1313; --dsw-alias-state-error-secondary: #f25a5a; --dsw-alias-state-success-primary: #22c55e; --dsw-alias-state-success-secondary: #4ed17e; --dsw-alias-state-warn-primary: #f59e0b; --dsw-alias-state-warn-secondary: #f7ad31; --dsw-alias-interactive-bg-hover-danger: #ec13130d; --dsw-alias-label-error: #ec1313; --dsw-alias-tooltip-bg: #43454a; --dsw-alias-tooltip-label: #f9fafb; --dsw-alias-markdown-inline-code: #f5f6f7; }
 .np-entry { width: 36px; height: 36px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-primary); cursor: grab; box-shadow: var(--dsw-elevation-soft); }
 .np-entry:active { cursor: grabbing; }
 .np-entry svg { width: 18px; height: 18px; display: block; margin: auto; }
@@ -1506,6 +1510,10 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     const theme = resolvedTheme()
     panel.dataset.theme = theme
     entry.dataset.theme = theme
+    /* The settings card is open while the user flips this very setting, and the
+       card lives on document.body — re-stamp it so it does not stay on the old
+       palette until reopened. */
+    activeDialog?.setTheme?.(theme)
     panel.style.setProperty('--np-editor-font-size', `${state.settings.editorFontSizePx}px`)
     applyCopy()
     const tree = must(panel, '.np-tree')
@@ -1630,6 +1638,9 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
   let closeMenu = /** @type {(() => void) | null} */ (null)
   let closeDialog = () => {}
   let dialogOpen = false
+  /* The open card's adapter handle. The settings card can flip our scheme while
+     it is up, so render() re-stamps it instead of leaving it on the old palette. */
+  let activeDialog = /** @type {{ close: () => void, setTheme?: (theme: string) => void } | null} */ (null)
   /* the ws button sits outside the anchored menu, so its own pointerdown makes
      NanoMenu close the menu before the click — suppress the immediate reopen. */
   let wsToggleJustClosed = false
@@ -1647,8 +1658,8 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
        .nano-dialog-host overlay then sits fullscreen on top and eats clicks
        meant for the new card. Close any open one first. */
     closeDialog?.()
-    let handle = /** @type {{ close: () => void } | undefined} */ (undefined)
-    const finish = () => { dialogOpen = false; if (closeDialog === closeSelf) closeDialog = () => {} }
+    let handle = /** @type {{ close: () => void, setTheme?: (theme: string) => void } | undefined} */ (undefined)
+    const finish = () => { dialogOpen = false; activeDialog = null; if (closeDialog === closeSelf) closeDialog = () => {} }
     // every exit path — footer buttons, Escape, mask, programmatic close —
     // funnels through finish()+adapter close so the panel guards release.
     const closeSelf = () => { if (!dialogOpen || !handle) return; finish(); handle.close() }
@@ -1666,6 +1677,9 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       maxHeight: cap + 24,
       width: Math.round(rect.width * 0.6),
       region: rect,
+      /* The card portals to document.body: name our scheme so a light notepad
+         inside a dark shell still paints a light card. */
+      theme: resolvedTheme(),
       /* Tabbed dialogs get one fixed height; panels scroll inside it. */
       fixedHeight: spec.fixedHeight === true ? cap : undefined,
       onConfirm: () => spec.onConfirm?.(closeSelf),
@@ -1676,6 +1690,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
         ref: el => { if (el) spec.setup?.(el, closeSelf) },
       }),
     })
+    activeDialog = handle
   }
 
   /**
@@ -1705,7 +1720,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     /* The portal sits on document.body and would happily outgrow the floating
        window — cap it at the space actually left inside the panel. */
     const room = panel.getBoundingClientRect().bottom - anchor.getBoundingClientRect().bottom - 10
-    const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), items, width: 190, maxHeight: Math.max(120, room), gap: 4 })
+    const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), items, width: 190, maxHeight: Math.max(120, room), gap: 4, theme: resolvedTheme() })
     let closed = false
     const done = (unmount) => {
       if (closed) return
@@ -1750,7 +1765,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       { id: 'file', label: text().newBlankFile, icon: icon(FILE_ICON), run: () => { done(false); void add('file').catch(showError) } },
       { id: 'folder', label: text().newBlankFolder, icon: icon(FOLDER_ICON), run: () => { done(false); void add('folder').catch(showError) } },
     ]
-    const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), items, width: 180 })
+    const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), items, width: 180, theme: resolvedTheme() })
     let closed = false
     const done = (unmount) => {
       if (closed) return
@@ -2462,7 +2477,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     closeMenu?.()
     const copy = text()
     const raw = openNanoMenu({
-      anchor: anchor.getBoundingClientRect(), width: 160,
+      anchor: anchor.getBoundingClientRect(), width: 160, theme: resolvedTheme(),
       items: [
         { id: 'rename', label: copy.rename, run: () => askName(copy.renameTitle, node.name, async name => {
           const renamed = await renameNode(state.db, node.id, name)

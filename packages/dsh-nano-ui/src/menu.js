@@ -11,8 +11,11 @@ const { useCallback, useEffect, useRef, useState } = React
  * @param {Array<{ id: string, label: string, icon?: React.ReactNode, tone?: string, run: () => void }>} props.actions
  * @param {() => void} props.onClose - called by Escape, outside press, or an item running.
  * @param {number} [props.maxHeight] - cap the popup in pixels; the list scrolls past it.
+ * @param {'light' | 'dark'} [props.theme] - the owning surface's resolved scheme. The popup
+ *   portals to `document.body`, so it inherits the shell's palette, not the owner's; declaring
+ *   the scheme here lets the owner scope its light/dark tokens over this subtree.
  */
-export function NanoMenu({ menu, actions, onClose, width = 208, maxHeight }) {
+export function NanoMenu({ menu, actions, onClose, width = 208, maxHeight, theme }) {
   const ref = useRef(null)
   const [active, setActive] = useState(0)
   const items = menu === null ? [] : actions
@@ -43,6 +46,8 @@ export function NanoMenu({ menu, actions, onClose, width = 208, maxHeight }) {
     style: { position: 'fixed', left: `${Math.max(8, left)}px`, top: `${Math.max(8, top)}px`, minWidth: `${width}px`,
       ...(typeof maxHeight === 'number' ? { maxHeight: `${Math.round(maxHeight)}px`, overflowY: 'auto', overscrollBehavior: 'contain' } : {}) },
     'data-nano-menu': 'true',
+    /* Undefined is dropped by React, so an owner that follows the shell simply omits it. */
+    'data-nano-theme': theme,
   }, items.map((item, index) => React.createElement(NanoMenuItem, {
     key: item.id, item, index, active: index === active, onHover: setActive, onRun: onClose,
   })))

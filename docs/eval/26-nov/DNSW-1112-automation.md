@@ -381,3 +381,15 @@
 - 桶内清理到只剩 `multi-user:9167ab8d56346228`（用级联删除，7 个 fixture 一次清完）。
 - 三端构建哈希一致：`lib/client.js` `4e1e32c55409…`、`lib/host.js` `8a8324d0cd0f…`。
 - 分支 `dasw-1112-automation` 共 10 个提交，工作区干净，`main` 未被污染。
+
+## 7. 人工协同期（DASW-1112 后续）
+
+### Round 8：真实身份接入 + 502 根治（2026-11-12 14:30–17:30）
+
+- 把 `dsh.local` 从生产桶切到测试桶 `dasw-1112-shared`；新增两个人类身份：`dsh-sean`（业主，dsh.local）与 `dsh-echo`（外部同事），各发 MinIO svcacct、按 `dasw-1112-shared` 限定。
+- `dsh-sean` 绑定：复用 `scripts/eval/desktop-auth.mjs` 的 cookie 铸法（authority→`dsh.local`），`/settings/update` 完成，远端 `identities/dsh-sean.json` 已落桶；`dsh-echo` 凭据经 `.env.s3` `S3_DSHECHO_*` 交付对方自建插件。
+- **F-29（严重，已修）**：`dsh.local` 的「无法从共享空间载入这个会话: HTTP 502」是事件循环 stall 的下游症状，不是插件返回码。后台 `syncAll` 对整个会话树做**同步** zstd 解码 + `readdirSync/readFileSync` 遍历 + 逐字节 `frameOffsets` 扫描，循环冻结数十秒；Caddy 对 :3081 的 keep-alive 上游连接（`keepAliveTimeout` 5s）判死后 RST，Caddy 把「connection reset by peer」翻译成 502。证据：`caddy-error.log` 同窗口里 `/materialize` 4.6s、`/ls` 11.25s、`/sessions/heartbeat` 9.6s、`/nano-explorer-extra/list` 8.2s、`/api/session/prompt` 9.8s 全在等。
+- **U-21 根治**：`session-io`/`tree`/`workspaces` 全部 fs 调用改 `fs/promises`，`zstd*Sync` → `promisify` 后进 worker pool，`frameOffsets` 用 `Buffer.indexOf`（native memchr，~1000×）；P2-05/P2-06 realpath/lstat 围栏语义不变只改 await。
+- **U-22 可观测**：路由统一包裹——每条记 `method+suffix+ms`，>2s 或抛错落 `dsh-web.log`/`err.log`；`s3.js` 每条远端请求记耗时、非 2xx 告警、`AbortSignal.timeout(120s)` 限住无限等待。
+- 验证：`dsh-dev` 上 22MB/62MB 解压的 5 帧会话负载下 `/sync` 跑 107s，并发 `/ls` p50=8ms / p95=82ms / max=275ms、0 次 >1s（旧构建同负载交互路由 stall 至 17s）；`multi-user-files` 26/26 含并发 dissolve；`materialize`+`transcript` 多帧下行正常。
+- `dsh.local` patch 已加 `backgroundSyncMs: 0`（人工协同期手动 `/sync`），lib 已部署，`dsh.local` 由业主自行重启后生效；worktree `nsw-eventloop-fix` 已删。

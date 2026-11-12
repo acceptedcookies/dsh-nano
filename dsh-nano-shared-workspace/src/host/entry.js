@@ -41,8 +41,15 @@ export const Config = {
       if (!Number.isInteger(rawInterval) || rawInterval < 0 || rawInterval > 86_400_000) {
         issues.push({ message: 'backgroundSyncMs must be an integer between 0 and 86400000' })
       }
+      // Optional origin pin: connect TCP/TLS to a literal IP (or IP:port) while
+      // the signed URL/SNI/Host stay the configured endpoint's hostname. Lets an
+      // operator skip the Cloudflare proxy's ~10x round-trip penalty.
+      const direct = source.endpointDirect === undefined ? '' : source.endpointDirect
+      if (typeof direct !== 'string' || (direct !== '' && !/^[0-9a-fA-F.:]+$/.test(direct))) {
+        issues.push({ message: 'endpointDirect must be an IP literal (optionally :port)' })
+      }
       if (issues.length > 0) return { issues }
-      return { value: { endpoint, bucket, region, prefix: prefix ?? '', backgroundSyncMs: rawInterval } }
+      return { value: { endpoint, bucket, region, prefix: prefix ?? '', backgroundSyncMs: rawInterval, endpointDirect: direct ?? '' } }
     },
   },
 }

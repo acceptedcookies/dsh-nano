@@ -9,10 +9,32 @@ async function call(path, init) {
     ...init,
   })
   const body = await response.json().catch(() => ({}))
-  if (!response.ok) {
-    throw new Error(typeof body?.error === 'string' ? body.error : `HTTP ${response.status}`)
+  if (!response.ok || body?.ok === false) {
+    /* The host now returns `{error, code, …}`; keep both on the thrown Error
+     * so a dialog can name the fault (e.g. `session-busy` → "held by X"). */
+    const error = new Error(typeof body?.error === 'string' ? body.error : `HTTP ${response.status}`)
+    error.code = body?.code ?? `http-${response.status}`
+    error.response = body
+    throw error
   }
   return body
+}
+
+/** Poll a host job until done/failed; `onTick` receives the live job row. */
+export async function pollJob(jobId, onTick) {
+  for (;;) {
+    const body = await call(`/jobs?id=${encodeURIComponent(jobId)}`)
+    const job = body?.job
+    if (job === undefined) throw new Error('job vanished')
+    onTick?.(job)
+    if (job.state === 'done') return job.result
+    if (job.state === 'failed') {
+      const error = new Error(job.error ?? 'job failed')
+      error.code = job.code ?? 'job-failed'
+      throw error
+    }
+    await new Promise(resolve => setTimeout(resolve, 800))
+  }
 }
 
 export const fetchSettings = () => call('/settings')
@@ -71,7 +93,17 @@ export function deleteWorkspace(workspaceId) {
   })
 }
 
-export const triggerSync = () => call('/sync', { method: 'POST' })
+/** Sync is a background job: the response is a jobId, the caller polls. */
+export function triggerSync(onTick) {
+  return call('/sync', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ async: true }),
+  }).then(start => {
+    if (start?.async !== true || typeof start?.jobId !== 'string') return start // legacy sync answer
+    return pollJob(start.jobId, onTick)
+  })
+}
 
 /** Host-side mkdir — independent of the optional directoryPicker/browse backend. */
 export function createDirectory(parent, name) {
@@ -130,11 +162,14 @@ export function heartbeatSession(workspaceId, sessionId) {
   })
 }
 
-export function materializeSession(workspaceId, sessionId) {
+export function materializeSession(workspaceId, sessionId, onTick) {
   return call('/materialize', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ workspaceId, sessionId }),
+    body: JSON.stringify({ workspaceId, sessionId, async: true }),
+  }).then(start => {
+    if (start?.async !== true || typeof start?.jobId !== 'string') return start // legacy sync answer
+    return pollJob(start.jobId, onTick)
   }).then(response => {
     if (response?.ok !== true) throw new Error(response?.error ?? 'materialize failed')
     return response

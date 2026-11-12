@@ -275,6 +275,25 @@ export async function renewClaim(s3, sessionId, writerId) {
 }
 
 /**
+ * Is `sessionId` claimed live by a writer other than `myWriterId`?
+ * A live foreign claim means that member is actively running the session —
+ * materializing or binding it on this host would hand our agent a copy of a
+ * log another host is concurrently writing, and a second member writing into
+ * the same canonical session is exactly what the lease is meant to forbid.
+ * @returns the foreign `{writerId, expiresAt}` when the session is owned by
+ *          someone else right now; `undefined` when free (absent, expired,
+ *          malformed, or already ours).
+ */
+export async function foreignActiveClaim(s3, sessionId, myWriterId) {
+  if (!SESSION_ID_RE.test(sessionId)) return undefined
+  const got = await s3.getJson(`claims/${sessionId}.json`).catch(() => undefined)
+  if (!validClaim(got)) return undefined
+  if (got.writerId === myWriterId) return undefined
+  if (!(got.expiresAt > Date.now())) return undefined
+  return { writerId: got.writerId, expiresAt: got.expiresAt }
+}
+
+/**
  * Push one session's new bytes. Returns a small outcome row the caller
  * surfaces in logs/routes; nothing is thrown for business-level skips.
  * @param markers - rows from `listWorkspaces` (fetched once per sync pass).
@@ -398,19 +417,32 @@ export async function pushSession(s3, ctx, identity, local, markers, state, lega
   }
 }
 
+/** Bounded session-push pool: each push is a chain of proxy round trips, so
+ *  running them serially costs N×latency even when the payloads are
+ *  independent. 4 keeps us under the default 6-socket keep-alive pool. */
+const PUSH_CONCURRENCY = 4
+
 /** Push every local session whose cwd maps to a claimed workspace marker. */
 export async function syncAll(s3, ctx, identity, dshHome, state, knownMarkers) {
   const markers = knownMarkers ?? await listWorkspacesFrom(s3)
   const results = []
   // One git lookup per distinct cwd for the whole pass (F-28).
   const legacyCache = new Map()
-  for (const local of await listLocalSessions(dshHome)) {
-    try {
-      results.push(await pushSession(s3, ctx, identity, local, markers, state, legacyCache))
-    } catch (error) {
-      results.push({ sessionId: local.sessionId, outcome: `error:${error instanceof Error ? error.message : String(error)}` })
+  const locals = await listLocalSessions(dshHome)
+  let cursor = 0
+  const worker = async () => {
+    while (cursor < locals.length) {
+      const index = cursor
+      cursor += 1
+      const local = locals[index]
+      try {
+        results[index] = await pushSession(s3, ctx, identity, local, markers, state, legacyCache)
+      } catch (error) {
+        results[index] = { sessionId: local.sessionId, outcome: `error:${error instanceof Error ? error.message : String(error)}` }
+      }
     }
   }
+  await Promise.all(Array.from({ length: Math.min(PUSH_CONCURRENCY, locals.length) }, worker))
   return results
 }
 
@@ -418,11 +450,16 @@ export async function syncAll(s3, ctx, identity, dshHome, state, knownMarkers) {
  * Remote session metas across every workspace marker.
  * @returns `[{workspaceId, ...meta}]`
  */
+const SESSION_LIST_CONCURRENCY = 8
+
 export async function listRemoteSessions(s3) {
   // With a delimiter, `workspaces/` yields session-family dirs as prefixes
   // (`workspaces/{id}/`), each holding `sessions/{sessionId}/` subdirs.
   const { prefixes } = await s3.list('workspaces/')
   const out = []
+  /* Each session's meta is one remote GET; fetch them a bounded few at a
+   * time so the listing scales with count, not count×latency. */
+  const tasks = []
   for (const wsPrefix of prefixes) {
     const workspaceId = wsPrefix.replace(/^workspaces\//, '').replace(/\/$/, '')
     if (!WORKSPACE_ID_RE.test(workspaceId)) continue
@@ -430,18 +467,29 @@ export async function listRemoteSessions(s3) {
     for (const sessionPrefix of inner.prefixes ?? []) {
       const sessionId = sessionPrefix.replace(/\/$/, '').split('/').pop()
       if (!SESSION_ID_RE.test(sessionId)) continue
-      const meta = await s3.getJson(`workspaces/${workspaceId}/sessions/${sessionId}/meta.json`).catch(() => undefined)
-      if (meta === undefined) continue
-      try {
-        validate('session-meta', meta)
-      } catch (error) {
-        if (error instanceof SchemaReject) continue
-        throw error
-      }
-      if (meta.sessionId !== sessionId) continue // key↔object binding
-      out.push({ workspaceId, ...meta })
+      tasks.push(async () => {
+        const meta = await s3.getJson(`workspaces/${workspaceId}/sessions/${sessionId}/meta.json`).catch(() => undefined)
+        if (meta === undefined) return
+        try {
+          validate('session-meta', meta)
+        } catch (error) {
+          if (error instanceof SchemaReject) return
+          throw error
+        }
+        if (meta.sessionId !== sessionId) return // key↔object binding
+        out.push({ workspaceId, ...meta })
+      })
     }
   }
+  let cursor = 0
+  const worker = async () => {
+    while (cursor < tasks.length) {
+      const task = tasks[cursor]
+      cursor += 1
+      await task()
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(SESSION_LIST_CONCURRENCY, tasks.length) }, worker))
   return out
 }
 
@@ -466,17 +514,27 @@ async function readSessionMeta(s3, workspaceId, sessionId) {
  * fetched part must be `≤ PART_BYTES` — a co-tenant cannot inflate a part
  * into an unbounded fetch/decompress (audit §: remote-meta-unbounded-fetch).
  */
+const PART_CONCURRENCY = 4
+
 async function readBodyParts(s3, workspaceId, sessionId, meta) {
   const parts = Math.ceil(meta.committedBytes / CHUNK)
-  const buffers = []
-  for (let index = 0; index < parts; index += 1) {
-    const part = await s3.getBytes(`workspaces/${workspaceId}/sessions/${sessionId}/body/${index}.part`)
-    if (part === undefined) throw new Error(`missing body part ${index}`)
-    if (part.length > PART_BYTES) {
-      throw new SchemaReject('schema:parts', `body part ${index} exceeds ${PART_BYTES} bytes`)
+  const buffers = new Array(parts)
+  /* Parts are independent prefix slices — fetch them a few at a time so a
+   * multi-part transcript costs ~parts/4 round trips, not parts. */
+  let cursor = 0
+  const worker = async () => {
+    while (cursor < parts) {
+      const index = cursor
+      cursor += 1
+      const part = await s3.getBytes(`workspaces/${workspaceId}/sessions/${sessionId}/body/${index}.part`)
+      if (part === undefined) throw new Error(`missing body part ${index}`)
+      if (part.length > PART_BYTES) {
+        throw new SchemaReject('schema:parts', `body part ${index} exceeds ${PART_BYTES} bytes`)
+      }
+      buffers[index] = part
     }
-    buffers.push(part)
   }
+  await Promise.all(Array.from({ length: Math.min(PART_CONCURRENCY, parts) }, worker))
   return Buffer.concat(buffers)
 }
 
@@ -507,13 +565,26 @@ export async function fetchTranscript(s3, workspaceId, sessionId) {
  * first frame is not exactly that one line, or whose directory doesn't match cwd.
  * @returns `{sessionId, cwd, path}`
  */
-export async function materializeSession(s3, dshHome, { workspaceId, sessionId, localPath }) {
+export async function materializeSession(s3, dshHome, { workspaceId, sessionId, localPath, writerId }) {
   // Consumer-layer boundary (P2-06 second layer; the route checks too):
   // a `..`/`/`-carrying sessionId can never reach the S3 key or the fs path.
   if (!WORKSPACE_ID_RE.test(workspaceId)) throw new SchemaReject('schema:workspaceId', 'workspaceId has a bad charset')
   if (!SESSION_ID_RE.test(sessionId)) throw new SchemaReject('schema:sessionId', 'sessionId has a bad charset')
   if (typeof localPath !== 'string' || !isAbsolute(localPath) || resolve(localPath) !== localPath) {
     throw new SchemaReject('schema:localPath', 'localPath must be an absolute normalized path')
+  }
+  /* Active-session write fence: while another member holds the live claim the
+   * canonical session is being written by them. Materializing it here would
+   * plant a divergent copy the local agent could run — exactly the "echo wrote
+   * into sean's live session" failure. Refuse; the holder must finish or the
+   * lease must expire first. */
+  const owned = writerId === undefined ? undefined : await foreignActiveClaim(s3, sessionId, writerId)
+  if (owned !== undefined) {
+    const error = new Error(`session is held by ${owned.writerId} until ${new Date(owned.expiresAt).toISOString()}`)
+    error.code = 'session-busy'
+    error.holder = owned.writerId
+    error.holderExpiresAt = owned.expiresAt
+    throw error
   }
   const meta = await readSessionMeta(s3, workspaceId, sessionId)
   if (meta === undefined) throw new Error('no such session')
@@ -550,5 +621,23 @@ export async function materializeSession(s3, dshHome, { workspaceId, sessionId, 
     if (error?.code !== 'ENOENT') throw error
   }
   await writeFile(path, Buffer.concat([headerFrame, body]))
-  return { sessionId, cwd: localPath, path }
+  /* Durable pull-fingerprint: survives a host restart so the next sync pass
+   * sees "already at this rev" instead of re-downloading the whole artifact
+   * (an in-memory map alone re-materialized every session after a restart). */
+  const revKey = `${meta.rev ?? 0}:${meta.committedBytes ?? 0}`
+  await writeFile(join(dir, '.nsw-meta.json'), JSON.stringify({
+    v: 1, workspaceId, sessionId, revKey, pulledAt: new Date().toISOString(),
+  })).catch(() => {})
+  return { sessionId, cwd: localPath, path, revKey }
+}
+
+/**
+ * The persisted pull-fingerprint for a previously materialized session;
+ * `undefined` when the artifact (or its receipt) was never written.
+ */
+export async function readPulledRev(dshHome, localPath, sessionId) {
+  try {
+    const row = JSON.parse(await readFile(join(dshHome, 'sessions', projectKey(localPath), sessionId, '.nsw-meta.json'), 'utf8'))
+    return typeof row?.revKey === 'string' ? row.revKey : undefined
+  } catch { return undefined }
 }

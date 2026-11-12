@@ -254,5 +254,17 @@ export const ROUTE_TABLE = [
     "bodyLimit": 65536,
     "sessionBinding": true,
     "justification": "dsh-nano-shared-workspace/src/host/routes.js:447 — writes a remote session into the local session tree under a caller/sessionId-derived path (materialize-sessionId-path-traversal finding); host fs write from remote data."
+  },
+  {
+    "plugin": "dsh-nano-shared-workspace",
+    "path": "/nano-shared-workspace/jobs",
+    "methods": [
+      "GET"
+    ],
+    "sensitivity": "L1",
+    "capability": "none",
+    "bodyLimit": 0,
+    "sessionBinding": false,
+    "justification": "dsh-nano-shared-workspace/src/host/routes.js:459 — read-only progress heartbeat for an in-process background job started by /sync or /materialize; returns job state only."
   }
 ]

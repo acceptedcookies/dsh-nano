@@ -1,12 +1,12 @@
 /** HTTP routes the client half calls: settings read/write and a status probe. */
 
-import { mkdir, opendir } from 'node:fs/promises'
+import { mkdir, opendir, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 import { clearIdentity, readIdentity, writeIdentity } from './credentials.js'
 import { createS3 } from './s3.js'
 import { createWorkspace, instanceId, joinWorkspace, listWorkspaces, ownMember, readMarker, trustedMember, unpinWorkspaceLocalPath } from './workspaces.js'
-import { acquireClaim, fetchTranscript, listRemoteSessions, materializeSession, renewClaim, syncAll } from './session-io.js'
+import { acquireClaim, fetchTranscript, foreignActiveClaim, listRemoteSessions, materializeSession, readPulledRev, renewClaim, syncAll } from './session-io.js'
 import { purgeWorkspaceObjects, pullWorkspace, pushWorkspace, registerIdentity } from './tree.js'
 import { ensurePerfReviewHost, LIB_VERSION } from 'dsh-performance-review/host'
 import { registerRoutes as registerGuardedRoutes } from 'dsh-host-route-guard'
@@ -46,14 +46,142 @@ const assertLocalPath = value => {
 const localMember = async (marker, identity, instance) =>
   instance === '' ? undefined : (await trustedMember(marker, identity, instance))?.member
 
-/** Error text for responses: never leak a raw S3 XML body or a stack (F-19). */
+/**
+ * One background job row: what it is doing, how far, and how it ended. A
+ * heavy call (`/sync`, `/materialize`) can return `jobId` immediately; the
+ * client polls `GET /jobs/{id}` for a progress heartbeat instead of blocking
+ * a request across many proxy round trips — the "first workspace load sits
+ * for minutes with no signal" symptom.
+ */
+const JOB_TTL_MS = 10 * 60 * 1000
+const jobs = new Map() // id -> {id, kind, state, done, total, note, startedAt, finishedAt, result|error}
+let jobSeq = 0
+
+function newJob(kind, total = 0) {
+  const id = `job-${Date.now().toString(36)}-${(jobSeq += 1).toString(36)}`
+  const job = { id, kind, state: 'running', done: 0, total, note: '', startedAt: Date.now() }
+  jobs.set(id, job)
+  // Bound the table; a finished row only needs to outlive the poller.
+  for (const [key, row] of jobs) {
+    if (row.finishedAt !== undefined && Date.now() - row.finishedAt > JOB_TTL_MS) jobs.delete(key)
+  }
+  return job
+}
+
+function finishJob(job, result) {
+  job.state = 'done'
+  job.result = result
+  job.finishedAt = Date.now()
+}
+
+function failJob(job, error) {
+  job.state = 'failed'
+  const info = messageOf(error)
+  job.error = info.error
+  job.code = info.code
+  job.finishedAt = Date.now()
+}
+
+/**
+ * Download remote session artifacts that are new or changed since our last
+ * materialize — the missing half of the sync cycle. A session only lands
+ * under OUR member row's project dir; one held live by another member is
+ * skipped (active-session write fence), and an unchanged rev is skipped
+ * cheaply by mtime on the local artifact.
+ * @returns `[{sessionId, workspaceId, outcome}]`
+ */
+async function pullRemoteSessions(s3, ctx, identity, dshHome, instance, markers, state, job) {
+  const remotes = await listRemoteSessions(s3)
+  if (remotes.length === 0) return []
+  const writerId = `${identity.username}@${instance.slice(0, 8)}`
+  const byWorkspace = new Map()
+  for (const marker of markers) {
+    const member = await localMember(marker, identity, instance)
+    if (typeof member?.localPath === 'string' && member.localPath !== '') {
+      byWorkspace.set(marker.workspaceId, member.localPath)
+    }
+  }
+  /* Durable dedupe before any download: the fingerprint materialize left on
+   * disk (surviving restarts) decides a re-pull; in-memory state only covers
+   * the same process. Skip tombstones and the already-seen. Newest first. */
+  const pending = (await Promise.all(remotes.map(async meta => {
+    if (meta.deleted === true || !byWorkspace.has(meta.workspaceId)) return undefined
+    const revKey = `${meta.rev ?? 0}:${meta.committedBytes ?? 0}`
+    const seen = state.remoteRev.get(`${meta.workspaceId}:${meta.sessionId}`)
+      ?? await readPulledRev(dshHome, byWorkspace.get(meta.workspaceId), meta.sessionId)
+    return seen === revKey ? undefined : meta
+  })))
+    .filter(Boolean)
+    .sort((a, b) => Date.parse(b.mtime ?? 0) - Date.parse(a.mtime ?? 0))
+  /* One pass bounds its work: beyond the cap the next tick continues; this is
+   * what keeps a full history sync from blocking the tick for minutes. */
+  const CAP = 6
+  const batch = pending.slice(0, CAP)
+  if (job !== undefined) { job.total = batch.length; job.done = 0 }
+  const outcomes = []
+  const worker = async () => {
+    for (;;) {
+      const index = outcomes.length
+      if (index >= batch.length) return
+      const meta = batch[index]
+      const revKey = `${meta.rev ?? 0}:${meta.committedBytes ?? 0}`
+      outcomes.push(null)
+      if (job !== undefined) job.note = `session ${meta.sessionId} (${index + 1}/${batch.length})`
+      const localPath = byWorkspace.get(meta.workspaceId)
+      try {
+        const owned = await foreignActiveClaim(s3, meta.sessionId, writerId)
+        if (owned !== undefined) {
+          outcomes[index] = { sessionId: meta.sessionId, workspaceId: meta.workspaceId, outcome: `skip:busy:${owned.writerId}` }
+        } else {
+          await materializeSession(s3, dshHome, { workspaceId: meta.workspaceId, sessionId: meta.sessionId, localPath, writerId })
+          state.remoteRev.set(`${meta.workspaceId}:${meta.sessionId}`, revKey)
+          /* Attach to the workspace so the pulled session appears in the
+           * member's session list immediately — the visible "I can see their
+           * session" half, not just an on-disk artifact. */
+          const workspace = ctx.workspaceRegistry?.resolveByPath?.(localPath)
+          try { workspace?.attachSession?.(meta.sessionId) } catch { /* best effort */ }
+          outcomes[index] = { sessionId: meta.sessionId, workspaceId: meta.workspaceId, outcome: 'materialized' }
+        }
+      } catch (error) {
+        /* Corrupt artifacts (e.g. parts written by a pre-fix build) fail
+         * forever; after a few tries adopt the fingerprint so the tick stops
+         * re-downloading a poisoned object every pass. */
+        const key = `${meta.workspaceId}:${meta.sessionId}`
+        const tries = (state.remoteTries.get(key) ?? 0) + 1
+        state.remoteTries.set(key, tries)
+        if (tries >= 3) state.remoteRev.set(key, revKey)
+        outcomes[index] = { sessionId: meta.sessionId, workspaceId: meta.workspaceId, outcome: `error:${messageOf(error).error}` }
+      }
+      if (job !== undefined) job.done += 1
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(3, batch.length) }, worker))
+  return outcomes.filter(Boolean)
+}
+
+/**
+ * One error row the client can act on: `error` is the human string, `code` a
+ * stable machine token, `detail` optional debugging context (never a stack or
+ * raw S3 XML — F-19). A thrown handler failure now carries all three so the
+ * client can show *why* a call failed instead of a bare HTTP status.
+ */
 function messageOf(error) {
   const raw = error instanceof Error ? error.message : String(error)
   const code = /<Code>([^<]+)<\/Code>/.exec(raw)?.[1]
   const status = /HTTP (\d{3})/.exec(raw)?.[1]
-  if (code !== undefined) return `S3 ${status ?? ''} ${code}`.trim()
+  if (error?.code === 'session-busy') {
+    return {
+      error: raw, code: 'session-busy',
+      holder: error.holder, holderExpiresAt: error.holderExpiresAt,
+    }
+  }
+  if (code !== undefined) return { error: `S3 ${status ?? ''} ${code}`.trim(), code: `s3-${String(code).toLowerCase()}` }
+  if (raw.startsWith('schema:')) return { error: raw, code: 'schema' }
+  if (/(timeout|timed out|aborted|fetch failed|econnreset|econnrefused|enotfound|network)/i.test(raw)) {
+    return { error: raw, code: 'network' }
+  }
   const clean = raw.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
-  return clean.length > 180 ? `${clean.slice(0, 177)}…` : clean
+  return { error: clean.length > 180 ? `${clean.slice(0, 177)}…` : clean, code: 'internal' }
 }
 
 function sendJson(res, status, body) {
@@ -104,7 +232,7 @@ export function createRoutes(ctx, config) {
     libVersion: LIB_VERSION,
   })
   const dshHome = process.env.DSH_HOME ?? `${homedir()}/.dsh`
-  const syncState = { bySession: new Map() }
+  const syncState = { bySession: new Map(), remoteRev: new Map(), remoteTries: new Map() }
   /** `{ until, body }` for the last probe that did not throw. */
   let settingsCache
   /** `{ epoch, promise }` so overlapping opens share one resolve + S3 GET. */
@@ -307,31 +435,70 @@ export function createRoutes(ctx, config) {
     },
     '/sync': {
       method: 'POST',
-      async run() {
-        const { client, identity } = await s3()
-        // One marker listing feeds both halves of the pass; listing twice cost
-        // a second LIST plus a GET per marker on every refresh (F-28).
-        const markers = await listWorkspaces(client)
-        const results = await syncAll(client, ctx, identity, dshHome, syncState, markers)
-        const instance = await instanceId(ctx)
-        const me = instance.slice(0, 8)
-        const trees = []
-        for (const marker of markers) {
-          // Strict memberId binding (P2-03): only our own row's localPath is a sync target.
-          const member = await localMember(marker, identity, instance)
-          if (typeof member?.localPath !== 'string' || member.localPath === '') continue
-          try {
-            trees.push({ workspaceId: marker.workspaceId, ...await pushWorkspace(client, dshHome, marker.workspaceId, member.localPath, `${identity.username}@${me}`) })
-          } catch (error) {
-            trees.push({ workspaceId: marker.workspaceId, ok: false, error: messageOf(error) })
+      async run(req) {
+        /* `{"async":true}` (or `?async=1`) returns a job immediately; the client
+         * polls /jobs/{id} for a heartbeat instead of blocking the request
+         * through every proxy round trip — the "first load sits silently for
+         * minutes" case. Default stays synchronous for callers/tests. */
+        const body = JSON.parse(await readBody(req) || '{}')
+        const work = async (job) => {
+          const { client, identity } = await s3()
+          const markers = await listWorkspaces(client)
+          job.note = 'pushing sessions'
+          const results = await syncAll(client, ctx, identity, dshHome, syncState, markers)
+          const instance = await instanceId(ctx)
+          const me = instance.slice(0, 8)
+          const trees = []
+          /* Pull before push on every workspace: remote members' file
+           * generations land in our replica first, then our local edits merge
+           * on top — the earlier push-only cycle is why two members diverged. */
+          job.total = markers.length
+          for (const marker of markers) {
+            job.note = `workspace ${marker.workspaceId}`
+            const member = await localMember(marker, identity, instance)
+            if (typeof member?.localPath !== 'string' || member.localPath === '') { job.done += 1; continue }
+            try {
+              const pulled = await pullWorkspace(client, dshHome, marker.workspaceId, member.localPath)
+              trees.push({ workspaceId: marker.workspaceId, pulled, ...await pushWorkspace(client, dshHome, marker.workspaceId, member.localPath, `${identity.username}@${me}`) })
+            } catch (error) {
+              trees.push({ workspaceId: marker.workspaceId, ok: false, ...messageOf(error) })
+            }
+            job.done += 1
+          }
+          job.note = 'pulling sessions'
+          const pulledSessions = await pullRemoteSessions(client, ctx, identity, dshHome, instance, markers, syncState, job).catch(() => [])
+          return {
+            ok: true,
+            pushed: results.filter(r => r.outcome.startsWith('pushed')).length,
+            outcomes: results.slice(0, 50),
+            trees,
+            pulledSessions,
           }
         }
-        return {
-          ok: true,
-          pushed: results.filter(r => r.outcome.startsWith('pushed')).length,
-          outcomes: results.slice(0, 50),
-          trees,
+        if (body?.async === true || new URL(req.url, 'http://x').searchParams.get('async') === '1') {
+          const job = newJob('sync')
+          work(job).then(result => finishJob(job, result)).catch(error => failJob(job, error))
+          return { ok: true, jobId: job.id, async: true }
         }
+        const job = newJob('sync')
+        try {
+          const result = await work(job)
+          finishJob(job, result)
+          return result
+        } catch (error) {
+          failJob(job, error)
+          throw error
+        }
+      },
+    },
+    // Route kind is `exact`, so the id rides a query param, not a path segment.
+    '/jobs': {
+      method: 'GET',
+      async run(req) {
+        const id = new URL(req.url, 'http://x').searchParams.get('id')
+        const job = id === null ? undefined : jobs.get(id)
+        if (job === undefined) return { ok: false, error: 'no such job', code: 'job-not-found' }
+        return { ok: true, job }
       },
     },
     '/tree/pull': {
@@ -539,21 +706,31 @@ export function createRoutes(ctx, config) {
         // materializeSession re-checks at the consumer layer.
         const workspaceId = assertWorkspaceId(body.workspaceId)
         const sessionId = assertSessionId(body.sessionId)
-        const marker = (await listWorkspaces(client)).find(row => row.workspaceId === workspaceId)
-        if (marker === undefined) return { ok: false, error: 'shared workspace not found' }
-        // The materialize localPath is OUR member row's only — a foreign
-        // member's localPath is never a write target (P2-03, audit §4.11).
-        const member = await localMember(marker, identity, await instanceId(ctx))
-        const localPath = member?.localPath
-        if (typeof localPath !== 'string' || localPath === '') {
-          return { ok: false, error: 'join this shared workspace before opening its sessions' }
+        const work = async () => {
+          const marker = (await listWorkspaces(client)).find(row => row.workspaceId === workspaceId)
+          if (marker === undefined) return { ok: false, error: 'shared workspace not found' }
+          // The materialize localPath is OUR member row's only — a foreign
+          // member's localPath is never a write target (P2-03, audit §4.11).
+          const instance = await instanceId(ctx)
+          const member = await localMember(marker, identity, instance)
+          const localPath = member?.localPath
+          if (typeof localPath !== 'string' || localPath === '') {
+            return { ok: false, error: 'join this shared workspace before opening its sessions' }
+          }
+          const landed = await materializeSession(client, dshHome, {
+            workspaceId,
+            sessionId,
+            localPath,
+            writerId: `${identity.username}@${instance.slice(0, 8)}`,
+          })
+          return { ok: true, ...landed }
         }
-        const landed = await materializeSession(client, dshHome, {
-          workspaceId,
-          sessionId,
-          localPath,
-        })
-        return { ok: true, ...landed }
+        if (body?.async === true || new URL(req.url, 'http://x').searchParams.get('async') === '1') {
+          const job = newJob('materialize')
+          work().then(result => finishJob(job, result)).catch(error => failJob(job, error))
+          return { ok: true, jobId: job.id, async: true }
+        }
+        return work()
       },
     },
   }
@@ -582,10 +759,11 @@ export function registerRoutes(ctx, routes) {
         if (ms > 2000) console.warn(`[nsw:route] ${route.method} ${suffix} -> 200 ${ms}ms`)
         sendJson(res, 200, body)
       } catch (error) {
-        // Every handler failure is logged server-side: previously a route that
-        // threw surfaced only as a bare client "HTTP <status>" with no trace.
-        console.error(`[nsw:route] ${route.method} ${suffix} -> 400 ${Date.now() - started}ms :: ${messageOf(error)}`)
-        sendJson(res, 400, { error: messageOf(error) })
+        // Every handler failure is logged server-side AND returned as a
+        // structured row ({error, code, …}) so the client can name the fault.
+        const info = messageOf(error)
+        console.error(`[nsw:route] ${route.method} ${suffix} -> 400 ${Date.now() - started}ms [${info.code}] :: ${info.error}`)
+        sendJson(res, 400, { ok: false, ...info })
       }
     },
   }))
@@ -601,7 +779,7 @@ export function startBackgroundSync(ctx, config) {
     libVersion: LIB_VERSION,
   })
   const dshHome = process.env.DSH_HOME ?? `${homedir()}/.dsh`
-  const syncState = { bySession: new Map() }
+  const syncState = { bySession: new Map(), remoteRev: new Map(), remoteTries: new Map() }
   let running = false
   const tick = () => review.hostSpan('sync-tick', async () => {
     if (running) return
@@ -611,13 +789,20 @@ export function startBackgroundSync(ctx, config) {
       if (identity?.configured !== true) return
       const client = createS3(config, identity)
       const instance = await instanceId(ctx)
-      await syncAll(client, ctx, identity, dshHome, syncState).catch(() => {})
-      for (const marker of await listWorkspaces(client)) {
+      const markers = await listWorkspaces(client)
+      /* Pull remote state before pushing: new session artifacts + file
+       * generations land in our replica first, then local edits merge on top.
+       * The earlier push-only cycle is why members diverged. */
+      await pullRemoteSessions(client, ctx, identity, dshHome, instance, markers, syncState).catch(() => {})
+      await syncAll(client, ctx, identity, dshHome, syncState, markers).catch(() => {})
+      for (const marker of markers) {
         // Strict memberId binding (P2-03): a foreign member's localPath is
         // never a push target — no username-only fallback.
         const member = await localMember(marker, identity, instance)
         if (typeof member?.localPath !== 'string' || member.localPath === '') continue
-        await pushWorkspace(client, dshHome, marker.workspaceId, member.localPath, `${identity.username}@${instance.slice(0, 8)}`).catch(() => {})
+        const writerId = `${identity.username}@${instance.slice(0, 8)}`
+        await pullWorkspace(client, dshHome, marker.workspaceId, member.localPath).catch(() => {})
+        await pushWorkspace(client, dshHome, marker.workspaceId, member.localPath, writerId).catch(() => {})
       }
     } finally {
       running = false

@@ -5,7 +5,7 @@
  */
 
 import { createHash } from 'node:crypto'
-import { lstat, mkdir, readFile, readdir, realpath, unlink, writeFile } from 'node:fs/promises'
+import { lstat, mkdir, readFile, readdir, realpath, rename, rm, unlink, writeFile } from 'node:fs/promises'
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { validate, SchemaReject, WORKSPACE_ID_RE } from 'dsh-remote-data-schema'
 
@@ -305,12 +305,24 @@ export async function pullWorkspace(s3, dshHome, workspaceId, localPath) {
     downloads.push({ dest, key: blobKey(workspaceId, file.sha256) })
   }
   const blobs = await mapLimit(downloads, BLOB_CONCURRENCY, ({ key }) => s3.getBytes(key))
+  /* Atomic hand-off (explorer-extra linkage): a blob lands under `.nsw/dl/`
+   * first — a SKIP-listed sibling the tree walk never uploads and the file
+   * explorer only sees once `rename` swaps it in — so a viewer never opens a
+   * half-downloaded file. `.nsw` already sits in SKIP, so the staging dir is
+   * invisible to both push-scan and the replica listing. */
+  const stagingRoot = join(root, '.nsw', 'dl', workspaceId)
   for (let index = 0; index < downloads.length; index += 1) {
     const blob = blobs[index]
     if (blob === undefined) continue
-    await mkdir(dirname(downloads[index].dest), { recursive: true })
-    await writeFile(downloads[index].dest, blob)
+    const staged = join(stagingRoot, `${downloads[index].key.split('/').pop()}-${index}.part`)
+    try {
+      await mkdir(dirname(staged), { recursive: true })
+      await writeFile(staged, blob)
+      await mkdir(dirname(downloads[index].dest), { recursive: true })
+      await rename(staged, downloads[index].dest)
+    } catch { /* best effort — leave the staged part for the next pass */ }
   }
+  try { await rm(stagingRoot, { recursive: true, force: true }) } catch { /* leftover parts are harmless */ }
   await saveBase(dshHome, workspaceId, head)
   return { ok: true, generation: head.generation ?? 0, files: (head.files ?? []).length, conflicts: head.conflicts ?? [] }
 }

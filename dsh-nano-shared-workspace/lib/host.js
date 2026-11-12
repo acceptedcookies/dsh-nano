@@ -1,5 +1,5 @@
 // src/host/routes.js
-import { mkdir as mkdir4, opendir } from "node:fs/promises";
+import { mkdir as mkdir4, opendir, stat as stat2 } from "node:fs/promises";
 import { homedir as homedir2 } from "node:os";
 import { basename as basename2, dirname as dirname2, isAbsolute as isAbsolute3, join as join4, resolve as resolve4 } from "node:path";
 
@@ -55,6 +55,7 @@ async function clearIdentity(ctx) {
 
 // src/host/s3.js
 import { createHash, createHmac } from "node:crypto";
+import { Agent, request as httpsRequest } from "node:https";
 var UA = "dsh-nano-shared-workspace/0.1.0";
 var sha256Hex = (data) => createHash("sha256").update(data).digest("hex");
 var hmac = (key, data) => createHmac("sha256", key).update(data).digest();
@@ -121,12 +122,7 @@ async function request(config, keys, method, keyPath, params = {}, body = void 0
   if (typeof extra.ifMatch === "string") sent["if-match"] = extra.ifMatch.replace(/^W\//, "");
   const started = Date.now();
   try {
-    const res = await fetch(url, {
-      method,
-      headers: sent,
-      body: payload === "" ? void 0 : payload,
-      signal: AbortSignal.timeout(12e4)
-    });
+    const res = await send(config, url, method, sent, payload);
     const ms = Date.now() - started;
     if (!res.ok || ms > 3e3) {
       console.warn(`[nsw:s3] ${method} ${keyPath} -> HTTP ${res.status} ${ms}ms${payload === "" ? "" : ` ${payload.length}B`}`);
@@ -136,6 +132,66 @@ async function request(config, keys, method, keyPath, params = {}, body = void 0
     console.warn(`[nsw:s3] ${method} ${keyPath} -> ${error instanceof Error ? error.message : String(error)} ${Date.now() - started}ms`);
     throw error;
   }
+}
+function send(config, url, method, headers, payload) {
+  const ip = config.endpointDirect;
+  if (typeof ip !== "string" || ip === "") {
+    return fetch(url, {
+      method,
+      headers,
+      body: payload === "" ? void 0 : payload,
+      signal: AbortSignal.timeout(12e4)
+    });
+  }
+  return directFetch(url, ip, method, headers, payload);
+}
+var directAgent = new Agent({ keepAlive: true, maxSockets: 16 });
+async function directFetch(url, ip, method, headers, payload) {
+  const timeout = AbortSignal.timeout(12e4);
+  const res = await new Promise((resolvePromise, rejectPromise) => {
+    const v4port = /^(\d{1,3}(?:\.\d{1,3}){3})(?::(\d{1,5}))?$/.exec(ip);
+    const pinHost = v4port !== null ? v4port[1] : ip;
+    const pinPort = v4port?.[2] !== void 0 ? Number(v4port[2]) : 443;
+    const req = httpsRequest({
+      host: pinHost,
+      port: pinPort,
+      servername: url.host,
+      // SNI + cert name = the virtual host
+      path: url.pathname + url.search,
+      method,
+      agent: directAgent,
+      /* fetch computes Content-Length itself; https.request does not, and
+       * MinIO rejects a length-less PUT with 411 — so state it explicitly. */
+      headers: { host: url.host, "content-length": Buffer.byteLength(payload === "" ? "" : payload), ...headers }
+    }, resolvePromise);
+    req.on("error", rejectPromise);
+    timeout.addEventListener("abort", () => req.destroy(new Error("s3 request timed out")), { once: true });
+    if (payload !== "") req.write(payload);
+    req.end();
+  });
+  const chunks = [];
+  for await (const chunk of res) chunks.push(chunk);
+  const body = Buffer.concat(chunks);
+  const headerMap = {
+    get(name2) {
+      const value = res.headers[String(name2).toLowerCase()];
+      return Array.isArray(value) ? value.join(", ") : value ?? null;
+    }
+  };
+  return {
+    ok: res.statusCode >= 200 && res.statusCode < 300,
+    status: res.statusCode,
+    headers: headerMap,
+    async text() {
+      return body.toString("utf8");
+    },
+    async json() {
+      return JSON.parse(body.toString("utf8"));
+    },
+    async arrayBuffer() {
+      return body;
+    }
+  };
 }
 function keysOrThrow(identity) {
   const keys = signingPair(identity);
@@ -992,6 +1048,14 @@ async function renewClaim(s3, sessionId, writerId) {
   }
   return { renewed: false, holder: writerId, expiresAt: null };
 }
+async function foreignActiveClaim(s3, sessionId, myWriterId) {
+  if (!SESSION_ID_RE.test(sessionId)) return void 0;
+  const got = await s3.getJson(`claims/${sessionId}.json`).catch(() => void 0);
+  if (!validClaim(got)) return void 0;
+  if (got.writerId === myWriterId) return void 0;
+  if (!(got.expiresAt > Date.now())) return void 0;
+  return { writerId: got.writerId, expiresAt: got.expiresAt };
+}
 async function pushSession(s3, ctx, identity, local, markers, state, legacyCache) {
   if (!SESSION_ID_RE.test(local.sessionId)) return { sessionId: local.sessionId, outcome: "skip:schema:sessionId" };
   const seen = state.bySession.get(local.sessionId);
@@ -1076,22 +1140,33 @@ async function pushSession(s3, ctx, identity, local, markers, state, legacyCache
     workspaceId
   };
 }
+var PUSH_CONCURRENCY = 4;
 async function syncAll(s3, ctx, identity, dshHome, state, knownMarkers) {
   const markers = knownMarkers ?? await listWorkspaces(s3);
   const results = [];
   const legacyCache = /* @__PURE__ */ new Map();
-  for (const local of await listLocalSessions(dshHome)) {
-    try {
-      results.push(await pushSession(s3, ctx, identity, local, markers, state, legacyCache));
-    } catch (error) {
-      results.push({ sessionId: local.sessionId, outcome: `error:${error instanceof Error ? error.message : String(error)}` });
+  const locals = await listLocalSessions(dshHome);
+  let cursor = 0;
+  const worker = async () => {
+    while (cursor < locals.length) {
+      const index = cursor;
+      cursor += 1;
+      const local = locals[index];
+      try {
+        results[index] = await pushSession(s3, ctx, identity, local, markers, state, legacyCache);
+      } catch (error) {
+        results[index] = { sessionId: local.sessionId, outcome: `error:${error instanceof Error ? error.message : String(error)}` };
+      }
     }
-  }
+  };
+  await Promise.all(Array.from({ length: Math.min(PUSH_CONCURRENCY, locals.length) }, worker));
   return results;
 }
+var SESSION_LIST_CONCURRENCY = 8;
 async function listRemoteSessions(s3) {
   const { prefixes } = await s3.list("workspaces/");
   const out = [];
+  const tasks = [];
   for (const wsPrefix of prefixes) {
     const workspaceId = wsPrefix.replace(/^workspaces\//, "").replace(/\/$/, "");
     if (!WORKSPACE_ID_RE.test(workspaceId)) continue;
@@ -1099,18 +1174,29 @@ async function listRemoteSessions(s3) {
     for (const sessionPrefix of inner.prefixes ?? []) {
       const sessionId = sessionPrefix.replace(/\/$/, "").split("/").pop();
       if (!SESSION_ID_RE.test(sessionId)) continue;
-      const meta = await s3.getJson(`workspaces/${workspaceId}/sessions/${sessionId}/meta.json`).catch(() => void 0);
-      if (meta === void 0) continue;
-      try {
-        validate("session-meta", meta);
-      } catch (error) {
-        if (error instanceof SchemaReject) continue;
-        throw error;
-      }
-      if (meta.sessionId !== sessionId) continue;
-      out.push({ workspaceId, ...meta });
+      tasks.push(async () => {
+        const meta = await s3.getJson(`workspaces/${workspaceId}/sessions/${sessionId}/meta.json`).catch(() => void 0);
+        if (meta === void 0) return;
+        try {
+          validate("session-meta", meta);
+        } catch (error) {
+          if (error instanceof SchemaReject) return;
+          throw error;
+        }
+        if (meta.sessionId !== sessionId) return;
+        out.push({ workspaceId, ...meta });
+      });
     }
   }
+  let cursor = 0;
+  const worker = async () => {
+    while (cursor < tasks.length) {
+      const task = tasks[cursor];
+      cursor += 1;
+      await task();
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(SESSION_LIST_CONCURRENCY, tasks.length) }, worker));
   return out;
 }
 async function readSessionMeta(s3, workspaceId, sessionId) {
@@ -1122,17 +1208,24 @@ async function readSessionMeta(s3, workspaceId, sessionId) {
   }
   return meta;
 }
+var PART_CONCURRENCY = 4;
 async function readBodyParts(s3, workspaceId, sessionId, meta) {
   const parts = Math.ceil(meta.committedBytes / CHUNK);
-  const buffers = [];
-  for (let index = 0; index < parts; index += 1) {
-    const part = await s3.getBytes(`workspaces/${workspaceId}/sessions/${sessionId}/body/${index}.part`);
-    if (part === void 0) throw new Error(`missing body part ${index}`);
-    if (part.length > PART_BYTES) {
-      throw new SchemaReject("schema:parts", `body part ${index} exceeds ${PART_BYTES} bytes`);
+  const buffers = new Array(parts);
+  let cursor = 0;
+  const worker = async () => {
+    while (cursor < parts) {
+      const index = cursor;
+      cursor += 1;
+      const part = await s3.getBytes(`workspaces/${workspaceId}/sessions/${sessionId}/body/${index}.part`);
+      if (part === void 0) throw new Error(`missing body part ${index}`);
+      if (part.length > PART_BYTES) {
+        throw new SchemaReject("schema:parts", `body part ${index} exceeds ${PART_BYTES} bytes`);
+      }
+      buffers[index] = part;
     }
-    buffers.push(part);
-  }
+  };
+  await Promise.all(Array.from({ length: Math.min(PART_CONCURRENCY, parts) }, worker));
   return Buffer.concat(buffers);
 }
 async function fetchTranscript(s3, workspaceId, sessionId) {
@@ -1152,11 +1245,19 @@ async function fetchTranscript(s3, workspaceId, sessionId) {
   }
   return { meta, events };
 }
-async function materializeSession(s3, dshHome, { workspaceId, sessionId, localPath }) {
+async function materializeSession(s3, dshHome, { workspaceId, sessionId, localPath, writerId }) {
   if (!WORKSPACE_ID_RE.test(workspaceId)) throw new SchemaReject("schema:workspaceId", "workspaceId has a bad charset");
   if (!SESSION_ID_RE.test(sessionId)) throw new SchemaReject("schema:sessionId", "sessionId has a bad charset");
   if (typeof localPath !== "string" || !isAbsolute(localPath) || resolve2(localPath) !== localPath) {
     throw new SchemaReject("schema:localPath", "localPath must be an absolute normalized path");
+  }
+  const owned = writerId === void 0 ? void 0 : await foreignActiveClaim(s3, sessionId, writerId);
+  if (owned !== void 0) {
+    const error = new Error(`session is held by ${owned.writerId} until ${new Date(owned.expiresAt).toISOString()}`);
+    error.code = "session-busy";
+    error.holder = owned.writerId;
+    error.holderExpiresAt = owned.expiresAt;
+    throw error;
   }
   const meta = await readSessionMeta(s3, workspaceId, sessionId);
   if (meta === void 0) throw new Error("no such session");
@@ -1194,12 +1295,29 @@ async function materializeSession(s3, dshHome, { workspaceId, sessionId, localPa
     if (error?.code !== "ENOENT") throw error;
   }
   await writeFile2(path, Buffer.concat([headerFrame, body]));
-  return { sessionId, cwd: localPath, path };
+  const revKey = `${meta.rev ?? 0}:${meta.committedBytes ?? 0}`;
+  await writeFile2(join2(dir, ".nsw-meta.json"), JSON.stringify({
+    v: 1,
+    workspaceId,
+    sessionId,
+    revKey,
+    pulledAt: (/* @__PURE__ */ new Date()).toISOString()
+  })).catch(() => {
+  });
+  return { sessionId, cwd: localPath, path, revKey };
+}
+async function readPulledRev(dshHome, localPath, sessionId) {
+  try {
+    const row = JSON.parse(await readFile2(join2(dshHome, "sessions", projectKey(localPath), sessionId, ".nsw-meta.json"), "utf8"));
+    return typeof row?.revKey === "string" ? row.revKey : void 0;
+  } catch {
+    return void 0;
+  }
 }
 
 // src/host/tree.js
 import { createHash as createHash3 } from "node:crypto";
-import { lstat as lstat2, mkdir as mkdir3, readFile as readFile3, readdir as readdir2, realpath as realpath2, unlink, writeFile as writeFile3 } from "node:fs/promises";
+import { lstat as lstat2, mkdir as mkdir3, readFile as readFile3, readdir as readdir2, realpath as realpath2, rename, rm as rm2, unlink, writeFile as writeFile3 } from "node:fs/promises";
 import { dirname, isAbsolute as isAbsolute2, join as join3, relative, resolve as resolve3, sep as sep2 } from "node:path";
 var SKIP = /* @__PURE__ */ new Set([".git", "node_modules", ".nsw", ".ds_store", "imagine"]);
 var MAX_FILE = 2 * 1024 * 1024;
@@ -1444,11 +1562,22 @@ async function pullWorkspace(s3, dshHome, workspaceId, localPath) {
     downloads.push({ dest, key: blobKey(workspaceId, file.sha256) });
   }
   const blobs = await mapLimit(downloads, BLOB_CONCURRENCY, ({ key }) => s3.getBytes(key));
+  const stagingRoot = join3(root, ".nsw", "dl", workspaceId);
   for (let index = 0; index < downloads.length; index += 1) {
     const blob = blobs[index];
     if (blob === void 0) continue;
-    await mkdir3(dirname(downloads[index].dest), { recursive: true });
-    await writeFile3(downloads[index].dest, blob);
+    const staged = join3(stagingRoot, `${downloads[index].key.split("/").pop()}-${index}.part`);
+    try {
+      await mkdir3(dirname(staged), { recursive: true });
+      await writeFile3(staged, blob);
+      await mkdir3(dirname(downloads[index].dest), { recursive: true });
+      await rename(staged, downloads[index].dest);
+    } catch {
+    }
+  }
+  try {
+    await rm2(stagingRoot, { recursive: true, force: true });
+  } catch {
   }
   await saveBase(dshHome, workspaceId, head);
   return { ok: true, generation: head.generation ?? 0, files: (head.files ?? []).length, conflicts: head.conflicts ?? [] };
@@ -2122,6 +2251,18 @@ var ROUTE_TABLE = [
     "bodyLimit": 65536,
     "sessionBinding": true,
     "justification": "dsh-nano-shared-workspace/src/host/routes.js:447 \u2014 writes a remote session into the local session tree under a caller/sessionId-derived path (materialize-sessionId-path-traversal finding); host fs write from remote data."
+  },
+  {
+    "plugin": "dsh-nano-shared-workspace",
+    "path": "/nano-shared-workspace/jobs",
+    "methods": [
+      "GET"
+    ],
+    "sensitivity": "L1",
+    "capability": "none",
+    "bodyLimit": 0,
+    "sessionBinding": false,
+    "justification": "dsh-nano-shared-workspace/src/host/routes.js:459 \u2014 read-only progress heartbeat for an in-process background job started by /sync or /materialize; returns job state only."
   }
 ];
 
@@ -2143,13 +2284,109 @@ var assertLocalPath = (value) => {
   return value;
 };
 var localMember = async (marker, identity, instance) => instance === "" ? void 0 : (await trustedMember(marker, identity, instance))?.member;
+var JOB_TTL_MS = 10 * 60 * 1e3;
+var jobs = /* @__PURE__ */ new Map();
+var jobSeq = 0;
+function newJob(kind, total = 0) {
+  const id = `job-${Date.now().toString(36)}-${(jobSeq += 1).toString(36)}`;
+  const job = { id, kind, state: "running", done: 0, total, note: "", startedAt: Date.now() };
+  jobs.set(id, job);
+  for (const [key, row] of jobs) {
+    if (row.finishedAt !== void 0 && Date.now() - row.finishedAt > JOB_TTL_MS) jobs.delete(key);
+  }
+  return job;
+}
+function finishJob(job, result) {
+  job.state = "done";
+  job.result = result;
+  job.finishedAt = Date.now();
+}
+function failJob(job, error) {
+  job.state = "failed";
+  const info = messageOf(error);
+  job.error = info.error;
+  job.code = info.code;
+  job.finishedAt = Date.now();
+}
+async function pullRemoteSessions(s3, ctx, identity, dshHome, instance, markers, state, job) {
+  const remotes = await listRemoteSessions(s3);
+  if (remotes.length === 0) return [];
+  const writerId = `${identity.username}@${instance.slice(0, 8)}`;
+  const byWorkspace = /* @__PURE__ */ new Map();
+  for (const marker of markers) {
+    const member = await localMember(marker, identity, instance);
+    if (typeof member?.localPath === "string" && member.localPath !== "") {
+      byWorkspace.set(marker.workspaceId, member.localPath);
+    }
+  }
+  const pending = (await Promise.all(remotes.map(async (meta) => {
+    if (meta.deleted === true || !byWorkspace.has(meta.workspaceId)) return void 0;
+    const revKey = `${meta.rev ?? 0}:${meta.committedBytes ?? 0}`;
+    const seen = state.remoteRev.get(`${meta.workspaceId}:${meta.sessionId}`) ?? await readPulledRev(dshHome, byWorkspace.get(meta.workspaceId), meta.sessionId);
+    return seen === revKey ? void 0 : meta;
+  }))).filter(Boolean).sort((a, b) => Date.parse(b.mtime ?? 0) - Date.parse(a.mtime ?? 0));
+  const CAP = 6;
+  const batch = pending.slice(0, CAP);
+  if (job !== void 0) {
+    job.total = batch.length;
+    job.done = 0;
+  }
+  const outcomes = [];
+  const worker = async () => {
+    for (; ; ) {
+      const index = outcomes.length;
+      if (index >= batch.length) return;
+      const meta = batch[index];
+      const revKey = `${meta.rev ?? 0}:${meta.committedBytes ?? 0}`;
+      outcomes.push(null);
+      if (job !== void 0) job.note = `session ${meta.sessionId} (${index + 1}/${batch.length})`;
+      const localPath = byWorkspace.get(meta.workspaceId);
+      try {
+        const owned = await foreignActiveClaim(s3, meta.sessionId, writerId);
+        if (owned !== void 0) {
+          outcomes[index] = { sessionId: meta.sessionId, workspaceId: meta.workspaceId, outcome: `skip:busy:${owned.writerId}` };
+        } else {
+          await materializeSession(s3, dshHome, { workspaceId: meta.workspaceId, sessionId: meta.sessionId, localPath, writerId });
+          state.remoteRev.set(`${meta.workspaceId}:${meta.sessionId}`, revKey);
+          const workspace = ctx.workspaceRegistry?.resolveByPath?.(localPath);
+          try {
+            workspace?.attachSession?.(meta.sessionId);
+          } catch {
+          }
+          outcomes[index] = { sessionId: meta.sessionId, workspaceId: meta.workspaceId, outcome: "materialized" };
+        }
+      } catch (error) {
+        const key = `${meta.workspaceId}:${meta.sessionId}`;
+        const tries = (state.remoteTries.get(key) ?? 0) + 1;
+        state.remoteTries.set(key, tries);
+        if (tries >= 3) state.remoteRev.set(key, revKey);
+        outcomes[index] = { sessionId: meta.sessionId, workspaceId: meta.workspaceId, outcome: `error:${messageOf(error).error}` };
+      }
+      if (job !== void 0) job.done += 1;
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(3, batch.length) }, worker));
+  return outcomes.filter(Boolean);
+}
 function messageOf(error) {
   const raw = error instanceof Error ? error.message : String(error);
   const code = /<Code>([^<]+)<\/Code>/.exec(raw)?.[1];
   const status = /HTTP (\d{3})/.exec(raw)?.[1];
-  if (code !== void 0) return `S3 ${status ?? ""} ${code}`.trim();
+  if (error?.code === "session-busy") {
+    return {
+      error: raw,
+      code: "session-busy",
+      holder: error.holder,
+      holderExpiresAt: error.holderExpiresAt
+    };
+  }
+  if (code !== void 0) return { error: `S3 ${status ?? ""} ${code}`.trim(), code: `s3-${String(code).toLowerCase()}` };
+  if (raw.startsWith("schema:")) return { error: raw, code: "schema" };
+  if (/(timeout|timed out|aborted|fetch failed|econnreset|econnrefused|enotfound|network)/i.test(raw)) {
+    return { error: raw, code: "network" };
+  }
   const clean = raw.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
-  return clean.length > 180 ? `${clean.slice(0, 177)}\u2026` : clean;
+  return { error: clean.length > 180 ? `${clean.slice(0, 177)}\u2026` : clean, code: "internal" };
 }
 function sendJson2(res, status, body) {
   const payload = JSON.stringify(body);
@@ -2178,7 +2415,7 @@ function createRoutes(ctx, config) {
     libVersion: LIB_VERSION
   });
   const dshHome = process.env.DSH_HOME ?? `${homedir2()}/.dsh`;
-  const syncState = { bySession: /* @__PURE__ */ new Map() };
+  const syncState = { bySession: /* @__PURE__ */ new Map(), remoteRev: /* @__PURE__ */ new Map(), remoteTries: /* @__PURE__ */ new Map() };
   let settingsCache;
   let settingsPending;
   let settingsEpoch = 0;
@@ -2376,28 +2613,66 @@ function createRoutes(ctx, config) {
     },
     "/sync": {
       method: "POST",
-      async run() {
-        const { client, identity } = await s3();
-        const markers = await listWorkspaces(client);
-        const results = await syncAll(client, ctx, identity, dshHome, syncState, markers);
-        const instance = await instanceId(ctx);
-        const me = instance.slice(0, 8);
-        const trees = [];
-        for (const marker of markers) {
-          const member = await localMember(marker, identity, instance);
-          if (typeof member?.localPath !== "string" || member.localPath === "") continue;
-          try {
-            trees.push({ workspaceId: marker.workspaceId, ...await pushWorkspace(client, dshHome, marker.workspaceId, member.localPath, `${identity.username}@${me}`) });
-          } catch (error) {
-            trees.push({ workspaceId: marker.workspaceId, ok: false, error: messageOf(error) });
+      async run(req) {
+        const body = JSON.parse(await readBody(req) || "{}");
+        const work = async (job2) => {
+          const { client, identity } = await s3();
+          const markers = await listWorkspaces(client);
+          job2.note = "pushing sessions";
+          const results = await syncAll(client, ctx, identity, dshHome, syncState, markers);
+          const instance = await instanceId(ctx);
+          const me = instance.slice(0, 8);
+          const trees = [];
+          job2.total = markers.length;
+          for (const marker of markers) {
+            job2.note = `workspace ${marker.workspaceId}`;
+            const member = await localMember(marker, identity, instance);
+            if (typeof member?.localPath !== "string" || member.localPath === "") {
+              job2.done += 1;
+              continue;
+            }
+            try {
+              const pulled = await pullWorkspace(client, dshHome, marker.workspaceId, member.localPath);
+              trees.push({ workspaceId: marker.workspaceId, pulled, ...await pushWorkspace(client, dshHome, marker.workspaceId, member.localPath, `${identity.username}@${me}`) });
+            } catch (error) {
+              trees.push({ workspaceId: marker.workspaceId, ok: false, ...messageOf(error) });
+            }
+            job2.done += 1;
           }
-        }
-        return {
-          ok: true,
-          pushed: results.filter((r) => r.outcome.startsWith("pushed")).length,
-          outcomes: results.slice(0, 50),
-          trees
+          job2.note = "pulling sessions";
+          const pulledSessions = await pullRemoteSessions(client, ctx, identity, dshHome, instance, markers, syncState, job2).catch(() => []);
+          return {
+            ok: true,
+            pushed: results.filter((r) => r.outcome.startsWith("pushed")).length,
+            outcomes: results.slice(0, 50),
+            trees,
+            pulledSessions
+          };
         };
+        if (body?.async === true || new URL(req.url, "http://x").searchParams.get("async") === "1") {
+          const job2 = newJob("sync");
+          work(job2).then((result) => finishJob(job2, result)).catch((error) => failJob(job2, error));
+          return { ok: true, jobId: job2.id, async: true };
+        }
+        const job = newJob("sync");
+        try {
+          const result = await work(job);
+          finishJob(job, result);
+          return result;
+        } catch (error) {
+          failJob(job, error);
+          throw error;
+        }
+      }
+    },
+    // Route kind is `exact`, so the id rides a query param, not a path segment.
+    "/jobs": {
+      method: "GET",
+      async run(req) {
+        const id = new URL(req.url, "http://x").searchParams.get("id");
+        const job = id === null ? void 0 : jobs.get(id);
+        if (job === void 0) return { ok: false, error: "no such job", code: "job-not-found" };
+        return { ok: true, job };
       }
     },
     "/tree/pull": {
@@ -2602,19 +2877,29 @@ function createRoutes(ctx, config) {
         }
         const workspaceId = assertWorkspaceId(body.workspaceId);
         const sessionId = assertSessionId(body.sessionId);
-        const marker = (await listWorkspaces(client)).find((row) => row.workspaceId === workspaceId);
-        if (marker === void 0) return { ok: false, error: "shared workspace not found" };
-        const member = await localMember(marker, identity, await instanceId(ctx));
-        const localPath = member?.localPath;
-        if (typeof localPath !== "string" || localPath === "") {
-          return { ok: false, error: "join this shared workspace before opening its sessions" };
+        const work = async () => {
+          const marker = (await listWorkspaces(client)).find((row) => row.workspaceId === workspaceId);
+          if (marker === void 0) return { ok: false, error: "shared workspace not found" };
+          const instance = await instanceId(ctx);
+          const member = await localMember(marker, identity, instance);
+          const localPath = member?.localPath;
+          if (typeof localPath !== "string" || localPath === "") {
+            return { ok: false, error: "join this shared workspace before opening its sessions" };
+          }
+          const landed = await materializeSession(client, dshHome, {
+            workspaceId,
+            sessionId,
+            localPath,
+            writerId: `${identity.username}@${instance.slice(0, 8)}`
+          });
+          return { ok: true, ...landed };
+        };
+        if (body?.async === true || new URL(req.url, "http://x").searchParams.get("async") === "1") {
+          const job = newJob("materialize");
+          work().then((result) => finishJob(job, result)).catch((error) => failJob(job, error));
+          return { ok: true, jobId: job.id, async: true };
         }
-        const landed = await materializeSession(client, dshHome, {
-          workspaceId,
-          sessionId,
-          localPath
-        });
-        return { ok: true, ...landed };
+        return work();
       }
     }
   };
@@ -2631,8 +2916,9 @@ function registerRoutes2(ctx, routes) {
         if (ms > 2e3) console.warn(`[nsw:route] ${route.method} ${suffix} -> 200 ${ms}ms`);
         sendJson2(res, 200, body);
       } catch (error) {
-        console.error(`[nsw:route] ${route.method} ${suffix} -> 400 ${Date.now() - started}ms :: ${messageOf(error)}`);
-        sendJson2(res, 400, { error: messageOf(error) });
+        const info = messageOf(error);
+        console.error(`[nsw:route] ${route.method} ${suffix} -> 400 ${Date.now() - started}ms [${info.code}] :: ${info.error}`);
+        sendJson2(res, 400, { ok: false, ...info });
       }
     }
   }));
@@ -2646,7 +2932,7 @@ function startBackgroundSync(ctx, config) {
     libVersion: LIB_VERSION
   });
   const dshHome = process.env.DSH_HOME ?? `${homedir2()}/.dsh`;
-  const syncState = { bySession: /* @__PURE__ */ new Map() };
+  const syncState = { bySession: /* @__PURE__ */ new Map(), remoteRev: /* @__PURE__ */ new Map(), remoteTries: /* @__PURE__ */ new Map() };
   let running = false;
   const tick = () => review.hostSpan("sync-tick", async () => {
     if (running) return;
@@ -2656,12 +2942,18 @@ function startBackgroundSync(ctx, config) {
       if (identity?.configured !== true) return;
       const client = createS3(config, identity);
       const instance = await instanceId(ctx);
-      await syncAll(client, ctx, identity, dshHome, syncState).catch(() => {
+      const markers = await listWorkspaces(client);
+      await pullRemoteSessions(client, ctx, identity, dshHome, instance, markers, syncState).catch(() => {
       });
-      for (const marker of await listWorkspaces(client)) {
+      await syncAll(client, ctx, identity, dshHome, syncState, markers).catch(() => {
+      });
+      for (const marker of markers) {
         const member = await localMember(marker, identity, instance);
         if (typeof member?.localPath !== "string" || member.localPath === "") continue;
-        await pushWorkspace(client, dshHome, marker.workspaceId, member.localPath, `${identity.username}@${instance.slice(0, 8)}`).catch(() => {
+        const writerId = `${identity.username}@${instance.slice(0, 8)}`;
+        await pullWorkspace(client, dshHome, marker.workspaceId, member.localPath).catch(() => {
+        });
+        await pushWorkspace(client, dshHome, marker.workspaceId, member.localPath, writerId).catch(() => {
         });
       }
     } finally {
@@ -2705,8 +2997,12 @@ var Config = {
       if (!Number.isInteger(rawInterval) || rawInterval < 0 || rawInterval > 864e5) {
         issues.push({ message: "backgroundSyncMs must be an integer between 0 and 86400000" });
       }
+      const direct = source.endpointDirect === void 0 ? "" : source.endpointDirect;
+      if (typeof direct !== "string" || direct !== "" && !/^[0-9a-fA-F.:]+$/.test(direct)) {
+        issues.push({ message: "endpointDirect must be an IP literal (optionally :port)" });
+      }
       if (issues.length > 0) return { issues };
-      return { value: { endpoint, bucket, region, prefix: prefix ?? "", backgroundSyncMs: rawInterval } };
+      return { value: { endpoint, bucket, region, prefix: prefix ?? "", backgroundSyncMs: rawInterval, endpointDirect: direct ?? "" } };
     }
   }
 };

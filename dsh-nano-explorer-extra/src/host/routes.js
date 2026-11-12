@@ -4,7 +4,7 @@ import { watch } from 'node:fs'
 import { ensurePerfReviewHost, LIB_VERSION } from 'dsh-performance-review/host'
 import { registerRoutes as registerGuardedRoutes } from 'dsh-host-route-guard'
 import { ROUTE_TABLE, PLUGIN } from './route-table.js'
-import { checkoutBranch, commitAll, ignoredAmong, listBranches, listConflicts, listWorktrees, pullUpstream, readStatus } from './git.js'
+import { checkoutBranch, commitAll, ignoredAmong, listBranches, listConflicts, listWorktrees, pullUpstream, pushUpstream, readStatus, writeRemote, writeAuthor } from './git.js'
 import { absoluteOf, isLexicallyInside, listDirectory } from './listing.js'
 import { createFile, createFolder, moveEntry, removeEntry, rename } from './mutate.js'
 import { statisticsOf } from './stats.js'
@@ -294,6 +294,47 @@ export function createRoutes(ctx, config) {
         })
         forgetReads(root)
         return { summary }
+      },
+    },
+    '/push': {
+      method: 'POST',
+      async run(req) {
+        const body = await jsonBody(req)
+        const { root, policy, session } = await scopeOf(ctx, body.sessionId)
+        const summary = await pushUpstream(ctx, config, {
+          cwd: root, policy, session, signal: undefined,
+          // `remote` is only named when the branch has no upstream yet — `git push` alone never
+          // accepts a remote operand in this route.
+          remote: body.remote,
+        })
+        forgetReads(root)
+        return { summary }
+      },
+    },
+    '/remote': {
+      method: 'POST',
+      async run(req) {
+        const body = await jsonBody(req)
+        const { root, policy, session } = await scopeOf(ctx, body.sessionId)
+        const remotes = await writeRemote(ctx, config, {
+          cwd: root, policy, session, signal: undefined,
+          op: body.op, name: body.name, url: body.url,
+        })
+        forgetReads(root)
+        return { remotes }
+      },
+    },
+    '/author': {
+      method: 'POST',
+      async run(req) {
+        const body = await jsonBody(req)
+        const { root, policy, session } = await scopeOf(ctx, body.sessionId)
+        const author = await writeAuthor(ctx, config, {
+          cwd: root, policy, session, signal: undefined,
+          name: body.name, email: body.email,
+        })
+        forgetReads(root)
+        return { author }
       },
     },
     '/checkout': {

@@ -366,6 +366,42 @@ var ROUTE_TABLE = [
   },
   {
     "plugin": "dsh-nano-explorer-extra",
+    "path": "/nano-explorer-extra/push",
+    "methods": [
+      "POST"
+    ],
+    "sensitivity": "L2",
+    "capability": "proc:git",
+    "bodyLimit": 65536,
+    "sessionBinding": true,
+    "justification": "dsh-nano-explorer-extra/src/host/routes.js \u2014 `git push` or `git push -u <remote> HEAD`: host process exec + outbound net to a configured or caller-named remote; publishes commits off the machine."
+  },
+  {
+    "plugin": "dsh-nano-explorer-extra",
+    "path": "/nano-explorer-extra/remote",
+    "methods": [
+      "POST"
+    ],
+    "sensitivity": "L2",
+    "capability": "proc:git",
+    "bodyLimit": 65536,
+    "sessionBinding": true,
+    "justification": "dsh-nano-explorer-extra/src/host/routes.js \u2014 `git remote add|set-url|remove`: host process exec that rewrites .git/config; the URL operand steers where later pushes send the tree."
+  },
+  {
+    "plugin": "dsh-nano-explorer-extra",
+    "path": "/nano-explorer-extra/author",
+    "methods": [
+      "POST"
+    ],
+    "sensitivity": "L1",
+    "capability": "proc:git",
+    "bodyLimit": 65536,
+    "sessionBinding": true,
+    "justification": "dsh-nano-explorer-extra/src/host/routes.js \u2014 `git config user.name|user.email` (local only): writes .git/config; no process exec beyond the config setter itself, no network."
+  },
+  {
+    "plugin": "dsh-nano-explorer-extra",
     "path": "/nano-explorer-extra/checkout",
     "methods": [
       "POST"
@@ -681,25 +717,27 @@ function parseLog(stdout) {
   for (const line of stdout.split("\n")) {
     if (line.trim() === "") continue;
     const parts = line.split("");
-    const hash = parts[0] ?? "";
+    const full = parts[0] ?? "";
+    const hash = parts[1] ?? "";
     if (hash === "") continue;
-    const time = Number.parseInt(parts[1] ?? "", 10);
-    const subject = parts[2] ?? "";
+    const parents = (parts[2] ?? "").trim() === "" ? [] : (parts[2] ?? "").trim().split(/\s+/u);
+    const time = Number.parseInt(parts[3] ?? "", 10);
+    const subject = parts[4] ?? "";
     const refs = [];
-    for (const raw of (parts[3] ?? "").split(",")) {
+    for (const raw of (parts[5] ?? "").split(",")) {
       const name2 = raw.trim().replace(/^HEAD -> /u, "").replace(/^tag: /u, "");
       if (name2 === "" || name2 === "HEAD" || refs.includes(name2)) continue;
       refs.push(name2);
-      if (refs.length === 3) break;
+      if (refs.length === 4) break;
     }
-    commits.push({ hash, time: Number.isFinite(time) ? time : 0, subject, refs });
+    commits.push({ hash, full, parents, time: Number.isFinite(time) ? time : 0, subject, refs });
   }
   return commits;
 }
 async function readHistory(ctx, config, request) {
   const result = await runGit(ctx, config, {
     ...request,
-    args: ["log", "-n", "24", "--pretty=format:%h%x1f%ct%x1f%s%x1f%D"],
+    args: ["log", "--all", "-n", "48", "--pretty=format:%H%x1f%h%x1f%P%x1f%ct%x1f%s%x1f%D"],
     allowedExitCodes: [0, 128]
   }).catch(() => void 0);
   if (result === void 0 || result.exitCode !== 0) return [];
@@ -732,10 +770,12 @@ async function readStatus(ctx, config, request) {
   ]);
   const parsed = parseStatus(status.stdout);
   const stashed = stash === void 0 || stash.exitCode !== 0 ? 0 : stash.stdout.split("\n").filter((line) => line.trim() !== "").length;
-  const [branches, history, remote] = await Promise.all([
+  const [branches, history, remote, remotes, author] = await Promise.all([
     listBranches(ctx, config, request, worktrees),
     readHistory(ctx, config, request),
-    typeof parsed.upstream !== "string" || parsed.upstream === "" ? Promise.resolve(void 0) : remoteDivergence(ctx, config, request)
+    typeof parsed.upstream !== "string" || parsed.upstream === "" ? Promise.resolve(void 0) : remoteDivergence(ctx, config, request),
+    readRemotes(ctx, config, request),
+    readAuthor(ctx, config, request)
   ]);
   const conflicts = parsed.files.filter((file) => file.status === "U").map((file) => file.path);
   return {
@@ -746,7 +786,9 @@ async function readStatus(ctx, config, request) {
     branches,
     history,
     conflicts,
-    ...remote === void 0 ? {} : { remote }
+    ...remote === void 0 ? {} : { remote },
+    remotes,
+    author
   };
 }
 async function commitAll(ctx, config, request) {
@@ -878,6 +920,101 @@ async function checkoutBranch(ctx, config, request) {
     throw new Error(detail === "" ? "git checkout failed" : detail);
   }
   return { branch: name2 };
+}
+async function pushUpstream(ctx, config, request) {
+  const remote = typeof request.remote === "string" ? request.remote.trim() : "";
+  const args = remote === "" ? ["push"] : ["push", "-u", remote, "HEAD"];
+  const result = await runGit(ctx, config, {
+    ...request,
+    args,
+    allowedExitCodes: [0, 1, 128]
+  });
+  if (result.exitCode !== 0) {
+    const detail = firstLine(result.stderr) || firstLine(result.stdout);
+    throw new Error(detail === "" ? "git push failed" : detail);
+  }
+  return firstLine(result.stdout) || firstLine(result.stderr);
+}
+async function readRemotes(ctx, config, request) {
+  const result = await runGit(ctx, config, {
+    ...request,
+    args: ["remote", "-v"],
+    allowedExitCodes: [0, 128]
+  }).catch(() => void 0);
+  if (result === void 0 || result.exitCode !== 0) return [];
+  const byName = /* @__PURE__ */ new Map();
+  for (const line of result.stdout.split("\n")) {
+    if (line.trim() === "") continue;
+    const match = line.match(/^(\S+)\s+(\S+)\s+\((fetch|push)\)\s*$/u);
+    if (match === null) continue;
+    const [, name2, url, direction] = match;
+    const row = byName.get(name2) ?? { name: name2, fetch: "", push: "" };
+    row[direction] = url;
+    byName.set(name2, row);
+  }
+  return [...byName.values()];
+}
+async function writeRemote(ctx, config, request) {
+  const op = request.op;
+  const name2 = typeof request.name === "string" ? request.name.trim() : "";
+  const url = typeof request.url === "string" ? request.url.trim() : "";
+  if (name2 === "" || name2.startsWith("-")) throw new Error("remote name must be a non-dash name");
+  if (op === "add") {
+    if (url === "") throw new Error("remote url is required");
+    const result = await runGit(ctx, config, { ...request, args: ["remote", "add", name2, url], allowedExitCodes: [0, 1, 128] });
+    if (result.exitCode !== 0) throw new Error(firstLine(result.stderr) || "git remote add failed");
+  } else if (op === "set-url") {
+    if (url === "") throw new Error("remote url is required");
+    const result = await runGit(ctx, config, { ...request, args: ["remote", "set-url", name2, url], allowedExitCodes: [0, 1, 128] });
+    if (result.exitCode !== 0) throw new Error(firstLine(result.stderr) || "git remote set-url failed");
+  } else if (op === "remove") {
+    const result = await runGit(ctx, config, { ...request, args: ["remote", "remove", name2], allowedExitCodes: [0, 1, 128] });
+    if (result.exitCode !== 0) throw new Error(firstLine(result.stderr) || "git remote remove failed");
+  } else {
+    throw new Error(`unknown remote operation "${String(op)}"`);
+  }
+  return readRemotes(ctx, config, request);
+}
+async function readAuthor(ctx, config, request) {
+  const probe = async (key, scope) => {
+    const result = await runGit(ctx, config, {
+      ...request,
+      args: ["config", ...scope === null ? [] : [`--${scope}`], "--get", key],
+      allowedExitCodes: [0, 1, 128]
+    }).catch(() => void 0);
+    if (result === void 0 || result.exitCode !== 0) return "";
+    return result.stdout.trim();
+  };
+  const [localName, localEmail, globalName, globalEmail] = await Promise.all([
+    probe("user.name", "local"),
+    probe("user.email", "local"),
+    probe("user.name", "global"),
+    probe("user.email", "global")
+  ]);
+  const source = localName !== "" || localEmail !== "" ? "local" : globalName !== "" || globalEmail !== "" ? "global" : "unset";
+  return {
+    name: localName !== "" ? localName : globalName,
+    email: localEmail !== "" ? localEmail : globalEmail,
+    local: { name: localName, email: localEmail },
+    global: { name: globalName, email: globalEmail },
+    source
+  };
+}
+async function writeAuthor(ctx, config, request) {
+  const name2 = typeof request.name === "string" ? request.name.trim() : void 0;
+  const email = typeof request.email === "string" ? request.email.trim() : void 0;
+  if ((name2 === void 0 || name2 === "") && (email === void 0 || email === "")) {
+    throw new Error("a name or an email is required");
+  }
+  if (name2 !== void 0 && name2 !== "") {
+    const result = await runGit(ctx, config, { ...request, args: ["config", "user.name", name2], allowedExitCodes: [0, 1, 128] });
+    if (result.exitCode !== 0) throw new Error(firstLine(result.stderr) || "git config user.name failed");
+  }
+  if (email !== void 0 && email !== "") {
+    const result = await runGit(ctx, config, { ...request, args: ["config", "user.email", email], allowedExitCodes: [0, 1, 128] });
+    if (result.exitCode !== 0) throw new Error(firstLine(result.stderr) || "git config user.email failed");
+  }
+  return readAuthor(ctx, config, request);
 }
 
 // src/host/listing.js
@@ -1342,7 +1479,7 @@ function createRoutes(ctx, config) {
   const fs = () => ctx.fs;
   const external = (request) => runExternal(ctx, config, request);
   const review = ensurePerfReviewHost().hostJoin("nano-explorer-extra", {
-    version: true ? "0.2.0" : void 0,
+    version: true ? "0.3.0" : void 0,
     // This host bundle's own copy of the library version (A3 / §10.4.4).
     libVersion: LIB_VERSION
   });
@@ -1397,6 +1534,59 @@ function createRoutes(ctx, config) {
         });
         forgetReads(root);
         return { summary };
+      }
+    },
+    "/push": {
+      method: "POST",
+      async run(req) {
+        const body = await jsonBody(req);
+        const { root, policy, session } = await scopeOf(ctx, body.sessionId);
+        const summary = await pushUpstream(ctx, config, {
+          cwd: root,
+          policy,
+          session,
+          signal: void 0,
+          // `remote` is only named when the branch has no upstream yet — `git push` alone never
+          // accepts a remote operand in this route.
+          remote: body.remote
+        });
+        forgetReads(root);
+        return { summary };
+      }
+    },
+    "/remote": {
+      method: "POST",
+      async run(req) {
+        const body = await jsonBody(req);
+        const { root, policy, session } = await scopeOf(ctx, body.sessionId);
+        const remotes = await writeRemote(ctx, config, {
+          cwd: root,
+          policy,
+          session,
+          signal: void 0,
+          op: body.op,
+          name: body.name,
+          url: body.url
+        });
+        forgetReads(root);
+        return { remotes };
+      }
+    },
+    "/author": {
+      method: "POST",
+      async run(req) {
+        const body = await jsonBody(req);
+        const { root, policy, session } = await scopeOf(ctx, body.sessionId);
+        const author = await writeAuthor(ctx, config, {
+          cwd: root,
+          policy,
+          session,
+          signal: void 0,
+          name: body.name,
+          email: body.email
+        });
+        forgetReads(root);
+        return { author };
       }
     },
     "/checkout": {

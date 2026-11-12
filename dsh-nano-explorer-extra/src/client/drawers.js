@@ -82,36 +82,237 @@ function ChangeGroup({ label, count, files, tone }) {
       React.createElement(ChangeRow, { key: `${tone ?? ''}:${file.path}`, file }))))
 }
 
+/* The lane palette mirrors the VS Code git-graph one: eight hues, so lanes that appear together
+ * never share a colour unless the history is wider than eight concurrent branches. */
+const LANE_COLORS = 8
+
+/** Geometry of one graph row: a 22px tall canvas, lanes 10px apart starting at x=6. */
+const ROW_H = 22
+const LANE_W = 10
+const LANE_X = 6
+
 /**
- * The commits HEAD is about to grow from. The first row is the commit a new one would sit on.
- * @param props - copy and the history payload.
- * @returns the rail.
+ * Assign every commit to a lane column and collect the strokes each row has to draw.
+ *
+ * This is the same sweep VS Code's source-control graph and `git log --graph` share: a lane keeps
+ * the hash it is waiting for; when that commit appears the lane delivers it onto a column and
+ * forwards its first parent. A commit no lane expected is a new tip and takes the first free
+ * column. Each lane also remembers whether the last commit it delivered was already pushed, so
+ * its stroke can dim the moment its work reached a remote.
+ *
+ * @param commits - newest-first history with `{ full, parents }`.
+ * @param isPushed - whether a full hash is already on a remote.
+ * @returns `{ rows, lanesWide }`; each row carries `col` (its column), `color` (its hue),
+ *   `enter`/`exit` (Map col → `{ color, dim }` for lanes alive above/below the row), and `edges`
+ *   (`{ to, color, dim }` curves from this dot toward a parent's lane).
  */
-function HistoryRail({ copy, history, currentBranch, upstream }) {
+function layoutGraph(commits, isPushed) {
+  // A lane is `{ hash, color, dim }`: the commit it waits for, the hue it owns, and whether the
+  // commit that most recently sat on it was already pushed. `null` marks a freed column.
+  const lanes = []
+  const rows = []
+
+  const snapshot = () => {
+    const map = new Map()
+    for (let c = 0; c < lanes.length; c += 1) {
+      if (lanes[c] !== null) map.set(c, { color: lanes[c].color, dim: lanes[c].dim })
+    }
+    return map
+  }
+  const freeColumn = () => {
+    const free = lanes.indexOf(null)
+    if (free !== -1) return free
+    lanes.push(null)
+    return lanes.length - 1
+  }
+  const freshColor = () => {
+    let next = 0
+    for (const lane of lanes) if (lane !== null) next = Math.max(next, lane.color + 1)
+    return next
+  }
+
+  for (let i = 0; i < commits.length; i += 1) {
+    const commit = commits[i]
+    const pushed = isPushed(commit.full)
+    // Lanes alive above this row, before it delivers or spawns anything.
+    const enter = snapshot()
+
+    const hits = []
+    for (let c = 0; c < lanes.length; c += 1) {
+      if (lanes[c] !== null && lanes[c].hash === commit.full) hits.push(c)
+    }
+    let col
+    let color
+    if (hits.length === 0) {
+      col = freeColumn()
+      color = freshColor()
+      // A tip that was not drawn on the first row: give the waiting lane its own entry so the dot
+      // has a column on record. Nothing arrives from above, so `enter` stays untouched.
+      lanes[col] = { hash: commit.full, color, dim: pushed }
+    } else {
+      col = hits[0]
+      color = lanes[col].color
+    }
+    // Extra lanes that also waited for this commit terminate into it — the merge curves.
+    for (const c of hits.slice(1)) lanes[c] = null
+
+    const edges = []
+    const parents = commit.parents ?? []
+    if (parents.length === 0) {
+      lanes[col] = null
+    } else {
+      for (let pi = 0; pi < parents.length; pi += 1) {
+        const parent = parents[pi]
+        let target = -1
+        for (let c = 0; c < lanes.length; c += 1) {
+          if (lanes[c] !== null && lanes[c].hash === parent) { target = c; break }
+        }
+        if (pi === 0 && target === -1) {
+          // The lane continues straight through this commit onto its first parent; the segment
+          // below it keeps this commit's pushed state, which is what the dim answers.
+          lanes[col] = { hash: parent, color, dim: pushed }
+        } else {
+          const toCol = target !== -1 ? target : freeColumn()
+          if (target === -1) {
+            const toColor = freshColor()
+            lanes[toCol] = { hash: parent, color: toColor, dim: pushed }
+            edges.push({ to: toCol, color: toColor, dim: pushed })
+          } else {
+            edges.push({ to: toCol, color: lanes[toCol].color, dim: pushed })
+          }
+        }
+      }
+    }
+    rows.push({ commit, col, color, enter, exit: snapshot(), edges })
+  }
+  return { rows, lanesWide: lanes.length }
+}
+
+/**
+ * The commit graph: one lane stroke per concurrent line of history, one hue per lane.
+ *
+ * Pushed work keeps the lane's hue but drops to a dim stroke — the lane still reads as the same
+ * line, while the stretch that only exists locally is the bright part and its height IS the amount
+ * not yet pushed. `ahead` (unpushed AND an ancestor of HEAD) additionally darkens the subject,
+ * which is the set the push button acts on.
+ * @param props - copy, the history payload, and the ref names that matter.
+ * @returns the graph section.
+ */
+function HistoryRail({ copy, history, currentBranch, upstream, remotes }) {
   const commits = history ?? []
-  // The remote tip is the boundary the reader asked about: commits above it have never left this
-  // checkout, everything at and below it is already pushed. Without an upstream there is no
-  // boundary to draw, so the rail stays uniform rather than guessing from a branch-name prefix.
-  const pushedFrom = upstream === null || upstream === undefined
-    ? -1
-    : commits.findIndex(commit => commit.refs.includes(upstream))
+  // Pushed: reachable from any remote-tracking ref. Ahead: reachable from the current branch's
+  // tip but not pushed. Both are small ancestor walks over the same parent map the lanes used.
+  const { pushedSet, aheadSet } = React.useMemo(() => {
+    const byFull = new Map(commits.map(commit => [commit.full, commit]))
+    const mark = seeds => {
+      const seen = new Set()
+      const queue = seeds.filter(Boolean)
+      while (queue.length > 0) {
+        const full = queue.pop()
+        if (seen.has(full) || !byFull.has(full)) continue
+        seen.add(full)
+        for (const parent of byFull.get(full).parents ?? []) queue.push(parent)
+      }
+      return seen
+    }
+    // A ref is remote-tracking when it starts with a configured remote's name; a repo without
+    // remotes falls back to any `x/y` ref so detached mirror refs still mark the pushed region.
+    const remoteNames = (remotes ?? []).map(remote => remote.name)
+    const isRemoteRef = ref => remoteNames.length === 0
+      ? ref.includes('/')
+      : remoteNames.some(name => ref.startsWith(`${name}/`))
+    const remoteTips = commits
+      .filter(commit => commit.refs.some(isRemoteRef))
+      .map(commit => commit.full)
+    const pushed = mark(remoteTips)
+    const headTip = commits.find(commit => currentBranch !== null && commit.refs.includes(currentBranch))
+    const ahead = mark(headTip === undefined ? [] : [headTip.full])
+    return { pushedSet: pushed, aheadSet: ahead }
+  }, [commits, currentBranch, remotes])
+  const layout = React.useMemo(
+    () => layoutGraph(commits, full => pushedSet.has(full)),
+    [commits, pushedSet],
+  )
+
+  const graphW = Math.max(1, layout.lanesWide) * LANE_W + LANE_X * 2
+  const xOf = c => LANE_X + c * LANE_W
   return React.createElement('section', { className: 'nxe-scm-group', 'data-nxe-history': 'true' },
     React.createElement('h3', { className: 'nxe-drawer-heading' }, copy.historyHeading),
     commits.length === 0
       ? React.createElement('p', { className: 'nxe-drawer-empty' }, copy.historyEmpty)
-      : React.createElement('ol', { className: 'nxe-graph' }, commits.map((commit, index) =>
-        React.createElement('li', {
+      : React.createElement('ol', { className: 'nxe-graph' }, layout.rows.map((row, index) => {
+        const { commit } = row
+        const pushed = pushedSet.has(commit.full)
+        const ahead = aheadSet.has(commit.full) && !pushed
+        const pieces = []
+        // Lanes alive on both sides of the row run straight through. The column this commit leaves
+        // on is skipped here: its upper half is drawn by the 'top' piece so the two halves can take
+        // different dim values at the pushed boundary.
+        for (const [c, lane] of row.enter) {
+          if (!row.exit.has(c) || c === row.col) continue
+          pieces.push(React.createElement('line', {
+            key: `v${c}`, x1: xOf(c), y1: 0, x2: xOf(c), y2: ROW_H,
+            className: `nxe-lane nxe-c${lane.color % LANE_COLORS}`,
+            'data-dim': String(lane.dim && row.exit.get(c).dim),
+          }))
+        }
+        // Lanes that end at this commit (merge-ins) curve down onto its dot.
+        for (const [c, lane] of row.enter) {
+          if (row.exit.has(c) || c === row.col) continue
+          pieces.push(React.createElement('path', {
+            key: `m${c}`,
+            d: `M ${xOf(c)} 0 C ${xOf(c)} ${ROW_H * 0.55} ${xOf(row.col)} ${ROW_H * 0.45} ${xOf(row.col)} ${ROW_H / 2}`,
+            className: `nxe-lane nxe-c${lane.color % LANE_COLORS}`,
+            'data-dim': String(lane.dim),
+          }))
+        }
+        // This commit's own lane arrives from above only when a lane was waiting for it; a brand-new
+        // tip starts at its dot with no stroke above.
+        if (row.enter.has(row.col)) {
+          const lane = row.enter.get(row.col)
+          pieces.push(React.createElement('line', {
+            key: 'top', x1: xOf(row.col), y1: 0, x2: xOf(row.col), y2: ROW_H / 2,
+            className: `nxe-lane nxe-c${lane.color % LANE_COLORS}`,
+            'data-dim': String(lane.dim),
+          }))
+        }
+        if (row.exit.has(row.col)) {
+          const lane = row.exit.get(row.col)
+          pieces.push(React.createElement('line', {
+            key: 'bot', x1: xOf(row.col), y1: ROW_H / 2, x2: xOf(row.col), y2: ROW_H,
+            className: `nxe-lane nxe-c${lane.color % LANE_COLORS}`,
+            'data-dim': String(lane.dim),
+          }))
+        }
+        // Edges out of this dot toward parents living in another column: curve down into that lane.
+        for (let ei = 0; ei < row.edges.length; ei += 1) {
+          const edge = row.edges[ei]
+          pieces.push(React.createElement('path', {
+            key: `e${ei}`,
+            d: `M ${xOf(row.col)} ${ROW_H / 2} C ${xOf(row.col)} ${ROW_H * 0.95} ${xOf(edge.to)} ${ROW_H * 0.55} ${xOf(edge.to)} ${ROW_H}`,
+            className: `nxe-lane nxe-c${edge.color % LANE_COLORS}`,
+            'data-dim': String(edge.dim),
+          }))
+        }
+        // The commit dot: full hue and a touch larger while local-only, dimmed and smaller once the
+        // remote already holds it.
+        pieces.push(React.createElement('circle', {
+          key: 'dot', cx: xOf(row.col), cy: ROW_H / 2, r: pushed ? 2.6 : 3.4,
+          className: `nxe-lane nxe-c${row.color % LANE_COLORS}`,
+          'data-dim': String(pushed), 'data-dot': 'true',
+        }))
+        return React.createElement('li', {
           key: `${commit.hash}:${index}`,
           className: 'nxe-graph-row',
           'data-head': String(index === 0),
-          // `ahead` marks a commit the remote does not have yet; `boundary` is the first row it
-          // already has, and the stylesheet draws the divider that separates the two regions.
-          'data-ahead': String(pushedFrom >= 0 && index < pushedFrom || (pushedFrom === -1 && upstream != null)),
-          'data-boundary': String(pushedFrom >= 0 && index === pushedFrom),
+          'data-pushed': String(pushed),
+          'data-ahead': String(ahead),
           title: [commit.hash, ageLabel(copy, commit.time), commit.subject].filter(part => part !== '').join(' · '),
         },
-        React.createElement('span', { className: 'nxe-graph-rail', 'aria-hidden': 'true' },
-          React.createElement('span', { className: 'nxe-graph-dot' })),
+        React.createElement('svg', {
+          className: 'nxe-graph-rail', 'aria-hidden': 'true',
+          width: graphW, height: ROW_H, viewBox: `0 0 ${graphW} ${ROW_H}`,
+        }, pieces),
         React.createElement('span', { className: 'nxe-graph-subject' },
           React.createElement('span', { className: 'nxe-graph-hash' }, commit.hash),
           ' ',
@@ -122,7 +323,8 @@ function HistoryRail({ copy, history, currentBranch, upstream }) {
             className: 'nxe-pill',
             'data-tone': ref === currentBranch ? 'current' : ref === upstream ? 'upstream' : 'default',
             title: ref,
-          }, ref)))))))
+          }, ref))))
+      })))
 }
 
 /**
@@ -131,16 +333,24 @@ function HistoryRail({ copy, history, currentBranch, upstream }) {
  * @param props - copy, Git summary, and the actions the panel can start.
  * @returns the panel, or null while closed.
  */
-export function BranchDrawer({ copy, open, git, onClose, onPull, onRefresh, onCheckout, onOpenConflict, busy, error }) {
+export function BranchDrawer({ copy, open, git, onClose, onPull, onPush, onRefresh, onCheckout, onOpenConflict, onRemote, onAuthor, busy, error }) {
   usePanelConfinedLayer(open)
   const [query, setQuery] = useState('')
   const [pendingBranch, setPendingBranch] = useState(null)
-  useEffect(() => { if (!open) { setQuery(''); setPendingBranch(null) } }, [open])
+  // A first push needs a destination: the branch has no upstream yet, so the reader picks the
+  // remote before anything leaves this machine. `false` = no dialog, a string = dialog choosing.
+  const [pendingPush, setPendingPush] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  useEffect(() => {
+    if (!open) { setQuery(''); setPendingBranch(null); setPendingPush(false); setSettingsOpen(false) }
+  }, [open])
   if (!open) return null
   const current = branchName(git)
   const upstream = git?.upstream ?? null
   const behind = git?.behind ?? 0
   const ahead = git?.ahead ?? 0
+  const remotes = git?.remotes ?? []
+  const detached = git?.detached === true
   const history = git?.history ?? []
   const branches = [...(git?.branches ?? [])].sort((a, b) => {
     if (a.current === true && b.current !== true) return -1
@@ -167,14 +377,36 @@ export function BranchDrawer({ copy, open, git, onClose, onPull, onRefresh, onCh
       // the reader is done, matching the spot this panel family reserves for dismissals.
       React.createElement(Button, { variant: 'outline', className: 'nano-modal-action nxe-drawer-close', onClick: onClose }, copy.cancel),
       React.createElement(Button, { variant: 'outline', className: 'nano-modal-action', onClick: () => { void onRefresh() } }, copy.refreshGit),
+      React.createElement(Button, {
+        variant: 'outline', className: 'nano-modal-action',
+        title: copy.repoSettingsTitle,
+        onClick: () => setSettingsOpen(true),
+      }, copy.repoSettings),
       upstream === null
         ? null
         : React.createElement(Button, {
-          variant: 'primary', className: 'nano-modal-action',
-          disabled: busy === true || behind === 0,
-          title: behind === 0 ? copy.pullNothing : copy.pullNow,
+          variant: 'outline', className: 'nano-modal-action',
+          disabled: busy === true || upstream === null || behind === 0,
+          title: upstream === null ? copy.noUpstream : (behind === 0 ? copy.pullNothing : copy.pullNow),
           onClick: () => { void onPull() },
-        }, behind > 0 ? `${copy.pullNow} ${behind}` : copy.pullNow)),
+        }, behind > 0 ? `${copy.pullNow} ${behind}` : copy.pullNow),
+      React.createElement(Button, {
+        variant: 'primary', className: 'nano-modal-action',
+        disabled: busy === true || detached || (upstream === null && remotes.length === 0),
+        title: detached
+          ? copy.pushDetached
+          : remotes.length === 0 && upstream === null
+            ? copy.pushNoRemote
+            : upstream === null
+              ? copy.pushFirstTitle
+              : ahead === 0 ? copy.pushNothing : copy.pushNow,
+        onClick: () => {
+          if (upstream === null) setPendingPush(true)
+          else void onPush()
+        },
+      }, upstream === null
+        ? copy.pushFirst
+        : ahead > 0 ? `${copy.pushNow} ${ahead}` : copy.pushNow)),
     onCancel: onClose,
   },
   React.createElement('div', { className: 'nxe-scm nxe-repo', 'data-nxe-scm': 'branch' },
@@ -193,7 +425,7 @@ export function BranchDrawer({ copy, open, git, onClose, onPull, onRefresh, onCh
           type: 'button', className: 'nxe-drawer-link', title: path,
           onClick: () => onOpenConflict?.(path),
         }, path))))),
-    React.createElement(HistoryRail, { copy, history, currentBranch: current, upstream }),
+    React.createElement(HistoryRail, { copy, history, currentBranch: current, upstream, remotes }),
     React.createElement(Input, {
       value: query,
       placeholder: copy.branchFilter,
@@ -266,7 +498,182 @@ export function BranchDrawer({ copy, open, git, onClose, onPull, onRefresh, onCh
         void onCheckout(name)
       },
       onCancel: () => setPendingBranch(null),
-    }, React.createElement('p', { className: 'nxe-drawer-empty' }, copy.checkoutBody(pendingBranch))))
+    }, React.createElement('p', { className: 'nxe-drawer-empty' }, copy.checkoutBody(pendingBranch))),
+    pendingPush === false ? null : React.createElement(Dialog, {
+      copy,
+      title: copy.pushFirstTitle,
+      description: copy.pushFirstBody(current ?? copy.detached),
+      confirmLabel: copy.pushNow,
+      busy,
+      onConfirm: () => {
+        setPendingPush(false)
+        // The footer confirm publishes to the first remote; the rows below let the reader pick
+        // another one when there is more than origin.
+        void onPush(remotes[0]?.name)
+      },
+      onCancel: () => setPendingPush(false),
+    }, React.createElement(PushRemotePicker, {
+      copy, remotes, busy,
+      onPick: remote => {
+        setPendingPush(false)
+        void onPush(remote)
+      },
+    })),
+    settingsOpen ? React.createElement(RepoSettingsDialog, {
+      copy, remotes, author: git?.author, busy, error,
+      onRemote, onAuthor,
+      onCancel: () => setSettingsOpen(false),
+    }) : null)
+}
+
+/**
+ * The remote list the first push chooses from. Only mounts while the confirm card is open.
+ * @param props - copy, the remote rows, and the pick callback.
+ * @returns one button per remote.
+ */
+function PushRemotePicker({ copy, remotes, onPick }) {
+  if (remotes.length === 0) return React.createElement('p', { className: 'nxe-drawer-empty' }, copy.pushNoRemote)
+  return React.createElement('ul', { className: 'nxe-drawer-list' }, remotes.map(remote =>
+    React.createElement('li', { key: remote.name, className: 'nxe-drawer-row' },
+      React.createElement('button', {
+        type: 'button', className: 'nxe-drawer-branch',
+        title: remote.fetch === '' ? remote.name : remote.fetch,
+        onClick: () => onPick(remote.name),
+      }, remote.name),
+      React.createElement('span', {
+        className: 'nxe-drawer-row-path', title: remote.fetch === '' ? remote.push : remote.fetch,
+      }, remote.fetch === '' ? remote.push : remote.fetch))))
+}
+
+/**
+ * One remote: name, URL field, save and remove. The URL edits locally until Save writes it.
+ * Remounts (via the parent's `key`) whenever Git reports a different fetch URL.
+ * @param props - copy, the remote row, busy, and the remote callback.
+ * @returns the row.
+ */
+function RemoteRow({ copy, remote, busy, onRemote }) {
+  const [url, setUrl] = useState(remote.fetch)
+  return React.createElement('li', { className: 'nxe-remote-row' },
+    React.createElement('span', { className: 'nxe-remote-name', title: remote.name }, remote.name),
+    React.createElement(Input, {
+      value: url,
+      'aria-label': copy.remoteUrlOf(remote.name),
+      spellCheck: false,
+      onChange: event => setUrl(event.currentTarget.value),
+    }),
+    React.createElement(Button, {
+      variant: 'outline', className: 'nano-modal-action',
+      disabled: busy === true || url.trim() === '' || url.trim() === remote.fetch,
+      title: copy.remoteSaveTitle(remote.name),
+      onClick: () => { void onRemote('set-url', remote.name, url.trim()) },
+    }, copy.save),
+    React.createElement(Button, {
+      variant: 'outline', className: 'nano-modal-action',
+      disabled: busy === true,
+      title: copy.remoteRemoveTitle(remote.name),
+      onClick: () => { void onRemote('remove', remote.name, '') },
+    }, copy.remoteRemove))
+}
+
+/**
+ * The repository settings card: named remotes and the commit identity.
+ *
+ * Remote rows edit in place — the URL field rewrites `remote.<name>.url` on save — and the
+ * author block writes the local `user.name`/`user.email`, so a worktree-level identity never
+ * surprises the global config.
+ * @param props - copy, remotes, author, busy/error, and the save callbacks.
+ * @returns the dialog, or null while closed.
+ */
+function RepoSettingsDialog({ copy, remotes, author, busy, error, onRemote, onAuthor, onCancel }) {
+  const [remoteName, setRemoteName] = useState('')
+  const [remoteUrl, setRemoteUrl] = useState('')
+  const [authorName, setAuthorName] = useState(author?.name ?? '')
+  const [authorEmail, setAuthorEmail] = useState(author?.email ?? '')
+  const [remoteError, setRemoteError] = useState(undefined)
+  const [authorError, setAuthorError] = useState(undefined)
+
+  const submitRemote = async () => {
+    const name = remoteName.trim()
+    const url = remoteUrl.trim()
+    setRemoteError(undefined)
+    if (name === '' || name.startsWith('-')) { setRemoteError(copy.remoteNameBad); return }
+    if (url === '') { setRemoteError(copy.remoteUrlBad); return }
+    const exists = (remotes ?? []).some(row => row.name === name)
+    await onRemote(exists ? 'set-url' : 'add', name, url)
+    setRemoteName('')
+    setRemoteUrl('')
+  }
+  const submitAuthor = async () => {
+    setAuthorError(undefined)
+    const name = authorName.trim()
+    const email = authorEmail.trim()
+    if (name === '' && email === '') { setAuthorError(copy.authorEmpty); return }
+    await onAuthor(name, email)
+  }
+
+  return React.createElement(Dialog, {
+    copy,
+    title: copy.repoSettingsTitle,
+    description: copy.repoSettingsBody,
+    confirmLabel: copy.dismiss,
+    busy,
+    error,
+    onConfirm: onCancel,
+    onCancel,
+  },
+  React.createElement('section', { className: 'nxe-scm-group' },
+    React.createElement('h3', { className: 'nxe-drawer-heading' }, copy.remotesHeading),
+    (remotes ?? []).length === 0
+      ? React.createElement('p', { className: 'nxe-drawer-empty' }, copy.remotesEmpty)
+      : React.createElement('ul', { className: 'nxe-drawer-list' }, remotes.map(remote =>
+        React.createElement(RemoteRow, {
+          key: `${remote.name}:${remote.fetch}`, copy, remote, busy, onRemote,
+        }))),
+    React.createElement('div', { className: 'nxe-remote-add' },
+      React.createElement(Input, {
+        value: remoteName,
+        placeholder: copy.remoteNamePh,
+        'aria-label': copy.remoteNamePh,
+        spellCheck: false,
+        onChange: event => setRemoteName(event.currentTarget.value),
+      }),
+      React.createElement(Input, {
+        value: remoteUrl,
+        placeholder: copy.remoteUrlPh,
+        'aria-label': copy.remoteUrlPh,
+        spellCheck: false,
+        onChange: event => setRemoteUrl(event.currentTarget.value),
+      }),
+      React.createElement(Button, {
+        variant: 'outline', className: 'nano-modal-action',
+        disabled: busy === true,
+        onClick: () => { void submitRemote() },
+      }, (remotes ?? []).some(row => row.name === remoteName.trim()) ? copy.remoteSave : copy.remoteAdd)),
+    remoteError === undefined ? null : React.createElement('p', { className: 'nxe-dialog-error' }, remoteError)),
+  React.createElement('section', { className: 'nxe-scm-group' },
+    React.createElement('h3', { className: 'nxe-drawer-heading' }, copy.authorHeading),
+    React.createElement('p', { className: 'nxe-drawer-empty' },
+      author?.source === 'global' ? copy.authorInherited : author?.source === 'unset' ? copy.authorUnset : copy.authorLocal),
+    React.createElement('div', { className: 'nxe-remote-add' },
+      React.createElement(Input, {
+        value: authorName,
+        placeholder: copy.authorNamePh,
+        'aria-label': copy.authorNamePh,
+        onChange: event => setAuthorName(event.currentTarget.value),
+      }),
+      React.createElement(Input, {
+        value: authorEmail,
+        placeholder: copy.authorEmailPh,
+        'aria-label': copy.authorEmailPh,
+        spellCheck: false,
+        onChange: event => setAuthorEmail(event.currentTarget.value),
+      }),
+      React.createElement(Button, {
+        variant: 'outline', className: 'nano-modal-action',
+        disabled: busy === true,
+        onClick: () => { void submitAuthor() },
+      }, copy.authorSave)),
+    authorError === undefined ? null : React.createElement('p', { className: 'nxe-dialog-error' }, authorError)))
 }
 
 /**

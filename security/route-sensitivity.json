@@ -105,6 +105,36 @@
     },
     {
       "plugin": "dsh-nano-explorer-extra",
+      "path": "/nano-explorer-extra/push",
+      "methods": ["POST"],
+      "sensitivity": "L2",
+      "capability": "proc:git",
+      "bodyLimit": 65536,
+      "sessionBinding": true,
+      "justification": "dsh-nano-explorer-extra/src/host/routes.js — `git push` or `git push -u <remote> HEAD`: host process exec + outbound net to a configured or caller-named remote; publishes commits off the machine."
+    },
+    {
+      "plugin": "dsh-nano-explorer-extra",
+      "path": "/nano-explorer-extra/remote",
+      "methods": ["POST"],
+      "sensitivity": "L2",
+      "capability": "proc:git",
+      "bodyLimit": 65536,
+      "sessionBinding": true,
+      "justification": "dsh-nano-explorer-extra/src/host/routes.js — `git remote add|set-url|remove`: host process exec that rewrites .git/config; the URL operand steers where later pushes send the tree."
+    },
+    {
+      "plugin": "dsh-nano-explorer-extra",
+      "path": "/nano-explorer-extra/author",
+      "methods": ["POST"],
+      "sensitivity": "L1",
+      "capability": "proc:git",
+      "bodyLimit": 65536,
+      "sessionBinding": true,
+      "justification": "dsh-nano-explorer-extra/src/host/routes.js — `git config user.name|user.email` (local only): writes .git/config; no process exec beyond the config setter itself, no network."
+    },
+    {
+      "plugin": "dsh-nano-explorer-extra",
       "path": "/nano-explorer-extra/checkout",
       "methods": ["POST"],
       "sensitivity": "L2",

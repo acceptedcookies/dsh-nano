@@ -575,6 +575,45 @@ export function ExplorerBody(props) {
   }, [sessionId, request, tree, refreshGit, refreshStats])
 
   /**
+   * Push the current branch upstream.
+   *
+   * With an upstream the host runs a bare `git push`; without one the drawer has already asked the
+   * reader which remote to publish to, and that name arrives here so the host can `-u` bind it.
+   */
+  const doPush = useCallback(async remote => {
+    setDrawerBusy(true)
+    setDrawerError(undefined)
+    const result = await request('/push', { sessionId, remote })
+    setDrawerBusy(false)
+    if (!result.ok) { setDrawerError(result.message); return }
+    await refreshGit()
+  }, [sessionId, request, refreshGit])
+
+  /**
+   * Add, retarget, or drop one named remote.
+   */
+  const doRemote = useCallback(async (op, name, url) => {
+    setDrawerBusy(true)
+    setDrawerError(undefined)
+    const result = await request('/remote', { sessionId, op, name, url })
+    setDrawerBusy(false)
+    if (!result.ok) { setDrawerError(result.message); return }
+    await refreshGit()
+  }, [sessionId, request, refreshGit])
+
+  /**
+   * Write the local commit identity for this checkout.
+   */
+  const doAuthor = useCallback(async (name, email) => {
+    setDrawerBusy(true)
+    setDrawerError(undefined)
+    const result = await request('/author', { sessionId, name, email })
+    setDrawerBusy(false)
+    if (!result.ok) { setDrawerError(result.message); return }
+    await refreshGit()
+  }, [sessionId, request, refreshGit])
+
+  /**
    * Switch this worktree to another branch.
    *
    * Git refuses when local changes would be overwritten or the branch is held by another worktree; its
@@ -994,6 +1033,9 @@ export function ExplorerBody(props) {
       copy, open: drawer === 'branch', git, busy: drawerBusy, error: drawerError,
       onClose: () => { setDrawer(null); setDrawerError(undefined) },
       onPull: doPull,
+      onPush: doPush,
+      onRemote: doRemote,
+      onAuthor: doAuthor,
       onCheckout: doCheckout,
       onRefresh: async () => { await refreshGit() },
       onOpenConflict: path => { openEntry({ path: absoluteOf(cwd ?? '', path) }); setDrawer(null) },

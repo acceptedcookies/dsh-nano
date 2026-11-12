@@ -543,31 +543,29 @@ button.nxe-local-filter {
 .nxe-change-dir { margin-left: 8px; color: var(--dsw-alias-label-tertiary); font-size: 11px; }
 .nxe-graph { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 .nxe-graph-row {
-  display: grid; grid-template-columns: 14px minmax(0, 1fr) auto;
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center; gap: 6px; min-height: 22px;
 }
-.nxe-graph-rail { position: relative; width: 14px; align-self: stretch; }
-.nxe-graph-rail::before {
-  content: ""; position: absolute; left: 6px; top: 0; bottom: 0; width: 1px;
-  background: var(--dsw-alias-border-l2);
-}
-.nxe-graph-row:first-child .nxe-graph-rail::before { top: 50%; }
-.nxe-graph-row:last-child .nxe-graph-rail::before { bottom: 50%; }
-.nxe-graph-row:only-child .nxe-graph-rail::before { display: none; }
-.nxe-graph-dot {
-  position: absolute; left: 3px; top: 50%; width: 7px; height: 7px; margin-top: -3.5px;
-  border-radius: 50%; background: var(--dsw-alias-label-tertiary);
-}
-.nxe-graph-row[data-head="true"] .nxe-graph-dot { background: var(--dsw-alias-brand-primary, var(--dsw-alias-link)); }
-/* Unpushed region: the ahead rows get the accent ink so the eye can follow the local-only segment
-   of the rail; the boundary row is where the remote already has the work. */
-.nxe-graph-row[data-ahead="true"] .nxe-graph-dot { background: var(--dsw-alias-brand-primary, var(--dsw-alias-link)); }
-.nxe-graph-row[data-ahead="true"] .nxe-graph-rail::before,
-.nxe-graph-row[data-boundary="true"] .nxe-graph-rail::before { background: color-mix(in oklab, var(--dsw-alias-brand-primary, var(--dsw-alias-link)) 55%, var(--dsw-alias-border-l2)); }
-.nxe-graph-row[data-ahead="true"] .nxe-graph-subject { color: var(--dsw-alias-label-primary); }
-/* The divider sits on the boundary row's top edge, so pushed history below reads as a separate
-   region even before the eye reaches the ref pill. */
-.nxe-graph-row[data-boundary="true"] { border-top: .5px dashed var(--dsw-alias-border-l2); margin-top: 2px; padding-top: 2px; }
+.nxe-graph-rail { display: block; flex: none; }
+/* Lane palette: the VS Code git-graph hues. Eight colours so concurrent lanes never share ink
+   unless the history is wider than eight branches; the class cycles with the lane's colour index. */
+.nxe-lane { stroke-width: 1.6px; fill: none; }
+.nxe-lane[data-dot="true"] { fill: currentColor; stroke: none; }
+.nxe-c0 { color: #4ea1ff; stroke: #4ea1ff; }
+.nxe-c1 { color: #f9a03f; stroke: #f9a03f; }
+.nxe-c2 { color: #3fd68b; stroke: #3fd68b; }
+.nxe-c3 { color: #f16d75; stroke: #f16d75; }
+.nxe-c4 { color: #b180d7; stroke: #b180d7; }
+.nxe-c5 { color: #4ec9b0; stroke: #4ec9b0; }
+.nxe-c6 { color: #dcdcaa; stroke: #dcdcaa; }
+.nxe-c7 { color: #f78c6c; stroke: #f78c6c; }
+/* Pushed work keeps the lane's hue but drops to a low-contrast stroke: the bright stretch at the
+   top of a lane is exactly the part that has not left this machine, and its height is the count
+   the push button reports. */
+.nxe-lane[data-dim="true"] { opacity: .32; }
+.nxe-lane[data-dim="false"] { opacity: 1; }
+.nxe-graph-row[data-ahead="true"] .nxe-graph-subject { color: var(--dsw-alias-label-primary); font-weight: 600; }
+.nxe-graph-row[data-pushed="true"] .nxe-graph-subject { color: var(--dsw-alias-label-tertiary); }
 .nxe-pill[data-tone="upstream"] {
   color: var(--dsw-alias-link, var(--dsw-alias-label-secondary));
   background: color-mix(in oklab, var(--dsw-alias-link, #2f81f7) 14%, transparent);
@@ -613,6 +611,22 @@ button.nxe-local-filter {
 .nxe-worktree-path {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   font-size: 11px; line-height: 16px; color: var(--dsw-alias-label-tertiary);
+}
+.nxe-remote-row {
+  display: grid; grid-template-columns: 64px minmax(0, 1fr) auto auto;
+  align-items: center; gap: 6px; padding: 2px 0;
+}
+.nxe-remote-name {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 12px; font-weight: 600; color: var(--dsw-alias-label-primary);
+}
+.nxe-remote-add {
+  display: grid; grid-template-columns: 88px minmax(0, 1fr) auto;
+  align-items: center; gap: 6px; margin-top: 4px;
+}
+.nxe-dialog-error {
+  margin: 4px 0 0; font-size: 11px; line-height: 16px;
+  color: var(--dsw-alias-label-error, #e5534b);
 }
 .nxe-confined-layer .nano-dialog-content { scrollbar-width: thin; scrollbar-color: var(--dsw-alias-border-l2) transparent; }
 `

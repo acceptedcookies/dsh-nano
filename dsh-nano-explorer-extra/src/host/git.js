@@ -260,11 +260,12 @@ export function parseStatus(stdout) {
 }
 
 /**
- * Parse `git log --pretty=format:%h%x1f%ct%x1f%s%x1f%D`.
+ * Parse `git log --pretty=format:%H%x1f%h%x1f%P%x1f%ct%x1f%s%x1f%D`.
  *
- * One row is the short hash, the commit time, the subject, and the decoration list. Decorations
- * arrive as `HEAD -> main, origin/main`; the `HEAD ->` marker is dropped so the pill can name the
- * branch itself.
+ * One row is the full hash, the short hash, space-separated parent hashes, the commit time, the
+ * subject, and the decoration list. Decorations arrive as `HEAD -> main, origin/main`; the
+ * `HEAD ->` marker is dropped so the pill can name the branch itself. Parents power the
+ * client-side lane layout: without them every row would sit on one vertical rail.
  * @param stdout - one commit per line.
  * @returns the commits, newest first.
  */
@@ -273,36 +274,39 @@ export function parseLog(stdout) {
   for (const line of stdout.split('\n')) {
     if (line.trim() === '') continue
     const parts = line.split('\x1f')
-    const hash = parts[0] ?? ''
+    const full = parts[0] ?? ''
+    const hash = parts[1] ?? ''
     if (hash === '') continue
-    const time = Number.parseInt(parts[1] ?? '', 10)
-    const subject = parts[2] ?? ''
+    const parents = (parts[2] ?? '').trim() === '' ? [] : (parts[2] ?? '').trim().split(/\s+/u)
+    const time = Number.parseInt(parts[3] ?? '', 10)
+    const subject = parts[4] ?? ''
     const refs = []
-    for (const raw of (parts[3] ?? '').split(',')) {
+    for (const raw of (parts[5] ?? '').split(',')) {
       const name = raw.trim().replace(/^HEAD -> /u, '').replace(/^tag: /u, '')
       if (name === '' || name === 'HEAD' || refs.includes(name)) continue
       refs.push(name)
-      if (refs.length === 3) break
+      if (refs.length === 4) break
     }
-    commits.push({ hash, time: Number.isFinite(time) ? time : 0, subject, refs })
+    commits.push({ hash, full, parents, time: Number.isFinite(time) ? time : 0, subject, refs })
   }
   return commits
 }
 
 /**
- * Read the newest commits on the current HEAD.
+ * Read the newest commits across every local and remote-tracking ref.
  *
- * A checkout with no commits yet makes `log` exit 128; that is an empty history, not a failure of
- * the status read that asked for it.
+ * `--all` — not just HEAD — is what lets the graph draw the remote side as its own lane: the
+ * pushed timeline and the local-only timeline only differ meaningfully when both are visible. A
+ * checkout with no commits yet makes `log` exit 128; that is an empty history, not a failure.
  * @param ctx - context providing the process services.
  * @param config - executable and process limits.
  * @param request - working directory and cancellation.
- * @returns up to 24 commits, or an empty list when the log cannot be read.
+ * @returns up to 48 commits, or an empty list when the log cannot be read.
  */
 async function readHistory(ctx, config, request) {
   const result = await runGit(ctx, config, {
     ...request,
-    args: ['log', '-n', '24', '--pretty=format:%h%x1f%ct%x1f%s%x1f%D'],
+    args: ['log', '--all', '-n', '48', '--pretty=format:%H%x1f%h%x1f%P%x1f%ct%x1f%s%x1f%D'],
     allowedExitCodes: [0, 128],
   }).catch(() => undefined)
   if (result === undefined || result.exitCode !== 0) return []
@@ -359,18 +363,21 @@ export async function readStatus(ctx, config, request) {
   // The branch list, the history rail, and the upstream divergence are independent of each other
   // and run together. `listBranches` needs the held set the worktree read already produced, so it
   // takes the rows instead of asking Git a second time.
-  const [branches, history, remote] = await Promise.all([
+  const [branches, history, remote, remotes, author] = await Promise.all([
     listBranches(ctx, config, request, worktrees),
     readHistory(ctx, config, request),
     typeof parsed.upstream !== 'string' || parsed.upstream === ''
       ? Promise.resolve(undefined)
       : remoteDivergence(ctx, config, request),
+    readRemotes(ctx, config, request),
+    readAuthor(ctx, config, request),
   ])
   const conflicts = parsed.files.filter(file => file.status === 'U').map(file => file.path)
 
   return {
     root, ...parsed, stashed, worktrees, branches, history, conflicts,
     ...(remote === undefined ? {} : { remote }),
+    remotes, author,
   }
 }
 
@@ -598,4 +605,148 @@ export async function checkoutBranch(ctx, config, request) {
     throw new Error(detail === '' ? 'git checkout failed' : detail)
   }
   return { branch: name }
+}
+
+/**
+ * Push the current branch to its upstream.
+ *
+ * An upstream exists → `git push`. No upstream → `git push -u <remote> HEAD`, which publishes the
+ * current branch under its own name on the named remote and binds it, so the panel's pull button
+ * works from the next read on. The remote is always an argv operand, never a shell word.
+ * @param ctx - context providing the process services.
+ * @param config - executable and process limits.
+ * @param request - working directory, cancellation, and optional `{ remote }` for the
+ *   no-upstream case.
+ * @returns the summary line Git printed.
+ * @throws with Git's own diagnostic when the push is refused.
+ */
+export async function pushUpstream(ctx, config, request) {
+  // `git push` alone follows the configured upstream; only a branch without one asks us to name a
+  // remote and bind it. `HEAD` (not a branch name) keeps that first publish working on a detached
+  // checkout too.
+  const remote = typeof request.remote === 'string' ? request.remote.trim() : ''
+  const args = remote === '' ? ['push'] : ['push', '-u', remote, 'HEAD']
+  const result = await runGit(ctx, config, {
+    ...request, args, allowedExitCodes: [0, 1, 128],
+  })
+  if (result.exitCode !== 0) {
+    const detail = firstLine(result.stderr) || firstLine(result.stdout)
+    throw new Error(detail === '' ? 'git push failed' : detail)
+  }
+  return firstLine(result.stdout) || firstLine(result.stderr)
+}
+
+/**
+ * List the named remotes on this repository.
+ * @param ctx - context providing the process services.
+ * @param config - executable and process limits.
+ * @param request - working directory and cancellation.
+ * @returns one row per remote: `{ name, fetch, push }`, empty list when none exist.
+ */
+export async function readRemotes(ctx, config, request) {
+  const result = await runGit(ctx, config, {
+    ...request, args: ['remote', '-v'], allowedExitCodes: [0, 128],
+  }).catch(() => undefined)
+  if (result === undefined || result.exitCode !== 0) return []
+  const byName = new Map()
+  for (const line of result.stdout.split('\n')) {
+    if (line.trim() === '') continue
+    const match = line.match(/^(\S+)\s+(\S+)\s+\((fetch|push)\)\s*$/u)
+    if (match === null) continue
+    const [, name, url, direction] = match
+    const row = byName.get(name) ?? { name, fetch: '', push: '' }
+    row[direction] = url
+    byName.set(name, row)
+  }
+  return [...byName.values()]
+}
+
+/**
+ * Add, retarget, or drop one named remote.
+ * @param ctx - context providing the process services.
+ * @param config - executable and process limits.
+ * @param request - `{ op: 'add'|'set-url'|'remove', name, url? }`.
+ * @returns the remote list after the change.
+ * @throws on bad input or when Git refuses.
+ */
+export async function writeRemote(ctx, config, request) {
+  const op = request.op
+  const name = typeof request.name === 'string' ? request.name.trim() : ''
+  const url = typeof request.url === 'string' ? request.url.trim() : ''
+  if (name === '' || name.startsWith('-')) throw new Error('remote name must be a non-dash name')
+  if (op === 'add') {
+    if (url === '') throw new Error('remote url is required')
+    const result = await runGit(ctx, config, { ...request, args: ['remote', 'add', name, url], allowedExitCodes: [0, 1, 128] })
+    if (result.exitCode !== 0) throw new Error(firstLine(result.stderr) || 'git remote add failed')
+  } else if (op === 'set-url') {
+    if (url === '') throw new Error('remote url is required')
+    const result = await runGit(ctx, config, { ...request, args: ['remote', 'set-url', name, url], allowedExitCodes: [0, 1, 128] })
+    if (result.exitCode !== 0) throw new Error(firstLine(result.stderr) || 'git remote set-url failed')
+  } else if (op === 'remove') {
+    const result = await runGit(ctx, config, { ...request, args: ['remote', 'remove', name], allowedExitCodes: [0, 1, 128] })
+    if (result.exitCode !== 0) throw new Error(firstLine(result.stderr) || 'git remote remove failed')
+  } else {
+    throw new Error(`unknown remote operation "${String(op)}"`)
+  }
+  return readRemotes(ctx, config, request)
+}
+
+/**
+ * Read the commit identity this checkout would use.
+ *
+ * Local config wins; when it is absent the global value is reported as `fallback` so the panel can
+ * say "inherits" instead of pretending the field is empty.
+ * @param ctx - context providing the process services.
+ * @param config - executable and process limits.
+ * @param request - working directory and cancellation.
+ * @returns `{ name, email, source: 'local'|'global'|'unset' }`.
+ */
+export async function readAuthor(ctx, config, request) {
+  const probe = async (key, scope) => {
+    const result = await runGit(ctx, config, {
+      ...request,
+      args: ['config', ...(scope === null ? [] : [`--${scope}`]), '--get', key],
+      allowedExitCodes: [0, 1, 128],
+    }).catch(() => undefined)
+    if (result === undefined || result.exitCode !== 0) return ''
+    return result.stdout.trim()
+  }
+  const [localName, localEmail, globalName, globalEmail] = await Promise.all([
+    probe('user.name', 'local'), probe('user.email', 'local'),
+    probe('user.name', 'global'), probe('user.email', 'global'),
+  ])
+  const source = localName !== '' || localEmail !== '' ? 'local'
+    : globalName !== '' || globalEmail !== '' ? 'global' : 'unset'
+  return {
+    name: localName !== '' ? localName : globalName,
+    email: localEmail !== '' ? localEmail : globalEmail,
+    local: { name: localName, email: localEmail },
+    global: { name: globalName, email: globalEmail },
+    source,
+  }
+}
+
+/**
+ * Write the local commit identity for this checkout.
+ * @param ctx - context providing the process services.
+ * @param config - executable and process limits.
+ * @param request - `{ name, email }`; either may be an empty string to leave that key unchanged.
+ * @returns the identity after the write.
+ * @throws when both fields are empty or Git refuses.
+ */
+export async function writeAuthor(ctx, config, request) {
+  const name = typeof request.name === 'string' ? request.name.trim() : undefined
+  const email = typeof request.email === 'string' ? request.email.trim() : undefined
+  if ((name === undefined || name === '') && (email === undefined || email === '')) {
+    throw new Error('a name or an email is required')
+  }
+  if (name !== undefined && name !== '') {
+    const result = await runGit(ctx, config, { ...request, args: ['config', 'user.name', name], allowedExitCodes: [0, 1, 128] })
+    if (result.exitCode !== 0) throw new Error(firstLine(result.stderr) || 'git config user.name failed')
+  }
+  if (email !== undefined && email !== '') {
+    const result = await runGit(ctx, config, { ...request, args: ['config', 'user.email', email], allowedExitCodes: [0, 1, 128] })
+    if (result.exitCode !== 0) throw new Error(firstLine(result.stderr) || 'git config user.email failed')
+  }
+  return readAuthor(ctx, config, request)
 }

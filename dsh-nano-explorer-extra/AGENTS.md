@@ -41,7 +41,7 @@ client inject 以 `package.json` 的 `dsh.client.inject` 为准，不在这里�
 4. `git` 必须在跑宿主的那台机器的 PATH 上。浏览器里没有 git 不影响。状态栏读的是宿主上的仓库。
 5. 本包构建期依赖 `dsh-nano-ui`，声明为 `devDependencies` 的 `file:../packages/dsh-nano-ui`。`npm install`/`npm run build` 时解析这个相对路径；构建时它被打进 `lib/client.js`，运行中的页面不单独加载它。不要改这条依赖。tarball 只含构建产物，`dsh plugin add` 不再需要旁边的 `packages/` 目录。
 6. 本包还构建期依赖 `dsh-performance-review`，同样声明为 `devDependencies` 的 `file:`，约束同上。它被打进 `lib/client.js` 和 `lib/host.js` 两份产物；默认是恒等包装，只有页面带 `?perf-review=1` 或 `localStorage['dsh-perf-review']='1'`、宿主带 `DSH_PERF_REVIEW=1` 时才采集。不要改这条依赖。
-7. 本包还构建期依赖路由注册库 `dsh-host-route-guard`，同样声明为 `devDependencies` 的 `file:`，约束同上。构建把它与本插件 13 条路由行的烤入常量表一起打进 `lib/host.js`；全部 web 路由经它注册，Host/Origin 围栏与 405 在 guard 内。不要改这条依赖。
+7. 本包还构建期依赖路由注册库 `dsh-host-route-guard`，同样声明为 `devDependencies` 的 `file:`，约束同上。构建把它与本插件 16 条路由行的烤入常量表一起打进 `lib/host.js`；全部 web 路由经它注册，Host/Origin 围栏与 405 在 guard 内。不要改这条依赖。
 
 未被告知 `DSH_HOME` 或 profile 名时，只动默认的 `web`。不要猜第二套实例。
 
@@ -86,7 +86,7 @@ dsh plugin --profile web add <spec>
 | 双击 | 默认不做第二件事。不要同时打开「单击预览」和「双击预览」，一次双击会开两次 |
 | 右键一行 | 在 Finder 中显示、复制绝对路径、复制相对路径、重命名、删除。有改动的文件多一项「查看差异」：打开实验性 forge 面板的原生 diff tab（需在插件页启用「变更请求与工作树」） |
 | 顶栏新建文件或文件夹 | 先问名字，确认后才落盘 |
-| 底部分支按钮 | 仓库视图：提交图、工作树列表、拉取。切换分支先确认，成功后「当前」跟着变。状态栏的 `!` 会列出冲突路径，并在解决前禁用切换。卡片沉在文件区底部，不会跑到工作区外面 |
+| 底部分支按钮 | 仓库视图：多车道彩色提交图（亮段=未推送、暗段=已推送）、工作树列表、拉取、推送、仓库设置（远端地址与提交署名）。切换分支先确认，成功后「当前」跟着变。状态栏的 `!` 会列出冲突路径，并在解决前禁用切换。卡片沉在文件区底部，不会跑到工作区外面 |
 | 底部提交 | 只看本地工作区：已暂存 / 未暂存 / 未跟踪 / 冲突。确认后 `git add --all` 再提交。有冲突时按钮不可用。`Ctrl+Enter` 同样会提交。这里没有提交图，也没有拉取 |
 | 分支卡片里的拉取 | `git pull --ff-only`。不能快进就失败并显示 Git 原文，不会自动产生合并提交 |
 | 顶栏刷新 | 重读目录和整仓 Git 状态。不重算右下角的文件数量和体积 |
@@ -105,6 +105,9 @@ dsh plugin --profile web add <spec>
 | POST | `/list` | `{ sessionId, path }` |
 | POST | `/commit` | `{ sessionId, message }`。会 `git add --all`。没有「只提交已暂存」 |
 | POST | `/pull` | `{ sessionId }`。快进拉取 |
+| POST | `/push` | `{ sessionId, remote? }`。有上游走 `git push`；无上游时 `remote` 必填，走 `git push -u <remote> HEAD` 并绑定 |
+| POST | `/remote` | `{ sessionId, op, name, url? }`。`op` 为 `add`/`set-url`/`remove`，改写 `.git/config` 后返回新远端列表 |
+| POST | `/author` | `{ sessionId, name?, email? }`。写本仓库 `user.name`/`user.email`（local，不动 global），两者至少给一个 |
 | POST | `/checkout` | `{ sessionId, branch }`。分支名不能以 `-` 开头 |
 | POST | `/create-file` | `{ sessionId, directory, name }` |
 | POST | `/create-folder` | `{ sessionId, directory, name }` |

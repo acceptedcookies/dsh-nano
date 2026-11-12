@@ -10,6 +10,7 @@ import {
   deleteNodes,
   imageIdsIn,
   imagesById,
+  importTarget,
   loadSnapshot,
   moveNode,
   nextAvailableName,
@@ -3173,22 +3174,42 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
   window.__nanoNotepad = {
     async import(name, content, meta = {}) {
       await dbReady
-      const siblings = state.nodes.filter(node => node.parentId === null && (node.workspaceId ?? null) === activeWorkspace().id && node.kind === 'file')
-      /* Keep the caller's name verbatim — a workspace `.env` or `config.yaml`
-         stays that, and only a real collision gets a `-2` suffix. */
       const raw = String(name || 'note').trim() || 'note'
-      const candidate = nextAvailableName(siblings.map(node => node.name), raw)
-      const node = await createNode(state.db, 'file', null, candidate, activeWorkspace().id)
-      if (typeof meta.sourcePath === 'string' && meta.sourcePath) node.sourcePath = meta.sourcePath
-      state.nodes.push(node)
-      await saveDraft(state.db, node.id, String(content ?? ''))
-      if (node.sourcePath !== undefined) await updateNodeMeta(state.db, node.id, { sourcePath: node.sourcePath })
-      node.draft = String(content ?? '')
+      const workspaceNodes = state.nodes.filter(node => (node.workspaceId ?? null) === activeWorkspace().id)
+      /* Overwrite semantics: importing a name an unpinned file in this
+         workspace already carries replaces that draft — no `-2` clone. A
+         pinned note stays sacred and a folder collides too, so only then does
+         the import land as a new sibling with a numeric suffix. The previous
+         draft is committed as a version first, so the replace is reversible
+         through file history. */
+      const existing = importTarget(workspaceNodes, raw)
+      let node
+      if (existing) {
+        flushSave()
+        node = existing
+        const previous = node.draft ?? ''
+        if (previous !== '' && previous !== String(content ?? '')) {
+          await commitVersion(state.db, node.id, previous, 'import', state.settings.versionLimit)
+        }
+        Object.assign(node, await saveDraft(state.db, node.id, String(content ?? '')))
+        if (typeof meta.sourcePath === 'string' && meta.sourcePath && node.sourcePath !== meta.sourcePath) {
+          Object.assign(node, await updateNodeMeta(state.db, node.id, { sourcePath: meta.sourcePath }))
+        }
+      } else {
+        const siblings = workspaceNodes.filter(item => item.parentId === null)
+        const candidate = nextAvailableName(siblings.map(item => item.name), raw)
+        node = await createNode(state.db, 'file', null, candidate, activeWorkspace().id)
+        if (typeof meta.sourcePath === 'string' && meta.sourcePath) node.sourcePath = meta.sourcePath
+        state.nodes.push(node)
+        await saveDraft(state.db, node.id, String(content ?? ''))
+        if (node.sourcePath !== undefined) await updateNodeMeta(state.db, node.id, { sourcePath: node.sourcePath })
+        node.draft = String(content ?? '')
+      }
       openFile(node.id)
       /* openFile renders before node.draft lands; repaint both views once the
          draft exists so the source textarea and mirror show the import. */
       render()
-      channel?.postMessage({ type: 'changed' })
+      channel?.postMessage({ type: 'changed', fileId: node.id })
       return node
     },
     /** Debug handle for live settings (used by E2E verification). */

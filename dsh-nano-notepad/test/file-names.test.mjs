@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { fileName, nextAvailableName, validateName } from '../src/client/db.js'
+import { fileName, importTarget, nextAvailableName, validateName } from '../src/client/db.js'
 
 /* The notepad is a text editor: names are stored exactly as given, with no
    implied markdown extension. */
@@ -32,4 +32,20 @@ test('nextAvailableName dedupes while preserving the suffix', () => {
   assert.equal(nextAvailableName(['.env'], '.env'), '.env-2')
   assert.equal(nextAvailableName(['notes'], 'notes'), 'notes-2')
   assert.equal(nextAvailableName(['A.MD'], 'a.md'), 'a-2.md', 'collisions are case-insensitive')
+})
+
+test('importTarget overwrites an unpinned same-name file, preferring the root', () => {
+  const file = (name, extra = {}) => ({ name, parentId: null, kind: 'file', ...extra })
+  assert.equal(importTarget([], '.gitignore'), null)
+  const root = file('.gitignore')
+  assert.equal(importTarget([root], '.gitignore'), root)
+  const folder = { name: '.gitignore', parentId: null, kind: 'folder' }
+  assert.equal(importTarget([folder], '.gitignore'), null, 'folders never overwrite')
+  const pinned = file('.gitignore', { pinned: true })
+  assert.equal(importTarget([pinned], '.gitignore'), null, 'pinned notes are sacred')
+  const nested = file('.gitignore', { parentId: 'folder-1' })
+  const rootHit = file('.gitignore')
+  assert.equal(importTarget([nested], '.gitignore'), nested, 'a nested file still overwrites')
+  assert.equal(importTarget([nested, rootHit], '.gitignore'), rootHit, 'root wins over nested')
+  assert.equal(importTarget([file('.GITIGNORE')], '.gitignore')?.name, '.GITIGNORE', 'case-insensitive match keeps the existing casing')
 })

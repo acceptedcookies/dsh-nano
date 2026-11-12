@@ -102,7 +102,7 @@ dsh plugin --profile web add <spec>
 await window.__nanoNotepad.import(name, content, meta)
 ```
 
-- `name`：**原样保留任意后缀**（`.env`、`config.yaml`、`script.sh`、无后缀均可）。记事本是文本编辑器，不会追加或改写扩展名；重名时只加 `-2` 之类序号。Markdown 只是可选的渲染视图，仅 `.md` / `.markdown` 提供预览与 Markdown 工具栏。
+- `name`：**原样保留任意后缀**（`.env`、`config.yaml`、`script.sh`、无后缀均可）。记事本是文本编辑器，不会追加或改写扩展名。**同名未 pin 的文件会被直接覆盖**（旧草稿先存成一个版本，可在历史里找回），不会造第二份；只有当同名文件已 pin、或同名是个文件夹时，才落 `-2` 新副本。Markdown 只是可选的渲染视图，仅 `.md` / `.markdown` 提供预览与 Markdown 工具栏。
 - `content`：整篇草稿字符串。
 - `meta.sourcePath`：可选，记在节点上，不写该路径。
 

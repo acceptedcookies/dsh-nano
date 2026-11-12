@@ -145,6 +145,25 @@ export function fileName(name) {
 }
 
 /**
+ * Pick the note a same-name import should overwrite: an unpinned file in this
+ * workspace, preferring the root. A pinned note is never overwritten — the
+ * import then lands as a `-2` sibling instead. Folders never match.
+ * @param {{ name: string, kind: string, parentId: string | null, pinned?: boolean }[]} nodes same-workspace nodes
+ * @param {string} name the desired import name
+ * @returns {object | null} the node to overwrite, or null to create fresh
+ */
+export function importTarget(nodes, name) {
+  const wanted = name.toLowerCase()
+  let nested = null
+  for (const node of nodes) {
+    if (node.kind !== 'file' || node.pinned === true || node.name.toLowerCase() !== wanted) continue
+    if (node.parentId === null) return node
+    if (nested === null) nested = node
+  }
+  return nested
+}
+
+/**
  * Return `name`, or `base-2.ext` / `base-3.ext` … when the folder already has
  * that name. Dotfiles keep their leading dot as part of the base.
  * @param {string[]} names sibling names already in use
@@ -447,7 +466,7 @@ export async function versionsOf(db, fileId) {
   return rows.sort((left, right) => right.createdAt - left.createdAt)
 }
 
-/** @param {IDBDatabase} db @param {string} fileId @param {string} markdown @param {'interval' | 'manual' | 'restore'} reason @param {number} limit */
+/** @param {IDBDatabase} db @param {string} fileId @param {string} markdown @param {'interval' | 'manual' | 'restore' | 'import'} reason @param {number} limit */
 export async function commitVersion(db, fileId, markdown, reason, limit) {
   const transaction = db.transaction(['nodes', 'versions', 'images'], 'readwrite')
   const nodeStore = transaction.objectStore('nodes')

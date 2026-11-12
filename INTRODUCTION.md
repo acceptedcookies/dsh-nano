@@ -44,7 +44,7 @@
 | **动手前** | 目标包 `package.json` + `cordis.patch.yml` + `scripts/build-client.mjs` | 声明合同与构建合同 |
 | **排障** | [.local-dsh-setup.md](.local-dsh-setup.md) §9 / §14 | 双 web 实例的进程、端口、日志、`--patch` 验证 |
 | **排障** | [.local-desktop-setup.md](.local-desktop-setup.md) §5 | 桌面版 home 隔离与 `kickstart` 陷阱 |
-| **发布** | [release.md](release.md) | `npm pack`、SHA-256、attestation/cosign、卸载残留 |
+| **发布** | [RELEASE.md](RELEASE.md) | `npm pack`、SHA-256、attestation/cosign、卸载残留 |
 | **性能** | [docs/specs/dsh-nano-performance-review/spec-26nov.md](docs/specs/dsh-nano-performance-review/spec-26nov.md)、[lab/README.md](lab/README.md) | 观测合同、预算、判定口径 |
 | **深挖机制** | [context/deepseek-harness/docs/cordis-primer.zh.md](context/deepseek-harness/docs/cordis-primer.zh.md)、[context/deepseek-harness/docs/cookbook/extension-cookbook.zh.md](context/deepseek-harness/docs/cookbook/extension-cookbook.zh.md)、[context/deepseek-harness/docs/user/develop/basic/publish.zh.md](context/deepseek-harness/docs/user/develop/basic/publish.zh.md) | Cordis 五概念、插件形态、官方打包教程 |
 | **深挖机制** | 已安装版的 [dsh-app-boot/README.zh.md](/Users/seanz/.nvm/versions/node/v24.22.2/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-app-boot/README.zh.md)、[dsh-client-modules/README.zh.md](/Users/seanz/.nvm/versions/node/v24.22.2/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-client-modules/README.zh.md)、[dsh-plugin-manager/README.zh.md](/Users/seanz/.nvm/versions/node/v24.22.2/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-plugin-manager/README.zh.md) | 与本机运行版本逐字一致的权威合同 |
@@ -313,7 +313,7 @@ window.__ModuleLoader__.load({
 
 ### 2.9 安装与生效：两条路径
 
-**正式路径**（[release.md](release.md)、[docs/agents/TEMPLATE.md](docs/agents/TEMPLATE.md)）：
+**正式路径**（[RELEASE.md](RELEASE.md)、[docs/agents/TEMPLATE.md](docs/agents/TEMPLATE.md)）：
 
 ```sh
 dsh plugin --profile web add <spec>       # spec = 绝对目录 / .tgz 绝对路径 / 发布后的包名
@@ -328,7 +328,7 @@ CLI 实际是把参数转发给 profile 目录里的 pnpm，并在成功后 `rec
 
 ### 2.10 发布信任链
 
-`npm run build && npm pack` → 单文件 tarball；CI 由 `v*` tag 触发，断言 `package.json.version === tag 去掉 v`，生成 `SHA256SUMS.txt`，用 `actions/attest-build-provenance`（首选，零私钥）或 cosign keyless 签名；安装侧先验 attestation 再 `sha256sum -c` 再 `dsh plugin add`。三条原则：**只用 SHA-256；校验必须在包外；哈希清单必须经独立信道（签名/attestation）保护**。包内不做自校验，`AGENTS.md` 必须打进 tarball。详见 [release.md](release.md)。
+`npm run build && npm pack` → 单文件 tarball；CI 由 `v*` tag 触发，断言 `package.json.version === tag 去掉 v`，生成 `SHA256SUMS.txt`，用 `actions/attest-build-provenance`（首选，零私钥）或 cosign keyless 签名；安装侧先验 attestation 再 `sha256sum -c` 再 `dsh plugin add`。三条原则：**只用 SHA-256；校验必须在包外；哈希清单必须经独立信道（签名/attestation）保护**。包内不做自校验，`AGENTS.md` 必须打进 tarball。详见 [RELEASE.md](RELEASE.md)。
 
 ### 2.11 一张图
 
@@ -481,7 +481,7 @@ dsh-dev restart             # 同步到 ~/.dsh-dev/plugins/ 并重启 3083
 #    浏览器打开 https://dsh-dev.local/，强制刷新，⌘E 然后 1
 # 3) 发包前
 npm pack                    # 检查 tarball 内容：AGENTS.md / index.js / cordis.patch.yml / lib/*.js / icon.svg / locale
-# 4) 发布按 release.md：tag = v$(node -p "require('./package.json').version")，CI 出 SHA256SUMS + attestation
+# 4) 发布按 RELEASE.md：tag = v$(node -p "require('./package.json').version")，CI 出 SHA256SUMS + attestation
 ```
 
 包内 [AGENTS.md](dsh-nano-notepad/AGENTS.md) 的「验收」四步就是这套流程的可观测判据：bundles 里有包名 → 页面能找到 client 模块 → 快捷键能开浮层 → 该 origin 出现 IndexedDB 库。
@@ -642,7 +642,7 @@ export function apply(ctx) {
 - `locale/zh.json` / `en.json` 至少带 `meta.title` / `meta.description`。
 - 包内 `AGENTS.md` 按 [docs/agents/TEMPLATE.md](docs/agents/TEMPLATE.md) 写：标题下三段范围 + 十一个固定二级标题；版本与引擎指向 `package.json` 不写死；一个事实只出现一次；危险动作单独写门禁；「不要」最多 5 条。
 - 改安装合同先改母版，再逐字抄回三个已对齐的包。
-- 上线前：`npm run build` → `npm pack --dry-run` 逐项核对 `files` → `dsh-dev restart` → `https://dsh-dev.local/` 验收 → 把版本号与 tag 对齐 → 走 [release.md](release.md)。
+- 上线前：`npm run build` → `npm pack --dry-run` 逐项核对 `files` → `dsh-dev restart` → `https://dsh-dev.local/` 验收 → 把版本号与 tag 对齐 → 走 [RELEASE.md](RELEASE.md)。
 
 ### 5.8 防踩坑专章
 
@@ -697,7 +697,7 @@ export function apply(ctx) {
 
 ### 6.1 安全
 
-**分发信任链**（[release.md](release.md)）：git tag 是源代码可信根 → CI（OIDC 身份绑定 tag+job）产出 tarball / `SHA256SUMS.txt` / attestation → 安装侧验 attestation → `sha256sum -c` → `dsh plugin add`。三原则：只用 SHA-256、校验在包外、清单经独立信道保护。不做包内自校验、不手动上传 Release 产物、不忽略 lockfile。
+**分发信任链**（[RELEASE.md](RELEASE.md)）：git tag 是源代码可信根 → CI（OIDC 身份绑定 tag+job）产出 tarball / `SHA256SUMS.txt` / attestation → 安装侧验 attestation → `sha256sum -c` → `dsh plugin add`。三原则：只用 SHA-256、校验在包外、清单经独立信道保护。不做包内自校验、不手动上传 Release 产物、不忽略 lockfile。
 
 **运行时围栏**：
 
@@ -767,7 +767,7 @@ export function apply(ctx) {
 - 改安装合同 → 先改母版 → 逐字抄回 [notepad](dsh-nano-notepad/AGENTS.md) / [model-selector](dsh-nano-model-selector/AGENTS.md) / [explorer](dsh-nano-explorer-extra/AGENTS.md) 三份。
 - 包内 `AGENTS.md` **不写**规格、变更记录、本机双实例、`~/.dsh*`、launchd；版本与引擎指向 `package.json`。
 - 规格放 `docs/specs/`；四个包根的 `README.md` 是指向那里的软链接。
-- 发布物与安全链见 [release.md](release.md)；安装侧命令以各包 `AGENTS.md` 的「安装」为准。
+- 发布物与安全链见 [RELEASE.md](RELEASE.md)；安装侧命令以各包 `AGENTS.md` 的「安装」为准。
 
 ### 8.2 已知不一致（读文档时要有心理准备）
 
@@ -777,7 +777,7 @@ export function apply(ctx) {
 | [docs/specs/dsh-nano-notepad/README.md](docs/specs/dsh-nano-notepad/README.md) 的树只有 `lib/client.js` | 实际还有 `perf-review-host.js`、`s3-sync-host.js` |
 | [spec-26nov.md](docs/specs/dsh-nano-performance-review/spec-26nov.md) F3 写宿主构建用 `--packages=external` | 构建脚本注释与实现都是**不加**该参数；代码为准 |
 | 根 [AGENTS.md](AGENTS.md) 写「双实例」 | 本机现在是三套：`~/.dsh` / `~/.dsh-dev` / `~/.dsh-desktop`（见 [.local-desktop-setup.md](.local-desktop-setup.md)） |
-| `dsh-nano-shared-workspace` | 无包内 `AGENTS.md`，`files` 也不含它；`release.md` 的发布示例尚未覆盖它 |
+| `dsh-nano-shared-workspace` | 无包内 `AGENTS.md`，`files` 也不含它；`RELEASE.md` 的发布示例尚未覆盖它 |
 | `lib/` 里的文件 | 既有构建产物，也有手写的 `lib/host-media.js`，两者都必须在 `files` 里 |
 
 规格 README 是阶段性快照，**以 `package.json` + 包内 `AGENTS.md` + 源码为准**；发现漂移时顺手修规格，不要照抄旧文。
@@ -792,7 +792,7 @@ export function apply(ctx) {
 
 > **心智模型**：dsh 不加载「扩展点」，它加载「配置层」。一个插件包 = 一层可叠加的 `cordis.patch.yml` + 两个同名的 Cordis 插件（Node 宿主 / 浏览器）。宿主在启动时按 `dsh.profile.bundles` 顺序把各层叠到空根上，Loader 按 `insert.name` 导入模块；client-modules 同时扫描这些 entry 包的 `dsh.client`，把 `./client` 送进页面。共享包不是插件，只在构建期被 esbuild 吃进 `lib/`；`lib/` 才是运行时，`src/` 只是作者树。安装是「登记」，生效是「下次启动」。
 >
-> **工作七步**：读 [AGENTS.md](AGENTS.md) 与本手册 → 复制模板建包 → 写 `package.json` / `cordis.patch.yml` / 两个 `apply` → `npm run build` → `dsh-dev restart` + 刷新 `dsh-dev.local` 验收 → 套母版写包内 `AGENTS.md` → `npm pack` 核对 `files` 后按 [release.md](release.md) 发布。
+> **工作七步**：读 [AGENTS.md](AGENTS.md) 与本手册 → 复制模板建包 → 写 `package.json` / `cordis.patch.yml` / 两个 `apply` → `npm run build` → `dsh-dev restart` + 刷新 `dsh-dev.local` 验收 → 套母版写包内 `AGENTS.md` → `npm pack` 核对 `files` 后按 [RELEASE.md](RELEASE.md) 发布。
 >
 > **三条底线**：发布物里没有本机路径；运行时树里没有裸 import；用户没要求时不碰危险动作。
 

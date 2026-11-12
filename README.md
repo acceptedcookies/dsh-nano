@@ -37,7 +37,7 @@
 | `dsh-s3-client`（SigV4、限速、账本） | `已落地` | [`packages/dsh-s3-client/package.json`](packages/dsh-s3-client/package.json)；`node --test packages/dsh-s3-client/test/*.mjs` 本次 16 通过 |
 | `dsh-performance-review`（默认不采集） | `已落地` | 宿主开关 [`packages/dsh-performance-review/src/host.js:121`](packages/dsh-performance-review/src/host.js#L121) 仅 `DSH_PERF_REVIEW=1`；`node --test packages/dsh-performance-review/test/*.mjs` 本次 60 通过 |
 | `dsh-nano-ui`（构建期 UI） | `已落地` | [`packages/dsh-nano-ui/package.json`](packages/dsh-nano-ui/package.json)、[`src/tabs.js`](packages/dsh-nano-ui/src/tabs.js)。无测试脚本 |
-| 发布信任链（tag → Actions → attestation → Release） | `计划中` | 流程写在 [release.md](release.md)，仓库没有 `.github/workflows/`，`git tag -l` 为空 |
+| 发布信任链（tag → Actions → attestation → Release） | `计划中` | 流程写在 [RELEASE.md](RELEASE.md)，仓库没有 `.github/workflows/`，`git tag -l` 为空 |
 | 安全修复（24 条 confirmed） | `计划中` | 审查 [`docs/code-review/26-nov/security-audit.md`](docs/code-review/26-nov/security-audit.md) 状态 `findings-open`；执行口径已冻结在 [`pre-security-fix-qna.md`](docs/code-review/26-nov/pre-security-fix-qna.md)，HEAD 未按该文改路由 |
 
 ---
@@ -90,8 +90,8 @@
 ### 3.4 文档、规格与性能实验室
 
 - [INTRODUCTION.md](INTRODUCTION.md)：开荒手册（版本锚点、三套本机实例、插件机制、开发循环）。本机端口与 LaunchAgent 写在 git 忽略的手册里，克隆仓库得不到那两份文件。
-- [release.md](release.md)：打算使用的打包与信任链。它描述流程，不是已经跑起来的 CI。
-- [docs/agents/TEMPLATE.md](docs/agents/TEMPLATE.md)：包内安装合同的母版。安装命令以它和 [release.md](release.md) 为准：`dsh plugin --profile web add <spec>`。
+- [RELEASE.md](RELEASE.md)：打算使用的打包与信任链。它描述流程，不是已经跑起来的 CI。
+- [docs/agents/TEMPLATE.md](docs/agents/TEMPLATE.md)：包内安装合同的母版。安装命令以它和 [RELEASE.md](RELEASE.md) 为准：`dsh plugin --profile web add <spec>`。
 - [docs/specs/](docs/specs/)：各包规格。
 - [docs/code-review/26-nov/](docs/code-review/26-nov/)：安全审查与修复前 QNA。审查结论还开着。
 - [lab/](lab/)：性能观测的本机手动跑法，见 [lab/README.md](lab/README.md)。`lab/config.local.json` 与 `lab/out/` 不入库。
@@ -105,7 +105,7 @@
 ```text
 dsh-plugins/
 ├── INTRODUCTION.md                          # 开荒手册：拓扑、机制、开发循环
-├── release.md                               # 发布信任链（文档；CI 未接线）
+├── RELEASE.md                               # 发布信任链（文档；CI 未接线）
 ├── README.md                                # 本文件
 │
 ├── docs/
@@ -319,7 +319,7 @@ npm run build                # esbuild → lib/
 node --test test/*.mjs       # 仅记事本有 test/；共享包见 §10.3
 ```
 
-安装到本机 web profile（合同见 [release.md](release.md) 与 [docs/agents/TEMPLATE.md](docs/agents/TEMPLATE.md)）：
+安装到本机 web profile（合同见 [RELEASE.md](RELEASE.md) 与 [docs/agents/TEMPLATE.md](docs/agents/TEMPLATE.md)）：
 
 ```bash
 dsh plugin --profile web add <spec>
@@ -351,7 +351,7 @@ dsh plugin --profile web add <spec>
 
 ### 10.4 部署
 
-没有生产部署。分发单位按 [release.md](release.md) 设计为每个插件一个 `npm pack` tarball，再附 SHA-256 与 GitHub artifact attestation 或 cosign。该文档里的 workflow YAML **没有**对应的 `.github/workflows/` 文件，也没有 `v*` tag。
+没有生产部署。分发单位按 [RELEASE.md](RELEASE.md) 设计为每个插件一个 `npm pack` tarball，再附 SHA-256 与 GitHub artifact attestation 或 cosign。该文档里的 workflow YAML **没有**对应的 `.github/workflows/` 文件，也没有 `v*` tag。
 
 本机三套 dsh（日常、插件开发、桌面）如何加载副本，写在 [INTRODUCTION.md](INTRODUCTION.md)。那些地址是操作者机器上的，不是本仓库的对外地址。
 
@@ -377,7 +377,7 @@ dsh plugin --profile web add <spec>
 - 记事本 S3：`nano-notepad-s3.json` 模式 `0600`；API 不回 secret。这是已实现的存储政策，不是审查闭环。
 - 共享工作区：身份进 dsh credentials 文件，同样不入库。
 - 选择器：`/imagine` 的 grok 模板把 `GROK_HOME` 指到会话工作区里的 `imagine/.grok`，并会把 `~/.grok` 的文件拷进去。审查把「真实凭据进入工作区」标为高危，代码仍是这个行为（§12）。
-- [release.md](release.md) 要求 SHA-256、校验在包外、清单用 attestation 或 cosign 绑定 CI。这条是目标政策。流水线不存在，所以今天的 tarball 没有这条保护。
+- [RELEASE.md](RELEASE.md) 要求 SHA-256、校验在包外、清单用 attestation 或 cosign 绑定 CI。这条是目标政策。流水线不存在，所以今天的 tarball 没有这条保护。
 
 此处不新冻结决策。修复执行层的既定口径在 [`docs/code-review/26-nov/pre-security-fix-qna.md`](docs/code-review/26-nov/pre-security-fix-qna.md)（`frozen`，Q1–Q10 / T-O-1–T-O-14）。那份文档冻结的是「怎么修」，不是「已经修好」。
 
@@ -419,7 +419,7 @@ dsh plugin --profile web add <spec>
 | 编号 | 事项 | 严重 / 时机 | reopen / 修复触发器 |
 |------|------|-------------|----------------------|
 | 1 | 安全审查 24 条 confirmed（16 高 / 6 中 / 2 低）仍是 `findings-open`。页面脚本可驱使宿主做文件、git、出站与 S3 签名；富文本与同步数据有存储型 XSS。审查基准写的是脏工作区上的 `8a70166`，不是本 HEAD | 上线前 / 给不可信页面用之前 | 按已冻结的 [`pre-security-fix-qna.md`](docs/code-review/26-nov/pre-security-fix-qna.md) 执行 `26-nov-security-fix`，并用 `350c6c8` 之后的树复验。修完前不要把任一插件标成可对不可信内容开放 |
-| 2 | [release.md](release.md) 的 GitHub Actions、attestation、tag 与包版本对齐都未落地。本地 `npm pack` 可以打出 tarball，但没有包外校验 | 对外发包前 | 提交 `.github/workflows/` 并打第一个 `v*` tag 后，把本节改成有运行链接的证据 |
+| 2 | [RELEASE.md](RELEASE.md) 的 GitHub Actions、attestation、tag 与包版本对齐都未落地。本地 `npm pack` 可以打出 tarball，但没有包外校验 | 对外发包前 | 提交 `.github/workflows/` 并打第一个 `v*` tag 后，把本节改成有运行链接的证据 |
 | 3 | 共享工作区规格 [`spec.md:19`](docs/specs/dsh-nano-shared-workspace/spec.md#L19) 仍写工作区文件同步「尚未实现」，[`spec.md:21`](docs/specs/dsh-nano-shared-workspace/spec.md#L21) 把「继续对话」放在 Phase B；源码已有 `pullWorkspace` / `pushWorkspace` / `materialize`。包内 [README](dsh-nano-shared-workspace/README.md) 仍自述 Phase-0，只列了四条路由。`/status` 也还写着没有同步引擎 | 交接前 | 用当前 `src/host` 重写规格与包内 README，并补一次跨机验收。在那之前能力表保持「源码已落地、未验收」 |
 | 4 | 记事本 [`package.json:4`](dsh-nano-notepad/package.json#L4) 仍写 “Floating Markdown notepad”。行为已是任意文本（[`db.js:137`](dsh-nano-notepad/src/client/db.js#L137)）。`locale/zh.json` 的市场描述同样偏 Markdown | 下次发包前 | 改描述并与规格 [README](docs/specs/dsh-nano-notepad/README.md) 对齐 |
 | 5 | 文件树、选择器、共享工作区、`dsh-nano-ui` 没有自动化测试。记事本测试不覆盖 XSS、路由围栏或真实 S3 | 长期 | 给 §11.3 的围栏和记事本清洗各加失败即红的测试，再声称回归 |
@@ -435,7 +435,7 @@ dsh plugin --profile web add <spec>
 
 这是一个结构清楚的 dsh overlay 单仓：插件边界、构建期共享包、`src/` 与 `lib/` 的分工都已经能让后来的人按图改一个包。记事本的本地优先和可选 S3、文件树的 Git 卡片、选择器的 rail，在源码层是连着的，而不是空目录。
 
-它还不是一个可以对外宣称「已加固、已发布」的交付物。信任链停在 [release.md](release.md) 的设计，安全审查停在「已确认、未修」。共享工作区的路由已经超过它自己的规格和包内说明。接下来若只做一件事，应是按已冻结的修复口径处理审查里的高危项，并让规格文本跟上 `src/host`；在那之前，本仓库的准确描述是「可在操作者自己的 dsh web 上加载的插件源码」，不是「已上线的服务」。
+它还不是一个可以对外宣称「已加固、已发布」的交付物。信任链停在 [RELEASE.md](RELEASE.md) 的设计，安全审查停在「已确认、未修」。共享工作区的路由已经超过它自己的规格和包内说明。接下来若只做一件事，应是按已冻结的修复口径处理审查里的高危项，并让规格文本跟上 `src/host`；在那之前，本仓库的准确描述是「可在操作者自己的 dsh web 上加载的插件源码」，不是「已上线的服务」。
 
 ---
 

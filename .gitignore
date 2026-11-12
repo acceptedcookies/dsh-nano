@@ -84,6 +84,10 @@ lab/out/
 .output
 .temp
 
+# Screenshot folders at any depth. A trailing slash matches directories only.
+screenshot/
+screenshots/
+
 # 开发工作树 dev worktree
 .worktree/
 

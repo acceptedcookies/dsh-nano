@@ -893,10 +893,27 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     const layer = mirror()
     // perf-review: time the source highlighting itself (§6.7 highlight).
     /* Markdown tinting only for markdown files; other text stays plain. */
-    layer.innerHTML = perf.span('highlight', () => highlightSource(source.value, isJson(), isMarkdownFile() ? 'md' : 'text'))
+    const html = perf.span('highlight', () => highlightSource(source.value, isJson(), isMarkdownFile() ? 'md' : 'text'))
+    // Writing the string parses and rebuilds the whole mirror subtree; that DOM
+    // work — not highlightSource — is what a 28 KB draft pays per keystroke, so
+    // it gets its own span instead of hiding inside the handler's total.
+    perf.span('highlight-dom', () => { layer.innerHTML = html })
     fitMirror()
     layer.hidden = source.hidden
   }
+  /* A keystroke burst used to repaint the mirror synchronously per key — one
+     full innerHTML rebuild per character, on a draft that can be tens of KB.
+     Coalescing to one paint per animation frame keeps every glyph visible at
+     the same latency while collapsing the DOM work to at most once per frame. */
+  let paintMirrorFrame = 0
+  const schedulePaintMirror = () => {
+    if (paintMirrorFrame !== 0) return
+    paintMirrorFrame = requestAnimationFrame(() => {
+      paintMirrorFrame = 0
+      paintMirror()
+    })
+  }
+  disposers.push(() => { if (paintMirrorFrame !== 0) cancelAnimationFrame(paintMirrorFrame) })
   /** Keep the colour layer the same rectangle as the textarea. A box that
       runs to the editor's bottom paints the last lines across the footer. */
   const fitMirror = () => {
@@ -2864,21 +2881,26 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
   write().addEventListener('focus', () => {
     if (!current() && state.db) void beginWriting()
   })
-  write().addEventListener('input', () => {
+  // perf-review: one track for the typing hot path — every keystroke runs
+  // slash refresh, save scheduling, mirror highlighting, and JSON lint here.
+  const inputTrack = perf.track('listener', 'keystroke-input')
+  inputTrack.attach()
+  write().addEventListener('input', inputTrack.wrap(() => {
     if (!current() && state.db) {
       const typed = write().value
       void beginWriting().then(() => {
         if (typed && write().value !== typed) {
           write().value = typed
           scheduleSave()
-          paintMirror()
+          schedulePaintMirror()
         }
       })
       return
     }
     refreshSlash()
     scheduleSave()
-    paintMirror()
+    // One mirror repaint per frame, not one per keystroke (β §9.4 P1).
+    schedulePaintMirror()
     /* Live-lint JSON files so the badge tracks what is being typed. */
     if (isJson()) {
       const lint = panel.querySelector('.np-lint')
@@ -2892,7 +2914,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
         lint.title = result.ok ? '' : String(result.message)
       }
     }
-  })
+  }))
   write().addEventListener('scroll', () => {
     if (state.slash) placeSlash()
     fitMirror()

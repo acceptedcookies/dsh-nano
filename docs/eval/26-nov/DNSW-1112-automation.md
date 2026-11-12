@@ -164,6 +164,7 @@
 | F-18 | 中 | 绑定竞态 | 探测成功后 `finishBind` 只置 `setupStage`，`configured/username` 要等 `refresh()`；用户立即点「新建共享工作区」会被弹回第 1 步 | `finishBind(bound)` 接受刚落库的用户名并立即置 `configured:true` | 🔧 U-11 |
 | F-19 | 中 | 错误文案 | 错密钥时对话框直接展示 S3 原始 XML（几百字 `<Error><Code>…`） | `messageOf` 抽 `<Code>` + HTTP 状态，其余去标签并截断 180 字 | 🔧 U-09 |
 | F-20 | 中 | 同步性能 | 200 文件 push 111s / pull 108s：blob 串行传输；且重复 push 重传所有未变文件 | 有界并发池（8）；sha 已在 HEAD/parent 则跳过上传；返回 `uploaded` 供观测 | 🔧 U-08 |
+| F-23 | 中 | cool-off 的 UI 表达 | 租约被占时弹窗标题是「无法打开」，底部同时给「取消」和「关闭」两个同义按钮；语义上是「稍后重试」而非失败 | 新增 ``noticeKind: 'busy'``，标题改「会话正在被占用」，footer 只留一个「关闭」 | 🔧 U-15 |
 | F-22 | **严重** | 会话日志回放（跨运行时） | Electron 44 内置 Node 24.21 的 `zstdDecompressSync` **只解第一个帧**；DSH 会话日志是逐次追加的多帧 zstd。桌面版读到 21 事件的会话时只拿到 1 行 header，`/transcript` 返回 1 条、`/materialize` 产出 176 字节残缺副本。系统 Node 24.22 能解全部 7 帧，所以**只在桌面/Electron 端复现** | `decode()` 按 zstd magic 切帧后逐帧解码；两运行时均得 21 行 | 🔧 U-14 |
 
 ## 4. 升级记录（U-xx）
@@ -183,6 +184,7 @@
 | U-11 | F-18 | `index.js` `finishBind(bound)` 立即发布 `configured/username`；`graft.js` 透传 `bound` | ego 注入校验：`finishBind({username:'dasw-a'})` 后 `configured:true`、`stage:'workspace'` |
 | U-12 | F-15 | 新增 `scripts/eval/desktop-auth.mjs`（自签 cookie、固定 `~/.dsh-desktop`、动态端口）；`clients.mjs` 统一 A/B 两端 | 两端 `/settings` 均 200 且分别返回 `dasw-a` / `dasw-b` |
 | U-13 | F-21 | `entry.js` 新增 `Config.backgroundSyncMs` 校验；`routes.js` `startBackgroundSync` 读该值，0 时直接返回 | 关后 35s generation 不变；两个测试节点均已设 0 |
+| U-15 | F-23 | ``i18n.js`` 新增 ``noticeTitleBusy``；``index.js`` busy 分支置 ``noticeKind:'busy'``，``dismissNotice``/``onOpenSession`` 同步清理；``graft.js`` 按 kind 选标题并用单按钮 footer | 桌面 UI 实测：标题「会话正在被占用」、按钮仅「关闭」、``noticeKind: busy``（``R4-cooloff-fixed.png``） |
 | U-14 | F-22 | `session-io.js` `decode()`：按 zstd frame magic 切分后逐帧 `zstdDecompressSync`，兼容只解首帧的运行时 | 系统 Node 24.22 与 Electron Node 24.21 各跑一次：均 21 行。修复后 A/B `/transcript` 都返回 21 事件 / 16 类型；B `materialize` 产物由 176B/1 帧变为 15094B/2 帧 |
 
 ## 5. 证据索引

@@ -276,7 +276,7 @@ export function apply(ctx) {
         }))
     },
     onOpenSession: session => {
-      store.set({ notice: null, sectionOpen: true, expanded: { ...(store.current.expanded ?? {}), [session.workspaceId]: true } })
+      store.set({ notice: null, noticeKind: null, sectionOpen: true, expanded: { ...(store.current.expanded ?? {}), [session.workspaceId]: true } })
       const known = () => ctx.sessions.list.getSnapshot().byId?.[session.sessionId] != null
       const pathOf = () => memberPath(
         (store.current.sharedWorkspaces ?? []).find(item => item.workspaceId === session.workspaceId),
@@ -296,7 +296,10 @@ export function apply(ctx) {
       }
       const finishLease = claim => {
         if (claim?.busy === true) {
-          store.set({ notice: copyFor(languageOf()).readOnlyBusy.replace('{holder}', claim.holder ?? '') })
+          store.set({
+            notice: copyFor(languageOf()).readOnlyBusy.replace('{holder}', claim.holder ?? ''),
+            noticeKind: 'busy',
+          })
           return
         }
         holdSession(session.workspaceId, session.sessionId)
@@ -347,7 +350,7 @@ export function apply(ctx) {
         })
     },
     cancelRename: () => store.set({ rename: null }),
-    dismissNotice: () => store.set({ notice: null }),
+    dismissNotice: () => store.set({ notice: null, noticeKind: null }),
     /** Delete is destructive: the row action opens a confirmation dialog first. */
     onDeleteWorkspace: workspaceId => store.set({ deleteTarget: workspaceId }),
     cancelDeleteWorkspace: () => store.set({ deleteTarget: null }),

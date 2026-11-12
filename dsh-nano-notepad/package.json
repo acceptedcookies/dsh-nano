@@ -1,6 +1,6 @@
 {
   "name": "dsh-nano-notepad",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "A floating Markdown notepad. Files, history, and images stay in this browser.",
   "type": "module",
   "icon": "./icon.svg",
@@ -22,7 +22,10 @@
     "icon.svg",
     "locale",
     "lib/client.js",
+    "lib/mp-sanitize.js",
     "lib/perf-review-host.js",
+    "lib/route-guard.js",
+    "lib/route-table.js",
     "lib/s3-sync-host.js"
   ],
   "engines": {
@@ -45,11 +48,12 @@
     }
   },
   "devDependencies": {
-    "esbuild": "0.25.0"
-  },
-  "dependencies": {
+    "dsh-host-route-guard": "file:../packages/dsh-host-route-guard",
+    "dsh-html-policy": "file:../packages/dsh-html-policy",
     "dsh-nano-ui": "file:../packages/dsh-nano-ui",
     "dsh-performance-review": "file:../packages/dsh-performance-review",
-    "dsh-s3-client": "file:../packages/dsh-s3-client"
+    "dsh-remote-data-schema": "file:../packages/dsh-remote-data-schema",
+    "dsh-s3-client": "file:../packages/dsh-s3-client",
+    "esbuild": "0.25.0"
   }
 }

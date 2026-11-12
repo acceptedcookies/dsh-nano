@@ -26,7 +26,7 @@ import {
   writeSettings,
   writeUi as writeUiRaw,
 } from './db.js'
-import { applyFormat, escapeHtml, extractImageUrls, formatHtml, htmlToText, minifyHtml, renderMarkdown, sanitizeRichHtml, stripHtmlStyles } from './markdown.js'
+import { applyFormat, escapeAttr, escapeHtml, extractImageUrls, formatHtml, htmlToText, minifyHtml, renderMarkdown, sanitizeRichHtml, stripHtmlStyles } from './markdown.js'
 import { validateJson, positionOf, formatJson, minifyJson, escapeJson, unescapeJson, decodeEscapes, renderJsonTree } from './json.js'
 import { highlightSource } from './highlight.js'
 import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -1161,10 +1161,11 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
         const icon = node.kind === 'folder' ? FOLDER_ICON : FILE_ICON
         const name = escapeHtml(node.name)
         const expanded = !state.collapsed.has(node.id)
-        const caret = node.kind === 'folder' ? `<button type="button" class="np-caret" data-caret="${node.id}" data-open="${expanded}" aria-expanded="${expanded}" aria-label="${escapeHtml(node.name)} · ${escapeHtml(expanded ? text().collapse : text().expand)}">${CARET_ICON}</button>` : ''
+        const nodeId = escapeAttr(node.id)
+        const caret = node.kind === 'folder' ? `<button type="button" class="np-caret" data-caret="${nodeId}" data-open="${expanded}" aria-expanded="${expanded}" aria-label="${escapeHtml(node.name)} · ${escapeHtml(expanded ? text().collapse : text().expand)}">${CARET_ICON}</button>` : ''
         const pinLabel = node.pinned === true ? text().unpin : text().pin
-        const pin = `<button type="button" data-pin="${node.id}" data-active="${node.pinned === true}" title="${escapeHtml(pinLabel)}" aria-label="${escapeHtml(pinLabel)}">${node.pinned === true ? PIN_ON_ICON : PIN_OFF_ICON}</button>`
-        lines.push(`<div class="np-node" data-kind="${node.kind}" data-pinned="${node.pinned === true}" data-active="${node.id === state.ui.currentId}" title="${name}" style="padding-left:${8 + depth * 16}px">${caret}<button class="np-node-main" type="button" draggable="true" data-id="${node.id}" aria-label="${name}"><span class="np-node-icon" aria-hidden="true">${icon}</span><span class="np-node-name">${name}</span></button><span class="np-node-actions">${pin}<button type="button" data-move="${node.id}" title="${escapeHtml(text().transfer)}" aria-label="${escapeHtml(text().transfer)}">${MOVE_ICON}</button><button type="button" data-more="${node.id}" title="${escapeHtml(text().more)}" aria-label="${escapeHtml(text().more)}" aria-haspopup="menu">${MORE_ICON}</button></span></div>`)
+        const pin = `<button type="button" data-pin="${nodeId}" data-active="${node.pinned === true}" title="${escapeHtml(pinLabel)}" aria-label="${escapeHtml(pinLabel)}">${node.pinned === true ? PIN_ON_ICON : PIN_OFF_ICON}</button>`
+        lines.push(`<div class="np-node" data-kind="${node.kind}" data-pinned="${node.pinned === true}" data-active="${node.id === state.ui.currentId}" title="${name}" style="padding-left:${8 + depth * 16}px">${caret}<button class="np-node-main" type="button" draggable="true" data-id="${nodeId}" aria-label="${name}"><span class="np-node-icon" aria-hidden="true">${icon}</span><span class="np-node-name">${name}</span></button><span class="np-node-actions">${pin}<button type="button" data-move="${nodeId}" title="${escapeHtml(text().transfer)}" aria-label="${escapeHtml(text().transfer)}">${MOVE_ICON}</button><button type="button" data-more="${nodeId}" title="${escapeHtml(text().more)}" aria-label="${escapeHtml(text().more)}" aria-haspopup="menu">${MORE_ICON}</button></span></div>`)
         if (node.kind === 'folder' && !state.collapsed.has(node.id)) visit(node.id, depth + 1, workspaceId)
       }
     }
@@ -1185,7 +1186,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       seen.add(key)
       if (active.mode === 'all') {
         const count = (byParent.get(`${workspaceId ?? ''}`) ?? []).length
-        lines.push(`<div class="np-group" role="button" tabindex="0" data-ws="${key}" data-active="${workspaceId === workspaceCatalog().currentId}"><span class="np-group-title">${escapeHtml(workspaceTitle(workspaceId))}</span><span class="np-group-count">${count}</span></div>`)
+        lines.push(`<div class="np-group" role="button" tabindex="0" data-ws="${escapeAttr(key)}" data-active="${workspaceId === workspaceCatalog().currentId}"><span class="np-group-title">${escapeHtml(workspaceTitle(workspaceId))}</span><span class="np-group-count">${count}</span></div>`)
       }
       visit(null, 0, workspaceId)
     }
@@ -1205,7 +1206,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       const node = state.nodes.find(item => item.id === id)
       if (!node) return ''
       const name = escapeHtml(node.name)
-      return `<span class="np-tab" data-active="${id === state.ui.currentId}"><button class="np-tab-btn" type="button" data-tab="${id}" title="${name}"><span class="np-tab-name">${name}</span></button><button class="np-tab-x" type="button" data-close="${id}" title="${escapeHtml(text().close)}" aria-label="${escapeHtml(text().close)}">×</button></span>`
+      return `<span class="np-tab" data-active="${id === state.ui.currentId}"><button class="np-tab-btn" type="button" data-tab="${escapeAttr(id)}" title="${name}"><span class="np-tab-name">${name}</span></button><button class="np-tab-x" type="button" data-close="${escapeAttr(id)}" title="${escapeHtml(text().close)}" aria-label="${escapeHtml(text().close)}">×</button></span>`
     }).join('')
     /* Fade only when the text itself overflows into the close control. */
     requestAnimationFrame(() => {
@@ -2231,7 +2232,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     if (!file || !state.db) return
     const versions = await versionsOf(state.db, file.id)
     const copy = text()
-    const rows = versions.map(version => `<button type="button" data-version="${version.id}">${escapeHtml(new Date(version.createdAt).toLocaleString())} · ${escapeHtml(copy.reasons[version.reason] ?? version.reason)} · ${version.markdown.length} chars</button>`).join('')
+    const rows = versions.map(version => `<button type="button" data-version="${escapeAttr(version.id)}">${escapeHtml(new Date(version.createdAt).toLocaleString())} · ${escapeHtml(copy.reasons[version.reason] ?? version.reason)} · ${version.markdown.length} chars</button>`).join('')
     dialog({
       title: copy.historyTitle,
       body: `<div class="np-versions">${rows || `<p>${escapeHtml(copy.noVersions)}</p>`}</div>`,
@@ -2489,7 +2490,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       title: copy.transferTitle,
       body: `<div class="np-transfer-list">${items.length === 0
         ? `<p class="np-transfer-empty">${escapeHtml(copy.noOtherWorkspace)}</p>`
-        : items.map(item => `<button type="button" class="np-transfer-row" data-ws="${keyOf(item.workspaceId ?? null)}"><span class="np-transfer-name">${escapeHtml(item.title ?? workspaceTitle(item.workspaceId))}</span><span class="np-transfer-check" aria-hidden="true">${CHECK_ICON}</span></button>`).join('')}</div>`,
+        : items.map(item => `<button type="button" class="np-transfer-row" data-ws="${escapeAttr(keyOf(item.workspaceId ?? null))}"><span class="np-transfer-name">${escapeHtml(item.title ?? workspaceTitle(item.workspaceId))}</span><span class="np-transfer-check" aria-hidden="true">${CHECK_ICON}</span></button>`).join('')}</div>`,
       setup: el => {
         const paint = () => { for (const row of el.querySelectorAll('.np-transfer-row')) row.dataset.active = String(row.dataset.ws === picked) }
         paint()

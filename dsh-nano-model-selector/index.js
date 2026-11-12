@@ -5,6 +5,8 @@ import { join } from 'node:path'
 import { readFileSync } from 'node:fs'
 import { defaultEngine, imagineSkill, imagineStub, readEngine, scanEngines, writeEngine } from './lib/host-media.js'
 import { ensurePerfReviewHost, LIB_VERSION } from './lib/perf-review-host.js'
+import { registerRoutes } from './lib/route-guard.js'
+import { ROUTE_TABLE, PLUGIN } from './lib/route-table.js'
 
 export const name = 'nano-model-selector'
 
@@ -127,15 +129,9 @@ function catalogHandler(ctx) {
     return inflight
   }
   return (req, res) => review.hostSpan('catalog', async () => {
-    // Gate reads too: the catalog discloses the deployment's provider/model
-    // fingerprint, so it must not answer unauthenticated pages or LAN clients.
-    const rejection = ctx.get('connection')?.requestRejection(req)
-    if (rejection !== undefined) { res.statusCode = rejection; res.end(); return }
-    if (req.method !== 'GET' && req.method !== 'HEAD') {
-      res.setHeader('allow', 'GET, HEAD')
-      sendJson(res, 405, { error: `method ${req.method} is not allowed` })
-      return
-    }
+    // The guard owns requestRejection + the method gate; this handler only runs
+    // for admitted GET/HEAD (the catalog still discloses the deployment's
+    // provider/model fingerprint, so it stays behind that fence).
     try {
       if (cache === null || Date.now() - cache.at > CATALOG_TTL_MS) {
         const payload = await build()
@@ -148,14 +144,14 @@ function catalogHandler(ctx) {
   })
 }
 
-/** Read at most 16 KiB of request body as UTF-8 JSON. */
-function readBody(req) {
+/** Read at most `maxBytes` of request body as UTF-8 JSON. */
+function readBody(req, maxBytes) {
   return new Promise((resolve, reject) => {
     const chunks = []
     let size = 0
     req.on('data', chunk => {
       size += chunk.length
-      if (size > 16384) { req.destroy(); reject(new Error('body too large')); return }
+      if (size > maxBytes) { req.destroy(); reject(new Error('body too large')); return }
       chunks.push(chunk)
     })
     req.on('end', () => {
@@ -192,64 +188,51 @@ function registerImagine(ctx) {
   return { refresh, dispose: () => dispose?.() }
 }
 
-/** @param ctx - host context. */
-function mediaHandler(ctx, imagine) {
-  return async (req, res) => {
-    const rejection = ctx.get('connection')?.requestRejection(req)
-    if (rejection !== undefined) { res.statusCode = rejection; res.end(); return }
-    const url = new URL(req.url ?? '/', 'http://localhost')
-    if (url.pathname === ENGINES_ROUTE) {
-      if (req.method !== 'GET' && req.method !== 'HEAD') {
-        res.setHeader('allow', 'GET, HEAD')
-        sendJson(res, 405, { error: `method ${req.method} is not allowed` })
-        return
-      }
-      sendJson(res, 200, scanEngines())
-      return
-    }
-    if (url.pathname === ENGINE_ROUTE) {
-      if (req.method === 'GET' || req.method === 'HEAD') {
-        // Report the persisted choice, falling back to the auto-picked engine so
-        // a fresh install still shows which engine `/imagine` is wired to.
-        const persisted = readEngine(STATE_PATH)
-        sendJson(res, 200, { engine: persisted ?? defaultEngine(), explicit: persisted !== null })
-        return
-      }
-      if (req.method === 'PUT') {
-        try {
-          const body = await readBody(req)
-          const engines = scanEngines().engines
-          const wanted = engines.find(engine => engine.key === body.engine)
-          if (wanted === undefined) { sendJson(res, 400, { error: 'unknown media engine' }); return }
-          writeEngine(STATE_PATH, wanted.key)
-          imagine.refresh()
-          sendJson(res, 200, { engine: wanted.key })
-        } catch (error) {
-          sendJson(res, 400, { error: messageOf(error) })
-        }
-        return
-      }
-      res.setHeader('allow', 'GET, HEAD, PUT')
-      sendJson(res, 405, { error: `method ${req.method} is not allowed` })
-      return
-    }
-    sendJson(res, 404, { error: 'not found' })
+/**
+ * Media-engine handlers, one per route-table path. The guard owns
+ * requestRejection + the 405 gate; these keep only the work: engines scan,
+ * engine read-back on GET/HEAD, engine write + skill re-register on PUT.
+ * @param ctx - host context.
+ * @param imagine - the registerImagine() handle (refresh re-registers /imagine).
+ */
+function mediaHandlers(ctx, imagine) {
+  const engines = (req, res) => {
+    sendJson(res, 200, scanEngines())
   }
+  const engine = async (req, res) => {
+    if (req.method === 'PUT') {
+      try {
+        const body = await readBody(req, 16384)
+        const detected = scanEngines().engines
+        const wanted = detected.find(item => item.key === body.engine)
+        if (wanted === undefined) { sendJson(res, 400, { error: 'unknown media engine' }); return }
+        writeEngine(STATE_PATH, wanted.key)
+        imagine.refresh()
+        sendJson(res, 200, { engine: wanted.key })
+      } catch (error) {
+        sendJson(res, 400, { error: messageOf(error) })
+      }
+      return
+    }
+    // GET/HEAD: report the persisted choice, falling back to the auto-picked
+    // engine so a fresh install still shows which engine `/imagine` is wired to.
+    const persisted = readEngine(STATE_PATH)
+    sendJson(res, 200, { engine: persisted ?? defaultEngine(), explicit: persisted !== null })
+  }
+  return { engines, engine }
 }
 
 /** @param {import('@deepseek-ai/cordis').Context} ctx */
 export function apply(ctx) {
-  ctx.effect(() => ctx.webServer.register({
-    kind: 'exact',
-    path: ROUTE,
-    handler: catalogHandler(ctx),
-  }), 'nano-model-selector: catalog route')
-
   const imagine = registerImagine(ctx)
   ctx.effect(() => () => imagine.dispose(), 'nano-model-selector: imagine skill')
 
-  const media = mediaHandler(ctx, imagine)
-  for (const path of [ENGINES_ROUTE, ENGINE_ROUTE]) {
-    ctx.effect(() => ctx.webServer.register({ kind: 'exact', path, handler: media }), `nano-model-selector: ${path}`)
-  }
+  // All web routes register through dsh-host-route-guard (P1-05 / T-O-7): the
+  // guard owns requestRejection and the uniform 405; handlers keep the work.
+  const media = mediaHandlers(ctx, imagine)
+  registerRoutes(ctx, [
+    { path: ROUTE, methods: ['GET', 'HEAD'], handler: catalogHandler(ctx) },
+    { path: ENGINES_ROUTE, methods: ['GET', 'HEAD'], handler: media.engines },
+    { path: ENGINE_ROUTE, methods: ['GET', 'HEAD', 'PUT'], handler: media.engine },
+  ], { table: ROUTE_TABLE, plugin: PLUGIN })
 }

@@ -1,0 +1,70 @@
+# Route inventory — 43 host routes
+
+Static enumeration of every `webServer.register` path across the four plugins, in registration order. Source of truth for paths/methods/bodyLimit: `scripts/route-scan.mjs` → `security/route-sensitivity.json` (sensitivity) and `security/feature-contract.json` (contract). Re-run `node scripts/gen-route-sensitivity.mjs` after any registration change; `node scripts/check-route-sensitivity.mjs` must report 0 drift.
+
+`bodyLimit` = route-level cap (max over methods; GET/HEAD accept no body). `session` = takes a sessionId. Sensitivity per T-O-2: L0 read-only/no-secret · L1 bounded workspace write · L2 host-level capability · L3 operator config (none — no page route is operator-only).
+
+## dsh-nano-notepad — 7 (`index.js:60-66` constants, all POST)
+
+| path | methods | sensitivity | capability | bodyLimit | session | what it does |
+|---|---|---|---|---|---|---|
+| /nano-notepad/save | POST | L2 | write:host | 8388608 | – | native save dialog (osascript) → write chosen path |
+| /nano-notepad/read | POST | L2 | read:host | 8388608 | – | read any UTF-8 host text file ≤2MiB |
+| /nano-notepad/fetch-mp | POST | L2 | net:fetch | 8388608 | – | outbound fetch of mp.weixin.qq.com article |
+| /nano-notepad/s3/status | POST | L2 | s3:credentials | 33554432 | – | active profile + ledger (accessKeyId, endpoint) |
+| /nano-notepad/s3/test | POST | L2 | credential:probe | 33554432 | – | signed S3 probe with stored creds |
+| /nano-notepad/s3/object | POST | L2 | s3:write | 33554432 | – | generic signed S3 get/put/delete/head |
+| /nano-notepad/s3/config | POST | L2 | s3:credentials | 33554432 | – | write endpoint/bucket/secret profiles (0600) |
+
+## dsh-nano-explorer-extra — 13 (`src/host/routes.js:226-443` map)
+
+| path | methods | sensitivity | capability | bodyLimit | session | what it does |
+|---|---|---|---|---|---|---|
+| /nano-explorer-extra/status | GET | L0 | proc:git | 0 | ✓ | git status/stats for a session workspace |
+| /nano-explorer-extra/commit | POST | L2 | proc:git | 65536 | ✓ | git add --all + commit (host exec) |
+| /nano-explorer-extra/pull | POST | L2 | proc:git | 65536 | ✓ | git pull --ff-only (exec + net) |
+| /nano-explorer-extra/checkout | POST | L2 | proc:git | 65536 | ✓ | git checkout (exec, may trigger filters) |
+| /nano-explorer-extra/create-file | POST | L1 | write:workspace | 65536 | ✓ | create file in workspace |
+| /nano-explorer-extra/create-folder | POST | L1 | write:workspace | 65536 | ✓ | mkdir in workspace |
+| /nano-explorer-extra/rename | POST | L1 | write:workspace | 65536 | ✓ | rename in workspace |
+| /nano-explorer-extra/move | POST | L1 | write:workspace | 65536 | ✓ | move in workspace |
+| /nano-explorer-extra/delete | POST | L1 | write:workspace | 65536 | ✓ | delete in workspace (root refused) |
+| /nano-explorer-extra/ignored | POST | L0 | read:workspace | 65536 | ✓ | git check-ignore read |
+| /nano-explorer-extra/list | POST | L2 | read:host | 65536 | ✓ | list arbitrary host dir (unfenced) |
+| /nano-explorer-extra/perf-review/host | GET | L2 | read:host | 0 | – | process-global perf snapshot/window drain |
+| /nano-explorer-extra/read | POST | L2 | read:host | 65536 | ✓ | read any UTF-8 host file ≤1MiB |
+
+## dsh-nano-shared-workspace — 20 (`src/host/routes.js:123-470` map)
+
+| path | methods | sensitivity | capability | bodyLimit | session | what it does |
+|---|---|---|---|---|---|---|
+| /nano-shared-workspace/settings | GET | L0 | credential:read | 0 | – | masked identity + endpoint/bucket/region |
+| /nano-shared-workspace/settings/test | POST | L2 | credential:probe | 65536 | – | signed S3 LIST probe with creds |
+| /nano-shared-workspace/settings/update | PUT | L2 | credential:write | 65536 | – | write identity to credentials store |
+| /nano-shared-workspace/settings/clear | POST | L2 | credential:write | 65536 | – | delete stored identity |
+| /nano-shared-workspace/status | GET | L0 | read:host | 0 | – | local sync/status probe |
+| /nano-shared-workspace/workspaces | GET | L0 | s3:read | 0 | – | list member workspaces (markers) |
+| /nano-shared-workspace/workspaces/create | POST | L2 | s3:write | 65536 | – | PUT new workspace marker |
+| /nano-shared-workspace/workspaces/join | POST | L2 | write:host | 65536 | – | materialize remote ws into localPath |
+| /nano-shared-workspace/sync | POST | L2 | s3:write | 65536 | – | trigger signed sync cycle |
+| /nano-shared-workspace/tree/pull | POST | L2 | write:host | 65536 | – | write remote tree (incl .git) to localPath |
+| /nano-shared-workspace/tree/push | POST | L2 | s3:write | 65536 | – | read replica + PUT generations |
+| /nano-shared-workspace/sessions/bind | POST | L2 | write:host | 65536 | ✓ | bind session to workspace/localPath |
+| /nano-shared-workspace/sessions/claim | POST | L2 | s3:write | 65536 | ✓ | acquireClaim write to S3 (no CAS) |
+| /nano-shared-workspace/sessions/heartbeat | POST | L2 | s3:write | 65536 | ✓ | renew lease + heartbeatRev |
+| /nano-shared-workspace/sessions/lease | POST | L2 | s3:write | 65536 | ✓ | mutate remote lease/expiresAt |
+| /nano-shared-workspace/sessions | GET | L0 | s3:read | 0 | – | list remote session records |
+| /nano-shared-workspace/mkdir | POST | L2 | write:host | 65536 | – | mkdir at any writable absolute path |
+| /nano-shared-workspace/ls | POST | L2 | read:host | 65536 | – | list any absolute host path |
+| /nano-shared-workspace/transcript | POST | L2 | s3:read | 65536 | ✓ | fetch/decompress remote session body |
+| /nano-shared-workspace/materialize | POST | L2 | write:host | 65536 | ✓ | write remote session into local tree |
+
+## dsh-nano-model-selector — 3 (`index.js:28-30` constants)
+
+| path | methods | sensitivity | capability | bodyLimit | session | what it does |
+|---|---|---|---|---|---|---|
+| /nano-model-selector/catalog | GET, HEAD | L0 | read:host | 0 | – | enriched LLM model catalog |
+| /nano-model-selector/media-engines | GET, HEAD | L0 | read:host | 0 | – | scan local media CLIs |
+| /nano-model-selector/media-engine | GET, HEAD, PUT | L2 | write:host | 16384 | – | GET engine state; PUT writes media-engine.json + re-registers /imagine |
+
+**Totals: 43 paths · L0 8 · L1 5 · L2 30 · L3 0.** bodyLimit values: notepad /save+/read+/fetch-mp = MAX_SAVE_BYTES 8388608 (8 MiB), /s3/* = MAX_S3_BODY_BYTES 33554432 (32 MiB); explorer + nsw = 64 KiB (65536); model-selector GET/HEAD = 0, /media-engine PUT = 16384.

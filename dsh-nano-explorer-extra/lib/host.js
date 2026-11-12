@@ -174,6 +174,318 @@ function ensurePerfReviewHost(env = {}) {
   return global.__perfReviewHost;
 }
 
+// ../packages/dsh-host-route-guard/src/route-guard.js
+var RouteGuardError = class extends Error {
+  constructor(reason, detail = "") {
+    super(detail ? `route-guard: ${reason} \u2014 ${detail}` : `route-guard: ${reason}`);
+    this.name = "RouteGuardError";
+    this.reason = reason;
+  }
+};
+var ROUTE_KIND = "exact";
+function sendJson(res, status, body) {
+  if (res.writableEnded || res.destroyed) return;
+  res.statusCode = status;
+  res.setHeader("content-type", "application/json; charset=utf-8");
+  res.end(JSON.stringify(body));
+}
+function indexTable(table, plugin) {
+  if (!Array.isArray(table)) {
+    throw new RouteGuardError("table-invalid", "table must be an array of route rows");
+  }
+  const byPath = /* @__PURE__ */ new Map();
+  for (const row of table) {
+    if (!row || typeof row.path !== "string" || row.path === "") {
+      throw new RouteGuardError("table-invalid", "every row needs a non-empty path");
+    }
+    const methods = Array.isArray(row.methods) ? row.methods.map((m) => String(m).toUpperCase()) : [];
+    if (methods.length === 0) {
+      throw new RouteGuardError("table-invalid", `${row.path}: methods list is empty`);
+    }
+    if (byPath.has(row.path)) {
+      throw new RouteGuardError("table-invalid", `${row.path}: duplicate table row`);
+    }
+    byPath.set(row.path, {
+      path: row.path,
+      methods,
+      sensitivity: row.sensitivity,
+      capability: row.capability,
+      bodyLimit: row.bodyLimit,
+      sessionBinding: row.sessionBinding,
+      justification: row.justification,
+      plugin: row.plugin ?? plugin
+    });
+  }
+  return byPath;
+}
+function normalizeSpec(spec) {
+  if (!spec || typeof spec.path !== "string" || spec.path === "") {
+    throw new RouteGuardError("route-spec-invalid", "every spec needs a non-empty path");
+  }
+  const methods = /* @__PURE__ */ new Set();
+  if (Array.isArray(spec.methods)) {
+    for (const m of spec.methods) methods.add(String(m).toUpperCase());
+  }
+  if (spec.method !== void 0) methods.add(String(spec.method).toUpperCase());
+  if (methods.size === 0) {
+    throw new RouteGuardError("route-spec-invalid", `${spec.path}: declare method or methods`);
+  }
+  if (typeof spec.handler !== "function") {
+    throw new RouteGuardError("route-spec-invalid", `${spec.path}: handler must be a function`);
+  }
+  return { ...spec, methods: [...methods] };
+}
+function createGuard({ table, plugin } = {}) {
+  const byPath = indexTable(table ?? [], plugin);
+  const records = [];
+  function registerRoutes3(ctx, specs) {
+    const conn = ctx.get("connection");
+    if (!conn) throw new RouteGuardError("no-connection", "no connection service");
+    const normalized = specs.map(normalizeSpec);
+    const wanted = /* @__PURE__ */ new Map();
+    for (const spec of normalized) {
+      const row = byPath.get(spec.path);
+      for (const method of spec.methods) {
+        const key = `${method} ${spec.path}`;
+        if (!row) {
+          throw new RouteGuardError("route-not-listed", `${method} ${spec.path} is not in the route table`);
+        }
+        if (!row.methods.includes(method)) {
+          throw new RouteGuardError("route-not-listed", `${method} ${spec.path}: method not covered by the table row`);
+        }
+        if (wanted.has(key)) {
+          throw new RouteGuardError("route-duplicate", `${method} ${spec.path} declared twice`);
+        }
+        wanted.set(key, spec);
+      }
+      for (const field of ["sensitivity", "capability", "sessionBinding"]) {
+        if (spec[field] !== void 0 && row[field] !== spec[field]) {
+          throw new RouteGuardError("route-drift", `${spec.path}: ${field} declares "${spec[field]}" but the table row has "${row[field]}"`);
+        }
+      }
+    }
+    for (const row of byPath.values()) {
+      for (const method of row.methods) {
+        if (!wanted.has(`${method} ${row.path}`)) {
+          throw new RouteGuardError("route-stale", `${method} ${row.path}: table row has no matching route spec`);
+        }
+      }
+    }
+    const disposers = [];
+    for (const spec of normalized) {
+      const row = byPath.get(spec.path);
+      const route = Object.freeze({
+        path: spec.path,
+        methods: Object.freeze([...spec.methods]),
+        sensitivity: row.sensitivity,
+        capability: row.capability,
+        bodyLimit: spec.bodyLimit ?? row.bodyLimit,
+        sessionBinding: row.sessionBinding,
+        justification: row.justification,
+        plugin: row.plugin
+      });
+      records.push(route);
+      const handler = async (req, res) => {
+        const rejection = conn.requestRejection?.(req);
+        if (rejection !== void 0) {
+          res.statusCode = rejection;
+          res.end();
+          return;
+        }
+        if (!route.methods.includes(String(req.method ?? "").toUpperCase())) {
+          res.setHeader("allow", route.methods.join(", "));
+          sendJson(res, 405, { ok: false, reason: "method-not-allowed" });
+          return;
+        }
+        try {
+          await spec.handler(req, res, route);
+        } catch (error) {
+          const reason = error instanceof RouteGuardError ? error.reason : "failed";
+          sendJson(res, 500, { ok: false, reason });
+        }
+      };
+      const register = () => ctx.webServer.register({ kind: ROUTE_KIND, path: spec.path, handler });
+      if (typeof ctx.effect === "function") {
+        disposers.push(ctx.effect(register, `route-guard: ${spec.path}`));
+      } else {
+        disposers.push(register());
+      }
+    }
+    return disposers;
+  }
+  function inventory() {
+    return Object.freeze([...records]);
+  }
+  function lookup(path) {
+    return records.find((r) => r.path === path);
+  }
+  return { registerRoutes: registerRoutes3, inventory, lookup };
+}
+function registerRoutes(ctx, specs, { table, plugin } = {}) {
+  return createGuard({ table, plugin }).registerRoutes(ctx, specs);
+}
+
+// src/host/route-table.js
+var PLUGIN = "dsh-nano-explorer-extra";
+var ROUTE_TABLE = [
+  {
+    "plugin": "dsh-nano-explorer-extra",
+    "path": "/nano-explorer-extra/status",
+    "methods": [
+      "GET"
+    ],
+    "sensitivity": "L0",
+    "capability": "proc:git",
+    "bodyLimit": 0,
+    "sessionBinding": true,
+    "justification": "dsh-nano-explorer-extra/src/host/routes.js:226 \u2014 read-only git status/stats for one session workspace; returns no secrets. scopeOf resolves caller-supplied sessionId (finding scopeof-cross-session, harden) \u2014 session-scoped read by design."
+  },
+  {
+    "plugin": "dsh-nano-explorer-extra",
+    "path": "/nano-explorer-extra/commit",
+    "methods": [
+      "POST"
+    ],
+    "sensitivity": "L2",
+    "capability": "proc:git",
+    "bodyLimit": 65536,
+    "sessionBinding": true,
+    "justification": "dsh-nano-explorer-extra/src/host/routes.js:261 \u2014 runs `git add --all` + `git commit` as the host user; executes a process and can invoke attacker-controlled .git filter drivers (finding git-config-filter-exec). Host-level exec."
+  },
+  {
+    "plugin": "dsh-nano-explorer-extra",
+    "path": "/nano-explorer-extra/pull",
+    "methods": [
+      "POST"
+    ],
+    "sensitivity": "L2",
+    "capability": "proc:git",
+    "bodyLimit": 65536,
+    "sessionBinding": true,
+    "justification": "dsh-nano-explorer-extra/src/host/routes.js:273 \u2014 `git pull --ff-only`: host process exec + outbound net to the configured remote + merge writes into the workspace."
+  },
+  {
+    "plugin": "dsh-nano-explorer-extra",
+    "path": "/nano-explorer-extra/checkout",
+    "methods": [
+      "POST"
+    ],
+    "sensitivity": "L2",
+    "capability": "proc:git",
+    "bodyLimit": 65536,
+    "sessionBinding": true,
+    "justification": "dsh-nano-explorer-extra/src/host/routes.js:285 \u2014 `git checkout` as the host user; process exec that can rewrite workspace files and trigger smudge filters."
+  },
+  {
+    "plugin": "dsh-nano-explorer-extra",
+    "path": "/nano-explorer-extra/create-file",
+    "methods": [
+      "POST"
+    ],
+    "sensitivity": "L1",
+    "capability": "write:workspace",
+    "bodyLimit": 65536,
+    "sessionBinding": true,
+    "justification": "dsh-nano-explorer-extra/src/host/routes.js:297 + mutate.js \u2014 bounded write of a new file inside the session workspace after resolve+policy check; symlink-escape fence is the P2 harden item."
+  },
+  {
+    "plugin": "dsh-nano-explorer-extra",
+    "path": "/nano-explorer-extra/create-folder",
+    "methods": [
+      "POST"
+    ],
+    "sensitivity": "L1",
+    "capability": "write:workspace",
+    "bodyLimit": 65536,
+    "sessionBinding": true,
+    "justification": "dsh-nano-explorer-extra/src/host/routes.js:310 + mutate.js \u2014 bounded mkdir inside the session workspace; same realpath-fence hardening as the other mutations."
+  },
+  {
+    "plugin": "dsh-nano-explorer-extra",
+    "path": "/nano-explorer-extra/rename",
+    "methods": [
+      "POST"
+    ],
+    "sensitivity": "L1",
+    "capability": "write:workspace",
+    "bodyLimit": 65536,
+    "sessionBinding": true,
+    "justification": "dsh-nano-explorer-extra/src/host/routes.js:324 + mutate.js \u2014 rename/move inside the workspace; bounded write once realpath fencing is in place."
+  },
+  {
+    "plugin": "dsh-nano-explorer-extra",
+    "path": "/nano-explorer-extra/move",
+    "methods": [
+      "POST"
+    ],
+    "sensitivity": "L1",
+    "capability": "write:workspace",
+    "bodyLimit": 65536,
+    "sessionBinding": true,
+    "justification": "dsh-nano-explorer-extra/src/host/routes.js:340 + mutate.js \u2014 move entries inside the workspace; bounded write (symlink-escape fence pending)."
+  },
+  {
+    "plugin": "dsh-nano-explorer-extra",
+    "path": "/nano-explorer-extra/delete",
+    "methods": [
+      "POST"
+    ],
+    "sensitivity": "L1",
+    "capability": "write:workspace",
+    "bodyLimit": 65536,
+    "sessionBinding": true,
+    "justification": "dsh-nano-explorer-extra/src/host/routes.js:358 + mutate.js \u2014 delete inside the workspace (root itself refused); bounded write once fenced."
+  },
+  {
+    "plugin": "dsh-nano-explorer-extra",
+    "path": "/nano-explorer-extra/ignored",
+    "methods": [
+      "POST"
+    ],
+    "sensitivity": "L0",
+    "capability": "read:workspace",
+    "bodyLimit": 65536,
+    "sessionBinding": true,
+    "justification": "dsh-nano-explorer-extra/src/host/routes.js:373 \u2014 `git check-ignore` style read over workspace paths; no write, no secret."
+  },
+  {
+    "plugin": "dsh-nano-explorer-extra",
+    "path": "/nano-explorer-extra/list",
+    "methods": [
+      "POST"
+    ],
+    "sensitivity": "L2",
+    "capability": "read:host",
+    "bodyLimit": 65536,
+    "sessionBinding": true,
+    "justification": "dsh-nano-explorer-extra/src/host/routes.js:384 \u2014 directory listing never fenced to the workspace (finding nxe:routes-read-arbitrary-file, accepted); enumerates arbitrary host dirs = host-level read."
+  },
+  {
+    "plugin": "dsh-nano-explorer-extra",
+    "path": "/nano-explorer-extra/perf-review/host",
+    "methods": [
+      "GET"
+    ],
+    "sensitivity": "L2",
+    "capability": "read:host",
+    "bodyLimit": 0,
+    "sessionBinding": false,
+    "justification": "dsh-nano-explorer-extra/src/host/routes.js:400 \u2014 process-global perf reservoir; mode=window drains samples across all plugins/sessions (finding perf-review-window-drain, accepted). Cross-session process state, not session-scoped."
+  },
+  {
+    "plugin": "dsh-nano-explorer-extra",
+    "path": "/nano-explorer-extra/read",
+    "methods": [
+      "POST"
+    ],
+    "sensitivity": "L2",
+    "capability": "read:host",
+    "bodyLimit": 65536,
+    "sessionBinding": true,
+    "justification": "dsh-nano-explorer-extra/src/host/routes.js:412 \u2014 returns any UTF-8 host file up to 1 MiB; client may pass allowOutsideWorkspace:true to skip the fence (finding routes-read-arbitrary-file, accepted). Host-level read."
+  }
+];
+
 // src/host/git.js
 var GIT_TOMBSTONES = [
   "GIT_DIR",
@@ -464,6 +776,10 @@ async function readScopedStatus(ctx, config, request) {
 async function commitAll(ctx, config, request) {
   const { message } = request;
   await runGit(ctx, config, { ...request, args: ["add", "--all"] });
+  const staged = await runGit(ctx, config, { ...request, args: ["diff", "--cached", "--name-only"] });
+  if (String(staged.stdout).split("\n").some((line) => /(?:^|\/)\.git(?:\/|$)/u.test(line.trim()))) {
+    throw new Error("refusing to commit: a .git path entered the index");
+  }
   const committed = await runGit(ctx, config, { ...request, args: ["commit", "--message", message] });
   return firstLine(committed.stdout);
 }
@@ -688,15 +1004,32 @@ function validateName(name2) {
 function sameEntryIgnoringCase(source, destination) {
   return source !== destination && source.toLowerCase() === destination.toLowerCase();
 }
-function assertInside(fs, workspaceRoot, path) {
+function foldRoot(root) {
+  return root.replace(/\\/gu, "/").replace(/\/+$/u, "") || "/";
+}
+async function assertInside(fs, workspaceRoot, path, signal) {
   if (!isLexicallyInside(workspaceRoot, path)) throw new Error(`"${path}" is outside the workspace`);
+  if (isLexicallyInside(`${workspaceRoot.replace(/\/+$/u, "")}/.git`, path) || /\/\.git(?:\/|$)/u.test(path)) {
+    throw new Error("writes inside .git are refused");
+  }
+  const rootTarget = await fs.resolve(workspaceRoot, { signal }).catch((error) => {
+    throw new Error(`cannot verify workspace root \u2014 write refused (${error.message})`);
+  });
+  const pathTarget = await fs.resolve(path, { signal }).catch((error) => {
+    throw new Error(`cannot verify target path \u2014 write refused (${error.message})`);
+  });
+  const realRoot = fs.processPath(rootTarget).replace(/\/+$/u, "");
+  const realPath = fs.processPath(pathTarget);
+  if (/\/\.git(?:\/|$)/u.test(realPath)) throw new Error("writes inside .git are refused");
+  if (!isLexicallyInside(realRoot, realPath)) throw new Error(`"${path}" is outside the workspace`);
 }
 async function createFile(fs, request, signal) {
   const { workspaceRoot, directory, name: name2, sandboxPolicy } = request;
   const finalName = validateName(name2);
   const parent = absoluteOf(workspaceRoot, directory);
-  assertInside(fs, workspaceRoot, parent);
+  await assertInside(fs, workspaceRoot, parent, signal);
   const path = `${parent}/${finalName}`;
+  await assertInside(fs, workspaceRoot, path, signal);
   const target = await fs.resolve(path, { signal });
   try {
     await fs.writeText(target, "", { kind: "createIfAbsent" }, signal, sandboxPolicy);
@@ -709,9 +1042,10 @@ async function rename(fs, ctx, config, request, signal) {
   const { workspaceRoot, path, name: name2, kind, sandboxPolicy, session, runExternal: runExternal2 } = request;
   const finalName = validateName(name2);
   const source = absoluteOf(workspaceRoot, path);
-  assertInside(fs, workspaceRoot, source);
+  await assertInside(fs, workspaceRoot, source, signal);
   const parent = source.slice(0, source.lastIndexOf("/")) || "/";
   const destination = `${parent}/${finalName}`;
+  await assertInside(fs, workspaceRoot, destination, signal);
   if (source === destination) return { path: source };
   const existing = await fs.lstat(destination, {}, signal).catch(() => void 0);
   if (existing !== void 0 && !sameEntryIgnoringCase(source, destination)) {
@@ -758,8 +1092,21 @@ async function createFolder(fs, request, runExternal2) {
   const { workspaceRoot, directory, name: name2, sandboxPolicy, session } = request;
   const finalName = validateName(name2);
   const parent = absoluteOf(workspaceRoot, directory);
-  assertInside(fs, workspaceRoot, parent);
+  await assertInside(
+    fs,
+    workspaceRoot,
+    parent,
+    /* signal */
+    void 0
+  );
   const path = `${parent}/${finalName}`;
+  await assertInside(
+    fs,
+    workspaceRoot,
+    path,
+    /* signal */
+    void 0
+  );
   const existing = await fs.lstat(path).catch(() => void 0);
   if (existing !== void 0) throw new Error(`"${finalName}" already exists in this folder`);
   await runExternal2({ session, sandboxPolicy, cwd: parent, argv: ["mkdir", "--", path], args: ["mkdir"] });
@@ -786,7 +1133,7 @@ async function removeEntry(fs, request, signal) {
   const { workspaceRoot, path, kind, sandboxPolicy, session, runExternal: runExternal2 } = request;
   if (typeof path !== "string" || path.trim() === "") throw new Error("a path is required");
   const target = absoluteOf(workspaceRoot, path);
-  assertInside(fs, workspaceRoot, target);
+  await assertInside(fs, workspaceRoot, target, signal);
   const normalizedRoot = workspaceRoot.replace(/\/+$/u, "");
   const normalizedTarget = target.replace(/\/+$/u, "");
   if (normalizedTarget === normalizedRoot) throw new Error("the workspace root cannot be deleted");
@@ -807,22 +1154,27 @@ async function moveEntry(fs, ctx, config, request, signal) {
   const { workspaceRoot, path, directory, sandboxPolicy, session, runExternal: runExternal2 } = request;
   if (typeof path !== "string" || path.trim() === "") throw new Error("a path is required");
   const source = absoluteOf(workspaceRoot, path).replace(/\/+$/u, "");
-  assertInside(fs, workspaceRoot, source);
+  await assertInside(fs, workspaceRoot, source, signal);
   if (source === workspaceRoot.replace(/\/+$/u, "")) throw new Error("the workspace root cannot be moved");
   const info = await fs.lstat(source, {}, signal).catch(() => void 0);
   if (info === void 0) throw new Error(`"${path}" does not exist`);
   const name2 = source.slice(source.lastIndexOf("/") + 1);
   const sourceParent = source.slice(0, source.lastIndexOf("/")) || "/";
   const destinationDir = absoluteOf(workspaceRoot, typeof directory === "string" ? directory : "");
-  assertInside(fs, workspaceRoot, destinationDir);
+  await assertInside(fs, workspaceRoot, destinationDir, signal);
   const resolvedDirTarget = await fs.resolve(destinationDir, { signal });
   const resolvedDir = fs.processPath(resolvedDirTarget).replace(/\/+$/u, "");
-  if (!isLexicallyInside(workspaceRoot, resolvedDir)) throw new Error(`"${directory}" resolves outside the workspace`);
+  const realRootTarget = await fs.resolve(workspaceRoot, { signal }).catch(() => void 0);
+  const realRoot = realRootTarget === void 0 ? foldRoot(workspaceRoot) : fs.processPath(realRootTarget).replace(/\/+$/u, "");
+  if (/\/\.git(?:\/|$)/u.test(resolvedDir)) throw new Error("writes inside .git are refused");
+  if (!isLexicallyInside(realRoot, resolvedDir)) throw new Error(`"${directory}" resolves outside the workspace`);
   const dirInfo = await fs.stat(resolvedDirTarget, {}, signal).catch(() => void 0);
   if (dirInfo === void 0 || dirInfo === null || dirInfo.type !== "directory") throw new Error(`"${directory}" is not a folder`);
   if (resolvedDir === sourceParent) return { path: source };
   if (isLexicallyInside(source, resolvedDir)) throw new Error("a folder cannot be moved into itself");
   const destination = `${resolvedDir}/${name2}`;
+  if (/\/\.git(?:\/|$)/u.test(destination)) throw new Error("writes inside .git are refused");
+  if (!isLexicallyInside(realRoot, destination)) throw new Error(`"${name2}" would move outside the workspace`);
   const existing = await fs.lstat(destination, {}, signal).catch(() => void 0);
   if (existing !== void 0) throw new Error(`"${name2}" already exists in that folder`);
   await runExternal2({
@@ -896,7 +1248,7 @@ async function jsonBody(req) {
   if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("request body must be a JSON object");
   return parsed;
 }
-function sendJson(res, status, payload) {
+function sendJson2(res, status, payload) {
   res.statusCode = status;
   res.setHeader("content-type", "application/json; charset=utf-8");
   res.setHeader("cache-control", "no-store");
@@ -914,6 +1266,12 @@ async function scopeOf(ctx, sessionId) {
   const livePolicy = live === void 0 ? void 0 : ctx.get("sandboxPolicy")?.resolve({ session: live });
   const policy = livePolicy ?? (root === void 0 ? void 0 : { ...ctx.get("sandboxPolicy")?.resolve({}), workspaceRoot: root });
   if (typeof root !== "string" || root === "") throw new Error("this session has no working directory");
+  const ownRoot = ctx.get("sandboxPolicy")?.workspaceRoot;
+  if (typeof ownRoot === "string" && ownRoot !== "" && root !== ownRoot) {
+    console.warn(`[nxe] scopeOf cross-session: session "${sessionId}" adopted workspace "${root}" (own "${ownRoot}")`);
+  } else if (ownRoot === void 0) {
+    console.info(`[nxe] scopeOf: session "${sessionId}" adopted workspace "${root}" (no host own-root baseline)`);
+  }
   return { session: live, root, policy };
 }
 async function runExternal(ctx, config, request) {
@@ -1009,7 +1367,7 @@ function createRoutes(ctx, config) {
   const fs = () => ctx.fs;
   const external = (request) => runExternal(ctx, config, request);
   const review = ensurePerfReviewHost().hostJoin("nano-explorer-extra", {
-    version: true ? "0.1.1" : void 0,
+    version: true ? "0.2.0" : void 0,
     // This host bundle's own copy of the library version (A3 / §10.4.4).
     libVersion: LIB_VERSION
   });
@@ -1225,34 +1583,19 @@ function createRoutes(ctx, config) {
     }
   };
 }
-function registerRoutes(ctx, routes) {
-  const connection = () => ctx.get("connection");
-  const disposers = [];
-  for (const [suffix, route] of Object.entries(routes)) {
-    disposers.push(ctx.webServer.register({
-      kind: "exact",
-      path: `${PREFIX}${suffix}`,
-      handler: async (req, res) => {
-        const rejection = connection()?.requestRejection(req);
-        if (rejection !== void 0) {
-          res.statusCode = rejection;
-          res.end();
-          return;
-        }
-        if (req.method !== route.method) {
-          res.setHeader("allow", route.method);
-          sendJson(res, 405, { error: `method ${req.method} is not allowed` });
-          return;
-        }
-        try {
-          sendJson(res, 200, await route.run(req));
-        } catch (error) {
-          sendJson(res, 400, { error: messageOf2(error) });
-        }
+function registerRoutes2(ctx, routes) {
+  const specs = Object.entries(routes).map(([suffix, route]) => ({
+    path: `${PREFIX}${suffix}`,
+    methods: [route.method],
+    handler: async (req, res) => {
+      try {
+        sendJson2(res, 200, await route.run(req));
+      } catch (error) {
+        sendJson2(res, 400, { error: messageOf2(error) });
       }
-    }));
-  }
-  return disposers;
+    }
+  }));
+  return registerRoutes(ctx, specs, { table: ROUTE_TABLE, plugin: PLUGIN });
 }
 
 // src/host/entry.js
@@ -1310,7 +1653,7 @@ function apply(ctx, raw) {
   const config = resolved.value;
   const routes = createRoutes(ctx, config);
   ctx.effect(() => {
-    const disposers = registerRoutes(ctx, routes);
+    const disposers = registerRoutes2(ctx, routes);
     return () => {
       for (const dispose of disposers) dispose();
       disposeRootWatchers();

@@ -343,9 +343,426 @@ function createS3Client(config) {
   };
 }
 
+// ../packages/dsh-remote-data-schema/src/reject.js
+var SchemaReject = class extends Error {
+  constructor(reason, detail = "") {
+    super(detail ? `${reason}: ${detail}` : String(reason));
+    this.name = "SchemaReject";
+    this.reason = String(reason);
+  }
+};
+function reject(field, detail = "") {
+  throw new SchemaReject(`schema:${field}`, detail);
+}
+
+// ../packages/dsh-remote-data-schema/src/schema/v1.js
+var MAX_FILE_BYTES = 2 * 1024 * 1024;
+var MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+var MAX_COMMITTED_BYTES = 2 * 1024 * 1024 * 1024;
+var PART_BYTES = 64 * 1024;
+var MAX_DEPTH = 32;
+var SESSION_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
+var WORKSPACE_ID_RE = /^[A-Za-z0-9]{16}$/;
+var MAX_ENTRIES = 1024;
+var MAX_TREE_FILES = 4096;
+var MAX_STRING = 4096;
+var MAX_NAME = 512;
+var MAX_TITLE = 1024;
+var MAX_PARTS = MAX_COMMITTED_BYTES / PART_BYTES;
+var SHA256_RE = /^[0-9a-f]{64}$/;
+var FILE_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
+var INSTANCE_RE = /^[A-Za-z0-9_-]{1,64}$/;
+var PROJECT_DIR_RE = /^--[^\n\r]{0,252}--$/;
+var IMAGE_MIMES = /* @__PURE__ */ new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
+var BASE64_RE = /^[A-Za-z0-9+/]*={0,2}$/;
+var CONTROL_RE = /[\u0000-\u001f\u007f]/;
+var WINDOWS_ABS_RE = /^[A-Za-z]:[\\/]/;
+var FILE_KEY_RE = /^files\/([A-Za-z0-9_-]{1,128})\.md$/;
+var SUPPORTED_KINDS = Object.freeze([
+  "manifest",
+  "file",
+  "image",
+  "marker",
+  "session-meta",
+  "tree-head"
+]);
+var isObj = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
+function assertDepth(value) {
+  const stack = [[value, 0]];
+  while (stack.length) {
+    const [node, depth] = stack.pop();
+    if ((isObj(node) || Array.isArray(node)) && node !== null) {
+      if (depth + 1 > MAX_DEPTH) reject("depth", `nesting exceeds ${MAX_DEPTH}`);
+      for (const child of Object.values(node)) {
+        if (child !== null && typeof child === "object") stack.push([child, depth + 1]);
+      }
+    }
+  }
+}
+function checkKeys(obj, allowed, field) {
+  for (const key of Object.keys(obj)) {
+    if (!allowed.has(key)) reject(field, `unknown field "${key}"`);
+  }
+}
+function needString(value, field, { min = 1, max = MAX_STRING, control = true } = {}) {
+  if (typeof value !== "string" || value.length < min || value.length > max) {
+    reject(field, `${field} must be a ${min}..${max} char string`);
+  }
+  if (control && CONTROL_RE.test(value)) reject(field, `${field} contains a control character`);
+  return value;
+}
+function needInt(value, field, { min = 0, max = Number.MAX_SAFE_INTEGER } = {}) {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < min || value > max) {
+    reject(field, `${field} must be an integer in ${min}..${max}`);
+  }
+  return value;
+}
+function needIso(value, field) {
+  const s = needString(value, field, { min: 1, max: 64 });
+  if (Number.isNaN(Date.parse(s))) reject(field, `${field} is not a parseable timestamp`);
+  return s;
+}
+function needMemberId(value, field) {
+  const s = needString(value, field, { min: 3, max: 128 });
+  const at = s.lastIndexOf("@");
+  if (at <= 0 || at === s.length - 1) reject(field, `${field} is not a member id`);
+  if (s.includes("..") || s.includes("/") || s.includes("\\")) {
+    reject(field, `${field} contains a path segment`);
+  }
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(s.slice(at + 1))) {
+    reject(field, `${field} instance suffix has a bad charset`);
+  }
+  return s;
+}
+function needLocalPath(value, field) {
+  const s = needString(value, field, { min: 1, max: MAX_STRING });
+  const windows = WINDOWS_ABS_RE.test(s);
+  let body;
+  if (s.startsWith("/")) body = s.slice(1);
+  else if (windows) body = s.slice(3);
+  else reject(field, `${field} must be an absolute path`);
+  if (body === "") return s;
+  for (const seg of body.split(s.startsWith("/") ? "/" : /[\\/]/)) {
+    if (seg === ".." || seg === ".") reject(field, `${field} must not contain "${seg}"`);
+    if (seg === "") reject(field, `${field} has an empty segment`);
+  }
+  return s;
+}
+function needRel(value) {
+  const s = needString(value, "rel", { min: 1, max: MAX_STRING });
+  if (s.includes("\\")) reject("rel", 'rel must use "/" separators');
+  if (s.startsWith("/") || WINDOWS_ABS_RE.test(s) || s.includes(":")) {
+    reject("rel", "rel must be a relative path");
+  }
+  for (const seg of s.split("/")) {
+    if (seg === ".." || seg === ".") reject("rel", `rel must not contain "${seg}"`);
+    if (seg === "") reject("rel", "rel has an empty segment");
+  }
+  return s;
+}
+function needBytes(value, field, { max = MAX_FILE_BYTES } = {}) {
+  let bytes;
+  if (typeof value === "string") bytes = Buffer.from(value, "utf8");
+  else if (value instanceof Uint8Array || Buffer.isBuffer(value)) bytes = Buffer.from(value);
+  else reject(field, `${field} must be a string or byte buffer`);
+  if (bytes.byteLength > max) reject(field, `${field} exceeds ${max} bytes`);
+  return bytes;
+}
+function decodeUtf8(bytes, field) {
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    reject(field, `${field} is not valid UTF-8`);
+  }
+}
+function strictBase64(text, field) {
+  const s = needString(text, field, { min: 0, max: Math.ceil((MAX_IMAGE_BYTES + 2) / 3) * 4 });
+  if (!BASE64_RE.test(s) || s.length % 4 !== 0) reject(field, `${field} is not base64`);
+  const bytes = Buffer.from(s, "base64");
+  if (s.length > 0 && bytes.toString("base64") !== s) reject(field, `${field} is not base64`);
+  return bytes;
+}
+var MANIFEST_KEYS = /* @__PURE__ */ new Set(["schemaVersion", "rev", "updatedAt", "files", "images"]);
+var FILE_ENTRY_KEYS = /* @__PURE__ */ new Set(["name", "parentId", "workspaceId", "sha256", "bytes", "updatedAt"]);
+var IMAGE_ENTRY_KEYS = /* @__PURE__ */ new Set(["id", "mime", "byteLength"]);
+function validateManifestEntry(entry) {
+  if (!isObj(entry)) reject("files", "file entry must be an object");
+  checkKeys(entry, FILE_ENTRY_KEYS, "files");
+  const name = needString(entry.name, "name", { min: 1, max: MAX_NAME });
+  if (name.includes("/") || name.includes("\\")) reject("name", "name must not contain a path separator");
+  needString(entry.sha256, "sha256", { min: 64, max: 64 });
+  if (!SHA256_RE.test(entry.sha256)) reject("sha256", "sha256 must be 64 lowercase hex");
+  for (const field of ["parentId", "workspaceId"]) {
+    const v = entry[field];
+    if (v === void 0 || v === null) continue;
+    if (typeof v !== "string" || !FILE_ID_RE.test(v)) reject(field, `${field} must be null or a file id`);
+  }
+  needInt(entry.bytes, "bytes", { min: 0 });
+  needInt(entry.updatedAt, "updatedAt", { min: 0 });
+  return entry;
+}
+function validateImageEntry(entry, sha) {
+  if (!isObj(entry)) reject("images", "image entry must be an object");
+  checkKeys(entry, IMAGE_ENTRY_KEYS, "images");
+  needString(entry.id, "id", { min: 1, max: 128 });
+  if (!FILE_ID_RE.test(entry.id)) reject("id", "image id has a bad charset");
+  if (!IMAGE_MIMES.has(entry.mime)) reject("mime", `unsupported mime "${entry.mime}"`);
+  needInt(entry.byteLength, "byteLength", { min: 0, max: MAX_IMAGE_BYTES });
+  void sha;
+  return entry;
+}
+function validateManifest(obj) {
+  if (!isObj(obj)) reject("manifest", "manifest must be an object");
+  checkKeys(obj, MANIFEST_KEYS, "manifest");
+  if (obj.schemaVersion !== void 0 && obj.schemaVersion !== 1) {
+    reject("schemaVersion", "schemaVersion must be 1");
+  }
+  needInt(obj.rev, "rev", { min: 0 });
+  needIso(obj.updatedAt, "updatedAt");
+  for (const field of ["files", "images"]) {
+    if (!isObj(obj[field])) reject(field, `${field} must be an object`);
+    if (Object.keys(obj[field]).length > MAX_ENTRIES) reject(field, `${field} has too many entries`);
+  }
+  for (const [id, entry] of Object.entries(obj.files)) {
+    if (!FILE_ID_RE.test(id) || id.includes("..")) reject("files", `file id "${id}" has a bad charset`);
+    validateManifestEntry(entry);
+  }
+  for (const [sha, entry] of Object.entries(obj.images)) {
+    if (!SHA256_RE.test(sha)) reject("images", `image key "${sha}" is not a sha256`);
+    validateImageEntry(entry, sha);
+  }
+  return { ok: true };
+}
+function validateFile(obj, ctx) {
+  const { key, id, manifest } = ctx ?? {};
+  let content = obj;
+  let localId = id;
+  let localKey = key;
+  if (isObj(obj) && !(obj instanceof Uint8Array)) {
+    checkKeys(obj, /* @__PURE__ */ new Set(["content", "id", "key"]), "file");
+    if (obj.id !== void 0) localId = obj.id;
+    if (obj.key !== void 0) localKey = obj.key;
+    content = obj.content;
+  }
+  if (localKey !== void 0) {
+    if (typeof localKey !== "string" || localKey.length > 512) reject("key", "key must be a \u2264512 char string");
+    const match = FILE_KEY_RE.exec(localKey);
+    if (match === null) reject("key", `key "${localKey}" is not files/<id>.md`);
+    if (localId !== void 0 && localId !== match[1]) reject("id", "id does not match the key");
+    localId = match[1];
+  }
+  if (localId !== void 0 && (typeof localId !== "string" || !FILE_ID_RE.test(localId) || localId.includes(".."))) {
+    reject("id", `file id "${localId}" has a bad charset`);
+  }
+  if (manifest !== void 0) {
+    if (!isObj(manifest.files)) reject("manifest", "manifest has no files index");
+    if (localId === void 0 || !Object.hasOwn(manifest.files, localId)) {
+      reject("id", "file id is not listed in the manifest");
+    }
+  }
+  const bytes = needBytes(content, "content", { max: MAX_FILE_BYTES });
+  decodeUtf8(bytes, "content");
+  return { ok: true };
+}
+var IMAGE_KEYS = /* @__PURE__ */ new Set(["mime", "base64"]);
+function validateImage(obj) {
+  if (!isObj(obj)) reject("image", "image must be an object");
+  checkKeys(obj, IMAGE_KEYS, "image");
+  if (!IMAGE_MIMES.has(obj.mime)) reject("mime", `unsupported mime "${obj.mime}"`);
+  const bytes = strictBase64(obj.base64, "base64");
+  if (bytes.byteLength > MAX_IMAGE_BYTES) reject("base64", `image exceeds ${MAX_IMAGE_BYTES} bytes`);
+  return { ok: true };
+}
+var MARKER_KEYS = /* @__PURE__ */ new Set(["v", "workspaceId", "title", "pathHint", "createdAt", "createdBy", "members"]);
+var MEMBER_KEYS = /* @__PURE__ */ new Set(["username", "instance", "localPath", "joinedAt"]);
+function validateMarker(obj) {
+  if (!isObj(obj)) reject("marker", "marker must be an object");
+  checkKeys(obj, MARKER_KEYS, "marker");
+  if (obj.v !== 1) reject("v", "marker v must be 1");
+  const workspaceId = needString(obj.workspaceId, "workspaceId", { min: 16, max: 16 });
+  if (!WORKSPACE_ID_RE.test(workspaceId)) reject("workspaceId", "workspaceId must be 16 alphanumerics");
+  needString(obj.title, "title", { min: 0, max: MAX_TITLE });
+  needString(obj.pathHint, "pathHint", { min: 0, max: MAX_STRING });
+  needIso(obj.createdAt, "createdAt");
+  needMemberId(obj.createdBy, "createdBy");
+  if (!isObj(obj.members)) reject("members", "members must be an object");
+  const ids = Object.keys(obj.members);
+  if (ids.length === 0) reject("members", "members must not be empty");
+  if (ids.length > MAX_ENTRIES) reject("members", "members has too many entries");
+  for (const [memberId, member] of ids.map((id) => [id, obj.members[id]])) {
+    needMemberId(memberId, "members");
+    if (!isObj(member)) reject("members", `member "${memberId}" must be an object`);
+    checkKeys(member, MEMBER_KEYS, "members");
+    needString(member.username, "username", { min: 1, max: 128 });
+    needString(member.instance, "instance", { min: 1, max: 64 });
+    if (!INSTANCE_RE.test(member.instance)) reject("instance", "instance has a bad charset");
+    needLocalPath(member.localPath, "localPath");
+    needIso(member.joinedAt, "joinedAt");
+  }
+  return { ok: true };
+}
+var SESSION_META_KEYS = /* @__PURE__ */ new Set([
+  "v",
+  "sessionId",
+  "writerId",
+  "writerName",
+  "rev",
+  "formatVersion",
+  "committedBytes",
+  "uncompressedSeqBytes",
+  "eventCount",
+  "title",
+  "projectDir",
+  "cwd",
+  "createdAt",
+  "mtime",
+  "deleted",
+  "attachmentRefs",
+  "parts"
+  // optional: writers do not emit it; consumers may pass part sizes
+]);
+function validatePartSizes(parts, committedBytes) {
+  if (!Array.isArray(parts)) reject("parts", "parts must be an array of byte sizes");
+  const max = Math.ceil(committedBytes / PART_BYTES);
+  if (parts.length > max) reject("parts", `parts exceed ceil(committedBytes/${PART_BYTES})`);
+  if (parts.length > MAX_PARTS) reject("parts", "too many parts");
+  for (const size of parts) needInt(size, "parts", { min: 0, max: PART_BYTES });
+}
+function validateSessionMeta(obj, ctx) {
+  if (!isObj(obj)) reject("session-meta", "session meta must be an object");
+  checkKeys(obj, SESSION_META_KEYS, "session-meta");
+  if (obj.v !== 1) reject("v", "session meta v must be 1");
+  const sessionId = needString(obj.sessionId, "sessionId", { min: 1, max: 128 });
+  if (!SESSION_ID_RE.test(sessionId)) reject("sessionId", "sessionId has a bad charset");
+  needMemberId(obj.writerId, "writerId");
+  needString(obj.writerName, "writerName", { min: 1, max: 128 });
+  needInt(obj.rev, "rev", { min: 0 });
+  needInt(obj.formatVersion, "formatVersion", { min: 1, max: 4 });
+  needInt(obj.committedBytes, "committedBytes", { min: 0, max: MAX_COMMITTED_BYTES });
+  needInt(obj.uncompressedSeqBytes, "uncompressedSeqBytes", { min: 0 });
+  needInt(obj.eventCount, "eventCount", { min: 0 });
+  needString(obj.title, "title", { min: 0, max: MAX_TITLE });
+  const projectDir = needString(obj.projectDir, "projectDir", { min: 2, max: 255 });
+  if (!PROJECT_DIR_RE.test(projectDir)) reject("projectDir", "projectDir must be the --slug-- key form");
+  needString(obj.cwd, "cwd", { min: 1, max: MAX_STRING });
+  needIso(obj.createdAt, "createdAt");
+  needIso(obj.mtime, "mtime");
+  if (typeof obj.deleted !== "boolean") reject("deleted", "deleted must be a boolean");
+  if (!Array.isArray(obj.attachmentRefs)) reject("attachmentRefs", "attachmentRefs must be an array");
+  if (obj.attachmentRefs.length > MAX_ENTRIES) reject("attachmentRefs", "too many attachment refs");
+  for (const ref of obj.attachmentRefs) {
+    if (!isObj(ref) && !(typeof ref === "string" && ref.length <= 512)) {
+      reject("attachmentRefs", "attachment ref must be an object or a short string");
+    }
+  }
+  if (obj.parts !== void 0) validatePartSizes(obj.parts, obj.committedBytes);
+  if (ctx?.parts !== void 0) validatePartSizes(ctx.parts, obj.committedBytes);
+  return { ok: true };
+}
+var TREE_HEAD_KEYS = /* @__PURE__ */ new Set(["v", "generation", "parent", "writerId", "files", "conflicts", "at"]);
+var TREE_FILE_KEYS = /* @__PURE__ */ new Set(["rel", "sha256", "size"]);
+function validateTreeHead(obj) {
+  if (!isObj(obj)) reject("tree-head", "tree head must be an object");
+  checkKeys(obj, TREE_HEAD_KEYS, "tree-head");
+  if (obj.v !== 1) reject("v", "tree head v must be 1");
+  needInt(obj.generation, "generation", { min: 0 });
+  if (obj.parent !== null) needInt(obj.parent, "parent", { min: 0 });
+  needMemberId(obj.writerId, "writerId");
+  if (!Array.isArray(obj.files)) reject("files", "files must be an array");
+  if (obj.files.length > MAX_TREE_FILES) reject("files", "too many files");
+  for (const file of obj.files) {
+    if (!isObj(file)) reject("files", "file row must be an object");
+    checkKeys(file, TREE_FILE_KEYS, "files");
+    needRel(file.rel);
+    needString(file.sha256, "sha256", { min: 64, max: 64 });
+    if (!SHA256_RE.test(file.sha256)) reject("sha256", "sha256 must be 64 lowercase hex");
+    needInt(file.size, "size", { min: 0, max: MAX_FILE_BYTES });
+  }
+  if (!Array.isArray(obj.conflicts)) reject("conflicts", "conflicts must be an array");
+  for (const rel of obj.conflicts) needRel(rel);
+  needIso(obj.at, "at");
+  return { ok: true };
+}
+var KIND_VALIDATORS = {
+  manifest: validateManifest,
+  file: validateFile,
+  image: validateImage,
+  marker: validateMarker,
+  "session-meta": validateSessionMeta,
+  "tree-head": validateTreeHead
+};
+function validateV1(kind, obj, ctx) {
+  if (!SUPPORTED_KINDS.includes(kind)) {
+    throw new SchemaReject("schema:kind", `unknown kind "${kind}"`);
+  }
+  assertDepth(obj);
+  return KIND_VALIDATORS[kind](obj, ctx);
+}
+
+// ../packages/dsh-remote-data-schema/src/schema/v0.js
+function validateV0(kind, obj) {
+  if (!SUPPORTED_KINDS.includes(kind)) {
+    throw new SchemaReject("schema:kind", `unknown kind "${kind}"`);
+  }
+  if (kind !== "manifest") {
+    throw new SchemaReject("schema:v", `${kind} does not accept schema version 0`);
+  }
+  assertDepth(obj);
+  return { ok: true, compat: "v0-backfill" };
+}
+
+// ../packages/dsh-remote-data-schema/src/index.js
+var VALIDATORS = {
+  1: validateV1,
+  0: validateV0
+};
+var UNVERSIONED_DEFAULT = { manifest: 0, file: 1, image: 1, marker: 1, "session-meta": 1, "tree-head": 1 };
+var V0_KINDS = /* @__PURE__ */ new Set(["manifest"]);
+function detectVersion(kind, obj) {
+  if (obj && typeof obj === "object") {
+    if (typeof obj.schemaVersion === "number") return obj.schemaVersion;
+    if (typeof obj.v === "number") return obj.v;
+  }
+  return UNVERSIONED_DEFAULT[kind] ?? 0;
+}
+function validate(kind, obj, { v, context } = {}) {
+  if (typeof kind !== "string" || !SUPPORTED_KINDS.includes(kind)) {
+    throw new SchemaReject("schema:kind", `unknown kind "${kind}"`);
+  }
+  const version = v ?? detectVersion(kind, obj);
+  const run = VALIDATORS[version];
+  if (!run) {
+    throw new SchemaReject("schema:unknown-version", `${kind} schema version ${version}`);
+  }
+  if (version === 0 && !V0_KINDS.has(kind)) {
+    throw new SchemaReject("schema:v", `${kind} does not accept schema version 0`);
+  }
+  const result = run(kind, obj, context);
+  return { v: version, ...result };
+}
+
 // src/host/s3-sync.js
 var LIMITS = { rps: 10, burst: 20, kbps: 512, concurrency: 2 };
 var STORE_VERSION = 1;
+var FILE_KEY_SCHEMA_RE = /^files\/([A-Za-z0-9_-]{1,128})\.md$/;
+var IMAGE_KEY_SCHEMA_RE = /^images\/([0-9a-f]{64})$/;
+function kindOfKey(key) {
+  if (key === "manifest.json") return "manifest";
+  if (FILE_KEY_SCHEMA_RE.test(key)) return "file";
+  if (IMAGE_KEY_SCHEMA_RE.test(key)) return "image";
+  return null;
+}
+function validateRemoteBody(kind, key, body, { v } = {}) {
+  let payload = body;
+  if (kind === "manifest" || kind === "image") {
+    try {
+      payload = JSON.parse(Buffer.from(body).toString("utf8"));
+    } catch (error) {
+      throw new SchemaReject(`schema:${kind}`, `body is not valid JSON: ${messageOf(error)}`);
+    }
+  }
+  validate(kind, payload, { v, context: { key } });
+}
 function messageOf(value) {
   return value instanceof Error ? value.message : String(value);
 }
@@ -590,11 +1007,13 @@ function buildEngine(profile, ledgerFile) {
       if (!client) throw new Error("s3 client is not configured");
       if (op !== "list" && (typeof key !== "string" || key.length > 512 || key.includes(".."))) throw new Error("invalid object key");
       if (under && (typeof under !== "string" || under.length > 512 || under.includes(".."))) throw new Error("invalid under prefix");
+      const kind = op === "put" || op === "get" ? kindOfKey(key) : null;
       try {
         switch (op) {
           case "put": {
             if (typeof bodyB64 !== "string") throw new Error("put requires bodyB64");
             const body = Buffer.from(bodyB64, "base64");
+            if (kind) validateRemoteBody(kind, key, body, { v: 1 });
             const out = await client.putObject(key, body, { contentType, ifMatch });
             stats.put += 1;
             stats.bytesUp += body.length;
@@ -609,6 +1028,7 @@ function buildEngine(profile, ledgerFile) {
               return null;
             }
             stats.bytesDown += got.body.byteLength;
+            if (kind) validateRemoteBody(kind, key, got.body);
             succeed();
             return { bodyB64: Buffer.from(got.body).toString("base64"), etag: got.etag, contentType: got.contentType };
           }
@@ -638,6 +1058,10 @@ function buildEngine(profile, ledgerFile) {
             throw new Error(`unknown s3 op: ${op}`);
         }
       } catch (error) {
+        if (error instanceof SchemaReject) {
+          lastError = error.message;
+          return { ok: false, reason: error.reason };
+        }
         fail(error);
       }
     }
@@ -653,7 +1077,9 @@ async function probeProfile(profile) {
     if (!tested.ok) return { ok: false, reason: "unreachable", message: tested.message || "connectivity probe failed" };
     const got = await probe.object({ op: "get", key: "manifest.json" });
     let manifest = null;
-    if (got?.bodyB64) {
+    if (got?.ok === false) {
+      manifest = { rev: 0, updatedAt: null, files: [], images: 0, corrupt: true, reason: got.reason };
+    } else if (got?.bodyB64) {
       try {
         const parsed = JSON.parse(Buffer.from(got.bodyB64, "base64").toString("utf8"));
         manifest = {

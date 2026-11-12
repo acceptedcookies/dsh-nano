@@ -150,12 +150,18 @@ export function createS3(config, identity) {
       if (!res.ok) throw new Error(`S3 GET ${key} failed: HTTP ${res.status}`)
       return Buffer.from(await res.arrayBuffer())
     },
-    /** GET one object; `undefined` when 404. */
-    async getJson(key) {
+    /**
+     * GET one object; `undefined` when 404.
+     * `opts.withMeta: true` returns `{value, etag}` instead of the bare value
+     * — the etag is the CAS token `putJson(key, v, {ifMatch: etag})` consumes
+     * (P2-04 claim read-modify-write).
+     */
+    async getJson(key, opts) {
       const res = await request(config, keys, 'GET', `${bucketPath(config)}/${key}`)
       if (res.status === 404) return undefined
       if (!res.ok) throw new Error(`S3 GET ${key} failed: HTTP ${res.status}`)
-      return res.json()
+      const value = await res.json()
+      return opts?.withMeta === true ? { value, etag: res.headers.get('etag') ?? undefined } : value
     },
     /** DELETE one object; 204/404 both mean "gone". */
     async del(key) {

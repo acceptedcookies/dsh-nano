@@ -13,9 +13,58 @@
 import { existsSync, readFileSync, writeFileSync, chmodSync, mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { createS3Client } from 'dsh-s3-client/client'
+import { validate, SchemaReject } from 'dsh-remote-data-schema'
 
 const LIMITS = { rps: 10, burst: 20, kbps: 512, concurrency: 2 }
 const STORE_VERSION = 1
+
+/* Remote-data schema (P2-02 / T-O-8): dsh-remote-data-schema is a devDependency
+   bundled into lib/s3-sync-host.js, so only this source carries the bare
+   import — never index.js and never a lib/ artifact (T-O-13, no schema-shim).
+
+   Known-key layout the client sync writes (src/client/sync.js):
+     manifest.json              manifest object
+     files/<id>.md              raw UTF-8 draft bytes
+     images/<sha256>            JSON {mime, base64}
+   The put/get validation is deliberately ASYMMETRIC:
+     - get (ingress — the security contract): a known key's decoded body is
+       validated before it is returned to the client; a malformed remote
+       object is rejected ({ok:false, reason:'schema:<field>'}), never handed
+       out. manifest auto-detects v0 vs v1 so historical buckets keep reading
+       (v0 → compat:'v0-backfill'); file/image have no v0 form.
+     - put (egress): a known key's body is validated BEFORE putObject — a
+       client-side bug writes no malformed remote data. The manifest is forced
+       through the v1 rules (writes are always v1 even when the object carries
+       no schemaVersion discriminant). Unknown keys still write/read freely
+       (T-O-3: no narrowing of the existing write capability). */
+const FILE_KEY_SCHEMA_RE = /^files\/([A-Za-z0-9_-]{1,128})\.md$/
+const IMAGE_KEY_SCHEMA_RE = /^images\/([0-9a-f]{64})$/
+
+/** Map an object key to its schema kind; unknown shapes return null. */
+function kindOfKey(key) {
+  if (key === 'manifest.json') return 'manifest'
+  if (FILE_KEY_SCHEMA_RE.test(key)) return 'file'
+  if (IMAGE_KEY_SCHEMA_RE.test(key)) return 'image'
+  return null
+}
+
+/**
+ * Decode + validate one remote object body for a known key.
+ * manifest/image bodies are JSON; file bodies are raw UTF-8 bytes.
+ * `v:1` forces the write-side rules; reads rely on version detection so a v0
+ * manifest stays readable. Throws SchemaReject('schema:<field>').
+ */
+function validateRemoteBody(kind, key, body, { v } = {}) {
+  let payload = body
+  if (kind === 'manifest' || kind === 'image') {
+    /* body is a Buffer on the put path but a Uint8Array from getObject —
+       Buffer.from() normalizes both (a plain Uint8Array's toString() does
+       NOT decode UTF-8). */
+    try { payload = JSON.parse(Buffer.from(body).toString('utf8')) }
+    catch (error) { throw new SchemaReject(`schema:${kind}`, `body is not valid JSON: ${messageOf(error)}`) }
+  }
+  validate(kind, payload, { v, context: { key } })
+}
 
 function messageOf(value) { return value instanceof Error ? value.message : String(value) }
 
@@ -232,11 +281,15 @@ function buildEngine(profile, ledgerFile) {
       if (!client) throw new Error('s3 client is not configured')
       if (op !== 'list' && (typeof key !== 'string' || key.length > 512 || key.includes('..'))) throw new Error('invalid object key')
       if (under && (typeof under !== 'string' || under.length > 512 || under.includes('..'))) throw new Error('invalid under prefix')
+      const kind = op === 'put' || op === 'get' ? kindOfKey(key) : null
       try {
         switch (op) {
           case 'put': {
             if (typeof bodyB64 !== 'string') throw new Error('put requires bodyB64')
             const body = Buffer.from(bodyB64, 'base64')
+            /* Egress: a known key's body must satisfy its schema before it is
+               uploaded (v1 write rules); unknown keys pass through untouched. */
+            if (kind) validateRemoteBody(kind, key, body, { v: 1 })
             const out = await client.putObject(key, body, { contentType, ifMatch })
             stats.put += 1; stats.bytesUp += body.length
             succeed(); return out
@@ -246,6 +299,8 @@ function buildEngine(profile, ledgerFile) {
             stats.get += 1
             if (!got) { succeed(); return null }
             stats.bytesDown += got.body.byteLength
+            /* Ingress: a malformed remote object is rejected, never delivered. */
+            if (kind) validateRemoteBody(kind, key, got.body)
             succeed()
             return { bodyB64: Buffer.from(got.body).toString('base64'), etag: got.etag, contentType: got.contentType }
           }
@@ -262,7 +317,12 @@ function buildEngine(profile, ledgerFile) {
           }
           default: throw new Error(`unknown s3 op: ${op}`)
         }
-      } catch (error) { fail(error) }
+      } catch (error) {
+        /* SchemaReject surfaces its own `schema:<field>` reason instead of the
+           generic 'failed' — that reason is the route-level contract. */
+        if (error instanceof SchemaReject) { lastError = error.message; return { ok: false, reason: error.reason } }
+        fail(error)
+      }
     },
   }
 }
@@ -278,7 +338,11 @@ async function probeProfile(profile) {
     if (!tested.ok) return { ok: false, reason: 'unreachable', message: tested.message || 'connectivity probe failed' }
     const got = await probe.object({ op: 'get', key: 'manifest.json' })
     let manifest = null
-    if (got?.bodyB64) {
+    if (got?.ok === false) {
+      /* The remote manifest failed schema validation: surface the existing
+         corrupt-marker so the UI refuses to treat the bucket as empty. */
+      manifest = { rev: 0, updatedAt: null, files: [], images: 0, corrupt: true, reason: got.reason }
+    } else if (got?.bodyB64) {
       try {
         const parsed = JSON.parse(Buffer.from(got.bodyB64, 'base64').toString('utf8'))
         manifest = {

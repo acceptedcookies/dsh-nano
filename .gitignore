@@ -41,8 +41,15 @@ tmp/
 temp/
 *.tmp
 
-# All context directories at any depth (reference material)
+# All context directories at any depth (reference material).
+# `context` without a slash also covers a symlink of that name; `context/` does not.
+context
 context/
+
+# Grok agent credentials staged into a workspace by the imagine engine — never
+# commit. Belt-and-suspenders with nsw SKIP (tree.js) so `imagine/.grok/` can't
+# be pushed to the shared bucket either. (P4-04)
+imagine/.grok/
 
 # Local environment setup doc (machine-specific)
 .local-dsh-setup.md
@@ -75,3 +82,7 @@ lab/out/
 .anote
 .output
 .temp
+
+# 开发工作树 dev worktree
+.worktree/
+

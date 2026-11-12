@@ -3,6 +3,9 @@
 import { readFileSync } from 'node:fs'
 import { ensurePerfReviewHost, LIB_VERSION } from './lib/perf-review-host.js'
 import { createSyncEngine } from './lib/s3-sync-host.js'
+import { registerRoutes } from './lib/route-guard.js'
+import { ROUTE_TABLE, PLUGIN } from './lib/route-table.js'
+import { sanitizeMpHtml } from './lib/mp-sanitize.js'
 
 export const name = 'nano-notepad'
 export const inject = ['webServer', 'connection', 'subprocess']
@@ -65,12 +68,15 @@ const S3_TEST_ROUTE = '/nano-notepad/s3/test'
 const S3_OBJECT_ROUTE = '/nano-notepad/s3/object'
 const S3_CONFIG_ROUTE = '/nano-notepad/s3/config'
 const MP_MAX_HTML_BYTES = 8 * 1024 * 1024
+const MP_MAX_REDIRECTS = 5
 const MP_TIMEOUT_MS = 20000
 const MP_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 MicroMessenger/8.0.40'
 const MAX_READ_BYTES = 2 * 1024 * 1024
 const MAX_SAVE_BYTES = 8 * 1024 * 1024
 /* Images may be up to 20 MB; base64 expands them by ~4/3, so the S3 proxy
-   needs a larger envelope than the native save dialog. */
+   needs a larger envelope than the native save dialog. Routes now read their
+   cap from the baked route table (route.bodyLimit); this constant stays the
+   scanner's code truth for the S3 rows (scripts/route-scan.mjs). */
 const MAX_S3_BODY_BYTES = 32 * 1024 * 1024
 const DIALOG_TIMEOUT_MS = 600000
 const MAX_NAME_BYTES = 512
@@ -231,119 +237,142 @@ async function readMarkdown(filePath) {
 
 /** @param {import('@deepseek-ai/cordis').Context} ctx */
 export function apply(ctx) {
-  ctx.effect(() => ctx.webServer.register({
-    kind: 'exact',
-    path: READ_ROUTE,
-    handler: async (req, res) => {
-      const rejection = ctx.get('connection')?.requestRejection(req)
-      if (rejection !== undefined) { res.statusCode = rejection; res.end(); return }
-      if (req.method !== 'POST') { res.setHeader('allow', 'POST'); sendJson(res, 405, { ok: false, reason: 'method' }); return }
-      try {
-        const body = await jsonBody(req)
-        // perf-review: time the read route's actual work (§6.7 hostSpan read).
-        const file = await review.hostSpan('read', () => readMarkdown(body.path))
-        sendJson(res, 200, { ok: true, ...file })
-      } catch (error) {
-        sendJson(res, 500, { ok: false, reason: 'failed', message: messageOf(error).slice(0, 200) })
-      }
-    },
-  }), 'nano-notepad: read markdown')
-  ctx.effect(() => ctx.webServer.register({
-    kind: 'exact',
-    path: SAVE_ROUTE,
-    handler: async (req, res) => {
-      // Every write-capable route sits behind the connection's request admission
-      // (Host/Origin fence + authenticated Peer); without it any web page or LAN
-      // client could drive the native save dialog (review-01 R1).
-      const rejection = ctx.get('connection')?.requestRejection(req)
-      if (rejection !== undefined) { res.statusCode = rejection; res.end(); return }
-      if (req.method !== 'POST') { res.setHeader('allow', 'POST'); sendJson(res, 405, { ok: false, reason: 'method' }); return }
-      const type = String(req.headers['content-type'] ?? '')
-      if (!type.toLowerCase().startsWith('application/json')) { sendJson(res, 415, { ok: false, reason: 'content-type' }); return }
-      try {
-        const body = await jsonBody(req)
-        // perf-review: time the save route's actual work (§6.7 hostSpan save).
-        const result = await review.hostSpan('save', () => nativeSave(ctx, { name: body.name, content: body.content, dir: body.dir }))
-        sendJson(res, result.ok ? 200 : result.reason === 'cancelled' ? 200 : 500, result)
-      } catch (error) {
-        sendJson(res, 500, { ok: false, reason: 'failed', message: messageOf(error).slice(0, 200) })
-      }
-    },
-  }), 'nano-notepad: save route')
+  /* Every route registers through dsh-host-route-guard (P1-05 / T-O-7): the
+     guard owns requestRejection (Host/Origin fence + authenticated Peer, so
+     no web page or LAN client can drive the native save dialog) and the
+     uniform 405. Handlers keep their exact response work; only registration
+     moved. `route.bodyLimit` carries the baked per-route byte cap. */
 
-  ctx.effect(() => ctx.webServer.register({
-    kind: 'exact',
-    path: MP_ROUTE,
-    handler: async (req, res) => {
-      const rejection = ctx.get('connection')?.requestRejection(req)
-      if (rejection !== undefined) { res.statusCode = rejection; res.end(); return }
-      if (req.method !== 'POST') { res.setHeader('allow', 'POST'); sendJson(res, 405, { ok: false, reason: 'method' }); return }
-      const type = String(req.headers['content-type'] ?? '')
-      if (!type.toLowerCase().startsWith('application/json')) { sendJson(res, 415, { ok: false, reason: 'content-type' }); return }
-      try {
-        const body = await jsonBody(req)
-        const result = await fetchMpArticle(body.url)
-        sendJson(res, result.ok ? 200 : 422, result)
-      } catch (error) {
-        sendJson(res, 500, { ok: false, reason: 'failed', message: messageOf(error).slice(0, 200) })
-      }
-    },
-  }), 'nano-notepad: fetch-mp route')
-
-  /* S3 sync: the host is a signed proxy — credentials never reach the browser.
-     All three routes sit behind connection.requestRejection (Host/Origin fence
-     + authenticated Peer), same as the save route. */
+  /* S3 sync: the host is a signed proxy — credentials never reach the browser. */
   const s3 = createSyncEngine()
-  const s3Route = (path, label, work) => ctx.effect(() => ctx.webServer.register({
-    kind: 'exact',
-    path,
-    handler: async (req, res) => {
-      const rejection = ctx.get('connection')?.requestRejection(req)
-      if (rejection !== undefined) { res.statusCode = rejection; res.end(); return }
-      if (req.method !== 'POST') { res.setHeader('allow', 'POST'); sendJson(res, 405, { ok: false, reason: 'method' }); return }
-      try {
-        const body = await jsonBody(req, MAX_S3_BODY_BYTES)
-        const result = await work(body)
-        /* A missing object is a legitimate `null` result — do not coerce it
-           into a truthy object, or the client tries to base64-decode it. */
-        sendJson(res, 200, result === undefined ? { ok: true } : result)
-      } catch (error) {
-        sendJson(res, 500, { ok: false, reason: 'failed', message: messageOf(error).slice(0, 200) })
-      }
-    },
-  }), label)
+  const s3Work = work => async (req, res, route) => {
+    try {
+      const body = await jsonBody(req, route.bodyLimit)
+      const result = await work(body)
+      /* A missing object is a legitimate `null` result — do not coerce it
+         into a truthy object, or the client tries to base64-decode it. */
+      sendJson(res, 200, result === undefined ? { ok: true } : result)
+    } catch (error) {
+      sendJson(res, 500, { ok: false, reason: 'failed', message: messageOf(error).slice(0, 200) })
+    }
+  }
 
-  s3Route(S3_STATUS_ROUTE, 'nano-notepad: s3 status', () => s3.status())
-  s3Route(S3_TEST_ROUTE, 'nano-notepad: s3 test', () => s3.test())
-  s3Route(S3_OBJECT_ROUTE, 'nano-notepad: s3 object', body => s3.object(body))
-  /* Multi-endpoint config + the guarded switch handshake. Secrets are
-     write-only: `list` returns hasSecret, never the key material. */
-  s3Route(S3_CONFIG_ROUTE, 'nano-notepad: s3 config', body => s3.config(body))
+  const SPECS = [
+    {
+      path: READ_ROUTE,
+      methods: ['POST'],
+      handler: async (req, res, route) => {
+        try {
+          const body = await jsonBody(req, route.bodyLimit)
+          // perf-review: time the read route's actual work (§6.7 hostSpan read).
+          const file = await review.hostSpan('read', () => readMarkdown(body.path))
+          sendJson(res, 200, { ok: true, ...file })
+        } catch (error) {
+          sendJson(res, 500, { ok: false, reason: 'failed', message: messageOf(error).slice(0, 200) })
+        }
+      },
+    },
+    {
+      path: SAVE_ROUTE,
+      methods: ['POST'],
+      handler: async (req, res, route) => {
+        const type = String(req.headers['content-type'] ?? '')
+        if (!type.toLowerCase().startsWith('application/json')) { sendJson(res, 415, { ok: false, reason: 'content-type' }); return }
+        try {
+          const body = await jsonBody(req, route.bodyLimit)
+          // perf-review: time the save route's actual work (§6.7 hostSpan save).
+          const result = await review.hostSpan('save', () => nativeSave(ctx, { name: body.name, content: body.content, dir: body.dir }))
+          sendJson(res, result.ok ? 200 : result.reason === 'cancelled' ? 200 : 500, result)
+        } catch (error) {
+          sendJson(res, 500, { ok: false, reason: 'failed', message: messageOf(error).slice(0, 200) })
+        }
+      },
+    },
+    {
+      path: MP_ROUTE,
+      methods: ['POST'],
+      handler: async (req, res, route) => {
+        const type = String(req.headers['content-type'] ?? '')
+        if (!type.toLowerCase().startsWith('application/json')) { sendJson(res, 415, { ok: false, reason: 'content-type' }); return }
+        try {
+          const body = await jsonBody(req, route.bodyLimit)
+          const result = await fetchMpArticle(body.url)
+          sendJson(res, result.ok ? 200 : 422, result)
+        } catch (error) {
+          sendJson(res, 500, { ok: false, reason: 'failed', message: messageOf(error).slice(0, 200) })
+        }
+      },
+    },
+    { path: S3_STATUS_ROUTE, methods: ['POST'], handler: s3Work(() => s3.status()) },
+    { path: S3_TEST_ROUTE, methods: ['POST'], handler: s3Work(() => s3.test()) },
+    { path: S3_OBJECT_ROUTE, methods: ['POST'], handler: s3Work(body => s3.object(body)) },
+    /* Multi-endpoint config + the guarded switch handshake. Secrets are
+       write-only: `list` returns hasSecret, never the key material. */
+    { path: S3_CONFIG_ROUTE, methods: ['POST'], handler: s3Work(body => s3.config(body)) },
+  ]
+
+  registerRoutes(ctx, SPECS, { table: ROUTE_TABLE, plugin: PLUGIN })
 }
 
 /* ---------- WeChat MP article fetch ---------- */
+
+/**
+ * The mp allowlist gate, shared by the initial request and every redirect
+ * hop (P2-07 / fetch-mp-redirect-ssrf): scheme-pinned https, literal host
+ * `mp.weixin.qq.com`, article path `/s/…`. Applied to the raw input string
+ * and to each resolved `Location` target — `new URL(loc, base)` already
+ * normalizes relative targets, `//host` protocol-relative ones, and
+ * case/trailing-dot quirks, so any hop that escapes the gate is rejected
+ * before its request is ever issued.
+ */
+function allowedMpTarget(url) {
+  return typeof url === 'string' && /^https:\/\/mp\.weixin\.qq\.com\/s\//.test(url.trim())
+}
 
 /**
  * A pasted mp.weixin.qq.com link can't be fetched from the page (CORS), so the
  * host pulls it. A desktop/WeChat-less UA gets the anti-scrape verify page
  * (~18KB, no js_content); the iPhone+MicroMessenger UA gets the full article.
  * Non-article or verify-page responses surface as `reason:'not-article'`.
+ *
+ * Redirects are followed manually (redirect:'manual') and EVERY hop's target
+ * is re-validated against the mp allowlist before fetching — a 30x can no
+ * longer borrow the allowlisted origin to reach a loopback/LAN/metadata
+ * endpoint (P2-07; the cap, timeout, size limit and UA are unchanged).
  */
-async function fetchMpArticle(url) {
-  if (typeof url !== 'string' || !/^https:\/\/mp\.weixin\.qq\.com\/s\//.test(url.trim())) {
+export async function fetchMpArticle(url) {
+  if (!allowedMpTarget(url)) {
     return { ok: false, reason: 'not-mp-url' }
   }
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), MP_TIMEOUT_MS)
   let html = ''
   try {
-    const response = await fetch(url.trim(), {
-      headers: { 'user-agent': MP_UA, 'accept': 'text/html,application/xhtml+xml' },
-      signal: controller.signal,
-      redirect: 'follow',
-    })
-    if (!response.ok) return { ok: false, reason: 'fetch-failed', status: response.status }
-    html = await response.text()
+    let target = url.trim()
+    for (let redirects = 0; ; redirects++) {
+      const response = await fetch(target, {
+        headers: { 'user-agent': MP_UA, 'accept': 'text/html,application/xhtml+xml' },
+        signal: controller.signal,
+        redirect: 'manual',
+      })
+      if (response.status >= 300 && response.status < 400) {
+        const location = response.headers.get('location')
+        /* Drain the redirect body so the underlying socket can be reused. */
+        await response.arrayBuffer().catch(() => {})
+        if (redirects >= MP_MAX_REDIRECTS) return { ok: false, reason: 'too-many-redirects' }
+        if (!location || !location.trim()) return { ok: false, reason: 'fetch-failed', status: response.status }
+        let next
+        try { next = new URL(location, target).href }
+        catch { return { ok: false, reason: 'fetch-failed', status: response.status } }
+        /* Per-hop re-validation: any hop escaping the mp allowlist fails. */
+        if (!allowedMpTarget(next)) return { ok: false, reason: 'not-mp-url' }
+        target = next
+        continue
+      }
+      if (!response.ok) return { ok: false, reason: 'fetch-failed', status: response.status }
+      html = await response.text()
+      break
+    }
   } catch (error) {
     return { ok: false, reason: 'fetch-failed', message: messageOf(error).slice(0, 200) }
   } finally {
@@ -389,63 +418,10 @@ function mpContent(html) {
 }
 
 /**
- * Host-side regex sanitizer for the WeChat rich-text body: drop scripts,
- * iframes, event handlers, mpvoice, and every `style` declaration that isn't
- * in the layout whitelist; neutralize positioning. The client re-sanitizes in
- * DOM space before render, so this only has to be a solid first pass.
+ * The mp sanitizer lives in `src/host/mp-sanitize.js`, bundled to
+ * `lib/mp-sanitize.js` (P3-03): it is the shared `dsh-html-policy`
+ * serializer — same ALLOWED/DROP tables the client renderer walks, same
+ * data-src promotion and visibility sweep the historical regex pass ran.
+ * `sanitizeMpHtml` is imported above; the client re-sanitizes in DOM space
+ * before render, so this remains a solid first pass.
  */
-const MP_STYLE_ALLOW = /^(color|font-size|font-weight|font-style|font-family|text-align|line-height|margin(-(top|right|bottom|left))?|padding(-(top|right|bottom|left))?|background(-color|-image|-size|-position|-repeat)?|border(-(top|right|bottom|left)(-(width|style|color))?)?|border-radius|letter-spacing|text-indent|text-decoration(-line)?|width|max-width|height|display|vertical-align|box-sizing|overflow(-x|-y)?|white-space|word-(wrap|break)|opacity|float|clear)\s*$/i
-
-/* Splitting a style on ';' must not cut inside an entity like `&quot;`:
-   WeChat writes `url(&quot;…&quot;)` into inline styles, and a naive split(';')
-   truncates the URL at the entity's own semicolon. Mask entities, split,
-   restore. */
-function mpStyleSplit(value) {
-  /* Match declarations as `name: value` where value ends at a `;` that is NOT
-     part of an entity: an entity's `;` is preceded only by `&` + word chars. */
-  const parts = String(value).match(/[^;]+(?:;(?!\w*&) [^;]*)*/g)
-  if (!parts) return []
-  /* The lookahead trick above is unreliable; do the explicit scan instead. */
-  const out = []
-  let buf = ''
-  for (let i = 0; i < value.length; i++) {
-    const ch = value[i]
-    if (ch === ';') {
-      const entity = /&[a-zA-Z#\d]*$/.test(buf)
-      if (!entity) { if (buf.trim()) out.push(buf.trim()); buf = ''; continue }
-    }
-    buf += ch
-  }
-  if (buf.trim()) out.push(buf.trim())
-  return out
-}
-
-function sanitizeMpHtml(html) {
-  let out = html
-    .replace(/<script\b[\s\S]*?<\/script\s*>/gi, '')
-    .replace(/<iframe\b[\s\S]*?(<\/iframe\s*>|\/?>)/gi, '')
-    .replace(/<\/?mpvoice\b[^>]*>/gi, '')
-    .replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
-    /* Promote data-src only on <img>: WeChat also sticks junk data-src values
-       (e.g. "position:static") on video/decoration nodes, and promoting those
-       turns them into resource URLs — ERR_UNKNOWN_URL_SCHEME noise. */
-    .replace(/(<img\b[^>]*?)\sdata-src\s*=\s*"([^"]*)"/gi, `$1 src="$2" referrerpolicy="no-referrer" loading="lazy" decoding="async"`)
-    .replace(/(<img\b[^>]*?)\sdata-src\s*=\s*'([^']*)'/gi, `$1 src='$2' referrerpolicy="no-referrer" loading="lazy" decoding="async"`)
-    .replace(/\sdata-src\s*=\s*("[^"]*"|'[^']*')/gi, '')
-    .replace(/\sstyle\s*=\s*"([^"]*)"/gi, (all, value) => {
-      const kept = mpStyleSplit(value)
-        .filter(d => MP_STYLE_ALLOW.test(d.split(':')[0]))
-        .join('; ')
-      return kept ? ` style="${kept}; position: static"` : ''
-    })
-    .replace(/\sstyle\s*=\s*'([^']*)'/gi, (all, value) => {
-      const kept = mpStyleSplit(value)
-        .filter(d => MP_STYLE_ALLOW.test(d.split(':')[0]))
-        .join('; ')
-      return kept ? ` style='${kept}; position: static'` : ''
-    })
-    // Visibility tricks the original page uses for lazy reveal must not hide
-    // the whole body in our pane.
-    .replace(/visibility\s*:\s*hidden/gi, 'visibility: visible')
-  return out
-}

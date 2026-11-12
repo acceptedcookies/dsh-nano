@@ -25,7 +25,11 @@
 | `cordis.patch.yml` | 插入插件 id。`name` 是包名 |
 | `index.js` | 宿主。运行时必需 |
 | `lib/client.js` | 浏览器包。运行时必需。安装时不重建 |
+| `lib/perf-review-host.js` | 宿主 perf-review bundle。运行时必需（`index.js` 相对 import） |
 | `lib/s3-sync-host.js` | 宿主 S3 签名代理 bundle。运行时必需（宿主 `index.js` 相对 import） |
+| `lib/route-guard.js` | 路由注册 guard bundle。运行时必需（宿主 `index.js` 相对 import） |
+| `lib/route-table.js` | 烤进的插件路由表常量。运行时必需（宿主 `index.js` 相对 import） |
+| `lib/mp-sanitize.js` | 宿主 mp 文章消毒器 bundle（dsh-html-policy 的 `sanitizeHtml`）。运行时必需（宿主 `index.js` 相对 import） |
 | `icon.svg`、`locale/` | 图标与中英文案 |
 | `src/` | 作者树。已有 `lib/client.js` 时安装不需要它 |
 
@@ -37,9 +41,11 @@ client inject 以 `package.json` 的 `dsh.client.inject` 为准，不在这里�
 2. `pnpm` 在 PATH 上。`dsh plugin` 只是把参数转给 profile 里的 pnpm。
 3. 目标是已经能打开的 Web profile，默认名 `web`。不要装进 headless、sdk 或 acp。
 4. 无。宿主不需要 git 或其他外部命令。
-5. 本包依赖 `dsh-nano-ui`，声明为 `file:../packages/dsh-nano-ui`。`dsh plugin add` 时 pnpm 会解析这个相对路径，目录必须是 `<parent>/packages/dsh-nano-ui` 与 `<parent>/<本包>`。不要改这条依赖。运行中的页面不单独加载它，构建时它被打进 `lib/client.js`。
-6. 本包还依赖构建期库 `dsh-performance-review`，声明为 `file:../packages/dsh-performance-review`，约束同上（`<parent>/packages/dsh-performance-review` 与 `<parent>/<本包>`）。它被打进 `lib/client.js`，宿主侧另由构建生成 `lib/perf-review-host.js` 供 `index.js` 相对 import；两份产物默认是恒等包装，只有页面带 `?perf-review=1` 或 `localStorage['dsh-perf-review']='1'`、宿主带 `DSH_PERF_REVIEW=1` 时才采集。不要改这条依赖。
-7. 本包还依赖宿主构建期库 `dsh-s3-client`，声明为 `file:../packages/dsh-s3-client`，约束同上。宿主侧由构建生成 `lib/s3-sync-host.js` 供 `index.js` 相对 import（开发实例只拷贝 `lib/`、不拷贝 `node_modules`，所以必须 bundle）。它提供 SigV4 签名、令牌桶限速与用量账本；密钥只在宿主，不进浏览器。多端点配置存 `${DSH_HOME}/nano-notepad-s3.json`（0600），首次启动从环境变量 `S3_NOTEPAD_*` / `${DSH_HOME}/nano-notepad.env` 种子；之后在设置「云同步」tab 内填写、新增、切换。切换端点经过「本地为真源 → 预检差异 → 一致性确认 → 策略执行 → 提交或回滚」，宿主用 `pending` 记录保证崩溃时回滚。不要改这条依赖。
+5. 本包构建期依赖 `dsh-nano-ui`，声明为 `devDependencies` 的 `file:../packages/dsh-nano-ui`。`npm install`/`npm run build` 时解析这个相对路径；构建时它被打进 `lib/client.js`，运行中的页面不单独加载它。不要改这条依赖。tarball 只含构建产物，`dsh plugin add` 不再需要旁边的 `packages/` 目录。
+6. 本包还构建期依赖 `dsh-performance-review`，同样声明为 `devDependencies` 的 `file:`，约束同上。它被打进 `lib/client.js`，宿主侧另由构建生成 `lib/perf-review-host.js` 供 `index.js` 相对 import；两份产物默认是恒等包装，只有页面带 `?perf-review=1` 或 `localStorage['dsh-perf-review']='1'`、宿主带 `DSH_PERF_REVIEW=1` 时才采集。不要改这条依赖。
+7. 本包还构建期依赖宿主库 `dsh-s3-client`，同样声明为 `devDependencies` 的 `file:`，约束同上。宿主侧由构建生成 `lib/s3-sync-host.js` 供 `index.js` 相对 import（开发实例只拷贝 `lib/`、不拷贝 `node_modules`，所以必须 bundle）。它提供 SigV4 签名、令牌桶限速与用量账本；密钥只在宿主，不进浏览器。多端点配置存 `${DSH_HOME}/nano-notepad-s3.json`（0600），首次启动从环境变量 `S3_NOTEPAD_*` / `${DSH_HOME}/nano-notepad.env` 种子；之后在设置「云同步」tab 内填写、新增、切换。切换端点经过「本地为真源 → 预检差异 → 一致性确认 → 策略执行 → 提交或回滚」，宿主用 `pending` 记录保证崩溃时回滚。不要改这条依赖。
+8. 本包还构建期依赖路由注册库 `dsh-host-route-guard`，同样声明为 `devDependencies` 的 `file:`，约束同上。宿主侧由构建生成 `lib/route-guard.js` 与 `lib/route-table.js`（烤进本插件 7 条路由行的常量表）供 `index.js` 相对 import；全部 web 路由经它注册，Host/Origin 围栏与 405 在 guard 内。不要改这条依赖。
+9. 本包还构建期依赖共享消毒策略库 `dsh-html-policy` 与远程数据 schema `dsh-remote-data-schema`，同样声明为 `devDependencies` 的 `file:`，约束同上。前者同一张 allowlist 表驱动两个 renderer：客户端 `sanitizeRichHtml`（进 `lib/client.js`）与宿主 `sanitizeMpHtml`（构建生成 `lib/mp-sanitize.js` 供 `index.js` 相对 import）；后者客户端侧消费它的 `./image-check.js`（无 Buffer 的图片载荷门禁，进 `lib/client.js`）。不要改这两条依赖。
 
 未被告知 `DSH_HOME` 或 profile 名时，只动默认的 `web`。不要猜第二套实例。
 

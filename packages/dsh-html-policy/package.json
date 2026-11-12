@@ -1,0 +1,22 @@
+{
+  "name": "dsh-html-policy",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Build-time shared library: shared HTML allowlist policy for the dsh-nano plugins' two renderers (client DOM sanitizeRichHtml + host regex sanitizeMpHtml). Not a plugin; bundled into lib/ artifacts via esbuild (devDependency, never resolved at runtime).",
+  "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "files": [
+    "src",
+    "AGENTS.md"
+  ],
+  "scripts": {
+    "test": "node --test"
+  },
+  "engines": {
+    "dsh": ">=0.2.2-rc.1 <0.3.0",
+    "node": ">=20"
+  }
+}

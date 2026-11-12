@@ -1,0 +1,3 @@
+# Large real-bucket objects stay local; only metadata + small samples are committed.
+# *.bin
+# images/large/*

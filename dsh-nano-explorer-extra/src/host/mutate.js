@@ -34,15 +34,50 @@ function sameEntryIgnoringCase(source, destination) {
   return source !== destination && source.toLowerCase() === destination.toLowerCase()
 }
 
+/** Lexically fold a root when `fs.resolve` is unavailable (defensive fallback). */
+function foldRoot(root) {
+  return root.replace(/\\/gu, '/').replace(/\/+$/u, '') || '/'
+}
+
 /**
- * Refuse a write whose parent lies outside the workspace.
+ * Refuse a write whose resolved path escapes the workspace or touches `.git`.
+ *
+ * P4-01/P4-02: the check is realpath-aware, not just lexical. A lexical prefix
+ * match is bypassable through a symlinked ancestor (a link inside the
+ * workspace pointing out would pass the prefix check yet land outside the
+ * root); `fs.resolve` returns a target whose `processPath` is the realpath of
+ * the deepest existing ancestor plus any missing tail, so comparing that
+ * against the realpath'd root closes the symlink escape. The same fence also
+ * refuses a `<root>/.git/**` write so the explorer cannot plant a filter
+ * driver the git ops would execute (P4-02).
+ *
  * @param fs - filesystem provider.
  * @param workspaceRoot - session workspace root.
  * @param path - absolute candidate path.
- * @returns nothing; throws when the path escapes.
+ * @param signal - caller cancellation.
+ * @returns nothing; throws when the path escapes or targets `.git`.
  */
-function assertInside(fs, workspaceRoot, path) {
+async function assertInside(fs, workspaceRoot, path, signal) {
   if (!isLexicallyInside(workspaceRoot, path)) throw new Error(`"${path}" is outside the workspace`)
+  // Lexically-inside `.git` is rejected before any realpath work: writing
+  // `.git/config` could arm a filter/smudge driver that `git add --all` runs.
+  if (isLexicallyInside(`${workspaceRoot.replace(/\/+$/u, '')}/.git`, path)
+    || /\/\.git(?:\/|$)/u.test(path)) {
+    throw new Error('writes inside .git are refused')
+  }
+  /* Fail CLOSED (review 7788 W1): fs.resolve() returns the realpath of the
+   * deepest existing ancestor + the missing tail, so it never throws for a
+   * merely-absent leaf — a throw is a real failure (perm, hop-limit, abort).
+   * Treating it as "can't resolve, allow" would let a write slip past the
+   * real-root fence. A resolve error must REFUSE the write, not skip it. */
+  const rootTarget = await fs.resolve(workspaceRoot, { signal })
+    .catch(error => { throw new Error(`cannot verify workspace root — write refused (${error.message})`) })
+  const pathTarget = await fs.resolve(path, { signal })
+    .catch(error => { throw new Error(`cannot verify target path — write refused (${error.message})`) })
+  const realRoot = fs.processPath(rootTarget).replace(/\/+$/u, '')
+  const realPath = fs.processPath(pathTarget)
+  if (/\/\.git(?:\/|$)/u.test(realPath)) throw new Error('writes inside .git are refused')
+  if (!isLexicallyInside(realRoot, realPath)) throw new Error(`"${path}" is outside the workspace`)
 }
 
 /**
@@ -56,8 +91,12 @@ export async function createFile(fs, request, signal) {
   const { workspaceRoot, directory, name, sandboxPolicy } = request
   const finalName = validateName(name)
   const parent = absoluteOf(workspaceRoot, directory)
-  assertInside(fs, workspaceRoot, parent)
+  await assertInside(fs, workspaceRoot, parent, signal)
   const path = `${parent}/${finalName}`
+  /* Fence the LEAF too (7788 F2): the parent check alone let `name:".git"`
+   * create `<root>/.git` — a realpath'd parent inside the root passed while
+   * the composed path was never tested for the `.git` segment. */
+  await assertInside(fs, workspaceRoot, path, signal)
   const target = await fs.resolve(path, { signal })
   try {
     await fs.writeText(target, '', { kind: 'createIfAbsent' }, signal, sandboxPolicy)
@@ -80,9 +119,13 @@ export async function rename(fs, ctx, config, request, signal) {
   const { workspaceRoot, path, name, kind, sandboxPolicy, session, runExternal } = request
   const finalName = validateName(name)
   const source = absoluteOf(workspaceRoot, path)
-  assertInside(fs, workspaceRoot, source)
+  await assertInside(fs, workspaceRoot, source, signal)
   const parent = source.slice(0, source.lastIndexOf('/')) || '/'
   const destination = `${parent}/${finalName}`
+  /* Fence the DESTINATION (7788 F1): only the source was fenced, so
+   * `rename {name:".git"}` could move an armed gitdir/gitfile into place and
+   * `git add --all` would execute its filter driver — RCE as the host user. */
+  await assertInside(fs, workspaceRoot, destination, signal)
   if (source === destination) return { path: source }
   const existing = await fs.lstat(destination, {}, signal).catch(() => undefined)
   // A case-insensitive filesystem answers a lookup of the new name with the file being renamed, so
@@ -141,8 +184,10 @@ export async function createFolder(fs, request, runExternal) {
   const { workspaceRoot, directory, name, sandboxPolicy, session } = request
   const finalName = validateName(name)
   const parent = absoluteOf(workspaceRoot, directory)
-  assertInside(fs, workspaceRoot, parent)
+  await assertInside(fs, workspaceRoot, parent, /* signal */ undefined)
   const path = `${parent}/${finalName}`
+  /* Fence the LEAF (7788 F2): `name:".git"` must not create `<root>/.git`. */
+  await assertInside(fs, workspaceRoot, path, /* signal */ undefined)
   const existing = await fs.lstat(path).catch(() => undefined)
   if (existing !== undefined) throw new Error(`"${finalName}" already exists in this folder`)
   await runExternal({ session, sandboxPolicy, cwd: parent, argv: ['mkdir', '--', path], args: ['mkdir'] })
@@ -199,7 +244,7 @@ export async function removeEntry(fs, request, signal) {
   const { workspaceRoot, path, kind, sandboxPolicy, session, runExternal } = request
   if (typeof path !== 'string' || path.trim() === '') throw new Error('a path is required')
   const target = absoluteOf(workspaceRoot, path)
-  assertInside(fs, workspaceRoot, target)
+  await assertInside(fs, workspaceRoot, target, signal)
 
   // The workspace root is the one entry this tool must never delete: `rm -rf` there would take the
   // whole session with it, and every path below is already reachable on its own.
@@ -242,7 +287,7 @@ export async function moveEntry(fs, ctx, config, request, signal) {
   const { workspaceRoot, path, directory, sandboxPolicy, session, runExternal } = request
   if (typeof path !== 'string' || path.trim() === '') throw new Error('a path is required')
   const source = absoluteOf(workspaceRoot, path).replace(/\/+$/u, '')
-  assertInside(fs, workspaceRoot, source)
+  await assertInside(fs, workspaceRoot, source, signal)
   // The workspace root has no parent to move into within this tree.
   if (source === workspaceRoot.replace(/\/+$/u, '')) throw new Error('the workspace root cannot be moved')
 
@@ -252,13 +297,22 @@ export async function moveEntry(fs, ctx, config, request, signal) {
   const sourceParent = source.slice(0, source.lastIndexOf('/')) || '/'
 
   const destinationDir = absoluteOf(workspaceRoot, typeof directory === 'string' ? directory : '')
-  assertInside(fs, workspaceRoot, destinationDir)
+  await assertInside(fs, workspaceRoot, destinationDir, signal)
   // Resolve the drop target through the provider: a symlinked folder may be the row under the
   // cursor, and the command must land where the link leads, not beside the link itself. The
   // resolved path is fenced again, so a link out of the workspace cannot move entries across it.
   const resolvedDirTarget = await fs.resolve(destinationDir, { signal })
   const resolvedDir = fs.processPath(resolvedDirTarget).replace(/\/+$/u, '')
-  if (!isLexicallyInside(workspaceRoot, resolvedDir)) throw new Error(`"${directory}" resolves outside the workspace`)
+  /* Compare the RESOLVED dir against the RESOLVED root (7788 W2): a symlinked
+   * workspaceRoot made realpath≠lexical, so a real dir inside the workspace
+   * was wrongly rejected. `.git` is checked on the real path too — a linked
+   * destination that resolves into a gitdir must not be a drop target. */
+  const realRootTarget = await fs.resolve(workspaceRoot, { signal }).catch(() => undefined)
+  const realRoot = realRootTarget === undefined
+    ? foldRoot(workspaceRoot)
+    : fs.processPath(realRootTarget).replace(/\/+$/u, '')
+  if (/\/\.git(?:\/|$)/u.test(resolvedDir)) throw new Error('writes inside .git are refused')
+  if (!isLexicallyInside(realRoot, resolvedDir)) throw new Error(`"${directory}" resolves outside the workspace`)
   // `stat` reads the resolved target object; `processPath` output is what the `mv` command needs,
   // and `lstat` does not accept that form.
   const dirInfo = await fs.stat(resolvedDirTarget, {}, signal).catch(() => undefined)
@@ -271,6 +325,11 @@ export async function moveEntry(fs, ctx, config, request, signal) {
   if (isLexicallyInside(source, resolvedDir)) throw new Error('a folder cannot be moved into itself')
 
   const destination = `${resolvedDir}/${name}`
+  /* Fence the composed destination (7788 F1 parity with rename): the source
+   * name can't be `.git` (source was fenced), but the drop must still refuse
+   * a realpath'd destination that resolves into or outside `.git`. */
+  if (/\/\.git(?:\/|$)/u.test(destination)) throw new Error('writes inside .git are refused')
+  if (!isLexicallyInside(realRoot, destination)) throw new Error(`"${name}" would move outside the workspace`)
   const existing = await fs.lstat(destination, {}, signal).catch(() => undefined)
   if (existing !== undefined) throw new Error(`"${name}" already exists in that folder`)
 

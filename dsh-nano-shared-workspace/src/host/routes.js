@@ -5,12 +5,46 @@ import { homedir } from 'node:os'
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 import { clearIdentity, readIdentity, writeIdentity } from './credentials.js'
 import { createS3 } from './s3.js'
-import { createWorkspace, instanceId, joinWorkspace, listWorkspaces } from './workspaces.js'
+import { createWorkspace, instanceId, joinWorkspace, listWorkspaces, ownMember, trustedMember } from './workspaces.js'
 import { acquireClaim, fetchTranscript, listRemoteSessions, materializeSession, renewClaim, syncAll } from './session-io.js'
 import { pullWorkspace, pushWorkspace, registerIdentity } from './tree.js'
 import { ensurePerfReviewHost, LIB_VERSION } from 'dsh-performance-review/host'
+import { registerRoutes as registerGuardedRoutes } from 'dsh-host-route-guard'
+import { ROUTE_TABLE, PLUGIN } from './route-table.js'
+import { SESSION_ID_RE, WORKSPACE_ID_RE } from 'dsh-remote-data-schema'
 
 export const PREFIX = '/nano-shared-workspace'
+
+/* ------------------------------------------------------------------ *
+ * Route-boundary charset checks (P2-06 layer 1 of 2; the consumer layer
+ * re-checks inside session-io/tree/workspaces). A body param that cannot
+ * form a safe S3 key / host path is rejected before any bucket or fs call.
+ * Violations throw → the register wrapper answers 400 {error}, matching the
+ * existing missing-param error style.
+ * ------------------------------------------------------------------ */
+const badId = name => new Error(`${name} has an invalid charset`)
+
+const assertWorkspaceId = value => {
+  if (typeof value !== 'string' || !WORKSPACE_ID_RE.test(value)) throw badId('workspaceId')
+  return value
+}
+const assertSessionId = value => {
+  if (typeof value !== 'string' || !SESSION_ID_RE.test(value)) throw badId('sessionId')
+  return value
+}
+/** Absolute + normalized replica path (mirrors the marker schema's localPath rule). */
+const assertLocalPath = value => {
+  if (typeof value !== 'string' || !isAbsolute(value) || resolve(value) !== value) {
+    throw new Error('localPath must be an absolute normalized path')
+  }
+  return value
+}
+
+/** This instance's own member row — strict memberId binding (P2-03) PLUS the
+ * local pin (review 9012 F1): the PINNED localPath, not the co-tenant-writable
+ * remote row, is the replica root pull/push/sync use. */
+const localMember = (marker, identity, instance) =>
+  instance === '' ? undefined : trustedMember(marker, identity, instance)?.member
 
 /** Error message extraction that never leaks a stack to the response. */
 function messageOf(error) {
@@ -217,6 +251,7 @@ export function createRoutes(ctx, config) {
         if (name === undefined || localPath === undefined) {
           return { ok: false, error: 'name and localPath are required' }
         }
+        assertLocalPath(localPath)
         const marker = await createWorkspace(client, ctx, identity, { name, localPath })
         return { ok: true, workspace: marker }
       },
@@ -230,8 +265,12 @@ export function createRoutes(ctx, config) {
             || body.localPath.trim() === '') {
           return { ok: false, error: 'workspaceId and localPath are required' }
         }
+        // Route boundary (P2-03/#12 + P2-06): the id must be the 16-hex key
+        // charset before it can reach an S3 key — `..` join traversal stops here.
+        const workspaceId = assertWorkspaceId(body.workspaceId)
+        const localPath = assertLocalPath(body.localPath.trim())
         const marker = await joinWorkspace(client, ctx, identity,
-          { workspaceId: body.workspaceId, localPath: body.localPath.trim() })
+          { workspaceId, localPath })
         return { ok: true, workspace: marker }
       },
     },
@@ -240,11 +279,12 @@ export function createRoutes(ctx, config) {
       async run() {
         const { client, identity } = await s3()
         const results = await syncAll(client, ctx, identity, dshHome, syncState)
-        const me = (await instanceId(ctx)).slice(0, 8)
+        const instance = await instanceId(ctx)
+        const me = instance.slice(0, 8)
         const trees = []
         for (const marker of await listWorkspaces(client)) {
-          const member = Object.values(marker.members ?? {}).find(item => item?.username === identity.username && String(item.instance ?? '').startsWith(me))
-            ?? Object.values(marker.members ?? {}).find(item => item?.username === identity.username)
+          // Strict memberId binding (P2-03): only our own row's localPath is a sync target.
+          const member = localMember(marker, identity, instance)
           if (typeof member?.localPath !== 'string' || member.localPath === '') continue
           try {
             trees.push({ workspaceId: marker.workspaceId, ...await pushWorkspace(client, dshHome, marker.workspaceId, member.localPath, `${identity.username}@${me}`) })
@@ -266,11 +306,10 @@ export function createRoutes(ctx, config) {
         const { client, identity } = await s3()
         const body = JSON.parse(await readBody(req) || '{}')
         const workspaceId = typeof body?.workspaceId === 'string' ? body.workspaceId : ''
+        if (workspaceId !== '') assertWorkspaceId(workspaceId)
         const marker = (await listWorkspaces(client)).find(row => row.workspaceId === workspaceId)
         if (marker === undefined) return { ok: false, error: 'shared workspace not found' }
-        const me = (await instanceId(ctx)).slice(0, 8)
-        const member = Object.values(marker.members ?? {}).find(item => item?.username === identity.username && String(item.instance ?? '').startsWith(me))
-          ?? Object.values(marker.members ?? {}).find(item => item?.username === identity.username)
+        const member = localMember(marker, identity, await instanceId(ctx))
         if (typeof member?.localPath !== 'string' || member.localPath === '') return { ok: false, error: 'join this shared workspace before syncing files' }
         return pullWorkspace(client, dshHome, workspaceId, member.localPath)
       },
@@ -281,13 +320,13 @@ export function createRoutes(ctx, config) {
         const { client, identity } = await s3()
         const body = JSON.parse(await readBody(req) || '{}')
         const workspaceId = typeof body?.workspaceId === 'string' ? body.workspaceId : ''
+        if (workspaceId !== '') assertWorkspaceId(workspaceId)
         const marker = (await listWorkspaces(client)).find(row => row.workspaceId === workspaceId)
         if (marker === undefined) return { ok: false, error: 'shared workspace not found' }
-        const me = (await instanceId(ctx)).slice(0, 8)
-        const member = Object.values(marker.members ?? {}).find(item => item?.username === identity.username && String(item.instance ?? '').startsWith(me))
-          ?? Object.values(marker.members ?? {}).find(item => item?.username === identity.username)
+        const instance = await instanceId(ctx)
+        const member = localMember(marker, identity, instance)
         if (typeof member?.localPath !== 'string' || member.localPath === '') return { ok: false, error: 'join this shared workspace before syncing files' }
-        return pushWorkspace(client, dshHome, workspaceId, member.localPath, `${identity.username}@${me}`)
+        return pushWorkspace(client, dshHome, workspaceId, member.localPath, `${identity.username}@${instance.slice(0, 8)}`)
       },
     },
     // Harness only enables the composer for a session a Host workspace accounts.
@@ -300,6 +339,8 @@ export function createRoutes(ctx, config) {
         const localPath = typeof body?.path === 'string' ? body.path : ''
         const sessionId = typeof body?.sessionId === 'string' ? body.sessionId : ''
         if (localPath === '' || sessionId === '') return { ok: false, error: 'path and sessionId are required' }
+        assertSessionId(sessionId)
+        assertLocalPath(localPath)
         const registry = ctx.get('workspaceRegistry')
         const workspace = await registry.resolveByPath(localPath)
         if (workspace === undefined) return { ok: false, error: 'replica is not registered' }
@@ -315,13 +356,14 @@ export function createRoutes(ctx, config) {
         const workspaceId = typeof body?.workspaceId === 'string' ? body.workspaceId : ''
         const sessionId = typeof body?.sessionId === 'string' ? body.sessionId : ''
         if (workspaceId === '' || sessionId === '') return { ok: false, error: 'workspaceId and sessionId are required' }
+        assertWorkspaceId(workspaceId)
+        assertSessionId(sessionId)
         const marker = (await listWorkspaces(client)).find(row => row.workspaceId === workspaceId)
         if (marker === undefined) return { ok: false, error: 'shared workspace not found' }
-        const me = (await instanceId(ctx)).slice(0, 8)
-        const member = Object.values(marker.members ?? {}).find(item => item?.username === identity.username && String(item.instance ?? '').startsWith(me))
-          ?? Object.values(marker.members ?? {}).find(item => item?.username === identity.username)
+        const instance = await instanceId(ctx)
+        const member = localMember(marker, identity, instance)
         if (typeof member?.localPath !== 'string' || member.localPath === '') return { ok: false, error: 'join this shared workspace before opening its sessions' }
-        const claim = await acquireClaim(client, ctx, sessionId, `${identity.username}@${me}`, 1)
+        const claim = await acquireClaim(client, ctx, sessionId, `${identity.username}@${instance.slice(0, 8)}`, 1)
         return {
           ok: claim.acquired === true,
           busy: claim.acquired !== true,
@@ -338,15 +380,16 @@ export function createRoutes(ctx, config) {
         const workspaceId = typeof body?.workspaceId === 'string' ? body.workspaceId : ''
         const sessionId = typeof body?.sessionId === 'string' ? body.sessionId : ''
         if (sessionId === '') return { ok: false, error: 'sessionId is required' }
-        const me = (await instanceId(ctx)).slice(0, 8)
-        const writerId = `${identity.username}@${me}`
+        assertSessionId(sessionId)
+        if (workspaceId !== '') assertWorkspaceId(workspaceId)
+        const instance = await instanceId(ctx)
+        const writerId = `${identity.username}@${instance.slice(0, 8)}`
         const renewed = await renewClaim(client, sessionId, writerId)
         if (renewed.renewed !== true) return { ok: false, busy: true, holder: renewed.holder, expiresAt: renewed.expiresAt }
         let tree = null
         if (workspaceId !== '') {
           const marker = (await listWorkspaces(client)).find(row => row.workspaceId === workspaceId)
-          const member = Object.values(marker?.members ?? {}).find(item => item?.username === identity.username && String(item.instance ?? '').startsWith(me))
-            ?? Object.values(marker?.members ?? {}).find(item => item?.username === identity.username)
+          const member = localMember(marker, identity, instance)
           if (typeof member?.localPath === 'string' && member.localPath !== '') {
             tree = await pushWorkspace(client, dshHome, workspaceId, member.localPath, writerId)
           }
@@ -361,6 +404,9 @@ export function createRoutes(ctx, config) {
         const body = JSON.parse(await readBody(req) || '{}')
         const sessionId = typeof body?.sessionId === 'string' ? body.sessionId : ''
         if (sessionId === '') return { ok: false, error: 'sessionId is required' }
+        // Route boundary (P2-04/P2-06): `claims/${sessionId}.json` is keyed
+        // straight from the body — a `..` id must never reach S3.
+        assertSessionId(sessionId)
         const claim = await client.getJson(`claims/${sessionId}.json`)
         const me = (await instanceId(ctx)).slice(0, 8)
         return {
@@ -438,6 +484,8 @@ export function createRoutes(ctx, config) {
         if (typeof body?.workspaceId !== 'string' || typeof body?.sessionId !== 'string') {
           return { ok: false, error: 'workspaceId and sessionId are required' }
         }
+        assertWorkspaceId(body.workspaceId)
+        assertSessionId(body.sessionId)
         const { meta, events } = await fetchTranscript(client, body.workspaceId, body.sessionId)
         return { ok: true, meta, events }
       },
@@ -452,18 +500,23 @@ export function createRoutes(ctx, config) {
         if (typeof body?.workspaceId !== 'string' || typeof body?.sessionId !== 'string') {
           return { ok: false, error: 'workspaceId and sessionId are required' }
         }
-        const marker = (await listWorkspaces(client)).find(row => row.workspaceId === body.workspaceId)
+        // Route boundary (P2-06 layer 1): `..` sessionId traversal is stopped
+        // before it reaches the S3 key or the session tree (audit §4.10);
+        // materializeSession re-checks at the consumer layer.
+        const workspaceId = assertWorkspaceId(body.workspaceId)
+        const sessionId = assertSessionId(body.sessionId)
+        const marker = (await listWorkspaces(client)).find(row => row.workspaceId === workspaceId)
         if (marker === undefined) return { ok: false, error: 'shared workspace not found' }
-        const me = (await instanceId(ctx)).slice(0, 8)
-        const member = Object.values(marker.members ?? {}).find(item => item?.username === identity.username && String(item.instance ?? '').startsWith(me))
-          ?? Object.values(marker.members ?? {}).find(item => item?.username === identity.username)
+        // The materialize localPath is OUR member row's only — a foreign
+        // member's localPath is never a write target (P2-03, audit §4.11).
+        const member = localMember(marker, identity, await instanceId(ctx))
         const localPath = member?.localPath
         if (typeof localPath !== 'string' || localPath === '') {
           return { ok: false, error: 'join this shared workspace before opening its sessions' }
         }
         const landed = await materializeSession(client, dshHome, {
-          workspaceId: body.workspaceId,
-          sessionId: body.sessionId,
+          workspaceId,
+          sessionId,
           localPath,
         })
         return { ok: true, ...landed }
@@ -473,39 +526,27 @@ export function createRoutes(ctx, config) {
 }
 
 /**
- * Register every route on the web server, gated by the connection's request admission.
+ * Register every route on the web server through dsh-host-route-guard
+ * (P1-05 / T-O-7): the guard owns requestRejection (Host/Origin fence +
+ * authenticated Peer) and the uniform 405; handlers keep `route.run` and the
+ * 200/400 response shapes.
  * @param ctx - host context providing `webServer` and `connection`.
  * @param routes - the handlers built by {@link createRoutes}.
  * @returns one disposer per registered route.
  */
 export function registerRoutes(ctx, routes) {
-  const connection = () => ctx.get('connection')
-  const disposers = []
-  for (const [suffix, route] of Object.entries(routes)) {
-    disposers.push(ctx.webServer.register({
-      kind: 'exact',
-      path: `${PREFIX}${suffix}`,
-      handler: async (req, res) => {
-        const rejection = connection()?.requestRejection(req)
-        if (rejection !== undefined) {
-          res.statusCode = rejection
-          res.end()
-          return
-        }
-        if (req.method !== route.method) {
-          res.setHeader('allow', route.method)
-          sendJson(res, 405, { error: `method ${req.method} is not allowed` })
-          return
-        }
-        try {
-          sendJson(res, 200, await route.run(req))
-        } catch (error) {
-          sendJson(res, 400, { error: messageOf(error) })
-        }
-      },
-    }))
-  }
-  return disposers
+  const specs = Object.entries(routes).map(([suffix, route]) => ({
+    path: `${PREFIX}${suffix}`,
+    methods: [route.method],
+    handler: async (req, res) => {
+      try {
+        sendJson(res, 200, await route.run(req))
+      } catch (error) {
+        sendJson(res, 400, { error: messageOf(error) })
+      }
+    },
+  }))
+  return registerGuardedRoutes(ctx, specs, { table: ROUTE_TABLE, plugin: PLUGIN })
 }
 
 /** Every 30s, push session logs and replica files for workspaces this instance has joined. */
@@ -525,13 +566,14 @@ export function startBackgroundSync(ctx, config) {
       const identity = await readIdentity(ctx)
       if (identity?.configured !== true) return
       const client = createS3(config, identity)
-      const me = (await instanceId(ctx)).slice(0, 8)
+      const instance = await instanceId(ctx)
       await syncAll(client, ctx, identity, dshHome, syncState).catch(() => {})
       for (const marker of await listWorkspaces(client)) {
-        const member = Object.values(marker.members ?? {}).find(item => item?.username === identity.username && String(item.instance ?? '').startsWith(me))
-          ?? Object.values(marker.members ?? {}).find(item => item?.username === identity.username)
+        // Strict memberId binding (P2-03): a foreign member's localPath is
+        // never a push target — no username-only fallback.
+        const member = localMember(marker, identity, instance)
         if (typeof member?.localPath !== 'string' || member.localPath === '') continue
-        await pushWorkspace(client, dshHome, marker.workspaceId, member.localPath, `${identity.username}@${me}`).catch(() => {})
+        await pushWorkspace(client, dshHome, marker.workspaceId, member.localPath, `${identity.username}@${instance.slice(0, 8)}`).catch(() => {})
       }
     } finally {
       running = false

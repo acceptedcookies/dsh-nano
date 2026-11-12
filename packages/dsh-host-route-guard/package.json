@@ -1,0 +1,22 @@
+{
+  "name": "dsh-host-route-guard",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Build-time shared library: the single web-route registration entry for the dsh-nano plugins. Not a plugin; bundled into each plugin's lib/ artifacts via esbuild (devDependency, never resolved at runtime).",
+  "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "files": [
+    "src",
+    "AGENTS.md"
+  ],
+  "scripts": {
+    "test": "node --test"
+  },
+  "engines": {
+    "dsh": ">=0.2.2-rc.1 <0.3.0",
+    "node": ">=20"
+  }
+}

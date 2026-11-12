@@ -25,11 +25,14 @@
 | `cordis.patch.yml` | 插入插件 id。`name` 是包名 |
 | `index.js` | 宿主。运行时必需。目录路由、媒体路由、`imagine` 注册 |
 | `lib/host-media.js` | 引擎探测、状态读写、技能正文。运行时必需。`index.js` 直接 import 它 |
+| `lib/perf-review-host.js` | 宿主 perf-review bundle。运行时必需（`index.js` 相对 import） |
+| `lib/route-guard.js` | 路由注册 guard bundle。运行时必需（`index.js` 相对 import） |
+| `lib/route-table.js` | 烤进的插件路由表常量。运行时必需（`index.js` 相对 import） |
 | `lib/client.js` | 浏览器包。运行时必需。安装时不重建 |
 | `icon.svg`、`locale/` | 图标与中英文案 |
 | `src/` | 作者树。已有上面的 `lib/` 时安装不需要它 |
 
-client inject 以 `package.json` 的 `dsh.client.inject` 为准，不在这里抄。`files` 必须含 `lib/host-media.js` 和这份 `AGENTS.md`，否则发包后宿主找不到模块。
+client inject 以 `package.json` 的 `dsh.client.inject` 为准，不在这里抄。`files` 必须含 `lib/host-media.js`、`lib/route-guard.js`、`lib/route-table.js` 和这份 `AGENTS.md`，否则发包后宿主找不到模块。
 
 ## 前置
 
@@ -37,8 +40,9 @@ client inject 以 `package.json` 的 `dsh.client.inject` 为准，不在这里�
 2. `pnpm` 在 PATH 上。`dsh plugin` 只是把参数转给 profile 里的 pnpm。
 3. 目标是已经能打开的 Web profile，默认名 `web`。不要装进 headless、sdk 或 acp。
 4. 图片生成需要本机 CLI。没有也能装：`/imagine` 会注册成引导 stub。探测顺序见「初次运行」。
-5. 本包依赖 `dsh-nano-ui`，声明为 `file:../packages/dsh-nano-ui`。`dsh plugin add` 时 pnpm 会解析这个相对路径，目录必须是 `<parent>/packages/dsh-nano-ui` 与 `<parent>/<本包>`。不要改这条依赖。运行中的页面不单独加载它，构建时它被打进 `lib/client.js`。
-6. 本包还依赖构建期库 `dsh-performance-review`，同样声明为 `file:`，约束同上（`<parent>/packages/dsh-performance-review`）。它被打进 `lib/client.js` 和 `lib/perf-review-host.js` 两份产物；默认是恒等包装，只有页面带 `?perf-review=1` 或 `localStorage['dsh-perf-review']='1'`、宿主带 `DSH_PERF_REVIEW=1` 时才采集。不要改这条依赖。
+5. 本包构建期依赖 `dsh-nano-ui`，声明为 `devDependencies` 的 `file:../packages/dsh-nano-ui`。`npm install`/`npm run build` 时解析这个相对路径；构建时它被打进 `lib/client.js`，运行中的页面不单独加载它。不要改这条依赖。tarball 只含构建产物，`dsh plugin add` 不再需要旁边的 `packages/` 目录。
+6. 本包还构建期依赖 `dsh-performance-review`，同样声明为 `devDependencies` 的 `file:`，约束同上。它被打进 `lib/client.js` 和 `lib/perf-review-host.js` 两份产物；默认是恒等包装，只有页面带 `?perf-review=1` 或 `localStorage['dsh-perf-review']='1'`、宿主带 `DSH_PERF_REVIEW=1` 时才采集。不要改这条依赖。
+7. 本包还构建期依赖路由注册库 `dsh-host-route-guard`，同样声明为 `devDependencies` 的 `file:`，约束同上。宿主侧由构建生成 `lib/route-guard.js` 与 `lib/route-table.js`（烤进本插件 3 条路由行的常量表）供 `index.js` 相对 import；全部 web 路由经它注册，Host/Origin 围栏与 405 在 guard 内。不要改这条依赖。
 
 未被告知 `DSH_HOME` 或 profile 名时，只动默认的 `web`。不要猜第二套实例。
 
@@ -94,7 +98,7 @@ media-engine.json 里的显式选择
 | 「媒体生成」 | 扫描并选择本机图片 CLI |
 | composer 里 `/imagine` | 把所选引擎的命令模板注入会话 |
 
-技能要求会话 agent：用 kebab-case 文件名，按模板执行，核对产物非空并汇报相对路径。grok 模板把 `GROK_HOME` 指到工作区内的 `imagine/.grok`（并把 `~/.grok` 的凭证拷过去），形如 `mkdir -p imagine/.grok && cp … ; GROK_HOME=imagine/.grok <binary> -p "<prompt>. Save the image file to <out>" --always-approve --cwd "<cwd>"`，因此不需要 `danger-full-access`——所有写入都在工作区内。用户没要求就不要跑。
+技能要求会话 agent：把描述原样写进 `imagine/.prompt.txt`、把 `imagine/<slug>.<ext>` 写进 `imagine/.out.txt`（kebab-case slug，运行时 `grep -E` 门禁校验），然后**原样**执行模板——模板无占位符可替换。grok 模板把 `GROK_HOME` 指到工作区内的 `imagine/.grok`（并把 `~/.grok` 的凭证拷过去），形如 `OUT=$(tr … < "$PWD/imagine/.out.txt"); … ; mkdir -p "$PWD/imagine/.grok" && cp … ; GROK_HOME="$PWD/imagine/.grok" <binary> -p "$PROMPT. Save the image file to $OUT" --always-approve --cwd "$PWD"`，因此不需要 `danger-full-access`——所有写入都在工作区内。用户没要求就不要跑。
 
 路由都有 `connection.requestRejection`。裸调用被拒不是故障。
 

@@ -1,6 +1,6 @@
 {
   "name": "dsh-nano-explorer-extra",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "A richer workspace file explorer: git status in the file tree, a footer status bar, and inline create and rename.",
   "type": "module",
   "icon": "./icon.svg",
@@ -45,10 +45,9 @@
     }
   },
   "devDependencies": {
-    "esbuild": "0.25.0"
-  },
-  "dependencies": {
+    "dsh-host-route-guard": "file:../packages/dsh-host-route-guard",
     "dsh-nano-ui": "file:../packages/dsh-nano-ui",
-    "dsh-performance-review": "file:../packages/dsh-performance-review"
+    "dsh-performance-review": "file:../packages/dsh-performance-review",
+    "esbuild": "0.25.0"
   }
 }

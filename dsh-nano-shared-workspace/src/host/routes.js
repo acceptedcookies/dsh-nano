@@ -1,6 +1,6 @@
 /** HTTP routes the client half calls: settings read/write and a status probe. */
 
-import { mkdir, opendir, stat } from 'node:fs/promises'
+import { mkdir, opendir, readFile, stat, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 import { clearIdentity, readIdentity, writeIdentity } from './credentials.js'
@@ -14,6 +14,10 @@ import { ROUTE_TABLE, PLUGIN } from './route-table.js'
 import { SESSION_ID_RE, WORKSPACE_ID_RE } from 'dsh-remote-data-schema'
 
 export const PREFIX = '/nano-shared-workspace'
+
+/* Symbol handle for the route-object property that carries the shared sync
+ * state — invisible to the route guard's key enumeration. */
+export const SHARED_SYNC = Symbol('nsw-shared-sync')
 
 /* ------------------------------------------------------------------ *
  * Route-boundary charset checks (P2-06 layer 1 of 2; the consumer layer
@@ -91,7 +95,17 @@ function failJob(job, error) {
  * @returns `[{sessionId, workspaceId, outcome}]`
  */
 async function pullRemoteSessions(s3, ctx, identity, dshHome, instance, markers, state, job) {
-  const remotes = await listRemoteSessions(s3)
+  /* Remote index cache: the full LIST+GET-meta sweep costs N round trips and
+   * a 15s tick calling it every pass crowds interactive routes out of the
+   * keep-alive pool — the "shared workspace blocks the UI" symptom. 60s is
+   * plenty for a discovery list; materialize still runs on every miss. */
+  const now = Date.now()
+  if (state.remoteIndex !== undefined && now < state.remoteIndex.until) {
+    var remotes = state.remoteIndex.rows
+  } else {
+    var remotes = await listRemoteSessions(s3)
+    state.remoteIndex = { until: now + 60_000, rows: remotes }
+  }
   if (remotes.length === 0) return []
   const writerId = `${identity.username}@${instance.slice(0, 8)}`
   const byWorkspace = new Map()
@@ -235,6 +249,39 @@ export function createRoutes(ctx, config) {
   })
   const dshHome = process.env.DSH_HOME ?? `${homedir()}/.dsh`
   const syncState = { bySession: new Map(), remoteRev: new Map(), remoteTries: new Map() }
+  /* Durable fingerprint store (consumption receipt, not a second source of
+   * truth): mtime+size+rev rows that let a restarted host stat-skip the
+   * unchanged corpus instead of re-reading + re-decoding every artifact on
+   * the first tick — the load-time stall this round fixes. */
+  const statePath = join(dshHome, '.nsw', 'sync-state.json')
+  const persistSyncState = (() => {
+    let timer
+    return () => {
+      clearTimeout(timer)
+      timer = setTimeout(() => {
+        const payload = JSON.stringify({
+          v: 1,
+          bySession: [...syncState.bySession],
+          remoteRev: [...syncState.remoteRev],
+        })
+        mkdir(dirname(statePath), { recursive: true })
+          .then(() => writeFile(statePath, payload)).catch(() => {})
+      }, 2000)
+    }
+  })()
+  const stateReady = readFile(statePath, 'utf8')
+    .then(text => {
+      const saved = JSON.parse(text)
+      if (saved?.v === 1) {
+        for (const [key, row] of saved.bySession ?? []) {
+          if (!syncState.bySession.has(key)) syncState.bySession.set(key, row)
+        }
+        for (const [key, row] of saved.remoteRev ?? []) {
+          if (!syncState.remoteRev.has(key)) syncState.remoteRev.set(key, row)
+        }
+      }
+    })
+    .catch(() => {}) // first boot or unreadable — start empty
   /** `{ until, body }` for the last probe that did not throw. */
   let settingsCache
   /** `{ epoch, promise }` so overlapping opens share one resolve + S3 GET. */
@@ -288,7 +335,7 @@ export function createRoutes(ctx, config) {
     if (identity?.configured !== true) throw new Error('join identity is not configured')
     return { client: createS3(config, identity), identity }
   }
-  return {
+  const table = {
     '/settings': {
       method: 'GET',
       run() {
@@ -469,6 +516,7 @@ export function createRoutes(ctx, config) {
           }
           job.note = 'pulling sessions'
           const pulledSessions = await pullRemoteSessions(client, ctx, identity, dshHome, instance, markers, syncState, job).catch(() => [])
+          persistSyncState()
           return {
             ok: true,
             pushed: results.filter(r => r.outcome.startsWith('pushed')).length,
@@ -626,7 +674,16 @@ export function createRoutes(ctx, config) {
       async run() {
         return review.hostSpan('remote-sessions', async () => {
           const { client } = await s3()
-          return { sessions: await listRemoteSessions(client) }
+          /* Same 60s index cache the pull path uses — opening the panel used
+           * to fire a full LIST+GET-meta sweep every mount, which is the
+           * "workspace load blocks on the shared section" burst. */
+          const now = Date.now()
+          if (syncState.remoteIndex !== undefined && now < syncState.remoteIndex.until) {
+            return { sessions: syncState.remoteIndex.rows, cached: true }
+          }
+          const rows = await listRemoteSessions(client)
+          syncState.remoteIndex = { until: now + 60_000, rows }
+          return { sessions: rows }
         })
       },
     },
@@ -736,6 +793,13 @@ export function createRoutes(ctx, config) {
       },
     },
   }
+  /* Non-route handle the background tick shares: same fingerprint maps,
+   * remote index cache, and durable receipt — never a second copy that
+   * double-pulls or re-decodes what a route just finished. A Symbol key
+   * keeps it out of the guard's route enumeration. */
+  const routes = table
+  routes[SHARED_SYNC] = { state: syncState, persist: persistSyncState, ready: stateReady }
+  return routes
 }
 
 /**
@@ -772,8 +836,10 @@ export function registerRoutes(ctx, routes) {
   return registerGuardedRoutes(ctx, specs, { table: ROUTE_TABLE, plugin: PLUGIN })
 }
 
-/** Push session logs and replica files on the configured interval; 0 disables it. */
-export function startBackgroundSync(ctx, config) {
+/** Push session logs and replica files on the configured interval; 0 disables it.
+ *  `sharedSync` (from createRoutes) shares the fingerprint map, remote index
+ *  cache and durable receipt so a tick never double-pulls what a route just did. */
+export function startBackgroundSync(ctx, config, sharedSync) {
   if (config.backgroundSyncMs === 0) return () => {}
   // Same singleton/row as createRoutes; hostJoin is idempotent per plugin id.
   const review = ensurePerfReviewHost().hostJoin('nano-shared-workspace', {
@@ -781,12 +847,13 @@ export function startBackgroundSync(ctx, config) {
     libVersion: LIB_VERSION,
   })
   const dshHome = process.env.DSH_HOME ?? `${homedir()}/.dsh`
-  const syncState = { bySession: new Map(), remoteRev: new Map(), remoteTries: new Map() }
+  const shared = sharedSync?.state ?? { bySession: new Map(), remoteRev: new Map(), remoteTries: new Map() }
   let running = false
   const tick = () => review.hostSpan('sync-tick', async () => {
     if (running) return
     running = true
     try {
+      await sharedSync?.ready // let the durable receipt load before the first pass
       const identity = await readIdentity(ctx)
       if (identity?.configured !== true) return
       const client = createS3(config, identity)
@@ -795,8 +862,8 @@ export function startBackgroundSync(ctx, config) {
       /* Pull remote state before pushing: new session artifacts + file
        * generations land in our replica first, then local edits merge on top.
        * The earlier push-only cycle is why members diverged. */
-      await pullRemoteSessions(client, ctx, identity, dshHome, instance, markers, syncState).catch(() => {})
-      await syncAll(client, ctx, identity, dshHome, syncState, markers).catch(() => {})
+      await pullRemoteSessions(client, ctx, identity, dshHome, instance, markers, shared).catch(() => {})
+      await syncAll(client, ctx, identity, dshHome, shared, markers).catch(() => {})
       for (const marker of markers) {
         // Strict memberId binding (P2-03): a foreign member's localPath is
         // never a push target — no username-only fallback.
@@ -806,6 +873,7 @@ export function startBackgroundSync(ctx, config) {
         await pullWorkspace(client, dshHome, marker.workspaceId, member.localPath).catch(() => {})
         await pushWorkspace(client, dshHome, marker.workspaceId, member.localPath, writerId).catch(() => {})
       }
+      sharedSync?.persist?.()
     } finally {
       running = false
     }

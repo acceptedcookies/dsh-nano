@@ -1,6 +1,6 @@
 /** Host half entry: the plugin's exported name, inject list, Config, and apply. */
 
-import { createRoutes, registerRoutes, startBackgroundSync } from './routes.js'
+import { createRoutes, registerRoutes, SHARED_SYNC, startBackgroundSync } from './routes.js'
 
 export const name = 'nano-shared-workspace'
 
@@ -69,7 +69,7 @@ export function apply(ctx, raw) {
   const routes = createRoutes(ctx, config)
   ctx.effect(() => {
     const disposers = registerRoutes(ctx, routes)
-    const stopSync = startBackgroundSync(ctx, config)
+    const stopSync = startBackgroundSync(ctx, config, routes[SHARED_SYNC])
     return () => { stopSync(); for (const dispose of disposers) dispose() }
   }, 'nano-shared-workspace: routes')
 }

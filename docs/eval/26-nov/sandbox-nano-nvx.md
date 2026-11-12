@@ -1697,13 +1697,25 @@ NVX 的 snapshot → clone 是 55ms / 34 MiB。这可以给 DSH 一个现在完�
 
 spark 上全部制品（6.0 GB：rustup/cargo/target/源码/openvmm/x86 包）已删除。复查：`nvx dirs: 0`、`state: 0`、`/tmp` 归零。
 
-### 8.7 回归与验收门槛
+### 8.7 P-B — 构建阶段的宿主约束（§8C.5 实证项）
+
+> §8C.5 的权限分层把「bootstrap 悖论」拆成了两个未验证假设，此处登记为测试。
+
+| # | 用例 | 前置 | 期望 | 若失败 |
+|---|---|---|---|---|
+| P-B1 | Seatbelt `workspace-write` 下执行 `container system start` 与 `container run --rm alpine echo hi`，policy 的 `additionalWritableRoots` 含 `~/Library/Application Support/container` | P4-1 完成；插件 `confine` 包装 `sandbox-exec` | 系统服务启动、镜像可拉取运行 | LaunchAgent 写被拒 → 该步转 S1 per-call 提权；`container run` 挂 → 重新评估 S3 可行性 |
+| P-B2 | Windows ACL `workspace-write` 下执行 `nvx-rs download` 与 `nvx-rs run`（`NVX_ARTIFACTS_DIR` 指工作区，temp 指会话私有 temp） | Windows x86_64 主机（§9.6 #3）；WHP 已启用 | 工件落在工作区、guest 启动 | named pipe/pipe-stdio 挂 → 该步走 S1 per-call 提权；工件写越界 → 检查 `NVX_ARTIFACTS_DIR` 生效 |
+
+两条的共同判据：**失败不阻断 v1 设计**——S1 per-call 提权兜底存在；失败只是改变该步的底座分配。
+
+### 8.8 回归与验收门槛
 
 | 门槛 | 标准 | 对应用例 |
 |---|---|---|
 | **隔离强度**（一票否决） | 读宿主凭证与网络必须**拒绝**，否则 v1 无意义 | P1-5、P1-6 |
 | **env 隔离**（一票否决） | 宿主不装工具时沙箱仍可用 | P1-2、P4-4 |
 | **远程执行** | 改 `url` 即通，无需重装 | P1-3、P4-5 |
+| **构建不裸奔**（一票否决） | L1 步骤必须落在 S3 或 S1 提权二者之一，**不允许静默无约束** | P-B1、P-B2 |
 | 功能性 | MCP 接入与 policy 映射可用 | P1-1、P1-4 |
 | 无泄漏 | 异常退出后无残留 VM 进程 | P2-7 |
 | 成本可接受（未来） | 模板池内存水位 | P2-2、P2-6 |
@@ -1927,7 +1939,7 @@ DSH 的 `sandbox_permissions` 假设「同一次调用带更宽模式重试一�
 
 ### 8B.9 对外措辞
 
-> nano-sandbox v1 提供 2 个包：`nvx-windows`（x86_64）与 `apple-container-macos`（arm64），用于隔离 `/imagine` 等第三方 CLI 工具。两者隔离模型同构（每负载一 VM），可在 DSH `SandboxMode` 三档下统一映射；审计链四字段中 `mode`/`runnerFailed` 直接满足，`denied`/`enforcement` 由适配器构造并登记依据。**不打包运行时**，只提供确定性构建配方。**不支持 `sandbox_permissions` 升级**（策略创建时固定）。
+> nano-sandbox v1 提供 2 个包：`nvx-windows`（x86_64）与 `apple-container-macos`（arm64），用于隔离 `/imagine` 等第三方 CLI 工具。两者隔离模型同构（每负载一 VM），可在 DSH `SandboxMode` 三档下统一映射；审计链四字段中 `mode`/`runnerFailed` 直接满足，`denied`/`enforcement` 由适配器构造并登记依据。**不打包运行时**，只提供确定性构建配方。**不支持 `sandbox_permissions` 升级**（策略创建时固定）。构建步骤同样受约束：运行时管理由插件经 `ctx.sandbox.confine` 以固定 policy 执行（与 `danger-full-access` 会话无关），模型不持有持久宿主权限。
 
 ---
 
@@ -2028,17 +2040,78 @@ v1 的构建由**技能引导 agent 执行**，不是插件自己打包。这个
 | 双重校验 | 宿主侧校验 + 技能内 `grep -Eq` 门禁，失败 exit 64 |
 | 失败关闭 | 检测不到运行时 → 拒绝，**不降级到无约束** |
 
-### 8C.5 构建阶段不能无约束（bootstrap 悖论）
+### 8C.5 构建的权限分层与执行底座（bootstrap 调查结论）
 
-**建沙箱必须在沙箱外执行**——你无法从沙箱内部创建沙箱。这是 v1 唯一一个模型拥有宿主权限的时刻。
+> 本节经深度调查后重写。原论断「建沙箱必须在沙箱外执行，这是 v1 唯一一个模型拥有宿主权限的时刻」**不成立**：bootstrap 不是一个特权时刻，而是分布到三种执行底座上的三层操作，其中只有一层真正落在沙箱外——而那层本来就是 OS 设计给人做的。
 
-| 要求 | 说明 |
+#### 8C.5.1 三层权限矩阵
+
+| 层 | 操作 | 所需权限 | 能在 DSH 沙箱内？ |
+|---|---|---|---|
+| **L0 能力开通** | macOS：`sudo installer -pkg container-*.pkg -target /`；Windows：`Enable-WindowsOptionalFeature HypervisorPlatform -All` + **重启** | 管理员 + 交互式凭据（密码/UAC） | ❌ **结构上不可能，也不应尝试**——agent 拿 `danger-full-access` 也过不了 OS 凭据门槛 |
+| **L1 运行时管理** | macOS：`container system start` / `build` / `pull` / `run`；Windows：`nvx-rs download` / `run` / `sandbox` | **普通用户级**（WHP 特性启用后 WHP API 无 admin 要求；container 数据全部在 `~/Library/Application Support/container`） | ✅ **可以，且 DSH 已有正式 seam** |
+| **L2 工作负载执行** | VM 内 MCP 服务器、CLI、构建 | guest 内 | ✅ 本身就是隔离对象 |
+
+证据：[nvx/doc/setup.md:128-138](../../../context/nvx/doc/setup.md)（WHP 只需一次性 elevated 特性开关）；[Arm 官方安装指南](https://learn.arm.com/install-guides/container/)（`sudo installer` 是唯一提权点，`container system start`/`build`/`run` 全用户级）；NVX 工件目录可经 `NVX_ARTIFACTS_DIR` 配置（[runtime_adapter_tests.py:282](../../../context/nvx/scripts/nvx_tools/runtime_adapter_tests.py)），指进工作区即可让受限进程写。
+
+#### 8C.5.2 三种执行底座
+
+| 底座 | 谁执行 | 沙箱状态 | 审计 |
+|---|---|---|---|
+| **S1** agent bash（技能引导） | 模型 | 会话 `SandboxMode`；**`danger-full-access` 会话 = 无约束** | bash 命令 + `sandbox/mode` + `approval/*` 齐全 |
+| **S2** 插件宿主 JS 直 spawn | 固定代码 | **从不进沙箱**（`host-media.js` 直接 `import 'node:child_process'` 即先例） | 无内建，需自建 |
+| **S3** 插件宿主 JS → `ctx.sandbox.confine(argv, policy)` | 固定代码 | **构造性沙箱化**：policy 是调用方显式参数，与 `danger-full-access` 无关 | argv 包装无内建事件，但 policy 由我方代码写死，可自记会话事件 |
+
+`ctx.sandbox.confine()` 是正式 Service Definition 的抽象方法（[sandbox/src/index.ts:225](../../../context/deepseek-harness/packages/sandbox/sandbox/src/index.ts)），返回 Seatbelt/bwrap/windows-acl runner 包裹后的 argv，policy 逐调用显式传入（mode + `workspaceRoot` + `additionalWritableRoots`）。**这就是原 §8C.5 想要却以为不存在的东西**：插件把固定配方步骤放进平台沙箱里跑，`dsh.local` 的 `danger-full-access` profile 也拦不住它生效。
+
+另外两个直接可用的 seam：
+
+| seam | 作用 | 边界 |
+|---|---|---|
+| `ctx.sandboxPolicy.registerWritableRoot(session, dir)`（[index.ts:244](../../../context/deepseek-harness/packages/sandbox/sandbox-policy/src/index.ts)） | 会话级 runtime-only 写根，Seatbelt/bwrap/landlock 兑现 | **Windows 进程沙箱忽略**；不产审计事件（但出现在 system-prompt policy context）；S3 不需要它（policy 直接传根） |
+| `approveEscalation` per-call 提权（[plugin-manager/src/tools.ts:107](../../../context/deepseek-harness/packages/boot/plugin-manager/src/tools.ts)） | 单次命令以 `danger-full-access` 重试，**不改变会话模式** | 已有第一方先例；产 `approval/asked` + `decided` 成对事件 |
+
+#### 8C.5.3 Windows 弱点的精确形状
+
+| windows-acl 实际边界 | 对 NVX bootstrap 的影响 |
 |---|---|
-| 构建跑在**现有**沙箱里 | Linux 用 bwrap、macOS 用 Seatbelt，**不是 `danger-full-access`** |
-| Windows 是弱点 | 只有 pwsh-sandbox（`partial`），构建阶段约束较弱——**必须登记** |
-| 技能必须声明 | 「本步骤在宿主沙箱内执行，非无约束」 |
+| 只限**写**；读、网络、进程可见性全不管（README verified boundaries） | 工件下载 OK |
+| 额外写根**不兑现**给受限进程 | `NVX_ARTIFACTS_DIR` 指进工作区绕开，**不需要提权** |
+| `Authenticated Users` 被剔除 token → CIM/WMI 不可用 | 环境探测类命令受限，配方不依赖 |
+| `spawn(stdio:'pipe')` 在受限进程**内**失败（named pipe 客户端开写被拒）；inherited/anonymous 可用 | `nvx-rs` 若用 pipe 捕获 OpenVMM 输出可能挂——**未验证，见 §8.7 P-B2** |
+| `read-only` 下 pwsh 进 ConstrainedLanguage | `workspace-write` 下 FullLanguage，正常 |
+| 自带的 `diagnose-windows-sandbox-acl` 技能需无约束调用者 | **第一方自己承认「沙箱管理操作有时必须出沙箱」——这是模式，不是缺陷** |
 
-**这一条不写进技能，v1 就有一个未登记的提权窗口。**
+#### 8C.5.4 底座分配方案（推荐）
+
+| 层 | 分配 | 理由 |
+|---|---|---|
+| L0 | **人手**：技能验证签名/SHA 后出示命令 | 结构上就需要 OS 凭据；不可代理 |
+| L1 固定步骤 | **S3**（插件 `confine`，policy 写死） | `danger-full-access` 会话也被强制 confine；policy 由代码而非文档强制 |
+| L1 兜底步骤 | **S1** per-call 提权 | `confine` 失败的残留步（macOS LaunchAgent 若在 Seatbelt 下挂、Windows named pipe 若挂）；逐命令、有 `approval/*` 事件 |
+| L2 | guest 内 | — |
+
+#### 8C.5.5 残留风险（全部已登记）
+
+| # | 风险 | 处理 |
+|---|---|---|
+| RB-1 | `danger-full-access` 会话中 S1 路径无任何约束 | **默认走 S3**，S1 仅作为显式提权兜底 |
+| RB-2 | Windows named pipe / OpenVMM 子进程在受限 token 下的行为 | **未实测，§8.7 P-B2** |
+| RB-3 | `container system start` 的 LaunchAgent 写在 Seatbelt 下是否被拒 | **未实测，§8.7 P-B1** |
+| RB-4 | S3 的 `confine`/`spawn` 本身不产会话事件 | 插件自建审计事件（`sandbox/nvx-run` 类），比 bash 日志更结构化 |
+| RB-5 | `registerWritableRoot` 不产事件 | S3 不依赖它；若 S1 需要，session policy context 会显式列出根 |
+
+#### 8C.5.6 对技能的修订要求
+
+原三条要求修订为：
+
+| 要求 | 修订后 |
+|---|---|
+| ~~构建跑在现有沙箱里，不是 `danger-full-access`~~ | **技能不承诺沙箱内执行**——L0 声明为人手；L1 默认由插件经 S3 以固定 policy 执行，S3 不可用时才走 S1 的 per-call 批准提权 |
+| ~~Windows 是弱点，必须登记~~ | Windows 弱点已精确化为 named-pipe 等三个可测项（§8C.5.3、§8.7 P-B2），不再是笼统的 `partial` |
+| 技能必须声明「本步骤在宿主沙箱内执行，非无约束」 | 技能声明**分层 + 底座**：每步标 L0/L1/S3/S1，并声明「模型不持有持久宿主权限；宿主权力只有 per-call 批准提权，逐命令、有事件、可否决」 |
+
+**结论：v1 中模型不持有任何持久宿主权限。** 唯一的宿主权力是 S1 per-call 批准提权（turn 内、逐命令、`approval/*` 事件成对），以及 S3 中由插件代码写死的固定配方——后者连 `danger-full-access` 会话也强制 confine。
 
 ### 8C.6 工具安装脚本契约
 
@@ -2147,7 +2220,7 @@ v1 的起点是一个具体的、已被安全审查确认的问题：
 | arm NVX 呢 | **永久不做**——无用例 + 责任最重 |
 | 要自建运行时吗 | **不要**——只提供配方，不产出二进制 |
 | 能审计吗 | **能**——四字段中两个直接满足、两个同构可共用适配器 |
-| 最大风险 | **NVX 无稳定版**（Windows 侧）+ **构建阶段约束较弱**（Windows 只有 pwsh-sandbox） |
+| 最大风险 | **NVX 无稳定版**（Windows 侧）+ 构建步骤的两个未验证假设（§8.7 P-B1/P-B2） |
 | 需业主拍板 | **升级语义**（§8B.6） |
 
 ### 9.6 v1 的四个待办
@@ -2339,7 +2412,7 @@ spark   Linux aarch64  kernel 6.17.0-1021-nvidia  /dev/kvm 可读写  121 GB RAM
 - **未实现 MCP 服务器**（§8C 是架构设计，非实现）
 - 未验证 `streamable-http` 在 VM 内的实际连通性
 - 未评估远程执行的实际延迟与带宽
-- 未评估构建阶段（bootstrap）在 Windows `pwsh-sandbox` 下的实际约束强度
+- 未实测构建步骤在两个宿主沙箱下的行为（macOS Seatbelt 下 `container`、Windows ACL 下 `nvx-rs`）——已登记为 §8.7 P-B1/P-B2，并有 S1 提权兜底
 
 ### C.4 环境边界
 
@@ -2357,3 +2430,4 @@ spark   Linux aarch64  kernel 6.17.0-1021-nvidia  /dev/kvm 可读写  121 GB RAM
 | 2026-11-12（arm 实测） | §8.6 分层实证；修正「上游未就绪」为「guest 用户态写死 x86_64」 |
 | 2026-11-12（Apple container） | §5.9 新增；macOS 结论从「不可行」改为「有更优解」 |
 | 2026-11-12（v1 收尾） | **重构为 v1 设计文档**：§0 以 `/imagine` 隔离立论；新增 §8B（范围与责任边界）、§8C（MCP 架构）；§7 加适用范围说明；§8 测试计划改为 MCP 主路径；§9 重写为 `/imagine` 视角；arm NVX 定为永久不做 |
+| 2026-11-12（bootstrap 调查） | §8C.5 重写为权限分层 + 执行底座（S1/S2/S3）；纠正「构建必须在沙箱外执行」——L1 可经 `ctx.sandbox.confine` 构造性沙箱化；新增 §8.7 P-B1/P-B2 两个未验证假设；附录 C.3 同步 |

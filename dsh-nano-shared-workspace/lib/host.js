@@ -1,5 +1,5 @@
 // src/host/routes.js
-import { mkdir as mkdir4, opendir, stat as stat2 } from "node:fs/promises";
+import { mkdir as mkdir4, opendir, readFile as readFile4, stat as stat2, writeFile as writeFile4 } from "node:fs/promises";
 import { homedir as homedir2 } from "node:os";
 import { basename as basename2, dirname as dirname2, isAbsolute as isAbsolute3, join as join4, resolve as resolve4 } from "node:path";
 
@@ -922,6 +922,20 @@ async function decode(buf) {
     return void 0;
   }
 }
+async function peekCwd(buf) {
+  const first = buf.indexOf(ZSTD_MAGIC, 0);
+  if (first === -1) return null;
+  const second = buf.indexOf(ZSTD_MAGIC, first + 1);
+  const frame = second === -1 ? buf.subarray(first) : buf.subarray(first, second);
+  try {
+    const text = (await zstdDecompressAsync(frame)).toString("utf8");
+    const line = text.slice(0, text.indexOf("\n"));
+    const event = JSON.parse(line);
+    return event?.type === "session" && typeof event.cwd === "string" ? event.cwd : null;
+  } catch {
+    return null;
+  }
+}
 async function summarize(buf) {
   const text = await decode(buf);
   if (text === void 0) return { broken: true };
@@ -1065,11 +1079,13 @@ async function pushSession(s3, ctx, identity, local, markers, state, legacyCache
   const me = await instanceId(ctx);
   const writerId = `${identity.username}@${me.slice(0, 8)}`;
   const buf = await readFile2(local.filePath);
-  const head = await summarize(buf);
-  if (head.cwd === null) return { sessionId: local.sessionId, outcome: "skip:unparsable" };
-  const marker = await matchWorkspace(head.cwd, markers, { identity, me, legacyCache });
+  const cwd = await peekCwd(buf);
+  if (cwd === null) return { sessionId: local.sessionId, outcome: "skip:unparsable" };
+  const marker = await matchWorkspace(cwd, markers, { identity, me, legacyCache });
   if (marker === null) return { sessionId: local.sessionId, outcome: "skip:not-shared" };
   const workspaceId = marker.workspaceId;
+  const head = await summarize(buf);
+  if (head.cwd === null) return { sessionId: local.sessionId, outcome: "skip:unparsable" };
   const metaKey = `workspaces/${workspaceId}/sessions/${local.sessionId}/meta.json`;
   const remote = await s3.getJson(metaKey).catch(() => void 0);
   if (remote !== void 0) {
@@ -1736,7 +1752,7 @@ function createPerfReviewHost(env = {}) {
     writer: null
   };
   const dataDir = () => processRef.env?.DSH_DATA_DIR ?? processRef.env?.DSH_HOME ?? null;
-  const writeFile4 = async () => {
+  const writeFile5 = async () => {
     const fs = env.fs ?? await import("node:fs/promises");
     const path = env.path ?? await import("node:path");
     const dir = dataDir() ?? `${processRef.env?.HOME ?? ""}/.dsh`;
@@ -1752,12 +1768,12 @@ function createPerfReviewHost(env = {}) {
     if (state.writer !== null) return;
     const setIntervalRef = env.setInterval ?? setInterval;
     state.writer = setIntervalRef(() => {
-      void writeFile4();
+      void writeFile5();
     }, WRITE_INTERVAL_MS);
     if (typeof state.writer?.unref === "function") state.writer.unref();
     try {
       processRef.once?.("beforeExit", () => {
-        void writeFile4();
+        void writeFile5();
       });
     } catch {
     }
@@ -1835,7 +1851,7 @@ function createPerfReviewHost(env = {}) {
     hostJoin,
     snapshot: () => hostSnapshot(state),
     takeWindow: () => takeWindow(state),
-    flush: () => writeFile4(),
+    flush: () => writeFile5(),
     _state: () => state,
     libVersion: LIB_VERSION
   };
@@ -2268,6 +2284,7 @@ var ROUTE_TABLE = [
 
 // src/host/routes.js
 var PREFIX = "/nano-shared-workspace";
+var SHARED_SYNC = Symbol("nsw-shared-sync");
 var badId = (name2) => new Error(`${name2} has an invalid charset`);
 var assertWorkspaceId = (value) => {
   if (typeof value !== "string" || !WORKSPACE_ID_RE.test(value)) throw badId("workspaceId");
@@ -2309,7 +2326,13 @@ function failJob(job, error) {
   job.finishedAt = Date.now();
 }
 async function pullRemoteSessions(s3, ctx, identity, dshHome, instance, markers, state, job) {
-  const remotes = await listRemoteSessions(s3);
+  const now = Date.now();
+  if (state.remoteIndex !== void 0 && now < state.remoteIndex.until) {
+    var remotes = state.remoteIndex.rows;
+  } else {
+    var remotes = await listRemoteSessions(s3);
+    state.remoteIndex = { until: now + 6e4, rows: remotes };
+  }
   if (remotes.length === 0) return [];
   const writerId = `${identity.username}@${instance.slice(0, 8)}`;
   const byWorkspace = /* @__PURE__ */ new Map();
@@ -2418,6 +2441,34 @@ function createRoutes(ctx, config) {
   });
   const dshHome = process.env.DSH_HOME ?? `${homedir2()}/.dsh`;
   const syncState = { bySession: /* @__PURE__ */ new Map(), remoteRev: /* @__PURE__ */ new Map(), remoteTries: /* @__PURE__ */ new Map() };
+  const statePath = join4(dshHome, ".nsw", "sync-state.json");
+  const persistSyncState = /* @__PURE__ */ (() => {
+    let timer;
+    return () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        const payload = JSON.stringify({
+          v: 1,
+          bySession: [...syncState.bySession],
+          remoteRev: [...syncState.remoteRev]
+        });
+        mkdir4(dirname2(statePath), { recursive: true }).then(() => writeFile4(statePath, payload)).catch(() => {
+        });
+      }, 2e3);
+    };
+  })();
+  const stateReady = readFile4(statePath, "utf8").then((text) => {
+    const saved = JSON.parse(text);
+    if (saved?.v === 1) {
+      for (const [key, row] of saved.bySession ?? []) {
+        if (!syncState.bySession.has(key)) syncState.bySession.set(key, row);
+      }
+      for (const [key, row] of saved.remoteRev ?? []) {
+        if (!syncState.remoteRev.has(key)) syncState.remoteRev.set(key, row);
+      }
+    }
+  }).catch(() => {
+  });
   let settingsCache;
   let settingsPending;
   let settingsEpoch = 0;
@@ -2467,7 +2518,7 @@ function createRoutes(ctx, config) {
     if (identity?.configured !== true) throw new Error("join identity is not configured");
     return { client: createS3(config, identity), identity };
   };
-  return {
+  const table = {
     "/settings": {
       method: "GET",
       run() {
@@ -2643,6 +2694,7 @@ function createRoutes(ctx, config) {
           }
           job2.note = "pulling sessions";
           const pulledSessions = await pullRemoteSessions(client, ctx, identity, dshHome, instance, markers, syncState, job2).catch(() => []);
+          persistSyncState();
           return {
             ok: true,
             pushed: results.filter((r) => r.outcome.startsWith("pushed")).length,
@@ -2798,7 +2850,13 @@ function createRoutes(ctx, config) {
       async run() {
         return review.hostSpan("remote-sessions", async () => {
           const { client } = await s3();
-          return { sessions: await listRemoteSessions(client) };
+          const now = Date.now();
+          if (syncState.remoteIndex !== void 0 && now < syncState.remoteIndex.until) {
+            return { sessions: syncState.remoteIndex.rows, cached: true };
+          }
+          const rows = await listRemoteSessions(client);
+          syncState.remoteIndex = { until: now + 6e4, rows };
+          return { sessions: rows };
         });
       }
     },
@@ -2905,6 +2963,9 @@ function createRoutes(ctx, config) {
       }
     }
   };
+  const routes = table;
+  routes[SHARED_SYNC] = { state: syncState, persist: persistSyncState, ready: stateReady };
+  return routes;
 }
 function registerRoutes2(ctx, routes) {
   const specs = Object.entries(routes).map(([suffix, route]) => ({
@@ -2926,7 +2987,7 @@ function registerRoutes2(ctx, routes) {
   }));
   return registerRoutes(ctx, specs, { table: ROUTE_TABLE, plugin: PLUGIN });
 }
-function startBackgroundSync(ctx, config) {
+function startBackgroundSync(ctx, config, sharedSync) {
   if (config.backgroundSyncMs === 0) return () => {
   };
   const review = ensurePerfReviewHost().hostJoin("nano-shared-workspace", {
@@ -2934,20 +2995,21 @@ function startBackgroundSync(ctx, config) {
     libVersion: LIB_VERSION
   });
   const dshHome = process.env.DSH_HOME ?? `${homedir2()}/.dsh`;
-  const syncState = { bySession: /* @__PURE__ */ new Map(), remoteRev: /* @__PURE__ */ new Map(), remoteTries: /* @__PURE__ */ new Map() };
+  const shared = sharedSync?.state ?? { bySession: /* @__PURE__ */ new Map(), remoteRev: /* @__PURE__ */ new Map(), remoteTries: /* @__PURE__ */ new Map() };
   let running = false;
   const tick = () => review.hostSpan("sync-tick", async () => {
     if (running) return;
     running = true;
     try {
+      await sharedSync?.ready;
       const identity = await readIdentity(ctx);
       if (identity?.configured !== true) return;
       const client = createS3(config, identity);
       const instance = await instanceId(ctx);
       const markers = await listWorkspaces(client);
-      await pullRemoteSessions(client, ctx, identity, dshHome, instance, markers, syncState).catch(() => {
+      await pullRemoteSessions(client, ctx, identity, dshHome, instance, markers, shared).catch(() => {
       });
-      await syncAll(client, ctx, identity, dshHome, syncState, markers).catch(() => {
+      await syncAll(client, ctx, identity, dshHome, shared, markers).catch(() => {
       });
       for (const marker of markers) {
         const member = await localMember(marker, identity, instance);
@@ -2958,6 +3020,7 @@ function startBackgroundSync(ctx, config) {
         await pushWorkspace(client, dshHome, marker.workspaceId, member.localPath, writerId).catch(() => {
         });
       }
+      sharedSync?.persist?.();
     } finally {
       running = false;
     }
@@ -3017,7 +3080,7 @@ function apply(ctx, raw) {
   const routes = createRoutes(ctx, config);
   ctx.effect(() => {
     const disposers = registerRoutes2(ctx, routes);
-    const stopSync = startBackgroundSync(ctx, config);
+    const stopSync = startBackgroundSync(ctx, config, routes[SHARED_SYNC]);
     return () => {
       stopSync();
       for (const dispose of disposers) dispose();

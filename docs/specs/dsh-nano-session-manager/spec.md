@@ -94,7 +94,7 @@ dsh 越用越卡
 | 插件中立 | ✅ 开源（denoland） | ✅ 开源（Cloudflare） | ✅ |
 | DO/alarm 原生 | ✅ 一等公民 | ⚠️ 需自拼 DO 语义 | ❌ 需手写状态机 |
 | 资源开销 | 中（deno_core isolate + 编排） | 中高（workerd ~60–150MB） | 低（~20MB） |
-| Windows | ⚠️ deno_core 支持，预编译待验 | ❌ 无官方二进制 | ✅ |
+| Windows | ❌ 官方不支持；**经 VM 底座解决（见 3.5）** | ❌ 无官方二进制 | ✅ |
 | S3 协调 | ✅ 原生（分布式 DO 后端） | ❌ | ❌ |
 | 适配 session 定时任务 | ✅ 天生 | ⚠️ | ❌ |
 | 业主生态契合 | ✅ [nano-agent] 已在 celld 上跑 | 中性 | 中性 |
@@ -104,6 +104,34 @@ dsh 越用越卡
 - **celld 是对的方向，且比 workerd 更贴本仓**：DO/alarm 原生、S3 协调复用、[业主]已有运维经验。唯一未验证项是 Windows 预编译可用性（动手前确认）。
 - **但要按负载付费，不为重启一件事买整套 celld**：纯「轮询健康+kickstart」用 celld 是牛刀杀鸡；只有当 M2/M3（定时修剪队列、S3 归档调度、健康度滑窗）这些**本就是 durable scheduled work** 的需求落地时，celld 才是刚需底座。
 - **执行**：sidecar 以最小集起步——`HealthDO`（健康判定）+ `RestartDO`（排空/等待/重启编排），为后续 `ScheduleDO`（定时修剪/归档）留插槽。dsh 进程只把 celld 当一个 HTTP/WS 邻居，永不反向依赖。
+
+### 3.5 celld 的三种部署形态（VM 底座合拢后）
+
+「celld 在哪跑」在 `sandbox-nano-nvx` 的 VM 底座落地后不再是问题——**NVX guest 永远是 Linux，Apple container 是 macOS 原生 VM**，celld 作为 linux-x64 负载进 VM 即可，Windows 不需要移植也不需要 WSL2。三种形态：
+
+| 形态 | 适用 | 代价 |
+|---|---|---|
+| `celld dev` 本机裸跑 | 开发/单用户 macOS/Linux | 最低：官方二进制直接起 |
+| container·NVX 内 | **Windows 唯一本地路径**；需要更强隔离的负载 | 依赖 opt-in VM 底座（NVX/Apple container 已装并启动） |
+| 远端节点（如 [spark]） | Windows 无 VM 底座时；fleet 共享 | 网络可达 + bucket 协调 |
+
+**架构分工（VM 底座下）**：celld 进 VM 解决的是「在哪跑」，不是「谁杀宿主」——VM 里的 DO 能决策、持 durable state、到点 alarm，但**够不到宿主进程表**。所以最终拓扑是三层：
+
+```
+VM (NVX / Apple container / 远端)
+  celld + RestartDO      ← 「脑」：健康判定、durable 状态、alarm、倒计时状态机
+host (dsh 机器)
+  watchdog (launchd, 极小) ← 「手」：轮询 DO 的 restart-status，到点 kickstart
+  dsh web + session-manager  ← 「数据面」：孤儿管理 + perf 视图 + 请求/展示
+```
+
+celld-in-VM 负责**决策与编排**，watchdog 保留**执行**——二者分工，不是竞争。
+
+### 3.6 与 nano-sandbox VM 底座的关系
+
+session-manager 的 sidecar 与 model-selector 的 `/imagine` 隔离共用同一个**opt-in VM 底座**（`nvx-windows` + `apple-container-macos`）。沿用该底座的纪律：**产出确定性配方，不产出二进制**——celld 二进制由上游 release 提供，VM 镜像由 recipe 构建。未启用 VM 的用户 = 无 sidecar = 插件按 §4.1 降级运行（重启入口置灰）。
+
+**推进节奏（业主裁决）**：session-manager 的主体推进**等 NVX/VM 底座落地后再回顾**——届时 celld 的部署形态与 watchdog 分工按 §3.5 定型，再定 v1 实施顺序。本 spec 在此之前作为设计锚点冻结，不做实现。
 
 ## 4. 插件边界与 v1 范围
 

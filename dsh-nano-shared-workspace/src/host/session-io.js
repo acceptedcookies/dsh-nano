@@ -104,6 +104,26 @@ async function decode(buf) {
   }
 }
 
+/**
+ * Decode ONLY the first zstd frame and read its `session` header's cwd.
+ * The cheap membership probe: a session whose cwd never entered a shared
+ * workspace is rejected before the full multi-frame decode that `summarize`
+ * needs — on a large corpus that early-out is the difference between a
+ * first-pass sweep costing stat reads and one costing GBs of decompress.
+ */
+export async function peekCwd(buf) {
+  const first = buf.indexOf(ZSTD_MAGIC, 0)
+  if (first === -1) return null
+  const second = buf.indexOf(ZSTD_MAGIC, first + 1)
+  const frame = second === -1 ? buf.subarray(first) : buf.subarray(first, second)
+  try {
+    const text = (await zstdDecompressAsync(frame)).toString('utf8')
+    const line = text.slice(0, text.indexOf('\n'))
+    const event = JSON.parse(line)
+    return event?.type === 'session' && typeof event.cwd === 'string' ? event.cwd : null
+  } catch { return null }
+}
+
 /** First-line `session` event plus the latest `session/title` + event count. */
 async function summarize(buf) {
   const text = await decode(buf)
@@ -315,15 +335,21 @@ export async function pushSession(s3, ctx, identity, local, markers, state, lega
   const me = await instanceId(ctx)
   const writerId = `${identity.username}@${me.slice(0, 8)}`
   const buf = await readFile(local.filePath)
-  const head = await summarize(buf)
-  if (head.cwd === null) return { sessionId: local.sessionId, outcome: 'skip:unparsable' }
+  /* Cheap membership probe first: decode only the header frame. A session
+   * whose cwd is not under our member row is fingerprinted 'not-shared' and
+   * the next stat-skip avoids even this read. The expensive multi-frame
+   * `summarize` below only runs for the shared minority. */
+  const cwd = await peekCwd(buf)
+  if (cwd === null) return { sessionId: local.sessionId, outcome: 'skip:unparsable' }
 
   // Sessions only sync when the session's cwd sits inside THIS member's own
   // local replica path — strict memberId binding (P2-03, audit §4.9); the
   // legacy path-hash fallback is gated on our own member row too.
-  const marker = await matchWorkspace(head.cwd, markers, { identity, me, legacyCache })
+  const marker = await matchWorkspace(cwd, markers, { identity, me, legacyCache })
   if (marker === null) return { sessionId: local.sessionId, outcome: 'skip:not-shared' }
   const workspaceId = marker.workspaceId
+  const head = await summarize(buf)
+  if (head.cwd === null) return { sessionId: local.sessionId, outcome: 'skip:unparsable' }
 
   const metaKey = `workspaces/${workspaceId}/sessions/${local.sessionId}/meta.json`
   const remote = await s3.getJson(metaKey).catch(() => undefined)

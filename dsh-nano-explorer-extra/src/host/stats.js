@@ -12,8 +12,8 @@ export async function statisticsOf(fs, root, options, signal) {
   const { maxDepth, maxEntries, excludeGit } = options
   const totals = { files: 0, directories: 0, bytes: 0, truncated: false }
   let seen = 0
-  /** @param {string} path @param {number} depth @param {boolean} needsResolve */
-  const walk = async (path, depth, needsResolve) => {
+  /** @param {string} path @param {number} depth */
+  const walk = async (path, depth) => {
     if (totals.truncated) return
     signal?.throwIfAborted()
     if (depth > maxDepth) {
@@ -22,9 +22,7 @@ export async function statisticsOf(fs, root, options, signal) {
     }
     let children
     try {
-      // E9: a directory reached by joining names onto an already-resolved parent is plain — only the
-      // walk's root and paths that arrived through a symlink need the provider's resolve pass.
-      children = await fs.listDir(needsResolve ? await fs.resolve(path, { signal }) : path, signal)
+      children = await fs.listDir(await fs.resolve(path, { signal }), signal)
     } catch {
       // An unreadable directory (permissions, a dangling link) contributes nothing and never fails the total.
       return
@@ -42,16 +40,14 @@ export async function statisticsOf(fs, root, options, signal) {
       if (excludeGit && child.name === '.git') continue
       if (child.type === 'directory') {
         totals.directories += 1
-        // A child listing carries `target` only when it is a symlink itself.
-        const viaLink = child.target !== undefined
-        await walk(viaLink ? fs.processPath(child.target) : joinPath(path, child.name), depth + 1, viaLink)
+        await walk(child.target === undefined ? joinPath(path, child.name) : fs.processPath(child.target), depth + 1)
       } else if (child.type === 'file') {
         totals.files += 1
         if (typeof child.size === 'number') totals.bytes += child.size
       }
     }
   }
-  await walk(root, 1, true)
+  await walk(root, 1)
   return totals
 }
 

@@ -909,7 +909,10 @@ export function ExplorerBody(props) {
           const read = await request('/read', { sessionId, path: menu.path })
           if (!read.ok) { setLinkNote(read.message ?? copy.openInNotepadFail); return }
           setLinkNote(undefined)
-          const absolute = menu.path.startsWith('/') ? menu.path : `${cwd ?? ''}/${menu.path}`
+          /* `menu.path` is already the absolute tree key; `absoluteOf` also accepts the
+             Windows drive form `C:/…`, where a bare `startsWith('/')` check would instead
+             prefix the root a second time and the note lost its source folder. */
+          const absolute = absoluteOf(cwd ?? '', menu.path)
           await window.__nanoNotepad.import(menu.name, read.content, { sourcePath: absolute })
         } },
       /* A changed file opens in the native diff tab: the experimental forge panel's local-changes

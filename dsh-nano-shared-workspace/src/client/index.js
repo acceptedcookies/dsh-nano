@@ -6,8 +6,7 @@ import { SidebarGraft } from './graft.js'
 import { copyFor } from './i18n.js'
 import { bindSession as apiBindSession, claimSession as apiClaimSession, createDirectory as apiCreateDirectory, createWorkspace as apiCreateWorkspace, fetchRemoteSessions, fetchSettings, fetchSharedWorkspaces, fetchStatus, heartbeatSession as apiHeartbeatSession, joinWorkspace as apiJoinWorkspace, listDirectory as apiListDirectory, materializeSession as apiMaterializeSession, pullWorkspace as apiPullWorkspace, triggerSync } from './api.js'
 import { STYLE } from './styles.js'
-import { perf, profiler } from './perf.js'
-import { watchDom } from './dom-watch.js'
+import { perf } from './perf.js'
 
 export const inject = ['slots', 'locale', 'layout', 'uiWorkspace', 'workspaces', 'sessions']
 
@@ -406,23 +405,20 @@ export function apply(ctx) {
 
   // The `shell.overlay` list renders independent of the sidebar lifecycle, so
   // the graft component watches the DOM for the workspace region to appear.
-  // perf-review: <React.Profiler> when the flag is on, identity otherwise.
   ctx.effect(() => ctx.slots.inject('shell.overlay', () => ctx.slots.register({
     name: 'shell.overlay',
     id: 'nano-shared-workspace.section',
     inject: () => ({ face }),
-  }, profiler(SidebarGraft))), 'nano-shared-workspace: sidebar graft')
+  }, SidebarGraft)), 'nano-shared-workspace: sidebar graft')
 
   // Dev seam: lets an automated driver inspect the claim pipeline.
   window.__nsw = { store, ctx, face }
 
-  // The dedupe pass used to own a second body-wide MutationObserver on top of
-  // the graft's; dom-watch shares one observer, so the batch costs one callback
-  // chain and this track reports a per-frame count (β §9.4 P1).
   const dedupeTrack = perf.track('mutation', 'sidebar-dedupe')
-  const stopWatch = watchDom(dedupeTrack.wrap(() => separateFromLocal()))
+  const localList = new MutationObserver(dedupeTrack.wrap(() => separateFromLocal()))
+  localList.observe(document.body, { childList: true, subtree: true })
   dedupeTrack.attach()
-  ctx.effect(() => () => { stopWatch(); dedupeTrack.detach() })
+  ctx.effect(() => () => { localList.disconnect(); dedupeTrack.detach() })
 
   refresh()
 }

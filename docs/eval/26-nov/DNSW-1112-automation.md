@@ -183,7 +183,7 @@
 | F-09 | 低 | settings 缓存 | 60s 缓存与 `/workspaces` 的 `registerIdentity` 不同步：身份对象已写但 `/settings` 仍报 `registered:false` | `/workspaces` 注册新身份成功后 `dropSettingsCache()` | 🔧 U-05 |
 | F-10 | 低 | i18n | `joinHint` 在中英文里各定义两次，后写的身份提示覆盖「选择本地副本位置以加入」；构建告警 | 前者改名 `joinHintPick`，修正 `index.js` 引用；构建 0 告警 | 🔧 U-07 |
 | F-11 | 低 | 创建对话框视觉 | 面包屑渲染成 `// Users / seanz`（根 crumb 名 `''` 显示 `/` 再加分隔符） | 仅当首项不是根时插入分隔符 | 🔧 U-10 |
-| F-12 | 中 | 删除语义 | 只删 `workspaces/{id}.json`；该 id 下 `tree/`、`sessions/` 成为孤儿，本地副本保留 | 确认弹窗文案已明示；级联清理需枚举前缀（成本 O(n)）—— **待业主裁定** | 待裁定 |
+| F-12 | 中 | 删除语义 | 只删 `workspaces/{id}.json`；该 id 下 `tree/`、`sessions/` 成为孤儿，本地副本保留 | Round 6 裁定：**做级联清理**。新增 `purgeWorkspaceObjects`（递归 8 层 / 5000 键上限，跳过 MinIO 回显的自引用前缀），删除路由删 marker 后清 `workspaces/{id}/` 下全部对象，响应返回 `purged` | 🔧 U-17 |
 | F-13 | — | 测试方法 | CDP clip 截图产生 2x 与 backdrop 伪影（假透明） | 改用 `page.screenshot()` + PIL 裁剪 | 已记录 |
 | F-14 | **严重** | 桌面版启动 | `open -a "DeepSeek Harness"` 继承调用者 `DSH_HOME`（`~/.dsh`），host 起在日常 home 并写入 `settings.yaml`、`storages/workspace.json`、`profiles/desktop/*` | 测试一律用 `env -i … DSH_HOME=$HOME/.dsh-desktop` 启动，并用 `ps` 验证 host 路径含 `.dsh-desktop/profiles/desktop` | 已规避（仅新增文件，未改日常既有内容） |
 | F-15 | 低 | 桌面无头鉴权 | 自签 cookie 一开始总是 401：误用会话 `DSH_HOME`（`~/.dsh`）的密钥；且 authority 必须是 `127.0.0.1:<port>` | `desktop-auth.mjs` 固定读 `~/.dsh-desktop`，authority 不带 scheme | 🔧 U-12 |

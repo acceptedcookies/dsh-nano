@@ -1,0 +1,25 @@
+{
+  "name": "dsh-fx-spike-scaffold",
+  "version": "0.1.0",
+  "description": "Spike-only host scaffold for notepad-wasm-fx: injects ctx.llm, serves fx-core.wasm, mirrors the model catalog, and streams StreamChunk as raw SSE. Not for production; removed after spike.",
+  "type": "module",
+  "main": "./index.js",
+  "exports": {
+    ".": "./index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "AGENTS.md",
+    "cordis.patch.yml",
+    "lib/fx-core.wasm"
+  ],
+  "engines": {
+    "dsh": ">=0.2.2-rc.1 <0.3.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

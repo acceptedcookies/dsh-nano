@@ -1,0 +1,6 @@
+evidence/
+samples/
+tmp/
+host-scaffold/node_modules/
+# libfx 第三方拷贝（npm pack 解出），不进库
+host-scaffold/lib/

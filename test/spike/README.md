@@ -11,6 +11,7 @@
 | 目录 | 服务的设计 | 环境 | 状态 |
 |---|---|---|---|
 | `wx-article-ingest/` | 微信公众号文章导入 + 富文本渲染 | `dsh-dev.local` · mp.weixin.qq.com/mmbiz.qpic.cn（仅 GET） | 已收口；V-01–V-10 全 PASS（V-01 需伪装 UA、V-09 需深色适配层） |
+| `notepad-wasm-fx/` | notepad 内置 libfx `fx-core.wasm` + 经 `ctx.llm` 桥到 model-selector 同一份模型清单 | `dsh-dev.local` · 127.0.0.1:3425（本机 magpie，仅作 `ctx.llm` 下游）· npm registry（libfx 下载） | 已建档；V-01–V-12 全 NOT_RUN（V-01 JSPI 为一票否决项） |
 | `model-execution-sandbox/` | DSH 原生 `SandboxMode` 三档策略的实际边界（写入/读取/网络/进程/跨会话），为 `sandbox-nano-nvx` 提供基线 | 已安装的 `@deepseek-ai/dsh@0.2.2-rc.1` 宿主包 + `/usr/bin/sandbox-exec`（不启动实例；外部仅 `GET example.com` 探网络面） | 已收口；V-01–V-12 全 PASS（写入面 7/7 受控；读/网/进程三域零覆盖；`/tmp` 跨会话泄漏） |
 
 每个工作区的方法、判读门槛和结论以其自己的 `README.md` 为准。

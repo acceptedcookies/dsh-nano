@@ -1,0 +1,5 @@
+# Bundle patch: the row names the package. The dev launcher (dsh-dev) rewrites
+# `name:` to this copy's index.js; a release applies it through the bundle link.
+- insert:
+    - id: fx-spike-scaffold
+      name: dsh-fx-spike-scaffold

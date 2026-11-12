@@ -169,12 +169,28 @@ export function apply(ctx) {
     return ctx.workspaces.create({ path: localPath })
   }
 
-  /** Pull a remote log onto the replica when this machine doesn't have it yet. */
+  /** Pull a remote log onto the replica when this machine doesn't have it yet.
+   *  Materialize is a background job — the pulling flag holds the row's
+   *  download state while the artifact lands. A `session-busy` refusal is the
+   *  write-fence firing, and it surfaces as a "held by" notice, not a stall. */
   const prepareChat = async (sharedId, sessionId) => {
     const known = sessionId != null && ctx.sessions.list.getSnapshot().byId?.[sessionId] != null
     if (sessionId != null && !known) {
-      await apiMaterializeSession(sharedId, sessionId)
-      await ctx.sessions.refresh()
+      try {
+        await apiMaterializeSession(sharedId, sessionId, () => setPulling(sharedId, true))
+        await ctx.sessions.refresh()
+      } catch (cause) {
+        if (cause?.code === 'session-busy') {
+          store.set({
+            notice: copyFor(languageOf()).readOnlyBusy.replace('{holder}', cause?.response?.holder ?? cause?.holder ?? ''),
+            noticeKind: 'busy',
+          })
+          return
+        }
+        throw cause
+      } finally {
+        setPulling(sharedId, false)
+      }
     }
   }
 
@@ -219,15 +235,23 @@ export function apply(ctx) {
         ...(store.current.listReady === true ? { sectionOpen: next.expandOnLoad } : {}),
       })
     },
-    /** Refresh = push local sessions first, then re-read the remote lists. */
+    /** Refresh = push local sessions first, then re-read the remote lists.
+     *  Sync is a background job now — the spinner carries its live note so a
+     *  slow pass shows what it is doing instead of a silent stall. */
     onRefresh: () => {
-      store.set({ syncing: true })
-      triggerSync()
+      store.set({ syncing: true, syncNote: '' })
+      triggerSync(job => {
+        store.set({ syncNote: typeof job?.note === 'string' ? job.note : '' })
+      })
         .then(result => {
           if (result.pushed > 0) store.set({ notice: `${copyFor(languageOf()).syncPushed} ${result.pushed}` })
+          const pulled = Array.isArray(result?.pulledSessions) ? result.pulledSessions.length : 0
+          if (pulled > 0) store.set({ notice: `${copyFor(languageOf()).syncPulled ?? 'Pulled'} ${pulled}` })
         })
-        .catch(() => {})
-        .finally(() => { store.set({ syncing: false }); refresh() })
+        .catch(error => {
+          store.set({ notice: error?.message ?? 'sync failed' })
+        })
+        .finally(() => { store.set({ syncing: false, syncNote: '' }); refresh() })
     },
     onToggleWorkspace: workspaceId => {
       const open = store.current.expanded?.[workspaceId] === true

@@ -8,6 +8,7 @@
  */
 
 import { createHash, createHmac } from 'node:crypto'
+import { Agent, request as httpsRequest } from 'node:https'
 
 const UA = 'dsh-nano-shared-workspace/0.1.0'
 
@@ -101,12 +102,7 @@ async function request(config, keys, method, keyPath, params = {}, body = undefi
    * bounded — Cloudflare's own cap is ~100s, anything past 120s is dead. */
   const started = Date.now()
   try {
-    const res = await fetch(url, {
-      method,
-      headers: sent,
-      body: payload === '' ? undefined : payload,
-      signal: AbortSignal.timeout(120_000),
-    })
+    const res = await send(config, url, method, sent, payload)
     const ms = Date.now() - started
     if (!res.ok || ms > 3000) {
       console.warn(`[nsw:s3] ${method} ${keyPath} -> HTTP ${res.status} ${ms}ms${payload === '' ? '' : ` ${payload.length}B`}`)
@@ -115,6 +111,76 @@ async function request(config, keys, method, keyPath, params = {}, body = undefi
   } catch (error) {
     console.warn(`[nsw:s3] ${method} ${keyPath} -> ${error instanceof Error ? error.message : String(error)} ${Date.now() - started}ms`)
     throw error
+  }
+}
+
+/**
+ * Dispatch one request. `config.endpointDirect` pins the TCP/TLS target to a
+ * literal IP while `servername` + `Host` keep the virtual host the signed URL
+ * names — the Cloudflare proxy in front of the configured endpoint is the
+ * ~10x latency penalty (AMS edge for a Shanghai bucket), so an operator who
+ * knows the origin can skip it. `undefined` keeps the standard global fetch.
+ * The direct path uses `https.request` because fetch does not allow a Host
+ * different from the URL; both return a Response-shaped object.
+ */
+function send(config, url, method, headers, payload) {
+  const ip = config.endpointDirect
+  if (typeof ip !== 'string' || ip === '') {
+    return fetch(url, {
+      method,
+      headers,
+      body: payload === '' ? undefined : payload,
+      signal: AbortSignal.timeout(120_000),
+    })
+  }
+  return directFetch(url, ip, method, headers, payload)
+}
+
+/* Reuse one keep-alive pool per process for the direct path. */
+const directAgent = new Agent({ keepAlive: true, maxSockets: 16 })
+
+async function directFetch(url, ip, method, headers, payload) {
+  const timeout = AbortSignal.timeout(120_000)
+  const res = await new Promise((resolvePromise, rejectPromise) => {
+    // IPv4 "a.b.c.d" or "a.b.c.d:port"; a bare IPv6 literal carries no port.
+    const v4port = /^(\d{1,3}(?:\.\d{1,3}){3})(?::(\d{1,5}))?$/.exec(ip)
+    const pinHost = v4port !== null ? v4port[1] : ip
+    const pinPort = v4port?.[2] !== undefined ? Number(v4port[2]) : 443
+    const req = httpsRequest({
+      host: pinHost,
+      port: pinPort,
+      servername: url.host,        // SNI + cert name = the virtual host
+      path: url.pathname + url.search,
+      method,
+      agent: directAgent,
+      /* fetch computes Content-Length itself; https.request does not, and
+       * MinIO rejects a length-less PUT with 411 — so state it explicitly. */
+      headers: { host: url.host, 'content-length': Buffer.byteLength(payload === '' ? '' : payload), ...headers },
+    }, resolvePromise)
+    req.on('error', rejectPromise)
+    timeout.addEventListener('abort', () => req.destroy(new Error('s3 request timed out')), { once: true })
+    if (payload !== '') req.write(payload)
+    req.end()
+  })
+  const chunks = []
+  for await (const chunk of res) chunks.push(chunk)
+  const body = Buffer.concat(chunks)
+  /* Minimal Response shape the call sites use: ok/status/headers.get/text/
+   * json/arrayBuffer — `headers.get('etag')` is the CAS path, so it has to
+   * exist here too. Node lowercases incoming header names for us. */
+  const headerMap = {
+    get(name) {
+      const value = res.headers[String(name).toLowerCase()]
+      return Array.isArray(value) ? value.join(', ') : (value ?? null)
+    },
+  }
+  return {
+    ok: res.statusCode >= 200 && res.statusCode < 300,
+    status: res.statusCode,
+    headers: headerMap,
+    async text() { return body.toString('utf8') },
+    async json() { return JSON.parse(body.toString('utf8')) },
+    async arrayBuffer() { return body },
   }
 }
 

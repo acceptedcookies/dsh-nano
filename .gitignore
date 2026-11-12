@@ -67,6 +67,7 @@ imagine/.grok/
 SHA256SUMS.txt
 SHA256SUMS.sigstore.json
 release/
+.github/
 
 # Rust / Wasm (future plugins)
 # NOTE: Cargo.lock stays committed — reproducible builds depend on it.

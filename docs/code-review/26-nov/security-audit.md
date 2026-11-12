@@ -1,6 +1,8 @@
+> **⛔ 历史归档说明（2026-11-12）**：审查对象之一 `dsh-nano-shared-workspace` 已 DEPRECATED，源码移至 [`deprecated/dsh-nano-shared-workspace/`](../../../deprecated/README.md)。本报告的「四个插件」是审查当时的范围，**现行活跃插件为三个**；涉及该插件的 findings 仅作历史证据，已不再纳入发布门禁。正文未改写。
+
 # dsh-plugins 安全审查报告（security-26nov）
 
-> 审查对象: `dsh-nano-notepad` / `dsh-nano-model-selector` / `dsh-nano-explorer-extra` / `dsh-nano-shared-workspace` 四个 dsh overlay 插件，以及 `packages/dsh-nano-ui` / `packages/dsh-performance-review` / `packages/dsh-s3-client` 三个构建期共享包；另含 `release.md` 发布与安装合同
+> 审查对象: `dsh-nano-notepad` / `dsh-nano-model-selector` / `dsh-nano-explorer-extra` / `dsh-nano-shared-workspace` 四个 dsh overlay 插件（当时范围），以及 `packages/dsh-nano-ui` / `packages/dsh-performance-review` / `packages/dsh-s3-client` 三个构建期共享包；另含 `release.md` 发布与安装合同
 > 审查类型: `security-audit`（full / standard profile）
 > 审查时间: `2026-11-11`
 > 审查人: `DeepSeek Harness security-audit agent（覆盖驱动多子代理 + 独立候选验证 + Phase-5 独立记录复核）`

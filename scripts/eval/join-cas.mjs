@@ -5,7 +5,7 @@
  */
 process.env.DSH_HOME = '/tmp/dasw-1112-home'
 const { env, clientFor, check } = await import('./lib.mjs')
-const { createWorkspace, joinWorkspace, readMarker } = await import('../../dsh-nano-shared-workspace/src/host/workspaces.js')
+const { createWorkspace, joinWorkspace, readMarker } = await import('../../deprecated/dsh-nano-shared-workspace/src/host/workspaces.js')
 
 const { s3 } = clientFor(env(), 'DASWA')
 const ctxFor = instance => ({

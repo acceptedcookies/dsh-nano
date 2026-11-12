@@ -1,12 +1,14 @@
 {
   "version": 1,
-  "purpose": "Per-route sensitivity ledger for dsh-host-route-guard (T-O-2 / T-O-7). One row per registered path (43 total). sensitivity = validation strength required when a same-origin page script calls the route: L0 read-only/no-secret, L1 bounded workspace write, L2 host-level capability, L3 operator config. bodyLimit is the route-level cap (max over methods; GET/HEAD carry no body). sessionBinding records whether the route takes a sessionId; it is metadata, not a runtime assertion (M8).",
-  "generatedBy": "scripts/gen-route-sensitivity.mjs (paths/methods/bodyLimit from code; sensitivity/capability/justification hand-reviewed and preserved on merge)",
+  "purpose": "Per-route sensitivity ledger for dsh-host-route-guard (T-O-2 / T-O-7). One row per ACTIVE registered path (26 total after the 2026-11-12 NSW deprecation). sensitivity = validation strength required when a same-origin page script calls the route: L0 read-only/no-secret, L1 bounded workspace write, L2 host-level capability, L3 operator config. bodyLimit is the route-level cap (max over methods; GET/HEAD carry no body). sessionBinding records whether the route takes a sessionId; it is metadata, not a runtime assertion (M8). DEPRECATED 2026-11-12: dsh-nano-shared-workspace retired to deprecated/ — its routes were removed from this ledger; see deprecated/README.md.",
+  "generatedBy": "scripts/gen-route-sensitivity.mjs (paths/methods/bodyLimit from code; sensitivity/capability/justification hand-reviewed and preserved on merge) — NSW rows removed on deprecation, 2026-11-12",
   "routes": [
     {
       "plugin": "dsh-nano-notepad",
       "path": "/nano-notepad/save",
-      "methods": ["POST"],
+      "methods": [
+        "POST"
+      ],
       "sensitivity": "L2",
       "capability": "write:host",
       "bodyLimit": 8388608,
@@ -16,7 +18,9 @@
     {
       "plugin": "dsh-nano-notepad",
       "path": "/nano-notepad/read",
-      "methods": ["POST"],
+      "methods": [
+        "POST"
+      ],
       "sensitivity": "L2",
       "capability": "read:host",
       "bodyLimit": 8388608,
@@ -26,7 +30,9 @@
     {
       "plugin": "dsh-nano-notepad",
       "path": "/nano-notepad/fetch-mp",
-      "methods": ["POST"],
+      "methods": [
+        "POST"
+      ],
       "sensitivity": "L2",
       "capability": "net:fetch",
       "bodyLimit": 8388608,
@@ -36,7 +42,9 @@
     {
       "plugin": "dsh-nano-notepad",
       "path": "/nano-notepad/s3/status",
-      "methods": ["POST"],
+      "methods": [
+        "POST"
+      ],
       "sensitivity": "L2",
       "capability": "s3:credentials",
       "bodyLimit": 33554432,
@@ -46,7 +54,9 @@
     {
       "plugin": "dsh-nano-notepad",
       "path": "/nano-notepad/s3/test",
-      "methods": ["POST"],
+      "methods": [
+        "POST"
+      ],
       "sensitivity": "L2",
       "capability": "credential:probe",
       "bodyLimit": 33554432,
@@ -56,7 +66,9 @@
     {
       "plugin": "dsh-nano-notepad",
       "path": "/nano-notepad/s3/object",
-      "methods": ["POST"],
+      "methods": [
+        "POST"
+      ],
       "sensitivity": "L2",
       "capability": "s3:write",
       "bodyLimit": 33554432,
@@ -66,7 +78,9 @@
     {
       "plugin": "dsh-nano-notepad",
       "path": "/nano-notepad/s3/config",
-      "methods": ["POST"],
+      "methods": [
+        "POST"
+      ],
       "sensitivity": "L2",
       "capability": "s3:credentials",
       "bodyLimit": 33554432,
@@ -76,7 +90,9 @@
     {
       "plugin": "dsh-nano-explorer-extra",
       "path": "/nano-explorer-extra/status",
-      "methods": ["GET"],
+      "methods": [
+        "GET"
+      ],
       "sensitivity": "L0",
       "capability": "proc:git",
       "bodyLimit": 0,
@@ -86,7 +102,9 @@
     {
       "plugin": "dsh-nano-explorer-extra",
       "path": "/nano-explorer-extra/commit",
-      "methods": ["POST"],
+      "methods": [
+        "POST"
+      ],
       "sensitivity": "L2",
       "capability": "proc:git",
       "bodyLimit": 65536,
@@ -96,7 +114,9 @@
     {
       "plugin": "dsh-nano-explorer-extra",
       "path": "/nano-explorer-extra/pull",
-      "methods": ["POST"],
+      "methods": [
+        "POST"
+      ],
       "sensitivity": "L2",
       "capability": "proc:git",
       "bodyLimit": 65536,
@@ -106,7 +126,9 @@
     {
       "plugin": "dsh-nano-explorer-extra",
       "path": "/nano-explorer-extra/push",
-      "methods": ["POST"],
+      "methods": [
+        "POST"
+      ],
       "sensitivity": "L2",
       "capability": "proc:git",
       "bodyLimit": 65536,
@@ -116,7 +138,9 @@
     {
       "plugin": "dsh-nano-explorer-extra",
       "path": "/nano-explorer-extra/remote",
-      "methods": ["POST"],
+      "methods": [
+        "POST"
+      ],
       "sensitivity": "L2",
       "capability": "proc:git",
       "bodyLimit": 65536,
@@ -126,7 +150,9 @@
     {
       "plugin": "dsh-nano-explorer-extra",
       "path": "/nano-explorer-extra/author",
-      "methods": ["POST"],
+      "methods": [
+        "POST"
+      ],
       "sensitivity": "L1",
       "capability": "proc:git",
       "bodyLimit": 65536,
@@ -136,7 +162,9 @@
     {
       "plugin": "dsh-nano-explorer-extra",
       "path": "/nano-explorer-extra/checkout",
-      "methods": ["POST"],
+      "methods": [
+        "POST"
+      ],
       "sensitivity": "L2",
       "capability": "proc:git",
       "bodyLimit": 65536,
@@ -146,7 +174,9 @@
     {
       "plugin": "dsh-nano-explorer-extra",
       "path": "/nano-explorer-extra/create-file",
-      "methods": ["POST"],
+      "methods": [
+        "POST"
+      ],
       "sensitivity": "L1",
       "capability": "write:workspace",
       "bodyLimit": 65536,
@@ -156,7 +186,9 @@
     {
       "plugin": "dsh-nano-explorer-extra",
       "path": "/nano-explorer-extra/create-folder",
-      "methods": ["POST"],
+      "methods": [
+        "POST"
+      ],
       "sensitivity": "L1",
       "capability": "write:workspace",
       "bodyLimit": 65536,
@@ -166,7 +198,9 @@
     {
       "plugin": "dsh-nano-explorer-extra",
       "path": "/nano-explorer-extra/rename",
-      "methods": ["POST"],
+      "methods": [
+        "POST"
+      ],
       "sensitivity": "L1",
       "capability": "write:workspace",
       "bodyLimit": 65536,
@@ -176,7 +210,9 @@
     {
       "plugin": "dsh-nano-explorer-extra",
       "path": "/nano-explorer-extra/move",
-      "methods": ["POST"],
+      "methods": [
+        "POST"
+      ],
       "sensitivity": "L1",
       "capability": "write:workspace",
       "bodyLimit": 65536,
@@ -186,7 +222,9 @@
     {
       "plugin": "dsh-nano-explorer-extra",
       "path": "/nano-explorer-extra/delete",
-      "methods": ["POST"],
+      "methods": [
+        "POST"
+      ],
       "sensitivity": "L1",
       "capability": "write:workspace",
       "bodyLimit": 65536,
@@ -196,7 +234,9 @@
     {
       "plugin": "dsh-nano-explorer-extra",
       "path": "/nano-explorer-extra/ignored",
-      "methods": ["POST"],
+      "methods": [
+        "POST"
+      ],
       "sensitivity": "L0",
       "capability": "read:workspace",
       "bodyLimit": 65536,
@@ -206,7 +246,9 @@
     {
       "plugin": "dsh-nano-explorer-extra",
       "path": "/nano-explorer-extra/list",
-      "methods": ["POST"],
+      "methods": [
+        "POST"
+      ],
       "sensitivity": "L2",
       "capability": "read:host",
       "bodyLimit": 65536,
@@ -216,7 +258,9 @@
     {
       "plugin": "dsh-nano-explorer-extra",
       "path": "/nano-explorer-extra/perf-review/host",
-      "methods": ["GET"],
+      "methods": [
+        "GET"
+      ],
       "sensitivity": "L2",
       "capability": "read:host",
       "bodyLimit": 0,
@@ -226,7 +270,9 @@
     {
       "plugin": "dsh-nano-explorer-extra",
       "path": "/nano-explorer-extra/read",
-      "methods": ["POST"],
+      "methods": [
+        "POST"
+      ],
       "sensitivity": "L2",
       "capability": "read:host",
       "bodyLimit": 65536,
@@ -234,229 +280,12 @@
       "justification": "dsh-nano-explorer-extra/src/host/routes.js:412 — returns any UTF-8 host file up to 1 MiB; client may pass allowOutsideWorkspace:true to skip the fence (finding routes-read-arbitrary-file, accepted). Host-level read."
     },
     {
-      "plugin": "dsh-nano-shared-workspace",
-      "path": "/nano-shared-workspace/settings",
-      "methods": ["GET"],
-      "sensitivity": "L0",
-      "capability": "credential:read",
-      "bodyLimit": 0,
-      "sessionBinding": false,
-      "justification": "dsh-nano-shared-workspace/src/host/routes.js:123 — returns masked identity + deployment config (endpoint/bucket/region), secret masked by mask(); read-only, no plaintext secret."
-    },
-    {
-      "plugin": "dsh-nano-shared-workspace",
-      "path": "/nano-shared-workspace/settings/test",
-      "methods": ["POST"],
-      "sensitivity": "L2",
-      "capability": "credential:probe",
-      "bodyLimit": 65536,
-      "sessionBinding": false,
-      "justification": "dsh-nano-shared-workspace/src/host/routes.js:130 — real signed S3 LIST probe using submitted/stored credentials against the configured endpoint; exercises secrets + outbound net."
-    },
-    {
-      "plugin": "dsh-nano-shared-workspace",
-      "path": "/nano-shared-workspace/settings/update",
-      "methods": ["PUT"],
-      "sensitivity": "L2",
-      "capability": "credential:write",
-      "bodyLimit": 65536,
-      "sessionBinding": false,
-      "justification": "dsh-nano-shared-workspace/src/host/routes.js:154 — writes identity {username,token,accessKey} to the host credentials store (DSH_NSW_IDENTITY/USERNAME refs); page-callable credential write."
-    },
-    {
-      "plugin": "dsh-nano-shared-workspace",
-      "path": "/nano-shared-workspace/settings/clear",
-      "methods": ["POST"],
-      "sensitivity": "L2",
-      "capability": "credential:write",
-      "bodyLimit": 65536,
-      "sessionBinding": false,
-      "justification": "dsh-nano-shared-workspace/src/host/routes.js:173 — deletes the stored identity from the credentials store and drops the settings cache; credential mutation."
-    },
-    {
-      "plugin": "dsh-nano-shared-workspace",
-      "path": "/nano-shared-workspace/status",
-      "methods": ["GET"],
-      "sensitivity": "L0",
-      "capability": "read:host",
-      "bodyLimit": 0,
-      "sessionBinding": false,
-      "justification": "dsh-nano-shared-workspace/src/host/routes.js:181 — local sync/status probe (registered identity presence + counters); read-only, no secret plaintext."
-    },
-    {
-      "plugin": "dsh-nano-shared-workspace",
-      "path": "/nano-shared-workspace/workspaces",
-      "methods": ["GET"],
-      "sensitivity": "L0",
-      "capability": "s3:read",
-      "bodyLimit": 0,
-      "sessionBinding": false,
-      "justification": "dsh-nano-shared-workspace/src/host/routes.js:194 — lists workspace markers the member belongs to; read-only S3 marker enumeration, no secret, remote-cross boundary is the data side not the route."
-    },
-    {
-      "plugin": "dsh-nano-shared-workspace",
-      "path": "/nano-shared-workspace/workspaces/create",
-      "methods": ["POST"],
-      "sensitivity": "L2",
-      "capability": "s3:write",
-      "bodyLimit": 65536,
-      "sessionBinding": false,
-      "justification": "dsh-nano-shared-workspace/src/host/routes.js:210 — PUTs a new workspace marker to S3 and registers the local replica; signed write + member.localPath handling."
-    },
-    {
-      "plugin": "dsh-nano-shared-workspace",
-      "path": "/nano-shared-workspace/workspaces/join",
-      "methods": ["POST"],
-      "sensitivity": "L2",
-      "capability": "write:host",
-      "bodyLimit": 65536,
-      "sessionBinding": false,
-      "justification": "dsh-nano-shared-workspace/src/host/routes.js:224 — accepts a caller-supplied localPath and materializes the remote workspace into it (P0 workspaceId/localPath traversal + arbitrary-fs-write findings); host fs write driven by remote data."
-    },
-    {
-      "plugin": "dsh-nano-shared-workspace",
-      "path": "/nano-shared-workspace/workspaces/delete",
-      "methods": ["POST"],
-      "sensitivity": "L2",
-      "capability": "s3:write",
-      "bodyLimit": 65536,
-      "sessionBinding": false,
-      "justification": "DASW-1112: deletes a workspace marker on S3 after a member check; signed DELETE + local pin removal. Local replica directory is preserved; remote tree/session objects under the id are orphaned."
-    },
-    {
-      "plugin": "dsh-nano-shared-workspace",
-      "path": "/nano-shared-workspace/sync",
-      "methods": ["POST"],
-      "sensitivity": "L2",
-      "capability": "s3:write",
-      "bodyLimit": 65536,
-      "sessionBinding": false,
-      "justification": "dsh-nano-shared-workspace/src/host/routes.js:238 — triggers a signed S3 sync cycle (pull + push) using stored identity; outbound net + remote object writes."
-    },
-    {
-      "plugin": "dsh-nano-shared-workspace",
-      "path": "/nano-shared-workspace/tree/pull",
-      "methods": ["POST"],
-      "sensitivity": "L2",
-      "capability": "write:host",
-      "bodyLimit": 65536,
-      "sessionBinding": false,
-      "justification": "dsh-nano-shared-workspace/src/host/routes.js:263 — writes the remote file tree (incl. .git/*) into member.localPath on the host (finding remote-member-localPath-arbitrary-fs-write); host fs write from remote data."
-    },
-    {
-      "plugin": "dsh-nano-shared-workspace",
-      "path": "/nano-shared-workspace/tree/push",
-      "methods": ["POST"],
-      "sensitivity": "L2",
-      "capability": "s3:write",
-      "bodyLimit": 65536,
-      "sessionBinding": false,
-      "justification": "dsh-nano-shared-workspace/src/host/routes.js:278 — reads the local replica tree and PUTs generations to S3; host fs read + signed outbound write."
-    },
-    {
-      "plugin": "dsh-nano-shared-workspace",
-      "path": "/nano-shared-workspace/sessions/bind",
-      "methods": ["POST"],
-      "sensitivity": "L2",
-      "capability": "write:host",
-      "bodyLimit": 65536,
-      "sessionBinding": true,
-      "justification": "dsh-nano-shared-workspace/src/host/routes.js:296 — binds a session to a workspace/localPath and writes binding state; cross-session host write."
-    },
-    {
-      "plugin": "dsh-nano-shared-workspace",
-      "path": "/nano-shared-workspace/sessions/claim",
-      "methods": ["POST"],
-      "sensitivity": "L2",
-      "capability": "s3:write",
-      "bodyLimit": 65536,
-      "sessionBinding": true,
-      "justification": "dsh-nano-shared-workspace/src/host/routes.js:310 — acquireClaim writes session meta to S3 (read-modify-write, no CAS = P0 race); signed remote write + session takeover surface."
-    },
-    {
-      "plugin": "dsh-nano-shared-workspace",
-      "path": "/nano-shared-workspace/sessions/heartbeat",
-      "methods": ["POST"],
-      "sensitivity": "L2",
-      "capability": "s3:write",
-      "bodyLimit": 65536,
-      "sessionBinding": true,
-      "justification": "dsh-nano-shared-workspace/src/host/routes.js:333 — renews the claim lease + bumps heartbeatRev on the remote session object; signed S3 write."
-    },
-    {
-      "plugin": "dsh-nano-shared-workspace",
-      "path": "/nano-shared-workspace/sessions/lease",
-      "methods": ["POST"],
-      "sensitivity": "L2",
-      "capability": "s3:write",
-      "bodyLimit": 65536,
-      "sessionBinding": true,
-      "justification": "dsh-nano-shared-workspace/src/host/routes.js:357 — renewClaim mutates the remote lease/expiresAt for a session; signed S3 write affecting other members' view."
-    },
-    {
-      "plugin": "dsh-nano-shared-workspace",
-      "path": "/nano-shared-workspace/sessions",
-      "methods": ["GET"],
-      "sensitivity": "L0",
-      "capability": "s3:read",
-      "bodyLimit": 0,
-      "sessionBinding": false,
-      "justification": "dsh-nano-shared-workspace/src/host/routes.js:375 — lists remote session records for the member's workspaces; read-only enumeration, no secret plaintext."
-    },
-    {
-      "plugin": "dsh-nano-shared-workspace",
-      "path": "/nano-shared-workspace/mkdir",
-      "methods": ["POST"],
-      "sensitivity": "L2",
-      "capability": "write:host",
-      "bodyLimit": 65536,
-      "sessionBinding": false,
-      "justification": "dsh-nano-shared-workspace/src/host/routes.js:388 — creates a directory at any writable absolute host path (finding ls-mkdir-any-absolute-path, accepted); host-level write."
-    },
-    {
-      "plugin": "dsh-nano-shared-workspace",
-      "path": "/nano-shared-workspace/ls",
-      "methods": ["POST"],
-      "sensitivity": "L2",
-      "capability": "read:host",
-      "bodyLimit": 65536,
-      "sessionBinding": false,
-      "justification": "dsh-nano-shared-workspace/src/host/routes.js:406 — lists directory entries for any absolute host path (same finding, accepted); host-level read/enumeration."
-    },
-    {
-      "plugin": "dsh-nano-shared-workspace",
-      "path": "/nano-shared-workspace/transcript",
-      "methods": ["POST"],
-      "sensitivity": "L2",
-      "capability": "s3:read",
-      "bodyLimit": 65536,
-      "sessionBinding": true,
-      "justification": "dsh-nano-shared-workspace/src/host/routes.js:433 — fetchTranscript reads a remote session body and can decompress/fetch it onto the host (remote meta unbounded-fetch finding); remote object ingress + host write."
-    },
-    {
-      "plugin": "dsh-nano-shared-workspace",
-      "path": "/nano-shared-workspace/materialize",
-      "methods": ["POST"],
-      "sensitivity": "L2",
-      "capability": "write:host",
-      "bodyLimit": 65536,
-      "sessionBinding": true,
-      "justification": "dsh-nano-shared-workspace/src/host/routes.js:447 — writes a remote session into the local session tree under a caller/sessionId-derived path (materialize-sessionId-path-traversal finding); host fs write from remote data."
-    },
-    {
-      "plugin": "dsh-nano-shared-workspace",
-      "path": "/nano-shared-workspace/jobs",
-      "methods": ["GET"],
-      "sensitivity": "L1",
-      "capability": "none",
-      "bodyLimit": 0,
-      "sessionBinding": false,
-      "justification": "dsh-nano-shared-workspace/src/host/routes.js:459 — read-only progress heartbeat for an in-process background job started by /sync or /materialize; returns job state only."
-    },
-    {
       "plugin": "dsh-nano-model-selector",
       "path": "/nano-model-selector/catalog",
-      "methods": ["GET", "HEAD"],
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
       "sensitivity": "L0",
       "capability": "read:host",
       "bodyLimit": 0,
@@ -466,7 +295,10 @@
     {
       "plugin": "dsh-nano-model-selector",
       "path": "/nano-model-selector/media-engines",
-      "methods": ["GET", "HEAD"],
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
       "sensitivity": "L0",
       "capability": "read:host",
       "bodyLimit": 0,
@@ -476,7 +308,11 @@
     {
       "plugin": "dsh-nano-model-selector",
       "path": "/nano-model-selector/media-engine",
-      "methods": ["GET", "HEAD", "PUT"],
+      "methods": [
+        "GET",
+        "HEAD",
+        "PUT"
+      ],
       "sensitivity": "L2",
       "capability": "write:host",
       "bodyLimit": 16384,

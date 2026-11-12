@@ -1,0 +1,8 @@
+# ⛔ DEPRECATED 2026-11-12 — 本包已退役，见 deprecated/README.md。
+# 不要再把这个 patch 应用到任何 profile；已安装的实例请移除配置行并重启。
+# 保留本文件只为归档完整性，不参与任何发布/打包流程。
+# Bundle patch: a profile that lists this package as a bundle applies this layer.
+# The row names the package, so resolution runs through the profile's dependency link.
+- insert:
+    - id: nano-shared-workspace
+      name: dsh-nano-shared-workspace

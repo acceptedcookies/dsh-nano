@@ -1,7 +1,7 @@
 /**
  * nsw-fakes — host-function fixtures for the remote-cross PoC cases.
  *
- * Lifted verbatim from dsh-nano-shared-workspace/test/boundary.test.mjs
+ * Lifted verbatim from deprecated/dsh-nano-shared-workspace/test/boundary.test.mjs
  * (P2-03..P2-06 proven oracles): the in-memory fakeS3 with etag/CAS
  * semantics, the credentials fake ctx, the schema-valid marker/meta/head
  * builders, and the session seeder. The host functions under test take an
@@ -23,7 +23,7 @@ import { Readable } from 'node:stream'
 import { createHash } from 'node:crypto'
 import { zstdCompressSync, constants } from 'node:zlib'
 import { SchemaReject } from '../../../packages/dsh-remote-data-schema/src/index.js'
-import { projectKey } from '../../../dsh-nano-shared-workspace/src/host/session-io.js'
+import { projectKey } from '../../../deprecated/dsh-nano-shared-workspace/src/host/session-io.js'
 
 export { SchemaReject, projectKey }
 

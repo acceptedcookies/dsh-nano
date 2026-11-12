@@ -1,7 +1,8 @@
 {
   "name": "dsh-nano-shared-workspace",
   "version": "0.2.0",
-  "description": "Shared workspace: sync dsh sessions across clients through an S3-compatible endpoint (MinIO/R2), listed as a mirrored section above the workspace browser.",
+  "description": "[DEPRECATED 2026-11-12 — do not publish or install] Shared workspace: sync dsh sessions across clients through an S3-compatible endpoint (MinIO/R2), listed as a mirrored section above the workspace browser.",
+  "private": true,
   "type": "module",
   "icon": "./icon.svg",
   "main": "./index.js",

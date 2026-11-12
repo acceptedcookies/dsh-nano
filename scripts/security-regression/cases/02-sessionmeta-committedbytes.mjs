@@ -18,8 +18,8 @@ import {
   INSTANCE, USERNAME, MEMBER_ID, WS, SID,
   tmp, projectKey, isSchemaReject, settle, verdicts,
 } from '../lib/nsw-fakes.mjs'
-import { fetchTranscript, listRemoteSessions, pushSession } from '../../../dsh-nano-shared-workspace/src/host/session-io.js'
-import { pinWorkspaceLocalPath } from '../../../dsh-nano-shared-workspace/src/host/workspaces.js'
+import { fetchTranscript, listRemoteSessions, pushSession } from '../../../deprecated/dsh-nano-shared-workspace/src/host/session-io.js'
+import { pinWorkspaceLocalPath } from '../../../deprecated/dsh-nano-shared-workspace/src/host/workspaces.js'
 import { join } from 'node:path'
 
 export const fingerprint = 'nsw-sessionmeta-overflow'

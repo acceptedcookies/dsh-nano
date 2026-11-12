@@ -22,10 +22,12 @@ import { dirname, join } from 'node:path'
 const HERE = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(HERE, '..')
 
+// DEPRECATED 2026-11-12: dsh-nano-shared-workspace retired to deprecated/;
+// its lib/ is archived, not shipped, so it is no longer scanned. See
+// deprecated/README.md.
 const PLUGINS = [
   'dsh-nano-notepad',
   'dsh-nano-explorer-extra',
-  'dsh-nano-shared-workspace',
   'dsh-nano-model-selector',
 ]
 

@@ -1,4 +1,6 @@
-# DNSW-1112 · shared-workspace 自动化测试与开发 ledger
+> **⛔ DEPRECATED（2026-11-12）**：本 ledger 记录的插件 `dsh-nano-shared-workspace` 已由 [业主] 裁决退役，源码整体移至 [`deprecated/dsh-nano-shared-workspace/`](../../../deprecated/README.md)。**以下全部结论是历史记录，不构成现行能力的验收依据**；发布、打包、门禁均已排除该插件。正文中的相对路径按「退役当时位于仓库根 / 对应 worktree」理解，未做批量改写。完整说明见 [`deprecated/README.md`](../../../deprecated/README.md)。
+
+# DNSW-1112 · shared-workspace 自动化测试与开发 ledger（历史归档）
 
 > 本文件是本次自动化测试与开发的**唯一跟踪账本**，随分支 `dasw-1112-automation` 提交。
 > 所有测试结论、发现的问题、代码升级、证据路径都登记在这里；正文里的路径相对于本 worktree。

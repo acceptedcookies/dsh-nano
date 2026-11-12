@@ -80,6 +80,9 @@ export function bucketForElement(el, attrs) {
   return targetBucket({ tag: el?.tagName, attrs: {} })
 }
 
+// 'data-nano-shared-workspace' is a HISTORICAL anchor for the plugin
+// dsh-nano-shared-workspace, DEPRECATED 2026-11-12 (moved to deprecated/).
+// Kept only so old pages still bucket correctly; there is no active producer.
 const BUCKET_ATTRS = [
   'data-composer', 'data-chat-input',
   'data-nano-notepad', 'data-nano-model-selector',

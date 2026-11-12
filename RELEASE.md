@@ -2,16 +2,19 @@
 
 本仓库插件的发布流程、打包方式和完整性校验规范。所有插件共用这一套流程，不随单个插件变化。
 
+> **⛔ 排除项（2026-11-12，[业主] 裁决）**：`dsh-nano-shared-workspace` 已 **DEPRECATED**，整体移至 [`deprecated/dsh-nano-shared-workspace/`](deprecated/README.md)。**本文件描述的 RELEASE 流程、`npm pack` 打包、CI/attestation 与安装命令一律不再包含该插件**；其 `package.json` 已加 `private: true`（`npm publish` 硬拒）。归档目录不参与构建门禁，仅供回溯。
+
 ## 适用的包
 
-下面的命令用 `dsh-nano-notepad` 做例子。另外几个 overlay 插件把包名换掉即可。`dsh-nano-shared-workspace` 还没有包内 AGENTS.md，安装侧合同以各包 AGENTS.md 的「安装」和 [母版](docs/agents/TEMPLATE.md) 为准，命令是 `dsh plugin --profile web add <spec>`。状态汇总在仓库根 [AGENTS.md](AGENTS.md) 的「A2A onboarding 状态」。
+下面的命令用 `dsh-nano-notepad` 做例子。另外几个 overlay 插件把包名换掉即可。各包安装侧合同以包内 AGENTS.md 的「安装」和 [母版](docs/agents/TEMPLATE.md) 为准，命令是 `dsh plugin --profile web add <spec>`。状态汇总在仓库根 [AGENTS.md](AGENTS.md) 的「A2A onboarding 状态」。
 
 | 包 | 接入 | 规格 | tarball 必须含有 |
 |---|---|---|---|
 | `dsh-nano-notepad` | [AGENTS.md](dsh-nano-notepad/AGENTS.md) | [规格](docs/specs/dsh-nano-notepad/README.md) | `index.js`、`lib/client.js` 等全部 `lib/` 运行时文件、`cordis.patch.yml`、`AGENTS.md`（以 `package.json` 的 `files` 为准） |
 | `dsh-nano-model-selector` | [AGENTS.md](dsh-nano-model-selector/AGENTS.md) | [README](docs/specs/dsh-nano-model-selector/README.md) | 同上，另加 `lib/host-media.js`（`index.js` 直接 import） |
 | `dsh-nano-explorer-extra` | [AGENTS.md](dsh-nano-explorer-extra/AGENTS.md) | [README](docs/specs/dsh-nano-explorer-extra/README.md) | `index.js`、`lib/host.js`、`lib/client.js`、`cordis.patch.yml`、`AGENTS.md` |
-| `dsh-nano-shared-workspace` | 无包内 AGENTS.md | [spec.md](docs/specs/dsh-nano-shared-workspace/spec.md) | `index.js`、`lib/host.js`、`lib/client.js`、`cordis.patch.yml` |
+
+**发布包清单 = 上表三行，不含任何 `deprecated/` 下的条目。**
 
 ## 构建环境
 
@@ -41,7 +44,7 @@ npm pack         # 产出 dsh-nano-notepad-<version>.tgz
 
 `package.json` 的 `files` 字段决定 tarball 内容。各包必须带上的运行时文件见上面的表，也见各包 AGENTS.md 的「交付物」。共同规则：
 
-- 构建产物必须在 `files` 里：都有 `lib/client.js`；explorer / shared-workspace 另有 `lib/host.js`；model-selector 另有 `lib/host-media.js`、`lib/route-guard.js`、`lib/route-table.js`、`lib/perf-review-host.js`；notepad 另有 `lib/s3-sync-host.js`、`lib/route-guard.js`、`lib/route-table.js`、`lib/perf-review-host.js`、`lib/mp-sanitize.js`。源文件（`src/`）不进包。
+- 构建产物必须在 `files` 里：都有 `lib/client.js`；explorer 另有 `lib/host.js`；model-selector 另有 `lib/host-media.js`、`lib/route-guard.js`、`lib/route-table.js`、`lib/perf-review-host.js`；notepad 另有 `lib/s3-sync-host.js`、`lib/route-guard.js`、`lib/route-table.js`、`lib/perf-review-host.js`、`lib/mp-sanitize.js`。源文件（`src/`）不进包。（退役的 shared-workspace 曾有 `lib/host.js`，已排除。）
 - `AGENTS.md` 必须在 `files` 里。安装方拿到的是包内这一份，不是仓库根的 [AGENTS.md](AGENTS.md)，也不是 [docs/agents/TEMPLATE.md](docs/agents/TEMPLATE.md)。
 - 版本号与 git tag 对齐：`package.json` 的 `version` = tag 去掉 `v` 前缀，CI 里断言一致（见 workflow）。
 - `cordis.patch.yml` 的 `name` 必须是包名。开发启动器会在本机把它改写成这份副本的 `index.js`；不要把绝对路径提交进仓库。见各包 `cordis.patch.yml` 文件头，以及母版「安装」一节。
@@ -160,7 +163,7 @@ jobs:
             dsh-nano-notepad/SHA256SUMS.txt
 ```
 
-多插件时把 build/pack/checksum 三步抽成 matrix（`plugin: [dsh-nano-notepad, dsh-nano-model-selector, dsh-nano-explorer-extra, dsh-nano-shared-workspace]`），每个插件一个 tarball。各包的构建入口都是 `npm run build`，见各包 AGENTS.md 的「构建」。构建脚本跨平台，`runs-on` 可以是 `ubuntu-latest`、`macos-latest` 或 `windows-latest`，产物一致。
+多插件时把 build/pack/checksum 三步抽成 matrix（`plugin: [dsh-nano-notepad, dsh-nano-model-selector, dsh-nano-explorer-extra]`），每个插件一个 tarball。**matrix 只能列上表三个活跃包；`deprecated/` 下的条目一律不得加入**——`dsh-nano-shared-workspace` 已于 2026-11-12 退役并设 `private: true`，把它放进 matrix 会让 CI 重新发布已弃用的插件。各包的构建入口都是 `npm run build`，见各包 AGENTS.md 的「构建」。构建脚本跨平台，`runs-on` 可以是 `ubuntu-latest`、`macos-latest` 或 `windows-latest`，产物一致。
 
 ### attestation 与 cosign 二选一
 

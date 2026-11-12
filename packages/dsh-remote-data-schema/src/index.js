@@ -3,7 +3,10 @@
  *
  * Host-side schema validation for remote (S3-bucket) objects consumed by the
  * dsh-nano plugins (notepad manifest/files/images; shared-workspace marker /
- * session meta / tree HEAD). Pure JS, no DOM, no IO; bundled into lib/ via
+ * session meta / tree HEAD). NOTE: the shared-workspace consumer was
+ * DEPRECATED 2026-11-12 (moved to deprecated/); marker/session-meta/tree-head
+ * kinds remain in this library for the archived source and historical samples.
+ * Pure JS, no DOM, no IO; bundled into lib/ via
  * esbuild (devDependency per T-O-13), never resolved at runtime.
  *
  * Contract (T-O-8, P1-06 skeleton / P2-01 rules):

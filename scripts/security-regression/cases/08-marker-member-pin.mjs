@@ -23,7 +23,7 @@ import {
   INSTANCE, USERNAME, MEMBER_ID, WS, SID,
   tmp, settle, verdicts,
 } from '../lib/nsw-fakes.mjs'
-import { readMarker, matchWorkspace, trustedMember, ownMember, pinWorkspaceLocalPath } from '../../../dsh-nano-shared-workspace/src/host/workspaces.js'
+import { readMarker, matchWorkspace, trustedMember, ownMember, pinWorkspaceLocalPath } from '../../../deprecated/dsh-nano-shared-workspace/src/host/workspaces.js'
 import { join } from 'node:path'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -82,7 +82,7 @@ export async function run() {
   v.check('matchWorkspace:unpinned-ws-no-claim', hitOther === null, `matched=${hitOther?.workspaceId}`)
 
   /* ---------- join persists the pin (so membership survives restart) ------ */
-  const { joinWorkspace } = await import('../../../dsh-nano-shared-workspace/src/host/workspaces.js')
+  const { joinWorkspace } = await import('../../../deprecated/dsh-nano-shared-workspace/src/host/workspaces.js')
   const ws2 = 'aaaaaaaaaaaaaaaa'
   const s3 = fakeS3({ [`workspaces/${ws2}.json`]: markerOf({
     workspaceId: ws2,

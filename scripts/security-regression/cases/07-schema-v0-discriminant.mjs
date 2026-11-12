@@ -18,7 +18,7 @@
  */
 import { fakeS3, WS, SID, isSchemaReject, settle, verdicts } from '../lib/nsw-fakes.mjs'
 import { validate, SchemaReject } from '../../../packages/dsh-remote-data-schema/src/index.js'
-import { readMarker } from '../../../dsh-nano-shared-workspace/src/host/workspaces.js'
+import { readMarker } from '../../../deprecated/dsh-nano-shared-workspace/src/host/workspaces.js'
 
 export const fingerprint = 'schema-v0-discriminant'
 export const describe =

@@ -230,6 +230,8 @@ export function targetBucket(descriptor) {
   if (has('data-nano-notepad')) return 'notepad-panel'
   if (has('data-nano-model-selector')) return 'model-trigger'
   if (has('data-nxe')) return 'files-row'
+  // Historical anchor for the DEPRECATED (2026-11-12) shared-workspace plugin;
+  // see deprecated/README.md. No active producer, kept for old pages.
   if (has('data-nano-shared-workspace')) return 'shared-row'
   if (has('data-row-key') || has('data-sidebar-row')) return 'sidebar-row'
   if (descriptor.tag === 'TEXTAREA') return 'composer-textarea'

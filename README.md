@@ -1,11 +1,13 @@
 # dsh-nano
 
-> DeepSeek Harness（dsh）Web 的 overlay 插件仓库：四个「宿主 + 浏览器」双端插件，加三个只在构建期打进 `lib/` 的共享包。面向在本仓库改插件、做交接或巡检的人；能力面是悬浮文本记事本、模型选择与 `/imagine`、工作区文件树，以及可选的 S3 同步。运行底座是 `@deepseek-ai/dsh@0.2.2-rc.1` 的 **web** profile，不是独立网站。
+> **DEPRECATED（2026-11-12）**：`dsh-nano-shared-workspace` 已由 [业主] 裁决退役，整体移至 [`deprecated/dsh-nano-shared-workspace/`](deprecated/README.md)。本仓库现行是**三个**活跃「宿主 + 浏览器」双端插件；下文凡是「四个插件」的历史表述、以及 `docs/eval`、`docs/code-review`、`docs/specs` 里的历史路径，都按退役当时理解。发布/打包/门禁已不再包含该插件，详见 [`deprecated/README.md`](deprecated/README.md)。
+
+> DeepSeek Harness（dsh）Web 的 overlay 插件仓库：三个「宿主 + 浏览器」双端插件，加三个只在构建期打进 `lib/` 的共享包。面向在本仓库改插件、做交接或巡检的人；能力面是悬浮文本记事本、模型选择与 `/imagine`、工作区文件树，以及可选的 S3 同步。运行底座是 `@deepseek-ai/dsh@0.2.2-rc.1` 的 **web** profile，不是独立网站。
 
 > **维护者**：Sean.Z
 > **最后核对（against HEAD）**：2026-11-11 @ `350c6c8`（`main`）
 > **对外地址**：<https://github.com/acceptedcookies/dsh-nano>（源码。没有公开运行站点，也没有 git tag / GitHub Release）
-> **总体状态**：四个插件与三个共享包的源码在 `main`；记事本文件名、S3 配置存储、`dsh-s3-client` 与 `dsh-performance-review` 的单元测试在本次核对时通过。发布信任链未接线。2026-11-11 安全审查的 24 条 confirmed 仍是 `findings-open`，修复决策已冻结、代码未改。
+> **总体状态**：三个活跃插件 + 三个共享包的源码在 `main`，另有一个已退役插件归档在 `deprecated/`；记事本文件名、S3 配置存储、`dsh-s3-client` 与 `dsh-performance-review` 的单元测试在本次核对时通过。发布信任链未接线。2026-11-11 安全审查的 24 条 confirmed 仍是 `findings-open`，修复决策已冻结、代码未改。
 > **文档状态**：`draft`
 
 ---
@@ -21,7 +23,7 @@
 - **悬浮记事本**：任意后缀的文本留在该浏览器源的 IndexedDB；Markdown 只是 `.md` / `.markdown` 的视图。可选 S3 同步默认关闭。
 - **模型选择器**：composer 上的提供商 rail、收藏、effort，以及 `/imagine` 媒体技能。
 - **文件树增强**：会话工作区的目录、Git 状态、提交 / 拉取 / 切换分支；有改动的文件可打开实验性 forge 差异 tab。
-- **共享工作区**：经 S3 兼容端点列出、加入、同步会话与副本目录。源码长于包内自述，规格仍是草案。
+- ~~**共享工作区**：经 S3 兼容端点列出、加入、同步会话与副本目录~~ —— **已 DEPRECATED（2026-11-12）**，源码归档在 [`deprecated/dsh-nano-shared-workspace/`](deprecated/README.md)，不再维护、不发布。
 - **构建期共享包**：对话框 / 菜单 / tab、性能观测（默认关）、宿主侧 S3 客户端。三者都不单独安装。
 
 > **当前状态（对账诚实）**：`已落地` 只表示 HEAD 里有对应源码，且下表证据锚能定位到实现或一次本地测试。它不等于「已上线」或「安全审查已关闭」。没有公开部署，故本表不使用 `live`。
@@ -33,7 +35,7 @@
 | 记事本：公众号抓取 | `已落地`（默认关） | 路由 [`index.js:62`](dsh-nano-notepad/index.js#L62) `POST /nano-notepad/fetch-mp`；设置仅在 `mpEnabled === true` 时打开（[`db.js:62`](dsh-nano-notepad/src/client/db.js#L62)） |
 | 模型选择器 + `/imagine` | `已落地` | 目录路由 [`dsh-nano-model-selector/index.js:28`](dsh-nano-model-selector/index.js#L28)；引擎探测 [`lib/host-media.js:14`](dsh-nano-model-selector/lib/host-media.js#L14)。本次未做真实出图 |
 | 文件树与 Git 卡片 | `已落地` | 前缀 [`dsh-nano-explorer-extra/src/host/routes.js:11`](dsh-nano-explorer-extra/src/host/routes.js#L11)。无本包单元测试 |
-| 共享工作区路由（含 tree pull/push、materialize） | `已落地` | 前缀与路由表 [`dsh-nano-shared-workspace/src/host/routes.js:13`](dsh-nano-shared-workspace/src/host/routes.js#L13)；`pullWorkspace` [`src/host/tree.js:157`](dsh-nano-shared-workspace/src/host/tree.js#L157)。`/status` 仍固定返回空 `sessions`（[`routes.js:188`](dsh-nano-shared-workspace/src/host/routes.js#L188)）。无本包测试，无跨机验收记录 |
+| ~~共享工作区路由（含 tree pull/push、materialize）~~ | **已退役** | 2026-11-12 由 [业主] 裁决 deprecated，整体移至 [`deprecated/dsh-nano-shared-workspace/`](deprecated/README.md)。本表不再把它列为现行能力，历史证据见归档目录与 `docs/eval/26-nov/DNSW-1112-automation.md` |
 | `dsh-s3-client`（SigV4、限速、账本） | `已落地` | [`packages/dsh-s3-client/package.json`](packages/dsh-s3-client/package.json)；`node --test packages/dsh-s3-client/test/*.mjs` 本次 16 通过 |
 | `dsh-performance-review`（默认不采集） | `已落地` | 宿主开关 [`packages/dsh-performance-review/src/host.js:121`](packages/dsh-performance-review/src/host.js#L121) 仅 `DSH_PERF_REVIEW=1`；`node --test packages/dsh-performance-review/test/*.mjs` 本次 60 通过 |
 | `dsh-nano-ui`（构建期 UI） | `已落地` | [`packages/dsh-nano-ui/package.json`](packages/dsh-nano-ui/package.json)、[`src/tabs.js`](packages/dsh-nano-ui/src/tabs.js)。无测试脚本 |
@@ -46,7 +48,7 @@
 
 | 层级 | 技术 / 库 | 说明 |
 |------|-----------|------|
-| 宿主平台 | `@deepseek-ai/dsh@0.2.2-rc.1`，Cordis | `engines.dsh` 四个插件都是 `>=0.2.2-rc.1 <0.3.0`（如 [`dsh-nano-notepad/package.json:28`](dsh-nano-notepad/package.json#L28)）。只装 **web** profile，不装 headless / sdk / acp |
+| 宿主平台 | `@deepseek-ai/dsh@0.2.2-rc.1`，Cordis | `engines.dsh` 三个活跃插件都是 `>=0.2.2-rc.1 <0.3.0`（如 [`dsh-nano-notepad/package.json:28`](dsh-nano-notepad/package.json#L28)）。只装 **web** profile，不装 headless / sdk / acp |
 | 语言 | JavaScript（Node ESM + 浏览器 IIFE） | 无 TypeScript 编译步骤，无根级 `package.json` |
 | 构建 | esbuild `0.25.0`（各包 `devDependencies` 锁死） | `npm run build` → `node scripts/build-client.mjs`。共享包被打进 `lib/`，运行中的页面不单独加载它们 |
 | UI | `dsh-nano-ui`，peer：`react >=18`、`@deepseek-ai/dsh-client-ui-primitives` | 对话框、菜单、toast、分段 tab。`publishConfig.registry` 指向 GitHub npm，本仓库没有发布记录 |
@@ -64,14 +66,15 @@
 
 ### 3.1 Overlay 插件
 
-四个目录各自是一个可 `dsh plugin --profile web add` 的包。版本以各包 `package.json` 为准：notepad / model-selector / explorer-extra 为 `0.1.1`，shared-workspace 为 `0.1.0`。
+三个目录各自是一个可 `dsh plugin --profile web add` 的包，版本以各包 `package.json` 为准（notepad / model-selector / explorer-extra 均为 `0.1.1`）。
 
 | 包 | 插件 id | 浏览器里做什么 | 规格 |
 |----|---------|----------------|------|
 | [`dsh-nano-notepad/`](dsh-nano-notepad/) | `nano-notepad` | 悬浮文本记事本 | [docs/specs/dsh-nano-notepad/README.md](docs/specs/dsh-nano-notepad/README.md)、[s3-sync-design.md](docs/specs/dsh-nano-notepad/s3-sync-design.md) |
 | [`dsh-nano-model-selector/`](dsh-nano-model-selector/) | `nano-model-selector` | 模型面板与 `/imagine` | [docs/specs/dsh-nano-model-selector/README.md](docs/specs/dsh-nano-model-selector/README.md) |
 | [`dsh-nano-explorer-extra/`](dsh-nano-explorer-extra/) | `nano-explorer-extra` | 接管「文件」页 | [docs/specs/dsh-nano-explorer-extra/README.md](docs/specs/dsh-nano-explorer-extra/README.md) |
-| [`dsh-nano-shared-workspace/`](dsh-nano-shared-workspace/) | `nano-shared-workspace` | 侧栏共享工作区 | [docs/specs/dsh-nano-shared-workspace/spec.md](docs/specs/dsh-nano-shared-workspace/spec.md)（草案，见 §12） |
+
+> **已退役**：`dsh-nano-shared-workspace`（`nano-shared-workspace`，侧栏共享工作区）于 2026-11-12 deprecated，源码移至 [`deprecated/dsh-nano-shared-workspace/`](deprecated/README.md)，**不再安装、不打包、不发布**。历史规格草案仍在 `docs/specs/dsh-nano-shared-workspace/spec.md`，仅作回溯。
 
 每个插件的 `cordis.patch.yml` 在仓库里写包名，不写绝对路径。记事本的例子：[`dsh-nano-notepad/cordis.patch.yml:5`](dsh-nano-notepad/cordis.patch.yml#L5) `name: dsh-nano-notepad`。开发启动器可以在副本上改写这一行；提交进仓库的必须仍是包名。
 
@@ -130,8 +133,8 @@ dsh-plugins/
 │   ├── src/host/routes.js                   # /nano-explorer-extra/* 
 │   └── lib/host.js、lib/client.js           # 两份都是构建产物，缺一不可
 │
-├── dsh-nano-shared-workspace/               # 共享工作区 0.1.0
-│   └── src/host/                            # 路由、会话同步、目录树 pull/push
+├── deprecated/                               # 已退役插件归档（不参与构建/发布）
+│   └── dsh-nano-shared-workspace/            # ⛔ DEPRECATED 2026-11-12，见 deprecated/README.md
 │
 ├── packages/
 │   ├── dsh-nano-ui/                         # 构建期 UI（含 nanoTabs）
@@ -249,37 +252,18 @@ BFF 就是 dsh 宿主进程里的插件 `apply(ctx)`。浏览器请求 `https://
 | `/nano-explorer-extra/pull` | POST | `git pull --ff-only` |
 | `/nano-explorer-extra/checkout` | POST | 切换当前工作树的分支 |
 | `/nano-explorer-extra/perf-review/host` | GET | 观测快照。默认关闭时仍返回 200，`enabled` 为 false |
-| `/nano-shared-workspace/settings` | GET | 已存身份的非密字段 |
-| `/nano-shared-workspace/settings/test` | POST | 对候选密钥做一次 LIST，不落盘 |
-| `/nano-shared-workspace/settings/update` | PUT | 写入 username / token / accessKey |
-| `/nano-shared-workspace/settings/clear` | POST | 清除身份 |
-| `/nano-shared-workspace/status` | GET | **未接同步引擎**：永远 `sessions: []`（[`routes.js:188`](dsh-nano-shared-workspace/src/host/routes.js#L188)） |
-| `/nano-shared-workspace/workspaces` | GET | 列出桶上的共享工作区 |
-| `/nano-shared-workspace/workspaces/create` | POST | 先写远端 marker |
-| `/nano-shared-workspace/workspaces/join` | POST | 把本机路径记进成员 |
-| `/nano-shared-workspace/sync` | POST | 推送已加入工作区的会话并顺带推目录树 |
-| `/nano-shared-workspace/tree/pull` | POST | 按 HEAD 把副本目录拉到 `localPath` |
-| `/nano-shared-workspace/tree/push` | POST | 把副本目录推进桶 |
-| `/nano-shared-workspace/sessions` | GET | 远端会话列表 |
-| `/nano-shared-workspace/sessions/bind` | POST | 把 session 挂到本机已登记的副本工作区 |
-| `/nano-shared-workspace/sessions/claim` | POST | 抢写锁 |
-| `/nano-shared-workspace/sessions/heartbeat` | POST | 续租，并推一次目录树 |
-| `/nano-shared-workspace/sessions/lease` | POST | 看当前持有者 |
-| `/nano-shared-workspace/transcript` | POST | 取远端会话事件 |
-| `/nano-shared-workspace/materialize` | POST | 把共享会话写到本机会话树 |
-| `/nano-shared-workspace/ls` | POST | 列本机绝对路径下的子目录（默认 home） |
-| `/nano-shared-workspace/mkdir` | POST | 在本机绝对路径下建一层目录 |
+> **`/nano-shared-workspace/*` 的 20+ 条路由已从本表移除** —— 该插件 2026-11-12 deprecated，源码归档在 [`deprecated/dsh-nano-shared-workspace/`](deprecated/README.md)。历史路由清单见 `security/route-inventory.md`（已标注 deprecated）与归档包内 `src/host/routes.js`。现行门禁 `security/route-sensitivity.json` / `security/feature-contract.json` 已不再收录这些路由。
 
 文件树另有右键「查看差异」：不走本插件的 diff 路由（该路由已删），而是打开 forge 面板的本地差异 tab。profile 没装「变更请求与工作树」时，界面只提示不可用。
 
 ### 9.3 中间件与 CORS
 
-没有插件级 CORS 中间件。准入是 dsh `connection.requestRejection`，在 [`dsh-nano-explorer-extra/src/host/routes.js:458`](dsh-nano-explorer-extra/src/host/routes.js#L458)、[`dsh-nano-shared-workspace/src/host/routes.js:489`](dsh-nano-shared-workspace/src/host/routes.js#L489)、[`dsh-nano-notepad/index.js:301`](dsh-nano-notepad/index.js#L301) 各写一份。跨站请求会被拒；同页脚本不会。
+没有插件级 CORS 中间件。准入是 dsh `connection.requestRejection`，在 [`dsh-nano-explorer-extra/src/host/routes.js:458`](dsh-nano-explorer-extra/src/host/routes.js#L458)、[`dsh-nano-notepad/index.js:301`](dsh-nano-notepad/index.js#L301) 各写一份（退役的 shared-workspace 曾写第三份，见归档）。跨站请求会被拒；同页脚本不会。
 
 ### 9.4 第三方配置 / token / 客户端 / 缓存
 
 - **记事本 S3**（[`s3-sync.js`](dsh-nano-notepad/src/host/s3-sync.js) + [`packages/dsh-s3-client`](packages/dsh-s3-client/)）：多端点 JSON 存在 `DSH_HOME`。限速常量 `rps: 10, burst: 20, kbps: 512, concurrency: 2`（[`s3-sync.js:17`](dsh-nano-notepad/src/host/s3-sync.js#L17)）。用量账本在客户端库内，不在浏览器。
-- **共享工作区**：身份走 dsh credentials（`DSH_NSW_*` 环境变量可兜底），端点来自插件 Config。`/status` 的空列表不能用来判断同步是否在跑；看 `/sync` 与后台 30 秒 tick（[`routes.js:511`](dsh-nano-shared-workspace/src/host/routes.js#L511)）。
+- ~~**共享工作区**：身份走 dsh credentials（`DSH_NSW_*` 环境变量可兜底），端点来自插件 Config~~ —— **已 DEPRECATED**，见 [`deprecated/README.md`](deprecated/README.md)；现存实例需自行移除配置行。
 - **模型目录**：宿主内存缓存 15 秒，不是磁盘缓存。
 - **媒体引擎状态**：`$DSH_DATA_DIR` 或 `$DSH_HOME` 下 `plugins/nano-model-selector/media-engine.json`。卸载不删。
 - **git**：文件树调用宿主机器 PATH 上的 `git`，超时默认 30 秒。
@@ -343,7 +327,7 @@ dsh plugin --profile web add <spec>
 | `dsh-s3-client` | `node --test packages/dsh-s3-client/test/*.mjs` | URL 拼接、分页、ETag、限速、签名、账本。本次核对 16 通过。用 AWS 文档示例密钥，不访问网络 |
 | `dsh-performance-review` | `node --test packages/dsh-performance-review/test/*.mjs` | 默认关闭、开关、INP 聚合、宿主快照。本次核对 60 通过 |
 | notepad 文件名与 S3 profile | `node --test dsh-nano-notepad/test/*.mjs` | 后缀保持、重名、secret 不回显、切换回滚。本次核对 9 通过。不覆盖面板 DOM、不打真实桶 |
-| explorer / model-selector / shared-workspace / dsh-nano-ui | 无 | 没有 `test/` 或 `npm test` |
+| explorer / model-selector / dsh-nano-ui | 无 | 没有 `test/` 或 `npm test`。（shared-workspace 已退役，不在此列） |
 | 性能实验室 | `node lab/run.mjs …`（见 [lab/README.md](lab/README.md)） | 本机手动。不在本次核对里运行，也不能当成 CI |
 | 安全审查复现 | 见审查报告自述 | 2026-11-11 的有界本地复现，不是本仓库的回归套件 |
 
@@ -420,9 +404,9 @@ dsh plugin --profile web add <spec>
 |------|------|-------------|----------------------|
 | 1 | 安全审查 24 条 confirmed（16 高 / 6 中 / 2 低）仍是 `findings-open`。页面脚本可驱使宿主做文件、git、出站与 S3 签名；富文本与同步数据有存储型 XSS。审查基准写的是脏工作区上的 `8a70166`，不是本 HEAD | 上线前 / 给不可信页面用之前 | 按已冻结的 [`pre-security-fix-qna.md`](docs/code-review/26-nov/pre-security-fix-qna.md) 执行 `26-nov-security-fix`，并用 `350c6c8` 之后的树复验。修完前不要把任一插件标成可对不可信内容开放 |
 | 2 | [RELEASE.md](RELEASE.md) 的 GitHub Actions、attestation、tag 与包版本对齐都未落地。本地 `npm pack` 可以打出 tarball，但没有包外校验 | 对外发包前 | 提交 `.github/workflows/` 并打第一个 `v*` tag 后，把本节改成有运行链接的证据 |
-| 3 | 共享工作区规格 [`spec.md:19`](docs/specs/dsh-nano-shared-workspace/spec.md#L19) 仍写工作区文件同步「尚未实现」，[`spec.md:21`](docs/specs/dsh-nano-shared-workspace/spec.md#L21) 把「继续对话」放在 Phase B；源码已有 `pullWorkspace` / `pushWorkspace` / `materialize`。包内 [README](dsh-nano-shared-workspace/README.md) 仍自述 Phase-0，只列了四条路由。`/status` 也还写着没有同步引擎 | 交接前 | 用当前 `src/host` 重写规格与包内 README，并补一次跨机验收。在那之前能力表保持「源码已落地、未验收」 |
+| 3 | ~~共享工作区规格与包内 README 落后于源码~~ | **已关闭（退役）** | 2026-11-12 由 [业主] 裁决 deprecated，不再维护规格与 README；源码归档在 [`deprecated/dsh-nano-shared-workspace/`](deprecated/README.md)，无需再补跨机验收 |
 | 4 | 记事本 [`package.json:4`](dsh-nano-notepad/package.json#L4) 仍写 “Floating Markdown notepad”。行为已是任意文本（[`db.js:137`](dsh-nano-notepad/src/client/db.js#L137)）。`locale/zh.json` 的市场描述同样偏 Markdown | 下次发包前 | 改描述并与规格 [README](docs/specs/dsh-nano-notepad/README.md) 对齐 |
-| 5 | 文件树、选择器、共享工作区、`dsh-nano-ui` 没有自动化测试。记事本测试不覆盖 XSS、路由围栏或真实 S3 | 长期 | 给 §11.3 的围栏和记事本清洗各加失败即红的测试，再声称回归 |
+| 5 | 文件树、选择器、`dsh-nano-ui` 没有自动化测试。记事本测试不覆盖 XSS、路由围栏或真实 S3（shared-workspace 已退役，不再计入） | 长期 | 给 §11.3 的围栏和记事本清洗各加失败即红的测试，再声称回归 |
 | 6 | `dsh-nano-ui` 的 `publishConfig` 指向 `https://npm.pkg.github.com`，本仓库看不到发布记录。插件用 `file:` 依赖，不依赖那次发布 | 长期 | 若不再打算发布，改掉 `publishConfig`，避免读者以为 GitHub npm 上有可用版本 |
 | 7 | 性能实验室依赖本机已登录浏览器与 git 忽略的 `lab/config.local.json`。规格与 [lab/README.md](lab/README.md) 已经记录和 Playwright 设想的差异 | 不挡开发 | 没有把 lab 接进 CI 的决定；接之前不要在状态表写实验室全绿 |
 | 8 | 选择器同时探测 grok 与 codex（[`lib/host-media.js:14`](dsh-nano-model-selector/lib/host-media.js#L14)）。本次核对没有对任一 CLI 做真实出图 | 使用 `/imagine` 前 | 在目标机器上各跑一次并记下引擎版本 |

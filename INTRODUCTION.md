@@ -13,7 +13,7 @@
 
 本仓库把 **一个 npm 包** 做成 **一个 dsh 组合包（bundle）**：`package.json` 声明 `dsh.bundle.patch` 与 `dsh.client`，`cordis.patch.yml` 把自己插进宿主 Cordis 的 entry 树，宿主半侧是 `index.js` 导出的 Node ESM 插件，浏览器半侧是 `lib/client.js` 里的 `window.__ModuleLoader__.load` 工厂；`src/` 只是作者树，`npm run build` 用 esbuild 把共享包一起打进 `lib/`，`npm pack` 只带 `lib/` 与声明文件，安装侧用 `dsh plugin --profile web add` 登记进 profile，**下次启动**宿主才把 patch 层叠加生效。
 
-四个 overlay 插件、三个构建期共享包、三套本机实例、一套分发信任链和一套性能预算，都是这条主线的变体。
+三个活跃 overlay 插件（第四个 `dsh-nano-shared-workspace` 已 DEPRECATED，见 [`deprecated/README.md`](deprecated/README.md)）、三个构建期共享包、三套本机实例、一套分发信任链和一套性能预算，都是这条主线的变体。
 
 ### 0.2 版本锚点（pinned）
 
@@ -23,13 +23,13 @@
 | 对应上游 tag | `dsh-v0.2.2-rc.1`（`66491b05`） | [.local-dsh-setup.md](.local-dsh-setup.md) §0 |
 | Node | `v24.22.2`（nvm，未改系统默认 Node 22） | 同上 |
 | 安装位置 | `~/.nvm/versions/node/v24.22.2/lib/node_modules/@deepseek-ai/dsh` | 同上 |
-| 四个插件的 `engines.dsh` | 全部 `>=0.2.2-rc.1 <0.3.0` | 各包 `package.json` |
+| 三个活跃插件的 `engines.dsh` | 全部 `>=0.2.2-rc.1 <0.3.0` | 各包 `package.json`（归档插件见 `deprecated/`） |
 | 构建工具 | `esbuild 0.25.0`（各包 `devDependencies` 锁死） | 各包 `package.json` |
 | 目标 profile | `web`（不要装进 headless / sdk / acp） | [docs/agents/TEMPLATE.md](docs/agents/TEMPLATE.md) |
 | 反代 | Caddy `v2.11.9`，本地 CA | [.local-dsh-setup.md](.local-dsh-setup.md) §0 |
 | 桌面版 | `/Applications/DeepSeek Harness.app`，`0.2.2-rc.1` | [.local-desktop-setup.md](.local-desktop-setup.md) §0 |
 | 实验室浏览器 | ego-lite / Chromium 156 | [lab/README.md](lab/README.md) |
-| 插件版本 | notepad / model-selector / explorer-extra `0.1.1`；shared-workspace `0.1.0` | 各包 `package.json` |
+| 插件版本 | notepad / model-selector / explorer-extra `0.1.1` | 各包 `package.json`。`dsh-nano-shared-workspace` 已于 2026-11-12 **DEPRECATED**，移至 [`deprecated/`](deprecated/README.md)，不再计入版本矩阵 |
 
 > **真源纪律**：正在执行的 dsh 是上面那份 npm 包（只有 `lib/`，没有 `.git`、没有 `src/`）。[context/deepseek-harness/](context/deepseek-harness/AGENTS.md) 是超前于发布标签的 GitHub `master` 源码检出，**只用来查接口与文档，不参与启动、不是版本真源**。类型与接口以已安装包的 `lib/types` 为准。
 
@@ -373,7 +373,7 @@ packages/dsh-nano-ui/
 - [dsh-nano-notepad/src/client/panel.js](dsh-nano-notepad/src/client/panel.js)：`openNanoDialog, openNanoMenu, nanoTabs, NANO_STYLES`
 - [dsh-nano-explorer-extra/src/client/dialogs.js](dsh-nano-explorer-extra/src/client/dialogs.js)：`NanoDialog`
 - [dsh-nano-model-selector/src/client/ModelSelector.jsx](dsh-nano-model-selector/src/client/ModelSelector.jsx)：`NanoToast`
-- [dsh-nano-shared-workspace/src/client/index.js](dsh-nano-shared-workspace/src/client/index.js)：`openNanoMenu`
+- ~~`dsh-nano-shared-workspace/src/client/index.js`：`openNanoMenu`~~ —— 该插件已 DEPRECATED，源码见 [`deprecated/`](deprecated/README.md)
 
 ### 3.3 消费链路
 
@@ -399,7 +399,7 @@ tarball 是单文件分发，安装侧不需要这些共享包
 | [dsh-nano-notepad/](dsh-nano-notepad/AGENTS.md) | overlay 插件（host+client） | 是 | `0.1.1` | 悬浮 Markdown 记事本；IndexedDB 存储；S3 签名代理；`lib/client.js`、`lib/perf-review-host.js`、`lib/s3-sync-host.js` |
 | [dsh-nano-model-selector/](dsh-nano-model-selector/AGENTS.md) | overlay 插件（host+client） | 是 | `0.1.1` | 增强模型选择器 + `/imagine`；`lib/client.js`、手写 `lib/host-media.js`、`lib/perf-review-host.js` |
 | [dsh-nano-explorer-extra/](dsh-nano-explorer-extra/AGENTS.md) | overlay 插件（host+client） | 是 | `0.1.1` | 接管文件页：Git 状态、状态栏、内联增删改；`lib/host.js`、`lib/client.js` |
-| [dsh-nano-shared-workspace/](dsh-nano-shared-workspace/README.md) | overlay 插件（host+client，Phase-0 骨架） | 是（**尚无包内 `AGENTS.md`**） | `0.1.0` | S3 真源的多机共享工作区；`lib/host.js`、`lib/client.js` |
+| ~~[dsh-nano-shared-workspace/]~~ | **⛔ DEPRECATED 2026-11-12** | — | — | 已移至 [`deprecated/dsh-nano-shared-workspace/`](deprecated/README.md)；不再安装、构建、打包、发布 |
 | [packages/dsh-nano-ui/](docs/specs/dsh-nano-ui/README.md) | 构建期共享 UI 库 | **否** | `0.1.0` | 打进各 `lib/client.js` |
 | [packages/dsh-performance-review/](packages/dsh-performance-review/README.md) | 构建期性能观测库 | **否** | `0.1.0` | 打进 `lib/client.js` / `lib/host.js`；单例 + 默认关闭 |
 | [packages/dsh-s3-client/](packages/dsh-s3-client/README.md) | 宿主侧 S3 客户端 | **否** | `0.1.0` | SigV4 签名 + 令牌桶 + 用量账本；打进 `lib/s3-sync-host.js`，密钥只在宿主 |
@@ -711,7 +711,7 @@ export function apply(ctx) {
 
 **观测库** [packages/dsh-performance-review/](packages/dsh-performance-review/README.md)：不是插件，构建期打进四个包的 `lib/client.js` / `lib/host.js`。四个 bundle 各带一份拷贝但不共享模块堆，所以用页面单例 `window.__perfReview` 与宿主单例 `globalThis.__perfReviewHost`；每份拷贝 `join` 时登记 `contributors` 与 `libVersion`，报告里能看到版本不一致这个事实。**默认关闭**：浏览器 `?perf-review=1` 或 `localStorage['dsh-perf-review']='1'`，宿主 `DSH_PERF_REVIEW=1`；关闭时 `span` / `track` / `count` / `hostSpan` 是恒等包装，不打 mark、不查时间、不改功能路径。浏览器 `report()` 返回并清空窗口；宿主每 30s 写 `plugins/perf-review/host.json`。规格见 [docs/specs/dsh-nano-performance-review/spec-26nov.md](docs/specs/dsh-nano-performance-review/spec-26nov.md)。
 
-**实验室** [lab/README.md](lab/README.md)：用 `ego-browser nodejs`（复用已登录浏览器，不需要 Playwright / storageState）跑 7 个场景（`idle-10s`、`composer-type`、`files-expand`、`notepad-type`、`model-open`、`shared-open`、`observer-purity`），臂有 `on` / `off` / `purity`，`--measure-footprint` 用 esbuild `--alias` 构建无观测包产物量字节差，`--repeats N` 取中位数。基线落在 `lab/baseline/baseline.json`（**入库**）并记 `versions` 指纹（chromeMajor / dshVersion / observerVersion / 四个插件 version），指纹不一致退出码 2。退出码：0 通过或首次写基线、1 预算失败、2 版本/报告不一致。判定分两层：低方差结构性指标是硬门禁；高方差相对项（`span p95`、`hostSpan p95`、页级 `nativeInpP75`）是 audit，写入报告但不产生 exit 1。
+**实验室** [lab/README.md](lab/README.md)：用 `ego-browser nodejs`（复用已登录浏览器，不需要 Playwright / storageState）跑 7 个场景（`idle-10s`、`composer-type`、`files-expand`、`notepad-type`、`model-open`、`shared-open`、`observer-purity`），臂有 `on` / `off` / `purity`，`--measure-footprint` 用 esbuild `--alias` 构建无观测包产物量字节差，`--repeats N` 取中位数。基线落在 `lab/baseline/baseline.json`（**入库**）并记 `versions` 指纹（chromeMajor / dshVersion / observerVersion / 四个插件 version —— 该指纹是退役前四插件时代的 lab 口径，未随 2026-11-12 deprecated 改动），指纹不一致退出码 2。退出码：0 通过或首次写基线、1 预算失败、2 版本/报告不一致。判定分两层：低方差结构性指标是硬门禁；高方差相对项（`span p95`、`hostSpan p95`、页级 `nativeInpP75`）是 audit，写入报告但不产生 exit 1。
 
 真机结果（2026-11-10）：观测包单测 60/60；`--measure-footprint` 精确体积 15503 B；`--arm purity` `loafCount=0`；7/7 场景 PASS、连续 3 次全量复跑退出码 0。宿主数据靠 `GET /nano-explorer-extra/perf-review/host?mode=window` 在场景首尾各调一次取得精确场景增量。机器级前置：dev 宿主 plist 加了 `DSH_PERF_REVIEW=1` 并重载过 LaunchAgent，否则 `hostSpan` 为空。
 
@@ -777,7 +777,7 @@ export function apply(ctx) {
 | [docs/specs/dsh-nano-notepad/README.md](docs/specs/dsh-nano-notepad/README.md) 的树只有 `lib/client.js` | 实际还有 `perf-review-host.js`、`s3-sync-host.js` |
 | [spec-26nov.md](docs/specs/dsh-nano-performance-review/spec-26nov.md) F3 写宿主构建用 `--packages=external` | 构建脚本注释与实现都是**不加**该参数；代码为准 |
 | 根 [AGENTS.md](AGENTS.md) 写「双实例」 | 本机现在是三套：`~/.dsh` / `~/.dsh-dev` / `~/.dsh-desktop`（见 [.local-desktop-setup.md](.local-desktop-setup.md)） |
-| `dsh-nano-shared-workspace` | 无包内 `AGENTS.md`，`files` 也不含它；`RELEASE.md` 的发布示例尚未覆盖它 |
+| ~~`dsh-nano-shared-workspace`~~ | **已 DEPRECATED**（2026-11-12）：整体移至 [`deprecated/`](deprecated/README.md)，`RELEASE.md` 不再把它列为发布包；本行保留仅为说明历史漂移 |
 | `lib/` 里的文件 | 既有构建产物，也有手写的 `lib/host-media.js`，两者都必须在 `files` 里 |
 
 规格 README 是阶段性快照，**以 `package.json` + 包内 `AGENTS.md` + 源码为准**；发现漂移时顺手修规格，不要照抄旧文。
@@ -786,7 +786,7 @@ export function apply(ctx) {
 
 - 正在做 notepad 的 S3 云同步：新增 [docs/specs/dsh-nano-notepad/s3-sync-design.md](docs/specs/dsh-nano-notepad/s3-sync-design.md)、[packages/dsh-s3-client/](packages/dsh-s3-client/README.md)、`src/host/`、`src/client/sync.js`、`src/client/cloud-settings.js`、`lib/s3-sync-host.js`、`test/`，尚未提交。
 - 最近的提交集中在 `dsh-performance-review` 植入、公众号接入、对话框挂载层修复、explorer 差异卡。
-- 四个插件都已在 `https://dsh-dev.local/` 加载过（lab 记录 `contributors` 4/4）；日常实例保持干净。
+- 四个插件都已在 `https://dsh-dev.local/` 加载过（lab 记录 `contributors` 4/4）——**这是 2026-11-12 退役前的历史记录**；现行活跃插件为三个，日常实例保持干净。
 
 ### 8.4 一页总结
 

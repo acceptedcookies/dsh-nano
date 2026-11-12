@@ -1,5 +1,0 @@
-# Bundle patch: a profile that lists this package as a bundle applies this layer.
-# The row names the package, so resolution runs through the profile's dependency link.
-- insert:
-    - id: nano-shared-workspace
-      name: dsh-nano-shared-workspace

@@ -4,7 +4,7 @@
  * the plugin's own SigV4 client, so probes exercise exactly the shipped code path.
  */
 import { readFileSync } from 'node:fs'
-import { createS3 } from '../../dsh-nano-shared-workspace/src/host/s3.js'
+import { createS3 } from '../../deprecated/dsh-nano-shared-workspace/src/host/s3.js'
 
 const ROOT = new URL('../../', import.meta.url).pathname
 

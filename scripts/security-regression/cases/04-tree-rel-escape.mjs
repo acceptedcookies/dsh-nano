@@ -21,7 +21,7 @@ import { join } from 'node:path'
 import {
   fakeS3, headOf, WS, tmp, sha256hex, isSchemaReject, settle, verdicts,
 } from '../lib/nsw-fakes.mjs'
-import { pullWorkspace, pushWorkspace } from '../../../dsh-nano-shared-workspace/src/host/tree.js'
+import { pullWorkspace, pushWorkspace } from '../../../deprecated/dsh-nano-shared-workspace/src/host/tree.js'
 
 export const fingerprint = 'nsw-tree-rel-escape'
 export const describe =

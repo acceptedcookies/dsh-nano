@@ -1,4 +1,6 @@
-# dsh-nano-shared-workspace — 设计与实现规格
+> **⛔ DEPRECATED（2026-11-12）**：本规格对应的插件已由 [业主] 裁决退役，源码整体移至 [`deprecated/dsh-nano-shared-workspace/`](../../../deprecated/README.md)。**本文件是历史草案，不再是现行合同**；发布、打包、门禁均已排除该插件。正文中的 `dsh-nano-shared-workspace/...` 路径按「退役当时位于仓库根」理解，未做批量改写。完整说明见 [`deprecated/README.md`](../../../deprecated/README.md)。
+
+# dsh-nano-shared-workspace — 设计与实现规格（历史草案）
 
 | 元信息 | 值 |
 |---|---|

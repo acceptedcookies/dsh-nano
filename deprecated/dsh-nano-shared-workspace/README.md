@@ -1,8 +1,16 @@
+> # ⛔ DEPRECATED — 2026-11-12
+>
+> 本插件已由 [业主] 裁决退役，整体移至 [`deprecated/dsh-nano-shared-workspace/`](../README.md)。
+> **不再维护、不参与构建门禁、不进 tarball、不列入 [RELEASE.md] 的发布包清单，安装侧不要再 `dsh plugin add`。**
+> 原因：对象级 S3 + 15s 轮询的拓扑无法适应多用户同步（成本 = 会话数 × WAN RTT，且 ≥15s 盲区）；方向改为 [spark] 本地中心点（`rshared` 共享卷做文件层 [单一真源] + SQLite/SSE 做状态协调）。
+> 本文件以下内容是**退役时的历史快照**，仅供回溯，不代表现行能力或合同。
+> 完整说明见 [`deprecated/README.md`](../README.md)。
+
 # dsh-nano-shared-workspace
 
 共享工作区：把 dsh 会话同步到 S3 真源（MinIO），多台客户端按 `username + Token` 身份访问同一 workspace 的远端会话列表。
 
-规格：`../docs/specs/dsh-nano-shared-workspace/spec.md`
+规格：历史草案，见仓库根 `docs/specs/dsh-nano-shared-workspace/spec.md`（注意：插件移动后相对路径已变，按仓库根解析）。
 
 ## 当前形态（Phase-0 骨架）
 

@@ -5,6 +5,10 @@
  * Reads credentials from .env.s3 (S3_NOTEPAD_ for the notepad bucket,
  * S3_DEV_/S3_PROD_ for the shared-workspace bucket — nsw uses the same
  * credential set under whatever prefix it is configured with). Lists objects,
+ *
+ * DEPRECATED 2026-11-12: dsh-nano-shared-workspace retired to deprecated/.
+ * This exporter is kept for historical schema samples only; it is not a
+ * release gate. See deprecated/README.md.
  * pulls a representative sample of each of the six schema kinds, and writes
  * them to compat/<kind>/<name>. Large objects are skipped.
  *

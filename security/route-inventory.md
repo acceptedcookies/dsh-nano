@@ -1,6 +1,8 @@
-# Route inventory — 44 host routes
+# Route inventory — 44 host routes（含已退役插件的历史节）
 
-Static enumeration of every `webServer.register` path across the four plugins, in registration order. Source of truth for paths/methods/bodyLimit: `scripts/route-scan.mjs` → `security/route-sensitivity.json` (sensitivity) and `security/feature-contract.json` (contract). Re-run `node scripts/gen-route-sensitivity.mjs` after any registration change; `node scripts/check-route-sensitivity.mjs` must report 0 drift.
+> **⛔ DEPRECATED（2026-11-12）**：`dsh-nano-shared-workspace` 已退役并移至 [`deprecated/`](../deprecated/README.md)。本文件保留它的历史清单**仅供回溯**；现行活跃路由是 notepad 7 + explorer-extra 13 + model-selector 3 = **23 条**。`security/route-sensitivity.json` 与 `security/feature-contract.json` 已移除 NSW 条目，`scripts/route-scan.mjs` 不再扫描它。
+
+Static enumeration of every `webServer.register` path across the (formerly four) plugins, in registration order. Source of truth for paths/methods/bodyLimit: `scripts/route-scan.mjs` → `security/route-sensitivity.json` (sensitivity) and `security/feature-contract.json` (contract). Re-run `node scripts/gen-route-sensitivity.mjs` after any registration change; `node scripts/check-route-sensitivity.mjs` must report 0 drift.
 
 `bodyLimit` = route-level cap (max over methods; GET/HEAD accept no body). `session` = takes a sessionId. Sensitivity per T-O-2: L0 read-only/no-secret · L1 bounded workspace write · L2 host-level capability · L3 operator config (none — no page route is operator-only).
 
@@ -34,7 +36,9 @@ Static enumeration of every `webServer.register` path across the four plugins, i
 | /nano-explorer-extra/perf-review/host | GET | L2 | read:host | 0 | – | process-global perf snapshot/window drain |
 | /nano-explorer-extra/read | POST | L2 | read:host | 65536 | ✓ | read any UTF-8 host file ≤1MiB |
 
-## dsh-nano-shared-workspace — 21 (`src/host/routes.js:123-470` map)
+## ⛔ DEPRECATED · dsh-nano-shared-workspace — 21（历史，非现行）
+
+> 该插件 2026-11-12 退役，源码在 [`deprecated/dsh-nano-shared-workspace/`](../deprecated/README.md)。以下 21 行**不再是门禁输入**，请勿据此更新 `route-sensitivity.json` / `feature-contract.json`。
 
 | path | methods | sensitivity | capability | bodyLimit | session | what it does |
 |---|---|---|---|---|---|---|
@@ -68,4 +72,4 @@ Static enumeration of every `webServer.register` path across the four plugins, i
 | /nano-model-selector/media-engines | GET, HEAD | L0 | read:host | 0 | – | scan local media CLIs |
 | /nano-model-selector/media-engine | GET, HEAD, PUT | L2 | write:host | 16384 | – | GET engine state; PUT writes media-engine.json + re-registers /imagine |
 
-**Totals: 43 paths · L0 8 · L1 5 · L2 30 · L3 0.** bodyLimit values: notepad /save+/read+/fetch-mp = MAX_SAVE_BYTES 8388608 (8 MiB), /s3/* = MAX_S3_BODY_BYTES 33554432 (32 MiB); explorer + nsw = 64 KiB (65536); model-selector GET/HEAD = 0, /media-engine PUT = 16384.
+**历史 Totals（含退役 NSW 节）: 43 paths · L0 8 · L1 5 · L2 30 · L3 0. 现行活跃 = 23 条（NSW 节 20 条已不计）。** bodyLimit values: notepad /save+/read+/fetch-mp = MAX_SAVE_BYTES 8388608 (8 MiB), /s3/* = MAX_S3_BODY_BYTES 33554432 (32 MiB); explorer + nsw = 64 KiB (65536); model-selector GET/HEAD = 0, /media-engine PUT = 16384.

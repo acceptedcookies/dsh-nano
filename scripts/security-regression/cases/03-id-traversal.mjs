@@ -20,10 +20,10 @@ import {
   fakeS3, fakeCtx, fakeReq,
   WS, SID, tmp, isSchemaReject, settle, verdicts,
 } from '../lib/nsw-fakes.mjs'
-import { joinWorkspace } from '../../../dsh-nano-shared-workspace/src/host/workspaces.js'
-import { acquireClaim, renewClaim, fetchTranscript } from '../../../dsh-nano-shared-workspace/src/host/session-io.js'
-import { pullWorkspace, pushWorkspace } from '../../../dsh-nano-shared-workspace/src/host/tree.js'
-import { createRoutes } from '../../../dsh-nano-shared-workspace/src/host/routes.js'
+import { joinWorkspace } from '../../../deprecated/dsh-nano-shared-workspace/src/host/workspaces.js'
+import { acquireClaim, renewClaim, fetchTranscript } from '../../../deprecated/dsh-nano-shared-workspace/src/host/session-io.js'
+import { pullWorkspace, pushWorkspace } from '../../../deprecated/dsh-nano-shared-workspace/src/host/tree.js'
+import { createRoutes } from '../../../deprecated/dsh-nano-shared-workspace/src/host/routes.js'
 
 export const fingerprint = 'nsw-id-traversal'
 export const describe =

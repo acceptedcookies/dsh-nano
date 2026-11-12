@@ -1,9 +1,15 @@
 /**
- * Static enumerator for the 43 web routes registered by the four dsh plugins.
+ * Static enumerator for the ACTIVE web routes registered by dsh plugins.
  *
  * This module is the single source of truth for "what the code registers".
  * `gen-route-sensitivity.mjs` and `check-route-sensitivity.mjs` both import it
  * so the generated JSON and the drift gate cannot disagree about the code side.
+ *
+ * DEPRECATED 2026-11-12: `dsh-nano-shared-workspace` was retired to
+ * `deprecated/` and is NO LONGER scanned. Its 20+ routes were removed from
+ * security/route-sensitivity.json and security/feature-contract.json so the
+ * drift gates stay green. See deprecated/README.md. Do not re-add a scanner
+ * for it without an explicit [业主] decision to un-deprecate.
  *
  * Determinism: routes are returned in registration order per plugin, and
  * plugin order is fixed. No timestamps, no environment reads.
@@ -109,32 +115,11 @@ function scanExplorerExtra() {
   return rows
 }
 
-/* ------------------------------------------------------------------ *
- * dsh-nano-shared-workspace — src/host/routes.js                      *
- * Same '<suffix>': { method } map under PREFIX; readBody cap 64 KiB   *
- * written inline as `64 * 1024`.                                      *
- * ------------------------------------------------------------------ */
-function scanSharedWorkspace() {
-  const file = 'dsh-nano-shared-workspace/src/host/routes.js'
-  const text = src(file)
-  const prefixMatch = text.match(/export const PREFIX = '([^']+)'/)
-  const prefix = prefixMatch?.[1] ?? ''
-  // readBody uses a literal 64 * 1024 (no named constant).
-  const bodyMatch = text.match(/total > (\d+ \* \d+)/)
-  const cap = bodyMatch ? evalBytesExpr(bodyMatch[1]) : 64 * 1024
-  const rows = []
-  for (const match of text.matchAll(/^\s*'(\/[^']+)':\s*\{\s*method:\s*'([A-Z]+)'/gm)) {
-    const [, suffix, method] = match
-    rows.push({
-      plugin: 'dsh-nano-shared-workspace',
-      path: `${prefix}${suffix}`,
-      methods: [method],
-      bodyLimit: { [method]: method === 'GET' ? 0 : cap },
-      source: { file, line: lineOf(text, `'${suffix}':`) },
-    })
-  }
-  return rows
-}
+/* --------------------------------------------------------------------- *
+ * dsh-nano-shared-workspace — REMOVED (DEPRECATED 2026-11-12)            *
+ * Retired to deprecated/; its scanner and all route rows were unwired.    *
+ * See deprecated/README.md.                                              *
+ * --------------------------------------------------------------------- */
 
 /* --------------------------------------------------------------------- *
  * dsh-nano-model-selector — index.js                                     *
@@ -184,14 +169,14 @@ function scanModelSelector() {
 }
 
 /**
- * Enumerate every registered route across the four plugins.
+ * Enumerate every registered route across the ACTIVE plugins (three).
+ * dsh-nano-shared-workspace is deprecated and intentionally excluded.
  * @returns rows: { plugin, path, methods[], bodyLimit{METHOD:bytes}, source{file,line} }
  */
 export function scanRoutes() {
   return [
     ...scanNanoNotepad(),
     ...scanExplorerExtra(),
-    ...scanSharedWorkspace(),
     ...scanModelSelector(),
   ]
 }

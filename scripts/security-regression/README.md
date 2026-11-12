@@ -1,5 +1,7 @@
 # scripts/security-regression — PoC 重放 harness
 
+> **⛔ DEPRECATED（2026-11-12）**：`cases/*` 里针对 `dsh-nano-shared-workspace` 的用例仍可手动跑（import 路径已改指 [`deprecated/dsh-nano-shared-workspace/`](../../deprecated/README.md)），但该插件已退役，**本套件不再纳入 CI / 发布门禁**。保留仅为历史 PoC 可复现；不要据此给现行三插件发「回归全绿」结论。
+
 把 `.anote/security-26nov` 的攻击 PoC 工程化成可重复执行的用例，断言宿主**拒绝**它们。基座（P1-09）已就位；具体用例随批次落盘。
 
 ## 结构

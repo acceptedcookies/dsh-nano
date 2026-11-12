@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "purpose": "P2 disposition ledger (T-O-11). harden = apply a low-cost fence/validation that does not change the feature contract; accept = record as accepted local self-impact because a fix would change the feature (per T-O-3 a contract-changing fix must not ship). optionalHardening/monitoring/ownerSignoff/reviewDate are filled in Phase 4.",
+  "purpose": "P2 disposition ledger (T-O-11). harden = apply a low-cost fence/validation that does not change the feature contract; accept = record as accepted local self-impact because a fix would change the feature (per T-O-3 a contract-changing fix must not ship). optionalHardening/monitoring/ownerSignoff/reviewDate are filled in Phase 4. DEPRECATED 2026-11-12: dsh-nano-shared-workspace retired (see deprecated/README.md); its accepted-risk rows are historical.",
   "risks": [
     {
       "fingerprint": "nxe:mutate-symlink-escape",
@@ -77,7 +77,8 @@
       "optionalHardening": "Optional: restrict /ls /mkdir to the dsh home + configured replica roots; the join dialog needs free browsing, deferred.",
       "monitoring": "realpath fence on tree.js means even an attacker-chosen localPath cannot escape a chosen replica root.",
       "ownerSignoff": "owner (26-nov AP closure)",
-      "reviewDate": "2026-11-19"
+      "reviewDate": "2026-11-19",
+      "deprecation": "DEPRECATED 2026-11-12: plugin retired to deprecated/; risk is historical and no longer applies to an active shipped plugin. Frozen record kept, not rewritten. See deprecated/README.md."
     },
     {
       "fingerprint": "nano-notepad:s3-config-endpoint-ssrf",

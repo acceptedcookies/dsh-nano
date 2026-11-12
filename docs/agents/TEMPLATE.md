@@ -10,7 +10,7 @@
 - [dsh-nano-model-selector/AGENTS.md](../../dsh-nano-model-selector/AGENTS.md)
 - [dsh-nano-explorer-extra/AGENTS.md](../../dsh-nano-explorer-extra/AGENTS.md)
 
-`dsh-nano-shared-workspace` 还没有包内 `AGENTS.md`。要写时套这份骨架，不要另起标题。
+> **⛔ DEPRECATED（2026-11-12）**：`dsh-nano-shared-workspace` 已退役并移至 [`deprecated/dsh-nano-shared-workspace/`](../../deprecated/README.md)，**本母版不再为它生成包内 `AGENTS.md`**，也不再列入「逐字抄回」清单。下方三行即现行全部活跃插件。
 
 ## 骨架
 

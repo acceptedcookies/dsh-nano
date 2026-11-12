@@ -23,7 +23,7 @@ import {
   fakeS3, metaOf, seededSessionBucket,
   WS, SID, tmp, projectKey, zframe, isSchemaReject, settle, verdicts,
 } from '../lib/nsw-fakes.mjs'
-import { materializeSession, listRemoteSessions } from '../../../dsh-nano-shared-workspace/src/host/session-io.js'
+import { materializeSession, listRemoteSessions } from '../../../deprecated/dsh-nano-shared-workspace/src/host/session-io.js'
 
 export const fingerprint = 'nsw-materialize-traversal'
 export const describe =

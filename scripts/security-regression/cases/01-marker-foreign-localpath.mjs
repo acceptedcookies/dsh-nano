@@ -22,8 +22,8 @@ import {
   INSTANCE, USERNAME, MEMBER_ID, WS, SID,
   tmp, projectKey, verdicts,
 } from '../lib/nsw-fakes.mjs'
-import { listWorkspaces, joinWorkspace, matchWorkspace, ownMember, pinWorkspaceLocalPath } from '../../../dsh-nano-shared-workspace/src/host/workspaces.js'
-import { syncAll } from '../../../dsh-nano-shared-workspace/src/host/session-io.js'
+import { listWorkspaces, joinWorkspace, matchWorkspace, ownMember, pinWorkspaceLocalPath } from '../../../deprecated/dsh-nano-shared-workspace/src/host/workspaces.js'
+import { syncAll } from '../../../deprecated/dsh-nano-shared-workspace/src/host/session-io.js'
 import { join } from 'node:path'
 
 export const fingerprint = 'nsw-marker-foreign-localpath'

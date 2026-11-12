@@ -90,4 +90,5 @@ screenshots/
 
 # 开发工作树 dev worktree
 .worktree/
+.agents
 

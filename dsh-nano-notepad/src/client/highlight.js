@@ -8,6 +8,8 @@ import { escapeHtml } from './markdown.js'
 const s = (cls, text) => `<span class="${cls}">${text}</span>`
 /** Wrap already-built HTML (nested spans) — escaping is the caller's job. */
 const sRaw = (cls, html) => `<span class="${cls}">${html}</span>`
+/** A stored-image reference, e.g. `notepad-image:0f93d888-…`. */
+const STORED_IMAGE = /^notepad-image:([0-9a-f-]{36})$/u
 
 /**
  * Inline markdown tinting. Each alternative re-escapes the FULL raw match as
@@ -21,7 +23,16 @@ function inlineMd(text) {
   for (const m of text.matchAll(pattern)) {
     out += escapeHtml(text.slice(cursor, m.index))
     if (m[1] !== undefined) {
-      out += s('nm-mk', '![') + escapeHtml(m[1]) + s('nm-mk', '](') + s('nm-link', escapeHtml(m[2])) + s('nm-mk', ')')
+      /* The mirror is pointer-events:none, so it cannot be hovered directly —
+         but its spans still carry real geometry. Tagging the URL span with the
+         image id lets the editor hit-test the pointer against it and pop the
+         hover preview, with no extra layout pass. */
+      const stored = STORED_IMAGE.exec(m[2])
+      out += s('nm-mk', '![') + escapeHtml(m[1]) + s('nm-mk', '](')
+        + (stored === null
+          ? s('nm-link', escapeHtml(m[2]))
+          : `<span class="nm-link" data-np-image="${stored[1]}">${escapeHtml(m[2])}</span>`)
+        + s('nm-mk', ')')
     } else if (m[3] !== undefined) {
       out += s('nm-mk', '[') + escapeHtml(m[3]) + s('nm-mk', '](') + s('nm-link', escapeHtml(m[4])) + s('nm-mk', ')')
     } else if (m[5] !== undefined) {

@@ -10,7 +10,16 @@ import { NanoMenu } from './menu.js'
 
 /**
  * Open a NanoDialog. Returns a `close()` that unmounts and removes the portal host.
- * @param {object} options - NanoDialog props (`copy/title/onConfirm/onCancel/…`).
+ * @param {object} options - NanoDialog props (`copy/title/onConfirm/onCancel/…`), plus the
+ *   adapter-only keys below.
+ * @param {number} [options.fixedHeight] - freeze the card at this pixel height.
+ * @param {DOMRect} [options.region] - confine the overlay to this rect.
+ * @param {number} [options.width] - card width in pixels.
+ * @param {'light' | 'dark'} [options.theme] - owning surface's resolved scheme. The shell Modal
+ *   portals into `document.body`, so the card would otherwise inherit the shell's palette; the
+ *   scheme is stamped on the portal layer (card and mask alike) for the owner to scope its tokens.
+ * @param {number} [options.z] - z-index for the portal layer. The shell Modal bakes z-index:1000
+ *   into its root; an owner that must sit above shell modals raises it here (inline beats sheet).
  * @returns {{ close: () => void }}
  */
 export function openNanoDialog(options) {
@@ -34,27 +43,49 @@ export function openNanoDialog(options) {
      commits it — parentElement is the only reliable way back to .root. */
   const wantsRegion = options.region instanceof DOMRect
   const wantsWidth = typeof options.width === 'number'
-  const observer = (wantsRegion || wantsWidth) ? new MutationObserver(() => {
+  /* The shell Modal forwards only its own props to the card, so the scheme cannot
+     ride React: stamp it on the portal layer, which owns both the card and the
+     mask, and the owner's `[data-nano-theme]` rules reach the whole overlay. */
+  let theme = options.theme
+  const wantsTheme = theme === 'light' || theme === 'dark'
+  /** The portal layer once React has committed the card; `setTheme` writes here. */
+  let layerEl = /** @type {HTMLElement | null} */ (null)
+  const wantsZ = typeof options.z === 'number'
+  const observer = (wantsRegion || wantsWidth || wantsTheme || wantsZ) ? new MutationObserver(() => {
     for (const card of document.querySelectorAll('.nano-dialog-card')) {
       if (card instanceof HTMLElement === false || card.dataset.nanoBound === '1') continue
       const layer = card.parentElement
       if (!(layer instanceof HTMLElement)) continue
       card.dataset.nanoBound = '1'
+      if (wantsZ) layer.style.zIndex = String(Math.round(options.z))
+      if (wantsTheme) {
+        layerEl = layer
+        layer.setAttribute('data-nano-theme', theme)
+      }
       /* Fixed-height (tabbed) dialogs move scrolling into their own panels. */
       if (heightValue !== null) card.classList.add('nano-dialog-fixed')
       if (wantsWidth) layer.style.setProperty('--nano-dlg-w', `${Math.round(options.width)}px`)
       if (wantsRegion) {
         const r = options.region
         layer.classList.add('nano-regioned')
+        /* The shell's .root is content-box with its own 24px padding, and the
+           mask is an absolutely positioned child: `inset: 0` resolves against
+           the padding box. Without border-box the 12px padding below grows the
+           layer to r + 24px, so the mask (and the dimmed area) hangs 24px past
+           the owning window's right and bottom edges. Rounding the layer to the
+           same radius keeps the mask inside the window's rounded corners too. */
         Object.assign(layer.style, {
           position: 'fixed',
           top: `${r.top}px`,
           left: `${r.left}px`,
           right: 'auto',
           bottom: 'auto',
+          boxSizing: 'border-box',
           width: `${r.width}px`,
           height: `${r.height}px`,
           padding: '12px',
+          borderRadius: 'var(--dsw-radius-panel, 28px)',
+          overflow: 'hidden',
         })
       }
     }
@@ -73,7 +104,14 @@ export function openNanoDialog(options) {
     }
   }
   root.render(React.createElement(NanoDialog, { ...options, onCancel: () => { options.onCancel?.(); close() } }))
-  return { close }
+  /* Owners that can change scheme while the card is up (the notepad's own
+     settings card is exactly that) re-stamp it instead of reopening the dialog. */
+  const setTheme = next => {
+    if (next !== 'light' && next !== 'dark') return
+    theme = next
+    if (layerEl !== null && layerEl.isConnected) layerEl.setAttribute('data-nano-theme', next)
+  }
+  return { close, setTheme }
 }
 
 /**
@@ -84,6 +122,8 @@ export function openNanoDialog(options) {
  * @param {number} [options.width] - menu min-width.
  * @param {number} [options.maxHeight] - cap the popup; the list scrolls past it.
  * @param {number} [options.gap] - pixels between the anchor's bottom and the popup's top.
+ * @param {'light' | 'dark'} [options.theme] - owning surface's resolved scheme; see NanoMenu.
+ * @param {number} [options.z] - z-index for the popup root (inline style); see NanoMenu.
  * @returns {{ close: () => void }}
  */
 export function openNanoMenu(options) {
@@ -100,6 +140,8 @@ export function openNanoMenu(options) {
     actions: options.items ?? [],
     width: options.width,
     maxHeight: options.maxHeight,
+    theme: options.theme,
+    z: options.z,
     onClose: close,
   }))
   return { close }

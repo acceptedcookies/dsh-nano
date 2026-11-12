@@ -4,15 +4,16 @@ import React from 'react'
 import { normalizeSettings } from './db.js'
 import { mountNotepad } from './panel.js'
 import { perf } from './perf.js'
+import { chordAria, chordKeys, primaryDown } from './shortcut.js'
 
 export const inject = ['slots', 'shortcuts', 'theme', 'locale', 'workspaces', 'sessions', 'sidebarRight']
 
 /** @param {import('@deepseek-ai/cordis').Context} ctx */
 function shortcutLabel(ctx) {
-  const windows = ctx.shortcuts.platform === 'windows'
-  const keys = windows ? 'Ctrl+E 1' : '⌘E1'
+  const platform = ctx.shortcuts.platform
+  const keys = chordKeys(platform)
   const title = ctx.locale.getSnapshot().active?.startsWith('zh') ? '显示便签' : 'Show notepad'
-  return { text: `${title} (${keys})`, aria: windows ? 'Control+E+1' : 'Meta+E+1' }
+  return { text: `${title} (${keys})`, aria: chordAria(platform) }
 }
 
 /** @param {import('@deepseek-ai/cordis').Context} ctx @param {Record<string, unknown>} [config] */
@@ -100,24 +101,28 @@ export function apply(ctx, config = {}) {
     // (⌘E / 1). wrap() the ORIGINAL callbacks; attach/detach keep the shared
     // per-name live counter honest — never resetLive() (§6.7 / §10.5-A4).
     const shortcutTrack = perf.track('listener', 'shortcut-key')
+    const platform = ctx.shortcuts.platform
     let letterHeld = false
-    const primaryDown = (event) => ctx.shortcuts.platform === 'windows'
-      ? event.ctrlKey && !event.metaKey
-      : event.metaKey && !event.ctrlKey
     const down = (event) => {
       if (event.isComposing) return
       if (event.code === 'KeyE') {
-        letterHeld = primaryDown(event) && !event.altKey && !event.shiftKey
+        letterHeld = primaryDown(event, platform) && !event.shiftKey
+        /* Windows: Alt+E is also Chrome's "open the menu" accelerator. Ask the
+           browser to stand down; when it refuses, Ctrl+E still completes the
+           chord, so the notepad never becomes unreachable. */
+        if (letterHeld && platform === 'windows' && event.altKey === true) event.preventDefault()
         return
       }
       if (!letterHeld || event.code !== 'Digit1' || event.repeat) return
-      if (!primaryDown(event) || event.altKey || event.shiftKey) return
+      if (!primaryDown(event, platform) || event.shiftKey) return
       event.preventDefault()
       event.stopPropagation()
       api?.toggle()
     }
     const up = (event) => {
-      if (event.code === 'KeyE' || event.key === 'Meta' || event.key === 'Control') letterHeld = false
+      if (event.code === 'KeyE' || event.key === 'Meta' || event.key === 'Control' || event.key === 'Alt') {
+        letterHeld = false
+      }
     }
     const wrappedDown = shortcutTrack.wrap(down)
     const wrappedUp = shortcutTrack.wrap(up)

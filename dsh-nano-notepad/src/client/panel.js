@@ -30,6 +30,7 @@ import {
 import { applyFormat, escapeAttr, escapeHtml, extractImageUrls, formatHtml, htmlToText, minifyHtml, renderMarkdown, sanitizeRichHtml, stripHtmlStyles } from './markdown.js'
 import { validateJson, positionOf, formatJson, minifyJson, escapeJson, unescapeJson, decodeEscapes, renderJsonTree } from './json.js'
 import { highlightSource } from './highlight.js'
+import { checkImage } from 'dsh-remote-data-schema/image-check.js'
 import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
 import { copyFor } from './i18n.js'
 import React from 'react'
@@ -47,11 +48,15 @@ const writeUi = (...args) => perf.span('idb-write', () => writeUiRaw(...args))
 const STYLE = `
 ${NANO_STYLES}
 [data-nano-notepad] { pointer-events: none; }
-/* ── notepad typography tokens ────────────────────────────────────────────────
+/* ── notepad typography + portal theme tokens ──────────────────────────────────
    Declared on :root because nano-ui menus/dialogs portal to document.body —
    outside .np-layer — so only a document-level custom property reaches them.
    nano-ui reads the --nano-* vars (fallback = shell default); --np-* retunes
-   the notepad's own text. Both stay on --dsw-* for theme colours. */
+   the notepad's own text. Both stay on --dsw-* for theme colours.
+   Colours cannot ride :root, though: the portaled surface must follow the
+   notepad's own scheme, which can differ from the host's (light notepad inside
+   a dark shell). So every portal call passes resolvedTheme(), nano-ui stamps
+   it as [data-nano-theme], and the palette rules below repaint that subtree. */
 :root {
   --np-font-family: var(--dsw-font-family);
   --np-font-size: 13px;
@@ -65,7 +70,11 @@ ${NANO_STYLES}
   --nano-desc-size: var(--np-font-size-sm);
   --nano-toast-size: var(--np-font-size-sm);
 }
-.np-layer { position: fixed; inset: 0; pointer-events: none; z-index: 30; color: var(--dsw-alias-label-primary); font-family: var(--np-font-family); font-size: var(--np-font-size); }
+/* The layer must outrank the shell's own overlays: the shell modal root and
+   backdrop sit at z-index:1000, its toasts/portals at 1100. 1200 beats both.
+   z-index only applies once the layer escapes the shell.overlay slot's own
+   stacking context — see the document.body reparent in mountNotepad. */
+.np-layer { position: fixed; inset: 0; pointer-events: none; z-index: 1200; color: var(--dsw-alias-label-primary); font-family: var(--np-font-family); font-size: var(--np-font-size); }
 .np-entry, .np-window, .np-slash { pointer-events: auto; }
 .np-entry, .np-window { position: absolute; }
 .np-entry { z-index: 3; }
@@ -77,8 +86,8 @@ ${NANO_STYLES}
    setting the property has no visual effect (the WeChat paste zone stayed
    visible with the integration switched off). */
 .np-mp-zone[hidden], .np-cloud[hidden], .np-tab-panel[hidden], .np-dlg-body [hidden] { display: none !important; }
-.np-window[data-theme="dark"], .np-entry[data-theme="dark"] { color-scheme: dark; --dsw-alias-bg-layer-1: #232324; --dsw-alias-bg-layer-2: #2c2c2e; --dsw-alias-bg-layer-3: #353638; --dsw-alias-bg-mask-1: #00000080; --dsw-alias-label-primary: #f9fafb; --dsw-alias-label-secondary: #cfd3d6; --dsw-alias-label-tertiary: #adb2b8; --dsw-alias-border-l2: #ffffff1f; --dsw-alias-border-l3: #ffffff29; --dsw-alias-interactive-bg-hover: #ffffff14; --dsw-alias-interactive-bg-active: #ffffff24; --dsw-alias-brand-primary: #f9fafb; --dsw-alias-brand-primary-invert: #0f1115; --dsw-alias-link: #7aaaff; --dsw-alias-state-error-primary: #f25a5a; --dsw-alias-state-error-secondary: #f25a5a; --dsw-alias-state-success-primary: #22c55e; --dsw-alias-state-success-secondary: #4ed17e; --dsw-alias-state-warn-primary: #f59e0b; --dsw-alias-state-warn-secondary: #f7ad31; --dsw-alias-interactive-bg-hover-danger: #f25a5a26; --dsw-alias-label-error: #f25a5a; --dsw-alias-tooltip-bg: #43454a; --dsw-alias-tooltip-label: #f9fafb; --dsw-alias-markdown-inline-code: #43454a; }
-.np-window[data-theme="light"], .np-entry[data-theme="light"] { color-scheme: light; --dsw-alias-bg-layer-1: #ffffff; --dsw-alias-bg-layer-2: #ffffff; --dsw-alias-bg-layer-3: #ffffff; --dsw-alias-bg-mask-1: #0000003d; --dsw-alias-label-primary: #0f1115; --dsw-alias-label-secondary: #61666b; --dsw-alias-label-tertiary: #81858c; --dsw-alias-border-l2: #0000001a; --dsw-alias-border-l3: #0000001f; --dsw-alias-interactive-bg-hover: #2631480f; --dsw-alias-interactive-bg-active: #2631481a; --dsw-alias-brand-primary: #0f1115; --dsw-alias-brand-primary-invert: #f9fafb; --dsw-alias-link: #4176e6; --dsw-alias-state-error-primary: #ec1313; --dsw-alias-state-error-secondary: #f25a5a; --dsw-alias-state-success-primary: #22c55e; --dsw-alias-state-success-secondary: #4ed17e; --dsw-alias-state-warn-primary: #f59e0b; --dsw-alias-state-warn-secondary: #f7ad31; --dsw-alias-interactive-bg-hover-danger: #ec13130d; --dsw-alias-label-error: #ec1313; --dsw-alias-tooltip-bg: #43454a; --dsw-alias-tooltip-label: #f9fafb; --dsw-alias-markdown-inline-code: #f5f6f7; }
+.np-window[data-theme="dark"], .np-entry[data-theme="dark"], [data-nano-theme="dark"] { color-scheme: dark; --dsw-menu-surface-fill: #303136a3; --dsw-alias-button-primary-fill: #f9fafb; --dsw-alias-button-primary-hover: #ebeef2; --dsw-alias-label-primary-foreground: #0f1115; --dsw-alias-bg-layer-1: #232324; --dsw-alias-bg-layer-2: #2c2c2e; --dsw-alias-bg-layer-3: #353638; --dsw-alias-bg-mask-1: #00000080; --dsw-alias-label-primary: #f9fafb; --dsw-alias-label-secondary: #cfd3d6; --dsw-alias-label-tertiary: #adb2b8; --dsw-alias-border-l2: #ffffff1f; --dsw-alias-border-l3: #ffffff29; --dsw-alias-interactive-bg-hover: #ffffff14; --dsw-alias-interactive-bg-active: #ffffff24; --dsw-alias-brand-primary: #f9fafb; --dsw-alias-brand-primary-invert: #0f1115; --dsw-alias-link: #7aaaff; --dsw-alias-state-error-primary: #f25a5a; --dsw-alias-state-error-secondary: #f25a5a; --dsw-alias-state-success-primary: #22c55e; --dsw-alias-state-success-secondary: #4ed17e; --dsw-alias-state-warn-primary: #f59e0b; --dsw-alias-state-warn-secondary: #f7ad31; --dsw-alias-interactive-bg-hover-danger: #f25a5a26; --dsw-alias-label-error: #f25a5a; --dsw-alias-tooltip-bg: #43454a; --dsw-alias-tooltip-label: #f9fafb; --dsw-alias-markdown-inline-code: #43454a; }
+.np-window[data-theme="light"], .np-entry[data-theme="light"], [data-nano-theme="light"] { color-scheme: light; --dsw-menu-surface-fill: #fcfdfeb3; --dsw-alias-button-primary-fill: #0f1115; --dsw-alias-button-primary-hover: #43454a; --dsw-alias-label-primary-foreground: #ffffff; --dsw-alias-bg-layer-1: #ffffff; --dsw-alias-bg-layer-2: #ffffff; --dsw-alias-bg-layer-3: #ffffff; --dsw-alias-bg-mask-1: #0000003d; --dsw-alias-label-primary: #0f1115; --dsw-alias-label-secondary: #61666b; --dsw-alias-label-tertiary: #81858c; --dsw-alias-border-l2: #0000001a; --dsw-alias-border-l3: #0000001f; --dsw-alias-interactive-bg-hover: #2631480f; --dsw-alias-interactive-bg-active: #2631481a; --dsw-alias-brand-primary: #0f1115; --dsw-alias-brand-primary-invert: #f9fafb; --dsw-alias-link: #4176e6; --dsw-alias-state-error-primary: #ec1313; --dsw-alias-state-error-secondary: #f25a5a; --dsw-alias-state-success-primary: #22c55e; --dsw-alias-state-success-secondary: #4ed17e; --dsw-alias-state-warn-primary: #f59e0b; --dsw-alias-state-warn-secondary: #f7ad31; --dsw-alias-interactive-bg-hover-danger: #ec13130d; --dsw-alias-label-error: #ec1313; --dsw-alias-tooltip-bg: #43454a; --dsw-alias-tooltip-label: #f9fafb; --dsw-alias-markdown-inline-code: #f5f6f7; }
 .np-entry { width: 36px; height: 36px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-primary); cursor: grab; box-shadow: var(--dsw-elevation-soft); }
 .np-entry:active { cursor: grabbing; }
 .np-entry svg { width: 18px; height: 18px; display: block; margin: auto; }
@@ -302,6 +311,15 @@ ${NANO_STYLES}
 .nm-null { color: var(--dsw-alias-label-tertiary); font-style: italic; }
 .nm-key { color: var(--dsw-alias-label-secondary); }
 .np-write:focus-visible { outline: none; box-shadow: inset 0 0 0 1px var(--dsw-alias-border-l3); }
+/* Hover preview for a stored-image link in source view. It rides inside
+   .np-window so it inherits the notepad's own palette, and stays
+   pointer-events:none so it can never steal the hover that opened it. */
+.np-image-peek { position: absolute; z-index: 6; pointer-events: none; padding: 4px; box-sizing: border-box;
+  max-width: min(320px, calc(100% - 16px)); border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-1); border: 1px solid var(--dsw-alias-border-l2);
+  box-shadow: var(--dsw-elevation-prominent); }
+.np-image-peek[hidden] { display: none !important; }
+.np-image-peek img { display: block; max-width: 100%; max-height: 240px; border-radius: var(--dsw-radius-sm); }
 .np-read:focus-visible { outline: none; box-shadow: inset 0 0 0 1px var(--dsw-alias-border-l3); }
 .np-tool:disabled, .np-footer-actions button:disabled { opacity: .45; pointer-events: none; }
 .np-read { box-sizing: border-box; max-width: 100%; overflow: auto; overflow-wrap: anywhere; padding: var(--np-pad-x); color: var(--dsw-alias-label-primary); cursor: text; font-size: var(--np-editor-font-size, 14px); line-height: 1.65; }
@@ -395,7 +413,10 @@ ${NANO_STYLES}
 /* settings switches carry their index in --np-switch-i: thumb steps by
    (segment width + 2px gap), generic for N segments */
 .np-switch[data-seg-field] .np-switch-thumb { transform: translateX(calc(var(--np-switch-i) * (100% + 2px))); }
-.np-dlg-body input, .np-dlg-body select { width: 100%; box-sizing: border-box; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); padding: 8px 10px; font: inherit; }
+/* Text-like controls fill the row; a checkbox or radio must keep its intrinsic
+   box, or the 100% width turns it into a 300px slab and the 8px padding makes it
+   taller than the label it belongs to. */
+.np-dlg-body input:not([type="checkbox"]):not([type="radio"]), .np-dlg-body select { width: 100%; box-sizing: border-box; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); padding: 8px 10px; font: inherit; }
 .np-dlg-body input[type="number"] { max-width: 200px; }
 .np-dlg-body input:focus, .np-dlg-body select:focus { outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, var(--dsw-alias-link)); }
 .np-versions { max-height: 240px; overflow: auto; display: flex; flex-direction: column; }
@@ -564,7 +585,9 @@ ${NANO_STYLES}
   width: 100%; height: 28px; padding: 0 8px; border: 1px solid var(--dsw-alias-border-l2);
   border-radius: var(--dsw-radius-sm, 8px); background: var(--dsw-alias-bg-layer-1);
   color: var(--dsw-alias-label-primary); font: inherit; font-size: 12px; }
-.np-check, .np-radio { display: flex !important; flex-direction: row !important; align-items: center; gap: 6px !important; }
+/* .np-dlg-body label is a column flex with align-items:stretch and outranks a
+   bare class, so the row variant has to force its own cross-axis alignment. */
+.np-check, .np-radio { display: flex !important; flex-direction: row !important; align-items: center !important; gap: 6px !important; }
 .np-form-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
 .np-cloud-note { font-size: 11px; color: var(--dsw-alias-label-secondary); margin: 6px 0 0; }
 .np-cloud-note.error, .np-wizard-warn { color: var(--dsw-alias-state-error-secondary, #f25a5a); }
@@ -732,6 +755,13 @@ function caretRect(area, position) {
   return rect
 }
 
+/* Z-index scale for the notepad's own surface and its body-level portals.
+   .np-layer sits at 1200 (see the stylesheet) — above the shell modal root
+   (1000) and toast/portal band (1100). Notepad dialogs and menus must clear
+   the layer too: a portal on document.body at the shell default (1000/30)
+   would sink beneath the window that opened it. */
+const NP_PORTAL_Z = 1210
+
 export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', subscribe: () => () => {} }, language = { current: () => 'en', subscribe: () => () => {} }, workspaces = { current: () => ({ items: [], currentId: null }), subscribe: () => () => {} }, previewFile = () => false) {
   host.innerHTML = `<div class="np-layer"><button class="np-entry" type="button">${ICON}<span class="np-tip" hidden></span></button><section class="np-window" hidden></section></div>`
   const layer = must(host, '.np-layer')
@@ -842,6 +872,14 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
   setNotepadRoot(() => (state.ui.open && layer.isConnected ? layer : null))
 
   const disposers = []
+  /* The shell.overlay slot mounts us inside its own overlayLayer div, which is
+     position:absolute + z-index:20 — a stacking context. Inside it our layer's
+     z-index can never beat the shell's z-index:1000 modals, so a shell dialog
+     (e.g. the pending-changes panel) dropped its mask and card over the
+     notepad. Reparenting to document.body lets .np-layer's z-index compete at
+     the top level; removal rides the normal disposer list. */
+  document.body.append(layer)
+  disposers.push(() => layer.remove())
 
   /* Cloud sync engine. `render` is declared further down but only referenced
      from onApplied, which runs after the database is ready — no TDZ hit. */
@@ -899,6 +937,10 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     // work — not highlightSource — is what a 28 KB draft pays per keystroke, so
     // it gets its own span instead of hiding inside the handler's total.
     perf.span('highlight-dom', () => { layer.innerHTML = html })
+    /* The spans were just replaced, so the hover hit-test list must be too, and
+       any open preview is now anchored to geometry that no longer exists. */
+    imageTokens = [...layer.querySelectorAll('[data-np-image]')]
+    hideImagePeek()
     fitMirror()
     layer.hidden = source.hidden
   }
@@ -929,6 +971,119 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     layer.scrollTop = source.scrollTop
     layer.scrollLeft = source.scrollLeft
   }
+  /* ── stored-image hover preview ────────────────────────────────────────────
+     In source view an image is just `![alt](notepad-image:<id>)`. The textarea
+     paints transparent text over the colourised mirror, so the pointer can only
+     be resolved through the mirror's spans: highlightSource tags each stored
+     image URL with data-np-image, and we hit-test the pointer against those
+     rects. Nothing here mutates the draft or the caret. */
+  let peekEl = /** @type {HTMLElement | null} */ (null)
+  let peekId = /** @type {string | null} */ (null)
+  /** Bumped per request so a slow IndexedDB read cannot paint over a newer one. */
+  let peekToken = 0
+  /** id → data URL, or null when the payload is gone or fails the gate. */
+  const peekCache = new Map()
+  let peekEpoch = -1
+  /** Mirror spans carrying a stored-image id, refreshed whenever the mirror is repainted. */
+  let imageTokens = /** @type {HTMLElement[]} */ ([])
+
+  function peekBox() {
+    if (peekEl !== null) return peekEl
+    peekEl = document.createElement('div')
+    peekEl.className = 'np-image-peek'
+    peekEl.hidden = true
+    peekEl.setAttribute('aria-hidden', 'true')
+    panel.append(peekEl)
+    return peekEl
+  }
+
+  function hideImagePeek() {
+    peekId = null
+    if (peekEl !== null) peekEl.hidden = true
+  }
+
+  /** Park the card above the token, below it when there is no room, always inside the window. */
+  function placeImagePeek(anchor) {
+    const el = peekEl
+    if (el === null || el.hidden) return
+    const box = panel.getBoundingClientRect()
+    const width = el.offsetWidth
+    const height = el.offsetHeight
+    let top = anchor.top - height - 8
+    if (top < box.top + 8) top = anchor.bottom + 8
+    let left = anchor.left + anchor.width / 2 - width / 2
+    const minLeft = box.left + 8
+    const maxLeft = box.right - width - 8
+    left = Math.max(minLeft, Math.min(left, Math.max(minLeft, maxLeft)))
+    const minTop = box.top + 8
+    const maxTop = box.bottom - height - 8
+    top = Math.max(minTop, Math.min(top, Math.max(minTop, maxTop)))
+    el.style.left = `${left - box.left}px`
+    el.style.top = `${top - box.top}px`
+  }
+
+  /** Resolve one stored image to a data URL, through the same gate the renderer uses. */
+  async function peekSource(id) {
+    if (state.imageEpoch !== peekEpoch) {
+      peekCache.clear()
+      peekEpoch = state.imageEpoch
+    }
+    if (peekCache.has(id)) return peekCache.get(id)
+    const images = state.db === null ? new Map() : await imagesById(state.db, [id])
+    const image = images.get(id)
+    /* P3-04 parity: only a schema-clean payload may reach an <img src>. */
+    const url = image && checkImage(image, { maxBytes: 20 * 1024 * 1024 })
+      ? `data:${image.mime};base64,${image.base64}`
+      : null
+    /* A data URL is the whole bitmap in memory, so keep only a handful: a
+       gallery-sized note would otherwise pin every hovered image for the
+       lifetime of the panel. */
+    if (peekCache.size >= 8) {
+      const oldest = peekCache.keys().next().value
+      if (oldest !== undefined) peekCache.delete(oldest)
+    }
+    peekCache.set(id, url)
+    return url
+  }
+
+  async function showImagePeek(id, anchor) {
+    const el = peekBox()
+    if (peekId === id && el.hidden === false) { placeImagePeek(anchor); return }
+    peekId = id
+    const token = ++peekToken
+    const url = await peekSource(id)
+    /* A newer hover (or a hide) won the race while IndexedDB was reading. */
+    if (token !== peekToken || peekId !== id) return
+    if (url === null) { hideImagePeek(); return }
+    let img = el.querySelector('img')
+    if (img === null) {
+      img = document.createElement('img')
+      img.alt = ''
+      img.decoding = 'async'
+      el.append(img)
+    }
+    if (img.src !== url) img.src = url
+    el.hidden = false
+    placeImagePeek(anchor)
+    /* The card has no intrinsic size until the bitmap decodes; re-park it then. */
+    if (img.complete === false) {
+      img.addEventListener('load', () => { if (peekId === id) placeImagePeek(anchor) }, { once: true })
+    }
+  }
+
+  /** The stored-image token under the pointer, if any. */
+  function imageTokenAt(event) {
+    for (const span of imageTokens) {
+      const rect = span.getBoundingClientRect()
+      if (rect.width === 0 && rect.height === 0) continue
+      if (event.clientX >= rect.left && event.clientX <= rect.right
+        && event.clientY >= rect.top && event.clientY <= rect.bottom) {
+        return { id: span.dataset.npImage, rect }
+      }
+    }
+    return null
+  }
+
   const current = () => state.nodes.find(node => node.id === state.ui.currentId && node.kind === 'file')
   const isJson = () => (current()?.name ?? '').toLowerCase().endsWith('.json')
   const isHtml = () => /\.(html|htm|wx)$/i.test(current()?.name ?? '')
@@ -1503,9 +1658,15 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
   // perf-review: the whole render pass is one named span (§6.7 render).
   const render = () => perf.span('render', () => {
     panel.hidden = !state.ui.open
+    /* A file/view switch invalidates whatever image the preview was showing. */
+    hideImagePeek()
     const theme = resolvedTheme()
     panel.dataset.theme = theme
     entry.dataset.theme = theme
+    /* The settings card is open while the user flips this very setting, and the
+       card lives on document.body — re-stamp it so it does not stay on the old
+       palette until reopened. */
+    activeDialog?.setTheme?.(theme)
     panel.style.setProperty('--np-editor-font-size', `${state.settings.editorFontSizePx}px`)
     applyCopy()
     const tree = must(panel, '.np-tree')
@@ -1630,6 +1791,9 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
   let closeMenu = /** @type {(() => void) | null} */ (null)
   let closeDialog = () => {}
   let dialogOpen = false
+  /* The open card's adapter handle. The settings card can flip our scheme while
+     it is up, so render() re-stamps it instead of leaving it on the old palette. */
+  let activeDialog = /** @type {{ close: () => void, setTheme?: (theme: string) => void } | null} */ (null)
   /* the ws button sits outside the anchored menu, so its own pointerdown makes
      NanoMenu close the menu before the click — suppress the immediate reopen. */
   let wsToggleJustClosed = false
@@ -1647,8 +1811,8 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
        .nano-dialog-host overlay then sits fullscreen on top and eats clicks
        meant for the new card. Close any open one first. */
     closeDialog?.()
-    let handle = /** @type {{ close: () => void } | undefined} */ (undefined)
-    const finish = () => { dialogOpen = false; if (closeDialog === closeSelf) closeDialog = () => {} }
+    let handle = /** @type {{ close: () => void, setTheme?: (theme: string) => void } | undefined} */ (undefined)
+    const finish = () => { dialogOpen = false; activeDialog = null; if (closeDialog === closeSelf) closeDialog = () => {} }
     // every exit path — footer buttons, Escape, mask, programmatic close —
     // funnels through finish()+adapter close so the panel guards release.
     const closeSelf = () => { if (!dialogOpen || !handle) return; finish(); handle.close() }
@@ -1666,6 +1830,11 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       maxHeight: cap + 24,
       width: Math.round(rect.width * 0.6),
       region: rect,
+      /* The card portals to document.body: name our scheme so a light notepad
+         inside a dark shell still paints a light card, and raise it over both
+         the shell's modal band and our own 1200 layer. */
+      theme: resolvedTheme(),
+      z: NP_PORTAL_Z,
       /* Tabbed dialogs get one fixed height; panels scroll inside it. */
       fixedHeight: spec.fixedHeight === true ? cap : undefined,
       onConfirm: () => spec.onConfirm?.(closeSelf),
@@ -1676,6 +1845,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
         ref: el => { if (el) spec.setup?.(el, closeSelf) },
       }),
     })
+    activeDialog = handle
   }
 
   /**
@@ -1705,7 +1875,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     /* The portal sits on document.body and would happily outgrow the floating
        window — cap it at the space actually left inside the panel. */
     const room = panel.getBoundingClientRect().bottom - anchor.getBoundingClientRect().bottom - 10
-    const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), items, width: 190, maxHeight: Math.max(120, room), gap: 4 })
+    const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), items, width: 190, maxHeight: Math.max(120, room), gap: 4, theme: resolvedTheme(), z: NP_PORTAL_Z })
     let closed = false
     const done = (unmount) => {
       if (closed) return
@@ -1750,7 +1920,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       { id: 'file', label: text().newBlankFile, icon: icon(FILE_ICON), run: () => { done(false); void add('file').catch(showError) } },
       { id: 'folder', label: text().newBlankFolder, icon: icon(FOLDER_ICON), run: () => { done(false); void add('folder').catch(showError) } },
     ]
-    const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), items, width: 180 })
+    const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), items, width: 180, theme: resolvedTheme(), z: NP_PORTAL_Z })
     let closed = false
     const done = (unmount) => {
       if (closed) return
@@ -2462,7 +2632,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     closeMenu?.()
     const copy = text()
     const raw = openNanoMenu({
-      anchor: anchor.getBoundingClientRect(), width: 160,
+      anchor: anchor.getBoundingClientRect(), width: 160, theme: resolvedTheme(), z: NP_PORTAL_Z,
       items: [
         { id: 'rename', label: copy.rename, run: () => askName(copy.renameTitle, node.name, async name => {
           const renamed = await renameNode(state.db, node.id, name)
@@ -2919,12 +3089,26 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
   }))
   write().addEventListener('scroll', () => {
     if (state.slash) placeSlash()
+    /* The token moved under a stationary pointer; let the next move re-resolve. */
+    hideImagePeek()
     fitMirror()
   })
+  /* Source view only: rendered view already shows the bitmap inline. */
+  write().addEventListener('mousemove', event => {
+    if (state.view === 'rendered' || write().hidden || !isMarkdownFile() || event.buttons !== 0) {
+      hideImagePeek()
+      return
+    }
+    const hit = imageTokenAt(event)
+    if (hit === null) { hideImagePeek(); return }
+    void showImagePeek(hit.id, hit.rect)
+  })
+  write().addEventListener('mouseleave', hideImagePeek)
+  write().addEventListener('blur', hideImagePeek)
   // perf-review: the mirror ResizeObserver (§6.7 mirror-resize, kind resize).
   const mirrorResizeTrack = perf.track('resize', 'mirror-resize')
   if (typeof ResizeObserver === 'function') {
-    const mirrorBox = new ResizeObserver(mirrorResizeTrack.wrap(() => fitMirror()))
+    const mirrorBox = new ResizeObserver(mirrorResizeTrack.wrap(() => { hideImagePeek(); fitMirror() }))
     mirrorBox.observe(write())
     mirrorResizeTrack.attach()
     disposers.push(() => { mirrorBox.disconnect(); mirrorResizeTrack.detach() })

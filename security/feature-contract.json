@@ -49,7 +49,7 @@
   ],
   "ui": {
     "dsh-nano-notepad": {
-      "launcher": "⌘E then 1 (Ctrl+E then 1) toggles floating panel; circular launcher button",
+      "launcher": "⌘E then 1 (Windows: Alt+E then 1, Ctrl+E then 1 also accepted) toggles floating panel; circular launcher button",
       "panel": "floating notepad panel: tabs, source/rendered markdown view, format toolbar (.md/.markdown only), JSON tree view (.json), image notes (png/jpeg/gif/webp) in same IndexedDB",
       "settings": "openSettings(initialTab) dialog incl. 'integrate' + 'cloud' tabs; cloud-settings.js edits S3 endpoint profiles via /s3/* routes",
       "pageGlobal": "window.__nanoNotepad.import(name, content, meta) — programmatic draft import",

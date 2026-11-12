@@ -41,6 +41,8 @@ dsh-nano-notepad/
 - **文件名**：原样保存调用方给的名字，不追加/改写扩展名（`.env`、`config.yaml`、无后缀都可以）。`fileName()` 只校验非法字符。
 - **导入重名**：`__nanoNotepad.import(name, …)` 遇到同 workspace 的同名**未 pin** 文件时直接覆盖其草稿（旧草稿先存为一个 `import` 版本，历史里可回退），不产生第二份；同名文件已 pin、或同名是文件夹时才落 `-2` 副本。多处同名时优先根目录文件。
 - **视图能力**：`.md` / `.markdown` 有 Markdown 预览；`.json` 有树工具；`.html`/`.htm`/`.wx` 在公众号接入开启时有富文本预览。其余后缀是纯文本，只开源码视图且不显示 Markdown 工具栏。
+- **图片悬浮预览**：源码视图里图片就是 `![alt](notepad-image:<id>)`。`highlightSource` 给该 URL 的 span 打 `data-np-image`，编辑器按指针坐标命中这些 span（mirror 是 `pointer-events:none`，只能靠几何命中），命中后从 IndexedDB 取图、经 `checkImage` 同款门禁后弹 `.np-image-peek` 小窗。小窗在 `.np-window` 内，所以跟随浮窗自己的明暗；`pointer-events:none`，不会抢走打开它的 hover。只在源码视图、Markdown 文件、非拖选状态生效；图片行已删除时静默不弹。
+- **始终置顶**：`.np-layer` 在挂载时 reparent 到 `document.body` —— `shell.overlay` slot 自己的容器是 `z-index:20` 的堆叠上下文，留在里面就永远压不过 shell 的 modal（`._root_` z-index:1000）与 toast 带（1100）。reparent 后 `.np-layer` 用 `z-index:1200`，notepad 自己的菜单/对话框 portal 传 `z:1210`（见 [dsh-nano-ui 弹层层级契约](../dsh-nano-ui/README.md)），保证浮窗与它的弹层始终压在 shell 弹窗之上。
 - **另存为**：使用文件原名与真实后缀，选择器不限制扩展名；宿主按用户选定的完整路径写入，不再补 `.md`。
 - **持久化**：全部数据在浏览器 IndexedDB，host 侧无存储；host 只提供配置默认值与「另存为」路由。
 - **配置项**（`Config`，cordis standard schema）：

@@ -76,3 +76,40 @@ nano-ui 共享样式不再硬编码字号，改为消费一组可选的 `--nano-
 | `--nano-desc-size` | 对话框描述 / 错误行 / toast 字号 | 继承 / 12px |
 
 注意：`NanoMenu` 与 `NanoDialog` 都 portal 到 `document.body`，不在宿主导出的任意容器内 —— 所以令牌必须声明在 `document.documentElement`（`:root`）或 `body` 上才能到达这些弹层。宿主插件（如 `dsh-nano-notepad`）在自身 `:root` 规则里同时声明 `--np-*`（自身排版）与 `--nano-*`（喂给 nano-ui）即可。
+
+## 弹层主题契约（`theme`）
+
+排版令牌能走 `:root`，**颜色不能**：宿主可以把浮窗单独钉成 `light`，而 shell 仍是 `dark`，此时 portal 到 `body` 的弹层会解析到 shell 的 `--dsw-*` 调色板，画出深色菜单压在浅色浮窗上。
+
+因此 `NanoMenu` / `openNanoMenu` / `NanoDialog` / `openNanoDialog` 接受可选的 `theme: 'light' | 'dark'`，表示**拥有者自己的**解析后配色：
+
+| 弹层 | 落点 | 说明 |
+|---|---|---|
+| 菜单 | `.nano-menu` 根节点 `data-nano-theme` | React 属性直接下发 |
+| 对话框 | portal 层（卡片与遮罩的共同父级）`data-nano-theme` | shell `Modal` 只透传自己的 props，所以不能走 React 属性；由 `openNanoDialog` 的 MutationObserver 在卡片提交后写到 `parentElement` |
+
+拥有者据此把调色板作用到该子树，例如 notepad：
+
+```css
+[data-nano-theme="light"] { --dsw-menu-surface-fill: #fcfdfeb3; --dsw-alias-label-primary: #0f1115; … }
+```
+
+要点：
+
+- 直接声明在弹层元素上的自定义属性**胜过继承**，所以 `body[data-ds-dark-theme]` 的更高特异性不会把它压回去。
+- 省略 `theme` 时不写该属性，弹层继续跟随 shell —— 这是 `dsh-nano-explorer-extra`、`dsh-nano-shared-workspace` 的现状，不需要改。
+- 卡片必须自己解析文字颜色：`.nano-dialog-card` 显式声明 `color: var(--dsw-alias-label-primary)`。否则 `color` 从 shell 继承成已计算值，浅色卡片上会留下近白字。
+- `.nano-menu` 自身已声明 `color`，菜单不受此影响。
+
+## 弹层层级契约（`z`）
+
+portal 到 `document.body` 的弹层与 shell 自己的弹窗同台竞争：shell 的 modal 根层与遮罩是 `z-index:1000`，toast/portal 带是 `1100`，`.nano-menu` 样式表默认 `30`。拥有者若自身也停在更高层（如 notepad 的 `.np-layer` 为 `1200`），它打开的弹层会被压在自家窗口下面。
+
+因此 `NanoMenu` / `openNanoMenu` / `openNanoDialog` 接受可选的 `z: number`：
+
+| 弹层 | 落点 | 说明 |
+|---|---|---|
+| 菜单 | `.nano-menu` 根节点内联 `zIndex` | React style 属性直接下发 |
+| 对话框 | portal 层内联 `z-index` | shell `Modal` 的 `._root_` 把 1000 写死在哈希 class 里，inline 才能稳定压过它；由 `openNanoDialog` 的 MutationObserver 在卡片提交后设置 |
+
+省略 `z` 时保持默认（菜单 30、对话框 1000），跟随 shell 的拥有者不需要传。

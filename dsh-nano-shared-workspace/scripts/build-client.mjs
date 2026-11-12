@@ -1,5 +1,5 @@
-import { spawnSync } from 'node:child_process'
-import { readFileSync, writeFileSync, rmSync, existsSync, mkdirSync } from 'node:fs'
+import { createRequire } from 'node:module'
+import { readFileSync, writeFileSync, rmSync, mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -30,56 +30,65 @@ function bakeRouteTable() {
 // Route table first: the host bundle below imports it.
 bakeRouteTable()
 
-// Locked devDependency binary only — a release build never pulls a drifted
-// toolchain; missing binary exits with an npm ci hint (P4-06, review-01 R12).
-const local = join(root, 'node_modules', '.bin', 'esbuild')
+// Locked devDependency only — a release build never pulls a drifted toolchain
+// (P4-06, review-01 R12). We resolve the installed esbuild's JS API instead of
+// spawning node_modules/.bin/esbuild: that shim is a POSIX shell script on
+// macOS/Linux and unspawnable on Windows (esbuild.cmd needs shell:true, the
+// native binary lives under @esbuild/<platform>-<arch>/). Letting esbuild pick
+// its own binary keeps this script identical on every OS.
+const require = createRequire(join(root, 'package.json'))
+let esbuild
+try {
+  esbuild = require('esbuild')
+} catch {
+  console.error('[build] esbuild not installed — run `npm ci` first (no npx fallback)')
+  process.exit(1)
+}
 
 const { version } = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
 /** Compile-time package version, so both halves can report `meta.version` to perf-review. */
-const versionDefine = '--define:__NSW_VERSION__=' + JSON.stringify(version)
+const versionDefine = { __NSW_VERSION__: JSON.stringify(version) }
 
 /**
- * Bundle one entry and fail the build when esbuild rejects it.
- * @param {string} entry - source entry, relative to the package root.
- * @param {string} outfile - output path, relative to the package root.
- * @param {string[]} extra - additional esbuild flags.
+ * Bundle one entry through the esbuild JS API (CLI flags minus leading `--`
+ * map 1:1 onto build options). buildSync throws on failure, so a broken build
+ * can no longer exit silently with no stderr.
+ * @param {object} options - esbuild build options.
  */
-function bundle(entry, outfile, extra) {
-  const argv = [entry, '--bundle', ...extra, `--outfile=${join(root, outfile)}`]
-  // P4-06: no npx fallback — a release build must never pull a drifted
-  // toolchain. Require the locked devDependency; missing → tell the user to
-  // npm ci, not silently fetch esbuild@0.25.0 from the network.
-  if (!existsSync(local)) {
-    console.error('[build] esbuild not installed at node_modules/.bin — run `npm ci` first (no npx fallback)')
+function bundle(options) {
+  try {
+    esbuild.buildSync({ absWorkingDir: root, logLevel: 'info', bundle: true, ...options })
+  } catch (error) {
+    console.error(`[build] esbuild failed: ${error.message}`)
     process.exit(1)
   }
-  const built = spawnSync(local, argv, { cwd: root, stdio: 'inherit' })
-  if (built.status !== 0) process.exit(built.status ?? 1)
 }
 
 // Host half: plain ESM for Node. No --packages=external: the only bare import the host
 // sources carry is dsh-performance-review/host, and it MUST be bundled — the development
 // instance copies lib/ but not node_modules, so a runtime bare import would fail to
 // resolve (spec §3.3/F3). node:* builtins stay external automatically on platform=node.
-bundle('src/host/entry.js', 'lib/host.js', [
-  '--format=esm',
-  '--platform=node',
-  versionDefine,
-])
+bundle({
+  entryPoints: ['src/host/entry.js'],
+  outfile: join(root, 'lib/host.js'),
+  format: 'esm',
+  platform: 'node',
+  define: versionDefine,
+})
 
 // Browser half: an IIFE wrapped in the client module-loader factory format.
-bundle('src/client/index.js', 'lib/client.body.js', [
-  '--format=iife',
-  '--global-name=__nswExport',
-  '--minify',
-  '--platform=browser',
-  '--external:react',
-  '--external:react-dom',
-  '--external:react-dom/client',
-  // Shared through PLATFORM_MODULES: the shell seeds this identity, so the bundle must not copy it.
-  '--external:@deepseek-ai/dsh-client-ui-primitives',
-  versionDefine,
-])
+bundle({
+  entryPoints: ['src/client/index.js'],
+  outfile: join(root, 'lib/client.body.js'),
+  format: 'iife',
+  globalName: '__nswExport',
+  minify: true,
+  platform: 'browser',
+  external: ['react', 'react-dom', 'react-dom/client',
+    // Shared through PLATFORM_MODULES: the shell seeds this identity, so the bundle must not copy it.
+    '@deepseek-ai/dsh-client-ui-primitives'],
+  define: versionDefine,
+})
 
 const body = join(root, 'lib/client.body.js')
 // The bundle assigns its exports to one named global, so the factory returns that object rather than

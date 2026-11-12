@@ -1,5 +1,5 @@
-import { spawnSync } from 'node:child_process'
-import { readFileSync, writeFileSync, rmSync, existsSync, mkdirSync } from 'node:fs'
+import { createRequire } from 'node:module'
+import { readFileSync, writeFileSync, rmSync, mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -35,80 +35,91 @@ function bakeRouteTable() {
 // Route table first: both the route-guard bundle and lib/route-table.js read it.
 bakeRouteTable()
 
-// Locked devDependency binary only — a release build never pulls a drifted
-// toolchain; missing binary exits with an npm ci hint (P4-06, review-01 R12).
-const local = join(root, 'node_modules', '.bin', 'esbuild')
+// Locked devDependency only — a release build never pulls a drifted toolchain
+// (P4-06, review-01 R12). We resolve the installed esbuild's JS API instead of
+// spawning node_modules/.bin/esbuild: that shim is a POSIX shell script on
+// macOS/Linux and unspawnable on Windows (esbuild.cmd needs shell:true, the
+// native binary lives under @esbuild/<platform>-<arch>/). Letting esbuild pick
+// its own binary keeps this script identical on every OS.
+const require = createRequire(join(root, 'package.json'))
+let esbuild
+try {
+  esbuild = require('esbuild')
+} catch {
+  console.error('[build] esbuild not installed — run `npm ci` first (no npx fallback)')
+  process.exit(1)
+}
 
 const { version } = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
 /** Compile-time package version. A SINGLE stringify keeps the bare "0.1.1"
  * string in the bundle (spec §6.1); perf.js reads __NOTEPAD_VERSION__. */
-const versionDefine = `--define:__NOTEPAD_VERSION__=${JSON.stringify(version)}`
+const versionDefine = { __NOTEPAD_VERSION__: JSON.stringify(version) }
 
 /**
- * Bundle one entry and fail the build when esbuild rejects it.
- * @param {string[]} args - esbuild flags + entry, in argv order.
+ * Bundle one entry through the esbuild JS API (CLI flags minus leading `--`
+ * map 1:1 onto build options, e.g. `--loader:.svg=text` →
+ * `loader: { '.svg': 'text' }`). buildSync throws on failure, so a broken
+ * build can no longer exit silently with no stderr.
+ * @param {object} options - esbuild build options.
  */
-function build(args) {
-  // P4-06: no npx fallback — a release build must never pull a drifted
-  // toolchain. Require the locked devDependency; missing → tell the user to
-  // npm ci, not silently fetch esbuild@0.25.0 from the network.
-  if (!existsSync(local)) {
-    console.error('[build] esbuild not installed at node_modules/.bin — run `npm ci` first (no npx fallback)')
+function build(options) {
+  try {
+    esbuild.buildSync({ absWorkingDir: root, logLevel: 'info', ...options })
+  } catch (error) {
+    console.error(`[build] esbuild failed: ${error.message}`)
     process.exit(1)
   }
-  const built = spawnSync(local, args, { cwd: root, stdio: 'inherit' })
-  if (built.status !== 0) process.exit(built.status ?? 1)
 }
 
 // Host helper: the unbundled index.js imports this from lib/. The development
 // instance copies lib/ but not node_modules, so dsh-performance-review/host MUST
 // be bundled here; node:* builtins stay external automatically on platform=node
 // (spec §6.1/F3). Only node:* bare imports survive in the output.
-build([
-  'node_modules/dsh-performance-review/src/host.js',
-  '--bundle', '--format=esm', '--platform=node',
-  `--outfile=${join(root, 'lib/perf-review-host.js')}`,
-])
+build({
+  entryPoints: ['node_modules/dsh-performance-review/src/host.js'],
+  bundle: true, format: 'esm', platform: 'node',
+  outfile: join(root, 'lib/perf-review-host.js'),
+})
 
 // Host S3 engine: same reason as above — the dev instance copies lib/ but not
 // node_modules, so dsh-s3-client/* must be bundled into a single relative
 // import for index.js. Only node:* builtins survive as externals.
-build([
-  'src/host/s3-sync.js',
-  '--bundle', '--format=esm', '--platform=node',
-  `--outfile=${join(root, 'lib/s3-sync-host.js')}`,
-])
+build({
+  entryPoints: ['src/host/s3-sync.js'],
+  bundle: true, format: 'esm', platform: 'node',
+  outfile: join(root, 'lib/s3-sync-host.js'),
+})
 
 // Route guard: same constraint — index.js is unbundled and imports
 // ./lib/route-guard.js at runtime, so dsh-host-route-guard and the baked route
 // table are bundled here; only node:* bare imports survive (T-O-13).
-build([
-  'src/host/route-guard-entry.js',
-  '--bundle', '--format=esm', '--platform=node',
-  `--outfile=${join(root, 'lib/route-guard.js')}`,
-])
+build({
+  entryPoints: ['src/host/route-guard-entry.js'],
+  bundle: true, format: 'esm', platform: 'node',
+  outfile: join(root, 'lib/route-guard.js'),
+})
 
 // mp-sanitize-entry (P3-03): same constraint — index.js imports
 // ./lib/mp-sanitize.js at runtime, so dsh-html-policy (the shared ALLOWED/DROP
 // policy table + string serializer) is bundled here; only node:* bare imports
 // survive. The client renderer consumes the same policy inside lib/client.js.
-build([
-  'src/host/mp-sanitize.js',
-  '--bundle', '--format=esm', '--platform=node',
-  `--outfile=${join(root, 'lib/mp-sanitize.js')}`,
-])
+build({
+  entryPoints: ['src/host/mp-sanitize.js'],
+  bundle: true, format: 'esm', platform: 'node',
+  outfile: join(root, 'lib/mp-sanitize.js'),
+})
 
 // Browser half: an IIFE wrapped in the client module-loader factory format.
 // dsh-performance-review/client is a source dependency (NOT external), so it is
 // bundled into lib/client.js. Keep all existing externals unchanged.
-build([
-  'src/client/index.js', '--bundle', '--format=iife',
-  '--global-name=__notepadExport', '--minify', '--platform=browser',
-  '--external:react', '--external:react-dom', '--external:react-dom/client',
-  '--external:@deepseek-ai/dsh-client-ui-primitives',
-  versionDefine,
-  `--outfile=${body}`,
-])
+build({
+  entryPoints: ['src/client/index.js'], bundle: true, format: 'iife',
+  globalName: '__notepadExport', minify: true, platform: 'browser',
+  external: ['react', 'react-dom', 'react-dom/client',
+    '@deepseek-ai/dsh-client-ui-primitives'],
+  define: versionDefine,
+  outfile: body,
+})
 
 // `--global-name` makes esbind's IIFE assign the package exports to one named
 // global, so the factory returns that object instead of guessing at internal

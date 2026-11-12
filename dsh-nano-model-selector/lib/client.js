@@ -43,8 +43,12 @@ var __modelSelectorExport=(()=>{var Gt=Object.create;var Re=Object.definePropert
   font-size: var(--nano-font-size, inherit);
   line-height: var(--nano-line-height, inherit); }
 /* The Modal portals straight into document.body, outside .nano-dialog-host, so
-   the card itself must consume the owner tokens \u2014 not the host. */
-.nano-dialog-card { font-family: var(--nano-font-family, inherit); font-size: var(--nano-font-size, inherit); line-height: var(--nano-line-height, inherit); }
+   the card itself must consume the owner tokens \u2014 not the host.
+   The color declaration is deliberate: inheritance would otherwise carry the
+   host's computed ink onto the card, and an owner whose scheme differs from the
+   host (light notepad inside a dark shell) would paint near-white text on the
+   card's light surface. Resolving the token here keeps ink and surface paired. */
+.nano-dialog-card { font-family: var(--nano-font-family, inherit); font-size: var(--nano-font-size, inherit); line-height: var(--nano-line-height, inherit); color: var(--dsw-alias-label-primary); }
 /* The Modal title is a hashed class \u2014 size it and the description through the
    shared tokens so dialogs read at the same scale as the owning surface. */
 .nano-dialog-card [class*="title"], .nano-dialog-card [class*="title_"] { font-size: var(--nano-title-size, inherit); }

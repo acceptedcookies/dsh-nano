@@ -1,5 +1,5 @@
-import { spawnSync } from 'node:child_process'
-import { readFileSync, writeFileSync, rmSync, existsSync, mkdirSync } from 'node:fs'
+import { createRequire } from 'node:module'
+import { readFileSync, writeFileSync, rmSync, mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -35,49 +35,69 @@ function bakeRouteTable() {
 // Route table first: both the route-guard bundle and lib/route-table.js read it.
 bakeRouteTable()
 
-// Locked devDependency binary only — a release build never pulls a drifted
-// toolchain; missing binary exits with an npm ci hint (P4-06, review-01 R12).
-const local = join(root, 'node_modules', '.bin', 'esbuild')
+// Locked devDependency only — a release build never pulls a drifted toolchain
+// (P4-06, review-01 R12). We resolve the installed esbuild's JS API instead of
+// spawning node_modules/.bin/esbuild: that shim is a POSIX shell script on
+// macOS/Linux and unspawnable on Windows (esbuild.cmd needs shell:true, the
+// native binary lives under @esbuild/<platform>-<arch>/). Letting esbuild pick
+// its own binary keeps this script identical on every OS.
+const require = createRequire(join(root, 'package.json'))
+let esbuild
+try {
+  esbuild = require('esbuild')
+} catch {
+  console.error('[build] esbuild not installed — run `npm ci` first (no npx fallback)')
+  process.exit(1)
+}
 
 const { version } = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
 /** Compile-time package version, so the client bundle reports `meta.version` to perf-review. */
-const versionDefine = `--define:__NMS_VERSION__=${JSON.stringify(version)}`
+const versionDefine = { __NMS_VERSION__: JSON.stringify(version) }
 
-/** Run esbuild with the local locked binary, failing the build on error (no npx fallback). */
-function esbuild(argv) {
-  // P4-06: no npx fallback — a release build must never pull a drifted
-  // toolchain. Require the locked devDependency; missing → tell the user to
-  // npm ci, not silently fetch esbuild@0.25.0 from the network.
-  if (!existsSync(local)) {
-    console.error('[build] esbuild not installed at node_modules/.bin — run `npm ci` first (no npx fallback)')
+/**
+ * Bundle one entry through the esbuild JS API (CLI flags minus leading `--`
+ * map 1:1 onto build options). buildSync throws on failure, so a broken build
+ * can no longer exit silently with no stderr.
+ * @param {object} options - esbuild build options.
+ */
+function bundle(options) {
+  try {
+    esbuild.buildSync({ absWorkingDir: root, logLevel: 'info', ...options })
+  } catch (error) {
+    console.error(`[build] esbuild failed: ${error.message}`)
     process.exit(1)
   }
-  const built = spawnSync(local, argv, { cwd: root, stdio: 'inherit' })
-  if (built.status !== 0) process.exit(built.status ?? 1)
 }
 
 // Host half: the unbundled index.js imports ./lib/perf-review-host.js at runtime.
 // Bundle dsh-performance-review/src/host.js so the only bare imports left are
 // node:* builtins — the dev instance copies lib/ but not node_modules (spec §6.1/F3).
-esbuild([
-  'node_modules/dsh-performance-review/src/host.js',
-  '--bundle', '--format=esm', '--platform=node',
-  `--outfile=${join(root, 'lib', 'perf-review-host.js')}`,
-])
+bundle({
+  entryPoints: ['node_modules/dsh-performance-review/src/host.js'],
+  bundle: true, format: 'esm', platform: 'node',
+  outfile: join(root, 'lib', 'perf-review-host.js'),
+})
 
 // Route guard: same constraint — index.js is unbundled and imports
 // ./lib/route-guard.js at runtime, so dsh-host-route-guard and the baked route
 // table are bundled here; only node:* bare imports survive (T-O-13).
-esbuild([
-  'src/host/route-guard-entry.js',
-  '--bundle', '--format=esm', '--platform=node',
-  `--outfile=${join(root, 'lib', 'route-guard.js')}`,
-])
+bundle({
+  entryPoints: ['src/host/route-guard-entry.js'],
+  bundle: true, format: 'esm', platform: 'node',
+  outfile: join(root, 'lib', 'route-guard.js'),
+})
 
 // Browser half: one IIFE wrapped in the client module-loader factory. Shared UI
 // and the perf-review client are bundled (they are file: deps, not externals).
-const shared = ['src/client/index.jsx', '--bundle', '--format=iife', '--global-name=__modelSelectorExport', '--minify', '--platform=browser', '--jsx=transform', '--loader:.svg=text', '--loader:.png=dataurl', '--external:react', '--external:react-dom', '--external:react-dom/client', '--external:@deepseek-ai/dsh-client-ui-primitives', versionDefine, `--outfile=${body}`]
-esbuild(shared)
+bundle({
+  entryPoints: ['src/client/index.jsx'], bundle: true, format: 'iife',
+  globalName: '__modelSelectorExport', minify: true, platform: 'browser',
+  jsx: 'transform', loader: { '.svg': 'text', '.png': 'dataurl' },
+  external: ['react', 'react-dom', 'react-dom/client',
+    '@deepseek-ai/dsh-client-ui-primitives'],
+  define: versionDefine,
+  outfile: body,
+})
 
 // `--global-name` makes esbuild's IIFE assign the package exports to one named
 // global, so the factory returns that object instead of guessing at internal

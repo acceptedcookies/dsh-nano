@@ -18,17 +18,22 @@
  *      writer raced us and we must NOT silently merge writes.
  */
 
-import { mkdir, writeFile } from 'node:fs/promises'
-import { lstatSync, mkdirSync, realpathSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { lstat, mkdir, readdir, readFile, realpath, stat, writeFile } from 'node:fs/promises'
 import { isAbsolute, join, resolve, sep } from 'node:path'
-import { constants, zstdCompressSync, zstdDecompressSync } from 'node:zlib'
+import { promisify } from 'node:util'
+import { constants, zstdCompress, zstdDecompress } from 'node:zlib'
 import {
   validate, SchemaReject,
   SESSION_ID_RE, WORKSPACE_ID_RE, PART_BYTES,
 } from 'dsh-remote-data-schema'
 
-/** Same checksummed frame the JSONL backend appends. An unchecked frame is read as a torn record. */
-const zstdFrame = bytes => zstdCompressSync(bytes, { params: { [constants.ZSTD_c_checksumFlag]: 1 } })
+/* Async zstd: the sync forms block the host event loop while a sync pass
+ * decodes every local artifact — a stall Caddy reports to clients as a 502
+ * (upstream connection reset). Promisified zlib runs on the worker pool and
+ * never starves interactive routes. */
+const zstdCompressAsync = promisify(zstdCompress)
+const zstdDecompressAsync = promisify(zstdDecompress)
+const zstdFrame = bytes => zstdCompressAsync(bytes, { params: { [constants.ZSTD_c_checksumFlag]: 1 } })
 import { instanceId, listWorkspaces as listWorkspacesFrom, matchWorkspace } from './workspaces.js'
 
 /**
@@ -74,33 +79,34 @@ const sessionDir = home => join(home, 'sessions')
  */
 const ZSTD_MAGIC = Buffer.from([0x28, 0xb5, 0x2f, 0xfd])
 
-/** Byte offsets of every zstd frame in `buf`. */
+/** Byte offsets of every zstd frame in `buf`. `indexOf` uses the runtime's
+ *  native memchr — a per-byte `buf.compare` loop costs ~1000x and was itself a
+ *  measurable stall on multi-MB artifacts. */
 function frameOffsets(buf) {
   const offsets = []
-  for (let i = 0; i + 4 <= buf.length; i += 1) {
-    if (buf.compare(ZSTD_MAGIC, 0, 4, i, i + 4) === 0) offsets.push(i)
+  for (let i = buf.indexOf(ZSTD_MAGIC, 0); i !== -1; i = buf.indexOf(ZSTD_MAGIC, i + 1)) {
+    offsets.push(i)
   }
   return offsets
 }
 
-function decode(buf) {
+async function decode(buf) {
   try {
     const offsets = frameOffsets(buf)
-    if (offsets.length <= 1) return zstdDecompressSync(buf).toString('utf8')
-    let text = ''
-    for (let i = 0; i < offsets.length; i += 1) {
+    if (offsets.length <= 1) return (await zstdDecompressAsync(buf)).toString('utf8')
+    const texts = await Promise.all(offsets.map((start, i) => {
       const end = i + 1 < offsets.length ? offsets[i + 1] : buf.length
-      text += zstdDecompressSync(buf.subarray(offsets[i], end)).toString('utf8')
-    }
-    return text
+      return zstdDecompressAsync(buf.subarray(start, end)).then(part => part.toString('utf8'))
+    }))
+    return texts.join('')
   } catch {
     return undefined
   }
 }
 
 /** First-line `session` event plus the latest `session/title` + event count. */
-function summarize(buf) {
-  const text = decode(buf)
+async function summarize(buf) {
+  const text = await decode(buf)
   if (text === undefined) return { broken: true }
   let title = null
   let createdAt = null
@@ -130,26 +136,26 @@ function summarize(buf) {
  * Every session artifact under `$DSH_HOME/sessions/`, newest first.
  * @returns `[{sessionId, projectDir, filePath, sizeBytes, mtimeMs}]`
  */
-export function listLocalSessions(dshHome) {
+export async function listLocalSessions(dshHome) {
   const root = sessionDir(dshHome)
   const out = []
   let projects = []
-  try { projects = readdirSync(root, { withFileTypes: true }) } catch { return out }
+  try { projects = await readdir(root, { withFileTypes: true }) } catch { return out }
   for (const project of projects) {
     if (!project.isDirectory()) continue
     let sessions = []
-    try { sessions = readdirSync(join(root, project.name), { withFileTypes: true }) } catch { continue }
+    try { sessions = await readdir(join(root, project.name), { withFileTypes: true }) } catch { continue }
     for (const dir of sessions) {
       if (!dir.isDirectory() || !dir.name.startsWith('session-')) continue
       const filePath = join(root, project.name, dir.name, 'session.v4.jsonl.zstd')
       try {
-        const stat = statSync(filePath)
+        const info = await stat(filePath)
         out.push({
           sessionId: dir.name,
           projectDir: project.name,
           filePath,
-          sizeBytes: stat.size,
-          mtimeMs: stat.mtimeMs,
+          sizeBytes: info.size,
+          mtimeMs: info.mtimeMs,
         })
       } catch { /* vanished */ }
     }
@@ -289,8 +295,8 @@ export async function pushSession(s3, ctx, identity, local, markers, state, lega
   }
   const me = await instanceId(ctx)
   const writerId = `${identity.username}@${me.slice(0, 8)}`
-  const buf = readFileSync(local.filePath)
-  const head = summarize(buf)
+  const buf = await readFile(local.filePath)
+  const head = await summarize(buf)
   if (head.cwd === null) return { sessionId: local.sessionId, outcome: 'skip:unparsable' }
 
   // Sessions only sync when the session's cwd sits inside THIS member's own
@@ -398,7 +404,7 @@ export async function syncAll(s3, ctx, identity, dshHome, state, knownMarkers) {
   const results = []
   // One git lookup per distinct cwd for the whole pass (F-28).
   const legacyCache = new Map()
-  for (const local of listLocalSessions(dshHome)) {
+  for (const local of await listLocalSessions(dshHome)) {
     try {
       results.push(await pushSession(s3, ctx, identity, local, markers, state, legacyCache))
     } catch (error) {
@@ -484,7 +490,7 @@ export async function fetchTranscript(s3, workspaceId, sessionId) {
   if (!SESSION_ID_RE.test(sessionId)) throw new SchemaReject('schema:sessionId', 'sessionId has a bad charset')
   const meta = await readSessionMeta(s3, workspaceId, sessionId)
   if (meta === undefined) throw new Error('no such session')
-  const text = decode(await readBodyParts(s3, workspaceId, sessionId, meta))
+  const text = await decode(await readBodyParts(s3, workspaceId, sessionId, meta))
   if (text === undefined) throw new Error('artifact failed to decode')
   const events = []
   for (const line of text.split('\n')) {
@@ -511,36 +517,35 @@ export async function materializeSession(s3, dshHome, { workspaceId, sessionId, 
   }
   const meta = await readSessionMeta(s3, workspaceId, sessionId)
   if (meta === undefined) throw new Error('no such session')
-  const text = decode(await readBodyParts(s3, workspaceId, sessionId, meta))
+  const text = await decode(await readBodyParts(s3, workspaceId, sessionId, meta))
   if (text === undefined) throw new Error('artifact failed to decode')
   const newline = text.indexOf('\n')
   if (newline < 0) throw new Error('remote artifact has no session header')
   const header = JSON.parse(text.slice(0, newline))
   if (header?.type !== 'session' || header.id !== sessionId) throw new Error('remote artifact header does not match the session')
   header.cwd = localPath
-  const headerFrame = zstdFrame(Buffer.from(`${JSON.stringify(header)}\n`))
+  const headerFrame = await zstdFrame(Buffer.from(`${JSON.stringify(header)}\n`))
   const rest = text.slice(newline + 1)
-  const body = rest === '' ? Buffer.alloc(0) : zstdFrame(Buffer.from(rest.endsWith('\n') ? rest : `${rest}\n`))
+  const body = rest === '' ? Buffer.alloc(0) : await zstdFrame(Buffer.from(rest.endsWith('\n') ? rest : `${rest}\n`))
   // realpath fence (P2-06): the unpack target must stay inside
   // `dshHome/sessions/<projectKey>/<sessionId>` — no lexical or symlink
   // escape, and a pre-existing symlinked session dir is never written into.
   const sessionsRoot = resolve(dshHome, 'sessions')
   const projectRoot = join(sessionsRoot, projectKey(localPath))
   const dir = join(projectRoot, sessionId)
-  mkdirSync(dir, { recursive: true })
+  await mkdir(dir, { recursive: true })
   let realDir
   let realRoot
   try {
-    realDir = realpathSync(dir)
-    realRoot = realpathSync(sessionsRoot)
+    ;[realDir, realRoot] = await Promise.all([realpath(dir), realpath(sessionsRoot)])
   } catch { throw new Error('materialize target failed the realpath fence') }
   if (!(realDir === realRoot || realDir.startsWith(realRoot + sep))
-      || lstatSync(dir).isSymbolicLink()) {
+      || (await lstat(dir)).isSymbolicLink()) {
     throw new Error('materialize target escaped the session tree')
   }
   const path = join(dir, 'session.v4.jsonl.zstd')
   try {
-    if (lstatSync(path).isSymbolicLink()) throw new Error('materialize target is a symlink')
+    if ((await lstat(path)).isSymbolicLink()) throw new Error('materialize target is a symlink')
   } catch (error) {
     if (error?.code !== 'ENOENT') throw error
   }

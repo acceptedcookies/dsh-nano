@@ -95,11 +95,27 @@ async function request(config, keys, method, keyPath, params = {}, body = undefi
   }
   if (typeof extra.ifNoneMatch === 'string') sent['if-none-match'] = extra.ifNoneMatch
   if (typeof extra.ifMatch === 'string') sent['if-match'] = extra.ifMatch.replace(/^W\//, '')
-  return fetch(url, {
-    method,
-    headers: sent,
-    body: payload === '' ? undefined : payload,
-  })
+  /* Server-side observability: a failed or slow remote call is logged with
+   * method + key + status + ms to the host log, so a "HTTP 502"-style client
+   * symptom can be traced back to the exact upstream call. Requests are also
+   * bounded — Cloudflare's own cap is ~100s, anything past 120s is dead. */
+  const started = Date.now()
+  try {
+    const res = await fetch(url, {
+      method,
+      headers: sent,
+      body: payload === '' ? undefined : payload,
+      signal: AbortSignal.timeout(120_000),
+    })
+    const ms = Date.now() - started
+    if (!res.ok || ms > 3000) {
+      console.warn(`[nsw:s3] ${method} ${keyPath} -> HTTP ${res.status} ${ms}ms${payload === '' ? '' : ` ${payload.length}B`}`)
+    }
+    return res
+  } catch (error) {
+    console.warn(`[nsw:s3] ${method} ${keyPath} -> ${error instanceof Error ? error.message : String(error)} ${Date.now() - started}ms`)
+    throw error
+  }
 }
 
 /** Build the signing pair or throw a settings-facing message. */

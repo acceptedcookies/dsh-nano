@@ -1,5 +1,5 @@
 // src/host/routes.js
-import { mkdir as mkdir2, opendir } from "node:fs/promises";
+import { mkdir as mkdir4, opendir } from "node:fs/promises";
 import { homedir as homedir2 } from "node:os";
 import { basename as basename2, dirname as dirname2, isAbsolute as isAbsolute3, join as join4, resolve as resolve4 } from "node:path";
 
@@ -119,11 +119,23 @@ async function request(config, keys, method, keyPath, params = {}, body = void 0
   };
   if (typeof extra.ifNoneMatch === "string") sent["if-none-match"] = extra.ifNoneMatch;
   if (typeof extra.ifMatch === "string") sent["if-match"] = extra.ifMatch.replace(/^W\//, "");
-  return fetch(url, {
-    method,
-    headers: sent,
-    body: payload === "" ? void 0 : payload
-  });
+  const started = Date.now();
+  try {
+    const res = await fetch(url, {
+      method,
+      headers: sent,
+      body: payload === "" ? void 0 : payload,
+      signal: AbortSignal.timeout(12e4)
+    });
+    const ms = Date.now() - started;
+    if (!res.ok || ms > 3e3) {
+      console.warn(`[nsw:s3] ${method} ${keyPath} -> HTTP ${res.status} ${ms}ms${payload === "" ? "" : ` ${payload.length}B`}`);
+    }
+    return res;
+  } catch (error) {
+    console.warn(`[nsw:s3] ${method} ${keyPath} -> ${error instanceof Error ? error.message : String(error)} ${Date.now() - started}ms`);
+    throw error;
+  }
 }
 function keysOrThrow(identity) {
   const keys = signingPair(identity);
@@ -212,7 +224,7 @@ function createS3(config, identity) {
 // src/host/workspaces.js
 import { execFile } from "node:child_process";
 import { createHash as createHash2, randomBytes, randomUUID } from "node:crypto";
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, join, resolve } from "node:path";
 
@@ -661,34 +673,34 @@ async function workspaceIdFor(path) {
 var memberKeyOf = (identity, me) => `${identity.username}@${me.slice(0, 8)}`;
 var pinHome = () => process.env.DSH_HOME ?? join(homedir(), ".dsh");
 var pinPath = (workspaceId) => join(pinHome(), "nsw-pins", `${workspaceId}.json`);
-function pinDir() {
+async function pinDir() {
   const dir = join(pinHome(), "nsw-pins");
-  mkdirSync(dir, { recursive: true });
+  await mkdir(dir, { recursive: true });
   return dir;
 }
-function pinWorkspaceLocalPath(workspaceId, localPath) {
+async function pinWorkspaceLocalPath(workspaceId, localPath) {
   if (typeof workspaceId !== "string" || !WORKSPACE_ID_RE.test(workspaceId)) return;
-  const file = join(pinDir(), `${workspaceId}.json`);
-  writeFileSync(file, JSON.stringify({ workspaceId, localPath, pinnedAt: (/* @__PURE__ */ new Date()).toISOString() }));
+  const file = join(await pinDir(), `${workspaceId}.json`);
+  await writeFile(file, JSON.stringify({ workspaceId, localPath, pinnedAt: (/* @__PURE__ */ new Date()).toISOString() }));
 }
-function unpinWorkspaceLocalPath(workspaceId) {
+async function unpinWorkspaceLocalPath(workspaceId) {
   if (typeof workspaceId !== "string" || !WORKSPACE_ID_RE.test(workspaceId)) return;
-  rmSync(pinPath(workspaceId), { force: true });
+  await rm(pinPath(workspaceId), { force: true });
 }
-function readWorkspacePin(workspaceId) {
+async function readWorkspacePin(workspaceId) {
   if (typeof workspaceId !== "string" || !WORKSPACE_ID_RE.test(workspaceId)) return void 0;
   try {
-    const row = JSON.parse(readFileSync(pinPath(workspaceId), "utf8"));
+    const row = JSON.parse(await readFile(pinPath(workspaceId), "utf8"));
     if (row?.workspaceId !== workspaceId || typeof row?.localPath !== "string" || row.localPath === "") return void 0;
     return row.localPath;
   } catch {
     return void 0;
   }
 }
-function trustedMember(marker, identity, me) {
+async function trustedMember(marker, identity, me) {
   const own = ownMember(marker, identity, me);
   if (own === void 0) return void 0;
-  const pin = readWorkspacePin(marker.workspaceId);
+  const pin = await readWorkspacePin(marker.workspaceId);
   if (pin === void 0) return void 0;
   if (own.member.localPath !== pin) {
     console.warn(`[nsw] remote localPath diverges from local pin for ${marker.workspaceId} \u2014 using pinned ${pin} (remote claims ${own.member.localPath})`);
@@ -731,10 +743,10 @@ async function createWorkspace(s3, ctx, identity, { name: name2, localPath, requ
     if (existing === void 0 || existing.createdBy !== memberId || existing.title !== name2) {
       throw new Error("workspace id collision; retry with a fresh request");
     }
-    pinWorkspaceLocalPath(workspaceId, existing.members[memberId].localPath ?? localPath);
+    await pinWorkspaceLocalPath(workspaceId, existing.members[memberId].localPath ?? localPath);
     return { ...existing, deduplicated: true };
   }
-  pinWorkspaceLocalPath(workspaceId, localPath);
+  await pinWorkspaceLocalPath(workspaceId, localPath);
   return marker;
 }
 async function joinWorkspace(s3, ctx, identity, { workspaceId, localPath }) {
@@ -758,7 +770,7 @@ async function joinWorkspace(s3, ctx, identity, { workspaceId, localPath }) {
     const marker = { ...got.marker, members };
     const put = await s3.putJson(key, marker, { ifMatch: got.etag });
     if (put?.conflict === true) continue;
-    pinWorkspaceLocalPath(workspaceId, localPath);
+    await pinWorkspaceLocalPath(workspaceId, localPath);
     return marker;
   }
   throw new Error("another client is updating this workspace; retry the join");
@@ -784,7 +796,7 @@ async function matchWorkspace(cwd, markers, { identity, me, legacyCache } = {}) 
   }
   let prefixBest = null;
   for (const marker of markers) {
-    const own = trustedMember(marker, identity, me);
+    const own = await trustedMember(marker, identity, me);
     if (own === void 0) continue;
     if (marker.workspaceId === legacy) return marker;
     const localPath = own.member.localPath;
@@ -802,11 +814,13 @@ async function matchWorkspace(cwd, markers, { identity, me, legacyCache } = {}) 
 }
 
 // src/host/session-io.js
-import { mkdir, writeFile } from "node:fs/promises";
-import { lstatSync, mkdirSync as mkdirSync2, realpathSync, readdirSync, readFileSync as readFileSync2, statSync } from "node:fs";
+import { lstat, mkdir as mkdir2, readdir, readFile as readFile2, realpath, stat, writeFile as writeFile2 } from "node:fs/promises";
 import { isAbsolute, join as join2, resolve as resolve2, sep } from "node:path";
-import { constants, zstdCompressSync, zstdDecompressSync } from "node:zlib";
-var zstdFrame = (bytes) => zstdCompressSync(bytes, { params: { [constants.ZSTD_c_checksumFlag]: 1 } });
+import { promisify } from "node:util";
+import { constants, zstdCompress, zstdDecompress } from "node:zlib";
+var zstdCompressAsync = promisify(zstdCompress);
+var zstdDecompressAsync = promisify(zstdDecompress);
+var zstdFrame = (bytes) => zstdCompressAsync(bytes, { params: { [constants.ZSTD_c_checksumFlag]: 1 } });
 function projectKey(cwd) {
   if (cwd.length === 0) throw new Error("cannot encode an empty project path");
   let readable = "";
@@ -834,27 +848,26 @@ var sessionDir = (home) => join2(home, "sessions");
 var ZSTD_MAGIC = Buffer.from([40, 181, 47, 253]);
 function frameOffsets(buf) {
   const offsets = [];
-  for (let i = 0; i + 4 <= buf.length; i += 1) {
-    if (buf.compare(ZSTD_MAGIC, 0, 4, i, i + 4) === 0) offsets.push(i);
+  for (let i = buf.indexOf(ZSTD_MAGIC, 0); i !== -1; i = buf.indexOf(ZSTD_MAGIC, i + 1)) {
+    offsets.push(i);
   }
   return offsets;
 }
-function decode(buf) {
+async function decode(buf) {
   try {
     const offsets = frameOffsets(buf);
-    if (offsets.length <= 1) return zstdDecompressSync(buf).toString("utf8");
-    let text = "";
-    for (let i = 0; i < offsets.length; i += 1) {
+    if (offsets.length <= 1) return (await zstdDecompressAsync(buf)).toString("utf8");
+    const texts = await Promise.all(offsets.map((start, i) => {
       const end = i + 1 < offsets.length ? offsets[i + 1] : buf.length;
-      text += zstdDecompressSync(buf.subarray(offsets[i], end)).toString("utf8");
-    }
-    return text;
+      return zstdDecompressAsync(buf.subarray(start, end)).then((part) => part.toString("utf8"));
+    }));
+    return texts.join("");
   } catch {
     return void 0;
   }
 }
-function summarize(buf) {
-  const text = decode(buf);
+async function summarize(buf) {
+  const text = await decode(buf);
   if (text === void 0) return { broken: true };
   let title = null;
   let createdAt = null;
@@ -880,12 +893,12 @@ function summarize(buf) {
   }
   return { id, title, cwd, createdAt, events };
 }
-function listLocalSessions(dshHome) {
+async function listLocalSessions(dshHome) {
   const root = sessionDir(dshHome);
   const out = [];
   let projects = [];
   try {
-    projects = readdirSync(root, { withFileTypes: true });
+    projects = await readdir(root, { withFileTypes: true });
   } catch {
     return out;
   }
@@ -893,7 +906,7 @@ function listLocalSessions(dshHome) {
     if (!project.isDirectory()) continue;
     let sessions = [];
     try {
-      sessions = readdirSync(join2(root, project.name), { withFileTypes: true });
+      sessions = await readdir(join2(root, project.name), { withFileTypes: true });
     } catch {
       continue;
     }
@@ -901,13 +914,13 @@ function listLocalSessions(dshHome) {
       if (!dir.isDirectory() || !dir.name.startsWith("session-")) continue;
       const filePath = join2(root, project.name, dir.name, "session.v4.jsonl.zstd");
       try {
-        const stat = statSync(filePath);
+        const info = await stat(filePath);
         out.push({
           sessionId: dir.name,
           projectDir: project.name,
           filePath,
-          sizeBytes: stat.size,
-          mtimeMs: stat.mtimeMs
+          sizeBytes: info.size,
+          mtimeMs: info.mtimeMs
         });
       } catch {
       }
@@ -987,8 +1000,8 @@ async function pushSession(s3, ctx, identity, local, markers, state, legacyCache
   }
   const me = await instanceId(ctx);
   const writerId = `${identity.username}@${me.slice(0, 8)}`;
-  const buf = readFileSync2(local.filePath);
-  const head = summarize(buf);
+  const buf = await readFile2(local.filePath);
+  const head = await summarize(buf);
   if (head.cwd === null) return { sessionId: local.sessionId, outcome: "skip:unparsable" };
   const marker = await matchWorkspace(head.cwd, markers, { identity, me, legacyCache });
   if (marker === null) return { sessionId: local.sessionId, outcome: "skip:not-shared" };
@@ -1067,7 +1080,7 @@ async function syncAll(s3, ctx, identity, dshHome, state, knownMarkers) {
   const markers = knownMarkers ?? await listWorkspaces(s3);
   const results = [];
   const legacyCache = /* @__PURE__ */ new Map();
-  for (const local of listLocalSessions(dshHome)) {
+  for (const local of await listLocalSessions(dshHome)) {
     try {
       results.push(await pushSession(s3, ctx, identity, local, markers, state, legacyCache));
     } catch (error) {
@@ -1127,7 +1140,7 @@ async function fetchTranscript(s3, workspaceId, sessionId) {
   if (!SESSION_ID_RE.test(sessionId)) throw new SchemaReject("schema:sessionId", "sessionId has a bad charset");
   const meta = await readSessionMeta(s3, workspaceId, sessionId);
   if (meta === void 0) throw new Error("no such session");
-  const text = decode(await readBodyParts(s3, workspaceId, sessionId, meta));
+  const text = await decode(await readBodyParts(s3, workspaceId, sessionId, meta));
   if (text === void 0) throw new Error("artifact failed to decode");
   const events = [];
   for (const line of text.split("\n")) {
@@ -1147,46 +1160,46 @@ async function materializeSession(s3, dshHome, { workspaceId, sessionId, localPa
   }
   const meta = await readSessionMeta(s3, workspaceId, sessionId);
   if (meta === void 0) throw new Error("no such session");
-  const text = decode(await readBodyParts(s3, workspaceId, sessionId, meta));
+  const text = await decode(await readBodyParts(s3, workspaceId, sessionId, meta));
   if (text === void 0) throw new Error("artifact failed to decode");
   const newline = text.indexOf("\n");
   if (newline < 0) throw new Error("remote artifact has no session header");
   const header = JSON.parse(text.slice(0, newline));
   if (header?.type !== "session" || header.id !== sessionId) throw new Error("remote artifact header does not match the session");
   header.cwd = localPath;
-  const headerFrame = zstdFrame(Buffer.from(`${JSON.stringify(header)}
+  const headerFrame = await zstdFrame(Buffer.from(`${JSON.stringify(header)}
 `));
   const rest = text.slice(newline + 1);
-  const body = rest === "" ? Buffer.alloc(0) : zstdFrame(Buffer.from(rest.endsWith("\n") ? rest : `${rest}
+  const body = rest === "" ? Buffer.alloc(0) : await zstdFrame(Buffer.from(rest.endsWith("\n") ? rest : `${rest}
 `));
   const sessionsRoot = resolve2(dshHome, "sessions");
   const projectRoot = join2(sessionsRoot, projectKey(localPath));
   const dir = join2(projectRoot, sessionId);
-  mkdirSync2(dir, { recursive: true });
+  await mkdir2(dir, { recursive: true });
   let realDir;
   let realRoot;
   try {
-    realDir = realpathSync(dir);
-    realRoot = realpathSync(sessionsRoot);
+    ;
+    [realDir, realRoot] = await Promise.all([realpath(dir), realpath(sessionsRoot)]);
   } catch {
     throw new Error("materialize target failed the realpath fence");
   }
-  if (!(realDir === realRoot || realDir.startsWith(realRoot + sep)) || lstatSync(dir).isSymbolicLink()) {
+  if (!(realDir === realRoot || realDir.startsWith(realRoot + sep)) || (await lstat(dir)).isSymbolicLink()) {
     throw new Error("materialize target escaped the session tree");
   }
   const path = join2(dir, "session.v4.jsonl.zstd");
   try {
-    if (lstatSync(path).isSymbolicLink()) throw new Error("materialize target is a symlink");
+    if ((await lstat(path)).isSymbolicLink()) throw new Error("materialize target is a symlink");
   } catch (error) {
     if (error?.code !== "ENOENT") throw error;
   }
-  await writeFile(path, Buffer.concat([headerFrame, body]));
+  await writeFile2(path, Buffer.concat([headerFrame, body]));
   return { sessionId, cwd: localPath, path };
 }
 
 // src/host/tree.js
 import { createHash as createHash3 } from "node:crypto";
-import { existsSync, lstatSync as lstatSync2, mkdirSync as mkdirSync3, readFileSync as readFileSync3, readdirSync as readdirSync2, realpathSync as realpathSync2, unlinkSync, writeFileSync as writeFileSync2 } from "node:fs";
+import { lstat as lstat2, mkdir as mkdir3, readFile as readFile3, readdir as readdir2, realpath as realpath2, unlink, writeFile as writeFile3 } from "node:fs/promises";
 import { dirname, isAbsolute as isAbsolute2, join as join3, relative, resolve as resolve3, sep as sep2 } from "node:path";
 var SKIP = /* @__PURE__ */ new Set([".git", "node_modules", ".nsw", ".ds_store", "imagine"]);
 var MAX_FILE = 2 * 1024 * 1024;
@@ -1195,26 +1208,26 @@ var headKey = (id) => `workspaces/${id}/tree/HEAD.json`;
 var genKey = (id, n) => `workspaces/${id}/tree/generations/${n}.json`;
 var blobKey = (id, sha) => `workspaces/${id}/tree/blobs/${sha}`;
 var sha256 = (buf) => createHash3("sha256").update(buf).digest("hex");
-function replicaRoot(localPath) {
+async function replicaRoot(localPath) {
   if (typeof localPath !== "string" || !isAbsolute2(localPath) || resolve3(localPath) !== localPath) {
     throw new SchemaReject("schema:localPath", "localPath must be an absolute normalized path");
   }
   const root = resolve3(localPath);
   try {
-    if (lstatSync2(root).isSymbolicLink()) {
+    if ((await lstat2(root)).isSymbolicLink()) {
       throw new SchemaReject("schema:localPath", "localPath must not be a symlink");
     }
   } catch (error) {
     if (error?.code !== "ENOENT") throw error;
   }
-  mkdirSync3(root, { recursive: true });
-  return realpathSync2(root);
+  await mkdir3(root, { recursive: true });
+  return realpath2(root);
 }
 var skippedRel = (rel) => SKIP.has(String(rel).split("/")[0].toLowerCase());
-function inside(root, rel) {
+async function inside(root, rel) {
   if (typeof rel !== "string" || rel === "") return void 0;
   try {
-    root = realpathSync2(root);
+    root = await realpath2(root);
   } catch {
     return void 0;
   }
@@ -1222,7 +1235,7 @@ function inside(root, rel) {
   if (!dest.startsWith(root + sep2)) return void 0;
   if (skippedRel(rel)) return void 0;
   try {
-    if (lstatSync2(dest).isSymbolicLink()) return void 0;
+    if ((await lstat2(dest)).isSymbolicLink()) return void 0;
   } catch (error) {
     if (error?.code !== "ENOENT") return void 0;
   }
@@ -1230,7 +1243,7 @@ function inside(root, rel) {
   for (; ; ) {
     let st;
     try {
-      st = lstatSync2(probe);
+      st = await lstat2(probe);
     } catch {
       st = void 0;
     }
@@ -1244,18 +1257,18 @@ function inside(root, rel) {
     if (probe !== root && !probe.startsWith(root + sep2)) return void 0;
   }
   try {
-    if (realpathSync2(probe) !== probe) return void 0;
+    if (await realpath2(probe) !== probe) return void 0;
   } catch {
     return void 0;
   }
   return dest;
 }
-function scan(root) {
+async function scan(root) {
   const files = [];
-  const walk = (dir) => {
+  const walk = async (dir) => {
     let names = [];
     try {
-      names = readdirSync2(dir);
+      names = await readdir2(dir);
     } catch {
       return;
     }
@@ -1264,14 +1277,14 @@ function scan(root) {
       const abs = join3(dir, name2);
       let st;
       try {
-        st = lstatSync2(abs);
+        st = await lstat2(abs);
       } catch {
         continue;
       }
       if (st.isSymbolicLink()) continue;
-      if (st.isDirectory()) walk(abs);
+      if (st.isDirectory()) await walk(abs);
       else if (st.isFile() && st.size <= MAX_FILE) {
-        const buf = readFileSync3(abs);
+        const buf = await readFile3(abs);
         files.push({
           rel: relative(root, abs).split("\\").join("/"),
           sha256: sha256(buf),
@@ -1280,7 +1293,7 @@ function scan(root) {
       }
     }
   };
-  walk(root);
+  await walk(root);
   files.sort((a, b) => a.rel.localeCompare(b.rel));
   return files;
 }
@@ -1290,16 +1303,16 @@ function byRel(files) {
 function isText(buf) {
   return !buf.includes(0);
 }
-function readRel(root, rel) {
-  const dest = inside(root, rel);
+async function readRel(root, rel) {
+  const dest = await inside(root, rel);
   if (dest === void 0) return void 0;
   try {
-    return readFileSync3(dest);
+    return await readFile3(dest);
   } catch {
     return void 0;
   }
 }
-function dissolve(root, parent, remote, local) {
+async function dissolve(root, parent, remote, local) {
   const p = byRel(parent);
   const r = byRel(remote);
   const l = byRel(local);
@@ -1322,7 +1335,7 @@ function dissolve(root, parent, remote, local) {
       if (ls !== void 0) files.push(l.get(rel));
       continue;
     }
-    const localBuf = ls !== void 0 ? readRel(root, rel) : void 0;
+    const localBuf = ls !== void 0 ? await readRel(root, rel) : void 0;
     const remoteSha = rs;
     conflicts.push(rel);
     if (localBuf !== void 0 && remoteSha !== void 0 && isText(localBuf)) {
@@ -1355,29 +1368,29 @@ ${(remoteBuf ?? Buffer.alloc(0)).toString("utf8")}>>>>>>> remote
   }
   return out;
 }
-function writePending(root, files) {
+async function writePending(root, files) {
   for (const file of files) {
     if (file.writeToReplica !== true) continue;
-    const dest = inside(root, file.rel);
+    const dest = await inside(root, file.rel);
     if (dest === void 0) continue;
-    mkdirSync3(dirname(dest), { recursive: true });
-    writeFileSync2(dest, file.buf);
+    await mkdir3(dirname(dest), { recursive: true });
+    await writeFile3(dest, file.buf);
   }
 }
 function basePath(dshHome, workspaceId) {
   return join3(dshHome, "nsw", `${workspaceId}.json`);
 }
-function loadBase(dshHome, workspaceId) {
+async function loadBase(dshHome, workspaceId) {
   try {
-    return JSON.parse(readFileSync3(basePath(dshHome, workspaceId), "utf8"));
+    return JSON.parse(await readFile3(basePath(dshHome, workspaceId), "utf8"));
   } catch {
     return { generation: 0, files: [] };
   }
 }
-function saveBase(dshHome, workspaceId, record) {
+async function saveBase(dshHome, workspaceId, record) {
   const dest = basePath(dshHome, workspaceId);
-  mkdirSync3(dirname(dest), { recursive: true });
-  writeFileSync2(dest, JSON.stringify({ generation: record.generation, files: record.files }));
+  await mkdir3(dirname(dest), { recursive: true });
+  await writeFile3(dest, JSON.stringify({ generation: record.generation, files: record.files }));
 }
 var BLOB_CONCURRENCY = 8;
 async function mapLimit(items, limit, worker) {
@@ -1398,7 +1411,7 @@ async function ensureBlobs(s3, workspaceId, root, files, knownShas) {
   const uploads = [];
   for (const file of files) {
     if (knownShas !== void 0 && knownShas.has(file.sha256)) continue;
-    const buf = file.buf ?? readRel(root, file.rel);
+    const buf = file.buf ?? await readRel(root, file.rel);
     if (buf === void 0) continue;
     uploads.push({ key: blobKey(workspaceId, file.sha256), buf });
   }
@@ -1409,47 +1422,47 @@ async function pullWorkspace(s3, dshHome, workspaceId, localPath) {
   if (!WORKSPACE_ID_RE.test(workspaceId)) throw new SchemaReject("schema:workspaceId", "workspaceId has a bad charset");
   const head = await s3.getJson(headKey(workspaceId));
   if (head === void 0) return { ok: true, generation: 0, files: 0 };
-  const root = replicaRoot(localPath);
+  const root = await replicaRoot(localPath);
   validate("tree-head", head);
-  const base = loadBase(dshHome, workspaceId);
+  const base = await loadBase(dshHome, workspaceId);
   const next = new Set((head.files ?? []).map((file) => file.rel));
   for (const old of base.files ?? []) {
     if (next.has(old.rel)) continue;
-    const dest = inside(root, old.rel);
+    const dest = await inside(root, old.rel);
     if (dest === void 0) continue;
     try {
-      unlinkSync(dest);
+      await unlink(dest);
     } catch {
     }
   }
   const downloads = [];
   for (const file of head.files ?? []) {
-    const dest = inside(root, file.rel);
+    const dest = await inside(root, file.rel);
     if (dest === void 0) continue;
-    const have = readRel(root, file.rel);
+    const have = await readRel(root, file.rel);
     if (have !== void 0 && sha256(have) === file.sha256) continue;
     downloads.push({ dest, key: blobKey(workspaceId, file.sha256) });
   }
   const blobs = await mapLimit(downloads, BLOB_CONCURRENCY, ({ key }) => s3.getBytes(key));
-  downloads.forEach(({ dest }, index) => {
+  for (let index = 0; index < downloads.length; index += 1) {
     const blob = blobs[index];
-    if (blob === void 0) return;
-    mkdirSync3(dirname(dest), { recursive: true });
-    writeFileSync2(dest, blob);
-  });
-  saveBase(dshHome, workspaceId, head);
+    if (blob === void 0) continue;
+    await mkdir3(dirname(downloads[index].dest), { recursive: true });
+    await writeFile3(downloads[index].dest, blob);
+  }
+  await saveBase(dshHome, workspaceId, head);
   return { ok: true, generation: head.generation ?? 0, files: (head.files ?? []).length, conflicts: head.conflicts ?? [] };
 }
 async function pushWorkspace(s3, dshHome, workspaceId, localPath, writerId, attempt = 0) {
   if (!WORKSPACE_ID_RE.test(workspaceId)) throw new SchemaReject("schema:workspaceId", "workspaceId has a bad charset");
-  const root = replicaRoot(localPath);
+  const root = await replicaRoot(localPath);
   const got = await s3.getJson(headKey(workspaceId), { withMeta: true });
   const head = got?.value;
   if (head !== void 0) {
     validate("tree-head", head);
   }
-  const base = loadBase(dshHome, workspaceId);
-  const local = scan(root);
+  const base = await loadBase(dshHome, workspaceId);
+  const local = await scan(root);
   const remote = (head?.files ?? []).filter((file) => !skippedRel(file.rel));
   const same = JSON.stringify(local.map(({ rel, sha256: sha, size }) => ({ rel, sha256: sha, size }))) === JSON.stringify(remote.map(({ rel, sha256: sha, size }) => ({ rel, sha256: sha, size })));
   if (same && head !== void 0) return { ok: true, generation: head.generation, files: remote.length, unchanged: true, conflicts: [] };
@@ -1461,7 +1474,7 @@ async function pushWorkspace(s3, dshHome, workspaceId, localPath, writerId, atte
       parentFiles = parent.files ?? [];
     }
   }
-  const dissolved = dissolve(root, parentFiles, remote, local);
+  const dissolved = await dissolve(root, parentFiles, remote, local);
   const files = await materializePending(s3, workspaceId, dissolved);
   const knownShas = /* @__PURE__ */ new Set([
     ...(head?.files ?? []).map((file) => file.sha256),
@@ -1493,8 +1506,8 @@ async function pushWorkspace(s3, dshHome, workspaceId, localPath, writerId, atte
     if (attempt >= MAX_ATTEMPTS) throw new Error("tree HEAD changed during push; retry the push");
     return pushWorkspace(s3, dshHome, workspaceId, localPath, writerId, attempt + 1);
   }
-  writePending(root, files);
-  saveBase(dshHome, workspaceId, record);
+  await writePending(root, files);
+  await saveBase(dshHome, workspaceId, record);
   return { ok: true, generation, files: record.files.length, conflicts: dissolved.conflicts, uploaded };
 }
 async function purgeWorkspaceObjects(s3, workspaceId, { maxDepth = 8, maxKeys = 5e3 } = {}) {
@@ -1594,7 +1607,7 @@ function createPerfReviewHost(env = {}) {
     writer: null
   };
   const dataDir = () => processRef.env?.DSH_DATA_DIR ?? processRef.env?.DSH_HOME ?? null;
-  const writeFile2 = async () => {
+  const writeFile4 = async () => {
     const fs = env.fs ?? await import("node:fs/promises");
     const path = env.path ?? await import("node:path");
     const dir = dataDir() ?? `${processRef.env?.HOME ?? ""}/.dsh`;
@@ -1610,12 +1623,12 @@ function createPerfReviewHost(env = {}) {
     if (state.writer !== null) return;
     const setIntervalRef = env.setInterval ?? setInterval;
     state.writer = setIntervalRef(() => {
-      void writeFile2();
+      void writeFile4();
     }, WRITE_INTERVAL_MS);
     if (typeof state.writer?.unref === "function") state.writer.unref();
     try {
       processRef.once?.("beforeExit", () => {
-        void writeFile2();
+        void writeFile4();
       });
     } catch {
     }
@@ -1693,7 +1706,7 @@ function createPerfReviewHost(env = {}) {
     hostJoin,
     snapshot: () => hostSnapshot(state),
     takeWindow: () => takeWindow(state),
-    flush: () => writeFile2(),
+    flush: () => writeFile4(),
     _state: () => state,
     libVersion: LIB_VERSION
   };
@@ -2129,7 +2142,7 @@ var assertLocalPath = (value) => {
   }
   return value;
 };
-var localMember = (marker, identity, instance) => instance === "" ? void 0 : trustedMember(marker, identity, instance)?.member;
+var localMember = async (marker, identity, instance) => instance === "" ? void 0 : (await trustedMember(marker, identity, instance))?.member;
 function messageOf(error) {
   const raw = error instanceof Error ? error.message : String(error);
   const code = /<Code>([^<]+)<\/Code>/.exec(raw)?.[1];
@@ -2356,7 +2369,7 @@ function createRoutes(ctx, config) {
         const isMember = Object.values(marker.members ?? {}).some((member) => member?.username === identity.username);
         if (!isMember) return { ok: false, error: "only members can delete this shared workspace" };
         await client.del(key);
-        unpinWorkspaceLocalPath(workspaceId);
+        await unpinWorkspaceLocalPath(workspaceId);
         const purged = await purgeWorkspaceObjects(client, workspaceId).catch(() => void 0);
         return { ok: true, workspaceId, purged: purged ?? null };
       }
@@ -2371,7 +2384,7 @@ function createRoutes(ctx, config) {
         const me = instance.slice(0, 8);
         const trees = [];
         for (const marker of markers) {
-          const member = localMember(marker, identity, instance);
+          const member = await localMember(marker, identity, instance);
           if (typeof member?.localPath !== "string" || member.localPath === "") continue;
           try {
             trees.push({ workspaceId: marker.workspaceId, ...await pushWorkspace(client, dshHome, marker.workspaceId, member.localPath, `${identity.username}@${me}`) });
@@ -2396,7 +2409,7 @@ function createRoutes(ctx, config) {
         if (workspaceId !== "") assertWorkspaceId(workspaceId);
         const marker = (await listWorkspaces(client)).find((row) => row.workspaceId === workspaceId);
         if (marker === void 0) return { ok: false, error: "shared workspace not found" };
-        const member = localMember(marker, identity, await instanceId(ctx));
+        const member = await localMember(marker, identity, await instanceId(ctx));
         if (typeof member?.localPath !== "string" || member.localPath === "") return { ok: false, error: "join this shared workspace before syncing files" };
         return pullWorkspace(client, dshHome, workspaceId, member.localPath);
       }
@@ -2411,7 +2424,7 @@ function createRoutes(ctx, config) {
         const marker = (await listWorkspaces(client)).find((row) => row.workspaceId === workspaceId);
         if (marker === void 0) return { ok: false, error: "shared workspace not found" };
         const instance = await instanceId(ctx);
-        const member = localMember(marker, identity, instance);
+        const member = await localMember(marker, identity, instance);
         if (typeof member?.localPath !== "string" || member.localPath === "") return { ok: false, error: "join this shared workspace before syncing files" };
         return pushWorkspace(client, dshHome, workspaceId, member.localPath, `${identity.username}@${instance.slice(0, 8)}`);
       }
@@ -2448,7 +2461,7 @@ function createRoutes(ctx, config) {
         const marker = (await listWorkspaces(client)).find((row) => row.workspaceId === workspaceId);
         if (marker === void 0) return { ok: false, error: "shared workspace not found" };
         const instance = await instanceId(ctx);
-        const member = localMember(marker, identity, instance);
+        const member = await localMember(marker, identity, instance);
         if (typeof member?.localPath !== "string" || member.localPath === "") return { ok: false, error: "join this shared workspace before opening its sessions" };
         const claim = await acquireClaim(client, ctx, sessionId, `${identity.username}@${instance.slice(0, 8)}`, 1);
         return {
@@ -2476,7 +2489,7 @@ function createRoutes(ctx, config) {
         let tree = null;
         if (workspaceId !== "") {
           const marker = (await listWorkspaces(client)).find((row) => row.workspaceId === workspaceId);
-          const member = localMember(marker, identity, instance);
+          const member = await localMember(marker, identity, instance);
           if (typeof member?.localPath === "string" && member.localPath !== "") {
             tree = await pushWorkspace(client, dshHome, workspaceId, member.localPath, writerId);
           }
@@ -2527,7 +2540,7 @@ function createRoutes(ctx, config) {
           return { ok: false, error: "name must be a single path segment" };
         }
         const target = join4(parent, name2);
-        await mkdir2(target, { recursive: false });
+        await mkdir4(target, { recursive: false });
         return { ok: true, path: target };
       }
     },
@@ -2591,7 +2604,7 @@ function createRoutes(ctx, config) {
         const sessionId = assertSessionId(body.sessionId);
         const marker = (await listWorkspaces(client)).find((row) => row.workspaceId === workspaceId);
         if (marker === void 0) return { ok: false, error: "shared workspace not found" };
-        const member = localMember(marker, identity, await instanceId(ctx));
+        const member = await localMember(marker, identity, await instanceId(ctx));
         const localPath = member?.localPath;
         if (typeof localPath !== "string" || localPath === "") {
           return { ok: false, error: "join this shared workspace before opening its sessions" };
@@ -2611,9 +2624,14 @@ function registerRoutes2(ctx, routes) {
     path: `${PREFIX}${suffix}`,
     methods: [route.method],
     handler: async (req, res) => {
+      const started = Date.now();
       try {
-        sendJson2(res, 200, await route.run(req));
+        const body = await route.run(req);
+        const ms = Date.now() - started;
+        if (ms > 2e3) console.warn(`[nsw:route] ${route.method} ${suffix} -> 200 ${ms}ms`);
+        sendJson2(res, 200, body);
       } catch (error) {
+        console.error(`[nsw:route] ${route.method} ${suffix} -> 400 ${Date.now() - started}ms :: ${messageOf(error)}`);
         sendJson2(res, 400, { error: messageOf(error) });
       }
     }
@@ -2641,7 +2659,7 @@ function startBackgroundSync(ctx, config) {
       await syncAll(client, ctx, identity, dshHome, syncState).catch(() => {
       });
       for (const marker of await listWorkspaces(client)) {
-        const member = localMember(marker, identity, instance);
+        const member = await localMember(marker, identity, instance);
         if (typeof member?.localPath !== "string" || member.localPath === "") continue;
         await pushWorkspace(client, dshHome, marker.workspaceId, member.localPath, `${identity.username}@${instance.slice(0, 8)}`).catch(() => {
         });

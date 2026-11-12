@@ -10,7 +10,7 @@
 
 import { execFile } from 'node:child_process'
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
 import { validate, SchemaReject, WORKSPACE_ID_RE } from 'dsh-remote-data-schema'
@@ -106,30 +106,30 @@ const memberKeyOf = (identity, me) => `${identity.username}@${me.slice(0, 8)}`
 const pinHome = () => process.env.DSH_HOME ?? join(homedir(), '.dsh')
 const pinPath = workspaceId => join(pinHome(), 'nsw-pins', `${workspaceId}.json`)
 
-function pinDir() {
+async function pinDir() {
   const dir = join(pinHome(), 'nsw-pins')
-  mkdirSync(dir, { recursive: true })
+  await mkdir(dir, { recursive: true })
   return dir
 }
 
 /** Record the localPath this host chose for `workspaceId` (create/join). */
-export function pinWorkspaceLocalPath(workspaceId, localPath) {
+export async function pinWorkspaceLocalPath(workspaceId, localPath) {
   if (typeof workspaceId !== 'string' || !WORKSPACE_ID_RE.test(workspaceId)) return
-  const file = join(pinDir(), `${workspaceId}.json`)
-  writeFileSync(file, JSON.stringify({ workspaceId, localPath, pinnedAt: new Date().toISOString() }))
+  const file = join(await pinDir(), `${workspaceId}.json`)
+  await writeFile(file, JSON.stringify({ workspaceId, localPath, pinnedAt: new Date().toISOString() }))
 }
 
 /** Drop this host's replica pin when the workspace is deleted. */
-export function unpinWorkspaceLocalPath(workspaceId) {
+export async function unpinWorkspaceLocalPath(workspaceId) {
   if (typeof workspaceId !== 'string' || !WORKSPACE_ID_RE.test(workspaceId)) return
-  rmSync(pinPath(workspaceId), { force: true })
+  await rm(pinPath(workspaceId), { force: true })
 }
 
 /** The localPath we pinned for `workspaceId`, or undefined when never pinned. */
-export function readWorkspacePin(workspaceId) {
+export async function readWorkspacePin(workspaceId) {
   if (typeof workspaceId !== 'string' || !WORKSPACE_ID_RE.test(workspaceId)) return undefined
   try {
-    const row = JSON.parse(readFileSync(pinPath(workspaceId), 'utf8'))
+    const row = JSON.parse(await readFile(pinPath(workspaceId), 'utf8'))
     if (row?.workspaceId !== workspaceId || typeof row?.localPath !== 'string' || row.localPath === '') return undefined
     return row.localPath
   } catch {
@@ -145,10 +145,10 @@ export function readWorkspacePin(workspaceId) {
  * `localPath` replaced by the pinned value, or `undefined` when this
  * instance never joined.
  */
-export function trustedMember(marker, identity, me) {
+export async function trustedMember(marker, identity, me) {
   const own = ownMember(marker, identity, me)
   if (own === undefined) return undefined
-  const pin = readWorkspacePin(marker.workspaceId)
+  const pin = await readWorkspacePin(marker.workspaceId)
   /* No pin ⇒ we never joined this workspace locally ⇒ the member row is
    * unverifiable attacker-controlled data: it must not drive pull/push/match.
    * Re-joining (joinWorkspace) writes the pin and restores membership —
@@ -223,10 +223,10 @@ export async function createWorkspace(s3, ctx, identity, { name, localPath, requ
     if (existing === undefined || existing.createdBy !== memberId || existing.title !== name) {
       throw new Error('workspace id collision; retry with a fresh request')
     }
-    pinWorkspaceLocalPath(workspaceId, existing.members[memberId].localPath ?? localPath)
+    await pinWorkspaceLocalPath(workspaceId, existing.members[memberId].localPath ?? localPath)
     return { ...existing, deduplicated: true }
   }
-  pinWorkspaceLocalPath(workspaceId, localPath)
+  await pinWorkspaceLocalPath(workspaceId, localPath)
   return marker
 }
 
@@ -261,7 +261,7 @@ export async function joinWorkspace(s3, ctx, identity, { workspaceId, localPath 
     const marker = { ...got.marker, members }
     const put = await s3.putJson(key, marker, { ifMatch: got.etag })
     if (put?.conflict === true) continue // lost the race — re-read and recompute
-    pinWorkspaceLocalPath(workspaceId, localPath)
+    await pinWorkspaceLocalPath(workspaceId, localPath)
     return marker
   }
   throw new Error('another client is updating this workspace; retry the join')
@@ -315,7 +315,7 @@ export async function matchWorkspace(cwd, markers, { identity, me, legacyCache }
     /* trustedMember (review 9012 F1): the remote member row is co-tenant
      * writable, so the PINNED localPath — not the remote claim — decides
      * whether `cwd` is ours. A repointed remote row cannot claim this host. */
-    const own = trustedMember(marker, identity, me)
+    const own = await trustedMember(marker, identity, me)
     if (own === undefined) continue
     /* Legacy path-hash fallback (F7): a pin existing (trustedMember already
      * required it) is the only proof this hash-match is ours — a planted

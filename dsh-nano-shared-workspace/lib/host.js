@@ -822,9 +822,24 @@ function projectKey(cwd) {
 var CHUNK = 64 * 1024;
 var CLAIM_TTL_MS = 9e4;
 var sessionDir = (home) => join2(home, "sessions");
+var ZSTD_MAGIC = Buffer.from([40, 181, 47, 253]);
+function frameOffsets(buf) {
+  const offsets = [];
+  for (let i = 0; i + 4 <= buf.length; i += 1) {
+    if (buf.compare(ZSTD_MAGIC, 0, 4, i, i + 4) === 0) offsets.push(i);
+  }
+  return offsets;
+}
 function decode(buf) {
   try {
-    return zstdDecompressSync(buf).toString("utf8");
+    const offsets = frameOffsets(buf);
+    if (offsets.length <= 1) return zstdDecompressSync(buf).toString("utf8");
+    let text = "";
+    for (let i = 0; i < offsets.length; i += 1) {
+      const end = i + 1 < offsets.length ? offsets[i + 1] : buf.length;
+      text += zstdDecompressSync(buf.subarray(offsets[i], end)).toString("utf8");
+    }
+    return text;
   } catch {
     return void 0;
   }

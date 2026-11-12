@@ -62,10 +62,37 @@ const CLAIM_TTL_MS = 90_000
 
 const sessionDir = home => join(home, 'sessions')
 
-/** Decode one artifact; tolerate truncation mid-write. */
+/**
+ * Decode one artifact; tolerate truncation mid-write.
+ *
+ * A DSH session log is a CONCATENATION of checksummed zstd frames (one per
+ * append). `zstdDecompressSync` yields every frame on Node >= 24.22 but only
+ * the FIRST frame on the Node bundled with Electron 44 (24.21) — the desktop
+ * host would therefore read a 21-event session as its 1-line header and
+ * materialize a truncated copy (F-22). Splitting on the frame magic and
+ * decoding each frame keeps both runtimes identical.
+ */
+const ZSTD_MAGIC = Buffer.from([0x28, 0xb5, 0x2f, 0xfd])
+
+/** Byte offsets of every zstd frame in `buf`. */
+function frameOffsets(buf) {
+  const offsets = []
+  for (let i = 0; i + 4 <= buf.length; i += 1) {
+    if (buf.compare(ZSTD_MAGIC, 0, 4, i, i + 4) === 0) offsets.push(i)
+  }
+  return offsets
+}
+
 function decode(buf) {
   try {
-    return zstdDecompressSync(buf).toString('utf8')
+    const offsets = frameOffsets(buf)
+    if (offsets.length <= 1) return zstdDecompressSync(buf).toString('utf8')
+    let text = ''
+    for (let i = 0; i < offsets.length; i += 1) {
+      const end = i + 1 < offsets.length ? offsets[i + 1] : buf.length
+      text += zstdDecompressSync(buf.subarray(offsets[i], end)).toString('utf8')
+    }
+    return text
   } catch {
     return undefined
   }

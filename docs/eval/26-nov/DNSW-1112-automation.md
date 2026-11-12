@@ -107,6 +107,19 @@
 | T-C06 | 文件上传：大文件 / 二进制 / 超限 / 恶意路径 | ✅ | 1MiB 二进制 sha256 一致；>2MiB 不进 HEAD、本地保留；symlink 不跟随不上传；`../` rel 被 schema 拒绝且不写出副本；`imagine/` 类 SKIP 路径不落盘；schema 合法的远端 HEAD 正常拉取 |
 | T-C07 | 负向：伪造 id、越权 | ✅ | 非法 `workspaceId`/`sessionId` → 400；非成员 marker 删除被拒 |
 
+### F. 会话日志同步（T-Fxx，Round 3 新增）
+
+真实 UI 路径：ego 在 A 侧展开共享工作区 → 「新建会话」→ 输入「只回复一个词：pong」。
+
+| ID | 场景 | 状态 | 证据 / 结论 |
+|---|---|---|---|
+| T-F01 | 会话日志推送：本地 artifact → `sessions/{sid}/{meta.json,body/n.part}` | ✅ | `outcome: pushed:16062b`；meta `rev:3`、`committedBytes` 与 `0.part` 字节数完全相等 |
+| T-F02 | 两端都能列出远端会话 | ✅ | A/B `/sessions` 均返回该行，`writerId: dasw-a@fba3fbd5` |
+| T-F03 | transcript 回放完整（跨运行时） | ✅ | A/B 均为 22 事件 = `meta.eventCount`，17 种类型，含 `user/message`；B 修复前只有 1 条（F-22） |
+| T-F04 | materialize 落到 B 的会话树 | ✅ | 产物 cwd 重写为 `/Users/seanz/dasw-1112-mu-b`；22/22 行完整（修复前 176B/1 行）；帧布局有效 |
+| T-F05 | 外部写者不得覆盖 | ✅ | 把 meta 的 `writerId` 改成 `dasw-x@deadbeef` 后 A 返回 `skip:foreign-writer`，不写 |
+| T-F06 | 未共享会话不被推送 | ✅ | 普通会话返回 `skip:not-shared`（cwd 不在本成员副本内） |
+
 ### D. 视觉与交互（T-Dxx，局部截图）
 
 | ID | 场景 | 状态 | 证据 / 结论 |
@@ -151,7 +164,7 @@
 | F-18 | 中 | 绑定竞态 | 探测成功后 `finishBind` 只置 `setupStage`，`configured/username` 要等 `refresh()`；用户立即点「新建共享工作区」会被弹回第 1 步 | `finishBind(bound)` 接受刚落库的用户名并立即置 `configured:true` | 🔧 U-11 |
 | F-19 | 中 | 错误文案 | 错密钥时对话框直接展示 S3 原始 XML（几百字 `<Error><Code>…`） | `messageOf` 抽 `<Code>` + HTTP 状态，其余去标签并截断 180 字 | 🔧 U-09 |
 | F-20 | 中 | 同步性能 | 200 文件 push 111s / pull 108s：blob 串行传输；且重复 push 重传所有未变文件 | 有界并发池（8）；sha 已在 HEAD/parent 则跳过上传；返回 `uploaded` 供观测 | 🔧 U-08 |
-| F-21 | 低 | 可配置性 | 后台同步间隔写死 `30_000`，无法在测试/低带宽端关闭 | 新增 `Config.backgroundSyncMs`（0 关闭，上限 86400000） | 🔧 U-13 |
+| F-22 | **严重** | 会话日志回放（跨运行时） | Electron 44 内置 Node 24.21 的 `zstdDecompressSync` **只解第一个帧**；DSH 会话日志是逐次追加的多帧 zstd。桌面版读到 21 事件的会话时只拿到 1 行 header，`/transcript` 返回 1 条、`/materialize` 产出 176 字节残缺副本。系统 Node 24.22 能解全部 7 帧，所以**只在桌面/Electron 端复现** | `decode()` 按 zstd magic 切帧后逐帧解码；两运行时均得 21 行 | 🔧 U-14 |
 
 ## 4. 升级记录（U-xx）
 
@@ -170,6 +183,7 @@
 | U-11 | F-18 | `index.js` `finishBind(bound)` 立即发布 `configured/username`；`graft.js` 透传 `bound` | ego 注入校验：`finishBind({username:'dasw-a'})` 后 `configured:true`、`stage:'workspace'` |
 | U-12 | F-15 | 新增 `scripts/eval/desktop-auth.mjs`（自签 cookie、固定 `~/.dsh-desktop`、动态端口）；`clients.mjs` 统一 A/B 两端 | 两端 `/settings` 均 200 且分别返回 `dasw-a` / `dasw-b` |
 | U-13 | F-21 | `entry.js` 新增 `Config.backgroundSyncMs` 校验；`routes.js` `startBackgroundSync` 读该值，0 时直接返回 | 关后 35s generation 不变；两个测试节点均已设 0 |
+| U-14 | F-22 | `session-io.js` `decode()`：按 zstd frame magic 切分后逐帧 `zstdDecompressSync`，兼容只解首帧的运行时 | 系统 Node 24.22 与 Electron Node 24.21 各跑一次：均 21 行。修复后 A/B `/transcript` 都返回 21 事件 / 16 类型；B `materialize` 产物由 176B/1 帧变为 15094B/2 帧 |
 
 ## 5. 证据索引
 
@@ -181,6 +195,7 @@
 | `scripts/eval/multi-user-files.mjs` | 双客户端 join、文件同步、冲突消融、二进制、超限、symlink、恶意 HEAD、并发 push（T-B04 / T-C04 / C05 / C06） |
 | `scripts/eval/multi-user-leases.mjs` | cool-off、心跳、过期回收、并发 claim、非法 id（T-C01 / C02 / C03 / C07） |
 | `scripts/eval/scale-and-perf.mjs` | 200 文件规模、深层嵌套、`/workspaces` 大列表、会话路由、后台同步关闭（T-E02 / E03 / E04） |
+| `scripts/eval/session-sync.mjs` | 会话日志推送/远端列举/transcript/materialize/外部写者拒写（T-F01…F05，含 F-22 回归） |
 | `scripts/eval/race-markers.mjs` | 无条件并发 join 丢成员 + CAS 控制组（F-07 / U-01 / U-02） |
 | `scripts/eval/join-cas.mjs` | 三方并发 join 保留全部 member（U-02） |
 | `screenshots/R1-sidebar-empty.png`、`R1-sidebar-empty-crop.png` | 空状态侧栏全视口 / 裁剪 |
@@ -230,3 +245,19 @@
 - **测试编排纪律**：`multi-user-files.mjs` / `multi-user-leases.mjs` / `scale-and-perf.mjs` 共用 `/Users/seanz/dasw-1112-mu-{a,b}` 副本目录并会先清空，**必须串行执行**。并行跑会让后启动的脚本清掉前一个刚写的文件，表现为 `push generation` 断言失败（非产品缺陷，Round 2 已踩过一次）。
 - 回归结果（提交态 `4f5f5e3`）：`race-markers` / `join-cas` / `multi-user-leases` / `multi-user-files` 全绿。
 - 未裁定：F-12（删除是否级联清理 tree/sessions 孤儿对象）。
+
+### Round 3（2026-11-12 11:58–12:20）
+
+- 补齐上轮报告中最大的空白：**会话日志同步链路**。前两轮只验证了文件树，`session-io.js` 一次未跑通。
+- 用 ego 走真实 UI：展开共享工作区 → 「新建会话」→ 输入消息 → 会话出现在侧栏，cwd 落在副本目录内。
+- 驱动 `/sync`：`pushed:16062b`，meta `rev:3`、`committedBytes` 与 `0.part` 字节数相等；A/B 均可列出。
+- **发现 F-22（严重、跨运行时）**：Electron 44 内置 Node 24.21 的 `zstdDecompressSync` 只解第一个帧，而 DSH 会话日志是多帧追加。桌面版把 22 事件读成 1 条，`materialize` 只产出 176 字节 header。系统 Node 24.22 无此问题，所以此缺陷**只在桌面端可见**。
+- U-14：`decode()` 按 zstd magic 切帧逐帧解。两运行时均得完整行数；B `/transcript` 22 事件、`materialize` 15094B/2 帧。
+- 新增 `scripts/eval/session-sync.mjs`（17 断言全绿），含外部写者拒写与未共享会话不推送。
+- 顺手清理了累积的 16 个测试工作区与孤儿对象（F-12 未实现级联，测试侧手动枚举前缀清理）。
+- 未触碰 `dsh.local`。
+
+### Round 3 末状态
+
+- 三端构建哈希：`lib/host.js` `6d092f312280…`；两测试节点已同步。
+- 测试矩阵：A 6 / B 6 / C 7 / D 6 / E 4 / F 6 = **35 个用例**，除 F-12 裁定项外全部有结论。

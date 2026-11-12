@@ -219,22 +219,25 @@ export const STYLE = `${NANO_STYLES}
 }
 
 /* Row-level Git colour, the way VS Code's source-control view tints a changed entry.
-   The shared tree does not expose the row name element to its accessory, so the tint is selected
-   from the sibling accessory that carries the status letter: the :has() selector keeps the row itself untouched. */
-/* A row is tinted by the status it reports, whether that is a file's letter or a folder's summary dot.
-   Both mark kinds are matched here, so a folder that contains changes colours like the files inside it.
-   The accessory scope is the row div's direct child: an expanded folder keeps its children in a
-   sibling UL, so a bare :has([data-status]) also matched a descendant row and tinted the parent
-   with the wrong child's status — or, for [data-nxe-ignored], greyed out the whole subtree's root. */
-[data-nxe] .nxe-tree li[data-files-entry]:has(> div > div [data-status="M"]) > div > button > span { color: var(--nxe-git-modified); }
-[data-nxe] .nxe-tree li[data-files-entry]:has(> div > div [data-status="A"]) > div > button > span { color: var(--nxe-git-added); }
-[data-nxe] .nxe-tree li[data-files-entry]:has(> div > div [data-status="?"]) > div > button > span { color: var(--nxe-git-untracked); }
-[data-nxe] .nxe-tree li[data-files-entry]:has(> div > div [data-status="D"]) > div > button > span { color: var(--nxe-git-deleted); }
-[data-nxe] .nxe-tree li[data-files-entry]:has(> div > div [data-status="R"]) > div > button > span { color: var(--nxe-git-renamed); }
-[data-nxe] .nxe-tree li[data-files-entry]:has(> div > div [data-status="U"]) > div > button > span { color: var(--nxe-git-conflicted); }
+   rowTriggerProps stamps the letter on the row's own button (data-nxe-status for files,
+   data-nxe-folder-status for a directory's subtree summary), so the tint is a plain attribute
+   match — no :has() descendant scan on every style recalculation, and no chance of a descendant
+   row's mark leaking onto its parent the way the old selector did. */
+[data-nxe] .nxe-tree li[data-files-entry] > div > button[data-nxe-status="M"] > span { color: var(--nxe-git-modified); }
+[data-nxe] .nxe-tree li[data-files-entry] > div > button[data-nxe-status="A"] > span { color: var(--nxe-git-added); }
+[data-nxe] .nxe-tree li[data-files-entry] > div > button[data-nxe-status="?"] > span { color: var(--nxe-git-untracked); }
+[data-nxe] .nxe-tree li[data-files-entry] > div > button[data-nxe-status="D"] > span { color: var(--nxe-git-deleted); }
+[data-nxe] .nxe-tree li[data-files-entry] > div > button[data-nxe-status="R"] > span { color: var(--nxe-git-renamed); }
+[data-nxe] .nxe-tree li[data-files-entry] > div > button[data-nxe-status="U"] > span { color: var(--nxe-git-conflicted); }
+[data-nxe] .nxe-tree li[data-files-entry] > div > button[data-nxe-folder-status="M"] > span { color: var(--nxe-git-modified); }
+[data-nxe] .nxe-tree li[data-files-entry] > div > button[data-nxe-folder-status="A"] > span { color: var(--nxe-git-added); }
+[data-nxe] .nxe-tree li[data-files-entry] > div > button[data-nxe-folder-status="?"] > span { color: var(--nxe-git-untracked); }
+[data-nxe] .nxe-tree li[data-files-entry] > div > button[data-nxe-folder-status="D"] > span { color: var(--nxe-git-deleted); }
+[data-nxe] .nxe-tree li[data-files-entry] > div > button[data-nxe-folder-status="R"] > span { color: var(--nxe-git-renamed); }
+[data-nxe] .nxe-tree li[data-files-entry] > div > button[data-nxe-folder-status="U"] > span { color: var(--nxe-git-conflicted); }
 
 /* The folder's glyph takes the same tint so the row reads as one unit. */
-[data-nxe] .nxe-tree li[data-files-entry="directory"]:has(> div > div [data-status]) > div > button > svg { color: inherit; opacity: .85; }
+[data-nxe] .nxe-tree li[data-files-entry="directory"] > div > button[data-nxe-folder-status] > svg { color: inherit; opacity: .85; }
 
 
 /* One row geometry for every entry.
@@ -333,8 +336,8 @@ export const STYLE = `${NANO_STYLES}
    subordinate to a tracked row in both themes. */
 [data-nxe] .nxe-tree li[data-files-entry] > div > button > span:last-child,
 [data-nxe] .nxe-tree li[data-files-entry] > div > button > svg { transition: color .12s ease; }
-[data-nxe] .nxe-tree li[data-files-entry]:has(> div > div [data-nxe-ignored]) > div > button > span:last-child,
-[data-nxe] .nxe-tree li[data-files-entry]:has(> div > div [data-nxe-ignored]) > div > button > svg { color: var(--nxe-ignored-ink); }
+[data-nxe] .nxe-tree li[data-files-entry] > div > button[data-nxe-ignored] > span:last-child,
+[data-nxe] .nxe-tree li[data-files-entry] > div > button[data-nxe-ignored] > svg { color: var(--nxe-ignored-ink); }
 
 /* Persistent Git warning. Same floating surface as the shared toast, but interactive: it carries a
    dismiss button, stays until the read succeeds or the reader closes it, and floats above the

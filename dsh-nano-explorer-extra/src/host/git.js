@@ -324,29 +324,25 @@ export async function readStatus(ctx, config, request) {
     throw new Error(`git rev-parse failed: ${firstLine(probe.stderr)}`)
   }
   const root = probe.stdout.trim()
-  // `--untracked-files=normal` reports a wholly untracked directory as one entry, while `all`
-  // enumerates every file under it: on a workspace with a large generated tree that difference is
-  // 49 KB versus 32 MB, and the tree only ever draws the directories that were reported.
-  // Workspace-wide reads keep the summarised mode: `all` enumerates every file under an untracked
-  // directory (tens of megabytes on a large tree). A caller that names one directory asks for `all`
-  // instead, so opening a folder reveals each changed file inside it without ever walking the whole
-  // repository that way.
-  const scoped = typeof request.path === 'string' && request.path !== ''
   const args = [
     'status', '--porcelain=v2', '--branch',
-    scoped ? '--untracked-files=all' : '--untracked-files=normal',
+    // `--untracked-files=normal` reports a wholly untracked directory as one entry: on a workspace
+    // with a large generated tree that difference is 49 KB versus 32 MB of output, and the tree
+    // only ever draws the directories that were reported.
+    '--untracked-files=normal',
     '-z',
-    ...(scoped ? ['--', request.path] : []),
   ]
-  // These four reads do not depend on each other: status, stash, and the worktree list all answer
-  // from the repository's own metadata. Running them in line was nine sequential process waits;
-  // overlapping them makes the answer arrive when the slowest read does.
+  // E5: the tree and the status bar need branch, files, ahead/behind, stash count, and the upstream
+  // divergence — three commands. The worktree list, the branch rows, and the 24-commit history rail
+  // only matter once a footer drawer opens, so a plain status read asks for `detail=drawer` and pays
+  // for them, while every 15-second poll does not.
+  const detail = request.detail === 'drawer' ? 'drawer' : 'status'
   const [status, stash, worktrees] = await Promise.all([
     runGit(ctx, config, { ...request, args }),
     runGit(ctx, config, {
       ...request, args: ['stash', 'list', '--format=%gd'], allowedExitCodes: [0, 128],
     }).catch(() => undefined),
-    listWorktrees(ctx, config, request),
+    detail === 'drawer' ? listWorktrees(ctx, config, request) : Promise.resolve(undefined),
   ])
   const parsed = parseStatus(status.stdout)
 
@@ -356,12 +352,11 @@ export async function readStatus(ctx, config, request) {
     ? 0
     : stash.stdout.split('\n').filter(line => line.trim() !== '').length
 
-  // The branch list, the history rail, and the upstream divergence are independent of each other
-  // and run together. `listBranches` needs the held set the worktree read already produced, so it
-  // takes the rows instead of asking Git a second time.
+  // The branch list and the history rail belong to the drawers; the upstream divergence feeds the
+  // tree's remote markers, so it stays in every read.
   const [branches, history, remote] = await Promise.all([
-    listBranches(ctx, config, request, worktrees),
-    readHistory(ctx, config, request),
+    detail === 'drawer' ? listBranches(ctx, config, request, worktrees ?? []) : Promise.resolve([]),
+    detail === 'drawer' ? readHistory(ctx, config, request) : Promise.resolve([]),
     typeof parsed.upstream !== 'string' || parsed.upstream === ''
       ? Promise.resolve(undefined)
       : remoteDivergence(ctx, config, request),
@@ -369,9 +364,41 @@ export async function readStatus(ctx, config, request) {
   const conflicts = parsed.files.filter(file => file.status === 'U').map(file => file.path)
 
   return {
-    root, ...parsed, stashed, worktrees, branches, history, conflicts,
+    root, ...parsed, stashed, worktrees: worktrees ?? [], branches, history, conflicts,
     ...(remote === undefined ? {} : { remote }),
   }
+}
+
+/**
+ * Read the changed files inside one directory only.
+ *
+ * E4: a freshly expanded folder wants the per-file entries under its own path — nothing else. The
+ * workspace-wide read it used to piggyback on cost the worktree list, the branch rows, and the
+ * history rail with it; this keeps two processes: the checkout probe and a scoped porcelain with
+ * `--untracked-files=all` so every file under an untracked directory is named.
+ * @param ctx - context providing the process services.
+ * @param config - executable and process limits.
+ * @param request - working directory, session policy, `path` (repository-relative scope), and
+ *   cancellation.
+ * @returns `{ root, files }`, or `undefined` when the directory is not a checkout.
+ */
+export async function readScopedStatus(ctx, config, request) {
+  const probe = await runGit(ctx, config, { ...request, args: ['rev-parse', '--show-toplevel'], allowedExitCodes: [0, 128] })
+  if (probe.exitCode !== 0) {
+    if (NOT_A_CHECKOUT.test(probe.stderr)) return undefined
+    throw new Error(`git rev-parse failed: ${firstLine(probe.stderr)}`)
+  }
+  const root = probe.stdout.trim()
+  const status = await runGit(ctx, config, {
+    ...request,
+    args: [
+      'status', '--porcelain=v2', '--branch',
+      '--untracked-files=all', '-z',
+      '--', request.path,
+    ],
+  })
+  const parsed = parseStatus(status.stdout)
+  return { root, files: parsed.files }
 }
 
 /**

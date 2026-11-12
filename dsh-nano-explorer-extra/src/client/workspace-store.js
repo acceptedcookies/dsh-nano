@@ -67,6 +67,15 @@ function createStore(root) {
   // Bumped on every workspace-wide Git read; a per-directory answer that started against the
   // previous snapshot is discarded on landing, the same rule the per-mount epoch enforced before.
   let gitEpoch = 0
+  /**
+   * Serialized form of the last committed `git` snapshot. The Host builds the object in a fixed
+   * field order, so a textual compare is a sound "did anything change" test — E2 skips the commit,
+   * the subscriber notification, and the per-directory fan-out entirely when it does not.
+   */
+  let lastGitJson = undefined
+  let lastGitErrorJson = undefined
+  /** Expanded directories whose scoped read has landed; reset alongside `directoryStatus`. */
+  const dirStatusLoaded = new Set()
   let statsTimer = 0
   let orphanTimer = 0
   let lastRefreshAt = 0
@@ -94,7 +103,7 @@ function createStore(root) {
    * @param path - absolute directory path.
    * @param silent - keep the rows already drawn instead of showing a loading line.
    */
-  const loadLevel = (sessionId, path, silent = false) => once(`level:${path}`, () => perf.span('list-level', async () => {
+  const loadLevel = (sessionId, path, silent = false, skipIgnored = false) => once(`level:${path}`, () => perf.span('list-level', async () => {
     const key = treeKeyOf(root, path)
     if (!silent) {
       const next = new Map(state.levels)
@@ -120,24 +129,20 @@ function createStore(root) {
     // entries drew a ghost row forever, and the level map kept listing children of nothing.
     // Prune the whole subtree and the row in the parent instead of showing a dead level.
     if ((result.code === 'not-found' || result.code === 'not-directory') && path !== root) pruneEntry(path)
-    // The freshly listed names feed the ignored check; the answer lands in the shared set.
-    if (result.ok && result.entries.length > 0) void markIgnored(sessionId, path, result.entries.map(entry => entry.name))
+    // The freshly listed names feed the ignored check; the answer lands in the shared set. A mass
+    // refresh passes `skipIgnored` so one batched query covers every level instead of one per level.
+    if (result.ok && result.entries.length > 0 && !skipIgnored) void markIgnored(sessionId, path, result.entries.map(entry => entry.name))
     return result
   }))
 
   /**
-   * Ask Git which of one directory's entries it ignores, and merge the answer into the shared set.
+   * One `check-ignore` round trip for an arbitrary path list, merged into the shared set.
    * The `/ignored` route is itself memoized, so two panes asking for the same level cost one query;
    * the dedupe here keeps even that from being asked twice.
    */
-  const markIgnored = (sessionId, directory, names) => {
-    if (!showGitStatus() || !Array.isArray(names) || names.length === 0) return Promise.resolve()
-    return once(`ignored:${directory}:${names.join(',')}`, async () => {
-      // Ask about each entry where it actually lives. Sending bare names made Git answer about
-      // same-named entries at the workspace root: a nested `dist` stayed lit while an unrelated
-      // root `node_modules` marked every nested `node_modules` ignored.
-      const base = relativeTo(root, directory)
-      const paths = names.map(name => base === '' ? name : `${base}/${name}`)
+  const checkIgnored = (sessionId, paths) => {
+    if (!showGitStatus() || !Array.isArray(paths) || paths.length === 0) return Promise.resolve()
+    return once(`ignored:${paths.join(',')}`, async () => {
       const result = await request('/ignored', { sessionId, paths })
       if (!result.ok || !Array.isArray(result.ignored) || result.ignored.length === 0) return
       // The set is keyed like the status map — relative to the checkout root — so a workspace that
@@ -148,6 +153,19 @@ function createStore(root) {
       for (const path of result.ignored) next.add(prefix === '' ? path : `${prefix}/${path}`)
       commit({ ignoredSet: next })
     })
+  }
+
+  /**
+   * Ask Git which of one directory's entries it ignores, and merge the answer into the shared set.
+   */
+  const markIgnored = (sessionId, directory, names) => {
+    if (!Array.isArray(names) || names.length === 0) return Promise.resolve()
+    // Ask about each entry where it actually lives. Sending bare names made Git answer about
+    // same-named entries at the workspace root: a nested `dist` stayed lit while an unrelated
+    // root `node_modules` marked every nested `node_modules` ignored.
+    const base = relativeTo(root, directory)
+    const paths = names.map(name => base === '' ? name : `${base}/${name}`)
+    return checkIgnored(sessionId, paths)
   }
 
   /**
@@ -162,6 +180,7 @@ function createStore(root) {
       const result = await request(`/status?sessionId=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(directory)}`)
       if (epoch !== gitEpoch) return
       if (!result.ok || result.git === null || result.git === undefined) return
+      dirStatusLoaded.add(directory)
       const checkoutRoot = result.git.root
       const base = checkoutRoot ?? root
       const directoryRelative = relativeTo(base, directory)
@@ -176,24 +195,55 @@ function createStore(root) {
     }))
   }
 
-  /** Re-read Git state alone. Deduped: the leader and a manual refresh share one flight. */
-  const refreshGit = sessionId => {
+  /**
+   * Re-read Git state alone. Deduped: the leader and a manual refresh share one flight.
+   * @returns `true` when a new snapshot was committed; `false` when the read reported the exact
+   *   same state (E2 — nothing to redraw, nothing to fan out) or the read failed to produce one.
+   */
+  /**
+   * @param sessionId - the issuing Session.
+   * @param detail - `'drawer'` asks the Host for the worktree list, branch rows, and history rail a
+   *   footer drawer needs; anything else is the cheap status read the poll uses (E5). While a
+   *   drawer is open every read must carry it, or a light poll would blank the drawer's fields.
+   */
+  const refreshGit = (sessionId, detail) => {
     if (!showGitStatus()) {
       if (state.git !== null || state.gitError !== undefined || state.directoryStatus.size !== 0) {
+        dirStatusLoaded.clear()
         commit({ git: null, gitError: undefined, directoryStatus: new Map() })
       }
-      return Promise.resolve()
+      return Promise.resolve(false)
     }
-    return once('git', () => perf.span('git-refresh', async () => {
+    const suffix = detail === 'drawer' ? '&detail=drawer' : ''
+    return once(`git${suffix}`, () => perf.span('git-refresh', async () => {
       const epoch = gitEpoch + 1
       gitEpoch = epoch
-      const result = await request(`/status?sessionId=${encodeURIComponent(sessionId)}`)
-      if (epoch !== gitEpoch) return
-      if (!result.ok) { commit({ gitError: result.message }); return }
+      const result = await request(`/status?sessionId=${encodeURIComponent(sessionId)}${suffix}`)
+      if (epoch !== gitEpoch) return false
+      if (!result.ok) { commit({ gitError: result.message }); return false }
+      // E2: the Host's field order is deterministic, so a serialized compare is a sound identity
+      // check. An identical snapshot is not committed — subscribers, the accessory rebuild, and the
+      // per-directory fan-out are all skipped, which is what makes an idle poll cost a fetch and
+      // nothing else.
+      const git = result.git ?? null
+      const gitJson = JSON.stringify(git)
+      const errorJson = JSON.stringify(result.gitError)
+      // Expanded directories whose refinement is missing still get fetched: an identical whole-repo
+      // answer may have landed while the per-directory map was empty (fresh store, memoized host
+      // answer), and nothing else would ever repair it.
+      const missing = [...state.expanded].filter(path => !dirStatusLoaded.has(path))
+      if (gitJson === lastGitJson && errorJson === lastGitErrorJson) {
+        for (const path of missing) void loadDirectoryStatus(sessionId, path)
+        return missing.length > 0
+      }
+      lastGitJson = gitJson
+      lastGitErrorJson = errorJson
       // The per-directory map is a refinement of this snapshot; leaving it in place kept letters
       // after the footer had already returned to zero.
-      commit({ git: result.git ?? null, gitError: result.gitError, directoryStatus: new Map() })
+      dirStatusLoaded.clear()
+      commit({ git, gitError: result.gitError, directoryStatus: new Map() })
       for (const path of state.expanded) void loadDirectoryStatus(sessionId, path)
+      return true
     }))
   }
 
@@ -227,9 +277,19 @@ function createStore(root) {
 
   /** Reload the root and every expanded directory in place. */
   const refresh = sessionId => {
-    const paths = [...state.expanded]
-    void loadLevel(sessionId, root, true)
-    for (const path of paths) void loadLevel(sessionId, path, true)
+    const paths = [root, ...state.expanded]
+    // E10: the per-level ignored checks are suppressed and re-asked as ONE batched query once every
+    // level has landed — a wide tree used to spend one `check-ignore` process per directory.
+    void Promise.all(paths.map(path => loadLevel(sessionId, path, true, true))).then(() => {
+      const all = []
+      for (const [levelKey, level] of state.levels) {
+        for (const entry of level.entries ?? []) {
+          if (levelKey === '') all.push(entry.name)
+          else all.push(`${levelKey}/${entry.name}`)
+        }
+      }
+      void checkIgnored(sessionId, all)
+    })
     lastRefreshAt = Date.now()
   }
 

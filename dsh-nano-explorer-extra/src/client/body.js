@@ -21,6 +21,11 @@ const DOUBLE_CLICK_MS = 400
 
 /** How often a visible pane asks the store for fresh Git state; hidden panes stay silent. */
 const POLL_GIT_MS = 15000
+/**
+ * An unchanged status read means nothing is happening: the next poll waits twice as long, up to this
+ * floor. Any change — or the reader coming back to the tab — drops the streak and restores the base.
+ */
+const POLL_GIT_MS_MAX = 60000
 
 /** The empty snapshot before a workspace is known, kept referentially stable for the hook. */
 const EMPTY_WS = {
@@ -117,6 +122,9 @@ export function ExplorerBody(props) {
   // Which footer drawer is open, if any: `branch` shows worktrees and remote state, `commit` shows the
   // pending work. One at a time, so a reader never faces two stacked panels.
   const [drawer, setDrawer] = useState(null)
+  // The poll reads whether a drawer is open without re-arming its own effect every time it toggles.
+  const drawerRef = useRef(null)
+  drawerRef.current = drawer
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [drawerBusy, setDrawerBusy] = useState(false)
   const [drawerError, setDrawerError] = useState(undefined)
@@ -194,11 +202,14 @@ export function ExplorerBody(props) {
     }
     return states
   }, [ws.levels])
+  // E3: the expanded list is handed to the memoized FileTree; rebuilding the array on every render
+  // defeats that memo even when the set itself did not change.
+  const expandedList = useMemo(() => [...ws.expanded], [ws.expanded])
   const tree = useMemo(() => store === null ? EMPTY_TREE : ({
     levels: ws.levels,
     entries: treeEntries,
     directories: treeDirectories,
-    expanded: [...ws.expanded],
+    expanded: expandedList,
     selected, setSelected,
     loadLevel: (path, silent) => store.loadLevel(sessionId, path, silent),
     refreshLevel: path => store.refreshLevel(sessionId, path),
@@ -209,10 +220,18 @@ export function ExplorerBody(props) {
     knownEmpty: path => store.knownEmpty(path),
     pending: null,
     setPending: () => {},
-  }), [store, ws.levels, ws.expanded, treeEntries, treeDirectories, selected, sessionId])
+  }), [store, ws.levels, ws.expanded, expandedList, treeEntries, treeDirectories, selected, sessionId])
+  // E3: callbacks that live in memoized props read the facade through a ref, so their identity no
+  // longer depends on every snapshot swap.
+  const treeRef = useRef(tree)
+  treeRef.current = tree
 
-  /** Re-read Git state. The store deduplicates, so every visible pane may ask and only one flies. */
-  const refreshGit = useCallback(() => store?.refreshGit(sessionId) ?? Promise.resolve(), [store, sessionId])
+  /**
+   * Re-read Git state. The store deduplicates, so every visible pane may ask and only one flies.
+   * While a footer drawer is open the read carries `detail=drawer` so the rows it shows — worktrees,
+   * branches, the commit rail — are part of the snapshot instead of fields a light read blanked.
+   */
+  const refreshGit = useCallback(detail => store?.refreshGit(sessionId, detail ?? (drawer !== null ? 'drawer' : undefined)) ?? Promise.resolve(false), [store, sessionId, drawer])
   /** Re-count the workspace; a large tree takes seconds, so this is separate and cancellable. */
   const refreshStats = useCallback(() => store?.refreshStats(sessionId) ?? Promise.resolve(), [store, sessionId])
   /**
@@ -233,7 +252,7 @@ export function ExplorerBody(props) {
     setDrawer(which)
     setDrawerError(undefined)
     setDrawerRefresh(true)
-    void refreshGit().finally(() => setDrawerRefresh(false))
+    void refreshGit('drawer').finally(() => setDrawerRefresh(false))
   }, [refreshGit])
 
   useEffect(() => { void refreshGit() }, [refreshGit])
@@ -250,13 +269,39 @@ export function ExplorerBody(props) {
     // perf: one timer per pane is expected — the leak signal is `live` staying
     // non-zero after unmount or a hidden pane's tick doing real work.
     const poll = perf.track('interval', 'git-poll')
-    const timer = window.setInterval(poll.wrap(() => {
+    // E6: consecutive unchanged reads stretch the interval up to POLL_GIT_MS_MAX; a changed read or
+    // the tab becoming visible again resets it. `document.hidden` skips the tick outright.
+    let idleStreak = 0
+    let timer = 0
+    const visible = () => {
+      if (document.hidden) return false
       const node = rootEl.current
-      if (node === null || node.closest('[hidden], [aria-hidden="true"]') !== null) return
-      void store.refreshGit(sessionId)
-    }), POLL_GIT_MS)
+      return node !== null && node.closest('[hidden], [aria-hidden="true"]') === null
+    }
+    const schedule = () => {
+      window.clearTimeout(timer)
+      timer = window.setTimeout(tick, Math.min(POLL_GIT_MS * 2 ** idleStreak, POLL_GIT_MS_MAX))
+    }
+    const tick = poll.wrap(() => {
+      if (!visible()) { schedule(); return }
+      // E5: while a footer drawer is open the poll must carry `detail=drawer` too, or the light
+      // read would replace the snapshot the drawer is displaying with one that has no rails.
+      const detail = drawerRef.current !== null ? 'drawer' : undefined
+      void store.refreshGit(sessionId, detail).then(changed => {
+        idleStreak = changed === true ? 0 : idleStreak + 1
+        schedule()
+      })
+    })
+    const wake = () => {
+      if (document.hidden) return
+      idleStreak = 0
+      if (visible()) void store.refreshGit(sessionId)
+      schedule()
+    }
+    document.addEventListener('visibilitychange', wake)
+    schedule()
     poll.attach()
-    return () => { window.clearInterval(timer); poll.detach() }
+    return () => { window.clearTimeout(timer); document.removeEventListener('visibilitychange', wake); poll.detach() }
   }, [store, sessionId])
 
   /** Debounced re-count after directory changes; the debounce lives in the store. */
@@ -350,6 +395,31 @@ export function ExplorerBody(props) {
     return remoteByPath.get(relative)
   }, [remoteByPath, statusKeyOf])
 
+  // E8: the strongest status beneath each directory, pre-aggregated once per status snapshot instead
+  // of scanning the whole map for every folder row on every render.
+  const dirStatusMap = useMemo(() => {
+    const map = new Map()
+    const put = (dir, status) => {
+      const rank = SEVERITY.indexOf(status)
+      const existing = map.get(dir)
+      if (existing === undefined || rank > SEVERITY.indexOf(existing)) map.set(dir, status)
+    }
+    for (const [path, entry] of statusMap) {
+      let index = path.indexOf('/')
+      while (index !== -1) {
+        put(path.slice(0, index), entry.status)
+        index = path.indexOf('/', index + 1)
+      }
+    }
+    return map
+  }, [statusMap])
+
+  const folderStatusOf = useCallback(key => {
+    const relative = statusKeyOf(key)
+    if (relative === undefined) return undefined
+    return dirStatusMap.get(relative)
+  }, [dirStatusMap, statusKeyOf])
+
   /** Open one entry in the resource viewer the same way the shipped tree does. */
   const openEntry = useCallback(entry => {
     const absolute = absoluteOf(cwd ?? '', entry.path)
@@ -411,13 +481,13 @@ export function ExplorerBody(props) {
    * @param entry - the row that was pressed.
    */
   const openDirectory = useCallback(async entry => {
-    const result = await tree.loadLevel(entry.path)
+    const result = await treeRef.current.loadLevel(entry.path)
     // A folder opens whether or not its target lives under the workspace: the entry is the reader's
     // own, and a link behaves like the directory it points at. Only a failure to read is reported,
     // and the tree draws that in place of the level.
-    tree.toggle(entry.path, true)
+    treeRef.current.toggle(entry.path, true)
     if (result?.ok) void loadDirectoryStatus(entry.path)
-  }, [tree, loadDirectoryStatus])
+  }, [loadDirectoryStatus])
 
   /**
    * Delete one entry after the confirmation card is accepted.
@@ -638,10 +708,10 @@ export function ExplorerBody(props) {
     // Hovering a folded folder long enough opens it, so a move can reach a level the reader is
     // pointing at without a separate click. A null entry is the container itself (the workspace
     // root), which is already the open top level.
-    if (entry !== null && !tree.expanded.includes(entry.path)) {
+    if (entry !== null && !treeRef.current.expanded.includes(entry.path)) {
       hoverTimer.current = window.setTimeout(() => { void openDirectory(entry) }, 650)
     }
-  }, [clearHover, openDirectory, tree.expanded])
+  }, [clearHover, openDirectory])
   const dropOn = useCallback(event => {
     event.preventDefault()
     event.stopPropagation()
@@ -653,8 +723,14 @@ export function ExplorerBody(props) {
   // This page owns its row menu instead of going through `contextMenus`: that service gives each
   // contribution a one-second deadline, and the shipped opener provider needs a host round trip plus
   // an application probe, so the menu opened late and reported a failure for rows that had resolved.
+  //
+  // E7: the row's Git facts travel on the button itself as data attributes, so the stylesheet can
+  // tint without `:has()` scans. `folderStatus` carries a directory's subtree summary; `status` is
+  // the entry's own letter.
   const rowTriggerProps = useCallback((entry, kind) => ({
     draggable: true,
+    ...(kind === 'directory' ? { 'data-nxe-folder-status': folderStatusOf(entry.path) } : { 'data-nxe-status': statusOf(entry.path) }),
+    ...(ignoredOf(entry.path) ? { 'data-nxe-ignored': 'true' } : {}),
     onDragStart: event => {
       dragKind.current = kind
       event.dataTransfer?.setData('application/x-nxe-move', entry.path)
@@ -664,7 +740,7 @@ export function ExplorerBody(props) {
     onContextMenu: event => {
       event.preventDefault()
       event.stopPropagation()
-      tree.setSelected(entry.path)
+      treeRef.current.setSelected(entry.path)
       perf.count('menu-open')
       setMenu({ x: event.clientX, y: event.clientY, path: entry.path, name: entry.name, kind, openedAt: Date.now() })
     },
@@ -694,7 +770,7 @@ export function ExplorerBody(props) {
       if (source === '') return
       requestMove({ path: source, meta: { kind: dragKind.current } }, entry.path)
     } : undefined,
-  }), [tree, clearHover, markHover, dropOn, requestMove])
+  }), [clearHover, markHover, dropOn, requestMove, folderStatusOf, statusOf, ignoredOf])
 
   /**
    * The strongest Git status anywhere beneath one directory.
@@ -706,49 +782,31 @@ export function ExplorerBody(props) {
    */
 
 
-  const folderStatusOf = useCallback(key => {
-    const relative = statusKeyOf(key)
-    if (relative === undefined) return undefined
-    const prefix = relative === '' ? '' : `${relative}/`
-    let best
-    let bestRank = -1
-    for (const [path, entry] of statusMap) {
-      if (prefix !== '' && !path.startsWith(prefix)) continue
-      const rank = SEVERITY.indexOf(entry.status)
-      if (rank > bestRank) { bestRank = rank; best = entry.status }
-    }
-    return best
-  }, [statusMap, statusKeyOf])
-
-  const accessory = useMemo(() => createAccessory({
+  // E1: the accessory's component identity is frozen by creating it once. Its accessors change on
+  // every render (status, prefs, copy), so the component receives a ref it re-reads at render time;
+  // the Factory re-renders the accessory whenever `entries` rebuilds — which the status deps below
+  // guarantee on every data change.
+  const accessoryApi = useRef(null)
+  accessoryApi.current = {
     copy: () => copy,
     statusOf, stagedOf, unstagedOf, remoteOf, ignoredOf, folderStatusOf,
-    // A link is marked from the listing itself, so the row shows it while still collapsed. `outside`
-    // says where the link leads, not whether it may be opened.
-    // A level that failed with `broken-link` is how a dead link announces itself: the row keeps its
-    // folder glyph and gains a struck link, rather than the row vanishing or reading as a file.
     linkBrokenOf: key => tree.levels.get(treeKeyOf(cwd ?? '', key))?.code === 'broken-link',
-    linkOf: key => {
-      const info = linkByPath.get(key)
-      if (info === undefined) return undefined
-      return info.outside === true
-    },
+    linkOf: key => linkByPath.get(key)?.outside === true,
     showGit: () => prefs.showGitStatus,
     showIgnoredBadge: () => prefs.showIgnoredBadge,
     showOpenButton: () => prefs.showOpenButton,
     statusLabel: status => nxe.statusLabel(copy, status),
     open: entry => openEntry(entry),
-  }), [copy, statusOf, ignoredOf, tree.levels, cwd, prefs.showGitStatus, prefs.showIgnoredBadge, prefs.showOpenButton, nxe, openEntry])
+  }
+  const accessory = useMemo(() => createAccessory(accessoryApi), [])
 
   const factoryOptions = useMemo(() => ({ slots: { accessory }, fallback: null }), [accessory])
 
-  if (cwd === undefined) {
-    return React.createElement('div', { className: 'nxe-row-note', 'data-nxe': 'true' }, copy.noWorkspace)
-  }
-
-  // Repository bookkeeping and desktop metadata stay out of the tree until the settings switch
-  // asks for them. Matched by name at any depth; the listing itself is unchanged.
-  const entries = tree.entries
+  // E3: the row list is the FileTree's heaviest prop; rebuilding it inline on every render (or on
+  // unrelated state like a toast) defeated its memo entirely. The deps name every input the row
+  // needs — including the status maps the accessory reads — so the list only changes when real
+  // data does, and a poll that reports the same snapshot leaves the memoized FileTree untouched.
+  const entries = useMemo(() => tree.entries
     .filter(entry => prefs.showSystemFiles || !INTERNAL_NAMES.has(entry.name))
     .map(entry => ({
       path: entry.path,
@@ -759,36 +817,45 @@ export function ExplorerBody(props) {
         ...(entry.outside === true ? { outside: true } : {}),
         ...(ignoredOf(entry.path) ? { hidden: true } : {}),
       },
-    }))
+    })), [tree.entries, prefs.showSystemFiles, ignoredOf, statusMap, remoteByPath, linkByPath])
+
+  const treeRoot = useMemo(() => treeKeyOf(cwd ?? '', cwd ?? ''), [cwd])
+  const onTreeToggle = useCallback(entry => {
+    // A press on an open folder always collapses it. Only opening needs the boundary check, so a
+    // folder that was expanded can always be folded back whatever its link target is.
+    if (treeRef.current.expanded.includes(entry.path)) { treeRef.current.toggle(entry.path, false); return }
+    void openDirectory(entry)
+  }, [openDirectory])
+  const onTreeOpen = useCallback(entry => {
+    treeRef.current.setSelected(entry.path)
+    const now = Date.now()
+    const previous = lastPress.current
+    const second = previous.path === entry.path && now - previous.at <= DOUBLE_CLICK_MS
+    lastPress.current = { path: entry.path, at: now }
+    // `openPreviewOnClick` and `openPreviewOnDoubleClick` are independent switches. Enter and the
+    // row's own open button always open, so a reader who turns both off is never stuck.
+    const open = second ? prefsRef.current.openPreviewOnDoubleClick : prefsRef.current.openPreviewOnClick
+    if (open) openEntry(entry)
+  }, [openEntry])
+  const canOpenAny = useCallback(() => true, [])
+
+  if (cwd === undefined) {
+    return React.createElement('div', { className: 'nxe-row-note', 'data-nxe': 'true' }, copy.noWorkspace)
+  }
 
   const content = renderFactorySlot('sidebar.files.tree', {
-    root: treeKeyOf(cwd, cwd),
+    root: treeRoot,
     entries,
-    expanded: tree.expanded,
+    expanded: expandedList,
     directories: tree.directories,
-    current: tree.selected === null ? undefined : treeKeyOf(cwd, tree.selected),
+    current: selected === null ? undefined : treeKeyOf(cwd, selected),
     // `entry.path` is already the absolute tree key: the tree joins each level key with its child
     // name, so re-resolving it against the root would build `<root>/<root>/<name>` and the level
     // would never be found — which is what made every folder refuse to expand.
-    onToggle: entry => {
-      // A press on an open folder always collapses it. Only opening needs the boundary check, so a
-      // folder that was expanded can always be folded back whatever its link target is.
-      if (tree.expanded.includes(entry.path)) { tree.toggle(entry.path, false); return }
-      void openDirectory(entry)
-    },
-    onOpen: entry => {
-      tree.setSelected(entry.path)
-      const now = Date.now()
-      const previous = lastPress.current
-      const second = previous.path === entry.path && now - previous.at <= DOUBLE_CLICK_MS
-      lastPress.current = { path: entry.path, at: now }
-      // `openPreviewOnClick` and `openPreviewOnDoubleClick` are independent switches. Enter and the
-      // row's own open button always open, so a reader who turns both off is never stuck.
-      const open = second ? prefsRef.current.openPreviewOnDoubleClick : prefsRef.current.openPreviewOnClick
-      if (open) openEntry(entry)
-    },
+    onToggle: onTreeToggle,
+    onOpen: onTreeOpen,
     rowTriggerProps,
-    canOpen: () => true,
+    canOpen: canOpenAny,
   }, factoryOptions)
 
   // Publish this page's rename dialog to the row menus; the latest mounted page owns it.

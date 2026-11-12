@@ -5,15 +5,18 @@ import { IconCloseCircleFillRegular, IconLinkOutlineRegular, IconRightUpOutlineR
 
 /**
  * Build the accessory Component once at module scope, so the Factory never remounts it.
- * @param api - accessors for the Git map, ignored set, preferences, and copy.
+ * @param apiRef - a `{ current }` ref of accessors for the Git map, ignored set, preferences, and
+ *   copy. The component reads `apiRef.current` at render time, which lets the Factory keep one
+ *   component identity while the page swaps in fresh closures on every render.
  * @returns a Component the Factory draws beside each row.
  */
-export function createAccessory(api) {
+export function createAccessory(apiRef) {
   /**
    * @param props - the row's entry, supplied by the Factory.
    * @returns the row decorations.
    */
   return function Accessory({ entry }) {
+    const api = apiRef.current
     const copy = api.copy()
     const status = api.statusOf(entry.path)
     const ignored = api.ignoredOf(entry.path)
@@ -31,7 +34,9 @@ export function createAccessory(api) {
     return React.createElement('span', {
       className: 'nxe-acc',
       // A zero-size flag the row CSS reads with :has(), so an ignored row de-emphasizes its own label
-      // and glyph without the plugin needing to reach into the shared tree's markup.
+      // and glyph without the plugin needing to reach into the shared tree's markup. The button's
+      // own data-nxe-ignored attribute (rowTriggerProps) is the primary selector; this marker stays
+      // as the in-tree witness other styles still read.
       ...(ignored ? { 'data-nxe-ignored': 'true' } : {}),
     },
       // A link keeps the link glyph whatever it points at; where it leads is a tooltip detail, not a

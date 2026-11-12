@@ -2,6 +2,7 @@
 
 import React from 'react'
 import { ExplorerBody } from './body.js'
+import { perf } from './perf.js'
 import { COPY, copyFor, statusLabel } from './i18n.js'
 import { relativeTo } from './paths.js'
 import { DEFAULT_PREFS, readPrefs, writePrefs } from './prefs.js'
@@ -16,6 +17,14 @@ export const inject = ['slots', 'locale', 'sidebarRightTabs', 'sidebarRight', 's
 const NS = 'nanoExplorerExtra'
 const FILES_KIND = 'files'
 const OWN_ID = 'nano-explorer-extra'
+
+/**
+ * E11: the body's render path is what the beta audit could not see — every row repaint used to
+ * happen inside an unmeasured React commit. React.Profiler records actualDuration per commit, and
+ * the review report carries it as `nano-explorer-extra` render time. With the flag off the wrapper
+ * returns the component unchanged, so this costs nothing on a normal page.
+ */
+const ObservedExplorerBody = perf.profiler(ExplorerBody)
 
 /** One live page's rename handler; the menu actions forward into it. */
 const renameRequest = { handler: undefined }
@@ -109,7 +118,7 @@ export function apply(ctx) {
     name: 'sidebar.right.pane.tab',
     key: OWN_ID,
     inject: () => ({ nxe: face() }),
-  }, ExplorerBody)), 'nano-explorer-extra: files body')
+  }, ObservedExplorerBody)), 'nano-explorer-extra: files body')
 
   // The chip's title is its own seat. Taking over the body does not carry the shipped title with it,
   // and without this the tab label lost the folder sheet that the builtin draws before it.

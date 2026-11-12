@@ -2,7 +2,7 @@
 
 import { watch } from 'node:fs'
 import { ensurePerfReviewHost, LIB_VERSION } from 'dsh-performance-review/host'
-import { checkoutBranch, commitAll, ignoredAmong, listBranches, listConflicts, listWorktrees, pullUpstream, readStatus } from './git.js'
+import { checkoutBranch, commitAll, ignoredAmong, listBranches, listConflicts, listWorktrees, pullUpstream, readScopedStatus, readStatus } from './git.js'
 import { absoluteOf, isLexicallyInside, listDirectory } from './listing.js'
 import { createFile, createFolder, moveEntry, removeEntry, rename } from './mutate.js'
 import { statisticsOf } from './stats.js'
@@ -247,11 +247,15 @@ export function createRoutes(ctx, config) {
         let gitError
         try {
           // `path` scopes the query to one directory and asks Git for per-file untracked entries,
-          // which is what a freshly expanded folder needs.
+          // which is what a freshly expanded folder needs; it takes the cheap two-process read (E4).
+          // `detail=drawer` is what the footer drawers ask for — the plain status poll carries no
+          // worktree list, branch rows, or history rail (E5).
           const scopedPath = url.searchParams.get('path') ?? undefined
+          const detail = url.searchParams.get('detail') === 'drawer' ? 'drawer' : undefined
           git = await review.hostSpan('git-status', () =>
-            memoized(`status:${root}:${scopedPath ?? ''}`, () =>
-              readStatus(ctx, config, { cwd: root, policy, signal: undefined, path: scopedPath ?? undefined }))) ?? null
+            memoized(`status:${root}:${scopedPath ?? ''}:${detail ?? ''}`, () => scopedPath === undefined
+              ? readStatus(ctx, config, { cwd: root, policy, signal: undefined, detail })
+              : readScopedStatus(ctx, config, { cwd: root, policy, signal: undefined, path: scopedPath }))) ?? null
         } catch (error) {
           gitError = messageOf(error)
         }

@@ -400,15 +400,17 @@ async function readStatus(ctx, config, request) {
     throw new Error(`git rev-parse failed: ${firstLine(probe.stderr)}`);
   }
   const root = probe.stdout.trim();
-  const scoped = typeof request.path === "string" && request.path !== "";
   const args = [
     "status",
     "--porcelain=v2",
     "--branch",
-    scoped ? "--untracked-files=all" : "--untracked-files=normal",
-    "-z",
-    ...scoped ? ["--", request.path] : []
+    // `--untracked-files=normal` reports a wholly untracked directory as one entry: on a workspace
+    // with a large generated tree that difference is 49 KB versus 32 MB of output, and the tree
+    // only ever draws the directories that were reported.
+    "--untracked-files=normal",
+    "-z"
   ];
+  const detail = request.detail === "drawer" ? "drawer" : "status";
   const [status, stash, worktrees] = await Promise.all([
     runGit(ctx, config, { ...request, args }),
     runGit(ctx, config, {
@@ -416,13 +418,13 @@ async function readStatus(ctx, config, request) {
       args: ["stash", "list", "--format=%gd"],
       allowedExitCodes: [0, 128]
     }).catch(() => void 0),
-    listWorktrees(ctx, config, request)
+    detail === "drawer" ? listWorktrees(ctx, config, request) : Promise.resolve(void 0)
   ]);
   const parsed = parseStatus(status.stdout);
   const stashed = stash === void 0 || stash.exitCode !== 0 ? 0 : stash.stdout.split("\n").filter((line) => line.trim() !== "").length;
   const [branches, history, remote] = await Promise.all([
-    listBranches(ctx, config, request, worktrees),
-    readHistory(ctx, config, request),
+    detail === "drawer" ? listBranches(ctx, config, request, worktrees ?? []) : Promise.resolve([]),
+    detail === "drawer" ? readHistory(ctx, config, request) : Promise.resolve([]),
     typeof parsed.upstream !== "string" || parsed.upstream === "" ? Promise.resolve(void 0) : remoteDivergence(ctx, config, request)
   ]);
   const conflicts = parsed.files.filter((file) => file.status === "U").map((file) => file.path);
@@ -430,12 +432,34 @@ async function readStatus(ctx, config, request) {
     root,
     ...parsed,
     stashed,
-    worktrees,
+    worktrees: worktrees ?? [],
     branches,
     history,
     conflicts,
     ...remote === void 0 ? {} : { remote }
   };
+}
+async function readScopedStatus(ctx, config, request) {
+  const probe = await runGit(ctx, config, { ...request, args: ["rev-parse", "--show-toplevel"], allowedExitCodes: [0, 128] });
+  if (probe.exitCode !== 0) {
+    if (NOT_A_CHECKOUT.test(probe.stderr)) return void 0;
+    throw new Error(`git rev-parse failed: ${firstLine(probe.stderr)}`);
+  }
+  const root = probe.stdout.trim();
+  const status = await runGit(ctx, config, {
+    ...request,
+    args: [
+      "status",
+      "--porcelain=v2",
+      "--branch",
+      "--untracked-files=all",
+      "-z",
+      "--",
+      request.path
+    ]
+  });
+  const parsed = parseStatus(status.stdout);
+  return { root, files: parsed.files };
 }
 async function commitAll(ctx, config, request) {
   const { message } = request;
@@ -816,7 +840,7 @@ async function statisticsOf(fs, root, options, signal) {
   const { maxDepth, maxEntries, excludeGit } = options;
   const totals = { files: 0, directories: 0, bytes: 0, truncated: false };
   let seen = 0;
-  const walk = async (path, depth) => {
+  const walk = async (path, depth, needsResolve) => {
     if (totals.truncated) return;
     signal?.throwIfAborted();
     if (depth > maxDepth) {
@@ -825,7 +849,7 @@ async function statisticsOf(fs, root, options, signal) {
     }
     let children;
     try {
-      children = await fs.listDir(await fs.resolve(path, { signal }), signal);
+      children = await fs.listDir(needsResolve ? await fs.resolve(path, { signal }) : path, signal);
     } catch {
       return;
     }
@@ -840,14 +864,15 @@ async function statisticsOf(fs, root, options, signal) {
       if (excludeGit && child.name === ".git") continue;
       if (child.type === "directory") {
         totals.directories += 1;
-        await walk(child.target === void 0 ? joinPath(path, child.name) : fs.processPath(child.target), depth + 1);
+        const viaLink = child.target !== void 0;
+        await walk(viaLink ? fs.processPath(child.target) : joinPath(path, child.name), depth + 1, viaLink);
       } else if (child.type === "file") {
         totals.files += 1;
         if (typeof child.size === "number") totals.bytes += child.size;
       }
     }
   };
-  await walk(root, 1);
+  await walk(root, 1, true);
   return totals;
 }
 function joinPath(parent, name2) {
@@ -1007,7 +1032,8 @@ function createRoutes(ctx, config) {
         let gitError;
         try {
           const scopedPath = url.searchParams.get("path") ?? void 0;
-          git = await review.hostSpan("git-status", () => memoized(`status:${root}:${scopedPath ?? ""}`, () => readStatus(ctx, config, { cwd: root, policy, signal: void 0, path: scopedPath ?? void 0 }))) ?? null;
+          const detail = url.searchParams.get("detail") === "drawer" ? "drawer" : void 0;
+          git = await review.hostSpan("git-status", () => memoized(`status:${root}:${scopedPath ?? ""}:${detail ?? ""}`, () => scopedPath === void 0 ? readStatus(ctx, config, { cwd: root, policy, signal: void 0, detail }) : readScopedStatus(ctx, config, { cwd: root, policy, signal: void 0, path: scopedPath }))) ?? null;
         } catch (error) {
           gitError = messageOf2(error);
         }

@@ -24,3 +24,6 @@ export const perf = ensurePerfReview().join(OWN_ID, {
   // no layout reads (spec §6.3); null while the sidebar is unmounted.
   root: () => document.querySelector('[data-nano-shared-workspace]'),
 })
+
+/** Optional: wrap the graft component with <React.Profiler> (spec §6.3). */
+export const profiler = perf.profiler

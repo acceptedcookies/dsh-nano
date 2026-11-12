@@ -22,6 +22,7 @@ import { SettingsDialog } from './settings-dialog.js'
 import { TranscriptDialog } from './transcript-dialog.js'
 import { CreateWorkspaceDialog } from './create-dialog.js'
 import { perf } from './perf.js'
+import { watchDom } from './dom-watch.js'
 
 const HOST_ATTR = 'data-nano-shared-workspace'
 
@@ -131,25 +132,19 @@ export function SidebarGraft({ face, renderSlot }) {
   React.useEffect(() => face.settings.subscribe(setSettings), [])
 
   React.useEffect(() => {
-    // perf: sidebar-graft is the body-wide MutationObserver that keeps the host
-    // pinned; it is only alive while this component is mounted.
+    // perf: sidebar-graft used to run its own body-wide MutationObserver; it
+    // shares dom-watch's single observer now, so the browser pays one callback
+    // chain per mutation batch and this track sees a per-frame callback (β P1).
     const graftTrack = perf.track('mutation', 'sidebar-graft')
-    const observer = new MutationObserver(graftTrack.wrap(() => {
+    const unsubscribe = watchDom(graftTrack.wrap(() => {
       setHost(graftHost())
       setWide(sidebarIsWide())
     }))
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-      // Width changes arrive as style/class mutations on ancestors, so watch
-      // attributes broadly; the callbacks only re-measure, never re-render DOM.
-      attributes: true,
-    })
     graftTrack.attach()
     setHost(graftHost())
     setWide(sidebarIsWide())
     return () => {
-      observer.disconnect()
+      unsubscribe()
       graftTrack.detach()
       // Remove the graft host so a plugin reload leaves no empty shell behind.
       host?.remove()

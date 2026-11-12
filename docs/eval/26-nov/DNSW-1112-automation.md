@@ -146,7 +146,7 @@
 |---|---|---|---|
 | T-G01 | 密钥被吊销后重新绑定 | ✅ | 换错误密钥：`/workspaces` → 400 `S3 403 InvalidAccessKeyId`（有界、不挂死、不回 XML）；改回真密钥后立即恢复 |
 | T-G02 | 破坏性路由的畸形请求体 | ✅ | 无 id / 非 16-hex / 缺 name / 相对路径 / `../../etc` / 缺 sessionId / 短 id 共 7 种全部被拒 |
-| T-G03 | 租约时钟徏移 | ⚠️ | **已知风险 F-24**：把 claim 的 `expiresAt` 设到 400 天后，合法写者会被永久阻塞 |
+| T-G03 | 租约时钟徏移 | ✅ | 把 claim 的 `expiresAt` 设到 400 天后，A 仍能 `ok:true` 取得租约，桶内 writerId 变为 `dasw-a@…`（F-24 / U-16） |
 | T-G04 | 删除与 push 交错 | ✅ | 两者同时发出：push 200、delete 200，不互相崩溃；删除后列表消失、再 push 返回 `shared workspace not found`。但竞争中的 push 仍写下了孤儿 tree 对象（F-12） |
 | T-G05 | 成功后重试幂等 | ✅ | 第二次 push `generation` 不变且 `unchanged:true`，不产生新代 |
 | T-G06 | 大量工作区下列表 | ✅ | 14 个工作区时 `/workspaces` 11.6s 返回（Cloudflare 单次往返 ~1.1s × 逐 marker 读取，属已知线性成本） |
@@ -192,7 +192,7 @@
 | F-18 | 中 | 绑定竞态 | 探测成功后 `finishBind` 只置 `setupStage`，`configured/username` 要等 `refresh()`；用户立即点「新建共享工作区」会被弹回第 1 步 | `finishBind(bound)` 接受刚落库的用户名并立即置 `configured:true` | 🔧 U-11 |
 | F-19 | 中 | 错误文案 | 错密钥时对话框直接展示 S3 原始 XML（几百字 `<Error><Code>…`） | `messageOf` 抽 `<Code>` + HTTP 状态，其余去标签并截断 180 字 | 🔧 U-09 |
 | F-20 | 中 | 同步性能 | 200 文件 push 111s / pull 108s：blob 串行传输；且重复 push 重传所有未变文件 | 有界并发池（8）；sha 已在 HEAD/parent 则跳过上传；返回 `uploaded` 供观测 | 🔧 U-08 |
-| F-24 | 中 | 租约可被恶意/异常预占 | claim 的 `expiresAt` 只校验是有限数字，不校验合理上限。写入一个 400 天后的 claim 会让该会话对该工作区内所有合法写者永久 `busy`（实测 `holder: ghost@deadbeef`）。测试/时钟偏差也会触发同类问题 | 裁定：**接受为已知限制**（claim 属同桶协作者可写，彻底防住需服务端可信时钟），在 ledger 与 README 里明示；缓解手段是删除 `claims/{sessionId}.json` | 已登记 |
+| F-24 | 中 | 租约可被恶意/异常预占 | claim 的 `expiresAt` 只校验是有限数字，无合理上限；写入 400 天后的 claim 会让该会话对所有合法写者永久 `busy` | Round 6 裁定：**不接受到永久阻塞**。`validClaim` 增加上限 `now + 2×TTL`，超限的 claim 视为畸形，由已有的 CAS 循环原子替换 | 🔧 U-16 |
 | F-23 | 中 | cool-off 的 UI 表达 | 租约被占时弹窗标题是「无法打开」，底部同时给「取消」和「关闭」两个同义按钮；语义上是「稍后重试」而非失败 | 新增 ``noticeKind: 'busy'``，标题改「会话正在被占用」，footer 只留一个「关闭」 | 🔧 U-15 |
 | F-22 | **严重** | 会话日志回放（跨运行时） | Electron 44 内置 Node 24.21 的 `zstdDecompressSync` **只解第一个帧**；DSH 会话日志是逐次追加的多帧 zstd。桌面版读到 21 事件的会话时只拿到 1 行 header，`/transcript` 返回 1 条、`/materialize` 产出 176 字节残缺副本。系统 Node 24.22 能解全部 7 帧，所以**只在桌面/Electron 端复现** | `decode()` 按 zstd magic 切帧后逐帧解码；两运行时均得 21 行 | 🔧 U-14 |
 
@@ -213,6 +213,8 @@
 | U-11 | F-18 | `index.js` `finishBind(bound)` 立即发布 `configured/username`；`graft.js` 透传 `bound` | ego 注入校验：`finishBind({username:'dasw-a'})` 后 `configured:true`、`stage:'workspace'` |
 | U-12 | F-15 | 新增 `scripts/eval/desktop-auth.mjs`（自签 cookie、固定 `~/.dsh-desktop`、动态端口）；`clients.mjs` 统一 A/B 两端 | 两端 `/settings` 均 200 且分别返回 `dasw-a` / `dasw-b` |
 | U-13 | F-21 | `entry.js` 新增 `Config.backgroundSyncMs` 校验；`routes.js` `startBackgroundSync` 读该值，0 时直接返回 | 关后 35s generation 不变；两个测试节点均已设 0 |
+| U-16 | F-24 | `session-io.js` 新增 `claimExpiryIsSane`：`expiresAt <= now + 2×TTL_MS`，否则 `validClaim` 返回 false，CAS 循环重新取租约 | 400 天后的幽灵 claim → A `claim` 返回 `ok:true`，桶内 writerId 变为 `dasw-a@…`；租约回归套件 14 项仍全绿 |
+| U-17 | F-12 | `tree.js` 新增 `purgeWorkspaceObjects`（跳过 MinIO 回显的自引用前缀，防死循环）；`routes.js` 删除后调用并在响应里返回 `purged` | 含 tree/sessions 的 fixture 删除后报 `purged.keys:11`，桶内该 id 下 0 对象；竞争中的 push 也不会留下孤儿 |
 | U-15 | F-23 | ``i18n.js`` 新增 ``noticeTitleBusy``；``index.js`` busy 分支置 ``noticeKind:'busy'``，``dismissNotice``/``onOpenSession`` 同步清理；``graft.js`` 按 kind 选标题并用单按钮 footer | 桌面 UI 实测：标题「会话正在被占用」、按钮仅「关闭」、``noticeKind: busy``（``R4-cooloff-fixed.png``） |
 | U-14 | F-22 | `session-io.js` `decode()`：按 zstd frame magic 切分后逐帧 `zstdDecompressSync`，兼容只解首帧的运行时 | 系统 Node 24.22 与 Electron Node 24.21 各跑一次：均 21 行。修复后 A/B `/transcript` 都返回 21 事件 / 16 类型；B `materialize` 产物由 176B/1 帧变为 15094B/2 帧 |
 
@@ -310,3 +312,20 @@
 - 测试矩阵：A 6 / B 6 / C 7 / D 6 / E 4 / F 6 / G 6 / H 2 = **43 个用例**。
 - 发现 24 项：22 项已修并复测，F-12（级联删除）与 F-24（租约上限）为已登记的待裁定/已接受项。
 - 脚本 10 个（`scripts/eval/`），截图 22 张，perf 快照 1 份。
+
+### Round 6（2026-11-12 12:36–12:58）
+
+两个待裁定项自行裁定并完成：
+
+- **F-24 → U-16**：claim 过期时间加合理上限（`now + 2×TTL`）。超限视为畸形，由已有 CAS 循环原子替换。400 天后的幽灵 claim 不再永久阻塞，实测 A 能正常取得租约。租约回归 14 项全绿。
+- **F-12 → U-17**：删除工作区时级联清理 `workspaces/{id}/` 下全部对象。实现踩到一个 MinIO 行为：`list()` 带 delimiter 时会把**请求自身的 prefix 回显在 `<CommonPrefixes>` 里**，直接递归会原地自转直到深度上限，所以必须跳过自引用。修复后 11 个对象的 fixture 删完归零，竞争中的 push 也不留孤儿。
+- 负向套件扩到 19 断言全绿（新增"幽灵 claim 被替换"与"竞争删除后无孤儿"两条）。
+- 测试脚本自身的 3 处断言修正：吊销密钥应 400 而非 200、误把正常结果判失败、批量创建后立即列表有瞬时空窗需一次重试。
+- 桶内清理到只剩 `multi-user:9167ab8d56346228`；这次是用新的级联删除清的，不再需要手写枚举。
+
+### Round 6 末状态
+
+- 构建：`lib/host.js` `06825200761a…`，`lib/client.js` `a2d195d6e088…`；dev 与 desktop 均已同步。
+- 发现 24 项：**全部 24 项已修复并复测**，无待裁定项。
+- 测试矩阵 43 个用例 + 负向 19 条断言 + 会话同步 17 条断言。
+- `dsh.local` 全程未触碰（PID 47398）。

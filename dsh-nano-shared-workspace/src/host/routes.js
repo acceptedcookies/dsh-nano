@@ -7,7 +7,7 @@ import { clearIdentity, readIdentity, writeIdentity } from './credentials.js'
 import { createS3 } from './s3.js'
 import { createWorkspace, instanceId, joinWorkspace, listWorkspaces, ownMember, readMarker, trustedMember, unpinWorkspaceLocalPath } from './workspaces.js'
 import { acquireClaim, fetchTranscript, listRemoteSessions, materializeSession, renewClaim, syncAll } from './session-io.js'
-import { pullWorkspace, pushWorkspace, registerIdentity } from './tree.js'
+import { purgeWorkspaceObjects, pullWorkspace, pushWorkspace, registerIdentity } from './tree.js'
 import { ensurePerfReviewHost, LIB_VERSION } from 'dsh-performance-review/host'
 import { registerRoutes as registerGuardedRoutes } from 'dsh-host-route-guard'
 import { ROUTE_TABLE, PLUGIN } from './route-table.js'
@@ -299,7 +299,10 @@ export function createRoutes(ctx, config) {
         if (!isMember) return { ok: false, error: 'only members can delete this shared workspace' }
         await client.del(key)
         unpinWorkspaceLocalPath(workspaceId)
-        return { ok: true, workspaceId }
+        // The marker is gone; the tree generations, blobs and session chunks
+        // under this id would otherwise stay in the bucket forever (F-12).
+        const purged = await purgeWorkspaceObjects(client, workspaceId).catch(() => undefined)
+        return { ok: true, workspaceId, purged: purged ?? null }
       },
     },
     '/sync': {

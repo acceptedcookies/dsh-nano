@@ -380,6 +380,43 @@ export async function pushWorkspace(s3, dshHome, workspaceId, localPath, writerI
   return { ok: true, generation, files: record.files.length, conflicts: dissolved.conflicts, uploaded }
 }
 
+/**
+ * Delete every object under `workspaces/{id}/` (F-12). `list()` is one level
+ * deep because it asks S3 for a delimiter, so the walk recurses on prefixes
+ * and deletes the keys of each leaf level. Bounded by a depth and a key budget
+ * so a pathological bucket cannot turn a delete into an unbounded sweep.
+ *
+ * MinIO echoes the request's own prefix inside `<CommonPrefixes>` when the
+ * directory holds only deeper directories; recursing into that self-reference
+ * would loop until the depth cap, so any child equal to the current prefix is
+ * skipped.
+ * @returns `{keys, truncated}` actually removed.
+ */
+export async function purgeWorkspaceObjects(s3, workspaceId, { maxDepth = 8, maxKeys = 5000 } = {}) {
+  if (!WORKSPACE_ID_RE.test(workspaceId)) throw new SchemaReject('schema:workspaceId', 'workspaceId has a bad charset')
+  let deleted = 0
+  let visited = 0
+  const seen = new Set()
+  const walk = async (prefix, depth) => {
+    if (depth > maxDepth || visited >= maxKeys || seen.has(prefix)) return
+    seen.add(prefix)
+    const page = await s3.list(prefix).catch(() => undefined)
+    if (page === undefined) return
+    for (const key of page.keys ?? []) {
+      if (visited >= maxKeys) return
+      visited += 1
+      await s3.del(key).catch(() => {})
+      deleted += 1
+    }
+    for (const child of page.prefixes ?? []) {
+      if (child === prefix) continue
+      await walk(child, depth + 1)
+    }
+  }
+  await walk(`workspaces/${workspaceId}/`, 0)
+  return { keys: deleted, truncated: visited >= maxKeys }
+}
+
 /** Record the username once. A second client keeps the first claim. */
 export async function registerIdentity(s3, identity) {
   if (typeof identity?.username !== 'string' || identity.username === '') return { ok: false }

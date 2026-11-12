@@ -907,12 +907,15 @@ function listLocalSessions(dshHome) {
   return out.sort((a, b) => b.mtimeMs - a.mtimeMs);
 }
 var CLAIM_KEYS = /* @__PURE__ */ new Set(["writerId", "acquiredAt", "expiresAt", "heartbeatRev"]);
+function claimExpiryIsSane(expiresAt) {
+  return typeof expiresAt === "number" && Number.isFinite(expiresAt) && expiresAt <= Date.now() + CLAIM_TTL_MS * 2;
+}
 function validClaim(obj) {
   if (obj === null || typeof obj !== "object" || Array.isArray(obj)) return false;
   for (const key of Object.keys(obj)) if (!CLAIM_KEYS.has(key)) return false;
   if (typeof obj.writerId !== "string" || obj.writerId === "") return false;
   if (typeof obj.acquiredAt !== "string" || Number.isNaN(Date.parse(obj.acquiredAt))) return false;
-  if (typeof obj.expiresAt !== "number" || !Number.isFinite(obj.expiresAt)) return false;
+  if (!claimExpiryIsSane(obj.expiresAt)) return false;
   if (obj.heartbeatRev !== void 0 && !Number.isInteger(obj.heartbeatRev)) return false;
   return true;
 }
@@ -1464,6 +1467,31 @@ async function pushWorkspace(s3, dshHome, workspaceId, localPath, writerId, atte
   writePending(root, files);
   saveBase(dshHome, workspaceId, record);
   return { ok: true, generation, files: record.files.length, conflicts: dissolved.conflicts, uploaded };
+}
+async function purgeWorkspaceObjects(s3, workspaceId, { maxDepth = 8, maxKeys = 5e3 } = {}) {
+  if (!WORKSPACE_ID_RE.test(workspaceId)) throw new SchemaReject("schema:workspaceId", "workspaceId has a bad charset");
+  let deleted = 0;
+  let visited = 0;
+  const seen = /* @__PURE__ */ new Set();
+  const walk = async (prefix, depth) => {
+    if (depth > maxDepth || visited >= maxKeys || seen.has(prefix)) return;
+    seen.add(prefix);
+    const page = await s3.list(prefix).catch(() => void 0);
+    if (page === void 0) return;
+    for (const key of page.keys ?? []) {
+      if (visited >= maxKeys) return;
+      visited += 1;
+      await s3.del(key).catch(() => {
+      });
+      deleted += 1;
+    }
+    for (const child of page.prefixes ?? []) {
+      if (child === prefix) continue;
+      await walk(child, depth + 1);
+    }
+  };
+  await walk(`workspaces/${workspaceId}/`, 0);
+  return { keys: deleted, truncated: visited >= maxKeys };
 }
 async function registerIdentity(s3, identity) {
   if (typeof identity?.username !== "string" || identity.username === "") return { ok: false };
@@ -2300,7 +2328,8 @@ function createRoutes(ctx, config) {
         if (!isMember) return { ok: false, error: "only members can delete this shared workspace" };
         await client.del(key);
         unpinWorkspaceLocalPath(workspaceId);
-        return { ok: true, workspaceId };
+        const purged = await purgeWorkspaceObjects(client, workspaceId).catch(() => void 0);
+        return { ok: true, workspaceId, purged: purged ?? null };
       }
     },
     "/sync": {

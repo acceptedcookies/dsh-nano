@@ -163,12 +163,24 @@ export function listLocalSessions(dshHome) {
  */
 const CLAIM_KEYS = new Set(['writerId', 'acquiredAt', 'expiresAt', 'heartbeatRev'])
 
+/**
+ * A claim's expiry may not exceed one TTL beyond now (F-24). Without this a
+ * co-tenant could write `expiresAt: now + 400 days` and make the session
+ * permanently read-only for every legitimate writer; the same shape appears
+ * from a badly skewed clock. A claim past the bound is treated as malformed,
+ * which the CAS loop already replaces atomically.
+ */
+function claimExpiryIsSane(expiresAt) {
+  return typeof expiresAt === 'number' && Number.isFinite(expiresAt)
+    && expiresAt <= Date.now() + CLAIM_TTL_MS * 2
+}
+
 function validClaim(obj) {
   if (obj === null || typeof obj !== 'object' || Array.isArray(obj)) return false
   for (const key of Object.keys(obj)) if (!CLAIM_KEYS.has(key)) return false
   if (typeof obj.writerId !== 'string' || obj.writerId === '') return false
   if (typeof obj.acquiredAt !== 'string' || Number.isNaN(Date.parse(obj.acquiredAt))) return false
-  if (typeof obj.expiresAt !== 'number' || !Number.isFinite(obj.expiresAt)) return false
+  if (!claimExpiryIsSane(obj.expiresAt)) return false
   if (obj.heartbeatRev !== undefined && !Number.isInteger(obj.heartbeatRev)) return false
   return true
 }

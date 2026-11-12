@@ -30,6 +30,7 @@ import {
 import { applyFormat, escapeAttr, escapeHtml, extractImageUrls, formatHtml, htmlToText, minifyHtml, renderMarkdown, sanitizeRichHtml, stripHtmlStyles } from './markdown.js'
 import { validateJson, positionOf, formatJson, minifyJson, escapeJson, unescapeJson, decodeEscapes, renderJsonTree } from './json.js'
 import { highlightSource } from './highlight.js'
+import { checkImage } from 'dsh-remote-data-schema/image-check.js'
 import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
 import { copyFor } from './i18n.js'
 import React from 'react'
@@ -306,6 +307,15 @@ ${NANO_STYLES}
 .nm-null { color: var(--dsw-alias-label-tertiary); font-style: italic; }
 .nm-key { color: var(--dsw-alias-label-secondary); }
 .np-write:focus-visible { outline: none; box-shadow: inset 0 0 0 1px var(--dsw-alias-border-l3); }
+/* Hover preview for a stored-image link in source view. It rides inside
+   .np-window so it inherits the notepad's own palette, and stays
+   pointer-events:none so it can never steal the hover that opened it. */
+.np-image-peek { position: absolute; z-index: 6; pointer-events: none; padding: 4px; box-sizing: border-box;
+  max-width: min(320px, calc(100% - 16px)); border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-1); border: 1px solid var(--dsw-alias-border-l2);
+  box-shadow: var(--dsw-elevation-prominent); }
+.np-image-peek[hidden] { display: none !important; }
+.np-image-peek img { display: block; max-width: 100%; max-height: 240px; border-radius: var(--dsw-radius-sm); }
 .np-read:focus-visible { outline: none; box-shadow: inset 0 0 0 1px var(--dsw-alias-border-l3); }
 .np-tool:disabled, .np-footer-actions button:disabled { opacity: .45; pointer-events: none; }
 .np-read { box-sizing: border-box; max-width: 100%; overflow: auto; overflow-wrap: anywhere; padding: var(--np-pad-x); color: var(--dsw-alias-label-primary); cursor: text; font-size: var(--np-editor-font-size, 14px); line-height: 1.65; }
@@ -903,6 +913,10 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     // work — not highlightSource — is what a 28 KB draft pays per keystroke, so
     // it gets its own span instead of hiding inside the handler's total.
     perf.span('highlight-dom', () => { layer.innerHTML = html })
+    /* The spans were just replaced, so the hover hit-test list must be too, and
+       any open preview is now anchored to geometry that no longer exists. */
+    imageTokens = [...layer.querySelectorAll('[data-np-image]')]
+    hideImagePeek()
     fitMirror()
     layer.hidden = source.hidden
   }
@@ -933,6 +947,119 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     layer.scrollTop = source.scrollTop
     layer.scrollLeft = source.scrollLeft
   }
+  /* ── stored-image hover preview ────────────────────────────────────────────
+     In source view an image is just `![alt](notepad-image:<id>)`. The textarea
+     paints transparent text over the colourised mirror, so the pointer can only
+     be resolved through the mirror's spans: highlightSource tags each stored
+     image URL with data-np-image, and we hit-test the pointer against those
+     rects. Nothing here mutates the draft or the caret. */
+  let peekEl = /** @type {HTMLElement | null} */ (null)
+  let peekId = /** @type {string | null} */ (null)
+  /** Bumped per request so a slow IndexedDB read cannot paint over a newer one. */
+  let peekToken = 0
+  /** id → data URL, or null when the payload is gone or fails the gate. */
+  const peekCache = new Map()
+  let peekEpoch = -1
+  /** Mirror spans carrying a stored-image id, refreshed whenever the mirror is repainted. */
+  let imageTokens = /** @type {HTMLElement[]} */ ([])
+
+  function peekBox() {
+    if (peekEl !== null) return peekEl
+    peekEl = document.createElement('div')
+    peekEl.className = 'np-image-peek'
+    peekEl.hidden = true
+    peekEl.setAttribute('aria-hidden', 'true')
+    panel.append(peekEl)
+    return peekEl
+  }
+
+  function hideImagePeek() {
+    peekId = null
+    if (peekEl !== null) peekEl.hidden = true
+  }
+
+  /** Park the card above the token, below it when there is no room, always inside the window. */
+  function placeImagePeek(anchor) {
+    const el = peekEl
+    if (el === null || el.hidden) return
+    const box = panel.getBoundingClientRect()
+    const width = el.offsetWidth
+    const height = el.offsetHeight
+    let top = anchor.top - height - 8
+    if (top < box.top + 8) top = anchor.bottom + 8
+    let left = anchor.left + anchor.width / 2 - width / 2
+    const minLeft = box.left + 8
+    const maxLeft = box.right - width - 8
+    left = Math.max(minLeft, Math.min(left, Math.max(minLeft, maxLeft)))
+    const minTop = box.top + 8
+    const maxTop = box.bottom - height - 8
+    top = Math.max(minTop, Math.min(top, Math.max(minTop, maxTop)))
+    el.style.left = `${left - box.left}px`
+    el.style.top = `${top - box.top}px`
+  }
+
+  /** Resolve one stored image to a data URL, through the same gate the renderer uses. */
+  async function peekSource(id) {
+    if (state.imageEpoch !== peekEpoch) {
+      peekCache.clear()
+      peekEpoch = state.imageEpoch
+    }
+    if (peekCache.has(id)) return peekCache.get(id)
+    const images = state.db === null ? new Map() : await imagesById(state.db, [id])
+    const image = images.get(id)
+    /* P3-04 parity: only a schema-clean payload may reach an <img src>. */
+    const url = image && checkImage(image, { maxBytes: 20 * 1024 * 1024 })
+      ? `data:${image.mime};base64,${image.base64}`
+      : null
+    /* A data URL is the whole bitmap in memory, so keep only a handful: a
+       gallery-sized note would otherwise pin every hovered image for the
+       lifetime of the panel. */
+    if (peekCache.size >= 8) {
+      const oldest = peekCache.keys().next().value
+      if (oldest !== undefined) peekCache.delete(oldest)
+    }
+    peekCache.set(id, url)
+    return url
+  }
+
+  async function showImagePeek(id, anchor) {
+    const el = peekBox()
+    if (peekId === id && el.hidden === false) { placeImagePeek(anchor); return }
+    peekId = id
+    const token = ++peekToken
+    const url = await peekSource(id)
+    /* A newer hover (or a hide) won the race while IndexedDB was reading. */
+    if (token !== peekToken || peekId !== id) return
+    if (url === null) { hideImagePeek(); return }
+    let img = el.querySelector('img')
+    if (img === null) {
+      img = document.createElement('img')
+      img.alt = ''
+      img.decoding = 'async'
+      el.append(img)
+    }
+    if (img.src !== url) img.src = url
+    el.hidden = false
+    placeImagePeek(anchor)
+    /* The card has no intrinsic size until the bitmap decodes; re-park it then. */
+    if (img.complete === false) {
+      img.addEventListener('load', () => { if (peekId === id) placeImagePeek(anchor) }, { once: true })
+    }
+  }
+
+  /** The stored-image token under the pointer, if any. */
+  function imageTokenAt(event) {
+    for (const span of imageTokens) {
+      const rect = span.getBoundingClientRect()
+      if (rect.width === 0 && rect.height === 0) continue
+      if (event.clientX >= rect.left && event.clientX <= rect.right
+        && event.clientY >= rect.top && event.clientY <= rect.bottom) {
+        return { id: span.dataset.npImage, rect }
+      }
+    }
+    return null
+  }
+
   const current = () => state.nodes.find(node => node.id === state.ui.currentId && node.kind === 'file')
   const isJson = () => (current()?.name ?? '').toLowerCase().endsWith('.json')
   const isHtml = () => /\.(html|htm|wx)$/i.test(current()?.name ?? '')
@@ -1507,6 +1634,8 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
   // perf-review: the whole render pass is one named span (§6.7 render).
   const render = () => perf.span('render', () => {
     panel.hidden = !state.ui.open
+    /* A file/view switch invalidates whatever image the preview was showing. */
+    hideImagePeek()
     const theme = resolvedTheme()
     panel.dataset.theme = theme
     entry.dataset.theme = theme
@@ -2934,12 +3063,26 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
   }))
   write().addEventListener('scroll', () => {
     if (state.slash) placeSlash()
+    /* The token moved under a stationary pointer; let the next move re-resolve. */
+    hideImagePeek()
     fitMirror()
   })
+  /* Source view only: rendered view already shows the bitmap inline. */
+  write().addEventListener('mousemove', event => {
+    if (state.view === 'rendered' || write().hidden || !isMarkdownFile() || event.buttons !== 0) {
+      hideImagePeek()
+      return
+    }
+    const hit = imageTokenAt(event)
+    if (hit === null) { hideImagePeek(); return }
+    void showImagePeek(hit.id, hit.rect)
+  })
+  write().addEventListener('mouseleave', hideImagePeek)
+  write().addEventListener('blur', hideImagePeek)
   // perf-review: the mirror ResizeObserver (§6.7 mirror-resize, kind resize).
   const mirrorResizeTrack = perf.track('resize', 'mirror-resize')
   if (typeof ResizeObserver === 'function') {
-    const mirrorBox = new ResizeObserver(mirrorResizeTrack.wrap(() => fitMirror()))
+    const mirrorBox = new ResizeObserver(mirrorResizeTrack.wrap(() => { hideImagePeek(); fitMirror() }))
     mirrorBox.observe(write())
     mirrorResizeTrack.attach()
     disposers.push(() => { mirrorBox.disconnect(); mirrorResizeTrack.detach() })

@@ -95,6 +95,7 @@ dsh plugin --profile web add <spec>
 | 任意文本（`.env`、`.yaml`、`.sh`…） | 源码编辑；仅 `.md` / `.markdown` 提供 Markdown 预览与格式工具栏 |
 | `.json` | 保留后缀，打开树和 JSON 工具 |
 | 笔记内图片 | png、jpeg、gif、webp，存在同一个库 |
+| 源码视图里鼠标悬浮 `![…](notepad-image:…)` | 弹出小窗预览该图。仅 `.md` / `.markdown`，预览视图不弹 |
 
 页面里的 agent，且这个记事本已经打开过一次：
 

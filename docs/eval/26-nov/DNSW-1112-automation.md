@@ -225,6 +225,8 @@
 
 ### Round 2 末状态
 
-- 两个测试节点哈希一致（`lib/host.js` `32daafc9…` 前一轮；本轮末尾再核对一次），均 `backgroundSyncMs: 0`。
+- 两个测试节点哈希一致（`lib/host.js` `ef558c3a94c8…`、`lib/client.js` `3af2d8dbb85c…`），均 `backgroundSyncMs: 0`。
 - `scripts/eval/` 下 7 个可重跑脚本；`docs/eval/26-nov/screenshots/` 下 14 张证据图。
+- **测试编排纪律**：`multi-user-files.mjs` / `multi-user-leases.mjs` / `scale-and-perf.mjs` 共用 `/Users/seanz/dasw-1112-mu-{a,b}` 副本目录并会先清空，**必须串行执行**。并行跑会让后启动的脚本清掉前一个刚写的文件，表现为 `push generation` 断言失败（非产品缺陷，Round 2 已踩过一次）。
+- 回归结果（提交态 `4f5f5e3`）：`race-markers` / `join-cas` / `multi-user-leases` / `multi-user-files` 全绿。
 - 未裁定：F-12（删除是否级联清理 tree/sessions 孤儿对象）。

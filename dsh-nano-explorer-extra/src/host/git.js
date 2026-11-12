@@ -345,12 +345,16 @@ export async function readStatus(ctx, config, request) {
   // These four reads do not depend on each other: status, stash, and the worktree list all answer
   // from the repository's own metadata. Running them in line was nine sequential process waits;
   // overlapping them makes the answer arrive when the slowest read does.
+  // A scoped read is one directory's status for the row colours: the stash badge and the worktree
+  // list answer drawer questions, not per-directory ones, so they stay on the unscoped path.
   const [status, stash, worktrees] = await Promise.all([
     runGit(ctx, config, { ...request, args }),
-    runGit(ctx, config, {
-      ...request, args: ['stash', 'list', '--format=%gd'], allowedExitCodes: [0, 128],
-    }).catch(() => undefined),
-    listWorktrees(ctx, config, request),
+    scoped
+      ? Promise.resolve(undefined)
+      : runGit(ctx, config, {
+        ...request, args: ['stash', 'list', '--format=%gd'], allowedExitCodes: [0, 128],
+      }).catch(() => undefined),
+    scoped ? Promise.resolve([]) : listWorktrees(ctx, config, request),
   ])
   const parsed = parseStatus(status.stdout)
 
@@ -360,18 +364,21 @@ export async function readStatus(ctx, config, request) {
     ? 0
     : stash.stdout.split('\n').filter(line => line.trim() !== '').length
 
-  // The branch list, the history rail, and the upstream divergence are independent of each other
-  // and run together. `listBranches` needs the held set the worktree read already produced, so it
-  // takes the rows instead of asking Git a second time.
-  const [branches, history, remote, remotes, author] = await Promise.all([
-    listBranches(ctx, config, request, worktrees),
-    readHistory(ctx, config, request),
-    typeof parsed.upstream !== 'string' || parsed.upstream === ''
-      ? Promise.resolve(undefined)
-      : remoteDivergence(ctx, config, request),
-    readRemotes(ctx, config, request),
-    readAuthor(ctx, config, request),
-  ])
+  // A scoped read only colours the rows of the directory just expanded: branches, the history
+  // rail, divergence, remotes, and the author do not change with the directory, so asking for
+  // them here would spend four extra Git processes per folder the reader opens. The whole-suite
+  // reads stay on the unscoped path that feeds the drawer.
+  const [branches, history, remote, remotes, author] = scoped
+    ? [[], [], undefined, [], undefined]
+    : await Promise.all([
+      listBranches(ctx, config, request, worktrees),
+      readHistory(ctx, config, request),
+      typeof parsed.upstream !== 'string' || parsed.upstream === ''
+        ? Promise.resolve(undefined)
+        : remoteDivergence(ctx, config, request),
+      readRemotes(ctx, config, request),
+      readAuthor(ctx, config, request),
+    ])
   const conflicts = parsed.files.filter(file => file.status === 'U').map(file => file.path)
 
   return {

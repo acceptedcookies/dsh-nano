@@ -761,16 +761,16 @@ async function readStatus(ctx, config, request) {
   ];
   const [status, stash, worktrees] = await Promise.all([
     runGit(ctx, config, { ...request, args }),
-    runGit(ctx, config, {
+    scoped ? Promise.resolve(void 0) : runGit(ctx, config, {
       ...request,
       args: ["stash", "list", "--format=%gd"],
       allowedExitCodes: [0, 128]
     }).catch(() => void 0),
-    listWorktrees(ctx, config, request)
+    scoped ? Promise.resolve([]) : listWorktrees(ctx, config, request)
   ]);
   const parsed = parseStatus(status.stdout);
   const stashed = stash === void 0 || stash.exitCode !== 0 ? 0 : stash.stdout.split("\n").filter((line) => line.trim() !== "").length;
-  const [branches, history, remote, remotes, author] = await Promise.all([
+  const [branches, history, remote, remotes, author] = scoped ? [[], [], void 0, [], void 0] : await Promise.all([
     listBranches(ctx, config, request, worktrees),
     readHistory(ctx, config, request),
     typeof parsed.upstream !== "string" || parsed.upstream === "" ? Promise.resolve(void 0) : remoteDivergence(ctx, config, request),

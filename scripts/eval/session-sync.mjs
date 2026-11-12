@@ -25,8 +25,9 @@ const frameCount = buf => {
 const sync = await post(devNsw, '/sync')
 const outcome = (sync.body?.outcomes ?? []).find(row => row.sessionId === SID)
 check('A /sync reports this session', outcome !== undefined, JSON.stringify(outcome ?? sync.body).slice(0, 200))
-check('outcome is pushed or already-current',
-  outcome === undefined || /^pushed|unchanged|skip:not-shared/.test(outcome.outcome ?? ''), JSON.stringify(outcome))
+check('outcome is a real push outcome or a deliberate skip',
+  outcome === undefined || /^(pushed|fresh|unchanged|skip:not-shared|skip:lease-held-by-|skip:foreign-writer)/.test(outcome.outcome ?? ''),
+  JSON.stringify(outcome))
 
 const meta = await s3.getJson(`workspaces/${WS}/sessions/${SID}/meta.json`)
 check('remote meta exists and is bound to the session id', meta?.sessionId === SID, JSON.stringify(meta).slice(0, 160))

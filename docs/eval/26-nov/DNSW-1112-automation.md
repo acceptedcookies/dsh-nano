@@ -129,6 +129,8 @@
 | T-D03 | 新建工作区对话框：目录浏览、新建文件夹、错误行 | ✅ | `R1-create-dialog-clean.png`；面包屑修成 `/ / Users / seanz`（F-11 / U-10） |
 | T-D04 | 会话行：选中高亮、置顶/归档/重命名、hover 操作列 | ✅ | 行 hover 出现「新建会话/删除」；设置/删除均 danger 或 outline 语义正确；R1 已验置顶/归档/重命名 |
 | T-D05 | 错误表达：notice 弹窗标题与正文是否矛盾 | 🔧 | 创建成功不再弹 notice（R1）；**新发现**：失败详情会倒出 S3 XML（F-19）→ U-09 |
+| T-D07 | 只读回放（读者视角） | ✅ | 会话行 hover 出现「只读查看内容」；点击后 22 事件渲染成 5 条可读行（用户/助手），meta 行含写者、时间、事件数、字节数；footer 仅「关闭」（`R7-transcript-single-close.png`） |
+| T-D08 | 回放弹窗的异常输入 | ✅ | 远端标题截断到 60 字，不会挤掉关闭按钮；取数期间显示「正在从共享空间读取…」；失败落 notice 而不是空白弹窗 |
 | T-D06 | 窄侧栏 / 深色浅色 / 长名称截断 | ✅ | 窗口 700/600/520 宽侧栏仍是 280px 宽版（不自动切 rail）；手动收起后切 rail 图标正常；长标题 `scrollWidth 1333 > width 202` 正确省略 |
 
 ### E. 性能与监控（T-Exx）
@@ -192,6 +194,9 @@
 | F-18 | 中 | 绑定竞态 | 探测成功后 `finishBind` 只置 `setupStage`，`configured/username` 要等 `refresh()`；用户立即点「新建共享工作区」会被弹回第 1 步 | `finishBind(bound)` 接受刚落库的用户名并立即置 `configured:true` | 🔧 U-11 |
 | F-19 | 中 | 错误文案 | 错密钥时对话框直接展示 S3 原始 XML（几百字 `<Error><Code>…`） | `messageOf` 抽 `<Code>` + HTTP 状态，其余去标签并截断 180 字 | 🔧 U-09 |
 | F-20 | 中 | 同步性能 | 200 文件 push 111s / pull 108s：blob 串行传输；且重复 push 重传所有未变文件 | 有界并发池（8）；sha 已在 HEAD/parent 则跳过上传；返回 `uploaded` 供观测 | 🔧 U-08 |
+| F-25 | **高** | 只读回放不可达 | `TranscriptDialog`、`api.fetchTranscript`、`face.onCloseTranscript`、`graft` 的 portal 全部实现，但**没有任何 UI 入口调用它们**——整条只读回放是死代码。读者既不能占用租约，也就完全没有办法看到共享会话的内容 | 行操作列新增「只读查看内容」按钮（`IconDeliverDocRegular`），`onViewTranscript` 走 host 路由取数；footer 收成单一「关闭」（与 F-23 同类问题） | 🔧 U-18 |
+| F-26 | 中 | 回放弹窗的健壮性 | 标题直接取远端 `meta.title`（不可信、可任意长），会挤掉关闭按钮；取数期间没有任何加载反馈 | 标题截断到 60 字；新增 `transcriptLoading` 文案与 loading 分支 | 🔧 U-18 |
+| F-27 | **高** | 会话归属不确定 | 两个共享工作区声明同一个 `localPath` 时（创建对话框允许复用目录），`matchWorkspace` 的 `>` 比较无法决出胜者，结果取决于桶的列举顺序。实测同一会话在两次 `/sync` 中被匹配到不同 workspaceId（`8a77424e…` vs `9167ab8d…`），`/sessions` 与 `/tree/push` 因此指向不同 workspace | 等长前缀时用 `createdAt` 取更早的 marker 作为确定性 tie-break | 🔧 U-19 |
 | F-24 | 中 | 租约可被恶意/异常预占 | claim 的 `expiresAt` 只校验是有限数字，无合理上限；写入 400 天后的 claim 会让该会话对所有合法写者永久 `busy` | Round 6 裁定：**不接受到永久阻塞**。`validClaim` 增加上限 `now + 2×TTL`，超限的 claim 视为畸形，由已有的 CAS 循环原子替换 | 🔧 U-16 |
 | F-23 | 中 | cool-off 的 UI 表达 | 租约被占时弹窗标题是「无法打开」，底部同时给「取消」和「关闭」两个同义按钮；语义上是「稍后重试」而非失败 | 新增 ``noticeKind: 'busy'``，标题改「会话正在被占用」，footer 只留一个「关闭」 | 🔧 U-15 |
 | F-22 | **严重** | 会话日志回放（跨运行时） | Electron 44 内置 Node 24.21 的 `zstdDecompressSync` **只解第一个帧**；DSH 会话日志是逐次追加的多帧 zstd。桌面版读到 21 事件的会话时只拿到 1 行 header，`/transcript` 返回 1 条、`/materialize` 产出 176 字节残缺副本。系统 Node 24.22 能解全部 7 帧，所以**只在桌面/Electron 端复现** | `decode()` 按 zstd magic 切帧后逐帧解码；两运行时均得 21 行 | 🔧 U-14 |
@@ -213,6 +218,8 @@
 | U-11 | F-18 | `index.js` `finishBind(bound)` 立即发布 `configured/username`；`graft.js` 透传 `bound` | ego 注入校验：`finishBind({username:'dasw-a'})` 后 `configured:true`、`stage:'workspace'` |
 | U-12 | F-15 | 新增 `scripts/eval/desktop-auth.mjs`（自签 cookie、固定 `~/.dsh-desktop`、动态端口）；`clients.mjs` 统一 A/B 两端 | 两端 `/settings` 均 200 且分别返回 `dasw-a` / `dasw-b` |
 | U-13 | F-21 | `entry.js` 新增 `Config.backgroundSyncMs` 校验；`routes.js` `startBackgroundSync` 读该值，0 时直接返回 | 关后 35s generation 不变；两个测试节点均已设 0 |
+| U-18 | F-25/26 | `section.js` 会话行新增只读查看按钮；`index.js` 新增 `onViewTranscript`（loading → fetch → dialog，失败落 notice）；`transcript-dialog.js` 标题截断 + loading 分支 + 单按钮 footer；i18n 新增 `viewTranscript` / `transcriptLoading` | 桌面 UI 实测：行内出现「只读查看内容」；点击后弹窗标题「单词回复请求」、meta 行 `dasw-a · … · 22 events · 16062B`、5 条可读行（用户×4 + 助手×1）、footer 仅「关闭」（`R7-transcript-single-close.png`） |
+| U-19 | F-27 | `workspaces.js` `matchWorkspace`：同长度前缀时按 `createdAt` 取更早的 marker | 修复后同一会话稳定匹配到 `9167ab8d…`；`session-sync` 17 项全绿，`multi-user-files` 全绿 |
 | U-16 | F-24 | `session-io.js` 新增 `claimExpiryIsSane`：`expiresAt <= now + 2×TTL_MS`，否则 `validClaim` 返回 false，CAS 循环重新取租约 | 400 天后的幽灵 claim → A `claim` 返回 `ok:true`，桶内 writerId 变为 `dasw-a@…`；租约回归套件 14 项仍全绿 |
 | U-17 | F-12 | `tree.js` 新增 `purgeWorkspaceObjects`（跳过 MinIO 回显的自引用前缀，防死循环）；`routes.js` 删除后调用并在响应里返回 `purged` | 含 tree/sessions 的 fixture 删除后报 `purged.keys:11`，桶内该 id 下 0 对象；竞争中的 push 也不会留下孤儿 |
 | U-15 | F-23 | ``i18n.js`` 新增 ``noticeTitleBusy``；``index.js`` busy 分支置 ``noticeKind:'busy'``，``dismissNotice``/``onOpenSession`` 同步清理；``graft.js`` 按 kind 选标题并用单按钮 footer | 桌面 UI 实测：标题「会话正在被占用」、按钮仅「关闭」、``noticeKind: busy``（``R4-cooloff-fixed.png``） |
@@ -229,6 +236,8 @@
 | `scripts/eval/multi-user-leases.mjs` | cool-off、心跳、过期回收、并发 claim、非法 id（T-C01 / C02 / C03 / C07） |
 | `scripts/eval/scale-and-perf.mjs` | 200 文件规模、深层嵌套、`/workspaces` 大列表、会话路由、后台同步关闭（T-E02 / E03 / E04） |
 | `scripts/eval/negative-cases.mjs` | 密钥吊销/重绑、7 种畸形请求体、租约时钟徏移、删除与 push 交错、重试幂等、大量工作区（T-G01…G06） |
+| `screenshots/R7-desktop-transcript.png` | 桌面只读回放（修复前 footer 有「取消/关闭」两个同义按钮） |
+| `screenshots/R7-transcript-single-close.png` | 修复后：单一「关闭」+ 完整会话内容 |
 | `logs/perf-report.json` | `window.__perfReview.report()` 原始快照（T-H01） |
 | `scripts/eval/session-sync.mjs` | 会话日志推送/远端列举/transcript/materialize/外部写者拒写（T-F01…F05，含 F-22 回归） |
 | `scripts/eval/race-markers.mjs` | 无条件并发 join 丢成员 + CAS 控制组（F-07 / U-01 / U-02） |
@@ -328,4 +337,21 @@
 - 构建：`lib/host.js` `06825200761a…`，`lib/client.js` `a2d195d6e088…`；dev 与 desktop 均已同步。
 - 发现 24 项：**全部 24 项已修复并复测**，无待裁定项。
 - 测试矩阵 43 个用例 + 负向 19 条断言 + 会话同步 17 条断言。
+- `dsh.local` 全程未触碰（PID 47398）。
+
+### Round 7（2026-11-12 13:00–13:40）
+
+- **F-25（高）**：只读回放整条链路是**死代码**——`TranscriptDialog`、`fetchTranscript`、`onCloseTranscript`、portal 全写好了，但没有任何 UI 入口。读者不占租约，也就完全看不到共享会话内容。补上行内「只读查看内容」按钮后，桌面实测 22 事件渲染成 5 条可读行。
+- **F-26**：回放标题直接取远端不可信文本（可任意长），会挤掉关闭按钮；取数期间无反馈。已截断 60 字并加 loading 文案。
+- **F-27（高）**：两个共享工作区共用同一个 `localPath` 时，`matchWorkspace` 的等长前缀比较无法决出胜者，结果随桶列举顺序漂移。实测同一会话两次 `/sync` 匹配到不同 workspaceId，导致 `/sessions` 与 `/tree/push` 指向不同工作区。改为按 `createdAt` 取更早的 marker 做确定性 tie-break。
+- 顺带把回放弹窗 footer 从「取消/关闭」收成单一「关闭」（与 F-23 同类语义问题）。
+- 桶内清理：删掉 10 个残留测试工作区（级联生效），并确认 25 个空前缀下**无孤儿对象**（0 键）。
+- 测试脚本自身修了 2 处：`fresh` 是合法新状态却被白名单漏掉；`negative-cases` 在同一条命令里连跑三次会互相干扰（与 Round 2 的并行纪律同类）。
+
+### Round 7 末状态
+
+- 构建：`lib/client.js` `4e1e32c55409…`、`lib/host.js` `0cef50975f93…`；dev 与 desktop 均已同步。
+- 发现 27 项：**全部已修复并复测**。
+- 回归：`session-sync` 17/17、`multi-user-files` 全绿、`multi-user-leases` 14/14、`negative-cases` 20/20（单次运行）。
+- 桶内只剩 `multi-user:9167ab8d56346228`。
 - `dsh.local` 全程未触碰（PID 47398）。

@@ -4,7 +4,7 @@ import React from 'react'
 import { openNanoMenu } from 'dsh-nano-ui'
 import { SidebarGraft } from './graft.js'
 import { copyFor } from './i18n.js'
-import { bindSession as apiBindSession, claimSession as apiClaimSession, clearSettings as apiClearSettings, createDirectory as apiCreateDirectory, createWorkspace as apiCreateWorkspace, deleteWorkspace as apiDeleteWorkspace, fetchRemoteSessions, fetchSettings, fetchSharedWorkspaces, fetchStatus, heartbeatSession as apiHeartbeatSession, joinWorkspace as apiJoinWorkspace, listDirectory as apiListDirectory, materializeSession as apiMaterializeSession, pullWorkspace as apiPullWorkspace, triggerSync } from './api.js'
+import { bindSession as apiBindSession, claimSession as apiClaimSession, clearSettings as apiClearSettings, createDirectory as apiCreateDirectory, createWorkspace as apiCreateWorkspace, deleteWorkspace as apiDeleteWorkspace, fetchRemoteSessions, fetchSettings, fetchSharedWorkspaces, fetchStatus, fetchTranscript as apiFetchTranscript, heartbeatSession as apiHeartbeatSession, joinWorkspace as apiJoinWorkspace, listDirectory as apiListDirectory, materializeSession as apiMaterializeSession, pullWorkspace as apiPullWorkspace, triggerSync } from './api.js'
 import { STYLE } from './styles.js'
 import { perf } from './perf.js'
 
@@ -384,6 +384,21 @@ export function apply(ctx) {
         notice: `${copyFor(languageOf()).errorSave}: ${cause instanceof Error ? cause.message : String(cause)}`,
       })),
     onCloseTranscript: () => store.set({ transcript: null }),
+    /**
+     * Read-only replay of a shared session, straight from the bucket. This is
+     * the only path a reader has: opening the session itself takes the lease
+     * (or is refused while someone else writes). Fetches through the host so
+     * the S3 credentials never reach the page.
+     */
+    onViewTranscript: session => {
+      store.set({ transcript: { loading: true, meta: { title: session.title || session.sessionId }, events: [] } })
+      apiFetchTranscript(session.workspaceId, session.sessionId)
+        .then(result => store.set({ transcript: { meta: result.meta ?? {}, events: result.events ?? [] } }))
+        .catch(cause => store.set({
+          transcript: null,
+          notice: `${copyFor(languageOf()).transcriptFailed}: ${cause instanceof Error ? cause.message : String(cause)}`,
+        }))
+    },
     onToggleRail: () => ctx.layout?.toggleSidebar?.(),
     /**
      * A shared workspace is born on the remote: open the in-app directory

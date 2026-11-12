@@ -784,8 +784,11 @@ async function matchWorkspace(cwd, markers, { identity, me } = {}) {
     const localPath = own.member.localPath;
     if (typeof localPath !== "string" || localPath === "") continue;
     if (cwd === localPath || cwd.startsWith(`${localPath}/`)) {
-      if (prefixBest === null || localPath.length > (prefixBest.__matchLength ?? 0)) {
-        prefixBest = { ...marker, __matchLength: localPath.length };
+      const length = localPath.length;
+      const bestLength = prefixBest?.__matchLength ?? -1;
+      const older = prefixBest === null || String(marker.createdAt ?? "") < String(prefixBest.createdAt ?? "");
+      if (length > bestLength || length === bestLength && older) {
+        prefixBest = { ...marker, __matchLength: length };
       }
     }
   }

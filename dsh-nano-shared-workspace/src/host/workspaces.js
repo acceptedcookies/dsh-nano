@@ -315,8 +315,17 @@ export async function matchWorkspace(cwd, markers, { identity, me } = {}) {
     const localPath = own.member.localPath
     if (typeof localPath !== 'string' || localPath === '') continue
     if (cwd === localPath || cwd.startsWith(`${localPath}/`)) {
-      if (prefixBest === null || localPath.length > (prefixBest.__matchLength ?? 0)) {
-        prefixBest = { ...marker, __matchLength: localPath.length }
+      /* Two workspaces may legitimately share one replica root (the create
+       * dialog lets a user reuse a directory). Longest prefix wins; an exact
+       * tie falls back to the OLDEST marker, because a session written under
+       * one workspace must keep resolving to it instead of flip-flopping with
+       * bucket listing order (F-27). */
+      const length = localPath.length
+      const bestLength = prefixBest?.__matchLength ?? -1
+      const older = prefixBest === null
+        || String(marker.createdAt ?? '') < String(prefixBest.createdAt ?? '')
+      if (length > bestLength || (length === bestLength && older)) {
+        prefixBest = { ...marker, __matchLength: length }
       }
     }
   }

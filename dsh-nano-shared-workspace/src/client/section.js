@@ -7,7 +7,7 @@
  */
 
 import React from 'react'
-import { IconArchiveOutlineRegular, IconDatabaseOutlineRegular, IconFolderCloseRegular, IconFolderOpenRegular, IconGlobeOutlineRegular, IconNewChatOutlineRegular, IconPinFillRegular, IconPinOutlineRegular, IconProjectAddOutlineRegular, IconRefreshOutlineRegular, IconSlidersTwoOutlineRegular, IconTrashOutlineRegular, IconTriangleRightFillRegular, IconUnarchiveOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconArchiveOutlineRegular, IconDatabaseOutlineRegular, IconDeliverDocRegular, IconFolderCloseRegular, IconFolderOpenRegular, IconGlobeOutlineRegular, IconNewChatOutlineRegular, IconPinFillRegular, IconPinOutlineRegular, IconProjectAddOutlineRegular, IconRefreshOutlineRegular, IconSlidersTwoOutlineRegular, IconTrashOutlineRegular, IconTriangleRightFillRegular, IconUnarchiveOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import { perf } from './perf.js'
 
 const { createElement, useEffect, useLayoutEffect, useRef, useState } = React
@@ -265,6 +265,12 @@ function renderSharedSection({ face, wide }) {
           createElement('span', { className: chrome.time }, session.writerName ?? '')),
         createElement('span', { className: chrome.rowActions, onClick: event => event.stopPropagation() },
           loading || chrome.rowButton === '' ? null : createElement(React.Fragment, null,
+            createElement('button', {
+              type: 'button',
+              className: chrome.rowButton,
+              'aria-label': copy.viewTranscript,
+              onClick: event => { event.stopPropagation(); face.onViewTranscript?.(session) },
+            }, createElement(IconDeliverDocRegular, { size: 14 })),
             createElement('button', {
               type: 'button',
               className: chrome.rowButton,

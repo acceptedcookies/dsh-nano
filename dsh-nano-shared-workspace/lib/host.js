@@ -2381,7 +2381,9 @@ function messageOf(error) {
     };
   }
   if (code !== void 0) return { error: `S3 ${status ?? ""} ${code}`.trim(), code: `s3-${String(code).toLowerCase()}` };
-  if (raw.startsWith("schema:")) return { error: raw, code: "schema" };
+  if (raw.startsWith("schema:") || /invalid charset|must be an absolute normalized path/.test(raw)) {
+    return { error: raw, code: "bad-charset" };
+  }
   if (/(timeout|timed out|aborted|fetch failed|econnreset|econnrefused|enotfound|network)/i.test(raw)) {
     return { error: raw, code: "network" };
   }

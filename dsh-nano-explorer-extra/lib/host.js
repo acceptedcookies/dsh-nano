@@ -1305,9 +1305,13 @@ async function statisticsOf(fs, root, options, signal) {
   const { maxDepth, maxEntries, excludeGit } = options;
   const totals = { files: 0, directories: 0, bytes: 0, truncated: false };
   let seen = 0;
-  const walk = async (path, depth) => {
-    if (totals.truncated) return;
-    signal?.throwIfAborted();
+  let yielded = 0;
+  const pending = [{ path: root, depth: 1 }];
+  const maybeYield = async () => {
+    yielded += 1;
+    if (yielded % 200 === 0) await new Promise((resolve) => setImmediate(resolve));
+  };
+  const visit = async (path, depth) => {
     if (depth > maxDepth) {
       totals.truncated = true;
       return;
@@ -1325,18 +1329,26 @@ async function statisticsOf(fs, root, options, signal) {
         totals.truncated = true;
         return;
       }
-      if (seen % 200 === 0) await new Promise((resolve) => setImmediate(resolve));
+      await maybeYield();
       if (excludeGit && child.name === ".git") continue;
       if (child.type === "directory") {
         totals.directories += 1;
-        await walk(child.target === void 0 ? joinPath(path, child.name) : fs.processPath(child.target), depth + 1);
+        pending.push({ path: child.target === void 0 ? joinPath(path, child.name) : fs.processPath(child.target), depth: depth + 1 });
       } else if (child.type === "file") {
         totals.files += 1;
         if (typeof child.size === "number") totals.bytes += child.size;
       }
     }
   };
-  await walk(root, 1);
+  const workers = Array.from({ length: 6 }, async () => {
+    while (!totals.truncated) {
+      signal?.throwIfAborted();
+      const next = pending.pop();
+      if (next === void 0) return;
+      await visit(next.path, next.depth);
+    }
+  });
+  await Promise.all(workers);
   return totals;
 }
 function joinPath(parent, name2) {
@@ -1424,7 +1436,11 @@ async function runExternal(ctx, config, request) {
 }
 var memo = /* @__PURE__ */ new Map();
 var MEMO_MS = 3e3;
-var STATS_MEMO_MS = 45 * 1e3;
+var STATS_FRESH_MS = 30 * 60 * 1e3;
+var STATS_REFRESH_MIN_MS = 60 * 1e3;
+var statsCache = /* @__PURE__ */ new Map();
+var statsRefresh = /* @__PURE__ */ new Map();
+var statsLastStart = /* @__PURE__ */ new Map();
 function memoized(key, read, ttl = MEMO_MS) {
   const hit = memo.get(key);
   const now = Date.now();
@@ -1441,7 +1457,7 @@ function memoized(key, read, ttl = MEMO_MS) {
 }
 function forgetReads(root) {
   for (const key of memo.keys()) {
-    if (key.startsWith(`status:${root}:`) || key.startsWith(`ignored:${root}:`) || key === `stats:${root}`) memo.delete(key);
+    if (key.startsWith(`status:${root}:`) || key.startsWith(`ignored:${root}:`)) memo.delete(key);
   }
 }
 var watchers = /* @__PURE__ */ new Map();
@@ -1465,6 +1481,33 @@ function watchRoot(root) {
     }
   }
   watchers.set(root, entries);
+}
+function scheduleStatsRefresh(ctx, config, review, root) {
+  const cached = statsCache.get(root);
+  const stale = cached === void 0 || Date.now() - cached.at >= STATS_FRESH_MS;
+  const lastStart = statsLastStart.get(root) ?? 0;
+  const mayStart = stale && statsRefresh.get(root) === void 0 && Date.now() - lastStart >= STATS_REFRESH_MIN_MS;
+  if (mayStart) startStatsPass(ctx, config, review, root);
+  const pending = stale && statsRefresh.get(root) !== void 0;
+  return {
+    root,
+    stats: cached?.value ?? null,
+    statsPending: pending || stale && cached === void 0,
+    statsAgeMs: cached === void 0 ? 0 : Math.max(0, Date.now() - cached.at)
+  };
+}
+function startStatsPass(ctx, config, review, root) {
+  statsLastStart.set(root, Date.now());
+  statsRefresh.set(root, Promise.resolve().then(() => review.hostSpan("stats", () => statisticsOf(ctx.fs, root, {
+    maxDepth: config.statsMaxDepth,
+    maxEntries: config.statsMaxEntries,
+    excludeGit: config.statsExcludeGit
+  }))).then((value) => {
+    statsCache.set(root, { value, at: Date.now() });
+  }).catch(() => {
+  }).finally(() => {
+    statsRefresh.delete(root);
+  }));
 }
 function disposeRootWatchers() {
   for (const entries of watchers.values()) for (const entry of entries) try {
@@ -1491,12 +1534,8 @@ function createRoutes(ctx, config) {
         const { root, policy } = await scopeOf(ctx, url.searchParams.get("sessionId") ?? "");
         watchRoot(root);
         if (url.searchParams.get("only") === "stats") {
-          const stats = await review.hostSpan("stats", () => memoized(`stats:${root}`, () => statisticsOf(fs(), root, {
-            maxDepth: config.statsMaxDepth,
-            maxEntries: config.statsMaxEntries,
-            excludeGit: config.statsExcludeGit
-          }), STATS_MEMO_MS));
-          return { root, stats };
+          const stats = scheduleStatsRefresh(ctx, config, review, root);
+          return stats;
         }
         let git = null;
         let gitError;

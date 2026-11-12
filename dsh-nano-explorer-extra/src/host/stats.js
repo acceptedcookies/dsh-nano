@@ -2,6 +2,13 @@
 
 /**
  * Walk one workspace subtree and count files, directories, and bytes.
+ *
+ * The walk runs as a bounded pool of directory readers rather than a depth-first
+ * recursion: `fs.resolve` and `listDir` are I/O, so a serial walk idles on every
+ * directory while six in flight hide that latency entirely. The pool cap keeps
+ * the provider queue shallow enough that other requests still interleave.
+ * `setImmediate` yields keep the host event loop responsive between batches.
+ *
  * @param fs - the mounted filesystem provider.
  * @param root - workspace root path.
  * @param options - depth, entry, and `.git` policy.
@@ -12,10 +19,18 @@ export async function statisticsOf(fs, root, options, signal) {
   const { maxDepth, maxEntries, excludeGit } = options
   const totals = { files: 0, directories: 0, bytes: 0, truncated: false }
   let seen = 0
-  /** @param {string} path @param {number} depth */
-  const walk = async (path, depth) => {
-    if (totals.truncated) return
-    signal?.throwIfAborted()
+  let yielded = 0
+  /** One pending directory entry per pool slot; LIFO order keeps memory small. */
+  const pending = [{ path: root, depth: 1 }]
+
+  /** Yield to the event loop every 200 entries so the host keeps serving routes. */
+  const maybeYield = async () => {
+    yielded += 1
+    if (yielded % 200 === 0) await new Promise(resolve => setImmediate(resolve))
+  }
+
+  /** Read one directory, tally its children, and queue the subdirectories. */
+  const visit = async (path, depth) => {
     if (depth > maxDepth) {
       totals.truncated = true
       return
@@ -34,20 +49,30 @@ export async function statisticsOf(fs, root, options, signal) {
         totals.truncated = true
         return
       }
-      // Yield between directories so a large workspace never monopolizes the event loop; a blocked
-      // loop stalls the SSE and WebSocket carriers, which the browser reports as a reconnect.
-      if (seen % 200 === 0) await new Promise(resolve => setImmediate(resolve))
+      await maybeYield()
       if (excludeGit && child.name === '.git') continue
       if (child.type === 'directory') {
         totals.directories += 1
-        await walk(child.target === undefined ? joinPath(path, child.name) : fs.processPath(child.target), depth + 1)
+        pending.push({ path: child.target === undefined ? joinPath(path, child.name) : fs.processPath(child.target), depth: depth + 1 })
       } else if (child.type === 'file') {
         totals.files += 1
         if (typeof child.size === 'number') totals.bytes += child.size
       }
     }
   }
-  await walk(root, 1)
+
+  // A fixed number of workers drains the shared pending list: each pop hands the
+  // next unread directory to whichever worker finished first, so the pool width —
+  // not the tree shape — decides how many provider calls overlap at once.
+  const workers = Array.from({ length: 6 }, async () => {
+    while (!totals.truncated) {
+      signal?.throwIfAborted()
+      const next = pending.pop()
+      if (next === undefined) return
+      await visit(next.path, next.depth)
+    }
+  })
+  await Promise.all(workers)
   return totals
 }
 

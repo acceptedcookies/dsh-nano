@@ -100,7 +100,7 @@ dsh plugin --profile web add <spec>
 
 | 方法 | 路径 | 作用 |
 |---|---|---|
-| GET | `/status?sessionId=` | 整仓 Git 状态。`only=stats` 只返回体积。`path=` 只查一个目录 |
+| GET | `/status?sessionId=` | 整仓 Git 状态。`only=stats` 返回体积：数据来自宿主后台采样缓存（30min 新鲜期、两次遍历至少隔 60s），响应恒定毫秒级；未就绪时 `statsPending:true`、客户端短延迟重询，`stats` 字段始终给上一次完成的值或 null，`statsAgeMs` 为缓存年龄。`path=` 只查一个目录（scoped 读不跑 branches/history/remotes 等全仓套件） |
 | GET | `/perf-review/host` | 性能观测宿主快照。带 `mode=window` 时排空并返回「上次调用以来的场景窗口」（实验室用），默认返回累计快照。宿主没开 `DSH_PERF_REVIEW=1` 时 `enabled` 为 false，路由仍返回 200 |
 | POST | `/list` | `{ sessionId, path }` |
 | POST | `/commit` | `{ sessionId, message }`。会 `git add --all`。没有「只提交已暂存」 |

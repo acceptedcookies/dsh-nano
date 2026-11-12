@@ -153,8 +153,23 @@ export async function runExternal(ctx, config, request) {
  */
 const memo = new Map()
 const MEMO_MS = 3000
-/** Statistics walk far longer than Git commands do; the memo keeps it fresh without paying per ask. */
-const STATS_MEMO_MS = 45 * 1000
+/**
+ * Statistics live in their own long-lived cache rather than the Git memo: a full
+ * walk on a large checkout takes tens of seconds, so asking per-request is out.
+ * The last completed walk is served for up to half an hour; after that the next
+ * request still gets the stale value instantly while one background refresh
+ * refills the cache. Only a request ever starts the background pass — nothing
+ * walks the tree on a timer.
+ */
+const STATS_FRESH_MS = 30 * 60 * 1000
+/** At most one refresh start per minute, even when watchers keep invalidating. */
+const STATS_REFRESH_MIN_MS = 60 * 1000
+/** root → { value, at } for the last finished walk. The value is served forever; `at` only decides freshness. */
+const statsCache = new Map()
+/** root → the in-flight background walk's promise; cleared when it settles. */
+const statsRefresh = new Map()
+/** root → when the last background pass started; enforces the minimum interval between walks. */
+const statsLastStart = new Map()
 
 /**
  * Answer from the memo, or run the reader and remember its answer briefly.
@@ -182,8 +197,10 @@ function memoized(key, read, ttl = MEMO_MS) {
 /** Drop cached reads for one checkout. A switch or a commit would otherwise be painted with the branch it just left. */
 function forgetReads(root) {
   for (const key of memo.keys()) {
-    if (key.startsWith(`status:${root}:`) || key.startsWith(`ignored:${root}:`) || key === `stats:${root}`) memo.delete(key)
+    if (key.startsWith(`status:${root}:`) || key.startsWith(`ignored:${root}:`)) memo.delete(key)
   }
+  // The stats snapshot survives: serving last-known totals is always better than blocking the
+  // status bar for tens of seconds. Age is what controls the next background refresh.
 }
 
 /** One fs.watch per watched path, keyed by the workspace root it invalidates. */
@@ -217,6 +234,58 @@ function watchRoot(root) {
   watchers.set(root, entries)
 }
 
+/**
+ * Answer a stats request instantly and keep the background sampler at most one deep pass per root.
+ *
+ * The cache value never expires in the sense of being withheld: a stale answer is returned
+ * together with `statsPending: true` so the status bar keeps last-known numbers instead of a
+ * loading row, and `statsAgeMs` lets the client show how old the answer is. A background pass
+ * starts when the cached answer is older than `STATS_FRESH_MS` — or there is none at all — and
+ * at most once per `STATS_REFRESH_MIN_MS`, so a busy tree never queues walks back to back.
+ *
+ * @param ctx - host context providing `fs`.
+ * @param config - validated plugin configuration.
+ * @param review - perf-review host handle; the background pass is what the `stats` span records.
+ * @param root - workspace root.
+ * @returns `{ root, stats, statsPending }` — stats is the last finished walk or null.
+ */
+function scheduleStatsRefresh(ctx, config, review, root) {
+  const cached = statsCache.get(root)
+  const stale = cached === undefined || Date.now() - cached.at >= STATS_FRESH_MS
+  const lastStart = statsLastStart.get(root) ?? 0
+  const mayStart = stale && statsRefresh.get(root) === undefined && Date.now() - lastStart >= STATS_REFRESH_MIN_MS
+  if (mayStart) startStatsPass(ctx, config, review, root)
+  // `statsPending` reports the sampler's state, not staleness alone: the row means "a newer number
+  // is being counted", and once a walk is running it stays true until that walk stores its result.
+  const pending = stale && statsRefresh.get(root) !== undefined
+  return {
+    root,
+    stats: cached?.value ?? null,
+    statsPending: pending || (stale && cached === undefined),
+    statsAgeMs: cached === undefined ? 0 : Math.max(0, Date.now() - cached.at),
+  }
+}
+
+/**
+ * Launch the one deep pass for a root and remember its start so the next request does not stack
+ * a second walk on top of it. The span around the walk is what perf-review reports; failures are
+ * swallowed — the next request simply retries, keeping a walk crash out of the status route.
+ */
+function startStatsPass(ctx, config, review, root) {
+  statsLastStart.set(root, Date.now())
+  statsRefresh.set(root, Promise.resolve()
+    .then(() => review.hostSpan('stats', () => statisticsOf(ctx.fs, root, {
+      maxDepth: config.statsMaxDepth,
+      maxEntries: config.statsMaxEntries,
+      excludeGit: config.statsExcludeGit,
+    })))
+    .then(value => {
+      statsCache.set(root, { value, at: Date.now() })
+    })
+    .catch(() => {})
+    .finally(() => { statsRefresh.delete(root) }))
+}
+
 /** Close every watcher the plugin opened; called with the routes' lifetime. */
 export function disposeRootWatchers() {
   for (const entries of watchers.values()) for (const entry of entries) try { entry.close() } catch { /* already gone */ }
@@ -248,14 +317,10 @@ export function createRoutes(ctx, config) {
         // Git state and workspace totals are asked for separately: a tree with tens of thousands
         // of files spends seconds walking directories, and the branch line must not wait for it.
         if (url.searchParams.get('only') === 'stats') {
-          // A full walk on a large checkout takes seconds, and every pane on the same root asks
-          // for it; the memo keeps N sessions to one pass instead of one each.
-          const stats = await review.hostSpan('stats', () => memoized(`stats:${root}`, () => statisticsOf(fs(), root, {
-            maxDepth: config.statsMaxDepth,
-            maxEntries: config.statsMaxEntries,
-            excludeGit: config.statsExcludeGit,
-          }), STATS_MEMO_MS))
-          return { root, stats }
+          // Never block on the walk: answer from the cache (or `statsPending` on a cold start)
+          // and let the background sampler do the counting at its own pace.
+          const stats = scheduleStatsRefresh(ctx, config, review, root)
+          return stats
         }
         let git = null
         let gitError

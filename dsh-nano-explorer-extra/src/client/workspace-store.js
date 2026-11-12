@@ -18,6 +18,8 @@ const ORPHAN_TTL_MS = 5 * 60 * 1000
 const STALE_AFTER_MS = 20 * 1000
 /** Statistics debounce, matching the shipped footer's own pacing. */
 const STATS_DEBOUNCE_MS = 2000
+/** How soon to re-ask for stats while the host reports a background walk still running. */
+const STATS_PENDING_MS = 4000
 
 /** The live stores, keyed by workspace root. */
 const stores = new Map()
@@ -197,12 +199,21 @@ function createStore(root) {
     }))
   }
 
-  /** Re-count the workspace; a large tree takes seconds, so this is separate and cancellable. */
+  /** Re-count the workspace; the host samples in the background and answers instantly. */
   const refreshStats = sessionId => once('stats', () => perf.span('stats-count', async () => {
-    commit({ statsState: 'loading' })
+    if (state.stats === null) commit({ statsState: 'loading' })
     const result = await request(`/status?sessionId=${encodeURIComponent(sessionId)}&only=stats`)
     if (!result.ok) { commit({ statsState: 'failed' }); return }
-    commit({ stats: result.stats ?? null, statsState: 'ok' })
+    // The host counts in the background now: an answer carries last-known totals plus
+    // `statsPending` while a fresher number is still being walked. Keep showing what we have
+    // and poll back on a short delay instead of blocking the status bar.
+    if (result.stats !== null && result.stats !== undefined) commit({ stats: result.stats, statsState: 'ok' })
+    else if (result.statsPending === true) commit({ statsState: 'loading' })
+    else commit({ stats: null, statsState: 'ok' })
+    if (result.statsPending === true) {
+      clearTimeout(statsTimer)
+      statsTimer = setTimeout(() => { void refreshStats(sessionId) }, STATS_PENDING_MS)
+    }
   }))
 
   /** Debounced re-count after directory changes. */

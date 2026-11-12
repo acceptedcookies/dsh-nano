@@ -393,3 +393,19 @@
 - **U-22 可观测**：路由统一包裹——每条记 `method+suffix+ms`，>2s 或抛错落 `dsh-web.log`/`err.log`；`s3.js` 每条远端请求记耗时、非 2xx 告警、`AbortSignal.timeout(120s)` 限住无限等待。
 - 验证：`dsh-dev` 上 22MB/62MB 解压的 5 帧会话负载下 `/sync` 跑 107s，并发 `/ls` p50=8ms / p95=82ms / max=275ms、0 次 >1s（旧构建同负载交互路由 stall 至 17s）；`multi-user-files` 26/26 含并发 dissolve；`materialize`+`transcript` 多帧下行正常。
 - `dsh.local` patch 已加 `backgroundSyncMs: 0`（人工协同期手动 `/sync`），lib 已部署，`dsh.local` 由业主自行重启后生效；worktree `nsw-eventloop-fix` 已删。
+
+## §8 Round 9 (nsw-coop-round2, 2026-11-12 evening) — cooperative sync round 2
+
+Owner-reported gaps → fixes, verified on dsh-dev.local + desktop.
+
+| Symptom | Root cause | Fix |
+|---|---|---|
+| peer files/sessions invisible | `/sync` + tick pushed only; nothing ever pulled | pull before push in both paths; `pullRemoteSessions` materializes new/changed metas + `attachSession` to the member's own workspace |
+| echo wrote into sean's live session; sean then got 502 | materialize ignored the live foreign claim | `foreignActiveClaim` fence in `materializeSession`; `/materialize` returns `session-busy` code + holder |
+| first load minutes, silent | no progress surface | job registry + `GET /jobs?id=`; `/sync` `/materialize` accept `async:true`; client polls with live note |
+| connect very slow | Cloudflare proxy ~10x on every S3 hop (1462ms vs 150ms TTFB) | `endpointDirect` pins TCP/TLS to origin IP (SNI/Host = hostname); 150s → 37s full sync; operator decision to set |
+| 502 / bare HTTP errors | handler threw a raw string | structured `{error, code}` (s3-*, schema, network, session-busy) + client surfaces `code`+holder |
+| per-file download state | blob written directly to dest | staged under `.nsw/dl/` then renamed — push-scan and explorer-extra only ever see the finished copy |
+
+Extra: `syncAll`/`readBodyParts`/`listRemoteSessions` bounded-parallel; `.nsw-meta.json` durable pull fingerprint survives restarts; 3-strike poison-artifact skip; `backgroundSyncMs` back to 15000 on dev.
+Eval: multi-user-files 26/26 green over direct path.

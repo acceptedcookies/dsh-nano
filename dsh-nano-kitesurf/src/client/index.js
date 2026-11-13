@@ -50,7 +50,8 @@ const STYLE = `
 .nks-box{position:absolute;border:1.5px solid var(--dsw-alias-brand-primary,var(--dsw-alias-link));box-shadow:0 0 0 1px color-mix(in srgb,var(--dsw-alias-bg-base) 55%,transparent);pointer-events:none}
 .nks-box[data-kind="ellipse"]{border-radius:50%}
 .nks-box[data-kind="hover"]{border-style:dashed;opacity:.75}
-.nks-pin-dot{position:absolute;width:18px;height:18px;margin-left:-9px;margin-top:-9px;color:#fff;font:var(--dsw-font-xxxs-11);line-height:18px;text-align:center;background:var(--dsw-alias-brand-primary,var(--dsw-alias-link));border-radius:50%;pointer-events:none}
+.nks-pin-dot{position:absolute;width:18px;height:18px;margin-left:-9px;margin-top:-9px;color:#fff;font:var(--dsw-font-xxxs-11);line-height:18px;text-align:center;background:var(--dsw-alias-brand-primary,var(--dsw-alias-link));border-radius:50%;pointer-events:auto;cursor:pointer;user-select:none}
+.nks-pin-dot:hover{background:var(--dsw-alias-fill-error,#d5455c);transform:scale(1.15)}
 .nks-hint{flex:none;padding:3px 8px 4px;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11);display:flex;align-items:center;gap:6px;border-bottom:.5px solid var(--dsw-alias-border-l3)}
 .nks-hint-text{flex:auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .nks-start{position:absolute;inset:0;justify-content:center;align-items:center;display:flex}
@@ -154,6 +155,9 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
   const [draftUrl, setDraftUrl] = React.useState('')
   const [history, setHistory] = React.useState([])
   const [shot, setShot] = React.useState(null)
+  // Identity of the page the shot came from — a pick whose url/scroll differs
+  // means the frame is stale (page navigated or scrolled underneath it).
+  const [shotMeta, setShotMeta] = React.useState(null)
   const [annotate, setAnnotate] = React.useState(false)
   /** { elements: element[] , anchor: {x,y} } — one element per selected box. */
   const [pick, setPick] = React.useState(null)
@@ -189,11 +193,13 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
   const pinsRef = React.useRef([])
   const commentRef = React.useRef('')
   const editingRef = React.useRef(false)
+  const shotMetaRef = React.useRef(null)
   annotateRef.current = annotate
   pickRef.current = pick
   pinsRef.current = pins
   commentRef.current = comment
   editingRef.current = editing
+  shotMetaRef.current = shotMeta
 
   const refreshStatus = React.useCallback(() => {
     return fetch(STATUS)
@@ -215,6 +221,7 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
       try {
         const shotPayload = await post(SHOT, {})
         setShot(shotPayload.data)
+        setShotMeta({ url: shotPayload.url || '', scrollY: shotPayload.scrollY || 0, targetId: shotPayload.targetId || '', at: Date.now() })
       } catch { /* engine up but page not shootable yet — fine */ }
     })
   }, [])
@@ -326,6 +333,7 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
     })
     const shotPayload = await post(SHOT, {})
     setShot(shotPayload.data)
+    setShotMeta({ url: shotPayload.url || '', scrollY: shotPayload.scrollY || 0, targetId: shotPayload.targetId || '', at: Date.now() })
     setPick(null)
     remember(url)
   }
@@ -333,6 +341,7 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
   async function reloadShot(scroll) {
     const shotPayload = await post(SHOT, scroll ? { scroll } : {})
     setShot(shotPayload.data)
+    setShotMeta({ url: shotPayload.url || '', scrollY: shotPayload.scrollY || 0, targetId: shotPayload.targetId || '', at: Date.now() })
     setPick(null)
   }
 
@@ -423,6 +432,19 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
           const payload = await post(PICK, { x: start.x, y: start.y })
           const element = payload.pick?.elements?.[0] ?? payload.pick?.element
           if (!element) return
+          // Stale-frame guard: the live page moved since this shot (navigated
+          // or scrolled) — a pick drawn over the old pixels would silently
+          // land on the wrong element. Refresh instead of trusting it.
+          const meta = shotMetaRef.current
+          const pickPage = payload.pick || {}
+          const drifted = meta && pickPage.url && pickPage.url !== meta.url
+          const scrolled = meta && !drifted && Math.abs((pickPage.scrollY || 0) - (meta.scrollY || 0)) > 8
+          const retargeted = meta && pickPage.targetId && meta.targetId && pickPage.targetId !== meta.targetId
+          if (drifted || scrolled || retargeted) {
+            await reloadShot()
+            toastNow(copy.stalePage)
+            return
+          }
           if (wasShift && pickRef.current) {
             setPick((current) => ({ ...current, elements: [...current.elements, element] }))
             return
@@ -822,6 +844,11 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
         key: `pin-${index}`,
         className: 'nks-pin-dot',
         'data-nks-pin-dot': String(index + 1),
+        title: pin.text?.slice(0, 60) || '',
+        onPointerDown: (event) => event.stopPropagation(),
+        // Click a dot to drop that queued note — index is inside the filtered
+        // subset so remove by identity, not position.
+        onClick: (event) => { event.stopPropagation(); setPins((current) => current.filter((item) => item !== pin)) },
         style: { left: frame.left + pin.anchor.x * frame.scale, top: frame.top + pin.anchor.y * frame.scale },
       }, String(index + 1))) : null,
       pickAnchor && pick ? h('form', {

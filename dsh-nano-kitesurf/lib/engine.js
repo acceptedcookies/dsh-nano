@@ -522,6 +522,20 @@ export async function setBrowserSettings(httpBase, patch) {
   return { userAgent, viewport }
 }
 
+const PAGE_INFO_EXPRESSION = `JSON.stringify({ url: location.href, scrollX: Math.round(window.scrollX), scrollY: Math.round(window.scrollY) })`
+
+async function pageInfo(client, page) {
+  const evaluated = await client.send('Runtime.evaluate', {
+    expression: PAGE_INFO_EXPRESSION,
+    returnByValue: true,
+  }, page.sessionId)
+  try {
+    return JSON.parse(evaluated.result?.value || '{}')
+  } catch {
+    return {}
+  }
+}
+
 export async function captureShot(httpBase, scrollY = 0) {
   return useLive(httpBase, async (client) => {
     const page = await pageHandle(client)
@@ -535,7 +549,17 @@ export async function captureShot(httpBase, scrollY = 0) {
     if (typeof shot.data !== 'string' || shot.data.length === 0) {
       throw new KitesurfError('kitesurf.shot.empty', 'screenshot was empty')
     }
-    return { mimeType: 'image/png', data: shot.data, targetId: page.targetId }
+    // Page identity rides with every shot so the pane can compare a pick's
+    // identity against the frame it's drawn over and notice drift.
+    const info = await pageInfo(client, page)
+    return {
+      mimeType: 'image/png',
+      data: shot.data,
+      targetId: page.targetId,
+      url: typeof info.url === 'string' ? info.url : '',
+      scrollX: typeof info.scrollX === 'number' ? info.scrollX : 0,
+      scrollY: typeof info.scrollY === 'number' ? info.scrollY : 0,
+    }
   })
 }
 
@@ -639,9 +663,12 @@ export async function pickBySelector(httpBase, selector) {
       throw new KitesurfError('kitesurf.pick.failed', 'selector matched nothing')
     }
     const packet = elementPacket(remote.value)
+    const info = await pageInfo(client, page)
     return {
       point: null,
       targetId: page.targetId,
+      url: typeof info.url === 'string' ? info.url : '',
+      scrollY: typeof info.scrollY === 'number' ? info.scrollY : 0,
       element: packet,
       elements: [packet],
     }
@@ -703,9 +730,12 @@ export async function pickElement(httpBase, x, y) {
       throw new KitesurfError('kitesurf.pick.failed', String(evaluated.exceptionDetails?.text || 'element probe failed').slice(0, 160))
     }
     const packet = elementPacket(remote.value)
+    const info = await pageInfo(client, page)
     return {
       point,
       targetId: page.targetId,
+      url: typeof info.url === 'string' ? info.url : '',
+      scrollY: typeof info.scrollY === 'number' ? info.scrollY : 0,
       element: packet,
       // Multi-select notes read this list; single picks put one element here.
       elements: [packet],

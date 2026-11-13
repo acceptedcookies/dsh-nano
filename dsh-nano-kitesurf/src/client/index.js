@@ -439,7 +439,16 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
   React.useLayoutEffect(() => {
     const element = frameRef.current
     if (!element) return undefined
-    const measure = () => setFrame(frameOf(element.querySelector('img')))
+    const measure = () => {
+      // Native-HTML mode has no <img>; the iframe's own client box is the
+      // 1:1 coordinate space, so overlays line up without letterbox maths.
+      const img = element.querySelector('img')
+      if (img) { setFrame(frameOf(img)); return }
+      const rect = element.getBoundingClientRect()
+      setFrame(rect.width > 0 && rect.height > 0
+        ? { left: 0, top: 0, width: rect.width, height: rect.height, scale: 1 }
+        : null)
+    }
     const observer = new ResizeObserver(measure)
     observer.observe(element)
     const image = element.querySelector('img')
@@ -1050,6 +1059,88 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
    * Network.requestWillBeSent → responseReceived → loadingFinished|Failed),
    * captured on the same socket the pane already holds. No Chromium.
    */
+  /** Element packet from a node inside the native-HTML iframe (same origin). */
+  function packetFromDom(el, doc, x, y) {
+    const view = doc.defaultView
+    const cs = view.getComputedStyle(el)
+    const r = el.getBoundingClientRect()
+    const style = {}
+    for (const k of ['color','backgroundColor','fontSize','fontFamily','fontWeight','lineHeight','display','position','margin','padding','border','borderRadius','width','height','flexDirection','justifyContent','alignItems','gap','zIndex','overflow']) {
+      if (cs[k]) style[k] = String(cs[k])
+    }
+    const attrs = {}
+    for (const k of ['id','class','role','aria-label','aria-expanded','href','src','type','name','alt','title','placeholder']) {
+      const v = k === 'class' ? (el.className && el.className.baseVal !== undefined ? el.className.baseVal : el.className) : el.getAttribute?.(k)
+      if (typeof v === 'string' && v.trim()) attrs[k] = v.trim().slice(0, 120)
+    }
+    const parts = []
+    let node = el
+    while (node && node.nodeType === 1 && parts.length < 8) {
+      let tag = node.tagName.toLowerCase()
+      if (node.id) { parts.unshift(`${tag}#${node.id}`); break }
+      const parent = node.parentElement
+      if (parent) {
+        let same = 0, index = 0
+        for (const child of parent.children) { if (child.tagName === node.tagName) { same += 1; if (child === node) index = same } }
+        if (same > 1) tag += `:nth-of-type(${index})`
+      }
+      parts.unshift(tag)
+      node = parent
+    }
+    const ancestors = []
+    let up = el.parentElement
+    while (up && ancestors.length < 6) {
+      const cls = typeof up.className === 'string' ? up.className.trim().split(/\s+/).slice(0, 2).join('.') : ''
+      ancestors.push(up.tagName.toLowerCase() + (cls ? `.${cls}` : ''))
+      up = up.parentElement
+    }
+    return {
+      tag: el.tagName.toLowerCase(),
+      id: el.id || '',
+      className: typeof el.className === 'string' ? el.className.slice(0, 200) : '',
+      selector: parts.join(' > '),
+      text: (el.innerText || '').trim().slice(0, 200),
+      alt: el.getAttribute?.('alt') || '',
+      src: el.getAttribute?.('src') || '',
+      box: { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height) },
+      style, attrs, ancestors,
+      componentStack: null,
+      parentSel: parts.length > 1 ? parts.slice(0, -1).join(' > ') : null,
+      childSel: null,
+    }
+  }
+
+  /** Bind picking straight onto the iframe document — no postMessage hop. */
+  function bindDomFrame(frame) {
+    const doc = frame?.contentDocument
+    if (!doc || doc.__nksBound) return
+    doc.__nksBound = true
+    try {
+      const style = doc.createElement('style')
+      style.textContent = '.__nks_hover{outline:1.5px dashed #7aaaff !important;outline-offset:-1px}'
+      doc.documentElement.appendChild(style)
+    } catch { /* ignore */ }
+    let hovered = null
+    const clearHover = () => { if (hovered) { hovered.classList.remove('__nks_hover'); hovered = null } }
+    doc.addEventListener('mousemove', (e) => {
+      if (!annotateRef.current) { clearHover(); return }
+      clearHover()
+      const el = doc.elementFromPoint(e.clientX, e.clientY)
+      if (el) { el.classList.add('__nks_hover'); hovered = el }
+    }, true)
+    doc.addEventListener('click', (e) => {
+      if (!annotateRef.current) return
+      e.preventDefault(); e.stopPropagation()
+      const el = doc.elementFromPoint(e.clientX, e.clientY)
+      if (!el) return
+      clearHover()
+      const packet = packetFromDom(el, doc, e.clientX, e.clientY)
+      setPick({ elements: [packet], anchor: { x: packet.box.x + packet.box.width / 2, y: packet.box.y + packet.box.height } })
+      setEditing(false)
+    }, true)
+    doc.addEventListener('mouseleave', clearHover, true)
+  }
+
   function DevTools({ open, onClose }) {
     const [tab, setTab] = React.useState('console')
     const [rows, setRows] = React.useState([])
@@ -1282,7 +1373,9 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
         // The parent effect can fire before the document has executed the
         // injected picker; re-arm on load so MODE is never stale.
         onLoad: (event) => {
-          try { event.currentTarget.contentWindow.postMessage({ __nks: 'mode', annotate: annotateRef.current }, '*') } catch { /* cross-origin */ }
+          try { bindDomFrame(event.currentTarget) } catch { /* cross-origin document */ }
+          // Re-bind after a srcdoc swap can land before listeners exist.
+          setTimeout(() => { try { bindDomFrame(event.currentTarget) } catch { /* gone */ } }, 120)
         },
       }) : hasPage ? h('img', {
         alt: '',

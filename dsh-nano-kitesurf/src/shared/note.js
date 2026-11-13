@@ -42,7 +42,11 @@ export function designNote(element, extra = {}) {
   const css = cssLine(source.style)
   if (css) lines.push(`css: ${css}`)
   if (source.tag === 'iframe') lines.push('limit: iframe script is not inspected')
-  if (source.componentStack == null) lines.push('stack: none')
+  if (Array.isArray(source.componentStack) && source.componentStack.length) {
+    lines.push(`stack: ${source.componentStack.slice(-4).join(' → ')}`)
+  } else {
+    lines.push('stack: none')
+  }
   const comment = cleanLine(extra.comment, 160)
   if (comment) lines.push(`ask: ${comment}`)
   let note = lines.join('\n')

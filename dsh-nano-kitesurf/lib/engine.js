@@ -149,7 +149,9 @@ export function elementPacket(value) {
       height: numberOrZero(box.height),
     },
     style,
-    componentStack: null,
+    componentStack: Array.isArray(source.componentStack) && source.componentStack.length
+      ? source.componentStack.map((n) => String(n).slice(0, 60)).slice(0, 8)
+      : null,
     parentSel: typeof source.parentSel === 'string' ? source.parentSel.slice(0, 320) : null,
     childSel: typeof source.childSel === 'string' ? source.childSel.slice(0, 320) : null,
   }
@@ -389,6 +391,46 @@ async function waitForContent(client, page) {
   }
 }
 
+/**
+ * React/component-stack introspection, inlined into both packet expressions.
+ * Walks React fiber keys (the `__reactFiber$<key>` / `__reactInternalInstance`
+ * attach points) up the DOM
+ * then follows .return, collecting component display names (Class/Function
+ * components only — DOM/Host fibers and anonymous renders are skipped).
+ * Returns null when nothing resolves so the packet stays honest about
+ * "no framework detected" rather than [].
+ */
+const STACK_SNIPPET = `(() => {
+  const names = [];
+  const seen = new Set();
+  const fiberOf = (node) => {
+    if (!node) return null;
+    const keys = Object.keys(node);
+    const key = keys.find((k) => k.startsWith('__reactFiber$') || k.startsWith('__reactInternalInstance'));
+    return key ? node[key] : null;
+  };
+  const nameOf = (fiber) => {
+    const t = fiber && fiber.type;
+    if (!t) return null;
+    if (typeof t === 'function' || typeof t === 'object') {
+      const n = t.displayName || t.name || (t.render && t.render.name) || (t.type && t.type.name) || '';
+      return n && !/^[a-z]+$/.test(n) ? n : null;
+    }
+    return null;
+  };
+  let dom = el;
+  while (dom && names.length < 8) {
+    let fiber = fiberOf(dom);
+    while (fiber && names.length < 8) {
+      const n = nameOf(fiber);
+      if (n && !seen.has(n)) { seen.add(n); names.unshift(n); }
+      fiber = fiber.return;
+    }
+    dom = dom.parentElement;
+  }
+  return names.length ? names.slice(-8) : null;
+})()`
+
 const PACKET_EXPRESSION = `(() => {
   const el = document.elementFromPoint(__X__, __Y__);
   if (!el || el.nodeType !== 1) return null;
@@ -460,6 +502,7 @@ const PACKET_EXPRESSION = `(() => {
       display: style.display,
       position: style.position,
     },
+    componentStack: ${STACK_SNIPPET},
   };
 })()`
 
@@ -641,6 +684,7 @@ const SELECTOR_PACKET_EXPRESSION = `(() => {
       display: style.display,
       position: style.position,
     },
+    componentStack: ${STACK_SNIPPET},
   };
 })()`
 

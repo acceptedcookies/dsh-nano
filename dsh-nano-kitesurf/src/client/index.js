@@ -891,7 +891,10 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
       pick.elements[0].style.fontSize ? h('span', null, `font ${pick.elements[0].style.fontSize}`) : null,
       pick.elements[0].style.fontFamily ? h('span', null, pick.elements[0].style.fontFamily.split(',')[0].replace(/["']/g, '')) : null,
       pick.elements[0].style.display ? h('span', null, pick.elements[0].style.display) : null,
-      pick.elements[0].box ? h('span', null, `${Math.round(pick.elements[0].box.width)}×${Math.round(pick.elements[0].box.height)}`) : null) : null,
+      pick.elements[0].box ? h('span', null, `${Math.round(pick.elements[0].box.width)}×${Math.round(pick.elements[0].box.height)}`) : null,
+      Array.isArray(pick.elements[0].componentStack) && pick.elements[0].componentStack.length
+        ? h('span', { 'data-nks-stack': '1', title: pick.elements[0].componentStack.join(' → ') },
+            `⚛ ${pick.elements[0].componentStack.slice(-3).join(' → ')}`) : null) : null,
     toast ? h(NanoToast, { text: toast }) : null,
     pick?.elements?.length ? h('pre', {
       'data-nks-pick': '1',

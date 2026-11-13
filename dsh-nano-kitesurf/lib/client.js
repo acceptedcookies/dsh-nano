@@ -1651,7 +1651,11 @@ var __kitesurfExport = (() => {
     const css = cssLine(source.style);
     if (css) lines.push(`css: ${css}`);
     if (source.tag === "iframe") lines.push("limit: iframe script is not inspected");
-    if (source.componentStack == null) lines.push("stack: none");
+    if (Array.isArray(source.componentStack) && source.componentStack.length) {
+      lines.push(`stack: ${source.componentStack.slice(-4).join(" \u2192 ")}`);
+    } else {
+      lines.push("stack: none");
+    }
     const comment = cleanLine(extra.comment, 160);
     if (comment) lines.push(`ask: ${comment}`);
     let note = lines.join("\n");
@@ -2608,7 +2612,12 @@ ${item}`).join("\n");
         pick.elements[0].style.fontSize ? h("span", null, `font ${pick.elements[0].style.fontSize}`) : null,
         pick.elements[0].style.fontFamily ? h("span", null, pick.elements[0].style.fontFamily.split(",")[0].replace(/["']/g, "")) : null,
         pick.elements[0].style.display ? h("span", null, pick.elements[0].style.display) : null,
-        pick.elements[0].box ? h("span", null, `${Math.round(pick.elements[0].box.width)}\xD7${Math.round(pick.elements[0].box.height)}`) : null
+        pick.elements[0].box ? h("span", null, `${Math.round(pick.elements[0].box.width)}\xD7${Math.round(pick.elements[0].box.height)}`) : null,
+        Array.isArray(pick.elements[0].componentStack) && pick.elements[0].componentStack.length ? h(
+          "span",
+          { "data-nks-stack": "1", title: pick.elements[0].componentStack.join(" \u2192 ") },
+          `\u269B ${pick.elements[0].componentStack.slice(-3).join(" \u2192 ")}`
+        ) : null
       ) : null,
       toast ? h(NanoToast2, { text: toast }) : null,
       pick?.elements?.length ? h("pre", {

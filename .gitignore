@@ -73,6 +73,10 @@ release/
 # NOTE: Cargo.lock stays committed — reproducible builds depend on it.
 target/
 **/*.wasm
+# dsh-nano-terminal 把 wasm 当随仓库分发的构建产物：assets/ 是 build-rust 的
+# 输出与 build-client 的输入，lib/ 是 tarball 的运行时拷贝（files 含 lib）。
+!dsh-nano-terminal/assets/dnt-core.wasm
+!dsh-nano-terminal/lib/dnt-core.wasm
 
 # Lab (perf-review). Baseline IS committed; local config and run output are not.
 lab/config.local.json

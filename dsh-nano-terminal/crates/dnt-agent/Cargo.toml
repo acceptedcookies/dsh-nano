@@ -1,0 +1,5 @@
+[package]
+name = "dnt-agent"
+version = "0.1.0"
+edition = "2021"
+description = "dsh-nano-terminal remote PTY agent: MCP control plane + dnt-frame data plane (containers / remote hosts)"

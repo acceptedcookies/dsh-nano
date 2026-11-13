@@ -1,0 +1,244 @@
+// Terminal lanes: the transport backends behind each pane.
+// Every lane exposes { kind, open(), write(), resize(), close(), onOutput, onExit }.
+//   local   — ws to this dsh host's /dsh-nano-terminal/stream (dnt-ws-v1)
+//   mcp     — remote MCP endpoint: term.session.create then ws attach
+//   isolate — in-process wasm lane (workerd/v8 placeholder)
+
+const ROUTE = '/dsh-nano-terminal'
+
+export class LocalLane {
+  constructor({ sessionId, cols, rows, shell, cwd }) {
+    this.kind = 'local'
+    this.sessionId = sessionId
+    this.cols = cols
+    this.rows = rows
+    this.shell = shell
+    this.cwd = cwd
+    this.onOutput = () => {}
+    this.onExit = () => {}
+    this.onReady = () => {}
+    this.ws = null
+    this.id = null
+    this.closed = false
+  }
+
+  open() {
+    return new Promise((resolve, reject) => {
+      const proto = location.protocol === 'https:' ? 'wss' : 'ws'
+      const ws = new WebSocket(`${proto}://${location.host}${ROUTE}/stream`)
+      ws.binaryType = 'arraybuffer'
+      this.ws = ws
+      const timer = setTimeout(() => reject(new Error('open timeout')), 10_000)
+      ws.onopen = () => {
+        ws.send(JSON.stringify({
+          type: 'open', owner: this.sessionId, shell: this.shell,
+          cwd: this.cwd, cols: this.cols, rows: this.rows,
+        }))
+      }
+      ws.onmessage = (ev) => {
+        if (typeof ev.data === 'string') {
+          let msg
+          try { msg = JSON.parse(ev.data) } catch { return }
+          if (msg.type === 'ready') {
+            clearTimeout(timer)
+            this.id = msg.session
+            this.onReady(msg)
+            resolve(msg)
+          } else if (msg.type === 'error') {
+            clearTimeout(timer)
+            reject(new Error(msg.message))
+          } else if (msg.type === 'exit') {
+            this.onExit(msg)
+          }
+          return
+        }
+        this.onOutput(new Uint8Array(ev.data))
+      }
+      ws.onerror = () => {
+        clearTimeout(timer)
+        reject(new Error('websocket error'))
+      }
+      ws.onclose = () => {
+        if (!this.closed) this.onExit({ reason: 'ws-close' })
+      }
+    })
+  }
+
+  write(bytes) {
+    if (this.ws?.readyState === 1) this.ws.send(bytes)
+  }
+
+  resize(cols, rows) {
+    this.cols = cols
+    this.rows = rows
+    if (this.ws?.readyState === 1) this.ws.send(JSON.stringify({ type: 'resize', cols, rows }))
+  }
+
+  close() {
+    this.closed = true
+    try { this.ws?.close() } catch { /* gone */ }
+    if (this.id) {
+      fetch(`${ROUTE}/session/${encodeURIComponent(this.id)}/close`, { method: 'POST' }).catch(() => {})
+    }
+  }
+}
+
+export class McpLane {
+  constructor({ url, cols, rows, sessionId }) {
+    this.kind = 'mcp'
+    this.url = url
+    this.cols = cols
+    this.rows = rows
+    this.sessionId = sessionId
+    this.onOutput = () => {}
+    this.onExit = () => {}
+    this.onReady = () => {}
+    this.ws = null
+    this.id = null
+    this.closed = false
+  }
+
+  async open() {
+    const rpc = await fetch(this.url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0', id: 1, method: 'tools/call',
+        params: {
+          name: 'term.session.create',
+          arguments: { cols: this.cols, rows: this.rows, sessionId: this.sessionId },
+        },
+      }),
+    })
+    const reply = await rpc.json()
+    const result = reply?.result?.structuredContent
+    if (!result?.id) {
+      throw new Error(reply?.error?.message ?? reply?.result?.content?.[0]?.text ?? 'mcp create failed')
+    }
+    this.id = result.id
+    const attach = result.attach?.url ?? new URL(result.attach?.path ?? '/dsh-nano-terminal/stream', this.url).toString()
+    const wsUrl = new URL(attach)
+    wsUrl.searchParams.set('session', this.id)
+    wsUrl.protocol = wsUrl.protocol === 'https:' ? 'wss' : 'ws'
+    await new Promise((resolve, reject) => {
+      const ws = new WebSocket(wsUrl.toString())
+      ws.binaryType = 'arraybuffer'
+      this.ws = ws
+      const timer = setTimeout(() => reject(new Error('attach timeout')), 10_000)
+      ws.onopen = () => ws.send(JSON.stringify({ type: 'attach' }))
+      ws.onmessage = (ev) => {
+        if (typeof ev.data === 'string') {
+          let msg
+          try { msg = JSON.parse(ev.data) } catch { return }
+          if (msg.type === 'ready') {
+            clearTimeout(timer)
+            this.onReady(msg)
+            resolve(msg)
+          } else if (msg.type === 'error') {
+            clearTimeout(timer)
+            reject(new Error(msg.message))
+          } else if (msg.type === 'exit') {
+            this.onExit(msg)
+          }
+          return
+        }
+        this.onOutput(new Uint8Array(ev.data))
+      }
+      ws.onerror = () => { clearTimeout(timer); reject(new Error('websocket error')) }
+      ws.onclose = () => { if (!this.closed) this.onExit({ reason: 'ws-close' }) }
+    })
+    return { session: this.id }
+  }
+
+  write(bytes) {
+    if (this.ws?.readyState === 1) this.ws.send(bytes)
+  }
+
+  resize(cols, rows) {
+    this.cols = cols
+    this.rows = rows
+    if (this.ws?.readyState === 1) this.ws.send(JSON.stringify({ type: 'resize', cols, rows }))
+  }
+
+  close() {
+    this.closed = true
+    try { this.ws?.close() } catch { /* gone */ }
+    if (this.id) {
+      fetch(this.url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0', id: Date.now(), method: 'tools/call',
+          params: { name: 'term.session.close', arguments: { id: this.id } },
+        }),
+      }).catch(() => {})
+    }
+  }
+}
+
+/** Isolate lane: terminal core inside our own wasm/JS — echo/REPL scaffold for
+ * workerd/v8 backends. Proves the lane contract without a remote host. */
+export class IsolateLane {
+  constructor({ sessionId }) {
+    this.kind = 'isolate'
+    this.sessionId = sessionId
+    this.onOutput = () => {}
+    this.onExit = () => {}
+    this.onReady = () => {}
+    this.buffer = ''
+    this.closed = false
+    const enc = new TextEncoder()
+    this.enc = enc
+    this.id = 'isolate-' + Math.random().toString(36).slice(2, 10)
+  }
+
+  open() {
+    queueMicrotask(() => {
+      this.onReady({ session: this.id, lane: 'isolate' })
+      this.onOutput(this.enc.encode(
+        '\x1b[1;36m┌─ dnt isolate lane ─────────────────────────\x1b[0m\r\n' +
+        '\x1b[36m│ wasm-hosted terminal instance (no remote PTY)\x1b[0m\r\n' +
+        '\x1b[36m│ echo mode — input is mirrored back           \x1b[0m\r\n' +
+        '\x1b[36m└───────────────────────────────────────────────\x1b[0m\r\n' +
+        '\x1b[1;32misolate>\x1b[0m ',
+      ))
+    })
+    return Promise.resolve({ session: this.id })
+  }
+
+  write(bytes) {
+    if (this.closed) return
+    // naive echo REPL: mirror input, newline → prompt
+    for (const b of bytes) {
+      if (b === 0x0d) {
+        this.buffer += '\r\n'
+        this.onOutput(this.enc.encode('\r\n\x1b[1;32misolate>\x1b[0m '))
+      } else if (b === 0x7f) {
+        this.buffer = this.buffer.slice(0, -1)
+        this.onOutput(this.enc.encode('\b \b'))
+      } else {
+        this.buffer += String.fromCharCode(b)
+        this.onOutput(new Uint8Array([b]))
+      }
+    }
+  }
+
+  resize() {}
+
+  close() {
+    this.closed = true
+    this.onExit({ reason: 'closed' })
+  }
+}
+
+export function makeLane(spec, meta) {
+  switch (spec.lane) {
+    case 'mcp':
+      return new McpLane({ url: spec.url, cols: meta.cols, rows: meta.rows, sessionId: meta.sessionId })
+    case 'isolate':
+      return new IsolateLane({ sessionId: meta.sessionId })
+    case 'local':
+    default:
+      return new LocalLane({ sessionId: meta.sessionId, cols: meta.cols, rows: meta.rows, shell: spec.shell, cwd: spec.cwd })
+  }
+}

@@ -15,6 +15,7 @@ const SHOT = '/nano-kitesurf/shot'
 const PICK = '/nano-kitesurf/pick'
 const EDIT = '/nano-kitesurf/edit'
 const SETTINGS = '/nano-kitesurf/settings'
+const HISTORY = '/nano-kitesurf/history'
 const KITE = '/nano-kitesurf/kite'
 const KIND = 'kitesurf'
 const OWN_ID = 'nano-kitesurf'
@@ -349,6 +350,12 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
     setPick(null)
   }
 
+  async function historyNav(delta) {
+    const moved = await post(HISTORY, { delta })
+    if (moved.url) { setPageUrl(moved.url); setDraftUrl(moved.url) }
+    await reloadShot()
+  }
+
   async function onSubmitAddress(event) {
     event.preventDefault()
     if (!draftUrl.trim()) return
@@ -648,10 +655,17 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
     || (frame && anchor ? { left: frame.left + anchor.x * frame.scale, top: frame.top + anchor.y * frame.scale, width: 0, height: 0 } : null)
     || (frame ? { left: frame.left + 16, top: frame.top + 16, width: 0, height: 0 } : null)
 
+  // Browser chrome needs real left/right arrows — the primitives icon set
+  // only ships chevron-up/down, so draw 16px strokes inline.
+  const arrowGlyph = (dir) => h('svg', {
+    width: 16, height: 16, viewBox: '0 0 16 16', fill: 'none',
+    stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round', strokeLinejoin: 'round',
+    'aria-hidden': true,
+  }, h('path', { d: dir === 'back' ? 'M10 3 L5 8 L10 13' : 'M6 3 L11 8 L6 13' }))
+
   const glyph = (name) => {
+    if (name === 'back' || name === 'forward') return arrowGlyph(name)
     const Icon = {
-      up: primitives.IconChevronUpOutlineRegular,
-      down: primitives.IconChevronDownOutlineRegular,
       history: primitives.IconClockOutlineRegular,
       refresh: primitives.IconRefreshOutlineRegular,
       go: primitives.IconLinkOutlineRegular,
@@ -777,9 +791,9 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
     'data-nks-workspace': '1',
   },
     h('form', { className: 'nks-toolbar', onSubmit: onSubmitAddress },
-      h('button', { type: 'button', className: 'nks-tool', 'aria-label': copy.up, disabled: busy || !shot, onClick: () => run(() => reloadShot(-480)) }, glyph('up')),
-      h('button', { type: 'button', className: 'nks-tool', 'data-nks-lower': '1', 'aria-label': copy.down, disabled: busy || !shot, onClick: () => run(() => reloadShot(480)) }, glyph('down')),
-      h('button', { type: 'button', className: 'nks-tool', 'data-nks-reload': '1', 'aria-label': copy.refresh, disabled: busy || !pageUrl, onClick: onRefresh }, glyph('refresh')),
+      h('button', { type: 'button', className: 'nks-tool', 'data-nks-back': '1', 'aria-label': copy.back, title: copy.back, disabled: busy || !shot, onClick: () => run(() => historyNav(-1)) }, glyph('back')),
+      h('button', { type: 'button', className: 'nks-tool', 'data-nks-forward': '1', 'aria-label': copy.forward, title: copy.forward, disabled: busy || !shot, onClick: () => run(() => historyNav(1)) }, glyph('forward')),
+      h('button', { type: 'button', className: 'nks-tool', 'data-nks-reload': '1', 'aria-label': copy.refresh, title: copy.refresh, disabled: busy || !pageUrl, onClick: onRefresh }, glyph('refresh')),
       h('span', { className: 'nks-address-box', 'data-dirty': draftUrl ? 'true' : 'false' },
         h('input', {
           className: 'nks-address',
@@ -802,7 +816,7 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
         title: copy.annotateTitle,
         onClick: () => setAnnotate((value) => !value),
       }, glyph('annotate')),
-      h('button', { type: 'button', className: 'nks-tool', 'data-nks-settings': '1', 'aria-label': copy.settings, onClick: openSettings }, glyph('settings'))),
+      h('button', { type: 'button', className: 'nks-tool', 'data-nks-settings': '1', 'aria-label': copy.settings, title: copy.settings, onClick: openSettings }, glyph('settings'))),
     pins.length ? h('div', { className: 'nks-pins', 'data-nks-pins': String(pins.length), 'aria-live': 'polite' },
       `${pins.length} ${copy.pinsCount}${pins.length === MAX_PINS ? copy.pinsFull : ''}`,
       h('button', { type: 'button', className: 'nks-tool', 'data-nks-undo-pin': '1', 'aria-label': copy.undoPin, onClick: () => setPins((current) => current.slice(0, -1)) }, glyph('undo')),

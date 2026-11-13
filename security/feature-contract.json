@@ -358,6 +358,17 @@
     },
     {
       "plugin": "dsh-nano-kitesurf",
+      "path": "/nano-kitesurf/history",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 4096
+      },
+      "responseShape": "200 {ok:true,moved,url?,currentIndex,entries} | 400 {ok:false,errorId:kitesurf.navigate.delta,error} | 502 {ok:false,errorId,error}"
+    },
+    {
+      "plugin": "dsh-nano-kitesurf",
       "path": "/nano-kitesurf/pick",
       "methods": [
         "POST"

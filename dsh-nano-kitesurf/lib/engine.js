@@ -542,6 +542,32 @@ export async function openPage(httpBase, url) {
 }
 
 /**
+ * Browser chrome — real back/forward via the engine's navigationHistory,
+ * not scroll-by-pixels wearing nav-button clothing. `delta` is -1|+1.
+ * Returns the destination entry (or null when the move is a no-op) so the
+ * pane can still refresh its shot either way.
+ */
+export async function navigateHistory(httpBase, delta) {
+  const step = delta === -1 ? -1 : delta === 1 ? 1 : 0
+  if (!step) throw new KitesurfError('kitesurf.navigate.delta', 'delta must be -1 or +1')
+  return useLive(httpBase, async (client) => {
+    const page = await pageHandle(client)
+    const history = await client.send('Page.getNavigationHistory', {}, page.sessionId)
+    const current = history.currentIndex
+    const entries = Array.isArray(history.entries) ? history.entries : []
+    const nextIndex = current + step
+    const next = entries[nextIndex]
+    if (!next || typeof next.id !== 'number') {
+      return { moved: false, currentIndex: current, entries: entries.length }
+    }
+    await client.send('Page.navigateToHistoryEntry', { entryId: next.id }, page.sessionId, NAVIGATE_MS)
+    await waitForPage(client, page)
+    await waitForContent(client, page)
+    return { moved: true, url: next.url, title: next.title || '', currentIndex: nextIndex, entries: entries.length }
+  })
+}
+
+/**
  * @param {string} httpBase
  */
 /**

@@ -48,6 +48,7 @@ Static enumeration of every `webServer.register` path across the (formerly four)
 | /nano-kitesurf/last | GET, HEAD | L2 | read:host | 0 | – | last pick element packet (page content) |
 | /nano-kitesurf/open | POST | L2 | net:kitesurf | 4096 | – | Page.navigate the engine to a URL |
 | /nano-kitesurf/shot | POST | L2 | read:host | 4096 | – | Page.captureScreenshot (page content) |
+| /nano-kitesurf/history | POST | L2 | net:kitesurf | 4096 | – | Page.getNavigationHistory + navigateToHistoryEntry (real back/forward) |
 | /nano-kitesurf/pick | POST | L2 | read:host | 4096 | – | Runtime.evaluate element probe (click, selector nav, preview) |
 | /nano-kitesurf/edit | POST | L2 | write:engine | 8192 | – | Runtime.evaluate live text edit on a named element |
 | /nano-kitesurf/settings | POST | L1 | write:kitesurf | 4096 | – | in-memory UA/viewport emulation |

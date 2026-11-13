@@ -1523,8 +1523,8 @@ var __kitesurfExport = (() => {
           typeDescription: "\u5728\u5BB9\u5668\u91CC\u6D4F\u89C8\u9875\u9762\uFF0C\u5E76\u5728\u753B\u9762\u4E0A\u70B9\u9009\u5143\u7D20",
           addressPlaceholder: "\u8F93\u5165 HTTP(S) \u5730\u5740",
           addressAria: "\u9875\u9762\u5730\u5740",
-          up: "\u5411\u4E0A",
-          down: "\u5411\u4E0B",
+          back: "\u540E\u9000",
+          forward: "\u524D\u8FDB",
           refresh: "\u5237\u65B0",
           go: "\u524D\u5F80",
           annotate: "\u6807\u6CE8",
@@ -1570,8 +1570,8 @@ var __kitesurfExport = (() => {
           typeDescription: "Browse pages in the container and pick elements on the picture",
           addressPlaceholder: "Enter an HTTP(S) address",
           addressAria: "Page URL",
-          up: "Scroll up",
-          down: "Scroll down",
+          back: "Back",
+          forward: "Forward",
           refresh: "Refresh",
           go: "Go",
           annotate: "Annotate",
@@ -1791,6 +1791,7 @@ ${item}`).join("\n");
   var PICK = "/nano-kitesurf/pick";
   var EDIT = "/nano-kitesurf/edit";
   var SETTINGS = "/nano-kitesurf/settings";
+  var HISTORY = "/nano-kitesurf/history";
   var KITE = "/nano-kitesurf/kite";
   var KIND = "kitesurf";
   var OWN_ID = "nano-kitesurf";
@@ -2082,6 +2083,14 @@ ${item}`).join("\n");
       if (shotPayload.url) setPageUrl(shotPayload.url);
       setPick(null);
     }
+    async function historyNav(delta) {
+      const moved = await post(HISTORY, { delta });
+      if (moved.url) {
+        setPageUrl(moved.url);
+        setDraftUrl(moved.url);
+      }
+      await reloadShot();
+    }
     async function onSubmitAddress(event) {
       event.preventDefault();
       if (!draftUrl.trim()) return;
@@ -2336,10 +2345,20 @@ ${item}`).join("\n");
     })) : [];
     const anchor = pick?.anchor;
     const pickAnchor = overlays.find((o) => o.kind === "pick" || o.kind === "ellipse") || (frame && anchor ? { left: frame.left + anchor.x * frame.scale, top: frame.top + anchor.y * frame.scale, width: 0, height: 0 } : null) || (frame ? { left: frame.left + 16, top: frame.top + 16, width: 0, height: 0 } : null);
+    const arrowGlyph = (dir) => h("svg", {
+      width: 16,
+      height: 16,
+      viewBox: "0 0 16 16",
+      fill: "none",
+      stroke: "currentColor",
+      strokeWidth: 1.5,
+      strokeLinecap: "round",
+      strokeLinejoin: "round",
+      "aria-hidden": true
+    }, h("path", { d: dir === "back" ? "M10 3 L5 8 L10 13" : "M6 3 L11 8 L6 13" }));
     const glyph = (name) => {
+      if (name === "back" || name === "forward") return arrowGlyph(name);
       const Icon = {
-        up: primitives.IconChevronUpOutlineRegular,
-        down: primitives.IconChevronDownOutlineRegular,
         history: primitives.IconClockOutlineRegular,
         refresh: primitives.IconRefreshOutlineRegular,
         go: primitives.IconLinkOutlineRegular,
@@ -2474,9 +2493,9 @@ ${item}`).join("\n");
       h(
         "form",
         { className: "nks-toolbar", onSubmit: onSubmitAddress },
-        h("button", { type: "button", className: "nks-tool", "aria-label": copy.up, disabled: busy || !shot, onClick: () => run(() => reloadShot(-480)) }, glyph("up")),
-        h("button", { type: "button", className: "nks-tool", "data-nks-lower": "1", "aria-label": copy.down, disabled: busy || !shot, onClick: () => run(() => reloadShot(480)) }, glyph("down")),
-        h("button", { type: "button", className: "nks-tool", "data-nks-reload": "1", "aria-label": copy.refresh, disabled: busy || !pageUrl, onClick: onRefresh }, glyph("refresh")),
+        h("button", { type: "button", className: "nks-tool", "data-nks-back": "1", "aria-label": copy.back, title: copy.back, disabled: busy || !shot, onClick: () => run(() => historyNav(-1)) }, glyph("back")),
+        h("button", { type: "button", className: "nks-tool", "data-nks-forward": "1", "aria-label": copy.forward, title: copy.forward, disabled: busy || !shot, onClick: () => run(() => historyNav(1)) }, glyph("forward")),
+        h("button", { type: "button", className: "nks-tool", "data-nks-reload": "1", "aria-label": copy.refresh, title: copy.refresh, disabled: busy || !pageUrl, onClick: onRefresh }, glyph("refresh")),
         h(
           "span",
           { className: "nks-address-box", "data-dirty": draftUrl ? "true" : "false" },
@@ -2502,7 +2521,7 @@ ${item}`).join("\n");
           title: copy.annotateTitle,
           onClick: () => setAnnotate((value) => !value)
         }, glyph("annotate")),
-        h("button", { type: "button", className: "nks-tool", "data-nks-settings": "1", "aria-label": copy.settings, onClick: openSettings }, glyph("settings"))
+        h("button", { type: "button", className: "nks-tool", "data-nks-settings": "1", "aria-label": copy.settings, title: copy.settings, onClick: openSettings }, glyph("settings"))
       ),
       pins.length ? h(
         "div",

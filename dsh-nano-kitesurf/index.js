@@ -6,7 +6,7 @@ import { homedir } from 'node:os'
 import path from 'node:path'
 import { registerRoutes } from './lib/route-guard.js'
 import { ROUTE_TABLE, PLUGIN } from './lib/route-table.js'
-import { browserSocketUrl, captureShot, currentUserAgent, currentViewport, fetchEngine, KitesurfError, openPage, pickElement, pickBySelector, pickPoint, pickSelector, editBody, editElement, pageUrl, releaseEngine, scrollDelta, setBrowserSettings } from './lib/engine.js'
+import { browserSocketUrl, captureShot, currentUserAgent, currentViewport, fetchEngine, KitesurfError, navigateHistory, openPage, pickElement, pickBySelector, pickPoint, pickSelector, editBody, editElement, pageUrl, releaseEngine, scrollDelta, setBrowserSettings } from './lib/engine.js'
 import { kitesurfSkill, nanoKiteSkill } from './lib/skill.js'
 import { createNanoKite } from './lib/nano-kite.js'
 import { ensureLocalContainer, stopLocalContainer } from './lib/container-engine.js'
@@ -19,6 +19,7 @@ const STATUS_ROUTE = '/nano-kitesurf/status'
 const LAST_ROUTE = '/nano-kitesurf/last'
 const OPEN_ROUTE = '/nano-kitesurf/open'
 const SHOT_ROUTE = '/nano-kitesurf/shot'
+const HISTORY_ROUTE = '/nano-kitesurf/history'
 const PICK_ROUTE = '/nano-kitesurf/pick'
 const EDIT_ROUTE = '/nano-kitesurf/edit'
 const SETTINGS_ROUTE = '/nano-kitesurf/settings'
@@ -152,6 +153,7 @@ const ERROR_STATUS = [
   [/^kitesurf\.kite\.(origin|remote|mcpPort|action|checkout)$/, 400],
   [/^kitesurf\.kite\.(node|init)$/, 500],
   [/^kitesurf\.navigate\.egress$/, 504],
+  [/^kitesurf\.navigate\.delta$/, 400],
   [/^kitesurf\.perf\./, 400],
   [/^kitesurf\.navigate\.(timeout|failed)$/, 502],
   [/^kitesurf\.kite\.(container|start|resume)$/, 502],
@@ -313,6 +315,21 @@ export function apply(ctx, config) {
           const shot = await hostSpan('shot', () => captureShot(origin(), scrollDelta(body)))
           lastError = null
           sendJson(res, 200, { ok: true, ...shot })
+        } catch (error) {
+          fail(res, error)
+        }
+      },
+    },
+    {
+      path: HISTORY_ROUTE,
+      methods: ['POST'],
+      bodyLimit: 4096,
+      handler: async (req, res, route) => {
+        try {
+          const body = await readBody(req, route.bodyLimit)
+          const moved = await hostSpan('navigate', () => navigateHistory(origin(), body?.delta))
+          lastError = null
+          sendJson(res, 200, { ok: true, ...moved })
         } catch (error) {
           fail(res, error)
         }

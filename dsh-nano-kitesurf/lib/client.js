@@ -1962,6 +1962,7 @@ ${item}`).join("\n");
     const [draftUrl, setDraftUrl] = React5.useState("");
     const [history, setHistory] = React5.useState([]);
     const [shot, setShot] = React5.useState(null);
+    const [shotMime, setShotMime] = React5.useState("image/webp");
     const [shotMeta, setShotMeta] = React5.useState(null);
     const [annotate, setAnnotate] = React5.useState(false);
     const [pick, setPick] = React5.useState(null);
@@ -2013,10 +2014,11 @@ ${item}`).join("\n");
       refreshStatus().then(async (statusPayload) => {
         if (!statusPayload?.ok) return;
         try {
-          const shotPayload = await post(SHOT, {});
+          const shotPayload = await post(SHOT, { format: "webp" });
           setShot(shotPayload.data);
+          setShotMime(shotPayload.mimeType || "image/webp");
           setShotMeta({ url: shotPayload.url || "", scrollY: shotPayload.scrollY || 0, targetId: shotPayload.targetId || "", viewport: shotPayload.viewport?.width ?? null, at: Date.now() });
-          if (shotPayload.url) setPageUrl(shotPayload.url);
+          if (shotPayload.url && shotPayload.url !== "about:blank") setPageUrl(shotPayload.url);
         } catch {
         }
       });
@@ -2131,17 +2133,19 @@ ${item}`).join("\n");
       await perf.span("navigate", async () => {
         await post(OPEN, { url });
       });
-      const shotPayload = await post(SHOT, {});
+      const shotPayload = await post(SHOT, { format: "webp" });
       setShot(shotPayload.data);
+      setShotMime(shotPayload.mimeType || "image/webp");
       setShotMeta({ url: shotPayload.url || "", scrollY: shotPayload.scrollY || 0, targetId: shotPayload.targetId || "", viewport: shotPayload.viewport?.width ?? null, at: Date.now() });
       setPick(null);
       remember(url);
     }
     async function reloadShot(scroll) {
-      const shotPayload = await post(SHOT, scroll ? { scroll } : {});
+      const shotPayload = await post(SHOT, scroll ? { scroll, format: "webp" } : { format: "webp" });
       setShot(shotPayload.data);
+      setShotMime(shotPayload.mimeType || "image/webp");
       setShotMeta({ url: shotPayload.url || "", scrollY: shotPayload.scrollY || 0, targetId: shotPayload.targetId || "", viewport: shotPayload.viewport?.width ?? null, at: Date.now() });
-      if (shotPayload.url) setPageUrl(shotPayload.url);
+      if (shotPayload.url && shotPayload.url !== "about:blank") setPageUrl(shotPayload.url);
       setPick(null);
     }
     async function historyNav(delta) {
@@ -2155,6 +2159,7 @@ ${item}`).join("\n");
     async function onSubmitAddress(event) {
       event.preventDefault();
       if (!draftUrl.trim()) return;
+      event.currentTarget.querySelector("input")?.blur();
       await run(() => navigate(draftUrl));
     }
     function framePoint(event) {
@@ -2624,7 +2629,7 @@ ${item}`).join("\n");
         hasPage ? h("img", {
           alt: "",
           draggable: false,
-          src: `data:image/png;base64,${shot}`,
+          src: `data:${shotMime || "image/webp"};base64,${shot}`,
           style: { pointerEvents: annotate ? "none" : "auto" }
         }) : h(
           "div",

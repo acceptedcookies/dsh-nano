@@ -826,7 +826,20 @@ async function pageInfo(client, page) {
   }
 }
 
-export async function captureShot(httpBase, scrollY = 0) {
+/** Screenshot encodings the engine supports, plus the default quality. */
+const SHOT_FORMATS = { png: 'image/png', jpeg: 'image/jpeg', webp: 'image/webp' }
+const SHOT_DEFAULT_QUALITY = 82
+
+/**
+ * A 1280x720 PNG of a text page is ~226 KB base64 — decoded on the main
+ * thread for every refresh. WebP at q82 is typically 5-10x smaller and is
+ * what the pane uses by default; png stays available for pixel work.
+ */
+export async function captureShot(httpBase, scrollY = 0, options = {}) {
+  const format = SHOT_FORMATS[options.format] ? options.format : 'webp'
+  const quality = Number.isFinite(Number(options.quality))
+    ? Math.max(1, Math.min(Number(options.quality), 100))
+    : SHOT_DEFAULT_QUALITY
   return useLive(httpBase, async (client) => {
     const page = await pageHandle(client)
     if (scrollY) {
@@ -835,7 +848,8 @@ export async function captureShot(httpBase, scrollY = 0) {
         returnByValue: true,
       }, page.sessionId)
     }
-    const shot = await client.send('Page.captureScreenshot', { format: 'png' }, page.sessionId)
+    const params = format === 'png' ? { format } : { format, quality }
+    const shot = await client.send('Page.captureScreenshot', params, page.sessionId)
     if (typeof shot.data !== 'string' || shot.data.length === 0) {
       throw new KitesurfError('kitesurf.shot.empty', 'screenshot was empty')
     }
@@ -843,7 +857,8 @@ export async function captureShot(httpBase, scrollY = 0) {
     // identity against the frame it's drawn over and notice drift.
     const info = await pageInfo(client, page)
     return {
-      mimeType: 'image/png',
+      mimeType: SHOT_FORMATS[format],
+      format,
       data: shot.data,
       targetId: page.targetId,
       url: typeof info.url === 'string' ? info.url : '',

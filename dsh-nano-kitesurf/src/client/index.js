@@ -181,6 +181,7 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
   const [draftUrl, setDraftUrl] = React.useState('')
   const [history, setHistory] = React.useState([])
   const [shot, setShot] = React.useState(null)
+  const [shotMime, setShotMime] = React.useState('image/webp')
   // Identity of the page the shot came from — a pick whose url/scroll differs
   // means the frame is stale (page navigated or scrolled underneath it).
   const [shotMeta, setShotMeta] = React.useState(null)
@@ -257,12 +258,13 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
     refreshStatus().then(async (statusPayload) => {
       if (!statusPayload?.ok) return
       try {
-        const shotPayload = await post(SHOT, {})
+        const shotPayload = await post(SHOT, { format: 'webp' })
         setShot(shotPayload.data)
+        setShotMime(shotPayload.mimeType || 'image/webp')
         setShotMeta({ url: shotPayload.url || '', scrollY: shotPayload.scrollY || 0, targetId: shotPayload.targetId || '', viewport: shotPayload.viewport?.width ?? null, at: Date.now() })
         // pageUrl mirrors whatever the engine reports — pages opened behind
         // the pane (agent /open) still name the right url in notes.
-        if (shotPayload.url) setPageUrl(shotPayload.url)
+        if (shotPayload.url && shotPayload.url !== 'about:blank') setPageUrl(shotPayload.url)
       } catch { /* engine up but page not shootable yet — fine */ }
     })
   }, [])
@@ -384,18 +386,20 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
     await perf.span('navigate', async () => {
       await post(OPEN, { url })
     })
-    const shotPayload = await post(SHOT, {})
+    const shotPayload = await post(SHOT, { format: 'webp' })
     setShot(shotPayload.data)
+    setShotMime(shotPayload.mimeType || 'image/webp')
     setShotMeta({ url: shotPayload.url || '', scrollY: shotPayload.scrollY || 0, targetId: shotPayload.targetId || '', viewport: shotPayload.viewport?.width ?? null, at: Date.now() })
     setPick(null)
     remember(url)
   }
 
   async function reloadShot(scroll) {
-    const shotPayload = await post(SHOT, scroll ? { scroll } : {})
+    const shotPayload = await post(SHOT, scroll ? { scroll, format: 'webp' } : { format: 'webp' })
     setShot(shotPayload.data)
+    setShotMime(shotPayload.mimeType || 'image/webp')
     setShotMeta({ url: shotPayload.url || '', scrollY: shotPayload.scrollY || 0, targetId: shotPayload.targetId || '', viewport: shotPayload.viewport?.width ?? null, at: Date.now() })
-    if (shotPayload.url) setPageUrl(shotPayload.url)
+    if (shotPayload.url && shotPayload.url !== 'about:blank') setPageUrl(shotPayload.url)
     setPick(null)
   }
 
@@ -408,6 +412,7 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
   async function onSubmitAddress(event) {
     event.preventDefault()
     if (!draftUrl.trim()) return
+    event.currentTarget.querySelector('input')?.blur()
     await run(() => navigate(draftUrl))
   }
 
@@ -895,7 +900,7 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
       hasPage ? h('img', {
         alt: '',
         draggable: false,
-        src: `data:image/png;base64,${shot}`,
+        src: `data:${shotMime || 'image/webp'};base64,${shot}`,
         style: { pointerEvents: annotate ? 'none' : 'auto' },
       }) : h('div', { className: 'nks-empty', 'data-nks-empty': '' },
         // One container, one column: the old layout rendered an absolutely

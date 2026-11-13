@@ -495,7 +495,11 @@ export function apply(ctx, config) {
       handler: async (req, res, route) => {
         try {
           const body = await readBody(req, route.bodyLimit)
-          const shot = await hostSpan('shot', () => captureShot(origin(), scrollDelta(body)))
+          const format = ['png', 'jpeg', 'webp'].includes(body.format) ? body.format : undefined
+          if (body.format !== undefined && !format) {
+            throw new KitesurfError('kitesurf.shot.format', 'format must be png, jpeg or webp')
+          }
+          const shot = await hostSpan('shot', () => captureShot(origin(), scrollDelta(body), { format, quality: body.quality }))
           lastError = null
           sendJson(res, 200, { ok: true, ...shot })
         } catch (error) {

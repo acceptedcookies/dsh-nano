@@ -1895,7 +1895,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
   });
   var STYLE = `
 .nks-root{position:relative;height:100%;min-height:0;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-base);flex-direction:column;flex:auto;display:flex;font:var(--dsw-font-xxs-12);container-type:inline-size}
-.nks-toolbar{box-sizing:border-box;border-bottom:.5px solid var(--dsw-alias-border-l3);flex:none;align-items:center;gap:4px;height:38px;padding:5px 6px;display:flex}
+.nks-toolbar{position:relative;z-index:3;box-sizing:border-box;border-bottom:.5px solid var(--dsw-alias-border-l3);flex:none;align-items:center;gap:4px;height:38px;padding:5px 6px;display:flex}
 .nks-tool{width:28px;height:28px;color:var(--dsw-alias-label-secondary);border-radius:var(--dsw-radius-sm);cursor:pointer;background:transparent;border:0;flex:none;justify-content:center;align-items:center;padding:0;display:inline-flex}
 .nks-tool:hover:not(:disabled){color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}
 .nks-tool:disabled{color:var(--dsw-alias-label-tertiary,rgba(207,211,214,.55));opacity:.45;cursor:default}
@@ -1907,7 +1907,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
 .nks-address::placeholder{color:var(--dsw-alias-label-tertiary)}
 .nks-go{visibility:hidden;opacity:0;position:absolute;top:0;right:0}
 .nks-address-box:focus-within .nks-go,.nks-address-box[data-dirty="true"] .nks-go{visibility:visible;opacity:1}
-.nks-frame{position:relative;flex:auto;min-height:0;overflow:hidden;contain:layout paint;background:var(--dsw-alias-bg-layer-1)}
+.nks-frame{position:relative;z-index:0;flex:auto;min-height:0;overflow:hidden;contain:layout paint;background:var(--dsw-alias-bg-layer-1)}
 .nks-frame iframe.nks-dom{width:100%;height:100%;border:0;display:block;background:#fff}
 .nks-frame img{width:100%;height:100%;object-fit:contain;object-position:center;display:block}
 .nks-empty{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:10px;padding:24px;text-align:center;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxs-12)}
@@ -1922,7 +1922,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
 .nks-box[data-kind="hover"]{border-style:dashed;opacity:.75}
 .nks-pin-dot{position:absolute;width:18px;height:18px;margin-left:-9px;margin-top:-9px;color:#fff;font:var(--dsw-font-xxxs-11);line-height:18px;text-align:center;background:var(--dsw-alias-link,#2f6fed);box-shadow:0 0 0 1.5px rgba(0,0,0,.45),0 1px 4px rgba(0,0,0,.4);border-radius:50%;pointer-events:auto;cursor:pointer;user-select:none}
 .nks-pin-dot:hover{background:var(--dsw-alias-fill-error,#d5455c);transform:scale(1.15)}
-.nks-hint{flex:none;padding:3px 8px 4px;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11);display:flex;align-items:center;gap:6px;border-bottom:.5px solid var(--dsw-alias-border-l3)}
+.nks-hint{position:relative;z-index:2;flex:none;padding:3px 8px 4px;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11);display:flex;align-items:center;gap:6px;border-bottom:.5px solid var(--dsw-alias-border-l3)}
 .nks-hint-text{flex:auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .nks-start-btn{height:30px;padding:0 14px;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-12);background:var(--dsw-alias-bg-layer-1);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-md);cursor:pointer}
 .nks-start-btn:hover{background:var(--dsw-alias-interactive-bg-hover)}
@@ -1938,7 +1938,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
 .nks-busy::before{content:"";display:block;width:35%;height:100%;background:var(--dsw-alias-link,#2f6fed);animation:nks-beat 1s ease-in-out infinite}
 @keyframes nks-beat{from{transform:translateX(-120%)}to{transform:translateX(320%)}}
 .nks-settings-body{display:flex;flex-direction:column;gap:8px}
-.nks-status{flex:none;display:flex;align-items:center;gap:8px;height:26px;padding:0 8px;border-top:.5px solid var(--dsw-alias-border-l3);font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-tertiary)}
+.nks-status{position:relative;z-index:3;flex:none;display:flex;align-items:center;gap:8px;height:26px;padding:0 8px;border-top:.5px solid var(--dsw-alias-border-l3);font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-tertiary)}
 .nks-status button{height:20px;padding:0 8px;border:0;border-radius:var(--dsw-radius-sm);background:transparent;color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxxs-11);cursor:pointer}
 .nks-status button:hover{background:var(--dsw-alias-interactive-bg-hover)}
 .nks-status button[aria-pressed="true"]{background:color-mix(in srgb,var(--dsw-alias-link,#7aaaff) 22%,transparent);color:var(--dsw-alias-label-primary)}
@@ -2187,17 +2187,15 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       return () => window.removeEventListener("keydown", onKey);
     }, []);
     React5.useEffect(() => {
-      const timer = window.setInterval(() => {
-        const frame2 = domFrameRef.current;
-        if (frame2) {
-          try {
-            bindDomFrame(frame2);
-          } catch {
-          }
+      if (!nativeHtml) return;
+      const frame2 = domFrameRef.current;
+      if (frame2 && domDoc) {
+        try {
+          writeDomFrame(frame2);
+        } catch {
         }
-      }, 500);
-      return () => clearInterval(timer);
-    }, []);
+      }
+    }, [domDoc, nativeHtml]);
     React5.useEffect(() => {
       const onMessage = (event) => {
         const data = event.data;
@@ -2863,6 +2861,20 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         childSel: null
       };
     }
+    function writeDomFrame(frame2) {
+      if (!frame2 || !domDoc?.srcdoc) return;
+      if (frame2.dataset.nksVersion === String(domDoc.at)) {
+        bindDomFrame(frame2);
+        return;
+      }
+      const doc = frame2.contentDocument;
+      if (!doc) return;
+      frame2.dataset.nksVersion = String(domDoc.at);
+      doc.open();
+      doc.write(domDoc.srcdoc);
+      doc.close();
+      bindDomFrame(frame2);
+    }
     function bindDomFrame(frame2) {
       const doc = frame2?.contentDocument;
       if (!doc || doc.__nksBound) return;
@@ -3185,20 +3197,9 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           className: "nks-dom",
           title: "Kitesurf page",
           sandbox: "allow-scripts allow-same-origin",
-          srcDoc: domDoc.srcdoc,
-          // The parent effect can fire before the document has executed the
-          // injected picker; re-arm on load so MODE is never stale.
-          onLoad: (event) => {
-            try {
-              bindDomFrame(event.currentTarget);
-            } catch {
-            }
-            setTimeout(() => {
-              try {
-                bindDomFrame(event.currentTarget);
-              } catch {
-              }
-            }, 120);
+          ref: (el) => {
+            domFrameRef.current = el;
+            if (el) writeDomFrame(el);
           }
         }) : hasPage ? h("img", {
           alt: "",

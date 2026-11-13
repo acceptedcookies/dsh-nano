@@ -6,6 +6,21 @@
 
 const ROUTE = '/dsh-nano-terminal'
 
+/**
+ * WebSocket target for the same-host data plane.
+ * In the dsh desktop app the page runs on `dsh-app://app`; requests at that
+ * scheme are proxied via a custom protocol handler, but WebSocket upgrades at
+ * it are rejected. The desktop host provides `__DSH_TRANSPORT__.streamBaseUrl`
+ * — the real host origin — for ws connect; on plain web it is absent and
+ * same-origin location.host is used.
+ */
+function streamBase() {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws'
+  const streamBaseUrl = globalThis.__DSH_TRANSPORT__?.streamBaseUrl
+  if (streamBaseUrl) return new URL(streamBaseUrl).origin.replace(/^http/, 'ws') + ROUTE + '/stream'
+  return `${proto}://${location.host}${ROUTE}/stream`
+}
+
 export class LocalLane {
   constructor({ sessionId, cols, rows, shell, cwd }) {
     this.kind = 'local'
@@ -24,12 +39,13 @@ export class LocalLane {
 
   open() {
     return new Promise((resolve, reject) => {
-      const proto = location.protocol === 'https:' ? 'wss' : 'ws'
-      const ws = new WebSocket(`${proto}://${location.host}${ROUTE}/stream`)
+      const ws = new WebSocket(streamBase())
       ws.binaryType = 'arraybuffer'
       this.ws = ws
+      let opened = false
       const timer = setTimeout(() => reject(new Error('open timeout')), 10_000)
       ws.onopen = () => {
+        opened = true
         ws.send(JSON.stringify({
           type: 'open', owner: this.sessionId, shell: this.shell,
           cwd: this.cwd, cols: this.cols, rows: this.rows,
@@ -59,6 +75,11 @@ export class LocalLane {
         reject(new Error('websocket error'))
       }
       ws.onclose = () => {
+        if (!opened) {
+          clearTimeout(timer)
+          reject(new Error('websocket closed during open'))
+          return
+        }
         if (!this.closed) this.onExit({ reason: 'ws-close' })
       }
     })
@@ -195,11 +216,9 @@ export class IsolateLane {
   open() {
     queueMicrotask(() => {
       this.onReady({ session: this.id, lane: 'isolate' })
+      // dim one-line notice, no hand-drawn chrome inside the buffer
       this.onOutput(this.enc.encode(
-        '\x1b[1;36m┌─ dnt isolate lane ─────────────────────────\x1b[0m\r\n' +
-        '\x1b[36m│ wasm-hosted terminal instance (no remote PTY)\x1b[0m\r\n' +
-        '\x1b[36m│ echo mode — input is mirrored back           \x1b[0m\r\n' +
-        '\x1b[36m└───────────────────────────────────────────────\x1b[0m\r\n' +
+        '\x1b[2m— isolate lane · wasm instance · echo mode —\x1b[0m\r\n' +
         '\x1b[1;32misolate>\x1b[0m ',
       ))
     })

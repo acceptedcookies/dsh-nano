@@ -22,7 +22,8 @@
     "test": "node test/run.mjs"
   },
   "devDependencies": {
-    "esbuild": "0.25.0"
+    "esbuild": "0.25.0",
+    "dsh-nano-ui": "file:../packages/dsh-nano-ui"
   },
   "engines": {
     "dsh": ">=0.2.2-rc.1 <0.3.0"

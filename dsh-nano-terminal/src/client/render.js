@@ -8,9 +8,11 @@ import { MODES } from './wasm.js'
 // Palette
 // ---------------------------------------------------------------------------
 
+// Modern softened 16-color ramp (tokyo-night flavored): saturated primaries
+// read harsh on a dark workbench — these sit closer to editor chrome.
 const ANSI_DARK = [
-  '#0d1117', '#f85149', '#56d364', '#e3b341', '#58a6ff', '#bc8cff', '#39c5cf', '#b1bac4',
-  '#484f58', '#ff7b72', '#7ee787', '#f2cc60', '#79c0ff', '#d2a8ff', '#56d4dd', '#f0f6fc',
+  '#1b1e28', '#f7768e', '#9ece6a', '#e0af68', '#7aa2f7', '#bb9af7', '#7dcfff', '#a9b1d6',
+  '#565f89', '#ff899d', '#9ece6a', '#f0c674', '#8db4f2', '#c4a8f7', '#8adce6', '#c0caf5',
 ]
 
 export function buildPalette(host) {
@@ -86,19 +88,23 @@ export class TermCanvas {
    * @param {HTMLElement} container - positioning context, overflow hidden
    * @param {object} palette
    * @param {object} font - {family, size}
+   * @param {{padX?: number, padY?: number}} [pad] - content inset, workbench
+   *   convention (~8px horizontal): cells never touch the pane chrome
    */
-  constructor(container, palette, font) {
+  constructor(container, palette, font, pad = {}) {
     this.container = container
     this.palette = palette
     this.fontSize = font.size
     this.fontFamily = font.family
+    this.padX = pad.padX ?? 0
+    this.padY = pad.padY ?? 0
     this.dpr = Math.max(1, Math.round(window.devicePixelRatio || 1))
     this.base = document.createElement('canvas')
     this.overlay = document.createElement('canvas')
     for (const c of [this.base, this.overlay]) {
       c.style.position = 'absolute'
-      c.style.left = '0'
-      c.style.top = '0'
+      c.style.left = `${this.padX}px`
+      c.style.top = `${this.padY}px`
       c.style.pointerEvents = 'none'
     }
     this.overlay.style.zIndex = '2'
@@ -157,6 +163,24 @@ export class TermCanvas {
       return true
     }
     return false
+  }
+
+  /** Swap font family/size; caller re-fits after. */
+  setFont(font) {
+    this.fontSize = font.size
+    this.fontFamily = font.family
+    this.measure()
+  }
+
+  /** Toggle cursor blink; off = steady block. */
+  setBlink(on) {
+    this.blink = !!on
+    if (!on) {
+      clearInterval(this._blinkTimer)
+      this._blinkTimer = null
+      this.cursorOn = true
+      this.paintCursor(this._modes ?? 0)
+    }
   }
 
   cellX(col) { return col * this.charW }
@@ -255,6 +279,7 @@ export class TermCanvas {
   }
 
   paintCursor(modes) {
+    this._modes = modes
     const ctx = this.octx
     ctx.clearRect(0, 0, this.cols * this.charW, this.rows * this.charH)
     if (!(modes & MODES.CURSOR_VISIBLE)) return
@@ -265,13 +290,20 @@ export class TermCanvas {
     ctx.save()
     ctx.globalCompositeOperation = 'difference'
     ctx.fillStyle = this.palette.cursor
-    ctx.fillRect(x, y, this.charW, this.charH)
+    if (typeof ctx.roundRect === 'function') {
+      ctx.beginPath()
+      ctx.roundRect(x, y, this.charW, this.charH, 3)
+      ctx.fill()
+    } else {
+      ctx.fillRect(x, y, this.charW, this.charH)
+    }
     ctx.restore()
   }
 
   startBlink(getModes) {
     clearInterval(this._blinkTimer)
     this._blinkTimer = setInterval(() => {
+      if (this.blink === false) return
       this.cursorOn = !this.cursorOn
       this.paintCursor(getModes())
     }, 530)

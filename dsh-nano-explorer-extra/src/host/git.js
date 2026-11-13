@@ -635,7 +635,9 @@ export async function pushUpstream(ctx, config, request) {
   // remote and bind it. `HEAD` (not a branch name) keeps that first publish working on a detached
   // checkout too.
   const remote = typeof request.remote === 'string' ? request.remote.trim() : ''
-  const args = remote === '' ? ['push'] : ['push', '-u', remote, 'HEAD']
+  // `--porcelain` prints `flag old..new ref` rows on stdout even when progress output is muted, so
+  // a quiet success still names the ref that moved instead of reporting "no diagnostic".
+  const args = remote === '' ? ['push', '--porcelain'] : ['push', '--porcelain', '-u', remote, 'HEAD']
   const result = await runGit(ctx, config, {
     ...request, args, allowedExitCodes: [0, 1, 128],
   })
@@ -643,7 +645,8 @@ export async function pushUpstream(ctx, config, request) {
     const detail = firstLine(result.stderr) || firstLine(result.stdout)
     throw new Error(detail === '' ? 'git push failed' : detail)
   }
-  return firstLine(result.stdout) || firstLine(result.stderr)
+  const moved = result.stdout.split('\n').map(line => line.trim()).filter(line => /^[*+=!\-]/u.test(line)).at(-1)
+  return moved ?? firstLine(result.stdout) ?? firstLine(result.stderr)
 }
 
 /**

@@ -938,7 +938,7 @@ async function checkoutBranch(ctx, config, request) {
 }
 async function pushUpstream(ctx, config, request) {
   const remote = typeof request.remote === "string" ? request.remote.trim() : "";
-  const args = remote === "" ? ["push"] : ["push", "-u", remote, "HEAD"];
+  const args = remote === "" ? ["push", "--porcelain"] : ["push", "--porcelain", "-u", remote, "HEAD"];
   const result = await runGit(ctx, config, {
     ...request,
     args,
@@ -948,7 +948,8 @@ async function pushUpstream(ctx, config, request) {
     const detail = firstLine(result.stderr) || firstLine(result.stdout);
     throw new Error(detail === "" ? "git push failed" : detail);
   }
-  return firstLine(result.stdout) || firstLine(result.stderr);
+  const moved = result.stdout.split("\n").map((line) => line.trim()).filter((line) => /^[*+=!\-]/u.test(line)).at(-1);
+  return moved ?? firstLine(result.stdout) ?? firstLine(result.stderr);
 }
 async function readRemotes(ctx, config, request) {
   const result = await runGit(ctx, config, {

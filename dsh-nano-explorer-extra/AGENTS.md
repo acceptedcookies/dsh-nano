@@ -108,6 +108,7 @@ dsh plugin --profile web add <spec>
 | POST | `/push` | `{ sessionId, remote? }`。有上游走 `git push`；无上游时 `remote` 必填，走 `git push -u <remote> HEAD` 并绑定 |
 | POST | `/remote` | `{ sessionId, op, name, url? }`。`op` 为 `add`/`set-url`/`remove`，改写 `.git/config` 后返回新远端列表 |
 | POST | `/author` | `{ sessionId, name?, email? }`。写本仓库 `user.name`/`user.email`（local，不动 global），两者至少给一个 |
+| POST | `/ssh-key` | `{ sessionId, keyPath }`。写本仓库 `core.sshCommand`：`ssh -i '<keyPath>' -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new`。`pull`/`push`/fetch 自动生效；`keyPath` 为空则 `--unset` 清回默认。路径不能含引号/反引号/换行 |
 | POST | `/checkout` | `{ sessionId, branch }`。分支名不能以 `-` 开头 |
 | POST | `/create-file` | `{ sessionId, directory, name }` |
 | POST | `/create-folder` | `{ sessionId, directory, name }` |

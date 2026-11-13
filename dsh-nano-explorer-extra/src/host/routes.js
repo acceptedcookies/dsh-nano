@@ -4,7 +4,7 @@ import { watch } from 'node:fs'
 import { ensurePerfReviewHost, LIB_VERSION } from 'dsh-performance-review/host'
 import { registerRoutes as registerGuardedRoutes } from 'dsh-host-route-guard'
 import { ROUTE_TABLE, PLUGIN } from './route-table.js'
-import { checkoutBranch, commitAll, ignoredAmong, listBranches, listConflicts, listWorktrees, pullUpstream, pushUpstream, readStatus, writeRemote, writeAuthor, writeSshKey } from './git.js'
+import { checkoutBranch, commitAll, ignoredAmong, ignoredPathsOf, listBranches, listConflicts, listWorktrees, pullUpstream, pushUpstream, readStatus, writeRemote, writeAuthor, writeSshKey } from './git.js'
 import { absoluteOf, isLexicallyInside, listDirectory } from './listing.js'
 import { createFile, createFolder, moveEntry, removeEntry, rename } from './mutate.js'
 import { statisticsOf } from './stats.js'
@@ -235,6 +235,25 @@ function watchRoot(root) {
 }
 
 /**
+ * Stats options travel in the query so the status bar's own toggles drive the number it shows:
+ * `g=0|1` for `.git`, `i=0|1` for the Git ignore listing, `s=0|1` for following symlinks.
+ * Missing values keep the host config defaults.
+ * @param source - the plugin config this factory closed over.
+ * @param url - request URL of `/status`.
+ * @returns the walk policy for this request plus its cache-key suffix.
+ */
+function statsOptionsOf(config, url) {
+  const flag = name => url.searchParams.get(name)
+  const g = flag('g')
+  const i = flag('i')
+  const s = flag('s')
+  const excludeGit = g === null ? config.statsExcludeGit : g === '1'
+  const excludeIgnored = i === null ? config.statsExcludeIgnored : i === '1'
+  const followSymlinks = s === null ? config.statsFollowSymlinks : s === '1'
+  return { excludeGit, excludeIgnored, followSymlinks, key: `|g:${excludeGit}|i:${excludeIgnored}|s:${followSymlinks}` }
+}
+
+/**
  * Answer a stats request instantly and keep the background sampler at most one deep pass per root.
  *
  * The cache value never expires in the sense of being withheld: a stale answer is returned
@@ -247,17 +266,20 @@ function watchRoot(root) {
  * @param config - validated plugin configuration.
  * @param review - perf-review host handle; the background pass is what the `stats` span records.
  * @param root - workspace root.
+ * @param policy - sandbox policy for the ignore listing's `git` call.
+ * @param opts - request-scoped `{ excludeGit, excludeIgnored, followSymlinks, key }`.
  * @returns `{ root, stats, statsPending }` — stats is the last finished walk or null.
  */
-function scheduleStatsRefresh(ctx, config, review, root) {
-  const cached = statsCache.get(root)
+function scheduleStatsRefresh(ctx, config, review, root, policy, opts) {
+  const cacheKey = `${root}${opts.key}`
+  const cached = statsCache.get(cacheKey)
   const stale = cached === undefined || Date.now() - cached.at >= STATS_FRESH_MS
-  const lastStart = statsLastStart.get(root) ?? 0
-  const mayStart = stale && statsRefresh.get(root) === undefined && Date.now() - lastStart >= STATS_REFRESH_MIN_MS
-  if (mayStart) startStatsPass(ctx, config, review, root)
+  const lastStart = statsLastStart.get(cacheKey) ?? 0
+  const mayStart = stale && statsRefresh.get(cacheKey) === undefined && Date.now() - lastStart >= STATS_REFRESH_MIN_MS
+  if (mayStart) startStatsPass(ctx, config, review, root, policy, opts, cacheKey)
   // `statsPending` reports the sampler's state, not staleness alone: the row means "a newer number
   // is being counted", and once a walk is running it stays true until that walk stores its result.
-  const pending = stale && statsRefresh.get(root) !== undefined
+  const pending = stale && statsRefresh.get(cacheKey) !== undefined
   return {
     root,
     stats: cached?.value ?? null,
@@ -270,20 +292,25 @@ function scheduleStatsRefresh(ctx, config, review, root) {
  * Launch the one deep pass for a root and remember its start so the next request does not stack
  * a second walk on top of it. The span around the walk is what perf-review reports; failures are
  * swallowed — the next request simply retries, keeping a walk crash out of the status route.
+ * The ignore listing rides the same pass: `ignoredPathsOf` returns `null` outside a Git repo,
+ * which the walk reads as "count everything", so a non-repo workspace costs no second opinion.
  */
-function startStatsPass(ctx, config, review, root) {
-  statsLastStart.set(root, Date.now())
-  statsRefresh.set(root, Promise.resolve()
-    .then(() => review.hostSpan('stats', () => statisticsOf(ctx.fs, root, {
+function startStatsPass(ctx, config, review, root, policy, opts, cacheKey) {
+  statsLastStart.set(cacheKey, Date.now())
+  statsRefresh.set(cacheKey, Promise.resolve()
+    .then(() => review.hostSpan('stats', async () => statisticsOf(ctx.fs, root, {
       maxDepth: config.statsMaxDepth,
       maxEntries: config.statsMaxEntries,
-      excludeGit: config.statsExcludeGit,
+      excludeGit: opts.excludeGit,
+      followSymlinks: opts.followSymlinks,
+      ignored: opts.excludeIgnored === false ? undefined
+        : await ignoredPathsOf(ctx, config, { cwd: root, policy, signal: undefined }) ?? undefined,
     })))
     .then(value => {
-      statsCache.set(root, { value, at: Date.now() })
+      statsCache.set(cacheKey, { value, at: Date.now() })
     })
     .catch(() => {})
-    .finally(() => { statsRefresh.delete(root) }))
+    .finally(() => { statsRefresh.delete(cacheKey) }))
 }
 
 /** Close every watcher the plugin opened; called with the routes' lifetime. */
@@ -319,7 +346,7 @@ export function createRoutes(ctx, config) {
         if (url.searchParams.get('only') === 'stats') {
           // Never block on the walk: answer from the cache (or `statsPending` on a cold start)
           // and let the background sampler do the counting at its own pace.
-          const stats = scheduleStatsRefresh(ctx, config, review, root)
+          const stats = scheduleStatsRefresh(ctx, config, review, root, policy, statsOptionsOf(config, url))
           return stats
         }
         let git = null

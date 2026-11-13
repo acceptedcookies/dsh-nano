@@ -469,6 +469,36 @@ export async function ignoredAmong(ctx, config, request) {
 }
 
 /**
+ * List every path the workspace's Git ignore rules hide, collapsed by Git itself.
+ *
+ * `ls-files -o -i --exclude-standard --directory` is the one command that honors the whole
+ * ignore surface — nested `.gitignore` files, negations, the global excludes — so the stats
+ * walk never re-implements matching rules. It runs at the workspace root, so returned paths
+ * are root-relative; `--directory` collapses fully-ignored directories (node_modules, build
+ * output) into their parent entry with a trailing slash, which the caller normalizes away.
+ *
+ * @param ctx - context providing the process services.
+ * @param config - executable and process limits.
+ * @param request - workspace root (cwd), session policy, and cancellation.
+ * @returns a Set of root-relative ignored paths, or `null` when Git is not usable here —
+ *   a non-repo root carries no `.gitignore` semantics, so absence means "count everything".
+ */
+export async function ignoredPathsOf(ctx, config, request) {
+  const result = await runGit(ctx, config, {
+    ...request,
+    args: ['ls-files', '--others', '--ignored', '--exclude-standard', '--directory', '-z'],
+    allowedExitCodes: [0, 128],
+  }).catch(() => null)
+  if (result === null || result.exitCode !== 0) return null
+  const set = new Set()
+  for (const entry of result.stdout.split('\0')) {
+    const path = entry.replace(/\/+$/u, '')
+    if (path !== '') set.add(path)
+  }
+  return set
+}
+
+/**
  * List the worktrees attached to this checkout.
  *
  * A repository can be checked out in several places at once, each on its own branch. `list

@@ -16,6 +16,10 @@ export const DEFAULT_PREFS = {
   showGitStatus: true,
   showStatusBar: true,
   statsExcludeGit: true,
+  // Git-ignored content (node_modules, build output) is not workspace content the reader maintains;
+  // and a symlink's target lives outside this tree, so links count as their own name only.
+  statsExcludeIgnored: true,
+  statsFollowSymlinks: false,
   // .git and desktop metadata stay out of the tree until the reader asks for them.
   showSystemFiles: false,
 }

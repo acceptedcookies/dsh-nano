@@ -166,7 +166,15 @@ export function ExplorerBody(props) {
   /** Mount on the shared store; the first pane loads the root, a stale store re-reads quietly. */
   useEffect(() => {
     if (store === null) return undefined
-    const token = store.mount({ sessionId, showGitStatus: () => prefsRef.current.showGitStatus })
+    const token = store.mount({
+      sessionId,
+      showGitStatus: () => prefsRef.current.showGitStatus,
+      statsFlags: () => ({
+        g: prefsRef.current.statsExcludeGit,
+        i: prefsRef.current.statsExcludeIgnored,
+        s: prefsRef.current.statsFollowSymlinks,
+      }),
+    })
     return () => store.unmount(token)
   }, [store, sessionId])
 
@@ -1043,7 +1051,14 @@ export function ExplorerBody(props) {
     dialogNode,
     React.createElement(SettingsDialog, {
       copy, open: settingsOpen, prefs, onClose: () => setSettingsOpen(false),
-      setPref: (key, value) => nxe.setPref(key, value),
+      setPref: (key, value) => {
+        nxe.setPref(key, value)
+        // A stats-scope switch changes what the number means, not just the label: recount under the
+        // new flags immediately instead of waiting for the next file write to queue a walk.
+        if (key === 'statsExcludeGit' || key === 'statsExcludeIgnored' || key === 'statsFollowSymlinks') {
+          queueStats()
+        }
+      },
     }),
     React.createElement(BranchDrawer, {
       copy, open: drawer === 'branch', git, busy: drawerBusy, error: drawerError,

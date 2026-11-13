@@ -67,6 +67,14 @@ export function SettingsDialog({ copy, open, prefs, setPref, onClose }) {
   React.createElement(Row, {
     label: copy.settingsStatsExcludeGit, checked: prefs.statsExcludeGit,
     onChange: value => setPref('statsExcludeGit', value),
+  }),
+  React.createElement(Row, {
+    label: copy.settingsStatsExcludeIgnored, hint: copy.settingsStatsExcludeIgnoredHint,
+    checked: prefs.statsExcludeIgnored, onChange: value => setPref('statsExcludeIgnored', value),
+  }),
+  React.createElement(Row, {
+    label: copy.settingsStatsFollowSymlinks, hint: copy.settingsStatsFollowSymlinksHint,
+    checked: prefs.statsFollowSymlinks, onChange: value => setPref('statsFollowSymlinks', value),
   }))
 }
 

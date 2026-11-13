@@ -100,7 +100,7 @@ dsh plugin --profile web add <spec>
 
 | 方法 | 路径 | 作用 |
 |---|---|---|
-| GET | `/status?sessionId=` | 整仓 Git 状态。`only=stats` 返回体积：数据来自宿主后台采样缓存（30min 新鲜期、两次遍历至少隔 60s），响应恒定毫秒级；未就绪时 `statsPending:true`、客户端短延迟重询，`stats` 字段始终给上一次完成的值或 null，`statsAgeMs` 为缓存年龄。`path=` 只查一个目录（scoped 读不跑 branches/history/remotes 等全仓套件） |
+| GET | `/status?sessionId=` | 整仓 Git 状态。`only=stats` 返回体积：数据来自宿主后台采样缓存（30min 新鲜期、两次遍历至少隔 60s），响应恒定毫秒级；未就绪时 `statsPending:true`、客户端短延迟重询，`stats` 字段始终给上一次完成的值或 null，`statsAgeMs` 为缓存年龄。`path=` 只查一个目录（scoped 读不跑 branches/history/remotes 等全仓套件）。`only=stats` 额外接受 `g=0|1`（是否排除 `.git`）、`i=0|1`（是否排除 Git 忽略内容，由 `git ls-files -o -i --exclude-standard --directory` 一次取全量、遍历剪枝）、`s=0|1`（是否下钻软链接；为 0 时链接只算自身、不计目标体积）——缺省走宿主配置，缓存键随三者组合 |
 | GET | `/perf-review/host` | 性能观测宿主快照。带 `mode=window` 时排空并返回「上次调用以来的场景窗口」（实验室用），默认返回累计快照。宿主没开 `DSH_PERF_REVIEW=1` 时 `enabled` 为 false，路由仍返回 200 |
 | POST | `/list` | `{ sessionId, path }` |
 | POST | `/commit` | `{ sessionId, message }`。会 `git add --all`。没有「只提交已暂存」 |
@@ -131,6 +131,8 @@ dsh plugin --profile web add <spec>
     statsMaxEntries: 50000
     statsDebounceMs: 2000
     statsExcludeGit: true
+    statsExcludeIgnored: true
+    statsFollowSymlinks: false
     symlinkMaxHops: 16
     listingMaxEntries: 2000
 ```
@@ -146,6 +148,8 @@ dsh plugin --profile web add <spec>
 | `showGitStatus` | `true` | 树上的 Git 颜色和状态栏里的 Git |
 | `showStatusBar` | `true` | 底部整条状态栏 |
 | `statsExcludeGit` | `true` | 统计体积时跳过 `.git` |
+| `statsExcludeIgnored` | `true` | 统计体积时跳过被 .gitignore 忽略的内容 |
+| `statsFollowSymlinks` | `false` | 统计体积时是否下钻软链接；为 false 时链接只算自身 |
 | `showSystemFiles` | `false` | 为 `true` 时显示 `.git` 和 `.DS_Store` |
 
 旧键 `dsh-nano-explorer-extra:prefs.v1` 只在 v2 不存在时读一次。单击 / 双击两个键故意丢掉，其余布尔值保留。

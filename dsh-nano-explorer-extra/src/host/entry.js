@@ -48,6 +48,8 @@ export const Config = {
         statsMaxEntries: number('statsMaxEntries', 50000, 1000, 1000000),
         statsDebounceMs: number('statsDebounceMs', 2000, 0, 30000),
         statsExcludeGit: flag('statsExcludeGit', true),
+        statsExcludeIgnored: flag('statsExcludeIgnored', true),
+        statsFollowSymlinks: flag('statsFollowSymlinks', false),
         symlinkMaxHops: number('symlinkMaxHops', 16, 1, 64),
         listingMaxEntries: number('listingMaxEntries', 2000, 50, 20000),
       }

@@ -853,6 +853,20 @@ async function ignoredAmong(ctx, config, request) {
     scope.dispose();
   }
 }
+async function ignoredPathsOf(ctx, config, request) {
+  const result = await runGit(ctx, config, {
+    ...request,
+    args: ["ls-files", "--others", "--ignored", "--exclude-standard", "--directory", "-z"],
+    allowedExitCodes: [0, 128]
+  }).catch(() => null);
+  if (result === null || result.exitCode !== 0) return null;
+  const set = /* @__PURE__ */ new Set();
+  for (const entry of result.stdout.split("\0")) {
+    const path = entry.replace(/\/+$/u, "");
+    if (path !== "") set.add(path);
+  }
+  return set;
+}
 async function listWorktrees(ctx, config, request) {
   const result = await runGit(ctx, config, {
     ...request,
@@ -1351,16 +1365,22 @@ async function moveEntry(fs, ctx, config, request, signal) {
 
 // src/host/stats.js
 async function statisticsOf(fs, root, options, signal) {
-  const { maxDepth, maxEntries, excludeGit } = options;
+  const { maxDepth, maxEntries, excludeGit, ignored, followSymlinks } = options;
   const totals = { files: 0, directories: 0, bytes: 0, truncated: false };
   let seen = 0;
   let yielded = 0;
-  const pending = [{ path: root, depth: 1 }];
+  let seedPath = root;
+  try {
+    seedPath = fs.processPath(await fs.resolve(root, { signal }));
+  } catch {
+  }
+  const pending = [{ path: seedPath, rel: "", depth: 1 }];
   const maybeYield = async () => {
     yielded += 1;
     if (yielded % 200 === 0) await new Promise((resolve) => setImmediate(resolve));
   };
-  const visit = async (path, depth) => {
+  const visit = async (item) => {
+    const { path, depth } = item;
     if (depth > maxDepth) {
       totals.truncated = true;
       return;
@@ -1380,12 +1400,20 @@ async function statisticsOf(fs, root, options, signal) {
       }
       await maybeYield();
       if (excludeGit && child.name === ".git") continue;
+      const rel = item.rel === "" ? child.name : `${item.rel}/${child.name}`;
+      if (ignored !== void 0 && ignored.has(rel)) continue;
+      const resolved = child.target === void 0 ? joinPath(path, child.name) : fs.processPath(child.target);
+      const link = !followSymlinks && resolved !== joinPath(path, child.name);
       if (child.type === "directory") {
+        if (link) {
+          totals.files += 1;
+          continue;
+        }
         totals.directories += 1;
-        pending.push({ path: child.target === void 0 ? joinPath(path, child.name) : fs.processPath(child.target), depth: depth + 1 });
+        pending.push({ path: resolved, rel, depth: depth + 1 });
       } else if (child.type === "file") {
         totals.files += 1;
-        if (typeof child.size === "number") totals.bytes += child.size;
+        if (!link && typeof child.size === "number") totals.bytes += child.size;
       }
     }
   };
@@ -1394,7 +1422,7 @@ async function statisticsOf(fs, root, options, signal) {
       signal?.throwIfAborted();
       const next = pending.pop();
       if (next === void 0) return;
-      await visit(next.path, next.depth);
+      await visit(next);
     }
   });
   await Promise.all(workers);
@@ -1531,13 +1559,24 @@ function watchRoot(root) {
   }
   watchers.set(root, entries);
 }
-function scheduleStatsRefresh(ctx, config, review, root) {
-  const cached = statsCache.get(root);
+function statsOptionsOf(config, url) {
+  const flag = (name2) => url.searchParams.get(name2);
+  const g = flag("g");
+  const i = flag("i");
+  const s = flag("s");
+  const excludeGit = g === null ? config.statsExcludeGit : g === "1";
+  const excludeIgnored = i === null ? config.statsExcludeIgnored : i === "1";
+  const followSymlinks = s === null ? config.statsFollowSymlinks : s === "1";
+  return { excludeGit, excludeIgnored, followSymlinks, key: `|g:${excludeGit}|i:${excludeIgnored}|s:${followSymlinks}` };
+}
+function scheduleStatsRefresh(ctx, config, review, root, policy, opts) {
+  const cacheKey = `${root}${opts.key}`;
+  const cached = statsCache.get(cacheKey);
   const stale = cached === void 0 || Date.now() - cached.at >= STATS_FRESH_MS;
-  const lastStart = statsLastStart.get(root) ?? 0;
-  const mayStart = stale && statsRefresh.get(root) === void 0 && Date.now() - lastStart >= STATS_REFRESH_MIN_MS;
-  if (mayStart) startStatsPass(ctx, config, review, root);
-  const pending = stale && statsRefresh.get(root) !== void 0;
+  const lastStart = statsLastStart.get(cacheKey) ?? 0;
+  const mayStart = stale && statsRefresh.get(cacheKey) === void 0 && Date.now() - lastStart >= STATS_REFRESH_MIN_MS;
+  if (mayStart) startStatsPass(ctx, config, review, root, policy, opts, cacheKey);
+  const pending = stale && statsRefresh.get(cacheKey) !== void 0;
   return {
     root,
     stats: cached?.value ?? null,
@@ -1545,17 +1584,19 @@ function scheduleStatsRefresh(ctx, config, review, root) {
     statsAgeMs: cached === void 0 ? 0 : Math.max(0, Date.now() - cached.at)
   };
 }
-function startStatsPass(ctx, config, review, root) {
-  statsLastStart.set(root, Date.now());
-  statsRefresh.set(root, Promise.resolve().then(() => review.hostSpan("stats", () => statisticsOf(ctx.fs, root, {
+function startStatsPass(ctx, config, review, root, policy, opts, cacheKey) {
+  statsLastStart.set(cacheKey, Date.now());
+  statsRefresh.set(cacheKey, Promise.resolve().then(() => review.hostSpan("stats", async () => statisticsOf(ctx.fs, root, {
     maxDepth: config.statsMaxDepth,
     maxEntries: config.statsMaxEntries,
-    excludeGit: config.statsExcludeGit
+    excludeGit: opts.excludeGit,
+    followSymlinks: opts.followSymlinks,
+    ignored: opts.excludeIgnored === false ? void 0 : await ignoredPathsOf(ctx, config, { cwd: root, policy, signal: void 0 }) ?? void 0
   }))).then((value) => {
-    statsCache.set(root, { value, at: Date.now() });
+    statsCache.set(cacheKey, { value, at: Date.now() });
   }).catch(() => {
   }).finally(() => {
-    statsRefresh.delete(root);
+    statsRefresh.delete(cacheKey);
   }));
 }
 function disposeRootWatchers() {
@@ -1583,7 +1624,7 @@ function createRoutes(ctx, config) {
         const { root, policy } = await scopeOf(ctx, url.searchParams.get("sessionId") ?? "");
         watchRoot(root);
         if (url.searchParams.get("only") === "stats") {
-          const stats = scheduleStatsRefresh(ctx, config, review, root);
+          const stats = scheduleStatsRefresh(ctx, config, review, root, policy, statsOptionsOf(config, url));
           return stats;
         }
         let git = null;
@@ -1905,6 +1946,8 @@ var Config = {
         statsMaxEntries: number("statsMaxEntries", 5e4, 1e3, 1e6),
         statsDebounceMs: number("statsDebounceMs", 2e3, 0, 3e4),
         statsExcludeGit: flag("statsExcludeGit", true),
+        statsExcludeIgnored: flag("statsExcludeIgnored", true),
+        statsFollowSymlinks: flag("statsFollowSymlinks", false),
         symlinkMaxHops: number("symlinkMaxHops", 16, 1, 64),
         listingMaxEntries: number("listingMaxEntries", 2e3, 50, 2e4)
       };

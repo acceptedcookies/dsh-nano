@@ -74,6 +74,8 @@ function createStore(root) {
   let lastRefreshAt = 0
   /** Preference the reads honor; each mount feeds it so the latest subscriber's choice wins. */
   let showGitStatus = () => true
+  /** The status bar's own counting toggles; the request carries them so the host prunes the same way the labels claim. */
+  let statsFlags = () => ({ g: true, i: true, s: false })
 
   /** Swap the whole snapshot so subscribers see one coherent version, and notify them. */
   const commit = patch => perf.span('apply-status', () => {
@@ -202,7 +204,9 @@ function createStore(root) {
   /** Re-count the workspace; the host samples in the background and answers instantly. */
   const refreshStats = sessionId => once('stats', () => perf.span('stats-count', async () => {
     if (state.stats === null) commit({ statsState: 'loading' })
-    const result = await request(`/status?sessionId=${encodeURIComponent(sessionId)}&only=stats`)
+    const flags = statsFlags()
+    const query = `&g=${flags.g === false ? 0 : 1}&i=${flags.i === false ? 0 : 1}&s=${flags.s === true ? 1 : 0}`
+    const result = await request(`/status?sessionId=${encodeURIComponent(sessionId)}&only=stats${query}`)
     if (!result.ok) { commit({ statsState: 'failed' }); return }
     // The host counts in the background now: an answer carries last-known totals plus
     // `statsPending` while a fresher number is still being walked. Keep showing what we have
@@ -309,6 +313,7 @@ function createStore(root) {
     mount: hooks => {
       clearTimeout(orphanTimer)
       if (typeof hooks?.showGitStatus === 'function') showGitStatus = hooks.showGitStatus
+      if (typeof hooks?.statsFlags === 'function') statsFlags = hooks.statsFlags
       const token = {}
       mounts.add(token)
       if (state.levels.size === 0) void loadLevel(hooks.sessionId, root)

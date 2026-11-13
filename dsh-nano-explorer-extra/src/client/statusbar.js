@@ -133,7 +133,11 @@ export function StatusBar(props) {
     right.push(React.createElement('button', { key: 'retry', type: 'button', className: 'nxe-retry', onClick: props.onRetryStats }, copy.statsFailed))
   } else if (stats !== undefined && stats !== null) {
     const suffix = stats.truncated ? '+' : ''
-    const excluded = prefs.statsExcludeGit ? ` · ${copy.statsExcludeGit}` : ''
+    const exclusions = []
+    if (prefs.statsExcludeGit) exclusions.push(copy.statsExcludeGit)
+    if (prefs.statsExcludeIgnored) exclusions.push(copy.statsExcludeIgnored)
+    if (prefs.statsFollowSymlinks) exclusions.push(copy.statsFollowSymlinksLabel)
+    const excluded = exclusions.length === 0 ? '' : ` · ${exclusions.join(', ')}`
     right.push(React.createElement(Figure, {
       key: 'dirs', scope: 'directories',
       icon: React.createElement(IconFolderCloseRegular, { width: 14, height: 14 }),

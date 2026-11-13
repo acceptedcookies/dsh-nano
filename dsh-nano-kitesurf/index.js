@@ -463,6 +463,7 @@ export function apply(ctx, config) {
    */
   let lastSelfTest = null
   let lastElements = null
+  let lastDom = null
   async function runSelfTest() {
     const started = Date.now()
     const checks = []
@@ -538,6 +539,7 @@ export function apply(ctx, config) {
       ports: await portReport().catch(() => null),
       selftest: lastSelfTest,
       elements: lastElements,
+      dom: lastDom,
       observability: summary,
       console: listConsole({ limit }),
       network: listNetwork({ limit }),
@@ -941,6 +943,7 @@ export function apply(ctx, config) {
             ports: await portReport().catch(() => null),
       selftest: lastSelfTest,
       elements: lastElements,
+      dom: lastDom,
           })
         } catch (error) {
           fail(res, error)
@@ -1010,6 +1013,7 @@ export function apply(ctx, config) {
           const page = await hostSpan('dom', () => captureDom(origin()))
           // Build the iframe document on the host: the client bundle cannot
           // import lib/, and the rebasing/picker injection belongs to one place.
+          lastDom = { at: new Date().toISOString(), url: page.url, bytes: page.bytes, html: page.html.slice(0, 4000) }
           sendJson(res, 200, { ok: true, ...page, srcdoc: buildSrcDoc(page) })
         } catch (error) {
           fail(res, error)

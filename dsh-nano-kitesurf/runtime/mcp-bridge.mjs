@@ -205,6 +205,11 @@ const KITESURF_TOOLS = [
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
+    name: 'kitesurf_dom',
+    description: 'Last captured document: url, byte size and the first 4000 characters of documentElement.outerHTML. Use to confirm what the engine is actually rendering when the pane looks wrong.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
     name: 'kitesurf_elements',
     description: 'Elements panel data from the Kitesurf DOM/CSS domains: the last DOM tree (up to 40 nodes with tag/id/class/child count), the selector queried, and how many computed properties were returned. Call GET /nano-kitesurf/elements?selector=… on the host for styles of a specific node.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
@@ -286,6 +291,11 @@ function answerNativeTool(name, args, bridgeState) {
     return { ok: true, entries: filter ? all.filter((r) => r.errorId.includes(filter)) : all, total: all.length }
   }
   if (name === 'kitesurf_targets') return { ok: true, ...(snap.engine?.targets || { count: 0, targets: [] }), targetsError: snap.engine?.targetsError || null }
+  if (name === 'kitesurf_dom') {
+    const dom = snap.dom || null
+    if (!dom) return { ok: false, errorId: 'kitesurf.dom.stale', error: 'no DOM captured yet', hint: 'run GET /nano-kitesurf/dom on the host, then retry' }
+    return { ok: true, ...dom }
+  }
   if (name === 'kitesurf_elements') {
     const el = snap.elements || null
     if (!el) return { ok: false, errorId: 'kitesurf.elements.stale', error: 'no elements snapshot yet', hint: 'run GET /nano-kitesurf/elements on the host, then retry' }

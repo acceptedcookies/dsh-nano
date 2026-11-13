@@ -454,6 +454,72 @@
       "bodyLimit": 4096,
       "sessionBinding": false,
       "justification": "dsh-nano-kitesurf/index.js KITE_ROUTE — init writes $DSH_HOME/nano-kitesurf.lock.json; start/resume spawn `container run` and bind-mount a host dir (finding kitesurf-kite-spawns-container); configure repoints the engine (allowRemote-gated after R2). Host write + process exec + net target."
+    },
+    {
+      "plugin": "dsh-nano-kitesurf",
+      "path": "/nano-kitesurf/console",
+      "methods": [
+        "GET",
+        "HEAD",
+        "POST"
+      ],
+      "sensitivity": "L2",
+      "capability": "read:host",
+      "bodyLimit": 4096,
+      "sessionBinding": false,
+      "justification": "CONSOLE_ROUTE — in-memory page console/exception/network ring; GET reads, POST {clear:true} drains. Content egress L2."
+    },
+    {
+      "plugin": "dsh-nano-kitesurf",
+      "path": "/nano-kitesurf/operations",
+      "methods": [
+        "GET",
+        "HEAD",
+        "POST"
+      ],
+      "sensitivity": "L2",
+      "capability": "read:host",
+      "bodyLimit": 4096,
+      "sessionBinding": false,
+      "justification": "OPERATIONS_ROUTE — bounded trace of every route call (status/errorId/duration/input summary); POST {clear:true} drains. L2."
+    },
+    {
+      "plugin": "dsh-nano-kitesurf",
+      "path": "/nano-kitesurf/diagnostics",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "sensitivity": "L2",
+      "capability": "read:host",
+      "bodyLimit": 0,
+      "sessionBinding": false,
+      "justification": "DIAGNOSTICS_ROUTE — one-shot status + targets + console + operations + error catalogue + perf hints. L2 aggregate."
+    },
+    {
+      "plugin": "dsh-nano-kitesurf",
+      "path": "/nano-kitesurf/targets",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "sensitivity": "L2",
+      "capability": "read:host",
+      "bodyLimit": 0,
+      "sessionBinding": false,
+      "justification": "TARGETS_ROUTE — Target.getTargets over the engine browser socket; reveals page target ids/urls. L2."
+    },
+    {
+      "plugin": "dsh-nano-kitesurf",
+      "path": "/nano-kitesurf/evaluate",
+      "methods": [
+        "POST"
+      ],
+      "sensitivity": "L2",
+      "capability": "write:engine",
+      "bodyLimit": 4096,
+      "sessionBinding": false,
+      "justification": "EVALUATE_ROUTE — bounded Runtime.evaluate in the engine page (≤2000 chars, returnByValue, ≤4000 chars result). Writes page state, L2 like /edit."
     }
   ]
 }

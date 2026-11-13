@@ -4,9 +4,12 @@ import { readFileSync } from 'node:fs'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import path from 'node:path'
+import { createHash, randomUUID } from 'node:crypto'
+import { fileURLToPath } from 'node:url'
 import { registerRoutes } from './lib/route-guard.js'
 import { ROUTE_TABLE, PLUGIN } from './lib/route-table.js'
-import { browserSocketUrl, captureShot, currentUserAgent, currentViewport, fetchEngine, KitesurfError, navigateHistory, openPage, pickElement, pickBySelector, pickPoint, pickSelector, editBody, editElement, pageUrl, releaseEngine, scrollDelta, setBrowserSettings } from './lib/engine.js'
+import { browserSocketUrl, captureShot, currentEmulation, currentUserAgent, currentViewport, engineTargets, evaluateInPage, fetchEngine, KitesurfError, navigateHistory, openPage, pickElement, pickBySelector, pickPoint, pickSelector, editBody, editElement, pageUrl, releaseEngine, scrollDelta, setBrowserSettings } from './lib/engine.js'
+import { ERROR_STATUS, clearConsole, clearOperations, diagnosticsSummary, listConsole, listOperations, recordOperation, summarizeInput } from './lib/diagnostics.js'
 import { kitesurfSkill, nanoKiteSkill } from './lib/skill.js'
 import { createNanoKite } from './lib/nano-kite.js'
 import { ensureLocalContainer, stopLocalContainer } from './lib/container-engine.js'
@@ -25,6 +28,11 @@ const EDIT_ROUTE = '/nano-kitesurf/edit'
 const SETTINGS_ROUTE = '/nano-kitesurf/settings'
 const PERF_ROUTE = '/nano-kitesurf/perf-review/host'
 const KITE_ROUTE = '/nano-kitesurf/kite'
+const CONSOLE_ROUTE = '/nano-kitesurf/console'
+const OPERATIONS_ROUTE = '/nano-kitesurf/operations'
+const DIAGNOSTICS_ROUTE = '/nano-kitesurf/diagnostics'
+const TARGETS_ROUTE = '/nano-kitesurf/targets'
+const EVALUATE_ROUTE = '/nano-kitesurf/evaluate'
 
 const DEFAULT_ORIGIN = 'http://127.0.0.1:8787'
 
@@ -73,6 +81,56 @@ function pluginVersion() {
   }
 }
 
+/**
+ * Answer "which code am I actually running?" — the single most useful field
+ * during a broken deploy. Two files (index.js / route-table.js) drift once
+ * caused the whole plugin to fail activation with route-not-listed; hashing
+ * both plus the client bundle makes that visible in /status.
+ */
+function digestOf(relative) {
+  try {
+    return createHash('sha256').update(readFileSync(new URL(relative, import.meta.url))).digest('hex').slice(0, 8)
+  } catch {
+    return 'missing'
+  }
+}
+const buildId = `${pluginVersion() ?? '0'}-i${digestOf('./index.js')}r${digestOf('./lib/route-table.js')}c${digestOf('./lib/client.js')}`
+const storePath = fileURLToPath(new URL('./index.js', import.meta.url))
+
+/**
+ * The lock file is the plugin's only durable state (DSH_HOME, never inside
+ * the plugin dir — a host restart replaces that). We remember the checkout
+ * that last created the container so a later cold start can rebuild it even
+ * when neither KITESURF_CHECKOUT nor config.checkout is set. It is a
+ * consumption receipt of a *previous* config, not a new canonical source:
+ * an explicit env/config value always wins.
+ */
+function lockPathOf() {
+  return path.join(process.env.DSH_HOME || homedir(), 'nano-kitesurf.lock.json')
+}
+
+function persistedCheckout() {
+  try {
+    const row = JSON.parse(readFileSync(lockPathOf(), 'utf8'))
+    return typeof row.checkout === 'string' && row.checkout ? row.checkout : undefined
+  } catch {
+    return undefined
+  }
+}
+
+async function rememberCheckout(checkout) {
+  if (!checkout) return
+  try {
+    const file = lockPathOf()
+    let row = {}
+    try { row = JSON.parse(await readFile(file, 'utf8')) } catch { /* fresh */ }
+    row.checkout = checkout
+    row.checkoutAt = new Date().toISOString()
+    await mkdir(path.dirname(file), { recursive: true })
+    await writeFile(file, `${JSON.stringify(row, null, 2)}\n`)
+  } catch { /* diagnostics/config must never break engine start */ }
+}
+
 function sendJson(res, status, payload) {
   const body = JSON.stringify(payload)
   res.statusCode = status
@@ -106,6 +164,7 @@ function readBody(req, maxBytes) {
         return
       }
       if (chunks.length === 0) {
+        req.__dnkBody = {}
         resolve({})
         return
       }
@@ -115,6 +174,8 @@ function readBody(req, maxBytes) {
           reject(new KitesurfError('kitesurf.body.json', 'body must be a JSON object'))
           return
         }
+        // Stash the whitelisted summary source for the operation trace.
+        req.__dnkBody = parsed
         resolve(parsed)
       } catch {
         reject(new KitesurfError('kitesurf.body.json', 'invalid JSON body'))
@@ -133,32 +194,11 @@ function errorIdOf(error) {
 }
 
 /**
- * One errorId → HTTP status map, so 4xx client faults are never reported as
- * upstream engine failures. Prefix table is the single authority; anything
- * unlisted stays a 502 (engine/upstream) by default.
+ * ERROR_STATUS lives in lib/diagnostics.js together with the cause + next
+ * command for every id. index.js, the API and the skill docs all read that
+ * one table, so the status an agent sees can never drift from the skill.
+ * Unlisted ids stay 502 (upstream/engine) by default.
  */
-const ERROR_STATUS = [
-  [/^kitesurf\.body\.toolarge$/, 413],
-  [/^kitesurf\.body\./, 400],
-  [/^kitesurf\.url\./, 400],
-  [/^kitesurf\.pick\.(point|selector)$/, 400],
-  [/^kitesurf\.edit\.(badtext|badpoint|selector)$/, 400],
-  [/^kitesurf\.edit\.miss$/, 404],
-  [/^kitesurf\.pick\.badpoint$/, 400],
-  [/^kitesurf\.pick\.miss$/, 404],
-  [/^kitesurf\.pick\.failed$/, 502],
-  [/^kitesurf\.shot\.scroll$/, 400],
-  [/^kitesurf\.settings\./, 400],
-  [/^kitesurf\.kite\.state$/, 409],
-  [/^kitesurf\.kite\.(origin|remote|mcpPort|action|checkout)$/, 400],
-  [/^kitesurf\.kite\.(node|init)$/, 500],
-  [/^kitesurf\.navigate\.egress$/, 504],
-  [/^kitesurf\.navigate\.delta$/, 400],
-  [/^kitesurf\.perf\./, 400],
-  [/^kitesurf\.navigate\.(timeout|failed)$/, 502],
-  [/^kitesurf\.kite\.(container|start|resume)$/, 502],
-]
-
 function statusOf_error(errorId) {
   for (const [pattern, status] of ERROR_STATUS) {
     if (pattern.test(errorId)) return status
@@ -169,9 +209,75 @@ function statusOf_error(errorId) {
 function fail(res, error) {
   const errorId = errorIdOf(error)
   const errorText = messageOf(error)
-  lastError = { at: new Date().toISOString(), errorId, error: errorText }
-  sendJson(res, statusOf_error(errorId), { ok: false, errorId, error: errorText })
+  const incidentId = randomUUID()
+  lastError = { at: new Date().toISOString(), incidentId, errorId, error: errorText }
+  // One grep-able JSON line per failure in the host log. Before this, five
+  // triggered errors produced ZERO kitesurf lines and an MCP client had no
+  // durable evidence at all.
+  try {
+    process.stderr.write(`${JSON.stringify({
+      ts: new Date().toISOString(), plugin: 'nano-kitesurf', incidentId,
+      errorId, status: statusOf_error(errorId), error: errorText.slice(0, 240), buildId,
+    })}\n`)
+  } catch { /* logging must never break the response */ }
+  sendJson(res, statusOf_error(errorId), { ok: false, errorId, error: errorText, incidentId })
 }
+
+/**
+ * Execution-state instrumentation for EVERY route. Wrapping res.end lets us
+ * observe the exact JSON that went out (status, errorId, error) without
+ * editing a single handler; the input summary comes from readBody's stash.
+ * This is the missing "error 埋点": before this, only `lastError` (one row,
+ * overwritten) existed and an MCP client could not reconstruct what happened.
+ */
+function traced(spec) {
+  const original = spec.handler
+  return {
+    ...spec,
+    handler: async (req, res, route) => {
+      const started = Date.now()
+      let payload = null
+      const originalEnd = res.end.bind(res)
+      res.end = (body, ...rest) => {
+        if (typeof body === 'string' && body.startsWith('{')) {
+          try { payload = JSON.parse(body) } catch { /* non-JSON response */ }
+        }
+        return originalEnd(body, ...rest)
+      }
+      try {
+        await original(req, res, route)
+      } finally {
+        const status = res.statusCode || 0
+        const ok = payload ? payload.ok !== false && status < 400 : status < 400
+        try {
+          recordOperation({
+            route: spec.path,
+            method: req.method || 'GET',
+            status,
+            durationMs: Date.now() - started,
+            ok,
+            errorId: payload?.errorId || null,
+            error: payload?.error || null,
+            incidentId: payload?.incidentId || null,
+            input: summarizeInput(req.__dnkBody),
+            result: payload?.moved === false ? 'no-op' : (payload?.mimeType ? 'png' : null),
+          })
+        } catch { /* diagnostics must never break a route */ }
+        // Push a fresh snapshot to the MCP bridge, immediately on failure and
+        // debounced otherwise. An agent using only MCP sees the same state.
+        try { diagnosticsPusher?.(!ok) } catch { /* best effort */ }
+      }
+    },
+  }
+}
+
+function queryOf(req) {
+  return new URL(req.url ?? '/', 'http://localhost').searchParams
+}
+
+/** Set by apply(): the host pushes its diagnostics snapshot into the MCP
+ * bridge so an MCP-only client can read execution state. */
+let diagnosticsPusher = null
 
 /**
  * @param {string} httpBase
@@ -197,12 +303,14 @@ async function statusOf(httpBase) {
       health: health.text.slice(0, 300),
       browser: version && typeof version === 'object' ? version.Browser ?? version.browser ?? null : null,
       version: pluginVersion() ?? null,
+      buildId,
       userAgent: currentUserAgent(),
       viewport: currentViewport(),
+      emulation: currentEmulation(),
       lastError,
     }
   } catch (error) {
-    return { ok: false, httpBase, cdp: socket, errorId: errorIdOf(error), error: messageOf(error), userAgent: currentUserAgent(), viewport: currentViewport(), lastError, version: pluginVersion() ?? null }
+    return { ok: false, httpBase, cdp: socket, errorId: errorIdOf(error), error: messageOf(error), userAgent: currentUserAgent(), viewport: currentViewport(), emulation: currentEmulation(), lastError, version: pluginVersion() ?? null, buildId, storePath }
   }
 }
 
@@ -229,7 +337,10 @@ export function apply(ctx, config) {
     // so perf review distinguishes a slow boot from a slow spawn.
     await hostSpan('kite-bringup', async () => {
       const ensured = await hostSpan('kite-container',
-        () => ensureLocalContainer(kite.snapshot(), { checkout: config?.checkout }))
+        () => ensureLocalContainer(kite.snapshot(), { checkout: effectiveCheckout }))
+      // Remember what actually worked so the next cold start can rebuild the
+      // container without anyone editing a profile again.
+      await rememberCheckout(effectiveCheckout)
       await hostSpan('kite-warmup', async () => {
         for (let attempt = 0; attempt < 20; attempt += 1) {
           try {
@@ -249,6 +360,69 @@ export function apply(ctx, config) {
     releaseEngine()
   }
   const origin = () => kite.snapshot().httpBase
+  // Explicit config wins, then env, then the last checkout that actually
+  // created a container. Without this a host restart + deleted container is
+  // an unrecoverable 400 for someone who cannot edit their profile. Resolved
+  // lazily so writing the lock file takes effect on the NEXT resume without
+  // a host restart.
+  const effectiveCheckout = () => config?.checkout || process.env.KITESURF_CHECKOUT || persistedCheckout()
+
+  /** One packed snapshot, shared by GET /diagnostics and the MCP push. */
+  async function buildDiagnostics(limit = 20, withTargets = true) {
+    const status = await statusOf(origin())
+    const before = kite.snapshot().phase
+    if (status.ok && before === 'idle') kite.adopt()
+    else if (!status.ok && before === 'running') kite.degrade()
+    let targets = null
+    let targetsError = null
+    if (withTargets) {
+      try { targets = await engineTargets(origin()) } catch (error) { targetsError = messageOf(error).slice(0, 160) }
+    }
+    const summary = diagnosticsSummary()
+    const hints = []
+    if (!status.ok) hints.push('引擎不可达：看 status.error，然后 curl http://127.0.0.1:8798/health、container list --all、container logs kitesurf --tail 80')
+    if (!status.ok) hints.push('恢复顺序：先 GET /status 确认 phase（running 但死会自动降级为 idle）→ POST /kite {action:"suspend"}（若 suspended 可跳过）→ POST /kite {action:"resume"}；若返回 400 kitesurf.kite.checkout，说明缺 KITESURF_CHECKOUT/config.checkout，先在 profile cordis.patch.yml 写 config.checkout 或 export 后再试')
+    if (status.engineMismatch) hints.push('engineMismatch：httpBase 指向了非 Kitesurf 服务，POST /kite configure 回 loopback 引擎端口')
+    if (!targets && targetsError) hints.push(`Target.getTargets 失败：${targetsError}`)
+    if (summary.operations.failures > 0) hints.push(`最近 ${summary.operations.failures} 次操作失败：GET /operations?errorsOnly=true 看 errorId，再对照 errorCatalog`)
+    if (summary.console.counts.error || summary.console.counts.exception) hints.push('页面有 error/exception：GET /console?level=error,exception 看堆栈')
+    if (kite.snapshot().phase !== 'running') hints.push(`phase=${kite.snapshot().phase}：按阶段用 start/suspend/resume，409 是阶段不符不是引擎故障`)
+    return {
+      ok: true,
+      at: new Date().toISOString(),
+      plugin: { version: pluginVersion() ?? null, buildId, storePath, httpBase: origin(), cdp: browserSocketUrl(origin()), ...kite.snapshot() },
+      engine: { ...status, targets, targetsError, engineAlive: status.ok === true, phaseConsistent: status.ok ? kite.snapshot().phase === 'running' : kite.snapshot().phase !== 'running' },
+      settings: currentEmulation(),
+      observability: summary,
+      console: listConsole({ limit }),
+      operations: listOperations({ limit }),
+      perf: (() => { try { return perfSnapshot() } catch { return null } })(),
+      hints,
+    }
+  }
+
+  let lastPushAt = 0
+  /** Push the snapshot into the in-container MCP bridge over host loopback. */
+  async function pushDiagnostics(force = false) {
+    const now = Date.now()
+    if (!force && now - lastPushAt < 5000) return
+    lastPushAt = now
+    try {
+      const payload = await buildDiagnostics(20, false)
+      await fetch(`http://127.0.0.1:${kite.snapshot().mcpPort}/diagnostics`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(2000),
+      })
+    } catch { /* bridge may be down; the next request retries */ }
+  }
+  diagnosticsPusher = pushDiagnostics
+  const pushTimer = setInterval(() => { pushDiagnostics(true) }, 30_000)
+  pushTimer.unref?.()
+  setTimeout(() => { pushDiagnostics(true) }, 1500)?.unref?.()
+  ctx.effect(() => () => { clearInterval(pushTimer); diagnosticsPusher = null }, 'nano-kitesurf: diagnostics push')
+
   // The skill body no longer bakes the origin: it teaches the agent to read
   // kite.cdp from /status so it always follows the live configure() value.
   const skill = kitesurfSkill()
@@ -275,12 +449,21 @@ export function apply(ctx, config) {
       methods: ['GET', 'HEAD'],
       handler: async (_req, res) => {
         const status = await statusOf(origin())
-        // Re-adopt a live engine after a host restart: phase was in-memory
-        // only, so a running container reads 'idle' and the pane wrongly
-        // offers "start engine". One /health probe is enough to trust.
-        if (status.ok && kite.snapshot().phase === 'idle') kite.adopt()
+        // Health-driven phase: host restart → adopt a live engine; engine
+        // died underneath a running phase → degrade so the pane can offer
+        // a one-click start instead of trapping the operator behind 409.
+        const before = kite.snapshot().phase
+        if (status.ok && before === 'idle') kite.adopt()
+        else if (!status.ok && before === 'running') kite.degrade()
         const { phase, httpBase: base, mcpPort, cdp } = kite.snapshot()
-        sendJson(res, 200, { ...status, kite: { phase, httpBase: base, mcpPort, cdp } })
+        sendJson(res, 200, {
+          ...status,
+          engineAlive: status.ok === true,
+          phaseConsistent: status.ok ? phase === 'running' : phase !== 'running',
+          buildId,
+          storePath,
+          kite: { phase, httpBase: base, mcpPort, cdp },
+        })
       },
     },
     {
@@ -390,12 +573,20 @@ export function apply(ctx, config) {
           if (body.userAgent !== undefined && typeof body.userAgent !== 'string') {
             throw new KitesurfError('kitesurf.settings.userAgent', 'userAgent must be a string')
           }
-          if (body.viewport !== undefined && body.viewport !== null && typeof body.viewport !== 'object') {
+          if (body.viewport !== undefined && body.viewport !== null && (typeof body.viewport !== 'object' || Array.isArray(body.viewport))) {
             throw new KitesurfError('kitesurf.settings.viewport', 'viewport must be an object or null')
+          }
+          if (body.media !== undefined && body.media !== null && !['screen', 'print'].includes(body.media)) {
+            throw new KitesurfError('kitesurf.settings.media', 'media must be screen, print or null')
+          }
+          if (body.extraHeaders !== undefined && body.extraHeaders !== null && (typeof body.extraHeaders !== 'object' || Array.isArray(body.extraHeaders))) {
+            throw new KitesurfError('kitesurf.settings.headers', 'extraHeaders must be an object or null')
           }
           const saved = await hostSpan('settings', () => setBrowserSettings(origin(), {
             userAgent: typeof body.userAgent === 'string' ? body.userAgent : undefined,
             viewport: body.viewport === null || (body.viewport && typeof body.viewport === 'object') ? body.viewport : undefined,
+            media: body.media === null || ['screen', 'print'].includes(body.media) ? body.media : undefined,
+            extraHeaders: body.extraHeaders === null || (body.extraHeaders && typeof body.extraHeaders === 'object') ? body.extraHeaders : undefined,
           }))
           lastError = null
           sendJson(res, 200, { ok: true, ...saved })
@@ -430,10 +621,106 @@ export function apply(ctx, config) {
       },
     },
     {
+      path: CONSOLE_ROUTE,
+      methods: ['GET', 'HEAD', 'POST'],
+      bodyLimit: 4096,
+      handler: async (req, res, route) => {
+        try {
+          const body = req.method === 'POST' ? await readBody(req, route.bodyLimit) : {}
+          if (body.clear === true) {
+            const cleared = clearConsole()
+            sendJson(res, 200, { ok: true, cleared })
+            return
+          }
+          const q = queryOf(req)
+          const limit = Number(q.get('limit') || 50)
+          if (!Number.isFinite(limit) || limit < 1 || limit > 250) {
+            throw new KitesurfError('kitesurf.console.query', 'limit must be 1..250')
+          }
+          const level = q.get('level')
+          if (level && !/^[a-z,]+$/i.test(level)) {
+            throw new KitesurfError('kitesurf.console.query', 'level must be a comma-separated list of names')
+          }
+          sendJson(res, 200, { ok: true, ...listConsole({ limit, level, since: q.get('since') }) })
+        } catch (error) {
+          fail(res, error)
+        }
+      },
+    },
+    {
+      path: OPERATIONS_ROUTE,
+      methods: ['GET', 'HEAD', 'POST'],
+      bodyLimit: 4096,
+      handler: async (req, res, route) => {
+        try {
+          const body = req.method === 'POST' ? await readBody(req, route.bodyLimit) : {}
+          if (body.clear === true) {
+            const cleared = clearOperations()
+            sendJson(res, 200, { ok: true, cleared })
+            return
+          }
+          const q = queryOf(req)
+          const limit = Number(q.get('limit') || 50)
+          if (!Number.isFinite(limit) || limit < 1 || limit > 200) {
+            throw new KitesurfError('kitesurf.diag.query', 'limit must be 1..200')
+          }
+          const errorsOnly = q.get('errorsOnly') === 'true' || body.errorsOnly === true
+          sendJson(res, 200, { ok: true, ...listOperations({ limit, errorsOnly, since: q.get('since') }) })
+        } catch (error) {
+          fail(res, error)
+        }
+      },
+    },
+    {
+      path: TARGETS_ROUTE,
+      methods: ['GET', 'HEAD'],
+      handler: async (_req, res) => {
+        try {
+          const targets = await hostSpan('targets', () => engineTargets(origin()))
+          sendJson(res, 200, { ok: true, ...targets })
+        } catch (error) {
+          fail(res, error)
+        }
+      },
+    },
+    {
+      path: EVALUATE_ROUTE,
+      methods: ['POST'],
+      bodyLimit: 4096,
+      handler: async (req, res, route) => {
+        try {
+          const body = await readBody(req, route.bodyLimit)
+          const result = await hostSpan('evaluate', () => evaluateInPage(origin(), body.expression))
+          sendJson(res, 200, { ok: true, ...result })
+        } catch (error) {
+          fail(res, error)
+        }
+      },
+    },
+    {
+      // One probe that answers "what is the plugin doing, and why did it
+      // fail?" — status, engine targets, settings, console tail, operation
+      // trace, error catalogue, perf summary and generated next-step hints.
+      path: DIAGNOSTICS_ROUTE,
+      methods: ['GET', 'HEAD'],
+      handler: async (req, res) => {
+        try {
+          const q = queryOf(req)
+          const limit = Number(q.get('limit') || 20)
+          if (!Number.isFinite(limit) || limit < 1 || limit > 100) {
+            throw new KitesurfError('kitesurf.diag.query', 'limit must be 1..100')
+          }
+          sendJson(res, 200, await buildDiagnostics(limit))
+        } catch (error) {
+          fail(res, error)
+        }
+      },
+    },
+    {
       path: PERF_ROUTE,
       methods: ['GET', 'HEAD', 'POST'],
       handler: (req, res) => {
-        const mode = new URL(req.url ?? '/', 'http://localhost').searchParams.get('mode')
+        const mode = queryOf(req).get('mode')
         // mode=window drains the process-global reservoir — a write, so it is
         // POST-only; a bare GET (or HEAD, or a prefetcher) can never drain.
         if (mode === 'window' && req.method !== 'POST') {
@@ -443,5 +730,5 @@ export function apply(ctx, config) {
         sendJson(res, 200, perfSnapshot(mode))
       },
     },
-  ], { table: ROUTE_TABLE, plugin: PLUGIN })
+  ].map(traced), { table: ROUTE_TABLE, plugin: PLUGIN })
 }

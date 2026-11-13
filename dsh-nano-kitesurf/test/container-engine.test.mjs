@@ -61,9 +61,9 @@ test('an existing container with matching ports is started, not recreated', asyn
   }
   const result = await ensureLocalContainer({ httpBase: 'http://127.0.0.1:8798', mcpPort: 8799 }, { ...io, checkout: '/src/kitesurf' })
   assert.equal(result.created, false)
-  // Warm-adopt path skips `system start` — the daemon is already up if an
-  // inspect succeeded, so priming it again would be wasted work.
-  assert.deepEqual(commands, ['start kitesurf'])
+  // `system start` primes the apiserver before `start` too — a stopped
+  // container on a cold debug-build apiserver needs the same priming.
+  assert.deepEqual(commands, ['system start', 'start kitesurf'])
 })
 
 test('a container whose published ports drifted is deleted and recreated', async () => {
@@ -82,7 +82,7 @@ test('a container whose published ports drifted is deleted and recreated', async
   }
   const result = await ensureLocalContainer({ httpBase: 'http://127.0.0.1:8798', mcpPort: 8799 }, { ...io, checkout: '/src/kitesurf' })
   assert.equal(result.created, true)
-  assert.deepEqual(commands, ['delete --force', 'system start', 'run -d'])
+  assert.deepEqual(commands, ['system start', 'delete --force', 'run -d'])
 })
 
 test('a cold subsystem failure surfaces the system-start error, not the run', async () => {
@@ -101,7 +101,7 @@ test('a cold subsystem failure surfaces the system-start error, not the run', as
 
 test('a missing checkout is a config fault, not an engine failure', async () => {
   await assert.rejects(
-    () => ensureLocalContainer({ httpBase: 'http://127.0.0.1:8798', mcpPort: 8799 }, { inspect: async () => null }),
+    () => ensureLocalContainer({ httpBase: 'http://127.0.0.1:8798', mcpPort: 8799 }, { inspect: async () => null, run: async () => ({ stdout: '', stderr: '' }) }),
     (error) => error.id === 'kitesurf.kite.checkout',
   )
 })

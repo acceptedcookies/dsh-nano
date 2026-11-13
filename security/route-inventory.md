@@ -54,6 +54,11 @@ Static enumeration of every `webServer.register` path across the (formerly four)
 | /nano-kitesurf/settings | POST | L1 | write:kitesurf | 4096 | – | in-memory UA/viewport emulation |
 | /nano-kitesurf/perf-review/host | GET, HEAD, POST | L2 | read:host | 0 | – | perf snapshot; POST mode=window drains |
 | /nano-kitesurf/kite | POST | L2 | proc:kitesurf | 4096 | – | init lock / container start-stop / configure |
+| /nano-kitesurf/console | GET, HEAD, POST | L2 | read:host | 4096 | – | page console/exception/network ring; POST clear |
+| /nano-kitesurf/operations | GET, HEAD, POST | L2 | read:host | 4096 | – | every route call trace (status/errorId/duration); POST clear |
+| /nano-kitesurf/diagnostics | GET, HEAD | L2 | read:host | 0 | – | one-shot status + targets + console + trace + error catalogue + hints |
+| /nano-kitesurf/targets | GET, HEAD | L2 | read:host | 0 | – | Target.getTargets (page target ids/urls) |
+| /nano-kitesurf/evaluate | POST | L2 | write:engine | 4096 | – | bounded Runtime.evaluate in the engine page |
 
 ## ⛔ DEPRECATED · dsh-nano-shared-workspace — 21（历史，非现行）
 

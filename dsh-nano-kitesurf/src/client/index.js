@@ -33,29 +33,35 @@ const perf = perfReview.join(OWN_ID, {
 })
 
 const STYLE = `
-.nks-root{position:relative;height:100%;min-height:0;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-base);flex-direction:column;flex:auto;display:flex;font:var(--dsw-font-xxs-12)}
+.nks-root{position:relative;height:100%;min-height:0;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-base);flex-direction:column;flex:auto;display:flex;font:var(--dsw-font-xxs-12);container-type:inline-size}
 .nks-toolbar{box-sizing:border-box;border-bottom:.5px solid var(--dsw-alias-border-l3);flex:none;align-items:center;gap:4px;height:38px;padding:5px 6px;display:flex}
 .nks-tool{width:28px;height:28px;color:var(--dsw-alias-label-secondary);border-radius:var(--dsw-radius-sm);cursor:pointer;background:transparent;border:0;flex:none;justify-content:center;align-items:center;padding:0;display:inline-flex}
 .nks-tool:hover:not(:disabled){color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}
-.nks-tool:disabled{color:var(--dsw-alias-label-quaternary);cursor:default}
-.nks-tool:focus-visible,.nks-address:focus-visible{outline:2px solid var(--dsw-alias-brand-primary,var(--dsw-alias-link));outline-offset:1px}
-.nks-tool[aria-pressed="true"]{color:var(--dsw-alias-label-primary);background:color-mix(in srgb,var(--dsw-alias-brand-primary,var(--dsw-alias-link)) 18%,transparent)}
+.nks-tool:disabled{color:var(--dsw-alias-label-tertiary,rgba(207,211,214,.55));opacity:.45;cursor:default}
+.nks-tool:disabled:hover{background:transparent}
+.nks-tool:focus-visible,.nks-address:focus-visible{outline:2px solid var(--dsw-alias-link);outline-offset:1px}
+.nks-tool[aria-pressed="true"]{color:var(--dsw-alias-label-primary);background:color-mix(in srgb,var(--dsw-alias-link) 18%,transparent)}
 .nks-address-box{flex:auto;min-width:0;position:relative}
 .nks-address{box-sizing:border-box;width:100%;height:28px;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-12);background:var(--dsw-alias-bg-layer-1);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-sm);padding:0 32px 0 9px}
 .nks-address::placeholder{color:var(--dsw-alias-label-tertiary)}
 .nks-go{visibility:hidden;opacity:0;position:absolute;top:0;right:0}
 .nks-address-box:focus-within .nks-go,.nks-address-box[data-dirty="true"] .nks-go{visibility:visible;opacity:1}
 .nks-frame{position:relative;flex:auto;min-height:0;overflow:hidden;background:var(--dsw-alias-bg-layer-1)}
-.nks-frame img{width:100%;height:100%;object-fit:contain;object-position:top center;display:block}
-.nks-empty{height:100%;margin:0;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxs-12);justify-content:center;align-items:center;display:flex}
-.nks-box{position:absolute;border:1.5px solid var(--dsw-alias-brand-primary,var(--dsw-alias-link));box-shadow:0 0 0 1px color-mix(in srgb,var(--dsw-alias-bg-base) 55%,transparent);pointer-events:none}
+.nks-frame img{width:100%;height:100%;object-fit:contain;object-position:center;display:block}
+.nks-empty{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:10px;padding:24px;text-align:center;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxs-12)}
+.nks-empty-icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-link,#2f6fed);border:.5px solid var(--dsw-alias-border-l2)}
+.nks-empty-title{color:var(--dsw-alias-label-primary);font:var(--dsw-font-xs-13,var(--dsw-font-xxs-12));font-weight:600}
+.nks-empty-body{max-width:340px;line-height:1.55}
+.nks-empty-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:2px}
+.nks-empty-link{color:var(--dsw-alias-link,#2f6fed);cursor:pointer;background:none;border:0;font:inherit;padding:0;text-decoration:underline;text-underline-offset:2px}
+.nks-empty-meta{font:var(--dsw-font-xxxs-11);opacity:.75;word-break:break-all;max-width:340px}
+.nks-box{position:absolute;border:1.5px solid var(--dsw-alias-link,#2f6fed);box-shadow:0 0 0 1px rgba(0,0,0,.5),inset 0 0 0 1px rgba(255,255,255,.55);pointer-events:none}
 .nks-box[data-kind="ellipse"]{border-radius:50%}
 .nks-box[data-kind="hover"]{border-style:dashed;opacity:.75}
-.nks-pin-dot{position:absolute;width:18px;height:18px;margin-left:-9px;margin-top:-9px;color:#fff;font:var(--dsw-font-xxxs-11);line-height:18px;text-align:center;background:var(--dsw-alias-brand-primary,var(--dsw-alias-link));border-radius:50%;pointer-events:auto;cursor:pointer;user-select:none}
+.nks-pin-dot{position:absolute;width:18px;height:18px;margin-left:-9px;margin-top:-9px;color:#fff;font:var(--dsw-font-xxxs-11);line-height:18px;text-align:center;background:var(--dsw-alias-link,#2f6fed);box-shadow:0 0 0 1.5px rgba(0,0,0,.45),0 1px 4px rgba(0,0,0,.4);border-radius:50%;pointer-events:auto;cursor:pointer;user-select:none}
 .nks-pin-dot:hover{background:var(--dsw-alias-fill-error,#d5455c);transform:scale(1.15)}
 .nks-hint{flex:none;padding:3px 8px 4px;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11);display:flex;align-items:center;gap:6px;border-bottom:.5px solid var(--dsw-alias-border-l3)}
 .nks-hint-text{flex:auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.nks-start{position:absolute;inset:0;justify-content:center;align-items:center;display:flex}
 .nks-start-btn{height:30px;padding:0 14px;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-12);background:var(--dsw-alias-bg-layer-1);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-md);cursor:pointer}
 .nks-start-btn:hover{background:var(--dsw-alias-interactive-bg-hover)}
 .nks-inspector{flex:none;padding:3px 8px;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11);display:flex;gap:10px;overflow:hidden;border-top:.5px solid var(--dsw-alias-border-l3);white-space:nowrap}
@@ -65,13 +71,32 @@ const STYLE = `
 .nks-note input{width:220px;height:28px;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-12);background:var(--dsw-alias-bg-layer-2);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-sm);padding:0 8px}
 .nks-pins{flex:none;padding:2px 8px 4px;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11);display:flex;align-items:center;gap:4px}
 .nks-busy{position:absolute;left:0;right:0;top:0;height:2px;overflow:hidden;z-index:3}
-.nks-busy::before{content:"";display:block;width:35%;height:100%;background:var(--dsw-alias-brand-primary,var(--dsw-alias-link));animation:nks-beat 1s ease-in-out infinite}
+.nks-busy::before{content:"";display:block;width:35%;height:100%;background:var(--dsw-alias-link,#2f6fed);animation:nks-beat 1s ease-in-out infinite}
 @keyframes nks-beat{from{transform:translateX(-120%)}to{transform:translateX(320%)}}
 .nks-settings-body{display:flex;flex-direction:column;gap:8px}
 .nks-settings-body label{color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxxs-11)}
 .nks-choices{display:flex;gap:4px}
 .nks-choice{height:28px;padding:0 10px;color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxs-12);background:transparent;border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-sm);cursor:pointer}
-.nks-choice[aria-checked="true"]{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}
+.nks-choice[aria-checked="true"]{color:var(--dsw-alias-label-primary);background:color-mix(in srgb,var(--dsw-alias-link,#2f6fed) 22%,transparent);box-shadow:inset 0 0 0 1px var(--dsw-alias-link,#2f6fed)}
+.nks-choice[aria-checked="true"]::before{content:"✓ ";font-weight:600}
+/* Narrow split pane: a 286px rail cannot hold 7 tools + an address bar.
+   Keep navigation + address + annotate; fold history/settings into the
+   overflow affordance is out of scope for CSS, so they shrink and the
+   placeholder switches to a short form. */
+@container (max-width: 400px){
+  .nks-toolbar{gap:2px;padding:5px 4px}
+  .nks-tool{width:26px;height:26px}
+  .nks-address{padding:0 4px 0 7px;font-size:11px}
+  .nks-address::placeholder{color:transparent}
+  .nks-address-box::after{content:"网址";position:absolute;left:8px;top:6px;font:var(--dsw-font-xxs-12);color:var(--dsw-alias-label-tertiary);pointer-events:none}
+  .nks-address-box:focus-within::after,.nks-address-box[data-dirty="true"]::after{content:none}
+  .nks-go{display:none}
+  .nks-pins{gap:2px}
+  .nks-hint-text{font-size:10px}
+}
+/* Frame: never letterbox into a black void — a subtle checker makes the
+   dead area read as "canvas", and the picture is centred by object-position. */
+.nks-frame{background-image:linear-gradient(45deg,rgba(127,127,127,.05) 25%,transparent 25%,transparent 75%,rgba(127,127,127,.05) 75%),linear-gradient(45deg,rgba(127,127,127,.05) 25%,transparent 25%,transparent 75%,rgba(127,127,127,.05) 75%);background-size:16px 16px;background-position:0 0,8px 8px}
 `
 
 function post(path, body) {
@@ -195,12 +220,24 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
   const commentRef = React.useRef('')
   const editingRef = React.useRef(false)
   const shotMetaRef = React.useRef(null)
+  // ⌘L's window-level handler binds once; without this ref it would call the
+  // mount-time sendPick, which closes over an empty pageUrl — the note that
+  // reached composer lost its `url:` line. Keep the latest function here.
+  const sendPickRef = React.useRef(null)
   annotateRef.current = annotate
   pickRef.current = pick
   pinsRef.current = pins
   commentRef.current = comment
   editingRef.current = editing
   shotMetaRef.current = shotMeta
+
+  // The address bar mirrors the live page unless the human is typing in it —
+  // a page opened by an agent (or by history) used to leave the field blank,
+  // so there was no way to read or copy the current URL.
+  const addressFocusedRef = React.useRef(false)
+  React.useEffect(() => {
+    if (pageUrl && !addressFocusedRef.current) setDraftUrl(pageUrl)
+  }, [pageUrl])
 
   const refreshStatus = React.useCallback(() => {
     return fetch(STATUS)
@@ -255,7 +292,7 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
         const open = pickRef.current
         if (!open?.elements?.length) return
         event.preventDefault()
-        sendPick(true)
+        sendPickRef.current?.(true)
         return
       }
       // Arrow Up/Down walks parent/child while a note is open — Cursor parity.
@@ -286,6 +323,14 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
+  // An agent can /open a page behind the pane. Re-shoot on focus so the
+  // human is never staring at a stale frame with a disabled refresh button.
+  React.useEffect(() => {
+    const onFocus = () => { if (!busyRef.current) reloadShot().catch(() => {}) }
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [])
+
   React.useLayoutEffect(() => {
     const element = frameRef.current
     if (!element) return undefined
@@ -314,6 +359,10 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
   }
 
   async function run(work) {
+    // One entry guard for EVERY action (address Enter, refresh, start engine,
+    // history, settings apply): a second submit while the first /open is in
+    // flight used to fire a duplicate navigate and clear busy early.
+    if (busyRef.current) return
     busyRef.current = true
     setBusy(true)
     try {
@@ -570,6 +619,7 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
       showError(cause)
     }
   }
+  sendPickRef.current = sendPick
 
   function onSend(event) {
     event?.preventDefault()
@@ -650,6 +700,8 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
     width: Math.max(box.width * frame.scale, 2),
     height: Math.max(box.height * frame.scale, 2),
   })) : []
+  // about:blank still yields a (transparent) PNG — treat it as no page.
+  const hasPage = !!shot && !!shotMeta?.url && shotMeta.url !== 'about:blank'
   const anchor = pick?.anchor
   const pickAnchor = (overlays.find((o) => o.kind === 'pick' || o.kind === 'ellipse'))
     || (frame && anchor ? { left: frame.left + anchor.x * frame.scale, top: frame.top + anchor.y * frame.scale, width: 0, height: 0 } : null)
@@ -791,9 +843,9 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
     'data-nks-workspace': '1',
   },
     h('form', { className: 'nks-toolbar', onSubmit: onSubmitAddress },
-      h('button', { type: 'button', className: 'nks-tool', 'data-nks-back': '1', 'aria-label': copy.back, title: copy.back, disabled: busy || !shot, onClick: () => run(() => historyNav(-1)) }, glyph('back')),
-      h('button', { type: 'button', className: 'nks-tool', 'data-nks-forward': '1', 'aria-label': copy.forward, title: copy.forward, disabled: busy || !shot, onClick: () => run(() => historyNav(1)) }, glyph('forward')),
-      h('button', { type: 'button', className: 'nks-tool', 'data-nks-reload': '1', 'aria-label': copy.refresh, title: copy.refresh, disabled: busy || !pageUrl, onClick: onRefresh }, glyph('refresh')),
+      h('button', { type: 'button', className: 'nks-tool', 'data-nks-back': '1', 'aria-label': copy.back, title: copy.back, disabled: busy || !hasPage, onClick: () => run(() => historyNav(-1)) }, glyph('back')),
+      h('button', { type: 'button', className: 'nks-tool', 'data-nks-forward': '1', 'aria-label': copy.forward, title: copy.forward, disabled: busy || !hasPage, onClick: () => run(() => historyNav(1)) }, glyph('forward')),
+      h('button', { type: 'button', className: 'nks-tool', 'data-nks-reload': '1', 'aria-label': copy.refresh, title: copy.refresh, disabled: busy, onClick: onRefresh }, glyph('refresh')),
       h('span', { className: 'nks-address-box', 'data-dirty': draftUrl ? 'true' : 'false' },
         h('input', {
           className: 'nks-address',
@@ -804,6 +856,8 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
           autoComplete: 'off',
           value: draftUrl,
           onChange: (event) => setDraftUrl(event.target.value),
+          onFocus: () => { addressFocusedRef.current = true },
+          onBlur: () => { addressFocusedRef.current = false },
         }),
         h('button', { type: 'submit', className: 'nks-tool nks-go', 'aria-label': copy.go, disabled: busy }, glyph('go'))),
       h('button', { type: 'button', className: 'nks-tool', 'data-nks-history': '1', 'aria-label': copy.history, title: copy.history, disabled: busy || !history.length, onClick: openHistory }, glyph('history')),
@@ -822,7 +876,7 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
       h('button', { type: 'button', className: 'nks-tool', 'data-nks-undo-pin': '1', 'aria-label': copy.undoPin, onClick: () => setPins((current) => current.slice(0, -1)) }, glyph('undo')),
       h('button', { type: 'button', className: 'nks-tool', 'data-nks-clear-pins': '1', 'aria-label': copy.clearPins, onClick: () => setPins([]) }, glyph('clear')),
       h('button', { type: 'button', className: 'nks-tool', 'data-nks-send-all': '1', 'aria-label': copy.sendAll, onClick: onSendAll }, glyph('send'))) : null,
-    annotate && shot ? h('div', { className: 'nks-hint', 'data-nks-hint': '1' },
+    annotate && hasPage ? h('div', { className: 'nks-hint', 'data-nks-hint': '1' },
       h('span', { className: 'nks-hint-text' }, copy.hintBar),
       h('button', { type: 'button', className: 'nks-tool', 'data-nks-exit-annotate': '1', 'aria-label': copy.annotate, onClick: () => setAnnotate(false) }, glyph('exit'))) : null,
     h('div', {
@@ -838,25 +892,36 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
       style: { cursor: annotate ? 'crosshair' : 'default' },
     },
       busy ? h('div', { className: 'nks-busy', 'data-nks-loading': '1', role: 'progressbar', 'aria-label': copy.opening }) : null,
-      shot ? h('img', {
+      hasPage ? h('img', {
         alt: '',
         draggable: false,
         src: `data:image/png;base64,${shot}`,
         style: { pointerEvents: annotate ? 'none' : 'auto' },
-      }) : h('p', { className: 'nks-empty' },
-        busy ? copy.opening
-          : status?.engineMismatch === true ? copy.engineMismatch
-          : status?.ok === false ? copy.engineDown
-          : copy.emptyHint),
-      // Engine is idle/suspended with nothing on screen: offer start instead
-      // of a dead hint. First-run path now self-serves.
-      !shot && !busy && status?.ok === false && status?.kite?.phase !== 'running' ? h('div', { className: 'nks-start' },
-        h('button', {
-          type: 'button',
-          className: 'nks-start-btn',
-          'data-nks-start-engine': '1',
-          onClick: onStartEngine,
-        }, copy.startEngine)) : null,
+      }) : h('div', { className: 'nks-empty', 'data-nks-empty': '' },
+        // One container, one column: the old layout rendered an absolutely
+        // positioned .nks-start on top of a flex-centred .nks-empty, which
+        // painted the opaque Start button straight over the error text
+        // ("引启动引擎答"). Everything below is a single vertical stack.
+        h('div', { className: 'nks-empty-icon' }, glyph('annotate')),
+        h('div', { className: 'nks-empty-title' },
+          busy ? copy.opening
+            : status?.engineMismatch === true ? copy.engineMismatch
+            : status?.ok === false ? copy.errorTitle
+            : copy.emptyTitle),
+        !busy && status?.ok !== false && !status?.engineMismatch ? h('div', { className: 'nks-empty-body' }, copy.emptyBody) : null,
+        !busy && status?.ok === false && !status?.engineMismatch ? h('div', { className: 'nks-empty-body' }, copy.errorBody) : null,
+        !busy && status?.ok === false ? h('div', { className: 'nks-empty-actions' },
+          h('button', {
+            type: 'button',
+            className: 'nks-start-btn',
+            'data-nks-start-engine': '1',
+            onClick: onStartEngine,
+          }, status?.kite?.phase === 'running' ? copy.resumeEngine : copy.startEngine),
+          h('button', { type: 'button', className: 'nks-start-btn', 'data-nks-diagnose': '1', onClick: () => run(() => refreshStatus()) }, copy.retry)) : null,
+        !busy && status?.ok !== false && !status?.engineMismatch ? h('div', { className: 'nks-empty-actions' },
+          h('button', { type: 'button', className: 'nks-empty-link', 'data-nks-try': '1', onClick: () => { setDraftUrl('https://example.com'); run(() => navigate('https://example.com')) } }, copy.emptyTry)) : null,
+        status?.ok === false && status?.lastError ? h('div', { className: 'nks-empty-meta' }, `${status.lastError.errorId} · ${status?.httpBase || ''}`) : null,
+        status?.ok === false && status?.lastError ? h('div', { className: 'nks-empty-meta' }, status.lastError.error) : null),
       overlays.map((box, index) => h('div', {
         key: index,
         className: 'nks-box',

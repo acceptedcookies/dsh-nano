@@ -5,7 +5,12 @@
  * the Worker at `httpBase` (`/health`, `/json/version`) and to the browser
  * socket at `/devtools/browser`. Page commands go through a flattened
  * Target session, which is the same attachment Puppeteer uses.
+ *
+ * CDP events (console/exception/log/network/navigation) are normalized into
+ * the process-local ring buffer in ./diagnostics.js so an MCP client can read
+ * the page's execution state without attaching a second socket.
  */
+import { recordConsole } from './diagnostics.js'
 
 const CONNECT_MS = 4000
 const CALL_MS = 20000
@@ -188,9 +193,15 @@ export async function fetchEngine(httpBase, path, timeoutMs = CONNECT_MS) {
 let live = null
 let userAgent = ''
 let userAgentApplied = false
-/** @type {{ width: number, height: number, mobile: boolean } | null} */
+/** @type {{ width: number, height: number, mobile: boolean, deviceScaleFactor: number } | null} */
 let viewport = null
 let viewportApplied = false
+/** @type {'screen'|'print'|null} */
+let media = null
+let mediaApplied = false
+/** @type {Record<string,string>|null} */
+let extraHeaders = null
+let headersApplied = false
 
 const VIEWPORTS = {
   390: { width: 390, height: 844, mobile: true },
@@ -198,12 +209,26 @@ const VIEWPORTS = {
   1280: { width: 1280, height: 800, mobile: false },
 }
 
+// Header names that must never be injected by a debug setting: they carry
+// credentials or change request framing.
+const FORBIDDEN_HEADERS = new Set(['cookie', 'authorization', 'proxy-authorization', 'host', 'content-length', 'connection', 'transfer-encoding'])
+
 export function currentUserAgent() {
   return userAgent
 }
 
 export function currentViewport() {
   return viewport
+}
+
+/** All emulation state in one object for /status and /diagnostics. */
+export function currentEmulation() {
+  return {
+    userAgent,
+    viewport,
+    media,
+    extraHeaders: extraHeaders ? Object.keys(extraHeaders) : [],
+  }
 }
 
 async function applyEmulation(client, page) {
@@ -217,13 +242,88 @@ async function applyEmulation(client, page) {
     await client.send('Emulation.setDeviceMetricsOverride', {
       width: viewport.width,
       height: viewport.height,
-      deviceScaleFactor: 1,
+      deviceScaleFactor: viewport.deviceScaleFactor,
       mobile: viewport.mobile,
     }, page.sessionId)
     viewportApplied = true
   } else if (viewportApplied) {
     await client.send('Emulation.clearDeviceMetricsOverride', {}, page.sessionId)
     viewportApplied = false
+  }
+  if (media || mediaApplied) {
+    await client.send('Emulation.setEmulatedMedia', { media: media || 'screen' }, page.sessionId)
+    mediaApplied = media !== null
+  }
+  if (extraHeaders || headersApplied) {
+    await client.send('Network.setExtraHTTPHeaders', { headers: extraHeaders || {} }, page.sessionId)
+    headersApplied = extraHeaders !== null
+  }
+}
+
+/** Console arg → short printable text (RemoteObject, bounded). */
+function remoteArgText(arg) {
+  if (!arg || typeof arg !== 'object') return String(arg ?? '')
+  if (typeof arg.value === 'string' || typeof arg.value === 'number' || typeof arg.value === 'boolean') return String(arg.value)
+  if (typeof arg.description === 'string') return arg.description
+  if (arg.preview && Array.isArray(arg.preview.properties)) {
+    return `{${arg.preview.properties.slice(0, 8).map((p) => `${p.name}:${String(p.value ?? '').slice(0, 60)}`).join(', ')}}`
+  }
+  return arg.type === 'undefined' ? 'undefined' : `[${arg.type || 'object'}]`
+}
+
+/**
+ * One normalizer for all execution-state events. The engine emits
+ * Runtime.consoleAPICalled / Runtime.exceptionThrown / Log.entryAdded /
+ * Network.loadingFailed / Page.frameNavigated on the page session; keeping
+ * them here means the pane, the API and MCP all read the same ledger.
+ */
+function captureCdpEvent(method, params) {
+  try {
+    if (method === 'Runtime.consoleAPICalled') {
+      const level = params.type === 'warning' ? 'warn' : (['log', 'info', 'debug', 'error'].includes(params.type) ? params.type : 'log')
+      const frame = params.stackTrace?.callFrames?.[0]
+      recordConsole({
+        level,
+        source: 'console',
+        text: (Array.isArray(params.args) ? params.args : []).map(remoteArgText).join(' ').slice(0, 600) || '(empty console call)',
+        url: frame?.url,
+        lineNumber: frame?.lineNumber,
+      })
+      return
+    }
+    if (method === 'Runtime.exceptionThrown') {
+      const detail = params.exceptionDetails || {}
+      const text = [detail.text, detail.exception?.description, detail.exception?.value].filter(Boolean).join(' | ')
+      recordConsole({ level: 'exception', source: 'javascript', text: String(text || 'uncaught exception').slice(0, 600), url: detail.url, lineNumber: detail.lineNumber })
+      return
+    }
+    if (method === 'Log.entryAdded') {
+      const entry = params.entry || {}
+      const allowed = ['error', 'warn', 'log', 'info', 'debug']
+      const level = entry.level === 'warning' ? 'warn' : (allowed.includes(entry.level) ? entry.level : 'log')
+      recordConsole({
+        level: entry.source === 'network' ? 'network' : level,
+        source: `log:${entry.source || 'other'}`,
+        text: String(entry.text || '').slice(0, 600),
+        url: entry.url,
+        lineNumber: entry.lineNumber,
+      })
+      return
+    }
+    if (method === 'Network.loadingFailed') {
+      recordConsole({ level: 'network', source: 'network', text: `${params.errorText || 'request failed'} (${params.type || 'unknown'})`.slice(0, 600) })
+      return
+    }
+    if (method === 'Page.frameNavigated') {
+      const url = params.frame?.url
+      if (url && url !== 'about:blank') recordConsole({ level: 'navigation', source: 'page', text: `→ ${url}`.slice(0, 600), url })
+      return
+    }
+    if (method === 'Inspector.targetCrashed' || method === 'Target.targetCrashed') {
+      recordConsole({ level: 'exception', source: 'page', text: 'page target crashed' })
+    }
+  } catch {
+    // Diagnostics must never break the CDP transport.
   }
 }
 
@@ -288,10 +388,15 @@ async function connectLive(httpBase) {
   ws.addEventListener('message', (event) => {
     let message
     try { message = JSON.parse(String(event.data)) } catch { return }
-    if (typeof message.id !== 'number' || !pending.has(message.id)) return
-    const settle = pending.get(message.id)
-    pending.delete(message.id)
-    settle(message)
+    if (typeof message.id === 'number' && pending.has(message.id)) {
+      const settle = pending.get(message.id)
+      pending.delete(message.id)
+      settle(message)
+      return
+    }
+    // Everything else is a CDP event. Normalize the handful that carry
+    // execution state into the diagnostics ring; ignore the rest cheaply.
+    if (typeof message.method === 'string') captureCdpEvent(message.method, message.params || {})
   })
   ws.addEventListener('close', () => {
     if (live && live.ws === ws) live = null
@@ -343,6 +448,12 @@ async function pageHandle(client) {
   if (!attached.sessionId) throw new Error('kitesurf did not attach a page session')
   await client.send('Page.enable', {}, attached.sessionId)
   await client.send('Runtime.enable', {}, attached.sessionId)
+  // Best-effort: these domains are what make console/network/navigation
+  // events observable. An engine that lacks one simply emits fewer events;
+  // it must never fail the whole attach.
+  for (const domain of ['Log.enable', 'Network.enable']) {
+    try { await client.send(domain, {}, attached.sessionId) } catch { /* optional */ }
+  }
   client.page = { targetId, sessionId: attached.sessionId }
   return client.page
 }
@@ -542,6 +653,65 @@ export async function openPage(httpBase, url) {
 }
 
 /**
+ * Debug surface: the engine's live target list. An agent comparing the pane
+ * with the engine can see whether it is attached to the expected page target,
+ * and whether another socket opened an isolated page.
+ */
+export async function engineTargets(httpBase) {
+  return useLive(httpBase, async (client) => {
+    const listed = await client.send('Target.getTargets')
+    const targets = Array.isArray(listed.targetInfos) ? listed.targetInfos : []
+    return {
+      count: targets.length,
+      targets: targets.slice(0, 20).map((item) => ({
+        targetId: String(item.targetId || '').slice(0, 80),
+        type: String(item.type || '').slice(0, 20),
+        url: String(item.url || '').slice(0, 200),
+        title: String(item.title || '').slice(0, 120),
+        attached: item.attached === true,
+      })),
+      attachedPage: client.page?.targetId || null,
+    }
+  })
+}
+
+/**
+ * Debug surface: bounded JS evaluation in the engine page. This is the same
+ * primitive a frontend debugger's console uses; returnByValue + a hard
+ * length cap keep the response inspectable. Writes are allowed (that is what
+ * "change the page and see it" means), so the route is session-bound L2.
+ */
+export async function evaluateInPage(httpBase, expression) {
+  const text = typeof expression === 'string' ? expression.trim() : ''
+  if (!text) throw new KitesurfError('kitesurf.evaluate.empty', 'expression is empty')
+  if (text.length > 2000) throw new KitesurfError('kitesurf.evaluate.toolong', 'expression exceeds 2000 characters')
+  return useLive(httpBase, async (client) => {
+    const page = await pageHandle(client)
+    const evaluated = await client.send('Runtime.evaluate', {
+      expression: text,
+      returnByValue: true,
+      awaitPromise: true,
+    }, page.sessionId)
+    if (evaluated.exceptionDetails) {
+      const detail = evaluated.exceptionDetails
+      throw new KitesurfError('kitesurf.evaluate.exception',
+        String(detail.exception?.description || detail.text || 'evaluation threw').slice(0, 240))
+    }
+    const remote = evaluated.result || {}
+    let value = remote.value
+    if (value === undefined) value = remote.description ?? null
+    let serialized
+    try { serialized = JSON.stringify(value) } catch { serialized = String(value) }
+    if (serialized == null) serialized = 'null'
+    return {
+      type: String(remote.type || typeof value),
+      value: serialized.slice(0, 4000),
+      truncated: serialized.length > 4000,
+    }
+  })
+}
+
+/**
  * Browser chrome — real back/forward via the engine's navigationHistory,
  * not scroll-by-pixels wearing nav-button clothing. `delta` is -1|+1.
  * Returns the destination entry (or null when the move is a no-op) so the
@@ -568,18 +738,24 @@ export async function navigateHistory(httpBase, delta) {
 }
 
 /**
+ * Browser disguise / emulation. All fields are optional; `null` clears the
+ * corresponding override. Viewport is no longer limited to three presets —
+ * any bounded integer width/height is accepted, with a preset supplying the
+ * default mobile flag and height when only width is given.
  * @param {string} httpBase
- */
-/**
- * @param {string} httpBase
- * @param {string} value empty clears the override
- */
-/**
- * @param {string} httpBase
- * @param {{ userAgent?: string, viewport?: { width: number } | null }} patch
+ * @param {{ userAgent?: string, viewport?: object|null, media?: string|null,
+ *   extraHeaders?: object|null }} patch
  */
 export async function setBrowserSettings(httpBase, patch) {
   const next = patch && typeof patch === 'object' ? patch : {}
+  // Transactional: a failed engine call must not leave a "ghost setting" in
+  // /status. Snapshot everything and roll back on any error.
+  const before = { userAgent, media, viewport, extraHeaders, userAgentApplied, mediaApplied, viewportApplied, headersApplied }
+  const rollback = () => {
+    userAgent = before.userAgent; media = before.media; viewport = before.viewport; extraHeaders = before.extraHeaders
+    userAgentApplied = before.userAgentApplied; mediaApplied = before.mediaApplied
+    viewportApplied = before.viewportApplied; headersApplied = before.headersApplied
+  }
   if (typeof next.userAgent === 'string') {
     if (next.userAgent.length > 400 || /[\r\n]/.test(next.userAgent)) {
       throw new KitesurfError('kitesurf.settings.userAgent', 'User-Agent 必须是一行，最长 400 个字符')
@@ -587,16 +763,53 @@ export async function setBrowserSettings(httpBase, patch) {
     userAgent = next.userAgent.trim()
   }
   if (next.viewport === null) viewport = null
-  else if (next.viewport && typeof next.viewport === 'object') {
-    const preset = VIEWPORTS[next.viewport.width]
-    if (!preset) throw new KitesurfError('kitesurf.settings.viewport', '视口只能是 390、768 或 1280')
-    viewport = preset
+  else if (next.viewport && typeof next.viewport === 'object' && !Array.isArray(next.viewport)) {
+    const width = Number(next.viewport.width)
+    const height = Number(next.viewport.height ?? VIEWPORTS[width]?.height)
+    const dsf = Number(next.viewport.deviceScaleFactor ?? 1)
+    if (!Number.isInteger(width) || !Number.isInteger(height) || width < 320 || width > 3840 || height < 240 || height > 2160) {
+      throw new KitesurfError('kitesurf.settings.viewport', '视口宽高必须是 320..3840 / 240..2160 的整数（或只给 width 用预设高度）')
+    }
+    if (![1, 2, 3].includes(dsf)) {
+      throw new KitesurfError('kitesurf.settings.viewport', 'deviceScaleFactor 只能是 1、2 或 3')
+    }
+    const preset = VIEWPORTS[width]
+    const mobile = typeof next.viewport.mobile === 'boolean' ? next.viewport.mobile : (preset?.mobile ?? false)
+    viewport = { width, height, mobile, deviceScaleFactor: dsf }
   }
-  await useLive(httpBase, async (client) => {
-    const page = await pageHandle(client)
-    await applyEmulation(client, page)
-  })
-  return { userAgent, viewport }
+  if (next.media === null) media = null
+  else if (next.media === 'screen' || next.media === 'print') media = next.media
+  else if (next.media !== undefined) throw new KitesurfError('kitesurf.settings.media', 'media 只能是 screen、print 或 null')
+  if (next.extraHeaders === null) extraHeaders = null
+  else if (next.extraHeaders !== undefined) {
+    if (!next.extraHeaders || typeof next.extraHeaders !== 'object' || Array.isArray(next.extraHeaders)) {
+      throw new KitesurfError('kitesurf.settings.headers', 'extraHeaders 必须是对象或 null')
+    }
+    const entries = Object.entries(next.extraHeaders)
+    if (entries.length > 20) throw new KitesurfError('kitesurf.settings.headers', 'extraHeaders 最多 20 项')
+    const clean = {}
+    for (const [key, value] of entries) {
+      const lower = key.toLowerCase()
+      if (!/^[a-z0-9-]{1,64}$/i.test(key) || FORBIDDEN_HEADERS.has(lower)) {
+        throw new KitesurfError('kitesurf.settings.headers', `不允许的 header 名：${key}`)
+      }
+      if (typeof value !== 'string' || value.length > 200) {
+        throw new KitesurfError('kitesurf.settings.headers', `header ${key} 的值必须是 ≤200 字符的字符串`)
+      }
+      clean[key] = value
+    }
+    extraHeaders = clean
+  }
+  try {
+    await useLive(httpBase, async (client) => {
+      const page = await pageHandle(client)
+      await applyEmulation(client, page)
+    })
+  } catch (error) {
+    rollback()
+    throw error
+  }
+  return currentEmulation()
 }
 
 const PAGE_INFO_EXPRESSION = `JSON.stringify({ url: location.href, scrollX: Math.round(window.scrollX), scrollY: Math.round(window.scrollY) })`

@@ -426,6 +426,63 @@
         "POST": 4096
       },
       "responseShape": "200 {ok,already?,lock?,phase?,httpBase,mcpPort,cdp} | 400 {ok:false,errorId:kitesurf.kite.origin|remote|mcpPort|action|checkout|body.*,error} | 409 {ok:false,errorId:kitesurf.kite.state,error} | 500 {ok:false,errorId:kitesurf.kite.node|init,error} | 502 {ok:false,errorId:kitesurf.kite.start|resume|container,error}"
+    },
+    {
+      "plugin": "dsh-nano-kitesurf",
+      "path": "/nano-kitesurf/console",
+      "methods": [
+        "GET",
+        "HEAD",
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 4096
+      },
+      "responseShape": "200 {ok:true,entries,total,counts,dropped} | 400 {ok:false,errorId:kitesurf.console.query,error}"
+    },
+    {
+      "plugin": "dsh-nano-kitesurf",
+      "path": "/nano-kitesurf/operations",
+      "methods": [
+        "GET",
+        "HEAD",
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 4096
+      },
+      "responseShape": "200 {ok:true,entries,total,dropped} | 400 {ok:false,errorId:kitesurf.diag.query,error}"
+    },
+    {
+      "plugin": "dsh-nano-kitesurf",
+      "path": "/nano-kitesurf/diagnostics",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "bodyLimit": {},
+      "responseShape": "200 {ok:true,plugin,engine,settings,observability,console,operations,perf,hints} | 400 {ok:false,errorId:kitesurf.diag.query,error}"
+    },
+    {
+      "plugin": "dsh-nano-kitesurf",
+      "path": "/nano-kitesurf/targets",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "bodyLimit": {},
+      "responseShape": "200 {ok:true,count,targets,attachedPage} | 502 {ok:false,errorId,error}"
+    },
+    {
+      "plugin": "dsh-nano-kitesurf",
+      "path": "/nano-kitesurf/evaluate",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 4096
+      },
+      "responseShape": "200 {ok:true,type,value,truncated} | 400 {ok:false,errorId:kitesurf.evaluate.*,error} | 502 {ok:false,errorId,error}"
     }
   ],
   "ui": {

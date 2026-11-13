@@ -106,6 +106,17 @@ export function createNanoKite(options = {}) {
       phase = 'running'
       return snapshot()
     },
+    /**
+     * The mirror of adopt(): a live engine died underneath us. Leaving phase
+     * 'running' makes the pane offer no recovery action and turns start/resume
+     * into 409. Downgrade to idle so one click on "start engine" re-runs
+     * bringUp. The caller must have probed /health first.
+     */
+    degrade() {
+      if (phase !== 'running') return snapshot()
+      phase = 'idle'
+      return snapshot()
+    },
   }
 }
 

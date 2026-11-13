@@ -30,6 +30,7 @@
     "lib/skill.js",
     "lib/nano-kite.js",
     "lib/container-engine.js",
+  "lib/diagnostics.js",
     "runtime/Dockerfile",
     "runtime/entrypoint.sh",
     "runtime/mcp-bridge.mjs",

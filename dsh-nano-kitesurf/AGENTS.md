@@ -28,6 +28,7 @@
 | `lib/nano-kite.js` | /nano-kite 生命周期（init/start/suspend/resume/configure）。运行时必需 |
 | `lib/container-engine.js` | 本机 Apple `container` 控制面（loopback 发布、只读挂载、inspect 漂移重建）。运行时必需 |
 | `lib/skill.js` | 两份技能正文的单一真源。运行时必需 |
+| `lib/diagnostics.js` | 错误埋点 + console/操作环形缓冲 + `ERROR_CATALOG`（errorId→status→原因→下一步的唯一真源）。运行时必需 |
 | `lib/route-guard.js` | 路由注册 guard bundle。运行时必需 |
 | `lib/route-table.js` | 烤进的插件路由表常量。运行时必需 |
 | `lib/perf-host.js` | perf-review host bundle（`dsh-performance-review/host` 打包产物）。运行时必需 |
@@ -87,7 +88,8 @@ dsh plugin --profile web add <spec>
 | 工作区入口 | 和文件页并列。打开后占满右侧工作区 |
 | 地址栏 Go | 在容器里打开这个 http(s) 地址并投射当前画面 |
 | 最近地址（时钟图标） | 记住最近 8 个地址。切换时让容器打开那一个 |
-| ↑ ↓ 或滚轮 | 滚动容器里的页面并重新投射 |
+| ← → ⟳ | 真实浏览器后退/前进/刷新（走引擎 navigationHistory） |
+| 滚轮 / ↑ ↓ 键 | 滚动容器里的页面并重新投射 |
 | Annotate | 打开后，点画面上的元素。选框跟着元素；悬停时有虚线预览。Shift+点把元素并进当前备注（多选）；Alt+点在无备注时直送 composer；普通拖画选区，Alt+拖画椭圆，Shift+拖画箭头。↑↓ 选父/最大子元素；双击元素让备注输入变成就地改字（回车写回页面）。Esc 依次关拖/备注/标注；⌘⇧D 开关标注；⌘Z 撤最后一条 pin；⌘L 把当前备注直送 composer。备注回车 pin 进队列 |
 | `/kitesurf-cdp`、`/nano-kite` | 告诉 agent 用 `agent-browser --cdp` 接这个引擎，不要启动 Chrome |
 
@@ -105,8 +107,13 @@ dsh plugin --profile web add <spec>
 | POST | `/nano-kitesurf/settings` | `{ userAgent?, viewport? }`：`viewport:{width:390\|768\|1280}` 或 `null` 清除 |
 | POST | `/nano-kitesurf/kite` | `{action: init\|start\|suspend\|resume\|configure, httpBase?, mcpPort?}` |
 | GET/POST | `/nano-kitesurf/perf-review/host` | 进程 perf 快照；`?mode=window` 会清空全局桶，只允许 POST |
+| GET/POST | `/nano-kitesurf/console` | 页面 console/exception/network/navigation 环形缓冲；`?level=error,exception&limit=50`；`POST {"clear":true}` 清空 |
+| GET/POST | `/nano-kitesurf/operations` | 每次路由调用的执行埋点（route/status/errorId/耗时/输入摘要）；`?errorsOnly=true`；`POST {"clear":true}` 清空 |
+| GET | `/nano-kitesurf/diagnostics` | 一击全量诊断：status + target 列表 + console + 操作 trace + errorCatalog + perf + 自动 hints |
+| GET | `/nano-kitesurf/targets` | 引擎 `Target.getTargets`（page target id/url、当前附着页） |
+| POST | `/nano-kitesurf/evaluate` | `{expression}` 在引擎页面执行有界 JS（≤2000 字符，returnByValue，结果 ≤4000 字符） |
 
-错误一律 `{ok:false,errorId,error}` 并按 id 映射真实状态码：输入类 400、阶段错 409、body 超限 413、引擎故障 502、`navigate.egress` 504。完整 id 表在 `/kitesurf-cdp` 技能正文里。
+错误一律 `{ok:false,errorId,error}` 并按 `lib/diagnostics.js` 的 `ERROR_CATALOG` 映射真实状态码（唯一真源，index.js 与技能文档都从它派生）：输入类 400、未命中 404、阶段错 409、body 超限 413、引擎故障 502、`navigate.egress` 504。`/diagnostics` 会把「errorId → status → 原因 → 下一步命令」整表交给 agent；完整 id 表也在 `/kitesurf-cdp` 技能 §5。
 
 ## 配置与状态
 

@@ -5,7 +5,13 @@
 
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
+import { join } from 'node:path'
 import { KitesurfError } from './engine.js'
+
+// A container CLI call can hang (cold apiserver, stuck image pull). Without a
+// ceiling the /kite route would block forever and the pane would never get an
+// answer. 120s covers a cold image pull; the health poll has its own budget.
+const CLI_TIMEOUT_MS = Number(process.env.KITESURF_CLI_TIMEOUT_MS || 120_000)
 
 export const CONTAINER_NAME = 'kitesurf'
 export const ENGINE_IMAGE = 'kitesurf-engine:latest'
@@ -55,6 +61,11 @@ export function checkoutPath(env = process.env) {
   if (!existsSync(configured)) {
     throw new KitesurfError('kitesurf.kite.checkout', `Kitesurf 源码目录不存在：${configured}`)
   }
+  // A stale/unbuilt checkout (or an unmounted external volume) only surfaces
+  // after a 20s warmup poll as a blank engine. Detect it up front instead.
+  if (!existsSync(join(configured, 'packages/engine/wrangler.jsonc'))) {
+    throw new KitesurfError('kitesurf.kite.checkout', `Kitesurf 源码目录缺少 packages/engine/wrangler.jsonc（卷是否已挂载/是否已构建）：${configured}`)
+  }
   return configured
 }
 
@@ -73,10 +84,23 @@ export function runContainer(args, io = {}) {
     const child = spawnFn('container', args, { stdio: ['ignore', 'pipe', 'pipe'] })
     let stdout = ''
     let stderr = ''
+    let settled = false
+    const timer = setTimeout(() => {
+      if (settled) return
+      settled = true
+      try { child.kill('SIGKILL') } catch { /* gone */ }
+      reject(new KitesurfError('kitesurf.kite.container', `container ${args[0]} timed out after ${Math.round(CLI_TIMEOUT_MS / 1000)}s`))
+    }, CLI_TIMEOUT_MS)
+    const finish = (fn) => (...params) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      fn(...params)
+    }
     child.stdout?.on('data', (chunk) => { stdout += chunk })
     child.stderr?.on('data', (chunk) => { stderr += chunk })
-    child.on('error', (error) => reject(error))
-    child.on('close', (code) => {
+    child.on('error', finish(reject))
+    child.on('close', finish((code) => {
       if (code === 0) {
         resolve({ stdout, stderr })
       } else {
@@ -89,7 +113,7 @@ export function runContainer(args, io = {}) {
         const tail = lines.slice(-3).join(' | ') || `container ${args[0]} failed`
         reject(new KitesurfError('kitesurf.kite.container', scrubPaths(tail).slice(0, 300)))
       }
-    })
+    }))
   })
 }
 
@@ -125,7 +149,39 @@ export async function ensureLocalContainer(target, io = {}) {
     }
   })
   const enginePort = hostPort(target.httpBase)
-  const inspectText = await inspect(CONTAINER_NAME)
+
+  // The `container` CLI's inline bootstrap ("failed to bootstrap") is broken
+  // on debug builds when the apiserver is cold. Prime it BEFORE any inspect,
+  // run or start — a stopped container hitting `container start` needs the
+  // same priming as a cold create. Idempotent and cheap when warm.
+  const prime = async () => {
+    try {
+      await run(['system', 'start'])
+    } catch (error) {
+      throw new KitesurfError('kitesurf.kite.container',
+        `container system start failed: ${scrubPaths((error instanceof Error ? error.message : String(error)).slice(0, 200))}`)
+    }
+  }
+  // One bounded retry for transient CLI faults (cold apiserver, stuck pull,
+  // name collision). Deterministic input errors must NOT be retried.
+  const runOnce = async (args) => {
+    try {
+      return await run(args)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      if (/timed out|bootstrap|internalError|unavailable|not found|no such/i.test(message)) {
+        await new Promise((resolve) => setTimeout(resolve, 600))
+        return run(args)
+      }
+      throw error
+    }
+  }
+  // Resolve the checkout BEFORE touching the subsystem: a missing
+  // KITESURF_CHECKOUT is a config fault (400), not a container failure.
+  // Deferred until we know a create is actually needed so a warm start never
+  // demands a checkout it does not use.
+  await prime()
+  let inspectText = await inspect(CONTAINER_NAME)
   let exists = inspectText != null
   if (exists) {
     const ports = publishedPortsOf(inspectText)
@@ -142,19 +198,8 @@ export async function ensureLocalContainer(target, io = {}) {
     }
   }
   if (!exists) {
-    // Resolve the checkout BEFORE touching the subsystem: a missing
-    // KITESURF_CHECKOUT is a config fault (400), not a container failure.
     const checkout = io.checkout || checkoutPath()
-    // The `container` CLI's inline bootstrap ("failed to bootstrap") is
-    // broken on debug builds when the apiserver is cold. Prime it explicitly
-    // — idempotent and cheap when the daemon is already warm.
-    try {
-      await run(['system', 'start'])
-    } catch (error) {
-      throw new KitesurfError('kitesurf.kite.container',
-        `container system start failed: ${scrubPaths((error instanceof Error ? error.message : String(error)).slice(0, 200))}`)
-    }
-    await run(createArgs({
+    await runOnce(createArgs({
       checkout,
       hostEnginePort: enginePort,
       hostMcpPort: target.mcpPort,
@@ -162,7 +207,7 @@ export async function ensureLocalContainer(target, io = {}) {
     return { local: true, created: true }
   }
   try {
-    await run(['start', CONTAINER_NAME])
+    await runOnce(['start', CONTAINER_NAME])
   } catch (error) {
     if (!/already|running/i.test(error instanceof Error ? error.message : '')) throw error
   }

@@ -153,7 +153,111 @@ export function createFrameDecoder({ onMessage, onPing, onClose, maxFrame = MAX_
   }
 }
 
-function attach(socket, env = process.env) {
+/**
+ * Kitesurf-native MCP tools. The bridge is a byte pipe to `agent-browser mcp`,
+ * whose 33 core tools know nothing about the host plugin's execution state.
+ * These are answered LOCALLY from the diagnostics snapshot the host pushes to
+ * POST /diagnostics, so an agent using only MCP can still answer "what did the
+ * plugin just do, and which errorId fired?" — the gap the owner called out.
+ */
+const KITESURF_TOOLS = [
+  {
+    name: 'kitesurf_diagnostics',
+    description: 'One-shot Kitesurf plugin diagnostics: engine status, phase, targets, settings, console tail, operation trace, errorId catalogue and generated next-step hints. Call this FIRST when anything fails.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'kitesurf_console',
+    description: 'Recent page console/error/exception/network/navigation events captured over the plugin CDP socket.Levels: log,info,warn,error,exception,network,navigation.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        level: { type: 'string', description: 'Comma-separated levels, e.g. "error,exception"' },
+        limit: { type: 'number', description: '1..250, default 50' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'kitesurf_operations',
+    description: 'Recent /nano-kitesurf/* route calls with status, errorId, incidentId, durationMs and a whitelisted input summary. Use errorsOnly=true to see only failures.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        errorsOnly: { type: 'boolean' },
+        limit: { type: 'number', description: '1..200, default 50' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'kitesurf_error_catalog',
+    description: 'The single source of truth: errorId → HTTP status → cause → next command. Use it to interpret any kitesurf.* errorId instead of guessing.',
+    inputSchema: {
+      type: 'object',
+      properties: { errorId: { type: 'string', description: 'Optional: return only matching ids' } },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'kitesurf_targets',
+    description: 'Engine CDP Target.getTargets result: page target ids/urls and which page the plugin socket is attached to. Use when the pane and the API disagree.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'kitesurf_bridge_health',
+    description: 'MCP bridge liveness: conns, accepted, rejected, uptimeMs and when the last host diagnostics snapshot was pushed.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+]
+
+function toolResult(id, data) {
+  const text = JSON.stringify(data)
+  return {
+    jsonrpc: '2.0', id,
+    result: {
+      content: [{ type: 'text', text }],
+      structuredContent: data,
+    },
+  }
+}
+
+function toolError(id, code, message) {
+  return { jsonrpc: '2.0', id, error: { code, message } }
+}
+
+/** Answer a kitesurf_* tools/call without touching the agent-browser child. */
+function answerNativeTool(name, args, bridgeState) {
+  const snap = bridgeState.getDiagnostics()
+  if (name === 'kitesurf_bridge_health') {
+    return { ok: true, ...bridgeState.stats(), diagnosticsPushedAt: snap?.at || null }
+  }
+  if (!snap) {
+    return { ok: false, errorId: 'kitesurf.diag.stale', error: 'host has not pushed a diagnostics snapshot yet; retry in a few seconds', hint: 'GET /nano-kitesurf/diagnostics on the authenticated host, or wait for the 30s push' }
+  }
+  if (name === 'kitesurf_diagnostics') return snap
+  if (name === 'kitesurf_console') {
+    const levels = typeof args.level === 'string' ? args.level.split(',').map((s) => s.trim()).filter(Boolean) : null
+    const limit = Math.max(1, Math.min(Number(args.limit) || 50, 250))
+    const entries = (snap.console?.entries || []).filter((e) => !levels || levels.includes(e.level)).slice(-limit)
+    return { ok: true, entries, total: snap.console?.total ?? entries.length, counts: snap.console?.counts || {} }
+  }
+  if (name === 'kitesurf_operations') {
+    const errorsOnly = args.errorsOnly === true
+    const limit = Math.max(1, Math.min(Number(args.limit) || 50, 200))
+    const entries = (snap.operations?.entries || []).filter((e) => !errorsOnly || !e.ok).slice(-limit)
+    return { ok: true, entries, total: snap.operations?.total ?? entries.length, dropped: snap.operations?.dropped ?? 0 }
+  }
+  if (name === 'kitesurf_error_catalog') {
+    const all = snap.observability?.errorCatalog || []
+    const filter = typeof args.errorId === 'string' ? args.errorId : null
+    return { ok: true, entries: filter ? all.filter((r) => r.errorId.includes(filter)) : all, total: all.length }
+  }
+  if (name === 'kitesurf_targets') return { ok: true, ...(snap.engine?.targets || { count: 0, targets: [] }), targetsError: snap.engine?.targetsError || null }
+  return { ok: false, errorId: 'kitesurf.tool.unknown', error: `unknown native tool ${name}` }
+}
+
+function attach(socket, env = process.env, bridgeState = { getDiagnostics: () => null, stats: () => ({}) }) {
   let alive = true
   const teardown = (code = 1000) => {
     if (!alive) return
@@ -170,13 +274,27 @@ function attach(socket, env = process.env) {
   })
 
   let stdout = ''
+  // tools/list requests we forwarded to the child: when its reply comes back,
+  // merge the native kitesurf_* tools into result.tools before sending.
+  const pendingToolLists = new Set()
   child.stdout.on('data', (chunk) => {
     stdout += chunk.toString('utf8')
     let nl
     while ((nl = stdout.indexOf('\n')) >= 0) {
-      const line = stdout.slice(0, nl).trim()
+      let line = stdout.slice(0, nl).trim()
       stdout = stdout.slice(nl + 1)
-      if (line) sendText(socket, line)
+      if (!line) continue
+      try {
+        const message = JSON.parse(line)
+        if (message.id != null && pendingToolLists.has(message.id)) {
+          pendingToolLists.delete(message.id)
+          if (Array.isArray(message.result?.tools)) {
+            message.result.tools = [...message.result.tools, ...KITESURF_TOOLS]
+            line = JSON.stringify(message)
+          }
+        }
+      } catch { /* non-JSON child output: forward verbatim */ }
+      sendText(socket, line)
     }
   })
   child.on('exit', () => socket.end())
@@ -190,6 +308,20 @@ function attach(socket, env = process.env) {
       while ((nl = stdin.indexOf('\n')) >= 0) {
         const line = stdin.slice(0, nl)
         stdin = stdin.slice(nl + 1)
+        let handledLocally = false
+        try {
+          const message = JSON.parse(line)
+          if (message.method === 'tools/list' && message.id != null) pendingToolLists.add(message.id)
+          if (message.method === 'tools/call' && typeof message.params?.name === 'string'
+              && message.params.name.startsWith('kitesurf_')) {
+            const data = answerNativeTool(message.params.name, message.params.arguments || {}, bridgeState)
+            sendText(socket, JSON.stringify(message.id == null
+              ? toolError(null, -32600, 'tools/call requires an id')
+              : toolResult(message.id, data)))
+            handledLocally = true
+          }
+        } catch { /* malformed frame: let the child produce the -32700 */ }
+        if (handledLocally) continue
         // Backpressure: stop reading the socket until the child drains.
         if (!child.stdin.write(`${line}\n`)) {
           socket.pause()
@@ -214,11 +346,52 @@ export function createBridge(port = PORT, env = process.env) {
   let conns = 0
   let accepted = 0
   let rejected = 0
+  let lastDiagnostics = null
+  let diagnosticsPushedAt = null
   const startedAt = Date.now()
+  const stats = () => ({ conns, accepted, rejected, uptimeMs: Date.now() - startedAt })
+  const bridgeState = {
+    getDiagnostics: () => lastDiagnostics,
+    stats,
+  }
   const server = createServer((req, res) => {
     if (req.url === '/health') {
       res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
-      res.end(JSON.stringify({ ok: true, mcp: '/mcp', conns, accepted, rejected, uptimeMs: Date.now() - startedAt }))
+      res.end(JSON.stringify({ ok: true, mcp: '/mcp', ...stats(), diagnosticsPushedAt }))
+      return
+    }
+    // Host → bridge push. The dsh host is on the same loopback; the port is
+    // only published on 127.0.0.1. Reject browser-shaped requests (Origin)
+    // and bound the payload so this endpoint cannot be used to grow memory.
+    if (req.url === '/diagnostics' && (req.method === 'POST' || req.method === 'GET')) {
+      if (req.method === 'GET') {
+        res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
+        res.end(JSON.stringify({ ok: true, pushedAt: diagnosticsPushedAt, diagnostics: lastDiagnostics }))
+        return
+      }
+      if (req.headers.origin || (req.headers['content-type'] || '').indexOf('application/json') === -1) {
+        res.writeHead(403)
+        res.end()
+        return
+      }
+      let body = ''
+      req.on('data', (chunk) => {
+        body += chunk
+        if (body.length > 512 * 1024) { req.destroy() }
+      })
+      req.on('end', () => {
+        try {
+          const parsed = JSON.parse(body)
+          if (!parsed || typeof parsed !== 'object') throw new Error('not an object')
+          lastDiagnostics = parsed
+          diagnosticsPushedAt = new Date().toISOString()
+          res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
+          res.end(JSON.stringify({ ok: true, at: diagnosticsPushedAt }))
+        } catch (error) {
+          res.writeHead(400, { 'content-type': 'application/json; charset=utf-8' })
+          res.end(JSON.stringify({ ok: false, error: String(error?.message || error) }))
+        }
+      })
       return
     }
     res.writeHead(404)
@@ -250,7 +423,7 @@ export function createBridge(port = PORT, env = process.env) {
         'Connection: Upgrade\r\n' +
         `Sec-WebSocket-Accept: ${accept}\r\n\r\n`,
       )
-      attach(socket, env)
+      attach(socket, env, bridgeState)
     } catch (error) {
       // acceptKey/attach threw after we counted the conn — destroy() may not
       // emit 'close' on a socket never fully opened, so release the slot here
@@ -261,6 +434,11 @@ export function createBridge(port = PORT, env = process.env) {
     }
   })
 
+  // 0.0.0.0 INSIDE the container is required: Apple container publishes a
+  // host port onto the container's network IP (192.168.64.x), not its
+  // loopback. Binding to 127.0.0.1 here would make 127.0.0.1:8799 unreachable.
+  // The real boundary is the host-side loopback publish (createArgs), the
+  // Origin allowlist on /mcp, and the no-Origin requirement on /diagnostics.
   server.listen(port, '0.0.0.0', () => {
     process.stderr.write(`kitesurf mcp bridge on :${port} conns<=${MAX_CONNS} frame<=${MAX_FRAME}B\n`)
   })

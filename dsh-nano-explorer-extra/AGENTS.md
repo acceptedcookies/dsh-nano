@@ -129,11 +129,9 @@ dsh plugin --profile web add <spec>
     maxGitOutputBytes: 8388608
     statsMaxDepth: 32
     statsMaxEntries: 50000
-    statsDebounceMs: 2000
     statsExcludeGit: true
     statsExcludeIgnored: true
     statsFollowSymlinks: false
-    symlinkMaxHops: 16
     listingMaxEntries: 2000
 ```
 

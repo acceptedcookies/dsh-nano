@@ -241,6 +241,9 @@ function createGuard({ table, plugin } = {}) {
   function registerRoutes3(ctx, specs) {
     const conn = ctx.get("connection");
     if (!conn) throw new RouteGuardError("no-connection", "no connection service");
+    if (typeof conn.requestRejection !== "function") {
+      throw new RouteGuardError("no-request-rejection", "connection.requestRejection is not a function; refusing to register unauthenticated routes");
+    }
     const normalized = specs.map(normalizeSpec);
     const wanted = /* @__PURE__ */ new Map();
     for (const spec of normalized) {
@@ -1402,8 +1405,9 @@ async function statisticsOf(fs, root, options, signal) {
       if (excludeGit && child.name === ".git") continue;
       const rel = item.rel === "" ? child.name : `${item.rel}/${child.name}`;
       if (ignored !== void 0 && ignored.has(rel)) continue;
-      const resolved = child.target === void 0 ? joinPath(path, child.name) : fs.processPath(child.target);
-      const link = !followSymlinks && resolved !== joinPath(path, child.name);
+      const expected = joinPath(path, child.name).replace(/\\/gu, "/");
+      const resolved = (child.target === void 0 ? joinPath(path, child.name) : fs.processPath(child.target)).replace(/\\/gu, "/");
+      const link = !followSymlinks && resolved !== expected;
       if (child.type === "directory") {
         if (link) {
           totals.files += 1;
@@ -1944,11 +1948,9 @@ var Config = {
         maxGitOutputBytes: number("maxGitOutputBytes", 8 * 1024 * 1024, 64 * 1024, 64 * 1024 * 1024),
         statsMaxDepth: number("statsMaxDepth", 32, 1, 128),
         statsMaxEntries: number("statsMaxEntries", 5e4, 1e3, 1e6),
-        statsDebounceMs: number("statsDebounceMs", 2e3, 0, 3e4),
         statsExcludeGit: flag("statsExcludeGit", true),
         statsExcludeIgnored: flag("statsExcludeIgnored", true),
         statsFollowSymlinks: flag("statsFollowSymlinks", false),
-        symlinkMaxHops: number("symlinkMaxHops", 16, 1, 64),
         listingMaxEntries: number("listingMaxEntries", 2e3, 50, 2e4)
       };
       if (issues.length > 0) return { issues };

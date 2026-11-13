@@ -73,9 +73,12 @@ export async function statisticsOf(fs, root, options, signal) {
       const rel = item.rel === '' ? child.name : `${item.rel}/${child.name}`
       if (ignored !== undefined && ignored.has(rel)) continue
       // `path` is the parent's resolved target, so a child whose own resolved target differs is a
-      // symbolic link — detecting it costs no extra `lstat` per entry.
-      const resolved = child.target === undefined ? joinPath(path, child.name) : fs.processPath(child.target)
-      const link = !followSymlinks && resolved !== joinPath(path, child.name)
+      // symbolic link — detecting it costs no extra `lstat` per entry. Both sides are normalized to
+      // `/` separators before comparing: `processPath` may keep `\` on Windows, and a separator-only
+      // difference must not read as a link.
+      const expected = joinPath(path, child.name).replace(/\\/gu, '/')
+      const resolved = (child.target === undefined ? joinPath(path, child.name) : fs.processPath(child.target)).replace(/\\/gu, '/')
+      const link = !followSymlinks && resolved !== expected
       if (child.type === 'directory') {
         if (link) {
           // The link itself is the workspace content; its target is not. It still counts as

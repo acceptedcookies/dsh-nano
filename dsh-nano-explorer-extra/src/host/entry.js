@@ -46,11 +46,9 @@ export const Config = {
         maxGitOutputBytes: number('maxGitOutputBytes', 8 * 1024 * 1024, 64 * 1024, 64 * 1024 * 1024),
         statsMaxDepth: number('statsMaxDepth', 32, 1, 128),
         statsMaxEntries: number('statsMaxEntries', 50000, 1000, 1000000),
-        statsDebounceMs: number('statsDebounceMs', 2000, 0, 30000),
         statsExcludeGit: flag('statsExcludeGit', true),
         statsExcludeIgnored: flag('statsExcludeIgnored', true),
         statsFollowSymlinks: flag('statsFollowSymlinks', false),
-        symlinkMaxHops: number('symlinkMaxHops', 16, 1, 64),
         listingMaxEntries: number('listingMaxEntries', 2000, 50, 20000),
       }
       if (issues.length > 0) return { issues }

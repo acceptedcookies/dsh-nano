@@ -840,8 +840,23 @@ export async function captureShot(httpBase, scrollY = 0, options = {}) {
   const quality = Number.isFinite(Number(options.quality))
     ? Math.max(1, Math.min(Number(options.quality), 100))
     : SHOT_DEFAULT_QUALITY
+  // fit: drive the engine viewport to the pane's own aspect ratio so the PNG
+  // needs no letterbox at all. Without this a 1280x720 shot inside a 636x800
+  // pane wastes ~55% of the frame on black bars.
+  const fit = options.fit && typeof options.fit === 'object' ? options.fit : null
+  const fitWidth = fit ? Math.round(Number(fit.width)) : null
+  const fitHeight = fit ? Math.round(Number(fit.height)) : null
+  const useFit = Number.isFinite(fitWidth) && Number.isFinite(fitHeight)
+    && fitWidth >= 320 && fitWidth <= 3840 && fitHeight >= 240 && fitHeight <= 2160
   return useLive(httpBase, async (client) => {
     const page = await pageHandle(client)
+    if (useFit) {
+      viewport = { width: fitWidth, height: fitHeight, mobile: false, deviceScaleFactor: 1 }
+      await client.send('Emulation.setDeviceMetricsOverride', {
+        width: fitWidth, height: fitHeight, deviceScaleFactor: 1, mobile: false,
+      }, page.sessionId)
+      viewportApplied = true
+    }
     if (scrollY) {
       await client.send('Runtime.evaluate', {
         expression: `window.scrollBy(0, ${scrollY})`,

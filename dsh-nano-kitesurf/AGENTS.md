@@ -100,7 +100,7 @@ dsh plugin --profile web add <spec>
 | GET | `/nano-kitesurf/status` | `{ ok, engineMismatch?, httpBase, cdp, kite: { phase, httpBase, mcpPort, cdp }, lastError? }` |
 | GET | `/nano-kitesurf/last` | 最近一次点选，没有则 `pick: null` |
 | POST | `/nano-kitesurf/open` | `{ url }`。只接受 http(s)，不接受带凭证的地址 |
-| POST | `/nano-kitesurf/shot` | 当前页截图 base64 + `{url, scrollX, scrollY, targetId, viewport, mimeType, format}`；`{scroll: ±px}` 先滚后截，`{format:"webp"\|"png"\|"jpeg", quality:1..100}` 选编码（默认 webp q82，比 PNG 小约 3.7×） |
+| POST | `/nano-kitesurf/shot` | 当前页截图 base64 + `{url, scrollX, scrollY, targetId, viewport, mimeType, format}`；`{scroll: ±px}` 先滚后截，`{format:"webp"\|"png"\|"jpeg", quality:1..100}` 选编码（默认 webp q82，比 PNG 小约 3.7×），`{fit:{width,height}}` 让引擎视口等于面板尺寸（默认由 pane 侧传入，图片与面板 1:1、无 letterbox） |
 | POST | `/nano-kitesurf/history` | `{delta:-1\|+1}`：真实浏览器前进/后退（走引擎 `Page.getNavigationHistory`/`navigateToHistoryEntry`），返回 `{moved,url?,currentIndex,entries}` |
 | POST | `/nano-kitesurf/pick` | `{ x, y }` 或 `{selector}`（↑↓ 父/子重选）。`preview:true` 只做悬停预览、不写 lastPick。元素包带 `componentStack`（React fiber 自省出的组件名，无框架/生产压缩名时为 null 或短名）；`elements` 是单元素列表；`parentSel`/`childSel` 是父/最大子元素选择器；响应带 `{url, scrollY, targetId}` 供画面比对（漂移时 pane 自动重截并提示） |
 | POST | `/nano-kitesurf/edit` | `{selector, text}`：把文本写回该元素（双击就地改字），≤4000 字符 |

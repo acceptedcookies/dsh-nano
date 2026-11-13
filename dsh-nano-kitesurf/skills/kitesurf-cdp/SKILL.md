@@ -77,7 +77,7 @@ Gestures on the pane (Cursor design-mode parity): click picks, Shift+click appen
 
 An authenticated Harness page can read the last raw packet with `GET /nano-kitesurf/last`. Every shot and pick returns the live page identity (`url`, `scrollY`, `targetId`, `viewport`); the pane compares them and auto-refresh + warns (`页面已变化…`) when a click lands on stale pixels — picking over a shifted page never silently hits the wrong element. A click sends `POST /nano-kitesurf/pick` with `{x, y}` in viewport pixels — plus `preview: true` for hover probes that skip `lastPick`, or `{selector: "…"}` to re-pick a parent/child the pane already named (Arrow Up/Down). Double-click with a note open switches the input into in-place text edit — it POSTs `/nano-kitesurf/edit` with `{selector, text}` and the page itself changes; the shot refreshes.
 
-`POST /nano-kitesurf/open` navigates; `POST /nano-kitesurf/shot` screenshots the current page — optional `{"scroll": ±px}` (max 4000), `{"format":"webp"|"png"|"jpeg","quality":1..100}`. Default is webp q82: an example.com frame is 61 KB base64 vs 226 KB as PNG, and the pane always asks for webp. Response carries `mimeType` + `format` so the client picks the right data URL. `POST /nano-kitesurf/history {"delta":-1}` / `{"delta":1}` is real browser back/forward (engine navigationHistory), not scroll. `GET /nano-kitesurf/status` reports whether `/health` answered.
+`POST /nano-kitesurf/open` navigates; `POST /nano-kitesurf/shot` screenshots the current page — optional `{"scroll": ±px}` (max 4000), `{"format":"webp"|"png"|"jpeg","quality":1..100}`, `{"fit":{"width":W,"height":H}}`. Default is webp q82: an example.com frame is 61 KB base64 vs 226 KB as PNG, and the pane always asks for webp. Response carries `mimeType` + `format` so the client picks the right data URL. **`fit` 是默认行为**：pane 用 `ResizeObserver` 测量自身内容区，把引擎视口设成同尺寸再截图，所以图片与面板 1:1、没有黑边（旧行为固定 1280×720 会在竖长面板里浪费 55%~80% 的像素）。需要固定视口做响应式对比时才传 `/settings viewport`。 `POST /nano-kitesurf/history {"delta":-1}` / `{"delta":1}` is real browser back/forward (engine navigationHistory), not scroll. `GET /nano-kitesurf/status` reports whether `/health` answered.
 
 ### Browser disguise / emulation (`/settings`)
 
@@ -110,7 +110,7 @@ A failed call returns `{ok:false,errorId,error}` with a real HTTP status. The sa
 | `kitesurf.pick.failed` | 502 | 引擎侧元素探针异常 | GET /status 看 engineMismatch；POST /kite {action:"resume"} |
 | `kitesurf.edit.badtext` | 400 | text 为空/超 4000，或 selector 缺失非法 | /edit 必须同时给 selector 与 1..4000 字符 text |
 | `kitesurf.edit.miss` | 404 | 改字目标选择器未命中 | 重新 /pick 取 selector；页面若已导航需重选 |
-| `kitesurf.shot.scroll` | 400 | scroll 非有限数/超 ±4000，或 format 不是 png/jpeg/webp | POST /shot {scroll: ±整数, format:"webp", quality:1..100} |
+| `kitesurf.shot.scroll` | 400 | scroll 非有限数/超 ±4000，format 不是 png/jpeg/webp，或 fit 不是 {width,height} | POST /shot {scroll: ±整数, format:"webp", quality:1..100, fit:{width,height}} |
 | `kitesurf.settings.viewport` | 400 | userAgent/viewport/media/extraHeaders 形状非法或值越界（视口 320..3840 × 240..2160；dsf 1/2/3；media screen|print；header 名禁用凭证类） | POST /settings {"viewport":{"width":1024,"height":768},"media":"print","extraHeaders":{"X-Debug":"1"}}；任一字段传 null 清除；空串 UA 清除伪装 |
 | `kitesurf.kite.state` | 409 | 生命周期阶段不符（idle 才能 start、running 才能 suspend、suspended 才能 resume） | GET /status 读 kite.phase；按阶段选 start/suspend/resume；host 重启后 phase 会自动 adopt |
 | `kitesurf.kite.remote` | 400 | configure 参数非法、远程地址未开 allowRemote、或缺少 KITESURF_CHECKOUT/config.checkout | loopback 地址；mcpPort 1..65535；在 profile patch 写 config.checkout |

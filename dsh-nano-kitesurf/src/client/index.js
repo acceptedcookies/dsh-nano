@@ -258,7 +258,8 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
     refreshStatus().then(async (statusPayload) => {
       if (!statusPayload?.ok) return
       try {
-        const shotPayload = await post(SHOT, { format: 'webp' })
+        const fit = frameSize()
+        const shotPayload = await post(SHOT, { format: 'webp', ...(fit ? { fit } : {}) })
         setShot(shotPayload.data)
         setShotMime(shotPayload.mimeType || 'image/webp')
         setShotMeta({ url: shotPayload.url || '', scrollY: shotPayload.scrollY || 0, targetId: shotPayload.targetId || '', viewport: shotPayload.viewport?.width ?? null, at: Date.now() })
@@ -335,6 +336,30 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
     if (phase && phase !== 'running' && shot) { setShot(null); setPick(null); setPins([]); setShotMeta(null) }
   }, [status?.kite?.phase])
 
+  // Fit-to-pane: when the split pane is resized, the engine viewport must
+  // follow it — otherwise a 16:9 shot inside a 4:5 pane reintroduces the
+  // letterbox the fit mode exists to remove. Debounced to one re-shoot per
+  // settled size.
+  React.useEffect(() => {
+    const element = frameRef.current
+    if (!element || typeof ResizeObserver === 'undefined') return undefined
+    let timer = 0
+    let last = ''
+    const observer = new ResizeObserver(() => {
+      const size = frameSize()
+      if (!size) return
+      const key = `${size.width}x${size.height}`
+      if (key === last) return
+      const previous = last
+      last = key
+      if (!previous) return // first measurement is the mount shot
+      clearTimeout(timer)
+      timer = window.setTimeout(() => { if (!busyRef.current) reloadShot().catch(() => {}) }, 220)
+    })
+    observer.observe(element)
+    return () => { clearTimeout(timer); observer.disconnect() }
+  }, [])
+
   React.useEffect(() => {
     const onFocus = () => { if (!busyRef.current) reloadShot().catch(() => {}) }
     window.addEventListener('focus', onFocus)
@@ -394,7 +419,8 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
     await perf.span('navigate', async () => {
       await post(OPEN, { url })
     })
-    const shotPayload = await post(SHOT, { format: 'webp' })
+    const fit = frameSize()
+    const shotPayload = await post(SHOT, { format: 'webp', ...(fit ? { fit } : {}) })
     setShot(shotPayload.data)
     setShotMime(shotPayload.mimeType || 'image/webp')
     setShotMeta({ url: shotPayload.url || '', scrollY: shotPayload.scrollY || 0, targetId: shotPayload.targetId || '', viewport: shotPayload.viewport?.width ?? null, at: Date.now() })
@@ -402,8 +428,24 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
     remember(url)
   }
 
+  /** Pane content size in integer CSS px — the engine viewport we ask for. */
+  function frameSize() {
+    const element = frameRef.current
+    if (!element) return null
+    const rect = element.getBoundingClientRect()
+    const width = Math.round(rect.width)
+    const height = Math.round(rect.height)
+    if (width < 320 || height < 240) return null
+    return { width, height }
+  }
+
   async function reloadShot(scroll) {
-    const shotPayload = await post(SHOT, scroll ? { scroll, format: 'webp' } : { format: 'webp' })
+    const fit = frameSize()
+    const shotPayload = await post(SHOT, {
+      format: 'webp',
+      ...(scroll ? { scroll } : {}),
+      ...(fit ? { fit } : {}),
+    })
     setShot(shotPayload.data)
     setShotMime(shotPayload.mimeType || 'image/webp')
     setShotMeta({ url: shotPayload.url || '', scrollY: shotPayload.scrollY || 0, targetId: shotPayload.targetId || '', viewport: shotPayload.viewport?.width ?? null, at: Date.now() })

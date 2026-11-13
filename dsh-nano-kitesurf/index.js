@@ -583,7 +583,15 @@ export function apply(ctx, config) {
           if (body.format !== undefined && !format) {
             throw new KitesurfError('kitesurf.shot.format', 'format must be png, jpeg or webp')
           }
-          const shot = await hostSpan('shot', () => captureShot(origin(), scrollDelta(body), { format, quality: body.quality }))
+          // fit:{width,height} = use the pane's own aspect ratio as the engine
+          // viewport, so the screenshot fills the frame with no letterbox.
+          const fit = body.fit && typeof body.fit === 'object'
+            ? { width: Number(body.fit.width), height: Number(body.fit.height) }
+            : null
+          if (body.fit !== undefined && (!fit || !Number.isFinite(fit.width) || !Number.isFinite(fit.height))) {
+            throw new KitesurfError('kitesurf.shot.fit', 'fit must be {width,height} in pane pixels')
+          }
+          const shot = await hostSpan('shot', () => captureShot(origin(), scrollDelta(body), { format, quality: body.quality, fit }))
           lastError = null
           sendJson(res, 200, { ok: true, ...shot })
         } catch (error) {

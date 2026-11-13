@@ -442,15 +442,20 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
           const retargeted = meta && pickPage.targetId && meta.targetId && pickPage.targetId !== meta.targetId
           if (drifted || scrolled || retargeted) {
             await reloadShot()
-            toastNow(copy.stalePage)
+            showToast(copy.stalePage)
             return
           }
           if (wasShift && pickRef.current) {
             setPick((current) => ({ ...current, elements: [...current.elements, element] }))
             return
           }
+          // Alt+click skips the note entirely — straight into the composer
+          // with the packet (setPick is async; waiting on pickRef would die).
+          if (toComposer) {
+            sendPick(true, element)
+            return
+          }
           setPick({ elements: [element], anchor: { x: point.x, y: point.y } })
-          if (toComposer) sendPick(true)
         })
       }, 240)
       return
@@ -533,8 +538,10 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
   }
 
   /** Turn the open pick into a note: pinned (default) or straight into the composer. */
-  function sendPick(toComposer) {
-    const open = pickRef.current
+  /** `element` overrides pickRef for Alt+click — the pick hasn't committed to
+      * state yet when the click handler already wants it in the composer. */
+  function sendPick(toComposer, element) {
+    const open = element ? { elements: [element], anchor: null } : pickRef.current
     if (!open?.elements?.length) return
     try {
       const note = open.elements.length > 1

@@ -2161,15 +2161,18 @@ ${item}`).join("\n");
             const retargeted = meta && pickPage.targetId && meta.targetId && pickPage.targetId !== meta.targetId;
             if (drifted || scrolled || retargeted) {
               await reloadShot();
-              toastNow(copy.stalePage);
+              showToast(copy.stalePage);
               return;
             }
             if (wasShift && pickRef.current) {
               setPick((current) => ({ ...current, elements: [...current.elements, element] }));
               return;
             }
+            if (toComposer) {
+              sendPick(true, element);
+              return;
+            }
             setPick({ elements: [element], anchor: { x: point.x, y: point.y } });
-            if (toComposer) sendPick(true);
           });
         }, 240);
         return;
@@ -2240,8 +2243,8 @@ ${item}`).join("\n");
         setComment(picked.text || "");
       });
     }
-    function sendPick(toComposer) {
-      const open = pickRef.current;
+    function sendPick(toComposer, element) {
+      const open = element ? { elements: [element], anchor: null } : pickRef.current;
       if (!open?.elements?.length) return;
       try {
         const note = open.elements.length > 1 ? multiNote2(open.elements, { url: pageUrl, comment: commentRef.current }) : designNote2(open.elements[0], { url: pageUrl, comment: commentRef.current });

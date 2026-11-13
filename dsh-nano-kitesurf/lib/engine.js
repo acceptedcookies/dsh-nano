@@ -708,7 +708,7 @@ export async function editElement(httpBase, selector, text) {
     }, page.sessionId)
     const result = evaluated.result?.value
     if (!result || result.missing === true || evaluated.exceptionDetails) {
-      throw new KitesurfError('kitesurf.pick.failed', 'selector matched nothing')
+      throw new KitesurfError('kitesurf.edit.miss', 'selector matched nothing')
     }
     return { ok: true, box: result.box || null }
   })

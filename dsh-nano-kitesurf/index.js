@@ -132,6 +132,7 @@ const ERROR_STATUS = [
   [/^kitesurf\.pick\.point$/, 400],
   [/^kitesurf\.edit\.badtext$/, 400],
   [/^kitesurf\.edit\.badpoint$/, 400],
+  [/^kitesurf\.edit\.miss$/, 404],
   [/^kitesurf\.pick\.badpoint$/, 400],
   [/^kitesurf\.pick\.failed$/, 502],
   [/^kitesurf\.shot\.scroll$/, 400],

@@ -205,6 +205,18 @@ const KITESURF_TOOLS = [
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
+    name: 'kitesurf_network',
+    description: 'Network waterfall from the Kitesurf CDP session: method, url, status, mimeType, bytes and duration for every request. failedOnly=true shows 4xx/5xx and transport failures only.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        failedOnly: { type: 'boolean' },
+        limit: { type: 'number', description: '1..200, default 100' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'kitesurf_ports',
     description: 'Port truth: what the profile configured, what the engine actually uses, what the container published, and whether each host port is free (e.g. 8787 held by Cursor while the engine runs on 8798). Read this FIRST for any container/bootstrap failure.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
@@ -264,6 +276,14 @@ function answerNativeTool(name, args, bridgeState) {
     return { ok: true, entries: filter ? all.filter((r) => r.errorId.includes(filter)) : all, total: all.length }
   }
   if (name === 'kitesurf_targets') return { ok: true, ...(snap.engine?.targets || { count: 0, targets: [] }), targetsError: snap.engine?.targetsError || null }
+  if (name === 'kitesurf_network') {
+    const limit = Math.max(1, Math.min(Number(args.limit) || 100, 200))
+    const entries = (snap.network?.entries || [])
+      .filter((r) => args.failedOnly !== true || r.failed || (r.status && r.status >= 400))
+      .slice(-limit)
+    const failed = (snap.network?.entries || []).filter((r) => r.failed || (r.status && r.status >= 400)).length
+    return { ok: true, entries, total: snap.network?.total ?? entries.length, failed }
+  }
   if (name === 'kitesurf_ports') {
     const ports = snap.ports || null
     const hint = []

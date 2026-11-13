@@ -242,9 +242,10 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
   const [composing, setComposing] = React.useState(false)
   const refSeq = React.useRef(0)
   const [devtoolsOpen, setDevtoolsOpen] = React.useState(false)
-  // Native HTML stays opt-in: it works when enabled manually (verified: pick
-  // -> <kitesurf ref> in composer) but is not yet reliable on first mount, so
-  // the screenshot path remains the default.
+  // Default stays on the screenshot: native HTML works when switched on
+  // manually (verified pick -> composer with body > p), but a pane that boots
+  // with nativeHtml already true does not receive clicks. Needs init-order
+  // work before it can be the default.
   const [nativeHtml, setNativeHtml] = React.useState(false)
   const [domDoc, setDomDoc] = React.useState(null)
   const domFrameRef = React.useRef(null)

@@ -95,6 +95,17 @@ export function createNanoKite(options = {}) {
       if (next.mcpPort != null) mcpPort = mcpPortOf(next.mcpPort)
       return snapshot()
     },
+    /**
+     * Re-adopt a live engine after a host restart: the phase was in-memory
+     * only, so a running container reads as 'idle' and the pane shows
+     * "start engine" while the engine is fine. The caller probes /health
+     * first; adopt() just trusts that verdict instead of re-doing the check.
+     */
+    adopt() {
+      if (phase !== 'idle') return snapshot() // already tracked — nothing to fix
+      phase = 'running'
+      return snapshot()
+    },
   }
 }
 

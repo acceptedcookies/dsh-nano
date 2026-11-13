@@ -221,7 +221,7 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
       try {
         const shotPayload = await post(SHOT, {})
         setShot(shotPayload.data)
-        setShotMeta({ url: shotPayload.url || '', scrollY: shotPayload.scrollY || 0, targetId: shotPayload.targetId || '', at: Date.now() })
+        setShotMeta({ url: shotPayload.url || '', scrollY: shotPayload.scrollY || 0, targetId: shotPayload.targetId || '', viewport: shotPayload.viewport?.width ?? null, at: Date.now() })
         // pageUrl mirrors whatever the engine reports — pages opened behind
         // the pane (agent /open) still name the right url in notes.
         if (shotPayload.url) setPageUrl(shotPayload.url)
@@ -336,7 +336,7 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
     })
     const shotPayload = await post(SHOT, {})
     setShot(shotPayload.data)
-    setShotMeta({ url: shotPayload.url || '', scrollY: shotPayload.scrollY || 0, targetId: shotPayload.targetId || '', at: Date.now() })
+    setShotMeta({ url: shotPayload.url || '', scrollY: shotPayload.scrollY || 0, targetId: shotPayload.targetId || '', viewport: shotPayload.viewport?.width ?? null, at: Date.now() })
     setPick(null)
     remember(url)
   }
@@ -344,7 +344,7 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
   async function reloadShot(scroll) {
     const shotPayload = await post(SHOT, scroll ? { scroll } : {})
     setShot(shotPayload.data)
-    setShotMeta({ url: shotPayload.url || '', scrollY: shotPayload.scrollY || 0, targetId: shotPayload.targetId || '', at: Date.now() })
+    setShotMeta({ url: shotPayload.url || '', scrollY: shotPayload.scrollY || 0, targetId: shotPayload.targetId || '', viewport: shotPayload.viewport?.width ?? null, at: Date.now() })
     if (shotPayload.url) setPageUrl(shotPayload.url)
     setPick(null)
   }
@@ -444,7 +444,8 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
           const drifted = meta && pickPage.url && pickPage.url !== meta.url
           const scrolled = meta && !drifted && Math.abs((pickPage.scrollY || 0) - (meta.scrollY || 0)) > 8
           const retargeted = meta && pickPage.targetId && meta.targetId && pickPage.targetId !== meta.targetId
-          if (drifted || scrolled || retargeted) {
+          const reViewed = meta && pickPage.viewport && meta.viewport != null && pickPage.viewport.width !== meta.viewport
+          if (drifted || scrolled || retargeted || reViewed) {
             await reloadShot()
             showToast(copy.stalePage)
             return

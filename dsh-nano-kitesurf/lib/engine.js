@@ -603,6 +603,9 @@ export async function captureShot(httpBase, scrollY = 0) {
       url: typeof info.url === 'string' ? info.url : '',
       scrollX: typeof info.scrollX === 'number' ? info.scrollX : 0,
       scrollY: typeof info.scrollY === 'number' ? info.scrollY : 0,
+      // Viewport is part of frame identity: emulating 390px changes the same
+      // url/scroll into a different-looking page.
+      viewport: currentViewport(),
     }
   })
 }
@@ -696,7 +699,7 @@ const SELECTOR_PACKET_EXPRESSION = `(() => {
  */
 export async function pickBySelector(httpBase, selector) {
   const clean = String(selector || '').slice(0, 320)
-  if (!clean) throw new KitesurfError('kitesurf.pick.badpoint', 'selector required')
+  if (!clean) throw new KitesurfError('kitesurf.pick.selector', 'selector required')
   return useLive(httpBase, async (client) => {
     const page = await pageHandle(client)
     const evaluated = await client.send('Runtime.evaluate', {
@@ -704,8 +707,17 @@ export async function pickBySelector(httpBase, selector) {
       returnByValue: true,
     }, page.sessionId)
     const remote = evaluated.result ?? {}
-    if (remote.value == null || evaluated.exceptionDetails) {
-      throw new KitesurfError('kitesurf.pick.failed', 'selector matched nothing')
+    // A syntax error in the selector is an input fault (400), a valid-but-
+    // unmatched selector is a miss (404) — neither is an engine fault (502).
+    if (evaluated.exceptionDetails) {
+      const text = String(evaluated.exceptionDetails.text || '')
+      if (/SyntaxError|not a valid selector/i.test(text)) {
+        throw new KitesurfError('kitesurf.pick.selector', 'invalid selector syntax')
+      }
+      throw new KitesurfError('kitesurf.pick.failed', 'selector probe failed')
+    }
+    if (remote.value == null) {
+      throw new KitesurfError('kitesurf.pick.miss', 'selector matched nothing')
     }
     const packet = elementPacket(remote.value)
     const info = await pageInfo(client, page)
@@ -714,6 +726,7 @@ export async function pickBySelector(httpBase, selector) {
       targetId: page.targetId,
       url: typeof info.url === 'string' ? info.url : '',
       scrollY: typeof info.scrollY === 'number' ? info.scrollY : 0,
+      viewport: currentViewport(),
       element: packet,
       elements: [packet],
     }
@@ -774,6 +787,12 @@ export async function pickElement(httpBase, x, y) {
     if (remote.subtype === 'error' || evaluated.exceptionDetails) {
       throw new KitesurfError('kitesurf.pick.failed', String(evaluated.exceptionDetails?.text || 'element probe failed').slice(0, 160))
     }
+    // elementFromPoint hit nothing (point outside drawn content / no element)
+    // — an input-side miss, not a success with an empty packet that would
+    // poison lastPick.
+    if (remote.value == null) {
+      throw new KitesurfError('kitesurf.pick.miss', 'no element at point')
+    }
     const packet = elementPacket(remote.value)
     const info = await pageInfo(client, page)
     return {
@@ -781,6 +800,7 @@ export async function pickElement(httpBase, x, y) {
       targetId: page.targetId,
       url: typeof info.url === 'string' ? info.url : '',
       scrollY: typeof info.scrollY === 'number' ? info.scrollY : 0,
+      viewport: currentViewport(),
       element: packet,
       // Multi-select notes read this list; single picks put one element here.
       elements: [packet],

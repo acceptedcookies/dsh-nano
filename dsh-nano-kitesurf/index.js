@@ -80,20 +80,30 @@ function sendJson(res, status, payload) {
   res.end(body)
 }
 
+/**
+ * Drain-guarded body reader: on overflow it keeps eating 'data' (so the
+ * socket doesn't RST mid-write) then rejects — callers still send the real
+ * 413 instead of a silent TCP close.
+ */
 function readBody(req, maxBytes) {
   return new Promise((resolve, reject) => {
     const chunks = []
     let size = 0
+    let overflow = false
     req.on('data', (chunk) => {
+      if (overflow) return // keep draining so the 413 can be written
       size += chunk.length
       if (size > maxBytes) {
-        req.destroy()
-        reject(new KitesurfError('kitesurf.body.toolarge', `body exceeds ${maxBytes} bytes`))
+        overflow = true
       } else {
         chunks.push(chunk)
       }
     })
     req.on('end', () => {
+      if (overflow) {
+        reject(new KitesurfError('kitesurf.body.toolarge', `body exceeds ${maxBytes} bytes`))
+        return
+      }
       if (chunks.length === 0) {
         resolve({})
         return
@@ -130,11 +140,12 @@ const ERROR_STATUS = [
   [/^kitesurf\.body\.toolarge$/, 413],
   [/^kitesurf\.body\./, 400],
   [/^kitesurf\.url\./, 400],
-  [/^kitesurf\.pick\.point$/, 400],
+  [/^kitesurf\.pick\.(point|selector)$/, 400],
   [/^kitesurf\.edit\.badtext$/, 400],
   [/^kitesurf\.edit\.badpoint$/, 400],
   [/^kitesurf\.edit\.miss$/, 404],
   [/^kitesurf\.pick\.badpoint$/, 400],
+  [/^kitesurf\.pick\.miss$/, 404],
   [/^kitesurf\.pick\.failed$/, 502],
   [/^kitesurf\.shot\.scroll$/, 400],
   [/^kitesurf\.settings\./, 400],
@@ -263,6 +274,10 @@ export function apply(ctx, config) {
       methods: ['GET', 'HEAD'],
       handler: async (_req, res) => {
         const status = await statusOf(origin())
+        // Re-adopt a live engine after a host restart: phase was in-memory
+        // only, so a running container reads 'idle' and the pane wrongly
+        // offers "start engine". One /health probe is enough to trust.
+        if (status.ok && kite.snapshot().phase === 'idle') kite.adopt()
         const { phase, httpBase: base, mcpPort, cdp } = kite.snapshot()
         sendJson(res, 200, { ...status, kite: { phase, httpBase: base, mcpPort, cdp } })
       },
@@ -318,7 +333,10 @@ export function apply(ctx, config) {
             : (() => { const p = pickPoint(body); return pickElement(origin(), p.x, p.y) })())
           // Hover previews ask with preview:true — they must not move
           // lastPick, which belongs to the note the human is composing.
-          if (body.preview !== true) {
+          // preview truthy-in-any-shape stays read-only — a mistyped
+          // "true" must not scribble over the human's live lastPick.
+          const preview = body.preview === true || body.preview === 'true'
+          if (!preview) {
             lastPick = { at: new Date().toISOString(), ...picked }
           }
           lastError = null
@@ -351,6 +369,14 @@ export function apply(ctx, config) {
       handler: async (req, res, route) => {
         try {
           const body = await readBody(req, route.bodyLimit)
+          // Present-but-wrong-typed fields are a caller bug, not "unset" —
+          // silently dropping them would echo the old value as if it saved.
+          if (body.userAgent !== undefined && typeof body.userAgent !== 'string') {
+            throw new KitesurfError('kitesurf.settings.userAgent', 'userAgent must be a string')
+          }
+          if (body.viewport !== undefined && body.viewport !== null && typeof body.viewport !== 'object') {
+            throw new KitesurfError('kitesurf.settings.viewport', 'viewport must be an object or null')
+          }
           const saved = await hostSpan('settings', () => setBrowserSettings(origin(), {
             userAgent: typeof body.userAgent === 'string' ? body.userAgent : undefined,
             viewport: body.viewport === null || (body.viewport && typeof body.viewport === 'object') ? body.viewport : undefined,

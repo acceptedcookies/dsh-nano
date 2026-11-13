@@ -20,7 +20,9 @@ const CDP = process.env.AGENT_BROWSER_CDP || 'ws://127.0.0.1:8787/devtools/brows
 const MAX_FRAME = Number(process.env.KITESURF_MCP_MAX_FRAME || 1_048_576)
 const MAX_MESSAGE = Number(process.env.KITESURF_MCP_MAX_MESSAGE || 1_048_576)
 const MAX_CONNS = Number(process.env.KITESURF_MCP_MAX_CONNS || 8)
-const IDLE_MS = Number(process.env.KITESURF_MCP_IDLE_MS || 2 * 60 * 60 * 1000)
+// 20 minutes, not hours: a quiet but healthy MCP session is minutes, and a
+// half-open zombie must not hold a conn slot for hours.
+const IDLE_MS = Number(process.env.KITESURF_MCP_IDLE_MS || 20 * 60 * 1000)
 // Browser-supplied Origin must carry one of these exact hostnames — prefix
 // matching would let http://localhost.evil.example pass (S2-3). Non-browser
 // clients send no Origin and are allowed. Comma-separated env overrides.
@@ -157,7 +159,9 @@ function attach(socket, env = process.env) {
     if (!alive) return
     alive = false
     try { sendClose(socket, code) } catch { /* gone */ }
-    socket.end()
+    // Destroy, not just end(): on a half-open socket (client died mid-frame)
+    // end() can stall and 'close' never emits — destroy always releases it.
+    try { socket.destroy() } catch { /* gone */ }
     child.kill()
   }
   const child = spawn('agent-browser', ['mcp'], {
@@ -200,6 +204,9 @@ function attach(socket, env = process.env) {
   socket.on('data', decode)
   socket.on('close', () => { alive = false; child.kill() })
   socket.on('error', () => { alive = false; child.kill() })
+  // TCP FIN without a WS close frame (abrupt client death): 'end' fires where
+  // 'close' may lag or never come — free the slot + child, don't leak the conn.
+  socket.on('end', () => teardown(1006))
   socket.setTimeout(IDLE_MS, () => teardown(1001))
 }
 

@@ -230,3 +230,82 @@ export function listRefs(limit = 20) {
 export function refChip(id, label) {
   return `⟦kitesurf:${id}${label ? ` ${label}` : ''}⟧`
 }
+
+/**
+ * Network lifecycle. The engine pushes requestWillBeSent → responseReceived →
+ * loadingFinished/Failed on the same page session we already hold, so a
+ * DevTools-style waterfall needs no extra socket and no polling of the page.
+ */
+const NET_CAP = 200
+const netRequests = new Map()   // requestId → row (insertion ordered)
+const netOrder = []
+let droppedNetwork = 0
+
+function trimNetwork() {
+  while (netOrder.length > NET_CAP) {
+    const id = netOrder.shift()
+    if (netRequests.delete(id)) droppedNetwork += 1
+  }
+}
+
+export function networkRequest(p) {
+  const id = String(p.requestId || '')
+  if (!id) return
+  const existing = netRequests.get(id)
+  if (existing) return existing
+  const row = {
+    id,
+    at: new Date().toISOString(),
+    method: String(p.request?.method || 'GET').slice(0, 12),
+    url: String(p.request?.url || '').slice(0, 400),
+    type: String(p.type || 'Other').slice(0, 24),
+    status: null,
+    mimeType: '',
+    size: null,
+    durationMs: null,
+    failed: false,
+    error: '',
+    startedAt: Date.now(),
+  }
+  netRequests.set(id, row)
+  netOrder.push(id)
+  trimNetwork()
+  return row
+}
+
+export function networkResponse(p) {
+  const row = netRequests.get(String(p.requestId || ''))
+  if (!row) return
+  row.status = Number(p.response?.status) || 0
+  row.mimeType = String(p.response?.mimeType || '').slice(0, 60)
+  if (p.response?.fromDiskCache || p.response?.fromServiceWorker) row.cached = true
+}
+
+export function networkFinished(p) {
+  const row = netRequests.get(String(p.requestId || ''))
+  if (!row) return
+  row.size = Number(p.encodedDataLength) || row.size
+  row.durationMs = Date.now() - row.startedAt
+}
+
+export function networkFailed(p) {
+  const row = netRequests.get(String(p.requestId || ''))
+  if (!row) return
+  row.failed = true
+  row.error = String(p.errorText || 'failed').slice(0, 120)
+  row.durationMs = Date.now() - row.startedAt
+}
+
+export function listNetwork({ limit = 100, failedOnly = false } = {}) {
+  const cap = Math.max(1, Math.min(Number(limit) || 100, NET_CAP))
+  let rows = netOrder.map((id) => netRequests.get(id)).filter(Boolean)
+  if (failedOnly) rows = rows.filter((r) => r.failed || (r.status && r.status >= 400))
+  return { entries: rows.slice(-cap), total: netOrder.length, dropped: droppedNetwork }
+}
+
+export function clearNetwork() {
+  const cleared = netOrder.length
+  netOrder.length = 0
+  netRequests.clear()
+  return cleared
+}

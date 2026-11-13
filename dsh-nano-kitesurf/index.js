@@ -8,8 +8,8 @@ import { createHash, randomUUID } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import { registerRoutes } from './lib/route-guard.js'
 import { ROUTE_TABLE, PLUGIN } from './lib/route-table.js'
-import { browserSocketUrl, captureShot, currentEmulation, currentUserAgent, currentViewport, engineTargets, evaluateInPage, fetchEngine, KitesurfError, navigateHistory, openPage, pickElement, pickBySelector, pickPoint, pickSelector, editBody, editElement, pageUrl, releaseEngine, scrollDelta, setBrowserSettings } from './lib/engine.js'
-import { ERROR_STATUS, clearConsole, clearOperations, diagnosticsSummary, getRef, listConsole, listOperations, listRefs, putRef, recordOperation, refChip, summarizeInput } from './lib/diagnostics.js'
+import { browserSocketUrl, captureDom, captureShot, currentEmulation, currentUserAgent, currentViewport, engineTargets, evaluateInPage, fetchEngine, KitesurfError, navigateHistory, openPage, pickElement, pickBySelector, pickPoint, pickSelector, editBody, editElement, pageUrl, releaseEngine, scrollDelta, setBrowserSettings } from './lib/engine.js'
+import { ERROR_STATUS, clearConsole, clearNetwork, clearOperations, diagnosticsSummary, getRef, listNetwork, listConsole, listOperations, listRefs, putRef, recordOperation, refChip, summarizeInput } from './lib/diagnostics.js'
 import { kitesurfSkill, nanoKiteSkill } from './lib/skill.js'
 import { createNanoKite } from './lib/nano-kite.js'
 import { ensureLocalContainer, hostPort, stopLocalContainer } from './lib/container-engine.js'
@@ -34,6 +34,8 @@ const DIAGNOSTICS_ROUTE = '/nano-kitesurf/diagnostics'
 const PORTS_ROUTE = '/nano-kitesurf/ports'
 const RECOVER_ROUTE = '/nano-kitesurf/recover'
 const CONTEXT_ROUTE = '/nano-kitesurf/context'
+const DOM_ROUTE = '/nano-kitesurf/dom'
+const NETWORK_ROUTE = '/nano-kitesurf/network'
 const TARGETS_ROUTE = '/nano-kitesurf/targets'
 const EVALUATE_ROUTE = '/nano-kitesurf/evaluate'
 
@@ -480,6 +482,7 @@ export function apply(ctx, config) {
       ports: await portReport().catch(() => null),
       observability: summary,
       console: listConsole({ limit }),
+      network: listNetwork({ limit }),
       operations: listOperations({ limit }),
       perf: (() => { try { return perfSnapshot() } catch { return null } })(),
       hints,
@@ -898,6 +901,40 @@ export function apply(ctx, config) {
             throw new KitesurfError('kitesurf.diag.query', 'limit must be 1..100')
           }
           sendJson(res, 200, await buildDiagnostics(limit))
+        } catch (error) {
+          fail(res, error)
+        }
+      },
+    },
+    {
+      path: DOM_ROUTE,
+      methods: ['GET', 'HEAD'],
+      handler: async (_req, res) => {
+        try {
+          const page = await hostSpan('dom', () => captureDom(origin()))
+          sendJson(res, 200, { ok: true, ...page })
+        } catch (error) {
+          fail(res, error)
+        }
+      },
+    },
+    {
+      path: NETWORK_ROUTE,
+      methods: ['GET', 'HEAD', 'POST'],
+      bodyLimit: 4096,
+      handler: async (req, res, route) => {
+        try {
+          const body = req.method === 'POST' ? await readBody(req, route.bodyLimit) : {}
+          if (body.clear === true) {
+            sendJson(res, 200, { ok: true, cleared: clearNetwork() })
+            return
+          }
+          const q = queryOf(req)
+          const limit = Number(q.get('limit') || 100)
+          if (!Number.isFinite(limit) || limit < 1 || limit > 200) {
+            throw new KitesurfError('kitesurf.network.query', 'limit must be 1..200')
+          }
+          sendJson(res, 200, { ok: true, ...listNetwork({ limit, failedOnly: q.get('failedOnly') === 'true' }) })
         } catch (error) {
           fail(res, error)
         }

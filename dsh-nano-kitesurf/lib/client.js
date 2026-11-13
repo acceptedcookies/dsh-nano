@@ -1538,6 +1538,13 @@ var __kitesurfExport = (() => {
           copyContext: "\u590D\u5236\u4E0A\u4E0B\u6587",
           inputContext: "\u8F93\u5165\u5907\u6CE8",
           copied: "\u4E0A\u4E0B\u6587\u5DF2\u590D\u5236",
+          devtools: "\u5F00\u53D1\u8005\u5DE5\u5177",
+          devtoolsConsole: "Console",
+          devtoolsNetwork: "Network",
+          devtoolsEmpty: "\u6682\u65E0\u6570\u636E\uFF0C\u64CD\u4F5C\u9875\u9762\u540E\u5237\u65B0",
+          devtoolsClear: "\u6E05\u7A7A",
+          devtoolsClose: "\u5173\u95ED",
+          devtoolsFailedOnly: "\u4EC5\u5931\u8D25",
           envTitle: "\u73AF\u5883\u81EA\u68C0",
           envPlugin: "\u63D2\u4EF6",
           envEngine: "\u5F15\u64CE",
@@ -1610,6 +1617,13 @@ var __kitesurfExport = (() => {
           copyContext: "Copy context",
           inputContext: "Add a note",
           copied: "Context copied",
+          devtools: "DevTools",
+          devtoolsConsole: "Console",
+          devtoolsNetwork: "Network",
+          devtoolsEmpty: "No entries yet \u2014 interact with the page",
+          devtoolsClear: "Clear",
+          devtoolsClose: "Close",
+          devtoolsFailedOnly: "Failed only",
           envTitle: "Environment",
           envPlugin: "Plugin",
           envEngine: "Engine",
@@ -1861,6 +1875,8 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
   var PORTS = "/nano-kitesurf/ports";
   var RECOVER = "/nano-kitesurf/recover";
   var DIAGNOSTICS = "/nano-kitesurf/diagnostics";
+  var CONSOLE = "/nano-kitesurf/console";
+  var NETWORK = "/nano-kitesurf/network";
   var CONTEXT = "/nano-kitesurf/context";
   var KITE = "/nano-kitesurf/kite";
   var KIND = "kitesurf";
@@ -1920,6 +1936,23 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
 .nks-busy::before{content:"";display:block;width:35%;height:100%;background:var(--dsw-alias-link,#2f6fed);animation:nks-beat 1s ease-in-out infinite}
 @keyframes nks-beat{from{transform:translateX(-120%)}to{transform:translateX(320%)}}
 .nks-settings-body{display:flex;flex-direction:column;gap:8px}
+.nks-dt{flex:none;height:240px;display:flex;flex-direction:column;border-top:.5px solid var(--dsw-alias-border-l3);background:var(--dsw-alias-bg-layer-1);min-height:0}
+.nks-dt-head{flex:none;display:flex;align-items:center;gap:6px;height:30px;padding:0 8px;border-bottom:.5px solid var(--dsw-alias-border-l3)}
+.nks-dt-tab{height:22px;padding:0 8px;border:0;background:transparent;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11);border-radius:var(--dsw-radius-sm);cursor:pointer}
+.nks-dt-tab[aria-selected="true"]{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}
+.nks-dt-body{flex:auto;min-height:0;overflow:auto;font:var(--dsw-font-xxxs-11)}
+.nks-dt-row{display:flex;gap:8px;padding:2px 8px;border-bottom:.5px solid color-mix(in srgb,var(--dsw-alias-border-l3) 60%,transparent);align-items:baseline}
+.nks-dt-row:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.nks-dt-lv{flex:none;width:52px;text-transform:uppercase;font-size:9px}
+.nks-dt-lv[data-lv="error"],.nks-dt-lv[data-lv="exception"]{color:var(--dsw-alias-fill-error,#d5455c)}
+.nks-dt-lv[data-lv="warn"]{color:var(--dsw-alias-fill-warning,#d29922)}
+.nks-dt-lv[data-lv="network"]{color:var(--dsw-alias-link,#7aaaff)}
+.nks-dt-msg{flex:auto;min-width:0;white-space:pre-wrap;word-break:break-word;color:var(--dsw-alias-label-secondary)}
+.nks-dt-url{flex:none;max-width:55%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-tertiary);direction:ltr}
+.nks-dt-st{flex:none;width:36px;text-align:right}
+.nks-dt-st[data-bad="true"]{color:var(--dsw-alias-fill-error,#d5455c)}
+.nks-dt-dur{flex:none;width:58px;text-align:right;color:var(--dsw-alias-label-tertiary)}
+.nks-dt-empty{padding:14px;color:var(--dsw-alias-label-tertiary)}
 .nks-env{border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-md);padding:8px;background:var(--dsw-alias-bg-layer-2);display:flex;flex-direction:column;gap:6px}
 .nks-env-title{color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxxs-11);text-transform:none;display:flex;align-items:center;justify-content:space-between;gap:8px}
 .nks-env-row{display:flex;justify-content:space-between;gap:10px;font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-tertiary)}
@@ -2032,6 +2065,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
     const [editing, setEditing] = React5.useState(false);
     const [composing, setComposing] = React5.useState(false);
     const refSeq = React5.useRef(0);
+    const [devtoolsOpen, setDevtoolsOpen] = React5.useState(false);
     const [toast, setToast] = React5.useState(null);
     const [busy, setBusy] = React5.useState(false);
     const [hover, setHover] = React5.useState(null);
@@ -2709,6 +2743,73 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         h("div", { className: "nks-env-note" }, note || copy.envHint)
       );
     }
+    function DevTools({ open, onClose }) {
+      const [tab, setTab] = React5.useState("console");
+      const [rows, setRows] = React5.useState([]);
+      const [failedOnly, setFailedOnly] = React5.useState(false);
+      React5.useEffect(() => {
+        if (!open) return void 0;
+        let alive = true;
+        const load = async () => {
+          try {
+            if (tab === "console") {
+              const data = await fetch(`${CONSOLE}?limit=200`).then((r) => r.json());
+              if (alive) setRows(data.entries || []);
+            } else {
+              const data = await fetch(`${NETWORK}?limit=200${failedOnly ? "&failedOnly=true" : ""}`).then((r) => r.json());
+              if (alive) setRows(data.entries || []);
+            }
+          } catch {
+          }
+        };
+        load();
+        const timer = window.setInterval(load, 1500);
+        return () => {
+          alive = false;
+          clearInterval(timer);
+        };
+      }, [open, tab, failedOnly]);
+      if (!open) return null;
+      const clear = async () => {
+        const path = tab === "console" ? CONSOLE : NETWORK;
+        await fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: '{"clear":true}' }).catch(() => {
+        });
+        setRows([]);
+      };
+      return h(
+        "div",
+        { className: "nks-dt", "data-nks-devtools": "1" },
+        h(
+          "div",
+          { className: "nks-dt-head" },
+          h("button", { type: "button", className: "nks-dt-tab", "aria-selected": tab === "console" ? "true" : "false", "data-nks-dt-console": "1", onClick: () => setTab("console") }, copy.devtoolsConsole),
+          h("button", { type: "button", className: "nks-dt-tab", "aria-selected": tab === "network" ? "true" : "false", "data-nks-dt-network": "1", onClick: () => setTab("network") }, copy.devtoolsNetwork),
+          tab === "network" ? h("button", { type: "button", className: "nks-dt-tab", "aria-selected": failedOnly ? "true" : "false", onClick: () => setFailedOnly((v) => !v) }, copy.devtoolsFailedOnly) : null,
+          h("span", { style: { flex: "auto" } }),
+          h("button", { type: "button", className: "nks-dt-tab", "data-nks-dt-clear": "1", onClick: clear }, copy.devtoolsClear),
+          h("button", { type: "button", className: "nks-dt-tab", "data-nks-dt-close": "1", onClick: onClose }, copy.devtoolsClose)
+        ),
+        h(
+          "div",
+          { className: "nks-dt-body", "data-nks-dt-body": "1" },
+          rows.length === 0 ? h("div", { className: "nks-dt-empty" }, copy.devtoolsEmpty) : null,
+          rows.map((row, index) => tab === "console" ? h(
+            "div",
+            { className: "nks-dt-row", key: `c${row.seq || index}` },
+            h("span", { className: "nks-dt-lv", "data-lv": row.level }, row.level),
+            h("span", { className: "nks-dt-msg" }, row.text),
+            row.url ? h("span", { className: "nks-dt-url" }, row.url) : null
+          ) : h(
+            "div",
+            { className: "nks-dt-row", key: `n${row.id || index}` },
+            h("span", { className: "nks-dt-lv" }, row.method),
+            h("span", { className: "nks-dt-st", "data-bad": row.failed || row.status && row.status >= 400 ? "true" : "false" }, row.failed ? "ERR" : String(row.status || "\u2026")),
+            h("span", { className: "nks-dt-url" }, row.url),
+            h("span", { className: "nks-dt-dur" }, row.durationMs == null ? "" : `${row.durationMs}ms`)
+          ))
+        )
+      );
+    }
     function openSettings() {
       if (dialogOpenRef.current) return;
       dialogOpenRef.current = true;
@@ -2872,6 +2973,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
             return !value;
           })
         }, glyph("annotate")),
+        h("button", { type: "button", className: "nks-tool", "data-nks-devtools-toggle": "1", "aria-pressed": devtoolsOpen ? "true" : "false", title: copy.devtools, "aria-label": copy.devtools, onClick: () => setDevtoolsOpen((v) => !v) }, glyph("history")),
         h("button", { type: "button", className: "nks-tool", "data-nks-settings": "1", "aria-label": copy.settings, title: copy.settings, onClick: openSettings }, glyph("settings"))
       ),
       pins.length ? h(

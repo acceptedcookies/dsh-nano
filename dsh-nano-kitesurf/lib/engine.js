@@ -10,7 +10,7 @@
  * the process-local ring buffer in ./diagnostics.js so an MCP client can read
  * the page's execution state without attaching a second socket.
  */
-import { recordConsole } from './diagnostics.js'
+import { networkFailed, networkFinished, networkRequest, networkResponse, recordConsole } from './diagnostics.js'
 
 const CONNECT_MS = 4000
 const CALL_MS = 20000
@@ -324,7 +324,11 @@ function captureCdpEvent(method, params) {
       })
       return
     }
+    if (method === 'Network.requestWillBeSent') { networkRequest(params); return }
+    if (method === 'Network.responseReceived') { networkResponse(params); return }
+    if (method === 'Network.loadingFinished') { networkFinished(params); return }
     if (method === 'Network.loadingFailed') {
+      networkFailed(params)
       recordConsole({ level: 'network', source: 'network', text: `${params.errorText || 'request failed'} (${params.type || 'unknown'})`.slice(0, 600) })
       return
     }
@@ -1148,5 +1152,25 @@ export async function pickElement(httpBase, x, y) {
       // Multi-select notes read this list; single picks put one element here.
       elements: [packet],
     }
+  })
+}
+
+
+/** Live DOM of the engine page — the source for native-HTML rendering. */
+export async function captureDom(httpBase) {
+  return useLive(httpBase, async (client) => {
+    const page = await pageHandle(client)
+    const evaluated = await client.send('Runtime.evaluate', {
+      expression: "JSON.stringify({ url: location.href, html: document.documentElement.outerHTML })",
+      returnByValue: true,
+    }, page.sessionId)
+    const raw = evaluated.result?.value
+    if (typeof raw !== 'string' || !raw) {
+      throw new KitesurfError('kitesurf.dom.empty', 'no document to read')
+    }
+    let parsed
+    try { parsed = JSON.parse(raw) } catch { throw new KitesurfError('kitesurf.dom.empty', 'document was not serializable') }
+    if (parsed.url === 'about:blank') throw new KitesurfError('kitesurf.dom.blank', 'page is about:blank')
+    return { url: String(parsed.url || ''), html: String(parsed.html || ''), bytes: raw.length }
   })
 }

@@ -559,6 +559,33 @@
       "bodyLimit": 16384,
       "sessionBinding": false,
       "justification": "CONTEXT_ROUTE — stores the full element packet behind a composer chip and resolves it by id; POST writes, GET reads. Page content egress, L2."
+    },
+    {
+      "plugin": "dsh-nano-kitesurf",
+      "path": "/nano-kitesurf/dom",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "sensitivity": "L2",
+      "capability": "read:host",
+      "bodyLimit": 0,
+      "sessionBinding": false,
+      "justification": "DOM_ROUTE — serialized documentElement.outerHTML for native-HTML rendering; page content egress, L2."
+    },
+    {
+      "plugin": "dsh-nano-kitesurf",
+      "path": "/nano-kitesurf/network",
+      "methods": [
+        "GET",
+        "HEAD",
+        "POST"
+      ],
+      "sensitivity": "L2",
+      "capability": "read:host",
+      "bodyLimit": 4096,
+      "sessionBinding": false,
+      "justification": "NETWORK_ROUTE — Network.* lifecycle ring (method/url/status/duration/size); POST {clear:true} drains. L2."
     }
   ]
 }

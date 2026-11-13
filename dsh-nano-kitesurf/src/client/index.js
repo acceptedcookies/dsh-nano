@@ -19,6 +19,8 @@ const HISTORY = '/nano-kitesurf/history'
 const PORTS = '/nano-kitesurf/ports'
 const RECOVER = '/nano-kitesurf/recover'
 const DIAGNOSTICS = '/nano-kitesurf/diagnostics'
+const CONSOLE = '/nano-kitesurf/console'
+const NETWORK = '/nano-kitesurf/network'
 const CONTEXT = '/nano-kitesurf/context'
 const KITE = '/nano-kitesurf/kite'
 const KIND = 'kitesurf'
@@ -81,6 +83,23 @@ const STYLE = `
 .nks-busy::before{content:"";display:block;width:35%;height:100%;background:var(--dsw-alias-link,#2f6fed);animation:nks-beat 1s ease-in-out infinite}
 @keyframes nks-beat{from{transform:translateX(-120%)}to{transform:translateX(320%)}}
 .nks-settings-body{display:flex;flex-direction:column;gap:8px}
+.nks-dt{flex:none;height:240px;display:flex;flex-direction:column;border-top:.5px solid var(--dsw-alias-border-l3);background:var(--dsw-alias-bg-layer-1);min-height:0}
+.nks-dt-head{flex:none;display:flex;align-items:center;gap:6px;height:30px;padding:0 8px;border-bottom:.5px solid var(--dsw-alias-border-l3)}
+.nks-dt-tab{height:22px;padding:0 8px;border:0;background:transparent;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11);border-radius:var(--dsw-radius-sm);cursor:pointer}
+.nks-dt-tab[aria-selected="true"]{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}
+.nks-dt-body{flex:auto;min-height:0;overflow:auto;font:var(--dsw-font-xxxs-11)}
+.nks-dt-row{display:flex;gap:8px;padding:2px 8px;border-bottom:.5px solid color-mix(in srgb,var(--dsw-alias-border-l3) 60%,transparent);align-items:baseline}
+.nks-dt-row:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.nks-dt-lv{flex:none;width:52px;text-transform:uppercase;font-size:9px}
+.nks-dt-lv[data-lv="error"],.nks-dt-lv[data-lv="exception"]{color:var(--dsw-alias-fill-error,#d5455c)}
+.nks-dt-lv[data-lv="warn"]{color:var(--dsw-alias-fill-warning,#d29922)}
+.nks-dt-lv[data-lv="network"]{color:var(--dsw-alias-link,#7aaaff)}
+.nks-dt-msg{flex:auto;min-width:0;white-space:pre-wrap;word-break:break-word;color:var(--dsw-alias-label-secondary)}
+.nks-dt-url{flex:none;max-width:55%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-tertiary);direction:ltr}
+.nks-dt-st{flex:none;width:36px;text-align:right}
+.nks-dt-st[data-bad="true"]{color:var(--dsw-alias-fill-error,#d5455c)}
+.nks-dt-dur{flex:none;width:58px;text-align:right;color:var(--dsw-alias-label-tertiary)}
+.nks-dt-empty{padding:14px;color:var(--dsw-alias-label-tertiary)}
 .nks-env{border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-md);padding:8px;background:var(--dsw-alias-bg-layer-2);display:flex;flex-direction:column;gap:6px}
 .nks-env-title{color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxxs-11);text-transform:none;display:flex;align-items:center;justify-content:space-between;gap:8px}
 .nks-env-row{display:flex;justify-content:space-between;gap:10px;font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-tertiary)}
@@ -215,6 +234,7 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
   // exists after the human asks for it — typing is not the default path.
   const [composing, setComposing] = React.useState(false)
   const refSeq = React.useRef(0)
+  const [devtoolsOpen, setDevtoolsOpen] = React.useState(false)
   const [toast, setToast] = React.useState(null)
   const [busy, setBusy] = React.useState(false)
   /** Preview box under the cursor before a click (throttled pick preview). */
@@ -981,6 +1001,62 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
       h('div', { className: 'nks-env-note' }, note || copy.envHint))
   }
 
+  /**
+   * In-pane DevTools. Every row is a real CDP event from the engine
+   * (Runtime.consoleAPICalled / exceptionThrown / Log.entryAdded /
+   * Network.requestWillBeSent → responseReceived → loadingFinished|Failed),
+   * captured on the same socket the pane already holds. No Chromium.
+   */
+  function DevTools({ open, onClose }) {
+    const [tab, setTab] = React.useState('console')
+    const [rows, setRows] = React.useState([])
+    const [failedOnly, setFailedOnly] = React.useState(false)
+    React.useEffect(() => {
+      if (!open) return undefined
+      let alive = true
+      const load = async () => {
+        try {
+          if (tab === 'console') {
+            const data = await fetch(`${CONSOLE}?limit=200`).then((r) => r.json())
+            if (alive) setRows(data.entries || [])
+          } else {
+            const data = await fetch(`${NETWORK}?limit=200${failedOnly ? '&failedOnly=true' : ''}`).then((r) => r.json())
+            if (alive) setRows(data.entries || [])
+          }
+        } catch { /* endpoint may be briefly unavailable */ }
+      }
+      load()
+      const timer = window.setInterval(load, 1500)
+      return () => { alive = false; clearInterval(timer) }
+    }, [open, tab, failedOnly])
+    if (!open) return null
+    const clear = async () => {
+      const path = tab === 'console' ? CONSOLE : NETWORK
+      await fetch(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"clear":true}' }).catch(() => {})
+      setRows([])
+    }
+    return h('div', { className: 'nks-dt', 'data-nks-devtools': '1' },
+      h('div', { className: 'nks-dt-head' },
+        h('button', { type: 'button', className: 'nks-dt-tab', 'aria-selected': tab === 'console' ? 'true' : 'false', 'data-nks-dt-console': '1', onClick: () => setTab('console') }, copy.devtoolsConsole),
+        h('button', { type: 'button', className: 'nks-dt-tab', 'aria-selected': tab === 'network' ? 'true' : 'false', 'data-nks-dt-network': '1', onClick: () => setTab('network') }, copy.devtoolsNetwork),
+        tab === 'network' ? h('button', { type: 'button', className: 'nks-dt-tab', 'aria-selected': failedOnly ? 'true' : 'false', onClick: () => setFailedOnly((v) => !v) }, copy.devtoolsFailedOnly) : null,
+        h('span', { style: { flex: 'auto' } }),
+        h('button', { type: 'button', className: 'nks-dt-tab', 'data-nks-dt-clear': '1', onClick: clear }, copy.devtoolsClear),
+        h('button', { type: 'button', className: 'nks-dt-tab', 'data-nks-dt-close': '1', onClick: onClose }, copy.devtoolsClose)),
+      h('div', { className: 'nks-dt-body', 'data-nks-dt-body': '1' },
+        rows.length === 0 ? h('div', { className: 'nks-dt-empty' }, copy.devtoolsEmpty) : null,
+        rows.map((row, index) => tab === 'console'
+          ? h('div', { className: 'nks-dt-row', key: `c${row.seq || index}` },
+            h('span', { className: 'nks-dt-lv', 'data-lv': row.level }, row.level),
+            h('span', { className: 'nks-dt-msg' }, row.text),
+            row.url ? h('span', { className: 'nks-dt-url' }, row.url) : null)
+          : h('div', { className: 'nks-dt-row', key: `n${row.id || index}` },
+            h('span', { className: 'nks-dt-lv' }, row.method),
+            h('span', { className: 'nks-dt-st', 'data-bad': row.failed || (row.status && row.status >= 400) ? 'true' : 'false' }, row.failed ? 'ERR' : String(row.status || '…')),
+            h('span', { className: 'nks-dt-url' }, row.url),
+            h('span', { className: 'nks-dt-dur' }, row.durationMs == null ? '' : `${row.durationMs}ms`)))))
+  }
+
   function openSettings() {
     if (dialogOpenRef.current) return
     dialogOpenRef.current = true
@@ -1125,6 +1201,7 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
           return !value
         }),
       }, glyph('annotate')),
+      h('button', { type: 'button', className: 'nks-tool', 'data-nks-devtools-toggle': '1', 'aria-pressed': devtoolsOpen ? 'true' : 'false', title: copy.devtools, 'aria-label': copy.devtools, onClick: () => setDevtoolsOpen((v) => !v) }, glyph('history')),
       h('button', { type: 'button', className: 'nks-tool', 'data-nks-settings': '1', 'aria-label': copy.settings, title: copy.settings, onClick: openSettings }, glyph('settings'))),
     pins.length ? h('div', { className: 'nks-pins', 'data-nks-pins': String(pins.length), 'aria-live': 'polite' },
       `${pins.length} ${copy.pinsCount}${pins.length === MAX_PINS ? copy.pinsFull : ''}`,

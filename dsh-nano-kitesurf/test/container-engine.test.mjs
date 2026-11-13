@@ -85,6 +85,28 @@ test('a container whose published ports drifted is deleted and recreated', async
   assert.deepEqual(commands, ['system start', 'delete --force', 'run -d'])
 })
 
+test('a remap onto an occupied host port must NOT delete the working container', async () => {
+  const stale = JSON.stringify([{
+    configuration: {
+      publishedPorts: [
+        { containerPort: 8787, hostPort: 8798, hostAddress: '127.0.0.1', proto: 'TCP' },
+        { containerPort: 8791, hostPort: 8799, hostAddress: '127.0.0.1', proto: 'TCP' },
+      ],
+    },
+  }])
+  const commands = []
+  const io = {
+    inspect: async () => stale,
+    run: async (args) => { commands.push(args.slice(0, 2).join(' ')); return { stdout: '', stderr: '' } },
+    portFree: async () => false,           // Cursor owns 8787
+  }
+  await assert.rejects(
+    () => ensureLocalContainer({ httpBase: 'http://127.0.0.1:8787', mcpPort: 8799 }, { ...io, checkout: '/src/kitesurf' }),
+    (error) => error.id === 'kitesurf.kite.portbusy',
+  )
+  assert.equal(commands.includes('delete --force'), false, 'must not delete a healthy container')
+})
+
 test('a cold subsystem failure surfaces the system-start error, not the run', async () => {
   const io = {
     inspect: async () => null,

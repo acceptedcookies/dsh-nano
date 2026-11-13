@@ -5,6 +5,7 @@
 
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
+import { createConnection } from 'node:net'
 import { join } from 'node:path'
 import { KitesurfError } from './engine.js'
 
@@ -117,6 +118,25 @@ export function runContainer(args, io = {}) {
   })
 }
 
+/**
+ * Is a host port free on loopback? Used before deleting a working container
+ * for a port remap: if the NEW port is already taken (Cursor owns 8787 on the
+ * owner's machine), the old container must survive — recreating would destroy
+ * the only working engine and still fail.
+ * @param {number} port
+ * @returns {Promise<boolean>}
+ */
+export function hostPortFree(port) {
+  return new Promise((resolve) => {
+    const socket = createConnection({ host: '127.0.0.1', port })
+    const done = (free) => { try { socket.destroy() } catch { /* gone */ } resolve(free) }
+    socket.setTimeout(700)
+    socket.once('connect', () => done(false))
+    socket.once('timeout', () => done(true))
+    socket.once('error', () => done(true))
+  })
+}
+
 /** Read `configuration.publishedPorts[]` out of `container inspect` JSON. */
 function publishedPortsOf(text) {
   try {
@@ -192,6 +212,14 @@ export async function ensureLocalContainer(target, io = {}) {
       const match = ports.some((p) => Number(p?.containerPort) === 8787 && Number(p?.hostPort) === enginePort && loop(p))
         && ports.some((p) => Number(p?.containerPort) === 8791 && Number(p?.hostPort) === target.mcpPort && loop(p))
       if (!match) {
+        // A remap must not destroy a healthy engine. If the requested engine
+        // port is already held by another process (Cursor owns 8787 here),
+        // recreating would delete the working container AND fail to bind.
+        const probe = io.portFree || hostPortFree
+        if (!(await probe(enginePort))) {
+          throw new KitesurfError('kitesurf.kite.portbusy',
+            `端口 ${enginePort} 已被其他程序占用，不能把引擎重建到这个端口；现有容器保持不变。请把 config.httpBase 指到空闲端口（本机引擎通常用 8798）`)
+        }
         await run(['delete', '--force', CONTAINER_NAME])
         exists = false
       }

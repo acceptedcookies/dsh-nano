@@ -115,6 +115,7 @@ A failed call returns `{ok:false,errorId,error}` with a real HTTP status. The sa
 | `kitesurf.kite.state` | 409 | 生命周期阶段不符（idle 才能 start、running 才能 suspend、suspended 才能 resume） | GET /status 读 kite.phase；按阶段选 start/suspend/resume；host 重启后 phase 会自动 adopt |
 | `kitesurf.kite.remote` | 400 | configure 参数非法、远程地址未开 allowRemote、或缺少 KITESURF_CHECKOUT/config.checkout | loopback 地址；mcpPort 1..65535；在 profile patch 写 config.checkout |
 | `kitesurf.kite.node` | 500 | Node 版本过低或锁文件不可写 | 需要 Node ≥22；检查 DSH_HOME 可写 |
+| `kitesurf.kite.portbusy` | 409 | 要重建到的宿主端口被其他程序占用（本机 8787 常被 Cursor 占用） | 把 profile 的 config.httpBase 指到空闲端口（如 http://127.0.0.1:8798）后重启宿主；现有容器不会被删 |
 | `kitesurf.kite.container` | 502 | container CLI 冷启动/镜像/挂载失败（错误正文含 stdout 尾部真因） | 看 error 里的 failed to bootstrap 类信息；container system start；GET /diagnostics 看最近操作 |
 | `kitesurf.navigate.egress` | 504 | 目标站点出站超过 25s（引擎写入 egress timeout） | 换可达站点；不要重试同一地址；GET /status 确认引擎仍活 |
 | `kitesurf.navigate.delta` | 400 | /history delta 不是 -1 或 +1 | POST /history {delta:-1} 后退 / {delta:1} 前进 |

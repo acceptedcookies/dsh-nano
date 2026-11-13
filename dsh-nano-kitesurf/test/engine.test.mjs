@@ -54,3 +54,22 @@ test('element packets never invent a component stack', () => {
   assert.equal(packet.style.display, '')
   assert.deepEqual(packet.box, { x: 1, y: 2, width: 3, height: 4 })
 })
+
+test('pickSelector accepts a selector, rejects junk', async () => {
+  const { pickSelector } = await import('../lib/engine.js')
+  assert.equal(pickSelector({ selector: 'div.box > p:nth-of-type(2)' }), 'div.box > p:nth-of-type(2)')
+  assert.equal(pickSelector({ selector: '  a.b  ' }), 'a.b')
+  assert.throws(() => pickSelector({ selector: '' }), /required/)
+  assert.throws(() => pickSelector({ selector: 5 }), /required/)
+  assert.throws(() => pickSelector({ selector: 'xy' }), /invalid/)
+  assert.throws(() => pickSelector({}), /required/)
+})
+
+test('editBody validates selector + text', async () => {
+  const { editBody } = await import('../lib/engine.js')
+  assert.deepEqual(editBody({ selector: 'p.x', text: 'hi' }), { selector: 'p.x', text: 'hi' })
+  assert.throws(() => editBody({ selector: 'p.x', text: '' }), /text required/)
+  assert.throws(() => editBody({ selector: 'p.x', text: 5 }), /text required/)
+  assert.throws(() => editBody({ text: 'x' }), /required/)
+  assert.throws(() => editBody({ selector: 'p.x', text: 'a'.repeat(5000) }), /too long/)
+})

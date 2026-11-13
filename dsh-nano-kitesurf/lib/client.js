@@ -1542,9 +1542,12 @@ var __kitesurfExport = (() => {
           pinsFull: "\uFF08\u5DF2\u8FBE\u4E0A\u9650\uFF0C\u65E7\u6807\u6CE8\u5C06\u88AB\u4E22\u5F03\uFF09",
           sendAll: "\u53D1\u9001\u5168\u90E8\u6807\u6CE8",
           undoPin: "\u64A4\u9500\u4E0A\u4E00\u6761\u6807\u6CE8",
-          hintBar: "\u70B9\u9009\u5143\u7D20 \xB7 Shift+\u70B9\u591A\u9009 \xB7 Alt+\u753B\u692D\u5706 \xB7 Shift+\u62D6\u7BAD\u5934 \xB7 \u2318Z \u64A4\u9500 \xB7 Esc \u9000\u51FA",
+          hintBar: "\u70B9\u9009 \xB7 Shift+\u591A\u9009 \xB7 Alt+\u692D\u5706 \xB7 Shift+\u7BAD\u5934 \xB7 \u2191\u2193 \u7236/\u5B50 \xB7 \u53CC\u51FB\u6539\u6587\u5B57 \xB7 Esc \u9000\u51FA",
           startEngine: "\u542F\u52A8\u5F15\u64CE",
           clearPins: "\u6E05\u7A7A\u5168\u90E8\u6807\u6CE8",
+          editAria: "\u628A\u8FD9\u6BB5\u6587\u5B57\u5199\u56DE\u5143\u7D20",
+          editPlaceholder: "\u6539\u8FD9\u91CC\u7684\u6587\u5B57\u2026",
+          editSend: "\u5199\u56DE\u5143\u7D20",
           settingsTitle: "\u6D4F\u89C8\u8BBE\u7F6E",
           settingsDesc: "\u53EA\u4F5C\u7528\u4E8E\u8FD9\u4E00\u6B21\u5F15\u64CE\u8FDB\u7A0B\u3002\u89C6\u53E3\u7528\u6765\u6309\u624B\u673A\u3001\u5E73\u677F\u3001\u684C\u9762\u770B\u540C\u4E00\u9875\u3002\u5F15\u64CE\u5730\u5740\u6539\u52A8\u5373\u65F6\u751F\u6548\u3002",
           cancel: "\u53D6\u6D88",
@@ -1585,9 +1588,12 @@ var __kitesurfExport = (() => {
           pinsFull: " (at cap \u2014 oldest dropped)",
           sendAll: "Send all notes",
           undoPin: "Undo last note",
-          hintBar: "Click element \xB7 Shift+click multi-select \xB7 Alt+drag ellipse \xB7 Shift+drag arrow \xB7 \u2318Z undo \xB7 Esc exit",
+          hintBar: "Click \xB7 Shift+multi \xB7 Alt+ellipse \xB7 Shift+arrow \xB7 \u2191\u2193 parent/child \xB7 double-click edit \xB7 Esc exit",
           startEngine: "Start engine",
           clearPins: "Clear all notes",
+          editAria: "Write this text back into the element",
+          editPlaceholder: "Edit this text\u2026",
+          editSend: "Write back",
           settingsTitle: "Browser settings",
           settingsDesc: "Applies to this engine process only. Viewport previews the same page as phone, tablet, or desktop. Engine-address changes take effect immediately.",
           cancel: "Cancel",
@@ -1777,6 +1783,7 @@ ${item}`).join("\n");
   var OPEN = "/nano-kitesurf/open";
   var SHOT = "/nano-kitesurf/shot";
   var PICK = "/nano-kitesurf/pick";
+  var EDIT = "/nano-kitesurf/edit";
   var SETTINGS = "/nano-kitesurf/settings";
   var KITE = "/nano-kitesurf/kite";
   var KIND = "kitesurf";
@@ -1817,6 +1824,9 @@ ${item}`).join("\n");
 .nks-start{position:absolute;inset:0;justify-content:center;align-items:center;display:flex}
 .nks-start-btn{height:30px;padding:0 14px;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-12);background:var(--dsw-alias-bg-layer-1);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-md);cursor:pointer}
 .nks-start-btn:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.nks-inspector{flex:none;padding:3px 8px;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11);display:flex;gap:10px;overflow:hidden;border-top:.5px solid var(--dsw-alias-border-l3);white-space:nowrap}
+.nks-inspector b{font-weight:500;color:var(--dsw-alias-label-secondary)}
+.nks-inspector span{overflow:hidden;text-overflow:ellipsis;max-width:170px}
 .nks-note{position:absolute;z-index:2;display:flex;gap:6px;align-items:center;padding:4px;background:var(--dsw-alias-bg-layer-1);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-md);box-shadow:var(--dsw-elevation-soft)}
 .nks-note input{width:220px;height:28px;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-12);background:var(--dsw-alias-bg-layer-2);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-sm);padding:0 8px}
 .nks-pins{flex:none;padding:2px 8px 4px;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11);display:flex;align-items:center;gap:4px}
@@ -1903,6 +1913,7 @@ ${item}`).join("\n");
     const [draftBox, setDraftBox] = React5.useState(null);
     const [draftKind, setDraftKind] = React5.useState(null);
     const [comment, setComment] = React5.useState("");
+    const [editing, setEditing] = React5.useState(false);
     const [toast, setToast] = React5.useState(null);
     const [busy, setBusy] = React5.useState(false);
     const [hover, setHover] = React5.useState(null);
@@ -1913,14 +1924,18 @@ ${item}`).join("\n");
     const busyRef = React5.useRef(false);
     const dialogOpenRef = React5.useRef(false);
     const hoverTimerRef = React5.useRef(0);
+    const clickTimerRef = React5.useRef(0);
+    const lastDblClickRef = React5.useRef(0);
     const annotateRef = React5.useRef(false);
     const pickRef = React5.useRef(null);
     const pinsRef = React5.useRef([]);
     const commentRef = React5.useRef("");
+    const editingRef = React5.useRef(false);
     annotateRef.current = annotate;
     pickRef.current = pick;
     pinsRef.current = pins;
     commentRef.current = comment;
+    editingRef.current = editing;
     const refreshStatus = React5.useCallback(() => {
       return fetch(STATUS).then((response) => response.json()).then((payload) => {
         setStatus(payload);
@@ -1963,6 +1978,22 @@ ${item}`).join("\n");
           sendPick(true);
           return;
         }
+        if ((event.key === "ArrowUp" || event.key === "ArrowDown") && annotateRef.current && pickRef.current) {
+          const elements = pickRef.current.elements || [];
+          const last = elements[elements.length - 1];
+          const selector = event.key === "ArrowUp" ? last?.parentSel : last?.childSel;
+          if (selector) {
+            event.preventDefault();
+            post(PICK, { selector, preview: true }).then((payload) => {
+              const element = payload.pick?.elements?.[0] ?? payload.pick?.element;
+              if (element) {
+                setPick((current) => ({ elements: [...(current?.elements ?? []).slice(0, -1), element], anchor: current?.anchor ?? null }));
+              }
+            }).catch(() => {
+            });
+          }
+          return;
+        }
         if (event.key === "Escape") {
           if (dragRef.current) {
             endDrag();
@@ -1970,6 +2001,7 @@ ${item}`).join("\n");
           }
           if (pickRef.current) {
             setPick(null);
+            setEditing(false);
             return;
           }
           if (annotateRef.current) setAnnotate(false);
@@ -2104,17 +2136,23 @@ ${item}`).join("\n");
         setDraftBox(null);
         setDraftKind(null);
         const toComposer = event.altKey && !pickRef.current;
-        await run(async () => {
-          const payload = await post(PICK, { x: start.x, y: start.y });
-          const element = payload.pick?.elements?.[0] ?? payload.pick?.element;
-          if (!element) return;
-          if (event.shiftKey && pickRef.current) {
-            setPick((current) => ({ ...current, elements: [...current.elements, element] }));
-            return;
-          }
-          setPick({ elements: [element], anchor: { x: point.x, y: point.y } });
-          if (toComposer) sendPick(true);
-        });
+        const wasShift = event.shiftKey;
+        clearTimeout(clickTimerRef.current);
+        clickTimerRef.current = window.setTimeout(() => {
+          clickTimerRef.current = 0;
+          if (editingRef.current || Date.now() - lastDblClickRef.current < 600) return;
+          run(async () => {
+            const payload = await post(PICK, { x: start.x, y: start.y });
+            const element = payload.pick?.elements?.[0] ?? payload.pick?.element;
+            if (!element) return;
+            if (wasShift && pickRef.current) {
+              setPick((current) => ({ ...current, elements: [...current.elements, element] }));
+              return;
+            }
+            setPick({ elements: [element], anchor: { x: point.x, y: point.y } });
+            if (toComposer) sendPick(true);
+          });
+        }, 240);
         return;
       }
       setDraftBox(null);
@@ -2159,6 +2197,30 @@ ${item}`).join("\n");
       if (Math.abs(delta) < 8) return;
       run(() => reloadShot(delta));
     }
+    function onDoubleClick(event) {
+      if (!annotate) return;
+      event.preventDefault();
+      lastDblClickRef.current = Date.now();
+      clearTimeout(clickTimerRef.current);
+      clickTimerRef.current = 0;
+      const open = pickRef.current;
+      const element = open?.elements?.[open.elements.length - 1];
+      if (element?.selector) {
+        setEditing(true);
+        setComment(element.text || "");
+        return;
+      }
+      const point = framePoint(event);
+      if (!point) return;
+      run(async () => {
+        const payload = await post(PICK, { x: point.x, y: point.y });
+        const picked = payload.pick?.elements?.[0] ?? payload.pick?.element;
+        if (!picked?.selector) return;
+        setPick({ elements: [picked], anchor: { x: point.x, y: point.y } });
+        setEditing(true);
+        setComment(picked.text || "");
+      });
+    }
     function sendPick(toComposer) {
       const open = pickRef.current;
       if (!open?.elements?.length) return;
@@ -2177,6 +2239,18 @@ ${item}`).join("\n");
     }
     function onSend(event) {
       event?.preventDefault();
+      const open = pickRef.current;
+      if (editing && open?.elements?.length) {
+        const element = open.elements[open.elements.length - 1];
+        const text = commentRef.current;
+        setEditing(false);
+        run(async () => {
+          await post(EDIT, { selector: element.selector, text });
+          await reloadShot();
+          setPick(null);
+        });
+        return;
+      }
       sendPick(false);
     }
     function onSendAll() {
@@ -2245,7 +2319,8 @@ ${item}`).join("\n");
         send: primitives.IconRightUpOutlineRegular,
         undo: primitives.IconCloseOutlineRegular,
         exit: primitives.IconCloseOutlineRegular,
-        clear: primitives.IconDeleteOutlineRegular || primitives.IconCloseOutlineRegular
+        clear: primitives.IconDeleteOutlineRegular || primitives.IconCloseOutlineRegular,
+        edit: primitives.IconEditOutlineRegular || primitives.IconRightUpOutlineRegular
       }[name];
       return h(Icon, { width: 16, height: 16, "aria-hidden": true });
     };
@@ -2424,6 +2499,7 @@ ${item}`).join("\n");
           onPointerMove,
           onPointerUp,
           onPointerCancel,
+          onDoubleClick,
           onWheel,
           style: { cursor: annotate ? "crosshair" : "default" }
         },
@@ -2482,16 +2558,28 @@ ${item}`).join("\n");
           },
           pick.elements.length > 1 ? h("span", { "data-nks-multi": String(pick.elements.length) }, `\xD7${pick.elements.length}`) : null,
           h("input", {
-            "aria-label": copy.noteAria,
+            "aria-label": editing ? copy.editAria : copy.noteAria,
             "data-nks-comment": "1",
             value: comment,
-            placeholder: copy.notePlaceholder,
+            placeholder: editing ? copy.editPlaceholder : copy.notePlaceholder,
             autoFocus: true,
             onChange: (event) => setComment(event.target.value)
           }),
-          h("button", { type: "submit", className: "nks-tool", "data-nks-send": "1", "aria-label": copy.noteSend }, glyph("send"))
+          h("button", { type: "submit", className: "nks-tool", "data-nks-send": "1", "aria-label": editing ? copy.editSend : copy.noteSend }, glyph(editing ? "edit" : "send"))
         ) : null
       ),
+      // Inspector strip: the picked element's live computed styles under the
+      // frame — Cursor's design-mode sidebar reduced to one readable row.
+      pick?.elements?.[0] && pick.elements[0].style && Object.keys(pick.elements[0].style).length ? h(
+        "div",
+        { className: "nks-inspector", "data-nks-inspector": "1" },
+        h("span", null, h("b", null, pick.elements[0].selector || pick.elements[0].tag)),
+        pick.elements[0].style.color ? h("span", null, `color ${pick.elements[0].style.color}`) : null,
+        pick.elements[0].style.fontSize ? h("span", null, `font ${pick.elements[0].style.fontSize}`) : null,
+        pick.elements[0].style.fontFamily ? h("span", null, pick.elements[0].style.fontFamily.split(",")[0].replace(/["']/g, "")) : null,
+        pick.elements[0].style.display ? h("span", null, pick.elements[0].style.display) : null,
+        pick.elements[0].box ? h("span", null, `${Math.round(pick.elements[0].box.width)}\xD7${Math.round(pick.elements[0].box.height)}`) : null
+      ) : null,
       toast ? h(NanoToast2, { text: toast }) : null,
       pick?.elements?.length ? h("pre", {
         "data-nks-pick": "1",

@@ -66,6 +66,18 @@ export const ROUTE_TABLE = [
   },
   {
     "plugin": "dsh-nano-kitesurf",
+    "path": "/nano-kitesurf/edit",
+    "methods": [
+      "POST"
+    ],
+    "sensitivity": "L2",
+    "capability": "write:engine",
+    "bodyLimit": 8192,
+    "sessionBinding": false,
+    "justification": "dsh-nano-kitesurf/index.js EDIT_ROUTE — Runtime.evaluate mutates a named element's text in the shared engine page (double-click live edit). Page write on the loopback engine; bounded selector+text, same write-class as /settings."
+  },
+  {
+    "plugin": "dsh-nano-kitesurf",
     "path": "/nano-kitesurf/settings",
     "methods": [
       "POST"

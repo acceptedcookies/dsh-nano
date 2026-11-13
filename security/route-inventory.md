@@ -1,6 +1,6 @@
-# Route inventory — 44 host routes（含已退役插件的历史节）
+# Route inventory — 35 active host routes + retired NSW history
 
-> **⛔ DEPRECATED（2026-11-12）**：`dsh-nano-shared-workspace` 已退役并移至 [`deprecated/`](../deprecated/README.md)。本文件保留它的历史清单**仅供回溯**；现行活跃路由是 notepad 7 + explorer-extra 13 + model-selector 3 = **23 条**。`security/route-sensitivity.json` 与 `security/feature-contract.json` 已移除 NSW 条目，`scripts/route-scan.mjs` 不再扫描它。
+> **⛔ DEPRECATED（2026-11-12）**：`dsh-nano-shared-workspace` 已退役并移至 [`deprecated/`](../deprecated/README.md)。本文件保留它的历史清单**仅供回溯**；现行活跃路由是 notepad 7 + explorer-extra 17 + model-selector 3 + kitesurf 8 = **35 条**。`security/route-sensitivity.json` 与 `security/feature-contract.json` 已移除 NSW 条目，`scripts/route-scan.mjs` 不再扫描它。
 
 Static enumeration of every `webServer.register` path across the (formerly four) plugins, in registration order. Source of truth for paths/methods/bodyLimit: `scripts/route-scan.mjs` → `security/route-sensitivity.json` (sensitivity) and `security/feature-contract.json` (contract). Re-run `node scripts/gen-route-sensitivity.mjs` after any registration change; `node scripts/check-route-sensitivity.mjs` must report 0 drift.
 
@@ -18,13 +18,17 @@ Static enumeration of every `webServer.register` path across the (formerly four)
 | /nano-notepad/s3/object | POST | L2 | s3:write | 33554432 | – | generic signed S3 get/put/delete/head |
 | /nano-notepad/s3/config | POST | L2 | s3:credentials | 33554432 | – | write endpoint/bucket/secret profiles (0600) |
 
-## dsh-nano-explorer-extra — 13 (`src/host/routes.js:226-443` map)
+## dsh-nano-explorer-extra — 17 (`src/host/routes.js` route map)
 
 | path | methods | sensitivity | capability | bodyLimit | session | what it does |
 |---|---|---|---|---|---|---|
 | /nano-explorer-extra/status | GET | L0 | proc:git | 0 | ✓ | git status/stats for a session workspace |
 | /nano-explorer-extra/commit | POST | L2 | proc:git | 65536 | ✓ | git add --all + commit (host exec) |
 | /nano-explorer-extra/pull | POST | L2 | proc:git | 65536 | ✓ | git pull --ff-only (exec + net) |
+| /nano-explorer-extra/push | POST | L2 | proc:git | 65536 | ✓ | git push [-u remote HEAD] (exec + net) |
+| /nano-explorer-extra/remote | POST | L2 | proc:git | 65536 | ✓ | git remote add/set-url/remove (exec) |
+| /nano-explorer-extra/author | POST | L1 | proc:git | 65536 | ✓ | git config user.name/email (repo-local) |
+| /nano-explorer-extra/ssh-key | POST | L1 | proc:git | 65536 | ✓ | core.sshCommand bind in .git/config |
 | /nano-explorer-extra/checkout | POST | L2 | proc:git | 65536 | ✓ | git checkout (exec, may trigger filters) |
 | /nano-explorer-extra/create-file | POST | L1 | write:workspace | 65536 | ✓ | create file in workspace |
 | /nano-explorer-extra/create-folder | POST | L1 | write:workspace | 65536 | ✓ | mkdir in workspace |
@@ -35,6 +39,20 @@ Static enumeration of every `webServer.register` path across the (formerly four)
 | /nano-explorer-extra/list | POST | L2 | read:host | 65536 | ✓ | list arbitrary host dir (unfenced) |
 | /nano-explorer-extra/perf-review/host | GET | L2 | read:host | 0 | – | process-global perf snapshot/window drain |
 | /nano-explorer-extra/read | POST | L2 | read:host | 65536 | ✓ | read any UTF-8 host file ≤1MiB |
+
+## dsh-nano-kitesurf — 9 (`index.js` route constants + spec array)
+
+| path | methods | sensitivity | capability | bodyLimit | session | what it does |
+|---|---|---|---|---|---|---|
+| /nano-kitesurf/status | GET, HEAD | L0 | read:kitesurf | 0 | – | probe engine /health + kite phase |
+| /nano-kitesurf/last | GET, HEAD | L2 | read:host | 0 | – | last pick element packet (page content) |
+| /nano-kitesurf/open | POST | L2 | net:kitesurf | 4096 | – | Page.navigate the engine to a URL |
+| /nano-kitesurf/shot | POST | L2 | read:host | 4096 | – | Page.captureScreenshot (page content) |
+| /nano-kitesurf/pick | POST | L2 | read:host | 4096 | – | Runtime.evaluate element probe (click, selector nav, preview) |
+| /nano-kitesurf/edit | POST | L2 | write:engine | 8192 | – | Runtime.evaluate live text edit on a named element |
+| /nano-kitesurf/settings | POST | L1 | write:kitesurf | 4096 | – | in-memory UA/viewport emulation |
+| /nano-kitesurf/perf-review/host | GET, HEAD, POST | L2 | read:host | 0 | – | perf snapshot; POST mode=window drains |
+| /nano-kitesurf/kite | POST | L2 | proc:kitesurf | 4096 | – | init lock / container start-stop / configure |
 
 ## ⛔ DEPRECATED · dsh-nano-shared-workspace — 21（历史，非现行）
 
@@ -72,4 +90,4 @@ Static enumeration of every `webServer.register` path across the (formerly four)
 | /nano-model-selector/media-engines | GET, HEAD | L0 | read:host | 0 | – | scan local media CLIs |
 | /nano-model-selector/media-engine | GET, HEAD, PUT | L2 | write:host | 16384 | – | GET engine state; PUT writes media-engine.json + re-registers /imagine |
 
-**历史 Totals（含退役 NSW 节）: 43 paths · L0 8 · L1 5 · L2 30 · L3 0. 现行活跃 = 23 条（NSW 节 20 条已不计）。** bodyLimit values: notepad /save+/read+/fetch-mp = MAX_SAVE_BYTES 8388608 (8 MiB), /s3/* = MAX_S3_BODY_BYTES 33554432 (32 MiB); explorer + nsw = 64 KiB (65536); model-selector GET/HEAD = 0, /media-engine PUT = 16384.
+**历史 Totals（含退役 NSW 节）: 55 paths · 现行活跃 = 35 条（L0 5 · L1 8 · L2 22 · L3 0 — 口径见 route-sensitivity.json）。** bodyLimit values: notepad /save+/read+/fetch-mp = MAX_SAVE_BYTES 8388608 (8 MiB), /s3/* = MAX_S3_BODY_BYTES 33554432 (32 MiB); explorer + nsw = 64 KiB (65536); model-selector GET/HEAD = 0, /media-engine PUT = 16384.

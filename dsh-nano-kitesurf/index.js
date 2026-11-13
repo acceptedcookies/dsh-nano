@@ -6,7 +6,7 @@ import { homedir } from 'node:os'
 import path from 'node:path'
 import { registerRoutes } from './lib/route-guard.js'
 import { ROUTE_TABLE, PLUGIN } from './lib/route-table.js'
-import { browserSocketUrl, captureShot, currentUserAgent, currentViewport, fetchEngine, KitesurfError, openPage, pickElement, pickPoint, pageUrl, releaseEngine, scrollDelta, setBrowserSettings } from './lib/engine.js'
+import { browserSocketUrl, captureShot, currentUserAgent, currentViewport, fetchEngine, KitesurfError, openPage, pickElement, pickBySelector, pickPoint, pickSelector, editBody, editElement, pageUrl, releaseEngine, scrollDelta, setBrowserSettings } from './lib/engine.js'
 import { kitesurfSkill, nanoKiteSkill } from './lib/skill.js'
 import { createNanoKite } from './lib/nano-kite.js'
 import { ensureLocalContainer, stopLocalContainer } from './lib/container-engine.js'
@@ -20,6 +20,7 @@ const LAST_ROUTE = '/nano-kitesurf/last'
 const OPEN_ROUTE = '/nano-kitesurf/open'
 const SHOT_ROUTE = '/nano-kitesurf/shot'
 const PICK_ROUTE = '/nano-kitesurf/pick'
+const EDIT_ROUTE = '/nano-kitesurf/edit'
 const SETTINGS_ROUTE = '/nano-kitesurf/settings'
 const PERF_ROUTE = '/nano-kitesurf/perf-review/host'
 const KITE_ROUTE = '/nano-kitesurf/kite'
@@ -129,6 +130,10 @@ const ERROR_STATUS = [
   [/^kitesurf\.body\./, 400],
   [/^kitesurf\.url\./, 400],
   [/^kitesurf\.pick\.point$/, 400],
+  [/^kitesurf\.edit\.badtext$/, 400],
+  [/^kitesurf\.edit\.badpoint$/, 400],
+  [/^kitesurf\.pick\.badpoint$/, 400],
+  [/^kitesurf\.pick\.failed$/, 502],
   [/^kitesurf\.shot\.scroll$/, 400],
   [/^kitesurf\.settings\./, 400],
   [/^kitesurf\.kite\.state$/, 409],
@@ -301,8 +306,11 @@ export function apply(ctx, config) {
       handler: async (req, res, route) => {
         try {
           const body = await readBody(req, route.bodyLimit)
-          const point = pickPoint(body)
-          const picked = await hostSpan('pick', () => pickElement(origin(), point.x, point.y))
+          // {x, y} is a click; {selector} is Arrow Up/Down navigation — the
+          // pane names a parent/child selector and gets the same packet back.
+          const picked = await hostSpan('pick', () => typeof body.selector === 'string'
+            ? pickBySelector(origin(), pickSelector(body))
+            : (() => { const p = pickPoint(body); return pickElement(origin(), p.x, p.y) })())
           // Hover previews ask with preview:true — they must not move
           // lastPick, which belongs to the note the human is composing.
           if (body.preview !== true) {
@@ -310,6 +318,22 @@ export function apply(ctx, config) {
           }
           lastError = null
           sendJson(res, 200, { ok: true, pick: { at: new Date().toISOString(), ...picked } })
+        } catch (error) {
+          fail(res, error)
+        }
+      },
+    },
+    {
+      path: EDIT_ROUTE,
+      methods: ['POST'],
+      bodyLimit: 8192,
+      handler: async (req, res, route) => {
+        try {
+          const body = await readBody(req, route.bodyLimit)
+          const { selector, text } = editBody(body)
+          const edited = await hostSpan('edit', () => editElement(origin(), selector, text))
+          lastError = null
+          sendJson(res, 200, { ok: true, ...edited })
         } catch (error) {
           fail(res, error)
         }

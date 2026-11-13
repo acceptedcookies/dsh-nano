@@ -13,6 +13,7 @@ const STATUS = '/nano-kitesurf/status'
 const OPEN = '/nano-kitesurf/open'
 const SHOT = '/nano-kitesurf/shot'
 const PICK = '/nano-kitesurf/pick'
+const EDIT = '/nano-kitesurf/edit'
 const SETTINGS = '/nano-kitesurf/settings'
 const KITE = '/nano-kitesurf/kite'
 const KIND = 'kitesurf'
@@ -55,6 +56,9 @@ const STYLE = `
 .nks-start{position:absolute;inset:0;justify-content:center;align-items:center;display:flex}
 .nks-start-btn{height:30px;padding:0 14px;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-12);background:var(--dsw-alias-bg-layer-1);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-md);cursor:pointer}
 .nks-start-btn:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.nks-inspector{flex:none;padding:3px 8px;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11);display:flex;gap:10px;overflow:hidden;border-top:.5px solid var(--dsw-alias-border-l3);white-space:nowrap}
+.nks-inspector b{font-weight:500;color:var(--dsw-alias-label-secondary)}
+.nks-inspector span{overflow:hidden;text-overflow:ellipsis;max-width:170px}
 .nks-note{position:absolute;z-index:2;display:flex;gap:6px;align-items:center;padding:4px;background:var(--dsw-alias-bg-layer-1);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-md);box-shadow:var(--dsw-elevation-soft)}
 .nks-note input{width:220px;height:28px;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-12);background:var(--dsw-alias-bg-layer-2);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-sm);padding:0 8px}
 .nks-pins{flex:none;padding:2px 8px 4px;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11);display:flex;align-items:center;gap:4px}
@@ -158,6 +162,8 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
   /** 'box' | 'ellipse' | null — the drag kind in flight. */
   const [draftKind, setDraftKind] = React.useState(null)
   const [comment, setComment] = React.useState('')
+  /** Double-click mode: the note form writes text back into the element. */
+  const [editing, setEditing] = React.useState(false)
   const [toast, setToast] = React.useState(null)
   const [busy, setBusy] = React.useState(false)
   /** Preview box under the cursor before a click (throttled pick preview). */
@@ -170,16 +176,24 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
   const busyRef = React.useRef(false)
   const dialogOpenRef = React.useRef(false)
   const hoverTimerRef = React.useRef(0)
+  // A click waits ~240ms before its pick: a double-click's second click would
+  // otherwise re-pick mid-edit. lastDblClickRef stamps the dblclick
+  // synchronously — the deferred callback checks it because editing lands
+  // async (the pick request is in flight).
+  const clickTimerRef = React.useRef(0)
+  const lastDblClickRef = React.useRef(0)
   // Mutable mirrors for the window-level key handler: state captured in a
   // one-shot effect would freeze annotate/pins/pick at mount values.
   const annotateRef = React.useRef(false)
   const pickRef = React.useRef(null)
   const pinsRef = React.useRef([])
   const commentRef = React.useRef('')
+  const editingRef = React.useRef(false)
   annotateRef.current = annotate
   pickRef.current = pick
   pinsRef.current = pins
   commentRef.current = comment
+  editingRef.current = editing
 
   const refreshStatus = React.useCallback(() => {
     return fetch(STATUS)
@@ -233,9 +247,27 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
         sendPick(true)
         return
       }
+      // Arrow Up/Down walks parent/child while a note is open — Cursor parity.
+      if ((event.key === 'ArrowUp' || event.key === 'ArrowDown') && annotateRef.current && pickRef.current) {
+        const elements = pickRef.current.elements || []
+        const last = elements[elements.length - 1]
+        const selector = event.key === 'ArrowUp' ? last?.parentSel : last?.childSel
+        if (selector) {
+          event.preventDefault()
+          post(PICK, { selector, preview: true })
+            .then((payload) => {
+              const element = payload.pick?.elements?.[0] ?? payload.pick?.element
+              if (element) {
+                setPick((current) => ({ elements: [...(current?.elements ?? []).slice(0, -1), element], anchor: current?.anchor ?? null }))
+              }
+            })
+            .catch(() => { /* boundary reached — keep current selection */ })
+        }
+        return
+      }
       if (event.key === 'Escape') {
         if (dragRef.current) { endDrag(); return }
-        if (pickRef.current) { setPick(null); return }
+        if (pickRef.current) { setPick(null); setEditing(false); return }
         if (annotateRef.current) setAnnotate(false)
       }
     }
@@ -377,20 +409,28 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
     if (!start.moved || (width < 8 && height < 8)) {
       setDraftBox(null)
       setDraftKind(null)
-      // Click: element pick. Shift appends to the open note (multi-select);
-      // Alt sends the element straight into the composer (Cursor parity).
+      // Click: element pick, deferred so a double-click can cancel it —
+      // the second click's pointerup fires before dblclick.
       const toComposer = event.altKey && !pickRef.current
-      await run(async () => {
-        const payload = await post(PICK, { x: start.x, y: start.y })
-        const element = payload.pick?.elements?.[0] ?? payload.pick?.element
-        if (!element) return
-        if (event.shiftKey && pickRef.current) {
-          setPick((current) => ({ ...current, elements: [...current.elements, element] }))
-          return
-        }
-        setPick({ elements: [element], anchor: { x: point.x, y: point.y } })
-        if (toComposer) sendPick(true)
-      })
+      const wasShift = event.shiftKey
+      clearTimeout(clickTimerRef.current)
+      clickTimerRef.current = window.setTimeout(() => {
+        clickTimerRef.current = 0
+        // A dblclick (sync-stamped) or an open edit means this click was its
+        // second half — drop it.
+        if (editingRef.current || Date.now() - lastDblClickRef.current < 600) return
+        run(async () => {
+          const payload = await post(PICK, { x: start.x, y: start.y })
+          const element = payload.pick?.elements?.[0] ?? payload.pick?.element
+          if (!element) return
+          if (wasShift && pickRef.current) {
+            setPick((current) => ({ ...current, elements: [...current.elements, element] }))
+            return
+          }
+          setPick({ elements: [element], anchor: { x: point.x, y: point.y } })
+          if (toComposer) sendPick(true)
+        })
+      }, 240)
       return
     }
     setDraftBox(null)
@@ -442,6 +482,34 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
     run(() => reloadShot(delta))
   }
 
+  function onDoubleClick(event) {
+    if (!annotate) return
+    event.preventDefault()
+    // Kill the deferred click-pick the second pointerup scheduled — and stamp
+    // it so any earlier timer that survives the clearing also skips.
+    lastDblClickRef.current = Date.now()
+    clearTimeout(clickTimerRef.current)
+    clickTimerRef.current = 0
+    const open = pickRef.current
+    const element = open?.elements?.[open.elements.length - 1]
+    if (element?.selector) {
+      setEditing(true)
+      setComment(element.text || '')
+      return
+    }
+    // No note open: pick this point now, then enter edit mode with its text.
+    const point = framePoint(event)
+    if (!point) return
+    run(async () => {
+      const payload = await post(PICK, { x: point.x, y: point.y })
+      const picked = payload.pick?.elements?.[0] ?? payload.pick?.element
+      if (!picked?.selector) return
+      setPick({ elements: [picked], anchor: { x: point.x, y: point.y } })
+      setEditing(true)
+      setComment(picked.text || '')
+    })
+  }
+
   /** Turn the open pick into a note: pinned (default) or straight into the composer. */
   function sendPick(toComposer) {
     const open = pickRef.current
@@ -464,6 +532,19 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
 
   function onSend(event) {
     event?.preventDefault()
+    const open = pickRef.current
+    if (editing && open?.elements?.length) {
+      // Double-click mode: the input's text goes into the element itself.
+      const element = open.elements[open.elements.length - 1]
+      const text = commentRef.current
+      setEditing(false)
+      run(async () => {
+        await post(EDIT, { selector: element.selector, text })
+        await reloadShot()
+        setPick(null)
+      })
+      return
+    }
     sendPick(false)
   }
 
@@ -546,6 +627,7 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
       undo: primitives.IconCloseOutlineRegular,
       exit: primitives.IconCloseOutlineRegular,
       clear: primitives.IconDeleteOutlineRegular || primitives.IconCloseOutlineRegular,
+      edit: primitives.IconEditOutlineRegular || primitives.IconRightUpOutlineRegular,
     }[name]
     return h(Icon, { width: 16, height: 16, 'aria-hidden': true })
   }
@@ -703,6 +785,7 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
       onPointerMove,
       onPointerUp,
       onPointerCancel,
+      onDoubleClick,
       onWheel,
       style: { cursor: annotate ? 'crosshair' : 'default' },
     },
@@ -758,14 +841,23 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
       },
         pick.elements.length > 1 ? h('span', { 'data-nks-multi': String(pick.elements.length) }, `×${pick.elements.length}`) : null,
         h('input', {
-          'aria-label': copy.noteAria,
+          'aria-label': editing ? copy.editAria : copy.noteAria,
           'data-nks-comment': '1',
           value: comment,
-          placeholder: copy.notePlaceholder,
+          placeholder: editing ? copy.editPlaceholder : copy.notePlaceholder,
           autoFocus: true,
           onChange: (event) => setComment(event.target.value),
         }),
-        h('button', { type: 'submit', className: 'nks-tool', 'data-nks-send': '1', 'aria-label': copy.noteSend }, glyph('send'))) : null),
+        h('button', { type: 'submit', className: 'nks-tool', 'data-nks-send': '1', 'aria-label': editing ? copy.editSend : copy.noteSend }, glyph(editing ? 'edit' : 'send'))) : null),
+    // Inspector strip: the picked element's live computed styles under the
+    // frame — Cursor's design-mode sidebar reduced to one readable row.
+    pick?.elements?.[0] && pick.elements[0].style && Object.keys(pick.elements[0].style).length ? h('div', { className: 'nks-inspector', 'data-nks-inspector': '1' },
+      h('span', null, h('b', null, pick.elements[0].selector || pick.elements[0].tag)),
+      pick.elements[0].style.color ? h('span', null, `color ${pick.elements[0].style.color}`) : null,
+      pick.elements[0].style.fontSize ? h('span', null, `font ${pick.elements[0].style.fontSize}`) : null,
+      pick.elements[0].style.fontFamily ? h('span', null, pick.elements[0].style.fontFamily.split(',')[0].replace(/["']/g, '')) : null,
+      pick.elements[0].style.display ? h('span', null, pick.elements[0].style.display) : null,
+      pick.elements[0].box ? h('span', null, `${Math.round(pick.elements[0].box.width)}×${Math.round(pick.elements[0].box.height)}`) : null) : null,
     toast ? h(NanoToast, { text: toast }) : null,
     pick?.elements?.length ? h('pre', {
       'data-nks-pick': '1',

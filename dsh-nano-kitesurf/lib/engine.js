@@ -85,6 +85,31 @@ export function scrollDelta(body) {
   return rounded
 }
 
+/** Selector strings for pickBySelector — bounded, must look like a selector. */
+export function editBody(body) {
+  const selector = pickSelector(body)
+  const text = body?.text
+  if (typeof text !== 'string' || !text.length) {
+    throw new KitesurfError('kitesurf.edit.badtext', 'text required')
+  }
+  if (text.length > 4000) {
+    throw new KitesurfError('kitesurf.edit.badtext', 'text too long')
+  }
+  return { selector, text }
+}
+
+export function pickSelector(body) {
+  const selector = body?.selector
+  if (typeof selector !== 'string' || !selector.trim()) {
+    throw new KitesurfError('kitesurf.pick.badpoint', 'selector required')
+  }
+  const clean = selector.trim().slice(0, 320)
+  if (/[\0-\x08\x0b\x0c\x0e-\x1f]/.test(clean)) {
+    throw new KitesurfError('kitesurf.pick.badpoint', 'invalid selector')
+  }
+  return clean
+}
+
 export function pickPoint(body) {
   const x = body && typeof body === 'object' ? body.x : undefined
   const y = body && typeof body === 'object' ? body.y : undefined
@@ -125,6 +150,8 @@ export function elementPacket(value) {
     },
     style,
     componentStack: null,
+    parentSel: typeof source.parentSel === 'string' ? source.parentSel.slice(0, 320) : null,
+    childSel: typeof source.childSel === 'string' ? source.childSel.slice(0, 320) : null,
   }
 }
 
@@ -402,6 +429,28 @@ const PACKET_EXPRESSION = `(() => {
     src: (el.tagName === 'IMG' || el.tagName === 'VIDEO' || el.tagName === 'SOURCE')
       ? String(el.currentSrc || el.src || el.getAttribute('src') || '').slice(0, 120)
       : '',
+    // Parent/child navigation (Arrow Up/Down): parent is the selector minus
+    // its last segment; childSel names the largest visible element child so
+    // Arrow Down lands on something real rather than an inline text node.
+    parentSel: parts.length > 1 ? parts.slice(0, -1).join(' > ') : null,
+    childSel: (() => {
+      let best = null; let bestArea = 0;
+      for (const child of el.children) {
+        const r = child.getBoundingClientRect();
+        const area = r.width * r.height;
+        if (area > bestArea) { bestArea = area; best = child; }
+      }
+      if (!best) return null;
+      let piece = best.tagName.toLowerCase();
+      if (best.id) piece += '#' + best.id;
+      else if (typeof best.className === 'string' && best.className.trim()) {
+        piece += '.' + best.className.trim().split(/\s+/).slice(0, 2).join('.');
+      } else {
+        const same = Array.prototype.filter.call(el.children, (c) => c.tagName === best.tagName);
+        if (same.length > 1) piece += ':nth-of-type(' + (Array.prototype.indexOf.call(same, best) + 1) + ')';
+      }
+      return parts.join(' > ') + ' > ' + piece;
+    })(),
     box: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
     style: {
       color: style.color,
@@ -495,6 +544,149 @@ export async function captureShot(httpBase, scrollY = 0) {
  * @param {number} x
  * @param {number} y
  */
+/**
+ * Same packet shape as a click pick, but the element is named by selector
+ * rather than located by a point — parent/child navigation must return the
+ * *named* element, not whatever sits on top of its center.
+ */
+const SELECTOR_PACKET_EXPRESSION = `(() => {
+  const el = document.querySelector(__SELECTOR__);
+  if (!el || el.nodeType !== 1) return null;
+  const own = [];
+  if (el.tagName !== 'HTML' && el.tagName !== 'BODY' && el.tagName !== 'IFRAME') {
+    for (const child of el.childNodes) {
+      if (child.nodeType === 3) own.push(child.textContent);
+    }
+  }
+  let text = own.join('').replace(/\\s+/g, ' ').trim();
+  if (!text && el.tagName !== 'HTML' && el.tagName !== 'BODY' && el.tagName !== 'IFRAME' && el.getBoundingClientRect().height <= 80) {
+    text = String(el.innerText || '').replace(/\\s+/g, ' ').trim();
+  }
+  text = text.slice(0, 200);
+  const parts = [];
+  let node = el;
+  while (node && node.nodeType === 1 && parts.length < 8) {
+    let piece = node.tagName.toLowerCase();
+    if (node.id) piece += '#' + node.id;
+    else if (typeof node.className === 'string' && node.className.trim()) {
+      piece += '.' + node.className.trim().split(/\\s+/).slice(0, 2).join('.');
+    } else if (node.parentElement) {
+      const same = Array.prototype.filter.call(node.parentElement.children, (child) => child.tagName === node.tagName);
+      if (same.length > 1) piece += ':nth-of-type(' + (Array.prototype.indexOf.call(same, node) + 1) + ')';
+    }
+    parts.unshift(piece);
+    node = node.parentElement;
+  }
+  const style = getComputedStyle(el);
+  const rect = el.getBoundingClientRect();
+  return {
+    tag: el.tagName.toLowerCase(),
+    id: el.id || '',
+    className: typeof el.className === 'string' ? el.className : '',
+    selector: parts.join(' > '),
+    text,
+    alt: String(el.getAttribute('alt') || '').slice(0, 80),
+    src: (el.tagName === 'IMG' || el.tagName === 'VIDEO' || el.tagName === 'SOURCE')
+      ? String(el.currentSrc || el.src || el.getAttribute('src') || '').slice(0, 120)
+      : '',
+    parentSel: parts.length > 1 ? parts.slice(0, -1).join(' > ') : null,
+    childSel: (() => {
+      let best = null; let bestArea = 0;
+      for (const child of el.children) {
+        const r = child.getBoundingClientRect();
+        const area = r.width * r.height;
+        if (area > bestArea) { bestArea = area; best = child; }
+      }
+      if (!best) return null;
+      let piece = best.tagName.toLowerCase();
+      if (best.id) piece += '#' + best.id;
+      else if (typeof best.className === 'string' && best.className.trim()) {
+        piece += '.' + best.className.trim().split(/\\s+/).slice(0, 2).join('.');
+      } else {
+        const same = Array.prototype.filter.call(el.children, (c) => c.tagName === best.tagName);
+        if (same.length > 1) piece += ':nth-of-type(' + (Array.prototype.indexOf.call(same, best) + 1) + ')';
+      }
+      return parts.join(' > ') + ' > ' + piece;
+    })(),
+    box: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+    style: {
+      color: style.color,
+      backgroundColor: style.backgroundColor,
+      fontSize: style.fontSize,
+      fontFamily: style.fontFamily,
+      display: style.display,
+      position: style.position,
+    },
+  };
+})()`
+
+/**
+ * Re-derive a pick packet for an element the pane already identified by
+ * selector (Arrow Up/Down parent/child navigation). Returns the *named*
+ * element — a point-based pick would hit whatever sits on top of its center.
+ */
+export async function pickBySelector(httpBase, selector) {
+  const clean = String(selector || '').slice(0, 320)
+  if (!clean) throw new KitesurfError('kitesurf.pick.badpoint', 'selector required')
+  return useLive(httpBase, async (client) => {
+    const page = await pageHandle(client)
+    const evaluated = await client.send('Runtime.evaluate', {
+      expression: SELECTOR_PACKET_EXPRESSION.replace('__SELECTOR__', JSON.stringify(clean)),
+      returnByValue: true,
+    }, page.sessionId)
+    const remote = evaluated.result ?? {}
+    if (remote.value == null || evaluated.exceptionDetails) {
+      throw new KitesurfError('kitesurf.pick.failed', 'selector matched nothing')
+    }
+    const packet = elementPacket(remote.value)
+    return {
+      point: null,
+      targetId: page.targetId,
+      element: packet,
+      elements: [packet],
+    }
+  })
+}
+
+const EDIT_EXPRESSION = `(() => {
+  const el = document.querySelector(__SELECTOR__);
+  if (!el || el.nodeType !== 1) return { missing: true };
+  const text = __TEXT__;
+  if (el.childElementCount === 0) {
+    el.textContent = text;
+  } else {
+    el.innerText = text;
+  }
+  const r = el.getBoundingClientRect();
+  return { ok: true, box: { x: r.x, y: r.y, width: r.width, height: r.height } };
+})()`
+
+/**
+ * Double-click live text edit: set the element's text content in place.
+ * Leaf nodes get textContent (safer — wipes nested markup cleanly); richer
+ * nodes get innerText so layout-preserving children survive. Returns the
+ * element's post-edit box so the client can keep its overlay honest.
+ */
+export async function editElement(httpBase, selector, text) {
+  const clean = String(selector || '').slice(0, 320)
+  if (!clean) throw new KitesurfError('kitesurf.pick.badpoint', 'selector required')
+  const body = String(text ?? '').slice(0, 4000)
+  return useLive(httpBase, async (client) => {
+    const page = await pageHandle(client)
+    const evaluated = await client.send('Runtime.evaluate', {
+      expression: EDIT_EXPRESSION
+        .replace('__SELECTOR__', JSON.stringify(clean))
+        .replace('__TEXT__', JSON.stringify(body)),
+      returnByValue: true,
+    }, page.sessionId)
+    const result = evaluated.result?.value
+    if (!result || result.missing === true || evaluated.exceptionDetails) {
+      throw new KitesurfError('kitesurf.pick.failed', 'selector matched nothing')
+    }
+    return { ok: true, box: result.box || null }
+  })
+}
+
 export async function pickElement(httpBase, x, y) {
   const point = pickPoint({ x, y })
   return useLive(httpBase, async (client) => {

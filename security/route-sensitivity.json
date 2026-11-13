@@ -351,11 +351,11 @@
         "GET",
         "HEAD"
       ],
-      "sensitivity": "L0",
-      "capability": "read:kitesurf",
+      "sensitivity": "L2",
+      "capability": "read:host",
       "bodyLimit": 0,
       "sessionBinding": false,
-      "justification": "dsh-nano-kitesurf/index.js LAST_ROUTE — returns the in-memory element packet from the last pick. No host write."
+      "justification": "dsh-nano-kitesurf/index.js LAST_ROUTE — returns the in-memory element packet from the last pick, including up to 200 chars of page text the engine captured. Page-content readback = host-level read, same as /shot and /pick."
     },
     {
       "plugin": "dsh-nano-kitesurf",
@@ -375,11 +375,11 @@
       "methods": [
         "POST"
       ],
-      "sensitivity": "L0",
-      "capability": "read:kitesurf",
+      "sensitivity": "L2",
+      "capability": "read:host",
       "bodyLimit": 4096,
       "sessionBinding": false,
-      "justification": "dsh-nano-kitesurf/index.js SHOT_ROUTE — Page.captureScreenshot of the current Kitesurf page. Read of the configured engine."
+      "justification": "dsh-nano-kitesurf/index.js SHOT_ROUTE — Page.captureScreenshot returns the full page as base64 PNG; a same-origin caller can exfiltrate whatever the engine is showing. Content egress, L2 like /open."
     },
     {
       "plugin": "dsh-nano-kitesurf",
@@ -387,11 +387,61 @@
       "methods": [
         "POST"
       ],
-      "sensitivity": "L0",
-      "capability": "read:kitesurf",
+      "sensitivity": "L2",
+      "capability": "read:host",
       "bodyLimit": 4096,
       "sessionBinding": false,
-      "justification": "dsh-nano-kitesurf/index.js PICK_ROUTE — Runtime.evaluate at a viewport point and stores the packet in memory. Does not navigate."
+      "justification": "dsh-nano-kitesurf/index.js PICK_ROUTE — Runtime.evaluate probes DOM at a viewport point and returns element text/style to the caller, then persists it for /last. Page-content readback = host-level read."
+    },
+    {
+      "plugin": "dsh-nano-kitesurf",
+      "path": "/nano-kitesurf/edit",
+      "methods": [
+        "POST"
+      ],
+      "sensitivity": "L2",
+      "capability": "write:engine",
+      "bodyLimit": 8192,
+      "sessionBinding": false,
+      "justification": "dsh-nano-kitesurf/index.js EDIT_ROUTE — Runtime.evaluate mutates a named element's text in the shared engine page (double-click live edit). Page write on the loopback engine; bounded selector+text, same write-class as /settings."
+    },
+    {
+      "plugin": "dsh-nano-kitesurf",
+      "path": "/nano-kitesurf/settings",
+      "methods": [
+        "POST"
+      ],
+      "sensitivity": "L1",
+      "capability": "write:kitesurf",
+      "bodyLimit": 4096,
+      "sessionBinding": false,
+      "justification": "dsh-nano-kitesurf/index.js SETTINGS_ROUTE — mutates process-global emulation state (UA override, viewport metrics) on the shared engine; affects every later navigation by any session. Bounded write, not L0."
+    },
+    {
+      "plugin": "dsh-nano-kitesurf",
+      "path": "/nano-kitesurf/perf-review/host",
+      "methods": [
+        "GET",
+        "HEAD",
+        "POST"
+      ],
+      "sensitivity": "L2",
+      "capability": "read:host",
+      "bodyLimit": 0,
+      "sessionBinding": false,
+      "justification": "dsh-nano-kitesurf/index.js PERF_ROUTE — process-global perf reservoir; mode=window (POST-only after R21) drains samples across all plugins/sessions. Cross-session process state — same accepted-risk class as dsh-nano-explorer-extra's perf route."
+    },
+    {
+      "plugin": "dsh-nano-kitesurf",
+      "path": "/nano-kitesurf/kite",
+      "methods": [
+        "POST"
+      ],
+      "sensitivity": "L2",
+      "capability": "proc:kitesurf",
+      "bodyLimit": 4096,
+      "sessionBinding": false,
+      "justification": "dsh-nano-kitesurf/index.js KITE_ROUTE — init writes $DSH_HOME/nano-kitesurf.lock.json; start/resume spawn `container run` and bind-mount a host dir (finding kitesurf-kite-spawns-container); configure repoints the engine (allowRemote-gated after R2). Host write + process exec + net target."
     }
   ]
 }

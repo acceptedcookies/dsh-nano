@@ -88,7 +88,7 @@ dsh plugin --profile web add <spec>
 | 地址栏 Go | 在容器里打开这个 http(s) 地址并投射当前画面 |
 | 最近地址（时钟图标） | 记住最近 8 个地址。切换时让容器打开那一个 |
 | ↑ ↓ 或滚轮 | 滚动容器里的页面并重新投射 |
-| Annotate | 打开后，点画面上的元素。选框跟着元素；悬停时有虚线预览。Shift+点把元素并进当前备注（多选）；Alt+点在无备注时直送 composer；普通拖画选区，Alt+拖画椭圆，Shift+拖画箭头。Esc 依次关拖/备注/标注；⌘⇧D 开关标注；⌘Z 撤最后一条 pin；⌘L 把当前备注直送 composer。备注回车 pin 进队列 |
+| Annotate | 打开后，点画面上的元素。选框跟着元素；悬停时有虚线预览。Shift+点把元素并进当前备注（多选）；Alt+点在无备注时直送 composer；普通拖画选区，Alt+拖画椭圆，Shift+拖画箭头。↑↓ 选父/最大子元素；双击元素让备注输入变成就地改字（回车写回页面）。Esc 依次关拖/备注/标注；⌘⇧D 开关标注；⌘Z 撤最后一条 pin；⌘L 把当前备注直送 composer。备注回车 pin 进队列 |
 | `/kitesurf-cdp`、`/nano-kite` | 告诉 agent 用 `agent-browser --cdp` 接这个引擎，不要启动 Chrome |
 
 路由都有 `connection.requestRejection`。不要绕过面板去改引擎配置。
@@ -99,7 +99,8 @@ dsh plugin --profile web add <spec>
 | GET | `/nano-kitesurf/last` | 最近一次点选，没有则 `pick: null` |
 | POST | `/nano-kitesurf/open` | `{ url }`。只接受 http(s)，不接受带凭证的地址 |
 | POST | `/nano-kitesurf/shot` | 当前页 PNG 的 base64，`{scroll: ±px}` 先滚后截 |
-| POST | `/nano-kitesurf/pick` | `{ x, y }`，`preview:true` 只做悬停预览、不写 lastPick。元素包里 `componentStack` 恒为 null；`elements` 是单元素列表 |
+| POST | `/nano-kitesurf/pick` | `{ x, y }` 或 `{selector}`（↑↓ 父/子重选）。`preview:true` 只做悬停预览、不写 lastPick。元素包里 `componentStack` 恒为 null；`elements` 是单元素列表；`parentSel`/`childSel` 是父/最大子元素选择器 |
+| POST | `/nano-kitesurf/edit` | `{selector, text}`：把文本写回该元素（双击就地改字），≤4000 字符 |
 | POST | `/nano-kitesurf/settings` | `{ userAgent?, viewport? }`：`viewport:{width:390\|768\|1280}` 或 `null` 清除 |
 | POST | `/nano-kitesurf/kite` | `{action: init\|start\|suspend\|resume\|configure, httpBase?, mcpPort?}` |
 | GET/POST | `/nano-kitesurf/perf-review/host` | 进程 perf 快照；`?mode=window` 会清空全局桶，只允许 POST |

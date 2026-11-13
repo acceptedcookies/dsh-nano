@@ -154,6 +154,8 @@ async function main() {
   })
   record('computed-styles', Object.keys(styles.computed || {}).length > 10, `${Object.keys(styles.computed || {}).length} properties`)
 
+  record('matched-rules', Array.isArray(styles.matched?.matched) && styles.matched.matched.length > 0, `${styles.matched?.matched?.length || 0} rules`)
+
   // 9. lifecycle: suspend -> resume -> page comes back
   const lifecycle = await page.evaluate(async () => {
     const post = (body) => fetch('/nano-kitesurf/kite', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then((r) => r.json())

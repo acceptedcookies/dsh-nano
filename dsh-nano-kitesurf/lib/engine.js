@@ -479,7 +479,9 @@ async function pageHandle(client) {
   // Best-effort: these domains are what make console/network/navigation
   // events observable. An engine that lacks one simply emits fewer events;
   // it must never fail the whole attach.
-  for (const domain of ['Log.enable', 'Network.enable']) {
+  // DOM/CSS are what the Elements panel reads; without enabling them
+  // getMatchedStylesForNode returns no rules (computed still works).
+  for (const domain of ['Log.enable', 'Network.enable', 'DOM.enable', 'CSS.enable']) {
     try { await client.send(domain, {}, attached.sessionId) } catch { /* optional */ }
   }
   client.page = { targetId, sessionId: attached.sessionId }

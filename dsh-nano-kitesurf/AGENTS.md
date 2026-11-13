@@ -115,6 +115,20 @@ dsh plugin --profile web add <spec>
 
 错误一律 `{ok:false,errorId,error}` 并按 `lib/diagnostics.js` 的 `ERROR_CATALOG` 映射真实状态码（唯一真源，index.js 与技能文档都从它派生）：输入类 400、未命中 404、阶段错 409、body 超限 413、引擎故障 502、`navigate.egress` 504。`/diagnostics` 会把「errorId → status → 原因 → 下一步命令」整表交给 agent；完整 id 表也在 `/kitesurf-cdp` 技能 §5。
 
+## 拓扑（workerd 内的浏览器代理）
+
+浏览器代理不在宿主里，而在容器内的 workerd：Kitesurf 引擎自己就是那个代理，它把渲染器包成 CDP server 并从容器端口暴露出来。
+
+```
+DSH 宿主 (plugin/index.js)
+  └─ lib/engine.js  ── CDP over WS ──▶  ws://127.0.0.1:8798/devtools/browser
+                                          └─ 容器内 workerd + Kitesurf 渲染器
+MCP 客户端
+  └─ ws://127.0.0.1:8799/mcp ──▶ runtime/mcp-bridge.mjs ──▶ agent-browser mcp ──▶ 同一 CDP
+```
+
+因此「浏览器代理」= `browserSocketUrl(httpBase)` 指向的 CDP 端点；宿主只做协议转发与诊断，不启动任何浏览器进程。`GET /selftest` 里的 `engine` / `engine-identity` / `targets` 三项就是这条链路的健康证据。
+
 ## 配置与状态
 
 宿主配置可省略。要写就写在 profile 的 patch 里。

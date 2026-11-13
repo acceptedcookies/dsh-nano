@@ -1,0 +1,5 @@
+# Bundle patch: the row names the package. dsh-dev rewrites a stale absolute
+# path onto the copy under ~/.dsh-dev/plugins. name stays the package name.
+- insert:
+    - id: nano-kitesurf
+      name: dsh-nano-kitesurf

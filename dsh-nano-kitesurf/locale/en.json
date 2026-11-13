@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Kitesurf",
+    "description": "Point at a page rendered by Kitesurf and send that element into the session. The engine is a CDP endpoint, normally inside an Apple container."
+  }
+}

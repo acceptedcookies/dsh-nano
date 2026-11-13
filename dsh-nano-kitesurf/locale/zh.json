@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Kitesurf",
+    "description": "在 Kitesurf 渲染的页面上点一个元素，把元素包送进当前会话。引擎是一个 CDP 端点，通常跑在 Apple 容器里。"
+  }
+}

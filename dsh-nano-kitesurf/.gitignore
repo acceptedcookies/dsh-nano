@@ -1,0 +1,3 @@
+# container build artifacts (built on host per runtime/Dockerfile comments)
+runtime/linux-prefix/
+dsh-nano-kitesurf-*.tgz

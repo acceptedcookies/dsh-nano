@@ -1,0 +1,61 @@
+{
+  "name": "dsh-nano-kitesurf",
+  "version": "0.1.0",
+  "description": "Point at a Kitesurf page and hand the element to the session. The engine runs in an Apple container; this plugin speaks CDP.",
+  "type": "module",
+  "icon": "./icon.svg",
+  "main": "./index.js",
+  "scripts": {
+    "build": "node scripts/build-client.mjs",
+    "test": "node --test test/*.mjs"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./client": "./lib/client.js",
+    "./icon": "./icon.svg",
+    "./locale/*.json": "./locale/*.json",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "AGENTS.md",
+    "cordis.patch.yml",
+    "icon.svg",
+    "locale",
+    "lib/client.js",
+    "lib/engine.js",
+    "lib/perf-host.js",
+    "lib/route-guard.js",
+    "lib/route-table.js",
+    "lib/skill.js",
+    "lib/nano-kite.js",
+    "lib/container-engine.js",
+    "runtime/Dockerfile",
+    "runtime/entrypoint.sh",
+    "runtime/mcp-bridge.mjs",
+    "skills"
+  ],
+  "engines": {
+    "dsh": ">=0.2.2-rc.1 <0.3.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-sidebar-right",
+        "@deepseek-ai/dsh-client-ui-primitives",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-theme"
+      ]
+    }
+  },
+  "devDependencies": {
+    "dsh-host-route-guard": "file:../packages/dsh-host-route-guard",
+    "dsh-nano-ui": "file:../packages/dsh-nano-ui",
+    "dsh-performance-review": "file:../packages/dsh-performance-review",
+    "esbuild": "0.25.0"
+  }
+}

@@ -2596,7 +2596,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
     const pickBoxes = pick?.elements ? pick.elements.map((element) => elementBox(element)).filter(Boolean) : [];
     const allBoxes = draftBox ? [{ box: draftBox, kind: draftKind === "ellipse" ? "ellipse" : "draft" }] : [
       ...pickBoxes.map((box, index) => ({ box, kind: pick?.elements?.[index]?.tag === "ellipse" ? "ellipse" : "pick" })),
-      ...hover && !pick ? [{ box: hover, kind: "hover" }] : []
+      ...annotate && hover && !pick ? [{ box: hover, kind: "hover" }] : []
     ];
     const overlays = frame ? allBoxes.map(({ box, kind }) => ({
       kind,
@@ -2857,7 +2857,14 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           "aria-pressed": annotate ? "true" : "false",
           "aria-label": copy.annotate,
           title: copy.annotateTitle,
-          onClick: () => setAnnotate((value) => !value)
+          onClick: () => setAnnotate((value) => {
+            if (value) {
+              setHover(null);
+              setDraftBox(null);
+              setDrag(null);
+            }
+            return !value;
+          })
         }, glyph("annotate")),
         h("button", { type: "button", className: "nks-tool", "data-nks-settings": "1", "aria-label": copy.settings, title: copy.settings, onClick: openSettings }, glyph("settings"))
       ),

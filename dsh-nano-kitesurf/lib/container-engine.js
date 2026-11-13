@@ -77,8 +77,18 @@ export function runContainer(args, io = {}) {
     child.stderr?.on('data', (chunk) => { stderr += chunk })
     child.on('error', (error) => reject(error))
     child.on('close', (code) => {
-      if (code === 0) resolve({ stdout, stderr })
-      else reject(new KitesurfError('kitesurf.kite.container', scrubPaths((stderr || `container ${args[0]} failed`).trim()).slice(0, 300)))
+      if (code === 0) {
+        resolve({ stdout, stderr })
+      } else {
+        // Progress lines (fetching/unpacking/starting) go to stdout; the real
+        // failure line often lands there too (e.g. "failed to bootstrap").
+        // Include the last meaningful lines from both so the pane shows the
+        // actual cause, not just the CLI's debug-build warning.
+        const detail = `${stderr.trim()}\n${stdout.trim()}`
+        const lines = detail.split('\n').map((line) => line.trim()).filter((line) => line && !/^warning/i.test(line))
+        const tail = lines.slice(-3).join(' | ') || `container ${args[0]} failed`
+        reject(new KitesurfError('kitesurf.kite.container', scrubPaths(tail).slice(0, 300)))
+      }
     })
   })
 }
@@ -132,8 +142,20 @@ export async function ensureLocalContainer(target, io = {}) {
     }
   }
   if (!exists) {
+    // Resolve the checkout BEFORE touching the subsystem: a missing
+    // KITESURF_CHECKOUT is a config fault (400), not a container failure.
+    const checkout = io.checkout || checkoutPath()
+    // The `container` CLI's inline bootstrap ("failed to bootstrap") is
+    // broken on debug builds when the apiserver is cold. Prime it explicitly
+    // — idempotent and cheap when the daemon is already warm.
+    try {
+      await run(['system', 'start'])
+    } catch (error) {
+      throw new KitesurfError('kitesurf.kite.container',
+        `container system start failed: ${scrubPaths((error instanceof Error ? error.message : String(error)).slice(0, 200))}`)
+    }
     await run(createArgs({
-      checkout: io.checkout || checkoutPath(),
+      checkout,
       hostEnginePort: enginePort,
       hostMcpPort: target.mcpPort,
     }))

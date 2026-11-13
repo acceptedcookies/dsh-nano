@@ -42,13 +42,15 @@ test('a missing local container is created, and suspend stops it', async () => {
   const commands = []
   const io = {
     inspect: async () => null,
-    run: async (args) => { commands.push(args[0]); return { stdout: '', stderr: '' } },
+    run: async (args) => { commands.push(args.slice(0, 2).join(' ')); return { stdout: '', stderr: '' } },
   }
   const created = await ensureLocalContainer({ httpBase: 'http://127.0.0.1:8798', mcpPort: 8799 }, { ...io, checkout: '/src/kitesurf' })
   assert.equal(created.created, true)
-  assert.deepEqual(commands, ['run'])
+  // `system start` primes the apiserver before `run` — the CLI's inline
+  // bootstrap ("failed to bootstrap") is unreliable on debug builds cold.
+  assert.deepEqual(commands, ['system start', 'run -d'])
   await stopLocalContainer({ httpBase: 'http://127.0.0.1:8798', mcpPort: 8799 }, io)
-  assert.deepEqual(commands, ['run', 'stop'])
+  assert.deepEqual(commands, ['system start', 'run -d', 'stop kitesurf'])
 })
 
 test('an existing container with matching ports is started, not recreated', async () => {
@@ -59,6 +61,8 @@ test('an existing container with matching ports is started, not recreated', asyn
   }
   const result = await ensureLocalContainer({ httpBase: 'http://127.0.0.1:8798', mcpPort: 8799 }, { ...io, checkout: '/src/kitesurf' })
   assert.equal(result.created, false)
+  // Warm-adopt path skips `system start` — the daemon is already up if an
+  // inspect succeeded, so priming it again would be wasted work.
   assert.deepEqual(commands, ['start kitesurf'])
 })
 
@@ -78,7 +82,21 @@ test('a container whose published ports drifted is deleted and recreated', async
   }
   const result = await ensureLocalContainer({ httpBase: 'http://127.0.0.1:8798', mcpPort: 8799 }, { ...io, checkout: '/src/kitesurf' })
   assert.equal(result.created, true)
-  assert.deepEqual(commands, ['delete --force', 'run -d'])
+  assert.deepEqual(commands, ['delete --force', 'system start', 'run -d'])
+})
+
+test('a cold subsystem failure surfaces the system-start error, not the run', async () => {
+  const io = {
+    inspect: async () => null,
+    run: async (args) => {
+      if (args[0] === 'system') throw new Error('bootstrap broken on debug build')
+      return { stdout: '', stderr: '' }
+    },
+  }
+  await assert.rejects(
+    () => ensureLocalContainer({ httpBase: 'http://127.0.0.1:8798', mcpPort: 8799 }, { ...io, checkout: '/src/kitesurf' }),
+    (error) => error.id === 'kitesurf.kite.container' && /system start failed/.test(error.message),
+  )
 })
 
 test('a missing checkout is a config fault, not an engine failure', async () => {

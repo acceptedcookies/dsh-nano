@@ -50,7 +50,7 @@ const STYLE = `
 .nks-address::placeholder{color:var(--dsw-alias-label-tertiary)}
 .nks-go{visibility:hidden;opacity:0;position:absolute;top:0;right:0}
 .nks-address-box:focus-within .nks-go,.nks-address-box[data-dirty="true"] .nks-go{visibility:visible;opacity:1}
-.nks-frame{position:relative;flex:auto;min-height:0;overflow:hidden;background:var(--dsw-alias-bg-layer-1)}
+.nks-frame{position:relative;flex:auto;min-height:0;overflow:hidden;contain:layout paint;background:var(--dsw-alias-bg-layer-1)}
 .nks-frame img{width:100%;height:100%;object-fit:contain;object-position:center;display:block}
 .nks-empty{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:10px;padding:24px;text-align:center;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxs-12)}
 .nks-empty-icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-link,#2f6fed);border:.5px solid var(--dsw-alias-border-l2)}
@@ -213,6 +213,7 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
   // Note bubble starts compact (arrow / copy / input); the text field only
   // exists after the human asks for it — typing is not the default path.
   const [composing, setComposing] = React.useState(false)
+  const refSeq = React.useRef(0)
   const [toast, setToast] = React.useState(null)
   const [busy, setBusy] = React.useState(false)
   /** Preview box under the cursor before a click (throttled pick preview). */
@@ -223,6 +224,7 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
   const frameRef = React.useRef(null)
   const dragRef = React.useRef(null)
   const busyRef = React.useRef(false)
+  const shotInFlightRef = React.useRef(false)
   const dialogOpenRef = React.useRef(false)
   const hoverTimerRef = React.useRef(0)
   // A click waits ~240ms before its pick: a double-click's second click would
@@ -372,7 +374,7 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
       last = key
       if (!previous) return // first measurement is the mount shot
       clearTimeout(timer)
-      timer = window.setTimeout(() => { if (!busyRef.current) reloadShot(0, { keepPick: true }).catch(() => {}) }, 220)
+      timer = window.setTimeout(() => { if (!busyRef.current) reloadShot(0, { keepPick: true, fromResize: true }).catch(() => {}) }, 320)
     })
     observer.observe(element)
     return () => { clearTimeout(timer); observer.disconnect() }
@@ -458,6 +460,16 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
   }
 
   async function reloadShot(scroll, options = {}) {
+    if (shotInFlightRef.current && options.fromResize) return
+    shotInFlightRef.current = true
+    try {
+      return await reloadShotInner(scroll, options)
+    } finally {
+      shotInFlightRef.current = false
+    }
+  }
+
+  async function reloadShotInner(scroll, options = {}) {
     const fit = frameSize()
     const shotPayload = await post(SHOT, {
       format: 'webp',
@@ -681,8 +693,8 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
     if (!open?.elements?.length) return
     try {
       const note = open.elements.length > 1
-        ? multiNote(open.elements, { url: pageUrl, comment: commentRef.current })
-        : designNote(open.elements[0], { url: pageUrl, comment: commentRef.current })
+        ? multiNote(open.elements, { url: pageUrl, comment: commentRef.current, ref: `k${++refSeq.current}` })
+        : designNote(open.elements[0], { url: pageUrl, comment: commentRef.current, ref: `k${++refSeq.current}` })
       if (toComposer) {
         insertComposerNote(note)
       } else {
@@ -701,8 +713,8 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
     const open = element ? { elements: [element] } : pickRef.current
     if (!open?.elements?.length) return null
     return open.elements.length > 1
-      ? multiNote(open.elements, { url: pageUrl, comment: commentRef.current })
-      : designNote(open.elements[0], { url: pageUrl, comment: commentRef.current })
+      ? multiNote(open.elements, { url: pageUrl, comment: commentRef.current, ref: `k${++refSeq.current}` })
+      : designNote(open.elements[0], { url: pageUrl, comment: commentRef.current, ref: `k${++refSeq.current}` })
   }
 
   /**
@@ -717,12 +729,20 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
     const element = pickRef.current?.elements?.[0] || null
     const label = element ? `${element.tag || 'element'}${element.text ? ' · ' + element.text.slice(0, 24) : ''}` : 'selection'
     try {
-      const saved = await post(CONTEXT, { text: note, packet: element, label })
-      insertComposerNote(saved.chip || `⟦kitesurf:${saved.id}⟧`)
+      // The host has no plugin-extensible chip: a bare ref would reach the
+      // model as one meaningless token. So the DEFAULT is the full payload —
+      // complete, never truncated. We still register a ref id so the same
+      // packet can be re-pulled/resolved later, but the composer gets the text.
+      let refId = null
+      try {
+        const saved = await post(CONTEXT, { text: note, packet: element, label })
+        refId = saved.id
+      } catch { /* ref bookkeeping is best-effort, never block the injection */ }
+      insertComposerNote(note)
       setComment('')
       setComposing(false)
       setPick(null)
-      showToast(`已注入 ${saved.chip}（${saved.bytes} B，完整上下文可用 /context?id=${saved.id} 取回）`)
+      showToast(refId ? `${note.length} 字符已注入（ref #${refId}）` : `${note.length} 字符已注入`)
     } catch (cause) {
       showError(cause)
     }

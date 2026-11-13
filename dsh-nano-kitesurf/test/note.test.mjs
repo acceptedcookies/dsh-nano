@@ -13,7 +13,8 @@ const element = {
 
 test('design note stays under the budget and drops empty styles', () => {
   const note = designNote(element, { url: 'https://example.com/', comment: 'make the link larger' })
-  assert.ok(note.startsWith('[kitesurf]'))
+  assert.ok(note.startsWith('<kitesurf ref='))
+  assert.ok(note.trimEnd().endsWith('</kitesurf>'))
   assert.match(note, /el: a#learn\.more/)
   assert.match(note, /ask: make the link larger/)
   assert.match(note, /box: 10,21 80x18/)
@@ -47,7 +48,7 @@ test('several notes leave as one batch, not eight messages', () => {
   const one = designNote({ tag: 'p', selector: 'p', text: 'Hello', componentStack: null })
   const two = designNote({ tag: 'area', box: { x: 1, y: 2, width: 3, height: 4 }, componentStack: null })
   const batch = batchNote([one, two])
-  assert.match(batch, /\[kitesurf batch 2\]/)
+  assert.match(batch, /<kitesurf-batch n="2">/)
   assert.equal(batchNote([one]), one)
   assert.ok(batch.length <= 1600)
 })
@@ -119,8 +120,8 @@ test('shift-click multi-select folds into one numbered note', () => {
   const first = { tag: 'button', selector: 'button.save', text: 'Save', box: { x: 1, y: 2, width: 60, height: 24 }, style: {}, componentStack: null }
   const second = { tag: 'button', selector: 'button.cancel', text: 'Cancel', box: { x: 70, y: 2, width: 70, height: 24 }, style: {}, componentStack: null }
   const note = multiNote([first, second], { url: 'https://example.com/', comment: 'make these equal width' })
-  assert.match(note, /\[kitesurf\]/)
-  assert.match(note, /els: 2/)
+  assert.match(note, /<kitesurf ref=/)
+  assert.match(note, /n="2"/)
   assert.match(note, /el1: button\.save/)
   assert.match(note, /el2: button\.cancel/)
   assert.match(note, /box1: 1,2 60x24/)
@@ -133,5 +134,5 @@ test('multiNote of one delegates to designNote', () => {
   const only = { tag: 'p', selector: 'p', text: 'one', box: { x: 0, y: 0, width: 10, height: 10 }, style: {}, componentStack: null }
   assert.equal(multiNote([only], {}), designNote(only, {}))
   // Empty still yields the note header plus the stack: none line designNote emits.
-  assert.equal(multiNote([], {}), '[kitesurf]\nstack: none')
+  assert.match(multiNote([], {}), /^<kitesurf ref="k0" n="1">\nstack: none\n<\/kitesurf>$/)
 })

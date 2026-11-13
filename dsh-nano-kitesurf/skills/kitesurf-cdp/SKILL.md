@@ -219,7 +219,7 @@ GET  /nano-kitesurf/console?level=log
 3. 只有「偏好端口被占且现有容器端口也不可用」才抛 `409 kitesurf.kite.portbusy`，此时容器保持原样。
 4. 自愈入口：`POST /nano-kitesurf/recover {}`（suspend→resume→健康检查→端口报告）；只读诊断：`GET /nano-kitesurf/ports`；MCP 侧对应 `kitesurf_ports` 与 `kitesurf_recovery_plan`。
 
-**上下文引用（composer 里的 chip）**：点选后注入 composer 的不是全文，而是一行 chip `⟦kitesurf:3 svg · View as Markdown⟧`。**看到这个 token 必须解析**：`GET /nano-kitesurf/context?id=3` 返回 `{id, at, label, bytes, text, packet}`，其中 `text` 是**完整未裁切**的上下文（selector / text / box / 19 项 computed style / attrs / ancestors / componentStack），`packet` 是结构化元素包。`GET /nano-kitesurf/context?limit=20` 列出最近引用；ref 环保留 50 条、宿主重启即清空——若 404 `kitesurf.context.miss`，说明引用已过期，请人重新点选。chip 只是引用，**不会自动发送**。
+**上下文引用（composer 里可能出现 ref）**：默认注入的是**完整上下文正文**（不会裁切）。宿主同时登记一个 ref id，若有人在 composer 里看到 `[kitesurf:N …]` 这种**只有编号**的短 token（手动切换/外部工具产生），它不含上下文，**必须解析**：`GET /nano-kitesurf/context?id=3` 返回 `{id, at, label, bytes, text, packet}`，其中 `text` 是**完整未裁切**的上下文（selector / text / box / 19 项 computed style / attrs / ancestors / componentStack），`packet` 是结构化元素包。`GET /nano-kitesurf/context?limit=20` 列出最近引用；ref 环保留 50 条、宿主重启即清空——若 404 `kitesurf.context.miss`，说明引用已过期，请人重新点选。chip 只是引用，**不会自动发送**。
 
 **MCP 排障（只用 MCP 也能定位）**：`ws://127.0.0.1:<mcpPort>/mcp` 的 `tools/list` 除 33 个 `agent_browser_*` 外还有 6 个 `kitesurf_*` 原生工具：`kitesurf_diagnostics`（一击全量）、`kitesurf_console`、`kitesurf_operations`、`kitesurf_error_catalog`、`kitesurf_targets`、`kitesurf_ports`、`kitesurf_recovery_plan`、`kitesurf_bridge_health`。宿主每 30s（失败时立即）把诊断快照推给桥；若工具回 `kitesurf.diag.stale`，等几秒或先调宿主 `GET /diagnostics`。MCP 的 `-32601/-32602/-32700` 是 JSON-RPC 协议错，`kitesurf.*` 是业务错，两者互不等价。
 

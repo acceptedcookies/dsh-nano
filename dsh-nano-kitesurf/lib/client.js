@@ -1675,7 +1675,8 @@ var __kitesurfExport = (() => {
   });
   function designNote(element, extra = {}) {
     const source = element && typeof element === "object" ? element : {};
-    const lines = ["[kitesurf]"];
+    const refId = cleanLine(extra.ref, 32) || "k0";
+    const lines = [`<kitesurf ref="${refId}" n="1">`];
     const url = cleanLine(extra.url, 180);
     if (url) lines.push(`url: ${url}`);
     if (source.tag === "area") lines.push("mark: area");
@@ -1701,6 +1702,12 @@ var __kitesurfExport = (() => {
     const css = cssLine(source.style);
     if (css) lines.push(`css: ${css}`);
     if (source.tag === "iframe") lines.push("limit: iframe script is not inspected");
+    const attrs = source.attrs && typeof source.attrs === "object" ? source.attrs : {};
+    const keep = ["role", "aria-label", "href", "type", "name", "alt", "title", "placeholder"];
+    const attrLine = keep.filter((k) => typeof attrs[k] === "string" && attrs[k]).map((k) => `${k}=${String(attrs[k]).slice(0, 60)}`).join("; ");
+    if (attrLine) lines.push(`attrs: ${attrLine}`);
+    const ancestors = Array.isArray(source.ancestors) ? source.ancestors.filter(Boolean).slice(0, 5) : [];
+    if (ancestors.length) lines.push(`anc: ${ancestors.join(" < ")}`);
     if (Array.isArray(source.componentStack) && source.componentStack.length) {
       lines.push(`stack: ${source.componentStack.slice(-4).join(" \u2192 ")}`);
     } else {
@@ -1708,6 +1715,7 @@ var __kitesurfExport = (() => {
     }
     const comment = cleanLine(extra.comment, 160);
     if (comment) lines.push(`ask: ${comment}`);
+    lines.push("</kitesurf>");
     let note = lines.join("\n");
     if (note.length > NOTE_BUDGET) note = `${note.slice(0, NOTE_BUDGET - 1)}\u2026`;
     return note;
@@ -1715,7 +1723,8 @@ var __kitesurfExport = (() => {
   function multiNote(elements, extra = {}) {
     const list = (Array.isArray(elements) ? elements : []).filter((item) => item && typeof item === "object");
     if (list.length <= 1) return designNote(list[0], extra);
-    const lines = ["[kitesurf]", `els: ${list.length}`];
+    const refId = cleanLine(extra.ref, 32) || "k0";
+    const lines = [`<kitesurf ref="${refId}" n="${list.length}">`];
     const url = cleanLine(extra.url, 180);
     if (url) lines.push(`url: ${url}`);
     for (let index = 0; index < list.length; index += 1) {
@@ -1729,17 +1738,18 @@ var __kitesurfExport = (() => {
     }
     const comment = cleanLine(extra.comment, 160);
     if (comment) lines.push(`ask: ${comment}`);
+    lines.push("</kitesurf>");
     let note = lines.join("\n");
     if (note.length > NOTE_BUDGET * 2) note = `${note.slice(0, NOTE_BUDGET * 2 - 1)}\u2026`;
     return note;
   }
   function batchNote(notes) {
-    const items = (Array.isArray(notes) ? notes : []).filter((item) => typeof item === "string" && item.startsWith("[kitesurf]")).slice(0, 8);
+    const items = (Array.isArray(notes) ? notes : []).filter((item) => typeof item === "string" && item.startsWith("<kitesurf")).slice(0, 8);
     if (items.length === 0) return "";
     if (items.length === 1) return items[0];
-    let body = `[kitesurf batch ${items.length}]
+    let body = `<kitesurf-batch n="${items.length}">
 ` + items.map((item, index) => `#${index + 1}
-${item}`).join("\n");
+${item}`).join("\n") + "\n</kitesurf-batch>";
     if (body.length > 1600) body = `${body.slice(0, 1599)}\u2026`;
     return body;
   }
@@ -1785,7 +1795,7 @@ ${item}`).join("\n");
   var init_note = __esm({
     "src/shared/note.js"() {
       STYLE_ORDER = ["color", "backgroundColor", "fontSize", "fontFamily", "display", "position"];
-      NOTE_BUDGET = 640;
+      NOTE_BUDGET = 1100;
       TEXT_BUDGET = 80;
     }
   });
@@ -1880,7 +1890,7 @@ ${item}`).join("\n");
 .nks-address::placeholder{color:var(--dsw-alias-label-tertiary)}
 .nks-go{visibility:hidden;opacity:0;position:absolute;top:0;right:0}
 .nks-address-box:focus-within .nks-go,.nks-address-box[data-dirty="true"] .nks-go{visibility:visible;opacity:1}
-.nks-frame{position:relative;flex:auto;min-height:0;overflow:hidden;background:var(--dsw-alias-bg-layer-1)}
+.nks-frame{position:relative;flex:auto;min-height:0;overflow:hidden;contain:layout paint;background:var(--dsw-alias-bg-layer-1)}
 .nks-frame img{width:100%;height:100%;object-fit:contain;object-position:center;display:block}
 .nks-empty{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:10px;padding:24px;text-align:center;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxs-12)}
 .nks-empty-icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-link,#2f6fed);border:.5px solid var(--dsw-alias-border-l2)}
@@ -2021,6 +2031,7 @@ ${item}`).join("\n");
     const [comment, setComment] = React5.useState("");
     const [editing, setEditing] = React5.useState(false);
     const [composing, setComposing] = React5.useState(false);
+    const refSeq = React5.useRef(0);
     const [toast, setToast] = React5.useState(null);
     const [busy, setBusy] = React5.useState(false);
     const [hover, setHover] = React5.useState(null);
@@ -2029,6 +2040,7 @@ ${item}`).join("\n");
     const frameRef = React5.useRef(null);
     const dragRef = React5.useRef(null);
     const busyRef = React5.useRef(false);
+    const shotInFlightRef = React5.useRef(false);
     const dialogOpenRef = React5.useRef(false);
     const hoverTimerRef = React5.useRef(0);
     const clickTimerRef = React5.useRef(0);
@@ -2152,9 +2164,9 @@ ${item}`).join("\n");
         if (!previous) return;
         clearTimeout(timer);
         timer = window.setTimeout(() => {
-          if (!busyRef.current) reloadShot(0, { keepPick: true }).catch(() => {
+          if (!busyRef.current) reloadShot(0, { keepPick: true, fromResize: true }).catch(() => {
           });
-        }, 220);
+        }, 320);
       });
       observer.observe(element);
       return () => {
@@ -2236,6 +2248,15 @@ ${item}`).join("\n");
       return { width, height };
     }
     async function reloadShot(scroll, options = {}) {
+      if (shotInFlightRef.current && options.fromResize) return;
+      shotInFlightRef.current = true;
+      try {
+        return await reloadShotInner(scroll, options);
+      } finally {
+        shotInFlightRef.current = false;
+      }
+    }
+    async function reloadShotInner(scroll, options = {}) {
       const fit = frameSize();
       const shotPayload = await post(SHOT, {
         format: "webp",
@@ -2429,7 +2450,7 @@ ${item}`).join("\n");
       const open = element ? { elements: [element], anchor: null } : pickRef.current;
       if (!open?.elements?.length) return;
       try {
-        const note = open.elements.length > 1 ? multiNote2(open.elements, { url: pageUrl, comment: commentRef.current }) : designNote2(open.elements[0], { url: pageUrl, comment: commentRef.current });
+        const note = open.elements.length > 1 ? multiNote2(open.elements, { url: pageUrl, comment: commentRef.current, ref: `k${++refSeq.current}` }) : designNote2(open.elements[0], { url: pageUrl, comment: commentRef.current, ref: `k${++refSeq.current}` });
         if (toComposer) {
           insertComposerNote(note);
         } else {
@@ -2445,7 +2466,7 @@ ${item}`).join("\n");
     function noteOf(element) {
       const open = element ? { elements: [element] } : pickRef.current;
       if (!open?.elements?.length) return null;
-      return open.elements.length > 1 ? multiNote2(open.elements, { url: pageUrl, comment: commentRef.current }) : designNote2(open.elements[0], { url: pageUrl, comment: commentRef.current });
+      return open.elements.length > 1 ? multiNote2(open.elements, { url: pageUrl, comment: commentRef.current, ref: `k${++refSeq.current}` }) : designNote2(open.elements[0], { url: pageUrl, comment: commentRef.current, ref: `k${++refSeq.current}` });
     }
     async function injectNote() {
       const note = noteOf();
@@ -2453,12 +2474,17 @@ ${item}`).join("\n");
       const element = pickRef.current?.elements?.[0] || null;
       const label = element ? `${element.tag || "element"}${element.text ? " \xB7 " + element.text.slice(0, 24) : ""}` : "selection";
       try {
-        const saved = await post(CONTEXT, { text: note, packet: element, label });
-        insertComposerNote(saved.chip || `\u27E6kitesurf:${saved.id}\u27E7`);
+        let refId = null;
+        try {
+          const saved = await post(CONTEXT, { text: note, packet: element, label });
+          refId = saved.id;
+        } catch {
+        }
+        insertComposerNote(note);
         setComment("");
         setComposing(false);
         setPick(null);
-        showToast(`\u5DF2\u6CE8\u5165 ${saved.chip}\uFF08${saved.bytes} B\uFF0C\u5B8C\u6574\u4E0A\u4E0B\u6587\u53EF\u7528 /context?id=${saved.id} \u53D6\u56DE\uFF09`);
+        showToast(refId ? `${note.length} \u5B57\u7B26\u5DF2\u6CE8\u5165\uFF08ref #${refId}\uFF09` : `${note.length} \u5B57\u7B26\u5DF2\u6CE8\u5165`);
       } catch (cause) {
         showError(cause);
       }

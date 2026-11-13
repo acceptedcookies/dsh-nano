@@ -2073,7 +2073,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
     const [composing, setComposing] = React5.useState(false);
     const refSeq = React5.useRef(0);
     const [devtoolsOpen, setDevtoolsOpen] = React5.useState(false);
-    const [nativeHtml, setNativeHtml] = React5.useState(false);
+    const [nativeHtml, setNativeHtml] = React5.useState(true);
     const [domDoc, setDomDoc] = React5.useState(null);
     const domFrameRef = React5.useRef(null);
     const [toast, setToast] = React5.useState(null);
@@ -2882,6 +2882,10 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       doc.open();
       doc.write(domDoc.srcdoc);
       doc.close();
+      try {
+        delete doc.__nksBound;
+      } catch {
+      }
       bindDomFrame(frame2);
     }
     function bindDomFrame(frame2) {

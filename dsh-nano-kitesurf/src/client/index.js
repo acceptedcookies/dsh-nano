@@ -242,10 +242,9 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
   const [composing, setComposing] = React.useState(false)
   const refSeq = React.useRef(0)
   const [devtoolsOpen, setDevtoolsOpen] = React.useState(false)
-  // HTML stays opt-in: with nativeHtml=true from boot the annotate button is
-  // covered by the iframe (elementsFromPoint: covered=true), so design mode
-  // cannot be armed. The screenshot path remains the safe default.
-  const [nativeHtml, setNativeHtml] = React.useState(false)
+  // Native HTML is the default surface: the iframe gets real DOM/CSS and the
+  // picker is bound after document.write (which wipes listeners).
+  const [nativeHtml, setNativeHtml] = React.useState(true)
   const [domDoc, setDomDoc] = React.useState(null)
   const domFrameRef = React.useRef(null)
   const [toast, setToast] = React.useState(null)
@@ -1148,6 +1147,9 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
     doc.open()
     doc.write(domDoc.srcdoc)
     doc.close()
+    // document.write() wipes every listener on the SAME Document object, so
+    // the __nksBound marker must be cleared or the rebinding is skipped.
+    try { delete doc.__nksBound } catch { /* frozen */ }
     bindDomFrame(frame)
   }
 

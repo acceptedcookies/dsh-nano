@@ -168,17 +168,23 @@ async function main() {
   record('matched-rules', Array.isArray(styles.matched?.matched) && styles.matched.matched.length > 0, `${styles.matched?.matched?.length || 0} rules`)
 
   // 9. lifecycle: suspend -> resume -> page comes back
-  const lifecycle = await page.evaluate(async () => {
-    const post = (body) => fetch('/nano-kitesurf/kite', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then((r) => r.json())
-    const st = () => fetch('/nano-kitesurf/status').then((r) => r.json())
+  const lifecycle = await page.evaluate(async (targetUrl) => {
+    const readJson = async (r) => { const t = await r.text(); try { return JSON.parse(t) } catch { return { ok: false, error: t.slice(0, 120), status: r.status } } }
+    const post = (body) => fetch('/nano-kitesurf/kite', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then(readJson)
+    const st = () => fetch('/nano-kitesurf/status').then(readJson)
+    try {
     const before = await st()
     const suspended = await post({ action: 'suspend' })
     const mid = await st()
     const resumed = await post({ action: 'resume' })
     // resume rebuilds the container: the page is gone, so re-open before any
     // later check that needs a document.
-    await fetch('/nano-kitesurf/open', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ url: TARGET_URL }) })
-    await new Promise((r) => setTimeout(r, 3000))
+    await fetch('/nano-kitesurf/open', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ url: targetUrl }) })
+    for (let i = 0; i < 12; i += 1) {
+      const dom = await fetch('/nano-kitesurf/dom').then(readJson)
+      if (dom.ok) break
+      await new Promise((r) => setTimeout(r, 1000))
+    }
     const after = await st()
     return {
       beforePhase: before.kite?.phase,
@@ -188,7 +194,8 @@ async function main() {
       afterPhase: after.kite?.phase,
       alive: after.ok === true,
     }
-  })
+    } catch (error) { return { error: String((error && error.message) || error) } }
+  }, TARGET_URL)
   record('lifecycle', lifecycle.suspendOk && lifecycle.midPhase === 'suspended' && lifecycle.resumeOk && lifecycle.afterPhase === 'running' && lifecycle.alive, JSON.stringify(lifecycle))
 
   // 10. host self-test

@@ -2187,10 +2187,17 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       return () => window.removeEventListener("keydown", onKey);
     }, []);
     React5.useEffect(() => {
-      const frame2 = domFrameRef.current;
-      if (!frame2?.contentWindow) return;
-      frame2.contentWindow.postMessage({ __nks: "mode", annotate }, "*");
-    }, [annotate, domDoc]);
+      const timer = window.setInterval(() => {
+        const frame2 = domFrameRef.current;
+        if (frame2) {
+          try {
+            bindDomFrame(frame2);
+          } catch {
+          }
+        }
+      }, 500);
+      return () => clearInterval(timer);
+    }, []);
     React5.useEffect(() => {
       const onMessage = (event) => {
         const data = event.data;
@@ -2688,16 +2695,20 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       ...pickBoxes.map((box, index) => ({ box, kind: pick?.elements?.[index]?.tag === "ellipse" ? "ellipse" : "pick" })),
       ...annotate && hover && !pick ? [{ box: hover, kind: "hover" }] : []
     ];
-    const overlays = frame ? allBoxes.map(({ box, kind }) => ({
+    const activeFrame = frame || (nativeHtml && domDoc && frameRef.current ? (() => {
+      const r = frameRef.current.getBoundingClientRect();
+      return r.width > 0 && r.height > 0 ? { left: 0, top: 0, width: r.width, height: r.height, scale: 1 } : null;
+    })() : null);
+    const overlays = activeFrame ? allBoxes.map(({ box, kind }) => ({
       kind,
-      left: frame.left + box.x * frame.scale,
-      top: frame.top + box.y * frame.scale,
-      width: Math.max(box.width * frame.scale, 2),
-      height: Math.max(box.height * frame.scale, 2)
+      left: activeFrame.left + box.x * activeFrame.scale,
+      top: activeFrame.top + box.y * activeFrame.scale,
+      width: Math.max(box.width * activeFrame.scale, 2),
+      height: Math.max(box.height * activeFrame.scale, 2)
     })) : [];
     const hasPage = !!shot && !!shotMeta?.url && shotMeta.url !== "about:blank";
     const anchor = pick?.anchor;
-    const pickAnchor = overlays.find((o) => o.kind === "pick" || o.kind === "ellipse") || (frame && anchor ? { left: frame.left + anchor.x * frame.scale, top: frame.top + anchor.y * frame.scale, width: 0, height: 0 } : null) || (frame ? { left: frame.left + 16, top: frame.top + 16, width: 0, height: 0 } : null);
+    const pickAnchor = overlays.find((o) => o.kind === "pick" || o.kind === "ellipse") || (activeFrame && anchor ? { left: activeFrame.left + anchor.x * activeFrame.scale, top: activeFrame.top + anchor.y * activeFrame.scale, width: 0, height: 0 } : null) || (activeFrame ? { left: activeFrame.left + 16, top: activeFrame.top + 16, width: 0, height: 0 } : null);
     const arrowGlyph = (dir) => h("svg", {
       width: 16,
       height: 16,

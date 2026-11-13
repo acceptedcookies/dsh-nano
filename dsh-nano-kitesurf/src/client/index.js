@@ -242,6 +242,9 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
   const [composing, setComposing] = React.useState(false)
   const refSeq = React.useRef(0)
   const [devtoolsOpen, setDevtoolsOpen] = React.useState(false)
+  // Native HTML stays opt-in: it works when enabled manually (verified: pick
+  // -> <kitesurf ref> in composer) but is not yet reliable on first mount, so
+  // the screenshot path remains the default.
   const [nativeHtml, setNativeHtml] = React.useState(false)
   const [domDoc, setDomDoc] = React.useState(null)
   const domFrameRef = React.useRef(null)
@@ -384,10 +387,14 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
   // about:blank. Without this the pane kept a screenshot of a page that no
   // longer exists. Clear it so the empty state tells the truth.
   React.useEffect(() => {
-    const frame = domFrameRef.current
-    if (!frame?.contentWindow) return
-    frame.contentWindow.postMessage({ __nks: 'mode', annotate }, '*')
-  }, [annotate, domDoc])
+    // srcdoc can be replaced when domDoc updates; rebinding every 500ms keeps
+    // the picker attached without guessing React's commit timing.
+    const timer = window.setInterval(() => {
+      const frame = domFrameRef.current
+      if (frame) { try { bindDomFrame(frame) } catch { /* not ready */ } }
+    }, 500)
+    return () => clearInterval(timer)
+  }, [])
 
   React.useEffect(() => {
     const onMessage = (event) => {
@@ -955,19 +962,24 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
         ...pickBoxes.map((box, index) => ({ box, kind: pick?.elements?.[index]?.tag === 'ellipse' ? 'ellipse' : 'pick' })),
         ...(annotate && hover && !pick ? [{ box: hover, kind: 'hover' }] : []),
       ]
-  const overlays = frame ? allBoxes.map(({ box, kind }) => ({
+  // Native-HTML mode has no <img>: derive the 1:1 frame at render time so the
+  // selection box never depends on an async measurement effect firing.
+  const activeFrame = frame || (nativeHtml && domDoc && frameRef.current
+    ? (() => { const r = frameRef.current.getBoundingClientRect(); return r.width > 0 && r.height > 0 ? { left: 0, top: 0, width: r.width, height: r.height, scale: 1 } : null })()
+    : null)
+  const overlays = activeFrame ? allBoxes.map(({ box, kind }) => ({
     kind,
-    left: frame.left + box.x * frame.scale,
-    top: frame.top + box.y * frame.scale,
-    width: Math.max(box.width * frame.scale, 2),
-    height: Math.max(box.height * frame.scale, 2),
+    left: activeFrame.left + box.x * activeFrame.scale,
+    top: activeFrame.top + box.y * activeFrame.scale,
+    width: Math.max(box.width * activeFrame.scale, 2),
+    height: Math.max(box.height * activeFrame.scale, 2),
   })) : []
   // about:blank still yields a (transparent) PNG — treat it as no page.
   const hasPage = !!shot && !!shotMeta?.url && shotMeta.url !== 'about:blank'
   const anchor = pick?.anchor
   const pickAnchor = (overlays.find((o) => o.kind === 'pick' || o.kind === 'ellipse'))
-    || (frame && anchor ? { left: frame.left + anchor.x * frame.scale, top: frame.top + anchor.y * frame.scale, width: 0, height: 0 } : null)
-    || (frame ? { left: frame.left + 16, top: frame.top + 16, width: 0, height: 0 } : null)
+    || (activeFrame && anchor ? { left: activeFrame.left + anchor.x * activeFrame.scale, top: activeFrame.top + anchor.y * activeFrame.scale, width: 0, height: 0 } : null)
+    || (activeFrame ? { left: activeFrame.left + 16, top: activeFrame.top + 16, width: 0, height: 0 } : null)
 
   // Browser chrome needs real left/right arrows — the primitives icon set
   // only ships chevron-up/down, so draw 16px strokes inline.

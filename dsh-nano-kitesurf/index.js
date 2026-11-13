@@ -12,7 +12,7 @@ import { browserSocketUrl, captureShot, currentEmulation, currentUserAgent, curr
 import { ERROR_STATUS, clearConsole, clearOperations, diagnosticsSummary, listConsole, listOperations, recordOperation, summarizeInput } from './lib/diagnostics.js'
 import { kitesurfSkill, nanoKiteSkill } from './lib/skill.js'
 import { createNanoKite } from './lib/nano-kite.js'
-import { ensureLocalContainer, stopLocalContainer } from './lib/container-engine.js'
+import { ensureLocalContainer, hostPort, stopLocalContainer } from './lib/container-engine.js'
 import { hostSpan, perfSnapshot } from './lib/perf-host.js'
 
 export const name = 'nano-kitesurf'
@@ -31,6 +31,8 @@ const KITE_ROUTE = '/nano-kitesurf/kite'
 const CONSOLE_ROUTE = '/nano-kitesurf/console'
 const OPERATIONS_ROUTE = '/nano-kitesurf/operations'
 const DIAGNOSTICS_ROUTE = '/nano-kitesurf/diagnostics'
+const PORTS_ROUTE = '/nano-kitesurf/ports'
+const RECOVER_ROUTE = '/nano-kitesurf/recover'
 const TARGETS_ROUTE = '/nano-kitesurf/targets'
 const EVALUATE_ROUTE = '/nano-kitesurf/evaluate'
 
@@ -340,6 +342,8 @@ export function apply(ctx, config) {
     onSuspend: () => sleepEngine(),
     onResume: () => bringUp('kitesurf.kite.resume'),
   })
+  /** Last port repair performed by bringUp — surfaced in /status + /ports. */
+  let portRepair = null
   async function bringUp(id) {
     // Container bring-up can run ~100s (image pull + workerd boot + health
     // polling). Split the observables: `kite.container` covers the CLI call
@@ -348,6 +352,27 @@ export function apply(ctx, config) {
     await hostSpan('kite-bringup', async () => {
       const ensured = await hostSpan('kite-container',
         () => ensureLocalContainer(kite.snapshot(), { checkout: effectiveCheckout }))
+      // Resilience: the container may have been adopted on a different port
+      // than the config asked for (the configured one was busy). Rewrite the
+      // live engine endpoint so every later call follows reality, and record
+      // the repair for /status + /ports.
+      if (ensured && ensured.hostEnginePort) {
+        const before = kite.snapshot()
+        const wantBase = `http://127.0.0.1:${ensured.hostEnginePort}`
+        const patch = {}
+        if (before.httpBase !== wantBase) patch.httpBase = wantBase
+        if (ensured.mcpPort && before.mcpPort !== ensured.mcpPort) patch.mcpPort = ensured.mcpPort
+        if (Object.keys(patch).length) {
+          try { kite.configure(patch) } catch { /* keep config if it refuses */ }
+          portRepair = {
+            at: new Date().toISOString(),
+            from: { httpBase: before.httpBase, mcpPort: before.mcpPort },
+            to: { httpBase: kite.snapshot().httpBase, mcpPort: kite.snapshot().mcpPort },
+            reason: ensured.adopted ? 'adopted-existing-container' : 'port-busy-repaired',
+            requestedEnginePort: ensured.requestedEnginePort ?? null,
+          }
+        }
+      }
       // Remember what actually worked so the next cold start can rebuild the
       // container without anyone editing a profile again.
       await rememberCheckout(effectiveCheckout)
@@ -377,6 +402,54 @@ export function apply(ctx, config) {
   // a host restart.
   const effectiveCheckout = () => config?.checkout || process.env.KITESURF_CHECKOUT || persistedCheckout()
 
+  /**
+   * Port truth: what the config asks for, what the engine actually uses, what
+   * the container published, and who else holds the port. This is the data an
+   * agent needs to diagnose "8787 is Cursor, the engine is on 8798" without a
+   * shell.
+   */
+  async function portReport() {
+    const snap = kite.snapshot()
+    const want = { httpBase: config?.httpBase ?? DEFAULT_ORIGIN, mcpPort: snap.mcpPort }
+    let published = null
+    let containerState = null
+    try {
+      const { execFile } = await import('node:child_process')
+      const out = await new Promise((resolve) => {
+        execFile('container', ['inspect', 'kitesurf'], { timeout: 5000 }, (error, stdout) => resolve(error ? null : stdout))
+      })
+      if (out) {
+        const row = JSON.parse(out)?.[0]
+        containerState = row?.status?.state ?? (typeof row?.status === 'string' ? row.status : null)
+        published = (row?.configuration?.publishedPorts ?? []).map((p) => ({
+          containerPort: Number(p.containerPort), hostPort: Number(p.hostPort), hostAddress: p.hostAddress,
+        }))
+      }
+    } catch { /* container CLI missing is itself reported as null */ }
+    const probe = async (port) => {
+      if (!Number.isFinite(port)) return null
+      const { hostPortFree } = await import('./lib/container-engine.js')
+      return { port, free: await hostPortFree(port) }
+    }
+    const [wantEngine, wantMcp] = await Promise.all([probe(hostPort(snap.httpBase)), probe(snap.mcpPort)])
+    // "Occupied" is ambiguous: our own container holding its published port is
+    // healthy, not a conflict. Say who holds it.
+    const own = new Set((published || []).map((p) => p.hostPort))
+    const who = (row) => row == null ? null
+      : row.free ? 'free' : (own.has(row.port) ? 'this-container' : 'other')
+    return {
+      configured: want,
+      effective: { httpBase: snap.httpBase, mcpPort: snap.mcpPort },
+      container: { state: containerState, published },
+      ports: {
+        engine: wantEngine ? { ...wantEngine, heldBy: who(wantEngine) } : null,
+        mcp: wantMcp ? { ...wantMcp, heldBy: who(wantMcp) } : null,
+      },
+      lastRepair: portRepair,
+      healthy: (await statusOf(snap.httpBase)).ok === true,
+    }
+  }
+
   /** One packed snapshot, shared by GET /diagnostics and the MCP push. */
   async function buildDiagnostics(limit = 20, withTargets = true) {
     const status = await statusOf(origin())
@@ -403,6 +476,7 @@ export function apply(ctx, config) {
       plugin: { version: pluginVersion() ?? null, buildId, storePath, httpBase: origin(), cdp: browserSocketUrl(origin()), ...kite.snapshot() },
       engine: { ...status, targets, targetsError, engineAlive: status.ok === true, phaseConsistent: status.ok ? kite.snapshot().phase === 'running' : kite.snapshot().phase !== 'running' },
       settings: currentEmulation(),
+      ports: await portReport().catch(() => null),
       observability: summary,
       console: listConsole({ limit }),
       operations: listOperations({ limit }),
@@ -706,6 +780,63 @@ export function apply(ctx, config) {
           const body = await readBody(req, route.bodyLimit)
           const result = await hostSpan('evaluate', () => evaluateInPage(origin(), body.expression))
           sendJson(res, 200, { ok: true, ...result })
+        } catch (error) {
+          fail(res, error)
+        }
+      },
+    },
+    {
+      path: PORTS_ROUTE,
+      methods: ['GET', 'HEAD'],
+      handler: async (_req, res) => {
+        try {
+          sendJson(res, 200, { ok: true, ...(await portReport()) })
+        } catch (error) {
+          fail(res, error)
+        }
+      },
+    },
+    {
+      path: RECOVER_ROUTE,
+      methods: ['POST'],
+      bodyLimit: 4096,
+      handler: async (req, res) => {
+        try {
+          const body = await readBody(req, 4096)
+          const steps = []
+          // Phase is in-memory; the container may have been stopped behind our
+          // back. Reconcile against /health first, then pick the legal action:
+          // alive+idle→adopt, dead+running→degrade, then start or resume.
+          const probe = await statusOf(origin())
+          const before = kite.snapshot().phase
+          if (probe.ok && before === 'idle') kite.adopt()
+          else if (!probe.ok && before === 'running') kite.degrade()
+          steps.push({ step: 'reconcile', ok: true, from: before, to: kite.snapshot().phase, engineAlive: probe.ok === true })
+
+          if (kite.snapshot().phase === 'running' && !probe.ok) {
+            await hostSpan('kite-suspend', () => kite.suspend())
+            steps.push({ step: 'suspend', ok: true })
+          }
+          if (body.reset !== false) {
+            const phase = kite.snapshot().phase
+            if (phase === 'suspended') {
+              await hostSpan('kite-resume', () => kite.resume())
+              steps.push({ step: 'resume', ok: true })
+            } else if (phase === 'idle') {
+              await hostSpan('kite-start', () => kite.start())
+              steps.push({ step: 'start', ok: true })
+            } else {
+              steps.push({ step: 'already-running', ok: true })
+            }
+          }
+          const after = await statusOf(kite.snapshot().httpBase)
+          sendJson(res, 200, {
+            ok: after.ok === true,
+            steps,
+            phase: kite.snapshot().phase,
+            engineAlive: after.ok === true,
+            ports: await portReport().catch(() => null),
+          })
         } catch (error) {
           fail(res, error)
         }

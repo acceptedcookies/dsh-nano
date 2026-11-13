@@ -137,6 +137,21 @@ export function hostPortFree(port) {
   })
 }
 
+/**
+ * First free loopback port at or after `start`, stepping by 10 so a repaired
+ * engine never lands next to a busy neighbour. Bounded — never scans forever.
+ * @param {number} start
+ * @param {(port: number) => Promise<boolean>} probe
+ */
+export async function firstFreePort(start, probe) {
+  for (let i = 0; i < 12; i += 1) {
+    const port = start + i * 10
+    if (port > 65535) break
+    if (await probe(port)) return port
+  }
+  return null
+}
+
 /** Read `configuration.publishedPorts[]` out of `container inspect` JSON. */
 function publishedPortsOf(text) {
   try {
@@ -203,43 +218,90 @@ export async function ensureLocalContainer(target, io = {}) {
   await prime()
   let inspectText = await inspect(CONTAINER_NAME)
   let exists = inspectText != null
+  /** Set when a port-conflicted config adopts the container's real port. */
+  let adopted = null
   if (exists) {
     const ports = publishedPortsOf(inspectText)
     if (ports !== null) {
       // Match means the same host ports AND loopback-bound: an old container
       // published on 0.0.0.0 must be rebuilt, not reused (S2-5).
       const loop = (p) => p?.hostAddress === '127.0.0.1' || p?.hostAddress === '::1'
-      const match = ports.some((p) => Number(p?.containerPort) === 8787 && Number(p?.hostPort) === enginePort && loop(p))
-        && ports.some((p) => Number(p?.containerPort) === 8791 && Number(p?.hostPort) === target.mcpPort && loop(p))
+      const engineRow = ports.find((p) => Number(p?.containerPort) === 8787 && loop(p))
+      const mcpRow = ports.find((p) => Number(p?.containerPort) === 8791 && loop(p))
+      const match = engineRow && Number(engineRow.hostPort) === enginePort
+        && mcpRow && Number(mcpRow.hostPort) === target.mcpPort
       if (!match) {
         // A remap must not destroy a healthy engine. If the requested engine
         // port is already held by another process (Cursor owns 8787 here),
         // recreating would delete the working container AND fail to bind.
         const probe = io.portFree || hostPortFree
-        if (!(await probe(enginePort))) {
-          throw new KitesurfError('kitesurf.kite.portbusy',
-            `端口 ${enginePort} 已被其他程序占用，不能把引擎重建到这个端口；现有容器保持不变。请把 config.httpBase 指到空闲端口（本机引擎通常用 8798）`)
+        const desiredFree = await probe(enginePort)
+        if (!desiredFree) {
+          const currentEnginePort = engineRow ? Number(engineRow.hostPort) : null
+          const currentMcpPort = mcpRow ? Number(mcpRow.hostPort) : null
+          // Resilience: the container's OWN ports are still free (it is the
+          // one holding them). Adopt it instead of destroying it, and let the
+          // host rewrite its effective httpBase/mcpPort to match. A wrong
+          // config must never cost the operator a working engine.
+          if (currentEnginePort && await probe(currentEnginePort)) {
+            // Remember the adoption but DO NOT return here: a stopped
+            // container still needs its `container start` below.
+            adopted = {
+              adopted: true,
+              hostEnginePort: currentEnginePort,
+              mcpPort: currentMcpPort || target.mcpPort,
+              requestedEnginePort: enginePort,
+            }
+            exists = true
+          } else {
+            throw new KitesurfError('kitesurf.kite.portbusy',
+              `端口 ${enginePort} 已被其他程序占用，且现有容器的端口也无法确认空闲；现有容器保持不变。请把 config.httpBase 指到空闲端口（本机引擎通常用 8798）`)
+          }
         }
-        await run(['delete', '--force', CONTAINER_NAME])
-        exists = false
+        if (!adopted) {
+          await run(['delete', '--force', CONTAINER_NAME])
+          exists = false
+        }
       }
     }
   }
-  if (!exists) {
+  if (!exists && !adopted) {
     const checkout = io.checkout || checkoutPath()
+    // Resilience for a fresh create: if the preferred port is occupied, move
+    // to the next free one instead of failing the whole bring-up.
+    let createEnginePort = enginePort
+    let createMcpPort = target.mcpPort
+    const probe = io.portFree || hostPortFree
+    if (!(await probe(createEnginePort))) {
+      const free = await firstFreePort(enginePort + 10, probe)
+      if (!free) {
+        throw new KitesurfError('kitesurf.kite.portbusy',
+          `端口 ${enginePort} 及其后候选端口都被占用，无法创建引擎容器`)
+      }
+      createEnginePort = free
+      if (!(await probe(createMcpPort))) createMcpPort = free + 1
+    }
     await runOnce(createArgs({
       checkout,
-      hostEnginePort: enginePort,
-      hostMcpPort: target.mcpPort,
+      hostEnginePort: createEnginePort,
+      hostMcpPort: createMcpPort,
     }))
-    return { local: true, created: true }
+    return {
+      local: true,
+      created: true,
+      hostEnginePort: createEnginePort,
+      mcpPort: createMcpPort,
+      ...(createEnginePort !== enginePort ? { requestedEnginePort: enginePort, repaired: true } : {}),
+    }
   }
   try {
     await runOnce(['start', CONTAINER_NAME])
   } catch (error) {
     if (!/already|running/i.test(error instanceof Error ? error.message : '')) throw error
   }
-  return { local: true, created: false }
+  return adopted
+    ? { local: true, created: false, ...adopted }
+    : { local: true, created: false }
 }
 
 /**

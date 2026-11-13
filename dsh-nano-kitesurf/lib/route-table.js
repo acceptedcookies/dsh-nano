@@ -191,5 +191,30 @@ export const ROUTE_TABLE = [
     "bodyLimit": 4096,
     "sessionBinding": false,
     "justification": "EVALUATE_ROUTE — bounded Runtime.evaluate in the engine page (≤2000 chars, returnByValue, ≤4000 chars result). Writes page state, L2 like /edit."
+  },
+  {
+    "plugin": "dsh-nano-kitesurf",
+    "path": "/nano-kitesurf/ports",
+    "methods": [
+      "GET",
+      "HEAD"
+    ],
+    "sensitivity": "L2",
+    "capability": "read:host",
+    "bodyLimit": 0,
+    "sessionBinding": false,
+    "justification": "PORTS_ROUTE — configured vs effective ports, container publishedPorts, loopback occupancy probe and last port repair. L2 host internals."
+  },
+  {
+    "plugin": "dsh-nano-kitesurf",
+    "path": "/nano-kitesurf/recover",
+    "methods": [
+      "POST"
+    ],
+    "sensitivity": "L2",
+    "capability": "proc:kitesurf",
+    "bodyLimit": 4096,
+    "sessionBinding": false,
+    "justification": "RECOVER_ROUTE — runs suspend+resume of the local container and returns the resulting engine state. Process control, L2 like /kite."
   }
 ]

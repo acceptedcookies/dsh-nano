@@ -158,6 +158,9 @@ GET  /nano-kitesurf/console?level=log
 | `POST /settings {"viewport":"phone"}` | `400 kitesurf.settings.viewport` | 存在但类型错，不静默吞 |
 | `POST /settings {"viewport":{"width":9999}}` | `400 kitesurf.settings.viewport` | 宽 320..3840、高 240..2160；dsf 只能 1/2/3 |
 | `POST /settings {"extraHeaders":{"cookie":"a=b"}}` | `400 kitesurf.settings.headers` | 凭证类 header 名被禁用 |
+| 把 `httpBase` 指到 `http://127.0.0.1:8787`（本机 Cursor 占用） | **不会**删容器：接管现有 8798 容器并回报 `adopted:true`；若连现端口也不可用则 `409 kitesurf.kite.portbusy` | 端口占用不是引擎故障，绝不能拆掉能用的容器 |
+| `GET /nano-kitesurf/ports` | `{configured, effective, container.published, ports.engine.free, lastRepair}` | 一眼看出「配置 8787 / 实跑 8798」 |
+| `POST /nano-kitesurf/recover {}` | 自动 suspend→resume 并回报 `engineAlive` | 一键自愈，不需要人改 YAML |
 | `POST /history {"delta":2}` | `400 kitesurf.navigate.delta` | 只能 -1/+1 |
 | `POST /kite {"action":"start"}` 当 running | `409 kitesurf.kite.state` | 阶段错，不是引擎故障 |
 | `configure` 到 `http://evil.example` | `400 kitesurf.kite.remote` | 远程需 allowRemote |
@@ -207,7 +210,14 @@ GET  /nano-kitesurf/console?level=log
 
 **GUI 部署链（改了代码不生效时按此顺序）**：`npm run build`（生成 `lib/route-table.js`、`lib/client.js`、`skills/*/SKILL.md`）→ 同步到 profile 的插件目录（`~/.dsh-dev/plugins/dsh-nano-kitesurf`）→ `pnpm install --force` 重链虚拟 store → 重启宿主（`launchctl kickstart -k gui/$(id -u)/ai.deepseek.dsh.dev.web`）→ **强制刷新页面**重新取鉴权。顺序错一步会出现 `route-not-listed` 并让整块插件全部路由 502；用 `/status` 的 `buildId` 对照作者树确认版本。技能正文由 `lib/skill.js` 生成，`npm test` 会校验 `skills/<name>/SKILL.md` == frontmatter + `SKILL_BODIES[name]`（逐字符），杜绝真源与生成物漂移。
 
-**MCP 排障（只用 MCP 也能定位）**：`ws://127.0.0.1:<mcpPort>/mcp` 的 `tools/list` 除 33 个 `agent_browser_*` 外还有 6 个 `kitesurf_*` 原生工具：`kitesurf_diagnostics`（一击全量）、`kitesurf_console`、`kitesurf_operations`、`kitesurf_error_catalog`、`kitesurf_targets`、`kitesurf_bridge_health`。宿主每 30s（失败时立即）把诊断快照推给桥；若工具回 `kitesurf.diag.stale`，等几秒或先调宿主 `GET /diagnostics`。MCP 的 `-32601/-32602/-32700` 是 JSON-RPC 协议错，`kitesurf.*` 是业务错，两者互不等价。
+**端口韧性（本机最常见的坑）**：本机 8787 常年被 Cursor 占用，引擎容器实际发布在 8798/8799。插件现在的行为是：
+
+1. `config.httpBase` 只是**偏好**，不是硬约束。若目标端口被别的进程占用，而现有 `kitesurf` 容器自己的端口仍可用 → **接管**该容器并把运行中的 `httpBase` 改写成实际端口（`/status.ports.lastRepair` 记录 from/to，reason=`adopted-existing-container`），**不删除容器**。
+2. 首次创建且偏好端口被占用 → 自动向后取下一个空闲端口（步进 10），reason=`port-busy-repaired`。
+3. 只有「偏好端口被占且现有容器端口也不可用」才抛 `409 kitesurf.kite.portbusy`，此时容器保持原样。
+4. 自愈入口：`POST /nano-kitesurf/recover {}`（suspend→resume→健康检查→端口报告）；只读诊断：`GET /nano-kitesurf/ports`；MCP 侧对应 `kitesurf_ports` 与 `kitesurf_recovery_plan`。
+
+**MCP 排障（只用 MCP 也能定位）**：`ws://127.0.0.1:<mcpPort>/mcp` 的 `tools/list` 除 33 个 `agent_browser_*` 外还有 6 个 `kitesurf_*` 原生工具：`kitesurf_diagnostics`（一击全量）、`kitesurf_console`、`kitesurf_operations`、`kitesurf_error_catalog`、`kitesurf_targets`、`kitesurf_ports`、`kitesurf_recovery_plan`、`kitesurf_bridge_health`。宿主每 30s（失败时立即）把诊断快照推给桥；若工具回 `kitesurf.diag.stale`，等几秒或先调宿主 `GET /diagnostics`。MCP 的 `-32601/-32602/-32700` 是 JSON-RPC 协议错，`kitesurf.*` 是业务错，两者互不等价。
 
 ## 9. Do not
 

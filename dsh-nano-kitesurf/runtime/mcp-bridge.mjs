@@ -205,6 +205,16 @@ const KITESURF_TOOLS = [
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
+    name: 'kitesurf_ports',
+    description: 'Port truth: what the profile configured, what the engine actually uses, what the container published, and whether each host port is free (e.g. 8787 held by Cursor while the engine runs on 8798). Read this FIRST for any container/bootstrap failure.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'kitesurf_recovery_plan',
+    description: 'Ordered recovery steps with the exact HTTP call for each, derived from the live snapshot (port conflict, engine down, phase mismatch, container missing). Returns commands to run through the authenticated host session.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
     name: 'kitesurf_bridge_health',
     description: 'MCP bridge liveness: conns, accepted, rejected, uptimeMs and when the last host diagnostics snapshot was pushed.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
@@ -254,6 +264,27 @@ function answerNativeTool(name, args, bridgeState) {
     return { ok: true, entries: filter ? all.filter((r) => r.errorId.includes(filter)) : all, total: all.length }
   }
   if (name === 'kitesurf_targets') return { ok: true, ...(snap.engine?.targets || { count: 0, targets: [] }), targetsError: snap.engine?.targetsError || null }
+  if (name === 'kitesurf_ports') {
+    const ports = snap.ports || null
+    const hint = []
+    if (ports?.ports?.engine && ports.ports.engine.free === false && ports.effective?.httpBase) {
+      hint.push(`配置端口 ${ports.configured?.httpBase} 被占用或不可用；实际引擎在 ${ports.effective.httpBase}`)
+    }
+    if (ports?.lastRepair) hint.push(`最近一次端口修复：${ports.lastRepair.reason}（${JSON.stringify(ports.lastRepair.from)} → ${JSON.stringify(ports.lastRepair.to)}）`)
+    if (ports?.container?.state && ports.container.state !== 'running') hint.push(`容器状态 ${ports.container.state}，需要 POST /nano-kitesurf/recover 或 /kite resume`)
+    return { ok: true, ...(ports || { error: 'no port snapshot yet' }), hints: hint }
+  }
+  if (name === 'kitesurf_recovery_plan') {
+    const phase = snap.plugin?.phase || snap.engine?.kite?.phase || 'unknown'
+    const alive = snap.engine?.engineAlive === true
+    const steps = []
+    if (!alive) steps.push({ order: 1, action: 'suspend (only if phase=running)', call: 'POST /nano-kitesurf/kite {"action":"suspend"}' })
+    if (!alive) steps.push({ order: 2, action: 'resume / start engine (auto-repairs a busy port)', call: 'POST /nano-kitesurf/kite {"action":"resume"}' })
+    if (!alive) steps.push({ order: 3, action: 'one-shot self-heal + port report', call: 'POST /nano-kitesurf/recover {}' })
+    steps.push({ order: steps.length + 1, action: 'verify', call: 'GET /nano-kitesurf/ports' })
+    steps.push({ order: steps.length + 1, action: 'if a port is busy, repoint config', call: 'profile cordis.patch.yml → - id: nano-kitesurf / config.httpBase: http://127.0.0.1:8798, then restart the host' })
+    return { ok: true, phase, engineAlive: alive, steps, notes: 'kitesurf.kite.portbusy (409) means the requested port is held by another process; the existing container is preserved.' }
+  }
   return { ok: false, errorId: 'kitesurf.tool.unknown', error: `unknown native tool ${name}` }
 }
 

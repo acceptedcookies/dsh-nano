@@ -79,6 +79,7 @@ test('a container whose published ports drifted is deleted and recreated', async
   const io = {
     inspect: async () => stale,
     run: async (args) => { commands.push(args.slice(0, 2).join(' ')); return { stdout: '', stderr: '' } },
+    portFree: async () => true,   // requested port is free → safe to remap
   }
   const result = await ensureLocalContainer({ httpBase: 'http://127.0.0.1:8798', mcpPort: 8799 }, { ...io, checkout: '/src/kitesurf' })
   assert.equal(result.created, true)
@@ -105,6 +106,30 @@ test('a remap onto an occupied host port must NOT delete the working container',
     (error) => error.id === 'kitesurf.kite.portbusy',
   )
   assert.equal(commands.includes('delete --force'), false, 'must not delete a healthy container')
+})
+
+test('when the requested port is busy but the container still owns its own port, adopt it', async () => {
+  const stale = JSON.stringify([{
+    configuration: {
+      publishedPorts: [
+        { containerPort: 8787, hostPort: 8798, hostAddress: '127.0.0.1', proto: 'TCP' },
+        { containerPort: 8791, hostPort: 8799, hostAddress: '127.0.0.1', proto: 'TCP' },
+      ],
+    },
+  }])
+  const commands = []
+  const io = {
+    inspect: async () => stale,
+    run: async (args) => { commands.push(args[0]); return { stdout: '', stderr: '' } },
+    // 8787 (requested) busy; 8798 (container's own) free → adopt, never delete.
+    portFree: async (port) => port === 8798 || port === 8799,
+  }
+  const result = await ensureLocalContainer({ httpBase: 'http://127.0.0.1:8787', mcpPort: 8799 }, { ...io, checkout: '/src/kitesurf' })
+  assert.equal(result.adopted, true)
+  assert.equal(result.hostEnginePort, 8798)
+  assert.equal(result.requestedEnginePort, 8787)
+  assert.equal(commands.includes('delete'), false)
+  assert.equal(commands.includes('run'), false)
 })
 
 test('a cold subsystem failure surfaces the system-start error, not the run', async () => {

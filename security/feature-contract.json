@@ -483,6 +483,27 @@
         "POST": 4096
       },
       "responseShape": "200 {ok:true,type,value,truncated} | 400 {ok:false,errorId:kitesurf.evaluate.*,error} | 502 {ok:false,errorId,error}"
+    },
+    {
+      "plugin": "dsh-nano-kitesurf",
+      "path": "/nano-kitesurf/ports",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "bodyLimit": {},
+      "responseShape": "200 {ok:true,configured,effective,container{state,published},ports{engine,mcp},lastRepair,healthy}"
+    },
+    {
+      "plugin": "dsh-nano-kitesurf",
+      "path": "/nano-kitesurf/recover",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 4096
+      },
+      "responseShape": "200 {ok:true,steps,phase,engineAlive,ports} | 409 {ok:false,errorId:kitesurf.kite.state,error} | 502 {ok:false,errorId,error}"
     }
   ],
   "ui": {

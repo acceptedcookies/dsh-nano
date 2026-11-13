@@ -10,6 +10,7 @@
 
 const SPACE = 'dnk-e2e'
 const GUI = 'https://dsh-dev.local/'
+const TARGET_URL = process.env.DNK_E2E_URL || 'https://example.com'
 const results = []
 let shot = 0
 
@@ -28,11 +29,11 @@ async function main() {
 
   // 0. Make the run self-contained: a previous run may have left the engine
   // on about:blank (e.g. after suspend/resume), so open a page first.
-  await page.evaluate(() => fetch('/nano-kitesurf/open', {
+  await page.evaluate((url) => fetch('/nano-kitesurf/open', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ url: 'https://example.com' }),
-  }))
+    body: JSON.stringify({ url }),
+  }), TARGET_URL)
   await new Promise((r) => setTimeout(r, 2000))
 
   // 1. bundle freshness: the served module must carry a marker that only
@@ -176,7 +177,7 @@ async function main() {
     const resumed = await post({ action: 'resume' })
     // resume rebuilds the container: the page is gone, so re-open before any
     // later check that needs a document.
-    await fetch('/nano-kitesurf/open', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ url: 'https://example.com' }) })
+    await fetch('/nano-kitesurf/open', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ url: TARGET_URL }) })
     await new Promise((r) => setTimeout(r, 3000))
     const after = await st()
     return {

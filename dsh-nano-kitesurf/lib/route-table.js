@@ -257,5 +257,19 @@ export const ROUTE_TABLE = [
     "bodyLimit": 4096,
     "sessionBinding": false,
     "justification": "NETWORK_ROUTE — Network.* lifecycle ring (method/url/status/duration/size); POST {clear:true} drains. L2."
+  },
+  {
+    "plugin": "dsh-nano-kitesurf",
+    "path": "/nano-kitesurf/selftest",
+    "methods": [
+      "GET",
+      "HEAD",
+      "POST"
+    ],
+    "sensitivity": "L2",
+    "capability": "read:host",
+    "bodyLimit": 0,
+    "sessionBinding": false,
+    "justification": "SELFTEST_ROUTE — aggregates engine/container/ports/bridge/targets/dom/phase checks into one verdict. L2 read-only."
   }
 ]

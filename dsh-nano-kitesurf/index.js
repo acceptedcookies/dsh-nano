@@ -36,6 +36,7 @@ const PORTS_ROUTE = '/nano-kitesurf/ports'
 const RECOVER_ROUTE = '/nano-kitesurf/recover'
 const CONTEXT_ROUTE = '/nano-kitesurf/context'
 const DOM_ROUTE = '/nano-kitesurf/dom'
+const SELFTEST_ROUTE = '/nano-kitesurf/selftest'
 const NETWORK_ROUTE = '/nano-kitesurf/network'
 const TARGETS_ROUTE = '/nano-kitesurf/targets'
 const EVALUATE_ROUTE = '/nano-kitesurf/evaluate'
@@ -454,6 +455,58 @@ export function apply(ctx, config) {
     }
   }
 
+  /**
+   * Container / init / restart self-test: one call answers "is this
+   * installation actually functional?" across every layer we own, so a human
+   * (or an agent over MCP) never has to run `container` by hand.
+   */
+  let lastSelfTest = null
+  async function runSelfTest() {
+    const started = Date.now()
+    const checks = []
+    const add = (name, ok, detail) => checks.push({ name, ok: ok === true, detail: String(detail ?? '').slice(0, 200) })
+
+    add('plugin', !!buildId, buildId)
+
+    let status = null
+    try { status = await statusOf(origin()) } catch (error) { add('engine', false, messageOf(error)) }
+    if (status) add('engine', status.ok === true, status.ok ? status.health : `${status.errorId}: ${status.error}`)
+    if (status) add('engine-identity', status.engineMismatch !== true, status.engineMismatch ? 'not Kitesurf' : 'kitesurf')
+
+    let ports = null
+    try { ports = await portReport() } catch (error) { add('container', false, messageOf(error)) }
+    if (ports) {
+      add('container', ports.container?.state === 'running', `state=${ports.container?.state}`)
+      const published = Array.isArray(ports.container?.published) ? ports.container.published : []
+      add('ports-published', published.length >= 2, published.map((x) => `${x.hostPort}->${x.containerPort}@${x.hostAddress}`).join(', '))
+      const loopback = published.every((x) => x.hostAddress === '127.0.0.1' || x.hostAddress === '::1')
+      add('ports-loopback', loopback, loopback ? 'all loopback' : 'exposed on a public interface')
+    }
+
+    try {
+      const response = await fetch(`http://127.0.0.1:${kite.snapshot().mcpPort}/health`, { signal: AbortSignal.timeout(2000) })
+      const body = await response.json()
+      add('mcp-bridge', body.ok === true, `conns=${body.conns} accepted=${body.accepted} rejected=${body.rejected}`)
+    } catch (error) { add('mcp-bridge', false, messageOf(error)) }
+
+    try {
+      const targets = await engineTargets(origin())
+      add('targets', targets.count > 0, `${targets.count} target(s), attached=${targets.attachedPage || 'none'}`)
+    } catch (error) { add('targets', false, messageOf(error)) }
+    try {
+      const page = await captureDom(origin())
+      add('dom', page.bytes > 200, `${page.bytes} bytes · ${page.url}`)
+    } catch (error) { add('dom', false, `${errorIdOf(error)}: ${messageOf(error)}`) }
+
+    add('routes', ROUTE_TABLE.length >= 15, `${ROUTE_TABLE.length} routes in the baked table`)
+    const phase = kite.snapshot().phase
+    add('phase', status?.ok ? phase === 'running' : phase !== 'running', `phase=${phase} engineAlive=${status?.ok === true}`)
+
+    const failed = checks.filter((c) => !c.ok).length
+    lastSelfTest = { at: new Date().toISOString(), ok: failed === 0, total: checks.length, failed, durationMs: Date.now() - started, checks }
+    return lastSelfTest
+  }
+
   /** One packed snapshot, shared by GET /diagnostics and the MCP push. */
   async function buildDiagnostics(limit = 20, withTargets = true) {
     const status = await statusOf(origin())
@@ -481,6 +534,7 @@ export function apply(ctx, config) {
       engine: { ...status, targets, targetsError, engineAlive: status.ok === true, phaseConsistent: status.ok ? kite.snapshot().phase === 'running' : kite.snapshot().phase !== 'running' },
       settings: currentEmulation(),
       ports: await portReport().catch(() => null),
+      selftest: lastSelfTest,
       observability: summary,
       console: listConsole({ limit }),
       network: listNetwork({ limit }),
@@ -882,6 +936,7 @@ export function apply(ctx, config) {
             phase: kite.snapshot().phase,
             engineAlive: after.ok === true,
             ports: await portReport().catch(() => null),
+      selftest: lastSelfTest,
           })
         } catch (error) {
           fail(res, error)
@@ -902,6 +957,17 @@ export function apply(ctx, config) {
             throw new KitesurfError('kitesurf.diag.query', 'limit must be 1..100')
           }
           sendJson(res, 200, await buildDiagnostics(limit))
+        } catch (error) {
+          fail(res, error)
+        }
+      },
+    },
+    {
+      path: SELFTEST_ROUTE,
+      methods: ['GET', 'HEAD', 'POST'],
+      handler: async (_req, res) => {
+        try {
+          sendJson(res, 200, { ok: true, ...(await runSelfTest()) })
         } catch (error) {
           fail(res, error)
         }

@@ -205,6 +205,11 @@ const KITESURF_TOOLS = [
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
+    name: 'kitesurf_selftest',
+    description: 'One verdict over every layer: plugin build, engine identity, container state, published port loopback, MCP bridge counters, CDP targets, DOM availability, route table and phase consistency. Use after any restart or container change.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
     name: 'kitesurf_network',
     description: 'Network waterfall from the Kitesurf CDP session: method, url, status, mimeType, bytes and duration for every request. failedOnly=true shows 4xx/5xx and transport failures only.',
     inputSchema: {
@@ -276,6 +281,11 @@ function answerNativeTool(name, args, bridgeState) {
     return { ok: true, entries: filter ? all.filter((r) => r.errorId.includes(filter)) : all, total: all.length }
   }
   if (name === 'kitesurf_targets') return { ok: true, ...(snap.engine?.targets || { count: 0, targets: [] }), targetsError: snap.engine?.targetsError || null }
+  if (name === 'kitesurf_selftest') {
+    const st = snap.selftest || null
+    if (!st) return { ok: false, errorId: 'kitesurf.selftest.stale', error: 'no self-test has run yet', hint: 'run GET /nano-kitesurf/selftest on the authenticated host, then retry' }
+    return { ok: true, ...st, ageMs: Date.now() - Date.parse(st.at) }
+  }
   if (name === 'kitesurf_network') {
     const limit = Math.max(1, Math.min(Number(args.limit) || 100, 200))
     const entries = (snap.network?.entries || [])

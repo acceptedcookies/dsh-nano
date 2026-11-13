@@ -1851,6 +1851,7 @@ ${item}`).join("\n");
   var PORTS = "/nano-kitesurf/ports";
   var RECOVER = "/nano-kitesurf/recover";
   var DIAGNOSTICS = "/nano-kitesurf/diagnostics";
+  var CONTEXT = "/nano-kitesurf/context";
   var KITE = "/nano-kitesurf/kite";
   var KIND = "kitesurf";
   var OWN_ID = "nano-kitesurf";
@@ -2446,14 +2447,18 @@ ${item}`).join("\n");
       if (!open?.elements?.length) return null;
       return open.elements.length > 1 ? multiNote2(open.elements, { url: pageUrl, comment: commentRef.current }) : designNote2(open.elements[0], { url: pageUrl, comment: commentRef.current });
     }
-    function injectNote() {
+    async function injectNote() {
       const note = noteOf();
       if (!note) return;
+      const element = pickRef.current?.elements?.[0] || null;
+      const label = element ? `${element.tag || "element"}${element.text ? " \xB7 " + element.text.slice(0, 24) : ""}` : "selection";
       try {
-        insertComposerNote(note);
+        const saved = await post(CONTEXT, { text: note, packet: element, label });
+        insertComposerNote(saved.chip || `\u27E6kitesurf:${saved.id}\u27E7`);
         setComment("");
         setComposing(false);
         setPick(null);
+        showToast(`\u5DF2\u6CE8\u5165 ${saved.chip}\uFF08${saved.bytes} B\uFF0C\u5B8C\u6574\u4E0A\u4E0B\u6587\u53EF\u7528 /context?id=${saved.id} \u53D6\u56DE\uFF09`);
       } catch (cause) {
         showError(cause);
       }

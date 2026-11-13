@@ -135,7 +135,13 @@ export function pickPoint(body) {
 }
 
 /** Six computed styles, matching the fields a design note actually carries. */
-const STYLE_KEYS = ['color', 'backgroundColor', 'fontSize', 'fontFamily', 'display', 'position']
+// 6 was enough to describe a note; a debugger needs the box model and the
+// typography that actually explains a layout bug.
+const STYLE_KEYS = [
+  'color', 'backgroundColor', 'fontSize', 'fontFamily', 'fontWeight', 'lineHeight',
+  'display', 'position', 'margin', 'padding', 'border', 'borderRadius',
+  'width', 'height', 'flexDirection', 'justifyContent', 'alignItems', 'gap', 'zIndex', 'overflow',
+]
 
 /**
  * @param {Record<string, unknown> | null | undefined} value
@@ -161,6 +167,14 @@ export function elementPacket(value) {
       height: numberOrZero(box.height),
     },
     style,
+    // Attribute map + ancestor chain: a selector alone cannot tell an agent
+    // whether the node is a button, a link, or a decorative svg.
+    attrs: source.attrs && typeof source.attrs === 'object'
+      ? Object.fromEntries(Object.entries(source.attrs).slice(0, 12).map(([k, v]) => [String(k).slice(0, 32), String(v).slice(0, 120)]))
+      : {},
+    ancestors: Array.isArray(source.ancestors)
+      ? source.ancestors.slice(0, 6).map((n) => String(n).slice(0, 80))
+      : [],
     componentStack: Array.isArray(source.componentStack) && source.componentStack.length
       ? source.componentStack.map((n) => String(n).slice(0, 60)).slice(0, 8)
       : null,
@@ -634,6 +648,25 @@ const PACKET_EXPRESSION = `(() => {
       display: style.display,
       position: style.position,
     },
+    attrs: (() => {
+      const out = {};
+      const keys = ['id','class','role','aria-label','aria-expanded','href','src','type','name','alt','title','placeholder'];
+      for (const k of keys) {
+        const v = k === 'class' ? (el.className && el.className.baseVal !== undefined ? el.className.baseVal : el.className) : el.getAttribute?.(k);
+        if (typeof v === 'string' && v.trim()) out[k] = v.trim().slice(0, 120);
+      }
+      return out;
+    })(),
+    ancestors: (() => {
+      const chain = [];
+      let node = el.parentElement;
+      while (node && chain.length < 6) {
+        const cls = typeof node.className === 'string' ? node.className.trim().split(/\s+/).slice(0, 2).join('.') : '';
+        chain.push((node.tagName || '').toLowerCase() + (cls ? '.' + cls : ''));
+        node = node.parentElement;
+      }
+      return chain;
+    })(),
     componentStack: ${STACK_SNIPPET},
   };
 })()`
@@ -977,6 +1010,25 @@ const SELECTOR_PACKET_EXPRESSION = `(() => {
       display: style.display,
       position: style.position,
     },
+    attrs: (() => {
+      const out = {};
+      const keys = ['id','class','role','aria-label','aria-expanded','href','src','type','name','alt','title','placeholder'];
+      for (const k of keys) {
+        const v = k === 'class' ? (el.className && el.className.baseVal !== undefined ? el.className.baseVal : el.className) : el.getAttribute?.(k);
+        if (typeof v === 'string' && v.trim()) out[k] = v.trim().slice(0, 120);
+      }
+      return out;
+    })(),
+    ancestors: (() => {
+      const chain = [];
+      let node = el.parentElement;
+      while (node && chain.length < 6) {
+        const cls = typeof node.className === 'string' ? node.className.trim().split(/\s+/).slice(0, 2).join('.') : '';
+        chain.push((node.tagName || '').toLowerCase() + (cls ? '.' + cls : ''));
+        node = node.parentElement;
+      }
+      return chain;
+    })(),
     componentStack: ${STACK_SNIPPET},
   };
 })()`

@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url'
 import { registerRoutes } from './lib/route-guard.js'
 import { ROUTE_TABLE, PLUGIN } from './lib/route-table.js'
 import { browserSocketUrl, captureShot, currentEmulation, currentUserAgent, currentViewport, engineTargets, evaluateInPage, fetchEngine, KitesurfError, navigateHistory, openPage, pickElement, pickBySelector, pickPoint, pickSelector, editBody, editElement, pageUrl, releaseEngine, scrollDelta, setBrowserSettings } from './lib/engine.js'
-import { ERROR_STATUS, clearConsole, clearOperations, diagnosticsSummary, listConsole, listOperations, recordOperation, summarizeInput } from './lib/diagnostics.js'
+import { ERROR_STATUS, clearConsole, clearOperations, diagnosticsSummary, getRef, listConsole, listOperations, listRefs, putRef, recordOperation, refChip, summarizeInput } from './lib/diagnostics.js'
 import { kitesurfSkill, nanoKiteSkill } from './lib/skill.js'
 import { createNanoKite } from './lib/nano-kite.js'
 import { ensureLocalContainer, hostPort, stopLocalContainer } from './lib/container-engine.js'
@@ -33,6 +33,7 @@ const OPERATIONS_ROUTE = '/nano-kitesurf/operations'
 const DIAGNOSTICS_ROUTE = '/nano-kitesurf/diagnostics'
 const PORTS_ROUTE = '/nano-kitesurf/ports'
 const RECOVER_ROUTE = '/nano-kitesurf/recover'
+const CONTEXT_ROUTE = '/nano-kitesurf/context'
 const TARGETS_ROUTE = '/nano-kitesurf/targets'
 const EVALUATE_ROUTE = '/nano-kitesurf/evaluate'
 
@@ -799,6 +800,39 @@ export function apply(ctx, config) {
       handler: async (_req, res) => {
         try {
           sendJson(res, 200, { ok: true, ...(await portReport()) })
+        } catch (error) {
+          fail(res, error)
+        }
+      },
+    },
+    {
+      // POST {text, packet, label} -> {id, chip, bytes}: the composer gets the
+      // chip, the full text stays here. GET /context/:id resolves it.
+      path: CONTEXT_ROUTE,
+      methods: ['GET', 'HEAD', 'POST'],
+      bodyLimit: 16384,
+      handler: async (req, res, route) => {
+        try {
+          if (req.method === 'POST') {
+            const body = await readBody(req, route.bodyLimit)
+            if (typeof body.text !== 'string' || !body.text.trim()) {
+              throw new KitesurfError('kitesurf.context.text', 'text must be a non-empty string')
+            }
+            const row = putRef(body.text, body.packet ?? null, { label: body.label })
+            sendJson(res, 200, { ok: true, id: row.id, chip: refChip(row.id, row.label), bytes: row.bytes })
+            return
+          }
+          // Exact-path routing: the id rides as ?id=N, never as a path segment.
+          const q = queryOf(req)
+          const raw = q.get('id')
+          if (raw == null) {
+            sendJson(res, 200, { ok: true, ...listRefs(Number(q.get('limit') || 20)) })
+            return
+          }
+          if (!/^\d+$/.test(raw)) throw new KitesurfError('kitesurf.context.text', 'id must be an integer')
+          const row = getRef(Number(raw))
+          if (!row) throw new KitesurfError('kitesurf.context.miss', `no context ref ${raw}`)
+          sendJson(res, 200, { ok: true, ...row })
         } catch (error) {
           fail(res, error)
         }

@@ -123,6 +123,7 @@ A failed call returns `{ok:false,errorId,error}` with a real HTTP status. The sa
 | `kitesurf.engine.context` | 409 | 页面正在导航，JS 执行上下文被销毁（竞态，不是引擎故障） | 已自动重试一次；仍失败时等页面稳定后重试，或 POST /recover 一键恢复 |
 | `kitesurf.engine.connect` | 502 | CDP 连接失败/服务不是 Kitesurf/socket 关闭/命令超时 | GET /status；container list；curl http://127.0.0.1:8798/health；必要时 /kite resume |
 | `kitesurf.perf.method` | 400 | mode=window 排水只允许 POST | GET /perf-review/host 读快照；POST /perf-review/host?mode=window 排水 |
+| `kitesurf.context.miss` | 404 | 上下文引用不存在或 text 为空（ref 环只保留最近 50 条，宿主重启即清空） | 重新点选生成新 ref；GET /nano-kitesurf/context 列出最近引用 |
 | `kitesurf.console.query` | 400 | console 查询参数非法 | GET /console?level=error&limit=50；POST /console {clear:true} 清空 |
 | `kitesurf.diag.query` | 400 | diagnostics/operations 查询参数非法 | GET /diagnostics?limit=20；GET /operations?errorsOnly=true |
 | `kitesurf.evaluate.empty` | 400 | expression 为空或超过 2000 字符 | POST /evaluate {expression:"document.title"}，≤2000 字符 |
@@ -217,6 +218,8 @@ GET  /nano-kitesurf/console?level=log
 2. 首次创建且偏好端口被占用 → 自动向后取下一个空闲端口（步进 10），reason=`port-busy-repaired`。
 3. 只有「偏好端口被占且现有容器端口也不可用」才抛 `409 kitesurf.kite.portbusy`，此时容器保持原样。
 4. 自愈入口：`POST /nano-kitesurf/recover {}`（suspend→resume→健康检查→端口报告）；只读诊断：`GET /nano-kitesurf/ports`；MCP 侧对应 `kitesurf_ports` 与 `kitesurf_recovery_plan`。
+
+**上下文引用（composer 里的 chip）**：点选后注入 composer 的不是全文，而是一行 chip `⟦kitesurf:3 svg · View as Markdown⟧`。**看到这个 token 必须解析**：`GET /nano-kitesurf/context?id=3` 返回 `{id, at, label, bytes, text, packet}`，其中 `text` 是**完整未裁切**的上下文（selector / text / box / 19 项 computed style / attrs / ancestors / componentStack），`packet` 是结构化元素包。`GET /nano-kitesurf/context?limit=20` 列出最近引用；ref 环保留 50 条、宿主重启即清空——若 404 `kitesurf.context.miss`，说明引用已过期，请人重新点选。chip 只是引用，**不会自动发送**。
 
 **MCP 排障（只用 MCP 也能定位）**：`ws://127.0.0.1:<mcpPort>/mcp` 的 `tools/list` 除 33 个 `agent_browser_*` 外还有 6 个 `kitesurf_*` 原生工具：`kitesurf_diagnostics`（一击全量）、`kitesurf_console`、`kitesurf_operations`、`kitesurf_error_catalog`、`kitesurf_targets`、`kitesurf_ports`、`kitesurf_recovery_plan`、`kitesurf_bridge_health`。宿主每 30s（失败时立即）把诊断快照推给桥；若工具回 `kitesurf.diag.stale`，等几秒或先调宿主 `GET /diagnostics`。MCP 的 `-32601/-32602/-32700` 是 JSON-RPC 协议错，`kitesurf.*` 是业务错，两者互不等价。
 

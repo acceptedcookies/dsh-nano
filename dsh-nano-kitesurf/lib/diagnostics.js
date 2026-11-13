@@ -61,6 +61,7 @@ export const ERROR_CATALOG = [
   { match: '^kitesurf\\.engine\\.context$', example: 'kitesurf.engine.context', status: 409, cause: '页面正在导航，JS 执行上下文被销毁（竞态，不是引擎故障）', next: '已自动重试一次；仍失败时等页面稳定后重试，或 POST /recover 一键恢复' },
   { match: '^kitesurf\\.engine\\.', example: 'kitesurf.engine.connect', status: 502, cause: 'CDP 连接失败/服务不是 Kitesurf/socket 关闭/命令超时', next: 'GET /status；container list；curl http://127.0.0.1:8798/health；必要时 /kite resume' },
   { match: '^kitesurf\\.perf\\.', example: 'kitesurf.perf.method', status: 400, cause: 'mode=window 排水只允许 POST', next: 'GET /perf-review/host 读快照；POST /perf-review/host?mode=window 排水' },
+  { match: '^kitesurf\\.context\\.(text|miss)$', example: 'kitesurf.context.miss', status: 404, cause: '上下文引用不存在或 text 为空（ref 环只保留最近 50 条，宿主重启即清空）', next: '重新点选生成新 ref；GET /nano-kitesurf/context 列出最近引用' },
   { match: '^kitesurf\\.console\\.', example: 'kitesurf.console.query', status: 400, cause: 'console 查询参数非法', next: 'GET /console?level=error&limit=50；POST /console {clear:true} 清空' },
   { match: '^kitesurf\\.diag\\.', example: 'kitesurf.diag.query', status: 400, cause: 'diagnostics/operations 查询参数非法', next: 'GET /diagnostics?limit=20；GET /operations?errorsOnly=true' },
   { match: '^kitesurf\\.evaluate\\.(empty|toolong)$', example: 'kitesurf.evaluate.empty', status: 400, cause: 'expression 为空或超过 2000 字符', next: 'POST /evaluate {expression:"document.title"}，≤2000 字符' },
@@ -185,4 +186,47 @@ export function diagnosticsSummary() {
     console: { total: consoleEntries.length, counts: listConsole({ limit: 1 }).counts, dropped: droppedConsole },
     errorCatalog: ERROR_CATALOG.map(({ example, status, cause, next }) => ({ errorId: example, status, cause, next })),
   }
+}
+
+/**
+ * Context refs: the composer carries a one-line chip `⟦kitesurf:N⟧`, while the
+ * full (never truncated) element packet lives here, resolvable by id. This is
+ * the plugin-side equivalent of Cursor's inline context pill: the composer
+ * stays readable, the payload stays complete.
+ */
+const REF_CAP = 50
+const refs = []
+let refSeq = 0
+
+/** @param {string} text full note; @param {object|null} packet element packet */
+export function putRef(text, packet = null, meta = {}) {
+  const id = ++refSeq
+  const row = {
+    id,
+    at: new Date().toISOString(),
+    label: String(meta.label || '').slice(0, 60),
+    bytes: Buffer.byteLength(String(text), 'utf8'),
+    text: String(text),
+    packet,
+  }
+  refs.push(row)
+  while (refs.length > REF_CAP) refs.shift()
+  return row
+}
+
+export function getRef(id) {
+  return refs.find((row) => row.id === Number(id)) || null
+}
+
+export function listRefs(limit = 20) {
+  const cap = Math.max(1, Math.min(Number(limit) || 20, REF_CAP))
+  return {
+    total: refs.length,
+    entries: refs.slice(-cap).map(({ id, at, label, bytes }) => ({ id, at, label, bytes })),
+  }
+}
+
+/** Composer chip text — one line, stable, resolvable. */
+export function refChip(id, label) {
+  return `⟦kitesurf:${id}${label ? ` ${label}` : ''}⟧`
 }

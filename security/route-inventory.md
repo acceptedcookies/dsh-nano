@@ -61,6 +61,7 @@ Static enumeration of every `webServer.register` path across the (formerly four)
 | /nano-kitesurf/evaluate | POST | L2 | write:engine | 4096 | – | bounded Runtime.evaluate in the engine page |
 | /nano-kitesurf/ports | GET, HEAD | L2 | read:host | 0 | – | configured vs effective ports, publishedPorts, occupancy, last repair |
 | /nano-kitesurf/recover | POST | L2 | proc:kitesurf | 4096 | – | suspend+resume self-heal, returns engine state |
+| /nano-kitesurf/context | GET, HEAD, POST | L2 | read:host | 16384 | – | full element packet behind a composer chip; GET /context/:id resolves |
 
 ## ⛔ DEPRECATED · dsh-nano-shared-workspace — 21（历史，非现行）
 

@@ -19,6 +19,7 @@ const HISTORY = '/nano-kitesurf/history'
 const PORTS = '/nano-kitesurf/ports'
 const RECOVER = '/nano-kitesurf/recover'
 const DIAGNOSTICS = '/nano-kitesurf/diagnostics'
+const CONTEXT = '/nano-kitesurf/context'
 const KITE = '/nano-kitesurf/kite'
 const KIND = 'kitesurf'
 const OWN_ID = 'nano-kitesurf'
@@ -704,15 +705,24 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
       : designNote(open.elements[0], { url: pageUrl, comment: commentRef.current })
   }
 
-  /** Arrow: inject the element context into the composer. Never sends. */
-  function injectNote() {
+  /**
+   * Arrow: put a compact chip in the composer and keep the FULL payload on
+   * the host. The composer must stay readable (Cursor's inline pill idea);
+   * `⟦kitesurf:N⟧` resolves through GET /nano-kitesurf/context/N, so nothing
+   * is truncated.
+   */
+  async function injectNote() {
     const note = noteOf()
     if (!note) return
+    const element = pickRef.current?.elements?.[0] || null
+    const label = element ? `${element.tag || 'element'}${element.text ? ' · ' + element.text.slice(0, 24) : ''}` : 'selection'
     try {
-      insertComposerNote(note)
+      const saved = await post(CONTEXT, { text: note, packet: element, label })
+      insertComposerNote(saved.chip || `⟦kitesurf:${saved.id}⟧`)
       setComment('')
       setComposing(false)
       setPick(null)
+      showToast(`已注入 ${saved.chip}（${saved.bytes} B，完整上下文可用 /context?id=${saved.id} 取回）`)
     } catch (cause) {
       showError(cause)
     }

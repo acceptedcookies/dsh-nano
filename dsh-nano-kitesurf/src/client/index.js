@@ -67,7 +67,9 @@ const STYLE = `
 .nks-inspector{flex:none;padding:3px 8px;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11);display:flex;gap:10px;overflow:hidden;border-top:.5px solid var(--dsw-alias-border-l3);white-space:nowrap}
 .nks-inspector b{font-weight:500;color:var(--dsw-alias-label-secondary)}
 .nks-inspector span{overflow:hidden;text-overflow:ellipsis;max-width:170px}
-.nks-note{position:absolute;z-index:2;display:flex;gap:6px;align-items:center;padding:4px;background:var(--dsw-alias-bg-layer-1);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-md);box-shadow:var(--dsw-elevation-soft)}
+.nks-note{position:absolute;z-index:2;display:flex;gap:4px;align-items:center;padding:4px;background:var(--dsw-alias-bg-layer-1);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-md);box-shadow:var(--dsw-elevation-soft)}
+.nks-note-actions{display:flex;gap:2px;align-items:center}
+.nks-note-form{display:flex;gap:4px;align-items:center}
 .nks-note input{width:220px;height:28px;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-12);background:var(--dsw-alias-bg-layer-2);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-sm);padding:0 8px}
 .nks-pins{flex:none;padding:2px 8px 4px;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11);display:flex;align-items:center;gap:4px}
 .nks-busy{position:absolute;left:0;right:0;top:0;height:2px;overflow:hidden;z-index:3}
@@ -195,6 +197,9 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
   const [comment, setComment] = React.useState('')
   /** Double-click mode: the note form writes text back into the element. */
   const [editing, setEditing] = React.useState(false)
+  // Note bubble starts compact (arrow / copy / input); the text field only
+  // exists after the human asks for it — typing is not the default path.
+  const [composing, setComposing] = React.useState(false)
   const [toast, setToast] = React.useState(null)
   const [busy, setBusy] = React.useState(false)
   /** Preview box under the cursor before a click (throttled pick preview). */
@@ -354,14 +359,14 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
       last = key
       if (!previous) return // first measurement is the mount shot
       clearTimeout(timer)
-      timer = window.setTimeout(() => { if (!busyRef.current) reloadShot().catch(() => {}) }, 220)
+      timer = window.setTimeout(() => { if (!busyRef.current) reloadShot(0, { keepPick: true }).catch(() => {}) }, 220)
     })
     observer.observe(element)
     return () => { clearTimeout(timer); observer.disconnect() }
   }, [])
 
   React.useEffect(() => {
-    const onFocus = () => { if (!busyRef.current) reloadShot().catch(() => {}) }
+    const onFocus = () => { if (!busyRef.current) reloadShot(0, { keepPick: true }).catch(() => {}) }
     window.addEventListener('focus', onFocus)
     return () => window.removeEventListener('focus', onFocus)
   }, [])
@@ -439,7 +444,7 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
     return { width, height }
   }
 
-  async function reloadShot(scroll) {
+  async function reloadShot(scroll, options = {}) {
     const fit = frameSize()
     const shotPayload = await post(SHOT, {
       format: 'webp',
@@ -450,7 +455,9 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
     setShotMime(shotPayload.mimeType || 'image/webp')
     setShotMeta({ url: shotPayload.url || '', scrollY: shotPayload.scrollY || 0, targetId: shotPayload.targetId || '', viewport: shotPayload.viewport?.width ?? null, at: Date.now() })
     if (shotPayload.url && shotPayload.url !== 'about:blank') setPageUrl(shotPayload.url)
-    setPick(null)
+    // A re-shoot for a layout change must NOT drop the note the human is
+    // writing. Only an explicit navigation clears the selection.
+    if (options.keepPick !== true) setPick(null)
   }
 
   async function historyNav(delta) {
@@ -676,6 +683,64 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
   }
   sendPickRef.current = sendPick
 
+  /** Current pick → note text (pure, no side effects). */
+  function noteOf(element) {
+    const open = element ? { elements: [element] } : pickRef.current
+    if (!open?.elements?.length) return null
+    return open.elements.length > 1
+      ? multiNote(open.elements, { url: pageUrl, comment: commentRef.current })
+      : designNote(open.elements[0], { url: pageUrl, comment: commentRef.current })
+  }
+
+  /** Arrow: inject the element context into the composer. Never sends. */
+  function injectNote() {
+    const note = noteOf()
+    if (!note) return
+    try {
+      insertComposerNote(note)
+      setComment('')
+      setComposing(false)
+      setPick(null)
+    } catch (cause) {
+      showError(cause)
+    }
+  }
+
+  /** Copy: same context to the clipboard, no composer touch. */
+  async function copyNote() {
+    const note = noteOf()
+    if (!note) return
+    try {
+      await navigator.clipboard.writeText(note)
+      showToast(copy.copied)
+    } catch {
+      // Fallback for a page without the async clipboard permission.
+      try {
+        const area = document.createElement('textarea')
+        area.value = note
+        area.style.position = 'fixed'
+        area.style.opacity = '0'
+        document.body.appendChild(area)
+        area.select()
+        document.execCommand('copy')
+        area.remove()
+        showToast(copy.copied)
+      } catch (cause) { showError(cause) }
+    }
+  }
+
+  /** Shift+arrow keeps the queue path used by "send all". */
+  function pinNote() {
+    const note = noteOf()
+    if (!note) return
+    try {
+      setPins((current) => [...current, { text: note, anchor: pickRef.current?.anchor ?? null, shot }].slice(-MAX_PINS))
+      setComment('')
+      setComposing(false)
+      setPick(null)
+    } catch (cause) { showError(cause) }
+  }
+
   function onSend(event) {
     event?.preventDefault()
     const open = pickRef.current
@@ -691,7 +756,9 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
       })
       return
     }
-    sendPick(false)
+    // Enter in the input = inject (never pin, never send to the model).
+    if (event?.shiftKey) pinNote()
+    else injectNote()
   }
 
   function onSendAll() {
@@ -783,6 +850,7 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
       exit: primitives.IconCloseOutlineRegular,
       clear: primitives.IconDeleteOutlineRegular || primitives.IconCloseOutlineRegular,
       edit: primitives.IconEditOutlineRegular || primitives.IconRightUpOutlineRegular,
+      copy: primitives.IconCopyOutlineRegular || primitives.IconEditOutlineRegular,
     }[name]
     return h(Icon, { width: 16, height: 16, 'aria-hidden': true })
   }
@@ -997,31 +1065,51 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
         onClick: (event) => { event.stopPropagation(); setPins((current) => current.filter((item) => item !== pin)) },
         style: { left: frame.left + pin.anchor.x * frame.scale, top: frame.top + pin.anchor.y * frame.scale },
       }, String(index + 1))) : null,
-      pickAnchor && pick ? h('form', {
+      pickAnchor && pick ? h('div', {
         className: 'nks-note',
         'data-nks-note': '1',
-        onSubmit: onSend,
         onClick: (event) => event.stopPropagation(),
         onPointerDown: (event) => event.stopPropagation(),
         onPointerMove: (event) => event.stopPropagation(),
         onPointerUp: (event) => event.stopPropagation(),
         style: {
-          left: Math.max(8, Math.min(pickAnchor.left, Math.max(8, (frameRef.current?.clientWidth || 320) - 248))),
+          left: Math.max(8, Math.min(pickAnchor.left, Math.max(8, (frameRef.current?.clientWidth || 320) - 260))),
           top: pickAnchor.top + pickAnchor.height + 8 > (frameRef.current?.clientHeight || 0) - 44
             ? Math.max(8, pickAnchor.top - 44)
             : pickAnchor.top + pickAnchor.height + 8,
         },
       },
         pick.elements.length > 1 ? h('span', { 'data-nks-multi': String(pick.elements.length) }, `×${pick.elements.length}`) : null,
-        h('input', {
-          'aria-label': editing ? copy.editAria : copy.noteAria,
-          'data-nks-comment': '1',
-          value: comment,
-          placeholder: editing ? copy.editPlaceholder : copy.notePlaceholder,
-          autoFocus: true,
-          onChange: (event) => setComment(event.target.value),
-        }),
-        h('button', { type: 'submit', className: 'nks-tool', 'data-nks-send': '1', 'aria-label': editing ? copy.editSend : copy.noteSend }, glyph(editing ? 'edit' : 'send'))) : null),
+        editing ? h('form', { className: 'nks-note-form', onSubmit: onSend },
+          h('input', {
+            'aria-label': copy.editAria,
+            'data-nks-comment': '1',
+            value: comment,
+            placeholder: copy.editPlaceholder,
+            autoFocus: true,
+            onChange: (event) => setComment(event.target.value),
+          }),
+          h('button', { type: 'submit', className: 'nks-tool', 'data-nks-send': '1', 'aria-label': copy.editSend }, glyph('edit'))) : null,
+        !editing ? (composing ? h('form', { className: 'nks-note-form', onSubmit: onSend },
+          h('input', {
+            'aria-label': copy.noteAria,
+            'data-nks-comment': '1',
+            value: comment,
+            placeholder: copy.notePlaceholder,
+            autoFocus: true,
+            onChange: (event) => setComment(event.target.value),
+          }),
+          h('button', { type: 'submit', className: 'nks-tool', 'data-nks-send': '1', title: copy.injectContext, 'aria-label': copy.injectContext }, glyph('send'))) : h('div', { className: 'nks-note-actions' },
+          h('button', {
+            type: 'button',
+            className: 'nks-tool',
+            'data-nks-send': '1',
+            title: copy.injectContext,
+            'aria-label': copy.injectContext,
+            onClick: (event) => { if (event.shiftKey) pinNote(); else injectNote() },
+          }, glyph('send')),
+          h('button', { type: 'button', className: 'nks-tool', 'data-nks-copy-note': '1', title: copy.copyContext, 'aria-label': copy.copyContext, onClick: copyNote }, glyph('copy')),
+          h('button', { type: 'button', className: 'nks-tool', 'data-nks-compose': '1', title: copy.inputContext, 'aria-label': copy.inputContext, onClick: () => setComposing(true) }, glyph('annotate')))) : null) : null),
     // Inspector strip: the picked element's live computed styles under the
     // frame — Cursor's design-mode sidebar reduced to one readable row.
     pick?.elements?.[0] && pick.elements[0].style && Object.keys(pick.elements[0].style).length ? h('div', { className: 'nks-inspector', 'data-nks-inspector': '1' },

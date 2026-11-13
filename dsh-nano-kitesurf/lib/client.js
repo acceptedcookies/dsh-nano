@@ -1534,6 +1534,11 @@ var __kitesurfExport = (() => {
           noteAria: "\u5199\u7ED9 composer \u7684\u5907\u6CE8",
           notePlaceholder: "\u8FD9\u4E00\u5904\u8981\u6539\u4EC0\u4E48",
           noteSend: "\u52A0\u5165\u6807\u6CE8",
+          injectContext: "\u6CE8\u5165\u5230 composer",
+          copyContext: "\u590D\u5236\u4E0A\u4E0B\u6587",
+          inputContext: "\u8F93\u5165\u5907\u6CE8",
+          copied: "\u4E0A\u4E0B\u6587\u5DF2\u590D\u5236",
+          noteEmpty: "\u53EF\u76F4\u63A5\u6CE8\u5165\uFF0C\u65E0\u9700\u586B\u5199",
           opening: "\u6B63\u5728\u6253\u5F00\u9875\u9762",
           engineDown: "\u5F15\u64CE\u6CA1\u6709\u5E94\u7B54",
           engineMismatch: "\u8BE5\u5730\u5740\u4E0A\u8FD0\u884C\u7684\u4E0D\u662F Kitesurf",
@@ -1589,6 +1594,11 @@ var __kitesurfExport = (() => {
           noteAria: "Note for the composer",
           notePlaceholder: "What should change here",
           noteSend: "Add note",
+          injectContext: "Insert into composer",
+          copyContext: "Copy context",
+          inputContext: "Add a note",
+          copied: "Context copied",
+          noteEmpty: "Insert without typing",
           opening: "Opening page",
           engineDown: "Engine is not answering",
           engineMismatch: "The origin answered but is not Kitesurf",
@@ -1863,7 +1873,9 @@ ${item}`).join("\n");
 .nks-inspector{flex:none;padding:3px 8px;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11);display:flex;gap:10px;overflow:hidden;border-top:.5px solid var(--dsw-alias-border-l3);white-space:nowrap}
 .nks-inspector b{font-weight:500;color:var(--dsw-alias-label-secondary)}
 .nks-inspector span{overflow:hidden;text-overflow:ellipsis;max-width:170px}
-.nks-note{position:absolute;z-index:2;display:flex;gap:6px;align-items:center;padding:4px;background:var(--dsw-alias-bg-layer-1);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-md);box-shadow:var(--dsw-elevation-soft)}
+.nks-note{position:absolute;z-index:2;display:flex;gap:4px;align-items:center;padding:4px;background:var(--dsw-alias-bg-layer-1);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-md);box-shadow:var(--dsw-elevation-soft)}
+.nks-note-actions{display:flex;gap:2px;align-items:center}
+.nks-note-form{display:flex;gap:4px;align-items:center}
 .nks-note input{width:220px;height:28px;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-12);background:var(--dsw-alias-bg-layer-2);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-sm);padding:0 8px}
 .nks-pins{flex:none;padding:2px 8px 4px;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11);display:flex;align-items:center;gap:4px}
 .nks-busy{position:absolute;left:0;right:0;top:0;height:2px;overflow:hidden;z-index:3}
@@ -1971,6 +1983,7 @@ ${item}`).join("\n");
     const [draftKind, setDraftKind] = React5.useState(null);
     const [comment, setComment] = React5.useState("");
     const [editing, setEditing] = React5.useState(false);
+    const [composing, setComposing] = React5.useState(false);
     const [toast, setToast] = React5.useState(null);
     const [busy, setBusy] = React5.useState(false);
     const [hover, setHover] = React5.useState(null);
@@ -2102,7 +2115,7 @@ ${item}`).join("\n");
         if (!previous) return;
         clearTimeout(timer);
         timer = window.setTimeout(() => {
-          if (!busyRef.current) reloadShot().catch(() => {
+          if (!busyRef.current) reloadShot(0, { keepPick: true }).catch(() => {
           });
         }, 220);
       });
@@ -2114,7 +2127,7 @@ ${item}`).join("\n");
     }, []);
     React5.useEffect(() => {
       const onFocus = () => {
-        if (!busyRef.current) reloadShot().catch(() => {
+        if (!busyRef.current) reloadShot(0, { keepPick: true }).catch(() => {
         });
       };
       window.addEventListener("focus", onFocus);
@@ -2185,7 +2198,7 @@ ${item}`).join("\n");
       if (width < 320 || height < 240) return null;
       return { width, height };
     }
-    async function reloadShot(scroll) {
+    async function reloadShot(scroll, options = {}) {
       const fit = frameSize();
       const shotPayload = await post(SHOT, {
         format: "webp",
@@ -2196,7 +2209,7 @@ ${item}`).join("\n");
       setShotMime(shotPayload.mimeType || "image/webp");
       setShotMeta({ url: shotPayload.url || "", scrollY: shotPayload.scrollY || 0, targetId: shotPayload.targetId || "", viewport: shotPayload.viewport?.width ?? null, at: Date.now() });
       if (shotPayload.url && shotPayload.url !== "about:blank") setPageUrl(shotPayload.url);
-      setPick(null);
+      if (options.keepPick !== true) setPick(null);
     }
     async function historyNav(delta) {
       const moved = await post(HISTORY, { delta });
@@ -2392,6 +2405,57 @@ ${item}`).join("\n");
       }
     }
     sendPickRef.current = sendPick;
+    function noteOf(element) {
+      const open = element ? { elements: [element] } : pickRef.current;
+      if (!open?.elements?.length) return null;
+      return open.elements.length > 1 ? multiNote2(open.elements, { url: pageUrl, comment: commentRef.current }) : designNote2(open.elements[0], { url: pageUrl, comment: commentRef.current });
+    }
+    function injectNote() {
+      const note = noteOf();
+      if (!note) return;
+      try {
+        insertComposerNote(note);
+        setComment("");
+        setComposing(false);
+        setPick(null);
+      } catch (cause) {
+        showError(cause);
+      }
+    }
+    async function copyNote() {
+      const note = noteOf();
+      if (!note) return;
+      try {
+        await navigator.clipboard.writeText(note);
+        showToast(copy.copied);
+      } catch {
+        try {
+          const area = document.createElement("textarea");
+          area.value = note;
+          area.style.position = "fixed";
+          area.style.opacity = "0";
+          document.body.appendChild(area);
+          area.select();
+          document.execCommand("copy");
+          area.remove();
+          showToast(copy.copied);
+        } catch (cause) {
+          showError(cause);
+        }
+      }
+    }
+    function pinNote() {
+      const note = noteOf();
+      if (!note) return;
+      try {
+        setPins((current) => [...current, { text: note, anchor: pickRef.current?.anchor ?? null, shot }].slice(-MAX_PINS));
+        setComment("");
+        setComposing(false);
+        setPick(null);
+      } catch (cause) {
+        showError(cause);
+      }
+    }
     function onSend(event) {
       event?.preventDefault();
       const open = pickRef.current;
@@ -2406,7 +2470,8 @@ ${item}`).join("\n");
         });
         return;
       }
-      sendPick(false);
+      if (event?.shiftKey) pinNote();
+      else injectNote();
     }
     function onSendAll() {
       if (pins.length === 0) return;
@@ -2486,7 +2551,8 @@ ${item}`).join("\n");
         undo: primitives.IconCloseOutlineRegular,
         exit: primitives.IconCloseOutlineRegular,
         clear: primitives.IconDeleteOutlineRegular || primitives.IconCloseOutlineRegular,
-        edit: primitives.IconEditOutlineRegular || primitives.IconRightUpOutlineRegular
+        edit: primitives.IconEditOutlineRegular || primitives.IconRightUpOutlineRegular,
+        copy: primitives.IconCopyOutlineRegular || primitives.IconEditOutlineRegular
       }[name];
       return h(Icon, { width: 16, height: 16, "aria-hidden": true });
     };
@@ -2742,30 +2808,62 @@ ${item}`).join("\n");
           style: { left: frame.left + pin.anchor.x * frame.scale, top: frame.top + pin.anchor.y * frame.scale }
         }, String(index + 1))) : null,
         pickAnchor && pick ? h(
-          "form",
+          "div",
           {
             className: "nks-note",
             "data-nks-note": "1",
-            onSubmit: onSend,
             onClick: (event) => event.stopPropagation(),
             onPointerDown: (event) => event.stopPropagation(),
             onPointerMove: (event) => event.stopPropagation(),
             onPointerUp: (event) => event.stopPropagation(),
             style: {
-              left: Math.max(8, Math.min(pickAnchor.left, Math.max(8, (frameRef.current?.clientWidth || 320) - 248))),
+              left: Math.max(8, Math.min(pickAnchor.left, Math.max(8, (frameRef.current?.clientWidth || 320) - 260))),
               top: pickAnchor.top + pickAnchor.height + 8 > (frameRef.current?.clientHeight || 0) - 44 ? Math.max(8, pickAnchor.top - 44) : pickAnchor.top + pickAnchor.height + 8
             }
           },
           pick.elements.length > 1 ? h("span", { "data-nks-multi": String(pick.elements.length) }, `\xD7${pick.elements.length}`) : null,
-          h("input", {
-            "aria-label": editing ? copy.editAria : copy.noteAria,
-            "data-nks-comment": "1",
-            value: comment,
-            placeholder: editing ? copy.editPlaceholder : copy.notePlaceholder,
-            autoFocus: true,
-            onChange: (event) => setComment(event.target.value)
-          }),
-          h("button", { type: "submit", className: "nks-tool", "data-nks-send": "1", "aria-label": editing ? copy.editSend : copy.noteSend }, glyph(editing ? "edit" : "send"))
+          editing ? h(
+            "form",
+            { className: "nks-note-form", onSubmit: onSend },
+            h("input", {
+              "aria-label": copy.editAria,
+              "data-nks-comment": "1",
+              value: comment,
+              placeholder: copy.editPlaceholder,
+              autoFocus: true,
+              onChange: (event) => setComment(event.target.value)
+            }),
+            h("button", { type: "submit", className: "nks-tool", "data-nks-send": "1", "aria-label": copy.editSend }, glyph("edit"))
+          ) : null,
+          !editing ? composing ? h(
+            "form",
+            { className: "nks-note-form", onSubmit: onSend },
+            h("input", {
+              "aria-label": copy.noteAria,
+              "data-nks-comment": "1",
+              value: comment,
+              placeholder: copy.notePlaceholder,
+              autoFocus: true,
+              onChange: (event) => setComment(event.target.value)
+            }),
+            h("button", { type: "submit", className: "nks-tool", "data-nks-send": "1", title: copy.injectContext, "aria-label": copy.injectContext }, glyph("send"))
+          ) : h(
+            "div",
+            { className: "nks-note-actions" },
+            h("button", {
+              type: "button",
+              className: "nks-tool",
+              "data-nks-send": "1",
+              title: copy.injectContext,
+              "aria-label": copy.injectContext,
+              onClick: (event) => {
+                if (event.shiftKey) pinNote();
+                else injectNote();
+              }
+            }, glyph("send")),
+            h("button", { type: "button", className: "nks-tool", "data-nks-copy-note": "1", title: copy.copyContext, "aria-label": copy.copyContext, onClick: copyNote }, glyph("copy")),
+            h("button", { type: "button", className: "nks-tool", "data-nks-compose": "1", title: copy.inputContext, "aria-label": copy.inputContext, onClick: () => setComposing(true) }, glyph("annotate"))
+          ) : null
         ) : null
       ),
       // Inspector strip: the picked element's live computed styles under the

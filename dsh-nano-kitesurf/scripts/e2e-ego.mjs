@@ -154,6 +154,16 @@ async function main() {
   })
   record('computed-styles', Object.keys(styles.computed || {}).length > 10, `${Object.keys(styles.computed || {}).length} properties`)
 
+  const stylePanel = await page.evaluate(() => {
+    const rows = Array.from(document.querySelectorAll('[data-nks-devtools] .nks-dt-row'))
+    const p = rows.find((r) => (r.querySelector('.nks-dt-lv')?.textContent || '').toLowerCase() === 'p')
+    if (!p) return null
+    p.click()
+    return true
+  })
+  await new Promise((r) => setTimeout(r, 1500))
+  const styleText = await page.evaluate(() => document.querySelector('[data-nks-dt-styles]')?.innerText || '')
+  record('styles-panel', Boolean(stylePanel) && /rules/.test(styleText) && /computed/.test(styleText), styleText.slice(0, 80))
   record('matched-rules', Array.isArray(styles.matched?.matched) && styles.matched.matched.length > 0, `${styles.matched?.matched?.length || 0} rules`)
 
   // 9. lifecycle: suspend -> resume -> page comes back

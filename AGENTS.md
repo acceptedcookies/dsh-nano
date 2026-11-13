@@ -26,6 +26,7 @@
 [DNK] = dsh-nano-kitesurf, 仿 cursor 的 design mode;
 [DNMS] = dsh-nano-model-selector, 模型与请求管理器;
 [DNN] = dsh-nano-notepad, 或简称 notepad, 跨 workspace 草稿编辑器;
+[DNT] = dsh-nano-terminal, 高性能基于 wasm 的内部专用跨平台 terminal;
 
 ---
 # 核心工作原则

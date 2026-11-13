@@ -16,6 +16,9 @@ const PICK = '/nano-kitesurf/pick'
 const EDIT = '/nano-kitesurf/edit'
 const SETTINGS = '/nano-kitesurf/settings'
 const HISTORY = '/nano-kitesurf/history'
+const PORTS = '/nano-kitesurf/ports'
+const RECOVER = '/nano-kitesurf/recover'
+const DIAGNOSTICS = '/nano-kitesurf/diagnostics'
 const KITE = '/nano-kitesurf/kite'
 const KIND = 'kitesurf'
 const OWN_ID = 'nano-kitesurf'
@@ -76,6 +79,15 @@ const STYLE = `
 .nks-busy::before{content:"";display:block;width:35%;height:100%;background:var(--dsw-alias-link,#2f6fed);animation:nks-beat 1s ease-in-out infinite}
 @keyframes nks-beat{from{transform:translateX(-120%)}to{transform:translateX(320%)}}
 .nks-settings-body{display:flex;flex-direction:column;gap:8px}
+.nks-env{border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-md);padding:8px;background:var(--dsw-alias-bg-layer-2);display:flex;flex-direction:column;gap:6px}
+.nks-env-title{color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxxs-11);text-transform:none;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.nks-env-row{display:flex;justify-content:space-between;gap:10px;font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-tertiary)}
+.nks-env-row b{font-weight:500;color:var(--dsw-alias-label-secondary);flex:none}
+.nks-env-row span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right;unicode-bidi:plaintext}
+.nks-env-ok{color:var(--dsw-alias-fill-success,#3fb950)}
+.nks-env-bad{color:var(--dsw-alias-fill-error,#d5455c)}
+.nks-env-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:2px}
+.nks-env-note{font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-tertiary);line-height:1.5}
 .nks-settings-body label{color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxxs-11)}
 .nks-choices{display:flex;gap:4px}
 .nks-choice{height:28px;padding:0 10px;color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxs-12);background:transparent;border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-sm);cursor:pointer}
@@ -771,6 +783,21 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
     }
   }
 
+  /** One-click environment prep from the error state: repair, then re-shoot. */
+  async function oneClickPrepare() {
+    await run(async () => {
+      try {
+        const response = await post(RECOVER, {})
+        const after = await refreshStatus()
+        if (after?.ok !== false) await reloadShot(0, { keepPick: true })
+        else if (response?.ports) showToast(`${copy.prepareFailed}`)
+        else showToast(copy.prepareDone)
+      } catch (cause) {
+        showError(cause)
+      }
+    })
+  }
+
   function onStartEngine() {
     // The status call decides start vs resume; the pane should not guess phase.
     run(async () => {
@@ -855,6 +882,64 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
     return h(Icon, { width: 16, height: 16, 'aria-hidden': true })
   }
 
+  /**
+   * Environment self-check. Ordinary users should never have to read YAML or
+   * run `container` in a terminal: this panel shows plugin build, engine
+   * endpoint, container state and port ownership, and offers ONE button that
+   * runs the whole repair chain (reconcile → adopt/repair port → start/resume
+   * → health poll).
+   */
+  function EnvPanel() {
+    const [snap, setSnap] = React.useState(null)
+    const [busyLocal, setBusyLocal] = React.useState(false)
+    const [note, setNote] = React.useState('')
+    React.useEffect(() => {
+      let alive = true
+      fetch(PORTS).then((r) => r.json()).then((data) => { if (alive) setSnap(data) }).catch(() => {})
+      return () => { alive = false }
+    }, [])
+    async function prepare() {
+      setBusyLocal(true); setNote(copy.preparingEnv)
+      try {
+        const response = await fetch(RECOVER, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
+        const result = await response.json().catch(() => ({}))
+        const ports = result.ports || (await fetch(PORTS).then((r) => r.json()).catch(() => null))
+        setSnap(ports)
+        setNote(result.ok ? copy.prepareDone : copy.prepareFailed)
+        await refreshStatus()
+        await reloadShot(0, { keepPick: true }).catch(() => {})
+      } catch (cause) {
+        setNote(`${copy.prepareFailed}: ${cause?.message || cause}`)
+      } finally {
+        setBusyLocal(false)
+      }
+    }
+    async function copyDiagnostics() {
+      try {
+        const data = await fetch(DIAGNOSTICS).then((r) => r.json())
+        await navigator.clipboard.writeText(JSON.stringify(data, null, 2))
+        showToast(copy.diagCopied)
+      } catch (cause) { showError(cause) }
+    }
+    const engine = snap?.effective?.httpBase || '—'
+    const container = snap?.container?.state || '—'
+    const portRow = snap?.ports?.engine
+      ? `${snap.ports.engine.port} · ${snap.ports.engine.heldBy === 'this-container' ? '本插件容器' : snap.ports.engine.heldBy === 'other' ? '被其他程序占用' : '空闲'}`
+      : '—'
+    const healthy = snap?.healthy === true
+    return h('div', { className: 'nks-env', 'data-nks-env': '1' },
+      h('div', { className: 'nks-env-title' }, copy.envTitle,
+        h('span', { className: healthy ? 'nks-env-ok' : 'nks-env-bad' }, healthy ? '● OK' : '● 异常')),
+      h('div', { className: 'nks-env-row' }, h('b', null, copy.envPlugin), h('span', null, status?.buildId || '—')),
+      h('div', { className: 'nks-env-row' }, h('b', null, copy.envEngine), h('span', null, engine)),
+      h('div', { className: 'nks-env-row' }, h('b', null, copy.envContainer), h('span', null, container)),
+      h('div', { className: 'nks-env-row' }, h('b', null, copy.envPorts), h('span', null, portRow)),
+      h('div', { className: 'nks-env-actions' },
+        h('button', { type: 'button', className: 'nks-start-btn', 'data-nks-prepare': '1', disabled: busyLocal, onClick: prepare }, busyLocal ? copy.preparingEnv : copy.prepareEnv),
+        h('button', { type: 'button', className: 'nks-start-btn', 'data-nks-copy-diag': '1', onClick: copyDiagnostics }, copy.copyDiag)),
+      h('div', { className: 'nks-env-note' }, note || copy.envHint))
+  }
+
   function openSettings() {
     if (dialogOpenRef.current) return
     dialogOpenRef.current = true
@@ -875,6 +960,7 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
         className: 'nks-settings-body',
         onSubmit: (event) => { event.preventDefault(); save() },
       },
+        h(EnvPanel, null),
         h('label', { htmlFor: 'nks-ua' }, copy.uaLabel),
         h('input', { id: 'nks-ua', className: 'nks-address', autoFocus: true, placeholder: copy.uaPlaceholder }),
         h('label', { htmlFor: 'nks-origin' }, copy.originLabel),
@@ -1034,13 +1120,17 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
         !busy && status?.ok !== false && !status?.engineMismatch ? h('div', { className: 'nks-empty-body' }, copy.emptyBody) : null,
         !busy && status?.ok === false && !status?.engineMismatch ? h('div', { className: 'nks-empty-body' }, copy.errorBody) : null,
         !busy && status?.ok === false ? h('div', { className: 'nks-empty-actions' },
+          // Ordinary users get ONE button: it reconciles phase, adopts or
+          // repairs the port, starts/resumes the container and polls health.
           h('button', {
             type: 'button',
-            className: 'nks-start-btn',
+            className: 'nks-start-btn nks-primary',
             'data-nks-start-engine': '1',
-            onClick: onStartEngine,
-          }, status?.kite?.phase === 'running' ? copy.resumeEngine : copy.startEngine),
-          h('button', { type: 'button', className: 'nks-start-btn', 'data-nks-diagnose': '1', onClick: () => run(() => refreshStatus()) }, copy.retry)) : null,
+            'data-nks-prepare': '1',
+            onClick: oneClickPrepare,
+          }, status?.kite?.phase === 'running' ? copy.resumeEngine : copy.prepareEnv),
+          h('button', { type: 'button', className: 'nks-start-btn', 'data-nks-diagnose': '1', onClick: () => run(() => refreshStatus()) }, copy.retry),
+          h('button', { type: 'button', className: 'nks-start-btn', 'data-nks-open-settings': '1', onClick: openSettings }, copy.settings)) : null,
         !busy && status?.ok !== false && !status?.engineMismatch ? h('div', { className: 'nks-empty-actions' },
           h('button', { type: 'button', className: 'nks-empty-link', 'data-nks-try': '1', onClick: () => { setDraftUrl('https://example.com'); run(() => navigate('https://example.com')) } }, copy.emptyTry)) : null,
         status?.ok === false ? h('div', { className: 'nks-empty-meta' }, `${status?.lastError?.errorId || status?.errorId || 'kitesurf.engine.failed'} · ${status?.httpBase || ''}`) : null,

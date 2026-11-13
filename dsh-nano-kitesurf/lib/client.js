@@ -1538,6 +1538,18 @@ var __kitesurfExport = (() => {
           copyContext: "\u590D\u5236\u4E0A\u4E0B\u6587",
           inputContext: "\u8F93\u5165\u5907\u6CE8",
           copied: "\u4E0A\u4E0B\u6587\u5DF2\u590D\u5236",
+          envTitle: "\u73AF\u5883\u81EA\u68C0",
+          envPlugin: "\u63D2\u4EF6",
+          envEngine: "\u5F15\u64CE",
+          envContainer: "\u5BB9\u5668",
+          envPorts: "\u7AEF\u53E3",
+          prepareEnv: "\u4E00\u952E\u51C6\u5907\u73AF\u5883",
+          preparingEnv: "\u6B63\u5728\u51C6\u5907\u2026",
+          prepareDone: "\u73AF\u5883\u5DF2\u5C31\u7EEA",
+          prepareFailed: "\u51C6\u5907\u5931\u8D25\uFF0C\u89C1\u4E0B\u65B9\u8BCA\u65AD",
+          copyDiag: "\u590D\u5236\u8BCA\u65AD\u4FE1\u606F",
+          diagCopied: "\u8BCA\u65AD\u4FE1\u606F\u5DF2\u590D\u5236",
+          envHint: "\u4F9D\u6B21\u68C0\u67E5\u5BB9\u5668\u3001\u7AEF\u53E3\u3001\u5F15\u64CE\u5065\u5EB7\u5E76\u81EA\u52A8\u4FEE\u590D",
           noteEmpty: "\u53EF\u76F4\u63A5\u6CE8\u5165\uFF0C\u65E0\u9700\u586B\u5199",
           opening: "\u6B63\u5728\u6253\u5F00\u9875\u9762",
           engineDown: "\u5F15\u64CE\u6CA1\u6709\u5E94\u7B54",
@@ -1598,6 +1610,18 @@ var __kitesurfExport = (() => {
           copyContext: "Copy context",
           inputContext: "Add a note",
           copied: "Context copied",
+          envTitle: "Environment",
+          envPlugin: "Plugin",
+          envEngine: "Engine",
+          envContainer: "Container",
+          envPorts: "Ports",
+          prepareEnv: "Prepare environment",
+          preparingEnv: "Preparing\u2026",
+          prepareDone: "Environment ready",
+          prepareFailed: "Prepare failed \u2014 see diagnostics",
+          copyDiag: "Copy diagnostics",
+          diagCopied: "Diagnostics copied",
+          envHint: "Checks container, ports and engine health, then repairs automatically",
           noteEmpty: "Insert without typing",
           opening: "Opening page",
           engineDown: "Engine is not answering",
@@ -1824,6 +1848,9 @@ ${item}`).join("\n");
   var EDIT = "/nano-kitesurf/edit";
   var SETTINGS = "/nano-kitesurf/settings";
   var HISTORY = "/nano-kitesurf/history";
+  var PORTS = "/nano-kitesurf/ports";
+  var RECOVER = "/nano-kitesurf/recover";
+  var DIAGNOSTICS = "/nano-kitesurf/diagnostics";
   var KITE = "/nano-kitesurf/kite";
   var KIND = "kitesurf";
   var OWN_ID = "nano-kitesurf";
@@ -1882,6 +1909,15 @@ ${item}`).join("\n");
 .nks-busy::before{content:"";display:block;width:35%;height:100%;background:var(--dsw-alias-link,#2f6fed);animation:nks-beat 1s ease-in-out infinite}
 @keyframes nks-beat{from{transform:translateX(-120%)}to{transform:translateX(320%)}}
 .nks-settings-body{display:flex;flex-direction:column;gap:8px}
+.nks-env{border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-md);padding:8px;background:var(--dsw-alias-bg-layer-2);display:flex;flex-direction:column;gap:6px}
+.nks-env-title{color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxxs-11);text-transform:none;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.nks-env-row{display:flex;justify-content:space-between;gap:10px;font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-tertiary)}
+.nks-env-row b{font-weight:500;color:var(--dsw-alias-label-secondary);flex:none}
+.nks-env-row span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right;unicode-bidi:plaintext}
+.nks-env-ok{color:var(--dsw-alias-fill-success,#3fb950)}
+.nks-env-bad{color:var(--dsw-alias-fill-error,#d5455c)}
+.nks-env-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:2px}
+.nks-env-note{font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-tertiary);line-height:1.5}
 .nks-settings-body label{color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxxs-11)}
 .nks-choices{display:flex;gap:4px}
 .nks-choice{height:28px;padding:0 10px;color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxs-12);background:transparent;border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-sm);cursor:pointer}
@@ -2482,6 +2518,19 @@ ${item}`).join("\n");
         showError(cause);
       }
     }
+    async function oneClickPrepare() {
+      await run(async () => {
+        try {
+          const response = await post(RECOVER, {});
+          const after = await refreshStatus();
+          if (after?.ok !== false) await reloadShot(0, { keepPick: true });
+          else if (response?.ports) showToast(`${copy.prepareFailed}`);
+          else showToast(copy.prepareDone);
+        } catch (cause) {
+          showError(cause);
+        }
+      });
+    }
     function onStartEngine() {
       run(async () => {
         const fresh = await refreshStatus();
@@ -2556,6 +2605,73 @@ ${item}`).join("\n");
       }[name];
       return h(Icon, { width: 16, height: 16, "aria-hidden": true });
     };
+    function EnvPanel() {
+      const [snap, setSnap] = React5.useState(null);
+      const [busyLocal, setBusyLocal] = React5.useState(false);
+      const [note, setNote] = React5.useState("");
+      React5.useEffect(() => {
+        let alive = true;
+        fetch(PORTS).then((r) => r.json()).then((data) => {
+          if (alive) setSnap(data);
+        }).catch(() => {
+        });
+        return () => {
+          alive = false;
+        };
+      }, []);
+      async function prepare() {
+        setBusyLocal(true);
+        setNote(copy.preparingEnv);
+        try {
+          const response = await fetch(RECOVER, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+          const result = await response.json().catch(() => ({}));
+          const ports = result.ports || await fetch(PORTS).then((r) => r.json()).catch(() => null);
+          setSnap(ports);
+          setNote(result.ok ? copy.prepareDone : copy.prepareFailed);
+          await refreshStatus();
+          await reloadShot(0, { keepPick: true }).catch(() => {
+          });
+        } catch (cause) {
+          setNote(`${copy.prepareFailed}: ${cause?.message || cause}`);
+        } finally {
+          setBusyLocal(false);
+        }
+      }
+      async function copyDiagnostics() {
+        try {
+          const data = await fetch(DIAGNOSTICS).then((r) => r.json());
+          await navigator.clipboard.writeText(JSON.stringify(data, null, 2));
+          showToast(copy.diagCopied);
+        } catch (cause) {
+          showError(cause);
+        }
+      }
+      const engine = snap?.effective?.httpBase || "\u2014";
+      const container = snap?.container?.state || "\u2014";
+      const portRow = snap?.ports?.engine ? `${snap.ports.engine.port} \xB7 ${snap.ports.engine.heldBy === "this-container" ? "\u672C\u63D2\u4EF6\u5BB9\u5668" : snap.ports.engine.heldBy === "other" ? "\u88AB\u5176\u4ED6\u7A0B\u5E8F\u5360\u7528" : "\u7A7A\u95F2"}` : "\u2014";
+      const healthy = snap?.healthy === true;
+      return h(
+        "div",
+        { className: "nks-env", "data-nks-env": "1" },
+        h(
+          "div",
+          { className: "nks-env-title" },
+          copy.envTitle,
+          h("span", { className: healthy ? "nks-env-ok" : "nks-env-bad" }, healthy ? "\u25CF OK" : "\u25CF \u5F02\u5E38")
+        ),
+        h("div", { className: "nks-env-row" }, h("b", null, copy.envPlugin), h("span", null, status?.buildId || "\u2014")),
+        h("div", { className: "nks-env-row" }, h("b", null, copy.envEngine), h("span", null, engine)),
+        h("div", { className: "nks-env-row" }, h("b", null, copy.envContainer), h("span", null, container)),
+        h("div", { className: "nks-env-row" }, h("b", null, copy.envPorts), h("span", null, portRow)),
+        h(
+          "div",
+          { className: "nks-env-actions" },
+          h("button", { type: "button", className: "nks-start-btn", "data-nks-prepare": "1", disabled: busyLocal, onClick: prepare }, busyLocal ? copy.preparingEnv : copy.prepareEnv),
+          h("button", { type: "button", className: "nks-start-btn", "data-nks-copy-diag": "1", onClick: copyDiagnostics }, copy.copyDiag)
+        ),
+        h("div", { className: "nks-env-note" }, note || copy.envHint)
+      );
+    }
     function openSettings() {
       if (dialogOpenRef.current) return;
       dialogOpenRef.current = true;
@@ -2584,6 +2700,7 @@ ${item}`).join("\n");
               save();
             }
           },
+          h(EnvPanel, null),
           h("label", { htmlFor: "nks-ua" }, copy.uaLabel),
           h("input", { id: "nks-ua", className: "nks-address", autoFocus: true, placeholder: copy.uaPlaceholder }),
           h("label", { htmlFor: "nks-origin" }, copy.originLabel),
@@ -2765,13 +2882,17 @@ ${item}`).join("\n");
           !busy && status?.ok === false ? h(
             "div",
             { className: "nks-empty-actions" },
+            // Ordinary users get ONE button: it reconciles phase, adopts or
+            // repairs the port, starts/resumes the container and polls health.
             h("button", {
               type: "button",
-              className: "nks-start-btn",
+              className: "nks-start-btn nks-primary",
               "data-nks-start-engine": "1",
-              onClick: onStartEngine
-            }, status?.kite?.phase === "running" ? copy.resumeEngine : copy.startEngine),
-            h("button", { type: "button", className: "nks-start-btn", "data-nks-diagnose": "1", onClick: () => run(() => refreshStatus()) }, copy.retry)
+              "data-nks-prepare": "1",
+              onClick: oneClickPrepare
+            }, status?.kite?.phase === "running" ? copy.resumeEngine : copy.prepareEnv),
+            h("button", { type: "button", className: "nks-start-btn", "data-nks-diagnose": "1", onClick: () => run(() => refreshStatus()) }, copy.retry),
+            h("button", { type: "button", className: "nks-start-btn", "data-nks-open-settings": "1", onClick: openSettings }, copy.settings)
           ) : null,
           !busy && status?.ok !== false && !status?.engineMismatch ? h(
             "div",

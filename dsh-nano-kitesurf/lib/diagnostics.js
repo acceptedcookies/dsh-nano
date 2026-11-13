@@ -58,6 +58,7 @@ export const ERROR_CATALOG = [
   { match: '^kitesurf\\.navigate\\.egress$', example: 'kitesurf.navigate.egress', status: 504, cause: '目标站点出站超过 25s（引擎写入 egress timeout）', next: '换可达站点；不要重试同一地址；GET /status 确认引擎仍活' },
   { match: '^kitesurf\\.navigate\\.delta$', example: 'kitesurf.navigate.delta', status: 400, cause: '/history delta 不是 -1 或 +1', next: 'POST /history {delta:-1} 后退 / {delta:1} 前进' },
   { match: '^kitesurf\\.navigate\\.(timeout|failed)$', example: 'kitesurf.navigate.failed', status: 502, cause: 'Page.navigate 超时或被拒绝（DNS/网络）', next: '检查 URL 可达；超时后不要立刻重复 open（可能已在导航）' },
+  { match: '^kitesurf\\.engine\\.context$', example: 'kitesurf.engine.context', status: 409, cause: '页面正在导航，JS 执行上下文被销毁（竞态，不是引擎故障）', next: '已自动重试一次；仍失败时等页面稳定后重试，或 POST /recover 一键恢复' },
   { match: '^kitesurf\\.engine\\.', example: 'kitesurf.engine.connect', status: 502, cause: 'CDP 连接失败/服务不是 Kitesurf/socket 关闭/命令超时', next: 'GET /status；container list；curl http://127.0.0.1:8798/health；必要时 /kite resume' },
   { match: '^kitesurf\\.perf\\.', example: 'kitesurf.perf.method', status: 400, cause: 'mode=window 排水只允许 POST', next: 'GET /perf-review/host 读快照；POST /perf-review/host?mode=window 排水' },
   { match: '^kitesurf\\.console\\.', example: 'kitesurf.console.query', status: 400, cause: 'console 查询参数非法', next: 'GET /console?level=error&limit=50；POST /console {clear:true} 清空' },

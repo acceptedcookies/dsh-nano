@@ -120,6 +120,7 @@ A failed call returns `{ok:false,errorId,error}` with a real HTTP status. The sa
 | `kitesurf.navigate.egress` | 504 | 目标站点出站超过 25s（引擎写入 egress timeout） | 换可达站点；不要重试同一地址；GET /status 确认引擎仍活 |
 | `kitesurf.navigate.delta` | 400 | /history delta 不是 -1 或 +1 | POST /history {delta:-1} 后退 / {delta:1} 前进 |
 | `kitesurf.navigate.failed` | 502 | Page.navigate 超时或被拒绝（DNS/网络） | 检查 URL 可达；超时后不要立刻重复 open（可能已在导航） |
+| `kitesurf.engine.context` | 409 | 页面正在导航，JS 执行上下文被销毁（竞态，不是引擎故障） | 已自动重试一次；仍失败时等页面稳定后重试，或 POST /recover 一键恢复 |
 | `kitesurf.engine.connect` | 502 | CDP 连接失败/服务不是 Kitesurf/socket 关闭/命令超时 | GET /status；container list；curl http://127.0.0.1:8798/health；必要时 /kite resume |
 | `kitesurf.perf.method` | 400 | mode=window 排水只允许 POST | GET /perf-review/host 读快照；POST /perf-review/host?mode=window 排水 |
 | `kitesurf.console.query` | 400 | console 查询参数非法 | GET /console?level=error&limit=50；POST /console {clear:true} 清空 |

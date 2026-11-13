@@ -423,7 +423,17 @@ async function connectLive(httpBase) {
     pending.set(id, (message) => {
       clearTimeout(timer)
       if (message.kitesurfError) { reject(message.kitesurfError); return }
-      if (message.error) reject(new KitesurfError('kitesurf.engine.failed', message.error.message || method))
+      if (message.error) {
+        const text = String(message.error.message || method)
+        // A navigation between attach and evaluate destroys the execution
+        // context. That is a race, not an engine failure — retryable.
+        if (/Execution context was destroyed|Cannot find context|Inspected target navigated|Target closed/i.test(text)) {
+          reject(new KitesurfError('kitesurf.engine.context', text.slice(0, 160), { transport: true }))
+          return
+        }
+        reject(new KitesurfError('kitesurf.engine.failed', text))
+        return
+      }
       else resolve(message.result ?? {})
     })
     const frame = { id, method, params }
@@ -472,6 +482,9 @@ async function useLive(httpBase, body) {
   } catch (error) {
     if (!error || error.transport !== true) throw error
     dropLive()
+    // A destroyed execution context means the page is mid-navigation: give it
+    // a beat, then retry the whole operation once on a fresh session.
+    if (error.id === 'kitesurf.engine.context') await new Promise((r) => setTimeout(r, 350))
     try {
       return await body(await connectLive(httpBase))
     } catch (second) {

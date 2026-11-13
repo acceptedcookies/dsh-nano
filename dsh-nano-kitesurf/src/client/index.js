@@ -107,6 +107,11 @@ const STYLE = `
 .nks-dt-st{flex:none;width:36px;text-align:right}
 .nks-dt-st[data-bad="true"]{color:var(--dsw-alias-fill-error,#d5455c)}
 .nks-dt-dur{flex:none;width:58px;text-align:right;color:var(--dsw-alias-label-tertiary)}
+.nks-dt-styles{flex:none;max-height:120px;overflow:auto;border-bottom:.5px solid var(--dsw-alias-border-l3);padding:4px 8px}
+.nks-dt-style-head{color:var(--dsw-alias-label-secondary);margin-bottom:3px}
+.nks-dt-rule{display:flex;gap:8px;padding:1px 0;color:var(--dsw-alias-label-tertiary)}
+.nks-dt-rule b{color:var(--dsw-alias-label-secondary);font-weight:500;max-width:45%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nks-dt-rule span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .nks-dt-empty{padding:14px;color:var(--dsw-alias-label-tertiary)}
 .nks-env{border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-md);padding:8px;background:var(--dsw-alias-bg-layer-2);display:flex;flex-direction:column;gap:6px}
 .nks-env-title{color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxxs-11);text-transform:none;display:flex;align-items:center;justify-content:space-between;gap:8px}
@@ -1202,6 +1207,7 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
     const [tab, setTab] = React.useState('console')
     const [rows, setRows] = React.useState([])
     const [failedOnly, setFailedOnly] = React.useState(false)
+    const [styles, setStyles] = React.useState(null)
     React.useEffect(() => {
       if (!open) return undefined
       let alive = true
@@ -1224,6 +1230,13 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
       return () => { alive = false; clearInterval(timer) }
     }, [open, tab, failedOnly])
     if (!open) return null
+    const inspectNode = async (row) => {
+      const selector = row.id ? `${row.tag}#${row.id}` : (row.cls ? `${row.tag}.${String(row.cls).trim().split(/\s+/)[0]}` : row.tag)
+      try {
+        const data = await fetch(`${ELEMENTS}?selector=${encodeURIComponent(selector)}`).then((r) => r.json())
+        setStyles({ selector, matched: data.matched?.matched || [], computed: data.computed || {} })
+      } catch { setStyles({ selector, matched: [], computed: {} }) }
+    }
     const clear = async () => {
       const path = tab === 'console' ? CONSOLE : NETWORK
       await fetch(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"clear":true}' }).catch(() => {})
@@ -1238,10 +1251,15 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
         h('span', { style: { flex: 'auto' } }),
         h('button', { type: 'button', className: 'nks-dt-tab', 'data-nks-dt-clear': '1', onClick: clear }, copy.devtoolsClear),
         h('button', { type: 'button', className: 'nks-dt-tab', 'data-nks-dt-close': '1', onClick: onClose }, copy.devtoolsClose)),
+      styles ? h('div', { className: 'nks-dt-styles', 'data-nks-dt-styles': '1' },
+        h('div', { className: 'nks-dt-style-head' }, `${styles.selector} · ${styles.matched.length} rules · ${Object.keys(styles.computed).length} computed`),
+        styles.matched.slice(0, 6).map((rule, i) => h('div', { className: 'nks-dt-rule', key: `r${i}` },
+          h('b', null, rule.selector || '(anonymous)'),
+          h('span', null, (rule.properties || []).slice(0, 6).join('; '))))) : null,
       h('div', { className: 'nks-dt-body', 'data-nks-dt-body': '1' },
         rows.length === 0 ? h('div', { className: 'nks-dt-empty' }, copy.devtoolsEmpty) : null,
         rows.map((row, index) => tab === 'elements'
-          ? h('div', { className: 'nks-dt-row', key: `e${row.nodeId || index}`, style: { paddingLeft: `${8 + (row.level || 0) * 12}px` } },
+          ? h('div', { className: 'nks-dt-row', key: `e${row.nodeId || index}`, style: { paddingLeft: `${8 + (row.level || 0) * 12}px`, cursor: 'pointer' }, onClick: () => inspectNode(row), 'data-nks-el-node': String(row.nodeId) },
             h('span', { className: 'nks-dt-lv' }, row.tag),
             h('span', { className: 'nks-dt-msg' }, `${row.id ? '#' + row.id : ''}${row.cls ? '.' + String(row.cls).split(/\s+/).slice(0, 2).join('.') : ''}`),
             h('span', { className: 'nks-dt-dur' }, row.childNodeCount ? String(row.childNodeCount) : ''))

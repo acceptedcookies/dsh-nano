@@ -600,6 +600,19 @@
       "bodyLimit": 0,
       "sessionBinding": false,
       "justification": "SELFTEST_ROUTE — aggregates engine/container/ports/bridge/targets/dom/phase checks into one verdict. L2 read-only."
+    },
+    {
+      "plugin": "dsh-nano-kitesurf",
+      "path": "/nano-kitesurf/elements",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "sensitivity": "L2",
+      "capability": "read:host",
+      "bodyLimit": 0,
+      "sessionBinding": false,
+      "justification": "ELEMENTS_ROUTE — DOM.getDocument tree plus CSS.getMatchedStylesForNode/getComputedStyleForNode for a selector. Page content egress, L2."
     }
   ]
 }

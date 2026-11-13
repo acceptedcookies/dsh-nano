@@ -8,7 +8,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import { registerRoutes } from './lib/route-guard.js'
 import { ROUTE_TABLE, PLUGIN } from './lib/route-table.js'
-import { browserSocketUrl, captureDom, captureShot, currentEmulation, currentUserAgent, currentViewport, engineTargets, evaluateInPage, fetchEngine, KitesurfError, navigateHistory, openPage, pickElement, pickBySelector, pickPoint, pickSelector, editBody, editElement, pageUrl, releaseEngine, scrollDelta, setBrowserSettings } from './lib/engine.js'
+import { browserSocketUrl, captureDom, captureElements, captureShot, currentEmulation, currentUserAgent, currentViewport, engineTargets, evaluateInPage, fetchEngine, KitesurfError, navigateHistory, openPage, pickElement, pickBySelector, pickPoint, pickSelector, editBody, editElement, pageUrl, releaseEngine, scrollDelta, setBrowserSettings } from './lib/engine.js'
 import { ERROR_STATUS, clearConsole, clearNetwork, clearOperations, diagnosticsSummary, getRef, listNetwork, listConsole, listOperations, listRefs, putRef, recordOperation, refChip, summarizeInput } from './lib/diagnostics.js'
 import { buildSrcDoc } from './lib/dom.js'
 import { kitesurfSkill, nanoKiteSkill } from './lib/skill.js'
@@ -37,6 +37,7 @@ const RECOVER_ROUTE = '/nano-kitesurf/recover'
 const CONTEXT_ROUTE = '/nano-kitesurf/context'
 const DOM_ROUTE = '/nano-kitesurf/dom'
 const SELFTEST_ROUTE = '/nano-kitesurf/selftest'
+const ELEMENTS_ROUTE = '/nano-kitesurf/elements'
 const NETWORK_ROUTE = '/nano-kitesurf/network'
 const TARGETS_ROUTE = '/nano-kitesurf/targets'
 const EVALUATE_ROUTE = '/nano-kitesurf/evaluate'
@@ -957,6 +958,22 @@ export function apply(ctx, config) {
             throw new KitesurfError('kitesurf.diag.query', 'limit must be 1..100')
           }
           sendJson(res, 200, await buildDiagnostics(limit))
+        } catch (error) {
+          fail(res, error)
+        }
+      },
+    },
+    {
+      path: ELEMENTS_ROUTE,
+      methods: ['GET', 'HEAD'],
+      handler: async (req, res) => {
+        try {
+          const q = queryOf(req)
+          const data = await hostSpan('elements', () => captureElements(origin(), {
+            depth: Number(q.get('depth') || 4),
+            selector: q.get('selector') || '',
+          }))
+          sendJson(res, 200, { ok: true, ...data })
         } catch (error) {
           fail(res, error)
         }

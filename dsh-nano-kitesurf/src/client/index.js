@@ -21,6 +21,7 @@ const RECOVER = '/nano-kitesurf/recover'
 const DIAGNOSTICS = '/nano-kitesurf/diagnostics'
 const CONSOLE = '/nano-kitesurf/console'
 const NETWORK = '/nano-kitesurf/network'
+const ELEMENTS = '/nano-kitesurf/elements'
 const DOM = '/nano-kitesurf/dom'
 const CONTEXT = '/nano-kitesurf/context'
 const KITE = '/nano-kitesurf/kite'
@@ -1203,9 +1204,12 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
           if (tab === 'console') {
             const data = await fetch(`${CONSOLE}?limit=200`).then((r) => r.json())
             if (alive) setRows(data.entries || [])
-          } else {
+          } else if (tab === 'network') {
             const data = await fetch(`${NETWORK}?limit=200${failedOnly ? '&failedOnly=true' : ''}`).then((r) => r.json())
             if (alive) setRows(data.entries || [])
+          } else {
+            const data = await fetch(`${ELEMENTS}?depth=3`).then((r) => r.json())
+            if (alive) setRows(data.nodes || [])
           }
         } catch { /* endpoint may be briefly unavailable */ }
       }
@@ -1223,13 +1227,19 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
       h('div', { className: 'nks-dt-head' },
         h('button', { type: 'button', className: 'nks-dt-tab', 'aria-selected': tab === 'console' ? 'true' : 'false', 'data-nks-dt-console': '1', onClick: () => setTab('console') }, copy.devtoolsConsole),
         h('button', { type: 'button', className: 'nks-dt-tab', 'aria-selected': tab === 'network' ? 'true' : 'false', 'data-nks-dt-network': '1', onClick: () => setTab('network') }, copy.devtoolsNetwork),
+        h('button', { type: 'button', className: 'nks-dt-tab', 'aria-selected': tab === 'elements' ? 'true' : 'false', 'data-nks-dt-elements': '1', onClick: () => setTab('elements') }, 'Elements'),
         tab === 'network' ? h('button', { type: 'button', className: 'nks-dt-tab', 'aria-selected': failedOnly ? 'true' : 'false', onClick: () => setFailedOnly((v) => !v) }, copy.devtoolsFailedOnly) : null,
         h('span', { style: { flex: 'auto' } }),
         h('button', { type: 'button', className: 'nks-dt-tab', 'data-nks-dt-clear': '1', onClick: clear }, copy.devtoolsClear),
         h('button', { type: 'button', className: 'nks-dt-tab', 'data-nks-dt-close': '1', onClick: onClose }, copy.devtoolsClose)),
       h('div', { className: 'nks-dt-body', 'data-nks-dt-body': '1' },
         rows.length === 0 ? h('div', { className: 'nks-dt-empty' }, copy.devtoolsEmpty) : null,
-        rows.map((row, index) => tab === 'console'
+        rows.map((row, index) => tab === 'elements'
+          ? h('div', { className: 'nks-dt-row', key: `e${row.nodeId || index}`, style: { paddingLeft: `${8 + (row.level || 0) * 12}px` } },
+            h('span', { className: 'nks-dt-lv' }, row.tag),
+            h('span', { className: 'nks-dt-msg' }, `${row.id ? '#' + row.id : ''}${row.cls ? '.' + String(row.cls).split(/\s+/).slice(0, 2).join('.') : ''}`),
+            h('span', { className: 'nks-dt-dur' }, row.childNodeCount ? String(row.childNodeCount) : ''))
+          : tab === 'console'
           ? h('div', { className: 'nks-dt-row', key: `c${row.seq || index}` },
             h('span', { className: 'nks-dt-lv', 'data-lv': row.level }, row.level),
             h('span', { className: 'nks-dt-msg' }, row.text),

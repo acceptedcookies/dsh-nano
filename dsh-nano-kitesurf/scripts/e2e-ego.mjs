@@ -128,7 +128,24 @@ async function main() {
   record('devtools-network', netRows > 0, `${netRows} rows`)
   await page.screenshot({ path: `/tmp/dnk-e2e-${++shot}-devtools.png` })
 
-  // 8. host self-test
+  // 8. Elements tab (DOM tree) and computed styles
+  const elTab = await page.evaluate(() => {
+    const b = document.querySelector('[data-nks-dt-elements]')
+    if (!b) return null
+    const r = b.getBoundingClientRect()
+    return { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) }
+  })
+  if (elTab) await page.mouse.click(elTab.x, elTab.y)
+  await new Promise((r) => setTimeout(r, 2200))
+  const elRows = await page.evaluate(() => document.querySelectorAll('[data-nks-devtools] .nks-dt-row').length)
+  record('devtools-elements', elRows > 10, `${elRows} nodes`)
+  const styles = await page.evaluate(async () => {
+    const r = await fetch('/nano-kitesurf/elements?selector=p')
+    return r.json()
+  })
+  record('computed-styles', Object.keys(styles.computed || {}).length > 10, `${Object.keys(styles.computed || {}).length} properties`)
+
+  // 9. host self-test
   const selftest = await page.evaluate(async () => {
     const r = await fetch('/nano-kitesurf/selftest')
     return r.json()

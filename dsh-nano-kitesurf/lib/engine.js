@@ -1174,3 +1174,70 @@ export async function captureDom(httpBase) {
     return { url: String(parsed.url || ''), html: String(parsed.html || ''), bytes: raw.length }
   })
 }
+
+
+/**
+ * Elements panel data. The engine implements the real DOM/CSS domains
+ * (DOM.getDocument, DOM.describeNode, CSS.getMatchedStylesForNode,
+ * CSS.getComputedStyleForNode), so this is a genuine inspector feed — not a
+ * re-parse of outerHTML.
+ */
+export async function captureElements(httpBase, options = {}) {
+  return useLive(httpBase, async (client) => {
+    const page = await pageHandle(client)
+    const depth = Math.max(1, Math.min(Number(options.depth) || 4, 8))
+    const doc = await client.send('DOM.getDocument', { depth, pierce: false }, page.sessionId)
+    const root = doc.root || null
+    if (!root) throw new KitesurfError('kitesurf.elements.empty', 'no document')
+
+    const flatten = (node, level, out) => {
+      if (!node || out.length >= 220) return
+      const attrs = Array.isArray(node.attributes) ? node.attributes : []
+      const attr = (name) => {
+        for (let i = 0; i < attrs.length; i += 2) if (attrs[i] === name) return attrs[i + 1]
+        return ''
+      }
+      out.push({
+        nodeId: node.nodeId,
+        level,
+        tag: String(node.localName || node.nodeName || '').toLowerCase().slice(0, 32),
+        id: attr('id').slice(0, 60),
+        cls: attr('class').slice(0, 120),
+        text: node.nodeType === 3 ? String(node.nodeValue || '').trim().slice(0, 40) : '',
+        children: Array.isArray(node.children) ? node.children.length : 0,
+        childNodeCount: Number(node.childNodeCount) || 0,
+      })
+      for (const child of node.children || []) flatten(child, level + 1, out)
+    }
+    const nodes = []
+    flatten(root, 0, nodes)
+
+    let matched = null
+    let computed = null
+    const selector = typeof options.selector === 'string' ? options.selector.trim() : ''
+    if (selector) {
+      const found = await client.send('DOM.querySelector', { nodeId: root.nodeId, selector }, page.sessionId)
+      const nodeId = Number(found.nodeId) || 0
+      if (nodeId) {
+        try {
+          const rules = await client.send('CSS.getMatchedStylesForNode', { nodeId }, page.sessionId)
+          matched = {
+            inlineStyle: (rules.inlineStyle?.cssProperties || []).map((p) => `${p.name}: ${p.value}`).slice(0, 40),
+            matched: (rules.matchedCSSRules || []).slice(0, 40).map((row) => ({
+              selector: (row.rule?.selectorList?.selectors || []).map((x) => x.text).join(', ').slice(0, 200),
+              origin: row.rule?.origin || '',
+              properties: (row.rule?.style?.cssProperties || []).map((p) => `${p.name}: ${p.value}`).slice(0, 40),
+            })),
+            inherited: (rules.inherited || []).length,
+          }
+        } catch { matched = null }
+        try {
+          const cs = await client.send('CSS.getComputedStyleForNode', { nodeId }, page.sessionId)
+          computed = {}
+          for (const row of (cs.computedStyle || []).slice(0, 80)) computed[row.name] = row.value
+        } catch { computed = null }
+      }
+    }
+    return { depth, count: nodes.length, nodes, selector, matched, computed }
+  })
+}

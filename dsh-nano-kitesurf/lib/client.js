@@ -1877,6 +1877,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
   var DIAGNOSTICS = "/nano-kitesurf/diagnostics";
   var CONSOLE = "/nano-kitesurf/console";
   var NETWORK = "/nano-kitesurf/network";
+  var DOM = "/nano-kitesurf/dom";
   var CONTEXT = "/nano-kitesurf/context";
   var KITE = "/nano-kitesurf/kite";
   var KIND = "kitesurf";
@@ -1907,6 +1908,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
 .nks-go{visibility:hidden;opacity:0;position:absolute;top:0;right:0}
 .nks-address-box:focus-within .nks-go,.nks-address-box[data-dirty="true"] .nks-go{visibility:visible;opacity:1}
 .nks-frame{position:relative;flex:auto;min-height:0;overflow:hidden;contain:layout paint;background:var(--dsw-alias-bg-layer-1)}
+.nks-frame iframe.nks-dom{width:100%;height:100%;border:0;display:block;background:#fff}
 .nks-frame img{width:100%;height:100%;object-fit:contain;object-position:center;display:block}
 .nks-empty{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:10px;padding:24px;text-align:center;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxs-12)}
 .nks-empty-icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-link,#2f6fed);border:.5px solid var(--dsw-alias-border-l2)}
@@ -2071,6 +2073,9 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
     const [composing, setComposing] = React5.useState(false);
     const refSeq = React5.useRef(0);
     const [devtoolsOpen, setDevtoolsOpen] = React5.useState(false);
+    const [nativeHtml, setNativeHtml] = React5.useState(false);
+    const [domDoc, setDomDoc] = React5.useState(null);
+    const domFrameRef = React5.useRef(null);
     const [toast, setToast] = React5.useState(null);
     const [busy, setBusy] = React5.useState(false);
     const [hover, setHover] = React5.useState(null);
@@ -2119,6 +2124,8 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           const shotPayload = await post(SHOT, { format: "webp", ...fit ? { fit } : {} });
           setShot(shotPayload.data);
           setShotMime(shotPayload.mimeType || "image/webp");
+          loadDom().catch(() => {
+          });
           setShotMeta({ url: shotPayload.url || "", scrollY: shotPayload.scrollY || 0, targetId: shotPayload.targetId || "", viewport: shotPayload.viewport?.width ?? null, at: Date.now() });
           if (shotPayload.url && shotPayload.url !== "about:blank") setPageUrl(shotPayload.url);
         } catch {
@@ -2178,6 +2185,22 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       };
       window.addEventListener("keydown", onKey);
       return () => window.removeEventListener("keydown", onKey);
+    }, []);
+    React5.useEffect(() => {
+      const frame2 = domFrameRef.current;
+      if (!frame2?.contentWindow) return;
+      frame2.contentWindow.postMessage({ __nks: "mode", annotate }, "*");
+    }, [annotate, domDoc]);
+    React5.useEffect(() => {
+      const onMessage = (event) => {
+        const data = event.data;
+        if (!data || data.__nks !== "pick" || !data.packet) return;
+        const packet = data.packet;
+        setPick({ elements: [packet], anchor: packet.box ? { x: packet.box.x + packet.box.width / 2, y: packet.box.y + packet.box.height } : null });
+        setEditing(false);
+      };
+      window.addEventListener("message", onMessage);
+      return () => window.removeEventListener("message", onMessage);
     }, []);
     React5.useEffect(() => {
       const phase = status?.kite?.phase;
@@ -2274,6 +2297,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       setShot(shotPayload.data);
       setShotMime(shotPayload.mimeType || "image/webp");
       setShotMeta({ url: shotPayload.url || "", scrollY: shotPayload.scrollY || 0, targetId: shotPayload.targetId || "", viewport: shotPayload.viewport?.width ?? null, at: Date.now() });
+      await loadDom();
       setPick(null);
       remember(url);
     }
@@ -2300,6 +2324,19 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       } finally {
         shotInFlightRef.current = false;
       }
+    }
+    async function loadDom(options = {}) {
+      try {
+        const data = await fetch(DOM).then((r) => r.json());
+        if (data?.ok && data.srcdoc) {
+          setDomDoc({ srcdoc: data.srcdoc, url: data.url, at: Date.now() });
+          if (data.url && data.url !== "about:blank") setPageUrl(data.url);
+          return true;
+        }
+      } catch {
+      }
+      if (!options.keep) setDomDoc(null);
+      return false;
     }
     async function reloadShotInner(scroll, options = {}) {
       const fit = frameSize();
@@ -2983,6 +3020,11 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       h(
         "div",
         { className: "nks-status", "data-nks-status": "1" },
+        h("button", { type: "button", "data-nks-native-toggle": "1", "aria-pressed": nativeHtml ? "true" : "false", onClick: () => {
+          setNativeHtml((v) => !v);
+          if (!nativeHtml) loadDom().catch(() => {
+          });
+        } }, "HTML"),
         h("button", { type: "button", "data-nks-devtools-toggle": "1", "aria-pressed": devtoolsOpen ? "true" : "false", onClick: () => setDevtoolsOpen((v) => !v) }, copy.devtools),
         h("span", { "data-nks-count-console": "1" }, "console"),
         h("span", { style: { flex: "auto" } }),
@@ -3018,7 +3060,21 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           style: { cursor: annotate ? "crosshair" : "default" }
         },
         busy ? h("div", { className: "nks-busy", "data-nks-loading": "1", role: "progressbar", "aria-label": copy.opening }) : null,
-        hasPage ? h("img", {
+        nativeHtml && domDoc ? h("iframe", {
+          ref: domFrameRef,
+          className: "nks-dom",
+          title: "Kitesurf page",
+          sandbox: "allow-scripts allow-same-origin",
+          srcDoc: domDoc.srcdoc,
+          // The parent effect can fire before the document has executed the
+          // injected picker; re-arm on load so MODE is never stale.
+          onLoad: (event) => {
+            try {
+              event.currentTarget.contentWindow.postMessage({ __nks: "mode", annotate: annotateRef.current }, "*");
+            } catch {
+            }
+          }
+        }) : hasPage ? h("img", {
           alt: "",
           draggable: false,
           src: `data:${shotMime || "image/webp"};base64,${shot}`,

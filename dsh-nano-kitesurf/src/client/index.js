@@ -21,6 +21,7 @@ const RECOVER = '/nano-kitesurf/recover'
 const DIAGNOSTICS = '/nano-kitesurf/diagnostics'
 const CONSOLE = '/nano-kitesurf/console'
 const NETWORK = '/nano-kitesurf/network'
+const DOM = '/nano-kitesurf/dom'
 const CONTEXT = '/nano-kitesurf/context'
 const KITE = '/nano-kitesurf/kite'
 const KIND = 'kitesurf'
@@ -54,6 +55,7 @@ const STYLE = `
 .nks-go{visibility:hidden;opacity:0;position:absolute;top:0;right:0}
 .nks-address-box:focus-within .nks-go,.nks-address-box[data-dirty="true"] .nks-go{visibility:visible;opacity:1}
 .nks-frame{position:relative;flex:auto;min-height:0;overflow:hidden;contain:layout paint;background:var(--dsw-alias-bg-layer-1)}
+.nks-frame iframe.nks-dom{width:100%;height:100%;border:0;display:block;background:#fff}
 .nks-frame img{width:100%;height:100%;object-fit:contain;object-position:center;display:block}
 .nks-empty{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:10px;padding:24px;text-align:center;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxs-12)}
 .nks-empty-icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-link,#2f6fed);border:.5px solid var(--dsw-alias-border-l2)}
@@ -240,6 +242,9 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
   const [composing, setComposing] = React.useState(false)
   const refSeq = React.useRef(0)
   const [devtoolsOpen, setDevtoolsOpen] = React.useState(false)
+  const [nativeHtml, setNativeHtml] = React.useState(false)
+  const [domDoc, setDomDoc] = React.useState(null)
+  const domFrameRef = React.useRef(null)
   const [toast, setToast] = React.useState(null)
   const [busy, setBusy] = React.useState(false)
   /** Preview box under the cursor before a click (throttled pick preview). */
@@ -308,6 +313,7 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
         const shotPayload = await post(SHOT, { format: 'webp', ...(fit ? { fit } : {}) })
         setShot(shotPayload.data)
         setShotMime(shotPayload.mimeType || 'image/webp')
+        loadDom().catch(() => {})
         setShotMeta({ url: shotPayload.url || '', scrollY: shotPayload.scrollY || 0, targetId: shotPayload.targetId || '', viewport: shotPayload.viewport?.width ?? null, at: Date.now() })
         // pageUrl mirrors whatever the engine reports — pages opened behind
         // the pane (agent /open) still name the right url in notes.
@@ -377,6 +383,24 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
   // suspend/resume (or an external restart) drops the engine page back to
   // about:blank. Without this the pane kept a screenshot of a page that no
   // longer exists. Clear it so the empty state tells the truth.
+  React.useEffect(() => {
+    const frame = domFrameRef.current
+    if (!frame?.contentWindow) return
+    frame.contentWindow.postMessage({ __nks: 'mode', annotate }, '*')
+  }, [annotate, domDoc])
+
+  React.useEffect(() => {
+    const onMessage = (event) => {
+      const data = event.data
+      if (!data || data.__nks !== 'pick' || !data.packet) return
+      const packet = data.packet
+      setPick({ elements: [packet], anchor: packet.box ? { x: packet.box.x + packet.box.width / 2, y: packet.box.y + packet.box.height } : null })
+      setEditing(false)
+    }
+    window.addEventListener('message', onMessage)
+    return () => window.removeEventListener('message', onMessage)
+  }, [])
+
   React.useEffect(() => {
     const phase = status?.kite?.phase
     if (phase && phase !== 'running' && shot) { setShot(null); setPick(null); setPins([]); setShotMeta(null) }
@@ -470,6 +494,7 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
     setShot(shotPayload.data)
     setShotMime(shotPayload.mimeType || 'image/webp')
     setShotMeta({ url: shotPayload.url || '', scrollY: shotPayload.scrollY || 0, targetId: shotPayload.targetId || '', viewport: shotPayload.viewport?.width ?? null, at: Date.now() })
+    await loadDom()
     setPick(null)
     remember(url)
   }
@@ -503,6 +528,19 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
     } finally {
       shotInFlightRef.current = false
     }
+  }
+
+  async function loadDom(options = {}) {
+    try {
+      const data = await fetch(DOM).then((r) => r.json())
+      if (data?.ok && data.srcdoc) {
+        setDomDoc({ srcdoc: data.srcdoc, url: data.url, at: Date.now() })
+        if (data.url && data.url !== 'about:blank') setPageUrl(data.url)
+        return true
+      }
+    } catch { /* fall back to the screenshot */ }
+    if (!options.keep) setDomDoc(null)
+    return false
   }
 
   async function reloadShotInner(scroll, options = {}) {
@@ -1208,6 +1246,7 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
       }, glyph('annotate')),
       h('button', { type: 'button', className: 'nks-tool', 'data-nks-settings': '1', 'aria-label': copy.settings, title: copy.settings, onClick: openSettings }, glyph('settings'))),
     h('div', { className: 'nks-status', 'data-nks-status': '1' },
+      h('button', { type: 'button', 'data-nks-native-toggle': '1', 'aria-pressed': nativeHtml ? 'true' : 'false', onClick: () => { setNativeHtml((v) => !v); if (!nativeHtml) loadDom().catch(() => {}) } }, 'HTML'),
       h('button', { type: 'button', 'data-nks-devtools-toggle': '1', 'aria-pressed': devtoolsOpen ? 'true' : 'false', onClick: () => setDevtoolsOpen((v) => !v) }, copy.devtools),
       h('span', { 'data-nks-count-console': '1' }, 'console'),
       h('span', { style: { flex: 'auto' } }),
@@ -1234,7 +1273,18 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
       style: { cursor: annotate ? 'crosshair' : 'default' },
     },
       busy ? h('div', { className: 'nks-busy', 'data-nks-loading': '1', role: 'progressbar', 'aria-label': copy.opening }) : null,
-      hasPage ? h('img', {
+      nativeHtml && domDoc ? h('iframe', {
+        ref: domFrameRef,
+        className: 'nks-dom',
+        title: 'Kitesurf page',
+        sandbox: 'allow-scripts allow-same-origin',
+        srcDoc: domDoc.srcdoc,
+        // The parent effect can fire before the document has executed the
+        // injected picker; re-arm on load so MODE is never stale.
+        onLoad: (event) => {
+          try { event.currentTarget.contentWindow.postMessage({ __nks: 'mode', annotate: annotateRef.current }, '*') } catch { /* cross-origin */ }
+        },
+      }) : hasPage ? h('img', {
         alt: '',
         draggable: false,
         src: `data:${shotMime || 'image/webp'};base64,${shot}`,

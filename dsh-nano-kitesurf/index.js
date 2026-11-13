@@ -10,6 +10,7 @@ import { registerRoutes } from './lib/route-guard.js'
 import { ROUTE_TABLE, PLUGIN } from './lib/route-table.js'
 import { browserSocketUrl, captureDom, captureShot, currentEmulation, currentUserAgent, currentViewport, engineTargets, evaluateInPage, fetchEngine, KitesurfError, navigateHistory, openPage, pickElement, pickBySelector, pickPoint, pickSelector, editBody, editElement, pageUrl, releaseEngine, scrollDelta, setBrowserSettings } from './lib/engine.js'
 import { ERROR_STATUS, clearConsole, clearNetwork, clearOperations, diagnosticsSummary, getRef, listNetwork, listConsole, listOperations, listRefs, putRef, recordOperation, refChip, summarizeInput } from './lib/diagnostics.js'
+import { buildSrcDoc } from './lib/dom.js'
 import { kitesurfSkill, nanoKiteSkill } from './lib/skill.js'
 import { createNanoKite } from './lib/nano-kite.js'
 import { ensureLocalContainer, hostPort, stopLocalContainer } from './lib/container-engine.js'
@@ -912,7 +913,9 @@ export function apply(ctx, config) {
       handler: async (_req, res) => {
         try {
           const page = await hostSpan('dom', () => captureDom(origin()))
-          sendJson(res, 200, { ok: true, ...page })
+          // Build the iframe document on the host: the client bundle cannot
+          // import lib/, and the rebasing/picker injection belongs to one place.
+          sendJson(res, 200, { ok: true, ...page, srcdoc: buildSrcDoc(page) })
         } catch (error) {
           fail(res, error)
         }

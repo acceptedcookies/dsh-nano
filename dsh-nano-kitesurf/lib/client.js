@@ -1865,7 +1865,6 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
   var KITE = "/nano-kitesurf/kite";
   var KIND = "kitesurf";
   var OWN_ID = "nano-kitesurf";
-  var CAPTURE_HEIGHT = 800;
   var MAX_PINS = 8;
   var perfReview = ensurePerfReview2();
   perfReview.configure({ hostSnapshotUrl: "/nano-kitesurf/perf-review/host?mode=snapshot" });
@@ -2245,7 +2244,14 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       const rect = element.getBoundingClientRect();
       const width = Math.round(rect.width);
       if (width < 320) return null;
-      return { width, height: CAPTURE_HEIGHT };
+      const host = element.parentElement;
+      let chrome = 0;
+      for (const sel of ["[data-nks-hint]", "[data-nks-pins]", "[data-nks-inspector]"]) {
+        const node = host?.querySelector(sel);
+        if (node) chrome += node.getBoundingClientRect().height || 0;
+      }
+      const height = Math.max(240, Math.min(2160, Math.round(rect.height + chrome)));
+      return { width, height };
     }
     async function reloadShot(scroll, options = {}) {
       if (shotInFlightRef.current && options.fromResize) return;

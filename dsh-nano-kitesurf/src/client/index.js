@@ -455,13 +455,19 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
     if (!element) return null
     const rect = element.getBoundingClientRect()
     const width = Math.round(rect.width)
-    // Capture height is FIXED. Chrome (hint bar / inspector / pins) changes
-    // the frame's height by 10-40px on almost every action; if the capture
-    // followed it, the page would re-lay out at a new viewport and the whole
-    // picture would visually jump — that is the "抖动". A constant capture
-    // height keeps the page geometry identical across actions.
     if (width < 320) return null
-    return { width, height: CAPTURE_HEIGHT }
+    // Chrome (hint bar / pins strip / inspector) steals height from the frame
+    // when it appears. Add it BACK so the capture height is the same whether
+    // or not those bars are visible: full-bleed like a browser, yet stable
+    // enough that the page never re-lays out mid-interaction.
+    const host = element.parentElement
+    let chrome = 0
+    for (const sel of ['[data-nks-hint]', '[data-nks-pins]', '[data-nks-inspector]']) {
+      const node = host?.querySelector(sel)
+      if (node) chrome += node.getBoundingClientRect().height || 0
+    }
+    const height = Math.max(240, Math.min(2160, Math.round(rect.height + chrome)))
+    return { width, height }
   }
 
   async function reloadShot(scroll, options = {}) {

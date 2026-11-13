@@ -386,6 +386,17 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
   // suspend/resume (or an external restart) drops the engine page back to
   // about:blank. Without this the pane kept a screenshot of a page that no
   // longer exists. Clear it so the empty state tells the truth.
+  // Self-heal: if the pane mounted while the engine was still blank (common
+  // after a host restart, or when an agent opens a page behind the pane),
+  // keep trying until a frame exists instead of sitting on the empty state.
+  React.useEffect(() => {
+    if (shot) return undefined
+    const timer = window.setInterval(() => {
+      if (!busyRef.current) reloadShot(0, { keepPick: true }).catch(() => {})
+    }, 2000)
+    return () => clearInterval(timer)
+  }, [shot])
+
   React.useEffect(() => {
     if (!nativeHtml) return
     const frame = domFrameRef.current

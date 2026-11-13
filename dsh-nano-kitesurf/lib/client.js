@@ -2187,6 +2187,14 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       return () => window.removeEventListener("keydown", onKey);
     }, []);
     React5.useEffect(() => {
+      if (shot) return void 0;
+      const timer = window.setInterval(() => {
+        if (!busyRef.current) reloadShot(0, { keepPick: true }).catch(() => {
+        });
+      }, 2e3);
+      return () => clearInterval(timer);
+    }, [shot]);
+    React5.useEffect(() => {
       if (!nativeHtml) return;
       const frame2 = domFrameRef.current;
       if (frame2 && domDoc) {

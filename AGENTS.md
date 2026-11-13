@@ -20,6 +20,14 @@
 [dsh工作台] = dsh web/desktop 界面右侧的可开合工作区;
 
 ---
+# 当前注册的插件名称与缩写
+> 注意已经宣告暂停开发, 或者过期的插件, 被存放在 deprecated 文件夹内; 下面仅收录当前活跃开发中的插件;
+[DNEE] = dsh-nano-explorer-extra, 文件与git管理;
+[DNK] = dsh-nano-kitesurf, 仿 cursor 的 design mode;
+[DNMS] = dsh-nano-model-selector, 模型与请求管理器;
+[DNN] = dsh-nano-notepad, 或简称 notepad, 跨 workspace 草稿编辑器;
+
+---
 # 核心工作原则
 > 本仓库的执行原则, 任何工作必须通过核心原则的检测;
 **插件中立** = dsh-nano 的首要服务对象是官方的 DeepSeek Harness, 且是一个平台中立的插件. 因此不得与 dsh-mini 或者 self-host 的 nano-agent 在 dsh 容器内进行耦合; 

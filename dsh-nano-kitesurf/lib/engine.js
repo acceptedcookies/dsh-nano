@@ -87,7 +87,14 @@ export function scrollDelta(body) {
 
 /** Selector strings for pickBySelector — bounded, must look like a selector. */
 export function editBody(body) {
-  const selector = pickSelector(body)
+  let selector
+  try {
+    selector = pickSelector(body)
+  } catch (error) {
+    // /edit owns its own selector faults — surface them as edit.* ids, not
+    // pick.badpoint borrowed from the sibling route.
+    throw new KitesurfError('kitesurf.edit.selector', error instanceof Error ? error.message : String(error))
+  }
   const text = body?.text
   if (typeof text !== 'string' || !text.length) {
     throw new KitesurfError('kitesurf.edit.badtext', 'text required')
@@ -710,7 +717,9 @@ export async function pickBySelector(httpBase, selector) {
     // A syntax error in the selector is an input fault (400), a valid-but-
     // unmatched selector is a miss (404) — neither is an engine fault (502).
     if (evaluated.exceptionDetails) {
-      const text = String(evaluated.exceptionDetails.text || '')
+      // Engine may report just "Uncaught" in .text — the real SyntaxError
+      // description lives in .exception.description (Boa-in-WASM).
+      const text = `${evaluated.exceptionDetails.text || ''} ${evaluated.exceptionDetails.exception?.description || ''}`
       if (/SyntaxError|not a valid selector/i.test(text)) {
         throw new KitesurfError('kitesurf.pick.selector', 'invalid selector syntax')
       }
@@ -754,7 +763,7 @@ const EDIT_EXPRESSION = `(() => {
  */
 export async function editElement(httpBase, selector, text) {
   const clean = String(selector || '').slice(0, 320)
-  if (!clean) throw new KitesurfError('kitesurf.pick.badpoint', 'selector required')
+  if (!clean) throw new KitesurfError('kitesurf.edit.selector', 'selector required')
   const body = String(text ?? '').slice(0, 4000)
   return useLive(httpBase, async (client) => {
     const page = await pageHandle(client)

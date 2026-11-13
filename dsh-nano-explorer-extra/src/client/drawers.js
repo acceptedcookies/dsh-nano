@@ -6,7 +6,7 @@
  */
 
 import React from 'react'
-import { Button, FileTypeIcon, IconLoadingOutlineRegular, Input, classifyFileType } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, FileTypeIcon, IconLoadingOutlineRegular, Input } from '@deepseek-ai/dsh-client-ui-primitives'
 import { NanoDialog } from 'dsh-nano-ui'
 import { Dialog, usePanelConfinedLayer } from './dialogs.js'
 import { ageParts, partitionChanges, shortenPath, splitPath } from './format.js'
@@ -61,7 +61,9 @@ function ChangeRow({ file }) {
     React.createElement('span', { className: 'nxe-change-status', 'data-status': file.status }, file.status),
     // The row reads like the source-control row it mirrors: status letter, then the type glyph the
     // platform classifier picks for this filename — language, test file, lockfile, or generic.
-    React.createElement(FileTypeIcon, { kind: classifyFileType(name), size: 16, className: 'nxe-change-icon' }),
+    // `path:` — not `kind:` — so the primitives' filename map still fires (README.md → markdown,
+    // .gitignore → git) the same way the official file tree uses it.
+    React.createElement(FileTypeIcon, { path: name, size: 16, className: 'nxe-change-icon' }),
     React.createElement('span', { className: 'nxe-change-name' },
       name,
       dir === '' ? null : React.createElement('span', { className: 'nxe-change-dir' }, dir)))
@@ -795,7 +797,7 @@ export function CommitDrawer({ copy, open, git, onClose, onCommit, busy, error, 
         key: file.path, className: 'nxe-change', 'data-status': 'U',
       },
       React.createElement('span', { className: 'nxe-change-status', 'data-status': 'U' }, 'U'),
-      React.createElement(FileTypeIcon, { kind: classifyFileType(file.path), size: 16, className: 'nxe-change-icon' }),
+      React.createElement(FileTypeIcon, { path: file.path, size: 16, className: 'nxe-change-icon' }),
       React.createElement('button', {
         type: 'button', className: 'nxe-drawer-link', title: file.path,
         onClick: () => onOpenConflict(file.path),

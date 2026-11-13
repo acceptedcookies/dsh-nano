@@ -534,7 +534,9 @@ button.nxe-local-filter {
   font-weight: 700; text-align: center; font-variant-numeric: tabular-nums;
   color: var(--dsw-alias-label-secondary);
 }
-.nxe-change-icon { align-self: center; color: var(--dsw-alias-label-secondary); }
+/* Match the official file tree (.fileIcon sets no color): let the badge inherit the primary
+   label tone so single-tone marks like "MD" stay readable at 16px. */
+.nxe-change-icon { align-self: center; color: var(--dsw-alias-label-primary); }
 /* A folder catching a dragged row lights up like a drop target should: the hover fill plus a ring
    that reads as a boundary, not as selection. The container itself wears the same ring with a
    larger radius, so dropping onto empty space reads as the workspace root. */

@@ -26,6 +26,15 @@ async function main() {
   await page.waitForLoadState()
   await new Promise((r) => setTimeout(r, 2500))
 
+  // 0. Make the run self-contained: a previous run may have left the engine
+  // on about:blank (e.g. after suspend/resume), so open a page first.
+  await page.evaluate(() => fetch('/nano-kitesurf/open', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ url: 'https://example.com' }),
+  }))
+  await new Promise((r) => setTimeout(r, 2000))
+
   // 1. bundle freshness: the served module must carry a marker that only
   //    exists in the current source.
   const rev = await page.evaluate(() => {
@@ -145,7 +154,31 @@ async function main() {
   })
   record('computed-styles', Object.keys(styles.computed || {}).length > 10, `${Object.keys(styles.computed || {}).length} properties`)
 
-  // 9. host self-test
+  // 9. lifecycle: suspend -> resume -> page comes back
+  const lifecycle = await page.evaluate(async () => {
+    const post = (body) => fetch('/nano-kitesurf/kite', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then((r) => r.json())
+    const st = () => fetch('/nano-kitesurf/status').then((r) => r.json())
+    const before = await st()
+    const suspended = await post({ action: 'suspend' })
+    const mid = await st()
+    const resumed = await post({ action: 'resume' })
+    // resume rebuilds the container: the page is gone, so re-open before any
+    // later check that needs a document.
+    await fetch('/nano-kitesurf/open', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ url: 'https://example.com' }) })
+    await new Promise((r) => setTimeout(r, 3000))
+    const after = await st()
+    return {
+      beforePhase: before.kite?.phase,
+      suspendOk: suspended.ok === true,
+      midPhase: mid.kite?.phase,
+      resumeOk: resumed.ok === true,
+      afterPhase: after.kite?.phase,
+      alive: after.ok === true,
+    }
+  })
+  record('lifecycle', lifecycle.suspendOk && lifecycle.midPhase === 'suspended' && lifecycle.resumeOk && lifecycle.afterPhase === 'running' && lifecycle.alive, JSON.stringify(lifecycle))
+
+  // 10. host self-test
   const selftest = await page.evaluate(async () => {
     const r = await fetch('/nano-kitesurf/selftest')
     return r.json()

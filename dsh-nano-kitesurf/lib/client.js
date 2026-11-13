@@ -2188,6 +2188,10 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       return () => window.removeEventListener("keydown", onKey);
     }, []);
     React5.useEffect(() => {
+      if (nativeHtml && shot && !domDoc) loadDom().catch(() => {
+      });
+    }, [shot, nativeHtml]);
+    React5.useEffect(() => {
       if (shot) return void 0;
       const timer = window.setInterval(() => {
         if (!busyRef.current) reloadShot(0, { keepPick: true }).catch(() => {

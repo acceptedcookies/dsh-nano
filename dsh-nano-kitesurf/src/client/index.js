@@ -389,6 +389,12 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
   // Self-heal: if the pane mounted while the engine was still blank (common
   // after a host restart, or when an agent opens a page behind the pane),
   // keep trying until a frame exists instead of sitting on the empty state.
+  // If the pane started while the engine was blank it falls back to the
+  // screenshot; once a frame exists, upgrade to native HTML.
+  React.useEffect(() => {
+    if (nativeHtml && shot && !domDoc) loadDom().catch(() => {})
+  }, [shot, nativeHtml])
+
   React.useEffect(() => {
     if (shot) return undefined
     const timer = window.setInterval(() => {

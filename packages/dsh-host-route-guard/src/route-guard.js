@@ -159,6 +159,12 @@ export function createGuard({ table, plugin } = {}) {
   function registerRoutes(ctx, specs) {
     const conn = ctx.get('connection')
     if (!conn) throw new RouteGuardError('no-connection', 'no connection service')
+    // requestRejection is the auth boundary every route below depends on.
+    // Optional-chaining it would turn "the host changed shape" into a silent
+    // fail-open, so this contract is checked once at registration instead.
+    if (typeof conn.requestRejection !== 'function') {
+      throw new RouteGuardError('no-request-rejection', 'connection.requestRejection is not a function; refusing to register unauthenticated routes')
+    }
 
     const normalized = specs.map(normalizeSpec)
 

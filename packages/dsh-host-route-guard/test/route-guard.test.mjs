@@ -107,6 +107,15 @@ test('throws `no-connection` when ctx.get("connection") is absent', () => {
   assert.equal(ctx._registered.length, 0, 'nothing registered on fail-closed')
 })
 
+test('throws `no-request-rejection` instead of registering fail-open routes', () => {
+  const ctx = makeCtx({ connection: {} })
+  assert.throws(
+    () => registerRoutes(ctx, specs(), { table: TABLE }),
+    e => reason(e) === 'no-request-rejection',
+  )
+  assert.equal(ctx._registered.length, 0, 'nothing registered without an auth boundary')
+})
+
 /* ---------- table coverage ---------- */
 
 test('unlisted (path,method) throws `route-not-listed`', () => {

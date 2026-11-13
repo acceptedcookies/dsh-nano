@@ -29,6 +29,7 @@ guard.inventory()                            // → 台账行（喂 scripts/gen-
 ## 门禁语义（fail-closed）
 
 - `ctx.get('connection')` 为空 → 抛 `RouteGuardError`，`reason:'no-connection'`。
+- `conn.requestRejection` 不是函数 → 抛 `RouteGuardError`，`reason:'no-request-rejection'`（鉴权边界缺失时不注册任何路由，fail-fast 而非 fail-open）。
 - `(path, method)` 不在 table → `route-not-listed`；table 有而 spec 无 → `route-stale`。
 - spec 的 `sensitivity`/`capability`/`sessionBinding` 与 table 行冲突 → `route-drift`（table 为准）。
 - 方法不匹配 → 405 `{ok:false,reason:'method-not-allowed'}`；一切错误 JSON 形状 `{ok:false,reason}`。
@@ -54,6 +55,6 @@ npm pack --dry-run  # 应只含 src/ + AGENTS.md
 ## 不要
 
 - 不要在运行时 `fs` 读 `security/route-sensitivity.json`；table 是构建期烤进的常量。
-- 不要加业务逻辑；本包是 43 路由的唯一注册入口，必须极简可测。
+- 不要加业务逻辑；本包是全部活跃路由的唯一注册入口（活跃数见 security/route-sensitivity.json），必须极简可测。
 - 不要把 `sessionBinding` 当运行时鉴权；它只是台账元数据。
 - 不要为兼容关闭校验；没有 feature flag。

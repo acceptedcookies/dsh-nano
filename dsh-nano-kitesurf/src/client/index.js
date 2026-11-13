@@ -23,6 +23,7 @@ const CONTEXT = '/nano-kitesurf/context'
 const KITE = '/nano-kitesurf/kite'
 const KIND = 'kitesurf'
 const OWN_ID = 'nano-kitesurf'
+const CAPTURE_HEIGHT = 800
 const MAX_PINS = 8
 
 const perfReview = ensurePerfReview()
@@ -454,9 +455,13 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
     if (!element) return null
     const rect = element.getBoundingClientRect()
     const width = Math.round(rect.width)
-    const height = Math.round(rect.height)
-    if (width < 320 || height < 240) return null
-    return { width, height }
+    // Capture height is FIXED. Chrome (hint bar / inspector / pins) changes
+    // the frame's height by 10-40px on almost every action; if the capture
+    // followed it, the page would re-lay out at a new viewport and the whole
+    // picture would visually jump — that is the "抖动". A constant capture
+    // height keeps the page geometry identical across actions.
+    if (width < 320) return null
+    return { width, height: CAPTURE_HEIGHT }
   }
 
   async function reloadShot(scroll, options = {}) {

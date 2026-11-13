@@ -5,7 +5,7 @@
  * the computed styles that are actually set.
  */
 
-const STYLE_ORDER = ['color', 'backgroundColor', 'fontSize', 'fontFamily', 'display', 'position']
+const STYLE_ORDER = ['color', 'backgroundColor', 'fontSize', 'fontFamily', 'fontWeight', 'lineHeight', 'display', 'position', 'width', 'height', 'margin', 'padding']
 const NOTE_BUDGET = 1100
 const TEXT_BUDGET = 80
 

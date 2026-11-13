@@ -1794,7 +1794,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
   var STYLE_ORDER, NOTE_BUDGET, TEXT_BUDGET;
   var init_note = __esm({
     "src/shared/note.js"() {
-      STYLE_ORDER = ["color", "backgroundColor", "fontSize", "fontFamily", "display", "position"];
+      STYLE_ORDER = ["color", "backgroundColor", "fontSize", "fontFamily", "fontWeight", "lineHeight", "display", "position", "width", "height", "margin", "padding"];
       NOTE_BUDGET = 1100;
       TEXT_BUDGET = 80;
     }
@@ -1865,6 +1865,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
   var KITE = "/nano-kitesurf/kite";
   var KIND = "kitesurf";
   var OWN_ID = "nano-kitesurf";
+  var CAPTURE_HEIGHT = 800;
   var MAX_PINS = 8;
   var perfReview = ensurePerfReview2();
   perfReview.configure({ hostSnapshotUrl: "/nano-kitesurf/perf-review/host?mode=snapshot" });
@@ -2243,9 +2244,8 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       if (!element) return null;
       const rect = element.getBoundingClientRect();
       const width = Math.round(rect.width);
-      const height = Math.round(rect.height);
-      if (width < 320 || height < 240) return null;
-      return { width, height };
+      if (width < 320) return null;
+      return { width, height: CAPTURE_HEIGHT };
     }
     async function reloadShot(scroll, options = {}) {
       if (shotInFlightRef.current && options.fromResize) return;

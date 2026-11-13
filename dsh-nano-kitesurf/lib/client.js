@@ -2398,6 +2398,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
     }
     function onPointerDown(event) {
       if (!annotate || event.button !== 0) return;
+      if (event.target && event.target.tagName === "IFRAME") return;
       const point = framePoint(event);
       if (!point) return;
       event.currentTarget.setPointerCapture?.(event.pointerId);
@@ -2913,14 +2914,21 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         }
       }, true);
       doc.addEventListener("click", (e) => {
+        const dbg = doc.defaultView.__nks = doc.defaultView.__nks || { fired: 0 };
+        dbg.fired += 1;
+        dbg.mode = annotateRef.current;
         if (!annotateRef.current) return;
         e.preventDefault();
         e.stopPropagation();
         const el = doc.elementFromPoint(e.clientX, e.clientY);
+        dbg.hit = el ? el.tagName : null;
+        dbg.coords = [Math.round(e.clientX), Math.round(e.clientY)];
         if (!el) return;
         clearHover();
         const packet = packetFromDom(el, doc, e.clientX, e.clientY);
+        dbg.packet = !!packet;
         setPick({ elements: [packet], anchor: { x: packet.box.x + packet.box.width / 2, y: packet.box.y + packet.box.height } });
+        dbg.picked = true;
         setEditing(false);
       }, true);
       doc.addEventListener("mouseleave", clearHover, true);

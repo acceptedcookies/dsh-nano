@@ -608,6 +608,10 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
 
   function onPointerDown(event) {
     if (!annotate || event.button !== 0) return
+    // Native-HTML mode: the iframe document owns its own pointer events. The
+    // setPointerCapture() below would retarget every later event to this
+    // element and the iframe would never see a single click.
+    if (event.target && event.target.tagName === 'IFRAME') return
     const point = framePoint(event)
     if (!point) return
     event.currentTarget.setPointerCapture?.(event.pointerId)
@@ -1166,13 +1170,20 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
       if (el) { el.classList.add('__nks_hover'); hovered = el }
     }, true)
     doc.addEventListener('click', (e) => {
+      const dbg = (doc.defaultView.__nks = doc.defaultView.__nks || { fired: 0 })
+      dbg.fired += 1
+      dbg.mode = annotateRef.current
       if (!annotateRef.current) return
       e.preventDefault(); e.stopPropagation()
       const el = doc.elementFromPoint(e.clientX, e.clientY)
+      dbg.hit = el ? el.tagName : null
+      dbg.coords = [Math.round(e.clientX), Math.round(e.clientY)]
       if (!el) return
       clearHover()
       const packet = packetFromDom(el, doc, e.clientX, e.clientY)
+      dbg.packet = !!packet
       setPick({ elements: [packet], anchor: { x: packet.box.x + packet.box.width / 2, y: packet.box.y + packet.box.height } })
+      dbg.picked = true
       setEditing(false)
     }, true)
     doc.addEventListener('mouseleave', clearHover, true)

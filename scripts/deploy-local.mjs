@@ -189,8 +189,9 @@ for (const { name } of plugins) {
 }
 
 // ---- verify ---------------------------------------------------------------------
+// In --dry-run nothing was copied, so deployed files cannot be checked.
 const problems = []
-for (const { name, files } of plugins) {
+for (const { name, files } of dryRun ? [] : plugins) {
   const dst = join(dshHome, 'plugins', name)
   for (const entry of files) {
     if (!existsSync(join(dst, entry))) problems.push(`${name}: deployed file missing: ${entry}`)

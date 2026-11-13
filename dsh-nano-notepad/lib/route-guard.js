@@ -79,6 +79,9 @@ function createGuard({ table, plugin } = {}) {
   function registerRoutes2(ctx, specs) {
     const conn = ctx.get("connection");
     if (!conn) throw new RouteGuardError("no-connection", "no connection service");
+    if (typeof conn.requestRejection !== "function") {
+      throw new RouteGuardError("no-request-rejection", "connection.requestRejection is not a function; refusing to register unauthenticated routes");
+    }
     const normalized = specs.map(normalizeSpec);
     const wanted = /* @__PURE__ */ new Map();
     for (const spec of normalized) {

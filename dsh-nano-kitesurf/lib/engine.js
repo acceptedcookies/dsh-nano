@@ -414,7 +414,8 @@ const STACK_SNIPPET = `(() => {
     if (!t) return null;
     if (typeof t === 'function' || typeof t === 'object') {
       const n = t.displayName || t.name || (t.render && t.render.name) || (t.type && t.type.name) || '';
-      return n && !/^[a-z]+$/.test(n) ? n : null;
+      // Skip junk: lowercase DOM names, single chars, or the minifier's '$'.
+      return n && n.length > 1 && n !== '$' && !/^[a-z]+$/.test(n) ? n : null;
     }
     return null;
   };

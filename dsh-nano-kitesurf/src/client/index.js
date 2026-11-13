@@ -222,6 +222,9 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
         const shotPayload = await post(SHOT, {})
         setShot(shotPayload.data)
         setShotMeta({ url: shotPayload.url || '', scrollY: shotPayload.scrollY || 0, targetId: shotPayload.targetId || '', at: Date.now() })
+        // pageUrl mirrors whatever the engine reports — pages opened behind
+        // the pane (agent /open) still name the right url in notes.
+        if (shotPayload.url) setPageUrl(shotPayload.url)
       } catch { /* engine up but page not shootable yet — fine */ }
     })
   }, [])
@@ -342,6 +345,7 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
     const shotPayload = await post(SHOT, scroll ? { scroll } : {})
     setShot(shotPayload.data)
     setShotMeta({ url: shotPayload.url || '', scrollY: shotPayload.scrollY || 0, targetId: shotPayload.targetId || '', at: Date.now() })
+    if (shotPayload.url) setPageUrl(shotPayload.url)
     setPick(null)
   }
 

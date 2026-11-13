@@ -1963,6 +1963,7 @@ ${item}`).join("\n");
           const shotPayload = await post(SHOT, {});
           setShot(shotPayload.data);
           setShotMeta({ url: shotPayload.url || "", scrollY: shotPayload.scrollY || 0, targetId: shotPayload.targetId || "", at: Date.now() });
+          if (shotPayload.url) setPageUrl(shotPayload.url);
         } catch {
         }
       });
@@ -2078,6 +2079,7 @@ ${item}`).join("\n");
       const shotPayload = await post(SHOT, scroll ? { scroll } : {});
       setShot(shotPayload.data);
       setShotMeta({ url: shotPayload.url || "", scrollY: shotPayload.scrollY || 0, targetId: shotPayload.targetId || "", at: Date.now() });
+      if (shotPayload.url) setPageUrl(shotPayload.url);
       setPick(null);
     }
     async function onSubmitAddress(event) {

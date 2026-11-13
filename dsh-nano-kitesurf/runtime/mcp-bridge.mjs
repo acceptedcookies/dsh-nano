@@ -205,6 +205,11 @@ const KITESURF_TOOLS = [
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
+    name: 'kitesurf_elements',
+    description: 'Elements panel data from the Kitesurf DOM/CSS domains: the last DOM tree (up to 40 nodes with tag/id/class/child count), the selector queried, and how many computed properties were returned. Call GET /nano-kitesurf/elements?selector=… on the host for styles of a specific node.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
     name: 'kitesurf_selftest',
     description: 'One verdict over every layer: plugin build, engine identity, container state, published port loopback, MCP bridge counters, CDP targets, DOM availability, route table and phase consistency. Use after any restart or container change.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
@@ -281,6 +286,11 @@ function answerNativeTool(name, args, bridgeState) {
     return { ok: true, entries: filter ? all.filter((r) => r.errorId.includes(filter)) : all, total: all.length }
   }
   if (name === 'kitesurf_targets') return { ok: true, ...(snap.engine?.targets || { count: 0, targets: [] }), targetsError: snap.engine?.targetsError || null }
+  if (name === 'kitesurf_elements') {
+    const el = snap.elements || null
+    if (!el) return { ok: false, errorId: 'kitesurf.elements.stale', error: 'no elements snapshot yet', hint: 'run GET /nano-kitesurf/elements on the host, then retry' }
+    return { ok: true, ...el }
+  }
   if (name === 'kitesurf_selftest') {
     const st = snap.selftest || null
     if (!st) return { ok: false, errorId: 'kitesurf.selftest.stale', error: 'no self-test has run yet', hint: 'run GET /nano-kitesurf/selftest on the authenticated host, then retry' }

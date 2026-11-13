@@ -462,6 +462,7 @@ export function apply(ctx, config) {
    * (or an agent over MCP) never has to run `container` by hand.
    */
   let lastSelfTest = null
+  let lastElements = null
   async function runSelfTest() {
     const started = Date.now()
     const checks = []
@@ -536,6 +537,7 @@ export function apply(ctx, config) {
       settings: currentEmulation(),
       ports: await portReport().catch(() => null),
       selftest: lastSelfTest,
+      elements: lastElements,
       observability: summary,
       console: listConsole({ limit }),
       network: listNetwork({ limit }),
@@ -938,6 +940,7 @@ export function apply(ctx, config) {
             engineAlive: after.ok === true,
             ports: await portReport().catch(() => null),
       selftest: lastSelfTest,
+      elements: lastElements,
           })
         } catch (error) {
           fail(res, error)
@@ -973,6 +976,15 @@ export function apply(ctx, config) {
             depth: Number(q.get('depth') || 4),
             selector: q.get('selector') || '',
           }))
+          // Keep a trimmed copy for the MCP snapshot (a full tree is too heavy
+          // for the 30s push).
+          lastElements = {
+            at: new Date().toISOString(),
+            count: data.count,
+            selector: data.selector,
+            computedCount: Object.keys(data.computed || {}).length,
+            nodes: data.nodes.slice(0, 40),
+          }
           sendJson(res, 200, { ok: true, ...data })
         } catch (error) {
           fail(res, error)

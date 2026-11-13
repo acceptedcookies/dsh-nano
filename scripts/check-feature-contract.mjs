@@ -14,7 +14,7 @@ import { scanRoutes, ROOT } from './route-scan.mjs'
 const CONTRACT = join(ROOT, 'security', 'feature-contract.json')
 // DEPRECATED 2026-11-12: dsh-nano-shared-workspace retired to deprecated/,
 // excluded from the release/contract surface. See deprecated/README.md.
-const PLUGINS = ['dsh-nano-notepad', 'dsh-nano-explorer-extra', 'dsh-nano-model-selector']
+const PLUGINS = ['dsh-nano-notepad', 'dsh-nano-explorer-extra', 'dsh-nano-model-selector', 'dsh-nano-kitesurf']
 
 const sorted = a => [...a].sort().join(',')
 

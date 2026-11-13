@@ -168,8 +168,54 @@ function scanModelSelector() {
   return rows
 }
 
+/* ------------------------------------------------------------------ *
+ * dsh-nano-kitesurf — index.js                                       *
+ * Path constants + a registerRoutes(ctx, [ ... ]) spec array. Methods   *
+ * and bodyLimit are read from the specs themselves — never hand-listed *
+ * here, so adding a method to a spec can't drift past the gate.        *
+ * ------------------------------------------------------------------ */
+function scanKitesurf() {
+  const file = 'dsh-nano-kitesurf/index.js'
+  const text = src(file)
+  const consts = {}
+  for (const match of text.matchAll(/^const ([A-Z0-9_]+) = '([^']+)'/gm)) {
+    consts[match[1]] = match[2]
+  }
+  const rows = []
+  // Each route spec declares `path: X_ROUTE,` then `methods: [...]` (or the
+  // singular `method: 'M'` the guard also accepts). bodyLimit is read only
+  // within the spec head — before its `handler:` — so a missing cap can't
+  // pick up the next spec's number.
+  for (const match of text.matchAll(/path: ([A-Z0-9_]+|'[^']+'),\s*\n?\s*(?:methods: \[([^\]]*)\]|method: '([A-Z]+)')/g)) {
+    const name = match[1].startsWith("'") ? null : match[1]
+    const path = name ? consts[name] : match[1].slice(1, -1)
+    const methodBlock = match[2] ?? `'${match[3]}'`
+    const methods = [...methodBlock.matchAll(/'(GET|HEAD|POST|PUT|DELETE|PATCH)'/g)].map((m) => m[1])
+    if (!path || methods.length === 0) continue
+    const specHead = text.slice(match.index, match.index + 600)
+    const handlerAt = specHead.search(/handler[:(]/)
+    const capMatch = (handlerAt > 0 ? specHead.slice(0, handlerAt) : specHead).match(/bodyLimit: (\d+)/)
+    const cap = capMatch ? Number(capMatch[1]) : 0
+    rows.push({
+      plugin: 'dsh-nano-kitesurf',
+      path,
+      methods,
+      bodyLimit: Object.fromEntries(methods.map((method) => [method, method === 'POST' ? cap : 0])),
+      source: { file, line: lineOf(text, `const ${name || 'ROUTE'}`) },
+    })
+  }
+  // The plugin registers exactly the 8 constants below; anything else means
+  // the parser silently missed (or over-matched) a spec — fail the scan
+  // loudly instead of letting the ledger drift.
+  const expected = ['STATUS_ROUTE', 'LAST_ROUTE', 'OPEN_ROUTE', 'SHOT_ROUTE', 'PICK_ROUTE', 'SETTINGS_ROUTE', 'PERF_ROUTE', 'KITE_ROUTE']
+  if (rows.length !== expected.length || expected.some((name) => !consts[name] || !rows.some((row) => row.path === consts[name]))) {
+    throw new Error(`route-scan: expected 8 kitesurf route specs, parsed ${rows.length} — parser/spec drift`)
+  }
+  return rows
+}
+
 /**
- * Enumerate every registered route across the ACTIVE plugins (three).
+ * Enumerate every registered route across the ACTIVE plugins.
  * dsh-nano-shared-workspace is deprecated and intentionally excluded.
  * @returns rows: { plugin, path, methods[], bodyLimit{METHOD:bytes}, source{file,line} }
  */
@@ -178,6 +224,7 @@ export function scanRoutes() {
     ...scanNanoNotepad(),
     ...scanExplorerExtra(),
     ...scanModelSelector(),
+    ...scanKitesurf(),
   ]
 }
 

@@ -117,6 +117,7 @@ dsh plugin --profile web add <spec>
     httpBase: http://127.0.0.1:8787
     allowRemote: false
     checkout: /path/to/kitesurf   # 可选，同 KITESURF_CHECKOUT 语义
+    perfReview: true              # 可选：perf-span 采集开启（等价 DSH_PERF_REVIEW=1，仅本插件进程）
 ```
 
 `allowRemote: false` 时 `httpBase` 必须是 loopback，`configure` 远程地址同样被拒（`kitesurf.kite.remote`）。本机 `start`/`resume` 需要一份已构建的 Kitesurf 源码目录：`KITESURF_CHECKOUT` 环境变量，或 profile 的 `config.checkout`；缺失是 `kitesurf.kite.checkout`（400，配置问题，不是引擎故障）。点选结果只在宿主进程内存里，重启即丢。卸载不需要清浏览器存储，因为没有。

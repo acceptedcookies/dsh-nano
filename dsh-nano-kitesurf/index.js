@@ -58,7 +58,8 @@ export const Config = {
         return { issues: [{ message: 'httpBase must be loopback unless allowRemote is true' }] }
       }
       const checkout = typeof source.checkout === 'string' && source.checkout ? source.checkout : undefined
-      return { value: { httpBase: url.origin, allowRemote, checkout } }
+      const perfReview = source.perfReview === true
+      return { value: { httpBase: url.origin, allowRemote, checkout, perfReview } }
     },
   },
 }
@@ -195,6 +196,9 @@ async function statusOf(httpBase) {
 
 /** @param {import('@deepseek-ai/cordis').Context} ctx */
 export function apply(ctx, config) {
+  // perf-review capture is a documented plugin-side switch: perf spans feed
+  // /nano-kitesurf/perf-review/host and the host's own perf-review UI.
+  if (config?.perfReview === true) process.env.DSH_PERF_REVIEW = '1'
   const httpBase = config?.httpBase ?? DEFAULT_ORIGIN
   const kite = createNanoKite({
     httpBase,
@@ -211,10 +215,10 @@ export function apply(ctx, config) {
     // polling). Split the observables: `kite.container` covers the CLI call
     // (cold image pull vs warm re-adopt), `kite.warmup` the health poll —
     // so perf review distinguishes a slow boot from a slow spawn.
-    await hostSpan('kite.bringUp', async () => {
-      const ensured = await hostSpan('kite.container',
+    await hostSpan('kite-bringup', async () => {
+      const ensured = await hostSpan('kite-container',
         () => ensureLocalContainer(kite.snapshot(), { checkout: config?.checkout }))
-      await hostSpan('kite.warmup', async () => {
+      await hostSpan('kite-warmup', async () => {
         for (let attempt = 0; attempt < 20; attempt += 1) {
           try {
             const health = await fetchEngine(kite.snapshot().httpBase, '/health')

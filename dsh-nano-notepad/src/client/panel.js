@@ -1148,6 +1148,39 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     return { mode: 'one', id: choice }
   }
 
+  /** Per-workspace last-opened file, persisted on `state.ui.lastFile`. The key
+     is the node workspace id (`'unassigned'` for null), or 'all' for the
+     cross-workspace view. workspaceChoice 'current' resolves to the catalog's
+     live workspace so the map always keys concrete workspaces. */
+  function workspaceFileKey() {
+    const choice = state.ui.workspaceChoice ?? 'all'
+    if (choice === 'all') return 'all'
+    if (choice === 'current') return workspaceCatalog().currentId ?? 'unassigned'
+    if (choice === 'unassigned') return 'unassigned'
+    return choice
+  }
+  function lastFileMap() {
+    if (typeof state.ui.lastFile !== 'object' || state.ui.lastFile === null) state.ui.lastFile = {}
+    return state.ui.lastFile
+  }
+  /** Record the file just opened under its own workspace. */
+  function rememberFile(node) {
+    if (node?.kind === 'file') lastFileMap()[node.workspaceId ?? 'unassigned'] = node.id
+  }
+  /** Point `currentId` at the active workspace's remembered file — not the
+     global last-opened file. fallback=true keeps an already-valid current. */
+  function restoreWorkspaceFile({ fallback = true } = {}) {
+    const key = workspaceFileKey()
+    const wanted = state.ui.lastFile?.[key] ?? (key === 'all' ? undefined : state.ui.lastFile?.all)
+    const hit = state.nodes.find(node => node.id === wanted && node.kind === 'file' && (key === 'all' || (node.workspaceId ?? 'unassigned') === key))
+    if (hit) { state.ui.currentId = hit.id; return }
+    if (fallback && state.ui.currentId) {
+      const current = state.nodes.find(node => node.id === state.ui.currentId && node.kind === 'file')
+      if (current && (key === 'all' || (current.workspaceId ?? 'unassigned') === key)) return
+    }
+    state.ui.currentId = null
+  }
+
   function workspaceTitle(id) {
     const copy = text()
     if (!id) return copy.unassigned
@@ -1645,6 +1678,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     if (state.settings.followSessionWorkspace === false) return
     const catalog = workspaceCatalog()
     state.ui.workspaceChoice = catalog.currentId ?? 'unassigned'
+    restoreWorkspaceFile({ fallback: false })
   }
 
   function paintWorkspaceChoices() {
@@ -1748,6 +1782,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     flushSave()
     if (!state.ui.tabs.includes(id)) state.ui.tabs.push(id)
     state.ui.currentId = id
+    rememberFile(state.nodes.find(node => node.id === id))
     state.ui.open = true
     render()
     void persistUi()
@@ -1865,7 +1900,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       run: () => {
         flushSave()
         state.ui.workspaceChoice = value
-        state.ui.currentId = null
+        restoreWorkspaceFile({ fallback: false })
         render()
         void persistUi()
         // NanoMenu unmounts itself before run(); release our bookkeeping too.
@@ -2011,6 +2046,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     state.nodes = state.nodes.filter(node => !removed.has(node.id))
     for (const gone of removed) state.collapsed.delete(gone)
     state.ui.tabs = state.ui.tabs.filter(tab => !removed.has(tab))
+    for (const key of Object.keys(lastFileMap())) if (removed.has(state.ui.lastFile[key])) delete state.ui.lastFile[key]
     if (state.ui.currentId && removed.has(state.ui.currentId)) state.ui.currentId = state.ui.tabs.at(-1) ?? null
     render()
     void persistUi()
@@ -2964,7 +3000,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     if (target.dataset.ws !== undefined) {
       flushSave()
       state.ui.workspaceChoice = target.dataset.ws === '' ? 'unassigned' : target.dataset.ws
-      state.ui.currentId = null
+      restoreWorkspaceFile({ fallback: false })
       render()
       void persistUi()
       return
@@ -3475,6 +3511,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     if (!response.ok || out.ok !== true) throw new Error(out.message || 'read failed')
     const workspaceId = workspaceCatalog().currentId
     state.ui.workspaceChoice = workspaceId ?? 'unassigned'
+    restoreWorkspaceFile()
     state.ui.open = true
     await window.__nanoNotepad.import(out.name, out.content, { sourcePath: path })
     button.textContent = text().copiedToNotepad
@@ -3564,6 +3601,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     state.nodes = snapshot.nodes
     state.settings = { ...defaults, ...snapshot.settings }
     state.ui = { ...state.ui, ...snapshot.ui, tabs: snapshot.ui.tabs ?? [] }
+    if (typeof state.ui.lastFile !== 'object' || state.ui.lastFile === null) state.ui.lastFile = {}
     state.settings = normalizeSettings(state.settings)
     state.view = state.settings.defaultView
     if (!state.nodes.some(node => node.kind === 'file')) {

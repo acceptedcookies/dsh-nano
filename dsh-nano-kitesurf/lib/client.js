@@ -3144,16 +3144,21 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           className: "nks-tool",
           "data-nks-annotate": "1",
           "aria-pressed": annotate ? "true" : "false",
+          style: { position: "relative", zIndex: 5 },
           "aria-label": copy.annotate,
           title: copy.annotateTitle,
-          onClick: () => setAnnotate((value) => {
-            if (value) {
-              setHover(null);
-              setDraftBox(null);
-              setDrag(null);
-            }
-            return !value;
-          })
+          onPointerDown: (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            setAnnotate((value) => {
+              if (value) {
+                setHover(null);
+                setDraftBox(null);
+                setDrag(null);
+              }
+              return !value;
+            });
+          }
         }, glyph("annotate")),
         h("button", { type: "button", className: "nks-tool", "data-nks-settings": "1", "aria-label": copy.settings, title: copy.settings, onClick: openSettings }, glyph("settings"))
       ),

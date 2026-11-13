@@ -1363,14 +1363,16 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
         className: 'nks-tool',
         'data-nks-annotate': '1',
         'aria-pressed': annotate ? 'true' : 'false',
+        style: { position: 'relative', zIndex: 5 },
         'aria-label': copy.annotate,
         title: copy.annotateTitle,
-        onClick: () => setAnnotate((value) => {
-          // Leaving annotate must clear the transient hover/drag overlays:
-          // a leftover dashed box looked like "the whole page is selected".
-          if (value) { setHover(null); setDraftBox(null); setDrag(null) }
-          return !value
-        }),
+        onPointerDown: (event) => {
+          event.preventDefault(); event.stopPropagation()
+          setAnnotate((value) => {
+            if (value) { setHover(null); setDraftBox(null); setDrag(null) }
+            return !value
+          })
+        },
       }, glyph('annotate')),
       h('button', { type: 'button', className: 'nks-tool', 'data-nks-settings': '1', 'aria-label': copy.settings, title: copy.settings, onClick: openSettings }, glyph('settings'))),
     h('div', { className: 'nks-status', 'data-nks-status': '1' },

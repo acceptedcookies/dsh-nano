@@ -1936,6 +1936,11 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
 .nks-busy::before{content:"";display:block;width:35%;height:100%;background:var(--dsw-alias-link,#2f6fed);animation:nks-beat 1s ease-in-out infinite}
 @keyframes nks-beat{from{transform:translateX(-120%)}to{transform:translateX(320%)}}
 .nks-settings-body{display:flex;flex-direction:column;gap:8px}
+.nks-status{flex:none;display:flex;align-items:center;gap:8px;height:26px;padding:0 8px;border-top:.5px solid var(--dsw-alias-border-l3);font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-tertiary)}
+.nks-status button{height:20px;padding:0 8px;border:0;border-radius:var(--dsw-radius-sm);background:transparent;color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxxs-11);cursor:pointer}
+.nks-status button:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.nks-status button[aria-pressed="true"]{background:color-mix(in srgb,var(--dsw-alias-link,#7aaaff) 22%,transparent);color:var(--dsw-alias-label-primary)}
+.nks-status .nks-count[data-bad="true"]{color:var(--dsw-alias-fill-error,#d5455c)}
 .nks-dt{flex:none;height:240px;display:flex;flex-direction:column;border-top:.5px solid var(--dsw-alias-border-l3);background:var(--dsw-alias-bg-layer-1);min-height:0}
 .nks-dt-head{flex:none;display:flex;align-items:center;gap:6px;height:30px;padding:0 8px;border-bottom:.5px solid var(--dsw-alias-border-l3)}
 .nks-dt-tab{height:22px;padding:0 8px;border:0;background:transparent;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11);border-radius:var(--dsw-radius-sm);cursor:pointer}
@@ -2973,9 +2978,17 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
             return !value;
           })
         }, glyph("annotate")),
-        h("button", { type: "button", className: "nks-tool", "data-nks-devtools-toggle": "1", "aria-pressed": devtoolsOpen ? "true" : "false", title: copy.devtools, "aria-label": copy.devtools, onClick: () => setDevtoolsOpen((v) => !v) }, glyph("history")),
         h("button", { type: "button", className: "nks-tool", "data-nks-settings": "1", "aria-label": copy.settings, title: copy.settings, onClick: openSettings }, glyph("settings"))
       ),
+      h(
+        "div",
+        { className: "nks-status", "data-nks-status": "1" },
+        h("button", { type: "button", "data-nks-devtools-toggle": "1", "aria-pressed": devtoolsOpen ? "true" : "false", onClick: () => setDevtoolsOpen((v) => !v) }, copy.devtools),
+        h("span", { "data-nks-count-console": "1" }, "console"),
+        h("span", { style: { flex: "auto" } }),
+        status?.buildId ? h("span", { style: { opacity: 0.6 } }, String(status.buildId).slice(0, 18)) : null
+      ),
+      h(DevTools, { open: devtoolsOpen, onClose: () => setDevtoolsOpen(false) }),
       pins.length ? h(
         "div",
         { className: "nks-pins", "data-nks-pins": String(pins.length), "aria-live": "polite" },

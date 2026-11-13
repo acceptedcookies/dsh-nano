@@ -247,10 +247,15 @@ function traced(spec) {
       try {
         await original(req, res, route)
       } finally {
+        // The pane polls perf-review ~1/s; recording it would push every real
+        // failure out of the 200-row ring within minutes. Skip it entirely —
+        // but never `return` from finally (that would swallow a throw).
+        const skip = spec.path === PERF_ROUTE
         const status = res.statusCode || 0
         const ok = payload ? payload.ok !== false && status < 400 : status < 400
-        try {
-          recordOperation({
+        if (!skip) {
+          try {
+            recordOperation({
             route: spec.path,
             method: req.method || 'GET',
             status,
@@ -260,9 +265,10 @@ function traced(spec) {
             error: payload?.error || null,
             incidentId: payload?.incidentId || null,
             input: summarizeInput(req.__dnkBody),
-            result: payload?.moved === false ? 'no-op' : (payload?.mimeType ? 'png' : null),
-          })
-        } catch { /* diagnostics must never break a route */ }
+              result: payload?.moved === false ? 'no-op' : (payload?.mimeType ? 'png' : null),
+            })
+          } catch { /* diagnostics must never break a route */ }
+        }
         // Push a fresh snapshot to the MCP bridge, immediately on failure and
         // debounced otherwise. An agent using only MCP sees the same state.
         try { diagnosticsPusher?.(!ok) } catch { /* best effort */ }
@@ -310,6 +316,10 @@ async function statusOf(httpBase) {
       lastError,
     }
   } catch (error) {
+    // First-render honesty: a failed probe IS the current error, so record it.
+    // Without this the pane showed "engine not answering" with no errorId until
+    // the human pressed Retry.
+    lastError = { at: new Date().toISOString(), incidentId: randomUUID(), errorId: errorIdOf(error), error: messageOf(error).slice(0, 240) }
     return { ok: false, httpBase, cdp: socket, errorId: errorIdOf(error), error: messageOf(error), userAgent: currentUserAgent(), viewport: currentViewport(), emulation: currentEmulation(), lastError, version: pluginVersion() ?? null, buildId, storePath }
   }
 }

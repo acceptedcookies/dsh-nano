@@ -193,7 +193,7 @@ GET  /nano-kitesurf/console?level=log
 
 **React \`componentStack=null\`**：表示页面没有可解析的 React fiber（非 React 框架、生产压缩名、或 fiber 键不可见）。这时不要从 selector 猜组件文件；改用 \`parentSel\`/\`childSel\` 描述 DOM 位置，或请人在源码里确认。
 
-**perf span 名**（\`GET /perf-review/host\`）：\`pick\`、\`shot\`、\`open\`、\`edit\`、\`settings\`、\`navigate\`、\`targets\`、\`evaluate\`、\`kite-bringup\`、\`kite-container\`、\`kite-warmup\`。点号名（旧 \`kite.bringUp\`）会被 \`NAME_RE\` 丢弃；\`kite-container\` 有样本而 \`kite-warmup\` 没有，说明容器 CLI 阶段就失败。热启动实测约 0.25s，冷建容器约 100s。
+**perf span 名**（\`GET /perf-review/host\`）：\`pick\`、\`shot\`、\`open\`、\`edit\`、\`settings\`、\`navigate\`、\`targets\`、\`evaluate\`、\`kite-bringup\`、\`kite-container\`、\`kite-warmup\`。点号名（旧 \`kite.bringUp\`）会被 \`NAME_RE\` 丢弃；\`kite-container\` 有样本而 \`kite-warmup\` 没有，说明容器 CLI 阶段就失败。热启动（容器已在、只做 health 探测）约 0.25s；suspend→resume 的完整 stop/start 生命周期实测约 3s（container CLI ≈1s + warmup ≈2s）；冷建容器约 100s。
 
 **GUI 部署链（改了代码不生效时按此顺序）**：\`npm run build\`（生成 \`lib/route-table.js\`、\`lib/client.js\`、\`skills/*/SKILL.md\`）→ 同步到 profile 的插件目录（\`~/.dsh-dev/plugins/dsh-nano-kitesurf\`）→ \`pnpm install --force\` 重链虚拟 store → 重启宿主（\`launchctl kickstart -k gui/$(id -u)/ai.deepseek.dsh.dev.web\`）→ **强制刷新页面**重新取鉴权。顺序错一步会出现 \`route-not-listed\` 并让整块插件全部路由 502；用 \`/status\` 的 \`buildId\` 对照作者树确认版本。技能正文由 \`lib/skill.js\` 生成，\`npm test\` 会校验 \`skills/<name>/SKILL.md\` == frontmatter + \`SKILL_BODIES[name]\`（逐字符），杜绝真源与生成物漂移。
 

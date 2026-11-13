@@ -327,6 +327,14 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
 
   // An agent can /open a page behind the pane. Re-shoot on focus so the
   // human is never staring at a stale frame with a disabled refresh button.
+  // suspend/resume (or an external restart) drops the engine page back to
+  // about:blank. Without this the pane kept a screenshot of a page that no
+  // longer exists. Clear it so the empty state tells the truth.
+  React.useEffect(() => {
+    const phase = status?.kite?.phase
+    if (phase && phase !== 'running' && shot) { setShot(null); setPick(null); setPins([]); setShotMeta(null) }
+  }, [status?.kite?.phase])
+
   React.useEffect(() => {
     const onFocus = () => { if (!busyRef.current) reloadShot().catch(() => {}) }
     window.addEventListener('focus', onFocus)
@@ -925,8 +933,8 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
           h('button', { type: 'button', className: 'nks-start-btn', 'data-nks-diagnose': '1', onClick: () => run(() => refreshStatus()) }, copy.retry)) : null,
         !busy && status?.ok !== false && !status?.engineMismatch ? h('div', { className: 'nks-empty-actions' },
           h('button', { type: 'button', className: 'nks-empty-link', 'data-nks-try': '1', onClick: () => { setDraftUrl('https://example.com'); run(() => navigate('https://example.com')) } }, copy.emptyTry)) : null,
-        status?.ok === false && status?.lastError ? h('div', { className: 'nks-empty-meta' }, `${status.lastError.errorId} · ${status?.httpBase || ''}`) : null,
-        status?.ok === false && status?.lastError ? h('div', { className: 'nks-empty-meta' }, status.lastError.error) : null),
+        status?.ok === false ? h('div', { className: 'nks-empty-meta' }, `${status?.lastError?.errorId || status?.errorId || 'kitesurf.engine.failed'} · ${status?.httpBase || ''}`) : null,
+        status?.ok === false ? h('div', { className: 'nks-empty-meta' }, status?.lastError?.error || status?.error || '') : null),
       overlays.map((box, index) => h('div', {
         key: index,
         className: 'nks-box',

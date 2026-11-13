@@ -2078,6 +2078,15 @@ ${item}`).join("\n");
       return () => window.removeEventListener("keydown", onKey);
     }, []);
     React5.useEffect(() => {
+      const phase = status?.kite?.phase;
+      if (phase && phase !== "running" && shot) {
+        setShot(null);
+        setPick(null);
+        setPins([]);
+        setShotMeta(null);
+      }
+    }, [status?.kite?.phase]);
+    React5.useEffect(() => {
       const onFocus = () => {
         if (!busyRef.current) reloadShot().catch(() => {
         });
@@ -2665,8 +2674,8 @@ ${item}`).join("\n");
               run(() => navigate("https://example.com"));
             } }, copy.emptyTry)
           ) : null,
-          status?.ok === false && status?.lastError ? h("div", { className: "nks-empty-meta" }, `${status.lastError.errorId} \xB7 ${status?.httpBase || ""}`) : null,
-          status?.ok === false && status?.lastError ? h("div", { className: "nks-empty-meta" }, status.lastError.error) : null
+          status?.ok === false ? h("div", { className: "nks-empty-meta" }, `${status?.lastError?.errorId || status?.errorId || "kitesurf.engine.failed"} \xB7 ${status?.httpBase || ""}`) : null,
+          status?.ok === false ? h("div", { className: "nks-empty-meta" }, status?.lastError?.error || status?.error || "") : null
         ),
         overlays.map((box, index) => h("div", {
           key: index,

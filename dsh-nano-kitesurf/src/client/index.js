@@ -165,6 +165,9 @@ const STYLE = `
 .nks-hist-meta{color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11)}
 .nks-hist-del{width:24px;height:24px;border:0;border-radius:5px;background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer}
 .nks-hist-del:hover{color:var(--dsw-alias-fill-error,#d5455c);background:color-mix(in srgb,var(--dsw-alias-fill-error,#d5455c) 14%,transparent)}
+.nks-chip{height:22px;padding:0 8px;border:.5px solid var(--dsw-alias-border-l2);border-radius:6px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxxs-11);cursor:pointer}
+.nks-chip:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}
+.nks-vp-input{height:22px;width:52px;padding:0 6px;border:.5px solid var(--dsw-alias-border-l2);border-radius:6px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxxs-11)}
 .nks-dt-empty{padding:14px;color:var(--dsw-alias-label-tertiary)}
 .nks-env{border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-md);padding:8px;background:var(--dsw-alias-bg-layer-2);display:flex;flex-direction:column;gap:6px}
 .nks-env-title{color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxxs-11);text-transform:none;display:flex;align-items:center;justify-content:space-between;gap:8px}
@@ -1567,25 +1570,37 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
     h('div', { className: 'nks-status', 'data-nks-status': '1' },
       h('button', { type: 'button', 'data-nks-native-toggle': '1', 'aria-pressed': nativeHtml ? 'true' : 'false', title: '原生 HTML 渲染', onClick: () => { setNativeHtml((v) => !v); if (!nativeHtml) loadDom().catch(() => {}) } }, 'HTML'),
       h('button', { type: 'button', 'data-nks-devtools-toggle': '1', 'aria-pressed': devtoolsOpen ? 'true' : 'false', title: '开发者工具（⌘E 然后按 2）', onClick: () => setDevtoolsOpen((v) => !v) }, copy.devtools),
-      h('select', {
+      h('button', {
+        type: 'button',
         'data-nks-vp': '1',
+        className: 'nks-chip',
         title: '页面视口（拟真）',
-        value: vp ? String(vp.width) : 'fit',
-        onChange: async (event) => {
-          const value = event.target.value
-          if (value === 'custom') { setVpCustom(true); return }
-          setVpCustom(false)
-          const next = value === 'fit' ? null : { width: Number(value), height: Number(value) === 390 ? 844 : 900 }
-          setVp(next)
-          try { await post(SETTINGS, { viewport: next }) } catch { /* local only */ }
+        onClick: (event) => {
+          const rect = event.currentTarget.getBoundingClientRect()
+          const apply = async (next) => {
+            setVp(next); setVpCustom(false)
+            try { await post(SETTINGS, { viewport: next }) } catch { /* local only */ }
+          }
+          openNanoMenu({
+            anchor: { left: rect.left, bottom: rect.bottom },
+            theme: schemeOf?.(),
+            maxHeight: 6 * 28 + 8,
+            items: [
+              { id: 'fit', label: '自适应', run: () => apply(null) },
+              { id: '1280', label: '1280×900', run: () => apply({ width: 1280, height: 900 }) },
+              { id: '768', label: '768×900', run: () => apply({ width: 768, height: 900 }) },
+              { id: '390', label: '390×844', run: () => apply({ width: 390, height: 844 }) },
+              { id: 'custom', label: '自定义…', run: () => setVpCustom(true) },
+            ],
+          })
         },
-      }, h('option', { value: 'fit' }, '自适应'), h('option', { value: '1280' }, '1280×900'), h('option', { value: '768' }, '768×900'), h('option', { value: '390' }, '390×844'), h('option', { value: 'custom' }, '自定义…')),
+      }, vp ? `${vp.width}×${vp.height}` : '自适应'),
       vpCustom ? h('input', {
-        'data-nks-vp-w': '1', type: 'number', placeholder: '宽', style: { width: '52px' },
+        'data-nks-vp-w': '1', type: 'number', placeholder: '宽', className: 'nks-vp-input',
         onKeyDown: async (e) => { if (e.key !== 'Enter') return; const w = Number(e.currentTarget.value); if (w >= 240) { const next = { width: w, height: vp?.height || 900 }; setVp(next); setVpCustom(false); try { await post(SETTINGS, { viewport: next }) } catch {} } },
       }) : null,
       vpCustom ? h('input', {
-        'data-nks-vp-h': '1', type: 'number', placeholder: '高', style: { width: '52px' },
+        'data-nks-vp-h': '1', type: 'number', placeholder: '高', className: 'nks-vp-input',
         onKeyDown: async (e) => { if (e.key !== 'Enter') return; const h = Number(e.currentTarget.value); if (h >= 240) { const next = { width: vp?.width || 1280, height: h }; setVp(next); setVpCustom(false); try { await post(SETTINGS, { viewport: next }) } catch {} } },
       }) : null,
       h('span', { 'data-nks-mode': nativeHtml && domDoc ? 'html' : 'img', style: { color: nativeHtml && domDoc ? 'var(--dsw-alias-fill-success,#3fb950)' : 'var(--dsw-alias-fill-warning,#d29922)' } },

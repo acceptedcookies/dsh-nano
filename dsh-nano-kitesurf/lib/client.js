@@ -2018,6 +2018,9 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
 .nks-hist-meta{color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11)}
 .nks-hist-del{width:24px;height:24px;border:0;border-radius:5px;background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer}
 .nks-hist-del:hover{color:var(--dsw-alias-fill-error,#d5455c);background:color-mix(in srgb,var(--dsw-alias-fill-error,#d5455c) 14%,transparent)}
+.nks-chip{height:22px;padding:0 8px;border:.5px solid var(--dsw-alias-border-l2);border-radius:6px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxxs-11);cursor:pointer}
+.nks-chip:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}
+.nks-vp-input{height:22px;width:52px;padding:0 6px;border:.5px solid var(--dsw-alias-border-l2);border-radius:6px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxxs-11)}
 .nks-dt-empty{padding:14px;color:var(--dsw-alias-label-tertiary)}
 .nks-env{border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-md);padding:8px;background:var(--dsw-alias-bg-layer-2);display:flex;flex-direction:column;gap:6px}
 .nks-env-title{color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxxs-11);text-transform:none;display:flex;align-items:center;justify-content:space-between;gap:8px}
@@ -3447,30 +3450,40 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           });
         } }, "HTML"),
         h("button", { type: "button", "data-nks-devtools-toggle": "1", "aria-pressed": devtoolsOpen ? "true" : "false", title: "\u5F00\u53D1\u8005\u5DE5\u5177\uFF08\u2318E \u7136\u540E\u6309 2\uFF09", onClick: () => setDevtoolsOpen((v) => !v) }, copy.devtools),
-        h("select", {
+        h("button", {
+          type: "button",
           "data-nks-vp": "1",
+          className: "nks-chip",
           title: "\u9875\u9762\u89C6\u53E3\uFF08\u62DF\u771F\uFF09",
-          value: vp ? String(vp.width) : "fit",
-          onChange: async (event) => {
-            const value = event.target.value;
-            if (value === "custom") {
-              setVpCustom(true);
-              return;
-            }
-            setVpCustom(false);
-            const next = value === "fit" ? null : { width: Number(value), height: Number(value) === 390 ? 844 : 900 };
-            setVp(next);
-            try {
-              await post(SETTINGS, { viewport: next });
-            } catch {
-            }
+          onClick: (event) => {
+            const rect = event.currentTarget.getBoundingClientRect();
+            const apply2 = async (next) => {
+              setVp(next);
+              setVpCustom(false);
+              try {
+                await post(SETTINGS, { viewport: next });
+              } catch {
+              }
+            };
+            openNanoMenu2({
+              anchor: { left: rect.left, bottom: rect.bottom },
+              theme: schemeOf?.(),
+              maxHeight: 6 * 28 + 8,
+              items: [
+                { id: "fit", label: "\u81EA\u9002\u5E94", run: () => apply2(null) },
+                { id: "1280", label: "1280\xD7900", run: () => apply2({ width: 1280, height: 900 }) },
+                { id: "768", label: "768\xD7900", run: () => apply2({ width: 768, height: 900 }) },
+                { id: "390", label: "390\xD7844", run: () => apply2({ width: 390, height: 844 }) },
+                { id: "custom", label: "\u81EA\u5B9A\u4E49\u2026", run: () => setVpCustom(true) }
+              ]
+            });
           }
-        }, h("option", { value: "fit" }, "\u81EA\u9002\u5E94"), h("option", { value: "1280" }, "1280\xD7900"), h("option", { value: "768" }, "768\xD7900"), h("option", { value: "390" }, "390\xD7844"), h("option", { value: "custom" }, "\u81EA\u5B9A\u4E49\u2026")),
+        }, vp ? `${vp.width}\xD7${vp.height}` : "\u81EA\u9002\u5E94"),
         vpCustom ? h("input", {
           "data-nks-vp-w": "1",
           type: "number",
           placeholder: "\u5BBD",
-          style: { width: "52px" },
+          className: "nks-vp-input",
           onKeyDown: async (e) => {
             if (e.key !== "Enter") return;
             const w = Number(e.currentTarget.value);
@@ -3489,7 +3502,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           "data-nks-vp-h": "1",
           type: "number",
           placeholder: "\u9AD8",
-          style: { width: "52px" },
+          className: "nks-vp-input",
           onKeyDown: async (e) => {
             if (e.key !== "Enter") return;
             const h2 = Number(e.currentTarget.value);

@@ -159,16 +159,19 @@ export class TermCanvas {
   /** Resize canvases to fit the container; returns {cols, rows, changed}. */
   fit(cols, rows) {
     const dpr = this.dpr
-    const w = this.cols * this.charW
-    const h = this.rows * this.charH
-    if (cols !== this.cols || rows !== this.rows) {
+    const w = cols * this.charW
+    const h = rows * this.charH
+    // re-fit whenever cell metrics or grid dims changed — a font swap can keep
+    // cols/rows identical while pixels per cell move
+    if (cols !== this.cols || rows !== this.rows
+      || this.base.width !== Math.round(w * dpr) || this.base.height !== Math.round(h * dpr)) {
       this.cols = cols
       this.rows = rows
       for (const c of [this.base, this.overlay]) {
-        c.width = this.cols * this.charW * dpr
-        c.height = this.rows * this.charH * dpr
-        c.style.width = `${this.cols * this.charW}px`
-        c.style.height = `${this.rows * this.charH}px`
+        c.width = Math.round(w * dpr)
+        c.height = Math.round(h * dpr)
+        c.style.width = `${w}px`
+        c.style.height = `${h}px`
       }
       this.bctx.setTransform(dpr, 0, 0, dpr, 0, 0)
       this.octx.setTransform(dpr, 0, 0, dpr, 0, 0)

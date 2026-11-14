@@ -1,11 +1,11 @@
 // NanoTerm: the terminal tab body — a binary split tree of independent panes.
 // Each pane = wasm emulator + canvas renderer + one lane (local/mcp/isolate).
 
-import React, { useEffect, useRef, useState, useCallback } from 'react'
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import * as primitives from '@deepseek-ai/dsh-client-ui-primitives'
 import { NanoDialog, NanoMenu, NANO_STYLES } from 'dsh-nano-ui'
 
-const { Button, Input, Switch } = primitives
+const { Button, Input, Switch, StateDot, Tag, ShortcutKeys } = primitives
 import { loadCore, WasmTerm, MODES } from './wasm.js'
 import { TermCanvas, buildPalette } from './render.js'
 import { encodeKey, encodePaste, encodeMouse, encodeFocus } from './keys.js'
@@ -36,7 +36,19 @@ const STYLE = `
 ${NANO_STYLES}
 
 .dnt-root{position:relative;height:100%;min-height:0;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-base);flex-direction:column;display:flex;font:var(--dsw-font-xxs-12)}
-.dnt-toolbar{box-sizing:border-box;border-bottom:.5px solid var(--dsw-alias-border-l3);flex:none;align-items:center;gap:4px;height:38px;padding:5px 6px;display:flex}
+/* status bar mirrors 轨迹 toolbar exactly: sticky, 32px min-height,
+   4px 6px inner padding, bg-layer-1, border-l2 — no custom chrome */
+.dnt-statusbar{position:sticky;top:0;z-index:4;box-sizing:border-box;width:100%;flex:none;min-height:32px;border-bottom:.5px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1)}
+.dnt-statusbar-inner{display:flex;align-items:center;box-sizing:border-box;width:100%;min-height:32px;padding:4px 6px;gap:4px 8px;font:var(--dsw-font-xxs-12)}
+.dnt-statusbar-mark{display:inline-flex;color:var(--dsw-alias-brand-primary,var(--dsw-alias-link));flex:none}
+.dnt-statusbar-mark svg{width:14px;height:14px}
+.dnt-statusbar-title{color:var(--dsw-alias-label-primary);font-weight:600;flex:none}
+.dnt-statusbar-stat{display:inline-flex;align-items:center;gap:6px;color:var(--dsw-alias-label-tertiary);min-width:0}
+.dnt-statusbar-dim{font:10px var(--ds-font-family-code,monospace);color:var(--dsw-alias-label-quaternary)}
+.dnt-statusbar-phase{color:var(--dsw-alias-label-secondary)}
+.dnt-statusbar-termtitle{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-caption)}
+.dnt-statusbar-spacer{flex:1 1 auto}
+.dnt-statusbar-btnlabel{margin-left:2px}
 .dnt-tool{width:28px;height:28px;color:var(--dsw-alias-label-secondary);border-radius:var(--dsw-radius-sm);cursor:pointer;background:transparent;border:0;flex:none;justify-content:center;align-items:center;padding:0;display:inline-flex}
 .dnt-tool:hover:not(:disabled){color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}
 .dnt-tool:disabled{color:var(--dsw-alias-label-quaternary);cursor:default}
@@ -45,9 +57,11 @@ ${NANO_STYLES}
 .dnt-rotate{transform:rotate(90deg)}
 .dnt-address{box-sizing:border-box;width:220px;height:28px;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-12);background:var(--dsw-alias-bg-layer-1);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-sm);padding:0 9px}
 .dnt-address::placeholder{color:var(--dsw-alias-label-tertiary)}
-.dnt-toolbar-info{margin-left:auto;cursor:default;color:var(--dsw-alias-label-quaternary)}
-.dnt-toolbar-info:hover{color:var(--dsw-alias-label-tertiary);background:transparent}
-.dnt-panes{display:flex;flex:1 1 0;min-height:0;min-width:0;gap:6px;padding:6px}
+.dnt-statusbar-info{margin-left:auto;cursor:default;color:var(--dsw-alias-label-quaternary)}
+.dnt-statusbar-info:hover{color:var(--dsw-alias-label-tertiary);background:transparent}
+/* content column mirrors 轨迹: centered, same L/R margins */
+.dnt-content{flex:1 1 0;min-height:0;min-width:0;display:flex;justify-content:center;overflow:hidden}
+.dnt-panes{display:flex;flex:1 1 auto;min-height:0;min-width:0;max-width:880px;gap:6px;padding:8px 16px;box-sizing:border-box}
 .dnt-splitter{flex:0 0 6px;border-radius:3px;cursor:col-resize;transition:background .15s}
 .dnt-splitter:hover{background:var(--dsw-alias-interactive-bg-hover)}
 .dnt-pane{position:relative;flex:1 1 0;min-width:0;min-height:0;display:flex;flex-direction:column;overflow:hidden;container-type:size;container-name:dnt-pane;border-radius:var(--dsw-radius-md,8px);border:.5px solid var(--dsw-alias-border-l3);background:var(--dsw-alias-bg-base);transition:border-color .15s}
@@ -133,13 +147,69 @@ function leaf(laneSpec = { lane: 'local' }) {
   return { type: 'leaf', id: 'p' + paneSeq++, laneSpec }
 }
 
-export function NanoTerm({ sessionId, session, zh }) {
-  const [tree, setTree] = useState(() => leaf())
+// —— terminal sessions outlive view mounts ——
+// Switching conversation views (Nano 终端 ⇄ 对话/轨迹) unmounts the Body, but
+// a user-opened terminal must NOT die with it. The split tree + live pane
+// sessions are keyed by conversation sessionId at module scope; only an
+// explicit pane close (X) or plugin unload kills a lane.
+const termStores = new Map() // sessionId → { tree, sessions: Map<paneId, rec> }
+const termStore = (sessionId) => {
+  const key = sessionId ?? '_default'
+  let s = termStores.get(key)
+  if (!s) { s = { tree: null, sessions: new Map() }; termStores.set(key, s) }
+  return s
+}
+
+/** True while any conversation session keeps a live or opening terminal. */
+export function anyLiveTerminals() {
+  for (const { sessions } of termStores.values()) {
+    for (const rec of sessions.values()) {
+      if (rec.closed) continue
+      const phase = rec.lastStatus?.phase
+      if (phase !== 'exited' && phase !== 'error') return true
+    }
+  }
+  return false
+}
+
+/** Plugin unload only: kill every pane lane across all sessions. */
+export function disposeAllTerminals() {
+  for (const { sessions } of termStores.values()) {
+    for (const rec of sessions.values()) closePaneSession(rec)
+    sessions.clear()
+  }
+  termStores.clear()
+}
+
+export function NanoTerm({ sessionId, session, zh, openView }) {
+  const store = useMemo(() => termStore(sessionId), [sessionId])
+  const [tree, setTreeState] = useState(store.tree) // null until user picks a lane
+  const setTree = useCallback((fn) => {
+    setTreeState((prev) => {
+      const next = typeof fn === 'function' ? fn(prev) : fn
+      store.tree = next
+      return next
+    })
+  }, [store])
   const [focused, setFocused] = useState(null)
   const [err, setErr] = useState(null)
   const [ready, setReady] = useState(false)
   const [settings, setSettings] = useState(loadSettings)
-  const paneSessions = useRef(new Map())
+  // per-pane status lifted to the status bar: paneId → {lane, phase, dims, title}
+  const [statuses, setStatuses] = useState({})
+  const paneSessions = useRef(store.sessions)
+
+  const reportStatus = useCallback((paneId, st) => {
+    setStatuses((prev) => (prev[paneId] === st ? prev : { ...prev, [paneId]: st }))
+  }, [])
+  const forgetStatus = useCallback((paneId) => {
+    setStatuses((prev) => {
+      if (!(paneId in prev)) return prev
+      const next = { ...prev }
+      delete next[paneId]
+      return next
+    })
+  }, [])
 
   useEffect(() => {
     let live = true
@@ -156,11 +226,9 @@ export function NanoTerm({ sessionId, session, zh }) {
     }
   }, [])
 
-  // unmount cleanup: close every pane lane still registered
-  useEffect(() => () => {
-    for (const s of paneSessions.current.values()) closePaneSession(s)
-    paneSessions.current.clear()
-  }, [])
+  // Unmount ≠ close: view switching remounts the Body while terminals keep
+  // running in the module-scope store. Pane lanes die only via closeLeaf
+  // (X button) or plugin unload (disposeAllTerminals from apply()).
 
   const split = useCallback((id, dir, spec) => {
     setTree((t) => mapTree(t, id, (n) => ({
@@ -172,9 +240,10 @@ export function NanoTerm({ sessionId, session, zh }) {
   const closeLeaf = useCallback((id) => {
     const rec = paneSessions.current.get(id)
     if (rec) { closePaneSession(rec); paneSessions.current.delete(id) }
+    forgetStatus(id)
     setTree((t) => removeLeaf(t, id))
     setFocused((f) => (f === id ? null : f))
-  }, [])
+  }, [forgetStatus])
 
   const setRatio = useCallback((id, ratio) => {
     setTree((t) => mapTree(t, id, (n) => ({ ...n, ratio })))
@@ -207,22 +276,25 @@ export function NanoTerm({ sessionId, session, zh }) {
 
   return (
     <div className="dnt-root" data-nano-terminal>
-      <Toolbar sessionId={sessionId} split={split} openLeaf={openLeaf} focused={focused} zh={zh} tree={tree} paneSessions={paneSessions} settings={settings} onSettings={updateSettings} />
+      <StatusBar sessionId={sessionId} split={split} openLeaf={openLeaf} focused={focused} zh={zh} tree={tree} paneSessions={paneSessions} statuses={statuses} settings={settings} onSettings={updateSettings} />
       {tree ? (
-        <div className="dnt-panes">
-          <PaneNode
-            node={tree}
-            sessionId={sessionId}
-            session={session}
-            focused={focused}
-            setFocused={setFocused}
-            split={split}
-            closeLeaf={closeLeaf}
-            setRatio={setRatio}
-            paneSessions={paneSessions}
-            zh={zh}
-            settings={settings}
-          />
+        <div className="dnt-content">
+          <div className="dnt-panes">
+            <PaneNode
+              node={tree}
+              sessionId={sessionId}
+              session={session}
+              focused={focused}
+              setFocused={setFocused}
+              split={split}
+              closeLeaf={closeLeaf}
+              setRatio={setRatio}
+              paneSessions={paneSessions}
+              zh={zh}
+              settings={settings}
+              reportStatus={reportStatus}
+            />
+          </div>
         </div>
       ) : (
         <div className="dnt-empty" data-dnt-empty>
@@ -272,7 +344,8 @@ function firstLeaf(node) {
   return node.type === 'leaf' ? node.id : firstLeaf(node.a) ?? firstLeaf(node.b)
 }
 
-function Toolbar({ sessionId, split, openLeaf, focused, zh, tree, paneSessions, settings, onSettings }) {
+/** Top status bar: 轨迹 toolbar convention — identity + lane status left, controls right. */
+function StatusBar({ sessionId, split, openLeaf, focused, zh, tree, paneSessions, statuses, settings, onSettings }) {
   const [mcpUrl, setMcpUrl] = useState('')
   const [dialog, setDialog] = useState(null) // 'mcp' | 'help' | 'settings'
   const [menu, setMenu] = useState(null)
@@ -297,23 +370,38 @@ function Toolbar({ sessionId, split, openLeaf, focused, zh, tree, paneSessions, 
     { id: 'mcp', label: zh ? '连接 MCP 终端…' : 'Connect MCP terminal…', icon: glyph('mcp'), run: () => setDialog('mcp') },
   ]
   const copy = { cancel: zh ? '取消' : 'Cancel', confirm: zh ? '确定' : 'OK', close: zh ? '关闭' : 'Close' }
+
+  const count = Object.keys(statuses).length
+  const cur = focused ? statuses[focused] : (target ? statuses[target] : undefined)
+  const phaseDot = { opening: 'ongoing', live: 'done', exited: 'idle', error: 'error' }
+  const phaseText = { opening: zh ? '连接中' : 'connecting', live: zh ? '运行中' : 'live', exited: zh ? '已退出' : 'exited', error: zh ? '失败' : 'failed' }
+  const laneText = { local: 'LOCAL', mcp: 'MCP', isolate: 'ISOLATE' }
   return (
-    <div className="dnt-toolbar">
-      <button type="button" className="dnt-tool" title={zh ? '新建窗格' : 'new pane'}
-        aria-label={zh ? '新建窗格' : 'new pane'}
-        onClick={openMenu}>
-        {glyph('add')}
-      </button>
-      <span style={{ flex: '1 1 auto' }} />
-      <button type="button" className="dnt-tool" title={zh ? '快捷键与说明' : 'shortcuts'}
-        aria-label={zh ? '快捷键与说明' : 'shortcuts'} onClick={() => setDialog('help')}>
-        {glyph('help')}
-      </button>
-      <button type="button" className="dnt-tool" title={zh ? '终端设置' : 'terminal settings'}
-        aria-label={zh ? '终端设置' : 'terminal settings'} onClick={() => setDialog('settings')}>
-        {glyph('settings')}
-      </button>
-      <NanoMenu menu={menu} actions={laneActions} onClose={() => setMenu(null)} width={200} />
+    <div className="dnt-statusbar" role="toolbar" aria-label={zh ? '终端状态栏' : 'terminal status bar'}>
+      <div className="dnt-statusbar-inner">
+        <span className="dnt-statusbar-mark" aria-hidden>{glyph('terminal')}</span>
+        <span className="dnt-statusbar-title">{zh ? 'Nano 终端' : 'Nano Terminal'}</span>
+        {count > 0 && cur && (
+          <span className="dnt-statusbar-stat">
+            <StateDot state={phaseDot[cur.phase] ?? 'idle'} />
+            <Tag tone="outline">{laneText[cur.lane] ?? cur.lane}</Tag>
+            <span className="dnt-statusbar-dim">{count}{zh ? ' 窗格' : ' panes'}{cur.dims ? ` · ${cur.dims.cols}×${cur.dims.rows}` : ''}</span>
+            <span className="dnt-statusbar-phase">{phaseText[cur.phase] ?? cur.phase}</span>
+            {cur.title && <span className="dnt-statusbar-termtitle" title={cur.title}>{cur.title}</span>}
+          </span>
+        )}
+        <span className="dnt-statusbar-spacer" />
+        <Button variant="ghost" size="sm" onClick={openMenu} aria-label={zh ? '新建窗格' : 'new pane'} title={zh ? '新建窗格' : 'new pane'}>
+          {glyph('add')}
+          <span className="dnt-statusbar-btnlabel">{zh ? '新建' : 'New'}</span>
+        </Button>
+        <Button variant="ghost" size="sm" onClick={() => setDialog('help')} aria-label={zh ? '快捷键与说明' : 'shortcuts'} title={zh ? '快捷键与说明' : 'shortcuts'}>
+          {glyph('help')}
+        </Button>
+        <Button variant="ghost" size="sm" onClick={() => setDialog('settings')} aria-label={zh ? '终端设置' : 'terminal settings'} title={zh ? '终端设置' : 'terminal settings'}>
+          {glyph('settings')}
+        </Button>
+        <NanoMenu menu={menu} actions={laneActions} onClose={() => setMenu(null)} width={200} />
       {dialog === 'mcp' && (
         <NanoDialog
           copy={copy}
@@ -347,16 +435,18 @@ function Toolbar({ sessionId, split, openLeaf, focused, zh, tree, paneSessions, 
         >
           <div className="dnt-help-list">
             <span>{zh ? '每个窗格是一个独立实例（session）' : 'each pane is an independent instance'}</span>
-            <span><kbd>{zh ? '滚轮' : 'wheel'}</kbd> {zh ? '翻页滚动 scrollback' : 'scroll scrollback'}</span>
-            <span><kbd>⌘V</kbd> {zh ? '粘贴到当前窗格' : 'paste into focused pane'}</span>
-            <span><kbd>{zh ? '拖拽边' : 'drag edge'}</kbd> {zh ? '调整窗格比例' : 'resize panes'}</span>
-            <span><kbd>{zh ? '点击' : 'click'}</kbd> {zh ? '聚焦窗格（品牌描边）' : 'focus pane (brand border)'}</span>
+            <span><ShortcutKeys keys={[zh ? '滚轮' : 'wheel']} /> {zh ? '翻页滚动 scrollback' : 'scroll scrollback'}</span>
+            <span><ShortcutKeys keys={['⌘', 'V']} /> {zh ? '粘贴到当前窗格' : 'paste into focused pane'}</span>
+            <span><ShortcutKeys keys={['⌘', 'E', '→', 'T']} /> {zh ? '切换到本视图/切回对话' : 'toggle this view / back to chat'}</span>
+            <span><ShortcutKeys keys={[zh ? '拖拽边' : 'drag edge']} /> {zh ? '调整窗格比例' : 'resize panes'}</span>
+            <span><ShortcutKeys keys={[zh ? '点击' : 'click']} /> {zh ? '聚焦窗格（品牌描边）' : 'focus pane (brand border)'}</span>
           </div>
         </NanoDialog>
       )}
       {dialog === 'settings' && (
         <SettingsDialog copy={copy} zh={zh} settings={settings} onSettings={onSettings} onClose={() => setDialog(null)} />
       )}
+      </div>
     </div>
   )
 }
@@ -444,7 +534,7 @@ function SettingsDialog({ copy, zh, settings, onSettings, onClose }) {
   )
 }
 
-function PaneNode({ node, sessionId, session, focused, setFocused, split, closeLeaf, setRatio, paneSessions, zh, settings, style }) {
+function PaneNode({ node, sessionId, session, focused, setFocused, split, closeLeaf, setRatio, paneSessions, zh, settings, reportStatus, style }) {
   const dragRef = useRef(null)
   if (!node) return null
   if (node.type === 'split') {
@@ -474,7 +564,7 @@ function PaneNode({ node, sessionId, session, focused, setFocused, split, closeL
         flex: '1 1 0', minWidth: 0, minHeight: 0, ...style,
       }}>
         <div className="dnt-split-row" style={{ flex: `0 0 ${node.ratio * 100}%` }}>
-          <PaneNode node={node.a} {...{ sessionId, session, focused, setFocused, split, closeLeaf, setRatio, paneSessions, zh, settings }} />
+          <PaneNode node={node.a} {...{ sessionId, session, focused, setFocused, split, closeLeaf, setRatio, paneSessions, zh, settings, reportStatus }} />
         </div>
         <div
           className="dnt-splitter"
@@ -482,7 +572,7 @@ function PaneNode({ node, sessionId, session, focused, setFocused, split, closeL
           onMouseDown={startDrag}
         />
         <div className="dnt-split-row">
-          <PaneNode node={node.b} {...{ sessionId, session, focused, setFocused, split, closeLeaf, setRatio, paneSessions, zh, settings }} />
+          <PaneNode node={node.b} {...{ sessionId, session, focused, setFocused, split, closeLeaf, setRatio, paneSessions, zh, settings, reportStatus }} />
         </div>
       </div>
     )
@@ -500,6 +590,7 @@ function PaneNode({ node, sessionId, session, focused, setFocused, split, closeL
       paneSessions={paneSessions}
       zh={zh}
       settings={settings}
+      reportStatus={reportStatus}
     />
   )
 }
@@ -518,7 +609,7 @@ function closePaneSession(rec) {
 // workbench content inset: cells sit inside pane chrome, not on its edge
 const PANE_PAD = { padX: 8, padY: 4 }
 
-function TermPane({ paneId, laneSpec, sessionId, session, focused, onFocus, onClose, onSplit, paneSessions, zh, settings }) {
+function TermPane({ paneId, laneSpec, sessionId, session, focused, onFocus, onClose, onSplit, paneSessions, zh, settings, reportStatus }) {
   const boxRef = useRef(null)
   const canvasHostRef = useRef(null)
   const [status, setStatus] = useState({ lane: laneSpec.lane, phase: 'opening', scroll: '0/0', title: '' })
@@ -555,10 +646,12 @@ function TermPane({ paneId, laneSpec, sessionId, session, focused, onFocus, onCl
     }
     const { canvas, term, lane } = rec
 
-    // status updates flow to whichever mount currently owns the pane
+    // status updates flow to whichever mount currently owns the pane AND to
+    // the status bar's aggregate map
     const applyStatus = (fn) => {
       rec.lastStatus = fn(rec.lastStatus)
       setStatus(rec.lastStatus)
+      reportStatus?.(paneId, rec.lastStatus)
     }
     let lastScrollKey = ''
     const paint = () => {
@@ -593,18 +686,22 @@ function TermPane({ paneId, laneSpec, sessionId, session, focused, onFocus, onCl
     }
     lane.onReady = () => rec.hooks.applyStatus?.((s) => ({ ...s, phase: 'live' }))
 
-    // measure → fit canvas + wasm + pty
+    // measure → fit canvas + wasm + pty; a metric-only change (font swap) must
+    // still repaint everything because render() only emits dirty rows
     const fit = () => {
       const rect = host.getBoundingClientRect()
       const dims = paneSessions.current.get(paneId)
       if (dims) { dims.w = rect.width; dims.h = rect.height }
       const cols = Math.max(4, Math.floor((rect.width - canvas.padX * 2) / canvas.charW))
       const rows = Math.max(2, Math.floor((rect.height - canvas.padY) / canvas.charH))
-      if (cols === canvas.cols && rows === canvas.rows) return
-      canvas.fit(cols, rows)
+      const resized = canvas.fit(cols, rows)
       term.resize(cols, rows)
       lane.resize(cols, rows)
-      canvas.clearAll()
+      if (resized) {
+        canvas.clearAll()
+        term.invalidate()
+        applyStatus((s) => ({ ...s, dims: { cols, rows } }))
+      }
       schedulePaint()
     }
     const ro = new ResizeObserver(fit)
@@ -698,17 +795,19 @@ function TermPane({ paneId, laneSpec, sessionId, session, focused, onFocus, onCl
       canvas.setBlink(settings.blink)
       canvas.startBlink(() => term.modes())
 
-      rec.reconfigure = (next) => {
-        canvas.setFont(fontFrom(next))
-        canvas.setBlink(next.blink)
-        fit()
-        schedulePaint()
-      }
-
       paneSessions.current.set(paneId, rec)
     } else {
       // reattach: blink/repaint wiring survived on the canvas; restart it here
       canvas.startBlink(() => term.modes())
+      reportStatus?.(paneId, rec.lastStatus)
+      schedulePaint()
+    }
+    // bind to THIS mount's host/fit — a remount hands the session a new host
+    // element, so reconfigure must be refreshed on every mount, not just first.
+    rec.reconfigure = (next) => {
+      canvas.setFont(fontFrom(next))
+      canvas.setBlink(next.blink)
+      fit()
       schedulePaint()
     }
     fit()
@@ -733,7 +832,8 @@ function TermPane({ paneId, laneSpec, sessionId, session, focused, onFocus, onCl
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paneId, laneSpec.lane, laneSpec.url, retrySeq])
 
-  const phaseLabel = { opening: '…', live: laneSpec.lane, exited: 'exit', error: 'err' }[status.phase]
+  const phaseDot = { opening: 'ongoing', live: 'done', exited: 'idle', error: 'error' }
+  const laneText = { local: 'LOCAL', mcp: 'MCP', isolate: 'ISOLATE' }
   return (
     <div
       ref={boxRef}
@@ -743,23 +843,23 @@ function TermPane({ paneId, laneSpec, sessionId, session, focused, onFocus, onCl
       data-focused={focused ? 'true' : 'false'}
     >
       <div className="dnt-header">
-        <span className="dnt-dot" data-phase={status.phase} />
-        <span className="dnt-lane">{phaseLabel}</span>
+        <StateDot state={phaseDot[status.phase] ?? 'idle'} />
+        <Tag tone="outline">{laneText[laneSpec.lane] ?? laneSpec.lane}</Tag>
         <span className="dnt-title">{status.title || (status.phase === 'error' ? (zh ? '连接失败' : 'open failed') : '')}</span>
         <span className="dnt-scroll-lines">{status.scroll?.total ? `${status.scroll.total}ln` : ''}</span>
         <span className="dnt-header-actions">
           {(status.phase === 'error' || status.phase === 'exited') && (
-            <button type="button" className="dnt-tool" onClick={(e) => { e.stopPropagation(); setRetrySeq((n) => n + 1) }}
-              title={zh ? '重试连接' : 'retry connection'} aria-label={zh ? '重试连接' : 'retry connection'}>
+            <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setRetrySeq((n) => n + 1) }}
+              aria-label={zh ? '重试连接' : 'retry connection'} title={zh ? '重试连接' : 'retry connection'}>
               {glyph('retry')}
-            </button>
+            </Button>
           )}
-          <button type="button" className="dnt-tool dnt-hide-narrow" onClick={(e) => { e.stopPropagation(); onSplit('h') }}
-            title={zh ? '向右分屏' : 'split right'} aria-label={zh ? '向右分屏' : 'split right'}>{glyph('splitRight')}</button>
-          <button type="button" className="dnt-tool dnt-hide-narrow" onClick={(e) => { e.stopPropagation(); onSplit('v') }}
-            title={zh ? '向下分屏' : 'split down'} aria-label={zh ? '向下分屏' : 'split down'}>{glyph('splitDown', true)}</button>
-          <button type="button" className="dnt-tool" onClick={(e) => { e.stopPropagation(); onClose() }}
-            title={zh ? '关闭' : 'close pane'} aria-label={zh ? '关闭' : 'close pane'}>{glyph('close')}</button>
+          <Button variant="ghost" size="sm" className="dnt-hide-narrow" onClick={(e) => { e.stopPropagation(); onSplit('h') }}
+            aria-label={zh ? '向右分屏' : 'split right'} title={zh ? '向右分屏' : 'split right'}>{glyph('splitRight')}</Button>
+          <Button variant="ghost" size="sm" className="dnt-hide-narrow" onClick={(e) => { e.stopPropagation(); onSplit('v') }}
+            aria-label={zh ? '向下分屏' : 'split down'} title={zh ? '向下分屏' : 'split down'}>{glyph('splitDown', true)}</Button>
+          <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onClose() }}
+            aria-label={zh ? '关闭' : 'close pane'} title={zh ? '关闭' : 'close pane'}>{glyph('close')}</Button>
         </span>
       </div>
       <div ref={canvasHostRef} className="dnt-canvas-host" />
@@ -769,11 +869,11 @@ function TermPane({ paneId, laneSpec, sessionId, session, focused, onFocus, onCl
           {glyph('warn')}
           <span className="dnt-overlay-title">{zh ? '通道连接失败' : 'lane connection failed'}</span>
           <span className="dnt-overlay-msg" title={status.title}>{status.title}</span>
-          <button type="button" className="dnt-overlay-retry"
+          <Button variant="outline" size="sm"
             onClick={(e) => { e.stopPropagation(); setRetrySeq((n) => n + 1) }}>
             {glyph('retry')}
             {zh ? '重试' : 'retry'}
-          </button>
+          </Button>
         </div>
       )}
     </div>

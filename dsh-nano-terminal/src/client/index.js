@@ -1,15 +1,14 @@
 // dsh-nano-terminal client entry.
-// Registers the nano-term tab kind and takes over the builtin 'terminal' kind
-// body — both render through our wasm core + lanes instead of xterm.js.
+// The nano terminal lives ONLY inside the chat area as a 'conversation.view'
+// tab (对话 / 轨迹 / Nano 终端). The [dsh工作台] (right sidebar) surface is
+// intentionally not registered — the native terminal kind stays untouched.
 
 import { createElement as h } from 'react'
-import { NanoTerm } from './NanoTerm.jsx'
+import { NanoTerm, anyLiveTerminals, disposeAllTerminals } from './NanoTerm.jsx'
 
 try { window.__dntModule = 'evaluated' } catch { /* non-browser */ }
 
-export const inject = ['slots', 'sidebarRight', 'sidebarRightTabs', 'commandUi', 'locale']
-
-const KIND = 'nano-term'
+export const inject = ['slots', 'commandUi', 'locale', 'sidebarRight', 'sessions']
 
 const mark = (stage) => {
   try {
@@ -19,9 +18,23 @@ const mark = (stage) => {
   } catch { /* no storage */ }
 }
 
+const VIEW_LABELS = ['终端', 'Terminal', 'Nano 终端', 'Nano terminal']
+
+// The host exposes view selection only through the session-bound tab strip,
+// so activation clicks the official [data-conversation-tabs] anchor — the
+// same code path the user's own clicks take.
+const clickTab = (el) => { if (el) el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })) }
+const viewTabs = () => [...(document.querySelector('[data-conversation-tabs]')?.querySelectorAll('[role="tab"]') ?? [])]
+const mineTab = () => viewTabs().find((el) => VIEW_LABELS.some((l) => el.textContent.trim() === l))
+const activateView = () => clickTab(mineTab())
+const activateChat = () => clickTab(viewTabs()[0]) // 对话 is always first (fixed)
+
 /** @param {import('@deepseek-ai/cordis').Context} ctx */
 export function apply(ctx) {
-  mark('apply:start services=' + ['slots', 'sidebarRight', 'sidebarRightTabs', 'commandUi', 'locale'].map((k) => `${k}:${!!ctx[k]}`).join(','))
+  mark('apply:start services=' + ['slots', 'commandUi', 'locale', 'sidebarRight', 'sessions'].map((k) => `${k}:${!!ctx[k]}`).join(','))
+  // Plugin unload (disable/removal) must release every live lane — view
+  // remounts never do.
+  ctx.effect(() => () => disposeAllTerminals(), 'dsh-nano-terminal.disposeAll')
   const zh = () => ctx.locale?.getSnapshot?.().active?.startsWith('zh') ?? false
   const t = (en, cn) => (zh() ? cn : en)
 
@@ -30,81 +43,142 @@ export function apply(ctx) {
       window.__dntBodyProps = Object.keys(props)
       window.__dntBodyMounted = (window.__dntBodyMounted ?? 0) + 1
     } catch { /* diag best-effort */ }
-    return h(NanoTerm, { sessionId: props.sessionId, session: props.session, zh: zh() })
+    return h(NanoTerm, { sessionId: props.sessionId, session: props.session, zh: zh(), openView: props.openView })
   }
 
-  const title = (label) => (props) => {
-    const info = props.useTabInfo?.() ?? {}
-    const tabTitle = info.tab?.title
-    return h('span', { title: tabTitle ?? label }, tabTitle ?? label)
+  // Chat-area view tab: registered under the session scope so the 对话/轨迹
+  // tab row gains a Nano 终端 entry. Official shape — direct slots.inject at
+  // apply time, like dsh-client-ui-trajectory.
+  mark('registerView conversation.view')
+  try {
+    ctx.slots.inject('conversation.view', () => ctx.slots.register(
+      {
+        name: 'conversation.view',
+        id: 'nano-term',
+        order: 20, // after 对话(chat) and 轨迹(trajectory, order 10)
+        label: () => t('Terminal', '终端'),
+        inject: (sessionId) => ({ sessionId }),
+      },
+      Body,
+    ))
+    mark('registerView OK')
+  } catch (err) {
+    mark('registerView FAIL ' + String(err?.message ?? err))
+    console.warn('[dnt] conversation.view registration failed:', err)
   }
 
-  const ID = 'dsh-nano-terminal'       // extension type id for kind 'nano-term'
-  const TAKEOVER_ID = 'dsh-nano-terminal.takeover' // extension type id for kind 'terminal'
-
-  const registerKind = (kind, id, label, guide) => {
-    try {
-      mark('registerKind ' + kind)
-      return ctx.sidebarRightTabs.register({ id, kind, multiple: true, title: () => label, guide })
-    } catch (err) {
-      mark('registerKind FAIL ' + kind + ' ' + String(err?.message ?? err))
-      console.warn('[dnt] kind registration failed:', kind, err)
-      return () => {}
+  // ⌘+E then T toggles between this view and 对话. The host has its own ⌘E
+  // binding (opens a workbench browser), so the chord must be captured at
+  // ⌘E — preventDefault+stopPropagation — not just at T. Only armed while a
+  // conversation tab strip with our tab exists; elsewhere ⌘E stays native.
+  ctx.effect(() => {
+    let armed = 0
+    const onKey = (ev) => {
+      const now = Date.now()
+      if (now > armed) armed = 0
+      if ((ev.metaKey || ev.ctrlKey) && !ev.altKey && !ev.shiftKey && ev.code === 'KeyE' && !ev.repeat) {
+        if (!mineTab()) return
+        armed = now + 1200
+        ev.preventDefault()
+        ev.stopPropagation()
+        return
+      }
+      if (armed && ev.code === 'KeyT' && !ev.repeat) {
+        armed = 0
+        ev.preventDefault()
+        ev.stopPropagation()
+        const tab = mineTab()
+        if (!tab) return
+        if (tab.getAttribute('aria-selected') === 'true') activateChat()
+        else clickTab(tab)
+      }
     }
-  }
+    window.addEventListener('keydown', onKey, true)
+    mark('viewToggle listener')
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, 'dsh-nano-terminal.viewToggle')
 
-  ctx.effect(() => registerKind(KIND, ID, 'nano-term', [{
-    id: 'new',
-    order: 20,
-    title: () => t('New nano terminal', '新建 nano 终端'),
-    description: () => t('WASM terminal — local / MCP / isolate lanes', 'WASM 终端 — 本地 / MCP / 隔离通道'),
-  }]), 'dsh-nano-terminal.type')
-  // takeover of the builtin terminal kind: our body replaces xterm.js rendering
-  ctx.effect(() => registerKind('terminal', TAKEOVER_ID, 'Terminal', []), 'dsh-nano-terminal.takeover')
-
-  const injectProps = (sessionId) => ({ sessionId })
-
-  // body slot is dispatched by the tab TYPE's id (the `key` field)
-  const registerBody = (typeId) => {
-    mark('registerBody ' + typeId + ' slots=' + !!ctx.slots)
-    try {
-      return ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register(
-        { name: 'sidebar.right.pane.tab', key: typeId, inject: injectProps },
-        Body,
-      ))
-    } catch (err) {
-      mark('registerBody FAIL ' + typeId + ' ' + String(err?.message ?? err))
-      throw err
+  // Orphan cleanup: 'nano-term' sidebar tabs persisted before the workbench
+  // entry was retired would linger forever. Enumerate every session's
+  // sidebar tabs and close ours. Service is injected but nothing registers
+  // into the sidebar — the entry stays closed.
+  ctx.effect(() => {
+    let live = true
+    const sweep = () => {
+      try {
+        const ctl = ctx.sidebarRight
+        const byId = ctx.sessions?.list?.getSnapshot?.().byId ?? {}
+        let closed = 0
+        for (const sessionId of Object.keys(byId)) {
+          for (const tab of ctl.tabsIn?.(sessionId) ?? []) {
+            if (tab?.kind === 'nano-term') {
+              try { ctl.closeIn(sessionId, tab.id); closed += 1 } catch { /* raced */ }
+            }
+          }
+        }
+        if (closed) mark('sweep orphans ' + closed)
+      } catch (err) {
+        mark('sweep FAIL ' + String(err?.message ?? err))
+      }
     }
-  }
-  ctx.effect(() => registerBody(ID), 'dsh-nano-terminal.body')
-  ctx.effect(() => registerBody(TAKEOVER_ID), 'dsh-nano-terminal.takeover.body')
+    // run once soon after apply, then re-sweep as sessions come online
+    const timer = setTimeout(() => live && sweep(), 1500)
+    const sub = ctx.sessions?.list?.subscribe?.(() => sweep())
+    return () => {
+      live = false
+      clearTimeout(timer)
+      try { sub?.() } catch { /* no sessions service */ }
+    }
+  }, 'dsh-nano-terminal.orphanSweep')
 
-  const registerTitle = (typeId, label) => ctx.slots.inject('sidebar.right.pane.tab.title', () => ctx.slots.register(
-    { name: 'sidebar.right.pane.tab.title', key: typeId, inject: injectProps },
-    title(label),
-  ))
-  ctx.effect(() => registerTitle(ID, 'nano-term'), 'dsh-nano-terminal.title')
-  ctx.effect(() => registerTitle(TAKEOVER_ID, 'Terminal'), 'dsh-nano-terminal.takeover.title')
+  // —— composer 左右边距修复 ——
+  // [data-conversation-scroll] 的原生滚动条不是悬浮层：布局上它在右侧独占
+  // 一条 ~5px lane，把内容列（含 composer）整体向左挤，导致可视边距
+  // 左 32 / 右 39（composer 为 16 / 23），右栏前还多出一条视觉缺口。
+  // `scrollbar-gutter: stable both-edges` 在左侧镜像等宽 gutter，滚动条
+  // 仍在原位，内容列重新对称居中 —— 这是对本插件激活的宿主 composer
+  // 左右边距进行的样式修复。
+  ctx.effect(() => {
+    const style = document.createElement('style')
+    style.dataset.dntComposerMarginFix = '1'
+    style.textContent = '[data-conversation-scroll]{scrollbar-gutter:stable both-edges}'
+    document.head.appendChild(style)
+    mark('composerMarginFix applied')
+    return () => style.remove()
+  }, 'dsh-nano-terminal.composerMarginFix')
 
-  // slash command: /dnt — the UI mapping of the MCP control plane.
-  // `term` is host-owned by our index.js command; the client action opens tabs.
+  // Page-close guard: while any nano terminal lane is live, closing or
+  // reloading the whole dsh page must ask the user first — the browser's
+  // native beforeunload confirmation. On unload the plugin-level teardown
+  // also releases every lane so the host can sweep the pties.
+  ctx.effect(() => {
+    const guard = (ev) => {
+      if (!anyLiveTerminals()) return
+      ev.preventDefault()
+      ev.returnValue = '' // Chromium trigger for the confirm dialog
+    }
+    window.addEventListener('beforeunload', guard)
+    mark('beforeunload guard')
+    return () => window.removeEventListener('beforeunload', guard)
+  }, 'dsh-nano-terminal.unloadGuard')
+
+  // slash command: /dnt — opens the chat-area view, or prints lane status.
   ctx.effect(() => {
     try {
       return ctx.commandUi.register({
         name: 'dnt',
         label: () => t('nano terminal', 'nano 终端'),
-        description: () => t('open a nano-terminal tab (wasm core)', '打开 nano 终端标签页（wasm 核心）'),
+        description: () => t('open the Nano 终端 chat-area view', '打开 chat 区 Nano 终端视图'),
         available: () => true,
         ui: {
           kind: 'popupSelect',
           options: async () => [
-            { id: 'new', label: t('New nano-terminal tab', '新建 nano 终端标签页'), group: t('terminal', '终端') },
+            { id: 'open', label: t('Open Nano 终端 view', '打开 Nano 终端视图'), group: t('terminal', '终端') },
             { id: 'status', label: t('Lane status (host MCP)', '通道状态（宿主 MCP）'), group: t('terminal', '终端') },
           ],
           onSelect: async (option) => {
-            if (option.id === 'new') {
-              ctx.sidebarRight.openTab(KIND)
+            if (option.id === 'open') {
+              activateView()
             } else if (option.id === 'status') {
               try {
                 const res = await fetch('/dsh-nano-terminal/health')

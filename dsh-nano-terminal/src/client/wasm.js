@@ -96,6 +96,11 @@ export class WasmTerm {
     coreExports().dnt_scroll_bottom(this.id)
   }
 
+  /** Mark every screen row dirty so the next render() repaints all of it. */
+  invalidate() {
+    coreExports().dnt_invalidate?.(this.id)
+  }
+
   modes() {
     return coreExports().dnt_modes(this.id) >>> 0
   }

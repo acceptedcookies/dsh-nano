@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Nano 终端",
+    "description": "WASM 内核的终端：窗格分割、本地 / MCP / 隔离通道，附带 MCP 控制面。"
+  }
+}

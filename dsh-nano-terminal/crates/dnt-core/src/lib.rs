@@ -1199,6 +1199,15 @@ pub extern "C" fn dnt_scroll_bottom(id: u32) {
     with_term(id, |t| t.scroll_to_bottom());
 }
 
+/// Force the next render() to emit every screen row — used after font/metric
+/// changes where the JS side clears and repaints the whole canvas.
+#[no_mangle]
+pub extern "C" fn dnt_invalidate(id: u32) {
+    with_term(id, |t| {
+        t.grid.dirty_all = true;
+    });
+}
+
 /// Pack dirty rows. Returns pointer to i32 render buffer (valid until next call).
 #[no_mangle]
 pub extern "C" fn dnt_render(id: u32) -> *const i32 {

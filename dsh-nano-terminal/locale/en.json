@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Nano Terminal",
+    "description": "A WASM-core terminal: split panes, local / MCP / isolate lanes, with an MCP control plane."
+  }
+}

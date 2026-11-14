@@ -1,5 +1,6 @@
 // src/host/sessions.js
 import { randomUUID } from "node:crypto";
+import { homedir } from "node:os";
 
 // src/host/mirror.js
 import { readFileSync } from "node:fs";
@@ -478,7 +479,7 @@ var SessionRegistry = class {
     const argv = meta.argv?.length ? meta.argv : [shell, ...process.platform === "win32" ? [] : ["-i"]];
     const handle = await this.ctx.subprocess.spawnTerminal({
       argv,
-      cwd: meta.cwd ?? process.env.HOME,
+      cwd: meta.cwd ?? homedir(),
       env: rec.env,
       rows: Math.min(Math.max(meta.rows || 24, 2), 512),
       cols: Math.min(Math.max(meta.cols || 80, 2), 512),
@@ -504,7 +505,7 @@ var SessionRegistry = class {
       if (session) return this.ctx.workingDirectory.get(session);
     } catch {
     }
-    return process.env.HOME || process.cwd();
+    return process.env.HOME || homedir() || process.cwd();
   }
   async close(id, reason = "close") {
     const rec = this.resolve(id) ?? this.sessions.get(id);

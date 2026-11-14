@@ -15,6 +15,7 @@
 // All lifecycle transitions emit on the registry's EventBus.
 
 import { randomUUID } from 'node:crypto'
+import { homedir } from 'node:os'
 import { ScreenMirror, loadMirror } from './mirror.js'
 import { KIND, err } from './errors.js'
 import { Gate } from './gate.js'
@@ -211,7 +212,7 @@ export class SessionRegistry {
     const handle = await this.ctx.subprocess
       .spawnTerminal({
         argv,
-        cwd: meta.cwd ?? process.env.HOME,
+        cwd: meta.cwd ?? homedir(),
         env: rec.env,
         rows: Math.min(Math.max(meta.rows || 24, 2), 512),
         cols: Math.min(Math.max(meta.cols || 80, 2), 512),
@@ -240,7 +241,7 @@ export class SessionRegistry {
       const session = spec.sessionId ? this.ctx.sessions?.get?.(spec.sessionId) : undefined
       if (session) return this.ctx.workingDirectory.get(session)
     } catch { /* fall through to HOME */ }
-    return process.env.HOME || process.cwd()
+    return process.env.HOME || homedir() || process.cwd()
   }
 
   async close(id, reason = 'close') {

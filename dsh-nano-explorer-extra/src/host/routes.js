@@ -100,8 +100,10 @@ async function scopeOf(ctx, sessionId) {
 export async function runExternal(ctx, config, request) {
   const { argv, cwd, session, sandboxPolicy: policy } = request
   // A relative or empty directory makes the spawn fail with an opaque ENOTDIR; refuse it with a
-  // message that names the operation instead.
-  if (typeof cwd !== 'string' || cwd === '' || !cwd.startsWith('/')) throw new Error(`${argv[0]} needs an absolute working directory, got ${JSON.stringify(cwd)}`)
+  // message that names the operation instead. POSIX absolute or Windows drive/UNC — node:path is
+  // host-native, so resolve() already understands C:\ and \\server\share on Windows.
+  const cwdIsAbsolute = typeof cwd === 'string' && cwd !== '' && (cwd.startsWith('/') || /^[A-Za-z]:[\\/]/.test(cwd) || cwd.startsWith('\\\\'))
+  if (!cwdIsAbsolute) throw new Error(`${argv[0]} needs an absolute working directory, got ${JSON.stringify(cwd)}`)
   const subprocess = ctx.get('subprocess')
   const sandbox = ctx.get('sandbox')
   if (subprocess === undefined || subprocess === null) throw new Error('this deployment has no subprocess service')

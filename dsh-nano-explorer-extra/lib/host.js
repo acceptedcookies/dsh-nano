@@ -1300,6 +1300,17 @@ function isLexicallyInside(root, candidate) {
 }
 
 // src/host/mutate.js
+async function execMutation(spec) {
+  const { runExternal: runExternal2, argv } = spec;
+  if (process.platform !== "win32") return runExternal2(spec);
+  const { mkdir, rename: rename2, rm } = await import("node:fs/promises");
+  const [cmd, ...rest] = argv;
+  const operands = rest.filter((a) => a !== "--" && !a.startsWith("-"));
+  if (cmd === "mkdir") return mkdir(operands[0]);
+  if (cmd === "mv") return rename2(operands[0], operands[1]);
+  if (cmd === "rm") return rm(operands[0], { force: true, recursive: rest.includes("-rf") || rest.includes("-r") });
+  throw new Error(`unsupported mutation command ${cmd}`);
+}
 var BAD_NAME = /[/\\\0]/u;
 function validateName(name2) {
   if (typeof name2 !== "string") throw new Error("name must be a string");
@@ -1361,19 +1372,19 @@ async function rename(fs, ctx, config, request, signal) {
   }
   if (sameEntryIgnoringCase(source, destination)) {
     const staging = `${parent}/.nxe-case-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-    await runExternal2({
+    await execMutation({
       session,
       sandboxPolicy,
       cwd: parent,
-      argv: ["mv", "--", source, staging],
-      args: ["mv"]
+      runExternal: runExternal2,
+      argv: ["mv", "--", source, staging]
     });
-    await runExternal2({
+    await execMutation({
       session,
       sandboxPolicy,
       cwd: parent,
-      argv: ["mv", "--", staging, destination],
-      args: ["mv"]
+      runExternal: runExternal2,
+      argv: ["mv", "--", staging, destination]
     });
     return { path: destination };
   }
@@ -1387,12 +1398,12 @@ async function rename(fs, ctx, config, request, signal) {
     }
     return { path: destination };
   }
-  await runExternal2({
+  await execMutation({
     session,
     sandboxPolicy,
     cwd: parent,
-    argv: ["mv", "--", source, destination],
-    args: ["mv"]
+    runExternal: runExternal2,
+    argv: ["mv", "--", source, destination]
   });
   return { path: destination };
 }
@@ -1417,7 +1428,7 @@ async function createFolder(fs, request, runExternal2) {
   );
   const existing = await fs.lstat(path).catch(() => void 0);
   if (existing !== void 0) throw new Error(`"${finalName}" already exists in this folder`);
-  await runExternal2({ session, sandboxPolicy, cwd: parent, argv: ["mkdir", "--", path], args: ["mkdir"] });
+  await execMutation({ session, sandboxPolicy, cwd: parent, runExternal: runExternal2, argv: ["mkdir", "--", path] });
   return { path };
 }
 async function isTextFile(fs, path, signal) {
@@ -1449,12 +1460,12 @@ async function removeEntry(fs, request, signal) {
   if (existing === void 0) throw new Error(`"${path}" does not exist`);
   const directory = kind === "directory" || existing.isDirectory === true;
   const parent = normalizedTarget.slice(0, normalizedTarget.lastIndexOf("/")) || "/";
-  await runExternal2({
+  await execMutation({
     session,
     sandboxPolicy,
     cwd: parent,
-    argv: directory ? ["rm", "-rf", "--", normalizedTarget] : ["rm", "-f", "--", normalizedTarget],
-    args: ["rm"]
+    runExternal: runExternal2,
+    argv: directory ? ["rm", "-rf", "--", normalizedTarget] : ["rm", "-f", "--", normalizedTarget]
   });
   return { path: normalizedTarget, directory };
 }
@@ -1485,12 +1496,12 @@ async function moveEntry(fs, ctx, config, request, signal) {
   if (!isLexicallyInside(realRoot, destination)) throw new Error(`"${name2}" would move outside the workspace`);
   const existing = await fs.lstat(destination, {}, signal).catch(() => void 0);
   if (existing !== void 0) throw new Error(`"${name2}" already exists in that folder`);
-  await runExternal2({
+  await execMutation({
     session,
     sandboxPolicy,
     cwd: resolvedDir,
-    argv: ["mv", "--", source, destination],
-    args: ["mv"]
+    runExternal: runExternal2,
+    argv: ["mv", "--", source, destination]
   });
   return { path: destination };
 }
@@ -1610,7 +1621,8 @@ async function scopeOf(ctx, sessionId) {
 }
 async function runExternal(ctx, config, request) {
   const { argv, cwd, session, sandboxPolicy: policy } = request;
-  if (typeof cwd !== "string" || cwd === "" || !cwd.startsWith("/")) throw new Error(`${argv[0]} needs an absolute working directory, got ${JSON.stringify(cwd)}`);
+  const cwdIsAbsolute = typeof cwd === "string" && cwd !== "" && (cwd.startsWith("/") || /^[A-Za-z]:[\\/]/.test(cwd) || cwd.startsWith("\\\\"));
+  if (!cwdIsAbsolute) throw new Error(`${argv[0]} needs an absolute working directory, got ${JSON.stringify(cwd)}`);
   const subprocess = ctx.get("subprocess");
   const sandbox = ctx.get("sandbox");
   if (subprocess === void 0 || subprocess === null) throw new Error("this deployment has no subprocess service");

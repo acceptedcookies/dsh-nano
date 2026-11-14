@@ -23,7 +23,7 @@ async function main() {
   const task = await taskSpace(SPACE)
   const page = task.page('p1')
 
-  await page.goto(GUI)
+  await page.goto(`${GUI}?perf-review=1`)
   await page.waitForLoadState()
   await new Promise((r) => setTimeout(r, 2500))
 

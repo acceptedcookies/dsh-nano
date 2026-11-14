@@ -480,6 +480,18 @@ var ROUTE_TABLE = [
   },
   {
     "plugin": "dsh-nano-explorer-extra",
+    "path": "/nano-explorer-extra/fetch",
+    "methods": [
+      "POST"
+    ],
+    "sensitivity": "L2",
+    "capability": "proc:git",
+    "bodyLimit": 65536,
+    "sessionBinding": true,
+    "justification": "dsh-nano-explorer-extra/src/host/routes.js \u2014 `git fetch --all --prune`: host process exec + outbound net to configured remotes; rewrites refs/remotes but never touches workspace files."
+  },
+  {
+    "plugin": "dsh-nano-explorer-extra",
     "path": "/nano-explorer-extra/push",
     "methods": [
       "POST"
@@ -914,12 +926,14 @@ async function readStatus(ctx, config, request) {
     }
   }
   const stashed = stash === void 0 || stash.exitCode !== 0 ? 0 : stash.stdout.split("\n").filter((line) => line.trim() !== "").length;
-  const [branches, history, remote, remotes, repoConfig] = scoped ? [[], [], void 0, [], void 0] : await Promise.all([
+  const [branches, remoteBranches, history, remote, remotes, repoConfig, fetchedAt] = scoped ? [[], [], [], void 0, [], void 0, void 0] : await Promise.all([
     listBranches(ctx, config, request, worktrees),
+    listRemoteBranches(ctx, config, request),
     readHistory(ctx, config, request),
     typeof parsed.upstream !== "string" || parsed.upstream === "" ? Promise.resolve(void 0) : remoteDivergence(ctx, config, request),
     readRemotes(ctx, config, request),
-    readRepoConfig(ctx, config, request)
+    readRepoConfig(ctx, config, request),
+    fetchStamp(ctx, config, request)
   ]);
   const author = repoConfig === void 0 ? void 0 : authorOf(repoConfig);
   const sshKey = repoConfig === void 0 ? void 0 : sshKeyOf(repoConfig);
@@ -930,12 +944,14 @@ async function readStatus(ctx, config, request) {
     stashed,
     worktrees,
     branches,
+    remoteBranches,
     history,
     conflicts,
     ...remote === void 0 ? {} : { remote },
     remotes,
     author,
-    ...sshKey === void 0 ? {} : { sshKey }
+    ...sshKey === void 0 ? {} : { sshKey },
+    ...fetchedAt === void 0 ? {} : { fetchedAt }
   };
 }
 async function commitAll(ctx, config, request) {
@@ -1071,6 +1087,35 @@ async function checkoutBranch(ctx, config, request) {
   const name2 = typeof branch === "string" ? branch.trim() : "";
   if (name2 === "") throw new Error("a branch name is required");
   if (name2.startsWith("-")) throw new Error("a branch name must not begin with a dash");
+  if (name2.includes("/")) {
+    const remoteRef = await runGit(ctx, config, {
+      ...request,
+      args: ["show-ref", "--verify", `refs/remotes/${name2}`],
+      allowedExitCodes: [0, 1]
+    });
+    if (remoteRef.exitCode === 0) {
+      const base = name2.slice(name2.indexOf("/") + 1);
+      if (base !== "" && base !== "HEAD") {
+        const local = await runGit(ctx, config, {
+          ...request,
+          args: ["show-ref", "--verify", `refs/heads/${base}`],
+          allowedExitCodes: [0, 1]
+        });
+        if (local.exitCode !== 0) {
+          const tracked = await runGit(ctx, config, {
+            ...request,
+            args: ["checkout", "--track", name2],
+            allowedExitCodes: [0, 1, 128]
+          });
+          if (tracked.exitCode !== 0) {
+            const detail = firstLine(tracked.stderr) || firstLine(tracked.stdout);
+            throw new Error(detail === "" ? "git checkout failed" : detail);
+          }
+          return { branch: base };
+        }
+      }
+    }
+  }
   const result = await runGit(ctx, config, {
     ...request,
     args: ["checkout", name2],
@@ -1081,6 +1126,54 @@ async function checkoutBranch(ctx, config, request) {
     throw new Error(detail === "" ? "git checkout failed" : detail);
   }
   return { branch: name2 };
+}
+async function listRemoteBranches(ctx, config, request) {
+  const result = await runGit(ctx, config, {
+    ...request,
+    args: ["for-each-ref", "--format=%(refname:short)%09%(objectname:short)%09%(symref:short)", "refs/remotes"],
+    allowedExitCodes: [0, 128]
+  }).catch(() => void 0);
+  if (result === void 0 || result.exitCode !== 0) return [];
+  const rows = [];
+  for (const line of result.stdout.split("\n")) {
+    if (line.trim() === "") continue;
+    const [name2, commit, symref] = line.split("	");
+    if (name2 === void 0 || name2 === "") continue;
+    if (symref !== void 0 && symref !== "") continue;
+    rows.push({ name: name2, commit: commit ?? "" });
+  }
+  return rows;
+}
+async function fetchAll(ctx, config, request) {
+  const result = await runGit(ctx, config, {
+    ...request,
+    args: ["fetch", "--all", "--prune"],
+    allowedExitCodes: [0, 1, 128]
+  });
+  if (result.exitCode !== 0) {
+    const detail = firstLine(result.stderr) || firstLine(result.stdout);
+    throw new Error(detail === "" ? "git fetch failed" : detail);
+  }
+  const moved = result.stderr.split("\n").filter((line) => line.includes("->") && !line.includes("FETCH_HEAD"));
+  if (moved.length === 0) return "already up to date";
+  return `${moved.length} ref${moved.length === 1 ? "" : "s"} updated`;
+}
+async function fetchStamp(ctx, config, request) {
+  const gitdir = await runGit(ctx, config, {
+    ...request,
+    args: ["rev-parse", "--git-dir"],
+    allowedExitCodes: [0, 128]
+  }).catch(() => void 0);
+  if (gitdir === void 0 || gitdir.exitCode !== 0) return void 0;
+  const dir = gitdir.stdout.trim();
+  if (dir === "") return void 0;
+  const absolute = dir.startsWith("/") ? dir : `${request.cwd.replace(/\/+$/u, "")}/${dir}`;
+  const target = await ctx.fs?.resolve(`${absolute}/FETCH_HEAD`).catch(() => void 0);
+  if (target === void 0) return void 0;
+  const info = await ctx.fs.stat(target).catch(() => void 0);
+  const ns = typeof info?.version === "string" ? info.version.split(":")[3] : void 0;
+  const ms = ns === void 0 || ns === "" ? void 0 : Number(BigInt(ns) / 1000000n);
+  return typeof ms === "number" && Number.isFinite(ms) && ms > 0 ? ms : void 0;
 }
 async function pushUpstream(ctx, config, request) {
   const remote = typeof request.remote === "string" ? request.remote.trim() : "";
@@ -1789,6 +1882,21 @@ function createRoutes(ctx, config) {
         const body = await jsonBody(req);
         const { root, policy, session } = await scopeOf(ctx, body.sessionId);
         const summary = await pullUpstream(ctx, config, {
+          cwd: root,
+          policy,
+          session,
+          signal: void 0
+        });
+        forgetReads(root);
+        return { summary };
+      }
+    },
+    "/fetch": {
+      method: "POST",
+      async run(req) {
+        const body = await jsonBody(req);
+        const { root, policy, session } = await scopeOf(ctx, body.sessionId);
+        const summary = await fetchAll(ctx, config, {
           cwd: root,
           policy,
           session,

@@ -599,6 +599,22 @@ export function ExplorerBody(props) {
   }, [sessionId, request, refreshGit])
 
   /**
+   * Fetch every remote and prune dead remote-tracking refs.
+   *
+   * This is the only verb that refreshes what the remote world looks like: the remote branch
+   * section, ahead/behind numbers, and the graph's pushed lane all read `refs/remotes`, which
+   * nothing updates besides this and pull.
+   */
+  const doFetch = useCallback(async () => {
+    setDrawerBusy(true)
+    setDrawerError(undefined)
+    const result = await request('/fetch', { sessionId })
+    setDrawerBusy(false)
+    if (!result.ok) { setDrawerError(result.message); return }
+    await refreshGit()
+  }, [sessionId, request, refreshGit])
+
+  /**
    * Add, retarget, or drop one named remote.
    */
   const doRemote = useCallback(async (op, name, url) => {
@@ -1079,6 +1095,7 @@ export function ExplorerBody(props) {
       onClose: () => { setDrawer(null); setDrawerError(undefined) },
       onPull: doPull,
       onPush: doPush,
+      onFetch: doFetch,
       onRemote: doRemote,
       onAuthor: doAuthor,
       onSshKey: doSshKey,

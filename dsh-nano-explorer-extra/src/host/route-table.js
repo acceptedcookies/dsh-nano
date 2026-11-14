@@ -41,6 +41,18 @@ export const ROUTE_TABLE = [
   },
   {
     "plugin": "dsh-nano-explorer-extra",
+    "path": "/nano-explorer-extra/fetch",
+    "methods": [
+      "POST"
+    ],
+    "sensitivity": "L2",
+    "capability": "proc:git",
+    "bodyLimit": 65536,
+    "sessionBinding": true,
+    "justification": "dsh-nano-explorer-extra/src/host/routes.js — `git fetch --all --prune`: host process exec + outbound net to configured remotes; rewrites refs/remotes but never touches workspace files."
+  },
+  {
+    "plugin": "dsh-nano-explorer-extra",
     "path": "/nano-explorer-extra/push",
     "methods": [
       "POST"

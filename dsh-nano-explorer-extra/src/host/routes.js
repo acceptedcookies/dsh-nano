@@ -4,7 +4,7 @@ import { watch } from 'node:fs'
 import { ensurePerfReviewHost, LIB_VERSION } from 'dsh-performance-review/host'
 import { registerRoutes as registerGuardedRoutes } from 'dsh-host-route-guard'
 import { ROUTE_TABLE, PLUGIN } from './route-table.js'
-import { checkoutBranch, commitAll, ignoredAmong, ignoredPathsOf, listBranches, listConflicts, listWorktrees, pullUpstream, pushUpstream, readStatus, writeRemote, writeAuthor, writeSshKey } from './git.js'
+import { checkoutBranch, commitAll, fetchAll, ignoredAmong, ignoredPathsOf, listBranches, listConflicts, listWorktrees, pullUpstream, pushUpstream, readStatus, writeRemote, writeAuthor, writeSshKey } from './git.js'
 import { absoluteOf, isLexicallyInside, listDirectory } from './listing.js'
 import { createFile, createFolder, moveEntry, removeEntry, rename } from './mutate.js'
 import { statisticsOf } from './stats.js'
@@ -384,6 +384,20 @@ export function createRoutes(ctx, config) {
         const summary = await pullUpstream(ctx, config, {
           cwd: root, policy, session, signal: undefined,
         })
+        forgetReads(root)
+        return { summary }
+      },
+    },
+    '/fetch': {
+      method: 'POST',
+      async run(req) {
+        const body = await jsonBody(req)
+        const { root, policy, session } = await scopeOf(ctx, body.sessionId)
+        const summary = await fetchAll(ctx, config, {
+          cwd: root, policy, session, signal: undefined,
+        })
+        // Fetch rewrites remote-tracking refs, so every cached read that paints them (ahead/behind,
+        // the remote branch list, the graph's pushed lane) is stale the moment it lands.
         forgetReads(root)
         return { summary }
       },

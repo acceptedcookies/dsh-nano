@@ -335,16 +335,17 @@ function HistoryRail({ copy, history, currentBranch, upstream, remotes }) {
  * @param props - copy, Git summary, and the actions the panel can start.
  * @returns the panel, or null while closed.
  */
-export function BranchDrawer({ copy, open, git, onClose, onPull, onPush, onRefresh, onCheckout, onOpenConflict, onRemote, onAuthor, onSshKey, busy, error }) {
+export function BranchDrawer({ copy, open, git, onClose, onPull, onPush, onFetch, onRefresh, onCheckout, onOpenConflict, onRemote, onAuthor, onSshKey, busy, error }) {
   usePanelConfinedLayer(open)
   const [query, setQuery] = useState('')
   const [pendingBranch, setPendingBranch] = useState(null)
+  const [pendingRemote, setPendingRemote] = useState(null)
   // A first push needs a destination: the branch has no upstream yet, so the reader picks the
   // remote before anything leaves this machine. `false` = no dialog, a string = dialog choosing.
   const [pendingPush, setPendingPush] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   useEffect(() => {
-    if (!open) { setQuery(''); setPendingBranch(null); setPendingPush(false); setSettingsOpen(false) }
+    if (!open) { setQuery(''); setPendingBranch(null); setPendingRemote(null); setPendingPush(false); setSettingsOpen(false) }
   }, [open])
   if (!open) return null
   const current = branchName(git)
@@ -354,15 +355,22 @@ export function BranchDrawer({ copy, open, git, onClose, onPull, onPush, onRefre
   const remotes = git?.remotes ?? []
   const detached = git?.detached === true
   const history = git?.history ?? []
+  const localNames = new Set((git?.branches ?? []).map(row => row.name))
   const branches = [...(git?.branches ?? [])].sort((a, b) => {
     if (a.current === true && b.current !== true) return -1
     if (b.current === true && a.current !== true) return 1
     return a.name.localeCompare(b.name)
   }).filter(row => matches(query, [row.name, row.upstream, row.commit]))
+  // Remote-tracking refs are a snapshot of what each remote advertised at the last fetch, not a
+  // live view: `fetchedAt` (the FETCH_HEAD mtime) tells the reader how old that snapshot is.
+  const remoteBranches = [...(git?.remoteBranches ?? [])].sort((a, b) =>
+    a.name.localeCompare(b.name)).filter(row => matches(query, [row.name, row.commit]))
   const worktrees = (git?.worktrees ?? []).filter(row => matches(query, [
     row.branch, row.path, row.head, shortenPath(row.path),
   ]))
-  const filteredOut = query.trim() !== '' && branches.length === 0 && worktrees.length === 0
+  const fetchedAt = typeof git?.fetchedAt === 'number' ? git.fetchedAt : undefined
+  const fetchStamp = fetchedAt === undefined ? copy.fetchNever : copy.fetchAgo(ageLabel(copy, fetchedAt / 1000))
+  const filteredOut = query.trim() !== '' && branches.length === 0 && remoteBranches.length === 0 && worktrees.length === 0
   const conflicts = git?.conflicts ?? []
   const summary = copy.branchDrawerSummary(
     current ?? copy.detached,
@@ -379,6 +387,12 @@ export function BranchDrawer({ copy, open, git, onClose, onPull, onPush, onRefre
       // the reader is done, matching the spot this panel family reserves for dismissals.
       React.createElement(Button, { variant: 'outline', className: 'nano-modal-action nxe-drawer-close', onClick: onClose }, copy.cancel),
       React.createElement(Button, { variant: 'outline', className: 'nano-modal-action', onClick: () => { void onRefresh() } }, copy.refreshGit),
+      remotes.length === 0 ? null : React.createElement(Button, {
+        variant: 'outline', className: 'nano-modal-action',
+        disabled: busy === true,
+        title: fetchStamp,
+        onClick: () => { void onFetch() },
+      }, copy.fetchNow),
       React.createElement(Button, {
         variant: 'outline', className: 'nano-modal-action',
         title: copy.repoSettingsTitle,
@@ -474,7 +488,37 @@ export function BranchDrawer({ copy, open, git, onClose, onPull, onPush, onRefre
               ? React.createElement('span', { className: 'nxe-drawer-row-badge' }, copy.branchHeldShort)
               : row.current === true
                 ? React.createElement('span', { className: 'nxe-drawer-row-badge', 'data-tone': 'current' }, copy.branchCurrentShort)
-                : null))),
+                : row.upstream === null
+                  ? React.createElement('span', { className: 'nxe-drawer-row-badge', 'data-tone': 'local' }, copy.branchLocalOnly)
+                  : null))),
+        React.createElement('h3', { className: 'nxe-drawer-heading' },
+          copy.remoteBranchesHeadingCount(remoteBranches.length),
+          ' ',
+          React.createElement('span', { className: 'nxe-drawer-row-path', title: fetchStamp }, fetchStamp)),
+        remoteBranches.length === 0
+          ? React.createElement('p', { className: 'nxe-drawer-empty' }, copy.remoteBranchesEmpty)
+          : React.createElement('ul', { className: 'nxe-drawer-list', 'data-nxe-remote-branches': 'true' }, remoteBranches.map(row => {
+            const base = row.name.slice(row.name.indexOf('/') + 1)
+            const tracked = localNames.has(base)
+            return React.createElement('li', {
+              key: row.name,
+              className: 'nxe-drawer-row',
+              'data-tracked': String(tracked),
+            },
+            React.createElement('button', {
+              type: 'button', className: 'nxe-drawer-branch',
+              disabled: busy === true || conflicts.length > 0,
+              title: conflicts.length > 0
+                ? copy.branchConflictBlocks
+                : tracked ? row.name : copy.checkoutRemoteTitle(row.name),
+              onClick: () => setPendingRemote(row.name),
+              'data-nxe-remote-checkout': row.name,
+            }, row.name),
+            row.commit === '' ? null : React.createElement('span', { className: 'nxe-graph-hash' }, row.commit),
+            tracked
+              ? React.createElement('span', { className: 'nxe-drawer-row-badge', 'data-tone': 'current' }, copy.branchTrackedShort)
+              : null)
+          })),
         React.createElement('h3', { className: 'nxe-drawer-heading' }, copy.worktreesHeadingCount(worktrees.length)),
         worktrees.length === 0
           ? React.createElement('p', { className: 'nxe-drawer-empty' }, copy.worktreesEmpty)
@@ -509,6 +553,19 @@ export function BranchDrawer({ copy, open, git, onClose, onPull, onPush, onRefre
       },
       onCancel: () => setPendingBranch(null),
     }, React.createElement('p', { className: 'nxe-drawer-empty' }, copy.checkoutBody(pendingBranch))),
+    pendingRemote === null ? null : React.createElement(Dialog, {
+      copy,
+      title: copy.checkoutRemoteTitle(pendingRemote),
+      description: copy.checkoutRemoteBody(pendingRemote),
+      confirmLabel: copy.checkoutConfirm,
+      busy,
+      onConfirm: () => {
+        const name = pendingRemote
+        setPendingRemote(null)
+        void onCheckout(name)
+      },
+      onCancel: () => setPendingRemote(null),
+    }, React.createElement('p', { className: 'nxe-drawer-empty' }, copy.checkoutRemoteBody(pendingRemote))),
     pendingPush === false ? null : React.createElement(Dialog, {
       copy,
       title: copy.pushFirstTitle,

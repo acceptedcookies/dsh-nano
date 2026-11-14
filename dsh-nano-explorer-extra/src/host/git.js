@@ -403,26 +403,29 @@ export async function readStatus(ctx, config, request) {
   // rail, divergence, remotes, and the author do not change with the directory, so asking for
   // them here would spend four extra Git processes per folder the reader opens. The whole-suite
   // reads stay on the unscoped path that feeds the drawer.
-  const [branches, history, remote, remotes, repoConfig] = scoped
-    ? [[], [], undefined, [], undefined]
+  const [branches, remoteBranches, history, remote, remotes, repoConfig, fetchedAt] = scoped
+    ? [[], [], [], undefined, [], undefined, undefined]
     : await Promise.all([
       listBranches(ctx, config, request, worktrees),
+      listRemoteBranches(ctx, config, request),
       readHistory(ctx, config, request),
       typeof parsed.upstream !== 'string' || parsed.upstream === ''
         ? Promise.resolve(undefined)
         : remoteDivergence(ctx, config, request),
       readRemotes(ctx, config, request),
       readRepoConfig(ctx, config, request),
+      fetchStamp(ctx, config, request),
     ])
   const author = repoConfig === undefined ? undefined : authorOf(repoConfig)
   const sshKey = repoConfig === undefined ? undefined : sshKeyOf(repoConfig)
   const conflicts = parsed.files.filter(file => file.status === 'U').map(file => file.path)
 
   return {
-    root, ...parsed, stashed, worktrees, branches, history, conflicts,
+    root, ...parsed, stashed, worktrees, branches, remoteBranches, history, conflicts,
     ...(remote === undefined ? {} : { remote }),
     remotes, author,
     ...(sshKey === undefined ? {} : { sshKey }),
+    ...(fetchedAt === undefined ? {} : { fetchedAt }),
   }
 }
 
@@ -672,6 +675,34 @@ export async function checkoutBranch(ctx, config, request) {
   if (name === '') throw new Error('a branch name is required')
   // The value reaches a process argument, so it must not look like an option.
   if (name.startsWith('-')) throw new Error('a branch name must not begin with a dash')
+  // A `remote/branch` operand can name a remote-tracking ref. A bare `checkout` of that would
+  // leave a detached HEAD, so it becomes `--track` instead: Git creates the local branch under
+  // the short name and binds the upstream in one step. Names without a slash cannot be remote
+  // refs, and a local branch always wins over a same-named remote one (Git's own DWIM does the
+  // same), so the two cases never collide.
+  if (name.includes('/')) {
+    const remoteRef = await runGit(ctx, config, {
+      ...request, args: ['show-ref', '--verify', `refs/remotes/${name}`], allowedExitCodes: [0, 1],
+    })
+    if (remoteRef.exitCode === 0) {
+      const base = name.slice(name.indexOf('/') + 1)
+      if (base !== '' && base !== 'HEAD') {
+        const local = await runGit(ctx, config, {
+          ...request, args: ['show-ref', '--verify', `refs/heads/${base}`], allowedExitCodes: [0, 1],
+        })
+        if (local.exitCode !== 0) {
+          const tracked = await runGit(ctx, config, {
+            ...request, args: ['checkout', '--track', name], allowedExitCodes: [0, 1, 128],
+          })
+          if (tracked.exitCode !== 0) {
+            const detail = firstLine(tracked.stderr) || firstLine(tracked.stdout)
+            throw new Error(detail === '' ? 'git checkout failed' : detail)
+          }
+          return { branch: base }
+        }
+      }
+    }
+  }
   const result = await runGit(ctx, config, {
     ...request, args: ['checkout', name], allowedExitCodes: [0, 1, 128],
   })
@@ -680,6 +711,83 @@ export async function checkoutBranch(ctx, config, request) {
     throw new Error(detail === '' ? 'git checkout failed' : detail)
   }
   return { branch: name }
+}
+
+/**
+ * List remote-tracking refs (`refs/remotes`) — the local record of what each remote advertised at
+ * the last fetch. `origin/HEAD` is a symbolic ref and is dropped; everything else is one row.
+ * Freshness is the caller's concern: these refs move only on fetch/pull, never on their own.
+ * @param ctx - context providing the process services.
+ * @param config - executable and process limits.
+ * @param request - working directory and cancellation.
+ * @returns one row per remote-tracking ref: `{ name, commit }`.
+ */
+export async function listRemoteBranches(ctx, config, request) {
+  const result = await runGit(ctx, config, {
+    ...request,
+    args: ['for-each-ref', '--format=%(refname:short)%09%(objectname:short)%09%(symref:short)', 'refs/remotes'],
+    allowedExitCodes: [0, 128],
+  }).catch(() => undefined)
+  if (result === undefined || result.exitCode !== 0) return []
+  const rows = []
+  for (const line of result.stdout.split('\n')) {
+    if (line.trim() === '') continue
+    const [name, commit, symref] = line.split('\t')
+    if (name === undefined || name === '') continue
+    // `origin/HEAD`-style symrefs point at another remote ref; they are aliases, not branches.
+    if (symref !== undefined && symref !== '') continue
+    rows.push({ name, commit: commit ?? '' })
+  }
+  return rows
+}
+
+/**
+ * Fetch every configured remote and prune remote-tracking refs whose branches were deleted
+ * upstream. This is the only path that refreshes `refs/remotes` outside a pull: the branch list,
+ * ahead/behind numbers, and the graph's pushed lane all read from it.
+ * @param ctx - context providing the process services.
+ * @param config - executable and process limits.
+ * @param request - working directory and cancellation.
+ * @returns a short summary of refs that moved, or `'already up to date'`.
+ * @throws with Git's own diagnostic when the fetch fails (offline, auth, no remotes).
+ */
+export async function fetchAll(ctx, config, request) {
+  const result = await runGit(ctx, config, {
+    ...request, args: ['fetch', '--all', '--prune'], allowedExitCodes: [0, 1, 128],
+  })
+  if (result.exitCode !== 0) {
+    const detail = firstLine(result.stderr) || firstLine(result.stdout)
+    throw new Error(detail === '' ? 'git fetch failed' : detail)
+  }
+  const moved = result.stderr.split('\n').filter(line => line.includes('->') && !line.includes('FETCH_HEAD'))
+  if (moved.length === 0) return 'already up to date'
+  return `${moved.length} ref${moved.length === 1 ? '' : 's'} updated`
+}
+
+/**
+ * When this checkout last fetched, epoch milliseconds. `FETCH_HEAD`'s mtime is the timestamp of
+ * the most recent fetch or pull; absent when the repo has never fetched.
+ * @param ctx - context providing `fs` and the process services.
+ * @param config - executable and process limits.
+ * @param request - working directory and cancellation.
+ * @returns epoch ms, or `undefined` when unknown.
+ */
+async function fetchStamp(ctx, config, request) {
+  const gitdir = await runGit(ctx, config, {
+    ...request, args: ['rev-parse', '--git-dir'], allowedExitCodes: [0, 128],
+  }).catch(() => undefined)
+  if (gitdir === undefined || gitdir.exitCode !== 0) return undefined
+  const dir = gitdir.stdout.trim()
+  if (dir === '') return undefined
+  const absolute = dir.startsWith('/') ? dir : `${request.cwd.replace(/\/+$/u, '')}/${dir}`
+  // dsh fs stat reports no mtime; its `version` token encodes `dev:ino:size:mtimeNs:ctimeNs`
+  // (dsh-fs-local versionOf), so the fetch time is the token's fourth field.
+  const target = await ctx.fs?.resolve(`${absolute}/FETCH_HEAD`).catch(() => undefined)
+  if (target === undefined) return undefined
+  const info = await ctx.fs.stat(target).catch(() => undefined)
+  const ns = typeof info?.version === 'string' ? info.version.split(':')[3] : undefined
+  const ms = ns === undefined || ns === '' ? undefined : Number(BigInt(ns) / 1000000n)
+  return typeof ms === 'number' && Number.isFinite(ms) && ms > 0 ? ms : undefined
 }
 
 /**

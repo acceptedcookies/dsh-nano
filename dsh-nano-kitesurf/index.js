@@ -104,6 +104,23 @@ async function elementRefForPicked(httpBase, pickedSelector) {
   }
 }
 
+// Render-fidelity report for /snapshot: how trustworthy is the a11y-lite tree
+// as a semantic model? Kitesurf rewrites rich pages into svg viewport + P text
+// runs, so a tree of generics is a renderer limit, not a walker bug.
+// semantic = roles a real a11y tree would carry (heading/list/landmark/table);
+// interactive = actable nodes; sparse means semantic is ~0 and svg dominates.
+function snapshotFidelity(snap) {
+  const refs = Object.values(snap?.refs || {})
+  const interactive = refs.filter((r) => /^(link|button|input|textbox|checkbox|radio|combobox|slider|searchbox|option)$/.test(r.role)).length
+  const semantic = refs.filter((r) => /^(heading|list|listitem|table|main|navigation|banner|contentinfo|article|section)$/.test(r.role)).length
+  // A page is "sparse" when the tree has actable nodes but no semantic
+  // landmarks AND almost nothing to act on — i.e. it's a rendered picture,
+  // not a navigable document. interactive<=1 keeps form pages (httpbin) out.
+  const svgViewport = /\bsvg\b/i.test(snap?.tree || '')
+  const sparse = refs.length > 0 && semantic === 0 && interactive <= 1
+  return { refs: refs.length, interactive, semantic, svgViewport, sparse }
+}
+
 export const Config = {
   '~standard': {
     version: 1,
@@ -594,6 +611,8 @@ export function apply(ctx, config) {
     if (summary.operations.failures > 0) hints.push(`最近 ${summary.operations.failures} 次操作失败：GET /operations?errorsOnly=true 看 errorId，再对照 errorCatalog`)
     if (summary.console.counts.error || summary.console.counts.exception) hints.push('页面有 error/exception：GET /console?level=error,exception 看堆栈')
     if (kite.snapshot().phase !== 'running') hints.push(`phase=${kite.snapshot().phase}：按阶段用 start/suspend/resume，409 是阶段不符不是引擎故障`)
+    const snapFid = getLastSnapshot()?.fidelity
+    if (snapFid?.sparse) hints.push(`渲染保真稀疏：a11y 树 ${snapFid.refs} 个节点但 semantic=0、interactive=${snapFid.interactive}（Kitesurf 把语义结构渲染成了块）。用人点选 /pick 或 @N 定位，勿依赖 heading/list/语义 landmark；富语义页面建议 Chromium/ego`)
     return {
       ok: true,
       at: new Date().toISOString(),
@@ -1175,10 +1194,14 @@ export function apply(ctx, config) {
           const q = queryOf(req)
           const snap = await hostSpan('snapshot', () => captureSnapshot(origin(), { maxNodes: Number(q.get('maxNodes') || 200) }))
           putElementRefs(snap.refs, snap.url)
-          // Trim for the 30s MCP push: keep the ref table + counts, drop the
-          // full tree text (an agent re-walks live via /snapshot when needed).
-          setLastSnapshot({ at: new Date().toISOString(), url: snap.url, title: snap.title, count: snap.count, truncated: snap.truncated, refs: snap.refs, treePreview: snap.tree.split('\n').slice(0, 30).join('\n') })
-          sendJson(res, 200, { ok: true, ...snap })
+          // Render-fidelity honesty (P0-5 follow-up, eval-round-1 finding):
+          // Kitesurf rewrites rich pages into svg+P with no <h1>/list/main, so
+          // a sparse semantic tree is a RENDERER limit, not a walker bug. Report
+          // the density so an agent knows whether the tree is trustworthy for
+          // semantic navigation or it should fall back to human pick/@N.
+          const fidelity = snapshotFidelity(snap)
+          setLastSnapshot({ at: new Date().toISOString(), url: snap.url, title: snap.title, count: snap.count, truncated: snap.truncated, refs: snap.refs, fidelity, treePreview: snap.tree.split('\n').slice(0, 30).join('\n') })
+          sendJson(res, 200, { ok: true, ...snap, fidelity })
         } catch (error) {
           fail(res, error)
         }

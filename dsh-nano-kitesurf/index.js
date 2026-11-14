@@ -15,7 +15,7 @@ import { ERROR_STATUS, clearConsole, clearNetwork, clearOperations, diagnosticsS
 import { buildSrcDoc } from './lib/dom.js'
 import { kitesurfSkill, nanoKiteSkill } from './lib/skill.js'
 import { createNanoKite } from './lib/nano-kite.js'
-import { ensureLocalContainer, hostPort, stopLocalContainer } from './lib/container-engine.js'
+import { hostPort, hostPortFree } from './lib/container-engine.js'
 import { hostSpan as rawHostSpan, perfCount, perfSnapshot, setPerfEnabled } from './lib/perf-host.js'
 
 // Request-scoped incident id (P1-4): traced() opens an ALS context per request
@@ -471,53 +471,18 @@ export function apply(ctx, config) {
   /** Last port repair performed by bringUp — surfaced in /status + /ports. */
   let portRepair = null
   async function bringUp(id) {
-    // Container bring-up can run ~100s (image pull + workerd boot + health
-    // polling). Split the observables: `kite.container` covers the CLI call
-    // (cold image pull vs warm re-adopt), `kite.warmup` the health poll —
-    // so perf review distinguishes a slow boot from a slow spawn.
-    await hostSpan('kite-bringup', async () => {
-      const ensured = await hostSpan('kite-container',
-        () => ensureLocalContainer(kite.snapshot(), { checkout: effectiveCheckout }))
-      // Resilience: the container may have been adopted on a different port
-      // than the config asked for (the configured one was busy). Rewrite the
-      // live engine endpoint so every later call follows reality, and record
-      // the repair for /status + /ports.
-      if (ensured && ensured.hostEnginePort) {
-        const before = kite.snapshot()
-        const wantBase = `http://127.0.0.1:${ensured.hostEnginePort}`
-        const patch = {}
-        if (before.httpBase !== wantBase) patch.httpBase = wantBase
-        if (ensured.mcpPort && before.mcpPort !== ensured.mcpPort) patch.mcpPort = ensured.mcpPort
-        if (Object.keys(patch).length) {
-          try { kite.configure(patch) } catch { /* keep config if it refuses */ }
-          portRepair = {
-            at: new Date().toISOString(),
-            from: { httpBase: before.httpBase, mcpPort: before.mcpPort },
-            to: { httpBase: kite.snapshot().httpBase, mcpPort: kite.snapshot().mcpPort },
-            reason: ensured.adopted ? 'adopted-existing-container' : 'port-busy-repaired',
-            requestedEnginePort: ensured.requestedEnginePort ?? null,
-          }
-        }
+    await hostSpan('kite-warmup', async () => {
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        try {
+          const health = await fetchEngine(kite.snapshot().httpBase, '/health')
+          if (health.status === 200) return { healthy: true }
+        } catch { /* the engine is not answering */ }
+        await new Promise((resolve) => setTimeout(resolve, 200))
       }
-      // Remember what actually worked so the next cold start can rebuild the
-      // container without anyone editing a profile again.
-      await rememberCheckout(effectiveCheckout)
-      await hostSpan('kite-warmup', async () => {
-        for (let attempt = 0; attempt < 20; attempt += 1) {
-          try {
-            const health = await fetchEngine(kite.snapshot().httpBase, '/health')
-            if (health.status === 200) return { ...ensured, healthy: true }
-          } catch { /* the process is still booting */ }
-          await new Promise((resolve) => setTimeout(resolve, 1000))
-        }
-        throw new KitesurfError(id, '引擎没有应答')
-      })
+      throw new KitesurfError(id, '引擎没有应答。容器的启动不在这个包里。')
     })
   }
   async function sleepEngine() {
-    // Stop first, then drop the socket: a failed stop leaves the phase
-    // 'running' with a still-open socket, not a dead one (R13 residual).
-    await stopLocalContainer(kite.snapshot())
     releaseEngine()
   }
   const origin = () => kite.snapshot().httpBase
@@ -537,24 +502,10 @@ export function apply(ctx, config) {
   async function portReport() {
     const snap = kite.snapshot()
     const want = { httpBase: config?.httpBase ?? DEFAULT_ORIGIN, mcpPort: snap.mcpPort }
-    let published = null
-    let containerState = null
-    try {
-      const { execFile } = await import('node:child_process')
-      const out = await new Promise((resolve) => {
-        execFile('container', ['inspect', 'kitesurf'], { timeout: 5000 }, (error, stdout) => resolve(error ? null : stdout))
-      })
-      if (out) {
-        const row = JSON.parse(out)?.[0]
-        containerState = row?.status?.state ?? (typeof row?.status === 'string' ? row.status : null)
-        published = (row?.configuration?.publishedPorts ?? []).map((p) => ({
-          containerPort: Number(p.containerPort), hostPort: Number(p.hostPort), hostAddress: p.hostAddress,
-        }))
-      }
-    } catch { /* container CLI missing is itself reported as null */ }
+    const published = null
+    const containerState = null
     const probe = async (port) => {
       if (!Number.isFinite(port)) return null
-      const { hostPortFree } = await import('./lib/container-engine.js')
       return { port, free: await hostPortFree(port) }
     }
     const [wantEngine, wantMcp] = await Promise.all([probe(hostPort(snap.httpBase)), probe(snap.mcpPort)])

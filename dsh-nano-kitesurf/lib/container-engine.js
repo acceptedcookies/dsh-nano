@@ -3,7 +3,6 @@
  * A remote httpBase is not this machine, so it is only probed.
  */
 
-import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { createConnection } from 'node:net'
 import { homedir } from 'node:os'
@@ -13,8 +12,6 @@ import { KitesurfError } from './engine.js'
 // A container CLI call can hang (cold apiserver, stuck image pull). Without a
 // ceiling the /kite route would block forever and the pane would never get an
 // answer. 120s covers a cold image pull; the health poll has its own budget.
-const CLI_TIMEOUT_MS = Number(process.env.KITESURF_CLI_TIMEOUT_MS || 120_000)
-
 export const CONTAINER_NAME = 'kitesurf'
 export const ENGINE_IMAGE = 'kitesurf-engine:latest'
 
@@ -80,45 +77,9 @@ function scrubPaths(text) {
 
 /**
  * @param {string[]} args
- * @param {{ spawn?: typeof spawn }} [io]
  */
-export function runContainer(args, io = {}) {
-  const spawnFn = io.spawn || spawn
-  return new Promise((resolve, reject) => {
-    const child = spawnFn('container', args, { stdio: ['ignore', 'pipe', 'pipe'] })
-    let stdout = ''
-    let stderr = ''
-    let settled = false
-    const timer = setTimeout(() => {
-      if (settled) return
-      settled = true
-      try { child.kill('SIGKILL') } catch { /* gone */ }
-      reject(new KitesurfError('kitesurf.kite.container', `container ${args[0]} timed out after ${Math.round(CLI_TIMEOUT_MS / 1000)}s`))
-    }, CLI_TIMEOUT_MS)
-    const finish = (fn) => (...params) => {
-      if (settled) return
-      settled = true
-      clearTimeout(timer)
-      fn(...params)
-    }
-    child.stdout?.on('data', (chunk) => { stdout += chunk })
-    child.stderr?.on('data', (chunk) => { stderr += chunk })
-    child.on('error', finish(reject))
-    child.on('close', finish((code) => {
-      if (code === 0) {
-        resolve({ stdout, stderr })
-      } else {
-        // Progress lines (fetching/unpacking/starting) go to stdout; the real
-        // failure line often lands there too (e.g. "failed to bootstrap").
-        // Include the last meaningful lines from both so the pane shows the
-        // actual cause, not just the CLI's debug-build warning.
-        const detail = `${stderr.trim()}\n${stdout.trim()}`
-        const lines = detail.split('\n').map((line) => line.trim()).filter((line) => line && !/^warning/i.test(line))
-        const tail = lines.slice(-3).join(' | ') || `container ${args[0]} failed`
-        reject(new KitesurfError('kitesurf.kite.container', scrubPaths(tail).slice(0, 300)))
-      }
-    }))
-  })
+export function runContainer(args) {
+  return Promise.reject(new KitesurfError('kitesurf.kite.container', `this package does not run a container (${args?.[0] || 'command'})`))
 }
 
 /**
@@ -177,161 +138,14 @@ function publishedPortsOf(text) {
  */
 export async function ensureLocalContainer(target, io = {}) {
   if (!isLoopback(target.httpBase)) return { local: false }
-  const run = io.run || runContainer
-  const inspect = io.inspect || (async (name) => {
-    try {
-      const { stdout } = await runContainer(['inspect', name])
-      return stdout
-    } catch {
-      return null
-    }
-  })
-  const enginePort = hostPort(target.httpBase)
-
-  // The `container` CLI's inline bootstrap ("failed to bootstrap") is broken
-  // on debug builds when the apiserver is cold. Prime it BEFORE any inspect,
-  // run or start — a stopped container hitting `container start` needs the
-  // same priming as a cold create. Idempotent and cheap when warm.
-  const prime = async () => {
-    try {
-      await run(['system', 'start'])
-    } catch (error) {
-      throw new KitesurfError('kitesurf.kite.container',
-        `container system start failed: ${scrubPaths((error instanceof Error ? error.message : String(error)).slice(0, 200))}`)
-    }
-  }
-  // One bounded retry for transient CLI faults (cold apiserver, stuck pull,
-  // name collision). Deterministic input errors must NOT be retried.
-  const runOnce = async (args) => {
-    try {
-      return await run(args)
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      if (/timed out|bootstrap|internalError|unavailable|not found|no such/i.test(message)) {
-        await new Promise((resolve) => setTimeout(resolve, 600))
-        return run(args)
-      }
-      throw error
-    }
-  }
-  // Resolve the checkout BEFORE touching the subsystem: a missing
-  // KITESURF_CHECKOUT is a config fault (400), not a container failure.
-  // Deferred until we know a create is actually needed so a warm start never
-  // demands a checkout it does not use.
-  await prime()
-  let inspectText = await inspect(CONTAINER_NAME)
-  let exists = inspectText != null
-  /** Set when a port-conflicted config adopts the container's real port. */
-  let adopted = null
-  if (exists) {
-    const ports = publishedPortsOf(inspectText)
-    if (ports !== null) {
-      // Match means the same host ports AND loopback-bound: an old container
-      // published on 0.0.0.0 must be rebuilt, not reused (S2-5).
-      const loop = (p) => p?.hostAddress === '127.0.0.1' || p?.hostAddress === '::1'
-      const engineRow = ports.find((p) => Number(p?.containerPort) === 8787 && loop(p))
-      const mcpRow = ports.find((p) => Number(p?.containerPort) === 8791 && loop(p))
-      const match = engineRow && Number(engineRow.hostPort) === enginePort
-        && mcpRow && Number(mcpRow.hostPort) === target.mcpPort
-      if (!match) {
-        // A remap must not destroy a healthy engine. If the requested engine
-        // port is already held by another process (Cursor owns 8787 here),
-        // recreating would delete the working container AND fail to bind.
-        const probe = io.portFree || hostPortFree
-        const desiredFree = await probe(enginePort)
-        if (!desiredFree) {
-          const currentEnginePort = engineRow ? Number(engineRow.hostPort) : null
-          const currentMcpPort = mcpRow ? Number(mcpRow.hostPort) : null
-          // Resilience: the container's OWN ports are still free (it is the
-          // one holding them). Adopt it instead of destroying it, and let the
-          // host rewrite its effective httpBase/mcpPort to match. A wrong
-          // config must never cost the operator a working engine.
-          if (currentEnginePort && await probe(currentEnginePort)) {
-            // Remember the adoption but DO NOT return here: a stopped
-            // container still needs its `container start` below.
-            adopted = {
-              adopted: true,
-              hostEnginePort: currentEnginePort,
-              mcpPort: currentMcpPort || target.mcpPort,
-              requestedEnginePort: enginePort,
-            }
-            exists = true
-          } else {
-            throw new KitesurfError('kitesurf.kite.portbusy',
-              `端口 ${enginePort} 已被其他程序占用，且现有容器的端口也无法确认空闲；现有容器保持不变。请把 config.httpBase 指到空闲端口（本机引擎通常用 8798）`)
-          }
-        }
-        if (!adopted) {
-          await run(['delete', '--force', CONTAINER_NAME])
-          exists = false
-        }
-      }
-    }
-  }
-  if (!exists && !adopted) {
-    // io.checkout may be a path string or a deferred resolver (the plugin
-    // passes effectiveCheckout() so a lock-file write mid-bring-up still
-    // wins). Accept both; fall back to the env/config resolver.
-    const rawCheckout = typeof io.checkout === 'function' ? io.checkout() : io.checkout
-    const checkout = rawCheckout || checkoutPath()
-    // A plugin-supplied checkout skips checkoutPath()'s probe — validate it so
-    // a bad mount is a 400 config fault, not a 20s warmup blank page. An io-
-    // injected path (tests) is trusted as-is: they never touch the filesystem.
-    if (io.checkout === undefined && (!existsSync(checkout) || !existsSync(join(checkout, 'packages/engine/wrangler.jsonc')))) {
-      throw new KitesurfError('kitesurf.kite.checkout', `Kitesurf 源码目录不可用或缺少 packages/engine/wrangler.jsonc：${checkout}`)
-    }
-    // Resilience for a fresh create: if the preferred port is occupied, move
-    // to the next free one instead of failing the whole bring-up.
-    let createEnginePort = enginePort
-    let createMcpPort = target.mcpPort
-    const probe = io.portFree || hostPortFree
-    if (!(await probe(createEnginePort))) {
-      const free = await firstFreePort(enginePort + 10, probe)
-      if (!free) {
-        throw new KitesurfError('kitesurf.kite.portbusy',
-          `端口 ${enginePort} 及其后候选端口都被占用，无法创建引擎容器`)
-      }
-      createEnginePort = free
-      if (!(await probe(createMcpPort))) createMcpPort = free + 1
-    }
-    await runOnce(createArgs({
-      checkout,
-      hostEnginePort: createEnginePort,
-      hostMcpPort: createMcpPort,
-      stateDir: statePath(),
-    }))
-    return {
-      local: true,
-      created: true,
-      hostEnginePort: createEnginePort,
-      mcpPort: createMcpPort,
-      ...(createEnginePort !== enginePort ? { requestedEnginePort: enginePort, repaired: true } : {}),
-    }
-  }
-  try {
-    await runOnce(['start', CONTAINER_NAME])
-  } catch (error) {
-    if (!/already|running/i.test(error instanceof Error ? error.message : '')) throw error
-  }
-  return adopted
-    ? { local: true, created: false, ...adopted }
-    : { local: true, created: false }
+  void io
+  throw new KitesurfError('kitesurf.kite.container', 'this package does not start a container')
 }
 
-/**
- * A missing container is already stopped — that is the desired end state, not
- * a failure. Real stop errors still propagate so suspend keeps its phase.
- */
 export async function stopLocalContainer(target, io = {}) {
+  void io
   if (!isLoopback(target.httpBase)) return { local: false }
-  const run = io.run || runContainer
-  try {
-    await run(['stop', CONTAINER_NAME])
-  } catch (error) {
-    const message = error instanceof Error ? error.message : ''
-    if (!/no such|not found|does not exist/i.test(message)) throw error
-  }
-  return { local: true }
+  return { local: true, stopped: false }
 }
 
 

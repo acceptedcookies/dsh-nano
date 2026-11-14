@@ -299,5 +299,17 @@ export const ROUTE_TABLE = [
     "bodyLimit": 4096,
     "sessionBinding": false,
     "justification": "Navigation history move (back/forward) via Page.getNavigationHistory."
+  },
+  {
+    "plugin": "dsh-nano-kitesurf",
+    "path": "/nano-kitesurf/perf-report",
+    "methods": [
+      "POST"
+    ],
+    "sensitivity": "L2",
+    "capability": "read:host",
+    "bodyLimit": 200000,
+    "sessionBinding": false,
+    "justification": "Client perf-review report sink, merged into perfSnapshot."
   }
 ]

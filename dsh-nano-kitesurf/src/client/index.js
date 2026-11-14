@@ -42,6 +42,18 @@ const perf = perfReview.join(OWN_ID, {
   root: () => document.querySelector('[data-nks-workspace]'),
 })
 
+// Report collected spans to the host so /perf-review/host can show them.
+try {
+  const reportPerf = () => {
+    try {
+      const report = perfReview.report({ scenario: 'pane' })
+      fetch('/nano-kitesurf/perf-report', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(report) }).catch(() => {})
+    } catch { /* collector not ready */ }
+  }
+  setInterval(reportPerf, 10000)
+  setTimeout(reportPerf, 3000)
+} catch { /* no collector */ }
+
 const STYLE = `
 .nks-root{position:relative;height:100%;min-height:0;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-base);flex-direction:column;flex:auto;display:flex;font:var(--dsw-font-xxs-12);container-type:inline-size}
 .nks-toolbar{position:relative;z-index:3;margin-top:26px;box-sizing:border-box;border-bottom:.5px solid var(--dsw-alias-border-l3);flex:none;align-items:center;gap:4px;height:38px;padding:5px 6px;display:flex}

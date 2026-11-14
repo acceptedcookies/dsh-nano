@@ -29,6 +29,7 @@ const PICK_ROUTE = '/nano-kitesurf/pick'
 const EDIT_ROUTE = '/nano-kitesurf/edit'
 const SETTINGS_ROUTE = '/nano-kitesurf/settings'
 const PERF_ROUTE = '/nano-kitesurf/perf-review/host'
+const PERF_REPORT_ROUTE = '/nano-kitesurf/perf-report'
 const KITE_ROUTE = '/nano-kitesurf/kite'
 const CONSOLE_ROUTE = '/nano-kitesurf/console'
 const OPERATIONS_ROUTE = '/nano-kitesurf/operations'
@@ -465,6 +466,7 @@ export function apply(ctx, config) {
    * (or an agent over MCP) never has to run `container` by hand.
    */
   let lastSelfTest = null
+  let lastClientPerf = null
   let lastElements = null
   let lastDom = null
   async function runSelfTest() {
@@ -1081,6 +1083,18 @@ export function apply(ctx, config) {
       },
     },
     {
+      path: PERF_REPORT_ROUTE,
+      methods: ['POST'],
+      bodyLimit: 200000,
+      handler: async (req, res, route) => {
+        try {
+          const body = await readBody(req, route.bodyLimit)
+          lastClientPerf = body && typeof body === 'object' ? { at: new Date().toISOString(), report: body } : null
+          sendJson(res, 200, { ok: true, at: lastClientPerf?.at })
+        } catch (error) { fail(res, error) }
+      },
+    },
+    {
       path: PERF_ROUTE,
       methods: ['GET', 'HEAD', 'POST'],
       handler: (req, res) => {
@@ -1091,7 +1105,7 @@ export function apply(ctx, config) {
           fail(res, new KitesurfError('kitesurf.perf.method', 'mode=window drains samples; use POST'))
           return
         }
-        sendJson(res, 200, perfSnapshot(mode))
+        sendJson(res, 200, { ...perfSnapshot(mode), client: lastClientPerf })
       },
     },
   ].map(traced), { table: ROUTE_TABLE, plugin: PLUGIN })

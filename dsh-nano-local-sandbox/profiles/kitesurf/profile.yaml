@@ -12,7 +12,7 @@ build:
   checkout:
     ref: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
     verify: packages/engine/wrangler.jsonc
-  digest: sha256:4afe91bd473de4a7b796194140d8221882a5fe9fcfbc15626cbb6eaa00e25afb
+  digest: sha256:0f51b469daab8b6ed04d7533de5e1501929bfba1b40f798c5296200e048bb105
 runtime:
   user: node
   entrypoint: /entrypoint.sh

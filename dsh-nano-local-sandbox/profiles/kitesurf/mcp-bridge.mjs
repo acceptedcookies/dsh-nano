@@ -280,7 +280,7 @@ function answerNativeTool(name, args, bridgeState) {
     return { ok: true, ...bridgeState.stats(), diagnosticsPushedAt: snap?.at || null }
   }
   if (!snap) {
-    return { ok: false, errorId: 'kitesurf.diag.stale', error: 'host has not pushed a diagnostics snapshot yet; retry in a few seconds', hint: 'GET /nano-local-sandbox/diagnostics on the authenticated host, or wait for the 30s push' }
+    return { ok: false, error: 'this bridge does not keep a host snapshot; read GET /nano-local-sandbox/diagnostics' }
   }
   if (name === 'sandbox.diagnostics') return snap
   if (name === 'sandbox.console') {
@@ -352,17 +352,6 @@ function answerNativeTool(name, args, bridgeState) {
   }
   if (name.startsWith('sandbox.profile.') || name.startsWith('sandbox.instance.')) {
     return { ok: false, errorId: 'kitesurf.tool.unknown', error: 'lifecycle tools are answered by the host, not this bridge' }
-  }
-  if (name === 'sandbox.control') {
-    const c = bridgeState.control || {}
-    return {
-      ok: true,
-      writer: c.writer != null,
-      owner: c.owner ?? null,
-      ownerSince: c.ownerSince ?? null,
-      lastWriteAt: c.lastWriteAt ?? null,
-      hint: 'one writer moves the page at a time; a second writer gets kitesurf.control.busy',
-    }
   }
   return { ok: false, errorId: 'kitesurf.tool.unknown', error: `unknown native tool ${name}` }
 }

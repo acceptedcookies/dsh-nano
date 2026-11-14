@@ -721,10 +721,9 @@
       "clientCache": "localStorage 'dsh-nano-model-selector:media-engine.v1' + favorites key"
     },
     "dsh-nano-kitesurf": {
-      "lastPick": "in-memory only, cleared on host restart; no browser storage",
-      "lock": "$DSH_HOME/nano-kitesurf.lock.json written by POST /kite init; Node>=22 gate before write",
+      "lastPick": "in-memory only, cleared on host restart; no browser storage and no last or context route",
       "history": "client in-memory recent addresses (max 8), not persisted",
-      "config": "host Config httpBase (default http://127.0.0.1:8787), allowRemote (default false, gates kitesurf.kite.remote), checkout (Kitesurf source dir for container start; else KITESURF_CHECKOUT env)"
+      "config": "optional perfReview only; this package does not read a checkout path and does not start a container"
     },
     "dsh-nano-local-sandbox": {
       "state": "per-instance stateVolume history.json"

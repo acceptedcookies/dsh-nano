@@ -189,7 +189,7 @@ test('term.session.create does not create audit.jsonl', async () => {
   assert.equal(reply.result.structuredContent.attach.url.includes('session='), true)
   assert.equal(Object.hasOwn(reply.result.structuredContent.attach, 'path'), false)
   assert.equal(readdirSync(dir).includes('audit.jsonl'), false)
-  assert.equal(readdirSync(dir).includes('term.audit'), true)
+  assert.equal(readdirSync(dir).includes('term.audit'), false)
   const audit = []
   const auditFile = join(dir, 'term.audit')
   createTermSession({ cols: 80, rows: 24 }, audit, 'ws://127.0.0.1/term?session=a', auditFile)

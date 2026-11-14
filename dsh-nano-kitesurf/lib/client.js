@@ -1569,10 +1569,11 @@ var __kitesurfExport = (() => {
           envEngine: "\u5F15\u64CE",
           envContainer: "\u5BB9\u5668",
           envPorts: "\u7AEF\u53E3",
+          envInstance: "\u5B9E\u4F8B",
           prepareEnv: "\u4E00\u952E\u51C6\u5907\u73AF\u5883",
           preparingEnv: "\u6B63\u5728\u51C6\u5907\u2026",
           prepareDone: "\u73AF\u5883\u5DF2\u5C31\u7EEA",
-          prepareFailed: "\u51C6\u5907\u5931\u8D25\uFF0C\u89C1\u4E0B\u65B9\u8BCA\u65AD",
+          prepareFailed: "\u51C6\u5907\u5931\u8D25",
           copyDiag: "\u590D\u5236\u8BCA\u65AD\u4FE1\u606F",
           diagCopied: "\u8BCA\u65AD\u4FE1\u606F\u5DF2\u590D\u5236",
           envHint: "\u4F9D\u6B21\u68C0\u67E5\u5BB9\u5668\u3001\u7AEF\u53E3\u3001\u5F15\u64CE\u5065\u5EB7\u5E76\u81EA\u52A8\u4FEE\u590D",
@@ -1661,10 +1662,11 @@ var __kitesurfExport = (() => {
           envEngine: "Engine",
           envContainer: "Container",
           envPorts: "Ports",
+          envInstance: "Instance",
           prepareEnv: "Prepare environment",
           preparingEnv: "Preparing\u2026",
           prepareDone: "Environment ready",
-          prepareFailed: "Prepare failed \u2014 see diagnostics",
+          prepareFailed: "Prepare failed",
           copyDiag: "Copy diagnostics",
           diagCopied: "Diagnostics copied",
           envHint: "Checks container, ports and engine health, then repairs automatically",
@@ -3050,9 +3052,9 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         try {
           const response = await fetch(RECOVER, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
           const result = await response.json().catch(() => ({}));
-          const ports = result.ports || await fetch(PORTS).then((r) => r.json()).catch(() => null);
+          const ports = result.ports ? result : await fetch(PORTS).then((r) => r.json()).catch(() => null);
           setSnap(ports);
-          setNote(result.ok ? copy.prepareDone : copy.prepareFailed);
+          setNote(result.ok ? result.action === "noop" ? copy.prepareDone : `${copy.prepareDone} \xB7 ${result.action}` : `${copy.prepareFailed}: ${result.errorId || result.error || `HTTP ${response.status}`}`);
           await refreshStatus();
           await reloadShot(0, { keepPick: true }).catch(() => {
           });
@@ -3087,6 +3089,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         h("div", { className: "nks-env-row" }, h("b", null, copy.envPlugin), h("span", null, status?.buildId || "\u2014")),
         h("div", { className: "nks-env-row" }, h("b", null, copy.envEngine), h("span", null, engine)),
         h("div", { className: "nks-env-row" }, h("b", null, copy.envContainer), h("span", null, container)),
+        snap?.containerName ? h("div", { className: "nks-env-row" }, h("b", null, copy.envInstance), h("span", null, snap.containerName)) : null,
         h("div", { className: "nks-env-row" }, h("b", null, copy.envPorts), h("span", null, portRow)),
         h(
           "div",

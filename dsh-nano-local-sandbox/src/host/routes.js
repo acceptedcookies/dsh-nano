@@ -35,8 +35,155 @@ import { createCdpKeeper } from './cdp-keeper.js'
 import { publishedHttpBase } from './backend-apple.js'
 import { ensureClient, evaluatePage, navigate, readElements, withPage } from './cdp-elements.js'
 import { answerNativeTool, toolsList } from './mcp-sandbox.js'
+import { ERROR_CATALOG } from './error-catalog.js'
 
 const keeper = createCdpKeeper()
+
+/**
+ * #4 multi-env: one host owns ONE kitesurf-family container, but that name +
+ * its published ports are derived from the environment tag so dev / 正式 /
+ * desktop hosts can each own a distinct, concurrently-running instance
+ * instead of all adopting the same 'kitesurf' container.
+ *
+ * Env tag resolution: KITESURF_ENV > DSH_HOME suffix
+ * (.dsh-dev→dev, .dsh-desktop→desktop, .dsh/prod→prod).
+ * prod keeps the historic single name 'kitesurf' on 8798/8799 so the existing
+ * manual container is adopted untouched; dev→kitesurf-dev on 8800/8801,
+ * desktop→kitesurf-desktop on 8802/8803. Deterministic, no registry needed.
+ */
+function envTag(env = process.env) {
+  const explicit = String(env.KITESURF_ENV || '').trim().toLowerCase()
+  if (explicit && /^[a-z][a-z0-9-]{0,15}$/.test(explicit)) return explicit
+  const home = String(env.DSH_HOME || '')
+  if (/\.dsh-dev(\/|$)/.test(home)) return 'dev'
+  if (/\.dsh-desktop(\/|$)/.test(home)) return 'desktop'
+  return 'prod'
+}
+const ENV_SLOTS = { prod: 0, dev: 1, desktop: 2 }
+function envSlot(tag) { return ENV_SLOTS[tag] ?? ((tag.charCodeAt(0) % 3) + 1) }
+
+/** The container name this host owns: 'kitesurf' on prod, 'kitesurf-<env>' otherwise. */
+export function containerNameFor(session, env = process.env) {
+  if (typeof session?.containerName === 'string' && session.containerName) return session.containerName
+  const tag = envTag(env)
+  return tag === 'prod' ? 'kitesurf' : `kitesurf-${tag}`
+}
+
+/** Host ports to publish for this environment's container: 8787→engine, 8791→bridge. */
+export function envHostPorts(env = process.env) {
+  const slot = envSlot(envTag(env))
+  return { engineHostPort: 8798 + slot * 2, bridgeHostPort: 8799 + slot * 2, engineContainerPort: 8787, bridgeContainerPort: 8791 }
+}
+
+/** Parse `container inspect` output into a normalized {state,ports[],httpBase}. */
+function parseInspect(raw, containerPort = 8787) {
+  const text = String(raw ?? '')
+  const start = text.indexOf('[')
+  const objectStart = text.indexOf('{')
+  const at = start >= 0 ? start : objectStart
+  if (at < 0) return null
+  let data
+  try { data = JSON.parse(text.slice(at)) } catch { return null }
+  const item = Array.isArray(data) ? data[0] : data
+  const state = item?.status?.state ?? item?.state ?? 'unknown'
+  const ports = (item?.configuration?.publishedPorts ?? item?.publishedPorts ?? []).map((row) => ({
+    containerPort: Number(row.containerPort),
+    hostPort: Number(row.hostPort),
+    hostAddress: row.hostAddress || '127.0.0.1',
+  }))
+  return { state, ports, containerPort }
+}
+
+/** Engine liveness probe: reachable CDP /json/list, bounded so the UI never hangs. */
+async function engineAlive(base, timeoutMs = 900) {
+  if (!base) return false
+  try {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeoutMs)
+    const response = await fetch(`${base}/json/list`, { signal: controller.signal }).catch(() => null)
+    clearTimeout(timer)
+    return Boolean(response && response.ok)
+  } catch {
+    return false
+  }
+}
+
+/**
+ * The env self-heal / diagnostics snapshot EnvPanel reads: container state,
+ * published ports, resolved httpBase, engine liveness, and a derived healthy
+ * flag. Failure degrades to a partial shape rather than throwing.
+ */
+async function envSnapshot(session, deps) {
+  const name = containerNameFor(session, deps.env || process.env)
+  const host = envHostPorts(deps.env || process.env)
+  let info = null
+  try {
+    const inspected = await deps.backend?.inspect?.(name)
+    info = parseInspect(inspected?.raw ?? inspected, host.engineContainerPort)
+  } catch { info = null }
+  const engineRow = info?.ports?.find((p) => p.containerPort === host.engineContainerPort) || null
+  const bridgeRow = info?.ports?.find((p) => p.containerPort === host.bridgeContainerPort) || null
+  const httpBase = session.httpBase || (engineRow ? `http://${engineRow.hostAddress === '0.0.0.0' ? '127.0.0.1' : engineRow.hostAddress}:${engineRow.hostPort}` : null)
+  const alive = await engineAlive(httpBase)
+  const state = info?.state || 'missing'
+  const healthy = state === 'running' && alive === true
+  return {
+    containerName: name,
+    container: { state, name },
+    effective: { httpBase, enginePort: engineRow?.hostPort ?? host.engineHostPort, bridgePort: bridgeRow?.hostPort ?? host.bridgeHostPort },
+    ports: {
+      engine: engineRow ? { port: engineRow.hostPort, containerPort: engineRow.containerPort, heldBy: 'this-container' } : { port: host.engineHostPort, containerPort: host.engineContainerPort, heldBy: 'free' },
+      bridge: bridgeRow ? { port: bridgeRow.hostPort, containerPort: bridgeRow.containerPort, heldBy: 'this-container' } : { port: host.bridgeHostPort, containerPort: host.bridgeContainerPort, heldBy: 'free' },
+    },
+    engineAlive: alive,
+    healthy,
+    phase: session.phase,
+    httpBase,
+  }
+}
+
+/**
+ * Bring the environment to a usable state: adopt a running container, start a
+ * stopped one, or create+start a missing one. Returns envSnapshot plus what it
+ * did. The owner env can therefore self-heal without re-navigating a page.
+ */
+async function prepareEnvironment(session, deps) {
+  const name = containerNameFor(session, deps.env || process.env)
+  const host = envHostPorts(deps.env || process.env)
+  const image = (deps.env || process.env).KITESURF_IMAGE || 'kitesurf-engine:latest'
+  let action = 'noop'
+  let info = null
+  const canInspect = typeof deps.backend?.inspect === 'function'
+  if (canInspect) {
+    try {
+      const inspected = await deps.backend.inspect(name)
+      info = parseInspect(inspected?.raw ?? inspected, host.engineContainerPort)
+    } catch { info = null }
+  }
+  if (!info && !canInspect) {
+    // Fixture-grade backend without inspect: preserve the legacy "start it"
+    // contract instead of inventing a create it can't fulfil.
+    await deps.backend?.start?.(name)
+    action = 'started'
+  } else if (!info) {
+    await deps.backend?.create?.({
+      containerName: name,
+      image,
+      ports: [
+        { publish: `127.0.0.1:${host.engineHostPort}:${host.engineContainerPort}` },
+        { publish: `127.0.0.1:${host.bridgeHostPort}:${host.bridgeContainerPort}` },
+      ],
+    })
+    action = 'created'
+  } else if (info.state !== 'running') {
+    await deps.backend?.start?.(name)
+    action = 'started'
+  }
+  const snap = await envSnapshot(session, deps)
+  if (snap.httpBase) session.httpBase = session.httpBase || snap.httpBase
+  if (snap.healthy && session.phase === 'idle') session.phase = 'running'
+  return { action, ...snap }
+}
 
 function storageExpression(opts) {
   const scope = opts.scope === 'session' ? 'sessionStorage' : opts.scope === 'cookie' ? 'cookie' : 'localStorage'
@@ -119,7 +266,7 @@ async function ensureBase(session, deps) {
   if (session.httpBase) return session.httpBase
   if (!deps.backend?.inspect) return null
   try {
-    const inspected = await deps.backend.inspect(session.containerName || 'kitesurf')
+    const inspected = await deps.backend.inspect(containerNameFor(session, deps))
     const base = publishedHttpBase(inspected.raw ?? inspected)
     if (!base) return null
     if (session.phase === 'idle') session.phase = 'running'
@@ -169,7 +316,10 @@ async function bridgeFetch(session, pathname, { method = 'GET', body = null, tim
 }
 
 export function routeSpecs(deps = {}) {
-  const session = deps.session ?? { phase: 'idle', history: [] }
+  // #4: session.containerName is left empty on purpose — containerNameFor()
+  // derives 'kitesurf' (prod) or 'kitesurf-<env>' per DSH_HOME so each of the
+  // three local environments owns a distinct, concurrently-running instance.
+  const session = deps.session ?? { phase: 'idle', history: [], containerName: '' }
   return ROUTE_TABLE.map((row) => ({
     path: row.path,
     methods: [...row.methods],
@@ -248,16 +398,19 @@ export function routeSpecs(deps = {}) {
       if (row.path.endsWith('/kite')) {
         const body = await readJson(req)
         const action = body.action
+        const name = containerNameFor(session, deps)
         if (action === 'suspend' && session.phase === 'running') {
-          await deps.backend?.stop?.(session.containerName)
+          await deps.backend?.stop?.(name)
           session.phase = 'suspended'
           send(res, 200, { ok: true, phase: session.phase })
           return
         }
-        if ((action === 'resume' && session.phase === 'suspended') || (action === 'start' && session.phase === 'idle')) {
-          await deps.backend?.start?.(session.containerName)
+        if (action === 'resume' || action === 'start') {
+          // Prepare self-heals: adopt running / start stopped / create missing —
+          // resume and start both land on "environment usable", the pane's ask.
+          const snap = await prepareEnvironment(session, deps)
           session.phase = 'running'
-          send(res, 200, { ok: true, phase: session.phase })
+          send(res, 200, { ok: true, phase: session.phase, action: snap.action, healthy: snap.healthy })
           return
         }
         send(res, 409, { ok: false, errorId: 'kitesurf.kite.state', phase: session.phase })
@@ -488,30 +641,85 @@ export function routeSpecs(deps = {}) {
           return
         }
         if (row.path.endsWith('/diagnostics')) {
-          await ensureBase(session, deps)
+          // One-shot diagnostic: full env snapshot + targets + trace + catalog +
+          // derived hints. Degrades per-section so a dead engine still returns
+          // a useful map instead of a bare 502.
+          const snap = await envSnapshot(session, deps)
+          let targetInfos = []
+          let engineError = null
+          if (snap.engineAlive && snap.httpBase) {
+            try {
+              const client = await ensureClient(session, snap.httpBase)
+              const targets = await client.send('Target.getTargets')
+              targetInfos = targets?.targetInfos || []
+            } catch (error) { engineError = error?.errorId || error?.message || 'targets unreachable' }
+          }
+          const hints = []
+          if (snap.container.state === 'missing') hints.push('容器缺失：点「一键准备环境」或 POST /kite {action:start} 创建')
+          else if (snap.container.state !== 'running') hints.push(`容器状态 ${snap.container.state}：一键准备环境启动它`)
+          if (!snap.engineAlive) hints.push('引擎未应答 CDP：容器 running 但引擎僵死时重试 /recover 或重启容器')
+          if (engineError) hints.push(`引擎探测失败：${engineError}`)
+          if (targetInfos.length === 0 && snap.engineAlive) hints.push('无 page target：先 POST /open 打开一个页面')
           send(res, 200, {
-            ok: session.phase === 'running',
-            httpBase: session.httpBase ?? null,
+            ok: snap.healthy,
+            httpBase: snap.httpBase,
             kite: { phase: session.phase },
-            console: (session.console || []).slice(-10),
-            network: (session.network || []).slice(-10),
+            container: snap.container,
+            containerName: snap.containerName,
+            effective: snap.effective,
+            ports: snap.ports,
+            engineAlive: snap.engineAlive,
+            healthy: snap.healthy,
+            targets: targetInfos.map((t) => ({ targetId: t.targetId, type: t.type, url: t.url, title: t.title })),
+            console: (session.console || []).slice(-20),
+            network: (session.network || []).slice(-20),
+            operations: (session.operations || []).slice(-20),
+            history: (session.history || []).slice(-10),
+            errorCatalog: ERROR_CATALOG.map((row) => ({ errorId: row.example, status: row.status, cause: row.cause, next: row.next })),
+            hints,
           })
           return
         }
         if (row.path.endsWith('/ports')) {
-          await ensureBase(session, deps)
-          send(res, 200, { ok: true, httpBase: session.httpBase ?? null, phase: session.phase })
+          const snap = await envSnapshot(session, deps)
+          send(res, 200, {
+            ok: true,
+            httpBase: snap.httpBase ?? session.httpBase ?? null,
+            phase: session.phase,
+            containerName: snap.containerName,
+            container: snap.container,
+            effective: snap.effective,
+            ports: snap.ports,
+            engineAlive: snap.engineAlive,
+            healthy: snap.healthy,
+          })
           return
         }
         if (row.path.endsWith('/recover')) {
-          const last = session.history.at(-1)
-          if (!last) {
-            send(res, 409, { ok: false, errorId: 'kitesurf.dom.blank', error: 'no page to recover' })
+          // Prepare-environment semantics: make the engine usable FIRST, then
+          // replay the last page when there is one. Previously an empty history
+          // hard-failed the whole call, so a fresh pane could never self-heal.
+          let snap = null
+          try {
+            snap = await prepareEnvironment(session, deps)
+          } catch (error) {
+            send(res, error.status || 502, { ok: false, errorId: error.errorId || 'kitesurf.engine.connect', error: error.message })
             return
           }
-          const client = await page()
-          await navigate(session, session.httpBase, last.url)
-          send(res, 200, { ok: true, url: last.url })
+          const last = session.history.at(-1)
+          if (last && snap.httpBase) {
+            try { await navigate(session, snap.httpBase, last.url) } catch { /* replay is best-effort */ }
+          }
+          send(res, 200, {
+            ok: true,
+            action: snap.action,
+            healthy: snap.healthy,
+            engineAlive: snap.engineAlive,
+            url: last?.url ?? null,
+            replay: Boolean(last),
+            ports: snap.ports,
+            container: snap.container,
+          })
           return
         }
         if (row.path.endsWith('/network')) {

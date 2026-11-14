@@ -39,6 +39,7 @@ agent-browser --cdp "$(curl -s .../nano-local-sandbox/status | jq -r .kite.cdp)"
 - \`suspend\`/\`resume\`/引擎重启也打回 \`about:blank\`；resume 后先 \`get url\`。
 - 坐标/box/截图假定 dsf 1；viewport 仿真改过就从 note 的 box 重导。
 - \`<img>\` 是 object-fit:contain：letterbox 带内点击合法地打空，先 \`/console?level=navigation\` 或重 \`/shot\` 再怪引擎。
+- **人可能在开**（HITL）：写类调用前先 \`sandbox.control {action:status}\`——\`humanHold.active:true\` = 人接管了，你的写会被拒 \`kitesurf.control.held\`。看到 held **立刻停写**，别 retry 别 \`claim\`（claim 也被 held 拒）；把控制权交还人，等 \`humanHold.active:false\` 再写。held 比 busy 更高一级：不是「另一个 writer」，是「人在开」。
 
 ## 4. 元素 ref @N — 人=agent 同一语言
 \`GET /nano-local-sandbox/snapshot\` 的 a11y walker 给可交互元素 \`@N\` + selector；\`GET /refs?ref=@N\` 反查。**人点选 \`/pick\` 的 \`element.ref:"@N"\`** 与 agent 的 \`@N\` 指同一节点（页内 querySelector identity probe）。\`@N\` 可直接作 \`wait\`/\`pick\`/\`edit\` 的 selector；不在表=\`404 kitesurf.ref.miss\`（先 \`/snapshot\`）。别字符串比较 pick 的 \`html > body > a\` 与 walker 的 \`a\`——用 \`element.ref\`。
@@ -65,7 +66,8 @@ agent-browser --cdp "$(curl -s .../nano-local-sandbox/status | jq -r .kite.cdp)"
 - 不从 selector 猜组件文件；问，或搜 workspace 给 match。
 - 不部署引擎，容器管那个进程。
 - 不关 socket、不重启浏览器、会话中不 detach——人的页在上面。
-- 不立即重发超时 \`/open\`：导航可能仍在引擎内执行。`
+- 不立即重发超时 \`/open\`：导航可能仍在引擎内执行。
+- \`kitesurf.control.held\` 时不调 \`claim\`/\`takeover\`/retry——那是人工动作；等 release。`
 
 const NANO_KITE = `# nano-kite
 

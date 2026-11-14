@@ -39,7 +39,7 @@ var __kitesurfExport = (() => {
   ));
   var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
-  // ../packages/dsh-nano-ui/src/dialog.js
+  // ../../../../packages/dsh-nano-ui/src/dialog.js
   function NanoDialog({ copy, title, description, confirmLabel, confirmDisabled, busy, error, danger, footer, maxHeight, width, region, onConfirm, onCancel, children }) {
     return import_react.default.createElement(import_dsh_client_ui_primitives.Modal, {
       open: true,
@@ -69,13 +69,13 @@ var __kitesurfExport = (() => {
   }
   var import_react, import_dsh_client_ui_primitives;
   var init_dialog = __esm({
-    "../packages/dsh-nano-ui/src/dialog.js"() {
+    "../../../../packages/dsh-nano-ui/src/dialog.js"() {
       import_react = __toESM(__require("react"), 1);
       import_dsh_client_ui_primitives = __require("@deepseek-ai/dsh-client-ui-primitives");
     }
   });
 
-  // ../packages/dsh-nano-ui/src/menu.js
+  // ../../../../packages/dsh-nano-ui/src/menu.js
   function NanoMenu({ menu, actions, onClose, width = 208, maxHeight, theme, z }) {
     const ref = useRef(null);
     const [active, setActive] = useState(0);
@@ -170,25 +170,25 @@ var __kitesurfExport = (() => {
   }
   var import_react2, useCallback, useEffect, useRef, useState;
   var init_menu = __esm({
-    "../packages/dsh-nano-ui/src/menu.js"() {
+    "../../../../packages/dsh-nano-ui/src/menu.js"() {
       import_react2 = __toESM(__require("react"), 1);
       ({ useCallback, useEffect, useRef, useState } = import_react2.default);
     }
   });
 
-  // ../packages/dsh-nano-ui/src/toast.js
+  // ../../../../packages/dsh-nano-ui/src/toast.js
   function NanoToast({ text }) {
     if (text === void 0 || text === null) return null;
     return import_react3.default.createElement("div", { className: "nano-toast", role: "status", "aria-live": "polite", "data-nano-toast": "true" }, text);
   }
   var import_react3;
   var init_toast = __esm({
-    "../packages/dsh-nano-ui/src/toast.js"() {
+    "../../../../packages/dsh-nano-ui/src/toast.js"() {
       import_react3 = __toESM(__require("react"), 1);
     }
   });
 
-  // ../packages/dsh-nano-ui/src/dom.js
+  // ../../../../packages/dsh-nano-ui/src/dom.js
   function openNanoDialog(options) {
     const host = document.createElement("div");
     host.className = "nano-dialog-host";
@@ -295,7 +295,7 @@ var __kitesurfExport = (() => {
   }
   var import_react4, import_client;
   var init_dom = __esm({
-    "../packages/dsh-nano-ui/src/dom.js"() {
+    "../../../../packages/dsh-nano-ui/src/dom.js"() {
       import_react4 = __toESM(__require("react"), 1);
       import_client = __require("react-dom/client");
       init_dialog();
@@ -303,7 +303,7 @@ var __kitesurfExport = (() => {
     }
   });
 
-  // ../packages/dsh-nano-ui/src/tabs.js
+  // ../../../../packages/dsh-nano-ui/src/tabs.js
   function nanoTabs({ items, value, onChange, label }) {
     const seq = ++nanoTabsSeq;
     const el = document.createElement("div");
@@ -380,15 +380,15 @@ var __kitesurfExport = (() => {
   }
   var nanoTabsSeq;
   var init_tabs = __esm({
-    "../packages/dsh-nano-ui/src/tabs.js"() {
+    "../../../../packages/dsh-nano-ui/src/tabs.js"() {
       nanoTabsSeq = 0;
     }
   });
 
-  // ../packages/dsh-nano-ui/src/styles.js
+  // ../../../../packages/dsh-nano-ui/src/styles.js
   var NANO_STYLES;
   var init_styles = __esm({
-    "../packages/dsh-nano-ui/src/styles.js"() {
+    "../../../../packages/dsh-nano-ui/src/styles.js"() {
       NANO_STYLES = `
 /* \u2500\u2500 anchored popup menu (NanoMenu, NanoMenuItem) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
 /* \u2500\u2500 type tokens \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
@@ -518,7 +518,7 @@ var __kitesurfExport = (() => {
     }
   });
 
-  // ../packages/dsh-nano-ui/index.js
+  // ../../../../packages/dsh-nano-ui/index.js
   var dsh_nano_ui_exports = {};
   __export(dsh_nano_ui_exports, {
     NANO_STYLES: () => NANO_STYLES,
@@ -531,7 +531,7 @@ var __kitesurfExport = (() => {
     openNanoMenu: () => openNanoMenu
   });
   var init_dsh_nano_ui = __esm({
-    "../packages/dsh-nano-ui/index.js"() {
+    "../../../../packages/dsh-nano-ui/index.js"() {
       init_dialog();
       init_menu();
       init_toast();
@@ -541,7 +541,7 @@ var __kitesurfExport = (() => {
     }
   });
 
-  // ../packages/dsh-performance-review/src/state.js
+  // ../../../../packages/dsh-performance-review/src/state.js
   function percentile(values, p) {
     if (!Array.isArray(values) || values.length === 0) return null;
     const sorted = [...values].sort((a, b) => a - b);
@@ -706,7 +706,7 @@ var __kitesurfExport = (() => {
   }
   var LIB_VERSION, REPORT_VERSION, NAME_RE, MAX_SPAN_KEYS, MAX_USAGE_KEYS, INTERACTION_CAP, RESERVOIR_CAP, EVENT_DURATION_THRESHOLD, WINDOW_PAD_BEFORE_MS, WINDOW_PAD_AFTER_MS;
   var init_state = __esm({
-    "../packages/dsh-performance-review/src/state.js"() {
+    "../../../../packages/dsh-performance-review/src/state.js"() {
       LIB_VERSION = "0.1.0";
       REPORT_VERSION = 1;
       NAME_RE = /^[a-z0-9][a-z0-9-]{0,39}$/;
@@ -720,7 +720,7 @@ var __kitesurfExport = (() => {
     }
   });
 
-  // ../packages/dsh-performance-review/src/aggregate.js
+  // ../../../../packages/dsh-performance-review/src/aggregate.js
   function pushInteraction(collector, interaction) {
     collector.interactions.push(interaction);
     while (collector.interactions.length > INTERACTION_CAP) collector.interactions.shift();
@@ -943,7 +943,7 @@ var __kitesurfExport = (() => {
   }
   var spanStats;
   var init_aggregate = __esm({
-    "../packages/dsh-performance-review/src/aggregate.js"() {
+    "../../../../packages/dsh-performance-review/src/aggregate.js"() {
       init_state();
       spanStats = (row) => ({
         n: row.n,
@@ -955,7 +955,7 @@ var __kitesurfExport = (() => {
     }
   });
 
-  // ../packages/dsh-performance-review/src/client.js
+  // ../../../../packages/dsh-performance-review/src/client.js
   var client_exports = {};
   __export(client_exports, {
     LIB_VERSION: () => LIB_VERSION,
@@ -1482,7 +1482,7 @@ var __kitesurfExport = (() => {
   }
   var TRACK_EVENT_CAP, SPAN_EVENT_CAP, PROFILER_SAMPLE_CAP, now, isPromiseLike, BUCKET_ATTRS, HIDDEN_SELECTOR, contains;
   var init_client = __esm({
-    "../packages/dsh-performance-review/src/client.js"() {
+    "../../../../packages/dsh-performance-review/src/client.js"() {
       init_state();
       init_aggregate();
       TRACK_EVENT_CAP = 4096;
@@ -1558,6 +1558,12 @@ var __kitesurfExport = (() => {
           devtoolsClear: "\u6E05\u7A7A",
           devtoolsClose: "\u5173\u95ED",
           devtoolsFailedOnly: "\u4EC5\u5931\u8D25",
+          hitlAgent: "Agent \u6B63\u5728\u63A7\u5236",
+          hitlHeld: "\u4EBA\u5DE5\u63A5\u7BA1\u4E2D",
+          hitlTakeover: "\u63A5\u7BA1",
+          hitlTakeoverTitle: "\u4EBA\u5DE5\u63A5\u7BA1\uFF1A\u6682\u505C Agent \u5BF9\u9875\u9762\u7684\u5199\u5165\uFF0C\u7531\u4F60\u64CD\u4F5C",
+          hitlRelease: "\u505C\u6B62\u5199\u5165",
+          hitlAction: "Agent \u52A8\u4F5C",
           envTitle: "\u73AF\u5883\u81EA\u68C0",
           envPlugin: "\u63D2\u4EF6",
           envEngine: "\u5F15\u64CE",
@@ -1644,6 +1650,12 @@ var __kitesurfExport = (() => {
           devtoolsClear: "Clear",
           devtoolsClose: "Close",
           devtoolsFailedOnly: "Failed only",
+          hitlAgent: "Agent is controlling",
+          hitlHeld: "Human override",
+          hitlTakeover: "Take over",
+          hitlTakeoverTitle: "Human override: pause the agent\u2019s page writes while you drive",
+          hitlRelease: "Stop writes",
+          hitlAction: "Agent action",
           envTitle: "Environment",
           envPlugin: "Plugin",
           envEngine: "Engine",
@@ -1900,6 +1912,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
   var ELEMENTS = "/nano-local-sandbox/elements";
   var BROWSE_HISTORY = "/nano-local-sandbox/browse-history";
   var DOM = "/nano-local-sandbox/dom";
+  var CONTROL = "/nano-local-sandbox/control";
   var localNotes = [];
   var KITE = "/nano-local-sandbox/kite";
   var KIND = "kitesurf";
@@ -2005,6 +2018,22 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
 .nks-inspector b{font-weight:500;color:var(--dsw-alias-label-secondary)}
 .nks-inspector span{overflow:hidden;text-overflow:ellipsis;max-width:170px}
 .nks-note{position:absolute;z-index:2;display:flex;gap:4px;align-items:center;padding:4px;background:var(--dsw-alias-bg-layer-1);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-md);box-shadow:var(--dsw-elevation-soft)}
+/* HITL control bar \u2014 ego's bottom "Agent \u6B63\u5728\u63A7\u5236 / \u63A5\u7BA1 / \u7EC8\u6B62\u4EFB\u52A1" pill,
+   reworded honestly: the pane can hold the agent's page writes, it cannot
+   kill the run (that is host-side). Positioned bottom-center of the frame. */
+.nks-hitl{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);z-index:4;display:flex;align-items:center;gap:8px;height:32px;padding:4px 8px 4px 12px;background:var(--dsw-alias-bg-layer-1);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-md,8px);box-shadow:var(--dsw-elevation-soft);font:var(--dsw-font-xxs-12);white-space:nowrap}
+.nks-hitl-dot{width:8px;height:8px;border-radius:50%;background:var(--dsw-alias-link,#2f6fed);animation:nks-hitl-pulse 1.4s ease-in-out infinite}
+.nks-hitl-dot[data-held="true"]{background:var(--dsw-alias-fill-warning,#d4a72c);animation:none}
+@keyframes nks-hitl-pulse{0%,100%{opacity:1}50%{opacity:.35}}
+.nks-hitl-label{color:var(--dsw-alias-label-primary)}
+.nks-hitl-label b{font-weight:600;margin-left:4px}
+.nks-hitl-btn{height:24px;padding:0 10px;font:var(--dsw-font-xxs-12);color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-layer-2);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-sm);cursor:pointer}
+.nks-hitl-btn:hover{background:var(--dsw-alias-bg-layer-3)}
+.nks-hitl-primary{color:var(--dsw-alias-label-inverted,#fff);background:var(--dsw-alias-link,#2f6fed);border-color:transparent}
+.nks-hitl-primary:hover{background:var(--dsw-alias-link-hover,var(--dsw-alias-link,#2f6fed));filter:brightness(1.08)}
+.nks-act{position:absolute;left:50%;bottom:52px;transform:translateX(-50%);z-index:4;padding:4px 10px;background:var(--dsw-alias-bg-layer-1);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-sm);box-shadow:var(--dsw-elevation-soft);font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-secondary);white-space:nowrap;pointer-events:none;animation:nks-act-in .18s ease-out}
+.nks-act[data-ok="false"]{color:var(--dsw-alias-fill-error,#d5455c)}
+@keyframes nks-act-in{from{opacity:0;transform:translateX(-50%) translateY(4px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
 .nks-note-actions{display:flex;gap:2px;align-items:center}
 .nks-note-form{display:flex;gap:4px;align-items:center}
 .nks-note input{width:220px;height:28px;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-12);background:var(--dsw-alias-bg-layer-2);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-sm);padding:0 8px}
@@ -2202,6 +2231,10 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
     const [vpCustom, setVpCustom] = React5.useState(false);
     const domFrameRef = React5.useRef(null);
     const [toast, setToast] = React5.useState(null);
+    const [control, setControl] = React5.useState(null);
+    const [actionToast, setActionToast] = React5.useState(null);
+    const lastActionStamp = React5.useRef("");
+    const actionToastTimer = React5.useRef(0);
     const [busy, setBusy] = React5.useState(false);
     const [hover, setHover] = React5.useState(null);
     const [frame, setFrame] = React5.useState(null);
@@ -2763,11 +2796,8 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       const element = pickRef.current?.elements?.[0] || null;
       const label = element ? `${element.tag || "element"}${element.text ? " \xB7 " + element.text.slice(0, 24) : ""}` : "selection";
       try {
-        let refId = null;
-        try {
-          localNotes.push({ text: note, packet: element, label });
-        } catch {
-        }
+        const refId = null;
+        localNotes.push({ text: note, packet: element, label });
         insertComposerNote(note);
         setComment("");
         setComposing(false);
@@ -2884,6 +2914,53 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       height: Math.max(box.height * activeFrame.scale, 2)
     })) : [];
     const hasPage = !!shot && !!shotMeta?.url && shotMeta.url !== "about:blank";
+    const engineHasPage = hasPage || status?.phase === "running" || !!status?.httpBase;
+    React5.useEffect(() => {
+      if (!engineHasPage) {
+        setControl(null);
+        return void 0;
+      }
+      let alive = true;
+      const load = async () => {
+        try {
+          const data = await fetch(CONTROL).then((r) => r.json());
+          if (!alive) return;
+          const c = data?.control ?? null;
+          setControl(c);
+          const stamp = c?.lastAction ? `${c.lastAction.at}:${c.lastAction.tool}` : "";
+          if (stamp && stamp !== lastActionStamp.current) {
+            lastActionStamp.current = stamp;
+            setActionToast({ tool: c.lastAction.tool, ok: c.lastAction.ok });
+            clearTimeout(actionToastTimer.current);
+            actionToastTimer.current = setTimeout(() => setActionToast(null), 2600);
+          }
+        } catch {
+        }
+      };
+      load();
+      let timer = window.setInterval(load, document.visibilityState === "hidden" ? 12e3 : 1500);
+      const onVis = () => {
+        clearInterval(timer);
+        timer = window.setInterval(load, document.visibilityState === "hidden" ? 12e3 : 1500);
+        if (document.visibilityState !== "hidden") load();
+      };
+      document.addEventListener("visibilitychange", onVis);
+      return () => {
+        alive = false;
+        clearInterval(timer);
+        document.removeEventListener("visibilitychange", onVis);
+        clearTimeout(actionToastTimer.current);
+      };
+    }, [engineHasPage]);
+    const controlOp = React5.useCallback(async (action) => {
+      try {
+        const data = await fetch(CONTROL, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action, owner: "kitesurf-pane" }) }).then((r) => r.json());
+        if (data?.control) setControl(data.control);
+        else setControl(null);
+      } catch {
+        setControl(null);
+      }
+    }, []);
     const anchor = pick?.anchor;
     const pickAnchor = overlays.find((o) => o.kind === "pick" || o.kind === "ellipse") || (activeFrame && anchor ? { left: activeFrame.left + anchor.x * activeFrame.scale, top: activeFrame.top + anchor.y * activeFrame.scale, width: 0, height: 0 } : null) || (activeFrame ? { left: activeFrame.left + 16, top: activeFrame.top + 16, width: 0, height: 0 } : null);
     const arrowGlyph = (dir) => h("svg", {
@@ -3907,6 +3984,35 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           ) : null
         ) : null
       ),
+      // HITL control bar (ego parity): floats at the bottom of the frame when
+      // an agent holds the bridge writer lock or the human holds the override.
+      // "停止写入" is honest wording — the pane cannot kill the agent's run
+      // (that lives in the host), it can only hold its page writes.
+      control?.humanHold?.active || control?.writer ? h(
+        "div",
+        {
+          className: "nks-hitl",
+          "data-nks-hitl": "1",
+          role: "status",
+          onPointerDown: (event) => event.stopPropagation(),
+          onClick: (event) => event.stopPropagation()
+        },
+        h("span", {
+          className: "nks-hitl-dot",
+          "data-held": control?.humanHold?.active ? "true" : "false",
+          "aria-hidden": true
+        }),
+        control?.humanHold?.active ? h("span", { className: "nks-hitl-label" }, copy.hitlHeld) : h("span", { className: "nks-hitl-label" }, copy.hitlAgent, h("b", null, control?.owner || "agent")),
+        control?.humanHold?.active ? h("button", { type: "button", className: "nks-hitl-btn nks-hitl-primary", "data-nks-hitl-release": "1", onClick: () => controlOp("release") }, copy.hitlRelease) : h("button", { type: "button", className: "nks-hitl-btn nks-hitl-primary", "data-nks-hitl-takeover": "1", title: copy.hitlTakeoverTitle, onClick: () => controlOp("takeover") }, copy.hitlTakeover)
+      ) : null,
+      // ego's "Clicking element" tooltip: brief tool-name flash on each new
+      // agent action the bridge records.
+      actionToast ? h("div", {
+        className: "nks-act",
+        "data-nks-act": "1",
+        role: "status",
+        "data-ok": actionToast.ok === false ? "false" : "true"
+      }, `${copy.hitlAction} ${actionToast.tool}`) : null,
       // Inspector strip: the picked element's live computed styles under the
       // frame — Cursor's design-mode sidebar reduced to one readable row.
       pick?.elements?.[0] && pick.elements[0].style && Object.keys(pick.elements[0].style).length ? h(

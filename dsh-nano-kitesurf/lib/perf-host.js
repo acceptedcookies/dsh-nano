@@ -1,7 +1,7 @@
 // src/host/perf.js
 import { readFileSync } from "node:fs";
 
-// ../packages/dsh-performance-review/src/state.js
+// ../../../../packages/dsh-performance-review/src/state.js
 var LIB_VERSION = "0.1.0";
 var NAME_RE = /^[a-z0-9][a-z0-9-]{0,39}$/;
 var MAX_USAGE_KEYS = 32;
@@ -19,7 +19,7 @@ function roundMs(value) {
   return value == null ? null : Math.round(value * 10) / 10;
 }
 
-// ../packages/dsh-performance-review/src/host.js
+// ../../../../packages/dsh-performance-review/src/host.js
 var WRITE_INTERVAL_MS = 3e4;
 var WINDOW_SAMPLE_CAP = 512;
 var EVENT_CAP = 32;

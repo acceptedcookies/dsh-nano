@@ -678,6 +678,21 @@
     },
     {
       "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/control",
+      "methods": [
+        "GET",
+        "HEAD",
+        "POST"
+      ],
+      "bodyLimit": {
+        "GET": 0,
+        "HEAD": 0,
+        "POST": 4096
+      },
+      "responseShape": "CONTROL_ROUTE (HITL) — proxies the container MCP bridge loopback /control: GET returns {ok,control:{writer,owner,humanHold,lastAction}}, POST {action:takeover|release} toggles the sticky human override that refuses agent MCP writes (kitesurf.control.held)."
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
       "path": "/nano-local-sandbox/storage",
       "methods": [
         "GET",

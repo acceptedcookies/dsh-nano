@@ -28,6 +28,7 @@ export const STATE_ROUTE = '/nano-local-sandbox/state'
 export const HAR_ROUTE = '/nano-local-sandbox/har'
 export const SNAPSHOT_ROUTE = '/nano-local-sandbox/snapshot'
 export const REFS_ROUTE = '/nano-local-sandbox/refs'
+export const CONTROL_ROUTE = '/nano-local-sandbox/control'
 
 import { ROUTE_TABLE } from '../../lib/route-table.js'
 import { createCdpKeeper } from './cdp-keeper.js'
@@ -134,6 +135,39 @@ function send(res, status, body) {
   res.end(JSON.stringify(body))
 }
 
+/**
+ * HITL: the container's MCP bridge holds the real writer lock + humanHold on
+ * its loopback HTTP face (engine port +1 — engine:8798 → bridge:8799, the same
+ * convention entrypoint uses). The pane can't reach that port directly, so
+ * /nano-local-sandbox/control proxies it: GET merges bridge /health control
+ * state, POST {action:takeover|release} toggles the sticky human override.
+ */
+function bridgeControlBase(session) {
+  const httpBase = session.httpBase || ''
+  const m = /^https?:\/\/([^:]+):(\d+)/.exec(httpBase)
+  if (!m) return null
+  return `http://${m[1]}:${Number(m[2]) + 1}`
+}
+
+async function bridgeFetch(session, pathname, { method = 'GET', body = null, timeoutMs = 2500 } = {}) {
+  const base = bridgeControlBase(session)
+  if (!base) throw Object.assign(new Error('engine base unknown'), { errorId: 'kitesurf.control.bridge', status: 502 })
+  const ac = new AbortController()
+  const timer = setTimeout(() => ac.abort(), timeoutMs)
+  try {
+    const res = await fetch(`${base}${pathname}`, {
+      method,
+      headers: body ? { 'content-type': 'application/json' } : {},
+      body: body ? JSON.stringify(body) : null,
+      signal: ac.signal,
+    })
+    const text = await res.text()
+    try { return { status: res.status, data: JSON.parse(text) } } catch { return { status: res.status, data: { ok: false, error: text.slice(0, 200) } } }
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 export function routeSpecs(deps = {}) {
   const session = deps.session ?? { phase: 'idle', history: [] }
   return ROUTE_TABLE.map((row) => ({
@@ -222,6 +256,22 @@ export function routeSpecs(deps = {}) {
         } catch (error) {
           res.statusCode = error.status || 502
           res.end(JSON.stringify({ ok: false, errorId: error.errorId || 'kitesurf.elements.empty', error: error.message }))
+        }
+        return
+      }
+      if (row.path.endsWith('/control')) {
+        try {
+          await ensureBase(session, deps)
+          if (req.method === 'POST') {
+            const body = await readJson(req)
+            const { status, data } = await bridgeFetch(session, '/control', { method: 'POST', body })
+            send(res, status === 200 ? 200 : (status || 502), data?.ok ? data : { ok: false, errorId: data?.errorId || 'kitesurf.control.bridge', error: data?.error || 'bridge refused' })
+            return
+          }
+          const { data } = await bridgeFetch(session, '/control')
+          send(res, 200, { ok: true, control: data?.control ?? null })
+        } catch (error) {
+          send(res, error.status || 502, { ok: false, errorId: error.errorId || 'kitesurf.control.bridge', error: error.message })
         }
         return
       }

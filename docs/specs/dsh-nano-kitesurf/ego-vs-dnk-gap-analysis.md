@@ -526,3 +526,16 @@ P0 的**契约可信**目标已全数达成：错误可自查（P0-1）、开关
 3. **不上报 ego `evaluate` 字符串函数 bug**：ego 与本仓无关；但要求 DNK 自身不携带同类 bug（`evaluate` 表达式字符串必须稳定求值）。
 
 —— 登记完，解冻项进入施工。
+
+## §9 HITL（human-in-the-loop）合同面登记（2026-11-14，本任务施工同步）
+
+> [业主] 指令授权开发 human-in-the-loop UI 与功能；以下为本次新增的合同面，登记于本台账（单一真源）。
+
+| 面 | 内容 | 落点 |
+|---|---|---|
+| `POST /nano-local-sandbox/control` | `{action:takeover\|release}` 代理到容器 MCP 桥 `/control`；GET 读 `{writer,owner,humanHold,lastAction}` | DNLS `src/host/routes.js` + `lib/route-table.js` + 两份安全台账 |
+| `humanHold` | 桥 `bridgeState.control` 上的粘性人工覆盖：生效期所有 agent 写类 MCP 调用被拒 `kitesurf.control.held`；不绑定 socket 生命周期，agent 侧只能等「停止写入」 | `runtime/mcp-bridge.mjs`（DNK + DNLS 配方双本） |
+| `takeover` | 置 `humanHold.active` + 驱逐当前 writer；`release` 清除。`sandbox.control` 工具新增同名 action 供 MCP 侧同等操作 | 同上 |
+| `lastAction` | 每次 agent 写类 `tools/call` 记录 `{tool,owner,at,ok}`，pane 轮询渲染为动作 toast（ego「Clicking element」对等） | 同上 |
+| errorId | `kitesurf.control.held`(409) / `kitesurf.control.bridge`(502) / `kitesurf.control.query`(400) / `kitesurf.control.body`(400) | DNLS `src/host/error-catalog.js` |
+| 不做 | 「终止任务」≠ 杀 agent run——agent run 生命周期归 host（上层建筑归host）。UI 文案只写「接管/停止写入」，不标称 kill | pane `src/client/index.js` + `i18n.js` |

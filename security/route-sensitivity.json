@@ -358,6 +358,20 @@
     },
     {
       "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/control",
+      "methods": [
+        "GET",
+        "HEAD",
+        "POST"
+      ],
+      "sensitivity": "L2",
+      "capability": "write:engine",
+      "bodyLimit": 4096,
+      "sessionBinding": false,
+      "justification": "CONTROL_ROUTE (HITL) — proxies the container MCP bridge loopback /control (engine port +1): GET reads writer/humanHold/lastAction, POST {action:takeover|release} toggles the sticky human override refusing agent MCP writes. Shared-engine control, L2."
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
       "path": "/nano-local-sandbox/storage",
       "methods": [
         "GET",

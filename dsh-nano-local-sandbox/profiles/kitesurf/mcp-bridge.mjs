@@ -270,6 +270,11 @@ function toolResult(id, data) {
     result: {
       content: [{ type: 'text', text }],
       structuredContent: data,
+      // MCP tools/call marks business failures isError:true so a client/agent
+      // doesn't read an {ok:false} payload as a normal result. The bridge's
+      // three refusal paths (busy / held / claim-refused) all answer {ok:false}
+      // — surface that honestly to the model, not just in the text body.
+      isError: data?.ok === false ? true : undefined,
     },
   }
 }

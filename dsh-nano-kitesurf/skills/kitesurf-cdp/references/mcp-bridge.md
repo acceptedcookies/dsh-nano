@@ -23,7 +23,7 @@ MCP-over-WS：**每个文本帧一条完整 JSON-RPC**，无 `\n` 终止符（�
 | `sandbox.dom` | 最后抓取的 DOM 文本（推送，非 live） |
 | `sandbox.elements` | 最后抓取的元素列表（推送） |
 | `sandbox.snapshot` | a11y-lite 树 + `@N` ref 表 + treePreview（推送，`liveSnapshot`/`resolveRef` 指 host 路由） |
-| `sandbox.control` | 写所有权 `{action:status|claim|release}`（`self={connId,clientName}`） |
+| `sandbox.control` | 写所有权 `{action:status|claim|release|takeover}`（`self={connId,clientName}`） |
 | `sandbox.selftest` | 引擎健康自检结果 |
 | `sandbox.network` | 网络生命周期最近项 |
 | `sandbox.ports` | 端口报告：configured/effective/container.published/free/lastRepair |
@@ -37,3 +37,15 @@ MCP 的 `-32601/-32602/-32700` 是 JSON-RPC 协议错，`kitesurf.*` 是业务�
 ## 写所有权（`sandbox.control`）
 
 人机共存时同一页面只能一个写者。`claim` 认领、`release` 释放、`status` 读当前 writer。锁是**粘性**的：首写/`claim` 认领，`release`/断线才放；`B` 在非 owner 时写被 `kitesurf.control.busy` 拒（**拒非排队**），`B release` 不偷锁。
+
+## 人工接管（humanHold / takeover）— HITL
+
+`takeover` 是**人工专属**的抢占：置 `humanHold.active` 并**驱逐**当前 writer。之后**所有**非 owner（`clientInfo.name` ≠ `humanHold.owner`）的 agent 写类 `tools/call` 被拒 `kitesurf.control.held`（**拒非排队**，比 busy 更高一级——不是「另一个 writer」，是「人在开」）。`status`/`sandbox.*` 读不受限。owner 自己写放行（pane 用 `owner:'kitesurf-pane'`）。
+
+- 人在 pane 点「接管」= `POST /control {action:takeover, owner:'kitesurf-pane'}`；点「停止写入」=`{action:release}`。等价 MCP 路径是 `sandbox.control {action:takeover}`（给在 WS 内的人工侧 client，agent 不应调 takeover——它是人工动作）。
+- **幂等**：重复 `takeover`/`release` 同结果幂等；`release` 只清 hold、不偷回 writer（writer 由下次写重争）。
+- **竞态**：hold 置位与在飞写入不互斥——在飞的 `tools/call` 正常完成（写入已发生），**下一次**写才被拒；`humanHold` 不绑定 socket，持锁 writer 断线 hold 仍在。
+- **re-take**：`release` 后 hold 清除，agent 下次写自动重争 writer（粘性锁照旧）。
+- `lastAction` = 最后一次**放行**的写 `{tool,owner,at,ok}`；held/busy 的拒绝**不**记 `lastAction`（记了会骗 pane 有动作）。pane 轮询渲染为动作 toast。
+- `POST http://127.0.0.1:<mcpPort>/control` 接受 `{action,owner?,note?}`，GET 返回同 `sandbox.control status`；`/health` 里 `control.{writer,owner,humanHold,lastAction,lastCallAt}`。
+- agent 收到 `kitesurf.control.held`：**停写**，把控制权交还人；不要 retry 不要 `claim`——`claim` 在 hold 下被 `kitesurf.control.held` 拒（owner ≠ 你）。等 `status` 里 `humanHold.active:false` 再继续。

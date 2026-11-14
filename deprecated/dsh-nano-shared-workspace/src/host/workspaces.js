@@ -12,7 +12,7 @@ import { execFile } from 'node:child_process'
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { basename, join, resolve } from 'node:path'
+import { basename, join, resolve, sep } from 'node:path'
 import { validate, SchemaReject, WORKSPACE_ID_RE } from 'dsh-remote-data-schema'
 
 const hash16 = input => createHash('sha256').update(input).digest('hex').slice(0, 16)
@@ -323,7 +323,7 @@ export async function matchWorkspace(cwd, markers, { identity, me, legacyCache }
     if (marker.workspaceId === legacy) return marker
     const localPath = own.member.localPath
     if (typeof localPath !== 'string' || localPath === '') continue
-    if (cwd === localPath || cwd.startsWith(`${localPath}/`)) {
+    if (cwd === localPath || cwd.startsWith(`${localPath}${sep}`)) {
       /* Two workspaces may legitimately share one replica root (the create
        * dialog lets a user reuse a directory). Longest prefix wins; an exact
        * tie falls back to the OLDEST marker, because a session written under

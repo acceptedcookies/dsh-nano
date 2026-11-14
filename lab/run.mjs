@@ -22,6 +22,7 @@ import { homedir } from 'node:os'
 
 const LAB = dirname(fileURLToPath(import.meta.url))
 const ROOT = resolve(LAB, '..')
+const isWin = process.platform === 'win32'
 const OUT = join(LAB, 'out')
 const BASELINE = join(LAB, 'baseline', 'baseline.json')
 const CONFIG = join(LAB, 'config.local.json')
@@ -51,21 +52,21 @@ const readJson = p => (existsSync(p) ? JSON.parse(readFileSync(p, 'utf8')) : nul
 
 /** Build a standalone IIFE of the DNPR client for the purity arm. */
 function buildStandalone() {
-  const esbuild = join(ROOT, 'dsh-nano-explorer-extra', 'node_modules', '.bin', 'esbuild')
+  const esbuild = join(ROOT, 'dsh-nano-explorer-extra', 'node_modules', '.bin', isWin ? 'esbuild.cmd' : 'esbuild')
   const out = join(OUT, 'perf-review-standalone.js')
   const r = spawnSync(esbuild, [
     join(ROOT, 'packages', 'dsh-performance-review', 'src', 'client.js'),
     '--bundle', '--format=iife', '--global-name=__perfReviewLib', '--platform=browser',
     `--outfile=${out}`,
-  ], { encoding: 'utf8' })
+  ], { encoding: 'utf8', shell: isWin })
   if (r.status !== 0) throw new Error(`standalone build failed: ${r.stderr}`)
-  return readFileSync(out, 'utf8')
+  return out
 }
 
 /** B2: exact DNPR byte footprint in NDEE's client bundle (normal vs aliased stub). */
 function footprint() {
   const pkg = join(ROOT, 'dsh-nano-explorer-extra')
-  const esbuild = join(pkg, 'node_modules', '.bin', 'esbuild')
+  const esbuild = join(pkg, 'node_modules', '.bin', isWin ? 'esbuild.cmd' : 'esbuild')
   const stub = join(OUT, 'no-review-stub.mjs')
   writeFileSync(stub, [
     "export const LIB_VERSION = 'no-review'",
@@ -82,7 +83,7 @@ function footprint() {
   const plain = join(OUT, 'client-with-review.js')
   const bare = join(OUT, 'client-no-review.js')
   for (const [extra, outfile] of [[[], plain], [[`--alias:dsh-performance-review/client=${stub}`], bare]]) {
-    const r = spawnSync(esbuild, [...common, ...extra, `--outfile=${outfile}`], { cwd: pkg, encoding: 'utf8' })
+    const r = spawnSync(esbuild, [...common, ...extra, `--outfile=${outfile}`], { cwd: pkg, encoding: 'utf8', shell: isWin })
     if (r.status !== 0) throw new Error(`footprint build failed: ${r.stderr}`)
   }
   const withB = statSync(plain).size
@@ -110,7 +111,7 @@ function pluginVersions() {
   return out
 }
 function dshVersion() {
-  const r = spawnSync(cfg.dshBin ?? 'dsh', ['--version'], { encoding: 'utf8' })
+  const r = spawnSync(cfg.dshBin ?? 'dsh', ['--version'], { encoding: 'utf8', shell: isWin })
   return (r.stdout || '').trim().split(/\s+/)[0] || null
 }
 
@@ -196,7 +197,7 @@ function runOnce(scenario, actualArm, script) {
     log(`run scenario=${scenario} arm=${actualArm}${attempt > 1 ? ` (attempt ${attempt})` : ''}`)
     const r = spawnSync(cfg.egoBrowserBin, ['nodejs', '-e', script], {
       encoding: 'utf8', maxBuffer: 32 * 1024 * 1024,
-      env: { ...process.env, PATH: `${homedir()}/.local/bin:${process.env.PATH ?? ''}` },
+      env: { ...process.env, PATH: isWin ? process.env.PATH : `${homedir()}/.local/bin:${process.env.PATH ?? ''}` },
     })
     const combined = `${r.stdout ?? ''}\n${r.stderr ?? ''}`
     const line = combined.split('\n').find(l => l.startsWith('LAB_REPORT_JSON='))
@@ -210,7 +211,7 @@ function runOnce(scenario, actualArm, script) {
         return payload
       }
     }
-    if (attempt < 3) spawnSync('/bin/sleep', ['3'])
+    if (attempt < 3) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 3000)
   }
   return null
 }
@@ -224,6 +225,8 @@ async function main() {
 
   const want = scenarioArg === 'all' ? SCENARIOS : [scenarioArg]
   const needsStandalone = arm === 'purity' || want.includes('observer-purity')
+  // Pass the bundle PATH, not its source: inlining ~37 KB into the -e argv
+  // exceeds the Windows CreateProcess 32 KB command-line limit.
   const standalone = needsStandalone ? buildStandalone() : ''
   let baselineStore = readJson(BASELINE)
   const firstRun = writeBaseline || baselineStore === null

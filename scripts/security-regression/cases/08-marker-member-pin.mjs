@@ -52,17 +52,17 @@ export async function run() {
   v.check('ownMember:row-readable',
     ownMember(planted, identity, INSTANCE)?.member.localPath === attacker)
   v.check('trustedMember:no-pin-refuses',
-    trustedMember(planted, identity, INSTANCE) === undefined)
+    (await trustedMember(planted, identity, INSTANCE)) === undefined)
   const hitNoPin = await matchWorkspace(join(attacker, 'proj'), [planted], { identity, me: INSTANCE })
   v.check('matchWorkspace:no-pin-no-claim', hitNoPin === null, `matched=${hitNoPin?.workspaceId}`)
 
   /* ---------- pin set: remote repoint is ignored, pin wins ---------------- */
-  pinWorkspaceLocalPath(WS, ours)
+  await pinWorkspaceLocalPath(WS, ours)
   const repointed = markerOf({
     workspaceId: WS,
     members: { [MEMBER_ID]: memberRow(USERNAME, INSTANCE, attacker) },
   })
-  const tm = trustedMember(repointed, identity, INSTANCE)
+  const tm = await trustedMember(repointed, identity, INSTANCE)
   v.check('trustedMember:pin-wins', tm?.member.localPath === ours, `localPath=${tm?.member.localPath}`)
   /* matchWorkspace uses the pinned root, not the attacker path. */
   const hitOurs = await matchWorkspace(join(ours, 'proj'), [repointed], { identity, me: INSTANCE })
@@ -92,7 +92,7 @@ export async function run() {
   await joinWorkspace(s3, fakeCtx(), identity, { workspaceId: ws2, localPath: joinPath })
   const reRead = markerOf({ workspaceId: ws2, members: { [MEMBER_ID]: memberRow(USERNAME, INSTANCE, '/hostile') } })
   v.check('join-writes-pin:trustedMember-uses-pin',
-    trustedMember(reRead, identity, INSTANCE)?.member.localPath === joinPath)
+    (await trustedMember(reRead, identity, INSTANCE))?.member.localPath === joinPath)
 
   return v.result('schema:localPath')
 }

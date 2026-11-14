@@ -17,7 +17,7 @@
  * Pure host-function replay — fakeS3 + tmp dirs, no live base.
  */
 import { existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, sep } from 'node:path'
 import { zstdDecompressSync } from 'node:zlib'
 import {
   fakeS3, metaOf, seededSessionBucket,
@@ -135,7 +135,7 @@ export async function run() {
     const res = await materializeSession(s3, home, { workspaceId: WS, sessionId: SID, localPath: root })
     const expected = join(home, 'sessions', projectKey(root), SID, 'session.v4.jsonl.zstd')
     v.check('control-materializes-inside-tree',
-      res?.path === expected && existsSync(expected) && expected.startsWith(join(home, 'sessions') + '/'),
+      res?.path === expected && existsSync(expected) && expected.startsWith(join(home, 'sessions') + sep),
       `path=${res?.path}`)
   }
 

@@ -23,7 +23,8 @@ export { SCENARIOS }
  * @param {object} cfg - lab/config.local.json
  * @param {string} scenario
  * @param {string} arm - on | off | purity
- * @param {string} iife - standalone DNPR client bundle source (purity arm)
+ * @param {string} iife - standalone DNPR client bundle PATH (purity arm);
+ *   read at runtime so the -e argv stays under the Windows 32 KB cmdline limit
  * @returns {string} JavaScript source for `ego-browser nodejs -e`
  */
 export function scenarioScript(cfg, scenario, arm, iife = '') {
@@ -38,7 +39,7 @@ async function main() {
   const HOST_ROUTE = ${S(cfg.hostRoute)};
   const SCENARIO = ${S(scenario)};
   const ARM = ${S(arm)};
-  const STANDALONE = ${S(iife)};
+  const STANDALONE = ${S(iife)} ? (await import('node:fs')).readFileSync(${S(iife)}, 'utf8') : '';
   const notes = [];
   const steps = {};
 

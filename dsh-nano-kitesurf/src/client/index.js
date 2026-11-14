@@ -1702,8 +1702,9 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
             try { await post(SETTINGS, { viewport: next }) } catch { /* local only */ }
           }
           openNanoMenu({
-            anchor: { left: rect.left, bottom: rect.bottom },
+            anchor: { left: rect.left, top: rect.top, bottom: rect.bottom },
             theme: schemeOf?.(),
+            direction: 'up',
             maxHeight: 6 * 28 + 8,
             items: [
               { id: 'fit', label: '自适应', run: () => apply(null) },

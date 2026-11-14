@@ -121,7 +121,11 @@ export function openNanoDialog(options) {
  * @param {Array<{id:string,label:string,icon?:any,tone?:string,run:()=>void}>} options.items
  * @param {number} [options.width] - menu min-width.
  * @param {number} [options.maxHeight] - cap the popup; the list scrolls past it.
- * @param {number} [options.gap] - pixels between the anchor's bottom and the popup's top.
+ * @param {number} [options.gap] - pixels between the anchor's bottom and the popup's top
+ *   (or between the popup's bottom and the anchor's top when direction is 'up').
+ * @param {'down' | 'up'} [options.direction] - 'up' opens the menu ABOVE the anchor's
+ *   top edge instead of below its bottom edge; use it for status-bar / bottom-docked
+ *   triggers that would otherwise fire the list into the viewport.
  * @param {'light' | 'dark'} [options.theme] - owning surface's resolved scheme; see NanoMenu.
  * @param {number} [options.z] - z-index for the popup root (inline style); see NanoMenu.
  * @returns {{ close: () => void }}
@@ -134,7 +138,15 @@ export function openNanoMenu(options) {
   const close = () => { root.unmount(); host.remove() }
   const r = options.anchor
   const x = r.left !== undefined ? r.left : r.x
-  const y = (r.bottom !== undefined ? r.bottom : (r.y ?? 0) + (r.height ?? 0)) + (options.gap ?? 0)
+  const up = options.direction === 'up'
+  const estimatedHeight = Math.min(
+    options.maxHeight ?? Number.POSITIVE_INFINITY,
+    (options.items?.length ?? 0) * 28 + 8,
+  )
+  const anchorTop = r.top !== undefined ? r.top : (r.y ?? 0)
+  const y = up
+    ? anchorTop - (options.gap ?? 0) - (Number.isFinite(estimatedHeight) ? estimatedHeight : 0)
+    : (r.bottom !== undefined ? r.bottom : (r.y ?? 0) + (r.height ?? 0)) + (options.gap ?? 0)
   root.render(React.createElement(NanoMenu, {
     menu: { x, y, openedAt: Date.now() },
     actions: options.items ?? [],

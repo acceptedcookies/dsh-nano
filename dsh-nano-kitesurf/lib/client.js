@@ -275,7 +275,13 @@ var __kitesurfExport = (() => {
     };
     const r = options.anchor;
     const x = r.left !== void 0 ? r.left : r.x;
-    const y = (r.bottom !== void 0 ? r.bottom : (r.y ?? 0) + (r.height ?? 0)) + (options.gap ?? 0);
+    const up = options.direction === "up";
+    const estimatedHeight = Math.min(
+      options.maxHeight ?? Number.POSITIVE_INFINITY,
+      (options.items?.length ?? 0) * 28 + 8
+    );
+    const anchorTop = r.top !== void 0 ? r.top : r.y ?? 0;
+    const y = up ? anchorTop - (options.gap ?? 0) - (Number.isFinite(estimatedHeight) ? estimatedHeight : 0) : (r.bottom !== void 0 ? r.bottom : (r.y ?? 0) + (r.height ?? 0)) + (options.gap ?? 0);
     root.render(import_react4.default.createElement(NanoMenu, {
       menu: { x, y, openedAt: Date.now() },
       actions: options.items ?? [],
@@ -3623,8 +3629,9 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
               }
             };
             openNanoMenu2({
-              anchor: { left: rect.left, bottom: rect.bottom },
+              anchor: { left: rect.left, top: rect.top, bottom: rect.bottom },
               theme: schemeOf?.(),
+              direction: "up",
               maxHeight: 6 * 28 + 8,
               items: [
                 { id: "fit", label: "\u81EA\u9002\u5E94", run: () => apply2(null) },

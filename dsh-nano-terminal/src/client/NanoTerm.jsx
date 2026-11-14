@@ -109,7 +109,8 @@ ${NANO_STYLES}
    and chat composer sit flush against the column. No symmetric margin is
    left beside the panes. */
 .dnt-content{flex:1 1 0;min-height:0;min-width:0;display:flex;overflow:hidden}
-.dnt-panes{display:flex;flex:1 1 auto;min-height:0;min-width:0;gap:6px;padding:8px 0;box-sizing:border-box}
+/* 业主反馈：8px 0 让左右贴边——补上横向 padding，恢复四边呼吸。 */
+.dnt-panes{display:flex;flex:1 1 auto;min-height:0;min-width:0;gap:6px;padding:8px;box-sizing:border-box}
 .dnt-splitter{flex:0 0 6px;border-radius:3px;cursor:col-resize;transition:background .15s}
 .dnt-splitter:hover{background:var(--dsw-alias-interactive-bg-hover)}
 .dnt-pane{position:relative;flex:1 1 0;min-width:0;min-height:0;display:flex;flex-direction:column;overflow:hidden;container-type:size;container-name:dnt-pane;border-radius:var(--dsw-radius-md,8px);border:.5px solid var(--dsw-alias-border-l3);background:var(--dsw-alias-bg-base);transition:border-color .15s}
@@ -130,7 +131,9 @@ ${NANO_STYLES}
 .dnt-lane{font-size:10px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--dsw-alias-brand-primary,var(--dsw-alias-link));background:color-mix(in srgb,var(--dsw-alias-brand-primary,var(--dsw-alias-link)) 12%,transparent);border-radius:var(--dsw-radius-sm);padding:1px 6px;flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dnt-title{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary)}
 .dnt-scroll-lines{font-size:10px;color:var(--dsw-alias-label-quaternary);flex:0 0 auto;font-variant-numeric:tabular-nums}
-.dnt-header .dnt-toolbtn{width:20px;height:20px;padding:0}
+/* 宿主 trajCls('action') 靠行内文本居中；装 SVG 图标的 toolbtn 需要
+   inline-flex 自身居中，否则 X 按 baseline 悬挂在按钮顶边。 */
+.dnt-header .dnt-toolbtn{width:20px;height:20px;padding:0;display:inline-flex;align-items:center;justify-content:center;line-height:0}
 .dnt-header .dnt-toolbtn:hover:not(:disabled){color:var(--dsw-alias-label-primary)}
 .dnt-header .dnt-toolbtn svg{width:13px;height:13px}
 .dnt-header-actions{display:flex;align-items:center;gap:1px;flex:0 0 auto;margin-left:auto}
@@ -950,6 +953,7 @@ function TermPane({ paneId, laneSpec, sessionId, session, focused, onFocus, onCl
     }
     const mousedown = (ev) => {
       onFocus()
+      box.focus()
       const { x, y } = cellAt(ev)
       const data = encodeMouse(term.modes(), { btn: ev.button, x, y, release: false, shift: ev.shiftKey, alt: ev.altKey, ctrl: ev.ctrlKey })
       if (data) { lane.write(data); ev.preventDefault() }
@@ -972,6 +976,7 @@ function TermPane({ paneId, laneSpec, sessionId, session, focused, onFocus, onCl
     const contextmenu = (ev) => {
       ev.preventDefault()
       onFocus()
+      box.focus()
       setMenuAt({ x: ev.clientX, y: ev.clientY })
     }
 
@@ -1049,6 +1054,13 @@ function TermPane({ paneId, laneSpec, sessionId, session, focused, onFocus, onCl
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paneId, laneSpec.lane, laneSpec.url, retrySeq])
+
+  // React `focused`（窗格 chrome 状态）与 DOM focus 必须一致——新建或被聚
+  // 焦的窗格要在第一次击键前就持有键盘；终端只在 focused pane 的 box 上
+  // 消费键事件，不主动 focus() 会让击键落到 body 被宿主吞掉。
+  useEffect(() => {
+    if (focused) boxRef.current?.focus()
+  }, [focused])
 
   // five-level state (W-P0-6): lifecycle phase {opening,live,exited,error}
   // overlaid by the program's own OSC 7501 report {idle,working,blocked,done};

@@ -55,7 +55,7 @@ const STYLE = `
 .nks-address::placeholder{color:var(--dsw-alias-label-tertiary)}
 .nks-go{visibility:hidden;opacity:0;position:absolute;top:0;right:0}
 .nks-address-box:focus-within .nks-go,.nks-address-box[data-dirty="true"] .nks-go{visibility:visible;opacity:1}
-.nks-frame{position:relative;z-index:0;order:1;flex:auto;min-height:0;overflow:hidden;contain:layout paint;background:var(--dsw-alias-bg-layer-1)}
+.nks-frame{position:relative;z-index:0;order:1;overflow:auto;flex:auto;min-height:0;overflow:hidden;contain:layout paint;background:var(--dsw-alias-bg-layer-1)}
 .nks-frame iframe.nks-dom{width:100%;height:100%;border:0;display:block;background:#fff}
 .nks-frame img{width:100%;height:100%;object-fit:contain;object-position:center;display:block}
 .nks-empty{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:10px;padding:24px;text-align:center;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxs-12)}
@@ -86,12 +86,12 @@ const STYLE = `
 .nks-busy::before{content:"";display:block;width:35%;height:100%;background:var(--dsw-alias-link,#2f6fed);animation:nks-beat 1s ease-in-out infinite}
 @keyframes nks-beat{from{transform:translateX(-120%)}to{transform:translateX(320%)}}
 .nks-settings-body{display:flex;flex-direction:column;gap:8px}
-.nks-status{position:relative;z-index:3;order:9;flex:none;display:flex;align-items:center;gap:8px;height:26px;padding:0 8px;border-top:.5px solid var(--dsw-alias-border-l3);font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-tertiary)}
+.nks-status{position:relative;z-index:3;order:7;flex:none;display:flex;align-items:center;gap:8px;height:26px;padding:0 8px;border-top:.5px solid var(--dsw-alias-border-l3);font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-tertiary)}
 .nks-status button{height:20px;padding:0 8px;border:0;border-radius:var(--dsw-radius-sm);background:transparent;color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxxs-11);cursor:pointer}
 .nks-status button:hover{background:var(--dsw-alias-interactive-bg-hover)}
 .nks-status button[aria-pressed="true"],.nks-status button[data-nks-native-toggle][aria-pressed="true"]{background:color-mix(in srgb,var(--dsw-alias-link,#7aaaff) 22%,transparent);color:var(--dsw-alias-label-primary)}
 .nks-status .nks-count[data-bad="true"]{color:var(--dsw-alias-fill-error,#d5455c)}
-.nks-dt{flex:none;height:240px;z-index:6;order:8;display:flex;flex-direction:column;background:var(--dsw-alias-bg-base);border-top:.5px solid var(--dsw-alias-border-l2);box-shadow:0 -8px 24px rgba(0,0,0,.28);min-height:0;font:11px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.nks-dt{flex:none;height:240px;z-index:6;order:8;border-radius:0;display:flex;flex-direction:column;background:var(--dsw-alias-bg-base);border-top:.5px solid var(--dsw-alias-border-l2);min-height:0;font:11px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 .nks-dt-head{flex:none;display:flex;align-items:center;gap:2px;height:28px;padding:0 6px;border-bottom:.5px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1)}
 .nks-dt-tab{height:28px;padding:0 10px;border:0;border-bottom:2px solid transparent;background:transparent;color:var(--dsw-alias-label-tertiary);font:11px/1 ui-monospace,Menlo,monospace;cursor:pointer}
 .nks-dt-tab:hover{color:var(--dsw-alias-label-secondary)}
@@ -113,6 +113,7 @@ const STYLE = `
 .nks-dt-dur{flex:none;width:56px;text-align:right;color:var(--dsw-alias-label-tertiary)}
 .nks-dt-time{flex:none;width:64px;color:var(--dsw-alias-label-tertiary)}
 .nks-dt-src{flex:none;max-width:32%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-tertiary);text-align:right}
+.nks-dt-type{flex:none;width:72px;color:var(--dsw-alias-label-tertiary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .nks-dt-size{flex:none;width:56px;text-align:right;color:var(--dsw-alias-label-tertiary)}
 .nks-dt-styles{flex:none;max-height:110px;overflow:auto;border-bottom:.5px solid var(--dsw-alias-border-l2);padding:4px 8px;background:var(--dsw-alias-bg-layer-1)}
 .nks-dt-style-head{color:var(--dsw-alias-label-secondary);margin-bottom:3px}
@@ -259,6 +260,8 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
   // picker is bound after document.write (which wipes listeners).
   const [nativeHtml, setNativeHtml] = React.useState(true)
   const [domDoc, setDomDoc] = React.useState(null)
+  const [vp, setVp] = React.useState(null)
+  const [vpCustom, setVpCustom] = React.useState(false)
   const domFrameRef = React.useRef(null)
   const [toast, setToast] = React.useState(null)
   const [busy, setBusy] = React.useState(false)
@@ -414,6 +417,16 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
     }, 2000)
     return () => clearInterval(timer)
   }, [shot])
+
+  React.useEffect(() => {
+    let armed = 0
+    const onKey = (event) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'e') { armed = Date.now(); return }
+      if (armed && Date.now() - armed < 1200 && event.key === '2') { event.preventDefault(); armed = 0; setDevtoolsOpen((value) => !value) }
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [])
 
   React.useEffect(() => {
     if (!nativeHtml) return
@@ -766,10 +779,14 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
   }
 
   function onWheel(event) {
-    // React attaches passive wheel listeners, so preventDefault is a no-op;
-    // the frame has overflow:hidden anyway. busyRef (not state) throttles.
-    // A drag in progress keeps its coordinates only for THIS shot — scrolling
-    // mid-drag would remap the box onto a different page (S3-4).
+    // Native HTML owns its own scrolling: the iframe document scrolls exactly
+    // like a real browser. Intercepting here is what made the page refuse to
+    // move even though the scrollbar thumb changed.
+    if (nativeHtml && domDoc) return
+    // Screenshot mode: React attaches passive wheel listeners, so
+    // preventDefault is a no-op. A drag in progress keeps its coordinates only
+    // for THIS shot — scrolling mid-drag would remap the box onto a different
+    // page (S3-4).
     if (!shot || busyRef.current || dragRef.current) return
     const delta = event.deltaY
     if (Math.abs(delta) < 8) return
@@ -1271,6 +1288,7 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
       tab === 'network' ? h('div', { className: 'nks-dt-cols' },
         h('span', { className: 'nks-dt-lv' }, 'Method'),
         h('span', { className: 'nks-dt-st' }, 'Status'),
+        h('span', { className: 'nks-dt-type' }, 'Type'),
         h('span', { className: 'nks-dt-url nks-dt-grow', style: { maxWidth: 'none', textAlign: 'left' } }, 'URL'),
         h('span', { className: 'nks-dt-size' }, 'Size'),
         h('span', { className: 'nks-dt-dur' }, 'Time')) : null,
@@ -1444,7 +1462,28 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
       h('button', { type: 'button', className: 'nks-tool', 'data-nks-settings': '1', 'aria-label': copy.settings, title: copy.settings, onClick: openSettings }, glyph('settings'))),
     h('div', { className: 'nks-status', 'data-nks-status': '1' },
       h('button', { type: 'button', 'data-nks-native-toggle': '1', 'aria-pressed': nativeHtml ? 'true' : 'false', title: '原生 HTML 渲染', onClick: () => { setNativeHtml((v) => !v); if (!nativeHtml) loadDom().catch(() => {}) } }, 'HTML'),
-      h('button', { type: 'button', 'data-nks-devtools-toggle': '1', 'aria-pressed': devtoolsOpen ? 'true' : 'false', onClick: () => setDevtoolsOpen((v) => !v) }, copy.devtools),
+      h('button', { type: 'button', 'data-nks-devtools-toggle': '1', 'aria-pressed': devtoolsOpen ? 'true' : 'false', title: '开发者工具（⌘E 然后按 2）', onClick: () => setDevtoolsOpen((v) => !v) }, copy.devtools),
+      h('select', {
+        'data-nks-vp': '1',
+        title: '页面视口（拟真）',
+        value: vp ? String(vp.width) : 'fit',
+        onChange: async (event) => {
+          const value = event.target.value
+          if (value === 'custom') { setVpCustom(true); return }
+          setVpCustom(false)
+          const next = value === 'fit' ? null : { width: Number(value), height: Number(value) === 390 ? 844 : 900 }
+          setVp(next)
+          try { await post(SETTINGS, { viewport: next }) } catch { /* local only */ }
+        },
+      }, h('option', { value: 'fit' }, '自适应'), h('option', { value: '1280' }, '1280×900'), h('option', { value: '768' }, '768×900'), h('option', { value: '390' }, '390×844'), h('option', { value: 'custom' }, '自定义…')),
+      vpCustom ? h('input', {
+        'data-nks-vp-w': '1', type: 'number', placeholder: '宽', style: { width: '52px' },
+        onKeyDown: async (e) => { if (e.key !== 'Enter') return; const w = Number(e.currentTarget.value); if (w >= 240) { const next = { width: w, height: vp?.height || 900 }; setVp(next); setVpCustom(false); try { await post(SETTINGS, { viewport: next }) } catch {} } },
+      }) : null,
+      vpCustom ? h('input', {
+        'data-nks-vp-h': '1', type: 'number', placeholder: '高', style: { width: '52px' },
+        onKeyDown: async (e) => { if (e.key !== 'Enter') return; const h = Number(e.currentTarget.value); if (h >= 240) { const next = { width: vp?.width || 1280, height: h }; setVp(next); setVpCustom(false); try { await post(SETTINGS, { viewport: next }) } catch {} } },
+      }) : null,
       h('span', { 'data-nks-mode': nativeHtml && domDoc ? 'html' : 'img', style: { color: nativeHtml && domDoc ? 'var(--dsw-alias-fill-success,#3fb950)' : 'var(--dsw-alias-fill-warning,#d29922)' } },
         nativeHtml && domDoc ? 'HTML 原生渲染' : 'IMG 截图回退'),
       h('span', { style: { flex: 'auto' } }),
@@ -1476,6 +1515,7 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
         className: 'nks-dom',
         title: 'Kitesurf page',
         sandbox: 'allow-scripts allow-same-origin',
+        style: vp ? { width: `${vp.width}px`, height: `${vp.height}px`, flex: 'none', display: 'block', margin: '0 auto', background: '#fff' } : { width: '100%', height: '100%', display: 'block', border: 0 },
         ref: (el) => { domFrameRef.current = el; if (el) writeDomFrame(el) },
       }) : hasPage ? h('img', {
         alt: '',

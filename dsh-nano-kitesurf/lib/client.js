@@ -1908,7 +1908,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
 .nks-address::placeholder{color:var(--dsw-alias-label-tertiary)}
 .nks-go{visibility:hidden;opacity:0;position:absolute;top:0;right:0}
 .nks-address-box:focus-within .nks-go,.nks-address-box[data-dirty="true"] .nks-go{visibility:visible;opacity:1}
-.nks-frame{position:relative;z-index:0;order:1;flex:auto;min-height:0;overflow:hidden;contain:layout paint;background:var(--dsw-alias-bg-layer-1)}
+.nks-frame{position:relative;z-index:0;order:1;overflow:auto;flex:auto;min-height:0;overflow:hidden;contain:layout paint;background:var(--dsw-alias-bg-layer-1)}
 .nks-frame iframe.nks-dom{width:100%;height:100%;border:0;display:block;background:#fff}
 .nks-frame img{width:100%;height:100%;object-fit:contain;object-position:center;display:block}
 .nks-empty{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:10px;padding:24px;text-align:center;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxs-12)}
@@ -1939,12 +1939,12 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
 .nks-busy::before{content:"";display:block;width:35%;height:100%;background:var(--dsw-alias-link,#2f6fed);animation:nks-beat 1s ease-in-out infinite}
 @keyframes nks-beat{from{transform:translateX(-120%)}to{transform:translateX(320%)}}
 .nks-settings-body{display:flex;flex-direction:column;gap:8px}
-.nks-status{position:relative;z-index:3;order:9;flex:none;display:flex;align-items:center;gap:8px;height:26px;padding:0 8px;border-top:.5px solid var(--dsw-alias-border-l3);font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-tertiary)}
+.nks-status{position:relative;z-index:3;order:7;flex:none;display:flex;align-items:center;gap:8px;height:26px;padding:0 8px;border-top:.5px solid var(--dsw-alias-border-l3);font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-tertiary)}
 .nks-status button{height:20px;padding:0 8px;border:0;border-radius:var(--dsw-radius-sm);background:transparent;color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxxs-11);cursor:pointer}
 .nks-status button:hover{background:var(--dsw-alias-interactive-bg-hover)}
 .nks-status button[aria-pressed="true"],.nks-status button[data-nks-native-toggle][aria-pressed="true"]{background:color-mix(in srgb,var(--dsw-alias-link,#7aaaff) 22%,transparent);color:var(--dsw-alias-label-primary)}
 .nks-status .nks-count[data-bad="true"]{color:var(--dsw-alias-fill-error,#d5455c)}
-.nks-dt{flex:none;height:240px;z-index:6;order:8;display:flex;flex-direction:column;background:var(--dsw-alias-bg-base);border-top:.5px solid var(--dsw-alias-border-l2);box-shadow:0 -8px 24px rgba(0,0,0,.28);min-height:0;font:11px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.nks-dt{flex:none;height:240px;z-index:6;order:8;border-radius:0;display:flex;flex-direction:column;background:var(--dsw-alias-bg-base);border-top:.5px solid var(--dsw-alias-border-l2);min-height:0;font:11px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 .nks-dt-head{flex:none;display:flex;align-items:center;gap:2px;height:28px;padding:0 6px;border-bottom:.5px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1)}
 .nks-dt-tab{height:28px;padding:0 10px;border:0;border-bottom:2px solid transparent;background:transparent;color:var(--dsw-alias-label-tertiary);font:11px/1 ui-monospace,Menlo,monospace;cursor:pointer}
 .nks-dt-tab:hover{color:var(--dsw-alias-label-secondary)}
@@ -1966,6 +1966,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
 .nks-dt-dur{flex:none;width:56px;text-align:right;color:var(--dsw-alias-label-tertiary)}
 .nks-dt-time{flex:none;width:64px;color:var(--dsw-alias-label-tertiary)}
 .nks-dt-src{flex:none;max-width:32%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-tertiary);text-align:right}
+.nks-dt-type{flex:none;width:72px;color:var(--dsw-alias-label-tertiary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .nks-dt-size{flex:none;width:56px;text-align:right;color:var(--dsw-alias-label-tertiary)}
 .nks-dt-styles{flex:none;max-height:110px;overflow:auto;border-bottom:.5px solid var(--dsw-alias-border-l2);padding:4px 8px;background:var(--dsw-alias-bg-layer-1)}
 .nks-dt-style-head{color:var(--dsw-alias-label-secondary);margin-bottom:3px}
@@ -2088,6 +2089,8 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
     const [devtoolsOpen, setDevtoolsOpen] = React5.useState(false);
     const [nativeHtml, setNativeHtml] = React5.useState(true);
     const [domDoc, setDomDoc] = React5.useState(null);
+    const [vp, setVp] = React5.useState(null);
+    const [vpCustom, setVpCustom] = React5.useState(false);
     const domFrameRef = React5.useRef(null);
     const [toast, setToast] = React5.useState(null);
     const [busy, setBusy] = React5.useState(false);
@@ -2211,6 +2214,22 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       }, 2e3);
       return () => clearInterval(timer);
     }, [shot]);
+    React5.useEffect(() => {
+      let armed = 0;
+      const onKey = (event) => {
+        if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "e") {
+          armed = Date.now();
+          return;
+        }
+        if (armed && Date.now() - armed < 1200 && event.key === "2") {
+          event.preventDefault();
+          armed = 0;
+          setDevtoolsOpen((value) => !value);
+        }
+      };
+      window.addEventListener("keydown", onKey, true);
+      return () => window.removeEventListener("keydown", onKey, true);
+    }, []);
     React5.useEffect(() => {
       if (!nativeHtml) return;
       const frame2 = domFrameRef.current;
@@ -2538,6 +2557,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       endDrag();
     }
     function onWheel(event) {
+      if (nativeHtml && domDoc) return;
       if (!shot || busyRef.current || dragRef.current) return;
       const delta = event.deltaY;
       if (Math.abs(delta) < 8) return;
@@ -3038,6 +3058,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           { className: "nks-dt-cols" },
           h("span", { className: "nks-dt-lv" }, "Method"),
           h("span", { className: "nks-dt-st" }, "Status"),
+          h("span", { className: "nks-dt-type" }, "Type"),
           h("span", { className: "nks-dt-url nks-dt-grow", style: { maxWidth: "none", textAlign: "left" } }, "URL"),
           h("span", { className: "nks-dt-size" }, "Size"),
           h("span", { className: "nks-dt-dur" }, "Time")
@@ -3249,7 +3270,64 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           if (!nativeHtml) loadDom().catch(() => {
           });
         } }, "HTML"),
-        h("button", { type: "button", "data-nks-devtools-toggle": "1", "aria-pressed": devtoolsOpen ? "true" : "false", onClick: () => setDevtoolsOpen((v) => !v) }, copy.devtools),
+        h("button", { type: "button", "data-nks-devtools-toggle": "1", "aria-pressed": devtoolsOpen ? "true" : "false", title: "\u5F00\u53D1\u8005\u5DE5\u5177\uFF08\u2318E \u7136\u540E\u6309 2\uFF09", onClick: () => setDevtoolsOpen((v) => !v) }, copy.devtools),
+        h("select", {
+          "data-nks-vp": "1",
+          title: "\u9875\u9762\u89C6\u53E3\uFF08\u62DF\u771F\uFF09",
+          value: vp ? String(vp.width) : "fit",
+          onChange: async (event) => {
+            const value = event.target.value;
+            if (value === "custom") {
+              setVpCustom(true);
+              return;
+            }
+            setVpCustom(false);
+            const next = value === "fit" ? null : { width: Number(value), height: Number(value) === 390 ? 844 : 900 };
+            setVp(next);
+            try {
+              await post(SETTINGS, { viewport: next });
+            } catch {
+            }
+          }
+        }, h("option", { value: "fit" }, "\u81EA\u9002\u5E94"), h("option", { value: "1280" }, "1280\xD7900"), h("option", { value: "768" }, "768\xD7900"), h("option", { value: "390" }, "390\xD7844"), h("option", { value: "custom" }, "\u81EA\u5B9A\u4E49\u2026")),
+        vpCustom ? h("input", {
+          "data-nks-vp-w": "1",
+          type: "number",
+          placeholder: "\u5BBD",
+          style: { width: "52px" },
+          onKeyDown: async (e) => {
+            if (e.key !== "Enter") return;
+            const w = Number(e.currentTarget.value);
+            if (w >= 240) {
+              const next = { width: w, height: vp?.height || 900 };
+              setVp(next);
+              setVpCustom(false);
+              try {
+                await post(SETTINGS, { viewport: next });
+              } catch {
+              }
+            }
+          }
+        }) : null,
+        vpCustom ? h("input", {
+          "data-nks-vp-h": "1",
+          type: "number",
+          placeholder: "\u9AD8",
+          style: { width: "52px" },
+          onKeyDown: async (e) => {
+            if (e.key !== "Enter") return;
+            const h2 = Number(e.currentTarget.value);
+            if (h2 >= 240) {
+              const next = { width: vp?.width || 1280, height: h2 };
+              setVp(next);
+              setVpCustom(false);
+              try {
+                await post(SETTINGS, { viewport: next });
+              } catch {
+              }
+            }
+          }
+        }) : null,
         h(
           "span",
           { "data-nks-mode": nativeHtml && domDoc ? "html" : "img", style: { color: nativeHtml && domDoc ? "var(--dsw-alias-fill-success,#3fb950)" : "var(--dsw-alias-fill-warning,#d29922)" } },
@@ -3293,6 +3371,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           className: "nks-dom",
           title: "Kitesurf page",
           sandbox: "allow-scripts allow-same-origin",
+          style: vp ? { width: `${vp.width}px`, height: `${vp.height}px`, flex: "none", display: "block", margin: "0 auto", background: "#fff" } : { width: "100%", height: "100%", display: "block", border: 0 },
           ref: (el) => {
             domFrameRef.current = el;
             if (el) writeDomFrame(el);

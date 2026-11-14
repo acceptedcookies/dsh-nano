@@ -653,3 +653,39 @@ window_min = pinnedAsyncTokens / H
 | 版本 | 日期 | 说明 |
 |---|---|---|
 | `0.1.0-draft` | 2026-11-14 | 首版：汇入 2026-11-14 [业主] 四条要求与按钮要求；完成 [DNMS] / [dsh] 宿主 / [nano-agent] 三路 `file:line` 事实核查（含 13 项订正、3 项 UNVERIFIED）；引入 [nano-agent] 23 条踩坑记录并转成 10 项防护设计；对照本仓七条硬闸门与 [DNMS] 自身合同；给出架构 A/B、精确契约、P0–P6 执行计划、验收与风险登记。待 [业主] 裁决 D1–D6。 |
+| `0.1.0-impl` | 2026-11-15 | STEP.0–8 全执行：双包落地（`dsh-nano-model-selector@0.3.0` + `dsh-nano-model-selector-compaction@0.1.0`）、`cordis.patch.yml` 4-preset 全重放互斥、durable bracket 协议、`-18` 异步车道（B-arm→idle `runMaintenance`→同窗口 commit）、`-15` 策略文件、`GET/PUT/POST` 三路由、rail-4 面板、`-21` runtime 投影。三路对抗审（真相层对账/工作完成度/防假绿）→ T-FIX(1) durable-lock 泄漏修复 → T-FIX(2)+(3) 批量修复。 |
+
+---
+
+## 14. 执行日志（T-FIX 收敛后补记）
+
+### 14.1 P0：跨回合括号违例（live 实测发现）
+
+- **现象**：`headless` resume 报 `SessionFormatError: turn/start crosses an open compaction`，会话被判 corrupt 不可恢复。
+- **根因**：初版把 `compaction/start` 写在 arm 所在 turn 的 pre-step，`tx.commit` 延后到下一 turn 的 pre-step —— 括号跨过 `turn/start`，违反格式律。
+- **修法**：整条 `compactSurfaceRegion(owner:null)` 收进 `agent.runMaintenance` 空闲窗口（`prepare→summarize→commit` 一气呵成），`turn:None`；下一 turn 见压缩后表面。live 证据：seq58–61 `turn:None` + seq60 `surfaceOp.replace{37,45}` + seq74 adoption-wake。
+- **承诺**：`-18`「跨回合 arm」语义未变 —— arm 仍发生在 turn 内，物理 attempt 仍发生在 idle；只是 commit 也落在同一 maintenance 窗口，不再等下一 turn pre-step。
+
+### 14.2 T-FIX(2)+(3) 落点
+
+- `compact-runtime.js`：`lastCompaction.at ← event.time`（原读 `data?.at` 恒 null）；fold `compaction/start → busy`。
+- `index.js` PUT：master 序校验不再因空 model 被跳过；半空 model pair → `invalid-model` 400；`application:'failed'` → 500 + `switch-failed`。
+- `compaction-seam.js`：保留 vendored（link 安装下 `@deepseek-ai/dsh-compaction` 不可解析），但 `ManualCompactionError` 变可变导出 + `upgradeManualCompactionError` 桥；宿主启动时尝试升级到 upstream 类，`/compact` `instanceof` 门可命中。
+- `host-compaction.js`：episode attempt `EPISODE_TIMEOUT_MS=120s`；armed starvation guard（3 次 idle-claim 失败 → drop `starved`）；同步 FULL 成功复位 async circuit（`-18⑧`）。
+- `feature-contract.json`：补 `bundle`/`degraded` 字段 + `switch-failed` 500 形态。
+- `CompactPanel.jsx` + `i18n.js`：`overridden` 走独立 warn 文案 `compactSwitchOverridden`（原为 success「已应用」）。
+
+### 14.3 live 验收证据（dsh-dev，headless + web 双通道）
+
+| 项 | 证据 |
+|---|---|
+| 引擎挂载 | `dnms01-force` probe `compaction=true`；`ctx.compaction` 在 preset isolate 内由本包提供 |
+| B-line arm → maintenance commit | seq58–61 `turn:None` bracket；`runMaintenance` 内 start→summary→checkpoint→end |
+| 异步唤醒 | seq74 `source.kind:'compaction-adoption-wake'` + `(Context compacted asynchronously; continuing.)` |
+| pinned 保留 | seq60 `replace{37,45}` 保留 seq53 user + seq55 assistant 尾对 |
+| DC-1 fullOnly | `pinnedAsyncTokens=40000,H=0.05` → `dcs:["DC-1"]` → turn3 `turn:3` 同步 FULL |
+| S-line FULL | turn5 seq65–68 `turn:5` 同步 FULL（over-health 二次压实） |
+| 持久化 | resume `session-2e5b4535` 无 corrupt；`turn6` 正常执行；bracket 净零 |
+| PUT 生效 | `pinnedAsyncTokens`/`healthTargetAsync` 部分更新生效，effective 重算 |
+| 格式律 | `turn/start crosses an open compaction` 不再复现（修复后 resume 干净） |
+

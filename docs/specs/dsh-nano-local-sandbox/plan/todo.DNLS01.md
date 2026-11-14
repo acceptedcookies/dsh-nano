@@ -94,21 +94,21 @@ P0-01 ──▶ P1-01 ──▶ P1-02 ──▶ P1-03
   - **完成判据**：公开参数出现 Apple 名词则构造函数抛错；`backend.nvx.unimplemented` 不进目录
   - **验证映射**：`DNLS01-T02` · **依赖**：`P1-02`
   - **执行状态**：`complete` · **执行时间**：`2026-11-14T05:13:00Z` · **证据 / 备注**：`backend.test.mjs` exit 0
-- [ ] `P2-01` — profile 校验器，缺字段 / latest / caret / 坏 digest / 坏 ref / verify / container machine 都拒绝
+- [x] `P2-01` — profile 校验器，缺字段 / latest / caret / 坏 digest / 坏 ref / verify / container machine 都拒绝
   - **落点 / 对象**：`src/host/profile-registry.js`、`profiles/kitesurf/profile.yaml`
   - **完成判据**：拒绝路径上 `ensureImage` 次数为 0；`scope` 从 YAML 读出
   - **验证映射**：`DNLS01-T04` `DNLS01-T05` · **依赖**：`P1-03`
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
-- [ ] `P2-02` — 配方搬进 profile 目录，不改 [DNK] 原文件
+  - **执行状态**：`complete` · **执行时间**：`2026-11-14T05:20:00Z` · **证据 / 备注**：`node --test test/profile-reject.test.mjs test/profile-load.test.mjs` exit 0。`DNLS01-T23` 仍 pending，要等九条对照都在
+- [x] `P2-02` — 配方搬进 profile 目录，不改 [DNK] 原文件
   - **落点 / 对象**：`profiles/kitesurf/Dockerfile`、`entrypoint.sh`、`mcp-bridge.mjs`
   - **完成判据**：`__res_init` 注释与 `node:22-bookworm-slim` 仍在；本包不 import [DNK]
   - **验证映射**：`DNLS01-T05` · **依赖**：`P2-01`
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
-- [ ] `P2-03` — 构建 argv 只经 `ctx.sandbox.confine`；缺失则失败关闭
+  - **执行状态**：`complete` · **执行时间**：`2026-11-14T05:20:00Z` · **证据 / 备注**：`profile-load.test.mjs` exit 0；[DNK] runtime 未改
+- [x] `P2-03` — 构建 argv 只经 `ctx.sandbox.confine`；缺失则失败关闭
   - **落点 / 对象**：`src/host/build.js`
   - **完成判据**：有 confine 时裸 spawn 为 0；无 sandbox 时抛错且 spawn 仍为 0
   - **验证映射**：`DNLS01-T06` · **依赖**：`P2-02`
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
+  - **执行状态**：`complete` · **执行时间**：`2026-11-14T05:20:00Z` · **证据 / 备注**：`node --test test/build-confine.test.mjs` exit 0
 - [ ] `P3-01` — per-instance registry；ensure 幂等；adopt/degrade 不串实例
   - **落点 / 对象**：`src/host/instance-registry.js`
   - **完成判据**：同指纹两次 ensure，id 相同且 create 次数为 1；无模块级 phase
@@ -227,9 +227,9 @@ P0-01 ──▶ P1-01 ──▶ P1-02 ──▶ P1-03
 | DNLS01-T01 | 身份与 inject | `node --test dsh-nano-local-sandbox/test/identity.test.mjs` | exit 0 | exit 0，6 tests 中的身份 2 条 | `2026-11-14T05:13:00Z` | pass |
 | DNLS01-T02 | backend / NVX | `test/backend.test.mjs` | exit 0 | exit 0 | `2026-11-14T05:13:00Z` | pass |
 | DNLS01-T03 | 无 SandboxProvider | `test/no-sandbox-provider.test.mjs` | exit 0 | exit 0 | `2026-11-14T05:13:00Z` | pass |
-| DNLS01-T04 | profile 拒绝 | `test/profile-reject.test.mjs` | exit 0 | - | - | pending |
-| DNLS01-T05 | profile 加载 | `test/profile-load.test.mjs` | exit 0 | - | - | pending |
-| DNLS01-T06 | confine | `test/build-confine.test.mjs` | exit 0 | - | - | pending |
+| DNLS01-T04 | profile 拒绝 | `test/profile-reject.test.mjs` | exit 0 | exit 0 | `2026-11-14T05:20:00Z` | pass |
+| DNLS01-T05 | profile 加载 | `test/profile-load.test.mjs` | exit 0 | exit 0 | `2026-11-14T05:20:00Z` | pass |
+| DNLS01-T06 | confine | `test/build-confine.test.mjs` | exit 0 | exit 0 | `2026-11-14T05:20:00Z` | pass |
 | DNLS01-T07 | ensure 幂等 | `test/instance.test.mjs` | exit 0 | - | - | pending |
 | DNLS01-T08 | policy-stale | `test/policy-stale.test.mjs` | exit 0 | - | - | pending |
 | DNLS01-T09 | 单份 history | `test/history-single.test.mjs` | exit 0 | - | - | pending |
@@ -256,8 +256,8 @@ P0-01 ──▶ P1-01 ──▶ P1-02 ──▶ P1-03
 
 ## 5. 当前状态与交接
 
-- **当前节点 / 已完成**：`P2-01` / `P0-01` `P1-01` `P1-02` `P1-03`
-- **下一动作**：Phase 2 profile 与构建配方
+- **当前节点 / 已完成**：`P3-01` / `P0-01` 至 `P2-03`
+- **下一动作**：Phase 3 实例、policy、history、回收
 - **当前阻塞**：无
 - **待 owner / 外部决定**：无。真实容器 e2e 若本机无 CLI，T18 保持未观察并在 closure 写明
 - **最终交接目标**：合并回 `main` 后按 AGENTS.md 删除本 worktree（收口时）

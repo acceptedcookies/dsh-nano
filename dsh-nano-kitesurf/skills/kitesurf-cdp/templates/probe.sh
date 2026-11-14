@@ -19,14 +19,14 @@ req() { # req <path> [method] [json-body]
 }
 
 echo "=== /status ==="
-req /nano-kitesurf/status
+req /nano-local-sandbox/status
 echo
 echo "=== /diagnostics?limit=10 (hints) ==="
-req '/nano-kitesurf/diagnostics?limit=10'
+req '/nano-local-sandbox/diagnostics?limit=10'
 echo
 echo "=== /operations?errorsOnly=true ==="
-req '/nano-kitesurf/operations?errorsOnly=true'
+req '/nano-local-sandbox/operations?errorsOnly=true'
 echo
 echo "=== /ports ==="
-req /nano-kitesurf/ports
+req /nano-local-sandbox/ports
 echo

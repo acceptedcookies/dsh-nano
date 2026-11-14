@@ -5,21 +5,21 @@
 ### 1. 读人类点选并回答
 人在画面点了一个元素。agent 拉元素包回答「这是什么」：
 ```bash
-GET /nano-kitesurf/last                          # pick.element{selector,text,box,style×7,attrs,parentSel,childSel,ancestors,componentStack}
+GET /nano-local-sandbox/last                          # pick.element{selector,text,box,style×7,attrs,parentSel,childSel,ancestors,componentStack}
 ```
 元素包一调即全。答「这是 h1/body 第 N 段」，带 `element.selector`（兜底句柄）与 `element.ref`（@N，需跑过 /snapshot）。
 
 ### 2. 就改改字并截图复核
 ```bash
-POST /nano-kitesurf/edit    {"selector":"h1","text":"新文案"}      # 写回渲染态
-POST /nano-kitesurf/shot    {"format":"webp"}                       # 复核渲染结果
-GET  /nano-kitesurf/diagnostics?limit=5                             # 顺带看 stale/空快照 hint
+POST /nano-local-sandbox/edit    {"selector":"h1","text":"新文案"}      # 写回渲染态
+POST /nano-local-sandbox/shot    {"format":"webp"}                       # 复核渲染结果
+GET  /nano-local-sandbox/diagnostics?limit=5                             # 顺带看 stale/空快照 hint
 ```
 
 ### 3. 注入 console.log 探针
 ```bash
-POST /nano-kitesurf/evaluate {"expression":"console.log('KITE-PROBE', performance.now()); 1"}
-GET  /nano-kitesurf/console?level=log&limit=10                      # 取回 KITE-PROBE 行（带回栈）
+POST /nano-local-sandbox/evaluate {"expression":"console.log('KITE-PROBE', performance.now()); 1"}
+GET  /nano-local-sandbox/console?level=log&limit=10                      # 取回 KITE-PROBE 行（带回栈）
 ```
 
 ### 4. MCP-only 排障（无 host 路由时）
@@ -38,16 +38,16 @@ kitesurf_control {action:"release"}
 
 ```bash
 # 打开 → 诊断 → 快照取 ref → @N 驱动 → 点选 → 取包 → 改字 → 看 console
-POST /nano-kitesurf/open      {"url":"https://example.com"}
-GET  /nano-kitesurf/diagnostics?limit=10
+POST /nano-local-sandbox/open      {"url":"https://example.com"}
+GET  /nano-local-sandbox/diagnostics?limit=10
 GET  /nano-local-sandbox/snapshot                 # → tree + {"@1":{selector:"a"}}
-POST /nano-kitesurf/wait      {"selector":"@1","timeoutMs":5000}   # @N 直解
-POST /nano-kitesurf/pick      {"selector":"@1"}                     # element.ref:"@1"
-POST /nano-kitesurf/pick      {"x":640,"y":320}
-GET  /nano-kitesurf/last
-POST /nano-kitesurf/edit      {"selector":"@1","text":"Hello"}
-POST /nano-kitesurf/evaluate  {"expression":"console.log('probe'); document.title"}
-GET  /nano-kitesurf/console?level=log
+POST /nano-local-sandbox/wait      {"selector":"@1","timeoutMs":5000}   # @N 直解
+POST /nano-local-sandbox/pick      {"selector":"@1"}                     # element.ref:"@1"
+POST /nano-local-sandbox/pick      {"x":640,"y":320}
+GET  /nano-local-sandbox/last
+POST /nano-local-sandbox/edit      {"selector":"@1","text":"Hello"}
+POST /nano-local-sandbox/evaluate  {"expression":"console.log('probe'); document.title"}
+GET  /nano-local-sandbox/console?level=log
 ```
 
 ## 负例（每个都要能预测结果，不要靠猜）
@@ -70,8 +70,8 @@ GET  /nano-kitesurf/console?level=log
 | `POST /settings {"viewport":{"width":9999}}` | `400 kitesurf.settings.viewport` | 宽 320..3840、高 240..2160；dsf 只 1/2/3 |
 | `POST /settings {"extraHeaders":{"cookie":"a=b"}}` | `400 kitesurf.settings.headers` | 凭证类 header 名被禁 |
 | 把 `httpBase` 指到 8787（Cursor 占） | **不删容器**：接管现有 8798 并 `adopted:true`；若连现端口也不可用则 `409 kitesurf.kite.portbusy` | 端口占用不是引擎故障，不能拆能用的容器 |
-| `GET /nano-kitesurf/ports` | `{configured,effective,container.published,ports.engine.free,lastRepair}` | 一眼看「配置 8787/实跑 8798」 |
-| `POST /nano-kitesurf/recover {}` | 自动 suspend→resume 并回报 `engineAlive` | 一键自愈 |
+| `GET /nano-local-sandbox/ports` | `{configured,effective,container.published,ports.engine.free,lastRepair}` | 一眼看「配置 8787/实跑 8798」 |
+| `POST /nano-local-sandbox/recover {}` | 自动 suspend→resume 并回报 `engineAlive` | 一键自愈 |
 | `POST /history {"delta":2}` | `400 kitesurf.navigate.delta` | 只能 -1/+1 |
 | `POST /kite {"action":"start"}` 当 running | `409 kitesurf.kite.state` | 阶段错，不是引擎故障 |
 | `configure` 到 `http://evil.example` | `400 kitesurf.kite.remote` | 远程需 allowRemote |

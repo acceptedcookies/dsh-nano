@@ -26,7 +26,7 @@ A failed call returns `{ok:false,errorId,error}` with a real HTTP status. The sa
 | `kitesurf.engine.context` | 409 | 页面正在导航，JS 执行上下文被销毁（竞态，不是引擎故障） | 已自动重试一次；仍失败时等页面稳定后重试，或 POST /recover 一键恢复 |
 | `kitesurf.engine.connect` | 502 | CDP 连接失败/服务不是 Kitesurf/socket 关闭/命令超时 | GET /status；container list；curl http://127.0.0.1:8798/health；必要时 /kite resume |
 | `kitesurf.perf.method` | 400 | mode=window 排水只允许 POST | GET /perf-review/host 读快照；POST /perf-review/host?mode=window 排水 |
-| `kitesurf.context.miss` | 404 | 上下文引用不存在或 text 为空（ref 环只保留最近 50 条，宿主重启即清空） | 重新点选生成新 ref；GET /nano-kitesurf/context 列出最近引用 |
+| `kitesurf.context.miss` | 404 | 上下文引用不存在或 text 为空（ref 环只保留最近 50 条，宿主重启即清空） | 重新点选生成新 ref；GET /nano-local-sandbox/context 列出最近引用 |
 | `kitesurf.console.query` | 400 | console 查询参数非法 | GET /console?level=error&limit=50；POST /console {clear:true} 清空 |
 | `kitesurf.diag.query` | 400 | diagnostics/operations 查询参数非法 | GET /diagnostics?limit=20；GET /operations?errorsOnly=true |
 | `kitesurf.evaluate.empty` | 400 | expression 为空或超过 2000 字符 | POST /evaluate {expression:"document.title"}，≤2000 字符 |

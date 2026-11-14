@@ -2,21 +2,21 @@
 
 ## 探针路由
 
-任何异常先跑一次 `/nano-kitesurf/diagnostics`（`page.fetch` 带会话；裸 curl 需 `dsh-auth-*` cookie，否则 401/302）。它一次返回：插件版本/阶段、引擎 status 与 target 列表、UA/viewport、**最近操作 trace**（route/status/errorId/耗时）、**页面 console/exception/network**、错误目录、perf 快照、按当前状态生成的 `hints`。`hints` 是权威线索，先读它再决定动作。
+任何异常先跑一次 `/nano-local-sandbox/diagnostics`（`page.fetch` 带会话；裸 curl 需 `dsh-auth-*` cookie，否则 401/302）。它一次返回：插件版本/阶段、引擎 status 与 target 列表、UA/viewport、**最近操作 trace**（route/status/errorId/耗时）、**页面 console/exception/network**、错误目录、perf 快照、按当前状态生成的 `hints`。`hints` 是权威线索，先读它再决定动作。
 
 | 路由 | 作用 |
 |---|---|
-| `GET /nano-kitesurf/diagnostics?limit=20` | 一击全量诊断 |
-| `GET /nano-kitesurf/operations?errorsOnly=true` | 只看失败的调用（errorId + 耗时 + 输入摘要） |
-| `POST /nano-kitesurf/operations {"clear":true}` | 清空操作 trace |
-| `GET /nano-kitesurf/console?level=error,exception` | 页面 console.error / 未捕获异常 / 网络失败 |
-| `GET /nano-kitesurf/console?level=navigation` | 页面导航轨迹（漂移排查） |
-| `POST /nano-kitesurf/console {"clear":true}` | 清空 console 环形缓冲 |
-| `GET /nano-kitesurf/network?limit=1..200&failedOnly=true` | 网络生命周期（requestWillBeSent→responseReceived） |
-| `GET /nano-kitesurf/targets` | 引擎 Target.getTargets：page target id/url、当前附着页 |
-| `POST /nano-kitesurf/evaluate {"expression":"document.title"}` | 引擎页面有界 JS（≤2000 字符，结果 ≤4000 字符） |
-| `GET /nano-kitesurf/perf-review/host` | 进程 perf span（DSH_PERF_REVIEW=1 时） |
-| `GET /nano-kitesurf/browse-history` | 持久浏览历史；`DELETE ?id=…` / `POST {clear:true}` 改 |
+| `GET /nano-local-sandbox/diagnostics?limit=20` | 一击全量诊断 |
+| `GET /nano-local-sandbox/operations?errorsOnly=true` | 只看失败的调用（errorId + 耗时 + 输入摘要） |
+| `POST /nano-local-sandbox/operations {"clear":true}` | 清空操作 trace |
+| `GET /nano-local-sandbox/console?level=error,exception` | 页面 console.error / 未捕获异常 / 网络失败 |
+| `GET /nano-local-sandbox/console?level=navigation` | 页面导航轨迹（漂移排查） |
+| `POST /nano-local-sandbox/console {"clear":true}` | 清空 console 环形缓冲 |
+| `GET /nano-local-sandbox/network?limit=1..200&failedOnly=true` | 网络生命周期（requestWillBeSent→responseReceived） |
+| `GET /nano-local-sandbox/targets` | 引擎 Target.getTargets：page target id/url、当前附着页 |
+| `POST /nano-local-sandbox/evaluate {"expression":"document.title"}` | 引擎页面有界 JS（≤2000 字符，结果 ≤4000 字符） |
+| `GET /nano-local-sandbox/perf-review/host` | 进程 perf span（DSH_PERF_REVIEW=1 时） |
+| `GET /nano-local-sandbox/browse-history` | 持久浏览历史；`DELETE ?id=…` / `POST {clear:true}` 改 |
 
 console 采集走插件自己那条 CDP socket 的 `Runtime.consoleAPICalled` / `Runtime.exceptionThrown` / `Log.entryAdded` / `Network.loadingFailed` / `Page.frameNavigated`，**不需要**再注入 `window.__ksLogs`。`/evaluate` 里 `console.log("probe")` 会立刻出现在 `GET /console`。
 

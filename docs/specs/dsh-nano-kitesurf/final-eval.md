@@ -1,6 +1,6 @@
 # DNK vs ego-browser — 升级后全面对比评估（dsh 插件生态内）
 
-> 评估环境：`dsh-dev.local`（`DSH_HOME=~/.dsh-dev`，profile `web`）。ego-browser 走 `ego-browser nodejs` + `taskSpace`/`task.page`/`page.fetch`；DNK 走 `/nano-kitesurf/*` 路由 + MCP 桥 `:8799`。全部实测，非推断。
+> 评估环境：`dsh-dev.local`（`DSH_HOME=~/.dsh-dev`，profile `web`）。ego-browser 走 `ego-browser nodejs` + `taskSpace`/`task.page`/`page.fetch`；DNK 走 `/nano-local-sandbox/*` 路由 + MCP 桥 `:8799`。全部实测，非推断。
 > 时间：本轮（goal 第 11 轮）。所有 P0-P1 不扩约工作已交付。
 
 ## 一、五轴结论（升级后）

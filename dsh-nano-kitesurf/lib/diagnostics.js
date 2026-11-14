@@ -61,7 +61,7 @@ export const ERROR_CATALOG = [
   { match: '^kitesurf\\.engine\\.context$', example: 'kitesurf.engine.context', status: 409, cause: '页面正在导航，JS 执行上下文被销毁（竞态，不是引擎故障）', next: '已自动重试一次；仍失败时等页面稳定后重试，或 POST /recover 一键恢复' },
   { match: '^kitesurf\\.engine\\.', example: 'kitesurf.engine.connect', status: 502, cause: 'CDP 连接失败/服务不是 Kitesurf/socket 关闭/命令超时', next: 'GET /status；container list；curl http://127.0.0.1:8798/health；必要时 /kite resume' },
   { match: '^kitesurf\\.perf\\.', example: 'kitesurf.perf.method', status: 400, cause: 'mode=window 排水只允许 POST', next: 'GET /perf-review/host 读快照；POST /perf-review/host?mode=window 排水' },
-  { match: '^kitesurf\\.context\\.(text|miss)$', example: 'kitesurf.context.miss', status: 404, cause: '上下文引用不存在或 text 为空（ref 环只保留最近 50 条，宿主重启即清空）', next: '重新点选生成新 ref；GET /nano-kitesurf/context 列出最近引用' },
+  { match: '^kitesurf\\.context\\.(text|miss)$', example: 'kitesurf.context.miss', status: 404, cause: '上下文引用不存在或 text 为空（ref 环只保留最近 50 条，宿主重启即清空）', next: '重新点选生成新 ref；GET /nano-local-sandbox/context 列出最近引用' },
   { match: '^kitesurf\\.console\\.', example: 'kitesurf.console.query', status: 400, cause: 'console 查询参数非法', next: 'GET /console?level=error&limit=50；POST /console {clear:true} 清空' },
   { match: '^kitesurf\\.diag\\.query$', example: 'kitesurf.diag.query', status: 400, cause: 'diagnostics/operations 查询参数非法', next: 'GET /diagnostics?limit=20；GET /operations?errorsOnly=true' },
   { match: '^kitesurf\\.evaluate\\.(empty|toolong)$', example: 'kitesurf.evaluate.empty', status: 400, cause: 'expression 为空或超过 2000 字符', next: 'POST /evaluate {expression:"document.title"}，≤2000 字符' },
@@ -94,11 +94,11 @@ export const ERROR_CATALOG = [
 export const BRIDGE_ERRORS = [
   { id: 'kitesurf.diag.stale', cause: '宿主尚未把诊断快照推给桥（首次连接/刚重启）', next: '等几秒重试，或先在已登录页面调 GET /diagnostics 让宿主推一份' },
   { id: 'kitesurf.history.stale', cause: '桥侧还没有 history 快照', next: '在宿主打开一个页面产生 history 后重试' },
-  { id: 'kitesurf.dom.stale', cause: '桥侧还没有 dom 快照', next: '先调 GET /nano-kitesurf/dom' },
-  { id: 'kitesurf.elements.stale', cause: '桥侧还没有 elements 快照', next: '先调 GET /nano-kitesurf/elements' },
-  { id: 'kitesurf.selftest.stale', cause: '桥侧还没有 selftest 快照', next: '先调 GET /nano-kitesurf/selftest' },
+  { id: 'kitesurf.dom.stale', cause: '桥侧还没有 dom 快照', next: '先调 GET /nano-local-sandbox/dom' },
+  { id: 'kitesurf.elements.stale', cause: '桥侧还没有 elements 快照', next: '先调 GET /nano-local-sandbox/elements' },
+  { id: 'kitesurf.selftest.stale', cause: '桥侧还没有 selftest 快照', next: '先调 GET /nano-local-sandbox/selftest' },
   { id: 'kitesurf.control.busy', cause: '另一连接正在持有写操作（人机共享单页，写串行）', next: '等待并重试；GET /health 看当前 owner' },
-  { id: 'kitesurf.control.query', cause: 'kitesurf_control 的 action 不是 status|claim|release', next: '用 kitesurf_control {action:"status"|"claim"|"release"}' },
+  { id: 'kitesurf.control.query', cause: 'sandbox.control 的 action 不是 status|claim|release', next: '用 kitesurf_control {action:"status"|"claim"|"release"}' },
   { id: 'kitesurf.tool.unknown', cause: '调用了不存在的 kitesurf_* 工具名', next: '对照 tools/list 的 kitesurf_* 工具名' },
 ]
 

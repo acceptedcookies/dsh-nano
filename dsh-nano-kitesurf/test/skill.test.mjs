@@ -42,7 +42,7 @@ test('kitesurf-cdp is a directory skill: entry ≤90 lines + resourceBase direct
 
 test('coverage reconciliation: every ROUTE_TABLE path and kitesurf_* tool is documented in the tree', () => {
   const bridge = readFileSync(join(root, 'runtime', 'mcp-bridge.mjs'), 'utf8')
-  const tools = [...bridge.matchAll(/name:\s*['"](kitesurf_[a-z_]+)['"]/g)].map((m) => m[1])
+  const tools = [...bridge.matchAll(/name:\s*['"](sandbox\.[a-z_]+)['"]/g)].map((m) => m[1])
   const dir = join(root, 'skills', 'kitesurf-cdp')
   let text = readFileSync(join(dir, 'SKILL.md'), 'utf8')
   for (const f of readdirSync(join(dir, 'references'))) text += readFileSync(join(dir, 'references', f), 'utf8')
@@ -61,7 +61,7 @@ test('skill bodies carry the hard agentic constraints', () => {
   const dir = join(root, 'skills', 'kitesurf-cdp')
   let all = SKILL_BODIES['kitesurf-cdp']
   for (const f of readdirSync(join(dir, 'references'))) all += readFileSync(join(dir, 'references', f), 'utf8')
-  for (const phrase of ['同一个宿主进程状态', 'componentStack=null', 'kite-container', 'route-not-listed', 'kitesurf_diagnostics', '事务性', 'buildId', 'about:blank']) {
+  for (const phrase of ['同一个宿主进程状态', 'componentStack=null', 'kite-container', 'route-not-listed', 'sandbox.diagnostics', '事务性', 'buildId', 'about:blank']) {
     assert.ok(all.includes(phrase), `missing constraint: ${phrase}`)
   }
   assert.ok(nanoKiteSkill().content.includes('each text frame'))

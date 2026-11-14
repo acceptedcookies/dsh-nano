@@ -444,17 +444,17 @@ P0 批次在真机 dsh-dev 上构建→部署→e2e 完成。三项 **P0 内嵌�
 |---|---|---|
 | **P0-1** 错误目录对账 | ✅ | `diagnostics.test.mjs` 5/5：扫 `index.js`/`lib/`/`runtime/` 全部 `errorId:'…'`/`KitesurfError('…'` 字面量，断言全部命中 `ERROR_STATUS` 或入 `BRIDGE_ERROR_IDS`；bridge 本地 id（`.stale`×5/`control.busy`/`tool.unknown`）反断言**不**在 host 目录 |
 | **P0-2** perf 假开关 | ✅ | `enabled:true` 且 `nano-kitesurf` 下 `wait/shot/open/evaluate/dom/kite-*` span 实记；`decideEnabled`→`isEnabled()` 惰性化（首 span/snapshot 才解析，非 hostJoin 冻结）；`hostJoin` 永远返回统一 API，`recordSpan` 内部 gate；新增 `setEnabled` |
-| **P0-3** `/wait` 原语 | ✅ | POST `/nano-kitesurf/wait`：selector 10ms / text 8ms / url 10ms / fn 29ms / `load:networkidle` 681ms（真等 450ms 静默窗）；`wait.query`→400（多于一个条件）、`wait.timeout`→504；route 已入 `security/route-sensitivity.json`（L2 `read:engine`） |
+| **P0-3** `/wait` 原语 | ✅ | POST `/nano-local-sandbox/wait`：selector 10ms / text 8ms / url 10ms / fn 29ms / `load:networkidle` 681ms（真等 450ms 静默窗）；`wait.query`→400（多于一个条件）、`wait.timeout`→504；route 已入 `security/route-sensitivity.json`（L2 `read:engine`） |
 | **P0-4** 写互斥 | ✅ | 双 MCP 连接 e2e：`A claim`→`writer:true`；`B` 写被 `kitesurf.control.busy` 拒绝（**拒非排队**）；`B release` 不偷锁；`A release` 释放；断线 `releaseAll` 兜底。锁是**粘性**的（首写/`claim` 认领，`release`/断线才放），不只串行化并发调用 |
 | **P1-5**（提前）镜像瘦身 | ✅ | `runtime/linux-prefix` 343→249MB（删非 linux-arm64 的 agent-browser 二进制） |
-| **P0-5** 元素 ref 统一语言 | ✅ | `lib/snapshot.js` a11y-lite walker → `GET /snapshot`（tree+`@N` refs）+ `GET /refs?ref=@N`；`@N` 解析进 `wait`/`pick`/`edit`；`pick` 用页内 `querySelector` identity probe 回填 `element.ref`（人点选=agent ref）；`kitesurf_snapshot` MCP 工具走 30s 推送。e2e：snapshot→refs→`wait{selector:"@1"}`→`pick`→`element.ref:"@1"` 全绿 |
+| **P0-5** 元素 ref 统一语言 | ✅ | `lib/snapshot.js` a11y-lite walker → `GET /snapshot`（tree+`@N` refs）+ `GET /refs?ref=@N`；`@N` 解析进 `wait`/`pick`/`edit`；`pick` 用页内 `querySelector` identity probe 回填 `element.ref`（人点选=agent ref）；`sandbox.snapshot` MCP 工具走 30s 推送。e2e：snapshot→refs→`wait{selector:"@1"}`→`pick`→`element.ref:"@1"` 全绿 |
 | **P1-2** evaluate 分段+状态读写 lite | ✅ | `evaluateChunked`（页内 `__nkEval` token 环分段，`{token,offset}`/`?page=N` 拉后续——9005 字符分 3 页 e2e 通过）；`/storage` GET/POST（localStorage/sessionStorage/cookie，HttpOnly 标注不可达）；`/state` save/load 到 `$DSH_HOME/nano-kitesurf-state.jsonl`（命名快照，e2e set→save→clear→load→readback 往返）；route-sensitivity + ERROR_CATALOG + routes.md 全登记；29/29 绿 |
 | **P1-1** interact-lite 合成事件 | ✅（已解冻） | `/interact` + `interactElement`：click/dblclick/fill/type/press/hover/select/focus/blur/check/uncheck；scrollIntoView→`elementFromPoint` 遮挡检测（`interact.occluded`）→合成事件派发；fill/type 用 native setter（React 受控组件可达）；`@N` 经 `resolveSelectorRefs`；实测 fill→readback `DNK-Agent`、miss→`interact.miss`；route-sensitivity+ERROR_CATALOG+routes.md 登记 |
 | **P1-3** network body+HAR+归档 | ✅（已解冻） | network 行补 `requestHeaders`/`responseHeaders`（各≤40 项透传）+ 显式 `body:null reason:'engine'`；`/har` 导出 HAR 1.2（`content._note:body:engine`）；`archiveSnapshot` 把 shot/dom/elements 以 `{kind,at,buildId,url,…}` 追加 `$DSH_HOME/nano-kitesurf-snapshots.jsonl`——已落盘验证 |
 | **P1-6** feedback-report+recipe 工作流 | ✅ | `feedback-report.md` 模板（P0-6 已带）+ `recipes.md` 补齐**五条端到端配方**（读人点选/改字截图复核/console 探针/MCP-only 排障/写反馈报告）；`/context` chip↔报告字段链路在 e2e `feedback-report-fields` 断言（buildId/phase/ops/hints/errorCatalog/last 全可取，27/27 绿） |
 | **P1-4** perf 统计化+可视化 | ✅ | 数据面：`{ms,at,err,traceId}` 三元组 events 环（cap 32）+ 快照预聚合 `stats{p50,p95,max,errors,lastMs/At/ErrorAt,lastTraceId}`、`count()` 实现、`host-snapshots.jsonl` 时间序列（8MB 轮转）、`hostSpan(name,fn,ctx)` traceId/incidentId 关联（`AsyncLocalStorage` 把 traced 请求的 incidentId 穿透到 span events——实测 error 响应/ops 行/span event 三者同 id）。前端：devtools **Network 瀑布列**（`nks-dt-wf`：start-offset×duration 横条，pending 暗色/失败红条）、`/network`+`/console` `?since=` **增量拉**（`listNetwork`/`listConsole` 支持，前端 dedupe merge、pending→finished 原位更新）、`visibilityState` **降频**（hidden→15s，visible→1.5s）。e2e `shot p95<3000ms` 等 26/26 + host.test 63/63 |
 | **P1-7** `/selftest`→agent-first 自检 | ✅ | 每 check 带 `fixCall`（check→修复路由/命令对照 `SELFTEST_FIX` map，失败才附）；e2e：about:blank 时 `dom` 真失败并返回 `fixCall:'…POST /open'`，通过项无 fixCall；`recovery-playbook.md` 收录对照表 |
-| **P0-6** skill 包化分层 | ✅ | `lib/skill.js` → 目录包生成器：`skills/kitesurf-cdp/` = 54 行入口 + `references/`×8（routes/observability/mcp-bridge/element-packets/emulation/recipes/recovery-playbook/error-catalog 生成自 ERROR_CATALOG）+ `templates/`×2；注册带 `resourceBase:{kind:'directory'}`；frontmatter 注 `version`/`date`；build 断言 ROUTE_TABLE 27 路由 × 15 `kitesurf_*` 工具全被文档覆盖——**当场抓到真漂移** `/perf-report` 未记录。测试 59/59 |
+| **P0-6** skill 包化分层 | ✅ | `lib/skill.js` → 目录包生成器：`skills/kitesurf-cdp/` = 54 行入口 + `references/`×8（routes/observability/mcp-bridge/element-packets/emulation/recipes/recovery-playbook/error-catalog 生成自 ERROR_CATALOG）+ `templates/`×2；注册带 `resourceBase:{kind:'directory'}`；frontmatter 注 `version`/`date`；build 断言 ROUTE_TABLE 27 路由 × 15 `sandbox.*` 工具全被文档覆盖——**当场抓到真漂移** `/perf-report` 未记录。测试 59/59 |
 
 ### 7.2 e2e 暴露并当场修掉的真实 bug
 
@@ -487,7 +487,7 @@ P0 的**契约可信**目标已全数达成：错误可自查（P0-1）、开关
 | **观测保真**（a11y 心智模型） | **真实页上优秀**：MDN（nav/ul/h1/main 密集）渲染器产出 `navigation`/`banner`/`list`/`listitem×13`/`link×17`/`img`/`button`，semantic=14；httpbin/html `h1`→`heading`；example.com 的「无 heading」是**源页本就只有 `<title>`+`<p>`**（非渲染器丢失） | 真实 DOM 全保留 | **基本平**（见下方重 SSR 例外） |
 | 延迟（快照） | `/snapshot` 36–83ms | goto+DOM 295–4279ms | **DNK 快**（但重 SSR 上树可能是陈旧的，见下） |
 | **确定性错误契约** | 4/4 边缘输入给出稳定的 `errorId`+HTTP（`pick.miss`/`ref.miss`/`pick.point`/`pick.selector`）；未知工具也回 `kitesurf.tool.unknown` | Playwright 抛文本异常 | **DNK 胜**（可自查、可重试决策） |
-| **协议稳定性**（MCP 面） | 11/11：initialize、tools/list 15 工具枚举、帧 scoped JSON-RPC、`kitesurf_control` claim→status→busy(拒非排队)→release | ego 无对等 MCP 写所有权工具 | **DNK 胜**（单写者契约在协议层可测） |
+| **协议稳定性**（MCP 面） | 11/11：initialize、tools/list 15 工具枚举、帧 scoped JSON-RPC、`sandbox.control` claim→status→busy(拒非排队)→release | ego 无对等 MCP 写所有权工具 | **DNK 胜**（单写者契约在协议层可测） |
 
 ### 三个修正/新增的真发现（§7.5 两次修订）
 

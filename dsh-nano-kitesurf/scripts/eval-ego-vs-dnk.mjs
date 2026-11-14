@@ -24,10 +24,10 @@ const TARGETS = [
 // Deterministic-error edge cases: same wrong input must give the SAME
 // structured errorId on DNK. ego has no equivalent contract (Playwright throws).
 const EDGE = [
-  { name: 'missing-selector', path: '/nano-kitesurf/pick', body: { selector: 'h1.definitely-not-there' }, want: 'kitesurf.pick.miss', status: 404 },
-  { name: 'ref-not-in-table', path: '/nano-kitesurf/pick', body: { selector: '@999' }, want: 'kitesurf.ref.miss', status: 404 },
-  { name: 'bad-coords', path: '/nano-kitesurf/pick', body: { x: 60000, y: 1 }, want: 'kitesurf.pick.point', status: 400 },
-  { name: 'malformed-selector', path: '/nano-kitesurf/pick', body: { selector: '[[[' }, want: 'kitesurf.pick', status: 400 },
+  { name: 'missing-selector', path: '/nano-local-sandbox/pick', body: { selector: 'h1.definitely-not-there' }, want: 'kitesurf.pick.miss', status: 404 },
+  { name: 'ref-not-in-table', path: '/nano-local-sandbox/pick', body: { selector: '@999' }, want: 'kitesurf.ref.miss', status: 404 },
+  { name: 'bad-coords', path: '/nano-local-sandbox/pick', body: { x: 60000, y: 1 }, want: 'kitesurf.pick.point', status: 400 },
+  { name: 'malformed-selector', path: '/nano-local-sandbox/pick', body: { selector: '[[[' }, want: 'kitesurf.pick', status: 400 },
 ]
 
 const report = { axes: {}, cases: [] }
@@ -47,7 +47,7 @@ async function caseRun(dnkPage, egoPage, target) {
   // ── DNK side: open the target in the engine, snapshot, locate by intent.
   await dnkPage.goto(GUI); await new Promise((r) => setTimeout(r, 1400))
   let openErr = null
-  try { await dnk(dnkPage, '/nano-kitesurf/open', { url: target.url }) } catch (e) { openErr = String(e).slice(0, 80) }
+  try { await dnk(dnkPage, '/nano-local-sandbox/open', { url: target.url }) } catch (e) { openErr = String(e).slice(0, 80) }
   c.dnk.openErr = openErr
   await new Promise((r) => setTimeout(r, 2500))
   const snap = await dnk(dnkPage, '/nano-local-sandbox/snapshot', null, 'GET')
@@ -67,11 +67,11 @@ async function caseRun(dnkPage, egoPage, target) {
   c.dnk.headingPreserved = /heading/i.test(sd.tree || '')
 
   // Act on the ref through wait (proves @N resolves to a live element).
-  const wait = await dnk(dnkPage, '/nano-kitesurf/wait', { selector: c.dnk.locatedRef || target.probe, timeoutMs: 4000 })
+  const wait = await dnk(dnkPage, '/nano-local-sandbox/wait', { selector: c.dnk.locatedRef || target.probe, timeoutMs: 4000 })
   c.dnk.actOk = wait.status === 200 && wait.json?.ok === true
   c.dnk.actMs = wait.ms
   // Precision: does pick on the ref resolve the SAME node?
-  const pick = await dnk(dnkPage, '/nano-kitesurf/pick', { selector: c.dnk.locatedRef || target.probe })
+  const pick = await dnk(dnkPage, '/nano-local-sandbox/pick', { selector: c.dnk.locatedRef || target.probe })
   c.dnk.pickRef = pick.json?.pick?.element?.ref || null
   c.dnk.refStable = c.dnk.locatedRef && c.dnk.pickRef === c.dnk.locatedRef
 

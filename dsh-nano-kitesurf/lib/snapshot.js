@@ -4,7 +4,7 @@
  *
  * A single injected `Runtime.evaluate` walks the rendered DOM once and returns
  * a compact semantic tree plus a ref table `{ "@N": { role, name, selector } }`.
- * The same walker runs for the human annotate view and for `kitesurf_snapshot`,
+ * The same walker runs for the human annotate view and for `sandbox.snapshot`,
  * so a ref the pane shows is a ref an agent can hand to wait/pick/evaluate/edit.
  *
  * Kitesurf rewrites pages (example.com renders as SVG + <p>, no <h1>), so the

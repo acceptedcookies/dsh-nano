@@ -15,14 +15,14 @@ rules that MUST NOT be violated inline. Load topic references on demand from
 this skill's directory — `references/<topic>.md`.
 
 ## 0. 排障第一步：一次探针，不要猜
-`GET /nano-kitesurf/diagnostics`（page.fetch 带会话；裸 curl 需 dsh-auth cookie，否则 401/302）。一次返回 status/phase/targets/console/操作trace/errorCatalog/perf/hints。`hints` 是权威线索，先读它再决定动作。失败调用看 `GET /operations?errorsOnly=true`。
+`GET /nano-local-sandbox/diagnostics`（page.fetch 带会话；裸 curl 需 dsh-auth cookie，否则 401/302）。一次返回 status/phase/targets/console/操作trace/errorCatalog/perf/hints。`hints` 是权威线索，先读它再决定动作。失败调用看 `GET /operations?errorsOnly=true`。
 
 ## 1. Get the socket — never guess it
-`GET /nano-kitesurf/status`：`kite.cdp`=agent-browser `--cdp` 的浏览器 socket（顶层也回显 `cdp`）；`kite.mcpPort`=容器内 MCP 桥端口 `ws://<host>:<mcpPort>/mcp`；`kite.phase`=`idle`/`running`/`suspended`，仅 running 时 attach。宿主重启后自动 re-adopt 引擎，phase 跟现实。`engineMismatch:true`=该 origin 应 `/health` 但不是 Kitesurf——不要 attach，报它。
+`GET /nano-local-sandbox/status`：`kite.cdp`=agent-browser `--cdp` 的浏览器 socket（顶层也回显 `cdp`）；`kite.mcpPort`=容器内 MCP 桥端口 `ws://<host>:<mcpPort>/mcp`；`kite.phase`=`idle`/`running`/`suspended`，仅 running 时 attach。宿主重启后自动 re-adopt 引擎，phase 跟现实。`engineMismatch:true`=该 origin 应 `/health` 但不是 Kitesurf——不要 attach，报它。
 
 ## 2. Drive it — attach, never launch
 ```bash
-agent-browser --cdp "$(curl -s .../nano-kitesurf/status | jq -r .kite.cdp)" snapshot -i
+agent-browser --cdp "$(curl -s .../nano-local-sandbox/status | jq -r .kite.cdp)" snapshot -i
 ```
 无 CDP target 的命令会启动 Chrome——错误引擎。首次会话先 `agent-browser skills get core`。不在 PATH 用 `npx agent-browser`（同 `--cdp`），别 `--engine`、别 `install`。MCP-over-WS 每帧一条完整 JSON-RPC、无尾 `\n`；`GET http://127.0.0.1:<mcpPort>/health` 验桥。
 
@@ -42,7 +42,7 @@ agent-browser --cdp "$(curl -s .../nano-kitesurf/status | jq -r .kite.cdp)" snap
 |---|---|
 | `references/routes.md` | 查路由/参数/方法全表（ROUTE_TABLE 对账） |
 | `references/observability.md` | 状态模型、幂等/重试、perf span、取值域 |
-| `references/mcp-bridge.md` | 15 个 `kitesurf_*` MCP 工具、帧、写所有权 |
+| `references/mcp-bridge.md` | 15 个 `sandbox.*` MCP 工具、帧、写所有权 |
 | `references/element-packets.md` | 点选包、手势、shot/open/history 细节 |
 | `references/emulation.md` | `/settings` UA/viewport/media/headers |
 | `references/recipes.md` | 正例 + 负例（预测结果，不靠猜） |

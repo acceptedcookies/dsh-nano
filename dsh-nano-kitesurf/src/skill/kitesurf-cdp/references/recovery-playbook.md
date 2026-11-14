@@ -15,7 +15,7 @@
 
 ## `/selftest` 检查 → `fixCall` 对照（每项失败自带修复命令）
 
-`GET /nano-kitesurf/selftest` 返回 `{ok,total,failed,checks[]}`；失败的 `check` 带 `fixCall`（具体路由/命令）。对照：
+`GET /nano-local-sandbox/selftest` 返回 `{ok,total,failed,checks[]}`；失败的 `check` 带 `fixCall`（具体路由/命令）。对照：
 
 | check | `fixCall` |
 |---|---|
@@ -38,13 +38,13 @@
 1. `config.httpBase` 只是**偏好**，不是硬约束。目标端口被别进程占、而现有 `kitesurf` 容器自己端口仍可用 → **接管**该容器并把 `httpBase` 改写成实际端口（`/status.ports.lastRepair` 记 from/to，reason=`adopted-existing-container`），**不删容器**。
 2. 首次创建且偏好端口被占 → 自动向后取下一空闲端口（步进 10），reason=`port-busy-repaired`。
 3. 只有「偏好端口被占且现有容器端口也不可用」才抛 `409 kitesurf.kite.portbusy`，此时容器保持原样。
-4. 自愈入口：`POST /nano-kitesurf/recover {}`（suspend→resume→健康检查→端口报告）；只读诊断 `GET /nano-kitesurf/ports`；MCP 对应 `kitesurf_ports`/`kitesurf_recovery_plan`。
+4. 自愈入口：`POST /nano-local-sandbox/recover {}`（suspend→resume→健康检查→端口报告）；只读诊断 `GET /nano-local-sandbox/ports`；MCP 对应 `sandbox.ports`/`sandbox.recovery_plan`。
 
 **关键**：把 `httpBase` 指到被 Cursor 占的 8787 **不会删容器**——会接管现有 8798 容器并 `adopted:true`。端口占用不是引擎故障，绝不能拆掉能用的容器。
 
 ## 上下文引用（composer 里可能出现 ref）
 
-默认注入**完整上下文正文**（不裁切）。宿主同时登记 ref id：若有人在 composer 看到 `[kitesurf:N …]` 这种**只有编号**的短 token（手动切换/外部工具），它不含上下文、**必须解析**：`GET /nano-kitesurf/context?id=3` 返回 `{id,at,label,bytes,text,packet}`，`text` 是完整未裁切上下文（selector/text/box/19 项 computed style/attrs/ancestors/componentStack），`packet` 是结构化元素包。`GET /nano-kitesurf/context?limit=20` 列最近引用；ref 环保留 50 条、宿主重启即清空——`404 kitesurf.context.miss` 说明引用过期，请人重新点选。chip 只是引用，**不会自动发送**。
+默认注入**完整上下文正文**（不裁切）。宿主同时登记 ref id：若有人在 composer 看到 `[kitesurf:N …]` 这种**只有编号**的短 token（手动切换/外部工具），它不含上下文、**必须解析**：`GET /nano-local-sandbox/context?id=3` 返回 `{id,at,label,bytes,text,packet}`，`text` 是完整未裁切上下文（selector/text/box/19 项 computed style/attrs/ancestors/componentStack），`packet` 是结构化元素包。`GET /nano-local-sandbox/context?limit=20` 列最近引用；ref 环保留 50 条、宿主重启即清空——`404 kitesurf.context.miss` 说明引用过期，请人重新点选。chip 只是引用，**不会自动发送**。
 
 注意区分：`[kitesurf:N]` 是 note/composer 引用（context ref），`@N` 是**元素** ref（`/snapshot`/`/refs` 的 a11y walker）——两套不同，别混。
 

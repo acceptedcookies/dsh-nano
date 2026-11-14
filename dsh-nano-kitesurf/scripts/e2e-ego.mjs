@@ -423,10 +423,10 @@ async function main() {
   // context chip (/context). If any source vanishes the recipe breaks.
   const report = await page.evaluate(async () => {
     const [status, ops, diag, last] = await Promise.all([
-      fetch('/nano-kitesurf/status').then((r) => r.json()).catch(() => ({})),
-      fetch('/nano-kitesurf/operations?limit=5').then((r) => r.json()).catch(() => ({})),
-      fetch('/nano-kitesurf/diagnostics?limit=5').then((r) => r.json()).catch(() => ({})),
-      fetch('/nano-kitesurf/last').then((r) => r.json()).catch(() => ({})),
+      fetch('/nano-local-sandbox/status').then((r) => r.json()).catch(() => ({})),
+      fetch('/nano-local-sandbox/operations?limit=5').then((r) => r.json()).catch(() => ({})),
+      fetch('/nano-local-sandbox/diagnostics?limit=5').then((r) => r.json()).catch(() => ({})),
+      fetch('/nano-local-sandbox/last').then((r) => r.json()).catch(() => ({})),
     ])
     return {
       buildId: status.buildId || status.plugin?.buildId || null,
@@ -443,9 +443,9 @@ async function main() {
   // 15. P1-2 chunked evaluate: an expression returning >4KB must page through
   // the token cache; ?page=N / {token,offset} pull later slices.
   const chunk = await page.evaluate(async () => {
-    const big = await fetch('/nano-kitesurf/evaluate', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ expression: '"x".repeat(9000)+"END"' }) }).then((r) => r.json())
-    const p2 = await fetch('/nano-kitesurf/evaluate', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token: big.token, offset: 4000 }) }).then((r) => r.json())
-    const p3 = await fetch('/nano-kitesurf/evaluate', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token: big.token, offset: 8000 }) }).then((r) => r.json())
+    const big = await fetch('/nano-local-sandbox/evaluate', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ expression: '"x".repeat(9000)+"END"' }) }).then((r) => r.json())
+    const p2 = await fetch('/nano-local-sandbox/evaluate', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token: big.token, offset: 4000 }) }).then((r) => r.json())
+    const p3 = await fetch('/nano-local-sandbox/evaluate', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token: big.token, offset: 8000 }) }).then((r) => r.json())
     return { total: big.total, head: String(big.value || '').length, trunc: big.truncated, p2: String(p2.value || '').length, p3end: String(p3.value || '').endsWith('"END"') || String(p3.value || '').includes('END') }
   })
   record('eval-chunk', chunk.total > 4000 && chunk.head === 4000 && chunk.trunc === true && chunk.p2 > 0 && chunk.p3end, JSON.stringify(chunk))

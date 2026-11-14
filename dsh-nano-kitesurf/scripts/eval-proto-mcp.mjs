@@ -28,22 +28,22 @@ ws.send(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }))
 // 2. tools/list enumerates the kitesurf_* surface
 const list = await call('tools/list', {})
 const tools = (list.result?.tools || []).map((t) => t.name)
-const kt = tools.filter((t) => t.startsWith('kitesurf_'))
+const kt = tools.filter((t) => t.startsWith('sandbox.'))
 mark('tools/list enumerates kitesurf_*', kt.length >= 15, `${kt.length}/15: ${kt.join(',')}`)
 
 // 3. malformed JSON-RPC → -32700, deterministically
-const bad = await call('tools/call', { name: 'kitesurf_diagnostics' }) // missing arguments is fine
-mark('kitesurf_diagnostics callable', bad.result || bad.error, JSON.stringify(bad.result || bad.error).slice(0, 70))
+const bad = await call('tools/call', { name: 'sandbox.diagnostics' }) // missing arguments is fine
+mark('sandbox.diagnostics callable', bad.result || bad.error, JSON.stringify(bad.result || bad.error).slice(0, 70))
 
 // 4. error determinism: unknown tool → structured kitesurf.* business errorId
 //    (DNK keeps EVERY failure in one errorId contract, even a bad tool name —
 //    that's a strength over a bare -32601 protocol throw).
-const unknown = await call('tools/call', { name: 'kitesurf_nonexistent_tool', arguments: {} })
+const unknown = await call('tools/call', { name: 'sandbox.nonexistent_tool', arguments: {} })
 const uerr = JSON.stringify(unknown.error || unknown.result || '')
 mark('unknown tool → structured kitesurf.* errorId', /"errorId"\s*:\s*"kitesurf\./.test(uerr), uerr.slice(0, 80))
 
 // 5. each observability tool returns structured payload (snapshot may be stale→error, acceptable)
-for (const t of ['kitesurf_snapshot', 'kitesurf_operations', 'kitesurf_error_catalog', 'kitesurf_bridge_health']) {
+for (const t of ['sandbox.snapshot', 'sandbox.operations', 'sandbox.error_catalog', 'sandbox.bridge_health']) {
   const r = await call('tools/call', { name: t, arguments: {} })
   const txt = r.result?.content?.[0]?.text || JSON.stringify(r.result || r.error)
   const structured = /ok|stale|errorId|content/.test(txt)
@@ -51,17 +51,17 @@ for (const t of ['kitesurf_snapshot', 'kitesurf_operations', 'kitesurf_error_cat
 }
 
 // 6. control ownership: claim → status → release; double claim = busy not queued
-const claim1 = await call('tools/call', { name: 'kitesurf_control', arguments: { action: 'claim', self: { connId: 'eval-a', clientName: 'eval' } } })
+const claim1 = await call('tools/call', { name: 'sandbox.control', arguments: { action: 'claim', self: { connId: 'eval-a', clientName: 'eval' } } })
 const claim1t = claim1.result?.content?.[0]?.text || ''
-const status = await call('tools/call', { name: 'kitesurf_control', arguments: { action: 'status' } })
-const claim2 = await call('tools/call', { name: 'kitesurf_control', arguments: { action: 'claim', self: { connId: 'eval-b', clientName: 'eval' } } })
+const status = await call('tools/call', { name: 'sandbox.control', arguments: { action: 'status' } })
+const claim2 = await call('tools/call', { name: 'sandbox.control', arguments: { action: 'claim', self: { connId: 'eval-b', clientName: 'eval' } } })
 const claim2t = claim2.result?.content?.[0]?.text || JSON.stringify(claim2.error || claim2.result)
 mark('control claim→status', /owner|writer|claimed|eval-a/i.test(status.result?.content?.[0]?.text || ''), JSON.stringify(status.result?.content?.[0]?.text).slice(0, 70))
 mark('control double-claim → busy not queued', /busy|kitesurf\.control\.busy/i.test(claim2t), claim2t.slice(0, 70))
-await call('tools/call', { name: 'kitesurf_control', arguments: { action: 'release', self: { connId: 'eval-a' } } })
+await call('tools/call', { name: 'sandbox.control', arguments: { action: 'release', self: { connId: 'eval-a' } } })
 
 // 7. raw frame without trailing newline is still one message (frame-scoped)
-const rawCall = new Promise((res) => { const id = ++seq; pend.set(id, res); ws.send(JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'kitesurf_bridge_health', arguments: {} } })) })
+const rawCall = new Promise((res) => { const id = ++seq; pend.set(id, res); ws.send(JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'sandbox.bridge_health', arguments: {} } })) })
 const raw = await rawCall
 mark('frame-scoped JSON-RPC (no \\n)', raw.result || raw.error, 'ok')
 

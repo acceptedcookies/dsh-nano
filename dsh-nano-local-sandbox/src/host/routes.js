@@ -11,6 +11,7 @@ export const KITE_ROUTE = '/nano-local-sandbox/kite'
 export const CONSOLE_ROUTE = '/nano-local-sandbox/console'
 export const OPERATIONS_ROUTE = '/nano-local-sandbox/operations'
 export const DIAGNOSTICS_ROUTE = '/nano-local-sandbox/diagnostics'
+export const MCP_ROUTE = '/nano-local-sandbox/mcp'
 export const PORTS_ROUTE = '/nano-local-sandbox/ports'
 export const RECOVER_ROUTE = '/nano-local-sandbox/recover'
 export const DOM_ROUTE = '/nano-local-sandbox/dom'
@@ -24,6 +25,7 @@ export const WAIT_ROUTE = '/nano-local-sandbox/wait'
 
 import { ROUTE_TABLE } from '../../lib/route-table.js'
 import { createCdpKeeper } from './cdp-keeper.js'
+import { answerNativeTool, toolsList } from './mcp-sandbox.js'
 
 const keeper = createCdpKeeper()
 
@@ -38,6 +40,23 @@ export function routeSpecs(deps = {}) {
       if (row.path.endsWith('/shot') && deps.pageReady !== true) {
         res.statusCode = 502
         res.end(JSON.stringify({ ok: false, errorId: 'kitesurf.shot.empty' }))
+        return
+      }
+      if (row.path.endsWith('/mcp')) {
+        const rpc = deps.rpc ?? {}
+        if (rpc.method === 'tools/list') {
+          res.statusCode = 200
+          res.end(JSON.stringify({ jsonrpc: '2.0', id: rpc.id ?? null, result: { tools: toolsList() } }))
+          return
+        }
+        if (rpc.method === 'tools/call') {
+          const answer = answerNativeTool(rpc.params?.name, deps.state ?? {})
+          res.statusCode = answer.ok ? 200 : 404
+          res.end(JSON.stringify({ jsonrpc: '2.0', id: rpc.id ?? null, result: answer }))
+          return
+        }
+        res.statusCode = 200
+        res.end(JSON.stringify({ ok: true, tools: toolsList().length }))
         return
       }
       if (row.path.endsWith('/evaluate')) {

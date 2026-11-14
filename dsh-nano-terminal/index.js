@@ -18,6 +18,8 @@ import { EventBus } from './lib/events.js'
 import { Persist } from './lib/persist.js'
 import { createMcpHandler } from './lib/mcp.js'
 import { handshake, FrameParser, sendBinary, sendText, sendClose, encodeFrame, parseChannel, Attach, FR_KIND } from './lib/ws.js'
+import { registerRoutes } from './lib/route-guard.js'
+import { ROUTE_TABLE } from './lib/route-table.js'
 
 export const name = 'dsh-nano-terminal'
 
@@ -187,10 +189,10 @@ export function apply(ctx) {
 
   // -- control plane: MCP JSON-RPC + management REST --------------------------
 
-  const unregisterRoutes = [
-    ctx.webServer.register({
-      kind: 'exact',
+  const unregisterRoutes = registerRoutes(ctx, [
+    {
       path: `${ROUTE}/mcp`,
+      methods: ['POST'],
       handler: async (req, res) => {
         if (req.method !== 'POST') {
           res.writeHead(405).end()
@@ -210,22 +212,22 @@ export function apply(ctx) {
         res.writeHead(200, { 'content-type': 'application/json' })
         res.end(reply === undefined ? '' : JSON.stringify(reply))
       },
-    }),
-    ctx.webServer.register({
-      kind: 'exact',
+    },
+    {
       path: `${ROUTE}/sessions`,
+      methods: ['GET'],
       handler: async (req, res) => {
         res.writeHead(200, { 'content-type': 'application/json' })
         res.end(JSON.stringify({ sessions: registry.list() }))
       },
-    }),
+    },
     // SSE event stream: subscribe → snapshot first frame, then live events.
     // ?since=<seq> resumes from a position; falling behind the ring answers
     // with {missed:true,snapshot}. Agents can poll the same data via
     // term.events without holding a connection.
-    ctx.webServer.register({
-      kind: 'exact',
+    {
       path: `${ROUTE}/events`,
+      methods: ['GET'],
       handler: async (req, res) => {
         const url = new URL(req.url ?? '/', 'http://localhost')
         const since = Number(url.searchParams.get('since')) || 0
@@ -241,18 +243,19 @@ export function apply(ctx) {
         }, { since })
         req.on('close', unsub)
       },
-    }),
-    ctx.webServer.register({
-      kind: 'exact',
+    },
+    {
       path: `${ROUTE}/health`,
+      methods: ['GET'],
       handler: async (req, res) => {
         res.writeHead(200, { 'content-type': 'application/json' })
         res.end(JSON.stringify({ ok: true, lanes: laneStatus(), sessions: registry.count() }))
       },
-    }),
-    ctx.webServer.register({
-      kind: 'prefix',
+    },
+    {
       path: `${ROUTE}/session`,
+      methods: ['POST'],
+      kind: 'prefix',
       handler: async (req, res) => {
         const m = (req.url ?? '').match(/\/session\/([^/]+)\/close$/)
         if (req.method !== 'POST' || !m) {
@@ -263,8 +266,8 @@ export function apply(ctx) {
         res.writeHead(ok ? 200 : 404, { 'content-type': 'application/json' })
         res.end(JSON.stringify({ closed: ok }))
       },
-    }),
-  ]
+    },
+  ], { table: ROUTE_TABLE, plugin: 'dsh-nano-terminal' })
 
   // -- slash command (host side, agent-facing): /term --------------------------
   // UI-level mapping lives on the client via ctx.commandUi ('/dnt'); this host

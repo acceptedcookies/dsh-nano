@@ -469,6 +469,13 @@
     },
     {
       "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/mcp",
+      "methods": ["POST"],
+      "bodyLimit": { "POST": 4096 },
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
       "path": "/nano-local-sandbox/ports",
       "methods": [
         "GET",

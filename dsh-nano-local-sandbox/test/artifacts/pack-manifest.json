@@ -1,5 +1,5 @@
 {
-  "commit": "6afb4d99c157951864274c152a27cb5f7ade8503",
+  "commit": "930bebed71d048d5bc5c43ca05f0888971e425f3",
   "packs": {
     "dsh-nano-local-sandbox": [
       "AGENTS.md",
@@ -64,6 +64,8 @@
       "lib/mirror.js",
       "lib/notes.js",
       "lib/persist.js",
+      "lib/route-guard.js",
+      "lib/route-table.js",
       "lib/sessions.js",
       "lib/templates.js",
       "lib/wait.js",

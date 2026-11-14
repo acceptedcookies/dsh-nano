@@ -166,6 +166,16 @@ export const ROUTE_TABLE = [
   },
   {
     "plugin": "dsh-nano-local-sandbox",
+    "path": "/nano-local-sandbox/mcp",
+    "methods": ["POST"],
+    "sensitivity": "L2",
+    "capability": "proc:local-sandbox",
+    "bodyLimit": 4096,
+    "sessionBinding": true,
+    "justification": "sandbox tools/list and tools/call"
+  },
+  {
+    "plugin": "dsh-nano-local-sandbox",
     "path": "/nano-local-sandbox/ports",
     "methods": [
       "GET",

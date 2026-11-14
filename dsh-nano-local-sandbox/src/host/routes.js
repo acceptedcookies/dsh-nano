@@ -223,7 +223,7 @@ export function routeSpecs(deps = {}) {
         return
       }
       if (row.path.endsWith('/mcp')) {
-        const rpc = deps.rpc ?? {}
+        const rpc = deps.rpc ?? await readJson(req)
         if (rpc.method === 'tools/list') {
           res.statusCode = 200
           res.end(JSON.stringify({ jsonrpc: '2.0', id: rpc.id ?? null, result: { tools: toolsList() } }))
@@ -256,6 +256,10 @@ export function routeSpecs(deps = {}) {
             return
           }
           if (row.path.endsWith('/interact')) {
+            if (!body.selector && !body.target) {
+              send(res, 400, { ok: false, errorId: 'kitesurf.interact.selector', error: 'target selector is required' })
+              return
+            }
             const value = await evaluatePage(client, interactExpression(body))
             if (value && value.ok === false) {
               send(res, 400, { ok: false, errorId: value.errorId || 'kitesurf.interact.fail', error: value.error || 'interact failed' })

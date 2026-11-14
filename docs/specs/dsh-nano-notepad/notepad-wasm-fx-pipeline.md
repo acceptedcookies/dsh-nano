@@ -842,3 +842,29 @@ runPipeline(spec, ctx) → {runId, stages:[{name,ok,result}], status}
 | 网页结构化 JSON 转录 | prompt 语料「转录为 JSON」 | `note_read`→`note_write` |
 
 **perf-review 埋点**：`perf.mark/count` 记录 fx spawn/turn/tool-call/写回/渲染各段耗时，出基线表 + 改进项 + 实测提升。
+
+### 13.6 执行结果登记（2026-11-14）
+
+**L3/L4 完成**（commit `b117156`），真实 LLM tool-call 循环 + perf 基线 + 性能改进全过。
+
+**真实 LLM 场景（prompt 语料注入管线，ego 真机）**：
+
+| 场景 | prompt 语料 | 源节点 | 产物 | tool-call |
+|---|---|---|---|---|
+| HTML 总结 | `html-summarize.prompt.md` | `page.html.kb.md` | `DeepSeek-V3 发布.kb.md`(knowledge) | `note_write` |
+| 中译英 | `zh2en.prompt.md` | `zh-doc.kb.md` | `zh-en-translation-moe-…`(draft) | `note_write` |
+| JSON 转录 | `json-transcribe.prompt.md` | `web.json.kb.md` | `rust-in-browser.kb.md`(knowledge, `{title,sections[],entities[]}`) | `note_write` |
+
+`runs`/`checkpoints`/`claim_ledger` 全留痕（acquire→stage→done→release）。
+
+**perf-review 基线与改进**（`?perf-review=1`，`plugins.nano-notepad.spans`）：
+
+| span | 改进前 | 改进后 | 说明 |
+|---|---|---|---|
+| `fx-turn` | 4378ms | 2244–3290ms | LLM RTT（不可控，网络+模型） |
+| `fx-stage-run` | 4394ms | 2259–3305ms | ≈turn（step 开销 ~15ms） |
+| `fx-pipeline` | **7838ms** | **2726–3758ms** | **-52~65%** |
+| spawn | 3ms | 1–3ms | wasm warm 复用 |
+| `claim.acquire` | 4599ms | 并行隐藏 | s3 RTT 为管线开销主项 |
+
+**改进方法**：① `claim.acquire`/`release`（s3 网络 RTT ~5.5s）与 `beginRun`+stage 并行发出，fencing 语义保留（写产物前 acquired、release 前 `await claimReady`）——管线固定开销 **3444→467ms**；② `runWithTools` 加 `opts.skipRefresh`，编排层把 per-stage `_refreshNodes` 全量 IDB 扫描+树渲染挤到链尾统一一次。

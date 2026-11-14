@@ -65,7 +65,7 @@ export function createMcpHandler({ registry, bus, auditPath, laneStatus }) {
           addr: rec.addr,
           lane: rec.lane,
           title: rec.title,
-          attach: { protocol: 'dnt-ws-v1', path: '/dsh-nano-terminal/stream' },
+          attach: { protocol: 'dnt-ws-v1', url: `/dsh-nano-terminal/stream?session=${rec.id}` },
         }
       }
       case 'term.session.list':

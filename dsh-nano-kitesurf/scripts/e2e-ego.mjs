@@ -74,7 +74,7 @@ async function main() {
 
   // 0. Make the run self-contained: a previous run may have left the engine
   // on about:blank (e.g. after suspend/resume), so open a page first.
-  await page.evaluate((url) => fetch('/nano-kitesurf/open', {
+  await page.evaluate((url) => fetch('/nano-local-sandbox/open', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ url }),
@@ -288,7 +288,7 @@ async function main() {
   const elRows = await page.evaluate(() => document.querySelectorAll('[data-nks-devtools] .nks-dt-row').length)
   record('devtools-elements', elRows > 10, `${elRows} nodes`)
   const styles = await page.evaluate(async () => {
-    const r = await fetch('/nano-kitesurf/elements?selector=p')
+    const r = await fetch('/nano-local-sandbox/elements?selector=p')
     return r.json()
   })
   record('computed-styles', Object.keys(styles.computed || {}).length > 10, `${Object.keys(styles.computed || {}).length} properties`)
@@ -346,8 +346,8 @@ async function main() {
   // 9. lifecycle: suspend -> resume -> page comes back
   const lifecycle = await page.evaluate(async (targetUrl) => {
     const readJson = async (r) => { const t = await r.text(); try { return JSON.parse(t) } catch { return { ok: false, error: t.slice(0, 120), status: r.status } } }
-    const post = (body) => fetch('/nano-kitesurf/kite', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then(readJson)
-    const st = () => fetch('/nano-kitesurf/status').then(readJson)
+    const post = (body) => fetch('/nano-local-sandbox/kite', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then(readJson)
+    const st = () => fetch('/nano-local-sandbox/status').then(readJson)
     try {
     const before = await st()
     const suspended = await post({ action: 'suspend' })
@@ -355,9 +355,9 @@ async function main() {
     const resumed = await post({ action: 'resume' })
     // resume rebuilds the container: the page is gone, so re-open before any
     // later check that needs a document.
-    await fetch('/nano-kitesurf/open', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ url: targetUrl }) })
+    await fetch('/nano-local-sandbox/open', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ url: targetUrl }) })
     for (let i = 0; i < 12; i += 1) {
-      const dom = await fetch('/nano-kitesurf/dom').then(readJson)
+      const dom = await fetch('/nano-local-sandbox/dom').then(readJson)
       if (dom.ok) break
       await new Promise((r) => setTimeout(r, 1000))
     }
@@ -376,13 +376,13 @@ async function main() {
 
   // 10. host self-test
   const selftest = await page.evaluate(async () => {
-    const r = await fetch('/nano-kitesurf/selftest')
+    const r = await fetch('/nano-local-sandbox/selftest')
     return r.json()
   })
   record('host-selftest', selftest.ok === true, `${selftest.failed}/${selftest.total} failed`)
 
   // 11. history is served from the workerd KV
-  const history = await page.evaluate(() => fetch('/nano-kitesurf/browse-history?limit=5').then((r) => r.json()))
+  const history = await page.evaluate(() => fetch('/nano-local-sandbox/browse-history?limit=5').then((r) => r.json()))
   record('history-kv', history.ok === true && (history.entries || []).length > 0 && history.source === 'workerd-kv', `${(history.entries || []).length} entries · ${history.source}`)
 
   // 12. perf-review instrumentation: pane actions must be recorded as spans.
@@ -390,7 +390,7 @@ async function main() {
   // pane's periodic post and can lag the run() we triggered seconds ago.
   const perf = await page.evaluate(() => {
     const rep = window.__perfReview?.report?.({ scenario: 'e2e' })
-    const last = fetch('/nano-kitesurf/perf-review/host').then((r) => r.json())
+    const last = fetch('/nano-local-sandbox/perf-review/host').then((r) => r.json())
     return Promise.all([rep, last]).then(([local, host]) => ({ local, host }))
   })
   const ksSpans = perf.local?.plugins?.['nano-kitesurf']?.spans || {}

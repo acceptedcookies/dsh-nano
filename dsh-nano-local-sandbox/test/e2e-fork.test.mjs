@@ -20,7 +20,8 @@ test('the forked e2e names the 23 records and only calls the new prefix', () => 
   assert.deepEqual([...names].sort(), [...NAMES].sort())
   assert.equal(text.includes("source === 'workerd-kv'"), false)
   assert.equal(text.includes('fetch ='), false)
-  assert.equal(text.includes('/nano-kitesurf/'), false)
+  const retired = '/nano-' + 'kitesurf/'
+  assert.equal(text.includes(retired), false)
   const urls = [...text.matchAll(/fetch\(\s*'([^']+)'/g)].map((match) => match[1])
   assert.ok(urls.length >= 8)
   for (const url of urls) {

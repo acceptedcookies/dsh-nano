@@ -6,7 +6,7 @@ user-invocable: true
 
 # nano-kite
 
-Session skill. `POST /nano-kitesurf/kite` with `{ "action" }`. Live values are `GET /nano-kitesurf/status` under `kite`. Drive pages with `/kitesurf-cdp` and `kite.cdp`. Do not launch Chrome.
+Session skill. `POST /nano-local-sandbox/kite` with `{ "action" }`. Live values are `GET /nano-local-sandbox/status` under `kite`. Drive pages with `/kitesurf-cdp` and `kite.cdp`. Do not launch Chrome.
 
 - `init` checks Node ≥22 first (agent-browser needs it), then writes `$DSH_HOME/nano-kitesurf.lock.json` once; a later init returns `already: true` without rewriting. Init does not start a container. The lock is not inside the plugin directory, because a host restart replaces that directory.
 - `start` — only from `idle`. Starts the local `kitesurf` container from inside DSH when the origin is loopback (publishes `127.0.0.1:<enginePort>:8787` and `127.0.0.1:<mcpPort>:8791`, mounts the checkout read-only), then waits for `/health`. Cold create first runs `container system start` to prime the debug-build apiserver (its inline bootstrap reports `failed to bootstrap`); a warm container is simply `container start`ed. A remote origin is only probed. Failure is `kitesurf.kite.start` / `kitesurf.kite.container` with the stdout tail in `error`.

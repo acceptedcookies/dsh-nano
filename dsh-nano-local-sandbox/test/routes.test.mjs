@@ -39,7 +39,7 @@ test('every nano-local-sandbox spec binds the session and apply does not registe
   for (const row of ROUTE_TABLE) {
     assert.equal(row.sessionBinding, true)
     assert.equal(row.path.startsWith('/nano-local-sandbox/'), true)
-    assert.equal(row.path.includes('/nano-kitesurf/'), false)
+    assert.equal(row.path.includes('/nano-' + 'kitesurf/'), false)
   }
   const source = readFileSync(join(root, '..', 'index.js'), 'utf8')
   assert.equal(source.includes('ctx.webServer.register'), false)

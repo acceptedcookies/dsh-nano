@@ -44,24 +44,24 @@ Static enumeration of every `webServer.register` path across the (formerly four)
 
 | path | methods | sensitivity | capability | bodyLimit | session | what it does |
 |---|---|---|---|---|---|---|
-| /nano-kitesurf/status | GET, HEAD | L0 | read:kitesurf | 0 | – | probe engine /health + kite phase |
-| /nano-kitesurf/last | GET, HEAD | L2 | read:host | 0 | – | last pick element packet (page content) |
-| /nano-kitesurf/open | POST | L2 | net:kitesurf | 4096 | – | Page.navigate the engine to a URL |
-| /nano-kitesurf/shot | POST | L2 | read:host | 4096 | – | Page.captureScreenshot (page content) |
-| /nano-kitesurf/history | POST | L2 | net:kitesurf | 4096 | – | Page.getNavigationHistory + navigateToHistoryEntry (real back/forward) |
-| /nano-kitesurf/pick | POST | L2 | read:host | 4096 | – | Runtime.evaluate element probe (click, selector nav, preview) |
-| /nano-kitesurf/edit | POST | L2 | write:engine | 8192 | – | Runtime.evaluate live text edit on a named element |
-| /nano-kitesurf/settings | POST | L1 | write:kitesurf | 4096 | – | in-memory UA/viewport emulation |
-| /nano-kitesurf/perf-review/host | GET, HEAD, POST | L2 | read:host | 0 | – | perf snapshot; POST mode=window drains |
-| /nano-kitesurf/kite | POST | L2 | proc:kitesurf | 4096 | – | init lock / container start-stop / configure |
-| /nano-kitesurf/console | GET, HEAD, POST | L2 | read:host | 4096 | – | page console/exception/network ring; POST clear |
-| /nano-kitesurf/operations | GET, HEAD, POST | L2 | read:host | 4096 | – | every route call trace (status/errorId/duration); POST clear |
-| /nano-kitesurf/diagnostics | GET, HEAD | L2 | read:host | 0 | – | one-shot status + targets + console + trace + error catalogue + hints |
-| /nano-kitesurf/targets | GET, HEAD | L2 | read:host | 0 | – | Target.getTargets (page target ids/urls) |
-| /nano-kitesurf/evaluate | POST | L2 | write:engine | 4096 | – | bounded Runtime.evaluate in the engine page |
-| /nano-kitesurf/ports | GET, HEAD | L2 | read:host | 0 | – | configured vs effective ports, publishedPorts, occupancy, last repair |
-| /nano-kitesurf/recover | POST | L2 | proc:kitesurf | 4096 | – | suspend+resume self-heal, returns engine state |
-| /nano-kitesurf/context | GET, HEAD, POST | L2 | read:host | 16384 | – | full element packet behind a composer chip; GET /context/:id resolves |
+| 见 QNA status | GET, HEAD | L0 | read:kitesurf | 0 | – | probe engine /health + kite phase |
+| 见 QNA last | GET, HEAD | L2 | read:host | 0 | – | last pick element packet (page content) |
+| 见 QNA open | POST | L2 | net:kitesurf | 4096 | – | Page.navigate the engine to a URL |
+| 见 QNA shot | POST | L2 | read:host | 4096 | – | Page.captureScreenshot (page content) |
+| 见 QNA history | POST | L2 | net:kitesurf | 4096 | – | Page.getNavigationHistory + navigateToHistoryEntry (real back/forward) |
+| 见 QNA pick | POST | L2 | read:host | 4096 | – | Runtime.evaluate element probe (click, selector nav, preview) |
+| 见 QNA edit | POST | L2 | write:engine | 8192 | – | Runtime.evaluate live text edit on a named element |
+| 见 QNA settings | POST | L1 | write:kitesurf | 4096 | – | in-memory UA/viewport emulation |
+| 见 QNA perf-review/host | GET, HEAD, POST | L2 | read:host | 0 | – | perf snapshot; POST mode=window drains |
+| 见 QNA kite | POST | L2 | proc:local-sandbox | 4096 | – | init lock / container start-stop / configure |
+| 见 QNA console | GET, HEAD, POST | L2 | read:host | 4096 | – | page console/exception/network ring; POST clear |
+| 见 QNA operations | GET, HEAD, POST | L2 | read:host | 4096 | – | every route call trace (status/errorId/duration); POST clear |
+| 见 QNA diagnostics | GET, HEAD | L2 | read:host | 0 | – | one-shot status + targets + console + trace + error catalogue + hints |
+| 见 QNA targets | GET, HEAD | L2 | read:host | 0 | – | Target.getTargets (page target ids/urls) |
+| 见 QNA evaluate | POST | L2 | write:engine | 4096 | – | bounded Runtime.evaluate in the engine page |
+| 见 QNA ports | GET, HEAD | L2 | read:host | 0 | – | configured vs effective ports, publishedPorts, occupancy, last repair |
+| 见 QNA recover | POST | L2 | proc:local-sandbox | 4096 | – | suspend+resume self-heal, returns engine state |
+| 见 QNA context | GET, HEAD, POST | L2 | read:host | 16384 | – | full element packet behind a composer chip; GET /context/:id resolves |
 
 ## ⛔ DEPRECATED · dsh-nano-shared-workspace — 21（历史，非现行）
 

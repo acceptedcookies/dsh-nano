@@ -28,10 +28,10 @@ test('skill bodies carry the hard agentic constraints', () => {
   const body = SKILL_BODIES['kitesurf-cdp']
   for (const phrase of [
     '同一个宿主进程状态', 'componentStack=null', 'kite-container', 'route-not-listed',
-    'kitesurf_diagnostics', 'MUST end with', '事务性', 'buildId',
+    'sandbox.diagnostics', 'MUST end with', '事务性', 'buildId',
   ]) {
     assert.ok(body.includes(phrase), `missing constraint: ${phrase}`)
   }
-  assert.ok(kitesurfSkill().content.includes('kitesurf_diagnostics'))
+  assert.ok(kitesurfSkill().content.includes('sandbox.diagnostics'))
   assert.ok(nanoKiteSkill().content.includes('\\n'))
 })

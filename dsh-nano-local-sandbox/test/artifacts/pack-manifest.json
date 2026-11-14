@@ -1,5 +1,5 @@
 {
-  "commit": "178eb358a53fe6dafb5a5c7c04dd14dd1c177473",
+  "commit": "6afb4d99c157951864274c152a27cb5f7ade8503",
   "packs": {
     "dsh-nano-local-sandbox": [
       "AGENTS.md",
@@ -37,12 +37,8 @@
       "icon.svg",
       "index.js",
       "lib/client.js",
-      "lib/container-engine.js",
-      "lib/diagnostics.js",
       "lib/dom.js",
       "lib/engine.js",
-      "lib/history.js",
-      "lib/nano-kite.js",
       "lib/perf-host.js",
       "lib/route-guard.js",
       "lib/route-table.js",
@@ -50,9 +46,6 @@
       "locale/en.json",
       "locale/zh.json",
       "package.json",
-      "runtime/Dockerfile",
-      "runtime/entrypoint.sh",
-      "runtime/mcp-bridge.mjs",
       "skills/kitesurf-cdp/SKILL.md",
       "skills/nano-kite/SKILL.md"
     ],

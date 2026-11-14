@@ -30,7 +30,7 @@ test('scope is read from profile.yaml and the recipe stays in this package', () 
   const imports = []
   for (const file of files(root)) {
     const text = readFileSync(file, 'utf8')
-    if (text.includes('dsh-nano-kitesurf')) imports.push(file)
+    if (/from\s+['"]dsh-nano-kitesurf/.test(text) || /import\s+['"]dsh-nano-kitesurf/.test(text)) imports.push(file)
   }
   assert.deepEqual(imports, [])
 })

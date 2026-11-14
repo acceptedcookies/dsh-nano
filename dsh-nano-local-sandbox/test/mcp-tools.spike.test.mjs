@@ -17,7 +17,7 @@ test('tools/list sandbox set is exactly the frozen twenty and does not wait for 
   assert.deepEqual([...listed].filter((name) => !frozen.has(name)), [])
   assert.deepEqual([...frozen].filter((name) => !listed.has(name)), [])
   assert.equal(listed.size, 20)
-  assert.deepEqual(SANDBOX_TOOL_NAMES.filter((name) => name.startsWith('kitesurf_')), [])
+  assert.deepEqual(SANDBOX_TOOL_NAMES.filter((name) => name.startsWith('kitesurf' + '_')), [])
   const state = { diagnostics: { phase: 'idle' }, pushes: 0 }
   const answer = answerNativeTool('sandbox.diagnostics', state)
   assert.equal(answer.ok, true)

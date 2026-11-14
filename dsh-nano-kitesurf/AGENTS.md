@@ -75,7 +75,7 @@ dsh plugin --profile web add <spec>
 1. profile 的 `package.json` 里，`dependencies` 和 `dsh.profile.bundles` 都有本包名。
 2. 重启并刷新后，页面里能找到本包的 client 模块（包名）。找不到说明 client 没进页面。
 3. 右侧工作区能打开 Kitesurf，画面根上有 `data-nano-kitesurf="1"`。composer 下方不再挂这块面板。
-4. 已登录页面里 `GET /nano-kitesurf/status` 返回 200 JSON。裸 curl 被拒是鉴权，不是没装上。composer 输入 `/kitesurf-cdp` 能看到技能。
+4. 已登录页面里 `GET 见 QNA status` 返回 200 JSON。裸 curl 被拒是鉴权，不是没装上。composer 输入 `/kitesurf-cdp` 能看到技能。
 
 ## 初次运行
 
@@ -97,21 +97,21 @@ dsh plugin --profile web add <spec>
 
 | 方法 | 路径 | 作用 |
 |---|---|---|
-| GET | `/nano-kitesurf/status` | `{ ok, engineMismatch?, httpBase, cdp, kite: { phase, httpBase, mcpPort, cdp }, lastError? }` |
-| GET | `/nano-kitesurf/last` | 最近一次点选，没有则 `pick: null` |
-| POST | `/nano-kitesurf/open` | `{ url }`。只接受 http(s)，不接受带凭证的地址 |
-| POST | `/nano-kitesurf/shot` | 当前页截图 base64 + `{url, scrollX, scrollY, targetId, viewport, mimeType, format}`；`{scroll: ±px}` 先滚后截，`{format:"webp"\|"png"\|"jpeg", quality:1..100}` 选编码（默认 webp q82，比 PNG 小约 3.7×），`{fit:{width,height}}` 让引擎视口等于面板尺寸（默认由 pane 侧传入，图片与面板 1:1、无 letterbox） |
-| POST | `/nano-kitesurf/history` | `{delta:-1\|+1}`：真实浏览器前进/后退（走引擎 `Page.getNavigationHistory`/`navigateToHistoryEntry`），返回 `{moved,url?,currentIndex,entries}` |
-| POST | `/nano-kitesurf/pick` | `{ x, y }` 或 `{selector}`（↑↓ 父/子重选）。`preview:true` 只做悬停预览、不写 lastPick。元素包带 `componentStack`（React fiber 自省出的组件名，无框架/生产压缩名时为 null 或短名）；`elements` 是单元素列表；`parentSel`/`childSel` 是父/最大子元素选择器；响应带 `{url, scrollY, targetId}` 供画面比对（漂移时 pane 自动重截并提示） |
-| POST | `/nano-kitesurf/edit` | `{selector, text}`：把文本写回该元素（双击就地改字），≤4000 字符 |
-| POST | `/nano-kitesurf/settings` | `{ userAgent?, viewport?, media?, extraHeaders? }`：viewport `{width:320..3840, height:240..2160, mobile?, deviceScaleFactor?:1\|2\|3}` 或 `null`；media `screen\|print\|null`；extraHeaders ≤20 项（禁 cookie/authorization 等）；全部事务性，失败回滚 |
-| POST | `/nano-kitesurf/kite` | `{action: init\|start\|suspend\|resume\|configure, httpBase?, mcpPort?}` |
-| GET/POST | `/nano-kitesurf/perf-review/host` | 进程 perf 快照；`?mode=window` 会清空全局桶，只允许 POST |
-| GET/POST | `/nano-kitesurf/console` | 页面 console/exception/network/navigation 环形缓冲；`?level=error,exception&limit=50`；`POST {"clear":true}` 清空 |
-| GET/POST | `/nano-kitesurf/operations` | 每次路由调用的执行埋点（route/status/errorId/耗时/输入摘要）；`?errorsOnly=true`；`POST {"clear":true}` 清空 |
-| GET | `/nano-kitesurf/diagnostics` | 一击全量诊断：status + target 列表 + console + 操作 trace + errorCatalog + perf + 自动 hints |
-| GET | `/nano-kitesurf/targets` | 引擎 `Target.getTargets`（page target id/url、当前附着页） |
-| POST | `/nano-kitesurf/evaluate` | `{expression}` 在引擎页面执行有界 JS（≤2000 字符，returnByValue，结果 ≤4000 字符） |
+| GET | `见 QNA status` | `{ ok, engineMismatch?, httpBase, cdp, kite: { phase, httpBase, mcpPort, cdp }, lastError? }` |
+| GET | `见 QNA last` | 最近一次点选，没有则 `pick: null` |
+| POST | `见 QNA open` | `{ url }`。只接受 http(s)，不接受带凭证的地址 |
+| POST | `见 QNA shot` | 当前页截图 base64 + `{url, scrollX, scrollY, targetId, viewport, mimeType, format}`；`{scroll: ±px}` 先滚后截，`{format:"webp"\|"png"\|"jpeg", quality:1..100}` 选编码（默认 webp q82，比 PNG 小约 3.7×），`{fit:{width,height}}` 让引擎视口等于面板尺寸（默认由 pane 侧传入，图片与面板 1:1、无 letterbox） |
+| POST | `见 QNA history` | `{delta:-1\|+1}`：真实浏览器前进/后退（走引擎 `Page.getNavigationHistory`/`navigateToHistoryEntry`），返回 `{moved,url?,currentIndex,entries}` |
+| POST | `见 QNA pick` | `{ x, y }` 或 `{selector}`（↑↓ 父/子重选）。`preview:true` 只做悬停预览、不写 lastPick。元素包带 `componentStack`（React fiber 自省出的组件名，无框架/生产压缩名时为 null 或短名）；`elements` 是单元素列表；`parentSel`/`childSel` 是父/最大子元素选择器；响应带 `{url, scrollY, targetId}` 供画面比对（漂移时 pane 自动重截并提示） |
+| POST | `见 QNA edit` | `{selector, text}`：把文本写回该元素（双击就地改字），≤4000 字符 |
+| POST | `见 QNA settings` | `{ userAgent?, viewport?, media?, extraHeaders? }`：viewport `{width:320..3840, height:240..2160, mobile?, deviceScaleFactor?:1\|2\|3}` 或 `null`；media `screen\|print\|null`；extraHeaders ≤20 项（禁 cookie/authorization 等）；全部事务性，失败回滚 |
+| POST | `见 QNA kite` | `{action: init\|start\|suspend\|resume\|configure, httpBase?, mcpPort?}` |
+| GET/POST | `见 QNA perf-review/host` | 进程 perf 快照；`?mode=window` 会清空全局桶，只允许 POST |
+| GET/POST | `见 QNA console` | 页面 console/exception/network/navigation 环形缓冲；`?level=error,exception&limit=50`；`POST {"clear":true}` 清空 |
+| GET/POST | `见 QNA operations` | 每次路由调用的执行埋点（route/status/errorId/耗时/输入摘要）；`?errorsOnly=true`；`POST {"clear":true}` 清空 |
+| GET | `见 QNA diagnostics` | 一击全量诊断：status + target 列表 + console + 操作 trace + errorCatalog + perf + 自动 hints |
+| GET | `见 QNA targets` | 引擎 `Target.getTargets`（page target id/url、当前附着页） |
+| POST | `见 QNA evaluate` | `{expression}` 在引擎页面执行有界 JS（≤2000 字符，returnByValue，结果 ≤4000 字符） |
 
 错误一律 `{ok:false,errorId,error}` 并按 `lib/diagnostics.js` 的 `ERROR_CATALOG` 映射真实状态码（唯一真源，index.js 与技能文档都从它派生）：输入类 400、未命中 404、阶段错 409、body 超限 413、引擎故障 502、`navigate.egress` 504。`/diagnostics` 会把「errorId → status → 原因 → 下一步命令」整表交给 agent；完整 id 表也在 `/kitesurf-cdp` 技能 §5。
 

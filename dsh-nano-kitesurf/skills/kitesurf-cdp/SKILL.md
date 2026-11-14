@@ -14,10 +14,10 @@ The page under discussion is rendered by Kitesurf, not by Chrome.
 
 ```bash
 # 已登录的 Harness 页面内（page.fetch 或带 dsh-auth cookie）：
-curl -s -b "$DSH_COOKIE_JAR" https://dsh-dev.local/nano-kitesurf/diagnostics | jq .
+curl -s -b "$DSH_COOKIE_JAR" https://dsh-dev.local/nano-local-sandbox/diagnostics | jq .
 ```
 
-`...` 只是占位符：`page.fetch("/nano-kitesurf/diagnostics")` 会带上页面会话；裸 curl 必须携带 `dsh-auth-*` cookie，否则 401/302。上面几节的 `curl` 同理，不要照抄省略号。
+`...` 只是占位符：`page.fetch("/nano-local-sandbox/diagnostics")` 会带上页面会话；裸 curl 必须携带 `dsh-auth-*` cookie，否则 401/302。上面几节的 `curl` 同理，不要照抄省略号。
 
 `diagnostics` 一次性返回：插件版本/阶段、引擎 status 与 target 列表、UA/viewport、**最近操作 trace**（每次调用的 route/status/errorId/耗时）、**页面 console/exception/network 事件**、错误目录、perf 快照，以及按当前状态自动生成的 `hints`（下一步该做什么）。`hints` 是权威线索，先读它再决定动作。
 
@@ -25,21 +25,21 @@ curl -s -b "$DSH_COOKIE_JAR" https://dsh-dev.local/nano-kitesurf/diagnostics | j
 
 | 路由 | 作用 |
 |---|---|
-| `GET /nano-kitesurf/diagnostics?limit=20` | 一击全量诊断（上面那条） |
-| `GET /nano-kitesurf/operations?errorsOnly=true` | 只看失败的调用（含 errorId + 耗时 + 输入摘要） |
-| `POST /nano-kitesurf/operations {"clear":true}` | 清空操作 trace |
-| `GET /nano-kitesurf/console?level=error,exception` | 页面 console.error / 未捕获异常 / 网络失败 |
-| `GET /nano-kitesurf/console?level=navigation` | 页面导航轨迹（漂移排查） |
-| `POST /nano-kitesurf/console {"clear":true}` | 清空 console 环形缓冲 |
-| `GET /nano-kitesurf/targets` | 引擎 Target.getTargets：page target id/url、当前附着页 |
-| `POST /nano-kitesurf/evaluate {"expression":"document.title"}` | 在引擎页面执行有界 JS（≤2000 字符，结果 ≤4000 字符） |
-| `GET /nano-kitesurf/perf-review/host` | 进程 perf span（DSH_PERF_REVIEW=1 时） |
+| `GET /nano-local-sandbox/diagnostics?limit=20` | 一击全量诊断（上面那条） |
+| `GET /nano-local-sandbox/operations?errorsOnly=true` | 只看失败的调用（含 errorId + 耗时 + 输入摘要） |
+| `POST /nano-local-sandbox/operations {"clear":true}` | 清空操作 trace |
+| `GET /nano-local-sandbox/console?level=error,exception` | 页面 console.error / 未捕获异常 / 网络失败 |
+| `GET /nano-local-sandbox/console?level=navigation` | 页面导航轨迹（漂移排查） |
+| `POST /nano-local-sandbox/console {"clear":true}` | 清空 console 环形缓冲 |
+| `GET /nano-local-sandbox/targets` | 引擎 Target.getTargets：page target id/url、当前附着页 |
+| `POST /nano-local-sandbox/evaluate {"expression":"document.title"}` | 在引擎页面执行有界 JS（≤2000 字符，结果 ≤4000 字符） |
+| `GET /nano-local-sandbox/perf-review/host` | 进程 perf span（DSH_PERF_REVIEW=1 时） |
 
 console 采集走插件自己那条 CDP socket 的 `Runtime.consoleAPICalled` / `Runtime.exceptionThrown` / `Log.entryAdded` / `Network.loadingFailed` / `Page.frameNavigated`，**不需要**再注入 `window.__ksLogs` 之类的补丁。`/evaluate` 里 `console.log("probe")` 会立刻出现在 `GET /console`。
 
 ## 1. Get the socket — never guess it
 
-The live endpoints are always in `GET /nano-kitesurf/status`:
+The live endpoints are always in `GET /nano-local-sandbox/status`:
 
 - `kite.cdp` — the browser CDP socket for agent-browser's `--cdp` flag (also echoed top-level as `cdp`).
 - `kite.mcpPort` — the host port of the MCP bridge inside the engine container: `ws://<engine-host>:<mcpPort>/mcp`. It is a WebSocket→`agent-browser mcp` bridge, not an HTTP API. It moves only when a new container is created, not on `configure` alone.
@@ -51,7 +51,7 @@ The live endpoints are always in `GET /nano-kitesurf/status`:
 Use agent-browser, and always attach. A command without the CDP target launches Chrome, which is the wrong engine.
 
 ```bash
-agent-browser --cdp "$(curl -s .../nano-kitesurf/status | jq -r .kite.cdp)" snapshot -i
+agent-browser --cdp "$(curl -s .../nano-local-sandbox/status | jq -r .kite.cdp)" snapshot -i
 ```
 
 Before the first agent-browser command in a session, run `agent-browser skills get core` and follow it. That skill is the command reference (`open`, `get url`, `wait`, `click`, `fill`, `find`, `scroll`, `screenshot`). This skill only fixes the engine.
@@ -71,26 +71,26 @@ MCP bridge frames MUST end with `\n` — a raw JSON frame without a trailing new
 
 ## 4. What a human pick contains
 
-Into composer appends a short `[kitesurf]` note to the existing draft. It does not replace text the person already typed, and it does not attach the screenshot. The note has the page URL, one selector, at most 80 characters of the element's own text, a rounded box, and only the computed styles that carry a difference. The whole note is at most 640 characters. `hit: page root` means the click landed on `html` or `body`, and the note does not quote the document. `limit: iframe script is not inspected` means the child document was not read. A drag says `mark: area` and a box; an Alt-drag says `mark: ellipse`; a Shift-drag says `mark: arrow` plus `line: x1,y1 x2,y2`. A Shift+click while a note is open appends a second element — the note then reads `els: N` with numbered `el1/el2/…`, `box1/box2/…` lines, up to a 1280-char budget. Several notes in one draft are folded into one `[kitesurf batch N]` note of at most 1600 characters, pinned at most 8. `stack: none` means no framework component resolved; when the page ships React fibers the line reads `stack: Child → Parent → …` (component display names, last = nearest ancestor). Agents pull the human's last pick without a CDP attach: `GET /nano-kitesurf/last` returns the open note's full element packet (elements, boxes, styles, parentSel/childSel) — the note-pull API, same shape a click produces. Notes already sent stay listed when the page changes. Numbered pin dots sit on the frame — clicking a dot drops just that note, ⌘Z pops the last, the pins strip clears all. Do not expand the note into HTML, a screenshot, or a guessed component.
+Into composer appends a short `[kitesurf]` note to the existing draft. It does not replace text the person already typed, and it does not attach the screenshot. The note has the page URL, one selector, at most 80 characters of the element's own text, a rounded box, and only the computed styles that carry a difference. The whole note is at most 640 characters. `hit: page root` means the click landed on `html` or `body`, and the note does not quote the document. `limit: iframe script is not inspected` means the child document was not read. A drag says `mark: area` and a box; an Alt-drag says `mark: ellipse`; a Shift-drag says `mark: arrow` plus `line: x1,y1 x2,y2`. A Shift+click while a note is open appends a second element — the note then reads `els: N` with numbered `el1/el2/…`, `box1/box2/…` lines, up to a 1280-char budget. Several notes in one draft are folded into one `[kitesurf batch N]` note of at most 1600 characters, pinned at most 8. `stack: none` means no framework component resolved; when the page ships React fibers the line reads `stack: Child → Parent → …` (component display names, last = nearest ancestor). Agents pull the human's last pick without a CDP attach: `GET /nano-local-sandbox/last` returns the open note's full element packet (elements, boxes, styles, parentSel/childSel) — the note-pull API, same shape a click produces. Notes already sent stay listed when the page changes. Numbered pin dots sit on the frame — clicking a dot drops just that note, ⌘Z pops the last, the pins strip clears all. Do not expand the note into HTML, a screenshot, or a guessed component.
 
 Gestures on the pane (Cursor design-mode parity): click picks, Shift+click appends elements to the open note, Alt+click with no note open sends the element straight to the composer, plain drag marks a box, Alt+drag an ellipse, Shift+drag an arrow. While a note is open, Arrow Up selects the element's parent, Arrow Down its largest visible child — the packet's `parentSel`/`childSel` fields carry those selectors. 点选后气泡默认只有三个按钮：**箭头=把元素上下文注入 composer（无需填写任何文字）**、**复制=把同样的上下文写进剪贴板**、**铅笔=展开输入框补一句备注**（展开后箭头/回车注入，Shift+回车改为入队）。任何按钮都不会自动发送 composer 内容给模型——只注入、等人类决定。双击元素仍是就地改字（写回页面，不是注入）。 Esc cancels drag → note → annotate in that order; ⌘/Ctrl+Shift+D toggles annotate; ⌘/Ctrl+Z removes the last pin; ⌘/Ctrl+L with a note open pushes it into the composer. While annotate is on, a dashed box previews the element under the cursor (a `preview: true` pick that never moves `lastPick`).
 
-An authenticated Harness page can read the last raw packet with `GET /nano-kitesurf/last`. Every shot and pick returns the live page identity (`url`, `scrollY`, `targetId`, `viewport`); the pane compares them and auto-refresh + warns (`页面已变化…`) when a click lands on stale pixels — picking over a shifted page never silently hits the wrong element. A click sends `POST /nano-kitesurf/pick` with `{x, y}` in viewport pixels — plus `preview: true` for hover probes that skip `lastPick`, or `{selector: "…"}` to re-pick a parent/child the pane already named (Arrow Up/Down). Double-click with a note open switches the input into in-place text edit — it POSTs `/nano-kitesurf/edit` with `{selector, text}` and the page itself changes; the shot refreshes.
+An authenticated Harness page can read the last raw packet with `GET /nano-local-sandbox/last`. Every shot and pick returns the live page identity (`url`, `scrollY`, `targetId`, `viewport`); the pane compares them and auto-refresh + warns (`页面已变化…`) when a click lands on stale pixels — picking over a shifted page never silently hits the wrong element. A click sends `POST /nano-local-sandbox/pick` with `{x, y}` in viewport pixels — plus `preview: true` for hover probes that skip `lastPick`, or `{selector: "…"}` to re-pick a parent/child the pane already named (Arrow Up/Down). Double-click with a note open switches the input into in-place text edit — it POSTs `/nano-local-sandbox/edit` with `{selector, text}` and the page itself changes; the shot refreshes.
 
-`POST /nano-kitesurf/open` navigates; `POST /nano-kitesurf/shot` screenshots the current page — optional `{"scroll": ±px}` (max 4000), `{"format":"webp"|"png"|"jpeg","quality":1..100}`, `{"fit":{"width":W,"height":H}}`. Default is webp q82: an example.com frame is 61 KB base64 vs 226 KB as PNG, and the pane always asks for webp. Response carries `mimeType` + `format` so the client picks the right data URL. **`fit` 是默认行为**：pane 用 `ResizeObserver` 测量自身内容区，把引擎视口设成同尺寸再截图，所以图片与面板 1:1、没有黑边（旧行为固定 1280×720 会在竖长面板里浪费 55%~80% 的像素）。需要固定视口做响应式对比时才传 `/settings viewport`。 `POST /nano-kitesurf/history {"delta":-1}` / `{"delta":1}` is real browser back/forward (engine navigationHistory), not scroll. `GET /nano-kitesurf/status` reports whether `/health` answered.
+`POST /nano-local-sandbox/open` navigates; `POST /nano-local-sandbox/shot` screenshots the current page — optional `{"scroll": ±px}` (max 4000), `{"format":"webp"|"png"|"jpeg","quality":1..100}`, `{"fit":{"width":W,"height":H}}`. Default is webp q82: an example.com frame is 61 KB base64 vs 226 KB as PNG, and the pane always asks for webp. Response carries `mimeType` + `format` so the client picks the right data URL. **`fit` 是默认行为**：pane 用 `ResizeObserver` 测量自身内容区，把引擎视口设成同尺寸再截图，所以图片与面板 1:1、没有黑边（旧行为固定 1280×720 会在竖长面板里浪费 55%~80% 的像素）。需要固定视口做响应式对比时才传 `/settings viewport`。 `POST /nano-local-sandbox/history {"delta":-1}` / `{"delta":1}` is real browser back/forward (engine navigationHistory), not scroll. `GET /nano-local-sandbox/status` reports whether `/health` answered.
 
 ### Browser disguise / emulation (`/settings`)
 
 All fields optional, `null` clears that override. Values are in memory only and apply before the next navigation; `GET /status` → `emulation` echoes the whole set.
 
 ```bash
-POST /nano-kitesurf/settings {
+POST /nano-local-sandbox/settings {
   "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)",   # ≤400 字符，单行；"" 清除
   "viewport": { "width": 1024, "height": 768, "mobile": false, "deviceScaleFactor": 2 },
   "media": "print",                        # "screen" | "print" | null
   "extraHeaders": { "X-Debug": "1" }      # ≤20 项，键 1..64 字符，值 ≤200；禁用 cookie/authorization/host 等
 }
-POST /nano-kitesurf/settings { "viewport": null, "media": null, "extraHeaders": null }
+POST /nano-local-sandbox/settings { "viewport": null, "media": null, "extraHeaders": null }
 ```
 
 `viewport.width` 可任意 320..3840 整数（不再只有 390/768/1280 三档）；只给 `width` 时按预设补高度与 mobile 默认值。`height` 240..2160；`deviceScaleFactor` 只允许 1/2/3。改视口会改变画面身份，pane 的漂移检测含 `viewport` 维度。`POST /evaluate {"expression":"matchMedia('print').matches"}` 可验证 media 是否生效。
@@ -123,7 +123,7 @@ A failed call returns `{ok:false,errorId,error}` with a real HTTP status. The sa
 | `kitesurf.engine.context` | 409 | 页面正在导航，JS 执行上下文被销毁（竞态，不是引擎故障） | 已自动重试一次；仍失败时等页面稳定后重试，或 POST /recover 一键恢复 |
 | `kitesurf.engine.connect` | 502 | CDP 连接失败/服务不是 Kitesurf/socket 关闭/命令超时 | GET /status；container list；curl http://127.0.0.1:8798/health；必要时 /kite resume |
 | `kitesurf.perf.method` | 400 | mode=window 排水只允许 POST | GET /perf-review/host 读快照；POST /perf-review/host?mode=window 排水 |
-| `kitesurf.context.miss` | 404 | 上下文引用不存在或 text 为空（ref 环只保留最近 50 条，宿主重启即清空） | 重新点选生成新 ref；GET /nano-kitesurf/context 列出最近引用 |
+| `kitesurf.context.miss` | 404 | 上下文引用不存在或 text 为空（ref 环只保留最近 50 条，宿主重启即清空） | 重新点选生成新 ref；GET /nano-local-sandbox/context 列出最近引用 |
 | `kitesurf.console.query` | 400 | console 查询参数非法 | GET /console?level=error&limit=50；POST /console {clear:true} 清空 |
 | `kitesurf.diag.query` | 400 | diagnostics/operations 查询参数非法 | GET /diagnostics?limit=20；GET /operations?errorsOnly=true |
 | `kitesurf.evaluate.empty` | 400 | expression 为空或超过 2000 字符 | POST /evaluate {expression:"document.title"}，≤2000 字符 |
@@ -142,13 +142,13 @@ A failed call returns `{ok:false,errorId,error}` with a real HTTP status. The sa
 
 ```bash
 # 打开 → 诊断 → 点选 → 取包
-POST /nano-kitesurf/open      {"url":"https://example.com"}
-GET  /nano-kitesurf/diagnostics?limit=10
-POST /nano-kitesurf/pick      {"x":640,"y":320}
-GET  /nano-kitesurf/last
-POST /nano-kitesurf/edit      {"selector":"h1","text":"Hello"}
-POST /nano-kitesurf/evaluate  {"expression":"console.log('probe'); document.title"}
-GET  /nano-kitesurf/console?level=log
+POST /nano-local-sandbox/open      {"url":"https://example.com"}
+GET  /nano-local-sandbox/diagnostics?limit=10
+POST /nano-local-sandbox/pick      {"x":640,"y":320}
+GET  /nano-local-sandbox/last
+POST /nano-local-sandbox/edit      {"selector":"h1","text":"Hello"}
+POST /nano-local-sandbox/evaluate  {"expression":"console.log('probe'); document.title"}
+GET  /nano-local-sandbox/console?level=log
 ```
 
 负例（每个都要能预测结果，不要靠猜）：
@@ -168,8 +168,8 @@ GET  /nano-kitesurf/console?level=log
 | `POST /settings {"viewport":{"width":9999}}` | `400 kitesurf.settings.viewport` | 宽 320..3840、高 240..2160；dsf 只能 1/2/3 |
 | `POST /settings {"extraHeaders":{"cookie":"a=b"}}` | `400 kitesurf.settings.headers` | 凭证类 header 名被禁用 |
 | 把 `httpBase` 指到 `http://127.0.0.1:8787`（本机 Cursor 占用） | **不会**删容器：接管现有 8798 容器并回报 `adopted:true`；若连现端口也不可用则 `409 kitesurf.kite.portbusy` | 端口占用不是引擎故障，绝不能拆掉能用的容器 |
-| `GET /nano-kitesurf/ports` | `{configured, effective, container.published, ports.engine.free, lastRepair}` | 一眼看出「配置 8787 / 实跑 8798」 |
-| `POST /nano-kitesurf/recover {}` | 自动 suspend→resume 并回报 `engineAlive` | 一键自愈，不需要人改 YAML |
+| `GET /nano-local-sandbox/ports` | `{configured, effective, container.published, ports.engine.free, lastRepair}` | 一眼看出「配置 8787 / 实跑 8798」 |
+| `POST /nano-local-sandbox/recover {}` | 自动 suspend→resume 并回报 `engineAlive` | 一键自愈，不需要人改 YAML |
 | `POST /history {"delta":2}` | `400 kitesurf.navigate.delta` | 只能 -1/+1 |
 | `POST /kite {"action":"start"}` 当 running | `409 kitesurf.kite.state` | 阶段错，不是引擎故障 |
 | `configure` 到 `http://evil.example` | `400 kitesurf.kite.remote` | 远程需 allowRemote |
@@ -224,11 +224,11 @@ GET  /nano-kitesurf/console?level=log
 1. `config.httpBase` 只是**偏好**，不是硬约束。若目标端口被别的进程占用，而现有 `kitesurf` 容器自己的端口仍可用 → **接管**该容器并把运行中的 `httpBase` 改写成实际端口（`/status.ports.lastRepair` 记录 from/to，reason=`adopted-existing-container`），**不删除容器**。
 2. 首次创建且偏好端口被占用 → 自动向后取下一个空闲端口（步进 10），reason=`port-busy-repaired`。
 3. 只有「偏好端口被占且现有容器端口也不可用」才抛 `409 kitesurf.kite.portbusy`，此时容器保持原样。
-4. 自愈入口：`POST /nano-kitesurf/recover {}`（suspend→resume→健康检查→端口报告）；只读诊断：`GET /nano-kitesurf/ports`；MCP 侧对应 `kitesurf_ports` 与 `kitesurf_recovery_plan`。
+4. 自愈入口：`POST /nano-local-sandbox/recover {}`（suspend→resume→健康检查→端口报告）；只读诊断：`GET /nano-local-sandbox/ports`；MCP 侧对应 `sandbox.ports` 与 `sandbox.recovery_plan`。
 
-**上下文引用（composer 里可能出现 ref）**：默认注入的是**完整上下文正文**（不会裁切）。宿主同时登记一个 ref id，若有人在 composer 里看到 `[kitesurf:N …]` 这种**只有编号**的短 token（手动切换/外部工具产生），它不含上下文，**必须解析**：`GET /nano-kitesurf/context?id=3` 返回 `{id, at, label, bytes, text, packet}`，其中 `text` 是**完整未裁切**的上下文（selector / text / box / 19 项 computed style / attrs / ancestors / componentStack），`packet` 是结构化元素包。`GET /nano-kitesurf/context?limit=20` 列出最近引用；ref 环保留 50 条、宿主重启即清空——若 404 `kitesurf.context.miss`，说明引用已过期，请人重新点选。chip 只是引用，**不会自动发送**。
+**上下文引用（composer 里可能出现 ref）**：默认注入的是**完整上下文正文**（不会裁切）。宿主同时登记一个 ref id，若有人在 composer 里看到 `[kitesurf:N …]` 这种**只有编号**的短 token（手动切换/外部工具产生），它不含上下文，**必须解析**：`GET /nano-local-sandbox/context?id=3` 返回 `{id, at, label, bytes, text, packet}`，其中 `text` 是**完整未裁切**的上下文（selector / text / box / 19 项 computed style / attrs / ancestors / componentStack），`packet` 是结构化元素包。`GET /nano-local-sandbox/context?limit=20` 列出最近引用；ref 环保留 50 条、宿主重启即清空——若 404 `kitesurf.context.miss`，说明引用已过期，请人重新点选。chip 只是引用，**不会自动发送**。
 
-**MCP 排障（只用 MCP 也能定位）**：`ws://127.0.0.1:<mcpPort>/mcp` 的 `tools/list` 除 33 个 `agent_browser_*` 外还有 6 个 `kitesurf_*` 原生工具：`kitesurf_diagnostics`（一击全量）、`kitesurf_console`、`kitesurf_operations`、`kitesurf_error_catalog`、`kitesurf_targets`、`kitesurf_ports`、`kitesurf_recovery_plan`、`kitesurf_bridge_health`。宿主每 30s（失败时立即）把诊断快照推给桥；若工具回 `kitesurf.diag.stale`，等几秒或先调宿主 `GET /diagnostics`。MCP 的 `-32601/-32602/-32700` 是 JSON-RPC 协议错，`kitesurf.*` 是业务错，两者互不等价。
+**MCP 排障（只用 MCP 也能定位）**：`ws://127.0.0.1:<mcpPort>/mcp` 的 `tools/list` 除 33 个 `agent_browser_*` 外还有 6 个 `sandbox.*` 原生工具：`sandbox.diagnostics`（一击全量）、`sandbox.console`、`sandbox.operations`、`sandbox.error_catalog`、`sandbox.targets`、`sandbox.ports`、`sandbox.recovery_plan`、`sandbox.bridge_health`。宿主每 30s（失败时立即）把诊断快照推给桥；若工具回 `kitesurf.diag.stale`，等几秒或先调宿主 `GET /diagnostics`。MCP 的 `-32601/-32602/-32700` 是 JSON-RPC 协议错，`kitesurf.*` 是业务错，两者互不等价。
 
 ## 9. Do not
 

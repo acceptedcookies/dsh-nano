@@ -18,7 +18,7 @@ import { SessionRegistry } from './lib/sessions.js'
 import { EventBus } from './lib/events.js'
 import { Persist } from './lib/persist.js'
 import { createMcpHandler } from './lib/mcp.js'
-import { handshake, FrameParser, sendBinary, sendText, sendClose, parseChannel, Attach, FR_KIND } from './lib/ws.js'
+import { handshake, FrameParser, sendBinary, sendText, sendClose, encodeFrame, parseChannel, Attach, FR_KIND } from './lib/ws.js'
 
 export const name = 'dsh-nano-terminal'
 
@@ -32,7 +32,7 @@ export function apply(ctx) {
   // is wiped on re-sync so durable state lives at the home root.
   const home = process.env.DSH_HOME || process.env.HOME || '/tmp'
   const stateDir = join(home, 'dsh-nano-terminal.state')
-  const auditPath = join(stateDir, 'audit.jsonl')
+  const auditPath = join(home, 'nano-local-sandbox', 'term.audit')
 
   const bus = new EventBus({ audit: () => {} })
   // plugins/<pkg>/ is the install tree — re-synced from source on every host
@@ -79,7 +79,7 @@ export function apply(ctx) {
           return
         }
         if (opcode === 0x09) {
-          socket.write(payload) // pong payload with opcode… handled below
+          socket.write(encodeFrame(payload, 0x0A))
           return
         }
         if (!ready) {

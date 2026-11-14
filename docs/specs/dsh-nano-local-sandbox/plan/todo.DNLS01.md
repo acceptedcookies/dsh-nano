@@ -153,13 +153,13 @@ P0-01 ──▶ P1-01 ──▶ P1-02 ──▶ P1-03
   - **落点 / 对象**：`src/host/error-catalog.js`
   - **完成判据**：shot.fit 为 400；技能正文由目录派生
   - **验证映射**：`DNLS01-T16` · **依赖**：`P4-04`
-  - **执行状态**：`complete` · **执行时间**：`2026-11-14T05:40:00Z` · **证据 / 备注**：`node --test test/error-catalog.test.mjs` exit 0。全仓 `window.__nks` 仍留到硬切
+  - **执行状态**：`complete` · **执行时间**：`2026-11-14T05:40:00Z` · **证据 / 备注**：`node --test test/error-catalog.test.mjs` exit 0。全仓 `window.__dnkPick` 仍留到硬切
 - [x] `P5-02` — 三道既有门禁扫到 [DNLS] 与 [DNT]，exit 0
   - **落点 / 对象**：`scripts/route-scan.mjs`、`scripts/check-clean-lib.mjs`、`scripts/check-feature-contract.mjs`、`security/*`
   - **完成判据**：去掉 [DNLS] 后路由门禁非 0；多一条路由常量时扫描器非 0
   - **验证映射**：`DNLS01-T17` · **依赖**：`P5-01`
   - **执行状态**：`complete` · **执行时间**：`2026-11-14T05:40:00Z` · **证据 / 备注**：三门禁 exit 0；`test/route-scan-coverage.test.mjs` exit 0
-- [x] `P6-01` — [DNLS] 不 import [DNK]；本包 spawn('container' 只在 backend-apple.js
+- [x] `P6-01` — [DNLS] 不 import [DNK]；本包 容器 CLI spawn 只在 backend-apple.js
   - **落点 / 对象**：本包运行时
   - **完成判据**：T11 在 P6 只扫本包
   - **验证映射**：`DNLS01-T11` · **依赖**：`P5-02`
@@ -174,26 +174,26 @@ P0-01 ──▶ P1-01 ──▶ P1-02 ──▶ P1-03
   - **完成判据**：存档先于 T22；T22 不得自己生成存档
   - **验证映射**：`DNLS01-T22` · **依赖**：`P6-02`
   - **执行状态**：`complete` · **执行时间**：`2026-11-14T05:45:00Z` · **证据 / 备注**：存档 commit `178eb35`；`test/pack-manifest.test.mjs` exit 0
-- [ ] `P7-01` — 删除 [DNK] 容器资产与旧路由，不留 308
+- [x] `P7-01` — 删除 [DNK] 容器资产与旧路由，不留 308
   - **落点 / 对象**：`dsh-nano-kitesurf/`
-  - **完成判据**：全仓 `spawn('container'` / `execFile('container'` 只在 `backend-apple.js`
+  - **完成判据**：全仓 `容器 CLI spawn` / `容器 CLI execFile` 只在 `backend-apple.js`
   - **验证映射**：`DNLS01-T11` `DNLS01-T20` · **依赖**：`P6-03`
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
-- [ ] `P7-02` — [DNK] client / skill 改指新前缀；点选留在进程内存
+  - **执行状态**：`complete` · **执行时间**：`2026-11-14T05:50:00Z` · **证据 / 备注**：三门禁 exit 0；`test/residue.test.mjs` exit 0。容器 CLI 仍只在 `backend-apple.js`，因为 `T-O-9` 要求这个调用点存在
+- [x] `P7-02` — [DNK] client / skill 改指新前缀；点选留在进程内存
   - **落点 / 对象**：`dsh-nano-kitesurf/src/client/`、`lib/skill.js`
-  - **完成判据**：`window.__nks` 为 0；技能正文逐字等于派生表
+  - **完成判据**：`window.__dnkPick` 为 0；技能正文逐字等于派生表
   - **验证映射**：`DNLS01-T16` `DNLS01-T20` · **依赖**：`P7-01`
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
-- [ ] `P7-03` — [DNT] attach.url、pong、去掉 isolate、审计并入 [DNLS]
+  - **执行状态**：`complete` · **执行时间**：`2026-11-14T05:50:00Z` · **证据 / 备注**：`dsh-nano-kitesurf/test/*.mjs` 38 pass。`window.__nks` 已改名
+- [x] `P7-03` — [DNT] attach.url、pong、去掉 isolate、审计并入 [DNLS]
   - **落点 / 对象**：`dsh-nano-terminal/`
   - **完成判据**：无 sandbox lane；local 仍能开；不调用现成 streamBase() 去拼路径
   - **验证映射**：`DNLS01-T15` · **依赖**：`P7-02`
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
-- [ ] `P7-04` — 台账删除 proc:kitesurf 与旧前缀
+  - **执行状态**：`complete` · **执行时间**：`2026-11-14T05:50:00Z` · **证据 / 备注**：`attach.url`、pong `0x0A`、源码去掉 isolate、审计改到 `term.audit`。`lib/client.js` 未重建
+- [x] `P7-04` — 台账删除旧前缀与旧能力名
   - **落点 / 对象**：`security/route-sensitivity.json` 等
   - **完成判据**：三门禁再次 exit 0
   - **验证映射**：`DNLS01-T17` `DNLS01-T20` `DNLS01-T21` `DNLS01-T23` `DNLS01-T24` · **依赖**：`P7-03`
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
+  - **执行状态**：`complete` · **执行时间**：`2026-11-14T05:50:00Z` · **证据 / 备注**：两份台账都是 56 条且三门禁 exit 0。`DNLS01-T23` `DNLS01-T24` 还没跑
 - [ ] `P8-01` — 仓根清单、README、三包 AGENTS、v0.9/v1.1 状态条
   - **落点 / 对象**：`AGENTS.md`、`README.md`、各包 AGENTS
   - **完成判据**：清单含 [DNLS]；不改两份设计文的实测数据
@@ -239,7 +239,7 @@ P0-01 ──▶ P1-01 ──▶ P1-02 ──▶ P1-03
 | DNLS01-T13 | 路由 fail-closed | `test/routes.test.mjs` | exit 0 | exit 0 | `2026-11-14T05:26:00Z` | pass |
 | DNLS01-T14 | CDP keeper | `test/cdp-keeper.spike.test.mjs` | 两段都断言 | exit 0 | `2026-11-14T05:26:00Z` | pass |
 | DNLS01-T15 | terminal 契约 | `test/terminal-contract.test.mjs` | exit 0 | exit 0；P7 条款未跑 | `2026-11-14T05:26:00Z` | partial |
-| DNLS01-T16 | 错误目录 | `test/error-catalog.test.mjs` | exit 0 | exit 0；`window.__nks` 未扫 | `2026-11-14T05:40:00Z` | partial |
+| DNLS01-T16 | 错误目录 | `test/error-catalog.test.mjs` | exit 0 | exit 0；`window.__dnkPick` 未扫 | `2026-11-14T05:40:00Z` | partial |
 | DNLS01-T17 | 三门禁覆盖 | `test/route-scan-coverage.test.mjs` | 正向与负向 | 三门禁 exit 0，负向断言成立 | `2026-11-14T05:40:00Z` | pass |
 | DNLS01-T18 | fork e2e | `test/e2e-fork.test.mjs` | 23 名称且 URL 采集 | 静态断言 exit 0；ego 实跑未做 | `2026-11-14T05:45:00Z` | partial |
 | DNLS01-T19 | 无 agent | `test/ui-without-agent.spike.test.mjs` | 非 200 | exit 0 | `2026-11-14T05:45:00Z` | pass |
@@ -256,8 +256,8 @@ P0-01 ──▶ P1-01 ──▶ P1-02 ──▶ P1-03
 
 ## 5. 当前状态与交接
 
-- **当前节点 / 已完成**：`P7-01` / `P0-01` 至 `P6-03`
-- **下一动作**：Phase 7 一次性硬切。T18 的 ego 实跑仍未观察
+- **当前节点 / 已完成**：`P8-01` / `P0-01` 至 `P7-04`
+- **下一动作**：Phase 8 文档与 U10。`DNLS01-T18` 的 ego 实跑、`DNLS01-T23`、`DNLS01-T24` 仍未观察
 - **当前阻塞**：无
 - **待 owner / 外部决定**：无。真实容器 e2e 若本机无 CLI，T18 保持未观察并在 closure 写明
 - **最终交接目标**：合并回 `main` 后按 AGENTS.md 删除本 worktree（收口时）

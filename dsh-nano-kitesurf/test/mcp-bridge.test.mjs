@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { acceptKey, createFrameDecoder, originAllowed, sendText } from '../runtime/mcp-bridge.mjs'
+import { acceptKey, createFrameDecoder, originAllowed, sendText } from '../../dsh-nano-local-sandbox/profiles/kitesurf/mcp-bridge.mjs'
 
 test('the WebSocket accept key matches RFC 6455', async () => {
   const key = await acceptKey('dGhlIHNhbXBsZSBub25jZQ==')

@@ -769,3 +769,14 @@ notepad overlay（页面，人侧 —— 永远）
 - **L4 完**：pipeline 一等 kind + JSON 校验 + 谱系回溯。
 
 **硬约束重申**：L3/L4 是契约层——**F3/F4 未冻结不动手**；L1/L2 不动存储 schema、不引入 foreign 改动、step 原语不进 note_* 工具集。
+
+### 12.6 执行进度登记（2026-11-14）
+
+| 层 | 状态 | commit | ego 验证证据 |
+|---|---|---|---|
+| **L1** run 卡 | ✅ 完成 | `2b9a7b8` | fx 钮/prompt+model 下拉/流式正文/tool 线/产物链接全过；`fx-card.png` |
+| **L2** 观察面 | ✅ 完成 | `fb2b643` | 历史 tab 3 行 runs 记录、tool det 展开见 result JSON、写回徽标；`fx-card-l2.png` |
+| **L3** step executor | ⏸ 待 F3/F4 冻结 | — | 契约层，业主未裁 |
+| **L4** pipeline 载体 | ⏸ 待 F3/F4 冻结 | — | 契约层，业主未裁 |
+
+**L3/L4 阻塞**：F3（pipeline 载体=第六 kind `*.pipeline.json` 还是仅 sqlite 元数据）+ F4（step 原语集）属公共合同扩约——AGENTS.md「不得擅自扩约」要求业主 durable 登记后方可动手。业主冻结后按 §12.3/§12.4 拆解执行。

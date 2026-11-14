@@ -332,6 +332,17 @@ export default class NanoCompactionEngine extends CompactionEngine {
   }
 
   _dropEpisode(session, episode, reason, error) {
+    // Durable-lock hygiene: if the episode already opened its compaction/start
+    // bracket (tx exists), close it with end{error} BEFORE clearing, or the
+    // unmatched start blocks this session's compactions until the next
+    // end-seed (-18② the bracket is the one-active gate).
+    if (episode.tx !== null) {
+      try {
+        episode.tx.fail(error ?? new Error(`episode dropped: ${reason}`), reason === 'transient' ? 'summary' : reason)
+      } catch (closeError) {
+        this.ctx.logger.warn(`async compaction end{error} close failed: ${messageOf(closeError)}`)
+      }
+    }
     episode.phase = 'none'
     episode.tx = null
     episode.prepared = null

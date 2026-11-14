@@ -127,7 +127,7 @@ export function compactRuntime(ctx) {
     }
   }
 
-  function fillFor(session) {
+  function fillFor(session, W) {
     if (session === null) return null
     try {
       const meter = ctx.tokenMeter ?? ctx.get?.('tokenMeter')
@@ -137,7 +137,6 @@ export function compactRuntime(ctx) {
       const hit = fillMemo.get(key)
       if (hit !== undefined && Date.now() - hit.at < FILL_MEMO_MS) return hit.fill
       const measurement = meter.measure(session)
-      const W = session.__nanoCompactWindow // injected by caller when known
       const fill = typeof W === 'number' && W > 0 ? measurement.totalTokens / W : null
       fillMemo.set(key, { at: Date.now(), fill })
       for (const memoKey of [...fillMemo.keys()]) {
@@ -164,8 +163,7 @@ export function compactRuntime(ctx) {
     } catch (error) {
       ctx.logger.warn(`async-compact: lastCompaction projection failed: ${error instanceof Error ? error.message : String(error)}`)
     }
-    if (target !== null) target.__nanoCompactWindow = W
-    let fill = fillFor(target)
+    let fill = fillFor(target, W)
     if (fill === 'meter-unavailable') { degraded = degraded ?? 'meter-unavailable'; fill = null }
     if (degraded === null && lastCompaction?.status === 'failed') degraded = 'last-compaction-failed'
     return { fill, lastCompaction, degraded }

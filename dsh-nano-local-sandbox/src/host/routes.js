@@ -26,6 +26,7 @@ export const WAIT_ROUTE = '/nano-local-sandbox/wait'
 import { ROUTE_TABLE } from '../../lib/route-table.js'
 import { createCdpKeeper } from './cdp-keeper.js'
 import { publishedHttpBase } from './backend-apple.js'
+import { ensureClient, readElements } from './cdp-elements.js'
 import { answerNativeTool, toolsList } from './mcp-sandbox.js'
 
 const keeper = createCdpKeeper()
@@ -114,11 +115,15 @@ export function routeSpecs(deps = {}) {
       if (row.path.endsWith('/elements')) {
         const url = new URL(req.url ?? '/', 'http://localhost')
         try {
-          const data = await (deps.captureElements ?? (async () => {
-            const error = new Error('no engine page')
-            error.status = 502
-            error.errorId = 'kitesurf.elements.empty'
-            throw error
+          const data = await (deps.captureElements ?? (async (base, options) => {
+            if (!base) {
+              const error = new Error('no engine page')
+              error.status = 502
+              error.errorId = 'kitesurf.elements.empty'
+              throw error
+            }
+            const client = await ensureClient(session, base)
+            return readElements(client, options)
           }))(deps.httpBase ?? session.httpBase, {
             selector: url.searchParams.get('selector') || '',
             depth: Number(url.searchParams.get('depth') || 4),

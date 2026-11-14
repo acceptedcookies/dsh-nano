@@ -77,7 +77,7 @@ export const Config = {
         return { issues: [{ message: 'httpBase must be loopback unless allowRemote is true' }] }
       }
       const checkout = typeof source.checkout === 'string' && source.checkout ? source.checkout : undefined
-      const perfReview = source.perfReview === true
+      const perfReview = source.perfReview !== false
       return { value: { httpBase: url.origin, allowRemote, checkout, perfReview } }
     },
   },
@@ -339,7 +339,7 @@ async function statusOf(httpBase) {
 export function apply(ctx, config) {
   // perf-review capture is a documented plugin-side switch: perf spans feed
   // /nano-kitesurf/perf-review/host and the host's own perf-review UI.
-  if (config?.perfReview === true) process.env.DSH_PERF_REVIEW = '1'
+  if (config?.perfReview !== false) process.env.DSH_PERF_REVIEW = '1'
   const httpBase = config?.httpBase ?? DEFAULT_ORIGIN
   const kite = createNanoKite({
     httpBase,

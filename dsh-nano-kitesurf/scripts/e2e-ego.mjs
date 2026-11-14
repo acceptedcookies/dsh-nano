@@ -167,6 +167,34 @@ async function main() {
   record('styles-panel', Boolean(stylePanel) && /rules/.test(styleText) && /computed/.test(styleText), styleText.slice(0, 80))
   record('matched-rules', Array.isArray(styles.matched?.matched) && styles.matched.matched.length > 0, `${styles.matched?.matched?.length || 0} rules`)
 
+  // 8b. viewport control
+  const vpResult = await page.evaluate(async () => {
+    const sel = document.querySelector('[data-nks-vp]')
+    if (!sel) return null
+    sel.value = '390'
+    sel.dispatchEvent(new Event('change', { bubbles: true }))
+    await new Promise((r) => setTimeout(r, 900))
+    const w = Math.round(document.querySelector('iframe.nks-dom')?.getBoundingClientRect().width || 0)
+    sel.value = 'fit'
+    sel.dispatchEvent(new Event('change', { bubbles: true }))
+    await new Promise((r) => setTimeout(r, 700))
+    return { w }
+  })
+  record('viewport-390', vpResult && Math.abs(vpResult.w - 390) <= 2, JSON.stringify(vpResult))
+
+  // 8c. Cmd+E then 2 toggles the drawer
+  const shortcut = await page.evaluate(() => !!document.querySelector('[data-nks-devtools]'))
+  await page.keyboard.press('Meta+E')
+  await new Promise((r) => setTimeout(r, 120))
+  await page.keyboard.press('2')
+  await new Promise((r) => setTimeout(r, 600))
+  const afterShortcut = await page.evaluate(() => !!document.querySelector('[data-nks-devtools]'))
+  await page.keyboard.press('Meta+E')
+  await new Promise((r) => setTimeout(r, 120))
+  await page.keyboard.press('2')
+  await new Promise((r) => setTimeout(r, 500))
+  record('shortcut-cmd-e-2', shortcut !== afterShortcut, `devtools ${shortcut} -> ${afterShortcut}`)
+
   // 9. lifecycle: suspend -> resume -> page comes back
   const lifecycle = await page.evaluate(async (targetUrl) => {
     const readJson = async (r) => { const t = await r.text(); try { return JSON.parse(t) } catch { return { ok: false, error: t.slice(0, 120), status: r.status } } }
@@ -204,6 +232,15 @@ async function main() {
     return r.json()
   })
   record('host-selftest', selftest.ok === true, `${selftest.failed}/${selftest.total} failed`)
+
+  // 11. history is served from the workerd KV
+  const history = await page.evaluate(() => fetch('/nano-kitesurf/browse-history?limit=5').then((r) => r.json()))
+  record('history-kv', history.ok === true && (history.entries || []).length > 0 && history.source === 'workerd-kv', `${(history.entries || []).length} entries · ${history.source}`)
+
+  // 12. perf-review host spans exist
+  const perf = await page.evaluate(() => fetch('/nano-kitesurf/perf-review/host').then((r) => r.json()))
+  const spanCount = Array.isArray(perf.spans) ? perf.spans.length : (perf.total || 0)
+  record('perf-spans', perf.ok === true && spanCount > 0, `${spanCount} spans`)
 
   const failed = results.filter((r) => !r.ok)
   console.log(`\n${results.length - failed.length}/${results.length} checks passed`)

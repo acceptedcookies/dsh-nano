@@ -51,12 +51,15 @@ export function createCorpus(idb, { writerId = 'notepad-fx', epochId = 'e0', wor
       if (!MACHINE_WRITE_KINDS.has(kind)) {
         return { content: `kind must be draft|knowledge (got ${kind})`, isError: true }
       }
-      const finalName = name || `${kind}-${Date.now().toString(36)}.md`
+      /* 方案 A kind-spec：knowledge 必须规范名（name.kb.md），draft 任意。
+         机器产物命名规范 run-<ulid>.kb.md / run-<ulid>.md。 */
+      const base = name || `${kind}-${Date.now().toString(36)}`
+      const finalName = kind === 'knowledge' ? db.kindNameFor('knowledge', base) : (name ? base : `${base}.md`)
       // Unique-name retry: createNode throws on collision, append -2/-3…
       let node = null
       for (let attempt = 0; attempt < 6 && !node; attempt += 1) {
         try {
-          node = await db.createNode(idb, 'file', null, attempt === 0 ? finalName : `${attempt + 1}-${finalName}`, wsOf())
+          node = await db.createNode(idb, 'file', null, attempt === 0 ? finalName : `${attempt + 1}-${finalName}`, wsOf(), { allowKindSuffix: true })
         } catch { /* collision → retry */ }
       }
       if (!node) return { content: `name taken: ${finalName}`, isError: true }
@@ -94,11 +97,19 @@ export function createCorpus(idb, { writerId = 'notepad-fx', epochId = 'e0', wor
       }
       const node = (await db.loadSnapshot(idb)).nodes.find(n => n.id === id && n.kind === 'file')
       if (!node) return { content: `not found: ${id}`, isError: true }
-      const fields = cat === null
-        ? { cat: null }
-        : { cat, ...(cat === 'draft' ? { draftStatus: node.draftStatus ?? 'pending', rejectCount: node.rejectCount ?? 0 } : {}), rejectCount: node.rejectCount ?? 0 }
+      /* 方案 A kind-spec：非 draft 赋值/清除时 name 跟随规范后缀——
+         赋 kind 则名带该 kind 后缀，清除 kind 则剥掉现有后缀。draft 名不变。 */
+      const targetName = cat === null
+        ? (() => { let n = node.name; for (const k of db.KIND_FORMAT_KINDS) { const s = db.KIND_FORMAT[k].suffix; if (n.endsWith(s)) { n = n.slice(0, -s.length); break } } return n })()
+        : db.kindNameFor(cat, node.name)
+      const fields = {
+        cat,
+        ...(targetName && targetName !== node.name ? { name: targetName } : {}),
+        ...(cat === 'draft' ? { draftStatus: node.draftStatus ?? 'pending' } : {}),
+        rejectCount: node.rejectCount ?? 0,
+      }
       await db.updateNodeMeta(idb, id, fields)
-      return { content: JSON.stringify({ id, cat }) }
+      return { content: JSON.stringify({ id, cat, name: targetName ?? node.name }) }
     },
 
     /** note_search: {query,kind?,limit?} → [{id,cat,name,excerpt}]. */

@@ -15,6 +15,7 @@ import {
   moveNode,
   nextAvailableName,
   nextUntitled,
+  KIND_FORMAT,
   updateNodeMeta,
   normalizeSettings,
   openDatabase,
@@ -1979,14 +1980,49 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
   }
 
   /** One + button: blank file or blank folder. */
+  /* kind-spec：非 draft kind 的规范命名。untitled-N.<kind-suffix>。 */
+  function nextKindUntitled(siblings, kind) {
+    const spec = KIND_FORMAT[kind]
+    if (!spec) return nextUntitled(siblings)
+    for (let index = 1; index < 10000; index += 1) {
+      const name = index === 1 ? `untitled${spec.suffix}` : `untitled-${index}${spec.suffix}`
+      if (!siblings.some(n => n.name.toLowerCase() === name.toLowerCase())) return name
+    }
+    return `untitled-${Date.now()}${spec.suffix}`
+  }
+
+  async function addKind(kind) {
+    if (!state.db) return
+    const destination = selectedParent()
+    const siblings = state.nodes.filter(node => node.parentId === destination.parentId && (node.workspaceId ?? null) === destination.workspaceId)
+    const name = nextKindUntitled(siblings, kind)
+    const node = await createNode(state.db, 'file', destination.parentId, name, destination.workspaceId, { allowKindSuffix: true })
+    state.nodes.push(node)
+    await window.__nanoNotepad.fx.corpus().setCat({ id: node.id, cat: kind })
+    const snap = await loadSnapshot(state.db); state.nodes = snap.nodes
+    state.view = 'source'
+    openFile(node.id)
+    channel?.postMessage({ type: 'changed' })
+    return node
+  }
+
   function openCreateMenu(anchor) {
     closeMenu?.()
     anchor.setAttribute('aria-expanded', 'true')
     const icon = markup => React.createElement('span', { dangerouslySetInnerHTML: { __html: markup } })
-    const items = [
-      { id: 'file', label: text().newBlankFile, icon: icon(FILE_ICON), run: () => { done(false); void add('file').catch(showError) } },
-      { id: 'folder', label: text().newBlankFolder, icon: icon(FOLDER_ICON), run: () => { done(false); void add('folder').catch(showError) } },
-    ]
+    const copy = text()
+    const kf = kindFilter()
+    /* 联动：筛选到某 kind 时 + 直接新建该 kind；全部类型下加「以类型新建…」子菜单。 */
+    const items = kf === null
+      ? [
+          { id: 'file', label: copy.newBlankFile, icon: icon(FILE_ICON), run: () => { done(false); void add('file').catch(showError) } },
+          { id: 'kind', label: copy.newKindFile ?? '以类型新建…', icon: icon(FILE_ICON), run: () => { done(false); openKindCreateMenu(anchor) } },
+          { id: 'folder', label: copy.newBlankFolder, icon: icon(FOLDER_ICON), run: () => { done(false); void add('folder').catch(showError) } },
+        ]
+      : [
+          { id: `kind-${kf}`, label: `${copy.newKindFile ?? '新建'} · ${copy.kinds[kf] ?? kf}`, icon: icon(FILE_ICON), run: () => { done(false); void addKind(kf).catch(showError) } },
+          { id: 'folder', label: copy.newBlankFolder, icon: icon(FOLDER_ICON), run: () => { done(false); void add('folder').catch(showError) } },
+        ]
     const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), items, width: 180, theme: resolvedTheme(), z: NP_PORTAL_Z })
     let closed = false
     const done = (unmount) => {
@@ -1997,6 +2033,20 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       if (unmount) raw.close()
     }
     closeMenu = () => done(true)
+  }
+
+  /** 「以类型新建…」子菜单：五种 kind 各自一项（全部类型视图下）。
+      产出规范命名的 cat 节点。 */
+  function openKindCreateMenu(anchor) {
+    const copy = text()
+    closeMenu?.()
+    const items = KINDS.map(k => ({
+      id: `kc-${k}`,
+      label: copy.kinds[k] ?? k,
+      run: () => void addKind(k).catch(showError),
+    }))
+    const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), width: 160, theme: resolvedTheme(), z: NP_PORTAL_Z, items })
+    closeMenu = () => raw.close()
   }
 
   function askName(title, initial, done) {

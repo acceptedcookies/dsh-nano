@@ -97,6 +97,8 @@ dsh plugin --profile web add <spec>
 | `/dnt` → 通道状态（宿主 MCP） | 浏览器 console 打印 `/dsh-nano-terminal/health` 的 lane 状态 |
 | 打开内置 Terminal 标签 | client 接管其 body 渲染（wasm 接管 xterm） |
 
+对外入口（cordis 服务面，不是 window 全局）：client `ctx.provide('nanoTerminal', { openLocal(sessionId, cwd) })`。其他插件 `ctx.get('nanoTerminal')` 惰性读取——未装本包时返回 undefined，调用方自己走回退；`openLocal` 激活对话区 Nano 终端视图并在 `local` lane 开一个 `cwd` 起跳的窗格，视图未挂载时请求排队、Body 挂载排干。
+
 agent 与脚本可用的宿主侧 slash 命令（均代理到 MCP 工具面）：
 
 ```text

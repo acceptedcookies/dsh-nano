@@ -868,3 +868,5 @@ runPipeline(spec, ctx) → {runId, stages:[{name,ok,result}], status}
 | `claim.acquire` | 4599ms | 并行隐藏 | s3 RTT 为管线开销主项 |
 
 **改进方法**：① `claim.acquire`/`release`（s3 网络 RTT ~5.5s）与 `beginRun`+stage 并行发出，fencing 语义保留（写产物前 acquired、release 前 `await claimReady`）——管线固定开销 **3444→467ms**；② `runWithTools` 加 `opts.skipRefresh`，编排层把 per-stage `_refreshNodes` 全量 IDB 扫描+树渲染挤到链尾统一一次。
+
+**多 stage 执行链（补验）**：`[run(LLM) → setCat]`——`run` step 从 `toolCalls` 提取 `note_write` 产物 id（双层 JSON `content`）→ `lastId`/`{{lastId}}` 绑定 → 下游 `setCat` 自动晋升 LLM draft→knowledge（`deepseek-v3-发布摘要.kb.md`）。`[rename→setCat]` 同过（`{{node.id}}` 绑定 + 后缀真源改名）。这即 §3.2 「管线沉淀 knowledge」的宿主确定性实现。

@@ -17,6 +17,7 @@ function bind(value, ctx) {
     return value.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (_, path) => {
       const parts = path.split('.')
       let cur = parts[0] === 'last' ? ctx.last
+        : parts[0] === 'lastId' ? ctx.lastId
         : parts[0] === 'ctx' ? { vars: ctx.vars }
         : parts[0] === 'node' ? ctx.node
         : undefined
@@ -50,11 +51,23 @@ export async function runPipeline(spec, ctx) {
       const prompt = a.prompt ?? ''
       /* skipRefresh：编排层统一在链尾刷新节点，不每 stage 全量 IDB+渲染。 */
       local.last = await ctx.runWithTools(prompt, { model: a.model ?? ctx.model, skipRefresh: true })
-      return { text: (local.last?.text ?? '').slice(0, 120), toolCalls: local.last?.toolCalls?.length ?? 0 }
+      /* 提取 LLM note_write 产物 id → local.lastId，下游 {{last.id}}/{{lastId}}
+         可直接对产物做 setCat/accept/rename（真执行链）。 */
+      for (const tc of local.last?.toolCalls ?? []) {
+        try {
+          if (tc.name === 'note_write' && tc.result) {
+            /* tool_end.content = "{\"content\":\"{id:..}\"}"——双层 JSON。 */
+            let r = JSON.parse(tc.result)
+            if (r?.content) { try { r = JSON.parse(r.content) } catch {} }
+            if (r?.id) local.lastId = r.id
+          }
+        } catch {}
+      }
+      return { text: (local.last?.text ?? '').slice(0, 120), toolCalls: local.last?.toolCalls?.length ?? 0, artifactId: local.lastId ?? null }
     },
     /** 改 cat：args={id|fromLast, cat} */
     async setCat(a) {
-      const id = a.id ?? (a.fromLast ? local.last?.id : null) ?? local.node?.id
+      const id = a.id ?? (a.fromLast ? local.lastId ?? local.last?.id : null) ?? local.node?.id
       const res = await ctx.corpus().setCat({ id, cat: a.cat })
       local.last = JSON.parse(res.content)
       return local.last

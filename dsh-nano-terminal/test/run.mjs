@@ -1,6 +1,6 @@
 // Smoke test: instantiate dnt-core.wasm on Node, feed ANSI, read render output.
 import { readFileSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { dirname, join } from 'node:path'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -148,7 +148,7 @@ e.dnt_free(id)
 
 // 10. Gate draft-wait semantics
 {
-  const { Gate } = await import(join(root, 'src/host/gate.js'))
+  const { Gate } = await import(pathToFileURL(join(root, 'src/host/gate.js')).href)
   const g = new Gate({ notesQuietMs: 30, draftWaitMs: 100 })
   g.humanInput(Buffer.from('ls -l'))
   t('draft counted', g.draft === 5)
@@ -171,7 +171,7 @@ e.dnt_free(id)
 
 // 11. ws v2 channel codec + Attach credit/snapshot
 {
-  const { encodeChannel, parseChannel, Attach, FR_KIND, CREDIT_INIT, SNAP_LIMIT } = await import(join(root, 'src/host/ws.js'))
+  const { encodeChannel, parseChannel, Attach, FR_KIND, CREDIT_INIT, SNAP_LIMIT } = await import(pathToFileURL(join(root, 'src/host/ws.js')).href)
   const fr = encodeChannel(0, FR_KIND.DATA, Buffer.from('hello'))
   const p = parseChannel(fr)
   t('channel roundtrip', p.channel === 0 && p.kind === FR_KIND.DATA && p.payload.toString() === 'hello')
@@ -211,9 +211,9 @@ e.dnt_free(id)
 {
   const { mkdtempSync } = await import('node:fs')
   const { tmpdir } = await import('node:os')
-  const { Persist } = await import(join(root, 'src/host/persist.js'))
-  const { SessionRegistry, SessionRecord } = await import(join(root, 'src/host/sessions.js'))
-  const { EventBus } = await import(join(root, 'src/host/events.js'))
+  const { Persist } = await import(pathToFileURL(join(root, 'src/host/persist.js')).href)
+  const { SessionRegistry, SessionRecord } = await import(pathToFileURL(join(root, 'src/host/sessions.js')).href)
+  const { EventBus } = await import(pathToFileURL(join(root, 'src/host/events.js')).href)
   const dir = mkdtempSync(join(tmpdir(), 'dnt-persist-'))
   const p = new Persist(dir)
   const bus = new EventBus({ audit: () => {} })

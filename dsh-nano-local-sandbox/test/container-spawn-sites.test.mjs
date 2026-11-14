@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { dirname, join, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import test from 'node:test'
 
@@ -19,5 +19,6 @@ function files(dir, out = []) {
 
 test('inside DNLS the container CLI appears only in backend-apple.js', () => {
   const hits = files(packageRoot).filter((file) => NEEDLE.test(readFileSync(file, 'utf8')))
-  assert.deepEqual(hits.map((file) => file.slice(packageRoot.length + 1)), ['src/host/backend-apple.js'])
+  const relative = hits.map((file) => file.slice(packageRoot.length + 1).split(sep).join('/'))
+  assert.deepEqual(relative, ['src/host/backend-apple.js'])
 })

@@ -86,7 +86,7 @@ export async function run() {
       workspaceId: WS,
       members: { [MEMBER_ID]: memberRow(USERNAME, INSTANCE, cwd) },
     })
-    pinWorkspaceLocalPath(WS, cwd) // F1: membership needs the local pin
+    await pinWorkspaceLocalPath(WS, cwd) // F1: membership needs the local pin
     const s3 = fakeS3({ [metaKey]: metaOf({ sessionId: SID, committedBytes: Number.MAX_SAFE_INTEGER }) })
     const res = await pushSession(s3, fakeCtx(), identity,
       { sessionId: SID, filePath: join(dshHome, 'sessions', projectKey(cwd), SID, 'session.v4.jsonl.zstd') },

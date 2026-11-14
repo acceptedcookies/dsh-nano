@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import test from 'node:test'
 import { createAppleBackend as apple } from '../src/host/backend-apple.js'
 import { createInstanceRegistry } from '../src/host/instance-registry.js'
@@ -98,7 +99,7 @@ test('a cold subsystem failure surfaces the system-start error, not the run', as
 
 test('a missing checkout is a config fault, not an engine failure', async () => {
   const { loadProfile } = await import('../src/host/profile-registry.js')
-  const loaded = loadProfile(new URL('../profiles/kitesurf/', import.meta.url).pathname)
+  const loaded = loadProfile(fileURLToPath(new URL('../profiles/kitesurf/', import.meta.url)))
   assert.equal(loaded.manifest.scope, 'session')
   assert.equal(typeof loaded.manifest.build.checkout.ref, 'string')
 })

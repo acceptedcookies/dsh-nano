@@ -15,9 +15,11 @@ const FRONTMATTER = {
   'nano-kite': 'Initialize, start, suspend, or resume Kitesurf, and point MCP at a local or remote engine. Use when the user types /nano-kite.',
 }
 
+const canonical = (text) => text.replace(/\r\n/g, '\n')
+
 test('generated SKILL.md files exactly match the single source of truth', () => {
   for (const [name, body] of Object.entries(SKILL_BODIES)) {
-    const actual = readFileSync(join(root, 'skills', name, 'SKILL.md'), 'utf8')
+    const actual = canonical(readFileSync(join(root, 'skills', name, 'SKILL.md'), 'utf8'))
     assert.equal(actual.endsWith(`${body}\n`), true, `${name}/SKILL.md body drifted`)
   }
 })
@@ -31,7 +33,7 @@ test('skill bodies are generated from ERROR_CATALOG (no hand-copied table)', () 
 
 test('generated SKILL.md files exactly match the single source of truth (+ version/date frontmatter)', () => {
   for (const [name, body] of Object.entries(SKILL_BODIES)) {
-    const actual = readFileSync(join(root, 'skills', name, 'SKILL.md'), 'utf8')
+    const actual = canonical(readFileSync(join(root, 'skills', name, 'SKILL.md'), 'utf8'))
     // version/date are build-stamped; compare everything but those two lines.
     const stamp = /^version: .*$/m.exec(actual)?.[0]
     assert.match(actual, new RegExp(`^name: ${name}\\ndescription: `, 'm'))

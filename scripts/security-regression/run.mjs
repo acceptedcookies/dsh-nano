@@ -22,7 +22,7 @@
  * Exit 0 iff every selected case is rejected; non-zero otherwise.
  */
 import { readdirSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { dirname, join } from 'node:path'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -40,7 +40,7 @@ async function loadCases() {
   const files = readdirSync(CASES_DIR).filter(f => f.endsWith('.mjs')).sort()
   const cases = []
   for (const f of files) {
-    const mod = await import(join(CASES_DIR, f))
+    const mod = await import(pathToFileURL(join(CASES_DIR, f)).href)
     if (typeof mod.run === 'function' && mod.fingerprint) cases.push(mod)
   }
   return cases

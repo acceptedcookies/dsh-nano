@@ -2,10 +2,11 @@ import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import test from 'node:test'
 
 const BASE = '6afb4d99c157951864274c152a27cb5f7ade8503'
-const root = new URL('../../', import.meta.url).pathname
+const root = fileURLToPath(new URL('../../', import.meta.url))
 
 function gitShow(path) {
   return execFileSync('git', ['show', `${BASE}:${path}`], { cwd: root, encoding: 'utf8' })

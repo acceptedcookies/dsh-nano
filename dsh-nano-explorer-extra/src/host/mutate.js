@@ -2,6 +2,24 @@
 
 import { absoluteOf, isLexicallyInside } from './listing.js'
 
+/**
+ * Run a filesystem mutation. POSIX hosts spawn the coreutils (mv/mkdir/rm)
+ * through the confined `runExternal` seam; those executables do not exist on
+ * Windows, where the same (already assertInside-fenced) paths go through
+ * node:fs instead — identical boundary, no process.
+ */
+async function execMutation(spec) {
+  const { runExternal, argv } = spec
+  if (process.platform !== 'win32') return runExternal(spec)
+  const { mkdir, rename, rm } = await import('node:fs/promises')
+  const [cmd, ...rest] = argv
+  const operands = rest.filter(a => a !== '--' && !a.startsWith('-'))
+  if (cmd === 'mkdir') return mkdir(operands[0])
+  if (cmd === 'mv') return rename(operands[0], operands[1])
+  if (cmd === 'rm') return rm(operands[0], { force: true, recursive: rest.includes('-rf') || rest.includes('-r') })
+  throw new Error(`unsupported mutation command ${cmd}`)
+}
+
 /** Names the explorer refuses unconditionally: empty, separator-bearing, or traversal. */
 const BAD_NAME = /[/\\\0]/u
 
@@ -140,13 +158,13 @@ export async function rename(fs, ctx, config, request, signal) {
   // old casing survives. A unique intermediate name breaks that bond.
   if (sameEntryIgnoringCase(source, destination)) {
     const staging = `${parent}/.nxe-case-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
-    await runExternal({
-      session, sandboxPolicy, cwd: parent,
-      argv: ['mv', '--', source, staging], args: ['mv'],
+    await execMutation({
+      session, sandboxPolicy, cwd: parent, runExternal,
+      argv: ['mv', '--', source, staging],
     })
-    await runExternal({
-      session, sandboxPolicy, cwd: parent,
-      argv: ['mv', '--', staging, destination], args: ['mv'],
+    await execMutation({
+      session, sandboxPolicy, cwd: parent, runExternal,
+      argv: ['mv', '--', staging, destination],
     })
     return { path: destination }
   }
@@ -163,12 +181,12 @@ export async function rename(fs, ctx, config, request, signal) {
     }
     return { path: destination }
   }
-  await runExternal({
+  await execMutation({
     session,
     sandboxPolicy,
     cwd: parent,
+    runExternal,
     argv: ['mv', '--', source, destination],
-    args: ['mv'],
   })
   return { path: destination }
 }
@@ -190,7 +208,7 @@ export async function createFolder(fs, request, runExternal) {
   await assertInside(fs, workspaceRoot, path, /* signal */ undefined)
   const existing = await fs.lstat(path).catch(() => undefined)
   if (existing !== undefined) throw new Error(`"${finalName}" already exists in this folder`)
-  await runExternal({ session, sandboxPolicy, cwd: parent, argv: ['mkdir', '--', path], args: ['mkdir'] })
+  await execMutation({ session, sandboxPolicy, cwd: parent, runExternal, argv: ['mkdir', '--', path] })
   return { path }
 }
 
@@ -258,12 +276,12 @@ export async function removeEntry(fs, request, signal) {
   // Trust the observed entry over the caller, so a directory is never removed as a plain file.
   const directory = kind === 'directory' || existing.isDirectory === true
   const parent = normalizedTarget.slice(0, normalizedTarget.lastIndexOf('/')) || '/'
-  await runExternal({
+  await execMutation({
     session,
     sandboxPolicy,
     cwd: parent,
+    runExternal,
     argv: directory ? ['rm', '-rf', '--', normalizedTarget] : ['rm', '-f', '--', normalizedTarget],
-    args: ['rm'],
   })
   return { path: normalizedTarget, directory }
 }
@@ -333,12 +351,12 @@ export async function moveEntry(fs, ctx, config, request, signal) {
   const existing = await fs.lstat(destination, {}, signal).catch(() => undefined)
   if (existing !== undefined) throw new Error(`"${name}" already exists in that folder`)
 
-  await runExternal({
+  await execMutation({
     session,
     sandboxPolicy,
     cwd: resolvedDir,
+    runExternal,
     argv: ['mv', '--', source, destination],
-    args: ['mv'],
   })
   return { path: destination }
 }

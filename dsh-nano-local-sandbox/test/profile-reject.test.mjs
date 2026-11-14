@@ -26,7 +26,7 @@ async function rejects(dir, options = {}) {
 }
 
 test('missing field, latest, caret, floating pin, bad digest, bad ref, verify, and container machine all refuse', async () => {
-  await rejects(fixture((yaml) => yaml.replace('scope: session\n', '')))
+  await rejects(fixture((yaml) => yaml.replace(/scope: session\r?\n/, '')))
   await rejects(fixture((yaml, dir) => {
     writeFileSync(join(dir, 'Dockerfile'), `${readFileSync(join(dir, 'Dockerfile'), 'utf8')}\n# latest\n`)
     return yaml

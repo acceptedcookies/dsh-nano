@@ -15,6 +15,7 @@
 // All lifecycle transitions emit on the registry's EventBus.
 
 import { randomUUID } from 'node:crypto'
+import { homedir } from 'node:os'
 import { ScreenMirror, loadMirror } from './mirror.js'
 import { KIND, err } from './errors.js'
 import { Gate } from './gate.js'
@@ -25,6 +26,13 @@ const encoder = new TextEncoder()
 // keep respawn backoff (herdr-core kept.rs): 1.5→3→6→12→30→60s, reset when
 // the respawned program survives ≥10s
 const KEEP_BACKOFF = [1500, 3000, 6000, 12000, 30000, 60000]
+
+// Default interactive shell per platform. $SHELL is POSIX-only; on Windows
+// fall back to %COMSPEC% (cmd.exe). Callers can always override via spec.shell.
+function defaultShell() {
+  if (process.platform === 'win32') return process.env.COMSPEC ?? 'cmd.exe'
+  return process.env.SHELL ?? '/bin/zsh'
+}
 
 // Injected into every pane's environment — lets an agent inside a terminal
 // address itself and call back the control plane (hc $HC_TERMINAL_ID model).
@@ -113,14 +121,14 @@ export class SessionRegistry {
 
     const id = randomUUID()
     const cwd = await this.resolveCwd(spec)
-    const shell = spec.shell || (process.env.SHELL ?? '/bin/zsh')
-    const argv = spec.args?.length ? [shell, ...spec.args] : [shell, '-i']
+    const shell = spec.shell || defaultShell()
+    const argv = spec.args?.length ? [shell, ...spec.args] : [shell, ...(process.platform === 'win32' ? [] : ['-i'])]
     const record = new SessionRecord({
       id,
       lane: 'local',
       handle: null,
       owner: spec.owner ?? spec.sessionId ?? 'unknown',
-      title: spec.title ?? shell.split('/').pop(),
+      title: spec.title ?? shell.split(/[\\/]/).pop(),
       name: spec.name,
       parent: parentRec?.id,
       keep: !!spec.keep,
@@ -199,12 +207,12 @@ export class SessionRegistry {
     if (!rec.pending) return
     rec.pending = false
     const meta = rec.meta ?? {}
-    const shell = meta.shell || (process.env.SHELL ?? '/bin/zsh')
-    const argv = meta.argv?.length ? meta.argv : [shell, '-i']
+    const shell = meta.shell || defaultShell()
+    const argv = meta.argv?.length ? meta.argv : [shell, ...(process.platform === 'win32' ? [] : ['-i'])]
     const handle = await this.ctx.subprocess
       .spawnTerminal({
         argv,
-        cwd: meta.cwd ?? process.env.HOME,
+        cwd: meta.cwd ?? homedir(),
         env: rec.env,
         rows: Math.min(Math.max(meta.rows || 24, 2), 512),
         cols: Math.min(Math.max(meta.cols || 80, 2), 512),
@@ -233,7 +241,7 @@ export class SessionRegistry {
       const session = spec.sessionId ? this.ctx.sessions?.get?.(spec.sessionId) : undefined
       if (session) return this.ctx.workingDirectory.get(session)
     } catch { /* fall through to HOME */ }
-    return process.env.HOME || process.cwd()
+    return process.env.HOME || homedir() || process.cwd()
   }
 
   async close(id, reason = 'close') {

@@ -1,6 +1,8 @@
 # [DNMS] async-compaction 执行设计草案
 
-> **状态**：`规格草案 / 待 [业主] 裁决`。本文只做分析与设计，不授权改码、改 profile、安装、发布或重启任何 [dsh] 实例。
+> **⛔ 收口 banner（DNMS01 执行）**：本文是冻结前的设计草案，已被 `qna/DNMS01-qna.md` 的 22 条 `T-O` 冻结真相 + `plan/DNMS01-async-compaction-takeover.md`（收口 AP）取代为执行真源。本文保留为设计考古与经验对照，**不再驱动实现**；本文与冻结真相冲突处一律以 `T-O` 为准。
+>
+> **状态**：`规格草案 / 待 [业主] 裁决`（历史标注）。本文只做分析与设计，不授权改码、改 profile、安装、发布或重启任何 [dsh] 实例。
 > **来源**：2026-11-14 与 [业主] 的讨论（四条要求 + 一个设置按钮），以及此前对 [nano-agent] compaction [真相层] 的只读调研。
 > **命名**：沿用仓库惯例 `docs/specs/dsh-nano-model-selector/async-compaction.md`。
 > **证据纪律**：本文全部事实断言均在 §0 定义路径别名，并在 §11 给出 `file:line` 索引；三路独立只读事实核查（[DNMS] / [dsh] 宿主 / [nano-agent]）已完成，40 条宿主断言 35 PASS / 5 CORRECTION / 0 FAIL，订正已回写正文。

@@ -1940,7 +1940,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
  * browser controls stay on the toolbar \u2014 ExpandButton.tsx / SidebarRight.module.css in dsh artwork.
  */
 .nks-toolbar{position:relative;z-index:3;box-sizing:border-box;border-bottom:.5px solid var(--dsw-alias-border-l3);flex:none;align-items:center;gap:4px;height:38px;padding:5px 6px;display:flex}
-.nks-nav{position:absolute;z-index:4;top:44px;left:8px;bottom:34px;width:216px;display:flex;flex-direction:column;min-height:0;box-sizing:border-box;background:var(--dsw-alias-bg-layer-2);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-lg);box-shadow:var(--dsw-elevation-prominent,0 4px 18px rgba(0,0,0,.3));transform:translateX(calc(-100% - 12px));visibility:hidden;transition:transform var(--ds-transition-duration-slow,.32s) var(--ds-ease-in-out,ease),visibility 0s linear var(--ds-transition-duration-slow,.32s)}
+.nks-nav{position:absolute;z-index:4;top:44px;left:10px;bottom:36px;width:216px;display:flex;flex-direction:column;min-height:0;box-sizing:border-box;background:var(--dsw-alias-bg-layer-2);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-lg);box-shadow:var(--dsw-elevation-prominent,0 4px 18px rgba(0,0,0,.3));transform:translateX(calc(-100% - 12px));visibility:hidden;transition:transform var(--ds-transition-duration-slow,.32s) var(--ds-ease-in-out,ease),visibility 0s linear var(--ds-transition-duration-slow,.32s)}
 .nks-nav[data-nks-nav-state="open"]{transform:none;visibility:visible;transition:transform var(--ds-transition-duration-slow,.32s) var(--ds-ease-in-out,ease)}
 @starting-style{.nks-nav[data-nks-nav-state="open"]{transform:translateX(calc(-100% - 12px))}}
 @media (prefers-reduced-motion:reduce){.nks-nav,.nks-nav[data-nks-nav-state="open"]{transition:none}}
@@ -2005,7 +2005,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
 .nks-busy::before{content:"";display:block;width:35%;height:100%;background:var(--dsw-alias-link,#2f6fed);animation:nks-beat 1s ease-in-out infinite}
 @keyframes nks-beat{from{transform:translateX(-120%)}to{transform:translateX(320%)}}
 .nks-settings-body{display:flex;flex-direction:column;gap:8px}
-.nks-status{position:relative;z-index:3;order:7;flex:none;display:flex;align-items:center;gap:8px;height:26px;padding:0 8px;border-top:.5px solid var(--dsw-alias-border-l3);font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-tertiary)}
+.nks-status{position:relative;z-index:3;order:7;flex:none;display:flex;align-items:center;gap:8px;height:26px;padding:0 10px;border-top:.5px solid var(--dsw-alias-border-l3);font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-tertiary)}
 .nks-status button{height:20px;padding:0 8px;border:0;border-radius:var(--dsw-radius-sm);background:transparent;color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxxs-11);cursor:pointer}
 .nks-status button:hover{background:var(--dsw-alias-interactive-bg-hover)}
 .nks-status button[aria-pressed="true"],.nks-status button[data-nks-native-toggle][aria-pressed="true"]{background:color-mix(in srgb,var(--dsw-alias-link,#7aaaff) 22%,transparent);color:var(--dsw-alias-label-primary)}
@@ -2903,7 +2903,11 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         panel: primitives.IconPanelLeftOutlineRegular || primitives.IconEditOutlineRegular,
         globe: primitives.IconGlobeOutlineRegular || primitives.IconLinkOutlineRegular
       }[name];
-      return h(Icon, { width: 16, height: 16, "aria-hidden": true, style: navOpen && name === "panel" ? { transform: "scaleX(-1)" } : void 0 });
+      return h(
+        "span",
+        { className: "nks-tool-glyph", style: !navOpen && name === "panel" ? { display: "inline-flex", transform: "scaleX(-1)" } : { display: "inline-flex" } },
+        h(Icon, { width: 16, height: 16, "aria-hidden": true })
+      );
     };
     function EnvPanel() {
       const [snap, setSnap] = React5.useState(null);

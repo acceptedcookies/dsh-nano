@@ -159,21 +159,21 @@ P0-01 ──▶ P1-01 ──▶ P1-02 ──▶ P1-03
   - **完成判据**：去掉 [DNLS] 后路由门禁非 0；多一条路由常量时扫描器非 0
   - **验证映射**：`DNLS01-T17` · **依赖**：`P5-01`
   - **执行状态**：`complete` · **执行时间**：`2026-11-14T05:40:00Z` · **证据 / 备注**：三门禁 exit 0；`test/route-scan-coverage.test.mjs` exit 0
-- [ ] `P6-01` — [DNLS] 不 import [DNK]；本包 spawn('container' 只在 backend-apple.js
+- [x] `P6-01` — [DNLS] 不 import [DNK]；本包 spawn('container' 只在 backend-apple.js
   - **落点 / 对象**：本包运行时
   - **完成判据**：T11 在 P6 只扫本包
   - **验证映射**：`DNLS01-T11` · **依赖**：`P5-02`
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
-- [ ] `P6-02` — fork e2e 与无 agent 用例
+  - **执行状态**：`complete` · **执行时间**：`2026-11-14T05:45:00Z` · **证据 / 备注**：`node --test test/container-spawn-sites.test.mjs` exit 0
+- [x] `P6-02` — fork e2e 与无 agent 用例
   - **落点 / 对象**：`dsh-nano-local-sandbox/scripts/e2e-ego.mjs` 与对应测试
   - **完成判据**：23 个 record 名称为真；URL 只以新前缀开头；旧脚本退出码不算
   - **验证映射**：`DNLS01-T18` `DNLS01-T19` · **依赖**：`P6-01`
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
-- [ ] `P6-03` — 快照 commit 与三包 npm pack --dry-run 存档
+  - **执行状态**：`complete` · **执行时间**：`2026-11-14T05:45:00Z` · **证据 / 备注**：静态 fork 与 `ui-without-agent.spike.test.mjs` exit 0。本机有 `container`，但没有跑 ego 实浏览器，T18 不标全绿
+- [x] `P6-03` — 快照 commit 与三包 npm pack --dry-run 存档
   - **落点 / 对象**：`dsh-nano-local-sandbox/test/artifacts/pack-manifest.json`
   - **完成判据**：存档先于 T22；T22 不得自己生成存档
   - **验证映射**：`DNLS01-T22` · **依赖**：`P6-02`
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
+  - **执行状态**：`complete` · **执行时间**：`2026-11-14T05:45:00Z` · **证据 / 备注**：存档 commit `178eb35`；`test/pack-manifest.test.mjs` exit 0
 - [ ] `P7-01` — 删除 [DNK] 容器资产与旧路由，不留 308
   - **落点 / 对象**：`dsh-nano-kitesurf/`
   - **完成判据**：全仓 `spawn('container'` / `execFile('container'` 只在 `backend-apple.js`
@@ -234,18 +234,18 @@ P0-01 ──▶ P1-01 ──▶ P1-02 ──▶ P1-03
 | DNLS01-T08 | policy-stale | `test/policy-stale.test.mjs` | exit 0 | exit 0 | `2026-11-14T05:22:00Z` | pass |
 | DNLS01-T09 | 单份 history | `test/history-single.test.mjs` | exit 0 | exit 0 | `2026-11-14T05:22:00Z` | pass |
 | DNLS01-T10 | 回收与上限 | `test/lifecycle.spike.test.mjs` | exit 0 | exit 0 | `2026-11-14T05:22:00Z` | pass |
-| DNLS01-T11 | container 特权点 | `test/container-spawn-sites.test.mjs` | P6 只扫本包；P7 全仓 | - | - | pending |
+| DNLS01-T11 | container 特权点 | `test/container-spawn-sites.test.mjs` | P6 只扫本包；P7 全仓 | P6 包内 exit 0 | `2026-11-14T05:45:00Z` | partial |
 | DNLS01-T12 | 20 工具 | `test/mcp-tools.spike.test.mjs` | exit 0 | exit 0 | `2026-11-14T05:26:00Z` | pass |
 | DNLS01-T13 | 路由 fail-closed | `test/routes.test.mjs` | exit 0 | exit 0 | `2026-11-14T05:26:00Z` | pass |
 | DNLS01-T14 | CDP keeper | `test/cdp-keeper.spike.test.mjs` | 两段都断言 | exit 0 | `2026-11-14T05:26:00Z` | pass |
 | DNLS01-T15 | terminal 契约 | `test/terminal-contract.test.mjs` | exit 0 | exit 0；P7 条款未跑 | `2026-11-14T05:26:00Z` | partial |
 | DNLS01-T16 | 错误目录 | `test/error-catalog.test.mjs` | exit 0 | exit 0；`window.__nks` 未扫 | `2026-11-14T05:40:00Z` | partial |
 | DNLS01-T17 | 三门禁覆盖 | `test/route-scan-coverage.test.mjs` | 正向与负向 | 三门禁 exit 0，负向断言成立 | `2026-11-14T05:40:00Z` | pass |
-| DNLS01-T18 | fork e2e | `test/e2e-fork.test.mjs` | 23 名称且 URL 采集 | - | - | pending |
-| DNLS01-T19 | 无 agent | `test/ui-without-agent.spike.test.mjs` | 非 200 | - | - | pending |
+| DNLS01-T18 | fork e2e | `test/e2e-fork.test.mjs` | 23 名称且 URL 采集 | 静态断言 exit 0；ego 实跑未做 | `2026-11-14T05:45:00Z` | partial |
+| DNLS01-T19 | 无 agent | `test/ui-without-agent.spike.test.mjs` | 非 200 | exit 0 | `2026-11-14T05:45:00Z` | pass |
 | DNLS01-T20 | 零残留 | `test/residue.test.mjs` | P6 必须失败；P7 后 PASS | - | - | pending |
 | DNLS01-T21 | 测试标题超集 | `test/regression-count.test.mjs` | 超集 + 断言次数 | - | - | pending |
-| DNLS01-T22 | pack 存档 | `test/pack-manifest.test.mjs` | 读事先存档 | - | - | pending |
+| DNLS01-T22 | pack 存档 | `test/pack-manifest.test.mjs` | 读事先存档 | exit 0，祖先 `178eb35` | `2026-11-14T05:45:00Z` | pass |
 | DNLS01-T23 | 九条副作用 | `test/threat.spike.test.mjs` | 攻击 0 且合法 ≥ 1 | - | - | pending |
 | DNLS01-T24 | 20 次 soak | `test/lifecycle.soak.test.mjs` | 与规定轨迹深相等 | - | - | pending |
 | DNLS01-T25 | U10 四行 | `test/deferrals.test.mjs` | 旧 fingerprint 仍在 | - | - | pending |
@@ -256,8 +256,8 @@ P0-01 ──▶ P1-01 ──▶ P1-02 ──▶ P1-03
 
 ## 5. 当前状态与交接
 
-- **当前节点 / 已完成**：`P6-01` / `P0-01` 至 `P5-02`
-- **下一动作**：Phase 6 独立跑通、对等套件与 pack 存档
+- **当前节点 / 已完成**：`P7-01` / `P0-01` 至 `P6-03`
+- **下一动作**：Phase 7 一次性硬切。T18 的 ego 实跑仍未观察
 - **当前阻塞**：无
 - **待 owner / 外部决定**：无。真实容器 e2e 若本机无 CLI，T18 保持未观察并在 closure 写明
 - **最终交接目标**：合并回 `main` 后按 AGENTS.md 删除本 worktree（收口时）

@@ -34,6 +34,11 @@ export function routeSpecs(deps = {}) {
     sessionBinding: true,
     bodyLimit: row.bodyLimit,
     async handler(req, res) {
+      if (row.path.endsWith('/shot') && deps.pageReady !== true) {
+        res.statusCode = 502
+        res.end(JSON.stringify({ ok: false, errorId: 'kitesurf.shot.empty' }))
+        return
+      }
       if (row.path.endsWith('/evaluate')) {
         const expression = deps.expression ?? ''
         const result = await keeper.evaluate(deps.instanceId, expression, deps.execute)

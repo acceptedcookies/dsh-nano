@@ -738,7 +738,7 @@ pong 留在 T15，不能用来凑本项的条数。
 | terminal 合同，无新 lane | P4-04 P7-03 | T15 | 执行时填写 | 未观察 |
 | 错误目录一份 | P5-01 | T16 | 执行时填写 | 未观察 |
 | 三门禁 | P5-02 P7-04 | T17 | 执行时填写 | 未观察 |
-| ② 对等 | P6-02 | T18 T19 | 执行时填写 | 未观察 |
+| ② 对等 | P6-02 | T18 T19 | `ego-browser nodejs < dsh-nano-local-sandbox/scripts/e2e-ego.mjs`，23/23，exit 0，`2026-11-14T06:58:28Z` | 通过 |
 | ③ 零残留 | P7 | T20 | 执行时填写 | 未观察 |
 | 不删测试换绿 | P6 P7 | T21 | 执行时填写 | 未观察 |
 | 包内容 | P6-03 P8 | T22 | 执行时填写 | 未观察 |
@@ -776,7 +776,7 @@ pong 留在 T15，不能用来凑本项的条数。
 - **Phase 偏差**：`T18` 现场已经跑过，见下面的测试发现。`T20` 允许 `backend-apple.js` 保留容器 CLI 字面量，因为 `T-O-9` 要求这个调用点；四份历史文档的允许清单长度仍是 4。`[DNT] lib/client.js` 已按 `lanes.js` 重建。
 - **阻塞与处理**：没有把计划改成 `executed`。
 - **测试发现**：`DNLS01-T23` 九条与 `DNLS01-T24` 二十次轨迹通过。`DNLS01-T18` 实跑通过：`ego-browser nodejs < dsh-nano-local-sandbox/scripts/e2e-ego.mjs`，23/23，exit 0，`2026-11-14T06:58:28Z`。现场 profile 是 `~/.dsh-dev/profiles/web`，已装上这个工作树的 [DNLS]。
-- **后续 handoff**：合并回 `main` 与删除 worktree 仍等 [业主]。ego 实跑与 client 重建是后继，不在本日志里写成已完成。
+- **后续 handoff**：合并回 `main` 与删除 worktree 仍等 [业主]。ego 实跑已经完成，见上一条。
 
 ### 12.1 逐工作项状态
 
@@ -788,4 +788,4 @@ pong 留在 T15，不能用来凑本项的条数。
 
 ### 12.2 文档状态
 
-`reviewed`，保持不升为 `executed`（`2026-11-14`）。residual：ego 实跑、`[DNT]` client 重建。不回填成已收口。
+`reviewed`，保持不升为 `executed`（`2026-11-14`）。residual：真相层与完成度复审还没有对着最新提交给出通过。ego 实跑已完成。

@@ -282,7 +282,9 @@ function answerNativeTool(name, args, bridgeState) {
   if (!snap) {
     return { ok: false, error: 'this bridge does not keep a host snapshot; read GET /nano-local-sandbox/diagnostics' }
   }
-  if (name === 'sandbox.diagnostics') return snap
+  if (name === 'sandbox.diagnostics') {
+    return { ok: false, error: 'read GET /nano-local-sandbox/diagnostics on the host' }
+  }
   if (name === 'sandbox.console') {
     const levels = typeof args.level === 'string' ? args.level.split(',').map((s) => s.trim()).filter(Boolean) : null
     const limit = Math.max(1, Math.min(Number(args.limit) || 50, 250))
@@ -520,8 +522,6 @@ export function createBridge(port = PORT, env = process.env) {
   let conns = 0
   let accepted = 0
   let rejected = 0
-  let lastDiagnostics = null
-  let diagnosticsPushedAt = null
   const startedAt = Date.now()
   const control = makeControl()
   const stats = () => ({
@@ -529,50 +529,22 @@ export function createBridge(port = PORT, env = process.env) {
     control: { writer: control.writer !== null, owner: control.owner, ownerSince: control.ownerSince, lastWriteAt: control.lastWriteAt },
   })
   const bridgeState = {
-    getDiagnostics: () => lastDiagnostics,
+    getDiagnostics: () => null,
     stats,
     control,
   }
   const server = createServer((req, res) => {
     if (req.url === '/health') {
       res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
-      res.end(JSON.stringify({ ok: true, mcp: '/mcp', ...stats(), diagnosticsPushedAt }))
+      res.end(JSON.stringify({ ok: true, mcp: '/mcp', ...stats() }))
       return
     }
     // Host → bridge push. The dsh host is on the same loopback; the port is
     // only published on 127.0.0.1. Reject browser-shaped requests (Origin)
     // and bound the payload so this endpoint cannot be used to grow memory.
     if (req.url === '/diagnostics' && (req.method === 'POST' || req.method === 'GET')) {
-      if (req.method === 'GET') {
-        res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
-        res.end(JSON.stringify({ ok: true, pushedAt: diagnosticsPushedAt, diagnostics: lastDiagnostics }))
-        return
-      }
-      if (req.headers.origin || (req.headers['content-type'] || '').indexOf('application/json') === -1) {
-        res.writeHead(403)
-        res.end()
-        return
-      }
-      let body = ''
-      req.on('data', (chunk) => {
-        body += chunk
-        if (body.length > 512 * 1024) { req.destroy() }
-      })
-      req.on('end', () => {
-        try {
-          const parsed = JSON.parse(body)
-          if (!parsed || typeof parsed !== 'object') throw new Error('not an object')
-          // Two hosts can push to one engine (desktop + a dev profile). Keep the
-          // richest history instead of letting an older host erase it.
-          lastDiagnostics = parsed
-          diagnosticsPushedAt = new Date().toISOString()
-          res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
-          res.end(JSON.stringify({ ok: true, at: diagnosticsPushedAt }))
-        } catch (error) {
-          res.writeHead(400, { 'content-type': 'application/json; charset=utf-8' })
-          res.end(JSON.stringify({ ok: false, error: String(error?.message || error) }))
-        }
-      })
+      res.writeHead(410, { 'content-type': 'application/json; charset=utf-8' })
+      res.end(JSON.stringify({ ok: false, error: 'diagnostics live on GET /nano-local-sandbox/diagnostics' }))
       return
     }
     res.writeHead(404)

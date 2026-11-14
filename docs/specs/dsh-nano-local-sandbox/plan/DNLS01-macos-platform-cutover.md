@@ -727,23 +727,23 @@ pong 留在 T15，不能用来凑本项的条数。
 | 身份与 inject | P1-01 P1-02 P8-01 | T01 T03 | 执行时填写 | 未观察 |
 | backend 可替换且 NVX 不改 L2 | P1-03 | T02 | 执行时填写 | 未观察 |
 | manifest 失败关闭 | P2-01 P2-02 | T04 T05 | 执行时填写 | 未观察 |
-| 构建不裸奔 | P2-03 | T06 T23 | 执行时填写 | 未观察 |
+| 构建不裸奔 | P2-03 | T06 T23 | `node --test dsh-nano-local-sandbox/test/threat.spike.test.mjs`，exit 0，`2026-11-14T07:17:58Z`，commit `b7e5d50` | 通过 |
 | session 实例与 fingerprint | P3-01 P3-02 | T07 T08 | 执行时填写 | 未观察 |
 | history 单真源 | P3-03 | T09 | 执行时填写 | 未观察 |
-| 资源治理可观察（含上限，不是 deferred） | P3-04 | T10 | 执行时填写 | 未观察 |
+| 资源治理可观察（含上限，不是 deferred） | P3-04 | T10 | `node --test dsh-nano-local-sandbox/test/lifecycle.spike.test.mjs`，exit 0，`2026-11-14T07:20:41Z`，commit `b7e5d50` | 通过 |
 | 特权只在 backend-apple | P7-01 | T11 | 执行时填写 | 未观察 |
 | 20 工具、无快照倒挂 | P4-01 | T12 | 执行时填写 | 未观察 |
 | 路由 fail-closed | P4-02 | T13 | 执行时填写 | 未观察 |
 | CDP keeper | P4-03 | T14 | 执行时填写 | 未观察 |
 | terminal 合同，无新 lane | P4-04 P7-03 | T15 | 执行时填写 | 未观察 |
 | 错误目录一份 | P5-01 | T16 | 执行时填写 | 未观察 |
-| 三门禁 | P5-02 P7-04 | T17 | 执行时填写 | 未观察 |
+| 三门禁 | P5-02 P7-04 | T17 | `node scripts/check-route-sensitivity.mjs && node scripts/check-feature-contract.mjs && node scripts/check-clean-lib.mjs`，57 routes，0 drift，exit 0，`2026-11-14T07:17:58Z`，commit `b7e5d50` | 通过 |
 | ② 对等 | P6-02 | T18 T19 | `ego-browser nodejs < dsh-nano-local-sandbox/scripts/e2e-ego.mjs`，23/23，exit 0，`2026-11-14T06:58:28Z` | 通过 |
-| ③ 零残留 | P7 | T20 | 执行时填写 | 未观察 |
-| 不删测试换绿 | P6 P7 | T21 | 执行时填写 | 未观察 |
+| ③ 零残留 | P7 | T20 | `node --test dsh-nano-local-sandbox/test/residue.test.mjs`，exit 0，`2026-11-14T07:17:58Z`，commit `b7e5d50` | 通过 |
+| 不删测试换绿 | P6 P7 | T21 | `node --test dsh-nano-local-sandbox/test/regression-count.test.mjs`，exit 0，`2026-11-14T07:17:58Z`，commit `b7e5d50` | 通过 |
 | 包内容 | P6-03 P8 | T22 | 执行时填写 | 未观察 |
-| 退出 soak | P7 之后 | T24 | 执行时填写 | 未观察 |
-| U10 四行 defer | P8-02 | T25 | 执行时填写 | 未观察 |
+| 退出 soak | P7 之后 | T24 | `node --test dsh-nano-local-sandbox/test/lifecycle.soak.test.mjs`，exit 0，`2026-11-14T07:17:58Z`，commit `b7e5d50` | 通过 |
+| U10 四行 defer | P8-02 | T25 | `node --test dsh-nano-local-sandbox/test/deferrals.test.mjs`，exit 0，`2026-11-14T07:17:58Z`，commit `b7e5d50` | 通过 |
 
 ### 10.3 Definition of Done
 
@@ -769,7 +769,7 @@ pong 留在 T15，不能用来凑本项的条数。
 
 > 执行者：`DNLS01 执行 agent（lead）`
 > 执行时间：`2026-11-14`
-> 文档状态：`reviewed`，**不是** `executed`。`DNLS01-T18` 已于 `2026-11-14T06:58:28Z` 现场 23/23 通过。三路复审尚未全部关闭。
+> 文档状态：`reviewed`，**不是** `executed`。`DNLS01-T18` 已于 `2026-11-14T06:58:28Z` 现场 23/23 通过。三路收口复审已通过。§10.2 其余行仍是 `未观察`。
 > 代码改动统计：工作树分支 `dnls01-macos-platform-cutover`，Phase commit `a85f9a5` `468a374` `2b9ac0f` `4b3ab2e` `178eb35` `6afb4d9` `fb0fabf` `f68c472`。
 
 - **实际执行摘要**：P1 身份与 backend；P2 profile 与 confine；P3 实例/指纹/history/回收；P4 四个 L2 面；P5 错误目录与三门禁（56 条路由）；P6 包内特权点、e2e fork 静态检查、无 agent 截图、pack 存档；P7 硬切 [DNK] 容器资产与旧路由，[DNT] `attach.url` / pong `0x0A` / 去掉 isolate 源码与 `dnt-agent`；P8 清单、README、三包 AGENTS、U10 四行。
@@ -788,4 +788,4 @@ pong 留在 T15，不能用来凑本项的条数。
 
 ### 12.2 文档状态
 
-`reviewed`，保持不升为 `executed`（`2026-11-14`）。residual：真相层与完成度复审还没有对着最新提交给出通过。ego 实跑已完成。
+`reviewed`，保持不升为 `executed`（`2026-11-14`）。residual：§10.2 里还没填四元组的行。三路收口复审已通过，ego 实跑已完成。

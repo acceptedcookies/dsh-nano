@@ -89,6 +89,7 @@ export const BRIDGE_ERRORS = [
   { id: 'kitesurf.elements.stale', cause: '桥侧还没有 elements 快照', next: '先调 GET /nano-kitesurf/elements' },
   { id: 'kitesurf.selftest.stale', cause: '桥侧还没有 selftest 快照', next: '先调 GET /nano-kitesurf/selftest' },
   { id: 'kitesurf.control.busy', cause: '另一连接正在持有写操作（人机共享单页，写串行）', next: '等待并重试；GET /health 看当前 owner' },
+  { id: 'kitesurf.control.query', cause: 'kitesurf_control 的 action 不是 status|claim|release', next: '用 kitesurf_control {action:"status"|"claim"|"release"}' },
   { id: 'kitesurf.tool.unknown', cause: '调用了不存在的 kitesurf_* 工具名', next: '对照 tools/list 的 kitesurf_* 工具名' },
 ]
 

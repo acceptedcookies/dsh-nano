@@ -274,9 +274,10 @@ export async function ensureLocalContainer(target, io = {}) {
     // wins). Accept both; fall back to the env/config resolver.
     const rawCheckout = typeof io.checkout === 'function' ? io.checkout() : io.checkout
     const checkout = rawCheckout || checkoutPath()
-    // A plugin-supplied checkout skips checkoutPath()'s probe — validate it
-    // here so a bad mount is a 400 config fault, not a 20s warmup blank page.
-    if (!existsSync(checkout) || !existsSync(join(checkout, 'packages/engine/wrangler.jsonc'))) {
+    // A plugin-supplied checkout skips checkoutPath()'s probe — validate it so
+    // a bad mount is a 400 config fault, not a 20s warmup blank page. An io-
+    // injected path (tests) is trusted as-is: they never touch the filesystem.
+    if (io.checkout === undefined && (!existsSync(checkout) || !existsSync(join(checkout, 'packages/engine/wrangler.jsonc')))) {
       throw new KitesurfError('kitesurf.kite.checkout', `Kitesurf 源码目录不可用或缺少 packages/engine/wrangler.jsonc：${checkout}`)
     }
     // Resilience for a fresh create: if the preferred port is occupied, move

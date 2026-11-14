@@ -611,17 +611,23 @@ export function apply(ctx, config) {
     if (summary.operations.failures > 0) hints.push(`最近 ${summary.operations.failures} 次操作失败：GET /operations?errorsOnly=true 看 errorId，再对照 errorCatalog`)
     if (summary.console.counts.error || summary.console.counts.exception) hints.push('页面有 error/exception：GET /console?level=error,exception 看堆栈')
     if (kite.snapshot().phase !== 'running') hints.push(`phase=${kite.snapshot().phase}：按阶段用 start/suspend/resume，409 是阶段不符不是引擎故障`)
-    const snapFid = getLastSnapshot()?.fidelity
-    if (snapFid?.sparse) hints.push(`渲染保真稀疏：a11y 树 ${snapFid.refs} 个节点但 semantic=0、interactive=${snapFid.interactive}（Kitesurf 把语义结构渲染成了块）。用人点选 /pick 或 @N 定位，勿依赖 heading/list/语义 landmark；富语义页面建议 Chromium/ego`)
-    // Stale-snapshot guard: a timed-out/failed navigate can leave the engine
-    // still mid-navigation while the stored tree is the PREVIOUS page. If the
-    // last snapshot's url differs from what the engine reports now, warn the
-    // agent the tree may not describe the intended page — cross-check snap.url.
+    // Resolve snapshot/live state ONCE up front — the fidelity, empty and
+    // stale hints below all read these; declaring before use avoids a TDZ
+    // reference on the empty-hint path.
     const attachedTid = targets?.attachedPage
     const liveUrl = status.ok ? ((targets?.targets || []).find((t) => t.type === 'page' && (t.targetId === attachedTid || t.attached))?.url
       || (targets?.targets || []).find((t) => t.type === 'page')?.url || null) : null
     const snapUrl = getLastSnapshot()?.url
+    const snapFid = getLastSnapshot()?.fidelity
     const recentNavFail = (summary.recentErrors || []).some((e) => /navigate|open|egress|timeout/i.test(e.errorId || '') && Date.now() - new Date(e.at || 0).getTime() < 60000)
+    if (snapFid?.sparse) hints.push(`渲染保真稀疏：a11y 树 ${snapFid.refs} 个节点但 semantic=0、interactive=${snapFid.interactive}（Kitesurf 把语义结构渲染成了块）。用人点选 /pick 或 @N 定位，勿依赖 heading/list/语义 landmark；富语义页面建议 Chromium/ego`)
+    // Empty-snapshot wall: refs=0 on a real URL = the renderer produced no DOM
+    // at all (heavy-SSR capacity wall — observed on wikipedia: url lands but
+    // body stays ~empty for minutes). Distinct from sparse (sparse still had
+    // actable nodes); this means "walk gave nothing", not "page is semantic-poor".
+    if (snapFid && snapFid.refs === 0 && snapUrl && !/about:blank|^$/.test(snapUrl)) {
+      hints.push(`空快照：lastSnapshot url=${snapUrl} 但 refs=0——渲染器未产出 DOM。重 SSR 页（如 wikipedia）超出 Kitesurf 渲染容量墙；此页建议 Chromium/ego 或确认页面是否真已加载完（看 /console?level=navigation）`)
+    }
     if (snapUrl && liveUrl && snapUrl !== liveUrl) {
       hints.push(`快照可能陈旧：lastSnapshot.url=${snapUrl} ≠ 引擎当前 ${liveUrl}。/open 可能超时但引擎仍在导航——先 /snapshot 重新抓取并核对 url，再信这棵树${recentNavFail ? '（最近有 navigate 超时/egress 记录）' : ''}`)
     } else if (snapUrl && recentNavFail) {

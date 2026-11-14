@@ -478,16 +478,16 @@ P0 的**契约可信**目标已全数达成：错误可自查（P0-1）、开关
 |---|---|---|---|
 | 按意图定位元素 | `@1`+`selector`+`role` | `a`/`input` | 平 |
 | **执行精度**（`@N`→`wait`/`pick` 命中同一节点） | **稳定 round-trip，`pick.ref===@N`** | 无持久 ref 概念 | **DNK 胜**（唯一真值 ref 语言） |
-| **观测保真**（a11y 心智模型） | **不一致（非全缺）**：`example.com`→svg 路径压扁成 `P×6,A` 无 `<h1>`；但 `httpbin/html`+`wikipedia` 的 `<h1>` **保留**为 `heading`；表单控件（`textbox`/`radio`/`checkbox`）在 form 路径全存活 | 真实 DOM 全保留 | **ego 胜（不一致性 = 不可预测的退化）** |
+| **观测保真**（a11y 心智模型） | **真实页上优秀**：MDN（nav/ul/h1/main 密集）渲染器产出 `navigation`/`banner`/`list`/`listitem×13`/`link×17`/`img`/`button`，semantic=14；httpbin/html `h1`→`heading`；example.com 的「无 heading」是**源页本就只有 `<title>`+`<p>`**（非渲染器丢失） | 真实 DOM 全保留 | **基本平**（见下方重 SSR 例外） |
 | 延迟（快照） | `/snapshot` 36–83ms | goto+DOM 295–4279ms | **DNK 快**（但重 SSR 上树可能是陈旧的，见下） |
 | **确定性错误契约** | 4/4 边缘输入给出稳定的 `errorId`+HTTP（`pick.miss`/`ref.miss`/`pick.point`/`pick.selector`）；未知工具也回 `kitesurf.tool.unknown` | Playwright 抛文本异常 | **DNK 胜**（可自查、可重试决策） |
 | **协议稳定性**（MCP 面） | 11/11：initialize、tools/list 15 工具枚举、帧 scoped JSON-RPC、`kitesurf_control` claim→status→busy(拒非排队)→release | ego 无对等 MCP 写所有权工具 | **DNK 胜**（单写者契约在协议层可测） |
 
-### 三个修正/新增的真发现（§7.5 修订）
+### 三个修正/新增的真发现（§7.5 两次修订）
 
-1. **渲染保真是「不一致」不是「全缺」**（修正初判）。Kitesurf 渲染器至少有两条路径：`example.com` 走 svg 视口路径压扁语义；`httpbin/html`、`wikipedia` 走文本路径保留 `<h1>`/`heading`。对 agent 这意味着**退化不可预测**——`/snapshot` 现在带 `fidelity{refs,interactive,semantic,svgViewport,sparse}`，`/diagnostics` 在 `sparse` 时推诚实 hint。
-2. **重 SSR 容量缺口**：`wikipedia`（重 SSR）`/open` 超过 20s 超时。ego 同页 ~4.3s 加载完成。这是引擎吞吐差距，不是契约问题——`P2` 容量项。
-3. **stale-snapshot 无提示隐患**（新增→已闭合）：`/open` 超时后引擎可能仍在导航，`/snapshot` 静默返回上一页的树（wikipedia case 树头是上一页 Moby-Dick）。**已闭合**：`/diagnostics` 在 `lastSnapshot.url ≠ 引擎 attached page url` 时推「快照可能陈旧」hint（实测 example.com→httpbin 导航后正确告警），并提示先重抓并核对 `snap.url`。
+1. **渲染保真其实是「优秀」**（再次修正前判）。MDN 这样 nav/ul/h1/main 密集的真实页，渲染器产出完整的 `navigation`/`banner`/`list`/`listitem×13`/`link×17`/`img`/`button`（semantic=14）；`example.com` 的「无 heading」是因为**源页本就退化**——`<h1>` 在 `<title>` 里、body 只有 `<p>`+svg logo。**此前两次「保真受损」结论均为误读 `example.com` 所致，作废。** `/snapshot` 的 `fidelity` + `/diagnostics` 的 sparse hint 仍保留——但它们报告的是「此页本就无语义」，不是渲染器丢了什么。
+2. **重 SSR 是硬性容量墙，不是慢**：`wikipedia` `/open` 客户端 fetch >20s 超时；引擎最终到达 URL（`location.href` 正确）但 ~3 分钟后 `document.title` 仍空、`body.children=1`、`p=0`——**渲染器对重 SSR 页根本不产出 DOM**。ego 同页 ~4.3s 全渲染。这是吞吐/容量硬墙（P2 容量项），agent 侧表现是「snapshot refs=0 但 url 已对」的迷惑态——`sparse` 未捕获（refs=0 不满足 `refs>0`），可再补一条 `empty-snapshot` hint。
+3. **stale-snapshot 已闭合**：`/diagnostics` 在 `lastSnapshot.url ≠ 引擎 attached url` 时推「快照可能陈旧」hint（实测告警正确）。
 
 ## §7.6 design-mode lane 对比（DNK 独占的赢面）
 

@@ -15,6 +15,20 @@ const FRONTMATTER = {
   'nano-kite': 'Initialize, start, suspend, or resume Kitesurf, and point MCP at a local or remote engine. Use when the user types /nano-kite.',
 }
 
+test('generated SKILL.md files exactly match the single source of truth', () => {
+  for (const [name, body] of Object.entries(SKILL_BODIES)) {
+    const actual = readFileSync(join(root, 'skills', name, 'SKILL.md'), 'utf8')
+    assert.equal(actual.endsWith(`${body}\n`), true, `${name}/SKILL.md body drifted`)
+  }
+})
+
+test('skill bodies are generated from ERROR_CATALOG (no hand-copied table)', () => {
+  const catalog = readFileSync(join(root, 'skills', 'kitesurf-cdp', 'references', 'error-catalog.md'), 'utf8')
+  for (const row of ERROR_CATALOG) {
+    assert.ok(catalog.includes(row.example), `missing catalogue row: ${row.example}`)
+  }
+})
+
 test('generated SKILL.md files exactly match the single source of truth (+ version/date frontmatter)', () => {
   for (const [name, body] of Object.entries(SKILL_BODIES)) {
     const actual = readFileSync(join(root, 'skills', name, 'SKILL.md'), 'utf8')
@@ -65,4 +79,5 @@ test('skill bodies carry the hard agentic constraints', () => {
     assert.ok(all.includes(phrase), `missing constraint: ${phrase}`)
   }
   assert.ok(nanoKiteSkill().content.includes('each text frame'))
+  assert.ok(all.includes('sandbox.diagnostics'))
 })

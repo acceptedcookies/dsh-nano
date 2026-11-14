@@ -1,0 +1,24 @@
+# DNMS01 — `T-R[HEAD-实测]` 台账（P0-EMPIRICAL 收口）
+
+> 冻结方式：本表逐项落 `{id, claim, method, evidence, verdict, at}`，**不进 QNA §1**（`templates/README.md`：qna 只产 `T-O`）。
+> `verdict=FAIL` 项已在 §7.3 对应工作项标阻塞，并回 QNA append-only 修订（`../qna/DNMS01-qna.md` §12）。
+> 实测环境：`dsh-dev`（`DSH_HOME=~/.dsh-dev`，`https://dsh-dev.local`）；源码 = `context/deepseek-harness@e8f7b93a34`（`0.2.2-rc.2`）+ 安装版 `app.asar`（`0.2.2-rc.3`）。
+
+| T-R ID | claim | method | evidence | verdict | at |
+|---|---|---|---|---|---|
+| T-R-01 | profile-installed bundle 可 `import '@deepseek-ai/dsh-compaction'` 并拿到 `CompactionEngine` | `~/.dsh-dev/profiles/web/node_modules/dnms01-spike-pkg/spike.mjs` 动态 import 三 specifier | 裸 specifier `ERR_MODULE_NOT_FOUND`（`nodeLinker: hoisted`、`.pnpm/node_modules/@deepseek-ai/` 仅 31 个 hoisted transitive，无 compaction）；经 dep 路径可 resolve 得 `CompactionEngine,CompactionId,ManualCompactionError,compactCheckpointSource,default,isCompactCheckpointSource,toolPairingBalancedAfter,toolPairingBalancedBefore`；**附随风险**：第二 module instance → `command-compact/lib/index.js:70` `instanceof ManualCompactionError` 与 `compaction-image-offload:147` `instanceof LlmError` 跨界失配 | **FAIL**（`-16` 阻塞，回 QNA §12） | 2026-11-15 |
+| T-R-02 | `dump-config` 定位 5 realm 行 id + isolate 标记 | `DSH_HOME=~/.dsh-dev dsh --profile web --dump-config` | `dump-config-dev.txt`：base 扁平行 `compaction-basic`/`command-compact`/`tool-result-pruner` 全 `disabled:true`（web-app patch `:576-583`）；preset `cordis:group` `id: compaction` 4 处：`standard:1266`、`ptc:1431`、`minimal:1516`、`presets:1693`；minimal 变体 `isolate:{compaction:true}` 仅 2 子行（无 tool-result-pruner） | **PASS** | 2026-11-15 |
+| T-R-03 | 互补 `disabled` + 一次 `reload()` 原子切换；`disabled: !!js` mount-only | probe 插件 `setBundleEnabled` 翻转 + `applyPatches` 源码 + `--patch` 实测 | `setBundleEnabled` ×4 全 `application:applied`、串行无错（`/tmp/dnms01-probe.log`）；`!js` 只在 mount decision 求值（`entry.update`，`vendor/loader/src/config/entry.ts`）；**但** `applyPatches` `entryMap` 只含顶层 + `group.config` 嵌套（`vendor/include/src/patch.ts:buildMap`），preset `config.plugins` 子行不可寻址 → 互补翻转无法表达 | **FAIL**（机制半边 PASS：原子重组合可用；`-10`/`-14` 行级互斥阻塞，回 QNA §12） | 2026-11-15 |
+| T-R-04 | `ctx.get('toolResultPruner')` 在 isolate realm 内可达 | 同 realm 消费先例 + dump | `compaction-basic/src/index.ts:303,326,347` `ctx.get('toolResultPruner')?.pruneSession`——出厂 Provider 与我方行同 `id: compaction` group（同 ctx）；standard/ptc/presets 3 group 均含 `tool-result-pruner` 子行；minimal 无 → 按 `-13` 可选链消费 | **PASS** | 2026-11-15 |
+| T-R-05 | rc.3 安装版 ≡ rc.2 检出（逐字节） | `app.asar` 提取 vs `context/deepseek-harness` `src/` | `compaction`、`compaction-basic`、`command-compact`、`compaction-tool-result-pruner` 共 14 个 `src/*.ts` 逐字节一致；`package.json` 仅 version/workspace specifier 差异 | **PASS** | 2026-11-15 |
+| T-R-06 | `pluginManager` namespace 授权（Host 半侧路径） | probe `ctx.get('pluginManager')` + 实调 `setBundleEnabled` | `ctx.get('pluginManager') -> true`，`setBundleEnabled` 等 @Remote 方法全可达（`/tmp/dnms01-probe.log` 方法表）；Host 侧兜底路径 = `POST …/switch` 唯一写入口（`-20`⑦），浏览器半侧不需要 | **PASS** | 2026-11-15 |
+| T-R-07 | HMR 存在/不存在（`applied` vs `restart-required`） | probe 实调 `setBundleEnabled` ×4 | 4 次结果全 `{"stage":"enable","changed":true,"application":"applied"}`（`/tmp/dnms01-probe.log`）；`dsh-dev` 带 HMR | **PASS** | 2026-11-15 |
+| T-R-08 | 并发 dispose/init 竞态零窗口 | 两并发 `setBundleEnabled` ×2 轮（off→on） | 并发对全 `applied`、无死锁无错（`hmr.runExclusive` 串行，`plugin-manager/src/index.ts:1313-1315`）；`ctx.compaction` 由 isolate 单 provide 语义保证同一瞬时 ≤1 active（host 侧不可见，probe `ABSENT` 为预期） | **PASS** | 2026-11-15 |
+| T-R-09 | preset 4 group 子行 patch 覆盖率 | `--patch` 实测 `insert`/`disabled` 打 preset 子行 | `probe1`：`{id:compaction, insert:[…]}` → `patch insert: entry "compaction" not found`（`entryMap` 不含 preset 子行，合成时子行已是 `config.plugins` 数据而非 entry）；`probe2`：`{id:compaction-basic, disabled:true}` 只命中顶层 base 行，4 preset 子行不变；patch `config` 键为**整对象替换**（非深合并）→ 唯一可达路径 = 全量重放 preset `config.plugins` | **FAIL**（`-10` 阻塞，回 QNA §12） | 2026-11-15 |
+| T-R-10 | `ctx.sessionProjections` 第三方注册（附条件） | probe `ctx.get` + 注册契约静态检查 | `ctx.get('sessionProjections') -> true`（probe）；`session-projection/src/index.ts:296` `super(ctx,'sessionProjections')` 公共服务，`register()` 无调用方身份门槛（`:380-441`），token-meter `register:105-108` 先例；`-21` fallback 不需要 | **PASS** | 2026-11-15 |
+
+## 阻塞面汇总
+
+- **T-R-01 FAIL → `T-O-DNMS01-16` 阻塞**：`@deepseek-ai/dsh-compaction` 裸 import 在 profile-installed 包内不解析（preset 子行由 preset patch 的 `baseUrl` 解析进 app 自身 `node_modules`，profile 包没有这条路径）。dep 声明可解，但产生第二 module instance，`instanceof ManualCompactionError`/`instanceof LlmError` 跨界失配 → `/compact` 分型降级。
+- **T-R-03/T-R-09 FAIL → `T-O-DNMS01-10` 阻塞**：patch 语法不可寻址 preset `config.plugins` 子行；`insert` 只能挂 `entryMap` 可见 entry，`disabled` 只命中顶层同 id 行，`config` 键整对象替换。`-10`「同 group 两行互补」唯一落地路径 = 4 份 preset `config.plugins` 全量重放 patch（把 `compaction` group 换成含我方行 + 出厂行 `disabled:true` 的版本）。
+- 处置与选项见 `../qna/DNMS01-qna.md` §12（append-only，待 [业主] 裁决）。

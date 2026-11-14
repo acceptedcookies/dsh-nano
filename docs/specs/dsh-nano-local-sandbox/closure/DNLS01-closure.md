@@ -52,7 +52,7 @@
 
 ## 5. 证据口径
 
-`T18` 已在 `https://dsh-dev.local` 上 23/23 通过。计划正文仍是 `reviewed`：三路审查当时的结论是不通过，之后的修复还没有再审一遍。现场 [DNT] 曾因安装副本缺少 `schema/dnt-mcp.openrpc.json` 不能加载。该文件已补到 pnpm 实际加载的目录。最近一次宿主重启的错误日志没有再出现这条 `failed to import`。三路审查还没有复审，因此 close-type 仍不是 `full-close`。
+`T18` 已在 `https://dsh-dev.local` 上 23/23 通过。计划正文仍是 `reviewed`：三路审查当时的结论是不通过，之后的修复还没有再审一遍。现场 [DNT] 曾因安装副本缺少 `schema/dnt-mcp.openrpc.json` 不能加载。该文件已补到 pnpm 实际加载的目录。最近一次宿主重启的错误日志没有再出现这条 `failed to import`。防假绿复审已通过，报告在 `.anote/reviews/dsh-nano-local-sandbox/DNLS01/na/antigreen-rereview.md`。真相层和完成度复审在 `79476b3` 之前给出不通过，对应阻塞已在该提交里改掉，但这两份复审还没有对着 `79476b3` 再出结论。因此 close-type 仍不是 `full-close`。
 
 ## 修订历史
 

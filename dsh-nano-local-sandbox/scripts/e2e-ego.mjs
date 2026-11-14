@@ -343,26 +343,40 @@ async function main() {
   await new Promise((r) => setTimeout(r, 500))
   record('shortcut-cmd-e-2', shortcut !== afterShortcut, `devtools ${shortcut} -> ${afterShortcut}`)
 
-  // 9. lifecycle: suspend -> resume -> page comes back
-  const lifecycle = await page.evaluate(async (targetUrl) => {
-    const readJson = async (r) => { const t = await r.text(); try { return JSON.parse(t) } catch { return { ok: false, error: t.slice(0, 120), status: r.status } } }
-    const post = (body) => fetch('/nano-local-sandbox/kite', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then(readJson)
-    const st = () => fetch('/nano-local-sandbox/status').then(readJson)
-    try {
-    const before = await st()
-    const suspended = await post({ action: 'suspend' })
-    const mid = await st()
-    const resumed = await post({ action: 'resume' })
-    // resume rebuilds the container: the page is gone, so re-open before any
-    // later check that needs a document.
-    await fetch('/nano-local-sandbox/open', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ url: targetUrl }) })
+  // 9. lifecycle: suspend -> resume -> page comes back.
+  // Each fetch is its own evaluate. One evaluate cannot cover a container
+  // restart plus the DOM poll, because the browser bridge caps an evaluation
+  // at 15s.
+  const postKite = (action) => page.evaluate(async (name) => {
+    const response = await fetch('/nano-local-sandbox/kite', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: name }) })
+    const text = await response.text()
+    try { return JSON.parse(text) } catch { return { ok: false, error: text.slice(0, 120), status: response.status } }
+  }, action)
+  const readStatus = () => page.evaluate(async () => {
+    const response = await fetch('/nano-local-sandbox/status')
+    const text = await response.text()
+    try { return JSON.parse(text) } catch { return { ok: false, error: text.slice(0, 120), status: response.status } }
+  })
+  let lifecycle
+  try {
+    const before = await readStatus()
+    const suspended = await postKite('suspend')
+    const mid = await readStatus()
+    const resumed = await postKite('resume')
+    await page.evaluate(async (targetUrl) => {
+      await fetch('/nano-local-sandbox/open', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ url: targetUrl }) })
+    }, TARGET_URL)
     for (let i = 0; i < 12; i += 1) {
-      const dom = await fetch('/nano-local-sandbox/dom').then(readJson)
+      const dom = await page.evaluate(async () => {
+        const response = await fetch('/nano-local-sandbox/dom')
+        const text = await response.text()
+        try { return JSON.parse(text) } catch { return { ok: false } }
+      })
       if (dom.ok) break
       await new Promise((r) => setTimeout(r, 1000))
     }
-    const after = await st()
-    return {
+    const after = await readStatus()
+    lifecycle = {
       beforePhase: before.kite?.phase,
       suspendOk: suspended.ok === true,
       midPhase: mid.kite?.phase,
@@ -370,8 +384,9 @@ async function main() {
       afterPhase: after.kite?.phase,
       alive: after.ok === true,
     }
-    } catch (error) { return { error: String((error && error.message) || error) } }
-  }, TARGET_URL)
+  } catch (error) {
+    lifecycle = { error: String(error?.message || error) }
+  }
   record('lifecycle', lifecycle.suspendOk && lifecycle.midPhase === 'suspended' && lifecycle.resumeOk && lifecycle.afterPhase === 'running' && lifecycle.alive, JSON.stringify(lifecycle))
 
   // 10. host self-test

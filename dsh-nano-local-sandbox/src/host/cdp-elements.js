@@ -95,7 +95,12 @@ export function connectCdp(httpBase) {
       const frame = { id, method, params }
       if (sessionId) frame.sessionId = sessionId
       return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+          pending.delete(id)
+          reject(new Error(`${method} timed out`))
+        }, 4000)
         pending.set(id, (message) => {
+          clearTimeout(timer)
           if (message.error) reject(new Error(message.error.message || method))
           else resolve(message.result ?? {})
         })

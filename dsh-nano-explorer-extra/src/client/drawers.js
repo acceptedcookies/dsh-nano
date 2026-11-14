@@ -338,6 +338,7 @@ function HistoryRail({ copy, history, currentBranch, upstream, remotes }) {
 export function BranchDrawer({ copy, open, git, onClose, onPull, onPush, onFetch, onRefresh, onCheckout, onOpenConflict, onRemote, onAuthor, onSshKey, busy, error }) {
   usePanelConfinedLayer(open)
   const [query, setQuery] = useState('')
+  const [branchTab, setBranchTab] = useState('local')
   const [pendingBranch, setPendingBranch] = useState(null)
   const [pendingRemote, setPendingRemote] = useState(null)
   // A first push needs a destination: the branch has no upstream yet, so the reader picks the
@@ -345,7 +346,7 @@ export function BranchDrawer({ copy, open, git, onClose, onPull, onPush, onFetch
   const [pendingPush, setPendingPush] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   useEffect(() => {
-    if (!open) { setQuery(''); setPendingBranch(null); setPendingRemote(null); setPendingPush(false); setSettingsOpen(false) }
+    if (!open) { setQuery(''); setBranchTab('local'); setPendingBranch(null); setPendingRemote(null); setPendingPush(false); setSettingsOpen(false) }
   }, [open])
   if (!open) return null
   const current = branchName(git)
@@ -370,7 +371,11 @@ export function BranchDrawer({ copy, open, git, onClose, onPull, onPush, onFetch
   ]))
   const fetchedAt = typeof git?.fetchedAt === 'number' ? git.fetchedAt : undefined
   const fetchStamp = fetchedAt === undefined ? copy.fetchNever : copy.fetchAgo(ageLabel(copy, fetchedAt / 1000))
-  const filteredOut = query.trim() !== '' && branches.length === 0 && remoteBranches.length === 0 && worktrees.length === 0
+  // The remote tab only exists when the repo names a remote at all; without one there is
+  // nothing to fetch and nothing to track, so the tab would always be empty.
+  const tab = remotes.length === 0 ? 'local' : branchTab
+  const filteredOut = query.trim() !== '' && (
+    tab === 'local' ? branches.length === 0 : remoteBranches.length === 0)
   const conflicts = git?.conflicts ?? []
   const summary = copy.branchDrawerSummary(
     current ?? copy.detached,
@@ -460,65 +465,80 @@ export function BranchDrawer({ copy, open, git, onClose, onPull, onPush, onFetch
     filteredOut
       ? React.createElement('p', { className: 'nxe-drawer-empty' }, copy.branchFilterEmpty)
       : React.createElement(React.Fragment, null,
-        React.createElement('h3', { className: 'nxe-drawer-heading' }, copy.branchesHeadingCount(branches.length)),
-        branches.length === 0
-          ? React.createElement('p', { className: 'nxe-drawer-empty' }, copy.branchesEmpty)
-          : React.createElement('ul', { className: 'nxe-drawer-list', 'data-nxe-branches': 'true' }, branches.map(row =>
-            React.createElement('li', {
-              key: row.name,
-              className: 'nxe-drawer-row',
-              'data-current': String(row.current === true),
-              'data-blocked': String(row.inOtherWorktree === true),
-            },
-            React.createElement('button', {
-              type: 'button', className: 'nxe-drawer-branch',
-              disabled: row.current === true || row.inOtherWorktree === true || busy === true || conflicts.length > 0,
-              title: conflicts.length > 0
-                ? copy.branchConflictBlocks
-                : row.inOtherWorktree === true ? copy.branchHeldElsewhere : row.name,
-              onClick: () => setPendingBranch(row.name),
-              'data-nxe-checkout': row.name,
-            }, row.name),
-            row.commit === '' ? null : React.createElement('span', { className: 'nxe-graph-hash' }, row.commit),
-            row.upstream === null ? null : React.createElement('span', { className: 'nxe-drawer-row-path', title: row.upstream }, row.upstream),
-            conflicts.length > 0 && row.current === true
-              ? React.createElement('span', { className: 'nxe-drawer-row-badge', 'data-tone': 'danger' }, '!')
-              : null,
-            row.inOtherWorktree === true
-              ? React.createElement('span', { className: 'nxe-drawer-row-badge' }, copy.branchHeldShort)
-              : row.current === true
-                ? React.createElement('span', { className: 'nxe-drawer-row-badge', 'data-tone': 'current' }, copy.branchCurrentShort)
-                : row.upstream === null
-                  ? React.createElement('span', { className: 'nxe-drawer-row-badge', 'data-tone': 'local' }, copy.branchLocalOnly)
-                  : null))),
-        React.createElement('h3', { className: 'nxe-drawer-heading' },
-          copy.remoteBranchesHeadingCount(remoteBranches.length),
-          ' ',
-          React.createElement('span', { className: 'nxe-drawer-row-path', title: fetchStamp }, fetchStamp)),
-        remoteBranches.length === 0
-          ? React.createElement('p', { className: 'nxe-drawer-empty' }, copy.remoteBranchesEmpty)
-          : React.createElement('ul', { className: 'nxe-drawer-list', 'data-nxe-remote-branches': 'true' }, remoteBranches.map(row => {
-            const base = row.name.slice(row.name.indexOf('/') + 1)
-            const tracked = localNames.has(base)
-            return React.createElement('li', {
-              key: row.name,
-              className: 'nxe-drawer-row',
-              'data-tracked': String(tracked),
-            },
-            React.createElement('button', {
-              type: 'button', className: 'nxe-drawer-branch',
-              disabled: busy === true || conflicts.length > 0,
-              title: conflicts.length > 0
-                ? copy.branchConflictBlocks
-                : tracked ? row.name : copy.checkoutRemoteTitle(row.name),
-              onClick: () => setPendingRemote(row.name),
-              'data-nxe-remote-checkout': row.name,
-            }, row.name),
-            row.commit === '' ? null : React.createElement('span', { className: 'nxe-graph-hash' }, row.commit),
-            tracked
-              ? React.createElement('span', { className: 'nxe-drawer-row-badge', 'data-tone': 'current' }, copy.branchTrackedShort)
-              : null)
-          })),
+        remotes.length === 0 ? null : React.createElement('div', {
+          className: 'nxe-local-filters', role: 'group', 'aria-label': copy.branchTabLabel,
+        },
+        [
+          { id: 'local', label: copy.branchTabLocal, count: branches.length, title: copy.branchTabLocalTitle },
+          { id: 'remote', label: copy.branchTabRemote, count: remoteBranches.length, title: fetchStamp },
+        ].map(item => React.createElement(Button, {
+          key: item.id,
+          variant: tab === item.id ? 'primary' : 'outline',
+          className: 'nxe-local-filter',
+          'aria-pressed': String(tab === item.id),
+          title: item.title,
+          'data-nxe-branch-tab': item.id,
+          onClick: () => setBranchTab(item.id),
+        }, `${item.label} ${item.count}`))),
+        React.createElement('section', { className: 'nxe-branch-pane' },
+        tab === 'remote'
+          ? React.createElement('p', { className: 'nxe-branch-stamp', title: fetchStamp }, fetchStamp)
+          : null,
+        tab === 'local'
+          ? (branches.length === 0
+            ? React.createElement('p', { className: 'nxe-drawer-empty' }, copy.branchesEmpty)
+            : React.createElement('ul', { className: 'nxe-drawer-list', 'data-nxe-branches': 'true' }, branches.map(row =>
+              React.createElement('li', {
+                key: row.name,
+                className: 'nxe-drawer-row',
+                'data-current': String(row.current === true),
+                'data-blocked': String(row.inOtherWorktree === true),
+              },
+              React.createElement('button', {
+                type: 'button', className: 'nxe-drawer-branch',
+                disabled: row.current === true || row.inOtherWorktree === true || busy === true || conflicts.length > 0,
+                title: conflicts.length > 0
+                  ? copy.branchConflictBlocks
+                  : row.inOtherWorktree === true ? copy.branchHeldElsewhere : row.name,
+                onClick: () => setPendingBranch(row.name),
+                'data-nxe-checkout': row.name,
+              }, row.name),
+              row.commit === '' ? null : React.createElement('span', { className: 'nxe-graph-hash' }, row.commit),
+              row.upstream === null ? null : React.createElement('span', { className: 'nxe-drawer-row-path', title: row.upstream }, row.upstream),
+              conflicts.length > 0 && row.current === true
+                ? React.createElement('span', { className: 'nxe-drawer-row-badge', 'data-tone': 'danger' }, '!')
+                : null,
+              row.inOtherWorktree === true
+                ? React.createElement('span', { className: 'nxe-drawer-row-badge' }, copy.branchHeldShort)
+                : row.current === true
+                  ? React.createElement('span', { className: 'nxe-drawer-row-badge', 'data-tone': 'current' }, copy.branchCurrentShort)
+                  : row.upstream === null
+                    ? React.createElement('span', { className: 'nxe-drawer-row-badge', 'data-tone': 'local' }, copy.branchLocalOnly)
+                    : null))))
+          : (remoteBranches.length === 0
+            ? React.createElement('p', { className: 'nxe-drawer-empty' }, copy.remoteBranchesEmpty)
+            : React.createElement('ul', { className: 'nxe-drawer-list', 'data-nxe-remote-branches': 'true' }, remoteBranches.map(row => {
+              const base = row.name.slice(row.name.indexOf('/') + 1)
+              const tracked = localNames.has(base)
+              return React.createElement('li', {
+                key: row.name,
+                className: 'nxe-drawer-row',
+                'data-tracked': String(tracked),
+              },
+              React.createElement('button', {
+                type: 'button', className: 'nxe-drawer-branch',
+                disabled: busy === true || conflicts.length > 0,
+                title: conflicts.length > 0
+                  ? copy.branchConflictBlocks
+                  : tracked ? row.name : copy.checkoutRemoteTitle(row.name),
+                onClick: () => setPendingRemote(row.name),
+                'data-nxe-remote-checkout': row.name,
+              }, row.name),
+              row.commit === '' ? null : React.createElement('span', { className: 'nxe-graph-hash' }, row.commit),
+              tracked
+                ? React.createElement('span', { className: 'nxe-drawer-row-badge', 'data-tone': 'current' }, copy.branchTrackedShort)
+                : null)
+            })))),
         React.createElement('h3', { className: 'nxe-drawer-heading' }, copy.worktreesHeadingCount(worktrees.length)),
         worktrees.length === 0
           ? React.createElement('p', { className: 'nxe-drawer-empty' }, copy.worktreesEmpty)

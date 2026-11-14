@@ -89,7 +89,7 @@ dsh plugin --profile web add <spec>
 「在终端中打开」：装了 dsh-nano-terminal 时在对话区 Nano 终端视图里开一个本地窗格，shell 落在该目录（文件行落其父目录）；未装时开原生工作台终端，原生 tab 不接受目录参数，shell 落在会话工作区根。检测走 cordis `ctx.get('nanoTerminal')`，不是 inject，加载顺序无关。
 
 | 顶栏新建文件或文件夹 | 先问名字，确认后才落盘 |
-| 底部分支按钮 | 仓库视图：多车道彩色提交图（亮段=未推送、暗段=已推送）、工作树列表、拉取、推送、仓库设置（远端地址与提交署名）。切换分支先确认，成功后「当前」跟着变。状态栏的 `!` 会列出冲突路径，并在解决前禁用切换。卡片沉在文件区底部，不会跑到工作区外面 |
+| 底部分支按钮 | 仓库视图：多车道彩色提交图（亮段=未推送、暗段=已推送）、工作树列表、获取、拉取、推送、仓库设置（远端地址与提交署名）。本地/远端分支在固定高度的分页面板内切换（与提交卡的筛选条同款），远端页显示快照时间；远端行点击即 `checkout --track` 检出跟踪分支，已跟踪的行标徽章。切换分支先确认，成功后「当前」跟着变。状态栏的 `!` 会列出冲突路径，并在解决前禁用切换。卡片沉在文件区底部，不会跑到工作区外面 |
 | 底部提交 | 只看本地工作区：已暂存 / 未暂存 / 未跟踪 / 冲突。确认后 `git add --all` 再提交。有冲突时按钮不可用。`Ctrl+Enter` 同样会提交。这里没有提交图，也没有拉取 |
 | 分支卡片里的拉取 | `git pull --ff-only`。不能快进就失败并显示 Git 原文，不会自动产生合并提交 |
 | 顶栏刷新 | 重读目录和整仓 Git 状态。不重算右下角的文件数量和体积 |
@@ -109,6 +109,7 @@ Git 报为冲突（`U`）或删除（`D`）但磁盘上已不存在的文件，�
 | GET | `/perf-review/host` | 性能观测宿主快照。带 `mode=window` 时排空并返回「上次调用以来的场景窗口」（实验室用），默认返回累计快照。宿主没开 `DSH_PERF_REVIEW=1` 时 `enabled` 为 false，路由仍返回 200 |
 | POST | `/list` | `{ sessionId, path }` |
 | POST | `/commit` | `{ sessionId, message }`。会 `git add --all`。没有「只提交已暂存」 |
+| POST | `/fetch` | `{ sessionId }`。`git fetch --all --prune`：只刷新 `refs/remotes` 快照（远端分支列表、ahead/behind、提交图已推送车道），不动工作区文件 |
 | POST | `/pull` | `{ sessionId }`。快进拉取 |
 | POST | `/push` | `{ sessionId, remote? }`。有上游走 `git push`；无上游时 `remote` 必填，走 `git push -u <remote> HEAD` 并绑定 |
 | POST | `/remote` | `{ sessionId, op, name, url? }`。`op` 为 `add`/`set-url`/`remove`，改写 `.git/config` 后返回新远端列表 |

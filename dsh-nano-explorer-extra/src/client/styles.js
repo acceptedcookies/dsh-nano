@@ -519,6 +519,16 @@ button.nxe-local-filter {
   background: color-mix(in oklab, var(--dsw-alias-label-error, #e5534b) 16%, transparent);
 }
 .nxe-repo .nxe-graph { max-height: 220px; overflow: auto; }
+/* The two branch tabs share one pane: the 9-row local list and the 2-row remote list must not
+   resize it on every switch, so the pane holds a fixed height and scrolls inside. */
+.nxe-branch-pane {
+  display: flex; flex-direction: column; gap: 4px;
+  min-height: 216px; max-height: 216px; overflow-y: auto; overflow-x: hidden;
+}
+.nxe-branch-stamp {
+  margin: 0; font-size: 11px; line-height: 16px;
+  color: var(--dsw-alias-label-tertiary);
+}
 .nxe-repo-conflict {
   display: flex; flex-direction: column; gap: 4px;
   padding: 8px; border-radius: var(--dsw-radius-sm);

@@ -136,6 +136,9 @@ ${NANO_STYLES}
 .dnt-header .dnt-toolbtn{width:20px;height:20px;padding:0;display:inline-flex;align-items:center;justify-content:center;line-height:0}
 .dnt-header .dnt-toolbtn:hover:not(:disabled){color:var(--dsw-alias-label-primary)}
 .dnt-header .dnt-toolbtn svg{width:13px;height:13px}
+/* 宿主图标库只有水平 PanelLeft 形态；向下分屏复用同一图标旋转 90°
+   （此前该规则在一次样式清理中被误删，两枚分屏按钮变成同一朝向）。 */
+.dnt-rotate{transform:rotate(90deg)}
 .dnt-header-actions{display:flex;align-items:center;gap:1px;flex:0 0 auto;margin-left:auto}
 .dnt-canvas-host{position:absolute;top:26px;left:0;right:0;bottom:0;overflow:hidden;cursor:text}
 .dnt-scrollbar-track{position:absolute;right:3px;top:32px;bottom:8px;width:6px;pointer-events:none;z-index:4}

@@ -178,6 +178,9 @@ ${hA}
 .dnt-header .dnt-toolbtn{width:20px;height:20px;padding:0;display:inline-flex;align-items:center;justify-content:center;line-height:0}
 .dnt-header .dnt-toolbtn:hover:not(:disabled){color:var(--dsw-alias-label-primary)}
 .dnt-header .dnt-toolbtn svg{width:13px;height:13px}
+/* \u5BBF\u4E3B\u56FE\u6807\u5E93\u53EA\u6709\u6C34\u5E73 PanelLeft \u5F62\u6001\uFF1B\u5411\u4E0B\u5206\u5C4F\u590D\u7528\u540C\u4E00\u56FE\u6807\u65CB\u8F6C 90\xB0
+   \uFF08\u6B64\u524D\u8BE5\u89C4\u5219\u5728\u4E00\u6B21\u6837\u5F0F\u6E05\u7406\u4E2D\u88AB\u8BEF\u5220\uFF0C\u4E24\u679A\u5206\u5C4F\u6309\u94AE\u53D8\u6210\u540C\u4E00\u671D\u5411\uFF09\u3002 */
+.dnt-rotate{transform:rotate(90deg)}
 .dnt-header-actions{display:flex;align-items:center;gap:1px;flex:0 0 auto;margin-left:auto}
 .dnt-canvas-host{position:absolute;top:26px;left:0;right:0;bottom:0;overflow:hidden;cursor:text}
 .dnt-scrollbar-track{position:absolute;right:3px;top:32px;bottom:8px;width:6px;pointer-events:none;z-index:4}

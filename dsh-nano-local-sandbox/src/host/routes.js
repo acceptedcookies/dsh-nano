@@ -41,6 +41,21 @@ async function readJson(req) {
   try { return JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}') } catch { return {} }
 }
 
+async function ensureBase(session, deps) {
+  if (session.httpBase) return session.httpBase
+  if (!deps.backend?.inspect) return null
+  try {
+    const inspected = await deps.backend.inspect(session.containerName || 'kitesurf')
+    const base = publishedHttpBase(inspected.raw ?? inspected)
+    if (!base) return null
+    if (session.phase === 'idle') session.phase = 'running'
+    session.httpBase = base
+    return base
+  } catch {
+    return null
+  }
+}
+
 function send(res, status, body) {
   res.statusCode = status
   res.end(JSON.stringify(body))
@@ -61,16 +76,7 @@ export function routeSpecs(deps = {}) {
         return
       }
       if (row.path.endsWith('/status')) {
-        if (session.phase === 'idle' && deps.backend?.inspect) {
-          try {
-            const inspected = await deps.backend.inspect(session.containerName || 'kitesurf')
-            const base = publishedHttpBase(inspected.raw ?? inspected)
-            if (base) {
-              session.phase = 'running'
-              session.httpBase = base
-            }
-          } catch { /* container is not running */ }
-        }
+        await ensureBase(session, deps)
         send(res, 200, { ok: session.phase === 'running', httpBase: session.httpBase ?? null, kite: { phase: session.phase } })
         return
       }
@@ -96,8 +102,9 @@ export function routeSpecs(deps = {}) {
         const body = await readJson(req)
         if (typeof body.url === 'string' && body.url) {
           session.history.push({ url: body.url, at: new Date().toISOString() })
-          if (session.httpBase) {
-            try { await navigate(session, session.httpBase, body.url) } catch { /* the history entry still stands */ }
+          const base = await ensureBase(session, deps)
+          if (base) {
+            try { await navigate(session, base, body.url) } catch { /* the history entry still stands */ }
           }
         }
         send(res, 200, { ok: true, url: body.url ?? null })
@@ -121,6 +128,7 @@ export function routeSpecs(deps = {}) {
         const url = new URL(req.url ?? '/', 'http://localhost')
         try {
           const data = await (deps.captureElements ?? (async (base, options) => {
+            base = base || await ensureBase(session, deps)
             if (!base) {
               const error = new Error('no engine page')
               error.status = 502

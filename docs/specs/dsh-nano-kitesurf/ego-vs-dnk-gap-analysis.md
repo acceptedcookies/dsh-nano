@@ -478,13 +478,16 @@ P0 的**契约可信**目标已全数达成：错误可自查（P0-1）、开关
 |---|---|---|---|
 | 按意图定位元素 | `@1`+`selector`+`role` | `a`/`input` | 平 |
 | **执行精度**（`@N`→`wait`/`pick` 命中同一节点） | **稳定 round-trip，`pick.ref===@N`** | 无持久 ref 概念 | **DNK 胜**（唯一真值 ref 语言） |
-| **观测保真**（a11y 心智模型） | **结构性受损**：`example.com` 在引擎里是 `STYLE,svg,P×6,A,SCRIPT`，**无 `<h1>`**；Kitesurf 渲染器把语义标题/列表/容器压成 `svg`+`p` | 真实 DOM，h1/list/table 全在 | **ego 胜（结构性）** |
-| 延迟（快照/加载） | `/snapshot` 78–83ms | goto+DOM 789–1054ms | **DNK 快 10×**（但代价是树更浅） |
-| 协议/错误面 | `ERROR_CATALOG` 全表 + `hints` + `errorId` 契约 | Playwright 异常文本 | **DNK 胜**（结构化、可自查） |
+| **观测保真**（a11y 心智模型） | **不一致（非全缺）**：`example.com`→svg 路径压扁成 `P×6,A` 无 `<h1>`；但 `httpbin/html`+`wikipedia` 的 `<h1>` **保留**为 `heading`；表单控件（`textbox`/`radio`/`checkbox`）在 form 路径全存活 | 真实 DOM 全保留 | **ego 胜（不一致性 = 不可预测的退化）** |
+| 延迟（快照） | `/snapshot` 36–83ms | goto+DOM 295–4279ms | **DNK 快**（但重 SSR 上树可能是陈旧的，见下） |
+| **确定性错误契约** | 4/4 边缘输入给出稳定的 `errorId`+HTTP（`pick.miss`/`ref.miss`/`pick.point`/`pick.selector`）；未知工具也回 `kitesurf.tool.unknown` | Playwright 抛文本异常 | **DNK 胜**（可自查、可重试决策） |
+| **协议稳定性**（MCP 面） | 11/11：initialize、tools/list 15 工具枚举、帧 scoped JSON-RPC、`kitesurf_control` claim→status→busy(拒非排队)→release | ego 无对等 MCP 写所有权工具 | **DNK 胜**（单写者契约在协议层可测） |
 
-### 决定性的架构现实（必须写清）
+### 三个修正/新增的真发现（§7.5 修订）
 
-Kitesurf 引擎**不是 Chromium**——它是 workerd 里一个自研渲染器，把目标页**重写**成自己的渲染树（SVG 视口 + 段落文本运行 + 表单控件）。`document.querySelector("h1")` 在引擎内为 `null`。表单控件与链接存活（`@2 textbox "custname"` 证明），但 heading/语义容器/list/table 被压扁。
+1. **渲染保真是「不一致」不是「全缺」**（修正初判）。Kitesurf 渲染器至少有两条路径：`example.com` 走 svg 视口路径压扁语义；`httpbin/html`、`wikipedia` 走文本路径保留 `<h1>`/`heading`。对 agent 这意味着**退化不可预测**——`/snapshot` 现在带 `fidelity{refs,interactive,semantic,svgViewport,sparse}`，`/diagnostics` 在 `sparse` 时推诚实 hint。
+2. **重 SSR 容量缺口**：`wikipedia`（重 SSR）`/open` 超过 20s 超时。ego 同页 ~4.3s 加载完成。这是引擎吞吐差距，不是契约问题——`P2` 容量项。
+3. **stale-snapshot 无提示隐患**（新增）：`/open` 超时后，引擎可能仍在导航，`/snapshot` **静默返回上一页的树**（wikipedia case 的树头是上一页 Moby-Dick）。agent 若不交叉核对 `snap.url` 会拿错数据。`/diagnostics` 应推「最近 navigate 超时 + lastSnapshot.url≠意图目标」hint——**待做**（P1 内，扩约免费只是 hint 字符串）。
 
 **含义**：DNK 不可能在「通用浏览器自动化」轴上「全面超越」ego——那是 Kitesurf 渲染器刻意的轻量取舍，不是 bug。**DNK 能且应该赢得的，是 design-mode 协作调试这条 lane**：人点选→元素包→composer→agent 改写→写回页面，这条环 ego 完全没有（它没有 pane、没有元素包契约、没有 `@N` 统一语言、没有 composer 集成）。
 

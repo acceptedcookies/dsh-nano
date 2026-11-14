@@ -613,6 +613,20 @@ export function apply(ctx, config) {
     if (kite.snapshot().phase !== 'running') hints.push(`phase=${kite.snapshot().phase}：按阶段用 start/suspend/resume，409 是阶段不符不是引擎故障`)
     const snapFid = getLastSnapshot()?.fidelity
     if (snapFid?.sparse) hints.push(`渲染保真稀疏：a11y 树 ${snapFid.refs} 个节点但 semantic=0、interactive=${snapFid.interactive}（Kitesurf 把语义结构渲染成了块）。用人点选 /pick 或 @N 定位，勿依赖 heading/list/语义 landmark；富语义页面建议 Chromium/ego`)
+    // Stale-snapshot guard: a timed-out/failed navigate can leave the engine
+    // still mid-navigation while the stored tree is the PREVIOUS page. If the
+    // last snapshot's url differs from what the engine reports now, warn the
+    // agent the tree may not describe the intended page — cross-check snap.url.
+    const attachedTid = targets?.attachedPage
+    const liveUrl = status.ok ? ((targets?.targets || []).find((t) => t.type === 'page' && (t.targetId === attachedTid || t.attached))?.url
+      || (targets?.targets || []).find((t) => t.type === 'page')?.url || null) : null
+    const snapUrl = getLastSnapshot()?.url
+    const recentNavFail = (summary.recentErrors || []).some((e) => /navigate|open|egress|timeout/i.test(e.errorId || '') && Date.now() - new Date(e.at || 0).getTime() < 60000)
+    if (snapUrl && liveUrl && snapUrl !== liveUrl) {
+      hints.push(`快照可能陈旧：lastSnapshot.url=${snapUrl} ≠ 引擎当前 ${liveUrl}。/open 可能超时但引擎仍在导航——先 /snapshot 重新抓取并核对 url，再信这棵树${recentNavFail ? '（最近有 navigate 超时/egress 记录）' : ''}`)
+    } else if (snapUrl && recentNavFail) {
+      hints.push(`最近 navigate 超时/egress：引擎可能仍在加载，/snapshot 的树可能是旧页——核对 snap.url 再行动`)
+    }
     return {
       ok: true,
       at: new Date().toISOString(),

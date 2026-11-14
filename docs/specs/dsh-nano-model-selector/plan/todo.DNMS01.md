@@ -150,9 +150,9 @@ T-EXEC 工作日志回填 AP ──▶ T-CLO closure ──▶ T-REV ≥3 路对
 
 ### 3.8 Phase 6 — 观测派生与读面
 
-- [ ] `P6-01` — `sessionProjections` 注册（P0-10 FAIL 时 per-session Map fallback + 附录登记）（`L3-T15a/T15b`/`L3-T18`）
+- [x] `P6-01` — [观测面实现落位：compact-runtime.js + GET runtime/degraded 接入] — `sessionProjections` 注册（P0-10 FAIL 时 per-session Map fallback + 附录登记）（`L3-T15a/T15b`/`L3-T18`）
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
-- [ ] `P6-02` — `runtime.fill` 5s memo + `runtime.degraded` 四值闭集 + 读面 partial-degrade + P95（`L3-T16`/`T18`/`T19`）
+- [x] `P6-02` — [观测面实现落位：compact-runtime.js + GET runtime/degraded 接入] — `runtime.fill` 5s memo + `runtime.degraded` 四值闭集 + 读面 partial-degrade + P95（`L3-T16`/`T18`/`T19`）
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
 
 ### 3.9 Phase 7 — 收口

@@ -130,9 +130,13 @@ test('start, suspend, and resume follow one path and call the engine hooks', asy
   await backend.stop('a')
   await backend.restart('a')
   assert.deepEqual(seen, ['start', 'stop', 'restart'])
+  assert.equal(seen[0], 'start')
+  assert.equal(seen[1], 'stop')
+  assert.equal(seen[2], 'restart')
   assert.equal(backend.calls.start, 1)
   assert.equal(backend.calls.stop, 1)
   assert.equal(backend.calls.restart, 1)
+  assert.equal(backend.calls.spawn, 3)
   await assert.rejects(apple({}, { spawn() { return Promise.reject(new Error('no')) } }).start('a'))
 })
 

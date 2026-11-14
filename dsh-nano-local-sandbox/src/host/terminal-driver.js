@@ -1,3 +1,6 @@
+import { appendFileSync, mkdirSync } from 'node:fs'
+import { dirname } from 'node:path'
+
 export const TERM_TOOL_NAMES = Object.freeze([
   'term.session.create',
   'term.session.list',
@@ -51,7 +54,13 @@ export function validateTermCall(name, args = {}) {
   return { ok: true }
 }
 
-export function createTermSession(args, audit, url) {
+export function appendTermAudit(file, record) {
+  if (!file) return
+  mkdirSync(dirname(file), { recursive: true })
+  appendFileSync(file, `${JSON.stringify({ t: new Date().toISOString(), ...record })}\n`)
+}
+
+export function createTermSession(args, audit, url, auditFile) {
   const checked = validateTermCall('term.session.create', args)
   if (!checked.ok) return checked
   const id = args.sessionId ?? 'term-1'
@@ -59,7 +68,9 @@ export function createTermSession(args, audit, url) {
     id,
     attach: { protocol: 'dnt-ws-v1', url },
   }
-  audit?.push({ op: 'open', id })
+  const record = { op: 'open', id }
+  audit?.push(record)
+  appendTermAudit(auditFile, record)
   return { ok: true, ...session }
 }
 

@@ -57,8 +57,10 @@ export async function spawnEngine({ model = DEFAULT_MODEL, instructions = DEFAUL
  * the engine emits them; note_* executors also record via corpus.
  */
 export async function runOneShot(promptText, opts = {}) {
+  const t0 = performance.now()
   const { engine, done } = await spawnEngine(opts)
   const onEvent = typeof opts.onEvent === 'function' ? opts.onEvent : null
+  const spawnMs = performance.now() - t0
   let text = ''
   const toolCalls = []
   try {
@@ -71,7 +73,7 @@ export async function runOneShot(promptText, opts = {}) {
       }
     }
     const res = await turn.result
-    return { text, stopReason: res?.stopReason ?? null, usage: res?.usage ?? null, toolCalls }
+    return { text, stopReason: res?.stopReason ?? null, usage: res?.usage ?? null, toolCalls, timing: { spawnMs: Math.round(spawnMs), turnMs: Math.round(performance.now() - t0 - spawnMs) } }
   } finally {
     done()
   }

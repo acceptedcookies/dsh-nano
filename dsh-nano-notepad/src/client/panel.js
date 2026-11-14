@@ -2086,6 +2086,17 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
         <div class="np-fx-out"></div>
         <ul class="np-fx-tools"></ul>
         <div class="np-fx-foot" hidden><span>${escapeHtml(copy.fxWrote ?? '已写产物')}</span> <span class="np-fx-links"></span></div>`
+    /* 管线面板（L4：pipeline_defs 列表 + 新建 + 运行） */
+    const pipePanel = document.createElement('div')
+    pipePanel.innerHTML = `
+      <div class="np-fx-pipe-new" hidden>
+        <input class="np-fx-pipe-name" placeholder="${escapeHtml(copy.fxPipeName ?? '管线名')}">
+        <textarea class="np-fx-pipe-spec" rows="5" placeholder='{"name":"demo","stages":[{"step":"run","args":{"prompt":"…"}}]}'></textarea>
+        <button type="button" class="np-fx-pipe-save">${escapeHtml(copy.fxPipeSave ?? '存定义')}</button>
+      </div>
+      <button type="button" class="np-fx-pipe-add">${escapeHtml(copy.fxPipeNew ?? '新建管线')}</button>
+      <ul class="np-fx-pipe-list"></ul>
+      <div class="np-fx-pipe-out"></div>`
     /* 历史面板（读 sqlite runs 表） */
     const histPanel = document.createElement('div')
     histPanel.innerHTML = `<div class="np-fx-hist">${escapeHtml(copy.fxHistEmpty ?? '无 run 记录')}</div>`
@@ -2094,6 +2105,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       value: 'run',
       items: [
         { value: 'run', label: copy.fxRunBtn ?? '运行', panel: runPanel },
+        { value: 'pipe', label: copy.fxPipe ?? '管线', panel: pipePanel },
         { value: 'hist', label: copy.fxHist ?? '历史', panel: histPanel },
       ],
     })
@@ -2103,7 +2115,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       body,
       setup: (el, closeSelf) => {
         const card = el.querySelector('.np-fx-card')
-        card.appendChild(tabs.el); card.appendChild(runPanel); card.appendChild(histPanel)
+        card.appendChild(tabs.el); card.appendChild(runPanel); card.appendChild(pipePanel); card.appendChild(histPanel)
         const promptSel = runPanel.querySelector('.np-fx-prompt')
         const modelSel = runPanel.querySelector('.np-fx-model')
         const input = runPanel.querySelector('.np-fx-input')
@@ -2181,6 +2193,46 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
             if (changedOpen) { openFile(changedOpen.id); markChanged(changedOpen.id) }
             void refreshHist()
           } catch (e) { out.textContent = `ERR: ${e?.message ?? e}` }
+        }
+        /* 管线面板：列表 + 新建 + 运行（L4 定义面 + L3 执行面）。 */
+        const pipeList = pipePanel.querySelector('.np-fx-pipe-list')
+        const pipeOut = pipePanel.querySelector('.np-fx-pipe-out')
+        const pipeNew = pipePanel.querySelector('.np-fx-pipe-new')
+        const refreshPipes = async () => {
+          try {
+            const defs = await window.__nanoNotepad.fx.pipelines.list()
+            pipeList.innerHTML = defs.length ? defs.map(d =>
+              `<li><b>${escapeHtml(d.name ?? d.id)}</b> <button type="button" class="np-fx-pipe-run" data-id="${d.id}">${escapeHtml(copy.fxRunBtn ?? '运行')}</button> <button type="button" class="np-fx-pipe-del" data-id="${d.id}">×</button></li>`).join('')
+              : `<li class="np-fx-pipe-none">${escapeHtml(copy.fxPipeEmpty ?? '无管线定义')}</li>`
+          } catch { pipeList.innerHTML = `<li>${escapeHtml(copy.fxHistErr ?? '管线不可用')}</li>` }
+        }
+        void refreshPipes()
+        pipePanel.querySelector('.np-fx-pipe-add').onclick = () => { pipeNew.hidden = !pipeNew.hidden }
+        pipePanel.querySelector('.np-fx-pipe-save').onclick = async () => {
+          const name = pipePanel.querySelector('.np-fx-pipe-name').value.trim()
+          const specTxt = pipePanel.querySelector('.np-fx-pipe-spec').value
+          try {
+            const spec = JSON.parse(specTxt)
+            await window.__nanoNotepad.fx.pipelines.define(name || spec.name || 'pipeline', spec)
+            pipeNew.hidden = true
+            pipeOut.textContent = `已存 ${name || spec.name}`
+            void refreshPipes()
+          } catch (e) { pipeOut.textContent = `ERR: ${e?.message ?? e}` }
+        }
+        pipeList.onclick = async (ev) => {
+          const runBtn = ev.target.closest('.np-fx-pipe-run')
+          const delBtn = ev.target.closest('.np-fx-pipe-del')
+          if (delBtn) { await window.__nanoNotepad.fx.pipelines.remove(delBtn.dataset.id); void refreshPipes(); return }
+          if (runBtn) {
+            const def = await window.__nanoNotepad.fx.pipelines.get(runBtn.dataset.id)
+            if (!def?.spec) { pipeOut.textContent = 'def missing'; return }
+            pipeOut.textContent = `运行 ${def.name}…`
+            try {
+              const res = await window.__nanoNotepad.fx.runPipeline(def.spec, { model: modelSel?.value || undefined, nodeId: state.ui.currentId, defId: def.id })
+              pipeOut.textContent = `${res.status} — ${res.stages.map(s => `${s.step}${s.ok ? '✓' : '✗'}`).join(' ')}`
+              void refreshHist(); void refreshPipes()
+            } catch (e) { pipeOut.textContent = `ERR: ${e?.message ?? e}` }
+          }
         }
         const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'np-fx-go'; btn.textContent = copy.fxRunBtn ?? '运行'
         btn.onclick = () => void run().catch(showError)
@@ -3796,12 +3848,14 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
         let res = null; let err = null
         try {
           try { await sq.openPipeline(); await sq.beginRun(runId, 'fx-run', { prompt: String(text).slice(0, 200) }) } catch {}
-          res = await m.runOneShot(text, { tools: buildNoteTools({ corpus: window.__nanoNotepad.fx.corpus() }), toolContext: { corpus: window.__nanoNotepad.fx.corpus() }, ...opts })
+          res = await perf.span('fx-turn', () => m.runOneShot(text, { tools: buildNoteTools({ corpus: window.__nanoNotepad.fx.corpus() }), toolContext: { corpus: window.__nanoNotepad.fx.corpus() }, ...opts }))
           try { await sq.checkpoint(runId, 'done', { toolCalls: res?.toolCalls?.length ?? 0 }) } catch {}
         } catch (e) { err = e } finally {
           try { await sq.finishRun(runId, err ? 'error' : 'done') } catch {}
         }
-        await window.__nanoNotepad.fx._refreshNodes()
+        /* 管线编排调用（opts.skipRefresh）跳过 per-stage 全量刷新——链尾统一一次，
+           避免多 stage 每步 IDB 扫描+树渲染的 O(n×stages) 开销。 */
+        if (!opts.skipRefresh) await window.__nanoNotepad.fx._refreshNodes()
         if (err) throw err
         return res
       }),
@@ -3812,6 +3866,28 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       corpusList: async () => (await loadSnapshot(state.db)).nodes.filter(n => n.cat).map(n => ({ id: n.id, cat: n.cat, name: n.name, rejectCount: n.rejectCount ?? 0 })),
       casProbe: () => import('./fx-sqlite.js').then(m => m.casProbe()),
       casGateState: () => import('./fx-sqlite.js').then(m => m.casGateState()),
+      /* L3/L4：管线编排 + 定义面。spec={name,stages:[{step,args}]}；ctx 供 runWithTools。 */
+      runPipeline: (spec, opts = {}) => import('./fx-pipeline.js').then(async m => {
+        const res = await perf.span('fx-pipeline', () => m.runPipeline(spec, {
+          idb: state.db,
+          corpus: () => window.__nanoNotepad.fx.corpus(),
+          sqlite: () => window.__nanoNotepad.fx.sqlite(),
+          runWithTools: (t, o) => window.__nanoNotepad.fx.runWithTools(t, o),
+          perf,
+          model: opts.model,
+          node: opts.nodeId ? state.nodes.find(n => n.id === opts.nodeId) : current(),
+          vars: opts.vars ?? {},
+          defId: spec.defId ?? null,
+        }))
+        await window.__nanoNotepad.fx._refreshNodes()
+        return res
+      }),
+      pipelines: {
+        list: () => import('./fx-sqlite.js').then(m => m.listPipelines()),
+        define: (name, spec) => import('./fx-sqlite.js').then(m => m.definePipeline(name, spec)),
+        get: (id) => import('./fx-sqlite.js').then(m => m.getPipeline(id)),
+        remove: (id) => import('./fx-sqlite.js').then(m => m.deletePipeline(id)),
+      },
       __setCasGateForTest: (pass) => import('./fx-sqlite.js').then(m => m.__setCasGateForTest(pass)),
       setCat: (id, cat) => window.__nanoNotepad.fx.corpus().setCat({ id, cat }),
       acceptDraft: (id) => acceptDraft(state.db, id),

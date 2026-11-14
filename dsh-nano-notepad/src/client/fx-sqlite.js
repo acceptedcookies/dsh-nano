@@ -19,6 +19,8 @@ const SQLITE_S3_KEY = 'sqlite/pipeline.db'
 const MANIFEST_S3_KEY = 'sqlite/manifest.json'
 
 let promiser = null
+let promiserInFlight = null
+let openPipelineInFlight = null
 let dbId = null
 let opfsOk = null
 /** A5 启动门：cas-probe 结果（null=未跑 / pass=true|false）。fail 时共享写
@@ -44,38 +46,51 @@ async function loadSqlite() {
   return mod.sqlite3Worker1Promiser ?? mod.default?.sqlite3Worker1Promiser
 }
 
-async function ensurePromiser() {
-  if (promiser) return promiser
-  const pf = await loadSqlite()
-  promiser = await new Promise((resolve, reject) => {
-    const p = pf({
-      worker: () => new Worker(WORKER_URL, { type: 'module' }),
-      onready: () => resolve(p),
-      onerror: reject,
+function ensurePromiser() {
+  /* 并发保护：两个调用方同时 ensurePromiser 会各建一个 worker + promiser，
+     后者覆盖前者，被覆盖的 worker 再收到消息时报 unhandled worker message。
+     缓存 in-flight promise 使 worker 只建一次。 */
+  if (promiser) return Promise.resolve(promiser)
+  if (promiserInFlight) return promiserInFlight
+  promiserInFlight = (async () => {
+    const pf = await loadSqlite()
+    promiser = await new Promise((resolve, reject) => {
+      const p = pf({
+        worker: () => new Worker(WORKER_URL, { type: 'module' }),
+        onready: () => resolve(p),
+        onerror: reject,
+      })
+      setTimeout(() => reject(new Error('sqlite-promiser-timeout')), 15000)
     })
-    setTimeout(() => reject(new Error('sqlite-promiser-timeout')), 15000)
-  })
-  return promiser
+    return promiser
+  })().finally(() => { promiserInFlight = null })
+  return promiserInFlight
 }
 
 /**
  * Open the pipeline db. filename uses opfs-sahpool when available, else
  * a :memory: fallback (export/import still works; no OPFS persistence).
  */
-export async function openPipeline() {
-  const p = await ensurePromiser()
-  if (dbId) return dbId
-  let open
-  try {
-    open = await p('open', { filename: 'file:np-pipeline?vfs=opfs-sahpool' })
-    opfsOk = true
-  } catch {
-    open = await p('open', { filename: ':memory:' })
-    opfsOk = false
-  }
-  dbId = open.dbId
-  await migrate(p, dbId)
-  return dbId
+export function openPipeline() {
+  /* 并发保护：两个调用方同时 open 会向同一 worker 发两次 open（sqlite worker
+     报 unhandled message）。缓存 in-flight promise 使 open 只发一次。 */
+  if (openPipelineInFlight) return openPipelineInFlight
+  openPipelineInFlight = (async () => {
+    const p = await ensurePromiser()
+    if (dbId) return dbId
+    let open
+    try {
+      open = await p('open', { filename: 'file:np-pipeline?vfs=opfs-sahpool' })
+      opfsOk = true
+    } catch {
+      open = await p('open', { filename: ':memory:' })
+      opfsOk = false
+    }
+    dbId = open.dbId
+    await migrate(p, dbId)
+    return dbId
+  })().finally(() => { openPipelineInFlight = null })
+  return openPipelineInFlight
 }
 
 export function opfsAvailable() { return opfsOk === true }
@@ -104,9 +119,38 @@ async function migrate(p, id) {
         id TEXT PRIMARY KEY, cat TEXT, name TEXT,
         content TEXT, meta TEXT);
       CREATE INDEX IF NOT EXISTS corpus_cat ON corpus_nodes(cat);
+      CREATE TABLE IF NOT EXISTS pipeline_defs(
+        id TEXT PRIMARY KEY, name TEXT, spec_json TEXT, created_at INTEGER);
     `,
   })
 }
+
+/* ── L4 pipeline 定义面：stage 链 spec 入 sqlite，与管线执行态同域。
+   CRUD 先 openPipeline()——promiser 未初始化时 exec 会空调（之前 rt bug）。 ── */
+const withDb = async (fn) => { await openPipeline(); return fn() }
+export async function definePipeline(name, spec) {
+  return withDb(async () => {
+    const id = `def-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
+    await exec('INSERT OR REPLACE INTO pipeline_defs(id,name,spec_json,created_at) VALUES(?,?,?,?)',
+      [id, String(name), JSON.stringify(spec), Date.now()])
+    return { id, name }
+  })
+}
+export async function listPipelines() {
+  return withDb(async () => {
+    const rows = await queryRows('SELECT id,name,spec_json,created_at FROM pipeline_defs ORDER BY created_at DESC', [])
+    return rows.map(r => ({ id: r.id, name: r.name, spec: safeJson(r.spec_json), createdAt: r.created_at }))
+  })
+}
+export async function getPipeline(id) {
+  return withDb(async () => {
+    const r = await queryRows('SELECT id,name,spec_json,created_at FROM pipeline_defs WHERE id=?', [id])
+    const row = r[0]
+    return row ? { id: row.id, name: row.name, spec: safeJson(row.spec_json), createdAt: row.created_at } : null
+  })
+}
+export async function deletePipeline(id) { return withDb(async () => { await exec('DELETE FROM pipeline_defs WHERE id=?', [id]) }) }
+const safeJson = s => { try { return JSON.parse(s) } catch { return null } }
 
 /* worker1 response: {type:'exec', result:{resultRows:[...]}} for queries;
    {type:'export', result:{byteArray:Uint8Array}} for export. Errors arrive

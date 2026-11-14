@@ -16,6 +16,7 @@ test('confine is the only build path, and a missing sandbox does not spawn', asy
     ctx: { sandbox: { async confine(argv) { confined += 1; return { argv } } } },
     profileDir,
     checkout,
+    argv: ['build', profileDir],
     spawn,
     execFile,
   })

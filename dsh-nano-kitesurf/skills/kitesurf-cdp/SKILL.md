@@ -113,10 +113,10 @@ A failed call returns `{ok:false,errorId,error}` with a real HTTP status. The sa
 | `kitesurf.shot.scroll` | 400 | scroll 非有限数/超 ±4000，format 不是 png/jpeg/webp，或 fit 不是 {width,height} | POST /shot {scroll: ±整数, format:"webp", quality:1..100, fit:{width,height}} |
 | `kitesurf.settings.viewport` | 400 | userAgent/viewport/media/extraHeaders 形状非法或值越界（视口 320..3840 × 240..2160；dsf 1/2/3；media screen|print；header 名禁用凭证类） | POST /settings {"viewport":{"width":1024,"height":768},"media":"print","extraHeaders":{"X-Debug":"1"}}；任一字段传 null 清除；空串 UA 清除伪装 |
 | `kitesurf.kite.state` | 409 | 生命周期阶段不符（idle 才能 start、running 才能 suspend、suspended 才能 resume） | GET /status 读 kite.phase；按阶段选 start/suspend/resume；host 重启后 phase 会自动 adopt |
-| `kitesurf.kite.remote` | 400 | configure 参数非法、远程地址未开 allowRemote、或缺少 KITESURF_CHECKOUT/config.checkout | loopback 地址；mcpPort 1..65535；在 profile patch 写 config.checkout |
+| `kitesurf.kite.remote` | 400 | configure 参数非法，或远程地址未开 allowRemote | loopback 地址；mcpPort 1..65535；不要在这个包里写 checkout |
 | `kitesurf.kite.node` | 500 | Node 版本过低或锁文件不可写 | 需要 Node ≥22；检查 DSH_HOME 可写 |
 | `kitesurf.kite.portbusy` | 409 | 要重建到的宿主端口被其他程序占用（本机 8787 常被 Cursor 占用） | 把 profile 的 config.httpBase 指到空闲端口（如 http://127.0.0.1:8798）后重启宿主；现有容器不会被删 |
-| `kitesurf.kite.container` | 502 | container CLI 冷启动/镜像/挂载失败（错误正文含 stdout 尾部真因） | 看 error 里的 failed to bootstrap 类信息；container system start；GET /diagnostics 看最近操作 |
+| `kitesurf.kite.container` | 502 | 实例没有起来 | 读 GET /nano-local-sandbox/status；不要在这个包里启动容器 |
 | `kitesurf.navigate.egress` | 504 | 目标站点出站超过 25s（引擎写入 egress timeout） | 换可达站点；不要重试同一地址；GET /status 确认引擎仍活 |
 | `kitesurf.navigate.delta` | 400 | /history delta 不是 -1 或 +1 | POST /history {delta:-1} 后退 / {delta:1} 前进 |
 | `kitesurf.navigate.failed` | 502 | Page.navigate 超时或被拒绝（DNS/网络） | 检查 URL 可达；超时后不要立刻重复 open（可能已在导航） |
@@ -180,12 +180,12 @@ GET  /nano-local-sandbox/console?level=log
 ## 7. 排障决策树
 
 1. `GET /diagnostics` → 读 `hints`。
-2. `engine.ok=false` → `curl http://127.0.0.1:8798/health`、`container list`（本机 Apple container）、`container system start`；容器缺了就 `POST /kite {"action":"resume"}`（先 `suspend` 若 phase=running）。
+2. `engine.ok=false` → `GET /nano-local-sandbox/status`。不要在这个包里启动容器。实例由 `sandbox.instance.ensure` 创建。
 3. `engineMismatch=true` → `POST /kite {"action":"configure","httpBase":"http://127.0.0.1:8798"}`。
 4. 有失败调用 → `GET /operations?errorsOnly=true` 取 errorId → 在第 5 节表里查 status/原因/下一步。
 5. 页面 JS 报错 → `GET /console?level=error,exception`；网络失败 → `level=network`；导航漂移 → `level=navigation`。
 6. 画面与 API 对不上 → `GET /targets` 确认附着页，重新 `POST /shot`。
-7. 冷启动失败 → 看 `error` 里的 stdout 尾部真因（`failed to bootstrap` 说明 apiserver 冷），`container system start` 后重试；`kitesurf.kite.checkout` 说明缺 `KITESURF_CHECKOUT` / `config.checkout`。
+7. 冷启动失败 → 读 `GET /nano-local-sandbox/status` 的 errorId。不要设置 checkout 环境变量，也不要在这个包里重试容器启动。
 8. 需要复现 → `POST /evaluate` 注入 `console.log` / 改 DOM，再用 `/shot` 看效果。
 
 宿主日志：`~/Library/Logs/dsh-dev-web.err.log`（dsh-dev.local 实例）；桥健康：`GET http://127.0.0.1:<mcpPort>/health`。
@@ -226,9 +226,9 @@ GET  /nano-local-sandbox/console?level=log
 3. 只有「偏好端口被占且现有容器端口也不可用」才抛 `409 kitesurf.kite.portbusy`，此时容器保持原样。
 4. 自愈入口：`POST /nano-local-sandbox/recover {}`（suspend→resume→健康检查→端口报告）；只读诊断：`GET /nano-local-sandbox/ports`；MCP 侧对应 `sandbox.ports` 与 `sandbox.recovery_plan`。
 
-**上下文引用（composer 里可能出现 ref）**：默认注入的是**完整上下文正文**（不会裁切）。宿主同时登记一个 ref id，若有人在 composer 里看到 `[kitesurf:N …]` 这种**只有编号**的短 token（手动切换/外部工具产生），它不含上下文，**必须解析**：`GET /nano-local-sandbox/context?id=3` 返回 `{id, at, label, bytes, text, packet}`，其中 `text` 是**完整未裁切**的上下文（selector / text / box / 19 项 computed style / attrs / ancestors / componentStack），`packet` 是结构化元素包。`GET /nano-local-sandbox/context?limit=20` 列出最近引用；ref 环保留 50 条、宿主重启即清空——若 404 `kitesurf.context.miss`，说明引用已过期，请人重新点选。chip 只是引用，**不会自动发送**。
+**上下文引用**：点选包留在面板内存里。不要请求 context 或 last 路由。composer 里放完整正文，不靠编号回查。
 
-**MCP 排障（只用 MCP 也能定位）**：`ws://127.0.0.1:<mcpPort>/mcp` 的 `tools/list` 除 33 个 `agent_browser_*` 外还有 6 个 `sandbox.*` 原生工具：`sandbox.diagnostics`（一击全量）、`sandbox.console`、`sandbox.operations`、`sandbox.error_catalog`、`sandbox.targets`、`sandbox.ports`、`sandbox.recovery_plan`、`sandbox.bridge_health`。宿主每 30s（失败时立即）把诊断快照推给桥；若工具回 `kitesurf.diag.stale`，等几秒或先调宿主 `GET /diagnostics`。MCP 的 `-32601/-32602/-32700` 是 JSON-RPC 协议错，`kitesurf.*` 是业务错，两者互不等价。
+**MCP 排障**：先 `GET /nano-local-sandbox/status`。`tools/list` 的 sandbox 工具只有这 20 个：`sandbox.profile.list`、`sandbox.profile.describe`、`sandbox.instance.ensure`、`sandbox.instance.start`、`sandbox.instance.stop`、`sandbox.instance.restart`、`sandbox.instance.status`、`sandbox.diagnostics`、`sandbox.console`、`sandbox.operations`、`sandbox.error_catalog`、`sandbox.targets`、`sandbox.history`、`sandbox.dom`、`sandbox.elements`、`sandbox.selftest`、`sandbox.network`、`sandbox.ports`、`sandbox.recovery_plan`、`sandbox.bridge_health`。`agent_browser_*` 仍是 CDP 驱动。不要等宿主把快照推给桥。
 
 ## 9. Do not
 

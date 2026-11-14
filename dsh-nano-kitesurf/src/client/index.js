@@ -24,7 +24,7 @@ const NETWORK = '/nano-local-sandbox/network'
 const ELEMENTS = '/nano-local-sandbox/elements'
 const BROWSE_HISTORY = '/nano-local-sandbox/browse-history'
 const DOM = '/nano-local-sandbox/dom'
-const CONTEXT = '/nano-local-sandbox/context'
+const localNotes = []
 const KITE = '/nano-local-sandbox/kite'
 const KIND = 'kitesurf'
 const OWN_ID = 'nano-kitesurf'
@@ -981,8 +981,7 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
   /**
    * Arrow: put a compact chip in the composer and keep the FULL payload on
    * the host. The composer must stay readable (Cursor's inline pill idea);
-   * `⟦kitesurf:N⟧` resolves through GET /nano-local-sandbox/context/N, so nothing
-   * is truncated.
+   * The full note stays in this panel. There is no context route.
    */
   async function injectNote() {
     const note = noteOf()
@@ -994,11 +993,8 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
       // model as one meaningless token. So the DEFAULT is the full payload —
       // complete, never truncated. We still register a ref id so the same
       // packet can be re-pulled/resolved later, but the composer gets the text.
-      let refId = null
-      try {
-        const saved = await post(CONTEXT, { text: note, packet: element, label })
-        refId = saved.id
-      } catch { /* ref bookkeeping is best-effort, never block the injection */ }
+      const refId = null
+      localNotes.push({ text: note, packet: element, label })
       insertComposerNote(note)
       setComment('')
       setComposing(false)
@@ -1332,7 +1328,7 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
       if (el) { el.classList.add('__nks_hover'); hovered = el }
     }, true)
     doc.addEventListener('click', (e) => {
-      const dbg = (doc.defaultView.__dnkPick = doc.defaultView.__dnkPick || { fired: 0 })
+      const dbg = { fired: 0 }
       dbg.fired += 1
       dbg.mode = annotateRef.current
       if (!annotateRef.current) return

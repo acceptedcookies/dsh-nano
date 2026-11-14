@@ -3,7 +3,7 @@
 > 阶段: `DNLS01 — macOS local sandbox cutover`
 > 范围: `P1–P8` 代码与文档；审查与 ego 实跑未完成
 > Close-type: `implementation-complete-awaiting-live-verification`
-> 状态: `implementation-complete-awaiting-live-verification`
+> 状态: `implementation-complete-awaiting-live-verification`（三路审查已判不通过；下面的缺口还在）
 > 分支: `dnls01-macos-platform-cutover` @ `f68c472` 之后的补测 commit
 > 日期: `2026-11-14`
 

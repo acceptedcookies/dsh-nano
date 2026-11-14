@@ -18,7 +18,10 @@ export async function buildImage({ ctx, profileDir, checkout, argv }) {
     error.confined = 0
     throw error
   }
-  const command = argv ?? ['container', 'build', '-t', 'kitesurf-engine', profileDir]
+  if (!Array.isArray(argv) || argv.length === 0) {
+    return { ok: false, status: 400, error: 'build-argv', confined: 0, naked, argv: null }
+  }
+  const command = argv
   const confined = await ctx.sandbox.confine(command)
   return { ok: true, status: 200, confined: 1, naked, argv: confined?.argv ?? command }
 }

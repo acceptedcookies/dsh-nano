@@ -13,6 +13,7 @@ const EXPECTED = {
   stopA: 0,
   bFingerprintSame: true,
   bRootSame: true,
+  wasOpen: true,
   pageLost: 'sandbox.cdp.page-lost',
   domIsNotOld: true,
   bLastUrl: 'https://b.example',
@@ -21,11 +22,12 @@ const EXPECTED = {
 
 async function oneTrace() {
   let stops = 0
+  const backend = {
+    async create() { return {} },
+    async stop() { stops += 1 },
+  }
   const box = createInstanceRegistry({
-    backend: {
-      async create() { return {} },
-      async stop() { stops += 1 },
-    },
+    backend,
     profile: profileFixture(),
     volumeFor: (id) => join(mkdtempSync(join(tmpdir(), 'dnls-soak-')), id),
   })
@@ -39,25 +41,32 @@ async function oneTrace() {
   const socket = { readyState: OPEN }
   keeper.attach(a.instance.instanceId, socket, { lastUrl: 'https://a.example', dom: 'OLD-A' })
   keeper.attach(b.instance.instanceId, { readyState: OPEN }, { lastUrl: 'https://b.example', dom: 'DOM-B' })
+  const wasOpen = socket.readyState === OPEN
   socket.readyState = CLOSED
   const lost = await keeper.read(a.instance.instanceId, async () => null)
   return {
-    idsDiffer: a.instance.instanceId !== b.instance.instanceId,
-    staleId: stale.errorId,
-    stopA: stops,
-    bFingerprintSame: b.instance.policyFingerprint === bFingerprint,
-    bRootSame: b.instance.workspaceRoot === bRoot,
-    pageLost: lost.errorId,
-    domIsNotOld: lost.dom !== 'OLD-A',
-    bLastUrl: keeper.sockets.get(b.instance.instanceId).lastUrl,
-    bPhase: b.instance.phase,
+    trace: {
+      idsDiffer: a.instance.instanceId !== b.instance.instanceId,
+      staleId: stale.errorId,
+      stopA: stops,
+      bFingerprintSame: b.instance.policyFingerprint === bFingerprint,
+      bRootSame: b.instance.workspaceRoot === bRoot,
+      wasOpen,
+      pageLost: lost.errorId,
+      domIsNotOld: lost.dom !== 'OLD-A',
+      bLastUrl: keeper.sockets.get(b.instance.instanceId).lastUrl,
+      bPhase: b.instance.phase,
+    },
+    release: () => backend.stop(a.instance.containerName),
+    readStops: () => stops,
   }
 }
 
 test('twenty soak runs match the specified trace', async () => {
-  const traces = []
-  for (let i = 0; i < 20; i += 1) traces.push(await oneTrace())
-  for (const trace of traces) assert.deepEqual(trace, EXPECTED)
-  assert.equal(traces.length, 20)
-  assert.equal(CLOSED, 3)
+  const runs = []
+  for (let i = 0; i < 20; i += 1) runs.push(await oneTrace())
+  for (const run of runs) assert.deepEqual(run.trace, EXPECTED)
+  assert.equal(runs.length, 20)
+  await runs[0].release()
+  assert.equal(runs[0].readStops(), 1)
 })

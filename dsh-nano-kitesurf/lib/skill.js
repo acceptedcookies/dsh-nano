@@ -161,12 +161,12 @@ GET  /nano-local-sandbox/console?level=log
 ## 7. 排障决策树
 
 1. \`GET /diagnostics\` → 读 \`hints\`。
-2. \`engine.ok=false\` → \`curl http://127.0.0.1:8798/health\`、\`container list\`（本机 Apple container）、\`container system start\`；容器缺了就 \`POST /kite {"action":"resume"}\`（先 \`suspend\` 若 phase=running）。
+2. \`engine.ok=false\` → \`GET /nano-local-sandbox/status\`。不要在这个包里启动容器。实例由 \`sandbox.instance.ensure\` 创建。
 3. \`engineMismatch=true\` → \`POST /kite {"action":"configure","httpBase":"http://127.0.0.1:8798"}\`。
 4. 有失败调用 → \`GET /operations?errorsOnly=true\` 取 errorId → 在第 5 节表里查 status/原因/下一步。
 5. 页面 JS 报错 → \`GET /console?level=error,exception\`；网络失败 → \`level=network\`；导航漂移 → \`level=navigation\`。
 6. 画面与 API 对不上 → \`GET /targets\` 确认附着页，重新 \`POST /shot\`。
-7. 冷启动失败 → 看 \`error\` 里的 stdout 尾部真因（\`failed to bootstrap\` 说明 apiserver 冷），\`container system start\` 后重试；\`kitesurf.kite.checkout\` 说明缺 \`KITESURF_CHECKOUT\` / \`config.checkout\`。
+7. 冷启动失败 → 读 \`GET /nano-local-sandbox/status\` 的 errorId。不要设置 checkout 环境变量，也不要在这个包里重试容器启动。
 8. 需要复现 → \`POST /evaluate\` 注入 \`console.log\` / 改 DOM，再用 \`/shot\` 看效果。
 
 宿主日志：\`~/Library/Logs/dsh-dev-web.err.log\`（dsh-dev.local 实例）；桥健康：\`GET http://127.0.0.1:<mcpPort>/health\`。
@@ -207,9 +207,9 @@ GET  /nano-local-sandbox/console?level=log
 3. 只有「偏好端口被占且现有容器端口也不可用」才抛 \`409 kitesurf.kite.portbusy\`，此时容器保持原样。
 4. 自愈入口：\`POST /nano-local-sandbox/recover {}\`（suspend→resume→健康检查→端口报告）；只读诊断：\`GET /nano-local-sandbox/ports\`；MCP 侧对应 \`sandbox.ports\` 与 \`sandbox.recovery_plan\`。
 
-**上下文引用（composer 里可能出现 ref）**：默认注入的是**完整上下文正文**（不会裁切）。宿主同时登记一个 ref id，若有人在 composer 里看到 \`[kitesurf:N …]\` 这种**只有编号**的短 token（手动切换/外部工具产生），它不含上下文，**必须解析**：\`GET /nano-local-sandbox/context?id=3\` 返回 \`{id, at, label, bytes, text, packet}\`，其中 \`text\` 是**完整未裁切**的上下文（selector / text / box / 19 项 computed style / attrs / ancestors / componentStack），\`packet\` 是结构化元素包。\`GET /nano-local-sandbox/context?limit=20\` 列出最近引用；ref 环保留 50 条、宿主重启即清空——若 404 \`kitesurf.context.miss\`，说明引用已过期，请人重新点选。chip 只是引用，**不会自动发送**。
+**上下文引用**：点选包留在面板内存里。不要请求 context 或 last 路由。composer 里放完整正文，不靠编号回查。
 
-**MCP 排障（只用 MCP 也能定位）**：\`ws://127.0.0.1:<mcpPort>/mcp\` 的 \`tools/list\` 除 33 个 \`agent_browser_*\` 外还有 6 个 \`sandbox.*\` 原生工具：\`sandbox.diagnostics\`（一击全量）、\`sandbox.console\`、\`sandbox.operations\`、\`sandbox.error_catalog\`、\`sandbox.targets\`、\`sandbox.ports\`、\`sandbox.recovery_plan\`、\`sandbox.bridge_health\`。宿主每 30s（失败时立即）把诊断快照推给桥；若工具回 \`kitesurf.diag.stale\`，等几秒或先调宿主 \`GET /diagnostics\`。MCP 的 \`-32601/-32602/-32700\` 是 JSON-RPC 协议错，\`kitesurf.*\` 是业务错，两者互不等价。
+**MCP 排障**：先 \`GET /nano-local-sandbox/status\`。\`tools/list\` 的 sandbox 工具只有这 20 个：\`sandbox.profile.list\`、\`sandbox.profile.describe\`、\`sandbox.instance.ensure\`、\`sandbox.instance.start\`、\`sandbox.instance.stop\`、\`sandbox.instance.restart\`、\`sandbox.instance.status\`、\`sandbox.diagnostics\`、\`sandbox.console\`、\`sandbox.operations\`、\`sandbox.error_catalog\`、\`sandbox.targets\`、\`sandbox.history\`、\`sandbox.dom\`、\`sandbox.elements\`、\`sandbox.selftest\`、\`sandbox.network\`、\`sandbox.ports\`、\`sandbox.recovery_plan\`、\`sandbox.bridge_health\`。\`agent_browser_*\` 仍是 CDP 驱动。不要等宿主把快照推给桥。
 
 ## 9. Do not
 
@@ -223,13 +223,13 @@ const NANO_KITE = `# nano-kite
 
 Session skill. \`POST /nano-local-sandbox/kite\` with \`{ "action" }\`. Live values are \`GET /nano-local-sandbox/status\` under \`kite\`. Drive pages with \`/kitesurf-cdp\` and \`kite.cdp\`. Do not launch Chrome.
 
-- \`init\` checks Node ≥22 first (agent-browser needs it), then writes \`$DSH_HOME/nano-kitesurf.lock.json\` once; a later init returns \`already: true\` without rewriting. Init does not start a container. The lock is not inside the plugin directory, because a host restart replaces that directory.
-- \`start\` — only from \`idle\`. Starts the local \`kitesurf\` container from inside DSH when the origin is loopback (publishes \`127.0.0.1:<enginePort>:8787\` and \`127.0.0.1:<mcpPort>:8791\`, mounts the checkout read-only), then waits for \`/health\`. Cold create first runs \`container system start\` to prime the debug-build apiserver (its inline bootstrap reports \`failed to bootstrap\`); a warm container is simply \`container start\`ed. A remote origin is only probed. Failure is \`kitesurf.kite.start\` / \`kitesurf.kite.container\` with the stdout tail in \`error\`.
+- \`init\` does not start a container and does not write a lock file in this package.
+- \`start\` does not run here. Ask the local sandbox host for \`sandbox.instance.ensure\`, then read \`GET /nano-local-sandbox/status\`.
 - \`suspend\` — only from running. Closes the CDP socket and stops the local container. THIS DROPS THE PAGE TO about:blank — anything the user was viewing is gone. Warn before suspending.
 - \`resume\` — only from suspended. Starts the same container again (or recreates it if missing); the page does not come back with it. A failure is \`kitesurf.kite.resume\`.
 - \`configure\` — \`{ "httpBase": "http://host:port", "mcpPort": 8799 }\`. A remote engine is refused with \`kitesurf.kite.remote\` unless the profile sets \`allowRemote: true\`. Credentials in the URL are \`kitesurf.url.credentials\`. \`mcpPort\` only takes effect the next time a container is created — an existing container keeps its published ports (a changed mapping is detected on start and the container is recreated). The MCP bridge serves \`GET /health\` over plain HTTP too: \`{ ok, mcp, conns, accepted, rejected, uptimeMs }\` — use it to confirm the bridge is up before pointing agents at \`ws://127.0.0.1:<mcpPort>/mcp\`. When piping JSON-RPC over the WebSocket, frames must end with \`\\n\` — a raw JSON frame without a trailing newline is silently dropped.
 
-Local container runs need a Kitesurf checkout: set \`KITESURF_CHECKOUT\` or profile \`config.checkout\` to a built source tree; missing/unreadable is \`kitesurf.kite.checkout\` (400, configuration — not an engine fault). Starting a cold container can take ~100s. If you hit it: \`GET /diagnostics\` → \`hints\` → add \`- id: nano-kitesurf / config.checkout\` to the profile's \`cordis.patch.yml\`, or export \`KITESURF_CHECKOUT\`, then restart the dsh host.
+This package does not read a checkout path and does not start a container. If status is down, stop and report that. Do not export a checkout variable.
 
 Wrong phase is \`kitesurf.kite.state\` (409). An old Node is \`kitesurf.kite.node\` (500) and does not write the lock. A bad port is \`kitesurf.kite.mcpPort\` (400). Bad JSON is \`kitesurf.body.json\` (400). Full table: see \`/kitesurf-cdp\` §5 or \`/diagnostics\` → \`observability.errorCatalog\`.`
 

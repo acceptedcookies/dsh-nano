@@ -58,6 +58,7 @@ test('a checkout path that escapes the profile never reaches confine or spawn', 
     ctx: { sandbox: { async confine() { confined += 1; return {} } } },
     profileDir: root,
     checkout: join(root, 'inside'),
+    argv: ['build', root],
     spawn() { spawned += 1 },
   })
   assert.equal(legal.ok, true)
@@ -72,6 +73,7 @@ test('building without ctx.sandbox throws and does not spawn npm or curl', async
     ctx: {},
     profileDir: root,
     checkout: join(root, 'inside'),
+    argv: ['build', root],
     spawn(cmd) {
       if (cmd === 'npm') naked.npm += 1
       if (cmd === 'curl') naked.curl += 1
@@ -84,6 +86,7 @@ test('building without ctx.sandbox throws and does not spawn npm or curl', async
     ctx: { sandbox: { async confine() { confined += 1; return {} } } },
     profileDir: root,
     checkout: join(root, 'inside'),
+    argv: ['build', root],
     spawn() { naked.npm += 1 },
   })
   assert.equal(confined >= 1, true)

@@ -204,7 +204,9 @@ export async function fetchEngine(httpBase, path, timeoutMs = CONNECT_MS) {
  * and pick have to share one socket or the second call sees about:blank.
  * @type {{ wsUrl: string, ws: WebSocket, send: Function, page: { targetId: string, sessionId: string } | null } | null}
  */
-let pageSocket = null
+function connectLive() {
+  throw new Error('cdp socket is owned by the local sandbox keeper, not this package')
+}
 let userAgent = ''
 let userAgentApplied = false
 /** @type {{ width: number, height: number, mobile: boolean, deviceScaleFactor: number } | null} */
@@ -349,15 +351,7 @@ export function releaseEngine() {
   dropLive()
 }
 
-function dropLive() {
-  if (pageSocket) {
-    try { pageSocket.ws.close() } catch { /* already closed */ }
-    pageSocket = null
-  }
-  // The identity proof is per-socket, not per-origin: a same-port replacement
-  // service must be re-verified before the next attach.
-  verifiedBase = null
-}
+function dropLive() {}
 
 /**
  * The engine identifies itself through /health ("kitesurf..." body). The CDP
@@ -366,8 +360,6 @@ function dropLive() {
  * non-Puppeteer command. Verified once per origin, before the first socket.
  * @type {string | null}
  */
-let verifiedBase = null
-
 async function verifyEngine(httpBase) {
   if (verifiedBase === httpBase) return
   let health
@@ -385,7 +377,7 @@ async function verifyEngine(httpBase) {
   verifiedBase = httpBase
 }
 
-async function connectLive(httpBase) {
+async function connectLiveRetired(httpBase) {
   const wsUrl = browserSocketUrl(httpBase)
   if (pageSocket && pageSocket.wsUrl === wsUrl && pageSocket.ws.readyState === WebSocket.OPEN) return pageSocket
   dropLive()

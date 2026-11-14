@@ -3,7 +3,6 @@
  * Lanes:
  *   local   — ctx.subprocess.spawnTerminal (node-pty on this dsh host)
  *   mcp     — remote MCP terminal endpoint (containers, SSH hosts, nano-agent)
- *   isolate — wasm/JS isolate lane (v8/workerd; scaffolded)
  *
  * Routes:
  *   GET  /dsh-nano-terminal/stream  (WebSocket upgrade, dnt-ws-v1 data plane)
@@ -22,7 +21,7 @@ import { handshake, FrameParser, sendBinary, sendText, sendClose, encodeFrame, p
 
 export const name = 'dsh-nano-terminal'
 
-export const inject = ['webServer', 'subprocess', 'sessions', 'workingDirectory', 'commands']
+export const inject = ['webServer', 'connection', 'subprocess', 'sessions', 'workingDirectory', 'commands']
 
 const ROUTE = '/dsh-nano-terminal'
 
@@ -54,7 +53,6 @@ export function apply(ctx) {
   const laneStatus = () => ({
     local: { status: 'up', backend: 'subprocess.spawnTerminal', sessions: registry.count() },
     mcp: { status: 'client', detail: 'lane connects to remote MCP endpoints; this host is itself an MCP terminal server' },
-    isolate: { status: 'stub', detail: 'wasm-embedded lane (workerd/v8) scaffolded' },
   })
 
   const mcp = createMcpHandler({ registry, bus, auditPath, laneStatus })
@@ -66,6 +64,11 @@ export function apply(ctx) {
   const unregisterUpgrade = ctx.webServer.registerUpgrade({
     path: `${ROUTE}/stream`,
     handler: (req, socket) => {
+      const rejection = ctx.get('connection')?.requestRejection?.(req)
+      if (rejection !== undefined) {
+        socket.end()
+        return
+      }
       if (!handshake(req, socket)) return
       const url = new URL(req.url ?? '/', 'http://localhost')
       const attachId = url.searchParams.get('session')

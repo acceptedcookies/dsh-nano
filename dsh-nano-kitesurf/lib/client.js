@@ -1900,7 +1900,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
   var ELEMENTS = "/nano-local-sandbox/elements";
   var BROWSE_HISTORY = "/nano-local-sandbox/browse-history";
   var DOM = "/nano-local-sandbox/dom";
-  var CONTEXT = "/nano-local-sandbox/context";
+  var localNotes = [];
   var KITE = "/nano-local-sandbox/kite";
   var KIND = "kitesurf";
   var OWN_ID = "nano-kitesurf";
@@ -2761,8 +2761,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       try {
         let refId = null;
         try {
-          const saved = await post(CONTEXT, { text: note, packet: element, label });
-          refId = saved.id;
+          localNotes.push({ text: note, packet: element, label });
         } catch {
         }
         insertComposerNote(note);
@@ -3091,7 +3090,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         }
       }, true);
       doc.addEventListener("click", (e) => {
-        const dbg = doc.defaultView.__dnkPick = doc.defaultView.__dnkPick || { fired: 0 };
+        const dbg = { fired: 0 };
         dbg.fired += 1;
         dbg.mode = annotateRef.current;
         if (!annotateRef.current) return;

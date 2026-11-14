@@ -219,11 +219,11 @@ const DNLS_TOOLS = [
     description: 'Elements panel data from the Kitesurf DOM/CSS domains: the last DOM tree (up to 40 nodes with tag/id/class/child count), the selector queried, and how many computed properties were returned. Call GET /nano-local-sandbox/elements?selector=… on the host for styles of a specific node.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
-  {
-    name: 'sandbox.control',
-    description: 'Page control/ownership state: which writer holds the page (owner client name, since when, last write). One page is shared by a human and agents; a second writer is refused kitesurf.control.busy rather than tearing navigation. Use before any mutating tool call.',
+  ...['sandbox.profile.list', 'sandbox.profile.describe', 'sandbox.instance.ensure', 'sandbox.instance.start', 'sandbox.instance.stop', 'sandbox.instance.restart', 'sandbox.instance.status'].map((name) => ({
+    name,
+    description: 'Host-owned lifecycle tool. This bridge does not start a container.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
-  },
+  })),
   {
     name: 'sandbox.selftest',
     description: 'One verdict over every layer: plugin build, engine identity, container state, published port loopback, MCP bridge counters, CDP targets, DOM availability, route table and phase consistency. Use after any restart or container change.',
@@ -349,6 +349,9 @@ function answerNativeTool(name, args, bridgeState) {
     steps.push({ order: steps.length + 1, action: 'verify', call: 'GET /nano-local-sandbox/ports' })
     steps.push({ order: steps.length + 1, action: 'if a port is busy, repoint config', call: 'profile cordis.patch.yml → - id: nano-kitesurf / config.httpBase: http://127.0.0.1:8798, then restart the host' })
     return { ok: true, phase, engineAlive: alive, steps, notes: 'kitesurf.kite.portbusy (409) means the requested port is held by another process; the existing container is preserved.' }
+  }
+  if (name.startsWith('sandbox.profile.') || name.startsWith('sandbox.instance.')) {
+    return { ok: false, errorId: 'kitesurf.tool.unknown', error: 'lifecycle tools are answered by the host, not this bridge' }
   }
   if (name === 'sandbox.control') {
     const c = bridgeState.control || {}
@@ -572,9 +575,6 @@ export function createBridge(port = PORT, env = process.env) {
           if (!parsed || typeof parsed !== 'object') throw new Error('not an object')
           // Two hosts can push to one engine (desktop + a dev profile). Keep the
           // richest history instead of letting an older host erase it.
-          const prev = lastDiagnostics?.history
-          const next = parsed?.history
-          if (prev && (!next || (next.entries?.length || 0) < (prev.entries?.length || 0))) parsed.history = prev
           lastDiagnostics = parsed
           diagnosticsPushedAt = new Date().toISOString()
           res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })

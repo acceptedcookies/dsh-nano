@@ -487,7 +487,23 @@ P0 的**契约可信**目标已全数达成：错误可自查（P0-1）、开关
 
 1. **渲染保真是「不一致」不是「全缺」**（修正初判）。Kitesurf 渲染器至少有两条路径：`example.com` 走 svg 视口路径压扁语义；`httpbin/html`、`wikipedia` 走文本路径保留 `<h1>`/`heading`。对 agent 这意味着**退化不可预测**——`/snapshot` 现在带 `fidelity{refs,interactive,semantic,svgViewport,sparse}`，`/diagnostics` 在 `sparse` 时推诚实 hint。
 2. **重 SSR 容量缺口**：`wikipedia`（重 SSR）`/open` 超过 20s 超时。ego 同页 ~4.3s 加载完成。这是引擎吞吐差距，不是契约问题——`P2` 容量项。
-3. **stale-snapshot 无提示隐患**（新增）：`/open` 超时后，引擎可能仍在导航，`/snapshot` **静默返回上一页的树**（wikipedia case 的树头是上一页 Moby-Dick）。agent 若不交叉核对 `snap.url` 会拿错数据。`/diagnostics` 应推「最近 navigate 超时 + lastSnapshot.url≠意图目标」hint——**待做**（P1 内，扩约免费只是 hint 字符串）。
+3. **stale-snapshot 无提示隐患**（新增→已闭合）：`/open` 超时后引擎可能仍在导航，`/snapshot` 静默返回上一页的树（wikipedia case 树头是上一页 Moby-Dick）。**已闭合**：`/diagnostics` 在 `lastSnapshot.url ≠ 引擎 attached page url` 时推「快照可能陈旧」hint（实测 example.com→httpbin 导航后正确告警），并提示先重抓并核对 `snap.url`。
+
+## §7.6 design-mode lane 对比（DNK 独占的赢面）
+
+`eval-design-mode.mjs` 在 httpbin/html 上 8/8 绿：
+
+| design-mode 能力 | DNK | ego |
+|---|---|---|
+| 人/agent 点选 → 富元素包 | `{selector,text,box,style×7,attrs,parentSel,childSel,ancestors,componentStack,element.ref}` 一调返回 | 无契约，agent 手写 `elementFromPoint`+`computedStyle` 拼装 |
+| 写回页面文本 | `/edit`→渲染态 `h1` 文本真改（验证「DNK WROTE THIS」渲染回读） | `evaluate` 改 DOM（等价但无契约） |
+| 仿真（viewport/media/UA/headers） | `/settings` 事务性 round-trip → `/shot` 视口一致（webp 138KB） | 无 per-call 契约 |
+| note-pull | `/last` 不重抓即回元素包 | 无 |
+| 真浏览器进退 | `/history{delta:-1}` 走 navigationHistory 回目标页 | Playwright `goBack`（等价） |
+
+**裁决**：design-mode 协作调试 lane **是 DNK 独占**——ego 没有元素包契约、没有 note-pull、没有 per-call 仿真、没有人点选↔agent 引用的同一语言。这正是「DNK 默认调试引擎」定位应锚定的 lane，而非通用自动化。
+
+**@N 依赖注记**：`/pick` 的 `element.ref` 只在**当前 URL 跑过 `/snapshot`** 后由页内 `querySelector` identity-probe 回填；人没快照就点选时 `ref` 缺席，agent 应回退用 `element.selector`（`wait`/`pick`/`edit` 同样接受）。`@N` 是增强句柄，`element.selector` 是兜底句柄——设计如此，非缺口。
 
 **含义**：DNK 不可能在「通用浏览器自动化」轴上「全面超越」ego——那是 Kitesurf 渲染器刻意的轻量取舍，不是 bug。**DNK 能且应该赢得的，是 design-mode 协作调试这条 lane**：人点选→元素包→composer→agent 改写→写回页面，这条环 ego 完全没有（它没有 pane、没有元素包契约、没有 `@N` 统一语言、没有 composer 集成）。
 

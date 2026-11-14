@@ -90,7 +90,7 @@ const STYLE = `
 .nks-nav-tab:hover .nks-nav-tab-x{display:inline-flex}
 .nks-nav-tab .nks-nav-tab-x:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-fill-error,#d5455c)}
 .nks-nav-empty{flex:auto;padding:12px 8px;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11);text-align:center}
-.nks-tool{width:28px;height:28px;color:var(--dsw-alias-label-secondary);border-radius:var(--dsw-radius-sm);cursor:pointer;background:transparent;border:0;flex:none;justify-content:center;align-items:center;padding:0;display:inline-flex}
+.nks-tool{width:28px;height:28px;color:var(--dsw-alias-label-secondary);border-radius:var(--dsw-radius-sm);cursor:pointer;background:transparent;border:0;flex:none;justify-content:center;align-items:center;padding:6px;display:inline-flex;box-sizing:border-box}
 .nks-tool:hover:not(:disabled){color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}
 .nks-tool:disabled{color:var(--dsw-alias-label-tertiary,rgba(207,211,214,.55));opacity:.45;cursor:default}
 .nks-tool:disabled:hover{background:transparent}
@@ -1168,9 +1168,11 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
     // goes through a wrapper span — the primitive Icon is the inner
     // element. Closed → mirrored (reveal affordance), open → unmirrored
     // (panel-at-left = the rail currently shown).
+    // Native _iconButton svg is 15×15 inside a 28×28 button (6px inset);
+    // the panel toggle keeps the same icon geometry.
     return h('span',
       { className: 'nks-tool-glyph', style: !navOpen && name === 'panel' ? { display: 'inline-flex', transform: 'scaleX(-1)' } : { display: 'inline-flex' } },
-      h(Icon, { width: 16, height: 16, 'aria-hidden': true }))
+      h(Icon, { width: 15, height: 15, 'aria-hidden': true }))
   }
 
   /**

@@ -311,6 +311,10 @@ function sleep(ms) {
 var decoder2 = new TextDecoder("utf-8", { fatal: false });
 var encoder = new TextEncoder();
 var KEEP_BACKOFF = [1500, 3e3, 6e3, 12e3, 3e4, 6e4];
+function defaultShell() {
+  if (process.platform === "win32") return process.env.COMSPEC ?? "cmd.exe";
+  return process.env.SHELL ?? "/bin/zsh";
+}
 function agentEnv(rec, apiBase) {
   return {
     DNT_TERMINAL_ID: rec.addr,
@@ -386,14 +390,14 @@ var SessionRegistry = class {
     if (spec.parent && !parentRec) throw err(KIND.NOT_FOUND, `no such parent '${spec.parent}'`);
     const id = randomUUID();
     const cwd = await this.resolveCwd(spec);
-    const shell = spec.shell || (process.env.SHELL ?? "/bin/zsh");
-    const argv = spec.args?.length ? [shell, ...spec.args] : [shell, "-i"];
+    const shell = spec.shell || defaultShell();
+    const argv = spec.args?.length ? [shell, ...spec.args] : [shell, ...process.platform === "win32" ? [] : ["-i"]];
     const record = new SessionRecord({
       id,
       lane: "local",
       handle: null,
       owner: spec.owner ?? spec.sessionId ?? "unknown",
-      title: spec.title ?? shell.split("/").pop(),
+      title: spec.title ?? shell.split(/[\\/]/).pop(),
       name: spec.name,
       parent: parentRec?.id,
       keep: !!spec.keep,
@@ -470,8 +474,8 @@ var SessionRegistry = class {
     if (!rec.pending) return;
     rec.pending = false;
     const meta = rec.meta ?? {};
-    const shell = meta.shell || (process.env.SHELL ?? "/bin/zsh");
-    const argv = meta.argv?.length ? meta.argv : [shell, "-i"];
+    const shell = meta.shell || defaultShell();
+    const argv = meta.argv?.length ? meta.argv : [shell, ...process.platform === "win32" ? [] : ["-i"]];
     const handle = await this.ctx.subprocess.spawnTerminal({
       argv,
       cwd: meta.cwd ?? process.env.HOME,

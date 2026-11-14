@@ -26,6 +26,13 @@ const encoder = new TextEncoder()
 // the respawned program survives ≥10s
 const KEEP_BACKOFF = [1500, 3000, 6000, 12000, 30000, 60000]
 
+// Default interactive shell per platform. $SHELL is POSIX-only; on Windows
+// fall back to %COMSPEC% (cmd.exe). Callers can always override via spec.shell.
+function defaultShell() {
+  if (process.platform === 'win32') return process.env.COMSPEC ?? 'cmd.exe'
+  return process.env.SHELL ?? '/bin/zsh'
+}
+
 // Injected into every pane's environment — lets an agent inside a terminal
 // address itself and call back the control plane (hc $HC_TERMINAL_ID model).
 function agentEnv(rec, apiBase) {
@@ -113,14 +120,14 @@ export class SessionRegistry {
 
     const id = randomUUID()
     const cwd = await this.resolveCwd(spec)
-    const shell = spec.shell || (process.env.SHELL ?? '/bin/zsh')
-    const argv = spec.args?.length ? [shell, ...spec.args] : [shell, '-i']
+    const shell = spec.shell || defaultShell()
+    const argv = spec.args?.length ? [shell, ...spec.args] : [shell, ...(process.platform === 'win32' ? [] : ['-i'])]
     const record = new SessionRecord({
       id,
       lane: 'local',
       handle: null,
       owner: spec.owner ?? spec.sessionId ?? 'unknown',
-      title: spec.title ?? shell.split('/').pop(),
+      title: spec.title ?? shell.split(/[\\/]/).pop(),
       name: spec.name,
       parent: parentRec?.id,
       keep: !!spec.keep,
@@ -199,8 +206,8 @@ export class SessionRegistry {
     if (!rec.pending) return
     rec.pending = false
     const meta = rec.meta ?? {}
-    const shell = meta.shell || (process.env.SHELL ?? '/bin/zsh')
-    const argv = meta.argv?.length ? meta.argv : [shell, '-i']
+    const shell = meta.shell || defaultShell()
+    const argv = meta.argv?.length ? meta.argv : [shell, ...(process.platform === 'win32' ? [] : ['-i'])]
     const handle = await this.ctx.subprocess
       .spawnTerminal({
         argv,

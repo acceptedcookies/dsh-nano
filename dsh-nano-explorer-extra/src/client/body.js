@@ -599,19 +599,18 @@ export function ExplorerBody(props) {
   }, [sessionId, request, refreshGit])
 
   /**
-   * Fetch every remote and prune dead remote-tracking refs.
-   *
-   * This is the only verb that refreshes what the remote world looks like: the remote branch
-   * section, ahead/behind numbers, and the graph's pushed lane all read `refs/remotes`, which
-   * nothing updates besides this and pull.
+   * Refresh is the one full round-trip: fetch every remote (best-effort — an offline or
+   * unauthorized fetch must not blank the local view) and then reread the repo. Remote branches,
+   * ahead/behind, and the graph's pushed lane all come out of the same `refs/remotes` snapshot
+   * this refreshes.
    */
-  const doFetch = useCallback(async () => {
+  const doRefresh = useCallback(async () => {
     setDrawerBusy(true)
     setDrawerError(undefined)
-    const result = await request('/fetch', { sessionId })
-    setDrawerBusy(false)
-    if (!result.ok) { setDrawerError(result.message); return }
+    const fetched = await request('/fetch', { sessionId })
+    if (!fetched.ok) setDrawerError(fetched.message)
     await refreshGit()
+    setDrawerBusy(false)
   }, [sessionId, request, refreshGit])
 
   /**
@@ -1095,12 +1094,11 @@ export function ExplorerBody(props) {
       onClose: () => { setDrawer(null); setDrawerError(undefined) },
       onPull: doPull,
       onPush: doPush,
-      onFetch: doFetch,
       onRemote: doRemote,
       onAuthor: doAuthor,
       onSshKey: doSshKey,
       onCheckout: doCheckout,
-      onRefresh: async () => { await refreshGit() },
+      onRefresh: doRefresh,
       onOpenConflict: path => { openEntry({ path: absoluteOf(cwd ?? '', path) }); setDrawer(null) },
     }),
     React.createElement(CommitDrawer, {

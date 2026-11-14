@@ -335,7 +335,7 @@ function HistoryRail({ copy, history, currentBranch, upstream, remotes }) {
  * @param props - copy, Git summary, and the actions the panel can start.
  * @returns the panel, or null while closed.
  */
-export function BranchDrawer({ copy, open, git, onClose, onPull, onPush, onFetch, onRefresh, onCheckout, onOpenConflict, onRemote, onAuthor, onSshKey, busy, error }) {
+export function BranchDrawer({ copy, open, git, onClose, onPull, onPush, onRefresh, onCheckout, onOpenConflict, onRemote, onAuthor, onSshKey, busy, error }) {
   usePanelConfinedLayer(open)
   const [query, setQuery] = useState('')
   const [branchTab, setBranchTab] = useState('local')
@@ -384,20 +384,26 @@ export function BranchDrawer({ copy, open, git, onClose, onPull, onPush, onFetch
   )
   return React.createElement(NanoDialog, {
     copy,
-    title: copy.branchDrawerTitle,
+    title: React.createElement('span', { className: 'nxe-drawer-title' },
+      copy.branchDrawerTitle,
+      busy === true
+        ? React.createElement(IconLoadingOutlineRegular, {
+          width: 15, height: 15, className: 'nxe-drawer-spin',
+          'aria-label': copy.commitRefreshing ?? 'refreshing', role: 'status',
+        })
+        : null),
     description: conflicts.length === 0 ? summary : `${summary} · ${copy.factConflicted(conflicts.length)}`,
     error,
     footer: React.createElement(React.Fragment, null,
       // The close action sits at the far left of the footer so it lands under the thumb the moment
       // the reader is done, matching the spot this panel family reserves for dismissals.
       React.createElement(Button, { variant: 'outline', className: 'nano-modal-action nxe-drawer-close', onClick: onClose }, copy.cancel),
-      React.createElement(Button, { variant: 'outline', className: 'nano-modal-action', onClick: () => { void onRefresh() } }, copy.refreshGit),
-      remotes.length === 0 ? null : React.createElement(Button, {
+      React.createElement(Button, {
         variant: 'outline', className: 'nano-modal-action',
         disabled: busy === true,
-        title: fetchStamp,
-        onClick: () => { void onFetch() },
-      }, copy.fetchNow),
+        title: remotes.length === 0 ? copy.refreshGitTitleLocal : `${copy.refreshGitTitleLocal} + ${fetchStamp}`,
+        onClick: () => { void onRefresh() },
+      }, copy.refreshGit),
       React.createElement(Button, {
         variant: 'outline', className: 'nano-modal-action',
         title: copy.repoSettingsTitle,

@@ -77,6 +77,12 @@ build({
   outfile: join(root, 'lib/route-guard.js'),
 })
 
+build({
+  entryPoints: ['src/host/ssh-keys.js'],
+  bundle: true, format: 'esm', platform: 'node',
+  outfile: join(root, 'lib/ssh-keys.js'),
+})
+
 // Browser half: IIFE wrapped in the client module-loader factory format.
 build({
   entryPoints: ['src/client/index.js'], bundle: true, format: 'iife',

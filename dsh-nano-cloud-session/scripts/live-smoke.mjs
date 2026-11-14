@@ -48,8 +48,12 @@ if (id) {
   await api.unarchive(profile, id); check(true, 'unarchive')
   await api.terminate(profile, id); check(true, 'terminate (DELETE)')
   // DELETE on a LIVE session is suspend(user_request), async and not archive.
-  await new Promise(r => setTimeout(r, 8000))
-  const after = await api.getSession(profile, id).catch(e => ({ err: e.reason }))
+  let after = {}
+  for (let i = 0; i < 6; i++) {
+    await new Promise(r => setTimeout(r, 5000))
+    after = await api.getSession(profile, id).catch(e => ({ err: e.reason }))
+    if (['suspended', 'exit'].includes(after.status)) break
+  }
   check(['suspended', 'exit'].includes(after.status), 'post-terminate suspended/exit',
     JSON.stringify({ status: after.status, detail: after.status_detail }))
   await api.archive(profile, id)

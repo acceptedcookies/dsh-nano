@@ -60,9 +60,9 @@ test('all 10 routes register through guard (fail-closed table)', async () => {
 test('config save+list+test round-trip; secret never returned', async () => {
   const routes = await makeHandlers()
   const port = upstream.address().port
-  const save = await call(routes.get('/nano-cloud-session/config'), { action: 'save', profile: { label: 't', orgId: 'org-t', baseUrl: `http://127.0.0.1:${port}`, secret: 'cog_x' } })
+  const save = await call(routes.get('/nano-cloud-session/config'), { action: 'save', profile: { label: 't', orgId: 'org-t', baseUrl: `http://127.0.0.1:${port}`, secret: 'cog_xtok45678' } })
   assert.equal(save.json.ok, false) // http baseUrl rejected
-  const save2 = await call(routes.get('/nano-cloud-session/config'), { action: 'save', profile: { label: 't', orgId: 'org-t', baseUrl: `https://127.0.0.1:${port}`, secret: 'cog_x' } })
+  const save2 = await call(routes.get('/nano-cloud-session/config'), { action: 'save', profile: { label: 't', orgId: 'org-t', baseUrl: `https://127.0.0.1:${port}`, secret: 'cog_xtok45678' } })
   assert.equal(save2.json.ok, true)
   assert.equal(save2.json.profile.secret, undefined)
   assert.equal(save2.json.profile.hasSecret, true)
@@ -82,8 +82,22 @@ test('sessions proxies upstream; ssh returns command', async () => {
   const r = await call(routes.get('/nano-cloud-session/sessions'), {})
   assert.equal(r.json.ok, false)
   assert.equal(r.json.reason, 'no-active-profile')
+  // E5: security card data — store paths + mode, no secret material
+  const sec = await call(routes.get('/nano-cloud-session/config'), { action: 'security' })
+  assert.equal(sec.json.ok, true)
+  assert.match(sec.json.security.storePath, /nano-cloud-session\.json$/)
+  assert.match(sec.json.security.envPath, /nano-cloud-session\.env$/)
+  assert.equal(sec.json.security.secret, undefined)
+  // E3: ssh-key generates a real ed25519 keypair on demand
+  const sk = await call(routes.get('/nano-cloud-session/config'), { action: 'ssh-key' })
+  assert.equal(sk.json.ok, true)
+  assert.match(sk.json.publicKey, /^ssh-ed25519 /)
+  assert.match(sk.json.privateKeyPath, /nano-cloud-session-ssh$/)
+  assert.equal(sk.json.keyMode, '600')
   const ssh = await call(routes.get('/nano-cloud-session/ssh'), { session_id: 'devin-abc' })
   assert.equal(ssh.json.ok, true)
-  assert.equal(ssh.json.command, 'ssh devin-abc@ssh.devin.ai')
-  assert.match(ssh.json.forwardHint, /ssh -N/)
+  assert.match(ssh.json.shell, /ssh -i .+ devin-abc@ssh\.devin\.ai/)
+  assert.match(ssh.json.forward, /-L <local>:127\.0\.0\.1:<remote>/)
+  assert.match(ssh.json.publicKey, /^ssh-ed25519 /)
+  assert.match(ssh.json.enrollHint, /SSH keys/)
 })

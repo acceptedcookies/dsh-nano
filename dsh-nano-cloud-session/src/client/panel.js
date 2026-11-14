@@ -78,6 +78,14 @@ export function mountPanel(element, { t, pollIntervalMs = 5000 }) {
     selected: null, detail: null, transcript: [], transcriptAfter: null,
     showArchived: null, poll: true,
     busy: false, error: '',
+    security: null, sshKey: null, sshInfo: null, notice: '',
+  }
+
+  /* E4: prefer the localized reason text over the raw upstream message. */
+  function errText(err) {
+    const key = `reason_${err?.reason ?? ''}`
+    const localized = t(key)
+    return localized !== key ? localized : (err?.message ?? String(err))
   }
 
   let pollTimer = null
@@ -117,7 +125,8 @@ export function mountPanel(element, { t, pollIntervalMs = 5000 }) {
         <label><input type="checkbox" data-act="archived" ${state.showArchived ? 'checked' : ''}> ${esc(t('showArchived'))}</label>
       </div>
       ${note()}
-      ${state.sessions.length === 0 ? `<div class="dncs-note">${esc(t('empty'))}</div>` : rows}
+      ${!state.activeId ? `<div class="dncs-note">${esc(t('noProfile'))} <button class="dncs-btn primary" data-act="goto-settings" style="margin-left:8px">${esc(t('gotoSettings'))}</button></div>`
+        : state.sessions.length === 0 ? `<div class="dncs-note">${esc(t('empty'))}</div>` : rows}
       ${state.hasMore ? `<button class="dncs-btn" data-act="more">…</button>` : ''}
       <div class="dncs-detail-slot"></div>`
   }
@@ -145,6 +154,7 @@ export function mountPanel(element, { t, pollIntervalMs = 5000 }) {
           ${d.is_archived ? `<button class="dncs-btn" data-act="unarchive">${esc(t('unarchive'))}</button>` : `<button class="dncs-btn" data-act="archive">${esc(t('archive'))}</button>`}
           <button class="dncs-btn danger" data-act="terminate">${esc(t('terminate'))}</button>
         </div>
+        ${renderSshInfo(d)}
       </div>
       <div class="dncs-msgs">${msgs}</div>
       <div class="dncs-msg-box">
@@ -166,7 +176,48 @@ export function mountPanel(element, { t, pollIntervalMs = 5000 }) {
       <button class="dncs-btn primary" data-act="create" ${state.busy ? 'disabled' : ''}>${esc(t('create'))}</button>`
   }
 
+  function renderSshInfo(d) {
+    const info = state.sshInfo
+    if (!info || info.session_id !== d.session_id) return ''
+    return `
+      <div class="dncs-note" style="margin-top:8px">
+        <div><b>${esc(t('sshLane'))}</b></div>
+        <div style="margin:4px 0"><code>${esc(info.shell)}</code> <button class="dncs-btn" data-act="copy-ssh" data-v="shell">${esc(t('copy'))}</button></div>
+        <div class="dncs-hint">${esc(t('forwardLabel'))}</div>
+        <div><code>${esc(info.forward)}</code></div>
+        <div class="dncs-hint" style="margin-top:4px">${esc(t('pubkeyLabel'))}</div>
+        <div><code style="word-break:break-all">${esc(info.publicKey)}</code> <button class="dncs-btn" data-act="copy-ssh" data-v="publicKey">${esc(t('copy'))}</button></div>
+        <div class="dncs-hint">${esc(info.enrollHint)} · ${esc(t('enrollSteps'))}</div>
+      </div>`
+  }
+
   function renderSettings() {
+    const sec = state.security
+    const secCard = sec ? `
+      <div class="dncs-prof">
+        <b>${esc(t('secTitle'))}</b>
+        <dl class="dncs-kv" style="margin-top:6px">
+          <dt>${esc(t('secStore'))}</dt><dd><code>${esc(sec.storePath)}</code></dd>
+          <dt>${esc(t('secMode'))}</dt><dd>${esc(sec.storeMode ?? '—')}</dd>
+          <dt>${esc(t('secEnv'))}</dt><dd>${esc(sec.seededFromEnv ? t('secSeeded') : t('secNotSeeded'))} · <code>${esc(sec.envPath)}</code></dd>
+          <dt>${esc(t('secPolicy'))}</dt><dd>${esc(sec.secretPolicy)}</dd>
+        </dl>
+      </div>` : ''
+    const guide = state.profiles.length === 0 ? `
+      <div class="dncs-prof" style="border-color:var(--dsw-alias-accent-primary,#4c8dff)">
+        <b>${esc(t('guideTitle'))}</b>
+        <div class="dncs-hint" style="margin-top:6px">${esc(t('guideStep1'))}</div>
+        <div class="dncs-hint">${esc(t('guideStep2'))}</div>
+        <div class="dncs-hint">${esc(t('guideStep3'))}</div>
+      </div>` : ''
+    const sshCard = `
+      <div class="dncs-prof">
+        <b>${esc(t('sshLane'))}</b>
+        <div class="acts"><button class="dncs-btn" data-act="ssh-key">${esc(t('genKey'))}</button>
+        ${state.sshKey ? `<button class="dncs-btn" data-act="copy-ssh" data-v="sshKeyPub">${esc(t('copy'))}</button>` : ''}</div>
+        ${state.sshKey ? `<div style="margin-top:6px"><code style="word-break:break-all">${esc(state.sshKey.publicKey)}</code></div>
+          <div class="dncs-hint">${esc(t('pubkeyLabel'))} · ${esc(t('enrollSteps'))}</div>` : ''}
+      </div>`
     const profs = state.profiles.map(p => `
       <div class="dncs-prof" data-active="${p.active}">
         <b>${esc(p.label)}</b>${p.active ? ` · <span class="dncs-badge running">${esc(t('active'))}</span>` : ''}
@@ -179,7 +230,10 @@ export function mountPanel(element, { t, pollIntervalMs = 5000 }) {
       </div>`).join('')
     return `
       ${note()}
-      ${state.profiles.length === 0 ? `<div class="dncs-note">${esc(t('noProfile'))}</div>` : profs}
+      ${state.notice ? `<div class="dncs-note">${esc(state.notice)}</div>` : ''}
+      ${guide}
+      ${secCard}
+      ${state.profiles.length === 0 ? '' : profs}
       <div class="dncs-prof">
         <b>${esc(t('profileNew'))}</b>
         <div class="dncs-field" style="margin-top:8px"><label>${esc(t('label'))}</label><input data-p="label" type="text"></div>
@@ -187,7 +241,8 @@ export function mountPanel(element, { t, pollIntervalMs = 5000 }) {
         <div class="dncs-field"><label>${esc(t('token'))}</label><input data-p="secret" type="password" placeholder="cog_…"><div class="dncs-hint">${esc(t('tokenHint'))}</div></div>
         <div class="dncs-field"><label>${esc(t('baseUrl'))}</label><input data-p="baseUrl" type="text" placeholder="https://api.devin.ai"></div>
         <button class="dncs-btn primary" data-act="save-profile">${esc(t('save'))}</button>
-      </div>`
+      </div>
+      ${sshCard}`
   }
 
   function render() {
@@ -212,6 +267,8 @@ export function mountPanel(element, { t, pollIntervalMs = 5000 }) {
     const r = await api.status()
     state.profiles = r.profiles ?? []
     state.activeId = r.activeId ?? null
+    if (!state.activeId) state.tab = 'settings' // E1: land on setup when unconfigured
+    try { state.security = (await api.config('security')).security } catch { state.security = null }
   }
 
   async function refreshSessions() {
@@ -222,7 +279,7 @@ export function mountPanel(element, { t, pollIntervalMs = 5000 }) {
       state.hasMore = Boolean(r.has_next_page)
       state.cursor = r.end_cursor ?? null
       state.error = ''
-    } catch (e) { state.error = e.message }
+    } catch (e) { state.error = errText(e) }
   }
 
   async function refreshDetail(id, { keepScroll } = {}) {
@@ -234,7 +291,7 @@ export function mountPanel(element, { t, pollIntervalMs = 5000 }) {
       state.detail = d
       state.transcript = (m.items ?? m.messages ?? []).slice().sort((a, b) => (a.created_at ?? 0) - (b.created_at ?? 0))
       state.error = ''
-    } catch (e) { state.error = e.message }
+    } catch (e) { state.error = errText(e) }
   }
 
   function schedulePoll() {
@@ -268,10 +325,21 @@ export function mountPanel(element, { t, pollIntervalMs = 5000 }) {
         case 'poll': state.poll = actEl.checked; schedulePoll(); break
         case 'archived': state.showArchived = actEl.checked; await refreshSessions(); break
         case 'webapp': if (state.detail?.url) window.open(state.detail.url, '_blank', 'noreferrer'); return
+        case 'goto-settings': state.tab = 'settings'; break
+        case 'ssh-key': {
+          state.sshKey = await api.config('ssh-key')
+          break
+        }
+        case 'copy-ssh': {
+          const v = actEl.dataset.v
+          const text = v === 'publicKey' ? state.sshInfo?.publicKey : v === 'sshKeyPub' ? state.sshKey?.publicKey : state.sshInfo?.shell
+          if (text) await navigator.clipboard?.writeText(text).catch(() => {})
+          break
+        }
         case 'ssh': {
           const r = await api.ssh(state.selected)
-          await navigator.clipboard?.writeText(r.command).catch(() => {})
-          state.error = `${r.command} — ${r.forwardHint}`
+          state.sshInfo = r
+          await navigator.clipboard?.writeText(r.shell).catch(() => {})
           break
         }
         case 'archive': await api.archive(state.selected); await refreshDetail(state.selected); await refreshSessions(); break
@@ -312,12 +380,14 @@ export function mountPanel(element, { t, pollIntervalMs = 5000 }) {
         case 'del-profile': await api.config('remove', { profileId: actEl.dataset.id }); await refreshProfiles(); break
         case 'test': {
           const r = await api.config('test', { profileId: actEl.dataset.id })
-          state.error = `ok: ${r.self?.principal_type ?? ''} ${r.self?.api_key_name ?? ''} ${r.self?.devin_sessions_org_id ?? ''}`
+          const org = r.orgMatch === false ? ` · ${t('orgMatchWarn')} (${r.self?.devin_sessions_org_id ?? '?'})` : r.orgMatch === true ? ` · ${t('orgMatchOk')}` : ''
+          state.notice = `ok: ${r.self?.principal_type ?? ''} ${r.self?.api_key_name ?? ''} ${r.self?.devin_sessions_org_id ?? ''}${org}`
           break
         }
       }
-      state.error = act === 'test' ? state.error : ''
-    } catch (err) { state.error = err.message; state.busy = false }
+      if (act !== 'test') state.notice = ''
+      state.error = ''
+    } catch (err) { state.error = errText(err); state.busy = false }
     render()
   })
 
@@ -328,7 +398,7 @@ export function mountPanel(element, { t, pollIntervalMs = 5000 }) {
       await refreshProfiles()
       if (state.activeId) await refreshSessions()
       state.error = ''
-    } catch (e) { state.error = e.message }
+    } catch (e) { state.error = errText(e) }
     render(); schedulePoll()
   }
   boot()
@@ -336,7 +406,7 @@ export function mountPanel(element, { t, pollIntervalMs = 5000 }) {
   return {
     toggle() {
       const hidden = root.classList.toggle('dncs-hidden')
-      if (!hidden) { refreshProfiles().then(refreshSessions).then(render).catch(() => {}); schedulePoll() }
+      if (!hidden) { refreshProfiles().then(() => state.activeId ? refreshSessions() : undefined).then(render).catch(() => {}); schedulePoll() }
       else clearTimeout(pollTimer)
       return hidden
     },

@@ -74,7 +74,7 @@ dsh plugin --profile web add <spec>
 
 无宿主初始化命令。面板挂载即生效。
 
-- profile 存 `${DSH_HOME}/nano-cloud-session.json`（0600），token 只写不读，列表只回 `hasSecret`。
+- profile 存 `${DSH_HOME}/nano-cloud-session.json`（0600），token 只写不读，列表只回 `hasSecret`；新 token 必须是 `cog_` 前缀形态。
 - 空 store 首次启动会从 `DEVIN_API_TOKEN` / `DEVIN_ORG_ID` / `DEVIN_API_BASE` 环境变量或 `${DSH_HOME}/nano-cloud-session.env` 种子一个 profile。
 - 会话的 canonical 状态在 carrier（Devin 云），面板只做轮询视窗；插件不复制会话数据。
 
@@ -89,9 +89,9 @@ dsh plugin --profile web add <spec>
 | 新建 | prompt（必填）/ title / repos / devin_mode / max_acu_limit / resumable → `POST /v3/organizations/{org}/sessions` |
 | 归档 / 取消归档 | 对应 upstream archive / unarchive |
 | 中止 | `DELETE` upstream——存活 session → suspended；**不是硬删除、不自动归档**，收尾需再点归档 |
-| SSH 命令 | 复制 `ssh devin-<id>@ssh.devin.ai`；公钥需在 Devin 后台 SSH keys 手工 enroll 一次（账号级） |
+| SSH 命令 | 面板生成/显示专用密钥对（`${DSH_HOME}/nano-cloud-session-ssh`，0600），复制 `ssh -i <key> devin-<id>@ssh.devin.ai`；公钥粘到 Devin 后台 SSH keys 一次性 enroll（账号级） |
 
-宿主路由（全部 POST、全部走 route-guard）：`/nano-cloud-session/{status,config,sessions,session,create,message,archive,unarchive,terminate,ssh}`。错误面统一 `{ok:false,reason}`；403 表示「无权或不可见」（上游 fail-closed，不能当 404）。
+宿主路由（全部 POST、全部走 route-guard）：`/nano-cloud-session/{status,config,sessions,session,create,message,archive,unarchive,terminate,ssh}`。`/config` action：list/save/remove/activate/test（返 orgMatch 校验）/security/ssh-key。错误面统一 `{ok:false,reason}`；403 表示「无权或不可见」（上游 fail-closed，不能当 404）。无 profile 时面板自动落「设置」并显引导卡。
 
 ## 配置与状态
 

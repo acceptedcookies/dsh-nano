@@ -66,7 +66,12 @@ function normalizeProfile(input, { existing } = {}) {
     updatedAt: Date.now()
   };
   const secret = input.secret !== void 0 ? String(input.secret) : null;
-  if (secret !== null && secret !== "") profile.secret = secret;
+  if (secret !== null && secret !== "") {
+    if (!/^cog_[A-Za-z0-9_-]{8,}$/.test(secret)) {
+      throw new Error("token must look like cog_\u2026 (Devin PAT or service user key)");
+    }
+    profile.secret = secret;
+  }
   if (!profile.secret) throw new Error("token is required");
   return profile;
 }
@@ -154,5 +159,7 @@ function createProfileStore() {
   };
 }
 export {
-  createProfileStore
+  createProfileStore,
+  envPath,
+  storePath
 };

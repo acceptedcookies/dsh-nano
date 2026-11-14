@@ -50,6 +50,42 @@ const ZH = {
   role_user: '我',
   role_devin: 'Devin',
   role_system: '系统',
+  /* E1 first-run guide */
+  guideTitle: '首次配置',
+  guideStep1: '① 在 Devin 后台 Settings → API 生成一把 cog_ 前缀的 PAT，粘到下方 Token',
+  guideStep2: '② 把同一页面的 Org ID（org-…）填入 Org ID（org 无法被接口枚举，必须手抄）',
+  guideStep3: '③ 保存后点「连接测试」，看到 principal_type 即为打通',
+  gotoSettings: '去设置配置凭证',
+  /* E2 */
+  orgMatchOk: 'org 归属一致',
+  orgMatchWarn: '警告：token 归属 org 与填入 org_id 不一致',
+  /* E3 ssh lane */
+  sshLane: 'SSH 通道',
+  genKey: '生成/查看专用公钥',
+  pubkeyLabel: '公钥（粘贴到 Devin Settings → SSH keys，一次性）',
+  enrollSteps: 'enroll 是账号级一次性步骤；enroll 后 ssh 免批准直连',
+  forwardLabel: '端口转发模板（-N 会被 gateway 断开，必须带命令通道）',
+  /* E5 security card */
+  secTitle: '安全状态',
+  secStore: '凭证文件',
+  secMode: '文件权限',
+  secEnv: 'env 种子',
+  secPolicy: 'token 策略',
+  secSeeded: '已种子',
+  secNotSeeded: '未种子',
+  /* E4 reason localization */
+  'reason_no-active-profile': '未配置 carrier 凭证——先在设置页新增 profile',
+  'reason_profile-not-found': '指定的 profile 不存在',
+  'reason_forbidden-or-invisible': '无权访问或会话不可见（上游 403 fail-closed，不代表不存在）',
+  'reason_unauthorized': '凭证无效（401）',
+  'reason_not-found': '资源不存在（404）',
+  'reason_conflict': '状态冲突（409）',
+  'reason_invalid-request': '请求参数无效（422）',
+  'reason_rate-limited': '上游限速（429），稍后重试',
+  'reason_upstream-error': '上游错误（5xx）',
+  'reason_unreachable': '无法连通上游（网络/baseUrl）',
+  'reason_timeout': '上游超时',
+  'reason_failed': '宿主内部错误',
 }
 
 const EN = {
@@ -102,6 +138,42 @@ const EN = {
   role_user: 'Me',
   role_devin: 'Devin',
   role_system: 'System',
+  /* E1 first-run guide */
+  guideTitle: 'First-time setup',
+  guideStep1: '① Create a cog_-prefixed PAT in Devin Settings → API and paste it below',
+  guideStep2: '② Copy the Org ID (org-…) from the same page (orgs cannot be enumerated by API)',
+  guideStep3: '③ Save, then run Test — seeing principal_type means you are connected',
+  gotoSettings: 'Go to Settings to add credentials',
+  /* E2 */
+  orgMatchOk: 'org matches the token',
+  orgMatchWarn: 'warning: the token resolves to a different org than the org_id you entered',
+  /* E3 ssh lane */
+  sshLane: 'SSH lane',
+  genKey: 'Generate / show dedicated public key',
+  pubkeyLabel: 'Public key (paste into Devin Settings → SSH keys, one-time)',
+  enrollSteps: 'enrollment is account-level and one-time; enrolled keys connect without approval',
+  forwardLabel: 'Port-forward template (-N is dropped by the gateway — keep a command channel)',
+  /* E5 security card */
+  secTitle: 'Security',
+  secStore: 'Credential file',
+  secMode: 'File mode',
+  secEnv: 'env seed',
+  secPolicy: 'token policy',
+  secSeeded: 'seeded',
+  secNotSeeded: 'not seeded',
+  /* E4 reason localization */
+  'reason_no-active-profile': 'No carrier credential — add a profile in Settings first',
+  'reason_profile-not-found': 'The requested profile does not exist',
+  'reason_forbidden-or-invisible': 'Forbidden or invisible to you (upstream 403 fail-closed — does not prove absence)',
+  'reason_unauthorized': 'Credential rejected (401)',
+  'reason_not-found': 'Not found (404)',
+  'reason_conflict': 'Conflict (409)',
+  'reason_invalid-request': 'Invalid request (422)',
+  'reason_rate-limited': 'Upstream rate limited (429) — retry later',
+  'reason_upstream-error': 'Upstream error (5xx)',
+  'reason_unreachable': 'Upstream unreachable (network/baseUrl)',
+  'reason_timeout': 'Upstream timeout',
+  'reason_failed': 'Host internal error',
 }
 
 export function makeI18n(current) {

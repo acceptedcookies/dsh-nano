@@ -290,6 +290,47 @@ function scanTerminal() {
   }))
 }
 
+/* ------------------------------------------------------------------ *
+ * dsh-nano-cloud-session — index.js                                  *
+ * `const ROUTE = { key: '/nano-cloud-session/…' }` object + a SPECS    *
+ * array of `path: ROUTE.<key>, methods: [...]` entries, all registered *
+ * through registerRoutes(). Methods/caps read from the specs, like     *
+ * kitesurf — never hand-listed here.                                 *
+ * ------------------------------------------------------------------ */
+function scanCloudSession() {
+  const file = 'dsh-nano-cloud-session/index.js'
+  const text = src(file)
+  const routeBlock = text.match(/const ROUTE = \{([\s\S]*?)\}/)
+  if (!routeBlock) throw new Error('route-scan: dsh-nano-cloud-session is missing ROUTE object')
+  const consts = {}
+  for (const match of routeBlock[1].matchAll(/([a-zA-Z0-9_]+): '([^']+)'/g)) {
+    consts[match[1]] = match[2]
+  }
+  const rows = []
+  for (const match of text.matchAll(/path: ROUTE\.([a-zA-Z0-9_]+),\s*\n?\s*(?:methods: \[([^\]]*)\]|method: '([A-Z]+)')/g)) {
+    const path = consts[match[1]]
+    const methodBlock = match[2] ?? `'${match[3]}'`
+    const methods = [...methodBlock.matchAll(/'(GET|HEAD|POST|PUT|DELETE|PATCH)'/g)].map((m) => m[1])
+    if (!path || methods.length === 0) continue
+    const specHead = text.slice(match.index, match.index + 600)
+    const handlerAt = specHead.search(/handler[:(]/)
+    const capMatch = (handlerAt > 0 ? specHead.slice(0, handlerAt) : specHead).match(/bodyLimit: (\d+)/)
+    const cap = capMatch ? Number(capMatch[1]) : 0
+    rows.push({
+      plugin: 'dsh-nano-cloud-session',
+      path,
+      methods,
+      bodyLimit: Object.fromEntries(methods.map((method) => [method, method === 'POST' ? cap : 0])),
+      source: { file, line: lineOf(text, `${match[1]}: '/nano-cloud-session/`) },
+    })
+  }
+  const missing = Object.keys(consts).filter((key) => !rows.some((row) => row.path === consts[key]))
+  if (missing.length > 0) {
+    throw new Error(`route-scan: parsed ${rows.length} cloud-session route specs; unregistered ROUTE keys: ${missing.join(', ')}`)
+  }
+  return rows
+}
+
 export const SCAN_PLUGINS = [
   'dsh-nano-notepad',
   'dsh-nano-explorer-extra',
@@ -297,6 +338,7 @@ export const SCAN_PLUGINS = [
   'dsh-nano-kitesurf',
   'dsh-nano-local-sandbox',
   'dsh-nano-terminal',
+  'dsh-nano-cloud-session',
 ]
 
 /**
@@ -312,6 +354,7 @@ export function scanRoutes(plugins = SCAN_PLUGINS) {
     'dsh-nano-kitesurf': scanKitesurf,
     'dsh-nano-local-sandbox': scanLocalSandbox,
     'dsh-nano-terminal': scanTerminal,
+    'dsh-nano-cloud-session': scanCloudSession,
   }
   return plugins.flatMap((plugin) => {
     const scan = scanners[plugin]

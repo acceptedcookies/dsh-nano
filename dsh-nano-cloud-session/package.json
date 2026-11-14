@@ -1,0 +1,53 @@
+{
+  "name": "dsh-nano-cloud-session",
+  "version": "0.1.0",
+  "description": "Cloud-session client for dsh. devin-cloud-session is the first adapted carrier: authorize, sync and drive Devin cloud sessions from inside the harness.",
+  "type": "module",
+  "icon": "./icon.svg",
+  "main": "./index.js",
+  "scripts": {
+    "build": "node scripts/build-client.mjs",
+    "test": "node --test"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./client": "./lib/client.js",
+    "./icon": "./icon.svg",
+    "./locale/*.json": "./locale/*.json",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "AGENTS.md",
+    "cordis.patch.yml",
+    "icon.svg",
+    "locale",
+    "lib/client.js",
+    "lib/devin-api.js",
+    "lib/profiles-store.js",
+    "lib/route-guard.js",
+    "lib/route-table.js"
+  ],
+  "engines": {
+    "dsh": ">=0.2.2-rc.1 <0.3.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-shortcuts",
+        "@deepseek-ai/dsh-client-ui-theme",
+        "@deepseek-ai/dsh-client-locale"
+      ]
+    }
+  },
+  "devDependencies": {
+    "esbuild": "0.25.0",
+    "dsh-host-route-guard": "file:../packages/dsh-host-route-guard",
+    "dsh-performance-review": "file:../packages/dsh-performance-review"
+  }
+}

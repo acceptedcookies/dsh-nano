@@ -102,3 +102,60 @@ test('sendText writes a FIN text frame', () => {
   assert.equal(writes[0][0] & 0x8f, 0x81)
   assert.equal(writes[0].subarray(2).toString(), 'ok')
 })
+
+// HITL (human-in-the-loop): the bridge HTTP face exposes the control state and
+// accepts takeover/release. The write gate itself lives in attach() which needs
+// a spawned agent-browser child; the HTTP endpoints need no child, so they are
+// the unit-testable surface of the contract.
+test('POST /control takeover then release toggles humanHold visible on /health', async () => {
+  const { createBridge } = await import('../../dsh-nano-local-sandbox/profiles/kitesurf/mcp-bridge.mjs')
+  const port = 19000 + Math.floor(Math.random() * 900)
+  const server = createBridge(port, { ...process.env, DNLS_MCP_PORT: String(port) })
+  await new Promise((r) => setTimeout(r, 150))
+  try {
+    const health0 = await fetch(`http://127.0.0.1:${port}/health`).then((r) => r.json())
+    assert.equal(health0.control.humanHold.active, false)
+    assert.equal(health0.control.lastAction, null)
+
+    const take = await fetch(`http://127.0.0.1:${port}/control`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'takeover', owner: 'kitesurf-pane' }),
+    }).then((r) => r.json())
+    assert.equal(take.ok, true)
+    assert.equal(take.tookOver, true)
+    assert.equal(take.control.humanHold.active, true)
+    assert.equal(take.control.humanHold.owner, 'kitesurf-pane')
+
+    const rel = await fetch(`http://127.0.0.1:${port}/control`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'release' }),
+    }).then((r) => r.json())
+    assert.equal(rel.ok, true)
+    assert.equal(rel.control.humanHold.active, false)
+
+    const bad = await fetch(`http://127.0.0.1:${port}/control`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'nonsense' }),
+    }).then((r) => r.json())
+    assert.equal(bad.ok, false)
+    assert.equal(bad.errorId, 'kitesurf.control.query')
+
+    // Browser-shaped requests (Origin) are refused like /diagnostics.
+    const origin = await fetch(`http://127.0.0.1:${port}/control`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin: 'https://evil.example' },
+      body: JSON.stringify({ action: 'takeover' }),
+    })
+    assert.equal(origin.status, 403)
+
+    // GET /control mirrors the state without a body.
+    const get = await fetch(`http://127.0.0.1:${port}/control`).then((r) => r.json())
+    assert.equal(get.ok, true)
+    assert.equal(get.control.humanHold.active, false)
+  } finally {
+    server.close()
+  }
+})

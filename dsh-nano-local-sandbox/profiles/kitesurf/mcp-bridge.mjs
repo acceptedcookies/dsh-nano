@@ -160,7 +160,7 @@ export function createFrameDecoder({ onMessage, onPing, onClose, maxFrame = MAX_
  * POST /diagnostics, so an agent using only MCP can still answer "what did the
  * plugin just do, and which errorId fired?" — the gap the owner called out.
  */
-const DNLS_TOOLS = [
+const KITESURF_TOOLS = [
   {
     name: 'sandbox.diagnostics',
     description: 'One-shot Kitesurf plugin diagnostics: engine status, phase, targets, settings, console tail, operation trace, errorId catalogue and generated next-step hints. Call this FIRST when anything fails.',
@@ -219,11 +219,16 @@ const DNLS_TOOLS = [
     description: 'Elements panel data from the Kitesurf DOM/CSS domains: the last DOM tree (up to 40 nodes with tag/id/class/child count), the selector queried, and how many computed properties were returned. Call GET /nano-local-sandbox/elements?selector=… on the host for styles of a specific node.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
-  ...['sandbox.profile.list', 'sandbox.profile.describe', 'sandbox.instance.ensure', 'sandbox.instance.start', 'sandbox.instance.stop', 'sandbox.instance.restart', 'sandbox.instance.status'].map((name) => ({
-    name,
-    description: 'Host-owned lifecycle tool. This bridge does not start a container.',
+  {
+    name: 'sandbox.snapshot',
+    description: 'a11y-lite snapshot: the last semantic tree + @N element-ref table the host pushed. Refs (@1..@N) resolve via GET /nano-local-sandbox/refs?ref=@N or are accepted directly in wait/pick/evaluate/edit selector fields on the host. This is the shared language between a human pick and an agent action. For a live re-walk call GET /nano-local-sandbox/snapshot on the authenticated host.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
-  })),
+  },
+  {
+    name: 'sandbox.control',
+    description: 'Page control/ownership state: which writer holds the page (owner client name, since when, last write). One page is shared by a human and agents; a second writer is refused kitesurf.control.busy rather than tearing navigation. action: status|claim|release — claim to take the page, release to free it.',
+    inputSchema: { type: 'object', properties: { action: { type: 'string', enum: ['status', 'claim', 'release', 'takeover'] } }, additionalProperties: false },
+  },
   {
     name: 'sandbox.selftest',
     description: 'One verdict over every layer: plugin build, engine identity, container state, published port loopback, MCP bridge counters, CDP targets, DOM availability, route table and phase consistency. Use after any restart or container change.',
@@ -273,18 +278,20 @@ function toolError(id, code, message) {
   return { jsonrpc: '2.0', id, error: { code, message } }
 }
 
-/** Answer a sandbox.* tools/call without touching the agent-browser child. */
-function answerNativeTool(name, args, bridgeState) {
+/**
+ * Answer a kitesurf_* tools/call without touching the agent-browser child.
+ * `self` is {connId, clientName} for the calling connection — needed so
+ * kitesurf_control can bind release/claim to the actual owner, not a guess.
+ */
+function answerNativeTool(name, args, bridgeState, self = {}) {
   const snap = bridgeState.getDiagnostics()
   if (name === 'sandbox.bridge_health') {
     return { ok: true, ...bridgeState.stats(), diagnosticsPushedAt: snap?.at || null }
   }
   if (!snap) {
-    return { ok: false, error: 'this bridge does not keep a host snapshot; read GET /nano-local-sandbox/diagnostics' }
+    return { ok: false, errorId: 'kitesurf.diag.stale', error: 'host has not pushed a diagnostics snapshot yet; retry in a few seconds', hint: 'GET /nano-local-sandbox/diagnostics on the authenticated host, or wait for the 30s push' }
   }
-  if (name === 'sandbox.diagnostics') {
-    return { ok: false, error: 'read GET /nano-local-sandbox/diagnostics on the host' }
-  }
+  if (name === 'sandbox.diagnostics') return snap
   if (name === 'sandbox.console') {
     const levels = typeof args.level === 'string' ? args.level.split(',').map((s) => s.trim()).filter(Boolean) : null
     const limit = Math.max(1, Math.min(Number(args.limit) || 50, 250))
@@ -317,6 +324,11 @@ function answerNativeTool(name, args, bridgeState) {
     const el = snap.elements || null
     if (!el) return { ok: false, errorId: 'kitesurf.elements.stale', error: 'no elements snapshot yet', hint: 'run GET /nano-local-sandbox/elements on the host, then retry' }
     return { ok: true, ...el }
+  }
+  if (name === 'sandbox.snapshot') {
+    const s = snap.snapshot || null
+    if (!s) return { ok: false, errorId: 'kitesurf.diag.stale', error: 'no a11y snapshot pushed yet', hint: 'call GET /nano-local-sandbox/snapshot on the authenticated host to build the ref table, then retry' }
+    return { ok: true, ...s, liveSnapshot: 'GET /nano-local-sandbox/snapshot', resolveRef: 'GET /nano-local-sandbox/refs?ref=@N' }
   }
   if (name === 'sandbox.selftest') {
     const st = snap.selftest || null
@@ -352,8 +364,41 @@ function answerNativeTool(name, args, bridgeState) {
     steps.push({ order: steps.length + 1, action: 'if a port is busy, repoint config', call: 'profile cordis.patch.yml → - id: nano-kitesurf / config.httpBase: http://127.0.0.1:8798, then restart the host' })
     return { ok: true, phase, engineAlive: alive, steps, notes: 'kitesurf.kite.portbusy (409) means the requested port is held by another process; the existing container is preserved.' }
   }
-  if (name.startsWith('sandbox.profile.') || name.startsWith('sandbox.instance.')) {
-    return { ok: false, errorId: 'kitesurf.tool.unknown', error: 'lifecycle tools are answered by the host, not this bridge' }
+  if (name === 'sandbox.control') {
+    const c = bridgeState.control || {}
+    const me = self.connId || null
+    const action = typeof args.action === 'string' ? args.action.toLowerCase() : 'status'
+    const state = () => ({
+      ok: true,
+      ...controlSnapshot(c),
+      mine: me != null && c.writer === me,
+      hint: 'one writer moves the page at a time; a second writer gets kitesurf.control.busy. release only frees a lock you hold. humanHold.active means a human takeover refuses all MCP writes.',
+    })
+    if (action === 'status') return state()
+    if (action === 'claim') {
+      if (c.humanHold?.active && self.clientName !== c.humanHold.owner) {
+        return { ok: false, errorId: 'kitesurf.control.held', error: `a human (${c.humanHold.owner}) holds the page via takeover`, ...state() }
+      }
+      if (c.writer !== null && c.writer !== me) {
+        return { ok: false, errorId: 'kitesurf.control.busy', error: `another writer (${c.owner || 'unknown'}) holds the page`, ...state() }
+      }
+      c.writer = me
+      c.owner = self.clientName || c.owner || 'agent'
+      c.ownerSince = c.ownerSince || new Date().toISOString()
+      return state()
+    }
+    if (action === 'takeover') {
+      // Agent-side takeover (e.g. an agent asked by the human to grab the page):
+      // same semantics as POST /control takeover but attributed to the caller.
+      c.humanHold = { active: true, owner: self.clientName || 'human', since: new Date().toISOString(), note: 'mcp-takeover' }
+      c.writer = null; c.owner = null; c.ownerSince = null
+      return { ok: true, tookOver: true, ...state() }
+    }
+    if (action === 'release') {
+      if (c.writer === me) { c.writer = null; c.owner = null; c.ownerSince = null }
+      return { ok: true, released: c.writer !== me, ...state() }
+    }
+    return { ok: false, errorId: 'kitesurf.control.query', error: `unknown action ${action}; use status|claim|release|takeover`, ...state() }
   }
   return { ok: false, errorId: 'kitesurf.tool.unknown', error: `unknown native tool ${name}` }
 }
@@ -384,6 +429,28 @@ function makeControl() {
     owner: null,         // clientInfo.name of the last writer ('agent'|…)
     ownerSince: null,
     lastWriteAt: null,
+    // HITL (human-in-the-loop): a sticky human override, independent of any
+    // socket lifetime. While active every MCP write is refused with
+    // kitesurf.control.held — the pane's own host-side writes bypass this
+    // bridge, so the human keeps full control. Set/cleared only via
+    // POST /control {action:takeover|release} or sandbox.control takeover.
+    humanHold: { active: false, owner: null, since: null, note: null },
+    // Last admitted write tool call, for the pane's "Clicking element…"
+    // feedback. Updated on admission; `ok` lands when the child answers.
+    lastAction: null,    // {tool, owner, at, ok?}
+    lastCallAt: null,    // any tools/call — liveness for the control badge
+  }
+}
+
+function controlSnapshot(c) {
+  return {
+    writer: c.writer != null,
+    owner: c.owner ?? null,
+    ownerSince: c.ownerSince ?? null,
+    lastWriteAt: c.lastWriteAt ?? null,
+    humanHold: c.humanHold ? { ...c.humanHold } : { active: false, owner: null, since: null, note: null },
+    lastAction: c.lastAction ? { ...c.lastAction } : null,
+    lastCallAt: c.lastCallAt ?? null,
   }
 }
 
@@ -411,9 +478,13 @@ function attach(socket, env = process.env, bridgeState = { getDiagnostics: () =>
 
   let stdout = ''
   // tools/list requests we forwarded to the child: when its reply comes back,
-  // merge the native sandbox.* tools into result.tools before sending.
+  // merge the native kitesurf_* tools into result.tools before sending.
   const pendingToolLists = new Set()
+  child.on('spawn', () => { if (env.MCP_BRIDGE_DEBUG) try { process.stderr.write(`[bridge] child spawned cdp=${env.AGENT_BROWSER_CDP || CDP}\n`) } catch {} })
+  child.on('error', (e) => { try { process.stderr.write(`[bridge] child error ${e?.message || e}\n`) } catch {} })
+  child.on('exit', (c, s) => { try { process.stderr.write(`[bridge] child exit code=${c} sig=${s}\n`) } catch {}; socket.end() })
   child.stdout.on('data', (chunk) => {
+    if (env.MCP_BRIDGE_DEBUG) try { process.stderr.write(`[bridge] child<-stdout ${chunk.toString('utf8').slice(0, 90)}\n`) } catch {}
     stdout += chunk.toString('utf8')
     let nl
     while ((nl = stdout.indexOf('\n')) >= 0) {
@@ -422,14 +493,22 @@ function attach(socket, env = process.env, bridgeState = { getDiagnostics: () =>
       if (!line) continue
       try {
         const message = JSON.parse(line)
-        // A completed write releases the shared gate for the next writer.
-        if (message.id != null && pendingWrites.delete(message.id)) {
-          releaseWriter()
+        // A completed write releases the shared gate for the next writer;
+        // stamp the pane-visible action record with the outcome.
+        if (message.id != null && pendingWrites.has(message.id)) {
+          pendingWrites.delete(message.id)
+          // MCP tools/call reports failures as {result:{isError:true}} as well
+          // as JSON-RPC {error} — the toast should mark both as not-ok.
+          if (control.lastAction) {
+            const toolErr = message.error ? true
+              : (typeof message.result?.content?.[0]?.text === 'string' && (message.result?.isError === true || /"ok"\s*:\s*false/.test(message.result.content[0].text)))
+            control.lastAction.ok = !toolErr
+          }
         }
         if (message.id != null && pendingToolLists.has(message.id)) {
           pendingToolLists.delete(message.id)
           if (Array.isArray(message.result?.tools)) {
-            message.result.tools = [...message.result.tools, ...DNLS_TOOLS]
+            message.result.tools = [...message.result.tools, ...KITESURF_TOOLS]
             line = JSON.stringify(message)
           }
         }
@@ -437,26 +516,26 @@ function attach(socket, env = process.env, bridgeState = { getDiagnostics: () =>
       sendText(socket, line)
     }
   })
-  child.on('exit', () => socket.end())
-  child.on('error', () => teardown(1011))
-
   const control = bridgeState.control || makeControl()
-  const releaseWriter = () => {
-    if (control.writer === connId && pendingWrites.size === 0) control.writer = null
-  }
+  // The lock is sticky: only kitesurf_control release or the socket going away
+  // frees it — never the completion of one write. pendingWrites only tracks
+  // in-flight ids so a dropped socket can clean them up.
   const releaseAll = () => {
     pendingWrites.clear()
-    if (control.writer === connId) control.writer = null
+    if (control.writer === connId) { control.writer = null; control.owner = null; control.ownerSince = null }
   }
 
-  let stdin = ''
+  // MCP-over-WebSocket delivers one complete JSON-RPC message per text frame
+  // — there is no newline terminator. Buffering on '\n' deadlocks every client
+  // that sends a single-JSON frame (which is the norm). Treat each frame as
+  // one message; split on '\n' only to stay compatible with a client that
+  // batches several newline-joined messages into one frame.
   const decode = createFrameDecoder({
     onMessage: (text) => {
-      stdin += text
-      let nl
-      while ((nl = stdin.indexOf('\n')) >= 0) {
-        const line = stdin.slice(0, nl)
-        stdin = stdin.slice(nl + 1)
+      if (env.MCP_BRIDGE_DEBUG) try { process.stderr.write(`[bridge] msg ${text.slice(0, 90)}\n`) } catch {}
+      for (const rawLine of text.split('\n')) {
+        const line = rawLine.trim()
+        if (!line) continue
         let handledLocally = false
         try {
           const message = JSON.parse(line)
@@ -467,17 +546,30 @@ function attach(socket, env = process.env, bridgeState = { getDiagnostics: () =>
           }
           if (message.method === 'tools/call' && typeof message.params?.name === 'string') {
             const toolName = message.params.name
+            control.lastCallAt = new Date().toISOString()
             if (toolName.startsWith('sandbox.')) {
-              const data = answerNativeTool(toolName, message.params.arguments || {}, bridgeState)
+              const data = answerNativeTool(toolName, message.params.arguments || {}, bridgeState, { connId, clientName })
               sendText(socket, JSON.stringify(message.id == null
                 ? toolError(null, -32600, 'tools/call requires an id')
                 : toolResult(message.id, data)))
               handledLocally = true
             } else if (isWriteCall(toolName)) {
-              // One writer moves the page at a time (ownership contract): a
-              // second writer is refused, not queued, so a human annotating is
-              // never torn by a background agent's navigation.
-              if (control.writer !== null && control.writer !== connId) {
+              // One writer moves the page at a time (ownership contract). The
+              // lock is STICKY: the first write claims the page and keeps it
+              // until kitesurf_control release or socket close, so a human
+              // annotating is never torn by a background agent's navigation.
+              // A second writer is refused, not queued.
+              if (control.humanHold?.active && clientName !== control.humanHold.owner) {
+                sendText(socket, JSON.stringify(message.id == null
+                  ? toolError(null, -32600, 'tools/call requires an id')
+                  : toolResult(message.id, {
+                    ok: false,
+                    errorId: 'kitesurf.control.held',
+                    error: `a human (${control.humanHold.owner}) holds the page via takeover`,
+                    hint: 'the human clicked takeover; stop writing until they release',
+                  })))
+                handledLocally = true
+              } else if (control.writer !== null && control.writer !== connId) {
                 sendText(socket, JSON.stringify(message.id == null
                   ? toolError(null, -32600, 'tools/call requires an id')
                   : toolResult(message.id, {
@@ -492,12 +584,14 @@ function attach(socket, env = process.env, bridgeState = { getDiagnostics: () =>
                 control.owner = clientName
                 control.ownerSince = control.ownerSince || new Date().toISOString()
                 control.lastWriteAt = new Date().toISOString()
+                control.lastAction = { tool: toolName.slice(0, 80), owner: clientName, at: control.lastWriteAt }
                 if (message.id != null) pendingWrites.add(message.id)
               }
             }
           }
         } catch { /* malformed frame: let the child produce the -32700 */ }
         if (handledLocally) continue
+        if (env.MCP_BRIDGE_DEBUG) try { process.stderr.write(`[bridge] fwd->child ${line.slice(0, 90)}\n`) } catch {}
         // Backpressure: stop reading the socket until the child drains.
         if (!child.stdin.write(`${line}\n`)) {
           socket.pause()
@@ -522,29 +616,132 @@ export function createBridge(port = PORT, env = process.env) {
   let conns = 0
   let accepted = 0
   let rejected = 0
+  let lastDiagnostics = null
+  let diagnosticsPushedAt = null
   const startedAt = Date.now()
   const control = makeControl()
   const stats = () => ({
     conns, accepted, rejected, uptimeMs: Date.now() - startedAt,
-    control: { writer: control.writer !== null, owner: control.owner, ownerSince: control.ownerSince, lastWriteAt: control.lastWriteAt },
+    control: controlSnapshot(control),
   })
   const bridgeState = {
-    getDiagnostics: () => null,
+    getDiagnostics: () => lastDiagnostics,
     stats,
     control,
   }
   const server = createServer((req, res) => {
     if (req.url === '/health') {
       res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
-      res.end(JSON.stringify({ ok: true, mcp: '/mcp', ...stats() }))
+      res.end(JSON.stringify({ ok: true, mcp: '/mcp', ...stats(), diagnosticsPushedAt }))
+      return
+    }
+    // HITL control endpoint: the DSH pane reaches this through the host's
+    // /nano-local-sandbox/control proxy. GET = status; POST {action:takeover|
+    // release} toggles humanHold — the sticky human override that refuses all
+    // MCP write-class calls (kitesurf.control.held) while the human drives.
+    // Loopback-only like /diagnostics; reject browser-shaped requests.
+    if (req.url === '/control' && (req.method === 'POST' || req.method === 'GET')) {
+      if (req.method === 'GET') {
+        res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
+        res.end(JSON.stringify({ ok: true, control: controlSnapshot(control) }))
+        return
+      }
+      if (req.headers.origin || (req.headers['content-type'] || '').indexOf('application/json') === -1) {
+        res.writeHead(403)
+        res.end()
+        return
+      }
+      let body = ''
+      req.on('data', (chunk) => {
+        body += chunk
+        if (body.length > 8 * 1024) { req.destroy() }
+      })
+      req.on('end', () => {
+        try {
+          const parsed = JSON.parse(body)
+          const action = String(parsed?.action || '').toLowerCase()
+          const note = typeof parsed?.note === 'string' ? parsed.note.slice(0, 80) : null
+          const owner = typeof parsed?.owner === 'string' ? parsed.owner.slice(0, 40) : 'human'
+          if (action === 'takeover') {
+            control.humanHold = { active: true, owner, since: new Date().toISOString(), note }
+            // Evict any live writer: the human holds the page now. The evicted
+            // agent's next write gets kitesurf.control.held, not busy.
+            control.writer = null; control.owner = null; control.ownerSince = null
+            res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
+            res.end(JSON.stringify({ ok: true, tookOver: true, control: controlSnapshot(control) }))
+            return
+          }
+          if (action === 'release') {
+            control.humanHold = { active: false, owner: null, since: null, note: null }
+            res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
+            res.end(JSON.stringify({ ok: true, released: true, control: controlSnapshot(control) }))
+            return
+          }
+          res.writeHead(400, { 'content-type': 'application/json; charset=utf-8' })
+          res.end(JSON.stringify({ ok: false, errorId: 'kitesurf.control.query', error: 'action must be takeover|release' }))
+        } catch (error) {
+          res.writeHead(400, { 'content-type': 'application/json; charset=utf-8' })
+          res.end(JSON.stringify({ ok: false, errorId: 'kitesurf.control.body', error: String(error?.message || error) }))
+        }
+      })
       return
     }
     // Host → bridge push. The dsh host is on the same loopback; the port is
     // only published on 127.0.0.1. Reject browser-shaped requests (Origin)
     // and bound the payload so this endpoint cannot be used to grow memory.
     if (req.url === '/diagnostics' && (req.method === 'POST' || req.method === 'GET')) {
-      res.writeHead(410, { 'content-type': 'application/json; charset=utf-8' })
-      res.end(JSON.stringify({ ok: false, error: 'diagnostics live on GET /nano-local-sandbox/diagnostics' }))
+      if (req.method === 'GET') {
+        res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
+        res.end(JSON.stringify({ ok: true, pushedAt: diagnosticsPushedAt, diagnostics: lastDiagnostics }))
+        return
+      }
+      if (req.headers.origin || (req.headers['content-type'] || '').indexOf('application/json') === -1) {
+        res.writeHead(403)
+        res.end()
+        return
+      }
+      let body = ''
+      req.on('data', (chunk) => {
+        body += chunk
+        if (body.length > 512 * 1024) { req.destroy() }
+      })
+      req.on('end', () => {
+        try {
+          const parsed = JSON.parse(body)
+          if (!parsed || typeof parsed !== 'object') throw new Error('not an object')
+          // Two hosts can push to one engine (desktop + a dev profile). Keep the
+          // richest history instead of letting an older host erase it.
+          const prev = lastDiagnostics?.history
+          const next = parsed?.history
+          if (prev && (!next || (next.entries?.length || 0) < (prev.entries?.length || 0))) parsed.history = prev
+          // Writer election: two dsh hosts share one container bridge (desktop +
+          // a dev profile). Both may report the same httpBase and engineAlive —
+          // the peer auto-adopts the container — so rank by kite ownership:
+          // the host that started the kite reports phase:"running" and drives
+          // the page; a peer that merely probes the engine stays "idle". Sender
+          // identity is storePath (unique per host install), not httpBase.
+          const rankOf = (d) => {
+            const phase = d?.plugin?.phase
+            const own = phase === 'running' ? 2 : phase === 'suspended' ? 1 : 0
+            const alive = (d?.engine?.engineAlive === true || d?.engine?.ok === true) ? 1 : 0
+            return own * 2 + alive
+          }
+          const senderId = String(parsed?.plugin?.storePath || parsed?.plugin?.httpBase || '?')
+          const prevSenderId = String(lastDiagnostics?.plugin?.storePath || lastDiagnostics?.plugin?.httpBase || '')
+          const wins = lastDiagnostics == null
+            || rankOf(parsed) > rankOf(lastDiagnostics)
+            || (rankOf(parsed) === rankOf(lastDiagnostics) && senderId === prevSenderId)
+          if (wins) {
+            lastDiagnostics = parsed
+            diagnosticsPushedAt = new Date().toISOString()
+          }
+          res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
+          res.end(JSON.stringify({ ok: true, at: diagnosticsPushedAt, writer: prevSenderId || null, accepted: wins }))
+        } catch (error) {
+          res.writeHead(400, { 'content-type': 'application/json; charset=utf-8' })
+          res.end(JSON.stringify({ ok: false, error: String(error?.message || error) }))
+        }
+      })
       return
     }
     res.writeHead(404)

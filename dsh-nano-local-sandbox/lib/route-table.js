@@ -364,5 +364,15 @@ export const ROUTE_TABLE = [
     "bodyLimit": 0,
     "sessionBinding": true,
     "justification": "refs"
+  },
+  {
+    "plugin": "dsh-nano-local-sandbox",
+    "path": "/nano-local-sandbox/control",
+    "methods": ["GET", "HEAD", "POST"],
+    "sensitivity": "L2",
+    "capability": "write:engine",
+    "bodyLimit": 4096,
+    "sessionBinding": true,
+    "justification": "CONTROL_ROUTE (HITL) — proxies the container MCP bridge /control: GET reads writer+humanHold+lastAction state, POST {action:takeover|release} toggles the sticky human override that refuses agent MCP writes (kitesurf.control.held)."
   }
 ]

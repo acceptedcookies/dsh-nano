@@ -18,6 +18,9 @@ export const ERROR_CATALOG = [
   { match: '^kitesurf\\.shot\\.(scroll|format)$', example: 'kitesurf.shot.scroll', status: 400, cause: 'scroll 或 format 非法', next: 'POST /shot {scroll,format}' },
   { match: '^kitesurf\\.evaluate\\.(empty|toolong)$', example: 'kitesurf.evaluate.empty', status: 400, cause: 'expression 为空或超过 2000 字符', next: '缩短表达式' },
   { match: '^kitesurf\\.engine\\.', example: 'kitesurf.engine.connect', status: 502, cause: 'CDP 连接失败', next: 'GET /status' },
+  { match: '^kitesurf\\.control\\.bridge$', example: 'kitesurf.control.bridge', status: 502, cause: '容器 MCP 桥不可达（humanHold/控制态读写失败）', next: 'GET /nano-local-sandbox/status 看 phase；桥健康走 ws://<mcpPort>/health 或 sandbox.bridge_health' },
+  { match: '^kitesurf\\.control\\.held$', example: 'kitesurf.control.held', status: 409, cause: 'humanHold 生效中：人工接管了页面，agent 写类调用被拒', next: '人工点击「停止写入/释放」后重试；或等待人工完成' },
+  { match: '^kitesurf\\.control\\.(query|body)$', example: 'kitesurf.control.query', status: 400, cause: '/control 请求非法：action 不是 takeover|release，或 body 不是 JSON', next: 'POST /control {action:takeover} 或 {action:release}' },
 ]
 
 export const ERROR_STATUS = ERROR_CATALOG.map((row) => [new RegExp(row.match), row.status])

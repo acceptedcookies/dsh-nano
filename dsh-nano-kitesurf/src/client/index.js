@@ -24,6 +24,7 @@ const NETWORK = '/nano-local-sandbox/network'
 const ELEMENTS = '/nano-local-sandbox/elements'
 const BROWSE_HISTORY = '/nano-local-sandbox/browse-history'
 const DOM = '/nano-local-sandbox/dom'
+const CONTROL = '/nano-local-sandbox/control'
 const localNotes = []
 const KITE = '/nano-local-sandbox/kite'
 const KIND = 'kitesurf'
@@ -132,6 +133,22 @@ const STYLE = `
 .nks-inspector b{font-weight:500;color:var(--dsw-alias-label-secondary)}
 .nks-inspector span{overflow:hidden;text-overflow:ellipsis;max-width:170px}
 .nks-note{position:absolute;z-index:2;display:flex;gap:4px;align-items:center;padding:4px;background:var(--dsw-alias-bg-layer-1);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-md);box-shadow:var(--dsw-elevation-soft)}
+/* HITL control bar — ego's bottom "Agent 正在控制 / 接管 / 终止任务" pill,
+   reworded honestly: the pane can hold the agent's page writes, it cannot
+   kill the run (that is host-side). Positioned bottom-center of the frame. */
+.nks-hitl{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);z-index:4;display:flex;align-items:center;gap:8px;height:32px;padding:4px 8px 4px 12px;background:var(--dsw-alias-bg-layer-1);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-md,8px);box-shadow:var(--dsw-elevation-soft);font:var(--dsw-font-xxs-12);white-space:nowrap}
+.nks-hitl-dot{width:8px;height:8px;border-radius:50%;background:var(--dsw-alias-link,#2f6fed);animation:nks-hitl-pulse 1.4s ease-in-out infinite}
+.nks-hitl-dot[data-held="true"]{background:var(--dsw-alias-fill-warning,#d4a72c);animation:none}
+@keyframes nks-hitl-pulse{0%,100%{opacity:1}50%{opacity:.35}}
+.nks-hitl-label{color:var(--dsw-alias-label-primary)}
+.nks-hitl-label b{font-weight:600;margin-left:4px}
+.nks-hitl-btn{height:24px;padding:0 10px;font:var(--dsw-font-xxs-12);color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-layer-2);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-sm);cursor:pointer}
+.nks-hitl-btn:hover{background:var(--dsw-alias-bg-layer-3)}
+.nks-hitl-primary{color:var(--dsw-alias-label-inverted,#fff);background:var(--dsw-alias-link,#2f6fed);border-color:transparent}
+.nks-hitl-primary:hover{background:var(--dsw-alias-link-hover,var(--dsw-alias-link,#2f6fed));filter:brightness(1.08)}
+.nks-act{position:absolute;left:50%;bottom:52px;transform:translateX(-50%);z-index:4;padding:4px 10px;background:var(--dsw-alias-bg-layer-1);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-sm);box-shadow:var(--dsw-elevation-soft);font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-secondary);white-space:nowrap;pointer-events:none;animation:nks-act-in .18s ease-out}
+.nks-act[data-ok="false"]{color:var(--dsw-alias-fill-error,#d5455c)}
+@keyframes nks-act-in{from{opacity:0;transform:translateX(-50%) translateY(4px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
 .nks-note-actions{display:flex;gap:2px;align-items:center}
 .nks-note-form{display:flex;gap:4px;align-items:center}
 .nks-note input{width:220px;height:28px;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-12);background:var(--dsw-alias-bg-layer-2);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-sm);padding:0 8px}
@@ -353,6 +370,12 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
   const [vpCustom, setVpCustom] = React.useState(false)
   const domFrameRef = React.useRef(null)
   const [toast, setToast] = React.useState(null)
+  // HITL control state from /nano-local-sandbox/control (bridge proxy):
+  // {writer,owner,ownerSince,lastWriteAt,humanHold,lastAction,lastCallAt}.
+  const [control, setControl] = React.useState(null)
+  const [actionToast, setActionToast] = React.useState(null)
+  const lastActionStamp = React.useRef('')
+  const actionToastTimer = React.useRef(0)
   const [busy, setBusy] = React.useState(false)
   /** Preview box under the cursor before a click (throttled pick preview). */
   const [hover, setHover] = React.useState(null)
@@ -1134,6 +1157,47 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
   })) : []
   // about:blank still yields a (transparent) PNG — treat it as no page.
   const hasPage = !!shot && !!shotMeta?.url && shotMeta.url !== 'about:blank'
+
+  // HITL poll: the bridge control state is a small JSON on the loopback —
+  // cheap enough to ride the visible-tab cadence (1.5s) and back off to 12s
+  // while the pane is backgrounded. A new lastAction stamps a toast so the
+  // human sees "agent_browser_click…" flashes the way ego shows "Clicking
+  // element". Gate on "engine reported a page" not on "pane already shot":
+  // an agent can hold the writer before the human ever sees a frame, and the
+  // bar must appear then too.
+  const engineHasPage = hasPage || status?.phase === 'running' || !!status?.httpBase
+  React.useEffect(() => {
+    if (!engineHasPage) { setControl(null); return undefined }
+    let alive = true
+    const load = async () => {
+      try {
+        const data = await fetch(CONTROL).then((r) => r.json())
+        if (!alive) return
+        const c = data?.control ?? null
+        setControl(c)
+        const stamp = c?.lastAction ? `${c.lastAction.at}:${c.lastAction.tool}` : ''
+        if (stamp && stamp !== lastActionStamp.current) {
+          lastActionStamp.current = stamp
+          setActionToast({ tool: c.lastAction.tool, ok: c.lastAction.ok })
+          clearTimeout(actionToastTimer.current)
+          actionToastTimer.current = setTimeout(() => setActionToast(null), 2600)
+        }
+      } catch { /* bridge unreachable — hide the badge quietly */ }
+    }
+    load()
+    let timer = window.setInterval(load, document.visibilityState === 'hidden' ? 12000 : 1500)
+    const onVis = () => { clearInterval(timer); timer = window.setInterval(load, document.visibilityState === 'hidden' ? 12000 : 1500); if (document.visibilityState !== 'hidden') load() }
+    document.addEventListener('visibilitychange', onVis)
+    return () => { alive = false; clearInterval(timer); document.removeEventListener('visibilitychange', onVis); clearTimeout(actionToastTimer.current) }
+  }, [engineHasPage])
+
+  const controlOp = React.useCallback(async (action) => {
+    try {
+      const data = await fetch(CONTROL, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action, owner: 'kitesurf-pane' }) }).then((r) => r.json())
+      if (data?.control) setControl(data.control)
+      else setControl(null)
+    } catch { setControl(null) }
+  }, [])
   const anchor = pick?.anchor
   const pickAnchor = (overlays.find((o) => o.kind === 'pick' || o.kind === 'ellipse'))
     || (activeFrame && anchor ? { left: activeFrame.left + anchor.x * activeFrame.scale, top: activeFrame.top + anchor.y * activeFrame.scale, width: 0, height: 0 } : null)
@@ -1906,6 +1970,37 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
           }, glyph('send')),
           h('button', { type: 'button', className: 'nks-tool', 'data-nks-copy-note': '1', title: copy.copyContext, 'aria-label': copy.copyContext, onClick: copyNote }, glyph('copy')),
           h('button', { type: 'button', className: 'nks-tool', 'data-nks-compose': '1', title: copy.inputContext, 'aria-label': copy.inputContext, onClick: () => setComposing(true) }, glyph('annotate')))) : null) : null),
+      // HITL control bar (ego parity): floats at the bottom of the frame when
+      // an agent holds the bridge writer lock or the human holds the override.
+      // "停止写入" is honest wording — the pane cannot kill the agent's run
+      // (that lives in the host), it can only hold its page writes.
+      control?.humanHold?.active || control?.writer ? h('div', {
+        className: 'nks-hitl',
+        'data-nks-hitl': '1',
+        role: 'status',
+        onPointerDown: (event) => event.stopPropagation(),
+        onClick: (event) => event.stopPropagation(),
+      },
+        h('span', {
+          className: 'nks-hitl-dot',
+          'data-held': control?.humanHold?.active ? 'true' : 'false',
+          'aria-hidden': true,
+        }),
+        control?.humanHold?.active
+          ? h('span', { className: 'nks-hitl-label' }, copy.hitlHeld)
+          : h('span', { className: 'nks-hitl-label' }, copy.hitlAgent, h('b', null, control?.owner || 'agent')),
+        control?.humanHold?.active
+          ? h('button', { type: 'button', className: 'nks-hitl-btn nks-hitl-primary', 'data-nks-hitl-release': '1', onClick: () => controlOp('release') }, copy.hitlRelease)
+          : h('button', { type: 'button', className: 'nks-hitl-btn nks-hitl-primary', 'data-nks-hitl-takeover': '1', title: copy.hitlTakeoverTitle, onClick: () => controlOp('takeover') }, copy.hitlTakeover),
+      ) : null,
+      // ego's "Clicking element" tooltip: brief tool-name flash on each new
+      // agent action the bridge records.
+      actionToast ? h('div', {
+        className: 'nks-act',
+        'data-nks-act': '1',
+        role: 'status',
+        'data-ok': actionToast.ok === false ? 'false' : 'true',
+      }, `${copy.hitlAction} ${actionToast.tool}`) : null,
     // Inspector strip: the picked element's live computed styles under the
     // frame — Cursor's design-mode sidebar reduced to one readable row.
     pick?.elements?.[0] && pick.elements[0].style && Object.keys(pick.elements[0].style).length ? h('div', { className: 'nks-inspector', 'data-nks-inspector': '1' },

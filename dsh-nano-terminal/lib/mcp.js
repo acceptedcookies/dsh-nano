@@ -1,83 +1,145 @@
 // src/host/mcp.js
 import { appendFileSync, mkdirSync } from "node:fs";
-import { dirname, join } from "node:path";
 import { readFileSync } from "node:fs";
-var PROTOCOL_VERSION = "2025-06-18";
-var TOOLS = [
-  {
-    name: "term.session.create",
-    description: "Open a terminal session on a lane (local PTY | mcp remote | isolate). Returns session id and attach metadata.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        lane: { type: "string", enum: ["local", "mcp", "isolate"], default: "local" },
-        sessionId: { type: "string", description: "owning dsh session (for cwd + scoping)" },
-        shell: { type: "string" },
-        args: { type: "array", items: { type: "string" } },
-        cwd: { type: "string" },
-        cols: { type: "integer" },
-        rows: { type: "integer" },
-        title: { type: "string" }
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+// src/host/errors.js
+var KIND = Object.freeze({
+  NOT_FOUND: "not_found",
+  // no such session/address/name
+  BLOCKED: "blocked",
+  // target reported blocked; send refused (use force)
+  FINISHED: "finished",
+  // terminal exited; operation needs a live one
+  LIVE: "live",
+  // operation requires a finished/inactive terminal
+  UNAVAILABLE: "unavailable",
+  // transiently not usable (recovering/attaching)
+  SPAWN_FAILED: "spawn_failed",
+  // backend refused to start the program
+  CONFLICT: "conflict",
+  // request contradicts current state
+  STATUS_MISMATCH: "status_mismatch",
+  // --if condition not met
+  NAME_TAKEN: "name_taken",
+  // requested name already bound
+  NEEDS_TARGET: "needs_target",
+  // ambiguous/unspecified target
+  INCOMPATIBLE: "incompatible",
+  // protocol/version/capability mismatch
+  LIMIT: "limit",
+  // resource cap reached (session count, body size)
+  INVALID: "invalid"
+  // malformed argument
+});
+function err(kind, message, extra) {
+  const e = new Error(message);
+  e.kind = kind;
+  if (extra) Object.assign(e, extra);
+  return e;
+}
+
+// src/host/wait.js
+var POLL_MS = 200;
+function waitFor(rec, registry, bus, { output = null, children = null, timeoutMs = 18e4 } = {}) {
+  return new Promise((resolve) => {
+    let done = false;
+    const seen = /* @__PURE__ */ new Set();
+    const finish = (reason, extra = {}) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      clearInterval(poll);
+      unsub();
+      resolve({ reason, turn: rec.turn, ...extra });
+    };
+    const unsub = bus.subscribe((ev) => {
+      if (ev.type !== "snapshot") {
+        if (ev.addr === rec.addr && ev.type === "finished") return finish("exit");
+        if (ev.addr === rec.addr && ev.type === "status") {
+          if (ev.status?.state !== "working" && rec.status?.state !== "working") return finish("status");
+          if (ev.status?.state !== "working") return finish("status");
+        }
+        if (ev.addr === rec.addr && ev.type === "message") return finish("message");
+        if (children && (ev.type === "status" || ev.type === "finished" || ev.type === "message")) {
+          checkChildren();
+        }
+        return;
       }
-    }
-  },
-  {
-    name: "term.session.list",
-    description: "List live terminal sessions with lane, owner, title and exit state.",
-    inputSchema: { type: "object", properties: {} }
-  },
-  {
-    name: "term.session.input",
-    description: "Write input bytes to a session (utf-8 text; \r for Enter).",
-    inputSchema: {
-      type: "object",
-      properties: { id: { type: "string" }, data: { type: "string" } },
-      required: ["id", "data"]
-    }
-  },
-  {
-    name: "term.session.read",
-    description: "Read the last N rendered screen lines of a session (wasm mirror).",
-    inputSchema: {
-      type: "object",
-      properties: { id: { type: "string" }, lines: { type: "integer", default: 50 } },
-      required: ["id"]
-    }
-  },
-  {
-    name: "term.session.resize",
-    description: "Resize a session terminal.",
-    inputSchema: {
-      type: "object",
-      properties: { id: { type: "string" }, cols: { type: "integer" }, rows: { type: "integer" } },
-      required: ["id", "cols", "rows"]
-    }
-  },
-  {
-    name: "term.session.close",
-    description: "Terminate a session and its process range.",
-    inputSchema: {
-      type: "object",
-      properties: { id: { type: "string" }, reason: { type: "string" } },
-      required: ["id"]
-    }
-  },
-  {
-    name: "term.audit",
-    description: "Read the audit log (newest last).",
-    inputSchema: {
-      type: "object",
-      properties: { lines: { type: "integer", default: 50 } }
-    }
-  },
-  {
-    name: "term.lane.status",
-    description: "Report available lanes and their health.",
-    inputSchema: { type: "object", properties: {} }
-  }
-];
+    });
+    const checkChildren = () => {
+      if (!children) return;
+      const kids = registry.childrenOf(rec);
+      if (children === "all") {
+        if (kids.length && kids.every((k) => k.exited || k.status?.state !== "working")) finish("children");
+      } else if (children === "any") {
+        for (const k of kids) {
+          if (seen.has(k.id)) continue;
+          if (k.exited || k.status?.state && k.status.state !== "working") {
+            seen.add(k.id);
+            finish("children", { child: k.addr });
+          }
+        }
+      }
+    };
+    const poll = setInterval(() => {
+      if (done) return;
+      if (rec.exited) return finish("exit");
+      if (rec.status && rec.status.state !== "working") return finish("status");
+      if (output) {
+        const text = rec.screenText(60, "detection");
+        if (text.includes(output)) return finish("output");
+      }
+      checkChildren();
+    }, POLL_MS);
+    poll.unref?.();
+    const timer = setTimeout(() => finish("timeout"), timeoutMs);
+    timer.unref?.();
+    if (rec.exited) return finish("exit");
+    if (rec.status && rec.status.state !== "working") return finish("status");
+    checkChildren();
+  });
+}
+var NAMED_KEYS = {
+  enter: "\r",
+  esc: "\x1B",
+  tab: "	",
+  backspace: "\x7F",
+  "ctrl+c": "",
+  "ctrl+d": "",
+  "ctrl+z": "",
+  "ctrl+u": "",
+  up: "\x1B[A",
+  down: "\x1B[B",
+  right: "\x1B[C",
+  left: "\x1B[D",
+  f1: "\x1BOP",
+  f2: "\x1BOQ",
+  f3: "\x1BOR",
+  f4: "\x1BOS",
+  f5: "\x1B[15~",
+  f6: "\x1B[17~",
+  f7: "\x1B[18~",
+  f8: "\x1B[19~",
+  f9: "\x1B[20~",
+  f10: "\x1B[21~",
+  f11: "\x1B[23~",
+  f12: "\x1B[24~"
+};
+
+// src/host/mcp.js
+var PROTOCOL_VERSION = "2025-06-18";
+var schema = JSON.parse(
+  readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "schema", "dnt-mcp.openrpc.json"), "utf8")
+);
+var TOOLS = schema.methods.map((m) => ({
+  name: m.name,
+  description: m.description,
+  inputSchema: m.params
+}));
 var TOOL_MAP = Object.fromEntries(TOOLS.map((t) => [t.name, t]));
-function createMcpHandler({ registry, auditPath, laneStatus }) {
+function createMcpHandler({ registry, bus, auditPath, laneStatus }) {
   mkdirSync(dirname(auditPath), { recursive: true });
   const audit = (event) => {
     try {
@@ -85,36 +147,110 @@ function createMcpHandler({ registry, auditPath, laneStatus }) {
     } catch {
     }
   };
+  const target = (ref) => {
+    const rec = registry.resolve(ref);
+    if (!rec) throw err(KIND.NOT_FOUND, `no such terminal '${ref}'`);
+    return rec;
+  };
   async function callTool(name, args = {}) {
     switch (name) {
       case "term.session.create": {
         if (args.lane && args.lane !== "local") {
-          throw rpcError(`lane '${args.lane}' has no local backend on this host; connect to its own MCP endpoint`);
+          throw err(KIND.INCOMPATIBLE, `lane '${args.lane}' has no local backend on this host; connect to its own MCP endpoint`);
         }
         const rec = await registry.create(args);
-        audit({ op: "mcp.create", id: rec.id, by: "tool" });
-        return { id: rec.id, lane: rec.lane, title: rec.title, attach: { protocol: "dnt-ws-v1", path: "/dsh-nano-terminal/stream" } };
+        audit({ op: "mcp.create", id: rec.id, addr: rec.addr, by: "tool" });
+        return {
+          id: rec.id,
+          addr: rec.addr,
+          lane: rec.lane,
+          title: rec.title,
+          attach: { protocol: "dnt-ws-v1", path: "/dsh-nano-terminal/stream" }
+        };
       }
       case "term.session.list":
         return { sessions: registry.list() };
       case "term.session.input": {
-        const rec = registry.get(args.id);
-        if (!rec) throw rpcError("no such session");
-        audit({ op: "mcp.input", id: args.id, bytes: args.data.length });
-        await rec.writeInput(args.data);
+        const rec = target(args.id);
+        audit({ op: "mcp.input", id: rec.id, addr: rec.addr, bytes: args.data.length });
+        await rec.writeInput(args.data, "agent");
         return { ok: true };
       }
+      case "term.send": {
+        const rec = target(args.id);
+        audit({ op: "mcp.send", id: rec.id, addr: rec.addr, bytes: args.data.length, force: !!args.force });
+        const r = await rec.agentSend(args.data, {
+          enter: args.enter !== false,
+          force: !!args.force,
+          cond: args.if ?? null
+        });
+        if (args.wait) {
+          const w = await waitFor(rec, registry, bus, { timeoutMs: (args.timeout ?? 180) * 1e3 });
+          return { ok: true, turn: r.turn, wait: w };
+        }
+        return { ok: true, turn: r.turn };
+      }
+      case "term.keys": {
+        const rec = target(args.id);
+        if (rec.exited) throw err(KIND.FINISHED, "terminal exited");
+        if (rec.status?.state === "blocked" && !args.force) throw err(KIND.BLOCKED, "terminal reports blocked");
+        const bytes = [];
+        for (const k of args.keys ?? []) {
+          const seq = NAMED_KEYS[k];
+          if (seq === void 0) throw err(KIND.INVALID, `unknown key '${k}'`);
+          bytes.push(seq);
+        }
+        await rec.gate.submit(() => rec.handle.write(bytes.join("")));
+        return { ok: true };
+      }
+      case "term.interrupt": {
+        const rec = target(args.id);
+        if (rec.exited) throw err(KIND.FINISHED, "terminal exited");
+        audit({ op: "mcp.interrupt", id: rec.id, addr: rec.addr });
+        const key = rec.status ? "\x1B" : "";
+        const turnBefore = rec.turn;
+        await rec.gate.submit(() => rec.handle.write(key), { urgent: true });
+        const w = await waitFor(rec, registry, bus, { timeoutMs: (args.timeout ?? 10) * 1e3 });
+        const result = w.reason === "exit" ? "exited" : w.reason === "status" || rec.turn > turnBefore ? "stopped" : w.reason === "timeout" ? "still_working" : "unknown";
+        return { result };
+      }
+      case "term.wait": {
+        const rec = target(args.id);
+        audit({ op: "mcp.wait", id: rec.id, addr: rec.addr, output: args.output });
+        return waitFor(rec, registry, bus, {
+          output: args.output ?? null,
+          children: args.children ?? null,
+          timeoutMs: (args.timeout ?? 180) * 1e3
+        });
+      }
       case "term.session.read": {
-        const rec = registry.get(args.id);
-        if (!rec) throw rpcError("no such session");
-        return { id: args.id, text: rec.screenText(Math.min(args.lines ?? 50, 500)) };
+        const rec = target(args.id);
+        return {
+          id: rec.id,
+          addr: rec.addr,
+          text: rec.screenText(Math.min(args.lines ?? 50, 500), args.source ?? "visible"),
+          complete: !(rec.status?.state === "working" || rec.status?.state === "blocked")
+        };
       }
       case "term.session.resize": {
-        const rec = registry.get(args.id);
-        if (!rec) throw rpcError("no such session");
+        const rec = target(args.id);
         await rec.resize(args.cols, args.rows);
         return { ok: true };
       }
+      case "term.session.keep": {
+        const rec = target(args.id);
+        rec.keep = args.keep !== false;
+        audit({ op: "mcp.keep", id: rec.id, addr: rec.addr, keep: rec.keep });
+        bus.emit("labels", rec.addr, { id: rec.id, keep: rec.keep });
+        return { ok: true, keep: rec.keep };
+      }
+      case "term.session.label": {
+        const rec = target(args.id);
+        const labels = rec.setLabels(args.set, args.unset);
+        return { ok: true, labels };
+      }
+      case "term.events":
+        return bus.since(args.since ?? 0);
       case "term.session.close": {
         const ok = await registry.close(args.id, args.reason ?? "mcp");
         return { closed: ok };
@@ -123,8 +259,12 @@ function createMcpHandler({ registry, auditPath, laneStatus }) {
         return { log: readAuditTail(auditPath, Math.min(args.lines ?? 50, 500)) };
       case "term.lane.status":
         return { lanes: laneStatus() };
+      case "term.skill": {
+        const skill = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "docs", "skill.md"), "utf8");
+        return { skill };
+      }
       default:
-        throw rpcError(`unknown tool '${name}'`);
+        throw err(KIND.INVALID, `unknown tool '${name}'`);
     }
   }
   async function handleRpc(body) {
@@ -139,8 +279,13 @@ function createMcpHandler({ registry, auditPath, laneStatus }) {
         out.push(
           rpcReply(msg.id, {
             protocolVersion: PROTOCOL_VERSION,
-            capabilities: { tools: {} },
-            serverInfo: { name: "dsh-nano-terminal", version: "0.1.0" }
+            capabilities: {
+              tools: {},
+              // event notifications: clients may poll term.events or open the
+              // SSE stream at GET /dsh-nano-terminal/events?since=<seq>
+              "dnt.events": { types: schema["x-events"] }
+            },
+            serverInfo: { name: "dsh-nano-terminal", version: "0.2.0" }
           })
         );
         continue;
@@ -170,11 +315,14 @@ function createMcpHandler({ registry, auditPath, laneStatus }) {
               structuredContent: result
             })
           );
-        } catch (err) {
+        } catch (e) {
           out.push(
             rpcReply(msg.id, {
-              content: [{ type: "text", text: String(err?.message ?? err) }],
-              isError: true
+              content: [{ type: "text", text: String(e?.message ?? e) }],
+              isError: true,
+              // stable kind travels on structuredContent so callers map errors
+              // without parsing message text
+              structuredContent: { kind: e?.kind ?? KIND.INVALID, message: String(e?.message ?? e) }
             })
           );
         }
@@ -189,22 +337,13 @@ function createMcpHandler({ registry, auditPath, laneStatus }) {
 function rpcReply(id, result, error) {
   return error ? { jsonrpc: "2.0", id, error } : { jsonrpc: "2.0", id, result };
 }
-function rpcError(message) {
-  const e = new Error(message);
-  e.rpc = true;
-  return e;
-}
 function readAuditTail(path, lines) {
   try {
-    const { readFileSync: readFileSync2 } = requireFs();
-    const text = readFileSync2(path, "utf8");
+    const text = readFileSync(path, "utf8");
     return text.trim().split("\n").slice(-lines);
   } catch {
     return [];
   }
-}
-function requireFs() {
-  return { readFileSync };
 }
 export {
   TOOLS,

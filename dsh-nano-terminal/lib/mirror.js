@@ -21,11 +21,14 @@ function memI32() {
 function memU8() {
   return new Uint8Array(memory.buffer);
 }
+var SOURCE = { visible: 0, recent: 1, detection: 2 };
 var ScreenMirror = class {
   constructor(cols, rows, scrollback = 2e3) {
     const e = loadMirror();
     this.id = e.dnt_new(cols, rows, scrollback);
     this.e = e;
+    this._lastStateSeq = -1;
+    this._stateCache = null;
   }
   free() {
     if (this.id) this.e.dnt_free(this.id);
@@ -41,8 +44,48 @@ var ScreenMirror = class {
   resize(cols, rows) {
     this.e.dnt_resize(this.id, cols, rows);
   }
-  /** Last `n` rendered screen rows as joined text (trailing blanks trimmed). */
-  screenText(n = 50) {
+  /**
+   * Program-reported OSC 7501 state — "the core never guesses the screen".
+   * Returns { seq, title, records, root } — root = the id-less record (or null).
+   * Cached by state_seq so the per-chunk poll is nearly free.
+   */
+  state() {
+    const e = this.e;
+    const seq = e.dnt_state_seq?.(this.id) >>> 0;
+    if (seq === this._lastStateSeq && this._stateCache) return this._stateCache;
+    this._lastStateSeq = seq;
+    const ptr = e.dnt_state_json?.(this.id);
+    const len = e.dnt_state_len?.(this.id) ?? 0;
+    let parsed = { seq, title: "", records: [] };
+    if (ptr && len) {
+      try {
+        parsed = JSON.parse(decoder.decode(memU8().subarray(ptr, ptr + len)));
+      } catch {
+      }
+    }
+    const root = parsed.records.find((r) => r.id === "") ?? null;
+    this._stateCache = { seq: parsed.seq ?? seq, title: parsed.title ?? "", records: parsed.records, root };
+    return this._stateCache;
+  }
+  /**
+   * Rendered text via the wasm dump ABI (no render() involved).
+   * source: 'visible' live screen | 'recent' incl. scrollback | 'detection'
+   * bottom-buffer live rows (status-detection snapshot).
+   */
+  dump(n = 50, source = "visible") {
+    const e = this.e;
+    const ptr = e.dnt_dump?.(this.id, SOURCE[source] ?? 0, n);
+    const len = e.dnt_dump_len?.(this.id) ?? 0;
+    if (!ptr || !len) return "";
+    return decoder.decode(memU8().subarray(ptr, ptr + len));
+  }
+  /** Back-compat single-arg read; prefers dump when available. */
+  screenText(n = 50, source = "visible") {
+    if (this.e.dnt_dump) return this.dump(n, source);
+    return this.#screenTextLegacy(n);
+  }
+  /** Legacy render-buffer reader — kept for wasm binaries without dnt_dump. */
+  #screenTextLegacy(n = 50) {
     const e = this.e;
     const ptr = e.dnt_render(this.id);
     const len = e.dnt_render_len(this.id);

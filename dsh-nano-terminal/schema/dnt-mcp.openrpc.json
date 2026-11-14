@@ -1,0 +1,224 @@
+{
+  "openrpc": "1.3.2",
+  "info": {
+    "title": "dsh-nano-terminal MCP control plane",
+    "version": "0.2.0",
+    "description": "Canonical contract for term.* tools, error kinds and term.* events. The mcp.js tool table is generated from this document; /term slash subcommands and ws-v2 frames implement the same semantics. Contract only grows — never rename or remove a method, kind, or event type."
+  },
+  "x-errorKinds": [
+    "not_found", "blocked", "finished", "live", "unavailable",
+    "spawn_failed", "conflict", "status_mismatch", "name_taken",
+    "needs_target", "incompatible", "limit", "invalid"
+  ],
+  "x-events": [
+    "created", "lost", "finished", "removed", "status", "turn",
+    "title", "labels", "size", "restarted", "heartbeat", "missed"
+  ],
+  "x-address": "A terminal is addressable by id, by name, or by addr '<lane>/<name|short6>'. All three resolve through the same registry.",
+  "methods": [
+    {
+      "name": "term.session.create",
+      "description": "Open a terminal session on a lane (local PTY | mcp remote | isolate). Returns id, addr and attach metadata.",
+      "params": {
+        "type": "object",
+        "properties": {
+          "lane": { "type": "string", "enum": ["local", "mcp", "isolate"], "default": "local" },
+          "name": { "type": "string", "description": "addressable name; unique per registry" },
+          "parent": { "type": "string", "description": "parent terminal addr — notes fan-in and die_with_parent" },
+          "keep": { "type": "boolean", "description": "respawn a shell when the program is lost; never reruns the command" },
+          "labels": { "type": "object", "additionalProperties": { "type": "string" } },
+          "sessionId": { "type": "string", "description": "owning dsh session (cwd + scoping)" },
+          "shell": { "type": "string" },
+          "args": { "type": "array", "items": { "type": "string" } },
+          "cwd": { "type": "string" },
+          "cols": { "type": "integer" },
+          "rows": { "type": "integer" },
+          "title": { "type": "string" },
+          "template": { "type": "string", "description": "templates/<name>.md to run" },
+          "task": { "type": "string", "description": "first_message payload appended to template body" }
+        }
+      },
+      "result": { "type": "object", "properties": { "id": { "type": "string" }, "addr": { "type": "string" }, "lane": { "type": "string" }, "title": { "type": "string" }, "attach": { "type": "object" } } },
+      "errors": ["name_taken", "spawn_failed", "limit", "invalid"]
+    },
+    {
+      "name": "term.session.list",
+      "description": "List live terminal records with lane, addr, owner, title, status and exit state.",
+      "params": { "type": "object", "properties": {} },
+      "result": { "type": "object", "properties": { "sessions": { "type": "array" } } },
+      "errors": []
+    },
+    {
+      "name": "term.session.input",
+      "description": "Write raw input bytes to a session (utf-8 text; \\r for Enter). Low-level: no draft-wait, no blocked guard. Prefer term.send for agent use.",
+      "params": {
+        "type": "object",
+        "properties": { "id": { "type": "string" }, "data": { "type": "string" } },
+        "required": ["id", "data"]
+      },
+      "result": { "type": "object", "properties": { "ok": { "type": "boolean" } } },
+      "errors": ["not_found", "finished"]
+    },
+    {
+      "name": "term.send",
+      "description": "Send text through the input gate: bracketed-paste + Enter, draft-wait respected, blocked targets refuse unless force. wait:true rides this turn to completion.",
+      "params": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "data": { "type": "string" },
+          "enter": { "type": "boolean", "default": true },
+          "force": { "type": "boolean", "default": false },
+          "if": { "type": "string", "enum": ["idle", "working"], "description": "only deliver when status matches" },
+          "wait": { "type": "boolean", "default": false },
+          "timeout": { "type": "integer", "default": 180 }
+        },
+        "required": ["id", "data"]
+      },
+      "result": { "type": "object", "properties": { "ok": { "type": "boolean" }, "turn": { "type": "integer" }, "held": { "type": "integer" }, "wait": { "type": "object" } } },
+      "errors": ["not_found", "blocked", "finished", "status_mismatch", "unavailable"]
+    },
+    {
+      "name": "term.keys",
+      "description": "Send named keys: enter esc tab backspace ctrl+c ctrl+d ctrl+z up down left right f1..f12.",
+      "params": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "keys": { "type": "array", "items": { "type": "string" } },
+          "force": { "type": "boolean", "default": false }
+        },
+        "required": ["id", "keys"]
+      },
+      "result": { "type": "object", "properties": { "ok": { "type": "boolean" } } },
+      "errors": ["not_found", "blocked", "finished", "invalid"]
+    },
+    {
+      "name": "term.interrupt",
+      "description": "Stop the foreground program politely and observe the result. Status-reporting programs get esc; others get ctrl+c. Returns stopped|exited|still_working|unknown.",
+      "params": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "timeout": { "type": "integer", "default": 10 }
+        },
+        "required": ["id"]
+      },
+      "result": { "type": "object", "properties": { "result": { "type": "string", "enum": ["stopped", "exited", "still_working", "unknown"] } } },
+      "errors": ["not_found", "finished"]
+    },
+    {
+      "name": "term.wait",
+      "description": "Event-driven wait. Waits until the terminal leaves 'working', or output contains `output` (escape sequences stripped), or child terminals per `children`. Timeout is a check-in, not a failure.",
+      "params": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "output": { "type": "string" },
+          "children": { "type": "string", "enum": ["all", "any"] },
+          "timeout": { "type": "integer", "default": 180 }
+        },
+        "required": ["id"]
+      },
+      "result": { "type": "object", "properties": { "reason": { "type": "string", "enum": ["status", "exit", "output", "children", "message", "timeout"] }, "turn": { "type": "integer" } } },
+      "errors": ["not_found"]
+    },
+    {
+      "name": "term.session.read",
+      "description": "Read rendered screen text. source=visible (default) last N screen rows; recent includes scrollback; detection is the live bottom-buffer snapshot used for status matching.",
+      "params": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "lines": { "type": "integer", "default": 50 },
+          "source": { "type": "string", "enum": ["visible", "recent", "detection"], "default": "visible" }
+        },
+        "required": ["id"]
+      },
+      "result": { "type": "object", "properties": { "id": { "type": "string" }, "text": { "type": "string" }, "complete": { "type": "boolean" } } },
+      "errors": ["not_found"]
+    },
+    {
+      "name": "term.session.resize",
+      "description": "Resize a session terminal.",
+      "params": {
+        "type": "object",
+        "properties": { "id": { "type": "string" }, "cols": { "type": "integer" }, "rows": { "type": "integer" } },
+        "required": ["id", "cols", "rows"]
+      },
+      "result": { "type": "object", "properties": { "ok": { "type": "boolean" } } },
+      "errors": ["not_found"]
+    },
+    {
+      "name": "term.session.keep",
+      "description": "Mark a terminal keep:true (respawn a shell on program loss, never reruns) or keep:false.",
+      "params": {
+        "type": "object",
+        "properties": { "id": { "type": "string" }, "keep": { "type": "boolean", "default": true } },
+        "required": ["id"]
+      },
+      "result": { "type": "object", "properties": { "ok": { "type": "boolean" }, "keep": { "type": "boolean" } } },
+      "errors": ["not_found"]
+    },
+    {
+      "name": "term.session.label",
+      "description": "Set or clear key=value labels on a terminal.",
+      "params": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "set": { "type": "object", "additionalProperties": { "type": "string" } },
+          "unset": { "type": "array", "items": { "type": "string" } }
+        },
+        "required": ["id"]
+      },
+      "result": { "type": "object", "properties": { "ok": { "type": "boolean" }, "labels": { "type": "object" } } },
+      "errors": ["not_found"]
+    },
+    {
+      "name": "term.events",
+      "description": "Read events newer than `since` (a seq). Returns {seq, events} or {missed:true, snapshot} when the consumer fell behind. MCP polling counterpart of GET /events SSE.",
+      "params": {
+        "type": "object",
+        "properties": { "since": { "type": "integer", "default": 0 } }
+      },
+      "result": { "type": "object" },
+      "errors": []
+    },
+    {
+      "name": "term.session.close",
+      "description": "Terminate a session and its process range.",
+      "params": {
+        "type": "object",
+        "properties": { "id": { "type": "string" }, "reason": { "type": "string" } },
+        "required": ["id"]
+      },
+      "result": { "type": "object", "properties": { "closed": { "type": "boolean" } } },
+      "errors": []
+    },
+    {
+      "name": "term.audit",
+      "description": "Read the audit log (newest last).",
+      "params": {
+        "type": "object",
+        "properties": { "lines": { "type": "integer", "default": 50 } }
+      },
+      "result": { "type": "object", "properties": { "log": { "type": "array" } } },
+      "errors": []
+    },
+    {
+      "name": "term.lane.status",
+      "description": "Report available lanes and their health.",
+      "params": { "type": "object", "properties": {} },
+      "result": { "type": "object", "properties": { "lanes": { "type": "object" } } },
+      "errors": []
+    },
+    {
+      "name": "term.skill",
+      "description": "Print the agent skill document: how to spawn, send, wait, report back and clean up terminals.",
+      "params": { "type": "object", "properties": {} },
+      "result": { "type": "object", "properties": { "skill": { "type": "string" } } },
+      "errors": []
+    }
+  ]
+}

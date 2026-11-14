@@ -1,5 +1,6 @@
 // Host-side screen mirror: the same dnt-core wasm that renders in the browser,
-// instantiated once on Node for term.session.read (MCP audit/read tools).
+// instantiated once on Node for term.session.read (MCP audit/read tools) and
+// the authoritative screen behind read/snapshot/wait semantics.
 // Reads lib/dnt-core.wasm — built by scripts/build-rust.sh before packaging.
 
 import { readFileSync } from 'node:fs'
@@ -29,11 +30,15 @@ function memU8() {
   return new Uint8Array(memory.buffer)
 }
 
+const SOURCE = { visible: 0, recent: 1, detection: 2 }
+
 export class ScreenMirror {
   constructor(cols, rows, scrollback = 2000) {
     const e = loadMirror()
     this.id = e.dnt_new(cols, rows, scrollback)
     this.e = e
+    this._lastStateSeq = -1
+    this._stateCache = null
   }
   free() {
     if (this.id) this.e.dnt_free(this.id)
@@ -49,8 +54,51 @@ export class ScreenMirror {
   resize(cols, rows) {
     this.e.dnt_resize(this.id, cols, rows)
   }
-  /** Last `n` rendered screen rows as joined text (trailing blanks trimmed). */
-  screenText(n = 50) {
+
+  /**
+   * Program-reported OSC 7501 state — "the core never guesses the screen".
+   * Returns { seq, title, records, root } — root = the id-less record (or null).
+   * Cached by state_seq so the per-chunk poll is nearly free.
+   */
+  state() {
+    const e = this.e
+    const seq = e.dnt_state_seq?.(this.id) >>> 0
+    if (seq === this._lastStateSeq && this._stateCache) return this._stateCache
+    this._lastStateSeq = seq
+    const ptr = e.dnt_state_json?.(this.id)
+    const len = e.dnt_state_len?.(this.id) ?? 0
+    let parsed = { seq, title: '', records: [] }
+    if (ptr && len) {
+      try {
+        parsed = JSON.parse(decoder.decode(memU8().subarray(ptr, ptr + len)))
+      } catch { /* keep default */ }
+    }
+    const root = parsed.records.find((r) => r.id === '') ?? null
+    this._stateCache = { seq: parsed.seq ?? seq, title: parsed.title ?? '', records: parsed.records, root }
+    return this._stateCache
+  }
+
+  /**
+   * Rendered text via the wasm dump ABI (no render() involved).
+   * source: 'visible' live screen | 'recent' incl. scrollback | 'detection'
+   * bottom-buffer live rows (status-detection snapshot).
+   */
+  dump(n = 50, source = 'visible') {
+    const e = this.e
+    const ptr = e.dnt_dump?.(this.id, SOURCE[source] ?? 0, n)
+    const len = e.dnt_dump_len?.(this.id) ?? 0
+    if (!ptr || !len) return ''
+    return decoder.decode(memU8().subarray(ptr, ptr + len))
+  }
+
+  /** Back-compat single-arg read; prefers dump when available. */
+  screenText(n = 50, source = 'visible') {
+    if (this.e.dnt_dump) return this.dump(n, source)
+    return this.#screenTextLegacy(n)
+  }
+
+  /** Legacy render-buffer reader — kept for wasm binaries without dnt_dump. */
+  #screenTextLegacy(n = 50) {
     const e = this.e
     const ptr = e.dnt_render(this.id)
     const len = e.dnt_render_len(this.id)
@@ -59,7 +107,6 @@ export class ScreenMirror {
     const textLen = e.dnt_render_text_len(this.id)
     const textPtr = e.dnt_render_text(this.id)
     const textAll = decoder.decode(memU8().subarray(textPtr, textPtr + textLen))
-    // byte→js index map
     const textBytes = memU8().subarray(textPtr, textPtr + textLen)
     const map = new Uint32Array(textBytes.length + 1)
     let js = 0
@@ -77,28 +124,26 @@ export class ScreenMirror {
 
     let i = (ptr >> 2) + 1
     const rowsVisible = buf[i++]
-    i += 4 // totalLines, viewStart, cursorX, cursorAbsY
-    i++ // modes
+    i += 4
+    i++
     const rowCount = buf[i++]
     const lines = new Array(rowsVisible).fill('')
     for (let r = 0; r < rowCount; r++) {
       const y = buf[i++]
-      i += 2 // cols, lineTextLen
+      i += 2
       const runCount = buf[i++]
-      i += 3 // cursorInRow, curX, reserved
+      i += 3
       let line = ''
       for (let k = 0; k < runCount; k++) {
         const col = buf[i++]
         const byteOff = buf[i++]
         const byteLen = buf[i++]
-        i += 3 // attr, fg, bg
+        i += 3
         const t = textAll.slice(map[byteOff], map[byteOff + byteLen])
         line = line.padEnd(col, ' ') + t
       }
       if (y >= 0 && y < rowsVisible) lines[y] = line.replace(/\s+$/, '')
     }
-    // a fresh screen writes at the top — trailing blank rows carry nothing,
-    // so trim them before taking the tail window
     let end = lines.length
     while (end > 0 && lines[end - 1] === '') end--
     return lines.slice(Math.max(0, end - n), end).join('\n')

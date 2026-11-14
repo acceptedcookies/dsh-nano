@@ -20,7 +20,7 @@ mkdirSync(join(root, 'lib'), { recursive: true })
 // Host halves: index.js is unbundled and imports ./lib/*.js at runtime. The dev
 // instance copies lib/ but not node_modules — our host files have no external
 // deps, so bundling is just concatenation for a stable lib/ surface.
-for (const name of ['sessions', 'mcp', 'ws', 'mirror']) {
+for (const name of ['sessions', 'mcp', 'ws', 'mirror', 'events', 'errors', 'gate', 'wait']) {
   esbuild.buildSync({
     absWorkingDir: root, logLevel: 'warning',
     entryPoints: [`src/host/${name}.js`],

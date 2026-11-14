@@ -15,6 +15,7 @@
 
 import { join } from 'node:path'
 import { SessionRegistry } from './lib/sessions.js'
+import { EventBus } from './lib/events.js'
 import { createMcpHandler } from './lib/mcp.js'
 import { handshake, FrameParser, sendBinary, sendText, sendClose } from './lib/ws.js'
 
@@ -30,12 +31,17 @@ export function apply(ctx) {
   const home = process.env.DSH_HOME || process.env.HOME || '/tmp'
   const auditPath = join(home, 'plugins', 'dsh-nano-terminal', 'audit.jsonl')
 
+  const bus = new EventBus({ audit: () => {} })
+
   const registry = new SessionRegistry({
     ctx,
     audit: () => {}, // replaced below
     sendBinary,
     sendText,
+    bus,
+    apiBase: `${ROUTE}/mcp`,
   })
+  bus.registry = registry
 
   const laneStatus = () => ({
     local: { status: 'up', backend: 'subprocess.spawnTerminal', sessions: registry.count() },
@@ -43,8 +49,9 @@ export function apply(ctx) {
     isolate: { status: 'stub', detail: 'wasm-embedded lane (workerd/v8) scaffolded' },
   })
 
-  const mcp = createMcpHandler({ registry, auditPath, laneStatus })
+  const mcp = createMcpHandler({ registry, bus, auditPath, laneStatus })
   registry.audit = mcp.audit
+  bus.audit = mcp.audit
 
   // -- data plane: WebSocket upgrade -----------------------------------------
 
@@ -79,7 +86,9 @@ export function apply(ctx) {
           return
         }
         if (opcode === 0x02 && record) {
-          void record.writeInput(payload).catch(() => {})
+          // interactive bytes count as human input — the gate holds them
+          // while an agent delivery is in flight (never interleaves)
+          void record.writeInput(payload, 'human').catch(() => {})
         } else if (opcode === 0x01) {
           try {
             const msg = JSON.parse(payload.toString('utf8'))
@@ -95,7 +104,8 @@ export function apply(ctx) {
       async function openFlow(msg) {
         try {
           if (attachId) {
-            record = registry.get(attachId)
+            // ?session= accepts id | name | addr — the unified address space
+            record = registry.resolve(attachId)
             if (!record) throw new Error('no such session')
           } else if (msg.type === 'open') {
             record = await registry.create({
@@ -165,6 +175,29 @@ export function apply(ctx) {
         res.end(JSON.stringify({ sessions: registry.list() }))
       },
     }),
+    // SSE event stream: subscribe → snapshot first frame, then live events.
+    // ?since=<seq> resumes from a position; falling behind the ring answers
+    // with {missed:true,snapshot}. Agents can poll the same data via
+    // term.events without holding a connection.
+    ctx.webServer.register({
+      kind: 'exact',
+      path: `${ROUTE}/events`,
+      handler: async (req, res) => {
+        const url = new URL(req.url ?? '/', 'http://localhost')
+        const since = Number(url.searchParams.get('since')) || 0
+        res.writeHead(200, {
+          'content-type': 'text/event-stream',
+          'cache-control': 'no-cache',
+          connection: 'keep-alive',
+        })
+        const unsub = bus.subscribe((ev) => {
+          try {
+            res.write(`data: ${JSON.stringify(ev)}\n\n`)
+          } catch { /* stream closing */ }
+        }, { since })
+        req.on('close', unsub)
+      },
+    }),
     ctx.webServer.register({
       kind: 'exact',
       path: `${ROUTE}/health`,
@@ -195,34 +228,77 @@ export function apply(ctx) {
 
   const unregisterCommand = ctx.commands?.register?.({
     name: 'term',
-    description: 'nano-terminal: /term new | list | close <id> | attach <id>',
-    input: { hint: '[new|list|close|attach] [args]' },
+    description: 'nano-terminal: /term new|list|close|attach|send|read|wait|keys|interrupt|keep|label|events|skill',
+    input: { hint: '[new|list|close|attach|send|read|wait|keys|interrupt|keep|label|events|skill] [args]' },
     handler: async ({ rawInput }) => {
       const [sub, ...rest] = String(rawInput ?? '').trim().split(/\s+/)
+      const arg = rest.join(' ')
+      const rpc = async (name, args) => {
+        const reply = await mcp.handleRpc({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } })
+        const r = reply?.result
+        if (r?.isError) return { kind: 'error', text: r.structuredContent?.message ?? r.content?.[0]?.text ?? 'error' }
+        return { kind: 'success', text: typeof r?.structuredContent === 'object' ? JSON.stringify(r.structuredContent, null, 2) : String(r?.content?.[0]?.text ?? 'ok') }
+      }
       try {
-        if (!sub || sub === 'new') {
-          const rec = await registry.create({ owner: 'slash' })
-          return { kind: 'success', text: `terminal ${rec.id.slice(0, 8)} created (lane=local)` }
-        }
-        if (sub === 'list') {
-          const rows = registry.list()
-          if (!rows.length) return { kind: 'success', text: 'no terminal sessions' }
-          return {
-            kind: 'success',
-            text: rows.map((r) => `${r.id.slice(0, 8)} ${r.lane} ${r.title} attached=${r.attached}${r.exited ? ' (exited)' : ''}`).join('\n'),
+        switch (sub) {
+          case '':
+          case 'new': {
+            const rec = await registry.create({ owner: 'slash' })
+            return { kind: 'success', text: `terminal ${rec.addr} created (lane=local)` }
           }
+          case 'list': {
+            const rows = registry.list()
+            if (!rows.length) return { kind: 'success', text: 'no terminal sessions' }
+            return {
+              kind: 'success',
+              text: rows.map((r) => `${r.addr} ${r.title}${r.status?.state ? ` [${r.status.state}]` : ''} attached=${r.attached}${r.exited ? ' (exited)' : ''}${r.keep ? ' keep' : ''}`).join('\n'),
+            }
+          }
+          case 'close':
+            return rpc('term.session.close', { id: rest[0] })
+          case 'attach': {
+            const rec = registry.resolve(rest[0])
+            return rec
+              ? { kind: 'success', text: `attach via ws ${ROUTE}/stream?session=${rec.id}` }
+              : { kind: 'error', text: 'no such session' }
+          }
+          case 'send': {
+            const [id, ...data] = rest
+            return rpc('term.send', { id, data: data.join(' ') })
+          }
+          case 'input': {
+            const [id, ...data] = rest
+            return rpc('term.session.input', { id, data: data.join(' ') })
+          }
+          case 'read':
+            return rpc('term.session.read', { id: rest[0], lines: Number(rest[1]) || 50 })
+          case 'wait':
+            return rpc('term.wait', { id: rest[0], output: rest[1] ?? undefined })
+          case 'keys': {
+            const [id, ...keys] = rest
+            return rpc('term.keys', { id, keys })
+          }
+          case 'interrupt':
+            return rpc('term.interrupt', { id: rest[0] })
+          case 'keep':
+            return rpc('term.session.keep', { id: rest[0], keep: rest[1] !== 'off' })
+          case 'label': {
+            // /term label <id> k=v k=v  |  /term label <id> -k -k
+            const [id, ...pairs] = rest
+            const set = {}; const unset = []
+            for (const p of pairs) {
+              if (p.startsWith('-')) unset.push(p.slice(1))
+              else { const i = p.indexOf('='); if (i > 0) set[p.slice(0, i)] = p.slice(i + 1) }
+            }
+            return rpc('term.session.label', { id, set, unset })
+          }
+          case 'events':
+            return rpc('term.events', { since: Number(rest[0]) || 0 })
+          case 'skill':
+            return rpc('term.skill', {})
+          default:
+            return { kind: 'error', text: `unknown subcommand '${sub}'` }
         }
-        if (sub === 'close') {
-          const ok = await registry.close(rest[0], 'slash')
-          return ok ? { kind: 'success', text: 'closed' } : { kind: 'error', text: 'no such session' }
-        }
-        if (sub === 'attach') {
-          const rec = registry.get(rest[0])
-          return rec
-            ? { kind: 'success', text: `attach via ws ${ROUTE}/stream?session=${rec.id}` }
-            : { kind: 'error', text: 'no such session' }
-        }
-        return { kind: 'error', text: `unknown subcommand '${sub}'` }
       } catch (err) {
         return { kind: 'error', text: String(err?.message ?? err) }
       }
@@ -235,6 +311,7 @@ export function apply(ctx) {
 
   ctx.effect(() => () => {
     clearInterval(sweep)
+    bus.dispose()
     unregisterUpgrade()
     for (const un of unregisterRoutes) un()
     unregisterCommand()

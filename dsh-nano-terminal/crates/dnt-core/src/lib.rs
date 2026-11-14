@@ -128,8 +128,9 @@ impl Grid {
     fn scroll_up(&mut self, top: usize, bottom: usize, fill: Cell) {
         let base = self.screen_base();
         if top == 0 && bottom == self.rows {
-            let line = self.lines.pop_front().unwrap_or_else(|| blank_line(self.cols, fill));
-            drop(line);
+            // full-screen scroll: append a blank at the bottom and let the
+            // deque grow — the scrolled-off line stays as scrollback.
+            // (DNT01 fix: the line used to be dropped, so history never grew.)
             self.lines.push_back(blank_line(self.cols, fill));
             while self.lines.len() > self.scrollback + self.rows {
                 self.lines.pop_front();
@@ -252,6 +253,105 @@ pub struct Term {
     alive: bool,
     underline_color: u32,
     hyperlinks: u32, // unused counter (future)
+    // --- OSC 7501 program-reported state (herdr-core status protocol) -------
+    // The program declares its own state; the core never guesses from the
+    // screen. Each report is a record with an optional `id` (multi-subtask);
+    // the record without an id is the "root" record and drives the turn.
+    states: Vec<StateRecord>,
+    state_seq: u32,
+    state_buf: String, // JSON-serialized states for JS/host consumption
+    state_dirty: bool,
+    // text export buffer (dnt_screen_text) — separate from render's text_buf
+    dump_buf: Vec<u8>,
+}
+
+/// One OSC 7501 record: `state=working:kind=permission:app=x:progress=40:msg=<b64>`
+#[derive(Clone, Default)]
+pub struct StateRecord {
+    pub id: String,     // empty = root record
+    pub state: String,  // idle | working | done | blocked | error | clear
+    pub kind: String,   // blocked only: permission | question | auth
+    pub app: String,
+    pub msg: String,    // base64-decoded
+    pub progress: u32,
+}
+
+impl StateRecord {
+    fn to_json(&self) -> String {
+        let mut s = String::with_capacity(64 + self.id.len() + self.msg.len());
+        s.push_str("{\"id\":\"");
+        json_escape(&self.id, &mut s);
+        s.push_str("\",\"state\":\"");
+        json_escape(&self.state, &mut s);
+        s.push('"');
+        if !self.kind.is_empty() {
+            s.push_str(",\"kind\":\"");
+            json_escape(&self.kind, &mut s);
+            s.push('"');
+        }
+        if !self.app.is_empty() {
+            s.push_str(",\"app\":\"");
+            json_escape(&self.app, &mut s);
+            s.push('"');
+        }
+        if !self.msg.is_empty() {
+            s.push_str(",\"msg\":\"");
+            json_escape(&self.msg, &mut s);
+            s.push('"');
+        }
+        if self.progress > 0 {
+            s.push_str(",\"progress\":");
+            s.push_str(&self.progress.to_string());
+        }
+        s.push('}');
+        s
+    }
+}
+
+fn json_escape(src: &str, out: &mut String) {
+    for c in src.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if (c as u32) < 0x20 => {
+                out.push_str(&format!("\\u{:04x}", c as u32));
+            }
+            c => out.push(c),
+        }
+    }
+}
+
+fn b64_decode(s: &str) -> Option<String> {
+    fn val(b: u8) -> Option<u32> {
+        match b {
+            b'A'..=b'Z' => Some((b - b'A') as u32),
+            b'a'..=b'z' => Some((b - b'a' + 26) as u32),
+            b'0'..=b'9' => Some((b - b'0' + 52) as u32),
+            b'+' | b'-' => Some(62),
+            b'/' | b'_' => Some(63),
+            _ => None,
+        }
+    }
+    let bytes = s.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len() * 3 / 4);
+    let mut acc: u32 = 0;
+    let mut nbits: u32 = 0;
+    for &b in bytes {
+        if b == b'=' || b == b'\n' || b == b'\r' {
+            continue;
+        }
+        let v = val(b)?;
+        acc = (acc << 6) | v;
+        nbits += 6;
+        if nbits >= 8 {
+            nbits -= 8;
+            out.push((acc >> nbits) as u8);
+        }
+    }
+    String::from_utf8(out).ok()
 }
 
 const DEFAULT_SCROLLBACK: usize = 2000;
@@ -291,7 +391,65 @@ impl Term {
             alive: true,
             underline_color: C_DEFAULT,
             hyperlinks: 0,
+            states: Vec::new(),
+            state_seq: 0,
+            state_buf: String::new(),
+            state_dirty: false,
+            dump_buf: Vec::with_capacity(8192),
         }
+    }
+
+    /// Parse one or more OSC 7501 records. `state=clear` removes the record
+    /// (matching id when given, else root); otherwise upsert by id.
+    fn osc_7501(&mut self, params: &[&[u8]]) {
+        for p in params {
+            let text = String::from_utf8_lossy(p);
+            let mut rec = StateRecord::default();
+            for kv in text.split(':') {
+                let mut it = kv.splitn(2, '=');
+                let (k, v) = (it.next().unwrap_or(""), it.next().unwrap_or(""));
+                match k {
+                    "id" => rec.id = v.to_string(),
+                    "state" => rec.state = v.to_string(),
+                    "kind" => rec.kind = v.to_string(),
+                    "app" => rec.app = v.to_string(),
+                    "msg" => rec.msg = b64_decode(v).unwrap_or_else(|| v.to_string()),
+                    "progress" => rec.progress = v.parse().unwrap_or(0),
+                    _ => {}
+                }
+            }
+            if rec.state.is_empty() {
+                continue;
+            }
+            if rec.state == "clear" {
+                self.states.retain(|s| s.id != rec.id);
+            } else if let Some(slot) = self.states.iter_mut().find(|s| s.id == rec.id) {
+                // upsert: state/kind/app/msg all come from the new report
+                *slot = rec;
+            } else {
+                self.states.push(rec);
+            }
+            self.state_seq = self.state_seq.wrapping_add(1);
+            self.state_dirty = true;
+        }
+    }
+
+    /// Serialize the state table + title as JSON for JS/host consumption.
+    /// Root = the record with empty id (may be absent).
+    fn state_json(&mut self) {
+        self.state_buf.clear();
+        self.state_buf.push_str("{\"seq\":");
+        self.state_buf.push_str(&self.state_seq.to_string());
+        self.state_buf.push_str(",\"title\":\"");
+        json_escape(&self.title, &mut self.state_buf);
+        self.state_buf.push_str("\",\"records\":[");
+        for (i, s) in self.states.iter().enumerate() {
+            if i > 0 {
+                self.state_buf.push(',');
+            }
+            self.state_buf.push_str(&s.to_json());
+        }
+        self.state_buf.push_str("]}");
     }
 
     #[inline]
@@ -850,6 +1008,13 @@ impl Perform for Term {
                     self.title_dirty = true;
                 }
             }
+            Some(b"7501") => {
+                // herdr-core status protocol: the program reports its own state,
+                // the core never guesses from the screen. Each param after the
+                // command is one record `k=v:k=v…`; `state=clear` drops the
+                // matching record. The id-less record is the root status.
+                self.osc_7501(&params[1..]);
+            }
             _ => {}
         }
     }
@@ -1297,4 +1462,82 @@ pub extern "C" fn dnt_total_lines(id: u32) -> u32 {
 #[no_mangle]
 pub extern "C" fn dnt_view_start(id: u32) -> i32 {
     with_term(id, |t| (t.grid.total_lines() - t.grid.rows - t.scroll_off) as i32).unwrap_or(0)
+}
+
+// --- OSC 7501 state export --------------------------------------------------
+
+/// Monotonic state sequence — bump on every 7501 record upsert/clear.
+#[no_mangle]
+pub extern "C" fn dnt_state_seq(id: u32) -> u32 {
+    with_term(id, |t| t.state_seq).unwrap_or(0)
+}
+
+/// JSON pointer for `{seq,title,records:[{id,state,kind?,app?,msg?,progress?}]}`.
+/// Re-serializes only when dirty. Valid until next call.
+#[no_mangle]
+pub extern "C" fn dnt_state_json(id: u32) -> *const u8 {
+    match with_term(id, |t| {
+        if t.state_dirty {
+            t.state_dirty = false;
+            t.state_json();
+        }
+        set_last(t.state_buf.as_bytes())
+    }) {
+        Some(p) => p,
+        None => std::ptr::null(),
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn dnt_state_len(id: u32) -> u32 {
+    with_term(id, |t| t.state_buf.len() as u32).unwrap_or(0)
+}
+
+// --- Screen text export ------------------------------------------------------
+
+/// Dump screen text into an internal buffer.
+/// `source`: 0 = visible (live screen, last `lines` rows — the user's viewport
+/// is irrelevant; this is the live grid), 1 = recent (last `lines` of the
+/// whole buffer incl. scrollback), 2 = detection (bottom-buffer live rows —
+/// the snapshot status detection reads; identical to visible for now but a
+/// distinct contract slot for viewport-aware reads later).
+/// Returns pointer (valid until next call); len via dnt_dump_len.
+#[no_mangle]
+pub extern "C" fn dnt_dump(id: u32, source: u32, lines: u32) -> *const u8 {
+    match with_term(id, |t| {
+        t.dump_buf.clear();
+        let total = t.grid.total_lines();
+        let base = t.grid.screen_base();
+        let rows = t.grid.rows;
+        let n = (lines as usize).max(1);
+        let (start, end) = match source {
+            1 => (total.saturating_sub(n), total),
+            _ => (base + rows.saturating_sub(n), base + rows),
+        };
+        let mut first = true;
+        for idx in start..end.min(t.grid.lines.len()) {
+            if !first {
+                t.dump_buf.push(b'\n');
+            }
+            first = false;
+            let line = &t.grid.lines[idx];
+            let mut s = String::with_capacity(line.len());
+            for c in line {
+                if c.flags & WIDE_SPACER != 0 {
+                    continue;
+                }
+                s.push(char::from_u32(c.ch).unwrap_or(' '));
+            }
+            t.dump_buf.extend_from_slice(s.trim_end().as_bytes());
+        }
+        set_last(&t.dump_buf)
+    }) {
+        Some(p) => p,
+        None => std::ptr::null(),
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn dnt_dump_len(id: u32) -> u32 {
+    with_term(id, |t| t.dump_buf.len() as u32).unwrap_or(0)
 }

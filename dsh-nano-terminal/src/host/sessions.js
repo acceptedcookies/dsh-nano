@@ -1,36 +1,84 @@
-// Local PTY session registry for dsh-nano-terminal.
+// Terminal registry for dsh-nano-terminal.
 // Lane "local": ctx.subprocess.spawnTerminal (node-pty) on the dsh host.
+//
+// Upgraded contract (DNT01): a terminal is a persistent, addressable object —
+//   id    = uuid (stable, internal)
+//   addr  = '<lane>/<name|short6>' — the single address space across lanes
+//   name  = optional caller-chosen addressable name (unique)
+//   parent= optional parent addr — notes fan-in, die_with_parent cleanup
+//   keep  = respawn a shell when the program is lost; NEVER reruns the command
+//   labels= caller key=value metadata
+//   status= program-reported OSC 7501 state (idle/working/done/blocked/error)
+//   phase = lifecycle: live | exited | recovering
+//   turn  = monotonically increasing when status leaves 'working' (wait anchor)
 // Sessions survive WebSocket detach; replay log powers reattach recovery.
+// All lifecycle transitions emit on the registry's EventBus.
 
 import { randomUUID } from 'node:crypto'
 import { ScreenMirror, loadMirror } from './mirror.js'
+import { KIND, err } from './errors.js'
+import { Gate } from './gate.js'
 
 const decoder = new TextDecoder('utf-8', { fatal: false })
 const encoder = new TextEncoder()
+
+// keep respawn backoff (herdr-core kept.rs): 1.5→3→6→12→30→60s, reset when
+// the respawned program survives ≥10s
+const KEEP_BACKOFF = [1500, 3000, 6000, 12000, 30000, 60000]
+
+// Injected into every pane's environment — lets an agent inside a terminal
+// address itself and call back the control plane (hc $HC_TERMINAL_ID model).
+function agentEnv(rec, apiBase) {
+  return {
+    DNT_TERMINAL_ID: rec.addr,
+    DNT_TERMINAL_SESSION: rec.id,
+    DNT_API: apiBase,
+    DNT_ENV: '1',
+    TERM_PROGRAM: 'dnt',
+  }
+}
 
 export class SessionRegistry {
   /**
    * @param {object} deps
    * @param {import('@deepseek-ai/cordis').Context} deps.ctx
    * @param {(event: object) => void} deps.audit
-   * @param {number} deps.maxSessions
-   * @param {number} deps.replayBytes
-   * @param {number} deps.idleTimeoutMs
+   * @param {import('./events.js').EventBus} deps.bus
+   * @param {string} deps.apiBase — base URL agents use to reach the MCP plane
    */
-  constructor({ ctx, audit, sendBinary, sendText, maxSessions = 16, replayBytes = 512 * 1024, idleTimeoutMs = 30 * 60 * 1000 }) {
+  constructor({ ctx, audit, sendBinary, sendText, bus, apiBase = '', maxSessions = 16, replayBytes = 512 * 1024, idleTimeoutMs = 30 * 60 * 1000 }) {
     this.ctx = ctx
     this.audit = audit
     this.sendBinary = sendBinary
     this.sendText = sendText
+    this.bus = bus
+    this.apiBase = apiBase
     this.maxSessions = maxSessions
     this.replayBytes = replayBytes
     this.idleTimeoutMs = idleTimeoutMs
-    /** @type {Map<string, SessionRecord>} */
+    /** @type {Map<string, SessionRecord>} id → record */
     this.sessions = new Map()
+    /** @type {Map<string, string>} name → id */
+    this.names = new Map()
   }
 
   get(id) {
     return this.sessions.get(id)
+  }
+
+  /**
+   * Resolve id | name | addr ('<lane>/<name|short6>') | bare short6 to a record.
+   */
+  resolve(ref) {
+    if (!ref) return undefined
+    if (this.sessions.has(ref)) return this.sessions.get(ref)
+    const slash = String(ref).indexOf('/')
+    if (slash >= 0) ref = String(ref).slice(slash + 1)
+    if (this.names.has(ref)) return this.sessions.get(this.names.get(ref))
+    for (const rec of this.sessions.values()) {
+      if (rec.id.startsWith(ref) && ref.length >= 4) return rec
+    }
+    return undefined
   }
 
   list() {
@@ -41,41 +89,66 @@ export class SessionRegistry {
     return this.sessions.size
   }
 
+  /** Children of a parent record (or addr). */
+  childrenOf(ref) {
+    const parent = typeof ref === 'string' ? this.resolve(ref) : ref
+    if (!parent) return []
+    return [...this.sessions.values()].filter((s) => s.parent === parent.id)
+  }
+
   /**
    * Spawn a local PTY session.
-   * @param {object} spec - {sessionId, shell, args, cwd, cols, rows, env, owner}
+   * @param {object} spec - {sessionId, name, parent, keep, labels, shell, args, cwd, cols, rows, env, owner, title}
    */
   async create(spec) {
     if (this.sessions.size >= this.maxSessions) {
-      throw Object.assign(new Error('terminal limit reached'), { code: 'limit' })
+      throw err(KIND.LIMIT, 'terminal limit reached')
     }
+    if (spec.name) {
+      if (this.names.has(spec.name)) throw err(KIND.NAME_TAKEN, `name '${spec.name}' already bound`)
+    }
+    const parentRec = spec.parent ? this.resolve(spec.parent) : undefined
+    if (spec.parent && !parentRec) throw err(KIND.NOT_FOUND, `no such parent '${spec.parent}'`)
+
     const id = randomUUID()
     const cwd = await this.resolveCwd(spec)
     const shell = spec.shell || (process.env.SHELL ?? '/bin/zsh')
     const argv = spec.args?.length ? [shell, ...spec.args] : [shell, '-i']
-    const handle = await this.ctx.subprocess.spawnTerminal({
-      argv,
-      cwd,
-      env: spec.env ?? {},
-      rows: Math.min(Math.max(spec.rows || 24, 2), 512),
-      cols: Math.min(Math.max(spec.cols || 80, 2), 512),
-      terminalType: 'xterm-256color',
-      shellActivity: true,
-      graceMs: 1500,
-    })
     const record = new SessionRecord({
       id,
       lane: 'local',
-      handle,
+      handle: null,
       owner: spec.owner ?? spec.sessionId ?? 'unknown',
       title: spec.title ?? shell.split('/').pop(),
+      name: spec.name,
+      parent: parentRec?.id,
+      keep: !!spec.keep,
+      labels: { ...(spec.labels ?? {}) },
       meta: { shell, cwd, argv },
       replayBytes: this.replayBytes,
       registry: this,
     })
+    record.env = { ...(spec.env ?? {}), ...agentEnv(record, this.apiBase) }
+    const handle = await this.ctx.subprocess
+      .spawnTerminal({
+        argv,
+        cwd,
+        env: record.env,
+        rows: Math.min(Math.max(spec.rows || 24, 2), 512),
+        cols: Math.min(Math.max(spec.cols || 80, 2), 512),
+        terminalType: 'xterm-256color',
+        shellActivity: true,
+        graceMs: 1500,
+      })
+      .catch((e) => {
+        throw err(KIND.SPAWN_FAILED, String(e?.message ?? e))
+      })
+    record.handle = handle
     this.sessions.set(id, record)
+    if (spec.name) this.names.set(spec.name, id)
     record.pipe()
-    this.audit({ op: 'create', id, lane: 'local', shell, cwd, owner: record.owner, pid: handle.pid })
+    this.audit({ op: 'create', id, addr: record.addr, lane: 'local', shell, cwd, owner: record.owner, pid: handle.pid })
+    this.bus?.emit('created', record.addr, { id, lane: record.lane, title: record.title, owner: record.owner, parent: parentRec?.addr })
     return record
   }
 
@@ -89,11 +162,17 @@ export class SessionRegistry {
   }
 
   async close(id, reason = 'close') {
-    const rec = this.sessions.get(id)
+    const rec = this.resolve(id) ?? this.sessions.get(id)
     if (!rec) return false
-    this.sessions.delete(id)
+    this.sessions.delete(rec.id)
+    if (rec.name) this.names.delete(rec.name)
+    // die_with_parent: a child outlives its parent only when it never had one
+    for (const child of this.childrenOf(rec)) {
+      await this.close(child.id, 'parent-died')
+    }
     await rec.shutdown()
-    this.audit({ op: 'close', id, reason })
+    this.audit({ op: 'close', id: rec.id, addr: rec.addr, reason })
+    this.bus?.emit('removed', rec.addr, { id: rec.id, reason })
     return true
   }
 
@@ -101,6 +180,7 @@ export class SessionRegistry {
   async dispose() {
     const records = [...this.sessions.values()]
     this.sessions.clear()
+    this.names.clear()
     await Promise.allSettled(records.map((r) => r.shutdown()))
   }
 
@@ -108,7 +188,7 @@ export class SessionRegistry {
   sweep() {
     const now = Date.now()
     for (const rec of this.sessions.values()) {
-      if (rec.sockets.size === 0 && now - rec.lastDetach > this.idleTimeoutMs) {
+      if (rec.sockets.size === 0 && now - rec.lastDetach > this.idleTimeoutMs && !rec.keep) {
         this.close(rec.id, 'idle-timeout').catch(() => {})
       }
     }
@@ -116,40 +196,79 @@ export class SessionRegistry {
 }
 
 export class SessionRecord {
-  constructor({ id, lane, handle, owner, title, meta, replayBytes, registry }) {
+  constructor({ id, lane, handle, owner, title, name, parent, keep, labels, meta, replayBytes, registry }) {
     this.id = id
     this.lane = lane
     this.handle = handle
     this.owner = owner
     this.title = title
+    this.name = name ?? null
+    this.parent = parent ?? null
+    this.keep = !!keep
+    this.labels = labels ?? {}
     this.meta = meta
     this.registry = registry
     this.createdAt = Date.now()
     this.lastDetach = Date.now()
     this.exited = null
+    /** lifecycle phase: live | exited | recovering (keep respawn pending) */
+    this.phase = 'live'
+    /** program-reported OSC 7501 state object or null — core never guesses */
+    this.status = null
+    /** turn counter: +1 every time status leaves 'working' (wait anchor) */
+    this.turn = 0
     /** @type {Set<import('node:stream').Duplex>} */
     this.sockets = new Set()
     this.replay = []
     this.replayLen = 0
     this.replayCap = replayBytes
+    this.keepAttempt = 0
+    this.keepTimer = null
+    this.gate = new Gate()
+    // held human bytes flush straight to the pty once the agent delivery ends
+    this.gate.flushHeld = (chunks) => {
+      if (!this.exited) this.handle?.write(Buffer.concat(chunks.map((c) => (typeof c === 'string' ? Buffer.from(c, 'utf8') : c)))).catch(() => {})
+    }
     this.mirror = null
+    this._lastStateSeq = 0
     try {
       loadMirror()
       this.mirror = new ScreenMirror(meta.cols ?? 80, meta.rows ?? 24)
     } catch { /* wasm mirror optional */ }
   }
 
+  /** '<lane>/<name|short6>' — the single address across lanes. */
+  get addr() {
+    return `${this.lane}/${this.name ?? this.id.slice(0, 6)}`
+  }
+
   info() {
     return {
       id: this.id,
+      addr: this.addr,
+      name: this.name,
       lane: this.lane,
       title: this.title,
       owner: this.owner,
+      parent: this.parent,
+      keep: this.keep,
+      labels: this.labels,
+      phase: this.phase,
+      status: this.status,
+      turn: this.turn,
       createdAt: this.createdAt,
       attached: this.sockets.size,
       exited: this.exited,
-      meta: this.meta,
+      meta: { ...this.meta, argv: undefined }, // argv may carry secrets — omit
     }
+  }
+
+  /** Adopt a (re)spawned handle — used by keep respawn. */
+  adopt(handle) {
+    this.handle = handle
+    this.exited = null
+    this.phase = 'live'
+    this.pipe()
   }
 
   pipe() {
@@ -158,22 +277,100 @@ export class SessionRecord {
       this.remember(chunk)
       try {
         this.mirror?.write(chunk)
+        this.#pollState()
       } catch { /* mirror best-effort */ }
       for (const s of this.sockets) send(s, chunk)
     })
     this.handle.output.on('end', () => {
-      this.exited = { at: Date.now() }
-      this.broadcastText({ type: 'exit', session: this.id })
+      this.#onProgramEnd({ at: Date.now() })
     })
     this.handle.done
       .then((outcome) => {
-        this.exited = { at: Date.now(), outcome }
-        this.broadcastText({ type: 'exit', session: this.id, outcome: String(outcome?.code ?? outcome) })
+        this.#onProgramEnd({ at: Date.now(), outcome })
       })
-      .catch((err) => {
-        this.exited = { at: Date.now(), error: String(err?.message ?? err) }
-        this.broadcastText({ type: 'exit', session: this.id, error: String(err?.message ?? err) })
+      .catch((e) => {
+        this.#onProgramEnd({ at: Date.now(), error: String(e?.message ?? e) })
       })
+  }
+
+  /** Program end: exit code / explicit kill = terminal; loss may keep-respawn. */
+  #onProgramEnd(info) {
+    if (this.exited) return
+    this.exited = info
+    // herdr-core kept.rs: a *lost* program (signal/no exit code/holder death)
+    // with keep:true respawns a fresh shell — never reruns the command.
+    const lost = info.error || info.outcome === undefined || String(info.outcome) === 'undefined'
+    if (this.keep && lost && !this.closed) {
+      this.phase = 'recovering'
+      this.registry.bus?.emit('lost', this.addr, { id: this.id, reason: info.error ? 'error' : 'signal' })
+      this.#scheduleRespawn()
+      return
+    }
+    this.phase = 'exited'
+    const turn = this.#leaveWorking()
+    this.broadcastText({ type: 'exit', session: this.id, addr: this.addr, outcome: String(info.outcome ?? info.error ?? '') })
+    this.registry.bus?.emit('finished', this.addr, { id: this.id, outcome: info.outcome, turn })
+    this.registry.audit({ op: 'exit', id: this.id, addr: this.addr, outcome: info.outcome })
+  }
+
+  #scheduleRespawn() {
+    const delay = KEEP_BACKOFF[Math.min(this.keepAttempt, KEEP_BACKOFF.length - 1)]
+    this.keepAttempt += 1
+    clearTimeout(this.keepTimer)
+    this.keepTimer = setTimeout(() => this.#respawn().catch(() => {}), delay)
+    this.keepTimer.unref?.()
+  }
+
+  async #respawn() {
+    if (this.closed) return
+    const { shell, cwd } = this.meta
+    try {
+      const handle = await this.registry.ctx.subprocess.spawnTerminal({
+        argv: [shell, '-i'], // fresh shell — never reruns the lost command
+        cwd,
+        env: this.env,
+        rows: Math.min(Math.max(this.meta.rows || 24, 2), 512),
+        cols: Math.min(Math.max(this.meta.cols || 80, 2), 512),
+        terminalType: 'xterm-256color',
+        shellActivity: true,
+        graceMs: 1500,
+      })
+      this.adopt(handle)
+      this.keepAttempt = 0
+      this.registry.bus?.emit('restarted', this.addr, { id: this.id })
+      this.broadcastText({ type: 'restarted', session: this.id, addr: this.addr })
+      this.registry.audit({ op: 'respawn', id: this.id, addr: this.addr })
+    } catch (e) {
+      // stay 'recovering'; next loss or explicit close resolves it
+      this.registry.bus?.emit('lost', this.addr, { id: this.id, reason: 'respawn-failed', detail: String(e?.message ?? e) })
+      this.#scheduleRespawn()
+    }
+  }
+
+  /** If status was 'working', bump turn. Returns current turn. */
+  #leaveWorking() {
+    if (this.status?.state === 'working') this.turn += 1
+    return this.turn
+  }
+
+  /** Mirror-driven OSC 7501 poll: state changes emit status/turn events. */
+  #pollState() {
+    const st = this.mirror?.state?.()
+    if (!st || st.seq === this._lastStateSeq) return
+    this._lastStateSeq = st.seq
+    const prev = this.status?.state
+    this.status = st.root ?? null
+    if (prev !== this.status?.state) {
+      if (prev === 'working') this.turn += 1 // leaving working ends a turn
+      this.registry.bus?.emit('status', this.addr, { id: this.id, status: this.status, turn: this.turn })
+      if (this.status?.state && this.status.state !== 'working') {
+        this.registry.bus?.emit('turn', this.addr, { id: this.id, turn: this.turn })
+      }
+    }
+    if (st.title && st.title !== this.title) {
+      this.title = st.title
+      this.registry.bus?.emit('title', this.addr, { id: this.id, title: st.title })
+    }
   }
 
   remember(chunk) {
@@ -199,16 +396,58 @@ export class SessionRecord {
     }
   }
 
-  async writeInput(data) {
-    if (this.exited) return
-    await this.handle.write(typeof data === 'string' ? data : decoder.decode(data))
+  /**
+   * Input path. `source`:
+   *   'human'     — interactive bytes; counted toward the draft, held while an
+   *                 agent delivery is in flight (returns null when held).
+   *   'agent'     — tool/automation bytes; serialized through the gate queue.
+   *   'automatic' — terminal auto-replies (DA/CPR); bypass the gate entirely.
+   */
+  async writeInput(data, source = 'human') {
+    if (this.exited) throw err(KIND.FINISHED, 'terminal exited')
+    if (source === 'automatic') {
+      await this.handle.write(typeof data === 'string' ? data : decoder.decode(data))
+      return
+    }
+    if (source === 'agent') {
+      return this.gate.submit(() => this.handle.write(typeof data === 'string' ? data : decoder.decode(data)))
+    }
+    const ok = this.gate.humanInput(typeof data === 'string' ? Buffer.from(data, 'utf8') : data)
+    if (ok === null) return { held: true }
+    await this.handle.write(decoder.decode(ok))
+  }
+
+  /**
+   * Agent send semantics (term.send): blocked guard → bracketed paste + Enter
+   * → gate queue. opts: {enter, force, cond, urgent}
+   */
+  async agentSend(text, { enter = true, force = false, cond = null, urgent = false } = {}) {
+    if (this.exited) throw err(KIND.FINISHED, 'terminal exited')
+    const st = this.status?.state
+    if (st === 'blocked' && !force) throw err(KIND.BLOCKED, `terminal reports blocked${this.status.kind ? ` (${this.status.kind})` : ''}`)
+    if (cond && st !== cond) throw err(KIND.STATUS_MISMATCH, `status is '${st ?? 'none'}', required '${cond}'`)
+    const payload = `\x1b[200~${String(text).replace(/\r?\n/g, '\r')}\x1b[201~${enter ? '\r' : ''}`
+    const r = await this.gate.submit(() => this.handle.write(payload), { urgent })
+    this.registry.bus?.emit('message', this.addr, { id: this.id })
+    return { ...(r ?? {}), turn: this.turn }
+  }
+
+  setLabels(set = {}, unset = []) {
+    Object.assign(this.labels, set)
+    for (const k of unset) delete this.labels[k]
+    this.registry.bus?.emit('labels', this.addr, { id: this.id, labels: this.labels })
+    return this.labels
   }
 
   async resize(cols, rows) {
+    const prev = `${this.meta.cols}x${this.meta.rows}`
     this.meta = { ...this.meta, cols, rows }
     try {
       this.mirror?.resize(cols, rows)
     } catch { /* best-effort */ }
+    if (`${cols}x${rows}` !== prev) {
+      this.registry.bus?.emit('size', this.addr, { id: this.id, cols, rows })
+    }
     if (!this.exited) await this.handle.resize(cols, rows).catch(() => {})
   }
 
@@ -217,20 +456,22 @@ export class SessionRecord {
     for (const s of this.sockets) send(s, obj)
   }
 
-  screenText(n) {
+  screenText(n, source = 'visible') {
     try {
-      return this.mirror?.screenText(n) ?? ''
+      return this.mirror?.screenText(n, source) ?? ''
     } catch {
       return ''
     }
   }
 
   async shutdown() {
+    this.closed = true
+    clearTimeout(this.keepTimer)
     for (const s of this.sockets) {
       try { s.destroy() } catch { /* already gone */ }
     }
     this.sockets.clear()
     this.mirror?.free()
-    await this.handle.terminate().catch(() => {})
+    await this.handle?.terminate().catch(() => {})
   }
 }

@@ -18,7 +18,9 @@
     "cordis.patch.yml",
     "icon.svg",
     "locale",
-    "lib"
+    "lib",
+    "schema",
+    "docs"
   ],
   "scripts": {
     "build:rust": "bash scripts/build-rust.sh",

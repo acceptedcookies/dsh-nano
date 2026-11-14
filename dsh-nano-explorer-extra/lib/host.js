@@ -785,6 +785,12 @@ function letterOf(staged, unstaged) {
   if (both.includes("M")) return "M";
   return void 0;
 }
+function checkoutRelative(root, path) {
+  const base = root.replace(/\/+$/u, "");
+  const target = path.replace(/\/+$/u, "");
+  if (target === base) return "";
+  return target.startsWith(`${base}/`) ? target.slice(base.length + 1) : void 0;
+}
 function parseStatus(stdout) {
   const records = stdout.split("\0");
   const result = { branch: null, detached: false, upstream: null, ahead: 0, behind: 0, files: [], ignored: [] };
@@ -885,8 +891,12 @@ async function readStatus(ctx, config, request) {
     "-z",
     ...scoped ? ["--", request.path] : []
   ];
-  const [status, stash, worktrees] = await Promise.all([
+  const [status, tracked, stash, worktrees] = await Promise.all([
     runGit(ctx, config, { ...request, args }),
+    scoped ? runGit(ctx, config, {
+      ...request,
+      args: ["status", "--porcelain=v2", "-z", "--untracked-files=no"]
+    }).catch(() => void 0) : Promise.resolve(void 0),
     scoped ? Promise.resolve(void 0) : runGit(ctx, config, {
       ...request,
       args: ["stash", "list", "--format=%gd"],
@@ -895,6 +905,14 @@ async function readStatus(ctx, config, request) {
     scoped ? Promise.resolve([]) : listWorktrees(ctx, config, request)
   ]);
   const parsed = parseStatus(status.stdout);
+  if (scoped && tracked !== void 0 && tracked.exitCode === 0) {
+    const scope = checkoutRelative(root, request.path);
+    if (scope !== void 0) {
+      const inside = (file) => scope === "" || file.path === scope || file.path.startsWith(`${scope}/`);
+      const truthful = new Map(parseStatus(tracked.stdout).files.filter(inside).map((file) => [file.path, file]));
+      parsed.files = parsed.files.map((file) => truthful.get(file.path) ?? file);
+    }
+  }
   const stashed = stash === void 0 || stash.exitCode !== 0 ? 0 : stash.stdout.split("\n").filter((line) => line.trim() !== "").length;
   const [branches, history, remote, remotes, repoConfig] = scoped ? [[], [], void 0, [], void 0] : await Promise.all([
     listBranches(ctx, config, request, worktrees),

@@ -26,7 +26,7 @@ export const WAIT_ROUTE = '/nano-local-sandbox/wait'
 import { ROUTE_TABLE } from '../../lib/route-table.js'
 import { createCdpKeeper } from './cdp-keeper.js'
 import { publishedHttpBase } from './backend-apple.js'
-import { ensureClient, readElements } from './cdp-elements.js'
+import { ensureClient, navigate, readElements } from './cdp-elements.js'
 import { answerNativeTool, toolsList } from './mcp-sandbox.js'
 
 const keeper = createCdpKeeper()
@@ -94,7 +94,12 @@ export function routeSpecs(deps = {}) {
       }
       if (row.path.endsWith('/open')) {
         const body = await readJson(req)
-        if (typeof body.url === 'string' && body.url) session.history.push({ url: body.url, at: new Date().toISOString() })
+        if (typeof body.url === 'string' && body.url) {
+          session.history.push({ url: body.url, at: new Date().toISOString() })
+          if (session.httpBase) {
+            try { await navigate(session, session.httpBase, body.url) } catch { /* the history entry still stands */ }
+          }
+        }
         send(res, 200, { ok: true, url: body.url ?? null })
         return
       }

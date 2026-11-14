@@ -13,6 +13,8 @@ export async function readElements(client, options = {}) {
     ? { sessionId: page.sessionId }
     : await client.send('Target.attachToTarget', { targetId: page.targetId, flatten: true })
   const sessionId = attached.sessionId
+  await client.send('DOM.enable', {}, sessionId)
+  await client.send('CSS.enable', {}, sessionId)
   const depth = Math.max(1, Math.min(Number(options.depth) || 4, 8))
   const doc = await client.send('DOM.getDocument', { depth, pierce: false }, sessionId)
   const root = doc.root
@@ -48,6 +50,19 @@ export async function readElements(client, options = {}) {
     }
   }
   return { depth, count: nodes.length, nodes, selector, matched, computed }
+}
+
+export async function navigate(session, httpBase, url, connect = connectCdp) {
+  const client = await ensureClient(session, httpBase, connect)
+  const targets = await client.send('Target.getTargets')
+  const page = (targets.targetInfos || []).find((row) => row.type === 'page')
+  if (!page) return { ok: false }
+  const attached = page.sessionId
+    ? { sessionId: page.sessionId }
+    : await client.send('Target.attachToTarget', { targetId: page.targetId, flatten: true })
+  await client.send('Page.enable', {}, attached.sessionId)
+  await client.send('Page.navigate', { url }, attached.sessionId)
+  return { ok: true, url }
 }
 
 export async function ensureClient(session, httpBase, connect = connectCdp) {

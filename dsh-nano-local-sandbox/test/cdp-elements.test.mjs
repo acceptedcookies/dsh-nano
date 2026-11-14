@@ -7,6 +7,7 @@ test('readElements returns computed styles and matched rules for a selector', as
   const client = {
     async send(method, params) {
       calls.push(method)
+      if (method === 'DOM.enable' || method === 'CSS.enable') return {}
       if (method === 'Target.getTargets') return { targetInfos: [{ type: 'page', targetId: 'p', sessionId: 's' }] }
       if (method === 'DOM.getDocument') return { root: { nodeId: 1, localName: 'html', children: [{ nodeId: 2, localName: 'p' }] } }
       if (method === 'DOM.querySelector') {

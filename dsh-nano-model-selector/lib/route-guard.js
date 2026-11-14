@@ -208,6 +208,20 @@ var ROUTE_TABLE = [
     "bodyLimit": 16384,
     "sessionBinding": false,
     "justification": "dsh-nano-model-selector/index.js:30,252 \u2014 GET reads {engine,explicit}; PUT (16384-byte cap) writes DSH_HOME/plugins/nano-model-selector/media-engine.json and re-registers the /imagine skill = DSH_HOME write + skill mutation."
+  },
+  {
+    "plugin": "dsh-nano-model-selector",
+    "path": "/nano-model-selector/async-compact",
+    "methods": [
+      "GET",
+      "HEAD",
+      "PUT"
+    ],
+    "sensitivity": "L3",
+    "capability": "write:operator",
+    "bodyLimit": 16384,
+    "sessionBinding": false,
+    "justification": "dsh-nano-model-selector/index.js \u2014 DNMS01/-15. GET returns {policy, effective, runtime}; PUT (16384-byte cap) rewrites plugins/nano-model-selector/async-compact.json, the sole writable authority for the async-compaction takeover (master-order + schema validation, fail-closed). Operator-level config surface = L3 write:operator."
   }
 ];
 export {

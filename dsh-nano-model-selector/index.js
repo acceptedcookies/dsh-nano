@@ -7,6 +7,9 @@ import { defaultEngine, imagineSkill, imagineStub, readEngine, scanEngines, writ
 import { ensurePerfReviewHost, LIB_VERSION } from './lib/perf-review-host.js'
 import { registerRoutes } from './lib/route-guard.js'
 import { ROUTE_TABLE, PLUGIN } from './lib/route-table.js'
+import {
+  mergePutBody, readState, validateMasterOrder, validatePutBody, writeState,
+} from './lib/compact-policy.js'
 
 export const name = 'nano-model-selector'
 
@@ -30,11 +33,18 @@ const review = ensurePerfReviewHost().hostJoin('nano-model-selector', {
 const ROUTE = '/nano-model-selector/catalog'
 const ENGINES_ROUTE = '/nano-model-selector/media-engines'
 const ENGINE_ROUTE = '/nano-model-selector/media-engine'
+const ASYNC_COMPACT_ROUTE = '/nano-model-selector/async-compact'
 
 /** Plugin-private state file holding the chosen media engine. */
 const STATE_PATH = join(
   process.env.DSH_DATA_DIR ?? process.env.DSH_HOME ?? join(homedir(), '.dsh'),
   'plugins', 'nano-model-selector', 'media-engine.json',
+)
+
+/** Async-compaction policy file — the sole writable authority while ON (-11). */
+const ASYNC_COMPACT_PATH = join(
+  process.env.DSH_DATA_DIR ?? process.env.DSH_HOME ?? join(homedir(), '.dsh'),
+  'plugins', 'nano-model-selector', 'async-compact.json',
 )
 
 /** Reuse a built catalog this long; the selector does not need per-open freshness. */
@@ -222,6 +232,80 @@ function mediaHandlers(ctx, imagine) {
   return { engines, engine }
 }
 
+/**
+ * Resolve the nominal context window for a policy's model target, when one is
+ * routed. An empty {provider,model} pair means "reuse the routed target" and
+ * yields no resolvable window here (the Provider resolves it at runtime).
+ * @returns context window in tokens, or null when unresolvable.
+ */
+async function policyWindow(ctx, model) {
+  if (!model || model.provider === '' || model.model === '') return null
+  try {
+    const info = await ctx.llm.resolveModelInfo(model.provider, model.model)
+    const w = info?.context?.contextWindow
+    return typeof w === 'number' && w > 0 ? w : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * GET/PUT /nano-model-selector/async-compact (L3, PUT bodyLimit 16384,
+ * sessionBinding:false — T-O-DNMS01-15).
+ * GET -> {...policy, effective:{pin,windowMin,dcs}, runtime:{fill,lastCompaction}};
+ * PUT -> partial update: validatePutBody -> optional model route check ->
+ * merge -> master-order -> atomic write. Every rejection is 400 with the
+ * closed error-code set; nothing is written on failure.
+ */
+function asyncCompactHandlers(ctx) {
+  const payload = async policy => {
+    const W = await policyWindow(ctx, policy.model)
+    const effective = W === null
+      ? { pin: null, windowMin: null, dcs: [] }
+      : (() => {
+        const r = validateMasterOrder(policy, W)
+        return r.ok ? { pin: r.effectivePin, windowMin: r.windowMin, dcs: r.dcs } : { pin: null, windowMin: null, dcs: [], invalid: r.reason }
+      })()
+    return {
+      ...policy,
+      effective,
+      runtime: { fill: null, lastCompaction: null },
+    }
+  }
+  const handler = async (req, res) => {
+    if (req.method === 'PUT') {
+      try {
+        const body = await readBody(req, 16384)
+        const shape = validatePutBody(body)
+        if (!shape.ok) { sendJson(res, 400, { ok: false, error: { code: 'invalid-schema', reason: shape.reason } }); return }
+        const state = readState(ASYNC_COMPACT_PATH)
+        if (!state.ok) { sendJson(res, 400, { ok: false, error: { code: 'state-read-failed', reason: state.reason } }); return }
+        const next = mergePutBody(state.policy, body)
+        if ('model' in body && body.model.provider !== '' && body.model.model !== '') {
+          const W = await policyWindow(ctx, next.model)
+          if (W === null) { sendJson(res, 400, { ok: false, error: { code: 'invalid-model', reason: 'model target is not a registered route' } }); return }
+        }
+        const W = await policyWindow(ctx, next.model)
+        if (W !== null) {
+          const order = validateMasterOrder(next, W)
+          if (!order.ok) { sendJson(res, 400, { ok: false, error: { code: order.code, reason: order.reason } }); return }
+        }
+        const wrote = writeState(ASYNC_COMPACT_PATH, next)
+        if (!wrote.ok) { sendJson(res, 400, { ok: false, error: { code: 'state-write-failed', reason: wrote.reason } }); return }
+        sendJson(res, 200, { ok: true, policy: await payload(next) })
+      } catch (error) {
+        sendJson(res, 400, { ok: false, error: { code: error.message === 'body too large' ? 'body-too-large' : 'invalid-json-body', reason: messageOf(error) } })
+      }
+      return
+    }
+    // GET/HEAD: serve the stored policy plus derived read-only fields.
+    const state = readState(ASYNC_COMPACT_PATH)
+    if (!state.ok) { sendJson(res, 500, { ok: false, error: { code: 'state-read-failed', reason: state.reason } }); return }
+    sendJson(res, 200, { ok: true, policy: await payload(state.policy), missing: state.missing })
+  }
+  return handler
+}
+
 /** @param {import('@deepseek-ai/cordis').Context} ctx */
 export function apply(ctx) {
   const imagine = registerImagine(ctx)
@@ -234,5 +318,6 @@ export function apply(ctx) {
     { path: ROUTE, methods: ['GET', 'HEAD'], handler: catalogHandler(ctx) },
     { path: ENGINES_ROUTE, methods: ['GET', 'HEAD'], handler: media.engines },
     { path: ENGINE_ROUTE, methods: ['GET', 'HEAD', 'PUT'], handler: media.engine },
+    { path: ASYNC_COMPACT_ROUTE, methods: ['GET', 'HEAD', 'PUT'], handler: asyncCompactHandlers(ctx) },
   ], { table: ROUTE_TABLE, plugin: PLUGIN })
 }

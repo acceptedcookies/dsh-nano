@@ -1531,6 +1531,12 @@ var __kitesurfExport = (() => {
           annotateTitle: "\u6807\u6CE8\u3002\u6309\u4F4F Shift \u62D6\u4E00\u6761\u7BAD\u5934",
           history: "\u6700\u8FD1\u5730\u5740",
           settings: "\u8BBE\u7F6E",
+          navOpen: "\u6807\u7B7E\u9875\u680F",
+          navOpenTitle: "\u5C55\u5F00\u6807\u7B7E\u9875\u680F\uFF08\u2318E \u7136\u540E\u6309 1\uFF09",
+          navClose: "\u6536\u8D77\u6807\u7B7E\u9875\u680F",
+          navCloseTitle: "\u6536\u8D77\u6807\u7B7E\u9875\u680F\uFF08Esc\uFF09",
+          navTabs: "\u6807\u7B7E\u9875",
+          navEmpty: "\u8FD8\u6CA1\u6709\u6D4F\u89C8\u8BB0\u5F55\uFF0C\u8F93\u5165\u5730\u5740\u5F00\u59CB",
           noteAria: "\u5199\u7ED9 composer \u7684\u5907\u6CE8",
           notePlaceholder: "\u8FD9\u4E00\u5904\u8981\u6539\u4EC0\u4E48",
           noteSend: "\u52A0\u5165\u6807\u6CE8",
@@ -1589,7 +1595,7 @@ var __kitesurfExport = (() => {
           viewportPhone: "\u624B\u673A 390",
           saved: "\u8BBE\u7F6E\u5DF2\u4FDD\u5B58",
           emptyTitle: "\u5F00\u59CB\u6D4F\u89C8",
-          emptyBody: "\u5728\u4E0A\u65B9\u5730\u5740\u680F\u8F93\u5165\u7F51\u5740\uFF0CKitesurf \u4F1A\u5728\u5BB9\u5668\u91CC\u6253\u5F00\u5B83\uFF1B\u968F\u540E\u70B9\u300C\u6807\u6CE8\u300D\u5728\u753B\u9762\u4E0A\u70B9\u9009\u5143\u7D20\u3002",
+          emptyBody: "\u70B9\u5DE6\u4E0A\u89D2\u56FE\u6807\u5C55\u5F00\u6807\u7B7E\u9875\u680F\uFF0C\u8F93\u5165\u7F51\u5740\uFF0CKitesurf \u4F1A\u5728\u5BB9\u5668\u91CC\u6253\u5F00\u5B83\uFF1B\u968F\u540E\u70B9\u300C\u6807\u6CE8\u300D\u5728\u753B\u9762\u4E0A\u70B9\u9009\u5143\u7D20\u3002",
           emptyTry: "\u8BD5\u8BD5 example.com",
           errorTitle: "\u5F15\u64CE\u6CA1\u6709\u5E94\u7B54",
           errorBody: "\u5BB9\u5668\u91CC\u7684 Kitesurf \u6CA1\u6709\u54CD\u5E94\u3002\u5148\u542F\u52A8\u5F15\u64CE\uFF1B\u82E5\u5DF2\u542F\u52A8\uFF0C\u6253\u5F00\u8BBE\u7F6E\u786E\u8BA4\u5F15\u64CE\u5730\u5740\u3002",
@@ -1610,6 +1616,12 @@ var __kitesurfExport = (() => {
           annotateTitle: "Annotate. Hold Shift and drag to draw an arrow",
           history: "Recent addresses",
           settings: "Settings",
+          navOpen: "Tab rail",
+          navOpenTitle: "Show tab rail (\u2318E then 1)",
+          navClose: "Hide tab rail",
+          navCloseTitle: "Hide tab rail (Esc)",
+          navTabs: "Tabs",
+          navEmpty: "No browsing yet \u2014 enter an address",
           noteAria: "Note for the composer",
           notePlaceholder: "What should change here",
           noteSend: "Add note",
@@ -1668,7 +1680,7 @@ var __kitesurfExport = (() => {
           viewportPhone: "Phone 390",
           saved: "Settings saved",
           emptyTitle: "Start browsing",
-          emptyBody: "Type a URL above \u2014 Kitesurf opens it inside the container. Then hit Annotate and pick elements on the page.",
+          emptyBody: "Open the tab rail (top-left icon), type a URL \u2014 Kitesurf opens it inside the container. Then hit Annotate and pick elements on the page.",
           emptyTry: "Try example.com",
           errorTitle: "Engine is not answering",
           errorBody: "Kitesurf inside the container is not responding. Start the engine; if it is already started, open Settings and check the engine address.",
@@ -1917,7 +1929,37 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
   }
   var STYLE = `
 .nks-root{position:relative;height:100%;min-height:0;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-base);flex-direction:column;flex:auto;display:flex;font:var(--dsw-font-xxs-12);container-type:inline-size}
-.nks-toolbar{position:relative;z-index:3;margin-top:26px;box-sizing:border-box;border-bottom:.5px solid var(--dsw-alias-border-l3);flex:none;align-items:center;gap:4px;height:38px;padding:5px 6px;display:flex}
+/*
+ * Left-slide vertical tab rail \u2014 DSH sidebar artwork: the rail stays mounted
+ * off the left edge (translateX), sliding in/out on one gesture while
+ * visibility flips after the slide on close and before it on open. The way
+ * back in is a floating expand button with the panel-left glyph; the rail's
+ * own collapse button uses the same glyph mirrored (one affordance, both
+ * directions) \u2014 ExpandButton.tsx / SidebarRight.module.css in dsh artwork.
+ */
+.nks-nav-fab{position:absolute;z-index:4;top:30px;left:8px;width:28px;height:28px;color:var(--dsw-alias-label-secondary);border:0;border-radius:var(--dsw-radius-sm);background:var(--dsw-alias-bg-layer-1);box-shadow:var(--dsw-elevation-soft,.0 1px 3px rgba(0,0,0,.24));cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0}
+.nks-nav-fab:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}
+.nks-nav-fab svg{width:15px;height:15px}
+.nks-nav{position:absolute;z-index:4;top:30px;left:8px;bottom:34px;width:252px;display:flex;flex-direction:column;min-height:0;box-sizing:border-box;background:var(--dsw-alias-bg-layer-2);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-lg);box-shadow:var(--dsw-elevation-prominent,0 4px 18px rgba(0,0,0,.3));transform:translateX(calc(-100% - 12px));visibility:hidden;transition:transform var(--ds-transition-duration-slow,.32s) var(--ds-ease-in-out,ease),visibility 0s linear var(--ds-transition-duration-slow,.32s)}
+.nks-nav[data-nks-nav-state="open"]{transform:none;visibility:visible;transition:transform var(--ds-transition-duration-slow,.32s) var(--ds-ease-in-out,ease)}
+@starting-style{.nks-nav[data-nks-nav-state="open"]{transform:translateX(calc(-100% - 12px))}}
+@media (prefers-reduced-motion:reduce){.nks-nav,.nks-nav[data-nks-nav-state="open"]{transition:none}}
+.nks-nav-head{display:flex;flex:none;align-items:center;gap:6px;height:34px;padding:0 10px;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11);border-bottom:.5px solid var(--dsw-alias-border-l3)}
+.nks-nav-head b{flex:auto;font-weight:600;color:var(--dsw-alias-label-secondary)}
+.nks-nav-head .nks-tool svg{width:15px;height:15px;transform:scaleX(-1)}
+.nks-nav-bar{display:flex;flex:none;align-items:center;gap:2px;padding:5px 8px;border-bottom:.5px solid var(--dsw-alias-border-l3)}
+.nks-nav-form{flex:none;display:block;padding:0 8px 6px;border-bottom:.5px solid var(--dsw-alias-border-l3)}
+.nks-nav-tabs{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:4px}
+.nks-nav-tab{position:relative;display:flex;align-items:center;gap:7px;width:100%;box-sizing:border-box;min-height:30px;padding:4px 26px 4px 8px;border:0;border-radius:var(--dsw-radius-sm);background:transparent;color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxs-12);text-align:left;cursor:pointer}
+.nks-nav-tab:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.nks-nav-tab[data-current="true"]{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-markdown-tag,var(--dsw-alias-bg-layer-3))}
+.nks-nav-tab svg{flex:none;width:14px;height:14px;opacity:.8}
+.nks-nav-tab .nks-nav-tab-url{flex:auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nks-nav-tab .nks-nav-tab-count{flex:none;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11)}
+.nks-nav-tab .nks-nav-tab-x{position:absolute;right:4px;top:50%;margin-top:-9px;width:18px;height:18px;display:none;align-items:center;justify-content:center;border:0;border-radius:var(--dsw-radius-sm);background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer;font:var(--dsw-font-xxxs-11);line-height:1;padding:0}
+.nks-nav-tab:hover .nks-nav-tab-x{display:inline-flex}
+.nks-nav-tab .nks-nav-tab-x:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-fill-error,#d5455c)}
+.nks-nav-empty{flex:auto;padding:12px 8px;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11);text-align:center}
 .nks-tool{width:28px;height:28px;color:var(--dsw-alias-label-secondary);border-radius:var(--dsw-radius-sm);cursor:pointer;background:transparent;border:0;flex:none;justify-content:center;align-items:center;padding:0;display:inline-flex}
 .nks-tool:hover:not(:disabled){color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}
 .nks-tool:disabled{color:var(--dsw-alias-label-tertiary,rgba(207,211,214,.55));opacity:.45;cursor:default}
@@ -1944,7 +1986,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
 .nks-box[data-kind="hover"]{border-style:dashed;opacity:.75}
 .nks-pin-dot{position:absolute;width:18px;height:18px;margin-left:-9px;margin-top:-9px;color:#fff;font:var(--dsw-font-xxxs-11);line-height:18px;text-align:center;background:var(--dsw-alias-link,#2f6fed);box-shadow:0 0 0 1.5px rgba(0,0,0,.45),0 1px 4px rgba(0,0,0,.4);border-radius:50%;pointer-events:auto;cursor:pointer;user-select:none}
 .nks-pin-dot:hover{background:var(--dsw-alias-fill-error,#d5455c);transform:scale(1.15)}
-.nks-hint{position:relative;z-index:2;flex:none;padding:3px 8px 4px;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11);display:flex;align-items:center;gap:6px;border-bottom:.5px solid var(--dsw-alias-border-l3)}
+.nks-hint{position:absolute;z-index:4;top:30px;right:8px;max-width:70%;padding:4px 8px;color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxxs-11);display:flex;align-items:center;gap:6px;background:var(--dsw-alias-bg-layer-2);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-md);box-shadow:var(--dsw-elevation-soft,0 1px 3px rgba(0,0,0,.24))}
 .nks-hint-text{flex:auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .nks-start-btn{height:30px;padding:0 14px;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-12);background:var(--dsw-alias-bg-layer-1);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-md);cursor:pointer}
 .nks-start-btn:hover{background:var(--dsw-alias-interactive-bg-hover)}
@@ -2041,7 +2083,8 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
    overflow affordance is out of scope for CSS, so they shrink and the
    placeholder switches to a short form. */
 @container (max-width: 400px){
-  .nks-toolbar{gap:2px;padding:5px 4px}
+  .nks-nav{width:216px}
+  .nks-nav-bar{gap:0}
   .nks-tool{width:26px;height:26px}
   .nks-address{padding:0 4px 0 7px;font-size:11px}
   .nks-address::placeholder{color:transparent}
@@ -2136,6 +2179,8 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
     const [composing, setComposing] = React5.useState(false);
     const refSeq = React5.useRef(0);
     const [devtoolsOpen, setDevtoolsOpen] = React5.useState(false);
+    const [navOpen, setNavOpen] = React5.useState(false);
+    const [navTabs, setNavTabs] = React5.useState([]);
     const [nativeHtml, setNativeHtml] = React5.useState(true);
     const [domDoc, setDomDoc] = React5.useState(null);
     const [vp, setVp] = React5.useState(null);
@@ -2181,6 +2226,31 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         return fallback;
       });
     }, []);
+    React5.useEffect(() => {
+      if (!navOpen) return;
+      let alive = true;
+      fetch(`${BROWSE_HISTORY}?limit=120`).then((r) => r.json()).then((data) => {
+        if (!alive) return;
+        const byUrl = /* @__PURE__ */ new Map();
+        for (const row of Array.isArray(data?.entries) ? data.entries : []) {
+          if (!row?.url) continue;
+          const prev = byUrl.get(row.url);
+          if (prev) prev.count += row.count || 1;
+          else byUrl.set(row.url, { url: row.url, count: row.count || 1 });
+        }
+        setNavTabs([...byUrl.values()]);
+      }).catch(() => {
+        if (alive) setNavTabs([]);
+      });
+      return () => {
+        alive = false;
+      };
+    }, [navOpen]);
+    const delNavTab = (url) => {
+      fetch(`${BROWSE_HISTORY}?url=${encodeURIComponent(url)}`, { method: "DELETE" }).catch(() => {
+      });
+      setNavTabs((current) => current.filter((row) => row.url !== url));
+    };
     React5.useEffect(() => {
       refreshStatus().then(async (statusPayload) => {
         if (!statusPayload?.ok) return;
@@ -2245,7 +2315,11 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
             setEditing(false);
             return;
           }
-          if (annotateRef.current) setAnnotate(false);
+          if (annotateRef.current) {
+            setAnnotate(false);
+            return;
+          }
+          setNavOpen(false);
         }
       };
       window.addEventListener("keydown", onKey);
@@ -2274,6 +2348,11 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           event.preventDefault();
           armed = 0;
           setDevtoolsOpen((value) => !value);
+        }
+        if (armed && Date.now() - armed < 1200 && event.key === "1") {
+          event.preventDefault();
+          armed = 0;
+          setNavOpen((value) => !value);
         }
       };
       window.addEventListener("keydown", onKey, true);
@@ -2817,7 +2896,9 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         exit: primitives.IconCloseOutlineRegular,
         clear: primitives.IconDeleteOutlineRegular || primitives.IconCloseOutlineRegular,
         edit: primitives.IconEditOutlineRegular || primitives.IconRightUpOutlineRegular,
-        copy: primitives.IconCopyOutlineRegular || primitives.IconEditOutlineRegular
+        copy: primitives.IconCopyOutlineRegular || primitives.IconEditOutlineRegular,
+        panel: primitives.IconPanelLeftOutlineRegular || primitives.IconEditOutlineRegular,
+        globe: primitives.IconGlobeOutlineRegular || primitives.IconLinkOutlineRegular
       }[name];
       return h(Icon, { width: 16, height: 16, "aria-hidden": true });
     };
@@ -3390,56 +3471,115 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         "data-nano-kitesurf": "1",
         "data-nks-workspace": "1"
       },
+      !navOpen ? h("button", {
+        type: "button",
+        className: "nks-nav-fab",
+        "data-nks-nav-fab": "1",
+        "aria-label": copy.navOpen,
+        title: copy.navOpenTitle,
+        onClick: () => setNavOpen(true)
+      }, glyph("panel")) : null,
       h(
-        "form",
-        { className: "nks-toolbar", onSubmit: onSubmitAddress },
-        h("button", { type: "button", className: "nks-tool", "data-nks-back": "1", "aria-label": copy.back, title: copy.back, disabled: busy || !hasPage, onClick: () => run(() => historyNav(-1)) }, glyph("back")),
-        h("button", { type: "button", className: "nks-tool", "data-nks-forward": "1", "aria-label": copy.forward, title: copy.forward, disabled: busy || !hasPage, onClick: () => run(() => historyNav(1)) }, glyph("forward")),
-        h("button", { type: "button", className: "nks-tool", "data-nks-reload": "1", "aria-label": copy.refresh, title: copy.refresh, disabled: busy, onClick: onRefresh }, glyph("refresh")),
+        "nav",
+        {
+          className: "nks-nav",
+          "data-nks-nav": "1",
+          "data-nks-nav-state": navOpen ? "open" : "closed",
+          "aria-label": copy.navOpen
+        },
         h(
-          "span",
-          { className: "nks-address-box", "data-dirty": draftUrl ? "true" : "false" },
-          h("input", {
-            className: "nks-address",
-            "aria-label": copy.addressAria,
-            placeholder: copy.addressPlaceholder,
-            inputMode: "url",
-            spellCheck: false,
-            autoComplete: "off",
-            value: draftUrl,
-            onChange: (event) => setDraftUrl(event.target.value),
-            onFocus: () => {
-              addressFocusedRef.current = true;
-            },
-            onBlur: () => {
-              addressFocusedRef.current = false;
-            }
-          }),
-          h("button", { type: "submit", className: "nks-tool nks-go", "aria-label": copy.go, disabled: busy }, glyph("go"))
+          "div",
+          { className: "nks-nav-head" },
+          h("b", null, copy.navTabs),
+          h("button", { type: "button", className: "nks-tool", "data-nks-nav-close": "1", "aria-label": copy.navClose, title: copy.navCloseTitle, onClick: () => setNavOpen(false) }, glyph("panel"))
         ),
-        h("button", { type: "button", className: "nks-tool", "data-nks-history-open": "1", "aria-label": copy.history, title: copy.history, disabled: busy, onClick: openHistory }, glyph("history")),
-        h("button", {
-          type: "button",
-          className: "nks-tool",
-          "data-nks-annotate": "1",
-          "aria-pressed": annotate ? "true" : "false",
-          style: { position: "relative", zIndex: 5 },
-          "aria-label": copy.annotate,
-          title: copy.annotateTitle,
-          onPointerDown: (event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            setAnnotate((value) => {
-              if (value) {
-                setHover(null);
-                setDraftBox(null);
-                setDrag(null);
+        h(
+          "div",
+          { className: "nks-nav-bar" },
+          h("button", { type: "button", className: "nks-tool", "data-nks-back": "1", "aria-label": copy.back, title: copy.back, disabled: busy || !hasPage, onClick: () => run(() => historyNav(-1)) }, glyph("back")),
+          h("button", { type: "button", className: "nks-tool", "data-nks-forward": "1", "aria-label": copy.forward, title: copy.forward, disabled: busy || !hasPage, onClick: () => run(() => historyNav(1)) }, glyph("forward")),
+          h("button", { type: "button", className: "nks-tool", "data-nks-reload": "1", "aria-label": copy.refresh, title: copy.refresh, disabled: busy, onClick: onRefresh }, glyph("refresh")),
+          h("span", { style: { flex: "auto" } }),
+          h("button", {
+            type: "button",
+            className: "nks-tool",
+            "data-nks-annotate": "1",
+            "aria-pressed": annotate ? "true" : "false",
+            "aria-label": copy.annotate,
+            title: copy.annotateTitle,
+            onPointerDown: (event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              setAnnotate((value) => {
+                if (value) {
+                  setHover(null);
+                  setDraftBox(null);
+                  setDrag(null);
+                }
+                return !value;
+              });
+            }
+          }, glyph("annotate")),
+          h("button", { type: "button", className: "nks-tool", "data-nks-history-open": "1", "aria-label": copy.history, title: copy.history, disabled: busy, onClick: openHistory }, glyph("history")),
+          h("button", { type: "button", className: "nks-tool", "data-nks-settings": "1", "aria-label": copy.settings, title: copy.settings, onClick: openSettings }, glyph("settings"))
+        ),
+        h(
+          "form",
+          { className: "nks-nav-form", onSubmit: onSubmitAddress },
+          h(
+            "span",
+            { className: "nks-address-box", "data-dirty": draftUrl ? "true" : "false" },
+            h("input", {
+              className: "nks-address",
+              "aria-label": copy.addressAria,
+              placeholder: copy.addressPlaceholder,
+              inputMode: "url",
+              spellCheck: false,
+              autoComplete: "off",
+              value: draftUrl,
+              onChange: (event) => setDraftUrl(event.target.value),
+              onFocus: () => {
+                addressFocusedRef.current = true;
+              },
+              onBlur: () => {
+                addressFocusedRef.current = false;
               }
-              return !value;
-            });
-          }
-        }, glyph("annotate")),
-        h("button", { type: "button", className: "nks-tool", "data-nks-settings": "1", "aria-label": copy.settings, title: copy.settings, onClick: openSettings }, glyph("settings"))
+            }),
+            h("button", { type: "submit", className: "nks-tool nks-go", "aria-label": copy.go, disabled: busy }, glyph("go"))
+          )
+        ),
+        h(
+          "div",
+          { className: "nks-nav-tabs", role: "list", "data-nks-nav-tabs": "1" },
+          navTabs.length ? navTabs.map((row) => h(
+            "button",
+            {
+              type: "button",
+              key: row.url,
+              className: "nks-nav-tab",
+              "data-nks-nav-tab": row.url,
+              "data-current": row.url === pageUrl ? "true" : "false",
+              title: row.url,
+              onClick: () => {
+                if (row.url !== pageUrl) run(() => navigate(row.url));
+                setNavOpen(false);
+              }
+            },
+            glyph("globe"),
+            h("span", { className: "nks-nav-tab-url" }, row.url.replace(/^https?:\/\//, "")),
+            row.count > 1 ? h("span", { className: "nks-nav-tab-count" }, `\xD7${row.count}`) : null,
+            h("span", {
+              className: "nks-nav-tab-x",
+              role: "button",
+              "aria-label": "\u5173\u95ED\u6807\u7B7E\u9875",
+              "data-nks-nav-tab-del": row.url,
+              onClick: (event) => {
+                event.stopPropagation();
+                delNavTab(row.url);
+              }
+            }, "\xD7")
+          )) : h("div", { className: "nks-nav-empty" }, copy.navEmpty)
+        )
       ),
       h(
         "div",

@@ -1267,3 +1267,8 @@ export async function engineHistoryClear(httpBase) {
   const response = await fetch(`${httpBase}/history`, { method: 'DELETE', signal: AbortSignal.timeout(4000) })
   return response.json()
 }
+
+export async function engineHistoryRemove(httpBase, url) {
+  const response = await fetch(`${httpBase}/history?url=${encodeURIComponent(url)}`, { method: 'DELETE', signal: AbortSignal.timeout(4000) })
+  return response.json()
+}

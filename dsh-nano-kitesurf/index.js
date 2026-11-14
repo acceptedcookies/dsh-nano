@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url'
 import { registerRoutes } from './lib/route-guard.js'
 import { ROUTE_TABLE, PLUGIN } from './lib/route-table.js'
 import { createHistory } from './lib/history.js'
-import { browserSocketUrl, captureDom, captureElements, captureShot, currentEmulation, engineHistoryAdd, engineHistoryClear, engineHistoryList, currentUserAgent, currentViewport, engineTargets, evaluateInPage, fetchEngine, KitesurfError, navigateHistory, openPage, pickElement, pickBySelector, pickPoint, pickSelector, editBody, editElement, pageUrl, releaseEngine, scrollDelta, setBrowserSettings } from './lib/engine.js'
+import { browserSocketUrl, captureDom, captureElements, captureShot, currentEmulation, engineHistoryAdd, engineHistoryClear, engineHistoryList, engineHistoryRemove, currentUserAgent, currentViewport, engineTargets, evaluateInPage, fetchEngine, KitesurfError, navigateHistory, openPage, pickElement, pickBySelector, pickPoint, pickSelector, editBody, editElement, pageUrl, releaseEngine, scrollDelta, setBrowserSettings } from './lib/engine.js'
 import { ERROR_STATUS, clearConsole, clearNetwork, clearOperations, diagnosticsSummary, getRef, listNetwork, listConsole, listOperations, listRefs, putRef, recordOperation, refChip, summarizeInput } from './lib/diagnostics.js'
 import { buildSrcDoc } from './lib/dom.js'
 import { kitesurfSkill, nanoKiteSkill } from './lib/skill.js'
@@ -988,6 +988,18 @@ export function apply(ctx, config) {
           const q = queryOf(req)
           if (method === 'DELETE') {
             const id = q.get('id') || ''
+            const url = q.get('url') || ''
+            if (url) {
+              // Tab-close semantics: remove the address everywhere it is
+              // stored — engine KV first (canonical while the container
+              // lives), then the local mirror. Missing from one store is not
+              // an error: the tab is gone either way.
+              let engineOk = false
+              try { engineOk = Boolean((await engineHistoryRemove(origin(), url))?.ok) } catch { /* engine down */ }
+              history.removeUrl(url)
+              sendJson(res, 200, { ok: true, engine: engineOk, ...history.stats() })
+              return
+            }
             sendJson(res, id && history.remove(id) ? 200 : 404, { ok: Boolean(id && history.remove(id)), ...history.stats() })
             return
           }

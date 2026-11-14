@@ -59,6 +59,12 @@ export function createHistory(dir) {
       write(next)
       return rows.length !== next.length
     },
+    removeUrl(url) {
+      const rows = read()
+      const next = rows.filter((row) => row.url !== url)
+      write(next)
+      return rows.length !== next.length
+    },
     clear() {
       write([])
       return true

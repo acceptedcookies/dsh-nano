@@ -658,3 +658,114 @@ notepad overlay（页面，人侧 —— 永远）
 - [ ] 零 DNLS 依赖；spike 19 项证据不被推翻；不引入 foreign 改动
 
 **完成后**：回到 §9 结构讨论——DNLS offload 面、nvx Windows、容器服务暴露面再裁。
+
+---
+
+## 11. L1–L4 分层判断登记 — fx 用户面缺口裁决
+
+> 登记时间 `2026-11-14`（commit `4bdbb57` 之后）。本章把 §10 完成后暴露的「fx 只有引擎+调试面、无任何用户通路」缺口按 L1–L4 分层，给出每层的判断——**哪些是 UI 债、哪些是契约债、哪些必须先冻结契约**。
+>
+> **前提事实（代码侧核实）**：
+> - `window.__nanoNotepad.fx` 是 **agent 调试面**，不是产品面——它只给 `corpus()`/`run`/`runWithTools`/`models`/`sqlite`/`lineage`/`rejectDraft`/`corpusList`/`casProbe`/`casGateState`/`__setCasGateForTest`/`setCat`/`acceptDraft` 暴露钩子，页面里没有任何按钮/面板/对话框触达它们。
+> - `fx-runtime.runOneShot` 已能 `prompt→turn→toolCalls→result`，但 `toolCalls` 只进返回值、`_refreshNodes` 只刷树——**编辑器 body 不重载、无 diff 提示**。
+> - `dialog()`/`openNanoMenu`/`openNanoDialog`/`nanoTabs` 全部可用（设置/云同步/确认对话框都是这套），L1 无新建 UI 框架成本。
+> - `runs`/`checkpoints`/`idempotent_keys`/`claim_ledger` 表已建但**无编排器写它们**——L3/L4 才是让这些表活起来的层。
+
+### 11.1 缺口→层映射（判断）
+
+| 业主点 | 缺口本质 | 归属层 | 判定 |
+|---|---|---|---|
+| ① textarea 无 fx 激活 | 入口控件缺失 | **L1** | UI 债——toolbar `.np-md-tools` 只挂格式化钮，无 AI 入口；加一个 `data-action="fx"` 钮即可，纯 UI 不加契约 |
+| ② fx 内无法选 prompt | prompt 选择器缺失 | **L1** | UI 债——`cat=prompt` 语料已可标，`fetchModels` 已返 53 模型；缺的是「选一条 prompt 语料 + 选一个模型」的选择器控件 |
+| ③ 无 fx 循环/tool-call 观察 | run 观察面缺失 | **L1+L2** | 一半 UI 债（时间线/流式渲染）、一半功能债（`toolCalls` 不回显、run 无历史）；L1 给最小可见回路，L2 给完整观察 |
+| ④ run 后 draft 改动不可见 | 写回不可见 | **L2** | 功能债——`note_write` 改了 draft 但 `openFile` 不重载 body、无「已修改」标记；需 run 后回读 diff 或刷新 open 视图 |
+| ⑤ 无法定义管线 | **没有「管线」一等对象** | **L3+L4** | 契约债——需要 stage 链、step executor（确定性宿主动作）、pipeline 定义载体；这是真正的扩约，必须先冻结契约 |
+
+### 11.2 分层边界（执行纪律）
+
+- **L1（run 卡）**：不动契约、不动存储 schema。只做「入口钮 + prompt/model 选择 + 调用 `runWithTools` + 把 `text`/`toolCalls` 渲染出来」。**一次给业主可感知的完整回路**。
+- **L2（观察面）**：仍不动契约。加 run 历史列表（读 `runs` 表）、tool-call 明细、写回后 body 重载/diff 标记。**让 L1 的回路可审计**。
+- **L3（pipeline 原语）**：契约层。新增确定性 step executor（`run`/`set-cat`/`rename`/`accept`/`reject`/`write-back`/`claim`）+ 顺序链执行器。**这些动作不能进 note_* 工具集**（不给 LLM 自由发挥），是宿主侧编排。runs/checkpoints/claim_ledger 由此层开始真写。
+- **L4（pipeline 定义载体）**：契约+存储。决定是否给 pipeline 定义一个语料 kind（如 `pipeline`、`*.pipeline.json`）或仅驻 sqlite `runs` 元数据。**需业主冻结**。
+
+### 11.3 待业主冻结项（执行 L3/L4 前必须裁）
+
+| # | 裁决项 | 选项 |
+|---|---|---|
+| F1 | L1 首块范围 | 建议 run 卡（入口+prompt/model 选择+流式+tool 线），一次可见完整回路 |
+| F2 | prompt 来源语义 | A=cat=prompt 语料当库（推荐，复用五-kind）；B=临时输入框 |
+| F3 | pipeline 定义载体 | A=第六 corpus kind `*.pipeline.json`（可谱系/reject）；B=仅 sqlite runs 元数据 |
+| F4 | step executor 的可执行原语集 | 建议先冻结最小集：`run`/`set-cat`/`rename`/`accept`/`reject`/`write-back`/`claim` |
+
+---
+
+## 12. L1–L4 执行台账 — 执行内容·目标·顺序·验证
+
+> 登记时间 `2026-11-14`。**执行顺序严格 L1→L4**（L1/L2 可并行无契约依赖；L3 需 F3/F4 冻结；L4 需 L3 落地）。**所有验证均经 ego-browser（`taskSpace("notepad-fx-proto")`）在 `https://dsh-dev.local/` 视觉 + agentic 双验证**——agentic=evaluate 内点击/读 DOM/读 IDB/读 `__nanoNotepad.fx`，视觉=`page.screenshot`。
+
+### 12.0 总则
+
+- 每步「执行内容」写死文件名+函数级落点；「工作目标」是可验收行为；「ego 验证」给具体 probe。
+- L3/L4 标 `[契约]`——业主冻结 F3/F4 前不动手。
+- 所有 UI 复用 `dialog()`/`openNanoMenu`/`openNanoDialog`/`nanoTabs`/`dsh-nano-ui`，不新建设计面；i18n 键 zh+en 双侧。
+
+### 12.1 L1 · run 卡（fx 最小可见回路）
+
+**目标**：业主在 textarea 上方点一个钮，就能选 prompt 语料+选模型+跑一次 one-shot tool-call，并看到流式正文+tool-call 行——**端到端可感知**。
+
+| 序 | 执行内容 | 落点（文件·函数） | 工作目标 | ego 验证 |
+|---|---|---|---|---|
+| L1-1 | 工具栏 fx 入口钮 | `panel.js` `.np-md-tools`/`.np-ht-tools`/`.np-rt-tools` 旁加 `<button data-action="fx">`；或工具栏独立 `data-action="fx-run"` 钮（所有文件类型可见，不只 md） | 任意文件打开时工具栏出现 fx 钮；点击不破坏现有格式化钮 | `document.querySelector('[data-action="fx-run"]')` 非空；`page.screenshot` 见钮 |
+| L1-2 | run 卡对话框 | 复用 `dialog({title,body,setup})`；body=`prompt 下拉(cat=prompt 语料)` + `model 下拉(fetchModels)` + `输入框` + `运行` + `输出区` | 卡打开列出 prompt 语料项 + 53 模型；空语料时给手输回退 | 卡 DOM 内 `select/option` 计数=prompt 语料数；模型 option>0 |
+| L1-3 | run 执行接线 | `setup` 内点运行 → `__nanoNotepad.fx.runWithTools(text)`；`signal` 绑卡关闭 | 点运行触发 turn；`toolCalls` 收集 | evaluate 注入 prompt「写一个 draft」，断言返回值 `toolCalls` 非空 |
+| L1-4 | 流式+tool 线渲染 | `for await` turn → `text_delta` 追加输出区；`tool_call` 渲染一行（name+args摘要+ok/err） | 卡内实时见正文流+tool 行，无需开 console | 卡内输出区 `textContent` 增长；tool 行 `li` 出现；screenshot 见流+行 |
+| L1-5 | 写回提示 | run 结束后 `._refreshNodes()` + 若产物落 draft 则卡底显示「已写 N 个 draft/knowledge」+ 可点击跳转树节点 | 业主一眼看到产物，可跳转 | 卡内出现产物链接；点击后树高亮该节点 |
+
+**验证目标汇总**：任意文件→工具栏 fx 钮→卡开→选 prompt+model→运行→流式正文+tool 行可见→卡底产物跳转。**ego agentic 全程可点可读可断言**。
+
+### 12.2 L2 · 观察面（run 历史 + tool 明细 + 写回可见）
+
+**目标**：L1 回路变成**可审计**——每次 run 留痕、tool-call 可点开看参数/结果、写回后编辑器 body 真实重载。
+
+| 序 | 执行内容 | 落点 | 工作目标 | ego 验证 |
+|---|---|---|---|---|
+| L2-1 | run 历史 tab/面板 | `dialog` 加 `nanoTabs`：`运行`/`历史`；历史读 sqlite `runs` 表（`beginRun`/`finishRun` 需先被调用——见 L2-2） | 历史列每次 run 的 name/status/at | 跑 2 次后历史行数=2 |
+| L2-2 | run 记录接线 | `runWithTools` 包装：起 `sq.beginRun(runId,name)`、终 `sq.finishRun`、tool 命中写 `recordClaim`/`claimIdempotent` | runs 表真写 | `sqlite().__probe('SELECT count(*) FROM runs')` ≥1 |
+| L2-3 | tool 明细可展开 | L1 的 tool 行点开看 `args`/`result`/`via` | 每行可展开 JSON | tool 行 `details/click` 后显 args |
+| L2-4 | 写回重载 | run 后若 `openFile` 指向被改节点 → 重读 `saveDraft` 内容刷新 `write()`；加「已修改」徽标闪烁 | 开着被改的 draft 时 body 变、有提示 | 改前截图 body A、跑后 body B，断言不同+徽标出现 |
+
+**验证目标**：run 历史≥2 行、tool 行可展开见 args、被改 draft body 真实刷新+徽标。
+
+### 12.3 L3 · pipeline step executor `[契约·需 F3/F4]`
+
+**目标**：确定性宿主动作编成 stage 链——「fx 循环→set-cat 当前 note→或 accept/reject/write-back」可编排执行，runs/checkpoints/claim 真落库。**这些动作不暴露给 LLM**。
+
+| 序 | 执行内容 | 落点 | 工作目标 | ego 验证 |
+|---|---|---|---|---|
+| L3-1 | step 原语注册表 | `fx-pipeline.js`（新）：`steps={run,setCat,rename,acceptDraft,rejectDraft,writeBack,claim}`，每步 `(ctx,args)=>result` | 每原语可独立调用 | `steps.setCat` 改 cat、断言 IDB |
+| L3-2 | 顺序链执行器 | `runPipeline(spec,ctx)`：for stage→`beginRun`/`checkpoint`/`finishRun`；失败记 checkpoint 停 | 链按序执行、stage 间传递产物 | 链 `[llm-run→setCat draft]`：note 变 cat=draft；`checkpoints` 行数=stage 数 |
+| L3-3 | claim 集成 | 链起 `claim.acquire('run-<ulid>')`、stage 间 `renew`、终 `release`；`recordClaim` 记账 | 单写者语义落 | `claim_ledger` 有 acquire/renew/release 行 |
+| L3-4 | UI 触发链 | run 卡加「保存为管线」/「运行管线」入口（L4 载体未定前先用临时 spec 输入） | 业主定义一条链并跑通 | 卡内输入 spec JSON→运行→链产物可见 |
+
+**验证目标**：`[run→setCat]` 链把打开 note 变 draft；`[prompt→llm-run→write]` 链产 knowledge；checkpoints/runs/claim_ledger 全有行。
+
+### 12.4 L4 · pipeline 定义载体 `[契约·需 F3]`
+
+**目标**：管线定义成为可存储/可谱系/可 reject 的一等对象。
+
+| 序 | 执行内容 | 落点 | 工作目标 | ego 验证 |
+|---|---|---|---|---|
+| L4-1 | pipeline 语料 kind | 若 F3=A：新增 `cat='pipeline'`、`*.pipeline.json` 后缀入 `KIND_FORMAT`、`KINDS`、i18n、kind 菜单/筛选/徽标 | pipeline 文件可被标记/筛选/徽标 | kind 菜单含「管线」；筛选含 pipeline |
+| L4-2 | 定义编辑/校验 | `*.pipeline.json` 用 `.json` 视图 + `validateJson`；run 卡从 pipeline 节点读 spec | 编辑 pipeline.json 可校验 JSON | 打开 `.pipeline.json` 进 JSON 树视图 |
+| L4-3 | 谱系集成 | pipeline run 产物 `via.promptId` 指 pipeline 节点；reject pipeline draft 沿 supersedes | 产物可回溯 pipeline 定义 | lineage(pipeline→产物) 链非空 |
+
+**验证目标**：pipeline 文件是一等 kind、可编辑校验、run 产物带谱系回溯。
+
+### 12.5 验收线（按层累计）
+
+- **L1 完**：工具栏 fx 钮→run 卡→选 prompt+model→流式+tool 行→产物跳转，全程 ego 可视。
+- **L2 完**：run 历史≥2、tool 明细可展开、写回 body 真实重载+徽标。
+- **L3 完**：`[run→setCat]`/`[prompt→llm→write]` 链跑通，runs/checkpoints/claim_ledger 有行。
+- **L4 完**：pipeline 一等 kind + JSON 校验 + 谱系回溯。
+
+**硬约束重申**：L3/L4 是契约层——**F3/F4 未冻结不动手**；L1/L2 不动存储 schema、不引入 foreign 改动、step 原语不进 note_* 工具集。

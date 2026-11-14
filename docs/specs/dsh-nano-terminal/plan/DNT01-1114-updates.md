@@ -249,3 +249,114 @@
 4. **合同面膨胀风险**:term.* 方法会从 8 个涨到 ~20 个;没有 W-P0-4 schema 单源,这就是漂移温床——所以 schema 不是"文档工作",是 P0 的硬闸门。
 
 **净判断**:升级方向正确且必须分层交付。**真正的价值拐点不在任何单一功能,而在"DNT 成为 dsh agent 可编程的终端运行时"**——当 `term.send --wait` 与 `wait --children` 可用时,DNT 就从"业主手用的工具"变成了"agent 手用的运行时",这与 [nano-agent] / Harness-as-a-Service 的大方向同构,但不耦合:合同是 MCP/OSC 公开语义,谁实现都行。
+
+---
+
+## 9. 执行日志回填
+
+> 执行者：`lead`（DeepSeek Harness agent）
+> 执行时间：`2026-11-14 12:xx–13:0x CST`
+> 文档状态：`draft → executing → executed`
+> 代码改动统计：`30 文件修改 / 8 新建（src/host/{errors,events,gate,wait,persist,notes,templates}.js、src/client/select.js、scripts/headless.mjs、schema/dnt-mcp.openrpc.json、docs/skill.md）/ schema 1 个（首版 OpenRPC 单源）`
+
+- **实际执行摘要**：P0 合同层 + P0-B client 状态层 + P1 数据面/持久化 + P2 agent 互操作/输入层全部落地；P3 未开工（见 9.1）。按批提交：`262b3d4`（P0-A）→`35ac31d`（P0-B）→`cec2159`（P1）→`f5bafa1`+`0854d83`（P2）。
+- **Phase 偏差（计划 vs 实际）**：
+  1. `P1` 持久化目录从 `${DSH_HOME}/plugins/<pkg>/persist` 改为 `${DSH_HOME}/dsh-nano-terminal.state/`（substrate-fit：dev 重启时插件安装树被源树覆盖，plugins/ 下无 durable 状态）。
+  2. `P2` `agentSend`/`sendNote` 的 bracketed paste 由「恒裹」改为「按 `M_BRACKETED_PASTE`(2004) 自适应」（substrate-fit：纯 `sh` 不启用 2004，裸标记被当可显文本打印 `200~`/`201~`）。
+  3. `P2` 右键菜单交付为 `NanoMenu`（host 组件）而非独立下拉实现（host 样式零手写）。
+  4. `P3` 未执行：notify/MCP client 自动重连/isolate lane 契约文档化，工作量评估后交后继 charter。
+- **阻塞与处理**：`dsh-dev` 健康检查在 `dsh-dev restart` 后 ~8–24s 才转 200（冷启动加载全部插件）——探测循环内重试；无代码级阻塞。
+- **测试发现**：`test/run.mjs` 97/97 绿（wasm 解析/7501/dump 三源、schema↔impl↔errorKinds 一致、gate 语义、ws v2 编解码/CREDIT/SNAPSHOT、persist 往返）；dev 冒烟全绿：16→19 工具、create/send/blocked/name_taken/turn/wait-output/SSE snapshot+live/persist restore+FACTS attach；`scripts/headless.mjs` v2 attach + FACTS + 数据流通过。
+- **后续 handoff**：`P3`（notify、MCP lane 契约文档化、isolate lane 合同文档化）→ successor charter；bench 基线（§6.3）未采集 → 后继；`term.read` `source:'visible'` 尾部语义 vs `recent` 需 docs 说明 → 后继。
+
+### 9.1 逐工作项状态
+
+| 工作项 | 状态 | PR(commit) | 实际落点（file:line 近似） | 备注 |
+|--------|------|----|------------------------|------|
+| W-P0-1 统一终端对象 + addr/resolve | ✅ done | `262b3d4` | `src/host/sessions.js:SessionRecord` + `resolve()` | id/name/addr/short6 四种寻址 |
+| W-P0-2 稳定错误 kind 枚举 | ✅ done | `262b3d4` | `src/host/errors.js` + `schema x-errorKinds` | not_found/blocked/finished/live/unavailable/spawn_failed/conflict/status_mismatch/name_taken/needs_target/incompatible/limit/invalid |
+| W-P0-3 EventBus + snapshot/seq/missed | ✅ done | `262b3d4` | `src/host/events.js` + `index.js:/events` | 15s heartbeat；ring 2048 |
+| W-P0-4 OpenRPC schema 单源 TOOLS | ✅ done | `262b3d4` | `schema/dnt-mcp.openrpc.json` + `mcp.js:makeTools` | 16→19 方法；x-errorKinds/x-events/x-address |
+| W-P0-5 OSC 7501 状态协议 | ✅ done | `262b3d4` | `crates/dnt-core/src/lib.rs:osc_7501/state_json` + `mirror.js:state()` | root record 驱动 turn；core 不猜屏 |
+| W-P0-6 dnt_dump 文本导出 ABI | ✅ done | `262b3d4` | `crates/dnt-core/src/lib.rs:dnt_dump` + `mirror.js:dump/screenText` | visible/recent/detection 三源 |
+| W-P0-7 Gate 输入闸门 | ✅ done | `262b3d4` | `src/host/gate.js` | human/agent/automatic 分流；held；draft_wait 对齐 hc |
+| W-P0-8 wait + turn 语义 | ✅ done | `262b3d4` | `src/host/wait.js` + `sessions.js:#pollState` | reasons: status/exit/output/children/message/timeout |
+| W-P0-9 `/term` 全量子命令 | ✅ done | `262b3d4`+`f5bafa1` | `index.js:/term` | new/list/close/attach/send/input/read/wait/keys/interrupt/keep/label/note/template/events/skill |
+| W-P0-10 keep + lost 恢复 | ✅ done | `262b3d4` | `sessions.js:#onProgramEnd/spawnPending` | keep:true 丢程序重 spawn shell 绝不重跑；backoff 1.5→60s |
+| W-P0-11 client 状态层 | ✅ done | `35ac31d` | `src/client/wasm.js:state()` + `NanoTerm.jsx:effState/statusbar` | spinner 剥离；pane Tag；rollup |
+| W-P1-1 dnt-ws-v2 framed channel | ✅ done | `cec2159` | `src/host/ws.js:Attach/parseChannel` + `src/client/lanes.js` | CREDIT 256KiB；SNAPSHOT 4MiB；FACTS；AUTO_INPUT；HELD；协商 open.v=2/?v=2 |
+| W-P1-2 非聚焦降级 | ✅ done | `cec2159` | `NanoTerm.jsx:schedulePaint` | 非聚焦 2Hz；聚焦 30Hz |
+| W-P1-3 headless.mjs FACTS 驱动 | ✅ done | `cec2159` | `scripts/headless.mjs` | wss 直通；--send/--duration |
+| W-P1-4 persist + placeholder 恢复 | ✅ done | `cec2159` | `src/host/persist.js` + `sessions.js:restoreSaved/spawnPending` | session.json tmp+rename；screens/；48 滚动快照；attach 唤醒 |
+| W-P1-5 状态目录移 DSH_HOME 根 | ✅ done | `cec2159` | `index.js:stateDir` | plugins/ 安装树被源树覆盖 → `${DSH_HOME}/dsh-nano-terminal.state/` |
+| W-P2-1 notes `<dnt from=…>` 信封 | ✅ done | `f5bafa1`+`0854d83` | `src/host/notes.js` + `mcp.js:term.session.note` | gate kind:'note' 双闸；bracketed paste 自适应 |
+| W-P2-2 templates | ✅ done | `f5bafa1` | `src/host/templates.js` | run-command/wait-output/repl |
+| W-P2-3 select/copy-mode | ✅ done | `f5bafa1` | `src/client/select.js` + wasm `dnt_select_*` | 输出不暂停；⌃⌥C 进 copy-mode |
+| W-P2-4 prefix ctrl+alt 族 | ✅ done | `f5bafa1` | `NanoTerm.jsx:keydown` | ⌃⌥C/\\/-/w |
+| W-P2-5 右键=NanoMenu | ✅ done | `f5bafa1` | `NanoTerm.jsx:contextmenu` | paste/copy-mode/split/close |
+| W-P2-6 MCP lane 断线重连 | ✅ done | `f5bafa1` | `lanes.js:McpLane.#connect` | 2s→30s 退避；session 复活 |
+| W-P2-7 bracketed paste 自适应 | ✅ done | `0854d83` | `sessions.js:agentSend` + `notes.js:sendNote` | M_BRACKETED_PASTE 探测 |
+| W-P3-1 notify.js | ❌ OOS handoff | `-` | `-` | successor charter：blocked/done 状态 Notification |
+| W-P3-2 isolate lane 契约文档化 | ❌ OOS handoff | `-` | `-` | successor charter：ABI 冻结文档 |
+| W-P3-3 bench 基线 §6.3 | ❌ OOS handoff | `-` | `-` | successor charter：2000 行 yes 30s 等 |
+
+### 9.2 关键指标演进
+
+| 指标 | prev | this | Δ |
+|------|------|------|---|
+| MCP 工具数 | 8 | 19 | +11 |
+| `lib/` 宿主模块数 | 5 | 13 | +8 |
+| wasm ABI 导出数 | ~20 | ~28 | +8（state/select/rows） |
+| test/run.mjs 用例 | 0 | 97 | +97 |
+| 错误 kind 枚举 | 无 | 14 | +14 |
+| ws 协议版本 | v1 裸流 | v1+v2 framed | 协商式升级 |
+| 事件面 | 无 | EventBus + SSE + 15 事件型 | 新增 |
+
+### 9.3 时序执行日志
+
+| 时点 | 步骤 | 决策/产出 |
+|------|------|-----------|
+| T0 | P0-A 合同层 | 终端对象/错误/EventBus/OSC7501/dump/gate/wait/term.* 工具面 |
+| T1 | P0-B client 状态层 | effState 五级相位 + statusbar rollup + spinner 剥离 |
+| T2 | 修 scroll_up 原生 bug | scrollback 永不累积 → push_back；测试断言 |
+| T3 | P1 ws-v2 + persist + 非聚焦 + headless | framed channel / 状态目录迁移 / placeholder 恢复 |
+| T4 | 发现 plugins/ 安装树被源树覆盖 | 持久化移 `${DSH_HOME}/dsh-nano-terminal.state/` |
+| T5 | P2 notes/templates/select/prefix/MCP 重连 | agent 互操作闭环 |
+| T6 | 发现纯 sh 无 2004 → paste 标记污染 | bracketed paste 按 `M_BRACKETED_PASTE` 自适应 |
+| T7 | ego-browser 视觉匹配 | 单/双窗格 + wasm 渲染 + LOCAL Tag + split + layout 持久化重连 |
+| T8 | 三实例部署 + AGENTS.md 对账 | dev/desktop/prod 同步；运行时清单与路由全量更新 |
+| T9 | §9 回填 | 本行 |
+
+### 9.4 关键决策日志
+
+#### Decision-1 — 状态目录从 `plugins/<pkg>/` 迁到 `${DSH_HOME}/` 根
+- **背景**：`persist/session.json` 初版写 `plugins/dsh-nano-terminal/persist/`；dev 重启后整目录被 `cordis.patch`/source 同步覆盖，session.json 连同 screens/ 一并消失。
+- **决议**：状态目录 = `${DSH_HOME}/dsh-nano-terminal.state/`（home 根、非安装树）。
+- **理由**：`plugins/<pkg>/` 在 dsh 语义下是「只读制品」，不是 durable state；home 根同级文件（`nano-notepad-s3.json` 等）才是约定位置。
+- **代价**：老 audit 日志丢弃；AGENTS.md「配置与状态」全表改写。
+
+#### Decision-2 — bracketed paste 按 `M_BRACKETED_PASTE`(2004) 自适应
+- **背景**：`agentSend`/`sendNote` 恒裹 `\x1b[200~…\x1b[201~`；`sh -c cat` 不启用 2004，pty cooked echo 把标记当可显字节，`dnt_dump` 解析出 `00~…01~` 文本。
+- **决议**：`ScreenMirror.modes()` 暴露 `dnt_modes`；send/note 仅在 `modes & M_BRACKETED_PASTE` 时包裹，否则纯文本。
+- **理由**：herdr 同语义——「core 不猜屏」包括「不假设程序开 2004」；按程序实启模式写。
+- **代价**：纯 sh 下 agent 送文失去「这是 paste」信号，程序侧读到裸文本（预期行为）。
+
+#### Decision-3 — `term.read` `source:'visible'` 保留尾部语义，`recent` 作 agent 面
+- **背景**：`read(id, lines:8)` 返回末 8 行（空），非空数据在第 0 行——「tail of visible」对 agent 不直觉。
+- **决议**：不动 ABI；`recent`(recent+scrollback) 作为 agent 文档推荐源，visible 保留渲染语义。
+- **理由**：visible=屏幕字面，`term.session.read` 是审计/排障面；`wait --output`/`term.send --wait` 走 detection+recent。
+- **代价**：docs/skill.md 需写清两源分工（已落）。
+
+### 9.5 pre-existing 失败甩锅
+
+| 失败项 | 证据（git / 命令） | 判断 |
+|--------|---------------------|------|
+| `term.send` 初测「blank read」 | 测试载体 `/bin/sh -c cat` 在 pty 下 ~30s EOF 退出（audit `exit local/nt*`），非 send 缺陷；`input` 同会话回显正常，`send` 改正参数后 `SENDOK_42` | pre-existing, non-blocking |
+| ego 首页被 Kitesurf cell 覆盖 | `_tabHost_3oazc_164` 等 workbench pane 与终端 viewArea 同坐标叠层；隐藏后即露，非 dnt 侧遮挡 bug | pre-existing, non-blocking |
+| `ego-browser` v0.6.2.9 提示升级 | `[ego-browser:notice]` 外部工具提示，非本轮范围 | pre-existing, non-blocking |
+
+### 9.6 文档状态
+
+`draft → executing → executed（2026-11-14 13:0x CST）`。
+
+residual / follow-up → `DNT02`（P3：notify.js、isolate lane 契约文档化、bench 基线 §6.3、`term.read` 源语义文档）——**不回填本阶段**。

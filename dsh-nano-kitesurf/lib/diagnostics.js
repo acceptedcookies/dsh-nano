@@ -371,10 +371,14 @@ export function networkFailed(p) {
   row.durationMs = Date.now() - row.startedAt
 }
 
-export function listNetwork({ limit = 100, failedOnly = false } = {}) {
+export function listNetwork({ limit = 100, failedOnly = false, since = null } = {}) {
   const cap = Math.max(1, Math.min(Number(limit) || 100, NET_CAP))
+  // `since` may be an ISO time or an epoch-ms number; network rows carry
+  // epoch `startedAt` (Date.now) rather than ISO `at`, so compare numerically.
+  const sinceMs = since ? (Number.isFinite(Number(since)) ? Number(since) : Date.parse(since)) : 0
   let rows = netOrder.map((id) => netRequests.get(id)).filter(Boolean)
   if (failedOnly) rows = rows.filter((r) => r.failed || (r.status && r.status >= 400))
+  if (sinceMs) rows = rows.filter((r) => Number(r.startedAt) > sinceMs)
   return { entries: rows.slice(-cap), total: netOrder.length, dropped: droppedNetwork }
 }
 

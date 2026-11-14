@@ -1239,7 +1239,7 @@ export function apply(ctx, config) {
           if (!Number.isFinite(limit) || limit < 1 || limit > 200) {
             throw new KitesurfError('kitesurf.network.query', 'limit must be 1..200')
           }
-          sendJson(res, 200, { ok: true, ...listNetwork({ limit, failedOnly: q.get('failedOnly') === 'true' }) })
+          sendJson(res, 200, { ok: true, ...listNetwork({ limit, failedOnly: q.get('failedOnly') === 'true', since: q.get('since') }) })
         } catch (error) {
           fail(res, error)
         }

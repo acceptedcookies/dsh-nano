@@ -2042,6 +2042,10 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
 .nks-dt-src{flex:none;max-width:32%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-tertiary);text-align:right}
 .nks-dt-type{flex:none;width:72px;color:var(--dsw-alias-label-tertiary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .nks-dt-size{flex:none;width:56px;text-align:right;color:var(--dsw-alias-label-tertiary)}
+.nks-dt-wf{flex:none;width:130px;position:relative;height:10px;align-self:center}
+.nks-dt-wf i{position:absolute;top:0;height:8px;min-width:2px;border-radius:2px;background:color-mix(in srgb,var(--dsw-alias-link,#7aaaff) 70%,transparent)}
+.nks-dt-wf i[data-bad="true"]{background:var(--dsw-alias-fill-error,#d5455c)}
+.nks-dt-wf i[data-pending="true"]{background:var(--dsw-alias-label-quaternary,var(--dsw-alias-label-tertiary));opacity:.6}
 .nks-dt-styles{flex:none;max-height:110px;overflow:auto;border-bottom:.5px solid var(--dsw-alias-border-l2);padding:4px 8px;background:var(--dsw-alias-bg-layer-1)}
 .nks-dt-style-head{color:var(--dsw-alias-label-secondary);margin-bottom:3px}
 .nks-dt-rule{display:flex;gap:8px;padding:1px 0;color:var(--dsw-alias-label-tertiary)}
@@ -3256,14 +3260,34 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       React5.useEffect(() => {
         if (!open) return void 0;
         let alive = true;
+        let since = null;
+        setRows([]);
+        const merge = (fresh, keyOf) => setRows((prev) => {
+          if (!Array.isArray(fresh) || fresh.length === 0) return prev;
+          const seen = new Set(prev.map(keyOf));
+          const extra = fresh.filter((r) => !seen.has(keyOf(r)));
+          if (extra.length === 0) return prev;
+          const merged = prev.map((r) => fresh.find((f) => keyOf(f) === keyOf(r)) || r).concat(extra);
+          return merged.slice(-400);
+        });
         const load = async () => {
           try {
             if (tab === "console") {
-              const data = await fetch(`${CONSOLE}?limit=200`).then((r) => r.json());
-              if (alive) setRows(data.entries || []);
+              const url = since ? `${CONSOLE}?limit=200&since=${encodeURIComponent(since)}` : `${CONSOLE}?limit=200`;
+              const data = await fetch(url).then((r) => r.json());
+              if (alive && Array.isArray(data.entries)) {
+                merge(data.entries, (r) => `c${r.seq}`);
+                const last = data.entries[data.entries.length - 1];
+                if (last?.at) since = last.at;
+              }
             } else if (tab === "network") {
-              const data = await fetch(`${NETWORK}?limit=200${failedOnly ? "&failedOnly=true" : ""}`).then((r) => r.json());
-              if (alive) setRows(data.entries || []);
+              const url = `${NETWORK}?limit=200${failedOnly ? "&failedOnly=true" : ""}${since ? `&since=${encodeURIComponent(since)}` : ""}`;
+              const data = await fetch(url).then((r) => r.json());
+              if (alive && Array.isArray(data.entries)) {
+                merge(data.entries, (r) => `n${r.id}`);
+                const lastStart = data.entries.reduce((m, r) => Math.max(m, Number(r.startedAt) || 0), 0);
+                if (lastStart) since = String(lastStart);
+              }
             } else {
               const data = await fetch(`${ELEMENTS}?depth=3`).then((r) => r.json());
               if (alive) setRows(data.nodes || []);
@@ -3272,10 +3296,22 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           }
         };
         load();
-        const timer = window.setInterval(load, 1500);
+        const period = () => document.visibilityState === "hidden" ? 15e3 : 1500;
+        let timer = 0;
+        const arm = () => {
+          clearInterval(timer);
+          timer = window.setInterval(load, period());
+        };
+        const onVis = () => {
+          arm();
+          if (document.visibilityState !== "hidden") load();
+        };
+        document.addEventListener("visibilitychange", onVis);
+        arm();
         return () => {
           alive = false;
           clearInterval(timer);
+          document.removeEventListener("visibilitychange", onVis);
         };
       }, [open, tab, failedOnly]);
       if (!open) return null;
@@ -3335,7 +3371,8 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           h("span", { className: "nks-dt-type" }, "Type"),
           h("span", { className: "nks-dt-url nks-dt-grow", style: { maxWidth: "none", textAlign: "left" } }, "URL"),
           h("span", { className: "nks-dt-size" }, "Size"),
-          h("span", { className: "nks-dt-dur" }, "Time")
+          h("span", { className: "nks-dt-dur" }, "Time"),
+          h("span", { className: "nks-dt-wf", style: { height: "auto" } }, "Waterfall")
         ) : null,
         h(
           "div",
@@ -3362,10 +3399,23 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
             h("span", { className: "nks-dt-type" }, String(row.mimeType || row.type || "").split(";")[0].replace("application/", "").replace("text/", "").slice(0, 12)),
             h("span", { className: "nks-dt-url nks-dt-grow", "data-bad": row.failed || (row.status || 0) >= 400 ? "true" : "false" }, row.url),
             h("span", { className: "nks-dt-size" }, row.size == null ? "" : row.size > 1024 ? `${(row.size / 1024).toFixed(1)}kb` : `${row.size}b`),
-            h("span", { className: "nks-dt-dur" }, row.durationMs == null ? "" : `${row.durationMs}ms`)
+            h("span", { className: "nks-dt-dur" }, row.durationMs == null ? "" : `${row.durationMs}ms`),
+            h("span", { className: "nks-dt-wf", "data-nks-dt-wf": "1" }, wfBar(row, rows))
           ))
         )
       );
+    }
+    function wfBar(row, rows) {
+      const starts = rows.map((r) => Number(r.startedAt) || 0).filter(Boolean);
+      const ends = rows.map((r) => (Number(r.startedAt) || 0) + (Number(r.durationMs) || 0)).filter(Boolean);
+      const min = starts.length ? Math.min(...starts) : 0;
+      const span = Math.max(1, (ends.length ? Math.max(...ends) : min + 1) - min);
+      const start = Number(row.startedAt) || 0;
+      const dur = Number(row.durationMs) || 0;
+      const left = Math.max(0, Math.min(100, (start - min) / span * 100));
+      const width = dur > 0 ? Math.max(1.5, Math.min(100 - left, dur / span * 100)) : 1.5;
+      const pending = row.durationMs == null && !row.failed;
+      return h("i", { style: { left: `${left}%`, width: `${width}%` }, "data-bad": row.failed || (row.status || 0) >= 400 ? "true" : "false", "data-pending": pending ? "true" : "false" });
     }
     function openSettings() {
       if (dialogOpenRef.current) return;

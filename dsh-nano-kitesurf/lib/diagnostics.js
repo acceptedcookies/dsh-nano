@@ -98,6 +98,8 @@ export const BRIDGE_ERRORS = [
   { id: 'kitesurf.elements.stale', cause: '桥侧还没有 elements 快照', next: '先调 GET /nano-local-sandbox/elements' },
   { id: 'kitesurf.selftest.stale', cause: '桥侧还没有 selftest 快照', next: '先调 GET /nano-local-sandbox/selftest' },
   { id: 'kitesurf.control.busy', cause: '另一连接正在持有写操作（人机共享单页，写串行）', next: '等待并重试；GET /health 看当前 owner' },
+  { id: 'kitesurf.control.held', cause: '人接管了页面（humanHold.active），写类调用被拒——held 比 busy 更高一级', next: '立刻停写、别 claim 别 retry；把控制权交还人，等 humanHold.active:false 再写' },
+  { id: 'kitesurf.control.body', cause: '/control 请求体 JSON 解析失败（400）', next: '修正请求体 schema 后重试一次' },
   { id: 'kitesurf.control.query', cause: 'sandbox.control 的 action 不是 status|claim|release', next: '用 kitesurf_control {action:"status"|"claim"|"release"}' },
   { id: 'kitesurf.tool.unknown', cause: '调用了不存在的 kitesurf_* 工具名', next: '对照 tools/list 的 kitesurf_* 工具名' },
 ]

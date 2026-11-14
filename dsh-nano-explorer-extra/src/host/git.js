@@ -198,6 +198,19 @@ function letterOf(staged, unstaged) {
 }
 
 /**
+ * Reduce a workspace-absolute path to one relative to the checkout root.
+ * @param root - checkout top-level.
+ * @param path - absolute path inside or under it.
+ * @returns the relative path (`''` for the root itself), or `undefined` when it lies outside.
+ */
+function checkoutRelative(root, path) {
+  const base = root.replace(/\/+$/u, '')
+  const target = path.replace(/\/+$/u, '')
+  if (target === base) return ''
+  return target.startsWith(`${base}/`) ? target.slice(base.length + 1) : undefined
+}
+
+/**
  * Parse `git status --porcelain=v2 --branch --ignored=matching -z` output.
  * @param stdout - NUL-separated records.
  * @returns branch facts, changed files, and ignored paths.
@@ -342,13 +355,24 @@ export async function readStatus(ctx, config, request) {
     '-z',
     ...(scoped ? ['--', request.path] : []),
   ]
-  // These four reads do not depend on each other: status, stash, and the worktree list all answer
+  // These reads do not depend on each other: status, stash, and the worktree list all answer
   // from the repository's own metadata. Running them in line was nine sequential process waits;
   // overlapping them makes the answer arrive when the slowest read does.
   // A scoped read is one directory's status for the row colours: the stash badge and the worktree
   // list answer drawer questions, not per-directory ones, so they stay on the unscoped path.
-  const [status, stash, worktrees] = await Promise.all([
+  // `-- path` also blinds rename detection to any source outside the scope: a rename into the
+  // directory reports its target as `A`, and the row paints "added" for a file the commit drawer
+  // calls `R`. One extra repository-wide read with untracked records off (a few lines even on a
+  // busy tree) supplies the tracked truth; the merge below lets it win tracked records while the
+  // scoped `?`/`!` rows keep coming from the narrow read.
+  const [status, tracked, stash, worktrees] = await Promise.all([
     runGit(ctx, config, { ...request, args }),
+    scoped
+      ? runGit(ctx, config, {
+        ...request,
+        args: ['status', '--porcelain=v2', '-z', '--untracked-files=no'],
+      }).catch(() => undefined)
+      : Promise.resolve(undefined),
     scoped
       ? Promise.resolve(undefined)
       : runGit(ctx, config, {
@@ -357,6 +381,17 @@ export async function readStatus(ctx, config, request) {
     scoped ? Promise.resolve([]) : listWorktrees(ctx, config, request),
   ])
   const parsed = parseStatus(status.stdout)
+  if (scoped && tracked !== undefined && tracked.exitCode === 0) {
+    // `root` is the checkout top-level; the scope path is workspace-absolute, so reduce it before
+    // prefix-matching parsed paths, which are checkout-relative.
+    const scope = checkoutRelative(root, request.path)
+    if (scope !== undefined) {
+      const inside = file => scope === '' || file.path === scope || file.path.startsWith(`${scope}/`)
+      const truthful = new Map(parseStatus(tracked.stdout).files.filter(inside).map(file => [file.path, file]))
+      // A scoped tracked record exists on both sides; the truthful one only needs to overwrite.
+      parsed.files = parsed.files.map(file => truthful.get(file.path) ?? file)
+    }
+  }
 
   // Stashed work is invisible to `status`: the tree looks clean while a shelf of commits waits to be
   // restored. One extra command reports how many are shelved, which the status bar shows as a badge.

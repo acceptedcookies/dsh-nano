@@ -204,16 +204,16 @@ P0-01 ──▶ P1-01 ──▶ P1-02 ──▶ P1-03
   - **完成判据**：旧 fingerprint 一个不改
   - **验证映射**：`DNLS01-T25` · **依赖**：`P8-01`
   - **执行状态**：`complete` · **执行时间**：`2026-11-14T06:00:00Z` · **证据 / 备注**：`node --test test/deferrals.test.mjs` exit 0；旧 9 个 fingerprint 都还在
-- [ ] `P9-01` — 把执行日志 append 到 action-plan 底部
+- [x] `P9-01` — 把执行日志 append 到 action-plan 底部
   - **落点 / 对象**：`DNLS01-macos-platform-cutover.md`
   - **完成判据**：不改计划主体；每行对应 Item ID
   - **验证映射**：日志自检 · **依赖**：`P8-02`
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
-- [ ] `P9-02` — closure
+  - **执行状态**：`complete` · **执行时间**：`2026-11-14T06:10:00Z` · **证据 / 备注**：计划 §12 已追加。计划状态保持 `reviewed`，不是 `executed`
+- [x] `P9-02` — closure
   - **落点 / 对象**：`docs/specs/dsh-nano-local-sandbox/closure/DNLS01-closure.md`
   - **完成判据**：close-type 与证据四元组一致；无预先 deferred
   - **验证映射**：closure 自检 · **依赖**：`P9-01`
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
+  - **执行状态**：`complete` · **执行时间**：`2026-11-14T06:10:00Z` · **证据 / 备注**：`closure/DNLS01-closure.md`，close-type `implementation-complete-awaiting-live-verification`
 - [ ] `P9-03` — 至少三路审查（真相对账 / 完成度 / 防假绿与防侧载）并修复到收口
   - **落点 / 对象**：`.anote/reviews/dsh-nano-local-sandbox/DNLS01/na/`
   - **完成判据**：每路有专用审查 prompt 与报告；核实后的问题已修或明确未勾选

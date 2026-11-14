@@ -94,6 +94,9 @@ export function loadProfile(dir, options = {}) {
 export async function ensureReady(dir, backend, options = {}) {
   const loaded = loadProfile(dir, options)
   if (!loaded.ready) return { ok: false, status: 400, errors: loaded.errors, loaded }
+  if (typeof backend?.ensureImage === 'function') {
+    await backend.ensureImage({ tag: loaded.manifest.build.digest, publicSpec: {} })
+  }
   return { ok: true, status: 200, loaded }
 }
 

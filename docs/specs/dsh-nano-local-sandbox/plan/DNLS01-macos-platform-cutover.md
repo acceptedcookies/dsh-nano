@@ -764,3 +764,28 @@ pong 留在 T15，不能用来凑本项的条数。
 ## 11. 执行日志回填（仅 `executed` 状态使用）
 
 文档状态为 `reviewed`。本节按模板省略，执行完成前不回填。
+
+## 12. 执行日志回填
+
+> 执行者：`DNLS01 执行 agent（lead）`
+> 执行时间：`2026-11-14`
+> 文档状态：`reviewed`，**不是** `executed`。`DNLS01-T18` 的 ego 实跑仍是 `未观察`。
+> 代码改动统计：工作树分支 `dnls01-macos-platform-cutover`，Phase commit `a85f9a5` `468a374` `2b9ac0f` `4b3ab2e` `178eb35` `6afb4d9` `fb0fabf` `f68c472`。
+
+- **实际执行摘要**：P1 身份与 backend；P2 profile 与 confine；P3 实例/指纹/history/回收；P4 四个 L2 面；P5 错误目录与三门禁（56 条路由）；P6 包内特权点、e2e fork 静态检查、无 agent 截图、pack 存档；P7 硬切 [DNK] 容器资产与旧路由，[DNT] `attach.url` / pong `0x0A` / 去掉 isolate 源码与 `dnt-agent`；P8 清单、README、三包 AGENTS、U10 四行。
+- **Phase 偏差**：`T18` 只做了 fork 静态断言，没有跑 ego（计划偏差，本机有 `container`，仍标 `未观察`）。`T20` 允许 `backend-apple.js` 保留容器 CLI 字面量，因为 `T-O-9` 要求这个调用点；四份历史文档的允许清单长度仍是 4。`[DNT] lib/client.js` 没有按新的 `lanes.js` 重建。
+- **阻塞与处理**：没有把计划改成 `executed`。
+- **测试发现**：`DNLS01-T23` 九条与 `DNLS01-T24` 二十次轨迹在本轮补跑通过。`T18` 实跑仍缺。
+- **后续 handoff**：合并回 `main` 与删除 worktree 仍等 [业主]。ego 实跑与 client 重建是后继，不在本日志里写成已完成。
+
+### 12.1 逐工作项状态
+
+| 工作项 | 状态 | PR | 实际落点 | 备注 |
+|--------|------|----|----------|------|
+| `P1-01`…`P8-02` | `✅ done` | 分支 commit，未开 PR | 见各 Phase commit | 本地 short-verified |
+| `P6-02` / `DNLS01-T18` | `🟩 partial` | 同上 | `dsh-nano-local-sandbox/scripts/e2e-ego.mjs` | 静态 23 名称通过；ego 未跑 |
+| `P9-01`…`P9-03` | `🟩 partial` | - | 本节与 closure | 审查在日志之后 |
+
+### 12.2 文档状态
+
+`reviewed`，保持不升为 `executed`（`2026-11-14`）。residual：ego 实跑、`[DNT]` client 重建。不回填成已收口。

@@ -5,6 +5,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import path from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { fileURLToPath } from 'node:url'
 import { registerRoutes } from './lib/route-guard.js'
 import { ROUTE_TABLE, PLUGIN } from './lib/route-table.js'
@@ -15,7 +16,15 @@ import { buildSrcDoc } from './lib/dom.js'
 import { kitesurfSkill, nanoKiteSkill } from './lib/skill.js'
 import { createNanoKite } from './lib/nano-kite.js'
 import { ensureLocalContainer, hostPort, stopLocalContainer } from './lib/container-engine.js'
-import { hostSpan, perfSnapshot, setPerfEnabled } from './lib/perf-host.js'
+import { hostSpan as rawHostSpan, perfCount, perfSnapshot, setPerfEnabled } from './lib/perf-host.js'
+
+// Request-scoped incident id (P1-4): traced() opens an ALS context per request
+// so every hostSpan inside correlates to the incidentId that fail() stamps on
+// the error response and the operations ring — an agent reading a slow/failed
+// span event can jump straight to the incident row and vice versa.
+const reqContext = new AsyncLocalStorage()
+const activeIncidentId = () => reqContext.getStore()?.incidentId ?? null
+const hostSpan = (name, fn) => rawHostSpan(name, fn, { incidentId: activeIncidentId() })
 
 export const name = 'nano-kitesurf'
 export const inject = ['webServer', 'connection', 'skills']
@@ -290,7 +299,9 @@ function statusOf_error(errorId) {
 function fail(res, error) {
   const errorId = errorIdOf(error)
   const errorText = messageOf(error)
-  const incidentId = randomUUID()
+  // Reuse the request-scoped id when fail() runs inside a traced handler —
+  // span events, the operations row and this response then share one key.
+  const incidentId = activeIncidentId() ?? randomUUID()
   lastError = { at: new Date().toISOString(), incidentId, errorId, error: errorText }
   // One grep-able JSON line per failure in the host log. Before this, five
   // triggered errors produced ZERO kitesurf lines and an MCP client had no
@@ -325,8 +336,12 @@ function traced(spec) {
         }
         return originalEnd(body, ...rest)
       }
+      // The request's incidentId: fail() reuses it so error response, stderr
+      // line, operations row and span events all share one correlation id.
+      const incidentId = randomUUID()
+      req.__dnkIncidentId = incidentId
       try {
-        await original(req, res, route)
+        await reqContext.run({ incidentId }, () => original(req, res, route))
       } finally {
         // The pane polls perf-review ~1/s; recording it would push every real
         // failure out of the 200-row ring within minutes. Skip it entirely —
@@ -344,11 +359,19 @@ function traced(spec) {
             ok,
             errorId: payload?.errorId || null,
             error: payload?.error || null,
-            incidentId: payload?.incidentId || null,
+            incidentId: payload?.incidentId || req.__dnkIncidentId || null,
             input: summarizeInput(req.__dnkBody),
               result: payload?.moved === false ? 'no-op' : (payload?.mimeType ? 'png' : null),
             })
           } catch { /* diagnostics must never break a route */ }
+          // P1-4 usage counters: route failures + slow calls, per route name —
+          // cheap tallies an agent can read next to the span stats.
+          try {
+            const short = spec.path.replace(/^\/nano-kitesurf\//, '').replace(/[^a-z0-9-]/g, '-').slice(0, 32)
+            if (!ok) perfCount(`route-err-${short}`)
+            const dur = Date.now() - started
+            if (dur >= 500) perfCount(`route-slow-${short}`)
+          } catch { /* counters are best effort */ }
         }
         // Push a fresh snapshot to the MCP bridge, immediately on failure and
         // debounced otherwise. An agent using only MCP sees the same state.

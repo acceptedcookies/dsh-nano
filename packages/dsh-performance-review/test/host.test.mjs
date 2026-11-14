@@ -36,10 +36,12 @@ test('disabled without env flag: passthrough hostSpan, no writer', () => {
   assert.equal(host.snapshot().enabled, false)
 })
 
-test('enabled: writer armed, timer unref-able, hostSpan times to settle', async () => {
+test('enabled: writer armed lazily (first read, not hostJoin), hostSpan times to settle', async () => {
   const env = fakeEnv()
   const host = createPerfReviewHost(env)
   const api = host.hostJoin('nano-explorer-extra', { version: '0.1.1' })
+  assert.equal(env.timers.length, 0) // lazy resolution — apply() may set the env var after import
+  host.snapshot() // first enablement read arms the writer
   assert.equal(env.timers.length, 1)
 
   api.hostSpan('git-status', () => { env.performance.advance(12) })
@@ -65,16 +67,22 @@ test('writeFile failures count hostWriteErrors; no throw, no retry', async () =>
   assert.equal(host.snapshot().structure.hostWriteErrors, 2)
 })
 
-test('flush writes plugins/perf-review/host.json under data dir', async () => {
+test('flush writes host.json + host-snapshots.jsonl under data dir (P1-4 time series)', async () => {
   const env = fakeEnv()
+  env.fs.readFile = async () => { throw new Error('ENOENT') }
   const host = createPerfReviewHost(env)
   host.hostJoin('nano-x')
+  host.snapshot() // resolve enablement lazily before flushing (first read wins)
   await host.flush()
-  assert.equal(env.fs.writes.length, 1)
+  assert.equal(env.fs.writes.length, 2)
   assert.ok(env.fs.writes[0].path.endsWith('/tmp/dsh-test/plugins/perf-review/host.json'))
+  assert.ok(env.fs.writes[1].path.endsWith('/tmp/dsh-test/plugins/perf-review/host-snapshots.jsonl'))
   const parsed = JSON.parse(env.fs.writes[0].data)
-  assert.equal(parsed.version, 1)
+  assert.equal(parsed.version, 2)
   assert.equal(parsed.enabled, true)
+  const seriesRow = JSON.parse(env.fs.writes[1].data.trim())
+  assert.ok(typeof seriesRow.at === 'string')
+  assert.ok('plugins' in seriesRow)
 })
 
 test('reservoir caps host span samples at RESERVOIR_CAP', () => {
@@ -102,4 +110,44 @@ test('sync hostSpan that throws still records and rethrows', () => {
   const span = host.snapshot().plugins['nano-x'].spans.boom
   assert.equal(span.n, 1)
   assert.equal(span.samples[0], 4)
+})
+
+test('P1-4: span rows carry pre-aggregated stats + {ms,at,err} event ring', async () => {
+  const env = fakeEnv()
+  const host = createPerfReviewHost(env)
+  const api = host.hostJoin('nano-x')
+  api.hostSpan('shot', () => env.performance.advance(10), { traceId: 'inc-7' })
+  api.hostSpan('shot', () => env.performance.advance(30))
+  try { api.hostSpan('shot', () => { env.performance.advance(5); throw new Error('k') }) } catch {}
+  const span = host.snapshot().plugins['nano-x'].spans.shot
+  assert.equal(span.n, 3)
+  assert.equal(span.stats.errors, 1)
+  assert.equal(span.stats.max, 30)
+  assert.equal(typeof span.stats.p50, 'number')
+  assert.equal(typeof span.stats.p95, 'number')
+  assert.ok(span.stats.lastErrorAt)
+  assert.equal(span.stats.lastTraceId, 'inc-7')
+  assert.equal(span.events.length, 3)
+  assert.equal(span.events[0].traceId, 'inc-7')
+  assert.equal(span.events[2].err, true)
+})
+
+test('P1-4: count() accumulates per-name counters into snapshot', () => {
+  const env = fakeEnv()
+  const host = createPerfReviewHost(env)
+  const api = host.hostJoin('nano-x')
+  api.count('shots-taken')
+  api.count('shots-taken', 2)
+  const counts = host.snapshot().plugins['nano-x'].counts
+  assert.equal(counts['shots-taken'], 3)
+})
+
+test('P1-4: async rejection marks err=true (was invisible via finally)', async () => {
+  const env = fakeEnv()
+  const host = createPerfReviewHost(env)
+  const api = host.hostJoin('nano-x')
+  await assert.rejects(() => api.hostSpan('net', () => Promise.reject(new Error('timeout'))))
+  const span = host.snapshot().plugins['nano-x'].spans.net
+  assert.equal(span.stats.errors, 1)
+  assert.equal(span.events[0].err, true)
 })

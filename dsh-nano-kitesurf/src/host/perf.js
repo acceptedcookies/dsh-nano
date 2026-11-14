@@ -14,8 +14,13 @@ function pluginVersion() {
 const host = ensurePerfReviewHost()
 const review = host.hostJoin('nano-kitesurf', { version: pluginVersion(), libVersion: LIB_VERSION })
 
-export function hostSpan(name, fn) {
-  return review.hostSpan(name, fn)
+export function hostSpan(name, fn, ctx = null) {
+  return review.hostSpan(name, fn, ctx)
+}
+
+/** Per-name cumulative counter (P1-4) — usage-style tallies next to spans. */
+export function perfCount(name, n = 1) {
+  return review.count(name, n)
 }
 
 /** Explicit perf switch — apply() calls it with config.perfReview. */

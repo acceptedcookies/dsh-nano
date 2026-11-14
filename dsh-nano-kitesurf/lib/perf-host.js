@@ -4,15 +4,41 @@ import { readFileSync } from "node:fs";
 // ../packages/dsh-performance-review/src/state.js
 var LIB_VERSION = "0.1.0";
 var NAME_RE = /^[a-z0-9][a-z0-9-]{0,39}$/;
+var MAX_USAGE_KEYS = 32;
 var RESERVOIR_CAP = 64;
+function percentile(values, p) {
+  if (!Array.isArray(values) || values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil(p * sorted.length) - 1));
+  return sorted[index];
+}
 function createSpanRow() {
   return { n: 0, window: [], reservoir: [] };
+}
+function roundMs(value) {
+  return value == null ? null : Math.round(value * 10) / 10;
 }
 
 // ../packages/dsh-performance-review/src/host.js
 var WRITE_INTERVAL_MS = 3e4;
 var WINDOW_SAMPLE_CAP = 512;
+var EVENT_CAP = 32;
+var JSONL_CAP_BYTES = 8 * 1024 * 1024;
 var isPromiseLike = (value) => value !== null && typeof value === "object" && typeof value.then === "function";
+function spanStats(span) {
+  const reservoir = span.reservoir ?? [];
+  return {
+    n: span.n,
+    p50: roundMs(percentile(reservoir, 0.5)),
+    p95: roundMs(percentile(reservoir, 0.95)),
+    max: roundMs(reservoir.length === 0 ? null : Math.max(...reservoir)),
+    errors: span.errors ?? 0,
+    lastMs: span.lastMs ?? null,
+    lastAt: span.lastAt ?? null,
+    lastErrorAt: span.lastErrorAt ?? null,
+    lastTraceId: span.lastTraceId ?? null
+  };
+}
 function hostSnapshot(state) {
   const plugins = {};
   for (const [pluginId, row] of state.plugins) {
@@ -22,13 +48,19 @@ function hostSnapshot(state) {
         n: span.n,
         samples: [...span.reservoir],
         windowN: span.window.length,
-        windowSamples: [...span.window]
+        windowSamples: [...span.window],
+        stats: spanStats(span),
+        events: [...span.events ?? []]
       };
     }
-    plugins[pluginId] = { version: row.version ?? null, spans };
+    const counts = {};
+    if (row.counts instanceof Map) {
+      for (const [name, n] of row.counts) counts[name] = n;
+    }
+    plugins[pluginId] = { version: row.version ?? null, spans, counts };
   }
   return {
-    version: 1,
+    version: 2,
     enabled: state.enabled,
     observerVersion: LIB_VERSION,
     contributors: state.contributors.map((c) => ({ ...c })),
@@ -46,7 +78,11 @@ function takeWindow(state) {
     for (const [name, span] of row.spans) {
       spans[name] = { n: span.window.length, samples: [...span.window] };
     }
-    plugins[pluginId] = { version: row.version ?? null, spans };
+    const counts = {};
+    if (row.counts instanceof Map) {
+      for (const [name, n] of row.counts) counts[name] = n;
+    }
+    plugins[pluginId] = { version: row.version ?? null, spans, counts };
   }
   for (const row of state.plugins.values()) {
     for (const span of row.spans.values()) span.window.length = 0;
@@ -71,7 +107,28 @@ function createPerfReviewHost(env = {}) {
     const target = path.join(dir, "plugins", "perf-review");
     try {
       await fs.mkdir(target, { recursive: true });
-      await fs.writeFile(path.join(target, "host.json"), JSON.stringify(hostSnapshot(state), null, 2));
+      const snap = hostSnapshot(state);
+      await fs.writeFile(path.join(target, "host.json"), JSON.stringify(snap, null, 2));
+      const series = { at: snap.writtenAt, plugins: {} };
+      for (const [pluginId, row] of state.plugins) {
+        const spans = {};
+        for (const [name, span] of row.spans) {
+          spans[name] = { n: span.n, p95: roundMs(percentile(span.reservoir, 0.95)), errors: span.errors ?? 0 };
+        }
+        series.plugins[pluginId] = { spans };
+      }
+      const jsonlPath = path.join(target, "host-snapshots.jsonl");
+      let existing = "";
+      try {
+        existing = await fs.readFile(jsonlPath, "utf8");
+      } catch {
+      }
+      if (existing.length > JSONL_CAP_BYTES) {
+        existing = existing.slice(-Math.floor(JSONL_CAP_BYTES / 2));
+        const nl = existing.indexOf("\n");
+        if (nl >= 0) existing = existing.slice(nl + 1);
+      }
+      await fs.writeFile(jsonlPath, existing + JSON.stringify(series) + "\n");
     } catch {
       state.writeErrors += 1;
     }
@@ -101,15 +158,25 @@ function createPerfReviewHost(env = {}) {
     state.enabled = value === true;
     if (state.enabled) startWriter();
   };
-  const recordSpan = (row, name, t0, t1) => {
+  const recordSpan = (row, name, t0, t1, err = false, traceId = null) => {
     if (!NAME_RE.test(name) || !isEnabled()) return;
     let span = row.spans.get(name);
     if (span === void 0) {
       span = createSpanRow();
+      span.errors = 0;
+      span.events = [];
       row.spans.set(name, span);
     }
     span.n += 1;
     const ms = t1 - t0;
+    const at = (/* @__PURE__ */ new Date()).toISOString();
+    span.lastMs = ms;
+    span.lastAt = at;
+    if (traceId != null) span.lastTraceId = traceId;
+    if (err) {
+      span.errors += 1;
+      span.lastErrorAt = at;
+    }
     span.window.push(ms);
     while (span.window.length > WINDOW_SAMPLE_CAP) span.window.shift();
     if (span.reservoir.length < RESERVOIR_CAP) span.reservoir.push(ms);
@@ -117,34 +184,58 @@ function createPerfReviewHost(env = {}) {
       const slot = Math.floor(Math.random() * span.n);
       if (slot < RESERVOIR_CAP) span.reservoir[slot] = ms;
     }
+    span.events.push(traceId != null ? { ms: Math.round(ms * 10) / 10, at, err, traceId } : { ms: Math.round(ms * 10) / 10, at, err });
+    while (span.events.length > EVENT_CAP) span.events.shift();
   };
   const hostJoin = (pluginId, impl = {}) => {
     let row = state.plugins.get(pluginId);
     if (row === void 0) {
-      row = { version: impl.version ?? null, spans: /* @__PURE__ */ new Map() };
+      row = { version: impl.version ?? null, spans: /* @__PURE__ */ new Map(), counts: /* @__PURE__ */ new Map() };
       state.plugins.set(pluginId, row);
     }
+    if (!(row.counts instanceof Map)) row.counts = /* @__PURE__ */ new Map();
     state.contributors.push({ pluginId, libVersion: impl.libVersion ?? LIB_VERSION });
     const clock = env.performance ?? globalThis.performance;
     const now = () => clock.now();
     return {
-      hostSpan(name, fn) {
+      /**
+       * hostSpan(name, fn, ctx?) — ctx: {traceId?, incidentId?} correlates the
+       * span event with a caller-side trace (e.g. an incidentId from the
+       * operations ring); only the LAST-seen trace is kept per span plus the
+       * traceId on each event row.
+       */
+      hostSpan(name, fn, ctx = null) {
         if (!NAME_RE.test(name)) return fn();
+        const traceId = ctx && (ctx.traceId ?? ctx.incidentId ?? null);
         const t0 = now();
         let result;
         try {
           result = fn();
         } catch (error) {
-          recordSpan(row, name, t0, now());
+          recordSpan(row, name, t0, now(), true, traceId);
           throw error;
         }
         if (isPromiseLike(result)) {
-          return result.finally(() => recordSpan(row, name, t0, now()));
+          return result.then(
+            (value) => {
+              recordSpan(row, name, t0, now(), false, traceId);
+              return value;
+            },
+            (error) => {
+              recordSpan(row, name, t0, now(), true, traceId);
+              throw error;
+            }
+          );
         }
-        recordSpan(row, name, t0, now());
+        recordSpan(row, name, t0, now(), false, traceId);
         return result;
       },
-      count() {
+      /** count(name, n?) — cumulative counter per name (usage-style). */
+      count(name, n = 1) {
+        if (!NAME_RE.test(name) || !isEnabled()) return;
+        if (!(row.counts instanceof Map)) row.counts = /* @__PURE__ */ new Map();
+        if (!row.counts.has(name) && row.counts.size >= MAX_USAGE_KEYS) return;
+        row.counts.set(name, (row.counts.get(name) ?? 0) + n);
       },
       snapshot: () => {
         isEnabled();
@@ -204,8 +295,11 @@ function pluginVersion() {
 }
 var host = ensurePerfReviewHost();
 var review = host.hostJoin("nano-kitesurf", { version: pluginVersion(), libVersion: LIB_VERSION });
-function hostSpan(name, fn) {
-  return review.hostSpan(name, fn);
+function hostSpan(name, fn, ctx = null) {
+  return review.hostSpan(name, fn, ctx);
+}
+function perfCount(name, n = 1) {
+  return review.count(name, n);
 }
 function setPerfEnabled(value) {
   host.setEnabled(value === true);
@@ -215,6 +309,7 @@ function perfSnapshot(mode) {
 }
 export {
   hostSpan,
+  perfCount,
   perfSnapshot,
   setPerfEnabled
 };

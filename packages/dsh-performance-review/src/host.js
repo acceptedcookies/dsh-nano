@@ -14,17 +14,42 @@
  * every 30 s (timer.unref()) and once more on process beforeExit.
  */
 
-import { LIB_VERSION, NAME_RE, percentile, recordSpanSample, createSpanRow, RESERVOIR_CAP } from './state.js'
+import { LIB_VERSION, NAME_RE, percentile, recordSpanSample, createSpanRow, RESERVOIR_CAP, MAX_USAGE_KEYS, roundMs } from './state.js'
 
 const WRITE_INTERVAL_MS = 30_000
 /** Bound the per-window sample list when no lab drains it for a long time. */
 const WINDOW_SAMPLE_CAP = 512
+/** Ring of recent {ms,at,err,traceId} events per span — answers "which call was slow/failed". */
+const EVENT_CAP = 32
+/** Rotate host-snapshots.jsonl past this size so a long-lived host cannot grow it forever. */
+const JSONL_CAP_BYTES = 8 * 1024 * 1024
 
 const isPromiseLike = value => value !== null && typeof value === 'object' && typeof value.then === 'function'
 
 /**
+ * Pre-aggregated per-span stats — computed once at snapshot time from the
+ * reservoir (≤64 numbers) rather than making every consumer re-derive p95.
+ * `errors` counts calls whose fn threw/rejected; `lastErrorAt` says when.
+ */
+function spanStats(span) {
+  const reservoir = span.reservoir ?? []
+  return {
+    n: span.n,
+    p50: roundMs(percentile(reservoir, 0.5)),
+    p95: roundMs(percentile(reservoir, 0.95)),
+    max: roundMs(reservoir.length === 0 ? null : Math.max(...reservoir)),
+    errors: span.errors ?? 0,
+    lastMs: span.lastMs ?? null,
+    lastAt: span.lastAt ?? null,
+    lastErrorAt: span.lastErrorAt ?? null,
+    lastTraceId: span.lastTraceId ?? null,
+  }
+}
+
+/**
  * The host-side snapshot that host.json carries and aggregate.hostSpanObject()
- * merges into the browser report.
+ * merges into the browser report. `stats` is additive (P1-4): consumers that
+ * only know `samples` keep working unchanged.
  */
 export function hostSnapshot(state) {
   const plugins = {}
@@ -36,12 +61,18 @@ export function hostSnapshot(state) {
         samples: [...span.reservoir],
         windowN: span.window.length,
         windowSamples: [...span.window],
+        stats: spanStats(span),
+        events: [...(span.events ?? [])],
       }
     }
-    plugins[pluginId] = { version: row.version ?? null, spans }
+    const counts = {}
+    if (row.counts instanceof Map) {
+      for (const [name, n] of row.counts) counts[name] = n
+    }
+    plugins[pluginId] = { version: row.version ?? null, spans, counts }
   }
   return {
-    version: 1,
+    version: 2,
     enabled: state.enabled,
     observerVersion: LIB_VERSION,
     contributors: state.contributors.map(c => ({ ...c })),
@@ -67,7 +98,11 @@ export function takeWindow(state) {
     for (const [name, span] of row.spans) {
       spans[name] = { n: span.window.length, samples: [...span.window] }
     }
-    plugins[pluginId] = { version: row.version ?? null, spans }
+    const counts = {}
+    if (row.counts instanceof Map) {
+      for (const [name, n] of row.counts) counts[name] = n
+    }
+    plugins[pluginId] = { version: row.version ?? null, spans, counts }
   }
   for (const row of state.plugins.values()) {
     for (const span of row.spans.values()) span.window.length = 0
@@ -100,7 +135,31 @@ export function createPerfReviewHost(env = {}) {
     const target = path.join(dir, 'plugins', 'perf-review')
     try {
       await fs.mkdir(target, { recursive: true })
-      await fs.writeFile(path.join(target, 'host.json'), JSON.stringify(hostSnapshot(state), null, 2))
+      const snap = hostSnapshot(state)
+      await fs.writeFile(path.join(target, 'host.json'), JSON.stringify(snap, null, 2))
+      // P1-4 time series: one compact JSONL row per write cycle — a lab can
+      // replay p95 over time without holding the host process open. Rotates
+      // by truncating when the file passes the cap (keeps tail rows, drops
+      // the oldest by rewriting — coarse but bounded and dependency-free).
+      const series = { at: snap.writtenAt, plugins: {} }
+      for (const [pluginId, row] of state.plugins) {
+        const spans = {}
+        for (const [name, span] of row.spans) {
+          spans[name] = { n: span.n, p95: roundMs(percentile(span.reservoir, 0.95)), errors: span.errors ?? 0 }
+        }
+        series.plugins[pluginId] = { spans }
+      }
+      const jsonlPath = path.join(target, 'host-snapshots.jsonl')
+      let existing = ''
+      try {
+        existing = await fs.readFile(jsonlPath, 'utf8')
+      } catch { /* first write */ }
+      if (existing.length > JSONL_CAP_BYTES) {
+        existing = existing.slice(-Math.floor(JSONL_CAP_BYTES / 2))
+        const nl = existing.indexOf('\n')
+        if (nl >= 0) existing = existing.slice(nl + 1)
+      }
+      await fs.writeFile(jsonlPath, existing + JSON.stringify(series) + '\n')
     } catch {
       state.writeErrors += 1
     }
@@ -141,17 +200,26 @@ export function createPerfReviewHost(env = {}) {
     if (state.enabled) startWriter()
   }
 
-  const recordSpan = (row, name, t0, t1) => {
+  const recordSpan = (row, name, t0, t1, err = false, traceId = null) => {
     if (!NAME_RE.test(name) || !isEnabled()) return
     let span = row.spans.get(name)
     if (span === undefined) {
       span = createSpanRow()
+      span.errors = 0
+      span.events = []
       row.spans.set(name, span)
     }
     // host keeps a cumulative reservoir plus a per-window list (A1: the lab
-    // drains the window between scenarios; the 30 s writer drains it too).
+    // drains the window between scenarios; the 30 s writer drains it too),
+    // plus a small events ring carrying the {ms,at,err} triple so a reader
+    // can answer "which call was slow/failed" without replaying samples.
     span.n += 1
     const ms = t1 - t0
+    const at = new Date().toISOString()
+    span.lastMs = ms
+    span.lastAt = at
+    if (traceId != null) span.lastTraceId = traceId
+    if (err) { span.errors += 1; span.lastErrorAt = at }
     span.window.push(ms)
     while (span.window.length > WINDOW_SAMPLE_CAP) span.window.shift()
     if (span.reservoir.length < RESERVOIR_CAP) span.reservoir.push(ms)
@@ -159,6 +227,8 @@ export function createPerfReviewHost(env = {}) {
       const slot = Math.floor(Math.random() * span.n)
       if (slot < RESERVOIR_CAP) span.reservoir[slot] = ms
     }
+    span.events.push(traceId != null ? { ms: Math.round(ms * 10) / 10, at, err, traceId } : { ms: Math.round(ms * 10) / 10, at, err })
+    while (span.events.length > EVENT_CAP) span.events.shift()
   }
 
   /**
@@ -170,30 +240,47 @@ export function createPerfReviewHost(env = {}) {
   const hostJoin = (pluginId, impl = {}) => {
     let row = state.plugins.get(pluginId)
     if (row === undefined) {
-      row = { version: impl.version ?? null, spans: new Map() }
+      row = { version: impl.version ?? null, spans: new Map(), counts: new Map() }
       state.plugins.set(pluginId, row)
     }
+    if (!(row.counts instanceof Map)) row.counts = new Map()
     state.contributors.push({ pluginId, libVersion: impl.libVersion ?? LIB_VERSION })
     const clock = env.performance ?? globalThis.performance
     const now = () => clock.now()
     return {
-      hostSpan(name, fn) {
+      /**
+       * hostSpan(name, fn, ctx?) — ctx: {traceId?, incidentId?} correlates the
+       * span event with a caller-side trace (e.g. an incidentId from the
+       * operations ring); only the LAST-seen trace is kept per span plus the
+       * traceId on each event row.
+       */
+      hostSpan(name, fn, ctx = null) {
         if (!NAME_RE.test(name)) return fn()
+        const traceId = ctx && (ctx.traceId ?? ctx.incidentId ?? null)
         const t0 = now()
         let result
         try {
           result = fn()
         } catch (error) {
-          recordSpan(row, name, t0, now())
+          recordSpan(row, name, t0, now(), true, traceId)
           throw error
         }
         if (isPromiseLike(result)) {
-          return result.finally(() => recordSpan(row, name, t0, now()))
+          return result.then(
+            (value) => { recordSpan(row, name, t0, now(), false, traceId); return value },
+            (error) => { recordSpan(row, name, t0, now(), true, traceId); throw error },
+          )
         }
-        recordSpan(row, name, t0, now())
+        recordSpan(row, name, t0, now(), false, traceId)
         return result
       },
-      count() {},
+      /** count(name, n?) — cumulative counter per name (usage-style). */
+      count(name, n = 1) {
+        if (!NAME_RE.test(name) || !isEnabled()) return
+        if (!(row.counts instanceof Map)) row.counts = new Map()
+        if (!row.counts.has(name) && row.counts.size >= MAX_USAGE_KEYS) return
+        row.counts.set(name, (row.counts.get(name) ?? 0) + n)
+      },
       snapshot: () => { isEnabled(); return hostSnapshot(state) },
       takeWindow: () => takeWindow(state),
     }

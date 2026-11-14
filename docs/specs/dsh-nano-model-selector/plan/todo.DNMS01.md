@@ -117,7 +117,7 @@ T-EXEC 工作日志回填 AP ──▶ T-CLO closure ──▶ T-REV ≥3 路对
 
 ### 3.5 Phase 3 — 主包路由与契约层
 
-- [ ] `P3-01` — `GET/PUT /nano-model-selector/async-compact`（L3/16384/错误闭集 7 码）（`L1-T01`）
+- [x] `P3-01` — [路由+五处台账完成，route-scan/route-table 重烤全绿] — `GET/PUT /nano-model-selector/async-compact`（L3/16384/错误闭集 7 码）（`L1-T01`）
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
 - [ ] `P3-02` — `POST /nano-model-selector/async-compact/switch`（≤1024/`setBundleEnabled` 转发/四态回包）（`L1-T02`）
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`

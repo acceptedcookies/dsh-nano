@@ -652,6 +652,373 @@
       "bodyLimit": 200000,
       "sessionBinding": false,
       "justification": "Client perf-review report sink, merged into perfSnapshot."
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/status",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "sensitivity": "L0",
+      "capability": "read:host",
+      "bodyLimit": 0,
+      "sessionBinding": true,
+      "justification": "dsh-nano-local-sandbox /nano-local-sandbox/status"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/open",
+      "methods": [
+        "POST"
+      ],
+      "sensitivity": "L2",
+      "capability": "net:sandbox",
+      "bodyLimit": 4096,
+      "sessionBinding": true,
+      "justification": "dsh-nano-local-sandbox /nano-local-sandbox/open"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/shot",
+      "methods": [
+        "POST"
+      ],
+      "sensitivity": "L2",
+      "capability": "read:host",
+      "bodyLimit": 4096,
+      "sessionBinding": true,
+      "justification": "dsh-nano-local-sandbox /nano-local-sandbox/shot"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/history",
+      "methods": [
+        "POST"
+      ],
+      "sensitivity": "L2",
+      "capability": "read:host",
+      "bodyLimit": 4096,
+      "sessionBinding": true,
+      "justification": "dsh-nano-local-sandbox /nano-local-sandbox/history"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/pick",
+      "methods": [
+        "POST"
+      ],
+      "sensitivity": "L2",
+      "capability": "read:host",
+      "bodyLimit": 4096,
+      "sessionBinding": true,
+      "justification": "dsh-nano-local-sandbox /nano-local-sandbox/pick"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/edit",
+      "methods": [
+        "POST"
+      ],
+      "sensitivity": "L2",
+      "capability": "write:engine",
+      "bodyLimit": 8192,
+      "sessionBinding": true,
+      "justification": "dsh-nano-local-sandbox /nano-local-sandbox/edit"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/settings",
+      "methods": [
+        "POST"
+      ],
+      "sensitivity": "L1",
+      "capability": "write:sandbox",
+      "bodyLimit": 4096,
+      "sessionBinding": true,
+      "justification": "dsh-nano-local-sandbox /nano-local-sandbox/settings"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/perf-review/host",
+      "methods": [
+        "GET",
+        "HEAD",
+        "POST"
+      ],
+      "sensitivity": "L2",
+      "capability": "read:host",
+      "bodyLimit": 0,
+      "sessionBinding": true,
+      "justification": "dsh-nano-local-sandbox /nano-local-sandbox/perf-review/host"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/perf-report",
+      "methods": [
+        "POST"
+      ],
+      "sensitivity": "L2",
+      "capability": "read:host",
+      "bodyLimit": 200000,
+      "sessionBinding": true,
+      "justification": "dsh-nano-local-sandbox /nano-local-sandbox/perf-report"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/kite",
+      "methods": [
+        "POST"
+      ],
+      "sensitivity": "L2",
+      "capability": "proc:local-sandbox",
+      "bodyLimit": 4096,
+      "sessionBinding": true,
+      "justification": "dsh-nano-local-sandbox /nano-local-sandbox/kite"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/console",
+      "methods": [
+        "GET",
+        "HEAD",
+        "POST"
+      ],
+      "sensitivity": "L2",
+      "capability": "read:host",
+      "bodyLimit": 4096,
+      "sessionBinding": true,
+      "justification": "dsh-nano-local-sandbox /nano-local-sandbox/console"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/operations",
+      "methods": [
+        "GET",
+        "HEAD",
+        "POST"
+      ],
+      "sensitivity": "L2",
+      "capability": "read:host",
+      "bodyLimit": 4096,
+      "sessionBinding": true,
+      "justification": "dsh-nano-local-sandbox /nano-local-sandbox/operations"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/diagnostics",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "sensitivity": "L2",
+      "capability": "read:host",
+      "bodyLimit": 0,
+      "sessionBinding": true,
+      "justification": "dsh-nano-local-sandbox /nano-local-sandbox/diagnostics"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/ports",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "sensitivity": "L2",
+      "capability": "read:host",
+      "bodyLimit": 0,
+      "sessionBinding": true,
+      "justification": "dsh-nano-local-sandbox /nano-local-sandbox/ports"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/recover",
+      "methods": [
+        "POST"
+      ],
+      "sensitivity": "L2",
+      "capability": "proc:local-sandbox",
+      "bodyLimit": 4096,
+      "sessionBinding": true,
+      "justification": "dsh-nano-local-sandbox /nano-local-sandbox/recover"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/dom",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "sensitivity": "L2",
+      "capability": "read:host",
+      "bodyLimit": 0,
+      "sessionBinding": true,
+      "justification": "dsh-nano-local-sandbox /nano-local-sandbox/dom"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/selftest",
+      "methods": [
+        "GET",
+        "HEAD",
+        "POST"
+      ],
+      "sensitivity": "L2",
+      "capability": "read:host",
+      "bodyLimit": 0,
+      "sessionBinding": true,
+      "justification": "dsh-nano-local-sandbox /nano-local-sandbox/selftest"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/elements",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "sensitivity": "L2",
+      "capability": "read:host",
+      "bodyLimit": 0,
+      "sessionBinding": true,
+      "justification": "dsh-nano-local-sandbox /nano-local-sandbox/elements"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/browse-history",
+      "methods": [
+        "GET",
+        "HEAD",
+        "POST",
+        "DELETE"
+      ],
+      "sensitivity": "L2",
+      "capability": "read:host",
+      "bodyLimit": 4096,
+      "sessionBinding": true,
+      "justification": "dsh-nano-local-sandbox /nano-local-sandbox/browse-history"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/network",
+      "methods": [
+        "GET",
+        "HEAD",
+        "POST"
+      ],
+      "sensitivity": "L2",
+      "capability": "read:host",
+      "bodyLimit": 4096,
+      "sessionBinding": true,
+      "justification": "dsh-nano-local-sandbox /nano-local-sandbox/network"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/targets",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "sensitivity": "L2",
+      "capability": "read:host",
+      "bodyLimit": 0,
+      "sessionBinding": true,
+      "justification": "dsh-nano-local-sandbox /nano-local-sandbox/targets"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/evaluate",
+      "methods": [
+        "POST"
+      ],
+      "sensitivity": "L2",
+      "capability": "write:engine",
+      "bodyLimit": 4096,
+      "sessionBinding": true,
+      "justification": "dsh-nano-local-sandbox /nano-local-sandbox/evaluate"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/wait",
+      "methods": [
+        "POST"
+      ],
+      "sensitivity": "L2",
+      "capability": "read:engine",
+      "bodyLimit": 4096,
+      "sessionBinding": true,
+      "justification": "dsh-nano-local-sandbox /nano-local-sandbox/wait"
+    },
+    {
+      "plugin": "dsh-nano-terminal",
+      "path": "/dsh-nano-terminal/stream",
+      "methods": [
+        "GET"
+      ],
+      "sensitivity": "L2",
+      "capability": "read:host",
+      "bodyLimit": 0,
+      "sessionBinding": false,
+      "justification": "dsh-nano-terminal /dsh-nano-terminal/stream"
+    },
+    {
+      "plugin": "dsh-nano-terminal",
+      "path": "/dsh-nano-terminal/mcp",
+      "methods": [
+        "POST"
+      ],
+      "sensitivity": "L2",
+      "capability": "read:host",
+      "bodyLimit": 524288,
+      "sessionBinding": false,
+      "justification": "dsh-nano-terminal /dsh-nano-terminal/mcp"
+    },
+    {
+      "plugin": "dsh-nano-terminal",
+      "path": "/dsh-nano-terminal/sessions",
+      "methods": [
+        "GET"
+      ],
+      "sensitivity": "L2",
+      "capability": "read:host",
+      "bodyLimit": 0,
+      "sessionBinding": false,
+      "justification": "dsh-nano-terminal /dsh-nano-terminal/sessions"
+    },
+    {
+      "plugin": "dsh-nano-terminal",
+      "path": "/dsh-nano-terminal/events",
+      "methods": [
+        "GET"
+      ],
+      "sensitivity": "L2",
+      "capability": "read:host",
+      "bodyLimit": 0,
+      "sessionBinding": false,
+      "justification": "dsh-nano-terminal /dsh-nano-terminal/events"
+    },
+    {
+      "plugin": "dsh-nano-terminal",
+      "path": "/dsh-nano-terminal/health",
+      "methods": [
+        "GET"
+      ],
+      "sensitivity": "L2",
+      "capability": "read:host",
+      "bodyLimit": 0,
+      "sessionBinding": false,
+      "justification": "dsh-nano-terminal /dsh-nano-terminal/health"
+    },
+    {
+      "plugin": "dsh-nano-terminal",
+      "path": "/dsh-nano-terminal/session",
+      "methods": [
+        "POST"
+      ],
+      "sensitivity": "L2",
+      "capability": "read:host",
+      "bodyLimit": 0,
+      "sessionBinding": false,
+      "justification": "dsh-nano-terminal /dsh-nano-terminal/session"
     }
   ]
 }

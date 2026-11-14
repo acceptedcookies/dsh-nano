@@ -149,16 +149,16 @@ P0-01 ──▶ P1-01 ──▶ P1-02 ──▶ P1-03
   - **完成判据**：lines/cols/rows/额外字段都拒绝；无 path 键
   - **验证映射**：`DNLS01-T15` · **依赖**：`P4-03`
   - **执行状态**：`complete` · **执行时间**：`2026-11-14T05:26:00Z` · **证据 / 备注**：`node --test test/terminal-contract.test.mjs` exit 0。P7 的 isolate / audit.jsonl 断言尚未跑
-- [ ] `P5-01` — 唯一 ERROR_CATALOG（7 个 kitesurf.* + 2 个 sandbox.*）
+- [x] `P5-01` — 唯一 ERROR_CATALOG（7 个 kitesurf.* + 2 个 sandbox.*）
   - **落点 / 对象**：`src/host/error-catalog.js`
   - **完成判据**：shot.fit 为 400；技能正文由目录派生
   - **验证映射**：`DNLS01-T16` · **依赖**：`P4-04`
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
-- [ ] `P5-02` — 三道既有门禁扫到 [DNLS] 与 [DNT]，exit 0
+  - **执行状态**：`complete` · **执行时间**：`2026-11-14T05:40:00Z` · **证据 / 备注**：`node --test test/error-catalog.test.mjs` exit 0。全仓 `window.__nks` 仍留到硬切
+- [x] `P5-02` — 三道既有门禁扫到 [DNLS] 与 [DNT]，exit 0
   - **落点 / 对象**：`scripts/route-scan.mjs`、`scripts/check-clean-lib.mjs`、`scripts/check-feature-contract.mjs`、`security/*`
   - **完成判据**：去掉 [DNLS] 后路由门禁非 0；多一条路由常量时扫描器非 0
   - **验证映射**：`DNLS01-T17` · **依赖**：`P5-01`
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
+  - **执行状态**：`complete` · **执行时间**：`2026-11-14T05:40:00Z` · **证据 / 备注**：三门禁 exit 0；`test/route-scan-coverage.test.mjs` exit 0
 - [ ] `P6-01` — [DNLS] 不 import [DNK]；本包 spawn('container' 只在 backend-apple.js
   - **落点 / 对象**：本包运行时
   - **完成判据**：T11 在 P6 只扫本包
@@ -239,8 +239,8 @@ P0-01 ──▶ P1-01 ──▶ P1-02 ──▶ P1-03
 | DNLS01-T13 | 路由 fail-closed | `test/routes.test.mjs` | exit 0 | exit 0 | `2026-11-14T05:26:00Z` | pass |
 | DNLS01-T14 | CDP keeper | `test/cdp-keeper.spike.test.mjs` | 两段都断言 | exit 0 | `2026-11-14T05:26:00Z` | pass |
 | DNLS01-T15 | terminal 契约 | `test/terminal-contract.test.mjs` | exit 0 | exit 0；P7 条款未跑 | `2026-11-14T05:26:00Z` | partial |
-| DNLS01-T16 | 错误目录 | `test/error-catalog.test.mjs` | exit 0 | - | - | pending |
-| DNLS01-T17 | 三门禁覆盖 | `test/route-scan-coverage.test.mjs` | 正向与负向 | - | - | pending |
+| DNLS01-T16 | 错误目录 | `test/error-catalog.test.mjs` | exit 0 | exit 0；`window.__nks` 未扫 | `2026-11-14T05:40:00Z` | partial |
+| DNLS01-T17 | 三门禁覆盖 | `test/route-scan-coverage.test.mjs` | 正向与负向 | 三门禁 exit 0，负向断言成立 | `2026-11-14T05:40:00Z` | pass |
 | DNLS01-T18 | fork e2e | `test/e2e-fork.test.mjs` | 23 名称且 URL 采集 | - | - | pending |
 | DNLS01-T19 | 无 agent | `test/ui-without-agent.spike.test.mjs` | 非 200 | - | - | pending |
 | DNLS01-T20 | 零残留 | `test/residue.test.mjs` | P6 必须失败；P7 后 PASS | - | - | pending |
@@ -256,8 +256,8 @@ P0-01 ──▶ P1-01 ──▶ P1-02 ──▶ P1-03
 
 ## 5. 当前状态与交接
 
-- **当前节点 / 已完成**：`P5-01` / `P0-01` 至 `P4-04`
-- **下一动作**：Phase 5 错误目录与三门禁
+- **当前节点 / 已完成**：`P6-01` / `P0-01` 至 `P5-02`
+- **下一动作**：Phase 6 独立跑通、对等套件与 pack 存档
 - **当前阻塞**：无
 - **待 owner / 外部决定**：无。真实容器 e2e 若本机无 CLI，T18 保持未观察并在 closure 写明
 - **最终交接目标**：合并回 `main` 后按 AGENTS.md 删除本 worktree（收口时）

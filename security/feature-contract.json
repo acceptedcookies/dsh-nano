@@ -386,7 +386,9 @@
       ],
       "sensitivity": "L2",
       "capability": "write:engine",
-      "bodyLimit": 8192,
+      "bodyLimit": {
+        "POST": 8192
+      },
       "sessionBinding": false,
       "justification": "dsh-nano-kitesurf/index.js EDIT_ROUTE — Runtime.evaluate mutates a named element's text in the shared engine page (double-click live edit). Page write on the loopback engine; bounded selector+text."
     },
@@ -436,6 +438,8 @@
         "POST"
       ],
       "bodyLimit": {
+        "GET": 0,
+        "HEAD": 0,
         "POST": 4096
       },
       "responseShape": "200 {ok:true,entries,total,counts,dropped} | 400 {ok:false,errorId:kitesurf.console.query,error}"
@@ -449,6 +453,8 @@
         "POST"
       ],
       "bodyLimit": {
+        "GET": 0,
+        "HEAD": 0,
         "POST": 4096
       },
       "responseShape": "200 {ok:true,entries,total,dropped} | 400 {ok:false,errorId:kitesurf.diag.query,error}"
@@ -460,7 +466,10 @@
         "GET",
         "HEAD"
       ],
-      "bodyLimit": {},
+      "bodyLimit": {
+        "GET": 0,
+        "HEAD": 0
+      },
       "responseShape": "200 {ok:true,plugin,engine,settings,observability,console,operations,perf,hints} | 400 {ok:false,errorId:kitesurf.diag.query,error}"
     },
     {
@@ -470,7 +479,10 @@
         "GET",
         "HEAD"
       ],
-      "bodyLimit": {},
+      "bodyLimit": {
+        "GET": 0,
+        "HEAD": 0
+      },
       "responseShape": "200 {ok:true,count,targets,attachedPage} | 502 {ok:false,errorId,error}"
     },
     {
@@ -491,7 +503,10 @@
         "GET",
         "HEAD"
       ],
-      "bodyLimit": {},
+      "bodyLimit": {
+        "GET": 0,
+        "HEAD": 0
+      },
       "responseShape": "200 {ok:true,configured,effective,container{state,published},ports{engine,mcp},lastRepair,healthy}"
     },
     {
@@ -504,6 +519,473 @@
         "POST": 4096
       },
       "responseShape": "200 {ok:true,steps,phase,engineAlive,ports} | 409 {ok:false,errorId:kitesurf.kite.state,error} | 502 {ok:false,errorId,error}"
+    },
+    {
+      "plugin": "dsh-nano-kitesurf",
+      "path": "/nano-kitesurf/context",
+      "methods": [
+        "GET",
+        "HEAD",
+        "POST"
+      ],
+      "bodyLimit": {
+        "GET": 0,
+        "HEAD": 0,
+        "POST": 16384
+      },
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-kitesurf",
+      "path": "/nano-kitesurf/browse-history",
+      "methods": [
+        "GET",
+        "HEAD",
+        "POST",
+        "DELETE"
+      ],
+      "bodyLimit": {
+        "GET": 0,
+        "HEAD": 0,
+        "POST": 4096,
+        "DELETE": 4096
+      },
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-kitesurf",
+      "path": "/nano-kitesurf/elements",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "bodyLimit": {
+        "GET": 0,
+        "HEAD": 0
+      },
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-kitesurf",
+      "path": "/nano-kitesurf/selftest",
+      "methods": [
+        "GET",
+        "HEAD",
+        "POST"
+      ],
+      "bodyLimit": {
+        "GET": 0,
+        "HEAD": 0,
+        "POST": 0
+      },
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-kitesurf",
+      "path": "/nano-kitesurf/dom",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "bodyLimit": {
+        "GET": 0,
+        "HEAD": 0
+      },
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-kitesurf",
+      "path": "/nano-kitesurf/network",
+      "methods": [
+        "GET",
+        "HEAD",
+        "POST"
+      ],
+      "bodyLimit": {
+        "GET": 0,
+        "HEAD": 0,
+        "POST": 4096
+      },
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-kitesurf",
+      "path": "/nano-kitesurf/wait",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 4096
+      },
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-kitesurf",
+      "path": "/nano-kitesurf/perf-report",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 200000
+      },
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/status",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "bodyLimit": {
+        "GET": 0,
+        "HEAD": 0
+      },
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/open",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 4096
+      },
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/shot",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 4096
+      },
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/history",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 4096
+      },
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/pick",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 4096
+      },
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/edit",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 8192
+      },
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/settings",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 4096
+      },
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/perf-review/host",
+      "methods": [
+        "GET",
+        "HEAD",
+        "POST"
+      ],
+      "bodyLimit": {
+        "GET": 0,
+        "HEAD": 0,
+        "POST": 0
+      },
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/perf-report",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 200000
+      },
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/kite",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 4096
+      },
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/console",
+      "methods": [
+        "GET",
+        "HEAD",
+        "POST"
+      ],
+      "bodyLimit": {
+        "GET": 0,
+        "HEAD": 0,
+        "POST": 4096
+      },
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/operations",
+      "methods": [
+        "GET",
+        "HEAD",
+        "POST"
+      ],
+      "bodyLimit": {
+        "GET": 0,
+        "HEAD": 0,
+        "POST": 4096
+      },
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/diagnostics",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "bodyLimit": {
+        "GET": 0,
+        "HEAD": 0
+      },
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/ports",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "bodyLimit": {
+        "GET": 0,
+        "HEAD": 0
+      },
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/recover",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 4096
+      },
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/dom",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "bodyLimit": {
+        "GET": 0,
+        "HEAD": 0
+      },
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/selftest",
+      "methods": [
+        "GET",
+        "HEAD",
+        "POST"
+      ],
+      "bodyLimit": {
+        "GET": 0,
+        "HEAD": 0,
+        "POST": 0
+      },
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/elements",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "bodyLimit": {
+        "GET": 0,
+        "HEAD": 0
+      },
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/browse-history",
+      "methods": [
+        "GET",
+        "HEAD",
+        "POST",
+        "DELETE"
+      ],
+      "bodyLimit": {
+        "GET": 0,
+        "HEAD": 0,
+        "POST": 4096,
+        "DELETE": 4096
+      },
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/network",
+      "methods": [
+        "GET",
+        "HEAD",
+        "POST"
+      ],
+      "bodyLimit": {
+        "GET": 0,
+        "HEAD": 0,
+        "POST": 4096
+      },
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/targets",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "bodyLimit": {
+        "GET": 0,
+        "HEAD": 0
+      },
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/evaluate",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 4096
+      },
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/wait",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 4096
+      },
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-terminal",
+      "path": "/dsh-nano-terminal/stream",
+      "methods": [
+        "GET"
+      ],
+      "bodyLimit": {
+        "GET": 0
+      },
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-terminal",
+      "path": "/dsh-nano-terminal/mcp",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 524288
+      },
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-terminal",
+      "path": "/dsh-nano-terminal/sessions",
+      "methods": [
+        "GET"
+      ],
+      "bodyLimit": {
+        "GET": 0
+      },
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-terminal",
+      "path": "/dsh-nano-terminal/events",
+      "methods": [
+        "GET"
+      ],
+      "bodyLimit": {
+        "GET": 0
+      },
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-terminal",
+      "path": "/dsh-nano-terminal/health",
+      "methods": [
+        "GET"
+      ],
+      "bodyLimit": {
+        "GET": 0
+      },
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-terminal",
+      "path": "/dsh-nano-terminal/session",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 0
+      },
+      "responseShape": "JSON"
     }
   ],
   "ui": {
@@ -531,6 +1013,12 @@
       "workspace": "sidebar.right kind kitesurf: address bar + history menu, refresh, annotate/arrow on the projected page, note form, settings dialog (UA + viewport radiogroup + engine origin/MCP), pins strip (undo last + send all, cap 8), scroll up/down + wheel scroll",
       "errors": "{ok:false,errorId,error} with mapped status (400 input / 409 phase / 413 body / 502-504 engine); ids kitesurf.url.*, kitesurf.body.json|toolarge, kitesurf.pick.point|failed, kitesurf.shot.scroll|empty, kitesurf.settings.userAgent|viewport, kitesurf.navigate.timeout|failed|egress, kitesurf.engine.connect|closed|timeout|mismatch|failed, kitesurf.kite.state|remote|checkout|origin|mcpPort|action|node|init|start|resume|container, kitesurf.perf.method. Status includes lastError, userAgent, viewport, kite snapshot.",
       "skill": "/kitesurf-cdp + /nano-kite session skills (SKILL.md generated at build from lib/skill.js); agent-browser --cdp against the live kite.cdp from /status, never a local Chrome"
+    },
+    "dsh-nano-local-sandbox": {
+      "surface": "host plugin, no second design pane"
+    },
+    "dsh-nano-terminal": {
+      "surface": "wasm terminal tab via /dnt"
     }
   },
   "dataLocations": {
@@ -552,6 +1040,12 @@
       "lock": "$DSH_HOME/nano-kitesurf.lock.json written by POST /kite init; Node>=22 gate before write",
       "history": "client in-memory recent addresses (max 8), not persisted",
       "config": "host Config httpBase (default http://127.0.0.1:8787), allowRemote (default false, gates kitesurf.kite.remote), checkout (Kitesurf source dir for container start; else KITESURF_CHECKOUT env)"
+    },
+    "dsh-nano-local-sandbox": {
+      "state": "per-instance stateVolume history.json"
+    },
+    "dsh-nano-terminal": {
+      "state": "${DSH_HOME}/dsh-nano-terminal.state/"
     }
   }
 }

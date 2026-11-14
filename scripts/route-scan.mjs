@@ -204,28 +204,121 @@ function scanKitesurf() {
       source: { file, line: lineOf(text, `const ${name || 'ROUTE'}`) },
     })
   }
-  // The plugin registers exactly the 8 constants below; anything else means
-  // the parser silently missed (or over-matched) a spec — fail the scan
-  // loudly instead of letting the ledger drift.
-  const expected = ['STATUS_ROUTE', 'LAST_ROUTE', 'OPEN_ROUTE', 'SHOT_ROUTE', 'PICK_ROUTE', 'SETTINGS_ROUTE', 'PERF_ROUTE', 'KITE_ROUTE']
-  if (rows.length !== expected.length || expected.some((name) => !consts[name] || !rows.some((row) => row.path === consts[name]))) {
-    throw new Error(`route-scan: expected 8 kitesurf route specs, parsed ${rows.length} — parser/spec drift`)
+  const table = tableRows(src('dsh-nano-kitesurf/lib/route-table.js'))
+  assertSameRoutes(rows, table, 'dsh-nano-kitesurf')
+  for (const row of rows) {
+    const expected = table.find((item) => item.path === row.path)
+    row.bodyLimit = Object.fromEntries(row.methods.map((method) => [
+      method,
+      method === 'GET' || method === 'HEAD' ? 0 : expected.bodyLimit,
+    ]))
   }
   return rows
 }
+
+function tableRows(text) {
+  const rows = []
+  const re = /"path": "([^"]+)"[\s\S]*?"methods": \[([^\]]*)\][\s\S]*?"bodyLimit": (\d+)/g
+  for (const match of text.matchAll(re)) {
+    const methods = [...match[2].matchAll(/"([A-Z]+)"/g)].map((item) => item[1])
+    rows.push({ path: match[1], methods, bodyLimit: Number(match[3]) })
+  }
+  return rows
+}
+
+export function assertSameRoutes(parsed, table, plugin) {
+  const parsedPaths = new Set(parsed.map((row) => row.path))
+  const tablePaths = new Set(table.map((row) => row.path))
+  if (parsedPaths.size !== tablePaths.size || [...parsedPaths].some((path) => !tablePaths.has(path))) {
+    throw new Error(`route-scan: ${plugin} parsed ${parsedPaths.size} routes, table has ${tablePaths.size}`)
+  }
+  for (const row of parsed) {
+    const expected = table.find((item) => item.path === row.path)
+    const got = [...row.methods].sort().join(',')
+    const want = [...expected.methods].sort().join(',')
+    if (got !== want) throw new Error(`route-scan: ${plugin} ${row.path} methods ${got} != table ${want}`)
+  }
+}
+
+export function scanLocalSandboxSource(text, tableText, file = 'dsh-nano-local-sandbox/src/host/routes.js') {
+  const constants = [...text.matchAll(/export const ([A-Z0-9_]+) = '([^']+)'/g)].map((match) => ({ name: match[1], path: match[2] }))
+  const table = tableRows(tableText)
+  const parsed = constants.map((item) => {
+    const row = table.find((candidate) => candidate.path === item.path)
+    return {
+      plugin: 'dsh-nano-local-sandbox',
+      path: item.path,
+      methods: row?.methods ?? [],
+      bodyLimit: Object.fromEntries((row?.methods ?? []).map((method) => [method, method === 'GET' || method === 'HEAD' ? 0 : row.bodyLimit])),
+      source: { file, line: lineOf(text, `export const ${item.name}`) },
+    }
+  })
+  assertSameRoutes(parsed, table, 'dsh-nano-local-sandbox')
+  return parsed
+}
+
+function scanLocalSandbox() {
+  return scanLocalSandboxSource(
+    src('dsh-nano-local-sandbox/src/host/routes.js'),
+    src('dsh-nano-local-sandbox/lib/route-table.js'),
+  )
+}
+
+function scanTerminal() {
+  const file = 'dsh-nano-terminal/index.js'
+  const text = src(file)
+  const base = text.match(/const ROUTE = '([^']+)'/)?.[1]
+  if (!base) throw new Error('route-scan: dsh-nano-terminal is missing ROUTE')
+  const suffixes = [...text.matchAll(/path: `\$\{ROUTE\}([^`]*)`/g)].map((match) => match[1])
+  const unique = [...new Set(suffixes)]
+  const known = {
+    '/stream': { methods: ['GET'], cap: 0 },
+    '/mcp': { methods: ['POST'], cap: 524288 },
+    '/sessions': { methods: ['GET'], cap: 0 },
+    '/events': { methods: ['GET'], cap: 0 },
+    '/health': { methods: ['GET'], cap: 0 },
+    '/session': { methods: ['POST'], cap: 0 },
+  }
+  if (unique.length !== Object.keys(known).length || unique.some((suffix) => !known[suffix])) {
+    throw new Error(`route-scan: dsh-nano-terminal paths ${unique.join(',')} do not match the known set`)
+  }
+  return unique.map((suffix) => ({
+    plugin: 'dsh-nano-terminal',
+    path: `${base}${suffix}`,
+    methods: known[suffix].methods,
+    bodyLimit: Object.fromEntries(known[suffix].methods.map((method) => [method, method === 'POST' ? known[suffix].cap : 0])),
+    source: { file, line: lineOf(text, 'const ROUTE =') },
+  }))
+}
+
+export const SCAN_PLUGINS = [
+  'dsh-nano-notepad',
+  'dsh-nano-explorer-extra',
+  'dsh-nano-model-selector',
+  'dsh-nano-kitesurf',
+  'dsh-nano-local-sandbox',
+  'dsh-nano-terminal',
+]
 
 /**
  * Enumerate every registered route across the ACTIVE plugins.
  * dsh-nano-shared-workspace is deprecated and intentionally excluded.
  * @returns rows: { plugin, path, methods[], bodyLimit{METHOD:bytes}, source{file,line} }
  */
-export function scanRoutes() {
-  return [
-    ...scanNanoNotepad(),
-    ...scanExplorerExtra(),
-    ...scanModelSelector(),
-    ...scanKitesurf(),
-  ]
+export function scanRoutes(plugins = SCAN_PLUGINS) {
+  const scanners = {
+    'dsh-nano-notepad': scanNanoNotepad,
+    'dsh-nano-explorer-extra': scanExplorerExtra,
+    'dsh-nano-model-selector': scanModelSelector,
+    'dsh-nano-kitesurf': scanKitesurf,
+    'dsh-nano-local-sandbox': scanLocalSandbox,
+    'dsh-nano-terminal': scanTerminal,
+  }
+  return plugins.flatMap((plugin) => {
+    const scan = scanners[plugin]
+    if (!scan) throw new Error(`route-scan: unknown plugin ${plugin}`)
+    return scan()
+  })
 }
 
 /** Max body limit across methods for one row (the route-level cap). */

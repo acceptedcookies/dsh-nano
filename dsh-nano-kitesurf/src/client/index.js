@@ -55,7 +55,7 @@ const STYLE = `
 .nks-address::placeholder{color:var(--dsw-alias-label-tertiary)}
 .nks-go{visibility:hidden;opacity:0;position:absolute;top:0;right:0}
 .nks-address-box:focus-within .nks-go,.nks-address-box[data-dirty="true"] .nks-go{visibility:visible;opacity:1}
-.nks-frame{position:relative;z-index:0;flex:auto;min-height:0;overflow:hidden;contain:layout paint;background:var(--dsw-alias-bg-layer-1)}
+.nks-frame{position:relative;z-index:0;order:1;flex:auto;min-height:0;overflow:hidden;contain:layout paint;background:var(--dsw-alias-bg-layer-1)}
 .nks-frame iframe.nks-dom{width:100%;height:100%;border:0;display:block;background:#fff}
 .nks-frame img{width:100%;height:100%;object-fit:contain;object-position:center;display:block}
 .nks-empty{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:10px;padding:24px;text-align:center;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxs-12)}
@@ -86,12 +86,12 @@ const STYLE = `
 .nks-busy::before{content:"";display:block;width:35%;height:100%;background:var(--dsw-alias-link,#2f6fed);animation:nks-beat 1s ease-in-out infinite}
 @keyframes nks-beat{from{transform:translateX(-120%)}to{transform:translateX(320%)}}
 .nks-settings-body{display:flex;flex-direction:column;gap:8px}
-.nks-status{position:relative;z-index:3;flex:none;display:flex;align-items:center;gap:8px;height:26px;padding:0 8px;border-top:.5px solid var(--dsw-alias-border-l3);font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-tertiary)}
+.nks-status{position:relative;z-index:3;order:9;flex:none;display:flex;align-items:center;gap:8px;height:26px;padding:0 8px;border-top:.5px solid var(--dsw-alias-border-l3);font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-tertiary)}
 .nks-status button{height:20px;padding:0 8px;border:0;border-radius:var(--dsw-radius-sm);background:transparent;color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxxs-11);cursor:pointer}
 .nks-status button:hover{background:var(--dsw-alias-interactive-bg-hover)}
 .nks-status button[aria-pressed="true"],.nks-status button[data-nks-native-toggle][aria-pressed="true"]{background:color-mix(in srgb,var(--dsw-alias-link,#7aaaff) 22%,transparent);color:var(--dsw-alias-label-primary)}
 .nks-status .nks-count[data-bad="true"]{color:var(--dsw-alias-fill-error,#d5455c)}
-.nks-dt{position:absolute;left:0;right:0;bottom:26px;height:280px;z-index:6;display:flex;flex-direction:column;background:var(--dsw-alias-bg-base);border-top:.5px solid var(--dsw-alias-border-l2);box-shadow:0 -8px 24px rgba(0,0,0,.28);min-height:0;font:11px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.nks-dt{flex:none;height:240px;z-index:6;order:8;display:flex;flex-direction:column;background:var(--dsw-alias-bg-base);border-top:.5px solid var(--dsw-alias-border-l2);box-shadow:0 -8px 24px rgba(0,0,0,.28);min-height:0;font:11px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 .nks-dt-head{flex:none;display:flex;align-items:center;gap:2px;height:28px;padding:0 6px;border-bottom:.5px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1)}
 .nks-dt-tab{height:28px;padding:0 10px;border:0;border-bottom:2px solid transparent;background:transparent;color:var(--dsw-alias-label-tertiary);font:11px/1 ui-monospace,Menlo,monospace;cursor:pointer}
 .nks-dt-tab:hover{color:var(--dsw-alias-label-secondary)}
@@ -106,6 +106,7 @@ const STYLE = `
 .nks-dt-lv[data-lv="warn"]{color:var(--dsw-alias-fill-warning,#d29922)}
 .nks-dt-lv[data-lv="network"]{color:var(--dsw-alias-link,#7aaaff)}
 .nks-dt-msg{flex:auto;min-width:0;white-space:pre-wrap;word-break:break-word;color:var(--dsw-alias-label-secondary)}
+.nks-dt-grow{flex:1 1 auto;min-width:0;max-width:none}
 .nks-dt-url{flex:none;max-width:55%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary);direction:ltr}
 .nks-dt-st{flex:none;width:34px;text-align:right}
 .nks-dt-st[data-bad="true"]{color:var(--dsw-alias-fill-error,#d5455c)}
@@ -1270,7 +1271,7 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
       tab === 'network' ? h('div', { className: 'nks-dt-cols' },
         h('span', { className: 'nks-dt-lv' }, 'Method'),
         h('span', { className: 'nks-dt-st' }, 'Status'),
-        h('span', { className: 'nks-dt-url', style: { flex: 'auto', maxWidth: 'none', textAlign: 'left' } }, 'URL'),
+        h('span', { className: 'nks-dt-url nks-dt-grow', style: { maxWidth: 'none', textAlign: 'left' } }, 'URL'),
         h('span', { className: 'nks-dt-size' }, 'Size'),
         h('span', { className: 'nks-dt-dur' }, 'Time')) : null,
       h('div', { className: 'nks-dt-body', 'data-nks-dt-body': '1' },
@@ -1289,7 +1290,7 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
           : h('div', { className: 'nks-dt-row', key: `n${row.id || index}` },
             h('span', { className: 'nks-dt-lv' }, row.method),
             h('span', { className: 'nks-dt-st', 'data-bad': row.failed || (row.status && row.status >= 400) ? 'true' : 'false' }, row.failed ? 'ERR' : String(row.status || '…')),
-            h('span', { className: 'nks-dt-url' }, row.url),
+            h('span', { className: 'nks-dt-url nks-dt-grow', 'data-bad': row.failed || (row.status || 0) >= 400 ? 'true' : 'false' }, row.url),
             h('span', { className: 'nks-dt-size' }, row.size == null ? '' : row.size > 1024 ? `${(row.size / 1024).toFixed(1)}kb` : `${row.size}b`),
             h('span', { className: 'nks-dt-dur' }, row.durationMs == null ? '' : `${row.durationMs}ms`)))))
   }

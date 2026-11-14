@@ -239,8 +239,10 @@ async function main() {
 
   // 12. perf-review host spans exist
   const perf = await page.evaluate(() => fetch('/nano-kitesurf/perf-review/host').then((r) => r.json()))
-  const spanCount = Array.isArray(perf.spans) ? perf.spans.length : (perf.total || 0)
-  record('perf-spans', perf.ok === true && spanCount > 0, `${spanCount} spans`)
+  const ksSpans = perf.client?.report?.plugins?.['nano-kitesurf']?.spans || {}
+  const spanNames = Object.keys(ksSpans)
+  const spanCount = spanNames.reduce((sum, name) => sum + (ksSpans[name]?.n || 0), 0)
+  record('perf-spans', spanCount > 0, `${spanCount} spans (${spanNames.join(',')})`)
 
   const failed = results.filter((r) => !r.ok)
   console.log(`\n${results.length - failed.length}/${results.length} checks passed`)

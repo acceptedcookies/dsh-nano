@@ -33,14 +33,22 @@ const MAX_PINS = 8
 
 const perfReview = ensurePerfReview()
 perfReview.configure({ hostSnapshotUrl: '/nano-kitesurf/perf-review/host?mode=snapshot' })
-const perf = perfReview.join(OWN_ID, {
-  // Baked at build time by scripts/build-client.mjs `define`; the fallback
-  // keeps an unbundled src/ loadable in tests.
-  version: typeof __NKS_VERSION__ === 'string' ? __NKS_VERSION__ : '0.0.0',
-  libVersion: LIB_VERSION,
-  react: React,
-  root: () => document.querySelector('[data-nks-workspace]'),
-})
+// join() freezes the collector's enabled state at call time. The pane mounts
+// before the perf-review enable flag is visible, so join lazily on first use.
+const perf = {
+  span(name, fn) {
+    try {
+      const collector = window.__perfReview?.join?.(OWN_ID, {
+        version: typeof __NKS_VERSION__ === 'string' ? __NKS_VERSION__ : '0.0.0',
+        libVersion: LIB_VERSION,
+        react: React,
+        root: () => document.querySelector('[data-nks-workspace]'),
+      })
+      if (collector?.span) return collector.span(name, fn)
+    } catch { /* collector unavailable */ }
+    return fn()
+  },
+}
 
 // Report collected spans to the host so /perf-review/host can show them.
 try {
@@ -563,6 +571,8 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
   }
 
   async function runInner(work) {
+    // Diagnostic counter: proves whether an action reached the pane at all.
+    window.__nksRuns = (window.__nksRuns || 0) + 1
     // One entry guard for EVERY action (address Enter, refresh, start engine,
     // history, settings apply): a second submit while the first /open is in
     // flight used to fire a duplicate navigate and clear busy early.

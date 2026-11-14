@@ -1887,14 +1887,21 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
   var MAX_PINS = 8;
   var perfReview = ensurePerfReview2();
   perfReview.configure({ hostSnapshotUrl: "/nano-kitesurf/perf-review/host?mode=snapshot" });
-  var perf = perfReview.join(OWN_ID, {
-    // Baked at build time by scripts/build-client.mjs `define`; the fallback
-    // keeps an unbundled src/ loadable in tests.
-    version: true ? "0.1.0" : "0.0.0",
-    libVersion: LIB_VERSION2,
-    react: React5,
-    root: () => document.querySelector("[data-nks-workspace]")
-  });
+  var perf = {
+    span(name, fn) {
+      try {
+        const collector = window.__perfReview?.join?.(OWN_ID, {
+          version: true ? "0.1.0" : "0.0.0",
+          libVersion: LIB_VERSION2,
+          react: React5,
+          root: () => document.querySelector("[data-nks-workspace]")
+        });
+        if (collector?.span) return collector.span(name, fn);
+      } catch {
+      }
+      return fn();
+    }
+  };
   try {
     const reportPerf = () => {
       try {
@@ -2372,6 +2379,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       return runInner(work);
     }
     async function runInner(work) {
+      window.__nksRuns = (window.__nksRuns || 0) + 1;
       if (busyRef.current) return;
       busyRef.current = true;
       setBusy(true);

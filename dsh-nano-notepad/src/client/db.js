@@ -219,6 +219,16 @@ export function sanitizeNodes(rows) {
     node.parentId = typeof node.parentId === 'string' ? node.parentId : null
     node.workspaceId = typeof node.workspaceId === 'string' ? node.workspaceId : null
     if (typeof node.draft !== 'string') node.draft = node.kind === 'file' ? '' : undefined
+    /* five-kind corpus fields (fx pipeline): cat ∈ prompt|note|draft|
+       knowledge|memory on file nodes; machine artifacts carry lineage. */
+    if (typeof node.cat === 'string' && ['prompt', 'note', 'draft', 'knowledge', 'memory'].includes(node.cat)) {
+      node.rejectCount = Number.isInteger(node.rejectCount) ? node.rejectCount : 0
+      if (typeof node.supersedes !== 'string') node.supersedes = null
+      if (node.cat !== 'draft') delete node.draftStatus
+      else if (typeof node.draftStatus !== 'string') node.draftStatus = 'pending'
+    } else {
+      node.cat = null
+    }
     seen.add(node.id)
     clean.push(node)
   }

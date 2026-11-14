@@ -1,14 +1,18 @@
 /** Host half. Notes stay in the browser database, so this side only supplies defaults. */
 
-import { readFileSync } from 'node:fs'
+import { readFileSync, statSync, createReadStream } from 'node:fs'
+import { join, basename } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { ensurePerfReviewHost, LIB_VERSION } from './lib/perf-review-host.js'
 import { createSyncEngine } from './lib/s3-sync-host.js'
 import { registerRoutes } from './lib/route-guard.js'
 import { ROUTE_TABLE, PLUGIN } from './lib/route-table.js'
 import { sanitizeMpHtml } from './lib/mp-sanitize.js'
+import { modelsHandler, chatHandler } from './lib/fx-bridge.js'
+import { pipelineS3Handler, pipelineClaimHandler, pipelineRpcHandler } from './lib/pipeline.js'
 
 export const name = 'nano-notepad'
-export const inject = ['webServer', 'connection', 'subprocess']
+export const inject = ['webServer', 'connection', 'subprocess', 'llm', 'attachments', 'credentials']
 
 // perf-review: register a host contributor. index.js is unbundled and the dev
 // instance copies lib/ but not node_modules, so the helper is a bundled file
@@ -67,6 +71,23 @@ const S3_STATUS_ROUTE = '/nano-notepad/s3/status'
 const S3_TEST_ROUTE = '/nano-notepad/s3/test'
 const S3_OBJECT_ROUTE = '/nano-notepad/s3/object'
 const S3_CONFIG_ROUTE = '/nano-notepad/s3/config'
+/* fx 管线（§9/§10 台账）：wasm 引擎 + OpenAI 桥 + s3/claim 签名面 */
+const FX_WASM_ROUTE = '/nano-notepad/fx-core.wasm'
+const FX_SDK_PREFIX = '/nano-notepad/fx/sdk'
+const FX_MODELS_ROUTE = '/nano-notepad/fx/models'
+const FX_CHAT_ROUTE = '/nano-notepad/fx/chat/completions'
+const PIPELINE_S3_ROUTE = '/nano-notepad/pipeline/s3'
+const PIPELINE_CLAIM_ROUTE = '/nano-notepad/pipeline/claim'
+/* A3 跨插件读面：内部 MCP/RPC（只读白名单，签名/凭证留宿主） */
+const PIPELINE_RPC_ROUTE = '/nano-notepad/rpc'
+const FX_ASSETS_DIR = fileURLToPath(new URL('./lib/fx', import.meta.url))
+const FX_CORE_WASM = fileURLToPath(new URL('./lib/fx-core.wasm', import.meta.url))
+const SDK_MIME = {
+  '.js': 'text/javascript; charset=utf-8',
+  '.mjs': 'text/javascript; charset=utf-8',
+  '.wasm': 'application/wasm',
+  '.map': 'application/json; charset=utf-8',
+}
 const MP_MAX_HTML_BYTES = 8 * 1024 * 1024
 const MP_MAX_REDIRECTS = 5
 const MP_TIMEOUT_MS = 20000
@@ -309,9 +330,82 @@ export function apply(ctx) {
     /* Multi-endpoint config + the guarded switch handshake. Secrets are
        write-only: `list` returns hasSecret, never the key material. */
     { path: S3_CONFIG_ROUTE, methods: ['POST'], handler: s3Work(body => s3.config(body)) },
+
+    /* fx 管线面：fx-core.wasm + ctx.llm 桥 + s3/claim（SDK 前缀路由旁路注册，见下） */
+    { path: FX_WASM_ROUTE, methods: ['GET', 'HEAD'], handler: wasmFileHandler(FX_CORE_WASM) },
+    { path: FX_MODELS_ROUTE, methods: ['GET'], handler: modelsHandler(ctx) },
+    { path: FX_CHAT_ROUTE, methods: ['POST'], handler: chatHandler(ctx) },
+    { path: PIPELINE_S3_ROUTE, methods: ['POST'], handler: pipelineS3Handler(ctx) },
+    { path: PIPELINE_CLAIM_ROUTE, methods: ['POST'], handler: pipelineClaimHandler(ctx) },
+    { path: PIPELINE_RPC_ROUTE, methods: ['POST'], handler: pipelineRpcHandler(ctx) },
   ]
 
   registerRoutes(ctx, SPECS, { table: ROUTE_TABLE, plugin: PLUGIN })
+
+  /* SDK 前缀路由：route-guard 固定 kind:'exact' 不认 prefix，旁路注册，
+     手动补同一道 requestRejection 闸门（Host/Origin 围栏 + 已鉴权 Peer）。 */
+  const conn = ctx.get('connection')
+  const sdkServe = sdkHandler(FX_ASSETS_DIR)
+  ctx.effect?.(() => ctx.webServer.register({
+    kind: 'prefix',
+    path: FX_SDK_PREFIX,
+    handler: async (req, res) => {
+      const rejection = conn?.requestRejection?.(req)
+      if (rejection !== undefined) { res.statusCode = rejection; res.end(); return }
+      await sdkServe(req, res)
+    },
+  }))
+}
+
+/* ---------- fx 资产分发（wasm + libfx SDK，同源静态） ---------- */
+
+/** GET /nano-notepad/fx-core.wasm — static wasm delivery. */
+function wasmFileHandler(wasmPath) {
+  return async (req, res) => {
+    try {
+      const stat = statSync(wasmPath)
+      if (req.method === 'HEAD') {
+        res.statusCode = 200
+        res.setHeader('content-length', String(stat.size))
+        res.setHeader('content-type', 'application/wasm')
+        res.end()
+        return
+      }
+      res.statusCode = 200
+      res.setHeader('content-type', 'application/wasm')
+      res.setHeader('content-length', String(stat.size))
+      res.setHeader('cache-control', 'public, max-age=60')
+      createReadStream(wasmPath).pipe(res)
+    } catch (error) {
+      sendJson(res, 404, { ok: false, reason: 'wasm', message: messageOf(error) })
+    }
+  }
+}
+
+/**
+ * GET /nano-notepad/fx/sdk/<file> — libfx ESM + sqlite/pdf 资产分发。
+ * basename-only（无路径穿越）；仅 `.js/.mjs/.wasm/.map`。
+ */
+function sdkHandler(dir) {
+  return async (req, res) => {
+    try {
+      const url = new URL(req.url, 'http://x')
+      const name = basename(decodeURIComponent(url.pathname))
+      if (!/^[A-Za-z0-9._-]+$/.test(name)) { sendJson(res, 400, { ok: false, reason: 'name' }); return }
+      const file = join(dir, name)
+      const ext = name.includes('.') ? name.slice(name.lastIndexOf('.')) : ''
+      const mime = SDK_MIME[ext]
+      if (!mime) { sendJson(res, 404, { ok: false, reason: 'type' }); return }
+      const stat = statSync(file)
+      res.statusCode = 200
+      res.setHeader('content-type', mime)
+      res.setHeader('content-length', String(stat.size))
+      res.setHeader('cache-control', 'public, max-age=60')
+      createReadStream(file).pipe(res)
+    } catch (error) {
+      sendJson(res, 404, { ok: false, reason: 'sdk', message: messageOf(error) })
+    }
+  }
 }
 
 /* ---------- WeChat MP article fetch ---------- */

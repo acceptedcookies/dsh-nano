@@ -1,0 +1,43 @@
+{
+  "name": "dsh-nano-local-sandbox",
+  "version": "0.1.0",
+  "description": "Local sandbox host for session-scoped containers. macOS Apple container is the only backend that runs; consumers do not build or start containers.",
+  "type": "module",
+  "icon": "./icon.svg",
+  "main": "./index.js",
+  "scripts": {
+    "test": "node --test test/*.mjs"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./icon": "./icon.svg",
+    "./locale/*.json": "./locale/*.json",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "AGENTS.md",
+    "cordis.patch.yml",
+    "icon.svg",
+    "locale",
+    "src/host",
+    "profiles/kitesurf/profile.yaml",
+    "profiles/kitesurf/Dockerfile",
+    "profiles/kitesurf/entrypoint.sh",
+    "profiles/kitesurf/mcp-bridge.mjs",
+    "profiles/terminal",
+    "lib/route-guard.js",
+    "lib/route-table.js"
+  ],
+  "engines": {
+    "dsh": ">=0.2.2-rc.1 <0.3.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "devDependencies": {
+    "dsh-host-route-guard": "file:../packages/dsh-host-route-guard"
+  }
+}

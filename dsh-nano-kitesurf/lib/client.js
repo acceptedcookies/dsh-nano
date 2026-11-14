@@ -1960,8 +1960,8 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
 .nks-dt-lv[data-lv="warn"]{color:var(--dsw-alias-fill-warning,#d29922)}
 .nks-dt-lv[data-lv="network"]{color:var(--dsw-alias-link,#7aaaff)}
 .nks-dt-msg{flex:auto;min-width:0;white-space:pre-wrap;word-break:break-word;color:var(--dsw-alias-label-secondary)}
-.nks-dt-grow{flex:1 1 auto;min-width:0;max-width:none}
-.nks-dt-url{flex:none;max-width:55%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary);direction:ltr}
+
+.nks-dt-url{flex:1 1 auto;min-width:0;max-width:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary);direction:ltr}
 .nks-dt-st{flex:none;width:34px;text-align:right}
 .nks-dt-st[data-bad="true"]{color:var(--dsw-alias-fill-error,#d5455c)}
 .nks-dt-dur{flex:none;width:56px;text-align:right;color:var(--dsw-alias-label-tertiary)}
@@ -3235,6 +3235,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
             { className: "nks-dt-row", key: `n${row.id || index}` },
             h("span", { className: "nks-dt-lv" }, row.method),
             h("span", { className: "nks-dt-st", "data-bad": row.failed || row.status && row.status >= 400 ? "true" : "false" }, row.failed ? "ERR" : String(row.status || "\u2026")),
+            h("span", { className: "nks-dt-type" }, String(row.mimeType || row.type || "").split(";")[0].replace("application/", "").replace("text/", "").slice(0, 12)),
             h("span", { className: "nks-dt-url nks-dt-grow", "data-bad": row.failed || (row.status || 0) >= 400 ? "true" : "false" }, row.url),
             h("span", { className: "nks-dt-size" }, row.size == null ? "" : row.size > 1024 ? `${(row.size / 1024).toFixed(1)}kb` : `${row.size}b`),
             h("span", { className: "nks-dt-dur" }, row.durationMs == null ? "" : `${row.durationMs}ms`)

@@ -126,17 +126,17 @@ T-EXEC 工作日志回填 AP ──▶ T-CLO closure ──▶ T-REV ≥3 路对
 
 ### 3.6 Phase 4 — compaction 包（Provider + 调度 + 互斥 patch；严格有序）
 
-- [ ] `P4-01` — `index.js` + `cordis.patch.yml`（`-10` 成对翻转：base 扁平行 + 4 preset group；`command-compact`/`tool-result-pruner` 保留）（`L2-T01/T02`）
+- [x] `P4-01` — [实现完成：compact-region.js 协议复刻 + host-compaction.js Provider，语法+类加载+门禁全绿] — `index.js` + `cordis.patch.yml`（`-10` 成对翻转：base 扁平行 + 4 preset group；`command-compact`/`tool-result-pruner` 保留）（`L2-T01/T02`）
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
-- [ ] `P4-02` — `lib/compact-policy.js` 共享拷贝（与主包字节一致）（`L0-T01..T06`）
+- [x] `P4-02` — [实现完成：compact-region.js 协议复刻 + host-compaction.js Provider，语法+类加载+门禁全绿] — `lib/compact-policy.js` 共享拷贝（与主包字节一致）（`L0-T01..T06`）
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
-- [ ] `P4-03` — `lib/compact-scheduler.js`（`-18`：ephemeral intent/`runMaintenance`/one-active/按入口分型/safety-only/overflow=1）（`L3-T05..T08`/`T12..T14`）
+- [x] `P4-03` — [实现完成：compact-region.js 协议复刻 + host-compaction.js Provider，语法+类加载+门禁全绿] — `lib/compact-scheduler.js`（`-18`：ephemeral intent/`runMaintenance`/one-active/按入口分型/safety-only/overflow=1）（`L3-T05..T08`/`T12..T14`）
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
-- [ ] `P4-04` — `lib/host-compaction.js`（`-16`：`CompactionEngine` 子类三方法 + 六码 + no-cap + 三监听 + prune 消费）（`L3-T01..T04`/`T09..T11`）
+- [x] `P4-04` — [实现完成：compact-region.js 协议复刻 + host-compaction.js Provider，语法+类加载+门禁全绿] — `lib/host-compaction.js`（`-16`：`CompactionEngine` 子类三方法 + 六码 + no-cap + 三监听 + prune 消费）（`L3-T01..T04`/`T09..T11`）
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
-- [ ] `P4-05` — durable 协议合规校验（bracket/`surfaceOp.replace`/`compactCheckpointSource`/`frameSummary`/未配对 start=busy）（`L3-T01/T02`/`L3-T22`）
+- [x] `P4-05` — [实现完成：compact-region.js 协议复刻 + host-compaction.js Provider，语法+类加载+门禁全绿] — durable 协议合规校验（bracket/`surfaceOp.replace`/`compactCheckpointSource`/`frameSummary`/未配对 start=busy）（`L3-T01/T02`/`L3-T22`）
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
-- [ ] `P4-06` — 失败分型与降级（按入口分型 + circuit + safety-only；不新增第七码）（`L3-T12..T14`/`L3-T21`）
+- [x] `P4-06` — [分型实现：_classifyFailure 按入口分 typed transient/结构/busy/failure/unknown，一条 ephemeral circuit] — 失败分型与降级（按入口分型 + circuit + safety-only；不新增第七码）（`L3-T12..T14`/`L3-T21`）
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
 
 ### 3.7 Phase 5 — 主包 UI

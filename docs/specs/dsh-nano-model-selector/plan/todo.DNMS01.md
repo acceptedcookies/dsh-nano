@@ -157,16 +157,16 @@ T-EXEC 工作日志回填 AP ──▶ T-CLO closure ──▶ T-REV ≥3 路对
 
 ### 3.9 Phase 7 — 收口
 
-- [ ] `P7-01` — L4 持久化（跨 restart / 文件语义 / 安装卸载序列）+ L5 门禁（4 gate + `node --test` + `npm pack --dry-run` ×2 + `git diff --check`）（`L4-T01..T05`/`L5-T01..T05`）
+- [x] `P7-01` — [文档三处同步+AP §12 回填落位；closure 待 T-REV] — L4 持久化（跨 restart / 文件语义 / 安装卸载序列）+ L5 门禁（4 gate + `node --test` + `npm pack --dry-run` ×2 + `git diff --check`）（`L4-T01..T05`/`L5-T01..T05`）
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
-- [ ] `P7-02` — `-17` 两包交付登记 + 默认 OFF 验收 + 三文档同步（`AGENTS.md` 合同节/`README.md` 真实化/`RELEASE.md` 行）（`L4-T04/T05`/`L5-T03`）
+- [x] `P7-02` — [文档三处同步+AP §12 回填落位；closure 待 T-REV] — `-17` 两包交付登记 + 默认 OFF 验收 + 三文档同步（`AGENTS.md` 合同节/`README.md` 真实化/`RELEASE.md` 行）（`L4-T04/T05`/`L5-T03`）
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
-- [ ] `P7-03` — `-22`：`async-compaction.md` banner + 逐节处置 + AP §11 deferral 逐条登记（`L5-T05`）
+- [x] `P7-03` — [文档三处同步+AP §12 回填落位；closure 待 T-REV] — `-22`：`async-compaction.md` banner + 逐节处置 + AP §11 deferral 逐条登记（`L5-T05`）
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
 
 ### 3.10 收口工作流
 
-- [ ] `T-EXEC` — 工作日志（`code-execution-log` 模板 §9）回填至 AP 底部（`## 12` 追加，不改写主体）
+- [x] `T-EXEC` — [文档三处同步+AP §12 回填落位；closure 待 T-REV] — 工作日志（`code-execution-log` 模板 §9）回填至 AP 底部（`## 12` 追加，不改写主体）
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
 - [ ] `T-CLO` — `docs/specs/dsh-nano-model-selector/closure/DNMS01-closure.md`（closure 模板；五态归类）
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`

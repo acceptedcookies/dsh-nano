@@ -21,6 +21,23 @@ const MANIFEST_S3_KEY = 'sqlite/manifest.json'
 let promiser = null
 let dbId = null
 let opfsOk = null
+/** A5 启动门：cas-probe 结果（null=未跑 / pass=true|false）。fail 时共享写
+ * 面关闭——export/claim/manifest CAS 拒服务并报 `cas-probe:fail`；本地
+ * sqlite/IDB 读写不受影响（A5 裁决）。 */
+let casGate = { ran: false, pass: true, reason: 'cas-probe:pending' }
+
+export function casGateState() { return { ...casGate } }
+/* Dev/test only: force the gate so the closed-write path is verifiable without
+   taking the real bucket down. Never called from production flow. */
+export function __setCasGateForTest(pass) {
+  casGate = { ran: true, pass, reason: pass ? 'cas-probe:ok' : 'cas-probe:fail', detail: { forced: true } }
+  return casGateState()
+}
+function assertSharedWrite(op) {
+  if (casGate.ran && casGate.pass === false) {
+    throw new Error(`cas-probe:fail — shared write surface closed (${op})`)
+  }
+}
 
 async function loadSqlite() {
   const mod = await import(/* webpackIgnore: true */ `${SDK_BASE}/sqlite3.mjs`)
@@ -181,6 +198,7 @@ async function pipelineCall(route, body) {
 
 /** Export the db bytes → PUT s3 sqlite/pipeline.db (manifest CAS around etag). */
 export async function exportToS3() {
+  assertSharedWrite('exportToS3')
   const result = assertOk(await promiser('export', { dbId }))
   const byteArray = result?.byteArray instanceof Uint8Array ? result.byteArray : new Uint8Array(result?.byteArray ?? 0)
   const b64 = btoa(String.fromCharCode(...byteArray))
@@ -207,10 +225,10 @@ export async function restoreFromS3() {
 
 /** Claim lease ops (host signs; page just sends op+key+writerId). */
 export const claim = {
-  acquire: (key, writerId = 'notepad-fx') => pipelineCall(CLAIM_ROUTE, { op: 'acquire', key, writerId }),
-  renew: (key, writerId = 'notepad-fx') => pipelineCall(CLAIM_ROUTE, { op: 'renew', key, writerId }),
+  acquire: (key, writerId = 'notepad-fx') => { assertSharedWrite('claim.acquire'); return pipelineCall(CLAIM_ROUTE, { op: 'acquire', key, writerId }) },
+  renew: (key, writerId = 'notepad-fx') => { assertSharedWrite('claim.renew'); return pipelineCall(CLAIM_ROUTE, { op: 'renew', key, writerId }) },
   read: (key) => pipelineCall(CLAIM_ROUTE, { op: 'read', key }),
-  release: (key, writerId = 'notepad-fx') => pipelineCall(CLAIM_ROUTE, { op: 'release', key, writerId }),
+  release: (key, writerId = 'notepad-fx') => { assertSharedWrite('claim.release'); return pipelineCall(CLAIM_ROUTE, { op: 'release', key, writerId }) },
 }
 
 /** A5 硬门槛：V-17b 三用例启动探针。返回 {pass, detail}；不过则调用方
@@ -232,7 +250,8 @@ export async function casProbe() {
   }
   const pass = detail.create1 === false && detail.create2 === true &&
                detail.ifMatchBogus === true && detail.ifMatchReal === false
-  return { pass, detail, reason: pass ? 'cas-probe:ok' : 'cas-probe:fail' }
+  casGate = { ran: true, pass, reason: pass ? 'cas-probe:ok' : 'cas-probe:fail', detail }
+  return { pass, detail, reason: casGate.reason }
 }
 
 async function sha256Hex(buf) {

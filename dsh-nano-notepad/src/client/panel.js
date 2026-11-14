@@ -38,7 +38,7 @@ import { openNanoDialog, openNanoMenu, nanoTabs, NANO_STYLES } from 'dsh-nano-ui
 import { perf, setNotepadRoot } from './perf.js'
 import { createSync } from './sync.js'
 import { mountCloudSettings } from './cloud-settings.js'
-import { createCorpus, rejectDraft, lineage } from './fx-corpus.js'
+import { createCorpus, rejectDraft, acceptDraft, lineage, KINDS } from './fx-corpus.js'
 
 /* perf-review: one named span for the IndexedDB writers (saveDraft / writeUi /
  * persistUi). Defined at module scope so every caller routes through it without
@@ -257,6 +257,11 @@ ${NANO_STYLES}
 .np-ws-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
 .np-ws-caret { display: inline-flex; width: 14px; height: 14px; flex: none; color: var(--dsw-alias-label-tertiary); }
 .np-ws-caret svg { width: 14px; height: 14px; }
+.np-kind { display: inline-flex; align-items: center; gap: 4px; flex: none; height: var(--np-icon-btn); box-sizing: border-box; padding: 0 6px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-secondary); font: inherit; font-size: 10px; cursor: pointer; }
+.np-kind:hover { background: var(--dsw-alias-interactive-bg-active); color: var(--dsw-alias-label-primary); }
+.np-kind[data-active="true"] { color: var(--dsw-alias-link); border-color: var(--dsw-alias-link); }
+.np-kind-caret { display: inline-flex; width: 12px; height: 12px; color: var(--dsw-alias-label-tertiary); }
+.np-kind-caret svg { width: 12px; height: 12px; }
 .np-group { display: flex; align-items: center; gap: 6px; margin: 12px 0 4px; padding-left: 8px; color: var(--dsw-alias-label-tertiary); font-size: var(--np-font-size-xs); font-weight: 600; letter-spacing: .04em; line-height: 20px; }
 .np-nodes > .np-group:first-child { margin-top: 2px; }
 .np-group[data-active="true"] { color: var(--dsw-alias-label-primary); }
@@ -780,7 +785,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
   panel.innerHTML = `
     <div class="np-tabs"><button type="button" class="np-tree-toggle" data-action="toggle-tree"></button><button type="button" class="np-close-tabs" data-action="close-tabs" data-i18n="saveCloseTabs" data-i18n-mode="title">${dshIcon('archive-check-outline')}</button><div class="np-tablist"></div><span class="np-tabs-spacer"></span></div>
     <div class="np-body">
-      <aside class="np-tree"><div class="np-tree-head"><div class="np-ws"><button type="button" class="np-ws-btn" data-action="ws-toggle" aria-haspopup="listbox" aria-expanded="false"><span class="np-ws-label"></span><span class="np-ws-caret" aria-hidden="true">${CHEVRON_ICON}</span></button></div><span class="np-tree-tools"><button type="button" data-action="new-item" data-i18n="newItem" data-i18n-mode="title" aria-haspopup="menu">${PLUS_ICON}</button><button type="button" class="np-danger" data-action="delete" data-i18n="clearUnpinned" data-i18n-mode="title">${dshIcon('trash-outline')}</button><button type="button" class="np-tools-toggle" data-action="toggle-tools" data-i18n="expandTools" data-i18n-mode="title" aria-expanded="false">${CHEVRON_ICON}</button></span></div><div class="np-nodes" data-root="true"></div><div class="np-mp-zone"><input class="np-mp-input" type="text" inputmode="url" autocomplete="off" spellcheck="false" data-i18n="importMp" data-i18n-attr="placeholder"><span class="np-mp-hint" data-state="idle" aria-hidden="true"></span></div><button type="button" class="np-tools-toggle" data-action="toggle-tools" data-i18n="expandTools" data-i18n-mode="title" aria-expanded="false">${CHEVRON_ICON}</button><div class="np-tree-foot"><button type="button" data-action="settings" data-i18n="settings" data-i18n-mode="label">${SETTINGS_ICON}<span data-i18n="settings"></span></button><button type="button" data-action="close" data-i18n="close" data-i18n-mode="label">${CLOSE_ICON}<span data-i18n="close"></span></button></div></aside>
+      <aside class="np-tree"><div class="np-tree-head"><div class="np-ws"><button type="button" class="np-ws-btn" data-action="ws-toggle" aria-haspopup="listbox" aria-expanded="false"><span class="np-ws-label"></span><span class="np-ws-caret" aria-hidden="true">${CHEVRON_ICON}</span></button></div><button type="button" class="np-kind" data-action="kind-filter" data-i18n="kindFilter" data-i18n-mode="title"><span class="np-kind-label"></span><span class="np-kind-caret" aria-hidden="true">${CHEVRON_ICON}</span></button><span class="np-tree-tools"><button type="button" data-action="new-item" data-i18n="newItem" data-i18n-mode="title" aria-haspopup="menu">${PLUS_ICON}</button><button type="button" class="np-danger" data-action="delete" data-i18n="clearUnpinned" data-i18n-mode="title">${dshIcon('trash-outline')}</button><button type="button" class="np-tools-toggle" data-action="toggle-tools" data-i18n="expandTools" data-i18n-mode="title" aria-expanded="false">${CHEVRON_ICON}</button></span></div><div class="np-nodes" data-root="true"></div><div class="np-mp-zone"><input class="np-mp-input" type="text" inputmode="url" autocomplete="off" spellcheck="false" data-i18n="importMp" data-i18n-attr="placeholder"><span class="np-mp-hint" data-state="idle" aria-hidden="true"></span></div><button type="button" class="np-tools-toggle" data-action="toggle-tools" data-i18n="expandTools" data-i18n-mode="title" aria-expanded="false">${CHEVRON_ICON}</button><div class="np-tree-foot"><button type="button" data-action="settings" data-i18n="settings" data-i18n-mode="label">${SETTINGS_ICON}<span data-i18n="settings"></span></button><button type="button" data-action="close" data-i18n="close" data-i18n-mode="label">${CLOSE_ICON}<span data-i18n="close"></span></button></div></aside>
       <div class="np-editor" data-themefit="true">
         <div class="np-toolbar"><span class="np-md-tools">${toolbar}</span><span class="np-json-tools" hidden><button type="button" class="np-tool" data-json="expand" data-i18n="jsonExpand" data-i18n-mode="title">${EXPAND_ICON}</button><button type="button" class="np-tool" data-json="collapse" data-i18n="jsonCollapse" data-i18n-mode="title">${COLLAPSE_ICON}</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-json="format" data-i18n="jsonFormat" data-i18n-mode="title">${FORMAT_ICON}</button><button type="button" class="np-tool" data-json="minify" data-i18n="jsonMinify" data-i18n-mode="title">${MINIFY_ICON}</button><button type="button" class="np-tool" data-json="escape" data-i18n="jsonEscape" data-i18n-mode="title">${ESCAPE_ICON}</button><button type="button" class="np-tool" data-json="unescape" data-i18n="jsonUnescape" data-i18n-mode="title">${UNESCAPE_ICON}</button><button type="button" class="np-tool" data-json="strip" data-i18n="jsonStrip" data-i18n-mode="title">${STRIP_ICON}</button></span><span class="np-ht-tools" hidden><button type="button" class="np-tool" data-ht="format" data-i18n="htFormat" data-i18n-mode="title">${FORMAT_ICON}</button><button type="button" class="np-tool" data-ht="minify" data-i18n="htMinify" data-i18n-mode="title">${MINIFY_ICON}</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-ht="strip-styles" data-i18n="htStripStyles" data-i18n-mode="title">${STRIP_ICON}</button><button type="button" class="np-tool" data-ht="extract-images" data-i18n="htExtractImages" data-i18n-mode="title">${GRID_ICON}</button><button type="button" class="np-tool" data-ht="copy-text" data-i18n="htCopyText" data-i18n-mode="title">${dshIcon('copy-outline')}</button></span><span class="np-rt-tools" hidden><button type="button" class="np-tool" data-rt="gallery" data-i18n="rtGallery" data-i18n-mode="title">${GRID_ICON}</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-rt="font-minus" data-i18n="rtFontMinus" data-i18n-mode="title">A−</button><button type="button" class="np-tool" data-rt="font-plus" data-i18n="rtFontPlus" data-i18n-mode="title">A+</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-rt="width" data-i18n="rtWidth" data-i18n-mode="title">宽</button><button type="button" class="np-tool" data-rt="themefit" data-i18n="rtThemeFit" data-i18n-mode="title" aria-pressed="true">◐</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-rt="copy-rich" data-i18n="rtCopyRich" data-i18n-mode="title">${dshIcon('copy-outline')}</button><button type="button" class="np-tool" data-rt="copy-text" data-i18n="rtCopyText" data-i18n-mode="title">Tx</button><button type="button" class="np-tool" data-rt="links" data-i18n="rtLinks" data-i18n-mode="title">${LINK_ICON}</button></span><button type="button" class="np-switch" data-action="view" role="switch" aria-checked="false" data-i18n="viewGroup" data-i18n-mode="title"><span class="np-switch-label" data-i18n="source"></span><span class="np-switch-label" data-i18n="preview"></span><span class="np-switch-thumb" data-i18n="source"></span></button></div>
         <div class="np-mirror" aria-hidden="true"></div>
@@ -840,7 +845,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     db: /** @type {IDBDatabase | null} */ (null),
     nodes: /** @type {any[]} */ ([]),
     settings: defaults,
-    ui: { id: 'ui', open: false, tabs: /** @type {string[]} */ ([]), currentId: /** @type {string | null} */ (null), entryX: null, entryY: null, panelX: null, panelY: null },
+    ui: { id: 'ui', open: false, tabs: /** @type {string[]} */ ([]), currentId: /** @type {string | null} */ (null), entryX: null, entryY: null, panelX: null, panelY: null, kindFilter: /** @type {string | null} */ (null) },
     view: defaults.defaultView,
     slash: null,
     slashIndex: 0,
@@ -1146,6 +1151,11 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     }
   }
 
+  /** kindFilter: null = every file; otherwise only nodes whose `cat` matches
+     * the selected kind render (folders + uncatted plain notes hide too — the
+     * filter is a corpus view, not a tree of everything). */
+  function kindFilter() { return state.ui.kindFilter ?? null }
+
   function activeWorkspace() {
     const choice = state.ui.workspaceChoice ?? 'all'
     if (choice === 'all') return { mode: 'all', id: null }
@@ -1341,7 +1351,9 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     // Group children once by (workspace, parent) so `visit` is O(1) per node
     // instead of re-filtering the whole list at every depth (was O(N²)).
     const byParent = new Map()
+    const kf = kindFilter()
     for (const node of state.nodes) {
+      if (kf !== null && node.cat !== kf) continue
       const key = `${node.workspaceId ?? ''}${node.parentId ?? ''}`
       let bucket = byParent.get(key)
       if (bucket === undefined) { bucket = []; byParent.set(key, bucket) }
@@ -1731,6 +1743,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     treeToggle.setAttribute('aria-label', treeToggle.title)
     treeToggle.setAttribute('aria-expanded', String(!treeCollapsed))
     paintWorkspaceChoices()
+    paintKindFilter()
     renderTree()
     renderTabs()
     renderChrome()
@@ -2689,6 +2702,74 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     })
   }
 
+  /** draft accept: pending → accepted（人侧确认，谱系保留）。 */
+  function requestAcceptDraft(id) {
+    if (!state.db) return
+    const node = state.nodes.find(item => item.id === id)
+    if (!node || node.cat !== 'draft') return
+    void (async () => {
+      await acceptDraft(state.db, id)
+      const snapshot = await loadSnapshot(state.db)
+      state.nodes = snapshot.nodes
+      state.renderCache.clear()
+      render()
+    })()
+  }
+
+  /** Human kind assignment submenu: set this file's cat to one of the five
+     * kinds (or clear back to a plain note). Human-owned only; machine writes
+     * stay draft|knowledge via corpus.write. */
+  function openKindMenu(id, anchor) {
+    const node = state.nodes.find(item => item.id === id)
+    if (!node || !state.db) return
+    const copy = text()
+    closeMenu?.()
+    const items = [
+      ...KINDS.map(k => ({
+        id: `kind-${k}`,
+        label: `${copy.kinds[k] ?? k}${node.cat === k ? ' ✓' : ''}`,
+        run: () => void assignKind(id, k),
+      })),
+      { id: 'kind-clear', label: copy.kindClear, run: () => void assignKind(id, null) },
+    ]
+    const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), width: 160, theme: resolvedTheme(), z: NP_PORTAL_Z, items })
+    closeMenu = () => raw.close()
+  }
+
+  async function assignKind(id, cat) {
+    if (!state.db) return
+    await window.__nanoNotepad.fx.corpus().setCat({ id, cat })
+    const snapshot = await loadSnapshot(state.db)
+    state.nodes = snapshot.nodes
+    state.renderCache.clear()
+    render()
+  }
+
+  /** Kind-filter menu: scope the tree to one corpus kind (or all). Mirrors the
+     * ws-toggle menu; selection lives in state.ui.kindFilter (session-only). */
+  function openKindFilterMenu(anchor) {
+    const copy = text()
+    closeMenu?.()
+    const current = kindFilter()
+    const items = [
+      { id: 'all', label: `${copy.kindAll ?? copy.kindFilter}${current === null ? ' ✓' : ''}`, run: () => { state.ui.kindFilter = null; render() } },
+      ...KINDS.map(k => ({ id: k, label: `${copy.kinds[k] ?? k}${current === k ? ' ✓' : ''}`, run: () => { state.ui.kindFilter = k; render() } })),
+    ]
+    const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), width: 160, theme: resolvedTheme(), z: NP_PORTAL_Z, items })
+    closeMenu = () => raw.close()
+  }
+
+  /** Paint the kind-filter button label + the tree-head visibility. */
+  function paintKindFilter() {
+    const label = panel.querySelector('.np-kind-label')
+    if (label) {
+      const k = kindFilter()
+      label.textContent = k === null ? (text().kindFilter) : (text().kinds[k] ?? k)
+    }
+    const btn = panel.querySelector('.np-kind')
+    if (btn) btn.dataset.active = String(kindFilter() !== null)
+  }
+
   function requestDelete(id) {
     if (!state.db) return
     const node = state.nodes.find(item => item.id === id)
@@ -2720,6 +2801,8 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
           Object.assign(node, renamed)
           render()
         }) },
+        ...(node.kind === 'file' ? [{ id: 'kind', label: `${copy.kindMenu}${node.cat ? ` · ${copy.kinds[node.cat] ?? node.cat}` : ''}`, run: () => openKindMenu(id, anchor) }] : []),
+        ...(node.cat === 'draft' && node.draftStatus !== 'accepted' ? [{ id: 'accept-draft', label: copy.acceptDraftTitle, run: () => requestAcceptDraft(id) }] : []),
         ...(node.cat === 'draft' ? [{ id: 'reject-draft', label: `${copy.rejectDraftTitle}${Number.isInteger(node.rejectCount) && node.rejectCount > 0 ? ` (×${node.rejectCount})` : ''}`, tone: 'danger', run: () => requestRejectDraft(id) }] : []),
         { id: 'delete', label: copy.delete, tone: 'danger', run: () => requestDelete(id) },
       ],
@@ -2818,6 +2901,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       openWorkspaceMenu(target)
       return
     }
+    if (action === 'kind-filter') { openKindFilterMenu(target); return }
     if (action === 'close' || action === 'tree') {
       flushSave()
       dismissOverlays()
@@ -3517,6 +3601,10 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       rejectDraft: (id, feedback) => rejectDraft(state.db, id, feedback),
       corpusList: async () => (await loadSnapshot(state.db)).nodes.filter(n => n.cat).map(n => ({ id: n.id, cat: n.cat, name: n.name, rejectCount: n.rejectCount ?? 0 })),
       casProbe: () => import('./fx-sqlite.js').then(m => m.casProbe()),
+      casGateState: () => import('./fx-sqlite.js').then(m => m.casGateState()),
+      __setCasGateForTest: (pass) => import('./fx-sqlite.js').then(m => m.__setCasGateForTest(pass)),
+      setCat: (id, cat) => window.__nanoNotepad.fx.corpus().setCat({ id, cat }),
+      acceptDraft: (id) => acceptDraft(state.db, id),
     },
     /** Set the syncing micro-motion ('a' | 'b' | 'c'), same path as the UI. */
     setCloudMotion(value) {
@@ -3697,6 +3785,13 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     /* Start cloud polling once settings and the database are both ready. */
     sync.start()
     void navigator.storage?.persist?.()
+    /* A5 启动门：后台跑一次 cas-probe（独桶 CAS 一致性三用例）。fail 时
+       共享写面关闭（export/claim/manifest CAS 拒服务报 cas-probe:fail），
+       本地 sqlite/IDB 读写不受影响；结果经 __nanoNotepad.fx.casGateState() 可查。 */
+    import('./fx-sqlite.js').then(m => m.casProbe()).then(probe => {
+      state.fxCasProbe = probe
+      if (probe.pass === false) console.warn('[notepad] cas-probe:fail — shared write surface closed', probe.detail)
+    }).catch(() => {})
     state.dbReadyResolve?.()
   }).catch(error => { state.dbReadyReject?.(error); api.failed(error) })
   render()

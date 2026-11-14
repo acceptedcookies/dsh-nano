@@ -169,6 +169,74 @@ export function pipelineS3Handler(ctx) {
   }
 }
 
+/**
+ * POST /nano-notepad/rpc — A3 跨插件读面（内部 MCP/RPC）。
+ * 只读、白名单方法；语料真源是独桶的发布面（pipeline.db / manifest / kb-* /
+ * corpus-manifest），不是页面 IDB（宿主够不到、也不该够到——单一真源）。
+ * 签名/凭证全留宿主；调用方只给 method+params，不碰 s3 键之外的任何面。
+ *
+ * 白名单方法（read-only）：
+ *   manifest.get        → {manifest}  管线发布清单（etag/sha256/updatedAt）
+ *   corpus.list         → [{key,size,etag?}]  corpus-manifest + kb-* 键清单
+ *   corpus.read         → {key,bodyB64|body}  拉一个已发布键（kb-*、art-*、sqlite 前缀）
+ *   lsrag.manifest      → {manifest}  同 manifest.get（语义别名，分层检索入口）
+ *   claim.read          → {value,etag}  claim 租约读（不持锁、只观察）
+ */
+const RPC_METHODS = new Set(['manifest.get', 'corpus.list', 'corpus.read', 'lsrag.manifest', 'claim.read'])
+const RPC_READ_KEYS = /^(kb-|art-|sqlite\/|claims\/|corpus-manifest|pipeline-manifest)[A-Za-z0-9._/-]*$/
+
+export function pipelineRpcHandler(ctx) {
+  return async (req, res, route) => {
+    try {
+      const body = await readJsonBody(req, route?.bodyLimit)
+      const s3 = await s3Target(ctx, body.target)
+      const method = String(body.method ?? '')
+      const params = body.params && typeof body.params === 'object' ? body.params : {}
+      if (!RPC_METHODS.has(method)) {
+        sendJson(res, 200, { ok: false, reason: 'unknown-method', method })
+        return
+      }
+      let result
+      switch (method) {
+        case 'manifest.get':
+        case 'lsrag.manifest': {
+          const got = await s3.getJson('sqlite/manifest.json', { withMeta: true }).catch(() => undefined)
+          result = got === undefined ? null : { value: got.value, etag: got.etag }
+          break
+        }
+        case 'corpus.list': {
+          const under = typeof params.under === 'string' ? params.under : ''
+          /* 空桶 LIST 返回 NoSuchKey 404——对读面是「无已发布键」，非错误。 */
+          result = await s3.list(under).catch(error => /HTTP 404|NoSuchKey/.test(messageOf(error)) ? [] : Promise.reject(error))
+          break
+        }
+        case 'corpus.read': {
+          const key = String(params.key ?? '')
+          if (!RPC_READ_KEYS.test(key)) { result = { denied: `key outside read allowlist: ${key}` }; break }
+          if (params.format === 'bytes') {
+            const bytes = await s3.getBytes(key)
+            result = bytes === undefined ? null : { key, bodyB64: bytes.toString('base64') }
+          } else {
+            const meta = params.withMeta === true
+            result = await s3.getJson(key, { withMeta: meta }) ?? null
+          }
+          break
+        }
+        case 'claim.read': {
+          const key = String(params.key ?? '')
+          if (!SESSION_ID_RE_RPC.test(key)) { result = { denied: 'schema:badKey' }; break }
+          result = await readClaim(s3, key) ?? null
+          break
+        }
+      }
+      sendJson(res, 200, { ok: true, result })
+    } catch (error) {
+      sendJson(res, 500, { ok: false, reason: 'failed', message: messageOf(error).slice(0, 200) })
+    }
+  }
+}
+const SESSION_ID_RE_RPC = /^[A-Za-z0-9_-]{1,128}$/
+
 /** POST /nano-notepad/pipeline/claim — {op:'acquire'|'renew'|'read'|'release', key, writerId} */
 export function pipelineClaimHandler(ctx) {
   return async (req, res, route) => {

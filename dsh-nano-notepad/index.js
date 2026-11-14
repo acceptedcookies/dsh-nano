@@ -9,7 +9,7 @@ import { registerRoutes } from './lib/route-guard.js'
 import { ROUTE_TABLE, PLUGIN } from './lib/route-table.js'
 import { sanitizeMpHtml } from './lib/mp-sanitize.js'
 import { modelsHandler, chatHandler } from './lib/fx-bridge.js'
-import { pipelineS3Handler, pipelineClaimHandler } from './lib/pipeline.js'
+import { pipelineS3Handler, pipelineClaimHandler, pipelineRpcHandler } from './lib/pipeline.js'
 
 export const name = 'nano-notepad'
 export const inject = ['webServer', 'connection', 'subprocess', 'llm', 'attachments', 'credentials']
@@ -78,6 +78,8 @@ const FX_MODELS_ROUTE = '/nano-notepad/fx/models'
 const FX_CHAT_ROUTE = '/nano-notepad/fx/chat/completions'
 const PIPELINE_S3_ROUTE = '/nano-notepad/pipeline/s3'
 const PIPELINE_CLAIM_ROUTE = '/nano-notepad/pipeline/claim'
+/* A3 跨插件读面：内部 MCP/RPC（只读白名单，签名/凭证留宿主） */
+const PIPELINE_RPC_ROUTE = '/nano-notepad/rpc'
 const FX_ASSETS_DIR = fileURLToPath(new URL('./lib/fx', import.meta.url))
 const FX_CORE_WASM = fileURLToPath(new URL('./lib/fx-core.wasm', import.meta.url))
 const SDK_MIME = {
@@ -335,6 +337,7 @@ export function apply(ctx) {
     { path: FX_CHAT_ROUTE, methods: ['POST'], handler: chatHandler(ctx) },
     { path: PIPELINE_S3_ROUTE, methods: ['POST'], handler: pipelineS3Handler(ctx) },
     { path: PIPELINE_CLAIM_ROUTE, methods: ['POST'], handler: pipelineClaimHandler(ctx) },
+    { path: PIPELINE_RPC_ROUTE, methods: ['POST'], handler: pipelineRpcHandler(ctx) },
   ]
 
   registerRoutes(ctx, SPECS, { table: ROUTE_TABLE, plugin: PLUGIN })

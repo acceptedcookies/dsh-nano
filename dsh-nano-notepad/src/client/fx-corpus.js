@@ -85,6 +85,22 @@ export function createCorpus(idb, { writerId = 'notepad-fx', epochId = 'e0', wor
       return { content: JSON.stringify(nodes) }
     },
 
+    /** Human kind assignment: {id, cat} — the human sets prompt|note|memory|
+     * draft|knowledge on an existing node; machine writes stay draft|knowledge.
+     * Clearing back to an ordinary note passes cat=null. */
+    async setCat({ id, cat }) {
+      if (!(cat === null || KINDS.includes(cat))) {
+        return { content: `cat must be ${KINDS.join('|')}|null (got ${cat})`, isError: true }
+      }
+      const node = (await db.loadSnapshot(idb)).nodes.find(n => n.id === id && n.kind === 'file')
+      if (!node) return { content: `not found: ${id}`, isError: true }
+      const fields = cat === null
+        ? { cat: null }
+        : { cat, ...(cat === 'draft' ? { draftStatus: node.draftStatus ?? 'pending', rejectCount: node.rejectCount ?? 0 } : {}), rejectCount: node.rejectCount ?? 0 }
+      await db.updateNodeMeta(idb, id, fields)
+      return { content: JSON.stringify({ id, cat }) }
+    },
+
     /** note_search: {query,kind?,limit?} → [{id,cat,name,excerpt}]. */
     async search({ query, kind, limit = 20 }) {
       const q = String(query ?? '').toLowerCase()
@@ -106,6 +122,17 @@ export function createCorpus(idb, { writerId = 'notepad-fx', epochId = 'e0', wor
  * draft 状态机：reject(feedback) → 记录 supersedes 源 + rejectCount+1，
  * 产物本身标记 rejected（不删；谱系可查）。返回 {id,supersedesOf,rejectCount}。
  */
+/**
+ * draft 状态机另一半：人侧接受 → draftStatus 'accepted'，谱系保留。
+ * 与 reject 互补——pending → accepted | rejected。
+ */
+export async function acceptDraft(idb, id) {
+  const node = (await db.loadSnapshot(idb)).nodes.find(n => n.id === id)
+  if (!node || node.cat !== 'draft') throw new Error('not a draft node')
+  await db.updateNodeMeta(idb, id, { draftStatus: 'accepted', acceptedAt: Date.now() })
+  return { id, status: 'accepted' }
+}
+
 export async function rejectDraft(idb, id, feedback = '') {
   const node = (await db.loadSnapshot(idb)).nodes.find(n => n.id === id)
   if (!node || node.cat !== 'draft') throw new Error('not a draft node')

@@ -369,6 +369,64 @@ function pipelineS3Handler(ctx) {
     }
   };
 }
+var RPC_METHODS = /* @__PURE__ */ new Set(["manifest.get", "corpus.list", "corpus.read", "lsrag.manifest", "claim.read"]);
+var RPC_READ_KEYS = /^(kb-|art-|sqlite\/|claims\/|corpus-manifest|pipeline-manifest)[A-Za-z0-9._/-]*$/;
+function pipelineRpcHandler(ctx) {
+  return async (req, res, route) => {
+    try {
+      const body = await readJsonBody(req, route?.bodyLimit);
+      const s3 = await s3Target(ctx, body.target);
+      const method = String(body.method ?? "");
+      const params = body.params && typeof body.params === "object" ? body.params : {};
+      if (!RPC_METHODS.has(method)) {
+        sendJson(res, 200, { ok: false, reason: "unknown-method", method });
+        return;
+      }
+      let result;
+      switch (method) {
+        case "manifest.get":
+        case "lsrag.manifest": {
+          const got = await s3.getJson("sqlite/manifest.json", { withMeta: true }).catch(() => void 0);
+          result = got === void 0 ? null : { value: got.value, etag: got.etag };
+          break;
+        }
+        case "corpus.list": {
+          const under = typeof params.under === "string" ? params.under : "";
+          result = await s3.list(under).catch((error) => /HTTP 404|NoSuchKey/.test(messageOf(error)) ? [] : Promise.reject(error));
+          break;
+        }
+        case "corpus.read": {
+          const key = String(params.key ?? "");
+          if (!RPC_READ_KEYS.test(key)) {
+            result = { denied: `key outside read allowlist: ${key}` };
+            break;
+          }
+          if (params.format === "bytes") {
+            const bytes = await s3.getBytes(key);
+            result = bytes === void 0 ? null : { key, bodyB64: bytes.toString("base64") };
+          } else {
+            const meta = params.withMeta === true;
+            result = await s3.getJson(key, { withMeta: meta }) ?? null;
+          }
+          break;
+        }
+        case "claim.read": {
+          const key = String(params.key ?? "");
+          if (!SESSION_ID_RE_RPC.test(key)) {
+            result = { denied: "schema:badKey" };
+            break;
+          }
+          result = await readClaim(s3, key) ?? null;
+          break;
+        }
+      }
+      sendJson(res, 200, { ok: true, result });
+    } catch (error) {
+      sendJson(res, 500, { ok: false, reason: "failed", message: messageOf(error).slice(0, 200) });
+    }
+  };
+}
+var SESSION_ID_RE_RPC = /^[A-Za-z0-9_-]{1,128}$/;
 function pipelineClaimHandler(ctx) {
   return async (req, res, route) => {
     try {
@@ -402,5 +460,6 @@ function pipelineClaimHandler(ctx) {
 }
 export {
   pipelineClaimHandler,
+  pipelineRpcHandler,
   pipelineS3Handler
 };

@@ -313,6 +313,18 @@ var ROUTE_TABLE = [
     "bodyLimit": 4096,
     "sessionBinding": false,
     "justification": "pipeline.js \u2014 claim lease lifecycle on notepad bucket (acquire/renew/read/release); ETag CAS read-modify-write, 90s TTL, CLAIM_KEYS whitelist; writerId from request (scoped by host auth)."
+  },
+  {
+    "plugin": "dsh-nano-notepad",
+    "path": "/nano-notepad/rpc",
+    "methods": [
+      "POST"
+    ],
+    "sensitivity": "L1",
+    "capability": "s3:read",
+    "bodyLimit": 4096,
+    "sessionBinding": false,
+    "justification": "pipeline.js \u2014 A3 cross-plugin read surface (internal MCP/RPC): read-only whitelisted methods (manifest.get/corpus.list/corpus.read/claim.read) over the published pipeline bucket; key allowlist kb-*/art-*/sqlite/claims; host-signed, no credentials exposed, no writes."
   }
 ];
 export {

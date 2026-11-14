@@ -1,7 +1,7 @@
 /** Host half. The Kitesurf process stays outside this plugin; we only speak CDP. */
 
 import { readFileSync } from 'node:fs'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import path from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url'
 import { registerRoutes } from './lib/route-guard.js'
 import { ROUTE_TABLE, PLUGIN } from './lib/route-table.js'
 import { createHistory } from './lib/history.js'
-import { browserSocketUrl, captureDom, captureElements, captureShot, captureSnapshot, currentEmulation, engineHistoryAdd, engineHistoryClear, engineHistoryList, engineHistoryRemove, currentUserAgent, currentViewport, engineTargets, evaluateInPage, fetchEngine, KitesurfError, navigateHistory, openPage, pickElement, pickBySelector, pickPoint, pickSelector, editBody, editElement, pageUrl, releaseEngine, scrollDelta, setBrowserSettings, waitForCondition } from './lib/engine.js'
+import { browserSocketUrl, captureDom, captureElements, captureShot, captureSnapshot, currentEmulation, engineHistoryAdd, engineHistoryClear, engineHistoryList, engineHistoryRemove, currentUserAgent, currentViewport, engineTargets, evaluateInPage, evaluateChunked, fetchEngine, KitesurfError, navigateHistory, openPage, pickElement, pickBySelector, pickPoint, pickSelector, editBody, editElement, pageUrl, releaseEngine, scrollDelta, setBrowserSettings, stateOp, storageOp, waitForCondition } from './lib/engine.js'
 import { ERROR_STATUS, clearConsole, clearNetwork, clearOperations, diagnosticsSummary, elementRefSelector, elementRefSummary, getElementRef, getLastSnapshot, getRef, isElementRef, listNetwork, listConsole, listOperations, listRefs, putElementRefs, putRef, recordOperation, refChip, setLastSnapshot, summarizeInput } from './lib/diagnostics.js'
 import { buildSrcDoc } from './lib/dom.js'
 import { kitesurfSkill, nanoKiteSkill } from './lib/skill.js'
@@ -53,6 +53,8 @@ const BROWSE_HISTORY_ROUTE = '/nano-kitesurf/browse-history'
 const NETWORK_ROUTE = '/nano-kitesurf/network'
 const TARGETS_ROUTE = '/nano-kitesurf/targets'
 const EVALUATE_ROUTE = '/nano-kitesurf/evaluate'
+const STORAGE_ROUTE = '/nano-kitesurf/storage'
+const STATE_ROUTE = '/nano-kitesurf/state'
 const WAIT_ROUTE = '/nano-kitesurf/wait'
 const SNAPSHOT_ROUTE = '/nano-kitesurf/snapshot'
 const REFS_ROUTE = '/nano-kitesurf/refs'
@@ -1009,7 +1011,81 @@ export function apply(ctx, config) {
       handler: async (req, res, route) => {
         try {
           const body = await readBody(req, route.bodyLimit)
-          const result = await hostSpan('evaluate', () => evaluateInPage(origin(), body.expression))
+          // P1-2: `{token,offset}` pulls a later slice of a chunked result;
+          // `{expression}` evaluates and stashes the serialized value under a
+          // page-global token ring. `?page=N` is an alias for offset=N*4000.
+          const q = queryOf(req)
+          const pageIdx = Number(q.get('page') || 0)
+          const result = await hostSpan('evaluate', () => evaluateChunked(origin(), {
+            expression: body.expression,
+            token: body.token ?? (q.get('page') != null && body.token == null && body.expression == null ? q.get('token') : undefined),
+            offset: Number.isFinite(Number(body.offset)) ? Number(body.offset) : pageIdx * 4000,
+          }))
+          sendJson(res, 200, { ok: true, ...result })
+        } catch (error) {
+          fail(res, error)
+        }
+      },
+    },
+    {
+      // P1-2: localStorage/sessionStorage/document.cookie read & write.
+      // GET ?scope=local|session|cookie lists; POST {scope,op:set|delete|clear,name,value} writes.
+      path: STORAGE_ROUTE,
+      methods: ['GET', 'HEAD', 'POST'],
+      bodyLimit: 8192,
+      handler: async (req, res, route) => {
+        try {
+          const q = queryOf(req)
+          if (req.method === 'POST') {
+            const body = await readBody(req, route.bodyLimit)
+            const result = await hostSpan('storage', () => storageOp(origin(), body))
+            sendJson(res, 200, { ok: true, ...result })
+            return
+          }
+          const scope = q.get('scope') === 'session' ? 'session' : q.get('scope') === 'cookie' ? 'cookie' : 'local'
+          const result = await hostSpan('storage', () => storageOp(origin(), { scope, op: 'read' }))
+          sendJson(res, 200, { ok: true, ...result })
+        } catch (error) {
+          fail(res, error)
+        }
+      },
+    },
+    {
+      // P1-2: {action:save} exports {localStorage,sessionStorage,cookie,url,at}
+      // and archives to $DSH_HOME/nano-kitesurf-state.jsonl; {action:load,state}
+      // or {action:load,name} restores. `?since=` not needed — file is the audit.
+      path: STATE_ROUTE,
+      methods: ['POST'],
+      bodyLimit: 65536,
+      handler: async (req, res, route) => {
+        try {
+          const body = await readBody(req, route.bodyLimit)
+          const action = body.action === 'load' ? 'load' : 'save'
+          if (action === 'save') {
+            const result = await hostSpan('state-save', () => stateOp(origin(), { action: 'save' }))
+            const state = result.state || {}
+            // Durable archive: append to the profile state file (receipt-grade
+            // audit, single canonical copy per save). Name keys the restore.
+            const name = String(body.name || `state-${Date.now()}`)
+            try {
+              const file = path.join(process.env.DSH_HOME || homedir(), 'nano-kitesurf-state.jsonl')
+              await mkdir(path.dirname(file), { recursive: true })
+              await appendFile(file, `${JSON.stringify({ name, at: new Date().toISOString(), url: state.url || null, state })}\n`)
+            } catch { /* archival is best-effort; the response still carries state */ }
+            sendJson(res, 200, { ok: true, ...result, name })
+            return
+          }
+          // load: inline `state`, or `name` → last matching row in the archive.
+          let state = body.state
+          if (!state && body.name) {
+            const file = path.join(process.env.DSH_HOME || homedir(), 'nano-kitesurf-state.jsonl')
+            const rows = (await readFile(file, 'utf8').then((t) => t.split('\n').filter(Boolean).map((l) => { try { return JSON.parse(l) } catch { return null } }).filter(Boolean)).catch(() => []))
+            const hit = [...rows].reverse().find((r) => r.name === String(body.name))
+            if (!hit) throw new KitesurfError('kitesurf.state.miss', `no saved state named ${body.name}`)
+            state = hit.state
+          }
+          if (!state || typeof state !== 'object') throw new KitesurfError('kitesurf.state.miss', 'load requires state or a known name')
+          const result = await hostSpan('state-load', () => stateOp(origin(), { action: 'load', state }))
           sendJson(res, 200, { ok: true, ...result })
         } catch (error) {
           fail(res, error)

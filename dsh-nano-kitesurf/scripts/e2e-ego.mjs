@@ -440,6 +440,28 @@ async function main() {
   const reportOk = report.buildId && report.phase && report.hasHints && report.hasErrorCatalog
   record('feedback-report-fields', !!reportOk, JSON.stringify(report).slice(0, 160))
 
+  // 15. P1-2 chunked evaluate: an expression returning >4KB must page through
+  // the token cache; ?page=N / {token,offset} pull later slices.
+  const chunk = await page.evaluate(async () => {
+    const big = await fetch('/nano-kitesurf/evaluate', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ expression: '"x".repeat(9000)+"END"' }) }).then((r) => r.json())
+    const p2 = await fetch('/nano-kitesurf/evaluate', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token: big.token, offset: 4000 }) }).then((r) => r.json())
+    const p3 = await fetch('/nano-kitesurf/evaluate', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token: big.token, offset: 8000 }) }).then((r) => r.json())
+    return { total: big.total, head: String(big.value || '').length, trunc: big.truncated, p2: String(p2.value || '').length, p3end: String(p3.value || '').endsWith('"END"') || String(p3.value || '').includes('END') }
+  })
+  record('eval-chunk', chunk.total > 4000 && chunk.head === 4000 && chunk.trunc === true && chunk.p2 > 0 && chunk.p3end, JSON.stringify(chunk))
+
+  // 16. P1-2 storage/state round-trip: set → save → clear → load → read back.
+  const st = await page.evaluate(async () => {
+    const J = (r) => r.json()
+    await fetch('/nano-kitesurf/storage', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ scope: 'local', op: 'set', name: 'e2e-k', value: 'e2e-v' }) }).then(J)
+    const saved = await fetch('/nano-kitesurf/state', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'save', name: 'e2e' }) }).then(J)
+    await fetch('/nano-kitesurf/storage', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ scope: 'local', op: 'clear' }) }).then(J)
+    const loaded = await fetch('/nano-kitesurf/state', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'load', name: 'e2e' }) }).then(J)
+    const rd = await fetch('/nano-kitesurf/storage?scope=local').then(J)
+    return { savedOk: saved.ok === true, restored: loaded.restored, readBack: rd.result?.entries?.['e2e-k'] }
+  })
+  record('storage-state-roundtrip', st.savedOk && st.restored >= 1 && st.readBack === 'e2e-v', JSON.stringify(st))
+
   const failed = results.filter((r) => !r.ok)
   console.log(`\n${results.length - failed.length}/${results.length} checks passed`)
   console.log(JSON.stringify({ at: new Date().toISOString(), passed: results.length - failed.length, total: results.length, results }))

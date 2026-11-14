@@ -182,6 +182,32 @@ export const ROUTE_TABLE = [
   },
   {
     "plugin": "dsh-nano-kitesurf",
+    "path": "/nano-kitesurf/storage",
+    "methods": [
+      "GET",
+      "HEAD",
+      "POST"
+    ],
+    "sensitivity": "L2",
+    "capability": "write:engine",
+    "bodyLimit": 8192,
+    "sessionBinding": false,
+    "justification": "STORAGE_ROUTE (P1-2) — reads/writes localStorage/sessionStorage/document.cookie inside the engine page via Runtime.evaluate. Page-state write on the shared engine, same class as /evaluate. HttpOnly cookies annotated unreachable."
+  },
+  {
+    "plugin": "dsh-nano-kitesurf",
+    "path": "/nano-kitesurf/state",
+    "methods": [
+      "POST"
+    ],
+    "sensitivity": "L2",
+    "capability": "write:engine",
+    "bodyLimit": 65536,
+    "sessionBinding": false,
+    "justification": "STATE_ROUTE (P1-2) — {action:save} exports {localStorage,sessionStorage,cookie} and appends to $DSH_HOME/nano-kitesurf-state.jsonl; {action:load,state|name} restores it into the page. Host write (state file) + page write, L2."
+  },
+  {
+    "plugin": "dsh-nano-kitesurf",
     "path": "/nano-kitesurf/wait",
     "methods": [
       "POST"

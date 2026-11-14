@@ -75,6 +75,10 @@ export const ERROR_CATALOG = [
   { match: '^kitesurf\\.elements\\.empty$', example: 'kitesurf.elements.empty', status: 502, cause: '引擎 DOM.getDocument 未返回文档根（页面未打开）', next: '先 POST /open；或 GET /elements?selector=… 前先确认页面存在' },
   { match: '^kitesurf\\.snapshot\\.(empty|failed)$', example: 'kitesurf.snapshot.empty', status: 502, cause: 'a11y walker 没返回 JSON / 在页面里抛异常', next: '先 POST /open 再 GET /snapshot；页面若 about:blank 先导航' },
   { match: '^kitesurf\\.ref\\.miss$', example: 'kitesurf.ref.miss', status: 404, cause: '@N 元素 ref 不在当前表（页面变了/还没跑过 /snapshot）', next: 'GET /nano-kitesurf/snapshot 重建 ref 表后重试；或直接传 selector' },
+  { match: '^kitesurf\\.evaluate\\.miss$', example: 'kitesurf.evaluate.miss', status: 404, cause: 'evaluate 的 token 不在页内缓存（过期/页面重建）', next: '重新 POST /evaluate {expression} 取新 token；token 缓存页级，导航即失效' },
+  { match: '^kitesurf\\.storage\\.(name|op)$', example: 'kitesurf.storage.op', status: 400, cause: 'storage 请求缺 name 或 op 非法', next: 'GET /storage?scope=local|session|cookie 读；POST {scope,op:set|delete|clear,name,value}' },
+  { match: '^kitesurf\\.storage\\.exception$', example: 'kitesurf.storage.exception', status: 400, cause: 'storage 页面内操作抛异常（如 cookie 语法/配额）', next: '看 error 描述；localStorage/sessionStorage 用 key-value；cookie 走 document.cookie（HttpOnly 不可达）' },
+  { match: '^kitesurf\\.state\\.(miss|exception)$', example: 'kitesurf.state.miss', status: 400, cause: '/state load 缺 state 或命名快照不存在/页面内恢复抛异常', next: 'POST /state {action:save,name:"x"} 先存；load 传 {action:load,name:"x"} 或 {action:load,state:{...}}' },
 ]
 
 /**

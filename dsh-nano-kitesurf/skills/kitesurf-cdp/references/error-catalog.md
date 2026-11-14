@@ -40,3 +40,7 @@ A failed call returns `{ok:false,errorId,error}` with a real HTTP status. The sa
 | `kitesurf.elements.empty` | 502 | 引擎 DOM.getDocument 未返回文档根（页面未打开） | 先 POST /open；或 GET /elements?selector=… 前先确认页面存在 |
 | `kitesurf.snapshot.empty` | 502 | a11y walker 没返回 JSON / 在页面里抛异常 | 先 POST /open 再 GET /snapshot；页面若 about:blank 先导航 |
 | `kitesurf.ref.miss` | 404 | @N 元素 ref 不在当前表（页面变了/还没跑过 /snapshot） | GET /nano-kitesurf/snapshot 重建 ref 表后重试；或直接传 selector |
+| `kitesurf.evaluate.miss` | 404 | evaluate 的 token 不在页内缓存（过期/页面重建） | 重新 POST /evaluate {expression} 取新 token；token 缓存页级，导航即失效 |
+| `kitesurf.storage.op` | 400 | storage 请求缺 name 或 op 非法 | GET /storage?scope=local|session|cookie 读；POST {scope,op:set|delete|clear,name,value} |
+| `kitesurf.storage.exception` | 400 | storage 页面内操作抛异常（如 cookie 语法/配额） | 看 error 描述；localStorage/sessionStorage 用 key-value；cookie 走 document.cookie（HttpOnly 不可达） |
+| `kitesurf.state.miss` | 400 | /state load 缺 state 或命名快照不存在/页面内恢复抛异常 | POST /state {action:save,name:"x"} 先存；load 传 {action:load,name:"x"} 或 {action:load,state:{...}} |

@@ -764,6 +764,107 @@ export async function evaluateInPage(httpBase, expression) {
 }
 
 /**
+ * P1-2 chunked evaluation: the serialized value is stored in a page-global
+ * ring (`window.__nkEval`) keyed by a returned token. `POST /evaluate
+ * {expression}` returns `{value:head,token,total,truncated}` when it spills
+ * the 4000-char head; `POST /evaluate {token,offset}` pulls further slices.
+ * This keeps `returnByValue` semantics while lifting the hard 4KB ceiling —
+ * long storage dumps / a11y trees / synthesized probes survive.
+ */
+export async function evaluateChunked(httpBase, opts = {}) {
+  const token = typeof opts.token === 'string' && /^\d+$/.test(opts.token) ? opts.token : null
+  const offset = Math.max(0, Number(opts.offset) || 0)
+  return useLive(httpBase, async (client) => {
+    const page = await pageHandle(client)
+    if (token) {
+      const expr = `(()=>{const c=globalThis.__nkEval&&globalThis.__nkEval[${JSON.stringify(token)}];return c==null?null:{total:c.length,slice:c.slice(${offset},${offset + 4000})}})()`
+      const r = await client.send('Runtime.evaluate', { expression: expr, returnByValue: true, awaitPromise: true }, page.sessionId)
+      const v = r.result?.value
+      if (!v) throw new KitesurfError('kitesurf.evaluate.miss', `eval token ${token} not found or expired`)
+      return { token, offset, value: String(v.slice), total: Number(v.total), truncated: offset + 4000 < Number(v.total) }
+    }
+    const text = typeof opts.expression === 'string' ? opts.expression.trim() : ''
+    if (!text) throw new KitesurfError('kitesurf.evaluate.empty', 'expression is empty')
+    if (text.length > 2000) throw new KitesurfError('kitesurf.evaluate.toolong', 'expression exceeds 2000 characters')
+    // Eval the expression, stash the stringified result under a token, return head.
+    const expr = `(async()=>{const __v=await (${text});let __s;try{__s=JSON.stringify(__v)}catch{__s=String(__v)}if(__s==null)__s='null';const t=String((globalThis.__nkSeq=(globalThis.__nkSeq||0)+1));globalThis.__nkEval=globalThis.__nkEval||{};globalThis.__nkEval[t]=__s;const ks=Object.keys(globalThis.__nkEval);if(ks.length>20)for(const k of ks.slice(0,ks.length-20))delete globalThis.__nkEval[k];return{token:t,total:__s.length,head:__s.slice(0,4000),type:typeof __v}})()`
+    const r = await client.send('Runtime.evaluate', { expression: expr, returnByValue: true, awaitPromise: true }, page.sessionId)
+    if (r.exceptionDetails) {
+      const d = r.exceptionDetails
+      throw new KitesurfError('kitesurf.evaluate.exception', String(d.exception?.description || d.text || 'evaluation threw').slice(0, 240))
+    }
+    const v = r.result?.value || {}
+    return { type: String(v.type || 'undefined'), token: v.token, offset: 0, value: String(v.head ?? ''), total: Number(v.total || 0), truncated: Number(v.total || 0) > 4000 }
+  })
+}
+
+/**
+ * P1-2 storage read/write. `read` returns the whole store as JSON (paged via
+ * the eval cache when large); `set`/`delete`/`clear` write it. Cookies go
+ * through `document.cookie` — HttpOnly entries are annotated unreachable.
+ */
+export async function storageOp(httpBase, opts = {}) {
+  const scope = opts.scope === 'session' ? 'sessionStorage' : opts.scope === 'cookie' ? 'cookie' : 'localStorage'
+  const op = opts.op || 'read'
+  return useLive(httpBase, async (client) => {
+    const page = await pageHandle(client)
+    let expr
+    if (scope === 'cookie') {
+      if (op === 'read') {
+        expr = `(()=>{const m={};for(const p of document.cookie.split('; ')){const i=p.indexOf('=');if(i>0)m[p.slice(0,i)]=p.slice(i+1)}return{entries:m,httpOnly:'unreachable via document.cookie'}})()`
+      } else if (op === 'set') {
+        const name = String(opts.name || ''); const value = String(opts.value ?? '')
+        if (!name) throw new KitesurfError('kitesurf.storage.name', 'cookie set requires name')
+        expr = `(()=>{document.cookie=${JSON.stringify(`${name}=${value}; path=/`)};return{ok:true}})()`
+      } else if (op === 'delete' || op === 'clear') {
+        const name = String(opts.name || '')
+        expr = op === 'clear'
+          ? `(()=>{for(const p of document.cookie.split('; ')){const i=p.indexOf('=');if(i>0)document.cookie=p.slice(0,i)+'=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/'}return{ok:true}})()`
+          : (name ? `(()=>{document.cookie=${JSON.stringify(name + '=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/')};return{ok:true}})()` : '')
+      }
+    } else {
+      if (op === 'read') expr = `(()=>{const s=${scope};const m={};for(let i=0;i<s.length;i++){const k=s.key(i);m[k]=s.getItem(k)}return{entries:m}})()`
+      else if (op === 'set') {
+        const name = String(opts.name || ''); const value = String(opts.value ?? '')
+        if (!name) throw new KitesurfError('kitesurf.storage.name', 'set requires name')
+        expr = `(()=>{${scope}.setItem(${JSON.stringify(name)},${JSON.stringify(value)});return{ok:true}})()`
+      } else if (op === 'delete') {
+        const name = String(opts.name || '')
+        if (!name) throw new KitesurfError('kitesurf.storage.name', 'delete requires name')
+        expr = `(()=>{${scope}.removeItem(${JSON.stringify(name)});return{ok:true}})()`
+      } else if (op === 'clear') expr = `(()=>{${scope}.clear();return{ok:true}})()`
+    }
+    if (!expr) throw new KitesurfError('kitesurf.storage.op', `unsupported op ${op}`)
+    const r = await client.send('Runtime.evaluate', { expression: expr, returnByValue: true, awaitPromise: true }, page.sessionId)
+    if (r.exceptionDetails) {
+      const d = r.exceptionDetails
+      throw new KitesurfError('kitesurf.storage.exception', String(d.exception?.description || d.text || 'storage op threw').slice(0, 240))
+    }
+    return { scope: opts.scope === 'session' ? 'session' : opts.scope === 'cookie' ? 'cookie' : 'local', op, result: r.result?.value ?? null }
+  })
+}
+
+/** P1-2 state snapshot: export or restore {localStorage,sessionStorage,cookie}. */
+export async function stateOp(httpBase, opts = {}) {
+  const action = opts.action === 'load' ? 'load' : 'save'
+  return useLive(httpBase, async (client) => {
+    const page = await pageHandle(client)
+    if (action === 'save') {
+      const expr = `(()=>{const grab=s=>{const m={};for(let i=0;i<s.length;i++){const k=s.key(i);m[k]=s.getItem(k)}return m};return{localStorage:grab(localStorage),sessionStorage:grab(sessionStorage),cookie:document.cookie,url:location.href,at:new Date().toISOString()}})()`
+      const r = await client.send('Runtime.evaluate', { expression: expr, returnByValue: true, awaitPromise: true }, page.sessionId)
+      if (r.exceptionDetails) throw new KitesurfError('kitesurf.state.exception', String(r.exceptionDetails.exception?.description || r.exceptionDetails.text || 'save threw').slice(0, 240))
+      return { action, state: r.result?.value ?? {} }
+    }
+    const st = opts.state && typeof opts.state === 'object' ? opts.state : {}
+    const put = (store, obj) => `{const s=${store};for(const k of ${JSON.stringify(Object.keys(obj))})s.setItem(k,${JSON.stringify(obj)}[k])}`
+    const expr = `(()=>{${put('localStorage', st.localStorage || {})}${put('sessionStorage', st.sessionStorage || {})}if(${JSON.stringify(String(st.cookie || ''))})document.cookie=${JSON.stringify(String(st.cookie || ''))};return{ok:true}})()`
+    const r = await client.send('Runtime.evaluate', { expression: expr, returnByValue: true, awaitPromise: true }, page.sessionId)
+    if (r.exceptionDetails) throw new KitesurfError('kitesurf.state.exception', String(r.exceptionDetails.exception?.description || r.exceptionDetails.text || 'load threw').slice(0, 240))
+    return { action, restored: Object.keys(st.localStorage || {}).length + Object.keys(st.sessionStorage || {}).length }
+  })
+}
+
+/**
  * Browser chrome — real back/forward via the engine's navigationHistory,
  * not scroll-by-pixels wearing nav-button clothing. `delta` is -1|+1.
  * Returns the destination entry (or null when the move is a no-op) so the

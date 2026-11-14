@@ -11,6 +11,23 @@ import { TermCanvas, buildPalette } from './render.js'
 import { encodeKey, encodePaste, encodeMouse, encodeFocus } from './keys.js'
 import { makeLane } from './lanes.js'
 
+// Spinner glyphs programs append to OSC titles for animation — strip them so
+// the pane title is stable (herdr terminal_title_stripped convention)
+const SPINNER = /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏◐◓◑◒◴◷◶◵⣾⣽⣻⢿⡿⣟⣯⣷\\|/-]$/u
+function stripSpinner(s) {
+  return s.replace(SPINNER, '').trimEnd()
+}
+
+/**
+ * Effective display state for a pane status record:
+ * lifecycle phase overlaid by the program's OSC 7501 report.
+ */
+function effState(s) {
+  if (!s) return 'opening'
+  if (s.phase !== 'live') return s.phase
+  return s.prog?.state ?? 'live'
+}
+
 let paneSeq = 1
 const FONT_FAMILIES = {
   jetbrains: '"JetBrains Mono", "Fira Code", "SF Mono", Menlo, Consolas, monospace',
@@ -406,14 +423,23 @@ function StatusBar({ sessionId, split, openLeaf, focused, zh, tree, paneSessions
 
   const count = Object.keys(statuses).length
   const cur = focused ? statuses[focused] : (target ? statuses[target] : undefined)
-  const phaseDot = { opening: 'ongoing', live: 'done', exited: 'idle', error: 'error' }
-  const phaseText = { opening: zh ? '连接中' : 'connecting', live: zh ? '运行中' : 'live', exited: zh ? '已退出' : 'exited', error: zh ? '失败' : 'failed' }
+  // rollup (herdr convention): counts of program states bubble to the bar so
+  // the owner sees "2 working · 1 blocked" without opening panes
+  const rollup = Object.values(statuses).reduce((acc, s) => {
+    const e = effState(s)
+    acc[e] = (acc[e] ?? 0) + 1
+    return acc
+  }, {})
+  const phaseDot = { opening: 'ongoing', live: 'done', exited: 'idle', error: 'error', working: 'ongoing', blocked: 'error', done: 'done', idle: 'idle' }
+  const phaseText = { opening: zh ? '连接中' : 'connecting', live: zh ? '运行中' : 'live', exited: zh ? '已退出' : 'exited', error: zh ? '失败' : 'failed', working: zh ? '工作中' : 'working', blocked: zh ? '待处理' : 'blocked', done: zh ? '已完成' : 'done', idle: zh ? '空闲' : 'idle' }
   const laneText = { local: 'LOCAL', mcp: 'MCP', isolate: 'ISOLATE' }
   // statusbar mirrors TrajectoryToolbar.tsx exactly: root→inner→actions→
   // (toggle + action buttons with actionIcon text glyphs) + search on the
   // right. Host module classes resolved by trajCls; zero local chrome rules.
+  const eff = effState(cur)
+  const rollText = [rollup.working && `${rollup.working}${zh ? ' 工作' : 'w'}`, rollup.blocked && `${rollup.blocked}${zh ? ' 待处理' : 'blk'}`].filter(Boolean).join(' · ')
   const statSummary = cur
-    ? `${laneText[cur.lane] ?? cur.lane} · ${count}${zh ? ' 窗格' : ' panes'}${cur.dims ? ` · ${cur.dims.cols}×${cur.dims.rows}` : ''} · ${phaseText[cur.phase] ?? cur.phase}`
+    ? `${laneText[cur.lane] ?? cur.lane} · ${count}${zh ? ' 窗格' : ' panes'}${cur.dims ? ` · ${cur.dims.cols}×${cur.dims.rows}` : ''} · ${phaseText[eff] ?? eff}${rollText ? ` · ${rollText}` : ''}`
     : null
   return (
     <div className={trajCls('root')} role="toolbar" aria-label={zh ? '终端状态栏' : 'terminal status bar'}>
@@ -428,7 +454,7 @@ function StatusBar({ sessionId, split, openLeaf, focused, zh, tree, paneSessions
           </button>
           {count > 0 && cur && (
             <button type="button" className={trajCls('toggle')} aria-label={zh ? '窗格与通道' : 'panes and lane'} title={cur.title ?? statSummary}>
-              <StateDot state={phaseDot[cur.phase] ?? 'idle'} />
+              <StateDot state={phaseDot[eff] ?? 'idle'} />
               {statSummary}
             </button>
           )}
@@ -723,7 +749,14 @@ function TermPane({ paneId, laneSpec, sessionId, session, focused, onFocus, onCl
           applyStatus((s) => ({ ...s, scroll: { total, viewStart: lastViewStart, rows: canvas.rows } }))
         }
         const title = term.title()
-        if (title) applyStatus((s) => ({ ...s, title: title.slice(0, 60) }))
+        if (title) applyStatus((s) => ({ ...s, title: stripSpinner(title).slice(0, 60) }))
+        // OSC 7501: program-reported state polled at paint cadence — the core
+        // never guesses from the screen (herdr-core rule)
+        const st = term.state?.()
+        if (st && st.seq !== stateRef.current.stateSeq) {
+          stateRef.current.stateSeq = st.seq
+          applyStatus((s) => ({ ...s, prog: st.root ? { state: st.root.state, kind: st.root.kind, app: st.root.app, msg: st.root.msg, progress: st.root.progress } : null }))
+        }
       }
     }
     const schedulePaint = () => { if (!raf) raf = requestAnimationFrame(paint) }
@@ -888,7 +921,11 @@ function TermPane({ paneId, laneSpec, sessionId, session, focused, onFocus, onCl
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paneId, laneSpec.lane, laneSpec.url, retrySeq])
 
-  const phaseDot = { opening: 'ongoing', live: 'done', exited: 'idle', error: 'error' }
+  // five-level state (W-P0-6): lifecycle phase {opening,live,exited,error}
+  // overlaid by the program's own OSC 7501 report {idle,working,blocked,done};
+  // blocked carries kind=permission|question|auth for the caller to act on.
+  const eff = effState(status)
+  const phaseDot = { opening: 'ongoing', live: 'done', exited: 'idle', error: 'error', working: 'ongoing', blocked: 'error', done: 'done', idle: 'idle' }
   const laneText = { local: 'LOCAL', mcp: 'MCP', isolate: 'ISOLATE' }
   return (
     <div
@@ -899,8 +936,11 @@ function TermPane({ paneId, laneSpec, sessionId, session, focused, onFocus, onCl
       data-focused={focused ? 'true' : 'false'}
     >
       <div className="dnt-header">
-        <StateDot state={phaseDot[status.phase] ?? 'idle'} />
+        <StateDot state={phaseDot[eff] ?? 'idle'} />
         <Tag tone="outline">{laneText[laneSpec.lane] ?? laneSpec.lane}</Tag>
+        {status.prog?.state && status.prog.state !== 'idle' && (
+          <Tag tone={status.prog.state === 'blocked' ? 'warn' : 'info'}>{status.prog.state === 'blocked' ? (status.prog.kind ?? 'blocked') : status.prog.state}</Tag>
+        )}
         <span className="dnt-title">{status.title || (status.phase === 'error' ? (zh ? '连接失败' : 'open failed') : '')}</span>
         <span className="dnt-scroll-lines">{status.scroll?.total ? `${status.scroll.total}ln` : ''}</span>
         <span className="dnt-header-actions">

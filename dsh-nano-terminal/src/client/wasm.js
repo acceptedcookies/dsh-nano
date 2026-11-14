@@ -109,6 +109,24 @@ export class WasmTerm {
     coreExports().dnt_dead(this.id)
   }
 
+  /**
+   * Program-reported OSC 7501 state — "the core never guesses the screen".
+   * Returns { seq, title, records, root } or null when the ABI is absent.
+   */
+  state() {
+    const e = coreExports()
+    if (!e.dnt_state_json) return null
+    const ptr = e.dnt_state_json(this.id)
+    const len = e.dnt_state_len(this.id)
+    if (!ptr || !len) return null
+    try {
+      const parsed = JSON.parse(decoder.decode(memU8().subarray(ptr, ptr + len)))
+      return { ...parsed, root: parsed.records?.find((r) => r.id === '') ?? null }
+    } catch {
+      return null
+    }
+  }
+
   /** Title string, or null when unchanged since last poll. */
   title() {
     const e = coreExports()

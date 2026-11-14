@@ -121,6 +121,12 @@ const STYLE = `
 .nks-dt-rule{display:flex;gap:8px;padding:1px 0;color:var(--dsw-alias-label-tertiary)}
 .nks-dt-rule b{color:var(--dsw-alias-link,#7aaaff);font-weight:500;max-width:45%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .nks-dt-rule span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nks-tabs-wrap{display:flex;flex-direction:column;min-height:0}
+.nks-tabs{display:flex;gap:2px;border-bottom:.5px solid var(--dsw-alias-border-l2);margin-bottom:8px}
+.nks-tabs button{height:30px;padding:0 12px;border:0;border-bottom:2px solid transparent;background:transparent;color:var(--dsw-alias-label-tertiary);font:inherit;cursor:pointer}
+.nks-tabs button[aria-selected="true"]{color:var(--dsw-alias-label-primary);border-bottom-color:var(--dsw-alias-link,#7aaaff)}
+.nks-hist-tab{display:flex;flex-direction:column;min-height:0;max-height:360px}
+.nks-hist-list{overflow:auto}
 .nks-modal-mask{position:absolute;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.45)}
 .nks-modal{width:min(560px,92%);max-height:78%;display:flex;flex-direction:column;background:var(--dsw-alias-bg-base);border:.5px solid var(--dsw-alias-border-l2);border-radius:10px;box-shadow:0 16px 48px rgba(0,0,0,.45);overflow:hidden}
 .nks-modal-head{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:.5px solid var(--dsw-alias-border-l2)}
@@ -1234,6 +1240,37 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
     doc.addEventListener('mouseleave', clearHover, true)
   }
 
+  /** Settings shell with tabs: environment/settings vs browse history. */
+  function SettingsTabs({ children }) {
+    const [tab, setTab] = React.useState('env')
+    return h('div', { className: 'nks-tabs-wrap' },
+      h('div', { className: 'nks-tabs', role: 'tablist' },
+        h('button', { type: 'button', role: 'tab', 'data-nks-tab': 'env', 'aria-selected': tab === 'env' ? 'true' : 'false', onClick: () => setTab('env') }, '设置'),
+        h('button', { type: 'button', role: 'tab', 'data-nks-tab': 'history', 'aria-selected': tab === 'history' ? 'true' : 'false', onClick: () => setTab('history') }, '浏览历史')),
+      tab === 'env' ? children : h(HistoryTab))
+  }
+
+  function HistoryTab() {
+    const [rows, setRows] = React.useState([])
+    const [q, setQ] = React.useState('')
+    const load = React.useCallback(async (needle) => {
+      const data = await fetch(`${BROWSE_HISTORY}?limit=100${needle ? '&q=' + encodeURIComponent(needle) : ''}`).then((r) => r.json())
+      setRows(data.entries || [])
+    }, [])
+    React.useEffect(() => { load('').catch(() => {}) }, [load])
+    const del = async (id) => { await fetch(`${BROWSE_HISTORY}?id=${encodeURIComponent(id)}`, { method: 'DELETE' }); await load(q) }
+    const clear = async () => { await fetch(BROWSE_HISTORY, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ clear: true }) }); await load(q) }
+    return h('div', { className: 'nks-hist-tab', 'data-nks-hist-tab': '1' },
+      h('div', { className: 'nks-modal-bar', style: { padding: '4px 0' } },
+        h('input', { 'data-nks-history-q': '1', placeholder: '搜索地址…', value: q, onChange: async (e) => { setQ(e.target.value); await load(e.target.value) } }),
+        h('button', { type: 'button', 'data-nks-history-clear': '1', disabled: !rows.length, onClick: clear }, '清空')),
+      h('div', { className: 'nks-hist-list' }, rows.length ? rows.map((row) => h('div', { className: 'nks-hist-row', key: row.id, 'data-nks-history-row': row.id },
+        h('button', { type: 'button', className: 'nks-hist-open', onClick: () => { setDraftUrl(row.url); run(() => navigate(row.url)) } },
+          h('span', { className: 'nks-hist-url' }, row.url),
+          h('span', { className: 'nks-hist-meta' }, `${String(row.at).slice(0, 16).replace('T', ' ')}${row.count > 1 ? ' · ' + row.count + ' 次' : ''}`)),
+        h('button', { type: 'button', className: 'nks-hist-del', onClick: () => del(row.id), 'aria-label': '删除' }, '×'))) : h('div', { className: 'nks-modal-empty' }, '还没有浏览记录')))
+  }
+
   function HistoryDialog({ open, onClose }) {
     const [rows, setRows] = React.useState([])
     const [q, setQ] = React.useState('')
@@ -1366,7 +1403,7 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
       // again would double root.unmount()/host.remove() (S3-3).
       onCancel: () => { dialogOpenRef.current = false },
       onConfirm: () => save(),
-      children: h('form', {
+      children: h(SettingsTabs, null, h('form', {
         className: 'nks-settings-body',
         onSubmit: (event) => { event.preventDefault(); save() },
       },
@@ -1411,7 +1448,7 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
           className: 'nks-choice',
           onClick: (event) => selectRadio(event.currentTarget.parentElement, value),
         }, label))),
-        h('button', { type: 'submit', style: { display: 'none' }, 'aria-hidden': 'true', tabIndex: -1 })),
+        h('button', { type: 'submit', style: { display: 'none' }, 'aria-hidden': 'true', tabIndex: -1 }))),
     })
     close = () => { dialogOpenRef.current = false; dialog.close() }
 

@@ -13,13 +13,13 @@
         "dsh-nano-terminal": "0.1.0"
       }
     },
-    "generatedAt": "2026-11-14T11:20:43.795Z"
+    "generatedAt": "2026-11-14T14:38:52.577Z"
   },
   "reports": {
     "idle-10s": {
       "version": 1,
       "meta": {
-        "generatedAt": "2026-11-14T11:19:57.836Z",
+        "generatedAt": "2026-11-14T14:36:12.014Z",
         "scenario": "idle-10s",
         "arm": "on",
         "dshVersion": null,
@@ -41,10 +41,11 @@
         ],
         "gitSha": null,
         "labels": {},
-        "hostSinceStart": "2026-11-14T11:16:05.001Z",
-        "hostWrittenAt": "2026-11-14T11:19:57.827Z",
+        "hostSinceStart": "2026-11-14T14:10:58.838Z",
+        "hostWrittenAt": "2026-11-14T14:36:12.007Z",
         "hostEnabled": true,
-        "hostWindow": true
+        "hostWindow": true,
+        "repeats": 3
       },
       "enabled": true,
       "loafSupported": true,
@@ -55,26 +56,26 @@
         "inputDelayP95": null,
         "processingP95": null,
         "presentationP95": null,
-        "loafCount": 0,
+        "loafCount": 2,
         "blockingMs": 0,
         "forcedLayoutMs": 0,
         "nanoCombined": {
           "scriptMs": 0,
           "loafCount": 0,
           "blockingMs": 0,
-          "clientJsBytes": 831175,
+          "clientJsBytes": 1005218,
           "comboResources": 1
         },
         "resources": {
-          "nanoClientJsBytes": 831175,
-          "totalJsBytes": 3492109
+          "nanoClientJsBytes": 1005218,
+          "totalJsBytes": 3666151
         }
       },
       "plugins": {
         "nano-notepad": {
           "meta": {
             "version": "0.2.0",
-            "implantedAt": "2026-11-14T11:19:45.683Z",
+            "implantedAt": "2026-11-14T14:35:59.854Z",
             "implanted": true
           },
           "own": {
@@ -91,7 +92,7 @@
           },
           "spans": {
             "render": {
-              "n": 3,
+              "n": 4,
               "windowN": 0,
               "p50": null,
               "p95": null,
@@ -143,7 +144,7 @@
               "live": 1,
               "callbackMs": 0,
               "totalCallbacks": 1,
-              "totalCallbackMs": 1.1
+              "totalCallbackMs": 0.6
             },
             "visibility": {
               "kind": "listener",
@@ -182,8 +183,8 @@
               "callbacks": 0,
               "live": 1,
               "callbackMs": 0,
-              "totalCallbacks": 8,
-              "totalCallbackMs": 0.2
+              "totalCallbacks": 33,
+              "totalCallbackMs": 0.7
             }
           },
           "usage": {},
@@ -197,7 +198,7 @@
         "nano-model-selector": {
           "meta": {
             "version": "0.2.0",
-            "implantedAt": "2026-11-14T11:19:45.720Z",
+            "implantedAt": "2026-11-14T14:35:59.911Z",
             "implanted": true
           },
           "own": {
@@ -240,7 +241,7 @@
         "nano-explorer-extra": {
           "meta": {
             "version": "0.3.0",
-            "implantedAt": "2026-11-14T11:19:45.724Z",
+            "implantedAt": "2026-11-14T14:35:59.916Z",
             "implanted": true
           },
           "own": {
@@ -255,10 +256,64 @@
               "callbacks": 0
             }
           },
-          "spans": {},
-          "tracks": {},
+          "spans": {
+            "apply-status": {
+              "n": 6,
+              "windowN": 0,
+              "p50": null,
+              "p95": null,
+              "maxMs": null
+            },
+            "stats-count": {
+              "n": 1,
+              "windowN": 0,
+              "p50": null,
+              "p95": null,
+              "maxMs": null
+            },
+            "list-level": {
+              "n": 1,
+              "windowN": 0,
+              "p50": null,
+              "p95": null,
+              "maxMs": null
+            },
+            "git-refresh": {
+              "n": 1,
+              "windowN": 0,
+              "p50": null,
+              "p95": null,
+              "maxMs": null
+            }
+          },
+          "tracks": {
+            "git-poll": {
+              "kind": "interval",
+              "callbacks": 0,
+              "live": 1,
+              "callbackMs": 0,
+              "totalCallbacks": 0,
+              "totalCallbackMs": 0
+            }
+          },
           "usage": {},
-          "hostSpan": {},
+          "hostSpan": {
+            "git-status": {
+              "n": 0,
+              "p50": null,
+              "p95": null
+            },
+            "list": {
+              "n": 0,
+              "p50": null,
+              "p95": null
+            },
+            "stats": {
+              "n": 0,
+              "p50": null,
+              "p95": null
+            }
+          },
           "profiler": {
             "commits": 0,
             "commitP95": null
@@ -288,7 +343,7 @@
     "composer-type": {
       "version": 1,
       "meta": {
-        "generatedAt": "2026-11-14T11:20:14.461Z",
+        "generatedAt": "2026-11-14T14:36:53.111Z",
         "scenario": "composer-type",
         "arm": "on",
         "dshVersion": null,
@@ -310,40 +365,41 @@
         ],
         "gitSha": null,
         "labels": {},
-        "hostSinceStart": "2026-11-14T11:16:05.001Z",
-        "hostWrittenAt": "2026-11-14T11:20:14.452Z",
+        "hostSinceStart": "2026-11-14T14:10:58.838Z",
+        "hostWrittenAt": "2026-11-14T14:36:53.104Z",
         "hostEnabled": true,
-        "hostWindow": true
+        "hostWindow": true,
+        "repeats": 3
       },
       "enabled": true,
       "loafSupported": true,
       "page": {
-        "nativeInpP75": null,
-        "nativeInpCount": 0,
+        "nativeInpP75": 808,
+        "nativeInpCount": 50,
         "nativeInpDurationThreshold": 16,
-        "inputDelayP95": null,
-        "processingP95": null,
-        "presentationP95": null,
-        "loafCount": 0,
+        "inputDelayP95": 0.6,
+        "processingP95": 4.1,
+        "presentationP95": 989.3,
+        "loafCount": 6,
         "blockingMs": 0,
         "forcedLayoutMs": 0,
         "nanoCombined": {
           "scriptMs": 0,
           "loafCount": 0,
           "blockingMs": 0,
-          "clientJsBytes": 831175,
+          "clientJsBytes": 1005218,
           "comboResources": 1
         },
         "resources": {
-          "nanoClientJsBytes": 831175,
-          "totalJsBytes": 3492109
+          "nanoClientJsBytes": 1005218,
+          "totalJsBytes": 3666151
         }
       },
       "plugins": {
         "nano-notepad": {
           "meta": {
             "version": "0.2.0",
-            "implantedAt": "2026-11-14T11:19:58.191Z",
+            "implantedAt": "2026-11-14T14:36:37.145Z",
             "implanted": true
           },
           "own": {
@@ -352,29 +408,29 @@
           },
           "native": {
             "spanMsP95": null,
-            "trackMsP95": null,
+            "trackMsP95": 0.1,
             "samples": {
               "spans": 0,
-              "callbacks": 0
+              "callbacks": 1085
             }
           },
           "spans": {
             "render": {
-              "n": 3,
+              "n": 4,
               "windowN": 0,
               "p50": null,
               "p95": null,
               "maxMs": null
             },
             "highlight": {
-              "n": 1,
+              "n": 3,
               "windowN": 0,
               "p50": null,
               "p95": null,
               "maxMs": null
             },
             "highlight-dom": {
-              "n": 1,
+              "n": 3,
               "windowN": 0,
               "p50": null,
               "p95": null,
@@ -384,11 +440,11 @@
           "tracks": {
             "shortcut-key": {
               "kind": "listener",
-              "callbacks": 113,
+              "callbacks": 109,
               "live": 2,
-              "callbackMs": 0.3,
+              "callbackMs": 0.2,
               "totalCallbacks": 266,
-              "totalCallbackMs": 0.9
+              "totalCallbackMs": 0.6
             },
             "draft-commit": {
               "kind": "interval",
@@ -412,7 +468,7 @@
               "live": 1,
               "callbackMs": 0,
               "totalCallbacks": 1,
-              "totalCallbackMs": 1.2
+              "totalCallbackMs": 0.4
             },
             "visibility": {
               "kind": "listener",
@@ -432,11 +488,11 @@
             },
             "escape-key": {
               "kind": "listener",
-              "callbacks": 56,
+              "callbacks": 54,
               "live": 1,
               "callbackMs": 0,
               "totalCallbacks": 133,
-              "totalCallbackMs": 0.1
+              "totalCallbackMs": 0
             },
             "bc-message": {
               "kind": "broadcast",
@@ -451,8 +507,8 @@
               "callbacks": 0,
               "live": 1,
               "callbackMs": 0,
-              "totalCallbacks": 8,
-              "totalCallbackMs": 0.2
+              "totalCallbacks": 39,
+              "totalCallbackMs": 0.8
             }
           },
           "usage": {},
@@ -466,7 +522,7 @@
         "nano-model-selector": {
           "meta": {
             "version": "0.2.0",
-            "implantedAt": "2026-11-14T11:19:58.216Z",
+            "implantedAt": "2026-11-14T14:36:37.167Z",
             "implanted": true
           },
           "own": {
@@ -509,7 +565,7 @@
         "nano-explorer-extra": {
           "meta": {
             "version": "0.3.0",
-            "implantedAt": "2026-11-14T11:19:58.220Z",
+            "implantedAt": "2026-11-14T14:36:37.169Z",
             "implanted": true
           },
           "own": {
@@ -524,10 +580,64 @@
               "callbacks": 0
             }
           },
-          "spans": {},
-          "tracks": {},
+          "spans": {
+            "apply-status": {
+              "n": 6,
+              "windowN": 0,
+              "p50": null,
+              "p95": null,
+              "maxMs": null
+            },
+            "stats-count": {
+              "n": 1,
+              "windowN": 0,
+              "p50": null,
+              "p95": null,
+              "maxMs": null
+            },
+            "list-level": {
+              "n": 1,
+              "windowN": 0,
+              "p50": null,
+              "p95": null,
+              "maxMs": null
+            },
+            "git-refresh": {
+              "n": 1,
+              "windowN": 0,
+              "p50": null,
+              "p95": null,
+              "maxMs": null
+            }
+          },
+          "tracks": {
+            "git-poll": {
+              "kind": "interval",
+              "callbacks": 1,
+              "live": 1,
+              "callbackMs": 0.2,
+              "totalCallbacks": 1,
+              "totalCallbackMs": 0.2
+            }
+          },
           "usage": {},
-          "hostSpan": {},
+          "hostSpan": {
+            "git-status": {
+              "n": 1,
+              "p50": 1021.7,
+              "p95": 1021.7
+            },
+            "list": {
+              "n": 0,
+              "p50": null,
+              "p95": null
+            },
+            "stats": {
+              "n": 0,
+              "p50": null,
+              "p95": null
+            }
+          },
           "profiler": {
             "commits": 0,
             "commitP95": null
@@ -557,7 +667,7 @@
     "files-expand": {
       "version": 1,
       "meta": {
-        "generatedAt": "2026-11-14T11:20:21.261Z",
+        "generatedAt": "2026-11-14T14:37:32.569Z",
         "scenario": "files-expand",
         "arm": "on",
         "dshVersion": null,
@@ -579,10 +689,11 @@
         ],
         "gitSha": null,
         "labels": {},
-        "hostSinceStart": "2026-11-14T11:16:05.001Z",
-        "hostWrittenAt": "2026-11-14T11:20:21.249Z",
+        "hostSinceStart": "2026-11-14T14:10:58.838Z",
+        "hostWrittenAt": "2026-11-14T14:37:32.561Z",
         "hostEnabled": true,
-        "hostWindow": true
+        "hostWindow": true,
+        "repeats": 3
       },
       "enabled": true,
       "loafSupported": true,
@@ -593,26 +704,26 @@
         "inputDelayP95": null,
         "processingP95": null,
         "presentationP95": null,
-        "loafCount": 0,
+        "loafCount": 3,
         "blockingMs": 0,
-        "forcedLayoutMs": 0,
+        "forcedLayoutMs": 13.5,
         "nanoCombined": {
-          "scriptMs": 0,
-          "loafCount": 0,
+          "scriptMs": 17.4,
+          "loafCount": 2,
           "blockingMs": 0,
-          "clientJsBytes": 831175,
+          "clientJsBytes": 1005218,
           "comboResources": 1
         },
         "resources": {
-          "nanoClientJsBytes": 831175,
-          "totalJsBytes": 3492109
+          "nanoClientJsBytes": 1005218,
+          "totalJsBytes": 3666151
         }
       },
       "plugins": {
         "nano-notepad": {
           "meta": {
             "version": "0.2.0",
-            "implantedAt": "2026-11-14T11:20:14.814Z",
+            "implantedAt": "2026-11-14T14:37:26.156Z",
             "implanted": true
           },
           "own": {
@@ -629,21 +740,21 @@
           },
           "spans": {
             "render": {
-              "n": 3,
+              "n": 4,
               "windowN": 0,
               "p50": null,
               "p95": null,
               "maxMs": null
             },
             "highlight": {
-              "n": 1,
+              "n": 3,
               "windowN": 0,
               "p50": null,
               "p95": null,
               "maxMs": null
             },
             "highlight-dom": {
-              "n": 1,
+              "n": 3,
               "windowN": 0,
               "p50": null,
               "p95": null,
@@ -681,7 +792,7 @@
               "live": 1,
               "callbackMs": 0,
               "totalCallbacks": 1,
-              "totalCallbackMs": 1.3
+              "totalCallbackMs": 0.3
             },
             "visibility": {
               "kind": "listener",
@@ -717,11 +828,11 @@
             },
             "ctia-watch": {
               "kind": "mutation",
-              "callbacks": 0,
+              "callbacks": 10,
               "live": 1,
-              "callbackMs": 0,
-              "totalCallbacks": 8,
-              "totalCallbackMs": 0.2
+              "callbackMs": 0.6,
+              "totalCallbacks": 41,
+              "totalCallbackMs": 1.3
             }
           },
           "usage": {},
@@ -735,7 +846,7 @@
         "nano-model-selector": {
           "meta": {
             "version": "0.2.0",
-            "implantedAt": "2026-11-14T11:20:14.842Z",
+            "implantedAt": "2026-11-14T14:37:26.175Z",
             "implanted": true
           },
           "own": {
@@ -778,7 +889,7 @@
         "nano-explorer-extra": {
           "meta": {
             "version": "0.3.0",
-            "implantedAt": "2026-11-14T11:20:14.846Z",
+            "implantedAt": "2026-11-14T14:37:26.177Z",
             "implanted": true
           },
           "own": {
@@ -793,10 +904,73 @@
               "callbacks": 0
             }
           },
-          "spans": {},
-          "tracks": {},
-          "usage": {},
-          "hostSpan": {},
+          "spans": {
+            "apply-status": {
+              "n": 19,
+              "windowN": 13,
+              "p50": 0,
+              "p95": 0.1,
+              "maxMs": 0.1
+            },
+            "stats-count": {
+              "n": 1,
+              "windowN": 0,
+              "p50": null,
+              "p95": null,
+              "maxMs": null
+            },
+            "list-level": {
+              "n": 4,
+              "windowN": 3,
+              "p50": 35,
+              "p95": 92.8,
+              "maxMs": 92.8
+            },
+            "git-refresh": {
+              "n": 1,
+              "windowN": 0,
+              "p50": null,
+              "p95": null,
+              "maxMs": null
+            },
+            "dir-status": {
+              "n": 3,
+              "windowN": 3,
+              "p50": 317.9,
+              "p95": 321.3,
+              "maxMs": 321.3
+            }
+          },
+          "tracks": {
+            "git-poll": {
+              "kind": "interval",
+              "callbacks": 0,
+              "live": 1,
+              "callbackMs": 0,
+              "totalCallbacks": 0,
+              "totalCallbackMs": 0
+            }
+          },
+          "usage": {
+            "files-expand": 3
+          },
+          "hostSpan": {
+            "git-status": {
+              "n": 3,
+              "p50": 295.9,
+              "p95": 310.8
+            },
+            "list": {
+              "n": 3,
+              "p50": 25.8,
+              "p95": 72.2
+            },
+            "stats": {
+              "n": 0,
+              "p50": null,
+              "p95": null
+            }
+          },
           "profiler": {
             "commits": 0,
             "commitP95": null
@@ -804,7 +978,9 @@
           "scriptMs": 0
         }
       },
-      "counts": {},
+      "counts": {
+        "files-expand": 3
+      },
       "structure": {
         "rootErrors": 0,
         "badNames": 0,
@@ -826,7 +1002,7 @@
     "notepad-type": {
       "version": 1,
       "meta": {
-        "generatedAt": "2026-11-14T11:20:33.695Z",
+        "generatedAt": "2026-11-14T14:37:58.296Z",
         "scenario": "notepad-type",
         "arm": "on",
         "dshVersion": null,
@@ -848,40 +1024,41 @@
         ],
         "gitSha": null,
         "labels": {},
-        "hostSinceStart": "2026-11-14T11:16:05.001Z",
-        "hostWrittenAt": "2026-11-14T11:20:33.686Z",
+        "hostSinceStart": "2026-11-14T14:10:58.838Z",
+        "hostWrittenAt": "2026-11-14T14:37:58.291Z",
         "hostEnabled": true,
-        "hostWindow": true
+        "hostWindow": true,
+        "repeats": 3
       },
       "enabled": true,
       "loafSupported": true,
       "page": {
-        "nativeInpP75": null,
-        "nativeInpCount": 0,
+        "nativeInpP75": 856,
+        "nativeInpCount": 10,
         "nativeInpDurationThreshold": 16,
-        "inputDelayP95": null,
-        "processingP95": null,
-        "presentationP95": null,
-        "loafCount": 0,
+        "inputDelayP95": 0.5,
+        "processingP95": 4,
+        "presentationP95": 965.5,
+        "loafCount": 2,
         "blockingMs": 0,
         "forcedLayoutMs": 0,
         "nanoCombined": {
           "scriptMs": 0,
           "loafCount": 0,
           "blockingMs": 0,
-          "clientJsBytes": 831175,
+          "clientJsBytes": 1005218,
           "comboResources": 1
         },
         "resources": {
-          "nanoClientJsBytes": 831175,
-          "totalJsBytes": 3492109
+          "nanoClientJsBytes": 1005218,
+          "totalJsBytes": 3666151
         }
       },
       "plugins": {
         "nano-notepad": {
           "meta": {
             "version": "0.2.0",
-            "implantedAt": "2026-11-14T11:20:21.620Z",
+            "implantedAt": "2026-11-14T14:37:46.201Z",
             "implanted": true
           },
           "own": {
@@ -893,26 +1070,26 @@
             "trackMsP95": null,
             "samples": {
               "spans": 0,
-              "callbacks": 0
+              "callbacks": 11
             }
           },
           "spans": {
             "render": {
-              "n": 3,
+              "n": 4,
               "windowN": 0,
               "p50": null,
               "p95": null,
               "maxMs": null
             },
             "highlight": {
-              "n": 1,
+              "n": 3,
               "windowN": 0,
               "p50": null,
               "p95": null,
               "maxMs": null
             },
             "highlight-dom": {
-              "n": 1,
+              "n": 3,
               "windowN": 0,
               "p50": null,
               "p95": null,
@@ -926,7 +1103,7 @@
               "live": 2,
               "callbackMs": 0,
               "totalCallbacks": 214,
-              "totalCallbackMs": 0.5
+              "totalCallbackMs": 0.7
             },
             "draft-commit": {
               "kind": "interval",
@@ -950,7 +1127,7 @@
               "live": 1,
               "callbackMs": 0,
               "totalCallbacks": 1,
-              "totalCallbackMs": 0.7
+              "totalCallbackMs": 0.4
             },
             "visibility": {
               "kind": "listener",
@@ -989,8 +1166,8 @@
               "callbacks": 0,
               "live": 1,
               "callbackMs": 0,
-              "totalCallbacks": 8,
-              "totalCallbackMs": 0.2
+              "totalCallbacks": 31,
+              "totalCallbackMs": 0.6
             }
           },
           "usage": {},
@@ -1004,7 +1181,7 @@
         "nano-model-selector": {
           "meta": {
             "version": "0.2.0",
-            "implantedAt": "2026-11-14T11:20:21.645Z",
+            "implantedAt": "2026-11-14T14:37:46.219Z",
             "implanted": true
           },
           "own": {
@@ -1047,7 +1224,7 @@
         "nano-explorer-extra": {
           "meta": {
             "version": "0.3.0",
-            "implantedAt": "2026-11-14T11:20:21.649Z",
+            "implantedAt": "2026-11-14T14:37:46.222Z",
             "implanted": true
           },
           "own": {
@@ -1062,10 +1239,64 @@
               "callbacks": 0
             }
           },
-          "spans": {},
-          "tracks": {},
+          "spans": {
+            "apply-status": {
+              "n": 6,
+              "windowN": 0,
+              "p50": null,
+              "p95": null,
+              "maxMs": null
+            },
+            "stats-count": {
+              "n": 1,
+              "windowN": 0,
+              "p50": null,
+              "p95": null,
+              "maxMs": null
+            },
+            "list-level": {
+              "n": 1,
+              "windowN": 0,
+              "p50": null,
+              "p95": null,
+              "maxMs": null
+            },
+            "git-refresh": {
+              "n": 1,
+              "windowN": 0,
+              "p50": null,
+              "p95": null,
+              "maxMs": null
+            }
+          },
+          "tracks": {
+            "git-poll": {
+              "kind": "interval",
+              "callbacks": 0,
+              "live": 1,
+              "callbackMs": 0,
+              "totalCallbacks": 0,
+              "totalCallbackMs": 0
+            }
+          },
           "usage": {},
-          "hostSpan": {},
+          "hostSpan": {
+            "git-status": {
+              "n": 0,
+              "p50": 1075.2,
+              "p95": 1075.2
+            },
+            "list": {
+              "n": 0,
+              "p50": null,
+              "p95": null
+            },
+            "stats": {
+              "n": 0,
+              "p50": null,
+              "p95": null
+            }
+          },
           "profiler": {
             "commits": 0,
             "commitP95": null
@@ -1084,6 +1315,7 @@
         "hostWriteErrors": 0
       },
       "notes": [
+        "nativeInpCount=6 < 8：p75 仅供参考，不作预算判断；这不是 web-vitals INP。",
         "Event Timing 三段：inputDelay=主线程忙/排队，processing=事件处理器，presentation=等下一次绘制。页级 nativeInpP75 含 presentation，属环境级读数，不抄进插件行（spec §5.1）；插件预算以 inputDelayP95/processingP95 与 native.spanMsP95/trackMsP95 为准。",
         "lab 的 composer-type 用 CDP 合成按键（page.keyboard.type），抬起的是 presentation 段；读数标注为 synthetic input，不等同真实用户 INP。",
         "nanoCombined.scriptMs 只统计 >50ms 长帧里 >5ms 的脚本条目，不是总脚本耗时；快而频繁的脚本工作不可见。",
@@ -1095,7 +1327,7 @@
     "model-open": {
       "version": 1,
       "meta": {
-        "generatedAt": "2026-11-14T11:20:38.674Z",
+        "generatedAt": "2026-11-14T14:38:28.097Z",
         "scenario": "model-open",
         "arm": "on",
         "dshVersion": null,
@@ -1117,40 +1349,41 @@
         ],
         "gitSha": null,
         "labels": {},
-        "hostSinceStart": "2026-11-14T11:16:05.001Z",
-        "hostWrittenAt": "2026-11-14T11:20:38.666Z",
+        "hostSinceStart": "2026-11-14T14:10:58.838Z",
+        "hostWrittenAt": "2026-11-14T14:38:28.093Z",
         "hostEnabled": true,
-        "hostWindow": true
+        "hostWindow": true,
+        "repeats": 3
       },
       "enabled": true,
       "loafSupported": true,
       "page": {
-        "nativeInpP75": 672,
-        "nativeInpCount": 2,
+        "nativeInpP75": 880,
+        "nativeInpCount": 4,
         "nativeInpDurationThreshold": 16,
-        "inputDelayP95": 1.3,
-        "processingP95": 10.6,
-        "presentationP95": 660.1,
-        "loafCount": 2,
+        "inputDelayP95": 1.6,
+        "processingP95": 20.8,
+        "presentationP95": 854.6,
+        "loafCount": 1,
         "blockingMs": 0,
-        "forcedLayoutMs": 9.5,
+        "forcedLayoutMs": 10.3,
         "nanoCombined": {
-          "scriptMs": 0,
-          "loafCount": 0,
+          "scriptMs": 11.5,
+          "loafCount": 1,
           "blockingMs": 0,
-          "clientJsBytes": 831175,
+          "clientJsBytes": 1005218,
           "comboResources": 1
         },
         "resources": {
-          "nanoClientJsBytes": 831175,
-          "totalJsBytes": 3492109
+          "nanoClientJsBytes": 1005218,
+          "totalJsBytes": 3666151
         }
       },
       "plugins": {
         "nano-notepad": {
           "meta": {
             "version": "0.2.0",
-            "implantedAt": "2026-11-14T11:20:34.103Z",
+            "implantedAt": "2026-11-14T14:38:23.545Z",
             "implanted": true
           },
           "own": {
@@ -1159,29 +1392,29 @@
           },
           "native": {
             "spanMsP95": null,
-            "trackMsP95": null,
+            "trackMsP95": 0.1,
             "samples": {
               "spans": 0,
-              "callbacks": 0
+              "callbacks": 23
             }
           },
           "spans": {
             "render": {
-              "n": 3,
+              "n": 4,
               "windowN": 0,
               "p50": null,
               "p95": null,
               "maxMs": null
             },
             "highlight": {
-              "n": 1,
+              "n": 3,
               "windowN": 0,
               "p50": null,
               "p95": null,
               "maxMs": null
             },
             "highlight-dom": {
-              "n": 1,
+              "n": 3,
               "windowN": 0,
               "p50": null,
               "p95": null,
@@ -1191,7 +1424,7 @@
           "tracks": {
             "shortcut-key": {
               "kind": "listener",
-              "callbacks": 8,
+              "callbacks": 7,
               "live": 2,
               "callbackMs": 0,
               "totalCallbacks": 8,
@@ -1219,7 +1452,7 @@
               "live": 1,
               "callbackMs": 0,
               "totalCallbacks": 1,
-              "totalCallbackMs": 1.2
+              "totalCallbackMs": 0.3
             },
             "visibility": {
               "kind": "listener",
@@ -1239,7 +1472,7 @@
             },
             "escape-key": {
               "kind": "listener",
-              "callbacks": 4,
+              "callbacks": 3,
               "live": 1,
               "callbackMs": 0,
               "totalCallbacks": 4,
@@ -1255,11 +1488,11 @@
             },
             "ctia-watch": {
               "kind": "mutation",
-              "callbacks": 2,
+              "callbacks": 3,
               "live": 1,
               "callbackMs": 0,
-              "totalCallbacks": 11,
-              "totalCallbackMs": 0.2
+              "totalCallbacks": 37,
+              "totalCallbackMs": 0.5
             }
           },
           "usage": {},
@@ -1273,28 +1506,28 @@
         "nano-model-selector": {
           "meta": {
             "version": "0.2.0",
-            "implantedAt": "2026-11-14T11:20:34.130Z",
+            "implantedAt": "2026-11-14T14:38:23.564Z",
             "implanted": true
           },
           "own": {
-            "inpP75": 672,
-            "inpCount": 2
+            "inpP75": 68,
+            "inpCount": 1
           },
           "native": {
-            "spanMsP95": null,
-            "trackMsP95": null,
+            "spanMsP95": 0.2,
+            "trackMsP95": 0.6,
             "samples": {
-              "spans": 0,
-              "callbacks": 0
+              "spans": 6,
+              "callbacks": 5
             }
           },
           "spans": {
             "filter-render": {
               "n": 10,
-              "windowN": 6,
+              "windowN": 4,
               "p50": 0,
-              "p95": 0,
-              "maxMs": 0
+              "p95": 0.1,
+              "maxMs": 0.1
             },
             "catalog-fetch": {
               "n": 2,
@@ -1322,17 +1555,23 @@
             },
             "panel-outside": {
               "kind": "listener",
-              "callbacks": 4,
+              "callbacks": 3,
               "live": 0,
-              "callbackMs": 0.1,
+              "callbackMs": 0.7,
               "totalCallbacks": 4,
-              "totalCallbackMs": 0.1
+              "totalCallbackMs": 0.6
             }
           },
           "usage": {
             "panel-open": 1
           },
-          "hostSpan": {},
+          "hostSpan": {
+            "catalog": {
+              "n": 1,
+              "p50": 0.5,
+              "p95": 0.5
+            }
+          },
           "profiler": {
             "commits": 0,
             "commitP95": null
@@ -1342,7 +1581,7 @@
         "nano-explorer-extra": {
           "meta": {
             "version": "0.3.0",
-            "implantedAt": "2026-11-14T11:20:34.133Z",
+            "implantedAt": "2026-11-14T14:38:23.565Z",
             "implanted": true
           },
           "own": {
@@ -1357,10 +1596,64 @@
               "callbacks": 0
             }
           },
-          "spans": {},
-          "tracks": {},
+          "spans": {
+            "apply-status": {
+              "n": 6,
+              "windowN": 0,
+              "p50": null,
+              "p95": null,
+              "maxMs": null
+            },
+            "stats-count": {
+              "n": 1,
+              "windowN": 0,
+              "p50": null,
+              "p95": null,
+              "maxMs": null
+            },
+            "list-level": {
+              "n": 1,
+              "windowN": 0,
+              "p50": null,
+              "p95": null,
+              "maxMs": null
+            },
+            "git-refresh": {
+              "n": 1,
+              "windowN": 0,
+              "p50": null,
+              "p95": null,
+              "maxMs": null
+            }
+          },
+          "tracks": {
+            "git-poll": {
+              "kind": "interval",
+              "callbacks": 0,
+              "live": 1,
+              "callbackMs": 0,
+              "totalCallbacks": 0,
+              "totalCallbackMs": 0
+            }
+          },
           "usage": {},
-          "hostSpan": {},
+          "hostSpan": {
+            "git-status": {
+              "n": 0,
+              "p50": 0,
+              "p95": 0
+            },
+            "list": {
+              "n": 0,
+              "p50": null,
+              "p95": null
+            },
+            "stats": {
+              "n": 0,
+              "p50": null,
+              "p95": null
+            }
+          },
           "profiler": {
             "commits": 0,
             "commitP95": null
@@ -1381,7 +1674,7 @@
         "hostWriteErrors": 0
       },
       "notes": [
-        "nativeInpCount=2 < 8：p75 仅供参考，不作预算判断；这不是 web-vitals INP。",
+        "nativeInpCount=5 < 8：p75 仅供参考，不作预算判断；这不是 web-vitals INP。",
         "Event Timing 三段：inputDelay=主线程忙/排队，processing=事件处理器，presentation=等下一次绘制。页级 nativeInpP75 含 presentation，属环境级读数，不抄进插件行（spec §5.1）；插件预算以 inputDelayP95/processingP95 与 native.spanMsP95/trackMsP95 为准。",
         "lab 的 composer-type 用 CDP 合成按键（page.keyboard.type），抬起的是 presentation 段；读数标注为 synthetic input，不等同真实用户 INP。",
         "nanoCombined.scriptMs 只统计 >50ms 长帧里 >5ms 的脚本条目，不是总脚本耗时；快而频繁的脚本工作不可见。",
@@ -1393,7 +1686,7 @@
     "shared-open": {
       "version": 1,
       "meta": {
-        "generatedAt": "2026-11-14T11:20:43.672Z",
+        "generatedAt": "2026-11-14T14:38:42.592Z",
         "scenario": "shared-open",
         "arm": "on",
         "dshVersion": null,
@@ -1415,10 +1708,11 @@
         ],
         "gitSha": null,
         "labels": {},
-        "hostSinceStart": "2026-11-14T11:16:05.001Z",
-        "hostWrittenAt": "2026-11-14T11:20:43.663Z",
+        "hostSinceStart": "2026-11-14T14:10:58.838Z",
+        "hostWrittenAt": "2026-11-14T14:38:42.586Z",
         "hostEnabled": true,
-        "hostWindow": true
+        "hostWindow": true,
+        "repeats": 3
       },
       "enabled": true,
       "loafSupported": true,
@@ -1429,26 +1723,26 @@
         "inputDelayP95": null,
         "processingP95": null,
         "presentationP95": null,
-        "loafCount": 0,
+        "loafCount": 1,
         "blockingMs": 0,
         "forcedLayoutMs": 0,
         "nanoCombined": {
           "scriptMs": 0,
           "loafCount": 0,
           "blockingMs": 0,
-          "clientJsBytes": 831175,
+          "clientJsBytes": 1005218,
           "comboResources": 1
         },
         "resources": {
-          "nanoClientJsBytes": 831175,
-          "totalJsBytes": 3492109
+          "nanoClientJsBytes": 1005218,
+          "totalJsBytes": 3666151
         }
       },
       "plugins": {
         "nano-notepad": {
           "meta": {
             "version": "0.2.0",
-            "implantedAt": "2026-11-14T11:20:39.033Z",
+            "implantedAt": "2026-11-14T14:38:38.009Z",
             "implanted": true
           },
           "own": {
@@ -1465,21 +1759,21 @@
           },
           "spans": {
             "render": {
-              "n": 3,
+              "n": 5,
               "windowN": 0,
               "p50": null,
               "p95": null,
               "maxMs": null
             },
             "highlight": {
-              "n": 1,
+              "n": 4,
               "windowN": 0,
               "p50": null,
               "p95": null,
               "maxMs": null
             },
             "highlight-dom": {
-              "n": 1,
+              "n": 4,
               "windowN": 0,
               "p50": null,
               "p95": null,
@@ -1517,7 +1811,7 @@
               "live": 1,
               "callbackMs": 0,
               "totalCallbacks": 1,
-              "totalCallbackMs": 9.5
+              "totalCallbackMs": 0.4
             },
             "visibility": {
               "kind": "listener",
@@ -1556,8 +1850,8 @@
               "callbacks": 0,
               "live": 1,
               "callbackMs": 0,
-              "totalCallbacks": 8,
-              "totalCallbackMs": 0.1
+              "totalCallbacks": 32,
+              "totalCallbackMs": 0.6
             }
           },
           "usage": {},
@@ -1571,7 +1865,7 @@
         "nano-model-selector": {
           "meta": {
             "version": "0.2.0",
-            "implantedAt": "2026-11-14T11:20:39.058Z",
+            "implantedAt": "2026-11-14T14:38:38.029Z",
             "implanted": true
           },
           "own": {
@@ -1604,7 +1898,13 @@
           },
           "tracks": {},
           "usage": {},
-          "hostSpan": {},
+          "hostSpan": {
+            "catalog": {
+              "n": 0,
+              "p50": null,
+              "p95": null
+            }
+          },
           "profiler": {
             "commits": 0,
             "commitP95": null
@@ -1614,7 +1914,7 @@
         "nano-explorer-extra": {
           "meta": {
             "version": "0.3.0",
-            "implantedAt": "2026-11-14T11:20:39.061Z",
+            "implantedAt": "2026-11-14T14:38:38.030Z",
             "implanted": true
           },
           "own": {
@@ -1629,10 +1929,64 @@
               "callbacks": 0
             }
           },
-          "spans": {},
-          "tracks": {},
+          "spans": {
+            "apply-status": {
+              "n": 6,
+              "windowN": 0,
+              "p50": null,
+              "p95": null,
+              "maxMs": null
+            },
+            "stats-count": {
+              "n": 1,
+              "windowN": 0,
+              "p50": null,
+              "p95": null,
+              "maxMs": null
+            },
+            "list-level": {
+              "n": 1,
+              "windowN": 0,
+              "p50": null,
+              "p95": null,
+              "maxMs": null
+            },
+            "git-refresh": {
+              "n": 1,
+              "windowN": 0,
+              "p50": null,
+              "p95": null,
+              "maxMs": null
+            }
+          },
+          "tracks": {
+            "git-poll": {
+              "kind": "interval",
+              "callbacks": 0,
+              "live": 1,
+              "callbackMs": 0,
+              "totalCallbacks": 0,
+              "totalCallbackMs": 0
+            }
+          },
           "usage": {},
-          "hostSpan": {},
+          "hostSpan": {
+            "git-status": {
+              "n": 0,
+              "p50": 832.1,
+              "p95": 832.1
+            },
+            "list": {
+              "n": 0,
+              "p50": null,
+              "p95": null
+            },
+            "stats": {
+              "n": 0,
+              "p50": null,
+              "p95": null
+            }
+          },
           "profiler": {
             "commits": 0,
             "commitP95": null

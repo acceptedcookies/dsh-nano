@@ -6,6 +6,7 @@
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { createConnection } from 'node:net'
+import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { KitesurfError } from './engine.js'
 
@@ -32,7 +33,7 @@ export function hostPort(httpBase) {
  * The plugin never publishes onto a network interface: both published ports
  * bind host loopback so the engine and the MCP bridge stay off the LAN.
  * The checkout bind-mount is read-only; wrangler persists to /tmp instead.
- * @param {{ checkout: string, hostEnginePort: number, hostMcpPort: number }} spec
+ * @param {{ checkout: string, hostEnginePort: number, hostMcpPort: number, stateDir: string }} spec
  */
 export function createArgs(spec) {
   return [
@@ -44,6 +45,8 @@ export function createArgs(spec) {
     // it mkdtemp's under .wrangler/ even when --persist-to moves durable
     // state elsewhere. A tmpfs gives it a writable, container-lifetime dir.
     '--tmpfs', '/opt/kitesurf/packages/engine/.wrangler',
+    // Durable wrangler state (KV, D1, caches) across container recreation.
+    ...(spec.stateDir ? ['--mount', `type=bind,source=${spec.stateDir},target=/var/lib/kitesurf-state`] : []),
     ENGINE_IMAGE,
   ]
 }
@@ -285,6 +288,7 @@ export async function ensureLocalContainer(target, io = {}) {
       checkout,
       hostEnginePort: createEnginePort,
       hostMcpPort: createMcpPort,
+      stateDir: statePath(),
     }))
     return {
       local: true,
@@ -318,4 +322,10 @@ export async function stopLocalContainer(target, io = {}) {
     if (!/no such|not found|does not exist/i.test(message)) throw error
   }
   return { local: true }
+}
+
+
+/** Durable wrangler state directory (KV/D1) — survives container recreation. */
+export function statePath(env = process.env) {
+  return env.KITESURF_STATE_DIR || join(homedir(), '.dsh-kitesurf-state')
 }

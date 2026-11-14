@@ -29,4 +29,6 @@ fi
 cd "$home/packages/engine"
 # The checkout bind-mount is read-only, so wrangler's persistent state goes
 # to the writable container filesystem instead of .wrangler/ in the mount.
-exec wrangler dev --env local -c wrangler.jsonc --port "$port" --ip 0.0.0.0 --persist-to /tmp/kitesurf-state
+state="${KITESURF_STATE_DIR:-/var/lib/kitesurf-state}"
+mkdir -p "$state"
+exec wrangler dev --env local -c wrangler.jsonc --port "$port" --ip 0.0.0.0 --persist-to "$state"

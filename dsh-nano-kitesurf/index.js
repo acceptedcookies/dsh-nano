@@ -8,6 +8,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import { registerRoutes } from './lib/route-guard.js'
 import { ROUTE_TABLE, PLUGIN } from './lib/route-table.js'
+import { createHistory } from './lib/history.js'
 import { browserSocketUrl, captureDom, captureElements, captureShot, currentEmulation, currentUserAgent, currentViewport, engineTargets, evaluateInPage, fetchEngine, KitesurfError, navigateHistory, openPage, pickElement, pickBySelector, pickPoint, pickSelector, editBody, editElement, pageUrl, releaseEngine, scrollDelta, setBrowserSettings } from './lib/engine.js'
 import { ERROR_STATUS, clearConsole, clearNetwork, clearOperations, diagnosticsSummary, getRef, listNetwork, listConsole, listOperations, listRefs, putRef, recordOperation, refChip, summarizeInput } from './lib/diagnostics.js'
 import { buildSrcDoc } from './lib/dom.js'
@@ -38,6 +39,7 @@ const CONTEXT_ROUTE = '/nano-kitesurf/context'
 const DOM_ROUTE = '/nano-kitesurf/dom'
 const SELFTEST_ROUTE = '/nano-kitesurf/selftest'
 const ELEMENTS_ROUTE = '/nano-kitesurf/elements'
+const BROWSE_HISTORY_ROUTE = '/nano-kitesurf/browse-history'
 const NETWORK_ROUTE = '/nano-kitesurf/network'
 const TARGETS_ROUTE = '/nano-kitesurf/targets'
 const EVALUATE_ROUTE = '/nano-kitesurf/evaluate'
@@ -104,6 +106,7 @@ function digestOf(relative) {
 }
 const buildId = `${pluginVersion() ?? '0'}-i${digestOf('./index.js')}r${digestOf('./lib/route-table.js')}c${digestOf('./lib/client.js')}`
 const storePath = fileURLToPath(new URL('./index.js', import.meta.url))
+const history = createHistory(fileURLToPath(new URL('.', import.meta.url)))
 
 /**
  * The lock file is the plugin's only durable state (DSH_HOME, never inside
@@ -539,6 +542,7 @@ export function apply(ctx, config) {
       ports: await portReport().catch(() => null),
       selftest: lastSelfTest,
       elements: lastElements,
+      history: history.list({ limit: 30 }),
       dom: lastDom,
       observability: summary,
       console: listConsole({ limit }),
@@ -628,8 +632,10 @@ export function apply(ctx, config) {
       handler: async (req, res, route) => {
         try {
           const body = await readBody(req, route.bodyLimit)
-          const opened = await hostSpan('open', () => openPage(origin(), pageUrl(body.url)))
+          const target = pageUrl(body.url)
+          const opened = await hostSpan('open', () => openPage(origin(), target))
           lastError = null
+          try { history.add({ url: target, at: new Date().toISOString(), source: 'pane' }) } catch { /* best-effort */ }
           sendJson(res, 200, { ok: true, ...opened })
         } catch (error) {
           fail(res, error)
@@ -943,6 +949,7 @@ export function apply(ctx, config) {
             ports: await portReport().catch(() => null),
       selftest: lastSelfTest,
       elements: lastElements,
+      history: history.list({ limit: 30 }),
       dom: lastDom,
           })
         } catch (error) {
@@ -967,6 +974,29 @@ export function apply(ctx, config) {
         } catch (error) {
           fail(res, error)
         }
+      },
+    },
+    {
+      path: BROWSE_HISTORY_ROUTE,
+      methods: ['GET', 'HEAD', 'POST', 'DELETE'],
+      handler: async (req, res, route) => {
+        try {
+          const method = String(req.method || 'GET').toUpperCase()
+          const q = queryOf(req)
+          if (method === 'DELETE') {
+            const id = q.get('id') || ''
+            sendJson(res, id && history.remove(id) ? 200 : 404, { ok: Boolean(id && history.remove(id)), ...history.stats() })
+            return
+          }
+          if (method === 'POST') {
+            const body = await readBody(req, route.bodyLimit)
+            if (body?.clear) { history.clear(); sendJson(res, 200, { ok: true, ...history.stats() }); return }
+            sendJson(res, 400, { ok: false, errorId: 'kitesurf.history.body', error: 'expected {clear:true}' })
+            return
+          }
+          const data = history.list({ limit: Math.min(Number(q.get('limit') || 50), 200), offset: Number(q.get('offset') || 0), q: q.get('q') || '' })
+          sendJson(res, 200, { ok: true, ...data, ...history.stats() })
+        } catch (error) { fail(res, error) }
       },
     },
     {

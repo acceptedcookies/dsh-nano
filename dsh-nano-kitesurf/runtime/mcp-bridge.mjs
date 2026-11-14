@@ -205,6 +205,11 @@ const KITESURF_TOOLS = [
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
+    name: 'kitesurf_history',
+    description: 'Browse history for the Kitesurf pane: the newest 30 visits with url, ISO time and visit count, plus the total stored. Backed by the plugin durable store (the Kitesurf workerd exposes no D1/KV binding). Mutations go through the host: DELETE /nano-kitesurf/browse-history?id=… or POST {clear:true}.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
     name: 'kitesurf_dom',
     description: 'Last captured document: url, byte size and the first 4000 characters of documentElement.outerHTML. Use to confirm what the engine is actually rendering when the pane looks wrong.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
@@ -291,6 +296,11 @@ function answerNativeTool(name, args, bridgeState) {
     return { ok: true, entries: filter ? all.filter((r) => r.errorId.includes(filter)) : all, total: all.length }
   }
   if (name === 'kitesurf_targets') return { ok: true, ...(snap.engine?.targets || { count: 0, targets: [] }), targetsError: snap.engine?.targetsError || null }
+  if (name === 'kitesurf_history') {
+    const h = snap.history || null
+    if (!h) return { ok: false, errorId: 'kitesurf.history.stale', error: 'no history snapshot yet', hint: 'open a page on the host, then retry' }
+    return { ok: true, total: h.total, entries: h.entries }
+  }
   if (name === 'kitesurf_dom') {
     const dom = snap.dom || null
     if (!dom) return { ok: false, errorId: 'kitesurf.dom.stale', error: 'no DOM captured yet', hint: 'run GET /nano-kitesurf/dom on the host, then retry' }

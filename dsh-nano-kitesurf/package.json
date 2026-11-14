@@ -32,6 +32,7 @@
     "lib/nano-kite.js",
     "lib/container-engine.js",
     "lib/diagnostics.js",
+    "lib/history.js",
     "lib/dom.js",
     "runtime/Dockerfile",
     "runtime/entrypoint.sh",

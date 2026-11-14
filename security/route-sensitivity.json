@@ -383,18 +383,6 @@
     },
     {
       "plugin": "dsh-nano-kitesurf",
-      "path": "/nano-kitesurf/history",
-      "methods": [
-        "POST"
-      ],
-      "sensitivity": "L2",
-      "capability": "net:kitesurf",
-      "bodyLimit": 4096,
-      "sessionBinding": false,
-      "justification": "dsh-nano-kitesurf/index.js HISTORY_ROUTE — real browser back/forward via Page.getNavigationHistory + navigateToHistoryEntry; a same-origin caller can move the engine to any prior URL in its session history. Network effect, L2 like /open."
-    },
-    {
-      "plugin": "dsh-nano-kitesurf",
       "path": "/nano-kitesurf/pick",
       "methods": [
         "POST"
@@ -613,6 +601,33 @@
       "bodyLimit": 0,
       "sessionBinding": false,
       "justification": "ELEMENTS_ROUTE — DOM.getDocument tree plus CSS.getMatchedStylesForNode/getComputedStyleForNode for a selector. Page content egress, L2."
+    },
+    {
+      "plugin": "dsh-nano-kitesurf",
+      "path": "/nano-kitesurf/browse-history",
+      "methods": [
+        "GET",
+        "HEAD",
+        "POST",
+        "DELETE"
+      ],
+      "sensitivity": "L2",
+      "capability": "read:host",
+      "bodyLimit": 4096,
+      "sessionBinding": false,
+      "justification": "BROWSE_HISTORY_ROUTE — durable browse history list/delete/clear. Contains visited URLs, L2."
+    },
+    {
+      "plugin": "dsh-nano-kitesurf",
+      "path": "/nano-kitesurf/history",
+      "methods": [
+        "POST"
+      ],
+      "sensitivity": "L2",
+      "capability": "read:host",
+      "bodyLimit": 4096,
+      "sessionBinding": false,
+      "justification": "Navigation history move (back/forward) via Page.getNavigationHistory."
     }
   ]
 }

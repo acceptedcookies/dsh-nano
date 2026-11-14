@@ -55,7 +55,7 @@ export function CompactPanel({ copy, models, onError }) {
           : application === 'restart-required'
             ? { kind: 'warn', text: `${copy.compactSwitchRestart}（dsh-dev restart）` }
             : application === 'overridden'
-              ? { kind: 'warn', text: copy.compactSwitchApplied }
+              ? { kind: 'warn', text: copy.compactSwitchOverridden }
               : { kind: 'warn', text: application })
         reload()
       })

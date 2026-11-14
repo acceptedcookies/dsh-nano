@@ -15,10 +15,12 @@ const FILL_MEMO_MS = 5000
 /** Pure fold over the three durable event types (-21①). */
 function foldCompactionEvent(state, event) {
   switch (event.type) {
+    case 'compaction/start':
+      return { ...state, at: event.time ?? state.at, status: 'busy' }
     case 'compaction/summary':
       return {
-        at: event.data?.at ?? null,
-        status: 'ready',
+        at: event.time ?? state.at,
+        status: 'busy',
         provider: event.data?.provider ?? null,
         model: event.data?.model ?? null,
         shadowedTokenCount: state.shadowedTokenCount + (event.data?.shadowedTokenCount ?? 0),
@@ -26,8 +28,8 @@ function foldCompactionEvent(state, event) {
       }
     case 'compaction/end':
       return event.data?.error === undefined
-        ? { ...state, status: 'ready' }
-        : { ...state, status: 'failed', degradedReason: String(event.data.error).slice(0, 200) }
+        ? { ...state, status: 'completed', at: event.time ?? state.at }
+        : { ...state, status: 'failed', degradedReason: String(event.data.error).slice(0, 200), at: event.time ?? state.at }
     case 'compaction/prune':
       return {
         ...state,

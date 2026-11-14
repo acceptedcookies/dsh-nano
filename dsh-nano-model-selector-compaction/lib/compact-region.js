@@ -22,7 +22,7 @@ import {
   compactCheckpointSource,
   toolPairingBalancedAfter,
   toolPairingBalancedBefore,
-} from './compaction/index.js'
+} from './compaction-seam.js'
 
 /* ---- minimal re-derivations of dsh-llm private primitives ---- */
 

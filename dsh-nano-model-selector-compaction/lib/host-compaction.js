@@ -27,7 +27,16 @@ import { join } from 'node:path'
 import {
   CompactionEngine,
   ManualCompactionError,
-} from './compaction/index.js'
+  upgradeManualCompactionError,
+} from './compaction-seam.js'
+
+// Upgrade ManualCompactionError to the upstream class when the harness exposes
+// @deepseek-ai/dsh-compaction, so compactNow()'s coded errors satisfy the
+// /compact gate's instanceof check (-16 verbatim protocol). Falls back to the
+// vendored impl otherwise — same shape, just a different class identity.
+import('@deepseek-ai/dsh-compaction')
+  .then(m => upgradeManualCompactionError(m.ManualCompactionError))
+  .catch(() => {})
 import {
   assertNoActiveCompaction,
   compactSurfaceRegion,
@@ -50,6 +59,11 @@ const OVERFLOW_RETRIES = 1
 const TRANSIENT_CODES = new Set([
   'RATE_LIMIT', 'NETWORK', 'TIMEOUT', 'SERVICE_UNAVAILABLE', 'OVERLOADED', 'ABORTED',
 ])
+
+/** Episode attempt budget: a hung summarizer must not pin the arm (-18). */
+const EPISODE_TIMEOUT_MS = 120_000
+/** Idle-claim retries before the arm is dropped as starved (-18). */
+const MAX_CLAIM_ATTEMPTS = 3
 
 const ASYNC_COMPACT_PATH = join(
   process.env.DSH_DATA_DIR ?? process.env.DSH_HOME ?? join(homedir(), '.dsh'),
@@ -119,19 +133,21 @@ export default class NanoCompactionEngine extends CompactionEngine {
     // synchronous FULL closed set. Adoption of a ready episode happens here too
     // (before the step assembles, so the request sees the compacted surface).
     ctx.on('agent/pre-step', async ({ agent, signal }, next) => {
+      ctx.logger.debug(`nano-async-pre-step ${agent.session.id}`)
       if (signal.aborted) return next()
-      const episode = this._episode(agent.session)
-      if (episode.phase === 'ready') {
-        try {
-          const adopted = await this._adoptEpisode(agent, episode, signal)
-          if (adopted !== null) logResult(adopted, 'async adoption')
-        } catch (error) {
-          ctx.logger.warn(`async adoption failed: ${messageOf(error)}; continuing the turn`)
-        }
-      }
       try {
         const result = await this.compactIfNeeded(agent, 'pressure', signal)
-        if (result !== null) logResult(result, 'safety/full')
+        if (result !== null) {
+          logResult(result, 'safety/full')
+          // -18⑧: a synchronous FULL success also settles the async circuit —
+          // the summarizer proved healthy regardless of which lane drove it.
+          const episode = this._episodes.get(agent.session.id)
+          if (episode !== undefined) {
+            episode.circuit.transientFailures = 0
+            episode.circuit.open = false
+            episode.circuit.suppressedLogged = false
+          }
+        }
       } catch (error) {
         ctx.logger.warn(`step compaction failed: ${messageOf(error)}; continuing the turn`)
       }
@@ -231,6 +247,8 @@ export default class NanoCompactionEngine extends CompactionEngine {
     episode.prepared = null
     episode.summarized = null
     episode.retainTokens = effectivePin
+    episode.armedAt = Date.now()
+    episode.claimAttempts = 0
     episode.summarizationTarget = policy.model.provider.length > 0 && policy.model.model.length > 0
       ? { provider: policy.model.provider, model: policy.model.model }
       : undefined
@@ -241,7 +259,10 @@ export default class NanoCompactionEngine extends CompactionEngine {
     try {
       void agent.runMaintenance(async (agentSignal) => {
         try {
-          await this._runEpisodeAttempt(agent, episode, agentSignal)
+          // Bound the episode attempt: a hung summarizer must not pin the arm.
+          const attemptTimeout = AbortSignal.timeout(EPISODE_TIMEOUT_MS)
+          const combined = AbortSignal.any([agentSignal, attemptTimeout])
+          await this._runEpisodeAttempt(agent, episode, combined)
         } catch (error) {
           this._dropEpisode(agent.session, episode, this._classifyFailure(error), error)
         }
@@ -250,8 +271,13 @@ export default class NanoCompactionEngine extends CompactionEngine {
       })
     } catch (error) {
       // Agent was claimed by a turn before we could claim idle maintenance —
-      // keep the arm; the next idle boundary retries the claim.
+      // keep the arm; the next idle boundary retries the claim, bounded.
       if (episode.phase === 'armed') {
+        episode.claimAttempts = (episode.claimAttempts ?? 0) + 1
+        if (episode.claimAttempts >= MAX_CLAIM_ATTEMPTS) {
+          this._dropEpisode(agent.session, episode, 'starved', error)
+          return
+        }
         this.ctx.logger.info(`async compaction maintenance deferred: ${messageOf(error)}`)
       }
     }
@@ -280,40 +306,21 @@ export default class NanoCompactionEngine extends CompactionEngine {
     episode.tx = tx
     const prepared = tx.prepared()
     const summarized = await tx.summarize(prepared, signal)
-    episode.phase = 'ready'
-    episode.summarized = summarized
-    // Wake the driver so the adoption boundary arrives promptly.
-    agent.followup(this._adoptionWakeMessage(episode))
-  }
-
-  _adoptionWakeMessage(episode) {
-    return createUserMessage({
-      content: [{ type: 'text', text: ADOPTION_WAKE_TEXT }],
-      source: { kind: 'compaction-adoption-wake', compactionId: episode.tx.compactionId },
-    })
-  }
-
-  /** Commit the prepared episode at the next request assembly (-18 adoption). */
-  async _adoptEpisode(agent, episode, signal) {
-    const session = agent.session
-    const { tx, summarized } = episode
-    episode.phase = 'none'
+    // Format law: turn/start must never cross an open compaction bracket —
+    // commit inside the maintenance window, not at a later turn's pre-step.
     const outcome = tx.commit(summarized, signal)
-    episode.tx = null
-    episode.prepared = null
-    episode.summarized = null
     if (outcome.failure !== undefined) {
-      if (this._classifyFailure(outcome.failure.error) === 'transient') {
-        episode.circuit.transientFailures += 1
-        if (episode.circuit.transientFailures >= 2) episode.circuit.open = true
-      }
+      // commit already closed the bracket with end{error} — detach the tx so
+      // the drop path does not append a second end{error}.
+      episode.tx = null
       throw outcome.failure.error
     }
     try {
       await this.ctx.sessions.flush(session)
     } catch (error) {
-      this.ctx.logger.warn(`async adoption durability checkpoint failed: ${messageOf(error)}`)
+      this.ctx.logger.warn(`async compaction durability checkpoint failed: ${messageOf(error)}`)
     }
+    episode._lastResult = outcome.result
     // Over-health adoption primes the -13 FULL closed set on the next B crossing.
     try {
       const policy = this._policy()
@@ -325,10 +332,38 @@ export default class NanoCompactionEngine extends CompactionEngine {
     } catch {
       episode.adoptedAsyncOverHealth = false
     }
+    // Wake the driver so the compacted surface is observed by a fresh turn.
+    agent.followup(this._adoptionWakeMessage(episode))
     episode.circuit.transientFailures = 0
     episode.circuit.open = false
     episode.circuit.suppressedLogged = false
-    return outcome.result
+    const result = episode._lastResult
+    episode._lastResult = undefined
+    this._settleEpisode(episode)
+    this._logResult(result, 'async maintenance')
+  }
+
+  _adoptionWakeMessage(episode) {
+    return createUserMessage({
+      content: [{ type: 'text', text: ADOPTION_WAKE_TEXT }],
+      source: { kind: 'compaction-adoption-wake', compactionId: episode.tx.compactionId },
+    })
+  }
+
+  _settleEpisode(episode) {
+    episode.phase = 'none'
+    episode.tx = null
+    episode.prepared = null
+    episode.summarized = null
+  }
+
+  _logResult(result, trigger) {
+    if (result === null || result === undefined) return
+    this.ctx.logger.info(
+      `nano compaction (${trigger}): shadowed ${result.shadowedSeqs.length} surface nodes `
+      + `(seqs ${result.shadowedRange.start}-${result.shadowedRange.end}, `
+      + `~${result.shadowedTokenCount} tokens)`,
+    )
   }
 
   _dropEpisode(session, episode, reason, error) {

@@ -143,33 +143,29 @@ function isCompactCheckpointSource(source) {
 * Shared durable-lock entry assertions may also throw the `busy` subtype from
 * automatic compaction paths.
 */
-var ManualCompactionError = class extends Error {
-	code;
+/**
+ * ManualCompactionError is a mutable export: host-compaction upgrades the impl
+ * to the upstream dsh-compaction class when that package is resolvable, so
+ * manual errors thrown by compactNow() satisfy the /compact gate's instanceof.
+ */
+let ManualCompactionErrorImpl = class extends Error {
 	name = "ManualCompactionError";
-	/**
-	* Create one classified compaction failure.
-	* @param code - stable failure class; `busy` may originate from any compaction entry path.
-	* @param message - backend diagnostic retained as the Error message.
-	* @param options - optional original failure.
-	*/
+	code;
 	constructor(code, message, options) {
 		super(message, options);
 		this.code = code;
 	}
 };
-/**
-* Abstract compaction service. Implementations own trigger policy, retention,
-* and summarization, and may consume a separate measurement service. A
-* successful run replaces the selected surface span with one summary node and
-* prevents concurrent compaction of the same session. The replacement user
-* message uses {@link compactCheckpointSource} with the transaction identity
-* so consumers recognize and correlate it independently of the backend. Load
-* one implementation per context as `ctx.compaction`.
-*/
+function ManualCompactionError(code, message, options) {
+	return new ManualCompactionErrorImpl(code, message, options);
+}
+ManualCompactionError.prototype = ManualCompactionErrorImpl.prototype;
+export function upgradeManualCompactionError(cls) {
+	if (typeof cls === 'function') { ManualCompactionErrorImpl = cls; ManualCompactionError.prototype = cls.prototype; }
+}
 var CompactionEngine = class extends Service {
 	constructor(ctx) {
 		super(ctx, "compaction");
 	}
 };
-//#endregion
 export { CompactionEngine, CompactionEngine as default, CompactionId, ManualCompactionError, compactCheckpointSource, isCompactCheckpointSource, toolPairingBalancedAfter, toolPairingBalancedBefore };

@@ -286,14 +286,21 @@ function asyncCompactHandlers(ctx, runtimeHandle) {
         const state = readState(ASYNC_COMPACT_PATH)
         if (!state.ok) { sendJson(res, 400, { ok: false, error: { code: 'state-read-failed', reason: state.reason } }); return }
         const next = mergePutBody(state.policy, body)
-        if ('model' in body && body.model.provider !== '' && body.model.model !== '') {
-          const W = await policyWindow(ctx, next.model)
-          if (W === null) { sendJson(res, 400, { ok: false, error: { code: 'invalid-model', reason: 'model target is not a registered route' } }); return }
+        const model = next.model
+        // A half-empty pair is never meaningful: either both fields are set or both empty.
+        if (model !== undefined && (model.provider === '') !== (model.model === '')) {
+          sendJson(res, 400, { ok: false, error: { code: 'invalid-model', reason: 'model pair must be fully set or fully empty' } }); return
         }
-        const W = await policyWindow(ctx, next.model)
-        if (W !== null) {
-          const order = validateMasterOrder(next, W)
-          if (!order.ok) { sendJson(res, 400, { ok: false, error: { code: order.code, reason: order.reason } }); return }
+        const W = await policyWindow(ctx, model)
+        // Always run master-order validation (W-independent checks are mandatory);
+        // W only adds the DC-1 + effectivePin derivations on top.
+        const order = W === null
+          ? validateMasterOrder(next, 1000000) /* arbitrary large W for ordering checks */
+          : validateMasterOrder(next, W)
+        if (!order.ok) { sendJson(res, 400, { ok: false, error: { code: order.code, reason: order.reason } }); return }
+        // Model-route check: only when the merged target is a non-empty pair.
+        if (model !== undefined && model.provider !== '') {
+          if (W === null) { sendJson(res, 400, { ok: false, error: { code: 'invalid-model', reason: 'model target is not a registered route' } }); return }
         }
         const wrote = writeState(ASYNC_COMPACT_PATH, next)
         if (!wrote.ok) { sendJson(res, 400, { ok: false, error: { code: 'state-write-failed', reason: wrote.reason } }); return }
@@ -356,6 +363,16 @@ async function asyncCompactSwitchHandler(ctx, req, res) {
     try {
       const result = await pm.setBundleEnabled(COMPACTION_BUNDLE_NAME, parsed.enabled)
       const application = result?.application ?? 'applied'
+      if (application === 'failed') {
+        sendJson(res, 500, {
+          ok: false,
+          application,
+          error: { code: 'switch-failed', reason: result?.reason ?? 'setBundleEnabled reported application failure' },
+          ...(result?.restartReason === undefined ? {} : { restartReason: result.restartReason }),
+          bundle: await compactionBundleState(ctx),
+        })
+        return
+      }
       sendJson(res, 200, {
         ok: true,
         application,

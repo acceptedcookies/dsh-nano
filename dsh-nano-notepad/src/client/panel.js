@@ -38,6 +38,7 @@ import { openNanoDialog, openNanoMenu, nanoTabs, NANO_STYLES } from 'dsh-nano-ui
 import { perf, setNotepadRoot } from './perf.js'
 import { createSync } from './sync.js'
 import { mountCloudSettings } from './cloud-settings.js'
+import { createCorpus, rejectDraft, lineage } from './fx-corpus.js'
 
 /* perf-review: one named span for the IndexedDB writers (saveDraft / writeUi /
  * persistUi). Defined at module scope so every caller routes through it without
@@ -240,6 +241,11 @@ ${NANO_STYLES}
 .np-caret[data-open="true"] svg { transform: rotate(90deg); }
 .np-node-icon { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex: none; color: var(--dsw-alias-label-tertiary); }
 .np-node-name { display: block; min-width: 0; overflow: hidden; white-space: nowrap; }
+.np-cat { flex: none; font-size: 9px; line-height: 1; padding: 2px 4px; border-radius: 4px; letter-spacing: .02em; color: var(--dsw-alias-label-tertiary); background: var(--dsw-alias-bg-layer-3); }
+.np-node[data-cat="draft"] .np-cat { color: var(--dsw-alias-state-warn-primary); }
+.np-node[data-cat="knowledge"] .np-cat { color: var(--dsw-alias-state-success-primary); }
+.np-node[data-cat="prompt"] .np-cat { color: var(--dsw-alias-link); }
+.np-node[data-cat="memory"] .np-cat { color: var(--dsw-alias-label-secondary); }
 .np-node-name[data-fade="true"] { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 18px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 18px), transparent); }
 .np-entry svg, .np-node-icon svg, .np-tree-tools svg, .np-tree-toggle svg, .np-tree-foot svg, .np-caret svg, .np-node-actions svg, .np-tool svg, .np-slash svg, .np-ws-caret svg { fill: currentColor; stroke: none; }
 .np-tree-toggle svg { fill: none; stroke: currentColor; stroke-width: 1; }
@@ -1354,7 +1360,10 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
         const caret = node.kind === 'folder' ? `<button type="button" class="np-caret" data-caret="${nodeId}" data-open="${expanded}" aria-expanded="${expanded}" aria-label="${escapeHtml(node.name)} · ${escapeHtml(expanded ? text().collapse : text().expand)}">${CARET_ICON}</button>` : ''
         const pinLabel = node.pinned === true ? text().unpin : text().pin
         const pin = `<button type="button" data-pin="${nodeId}" data-active="${node.pinned === true}" title="${escapeHtml(pinLabel)}" aria-label="${escapeHtml(pinLabel)}">${node.pinned === true ? PIN_ON_ICON : PIN_OFF_ICON}</button>`
-        lines.push(`<div class="np-node" data-kind="${node.kind}" data-pinned="${node.pinned === true}" data-active="${node.id === state.ui.currentId}" title="${name}" style="padding-left:${8 + depth * 16}px">${caret}<button class="np-node-main" type="button" draggable="true" data-id="${nodeId}" aria-label="${name}"><span class="np-node-icon" aria-hidden="true">${icon}</span><span class="np-node-name">${name}</span></button><span class="np-node-actions">${pin}<button type="button" data-move="${nodeId}" title="${escapeHtml(text().transfer)}" aria-label="${escapeHtml(text().transfer)}">${MOVE_ICON}</button><button type="button" data-more="${nodeId}" title="${escapeHtml(text().more)}" aria-label="${escapeHtml(text().more)}" aria-haspopup="menu">${MORE_ICON}</button></span></div>`)
+        const catBadge = typeof node.cat === 'string' && node.cat
+          ? `<span class="np-cat" data-cat="${escapeAttr(node.cat)}" title="${escapeAttr(node.cat)}${node.cat === 'draft' && Number.isInteger(node.rejectCount) && node.rejectCount > 0 ? ` · ×${node.rejectCount}` : ''}">${escapeHtml(node.cat.slice(0, 4))}</span>`
+          : ''
+        lines.push(`<div class="np-node" data-kind="${node.kind}" data-cat="${escapeAttr(node.cat ?? '')}" data-pinned="${node.pinned === true}" data-active="${node.id === state.ui.currentId}" title="${name}" style="padding-left:${8 + depth * 16}px">${caret}<button class="np-node-main" type="button" draggable="true" data-id="${nodeId}" aria-label="${name}"><span class="np-node-icon" aria-hidden="true">${icon}</span><span class="np-node-name">${name}</span>${catBadge}</button><span class="np-node-actions">${pin}<button type="button" data-move="${nodeId}" title="${escapeHtml(text().transfer)}" aria-label="${escapeHtml(text().transfer)}">${MOVE_ICON}</button><button type="button" data-more="${nodeId}" title="${escapeHtml(text().more)}" aria-label="${escapeHtml(text().more)}" aria-haspopup="menu">${MORE_ICON}</button></span></div>`)
         if (node.kind === 'folder' && !state.collapsed.has(node.id)) visit(node.id, depth + 1, workspaceId)
       }
     }
@@ -2644,6 +2653,32 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     if (handle) drag(handle, grabWindow, panel)
   }
 
+  /** draft reject-only 状态机：反馈可填；reject 后状态 rejected + rejectCount+1。 */
+  function requestRejectDraft(id) {
+    if (!state.db) return
+    const node = state.nodes.find(item => item.id === id)
+    if (!node || node.cat !== 'draft') return
+    const copy = text()
+    dialog({
+      title: copy.rejectDraftTitle,
+      description: copy.rejectDraftBody(node.name),
+      danger: true,
+      confirmLabel: copy.rejectDraftLabel,
+      body: `<textarea class="np-reject-feedback" rows="3" placeholder="${escapeAttr(copy.rejectDraftFeedback)}" style="width:100%;box-sizing:border-box"></textarea>`,
+      setup: el => { state.__rejectFeedbackEl = el.querySelector('.np-reject-feedback') },
+      onConfirm: async close => {
+        const feedback = state.__rejectFeedbackEl?.value ?? ''
+        state.__rejectFeedbackEl = null
+        close()
+        await rejectDraft(state.db, id, feedback)
+        const snapshot = await loadSnapshot(state.db)
+        state.nodes = snapshot.nodes
+        state.renderCache.clear()
+        render()
+      },
+    })
+  }
+
   function requestDelete(id) {
     if (!state.db) return
     const node = state.nodes.find(item => item.id === id)
@@ -2675,6 +2710,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
           Object.assign(node, renamed)
           render()
         }) },
+        ...(node.cat === 'draft' ? [{ id: 'reject-draft', label: `${copy.rejectDraftTitle}${Number.isInteger(node.rejectCount) && node.rejectCount > 0 ? ` (×${node.rejectCount})` : ''}`, tone: 'danger', run: () => requestRejectDraft(id) }] : []),
         { id: 'delete', label: copy.delete, tone: 'danger', run: () => requestDelete(id) },
       ],
     })
@@ -3438,6 +3474,39 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     cloud() { return { ...sync.info(), files: state.nodes.filter(n => n.kind === 'file').map(n => ({ id: n.id, name: n.name })) } },
     /** Awaitable sync cycle + persisted cursor, for deterministic E2E. */
     cloudCycle() { return sync.cycle() },
+    /* 程序化开合：与 entry 按钮同一 toggle 通路（不绕过 focus/persist）。 */
+    open() { if (!state.ui.open) { state.ui.open = true; render(); void persistUi() } },
+    close() { if (state.ui.open) { flushSave(); dismissOverlays(); state.ui.open = false; render(); void persistUi() } },
+    get openState() { return state.ui.open === true },
+    /* fx 管线调试面（§10）：corpus handle + one-shot + sqlite/vfs, lazily
+       wired so the panel renders before fx modules load. */
+    fx: {
+      /* corpus 随当前 workspace 建：机器产物落在可视层，便于审阅/reject。 */
+      corpus: () => (state.fxCorpus ??= createCorpus(state.db, { epochId: state.fxEpoch ?? 'e0', workspaceId: () => workspaceCatalog().currentId ?? null })),
+      /* 机器写直连 IDB，绕过 state.nodes 快照——run 后强制重水合，树即刻反映。 */
+      _refreshNodes: async () => {
+        const snapshot = await loadSnapshot(state.db)
+        state.nodes = snapshot.nodes
+        state.renderCache.clear()
+        render()
+      },
+      run: (text, opts = {}) => import('./fx-runtime.js').then(async m => {
+        const res = await m.runOneShot(text, { tools: opts.tools ?? undefined, toolContext: { corpus: window.__nanoNotepad.fx.corpus() }, ...opts })
+        await window.__nanoNotepad.fx._refreshNodes()
+        return res
+      }),
+      runWithTools: (text, opts = {}) => import('./fx-runtime.js').then(async m => {
+        const { buildNoteTools } = await import('./fx-tools.js')
+        const res = await m.runOneShot(text, { tools: buildNoteTools({ corpus: window.__nanoNotepad.fx.corpus() }), toolContext: { corpus: window.__nanoNotepad.fx.corpus() }, ...opts })
+        await window.__nanoNotepad.fx._refreshNodes()
+        return res
+      }),
+      models: () => import('./fx-runtime.js').then(m => m.fetchModels()),
+      sqlite: () => import('./fx-sqlite.js'),
+      lineage: (id) => lineage(state.db, id),
+      rejectDraft: (id, feedback) => rejectDraft(state.db, id, feedback),
+      corpusList: async () => (await loadSnapshot(state.db)).nodes.filter(n => n.cat).map(n => ({ id: n.id, cat: n.cat, name: n.name, rejectCount: n.rejectCount ?? 0 })),
+    },
     /** Set the syncing micro-motion ('a' | 'b' | 'c'), same path as the UI. */
     setCloudMotion(value) {
       if (!['a', 'b', 'c'].includes(value)) return state.settings.cloudMotion

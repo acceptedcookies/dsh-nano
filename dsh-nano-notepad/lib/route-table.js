@@ -86,5 +86,66 @@ export const ROUTE_TABLE = [
     "bodyLimit": 33554432,
     "sessionBinding": false,
     "justification": "dsh-nano-notepad/index.js:66,317 — writes endpoint/bucket/secret profiles to ${DSH_HOME}/nano-notepad-s3.json (0600) and probes them; endpoint-SSRF oracle + credential write (finding s3-config-endpoint-ssrf, accepted)."
+  },
+  {
+    "plugin": "dsh-nano-notepad",
+    "path": "/nano-notepad/fx-core.wasm",
+    "methods": [
+      "GET",
+      "HEAD"
+    ],
+    "sensitivity": "L1",
+    "capability": "static:asset",
+    "bodyLimit": 4096,
+    "sessionBinding": false,
+    "justification": "index.js — serves vendored fx-core.wasm from lib/fx-core.wasm; read-only static asset, same-origin delivery for the page engine."
+  },
+  {
+    "plugin": "dsh-nano-notepad",
+    "path": "/nano-notepad/fx/models",
+    "methods": [
+      "GET"
+    ],
+    "sensitivity": "L2",
+    "capability": "read:model-catalog",
+    "bodyLimit": 4096,
+    "sessionBinding": false,
+    "justification": "fx-bridge.js — lists ctx.llm provider~model catalog for the page engine picker; read-only model metadata, no credentials."
+  },
+  {
+    "plugin": "dsh-nano-notepad",
+    "path": "/nano-notepad/fx/chat/completions",
+    "methods": [
+      "POST"
+    ],
+    "sensitivity": "L2",
+    "capability": "llm:generate",
+    "bodyLimit": 33554432,
+    "sessionBinding": false,
+    "justification": "fx-bridge.js — OpenAI→GenerateOptions bridge onto ctx.llm.prepareCall().stream(); model invocations + tool calls consume model quota; attachments via ctx.attachments."
+  },
+  {
+    "plugin": "dsh-nano-notepad",
+    "path": "/nano-notepad/pipeline/s3",
+    "methods": [
+      "POST"
+    ],
+    "sensitivity": "L2",
+    "capability": "s3:write",
+    "bodyLimit": 33554432,
+    "sessionBinding": false,
+    "justification": "pipeline.js — signed pipeline-bucket ops (putJson/putBytes/getJson/getBytes/del/list) for pipeline state + sqlite export; CAS ifMatch/ifNoneMatch; scoped S3_NOTEPAD_* or DSH_NP_PIPELINE_IDENTITY; host-signed (credentials never reach page)."
+  },
+  {
+    "plugin": "dsh-nano-notepad",
+    "path": "/nano-notepad/pipeline/claim",
+    "methods": [
+      "POST"
+    ],
+    "sensitivity": "L2",
+    "capability": "s3:write",
+    "bodyLimit": 4096,
+    "sessionBinding": false,
+    "justification": "pipeline.js — claim lease lifecycle on notepad bucket (acquire/renew/read/release); ETag CAS read-modify-write, 90s TTL, CLAIM_KEYS whitelist; writerId from request (scoped by host auth)."
   }
 ]

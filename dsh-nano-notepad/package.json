@@ -26,7 +26,11 @@
     "lib/perf-review-host.js",
     "lib/route-guard.js",
     "lib/route-table.js",
-    "lib/s3-sync-host.js"
+    "lib/s3-sync-host.js",
+    "lib/fx-bridge.js",
+    "lib/pipeline.js",
+    "lib/fx",
+    "lib/fx-core.wasm"
   ],
   "engines": {
     "dsh": ">=0.2.2-rc.1 <0.3.0"

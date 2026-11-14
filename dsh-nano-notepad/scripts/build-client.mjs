@@ -109,6 +109,20 @@ build({
   outfile: join(root, 'lib/mp-sanitize.js'),
 })
 
+// fx bridge + pipeline: index.js is unbundled and imports ./lib/fx-bridge.js and
+// ./lib/pipeline.js; bundle each (pipeline inlines pipeline-s3 + pipeline-claim).
+// Only node:* bare imports survive.
+build({
+  entryPoints: ['src/host/fx-bridge.js'],
+  bundle: true, format: 'esm', platform: 'node',
+  outfile: join(root, 'lib/fx-bridge.js'),
+})
+build({
+  entryPoints: ['src/host/pipeline.js'],
+  bundle: true, format: 'esm', platform: 'node',
+  outfile: join(root, 'lib/pipeline.js'),
+})
+
 // Browser half: an IIFE wrapped in the client module-loader factory format.
 // dsh-performance-review/client is a source dependency (NOT external), so it is
 // bundled into lib/client.js. Keep all existing externals unchanged.

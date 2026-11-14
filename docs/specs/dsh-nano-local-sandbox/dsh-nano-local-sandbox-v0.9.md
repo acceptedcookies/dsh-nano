@@ -1,5 +1,7 @@
 # sandbox-nano-nvx 可行性评估
 
+> **状态（2026-11-14）**：本文仍是事实基线。文中与冻结 QNA 冲突的兼容建议已作废。实现计划是 `plan/DNLS01-macos-platform-cutover.md`。下面的实测数据不改。
+
 > 评估对象：DSH 原生进程沙箱（`context/deepseek-harness`）与 NVX microVM（`context/nvx`），以及用 NVX 替换原生后端构建 `sandbox-nano-nvx` 的可行性
 > 评估类型：架构登记 + 本机实证 + 前瞻可行性
 > 评估时间：`2026-11-12`

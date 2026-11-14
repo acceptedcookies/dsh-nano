@@ -79,15 +79,15 @@ dsh plugin --profile web add <spec>
 1. profile 的 `package.json` 里，`dependencies` 和 `dsh.profile.bundles` 都有本包名。
 2. 重启并刷新后，页面里能找到本包的 client 模块（包名）。找不到说明 client 没进页面。
 3. 输入 `/dnt`，弹出选项有「新建 nano 终端标签页」；选中后右栏（[dsh工作台]）出现 nano 终端标签页，终端有输出。
-4. `curl -s http://<宿主>/dsh-nano-terminal/health` 返回 JSON（含三条 lane 状态）。`localStorage['dnt.apply']` 出现 client 自检日志数组。
+4. `curl -s http://<宿主>/dsh-nano-terminal/health` 返回 JSON（含 `local` 与 `mcp` 两条 lane 状态）。`localStorage['dnt.apply']` 出现 client 自检日志数组。
 
 ## 初次运行
 
 无宿主初始化命令。宿主启动即注册路由、slash 命令 `/term` 与 session 注册表。
 
-- 审计日志写在 `${DSH_HOME}/dsh-nano-terminal.state/audit.jsonl`（宿主 home 根下；`plugins/<pkg>/` 安装树每次重启被覆盖），记录 open/close/attach/note/template/mcp 事件。
+- 控制面审计写在 `${DSH_HOME}/nano-local-sandbox/term.audit`，与本地沙箱宿主同一份。本包不再新建 `audit.jsonl`。
 - 浏览器侧 `localStorage['dnt.apply']` 存 client 自检日志（最多 40 条），仅诊断用。
-- 卸载不删除 `audit.jsonl`；也不要删除 `dnt.apply`，它不带敏感内容。
+- 卸载不删除 `term.audit`；也不要删除 `dnt.apply`，它不带敏感内容。
 
 ## 使用
 
@@ -103,7 +103,7 @@ agent 与脚本可用的宿主侧 slash 命令（均代理到 MCP 工具面）�
 /term new                  新建 terminal session（lane=local），返回 addr
 /term list                 列出全部 session（addr、status、attached、exited、keep）
 /term close <ref>          关闭 session（ref = id|name|addr）
-/term attach <ref>         返回 ws attach 地址 /dsh-nano-terminal/stream?session=<id>
+/term attach <ref>         返回 server 给出的 attach.url，客户端不再硬编流地址
 /term send <ref> <text>    代理 term.send（bracketed paste + Enter，blocked 拒发）
 /term read <ref> [n]       读屏（visible source）
 /term wait <ref> [pattern] 等待 turn 结束或屏幕出现 pattern
@@ -124,13 +124,13 @@ agent 与脚本可用的宿主侧 slash 命令（均代理到 MCP 工具面）�
 - `GET /dsh-nano-terminal/events`（SSE 事件流：snapshot 首帧 + live + 15s heartbeat；`?since=<seq>` 断点续传，落后即 `{missed:true,snapshot}`）
 - `GET /dsh-nano-terminal/sessions`、`POST /dsh-nano-terminal/session/:id/close`、`GET /dsh-nano-terminal/health`
 
-三条 lane：`local`（宿主 `subprocess.spawnTerminal`，即 node-pty）、`mcp`（连接远端 MCP terminal 端点）、`isolate`（v8/workerd wasm 内嵌通道，scaffolded）。`/term` 创建的 session 默认走 `local`。
+两条 lane：`local`（宿主 `subprocess.spawnTerminal`，即 node-pty）、`mcp`（连接远端 MCP terminal 端点，用返回的 `attach.url`）。没有 isolate，也没有 sandbox lane。`/term` 创建的 session 默认走 `local`。
 
 ## 配置与状态
 
 宿主无配置文件。所有 durable 状态在 `${DSH_HOME}/dsh-nano-terminal.state/`（`plugins/<pkg>/` 是安装树，每次宿主重启被源树覆盖，不能存状态）：
 
-- `audit.jsonl` — 控制面审计（open/close/attach/note/template/mcp 调用）
+- `term.audit` — 控制面审计在 `${DSH_HOME}/nano-local-sandbox/term.audit`（open/close/attach/note/template/mcp 调用）
 - `session.json` + `screens/<id>.bin` + `session-snapshots/` — 终端持久化；重启后以 placeholder 回归，首次 attach 才 spawn shell 并重放保存的屏幕尾（程序绝不重跑）
 
 浏览器状态：`localStorage['dnt.apply']`（自检日志）、`localStorage['dnt.layout']`（窗格树 + attach 引用，重连活 terminal）。没有可写的宿主配置键。
@@ -161,5 +161,5 @@ npm run build
 
 - 不要装进非 web profile 后期待出现右栏终端标签页。
 - 不要把 `POST /dsh-nano-terminal/mcp` 当数据面——pty 数据流只走 `stream` 的 WebSocket。
-- 不要清空 `audit.jsonl` 或 `dnt.apply`，除非操作者明确要求。
+- 不要清空 `term.audit` 或 `dnt.apply`，除非操作者明确要求。
 - 不要把 `context/` 或本机手册当成安装步骤。它们不在这个包里。

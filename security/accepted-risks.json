@@ -101,6 +101,50 @@
       "monitoring": "route-inventory L0; env flag required.",
       "ownerSignoff": "owner (26-nov AP closure)",
       "reviewDate": "2026-11-19"
+    },
+    {
+      "fingerprint": "dnls:defer-nvx",
+      "subject": "dsh-nano-local-sandbox NVX backend",
+      "existingFeature": "backend-nvx.js rejects every method except capabilities().",
+      "disposition": "accept",
+      "rationale": "Deferred by T-O-1 and T-O-18 section 4 until v1.1 section 5.7's three conditions hold and the owner starts the Windows phase.",
+      "optionalHardening": "None in DNLS01. Do not replace the failing backend in this plan.",
+      "monitoring": "DNLS01-T02 asserts the unimplemented methods reject.",
+      "ownerSignoff": "owner (DNLS01 QNA freeze, 2026-11-14)",
+      "reviewDate": "2026-12-14"
+    },
+    {
+      "fingerprint": "dnls:defer-xray",
+      "subject": "dsh-nano-local-sandbox xray profile",
+      "existingFeature": "No xray profile is shipped.",
+      "disposition": "accept",
+      "rationale": "Deferred by T-O-18 section 4. A future profile is another YAML file, not a new platform.",
+      "optionalHardening": "None in DNLS01.",
+      "monitoring": "No xray route or tool is registered.",
+      "ownerSignoff": "owner (DNLS01 QNA freeze, 2026-11-14)",
+      "reviewDate": "2026-12-14"
+    },
+    {
+      "fingerprint": "dnls:defer-gateway",
+      "subject": "dsh-nano-local-sandbox gateway profile",
+      "existingFeature": "No gateway profile is shipped.",
+      "disposition": "accept",
+      "rationale": "Deferred by T-O-18 section 4. A future profile is another YAML file, not a new platform.",
+      "optionalHardening": "None in DNLS01.",
+      "monitoring": "No gateway route or tool is registered.",
+      "ownerSignoff": "owner (DNLS01 QNA freeze, 2026-11-14)",
+      "reviewDate": "2026-12-14"
+    },
+    {
+      "fingerprint": "dnls:defer-local-s3",
+      "subject": "dsh-nano-local-sandbox local S3 profile",
+      "existingFeature": "No local S3 profile is shipped.",
+      "disposition": "accept",
+      "rationale": "Deferred by T-O-18 section 4. A future profile is another YAML file, not a new platform.",
+      "optionalHardening": "None in DNLS01.",
+      "monitoring": "No local-s3 route or tool is registered.",
+      "ownerSignoff": "owner (DNLS01 QNA freeze, 2026-11-14)",
+      "reviewDate": "2026-12-14"
     }
   ]
 }

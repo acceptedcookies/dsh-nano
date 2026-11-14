@@ -194,16 +194,16 @@ P0-01 ──▶ P1-01 ──▶ P1-02 ──▶ P1-03
   - **完成判据**：三门禁再次 exit 0
   - **验证映射**：`DNLS01-T17` `DNLS01-T20` `DNLS01-T21` `DNLS01-T23` `DNLS01-T24` · **依赖**：`P7-03`
   - **执行状态**：`complete` · **执行时间**：`2026-11-14T05:50:00Z` · **证据 / 备注**：两份台账都是 56 条且三门禁 exit 0。`DNLS01-T23` `DNLS01-T24` 还没跑
-- [ ] `P8-01` — 仓根清单、README、三包 AGENTS、v0.9/v1.1 状态条
+- [x] `P8-01` — 仓根清单、README、三包 AGENTS、v0.9/v1.1 状态条
   - **落点 / 对象**：`AGENTS.md`、`README.md`、各包 AGENTS
   - **完成判据**：清单含 [DNLS]；不改两份设计文的实测数据
   - **验证映射**：`DNLS01-T01` · **依赖**：`P7-04`
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
-- [ ] `P8-02` — accepted-risks.json 末尾追加四条 dnls:defer-
+  - **执行状态**：`complete` · **执行时间**：`2026-11-14T06:00:00Z` · **证据 / 备注**：仓根清单 6 行；README 写六个；v0.9/v1.1 只加了状态条
+- [x] `P8-02` — accepted-risks.json 末尾追加四条 dnls:defer-
   - **落点 / 对象**：`security/accepted-risks.json`
   - **完成判据**：旧 fingerprint 一个不改
   - **验证映射**：`DNLS01-T25` · **依赖**：`P8-01`
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
+  - **执行状态**：`complete` · **执行时间**：`2026-11-14T06:00:00Z` · **证据 / 备注**：`node --test test/deferrals.test.mjs` exit 0；旧 9 个 fingerprint 都还在
 - [ ] `P9-01` — 把执行日志 append 到 action-plan 底部
   - **落点 / 对象**：`DNLS01-macos-platform-cutover.md`
   - **完成判据**：不改计划主体；每行对应 Item ID
@@ -256,8 +256,8 @@ P0-01 ──▶ P1-01 ──▶ P1-02 ──▶ P1-03
 
 ## 5. 当前状态与交接
 
-- **当前节点 / 已完成**：`P8-01` / `P0-01` 至 `P7-04`
-- **下一动作**：Phase 8 文档与 U10。`DNLS01-T18` 的 ego 实跑、`DNLS01-T23`、`DNLS01-T24` 仍未观察
+- **当前节点 / 已完成**：`P9-01` / `P0-01` 至 `P8-02`
+- **下一动作**：执行日志、closure、三路审查。`DNLS01-T18` 的 ego 实跑、`DNLS01-T23`、`DNLS01-T24` 仍未观察
 - **当前阻塞**：无
 - **待 owner / 外部决定**：无。真实容器 e2e 若本机无 CLI，T18 保持未观察并在 closure 写明
 - **最终交接目标**：合并回 `main` 后按 AGENTS.md 删除本 worktree（收口时）

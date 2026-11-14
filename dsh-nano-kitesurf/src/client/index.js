@@ -98,11 +98,11 @@ const STYLE = `
 .nks-dt-tab:hover{color:var(--dsw-alias-label-secondary)}
 .nks-dt-tab[aria-selected="true"]{color:var(--dsw-alias-label-primary);border-bottom-color:var(--dsw-alias-link,#7aaaff)}
 .nks-dt-body{flex:auto;min-height:0;overflow:auto;font:11px/1.45 ui-monospace,Menlo,monospace}
-.nks-dt-cols{flex:none;display:flex;gap:8px;padding:2px 8px;color:var(--dsw-alias-label-quaternary,var(--dsw-alias-label-tertiary));border-bottom:.5px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1);font-size:10px;text-transform:uppercase;letter-spacing:.04em}
+.nks-dt-cols{flex:none;display:flex;gap:8px;padding:2px 8px;color:var(--dsw-alias-label-quaternary,var(--dsw-alias-label-tertiary));border-bottom:.5px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1);font-size:10px;text-transform:uppercase;letter-spacing:.04em;font:var(--dsw-font-xxxs-11)}
 .nks-dt-row{display:flex;gap:8px;padding:2px 8px;border-bottom:.5px solid color-mix(in srgb,var(--dsw-alias-border-l3) 45%,transparent);align-items:baseline;white-space:nowrap}
 .nks-dt-row:nth-child(even){background:color-mix(in srgb,var(--dsw-alias-bg-layer-1) 45%,transparent)}
 .nks-dt-row:hover{background:var(--dsw-alias-interactive-bg-hover)}
-.nks-dt-lv{flex:none;width:56px;color:var(--dsw-alias-label-tertiary);text-transform:uppercase;font-size:10px}
+.nks-dt-lv{flex:none;width:56px;color:var(--dsw-alias-label-tertiary);text-transform:uppercase;font:var(--dsw-font-xxxs-11)}
 .nks-dt-lv[data-lv="error"],.nks-dt-lv[data-lv="exception"]{color:var(--dsw-alias-fill-error,#d5455c)}
 .nks-dt-lv[data-lv="warn"]{color:var(--dsw-alias-fill-warning,#d29922)}
 .nks-dt-lv[data-lv="network"]{color:var(--dsw-alias-link,#7aaaff)}
@@ -142,7 +142,7 @@ const STYLE = `
 .nks-hist-row:hover{background:var(--dsw-alias-interactive-bg-hover)}
 .nks-hist-open{flex:auto;min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:7px 4px;border:0;background:transparent;cursor:pointer;text-align:left}
 .nks-hist-url{color:var(--dsw-alias-label-primary);font-size:12px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.nks-hist-meta{color:var(--dsw-alias-label-tertiary);font-size:10px}
+.nks-hist-meta{color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11)}
 .nks-hist-del{width:24px;height:24px;border:0;border-radius:5px;background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer}
 .nks-hist-del:hover{color:var(--dsw-alias-fill-error,#d5455c);background:color-mix(in srgb,var(--dsw-alias-fill-error,#d5455c) 14%,transparent)}
 .nks-dt-empty{padding:14px;color:var(--dsw-alias-label-tertiary)}
@@ -173,7 +173,7 @@ const STYLE = `
   .nks-address-box:focus-within::after,.nks-address-box[data-dirty="true"]::after{content:none}
   .nks-go{display:none}
   .nks-pins{gap:2px}
-  .nks-hint-text{font-size:10px}
+  .nks-hint-text{font:var(--dsw-font-xxxs-11)}
 }
 /* Frame: never letterbox into a black void — a subtle checker makes the
    dead area read as "canvas", and the picture is centred by object-position. */

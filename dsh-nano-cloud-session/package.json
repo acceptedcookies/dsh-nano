@@ -16,7 +16,7 @@
     "./locale/*.json": "./locale/*.json",
     "./package.json": "./package.json"
   },
-  "files": [
+  "files": ["lib/perf-review-host.js",
     "index.js",
     "AGENTS.md",
     "cordis.patch.yml",

@@ -34,6 +34,7 @@
     "lib/diagnostics.js",
     "lib/history.js",
     "lib/dom.js",
+    "lib/snapshot.js",
     "runtime/Dockerfile",
     "runtime/entrypoint.sh",
     "runtime/mcp-bridge.mjs",

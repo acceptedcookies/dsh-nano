@@ -135,6 +135,8 @@ A failed call returns `{ok:false,errorId,error}` with a real HTTP status. The sa
 | `kitesurf.shot.empty` | 502 | 引擎返回了空截图（页面不可绘/渲染器忙） | 确认页面已 /open；等一秒重试；仍空则 GET /diagnostics 看页面是否 about:blank |
 | `kitesurf.dom.blank` | 502 | 无文档可序列化（页面未打开/仍是 about:blank/文档不可序列化） | 先 POST /open；空白页是 socket 断开重置的信号 — GET /status 看 phase |
 | `kitesurf.elements.empty` | 502 | 引擎 DOM.getDocument 未返回文档根（页面未打开） | 先 POST /open；或 GET /elements?selector=… 前先确认页面存在 |
+| `kitesurf.snapshot.empty` | 502 | a11y walker 没返回 JSON / 在页面里抛异常 | 先 POST /open 再 GET /snapshot；页面若 about:blank 先导航 |
+| `kitesurf.ref.miss` | 404 | @N 元素 ref 不在当前表（页面变了/还没跑过 /snapshot） | GET /nano-kitesurf/snapshot 重建 ref 表后重试；或直接传 selector |
 
 ## 6. 正例 / 负例（可直接复制）
 

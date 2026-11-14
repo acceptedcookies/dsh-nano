@@ -220,9 +220,14 @@ const KITESURF_TOOLS = [
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
-    name: 'kitesurf_control',
-    description: 'Page control/ownership state: which writer holds the page (owner client name, since when, last write). One page is shared by a human and agents; a second writer is refused kitesurf.control.busy rather than tearing navigation. Use before any mutating tool call.',
+    name: 'kitesurf_snapshot',
+    description: 'a11y-lite snapshot: the last semantic tree + @N element-ref table the host pushed. Refs (@1..@N) resolve via GET /nano-kitesurf/refs?ref=@N or are accepted directly in wait/pick/evaluate/edit selector fields on the host. This is the shared language between a human pick and an agent action. For a live re-walk call GET /nano-kitesurf/snapshot on the authenticated host.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'kitesurf_control',
+    description: 'Page control/ownership state: which writer holds the page (owner client name, since when, last write). One page is shared by a human and agents; a second writer is refused kitesurf.control.busy rather than tearing navigation. action: status|claim|release — claim to take the page, release to free it.',
+    inputSchema: { type: 'object', properties: { action: { type: 'string', enum: ['status', 'claim', 'release'] } }, additionalProperties: false },
   },
   {
     name: 'kitesurf_selftest',
@@ -319,6 +324,11 @@ function answerNativeTool(name, args, bridgeState, self = {}) {
     const el = snap.elements || null
     if (!el) return { ok: false, errorId: 'kitesurf.elements.stale', error: 'no elements snapshot yet', hint: 'run GET /nano-kitesurf/elements on the host, then retry' }
     return { ok: true, ...el }
+  }
+  if (name === 'kitesurf_snapshot') {
+    const s = snap.snapshot || null
+    if (!s) return { ok: false, errorId: 'kitesurf.diag.stale', error: 'no a11y snapshot pushed yet', hint: 'call GET /nano-kitesurf/snapshot on the authenticated host to build the ref table, then retry' }
+    return { ok: true, ...s, liveSnapshot: 'GET /nano-kitesurf/snapshot', resolveRef: 'GET /nano-kitesurf/refs?ref=@N' }
   }
   if (name === 'kitesurf_selftest') {
     const st = snap.selftest || null

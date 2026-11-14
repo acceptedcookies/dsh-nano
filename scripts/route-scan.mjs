@@ -204,12 +204,13 @@ function scanKitesurf() {
       source: { file, line: lineOf(text, `const ${name || 'ROUTE'}`) },
     })
   }
-  // The plugin registers exactly the 8 constants below; anything else means
-  // the parser silently missed (or over-matched) a spec — fail the scan
-  // loudly instead of letting the ledger drift.
-  const expected = ['STATUS_ROUTE', 'LAST_ROUTE', 'OPEN_ROUTE', 'SHOT_ROUTE', 'PICK_ROUTE', 'SETTINGS_ROUTE', 'PERF_ROUTE', 'KITE_ROUTE']
-  if (rows.length !== expected.length || expected.some((name) => !consts[name] || !rows.some((row) => row.path === consts[name]))) {
-    throw new Error(`route-scan: expected 8 kitesurf route specs, parsed ${rows.length} — parser/spec drift`)
+  // Every `*_ROUTE`/`ROUTE` string constant in the file must resolve to a
+  // registered row — a hard count would go stale the next time a route is
+  // added (it already drifted from 8 to 27 before this guard was written).
+  const declared = Object.keys(consts).filter((name) => /ROUTE$/.test(name))
+  const missing = declared.filter((name) => !rows.some((row) => row.path === consts[name]))
+  if (rows.length === 0 || missing.length > 0) {
+    throw new Error(`route-scan: parsed ${rows.length} kitesurf route specs; unregistered constants: ${missing.join(', ') || 'none'} — parser/spec drift`)
   }
   return rows
 }

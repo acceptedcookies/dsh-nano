@@ -73,6 +73,8 @@ export const ERROR_CATALOG = [
   { match: '^kitesurf\\.shot\\.empty$', example: 'kitesurf.shot.empty', status: 502, cause: '引擎返回了空截图（页面不可绘/渲染器忙）', next: '确认页面已 /open；等一秒重试；仍空则 GET /diagnostics 看页面是否 about:blank' },
   { match: '^kitesurf\\.dom\\.(empty|blank)$', example: 'kitesurf.dom.blank', status: 502, cause: '无文档可序列化（页面未打开/仍是 about:blank/文档不可序列化）', next: '先 POST /open；空白页是 socket 断开重置的信号 — GET /status 看 phase' },
   { match: '^kitesurf\\.elements\\.empty$', example: 'kitesurf.elements.empty', status: 502, cause: '引擎 DOM.getDocument 未返回文档根（页面未打开）', next: '先 POST /open；或 GET /elements?selector=… 前先确认页面存在' },
+  { match: '^kitesurf\\.snapshot\\.(empty|failed)$', example: 'kitesurf.snapshot.empty', status: 502, cause: 'a11y walker 没返回 JSON / 在页面里抛异常', next: '先 POST /open 再 GET /snapshot；页面若 about:blank 先导航' },
+  { match: '^kitesurf\\.ref\\.miss$', example: 'kitesurf.ref.miss', status: 404, cause: '@N 元素 ref 不在当前表（页面变了/还没跑过 /snapshot）', next: 'GET /nano-kitesurf/snapshot 重建 ref 表后重试；或直接传 selector' },
 ]
 
 /**
@@ -257,6 +259,44 @@ export function listRefs(limit = 20) {
 /** Composer chip text — one line, stable, resolvable. */
 export function refChip(id, label) {
   return `⟦kitesurf:${id}${label ? ` ${label}` : ''}⟧`
+}
+
+/**
+ * Element refs (P0-5). The @N table from the latest /snapshot walk. Separate
+ * from the note `refs` above: notes are human-authored composer chips, element
+ * refs are the machine-readable selector table an agent hands to wait/pick/
+ * evaluate/edit. Replaced wholesale on every snapshot so refs always resolve
+ * against the same rendered page the tree described.
+ */
+let elementRefs = {}      // "@N" → {role,name,text,selector}
+let elementRefsUrl = null // page url the table was built against
+let elementRefsAt = null
+
+/** Replace the element-ref table (called by the /snapshot route). */
+export function putElementRefs(refs, url) {
+  elementRefs = refs && typeof refs === 'object' ? refs : {}
+  elementRefsUrl = typeof url === 'string' ? url : null
+  elementRefsAt = new Date().toISOString()
+}
+
+/** Resolve "@N" to its {role,name,text,selector} or null. */
+export function getElementRef(ref) {
+  return elementRefs[String(ref || '')] || null
+}
+
+/** "@N" → CSS selector; null when ref is unknown or not a ref. */
+export function elementRefSelector(ref) {
+  const row = getElementRef(ref)
+  return row && typeof row.selector === 'string' && row.selector ? row.selector : null
+}
+
+/** True when the string is an @N element ref (not a note ref or a selector). */
+export function isElementRef(value) {
+  return /^@\d+$/.test(String(value || '').trim())
+}
+
+export function elementRefSummary() {
+  return { count: Object.keys(elementRefs).length, url: elementRefsUrl, at: elementRefsAt, refs: elementRefs }
 }
 
 /**

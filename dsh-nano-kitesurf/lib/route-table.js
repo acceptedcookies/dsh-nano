@@ -194,6 +194,32 @@ export const ROUTE_TABLE = [
   },
   {
     "plugin": "dsh-nano-kitesurf",
+    "path": "/nano-kitesurf/snapshot",
+    "methods": [
+      "GET",
+      "HEAD"
+    ],
+    "sensitivity": "L2",
+    "capability": "read:engine",
+    "bodyLimit": 0,
+    "sessionBinding": false,
+    "justification": "SNAPSHOT_ROUTE — injected a11y-lite walker returns the semantic tree + @N element-ref table of the rendered page. A bounded read (one Runtime.evaluate round-trip), same read-class as /elements and /dom. Refs written to host memory for later @N resolution."
+  },
+  {
+    "plugin": "dsh-nano-kitesurf",
+    "path": "/nano-kitesurf/refs",
+    "methods": [
+      "GET",
+      "HEAD"
+    ],
+    "sensitivity": "L2",
+    "capability": "read:host",
+    "bodyLimit": 0,
+    "sessionBinding": false,
+    "justification": "REFS_ROUTE — resolves @N element refs to selectors from the host's stored ref table. No engine call; a host-memory read of the last /snapshot, same read-class as /context list."
+  },
+  {
+    "plugin": "dsh-nano-kitesurf",
     "path": "/nano-kitesurf/ports",
     "methods": [
       "GET",
@@ -296,7 +322,7 @@ export const ROUTE_TABLE = [
     ],
     "sensitivity": "L2",
     "capability": "read:host",
-    "bodyLimit": 4096,
+    "bodyLimit": 0,
     "sessionBinding": false,
     "justification": "BROWSE_HISTORY_ROUTE — durable browse history list/delete/clear. Contains visited URLs, L2."
   },

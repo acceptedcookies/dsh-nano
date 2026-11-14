@@ -1336,6 +1336,44 @@ export async function captureElements(httpBase, options = {}) {
 }
 
 
+/**
+ * a11y-lite snapshot (P0-5). Injects the snapshot walker, parses its single
+ * JSON round-trip into {tree, refs, truncated, url, title, count}. The same
+ * walker runs for the pane annotate view and for the /snapshot host route, so
+ * a ref the human sees is a ref an agent can resolve.
+ */
+export async function captureSnapshot(httpBase, options = {}) {
+  return useLive(httpBase, async (client) => {
+    const page = await pageHandle(client)
+    const { snapshotExpression } = await import('./snapshot.js')
+    const evaluated = await client.send('Runtime.evaluate', {
+      expression: snapshotExpression(options.maxNodes),
+      returnByValue: true,
+    }, page.sessionId)
+    if (evaluated.exceptionDetails) {
+      const d = evaluated.exceptionDetails
+      throw new KitesurfError('kitesurf.snapshot.failed',
+        String(d.exception?.description || d.text || 'snapshot walker threw').slice(0, 180))
+    }
+    const raw = evaluated.result?.value
+    if (typeof raw !== 'string' || !raw) {
+      throw new KitesurfError('kitesurf.snapshot.empty', 'snapshot walker returned no payload')
+    }
+    let parsed
+    try { parsed = JSON.parse(raw) } catch { throw new KitesurfError('kitesurf.snapshot.empty', 'snapshot payload was not JSON') }
+    if (parsed.url === 'about:blank') throw new KitesurfError('kitesurf.dom.blank', 'page is about:blank')
+    return {
+      url: String(parsed.url || ''),
+      title: String(parsed.title || ''),
+      tree: String(parsed.tree || ''),
+      refs: parsed.refs && typeof parsed.refs === 'object' ? parsed.refs : {},
+      truncated: parsed.truncated === true,
+      count: Number(parsed.count) || 0,
+    }
+  })
+}
+
+
 /** Browse history lives in the engine KV namespace (workerd), not the host. */
 export async function engineHistoryList(httpBase, limit = 100) {
   const response = await fetch(`${httpBase}/history`, { signal: AbortSignal.timeout(4000) })

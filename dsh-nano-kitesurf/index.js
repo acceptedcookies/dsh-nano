@@ -9,8 +9,8 @@ import { fileURLToPath } from 'node:url'
 import { registerRoutes } from './lib/route-guard.js'
 import { ROUTE_TABLE, PLUGIN } from './lib/route-table.js'
 import { createHistory } from './lib/history.js'
-import { browserSocketUrl, captureDom, captureElements, captureShot, currentEmulation, engineHistoryAdd, engineHistoryClear, engineHistoryList, engineHistoryRemove, currentUserAgent, currentViewport, engineTargets, evaluateInPage, fetchEngine, KitesurfError, navigateHistory, openPage, pickElement, pickBySelector, pickPoint, pickSelector, editBody, editElement, pageUrl, releaseEngine, scrollDelta, setBrowserSettings, waitForCondition } from './lib/engine.js'
-import { ERROR_STATUS, clearConsole, clearNetwork, clearOperations, diagnosticsSummary, getRef, listNetwork, listConsole, listOperations, listRefs, putRef, recordOperation, refChip, summarizeInput } from './lib/diagnostics.js'
+import { browserSocketUrl, captureDom, captureElements, captureShot, captureSnapshot, currentEmulation, engineHistoryAdd, engineHistoryClear, engineHistoryList, engineHistoryRemove, currentUserAgent, currentViewport, engineTargets, evaluateInPage, fetchEngine, KitesurfError, navigateHistory, openPage, pickElement, pickBySelector, pickPoint, pickSelector, editBody, editElement, pageUrl, releaseEngine, scrollDelta, setBrowserSettings, waitForCondition } from './lib/engine.js'
+import { ERROR_STATUS, clearConsole, clearNetwork, clearOperations, diagnosticsSummary, elementRefSelector, elementRefSummary, getElementRef, getRef, isElementRef, listNetwork, listConsole, listOperations, listRefs, putElementRefs, putRef, recordOperation, refChip, summarizeInput } from './lib/diagnostics.js'
 import { buildSrcDoc } from './lib/dom.js'
 import { kitesurfSkill, nanoKiteSkill } from './lib/skill.js'
 import { createNanoKite } from './lib/nano-kite.js'
@@ -45,6 +45,8 @@ const NETWORK_ROUTE = '/nano-kitesurf/network'
 const TARGETS_ROUTE = '/nano-kitesurf/targets'
 const EVALUATE_ROUTE = '/nano-kitesurf/evaluate'
 const WAIT_ROUTE = '/nano-kitesurf/wait'
+const SNAPSHOT_ROUTE = '/nano-kitesurf/snapshot'
+const REFS_ROUTE = '/nano-kitesurf/refs'
 
 const DEFAULT_ORIGIN = 'http://127.0.0.1:8787'
 
@@ -52,6 +54,55 @@ const DEFAULT_ORIGIN = 'http://127.0.0.1:8787'
 let lastPick = null
 /** @type {{ at: string, errorId: string, error: string } | null} */
 let lastError = null
+
+/**
+ * P0-5 ref language: "@N" in a selector-ish field resolves through the last
+ * /snapshot's element-ref table to the SAME element the human saw. Non-@N
+ * input passes through untouched so plain selectors keep working.
+ */
+function resolveSelectorRefs(body) {
+  if (!body || typeof body !== 'object') return body
+  const out = { ...body }
+  for (const key of ['selector', 'target', 'needle']) {
+    if (isElementRef(out[key])) {
+      const sel = elementRefSelector(out[key])
+      if (!sel) throw new KitesurfError('kitesurf.ref.miss', `element ref ${out[key]} unknown — run /snapshot to rebuild the ref table`)
+      out[key] = sel
+    }
+  }
+  return out
+}
+
+/**
+ * @N whose stored selector selects the SAME element as `pickedSelector`. A
+ * string compare cannot be trusted (pick emits "html > body > a", the walker
+ * emits "a" — same node, different spelling), so this probes the live page
+ * once: querySelector each candidate and compare node identity.
+ */
+async function elementRefForPicked(httpBase, pickedSelector) {
+  const { refs } = elementRefSummary()
+  const candidates = Object.entries(refs)
+    .map(([id, row]) => ({ id, selector: row?.selector }))
+    .filter((c) => typeof c.selector === 'string' && c.selector)
+  if (!candidates.length || !pickedSelector) return null
+  const expr = `(() => {
+    const want = document.querySelector(${JSON.stringify(pickedSelector)})
+    if (!want) return null
+    const table = ${JSON.stringify(candidates.map((c) => [c.id, c.selector]))}
+    for (const [id, sel] of table) {
+      try { if (sel && document.querySelector(sel) === want) return id } catch (e) { /* malformed stored sel */ }
+    }
+    return null
+  })()`
+  try {
+    const result = await evaluateInPage(httpBase, expr)
+    // evaluateInPage returns the JSON.stringify'd value; unwrap to the bare ref.
+    const value = JSON.parse(result?.value ?? 'null')
+    return typeof value === 'string' && /^@\d+$/.test(value) ? value : null
+  } catch {
+    return null
+  }
+}
 
 export const Config = {
   '~standard': {
@@ -473,6 +524,7 @@ export function apply(ctx, config) {
   let lastClientPerf = null
   let lastElements = null
   let lastDom = null
+  let lastSnapshot = null
   async function runSelfTest() {
     const started = Date.now()
     const checks = []
@@ -550,6 +602,7 @@ export function apply(ctx, config) {
       elements: lastElements,
       history: history.list({ limit: 30 }),
       dom: lastDom,
+      snapshot: lastSnapshot,
       observability: summary,
       console: listConsole({ limit }),
       network: listNetwork({ limit }),
@@ -697,7 +750,7 @@ export function apply(ctx, config) {
       bodyLimit: 4096,
       handler: async (req, res, route) => {
         try {
-          const body = await readBody(req, route.bodyLimit)
+          const body = resolveSelectorRefs(await readBody(req, route.bodyLimit))
           // {x, y} is a click; {selector} is Arrow Up/Down navigation — the
           // pane names a parent/child selector and gets the same packet back.
           const picked = await hostSpan('pick', () => typeof body.selector === 'string'
@@ -708,6 +761,13 @@ export function apply(ctx, config) {
           // preview truthy-in-any-shape stays read-only — a mistyped
           // "true" must not scribble over the human's live lastPick.
           const preview = body.preview === true || body.preview === 'true'
+          // P0-5 link: annotate the pick packet with the @N element ref that
+          // resolves to the SAME DOM node. Selectors differ in spelling (pick
+          // emits "html > body > a", the walker emits "a") so a string compare
+          // is unreliable — probe the page for element identity instead.
+          const pickedSelector = picked?.element?.selector
+          const ref = pickedSelector ? await elementRefForPicked(origin(), pickedSelector) : null
+          if (ref) picked.element = { ...picked.element, ref }
           if (!preview) {
             lastPick = { at: new Date().toISOString(), ...picked }
           }
@@ -724,7 +784,7 @@ export function apply(ctx, config) {
       bodyLimit: 8192,
       handler: async (req, res, route) => {
         try {
-          const body = await readBody(req, route.bodyLimit)
+          const body = resolveSelectorRefs(await readBody(req, route.bodyLimit))
           const { selector, text } = editBody(body)
           const edited = await hostSpan('edit', () => editElement(origin(), selector, text))
           lastError = null
@@ -958,6 +1018,7 @@ export function apply(ctx, config) {
       elements: lastElements,
       history: history.list({ limit: 30 }),
       dom: lastDom,
+      snapshot: lastSnapshot,
           })
         } catch (error) {
           fail(res, error)
@@ -1099,6 +1160,49 @@ export function apply(ctx, config) {
       },
     },
     {
+      // a11y-lite snapshot (P0-5): the shared element-ref language. One live
+      // DOM walk emits the tree + ref table; the host stores refs so @N in a
+      // later wait/pick/evaluate/edit resolves to the same element the human
+      // saw. This is what makes a pick note and an agent ref interchangeable.
+      path: SNAPSHOT_ROUTE,
+      methods: ['GET', 'HEAD'],
+      handler: async (req, res) => {
+        try {
+          const q = queryOf(req)
+          const snap = await hostSpan('snapshot', () => captureSnapshot(origin(), { maxNodes: Number(q.get('maxNodes') || 200) }))
+          putElementRefs(snap.refs, snap.url)
+          // Trim for the 30s MCP push: keep the ref table + counts, drop the
+          // full tree text (an agent re-walks live via /snapshot when needed).
+          lastSnapshot = { at: new Date().toISOString(), url: snap.url, title: snap.title, count: snap.count, truncated: snap.truncated, refs: snap.refs, treePreview: snap.tree.split('\n').slice(0, 30).join('\n') }
+          sendJson(res, 200, { ok: true, ...snap })
+        } catch (error) {
+          fail(res, error)
+        }
+      },
+    },
+    {
+      // The stored element-ref table: an agent resolves "@N" without re-walking
+      // the page. Empty until a /snapshot runs; always the SAME page the last
+      // tree described (refs are replaced wholesale each snapshot).
+      path: REFS_ROUTE,
+      methods: ['GET', 'HEAD'],
+      handler: async (req, res) => {
+        try {
+          const q = queryOf(req)
+          const ref = q.get('ref')
+          if (ref) {
+            const row = getElementRef(ref)
+            if (!row) throw new KitesurfError('kitesurf.ref.miss', `no element ref ${ref}; run /snapshot to rebuild`)
+            sendJson(res, 200, { ok: true, ref, ...row })
+            return
+          }
+          sendJson(res, 200, { ok: true, ...elementRefSummary() })
+        } catch (error) {
+          fail(res, error)
+        }
+      },
+    },
+    {
       // Blocking condition wait — the automation loop's third primitive. An
       // agent stops polling `sleep` and gets a deterministic verdict:
       // {selector|text|url|fn} matched, or kitesurf.wait.timeout. `load` adds
@@ -1109,7 +1213,7 @@ export function apply(ctx, config) {
       bodyLimit: 4096,
       handler: async (req, res, route) => {
         try {
-          const body = await readBody(req, route.bodyLimit)
+          const body = resolveSelectorRefs(await readBody(req, route.bodyLimit))
           const result = await hostSpan('wait', () => waitForCondition(origin(), body || {}))
           sendJson(res, 200, result)
         } catch (error) {

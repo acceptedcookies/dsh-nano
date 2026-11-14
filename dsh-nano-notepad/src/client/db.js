@@ -140,8 +140,15 @@ export function validateName(name) {
  * not the storage format.
  * @param {string} name
  */
-export function fileName(name) {
-  return validateName(name)
+export function fileName(name, { allowKindSuffix = false } = {}) {
+  const trimmed = validateName(name)
+  /* 方案 A kind-spec：非 draft kind 的真源格式以规范后缀为门面（draft 任意）。
+     保留后缀只允许经 kind 赋值通路（setCat/corpus.write/创建联动）写入——
+     直接新建/改名带 kind 后缀的裸文件视为越权，拒。 */
+  if (!allowKindSuffix && catForName(trimmed) !== null) {
+    throw new Error('name uses a reserved kind suffix — use 标记类型 to assign a kind')
+  }
+  return trimmed
 }
 
 /**
@@ -206,6 +213,40 @@ async function readAll(db, storeName) {
   return rows
 }
 
+/**
+ * 方案 A kind-spec（业主冻结 2026-11-14）：非 draft kind 的真源格式以规范
+ * 后缀为门面；draft 可为任何类型故不受后缀约束。name 是格式门面、cat 是
+ * 权威语义——sanitize 时 cat 必须落回 name 的后缀映射，否则降级 null。
+ * folder 不参与 kind 门面。
+ */
+export const KIND_FORMAT = /** @type {const} */ ({
+  note: { suffix: '.note.md' },
+  prompt: { suffix: '.prompt.md' },
+  knowledge: { suffix: '.kb.md' },
+  memory: { suffix: '.memory.md' },
+})
+export const KIND_FORMAT_KINDS = /** @type {const} */ (['note', 'prompt', 'knowledge', 'memory'])
+
+/** name 的后缀投影 → kind|null；draft 无后缀门面恒 null。 */
+export function catForName(name) {
+  if (typeof name !== 'string') return null
+  for (const k of KIND_FORMAT_KINDS) {
+    if (name.endsWith(KIND_FORMAT[k].suffix)) return k
+  }
+  return null
+}
+/** kind 的规范名生成：把 base 名（剥掉任何已有 kind 后缀）拼上该 kind 后缀。 */
+export function kindNameFor(kind, base) {
+  if (kind === 'draft') return base
+  const spec = KIND_FORMAT[kind]
+  if (!spec) return null
+  const stripped = KIND_FORMAT_KINDS.reduce(
+    (n, k) => (n.endsWith(KIND_FORMAT[k].suffix) ? n.slice(0, -KIND_FORMAT[k].suffix.length) : n),
+    base,
+  )
+  return `${stripped}${spec.suffix}`
+}
+
 /** Coerce stored nodes into the shape the UI expects; bad rows are skipped. @param {any[]} rows */
 export function sanitizeNodes(rows) {
   const clean = []
@@ -224,6 +265,12 @@ export function sanitizeNodes(rows) {
     if (typeof node.cat === 'string' && ['prompt', 'note', 'draft', 'knowledge', 'memory'].includes(node.cat)) {
       node.rejectCount = Number.isInteger(node.rejectCount) ? node.rejectCount : 0
       if (typeof node.supersedes !== 'string') node.supersedes = null
+      /* 方案 A：非 draft kind 必须名随其规（name 后缀 = 真源格式门面）。
+         cat 与 name 不符 → 降级 null，由用户经「标记类型」重标；
+         draft 无后缀门面，豁免。 */
+      if (node.cat !== 'draft' && catForName(node.name) !== node.cat) {
+        node.cat = null
+      }
       if (node.cat !== 'draft') delete node.draftStatus
       else if (typeof node.draftStatus !== 'string') node.draftStatus = 'pending'
     } else {
@@ -262,9 +309,9 @@ async function siblingsOf(db, parentId, workspaceId) {
 }
 
 /** @param {IDBDatabase} db @param {'folder' | 'file'} kind @param {string | null} parentId @param {string} name @param {string | null} workspaceId */
-export async function createNode(db, kind, parentId, name, workspaceId = null) {
+export async function createNode(db, kind, parentId, name, workspaceId = null, opts = {}) {
   const siblings = await siblingsOf(db, parentId, workspaceId)
-  const finalName = kind === 'file' ? fileName(name) : validateName(name)
+  const finalName = kind === 'file' ? fileName(name, opts) : validateName(name)
   if (taken(siblings, finalName)) throw new Error('notepad name is already used in this folder')
   const now = Date.now()
   const node = {
@@ -288,7 +335,9 @@ export async function renameNode(db, id, name) {
   const rows = await readAll(db, 'nodes')
   const node = rows.find(item => item.id === id)
   if (!node) throw new Error('notepad item no longer exists')
-  const finalName = node.kind === 'file' ? fileName(name) : validateName(name)
+  /* kind-spec：带 cat 的文件改名必须保住规范后缀（draft 无后缀门面豁免）；
+     无 cat 的文件改名不许带上保留后缀（同 fileName 拒则）。 */
+  const finalName = node.kind === 'file' ? fileName(name, { allowKindSuffix: node.cat === 'draft' || (node.cat && node.cat === catForName(name)) }) : validateName(name)
   const siblings = rows.filter(item => item.parentId === node.parentId && (item.workspaceId ?? null) === (node.workspaceId ?? null))
   if (siblings.some(item => item.id !== id && item.name.toLowerCase() === finalName.toLowerCase())) {
     throw new Error('notepad name is already used in this folder')

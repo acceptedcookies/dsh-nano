@@ -57,19 +57,23 @@ export async function spawnEngine({ model = DEFAULT_MODEL, instructions = DEFAUL
  * the engine emits them; note_* executors also record via corpus.
  */
 export async function runOneShot(promptText, opts = {}) {
+  const t0 = performance.now()
   const { engine, done } = await spawnEngine(opts)
+  const onEvent = typeof opts.onEvent === 'function' ? opts.onEvent : null
+  const spawnMs = performance.now() - t0
   let text = ''
   const toolCalls = []
   try {
     const turn = engine.prompt(promptText, { signal: opts.signal })
     for await (const e of turn) {
+      onEvent?.(e)
       if (e.type === 'text_delta') text += e.delta
-      else if (e.type === 'tool_call' || e.type === 'tool_call_update' || e.type === 'fx_host_tool_call') {
-        toolCalls.push({ raw: e.type, name: e.name ?? e.toolName ?? null })
+      else if (e.type === 'tool_start' || e.type === 'tool_call' || e.type === 'tool_call_update' || e.type === 'fx_host_tool_call' || e.type === 'tool_end') {
+        toolCalls.push({ raw: e.type, name: e.name ?? e.toolName ?? null, args: e.input ?? e.args ?? null, result: e.content ?? e.output ?? e.result ?? null, isError: e.isError })
       }
     }
     const res = await turn.result
-    return { text, stopReason: res?.stopReason ?? null, usage: res?.usage ?? null, toolCalls }
+    return { text, stopReason: res?.stopReason ?? null, usage: res?.usage ?? null, toolCalls, timing: { spawnMs: Math.round(spawnMs), turnMs: Math.round(performance.now() - t0 - spawnMs) } }
   } finally {
     done()
   }

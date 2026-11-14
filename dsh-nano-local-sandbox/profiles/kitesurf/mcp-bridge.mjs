@@ -162,12 +162,12 @@ export function createFrameDecoder({ onMessage, onPing, onClose, maxFrame = MAX_
  */
 const DNLS_TOOLS = [
   {
-    name: 'kitesurf_diagnostics',
+    name: 'sandbox.diagnostics',
     description: 'One-shot Kitesurf plugin diagnostics: engine status, phase, targets, settings, console tail, operation trace, errorId catalogue and generated next-step hints. Call this FIRST when anything fails.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
-    name: 'kitesurf_console',
+    name: 'sandbox.console',
     description: 'Recent page console/error/exception/network/navigation events captured over the plugin CDP socket.Levels: log,info,warn,error,exception,network,navigation.',
     inputSchema: {
       type: 'object',
@@ -179,8 +179,8 @@ const DNLS_TOOLS = [
     },
   },
   {
-    name: 'kitesurf_operations',
-    description: 'Recent /nano-kitesurf/* route calls with status, errorId, incidentId, durationMs and a whitelisted input summary. Use errorsOnly=true to see only failures.',
+    name: 'sandbox.operations',
+    description: 'Recent /nano-local-sandbox/* route calls with status, errorId, incidentId, durationMs and a whitelisted input summary. Use errorsOnly=true to see only failures.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -191,7 +191,7 @@ const DNLS_TOOLS = [
     },
   },
   {
-    name: 'kitesurf_error_catalog',
+    name: 'sandbox.error_catalog',
     description: 'The single source of truth: errorId → HTTP status → cause → next command. Use it to interpret any kitesurf.* errorId instead of guessing.',
     inputSchema: {
       type: 'object',
@@ -200,37 +200,37 @@ const DNLS_TOOLS = [
     },
   },
   {
-    name: 'kitesurf_targets',
+    name: 'sandbox.targets',
     description: 'Engine CDP Target.getTargets result: page target ids/urls and which page the plugin socket is attached to. Use when the pane and the API disagree.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
-    name: 'kitesurf_history',
-    description: 'Browse history for the Kitesurf pane: the newest 30 visits with url, ISO time and visit count, plus the total stored. Backed by the plugin durable store (the Kitesurf workerd exposes no D1/KV binding). Mutations go through the host: DELETE /nano-kitesurf/browse-history?id=… or POST {clear:true}.',
+    name: 'sandbox.history',
+    description: 'Browse history for the Kitesurf pane: the newest 30 visits with url, ISO time and visit count, plus the total stored. Backed by the plugin durable store (the Kitesurf workerd exposes no D1/KV binding). Mutations go through the host: DELETE /nano-local-sandbox/browse-history?id=… or POST {clear:true}.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
-    name: 'kitesurf_dom',
+    name: 'sandbox.dom',
     description: 'Last captured document: url, byte size and the first 4000 characters of documentElement.outerHTML. Use to confirm what the engine is actually rendering when the pane looks wrong.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
-    name: 'kitesurf_elements',
-    description: 'Elements panel data from the Kitesurf DOM/CSS domains: the last DOM tree (up to 40 nodes with tag/id/class/child count), the selector queried, and how many computed properties were returned. Call GET /nano-kitesurf/elements?selector=… on the host for styles of a specific node.',
+    name: 'sandbox.elements',
+    description: 'Elements panel data from the Kitesurf DOM/CSS domains: the last DOM tree (up to 40 nodes with tag/id/class/child count), the selector queried, and how many computed properties were returned. Call GET /nano-local-sandbox/elements?selector=… on the host for styles of a specific node.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
-    name: 'kitesurf_control',
+    name: 'sandbox.control',
     description: 'Page control/ownership state: which writer holds the page (owner client name, since when, last write). One page is shared by a human and agents; a second writer is refused kitesurf.control.busy rather than tearing navigation. Use before any mutating tool call.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
-    name: 'kitesurf_selftest',
+    name: 'sandbox.selftest',
     description: 'One verdict over every layer: plugin build, engine identity, container state, published port loopback, MCP bridge counters, CDP targets, DOM availability, route table and phase consistency. Use after any restart or container change.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
-    name: 'kitesurf_network',
+    name: 'sandbox.network',
     description: 'Network waterfall from the Kitesurf CDP session: method, url, status, mimeType, bytes and duration for every request. failedOnly=true shows 4xx/5xx and transport failures only.',
     inputSchema: {
       type: 'object',
@@ -242,17 +242,17 @@ const DNLS_TOOLS = [
     },
   },
   {
-    name: 'kitesurf_ports',
+    name: 'sandbox.ports',
     description: 'Port truth: what the profile configured, what the engine actually uses, what the container published, and whether each host port is free (e.g. 8787 held by Cursor while the engine runs on 8798). Read this FIRST for any container/bootstrap failure.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
-    name: 'kitesurf_recovery_plan',
+    name: 'sandbox.recovery_plan',
     description: 'Ordered recovery steps with the exact HTTP call for each, derived from the live snapshot (port conflict, engine down, phase mismatch, container missing). Returns commands to run through the authenticated host session.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
-    name: 'kitesurf_bridge_health',
+    name: 'sandbox.bridge_health',
     description: 'MCP bridge liveness: conns, accepted, rejected, uptimeMs and when the last host diagnostics snapshot was pushed.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
@@ -273,55 +273,55 @@ function toolError(id, code, message) {
   return { jsonrpc: '2.0', id, error: { code, message } }
 }
 
-/** Answer a kitesurf_* tools/call without touching the agent-browser child. */
+/** Answer a sandbox.* tools/call without touching the agent-browser child. */
 function answerNativeTool(name, args, bridgeState) {
   const snap = bridgeState.getDiagnostics()
-  if (name === 'kitesurf_bridge_health') {
+  if (name === 'sandbox.bridge_health') {
     return { ok: true, ...bridgeState.stats(), diagnosticsPushedAt: snap?.at || null }
   }
   if (!snap) {
-    return { ok: false, errorId: 'kitesurf.diag.stale', error: 'host has not pushed a diagnostics snapshot yet; retry in a few seconds', hint: 'GET /nano-kitesurf/diagnostics on the authenticated host, or wait for the 30s push' }
+    return { ok: false, errorId: 'kitesurf.diag.stale', error: 'host has not pushed a diagnostics snapshot yet; retry in a few seconds', hint: 'GET /nano-local-sandbox/diagnostics on the authenticated host, or wait for the 30s push' }
   }
-  if (name === 'kitesurf_diagnostics') return snap
-  if (name === 'kitesurf_console') {
+  if (name === 'sandbox.diagnostics') return snap
+  if (name === 'sandbox.console') {
     const levels = typeof args.level === 'string' ? args.level.split(',').map((s) => s.trim()).filter(Boolean) : null
     const limit = Math.max(1, Math.min(Number(args.limit) || 50, 250))
     const entries = (snap.console?.entries || []).filter((e) => !levels || levels.includes(e.level)).slice(-limit)
     return { ok: true, entries, total: snap.console?.total ?? entries.length, counts: snap.console?.counts || {} }
   }
-  if (name === 'kitesurf_operations') {
+  if (name === 'sandbox.operations') {
     const errorsOnly = args.errorsOnly === true
     const limit = Math.max(1, Math.min(Number(args.limit) || 50, 200))
     const entries = (snap.operations?.entries || []).filter((e) => !errorsOnly || !e.ok).slice(-limit)
     return { ok: true, entries, total: snap.operations?.total ?? entries.length, dropped: snap.operations?.dropped ?? 0 }
   }
-  if (name === 'kitesurf_error_catalog') {
+  if (name === 'sandbox.error_catalog') {
     const all = snap.observability?.errorCatalog || []
     const filter = typeof args.errorId === 'string' ? args.errorId : null
     return { ok: true, entries: filter ? all.filter((r) => r.errorId.includes(filter)) : all, total: all.length }
   }
-  if (name === 'kitesurf_targets') return { ok: true, ...(snap.engine?.targets || { count: 0, targets: [] }), targetsError: snap.engine?.targetsError || null }
-  if (name === 'kitesurf_history') {
+  if (name === 'sandbox.targets') return { ok: true, ...(snap.engine?.targets || { count: 0, targets: [] }), targetsError: snap.engine?.targetsError || null }
+  if (name === 'sandbox.history') {
     const h = snap.history || null
     if (!h) return { ok: false, errorId: 'kitesurf.history.stale', error: 'no history snapshot yet', hint: 'open a page on the host, then retry' }
     return { ok: true, total: h.total, entries: h.entries }
   }
-  if (name === 'kitesurf_dom') {
+  if (name === 'sandbox.dom') {
     const dom = snap.dom || null
-    if (!dom) return { ok: false, errorId: 'kitesurf.dom.stale', error: 'no DOM captured yet', hint: 'run GET /nano-kitesurf/dom on the host, then retry' }
+    if (!dom) return { ok: false, errorId: 'kitesurf.dom.stale', error: 'no DOM captured yet', hint: 'run GET /nano-local-sandbox/dom on the host, then retry' }
     return { ok: true, ...dom }
   }
-  if (name === 'kitesurf_elements') {
+  if (name === 'sandbox.elements') {
     const el = snap.elements || null
-    if (!el) return { ok: false, errorId: 'kitesurf.elements.stale', error: 'no elements snapshot yet', hint: 'run GET /nano-kitesurf/elements on the host, then retry' }
+    if (!el) return { ok: false, errorId: 'kitesurf.elements.stale', error: 'no elements snapshot yet', hint: 'run GET /nano-local-sandbox/elements on the host, then retry' }
     return { ok: true, ...el }
   }
-  if (name === 'kitesurf_selftest') {
+  if (name === 'sandbox.selftest') {
     const st = snap.selftest || null
-    if (!st) return { ok: false, errorId: 'kitesurf.selftest.stale', error: 'no self-test has run yet', hint: 'run GET /nano-kitesurf/selftest on the authenticated host, then retry' }
+    if (!st) return { ok: false, errorId: 'kitesurf.selftest.stale', error: 'no self-test has run yet', hint: 'run GET /nano-local-sandbox/selftest on the authenticated host, then retry' }
     return { ok: true, ...st, ageMs: Date.now() - Date.parse(st.at) }
   }
-  if (name === 'kitesurf_network') {
+  if (name === 'sandbox.network') {
     const limit = Math.max(1, Math.min(Number(args.limit) || 100, 200))
     const entries = (snap.network?.entries || [])
       .filter((r) => args.failedOnly !== true || r.failed || (r.status && r.status >= 400))
@@ -329,28 +329,28 @@ function answerNativeTool(name, args, bridgeState) {
     const failed = (snap.network?.entries || []).filter((r) => r.failed || (r.status && r.status >= 400)).length
     return { ok: true, entries, total: snap.network?.total ?? entries.length, failed }
   }
-  if (name === 'kitesurf_ports') {
+  if (name === 'sandbox.ports') {
     const ports = snap.ports || null
     const hint = []
     if (ports?.ports?.engine && ports.ports.engine.free === false && ports.effective?.httpBase) {
       hint.push(`配置端口 ${ports.configured?.httpBase} 被占用或不可用；实际引擎在 ${ports.effective.httpBase}`)
     }
     if (ports?.lastRepair) hint.push(`最近一次端口修复：${ports.lastRepair.reason}（${JSON.stringify(ports.lastRepair.from)} → ${JSON.stringify(ports.lastRepair.to)}）`)
-    if (ports?.container?.state && ports.container.state !== 'running') hint.push(`容器状态 ${ports.container.state}，需要 POST /nano-kitesurf/recover 或 /kite resume`)
+    if (ports?.container?.state && ports.container.state !== 'running') hint.push(`容器状态 ${ports.container.state}，需要 POST /nano-local-sandbox/recover 或 /kite resume`)
     return { ok: true, ...(ports || { error: 'no port snapshot yet' }), hints: hint }
   }
-  if (name === 'kitesurf_recovery_plan') {
+  if (name === 'sandbox.recovery_plan') {
     const phase = snap.plugin?.phase || snap.engine?.kite?.phase || 'unknown'
     const alive = snap.engine?.engineAlive === true
     const steps = []
-    if (!alive) steps.push({ order: 1, action: 'suspend (only if phase=running)', call: 'POST /nano-kitesurf/kite {"action":"suspend"}' })
-    if (!alive) steps.push({ order: 2, action: 'resume / start engine (auto-repairs a busy port)', call: 'POST /nano-kitesurf/kite {"action":"resume"}' })
-    if (!alive) steps.push({ order: 3, action: 'one-shot self-heal + port report', call: 'POST /nano-kitesurf/recover {}' })
-    steps.push({ order: steps.length + 1, action: 'verify', call: 'GET /nano-kitesurf/ports' })
+    if (!alive) steps.push({ order: 1, action: 'suspend (only if phase=running)', call: 'POST /nano-local-sandbox/kite {"action":"suspend"}' })
+    if (!alive) steps.push({ order: 2, action: 'resume / start engine (auto-repairs a busy port)', call: 'POST /nano-local-sandbox/kite {"action":"resume"}' })
+    if (!alive) steps.push({ order: 3, action: 'one-shot self-heal + port report', call: 'POST /nano-local-sandbox/recover {}' })
+    steps.push({ order: steps.length + 1, action: 'verify', call: 'GET /nano-local-sandbox/ports' })
     steps.push({ order: steps.length + 1, action: 'if a port is busy, repoint config', call: 'profile cordis.patch.yml → - id: nano-kitesurf / config.httpBase: http://127.0.0.1:8798, then restart the host' })
     return { ok: true, phase, engineAlive: alive, steps, notes: 'kitesurf.kite.portbusy (409) means the requested port is held by another process; the existing container is preserved.' }
   }
-  if (name === 'kitesurf_control') {
+  if (name === 'sandbox.control') {
     const c = bridgeState.control || {}
     return {
       ok: true,
@@ -375,7 +375,7 @@ function answerNativeTool(name, args, bridgeState) {
 const WRITE_RE = /agent_browser_(click|dblclick|fill|type|press|hover|select|check|uncheck|drag|scroll|navigate|navigate_back|navigate_forward|reload|open|back|forward|eval|exec|upload|set_|auth_|storage_set|storage_clear|cookies_set|cookies_delete|state_save|state_load|state_clear|emulate|geolocation|network_|wait_for_download|download|record|screenshot_annotate|annotate|tab_|keyboard|mouse|form|submit|paste|insert|delete|move|resize|bring|focus|highlight|launch|connect|disconnect|session|context_|page_|frame_|route|intercept|mock|throttle|offline)/
 
 function isWriteCall(name) {
-  return typeof name === 'string' && (name.startsWith('kitesurf_interact') || WRITE_RE.test(name))
+  return typeof name === 'string' && (name.startsWith('sandbox.interact') || WRITE_RE.test(name))
 }
 
 /**
@@ -417,7 +417,7 @@ function attach(socket, env = process.env, bridgeState = { getDiagnostics: () =>
 
   let stdout = ''
   // tools/list requests we forwarded to the child: when its reply comes back,
-  // merge the native kitesurf_* tools into result.tools before sending.
+  // merge the native sandbox.* tools into result.tools before sending.
   const pendingToolLists = new Set()
   child.stdout.on('data', (chunk) => {
     stdout += chunk.toString('utf8')
@@ -473,7 +473,7 @@ function attach(socket, env = process.env, bridgeState = { getDiagnostics: () =>
           }
           if (message.method === 'tools/call' && typeof message.params?.name === 'string') {
             const toolName = message.params.name
-            if (toolName.startsWith('kitesurf_')) {
+            if (toolName.startsWith('sandbox.')) {
               const data = answerNativeTool(toolName, message.params.arguments || {}, bridgeState)
               sendText(socket, JSON.stringify(message.id == null
                 ? toolError(null, -32600, 'tools/call requires an id')

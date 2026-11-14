@@ -129,26 +129,26 @@ P0-01 ──▶ P1-01 ──▶ P1-02 ──▶ P1-03
   - **完成判据**：生产 YAML 仍含 `1800000`；夹具 50ms；达上限不分配新 id
   - **验证映射**：`DNLS01-T10` · **依赖**：`P3-03`
   - **执行状态**：`complete` · **执行时间**：`2026-11-14T05:22:00Z` · **证据 / 备注**：`node --test test/lifecycle.spike.test.mjs` exit 0
-- [ ] `P4-01` — 恰好 20 个 `sandbox_*` 工具
+- [x] `P4-01` — 恰好 20 个 `sandbox_*` 工具
   - **落点 / 对象**：`src/host/mcp-sandbox.js`
   - **完成判据**：tools/list 集合差为空；诊断不依赖宿主 POST
   - **验证映射**：`DNLS01-T12` · **依赖**：`P3-04`
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
-- [ ] `P4-02` — `/nano-local-sandbox/*` 全部经 registerRoutes，sessionBinding true
+  - **执行状态**：`complete` · **执行时间**：`2026-11-14T05:26:00Z` · **证据 / 备注**：`node --test test/mcp-tools.spike.test.mjs` exit 0
+- [x] `P4-02` — `/nano-local-sandbox/*` 全部经 registerRoutes，sessionBinding true
   - **落点 / 对象**：`src/host/routes.js`、`lib/route-table.js`
   - **完成判据**：未列表路由不能注册；无 requestRejection 时 register 次数为 0
   - **验证映射**：`DNLS01-T13` · **依赖**：`P4-01`
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
-- [ ] `P4-03` — per-instance CDP keeper
+  - **执行状态**：`complete` · **执行时间**：`2026-11-14T05:26:00Z` · **证据 / 备注**：`node --test test/routes.test.mjs` exit 0
+- [x] `P4-03` — per-instance CDP keeper
   - **落点 / 对象**：`src/host/cdp-keeper.js`
   - **完成判据**：OPEN 时不得 page-lost；关闭后 page-lost 或按 lastUrl 恢复，且不是旧 DOM
   - **验证映射**：`DNLS01-T14` · **依赖**：`P4-02`
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
-- [ ] `P4-04` — terminal 8 工具、attach.url、pong 0x0A
+  - **执行状态**：`complete` · **执行时间**：`2026-11-14T05:26:00Z` · **证据 / 备注**：`node --test test/cdp-keeper.spike.test.mjs` exit 0
+- [x] `P4-04` — terminal 8 工具、attach.url、pong 0x0A
   - **落点 / 对象**：`src/host/terminal-driver.js`、`profiles/terminal/`
   - **完成判据**：lines/cols/rows/额外字段都拒绝；无 path 键
   - **验证映射**：`DNLS01-T15` · **依赖**：`P4-03`
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
+  - **执行状态**：`complete` · **执行时间**：`2026-11-14T05:26:00Z` · **证据 / 备注**：`node --test test/terminal-contract.test.mjs` exit 0。P7 的 isolate / audit.jsonl 断言尚未跑
 - [ ] `P5-01` — 唯一 ERROR_CATALOG（7 个 kitesurf.* + 2 个 sandbox.*）
   - **落点 / 对象**：`src/host/error-catalog.js`
   - **完成判据**：shot.fit 为 400；技能正文由目录派生
@@ -235,10 +235,10 @@ P0-01 ──▶ P1-01 ──▶ P1-02 ──▶ P1-03
 | DNLS01-T09 | 单份 history | `test/history-single.test.mjs` | exit 0 | exit 0 | `2026-11-14T05:22:00Z` | pass |
 | DNLS01-T10 | 回收与上限 | `test/lifecycle.spike.test.mjs` | exit 0 | exit 0 | `2026-11-14T05:22:00Z` | pass |
 | DNLS01-T11 | container 特权点 | `test/container-spawn-sites.test.mjs` | P6 只扫本包；P7 全仓 | - | - | pending |
-| DNLS01-T12 | 20 工具 | `test/mcp-tools.spike.test.mjs` | exit 0 | - | - | pending |
-| DNLS01-T13 | 路由 fail-closed | `test/routes.test.mjs` | exit 0 | - | - | pending |
-| DNLS01-T14 | CDP keeper | `test/cdp-keeper.spike.test.mjs` | 两段都断言 | - | - | pending |
-| DNLS01-T15 | terminal 契约 | `test/terminal-contract.test.mjs` | exit 0 | - | - | pending |
+| DNLS01-T12 | 20 工具 | `test/mcp-tools.spike.test.mjs` | exit 0 | exit 0 | `2026-11-14T05:26:00Z` | pass |
+| DNLS01-T13 | 路由 fail-closed | `test/routes.test.mjs` | exit 0 | exit 0 | `2026-11-14T05:26:00Z` | pass |
+| DNLS01-T14 | CDP keeper | `test/cdp-keeper.spike.test.mjs` | 两段都断言 | exit 0 | `2026-11-14T05:26:00Z` | pass |
+| DNLS01-T15 | terminal 契约 | `test/terminal-contract.test.mjs` | exit 0 | exit 0；P7 条款未跑 | `2026-11-14T05:26:00Z` | partial |
 | DNLS01-T16 | 错误目录 | `test/error-catalog.test.mjs` | exit 0 | - | - | pending |
 | DNLS01-T17 | 三门禁覆盖 | `test/route-scan-coverage.test.mjs` | 正向与负向 | - | - | pending |
 | DNLS01-T18 | fork e2e | `test/e2e-fork.test.mjs` | 23 名称且 URL 采集 | - | - | pending |
@@ -256,8 +256,8 @@ P0-01 ──▶ P1-01 ──▶ P1-02 ──▶ P1-03
 
 ## 5. 当前状态与交接
 
-- **当前节点 / 已完成**：`P4-01` / `P0-01` 至 `P3-04`
-- **下一动作**：Phase 4 四个 L2 驱动
+- **当前节点 / 已完成**：`P5-01` / `P0-01` 至 `P4-04`
+- **下一动作**：Phase 5 错误目录与三门禁
 - **当前阻塞**：无
 - **待 owner / 外部决定**：无。真实容器 e2e 若本机无 CLI，T18 保持未观察并在 closure 写明
 - **最终交接目标**：合并回 `main` 后按 AGENTS.md 删除本 worktree（收口时）

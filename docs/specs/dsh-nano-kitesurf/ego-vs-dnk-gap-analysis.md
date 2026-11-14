@@ -447,6 +447,7 @@ P0 批次在真机 dsh-dev 上构建→部署→e2e 完成。三项 **P0 内嵌�
 | **P0-3** `/wait` 原语 | ✅ | POST `/nano-kitesurf/wait`：selector 10ms / text 8ms / url 10ms / fn 29ms / `load:networkidle` 681ms（真等 450ms 静默窗）；`wait.query`→400（多于一个条件）、`wait.timeout`→504；route 已入 `security/route-sensitivity.json`（L2 `read:engine`） |
 | **P0-4** 写互斥 | ✅ | 双 MCP 连接 e2e：`A claim`→`writer:true`；`B` 写被 `kitesurf.control.busy` 拒绝（**拒非排队**）；`B release` 不偷锁；`A release` 释放；断线 `releaseAll` 兜底。锁是**粘性**的（首写/`claim` 认领，`release`/断线才放），不只串行化并发调用 |
 | **P1-5**（提前）镜像瘦身 | ✅ | `runtime/linux-prefix` 343→249MB（删非 linux-arm64 的 agent-browser 二进制） |
+| **P0-5** 元素 ref 统一语言 | ✅ | `lib/snapshot.js` a11y-lite walker → `GET /snapshot`（tree+`@N` refs）+ `GET /refs?ref=@N`；`@N` 解析进 `wait`/`pick`/`edit`；`pick` 用页内 `querySelector` identity probe 回填 `element.ref`（人点选=agent ref）；`kitesurf_snapshot` MCP 工具走 30s 推送。e2e：snapshot→refs→`wait{selector:"@1"}`→`pick`→`element.ref:"@1"` 全绿 |
 
 ### 7.2 e2e 暴露并当场修掉的真实 bug
 
@@ -458,10 +459,14 @@ P0 批次在真机 dsh-dev 上构建→部署→e2e 完成。三项 **P0 内嵌�
 
 3. **container-engine io.checkout 函数被序列化**（`container-engine.js`）：`index.js` 传 `{ checkout: effectiveCheckout }`（函数）作惰性解析，引擎却把它当字符串插进 `--mount source=…` → `invalid directive format … source=() => config?.checkout …`，容器创建必败。修复：接受函数或字符串，再兜底 `checkoutPath()`，并对插件提供的路径补 `wrangler.jsonc` 存在性校验（坏挂载是 400 配置错，不是 20s warmup 空白页）。
 
+4. **双宿主 push 竞态覆盖 diagnostics**（`mcp-bridge.mjs`）：桌面 profile 与 dsh-dev 指向**同一容器 bridge**（`mcpPort:8799`），两宿主各 30s + route-guard 每次路由调用后 debounce 都 POST `/diagnostics`。桌面宿主 `lastSnapshot` 恒 null（它没跑 `/snapshot`）、`httpBase` auto-adopt 后同为 `8798`、`engineAlive` 也 true → 单看 httpBase/alive 无法区分发送者，桌面 push 把 dev 的 snapshot 覆盖成 null，flap 出 `diag.stale`。修复：**writer 选举**——按 `plugin.phase` 排名（`running`>其他，kite owner 才驱动页面）+ `engineAlive` 次优，发送者身份用 `storePath`（每宿主唯一）而非 httpBase；低 rank 或非 incumbent 的 push 不覆盖。e2e：DEV 锁写 `phase:running`、snapshot 恒 PRESENT，桌面干扰 push 全被拒。
+
+5. **apply() 闭包陈读 + 双定时器**（`index.js`）：`pushTimer` 与 `lastSnapshot` 都是 `apply()` 内局部——`apply()` 若在同一进程跑两次（重 apply 未先 dispose），旧 timer 存活、其闭包读旧 `lastSnapshot`（恒 null），两定时器交替 push 出 null/有值 flap。修复：`lastSnapshot` 升 `diagnostics.js` 模块级（`getLastSnapshot`/`setLastSnapshot`，与 `putElementRefs` 同一存储哲学）；`diagnosticsPushTimer` 升模块级、新 apply 先 `clearInterval` 旧的。
+
 另修复部署层：`checkout` 由 profile `cordis.patch.yml` 的 `config.checkout` 提供（`/Users/seanz/Documents/dsh-plugins/context/kitesurf`），不再依赖易丢失的 env/lock。
 
 ### 7.3 本轮结论
 
-P0 的**契约可信**目标已达成大半：错误可自查（P0-1）、开关是真的（P0-2）、等待是原语（P0-3）、单写者不被踩（P0-4）。尚未闭合的是 P0-5（ref 统一语言）与 P0-6（skill 分层）——它们决定「人标注 ↔ agent 引用同一元素」这条链是否真正打通。
+P0 的**契约可信**目标已达成大半：错误可自查（P0-1）、开关是真的（P0-2）、等待是原语（P0-3）、单写者不被踩（P0-4）、**ref 是统一语言**（P0-5）。尚未闭合的是 P0-6（skill 分层）。P0-5 的「人标注 ↔ agent 引用同一元素」链已真正打通：人点选的 `element.ref` 与 agent 的 `@N` 指向同一 DOM 节点。
 
 **三条不做的线**（守住定位）：① 不做本地 Chrome fallback（架构红线）；② 不做「先试样式再写代码」（design-mode-feedback 已裁决：`DOM.highlightNode` 是空的，假功能不做）；③ P2-6 远程面不在无业主决议时动（扩约）。

@@ -1,5 +1,39 @@
 # recipes — 正例 / 负例（可直接复制）
 
+## 五条端到端配方（P1-6）
+
+### 1. 读人类点选并回答
+人在画面点了一个元素。agent 拉元素包回答「这是什么」：
+```bash
+GET /nano-kitesurf/last                          # pick.element{selector,text,box,style×7,attrs,parentSel,childSel,ancestors,componentStack}
+```
+元素包一调即全。答「这是 h1/body 第 N 段」，带 `element.selector`（兜底句柄）与 `element.ref`（@N，需跑过 /snapshot）。
+
+### 2. 就改改字并截图复核
+```bash
+POST /nano-kitesurf/edit    {"selector":"h1","text":"新文案"}      # 写回渲染态
+POST /nano-kitesurf/shot    {"format":"webp"}                       # 复核渲染结果
+GET  /nano-kitesurf/diagnostics?limit=5                             # 顺带看 stale/空快照 hint
+```
+
+### 3. 注入 console.log 探针
+```bash
+POST /nano-kitesurf/evaluate {"expression":"console.log('KITE-PROBE', performance.now()); 1"}
+GET  /nano-kitesurf/console?level=log&limit=10                      # 取回 KITE-PROBE 行（带回栈）
+```
+
+### 4. MCP-only 排障（无 host 路由时）
+```
+kitesurf_control  {action:"claim"}            # 单写者
+kitesurf_bridge_health                        # 桥/引擎/conns
+kitesurf_diagnose {withTargets:true}          # hints: sparse/空快照/stale/engine
+kitesurf_operations {errorsOnly:true}         # 失败 trace + errorId
+kitesurf_control {action:"release"}
+```
+
+### 5. 写反馈报告（结构化回执）
+排障完成后按 `templates/feedback-report.md` 填：元信息（buildId/phase）→ 路由调用序列（/operations 摘）→ 观察到的现象 → 诊断摘录（hints/console/errorsOnly）→ 元素上下文（/last + `/context?id=` 若引用 composer ref `⟦kitesurf:N⟧`）→ errorId 对照 `error-catalog.md` → 下一步命令。结构化报告是可归档数据，不是散文。
+
 ## 正例
 
 ```bash

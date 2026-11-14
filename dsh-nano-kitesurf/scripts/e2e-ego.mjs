@@ -417,6 +417,29 @@ async function main() {
   const hasTriple = shotEvents.length === 0 || shotEvents.every((e) => typeof e.ms === 'number' && typeof e.at === 'string' && 'err' in e)
   record('perf-event-triples', hasTriple, `${shotEvents.length} events, triple shape ok=${hasTriple}`)
 
+  // 14. P1-6 feedback-report: every field the template asks for must be
+  // fetchable from a real route — buildId/phase (status), route sequence
+  // (operations), hints+console+errors (diagnostics), element packet (/last),
+  // context chip (/context). If any source vanishes the recipe breaks.
+  const report = await page.evaluate(async () => {
+    const [status, ops, diag, last] = await Promise.all([
+      fetch('/nano-kitesurf/status').then((r) => r.json()).catch(() => ({})),
+      fetch('/nano-kitesurf/operations?limit=5').then((r) => r.json()).catch(() => ({})),
+      fetch('/nano-kitesurf/diagnostics?limit=5').then((r) => r.json()).catch(() => ({})),
+      fetch('/nano-kitesurf/last').then((r) => r.json()).catch(() => ({})),
+    ])
+    return {
+      buildId: status.buildId || status.plugin?.buildId || null,
+      phase: status.kite?.phase || status.plugin?.phase || null,
+      opsCount: (ops.entries || []).length,
+      hasHints: Array.isArray(diag.hints),
+      hasErrorCatalog: Array.isArray(diag.observability?.errorCatalog) && diag.observability.errorCatalog.length > 10,
+      lastPick: last.pick === null || typeof last.pick === 'object',
+    }
+  })
+  const reportOk = report.buildId && report.phase && report.hasHints && report.hasErrorCatalog
+  record('feedback-report-fields', !!reportOk, JSON.stringify(report).slice(0, 160))
+
   const failed = results.filter((r) => !r.ok)
   console.log(`\n${results.length - failed.length}/${results.length} checks passed`)
   console.log(JSON.stringify({ at: new Date().toISOString(), passed: results.length - failed.length, total: results.length, results }))

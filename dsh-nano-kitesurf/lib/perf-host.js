@@ -168,8 +168,30 @@ function createPerfReviewHost(env = {}) {
 }
 function ensurePerfReviewHost(env = {}) {
   const global = env.global ?? globalThis;
-  if (global.__perfReviewHost == null) global.__perfReviewHost = createPerfReviewHost(env);
-  return global.__perfReviewHost;
+  const incumbent = global.__perfReviewHost;
+  if (incumbent == null) {
+    global.__perfReviewHost = createPerfReviewHost(env);
+    return global.__perfReviewHost;
+  }
+  if (typeof incumbent.setEnabled !== "function" || typeof incumbent._state !== "function") {
+    const fresh = createPerfReviewHost(env);
+    try {
+      const old = typeof incumbent._state === "function" ? incumbent._state() : null;
+      const next = fresh._state();
+      if (old && typeof old === "object") {
+        if (old.plugins instanceof Map) next.plugins = old.plugins;
+        if (Array.isArray(old.contributors)) next.contributors = old.contributors;
+        if (typeof old.enabled === "boolean") next.enabled = old.enabled;
+        if (typeof old.writeErrors === "number") next.writeErrors = old.writeErrors;
+        if (typeof old.sinceStart === "string") next.sinceStart = old.sinceStart;
+        if (old.writer) next.writer = old.writer;
+      }
+    } catch {
+    }
+    global.__perfReviewHost = fresh;
+    return fresh;
+  }
+  return incumbent;
 }
 
 // src/host/perf.js

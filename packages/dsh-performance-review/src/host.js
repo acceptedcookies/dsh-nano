@@ -213,9 +213,46 @@ export function createPerfReviewHost(env = {}) {
 /** Each bundled copy carries its own LIB_VERSION: implants must pass it to hostJoin(). */
 export { LIB_VERSION }
 
-/** Install-or-reuse the process singleton. */
+/**
+ * Install-or-reuse the process singleton.
+ *
+ * Version skew: each plugin bundles its own copy of this host. An older
+ * bundle that loads first wins the singleton and lacks `setEnabled`/`_state`;
+ * a newer bundle then crashes calling host.setEnabled(). Fix by upgrading in
+ * place — when the incumbent lacks an API the newer copy provides, swap in a
+ * fresh host and carry the accumulated state across (spans, contributors,
+ * enablement) so already-recorded data is not lost. The upgrade only fires
+ * when the incumbent is actually missing something, so a same-version call is
+ * a cheap reuse.
+ */
 export function ensurePerfReviewHost(env = {}) {
   const global = env.global ?? globalThis
-  if (global.__perfReviewHost == null) global.__perfReviewHost = createPerfReviewHost(env)
-  return global.__perfReviewHost
+  const incumbent = global.__perfReviewHost
+  if (incumbent == null) {
+    global.__perfReviewHost = createPerfReviewHost(env)
+    return global.__perfReviewHost
+  }
+  // The new copy needs setEnabled + _state to manage/inspect the host. An
+  // older incumbent without them is upgraded; a peer that already has them is
+  // reused as-is.
+  if (typeof incumbent.setEnabled !== 'function' || typeof incumbent._state !== 'function') {
+    const fresh = createPerfReviewHost(env)
+    try {
+      const old = typeof incumbent._state === 'function' ? incumbent._state() : null
+      const next = fresh._state()
+      if (old && typeof old === 'object') {
+        if (old.plugins instanceof Map) next.plugins = old.plugins
+        if (Array.isArray(old.contributors)) next.contributors = old.contributors
+        if (typeof old.enabled === 'boolean') next.enabled = old.enabled
+        if (typeof old.writeErrors === 'number') next.writeErrors = old.writeErrors
+        if (typeof old.sinceStart === 'string') next.sinceStart = old.sinceStart
+        // Keep the incumbent's writer if it is already running so we do not
+        // double-subscribe the interval.
+        if (old.writer) next.writer = old.writer
+      }
+    } catch { /* upgrade is best-effort; never break apply() */ }
+    global.__perfReviewHost = fresh
+    return fresh
+  }
+  return incumbent
 }

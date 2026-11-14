@@ -273,8 +273,12 @@ function toolError(id, code, message) {
   return { jsonrpc: '2.0', id, error: { code, message } }
 }
 
-/** Answer a kitesurf_* tools/call without touching the agent-browser child. */
-function answerNativeTool(name, args, bridgeState) {
+/**
+ * Answer a kitesurf_* tools/call without touching the agent-browser child.
+ * `self` is {connId, clientName} for the calling connection — needed so
+ * kitesurf_control can bind release/claim to the actual owner, not a guess.
+ */
+function answerNativeTool(name, args, bridgeState, self = {}) {
   const snap = bridgeState.getDiagnostics()
   if (name === 'kitesurf_bridge_health') {
     return { ok: true, ...bridgeState.stats(), diagnosticsPushedAt: snap?.at || null }
@@ -352,14 +356,32 @@ function answerNativeTool(name, args, bridgeState) {
   }
   if (name === 'kitesurf_control') {
     const c = bridgeState.control || {}
-    return {
+    const me = self.connId || null
+    const action = typeof args.action === 'string' ? args.action.toLowerCase() : 'status'
+    const state = () => ({
       ok: true,
       writer: c.writer != null,
+      mine: me != null && c.writer === me,
       owner: c.owner ?? null,
       ownerSince: c.ownerSince ?? null,
       lastWriteAt: c.lastWriteAt ?? null,
-      hint: 'one writer moves the page at a time; a second writer gets kitesurf.control.busy',
+      hint: 'one writer moves the page at a time; a second writer gets kitesurf.control.busy. release only frees a lock you hold.',
+    })
+    if (action === 'status') return state()
+    if (action === 'claim') {
+      if (c.writer !== null && c.writer !== me) {
+        return { ok: false, errorId: 'kitesurf.control.busy', error: `another writer (${c.owner || 'unknown'}) holds the page`, ...state() }
+      }
+      c.writer = me
+      c.owner = self.clientName || c.owner || 'agent'
+      c.ownerSince = c.ownerSince || new Date().toISOString()
+      return state()
     }
+    if (action === 'release') {
+      if (c.writer === me) { c.writer = null; c.owner = null; c.ownerSince = null }
+      return { ok: true, released: c.writer !== me, ...state() }
+    }
+    return { ok: false, errorId: 'kitesurf.control.query', error: `unknown action ${action}; use status|claim|release`, ...state() }
   }
   return { ok: false, errorId: 'kitesurf.tool.unknown', error: `unknown native tool ${name}` }
 }
@@ -419,7 +441,11 @@ function attach(socket, env = process.env, bridgeState = { getDiagnostics: () =>
   // tools/list requests we forwarded to the child: when its reply comes back,
   // merge the native kitesurf_* tools into result.tools before sending.
   const pendingToolLists = new Set()
+  child.on('spawn', () => { if (env.MCP_BRIDGE_DEBUG) try { process.stderr.write(`[bridge] child spawned cdp=${env.AGENT_BROWSER_CDP || CDP}\n`) } catch {} })
+  child.on('error', (e) => { try { process.stderr.write(`[bridge] child error ${e?.message || e}\n`) } catch {} })
+  child.on('exit', (c, s) => { try { process.stderr.write(`[bridge] child exit code=${c} sig=${s}\n`) } catch {}; socket.end() })
   child.stdout.on('data', (chunk) => {
+    if (env.MCP_BRIDGE_DEBUG) try { process.stderr.write(`[bridge] child<-stdout ${chunk.toString('utf8').slice(0, 90)}\n`) } catch {}
     stdout += chunk.toString('utf8')
     let nl
     while ((nl = stdout.indexOf('\n')) >= 0) {
@@ -429,9 +455,7 @@ function attach(socket, env = process.env, bridgeState = { getDiagnostics: () =>
       try {
         const message = JSON.parse(line)
         // A completed write releases the shared gate for the next writer.
-        if (message.id != null && pendingWrites.delete(message.id)) {
-          releaseWriter()
-        }
+        if (message.id != null) pendingWrites.delete(message.id)
         if (message.id != null && pendingToolLists.has(message.id)) {
           pendingToolLists.delete(message.id)
           if (Array.isArray(message.result?.tools)) {
@@ -443,26 +467,26 @@ function attach(socket, env = process.env, bridgeState = { getDiagnostics: () =>
       sendText(socket, line)
     }
   })
-  child.on('exit', () => socket.end())
-  child.on('error', () => teardown(1011))
-
   const control = bridgeState.control || makeControl()
-  const releaseWriter = () => {
-    if (control.writer === connId && pendingWrites.size === 0) control.writer = null
-  }
+  // The lock is sticky: only kitesurf_control release or the socket going away
+  // frees it — never the completion of one write. pendingWrites only tracks
+  // in-flight ids so a dropped socket can clean them up.
   const releaseAll = () => {
     pendingWrites.clear()
-    if (control.writer === connId) control.writer = null
+    if (control.writer === connId) { control.writer = null; control.owner = null; control.ownerSince = null }
   }
 
-  let stdin = ''
+  // MCP-over-WebSocket delivers one complete JSON-RPC message per text frame
+  // — there is no newline terminator. Buffering on '\n' deadlocks every client
+  // that sends a single-JSON frame (which is the norm). Treat each frame as
+  // one message; split on '\n' only to stay compatible with a client that
+  // batches several newline-joined messages into one frame.
   const decode = createFrameDecoder({
     onMessage: (text) => {
-      stdin += text
-      let nl
-      while ((nl = stdin.indexOf('\n')) >= 0) {
-        const line = stdin.slice(0, nl)
-        stdin = stdin.slice(nl + 1)
+      if (env.MCP_BRIDGE_DEBUG) try { process.stderr.write(`[bridge] msg ${text.slice(0, 90)}\n`) } catch {}
+      for (const rawLine of text.split('\n')) {
+        const line = rawLine.trim()
+        if (!line) continue
         let handledLocally = false
         try {
           const message = JSON.parse(line)
@@ -474,15 +498,17 @@ function attach(socket, env = process.env, bridgeState = { getDiagnostics: () =>
           if (message.method === 'tools/call' && typeof message.params?.name === 'string') {
             const toolName = message.params.name
             if (toolName.startsWith('kitesurf_')) {
-              const data = answerNativeTool(toolName, message.params.arguments || {}, bridgeState)
+              const data = answerNativeTool(toolName, message.params.arguments || {}, bridgeState, { connId, clientName })
               sendText(socket, JSON.stringify(message.id == null
                 ? toolError(null, -32600, 'tools/call requires an id')
                 : toolResult(message.id, data)))
               handledLocally = true
             } else if (isWriteCall(toolName)) {
-              // One writer moves the page at a time (ownership contract): a
-              // second writer is refused, not queued, so a human annotating is
-              // never torn by a background agent's navigation.
+              // One writer moves the page at a time (ownership contract). The
+              // lock is STICKY: the first write claims the page and keeps it
+              // until kitesurf_control release or socket close, so a human
+              // annotating is never torn by a background agent's navigation.
+              // A second writer is refused, not queued.
               if (control.writer !== null && control.writer !== connId) {
                 sendText(socket, JSON.stringify(message.id == null
                   ? toolError(null, -32600, 'tools/call requires an id')
@@ -504,6 +530,7 @@ function attach(socket, env = process.env, bridgeState = { getDiagnostics: () =>
           }
         } catch { /* malformed frame: let the child produce the -32700 */ }
         if (handledLocally) continue
+        if (env.MCP_BRIDGE_DEBUG) try { process.stderr.write(`[bridge] fwd->child ${line.slice(0, 90)}\n`) } catch {}
         // Backpressure: stop reading the socket until the child drains.
         if (!child.stdin.write(`${line}\n`)) {
           socket.pause()

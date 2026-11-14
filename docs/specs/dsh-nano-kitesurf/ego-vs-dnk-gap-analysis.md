@@ -432,4 +432,36 @@ loopback 双端口 + Origin 精确白名单 + 无 Origin 才允许非浏览器 c
 - **P1 完成标志**：agent 能闭环「打开 → 等 → 点击/填表 → 截图复核 → 导出证据 → 产结构化报告」，且单 agent 不会踩人的页面。
 - **P2 完成标志**：多 agent 并行各管一页、引擎真实交互、页面指标可采、操作可录可断言、远程引擎可编排。
 
+---
+
+## 7. 执行台账（live round 1 · 2026-11-14）
+
+P0 批次在真机 dsh-dev 上构建→部署→e2e 完成。三项 **P0 内嵌修复**在 e2e 中暴露并当场修掉——它们是本轮比「功能落地」更硬的收获，因为它们每一个都会让 DNK 在真实插件生态里静默失效。
+
+### 7.1 已落地并 e2e 通过的项
+
+| 项 | 结果 | 验收证据 |
+|---|---|---|
+| **P0-1** 错误目录对账 | ✅ | `diagnostics.test.mjs` 5/5：扫 `index.js`/`lib/`/`runtime/` 全部 `errorId:'…'`/`KitesurfError('…'` 字面量，断言全部命中 `ERROR_STATUS` 或入 `BRIDGE_ERROR_IDS`；bridge 本地 id（`.stale`×5/`control.busy`/`tool.unknown`）反断言**不**在 host 目录 |
+| **P0-2** perf 假开关 | ✅ | `enabled:true` 且 `nano-kitesurf` 下 `wait/shot/open/evaluate/dom/kite-*` span 实记；`decideEnabled`→`isEnabled()` 惰性化（首 span/snapshot 才解析，非 hostJoin 冻结）；`hostJoin` 永远返回统一 API，`recordSpan` 内部 gate；新增 `setEnabled` |
+| **P0-3** `/wait` 原语 | ✅ | POST `/nano-kitesurf/wait`：selector 10ms / text 8ms / url 10ms / fn 29ms / `load:networkidle` 681ms（真等 450ms 静默窗）；`wait.query`→400（多于一个条件）、`wait.timeout`→504；route 已入 `security/route-sensitivity.json`（L2 `read:engine`） |
+| **P0-4** 写互斥 | ✅ | 双 MCP 连接 e2e：`A claim`→`writer:true`；`B` 写被 `kitesurf.control.busy` 拒绝（**拒非排队**）；`B release` 不偷锁；`A release` 释放；断线 `releaseAll` 兜底。锁是**粘性**的（首写/`claim` 认领，`release`/断线才放），不只串行化并发调用 |
+| **P1-5**（提前）镜像瘦身 | ✅ | `runtime/linux-prefix` 343→249MB（删非 linux-arm64 的 agent-browser 二进制） |
+
+### 7.2 e2e 暴露并当场修掉的真实 bug
+
+这三个不在台账上——它们是**部署到真插件生态才浮出**的缺陷，每一个单独都足以让 DNK 静默失效：
+
+1. **MCP 帧边界死锁**（`mcp-bridge.mjs`）：桥把 WS 文本帧当字节流按 `\n` 切分，但 MCP-over-WS 是**每帧一条完整 JSON-RPC、无尾 `\n`**。任何标准 MCP 客户端连上后 `initialize` 永远不进 `child.stdin` → 整条 MCP 面死锁。修复：`onMessage` 按帧处理，帧内 `\n` 仅兼容批量。**这是本轮最关键的修复**——此前桥对真实 MCP 客户端根本没工作过。
+
+2. **perf-review 全局单例版本倾斜**（`dsh-performance-review/host.js`）：`ensurePerfReviewHost` 不做版本协商——谁先加载谁建 `globalThis.__perfReviewHost`。`explorer-extra`/`model-selector`/`notepad` 先加载且 bundle 的是**旧版**（无 `setEnabled`），kitesurf 后到调用 `host.setEnabled` → `TypeError`，`apply()` 抛错、插件不激活。修复：新 bundle 若提供旧单例缺的 API，**就地升级**并搬运 `plugins`/`contributors`/`enabled`/`sinceStart`/`writer`，不丢已记数据。
+
+3. **container-engine io.checkout 函数被序列化**（`container-engine.js`）：`index.js` 传 `{ checkout: effectiveCheckout }`（函数）作惰性解析，引擎却把它当字符串插进 `--mount source=…` → `invalid directive format … source=() => config?.checkout …`，容器创建必败。修复：接受函数或字符串，再兜底 `checkoutPath()`，并对插件提供的路径补 `wrangler.jsonc` 存在性校验（坏挂载是 400 配置错，不是 20s warmup 空白页）。
+
+另修复部署层：`checkout` 由 profile `cordis.patch.yml` 的 `config.checkout` 提供（`/Users/seanz/Documents/dsh-plugins/context/kitesurf`），不再依赖易丢失的 env/lock。
+
+### 7.3 本轮结论
+
+P0 的**契约可信**目标已达成大半：错误可自查（P0-1）、开关是真的（P0-2）、等待是原语（P0-3）、单写者不被踩（P0-4）。尚未闭合的是 P0-5（ref 统一语言）与 P0-6（skill 分层）——它们决定「人标注 ↔ agent 引用同一元素」这条链是否真正打通。
+
 **三条不做的线**（守住定位）：① 不做本地 Chrome fallback（架构红线）；② 不做「先试样式再写代码」（design-mode-feedback 已裁决：`DOM.highlightNode` 是空的，假功能不做）；③ P2-6 远程面不在无业主决议时动（扩约）。

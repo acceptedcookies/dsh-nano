@@ -9,7 +9,7 @@ port="${KITESURF_PORT:-8787}"
 
 # Supervise the MCP bridge: if it crashes, restart rather than leaving the
 # published 8791 port dead while the engine keeps running.
-( while :; do node /mcp-bridge.mjs; echo "mcp-bridge exited — restarting in 2s" >&2; sleep 2; done ) &
+( while :; do MCP_BRIDGE_DEBUG="${MCP_BRIDGE_DEBUG:-}" node /mcp-bridge.mjs; echo "mcp-bridge exited — restarting in 2s" >&2; sleep 2; done ) &
 
 if [ -n "${CELLD_BUCKET:-}" ]; then
   if ! command -v celld >/dev/null 2>&1; then

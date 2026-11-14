@@ -204,7 +204,9 @@ export async function fetchEngine(httpBase, path, timeoutMs = CONNECT_MS) {
  * and pick have to share one socket or the second call sees about:blank.
  * @type {{ wsUrl: string, ws: WebSocket, send: Function, page: { targetId: string, sessionId: string } | null } | null}
  */
-let live = null
+function connectLive() {
+  throw new Error('cdp socket is owned by the local sandbox keeper, not this package')
+}
 let userAgent = ''
 let userAgentApplied = false
 /** @type {{ width: number, height: number, mobile: boolean, deviceScaleFactor: number } | null} */
@@ -349,15 +351,7 @@ export function releaseEngine() {
   dropLive()
 }
 
-function dropLive() {
-  if (live) {
-    try { live.ws.close() } catch { /* already closed */ }
-    live = null
-  }
-  // The identity proof is per-socket, not per-origin: a same-port replacement
-  // service must be re-verified before the next attach.
-  verifiedBase = null
-}
+function dropLive() {}
 
 /**
  * The engine identifies itself through /health ("kitesurf..." body). The CDP
@@ -366,8 +360,6 @@ function dropLive() {
  * non-Puppeteer command. Verified once per origin, before the first socket.
  * @type {string | null}
  */
-let verifiedBase = null
-
 async function verifyEngine(httpBase) {
   if (verifiedBase === httpBase) return
   let health
@@ -385,9 +377,9 @@ async function verifyEngine(httpBase) {
   verifiedBase = httpBase
 }
 
-async function connectLive(httpBase) {
+async function connectLiveRetired(httpBase) {
   const wsUrl = browserSocketUrl(httpBase)
-  if (live && live.wsUrl === wsUrl && live.ws.readyState === WebSocket.OPEN) return live
+  if (pageSocket && pageSocket.wsUrl === wsUrl && pageSocket.ws.readyState === WebSocket.OPEN) return pageSocket
   dropLive()
   await verifyEngine(httpBase)
   const ws = new WebSocket(wsUrl)
@@ -417,7 +409,7 @@ async function connectLive(httpBase) {
     if (typeof message.method === 'string') captureCdpEvent(message.method, message.params || {})
   })
   ws.addEventListener('close', () => {
-    if (live && live.ws === ws) live = null
+    if (pageSocket && pageSocket.ws === ws) pageSocket = null
     // Never leave callers hanging on a dead socket: their CALL_MS timer would
     // otherwise stretch a known-dead transport into a 20s stall.
     const closed = new KitesurfError('kitesurf.engine.closed', 'browser socket closed', { transport: true })
@@ -458,8 +450,8 @@ async function connectLive(httpBase) {
     if (sessionId) frame.sessionId = sessionId
     ws.send(JSON.stringify(frame))
   })
-  live = { wsUrl, ws, send, page: null }
-  return live
+  pageSocket = { wsUrl, ws, send, page: null }
+  return pageSocket
 }
 
 async function pageHandle(client) {

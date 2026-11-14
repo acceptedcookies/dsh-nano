@@ -26,7 +26,7 @@
 | R9 | fail-fast | 共享包改源，4 插件受影响——但只在各自重建时生效 | `requestRejection` 非 function → `RouteGuardError('no-request-rejection')`；DNK 重建 bundle |
 | R10 | 技能不烤地址 | `configure` 热生效 vs 文本死地址 | 技能教读 `GET /status` 取 `kite.cdp`，不烤字面量 |
 | R11 | 负面指令+mcpPort | `agent-browser close` 会清空共享页 | 补禁 `close`/`--pin-tab` 不适用、`mcpPort`=`ws://host:mcp/mcp` 桥语义、suspend 丢页 |
-| R12 | 台账重审 | 与 explorer 同型路由对齐 | `/last`/`/pick`/`/shot`→L2 `read:host`；`/settings`→L1 `write:kitesurf`；`/perf-review`→L2 `read:host`+accepted-risk；`/kite`→L2 `proc:kitesurf`（init 写锁+start 起容器）；route-scan 注释改 Eight |
+| R12 | 台账重审 | 与 explorer 同型路由对齐 | `/last`/`/pick`/`/shot`→L2 `read:host`；`/settings`→L1 `write:kitesurf`；`/perf-review`→L2 `read:host`+accepted-risk；`/kite`→L2 `proc:local-sandbox`（init 写锁+start 起容器）；route-scan 注释改 Eight |
 | R13 | 相位机 | `suspended→start` 绕过 resume；suspend 失败假态 | `start` 仅 `idle`；`sleepEngine` 容忍 `no such container`；头注更正 |
 | R14 | 错误分层+bodyLimit | 4xx 语义丢失 + 裸 Error 折叠 | `fail()` 按 errorId 前缀映射 400/409/413/502；校验全抛 `KitesurfError`（新 id `kitesurf.body.*`/`kitesurf.pick.point`/`kitesurf.shot.scroll`/`kitesurf.navigate.failed`/`kitesurf.engine.connect`）；`spec.bodyLimit` 显式 + handler 读 `route.bodyLimit` |
 | R15 | 重试边界 | 任意错误整体重跑 → 二次导航 | 错误分类：transport（connect/closed/timeout）才重试；CDP 域错误/业务错误直抛 |

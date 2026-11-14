@@ -27,6 +27,7 @@
 [DNMS] = dsh-nano-model-selector, 模型与请求管理器;
 [DNN] = dsh-nano-notepad, 或简称 notepad, 跨 workspace 草稿编辑器;
 [DNT] = dsh-nano-terminal, 高性能基于 wasm 的内部专用跨平台 terminal;
+[DNLS] = dsh-nano-local-sandbox, macOS 本地沙箱宿主，容器特权只在这里;
 
 ---
 # 核心工作原则

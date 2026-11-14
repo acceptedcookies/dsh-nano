@@ -1,0 +1,4 @@
+# Bundle patch: the row names the package. name stays the package name.
+- insert:
+    - id: nano-local-sandbox
+      name: dsh-nano-local-sandbox

@@ -1,0 +1,59 @@
+id: kitesurf
+version: 1
+platform:
+  - darwin/arm64
+backend: apple-container
+scope: session
+build:
+  base: node:22-bookworm-slim
+  npmPrefix:
+    wrangler: 4.161.0
+    agent-browser: 0.42.0
+  checkout:
+    ref: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    verify: packages/engine/wrangler.jsonc
+  digest: sha256:34f31ade5e88425d0853ce9bb789aff6f8d4935fff0517b03f5f9c2074fb4e9e
+runtime:
+  user: node
+  entrypoint: /entrypoint.sh
+  services:
+    - id: engine
+      port: 8787
+      command: wrangler dev --env local -c wrangler.jsonc --persist-to volume
+    - id: mcp-bridge
+      port: 8791
+      command: node /mcp-bridge.mjs
+  state:
+    kv: volume
+  isolation:
+    network: loopback-only
+    resources:
+      cpus: 4
+      memory: 4G
+lifecycle:
+  idleTimeoutMs: 1800000
+  maxInstances: 2
+policyMapping:
+  read-only:
+    checkout: ro
+    state: ephemeral
+    network: deny
+  workspace-write:
+    checkout: ro
+    state: rw
+    workspace: rw
+    extraRoots: rw
+  danger-full-access:
+    checkout: ro
+    state: rw
+    note: container-only
+capabilities:
+  drivers:
+    - cdp
+    - mcp
+  tools:
+    - sandbox.instance.ensure
+health:
+  engine: kitesurf
+  bridge: ok
+  selftest: 11

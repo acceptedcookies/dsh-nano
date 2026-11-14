@@ -16,7 +16,7 @@
  */
 
 import { readFileSync, readdirSync, existsSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { dirname, join } from 'node:path'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -25,14 +25,17 @@ const ROOT = join(HERE, '..')
 // DEPRECATED 2026-11-12: dsh-nano-shared-workspace retired to deprecated/;
 // its lib/ is archived, not shipped, so it is no longer scanned. See
 // deprecated/README.md.
-const PLUGINS = [
+export const PLUGINS = [
   'dsh-nano-notepad',
   'dsh-nano-explorer-extra',
   'dsh-nano-model-selector',
+  'dsh-nano-kitesurf',
+  'dsh-nano-local-sandbox',
+  'dsh-nano-terminal',
 ]
 
 /** Plugins whose host entry is the unbundled index.js (also a runtime file). */
-const UNBUNDLED_INDEX = ['dsh-nano-notepad', 'dsh-nano-model-selector']
+export const UNBUNDLED_INDEX = ['dsh-nano-notepad', 'dsh-nano-model-selector', 'dsh-nano-kitesurf', 'dsh-nano-local-sandbox', 'dsh-nano-terminal']
 
 /**
  * Strip comments so JSDoc `import('pkg').Type` annotations and commented-out
@@ -77,30 +80,33 @@ const isBare = spec =>
   && !spec.startsWith('../')
   && !spec.startsWith('/')
 
-function main() {
+export function collectBare(root, plugins = PLUGINS, unbundled = UNBUNDLED_INDEX) {
   const problems = []
   const scanned = []
-
-  for (const plugin of PLUGINS) {
-    const dir = join(ROOT, plugin)
+  for (const plugin of plugins) {
+    const dir = join(root, plugin)
     const lib = join(dir, 'lib')
     const files = existsSync(lib)
       ? readdirSync(lib).filter(name => name.endsWith('.js')).map(name => join(lib, name))
       : []
-    if (UNBUNDLED_INDEX.includes(plugin) && existsSync(join(dir, 'index.js'))) {
+    if (unbundled.includes(plugin) && existsSync(join(dir, 'index.js'))) {
       files.push(join(dir, 'index.js'))
     }
     for (const file of files.sort()) {
       scanned.push(file)
       const text = readFileSync(file, 'utf8')
       for (const { spec, line } of specifiers(text)) {
-        if (isBare(spec)) {
-          problems.push(`${file.slice(ROOT.length + 1)}:${line} — bare specifier '${spec}' would fail at runtime`)
+        if (isBare(spec) && spec.length < 180 && !/[\s,();]/.test(spec)) {
+          problems.push(`${file.slice(root.length + 1)}:${line} — bare specifier '${spec}' would fail at runtime`)
         }
       }
     }
   }
+  return { problems, scanned }
+}
 
+function main() {
+  const { problems, scanned } = collectBare(ROOT)
   if (problems.length > 0) {
     console.error(`clean-lib FAILED: ${problems.length} bare specifier(s) in runtime artifacts`)
     for (const p of problems) console.error(`  - ${p}`)
@@ -109,4 +115,4 @@ function main() {
   console.log(`clean-lib OK: ${scanned.length} runtime artifact(s), only node:* + relative imports`)
 }
 
-main()
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main()

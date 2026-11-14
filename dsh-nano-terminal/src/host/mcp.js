@@ -7,7 +7,6 @@
 // TOOLS table below is *generated* from it (name/description/inputSchema).
 // Adding or changing a method means editing the schema first, then this file.
 
-import { appendFileSync, mkdirSync } from 'node:fs'
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -37,13 +36,11 @@ const TOOL_MAP = Object.fromEntries(TOOLS.map((t) => [t.name, t]))
  * @param {string} deps.auditPath
  * @param {() => Record<string, {status: string, detail?: string}>} deps.laneStatus
  */
-export function createMcpHandler({ registry, bus, auditPath, laneStatus }) {
-  mkdirSync(dirname(auditPath), { recursive: true })
+export function createMcpHandler({ registry, bus, auditPath, laneStatus, writeAudit }) {
   const audit = (event) => {
-    try {
-      appendFileSync(auditPath, JSON.stringify({ t: new Date().toISOString(), ...event }) + '\n')
-    } catch { /* audit is best-effort */ }
+    if (typeof writeAudit === 'function') writeAudit(event)
   }
+  void auditPath
 
   /** Resolve schema-style ref (id | name | addr) → record or throw. */
   const target = (ref) => {
@@ -65,7 +62,7 @@ export function createMcpHandler({ registry, bus, auditPath, laneStatus }) {
           addr: rec.addr,
           lane: rec.lane,
           title: rec.title,
-          attach: { protocol: 'dnt-ws-v1', path: '/dsh-nano-terminal/stream' },
+          attach: { protocol: 'dnt-ws-v1', url: `/dsh-nano-terminal/stream?session=${rec.id}` },
         }
       }
       case 'term.session.list':

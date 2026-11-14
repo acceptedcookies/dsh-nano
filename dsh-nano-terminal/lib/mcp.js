@@ -1,5 +1,4 @@
 // src/host/mcp.js
-import { appendFileSync, mkdirSync } from "node:fs";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -212,14 +211,11 @@ var TOOLS = schema.methods.map((m) => ({
   inputSchema: m.params
 }));
 var TOOL_MAP = Object.fromEntries(TOOLS.map((t) => [t.name, t]));
-function createMcpHandler({ registry, bus, auditPath, laneStatus }) {
-  mkdirSync(dirname(auditPath), { recursive: true });
+function createMcpHandler({ registry, bus, auditPath, laneStatus, writeAudit }) {
   const audit = (event) => {
-    try {
-      appendFileSync(auditPath, JSON.stringify({ t: (/* @__PURE__ */ new Date()).toISOString(), ...event }) + "\n");
-    } catch {
-    }
+    if (typeof writeAudit === "function") writeAudit(event);
   };
+  void auditPath;
   const target = (ref) => {
     const rec = registry.resolve(ref);
     if (!rec) throw err(KIND.NOT_FOUND, `no such terminal '${ref}'`);
@@ -238,7 +234,7 @@ function createMcpHandler({ registry, bus, auditPath, laneStatus }) {
           addr: rec.addr,
           lane: rec.lane,
           title: rec.title,
-          attach: { protocol: "dnt-ws-v1", path: "/dsh-nano-terminal/stream" }
+          attach: { protocol: "dnt-ws-v1", url: `/dsh-nano-terminal/stream?session=${rec.id}` }
         };
       }
       case "term.session.list":

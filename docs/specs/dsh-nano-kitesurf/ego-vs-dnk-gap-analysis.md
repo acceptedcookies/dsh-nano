@@ -13,14 +13,14 @@
 | 层 | 真身 | 自动化协议 | 与 DNK 的关系 |
 |---|---|---|---|
 | **ego-browser** | Chromium `ego_cli` 组件，经 Mojo named-channel IPC 连 ego lite.app | `nodejs` REPL（TaskSpace/Page API）+ `import`/`skill`/`upgrade` CLI；**无 MCP、无 daemon** | 无代码共享；但它是「agent 与人类共用同一浏览器」的成熟范式（ownership/handOff/用户批准） |
-| **agent-browser** | vercel-labs 独立 Rust CLI，daemon→CDP 控 Chrome | CLI ~90 子命令 + `mcp` stdio JSON-RPC（8 档 tool profile，core=33 / all=160 工具） | **DNK 容器内嵌的就是它**：`mcp-bridge.mjs` 每连接 spawn `agent-browser mcp` 透传 + 13 个本地 `kitesurf_*` 工具 |
+| **agent-browser** | vercel-labs 独立 Rust CLI，daemon→CDP 控 Chrome | CLI ~90 子命令 + `mcp` stdio JSON-RPC（8 档 tool profile，core=33 / all=160 工具） | **DNK 容器内嵌的就是它**：`mcp-bridge.mjs` 每连接 spawn `agent-browser mcp` 透传 + 13 个本地 `sandbox.*` 工具 |
 
 所以正确的对比是：**agent-browser（CLI+MCP）与 ego 的 TaskSpace/Page 语义模型** vs **DNK（24 HTTP 路由 + bridge MCP + workerd 引擎）**。ego 的贡献是「人机共存与所有权语义」，agent-browser 的贡献是「自动化命令面 + MCP 协议完备性」。
 
 ### DNK 的真实接口面（已核实）
 
 - **HTTP**：`src/host/route-table.js` 共 **24** 条路由（子代理报 26 系误读，按文件实际计数）。
-- **MCP**：`ws://…/mcp` → bridge 本地应答 13 个 `kitesurf_*` 只读诊断工具 + 透传 `agent-browser mcp`（默认 core 档 33 工具，**但大部分在 workerd 引擎上无法工作**，见 §1）。
+- **MCP**：`ws://…/mcp` → bridge 本地应答 13 个 `sandbox.*` 只读诊断工具 + 透传 `agent-browser mcp`（默认 core 档 33 工具，**但大部分在 workerd 引擎上无法工作**，见 §1）。
 - **CDP 子集**：`lib/engine.js` 全文件仅调用 **8 个域 17 个方法**——Target(3)/Page(4)/Runtime(2)/Log(1)/Network(2)/DOM(2)/CSS(2)/Emulation(4)。**未出现的域**：Input、Accessibility、Fetch、Tracing、Profiler、Performance、DOM.getBoxModel、Page.printToPDF/screencast/javascriptDialogOpening、Target.createBrowserContext、Network.getCookies/getResponseBody。
 
 ---
@@ -43,7 +43,7 @@ DNK 当前定位 = **「可观测的单页渲染投射 + 诊断」，不是「�
 |---|---|---|---|---|
 | a11y snapshot + @ref | `snapshot -i/--delta`、ego `page.snapshot()` | 无 | **阻塞** | P1：workerd 实现 `Accessibility.getFullAXTree`；P0 兜底：host 注入 a11y-walker 生成 ref 表（复用 `putRef/getRef` ref 机制） |
 | 元素交互 | click/fill/type/press/hover/select/drag + find role/text/label/testid | 无 | **阻塞** | P0：`Runtime.evaluate` 合成事件 + native setter（80% 场景）；P1：workerd `Input.*` + `DOM.getBoxModel/scrollIntoViewIfNeeded` |
-| 等待原语 | `wait --text/--url/--load/--fn/--download` | 无 | **阻塞** | **P0 纯 host 可实现**：evaluate 轮询 + 现有 `frameNavigated`/`Network.*` 环缓冲判定；`/wait` 路由 + `kitesurf_wait` 工具，**不需要引擎改动** |
+| 等待原语 | `wait --text/--url/--load/--fn/--download` | 无 | **阻塞** | **P0 纯 host 可实现**：evaluate 轮询 + 现有 `frameNavigated`/`Network.*` 环缓冲判定；`/wait` 路由 + `sandbox.wait` 工具，**不需要引擎改动** |
 | JS 执行 | `eval` 无界/文件/`--base64` | `/evaluate` ≤2000 入 ≤4000 出 | **阻塞**（兜底手段全被截断） | P0：分段返回 + `awaitPromise` + objectId 续取 |
 | 网络观测 | `network_requests`（含 body）+ HAR | `/network` 仅元数据 | **阻塞** | P0：ring→HAR 组装（body 先留空）；P1：workerd `Network.getResponseBody` |
 | 拦截/mock/离线 | `network route/unroute`、`set_offline`、`emulateNetworkConditions` | 无 | **阻塞** | 仅 P1：workerd `Fetch.*`（唯一正确拦截层） |
@@ -53,16 +53,16 @@ DNK 当前定位 = **「可观测的单页渲染投射 + 诊断」，不是「�
 | 上传/下载 | `upload`、`download`、`wait_for_download` | 无 | 效率 | P1：`DOM.setFileInputFiles` + `Page.setDownloadBehavior` |
 | 页面性能 | `trace/profiler/vitals`（Tracing/Profiler 域） | 无页面级指标 | 效率 | P0：`performance.getEntries*`/`PerformanceObserver`/`memory` 经 evaluate 采集；Tracing/Profiler workerd 大概率不可行，**接受降级** |
 | 截图/PDF/录像 | screenshot/PDF/screencast/record | `/shot` 已较好（webp/fit） | 锦上添花 | P2：`Page.startScreencast`（若引擎支持）替代轮询 |
-| console/errors | `console/errors` | `/console` + `kitesurf_console` | ✅ **唯一持平** | — |
+| console/errors | `console/errors` | `/console` + `sandbox.console` | ✅ **唯一持平** | — |
 | 仿真 | geo/timezone/locale/device | UA/viewport/media/extraHeaders ✅ | 效率 | P1：workerd 补三个 `Emulation.set*` |
 
 ### 1.3 实现路径总纲（按 ROI）
 
 **P0（纯 host/bridge 侧，不碰 workerd，先做）**
-1. `/wait` 路由 + `kitesurf_wait`：selector/text/url/fn/networkidle 全部可用现有事件环 + evaluate 轮询实现。
+1. `/wait` 路由 + `sandbox.wait`：selector/text/url/fn/networkidle 全部可用现有事件环 + evaluate 轮询实现。
 2. `evaluate` 放宽：分段返回、objectId 句柄、awaitPromise。
 3. storage/cookie-lite：evaluate 封装的读写/导出/导入路由。
-4. a11y-lite + interact-lite：注入 walker 建 ref 表 → `kitesurf_snapshot`/`kitesurf_interact` 桥内工具。
+4. a11y-lite + interact-lite：注入 walker 建 ref 表 → `sandbox.snapshot`/`sandbox.interact` 桥内工具。
 5. bridge 写类调用互斥锁（`answerNativeTool` 拦截点现成）。
 6. HAR 组装导出。
 
@@ -86,8 +86,8 @@ DNK 的 skill 在**错误目录真源化 + 测试防漂移**上已反超 ego 的
 
 1. **24 条路由中 6 条未逐条文档化**：`/dom`、`/elements`、`/selftest`、`/network`、`/browse-history`、`/perf-report`（SKILL.md 只给主流程路由；这些在 route-table 里都有完整 sensitivity/justification，唯独没有 agent-facing 文档）。AGENTS.md 路由表只列 15 条同样缺口。
 2. **ERROR_CATALOG 漏 5 个 host 侧真实 throw id**：`history.body`、`network.query`（两个输入侧 400，未入表会兜底成 502 误诊）+ `shot.empty`、`shot.fit`、`dom.blank/dom.empty`、`elements.empty`（502 类，但 `shot.empty`/`dom.empty` 值得明示）。另有 4 个 bridge 本地 id（`diag.stale`/`history.stale`/`dom.stale`/`elements.stale`/`selftest.stale`/`tool.unknown`）应单独登记为「MCP 层错误」，现在既不属 host catalog 也无独立表。
-3. **MCP 事实过期**：SKILL.md §8 写「6 个 `kitesurf_*` 工具」实际 13 个（`kitesurf_history/dom/elements/selftest/network` 五个未提及）；「33 个 `agent_browser_*`」未经对账。
-4. **MCP 入口零引导**：没有文档告诉 agent 走 `ws://…/mcp` 时工具名前缀、native 工具的 inputSchema、MCP 能做而 HTTP 不能做的（反之 `kitesurf_elements` 的 description 自己承认是快照缓存版，得回 HTTP `/elements?selector=`）。
+3. **MCP 事实过期**：SKILL.md §8 写「6 个 `sandbox.*` 工具」实际 13 个（`sandbox.history/dom/elements/selftest/network` 五个未提及）；「33 个 `agent_browser_*`」未经对账。
+4. **MCP 入口零引导**：没有文档告诉 agent 走 `ws://…/mcp` 时工具名前缀、native 工具的 inputSchema、MCP 能做而 HTTP 不能做的（反之 `sandbox.elements` 的 description 自己承认是快照缓存版，得回 HTTP `/elements?selector=`）。
 
 ### 2.3 结构性缺口（S1/S2）
 
@@ -110,7 +110,7 @@ skills/kitesurf-cdp/
   references/
     routes.md                  # 24 路由逐条（从 ROUTE_TABLE build 时对账路径集合）
     observability.md           # ERROR_CATALOG 全表 + bridge 本地错误表 + span 名 + 参数取值域
-    mcp-bridge.md              # 13 个 kitesurf_* 工具 schema + 透传说明 + 帧尾 \n
+    mcp-bridge.md              # 13 个 sandbox.* 工具 schema + 透传说明 + 帧尾 \n
     element-packets.md         # pick note 字段/chip/ref 环/漂移检测
     recovery-playbook.md       # 端口自愈/自愈/状态模型/幂等
     recipes.md                 # 5 条端到端配方
@@ -185,7 +185,7 @@ loopback 双端口 + Origin 精确白名单 + 无 Origin 才允许非浏览器 c
 
 **优化意见（按 ROI 排序的路线图）：**
 
-- **阶段 A（纯 host/bridge，不碰引擎，1-2 轮迭代）**：补 `/wait` + `kitesurf_wait`、`evaluate` 分段放宽、a11y-lite ref 表 + `kitesurf_snapshot/interact` 桥内工具、storage/cookie-lite、bridge 写类互斥 + ownership 标记。这一步把「能做动作」的 80% 场景补上。
+- **阶段 A（纯 host/bridge，不碰引擎，1-2 轮迭代）**：补 `/wait` + `sandbox.wait`、`evaluate` 分段放宽、a11y-lite ref 表 + `sandbox.snapshot/interact` 桥内工具、storage/cookie-lite、bridge 写类互斥 + ownership 标记。这一步把「能做动作」的 80% 场景补上。
 - **阶段 B（契约与文档）**：修 `perfReview` 假开关、ERROR_CATALOG 补 5 个 host id + 4 个 bridge 本地表、skill 改包结构（routes/mcp-bridge/observability/element-packets/recovery/recipes/emulation 七个 reference + 两模板）+ build 对账断言。
 - **阶段 C（容器与监控）**：监督对称化 + 取证、推送瘦身 + portReport 缓存、linux-prefix 剪枝 + pin、span 全覆盖 + 三元组样本 + p50/p95 + jsonl 时间序列、devtools `?since=` 增量。
 - **阶段 D（引擎依赖，推动 workerd/CDP 面扩展）**：`Input.*`/`DOM.getBoxModel`/`Accessibility`/`Fetch`/`Network.getResponseBody`/`Target.createBrowserContext`/`Page.addScriptToEvaluateOnNewDocument`——这是把「合成事件兜底」升级为「真实交互」的正解；Tracing/Profiler 类接受降级为 `performance.*` evaluate 采集。
@@ -201,7 +201,7 @@ loopback 双端口 + Origin 精确白名单 + 无 Origin 才允许非浏览器 c
 | route-table 有 26 条路由（agent-9/任务书口径） | **实际 24 条**（`"path":` 计数），按 24 为准 |
 | `package.json.files` 漏 `lib/dom.js`/`lib/history.js`（agent-10） | **误报**，files 包含两者 |
 | `kitesurf.diag.stale` 无 throw site（agent-10） | **误报**，存在于 `mcp-bridge.mjs:278`；但其归类应为「bridge 本地错误」而非 host catalog |
-| 「6 个 kitesurf_* 工具」vs 实际 13 个 | 属实（`kitesurf_history/dom/elements/selftest/network` 未在 skill 文档） |
+| 「6 个 sandbox.* 工具」vs 实际 13 个 | 属实（`sandbox.history/dom/elements/selftest/network` 未在 skill 文档） |
 | `config.perfReview` 假开关 | **属实已复现**（decideEnabled 冻结时机） |
 | `resourceBase` directory 机制 | **属实已验证**（`dsh-skill/lib/index.js:445,492,501`） |
 | ERROR_CATALOG 漏 id | 部分属实：host 侧 `history.body`/`network.query`/`shot.empty`/`shot.fit`/`dom.*`/`elements.empty`；bridge 本地 `.stale`/`tool.unknown` 应单列 |
@@ -238,7 +238,7 @@ loopback 双端口 + Origin 精确白名单 + 无 Origin 才允许非浏览器 c
 |---|---|---|---|---|
 | **P0-1** | 错误目录与事实对账补齐 | 契约可信 | 无 | 低 |
 | **P0-2** | `perfReview` 假开关修复 | 契约可信 | 无 | 低 |
-| **P0-3** | 等待原语 `/wait` + `kitesurf_wait` | 动作环 | 无 | 低 |
+| **P0-3** | 等待原语 `/wait` + `sandbox.wait` | 动作环 | 无 | 低 |
 | **P0-4** | 所有权契约 + 写操作互斥 | 人机共存 | P0-3（先验证 socket 语义） | 中 |
 | **P0-5** | 元素 ref 统一语言（a11y-lite） | 定位语言 | 无 | 中 |
 | **P0-6** | skill 包化分层 + build 对账 | 文档可信 | P0-1 | 中 |
@@ -276,13 +276,13 @@ loopback 双端口 + Origin 精确白名单 + 无 Origin 才允许非浏览器 c
 - **dsh 长期价值**：perf-review 是跨插件的共享监控面，一个假开关会污染整个 `host.json` 的可信度。
 - **交付/验收**：`config.perfReview:true` 且无 env 时 `GET /perf-review/host` 返回 `{enabled:true}` 且 span 落盘；`npm test` 加开关语义用例。
 
-### P0-3 等待原语 `/wait` + `kitesurf_wait`
+### P0-3 等待原语 `/wait` + `sandbox.wait`
 
-- **做什么**：新路由 `POST /nano-kitesurf/wait {selector?|text?|url?|fn?|load?:commit|domcontentloaded|load|networkidle, timeoutMs?, intervalMs?}` + MCP `kitesurf_wait` 同名镜像。实现：`Runtime.evaluate` 轮询 + 复用 `captureCdpEvent` 已有的 `Page.frameNavigated`/`Network.*` 环缓冲判定 navigation/networkidle；命中 `{ok:true,matched,elapsedMs}`，超时 `{ok:false,errorId:kitesurf.wait.*}`。
+- **做什么**：新路由 `POST 见 QNA wait {selector?|text?|url?|fn?|load?:commit|domcontentloaded|load|networkidle, timeoutMs?, intervalMs?}` + MCP `sandbox.wait` 同名镜像。实现：`Runtime.evaluate` 轮询 + 复用 `captureCdpEvent` 已有的 `Page.frameNavigated`/`Network.*` 环缓冲判定 navigation/networkidle；命中 `{ok:true,matched,elapsedMs}`，超时 `{ok:false,errorId:kitesurf.wait.*}`。
 - **ego/cursor 对照**：agent-browser `wait --text/--url/--load/--fn/--download`（commands.md:165）；Playwright `waitFor*`；ego `page.waitForSelector/waitForLoadState/waitForFunction`——**全部等价语义**，这是 agentic 自动化最基础的原语，Cursor design mode 完全没有。
 - **为什么需要**：它是自动化闭环的**第三环**（snapshot→interact→**wait**→verify）。没有它，agent 只能靠固定 `sleep` 猜，SPA/异步渲染下必然不可靠；且它是**唯一一个纯 host 侧就能实现的「阻塞级」缺口**，ROI 最高。
 - **dsh 长期价值**：等待原语把「轮询页面」从 agent 的 token 消耗变成插件的确定性协议调用——每省一次自轮询就是省一轮 LLM 往返。它是后续所有 recipe/断言测试的公共地基。
-- **交付/验收**：`/wait` 进 route-table（L2 `write:engine`）+ `kitesurf_wait` 进 `KITESURF_TOOLS`；e2e 加「wait text 命中 / 超时返回 wait.timeout」两项；skill reference 收录。
+- **交付/验收**：`/wait` 进 route-table（L2 `write:engine`）+ `sandbox.wait` 进 `KITESURF_TOOLS`；e2e 加「wait text 命中 / 超时返回 wait.timeout」两项；skill reference 收录。
 
 ### P0-4 所有权契约 + 写操作互斥
 
@@ -294,11 +294,11 @@ loopback 双端口 + Origin 精确白名单 + 无 Origin 才允许非浏览器 c
 
 ### P0-5 元素 ref 统一语言（a11y-lite 快照）
 
-- **做什么**：注入 a11y-walker 脚本生成带 `@N` ref 的语义树（role/name/text/可见性，截断 200 节点）；宿主 `putRef/getRef` 复用为统一 ref 存储；**人类 pick note 的 selector 与 agent `kitesurf_snapshot` 的 ref 指向同一元素**；`interact`/`wait`/`get_text` 全部接受 `@N`/selector 双入参。
+- **做什么**：注入 a11y-walker 脚本生成带 `@N` ref 的语义树（role/name/text/可见性，截断 200 节点）；宿主 `putRef/getRef` 复用为统一 ref 存储；**人类 pick note 的 selector 与 agent `sandbox.snapshot` 的 ref 指向同一元素**；`interact`/`wait`/`get_text` 全部接受 `@N`/selector 双入参。
 - **ego/cursor 对照**：agent-browser `snapshot -i` 的 `@ref` 体系 + `find role/text/label/testid` + ego `page.snapshot()` 的 stableLocator——这是**整个 agentic 交互模型的入口语言**。Cursor design mode 的 selector 是一次性字符串，人写的与 agent 用的不是同一套。
 - **为什么需要**：DNK 的灵魂特性是「人标注→agent 执行」。若人类点选产生的是 CSS selector 而 agent 工具用的是 `@ref`，两种语言不互通，标注就无法被复用——闭环断在翻译层。统一 ref 让「人指什么，agent 就能动什么」。
 - **dsh 长期价值**：这是 dsh 内「人机协作」的**词汇表**——一旦 ref 语义统一，composer 里的 `[kitesurf]` chip、devtools 面板、agent 工具、测试断言全部说同一种元素语言。这是 dsh 独有的、Chrome DevTools 天然没有的能力。
-- **交付/验收**：`kitesurf_snapshot` MCP 工具返回 `{tree,refs}`；pick note 与 snapshot ref 可互查；`interact`/`wait` 接受 ref；e2e 验证 ref→元素往返。
+- **交付/验收**：`sandbox.snapshot` MCP 工具返回 `{tree,refs}`；pick note 与 snapshot ref 可互查；`interact`/`wait` 接受 ref；e2e 验证 ref→元素往返。
 
 ### P0-6 skill 包化分层 + build 对账
 
@@ -314,11 +314,11 @@ loopback 双端口 + Origin 精确白名单 + 无 Origin 才允许非浏览器 c
 
 ### P1-1 交互核心 `interact-lite`（合成事件）
 
-- **做什么**：`interact` 路由 + `kitesurf_interact` 工具：`{action:click|dblclick|fill|type|press|hover|select|focus|check|uncheck, target:@N|selector, text?|key?|value?|option?}`。实现：`Runtime.evaluate` 派发合成事件 + `native setter`（InputEvent/bubbles，对 React 受控组件用 native setter 技巧）+ `scrollIntoViewIfNeeded` 前置 + 遮挡检测。写操作走 P0-4 所有权。
+- **做什么**：`interact` 路由 + `sandbox.interact` 工具：`{action:click|dblclick|fill|type|press|hover|select|focus|check|uncheck, target:@N|selector, text?|key?|value?|option?}`。实现：`Runtime.evaluate` 派发合成事件 + `native setter`（InputEvent/bubbles，对 React 受控组件用 native setter 技巧）+ `scrollIntoViewIfNeeded` 前置 + 遮挡检测。写操作走 P0-4 所有权。
 - **ego/cursor 对照**：agent-browser `click/fill/type/press/hover/select` + `find role/text/label` 语义定位 + ego `page.click/fill/selectOption/press`——**这是自动化调试的核心动作集**。Cursor design mode 只有「选中给 agent」，agent 自己点不了。
 - **为什么需要**：§1 Top-2 阻塞缺口。没有交互，agent 只能「看页面-告诉人问题」，不能「复现-验证-再测」。合成事件覆盖 ~80% 场景，是引擎 `Input.*` 落地前的正解。
 - **dsh 长期价值**：把「做动作」从「请人去点」变成 agent 的原语——这是 DNK 从「投射器」升级为「工作台」的分界线。它与 P0-5 的 ref 语言组合后，人标注的元素第一次可以被 agent 直接驱动。
-- **交付/验收**：`/interact` 进 route-table（L2 `write:engine`）；`kitesurf_interact` 进 `KITESURF_TOOLS`；e2e 完成「fill+click→console 出事件」；遮挡/不可见返回 `interact.occluded`。
+- **交付/验收**：`/interact` 进 route-table（L2 `write:engine`）；`sandbox.interact` 进 `KITESURF_TOOLS`；e2e 完成「fill+click→console 出事件」；遮挡/不可见返回 `interact.occluded`。
 
 ### P1-2 `evaluate` 分段 + 状态读写 lite
 
@@ -362,7 +362,7 @@ loopback 双端口 + Origin 精确白名单 + 无 Origin 才允许非浏览器 c
 
 ### P1-7 `/selftest` 强化为 agent-first 自检
 
-- **做什么**：`/selftest` 除现有 verdict 外补「每一检查项的修复命令」（从 `kitesurf_recovery_plan` 升级：每项 `{check,ok,failHint,fixCall}`）；`agent-browser doctor` 式输出——agent 拿到即知怎么修。
+- **做什么**：`/selftest` 除现有 verdict 外补「每一检查项的修复命令」（从 `sandbox.recovery_plan` 升级：每项 `{check,ok,failHint,fixCall}`）；`agent-browser doctor` 式输出——agent 拿到即知怎么修。
 - **ego/cursor 对照**：agent-browser `doctor [--fix]` 自动清 stale socket/pid 并出 exit code——「自检 + 自愈指引」是 agentic 工具的标准运维面；Cursor 无插件自检概念。
 - **为什么需要**：现在 `/selftest` 给的是 verdict 字符串，agent 还得自己翻译「buildId 不符→该重启谁」。把 fix 命令直接编进返回，自助排障闭环才完整。
 - **dsh 长期价值**：`/selftest` 是 DNK 对 agent 的「健康协议」——协议化的自检让所有上层自动化（P2 录制回放、nano-platform 编排）都有了标准探针。
@@ -390,7 +390,7 @@ loopback 双端口 + Origin 精确白名单 + 无 Origin 才允许非浏览器 c
 
 ### P2-3 页面级指标（Web Vitals + 引擎 metrics）
 
-- **做什么**：`evaluate` 采集 `performance.getEntriesByType('navigation'|'paint'|'largest-contentful-paint')` + `PerformanceObserver`（LCP/INP/CLS）+ `performance.memory`（若可用）；引擎侧探测 `Performance.getMetrics`/`Tracing.start`，不支持则在 workerd 加 `/metrics` 端点（CPU/mem/请求计数）；`/nano-kitesurf/vitals` 聚合输出 + 并入 perf-review 时间序列。
+- **做什么**：`evaluate` 采集 `performance.getEntriesByType('navigation'|'paint'|'largest-contentful-paint')` + `PerformanceObserver`（LCP/INP/CLS）+ `performance.memory`（若可用）；引擎侧探测 `Performance.getMetrics`/`Tracing.start`，不支持则在 workerd 加 `/metrics` 端点（CPU/mem/请求计数）；`见 QNA vitals` 聚合输出 + 并入 perf-review 时间序列。
 - **ego/cursor 对照**：agent-browser `vitals`/`trace`/`profiler`（Chrome Trace→Perfetto）——页面级黑盒是它已解决而 DNK 只有「路由墙钟」的明确差距；Cursor 无页面指标面。
 - **为什么需要**：§3.4 已判定 perf-review 只看见「路由花了多久」，看不见「页面为什么慢」。Web Vitals 是前端调试的第一公民指标，没有它「性能调试」名不副实。
 - **dsh 长期价值**：「路由墙钟 + 页面指标」双轨后，DNK 的 perf 面从「运维监控」升级为「性能调试」——这是它能否承接「前端性能回归测试」（P2-4）的决定性前提。

@@ -69,7 +69,7 @@ test('every real kitesurf.* errorId is catalogued or a bridge-local id', () => {
 test('operations ring is bounded, filterable and carries the failure id', () => {
   clearOperations()
   for (let i = 0; i < 12; i += 1) {
-    recordOperation({ route: '/nano-kitesurf/pick', method: 'POST', status: i % 2 ? 404 : 200, durationMs: i, ok: i % 2 === 0, errorId: i % 2 ? 'kitesurf.pick.miss' : null, input: summarizeInput({ x: 10, secret: 'do-not-record' }) })
+    recordOperation({ route: '/nano-local-sandbox/pick', method: 'POST', status: i % 2 ? 404 : 200, durationMs: i, ok: i % 2 === 0, errorId: i % 2 ? 'kitesurf.pick.miss' : null, input: summarizeInput({ x: 10, secret: 'do-not-record' }) })
   }
   const all = listOperations({ limit: 20 })
   assert.equal(all.entries.length, 12)
@@ -99,12 +99,12 @@ test('console ring counts by level and clears', () => {
 test('diagnosticsSummary reports latency, failures and the catalogue', () => {
   clearOperations()
   clearConsole()
-  recordOperation({ route: '/nano-kitesurf/shot', method: 'POST', status: 200, durationMs: 42, ok: true })
-  recordOperation({ route: '/nano-kitesurf/shot', method: 'POST', status: 502, durationMs: 7, ok: false, errorId: 'kitesurf.engine.failed', error: 'down' })
+  recordOperation({ route: '/nano-local-sandbox/shot', method: 'POST', status: 200, durationMs: 42, ok: true })
+  recordOperation({ route: '/nano-local-sandbox/shot', method: 'POST', status: 502, durationMs: 7, ok: false, errorId: 'kitesurf.engine.failed', error: 'down' })
   const summary = diagnosticsSummary()
   assert.equal(summary.operations.total, 2)
   assert.equal(summary.operations.failures, 1)
-  assert.equal(summary.operations.latency['/nano-kitesurf/shot'].n, 2)
+  assert.equal(summary.operations.latency['/nano-local-sandbox/shot'].n, 2)
   assert.equal(summary.recentErrors[0].errorId, 'kitesurf.engine.failed')
   assert.ok(summary.errorCatalog.length >= 20)
   assert.ok(summary.errorCatalog.every((row) => Number.isInteger(row.status) && row.next))

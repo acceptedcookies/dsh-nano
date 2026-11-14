@@ -3,7 +3,6 @@
  * Lanes:
  *   local   — ctx.subprocess.spawnTerminal (node-pty on this dsh host)
  *   mcp     — remote MCP terminal endpoint (containers, SSH hosts, nano-agent)
- *   isolate — wasm/JS isolate lane (v8/workerd; scaffolded)
  *
  * Routes:
  *   GET  /dsh-nano-terminal/stream  (WebSocket upgrade, dnt-ws-v1 data plane)
@@ -18,11 +17,13 @@ import { SessionRegistry } from './lib/sessions.js'
 import { EventBus } from './lib/events.js'
 import { Persist } from './lib/persist.js'
 import { createMcpHandler } from './lib/mcp.js'
-import { handshake, FrameParser, sendBinary, sendText, sendClose, parseChannel, Attach, FR_KIND } from './lib/ws.js'
+import { handshake, FrameParser, sendBinary, sendText, sendClose, encodeFrame, parseChannel, Attach, FR_KIND } from './lib/ws.js'
+import { registerRoutes } from './lib/route-guard.js'
+import { ROUTE_TABLE } from './lib/route-table.js'
 
 export const name = 'dsh-nano-terminal'
 
-export const inject = ['webServer', 'subprocess', 'sessions', 'workingDirectory', 'commands']
+export const inject = ['webServer', 'connection', 'subprocess', 'sessions', 'workingDirectory', 'commands']
 
 const ROUTE = '/dsh-nano-terminal'
 
@@ -32,7 +33,7 @@ export function apply(ctx) {
   // is wiped on re-sync so durable state lives at the home root.
   const home = process.env.DSH_HOME || process.env.HOME || '/tmp'
   const stateDir = join(home, 'dsh-nano-terminal.state')
-  const auditPath = join(stateDir, 'audit.jsonl')
+  const auditPath = join(home, 'nano-local-sandbox', 'term.audit')
 
   const bus = new EventBus({ audit: () => {} })
   // plugins/<pkg>/ is the install tree — re-synced from source on every host
@@ -54,7 +55,6 @@ export function apply(ctx) {
   const laneStatus = () => ({
     local: { status: 'up', backend: 'subprocess.spawnTerminal', sessions: registry.count() },
     mcp: { status: 'client', detail: 'lane connects to remote MCP endpoints; this host is itself an MCP terminal server' },
-    isolate: { status: 'stub', detail: 'wasm-embedded lane (workerd/v8) scaffolded' },
   })
 
   const mcp = createMcpHandler({ registry, bus, auditPath, laneStatus })
@@ -66,6 +66,11 @@ export function apply(ctx) {
   const unregisterUpgrade = ctx.webServer.registerUpgrade({
     path: `${ROUTE}/stream`,
     handler: (req, socket) => {
+      const rejection = ctx.get('connection')?.requestRejection?.(req)
+      if (rejection !== undefined) {
+        socket.end()
+        return
+      }
       if (!handshake(req, socket)) return
       const url = new URL(req.url ?? '/', 'http://localhost')
       const attachId = url.searchParams.get('session')
@@ -79,7 +84,7 @@ export function apply(ctx) {
           return
         }
         if (opcode === 0x09) {
-          socket.write(payload) // pong payload with opcode… handled below
+          socket.write(encodeFrame(payload, 0x0A))
           return
         }
         if (!ready) {
@@ -184,10 +189,10 @@ export function apply(ctx) {
 
   // -- control plane: MCP JSON-RPC + management REST --------------------------
 
-  const unregisterRoutes = [
-    ctx.webServer.register({
-      kind: 'exact',
+  const unregisterRoutes = registerRoutes(ctx, [
+    {
       path: `${ROUTE}/mcp`,
+      methods: ['POST'],
       handler: async (req, res) => {
         if (req.method !== 'POST') {
           res.writeHead(405).end()
@@ -207,22 +212,22 @@ export function apply(ctx) {
         res.writeHead(200, { 'content-type': 'application/json' })
         res.end(reply === undefined ? '' : JSON.stringify(reply))
       },
-    }),
-    ctx.webServer.register({
-      kind: 'exact',
+    },
+    {
       path: `${ROUTE}/sessions`,
+      methods: ['GET'],
       handler: async (req, res) => {
         res.writeHead(200, { 'content-type': 'application/json' })
         res.end(JSON.stringify({ sessions: registry.list() }))
       },
-    }),
+    },
     // SSE event stream: subscribe → snapshot first frame, then live events.
     // ?since=<seq> resumes from a position; falling behind the ring answers
     // with {missed:true,snapshot}. Agents can poll the same data via
     // term.events without holding a connection.
-    ctx.webServer.register({
-      kind: 'exact',
+    {
       path: `${ROUTE}/events`,
+      methods: ['GET'],
       handler: async (req, res) => {
         const url = new URL(req.url ?? '/', 'http://localhost')
         const since = Number(url.searchParams.get('since')) || 0
@@ -238,18 +243,19 @@ export function apply(ctx) {
         }, { since })
         req.on('close', unsub)
       },
-    }),
-    ctx.webServer.register({
-      kind: 'exact',
+    },
+    {
       path: `${ROUTE}/health`,
+      methods: ['GET'],
       handler: async (req, res) => {
         res.writeHead(200, { 'content-type': 'application/json' })
         res.end(JSON.stringify({ ok: true, lanes: laneStatus(), sessions: registry.count() }))
       },
-    }),
-    ctx.webServer.register({
-      kind: 'prefix',
+    },
+    {
       path: `${ROUTE}/session`,
+      methods: ['POST'],
+      kind: 'prefix',
       handler: async (req, res) => {
         const m = (req.url ?? '').match(/\/session\/([^/]+)\/close$/)
         if (req.method !== 'POST' || !m) {
@@ -260,8 +266,8 @@ export function apply(ctx) {
         res.writeHead(ok ? 200 : 404, { 'content-type': 'application/json' })
         res.end(JSON.stringify({ closed: ok }))
       },
-    }),
-  ]
+    },
+  ], { table: ROUTE_TABLE, plugin: 'dsh-nano-terminal' })
 
   // -- slash command (host side, agent-facing): /term --------------------------
   // UI-level mapping lives on the client via ctx.commandUi ('/dnt'); this host

@@ -9,30 +9,30 @@ const { batchNote, designNote, multiNote } = require('../shared/note.js')
 const { contentFrame, shotPoint } = require('../shared/shot-point.js')
 const h = React.createElement
 
-const STATUS = '/nano-kitesurf/status'
-const OPEN = '/nano-kitesurf/open'
-const SHOT = '/nano-kitesurf/shot'
-const PICK = '/nano-kitesurf/pick'
-const EDIT = '/nano-kitesurf/edit'
-const SETTINGS = '/nano-kitesurf/settings'
-const HISTORY = '/nano-kitesurf/history'
-const PORTS = '/nano-kitesurf/ports'
-const RECOVER = '/nano-kitesurf/recover'
-const DIAGNOSTICS = '/nano-kitesurf/diagnostics'
-const CONSOLE = '/nano-kitesurf/console'
-const NETWORK = '/nano-kitesurf/network'
-const ELEMENTS = '/nano-kitesurf/elements'
-const BROWSE_HISTORY = '/nano-kitesurf/browse-history'
-const DOM = '/nano-kitesurf/dom'
-const CONTEXT = '/nano-kitesurf/context'
-const KITE = '/nano-kitesurf/kite'
+const STATUS = '/nano-local-sandbox/status'
+const OPEN = '/nano-local-sandbox/open'
+const SHOT = '/nano-local-sandbox/shot'
+const PICK = '/nano-local-sandbox/pick'
+const EDIT = '/nano-local-sandbox/edit'
+const SETTINGS = '/nano-local-sandbox/settings'
+const HISTORY = '/nano-local-sandbox/history'
+const PORTS = '/nano-local-sandbox/ports'
+const RECOVER = '/nano-local-sandbox/recover'
+const DIAGNOSTICS = '/nano-local-sandbox/diagnostics'
+const CONSOLE = '/nano-local-sandbox/console'
+const NETWORK = '/nano-local-sandbox/network'
+const ELEMENTS = '/nano-local-sandbox/elements'
+const BROWSE_HISTORY = '/nano-local-sandbox/browse-history'
+const DOM = '/nano-local-sandbox/dom'
+const localNotes = []
+const KITE = '/nano-local-sandbox/kite'
 const KIND = 'kitesurf'
 const OWN_ID = 'nano-kitesurf'
 const CAPTURE_HEIGHT = 800
 const MAX_PINS = 8
 
 const perfReview = ensurePerfReview()
-perfReview.configure({ hostSnapshotUrl: '/nano-kitesurf/perf-review/host?mode=snapshot' })
+perfReview.configure({ hostSnapshotUrl: '/nano-local-sandbox/perf-review/host?mode=snapshot' })
 // join() freezes the collector's enabled state at call time. The pane mounts
 // before the perf-review enable flag is visible, so join lazily on first use.
 const perf = {
@@ -55,7 +55,7 @@ try {
   const reportPerf = () => {
     try {
       const report = perfReview.report({ scenario: 'pane' })
-      fetch('/nano-kitesurf/perf-report', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(report) }).catch(() => {})
+      fetch('/nano-local-sandbox/perf-report', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(report) }).catch(() => {})
     } catch { /* collector not ready */ }
   }
   setInterval(reportPerf, 10000)
@@ -646,7 +646,7 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
 
   async function runInner(work) {
     // Diagnostic counter: proves whether an action reached the pane at all.
-    window.__nksRuns = (window.__nksRuns || 0) + 1
+    window.__dnkRuns = (window.__dnkRuns || 0) + 1
     // One entry guard for EVERY action (address Enter, refresh, start engine,
     // history, settings apply): a second submit while the first /open is in
     // flight used to fire a duplicate navigate and clear busy early.
@@ -985,8 +985,7 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
   /**
    * Arrow: put a compact chip in the composer and keep the FULL payload on
    * the host. The composer must stay readable (Cursor's inline pill idea);
-   * `⟦kitesurf:N⟧` resolves through GET /nano-kitesurf/context/N, so nothing
-   * is truncated.
+   * The full note stays in this panel. There is no context route.
    */
   async function injectNote() {
     const note = noteOf()
@@ -998,11 +997,8 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
       // model as one meaningless token. So the DEFAULT is the full payload —
       // complete, never truncated. We still register a ref id so the same
       // packet can be re-pulled/resolved later, but the composer gets the text.
-      let refId = null
-      try {
-        const saved = await post(CONTEXT, { text: note, packet: element, label })
-        refId = saved.id
-      } catch { /* ref bookkeeping is best-effort, never block the injection */ }
+      const refId = null
+      localNotes.push({ text: note, packet: element, label })
       insertComposerNote(note)
       setComment('')
       setComposing(false)
@@ -1336,7 +1332,7 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
       if (el) { el.classList.add('__nks_hover'); hovered = el }
     }, true)
     doc.addEventListener('click', (e) => {
-      const dbg = (doc.defaultView.__nks = doc.defaultView.__nks || { fired: 0 })
+      const dbg = { fired: 0 }
       dbg.fired += 1
       dbg.mode = annotateRef.current
       if (!annotateRef.current) return

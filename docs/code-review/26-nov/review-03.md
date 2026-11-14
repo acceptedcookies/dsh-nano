@@ -62,7 +62,7 @@
 - `lib/route-table.js` 由 `build-client.mjs` 从 `security/route-sensitivity.json` 生成，单一真源。
 - `elementPacket`/`designNote`/`batchNote` 认真执行反馈预算：text≤80、note≤640、batch≤1600、`data:` src 剔除、`hit: page root` 不引正文、透明/`static` 剔除、`stack: none` 不编造组件栈、iframe 限额、`componentStack` 恒 null。
 - `shotPoint`/`contentFrame` 对 `object-fit:contain` + `object-position:top center` 的 letterbox 换算正确（letterbox 点击返回 null）——上一版 letterbox 偏移已修。
-- `spawn('container', args)` 数组 argv 无 shell 注入；`pickPoint`/`scrollDelta` 有界；`useLive` 共享单条 socket 符合"socket 一关页面归零"的引擎事实。
+- 容器 CLI 使用数组 argv，无 shell 注入；`pickPoint`/`scrollDelta` 有界；页面 socket 一关即归零。
 - init 锁只写一次、`already:true` 幂等、锁放 `DSH_HOME` 不放插件目录（避开 restart 覆盖），符合单一真源。
 - `origin()` 每请求读 `kite.snapshot()`，`configure` 热生效；`send` 对 `Page.navigate` 给专属 `kitesurf.navigate.timeout`。
 - UI 令牌纪律好：全 `--dsw-alias-*`/`--dsw-font-*`/`--dsw-radius-*`/`--dsw-elevation-*`，38px 工具栏 + 28×28 按钮 + .5px 描边对齐原生 sidebar chrome；`openNanoDialog` 传 `region` 关在面板内，`NanoToast` 复用，`aria-label`/`aria-pressed`/`focus-visible` 齐。
@@ -255,7 +255,7 @@
   - `skills/kitesurf-cdp/SKILL.md:9` 自称"prefer that copy because it contains the configured origin"——那份 live copy 同样是死的
 - **为什么重要**：agent 按技能驱动时会打到旧引擎地址，而它恰恰是 `nano-kite` 让 agent 改的那个引擎。
 - **审查判断**：技能正文应当是"教 agent 去哪读 live origin"，而不是"把一次快照烤进文本"。
-- **建议修法**：技能正文改为"先 `GET /nano-kitesurf/status` 读 `kite.cdp` 作 `--cdp`"；或在 `configure` 成功后重新注册技能。
+- **建议修法**：技能正文改为"先 `GET 见 QNA status` 读 `kite.cdp` 作 `--cdp`"；或在 `configure` 成功后重新注册技能。
 
 ### R11. 技能漏「socket 关=页面清空」与 `close`/`--pin-tab`/`mcpPort` 语义
 
@@ -427,7 +427,7 @@
 - **是否 blocker**：`no`
 - **事实依据**：
   - 「使用」表「标签 | 记住多个地址。切换时让容器打开那一个」——客户端无 tab 条
-  - 路由表只列 5 条，缺 `/nano-kitesurf/settings`、`/nano-kitesurf/kite`、`/nano-kitesurf/perf-review/host`；`/shot` 行只写"PNG 的 base64"漏 `mimeType`/`targetId`
+  - 路由表只列 5 条，缺 `见 QNA settings`、`见 QNA kite`、`见 QNA perf-review/host`；`/shot` 行只写"PNG 的 base64"漏 `mimeType`/`targetId`
 - **建议修法**：补 tab 功能或改文档；路由表补齐。
 
 ### R24. 杂项一批
@@ -537,7 +537,7 @@
 | R9 | `fixed` | 注册时断言 `conn.requestRejection` 为 function→`RouteGuardError('no-request-rejection')`；加测试 15/15 | `packages/dsh-host-route-guard/src/route-guard.js`, `test/route-guard.test.mjs` |
 | R10 | `fixed` | 两份技能不再烤字面量，改为教 agent 读 `GET /status` 的 `kite.cdp`/`kite.mcpPort`/`kite.phase`/`engineMismatch` | `lib/skill.js`, `index.js`（调用点去参数） |
 | R11 | `fixed` | 技能新增「共享单页引擎」段：禁 `close`/`--pin-tab`/多 target、socket 关=丢页、suspend=丢页、DSF=1 坐标约定、mcpPort=ws 桥语义 | `lib/skill.js` |
-| R12 | `fixed` | `/last` `/shot` `/pick`→L2 `read:host`；`/settings`→L1 `write:kitesurf`；`/perf`→L2 `read:host`；`/kite`→L2 `proc:kitesurf`；justification 重写 | `security/route-sensitivity.json` |
+| R12 | `fixed` | `/last` `/shot` `/pick`→L2 `read:host`；`/settings`→L1 `write:kitesurf`；`/perf`→L2 `read:host`；`/kite`→L2 `proc:local-sandbox`；justification 重写 | `security/route-sensitivity.json` |
 | R13 | `fixed` | `start` 要求 `idle`（suspended 必须走 `resume`）；`stopLocalContainer` 容忍 `no such/not found/does not exist` | `lib/nano-kite.js`, `lib/container-engine.js` |
 | R14 | `fixed` | `ERROR_STATUS` 前缀表：400 输入类 / 409 相位 / 413 body / 502 引擎 / 504 egress；`readBody` 抛 `kitesurf.body.json|toolarge`；handler 用 `route.bodyLimit` 落实 limit | `index.js` |
 | R15 | `fixed` | `KitesurfError` 增 `transport` 标记；`useLive` 只重试 transport=true（connect/closed/timeout）一次 | `lib/engine.js` |

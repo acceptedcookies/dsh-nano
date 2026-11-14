@@ -9,18 +9,17 @@
 
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { scanRoutes, ROOT } from './route-scan.mjs'
 
 const CONTRACT = join(ROOT, 'security', 'feature-contract.json')
 // DEPRECATED 2026-11-12: dsh-nano-shared-workspace retired to deprecated/,
 // excluded from the release/contract surface. See deprecated/README.md.
-const PLUGINS = ['dsh-nano-notepad', 'dsh-nano-explorer-extra', 'dsh-nano-model-selector', 'dsh-nano-kitesurf']
+export const PLUGINS = ['dsh-nano-notepad', 'dsh-nano-explorer-extra', 'dsh-nano-model-selector', 'dsh-nano-kitesurf', 'dsh-nano-local-sandbox', 'dsh-nano-terminal']
 
 const sorted = a => [...a].sort().join(',')
 
-function main() {
-  const contract = JSON.parse(readFileSync(CONTRACT, 'utf8'))
-  const code = scanRoutes()
+export function contractProblems(contract, code, plugins = PLUGINS) {
   const codeByPath = new Map(code.map(r => [r.path, r]))
   const problems = []
 
@@ -48,17 +47,23 @@ function main() {
     if (!seen.has(row.path)) problems.push(`code route missing from contract: ${row.path}`)
   }
 
-  for (const plugin of PLUGINS) {
+  for (const plugin of plugins) {
     if (!contract.ui?.[plugin]) problems.push(`missing ui entry: ${plugin}`)
     if (!contract.dataLocations?.[plugin]) problems.push(`missing dataLocations entry: ${plugin}`)
   }
+  return problems
+}
 
+function main() {
+  const contract = JSON.parse(readFileSync(CONTRACT, 'utf8'))
+  const code = scanRoutes()
+  const problems = contractProblems(contract, code)
   if (problems.length > 0) {
     console.error(`feature-contract drift: ${problems.length} issue(s)`)
     for (const p of problems) console.error(`  - ${p}`)
     process.exit(1)
   }
-  console.log(`feature-contract OK: ${routes.length} routes, ui+dataLocations for ${PLUGINS.length} plugins`)
+  console.log(`feature-contract OK: ${contract.routes.length} routes, ui+dataLocations for ${PLUGINS.length} plugins`)
 }
 
-main()
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main()

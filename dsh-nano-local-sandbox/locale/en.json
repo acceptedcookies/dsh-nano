@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Local Sandbox",
+    "description": "Session-scoped local containers. This package is the host, not a second design surface."
+  }
+}

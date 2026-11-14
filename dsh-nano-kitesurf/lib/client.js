@@ -1885,28 +1885,28 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
   var { batchNote: batchNote2, designNote: designNote2, multiNote: multiNote2 } = (init_note(), __toCommonJS(note_exports));
   var { contentFrame: contentFrame2, shotPoint: shotPoint2 } = (init_shot_point(), __toCommonJS(shot_point_exports));
   var h = React5.createElement;
-  var STATUS = "/nano-kitesurf/status";
-  var OPEN = "/nano-kitesurf/open";
-  var SHOT = "/nano-kitesurf/shot";
-  var PICK = "/nano-kitesurf/pick";
-  var EDIT = "/nano-kitesurf/edit";
-  var SETTINGS = "/nano-kitesurf/settings";
-  var HISTORY = "/nano-kitesurf/history";
-  var PORTS = "/nano-kitesurf/ports";
-  var RECOVER = "/nano-kitesurf/recover";
-  var DIAGNOSTICS = "/nano-kitesurf/diagnostics";
-  var CONSOLE = "/nano-kitesurf/console";
-  var NETWORK = "/nano-kitesurf/network";
-  var ELEMENTS = "/nano-kitesurf/elements";
-  var BROWSE_HISTORY = "/nano-kitesurf/browse-history";
-  var DOM = "/nano-kitesurf/dom";
-  var CONTEXT = "/nano-kitesurf/context";
-  var KITE = "/nano-kitesurf/kite";
+  var STATUS = "/nano-local-sandbox/status";
+  var OPEN = "/nano-local-sandbox/open";
+  var SHOT = "/nano-local-sandbox/shot";
+  var PICK = "/nano-local-sandbox/pick";
+  var EDIT = "/nano-local-sandbox/edit";
+  var SETTINGS = "/nano-local-sandbox/settings";
+  var HISTORY = "/nano-local-sandbox/history";
+  var PORTS = "/nano-local-sandbox/ports";
+  var RECOVER = "/nano-local-sandbox/recover";
+  var DIAGNOSTICS = "/nano-local-sandbox/diagnostics";
+  var CONSOLE = "/nano-local-sandbox/console";
+  var NETWORK = "/nano-local-sandbox/network";
+  var ELEMENTS = "/nano-local-sandbox/elements";
+  var BROWSE_HISTORY = "/nano-local-sandbox/browse-history";
+  var DOM = "/nano-local-sandbox/dom";
+  var localNotes = [];
+  var KITE = "/nano-local-sandbox/kite";
   var KIND = "kitesurf";
   var OWN_ID = "nano-kitesurf";
   var MAX_PINS = 8;
   var perfReview = ensurePerfReview2();
-  perfReview.configure({ hostSnapshotUrl: "/nano-kitesurf/perf-review/host?mode=snapshot" });
+  perfReview.configure({ hostSnapshotUrl: "/nano-local-sandbox/perf-review/host?mode=snapshot" });
   var perf = {
     span(name, fn) {
       try {
@@ -1926,7 +1926,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
     const reportPerf = () => {
       try {
         const report = perfReview.report({ scenario: "pane" });
-        fetch("/nano-kitesurf/perf-report", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(report) }).catch(() => {
+        fetch("/nano-local-sandbox/perf-report", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(report) }).catch(() => {
         });
       } catch {
       }
@@ -2476,7 +2476,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       return runInner(work);
     }
     async function runInner(work) {
-      window.__nksRuns = (window.__nksRuns || 0) + 1;
+      window.__dnkRuns = (window.__dnkRuns || 0) + 1;
       if (busyRef.current) return;
       busyRef.current = true;
       setBusy(true);
@@ -2765,8 +2765,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       try {
         let refId = null;
         try {
-          const saved = await post(CONTEXT, { text: note, packet: element, label });
-          refId = saved.id;
+          localNotes.push({ text: note, packet: element, label });
         } catch {
         }
         insertComposerNote(note);
@@ -3095,7 +3094,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         }
       }, true);
       doc.addEventListener("click", (e) => {
-        const dbg = doc.defaultView.__nks = doc.defaultView.__nks || { fired: 0 };
+        const dbg = { fired: 0 };
         dbg.fired += 1;
         dbg.mode = annotateRef.current;
         if (!annotateRef.current) return;

@@ -2,7 +2,7 @@
 // Every lane exposes { kind, open(), write(), resize(), close(), onOutput, onExit }.
 //   local   — ws to this dsh host's /dsh-nano-terminal/stream (dnt-ws-v1)
 //   mcp     — remote MCP endpoint: term.session.create then ws attach
-//   isolate — in-process wasm lane (workerd/v8 placeholder)
+//   local and mcp only. There is no isolate lane and no sandbox lane.
 
 const ROUTE = '/dsh-nano-terminal'
 
@@ -197,7 +197,12 @@ export class McpLane {
   }
 
   #wsUrl(result) {
-    const attach = result.attach?.url ?? new URL(result.attach?.path ?? '/dsh-nano-terminal/stream', this.url).toString()
+    const raw = result.attach?.url
+    if (!raw) throw new Error('attach.url missing')
+    const absolute = /^(ws|wss|http|https):/.test(raw)
+      ? raw
+      : new URL(raw, (globalThis.__DSH_TRANSPORT__?.streamBaseUrl ? new URL(globalThis.__DSH_TRANSPORT__.streamBaseUrl).origin : location.origin)).toString()
+    const attach = absolute
     const wsUrl = new URL(attach)
     wsUrl.searchParams.set('session', this.id)
     wsUrl.protocol = wsUrl.protocol === 'https:' ? 'wss' : 'ws'
@@ -273,67 +278,13 @@ export class McpLane {
   }
 }
 
-/** Isolate lane: terminal core inside our own wasm/JS — echo/REPL scaffold for
- * workerd/v8 backends. Proves the lane contract without a remote host. */
-export class IsolateLane {
-  constructor({ sessionId }) {
-    this.kind = 'isolate'
-    this.sessionId = sessionId
-    this.onOutput = () => {}
-    this.onExit = () => {}
-    this.onReady = () => {}
-    this.buffer = ''
-    this.closed = false
-    const enc = new TextEncoder()
-    this.enc = enc
-    this.id = 'isolate-' + Math.random().toString(36).slice(2, 10)
-  }
-
-  open() {
-    queueMicrotask(() => {
-      this.onReady({ session: this.id, lane: 'isolate' })
-      // dim one-line notice, no hand-drawn chrome inside the buffer
-      this.onOutput(this.enc.encode(
-        '\x1b[2m— isolate lane · wasm instance · echo mode —\x1b[0m\r\n' +
-        '\x1b[1;32misolate>\x1b[0m ',
-      ))
-    })
-    return Promise.resolve({ session: this.id })
-  }
-
-  write(bytes) {
-    if (this.closed) return
-    // naive echo REPL: mirror input, newline → prompt
-    for (const b of bytes) {
-      if (b === 0x0d) {
-        this.buffer += '\r\n'
-        this.onOutput(this.enc.encode('\r\n\x1b[1;32misolate>\x1b[0m '))
-      } else if (b === 0x7f) {
-        this.buffer = this.buffer.slice(0, -1)
-        this.onOutput(this.enc.encode('\b \b'))
-      } else {
-        this.buffer += String.fromCharCode(b)
-        this.onOutput(new Uint8Array([b]))
-      }
-    }
-  }
-
-  resize() {}
-
-  close() {
-    this.closed = true
-    this.onExit({ reason: 'closed' })
-  }
-}
-
 export function makeLane(spec, meta) {
   switch (spec.lane) {
     case 'mcp':
       return new McpLane({ url: spec.url, cols: meta.cols, rows: meta.rows, sessionId: meta.sessionId })
-    case 'isolate':
-      return new IsolateLane({ sessionId: meta.sessionId })
     case 'local':
     default:
+      if (spec.lane && spec.lane !== 'local') throw new Error(`lane ${spec.lane} is not available`)
       return new LocalLane({ sessionId: meta.sessionId, cols: meta.cols, rows: meta.rows, shell: spec.shell, cwd: spec.cwd, attach: spec.attach ?? null })
   }
 }

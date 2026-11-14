@@ -13,18 +13,16 @@
 
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { scanRoutes, routeBodyLimit, ROOT } from './route-scan.mjs'
 
 const LEDGER = join(ROOT, 'security', 'route-sensitivity.json')
 
 const sorted = a => [...a].sort().join(',')
 
-function main() {
-  const ledger = JSON.parse(readFileSync(LEDGER, 'utf8'))
-  const code = scanRoutes()
+export function sensitivityProblems(ledger, code) {
   const codeByPath = new Map(code.map(r => [r.path, r]))
   const jsonByPath = new Map((ledger.routes ?? []).map(r => [r.path, r]))
-
   const drift = []
 
   for (const row of code) {
@@ -45,7 +43,12 @@ function main() {
       drift.push(`route-stale: ${json.path} (${json.plugin}) in JSON but not registered in code`)
     }
   }
+  return drift
+}
 
+function main() {
+  const code = scanRoutes()
+  const drift = sensitivityProblems(JSON.parse(readFileSync(LEDGER, 'utf8')), code)
   if (drift.length > 0) {
     console.error(`route-sensitivity drift: ${drift.length} issue(s)`)
     for (const d of drift) console.error(`  - ${d}`)
@@ -54,4 +57,4 @@ function main() {
   console.log(`route-sensitivity OK: ${code.length} routes, 0 drift`)
 }
 
-main()
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main()

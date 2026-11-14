@@ -1,8 +1,8 @@
 # dsh-nano
 
-> **DEPRECATED（2026-11-12）**：`dsh-nano-shared-workspace` 已由 [业主] 裁决退役，整体移至 [`deprecated/dsh-nano-shared-workspace/`](deprecated/README.md)。本仓库现行是**三个**活跃「宿主 + 浏览器」双端插件；下文凡是「四个插件」的历史表述、以及 `docs/eval`、`docs/code-review`、`docs/specs` 里的历史路径，都按退役当时理解。发布/打包/门禁已不再包含该插件，详见 [`deprecated/README.md`](deprecated/README.md)。
+> **DEPRECATED（2026-11-12）**：`dsh-nano-shared-workspace` 已由 [业主] 裁决退役，整体移至 [`deprecated/dsh-nano-shared-workspace/`](deprecated/README.md)。本仓库现行活跃插件是仓根 `AGENTS.md` 清单里的 **六个**；下文凡是「三个插件」「四个插件」的历史表述、以及 `docs/eval`、`docs/code-review`、`docs/specs` 里的历史路径，都按退役当时理解。发布/打包/门禁已不再包含该退役插件，详见 [`deprecated/README.md`](deprecated/README.md)。
 
-> DeepSeek Harness（dsh）Web 的 overlay 插件仓库：三个「宿主 + 浏览器」双端插件，加三个只在构建期打进 `lib/` 的共享包。面向在本仓库改插件、做交接或巡检的人；能力面是悬浮文本记事本、模型选择与 `/imagine`、工作区文件树，以及可选的 S3 同步。运行底座是 `@deepseek-ai/dsh@0.2.2-rc.1` 的 **web** profile，不是独立网站。
+> DeepSeek Harness（dsh）Web 的 overlay 插件仓库：六个活跃插件，加三个只在构建期打进 `lib/` 的共享包。面向在本仓库改插件、做交接或巡检的人；能力面包括悬浮文本记事本、模型选择与 `/imagine`、工作区文件树、Kitesurf 设计面、终端，以及 macOS 本地沙箱宿主。运行底座是 `@deepseek-ai/dsh@0.2.2-rc.1` 的 **web** profile，不是独立网站。
 
 > **维护者**：Sean.Z
 > **最后核对（against HEAD）**：2026-11-11 @ `350c6c8`（`main`）

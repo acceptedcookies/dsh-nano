@@ -121,10 +121,24 @@ export class TermCanvas {
     this._blinkTimer = null
   }
 
-  dispose() {
-    clearInterval(this._blinkTimer)
+  /** Move the two canvas elements under a new container (remount reattach). */
+  attach(container) {
+    this.container = container
+    if (this.base.parentNode !== container) container.appendChild(this.base)
+    if (this.overlay.parentNode !== container) container.appendChild(this.overlay)
+    if (this._getModes) this.startBlink(this._getModes)
+  }
+
+  /** Detach without discarding state (split remount keeps the session). */
+  detach() {
+    if (this._blinkTimer) clearInterval(this._blinkTimer)
+    this._blinkTimer = null
     this.base.remove()
     this.overlay.remove()
+  }
+
+  dispose() {
+    this.detach()
   }
 
   font(bold, italic) {
@@ -301,6 +315,7 @@ export class TermCanvas {
   }
 
   startBlink(getModes) {
+    this._getModes = getModes
     clearInterval(this._blinkTimer)
     this._blinkTimer = setInterval(() => {
       if (this.blink === false) return

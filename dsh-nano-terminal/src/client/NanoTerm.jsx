@@ -158,9 +158,7 @@ export function NanoTerm({ sessionId, session, zh }) {
 
   // unmount cleanup: close every pane lane still registered
   useEffect(() => () => {
-    for (const s of paneSessions.current.values()) {
-      try { s.lane?.close() } catch { /* gone */ }
-    }
+    for (const s of paneSessions.current.values()) closePaneSession(s)
     paneSessions.current.clear()
   }, [])
 
@@ -172,7 +170,10 @@ export function NanoTerm({ sessionId, session, zh }) {
   }, [])
 
   const closeLeaf = useCallback((id) => {
+    const rec = paneSessions.current.get(id)
+    if (rec) { closePaneSession(rec); paneSessions.current.delete(id) }
     setTree((t) => removeLeaf(t, id))
+    setFocused((f) => (f === id ? null : f))
   }, [])
 
   const setRatio = useCallback((id, ratio) => {
@@ -505,6 +506,15 @@ function PaneNode({ node, sessionId, session, focused, setFocused, split, closeL
 
 const OPEN_RETRIES = 3
 const RETRY_BACKOFF = [400, 1200]
+
+/** Really end a pane session (X click, retry swap, root unmount). */
+function closePaneSession(rec) {
+  if (!rec || rec.closed) return
+  rec.closed = true
+  try { rec.lane?.close() } catch { /* already gone */ }
+  try { rec.canvas?.dispose() } catch { /* detached already */ }
+  try { rec.term?.dispose() } catch { /* freed */ }
+}
 // workbench content inset: cells sit inside pane chrome, not on its edge
 const PANE_PAD = { padX: 8, padY: 4 }
 
@@ -521,48 +531,67 @@ function TermPane({ paneId, laneSpec, sessionId, session, focused, onFocus, onCl
     if (!box || !host) return
     let dead = false
     let raf = 0
-    let painted = false
     let lastViewStart = 0
-    const palette = buildPalette(box)
-    const canvas = new TermCanvas(host, palette, fontFrom(settings), PANE_PAD)
-    const term = new WasmTerm(2, 2, settings.scrollback ?? 2000)
-    const lane = makeLane(laneSpec, { cols: 80, rows: 24, sessionId })
 
+    // Sessions outlive components: splitting or collapsing panes reparents a
+    // leaf in the tree, React remounts TermPane, and the session must survive.
+    // paneSessions is the authority — a mount attaches, only a real close kills.
+    let rec = paneSessions.current.get(paneId)
+    if (rec && rec.retrySeq !== retrySeq) {
+      closePaneSession(rec)
+      paneSessions.current.delete(paneId)
+      rec = undefined
+    }
+    const isNew = !rec
+    if (isNew) {
+      const palette = buildPalette(box)
+      const canvas = new TermCanvas(host, palette, fontFrom(settings), PANE_PAD)
+      const term = new WasmTerm(2, 2, settings.scrollback ?? 2000)
+      const lane = makeLane(laneSpec, { cols: 80, rows: 24, sessionId })
+      rec = { lane, term, canvas, w: 0, h: 0, retrySeq, hooks: {}, lastStatus: { lane: laneSpec.lane, phase: 'opening', scroll: null, title: '' }, closed: false }
+    } else {
+      rec.canvas.attach(host)
+      setStatus(rec.lastStatus)
+    }
+    const { canvas, term, lane } = rec
+
+    // status updates flow to whichever mount currently owns the pane
+    const applyStatus = (fn) => {
+      rec.lastStatus = fn(rec.lastStatus)
+      setStatus(rec.lastStatus)
+    }
+    let lastScrollKey = ''
     const paint = () => {
       raf = 0
       const packed = term.render()
       if (packed) {
         canvas.paint(packed)
         lastViewStart = packed.viewStart ?? 0
-        painted = true
+        const total = term.totalLines()
+        const key = `${total}/${lastViewStart}/${canvas.rows}`
+        if (key !== lastScrollKey) {
+          lastScrollKey = key
+          applyStatus((s) => ({ ...s, scroll: { total, viewStart: lastViewStart, rows: canvas.rows } }))
+        }
         const title = term.title()
-        if (title) setStatus((s) => ({ ...s, title: title.slice(0, 60) }))
+        if (title) applyStatus((s) => ({ ...s, title: title.slice(0, 60) }))
       }
     }
     const schedulePaint = () => { if (!raf) raf = requestAnimationFrame(paint) }
+    rec.hooks.schedulePaint = schedulePaint
+    rec.hooks.applyStatus = applyStatus
 
-    let lastScrollKey = ''
-    const syncStatus = () => {
-      const total = term.totalLines()
-      const viewStart = lastViewStart
-      const key = `${total}/${viewStart}/${canvas.rows}`
-      if (key !== lastScrollKey) {
-        lastScrollKey = key
-        setStatus((s) => ({ ...s, scroll: { total, viewStart, rows: canvas.rows } }))
-      }
-    }
     lane.onOutput = (bytes) => {
       term.write(bytes)
       const reply = term.drainReply()
       if (reply.length) lane.write(reply)
-      schedulePaint()
-      syncStatus()
+      rec.hooks.schedulePaint?.()
     }
     lane.onExit = () => {
       term.dead()
-      setStatus((s) => ({ ...s, phase: 'exited' }))
+      rec.hooks.applyStatus?.((s) => ({ ...s, phase: 'exited' }))
     }
-    lane.onReady = () => setStatus((s) => ({ ...s, phase: 'live' }))
+    lane.onReady = () => rec.hooks.applyStatus?.((s) => ({ ...s, phase: 'live' }))
 
     // measure → fit canvas + wasm + pty
     const fit = () => {
@@ -647,35 +676,41 @@ function TermPane({ paneId, laneSpec, sessionId, session, focused, onFocus, onCl
 
     // bounded retry: a pane opened while the host is restarting should
     // recover on its own instead of pinning a dead error state
-    void (async () => {
-      let lastErr = null
-      for (let attempt = 0; attempt < OPEN_RETRIES; attempt += 1) {
-        try {
-          await lane.open()
-          return
-        } catch (e) {
-          lastErr = e
-          if (dead || attempt === OPEN_RETRIES - 1) break
-          setStatus((s) => ({ ...s, phase: 'opening', title: `open retry ${attempt + 2}/${OPEN_RETRIES}` }))
-          await new Promise((r) => setTimeout(r, RETRY_BACKOFF[attempt] ?? 1200))
+    if (isNew) {
+      void (async () => {
+        let lastErr = null
+        for (let attempt = 0; attempt < OPEN_RETRIES; attempt += 1) {
+          try {
+            await lane.open()
+            return
+          } catch (e) {
+            lastErr = e
+            if (dead || attempt === OPEN_RETRIES - 1) break
+            applyStatus((s) => ({ ...s, phase: 'opening', title: `open retry ${attempt + 2}/${OPEN_RETRIES}` }))
+            await new Promise((r) => setTimeout(r, RETRY_BACKOFF[attempt] ?? 1200))
+          }
         }
+        if (dead) return
+        const msg = String(lastErr?.message ?? lastErr ?? 'open failed')
+        applyStatus((s) => ({ ...s, phase: 'error', title: msg }))
+      })()
+
+      canvas.setBlink(settings.blink)
+      canvas.startBlink(() => term.modes())
+
+      rec.reconfigure = (next) => {
+        canvas.setFont(fontFrom(next))
+        canvas.setBlink(next.blink)
+        fit()
+        schedulePaint()
       }
-      if (dead) return
-      const msg = String(lastErr?.message ?? lastErr ?? 'open failed')
-      setStatus((s) => ({ ...s, phase: 'error', title: msg }))
-    })()
 
-    canvas.setBlink(settings.blink)
-    canvas.startBlink(() => term.modes())
-
-    const reconfigure = (next) => {
-      canvas.setFont(fontFrom(next))
-      canvas.setBlink(next.blink)
-      fit()
+      paneSessions.current.set(paneId, rec)
+    } else {
+      // reattach: blink/repaint wiring survived on the canvas; restart it here
+      canvas.startBlink(() => term.modes())
       schedulePaint()
     }
-
-    paneSessions.current.set(paneId, { lane, term, w: 0, h: 0, reconfigure })
     fit()
 
     return () => {
@@ -690,10 +725,10 @@ function TermPane({ paneId, laneSpec, sessionId, session, focused, onFocus, onCl
       host.removeEventListener('mousemove', mousemove)
       box.removeEventListener('focusin', focusin)
       box.removeEventListener('focusout', focusout)
-      paneSessions.current.delete(paneId)
-      lane.close()
-      canvas.dispose()
-      term.dispose()
+      rec.hooks.schedulePaint = undefined
+      rec.hooks.applyStatus = undefined
+      // unmount ≠ close: a split-remount reattaches; closeLeaf decides life.
+      canvas.detach()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paneId, laneSpec.lane, laneSpec.url, retrySeq])

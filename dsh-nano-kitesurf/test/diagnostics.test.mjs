@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { readdirSync } from 'node:fs'
+import { join } from 'node:path'
 import test from 'node:test'
 import {
-  ERROR_CATALOG, ERROR_STATUS, clearConsole, clearOperations, diagnosticsSummary,
+  BRIDGE_ERROR_IDS, ERROR_CATALOG, ERROR_STATUS, clearConsole, clearOperations, diagnosticsSummary,
   listConsole, listOperations, recordConsole, recordOperation, summarizeInput,
 } from '../lib/diagnostics.js'
 
@@ -26,6 +29,41 @@ test('the catalogue is a single truth: every row maps to the status it declares'
   for (const row of ERROR_CATALOG) {
     assert.ok(row.cause && row.next, `${row.example} needs cause + next`)
   }
+})
+
+test('every real kitesurf.* errorId is catalogued or a bridge-local id', () => {
+  // Contract: an agent that reads the catalog must never hit an undocumented
+  // id — a host input-side id that falls through to the 502 default is a
+  // contract bug (the agent would self-heal on the wrong branch). Scan every
+  // source file for kitesurf.* literals, then require each to match a
+  // catalog regex or be a registered bridge-local id.
+  const covered = (id) => ERROR_STATUS.some(([pattern]) => pattern.test(id))
+  const roots = [new URL('..', import.meta.url).pathname]
+  const files = []
+  for (const dir of ['index.js', 'lib', 'runtime']) {
+    const full = join(roots[0], dir)
+    if (dir === 'index.js') { files.push(full); continue }
+    for (const entry of readdirSync(full)) {
+      if (/\.(js|mjs)$/.test(entry)) files.push(join(full, entry))
+    }
+  }
+  const literals = new Set()
+  // errorId literals only: a bare 'kitesurf.lock.json' filename (the durable
+  // lock path) is not an errorId, so require an errorId context or a
+  // KitesurfError throw to count a literal.
+  const patterns = [/errorId:\s*'(kitesurf\.[a-zA-Z]+\.[a-zA-Z]+)'/g, /KitesurfError\(\s*'(kitesurf\.[a-zA-Z]+\.[a-zA-Z]+)'/g]
+  for (const file of files) {
+    const text = readFileSync(file, 'utf8')
+    for (const pattern of patterns) {
+      pattern.lastIndex = 0
+      let match
+      while ((match = pattern.exec(text))) literals.add(match[1])
+    }
+  }
+  const uncovered = [...literals].filter((id) => !BRIDGE_ERROR_IDS.has(id) && !covered(id)).sort()
+  assert.deepEqual(uncovered, [], `uncovered host ids (will 502 as if engine-down): ${uncovered.join(', ')}`)
+  // Bridge ids stay bridge-scoped and never sneak into the host catalog.
+  for (const id of BRIDGE_ERROR_IDS) assert.ok(!covered(id), `${id} must not map to a host status`)
 })
 
 test('operations ring is bounded, filterable and carries the failure id', () => {

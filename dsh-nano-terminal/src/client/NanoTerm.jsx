@@ -200,10 +200,51 @@ function leaf(laneSpec = { lane: 'local' }) {
 // sessions are keyed by conversation sessionId at module scope; only an
 // explicit pane close (X) or plugin unload kills a lane.
 const termStores = new Map() // sessionId → { tree, sessions: Map<paneId, rec> }
+const LAYOUT_KEY = 'dnt.layout'
+
+/**
+ * Layout persistence (W-P1-3): the split tree + pane lane specs serialize to
+ * localStorage so a remount/page reload rebuilds the same arrangement.
+ * Local panes carry `laneSpec.attach` (host session addr) — reload re-attaches
+ * to the still-running host terminal instead of spawning a new shell.
+ */
+function loadLayouts() {
+  try { return JSON.parse(localStorage.getItem(LAYOUT_KEY) || '{}') } catch { return {} }
+}
+const saveLayouts = (() => {
+  let t = null
+  return () => {
+    clearTimeout(t)
+    t = setTimeout(() => {
+      const doc = {}
+      for (const [k, s] of termStores) {
+        if (!s.tree) continue
+        // attach refs live on each pane record's lane — graft onto laneSpec
+        const graft = (node) => {
+          if (node.type === 'leaf') {
+            const rec = s.sessions.get(node.id)
+            const addr = rec?.lane?.addr ?? rec?.lane?.id
+            const spec = { ...node.laneSpec }
+            if (node.laneSpec.lane === 'local' && addr) spec.attach = addr
+            return { ...node, laneSpec: spec }
+          }
+          return { ...node, a: graft(node.a), b: graft(node.b) }
+        }
+        doc[k] = graft(s.tree)
+      }
+      try { localStorage.setItem(LAYOUT_KEY, JSON.stringify(doc)) } catch { /* quota */ }
+    }, 400)
+  }
+})()
+
 const termStore = (sessionId) => {
   const key = sessionId ?? '_default'
   let s = termStores.get(key)
-  if (!s) { s = { tree: null, sessions: new Map() }; termStores.set(key, s) }
+  if (!s) {
+    const saved = loadLayouts()[key]
+    s = { tree: saved ?? null, sessions: new Map() }
+    termStores.set(key, s)
+  }
   return s
 }
 
@@ -235,6 +276,7 @@ export function NanoTerm({ sessionId, session, zh, openView }) {
     setTreeState((prev) => {
       const next = typeof fn === 'function' ? fn(prev) : fn
       store.tree = next
+      saveLayouts()
       return next
     })
   }, [store])
@@ -759,21 +801,36 @@ function TermPane({ paneId, laneSpec, sessionId, session, focused, onFocus, onCl
         }
       }
     }
-    const schedulePaint = () => { if (!raf) raf = requestAnimationFrame(paint) }
+    // W-P1-4: a non-focused pane downgrades to ~2Hz interval paints — wasm
+    // keeps parsing (mirror/state stay current) but canvas painting halves.
+    // Focus is read live from data-focused (effect doesn't rerun on focus).
+    const schedulePaint = () => {
+      if (raf) return
+      if (boxRef.current?.dataset?.focused !== 'false') {
+        raf = requestAnimationFrame(paint)
+      } else if (!stateRef.current.slowTimer) {
+        stateRef.current.slowTimer = setInterval(() => { if (raf) return; paint() }, 500)
+      }
+    }
     rec.hooks.schedulePaint = schedulePaint
     rec.hooks.applyStatus = applyStatus
 
     lane.onOutput = (bytes) => {
       term.write(bytes)
       const reply = term.drainReply()
-      if (reply.length) lane.write(reply)
+      // terminal auto-replies bypass the host input gate — they are not human
+      // activity and must never reset the draft/quiet timers (hc rule)
+      if (reply.length) (lane.writeAuto ?? lane.write).call(lane, reply)
       rec.hooks.schedulePaint?.()
     }
     lane.onExit = () => {
       term.dead()
       rec.hooks.applyStatus?.((s) => ({ ...s, phase: 'exited' }))
     }
-    lane.onReady = () => rec.hooks.applyStatus?.((s) => ({ ...s, phase: 'live' }))
+    lane.onReady = () => {
+      rec.hooks.applyStatus?.((s) => ({ ...s, phase: 'live' }))
+      saveLayouts() // the pane now has a host addr — persist it for re-attach
+    }
 
     // measure → fit canvas + wasm + pty; a metric-only change (font swap) must
     // still repaint everything because render() only emits dirty rows
@@ -904,6 +961,8 @@ function TermPane({ paneId, laneSpec, sessionId, session, focused, onFocus, onCl
     return () => {
       dead = true
       cancelAnimationFrame(raf)
+      clearInterval(stateRef.current.slowTimer)
+      stateRef.current.slowTimer = null
       ro.disconnect()
       box.removeEventListener('keydown', keydown)
       box.removeEventListener('paste', paste)

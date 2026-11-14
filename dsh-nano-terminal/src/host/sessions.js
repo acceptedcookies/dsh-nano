@@ -46,13 +46,14 @@ export class SessionRegistry {
    * @param {import('./events.js').EventBus} deps.bus
    * @param {string} deps.apiBase — base URL agents use to reach the MCP plane
    */
-  constructor({ ctx, audit, sendBinary, sendText, bus, apiBase = '', maxSessions = 16, replayBytes = 512 * 1024, idleTimeoutMs = 30 * 60 * 1000 }) {
+  constructor({ ctx, audit, sendBinary, sendText, bus, apiBase = '', persist = null, maxSessions = 16, replayBytes = 512 * 1024, idleTimeoutMs = 30 * 60 * 1000 }) {
     this.ctx = ctx
     this.audit = audit
     this.sendBinary = sendBinary
     this.sendText = sendText
     this.bus = bus
     this.apiBase = apiBase
+    this.persist = persist
     this.maxSessions = maxSessions
     this.replayBytes = replayBytes
     this.idleTimeoutMs = idleTimeoutMs
@@ -149,7 +150,81 @@ export class SessionRegistry {
     record.pipe()
     this.audit({ op: 'create', id, addr: record.addr, lane: 'local', shell, cwd, owner: record.owner, pid: handle.pid })
     this.bus?.emit('created', record.addr, { id, lane: record.lane, title: record.title, owner: record.owner, parent: parentRec?.addr })
+    this.persist?.schedule(this)
     return record
+  }
+
+  /**
+   * Restore persisted terminals as placeholders (no process; a fresh shell
+   * spawns on first attach and the saved screen tail replays above it —
+   * the program itself is NEVER rerun, same rule as `keep`).
+   */
+  restoreSaved() {
+    const saved = this.persist?.load?.() ?? []
+    for (const t of saved) {
+      if (this.sessions.has(t.id)) continue
+      try {
+        const rec = new SessionRecord({
+          id: t.id,
+          lane: t.lane ?? 'local',
+          handle: null,
+          owner: t.owner ?? 'restored',
+          title: t.title ?? 'restored',
+          name: t.name,
+          parent: null, // parent addr resolves lazily — order-independent
+          keep: !!t.keep,
+          labels: t.labels ?? {},
+          meta: t.meta ?? {},
+          replayBytes: this.replayBytes,
+          registry: this,
+        })
+        rec.parent = t.parent ? (this.resolve(t.parent)?.id ?? null) : null
+        rec.pending = true
+        rec.phase = 'live'
+        rec.env = agentEnv(rec, this.apiBase)
+        rec.preservedScreen = this.persist.screenFor(t.id)
+        rec.gate.restore(t.gate)
+        this.sessions.set(t.id, rec)
+        if (t.name) this.names.set(t.name, t.id)
+        this.bus?.emit('created', rec.addr, { id: rec.id, lane: rec.lane, title: rec.title, restored: true })
+      } catch { /* one bad record doesn't block the rest */ }
+    }
+  }
+
+  /**
+   * First attach to a placeholder spawns the fresh shell and replays the
+   * preserved screen above it. Idempotent.
+   */
+  async spawnPending(rec) {
+    if (!rec.pending) return
+    rec.pending = false
+    const meta = rec.meta ?? {}
+    const shell = meta.shell || (process.env.SHELL ?? '/bin/zsh')
+    const argv = meta.argv?.length ? meta.argv : [shell, '-i']
+    const handle = await this.ctx.subprocess
+      .spawnTerminal({
+        argv,
+        cwd: meta.cwd ?? process.env.HOME,
+        env: rec.env,
+        rows: Math.min(Math.max(meta.rows || 24, 2), 512),
+        cols: Math.min(Math.max(meta.cols || 80, 2), 512),
+        terminalType: 'xterm-256color',
+        shellActivity: true,
+        graceMs: 1500,
+      })
+      .catch((e) => {
+        throw err(KIND.SPAWN_FAILED, String(e?.message ?? e))
+      })
+    rec.handle = handle
+    rec.pipe()
+    // preserved screen replays into the mirror + first attach so reads match
+    // the pre-restart screen
+    if (rec.preservedScreen?.length) {
+      rec.push(rec.preservedScreen)
+      rec.mirror?.write(rec.preservedScreen)
+    }
+    this.audit({ op: 'respawn-on-attach', id: rec.id, addr: rec.addr })
+    this.bus?.emit('restarted', rec.addr, { id: rec.id, restored: true })
   }
 
   async resolveCwd(spec) {
@@ -173,6 +248,7 @@ export class SessionRegistry {
     await rec.shutdown()
     this.audit({ op: 'close', id: rec.id, addr: rec.addr, reason })
     this.bus?.emit('removed', rec.addr, { id: rec.id, reason })
+    this.persist?.schedule(this)
     return true
   }
 
@@ -219,6 +295,8 @@ export class SessionRecord {
     this.turn = 0
     /** @type {Set<import('node:stream').Duplex>} */
     this.sockets = new Set()
+    /** @type {Map<import('node:stream').Duplex, import('./ws.js').Attach>} v2 attach state per socket */
+    this.attached = new Map()
     this.replay = []
     this.replayLen = 0
     this.replayCap = replayBytes
@@ -279,7 +357,10 @@ export class SessionRecord {
         this.mirror?.write(chunk)
         this.#pollState()
       } catch { /* mirror best-effort */ }
-      for (const s of this.sockets) send(s, chunk)
+      for (const [s, att] of this.attached) {
+        if (att) att.data(chunk)
+        else send(s, chunk)
+      }
     })
     this.handle.output.on('end', () => {
       this.#onProgramEnd({ at: Date.now() })
@@ -371,6 +452,7 @@ export class SessionRecord {
       this.title = st.title
       this.registry.bus?.emit('title', this.addr, { id: this.id, title: st.title })
     }
+    this.registry.persist?.schedule(this.registry)
   }
 
   remember(chunk) {
@@ -383,6 +465,11 @@ export class SessionRecord {
 
   replayInto(socket, send) {
     for (const chunk of this.replay) send(socket, chunk)
+  }
+
+  /** push() — feed raw bytes into the replay buffer (persisted screens). */
+  push(chunk) {
+    this.remember(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
   }
 
   attach(socket) {
@@ -405,6 +492,7 @@ export class SessionRecord {
    */
   async writeInput(data, source = 'human') {
     if (this.exited) throw err(KIND.FINISHED, 'terminal exited')
+    if (!this.handle) throw err(KIND.UNAVAILABLE, 'terminal not spawned yet (attach to wake)')
     if (source === 'automatic') {
       await this.handle.write(typeof data === 'string' ? data : decoder.decode(data))
       return
@@ -436,6 +524,7 @@ export class SessionRecord {
     Object.assign(this.labels, set)
     for (const k of unset) delete this.labels[k]
     this.registry.bus?.emit('labels', this.addr, { id: this.id, labels: this.labels })
+    this.registry.persist?.schedule(this.registry)
     return this.labels
   }
 
@@ -447,13 +536,14 @@ export class SessionRecord {
     } catch { /* best-effort */ }
     if (`${cols}x${rows}` !== prev) {
       this.registry.bus?.emit('size', this.addr, { id: this.id, cols, rows })
+      this.registry.persist?.schedule(this.registry)
     }
-    if (!this.exited) await this.handle.resize(cols, rows).catch(() => {})
+    if (!this.exited) await this.handle?.resize(cols, rows).catch(() => {})
   }
 
   broadcastText(obj) {
     const send = this.registry.sendText
-    for (const s of this.sockets) send(s, obj)
+    for (const s of this.attached.size ? this.attached.keys() : this.sockets) send(s, obj)
   }
 
   screenText(n, source = 'visible') {

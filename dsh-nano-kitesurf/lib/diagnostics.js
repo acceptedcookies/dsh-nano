@@ -48,7 +48,7 @@ export const ERROR_CATALOG = [
   { match: '^kitesurf\\.pick\\.failed$', example: 'kitesurf.pick.failed', status: 502, cause: '引擎侧元素探针异常', next: 'GET /status 看 engineMismatch；POST /kite {action:"resume"}' },
   { match: '^kitesurf\\.edit\\.(badtext|badpoint|selector)$', example: 'kitesurf.edit.badtext', status: 400, cause: 'text 为空/超 4000，或 selector 缺失非法', next: '/edit 必须同时给 selector 与 1..4000 字符 text' },
   { match: '^kitesurf\\.edit\\.miss$', example: 'kitesurf.edit.miss', status: 404, cause: '改字目标选择器未命中', next: '重新 /pick 取 selector；页面若已导航需重选' },
-  { match: '^kitesurf\\.shot\\.(scroll|format)$', example: 'kitesurf.shot.scroll', status: 400, cause: 'scroll 非有限数/超 ±4000，format 不是 png/jpeg/webp，或 fit 不是 {width,height}', next: 'POST /shot {scroll: ±整数, format:\"webp\", quality:1..100, fit:{width,height}}' },
+  { match: '^kitesurf\\.shot\\.(scroll|format|fit)$', example: 'kitesurf.shot.scroll', status: 400, cause: 'scroll 非有限数/超 ±4000，format 不是 png/jpeg/webp，或 fit 不是 {width,height}', next: 'POST /shot {scroll: ±整数, format:\"webp\", quality:1..100, fit:{width,height}}' },
   { match: '^kitesurf\\.settings\\.', example: 'kitesurf.settings.viewport', status: 400, cause: 'userAgent/viewport/media/extraHeaders 形状非法或值越界（视口 320..3840 × 240..2160；dsf 1/2/3；media screen|print；header 名禁用凭证类）', next: 'POST /settings {"viewport":{"width":1024,"height":768},"media":"print","extraHeaders":{"X-Debug":"1"}}；任一字段传 null 清除；空串 UA 清除伪装' },
   { match: '^kitesurf\\.kite\\.state$', example: 'kitesurf.kite.state', status: 409, cause: '生命周期阶段不符（idle 才能 start、running 才能 suspend、suspended 才能 resume）', next: 'GET /status 读 kite.phase；按阶段选 start/suspend/resume；host 重启后 phase 会自动 adopt' },
   { match: '^kitesurf\\.kite\\.(origin|remote|mcpPort|action|checkout)$', example: 'kitesurf.kite.remote', status: 400, cause: 'configure 参数非法、远程地址未开 allowRemote、或缺少 KITESURF_CHECKOUT/config.checkout', next: 'loopback 地址；mcpPort 1..65535；在 profile patch 写 config.checkout' },
@@ -63,10 +63,35 @@ export const ERROR_CATALOG = [
   { match: '^kitesurf\\.perf\\.', example: 'kitesurf.perf.method', status: 400, cause: 'mode=window 排水只允许 POST', next: 'GET /perf-review/host 读快照；POST /perf-review/host?mode=window 排水' },
   { match: '^kitesurf\\.context\\.(text|miss)$', example: 'kitesurf.context.miss', status: 404, cause: '上下文引用不存在或 text 为空（ref 环只保留最近 50 条，宿主重启即清空）', next: '重新点选生成新 ref；GET /nano-kitesurf/context 列出最近引用' },
   { match: '^kitesurf\\.console\\.', example: 'kitesurf.console.query', status: 400, cause: 'console 查询参数非法', next: 'GET /console?level=error&limit=50；POST /console {clear:true} 清空' },
-  { match: '^kitesurf\\.diag\\.', example: 'kitesurf.diag.query', status: 400, cause: 'diagnostics/operations 查询参数非法', next: 'GET /diagnostics?limit=20；GET /operations?errorsOnly=true' },
+  { match: '^kitesurf\\.diag\\.query$', example: 'kitesurf.diag.query', status: 400, cause: 'diagnostics/operations 查询参数非法', next: 'GET /diagnostics?limit=20；GET /operations?errorsOnly=true' },
   { match: '^kitesurf\\.evaluate\\.(empty|toolong)$', example: 'kitesurf.evaluate.empty', status: 400, cause: 'expression 为空或超过 2000 字符', next: 'POST /evaluate {expression:"document.title"}，≤2000 字符' },
   { match: '^kitesurf\\.evaluate\\.exception$', example: 'kitesurf.evaluate.exception', status: 400, cause: '页面 JS 求值抛异常（输入侧表达式错误）', next: '看 error 里的异常描述；先 /open 再求值；确认 selector/变量名存在' },
+  { match: '^kitesurf\\.history\\.body$', example: 'kitesurf.history.body', status: 400, cause: '/browse-history POST body 不是 {clear:true}，或 /history body 不是 {delta:±1}', next: 'POST /browse-history {"clear":true}；导航用 POST /history {delta:-1|1}' },
+  { match: '^kitesurf\\.network\\.query$', example: 'kitesurf.network.query', status: 400, cause: '/network 查询参数非法（limit 越界）', next: 'GET /network?limit=1..200&failedOnly=true；POST /network {clear:true} 清空' },
+  { match: '^kitesurf\\.shot\\.empty$', example: 'kitesurf.shot.empty', status: 502, cause: '引擎返回了空截图（页面不可绘/渲染器忙）', next: '确认页面已 /open；等一秒重试；仍空则 GET /diagnostics 看页面是否 about:blank' },
+  { match: '^kitesurf\\.dom\\.(empty|blank)$', example: 'kitesurf.dom.blank', status: 502, cause: '无文档可序列化（页面未打开/仍是 about:blank/文档不可序列化）', next: '先 POST /open；空白页是 socket 断开重置的信号 — GET /status 看 phase' },
+  { match: '^kitesurf\\.elements\\.empty$', example: 'kitesurf.elements.empty', status: 502, cause: '引擎 DOM.getDocument 未返回文档根（页面未打开）', next: '先 POST /open；或 GET /elements?selector=… 前先确认页面存在' },
 ]
+
+/**
+ * Bridge-local errors (runtime/mcp-bridge.mjs) — these fire inside the MCP
+ * bridge, not on an HTTP route, so they are not host KitesurfError sites.
+ * They are registered here so the "every kitesurf.* id is documented" test
+ * and the agent's error table treat them as first-class, bridge-scoped ids
+ * (status is null: they never map to an HTTP status).
+ */
+export const BRIDGE_ERRORS = [
+  { id: 'kitesurf.diag.stale', cause: '宿主尚未把诊断快照推给桥（首次连接/刚重启）', next: '等几秒重试，或先在已登录页面调 GET /diagnostics 让宿主推一份' },
+  { id: 'kitesurf.history.stale', cause: '桥侧还没有 history 快照', next: '在宿主打开一个页面产生 history 后重试' },
+  { id: 'kitesurf.dom.stale', cause: '桥侧还没有 dom 快照', next: '先调 GET /nano-kitesurf/dom' },
+  { id: 'kitesurf.elements.stale', cause: '桥侧还没有 elements 快照', next: '先调 GET /nano-kitesurf/elements' },
+  { id: 'kitesurf.selftest.stale', cause: '桥侧还没有 selftest 快照', next: '先调 GET /nano-kitesurf/selftest' },
+  { id: 'kitesurf.control.busy', cause: '另一连接正在持有写操作（人机共享单页，写串行）', next: '等待并重试；GET /health 看当前 owner' },
+  { id: 'kitesurf.tool.unknown', cause: '调用了不存在的 kitesurf_* 工具名', next: '对照 tools/list 的 kitesurf_* 工具名' },
+]
+
+/** Bridge ids are bridge-scoped, not host-catalog rows — kept separate. */
+export const BRIDGE_ERROR_IDS = new Set(BRIDGE_ERRORS.map((row) => row.id))
 
 /** Derived status table — index.js must not keep a second copy. */
 export const ERROR_STATUS = ERROR_CATALOG.map((row) => [new RegExp(row.match), row.status])

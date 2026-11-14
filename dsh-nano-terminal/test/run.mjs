@@ -169,5 +169,71 @@ e.dnt_free(id)
   t('draft_wait expires and delivers', Date.now() - t0 >= 45)
 }
 
+// 11. ws v2 channel codec + Attach credit/snapshot
+{
+  const { encodeChannel, parseChannel, Attach, FR_KIND, CREDIT_INIT, SNAP_LIMIT } = await import(join(root, 'src/host/ws.js'))
+  const fr = encodeChannel(0, FR_KIND.DATA, Buffer.from('hello'))
+  const p = parseChannel(fr)
+  t('channel roundtrip', p.channel === 0 && p.kind === FR_KIND.DATA && p.payload.toString() === 'hello')
+  // ws-frame → channel payload (server-side sends are unmasked)
+  const wsPayload = (frame) => {
+    let len = frame[1] & 0x7f
+    let off = 2
+    if (len === 126) { len = frame.readUInt16BE(2); off = 4 }
+    else if (len === 127) { len = Number(frame.readBigUInt64BE(2)); off = 10 }
+    return frame.subarray(off, off + len)
+  }
+  const sentChan = (s) => parseChannel(wsPayload(s))
+  // Attach v1: raw passthrough
+  const sent = []
+  const sock1 = { write: (b) => sent.push(b), destroyed: false }
+  const att1 = new Attach(sock1, { screenText: () => 'screen' })
+  att1.data(Buffer.from('x'.repeat(10)))
+  t('v1 raw send', sent.length === 1 && sent[0].toString().includes('x'.repeat(10)))
+  // Attach v2: framed + credit accounting
+  const sent2 = []
+  const sock2 = { write: (b) => sent2.push(b), destroyed: false }
+  const att2 = new Attach(sock2, { screenText: () => 'SNAP' })
+  att2.v = 2
+  att2.data(Buffer.from('abc'))
+  t('v2 framed send', sentChan(sent2[0]).kind === FR_KIND.DATA && att2.pending === 3)
+  att2.credit = 0
+  att2.onCredit(2)
+  t('credit consumed', att2.pending === 1)
+  // snapshot fallback: pending > credit + SNAP_LIMIT
+  att2.pending = att2.credit + SNAP_LIMIT + 1
+  att2.data(Buffer.from('z'))
+  const snapFr = sentChan(sent2[sent2.length - 2]) // snapshot, then the data frame
+  t('snapshot fallback', snapFr.kind === FR_KIND.SNAPSHOT && snapFr.payload.toString().includes('SNAP'))
+}
+
+// 12. Persist roundtrip + placeholder restore
+{
+  const { mkdtempSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { Persist } = await import(join(root, 'src/host/persist.js'))
+  const { SessionRegistry, SessionRecord } = await import(join(root, 'src/host/sessions.js'))
+  const { EventBus } = await import(join(root, 'src/host/events.js'))
+  const dir = mkdtempSync(join(tmpdir(), 'dnt-persist-'))
+  const p = new Persist(dir)
+  const bus = new EventBus({ audit: () => {} })
+  const registry = new SessionRegistry({ ctx: { subprocess: {} }, audit: () => {}, sendBinary: () => {}, sendText: () => {}, bus, persist: p })
+  // fabricate a record
+  const rec = new SessionRecord({ id: 'aaaa-bbbb', lane: 'local', handle: null, owner: 't', title: 'rest', name: 'myterm', keep: true, labels: { k: 'v' }, meta: { cwd: '/tmp', cols: 90, rows: 30 }, replayBytes: 100, registry })
+  rec.push(Buffer.from('old screen bytes'))
+  registry.sessions.set(rec.id, rec)
+  registry.names.set('myterm', rec.id)
+  p.write(registry)
+  const saved = p.load()
+  t('persist saves terminal', saved.length === 1 && saved[0].name === 'myterm' && saved[0].keep === true)
+  t('screen tail saved', p.screenFor(rec.id)?.toString() === 'old screen bytes')
+  // restore into a fresh registry
+  const reg2 = new SessionRegistry({ ctx: { subprocess: {} }, audit: () => {}, sendBinary: () => {}, sendText: () => {}, bus: new EventBus({ audit: () => {} }), persist: p })
+  reg2.restoreSaved()
+  const r2 = reg2.resolve('local/myterm')
+  t('restored placeholder', r2?.pending === true && r2?.keep === true && r2?.labels?.k === 'v')
+  t('preserved screen staged', r2?.preservedScreen?.toString() === 'old screen bytes')
+}
+
 console.log(`${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

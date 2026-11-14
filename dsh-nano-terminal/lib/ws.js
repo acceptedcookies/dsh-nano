@@ -58,6 +58,76 @@ function sendClose(socket, code = 1e3, reason = "") {
 function sendPing(socket) {
   if (!socket.destroyed) socket.write(encodeFrame(randomBytes(4), 9));
 }
+var FR_KIND = {
+  DATA: 0,
+  CREDIT: 1,
+  RESIZE: 2,
+  CLOSE: 3,
+  PING: 4,
+  FACTS: 5,
+  AUTO_INPUT: 6,
+  SNAPSHOT: 7,
+  PONG: 8,
+  HELD: 9
+};
+var CREDIT_INIT = 256 * 1024;
+var SNAP_LIMIT = 4 * 1024 * 1024;
+function encodeChannel(channel, kind, payload = Buffer.alloc(0)) {
+  const head = Buffer.allocUnsafe(9);
+  head.writeUInt32BE(channel, 0);
+  head.writeUInt8(kind, 4);
+  head.writeUInt32BE(payload.length, 5);
+  return Buffer.concat([head, payload]);
+}
+function parseChannel(buf) {
+  if (!buf || buf.length < 9) return null;
+  const channel = buf.readUInt32BE(0);
+  const kind = buf.readUInt8(4);
+  const len = buf.readUInt32BE(5);
+  if (buf.length < 9 + len) return null;
+  return { channel, kind, payload: buf.subarray(9, 9 + len) };
+}
+var Attach = class {
+  constructor(socket, record) {
+    this.socket = socket;
+    this.record = record;
+    this.v = 1;
+    this.credit = CREDIT_INIT;
+    this.pending = 0;
+    this.snapping = false;
+  }
+  /** Send data honoring credit + snapshot fallback. */
+  data(chunk) {
+    if (this.v === 1) {
+      sendBinary(this.socket, chunk);
+      this.pending += chunk.length;
+      return;
+    }
+    if (this.snapping || this.pending + chunk.length > this.credit + SNAP_LIMIT) {
+      this.#snapshot();
+      this.pending = 0;
+      this.snapping = false;
+    }
+    this.socket.write(encodeFrame(encodeChannel(0, FR_KIND.DATA, chunk), 2));
+    this.pending += chunk.length;
+  }
+  /** Consume client credit. */
+  onCredit(n) {
+    this.credit += n;
+    this.pending = Math.max(0, this.pending - n);
+  }
+  #snapshot() {
+    this.snapping = true;
+    const text = this.record?.screenText(200, "visible") ?? "";
+    const clear = Buffer.from("\x1B[2J\x1B[H", "utf8");
+    this.socket.write(encodeFrame(encodeChannel(0, FR_KIND.SNAPSHOT, Buffer.concat([clear, Buffer.from(text, "utf8")])), 2));
+  }
+  channel(channel, kind, payload) {
+    if (!this.socket.destroyed) {
+      this.socket.write(encodeFrame(encodeChannel(channel, kind, payload ?? Buffer.alloc(0)), 2));
+    }
+  }
+};
 var FrameParser = class {
   constructor(onMessage) {
     this.onMessage = onMessage;
@@ -114,10 +184,16 @@ var FrameParser = class {
   }
 };
 export {
+  Attach,
+  CREDIT_INIT,
+  FR_KIND,
   FrameParser,
+  SNAP_LIMIT,
   acceptKey,
+  encodeChannel,
   encodeFrame,
   handshake,
+  parseChannel,
   sendBinary,
   sendClose,
   sendPing,

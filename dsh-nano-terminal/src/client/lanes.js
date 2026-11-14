@@ -21,10 +21,25 @@ function streamBase() {
   return `${proto}://${location.host}${ROUTE}/stream`
 }
 
+// dnt-ws-v2 framed channel: [channel u32][kind u8][len u32][payload]
+const FR_DATA = 0, FR_CREDIT = 1, FR_AUTO_INPUT = 6, FR_SNAPSHOT = 7
+const CREDIT_INIT = 256 * 1024
+
+function encChannel(channel, kind, payload) {
+  const out = new Uint8Array(9 + payload.length)
+  const v = new DataView(out.buffer)
+  v.setUint32(0, channel)
+  v.setUint8(4, kind)
+  v.setUint32(5, payload.length)
+  out.set(payload, 9)
+  return out
+}
+
 export class LocalLane {
-  constructor({ sessionId, cols, rows, shell, cwd }) {
+  constructor({ sessionId, cols, rows, shell, cwd, attach = null }) {
     this.kind = 'local'
     this.sessionId = sessionId
+    this.attach = attach // re-attach to a host-side session id | name | addr
     this.cols = cols
     this.rows = rows
     this.shell = shell
@@ -35,6 +50,8 @@ export class LocalLane {
     this.ws = null
     this.id = null
     this.closed = false
+    this.v = 1 // negotiated protocol version
+    this.credit = 0 // bytes consumed, to be reported
   }
 
   open() {
@@ -46,10 +63,14 @@ export class LocalLane {
       const timer = setTimeout(() => reject(new Error('open timeout')), 10_000)
       ws.onopen = () => {
         opened = true
-        ws.send(JSON.stringify({
-          type: 'open', owner: this.sessionId, shell: this.shell,
-          cwd: this.cwd, cols: this.cols, rows: this.rows,
-        }))
+        if (this.attach) {
+          ws.send(JSON.stringify({ type: 'open', v: 2, session: this.attach, owner: this.sessionId }))
+        } else {
+          ws.send(JSON.stringify({
+            type: 'open', v: 2, owner: this.sessionId, shell: this.shell,
+            cwd: this.cwd, cols: this.cols, rows: this.rows,
+          }))
+        }
       }
       ws.onmessage = (ev) => {
         if (typeof ev.data === 'string') {
@@ -58,6 +79,8 @@ export class LocalLane {
           if (msg.type === 'ready') {
             clearTimeout(timer)
             this.id = msg.session
+            this.addr = msg.addr
+            this.v = msg.v ?? 1
             this.onReady(msg)
             resolve(msg)
           } else if (msg.type === 'error') {
@@ -68,7 +91,12 @@ export class LocalLane {
           }
           return
         }
-        this.onOutput(new Uint8Array(ev.data))
+        const buf = new Uint8Array(ev.data)
+        if (this.v === 2) {
+          this.#onFrame(buf)
+        } else {
+          this.onOutput(buf)
+        }
       }
       ws.onerror = () => {
         clearTimeout(timer)
@@ -85,8 +113,34 @@ export class LocalLane {
     })
   }
 
+  #onFrame(buf) {
+    if (buf.length < 9) return
+    const v = new DataView(buf.buffer, buf.byteOffset)
+    const kind = v.getUint8(4)
+    const len = v.getUint32(5)
+    const payload = buf.subarray(9, 9 + len)
+    if (kind === FR_DATA || kind === FR_SNAPSHOT) {
+      this.onOutput(payload)
+      // credit: report bytes consumed so the host keeps streaming
+      const credit = new Uint8Array(4)
+      new DataView(credit.buffer).setUint32(0, payload.length)
+      this.ws?.send(encChannel(0, FR_CREDIT, credit))
+    }
+    // SNAPSHOT payload already contains its own clear-screen escapes;
+    // HELD/FACTS/etc. have no client action.
+  }
+
   write(bytes) {
-    if (this.ws?.readyState === 1) this.ws.send(bytes)
+    if (this.ws?.readyState !== 1) return
+    const payload = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)
+    this.ws.send(this.v === 2 ? encChannel(0, FR_DATA, payload) : payload)
+  }
+
+  /** Terminal auto-replies (DA/CPR) — bypass the input gate on the host. */
+  writeAuto(bytes) {
+    if (this.ws?.readyState !== 1) return
+    const payload = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)
+    this.ws.send(this.v === 2 ? encChannel(0, FR_AUTO_INPUT, payload) : payload)
   }
 
   resize(cols, rows) {
@@ -258,6 +312,6 @@ export function makeLane(spec, meta) {
       return new IsolateLane({ sessionId: meta.sessionId })
     case 'local':
     default:
-      return new LocalLane({ sessionId: meta.sessionId, cols: meta.cols, rows: meta.rows, shell: spec.shell, cwd: spec.cwd })
+      return new LocalLane({ sessionId: meta.sessionId, cols: meta.cols, rows: meta.rows, shell: spec.shell, cwd: spec.cwd, attach: spec.attach ?? null })
   }
 }

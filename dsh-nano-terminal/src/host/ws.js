@@ -70,6 +70,101 @@ export function sendPing(socket) {
   if (!socket.destroyed) socket.write(encodeFrame(randomBytes(4), 0x09))
 }
 
+// ---------------------------------------------------------------------------
+// dnt-ws-v2 framed channels (herdr framed.rs model)
+//
+// Binary frame payload: [channel u32 BE][kind u8][len u32 BE][payload]
+// Channels: 0 = terminal data (pty bytes / snapshot), 1 = control JSON.
+// Kinds:
+//   DATA       0  raw bytes
+//   CREDIT     1  u32 BE bytes consumed — flow control
+//   RESIZE     2  {cols u16, rows u16}
+//   CLOSE      3  channel teardown
+//   PING/PONG  4/8
+//   FACTS      5  headless attach reports {cols,rows,fg,bg} JSON
+//   AUTO_INPUT 6  terminal auto-replies (DA/CPR) — bypass the input gate
+//   SNAPSHOT   7  screen catch-up when output outran credit (4MiB rule)
+//   HELD       9  ack: human bytes held behind an agent delivery
+// Client→server credit starts at CREDIT_INIT; when pending outruns
+// SNAP_LIMIT the server degrades to one SNAPSHOT instead of streaming data.
+// ---------------------------------------------------------------------------
+
+export const FR_KIND = {
+  DATA: 0, CREDIT: 1, RESIZE: 2, CLOSE: 3, PING: 4,
+  FACTS: 5, AUTO_INPUT: 6, SNAPSHOT: 7, PONG: 8, HELD: 9,
+}
+export const CREDIT_INIT = 256 * 1024
+export const SNAP_LIMIT = 4 * 1024 * 1024
+
+export function encodeChannel(channel, kind, payload = Buffer.alloc(0)) {
+  const head = Buffer.allocUnsafe(9)
+  head.writeUInt32BE(channel, 0)
+  head.writeUInt8(kind, 4)
+  head.writeUInt32BE(payload.length, 5)
+  return Buffer.concat([head, payload])
+}
+
+/** Parse one framed-channel payload → {channel, kind, payload} or null. */
+export function parseChannel(buf) {
+  if (!buf || buf.length < 9) return null
+  const channel = buf.readUInt32BE(0)
+  const kind = buf.readUInt8(4)
+  const len = buf.readUInt32BE(5)
+  if (buf.length < 9 + len) return null
+  return { channel, kind, payload: buf.subarray(9, 9 + len) }
+}
+
+/**
+ * Per-socket v2 attach state: credit accounting + snapshot fallback.
+ * `pending` = bytes sent since last CREDIT; when it would exceed credit +
+ * SNAP_LIMIT we send one SNAPSHOT (escape-cleared screen text) and reset.
+ */
+export class Attach {
+  constructor(socket, record) {
+    this.socket = socket
+    this.record = record
+    this.v = 1
+    this.credit = CREDIT_INIT
+    this.pending = 0
+    this.snapping = false
+  }
+
+  /** Send data honoring credit + snapshot fallback. */
+  data(chunk) {
+    if (this.v === 1) {
+      sendBinary(this.socket, chunk)
+      this.pending += chunk.length
+      return
+    }
+    if (this.snapping || this.pending + chunk.length > this.credit + SNAP_LIMIT) {
+      this.#snapshot()
+      this.pending = 0
+      this.snapping = false
+    }
+    this.socket.write(encodeFrame(encodeChannel(0, FR_KIND.DATA, chunk), 0x02))
+    this.pending += chunk.length
+  }
+
+  /** Consume client credit. */
+  onCredit(n) {
+    this.credit += n
+    this.pending = Math.max(0, this.pending - n)
+  }
+
+  #snapshot() {
+    this.snapping = true
+    const text = this.record?.screenText(200, 'visible') ?? ''
+    const clear = Buffer.from('\x1b[2J\x1b[H', 'utf8')
+    this.socket.write(encodeFrame(encodeChannel(0, FR_KIND.SNAPSHOT, Buffer.concat([clear, Buffer.from(text, 'utf8')])), 0x02))
+  }
+
+  channel(channel, kind, payload) {
+    if (!this.socket.destroyed) {
+      this.socket.write(encodeFrame(encodeChannel(channel, kind, payload ?? Buffer.alloc(0)), 0x02))
+    }
+  }
+}
+
 /**
  * Incremental client→server frame parser.
  * onMessage(opcode, payload): opcode 1 text, 2 binary, 8 close, 9 ping, 10 pong.

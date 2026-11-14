@@ -16,8 +16,9 @@
 import { join } from 'node:path'
 import { SessionRegistry } from './lib/sessions.js'
 import { EventBus } from './lib/events.js'
+import { Persist } from './lib/persist.js'
 import { createMcpHandler } from './lib/mcp.js'
-import { handshake, FrameParser, sendBinary, sendText, sendClose } from './lib/ws.js'
+import { handshake, FrameParser, sendBinary, sendText, sendClose, parseChannel, Attach, FR_KIND } from './lib/ws.js'
 
 export const name = 'dsh-nano-terminal'
 
@@ -27,11 +28,16 @@ const ROUTE = '/dsh-nano-terminal'
 
 /** @param {import('@deepseek-ai/cordis').Context} ctx */
 export function apply(ctx) {
-  // DSH_HOME is the harness home (~/.dsh-dev under dev); audit lives under it
+  // DSH_HOME is the harness home (~/.dsh-dev under dev); plugin install dir
+  // is wiped on re-sync so durable state lives at the home root.
   const home = process.env.DSH_HOME || process.env.HOME || '/tmp'
-  const auditPath = join(home, 'plugins', 'dsh-nano-terminal', 'audit.jsonl')
+  const stateDir = join(home, 'dsh-nano-terminal.state')
+  const auditPath = join(stateDir, 'audit.jsonl')
 
   const bus = new EventBus({ audit: () => {} })
+  // plugins/<pkg>/ is the install tree — re-synced from source on every host
+  // restart, so session state must live at the DSH_HOME root to survive.
+  const persist = new Persist(stateDir)
 
   const registry = new SessionRegistry({
     ctx,
@@ -40,8 +46,10 @@ export function apply(ctx) {
     sendText,
     bus,
     apiBase: `${ROUTE}/mcp`,
+    persist,
   })
   bus.registry = registry
+  registry.restoreSaved()
 
   const laneStatus = () => ({
     local: { status: 'up', backend: 'subprocess.spawnTerminal', sessions: registry.count() },
@@ -63,6 +71,7 @@ export function apply(ctx) {
       const attachId = url.searchParams.get('session')
       let record = null
       let ready = false
+      let attach = null
 
       const parser = new FrameParser((opcode, payload) => {
         if (opcode === 0x08) {
@@ -86,9 +95,32 @@ export function apply(ctx) {
           return
         }
         if (opcode === 0x02 && record) {
-          // interactive bytes count as human input — the gate holds them
-          // while an agent delivery is in flight (never interleaves)
-          void record.writeInput(payload, 'human').catch(() => {})
+          if (attach.v === 2) {
+            const fr = parseChannel(payload)
+            if (!fr) return
+            if (fr.kind === FR_KIND.CREDIT) {
+              attach.onCredit(fr.payload.readUInt32BE(0))
+            } else if (fr.kind === FR_KIND.DATA) {
+              // interactive bytes count as human input — the gate holds them
+              // while an agent delivery is in flight (never interleaves)
+              void record.writeInput(fr.payload, 'human').then((r) => {
+                if (r?.held) attach.channel(1, FR_KIND.HELD)
+              }).catch(() => {})
+            } else if (fr.kind === FR_KIND.AUTO_INPUT) {
+              // terminal auto-replies bypass the gate entirely (hc rule)
+              void record.writeInput(fr.payload, 'automatic').catch(() => {})
+            } else if (fr.kind === FR_KIND.FACTS) {
+              // headless attach reports its viewport — adopt its geometry
+              try {
+                const f = JSON.parse(fr.payload.toString('utf8'))
+                if (f.cols && f.rows) void record.resize(f.cols, f.rows)
+              } catch { /* ignore malformed facts */ }
+            } else if (fr.kind === FR_KIND.RESIZE && fr.payload.length >= 4) {
+              void record.resize(fr.payload.readUInt16BE(0), fr.payload.readUInt16BE(2))
+            }
+          } else {
+            void record.writeInput(payload, 'human').catch(() => {})
+          }
         } else if (opcode === 0x01) {
           try {
             const msg = JSON.parse(payload.toString('utf8'))
@@ -103,9 +135,10 @@ export function apply(ctx) {
 
       async function openFlow(msg) {
         try {
-          if (attachId) {
-            // ?session= accepts id | name | addr — the unified address space
-            record = registry.resolve(attachId)
+          const attachRef = attachId ?? msg.session
+          if (attachRef) {
+            // ?session= or open.session accepts id | name | addr
+            record = registry.resolve(attachRef)
             if (!record) throw new Error('no such session')
           } else if (msg.type === 'open') {
             record = await registry.create({
@@ -121,18 +154,26 @@ export function apply(ctx) {
           } else {
             throw new Error('expected {type:"open"}')
           }
-          record.attach(socket)
-          socket.once('close', () => record?.detach(socket))
+          // pending placeholder: spawn the fresh shell on first attach
+          if (record.pending) await registry.spawnPending(record)
+          // v2 negotiated via open.v or ?v=2 — framed channels + credit
+          const wantV2 = msg.v === 2 || url.searchParams.get('v') === '2'
+          attach = new Attach(socket, record)
+          attach.v = wantV2 ? 2 : 1
+          record.attached.set(socket, attach)
+          socket.once('close', () => { record?.detach(socket); record?.attached.delete(socket) })
           ready = true
           sendText(socket, {
             type: 'ready',
+            v: attach.v,
             session: record.id,
+            addr: record.addr,
             title: record.title,
             lane: record.lane,
             exited: record.exited,
             replayBytes: record.replayLen,
           })
-          record.replayInto(socket, sendBinary)
+          record.replayInto(socket, (s, chunk) => attach.data(chunk))
         } catch (err) {
           sendText(socket, { type: 'error', message: String(err?.message ?? err) })
           sendClose(socket, 1008, 'open failed')

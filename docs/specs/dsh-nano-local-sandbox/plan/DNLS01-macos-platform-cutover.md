@@ -16,10 +16,13 @@
 > 冻结决策来源:
 > - [`qna/DNLS01-qna.md`](../qna/DNLS01-qna.md) §1（只读引用；本计划不填写 Q/A，不改已冻结行）
 > grounding 来源:
-> - 现行工作树 `7a49a07`（2026-11-14）的 `file:line` + 符号名。QNA 证据快照是 `9aee891` / Round 4 复核 `a25944f`；行号冲突时以本计划 §7 的路径 + 符号名为准
+> - 锚点提交 `7a49a07`。审查时已提交 HEAD 曾是它的后代 `8d14f6c`（未改本计划点名的符号）。行号以路径 + 符号名为准，不把未提交脏树的行号写进来
 > 关联 reference-anchor:
 > - 无独立 eval-reference-anchor。§7 是本计划的 grounding 真源
-> 文档状态: `draft`
+> 对抗审查（已回写，未改 QNA）:
+> - `.anote/reviews/dsh-nano-local-sandbox/DNLS01/na/4827/qna-compliance.md`
+> - `.anote/reviews/dsh-nano-local-sandbox/DNLS01/na/4827/exit-and-antigreen.md`
+> 文档状态: `reviewed`
 
 ---
 
@@ -159,8 +162,8 @@ DNLS01-macos-platform-cutover
 | registry 同时接受 `shared` 声明 | `in-scope` | `T-O-12`：L1 不硬编。本计划不交付第二份 shared profile，只交付拒绝「写死 session」的测试 | 真要 shipped shared profile 时另开计划 |
 | U9 数字（cpu / 内存 / 超时 / 上限 / 预热） | `in-scope` 的初值，`defer` 的再调参 | `T-O-18` ④：具体数值是本计划的实施细节，不是 OPEN 残题 | 只改 profile 字面量且 §8 的测试仍读声明值 |
 | U10 NVX 与未来 profile | `defer` | `T-O-1` + `T-O-18` ④；触发条件仍是 `v1.1 §5.7` 三条同时成立 | `[业主]` 明确进入 Windows 阶段 |
-| `[DNK]` 保留的领域路由换前缀 | `in-scope` | `T-O-11` 留 `lastPick` / context；`T-O-15` 不允许继续叫 `/nano-kitesurf/*`。新路径不是转发 | 无 façade。路径见 §5.7 |
-| `[DNT]` `audit.jsonl` | `in-scope` | `T-O-18` ②：canonical 审计只留 `[DNLS]`。`local` lane 不再另写一份 durable 审计 | 若 `[业主]` 要回 local 专用审计，必须新的 durable 登记 |
+| `[DNK]` 的 `lastPick` / context | `in-scope` | `T-O-11` 把 client 的全部 `fetch` 改到 `/nano-local-sandbox/*`。领域态留在 `[DNK]` 进程内，不新开 HTTP 前缀 | 不造 `/dsh-nano-kitesurf/*`，也不恢复旧前缀 |
+| `[DNT]` `audit.jsonl` | `in-scope` | `T-O-18` ②：收归 `[DNLS]` 一份。`local` 的 open/close/attach 写入这一份，不另留文件 | 不把「不再审计 local」当成收口 |
 | 假 NVX backend 的接口测试 | `in-scope` | `T-O-9` 执行说明第 6 条 / `v1.1` G8。不是 U10 的实现 | U10 开工时替换空实现，不改 L2 测试夹具 |
 | 无关的 notepad 断链 | `out-of-scope` | 与本切割无关 | 不在本计划「顺手修」 |
 
@@ -177,16 +180,7 @@ DNLS01-macos-platform-cutover
 
 **fingerprint 算法（实施细节，避免各写各的）：** SHA-256，输入为 UTF-8 的稳定 JSON：键顺序固定为 `sessionId`、`mode`、`workspaceRoot`、`extraRoots`；`extraRoots` 按字典序；不含其它字段。`scope: session` 时缺 `sessionId` 直接拒绝，不用空串凑哈希。
 
-**保留在 `[DNK]` 的领域路由（硬切时改名，不转发）：**
-
-| 现行 | 硬切后 | 为什么留 |
-|---|---|---|
-| `/nano-kitesurf/last` | `/dsh-nano-kitesurf/last` | `lastPick` 是领域态（`index.js:51`） |
-| `/nano-kitesurf/context` | `/dsh-nano-kitesurf/context` | composer 引用，不是容器 |
-| `/nano-kitesurf/perf-review/host` | `/dsh-nano-kitesurf/perf-review/host` | `[DNK]` 页面性能，不是引擎 |
-| `/nano-kitesurf/perf-report` | `/dsh-nano-kitesurf/perf-report` | 同上 |
-
-其余 20 条现行路由迁到 `/nano-local-sandbox/*`，旧路径删除，不保留 308。
+**路由怎么搬（服从 `T-O-11`，不新造前缀）：** 现行 24 条 `/nano-kitesurf/*` 全部删除，不留 308，不改名到别的前缀。引擎、诊断、perf 快照与 perf 上报改由 `[DNLS]` 提供同名资源，路径前缀只有 `/nano-local-sandbox/`。`lastPick`（`index.js:51`）和 composer context ref 留在 `[DNK]` 进程内存里：点选结果来自 `[DNLS]` 的 pick 响应，面板自己记住，不再为它们单开路由。
 
 ---
 
@@ -213,12 +207,12 @@ DNLS01-macos-platform-cutover
 | P6-01 | Phase 6 | 独立跑通 | add | `[DNLS]` 运行路径不得 import `dsh-nano-kitesurf` | 不加载 `[DNK]` 也能 `ensure` kitesurf profile | `DNLS01-T11` `DNLS01-T18` | high |
 | P6-02 | Phase 6 | 对等 + 六类增量 | add | fork `dsh-nano-kitesurf/scripts/e2e-ego.mjs` | 新套件的 base 只有 `/nano-local-sandbox/`；旧套件绿灯不算数 | `DNLS01-T18` `DNLS01-T19` | high |
 | P6-03 | Phase 6 | 切割前快照 | migrate | 三包 `npm pack --dry-run` | 清单文件写入测试产物目录；没有这份清单，Phase 7 不得开始 | `DNLS01-T22` | medium |
-| P7-01 | Phase 7 | 删除 `[DNK]` 容器资产 | remove | `lib/container-engine.js`、`lib/nano-kite.js`、`runtime/`、`package.json:32-39`、`index.js:429` | 全仓 `spawn('container'` / `execFile('container'` 只在 `backend-apple.js` | `DNLS01-T11` `DNLS01-T20` | high |
+| P7-01 | Phase 7 | 删除 `[DNK]` 容器资产 | remove | `lib/container-engine.js`、`lib/nano-kite.js`、`runtime/Dockerfile`、`runtime/entrypoint.sh`、`runtime/mcp-bridge.mjs`、`package.json` 里这五行；`lib/dom.js` 留在 `files`。`lib/history.js` / `lib/diagnostics.js` 只在 `[DNK]` 不再 import 之后单独删行。`index.js:429` | 全仓运行时代码里 `spawn('container'` / `execFile('container'` 只在 `backend-apple.js` | `DNLS01-T11` `DNLS01-T20` | high |
 | P7-02 | Phase 7 | `[DNK]` client 与 skill | update | `src/client/index.js:12-28`、`lib/skill.js:212`、`skills/*/SKILL.md` | fetch 指向新前缀；技能由 `skill.js` 生成；无 `__nks` 跨插件总线 | `DNLS01-T16` `DNLS01-T20` | high |
-| P7-03 | Phase 7 | `[DNT]` 契约对齐 | update | `src/host/mcp.js:109`、`index.js:65-67`、`src/host/ws.js:69`、`src/client/lanes.js:140`、`:202`、`:253` | `attach.url`；pong 为 `0x0A`；`McpLane` 使用 `streamBase()`；无 isolate；无 sandbox lane | `DNLS01-T15` `DNLS01-T20` | high |
+| P7-03 | Phase 7 | `[DNT]` 契约对齐 | update | `src/host/mcp.js:109`、`index.js:65-67`、`src/host/ws.js:69`、`src/client/lanes.js:17-22`、`:140`、`:202`、`:253` | `attach.url`；pong 为 `0x0A`；不调用现成的 `streamBase()` 去拼路径；无 isolate；无 sandbox lane；`local` 审计并入 `[DNLS]` | `DNLS01-T15` `DNLS01-T20` | high |
 | P7-04 | Phase 7 | 台账删旧能力 | remove | `security/route-sensitivity.json:441`、`:532` | `proc:kitesurf` 与 `/nano-kitesurf/` 行删除；门禁再次 `exit 0` | `DNLS01-T17` `DNLS01-T20` | high |
 | P8-01 | Phase 8 | 人读文档 | update | `AGENTS.md:23-29`、`README.md:3`、三包 `AGENTS.md` | 清单含 `[DNLS]`；`[DNK]` 交付物表不再列容器引擎 | `DNLS01-T01` `DNLS01-T22` | low |
-| P8-02 | Phase 8 | U10 defer 行 | add | `security/accepted-risks.json` | 四行 defer：NVX、xray、gateway、local-s3；不改既有安全行的 disposition | `DNLS01-T21` | low |
+| P8-02 | Phase 8 | U10 defer 行 | add | `security/accepted-risks.json` 的 `risks` 数组末尾 | 四行 defer：NVX、xray、gateway、local-s3；既有 `fingerprint` 一个不改 | `DNLS01-T25` | low |
 
 ---
 
@@ -230,7 +224,7 @@ DNLS01-macos-platform-cutover
 |------|--------|----------|------------------------------|----------|----------|----------|
 | P1-01 | 包身份 | a) `name` = `dsh-nano-local-sandbox`，`engines.dsh` 抄 `dsh-nano-kitesurf/package.json:42-43`，不放宽。b) `exports` 只有 `.`、`./package.json`、图标与 locale；没有浏览器 UI 入口，除非 Phase 1 的安装探针证明宿主拒绝无 client 的包。c) 若探针失败：加一个零 slot、零 fetch 的 client，并在 `AGENTS.md` 写明它不是第二个产品面。d) `files` 白名单；`linux-prefix/` 不在其中 | 新建包；装配样例 `dsh-nano-kitesurf/cordis.patch.yml:3-5` | `npm pack --dry-run` 清单与白名单一致 | `DNLS01-T01` `DNLS01-T22` | 包能被指出「id = nano-local-sandbox」 |
 | P1-02 | inject | a) `export const name = 'nano-local-sandbox'`（与 `[DNK]` 一样，JS `name` 是 id，cordis `name` 才是包名）。b) inject 五元组见 §3，顺序固定，测试按集合断言。c) `apply` 只 `registerRoutes`，不直接 `ctx.webServer.register`。d) 插件 `AGENTS.md` 写明特权：容器 CLI 与构建 confine；不写消费者的路径 | `dsh-nano-kitesurf/index.js:20-21` 是反例（id 与容器特权绑在同一插件） | grep inject 数组无 `kitesurf` / `terminal` / `notepad` | `DNLS01-T01` `DNLS01-T03` | 特权只出现在本包文档与 `backend-apple` |
-| P1-03 | backend | a) 接口方法与 `v1.1 §5.2` 十一行同名：`ensureImage` `create` `start` `stop` `restart` `inspect` `exec` `publish` `mount` `networkPolicy` `identity` `stateVolume` `capabilities`。对外签名用 `image/mounts/ports/resources/network/identity`，参数对象禁止出现 `container` `vmnet` `virtiofs` `kitesurf`。b) `backend-apple.js` 是唯一允许出现 `spawn('container'` 或 `execFile('container'` 的文件；Phase 1 可以先把命令拼好但不在本 Phase 启动真实容器。c) `backend-nvx.js` 每个方法抛 `backend.nvx.unimplemented`，`capabilities()` 仍返回与 apple 相同的键。d) 测试用同一份 L2 夹具分别喂两个实现，夹具文件本身被 grep | 能力表 `v1.1:606-622`；现行拼参 `container-engine.js:38-52` | NVX 测试不修改 L2 夹具即失败关闭 | `DNLS01-T02` | G8 的「假 backend」在这一项就已经成立 |
+| P1-03 | backend | a) 与 `v1.1 §5.2` 的 11 行同名。`start` / `stop` / `restart` 是三个方法，连同 `ensureImage` `create` `inspect` `exec` `publish` `mount` `networkPolicy` `identity` `stateVolume` `capabilities` 一共 13 个方法。公开参数只用 `image/mounts/ports/resources/network/identity`，出现 `container` `vmnet` `virtiofs` `kitesurf` 时构造函数抛错。b) `backend-apple.js` 是本包里唯一允许出现 `spawn('container'` 或 `execFile('container'` 的文件；Phase 1 可以先把命令拼好，不在本 Phase 启动真实容器。c) `backend-nvx.js` 除 `capabilities()` 外每个方法 reject，错误码 `backend.nvx.unimplemented` 只是内部异常，不进 `ERROR_CATALOG`，也不当 HTTP/MCP 的 `errorId`。`capabilities()` 的键与 apple 实现相等。d) 同一份 L2 夹具喂两个实现 | 能力表 `v1.1:606-622`；现行拼参 `container-engine.js:38-52` | 只 grep 夹具、或只数 capabilities 键，不算通过 | `DNLS01-T02` | G8 的「假 backend」在这一项就已经成立 |
 
 ### 4.2 Phase 2 — profile 与构建配方
 
@@ -247,11 +241,9 @@ DNLS01-macos-platform-cutover
 | P3-01 | registry | a) 记录字段见 `T-O-14` 执行说明：`instanceId` `profileId` `profileVersion` `scope` `sessionId` `phase` `policyFingerprint` `endpoints` `stateVolume` `artifacts`。b) `ensure(profileId, sessionId, policy)`：先算 fingerprint，命中复用；未命中创建；**禁止**复用 fingerprint 不同的实例。c) 相位机从 `createNanoKite` 的单例闭包改成 per-instance；`adopt` / `degrade` 的判定保留（健康且内存为 idle → adopt；不健康且内存为 running → degrade），调用点今天在 `index.js:522-523`、`:610-611`、`:926-927`。d) 容器名由 `instanceId` 派生，不再是 `CONTAINER_NAME`（`container-engine.js:18`） | `lib/nano-kite.js:31-117` | 两个 session 两次 `ensure` 得到两个 id | `DNLS01-T07` | 无模块级 `phase` |
 | P3-02 | policy | a) 只读 `ctx.sandboxPolicy.resolve({session})`。b) 用 §2.3 的算法写 fingerprint。c) 不等：返回 `sandbox.instance.policy-stale`，body 带 `expectedFingerprint`，**不**停掉旧实例。d) `recreate` 是另一个显式调用，先停该实例再 `ensure`。e) 代码库不存在「改已有挂载」的函数；测试用静态扫描禁止 `mount` 被 `recreate` 以外的路径在 running 实例上调用 | 三档映射是 profile 的 `policyMapping` | 切 mode 不影响另一个 session 的 fingerprint | `DNLS01-T08` | 409 族，见 P5-01 |
 | P3-03 | state | a) history 只写该实例的 `stateVolume`。b) 不创建 `history.jsonl`，不保留 `source: workerd-kv` / `plugin-store` 的双读（`index.js:1016-1019`）。c) `lib/history.js:4-8` 与双读互相矛盾，搬迁时两套都删，不选其中一套当权威。d) checkout 的消费回执存在实例记录的 `artifacts`（identity + hash + consumed_at），不新建 `nano-kitesurf.lock.json`，也不读 `DSH_HOME/nano-kitesurf.lock.json`（`index.js:121`） | `lib/history.js:15-16`；`container-engine.js:329` `statePath` | 单实例测试里写者数量 = 1 | `DNLS01-T09` | G3 的 history 部分 |
-| P3-04 | 回收与端点 | a) `maxInstances` 从 profile 读。已达上限时 `ensure` 失败，错误 id `sandbox.instance.capacity`（本计划把它视为 `policy-stale` 同一 409 族的**相邻**实现 id；若实现时发现 QNA 没有这个 id，就复用一个已冻结 id 的 `error` 正文说明 capacity，**禁止**再发明第三个名字空间——见 §5.3 的收口约束）。b) sweep 只回收「无 attach 且超过该 profile 的 `idleTimeoutMs`」的实例，回收必须调用 backend `stop`。c) 插件 `apply` 不调用 `ensure`。d) `endpoints.cdp/mcp/engine/terminal` 来自该实例的端口分配，禁止写死 8787/8791 | `container-engine.js:40-41`；`sessions.js:108` | 短超时 profile 在不睡 30 分钟的前提下观察到 stop | `DNLS01-T10` | 第七类增量的资源半边 |
+| P3-04 | 回收与端点 | a) `maxInstances` 从 profile 读。已达上限时 `ensure` **不得**分配新 `instanceId`，backend `create` 次数不增加，响应不是 2xx。不新增 `ERROR_CATALOG` 行，也不把 `sandbox.instance.policy-stale` 挪用到容量上。b) sweep 只回收「无 attach 且超过该 profile 的 `idleTimeoutMs`」的实例，回收必须调用 backend `stop`。c) 插件 `apply` 不调用 `ensure`。d) `endpoints` 来自该实例的端口分配，禁止写死 8787/8791 | `container-engine.js:40-41`；`sessions.js` 的 `sweep` | 夹具 profile 的小上限会被打到；生产 YAML 的 1800000 不被改短 | `DNLS01-T10` | 第七类增量的资源半边 |
 
-**P3-04 的 errorId 约束（避免扩约）：** `T-O` 已登记的新 id 只有 `sandbox.instance.policy-stale` 与 `sandbox.cdp.page-lost`。容量拒绝不得新造 `sandbox.instance.capacity` 作为公共合同，除非执行时把它写回 QNA 修订。本计划的执行选择是：**容量拒绝使用 `sandbox.instance.policy-stale` 的同一错误信封是错误的**（语义不同）。因此容量拒绝走 HTTP 409 + 已有相位冲突的表达方式：在 `ERROR_CATALOG` 增加一行必须先经过本计划 §6 的「若不成立」——它 **不** 在冻结清单里。执行时的合法做法只有一个：`ensure` 在达上限时返回 409，`errorId` 使用 **本计划明确登记、并在 P8 之前追加进 QNA 修订历史所指向的同一 id**。为不阻塞测试命名，测试只断言：状态 409、`errorId` 以 `sandbox.instance.` 开头、且该 id 在 `ERROR_CATALOG` 恰好一行、全文没有第二个容量 id。**具体 id 字符串在实现 PR 里只能是 `sandbox.instance.policy-stale` 以外的、由 `[业主]` 追加的修订；在修订落地前，测试用夹具 profile 把上限设为大于用例会话数，容量用例标记 `deferred` 并写明「等 QNA 追加」，不得假绿。**
-
-这条是本计划里唯一故意留下的合同缺口，放在明处，避免实现的人悄悄加枚举。
+达上限时的失败是可观察行为，不是新的公共 errorId。R-5 只登记了 `sandbox.instance.policy-stale` 与 `sandbox.cdp.page-lost`。本计划不追加 QNA、不等待新枚举。业主若以后要单独的容量 id，先改 QNA 再改代码，不作为本计划的收口条件。
 
 ### 4.4 Phase 4 — 四个 L2 驱动
 
@@ -273,25 +265,25 @@ DNLS01-macos-platform-cutover
 
 | 编号 | 工作项 | 工作内容 | 涉及文件 / 模块（file:line） | 预期结果 | 测试映射 | 收口标准 |
 |------|--------|----------|------------------------------|----------|----------|----------|
-| P6-01 | 独立 | a) `[DNLS]` 的依赖与 import 图里没有 `dsh-nano-kitesurf`。b) 用真实或夹具的 `container` 二进制（测试可注入 `spawn`）完成一次 `ensure` → `/health` 前缀 → `stop`。c) 此阶段 `[DNK]` `npm test` 仍必须能跑；不许靠删 `[DNK]` 测试来换绿灯 | `[DNK]` `package.json:11` `test:e2e` | import 扫描为空 | `DNLS01-T11` `DNLS01-T18` | ① 完成 |
-| P6-02 | 对等 | a) fork `scripts/e2e-ego.mjs`，base 改为 `/nano-local-sandbox`。b) 断言集合覆盖现行 20 条行为名（以脚本里的用例名为准，不采用 `v1.1` 口头的「52/52」当本计划的计数）。c) 增量六类：双 session 不串味；切 mode 得到 `policy-stale` 且另一实例仍在；无 MCP 会话时 HTTP 面板路由仍 200/业务错而不是「没有 agent」；断开只毁对应实例；只用 `sandbox_*` 能读到 diagnostics；资源三项里「无预热 + 上限 + 短超时回收」。d) 零残留 **不** 放进本 Phase 的通过条件 | `scripts/e2e-ego.mjs` | 报告里的 URL 不含 `/nano-kitesurf/` | `DNLS01-T18` `DNLS01-T19` `DNLS01-T10` | ② 完成 |
+| P6-01 | 独立 | a) `[DNLS]` 的 import 图里没有 `dsh-nano-kitesurf`。b) 本包内的 `spawn('container'` / `execFile('container'` 只在 `backend-apple.js`。此阶段不要求全仓为零，因为 `[DNK]` 还没切。c) `[DNK]` `npm test` 仍能跑 | `[DNK]` `package.json:11` | import 扫描为空 | `DNLS01-T11`（只扫本包） | ① 完成 |
+| P6-02 | 对等 | a) fork `scripts/e2e-ego.mjs` 成新文件。b) 现行脚本里 23 个 `record(...)` 名字全部保留且为真：`bundle-mounted` `pane-open` `nav-fab` `nav-slide` `nav-tabs` `native-html` `annotate-reachable` `annotate-armed` `pick-opens-note` `no-jitter` `composer-ref` `devtools-console` `devtools-network` `devtools-elements` `computed-styles` `styles-panel` `matched-rules` `viewport-390` `shortcut-cmd-e-2` `lifecycle` `host-selftest` `history-kv` `perf-spans`。`T-O-18` 说的 20/20 是冻结当时的基线；现行文件是 23 个名字，少一个即失败。c) HTTP URL 从 `fetch` / `page.evaluate` 实参采集。d) `history-kv` 改为断言没有 `workerd-kv` 这个 source。e) 增量：双 session、`policy-stale`、无 agent、断 socket、只用 `sandbox_*`、资源三项。f) 零残留不在本 Phase 要求变绿 | `dsh-nano-kitesurf/scripts/e2e-ego.mjs:90-399` | 旧脚本退出码不能填进 T18 | `DNLS01-T18` `DNLS01-T19` `DNLS01-T10` | ② 完成 |
 | P6-03 | 快照 | a) 记录 HEAD。b) 三包 `npm pack --dry-run` 输出存档。c) Phase 7 的第一步检查存档存在且 HEAD 仍是该快照的子孙；执行人在开工前做一个快照 commit（本计划的执行步骤，不是本文撰写时提交） | `T-O-18` ③ | 存档路径写进 Phase 7 的执行笔记 | `DNLS01-T22` | 没有存档就没有 ③ |
 
 ### 4.7 Phase 7 — 一次性硬切
 
 | 编号 | 工作项 | 工作内容 | 涉及文件 / 模块（file:line） | 预期结果 | 测试映射 | 收口标准 |
 |------|--------|----------|------------------------------|----------|----------|----------|
-| P7-01 | 删容器资产 | a) 删除 `lib/container-engine.js`、`lib/nano-kite.js`、`runtime/` 整树、`package.json` 里对应 `files` 行（`:32-39`）。b) 从 `index.js` 去掉 `execFile('container'`（`:429`）、`bringUp`（`:357`）、`sleepEngine`（`:401`）、`effectiveCheckout`（`:413`）、`KITESURF_CHECKOUT`。c) 领域路由改到 §2.3 的新前缀，handler 不再调用容器。d) 不留转发 | 同上 | `[DNK]` 包内 `container` 字符串只允许出现在「已退役」的否定句文档里；运行时代码为零。文档句也要改，见 P8 | `DNLS01-T11` `DNLS01-T20` | G2 |
-| P7-02 | client / skill | a) `src/client/index.js:12-28` 的常量改为新前缀；领域四条用 `/dsh-nano-kitesurf/`。b) 重建 `lib/client.js`，测试同时扫 src 与 lib。c) `lib/skill.js` 改成教 `sandbox_*` 与 `GET /nano-local-sandbox/status`；生成 `skills/*/SKILL.md`；禁止手改生成物。d) 删除 `window.__nksRuns` 这类跨插件全局（`src/client/index.js:645`）若它被其它包读取；若仅本包使用，改名为包内符号并确认无第二包引用。e) `lib/engine.js` 的全局 `live` 若仍被 client 需要，改为「向 `[DNLS]` 要 endpoint」的无状态客户端，模块级 socket 删除 | `lib/skill.js:212` 的 6/8/13 漂移随生成消失 | 技能测试逐字符对比 | `DNLS01-T16` `DNLS01-T20` | 模型侧没有 `kitesurf_` 工具名 |
-| P7-03 | `[DNT]` | a) `create` 返回 `attach.url`，删除 `path`（`src/host/mcp.js:109`）。b) `McpLane` 删除 `attach.path` 兜底（`lanes.js:140`），桌面用已有的 `streamBase()`（`:17-22`）拼到 **server 返回的 url** 上，而不是自己拼 `/dsh-nano-terminal/stream`。c) `index.js:65-67` 改为 `encodeFrame(payload, 0x0A)`；空闲时调用 `sendPing`；客户端在超时前发送 ping。d) 删除 `IsolateLane`（`lanes.js:202-251`）及 `makeLane` 的 `isolate` 分支（`:257-258`）；lane 枚举、health 三处文案、`AGENTS.md:106` 同步去掉 isolate，**不**加入 `sandbox`。e) 删除 `crates/dnt-agent` stub。f) 停止写 `${DSH_HOME}/plugins/dsh-nano-terminal/audit.jsonl`（`index.js:31`）；`term.audit` 只由 `[DNLS]` 提供。`local` lane 仍可用，只是没有第二份 durable 审计。g) 改的是 `src/host` 与 `src/client`，然后构建；残留扫描覆盖 `lib/` | `AGENTS.md:106`；`package.json` 无 route-guard devDep（`:28-31`） | `[DNT]` HTTP 也改为 `registerRoutes`，否则台账行会再次漂移 | `DNLS01-T15` `DNLS01-T17` | `local` 仍能开 |
-| P7-04 | 台账 | a) 删除 `proc:kitesurf` 两行（`route-sensitivity.json:441`、`:532`）及全部 `/nano-kitesurf/` 行。b) 写入 `/nano-local-sandbox/*` 与改名后的四条 `[DNK]` 领域路由。c) 三份台账的行数断言彼此相等。d) 三门禁再跑，必须 `exit 0` | `security/route-inventory.md`、`feature-contract.json` | 扫描器多一行就失败 | `DNLS01-T17` `DNLS01-T20` | 零残留的台账半边 |
+| P7-01 | 删容器资产 | a) 删除 `lib/container-engine.js`、`lib/nano-kite.js`、`runtime/` 下那三个配方文件，以及 `package.json` `files` 里对应的五条。`lib/dom.js` 留着。b) 从 `index.js` 去掉 `execFile('container'`（`:429`）、`bringUp`（`:357`）、`sleepEngine`（`:401`）、`effectiveCheckout`（`:413`）、`KITESURF_CHECKOUT`。c) 24 条旧路由全部删除，不改名、不转发。d) `lib/history.js` 与 `lib/diagnostics.js` 在 `[DNK]` 的 import 消失后再删 `files` 行 | 同上 | `[DNK]` 运行时代码不再调用容器 | `DNLS01-T11` `DNLS01-T20` | G2 |
+| P7-02 | client / skill | a) `src/client/index.js:12-28` 与 `:35`、`:58` 的 fetch 全部改为 `/nano-local-sandbox/`。不再请求 last/context 路由；点选包由面板自己留在内存。b) 重建 `lib/client.js`，测试同时扫 src 与 lib。c) `lib/skill.js` 改成教 `sandbox_*` 与 `GET /nano-local-sandbox/status`；生成 `skills/*/SKILL.md`；禁止手改生成物。d) 全仓 `window.__nks` 命中数为 0。e) `lib/engine.js` 不再持有模块级 socket | `lib/skill.js:212` 的 6/8/13 漂移随生成消失 | 技能测试逐字符对比 | `DNLS01-T16` `DNLS01-T20` | 模型侧没有 `kitesurf_` 工具名 |
+| P7-03 | `[DNT]` | a) `create` 返回 `attach.url`，删除 `path`（`src/host/mcp.js:109` 与构建后的 `lib/mcp.js`）。b) `McpLane` 删除 `attach?.path` 兜底（`lanes.js:140`）。`attach.url` 已是绝对 URL 时原样连接。只有相对 URL 时，才借用 `__DSH_TRANSPORT__.streamBaseUrl` 的 **origin**。禁止调用现在的 `streamBase()`（`:17-22` 返回的是已经拼好 `/dsh-nano-terminal/stream` 的完整地址）。c) `index.js:65-67` 改为 `encodeFrame(payload, 0x0A)`。`sendPing`（`ws.js:69`）仍发 `0x09`，接到空闲计时器上，不要把它改成 pong。客户端在超时前发送 ping。d) 删除 `IsolateLane`（`lanes.js:202-251`）及 `makeLane` 的 `isolate` 分支（`:257-258`）；lane 枚举、health、`AGENTS.md:106` 去掉 isolate，**不**加入 `sandbox`。`makeLane('local')` 仍成功。e) 删除 `crates/dnt-agent` stub。f) 停止创建 `${DSH_HOME}/plugins/dsh-nano-terminal/audit.jsonl`。`local` 与 sandbox 终端的 open/close/attach 都写入 `[DNLS]` 的那一份 `term.audit`，不双写。g) 改 `src/host` 与 `src/client` 后构建；残留扫描覆盖 `lib/` | `AGENTS.md:106`；`package.json` 无 route-guard devDep（`:28-31`） | `[DNT]` HTTP 也改为 `registerRoutes` | `DNLS01-T15` `DNLS01-T17` | `local` 仍能开，且开的事件出现在 `[DNLS]` 审计里 |
+| P7-04 | 台账 | a) 删除 `proc:kitesurf` 两行（`route-sensitivity.json:441`、`:532`）及全部旧前缀行。b) 写入 `/nano-local-sandbox/*`，不写第四套前缀。c) 三份台账行数彼此相等。d) 三门禁再跑，必须 `exit 0` | `security/route-inventory.md`、`feature-contract.json` | 扫描器多一行就失败 | `DNLS01-T17` `DNLS01-T20` | 零残留的台账半边 |
 
 ### 4.8 Phase 8 — 发布姿态与 defer
 
 | 编号 | 工作项 | 工作内容 | 涉及文件 / 模块（file:line） | 预期结果 | 测试映射 | 收口标准 |
 |------|--------|----------|------------------------------|----------|----------|----------|
 | P8-01 | 文档 | a) `AGENTS.md:25-29` 增加 `[DNLS]` 一行。b) `README.md:3` 的「三个活跃插件」改成与清单一致的表述，不写死一个马上会过期的阿拉伯数字以外的营销句；数字必须等于清单行数。c) `[DNK]` `AGENTS.md` 交付物表删除容器引擎、runtime、`KITESURF_CHECKOUT`。d) `[DNT]` `AGENTS.md:106` 与 `/term attach` 的硬编路径改成「server 返回的 url」。e) 在 `v0.9` 与 `v1.1` 文首各加一段状态：事实基线仍有效；兼容建议已被 QNA 作废；实现计划是本文。不改两文的实测数据 | `README.md:3`；`AGENTS.md:23-29` | 人读文档与 `package.json` `files` 一致 | `DNLS01-T01` | `T-O-18` ③ 的文档半边 |
-| P8-02 | U10 | 在 `accepted-risks.json` 的 `risks` 数组**末尾追加**四行，`fingerprint` 前缀 `dnls:defer-`，`disposition` = `accept`，正文指向 `T-O-1` / `T-O-18` ④ 与 `v1.1 §5.7`。不修改文件中已有行 | `security/accepted-risks.json:1-14` 是既有安全台账，不是本计划的草稿本 | 既有 fingerprint 一个不改 | `DNLS01-T21` | U10 不再是口头 defer |
+| P8-02 | U10 | 在 `accepted-risks.json` 的 `risks` 数组**末尾追加**四行，`fingerprint` 前缀 `dnls:defer-`，`disposition` = `accept`，正文指向 `T-O-1` / `T-O-18` ④ 与 `v1.1 §5.7`。不修改已有对象 | 追加到 `risks` 末尾；既有 `fingerprint` 一个不改。文件长于开头十几行 | 既有 fingerprint 集合是追加前的超集 | `DNLS01-T25` | U10 不再是口头 defer |
 
 ---
 
@@ -343,11 +335,11 @@ DNLS01-macos-platform-cutover
   4. `recreate` 之后新 id 的挂载根等于新的 `workspaceRoot`；另一个 session 的根不变。
   5. history 写入次数与 volume 上的记录数一致，磁盘上没有第二份 jsonl。
   6. `apply()` 之后容器数为 0；第一次 `ensure` 之后才为 1。
-  7. 达上限后再 `ensure` 的行为遵守 §4.3 的合同缺口：修订未落地前，该用例是 `deferred` 而不是跳过断言。
-  8. 空闲回收调用了 `stop`；只从 Map 里 `delete` 不算回收。
+  7. 会话数已经等于夹具 profile 的 `maxInstances` 时，再一次 `ensure` 不分配新 id，`create` 次数不增加，响应不是 2xx。未达上限时同一次调用不得失败。不把上限调到大于会话数来躲开这一条。
+  8. 空闲回收调用了 `stop`，而且发生在 Map 删除之前；只 `delete` 不算回收。未超时或仍有 attach 时 `stop` 次数保持 0。
 - **对应测试台账项**：`DNLS01-T07` `DNLS01-T08` `DNLS01-T09` `DNLS01-T10` `DNLS01-T23`
 - **收口标准**：夹具 backend 上的调用序列与上面 8 条一致。
-- **本 Phase 风险提醒**：容量 errorId 是唯一允许 `deferred` 的功能点，且必须出现在 §10 的状态列里。
+- **本 Phase 风险提醒**：不要为容量发明 `errorId`。行为不够就修行为，不回 QNA 加枚举。
 
 ### 5.4 Phase 4 — 四个 L2 驱动
 
@@ -389,12 +381,12 @@ DNLS01-macos-platform-cutover
 - **本 Phase 对应编号**：`P6-01` `P6-02` `P6-03`
 - **本 Phase 新增 / 修改 / 删除文件**：`dsh-nano-local-sandbox/test/**`、fork 的 e2e 脚本、快照清单。不改 `[DNK]` 源码。
 - **具体功能预期**：
-  1. fork 套件的每条请求 URL 都以 `/nano-local-sandbox/` 开头。
-  2. 旧 `test:e2e` 即使全绿，也不写入本 Phase 的 PASS 证据。
-  3. 双 session 的挂载根不同，且 A 的 history 读不到 B 的 URL。
-  4. 无 agent 连接时，`POST /nano-local-sandbox/shot` 的失败原因是引擎 / 鉴权，不是「MCP session missing」。
-  5. 快照清单里含 Dockerfile、不含 `linux-prefix/`。
-  6. `[DNK]` 与 `[DNT]` 的 `npm test` 相对快照，失败数不增加；测试文件数不少于快照。
+  1. fork 文件里现行 `e2e-ego.mjs` 的 23 个 `record` 名字都在，且都为真。HTTP URL 从 `fetch` / `page.evaluate` 的实参采集，不是从 base 常量采集。
+  2. 旧 `test:e2e` 即使全绿，也不写入本 Phase 的 PASS 证据。mock `fetch` 或没调用 `registerRoutes` 的进程打出 23 个 true，判失败。
+  3. 双 session 的挂载根不同，且 A 的 history 读不到 B 的 URL。`history-kv` 改为断言不存在 `source === 'workerd-kv'`。
+  4. 无 agent 连接时，`POST /nano-local-sandbox/shot` 不是 200；`requestRejection` 发生在 handler 之前，或者失败 id 属于目录里已有的 `kitesurf.*` / `sandbox.*`。
+  5. 快照清单是事先落盘的那一份，测试不得现场再 pack 一份来冒充。
+  6. `[DNK]` 与 `[DNT]` 的测试标题集合是快照的超集。空测试不算数。
 - **对应测试台账项**：`DNLS01-T18` `DNLS01-T19` `DNLS01-T21` `DNLS01-T22`
 - **收口标准**：§10 中 ② 的行全部不是 `未观察`。
 - **本 Phase 风险提醒**：用 mock 的 `fetch` 把 20 个用例打绿，而没有一次真实的路由注册，按 §8.6 判假绿。
@@ -409,14 +401,14 @@ DNLS01-macos-platform-cutover
 - **具体功能预期**：
   1. 运行时代码搜索根（§8.6）里 `spawn('container'` 与 `execFile('container'` 只命中 `backend-apple.js`。
   2. 同一搜索根里没有 `/nano-kitesurf/`、没有 `kitesurf_` 工具名、没有 `proc:kitesurf`。
-  3. QNA 与两份 eval **可以**继续出现这些字符串；它们在允许清单里，允许清单本身被测试约束路径前缀。
-  4. `[DNK]` client 的领域四路由使用 §2.3 的新路径，且这些 handler 的源码不含 `ensureLocalContainer` / `execFile`。
-  5. `McpLane` 源码不含 `attach?.path`。
-  6. `makeLane` 不含 `isolate`，也不含 `sandbox`。
-  7. `[DNT]` 不再创建 `audit.jsonl`；`[DNLS]` 的 `term.audit` 能读到 sandbox 终端的 open。
-  8. 硬切后三门禁仍 `exit 0`。
-  9. `[DNT]` `local` lane 的单测仍通过。
-  10. 不存在 `/nano-kitesurf/*` → 新路径的转发函数。
+  3. 允许留下旧字符串的文件只有 §8.6 列出的三条实路径，外加本计划文件这一条。用 `..`、`deprecated/` 或前缀匹配放行，判失败。
+  4. `[DNK]` 不再注册 last/context/perf 的旧路径，也没有新前缀。面板内存里的 `lastPick` 仍能显示刚刚的点选。
+  5. `McpLane` 源码不含 `attach?.path`，也不调用现行 `streamBase()` 去连接 sandbox 终端。
+  6. `makeLane` 不含 `isolate`，也不含 `sandbox`。`makeLane` 的 `local` 分支仍在。
+  7. `[DNT]` 不再创建 `audit.jsonl`。`local` 与 sandbox 的 open 都能从 `[DNLS]` `term.audit` 读到，且只有一份存储。
+  8. 硬切后三门禁仍 `exit 0`，而且是因为扫描器真的扫到了 `[DNLS]` 与 `[DNT]`。
+  9. `[DNT]` `local` lane 的既有单测标题仍在且通过。
+  10. 不存在把旧前缀转到新前缀的函数。
 - **对应测试台账项**：`DNLS01-T11` `DNLS01-T15` `DNLS01-T17` `DNLS01-T20` `DNLS01-T21`
 - **收口标准**：零残留与门禁同时为真。只绿一个不算。
 - **本 Phase 风险提醒**：无运行时开关。失败则回到 P6-03 的 commit，禁止临时加别名把套件救绿。
@@ -431,8 +423,9 @@ DNLS01-macos-platform-cutover
   2. `README.md:3` 不再写「三个」活跃插件。
   3. `[DNK]` `AGENTS.md` 的交付物表没有 `container-engine` 与 `runtime/`。
   4. `accepted-risks.json` 新增四行，旧行的 `fingerprint` 集合是追加前的超集（只增不改）。
-  5. `v1.1` 文首能读到「C6-4 / C7-2 已作废」，正文历史段落保持原样。
-- **对应测试台账项**：`DNLS01-T01` `DNLS01-T21`
+  5. `v0.9` / `v1.1` 文首能读到「兼容建议已作废」，正文里的旧路径字面量保留（这两份在 T20 的允许清单里）。
+  6. 允许清单以外的 markdown（含 `docs/code-review/` 与 `docs/specs/dsh-nano-kitesurf/`）不再留下旧路由字面量，改成指向 QNA 的句子。QNA 本身不改。
+- **对应测试台账项**：`DNLS01-T01` `DNLS01-T20` `DNLS01-T25`
 - **收口标准**：文档 grep 与包清单一致。
 - **本 Phase 风险提醒**：不要为了「文档干净」去改 QNA 的历史问句。
 
@@ -448,7 +441,7 @@ DNLS01-macos-platform-cutover
 | `T-O-4` | QNA §1 | 终端与未来服务都走 profile，不新开插件 | 若执行时需要新插件，回到 QNA 追加，本计划标 `blocked` |
 | `T-O-5` | QNA §1 | 不重测 v0.9 已有的 Apple 规格；P8 只加状态段 | 无 |
 | `T-O-6` | QNA §1 | P1-02 禁止 `SandboxProvider`；三档映射 | 同上 |
-| `T-O-7` | QNA §1 | 新 errorId 只有已登记的两个；容量 id 见 §4.3 缺口 | 缺口在修订前保持 `deferred` |
+| `T-O-7` | QNA §1 | 新的公共 errorId 只有已登记的两个。容量是「不创建」，不是新枚举 | 若实现写出第三个 `sandbox.*` id，P5 不收口 |
 | `T-O-8` | QNA §1 | §2.2 的 O2 整表不做 | 若 `[业主]` 推翻，先改 QNA 再改本文 |
 | `T-O-9` / Q1 | QNA §1 | Phase 1 全部 | 身份不同则本文作废重写 |
 | `T-O-10` / Q2 | QNA §1 | §1.1 的 ①②③ | 禁止把 P7 拆成「先 façade 再删」 |
@@ -465,7 +458,7 @@ DNLS01-macos-platform-cutover
 
 ## 7. 内置 Reference-Anchor 锚区
 
-锚点树：`7a49a07`。符号还在但行号变了时，改锚的行号，不改工作项。
+锚点树：`7a49a07`（审查时的已提交 HEAD `8d14f6c` 是它的后代，未改这些符号）。符号还在但行号变了时，改锚的行号，不改工作项。不采用未提交工作区里的行号。
 
 ### 7.1 锚表（本计划工作要落在哪些既有代码 / 新建点上）
 
@@ -474,7 +467,7 @@ DNLS01-macos-platform-cutover
 | A-1 | `dsh-nano-kitesurf/package.json:42-57` | 引擎范围与 client inject 样例 | P1-01 | ✅ 复用 | 只复用装配形状 |
 | A-2 | `dsh-nano-kitesurf/cordis.patch.yml:3-5` | `id` / 包名分离 | P1-01 | ✅ 复用 | `name` 必须是包名 |
 | A-3 | `dsh-nano-kitesurf/index.js:20-21` | 现行 `name` 与 inject | P1-02 | ♻️ 重 substrate | 不把 `skills` 带进 `[DNLS]` |
-| A-4 | `dsh-nano-kitesurf/index.js:23-46` | 24 条路由常量 | P4-02 / P7-02 | ♻️ 重 substrate | 20 条迁走，4 条改前缀 |
+| A-4 | `dsh-nano-kitesurf/index.js:23-46` | 24 条路由常量 | P4-02 / P7-02 | ♻️ 重 substrate | 全部改到 `/nano-local-sandbox/`；last/context 不再有路由 |
 | A-5 | `dsh-nano-kitesurf/index.js:51` | `lastPick` | P7-02 | ✅ 复用 | 留在 `[DNK]` |
 | A-6 | `dsh-nano-kitesurf/index.js:121` | lock 路径 | P3-03 / P7-01 | remove | 文件删除，不迁移 |
 | A-7 | `dsh-nano-kitesurf/index.js:357` `bringUp`；`:401` `sleepEngine`；`:413` `effectiveCheckout`；`:429` `execFile` | 容器特权在宿主路由里 | P7-01 | remove | 调用只留 A-12 |
@@ -545,29 +538,30 @@ DNLS01-macos-platform-cutover
 | Test-ID | 测试项（验证什么） | 类型 | 层 | 来源 | 映射（工作项 → 收口目标） | PASS 证据（四元组） |
 |---------|------------------|------|----|------|---------------------------|---------------------|
 | `DNLS01-T01` | 包名、cordis、inject 集合、仓根清单最终含 `[DNLS]` | 短途 | 契约 | 🆕 `dsh-nano-local-sandbox/test/identity.test.mjs` | P1-01/P1-02/P8-01 → 身份只有一套 | `commit + identity.test.mjs + exit 0 + UTC` |
-| `DNLS01-T02` | 11 键 capabilities；NVX 抛未实现；L2 夹具无 Apple 名词 | 短途 | unit | 🆕 `test/backend.test.mjs` | P1-03 → G8 | 同上 |
+| `DNLS01-T02` | 13 个方法里，除 `capabilities()` 外 NVX 全部 reject `backend.nvx.unimplemented`；该字符串不进 `ERROR_CATALOG`。公开参数写入 Apple 名词时构造函数抛错 | 短途 | unit | 🆕 `test/backend.test.mjs` | P1-03 → G8 | 只 grep 夹具或只数键，不算 PASS |
 | `DNLS01-T03` | 运行时代码无 `SandboxProvider`、无 seam 赋值 | 短途 | 契约 | 🆕 `test/no-sandbox-provider.test.mjs` | P1-02 → `T-O-6` | 同上 |
-| `DNLS01-T04` | 缺字段 / latest / caret / 坏 digest / `container machine` 拒绝 | 短途 | unit | 🆕 `test/profile-reject.test.mjs` | P2-01 → 失败关闭 | 同上；每条反例都要有一次 `ensureImage` 计数 = 0 |
-| `DNLS01-T05` | 合法 kitesurf manifest `scope=session`，pin 为精确版本 | 短途 | unit | 🆕 `test/profile-load.test.mjs` | P2-01/P2-02 → describe 齐 | 同上 |
-| `DNLS01-T06` | 构建 argv 只出现在 confine 双里 | 短途 | unit | 🆕 `test/build-confine.test.mjs` | P2-03 → G6 | 双的调用次数 ≥ 1，裸 spawn 次数 = 0 |
-| `DNLS01-T07` | `ensure` 幂等；不同 session 不同 id | 短途 | unit | 🆕 `test/instance.test.mjs` | P3-01 → 不串实例 | 同上 |
-| `DNLS01-T08` | 改 mode → `policy-stale` + `expectedFingerprint`；另一实例 mount 参数不变；无热改函数被调用 | 短途 | unit | 🆕 `test/policy-stale.test.mjs` | P3-02 → `T-O-14` | 必须断言旧实例 `stop` 计数在 recreate 之前为 0 |
-| `DNLS01-T09` | history 单写者；无 jsonl 第二文件 | 短途 | unit | 🆕 `test/history-single.test.mjs` | P3-03 → G3 | 写者计数 = 1 |
-| `DNLS01-T10` | 读 profile 的 `maxInstances` 与短 `idleTimeoutMs`；回收调用 `stop`；`apply` 后容器数 = 0 | spike | 集成 | 🆕 `test/lifecycle.spike.test.mjs` | P3-04/P6-02 → 第七类 | 超时用夹具 profile 的短值；生产 1800000 不在这个测试里睡 |
-| `DNLS01-T11` | `spawn('container'` / `execFile('container'` 的命中文件集合 = `{backend-apple.js}` | 短途 | 契约 | 🆕 `test/container-spawn-sites.test.mjs` | P6-01/P7-01 → G2 | 搜索根见 §8.6；命中数与允许名单逐文件相等 |
+| `DNLS01-T04` | 缺字段、`latest`、caret、坏 digest、坏 `checkout.ref`、`verify` 失败、`container machine` 都拒绝，且 `ensureImage` 次数为 0 | 短途 | unit | 🆕 `test/profile-reject.test.mjs` | P2-01 → 失败关闭 | 缺 `ref` 或 `verify` 任一类即失败 |
+| `DNLS01-T05` | 合法 manifest 的 `scope` 从 YAML 读出是 `session`；`[DNLS]` 不 import `[DNK]`；Dockerfile 仍有 `__res_init` 注释且基础镜像是 `node:22-bookworm-slim` | 短途 | unit | 🆕 `test/profile-load.test.mjs` | P2-01/P2-02 → 配方只在 profile 目录 | 一行 re-export 不算搬迁 |
+| `DNLS01-T06` | 有 confine 时裸 `spawn`/`execFile` 为 0；没有 `ctx.sandbox` 时构建抛错且 `spawn` 仍为 0 | 短途 | unit | 🆕 `test/build-confine.test.mjs` | P2-03 → G6 | 只测注入了双的那一次，不算 PASS |
+| `DNLS01-T07` | 同一三元组两次 `ensure`：id 相同且 `create` 次数 = 1。无模块级 `phase`。A `degrade` 时 B 的 phase 不变 | 短途 | unit | 🆕 `test/instance.test.mjs` | P3-01 → 不串实例 | 只比较 id、不看 `create` 次数，判假绿 |
+| `DNLS01-T08` | 改 mode → `policy-stale` + `expectedFingerprint`，旧实例 `stop` 仍为 0。只改四元组外的标签，哈希不变。只改 `workspaceRoot`，哈希变且不复用旧 id | 短途 | unit | 🆕 `test/policy-stale.test.mjs` | P3-02 → `T-O-14` | 缺 `workspaceRoot` 这一条即失败 |
+| `DNLS01-T09` | 磁盘上的 history 记录数等于该实例 volume 的写入次数；不存在第二份 jsonl，也不存在第二套 KV 写路径 | 短途 | unit | 🆕 `test/history-single.test.mjs` | P3-03 → G3 | 测试自建的计数器恒为 1，不算 |
+| `DNLS01-T10` | 生产 YAML 的 `idleTimeoutMs` 字节仍是 `1800000`，测试不写这个文件。夹具 profile 写 `50`。sweep 只能从 loader 读到 50，测试不得调用 `stop`，也不得把超时当参数传入。无 attach 且时钟 < 50 时 `stop` = 0；≥ 50 时 `stop` = 1 且 Map 删除在 `stop` 返回之后。有 attach 时拨过 50，`stop` 仍为 0。会话数等于夹具 `maxInstances` 时再 `ensure` 不分配新 id、响应不是 2xx | spike | 集成 | 🆕 `test/lifecycle.spike.test.mjs` | P3-04 → 第七类 | 直接 `stop()` 或把生产值改短，判假绿 |
+| `DNLS01-T11` | P6：只扫 `dsh-nano-local-sandbox/`，命中文件只有 `backend-apple.js`。P7 之后：仓库里除 §8.6 允许的路径外，命中文件集合等于这一份 | 短途 | 契约 | 🆕 `test/container-spawn-sites.test.mjs` | P6-01 只扫本包；P7-01 扫全仓 → G2 | P6 用全仓断言会逼人把 `[DNK]` 排除，禁止 |
 | `DNLS01-T12` | `tools/list` 的 sandbox 集合 = 20 个冻结名字；诊断不依赖宿主 POST | spike | 集成 | 🆕 `test/mcp-tools.spike.test.mjs` | P4-01 → 零别名 | 集合差集为空；推送计数器 = 0 |
-| `DNLS01-T13` | 未列表路由不能注册；无 `requestRejection` 时一个路由都不注册 | 短途 | 契约 | 🔱 fork `packages/dsh-host-route-guard/test/route-guard.test.mjs` 的断言方式，新文件 `dsh-nano-local-sandbox/test/routes.test.mjs` | P4-02 → fail-closed | 注册前抛错，`webServer.register` 计数 = 0 |
-| `DNLS01-T14` | 两 socket；关 A 不影响 B；A 得到 `page-lost` 或新的 `lastUrl`，不是旧 DOM | spike | 集成 | 🆕 `test/cdp-keeper.spike.test.mjs` | P4-03 → `T-O-16` | 响应体哈希不得等于关闭前的 DOM 哈希 |
-| `DNLS01-T15` | schema 边界、无 `path` 键、pong opcode、无 sandbox/isolate lane、`McpLane` 无 path 兜底 | 短途 | 契约 | 🆕 `[DNLS]` `test/terminal-contract.test.mjs` + `[DNT]` 侧断言（P7 后） | P4-04/P7-03 → `T-O-17` | 帧的第一个字节 opcode 为 `0x0A` |
-| `DNLS01-T16` | 目录含 7+2 id；`shot.fit` 为 400；技能正文逐字等于派生表 | 短途 | 契约 | 🔱 fork `dsh-nano-kitesurf/test/diagnostics.test.mjs` 与 `test/skill.test.mjs` | P5-01/P7-02 → 一份目录 | 派生字符串相等，不是「包含子串」 |
-| `DNLS01-T17` | 三门禁 `exit 0`；多一条路由则非 0；扫描结果含两个新插件名 | 短途 | 契约 | ♻️ 跑现有三脚本 + 🆕 `test/route-scan-coverage.test.mjs` | P5-02/P7-04 → `T-O-18` ③ | 三个进程的 exit code 都是 0，且覆盖测试单独非 0 的反例也要留下日志 |
-| `DNLS01-T18` | fork e2e 只打新前缀 | mega | e2e | 🔱 fork `dsh-nano-kitesurf/scripts/e2e-ego.mjs` | P6-02 → ② | 旧脚本的绿灯 **不** 填写本行 |
-| `DNLS01-T19` | 无 MCP 客户端时 HTTP 路由仍由 `requestRejection` 决定，而不是「没有 agent」 | spike | 集成 | 🆕 `test/ui-without-agent.spike.test.mjs` | P6-02 → `T-O-11` | 失败 id 不得是自造的 `no-agent` |
-| `DNLS01-T20` | §8.6 搜索根零残留；允许清单不能覆盖搜索根 | 短途 | 契约 | 🆕 `test/residue.test.mjs` | P7 → ③ | 只在 P7 之后允许 PASS。P6 跑它必须失败，这个失败要被记录为「未到时点」而不是修搜索根 |
-| `DNLS01-T21` | `[DNK]`、`[DNT]` `npm test` exit 0，且 `test()` 个数 ≥ 快照 | 短途 | 回归 | ♻️ 两包现有测试；🆕 计数比较写在 `test/regression-count.test.mjs` | P6/P7/P8 → 不删测试换绿 | 快照计数写在 P6-03 的清单里 |
-| `DNLS01-T22` | `npm pack --dry-run` 含配方、不含 `linux-prefix/`、不含 `[DNK]` 的 runtime | 短途 | 契约 | 🆕 `test/pack-manifest.test.mjs` | P6-03/P8 → 发布物 | 清单与白名单双向相等 |
-| `DNLS01-T23` | 攻击：坏 digest、越界 checkout、跨 session 挂载、无鉴权 HTTP/WS、`container machine`、pong 伪造后仍只接受帧 | spike | 集成 | 🆕 `test/threat.spike.test.mjs` | P2-03/P3-02/P4-02 → §7.3 | 每条攻击的「坏动作计数」= 0 |
-| `DNLS01-T24` | 两 session × 切 mode × 断 socket，重复 20 次，相位序列一致 | soak | 集成 | 🆕 `test/lifecycle.soak.test.mjs` | P7 之后的退出硬闸 | 20 次序列全等；任何一次 `page-lost` 缺失都不是 PASS |
+| `DNLS01-T13` | 未列表路由不能注册；无 `requestRejection` 时 `webServer.register` 次数为 0。每条 `/nano-local-sandbox/` 的 `sessionBinding` 是字面量 `true`。`apply` 里直接调用 `ctx.webServer.register` 的次数为 0 | 短途 | 契约 | 🔱 断言方式来自 `packages/dsh-host-route-guard/test/route-guard.test.mjs`；新文件 `dsh-nano-local-sandbox/test/routes.test.mjs` | P4-02 / P1-02 → fail-closed | 先注册再补 rejection，判失败 |
+| `DNLS01-T14` | 两段都要有。段一：A 的 socket 仍是 OPEN 时返回 `page-lost`，失败。段二：测试先关掉 A，然后响应要么是 `sandbox.cdp.page-lost` 且正文不是关闭前 DOM，要么是按 `lastUrl` 打开的新页面。B 的 `lastUrl` 与 socket 身份两段都不变 | spike | 集成 | 🆕 `test/cdp-keeper.spike.test.mjs` | P4-03 → `T-O-16` | 只做「或」的一边，不算 PASS |
+| `DNLS01-T15` | `additionalProperties: false`；`lines: 501`、`cols: 1`、`rows: 513`、额外字段都拒绝。无 `path` 键。pong opcode 是 `0x0A`。P7 后：无 isolate、无 sandbox lane；`local` 单测标题仍在；`audit.jsonl` 不出现；open 能从 `[DNLS]` `term.audit` 读到。PTY 入口只在 `profiles/terminal/` | 短途 | 契约 | 🆕 `dsh-nano-local-sandbox/test/terminal-contract.test.mjs` | P4-04/P7-03 → `T-O-17` | 只拒绝 `lines: 501` 不算 |
+| `DNLS01-T16` | 目录含 7+2 id 各一行；`shot.fit` 为 400；技能正文逐字等于派生表。全仓 `window.__nks` 为 0 | 短途 | 契约 | 🔱 fork `dsh-nano-kitesurf/test/diagnostics.test.mjs` 与 `test/skill.test.mjs` | P5-01/P7-02 → 一份目录 | 「包含子串」不算 |
+| `DNLS01-T17` | 插件名来自同一次 `scanRoutes()` 的返回值，以及 `check-feature-contract.mjs` 与 `check-clean-lib.mjs` 实际遍历的 `PLUGINS`。负向：从扫描数组去掉 `[DNLS]` 后两道路由门禁必须非 0；只在 `[DNLS]` 多一条路由常量时扫描器非 0；`check-clean-lib` 对夹具里的裸 import 非 0 | 短途 | 契约 | ♻️ 三道既有脚本 + 🆕 `test/route-scan-coverage.test.mjs` | P5-02/P7-04 → `T-O-18` ③ | 测试自己 `console.log` 插件名，不算 |
+| `DNLS01-T18` | fork 文件（不是旧的 `e2e-ego.mjs`）里 §4.6 的 23 个 `record` 名字都出现且都为真。URL 从实参采集，path 只以 `/nano-local-sandbox/` 开头。删掉任一名字、mock `fetch`、或没调用 `registerRoutes`，都失败。旧脚本退出码不得写入本行 | mega | e2e | 🔱 fork `dsh-nano-kitesurf/scripts/e2e-ego.mjs` | P6-02 → ② | 只检查日志前缀，不算 |
+| `DNLS01-T19` | MCP client 连接数保持 0。`POST /nano-local-sandbox/shot` 不是 200。`requestRejection` 在 handler 之前，或失败 id 属于目录中已有的 id。先建 MCP 会话再请求，失败 | spike | 集成 | 🆕 `test/ui-without-agent.spike.test.mjs` | P6-02 → `T-O-11` | 返回 200 但 id 不是 `no-agent`，仍算假绿 |
+| `DNLS01-T20` | 见 §8.6。P7 之后才能 PASS。P6 跑它必须失败，原因是「未到硬切」 | 短途 | 契约 | 🆕 `test/residue.test.mjs` | P7 → ③ | 允许清单变长、含 `..`、或指向 `deprecated/`，判假绿 |
+| `DNLS01-T21` | 快照记下每个 `test()` / `it()` 的相对路径和标题。之后 `[DNK]` 与 `[DNT]` 的标题集合是快照的超集。已删模块的标题只有在 `[DNLS]` 有同一标题、且 `assert` / `strictEqual` 调用次数不少于旧标题时才能从旧包消失。空测试和 `assert.equal(1, 1)` 不算 | 短途 | 回归 | ♻️ 两包现有测试；🆕 `test/regression-count.test.mjs` | P6/P7 → 不删测试换绿 | 散文「已迁移」不算 |
+| `DNLS01-T22` | PASS 读的是 P6-03 已经落盘的那份清单，内容等于本次 `npm pack --dry-run`。存档不存在则失败，测试不得现场生成。HEAD 必须是存档里那个 commit 的子孙。清单含配方、不含 `linux-prefix/` | 短途 | 契约 | 🆕 `test/pack-manifest.test.mjs` | P6-03 → 没有存档不能开始 P7 | 白名单由本次 pack 输出自己比自己，不算 |
+| `DNLS01-T23` | §8.6 的九条副作用。每条都要有「攻击时副作用为 0」和「合法调用使同一副作用 ≥ 1」。pong 不算本项 | spike | 集成 | 🆕 `test/threat.spike.test.mjs` | P2-03/P3-02/P4-02/P7-03 → §7.3 | 测试自建、永不递增的计数器，不算 |
+| `DNLS01-T24` | 20 次都必须等于这一条轨迹，禁止只做 20 次互比：`ensure(A)` → `ensure(B)` → 两个 id 不同 → 只对 A 切 mode → A 返回 `sandbox.instance.policy-stale` 且 A 的 `stop` 仍为 0、B 的 fingerprint 与挂载根不变 → 关闭 A 的 socket（关闭前是 OPEN）→ A 返回 `sandbox.cdp.page-lost` 且正文不是关闭前 DOM、B 的 `lastUrl` 不变 → B 的 `status` 仍是原 phase | soak | 集成 | 🆕 `test/lifecycle.soak.test.mjs` | P7 之后的退出硬闸 | 空序列互比、或 20 次里只出现过一次，不算 |
+| `DNLS01-T25` | `accepted-risks.json` 末尾多出四条 `dnls:defer-`；追加前的每个 `fingerprint` 原样还在 | 短途 | 契约 | 🆕 `test/deferrals.test.mjs` | P8-02 → U10 落账 | 改掉旧行的 disposition 即失败 |
 
 **列定义**：类型用 `短途` / `spike` / `mega` / `soak`。层用 `unit` / `集成` / `契约` / `回归` / `e2e`。PASS 四元组在执行前保持为上表的占位；没有四元组不得把 §10 标成 `verified`。
 
@@ -575,10 +569,10 @@ DNLS01-macos-platform-cutover
 
 | 既有用例 | 处置 | 改动 | 起跑线状态 |
 |----------|------|------|------------|
-| `dsh-nano-kitesurf/test/*.mjs`（8 个文件） | ♻️ 沿用到 P7；P7 删除其中只测已删模块的文件，但 `DNLS01-T21` 的计数不得靠此下降——那些断言要在 `[DNLS]` 有对应新测试之后，计数比较才把「已迁移」从分母挪到新包 | 迁移对应项，不把文件删了就算通过 | 现行存在。本计划不把 `v1.1` 的「52/52」当作计数 |
+| `dsh-nano-kitesurf/test/*.mjs`（8 个文件） | ♻️ 沿用到 P7。删除标题必须满足 `DNLS01-T21`：同一标题在 `[DNLS]` 里，且断言调用次数不少于旧的 | 不把「从分母挪走」当豁免 | 现行存在。本计划不把 `v1.1` 的「52/52」当作计数 |
 | `dsh-nano-kitesurf/test/diagnostics.test.mjs` | 🔱 fork 进 `[DNLS]` | 加上 7 个 id 与 2 个 `sandbox.*` | 现行会把未知 id 落到 502（`statusOf('kitesurf.brand.new')`） |
 | `dsh-nano-kitesurf/test/skill.test.mjs` | 🔱 fork | 期望正文改为 `sandbox_*` | 现行锁的是旧正文 |
-| `dsh-nano-kitesurf/scripts/e2e-ego.mjs` | 🔱 fork 为 `[DNLS]` 套件 | 只改 base 与会话夹具；不断言「旧 URL 也能用」 | 旧套件在 P7 之前仍可跑，其绿灯不是 `DNLS01-T18` |
+| `dsh-nano-kitesurf/scripts/e2e-ego.mjs` | 🔱 fork 为新文件 | 保留 23 个 `record` 名字；改 HTTP 实参；改 `history-kv` 的 source 断言。旧文件在 P7 之前可以还在，它的退出码不是 T18 | 现行 23 个 `record`，不是口头的 20 |
 | `dsh-nano-terminal/test/run.mjs` | ♻️ 沿用 | P7 更新 attach / lane 断言 | 现行 包脚本 `npm test` |
 | `packages/dsh-host-route-guard/test/route-guard.test.mjs` | ♻️ 沿用，不改 guard | `[DNLS]` 另写路由表测试 | 不重写已有门禁语义 |
 | `scripts/check-*.mjs` 与 `route-scan.mjs` | ♻️ 沿用 | 只改扫描范围与等势断言 | 现行 route 门禁预期为失败（8-vs-24），所以 P5 之前的红不是回归 |
@@ -599,61 +593,77 @@ DNLS01-macos-platform-cutover
 - 不覆盖真实 NVX、WHP、xray、gateway、本地 S3（`T-O-1` / U10）→ 以后的 Windows 计划；`DNLS01-T02` 只证明空实现会失败。
 - 不覆盖 4G × N 的物理内存水位。`DNLS01-T10` 只证明声明的上限被执行。水位测量留给 U9 再调参，不在本计划假装测过。
 - 不把旧 `e2e-ego.mjs` 的绿灯写成 `[DNLS]` 对等。
-- 容量专用 errorId 在 QNA 追加修订前，对应用例保持 `deferred`（§4.3），不记为 PASS。
+- 不把「还没有容量 errorId」写成不做上限测试。上限用「不创建新实例」验收，见 `DNLS01-T10`。
 
 ### 8.5 测试保真（防假绿 · 刻死）
 
-- 每个标成通过的 Test-ID 都要有四元组。没有 commit、没有命令、没有 UTC 时间，就还是 `未观察`。
-- `deferred` 必须写原因。本计划预先允许的 `deferred` 只有容量 errorId 这一处。
+- 每个标成通过的 Test-ID 都要有四元组 `commit + 具体命令 + exit 0 + UTC`。缺一格就是 `未观察`。只给五个硬闸补四元组不够。
+- 本计划没有预先允许的 `deferred`。做不到的项保持 `未观察`，文档不得标 `executed`。
 - 预先存在的红（今天的 8-vs-24）在 P5 之前不得被写成「与本计划无关所以忽略」。P5 的工作就是把它变成真绿。
 - 安全项 `DNLS01-T23` 缺一条攻击，整项不算 PASS。
-- **计数不是价值**：`npm test` 的通过个数上升，但 `DNLS01-T21` 的测试个数下降，判假绿。
-- **旧套件不是新证据**：`DNLS01-T18` 的日志里若出现 `/nano-kitesurf/`，整项作废。
-- **门禁绿的假法**：插件没被扫到，所以 exit 0。`DNLS01-T17` 必须打印扫描到的插件名。
-- **回收的假法**：Map 删除了但 `stop` 没被调用。`DNLS01-T10` 看的是 backend 计数。
-- **page-lost 的假法**：直接 `throw` 那个 errorId，而 socket 仍然 open。`DNLS01-T14` 先关 socket 再看响应。
-- **零残留的假法**：搜索时排除 `dsh-nano-kitesurf/`。不允许。排除的只有 §8.6 的允许清单。
+- **计数不是价值**：标题可以一个不删，但断言次数变少，仍是假绿。空 `test()` 不算补回。
+- **旧套件不是新证据**：T18 的通过文件必须是 fork。旧脚本退出码写进来，整项作废。
+- **门禁绿的假法**：插件没进 `scanRoutes()` / `PLUGINS`，所以 exit 0。打印一行插件名不算扫到。
+- **回收的假法**：测试自己调用 `stop()`，或把超时数字传进 sweep。T10 禁止这两件事。
+- **page-lost 的假法**：socket 还开着就返回这个 id，或者只用「新页面」这一支把 `page-lost` 支路留空。
+- **零残留的假法**：允许清单用前缀、`..`、`deprecated/`，或把 `[DNK]` 整棵排除。见 §8.6。
 
 ### 8.6 逐项防假绿侦测
 
-搜索根（`DNLS01-T11` 与 `DNLS01-T20` 共用）：
+`DNLS01-T20` 的搜索从仓库根开始，跳过目录名 `.git` 与 `node_modules`。`.anote/` 里的 `.js` / `.mjs` 仍要扫；那里的 markdown 审查稿可以引用旧名字，但不许出现可执行文件里的命中。
 
-`dsh-nano-local-sandbox/`、`dsh-nano-kitesurf/`、`dsh-nano-terminal/`、`packages/`、`security/`、`scripts/`、`AGENTS.md`、`README.md`、各包 `AGENTS.md`。
+命中是这些字面量：`spawn('container'`、`execFile('container'`、`/nano-kitesurf/`、工具名形如 `` `kitesurf_ `` 或 `'kitesurf_` 或 `"kitesurf_`、以及 `proc:kitesurf`。
 
-允许清单（只能是这些前缀，测试断言允许清单的每一行都以此开头，多一行就失败）：
+允许留下命中的路径只有这四条，`path.resolve` 之后必须与其中一条相等。含 `..`、符号链接逃出仓库、或以 `deprecated/` 开头，都算失败。测试里的期望数组必须与这四条字面量逐字相等，长度不是 4 即失败。不得从环境变量或被测代码读入允许清单。
 
-- `docs/specs/dsh-nano-local-sandbox/qna/`
+- `docs/specs/dsh-nano-local-sandbox/qna/DNLS01-qna.md`
 - `docs/specs/dsh-nano-local-sandbox/dsh-nano-local-sandbox-v0.9.md`
 - `docs/specs/dsh-nano-local-sandbox/dsh-nano-local-sandbox-v1.1.md`
-- `docs/specs/dsh-nano-local-sandbox/plan/`（本文件会提到旧名字）
-- `deprecated/`
+- `docs/specs/dsh-nano-local-sandbox/plan/DNLS01-macos-platform-cutover.md`
+
+`dsh-nano-kitesurf/` 整体不在允许清单里。其它历史 markdown（例如 `docs/code-review/`、`docs/specs/dsh-nano-kitesurf/`）里的旧路径必须在 P8 改成「见 QNA」，否则 T20 失败。P6 跑 T20 必须失败，原因固定为未到硬切；P6 变绿就是假绿。
+
+`DNLS01-T23` 的九条，每条都要对照实验（合法调用使同一副作用 ≥ 1）：
+
+1. 坏 digest，以及不是 40 位的 `checkout.ref`，各自使 `ensureImage` 次数 = 0。
+2. checkout 路径含 `..` 或越出 profile 目录时，argv 既不进 `confine` 也不进 `spawn`。
+3. 没有 `ctx.sandbox` 时构建抛错，裸 `spawn('npm'` 与 `spawn('curl'` 次数 = 0。
+4. 实例 A 的 `workspaceRoot` 不得出现在实例 B 的 `mount` 参数里。
+5. 只改四元组以外的字段时 fingerprint 不变；只改 `workspaceRoot` 时 fingerprint 变。
+6. 未鉴权的 HTTP 与 WS upgrade，在 `requestRejection` 返回前 handler 次数 = 0；handshake 不得先于 rejection。
+7. argv 首词或配方正文出现 `container machine` 时 registry 拒绝且 `spawn` 次数 = 0。
+8. CDP `evaluate` 正文超过 2000 字符时不得执行，响应不得是上一次 DOM。
+9. `[DNT]` 在 `term.session.create` 之后不得创建 `audit.jsonl`。
+
+pong 留在 T15，不能用来凑本项的条数。
 
 | Test-ID | 假绿的典型做法 | 侦测 | 判失败的条件 |
 |---------|----------------|------|----------------|
-| T01 | inject 写进文档但不写进 `index.js` | 测试 import 真正的 `inject` 导出 | 集合不等 |
-| T02 | NVX 文件存在但方法是空函数返回成功 | 断言抛 `backend.nvx.unimplemented` | 任一方法 resolve |
+| T01 | 只改 README，不改 `index.js` 的 inject；`engines.dsh` 被放宽 | import 真正的 `inject`；`engines.dsh` 与 `[DNK]` 的范围字符串相等；`files` 不含 `linux-prefix` | 集合不等，或引擎范围被改宽 |
+| T02 | NVX 的空方法返回成功；只 grep 夹具 | 除 `capabilities()` 外逐个 reject；Apple 名词在构造时抛错 | `capabilities()` 以外的方法 resolve |
 | T03 | 用字符串拼接躲过 grep | 对语法树 / 源码同时搜 `SandboxProvider` 与 `.shell =` | 命中不在允许清单 |
 | T04 | 校验器只在 `describe` 跑，`ensure` 不跑 | `ensure` 路径也要拒绝，且 `ensureImage` 计数为 0 | 计数 > 0 |
 | T05 | 测试把 `scope` 写死成期望值，不读 YAML | 从 `profile.yaml` 读 | 磁盘值不是 `session` |
 | T06 | confine 双被调用了，但后面又裸 spawn | 两者都计数 | 裸 spawn > 0 |
-| T07 | 用调用次数当幂等 | 比较 `instanceId` | 两次 id 不同 |
-| T08 | 只断言错误字符串 | 同时断言 `expectedFingerprint`、旧实例未 `stop`、另一实例 mount 根不变 | 任一缺失 |
-| T09 | 只关了 jsonl，KV 仍写 | 两处写者都计数 | 合计 ≠ 1 |
-| T10 | 把生产超时改成 1ms 来让测试变快 | 生产 YAML 仍是 1800000；短超时只在夹具 profile | 生产文件被改成短值 |
-| T11 | 搜索时 `--glob !dsh-nano-kitesurf` | 搜索根固定 | 允许名单外命中 |
-| T12 | 20 个名字里夹一个别名，测试只断言「含有 ensure」 | 集合相等 | 差集非空，或出现一次宿主快照 POST |
-| T13 | 先注册再补 rejection | 断言抛错发生在第一次 `webServer.register` 之前 | register 计数 > 0 |
-| T14 | 直接返回 `page-lost` 但 ws 仍 OPEN | 先关闭 A 的 socket；比较 DOM 哈希；读 B 的 `lastUrl` | 哈希相等或 B 变化 |
-| T15 | 客户端仍接受 `path`，只是服务器不发 | 源码断言 `lanes.js` 无 `attach?.path`；schema 拒绝 `lines:501` | 兜底表达式仍在，含 `lib/client.js` 构建产物 |
-| T16 | 技能文档「包含」工具名即可 | 整表字符串相等 | 有第二份手写表 |
-| T17 | `expected = 24` 或把新插件留在扫描外 | 等势断言 + 打印插件名 + 夹具多一行必须非 0 | exit 0 但插件名缺失 |
-| T18 | 提交旧 e2e 日志 | 日志 URL 前缀检查 | 出现 `/nano-kitesurf/` |
-| T19 | 测试自己先建立 MCP 会话 | 进程内没有 MCP client 连接 | 出现自造 `no-agent` |
-| T20 | 在 P6 就把搜索根缩小以便变绿 | P6 执行本测试时期望 **失败**；允许清单前缀测试独立存在 | P6 它绿了，或允许清单指向 `dsh-nano-kitesurf/` |
-| T21 | 删掉失败的 `test()` | 与 P6-03 清单比个数 | 个数下降且没有「新包对应测试」的迁移记录 |
-| T22 | `npm pack` 成功但没看文件名 | 双向集合对比 | 含 `linux-prefix` 或缺 Dockerfile |
-| T23 | 只测 digest 快乐路径的反面一次 | 六条攻击都要有「坏动作计数 = 0」 | 缺一条 |
-| T24 | 跑 1 次就当 soak | 固定 20 次，序列全等 | 次数 < 20 或序列分叉 |
+| T07 | 两次 ensure 各 create 一次，再把 Map 写成同一个 id | id 相等且 `create` = 1；无模块级 `phase` | 只比较 id |
+| T08 | 只改 mode，不算 `workspaceRoot` | 改根必须变哈希且不复用 id；改无关标签哈希不变 | 缺改根这一条 |
+| T09 | 测试自己的计数器恒为 1 | 看 volume 上的记录数，并确认没有第二份文件 | 计数器不观察磁盘 |
+| T10 | 直接 `stop()`，或 `sweep(50)`，或无条件 stop | 超时只能从夹具 profile 读出；未超时 `stop` = 0；达上限不再创建 | 生产 YAML 被改成短值 |
+| T11 | P6 就用全仓断言，于是把 `[DNK]` 排除出搜索 | P6 只扫 `[DNLS]` 包；P7 用 §8.6 的四条允许路径 | 排除 `[DNK]` 目录 |
+| T12 | 只断言「含有 ensure」 | 集合差为空，且没有宿主快照 POST | 差集非空 |
+| T13 | 先注册再补 rejection；`sessionBinding` 漏掉 | `register` 次数在抛错前为 0；每条 spec 的 `sessionBinding === true` | 缺一条 binding |
+| T14 | 只做恢复分支，不测 OPEN 时不得 `page-lost` | 两段都要失败条件 | 只有「或」 |
+| T15 | 只拒绝 `lines: 501`；拆掉 `local` | `cols`/`rows`/额外字段/`additionalProperties`；`local` 仍能开；`audit.jsonl` 不出现 | 只绿了 schema 的一条 |
+| T16 | 正文「包含」工具名 | 整表逐字相等；`window.__nks` 为 0 | 有第二份手写表 |
+| T17 | `console.log` 插件名；多一行加在已经被扫描的旧插件上 | 名字来自 `scanRoutes()` 与两份 `PLUGINS`；去掉 `[DNLS]` 后门禁非 0 | 只有正向 exit 0 |
+| T18 | 只改 base 常量，evaluate 里仍是旧 URL；删掉 `history-kv` | 23 个名字从 fork 文件解析；URL 从实参采集 | 旧脚本退出码被写进证据 |
+| T19 | 返回 200，id 不是 `no-agent` | 不是 200，且 rejection 在 handler 前或 id 属于目录 | 先连上 MCP |
+| T20 | 允许清单加长，或 `plan/../../../dsh-nano-kitesurf` | 四条实路径相等；P6 必须失败 | 清单长度不是 4 |
+| T21 | 删测试再写「已迁移」，或空 `test()` 把个数补回 | 标题超集 + 断言调用次数 | 只有个数 ≥ 快照 |
+| T22 | 存档不存在时现场 pack | 读事先落盘的清单；HEAD 是其子孙 | 清单自己比自己 |
+| T23 | 自建计数器恒为 0；用 pong 占一条 | 本节九条都有对照实验 | 缺一条 |
+| T24 | 20 个空数组互比 | 与本节规定轨迹深相等 | 次数到了但轨迹缺格 |
+| T25 | 改旧 risk 的 disposition 来「整理台账」 | 旧 fingerprint 集合是超集，新四条以前缀区分 | 旧行被改写 |
 
 ---
 
@@ -663,7 +673,7 @@ DNLS01-macos-platform-cutover
 
 | 风险 / 依赖 | 描述 | 当前判断 | 应对方式 |
 |-------------|------|----------|----------|
-| 容量 errorId 未在 QNA 登记 | §4.3 不能假装已经扩约 | high | 修订前对应用例 `deferred`；不新增别的 id |
+| 容量没有单独的 errorId | R-5 只登记了两个 `sandbox.*` | medium | 用「不创建新实例、响应不是 2xx」验收，不新造 id，也不把 `policy-stale` 挪用过来 |
 | 门禁今天是红的 | `route-scan.mjs:210-212` | high | P5 先于 P6；不许用排除插件的方式转绿 |
 | 硬切无运行时回退 | `T-O-10` | high | P6-03 快照 commit + pack 清单；失败就回到 commit |
 | CDP 丢页被 UI 当成「还在」 | `T-O-16` | high | `DNLS01-T14` 比较 DOM 哈希 |
@@ -697,7 +707,7 @@ DNLS01-macos-platform-cutover
 2. `[DNT]` 仍有 `local` lane；sandbox 终端通过现有 `McpLane` 使用 `attach.url`；没有 `sandbox` lane，没有 isolate echo，没有第二份 `audit.jsonl`。
 3. 三道既有门禁 `exit 0`，三份安全台账数字一致，没有新的 release-gate。
 4. U9 的数字只活在 `profile.yaml`；U10 的四行在 `accepted-risks.json`。
-5. QNA 仍是 `frozen`。除容量 errorId 那一处预先声明的缺口外，没有第二份合同。
+5. QNA 仍是 `frozen`。公共 errorId 没有超出 R-5 的两个 `sandbox.*`。`[DNT]` 的 `local` 事件写在 `[DNLS]` 那一份审计里。
 
 ---
 
@@ -720,7 +730,7 @@ DNLS01-macos-platform-cutover
 | 构建不裸奔 | P2-03 | T06 T23 | 执行时填写 | 未观察 |
 | session 实例与 fingerprint | P3-01 P3-02 | T07 T08 | 执行时填写 | 未观察 |
 | history 单真源 | P3-03 | T09 | 执行时填写 | 未观察 |
-| 资源治理可观察 | P3-04 | T10 | 执行时填写 | 未观察 |
+| 资源治理可观察（含上限，不是 deferred） | P3-04 | T10 | 执行时填写 | 未观察 |
 | 特权只在 backend-apple | P7-01 | T11 | 执行时填写 | 未观察 |
 | 20 工具、无快照倒挂 | P4-01 | T12 | 执行时填写 | 未观察 |
 | 路由 fail-closed | P4-02 | T13 | 执行时填写 | 未观察 |
@@ -733,24 +743,24 @@ DNLS01-macos-platform-cutover
 | 不删测试换绿 | P6 P7 | T21 | 执行时填写 | 未观察 |
 | 包内容 | P6-03 P8 | T22 | 执行时填写 | 未观察 |
 | 退出 soak | P7 之后 | T24 | 执行时填写 | 未观察 |
-| 容量专用 id | P3-04 | T10 的容量半边 | 无 | deferred：等 QNA 按 §9 追加；见 §4.3 |
+| U10 四行 defer | P8-02 | T25 | 执行时填写 | 未观察 |
 
 ### 10.3 Definition of Done
 
 | 维度 | 完成定义 |
 |------|----------|
-| 功能 | §5 各 Phase 的预期全部为真；容量 id 要么已有 QNA 修订并测试通过，要么仍是表中的 `deferred` 且没有假的 PASS |
-| 测试 | §8 除该 `deferred` 行外全 PASS；T17、T18、T20、T23、T24 四元组齐全 |
+| 功能 | §5 各 Phase 的预期全部为真。上限拒绝被 T10 实际打到，而不是标成 deferred |
+| 测试 | §8 每一个标成 PASS 的 Test-ID 都有四元组。缺任何一格，该行保持 `未观察`，文档不得是 `executed` |
 | 文档 | P8-01 的五条预期为真；QNA 冻结行未被修改 |
 | 风险收敛 | §7.3 的每条攻击在 T23 有计数；U10 已追加；无运行时回退开关被加回来 |
 | 可交付性 | 三包 `npm pack --dry-run` 与 T22 一致；worktree 按 `AGENTS.md:40` 在合并后删除 |
 
 ### 10.4 NOT-成功识别
 
-任一退出硬闸（T17 在 P6 之前、T18、T20、T23、T24）为 `未观察` 或失败，本计划不得标 `executed`。`deferred` 的容量行若被写成 `verified`，同样不得标 `executed`。不允许用「旧 e2e 20/20」填 T18。
+任一退出硬闸（T17 在 P6 之前、T18、T20、T23、T24、以及 T10 的上限半边）为 `未观察` 或失败，本计划不得标 `executed`。没有预先允许的 `deferred`。不允许用旧 e2e 的退出码填 T18。T20 的允许清单长度不是 4，也不得标通过。
 
 ---
 
 ## 11. 执行日志回填（仅 `executed` 状态使用）
 
-文档状态为 `draft`。本节按模板省略，执行完成前不回填。
+文档状态为 `reviewed`。本节按模板省略，执行完成前不回填。

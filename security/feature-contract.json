@@ -81,6 +81,74 @@
       "responseShape": "200 {ok:true,profiles?,activeId?,pending?} | {ok:false,error}"
     },
     {
+      "plugin": "dsh-nano-notepad",
+      "path": "/nano-notepad/fx-core.wasm",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "bodyLimit": {
+        "GET": 0,
+        "HEAD": 0
+      },
+      "responseShape": "200 application/wasm (vendored lib/fx-core.wasm static asset)"
+    },
+    {
+      "plugin": "dsh-nano-notepad",
+      "path": "/nano-notepad/fx/models",
+      "methods": [
+        "GET"
+      ],
+      "bodyLimit": {
+        "GET": 0
+      },
+      "responseShape": "200 {ok:true,models[{key,provider,model,contextWindow}]} | 500 {ok:false,reason:'models',detail}"
+    },
+    {
+      "plugin": "dsh-nano-notepad",
+      "path": "/nano-notepad/fx/chat/completions",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 33554432
+      },
+      "responseShape": "400 {ok:false,reason:'model-key-format'} | 502 {ok:false,reason:'prepareCall'} | 200 text/event-stream (OpenAI chat.completion.chunk SSE + [DONE])"
+    },
+    {
+      "plugin": "dsh-nano-notepad",
+      "path": "/nano-notepad/pipeline/s3",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 33554432
+      },
+      "responseShape": "200 {ok:true,...result(op: putJson|putBytes|getJson|getBytes|del|list)} | 500 {ok:false,reason:'failed'}"
+    },
+    {
+      "plugin": "dsh-nano-notepad",
+      "path": "/nano-notepad/pipeline/claim",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 4096
+      },
+      "responseShape": "200 {ok:true,result(op: acquire|renew|read|release)} | 500 {ok:false,reason:'failed'}"
+    },
+    {
+      "plugin": "dsh-nano-notepad",
+      "path": "/nano-notepad/rpc",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 4096
+      },
+      "responseShape": "200 {ok:true,result} | 200 {ok:false,reason:'unknown-method'} | 500 {ok:false,reason:'failed'} — read-only whitelist (manifest.get/corpus.list/corpus.read/lsrag.manifest/claim.read)"
+    },
+    {
       "plugin": "dsh-nano-explorer-extra",
       "path": "/nano-explorer-extra/status",
       "methods": [
@@ -112,6 +180,17 @@
         "POST": 65536
       },
       "responseShape": "200 {ok:true,output?} | 400 {error}"
+    },
+    {
+      "plugin": "dsh-nano-explorer-extra",
+      "path": "/nano-explorer-extra/fetch",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 65536
+      },
+      "responseShape": "200 {ok:true,summary} | 400 {error}"
     },
     {
       "plugin": "dsh-nano-explorer-extra",
@@ -773,7 +852,9 @@
       "methods": [
         "POST"
       ],
-      "bodyLimit": 16384,
+      "bodyLimit": {
+        "POST": 16384
+      },
       "responseShape": "200 {ok:true,profiles[],activeId,seededFromEnv} | 5xx {ok:false,reason}"
     },
     {
@@ -782,7 +863,9 @@
       "methods": [
         "POST"
       ],
-      "bodyLimit": 16384,
+      "bodyLimit": {
+        "POST": 16384
+      },
       "responseShape": "200 {ok:true,…(list/save/remove/activate/test+orgMatch/security/ssh-key actions)} | 4xx/5xx {ok:false,reason}"
     },
     {
@@ -791,7 +874,9 @@
       "methods": [
         "POST"
       ],
-      "bodyLimit": 65536,
+      "bodyLimit": {
+        "POST": 65536
+      },
       "responseShape": "200 upstream list json | 4xx/5xx {ok:false,reason,status}"
     },
     {
@@ -800,7 +885,9 @@
       "methods": [
         "POST"
       ],
-      "bodyLimit": 65536,
+      "bodyLimit": {
+        "POST": 65536
+      },
       "responseShape": "200 upstream op json | 4xx/5xx {ok:false,reason,status}"
     },
     {
@@ -809,7 +896,9 @@
       "methods": [
         "POST"
       ],
-      "bodyLimit": 262144,
+      "bodyLimit": {
+        "POST": 262144
+      },
       "responseShape": "200 upstream {session_id,url,...} | 4xx/5xx {ok:false,reason,status}"
     },
     {
@@ -818,7 +907,9 @@
       "methods": [
         "POST"
       ],
-      "bodyLimit": 65536,
+      "bodyLimit": {
+        "POST": 65536
+      },
       "responseShape": "200 upstream message ack | 4xx/5xx {ok:false,reason,status}"
     },
     {
@@ -827,7 +918,9 @@
       "methods": [
         "POST"
       ],
-      "bodyLimit": 16384,
+      "bodyLimit": {
+        "POST": 16384
+      },
       "responseShape": "200 upstream session json | 4xx/5xx {ok:false,reason,status}"
     },
     {
@@ -836,7 +929,9 @@
       "methods": [
         "POST"
       ],
-      "bodyLimit": 16384,
+      "bodyLimit": {
+        "POST": 16384
+      },
       "responseShape": "200 upstream session json | 4xx/5xx {ok:false,reason,status}"
     },
     {
@@ -845,7 +940,9 @@
       "methods": [
         "POST"
       ],
-      "bodyLimit": 16384,
+      "bodyLimit": {
+        "POST": 16384
+      },
       "responseShape": "200 upstream ack | 4xx/5xx {ok:false,reason,status}"
     },
     {
@@ -854,7 +951,9 @@
       "methods": [
         "POST"
       ],
-      "bodyLimit": 16384,
+      "bodyLimit": {
+        "POST": 16384
+      },
       "responseShape": "200 {ok:true,session_id,shell,forward,publicKey,enrollHint} | 422 {ok:false,reason}"
     }
   ],

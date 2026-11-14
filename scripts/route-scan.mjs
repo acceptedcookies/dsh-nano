@@ -63,28 +63,46 @@ function scanNanoNotepad() {
   const MAX_SAVE = bytes('MAX_SAVE_BYTES')
   const MAX_S3 = bytes('MAX_S3_BODY_BYTES')
 
-  // Registration order: three literal ctx.effect blocks (SAVE, READ, MP),
-  // then the four s3Route() calls in listing order.
+  // Every spec in the SPECS array is `path: X_ROUTE, methods: [...]` — parse
+  // the array so an added route cannot slip past the gate. bodyLimit is NOT
+  // inline in the spec: handlers read `route.bodyLimit` off the baked route
+  // table, so the per-route byte cap is looked up there (the table itself is
+  // generated from security/route-sensitivity.json — route presence comes
+  // from index.js code, the cap is a lookup, not a second source of truth).
+  const tableText = src('dsh-nano-notepad/src/host/route-table.js')
+  const tableCap = {}
+  for (const match of tableText.matchAll(/"path": "([^"]+)"[\s\S]*?"bodyLimit": (\d+)/g)) {
+    tableCap[match[1]] = Number(match[2])
+  }
+
   const rows = []
   const seen = new Set()
-  const push = (constName, bodyBytes) => {
-    const path = consts[constName]
-    if (!path || seen.has(path)) return
+  for (const match of text.matchAll(/path: ([A-Z0-9_]+),\s*\n?\s*methods: \[([^\]]*)\]/g)) {
+    const path = consts[match[1]]
+    if (!path || seen.has(path)) continue
     seen.add(path)
+    const methods = [...match[2].matchAll(/'(GET|HEAD|POST|PUT|DELETE|PATCH)'/g)].map((m) => m[1])
+    if (methods.length === 0) continue
+    const cap = tableCap[path]
+    if (cap === undefined) {
+      throw new Error(`route-scan: notepad spec ${match[1]} (${path}) has no baked bodyLimit in src/host/route-table.js — run scripts/build-client.mjs`)
+    }
     rows.push({
       plugin: 'dsh-nano-notepad',
       path,
-      methods: ['POST'],
-      bodyLimit: { POST: bodyBytes },
-      source: { file, line: lineOf(text, `const ${constName}`) },
+      methods,
+      bodyLimit: Object.fromEntries(methods.map((method) => [method, method === 'GET' || method === 'HEAD' ? 0 : cap])),
+      source: { file, line: lineOf(text, `const ${match[1]}`) },
     })
   }
-  push('SAVE_ROUTE', MAX_SAVE)
-  push('READ_ROUTE', MAX_SAVE)
-  push('MP_ROUTE', MAX_SAVE)
-  // The s3Route() wrapper binds every S3_* constant to POST + MAX_S3_BODY_BYTES.
+  // The three oldest routes keep their constant-derived caps as a cross-check:
+  // if MAX_SAVE_BYTES/MAX_S3_BODY_BYTES drifted from the baked table, the
+  // ledger would silently lie — fail loudly instead.
+  for (const name of ['SAVE_ROUTE', 'READ_ROUTE', 'MP_ROUTE']) {
+    if (tableCap[consts[name]] !== MAX_SAVE) throw new Error(`route-scan: ${name} table cap ${tableCap[consts[name]]} != MAX_SAVE_BYTES ${MAX_SAVE}`)
+  }
   for (const name of ['S3_STATUS_ROUTE', 'S3_TEST_ROUTE', 'S3_OBJECT_ROUTE', 'S3_CONFIG_ROUTE']) {
-    push(name, MAX_S3)
+    if (tableCap[consts[name]] !== MAX_S3) throw new Error(`route-scan: ${name} table cap ${tableCap[consts[name]]} != MAX_S3_BODY_BYTES ${MAX_S3}`)
   }
   return rows
 }

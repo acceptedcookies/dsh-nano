@@ -26,7 +26,7 @@
 | C6 | DO alarm API：`storage.setAlarm(ts)` / `getAlarm()`；`alarm(info)` handler 带 `retryCount`；DO class 在 wrangler `durable_objects.bindings` + `migrations.new_sqlite_classes` 注册 | `examples/alarm/index.js` |
 | C7 | DO 状态是每对象一个 SQLite db；`storage.put/get` 持久；hibernation/eviction 由 `CELLD_*` 控制 | `README.md`、`docs/services/durable-objects.md` |
 | C8 | v0.2.0 起 resident cell ~471KB/个（共享 isolate 池），isolate 在 await 时释放 | v0.2.0 release notes |
-| C9 | **VM 底座合拢**：`sandbox-nano-nvx` 已论证 NVX guest 永远是 Linux、Apple container 是 macOS 原生 VM、L1 运行时管理是用户级。**celld 作为 linux-x64 负载进 VM，Windows 无需移植/WSL2**。这消解了 celld 的 Windows 硬依赖（C4） | `docs/eval/26-nov/sandbox-nano-nvx.md` §0.3/§5.8/§5.9 |
+| C9 | **VM 底座合拢**：`dsh-nano-local-sandbox-v0.9` 已论证 NVX guest 永远是 Linux、Apple container 是 macOS 原生 VM、L1 运行时管理是用户级。**celld 作为 linux-x64 负载进 VM，Windows 无需移植/WSL2**。这消解了 celld 的 Windows 硬依赖（C4） | `docs/specs/dsh-nano-local-sandbox/dsh-nano-local-sandbox-v0.9.md` §0.3/§5.8/§5.9 |
 
 ## §2 待验证命题（V-xx）
 

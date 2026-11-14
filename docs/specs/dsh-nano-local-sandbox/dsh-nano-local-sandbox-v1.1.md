@@ -4,8 +4,8 @@
 > **建档日期**：`2026-11-14`（Asia/Shanghai）
 > **文档状态**：`draft — 待 [业主] 复核`（本文件不产生任何实现承诺，不改动任何代码/配置/profile）
 > **读者**：[业主]、后续在本仓库实施 [DNLS] 的 agent
-> **上游文档**：[`sandbox-nano-nvx.md`](sandbox-nano-nvx.md) · [`../../code-review/26-nov/security-audit.md`](../../code-review/26-nov/security-audit.md) · [`../../code-review/26-nov/review-03.md`](../../code-review/26-nov/review-03.md) · [`../../../test/spike/model-execution-sandbox/README.md`](../../../test/spike/model-execution-sandbox/README.md)
-> **评估对象**：[业主] 于 2026-11-14 提出的 [DNLS] 心智模型；[DNK] 中已实现的 macOS Apple container profile 管理能力；[DNK]/[DNT] 现有 CDP/MCP 协议面；与 [`sandbox-nano-nvx.md`](sandbox-nano-nvx.md) v1 设计的异同
+> **上游文档**：[`dsh-nano-local-sandbox-v0.9.md`](dsh-nano-local-sandbox-v0.9.md) · [`../../code-review/26-nov/security-audit.md`](../../code-review/26-nov/security-audit.md) · [`../../code-review/26-nov/review-03.md`](../../code-review/26-nov/review-03.md) · [`../../../test/spike/model-execution-sandbox/README.md`](../../../test/spike/model-execution-sandbox/README.md)
+> **评估对象**：[业主] 于 2026-11-14 提出的 [DNLS] 心智模型；[DNK] 中已实现的 macOS Apple container profile 管理能力；[DNK]/[DNT] 现有 CDP/MCP 协议面；与 [`dsh-nano-local-sandbox-v0.9.md`](dsh-nano-local-sandbox-v0.9.md) v1 设计的异同
 > **执行边界**：本机只读探查（`container inspect` / `curl /health` / `npm test`），未重启、未重装、未修改三个 dsh 实例；未创建 [DNLS] 包
 
 ---
@@ -29,7 +29,7 @@
 | §3 | 当前 CDP 与 MCP 协议及接口详细分析 | 要求 3 |
 | §4 | 心智模型 → macOS topology 映射与视觉投影 | 要求 4 |
 | §5 | macOS / NVX 统一后端抽象 + 上层 spec 清单 | 要求 5 |
-| §6 | 与 [`sandbox-nano-nvx.md`](sandbox-nano-nvx.md) 的逐项对比与差异判断 | 要求 6 |
+| §6 | 与 [`dsh-nano-local-sandbox-v0.9.md`](dsh-nano-local-sandbox-v0.9.md) 的逐项对比与差异判断 | 要求 6 |
 | §7 | 全量工作分析与业务分簇 | 要求 7 |
 | §8 | 分簇台账（`file:line` + 合约单位） | 要求 8 |
 | §9 | Verdict：对 nano 插件簇的多维度后端价值 | 要求 9 |
@@ -601,7 +601,7 @@ flowchart TB
 
 [业主] 第 1 点是「先 macOS，Windows 后置」，但第 5 点要求「macOS 与 NVX 统一后端抽象」。这两条合起来意味着：**首期只实现 macOS，但 backend 接口的形状必须按「两种实现都装得下」来设计**，否则 Windows 接入会演变成一次 L2 合同重做（违反「不得擅自扩约」）。
 
-前序 [`sandbox-nano-nvx.md`](sandbox-nano-nvx.md) §8B.7（`L1919-1927`）已经证明两侧原语同构：capability 集合、只读挂载、网络策略、内存/CPU 上限、UID/GID 一一对应，且 §8B.8（`L1929-1938`）证明 `ShellSandboxInfo` 四字段在两个后端里形状一致。这份同构性结论在 [DNLS] 下**直接可复用**（见 §6.4）。
+前序 [`dsh-nano-local-sandbox-v0.9.md`](dsh-nano-local-sandbox-v0.9.md) §8B.7（`L1919-1927`）已经证明两侧原语同构：capability 集合、只读挂载、网络策略、内存/CPU 上限、UID/GID 一一对应，且 §8B.8（`L1929-1938`）证明 `ShellSandboxInfo` 四字段在两个后端里形状一致。这份同构性结论在 [DNLS] 下**直接可复用**（见 §6.4）。
 
 ### 5.2 Backend 能力矩阵（草案）
 
@@ -761,7 +761,7 @@ health:
 
 ---
 
-## 6. 与 [`sandbox-nano-nvx.md`](sandbox-nano-nvx.md) 的设计对比与差异判断
+## 6. 与 [`dsh-nano-local-sandbox-v0.9.md`](dsh-nano-local-sandbox-v0.9.md) 的设计对比与差异判断
 
 > 前序文档 2433 行，`document status: complete`（`L10`），基准 DSH checkout `0.2.2-rc.2`（`L6`）；本文基准 `0.2.2-rc.3` 安装版（§0.5）。两者相隔 macOS 内部适配已实际完成（见 §6.3 差异 f），因此**前序的若干「未实测」结论在本文时点已经被事实推翻**，这不是文档错误，是时间差，必须显式登记。
 
@@ -1087,7 +1087,7 @@ C1 ──▶ C2 ──▶ C3 ──▶ C4 ──▶ C5
 | C7-2 双轨开关 | —（须新增） | `migration` | 新建 | [DNK] | 旧容器路径 / [DNLS] 路径可切换，G1 前不删旧码 |
 | C7-3 单测回归 | [DNK] `test/*.mjs` 52 项、[DNT] `test/run.mjs` 6 项 | `migration` | 保留 | [DNK]/[DNT]/[DNLS] | G7：52/52 + 6/6 + [DNLS] 新增用例 |
 | C7-4 tarball / 构建 | `dsh-nano-kitesurf-0.1.0.tgz`、`dsh-nano-terminal-0.1.0.tgz`、`package.json` files | `migration` | 重写 | 三包 | `npm pack --dry-run` 含全部运行时文件 |
-| C7-5 前序文档回指针 | `sandbox-nano-nvx.md:1050-1063`（未实跑）、`:2231`（待办 #2）、`:2408`（附录 C.2） | `migration` | 重写（加注） | 文档 | 前序「未实测」不再被当作当前事实 |
+| C7-5 前序文档回指针 | `dsh-nano-local-sandbox-v0.9.md:1050-1063`（未实跑）、`:2231`（待办 #2）、`:2408`（附录 C.2） | `migration` | 重写（加注） | 文档 | 前序「未实测」不再被当作当前事实 |
 | C7-6 门禁与台账一致性 | `scripts/check-route-sensitivity.mjs`、`scripts/check-feature-contract.mjs`（当前 exit 1） | `contract-ledger` | 重写 | [DNLS] | G7：两门禁 exit 0，三份台账数字一致 |
 | C7-7 发布姿态 | `README.md:3`（旧「三个活跃插件」表述）、`AGENTS.md:23-29` | `migration` | 重写 | 文档 | 插件清单含 [DNLS]；包合同与实现一致 |
 
@@ -1198,7 +1198,7 @@ C1 ──▶ C2 ──▶ C3 ──▶ C4 ──▶ C5
 1. **方向正确**：V1–V5 的收益来自「平台化」本身，与 Windows 无关，因此 [业主] 第 1 点「先 macOS」不损失核心价值，反而把前序公认构建成本最低的分支（前序 §8C.8 `L2145`）选为首期实验场。
 2. **时机成熟**：[DNK] 已经把 Apple container 的镜像、硬化参数、端口韧性、相位机、自检、MCP 桥、CDP 客户端全部跑通并 e2e 20/20（§2.8）；前序 §9.6 待办 #2 已完成。[DNLS] 不是从零造平台，是**把已验证的垂直切片抽象成水平底座**。
 3. **但合同风险高于技术风险**：真正会让项目失败的是 RK1（六份合同未冻结）、RK2（shared/session 未定）、D4（合规前置未清），而不是 Apple container 或 NVX 能不能跑。三者都属「不得擅自扩约」范畴，必须 [业主] 决定。
-4. **前序文档不做废、只降级**：`sandbox-nano-nvx.md` 的实测数据、Apple container 规格、能力对照表、L0/L1/S3 权限分层、脚本契约全部可继承（§6.4）；需要修订的是「不打包运行时 / 2 个包 / 未实跑」三类结论（§6.5）。建议在 [DNLS] 落地后给前序文档加一条**状态回指针**，而不是重写它 —— 保留评估链的可追溯性。
+4. **前序文档不做废、只降级**：`dsh-nano-local-sandbox-v0.9.md` 的实测数据、Apple container 规格、能力对照表、L0/L1/S3 权限分层、脚本契约全部可继承（§6.4）；需要修订的是「不打包运行时 / 2 个包 / 未实跑」三类结论（§6.5）。建议在 [DNLS] 落地后给前序文档加一条**状态回指针**，而不是重写它 —— 保留评估链的可追溯性。
 
 ### 9.4 首期 Definition of Done（建议，待 Q7 确认）
 

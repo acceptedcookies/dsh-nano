@@ -107,7 +107,7 @@ dsh 越用越卡
 
 ### 3.5 celld 的三种部署形态（VM 底座合拢后）
 
-「celld 在哪跑」在 `sandbox-nano-nvx` 的 VM 底座落地后不再是问题——**NVX guest 永远是 Linux，Apple container 是 macOS 原生 VM**，celld 作为 linux-x64 负载进 VM 即可，Windows 不需要移植也不需要 WSL2。三种形态：
+「celld 在哪跑」在 `dsh-nano-local-sandbox-v0.9` 的 VM 底座落地后不再是问题——**NVX guest 永远是 Linux，Apple container 是 macOS 原生 VM**，celld 作为 linux-x64 负载进 VM 即可，Windows 不需要移植也不需要 WSL2。三种形态：
 
 | 形态 | 适用 | 代价 |
 |---|---|---|

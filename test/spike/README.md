@@ -12,7 +12,7 @@
 |---|---|---|---|
 | `wx-article-ingest/` | 微信公众号文章导入 + 富文本渲染 | `dsh-dev.local` · mp.weixin.qq.com/mmbiz.qpic.cn（仅 GET） | 已收口；V-01–V-10 全 PASS（V-01 需伪装 UA、V-09 需深色适配层） |
 | `notepad-wasm-fx/` | notepad 内置 libfx `fx-core.wasm` + 经 `ctx.llm` 桥到 model-selector 同一份模型清单 | `dsh-dev.local` · 127.0.0.1:3425（本机 magpie，仅作 `ctx.llm` 下游）· npm registry（libfx 下载） | 已建档；V-01–V-12 全 NOT_RUN（V-01 JSPI 为一票否决项） |
-| `model-execution-sandbox/` | DSH 原生 `SandboxMode` 三档策略的实际边界（写入/读取/网络/进程/跨会话），为 `sandbox-nano-nvx` 提供基线 | 已安装的 `@deepseek-ai/dsh@0.2.2-rc.1` 宿主包 + `/usr/bin/sandbox-exec`（不启动实例；外部仅 `GET example.com` 探网络面） | 已收口；V-01–V-12 全 PASS（写入面 7/7 受控；读/网/进程三域零覆盖；`/tmp` 跨会话泄漏） |
+| `model-execution-sandbox/` | DSH 原生 `SandboxMode` 三档策略的实际边界（写入/读取/网络/进程/跨会话），为 `dsh-nano-local-sandbox-v0.9` 提供基线 | 已安装的 `@deepseek-ai/dsh@0.2.2-rc.1` 宿主包 + `/usr/bin/sandbox-exec`（不启动实例；外部仅 `GET example.com` 探网络面） | 已收口；V-01–V-12 全 PASS（写入面 7/7 受控；读/网/进程三域零覆盖；`/tmp` 跨会话泄漏） |
 | `celld-state-and-alarm/` | `dsh-nano-session-manager` 的外部 actor 选型：celld 能否承担 durable-state / alarm / 跨 dsh 重启存活 / 可接受开销 | 本机 macOS arm64 上 `celld dev` 单节点（不碰任何 dsh 实例；`GET` 官方二进制） | 已建档；V-01–V-12 全 NOT_RUN、V-13 deferred（V-03/V-04 一票否决；V-13 celld-in-VM 待 NVX 底座落地后验） |
 
 每个工作区的方法、判读门槛和结论以其自己的 `README.md` 为准。

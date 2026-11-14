@@ -98,12 +98,12 @@ test/spike/model-execution-sandbox/
 |---|---|
 | 每条 V 的终态词 + 关键实测值 | §3 表格「终态」列 + §7 过程/结论 |
 | 原始日志 | `test/spike/model-execution-sandbox/evidence/*.log`（`.gitignore`，不入库；README 只写指针与数字） |
-| 能力/缺口对照表 | §7.2，供后续 sandbox-nano-nvx 设计直接引用 |
+| 能力/缺口对照表 | §7.2，供后续 dsh-nano-local-sandbox-v0.9 设计直接引用 |
 | 部署姿态事实 | §7.4 |
 | 风险与决策建议 | §8 |
 | 收口状态 | §7.5 |
 
-**转正路径**：本 spike 收口后，结论进 `docs/eval/26-nov/sandbox-nano-nvx.md`（已在 §3 引用本 spike 的数值）；若要改产品行为，走对应包的 `docs/specs/**`。宪章可在转正后整目录删除。
+**转正路径**：本 spike 收口后，结论进 `docs/specs/dsh-nano-local-sandbox/dsh-nano-local-sandbox-v0.9.md`（已在 §3 引用本 spike 的数值）；若要改产品行为，走对应包的 `docs/specs/**`。宪章可在转正后整目录删除。
 
 ---
 
@@ -193,7 +193,7 @@ test/spike/model-execution-sandbox/
 | 生产实例 `danger-full-access`（V-11） | 生产上沙箱等于关闭 | 业主决策；本 spike 只登记事实，不改配置 |
 | 无独立线上协议（V-12） | 拒绝靠 stderr 方言，in-band 可被模仿（V-08） | 与 NVX 的 NVXS/NVXC 双栈对比：后者有带类型的帧与 capability 认证 |
 
-**与 NVX 的关系**：本 spike 实测的六项缺口（读 / 网络 / 进程 / 跨会话 / syscall / 凭证）恰好是 NVX 的硬件虚拟化边界所覆盖的面。详见 `docs/eval/26-nov/sandbox-nano-nvx.md`。
+**与 NVX 的关系**：本 spike 实测的六项缺口（读 / 网络 / 进程 / 跨会话 / syscall / 凭证）恰好是 NVX 的硬件虚拟化边界所覆盖的面。详见 `docs/specs/dsh-nano-local-sandbox/dsh-nano-local-sandbox-v0.9.md`。
 
 **转正路径**：本 spike 只产事实。若要改行为，最小切入点是 `/tmp` 整目录授权（V-02）——它改动面小、收益明确（恢复跨会话隔离），不需要新词汇也不需要新后端。读 / 网络 / 进程三域需要词汇层决策，建议与 NVX 评估一并决策。
 
@@ -203,15 +203,15 @@ test/spike/model-execution-sandbox/
 
 **最大风险点**：生产实例 `dsh.local` 的 `defaultPreset` 为 `danger-full-access`，新会话 bash 直接 spawn、approval 为 `never`——**生产上的「沙箱」今天不存在**。这是部署选择而非缺陷，但必须登记。
 
-**最小可行动项**：`/tmp` 整目录授权（V-02）。改每会话私有 tmp 子目录即可恢复跨会话隔离，不动词汇、不动后端。读 / 网络 / 进程三域需要词汇层决策，建议与 `sandbox-nano-nvx` 的 NVX 边界评估一并定案。
+**最小可行动项**：`/tmp` 整目录授权（V-02）。改每会话私有 tmp 子目录即可恢复跨会话隔离，不动词汇、不动后端。读 / 网络 / 进程三域需要词汇层决策，建议与 `dsh-nano-local-sandbox-v0.9` 的 NVX 边界评估一并定案。
 
-**下一步**：本宪章的 12 项数值作为 `docs/eval/26-nov/sandbox-nano-nvx.md` 的基线证据；若要追 NVX 侧的对应能力，见该文档 §6.10 的逐条隔离对照表。
+**下一步**：本宪章的 12 项数值作为 `docs/specs/dsh-nano-local-sandbox/dsh-nano-local-sandbox-v0.9.md` 的基线证据；若要追 NVX 侧的对应能力，见该文档 §6.10 的逐条隔离对照表。
 
 ---
 
 ## §10 后续：远端 NVX 实测（2026-11-12，已清理）
 
-本宪章的 V-01–V-12 只覆盖 **DSH 原生沙箱**。业主后续要求验证 NVX 作为后端的可行性，实测在授权主机上完成，完整日志见 [`docs/eval/26-nov/sandbox-nano-nvx.md`](../../../docs/eval/26-nov/sandbox-nano-nvx.md)。此处只登记与本宪章直接相关的对照结论。
+本宪章的 V-01–V-12 只覆盖 **DSH 原生沙箱**。业主后续要求验证 NVX 作为后端的可行性，实测在授权主机上完成，完整日志见 [`docs/specs/dsh-nano-local-sandbox/dsh-nano-local-sandbox-v0.9.md`](../../../docs/specs/dsh-nano-local-sandbox/dsh-nano-local-sandbox-v0.9.md)。此处只登记与本宪章直接相关的对照结论。
 
 ### 10.1 NVX 隔离剖面 vs 原生（同一威胁模型下）
 

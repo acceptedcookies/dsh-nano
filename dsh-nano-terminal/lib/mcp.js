@@ -148,7 +148,8 @@ async function sendNote(registry, fromRef, toRef, body) {
   const from = registry.resolve(fromRef);
   const fromAddr = from?.addr ?? String(fromRef ?? "external");
   const env = makeEnvelope(fromAddr, body);
-  const payload = `\x1B[200~${env}\x1B[201~`;
+  const paste = (to.mirror?.modes?.() ?? 0) & 1 << 3;
+  const payload = `${paste ? "\x1B[200~" : ""}${env}${paste ? "\x1B[201~" : ""}`;
   await to.gate.submit(() => to.handle.write(payload), { kind: "note" });
   registry.bus?.emit("message", to.addr, { id: to.id, from: fromAddr, note: true });
   registry.audit?.({ op: "note", from: fromAddr, to: to.addr, bytes: env.length });

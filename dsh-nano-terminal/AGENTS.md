@@ -28,8 +28,17 @@
 | `lib/dnt-core.wasm` | wasm 终端核心。运行时必需（client 侧加载） |
 | `lib/sessions.js` | 宿主 session 注册表。运行时必需（`index.js` 相对 import） |
 | `lib/mcp.js` | 宿主 MCP 控制面。运行时必需（`index.js` 相对 import） |
-| `lib/ws.js` | 宿主 WebSocket 握手与帧解析。运行时必需（`index.js` 相对 import） |
-| `lib/mirror.js` | 宿主辅助模块。运行时必需（`index.js` 相对 import） |
+| `lib/ws.js` | 宿主 WebSocket 握手与帧解析 + dnt-ws-v2 framed channel。运行时必需 |
+| `lib/mirror.js` | 宿主屏幕镜像（dnt_dump / dnt_state_json ABI）。运行时必需 |
+| `lib/events.js` | EventBus：snapshot + seq + missed + heartbeat。运行时必需 |
+| `lib/errors.js` | 稳定错误 kind 枚举（OpenRPC x-errorKinds 同构）。运行时必需 |
+| `lib/gate.js` | 输入闸门：draft/quiet/held，human vs agent vs automatic 分流。运行时必需 |
+| `lib/wait.js` | 事件驱动 wait（status/exit/output/children/timeout）。运行时必需 |
+| `lib/persist.js` | session.json + screens/ + 滚动快照。运行时必需 |
+| `lib/notes.js` | `<dnt from=…>` agent 互操作信封。运行时必需 |
+| `lib/templates.js` | 内置任务模板（run-command/wait-output/repl）。运行时必需 |
+| `schema/` | OpenRPC 合同单源，TOOLS 由此生成。运行时必需（mcp.js 读取） |
+| `docs/skill.md` | agent 自助文档，`term.skill` 返回。运行时必需 |
 | `icon.svg`、`locale/` | 图标与中英文案 |
 | `src/`、`crates/`、`target/` | 作者树。已有 `lib/` 产物时安装不需要它们 |
 
@@ -76,7 +85,7 @@ dsh plugin --profile web add <spec>
 
 无宿主初始化命令。宿主启动即注册路由、slash 命令 `/term` 与 session 注册表。
 
-- 审计日志写在 `${DSH_HOME}/plugins/dsh-nano-terminal/audit.jsonl`（宿主 home 下），记录 open/close/attach 事件。
+- 审计日志写在 `${DSH_HOME}/dsh-nano-terminal.state/audit.jsonl`（宿主 home 根下；`plugins/<pkg>/` 安装树每次重启被覆盖），记录 open/close/attach/note/template/mcp 事件。
 - 浏览器侧 `localStorage['dnt.apply']` 存 client 自检日志（最多 40 条），仅诊断用。
 - 卸载不删除 `audit.jsonl`；也不要删除 `dnt.apply`，它不带敏感内容。
 
@@ -88,26 +97,43 @@ dsh plugin --profile web add <spec>
 | `/dnt` → 通道状态（宿主 MCP） | 浏览器 console 打印 `/dsh-nano-terminal/health` 的 lane 状态 |
 | 打开内置 Terminal 标签 | client 接管其 body 渲染（wasm 接管 xterm） |
 
-agent 与脚本可用的宿主侧 slash 命令：
+agent 与脚本可用的宿主侧 slash 命令（均代理到 MCP 工具面）：
 
 ```text
-/term new            新建 terminal session（lane=local），返回短 id
-/term list           列出全部 session（id、lane、attached、exited）
-/term close <id>     关闭 session
-/term attach <id>    返回 ws attach 地址 /dsh-nano-terminal/stream?session=<id>
+/term new                  新建 terminal session（lane=local），返回 addr
+/term list                 列出全部 session（addr、status、attached、exited、keep）
+/term close <ref>          关闭 session（ref = id|name|addr）
+/term attach <ref>         返回 ws attach 地址 /dsh-nano-terminal/stream?session=<id>
+/term send <ref> <text>    代理 term.send（bracketed paste + Enter，blocked 拒发）
+/term read <ref> [n]       读屏（visible source）
+/term wait <ref> [pattern] 等待 turn 结束或屏幕出现 pattern
+/term keys <ref> <keys>    TUI 键序列（enter/esc/ctrl+c/f5…）
+/term interrupt <ref>      礼貌打断前台程序，报 stopped|exited|still_working
+/term keep <ref> [on|off]  keep 标记：程序丢失时重 spawn shell（绝不重跑命令）
+/term label <ref> k=v|-k   设/删标签
+/term note <ref> <text>    向窗格投递 <dnt from=…> note 信封
+/term template [ref tpl k=v…] 列出 / 运行内置任务模板
+/term events [since]       拉取事件流（snapshot + missed 语义）
+/term skill                打印 agent 自助文档（docs/skill.md）
 ```
 
 宿主路由（已鉴权的 Harness 请求才可达）：
 
-- `GET /dsh-nano-terminal/stream`（WebSocket 升级，`dnt-ws-v1` 数据面）
-- `POST /dsh-nano-terminal/mcp`（MCP JSON-RPC 控制面，本宿主自身是 MCP terminal server）
+- `GET /dsh-nano-terminal/stream`（WebSocket 升级；`dnt-ws-v1` 裸流或 `open.v=2`/`?v=2` 协商 `dnt-ws-v2` framed channel：CREDIT 流量控制 + SNAPSHOT 降级 + FACTS headless + AUTO_INPUT）
+- `POST /dsh-nano-terminal/mcp`（MCP JSON-RPC 控制面，本宿主自身是 MCP terminal server；TOOLS 由 `schema/dnt-mcp.openrpc.json` 单源生成）
+- `GET /dsh-nano-terminal/events`（SSE 事件流：snapshot 首帧 + live + 15s heartbeat；`?since=<seq>` 断点续传，落后即 `{missed:true,snapshot}`）
 - `GET /dsh-nano-terminal/sessions`、`POST /dsh-nano-terminal/session/:id/close`、`GET /dsh-nano-terminal/health`
 
 三条 lane：`local`（宿主 `subprocess.spawnTerminal`，即 node-pty）、`mcp`（连接远端 MCP terminal 端点）、`isolate`（v8/workerd wasm 内嵌通道，scaffolded）。`/term` 创建的 session 默认走 `local`。
 
 ## 配置与状态
 
-宿主无配置文件。审计日志在 `${DSH_HOME}/plugins/dsh-nano-terminal/audit.jsonl`；浏览器状态仅 `localStorage['dnt.apply']`。没有可写的宿主配置键。
+宿主无配置文件。所有 durable 状态在 `${DSH_HOME}/dsh-nano-terminal.state/`（`plugins/<pkg>/` 是安装树，每次宿主重启被源树覆盖，不能存状态）：
+
+- `audit.jsonl` — 控制面审计（open/close/attach/note/template/mcp 调用）
+- `session.json` + `screens/<id>.bin` + `session-snapshots/` — 终端持久化；重启后以 placeholder 回归，首次 attach 才 spawn shell 并重放保存的屏幕尾（程序绝不重跑）
+
+浏览器状态：`localStorage['dnt.apply']`（自检日志）、`localStorage['dnt.layout']`（窗格树 + attach 引用，重连活 terminal）。没有可写的宿主配置键。
 
 ## 构建
 

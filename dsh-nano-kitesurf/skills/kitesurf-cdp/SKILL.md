@@ -128,6 +128,13 @@ A failed call returns `{ok:false,errorId,error}` with a real HTTP status. The sa
 | `kitesurf.diag.query` | 400 | diagnostics/operations 查询参数非法 | GET /diagnostics?limit=20；GET /operations?errorsOnly=true |
 | `kitesurf.evaluate.empty` | 400 | expression 为空或超过 2000 字符 | POST /evaluate {expression:"document.title"}，≤2000 字符 |
 | `kitesurf.evaluate.exception` | 400 | 页面 JS 求值抛异常（输入侧表达式错误） | 看 error 里的异常描述；先 /open 再求值；确认 selector/变量名存在 |
+| `kitesurf.wait.query` | 400 | /wait 条件不合法：selector/text/url/fn 必须恰好一个，load 必须是 commit|domcontentloaded|load|networkidle | POST /wait {selector:".ready"} 或 {text:"Done"} 或 {url:"/home"}；加 load:"networkidle" 等空闲 |
+| `kitesurf.wait.timeout` | 504 | 等待超时：条件在 timeoutMs 内没成立（元素没出现/文本没渲染/导航没到） | 确认条件写对（selector 真实存在？）；加大 timeoutMs≤30000；GET /console 看页面是否报错 |
+| `kitesurf.history.body` | 400 | /browse-history POST body 不是 {clear:true}，或 /history body 不是 {delta:±1} | POST /browse-history {"clear":true}；导航用 POST /history {delta:-1|1} |
+| `kitesurf.network.query` | 400 | /network 查询参数非法（limit 越界） | GET /network?limit=1..200&failedOnly=true；POST /network {clear:true} 清空 |
+| `kitesurf.shot.empty` | 502 | 引擎返回了空截图（页面不可绘/渲染器忙） | 确认页面已 /open；等一秒重试；仍空则 GET /diagnostics 看页面是否 about:blank |
+| `kitesurf.dom.blank` | 502 | 无文档可序列化（页面未打开/仍是 about:blank/文档不可序列化） | 先 POST /open；空白页是 socket 断开重置的信号 — GET /status 看 phase |
+| `kitesurf.elements.empty` | 502 | 引擎 DOM.getDocument 未返回文档根（页面未打开） | 先 POST /open；或 GET /elements?selector=… 前先确认页面存在 |
 
 ## 6. 正例 / 负例（可直接复制）
 

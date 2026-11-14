@@ -182,6 +182,18 @@ export const ROUTE_TABLE = [
   },
   {
     "plugin": "dsh-nano-kitesurf",
+    "path": "/nano-kitesurf/wait",
+    "methods": [
+      "POST"
+    ],
+    "sensitivity": "L2",
+    "capability": "read:engine",
+    "bodyLimit": 4096,
+    "sessionBinding": false,
+    "justification": "WAIT_ROUTE — blocking condition wait in the engine page (selector|text|url|fn + readyState load), Runtime.evaluate polling on the existing session socket. A bounded read: it mutates nothing, unlike /evaluate which can write. Holds the request open up to timeoutMs ≤ 30000."
+  },
+  {
+    "plugin": "dsh-nano-kitesurf",
     "path": "/nano-kitesurf/ports",
     "methods": [
       "GET",

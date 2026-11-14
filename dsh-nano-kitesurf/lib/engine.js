@@ -879,6 +879,9 @@ export async function waitForCondition(httpBase, spec = {}) {
     }
   })
 }
+
+/**
+ * Browser disguise / emulation. All fields are optional; `null` clears the
  * corresponding override. Viewport is no longer limited to three presets —
  * any bounded integer width/height is accepted, with a preset supplying the
  * default mobile flag and height when only width is given.

@@ -90,15 +90,19 @@ function createPerfReviewHost(env = {}) {
     } catch {
     }
   };
-  const decideEnabled = () => {
+  const isEnabled = () => {
     if (state.enabled === null) {
       state.enabled = env.forceEnabled !== void 0 ? env.forceEnabled === true : processRef.env?.DSH_PERF_REVIEW === "1";
       if (state.enabled) startWriter();
     }
     return state.enabled;
   };
+  const setEnabled = (value) => {
+    state.enabled = value === true;
+    if (state.enabled) startWriter();
+  };
   const recordSpan = (row, name, t0, t1) => {
-    if (!NAME_RE.test(name)) return;
+    if (!NAME_RE.test(name) || !isEnabled()) return;
     let span = row.spans.get(name);
     if (span === void 0) {
       span = createSpanRow();
@@ -114,26 +118,13 @@ function createPerfReviewHost(env = {}) {
       if (slot < RESERVOIR_CAP) span.reservoir[slot] = ms;
     }
   };
-  const disabledApi = () => ({
-    hostSpan(_name, fn) {
-      return fn();
-    },
-    count() {
-    },
-    // Diagnostic access stays available even when collection is off: the
-    // browser poll then sees `{enabled:false}` rather than a 404.
-    snapshot: () => hostSnapshot(state),
-    takeWindow: () => takeWindow(state)
-  });
   const hostJoin = (pluginId, impl = {}) => {
-    decideEnabled();
     let row = state.plugins.get(pluginId);
     if (row === void 0) {
       row = { version: impl.version ?? null, spans: /* @__PURE__ */ new Map() };
       state.plugins.set(pluginId, row);
     }
     state.contributors.push({ pluginId, libVersion: impl.libVersion ?? LIB_VERSION });
-    if (!state.enabled) return disabledApi();
     const clock = env.performance ?? globalThis.performance;
     const now = () => clock.now();
     return {
@@ -155,13 +146,20 @@ function createPerfReviewHost(env = {}) {
       },
       count() {
       },
-      snapshot: () => hostSnapshot(state),
+      snapshot: () => {
+        isEnabled();
+        return hostSnapshot(state);
+      },
       takeWindow: () => takeWindow(state)
     };
   };
   return {
     hostJoin,
-    snapshot: () => hostSnapshot(state),
+    setEnabled,
+    snapshot: () => {
+      isEnabled();
+      return hostSnapshot(state);
+    },
     takeWindow: () => takeWindow(state),
     flush: () => writeFile(),
     _state: () => state,
@@ -187,10 +185,14 @@ var review = host.hostJoin("nano-kitesurf", { version: pluginVersion(), libVersi
 function hostSpan(name, fn) {
   return review.hostSpan(name, fn);
 }
+function setPerfEnabled(value) {
+  host.setEnabled(value === true);
+}
 function perfSnapshot(mode) {
   return mode === "window" ? host.takeWindow() : host.snapshot();
 }
 export {
   hostSpan,
-  perfSnapshot
+  perfSnapshot,
+  setPerfEnabled
 };

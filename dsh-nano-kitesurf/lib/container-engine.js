@@ -269,7 +269,16 @@ export async function ensureLocalContainer(target, io = {}) {
     }
   }
   if (!exists && !adopted) {
-    const checkout = io.checkout || checkoutPath()
+    // io.checkout may be a path string or a deferred resolver (the plugin
+    // passes effectiveCheckout() so a lock-file write mid-bring-up still
+    // wins). Accept both; fall back to the env/config resolver.
+    const rawCheckout = typeof io.checkout === 'function' ? io.checkout() : io.checkout
+    const checkout = rawCheckout || checkoutPath()
+    // A plugin-supplied checkout skips checkoutPath()'s probe — validate it
+    // here so a bad mount is a 400 config fault, not a 20s warmup blank page.
+    if (!existsSync(checkout) || !existsSync(join(checkout, 'packages/engine/wrangler.jsonc'))) {
+      throw new KitesurfError('kitesurf.kite.checkout', `Kitesurf 源码目录不可用或缺少 packages/engine/wrangler.jsonc：${checkout}`)
+    }
     // Resilience for a fresh create: if the preferred port is occupied, move
     // to the next free one instead of failing the whole bring-up.
     let createEnginePort = enginePort

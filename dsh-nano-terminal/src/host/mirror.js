@@ -54,6 +54,9 @@ export class ScreenMirror {
   resize(cols, rows) {
     this.e.dnt_resize(this.id, cols, rows)
   }
+  modes() {
+    return this.e.dnt_modes?.(this.id) >>> 0
+  }
 
   /**
    * Program-reported OSC 7501 state — "the core never guesses the screen".

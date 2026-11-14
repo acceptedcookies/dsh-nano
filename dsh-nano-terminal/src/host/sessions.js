@@ -514,7 +514,11 @@ export class SessionRecord {
     const st = this.status?.state
     if (st === 'blocked' && !force) throw err(KIND.BLOCKED, `terminal reports blocked${this.status.kind ? ` (${this.status.kind})` : ''}`)
     if (cond && st !== cond) throw err(KIND.STATUS_MISMATCH, `status is '${st ?? 'none'}', required '${cond}'`)
-    const payload = `\x1b[200~${String(text).replace(/\r?\n/g, '\r')}\x1b[201~${enter ? '\r' : ''}`
+    // Adaptive bracketed paste: only wrap when the program enabled 2004 —
+    // plain shells otherwise print the raw `200~`/`201~` markers as text.
+    const paste = (this.mirror?.modes() ?? 0) & (1 << 3)
+    const body = String(text).replace(/\r?\n/g, '\r')
+    const payload = `${paste ? '\x1b[200~' : ''}${body}${paste ? '\x1b[201~' : ''}${enter ? '\r' : ''}`
     const r = await this.gate.submit(() => this.handle.write(payload), { urgent })
     this.registry.bus?.emit('message', this.addr, { id: this.id })
     return { ...(r ?? {}), turn: this.turn }

@@ -47,6 +47,9 @@ var ScreenMirror = class {
   resize(cols, rows) {
     this.e.dnt_resize(this.id, cols, rows);
   }
+  modes() {
+    return this.e.dnt_modes?.(this.id) >>> 0;
+  }
   /**
    * Program-reported OSC 7501 state — "the core never guesses the screen".
    * Returns { seq, title, records, root } — root = the id-less record (or null).
@@ -753,7 +756,9 @@ var SessionRecord = class {
     const st = this.status?.state;
     if (st === "blocked" && !force) throw err(KIND.BLOCKED, `terminal reports blocked${this.status.kind ? ` (${this.status.kind})` : ""}`);
     if (cond && st !== cond) throw err(KIND.STATUS_MISMATCH, `status is '${st ?? "none"}', required '${cond}'`);
-    const payload = `\x1B[200~${String(text).replace(/\r?\n/g, "\r")}\x1B[201~${enter ? "\r" : ""}`;
+    const paste = (this.mirror?.modes() ?? 0) & 1 << 3;
+    const body = String(text).replace(/\r?\n/g, "\r");
+    const payload = `${paste ? "\x1B[200~" : ""}${body}${paste ? "\x1B[201~" : ""}${enter ? "\r" : ""}`;
     const r = await this.gate.submit(() => this.handle.write(payload), { urgent });
     this.registry.bus?.emit("message", this.addr, { id: this.id });
     return { ...r ?? {}, turn: this.turn };

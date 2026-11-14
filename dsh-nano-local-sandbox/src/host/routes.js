@@ -32,7 +32,7 @@ export const REFS_ROUTE = '/nano-local-sandbox/refs'
 import { ROUTE_TABLE } from '../../lib/route-table.js'
 import { createCdpKeeper } from './cdp-keeper.js'
 import { publishedHttpBase } from './backend-apple.js'
-import { ensureClient, evaluatePage, navigate, readElements } from './cdp-elements.js'
+import { ensureClient, evaluatePage, navigate, readElements, withPage } from './cdp-elements.js'
 import { answerNativeTool, toolsList } from './mcp-sandbox.js'
 
 const keeper = createCdpKeeper()
@@ -143,6 +143,9 @@ export function routeSpecs(deps = {}) {
     bodyLimit: row.bodyLimit,
     async handler(req, res) {
       deps.onHandler?.()
+      session.operations = session.operations || []
+      session.operations.push({ path: row.path, method: req.method, at: new Date().toISOString() })
+      if (session.operations.length > 200) session.operations.shift()
       if (row.path.endsWith('/shot') && deps.pageReady !== true) {
         res.statusCode = 502
         res.end(JSON.stringify({ ok: false, errorId: 'kitesurf.shot.empty' }))
@@ -297,7 +300,13 @@ export function routeSpecs(deps = {}) {
         return
       }
       if (row.path.endsWith('/har')) {
-        send(res, 200, { ok: true, log: { version: '1.2', creator: { name: 'dsh-nano-local-sandbox', version: '0' }, entries: session.harEntries || [] } })
+        const entries = (session.network || []).slice(-100).map((item) => ({
+          startedDateTime: item.at,
+          time: 0,
+          request: { method: item.method || 'GET', url: item.url || '' },
+          response: { status: item.status || 0, statusText: '' },
+        }))
+        send(res, 200, { ok: true, log: { version: '1.2', creator: { name: 'dsh-nano-local-sandbox', version: '0' }, entries } })
         return
       }
       if (row.path.endsWith('/evaluate')) {
@@ -307,8 +316,138 @@ export function routeSpecs(deps = {}) {
         res.end(JSON.stringify({ ok: result.ok, errorId: result.errorId ?? null, dom: result.dom }))
         return
       }
-      res.statusCode = 200
-      res.end(JSON.stringify({ ok: true, path: row.path }))
+      const pageUrl = new URL(req.url ?? '/', 'http://localhost')
+      const pageBody = req.method === 'GET' || req.method === 'HEAD' ? {} : await readJson(req)
+      const page = async () => {
+        const base = await ensureBase(session, deps)
+        if (!base) {
+          const error = new Error('no engine page')
+          error.status = 502
+          error.errorId = 'kitesurf.elements.empty'
+          throw error
+        }
+        return ensureClient(session, base)
+      }
+      try {
+        if (row.path.endsWith('/history')) {
+          const delta = Number(pageBody.delta || 0)
+          const client = await page()
+          const value = await evaluatePage(client, `(()=>{history.go(${delta});return{ok:true,delta:${delta},url:location.href}})()`)
+          send(res, 200, { ok: true, ...(value || {}) })
+          return
+        }
+        if (row.path.endsWith('/pick')) {
+          const client = await page()
+          const selector = pageBody.selector || ''
+          const expression = selector
+            ? `(()=>{const el=document.querySelector(${JSON.stringify(selector)});if(!el)return{ok:false,errorId:'kitesurf.pick.miss'};const r=el.getBoundingClientRect();return{ok:true,tag:el.tagName.toLowerCase(),text:(el.innerText||'').slice(0,80),box:{x:r.x,y:r.y,width:r.width,height:r.height}}})()`
+            : `(()=>{const el=document.elementFromPoint(${Number(pageBody.x)||0},${Number(pageBody.y)||0});if(!el)return{ok:false,errorId:'kitesurf.pick.miss'};return{ok:true,tag:el.tagName.toLowerCase(),text:(el.innerText||'').slice(0,80)}})()`
+          const value = await evaluatePage(client, expression)
+          if (value && value.ok === false) {
+            send(res, 404, value)
+            return
+          }
+          send(res, 200, value || { ok: true })
+          return
+        }
+        if (row.path.endsWith('/edit')) {
+          const client = await page()
+          const value = await evaluatePage(client, `(()=>{const el=document.querySelector(${JSON.stringify(pageBody.selector || '')});if(!el)return{ok:false,errorId:'kitesurf.edit.miss'};el.textContent=${JSON.stringify(String(pageBody.text || ''))};return{ok:true,tag:el.tagName.toLowerCase()}})()`)
+          send(res, value && value.ok === false ? 404 : 200, value || { ok: true })
+          return
+        }
+        if (row.path.endsWith('/settings')) {
+          const client = await page()
+          const viewport = pageBody.viewport
+          if (viewport && viewport.width && viewport.height) {
+            await withPage(client, (sessionId) => client.send('Emulation.setDeviceMetricsOverride', {
+              width: Number(viewport.width),
+              height: Number(viewport.height),
+              deviceScaleFactor: Number(viewport.deviceScaleFactor || 1),
+              mobile: viewport.mobile === true,
+            }, sessionId))
+          }
+          send(res, 200, { ok: true, viewport: viewport || null })
+          return
+        }
+        if (row.path.endsWith('/console')) {
+          if (pageBody.clear === true) session.console = []
+          const level = pageUrl.searchParams.get('level')
+          const rows = (session.console || []).filter((item) => !level || item.level === level)
+          send(res, 200, { ok: true, entries: rows.slice(-100) })
+          return
+        }
+        if (row.path.endsWith('/operations')) {
+          if (pageBody.clear === true) session.operations = []
+          send(res, 200, { ok: true, entries: (session.operations || []).slice(-100) })
+          return
+        }
+        if (row.path.endsWith('/diagnostics')) {
+          await ensureBase(session, deps)
+          send(res, 200, {
+            ok: session.phase === 'running',
+            httpBase: session.httpBase ?? null,
+            kite: { phase: session.phase },
+            console: (session.console || []).slice(-10),
+            network: (session.network || []).slice(-10),
+          })
+          return
+        }
+        if (row.path.endsWith('/ports')) {
+          await ensureBase(session, deps)
+          send(res, 200, { ok: true, httpBase: session.httpBase ?? null, phase: session.phase })
+          return
+        }
+        if (row.path.endsWith('/recover')) {
+          const last = session.history.at(-1)
+          if (!last) {
+            send(res, 409, { ok: false, errorId: 'kitesurf.dom.blank', error: 'no page to recover' })
+            return
+          }
+          const client = await page()
+          await navigate(session, session.httpBase, last.url)
+          send(res, 200, { ok: true, url: last.url })
+          return
+        }
+        if (row.path.endsWith('/network')) {
+          send(res, 200, { ok: true, entries: (session.network || []).slice(-100) })
+          return
+        }
+        if (row.path.endsWith('/targets')) {
+          const client = await page()
+          const targets = await client.send('Target.getTargets')
+          send(res, 200, { ok: true, targetInfos: targets.targetInfos || [] })
+          return
+        }
+        if (row.path.endsWith('/wait')) {
+          const client = await page()
+          const selector = String(pageBody.selector || 'body')
+          let found = null
+          for (let attempt = 0; attempt < 4; attempt += 1) {
+            found = await evaluatePage(client, `(()=>{const el=document.querySelector(${JSON.stringify(selector)});return el?{ok:true,tag:el.tagName.toLowerCase()}:{ok:false}})()`)
+            if (found && found.ok) break
+          }
+          if (!found || found.ok !== true) {
+            send(res, 504, { ok: false, errorId: 'kitesurf.wait.timeout', error: `selector did not match: ${selector}` })
+            return
+          }
+          send(res, 200, found)
+          return
+        }
+        if (row.path.endsWith('/perf-report')) {
+          session.spans = session.spans || []
+          session.spans.push({ at: new Date().toISOString(), ...pageBody })
+          send(res, 200, { ok: true, count: session.spans.length })
+          return
+        }
+        if (row.path.endsWith('/perf-review/host')) {
+          send(res, 200, { ok: true, spans: session.spans || [] })
+          return
+        }
+        send(res, 404, { ok: false, errorId: 'kitesurf.tool.unknown', error: row.path })
+      } catch (error) {
+        send(res, error.status || 502, { ok: false, errorId: error.errorId || 'kitesurf.engine.connect', error: error.message })
+      }
     },
   }))
 }

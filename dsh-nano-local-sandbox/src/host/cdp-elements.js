@@ -100,7 +100,36 @@ export async function navigate(session, httpBase, url, connect = connectCdp) {
 
 export async function ensureClient(session, httpBase, connect = connectCdp) {
   if (session.cdp) return session.cdp
+  session.console = session.console || []
+  session.network = session.network || []
   session.cdp = await connect(httpBase)
+  if (typeof session.cdp.listen === 'function') {
+    session.cdp.listen((message) => {
+      const params = message.params || {}
+      if (message.method === 'Runtime.consoleAPICalled') {
+        const text = (params.args || []).map((arg) => arg.value ?? arg.description ?? '').join(' ').slice(0, 200)
+        session.console.push({ level: params.type || 'log', text, at: new Date().toISOString() })
+        if (session.console.length > 200) session.console.shift()
+      }
+      if (message.method === 'Network.requestWillBeSent') {
+        session.network.push({
+          id: params.requestId,
+          url: params.request?.url || '',
+          method: params.request?.method || 'GET',
+          at: new Date().toISOString(),
+        })
+        if (session.network.length > 200) session.network.shift()
+      }
+      if (message.method === 'Network.responseReceived') {
+        const row = [...session.network].reverse().find((item) => item.id === params.requestId)
+        if (row) row.status = params.response?.status
+      }
+    })
+  }
+  try {
+    await session.cdp.send('Network.enable')
+    await session.cdp.send('Runtime.enable')
+  } catch { /* page-session events still arrive after a later enable */ }
   return session.cdp
 }
 
@@ -109,12 +138,17 @@ export function connectCdp(httpBase) {
   const ws = new WebSocket(wsUrl)
   let next = 1
   const pending = new Map()
+  const listeners = new Set()
   ws.addEventListener('message', (event) => {
     let message
     try { message = JSON.parse(String(event.data)) } catch { return }
     if (typeof message.id === 'number' && pending.has(message.id)) {
       pending.get(message.id)(message)
       pending.delete(message.id)
+      return
+    }
+    if (message.method) {
+      for (const listener of listeners) listener(message)
     }
   })
   const ready = new Promise((resolve, reject) => {
@@ -139,6 +173,10 @@ export function connectCdp(httpBase) {
         })
         ws.send(JSON.stringify(frame))
       })
+    },
+    listen(fn) {
+      listeners.add(fn)
+      return () => listeners.delete(fn)
     },
   }))
 }

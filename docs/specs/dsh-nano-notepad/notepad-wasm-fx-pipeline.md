@@ -5,7 +5,7 @@
 > 评估时间：`2026-11-12`
 > 实验依据：`test/spike/notepad-wasm-fx/`（14 项命题全部 PASS，宪章已收口）
 > MKB 基线：`origin https://github.com/haimang/myknowledgebase.git`，HEAD `6ee5318`，约 50,000 行 Python + 29 SQL migration + Next.js 控制台；参考副本位于 `context/myknowledgebase`（真源 `/Volumes/mini-512/nano-agent-dev/context/myknowledgebase`）
-> 文档状态：`draft`——第 1–8 章已登记（含业主心智模型与分叉锁定），第 9 章起待业主后续指令
+> 文档状态：`draft`——第 1–8 章已登记（含业主心智模型与分叉锁定）；§9 DNLS 拓扑修订评估 + §10 原型执行台账已登记（2026-11-14）
 
 ---
 
@@ -525,4 +525,136 @@ dsh-nano-notepad overlay
 
 ---
 
-（§7 心智模型与分叉锁定 + §8 接入方法 — 2026-11-12 登记；§8.5 spike 实证 — 2026-11-12 第三轮；§9+ 待业主指令续写）
+(§7 心智模型与分叉锁定 + §8 接入方法 — 2026-11-12 登记；§8.5 spike 实证 — 2026-11-12 第三轮）
+
+---
+
+## 9. DNLS 拓扑修订 — 评估·分析·愿景
+
+> 登记时间 `2026-11-14`。**登记事件**：第 1–8 章讨论与 spike 收口之后，业主侧真实落点了 `dsh-nano-local-sandbox`（DNLS）与 `dsh-nano-kitesurf`（DNK）两个插件，把「执行沙箱」从页面内自主打包 wasm 这一单选，扩成了一个**沙箱矩阵**。本章记录这次落点漂移对第 1–8 章既有拓扑的冲击与重排。**本章只作评估与愿景登记，不改写 §6.5/§7 已锁定的形态与不变量**；原型开发按「假定无 DNLS」推进（见 §10），待原型立住后再回到本章结构讨论。
+
+### 9.1 DNLS 是什么（拓扑事实）
+
+| 项 | 事实 |
+|---|---|
+| 包名 / 插件 id | `dsh-nano-local-sandbox` / `nano-local-sandbox` |
+| 宿主 inject | `webServer` `connection` `sandboxPolicy` `sandbox` `sessions` |
+| 后端 | `backend-apple.js`（macOS Apple `container` CLI，**唯一可跑**）+ `backend-nvx.js`（Windows/nvx **空实现**，方法拒绝、留位） |
+| 容器内建 | **workerd**（DNK 经 `wrangler dev` 跑 Worker，`port:8787`；`mcp-bridge.mjs` 挂 `port:8791`）、`agent-browser`、可配 `stateVolume` 持久、spawn/subprocess 能力 |
+| 消费模型 | `sandbox.instance.ensure` 按 session 复用/建实例；策略指纹变化→`policy-stale` 不热改；终端 attach 只认返回 `attach.url` |
+| 平台路线 | macOS 已落；**nvx Windows 沙箱（Debian 操作环境 + workerd）在业主路线图上**——worker/管线拓扑跨平台同形 |
+| DNK 边界 | DNK 是 DNLS 的**真实消费者**（`lib/container-engine.js` 起 `kitesurf` 容器、发布 8787/8791 于 loopback）；notepad 若入 DNLS，与 DNK 同构 |
+
+### 9.2 冲击：它改了什么
+
+DNLS 不推翻第 1–8 章的语义锁定，它**打开了落点假设**：
+
+1. **「自主打包 wasm 环境」不再是唯一沙箱**。原 §6.5 把 fx+sqlite+管线全塞页面 wasm，是因为那是当时唯一能做「独立于 host 的沙箱」的形态。DNLS 给了 OS 级沙箱——管线语义可原样搬，但承载可以是容器 workerd。
+2. **sqlite 的本地副本形态多了一条硬路**。A1 裁决的「执行态→sqlite-worker OPFS」在纯浏览器下成立；DNLS 下同一份执行态可落容器真 sqlite（`/var/lib/…` + `stateVolume`），OPFS 降级为「无容器备胎」而非唯一形态。
+3. **管线重活有了容器承载**。LS-RAG 全量 g0/g1/g2（A4）、批 deterministic_embedding、PDF/大语料清洗、管线态 sqlite——这些在容器里有真 fs/网络/算力，比在浏览器 WASM 里挤更合适。
+4. **跨插件协议边界升级**。A3 已裁决「notepad 内容跨插件走内部 MCP/RPC 授权」；DNLS 容器内服务向 notepad 暴露，天然接这个面——DNK 的 `mcp-bridge.mjs` + `wrangler dev` 是参照。
+
+### 9.3 不改：不变量全部续存
+
+管线六条不变量（§7.6）是语义锁，不随运行位置变：模型源唯一（`ctx.llm`）、会话即弃产物即档、sqlite 仅本地副本 s3 为真源、单写者由 s3 claim 强制、桥即合同凭据留 host、真相脊三件套。**DNLS 反而是 §7.6.3 的强化**：本地副本从 OPFS 受限 sqlite 升级为容器真 sqlite，s3 manifest CAS 语义不变。
+
+### 9.4 愿景：双轨承载，不搬迁
+
+```
+notepad overlay（页面，人侧 —— 永远）
+├─ five-kind 语料(IDB)：prompt/note/draft/knowledge/memory   ← 产物真源在页面
+├─ fx-core.wasm one-shot：常驻引擎 + 桥合同（轻管线主路径，零依赖）
+│        │ 重活判定 offload ──────────────────────────┐
+├─ sqlite-wasm(无容器备胎)：本地执行态副本              │
+└─ ctx.llm 桥 · attachments · s3 client              │
+                                                     ▼
+                                  DNLS 容器 workerd（重活服务，v2 增强面）
+                                  ├─ LS-RAG 全量 g0/g1/g2（A4）
+                                  ├─ deterministic_embedding + 批向量化
+                                  ├─ intake 清洗（PDF/大 HTML/大语料）
+                                  ├─ sqlite native（管线执行态真副本，stateVolume）
+                                  └─ 经内部 MCP/RPC 授权面暴露给 notepad（A3 边界）
+                                                     │
+                                          s3 独桶 + claim + manifest CAS（真源，不变）
+```
+
+**判断**：语料/产物/人侧永远锁页面 IDB + fx wasm；**重活管线落 DNLS 容器 workerd 为 v2 增强**，页面 wasm 作缺容器备胎。默认路径不依赖容器存在——DNLS 是增强不是门槛。nvx Windows 一出，同形 workerd profile 直接复用。
+
+### 9.5 待裁点（登记，原型后再裁）
+
+| 点 | 问题 |
+|---|---|
+| 本地 sqlite 副本形态 | OPFS（无容器）vs 容器真 sqlite（有容器）——按环境自适应，还是统一走容器？ |
+| 管线默认承载 | 页面 fx 为主 / 容器为主 / 双轨（重活阈值判定）？ |
+| DNLS 接入时机 | v1 纯页面先立原型，v2 再接 DNLS offload——本章推荐 |
+| 容器服务暴露面 | MCP bridge（DNK 样）/ 宿主路由 / wrangler Worker fetch——何种形态供 notepad 读？ |
+
+---
+
+## 10. 原型执行台账 — fx·kinds·tool-call·vfs
+
+> 登记时间 `2026-11-14`。**执行前提**：假定无 DNLS，承载 = 页面自主打包 wasm（spike 实测形态，19 项 PASS 的证据面全部直接可用）。**隔离**：在 `.agents/worktrees/notepad-fx-pipeline`（语义分支 `feat-notepad-fx-pipeline`）进行，不带 DNK/其他 foreign 改动。本章是三任务的拆解、约束与测试目标——**每个细节写死，不留「看着办」**。
+
+### 10.0 总则约束
+
+- **模型源唯一**：一切 LLM 调用经 `ctx.llm`（model-selector 同份清单），不直连 magpie。fx 桥的 §7.3 六条合同逐字遵守。
+- **会话即弃**：`createFxEngine` 引擎级 one-shot（V-14 858ms/turn），**不接** `createFxAgent`/`memory()`/`World`。引擎实例常驻一份，每活 `prompt→result` 即弃。
+- **产物谱系**：一切机器产物带 `via:{promptId,runId,epochId,at}` + `supersedes` + `rejectCount` + `epoch`。
+- **单写者**：管线态写操作先过 claim 租约（`run-<ulid>`/`art-<id>`/`kb-<sha256>` 扁平键）。
+- **CAS 硬门槛**：启动探针复用 V-17b 三用例，不过则共享写面关并报 `cas-probe:fail`（A5）。
+- **不侧载**：凭据留 host（`credentials`），桥 i/o 幂等随行，不硬编 base-url/秘钥。
+
+### 10.1 任务一：fx 循环 + five-kind 前端表达
+
+**目标**：notepad 内 `createFxEngine` 常驻 + five-kind 记录 schema + 前端分层/谱系视图。
+
+**拆解**：
+
+| 子项 | 内容 | 约束 |
+|---|---|---|
+| 1a · five-kind schema | IDB 记录加 `kind∈{prompt,note,draft,knowledge,memory}`、`via{}`、`supersedes`、`rejectCount`、`epoch` | draft 机器独占写，人只 reject；`note`/`prompt` 机器不碰 |
+| 1b · draft 状态机 | `pending → reject(带 feedback)/accept`；reject→触发同模板 one-shot 重跑、新 draft `supersedes`父代、`rejectCount+1` | 分类不明产物一律落 draft，不静默污染 knowledge |
+| 1c · UI 表达 | kind 标签/筛选/谱系视图（树按 kind 分组或标色；draft 行带 reject 按钮 + rejectCount；vi 谱系 tooltip） | 复用 `dsh-nano-ui`；不加第二套设计面 |
+| 1d · fx 引擎接入 | `createFxEngine` 常驻 + OpenAI↔内部翻译（§7.3 六条）+ provider 前缀（`deepseek-official~deepseek-flash`）| 引擎实例一份；模型档位走固定轻量模型清单 |
+
+**测试目标**：① 五种 kind 记录增删读正常、kind 字段落库；② draft reject→新 draft supersedes 链 + rejectCount 递增；③ via 谱系字段在 UI 可读；④ fx 引擎 `prompt→stream→result` 闭环（echo 用例）。
+
+### 10.2 任务二：one-shot tool-call 测试 — 文件清洗管道依据
+
+**目标**：证明 `engine.prompt` + `note_*` host-tools 回调能完成「一次调用=一次任务」的清洗/沉淀语义，为 LS-RAG/清洗管道打底。
+
+**拆解**：
+
+| 子项 | 内容 | 约束 |
+|---|---|---|
+| 2a · host-tools 集 | `note_read`/`note_write`/`note_kind_get`/`note_search`（读语料/写 draft/查 kind/检索） | 全部经 wasm↔host 桥；幂等键随行；凭据不外泄 |
+| 2b · one-shot 闭环 | prompt(one-shot)→turn 内 `fx_host_tool_call`→note_* 命中→`turn.result`→产物落 draft/knowledge | `for await` 消费 turn 再取 result（spike 坑已解）；单 turn 无续聊 |
+| 2c · 取消/并发 | AbortSignal 传播到 wasm；并发多活各拿各的引擎 turn（引擎实例常驻、活即弃） | V-14 画像：活并发高、每活语义一次调用 |
+| 2d · 清洗用例 | 一段 HTML→sanitize→沉淀 knowledge 的最小 one-shot（为 LS-RAG quoted-cuts 的「模型报锚点、管道切片」打样） | quoted-cuts 形态预演：工具回报坐标，管道切片 |
+
+**测试目标**：① host-tool 回调命中且参数/返回正确往返；② turn.result 正确落库（draft/knowledge）；③ 取消信号到达 wasm；④ 并发 N 活互不串扰；⑤ 清洗用例端到端（HTML→knowledge）。
+
+### 10.3 任务三：wasm 内 vfs 视图 + sqlite 流转
+
+**目标**：在 sqlite-wasm（Worker `installOpfsSAHPoolVfs`）里构建管线态 + **vfs 视图**（IDB 语料投影进 sqlite 的虚拟文件/表），打通「sqlite↔IDB 边界」「sqlite→s3 真源」全部接口。
+
+**拆解**：
+
+| 子项 | 内容 | 约束 |
+|---|---|---|
+| 3a · sqlite 管线态 | Worker 内 `installOpfsSAHPoolVfs→initWorker1API`；表：`runs`/`checkpoints`/`idempotent_keys`/`epoch`/`claim_ledger`/`lsrag_chunks` | 唯一 OPFS 形态=V-15 实测；`:memory:`+serialize 为无 OPFS 降级 |
+| 3b · vfs 视图 | 把 IDB kinds 语料投影为 sqlite 虚拟表/视图（`corpus(docId,kind,text,meta)`），管线态与语料态可联表查询 | 视图只读语料、写走 note_* 桥回 IDB——**语料真源仍在 IDB**（A1） |
+| 3c · 幂等/租约 | `idempotent_keys` 查重、`claim_ledger` 记租约、epoch 推进 | 写前先 claim；`kb-<sha>` 内容寻址天然幂等 |
+| 3d · sqlite-2-s3 | `promiser("export")` 导出→PUT manifest（etag CAS）→restore-on-boot | 本地副本+s3 真源；目标 `dsh-nano-notepad-test` 桶 |
+| 3e · claim 面 | 复刻 `session-io` 语义：`run-<ulid>`/`art-<id>`/`kb-<sha256>`，CLAIM_KEYS 白名单+90s TTL+全轮竞态拒写 | 落 notepad 独桶 `nano-notepad/claims/{key}.json`（A3） |
+
+**测试目标**：① sqlite 管线态建表/读写/重启存活（OPFS）；② vfs 视图查询语料返回正确 docId→IDB 回指；③ 幂等键查重命中；④ claim acquire/renew/release 生命周期 + 同键并行恰一 acquired；⑤ sqlite→s3 导出→取回→deserialize 还原 + CAS 三用例真 412。
+
+### 10.4 验收线（三任务全过才回业主）
+
+- [ ] five-kind 全量可读 + draft 状态机 reject→supersedes 闭环 + via 谱系 UI 可见
+- [ ] one-shot tool-call 闭环 + 取消 + 并发 + 清洗用例端到端
+- [ ] vfs 视图 + sqlite 管线态 + 幂等 + claim + sqlite-2-s3 + CAS 探针全过
+- [ ] 零 DNLS 依赖；spike 19 项证据不被推翻；不引入 foreign 改动
+
+**完成后**：回到 §9 结构讨论——DNLS offload 面、nvx Windows、容器服务暴露面再裁。

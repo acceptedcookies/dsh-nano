@@ -724,24 +724,24 @@ pong 留在 T15，不能用来凑本项的条数。
 
 | 收口目标 | 工作项 | Test-ID | PASS 证据（四元组） | 状态 |
 |----------|--------|---------|---------------------|------|
-| 身份与 inject | P1-01 P1-02 P8-01 | T01 T03 | 执行时填写 | 未观察 |
-| backend 可替换且 NVX 不改 L2 | P1-03 | T02 | 执行时填写 | 未观察 |
-| manifest 失败关闭 | P2-01 P2-02 | T04 T05 | 执行时填写 | 未观察 |
-| 构建不裸奔 | P2-03 | T06 T23 | `node --test dsh-nano-local-sandbox/test/threat.spike.test.mjs`，exit 0，`2026-11-14T07:17:58Z`，commit `b7e5d50` | 通过 |
-| session 实例与 fingerprint | P3-01 P3-02 | T07 T08 | 执行时填写 | 未观察 |
-| history 单真源 | P3-03 | T09 | 执行时填写 | 未观察 |
+| 身份与 inject | P1-01 P1-02 P8-01 | T01 T03 | `node --test dsh-nano-local-sandbox/test/identity.test.mjs dsh-nano-local-sandbox/test/no-sandbox-provider.test.mjs`，exit 0，`2026-11-14T07:22:28Z`，commit `622112e` | 通过 |
+| backend 可替换且 NVX 不改 L2 | P1-03 | T02 | `node --test dsh-nano-local-sandbox/test/backend.test.mjs`，exit 0，`2026-11-14T07:22:28Z`，commit `622112e` | 通过 |
+| manifest 失败关闭 | P2-01 P2-02 | T04 T05 | `node --test dsh-nano-local-sandbox/test/profile-reject.test.mjs dsh-nano-local-sandbox/test/profile-load.test.mjs`，exit 0，`2026-11-14T07:22:28Z`，commit `622112e` | 通过 |
+| 构建不裸奔 | P2-03 | T06 T23 | T06：`node --test dsh-nano-local-sandbox/test/build-confine.test.mjs`，exit 0，`2026-11-14T07:22:28Z`，commit `622112e`。T23：`node --test dsh-nano-local-sandbox/test/threat.spike.test.mjs`，exit 0，`2026-11-14T07:17:58Z`，commit `b7e5d50` | 通过 |
+| session 实例与 fingerprint | P3-01 P3-02 | T07 T08 | `node --test dsh-nano-local-sandbox/test/instance.test.mjs dsh-nano-local-sandbox/test/policy-stale.test.mjs`，exit 0，`2026-11-14T07:22:28Z`，commit `622112e` | 通过 |
+| history 单真源 | P3-03 | T09 | `node --test dsh-nano-local-sandbox/test/history-single.test.mjs`，exit 0，`2026-11-14T07:22:28Z`，commit `622112e` | 通过 |
 | 资源治理可观察（含上限，不是 deferred） | P3-04 | T10 | `node --test dsh-nano-local-sandbox/test/lifecycle.spike.test.mjs`，exit 0，`2026-11-14T07:20:41Z`，commit `b7e5d50` | 通过 |
-| 特权只在 backend-apple | P7-01 | T11 | 执行时填写 | 未观察 |
-| 20 工具、无快照倒挂 | P4-01 | T12 | 执行时填写 | 未观察 |
-| 路由 fail-closed | P4-02 | T13 | 执行时填写 | 未观察 |
-| CDP keeper | P4-03 | T14 | 执行时填写 | 未观察 |
-| terminal 合同，无新 lane | P4-04 P7-03 | T15 | 执行时填写 | 未观察 |
-| 错误目录一份 | P5-01 | T16 | 执行时填写 | 未观察 |
+| 特权只在 backend-apple | P7-01 | T11 | `node --test dsh-nano-local-sandbox/test/container-spawn-sites.test.mjs`，exit 0，`2026-11-14T07:22:28Z`，commit `622112e` | 通过 |
+| 20 工具、无快照倒挂 | P4-01 | T12 | `node --test dsh-nano-local-sandbox/test/mcp-tools.spike.test.mjs`，exit 0，`2026-11-14T07:22:28Z`，commit `622112e` | 通过 |
+| 路由 fail-closed | P4-02 | T13 | `node --test dsh-nano-local-sandbox/test/routes.test.mjs`，exit 0，`2026-11-14T07:22:28Z`，commit `622112e` | 通过 |
+| CDP keeper | P4-03 | T14 | `node --test dsh-nano-local-sandbox/test/cdp-keeper.spike.test.mjs`，exit 0，`2026-11-14T07:22:28Z`，commit `622112e` | 通过 |
+| terminal 合同，无新 lane | P4-04 P7-03 | T15 | `node --test dsh-nano-local-sandbox/test/terminal-contract.test.mjs`，exit 0，`2026-11-14T07:22:28Z`，commit `622112e` | 通过 |
+| 错误目录一份 | P5-01 | T16 | `node --test dsh-nano-kitesurf/test/diagnostics.test.mjs dsh-nano-kitesurf/test/skill.test.mjs`，exit 0，`2026-11-14T07:22:28Z`，commit `622112e` | 通过 |
 | 三门禁 | P5-02 P7-04 | T17 | `node scripts/check-route-sensitivity.mjs && node scripts/check-feature-contract.mjs && node scripts/check-clean-lib.mjs`，57 routes，0 drift，exit 0，`2026-11-14T07:17:58Z`，commit `b7e5d50` | 通过 |
-| ② 对等 | P6-02 | T18 T19 | `ego-browser nodejs < dsh-nano-local-sandbox/scripts/e2e-ego.mjs`，23/23，exit 0，`2026-11-14T06:58:28Z` | 通过 |
+| ② 对等 | P6-02 | T18 T19 | T18：`ego-browser nodejs < dsh-nano-local-sandbox/scripts/e2e-ego.mjs`，23/23，exit 0，`2026-11-14T06:58:28Z`，commit `2d0b91a`。T19：`node --test dsh-nano-local-sandbox/test/ui-without-agent.spike.test.mjs`，exit 0，`2026-11-14T07:22:28Z`，commit `622112e` | 通过 |
 | ③ 零残留 | P7 | T20 | `node --test dsh-nano-local-sandbox/test/residue.test.mjs`，exit 0，`2026-11-14T07:17:58Z`，commit `b7e5d50` | 通过 |
 | 不删测试换绿 | P6 P7 | T21 | `node --test dsh-nano-local-sandbox/test/regression-count.test.mjs`，exit 0，`2026-11-14T07:17:58Z`，commit `b7e5d50` | 通过 |
-| 包内容 | P6-03 P8 | T22 | 执行时填写 | 未观察 |
+| 包内容 | P6-03 P8 | T22 | 存档已按当前 dry-run 重写，提交后复跑 `pack-manifest.test.mjs` | 待复核 |
 | 退出 soak | P7 之后 | T24 | `node --test dsh-nano-local-sandbox/test/lifecycle.soak.test.mjs`，exit 0，`2026-11-14T07:17:58Z`，commit `b7e5d50` | 通过 |
 | U10 四行 defer | P8-02 | T25 | `node --test dsh-nano-local-sandbox/test/deferrals.test.mjs`，exit 0，`2026-11-14T07:17:58Z`，commit `b7e5d50` | 通过 |
 

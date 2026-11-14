@@ -1292,9 +1292,11 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
       try {
         const response = await fetch(RECOVER, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
         const result = await response.json().catch(() => ({}))
-        const ports = result.ports || (await fetch(PORTS).then((r) => r.json()).catch(() => null))
+        // /recover now returns the env snapshot it produced — refresh the panel
+        // from it directly instead of a second /ports round-trip.
+        const ports = result.ports ? result : (await fetch(PORTS).then((r) => r.json()).catch(() => null))
         setSnap(ports)
-        setNote(result.ok ? copy.prepareDone : copy.prepareFailed)
+        setNote(result.ok ? (result.action === 'noop' ? copy.prepareDone : `${copy.prepareDone} · ${result.action}`) : `${copy.prepareFailed}: ${result.errorId || result.error || `HTTP ${response.status}`}`)
         await refreshStatus()
         await reloadShot(0, { keepPick: true }).catch(() => {})
       } catch (cause) {
@@ -1322,6 +1324,7 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
       h('div', { className: 'nks-env-row' }, h('b', null, copy.envPlugin), h('span', null, status?.buildId || '—')),
       h('div', { className: 'nks-env-row' }, h('b', null, copy.envEngine), h('span', null, engine)),
       h('div', { className: 'nks-env-row' }, h('b', null, copy.envContainer), h('span', null, container)),
+      snap?.containerName ? h('div', { className: 'nks-env-row' }, h('b', null, copy.envInstance), h('span', null, snap.containerName)) : null,
       h('div', { className: 'nks-env-row' }, h('b', null, copy.envPorts), h('span', null, portRow)),
       h('div', { className: 'nks-env-actions' },
         h('button', { type: 'button', className: 'nks-start-btn', 'data-nks-prepare': '1', disabled: busyLocal, onClick: prepare }, busyLocal ? copy.preparingEnv : copy.prepareEnv),

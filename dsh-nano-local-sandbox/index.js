@@ -14,7 +14,7 @@ export const name = 'nano-local-sandbox'
 export const inject = ['webServer', 'connection', 'sandboxPolicy', 'sandbox', 'sessions']
 
 export function apply(ctx, deps = {}) {
-  if (!deps.session) deps.session = { phase: 'idle', history: [], containerName: 'kitesurf' }
+  if (!deps.session) deps.session = { phase: 'idle', history: [], containerName: '' } // '' → containerNameFor() derives per-env
   if (!deps.backend) deps.backend = createAppleBackend()
   return registerRoutes(ctx, routeSpecs(deps), { table: ROUTE_TABLE, plugin: 'dsh-nano-local-sandbox' })
 }

@@ -103,16 +103,16 @@ T-EXEC 工作日志回填 AP ──▶ T-CLO closure ──▶ T-REV ≥3 路对
 
 ### 3.3 Phase 1 — 交付形态与 worktree
 
-- [ ] `P1-01` — `git worktree add .agents/worktrees/dnms01-async-compaction` + 新包骨架（`package.json`/`index.js`/`AGENTS.md`/`cordis.patch.yml`/`lib/` 占位）（`L5-T01`）
+- [x] `P1-01` — [worktree 已建；新包骨架就位（`a8dd6e6`→本分支 P1 提交）] — `git worktree add .agents/worktrees/dnms01-async-compaction` + 新包骨架（`package.json`/`index.js`/`AGENTS.md`/`cordis.patch.yml`/`lib/` 占位）（`L5-T01`）
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
-- [ ] `P1-02` — 主包 `package.json` → `0.3.0` + `files` 增 `lib/compact-policy.js`（`L5-T01`）
+- [x] `P1-02` — [主包 → `0.3.0` + `files` 增 `lib/compact-policy.js`] — 主包 `package.json` → `0.3.0` + `files` 增 `lib/compact-policy.js`（`L5-T01`）
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
-- [ ] `P1-03` — 根登记（`AGENTS.md`/`README.md`/`RELEASE.md`）（`L5-T03`）
+- [x] `P1-03` — [根登记完成：AGENTS.md [DNMSC] + README 目录表 + RELEASE 包表] — 根登记（`AGENTS.md`/`README.md`/`RELEASE.md`）（`L5-T03`）
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
 
 ### 3.4 Phase 2 — 策略引擎（纯函数）
 
-- [ ] `P2-01` — `lib/compact-policy.js`（7 字段/master 序/DC/effectivePin/原子写/fail-closed）+ `test/compact-policy.test.mjs`（`L0-T01..T06`）
+- [x] `P2-01` — [`lib/compact-policy.js` 双包镜像 + `test/compact-policy.test.mjs` 10 项全绿；clean-lib 51 工件过（白名单 `@deepseek-ai/cordis`）] — `lib/compact-policy.js`（7 字段/master 序/DC/effectivePin/原子写/fail-closed）+ `test/compact-policy.test.mjs`（`L0-T01..T06`）
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
 
 ### 3.5 Phase 3 — 主包路由与契约层

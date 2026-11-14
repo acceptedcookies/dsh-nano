@@ -25,6 +25,7 @@
 [DNEE] = dsh-nano-explorer-extra, 文件与git管理;
 [DNK] = dsh-nano-kitesurf, 仿 cursor 的 design mode;
 [DNMS] = dsh-nano-model-selector, 模型与请求管理器;
+[DNMSC] = dsh-nano-model-selector-compaction, [DNMS] 的 host-only companion bundle（异步压缩接管互斥层，DNMS01）;
 [DNN] = dsh-nano-notepad, 或简称 notepad, 跨 workspace 草稿编辑器;
 [DNT] = dsh-nano-terminal, 高性能基于 wasm 的内部专用跨平台 terminal;
 [DNLS] = dsh-nano-local-sandbox, macOS 本地沙箱宿主，容器特权只在这里;

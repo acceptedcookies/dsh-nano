@@ -72,6 +72,7 @@
 |----|---------|----------------|------|
 | [`dsh-nano-notepad/`](dsh-nano-notepad/) | `nano-notepad` | 悬浮文本记事本 | [docs/specs/dsh-nano-notepad/README.md](docs/specs/dsh-nano-notepad/README.md)、[s3-sync-design.md](docs/specs/dsh-nano-notepad/s3-sync-design.md) |
 | [`dsh-nano-model-selector/`](dsh-nano-model-selector/) | `nano-model-selector` | 模型面板与 `/imagine` | [docs/specs/dsh-nano-model-selector/README.md](docs/specs/dsh-nano-model-selector/README.md) |
+| [`dsh-nano-model-selector-compaction/`](dsh-nano-model-selector-compaction/) | `nano-model-selector-compaction` | （无 UI）DNMS 的 host-only 异步压缩接管 bundle | [docs/specs/dsh-nano-model-selector/README.md](docs/specs/dsh-nano-model-selector/README.md)（DNMS01） |
 | [`dsh-nano-explorer-extra/`](dsh-nano-explorer-extra/) | `nano-explorer-extra` | 接管「文件」页 | [docs/specs/dsh-nano-explorer-extra/README.md](docs/specs/dsh-nano-explorer-extra/README.md) |
 
 > **已退役**：`dsh-nano-shared-workspace`（`nano-shared-workspace`，侧栏共享工作区）于 2026-11-12 deprecated，源码移至 [`deprecated/dsh-nano-shared-workspace/`](deprecated/README.md)，**不再安装、不打包、不发布**。历史规格草案仍在 `docs/specs/dsh-nano-shared-workspace/spec.md`，仅作回溯。

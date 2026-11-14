@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs'
 import { defaultEngine, imagineSkill, imagineStub, readEngine, scanEngines, writeEngine } from './lib/host-media.js'
 import { ensurePerfReviewHost, LIB_VERSION } from './lib/perf-review-host.js'
 import { registerRoutes } from './lib/route-guard.js'
+import { compactRuntime } from './lib/compact-runtime.js'
 import { ROUTE_TABLE, PLUGIN } from './lib/route-table.js'
 import {
   mergePutBody, readState, validateMasterOrder, validatePutBody, writeState,
@@ -260,7 +261,7 @@ async function policyWindow(ctx, model) {
  * merge -> master-order -> atomic write. Every rejection is 400 with the
  * closed error-code set; nothing is written on failure.
  */
-function asyncCompactHandlers(ctx) {
+function asyncCompactHandlers(ctx, runtimeHandle) {
   const payload = async policy => {
     const W = await policyWindow(ctx, policy.model)
     const effective = W === null
@@ -269,10 +270,11 @@ function asyncCompactHandlers(ctx) {
         const r = validateMasterOrder(policy, W)
         return r.ok ? { pin: r.effectivePin, windowMin: r.windowMin, dcs: r.dcs } : { pin: null, windowMin: null, dcs: [], invalid: r.reason }
       })()
+    const rt = runtimeHandle?.runtime(null, W, null) ?? { fill: null, lastCompaction: null, degraded: null }
     return {
       ...policy,
       effective,
-      runtime: { fill: null, lastCompaction: null },
+      runtime: rt,
     }
   }
   const handler = async (req, res) => {
@@ -312,6 +314,7 @@ function asyncCompactHandlers(ctx) {
         policy: null,
         degraded: 'state-read-failed',
         missing: false,
+        runtime: runtimeHandle?.runtime(null, null, 'state-read-failed') ?? { fill: null, lastCompaction: null, degraded: 'state-read-failed' },
         bundle: await compactionBundleState(ctx),
       })
       return
@@ -375,11 +378,12 @@ export function apply(ctx) {
   // All web routes register through dsh-host-route-guard (P1-05 / T-O-7): the
   // guard owns requestRejection and the uniform 405; handlers keep the work.
   const media = mediaHandlers(ctx, imagine)
+  const runtimeHandle = compactRuntime(ctx)
   registerRoutes(ctx, [
     { path: ROUTE, methods: ['GET', 'HEAD'], handler: catalogHandler(ctx) },
     { path: ENGINES_ROUTE, methods: ['GET', 'HEAD'], handler: media.engines },
     { path: ENGINE_ROUTE, methods: ['GET', 'HEAD', 'PUT'], handler: media.engine },
-    { path: ASYNC_COMPACT_ROUTE, methods: ['GET', 'HEAD', 'PUT'], handler: asyncCompactHandlers(ctx) },
+    { path: ASYNC_COMPACT_ROUTE, methods: ['GET', 'HEAD', 'PUT'], handler: asyncCompactHandlers(ctx, runtimeHandle) },
     { path: ASYNC_COMPACT_SWITCH_ROUTE, methods: ['POST'], handler: (req, res) => asyncCompactSwitchHandler(ctx, req, res) },
   ], { table: ROUTE_TABLE, plugin: PLUGIN })
 }

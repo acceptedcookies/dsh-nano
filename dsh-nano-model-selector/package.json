@@ -23,6 +23,7 @@
     "locale",
     "lib/client.js",
     "lib/compact-policy.js",
+    "lib/compact-runtime.js",
     "lib/host-media.js",
     "lib/perf-review-host.js",
     "lib/route-guard.js",

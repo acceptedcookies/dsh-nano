@@ -26,7 +26,7 @@
 | 硬切 | `fb0fabf`；残留测试与 [DNK] 38 个测试 exit 0 | 🟢 short-verified |
 | U10 四行 | `f68c472`；`test/deferrals.test.mjs` exit 0 | 🟢 short-verified |
 | T23 九条、T24 二十次 | 本 closure 同批补测，见该 commit | 🟢 short-verified |
-| T18 ego | 未跑 | 未观察 |
+| T18 ego | `ego-browser nodejs < dsh-nano-local-sandbox/scripts/e2e-ego.mjs`，exit 1，`2026-11-14T06:20:55Z`。14 个 record 为真后，`/nano-local-sandbox/elements` 在现场返回 404。旧前缀仍是 200 | 失败 |
 | [DNT] client 包 | 未重建 | partial |
 
 ## 2. 明确没做
@@ -52,7 +52,7 @@
 
 ## 5. 证据口径
 
-本文件里的 ✅ / 🟢 都是本地 `node --test` 或三道门禁脚本，不是 live。`T18` 保持未观察，因此 close-type 不是 `full-close`。
+本文件里的 ✅ / 🟢 都是本地 `node --test` 或三道门禁脚本，不是 live。`T18` 已经实跑并且失败，因此 close-type 不是 `full-close`，计划也不能标 `executed`。
 
 ## 修订历史
 

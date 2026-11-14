@@ -775,7 +775,7 @@ pong 留在 T15，不能用来凑本项的条数。
 - **实际执行摘要**：P1 身份与 backend；P2 profile 与 confine；P3 实例/指纹/history/回收；P4 四个 L2 面；P5 错误目录与三门禁（56 条路由）；P6 包内特权点、e2e fork 静态检查、无 agent 截图、pack 存档；P7 硬切 [DNK] 容器资产与旧路由，[DNT] `attach.url` / pong `0x0A` / 去掉 isolate 源码与 `dnt-agent`；P8 清单、README、三包 AGENTS、U10 四行。
 - **Phase 偏差**：`T18` 只做了 fork 静态断言，没有跑 ego（计划偏差，本机有 `container`，仍标 `未观察`）。`T20` 允许 `backend-apple.js` 保留容器 CLI 字面量，因为 `T-O-9` 要求这个调用点；四份历史文档的允许清单长度仍是 4。`[DNT] lib/client.js` 没有按新的 `lanes.js` 重建。
 - **阻塞与处理**：没有把计划改成 `executed`。
-- **测试发现**：`DNLS01-T23` 九条与 `DNLS01-T24` 二十次轨迹在本轮补跑通过。`T18` 实跑仍缺。
+- **测试发现**：`DNLS01-T23` 九条与 `DNLS01-T24` 二十次轨迹通过。`DNLS01-T18` 已实跑，不是未观察：`ego-browser nodejs < dsh-nano-local-sandbox/scripts/e2e-ego.mjs`，exit 1，`2026-11-14T06:20:55Z`。前 14 个 record 为真（到 `devtools-elements`）。`computed-styles` 在 `fetch('/nano-local-sandbox/elements?selector=p')` 抛错，因为现场 `https://dsh-dev.local` 对该路径返回 404 空体。同一时刻 `/nano-kitesurf/elements?selector=p` 与 `/nano-kitesurf/status` 是 200。现场 profile 还没切到这个分支。
 - **后续 handoff**：合并回 `main` 与删除 worktree 仍等 [业主]。ego 实跑与 client 重建是后继，不在本日志里写成已完成。
 
 ### 12.1 逐工作项状态

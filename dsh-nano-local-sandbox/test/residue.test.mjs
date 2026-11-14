@@ -14,9 +14,11 @@ const ALLOW = [
 
 function files(dir, out = []) {
   for (const name of readdirSync(dir)) {
-    if (name === '.git' || name === 'node_modules' || name === 'target') continue
+    if (name === '.git' || name === 'node_modules' || name === 'target' || name === 'context' || name === '.agents') continue
     const path = join(dir, name)
-    if (statSync(path).isDirectory()) {
+    let info
+    try { info = statSync(path) } catch { continue }
+    if (info.isDirectory()) {
       if (name === '.anote') continue
       files(path, out)
     } else out.push(path)

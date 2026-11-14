@@ -525,10 +525,6 @@ button.nxe-local-filter {
   display: flex; flex-direction: column; gap: 4px;
   min-height: 216px; max-height: 216px; overflow-y: auto; overflow-x: hidden;
 }
-.nxe-branch-stamp {
-  margin: 0; font-size: 11px; line-height: 16px;
-  color: var(--dsw-alias-label-tertiary);
-}
 .nxe-repo-conflict {
   display: flex; flex-direction: column; gap: 4px;
   padding: 8px; border-radius: var(--dsw-radius-sm);

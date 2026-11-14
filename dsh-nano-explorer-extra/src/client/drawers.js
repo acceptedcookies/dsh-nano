@@ -377,10 +377,16 @@ export function BranchDrawer({ copy, open, git, onClose, onPull, onPush, onRefre
   const filteredOut = query.trim() !== '' && (
     tab === 'local' ? branches.length === 0 : remoteBranches.length === 0)
   const conflicts = git?.conflicts ?? []
+  // Three surfaces with three different physical shapes get three labels in one line: the branch
+  // is a ref on this worktree, the upstream is the remote ref it tracks, the stamp is how old
+  // the remote snapshot is. Sync counts stay in the commit card where the reader acts on them.
+  const checkedOut = branches.filter(row => row.current === true || row.inOtherWorktree === true)
+  const refsOnly = branches.filter(row => row.current !== true && row.inOtherWorktree !== true)
   const summary = copy.branchDrawerSummary(
     current ?? copy.detached,
-    upstream === null ? copy.noUpstream : `${upstream} · ${copy.factSyncValue(behind, ahead)}`,
+    upstream === null ? copy.noUpstream : upstream,
     copy.worktreesHeadingCount((git?.worktrees ?? []).length),
+    remotes.length === 0 ? '' : fetchStamp,
   )
   return React.createElement(NanoDialog, {
     copy,
@@ -487,43 +493,59 @@ export function BranchDrawer({ copy, open, git, onClose, onPull, onPush, onRefre
           onClick: () => setBranchTab(item.id),
         }, `${item.label} ${item.count}`))),
         React.createElement('section', { className: 'nxe-branch-pane' },
-        tab === 'remote'
-          ? React.createElement('p', { className: 'nxe-branch-stamp', title: fetchStamp }, fetchStamp)
-          : null,
         tab === 'local'
           ? (branches.length === 0
             ? React.createElement('p', { className: 'nxe-drawer-empty' }, copy.branchesEmpty)
-            : React.createElement('ul', { className: 'nxe-drawer-list', 'data-nxe-branches': 'true' }, branches.map(row =>
-              React.createElement('li', {
-                key: row.name,
-                className: 'nxe-drawer-row',
-                'data-current': String(row.current === true),
-                'data-blocked': String(row.inOtherWorktree === true),
-              },
-              React.createElement('button', {
-                type: 'button', className: 'nxe-drawer-branch',
-                disabled: row.current === true || row.inOtherWorktree === true || busy === true || conflicts.length > 0,
-                title: conflicts.length > 0
-                  ? copy.branchConflictBlocks
-                  : row.inOtherWorktree === true ? copy.branchHeldElsewhere : row.name,
-                onClick: () => setPendingBranch(row.name),
-                'data-nxe-checkout': row.name,
-              }, row.name),
-              row.commit === '' ? null : React.createElement('span', { className: 'nxe-graph-hash' }, row.commit),
-              row.upstream === null ? null : React.createElement('span', { className: 'nxe-drawer-row-path', title: row.upstream }, row.upstream),
-              conflicts.length > 0 && row.current === true
-                ? React.createElement('span', { className: 'nxe-drawer-row-badge', 'data-tone': 'danger' }, '!')
-                : null,
-              row.inOtherWorktree === true
-                ? React.createElement('span', { className: 'nxe-drawer-row-badge' }, copy.branchHeldShort)
-                : row.current === true
-                  ? React.createElement('span', { className: 'nxe-drawer-row-badge', 'data-tone': 'current' }, copy.branchCurrentShort)
-                  : row.upstream === null
-                    ? React.createElement('span', { className: 'nxe-drawer-row-badge', 'data-tone': 'local' }, copy.branchLocalOnly)
-                    : null))))
+            : React.createElement(React.Fragment, null,
+              checkedOut.length === 0 ? null : React.createElement(React.Fragment, null,
+                React.createElement('h3', { className: 'nxe-local-head' },
+                  React.createElement('span', null, copy.branchGroupCheckedOut),
+                  React.createElement('span', { className: 'nxe-local-badge' }, String(checkedOut.length))),
+                React.createElement('ul', { className: 'nxe-drawer-list', 'data-nxe-branches': 'true' }, checkedOut.map(row => React.createElement('li', {
+                  key: row.name,
+                  className: 'nxe-drawer-row',
+                  'data-current': String(row.current === true),
+                  'data-blocked': String(row.inOtherWorktree === true),
+                },
+                React.createElement('button', {
+                  type: 'button', className: 'nxe-drawer-branch',
+                  disabled: true,
+                  title: row.inOtherWorktree === true ? copy.branchHeldElsewhere : row.name,
+                }, row.name),
+                row.commit === '' ? null : React.createElement('span', { className: 'nxe-graph-hash' }, row.commit),
+                row.upstream === null ? null : React.createElement('span', { className: 'nxe-drawer-row-path', title: row.upstream }, row.upstream),
+                conflicts.length > 0 && row.current === true
+                  ? React.createElement('span', { className: 'nxe-drawer-row-badge', 'data-tone': 'danger' }, '!')
+                  : null,
+                React.createElement('span', { className: 'nxe-drawer-row-badge', 'data-tone': 'current' },
+                  row.current === true ? copy.branchCurrentShort : copy.branchHeldShort))))),
+              refsOnly.length === 0 ? null : React.createElement(React.Fragment, null,
+                React.createElement('h3', { className: 'nxe-local-head' },
+                  React.createElement('span', null, copy.branchGroupRefs),
+                  React.createElement('span', { className: 'nxe-local-badge' }, String(refsOnly.length))),
+                React.createElement('ul', { className: 'nxe-drawer-list', 'data-nxe-branches': 'true' }, refsOnly.map(row => React.createElement('li', {
+                  key: row.name,
+                  className: 'nxe-drawer-row',
+                },
+                React.createElement('button', {
+                  type: 'button', className: 'nxe-drawer-branch',
+                  disabled: busy === true || conflicts.length > 0,
+                  title: conflicts.length > 0 ? copy.branchConflictBlocks : row.name,
+                  onClick: () => setPendingBranch(row.name),
+                  'data-nxe-checkout': row.name,
+                }, row.name),
+                row.commit === '' ? null : React.createElement('span', { className: 'nxe-graph-hash' }, row.commit),
+                row.upstream === null ? null : React.createElement('span', { className: 'nxe-drawer-row-path', title: row.upstream }, row.upstream),
+                row.upstream === null
+                  ? React.createElement('span', { className: 'nxe-drawer-row-badge', 'data-tone': 'local' }, copy.branchLocalOnly)
+                  : null))))))
           : (remoteBranches.length === 0
             ? React.createElement('p', { className: 'nxe-drawer-empty' }, copy.remoteBranchesEmpty)
-            : React.createElement('ul', { className: 'nxe-drawer-list', 'data-nxe-remote-branches': 'true' }, remoteBranches.map(row => {
+            : React.createElement(React.Fragment, null,
+              React.createElement('h3', { className: 'nxe-local-head' },
+                React.createElement('span', null, copy.branchGroupRemote),
+                React.createElement('span', { className: 'nxe-local-badge' }, String(remoteBranches.length))),
+              React.createElement('ul', { className: 'nxe-drawer-list', 'data-nxe-remote-branches': 'true' }, remoteBranches.map(row => {
               const base = row.name.slice(row.name.indexOf('/') + 1)
               const tracked = localNames.has(base)
               return React.createElement('li', {
@@ -565,7 +587,7 @@ export function BranchDrawer({ copy, open, git, onClose, onPull, onPush, onRefre
                 hash === '' ? null : React.createElement('span', { className: 'nxe-graph-hash' }, hash),
                 here ? React.createElement('span', { className: 'nxe-drawer-row-badge', 'data-tone': 'current' }, copy.branchCurrentShort) : null),
               React.createElement('span', { className: 'nxe-worktree-path' }, shortenPath(row.path))))
-          })))),
+          }))))),
     pendingBranch === null ? null : React.createElement(Dialog, {
       copy,
       title: copy.checkoutTitle(pendingBranch),

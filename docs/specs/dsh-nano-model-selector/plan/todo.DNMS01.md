@@ -141,11 +141,11 @@ T-EXEC 工作日志回填 AP ──▶ T-CLO closure ──▶ T-REV ≥3 路对
 
 ### 3.7 Phase 5 — 主包 UI
 
-- [ ] `P5-01` — `ModelSelector.jsx` rail 第 4 图标 + `filter='compact'` 四态面板 + 切换四分类（`L3-T17`/`L5-T04`）
+- [x] `P5-01` — [rail 第4图标+CompactPanel 四态+切换四分类落位] — `ModelSelector.jsx` rail 第 4 图标 + `filter='compact'` 四态面板 + 切换四分类（`L3-T17`/`L5-T04`）
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
-- [ ] `P5-02` — `src/client/compact.js` + `icons.jsx` + `i18n.js`（+18 key zh/en）（`L3-T17`/`L5-T04`）
+- [x] `P5-02` — [compact.js+CompactionIcon+zh/en 各18 key 落位] — `src/client/compact.js` + `icons.jsx` + `i18n.js`（+18 key zh/en）（`L3-T17`/`L5-T04`）
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
-- [ ] `P5-03` — 4 处 `filter !== 'media'` 清理 + `:354-355,370` 同步（`L3-T17`）
+- [x] `P5-03` — [四处条件清理已加 compact（815/822/829/847 对应行）] — 4 处 `filter !== 'media'` 清理 + `:354-355,370` 同步（`L3-T17`）
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
 
 ### 3.8 Phase 6 — 观测派生与读面

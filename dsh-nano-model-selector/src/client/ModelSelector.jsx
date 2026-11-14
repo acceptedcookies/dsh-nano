@@ -7,10 +7,12 @@ import { copyFor } from './i18n.js'
 import { BrandMark } from './BrandMark.jsx'
 import { readFavorites, writeFavorites } from './favorites.js'
 import { fetchEngine, fetchEngines, readEngineCache, selectEngine, writeEngineCache } from './media.js'
+import { CompactPanel } from './CompactPanel.jsx'
 import {
   CheckIcon,
   ChevronDownIcon,
   CloseIcon,
+  CompactionIcon,
   GridIcon,
   MediaIcon,
   ModelIcon,
@@ -133,6 +135,8 @@ export function ModelSelector({ locked, available, directory, load, select, lang
   const [engines, setEngines] = React.useState(null)
   const [mediaEngine, setMediaEngine] = React.useState(() => readEngineCache())
   const [mediaBusy, setMediaBusy] = React.useState(null)
+  // Async-compaction takeover panel (-20): U1–U4 from the host's read-only
+  // projection; no local derivation or caching of the switch state.
   const enginesFetchedAt = React.useRef(0)
   const [position, setPosition] = React.useState(null)
   const [toast, setToast] = React.useState(null)
@@ -238,6 +242,11 @@ export function ModelSelector({ locked, available, directory, load, select, lang
     return refreshEngines()
   }, [open, engines, refreshEngines])
 
+  const onCompactError = text => {
+    toastSeq.current += 1
+    setToast({ seq: toastSeq.current, text })
+  }
+
   const chooseEngine = key => {
     if (mediaBusy !== null) return
     if (mediaEngine === key) { close(true); return }
@@ -317,6 +326,11 @@ export function ModelSelector({ locked, available, directory, load, select, lang
     }),
   })), [groupSource, detailMap])
   const allModels = React.useMemo(() => groups.flatMap(group => group.models), [groups])
+  // (provider, model) pairs for the summary-model dropdown (-20④).
+  const compactModelPairs = React.useMemo(
+    () => allModels.map(item => ({ provider: item.group.id, model: item.model.id })),
+    [allModels],
+  )
   const brands = React.useMemo(() => {
     const seen = new Set()
     const result = []
@@ -725,6 +739,17 @@ export function ModelSelector({ locked, available, directory, load, select, lang
               >
                 <MediaIcon size={17} />
               </button>
+              <button
+                type="button"
+                className="nms-rail-item"
+                data-active={filter === 'compact'}
+                title={copy.compactTitle}
+                aria-label={copy.compactTitle}
+                aria-pressed={filter === 'compact'}
+                onClick={() => { setFilter('compact'); setQuery('') }}
+              >
+                <CompactionIcon size={17} />
+              </button>
               <span className="nms-rail-sep" aria-hidden="true" />
               <div className="nms-rail-brands" ref={railBrandsRef} data-more={railMore || undefined} onScroll={updateRailOverflow}>
                 {brands.map(brand => (
@@ -812,21 +837,25 @@ export function ModelSelector({ locked, available, directory, load, select, lang
                   </div>
                 )}
 
-                {filter !== 'media' && visibleFavorites.length > 0 && (
+                {filter === 'compact' && (
+                  <CompactPanel copy={copy} models={compactModelPairs} onError={onCompactError} />
+                )}
+
+                {filter !== 'media' && filter !== 'compact' && visibleFavorites.length > 0 && (
                   <div>
                     <div className="nms-group"><StarIcon className="nms-group-star" size={12} filled />{copy.favorites}<span className="nms-group-count">{copy.favoriteCount(visibleFavorites.length)}</span></div>
                     {visibleFavorites.map(item => renderModel(item, { reorderable: filter === 'favorites' }))}
                   </div>
                 )}
 
-                {filter !== 'favorites' && filter !== 'media' && visibleGroups.map(group => (
+                {filter !== 'favorites' && filter !== 'media' && filter !== 'compact' && visibleGroups.map(group => (
                   <div key={group.id}>
                     <div className="nms-group">{group.name}<span className="nms-group-count">{copy.modelCount(group.models.length)}</span></div>
                     {group.models.map(item => renderModel(item))}
                   </div>
                 ))}
 
-                {filter !== 'media' && visibleCount === 0 && state.status !== 'loading' && !reloading && (
+                {filter !== 'media' && filter !== 'compact' && visibleCount === 0 && state.status !== 'loading' && !reloading && (
                   <div className="nms-empty">
                     <span className="nms-empty-icon">{filter === 'favorites' ? <StarIcon size={17} /> : <ModelIcon size={17} />}</span>
                     {filter === 'favorites' && favorites.length === 0
@@ -844,7 +873,7 @@ export function ModelSelector({ locked, available, directory, load, select, lang
                 ))}
               </div>
 
-              {filter !== 'media' && (
+              {filter !== 'media' && filter !== 'compact' && (
               <footer className="nms-effort">
                 <span className="nms-effort-label">{copy.effort}</span>
                 {current === null || currentItem === undefined

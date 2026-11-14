@@ -14,6 +14,7 @@ import {
   IconRefreshOutlineRegular,
   IconSearchOutlineRegular,
   IconSparkleRegular,
+  IconLayersOutlineRegular,
   IconWarningTriangleOutlineRegular,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 
@@ -75,4 +76,9 @@ export function DragHandleIcon(props) {
 /** @param {{ className?: string, size?: number }} props */
 export function MediaIcon(props) {
   return <IconSparkleRegular {...props} />
+}
+
+/** Async-compaction takeover rail icon: a layered stack folded into one. */
+export function CompactionIcon(props) {
+  return <IconLayersOutlineRegular {...props} />
 }

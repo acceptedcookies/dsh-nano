@@ -222,6 +222,18 @@ var ROUTE_TABLE = [
     "bodyLimit": 16384,
     "sessionBinding": false,
     "justification": "dsh-nano-model-selector/index.js \u2014 DNMS01/-15. GET returns {policy, effective, runtime}; PUT (16384-byte cap) rewrites plugins/nano-model-selector/async-compact.json, the sole writable authority for the async-compaction takeover (master-order + schema validation, fail-closed). Operator-level config surface = L3 write:operator."
+  },
+  {
+    "plugin": "dsh-nano-model-selector",
+    "path": "/nano-model-selector/async-compact/switch",
+    "methods": [
+      "POST"
+    ],
+    "sensitivity": "L3",
+    "capability": "write:operator",
+    "bodyLimit": 1024,
+    "sessionBinding": false,
+    "justification": `dsh-nano-model-selector/index.js \u2014 DNMS01/-20\u2466. POST {"enabled":boolean} (1024-byte cap) forwards to ctx.get('pluginManager').setBundleEnabled('dsh-nano-model-selector-compaction') \u2014 the panel's single write entry to the takeover toggle; same sanctioned writer, not a second truth source.`
   }
 ];
 export {

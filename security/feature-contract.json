@@ -403,6 +403,17 @@
    "responseShape": "GET/HEAD 200 {ok:true, policy:{schema,model,bufferSizeAsync,healthTargetAsync,bufferSizeSafety,pinnedAsyncTokens,pinnedFullTokens, effective:{pin,windowMin,dcs}, runtime:{fill,lastCompaction}}, missing} ; PUT 200 {ok:true, policy:{...same}} | {ok:false,error:{code,reason}} where code ∈ {invalid-schema,invalid-range,invalid-model,body-too-large,invalid-json-body,state-read-failed,state-write-failed}"
   },
   {
+   "plugin": "dsh-nano-model-selector",
+   "path": "/nano-model-selector/async-compact/switch",
+   "methods": [
+    "POST"
+   ],
+   "bodyLimit": {
+    "POST": 1024
+   },
+   "responseShape": "POST 200 {ok:true, application:'applied'|'restart-required'|'overridden', restartReason?, bundle:{installed,enabled,known}} | {ok:false,error:{code,reason}} where code ∈ {invalid-json-body,invalid-schema,body-too-large,manager-unavailable,switch-failed}"
+  },
+  {
    "plugin": "dsh-nano-local-sandbox",
    "path": "/nano-local-sandbox/status",
    "methods": [

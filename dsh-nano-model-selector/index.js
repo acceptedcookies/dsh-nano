@@ -34,6 +34,9 @@ const ROUTE = '/nano-model-selector/catalog'
 const ENGINES_ROUTE = '/nano-model-selector/media-engines'
 const ENGINE_ROUTE = '/nano-model-selector/media-engine'
 const ASYNC_COMPACT_ROUTE = '/nano-model-selector/async-compact'
+/** -20⑦: panel forwards the bundle flip through this one route (browser half cannot reach pluginManager). */
+const ASYNC_COMPACT_SWITCH_ROUTE = '/nano-model-selector/async-compact/switch'
+const COMPACTION_BUNDLE_NAME = 'dsh-nano-model-selector-compaction'
 
 /** Plugin-private state file holding the chosen media engine. */
 const STATE_PATH = join(
@@ -298,12 +301,70 @@ function asyncCompactHandlers(ctx) {
       }
       return
     }
-    // GET/HEAD: serve the stored policy plus derived read-only fields.
+    // GET/HEAD: serve the stored policy plus derived read-only fields plus the
+    // read-only bundle projection (-20②: U1–U4 derive from this pair). A read
+    // failure projects `degraded:'state-read-failed'` (U4) instead of 500 — the
+    // panel never derives state itself; PUT stays fail-closed.
     const state = readState(ASYNC_COMPACT_PATH)
-    if (!state.ok) { sendJson(res, 500, { ok: false, error: { code: 'state-read-failed', reason: state.reason } }); return }
-    sendJson(res, 200, { ok: true, policy: await payload(state.policy), missing: state.missing })
+    if (!state.ok) {
+      sendJson(res, 200, {
+        ok: true,
+        policy: null,
+        degraded: 'state-read-failed',
+        missing: false,
+        bundle: await compactionBundleState(ctx),
+      })
+      return
+    }
+    sendJson(res, 200, {
+      ok: true,
+      policy: await payload(state.policy),
+      missing: state.missing,
+      bundle: await compactionBundleState(ctx),
+    })
   }
   return handler
+}
+
+/** Read-only U1–U4 projection from the sanctioned inventory (-20②). */
+async function compactionBundleState(ctx) {
+  try {
+    const pm = ctx.get('pluginManager')
+    if (pm === undefined || pm === null) return { installed: false, enabled: false, known: false }
+    const row = (await pm.listBundles()).find(item => item.name === COMPACTION_BUNDLE_NAME)
+    if (row === undefined) return { installed: false, enabled: false, known: true }
+    return { installed: row.installed === true, enabled: row.enabled === true, known: true, availability: row.availability }
+  } catch {
+    return { installed: false, enabled: false, known: false }
+  }
+}
+
+/**
+ * -20⑦: the panel's only write path for the takeover toggle. Forwards to the
+ * sanctioned writer `pluginManager.setBundleEnabled` — not a second truth.
+ */
+async function asyncCompactSwitchHandler(ctx, req, res) {
+  try {
+    const body = await readBody(req, 1024)
+    if (typeof body?.enabled !== 'boolean') { sendJson(res, 400, { ok: false, error: { code: 'invalid-schema', reason: 'enabled must be a boolean' } }); return }
+    const parsed = body
+    const pm = ctx.get('pluginManager')
+    if (pm === undefined || pm === null) { sendJson(res, 400, { ok: false, error: { code: 'manager-unavailable', reason: 'pluginManager service is not reachable' } }); return }
+    try {
+      const result = await pm.setBundleEnabled(COMPACTION_BUNDLE_NAME, parsed.enabled)
+      const application = result?.application ?? 'applied'
+      sendJson(res, 200, {
+        ok: true,
+        application,
+        ...(result?.restartReason === undefined ? {} : { restartReason: result.restartReason }),
+        bundle: await compactionBundleState(ctx),
+      })
+    } catch (error) {
+      sendJson(res, 400, { ok: false, error: { code: 'switch-failed', reason: messageOf(error) } })
+    }
+  } catch (error) {
+    sendJson(res, 400, { ok: false, error: { code: error.message === 'body too large' ? 'body-too-large' : 'switch-failed', reason: messageOf(error) } })
+  }
 }
 
 /** @param {import('@deepseek-ai/cordis').Context} ctx */
@@ -319,5 +380,6 @@ export function apply(ctx) {
     { path: ENGINES_ROUTE, methods: ['GET', 'HEAD'], handler: media.engines },
     { path: ENGINE_ROUTE, methods: ['GET', 'HEAD', 'PUT'], handler: media.engine },
     { path: ASYNC_COMPACT_ROUTE, methods: ['GET', 'HEAD', 'PUT'], handler: asyncCompactHandlers(ctx) },
+    { path: ASYNC_COMPACT_SWITCH_ROUTE, methods: ['POST'], handler: (req, res) => asyncCompactSwitchHandler(ctx, req, res) },
   ], { table: ROUTE_TABLE, plugin: PLUGIN })
 }

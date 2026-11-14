@@ -37,7 +37,11 @@ const REQUIRED = [
 
 export function recipeDigest(dir) {
   const hash = createHash('sha256')
-  for (const name of RECIPE_FILES) hash.update(readFileSync(join(dir, name)))
+  for (const name of RECIPE_FILES) {
+    // Digest over canonical LF text so the pinned value is identical on
+    // CRLF checkouts (Windows core.autocrlf) and non-git materializations.
+    hash.update(readFileSync(join(dir, name), 'utf8').replace(/\r\n/g, '\n'))
+  }
   return `sha256:${hash.digest('hex')}`
 }
 

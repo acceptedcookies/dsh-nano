@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { readdirSync } from 'node:fs'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import test from 'node:test'
 import {
   BRIDGE_ERROR_IDS, ERROR_CATALOG, ERROR_STATUS, clearConsole, clearOperations, diagnosticsSummary,
@@ -38,7 +39,7 @@ test('every real kitesurf.* errorId is catalogued or a bridge-local id', () => {
   // source file for kitesurf.* literals, then require each to match a
   // catalog regex or be a registered bridge-local id.
   const covered = (id) => ERROR_STATUS.some(([pattern]) => pattern.test(id))
-  const roots = [new URL('..', import.meta.url).pathname]
+  const roots = [fileURLToPath(new URL('..', import.meta.url))]
   const files = []
   for (const dir of ['index.js', 'lib', 'runtime']) {
     const full = join(roots[0], dir)

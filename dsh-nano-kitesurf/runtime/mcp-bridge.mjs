@@ -474,6 +474,11 @@ export function createBridge(port = PORT, env = process.env) {
         try {
           const parsed = JSON.parse(body)
           if (!parsed || typeof parsed !== 'object') throw new Error('not an object')
+          // Two hosts can push to one engine (desktop + a dev profile). Keep the
+          // richest history instead of letting an older host erase it.
+          const prev = lastDiagnostics?.history
+          const next = parsed?.history
+          if (prev && (!next || (next.entries?.length || 0) < (prev.entries?.length || 0))) parsed.history = prev
           lastDiagnostics = parsed
           diagnosticsPushedAt = new Date().toISOString()
           res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })

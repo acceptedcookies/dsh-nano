@@ -470,4 +470,24 @@ P0 批次在真机 dsh-dev 上构建→部署→e2e 完成。三项 **P0 内嵌�
 
 P0 的**契约可信**目标已全数达成：错误可自查（P0-1）、开关是真的（P0-2）、等待是原语（P0-3）、单写者不被踩（P0-4）、**ref 是统一语言**（P0-5）、**skill 是分层目录包**（P0-6）。「人标注 ↔ agent 引用同一元素」链已真正打通：人点选的 `element.ref` 与 agent 的 `@N` 指向同一 DOM 节点。P0-6 的 build 对账第一次证明「接口真源 → 分层生成 → 覆盖断言」全链路可跑——会成为全仓 skill 工程模板。
 
+## §7.5 第一次 agentic 对比轮的诚实发现（P0 落地后）
+
+用 `scripts/eval-ego-vs-dnk.mjs` 在 dsh-dev 同一台机上，对同一目标页并行驱动 **DNK agent 面**（`/snapshot`/`@N`/`wait`/`pick` 经 `page.fetch`）与 **ego-browser agent 面**（Playwright `locator`/`evaluate`/真实 DOM）：
+
+| 轴 | DNK | ego | 裁决 |
+|---|---|---|---|
+| 按意图定位元素 | `@1`+`selector`+`role` | `a`/`input` | 平 |
+| **执行精度**（`@N`→`wait`/`pick` 命中同一节点） | **稳定 round-trip，`pick.ref===@N`** | 无持久 ref 概念 | **DNK 胜**（唯一真值 ref 语言） |
+| **观测保真**（a11y 心智模型） | **结构性受损**：`example.com` 在引擎里是 `STYLE,svg,P×6,A,SCRIPT`，**无 `<h1>`**；Kitesurf 渲染器把语义标题/列表/容器压成 `svg`+`p` | 真实 DOM，h1/list/table 全在 | **ego 胜（结构性）** |
+| 延迟（快照/加载） | `/snapshot` 78–83ms | goto+DOM 789–1054ms | **DNK 快 10×**（但代价是树更浅） |
+| 协议/错误面 | `ERROR_CATALOG` 全表 + `hints` + `errorId` 契约 | Playwright 异常文本 | **DNK 胜**（结构化、可自查） |
+
+### 决定性的架构现实（必须写清）
+
+Kitesurf 引擎**不是 Chromium**——它是 workerd 里一个自研渲染器，把目标页**重写**成自己的渲染树（SVG 视口 + 段落文本运行 + 表单控件）。`document.querySelector("h1")` 在引擎内为 `null`。表单控件与链接存活（`@2 textbox "custname"` 证明），但 heading/语义容器/list/table 被压扁。
+
+**含义**：DNK 不可能在「通用浏览器自动化」轴上「全面超越」ego——那是 Kitesurf 渲染器刻意的轻量取舍，不是 bug。**DNK 能且应该赢得的，是 design-mode 协作调试这条 lane**：人点选→元素包→composer→agent 改写→写回页面，这条环 ego 完全没有（它没有 pane、没有元素包契约、没有 `@N` 统一语言、没有 composer 集成）。
+
+**因此「默认调试引擎」的可达定义必须重定**：DNK 成为 **design-mode / 协作前端调试**的默认引擎（在 Kitesurf 渲染充分的静态/SSR/轻 JS 页面）——不是成为通用浏览器自动化的替代者。对富 JS/重语义页面，DNK 的合理行为是**明确退化**（报 `engineMismatch`/`render-fidelity` hint），而不是假装覆盖。
+
 **三条不做的线**（守住定位）：① 不做本地 Chrome fallback（架构红线）；② 不做「先试样式再写代码」（design-mode-feedback 已裁决：`DOM.highlightNode` 是空的，假功能不做）；③ P2-6 远程面不在无业主决议时动（扩约）。

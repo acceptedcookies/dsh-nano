@@ -688,4 +688,10 @@ window_min = pinnedAsyncTokens / H
 | 持久化 | resume `session-2e5b4535` 无 corrupt；`turn6` 正常执行；bracket 净零 |
 | PUT 生效 | `pinnedAsyncTokens`/`healthTargetAsync` 部分更新生效，effective 重算 |
 | 格式律 | `turn/start crosses an open compaction` 不再复现（修复后 resume 干净） |
+| 手动 seam | `ManualCompactionError` 升级桥 live 验：headless profile 内 `vendored-thrown instanceof upstream === true`；`/compact` 命令面在 `--json` 下不存在（模型 prompt），`compactNow()` 引擎路径由 S-line FULL 共享覆盖 |
+| idle 重入 | 拟真 harness 检出双 `compaction/end` 竞争；`_claimEpisodeMaintenance` 加 `running` 相位门后回归绿 |
+
+### 14.4 拟真 harness（node:test，`test/async-takeover.test.mjs`）
+
+13 用例全绿：B-line arm→maintenance commit 时序+adoption wake、one-active/durable-lock、S-line FULL `turn:'turn-1'` owner、circuit open/suppress/reset、corrupt→safetyOnly vs missing→DEFAULT_POLICY、compact-runtime fold + degraded 闭集、surfaceOp 内容观测（`replace{startSeq,endSeq}` + `source.kind` + framed summary）、abort→`end{error}` 括号闭合、model-switch veto `MODEL_SWITCH_COMPACTION_FAILED`。Hermetic：`DSH_DATA_DIR=mkdtemp` 于 module load 前。
 

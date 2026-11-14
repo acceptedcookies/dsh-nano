@@ -1,73 +1,73 @@
-# [DNMS01 / async-compaction takeover] Closure
+# DNMS01 Closure · 异步压缩接管（dsh-nano-model-selector-compaction）
 
-> 阶段: `DNMS01 — dsh-nano-model-selector 异步压缩接管`
-> 范围: `P0–P6` 编码 + P7 文档同步 + T-EXEC 工作日志；T-REV/T-FIX/L2–L4 live 验收进行中。
-> Close-type: `executed-on-branch-not-merged`（预期）；当前 `executing`
-> 状态: `executing`（三路对抗审查进行中，未合并回 `main`）
-> 分支: `dnms01-async-compaction` @ `b07ff01`（+ index.js inject 修正已入 `cbf1426`）
-> 日期: `2026-11-15`
+**Status**: implemented + live-verified + 拟真-tested | **Branch**: `dnms01-async-compaction` | **Date**: 2026-11-15
 
-## 0. Verdict
+## 1. 交付范围（对照 STEP.0–8）
 
-`P0`–`P6` 全部编码与 `P7` 文档同步在分支 `dnms01-async-compaction` 上落位。`L0`（10/10 node:test）与 `L5`（clean-lib 54 / route-sensitivity 83 0-drift / pack ×2 工件齐 / diff --check）静态门禁通过。`L1` 契约在 route-table + feature-contract 静态断言层面过；`L2`/`L3`/`L4` live 验收待三路审查 → T-FIX 后现场跑。不标 `executed` 直到 L2–L4 收口。
-
-## 1. 已落地
-
-| 项 | 证据 | 5 态 |
-|----|------|------|
-| P0 实测收口 | `a8dd6e6`；T-R 台账 + QNA R-15 FAIL → R-16 vendored 裁决 | 🟢 verified |
-| 两包骨架（0.3.0 + compaction@0.1.0、dsh.bundle.patch、mutex patch） | `ff74487`/`21f69f1`；`cordis.patch.yml` 633 行 4 preset 全回放，`--dump-config` 验证 | 🟢 verified（L2 静态） |
-| `lib/compact-policy.js`（7 字段、master 序、DC、0.15 clamp、fail-closed tmp+rename） | `lib/compact-policy.js` ×2（字节一致）；`node test/compact-policy.test.mjs` 10/10 | 🟢 verified |
-| `GET/PUT /nano-model-selector/async-compact` + `POST …/switch` | `index.js:260-370`；83 路由 0 drift；route-sensitivity L3×2 | 🟢 verified |
-| `NanoCompactionEngine`（三方法 + async arm→maintenance→adoption + FULL 闭集 + overflow + circuit） | `lib/host-compaction.js`；类加载 smoke 过（dev-only cordis 链接） | 🟡 observed-OK-at-closure（live 未跑） |
-| 协议复刻 `lib/compact-region.js`（bracket/六码/shrink/stability/no-cap/两相） | `compact-region.js`；逐节 mirror region.ts+summarizer.ts | 🟡 observed-OK-at-closure（live 未跑） |
-| UI 四态面板 + rail 第 4 图标 + i18n ×18 + 四处条件清理 | `src/client/CompactPanel.jsx`/`compact.js`/`ModelSelector.jsx`/`icons.jsx`/`i18n.js`；`npm run build` 过，`lib/client.js` 141.2kB | 🟡 observed-OK-at-closure（live 未跑） |
-| 观测面 `lib/compact-runtime.js`（sessionProjections + Map 退化 + 5s memo + degraded 闭集） | `compact-runtime.js`；GET runtime/degraded 接入 `index.js` | 🟡 observed-OK-at-closure（P0-10 未实测，两路径都实现） |
-| `-20⑦` switch 唯一写入口 → `setBundleEnabled` | `index.js` `asyncCompactSwitchHandler`（1024 cap） | 🟢 verified（代码路径） |
-| 文档三处同步（AGENTS 合同节/README/RELEASE matrix 四包）+ banner + AP §12 | `cbf1426`/`a725c92`/`b07ff01` | 🟢 verified |
-
-## 2. 明确没做
-
-- 没有合并回 `main`。
-- 没有删除 worktree。
-- `L2`/`L3`/`L4` live 行为验收未跑（`/compact` bracket 现场、B 线跨 turn、S 线、overflow ON/OFF 归属、dump-config 两态、持久化跨 restart）。
-- T-REV 三路报告未回收，T-FIX 循环未跑。
-- 没有发版、没有版本 bump、没有 tag（`-19`⑤ 权限归 [业主]）。
-- 没有动 `dsh.local`、`engines.dsh`、三个 `file:` devDeps、`tool-result-pruner`。
-
-## 3. 下游可以依赖什么
-
-- ON/OFF canonical = `dsh.profile.bundles` 是否有 `dsh-nano-model-selector-compaction`；`install ≠ 接管`——add 后默认 ON，OFF 需显式 `set_bundle(false)`。
-- 策略唯一可写真源 = `plugins/nano-model-selector/async-compact.json`（7 字段无 `enabled`，`schema:1` 无回退）。
-- 面板唯一写入口 = `POST /nano-model-selector/async-compact/switch`；UI 无 `ctx.remote`。
-- 运行期观测只用 `-19①` 闭集：GET `runtime`/`degraded` + `compaction/{summary,end,prune}` durable events + `pluginInventory`/`compositionInventory` + `ctx.logger`。
-- 上游 preset `config.plugins` 结构变化需重跑 `scripts/gen-mutex-patch.mjs`（`-10` 已知脆性，`engines.dsh >=0.2.2-rc.1 <0.3.0` 钉住）。
-
-## 4. 不要动
-
-- `docs/specs/dsh-nano-model-selector/qna/DNMS01-qna.md` 全部冻结行；append-only。
-- `engines.dsh`、三个 `file:` devDeps、`dsh.local`。
-- `compaction` 包的 vendored `lib/compaction/`（R-16 裁决路径；改动须 `npm pack --dry-run` 复核 files）。
-- `-19` 观测面闭集：不得加 `compact.notify` / 新 session event type / D1 / 新 audit 文件。
-
-## 5. 证据口径
-
-L0 = `node test/compact-policy.test.mjs` 10/10。L5 = `check-clean-lib` 54 工件、`check-route-sensitivity` 83 行 0 drift、`npm pack --dry-run` 两包工件齐（compaction 13 文件含 vendored 树）、`git diff --check` 干净、`node --check` 全部新文件过、`NanoCompactionEngine` 类加载 smoke 过。L1 = route-table + feature-contract responseShape 静态。L2/L3/L4 = 待 live。
-
-## 6. 残留登记（不 silent overclaim）
-
-| 项 | 判定 | 说明 |
+| Phase | 交付物 | 状态 |
 |---|---|---|
-| `sessionProjections` 实测注册路径 | `未观察` | `compact-runtime.js` 两路径都实现；L3 定实际路径 |
-| `NanoCompactionEngine`/`compact-region.js` live 行为 | `未观察` | 协议静态复刻逐节 mirror；L3 验收定 |
-| UI live 渲染/切换四分类现场 | `未观察` | 代码 + build 过；L3/L5-T04 现场定 |
-| L2 dump-config ON/OFF 两态终验 | `partial` | P1 已验证一次；最终态待复验 |
-| L4 跨 restart 持久化 | `未观察` | tmp+rename 代码路径已验；live 待 |
-| `lib/compact-scheduler.js` 计划文件名 | `deferred` | 调度闭集内联 host-compaction.js，等价拆分差异 AP §12 已登记 |
-| adoption wake `followup` 消息可见性 | `partial` | 实现权衡已登记；若 L3 判需静默改 `send()` |
+| STEP.0–2 | `dsh-nano-model-selector@0.3.0` + `dsh-nano-model-selector-compaction@0.1.0`；`cordis.patch.yml` 4-preset 全重放互斥；`-11` state schema；`GET/PUT/POST` 三路由 | ✅ |
+| STEP.3–5 | durable bracket 协议；`-18` 异步车道（B-arm→idle `runMaintenance`→同窗口 commit）；`-15` 策略文件；rail-4 面板；`-21` runtime 投影 | ✅ |
+| STEP.6 | 三路对抗审（真相层对账 / 工作完成度 / 防假绿） | ✅ 报告在 `.anote/reviews/DNMS01/` |
+| STEP.7 | T-FIX 收敛：durable-lock 泄漏 + P0 跨回合括号 + 13 项 review findings + idle 重入竞争 | ✅ |
+| STEP.8 | 收口文档 + AP `## 12–14` 执行日志 + QNA R-16 六项裁决请求 | ✅ |
 
-## 修订历史
+## 2. live 验收矩阵（dsh-dev，headless + web 双通道）
 
-| 版本 | 日期 | 作者 | 变更 |
-|------|------|------|------|
-| `r1` | `2026-11-15` | `DNMS01 执行 agent` | 初稿 `executing`；T-REV 三路审查进行中。 |
+| 验收项 | 证据 | 判定 |
+|---|---|---|
+| B-line arm → maintenance commit | seq58–61 `turn:None`；`prepare→summarize→commit` 全在 `runMaintenance` 空闲窗口 | PASS |
+| 异步唤醒 + adoption | seq74 `source.kind:'compaction-adoption-wake'` + `(Context compacted asynchronously; continuing.)` | PASS |
+| pinned 尾部保留（内容观测） | seq60 `replace{37,45}` 保留 seq53 user + seq55 assistant | PASS |
+| DC-1 fullOnly 拦截 | `pinned=40000,H=0.05` → `dcs:["DC-1"]` → 同步 FULL 不走异步 | PASS |
+| S-line 0.80 FULL | seq65–68 `turn:5` 同步 FULL（over-health 二次压实） | PASS |
+| L4 持久化 / resume | `session-2e5b4535` resume 无 corrupt，turn6/7 正常 | PASS |
+| PUT 部分更新 + effective 重算 | `pinnedAsyncTokens`/`healthTargetAsync` 生效 | PASS |
+| `ManualCompactionError` 升级桥 | `vendored-thrown instanceof upstream === true`（headless） | PASS |
+| 格式律（P0 修复） | `turn/start crosses an open compaction` 不再复现 | PASS |
+| `/compact` 手动命令 | `--json` 无命令面，模型 prompt 未路由；`compactNow()` 引擎层已由 S-line FULL 共享覆盖 | PARTIAL（命令面 live 未验，引擎路径已验） |
+| OFF 态原生 restore | 全重放 patch 下 OFF 时 `compaction-basic` 原样，`--dump-config` 验证 | PASS |
+| 前端面板 rail-4 + 水位编辑 | GUI「会话不可用」宿主 bug 阻塞交互测试；GET/PUT/switch 均 live 200 | PARTIAL（面板交互未验） |
+
+## 3. 拟真测试（node:test）
+
+`dsh-nano-model-selector-compaction/test/async-takeover.test.mjs` — **13/13 PASS**：arm→commit 时序、one-active、durable-lock、S-line owner、circuit 开/抑/复位、degraded vs DEFAULT_POLICY、runtime fold、surfaceOp 内容观测、abort→`end{error}`、model-switch veto。Hermetic（`DSH_DATA_DIR=mkdtemp`）。合计 compact-policy 10 用例 → **23/23 PASS**。
+
+## 4. T-FIX 收敛清单
+
+| # | 缺陷 | 修法 |
+|---|---|---|
+| P0-1 | `turn/start` 跨过开括号 → 会话 corrupt | 整条 `compactSurfaceRegion(owner:null)` 收进 `runMaintenance`（`turn:None`） |
+| P0-2 | commit-failure 双写 `end{error}` | `episode.tx=null` 在 throw 前置 |
+| P1 | idle 重入双 `compaction/end` | `_claimEpisodeMaintenance` 加 `running` 相位门 |
+| -20 | `at` 恒 null | `event.data?.at` → `event.time`；`start→busy`/`end→completed\|failed` |
+| -18⑧ | FULL 成功不复位 circuit | `_pressureGate` 成功路径复位 |
+| -18 | episode 无超时 | `EPISODE_TIMEOUT_MS=120s` + `AbortSignal.any` |
+| -18 | armed 饥饿 | `MAX_CLAIM_ATTEMPTS=3` → `starved` drop |
+| -16 | vendored MCE `instanceof` 不命中 | 可变导出 + `upgradeManualCompactionError` 桥 |
+| -11 | PUT 半空 model 过门 | 半空 → `invalid-model` 400；master 序校验 unconditional |
+| -12 | `application:'failed'` 返 200 | → 500 + `switch-failed` |
+| ledger | `bundle`/`degraded`/`switch-failed` 缺登记 | `feature-contract.json` 补齐 |
+| -20③ | `overridden` 走 success 文案 | `compactSwitchOverridden` warn |
+
+## 5. 诚实台账（未完全验收项）
+
+- `/compact` 手动命令面：无 TTY 命令解析通道（`--json` 不路由），GUI composer 被宿主「会话不可用」bug 阻塞。引擎层 `compactNow()` 已由 S-line FULL 共享路径验证；命令面 live 验留 OPEN。
+- 前端面板 rail-4 交互：`nms-trigger` disabled（同宿主 bug），面板 DOM 未 live 渲染。`GET/PUT/switch` 三路由已 live 200，UI 层留 PARTIAL。
+- `ManualCompactionError` 升级依赖 headless `package.json` 的 `file:` dep（`@deepseek-ai/dsh-compaction` 从 dsh 全局 `node_modules` 解析）。无此 dep 的纯 link 安装下回落 vendored impl——`/compact` `instanceof` 门不命中（documented divergence，R-16.2 待裁决）。
+- `session/prompt` 门（GUI「会话不可用」）：非本包缺陷，宿主侧 unresolved。
+
+## 6. R-16 待裁决（QNA append-only）
+
+1. `-10` 全重放 patch 机制即合同面？
+2. vendored seam + `ManualCompactionError` 双轨即 `-16` 合同面？
+3. `-18` adoption 改判：commit 在 maintenance 窗口而非下一 turn pre-step？
+4. `agents` inject 在 `id:compaction` isolate 内经父层原型链可达是合法依赖？
+5. `dsh plugin add` 默认 ON vs `-17` OFF 矛盾以哪份为准？
+6. adoption-wake 用 `followup`（可见、耗一 turn）还是 `send`（静默）？
+
+## 7. 残留治理
+
+- `dnms01-force` 探针插件已从 headless profile `cordis.patch.yml` + `dependencies` 移除。
+- `/tmp/dnms01-*` 调试日志文件与 `/tmp/dnms01-force/` 源码为临时工件，不影响交付物。
+- `docs/specs/dsh-nano-model-selector/plan/DNMS01-audit-agent27.md` 应归档至 `.anote/reviews/DNMS01/`（待移动）。

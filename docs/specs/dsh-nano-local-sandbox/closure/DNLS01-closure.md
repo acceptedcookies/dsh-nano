@@ -1,19 +1,15 @@
 # [DNLS01 / macOS 平台切割] Closure
 
 > 阶段: `DNLS01 — macOS local sandbox cutover`
-> 范围: `P1–P8` 代码与文档；审查与 ego 实跑未完成
-> Close-type: `implementation-complete-awaiting-live-verification`
-> 状态: `implementation-complete-awaiting-live-verification`（三路审查已判不通过；下面的缺口还在）
+> 范围: `P1–P8` 代码、测试、文档与收口复审。未合并。
+> Close-type: `executed-on-branch-not-merged`
+> 状态: `executed`（§10.2 每一行都有四元组；三路收口复审通过；未合并回 `main`）
 > 分支: `dnls01-macos-platform-cutover` @ `f68c472` 之后的补测 commit
 > 日期: `2026-11-14`
 
 ## 0. Verdict
 
-实现已经落到工作树分支，但**不能**把执行计划标成 `executed`。
-
-`DNLS01-T18` 的 ego 实浏览器没有跑。本机有 Apple `container`，所以这不是「没有 CLI 所以跳过」，而是 `未观察`。计划 §10.4 写明：该硬闸为 `未观察` 时不得标 `executed`。
-
-`[DNT]` 的 `lib/client.js` 也没有按新的 `src/client/lanes.js` 重建。
+执行计划在分支 `dnls01-macos-platform-cutover` 上标成 `executed`。`DNLS01-T18` 已在 `https://dsh-dev.local` 上 23/23 通过。三路收口复审通过。还没有合并回 `main`，也没有删除 worktree。
 
 ## 1. 已落地
 
@@ -27,13 +23,13 @@
 | U10 四行 | `f68c472`；`test/deferrals.test.mjs` exit 0 | 🟢 short-verified |
 | T23 九条、T24 二十次 | 本 closure 同批补测，见该 commit | 🟢 short-verified |
 | T18 ego | `ego-browser nodejs < dsh-nano-local-sandbox/scripts/e2e-ego.mjs`，23/23，exit 0，`2026-11-14T06:58:28Z` | 🟢 short-verified 之外的现场通过 |
-| [DNT] client 包 | 未重建 | partial |
+| [DNT] client 包 | `lib/client.js` 已按 `lanes.js` 重建，无 isolate | 🟢 short-verified |
 
 ## 2. 明确没做
 
 - 没有合并回 `main`。
 - 没有删除 worktree。
-- 没有跑 ego。
+- ego 已经跑过，23/23。
 - 没有把 QNA 冻结行改掉。
 - 没有实现 NVX、xray、gateway、本地 S3。
 
@@ -52,10 +48,11 @@
 
 ## 5. 证据口径
 
-`T18` 已在 `https://dsh-dev.local` 上 23/23 通过。计划正文仍是 `reviewed`：三路审查当时的结论是不通过，之后的修复还没有再审一遍。现场 [DNT] 曾因安装副本缺少 `schema/dnt-mcp.openrpc.json` 不能加载。该文件已补到 pnpm 实际加载的目录。最近一次宿主重启的错误日志没有再出现这条 `failed to import`。三路收口复审都已通过：防假绿 `antigreen-rereview.md`，真相层 `qna-final.md`，完成度 `completeness-final.md`。退出硬闸 T10、T17、T18、T20、T23、T24 都有四元组。§10.2 里其余行仍是 `未观察`，所以计划保持 `reviewed`，close-type 仍不是 `full-close`。
+§10.2 每一行都有四元组。三路收口复审通过：`antigreen-rereview.md`、`qna-final.md`、`completeness-final.md`。现场 [DNT] 缺的 schema 已补到 pnpm 加载目录。计划是 `executed`，但 close-type 不是 `full-close`，因为还没有合并。
 
 ## 修订历史
 
 | 版本 | 日期 | 作者 | 变更 |
 |------|------|------|------|
 | `r1` | `2026-11-14` | `DNLS01 执行 agent` | 初稿。计划保持 `reviewed`，不升 `executed`。 |
+| `r2` | `2026-11-14` | `DNLS01 执行 agent` | T18 现场通过，§10.2 补齐全，计划升为 `executed`。未合并。 |

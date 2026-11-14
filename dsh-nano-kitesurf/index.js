@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url'
 import { registerRoutes } from './lib/route-guard.js'
 import { ROUTE_TABLE, PLUGIN } from './lib/route-table.js'
 import { createHistory } from './lib/history.js'
-import { browserSocketUrl, captureDom, captureElements, captureShot, currentEmulation, currentUserAgent, currentViewport, engineTargets, evaluateInPage, fetchEngine, KitesurfError, navigateHistory, openPage, pickElement, pickBySelector, pickPoint, pickSelector, editBody, editElement, pageUrl, releaseEngine, scrollDelta, setBrowserSettings } from './lib/engine.js'
+import { browserSocketUrl, captureDom, captureElements, captureShot, currentEmulation, engineHistoryAdd, engineHistoryClear, engineHistoryList, currentUserAgent, currentViewport, engineTargets, evaluateInPage, fetchEngine, KitesurfError, navigateHistory, openPage, pickElement, pickBySelector, pickPoint, pickSelector, editBody, editElement, pageUrl, releaseEngine, scrollDelta, setBrowserSettings } from './lib/engine.js'
 import { ERROR_STATUS, clearConsole, clearNetwork, clearOperations, diagnosticsSummary, getRef, listNetwork, listConsole, listOperations, listRefs, putRef, recordOperation, refChip, summarizeInput } from './lib/diagnostics.js'
 import { buildSrcDoc } from './lib/dom.js'
 import { kitesurfSkill, nanoKiteSkill } from './lib/skill.js'
@@ -635,7 +635,8 @@ export function apply(ctx, config) {
           const target = pageUrl(body.url)
           const opened = await hostSpan('open', () => openPage(origin(), target))
           lastError = null
-          try { history.add({ url: target, at: new Date().toISOString(), source: 'pane' }) } catch { /* best-effort */ }
+          try { history.add({ url: target, at: new Date().toISOString(), source: 'pane' }) } catch { /* local mirror */ }
+          try { await engineHistoryAdd(origin(), target) } catch { /* engine may be down */ }
           sendJson(res, 200, { ok: true, ...opened })
         } catch (error) {
           fail(res, error)
@@ -990,12 +991,19 @@ export function apply(ctx, config) {
           }
           if (method === 'POST') {
             const body = await readBody(req, route.bodyLimit)
-            if (body?.clear) { history.clear(); sendJson(res, 200, { ok: true, ...history.stats() }); return }
+            if (body?.clear) { history.clear(); try { await engineHistoryClear(origin()) } catch { /* engine down */ } sendJson(res, 200, { ok: true, ...history.stats() }); return }
             sendJson(res, 400, { ok: false, errorId: 'kitesurf.history.body', error: 'expected {clear:true}' })
             return
           }
-          const data = history.list({ limit: Math.min(Number(q.get('limit') || 50), 200), offset: Number(q.get('offset') || 0), q: q.get('q') || '' })
-          sendJson(res, 200, { ok: true, ...data, ...history.stats() })
+          const limit = Math.min(Number(q.get('limit') || 50), 200)
+          const needle = String(q.get('q') || '').toLowerCase()
+          let data = null
+          try {
+            const engine = await engineHistoryList(origin(), 500)
+            if (engine.ok) data = { total: engine.entries.length, entries: engine.entries.filter((row) => !needle || row.url.toLowerCase().includes(needle)).slice(0, limit), source: 'workerd-kv' }
+          } catch { /* fall through to the local mirror */ }
+          if (!data) { data = { ...history.list({ limit, offset: Number(q.get('offset') || 0), q: q.get('q') || '' }), source: 'plugin-store' } }
+          sendJson(res, 200, { ok: true, ...history.stats(), ...data })
         } catch (error) { fail(res, error) }
       },
     },

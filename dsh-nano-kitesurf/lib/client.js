@@ -1878,6 +1878,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
   var CONSOLE = "/nano-kitesurf/console";
   var NETWORK = "/nano-kitesurf/network";
   var ELEMENTS = "/nano-kitesurf/elements";
+  var BROWSE_HISTORY = "/nano-kitesurf/browse-history";
   var DOM = "/nano-kitesurf/dom";
   var CONTEXT = "/nano-kitesurf/context";
   var KITE = "/nano-kitesurf/kite";
@@ -1973,6 +1974,24 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
 .nks-dt-rule{display:flex;gap:8px;padding:1px 0;color:var(--dsw-alias-label-tertiary)}
 .nks-dt-rule b{color:var(--dsw-alias-link,#7aaaff);font-weight:500;max-width:45%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .nks-dt-rule span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nks-modal-mask{position:absolute;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.45)}
+.nks-modal{width:min(560px,92%);max-height:78%;display:flex;flex-direction:column;background:var(--dsw-alias-bg-base);border:.5px solid var(--dsw-alias-border-l2);border-radius:10px;box-shadow:0 16px 48px rgba(0,0,0,.45);overflow:hidden}
+.nks-modal-head{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:.5px solid var(--dsw-alias-border-l2)}
+.nks-modal-head b{font:var(--dsw-font-xs-13);color:var(--dsw-alias-label-primary)}
+.nks-modal-sub{color:var(--dsw-alias-label-tertiary);font-size:11px}
+.nks-modal-x{margin-left:auto;border:0;background:transparent;color:var(--dsw-alias-label-tertiary);font-size:16px;cursor:pointer}
+.nks-modal-bar{display:flex;gap:8px;padding:8px 12px;border-bottom:.5px solid var(--dsw-alias-border-l3)}
+.nks-modal-bar input{flex:auto;height:28px;padding:0 8px;border:.5px solid var(--dsw-alias-border-l2);border-radius:6px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit}
+.nks-modal-bar button{height:28px;padding:0 10px;border:.5px solid var(--dsw-alias-border-l2);border-radius:6px;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer}
+.nks-modal-body{overflow:auto;padding:4px 0}
+.nks-modal-empty{padding:24px;text-align:center;color:var(--dsw-alias-label-tertiary)}
+.nks-hist-row{display:flex;align-items:center;gap:6px;padding:0 8px}
+.nks-hist-row:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.nks-hist-open{flex:auto;min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:7px 4px;border:0;background:transparent;cursor:pointer;text-align:left}
+.nks-hist-url{color:var(--dsw-alias-label-primary);font-size:12px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nks-hist-meta{color:var(--dsw-alias-label-tertiary);font-size:10px}
+.nks-hist-del{width:24px;height:24px;border:0;border-radius:5px;background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer}
+.nks-hist-del:hover{color:var(--dsw-alias-fill-error,#d5455c);background:color-mix(in srgb,var(--dsw-alias-fill-error,#d5455c) 14%,transparent)}
 .nks-dt-empty{padding:14px;color:var(--dsw-alias-label-tertiary)}
 .nks-env{border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-md);padding:8px;background:var(--dsw-alias-bg-layer-2);display:flex;flex-direction:column;gap:6px}
 .nks-env-title{color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxxs-11);text-transform:none;display:flex;align-items:center;justify-content:space-between;gap:8px}
@@ -2074,6 +2093,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
     const [pageUrl, setPageUrl] = React5.useState("");
     const [draftUrl, setDraftUrl] = React5.useState("");
     const [history, setHistory] = React5.useState([]);
+    const [historyOpen, setHistoryOpen] = React5.useState(false);
     const [shot, setShot] = React5.useState(null);
     const [shotMime, setShotMime] = React5.useState("image/webp");
     const [shotMeta, setShotMeta] = React5.useState(null);
@@ -2717,22 +2737,8 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       if (!pageUrl) return;
       await run(() => navigate(pageUrl));
     }
-    function openHistory(event) {
-      if (!history.length) return;
-      const rect = event.currentTarget.getBoundingClientRect();
-      openNanoMenu2({
-        anchor: { left: rect.left, bottom: rect.bottom },
-        items: history.map((url) => ({
-          id: url,
-          label: url,
-          run: () => {
-            setDraftUrl(url);
-            run(() => navigate(url));
-          }
-        })),
-        theme: schemeOf?.(),
-        maxHeight: 8 * 28 + 8
-      });
+    function openHistory() {
+      setHistoryOpen(true);
     }
     const pickBoxes = pick?.elements ? pick.elements.map((element) => elementBox(element)).filter(Boolean) : [];
     const allBoxes = draftBox ? [{ box: draftBox, kind: draftKind === "ellipse" ? "ellipse" : "draft" }] : [
@@ -2973,6 +2979,83 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         setEditing(false);
       }, true);
       doc.addEventListener("mouseleave", clearHover, true);
+    }
+    function HistoryDialog({ open, onClose }) {
+      const [rows, setRows] = React5.useState([]);
+      const [q, setQ] = React5.useState("");
+      const [busy2, setBusy2] = React5.useState(false);
+      const load = React5.useCallback(async (needle) => {
+        const data = await fetch(`${BROWSE_HISTORY}?limit=100${needle ? "&q=" + encodeURIComponent(needle) : ""}`).then((r) => r.json());
+        setRows(data.entries || []);
+      }, []);
+      React5.useEffect(() => {
+        if (open) load("").catch(() => {
+        });
+      }, [open, load]);
+      if (!open) return null;
+      const del = async (id) => {
+        setBusy2(true);
+        try {
+          await fetch(`${BROWSE_HISTORY}?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+          await load(q);
+        } finally {
+          setBusy2(false);
+        }
+      };
+      const clear = async () => {
+        setBusy2(true);
+        try {
+          await fetch(BROWSE_HISTORY, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ clear: true }) });
+          await load(q);
+        } finally {
+          setBusy2(false);
+        }
+      };
+      return h(
+        "div",
+        { className: "nks-modal-mask", "data-nks-history": "1", onClick: (e) => {
+          if (e.target === e.currentTarget) onClose();
+        } },
+        h(
+          "div",
+          { className: "nks-modal" },
+          h(
+            "div",
+            { className: "nks-modal-head" },
+            h("b", null, "\u6D4F\u89C8\u5386\u53F2"),
+            h("span", { className: "nks-modal-sub" }, `${rows.length} \u6761`),
+            h("button", { type: "button", className: "nks-modal-x", onClick: onClose, "aria-label": "\u5173\u95ED" }, "\xD7")
+          ),
+          h(
+            "div",
+            { className: "nks-modal-bar" },
+            h("input", { "data-nks-history-q": "1", placeholder: "\u641C\u7D22\u5730\u5740\u2026", value: q, onChange: async (e) => {
+              setQ(e.target.value);
+              await load(e.target.value);
+            } }),
+            h("button", { type: "button", "data-nks-history-clear": "1", disabled: busy2 || !rows.length, onClick: clear }, "\u6E05\u7A7A")
+          ),
+          h(
+            "div",
+            { className: "nks-modal-body" },
+            rows.length ? rows.map((row) => h(
+              "div",
+              { className: "nks-hist-row", key: row.id, "data-nks-history-row": row.id },
+              h(
+                "button",
+                { type: "button", className: "nks-hist-open", onClick: () => {
+                  setDraftUrl(row.url);
+                  setHistoryOpen(false);
+                  run(() => navigate(row.url));
+                } },
+                h("span", { className: "nks-hist-url" }, row.url),
+                h("span", { className: "nks-hist-meta" }, `${String(row.at).slice(0, 16).replace("T", " ")}${row.count > 1 ? " \xB7 " + row.count + " \u6B21" : ""}`)
+              ),
+              h("button", { type: "button", className: "nks-hist-del", "data-nks-history-del": row.id, onClick: () => del(row.id), "aria-label": "\u5220\u9664" }, "\xD7")
+            )) : h("div", { className: "nks-modal-empty" }, "\u8FD8\u6CA1\u6709\u6D4F\u89C8\u8BB0\u5F55")
+          )
+        )
+      );
     }
     function DevTools({ open, onClose }) {
       const [tab, setTab] = React5.useState("console");
@@ -3238,7 +3321,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           }),
           h("button", { type: "submit", className: "nks-tool nks-go", "aria-label": copy.go, disabled: busy }, glyph("go"))
         ),
-        h("button", { type: "button", className: "nks-tool", "data-nks-history": "1", "aria-label": copy.history, title: copy.history, disabled: busy || !history.length, onClick: openHistory }, glyph("history")),
+        h("button", { type: "button", className: "nks-tool", "data-nks-history-open": "1", "aria-label": copy.history, title: copy.history, disabled: busy, onClick: openHistory }, glyph("history")),
         h("button", {
           type: "button",
           className: "nks-tool",
@@ -3336,6 +3419,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         h("span", { style: { flex: "auto" } }),
         status?.buildId ? h("span", { style: { opacity: 0.6 } }, String(status.buildId).slice(0, 18)) : null
       ),
+      h(HistoryDialog, { open: historyOpen, onClose: () => setHistoryOpen(false) }),
       h(DevTools, { open: devtoolsOpen, onClose: () => setDevtoolsOpen(false) }),
       pins.length ? h(
         "div",

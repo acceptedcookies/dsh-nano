@@ -1243,3 +1243,27 @@ export async function captureElements(httpBase, options = {}) {
     return { depth, count: nodes.length, nodes, selector, matched, computed }
   })
 }
+
+
+/** Browse history lives in the engine KV namespace (workerd), not the host. */
+export async function engineHistoryList(httpBase, limit = 100) {
+  const response = await fetch(`${httpBase}/history`, { signal: AbortSignal.timeout(4000) })
+  const body = await response.json()
+  const entries = Array.isArray(body.entries) ? body.entries.slice(-limit).reverse() : []
+  return { ok: body.ok === true, total: entries.length, entries }
+}
+
+export async function engineHistoryAdd(httpBase, url) {
+  const response = await fetch(`${httpBase}/history`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ url }),
+    signal: AbortSignal.timeout(4000),
+  })
+  return response.json()
+}
+
+export async function engineHistoryClear(httpBase) {
+  const response = await fetch(`${httpBase}/history`, { method: 'DELETE', signal: AbortSignal.timeout(4000) })
+  return response.json()
+}

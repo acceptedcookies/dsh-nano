@@ -780,3 +780,65 @@ notepad overlay（页面，人侧 —— 永远）
 | **L4** pipeline 载体 | ⏸ 待 F3/F4 冻结 | — | 契约层，业主未裁 |
 
 **L3/L4 阻塞**：F3（pipeline 载体=第六 kind `*.pipeline.json` 还是仅 sqlite 元数据）+ F4（step 原语集）属公共合同扩约——AGENTS.md「不得擅自扩约」要求业主 durable 登记后方可动手。业主冻结后按 §12.3/§12.4 拆解执行。
+
+---
+
+## 13. L3/L4 扩约判断登记 — pipeline 定义入 sqlite，非 corpus kind
+
+> 登记时间 `2026-11-14`（业主纠偏后）。**扩约判定**：L3/L4 属公共合同扩约，本章为 durable 登记真源；业主已裁 pipeline 语义（见下）。
+
+### 13.1 概念纠偏（业主裁决，durable）
+
+**`pipeline` 不是 corpus kind**。回顾 §3/§10 定义：
+
+- **管线** = LS-RAG **生产管线的执行态控制**——活在 sqlite 管线态（`runs`/`checkpoints`/`idempotent_keys`/`claim_ledger`/`lsrag_chunks`/`corpus_nodes` vfs），是 §10.3 已建表群。
+- **corpus kind（五-kind）** = **语料本体**的身份分类（prompt/note/draft/knowledge/memory）——是内容，非控制流。
+
+`pipeline` 不是内容。把它当第六 corpus kind 是把**执行定义**混进**语料本体**——错误已纠。
+
+### 13.2 L3/L4 真实边界（登记）
+
+| 层 | 归属 | 载体 | 扩约内容 |
+|---|---|---|---|
+| 语料本体 | IDB `nodes`（五-kind） | `cat` | 不变 |
+| **管线执行态** | sqlite OPFS | `runs`/`checkpoints`/`claim_ledger`/`idempotent_keys` | L3 写入者 |
+| **管线定义（stage 链 spec）** | sqlite OPFS | **新表 `pipeline_defs(id,name,spec_json,created_at)`** | L4 扩约 |
+
+**F3 冻结（业主语义一致）**：管线 stage 链定义 → sqlite `pipeline_defs` 表，与 runs/checkpoints 同域同生命周期（OPFS→s3 同步、claim 护写）；run `via.defId` 反指。**不**新增 corpus kind。
+
+**F4 冻结（step 原语集）**：宿主编排器确定性原语 `run`/`set-cat`/`rename`/`accept`/`reject`/`write-back`/`claim`，**不进 note_* 工具集**（不给 LLM 自由发挥）。
+
+### 13.3 L3 step executor 契约
+
+`fx-pipeline.js`（新，client 侧编排器）：
+
+```
+runPipeline(spec, ctx) → {runId, stages:[{name,ok,result}], status}
+  spec = {name, stages:[{step, args, bind?}]}
+  每 stage → sq.checkpoint(runId, stage, state)；sq.beginRun/finishRun 包裹
+  steps = {run,setCat,rename,acceptDraft,rejectDraft,writeBack,claim}
+```
+
+- `run`：调 `runWithTools(prompt)`，产物 `{text,toolCalls}` 入 `ctx.last`。
+- `set-cat`：`{id|fromLast, cat}`——对指定节点或上一步产物改 cat。
+- `rename`/`accept`/`reject`/`write-back`：确定性宿主动作。
+- `claim`：`{key}`——acquire，链尾 release；claim_ledger 记账。
+- `bind`：`{{last.id}}`/`{{ctx.vars.x}}` 模板替换，stage 间传参。
+
+### 13.4 L4 pipeline 定义面契约
+
+- `pipeline_defs` 表 CRUD：`definePipeline(name,specJson)`/`listPipelines()`/`getPipeline(id)`。
+- UI：run 卡加「管线」tab——列表 + 新建（JSON 编辑）+ 运行。
+- run `via.defId` 谱系：产物 `meta.via.runId`、`checkpoint` 记 `defId`。
+
+### 13.5 收口标准（业主定）
+
+**真实 LLM tool-call 循环**经 ego 验证，场景至少：
+
+| 场景 | prompt kind 注入 | 期望 tool-call 链 |
+|---|---|---|
+| HTML 总结 | prompt 语料「总结此 HTML」 | `note_read`(html)→`note_write`(knowledge) |
+| 中译英 | prompt 语料「中→英翻译」 | `note_read`→`note_write`(draft/knowledge) |
+| 网页结构化 JSON 转录 | prompt 语料「转录为 JSON」 | `note_read`→`note_write` |
+
+**perf-review 埋点**：`perf.mark/count` 记录 fx spawn/turn/tool-call/写回/渲染各段耗时，出基线表 + 改进项 + 实测提升。

@@ -1,0 +1,21 @@
+{
+  "name": "dsh-nano-model-selector-compaction",
+  "version": "0.1.0",
+  "description": "Host-only complementary bundle for dsh-nano-model-selector: mounts the async-compaction CompactionEngine via a mutually-exclusive patch overlay over the four agent presets' id:compaction groups.",
+  "type": "module",
+  "main": "./index.js",
+  "files": [
+    "index.js",
+    "AGENTS.md",
+    "cordis.patch.yml",
+    "lib"
+  ],
+  "engines": {
+    "dsh": ">=0.2.2-rc.1 <0.3.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

@@ -26,7 +26,8 @@
     "lib/devin-api.js",
     "lib/profiles-store.js",
     "lib/route-guard.js",
-    "lib/route-table.js"
+    "lib/route-table.js",
+    "lib/ssh-keys.js"
   ],
   "engines": {
     "dsh": ">=0.2.2-rc.1 <0.3.0"

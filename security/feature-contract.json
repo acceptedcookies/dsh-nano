@@ -768,7 +768,7 @@
         "POST"
       ],
       "bodyLimit": 16384,
-      "responseShape": "200 {ok:true,profile?,profiles[],activeId} / 200 {ok:true,self} | 4xx/5xx {ok:false,reason}"
+      "responseShape": "200 {ok:true,…(list/save/remove/activate/test+orgMatch/security/ssh-key actions)} | 4xx/5xx {ok:false,reason}"
     },
     {
       "plugin": "dsh-nano-cloud-session",
@@ -840,7 +840,7 @@
         "POST"
       ],
       "bodyLimit": 16384,
-      "responseShape": "200 {ok:true,session_id,command,forwardHint,enrolledKeyHint} | 422 {ok:false,reason}"
+      "responseShape": "200 {ok:true,session_id,shell,forward,publicKey,enrollHint} | 422 {ok:false,reason}"
     }
   ],
   "ui": {
@@ -878,7 +878,8 @@
     "dsh-nano-cloud-session": {
       "launcher": "⌘E then 2 (Windows: Alt+E then 2, Ctrl+E then 2 also accepted) toggles cloud-session panel; circular launcher button",
       "panel": "floating panel: sessions list (cursor paging, archived toggle), detail card with transcript + message box, new-session form, settings tab for carrier profiles",
-      "ssh": "detail card copies `ssh devin-<id>@ssh.devin.ai`; public-key enroll is a manual step in Devin account settings (info-only route, no spawn)"
+      "ssh": "detail card copies `ssh devin-<id>@ssh.devin.ai`; public-key enroll is a manual step in Devin account settings (info-only route, no spawn)",
+      "firstRun": "no active profile → panel lands on Settings with a 3-step guide card; security card (store path/mode/seed/policy) on top; SSH lane card generates dedicated ed25519 keypair"
     }
   },
   "dataLocations": {
@@ -908,7 +909,8 @@
     },
     "dsh-nano-cloud-session": {
       "profiles": "${DSH_HOME}/nano-cloud-session.json (mode 0600, write-only secrets), seeded from DEVIN_API_TOKEN/DEVIN_ORG_ID/DEVIN_API_BASE env or ${DSH_HOME}/nano-cloud-session.env",
-      "config": "host Config defaults only (requestTimeoutMs 20000, defaultFirst 50, pollIntervalMs 5000); no client-side credential persistence"
+      "config": "host Config defaults only (requestTimeoutMs 20000, defaultFirst 50, pollIntervalMs 5000); no client-side credential persistence",
+      "sshKey": "${DSH_HOME}/nano-cloud-session-ssh{,.pub} (0600, generated via ssh-keygen on demand; private key never leaves host)"
     }
   }
 }

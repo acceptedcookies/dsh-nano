@@ -24,6 +24,7 @@ const DEFAULT_BASE_URL = 'https://api.devin.ai'
 function home() { return process.env.DSH_HOME || process.env.HOME || '.' }
 function storePath() { return join(home(), STORE_FILE) }
 function envPath() { return join(home(), ENV_FILE) }
+export { storePath, envPath }
 
 /* ---- env seed ---- */
 
@@ -78,7 +79,12 @@ function normalizeProfile(input, { existing } = {}) {
     updatedAt: Date.now(),
   }
   const secret = input.secret !== undefined ? String(input.secret) : null
-  if (secret !== null && secret !== '') profile.secret = secret
+  if (secret !== null && secret !== '') {
+    if (!/^cog_[A-Za-z0-9_-]{8,}$/.test(secret)) {
+      throw new Error('token must look like cog_… (Devin PAT or service user key)')
+    }
+    profile.secret = secret
+  }
   if (!profile.secret) throw new Error('token is required')
   return profile
 }

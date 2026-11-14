@@ -3,10 +3,11 @@
  *  never sees a token. Canonical state lives at the carrier (Devin cloud);
  *  this host keeps only the profile store + consumption receipts — 单一真源. */
 
-import { readFileSync } from 'node:fs'
+import { readFileSync, statSync } from 'node:fs'
 import { ensurePerfReviewHost, LIB_VERSION } from './lib/perf-review-host.js'
 import { createDevinApi, CarrierError } from './lib/devin-api.js'
-import { createProfileStore } from './lib/profiles-store.js'
+import { createProfileStore, storePath, envPath } from './lib/profiles-store.js'
+import { ensureSshKeypair, sshCommands } from './lib/ssh-keys.js'
 import { registerRoutes, sendJson, readJsonBody } from './lib/route-guard.js'
 import { ROUTE_TABLE, PLUGIN } from './lib/route-table.js'
 
@@ -91,6 +92,16 @@ export function apply(ctx, config = {}) {
 
   /* ---- profile management (secrets write-only) ---- */
 
+  const securityStatus = () => {
+    let mode = null
+    try { mode = (statSync(storePath()).mode & 0o777).toString(8) } catch { /* store not written yet */ }
+    return {
+      storePath: storePath(), envPath: envPath(), storeMode: mode,
+      seededFromEnv: store.seededFromEnv,
+      secretPolicy: 'write-only, mode 0600, never returned by any route',
+    }
+  }
+
   const configAction = async (body) => {
     const action = String(body.action ?? 'list')
     switch (action) {
@@ -109,7 +120,14 @@ export function apply(ctx, config = {}) {
       case 'test': {
         const profile = pick(body.profileId)
         const self = await review.hostSpan('self', () => api.self(profile))
-        return { ok: true, self }
+        const orgMatch = self.devin_sessions_org_id ? self.devin_sessions_org_id === profile.orgId : null
+        return { ok: true, self, orgMatch }
+      }
+      case 'security':
+        return { ok: true, security: securityStatus() }
+      case 'ssh-key': {
+        const kp = ensureSshKeypair()
+        return { ok: true, publicKey: kp.publicKey, privateKeyPath: kp.privateKeyPath, keyMode: kp.mode }
       }
       default:
         throw new CarrierError('invalid-request', `unknown config action ${action}`, { status: 422 })
@@ -117,6 +135,12 @@ export function apply(ctx, config = {}) {
   }
 
   /* ---- session surface ---- */
+
+  const needSessionId = body => {
+    const id = String(body.session_id ?? '')
+    if (!id.startsWith('devin-')) throw new CarrierError('invalid-request', 'session_id must look like devin-…', { status: 422 })
+    return id
+  }
 
   const sessionOps = {
     get: (profile, body) => api.getSession(profile, String(body.session_id)),
@@ -150,7 +174,7 @@ export function apply(ctx, config = {}) {
       handler: work(body => {
         const op = sessionOps[String(body.op ?? 'get')]
         if (!op) throw new CarrierError('invalid-request', `unknown session op ${body.op}`, { status: 422 })
-        if (!body.session_id) throw new CarrierError('invalid-request', 'session_id is required', { status: 422 })
+        needSessionId(body)
         return op(pick(body.profileId), body)
       }),
     },
@@ -172,19 +196,20 @@ export function apply(ctx, config = {}) {
         return api.postMessage(pick(body.profileId), String(body.session_id), body.message)
       }),
     },
-    { path: ROUTE.archive, methods: ['POST'], bodyLimit: 16384, handler: work(body => api.archive(pick(body.profileId), String(body.session_id))) },
-    { path: ROUTE.unarchive, methods: ['POST'], bodyLimit: 16384, handler: work(body => api.unarchive(pick(body.profileId), String(body.session_id))) },
-    { path: ROUTE.terminate, methods: ['POST'], bodyLimit: 16384, handler: work(body => api.terminate(pick(body.profileId), String(body.session_id))) },
+    { path: ROUTE.archive, methods: ['POST'], bodyLimit: 16384, handler: work(body => api.archive(pick(body.profileId), needSessionId(body))) },
+    { path: ROUTE.unarchive, methods: ['POST'], bodyLimit: 16384, handler: work(body => api.unarchive(pick(body.profileId), needSessionId(body))) },
+    { path: ROUTE.terminate, methods: ['POST'], bodyLimit: 16384, handler: work(body => api.terminate(pick(body.profileId), needSessionId(body))) },
     {
       path: ROUTE.ssh, methods: ['POST'], bodyLimit: 16384,
       handler: work(body => {
-        /* The SSH lane is information-only here: the terminal lane belongs to
-           DNT, and enrolling the public key is a manual step in the Devin
-           settings. This route hands the client everything needed to build
-           the command — it does not spawn ssh itself. */
-        const id = String(body.session_id ?? '')
-        if (!id.startsWith('devin-')) throw new CarrierError('invalid-request', 'session_id must look like devin-…', { status: 422 })
-        return { ok: true, session_id: id, command: `ssh ${id}@ssh.devin.ai`, forwardHint: `ssh -L <local>:127.0.0.1:<remote> ${id}@ssh.devin.ai '<command>' — keep a command channel open; the gateway drops ssh -N`, enrolledKeyHint: 'enroll the public key under your Devin account settings → SSH keys; one enrollment covers every session you own' }
+        /* Information-only: DNT owns the terminal lane; enrolling the pubkey
+           is a one-time manual step in Devin settings. Returns the dedicated
+           keypair material + ready commands (spike V-11 facts: gateway drops
+           `ssh -N`, so forward must ride a command channel). */
+        const id = needSessionId(body)
+        const kp = ensureSshKeypair()
+        return { ok: true, session_id: id, ...sshCommands(id, kp), publicKey: kp.publicKey,
+          enrollHint: 'paste publicKey into Devin settings → SSH keys (account-level, one-time)' }
       }),
     },
   ]

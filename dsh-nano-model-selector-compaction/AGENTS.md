@@ -9,10 +9,14 @@ isolate group, via full `config.plugins` replay), OFF = layer removed, native
 resident in both states.
 
 Install with `dsh plugin --profile web add <spec>`: it writes this package
-into BOTH `dependencies` and `dsh.profile.bundles`, then applies the patch.
-A package that lands only in `dependencies` (no bundles row) is mounted as a
-`--patch` launch overlay and bypasses the bundles switch — do not hand-edit
-`package.json`; use the sanctioned add/remove path.
+into BOTH `dependencies` and `dsh.profile.bundles`, then applies the patch —
+so a fresh install is ON. The recommended default is OFF: after `add`, run
+`set_bundle('dsh-nano-model-selector-compaction', false)` (or toggle in the
+selector's rail-4 compact panel, which calls the same sanctioned writer via
+`POST /nano-model-selector/async-compact/switch`). A package that lands only
+in `dependencies` (no bundles row) is mounted as a `--patch` launch overlay
+and bypasses the bundles switch — do not hand-edit `package.json`; use the
+sanctioned add/remove path.
 
 `engines.dsh >=0.2.2-rc.1 <0.3.0` pins the preset replay: upstream preset
 `config.plugins` changes between releases require regenerating

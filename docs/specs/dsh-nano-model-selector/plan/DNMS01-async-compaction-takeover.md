@@ -824,3 +824,36 @@ DNMS01-async-compaction-takeover
 | Host `Config` schema / `configEditor` | `out-of-scope` | `-11`/`-12`/`AMEND-3` | 无 |
 
 > `T-O` 1:1 CITE 已并入 §2.1（`-22`③ 位置判据），不再单设附录。
+
+## 12. 执行日志回填
+
+> 执行者：`DNMS01 执行 agent（lead）`
+> 执行时间：`2026-11-15`
+> 文档状态：`executing`（代码全量落位、P0–P6 完成；T-REV 三路对抗审查进行中、L2/L3 live 验收未跑，未合并回 `main`）
+> 代码改动统计：工作树分支 `dnms01-async-compaction`，Phase commit `a8dd6e6`（P0）`ff74487`/`21f69f1`（P1+P2）`35c5d68`/`a67bef1`（P3）`e01510c`/`de78f0a`（P4）`360c5fe`/`eb8bfca`（P5）`a04d1fd`/`5daa21d`（P6）+ index.js inject 修正（unstaged）。
+
+- **实际执行摘要**：P0 实测收口（T-R 台账 + QNA R-15 FAIL 登记：profile 包无 node_modules 路径 → `-16` 走 vendored seam + 私有原语本地复刻）；P1 两包骨架（`dsh-nano-model-selector@0.3.0` + `dsh-nano-model-selector-compaction@0.1.0`、`dsh.bundle.patch`、mutex patch 生成器、P1-03 根登记）；P2 `lib/compact-policy.js`（7 字段 schema、master 序、DC-1..3、0.15 clamp、fail-closed tmp+rename，主包镜像拷贝）+ 10 项 node:test 全绿；P3 `GET/PUT /nano-model-selector/async-compact` + 五处一次性对齐（route-scan/route-sensitivity 82→83 行/feature-contract/route-guard/route-table）；P4 `NanoCompactionEngine`（`lib/host-compaction.js`）+ 协议复刻（`lib/compact-region.js`：region.ts+summarizer.ts 两相 prepare/commit、durable bracket、六码、shrink 校验、stability、no-cap）+ `-16` 私有原语本地复刻（errorChain/createUserMessage/BlockAssembler/LlmError 形状/frameSummary）；P5 rail 第 4 图标 + `filter='compact'` 四态面板（U1–U4 由 `GET` 的 `bundle`/`degraded` 只读投影驱动）+ `POST …/async-compact/switch`（-20⑦ 唯一写入口 → `setBundleEnabled`）+ i18n zh/en 各 18 key + 四处条件清理 + 83 路由 0 drift；P6 `lib/compact-runtime.js`（sessionProjections 注册 + per-session Map 退化折叠 + 5s fill memo + degraded 四值闭集）+ GET `runtime`/`degraded` 接入。
+- **Phase 偏差**：（a）`-16` 的 `summarize` 复刻落进 `compact-region.js`（`summarizeWithLlm`），未单建 `lib/summarizer.js`——职责等价；`lib/compact-scheduler.js` 未单建，调度闭集（episode 状态机 + FULL 触发集 + circuit）内联在 `host-compaction.js` 的 `_pressureGate`/`_armEpisode`/`_claimEpisodeMaintenance`/`_adoptEpisode`，文件级拆分与计划表微差，函数级等价、无契约差。（b）`-18` adoption 边界取「下一 turn 的 `agent/pre-step`」（在 request 装配前提交 replace，比 request listener 更早）；async 唤醒用 `agent.followup` 注入 adoption-wake 用户消息（source.kind='compaction-adoption-wake'）——该消息会出现在 surface，属实现权衡待 L3 验收确认；若上游要求「静默 adoption」，改 `send(message,'next-turn',true)` 同语义无文案。（c）`compactNow` 增加 armed-episode 与 unmatched-start 双重 busy 断言。（d）`-20⑦` 判定浏览器半侧无 `ctx.remote` → switch 路由为唯一写入口，UI `compact.js` 只走它。（e）`-21` P0-10 未在 dsh-dev 实测，`compact-runtime.js` 两路径都实现（sessionProjections 优先 + Map 退化），L3 验收确定实际走哪条。（f）`-19` 六级验收只执行 L0（test）+ L5（pack/diff/gates），L1 契约断言在 route-table/feature-contract 静态层面过，L2 `--dump-config` 曾在 P1 验证、L3 live 行为未跑。
+- **阻塞与处理**：P0 的 T-R-01（profile 无 node_modules）已按 R-16 裁决 vendored；dsh-llm 110KB 单文件 bundle 不可整体 vendor → 只复刻所需函数体。其余无阻塞。
+- **测试发现**：`node --test` 10/10（compact-policy）；`node --check` 全部新文件过；`check-clean-lib` 54 工件 0 违规；`check-route-sensitivity` 83 路由 0 drift；`npm pack --dry-run` 两包 runtime 工件齐（compaction 13 文件含 vendored `lib/compaction/`）；`git diff --check` 干净；类加载 smoke（dev-only cordis 链接）：`NanoCompactionEngine` 类 + `static inject` 就位。L2/L3 live 未跑（待审查后统一现场验收）。
+- **后续 handoff**：T-REV 三路审查（真相层对账/工作完成度/防假绿·防侧载）已派生 subagent；报告落 `.anote/reviews/DNMS01/`；T-FIX 循环随后；L2/L3/L4 live 验收 + T-CLO closure 收口待审查修复后；合并回 `main` 与删 worktree 等 [业主]。
+
+### 12.1 逐工作项状态
+
+| 工作项 | 状态 | 实际落点 | 备注 |
+|--------|------|----------|------|
+| `P0-01..10` | `✅ done` | `a8dd6e6` + QNA R-15 | T-R 台账 + FAIL→R-16 裁决 |
+| `P1-01..03` | `✅ done` | `ff74487`/`21f69f1` | 两包骨架 + 根登记 |
+| `P2-01` | `✅ done` | `lib/compact-policy.js` ×2 + 10 test | 镜像字节一致 |
+| `P3-01` | `✅ done` | `35c5d68` | 路由 + 五处台账 |
+| `P4-01..06` | `✅ done` | `e01510c` | Provider + 协议复刻；偏差见上 |
+| `P5-01..03` | `✅ done` | `360c5fe` | 面板 + switch 路由 + i18n |
+| `P6-01..02` | `✅ done` | `a04d1fd` | 观测派生 + degraded 闭集 |
+| `T-EXEC` | `✅ done` | 本节 | append-only |
+| `T-REV` | `🟡 in-progress` | `.anote/reviews/DNMS01/` | 三路 subagent 运行中 |
+| `T-CLO` / `T-FIX` | `⏳ pending` | closure 待 T-REV 结果 | L2/L3 live 一并收口 |
+| `P7-*` | `🟩 partial` | AGENTS/README/RELEASE 三处已同步 | 计划附录退化路径登记在 §11（fallback 已实现、L3 定路径） |
+
+### 12.2 文档状态
+
+`executing`（`2026-11-15`）。T-REV 三路报告 + T-FIX + L2/L3/L4 live 验收完成后升 `executed`。未合并回 `main`，未删 worktree。

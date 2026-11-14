@@ -788,7 +788,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     <div class="np-body">
       <aside class="np-tree"><div class="np-tree-head"><div class="np-ws"><button type="button" class="np-ws-btn" data-action="ws-toggle" aria-haspopup="listbox" aria-expanded="false"><span class="np-ws-label"></span><span class="np-ws-caret" aria-hidden="true">${CHEVRON_ICON}</span></button></div><button type="button" class="np-kind" data-action="kind-filter" data-i18n="kindFilter" data-i18n-mode="title"><span class="np-kind-label"></span><span class="np-kind-caret" aria-hidden="true">${CHEVRON_ICON}</span></button><span class="np-tree-tools"><button type="button" data-action="new-item" data-i18n="newItem" data-i18n-mode="title" aria-haspopup="menu">${PLUS_ICON}</button><button type="button" class="np-danger" data-action="delete" data-i18n="clearUnpinned" data-i18n-mode="title">${dshIcon('trash-outline')}</button><button type="button" class="np-tools-toggle" data-action="toggle-tools" data-i18n="expandTools" data-i18n-mode="title" aria-expanded="false">${CHEVRON_ICON}</button></span></div><div class="np-nodes" data-root="true"></div><div class="np-mp-zone"><input class="np-mp-input" type="text" inputmode="url" autocomplete="off" spellcheck="false" data-i18n="importMp" data-i18n-attr="placeholder"><span class="np-mp-hint" data-state="idle" aria-hidden="true"></span></div><button type="button" class="np-tools-toggle" data-action="toggle-tools" data-i18n="expandTools" data-i18n-mode="title" aria-expanded="false">${CHEVRON_ICON}</button><div class="np-tree-foot"><button type="button" data-action="settings" data-i18n="settings" data-i18n-mode="label">${SETTINGS_ICON}<span data-i18n="settings"></span></button><button type="button" data-action="close" data-i18n="close" data-i18n-mode="label">${CLOSE_ICON}<span data-i18n="close"></span></button></div></aside>
       <div class="np-editor" data-themefit="true">
-        <div class="np-toolbar"><span class="np-md-tools">${toolbar}</span><span class="np-json-tools" hidden><button type="button" class="np-tool" data-json="expand" data-i18n="jsonExpand" data-i18n-mode="title">${EXPAND_ICON}</button><button type="button" class="np-tool" data-json="collapse" data-i18n="jsonCollapse" data-i18n-mode="title">${COLLAPSE_ICON}</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-json="format" data-i18n="jsonFormat" data-i18n-mode="title">${FORMAT_ICON}</button><button type="button" class="np-tool" data-json="minify" data-i18n="jsonMinify" data-i18n-mode="title">${MINIFY_ICON}</button><button type="button" class="np-tool" data-json="escape" data-i18n="jsonEscape" data-i18n-mode="title">${ESCAPE_ICON}</button><button type="button" class="np-tool" data-json="unescape" data-i18n="jsonUnescape" data-i18n-mode="title">${UNESCAPE_ICON}</button><button type="button" class="np-tool" data-json="strip" data-i18n="jsonStrip" data-i18n-mode="title">${STRIP_ICON}</button></span><span class="np-ht-tools" hidden><button type="button" class="np-tool" data-ht="format" data-i18n="htFormat" data-i18n-mode="title">${FORMAT_ICON}</button><button type="button" class="np-tool" data-ht="minify" data-i18n="htMinify" data-i18n-mode="title">${MINIFY_ICON}</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-ht="strip-styles" data-i18n="htStripStyles" data-i18n-mode="title">${STRIP_ICON}</button><button type="button" class="np-tool" data-ht="extract-images" data-i18n="htExtractImages" data-i18n-mode="title">${GRID_ICON}</button><button type="button" class="np-tool" data-ht="copy-text" data-i18n="htCopyText" data-i18n-mode="title">${dshIcon('copy-outline')}</button></span><span class="np-rt-tools" hidden><button type="button" class="np-tool" data-rt="gallery" data-i18n="rtGallery" data-i18n-mode="title">${GRID_ICON}</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-rt="font-minus" data-i18n="rtFontMinus" data-i18n-mode="title">A−</button><button type="button" class="np-tool" data-rt="font-plus" data-i18n="rtFontPlus" data-i18n-mode="title">A+</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-rt="width" data-i18n="rtWidth" data-i18n-mode="title">宽</button><button type="button" class="np-tool" data-rt="themefit" data-i18n="rtThemeFit" data-i18n-mode="title" aria-pressed="true">◐</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-rt="copy-rich" data-i18n="rtCopyRich" data-i18n-mode="title">${dshIcon('copy-outline')}</button><button type="button" class="np-tool" data-rt="copy-text" data-i18n="rtCopyText" data-i18n-mode="title">Tx</button><button type="button" class="np-tool" data-rt="links" data-i18n="rtLinks" data-i18n-mode="title">${LINK_ICON}</button></span><button type="button" class="np-switch" data-action="view" role="switch" aria-checked="false" data-i18n="viewGroup" data-i18n-mode="title"><span class="np-switch-label" data-i18n="source"></span><span class="np-switch-label" data-i18n="preview"></span><span class="np-switch-thumb" data-i18n="source"></span></button></div>
+        <div class="np-toolbar"><button type="button" class="np-tool" data-action="fx-run" data-i18n="fxRun" data-i18n-mode="title" title="fx">fx</button><span class="np-md-tools">${toolbar}</span><span class="np-json-tools" hidden><button type="button" class="np-tool" data-json="expand" data-i18n="jsonExpand" data-i18n-mode="title">${EXPAND_ICON}</button><button type="button" class="np-tool" data-json="collapse" data-i18n="jsonCollapse" data-i18n-mode="title">${COLLAPSE_ICON}</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-json="format" data-i18n="jsonFormat" data-i18n-mode="title">${FORMAT_ICON}</button><button type="button" class="np-tool" data-json="minify" data-i18n="jsonMinify" data-i18n-mode="title">${MINIFY_ICON}</button><button type="button" class="np-tool" data-json="escape" data-i18n="jsonEscape" data-i18n-mode="title">${ESCAPE_ICON}</button><button type="button" class="np-tool" data-json="unescape" data-i18n="jsonUnescape" data-i18n-mode="title">${UNESCAPE_ICON}</button><button type="button" class="np-tool" data-json="strip" data-i18n="jsonStrip" data-i18n-mode="title">${STRIP_ICON}</button></span><span class="np-ht-tools" hidden><button type="button" class="np-tool" data-ht="format" data-i18n="htFormat" data-i18n-mode="title">${FORMAT_ICON}</button><button type="button" class="np-tool" data-ht="minify" data-i18n="htMinify" data-i18n-mode="title">${MINIFY_ICON}</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-ht="strip-styles" data-i18n="htStripStyles" data-i18n-mode="title">${STRIP_ICON}</button><button type="button" class="np-tool" data-ht="extract-images" data-i18n="htExtractImages" data-i18n-mode="title">${GRID_ICON}</button><button type="button" class="np-tool" data-ht="copy-text" data-i18n="htCopyText" data-i18n-mode="title">${dshIcon('copy-outline')}</button></span><span class="np-rt-tools" hidden><button type="button" class="np-tool" data-rt="gallery" data-i18n="rtGallery" data-i18n-mode="title">${GRID_ICON}</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-rt="font-minus" data-i18n="rtFontMinus" data-i18n-mode="title">A−</button><button type="button" class="np-tool" data-rt="font-plus" data-i18n="rtFontPlus" data-i18n-mode="title">A+</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-rt="width" data-i18n="rtWidth" data-i18n-mode="title">宽</button><button type="button" class="np-tool" data-rt="themefit" data-i18n="rtThemeFit" data-i18n-mode="title" aria-pressed="true">◐</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-rt="copy-rich" data-i18n="rtCopyRich" data-i18n-mode="title">${dshIcon('copy-outline')}</button><button type="button" class="np-tool" data-rt="copy-text" data-i18n="rtCopyText" data-i18n-mode="title">Tx</button><button type="button" class="np-tool" data-rt="links" data-i18n="rtLinks" data-i18n-mode="title">${LINK_ICON}</button></span><button type="button" class="np-switch" data-action="view" role="switch" aria-checked="false" data-i18n="viewGroup" data-i18n-mode="title"><span class="np-switch-label" data-i18n="source"></span><span class="np-switch-label" data-i18n="preview"></span><span class="np-switch-thumb" data-i18n="source"></span></button></div>
         <div class="np-mirror" aria-hidden="true"></div>
         <textarea class="np-write" spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
         <div class="np-slash" hidden></div>
@@ -2049,6 +2049,87 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     closeMenu = () => raw.close()
   }
 
+  /* ── fx run 卡（§12.1 L1）：入口钮→prompt 语料+model 选择→one-shot→流式正文
+     +tool-call 行+产物跳转。复用 dialog()/openNanoDialog；不动契约/schema。 ── */
+  function openFxCard() {
+    const copy = text()
+    const promptNodes = state.nodes.filter(n => n.cat === 'prompt' && n.kind === 'file')
+    const modelOpts = (async () => {
+      try { const m = await window.__nanoNotepad.fx.models(); return Array.isArray(m) ? m : [] } catch { return [] }
+    })()
+    const body = `
+      <div class="np-fx-card">
+        <label class="np-fx-lab" data-i18n="fxPrompt">${escapeHtml(copy.fxPrompt ?? '提示语料')}</label>
+        <select class="np-fx-prompt">${promptNodes.length === 0 ? `<option value="">${escapeHtml(copy.fxPromptEmpty ?? '（无 prompt 语料，直接手输）')}</option>` : promptNodes.map(n => `<option value="${n.id}">${escapeHtml(n.name)}</option>`).join('')}</select>
+        <label class="np-fx-lab" data-i18n="fxModel">${escapeHtml(copy.fxModel ?? '模型')}</label>
+        <select class="np-fx-model"><option value="">${escapeHtml(copy.fxModelLoading ?? '载入中…')}</option></select>
+        <label class="np-fx-lab" data-i18n="fxInput">${escapeHtml(copy.fxInput ?? '任务')}</label>
+        <textarea class="np-fx-input" rows="3" placeholder="${escapeHtml(copy.fxInputPh ?? '要 fx 做什么——可触发 note_* 工具写 draft/knowledge')}"></textarea>
+        <div class="np-fx-out"></div>
+        <ul class="np-fx-tools"></ul>
+        <div class="np-fx-foot" hidden><span data-i18n="fxWrote">${escapeHtml(copy.fxWrote ?? '已写产物')}</span> <span class="np-fx-links"></span></div>
+      </div>`
+    dialog({
+      title: copy.fxTitle ?? 'fx 管线',
+      body,
+      confirmLabel: copy.fxRunBtn ?? '运行',
+      setup: (el, closeSelf) => {
+        const promptSel = el.querySelector('.np-fx-prompt')
+        const modelSel = el.querySelector('.np-fx-model')
+        const input = el.querySelector('.np-fx-input')
+        const out = el.querySelector('.np-fx-out')
+        const tools = el.querySelector('.np-fx-tools')
+        const foot = el.querySelector('.np-fx-foot')
+        const links = el.querySelector('.np-fx-links')
+        void modelOpts.then(models => {
+          /* /fx/models 返 {key,provider,model,contextWindow}——value 用 key（provider~model）。 */
+          modelSel.innerHTML = models.length
+            ? models.map(m => `<option value="${escapeHtml(m.key ?? m.id ?? m.name ?? m)}">${escapeHtml(m.key ?? m.id ?? m.name ?? m)}</option>`).join('')
+            : `<option value="">${escapeHtml(copy.fxModelNone ?? '（无模型）')}</option>`
+        })
+        const run = async () => {
+          const before = new Set(state.nodes.filter(n => n.cat === 'draft' || n.cat === 'knowledge').map(n => n.id))
+          const pid = promptSel?.value
+          const pnode = pid ? state.nodes.find(n => n.id === pid) : null
+          const task = String(input.value ?? '').trim()
+          const text = [pnode ? `按此提示执行：\n${pnode.draft ?? ''}\n` : '', `任务：${task || '总结当前内容'}`].join('\n')
+          out.textContent = ''
+          tools.innerHTML = ''
+          foot.hidden = true
+          links.innerHTML = ''
+          try {
+            const res = await window.__nanoNotepad.fx.runWithTools(text, {
+              model: modelSel?.value || undefined,
+              onEvent: (e) => {
+                if (e.type === 'text_delta') out.textContent += e.delta
+                else if (e.type === 'tool_start' || e.type === 'tool_call' || e.type === 'fx_host_tool_call') {
+                  const li = document.createElement('li')
+                  li.textContent = `${e.name ?? e.toolName ?? 'tool'}(${JSON.stringify(e.input ?? e.args ?? {}).slice(0, 80)})`
+                  tools.appendChild(li)
+                }
+              },
+            })
+            const after = (await loadSnapshot(state.db)).nodes.filter(n => (n.cat === 'draft' || n.cat === 'knowledge') && !before.has(n.id))
+            if (after.length) {
+              foot.hidden = false
+              after.forEach(n => {
+                const a = document.createElement('a'); a.href = '#'; a.textContent = n.name; a.dataset.id = n.id
+                a.onclick = (ev) => { ev.preventDefault(); closeSelf?.(); openFile(n.id) }
+                links.appendChild(a)
+              })
+            }
+            return res
+          } catch (e) { out.textContent = `ERR: ${e?.message ?? e}`; throw e }
+        }
+        /* confirm 走 dialog.onConfirm——但 dialog 无 confirm 回调直接暴露，改绑 footer。
+           最简单：把运行钮做进 footer，confirm 仍可用但我们也放 run。 */
+        const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'np-fx-go'; btn.textContent = copy.fxRunBtn ?? '运行'
+        btn.onclick = () => void run().catch(showError)
+        el.querySelector('.np-fx-card')?.appendChild(btn)
+      },
+    })
+  }
+
   function askName(title, initial, done) {
     let input = /** @type {HTMLInputElement | null} */ (null)
     const submit = close => { if (input) { close(); void done(input.value).catch(showError) } }
@@ -3017,6 +3098,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       }).catch(showError)
     }
     if (action === 'image') must(panel, '.np-file').click()
+    if (action === 'fx-run') { openFxCard(); return }
     /* Lint badge click: jump the source caret to the reported offset. */
     if (target.classList.contains('np-lint') && target.dataset.pos !== '') {
       const pos = Number(target.dataset.pos)

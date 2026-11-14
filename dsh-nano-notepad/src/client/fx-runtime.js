@@ -58,14 +58,16 @@ export async function spawnEngine({ model = DEFAULT_MODEL, instructions = DEFAUL
  */
 export async function runOneShot(promptText, opts = {}) {
   const { engine, done } = await spawnEngine(opts)
+  const onEvent = typeof opts.onEvent === 'function' ? opts.onEvent : null
   let text = ''
   const toolCalls = []
   try {
     const turn = engine.prompt(promptText, { signal: opts.signal })
     for await (const e of turn) {
+      onEvent?.(e)
       if (e.type === 'text_delta') text += e.delta
-      else if (e.type === 'tool_call' || e.type === 'tool_call_update' || e.type === 'fx_host_tool_call') {
-        toolCalls.push({ raw: e.type, name: e.name ?? e.toolName ?? null })
+      else if (e.type === 'tool_start' || e.type === 'tool_call' || e.type === 'tool_call_update' || e.type === 'fx_host_tool_call') {
+        toolCalls.push({ raw: e.type, name: e.name ?? e.toolName ?? null, args: e.input ?? e.args ?? null, result: e.result ?? e.output ?? null })
       }
     }
     const res = await turn.result

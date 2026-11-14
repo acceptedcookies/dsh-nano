@@ -79,6 +79,9 @@ export const ERROR_CATALOG = [
   { match: '^kitesurf\\.storage\\.(name|op)$', example: 'kitesurf.storage.op', status: 400, cause: 'storage 请求缺 name 或 op 非法', next: 'GET /storage?scope=local|session|cookie 读；POST {scope,op:set|delete|clear,name,value}' },
   { match: '^kitesurf\\.storage\\.exception$', example: 'kitesurf.storage.exception', status: 400, cause: 'storage 页面内操作抛异常（如 cookie 语法/配额）', next: '看 error 描述；localStorage/sessionStorage 用 key-value；cookie 走 document.cookie（HttpOnly 不可达）' },
   { match: '^kitesurf\\.state\\.(miss|exception)$', example: 'kitesurf.state.miss', status: 400, cause: '/state load 缺 state 或命名快照不存在/页面内恢复抛异常', next: 'POST /state {action:save,name:"x"} 先存；load 传 {action:load,name:"x"} 或 {action:load,state:{...}}' },
+  { match: '^kitesurf\\.interact\\.(action|selector)$', example: 'kitesurf.interact.selector', status: 400, cause: '/interact 缺 target/selector 或 action 非法', next: 'POST /interact {action:click,target:"@1"} 或 {action:fill,target:"input",text:"x"}' },
+  { match: '^kitesurf\\.interact\\.(miss|invisible|occluded|option|type)$', example: 'kitesurf.interact.occluded', status: 404, cause: '交互失败：元素未命中/零 box/被遮挡/无该 option/类型不支持该 action', next: 'occluded 时先 scroll 或关覆盖层；miss 重跑 /snapshot 或换 selector；check/select 只对 checkbox/select 元素' },
+  { match: '^kitesurf\\.interact\\.exception$', example: 'kitesurf.interact.exception', status: 400, cause: '页内合成事件抛异常', next: '看 error 描述；确认元素可交互（非 disabled/readonly）' },
 ]
 
 /**
@@ -332,6 +335,7 @@ export function networkRequest(p) {
   if (!id) return
   const existing = netRequests.get(id)
   if (existing) return existing
+  const hdrs = (o) => o && typeof o === 'object' ? Object.fromEntries(Object.entries(o).slice(0, 40).map(([k, v]) => [String(k).slice(0, 80), String(v).slice(0, 300)])) : null
   const row = {
     id,
     at: new Date().toISOString(),
@@ -345,6 +349,11 @@ export function networkRequest(p) {
     failed: false,
     error: '',
     startedAt: Date.now(),
+    requestHeaders: hdrs(p.request?.headers),
+    // response body is an engine-side gap (Kitesurf doesn't buffer it): mark
+    // explicitly so an agent sees `body:null reason:'engine'`, not a silent gap.
+    body: null,
+    bodyReason: 'engine',
   }
   netRequests.set(id, row)
   netOrder.push(id)
@@ -358,6 +367,8 @@ export function networkResponse(p) {
   row.status = Number(p.response?.status) || 0
   row.mimeType = String(p.response?.mimeType || '').slice(0, 60)
   if (p.response?.fromDiskCache || p.response?.fromServiceWorker) row.cached = true
+  const hdrs = (o) => o && typeof o === 'object' ? Object.fromEntries(Object.entries(o).slice(0, 40).map(([k, v]) => [String(k).slice(0, 80), String(v).slice(0, 300)])) : null
+  row.responseHeaders = hdrs(p.response?.headers)
 }
 
 export function networkFinished(p) {
@@ -401,4 +412,29 @@ export function clearNetwork() {
   netOrder.length = 0
   netRequests.clear()
   return cleared
+}
+
+/**
+ * Assemble the ring into a HAR 1.2 document. Missing body bytes come back as
+ * `content:{size:0}` with a `_note` — the engine doesn't buffer bodies, and the
+ * honest gap beats a fabricated empty string.
+ */
+export function listNetworkHar({ limit = 100 } = {}) {
+  const rows = netOrder.map((id) => netRequests.get(id)).filter(Boolean).slice(-Math.max(1, Math.min(Number(limit) || 100, NET_CAP)))
+  const toHdrs = (o) => o ? Object.entries(o).map(([name, value]) => ({ name, value })) : []
+  return {
+    log: {
+      version: '1.2',
+      creator: { name: 'dsh-nano-kitesurf', version: '0' },
+      entries: rows.map((r) => ({
+        startedDateTime: r.at,
+        time: r.durationMs ?? -1,
+        request: { method: r.method, url: r.url, headers: toHdrs(r.requestHeaders), httpVersion: 'HTTP/1.1' },
+        response: r.status != null || r.failed ? { status: r.failed ? 0 : Number(r.status) || 0, statusText: r.failed ? r.error : '', headers: toHdrs(r.responseHeaders), content: { size: 0, mimeType: r.mimeType, _note: r.body == null ? `body:${r.bodyReason}` : undefined }, bodySize: r.size ?? -1 } : { status: 0, statusText: 'pending', headers: [], content: { size: 0 } },
+        cache: r.cached ? { _fromCache: true } : {},
+        timings: { send: -1, wait: -1, receive: r.durationMs ?? -1 },
+        _dnk: { type: r.type, failed: !!r.failed, body: r.body },
+      })),
+    },
+  }
 }

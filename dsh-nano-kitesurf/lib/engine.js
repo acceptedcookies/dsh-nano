@@ -844,6 +844,62 @@ export async function storageOp(httpBase, opts = {}) {
   })
 }
 
+/**
+ * P1-1 interact-lite: synthetic events via Runtime.evaluate. `target` may be
+ * a CSS selector or @N (host resolves @N→selector before calling). Steps:
+ * resolve → scrollIntoView → occlusion probe (elementFromPoint at center is
+ * the element or its descendant) → dispatch. fill/type use the native-setter
+ * trick so React controlled components pick the value up.
+ */
+export async function interactElement(httpBase, opts = {}) {
+  const action = String(opts.action || '').toLowerCase()
+  const ACTIONS = ['click', 'dblclick', 'fill', 'type', 'press', 'hover', 'select', 'focus', 'blur', 'check', 'uncheck']
+  if (!ACTIONS.includes(action)) throw new KitesurfError('kitesurf.interact.action', `action must be one of ${ACTIONS.join('|')}`)
+  const selector = typeof opts.selector === 'string' && opts.selector.trim() ? opts.selector.trim() : null
+  if (!selector) throw new KitesurfError('kitesurf.interact.selector', 'target selector is required (resolve @N upstream)')
+  return useLive(httpBase, async (client) => {
+    const page = await pageHandle(client)
+    const arg = JSON.stringify({ action, selector, text: opts.text ?? opts.value ?? '', key: opts.key || '', option: opts.option ?? '' })
+    const expr = `(()=>{
+      const a=${arg};
+      const el=document.querySelector(a.selector);
+      if(!el)return{ok:false,errorId:'kitesurf.interact.miss',error:'no element matches '+a.selector};
+      try{el.scrollIntoView({block:'center',inline:'center'})}catch{}
+      const r=el.getBoundingClientRect();
+      const cx=r.left+r.width/2,cy=r.top+r.height/2;
+      const top=document.elementFromPoint(cx,cy);
+      const occluded=top&&top!==el&&!el.contains(top)&&!top.contains(el);
+      const vis=r.width>0&&r.height>0;
+      if(!vis)return{ok:false,errorId:'kitesurf.interact.invisible',error:'element has zero box'};
+      if(occluded)return{ok:false,errorId:'kitesurf.interact.occluded',error:'covered by '+(top.id?'#'+top.id:top.tagName)};
+      const fire=(t,type,init)=>{const e=t===window||t===document?new Event(type,init):new (type.startsWith('mouse')||type.startsWith('pointer')?MouseEvent:type.startsWith('key')?KeyboardEvent:type==='input'?InputEvent:Event)(type,Object.assign({bubbles:true,cancelable:true},init));el.dispatchEvent(e)};
+      const nativeSet=(o,v)=>{const d=Object.getOwnPropertyDescriptor(o.__proto__,'value');if(d&&d.set)d.set.call(o,v);else o.value=v};
+      switch(a.action){
+        case 'click': ['pointerdown','mousedown','pointerup','mouseup','click'].forEach(t=>fire(el,t,{clientX:cx,clientY:cy})); break;
+        case 'dblclick': ['pointerdown','mousedown','pointerup','mouseup','click','pointerdown','mousedown','pointerup','mouseup','click','dblclick'].forEach(t=>fire(el,t,{clientX:cx,clientY:cy})); break;
+        case 'focus': el.focus(); break;
+        case 'blur': el.blur(); break;
+        case 'hover': ['pointerover','mouseover','pointermove','mousemove'].forEach(t=>fire(el,t,{clientX:cx,clientY:cy})); break;
+        case 'fill': el.focus(); nativeSet(el,a.text); fire(el,'input',{data:a.text,inputType:'insertText'}); fire(el,'change'); break;
+        case 'type': el.focus(); for(const ch of String(a.text)){fire(el,'keydown',{key:ch});nativeSet(el,(el.value||'')+ch);fire(el,'input',{data:ch,inputType:'insertText'});fire(el,'keyup',{key:ch})} fire(el,'change'); break;
+        case 'press': ['keydown','keypress','keyup'].forEach(t=>fire(el,t,{key:a.key||'Enter'})); break;
+        case 'select': if(el.tagName==='SELECT'){const o=[...el.options].find(o=>o.value===a.option||o.text===a.option);if(o){nativeSet(el,o.value);fire(el,'change')}else return{ok:false,errorId:'kitesurf.interact.option',error:'no option '+a.option}}else return{ok:false,errorId:'kitesurf.interact.type',error:'select only works on <select>'}; break;
+        case 'check': if(el.type==='checkbox'||el.type==='radio'){el.checked=true;fire(el,'click');fire(el,'change')}else return{ok:false,errorId:'kitesurf.interact.type',error:'check only works on checkbox/radio'}; break;
+        case 'uncheck': if(el.type==='checkbox'){el.checked=false;fire(el,'click');fire(el,'change')}else return{ok:false,errorId:'kitesurf.interact.type',error:'uncheck only works on checkbox'}; break;
+      }
+      return{ok:true,action:a.action,selector:a.selector,tag:el.tagName.toLowerCase(),text:(el.value!==undefined?el.value:el.textContent||'').slice(0,120)}
+    })()`
+    const r = await client.send('Runtime.evaluate', { expression: expr, returnByValue: true, awaitPromise: true }, page.sessionId)
+    if (r.exceptionDetails) {
+      const d = r.exceptionDetails
+      throw new KitesurfError('kitesurf.interact.exception', String(d.exception?.description || d.text || 'interact threw').slice(0, 240))
+    }
+    const v = r.result?.value
+    if (v && v.ok === false) throw new KitesurfError(String(v.errorId || 'kitesurf.interact.fail'), String(v.error || 'interact failed'))
+    return v || { ok: true }
+  })
+}
+
 /** P1-2 state snapshot: export or restore {localStorage,sessionStorage,cookie}. */
 export async function stateOp(httpBase, opts = {}) {
   const action = opts.action === 'load' ? 'load' : 'save'

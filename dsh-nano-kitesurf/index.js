@@ -10,8 +10,8 @@ import { fileURLToPath } from 'node:url'
 import { registerRoutes } from './lib/route-guard.js'
 import { ROUTE_TABLE, PLUGIN } from './lib/route-table.js'
 import { createHistory } from './lib/history.js'
-import { browserSocketUrl, captureDom, captureElements, captureShot, captureSnapshot, currentEmulation, engineHistoryAdd, engineHistoryClear, engineHistoryList, engineHistoryRemove, currentUserAgent, currentViewport, engineTargets, evaluateInPage, evaluateChunked, fetchEngine, KitesurfError, navigateHistory, openPage, pickElement, pickBySelector, pickPoint, pickSelector, editBody, editElement, pageUrl, releaseEngine, scrollDelta, setBrowserSettings, stateOp, storageOp, waitForCondition } from './lib/engine.js'
-import { ERROR_STATUS, clearConsole, clearNetwork, clearOperations, diagnosticsSummary, elementRefSelector, elementRefSummary, getElementRef, getLastSnapshot, getRef, isElementRef, listNetwork, listConsole, listOperations, listRefs, putElementRefs, putRef, recordOperation, refChip, setLastSnapshot, summarizeInput } from './lib/diagnostics.js'
+import { browserSocketUrl, captureDom, captureElements, captureShot, captureSnapshot, currentEmulation, engineHistoryAdd, engineHistoryClear, engineHistoryList, engineHistoryRemove, currentUserAgent, currentViewport, engineTargets, evaluateInPage, evaluateChunked, fetchEngine, interactElement, KitesurfError, navigateHistory, openPage, pickElement, pickBySelector, pickPoint, pickSelector, editBody, editElement, pageUrl, releaseEngine, scrollDelta, setBrowserSettings, stateOp, storageOp, waitForCondition } from './lib/engine.js'
+import { ERROR_STATUS, clearConsole, clearNetwork, clearOperations, diagnosticsSummary, elementRefSelector, elementRefSummary, getElementRef, getLastSnapshot, getRef, isElementRef, listNetwork, listNetworkHar, listConsole, listOperations, listRefs, putElementRefs, putRef, recordOperation, refChip, setLastSnapshot, summarizeInput } from './lib/diagnostics.js'
 import { buildSrcDoc } from './lib/dom.js'
 import { kitesurfSkill, nanoKiteSkill } from './lib/skill.js'
 import { createNanoKite } from './lib/nano-kite.js'
@@ -51,10 +51,12 @@ const SELFTEST_ROUTE = '/nano-kitesurf/selftest'
 const ELEMENTS_ROUTE = '/nano-kitesurf/elements'
 const BROWSE_HISTORY_ROUTE = '/nano-kitesurf/browse-history'
 const NETWORK_ROUTE = '/nano-kitesurf/network'
+const HAR_ROUTE = '/nano-kitesurf/har'
 const TARGETS_ROUTE = '/nano-kitesurf/targets'
 const EVALUATE_ROUTE = '/nano-kitesurf/evaluate'
 const STORAGE_ROUTE = '/nano-kitesurf/storage'
 const STATE_ROUTE = '/nano-kitesurf/state'
+const INTERACT_ROUTE = '/nano-kitesurf/interact'
 const WAIT_ROUTE = '/nano-kitesurf/wait'
 const SNAPSHOT_ROUTE = '/nano-kitesurf/snapshot'
 const REFS_ROUTE = '/nano-kitesurf/refs'
@@ -208,6 +210,19 @@ function persistedCheckout() {
   } catch {
     return undefined
   }
+}
+
+/**
+ * P1-3 snapshot archive: append a compact evidence row ({kind,at,buildId,url,
+ * …shape}) to a durable jsonl so 「昨天那次 500 的上下文」is queryable across
+ * restarts. Fire-and-forget — archival failure must never break the route.
+ */
+function archiveSnapshot(kind, shape = {}) {
+  try {
+    const file = path.join(process.env.DSH_HOME || homedir(), 'nano-kitesurf-snapshots.jsonl')
+    const row = JSON.stringify({ kind, at: new Date().toISOString(), buildId, ...shape })
+    mkdir(path.dirname(file), { recursive: true }).then(() => appendFile(file, `${row}\n`)).catch(() => {})
+  } catch { /* best-effort */ }
 }
 
 async function rememberCheckout(checkout) {
@@ -811,6 +826,7 @@ export function apply(ctx, config) {
           }
           const shot = await hostSpan('shot', () => captureShot(origin(), scrollDelta(body), { format, quality: body.quality, fit }))
           lastError = null
+          archiveSnapshot('shot', { url: shot.url, viewport: shot.viewport, mimeType: shot.mimeType, bytes: shot.image ? String(shot.image).length : 0 })
           sendJson(res, 200, { ok: true, ...shot })
         } catch (error) {
           fail(res, error)
@@ -1051,6 +1067,25 @@ export function apply(ctx, config) {
       },
     },
     {
+      // P1-1 interact-lite: synthetic DOM events (click/fill/type/press/…)
+      // via Runtime.evaluate + native-setter for controlled inputs. Writes go
+      // through resolveSelectorRefs so @N lands on the same element as /pick.
+      path: INTERACT_ROUTE,
+      methods: ['POST'],
+      bodyLimit: 4096,
+      handler: async (req, res, route) => {
+        try {
+          const body = resolveSelectorRefs(await readBody(req, route.bodyLimit))
+          // spec field is `target` (@N|selector); normalize to selector.
+          if (!body.selector && body.target) body.selector = body.target
+          const result = await hostSpan('interact', () => interactElement(origin(), body))
+          sendJson(res, 200, { ok: true, ...result })
+        } catch (error) {
+          fail(res, error)
+        }
+      },
+    },
+    {
       // P1-2: {action:save} exports {localStorage,sessionStorage,cookie,url,at}
       // and archives to $DSH_HOME/nano-kitesurf-state.jsonl; {action:load,state}
       // or {action:load,name} restores. `?since=` not needed — file is the audit.
@@ -1267,6 +1302,7 @@ export function apply(ctx, config) {
             computedCount: Object.keys(data.computed || {}).length,
             nodes: data.nodes.slice(0, 40),
           }
+          archiveSnapshot('elements', { url: data.url, count: data.count, selector: data.selector })
           sendJson(res, 200, { ok: true, ...data })
         } catch (error) {
           fail(res, error)
@@ -1293,6 +1329,7 @@ export function apply(ctx, config) {
           // Build the iframe document on the host: the client bundle cannot
           // import lib/, and the rebasing/picker injection belongs to one place.
           lastDom = { at: new Date().toISOString(), url: page.url, bytes: page.bytes, html: page.html.slice(0, 4000) }
+          archiveSnapshot('dom', { url: page.url, bytes: page.bytes })
           sendJson(res, 200, { ok: true, ...page, srcdoc: buildSrcDoc(page) })
         } catch (error) {
           fail(res, error)
@@ -1316,6 +1353,21 @@ export function apply(ctx, config) {
             throw new KitesurfError('kitesurf.network.query', 'limit must be 1..200')
           }
           sendJson(res, 200, { ok: true, ...listNetwork({ limit, failedOnly: q.get('failedOnly') === 'true', since: q.get('since') }) })
+        } catch (error) {
+          fail(res, error)
+        }
+      },
+    },
+    {
+      // P1-3 HAR 1.2 export of the network ring — the evidence chain an agent
+      // hands to a human or an external DevTools for cross-tool audit.
+      path: HAR_ROUTE,
+      methods: ['GET', 'HEAD'],
+      handler: async (req, res) => {
+        try {
+          const q = queryOf(req)
+          const limit = Number(q.get('limit') || 100)
+          sendJson(res, 200, { ok: true, ...listNetworkHar({ limit }) })
         } catch (error) {
           fail(res, error)
         }

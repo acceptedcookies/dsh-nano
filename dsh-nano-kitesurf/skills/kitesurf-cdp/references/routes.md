@@ -33,7 +33,9 @@
 | POST | `/nano-kitesurf/pick` | `{x,y}`/`{selector|@N}`/`{preview:true}` 点选元素包 |
 | POST | `/nano-kitesurf/edit` | `{selector|@N,text}` 写回元素文本 |
 | POST | `/nano-kitesurf/evaluate` | `{expression}` 有界 JS；`{token,offset}`/`?page=N` 拉分段（>4KB 结果进页内 token 缓存） |
+| POST | `/nano-kitesurf/interact` | `{action:click|dblclick|fill|type|press|hover|select|focus|blur|check|uncheck, target:@N|selector, text?|key?|value?|option?}` 合成事件；遮挡→`interact.occluded` |
 | GET/POST | `/nano-kitesurf/storage` | localStorage/sessionStorage/cookie 读写：GET `?scope=` 列；POST `{scope,op:set|delete|clear,name,value}`（HttpOnly 不可达） |
+| GET | `/nano-kitesurf/har` | 网络环导出 HAR 1.2（requestHeaders/responseHeaders 透传；`body:null reason:'engine'`） |
 | POST | `/nano-kitesurf/state` | `{action:save,name?}` 导出 {localStorage,sessionStorage,cookie} 到 `$DSH_HOME/nano-kitesurf-state.jsonl`；`{action:load,name|state}` 恢复 |
 | POST | `/nano-kitesurf/wait` | `{selector|text|url|fn}+load+timeoutMs` 阻塞条件等待 |
 | POST | `/nano-kitesurf/history` | `{delta:-1|+1}` 真浏览器进退 |

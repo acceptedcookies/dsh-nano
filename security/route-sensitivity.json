@@ -511,6 +511,31 @@
     },
     {
       "plugin": "dsh-nano-kitesurf",
+      "path": "/nano-kitesurf/har",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "sensitivity": "L2",
+      "capability": "read:host",
+      "bodyLimit": 0,
+      "sessionBinding": false,
+      "justification": "HAR_ROUTE (P1-3) — exports the in-memory network ring as HAR 1.2 for external DevTools/audit. Reads host memory only; response bodies marked body:null reason:'engine' (engine doesn't buffer them)."
+    },
+    {
+      "plugin": "dsh-nano-kitesurf",
+      "path": "/nano-kitesurf/interact",
+      "methods": [
+        "POST"
+      ],
+      "sensitivity": "L2",
+      "capability": "write:engine",
+      "bodyLimit": 4096,
+      "sessionBinding": false,
+      "justification": "INTERACT_ROUTE (P1-1) — synthetic DOM events (click/fill/type/press/hover/select/check) via Runtime.evaluate + native-setter for controlled inputs. Page-state write on shared engine, same class as /edit. Occlusion/visibility probed before dispatch."
+    },
+    {
+      "plugin": "dsh-nano-kitesurf",
       "path": "/nano-kitesurf/storage",
       "methods": [
         "GET",

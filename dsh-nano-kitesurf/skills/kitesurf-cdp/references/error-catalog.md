@@ -44,3 +44,6 @@ A failed call returns `{ok:false,errorId,error}` with a real HTTP status. The sa
 | `kitesurf.storage.op` | 400 | storage 请求缺 name 或 op 非法 | GET /storage?scope=local|session|cookie 读；POST {scope,op:set|delete|clear,name,value} |
 | `kitesurf.storage.exception` | 400 | storage 页面内操作抛异常（如 cookie 语法/配额） | 看 error 描述；localStorage/sessionStorage 用 key-value；cookie 走 document.cookie（HttpOnly 不可达） |
 | `kitesurf.state.miss` | 400 | /state load 缺 state 或命名快照不存在/页面内恢复抛异常 | POST /state {action:save,name:"x"} 先存；load 传 {action:load,name:"x"} 或 {action:load,state:{...}} |
+| `kitesurf.interact.selector` | 400 | /interact 缺 target/selector 或 action 非法 | POST /interact {action:click,target:"@1"} 或 {action:fill,target:"input",text:"x"} |
+| `kitesurf.interact.occluded` | 404 | 交互失败：元素未命中/零 box/被遮挡/无该 option/类型不支持该 action | occluded 时先 scroll 或关覆盖层；miss 重跑 /snapshot 或换 selector；check/select 只对 checkbox/select 元素 |
+| `kitesurf.interact.exception` | 400 | 页内合成事件抛异常 | 看 error 描述；确认元素可交互（非 disabled/readonly） |

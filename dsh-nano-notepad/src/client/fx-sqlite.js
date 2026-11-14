@@ -171,7 +171,10 @@ async function pipelineCall(route, body) {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
   })
-  const data = await res.json()
+  const text = await res.text()
+  let data = null
+  try { data = text ? JSON.parse(text) : null } catch { /* non-JSON body */ }
+  if (!res.ok || data === null) throw new Error(data?.message ?? data?.reason ?? `HTTP ${res.status}`)
   if (!data.ok) throw new Error(data.message ?? data.reason ?? `HTTP ${res.status}`)
   return data.result
 }
@@ -208,6 +211,28 @@ export const claim = {
   renew: (key, writerId = 'notepad-fx') => pipelineCall(CLAIM_ROUTE, { op: 'renew', key, writerId }),
   read: (key) => pipelineCall(CLAIM_ROUTE, { op: 'read', key }),
   release: (key, writerId = 'notepad-fx') => pipelineCall(CLAIM_ROUTE, { op: 'release', key, writerId }),
+}
+
+/** A5 硬门槛：V-17b 三用例启动探针。返回 {pass, detail}；不过则调用方
+ * 应关共享写面并上报 `cas-probe:fail`（本地读写不受影响）。 */
+export async function casProbe() {
+  const key = `cas-probe-${Date.now().toString(36)}`
+  const put = (body, extra) => pipelineCall(S3_ROUTE, { op: 'put', key, body, ...extra })
+  const detail = {}
+  try {
+    detail.create1 = (await put({ v: 1 }, { ifNoneMatch: '*' })).conflict
+    detail.create2 = (await put({ v: 2 }, { ifNoneMatch: '*' })).conflict
+    const head = await pipelineCall(S3_ROUTE, { op: 'head', key })
+    detail.ifMatchBogus = (await put({ v: 3 }, { ifMatch: '"bogus"' })).conflict
+    detail.ifMatchReal = (await put({ v: 4 }, { ifMatch: head?.etag })).conflict
+  } catch (e) {
+    detail.error = String(e)
+  } finally {
+    try { await pipelineCall(S3_ROUTE, { op: 'del', key }) } catch { /* best-effort */ }
+  }
+  const pass = detail.create1 === false && detail.create2 === true &&
+               detail.ifMatchBogus === true && detail.ifMatchReal === false
+  return { pass, detail, reason: pass ? 'cas-probe:ok' : 'cas-probe:fail' }
 }
 
 async function sha256Hex(buf) {

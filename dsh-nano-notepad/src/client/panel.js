@@ -1360,8 +1360,18 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
         const caret = node.kind === 'folder' ? `<button type="button" class="np-caret" data-caret="${nodeId}" data-open="${expanded}" aria-expanded="${expanded}" aria-label="${escapeHtml(node.name)} · ${escapeHtml(expanded ? text().collapse : text().expand)}">${CARET_ICON}</button>` : ''
         const pinLabel = node.pinned === true ? text().unpin : text().pin
         const pin = `<button type="button" data-pin="${nodeId}" data-active="${node.pinned === true}" title="${escapeHtml(pinLabel)}" aria-label="${escapeHtml(pinLabel)}">${node.pinned === true ? PIN_ON_ICON : PIN_OFF_ICON}</button>`
+        const viaTip = (() => {
+          const v = node.via
+          if (!v || typeof v !== 'object') return ''
+          const parts = []
+          if (v.promptId) parts.push(`prompt:${v.promptId}`)
+          if (v.runId) parts.push(`run:${v.runId}`)
+          if (v.epochId) parts.push(`epoch:${v.epochId}`)
+          if (v.at) parts.push(new Date(v.at).toLocaleString())
+          return parts.length ? ` · ${parts.join(' · ')}` : ''
+        })()
         const catBadge = typeof node.cat === 'string' && node.cat
-          ? `<span class="np-cat" data-cat="${escapeAttr(node.cat)}" title="${escapeAttr(node.cat)}${node.cat === 'draft' && Number.isInteger(node.rejectCount) && node.rejectCount > 0 ? ` · ×${node.rejectCount}` : ''}">${escapeHtml(node.cat.slice(0, 4))}</span>`
+          ? `<span class="np-cat" data-cat="${escapeAttr(node.cat)}" title="${escapeAttr(node.cat)}${viaTip}${node.cat === 'draft' && Number.isInteger(node.rejectCount) && node.rejectCount > 0 ? ` · ×${node.rejectCount}` : ''}">${escapeHtml(node.cat.slice(0, 4))}</span>`
           : ''
         lines.push(`<div class="np-node" data-kind="${node.kind}" data-cat="${escapeAttr(node.cat ?? '')}" data-pinned="${node.pinned === true}" data-active="${node.id === state.ui.currentId}" title="${name}" style="padding-left:${8 + depth * 16}px">${caret}<button class="np-node-main" type="button" draggable="true" data-id="${nodeId}" aria-label="${name}"><span class="np-node-icon" aria-hidden="true">${icon}</span><span class="np-node-name">${name}</span>${catBadge}</button><span class="np-node-actions">${pin}<button type="button" data-move="${nodeId}" title="${escapeHtml(text().transfer)}" aria-label="${escapeHtml(text().transfer)}">${MOVE_ICON}</button><button type="button" data-more="${nodeId}" title="${escapeHtml(text().more)}" aria-label="${escapeHtml(text().more)}" aria-haspopup="menu">${MORE_ICON}</button></span></div>`)
         if (node.kind === 'folder' && !state.collapsed.has(node.id)) visit(node.id, depth + 1, workspaceId)
@@ -3506,6 +3516,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       lineage: (id) => lineage(state.db, id),
       rejectDraft: (id, feedback) => rejectDraft(state.db, id, feedback),
       corpusList: async () => (await loadSnapshot(state.db)).nodes.filter(n => n.cat).map(n => ({ id: n.id, cat: n.cat, name: n.name, rejectCount: n.rejectCount ?? 0 })),
+      casProbe: () => import('./fx-sqlite.js').then(m => m.casProbe()),
     },
     /** Set the syncing micro-motion ('a' | 'b' | 'c'), same path as the UI. */
     setCloudMotion(value) {

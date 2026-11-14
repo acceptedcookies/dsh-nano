@@ -922,6 +922,15 @@ export function ExplorerBody(props) {
       revealId === undefined ? null : { id: 'reveal', label: copy.revealIn(APP_LABELS[revealId] ?? revealId),
         icon: React.createElement('img', { src: `/open-in-app/icon/${encodeURIComponent(revealId)}`, alt: '', width: 14, height: 14 }),
         run: () => { open(revealId) } },
+      /* A directory row opens a shell inside itself; a file row lands the shell in its folder, the
+         * same reveal semantics the opener above already uses. The face picks the nano-terminal
+         * plugin when it published itself, and the native workbench terminal otherwise. */
+      { id: 'open-terminal', label: copy.openInTerminal, icon: React.createElement(primitives.IconCodeOutlineRegular, { width: 14, height: 14 }),
+        run: () => {
+          const absolute = absoluteOf(cwd ?? '', menu.path)
+          const directory = menu.kind === 'directory' ? absolute : parentOf(absolute)
+          nxe.openTerminal(sessionId, directory)
+        } },
       { id: 'copy-path', label: copy.copyAbsolute, icon: React.createElement(primitives.IconCopyOutlineRegular, { width: 14, height: 14 }),
         run: () => { void copyPath(menu.path, menu.path) } },
       { id: 'copy-relative', label: copy.copyRelative, icon: React.createElement(primitives.IconLinkOutlineRegular, { width: 14, height: 14 }),
@@ -954,7 +963,7 @@ export function ExplorerBody(props) {
       { id: 'delete', label: copy.delete, tone: 'danger', icon: React.createElement(primitives.IconTrashOutlineRegular, { width: 14, height: 14 }),
         run: () => { setLinkNote(undefined); setDeleteRequest(target) } },
     ].filter(Boolean)
-  }, [menu, copy, openApps, cwd, copyPath, statusOf, openDiff])
+  }, [menu, copy, openApps, cwd, copyPath, statusOf, openDiff, nxe, sessionId])
 
   return React.createElement('div', { className: 'nxe-root', 'data-nxe': 'true', 'data-theme': nxe.scheme(), ref: rootEl },
     React.createElement('div', { className: 'nxe-header' },

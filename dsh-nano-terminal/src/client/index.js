@@ -4,7 +4,7 @@
 // intentionally not registered — the native terminal kind stays untouched.
 
 import { createElement as h } from 'react'
-import { NanoTerm, anyLiveTerminals, disposeAllTerminals } from './NanoTerm.jsx'
+import { NanoTerm, anyLiveTerminals, disposeAllTerminals, requestPaneOpen } from './NanoTerm.jsx'
 
 try { window.__dntModule = 'evaluated' } catch { /* non-browser */ }
 
@@ -218,6 +218,26 @@ export function apply(ctx) {
       style.remove()
     }
   }, 'dsh-nano-terminal.composerMarginFix')
+
+  // —— intake for sibling plugins ——
+  // A file explorer (or anything else) asks for a terminal at a directory
+  // through the cordis service map rather than a window global or a bespoke
+  // DOM poke: `ctx.get('nanoTerminal')` stays undefined when this plugin is
+  // not installed, which is also how the caller picks its native fallback.
+  // `ctx.provide` returns a disposer the runtime ties to this scope.
+  ctx.effect(() => {
+    if (typeof ctx.provide !== 'function') return undefined
+    return ctx.provide('nanoTerminal', {
+      // openLocal(sessionId, cwd): reveal the nano-term conversation view and
+      // open a `local` lane whose shell starts in `cwd`. Queued while the view
+      // is not mounted — the pane still lands because the view is activated
+      // first and the Body drains pending requests on mount.
+      openLocal(sessionId, cwd) {
+        requestPaneOpen(sessionId, { lane: 'local', cwd })
+        activateView()
+      },
+    })
+  }, 'dsh-nano-terminal.service')
 
   // Page-close guard: while any nano terminal lane is live, closing or
   // reloading the whole dsh page must ask the user first — the browser's

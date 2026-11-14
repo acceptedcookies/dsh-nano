@@ -252,6 +252,22 @@ const termStore = (sessionId) => {
   return s
 }
 
+// —— outside intake ——
+// Another plugin asks for a terminal at a directory (the explorer's row menu is
+// the first caller). When the nano-term view is not mounted there is no
+// openLeaf to call yet, so the request parks here until a Body mounts — the
+// user still sees the pane because the intake always activates the view first.
+const pendingOpens = [] // { sessionId, spec }
+const openCallbacks = new Map() // sessionId → openLeaf while a Body is mounted
+
+/** Queue or dispatch one pane open for `sessionId`. Returns true when it ran. */
+export function requestPaneOpen(sessionId, spec) {
+  const open = openCallbacks.get(sessionId ?? '_default')
+  if (open !== undefined) { open(spec); return true }
+  pendingOpens.push({ sessionId: sessionId ?? '_default', spec })
+  return false
+}
+
 /** True while any conversation session keeps a live or opening terminal. */
 export function anyLiveTerminals() {
   for (const { sessions } of termStores.values()) {
@@ -365,6 +381,26 @@ export function NanoTerm({ sessionId, session, zh, openView }) {
     setTree(t)
     setFocused(t.id)
   }, [])
+
+  // Register the outside-intake slot for this session while the view is
+  // mounted, and flush anything queued while it was away — several requests
+  // become a vertical split row, which is the closest "each asked for a pane"
+  // the tiling layout can promise.
+  useEffect(() => {
+    const key = sessionId ?? '_default'
+    const open = (spec) => setTree((t) => {
+      const node = leaf(spec)
+      if (t === null) return node
+      return { type: 'split', dir: 'h', ratio: 0.5, id: 's' + paneSeq++, a: t, b: node }
+    })
+    openCallbacks.set(key, open)
+    const queued = pendingOpens.filter(req => req.sessionId === key)
+    for (let i = pendingOpens.length - 1; i >= 0; i -= 1) {
+      if (pendingOpens[i].sessionId === key) pendingOpens.splice(i, 1)
+    }
+    for (const req of queued) open(req.spec)
+    return () => { if (openCallbacks.get(key) === open) openCallbacks.delete(key) }
+  }, [sessionId, setTree])
 
   if (err) return <div className="dnt-err">nano-terminal failed to load: {err}</div>
   if (!ready) return <div className="dnt-err">{zh ? '正在加载终端核心…' : 'loading terminal core…'}</div>

@@ -77,6 +77,19 @@ export function apply(ctx) {
     onListed: () => {},
     /** The open page lends its rename dialog to the row menus. */
     setRenameHandler: handler => { renameRequest.handler = handler },
+    /**
+     * Row menu's "open in terminal". The nano-terminal plugin, when installed, publishes itself
+     * on the cordis service map as `nanoTerminal`; `ctx.get` reads lazily so loading order between
+     * the two plugins never matters and an absent service simply takes the native path. Without it
+     * the request goes to the built-in workbench terminal, which opens on the session's workspace —
+     * the native tab's only accepted parameter is a shell path, never a directory.
+     */
+    openTerminal: (sessionId, directory) => {
+      const dnt = ctx.get('nanoTerminal')
+      if (dnt?.openLocal !== undefined) { dnt.openLocal(sessionId, directory); return 'nano-terminal' }
+      ctx.sidebarRight.openTab('terminal', { sessionId })
+      return 'terminal'
+    },
     /** The settings card writes one viewing switch through the same store the page reads. */
     setPref: (key, value) => store.set({ ...store.get(), [key]: value }),
   })

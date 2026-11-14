@@ -304,5 +304,65 @@ export const ROUTE_TABLE = [
     "bodyLimit": 4096,
     "sessionBinding": true,
     "justification": "wait"
+  },
+  {
+    "plugin": "dsh-nano-local-sandbox",
+    "path": "/nano-local-sandbox/storage",
+    "methods": ["GET", "HEAD", "POST"],
+    "sensitivity": "L2",
+    "capability": "write:engine",
+    "bodyLimit": 8192,
+    "sessionBinding": true,
+    "justification": "storage"
+  },
+  {
+    "plugin": "dsh-nano-local-sandbox",
+    "path": "/nano-local-sandbox/interact",
+    "methods": ["POST"],
+    "sensitivity": "L2",
+    "capability": "write:engine",
+    "bodyLimit": 4096,
+    "sessionBinding": true,
+    "justification": "interact"
+  },
+  {
+    "plugin": "dsh-nano-local-sandbox",
+    "path": "/nano-local-sandbox/state",
+    "methods": ["POST"],
+    "sensitivity": "L2",
+    "capability": "write:engine",
+    "bodyLimit": 65536,
+    "sessionBinding": true,
+    "justification": "state"
+  },
+  {
+    "plugin": "dsh-nano-local-sandbox",
+    "path": "/nano-local-sandbox/har",
+    "methods": ["GET", "HEAD"],
+    "sensitivity": "L2",
+    "capability": "read:host",
+    "bodyLimit": 0,
+    "sessionBinding": true,
+    "justification": "har"
+  },
+  {
+    "plugin": "dsh-nano-local-sandbox",
+    "path": "/nano-local-sandbox/snapshot",
+    "methods": ["GET", "HEAD"],
+    "sensitivity": "L2",
+    "capability": "read:engine",
+    "bodyLimit": 0,
+    "sessionBinding": true,
+    "justification": "snapshot"
+  },
+  {
+    "plugin": "dsh-nano-local-sandbox",
+    "path": "/nano-local-sandbox/refs",
+    "methods": ["GET", "HEAD"],
+    "sensitivity": "L2",
+    "capability": "read:host",
+    "bodyLimit": 0,
+    "sessionBinding": true,
+    "justification": "refs"
   }
 ]

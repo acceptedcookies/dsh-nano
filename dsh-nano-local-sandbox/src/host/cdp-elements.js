@@ -1,5 +1,38 @@
 /** Per-session CDP reader. The socket hangs off the session object, not a module global. */
 
+export async function withPage(client, fn) {
+  const targets = await client.send('Target.getTargets')
+  const page = (targets.targetInfos || []).find((row) => row.type === 'page')
+  if (!page) {
+    const error = new Error('no document')
+    error.status = 502
+    error.errorId = 'kitesurf.elements.empty'
+    throw error
+  }
+  const attached = page.sessionId
+    ? { sessionId: page.sessionId }
+    : await client.send('Target.attachToTarget', { targetId: page.targetId, flatten: true })
+  return fn(attached.sessionId)
+}
+
+export async function evaluatePage(client, expression) {
+  return withPage(client, async (sessionId) => {
+    const result = await client.send('Runtime.evaluate', {
+      expression,
+      returnByValue: true,
+      awaitPromise: true,
+    }, sessionId)
+    if (result.exceptionDetails) {
+      const detail = result.exceptionDetails
+      const error = new Error(String(detail.exception?.description || detail.text || 'evaluate failed').slice(0, 240))
+      error.status = 400
+      error.errorId = 'kitesurf.evaluate.exception'
+      throw error
+    }
+    return result.result?.value
+  })
+}
+
 export async function readElements(client, options = {}) {
   const targets = await client.send('Target.getTargets')
   const page = (targets.targetInfos || []).find((row) => row.type === 'page')

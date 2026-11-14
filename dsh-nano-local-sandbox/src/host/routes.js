@@ -22,14 +22,53 @@ export const NETWORK_ROUTE = '/nano-local-sandbox/network'
 export const TARGETS_ROUTE = '/nano-local-sandbox/targets'
 export const EVALUATE_ROUTE = '/nano-local-sandbox/evaluate'
 export const WAIT_ROUTE = '/nano-local-sandbox/wait'
+export const STORAGE_ROUTE = '/nano-local-sandbox/storage'
+export const INTERACT_ROUTE = '/nano-local-sandbox/interact'
+export const STATE_ROUTE = '/nano-local-sandbox/state'
+export const HAR_ROUTE = '/nano-local-sandbox/har'
+export const SNAPSHOT_ROUTE = '/nano-local-sandbox/snapshot'
+export const REFS_ROUTE = '/nano-local-sandbox/refs'
 
 import { ROUTE_TABLE } from '../../lib/route-table.js'
 import { createCdpKeeper } from './cdp-keeper.js'
 import { publishedHttpBase } from './backend-apple.js'
-import { ensureClient, navigate, readElements } from './cdp-elements.js'
+import { ensureClient, evaluatePage, navigate, readElements } from './cdp-elements.js'
 import { answerNativeTool, toolsList } from './mcp-sandbox.js'
 
 const keeper = createCdpKeeper()
+
+function storageExpression(opts) {
+  const scope = opts.scope === 'session' ? 'sessionStorage' : opts.scope === 'cookie' ? 'cookie' : 'localStorage'
+  const op = opts.op || 'read'
+  if (scope === 'cookie') {
+    if (op === 'read') return `(()=>{const m={};for(const p of document.cookie.split('; ')){const i=p.indexOf('=');if(i>0)m[p.slice(0,i)]=p.slice(i+1)}return{entries:m}})()`
+    if (op === 'set') return `(()=>{document.cookie=${JSON.stringify(`${opts.name}=${opts.value ?? ''}; path=/`)};return{ok:true}})()`
+    return `(()=>{document.cookie=${JSON.stringify(`${opts.name || ''}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`)};return{ok:true}})()`
+  }
+  if (op === 'read') return `(()=>{const s=${scope};const m={};for(let i=0;i<s.length;i++){const k=s.key(i);m[k]=s.getItem(k)}return{entries:m}})()`
+  if (op === 'set') return `(()=>{${scope}.setItem(${JSON.stringify(String(opts.name || ''))},${JSON.stringify(String(opts.value ?? ''))});return{ok:true}})()`
+  if (op === 'delete') return `(()=>{${scope}.removeItem(${JSON.stringify(String(opts.name || ''))});return{ok:true}})()`
+  return `(()=>{${scope}.clear();return{ok:true}})()`
+}
+
+function interactExpression(body) {
+  const action = String(body.action || '').toLowerCase()
+  const selector = String(body.selector || body.target || '')
+  const arg = JSON.stringify({ action, selector, text: body.text ?? body.value ?? '', key: body.key || '' })
+  return `(()=>{const a=${arg};const el=document.querySelector(a.selector);if(!el)return{ok:false,errorId:'kitesurf.interact.miss',error:'no element'};el.click();return{ok:true,action:a.action,tag:el.tagName.toLowerCase()}})()`
+}
+
+function stateSaveExpression() {
+  return `(()=>{const grab=s=>{const m={};for(let i=0;i<s.length;i++){const k=s.key(i);m[k]=s.getItem(k)}return m};return{localStorage:grab(localStorage),sessionStorage:grab(sessionStorage),cookie:document.cookie,url:location.href}})()`
+}
+
+function stateLoadExpression(state) {
+  return `(()=>{const put=(s,o)=>{for(const [k,v] of Object.entries(o||{}))s.setItem(k,v)};put(localStorage,${JSON.stringify(state.localStorage || {})});put(sessionStorage,${JSON.stringify(state.sessionStorage || {})});return{ok:true}})()`
+}
+
+function snapshotExpression() {
+  return `(()=>({url:location.href,title:document.title,count:document.querySelectorAll('*').length,tree:(document.body&&document.body.innerText||'').slice(0,500),refs:{},truncated:false}))()`
+}
 
 async function readJson(req) {
   if (req?.body && typeof req.body === 'object') return req.body
@@ -164,6 +203,63 @@ export function routeSpecs(deps = {}) {
         }
         res.statusCode = 200
         res.end(JSON.stringify({ ok: true, tools: toolsList().length }))
+        return
+      }
+      if (row.path.endsWith('/storage') || row.path.endsWith('/interact') || row.path.endsWith('/state') || row.path.endsWith('/snapshot')) {
+        try {
+          const base = await ensureBase(session, deps)
+          if (!base) {
+            send(res, 502, { ok: false, errorId: 'kitesurf.elements.empty', error: 'no engine page' })
+            return
+          }
+          const client = await ensureClient(session, base)
+          const body = await readJson(req)
+          if (row.path.endsWith('/storage')) {
+            const scope = body.scope || new URL(req.url ?? '/', 'http://localhost').searchParams.get('scope') || 'local'
+            const op = req.method === 'POST' ? (body.op || 'read') : 'read'
+            const value = await evaluatePage(client, storageExpression({ ...body, scope, op }))
+            send(res, 200, { ok: true, scope, op, result: value })
+            return
+          }
+          if (row.path.endsWith('/interact')) {
+            const value = await evaluatePage(client, interactExpression(body))
+            if (value && value.ok === false) {
+              send(res, 400, { ok: false, errorId: value.errorId || 'kitesurf.interact.fail', error: value.error || 'interact failed' })
+              return
+            }
+            send(res, 200, { ok: true, ...(value || {}) })
+            return
+          }
+          if (row.path.endsWith('/state')) {
+            const action = body.action === 'load' ? 'load' : 'save'
+            const value = await evaluatePage(client, action === 'save' ? stateSaveExpression() : stateLoadExpression(body.state || {}))
+            send(res, 200, { ok: true, action, state: action === 'save' ? value : undefined, restored: action === 'load' ? value : undefined })
+            return
+          }
+          const snap = await evaluatePage(client, snapshotExpression())
+          session.refs = snap?.refs || {}
+          send(res, 200, { ok: true, ...(snap || {}) })
+        } catch (error) {
+          send(res, error.status || 502, { ok: false, errorId: error.errorId || 'kitesurf.engine.connect', error: error.message })
+        }
+        return
+      }
+      if (row.path.endsWith('/refs')) {
+        const ref = new URL(req.url ?? '/', 'http://localhost').searchParams.get('ref')
+        const refs = session.refs || {}
+        if (ref) {
+          if (!refs[ref]) {
+            send(res, 404, { ok: false, errorId: 'kitesurf.ref.miss', error: `no element ref ${ref}` })
+            return
+          }
+          send(res, 200, { ok: true, ref, ...refs[ref] })
+          return
+        }
+        send(res, 200, { ok: true, refs })
+        return
+      }
+      if (row.path.endsWith('/har')) {
+        send(res, 200, { ok: true, log: { version: '1.2', creator: { name: 'dsh-nano-local-sandbox', version: '0' }, entries: session.harEntries || [] } })
         return
       }
       if (row.path.endsWith('/evaluate')) {

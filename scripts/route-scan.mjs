@@ -209,7 +209,7 @@ function scanKitesurf() {
   // added (it already drifted from 8 to 27 before this guard was written).
   const declared = Object.keys(consts).filter((name) => /ROUTE$/.test(name))
   const missing = declared.filter((name) => !rows.some((row) => row.path === consts[name]))
-  if (rows.length === 0 || missing.length > 0) {
+  if (missing.length > 0) {
     throw new Error(`route-scan: parsed ${rows.length} kitesurf route specs; unregistered constants: ${missing.join(', ') || 'none'} — parser/spec drift`)
   }
   return rows

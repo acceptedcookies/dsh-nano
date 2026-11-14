@@ -677,7 +677,7 @@
       "responseShape": "JSON"
     },
     {
-      "plugin": "dsh-nano-kitesurf",
+      "plugin": "dsh-nano-local-sandbox",
       "path": "/nano-local-sandbox/storage",
       "methods": [
         "GET",
@@ -692,7 +692,7 @@
       "responseShape": "STORAGE_ROUTE (P1-2) — reads/writes localStorage/sessionStorage/document.cookie inside the engine page via Runtime.evaluate. Page-state write on the shared engine, same class as /evaluate. HttpOnly cookies annotated unreachable."
     },
     {
-      "plugin": "dsh-nano-kitesurf",
+      "plugin": "dsh-nano-local-sandbox",
       "path": "/nano-local-sandbox/interact",
       "methods": [
         "POST"
@@ -703,7 +703,7 @@
       "responseShape": "INTERACT_ROUTE (P1-1) — synthetic DOM events (click/fill/type/press/hover/select/check) via Runtime.evaluate + native-setter for controlled inputs. Page-state write on shared engine, same class as /edit. Occlusion/visibility probed before dispatch."
     },
     {
-      "plugin": "dsh-nano-kitesurf",
+      "plugin": "dsh-nano-local-sandbox",
       "path": "/nano-local-sandbox/state",
       "methods": [
         "POST"
@@ -714,7 +714,7 @@
       "responseShape": "STATE_ROUTE (P1-2) — {action:save} exports {localStorage,sessionStorage,cookie} and appends to $DSH_HOME/nano-kitesurf-state.jsonl; {action:load,state|name} restores it into the page. Host write (state file) + page write, L2."
     },
     {
-      "plugin": "dsh-nano-kitesurf",
+      "plugin": "dsh-nano-local-sandbox",
       "path": "/nano-local-sandbox/har",
       "methods": [
         "GET",
@@ -727,7 +727,7 @@
       "responseShape": "HAR_ROUTE (P1-3) — exports the in-memory network ring as HAR 1.2 for external DevTools/audit. Reads host memory only; response bodies marked body:null reason:'engine' (engine doesn't buffer them)."
     },
     {
-      "plugin": "dsh-nano-kitesurf",
+      "plugin": "dsh-nano-local-sandbox",
       "path": "/nano-local-sandbox/snapshot",
       "methods": [
         "GET",
@@ -740,7 +740,7 @@
       "responseShape": "SNAPSHOT_ROUTE — injected a11y-lite walker returns the semantic tree + @N element-ref table of the rendered page. A bounded read (one Runtime.evaluate round-trip), same read-class as /elements and /dom. Refs written to host memory for later @N resolution."
     },
     {
-      "plugin": "dsh-nano-kitesurf",
+      "plugin": "dsh-nano-local-sandbox",
       "path": "/nano-local-sandbox/refs",
       "methods": [
         "GET",

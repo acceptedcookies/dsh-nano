@@ -256,6 +256,11 @@ export default class NanoCompactionEngine extends CompactionEngine {
   }
 
   _claimEpisodeMaintenance(agent, episode) {
+    // Re-entry guard: flip phase BEFORE claiming runMaintenance, or a second
+    // idle event during an in-flight attempt starts a concurrent episode and
+    // corrupts the durable bracket with a second compaction/end.
+    if (episode.phase !== 'armed') return
+    episode.phase = 'running'
     try {
       void agent.runMaintenance(async (agentSignal) => {
         try {
@@ -271,8 +276,9 @@ export default class NanoCompactionEngine extends CompactionEngine {
       })
     } catch (error) {
       // Agent was claimed by a turn before we could claim idle maintenance —
-      // keep the arm; the next idle boundary retries the claim, bounded.
-      if (episode.phase === 'armed') {
+      // restore the arm so the next idle boundary retries the claim, bounded.
+      if (episode.phase === 'running') {
+        episode.phase = 'armed'
         episode.claimAttempts = (episode.claimAttempts ?? 0) + 1
         if (episode.claimAttempts >= MAX_CLAIM_ATTEMPTS) {
           this._dropEpisode(agent.session, episode, 'starved', error)

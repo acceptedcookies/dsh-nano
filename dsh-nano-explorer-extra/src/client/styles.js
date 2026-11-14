@@ -238,6 +238,14 @@ export const STYLE = `${NANO_STYLES}
 [data-nxe] .nxe-tree li[data-files-entry]:has(> div > div [data-status="R"]) > div > button > span { color: var(--nxe-git-renamed); }
 [data-nxe] .nxe-tree li[data-files-entry]:has(> div > div [data-status="U"]) > div > button > span { color: var(--nxe-git-conflicted); }
 
+/* A ghost row is a file the listing can no longer see — deleted side of a conflict or a plain
+   deletion. Its name reads struck-through on top of the status tint, so the row says "this path
+   exists in Git, not on disk" rather than looking like a file that could be opened. */
+[data-nxe] .nxe-tree li[data-files-entry]:has(> div > div [data-nxe-ghost]) > div > button > span {
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+
 /* The folder's glyph takes the same tint so the row reads as one unit. */
 [data-nxe] .nxe-tree li[data-files-entry="directory"]:has(> div > div [data-status]) > div > button > svg { color: inherit; opacity: .85; }
 

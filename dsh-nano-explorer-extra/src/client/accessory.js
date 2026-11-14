@@ -19,9 +19,14 @@ export function createAccessory(api) {
     const ignored = api.ignoredOf(entry.path)
     const link = api.linkOf(entry.path)
     const broken = api.linkBrokenOf(entry.path) === true
+    const ghost = entry.meta?.ghost === true
     const isFile = entry.meta?.kind !== 'directory'
     const folderStatus = isFile ? undefined : api.folderStatusOf(entry.path)
-    const showGit = api.showGit() && !ignored
+    // `ignored` de-emphasizes the row but must not hide a real Git status: a tracked file inside an
+    // ignored directory (committed before the rule, or force-added) can still be modified or — the
+    // case that bites during a merge — conflicted. Ignored-and-untracked paths carry no status at
+    // all, so nothing extra renders for them.
+    const showGit = api.showGit()
     // Both sides of the porcelain pair, so a reader can tell staged work from unstaged work.
     const staged = showGit ? api.stagedOf(entry.path) : undefined
     const unstaged = showGit ? api.unstagedOf(entry.path) : undefined
@@ -31,8 +36,10 @@ export function createAccessory(api) {
     return React.createElement('span', {
       className: 'nxe-acc',
       // A zero-size flag the row CSS reads with :has(), so an ignored row de-emphasizes its own label
-      // and glyph without the plugin needing to reach into the shared tree's markup.
+      // and glyph without the plugin needing to reach into the shared tree's markup. The ghost flag
+      // does the same for the struck-through name of a file that is only on Git's mind.
       ...(ignored ? { 'data-nxe-ignored': 'true' } : {}),
+      ...(ghost ? { 'data-nxe-ghost': 'true' } : {}),
     },
       // A link keeps the link glyph whatever it points at; where it leads is a tooltip detail, not a
       // warning. A link whose target is unreachable gets a struck-through variant so the row

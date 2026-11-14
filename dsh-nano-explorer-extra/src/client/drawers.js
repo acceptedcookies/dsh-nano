@@ -420,13 +420,21 @@ export function BranchDrawer({ copy, open, git, onClose, onPull, onPush, onRefre
       ' ',
       copy.factConflicted(conflicts.length)),
     React.createElement('p', { className: 'nxe-drawer-empty' }, copy.branchConflictBlocks),
-    React.createElement('ul', { className: 'nxe-drawer-list nxe-repo-conflict-list' }, conflicts.map(path =>
-      React.createElement('li', { key: path, className: 'nxe-change', 'data-status': 'U' },
+    React.createElement('ul', { className: 'nxe-drawer-list nxe-repo-conflict-list' }, conflicts.map(path => {
+      const { name, dir } = splitPath(path)
+      return React.createElement('li', { key: path, className: 'nxe-change', 'data-status': 'U' },
         React.createElement('span', { className: 'nxe-change-status', 'data-status': 'U' }, 'U'),
+        // The .nxe-change grid is letter/icon/name; the commit drawer's conflict rows already carry
+        // the glyph, and without it the button lands in the 16px icon column and reads as "d…".
+        React.createElement(FileTypeIcon, { path: name, size: 16, className: 'nxe-change-icon' }),
         React.createElement('button', {
           type: 'button', className: 'nxe-drawer-link', title: path,
           onClick: () => onOpenConflict?.(path),
-        }, path))))),
+        },
+          React.createElement('span', { className: 'nxe-change-name' },
+            name,
+            dir === '' ? null : React.createElement('span', { className: 'nxe-change-dir' }, dir))))
+    }))),
     React.createElement(HistoryRail, { copy, history, currentBranch: current, upstream, remotes }),
     React.createElement(Input, {
       value: query,

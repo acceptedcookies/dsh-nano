@@ -181,7 +181,8 @@ export function ExplorerBody(props) {
   /**
    * The tree facade every reader below already names. Levels, expansion, listings, and the
    * directory-status merge all live in the shared store now; this only adapts the method
-   * signatures the rest of the page calls.
+   * signatures the rest of the page calls. Ghost rows for missing conflicted/deleted files are
+   * synthesized inside the shared store itself, so `ws.levels` already carries them.
    */
   const treeEntries = useMemo(() => {
     const list = []
@@ -771,11 +772,14 @@ export function ExplorerBody(props) {
     if (relative === undefined) return undefined
     const prefix = relative === '' ? '' : `${relative}/`
     let best
-    let bestRank = -1
+    // SEVERITY lists the winner first (conflict, delete, modify, add, rename, untracked), so the
+    // strongest status is the lowest index. Comparing `>` used to hand the dot to the last entry
+    // in that order — an untracked file outranked a conflict it sat next to.
+    let bestRank = SEVERITY.length
     for (const [path, entry] of statusMap) {
       if (prefix !== '' && !path.startsWith(prefix)) continue
       const rank = SEVERITY.indexOf(entry.status)
-      if (rank > bestRank) { bestRank = rank; best = entry.status }
+      if (rank >= 0 && rank < bestRank) { bestRank = rank; best = entry.status }
     }
     return best
   }, [statusMap, statusKeyOf])
@@ -817,6 +821,7 @@ export function ExplorerBody(props) {
         kind: entry.type === 'directory' ? 'directory' : entry.type === 'file' ? 'file' : 'other',
         ...(entry.symlink === true ? { link: true } : {}),
         ...(entry.outside === true ? { outside: true } : {}),
+        ...(entry.ghost === true ? { ghost: true } : {}),
         ...(ignoredOf(entry.path) ? { hidden: true } : {}),
       },
     }))

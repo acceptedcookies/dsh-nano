@@ -83,6 +83,66 @@ function createStore(root) {
     for (const listener of listeners) listener()
   })
 
+  /**
+   * Add rows the listing can never return: files Git reports as conflicted or deleted that no
+   * longer exist on disk. A DU/UD conflict, or a plain `D`, still lives in the status map — so
+   * its directory lights up — while `listDir` has nothing to name. Without a synthesized row the
+   * folder reads as conflicted with nothing inside it, which is exactly the screenshot that
+   * spawned this. Ghosts are appended into already-loaded levels only; a level that has not been
+   * opened yet is left alone, since its next listing simply re-runs this for it.
+   *
+   * The merge mirrors the pane's statusMap: the workspace-wide file list first, the per-directory
+   * answers on top.
+   */
+  const syncGhosts = () => {
+    const git = state.git
+    const statuses = new Map()
+    for (const file of git?.files ?? []) statuses.set(file.path, file.status)
+    for (const [path, entry] of state.directoryStatus) statuses.set(path, entry?.status ?? entry)
+    const checkoutRoot = git?.root
+    if (checkoutRoot === undefined) return
+    const prefix = checkoutRoot.replace(/\/+$/u, '')
+    const nextLevels = new Map(state.levels)
+    let dirty = false
+    // Strip ghosts whose status has gone: resolving a conflict either restores the file (the next
+    // listing replaces this row with a real entry, which the same-name check below would then
+    // skip) or leaves it missing but clean, and neither should keep the synthesized row.
+    for (const [levelKey, level] of nextLevels) {
+      const filtered = (level.entries ?? []).filter(entry => {
+        if (entry.ghost !== true) return true
+        const absolute = levelKey === '' ? `${root}/${entry.name}` : `${root}/${levelKey}/${entry.name}`
+        const status = statuses.get(relativeTo(checkoutRoot, absolute))
+        return status === 'U' || status === 'D'
+      })
+      if (filtered.length !== (level.entries ?? []).length) {
+        nextLevels.set(levelKey, { ...level, entries: filtered })
+        dirty = true
+      }
+    }
+    for (const [checkoutPath, status] of statuses) {
+      if (status !== 'U' && status !== 'D') continue
+      // Both maps key by the checkout root; the tree keys by this workspace. Skip paths the
+      // checkout can see but this pane cannot.
+      const absolute = `${prefix}/${checkoutPath}`
+      const key = relativeTo(root, absolute)
+      if (key === absolute || key === '') continue
+      const parentKey = treeKeyOf(root, parentOf(key))
+      const level = nextLevels.get(parentKey)
+      if (level?.entries === undefined) continue
+      const name = basenameOf(key)
+      if (level.entries.some(entry => entry.name === name)) continue
+      const ghost = { name, type: 'file', ghost: true }
+      const copy = level.entries.slice()
+      // Listing order is directories first, then files by name; a ghost is a file.
+      let index = copy.length
+      while (index > 0 && copy[index - 1]?.type !== 'directory' && copy[index - 1].name > name) index -= 1
+      copy.splice(index, 0, ghost)
+      nextLevels.set(parentKey, { ...level, entries: copy })
+      dirty = true
+    }
+    if (dirty) commit({ levels: nextLevels })
+  }
+
   /** Run `work` once per key; concurrent callers share the promise. */
   const once = (key, work) => {
     const running = inFlight.get(key)
@@ -126,6 +186,9 @@ function createStore(root) {
     if ((result.code === 'not-found' || result.code === 'not-directory') && path !== root) pruneEntry(path)
     // The freshly listed names feed the ignored check; the answer lands in the shared set.
     if (result.ok && result.entries.length > 0) void markIgnored(sessionId, path, result.entries.map(entry => entry.name))
+    // A fresh listing is the moment a missing conflicted file can be proven absent — re-seed
+    // ghosts so its row exists the next time this level is open.
+    if (result.ok) syncGhosts()
     return result
   }))
 
@@ -177,6 +240,8 @@ function createStore(root) {
         if (relative !== absolute) files.push({ ...file, path: relative })
       }
       commit({ directoryStatus: replaceDirectoryStatus(state.directoryStatus, directoryRelative, files) })
+      // The scoped answer may be the first place a conflict is seen at all; seed its missing rows.
+      syncGhosts()
     }))
   }
 
@@ -197,6 +262,9 @@ function createStore(root) {
       // The per-directory map is a refinement of this snapshot; leaving it in place kept letters
       // after the footer had already returned to zero.
       commit({ git: result.git ?? null, gitError: result.gitError, directoryStatus: new Map() })
+      // The wide snapshot is the authoritative conflict list; seed missing rows into the levels
+      // that are already drawn before the per-directory answers even land.
+      syncGhosts()
       for (const path of state.expanded) void loadDirectoryStatus(sessionId, path)
     }))
   }

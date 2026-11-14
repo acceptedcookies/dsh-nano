@@ -25,6 +25,7 @@ export const WAIT_ROUTE = '/nano-local-sandbox/wait'
 
 import { ROUTE_TABLE } from '../../lib/route-table.js'
 import { createCdpKeeper } from './cdp-keeper.js'
+import { publishedHttpBase } from './backend-apple.js'
 import { answerNativeTool, toolsList } from './mcp-sandbox.js'
 
 const keeper = createCdpKeeper()
@@ -59,7 +60,17 @@ export function routeSpecs(deps = {}) {
         return
       }
       if (row.path.endsWith('/status')) {
-        send(res, 200, { ok: session.phase === 'running', kite: { phase: session.phase } })
+        if (session.phase === 'idle' && deps.backend?.inspect) {
+          try {
+            const inspected = await deps.backend.inspect(session.containerName || 'kitesurf')
+            const base = publishedHttpBase(inspected.raw ?? inspected)
+            if (base) {
+              session.phase = 'running'
+              session.httpBase = base
+            }
+          } catch { /* container is not running */ }
+        }
+        send(res, 200, { ok: session.phase === 'running', httpBase: session.httpBase ?? null, kite: { phase: session.phase } })
         return
       }
       if (row.path.endsWith('/kite')) {
@@ -108,7 +119,7 @@ export function routeSpecs(deps = {}) {
             error.status = 502
             error.errorId = 'kitesurf.elements.empty'
             throw error
-          }))(deps.httpBase, {
+          }))(deps.httpBase ?? session.httpBase, {
             selector: url.searchParams.get('selector') || '',
             depth: Number(url.searchParams.get('depth') || 4),
           })

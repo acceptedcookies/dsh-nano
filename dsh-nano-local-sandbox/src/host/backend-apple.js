@@ -31,6 +31,22 @@ function runFile(io, args) {
  * The only file in this package allowed to call the container CLI.
  * Public constructor arguments stay free of platform nouns.
  */
+export function publishedHttpBase(raw, containerPort = 8787) {
+  const text = String(raw ?? '')
+  const start = text.indexOf('[')
+  const objectStart = text.indexOf('{')
+  const at = start >= 0 ? start : objectStart
+  if (at < 0) return null
+  let data
+  try { data = JSON.parse(text.slice(at)) } catch { return null }
+  const item = Array.isArray(data) ? data[0] : data
+  const ports = item?.configuration?.publishedPorts ?? item?.publishedPorts ?? []
+  const hit = ports.find((row) => Number(row.containerPort) === Number(containerPort) && row.hostPort)
+  if (!hit) return null
+  const host = hit.hostAddress && hit.hostAddress !== '0.0.0.0' ? hit.hostAddress : '127.0.0.1'
+  return `http://${host}:${hit.hostPort}`
+}
+
 export function createAppleBackend(spec = {}, io = {}) {
   assertPublicSpec(spec)
   const calls = {

@@ -5,6 +5,7 @@
  */
 import { registerRoutes } from './lib/route-guard.js'
 import { ROUTE_TABLE } from './lib/route-table.js'
+import { createAppleBackend } from './src/host/backend-apple.js'
 import { routeSpecs } from './src/host/routes.js'
 
 export const name = 'nano-local-sandbox'
@@ -13,6 +14,7 @@ export const name = 'nano-local-sandbox'
 export const inject = ['webServer', 'connection', 'sandboxPolicy', 'sandbox', 'sessions']
 
 export function apply(ctx, deps = {}) {
-  if (!deps.session) deps.session = { phase: 'idle', history: [] }
+  if (!deps.session) deps.session = { phase: 'idle', history: [], containerName: 'kitesurf' }
+  if (!deps.backend) deps.backend = createAppleBackend()
   return registerRoutes(ctx, routeSpecs(deps), { table: ROUTE_TABLE, plugin: 'dsh-nano-local-sandbox' })
 }

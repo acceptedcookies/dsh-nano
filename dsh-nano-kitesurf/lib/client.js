@@ -2368,6 +2368,10 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       toastTimer.current = window.setTimeout(() => setToast(null), 2e3);
     }
     async function run(work) {
+      if (perf?.span) return perf.span("pane-op", () => runInner(work));
+      return runInner(work);
+    }
+    async function runInner(work) {
       if (busyRef.current) return;
       busyRef.current = true;
       setBusy(true);

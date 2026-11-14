@@ -556,6 +556,13 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
   }
 
   async function run(work) {
+    // Every pane action becomes a perf span so /perf-review/host can show what
+    // the pane actually spends time on.
+    if (perf?.span) return perf.span('pane-op', () => runInner(work))
+    return runInner(work)
+  }
+
+  async function runInner(work) {
     // One entry guard for EVERY action (address Enter, refresh, start engine,
     // history, settings apply): a second submit while the first /open is in
     // flight used to fire a duplicate navigate and clear busy early.

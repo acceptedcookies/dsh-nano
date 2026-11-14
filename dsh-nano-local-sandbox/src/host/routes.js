@@ -30,6 +30,7 @@ export const SNAPSHOT_ROUTE = '/nano-local-sandbox/snapshot'
 export const REFS_ROUTE = '/nano-local-sandbox/refs'
 export const CONTROL_ROUTE = '/nano-local-sandbox/control'
 
+import { mkdirSync } from 'node:fs'
 import { ROUTE_TABLE } from '../../lib/route-table.js'
 import { createCdpKeeper } from './cdp-keeper.js'
 import { publishedHttpBase } from './backend-apple.js'
@@ -123,7 +124,10 @@ async function envSnapshot(session, deps) {
   } catch { info = null }
   const engineRow = info?.ports?.find((p) => p.containerPort === host.engineContainerPort) || null
   const bridgeRow = info?.ports?.find((p) => p.containerPort === host.bridgeContainerPort) || null
-  const httpBase = session.httpBase || (engineRow ? `http://${engineRow.hostAddress === '0.0.0.0' ? '127.0.0.1' : engineRow.hostAddress}:${engineRow.hostPort}` : null)
+  // Prefer the port THIS env's container actually published — session.httpBase
+  // may be stale from a previous env (dev used to adopt the prod container).
+  const derived = engineRow ? `http://${engineRow.hostAddress === '0.0.0.0' ? '127.0.0.1' : engineRow.hostAddress}:${engineRow.hostPort}` : null
+  const httpBase = derived || session.httpBase || null
   const alive = await engineAlive(httpBase)
   const state = info?.state || 'missing'
   const healthy = state === 'running' && alive === true
@@ -148,9 +152,10 @@ async function envSnapshot(session, deps) {
  * did. The owner env can therefore self-heal without re-navigating a page.
  */
 async function prepareEnvironment(session, deps) {
-  const name = containerNameFor(session, deps.env || process.env)
-  const host = envHostPorts(deps.env || process.env)
-  const image = (deps.env || process.env).KITESURF_IMAGE || 'kitesurf-engine:latest'
+  const env = deps.env || process.env
+  const name = containerNameFor(session, env)
+  const host = envHostPorts(env)
+  const image = env.KITESURF_IMAGE || 'kitesurf-engine:latest'
   let action = 'noop'
   let info = null
   const canInspect = typeof deps.backend?.inspect === 'function'
@@ -166,9 +171,24 @@ async function prepareEnvironment(session, deps) {
     await deps.backend?.start?.(name)
     action = 'started'
   } else if (!info) {
+    // Recreate the documented kitesurf runtime shape: ro checkout at
+    // /opt/kitesurf, tmpfs over wrangler state, a writable per-env state
+    // volume, 4c/4G, published engine+bridge ports. Sources come from env so
+    // no host path is baked into the contract.
+    const tag = envTag(env)
+    const home = deps.home || env.HOME || ''
+    const checkout = env.KITESURF_CHECKOUT || `${home}/Documents/dsh-plugins/context/kitesurf`
+    const stateDir = env.KITESURF_STATE || `${home}/.dsh-kitesurf-state${tag === 'prod' ? '' : `-${tag}`}`
+    try { mkdirSync(stateDir, { recursive: true }) } catch { /* mount surfaces the failure */ }
     await deps.backend?.create?.({
       containerName: name,
       image,
+      resources: { cpus: 4, memory: '4G' },
+      mounts: [
+        { arg: `type=virtiofs,source=${checkout},target=/opt/kitesurf,readonly` },
+        { arg: 'type=tmpfs,target=/opt/kitesurf/packages/engine/.wrangler' },
+        { arg: `type=virtiofs,source=${stateDir},target=/var/lib/kitesurf-state` },
+      ],
       ports: [
         { publish: `127.0.0.1:${host.engineHostPort}:${host.engineContainerPort}` },
         { publish: `127.0.0.1:${host.bridgeHostPort}:${host.bridgeContainerPort}` },
@@ -179,7 +199,15 @@ async function prepareEnvironment(session, deps) {
     await deps.backend?.start?.(name)
     action = 'started'
   }
-  const snap = await envSnapshot(session, deps)
+  // A fresh container needs a beat for wrangler+engine to come up. Poll the
+  // engine face briefly so a first-time "prepare" reports real health instead
+  // of always saying "created but not answering yet".
+  const deadline = Date.now() + (action === 'noop' ? 0 : 6000)
+  let snap = await envSnapshot(session, deps)
+  while (!snap.engineAlive && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 600))
+    snap = await envSnapshot(session, deps)
+  }
   if (snap.httpBase) session.httpBase = session.httpBase || snap.httpBase
   if (snap.healthy && session.phase === 'idle') session.phase = 'running'
   return { action, ...snap }

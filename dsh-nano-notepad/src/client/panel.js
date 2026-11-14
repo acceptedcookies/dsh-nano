@@ -265,7 +265,6 @@ ${NANO_STYLES}
 .np-kind-caret svg { width: 12px; height: 12px; }
 /* fx run 卡 */
 .np-fx-card { display: flex; flex-direction: column; gap: 6px; }
-.np-fx-lab { font-size: var(--np-font-size-xs); color: var(--dsw-alias-label-tertiary); }
 .np-fx-card select, .np-fx-card textarea { width: 100%; box-sizing: border-box; font: inherit; background: var(--dsw-alias-bg-primary); color: var(--dsw-alias-label-primary); border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); padding: 4px 6px; }
 .np-fx-out { min-height: 60px; max-height: 180px; overflow: auto; white-space: pre-wrap; font-size: var(--np-font-size-sm); padding: 6px; background: var(--dsw-alias-interactive-bg-hover); border-radius: var(--dsw-radius-sm); }
 .np-fx-tools { list-style: none; margin: 0; padding: 0; max-height: 140px; overflow: auto; }
@@ -276,7 +275,52 @@ ${NANO_STYLES}
 .np-fx-hist-list { list-style: none; margin: 0; padding: 0; font-size: var(--np-font-size-xs); }
 .np-fx-hist-list li { display: flex; gap: 8px; padding: 3px 0; border-bottom: 1px solid var(--dsw-alias-border-l1); }
 .np-fx-hist-at { color: var(--dsw-alias-label-tertiary); margin-left: auto; }
-.np-fx-go { align-self: flex-start; margin-top: 4px; }
+/* ── fx composer（P0）：一张输入卡 + 底部 chips/模型/发送 ── */
+.np-fx-run { display: flex; flex-direction: column; gap: 10px; }
+.np-fx-empty { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 4px; padding: 8px 12px 2px; }
+.np-fx-empty[hidden] { display: none !important; }
+.np-fx-empty-icon { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-link); font-size: 20px; line-height: 1; }
+.np-fx-empty-title { font-size: var(--np-font-size); font-weight: 600; color: var(--dsw-alias-label-primary); }
+.np-fx-empty-desc { margin: 0; font-size: var(--np-font-size-sm); color: var(--dsw-alias-label-tertiary); line-height: 18px; }
+.np-fx-suggests { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 2px; }
+.np-dlg-body .np-fx-suggest { border: 1px solid var(--dsw-alias-border-l2) !important; background: var(--dsw-alias-bg-layer-1) !important; color: var(--dsw-alias-label-secondary) !important; border-radius: 999px !important; padding: 4px 10px !important; font-size: var(--np-font-size-xs) !important; line-height: 16px !important; cursor: pointer; }
+.np-dlg-body .np-fx-suggest:hover { background: var(--dsw-alias-interactive-bg-hover) !important; color: var(--dsw-alias-label-primary) !important; }
+.np-fx-composer { position: relative; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-lg); background: var(--dsw-alias-bg-primary); padding: 8px; transition: border-color .12s ease, box-shadow .12s ease; }
+.np-fx-composer:focus-within { border-color: var(--dsw-alias-border-l3); box-shadow: 0 0 0 1px var(--dsw-alias-border-l3); }
+.np-fx-composer .np-fx-input { width: 100%; box-sizing: border-box; border: 0 !important; background: transparent !important; padding: 4px 4px 8px !important; resize: none; min-height: 64px; max-height: 160px; font: inherit; color: var(--dsw-alias-label-primary); outline: none; }
+.np-fx-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.np-fx-grow { flex: 1 1 4px; }
+.np-dlg-body .np-fx-composer .np-fx-chip { display: inline-flex; align-items: center; gap: 4px; height: 24px; border: 0 !important; background: var(--dsw-alias-interactive-bg-hover) !important; color: var(--dsw-alias-label-secondary) !important; border-radius: 999px !important; padding: 0 8px !important; font-size: var(--np-font-size-xs) !important; line-height: 24px !important; cursor: pointer; max-width: 150px; }
+.np-dlg-body .np-fx-composer .np-fx-chip:hover { background: var(--dsw-alias-interactive-bg-active) !important; color: var(--dsw-alias-label-primary) !important; }
+.np-dlg-body .np-fx-composer .np-fx-chip[data-on="false"] { opacity: .42; }
+.np-fx-chip-ico { opacity: .78; }
+.np-fx-doc-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.np-fx-toolbadge { font-size: 10px; color: var(--dsw-alias-label-tertiary); border: 1px solid var(--dsw-alias-border-l2); border-radius: 999px; padding: 0 7px; line-height: 20px; }
+.np-dlg-body .np-fx-composer .np-fx-model { width: auto !important; max-width: 240px; height: 24px; padding: 0 6px !important; font-size: var(--np-font-size-xs) !important; border-radius: 999px !important; background: var(--dsw-alias-interactive-bg-hover) !important; border: 0 !important; }
+.np-dlg-body .np-fx-composer .np-fx-send { width: 30px; height: 30px; border-radius: 50% !important; border: 0 !important; background: var(--dsw-alias-link) !important; color: var(--dsw-alias-bg-primary) !important; font-size: 16px; line-height: 1 !important; padding: 0 !important; cursor: pointer; flex: none; }
+.np-dlg-body .np-fx-composer .np-fx-send:disabled { opacity: .4; cursor: default; }
+.np-fx-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px; }
+.np-fx-chips[hidden] { display: none !important; }
+.np-fx-tag { display: inline-flex; align-items: center; gap: 2px; font-size: 10px; background: var(--dsw-alias-interactive-bg-active); border-radius: var(--dsw-radius-sm); padding: 2px 4px 2px 6px; color: var(--dsw-alias-label-secondary); max-width: 220px; }
+.np-fx-tag > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.np-dlg-body .np-fx-tag-x { border: 0 !important; background: none !important; padding: 0 2px !important; color: var(--dsw-alias-label-tertiary) !important; cursor: pointer; line-height: 1 !important; }
+.np-fx-pop { position: absolute; left: 8px; right: 8px; bottom: 40px; max-height: 80px; overflow: auto; background: var(--dsw-alias-bg-layer-3); border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md); box-shadow: var(--dsw-elevation-prominent); padding: 4px; z-index: 5; }
+.np-fx-pop[hidden] { display: none !important; }
+.np-dlg-body .np-fx-popitem { display: flex; align-items: center; gap: 8px; width: 100%; border: 0 !important; background: none !important; color: var(--dsw-alias-label-primary) !important; text-align: left; padding: 3px 8px !important; border-radius: var(--dsw-radius-sm) !important; font: inherit !important; font-size: var(--np-font-size-xs) !important; line-height: 16px !important; cursor: pointer; }
+.np-dlg-body .np-fx-popitem:hover, .np-dlg-body .np-fx-popitem[data-active="true"] { background: var(--dsw-alias-interactive-bg-hover) !important; }
+.np-fx-pop-sub { margin-left: auto; color: var(--dsw-alias-label-tertiary); font-size: 10px; }
+.np-fx-pop-empty { padding: 8px; color: var(--dsw-alias-label-tertiary); font-size: var(--np-font-size-xs); }
+.np-fx-out[hidden] { display: none !important; }
+/* P0-4：tab 条的 + 新建；P1-5：文件级 … 菜单入口 */
+.np-tabs > button.np-new-tab { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; flex: none; box-sizing: border-box; padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); cursor: pointer; }
+.np-tabs > button.np-new-tab:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+.np-tabs > button.np-new-tab svg { width: 16px; height: 16px; }
+.np-tabs > button.np-more { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; flex: none; box-sizing: border-box; padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); cursor: pointer; font-size: 18px; line-height: 1; }
+.np-tabs > button.np-more:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+/* P1-5：自动换行开关（源编辑 + 高亮镜像同步；横向滚动由既有 scroll 同步） */
+.np-editor[data-wrap="off"] .np-write,
+.np-editor[data-wrap="off"] .np-mirror { white-space: pre; overflow-wrap: normal; word-break: normal; }
+.np-editor[data-wrap="off"] .np-write { overflow-x: auto; }
 .np-changed { animation: npChanged 2.4s; }
 @keyframes npChanged { 0% { background: var(--dsw-alias-interactive-bg-active); } 100% { background: transparent; } }
 .np-group { display: flex; align-items: center; gap: 6px; margin: 12px 0 4px; padding-left: 8px; color: var(--dsw-alias-label-tertiary); font-size: var(--np-font-size-xs); font-weight: 600; letter-spacing: .04em; line-height: 20px; }
@@ -800,7 +844,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     ? `<button type="button" class="np-tool" data-action="image" data-format-kind="image">${def.icon}</button>`
     : `<button type="button" class="np-tool" data-format="${def.kind}" data-format-kind="${def.kind}">${def.icon}</button>`).join('')
   panel.innerHTML = `
-    <div class="np-tabs"><button type="button" class="np-tree-toggle" data-action="toggle-tree"></button><button type="button" class="np-close-tabs" data-action="close-tabs" data-i18n="saveCloseTabs" data-i18n-mode="title">${dshIcon('archive-check-outline')}</button><div class="np-tablist"></div><span class="np-tabs-spacer"></span></div>
+    <div class="np-tabs"><button type="button" class="np-tree-toggle" data-action="toggle-tree"></button><button type="button" class="np-close-tabs" data-action="close-tabs" data-i18n="saveCloseTabs" data-i18n-mode="title">${dshIcon('archive-check-outline')}</button><div class="np-tablist"></div><button type="button" class="np-new-tab" data-action="new-file" data-i18n="newBlankFile" data-i18n-mode="title" title="+">${PLUS_ICON}</button><button type="button" class="np-more" data-action="more-menu" data-i18n="more" data-i18n-mode="title">⋯</button><span class="np-tabs-spacer"></span></div>
     <div class="np-body">
       <aside class="np-tree"><div class="np-tree-head"><div class="np-ws"><button type="button" class="np-ws-btn" data-action="ws-toggle" aria-haspopup="listbox" aria-expanded="false"><span class="np-ws-label"></span><span class="np-ws-caret" aria-hidden="true">${CHEVRON_ICON}</span></button></div><button type="button" class="np-kind" data-action="kind-filter" data-i18n="kindFilter" data-i18n-mode="title"><span class="np-kind-label"></span><span class="np-kind-caret" aria-hidden="true">${CHEVRON_ICON}</span></button><span class="np-tree-tools"><button type="button" data-action="new-item" data-i18n="newItem" data-i18n-mode="title" aria-haspopup="menu">${PLUS_ICON}</button><button type="button" class="np-danger" data-action="delete" data-i18n="clearUnpinned" data-i18n-mode="title">${dshIcon('trash-outline')}</button><button type="button" class="np-tools-toggle" data-action="toggle-tools" data-i18n="expandTools" data-i18n-mode="title" aria-expanded="false">${CHEVRON_ICON}</button></span></div><div class="np-nodes" data-root="true"></div><div class="np-mp-zone"><input class="np-mp-input" type="text" inputmode="url" autocomplete="off" spellcheck="false" data-i18n="importMp" data-i18n-attr="placeholder"><span class="np-mp-hint" data-state="idle" aria-hidden="true"></span></div><button type="button" class="np-tools-toggle" data-action="toggle-tools" data-i18n="expandTools" data-i18n-mode="title" aria-expanded="false">${CHEVRON_ICON}</button><div class="np-tree-foot"><button type="button" data-action="settings" data-i18n="settings" data-i18n-mode="label">${SETTINGS_ICON}<span data-i18n="settings"></span></button><button type="button" data-action="close" data-i18n="close" data-i18n-mode="label">${CLOSE_ICON}<span data-i18n="close"></span></button></div></aside>
       <div class="np-editor" data-themefit="true">
@@ -862,7 +906,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     db: /** @type {IDBDatabase | null} */ (null),
     nodes: /** @type {any[]} */ ([]),
     settings: defaults,
-    ui: { id: 'ui', open: false, tabs: /** @type {string[]} */ ([]), currentId: /** @type {string | null} */ (null), entryX: null, entryY: null, panelX: null, panelY: null, kindFilter: /** @type {string | null} */ (null) },
+    ui: { id: 'ui', open: false, tabs: /** @type {string[]} */ ([]), currentId: /** @type {string | null} */ (null), entryX: null, entryY: null, panelX: null, panelY: null, kindFilter: /** @type {string | null} */ (null), wordWrap: true },
     view: defaults.defaultView,
     slash: null,
     slashIndex: 0,
@@ -1283,6 +1327,52 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     setTimeout(() => URL.revokeObjectURL(url), 5000)
     setSync('exported', name)
     console.warn('[notepad] 仅浏览器下载可用')
+  }
+
+  /** P1-5：文档级 … 菜单——复制路径/相对路径、自动换行、导出。 */
+  async function writeClipboard(value) {
+    try { await navigator.clipboard.writeText(value); return true } catch { /* fall through */ }
+    try {
+      const area = document.createElement('textarea')
+      area.value = value
+      area.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0'
+      document.body.appendChild(area)
+      area.select()
+      const ok = document.execCommand('copy')
+      area.remove()
+      return ok
+    } catch { return false }
+  }
+
+  async function copyPath(relative) {
+    const file = current()
+    if (!file) return
+    const value = relative
+      ? pathOf(file.id).replace(/^\//, '')
+      : `${workspaceTitle(file.workspaceId)}${pathOf(file.id)}`
+    if (await writeClipboard(value)) setSync('copied', value)
+  }
+
+  function openMoreMenu(anchor) {
+    const copy = text()
+    const file = current()
+    if (!file) return
+    closeMenu?.()
+    const wrapOn = state.ui.wordWrap !== false
+    const items = [
+      { id: 'copy-path', label: copy.fxMenuPath ?? '复制路径', run: () => void copyPath(false) },
+      { id: 'copy-rel', label: copy.fxMenuRelPath ?? '复制相对路径', run: () => void copyPath(true) },
+      { id: 'wrap', label: `${copy.fxMenuWrap ?? '自动换行'}${wrapOn ? ' ✓' : ''}`, run: () => { state.ui.wordWrap = !wrapOn; applyWrap(); void persistUi() } },
+      { id: 'export', label: copy.fxMenuExport ?? '导出', run: () => void exportFile() },
+    ]
+    const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), width: 190, theme: resolvedTheme(), z: NP_PORTAL_Z, items })
+    closeMenu = () => raw.close()
+  }
+
+  /** P1-5：自动换行开关的视觉落点（源编辑 + 高亮镜像同步）。 */
+  function applyWrap() {
+    const editor = panel.querySelector('.np-editor')
+    if (editor) editor.dataset.wrap = state.ui.wordWrap === false ? 'off' : 'on'
   }
 
   function clamp(value, min, max) {
@@ -1751,6 +1841,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     activeDialog?.setTheme?.(theme)
     panel.style.setProperty('--np-editor-font-size', `${state.settings.editorFontSizePx}px`)
     applyCopy()
+    applyWrap()
     const tree = must(panel, '.np-tree')
     const treeCollapsed = state.ui.treeOpen === false
     tree.dataset.collapsed = String(treeCollapsed)
@@ -1903,7 +1994,10 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     closeDialog = closeSelf
     dialogOpen = true
     const rect = panel.getBoundingClientRect()
-    const cap = Math.min(520, Math.round(rect.height * 0.8))
+    /* fx 卡（spec.viewport）需要比浮窗更大的编辑面：居中于视口，不被
+       422px 高的 notepad 窗口切掉 composer；其余卡片仍贴浮窗 region。 */
+    const viewport = spec.viewport === true
+    const cap = viewport ? Math.min(700, Math.round(window.innerHeight * 0.82)) : Math.min(520, Math.round(rect.height * 0.8))
     handle = openNanoDialog({
       copy: text(),
       title: spec.title,
@@ -1912,8 +2006,8 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       danger: spec.danger === true,
       footer: spec.footer?.(closeSelf),
       maxHeight: cap + 24,
-      width: Math.round(rect.width * 0.6),
-      region: rect,
+      width: viewport ? Math.min(680, Math.round(window.innerWidth * 0.7)) : Math.round(rect.width * 0.6),
+      region: viewport ? undefined : rect,
       /* The card portals to document.body: name our scheme so a light notepad
          inside a dark shell still paints a light card, and raise it over both
          the shell's modal band and our own 1200 layer. */
@@ -2074,16 +2168,30 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     const modelOpts = (async () => {
       try { const m = await window.__nanoNotepad.fx.models(); return Array.isArray(m) ? m : [] } catch { return [] }
     })()
-    /* 运行面板 */
+    /* 运行面板（P0 composer）：空态 + 一张输入卡 + 弹出选择器。 */
     const runPanel = document.createElement('div')
+    runPanel.className = 'np-fx-run'
     runPanel.innerHTML = `
-        <label class="np-fx-lab">${escapeHtml(copy.fxPrompt ?? '提示语料')}</label>
-        <select class="np-fx-prompt">${promptNodes.length === 0 ? `<option value="">${escapeHtml(copy.fxPromptEmpty ?? '（无 prompt 语料，直接手输）')}</option>` : promptNodes.map(n => `<option value="${n.id}">${escapeHtml(n.name)}</option>`).join('')}</select>
-        <label class="np-fx-lab">${escapeHtml(copy.fxModel ?? '模型')}</label>
-        <select class="np-fx-model"><option value="">${escapeHtml(copy.fxModelLoading ?? '载入中…')}</option></select>
-        <label class="np-fx-lab">${escapeHtml(copy.fxInput ?? '任务')}</label>
-        <textarea class="np-fx-input" rows="3" placeholder="${escapeHtml(copy.fxInputPh ?? '要 fx 做什么——可触发 note_* 工具写 draft/knowledge')}"></textarea>
-        <div class="np-fx-out"></div>
+        <div class="np-fx-empty">
+          <div class="np-fx-empty-icon" aria-hidden="true">✦</div>
+          <div class="np-fx-empty-title">${escapeHtml(copy.fxEmptyTitle ?? '开始一次 fx 运行')}</div>
+          <p class="np-fx-empty-desc">${escapeHtml(copy.fxEmptyDesc ?? '读语料、写 draft/knowledge——一次完成。')}</p>
+          <div class="np-fx-suggests"></div>
+        </div>
+        <div class="np-fx-composer">
+          <div class="np-fx-chips" hidden></div>
+          <textarea class="np-fx-input" rows="3" placeholder="${escapeHtml(copy.fxInputPh ?? '要 fx 做什么——可触发 note_* 工具写 draft/knowledge')}"></textarea>
+          <div class="np-fx-bar">
+            <button type="button" class="np-fx-chip np-fx-doc" data-on="true"><span class="np-fx-chip-ico" aria-hidden="true">▣</span><span class="np-fx-doc-name"></span></button>
+            <button type="button" class="np-fx-chip np-fx-promptbtn"><span class="np-fx-chip-ico" aria-hidden="true">/</span><span>${escapeHtml(copy.fxPromptPick ?? '提示语料')}</span></button>
+            <span class="np-fx-toolbadge" title="${escapeHtml(copy.fxToolsBadgeHint ?? '本轮可用 note_* 工具')}">note_*</span>
+            <span class="np-fx-grow"></span>
+            <select class="np-fx-model" title="${escapeHtml(copy.fxModel ?? '模型')}"><option value="">${escapeHtml(copy.fxModelLoading ?? '载入中…')}</option></select>
+            <button type="button" class="np-fx-send" title="${escapeHtml(copy.fxRunBtn ?? '运行')}" aria-label="${escapeHtml(copy.fxRunBtn ?? '运行')}">→</button>
+          </div>
+          <div class="np-fx-pop" hidden></div>
+        </div>
+        <div class="np-fx-out" hidden></div>
         <ul class="np-fx-tools"></ul>
         <div class="np-fx-foot" hidden><span>${escapeHtml(copy.fxWrote ?? '已写产物')}</span> <span class="np-fx-links"></span></div>`
     /* 管线面板（L4：pipeline_defs 列表 + 新建 + 运行） */
@@ -2113,16 +2221,158 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     dialog({
       title: copy.fxTitle ?? 'fx 管线',
       body,
+      viewport: true,
+      /* fx 卡没有「确认/取消」语义：发送在 composer 内，关闭用右上角 X。 */
+      footer: () => React.createElement(React.Fragment),
       setup: (el, closeSelf) => {
         const card = el.querySelector('.np-fx-card')
         card.appendChild(tabs.el); card.appendChild(runPanel); card.appendChild(pipePanel); card.appendChild(histPanel)
-        const promptSel = runPanel.querySelector('.np-fx-prompt')
         const modelSel = runPanel.querySelector('.np-fx-model')
         const input = runPanel.querySelector('.np-fx-input')
         const out = runPanel.querySelector('.np-fx-out')
         const tools = runPanel.querySelector('.np-fx-tools')
         const foot = runPanel.querySelector('.np-fx-foot')
         const links = runPanel.querySelector('.np-fx-links')
+        const empty = runPanel.querySelector('.np-fx-empty')
+        const suggests = runPanel.querySelector('.np-fx-suggests')
+        const chipsRow = runPanel.querySelector('.np-fx-chips')
+        const docChip = runPanel.querySelector('.np-fx-doc')
+        const docName = runPanel.querySelector('.np-fx-doc-name')
+        const promptBtn = runPanel.querySelector('.np-fx-promptbtn')
+        const pop = runPanel.querySelector('.np-fx-pop')
+        const send = runPanel.querySelector('.np-fx-send')
+        /* P0 composer 状态：提示语料 / @ 引用 / 当前文档开关 / 运行中。 */
+        let promptId = null
+        const refs = []
+        let popMode = null
+        let popItems = []
+        let popIndex = 0
+        let popQuery = ''
+        let popToken = null
+        let docOn = true
+        let busy = false
+        let touched = false
+        const INLINE_LIMIT = 8000
+        const kindLabel = k => copy.kinds?.[k] ?? k
+        const cleanName = name => String(name ?? '').replace(/\.(prompt|note|kb|memory)\.md$/i, '').replace(/\.md$/i, '')
+        const currentNode = () => state.nodes.find(n => n.id === state.ui.currentId) ?? null
+        const paintDocChip = () => {
+          const node = currentNode()
+          docChip.dataset.on = String(docOn && !!node)
+          docChip.disabled = !node
+          docName.textContent = node ? cleanName(node.name) : (copy.fxDocMissing ?? '未打开文档')
+          docChip.title = copy.fxDocChipHint ?? '把当前文档作为本次运行的输入'
+        }
+        const syncChips = () => {
+          const pnode = promptId ? state.nodes.find(n => n.id === promptId) : null
+          if (!pnode && promptId) promptId = null
+          const items = []
+          if (pnode) items.push(`<span class="np-fx-tag"><span>${escapeHtml((copy.fxPromptTag ?? '提示') + '：' + cleanName(pnode.name))}</span><button type="button" class="np-fx-tag-x" data-fx-remove="prompt" aria-label="${escapeHtml(copy.fxRemove ?? '移除')}">×</button></span>`)
+          refs.forEach((ref, index) => items.push(`<span class="np-fx-tag"><span>${escapeHtml(kindLabel(ref.cat) + '：' + cleanName(ref.name))}</span><button type="button" class="np-fx-tag-x" data-fx-remove="ref:${index}" aria-label="${escapeHtml(copy.fxRemove ?? '移除')}">×</button></span>`))
+          chipsRow.hidden = items.length === 0
+          chipsRow.innerHTML = items.join('')
+        }
+        chipsRow.addEventListener('click', event => {
+          const btn = event.target.closest?.('[data-fx-remove]')
+          if (!btn) return
+          const key = btn.dataset.fxRemove
+          if (key === 'prompt') promptId = null
+          else if (key.startsWith('ref:')) refs.splice(Number(key.slice(4)), 1)
+          syncChips(); updateEmpty(); input.focus()
+        })
+        const updateEmpty = () => {
+          empty.hidden = touched || busy || String(input.value ?? '').trim() !== '' || !!promptId || refs.length > 0
+          send.disabled = busy || (!String(input.value ?? '').trim() && !promptId && refs.length === 0)
+        }
+        const promptNodesNow = () => state.nodes.filter(n => n.kind === 'file' && n.cat === 'prompt')
+        const paintSuggests = () => {
+          const prompts = promptNodesNow()
+          const items = prompts.length
+            ? prompts.slice(0, 4).map(n => ({ id: n.id, label: cleanName(n.name) }))
+            : [
+                { id: null, label: copy.fxSuggestSummary ?? '总结当前文档' },
+                { id: null, label: copy.fxSuggestTranslate ?? '中译英' },
+                { id: null, label: copy.fxSuggestJson ?? '结构化转录' },
+              ]
+          suggests.innerHTML = items.map((item, index) => `<button type="button" class="np-fx-suggest" data-suggest="${index}">${escapeHtml(item.label)}</button>`).join('')
+        }
+        suggests.addEventListener('click', event => {
+          const btn = event.target.closest?.('[data-suggest]')
+          if (!btn) return
+          const prompts = promptNodesNow()
+          if (prompts.length) {
+            const pick = prompts[Number(btn.dataset.suggest)]
+            if (pick) { promptId = pick.id; syncChips() }
+          } else {
+            input.value = btn.textContent ?? ''
+          }
+          updateEmpty(); input.focus()
+        })
+        const popMatches = () => {
+          if (popMode === 'prompt') {
+            return promptNodesNow().filter(n => cleanName(n.name).toLowerCase().includes(popQuery)).slice(0, 12)
+              .map(n => ({ id: n.id, label: cleanName(n.name), sub: copy.fxPromptTag ?? '提示', cat: 'prompt', name: n.name }))
+          }
+          return state.nodes.filter(n => n.kind === 'file' && n.cat && cleanName(n.name).toLowerCase().includes(popQuery)).slice(0, 18)
+            .map(n => ({ id: n.id, label: cleanName(n.name), sub: kindLabel(n.cat), cat: n.cat, name: n.name }))
+        }
+        const paintPop = () => {
+          const items = popMatches()
+          popItems = items
+          popIndex = Math.min(popIndex, Math.max(0, items.length - 1))
+          pop.hidden = false
+          pop.innerHTML = items.length
+            ? items.map((item, index) => `<button type="button" class="np-fx-popitem" data-pop="${index}" data-active="${index === popIndex}"><span>${escapeHtml(item.label)}</span><span class="np-fx-pop-sub">${escapeHtml(item.sub)}</span></button>`).join('')
+            : `<div class="np-fx-pop-empty">${escapeHtml(popMode === 'prompt' ? (copy.fxNoPrompt ?? '没有提示语料') : (copy.fxNoRef ?? '没有匹配语料'))}</div>`
+          pop.querySelector('[data-active="true"]')?.scrollIntoView({ block: 'nearest' })
+        }
+        const hidePop = () => { popMode = null; pop.hidden = true; popItems = [] }
+        const choosePop = index => {
+          const item = popItems[index]
+          if (!item) return
+          if (popMode === 'prompt') promptId = item.id
+          else if (!refs.some(r => r.id === item.id)) refs.push({ id: item.id, name: item.name, cat: item.cat })
+          /* 清掉输入框里的 /query 或 @query 触发串。 */
+          if (popToken) {
+            const before = input.value.slice(0, popToken.start)
+            const after = input.value.slice(input.selectionStart)
+            input.value = before + after
+            input.setSelectionRange(before.length, before.length)
+          }
+          hidePop(); syncChips(); updateEmpty(); input.focus()
+        }
+        const refreshPop = () => {
+          const before = String(input.value ?? '').slice(0, input.selectionStart)
+          const at = /(?:^|\s)@([^\s@]*)$/.exec(before)
+          const slash = /(?:^|\s)\/([^\s/]*)$/.exec(before)
+          const hit = at ? { mode: 'ref', match: at } : slash ? { mode: 'prompt', match: slash } : null
+          if (!hit) { hidePop(); return }
+          popToken = { start: input.selectionStart - hit.match[1].length - 1 }
+          popMode = hit.mode
+          popQuery = hit.match[1].toLowerCase()
+          popIndex = 0
+          paintPop()
+        }
+        pop.addEventListener('mousedown', event => event.preventDefault())
+        pop.addEventListener('click', event => {
+          const btn = event.target.closest?.('[data-pop]')
+          if (btn) choosePop(Number(btn.dataset.pop))
+        })
+        promptBtn.addEventListener('click', () => { popMode = 'prompt'; popQuery = ''; popIndex = 0; popToken = null; paintPop() })
+        input.addEventListener('input', () => { updateEmpty(); refreshPop() })
+        input.addEventListener('keydown', event => {
+          if (pop.hidden) {
+            if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); void run().catch(showError) }
+            return
+          }
+          if (event.key === 'ArrowDown') { event.preventDefault(); popIndex = Math.min(popItems.length - 1, popIndex + 1); paintPop(); return }
+          if (event.key === 'ArrowUp') { event.preventDefault(); popIndex = Math.max(0, popIndex - 1); paintPop(); return }
+          if (event.key === 'Escape') { event.preventDefault(); hidePop(); return }
+          if (event.key === 'Enter' && !event.isComposing) { event.preventDefault(); choosePop(popIndex) }
+        })
+        docChip.addEventListener('click', () => { docOn = !docOn; paintDocChip(); updateEmpty() })
+        send.addEventListener('click', () => void run().catch(showError))
+        paintDocChip(); paintSuggests(); syncChips(); updateEmpty()
         const refreshHist = async () => {
           try {
             const sq = await window.__nanoNotepad.fx.sqlite()
@@ -2136,21 +2386,49 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
         }
         void refreshHist()
         void modelOpts.then(models => {
-          /* /fx/models 返 {key,provider,model,contextWindow}——value 用 key（provider~model）。 */
+          /* /fx/models 返 {key,provider,model,contextWindow}——value 用 key（provider~model）。
+             P1-6：选项显示 contextWindow，帮助按上下文选型。 */
+          const label = m => {
+            const key = m.key ?? m.id ?? m.name ?? m
+            const ctx = Number(m.contextWindow) > 0 ? ` · ${Math.round(Number(m.contextWindow) / 1000)}k` : ''
+            return `${key}${ctx}`
+          }
           modelSel.innerHTML = models.length
-            ? models.map(m => `<option value="${escapeHtml(m.key ?? m.id ?? m.name ?? m)}">${escapeHtml(m.key ?? m.id ?? m.name ?? m)}</option>`).join('')
+            ? models.map(m => `<option value="${escapeHtml(m.key ?? m.id ?? m.name ?? m)}">${escapeHtml(label(m))}</option>`).join('')
             : `<option value="">${escapeHtml(copy.fxModelNone ?? '（无模型）')}</option>`
         })
         let lastDet = null
         const run = async () => {
+          if (busy) return
           lastDet = null
           const before = new Set(state.nodes.filter(n => n.cat === 'draft' || n.cat === 'knowledge').map(n => n.id))
           const openId = state.ui.currentId
           const openDraft = state.nodes.find(n => n.id === openId)?.draft
-          const pid = promptSel?.value
-          const pnode = pid ? state.nodes.find(n => n.id === pid) : null
+          const pnode = promptId ? state.nodes.find(n => n.id === promptId) : null
+          const node = currentNode()
           const task = String(input.value ?? '').trim()
-          const text = [pnode ? `按此提示执行：\n${pnode.draft ?? ''}\n` : '', `任务：${task || '总结当前内容'}`].join('\n')
+          if (!task && !pnode) { input.focus(); return }
+          touched = true
+          busy = true
+          send.disabled = true
+          send.textContent = '…'
+          updateEmpty()
+          const parts = []
+          if (pnode) parts.push(`按此提示执行：\n${pnode.draft ?? ''}\n`)
+          /* P0-2：当前文档作为输入。短文档直接内联，长文档只给 id 让模型
+             note_read（不把整篇塞进 prompt，避免撑爆上下文）。 */
+          if (node && docOn) {
+            /* 编辑器里可能还有未落库的输入：当前文件优先读 textarea 实时值。 */
+            const live = node.id === state.ui.currentId ? write().value : ''
+            const content = String(live || node.draft || '')
+            if (content.length > INLINE_LIMIT) parts.push(`输入：当前文档「${node.name}」id=${node.id} 内容较长（${content.length} 字符），请先用 note_read 工具读取。\n`)
+            else parts.push(`输入（当前文档：${node.name}）：\n${content}\n`)
+          }
+          /* P0-3：@ 引用只给名称+id，由模型 note_read——不新增工具面。 */
+          if (refs.length) parts.push(`参考语料（请先用 note_read 工具读取）：\n${refs.map(r => `- ${r.cat}/${r.name}（id: ${r.id}）`).join('\n')}\n`)
+          parts.push(`任务：${task || '总结当前内容'}`)
+          const text = parts.join('\n')
+          out.hidden = false
           out.textContent = ''
           tools.innerHTML = ''
           foot.hidden = true
@@ -2192,7 +2470,15 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
             }
             if (changedOpen) { openFile(changedOpen.id); markChanged(changedOpen.id) }
             void refreshHist()
-          } catch (e) { out.textContent = `ERR: ${e?.message ?? e}` }
+          } catch (e) {
+            out.hidden = false
+            out.textContent = `ERR: ${e?.message ?? e}`
+          } finally {
+            busy = false
+            send.disabled = false
+            send.textContent = '→'
+            updateEmpty()
+          }
         }
         /* 管线面板：列表 + 新建 + 运行（L4 定义面 + L3 执行面）。 */
         const pipeList = pipePanel.querySelector('.np-fx-pipe-list')
@@ -2234,9 +2520,6 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
             } catch (e) { pipeOut.textContent = `ERR: ${e?.message ?? e}` }
           }
         }
-        const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'np-fx-go'; btn.textContent = copy.fxRunBtn ?? '运行'
-        btn.onclick = () => void run().catch(showError)
-        runPanel.appendChild(btn)
       },
     })
   }
@@ -3202,6 +3485,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       void renderBody()
     }
     if (action === 'export-file') void exportFile()
+    if (action === 'more-menu') { openMoreMenu(target); return }
     if (action === 'history') void openHistory().catch(showError)
     if (action === 'dismiss-error' || action === 'keep-mine') must(panel, '.np-error').hidden = true
     if (action === 'load-remote' && state.db) {

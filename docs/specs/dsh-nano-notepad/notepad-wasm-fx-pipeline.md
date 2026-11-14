@@ -870,3 +870,18 @@ runPipeline(spec, ctx) → {runId, stages:[{name,ok,result}], status}
 **改进方法**：① `claim.acquire`/`release`（s3 网络 RTT ~5.5s）与 `beginRun`+stage 并行发出，fencing 语义保留（写产物前 acquired、release 前 `await claimReady`）——管线固定开销 **3444→467ms**；② `runWithTools` 加 `opts.skipRefresh`，编排层把 per-stage `_refreshNodes` 全量 IDB 扫描+树渲染挤到链尾统一一次。
 
 **多 stage 执行链（补验）**：`[run(LLM) → setCat]`——`run` step 从 `toolCalls` 提取 `note_write` 产物 id（双层 JSON `content`）→ `lastId`/`{{lastId}}` 绑定 → 下游 `setCat` 自动晋升 LLM draft→knowledge（`deepseek-v3-发布摘要.kb.md`）。`[rename→setCat]` 同过（`{{node.id}}` 绑定 + 后缀真源改名）。这即 §3.2 「管线沉淀 knowledge」的宿主确定性实现。
+
+### 13.7 P0–P1 视觉/交互优化登记（2026-11-14）
+
+**业主裁决**：吸收 Orca notepad 的交互语法，不吸收其多轮 Claude Chat / 权限模式 / 语音 / Finder 语义（见本轮 UI 分析）。fx 保持 one-shot。
+
+| 项 | 行为登记 | 合同影响 |
+|---|---|---|
+| P0-1 composer | fx 运行卡由「label+select」表单改为单卡 composer（输入区 + 底部 chip/模型/发送 + 空态 + 场景建议） | 无（纯 UI） |
+| P0-2 当前文档 | composer 左下「当前文档」chip 默认开启；运行前把当前草稿作为 `输入（当前文档：name）` 段注入；>8000 字符时改给 `id` 让模型 `note_read`（不塞爆上下文） | 无新工具面 |
+| P0-3 `/` 与 `@` | `/` 选 prompt 语料（cat=prompt）；`@` 引用任意语料节点；引用只注入「kind/name + id」，并要求模型先 `note_read`——**不新增工具、不把全文硬塞 prompt** | 产品语义，已在此登记；无公共合同扩约 |
+| P0-4 tab + | tab 条尾部 `+` 新建空白 draft（复用 `new-file`） | 无 |
+| P1-5 … 菜单 | tab 条 `⋯`：复制路径（workspace/tree path）、复制相对路径、自动换行（持久化，源编辑+镜像同步）、导出 | 无 |
+| P1-6 模型 chip | 模型选项显示 `key · Nk`（`contextWindow` 可用时；当前 `/fx/models` 返回 null，故仅显示 key） | 无 |
+
+**ego 验证**：`/`、`@` 弹出选择器与 chips；当前文档注入（短文档内联 / 9000 字符走 note_read）；`+` 新建 tab；`⋯` 菜单四项 + 自动换行 `scrollWidth 75870→555`；真实 LLM `html-summarize` 一次跑通（`note_search`/`note_kind_get`/`note_write`，10.5s，产物 `DeepSeek-V3 发布-结构化摘要.kb.md`）。

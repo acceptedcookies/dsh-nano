@@ -69,9 +69,6 @@ function trajCls(local) {
 const STYLE = `
 ${NANO_STYLES}
 
-/* The host views.module root defines --dsh-trajectory-toolbar-height for the
-   trajectory view; our view has no such ancestor, so the token is declared
-   here to let the borrowed fV0t5q_* rules resolve to the same 32px. */
 .dnt-root{position:relative;height:100%;min-height:0;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-base);flex-direction:column;display:flex;font:var(--dsw-font-xxs-12);--dsh-trajectory-toolbar-height:32px}
 /* statusbar uses the host's own TrajectoryToolbar module classes — resolved
    at runtime from document.styleSheets by trajCls(), never re-authored here.

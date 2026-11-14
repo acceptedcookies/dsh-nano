@@ -143,19 +143,42 @@ export function apply(ctx) {
     }
   }, 'dsh-nano-terminal.orphanSweep')
 
-  // —— composer 左右边距修复 + 悬浮滚动条 ——
+  // —— 原生样式修正：隐藏滚动条 + 撤销槽位 + 悬浮替身 ——
   // [data-conversation-scroll] 的原生滚动条不是悬浮层：布局上它在右侧独占
-  // 一条 lane，把内容列（含 composer）整体向左挤，导致可视边距不对称，且
-  // 在终端视图里挤占窗格两侧的边距。这里由本插件统一把宿主会话滚动区的
-  // 原生滚动条隐藏（scrollbar-width:none + ::-webkit-scrollbar width:0 —
-  // 不占布局、彻底零边距），并注入一条绝对定位的悬浮 thumb 跟随
-  // scrollTop/scrollHeight 驱动，视觉保留但零边距。
+  // 一条 lane，把内容列（含 composer）整体向左挤，导致可视边距不对称；宿
+  // 主 `.wSkVaW_scrollBody` 另带 `scrollbar-gutter:stable` + `margin-right:2px`
+  // 为这条滚动条预留槽位，三视图右侧各有约 7px 空白。本插件统一把原生滚
+  // 动条隐藏（零占位），并撤销其槽位/外边距，再注入绝对定位的悬浮 thumb
+  // 替代视觉滚动指示——不占布局、零边距、全视图生效。
   ctx.effect(() => {
     const style = document.createElement('style')
     style.dataset.dntComposerMarginFix = '1'
+    // —— 修正①：隐藏原生滚动条（零占位）——
+    //   宿主 `[data-conversation-scroll]` 的原生滚动条在右侧独占一条 ~5px
+    //   lane，把会话内容列整体向左挤；轨迹/对话/终端三个视图都有这条右
+    //   侧空隙（宿主既有问题，非本插件造成）。scrollbar-width:none +
+    //   ::-webkit-scrollbar{width:0} 让滚动条不再占布局——配合修正②腾出
+    //   的槽位，内容列恢复满宽；视觉滚动条由修正③的 .dnt-floatbar 悬浮
+    //   显示，不占布局。
+    // —— 修正②：撤销为原生滚动条预留的槽位与外边距——
+    //   宿主 `.wSkVaW_scrollBody` 自带 `scrollbar-gutter:stable`（不管滚
+    //   动条可不可见都预留一条左槽）与 `margin-right:2px`。原生滚动条被
+    //   修正①关掉后，这两条规则只剩副作用：右 5px gutter + 2px margin
+    //   合计约 7px 空白。`scrollbar-gutter:auto` + `margin-right:0` 把
+    //   它们复位，空隙消除；该选择器与属性命中宿主会话 scrollBody，在
+    //   对话/轨迹/终端三视图统一生效。
+    // —— 修正③：悬浮滚动条替身（.dnt-floatbar）——
+    //   原生滚动条隐藏后视觉仍要可拖可看的进度指示，这里注入一条 5px
+    //   悬浮 thumb，absolute 定位、pointer-events:none，跟随 scrollTop/
+    //   scrollHeight/ResizeObserver 更新高度与位移，滚动时提亮、900ms 停
+    //   止后淡出——不占任何布局，是「悬浮滚动条」的实现。
     style.textContent = [
+      // 修正①：隐藏原生滚动条（零占位）
       '[data-conversation-scroll]{scrollbar-width:none}',
       '[data-conversation-scroll]::-webkit-scrollbar{width:0;height:0}',
+      // 修正②：撤销原生滚动条的槽位与外边距（宿主 wSkVaW_scrollBody）
+      '.wSkVaW_scrollBody{scrollbar-gutter:auto;margin-right:0}',
+      // 修正③：悬浮滚动条替身
       '.dnt-floatbar{position:absolute;top:0;right:2px;z-index:20;width:5px;border-radius:3px;background:var(--dsw-alias-label-quaternary);opacity:.45;pointer-events:none;transition:opacity .18s}',
       '.dnt-floatbar[data-on="true"]{opacity:.85}',
     ].join('\n')

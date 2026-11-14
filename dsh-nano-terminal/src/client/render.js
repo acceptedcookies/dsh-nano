@@ -45,6 +45,9 @@ export function buildPalette(host) {
     cursor: css('--dsw-alias-brand-primary', css('--dsw-alias-link', base[4])),
     border: css('--dsw-alias-border-l3', '#30363d'),
     paneBg: bg,
+    // 选区色：宿主交互选中态（hover/bg-selected）的 30% 叠层，文字仍走 base
+    // 层原色——比反色更不打扰正在输出的程序画面（xterm selection 同款思路）
+    selBg: `color-mix(in srgb, ${css('--dsw-alias-brand-primary', css('--dsw-alias-link', 'rgb(74,144,226)'))} 30%, transparent)`,
   }
 }
 
@@ -100,18 +103,23 @@ export class TermCanvas {
     this.padY = pad.padY ?? 0
     this.dpr = Math.max(1, Math.round(window.devicePixelRatio || 1))
     this.base = document.createElement('canvas')
+    this.sel = document.createElement('canvas') // 选区高亮层：独立于光标 overlay，后者每帧 clearRect 会抹掉选区
     this.overlay = document.createElement('canvas')
-    for (const c of [this.base, this.overlay]) {
+    for (const c of [this.base, this.sel, this.overlay]) {
       c.style.position = 'absolute'
       c.style.left = `${this.padX}px`
       c.style.top = `${this.padY}px`
       c.style.pointerEvents = 'none'
     }
+    this.sel.style.zIndex = '1'
     this.overlay.style.zIndex = '2'
     container.appendChild(this.base)
+    container.appendChild(this.sel)
     container.appendChild(this.overlay)
     this.bctx = this.base.getContext('2d', { alpha: false })
+    this.sctx = this.sel.getContext('2d')
     this.octx = this.overlay.getContext('2d')
+    this.viewStart = 0
     this.cols = 0
     this.rows = 0
     this.measure()
@@ -125,6 +133,7 @@ export class TermCanvas {
   attach(container) {
     this.container = container
     if (this.base.parentNode !== container) container.appendChild(this.base)
+    if (this.sel.parentNode !== container) container.appendChild(this.sel)
     if (this.overlay.parentNode !== container) container.appendChild(this.overlay)
     if (this._getModes) this.startBlink(this._getModes)
   }
@@ -134,6 +143,7 @@ export class TermCanvas {
     if (this._blinkTimer) clearInterval(this._blinkTimer)
     this._blinkTimer = null
     this.base.remove()
+    this.sel.remove()
     this.overlay.remove()
   }
 
@@ -167,13 +177,14 @@ export class TermCanvas {
       || this.base.width !== Math.round(w * dpr) || this.base.height !== Math.round(h * dpr)) {
       this.cols = cols
       this.rows = rows
-      for (const c of [this.base, this.overlay]) {
+      for (const c of [this.base, this.sel, this.overlay]) {
         c.width = Math.round(w * dpr)
         c.height = Math.round(h * dpr)
         c.style.width = `${w}px`
         c.style.height = `${h}px`
       }
       this.bctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+      this.sctx.setTransform(dpr, 0, 0, dpr, 0, 0)
       this.octx.setTransform(dpr, 0, 0, dpr, 0, 0)
       this.bctx.fillStyle = this.palette.bg
       this.bctx.fillRect(0, 0, this.cols * this.charW, this.rows * this.charH)
@@ -206,6 +217,7 @@ export class TermCanvas {
   clearAll() {
     this.bctx.fillStyle = this.palette.bg
     this.bctx.fillRect(0, 0, this.cols * this.charW, this.rows * this.charH)
+    this.sctx.clearRect(0, 0, this.cols * this.charW, this.rows * this.charH)
     this.octx.clearRect(0, 0, this.cols * this.charW, this.rows * this.charH)
   }
 
@@ -215,6 +227,7 @@ export class TermCanvas {
   paint(packed, scrollbackActive) {
     const ctx = this.bctx
     const pal = this.palette
+    this.viewStart = packed.viewStart ?? 0
     const cursorRow = packed.cursorAbsY - packed.viewStart
     this.cursorRow = cursorRow
     this.cursorX = packed.cursorX
@@ -315,6 +328,28 @@ export class TermCanvas {
       ctx.fillRect(x, y, this.charW, this.charH)
     }
     ctx.restore()
+  }
+
+  /**
+   * 鼠标选区高亮：a/f = {line,col} 绝对行索引（buffer 全局），viewStart 为
+   * 当前视口首行的绝对索引。null/缺参 = 清空选区层。仿 tmux 行式选区：
+   * 首行从 aCol 到行尾，末行到 fCol，中间整行；上行选择自动归一化。
+   * 宿主规范用品牌主色做半透明覆盖，不反色文字（文字仍由 base 层承载）。
+   */
+  paintSelection(a, f, viewStart = this.viewStart) {
+    const ctx = this.sctx
+    ctx.clearRect(0, 0, this.cols * this.charW, this.rows * this.charH)
+    if (!a || !f) return
+    let [top, bot] = (a.line < f.line || (a.line === f.line && a.col <= f.col)) ? [a, f] : [f, a]
+    const selBg = this.palette.selBg ?? 'rgba(96,128,255,.30)'
+    ctx.fillStyle = selBg
+    for (let line = Math.max(top.line, viewStart); line <= Math.min(bot.line, viewStart + this.rows - 1); line++) {
+      const c0 = line === top.line ? top.col : 0
+      const c1 = line === bot.line ? bot.col : this.cols - 1
+      if (c1 < c0) continue
+      const y = this.cellY(line - viewStart)
+      ctx.fillRect(this.cellX(c0), y, (c1 - c0 + 1) * this.charW, this.charH)
+    }
   }
 
   startBlink(getModes) {

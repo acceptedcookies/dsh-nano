@@ -831,6 +831,8 @@ function TermPane({ paneId, laneSpec, sessionId, session, focused, onFocus, onCl
       if (packed) {
         canvas.paint(packed)
         lastViewStart = packed.viewStart ?? 0
+        // 选区层跟随视口滚动重新定位（滚动/输出移位时高亮不漂移）
+        canvas.paintSelection(rec.sel?.a, rec.sel?.f, lastViewStart)
         const total = term.totalLines()
         const key = `${total}/${lastViewStart}/${canvas.rows}`
         if (key !== lastScrollKey) {
@@ -903,6 +905,18 @@ function TermPane({ paneId, laneSpec, sessionId, session, focused, onFocus, onCl
 
     // input
     const keydown = (ev) => {
+      // ⌘C 复制当前选区（选区存在时不该落到程序手里）
+      if (ev.metaKey && ev.key === 'c' && rec.sel) {
+        ev.preventDefault(); ev.stopPropagation()
+        copySel(false)
+        return
+      }
+      // Esc 清选区/退出 copy-mode 残留高亮；无选区时放行给程序（vim 需要）
+      if (ev.key === 'Escape' && rec.sel && !ev.ctrlKey && !ev.altKey && !ev.metaKey) {
+        ev.preventDefault(); ev.stopPropagation()
+        setSel(null)
+        return
+      }
       // ctrl+alt prefix family (herdr least-conflicting set): copy-mode,
       // split, next-pane — intercepted before the program sees them.
       if (ev.ctrlKey && ev.altKey) {
@@ -950,14 +964,80 @@ function TermPane({ paneId, laneSpec, sessionId, session, focused, onFocus, onCl
     const cellAt = (ev) => {
       const rect = host.getBoundingClientRect()
       return {
-        x: Math.floor((ev.clientX - rect.left - canvas.padX) / canvas.charW),
-        y: Math.floor((ev.clientY - rect.top - canvas.padY) / canvas.charH),
+        x: Math.max(0, Math.min(term.cols - 1, Math.floor((ev.clientX - rect.left - canvas.padX) / canvas.charW))),
+        y: Math.max(0, Math.min(canvas.rows - 1, Math.floor((ev.clientY - rect.top - canvas.padY) / canvas.charH))),
       }
+    }
+    // —— 鼠标选区（tmux/xterm 语义）——
+    // 普通终端：左键拖拽 = 选中文本；Shift 永远强制本地选取（程序接管鼠标时
+    // 也保证能复制）。松开自动复制（tmux copy-on-select），高亮保留到 Esc/
+    // 下一次点击。行索引用 buffer 绝对行（viewStart + 屏幕行），滚动后仍对。
+    const mouseCaptured = () => !!(term.modes() & (MODES.MOUSE_CLICK | MODES.MOUSE_BTN_MOTION | MODES.MOUSE_ANY_MOTION))
+    const absCell = (ev) => { const { x, y } = cellAt(ev); return { line: lastViewStart + y, col: x } }
+    const setSel = (a, f) => {
+      rec.sel = a && f ? { a, f } : null
+      if (rec.sel) term.selectRange?.(a.line, a.col, f.line, f.col)
+      else term.selectClear?.()
+      canvas.paintSelection(rec.sel?.a, rec.sel?.f, lastViewStart)
+    }
+    const selText = () => {
+      const s = rec.sel
+      if (!s) return ''
+      // 起点/终点按 (line,col) 元组归一化——同行反向拖选也能拿到正序区间
+      const [a, f] = (s.a.line < s.f.line || (s.a.line === s.f.line && s.a.col <= s.f.col)) ? [s.a, s.f] : [s.f, s.a]
+      return term.selectText?.(a.line, f.line, a.col, f.col) ?? ''
+    }
+    const copySel = (quiet) => {
+      const text = selText()
+      if (!text) return
+      navigator.clipboard?.writeText(text).then(() => {
+        if (!quiet) applyStatus((s) => ({ ...s, hint: zh ? `已复制 ${text.length} 字符` : `copied ${text.length} chars` }))
+      }).catch(() => {
+        applyStatus((s) => ({ ...s, hint: zh ? '复制失败（剪贴板不可用）' : 'copy failed (clipboard unavailable)' }))
+      })
+    }
+    const drag = { on: false, moved: false, detach: null }
+    const endDrag = (ev) => {
+      drag.detach?.(); drag.detach = null
+      if (!drag.on) return
+      drag.on = false
+      if (!drag.moved || !rec.sel) return
+      // tmux 风格：拖选松开即复制；高亮保留作视觉反馈，Esc/再点清除
+      copySel(false)
+      ev?.preventDefault()
+    }
+    const dragMove = (ev) => {
+      if (!drag.on) return
+      const f = absCell(ev)
+      if (!drag.moved) {
+        drag.moved = true
+        ev.preventDefault() // 阻止默认拖拽，避免把 pane 当文本拖走
+      }
+      setSel(rec.sel?.a ?? f, f)
+    }
+    const beginDrag = () => {
+      const mm = (e) => dragMove(e)
+      const mu = (e) => { window.removeEventListener('mousemove', mm); window.removeEventListener('mouseup', mu); endDrag(e) }
+      window.addEventListener('mousemove', mm)
+      window.addEventListener('mouseup', mu)
+      drag.detach = () => { window.removeEventListener('mousemove', mm); window.removeEventListener('mouseup', mu) }
     }
     const mousedown = (ev) => {
       onFocus()
       box.focus()
       const { x, y } = cellAt(ev)
+      const captured = mouseCaptured()
+      // 本地选取优先：未被程序接管鼠标时左键始终可选取；被接管时用 Shift 绕过
+      if (ev.button === 0 && (!captured || ev.shiftKey)) {
+        ev.preventDefault()
+        drag.on = true
+        drag.moved = false
+        beginDrag()
+        const a = absCell(ev)
+        if (ev.shiftKey && rec.sel) setSel(rec.sel.a, a) // shift+click 延伸选区
+        else setSel(a, a)
+        return
+      }
       const data = encodeMouse(term.modes(), { btn: ev.button, x, y, release: false, shift: ev.shiftKey, alt: ev.altKey, ctrl: ev.ctrlKey })
       if (data) { lane.write(data); ev.preventDefault() }
     }
@@ -967,7 +1047,7 @@ function TermPane({ paneId, laneSpec, sessionId, session, focused, onFocus, onCl
       if (data) lane.write(data)
     }
     const mousemove = (ev) => {
-      if (!(ev.buttons & 1)) return
+      if (!(ev.buttons & 1) || drag.on) return
       const { x, y } = cellAt(ev)
       const data = encodeMouse(term.modes(), { btn: 32, x, y, release: false, shift: ev.shiftKey, alt: ev.altKey, ctrl: ev.ctrlKey })
       if (data) lane.write(data)
@@ -1052,6 +1132,9 @@ function TermPane({ paneId, laneSpec, sessionId, session, focused, onFocus, onCl
       rec.hooks.applyStatus = undefined
       stateRef.current.copyMode?.()
       stateRef.current.copyMode = null
+      // 拖拽中的 window 级监听与选区层随挂载清理；rec.sel 保留在 session
+      // 记录上（split remount 恢复高亮是刻意的）
+      drag.detach?.()
       // unmount ≠ close: a split-remount reattaches; closeLeaf decides life.
       canvas.detach()
     }
@@ -1112,6 +1195,7 @@ function TermPane({ paneId, laneSpec, sessionId, session, focused, onFocus, onCl
           width={190}
           actions={[
             { id: 'paste', label: zh ? '粘贴' : 'Paste', icon: glyph('paste'), run: async () => { const rec = paneSessions.current.get(paneId); const t = await navigator.clipboard?.readText?.().catch(() => '') ; if (t) rec?.lane?.write(encodePaste(t, rec.term.modes())) } },
+            { id: 'copy', label: zh ? '复制选区' : 'Copy selection', icon: glyph('copy'), run: () => { const rec = paneSessions.current.get(paneId); const s = rec?.sel; if (s) { const [a, f] = (s.a.line < s.f.line || (s.a.line === s.f.line && s.a.col <= s.f.col)) ? [s.a, s.f] : [s.f, s.a]; const t = rec.term.selectText?.(a.line, f.line, a.col, f.col); if (t) navigator.clipboard?.writeText(t).catch(() => {}) } } },
             { id: 'copymode', label: zh ? '复制模式 (⌃⌥C)' : 'Copy mode (⌃⌥C)', icon: glyph('copy'), run: () => boxRef.current?.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', ctrlKey: true, altKey: true, bubbles: true })) },
             { id: 'splith', label: zh ? '向右分屏' : 'Split right', icon: glyph('splitRight'), run: () => onSplit('h') },
             { id: 'splitv', label: zh ? '向下分屏' : 'Split down', icon: glyph('splitDown'), run: () => onSplit('v') },

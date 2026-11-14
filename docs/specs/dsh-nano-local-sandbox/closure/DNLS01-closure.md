@@ -52,7 +52,7 @@
 
 ## 5. 证据口径
 
-`T18` 已在 `https://dsh-dev.local` 上 23/23 通过。计划正文仍是 `reviewed`：三路审查当时的结论是不通过，之后的修复还没有再审一遍。现场 [DNT] 仍因缺少 `schema/dnt-mcp.openrpc.json` 没能在 `~/.dsh-dev` 里激活。因此 close-type 还不是 `full-close`。
+`T18` 已在 `https://dsh-dev.local` 上 23/23 通过。计划正文仍是 `reviewed`：三路审查当时的结论是不通过，之后的修复还没有再审一遍。现场 [DNT] 曾因安装副本缺少 `schema/dnt-mcp.openrpc.json` 不能加载。该文件已补到 pnpm 实际加载的目录。最近一次宿主重启的错误日志没有再出现这条 `failed to import`。三路审查还没有复审，因此 close-type 仍不是 `full-close`。
 
 ## 修订历史
 

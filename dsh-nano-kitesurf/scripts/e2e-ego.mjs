@@ -46,11 +46,10 @@ async function setNav(page, target) {
     if (st === target) return st
     // Wait out any in-flight transition before clicking again.
     await new Promise((r) => setTimeout(r, 450))
-    const pos = await page.evaluate((want) => {
-      const sel = want === 'open' ? '[data-nks-nav-fab]' : '[data-nks-nav-close]'
-      const r = document.querySelector(sel)?.getBoundingClientRect()
+    const pos = await page.evaluate(() => {
+      const r = document.querySelector('[data-nks-nav-toggle]')?.getBoundingClientRect()
       return r ? { x: r.x + r.width / 2, y: r.y + r.height / 2 } : null
-    }, target)
+    })
     if (pos) await page.mouse.click(pos.x, pos.y)
     for (let i = 0; i < 6; i += 1) {
       await new Promise((r) => setTimeout(r, 120))
@@ -103,14 +102,14 @@ async function main() {
   await new Promise((r) => setTimeout(r, 6000))
   record('pane-open', await page.evaluate(() => Boolean(document.querySelector('[data-nano-kitesurf]'))))
 
-  // 2b. vertical tab rail (DSH slide artwork): fab opens it, rail slides in
-  // from the left edge, panel-left glyph mirrored on the collapse button.
+  // 2b. vertical tab drawer (DSH slide artwork): a toolbar toggle opens it,
+  // the drawer slides in from the left edge and holds only the tab list.
   const navProbe = await page.evaluate(() => ({
-    fab: Boolean(document.querySelector('[data-nks-nav-fab]')),
+    toggle: Boolean(document.querySelector('[data-nks-nav-toggle]')),
     state: document.querySelector('[data-nks-nav]')?.dataset?.nksNavState,
-    legacyToolbar: Boolean(document.querySelector('.nks-toolbar')),
+    toolbar: Boolean(document.querySelector('.nks-toolbar')),
   }))
-  record('nav-fab', navProbe.fab && navProbe.state === 'closed' && !navProbe.legacyToolbar, JSON.stringify(navProbe))
+  record('nav-fab', navProbe.toggle && navProbe.state === 'closed' && navProbe.toolbar, JSON.stringify(navProbe))
   // Slide artwork proof — sample the rail's left edge (rect.x) during REAL
   // button interactions. getComputedStyle().transform can report the OLD
   // matrix mid-flight in this Chromium build, so rect.x is the ground truth;
@@ -166,9 +165,9 @@ async function main() {
   // Plant a real pane-op + navigate span for perf-spans. The tab click only
   // navigates when it isn't the current page, so drive the address form —
   // onSubmitAddress wraps run(() => navigate(url)) either way. Submitted
-  // through evaluate (not pointer coords) because the rail is still sliding.
+  // through evaluate (not pointer coords) since the toolbar reflows.
   await page.evaluate(() => {
-    const form = document.querySelector('.nks-nav-form')
+    const form = document.querySelector('.nks-toolbar')
     const input = form?.querySelector('input')
     if (input && !input.value.trim()) input.value = 'https://example.com/'
     form?.requestSubmit?.()
@@ -192,7 +191,7 @@ async function main() {
   const versions = []
   const sample = async () => versions.push(await page.evaluate(() => document.querySelector('iframe.nks-dom')?.dataset?.nksVersion || null))
   await sample()
-  // The annotate button lives inside the rail, whose layout reads lag one
+  // The annotate button's layout reads can lag one
   // frame in this build (proven: elementFromPoint can return the left panel
   // for in-pane coords). elementFromPoint is therefore not ground truth here
   // — report it, but drive the toggle through the same onPointerDown path the

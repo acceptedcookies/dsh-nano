@@ -65,25 +65,20 @@ try {
 const STYLE = `
 .nks-root{position:relative;height:100%;min-height:0;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-base);flex-direction:column;flex:auto;display:flex;font:var(--dsw-font-xxs-12);container-type:inline-size}
 /*
- * Left-slide vertical tab rail — DSH sidebar artwork: the rail stays mounted
+ * Left-slide vertical tab drawer — DSH sidebar artwork: the rail stays mounted
  * off the left edge (translateX), sliding in/out on one gesture while
  * visibility flips after the slide on close and before it on open. The way
- * back in is a floating expand button with the panel-left glyph; the rail's
- * own collapse button uses the same glyph mirrored (one affordance, both
- * directions) — ExpandButton.tsx / SidebarRight.module.css in dsh artwork.
+ * Expand/collapse lives in the toolbar (panel glyph, mirrored while open —
+ * one affordance, both directions). The drawer holds only the tab list;
+ * browser controls stay on the toolbar — ExpandButton.tsx / SidebarRight.module.css in dsh artwork.
  */
-.nks-nav-fab{position:absolute;z-index:4;top:30px;left:8px;width:28px;height:28px;color:var(--dsw-alias-label-secondary);border:0;border-radius:var(--dsw-radius-sm);background:var(--dsw-alias-bg-layer-1);box-shadow:var(--dsw-elevation-soft,.0 1px 3px rgba(0,0,0,.24));cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0}
-.nks-nav-fab:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}
-.nks-nav-fab svg{width:15px;height:15px}
-.nks-nav{position:absolute;z-index:4;top:30px;left:8px;bottom:34px;width:252px;display:flex;flex-direction:column;min-height:0;box-sizing:border-box;background:var(--dsw-alias-bg-layer-2);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-lg);box-shadow:var(--dsw-elevation-prominent,0 4px 18px rgba(0,0,0,.3));transform:translateX(calc(-100% - 12px));visibility:hidden;transition:transform var(--ds-transition-duration-slow,.32s) var(--ds-ease-in-out,ease),visibility 0s linear var(--ds-transition-duration-slow,.32s)}
+.nks-toolbar{position:relative;z-index:3;margin-top:26px;box-sizing:border-box;border-bottom:.5px solid var(--dsw-alias-border-l3);flex:none;align-items:center;gap:4px;height:38px;padding:5px 6px;display:flex}
+.nks-nav{position:absolute;z-index:4;top:72px;left:8px;bottom:34px;width:216px;display:flex;flex-direction:column;min-height:0;box-sizing:border-box;background:var(--dsw-alias-bg-layer-2);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-lg);box-shadow:var(--dsw-elevation-prominent,0 4px 18px rgba(0,0,0,.3));transform:translateX(calc(-100% - 12px));visibility:hidden;transition:transform var(--ds-transition-duration-slow,.32s) var(--ds-ease-in-out,ease),visibility 0s linear var(--ds-transition-duration-slow,.32s)}
 .nks-nav[data-nks-nav-state="open"]{transform:none;visibility:visible;transition:transform var(--ds-transition-duration-slow,.32s) var(--ds-ease-in-out,ease)}
 @starting-style{.nks-nav[data-nks-nav-state="open"]{transform:translateX(calc(-100% - 12px))}}
 @media (prefers-reduced-motion:reduce){.nks-nav,.nks-nav[data-nks-nav-state="open"]{transition:none}}
-.nks-nav-head{display:flex;flex:none;align-items:center;gap:6px;height:34px;padding:0 10px;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11);border-bottom:.5px solid var(--dsw-alias-border-l3)}
+.nks-nav-head{display:flex;flex:none;align-items:center;gap:6px;height:30px;padding:0 10px;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11);border-bottom:.5px solid var(--dsw-alias-border-l3)}
 .nks-nav-head b{flex:auto;font-weight:600;color:var(--dsw-alias-label-secondary)}
-.nks-nav-head .nks-tool svg{width:15px;height:15px;transform:scaleX(-1)}
-.nks-nav-bar{display:flex;flex:none;align-items:center;gap:2px;padding:5px 8px;border-bottom:.5px solid var(--dsw-alias-border-l3)}
-.nks-nav-form{flex:none;display:block;padding:0 8px 6px;border-bottom:.5px solid var(--dsw-alias-border-l3)}
 .nks-nav-tabs{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:4px}
 .nks-nav-tab{position:relative;display:flex;align-items:center;gap:7px;width:100%;box-sizing:border-box;min-height:30px;padding:4px 26px 4px 8px;border:0;border-radius:var(--dsw-radius-sm);background:transparent;color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxs-12);text-align:left;cursor:pointer}
 .nks-nav-tab:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
@@ -121,7 +116,7 @@ const STYLE = `
 .nks-box[data-kind="hover"]{border-style:dashed;opacity:.75}
 .nks-pin-dot{position:absolute;width:18px;height:18px;margin-left:-9px;margin-top:-9px;color:#fff;font:var(--dsw-font-xxxs-11);line-height:18px;text-align:center;background:var(--dsw-alias-link,#2f6fed);box-shadow:0 0 0 1.5px rgba(0,0,0,.45),0 1px 4px rgba(0,0,0,.4);border-radius:50%;pointer-events:auto;cursor:pointer;user-select:none}
 .nks-pin-dot:hover{background:var(--dsw-alias-fill-error,#d5455c);transform:scale(1.15)}
-.nks-hint{position:absolute;z-index:4;top:30px;right:8px;max-width:70%;padding:4px 8px;color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxxs-11);display:flex;align-items:center;gap:6px;background:var(--dsw-alias-bg-layer-2);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-md);box-shadow:var(--dsw-elevation-soft,0 1px 3px rgba(0,0,0,.24))}
+.nks-hint{position:relative;z-index:2;flex:none;padding:3px 8px 4px;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11);display:flex;align-items:center;gap:6px;border-bottom:.5px solid var(--dsw-alias-border-l3)}
 .nks-hint-text{flex:auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .nks-start-btn{height:30px;padding:0 14px;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-12);background:var(--dsw-alias-bg-layer-1);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-md);cursor:pointer}
 .nks-start-btn:hover{background:var(--dsw-alias-interactive-bg-hover)}
@@ -218,8 +213,8 @@ const STYLE = `
    overflow affordance is out of scope for CSS, so they shrink and the
    placeholder switches to a short form. */
 @container (max-width: 400px){
-  .nks-nav{width:216px}
-  .nks-nav-bar{gap:0}
+  .nks-nav{width:200px}
+  .nks-toolbar{gap:2px;padding:5px 4px}
   .nks-tool{width:26px;height:26px}
   .nks-address{padding:0 4px 0 7px;font-size:11px}
   .nks-address::placeholder{color:transparent}
@@ -1161,7 +1156,7 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
       panel: primitives.IconPanelLeftOutlineRegular || primitives.IconEditOutlineRegular,
       globe: primitives.IconGlobeOutlineRegular || primitives.IconLinkOutlineRegular,
     }[name]
-    return h(Icon, { width: 16, height: 16, 'aria-hidden': true })
+    return h(Icon, { width: 16, height: 16, 'aria-hidden': true, style: navOpen && name === 'panel' ? { transform: 'scaleX(-1)' } : undefined })
   }
 
   /**
@@ -1597,60 +1592,58 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
     'data-nano-kitesurf': '1',
     'data-nks-workspace': '1',
   },
-    !navOpen ? h('button', {
-      type: 'button',
-      className: 'nks-nav-fab',
-      'data-nks-nav-fab': '1',
-      'aria-label': copy.navOpen,
-      title: copy.navOpenTitle,
-      onClick: () => setNavOpen(true),
-    }, glyph('panel')) : null,
+    h('form', { className: 'nks-toolbar', onSubmit: onSubmitAddress },
+      h('button', {
+        type: 'button',
+        className: 'nks-tool',
+        'data-nks-nav-toggle': '1',
+        'aria-pressed': navOpen ? 'true' : 'false',
+        'aria-label': navOpen ? copy.navClose : copy.navOpen,
+        title: navOpen ? copy.navCloseTitle : copy.navOpenTitle,
+        onClick: () => setNavOpen((value) => !value),
+      }, glyph('panel', navOpen)),
+      h('button', { type: 'button', className: 'nks-tool', 'data-nks-back': '1', 'aria-label': copy.back, title: copy.back, disabled: busy || !hasPage, onClick: () => run(() => historyNav(-1)) }, glyph('back')),
+      h('button', { type: 'button', className: 'nks-tool', 'data-nks-forward': '1', 'aria-label': copy.forward, title: copy.forward, disabled: busy || !hasPage, onClick: () => run(() => historyNav(1)) }, glyph('forward')),
+      h('button', { type: 'button', className: 'nks-tool', 'data-nks-reload': '1', 'aria-label': copy.refresh, title: copy.refresh, disabled: busy, onClick: onRefresh }, glyph('refresh')),
+      h('span', { className: 'nks-address-box', 'data-dirty': draftUrl ? 'true' : 'false' },
+        h('input', {
+          className: 'nks-address',
+          'aria-label': copy.addressAria,
+          placeholder: copy.addressPlaceholder,
+          inputMode: 'url',
+          spellCheck: false,
+          autoComplete: 'off',
+          value: draftUrl,
+          onChange: (event) => setDraftUrl(event.target.value),
+          onFocus: () => { addressFocusedRef.current = true },
+          onBlur: () => { addressFocusedRef.current = false },
+        }),
+        h('button', { type: 'submit', className: 'nks-tool nks-go', 'aria-label': copy.go, disabled: busy }, glyph('go'))),
+      h('button', { type: 'button', className: 'nks-tool', 'data-nks-history-open': '1', 'aria-label': copy.history, title: copy.history, disabled: busy, onClick: openHistory }, glyph('history')),
+      h('button', {
+        type: 'button',
+        className: 'nks-tool',
+        'data-nks-annotate': '1',
+        'aria-pressed': annotate ? 'true' : 'false',
+        'aria-label': copy.annotate,
+        title: copy.annotateTitle,
+        onPointerDown: (event) => {
+          event.preventDefault(); event.stopPropagation()
+          setAnnotate((value) => {
+            if (value) { setHover(null); setDraftBox(null); setDrag(null) }
+            return !value
+          })
+        },
+      }, glyph('annotate')),
+      h('button', { type: 'button', className: 'nks-tool', 'data-nks-settings': '1', 'aria-label': copy.settings, title: copy.settings, onClick: openSettings }, glyph('settings'))),
     h('nav', {
       className: 'nks-nav',
       'data-nks-nav': '1',
       'data-nks-nav-state': navOpen ? 'open' : 'closed',
-      'aria-label': copy.navOpen,
+      'aria-label': copy.navTabs,
     },
       h('div', { className: 'nks-nav-head' },
-        h('b', null, copy.navTabs),
-        h('button', { type: 'button', className: 'nks-tool', 'data-nks-nav-close': '1', 'aria-label': copy.navClose, title: copy.navCloseTitle, onClick: () => setNavOpen(false) }, glyph('panel'))),
-      h('div', { className: 'nks-nav-bar' },
-        h('button', { type: 'button', className: 'nks-tool', 'data-nks-back': '1', 'aria-label': copy.back, title: copy.back, disabled: busy || !hasPage, onClick: () => run(() => historyNav(-1)) }, glyph('back')),
-        h('button', { type: 'button', className: 'nks-tool', 'data-nks-forward': '1', 'aria-label': copy.forward, title: copy.forward, disabled: busy || !hasPage, onClick: () => run(() => historyNav(1)) }, glyph('forward')),
-        h('button', { type: 'button', className: 'nks-tool', 'data-nks-reload': '1', 'aria-label': copy.refresh, title: copy.refresh, disabled: busy, onClick: onRefresh }, glyph('refresh')),
-        h('span', { style: { flex: 'auto' } }),
-        h('button', {
-          type: 'button',
-          className: 'nks-tool',
-          'data-nks-annotate': '1',
-          'aria-pressed': annotate ? 'true' : 'false',
-          'aria-label': copy.annotate,
-          title: copy.annotateTitle,
-          onPointerDown: (event) => {
-            event.preventDefault(); event.stopPropagation()
-            setAnnotate((value) => {
-              if (value) { setHover(null); setDraftBox(null); setDrag(null) }
-              return !value
-            })
-          },
-        }, glyph('annotate')),
-        h('button', { type: 'button', className: 'nks-tool', 'data-nks-history-open': '1', 'aria-label': copy.history, title: copy.history, disabled: busy, onClick: openHistory }, glyph('history')),
-        h('button', { type: 'button', className: 'nks-tool', 'data-nks-settings': '1', 'aria-label': copy.settings, title: copy.settings, onClick: openSettings }, glyph('settings'))),
-      h('form', { className: 'nks-nav-form', onSubmit: onSubmitAddress },
-        h('span', { className: 'nks-address-box', 'data-dirty': draftUrl ? 'true' : 'false' },
-          h('input', {
-            className: 'nks-address',
-            'aria-label': copy.addressAria,
-            placeholder: copy.addressPlaceholder,
-            inputMode: 'url',
-            spellCheck: false,
-            autoComplete: 'off',
-            value: draftUrl,
-            onChange: (event) => setDraftUrl(event.target.value),
-            onFocus: () => { addressFocusedRef.current = true },
-            onBlur: () => { addressFocusedRef.current = false },
-          }),
-          h('button', { type: 'submit', className: 'nks-tool nks-go', 'aria-label': copy.go, disabled: busy }, glyph('go')))),
+        h('b', null, copy.navTabs)),
       h('div', { className: 'nks-nav-tabs', role: 'list', 'data-nks-nav-tabs': '1' },
         navTabs.length ? navTabs.map((row) => h('button', {
           type: 'button',

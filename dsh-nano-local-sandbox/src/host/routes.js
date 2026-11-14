@@ -54,8 +54,42 @@ function storageExpression(opts) {
 function interactExpression(body) {
   const action = String(body.action || '').toLowerCase()
   const selector = String(body.selector || body.target || '')
-  const arg = JSON.stringify({ action, selector, text: body.text ?? body.value ?? '', key: body.key || '' })
-  return `(()=>{const a=${arg};const el=document.querySelector(a.selector);if(!el)return{ok:false,errorId:'kitesurf.interact.miss',error:'no element'};el.click();return{ok:true,action:a.action,tag:el.tagName.toLowerCase()}})()`
+  const arg = JSON.stringify({
+    action,
+    selector,
+    text: body.text ?? body.value ?? '',
+    key: body.key || '',
+    option: body.option ?? '',
+  })
+  return `(()=>{
+    const a=${arg};
+    const el=document.querySelector(a.selector);
+    if(!el)return{ok:false,errorId:'kitesurf.interact.miss',error:'no element matches '+a.selector};
+    try{el.scrollIntoView({block:'center',inline:'center'})}catch{}
+    const r=el.getBoundingClientRect();
+    const cx=r.left+r.width/2,cy=r.top+r.height/2;
+    const top=document.elementFromPoint(cx,cy);
+    const occluded=top&&top!==el&&!el.contains(top)&&!top.contains(el);
+    if(!(r.width>0&&r.height>0))return{ok:false,errorId:'kitesurf.interact.invisible',error:'element has zero box'};
+    if(occluded)return{ok:false,errorId:'kitesurf.interact.occluded',error:'covered by '+(top.id?'#'+top.id:top.tagName)};
+    const fire=(type,init)=>{el.dispatchEvent(new (type.startsWith('key')?KeyboardEvent:type==='input'?InputEvent:MouseEvent)(type,Object.assign({bubbles:true,cancelable:true},init)))};
+    const nativeSet=(o,v)=>{const d=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(o),'value');if(d&&d.set)d.set.call(o,v);else o.value=v};
+    switch(a.action){
+      case 'click': ['pointerdown','mousedown','pointerup','mouseup','click'].forEach(t=>fire(t,{clientX:cx,clientY:cy})); break;
+      case 'dblclick': ['pointerdown','mousedown','pointerup','mouseup','click','dblclick'].forEach(t=>fire(t,{clientX:cx,clientY:cy})); break;
+      case 'focus': el.focus(); break;
+      case 'blur': el.blur(); break;
+      case 'hover': ['pointerover','mouseover','pointermove','mousemove'].forEach(t=>fire(t,{clientX:cx,clientY:cy})); break;
+      case 'fill': el.focus(); nativeSet(el,a.text); fire('input',{data:a.text,inputType:'insertText'}); fire('change'); break;
+      case 'type': el.focus(); for(const ch of String(a.text)){fire('keydown',{key:ch});nativeSet(el,(el.value||'')+ch);fire('input',{data:ch,inputType:'insertText'});fire('keyup',{key:ch})} fire('change'); break;
+      case 'press': ['keydown','keypress','keyup'].forEach(t=>fire(t,{key:a.key||'Enter'})); break;
+      case 'select': if(el.tagName!=='SELECT')return{ok:false,errorId:'kitesurf.interact.type',error:'select only works on select'}; {const o=[...el.options].find(o=>o.value===a.option||o.text===a.option); if(!o)return{ok:false,errorId:'kitesurf.interact.option',error:'no option '+a.option}; nativeSet(el,o.value); fire('change');} break;
+      case 'check': if(el.type!=='checkbox'&&el.type!=='radio')return{ok:false,errorId:'kitesurf.interact.type',error:'check only works on checkbox/radio'}; el.checked=true; fire('click'); fire('change'); break;
+      case 'uncheck': if(el.type!=='checkbox')return{ok:false,errorId:'kitesurf.interact.type',error:'uncheck only works on checkbox'}; el.checked=false; fire('click'); fire('change'); break;
+      default: return{ok:false,errorId:'kitesurf.interact.action',error:'unsupported action '+a.action};
+    }
+    return{ok:true,action:a.action,selector:a.selector,tag:el.tagName.toLowerCase()};
+  })()`
 }
 
 function stateSaveExpression() {

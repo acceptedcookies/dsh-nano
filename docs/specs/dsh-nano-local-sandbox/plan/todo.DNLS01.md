@@ -109,26 +109,26 @@ P0-01 ──▶ P1-01 ──▶ P1-02 ──▶ P1-03
   - **完成判据**：有 confine 时裸 spawn 为 0；无 sandbox 时抛错且 spawn 仍为 0
   - **验证映射**：`DNLS01-T06` · **依赖**：`P2-02`
   - **执行状态**：`complete` · **执行时间**：`2026-11-14T05:20:00Z` · **证据 / 备注**：`node --test test/build-confine.test.mjs` exit 0
-- [ ] `P3-01` — per-instance registry；ensure 幂等；adopt/degrade 不串实例
+- [x] `P3-01` — per-instance registry；ensure 幂等；adopt/degrade 不串实例
   - **落点 / 对象**：`src/host/instance-registry.js`
   - **完成判据**：同指纹两次 ensure，id 相同且 create 次数为 1；无模块级 phase
   - **验证映射**：`DNLS01-T07` · **依赖**：`P2-03`
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
-- [ ] `P3-02` — policyFingerprint 四元组；不等则 policy-stale 且不 stop
+  - **执行状态**：`complete` · **执行时间**：`2026-11-14T05:22:00Z` · **证据 / 备注**：`node --test test/instance.test.mjs` exit 0
+- [x] `P3-02` — policyFingerprint 四元组；不等则 policy-stale 且不 stop
   - **落点 / 对象**：`src/host/policy-adapter.js`
   - **完成判据**：改 mode 与改 workspaceRoot 的行为符合 T08；无热改挂载
   - **验证映射**：`DNLS01-T08` · **依赖**：`P3-01`
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
-- [ ] `P3-03` — 每实例一份 history，无第二写者
+  - **执行状态**：`complete` · **执行时间**：`2026-11-14T05:22:00Z` · **证据 / 备注**：`node --test test/policy-stale.test.mjs` exit 0
+- [x] `P3-03` — 每实例一份 history，无第二写者
   - **落点 / 对象**：`src/host/state-service.js`
   - **完成判据**：磁盘记录数等于写入次数；无 `history.jsonl`
   - **验证映射**：`DNLS01-T09` · **依赖**：`P3-02`
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
-- [ ] `P3-04` — maxInstances 与 idle sweep；超时只从 profile 读
-  - **落点 / 对象**：`src/host/lifecycle.js`、夹具 profile
+  - **执行状态**：`complete` · **执行时间**：`2026-11-14T05:22:00Z` · **证据 / 备注**：`node --test test/history-single.test.mjs` exit 0
+- [x] `P3-04` — maxInstances 与 idle sweep；超时只从 profile 读
+  - **落点 / 对象**：`src/host/instance-registry.js` 的 sweep、夹具 profile
   - **完成判据**：生产 YAML 仍含 `1800000`；夹具 50ms；达上限不分配新 id
   - **验证映射**：`DNLS01-T10` · **依赖**：`P3-03`
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
+  - **执行状态**：`complete` · **执行时间**：`2026-11-14T05:22:00Z` · **证据 / 备注**：`node --test test/lifecycle.spike.test.mjs` exit 0
 - [ ] `P4-01` — 恰好 20 个 `sandbox_*` 工具
   - **落点 / 对象**：`src/host/mcp-sandbox.js`
   - **完成判据**：tools/list 集合差为空；诊断不依赖宿主 POST
@@ -230,10 +230,10 @@ P0-01 ──▶ P1-01 ──▶ P1-02 ──▶ P1-03
 | DNLS01-T04 | profile 拒绝 | `test/profile-reject.test.mjs` | exit 0 | exit 0 | `2026-11-14T05:20:00Z` | pass |
 | DNLS01-T05 | profile 加载 | `test/profile-load.test.mjs` | exit 0 | exit 0 | `2026-11-14T05:20:00Z` | pass |
 | DNLS01-T06 | confine | `test/build-confine.test.mjs` | exit 0 | exit 0 | `2026-11-14T05:20:00Z` | pass |
-| DNLS01-T07 | ensure 幂等 | `test/instance.test.mjs` | exit 0 | - | - | pending |
-| DNLS01-T08 | policy-stale | `test/policy-stale.test.mjs` | exit 0 | - | - | pending |
-| DNLS01-T09 | 单份 history | `test/history-single.test.mjs` | exit 0 | - | - | pending |
-| DNLS01-T10 | 回收与上限 | `test/lifecycle.spike.test.mjs` | exit 0 | - | - | pending |
+| DNLS01-T07 | ensure 幂等 | `test/instance.test.mjs` | exit 0 | exit 0 | `2026-11-14T05:22:00Z` | pass |
+| DNLS01-T08 | policy-stale | `test/policy-stale.test.mjs` | exit 0 | exit 0 | `2026-11-14T05:22:00Z` | pass |
+| DNLS01-T09 | 单份 history | `test/history-single.test.mjs` | exit 0 | exit 0 | `2026-11-14T05:22:00Z` | pass |
+| DNLS01-T10 | 回收与上限 | `test/lifecycle.spike.test.mjs` | exit 0 | exit 0 | `2026-11-14T05:22:00Z` | pass |
 | DNLS01-T11 | container 特权点 | `test/container-spawn-sites.test.mjs` | P6 只扫本包；P7 全仓 | - | - | pending |
 | DNLS01-T12 | 20 工具 | `test/mcp-tools.spike.test.mjs` | exit 0 | - | - | pending |
 | DNLS01-T13 | 路由 fail-closed | `test/routes.test.mjs` | exit 0 | - | - | pending |
@@ -256,8 +256,8 @@ P0-01 ──▶ P1-01 ──▶ P1-02 ──▶ P1-03
 
 ## 5. 当前状态与交接
 
-- **当前节点 / 已完成**：`P3-01` / `P0-01` 至 `P2-03`
-- **下一动作**：Phase 3 实例、policy、history、回收
+- **当前节点 / 已完成**：`P4-01` / `P0-01` 至 `P3-04`
+- **下一动作**：Phase 4 四个 L2 驱动
 - **当前阻塞**：无
 - **待 owner / 外部决定**：无。真实容器 e2e 若本机无 CLI，T18 保持未观察并在 closure 写明
 - **最终交接目标**：合并回 `main` 后按 AGENTS.md 删除本 worktree（收口时）

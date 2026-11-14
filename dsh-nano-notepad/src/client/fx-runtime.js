@@ -66,8 +66,8 @@ export async function runOneShot(promptText, opts = {}) {
     for await (const e of turn) {
       onEvent?.(e)
       if (e.type === 'text_delta') text += e.delta
-      else if (e.type === 'tool_start' || e.type === 'tool_call' || e.type === 'tool_call_update' || e.type === 'fx_host_tool_call') {
-        toolCalls.push({ raw: e.type, name: e.name ?? e.toolName ?? null, args: e.input ?? e.args ?? null, result: e.result ?? e.output ?? null })
+      else if (e.type === 'tool_start' || e.type === 'tool_call' || e.type === 'tool_call_update' || e.type === 'fx_host_tool_call' || e.type === 'tool_end') {
+        toolCalls.push({ raw: e.type, name: e.name ?? e.toolName ?? null, args: e.input ?? e.args ?? null, result: e.content ?? e.output ?? e.result ?? null, isError: e.isError })
       }
     }
     const res = await turn.result

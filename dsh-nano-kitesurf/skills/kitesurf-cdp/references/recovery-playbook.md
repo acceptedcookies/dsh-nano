@@ -13,6 +13,24 @@
 
 宿主日志：`~/Library/Logs/dsh-dev-web.err.log`（dsh-dev.local）；桥健康 `GET http://127.0.0.1:<mcpPort>/health`。
 
+## `/selftest` 检查 → `fixCall` 对照（每项失败自带修复命令）
+
+`GET /nano-kitesurf/selftest` 返回 `{ok,total,failed,checks[]}`；失败的 `check` 带 `fixCall`（具体路由/命令）。对照：
+
+| check | `fixCall` |
+|---|---|
+| `plugin` | `npm run build` → 同步 → `pnpm install --force` → 重启宿主 |
+| `engine` | `POST /recover {}`；若 `kitesurf.kite.checkout` 先配 `config.checkout` |
+| `engine-identity` | `POST /kite {"action":"configure","httpBase":"…:<enginePort>"}` |
+| `container` | `container list --all` → `POST /kite {"action":"resume"}` |
+| `ports-published` | `GET /ports` 看漂移 → `POST /recover {}` |
+| `ports-loopback` | `POST /recover {}` 重新发布到 127.0.0.1（公网暴露=安全风险） |
+| `mcp-bridge` | `GET :<mcpPort>/health` 验 → `POST /recover {}` |
+| `targets` | `POST /open {"url":…}` 让引擎开页 |
+| `dom` | `/diagnostics→hints` → `POST /open` 加载 |
+| `routes` | buildId 陈旧 → 重建+重链+重启 |
+| `phase` | `/status` 看 `kite.phase`，按阶段 start/suspend/resume |
+
 ## 端口韧性（本机最常见坑）
 
 本机 8787 常年被 Cursor 占用，引擎容器实际发布在 8798/8799。插件行为：

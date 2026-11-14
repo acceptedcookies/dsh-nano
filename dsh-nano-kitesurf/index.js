@@ -545,10 +545,30 @@ export function apply(ctx, config) {
   let lastClientPerf = null
   let lastElements = null
   let lastDom = null
+  // P1-7: each check carries its own repair call so an agent gets "doctor"
+  // output — the exact route/command to run, not just a verdict it has to
+  // translate. FIX maps a failing check to a concrete next action.
+  const SELFTEST_FIX = {
+    plugin: 'buildId 缺失：在本包 npm run build → 同步到 profile 插件目录 → pnpm install --force → 重启宿主',
+    engine: 'POST /nano-kitesurf/recover {}（自动 suspend→resume）；若 400 kitesurf.kite.checkout 先配 config.checkout',
+    'engine-identity': 'POST /nano-kitesurf/kite {"action":"configure","httpBase":"http://127.0.0.1:<enginePort>"}（httpBase 指向了非 Kitesurf 服务）',
+    container: 'container list --all 看容器；容器缺失/停止 → POST /nano-kitesurf/kite {"action":"resume"}',
+    'ports-published': '端口漂移：GET /nano-kitesurf/ports 看 configured/effective/published → POST /nano-kitesurf/recover {} 修复端口',
+    'ports-loopback': '端口发布在公网接口——安全风险：POST /nano-kitesurf/recover {} 重新发布到 127.0.0.1',
+    'mcp-bridge': '桥不可达：GET http://127.0.0.1:<mcpPort>/health 验 → POST /nano-kitesurf/recover {}',
+    targets: '无 page target：POST /nano-kitesurf/open {"url":"https://example.com"} 让引擎开一页',
+    dom: '页面 blank/无 DOM：GET /diagnostics→hints；POST /nano-kitesurf/open 加载真实页',
+    routes: '路由表过旧（<15）说明 buildId 陈旧：npm run build → 重链 → 重启宿主',
+    phase: 'phase 与 engineAlive 不一致：GET /nano-kitesurf/status 看 kite.phase，按阶段 start/suspend/resume',
+  }
   async function runSelfTest() {
     const started = Date.now()
     const checks = []
-    const add = (name, ok, detail) => checks.push({ name, ok: ok === true, detail: String(detail ?? '').slice(0, 200) })
+    const add = (name, ok, detail) => {
+      const row = { name, ok: ok === true, detail: String(detail ?? '').slice(0, 200) }
+      if (!row.ok && SELFTEST_FIX[name]) row.fixCall = SELFTEST_FIX[name]
+      checks.push(row)
+    }
 
     add('plugin', !!buildId, buildId)
 

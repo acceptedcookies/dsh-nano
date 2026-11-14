@@ -448,6 +448,7 @@ P0 批次在真机 dsh-dev 上构建→部署→e2e 完成。三项 **P0 内嵌�
 | **P0-4** 写互斥 | ✅ | 双 MCP 连接 e2e：`A claim`→`writer:true`；`B` 写被 `kitesurf.control.busy` 拒绝（**拒非排队**）；`B release` 不偷锁；`A release` 释放；断线 `releaseAll` 兜底。锁是**粘性**的（首写/`claim` 认领，`release`/断线才放），不只串行化并发调用 |
 | **P1-5**（提前）镜像瘦身 | ✅ | `runtime/linux-prefix` 343→249MB（删非 linux-arm64 的 agent-browser 二进制） |
 | **P0-5** 元素 ref 统一语言 | ✅ | `lib/snapshot.js` a11y-lite walker → `GET /snapshot`（tree+`@N` refs）+ `GET /refs?ref=@N`；`@N` 解析进 `wait`/`pick`/`edit`；`pick` 用页内 `querySelector` identity probe 回填 `element.ref`（人点选=agent ref）；`kitesurf_snapshot` MCP 工具走 30s 推送。e2e：snapshot→refs→`wait{selector:"@1"}`→`pick`→`element.ref:"@1"` 全绿 |
+| **P1-7** `/selftest`→agent-first 自检 | ✅ | 每 check 带 `fixCall`（check→修复路由/命令对照 `SELFTEST_FIX` map，失败才附）；e2e：about:blank 时 `dom` 真失败并返回 `fixCall:'…POST /open'`，通过项无 fixCall；`recovery-playbook.md` 收录对照表 |
 | **P0-6** skill 包化分层 | ✅ | `lib/skill.js` → 目录包生成器：`skills/kitesurf-cdp/` = 54 行入口 + `references/`×8（routes/observability/mcp-bridge/element-packets/emulation/recipes/recovery-playbook/error-catalog 生成自 ERROR_CATALOG）+ `templates/`×2；注册带 `resourceBase:{kind:'directory'}`；frontmatter 注 `version`/`date`；build 断言 ROUTE_TABLE 27 路由 × 15 `kitesurf_*` 工具全被文档覆盖——**当场抓到真漂移** `/perf-report` 未记录。测试 59/59 |
 
 ### 7.2 e2e 暴露并当场修掉的真实 bug

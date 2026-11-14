@@ -42,6 +42,26 @@ export function routeSpecs(deps = {}) {
         res.end(JSON.stringify({ ok: false, errorId: 'kitesurf.shot.empty' }))
         return
       }
+      if (row.path.endsWith('/elements')) {
+        const url = new URL(req.url ?? '/', 'http://localhost')
+        try {
+          const data = await (deps.captureElements ?? (async () => {
+            const error = new Error('no engine page')
+            error.status = 502
+            error.errorId = 'kitesurf.elements.empty'
+            throw error
+          }))(deps.httpBase, {
+            selector: url.searchParams.get('selector') || '',
+            depth: Number(url.searchParams.get('depth') || 4),
+          })
+          res.statusCode = 200
+          res.end(JSON.stringify({ ok: true, ...data }))
+        } catch (error) {
+          res.statusCode = error.status || 502
+          res.end(JSON.stringify({ ok: false, errorId: error.errorId || 'kitesurf.elements.empty', error: error.message }))
+        }
+        return
+      }
       if (row.path.endsWith('/mcp')) {
         const rpc = deps.rpc ?? {}
         if (rpc.method === 'tools/list') {

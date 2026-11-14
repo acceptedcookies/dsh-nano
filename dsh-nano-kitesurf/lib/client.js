@@ -1939,7 +1939,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
  * one affordance, both directions). The drawer holds only the tab list;
  * browser controls stay on the toolbar \u2014 ExpandButton.tsx / SidebarRight.module.css in dsh artwork.
  */
-.nks-toolbar{position:relative;z-index:3;box-sizing:border-box;border-bottom:.5px solid var(--dsw-alias-border-l3);flex:none;align-items:center;gap:4px;height:38px;padding:5px 6px;display:flex}
+.nks-toolbar{position:relative;z-index:3;box-sizing:border-box;border-bottom:.5px solid var(--dsw-alias-border-l3);flex:none;align-items:center;gap:8px;height:38px;padding:5px 6px;display:flex}
 .nks-nav{position:absolute;z-index:4;top:44px;left:10px;bottom:36px;width:216px;display:flex;flex-direction:column;min-height:0;box-sizing:border-box;background:var(--dsw-alias-bg-layer-2);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-lg);box-shadow:var(--dsw-elevation-prominent,0 4px 18px rgba(0,0,0,.3));transform:translateX(calc(-100% - 12px));visibility:hidden;transition:transform var(--ds-transition-duration-slow,.32s) var(--ds-ease-in-out,ease),visibility 0s linear var(--ds-transition-duration-slow,.32s)}
 .nks-nav[data-nks-nav-state="open"]{transform:none;visibility:visible;transition:transform var(--ds-transition-duration-slow,.32s) var(--ds-ease-in-out,ease)}
 @starting-style{.nks-nav[data-nks-nav-state="open"]{transform:translateX(calc(-100% - 12px))}}
@@ -1969,6 +1969,8 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
 .nks-tool.nks-nav-toggle{width:auto;height:28px;margin-left:4px;padding:0 10px;gap:5px;box-sizing:border-box;background:var(--dsw-alias-markdown-tag,var(--dsw-alias-bg-layer-2));border:0;border-radius:var(--dsw-radius-sm);font:var(--dsw-font-xxs-12);font-size:var(--dsh-content-font-size-secondary,13px);color:var(--dsw-alias-label-primary);white-space:nowrap}
 .nks-tool.nks-nav-toggle:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}
 .nks-tool.nks-nav-toggle[aria-pressed="true"]{background:color-mix(in srgb,var(--dsw-alias-link) 14%,var(--dsw-alias-markdown-tag,var(--dsw-alias-bg-layer-2)))}
+.nks-toolbar-nav{display:flex;flex:none;align-items:center;gap:8px}
+.nks-toolbar-tail{display:flex;flex:none;align-items:center;gap:8px}
 .nks-address-box{flex:auto;min-width:0;position:relative}
 .nks-address{box-sizing:border-box;width:100%;height:28px;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-12);background:var(--dsw-alias-bg-layer-1);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-sm);padding:0 32px 0 9px}
 .nks-address::placeholder{color:var(--dsw-alias-label-tertiary)}
@@ -3490,9 +3492,15 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           title: navOpen ? copy.navCloseTitle : copy.navOpenTitle,
           onClick: () => setNavOpen((value) => !value)
         }, glyph("panel", navOpen), h("span", null, copy.navToggleLabel)),
-        h("button", { type: "button", className: "nks-tool", "data-nks-back": "1", "aria-label": copy.back, title: copy.back, disabled: busy || !hasPage, onClick: () => run(() => historyNav(-1)) }, glyph("back")),
-        h("button", { type: "button", className: "nks-tool", "data-nks-forward": "1", "aria-label": copy.forward, title: copy.forward, disabled: busy || !hasPage, onClick: () => run(() => historyNav(1)) }, glyph("forward")),
-        h("button", { type: "button", className: "nks-tool", "data-nks-reload": "1", "aria-label": copy.refresh, title: copy.refresh, disabled: busy, onClick: onRefresh }, glyph("refresh")),
+        // Navigation trio shares the host strip's 8px pitch with the
+        // trailing cluster — one rhythm across the whole toolbar.
+        h(
+          "div",
+          { className: "nks-toolbar-nav" },
+          h("button", { type: "button", className: "nks-tool", "data-nks-back": "1", "aria-label": copy.back, title: copy.back, disabled: busy || !hasPage, onClick: () => run(() => historyNav(-1)) }, glyph("back")),
+          h("button", { type: "button", className: "nks-tool", "data-nks-forward": "1", "aria-label": copy.forward, title: copy.forward, disabled: busy || !hasPage, onClick: () => run(() => historyNav(1)) }, glyph("forward")),
+          h("button", { type: "button", className: "nks-tool", "data-nks-reload": "1", "aria-label": copy.refresh, title: copy.refresh, disabled: busy, onClick: onRefresh }, glyph("refresh"))
+        ),
         h(
           "span",
           { className: "nks-address-box", "data-dirty": draftUrl ? "true" : "false" },
@@ -3514,28 +3522,35 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           }),
           h("button", { type: "submit", className: "nks-tool nks-go", "aria-label": copy.go, disabled: busy }, glyph("go"))
         ),
-        h("button", { type: "button", className: "nks-tool", "data-nks-history-open": "1", "aria-label": copy.history, title: copy.history, disabled: busy, onClick: openHistory }, glyph("history")),
-        h("button", {
-          type: "button",
-          className: "nks-tool",
-          "data-nks-annotate": "1",
-          "aria-pressed": annotate ? "true" : "false",
-          "aria-label": copy.annotate,
-          title: copy.annotateTitle,
-          onPointerDown: (event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            setAnnotate((value) => {
-              if (value) {
-                setHover(null);
-                setDraftBox(null);
-                setDrag(null);
-              }
-              return !value;
-            });
-          }
-        }, glyph("annotate")),
-        h("button", { type: "button", className: "nks-tool", "data-nks-settings": "1", "aria-label": copy.settings, title: copy.settings, onClick: openSettings }, glyph("settings"))
+        // Trailing cluster mirrors the host's three icon buttons (分栏 /
+        // 全屏 / 侧栏): same 28×28 seats at an 8px pitch, so each of ours
+        // lands under its native counterpart instead of walking 4px apart.
+        h(
+          "div",
+          { className: "nks-toolbar-tail" },
+          h("button", { type: "button", className: "nks-tool", "data-nks-history-open": "1", "aria-label": copy.history, title: copy.history, disabled: busy, onClick: openHistory }, glyph("history")),
+          h("button", {
+            type: "button",
+            className: "nks-tool",
+            "data-nks-annotate": "1",
+            "aria-pressed": annotate ? "true" : "false",
+            "aria-label": copy.annotate,
+            title: copy.annotateTitle,
+            onPointerDown: (event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              setAnnotate((value) => {
+                if (value) {
+                  setHover(null);
+                  setDraftBox(null);
+                  setDrag(null);
+                }
+                return !value;
+              });
+            }
+          }, glyph("annotate")),
+          h("button", { type: "button", className: "nks-tool", "data-nks-settings": "1", "aria-label": copy.settings, title: copy.settings, onClick: openSettings }, glyph("settings"))
+        )
       ),
       h(
         "nav",

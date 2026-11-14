@@ -114,6 +114,11 @@ const STYLE = `
 .nks-frame iframe.nks-dom{width:100%;height:100%;border:0;display:block;background:#fff}
 .nks-frame img{width:100%;height:100%;object-fit:contain;object-position:center;display:block}
 .nks-empty{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:10px;padding:24px;text-align:center;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxs-12)}
+/* Interactive error toast: shared .nano-toast chrome is pointer-events:none —
+   re-enable it on our variant and lay the text + repair button in a row. */
+.nks-toast-fix{pointer-events:auto;display:flex;align-items:center;gap:10px}
+.nks-toast-btn{background:var(--dsw-alias-fill-brand,#2f6fed);color:var(--dsw-alias-label-invert,#fff);border:0;border-radius:var(--dsw-radius-sm,6px);padding:2px 8px;font:inherit;cursor:pointer;white-space:nowrap}
+.nks-toast-btn:hover{filter:brightness(1.1)}
 .nks-empty-icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-link,#2f6fed);border:.5px solid var(--dsw-alias-border-l2)}
 .nks-empty-title{color:var(--dsw-alias-label-primary);font:var(--dsw-font-xs-13,var(--dsw-font-xxs-12));font-weight:600}
 .nks-empty-body{max-width:340px;line-height:1.55}
@@ -370,6 +375,9 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
   const [vpCustom, setVpCustom] = React.useState(false)
   const domFrameRef = React.useRef(null)
   const [toast, setToast] = React.useState(null)
+  // When the last error was an engine/recoverable failure, the toast gains a
+  // one-click "fix environment" action so the user isn't left to hunt for it.
+  const [toastFix, setToastFix] = React.useState(false)
   // HITL control state from /nano-local-sandbox/control (bridge proxy):
   // {writer,owner,ownerSince,lastWriteAt,humanHold,lastAction,lastCallAt}.
   const [control, setControl] = React.useState(null)
@@ -645,19 +653,41 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
     return () => { observer.disconnect(); image?.removeEventListener('load', measure) }
   }, [shot])
 
+  // Engine/recoverable errors earn a repair shortcut on the toast; input and
+  // ref misses are user-error and stay plain. POST /recover replays the last
+  // opened url, then a fresh shot replaces the failed frame.
+  const RECOVERABLE = /^kitesurf\.(shot|engine|elements|dom|kite|navigate|pick|wait|ref)\.|^sandbox\.cdp\./
+
+  async function repairNow() {
+    setToastFix(false)
+    setToast(copy.preparingEnv)
+    try {
+      await fetch(RECOVER, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
+      await refreshStatus()
+      await reloadShot(0, { keepPick: true }).catch(() => {})
+      setToast(copy.prepareDone)
+    } catch (cause) {
+      setToast(`${copy.prepareFailed}: ${cause?.message || cause}`)
+    }
+    window.clearTimeout(toastTimer.current)
+    toastTimer.current = window.setTimeout(() => { setToast(null); setToastFix(false) }, 3000)
+  }
+
   function showError(cause) {
     const errorId = cause?.errorId || 'kitesurf.unknown'
     const message = cause instanceof Error ? cause.message : String(cause)
     setToast(`${errorId} ${message}`)
+    setToastFix(RECOVERABLE.test(errorId))
     window.clearTimeout(toastTimer.current)
-    toastTimer.current = window.setTimeout(() => setToast(null), 4000)
+    toastTimer.current = window.setTimeout(() => { setToast(null); setToastFix(false) }, 4000)
     refreshStatus() // a failure may have changed the engine's truth
   }
 
   function showToast(text) {
     setToast(text)
+    setToastFix(false)
     window.clearTimeout(toastTimer.current)
-    toastTimer.current = window.setTimeout(() => setToast(null), 2000)
+    toastTimer.current = window.setTimeout(() => { setToast(null); setToastFix(false) }, 2000)
   }
 
   async function run(work) {
@@ -2013,7 +2043,14 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
       Array.isArray(pick.elements[0].componentStack) && pick.elements[0].componentStack.length
         ? h('span', { 'data-nks-stack': '1', title: pick.elements[0].componentStack.join(' → ') },
             `⚛ ${pick.elements[0].componentStack.slice(-3).join(' → ')}`) : null) : null,
-    toast ? h(NanoToast, { text: toast }) : null,
+    toast ? (toastFix
+      // Interactive toast: same .nano-toast chrome but pointer-events on + a
+      // repair button. Shared NanoToast is text-only; re-implementing here
+      // keeps dsh-nano-ui's contract untouched.
+      ? h('div', { className: 'nano-toast nks-toast-fix', role: 'status', 'aria-live': 'polite', 'data-nano-toast': 'true' },
+          h('span', null, toast),
+          h('button', { type: 'button', className: 'nks-toast-btn', 'data-nks-repair': '1', onClick: repairNow }, copy.prepareEnv))
+      : h(NanoToast, { text: toast })) : null,
     pick?.elements?.length ? h('pre', {
       'data-nks-pick': '1',
       style: { display: 'none' },

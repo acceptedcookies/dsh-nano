@@ -180,9 +180,64 @@ export function routeSpecs(deps = {}) {
       session.operations = session.operations || []
       session.operations.push({ path: row.path, method: req.method, at: new Date().toISOString() })
       if (session.operations.length > 200) session.operations.shift()
-      if (row.path.endsWith('/shot') && deps.pageReady !== true) {
-        res.statusCode = 502
-        res.end(JSON.stringify({ ok: false, errorId: 'kitesurf.shot.empty' }))
+      if (row.path.endsWith('/shot')) {
+        // Real implementation: the page-ready stub (deps.pageReady) was a
+        // scaffold nobody ever wired — shot has a route row but no body. Drive
+        // CDP directly: optional fit (viewport emulate to the pane's aspect,
+        // no letterbox), optional scroll, then Page.captureScreenshot. Empty
+        // capture is the contract's kitesurf.shot.empty (502), not a stub.
+        try {
+          const body = await readJson(req)
+          const base = await ensureBase(session, deps)
+          if (!base) {
+            send(res, 502, { ok: false, errorId: 'kitesurf.shot.empty', error: 'no engine page' })
+            return
+          }
+          const client = await ensureClient(session, base)
+          const format = typeof body.format === 'string' && ['png', 'jpeg', 'webp'].includes(body.format) ? body.format : 'webp'
+          const fit = body.fit && typeof body.fit === 'object' ? body.fit : null
+          const fitW = fit ? Math.round(Number(fit.width)) : null
+          const fitH = fit ? Math.round(Number(fit.height)) : null
+          const useFit = Number.isFinite(fitW) && Number.isFinite(fitH) && fitW >= 320 && fitW <= 3840 && fitH >= 240 && fitH <= 2160
+          const scroll = Number(body.scroll) || 0
+          const targets = await client.send('Target.getTargets')
+          const pageTargetId = (targets?.targetInfos || []).find((row) => row.type === 'page')?.targetId || ''
+          const shot = await withPage(client, async (sessionId) => {
+            if (useFit) {
+              await client.send('Emulation.setDeviceMetricsOverride', { width: fitW, height: fitH, deviceScaleFactor: 1, mobile: false }, sessionId)
+            }
+            if (scroll) {
+              await client.send('Runtime.evaluate', { expression: `window.scrollBy(0, ${scroll})`, returnByValue: true }, sessionId)
+            }
+            const params = format === 'png' ? { format } : { format, quality: 80 }
+            const cap = await client.send('Page.captureScreenshot', params, sessionId)
+            // Frame identity rides with the shot so the pane's pick-drift check
+            // compares a pick's identity against the frame it's drawn over.
+            const info = await client.send('Runtime.evaluate', {
+              expression: `(()=>({url:location.href,scrollX:window.scrollX||0,scrollY:window.scrollY||0}))()`,
+              returnByValue: true,
+            }, sessionId)
+            return { ...cap, identity: info?.result?.value }
+          })
+          const data = shot?.data
+          if (typeof data !== 'string' || data.length === 0) {
+            send(res, 502, { ok: false, errorId: 'kitesurf.shot.empty', error: 'engine returned empty screenshot' })
+            return
+          }
+          send(res, 200, {
+            ok: true,
+            mimeType: format === 'png' ? 'image/png' : format === 'jpeg' ? 'image/jpeg' : 'image/webp',
+            format,
+            data,
+            url: shot.identity?.url || '',
+            scrollX: shot.identity?.scrollX || 0,
+            scrollY: shot.identity?.scrollY || 0,
+            targetId: pageTargetId,
+            viewport: useFit ? { width: fitW, height: fitH } : null,
+          })
+        } catch (error) {
+          send(res, error.status || 502, { ok: false, errorId: error.errorId || 'kitesurf.engine.connect', error: error.message })
+        }
         return
       }
       if (row.path.endsWith('/status')) {

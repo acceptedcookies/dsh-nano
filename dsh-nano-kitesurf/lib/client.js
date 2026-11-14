@@ -39,7 +39,7 @@ var __kitesurfExport = (() => {
   ));
   var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
-  // ../../../../packages/dsh-nano-ui/src/dialog.js
+  // ../packages/dsh-nano-ui/src/dialog.js
   function NanoDialog({ copy, title, description, confirmLabel, confirmDisabled, busy, error, danger, footer, maxHeight, width, region, onConfirm, onCancel, children }) {
     return import_react.default.createElement(import_dsh_client_ui_primitives.Modal, {
       open: true,
@@ -69,13 +69,13 @@ var __kitesurfExport = (() => {
   }
   var import_react, import_dsh_client_ui_primitives;
   var init_dialog = __esm({
-    "../../../../packages/dsh-nano-ui/src/dialog.js"() {
+    "../packages/dsh-nano-ui/src/dialog.js"() {
       import_react = __toESM(__require("react"), 1);
       import_dsh_client_ui_primitives = __require("@deepseek-ai/dsh-client-ui-primitives");
     }
   });
 
-  // ../../../../packages/dsh-nano-ui/src/menu.js
+  // ../packages/dsh-nano-ui/src/menu.js
   function NanoMenu({ menu, actions, onClose, width = 208, maxHeight, theme, z }) {
     const ref = useRef(null);
     const [active, setActive] = useState(0);
@@ -170,25 +170,25 @@ var __kitesurfExport = (() => {
   }
   var import_react2, useCallback, useEffect, useRef, useState;
   var init_menu = __esm({
-    "../../../../packages/dsh-nano-ui/src/menu.js"() {
+    "../packages/dsh-nano-ui/src/menu.js"() {
       import_react2 = __toESM(__require("react"), 1);
       ({ useCallback, useEffect, useRef, useState } = import_react2.default);
     }
   });
 
-  // ../../../../packages/dsh-nano-ui/src/toast.js
+  // ../packages/dsh-nano-ui/src/toast.js
   function NanoToast({ text }) {
     if (text === void 0 || text === null) return null;
     return import_react3.default.createElement("div", { className: "nano-toast", role: "status", "aria-live": "polite", "data-nano-toast": "true" }, text);
   }
   var import_react3;
   var init_toast = __esm({
-    "../../../../packages/dsh-nano-ui/src/toast.js"() {
+    "../packages/dsh-nano-ui/src/toast.js"() {
       import_react3 = __toESM(__require("react"), 1);
     }
   });
 
-  // ../../../../packages/dsh-nano-ui/src/dom.js
+  // ../packages/dsh-nano-ui/src/dom.js
   function openNanoDialog(options) {
     const host = document.createElement("div");
     host.className = "nano-dialog-host";
@@ -295,7 +295,7 @@ var __kitesurfExport = (() => {
   }
   var import_react4, import_client;
   var init_dom = __esm({
-    "../../../../packages/dsh-nano-ui/src/dom.js"() {
+    "../packages/dsh-nano-ui/src/dom.js"() {
       import_react4 = __toESM(__require("react"), 1);
       import_client = __require("react-dom/client");
       init_dialog();
@@ -303,7 +303,7 @@ var __kitesurfExport = (() => {
     }
   });
 
-  // ../../../../packages/dsh-nano-ui/src/tabs.js
+  // ../packages/dsh-nano-ui/src/tabs.js
   function nanoTabs({ items, value, onChange, label }) {
     const seq = ++nanoTabsSeq;
     const el = document.createElement("div");
@@ -380,15 +380,15 @@ var __kitesurfExport = (() => {
   }
   var nanoTabsSeq;
   var init_tabs = __esm({
-    "../../../../packages/dsh-nano-ui/src/tabs.js"() {
+    "../packages/dsh-nano-ui/src/tabs.js"() {
       nanoTabsSeq = 0;
     }
   });
 
-  // ../../../../packages/dsh-nano-ui/src/styles.js
+  // ../packages/dsh-nano-ui/src/styles.js
   var NANO_STYLES;
   var init_styles = __esm({
-    "../../../../packages/dsh-nano-ui/src/styles.js"() {
+    "../packages/dsh-nano-ui/src/styles.js"() {
       NANO_STYLES = `
 /* \u2500\u2500 anchored popup menu (NanoMenu, NanoMenuItem) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
 /* \u2500\u2500 type tokens \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
@@ -518,7 +518,7 @@ var __kitesurfExport = (() => {
     }
   });
 
-  // ../../../../packages/dsh-nano-ui/index.js
+  // ../packages/dsh-nano-ui/index.js
   var dsh_nano_ui_exports = {};
   __export(dsh_nano_ui_exports, {
     NANO_STYLES: () => NANO_STYLES,
@@ -531,7 +531,7 @@ var __kitesurfExport = (() => {
     openNanoMenu: () => openNanoMenu
   });
   var init_dsh_nano_ui = __esm({
-    "../../../../packages/dsh-nano-ui/index.js"() {
+    "../packages/dsh-nano-ui/index.js"() {
       init_dialog();
       init_menu();
       init_toast();
@@ -541,7 +541,7 @@ var __kitesurfExport = (() => {
     }
   });
 
-  // ../../../../packages/dsh-performance-review/src/state.js
+  // ../packages/dsh-performance-review/src/state.js
   function percentile(values, p) {
     if (!Array.isArray(values) || values.length === 0) return null;
     const sorted = [...values].sort((a, b) => a - b);
@@ -706,7 +706,7 @@ var __kitesurfExport = (() => {
   }
   var LIB_VERSION, REPORT_VERSION, NAME_RE, MAX_SPAN_KEYS, MAX_USAGE_KEYS, INTERACTION_CAP, RESERVOIR_CAP, EVENT_DURATION_THRESHOLD, WINDOW_PAD_BEFORE_MS, WINDOW_PAD_AFTER_MS;
   var init_state = __esm({
-    "../../../../packages/dsh-performance-review/src/state.js"() {
+    "../packages/dsh-performance-review/src/state.js"() {
       LIB_VERSION = "0.1.0";
       REPORT_VERSION = 1;
       NAME_RE = /^[a-z0-9][a-z0-9-]{0,39}$/;
@@ -720,7 +720,7 @@ var __kitesurfExport = (() => {
     }
   });
 
-  // ../../../../packages/dsh-performance-review/src/aggregate.js
+  // ../packages/dsh-performance-review/src/aggregate.js
   function pushInteraction(collector, interaction) {
     collector.interactions.push(interaction);
     while (collector.interactions.length > INTERACTION_CAP) collector.interactions.shift();
@@ -943,7 +943,7 @@ var __kitesurfExport = (() => {
   }
   var spanStats;
   var init_aggregate = __esm({
-    "../../../../packages/dsh-performance-review/src/aggregate.js"() {
+    "../packages/dsh-performance-review/src/aggregate.js"() {
       init_state();
       spanStats = (row) => ({
         n: row.n,
@@ -955,7 +955,7 @@ var __kitesurfExport = (() => {
     }
   });
 
-  // ../../../../packages/dsh-performance-review/src/client.js
+  // ../packages/dsh-performance-review/src/client.js
   var client_exports = {};
   __export(client_exports, {
     LIB_VERSION: () => LIB_VERSION,
@@ -1482,7 +1482,7 @@ var __kitesurfExport = (() => {
   }
   var TRACK_EVENT_CAP, SPAN_EVENT_CAP, PROFILER_SAMPLE_CAP, now, isPromiseLike, BUCKET_ATTRS, HIDDEN_SELECTOR, contains;
   var init_client = __esm({
-    "../../../../packages/dsh-performance-review/src/client.js"() {
+    "../packages/dsh-performance-review/src/client.js"() {
       init_state();
       init_aggregate();
       TRACK_EVENT_CAP = 4096;
@@ -1999,6 +1999,11 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
 .nks-frame iframe.nks-dom{width:100%;height:100%;border:0;display:block;background:#fff}
 .nks-frame img{width:100%;height:100%;object-fit:contain;object-position:center;display:block}
 .nks-empty{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:10px;padding:24px;text-align:center;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxs-12)}
+/* Interactive error toast: shared .nano-toast chrome is pointer-events:none \u2014
+   re-enable it on our variant and lay the text + repair button in a row. */
+.nks-toast-fix{pointer-events:auto;display:flex;align-items:center;gap:10px}
+.nks-toast-btn{background:var(--dsw-alias-fill-brand,#2f6fed);color:var(--dsw-alias-label-invert,#fff);border:0;border-radius:var(--dsw-radius-sm,6px);padding:2px 8px;font:inherit;cursor:pointer;white-space:nowrap}
+.nks-toast-btn:hover{filter:brightness(1.1)}
 .nks-empty-icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-link,#2f6fed);border:.5px solid var(--dsw-alias-border-l2)}
 .nks-empty-title{color:var(--dsw-alias-label-primary);font:var(--dsw-font-xs-13,var(--dsw-font-xxs-12));font-weight:600}
 .nks-empty-body{max-width:340px;line-height:1.55}
@@ -2231,6 +2236,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
     const [vpCustom, setVpCustom] = React5.useState(false);
     const domFrameRef = React5.useRef(null);
     const [toast, setToast] = React5.useState(null);
+    const [toastFix, setToastFix] = React5.useState(false);
     const [control, setControl] = React5.useState(null);
     const [actionToast, setActionToast] = React5.useState(null);
     const lastActionStamp = React5.useRef("");
@@ -2491,18 +2497,45 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         image?.removeEventListener("load", measure);
       };
     }, [shot]);
+    const RECOVERABLE = /^kitesurf\.(shot|engine|elements|dom|kite|navigate|pick|wait|ref)\.|^sandbox\.cdp\./;
+    async function repairNow() {
+      setToastFix(false);
+      setToast(copy.preparingEnv);
+      try {
+        await fetch(RECOVER, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+        await refreshStatus();
+        await reloadShot(0, { keepPick: true }).catch(() => {
+        });
+        setToast(copy.prepareDone);
+      } catch (cause) {
+        setToast(`${copy.prepareFailed}: ${cause?.message || cause}`);
+      }
+      window.clearTimeout(toastTimer.current);
+      toastTimer.current = window.setTimeout(() => {
+        setToast(null);
+        setToastFix(false);
+      }, 3e3);
+    }
     function showError(cause) {
       const errorId = cause?.errorId || "kitesurf.unknown";
       const message = cause instanceof Error ? cause.message : String(cause);
       setToast(`${errorId} ${message}`);
+      setToastFix(RECOVERABLE.test(errorId));
       window.clearTimeout(toastTimer.current);
-      toastTimer.current = window.setTimeout(() => setToast(null), 4e3);
+      toastTimer.current = window.setTimeout(() => {
+        setToast(null);
+        setToastFix(false);
+      }, 4e3);
       refreshStatus();
     }
     function showToast(text) {
       setToast(text);
+      setToastFix(false);
       window.clearTimeout(toastTimer.current);
-      toastTimer.current = window.setTimeout(() => setToast(null), 2e3);
+      toastTimer.current = window.setTimeout(() => {
+        setToast(null);
+        setToastFix(false);
+      }, 2e3);
     }
     async function run(work) {
       if (perf?.span) return perf.span("pane-op", () => runInner(work));
@@ -4030,7 +4063,12 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           `\u269B ${pick.elements[0].componentStack.slice(-3).join(" \u2192 ")}`
         ) : null
       ) : null,
-      toast ? h(NanoToast2, { text: toast }) : null,
+      toast ? toastFix ? h(
+        "div",
+        { className: "nano-toast nks-toast-fix", role: "status", "aria-live": "polite", "data-nano-toast": "true" },
+        h("span", null, toast),
+        h("button", { type: "button", className: "nks-toast-btn", "data-nks-repair": "1", onClick: repairNow }, copy.prepareEnv)
+      ) : h(NanoToast2, { text: toast }) : null,
       pick?.elements?.length ? h("pre", {
         "data-nks-pick": "1",
         style: { display: "none" }

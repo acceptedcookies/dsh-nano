@@ -10,7 +10,7 @@ import { registerRoutes } from './lib/route-guard.js'
 import { ROUTE_TABLE, PLUGIN } from './lib/route-table.js'
 import { createHistory } from './lib/history.js'
 import { browserSocketUrl, captureDom, captureElements, captureShot, captureSnapshot, currentEmulation, engineHistoryAdd, engineHistoryClear, engineHistoryList, engineHistoryRemove, currentUserAgent, currentViewport, engineTargets, evaluateInPage, fetchEngine, KitesurfError, navigateHistory, openPage, pickElement, pickBySelector, pickPoint, pickSelector, editBody, editElement, pageUrl, releaseEngine, scrollDelta, setBrowserSettings, waitForCondition } from './lib/engine.js'
-import { ERROR_STATUS, clearConsole, clearNetwork, clearOperations, diagnosticsSummary, elementRefSelector, elementRefSummary, getElementRef, getRef, isElementRef, listNetwork, listConsole, listOperations, listRefs, putElementRefs, putRef, recordOperation, refChip, summarizeInput } from './lib/diagnostics.js'
+import { ERROR_STATUS, clearConsole, clearNetwork, clearOperations, diagnosticsSummary, elementRefSelector, elementRefSummary, getElementRef, getLastSnapshot, getRef, isElementRef, listNetwork, listConsole, listOperations, listRefs, putElementRefs, putRef, recordOperation, refChip, setLastSnapshot, summarizeInput } from './lib/diagnostics.js'
 import { buildSrcDoc } from './lib/dom.js'
 import { kitesurfSkill, nanoKiteSkill } from './lib/skill.js'
 import { createNanoKite } from './lib/nano-kite.js'
@@ -348,6 +348,10 @@ function queryOf(req) {
 /** Set by apply(): the host pushes its diagnostics snapshot into the MCP
  * bridge so an MCP-only client can read execution state. */
 let diagnosticsPusher = null
+/** Module-scope: if apply() ever runs twice in one process the previous
+ * timer must die here — a per-apply local would leave a stale timer whose
+ * closure pushes a null-snapshot payload that flaps the bridge. */
+let diagnosticsPushTimer = null
 
 /**
  * @param {string} httpBase
@@ -524,7 +528,6 @@ export function apply(ctx, config) {
   let lastClientPerf = null
   let lastElements = null
   let lastDom = null
-  let lastSnapshot = null
   async function runSelfTest() {
     const started = Date.now()
     const checks = []
@@ -602,7 +605,7 @@ export function apply(ctx, config) {
       elements: lastElements,
       history: history.list({ limit: 30 }),
       dom: lastDom,
-      snapshot: lastSnapshot,
+      snapshot: getLastSnapshot(),
       observability: summary,
       console: listConsole({ limit }),
       network: listNetwork({ limit }),
@@ -629,10 +632,11 @@ export function apply(ctx, config) {
     } catch { /* bridge may be down; the next request retries */ }
   }
   diagnosticsPusher = pushDiagnostics
-  const pushTimer = setInterval(() => { pushDiagnostics(true) }, 30_000)
-  pushTimer.unref?.()
+  if (diagnosticsPushTimer) clearInterval(diagnosticsPushTimer)
+  diagnosticsPushTimer = setInterval(() => { pushDiagnostics(true) }, 30_000)
+  diagnosticsPushTimer.unref?.()
   setTimeout(() => { pushDiagnostics(true) }, 1500)?.unref?.()
-  ctx.effect(() => () => { clearInterval(pushTimer); diagnosticsPusher = null }, 'nano-kitesurf: diagnostics push')
+  ctx.effect(() => () => { clearInterval(diagnosticsPushTimer); diagnosticsPushTimer = null; diagnosticsPusher = null }, 'nano-kitesurf: diagnostics push')
 
   // The skill body no longer bakes the origin: it teaches the agent to read
   // kite.cdp from /status so it always follows the live configure() value.
@@ -1018,7 +1022,7 @@ export function apply(ctx, config) {
       elements: lastElements,
       history: history.list({ limit: 30 }),
       dom: lastDom,
-      snapshot: lastSnapshot,
+      snapshot: getLastSnapshot(),
           })
         } catch (error) {
           fail(res, error)
@@ -1173,7 +1177,7 @@ export function apply(ctx, config) {
           putElementRefs(snap.refs, snap.url)
           // Trim for the 30s MCP push: keep the ref table + counts, drop the
           // full tree text (an agent re-walks live via /snapshot when needed).
-          lastSnapshot = { at: new Date().toISOString(), url: snap.url, title: snap.title, count: snap.count, truncated: snap.truncated, refs: snap.refs, treePreview: snap.tree.split('\n').slice(0, 30).join('\n') }
+          setLastSnapshot({ at: new Date().toISOString(), url: snap.url, title: snap.title, count: snap.count, truncated: snap.truncated, refs: snap.refs, treePreview: snap.tree.split('\n').slice(0, 30).join('\n') })
           sendJson(res, 200, { ok: true, ...snap })
         } catch (error) {
           fail(res, error)

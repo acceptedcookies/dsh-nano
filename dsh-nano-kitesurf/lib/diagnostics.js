@@ -299,6 +299,13 @@ export function elementRefSummary() {
   return { count: Object.keys(elementRefs).length, url: elementRefsUrl, at: elementRefsAt, refs: elementRefs }
 }
 
+// ── lastSnapshot: the trimmed tree the 30s MCP push ships. Module scope on
+// purpose — apply()-scoped `let lastSnapshot` was read by a stale closure when
+// the push timer outlived one apply() and the route handler lived in another.
+let lastSnapshot = null
+export function setLastSnapshot(snap) { lastSnapshot = snap && typeof snap === 'object' ? snap : null }
+export function getLastSnapshot() { return lastSnapshot }
+
 /**
  * Network lifecycle. The engine pushes requestWillBeSent → responseReceived →
  * loadingFinished/Failed on the same page session we already hold, so a

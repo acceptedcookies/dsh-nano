@@ -612,10 +612,29 @@ export function createBridge(port = PORT, env = process.env) {
           const prev = lastDiagnostics?.history
           const next = parsed?.history
           if (prev && (!next || (next.entries?.length || 0) < (prev.entries?.length || 0))) parsed.history = prev
-          lastDiagnostics = parsed
-          diagnosticsPushedAt = new Date().toISOString()
+          // Writer election: two dsh hosts share one container bridge (desktop +
+          // a dev profile). Both may report the same httpBase and engineAlive —
+          // the peer auto-adopts the container — so rank by kite ownership:
+          // the host that started the kite reports phase:"running" and drives
+          // the page; a peer that merely probes the engine stays "idle". Sender
+          // identity is storePath (unique per host install), not httpBase.
+          const rankOf = (d) => {
+            const phase = d?.plugin?.phase
+            const own = phase === 'running' ? 2 : phase === 'suspended' ? 1 : 0
+            const alive = (d?.engine?.engineAlive === true || d?.engine?.ok === true) ? 1 : 0
+            return own * 2 + alive
+          }
+          const senderId = String(parsed?.plugin?.storePath || parsed?.plugin?.httpBase || '?')
+          const prevSenderId = String(lastDiagnostics?.plugin?.storePath || lastDiagnostics?.plugin?.httpBase || '')
+          const wins = lastDiagnostics == null
+            || rankOf(parsed) > rankOf(lastDiagnostics)
+            || (rankOf(parsed) === rankOf(lastDiagnostics) && senderId === prevSenderId)
+          if (wins) {
+            lastDiagnostics = parsed
+            diagnosticsPushedAt = new Date().toISOString()
+          }
           res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
-          res.end(JSON.stringify({ ok: true, at: diagnosticsPushedAt }))
+          res.end(JSON.stringify({ ok: true, at: diagnosticsPushedAt, writer: prevSenderId || null, accepted: wins }))
         } catch (error) {
           res.writeHead(400, { 'content-type': 'application/json; charset=utf-8' })
           res.end(JSON.stringify({ ok: false, error: String(error?.message || error) }))

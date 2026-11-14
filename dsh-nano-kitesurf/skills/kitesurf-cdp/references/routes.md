@@ -18,8 +18,8 @@
 | GET | `/nano-kitesurf/context?id=N`/`?limit=20` | composer ref 上下文反查（`[kitesurf:N]`） |
 | GET | `/nano-kitesurf/elements?selector=…` | 引擎 DOM.getDocument 元素列表 |
 | GET | `/nano-kitesurf/dom` | 页面 DOM 文本 |
-| GET | `/nano-kitesurf/snapshot?maxNodes=1..500` | a11y-lite 树 + `@N` ref 表（人=agent 同一语言） |
-| GET | `/nano-kitesurf/refs?ref=@N` | `@N`→selector 反查；`?` 无参=整表 summary |
+| GET | `/nano-local-sandbox/snapshot?maxNodes=1..500` | a11y-lite 树 + `@N` ref 表（人=agent 同一语言） |
+| GET | `/nano-local-sandbox/refs?ref=@N` | `@N`→selector 反查；`?` 无参=整表 summary |
 | GET | `/nano-kitesurf/perf-review/host` | 进程 perf 快照（`?mode=window` 排水仅 POST） |
 | GET | `/nano-kitesurf/selftest` | 引擎健康自检 |
 | GET | `/nano-kitesurf/client-perf` | 客户端 perf 缓冲 |
@@ -33,10 +33,10 @@
 | POST | `/nano-kitesurf/pick` | `{x,y}`/`{selector|@N}`/`{preview:true}` 点选元素包 |
 | POST | `/nano-kitesurf/edit` | `{selector|@N,text}` 写回元素文本 |
 | POST | `/nano-kitesurf/evaluate` | `{expression}` 有界 JS；`{token,offset}`/`?page=N` 拉分段（>4KB 结果进页内 token 缓存） |
-| POST | `/nano-kitesurf/interact` | `{action:click|dblclick|fill|type|press|hover|select|focus|blur|check|uncheck, target:@N|selector, text?|key?|value?|option?}` 合成事件；遮挡→`interact.occluded` |
-| GET/POST | `/nano-kitesurf/storage` | localStorage/sessionStorage/cookie 读写：GET `?scope=` 列；POST `{scope,op:set|delete|clear,name,value}`（HttpOnly 不可达） |
-| GET | `/nano-kitesurf/har` | 网络环导出 HAR 1.2（requestHeaders/responseHeaders 透传；`body:null reason:'engine'`） |
-| POST | `/nano-kitesurf/state` | `{action:save,name?}` 导出 {localStorage,sessionStorage,cookie} 到 `$DSH_HOME/nano-kitesurf-state.jsonl`；`{action:load,name|state}` 恢复 |
+| POST | `/nano-local-sandbox/interact` | `{action:click|dblclick|fill|type|press|hover|select|focus|blur|check|uncheck, target:@N|selector, text?|key?|value?|option?}` 合成事件；遮挡→`interact.occluded` |
+| GET/POST | `/nano-local-sandbox/storage` | localStorage/sessionStorage/cookie 读写：GET `?scope=` 列；POST `{scope,op:set|delete|clear,name,value}`（HttpOnly 不可达） |
+| GET | `/nano-local-sandbox/har` | 网络环导出 HAR 1.2（requestHeaders/responseHeaders 透传；`body:null reason:'engine'`） |
+| POST | `/nano-local-sandbox/state` | `{action:save,name?}` 导出 {localStorage,sessionStorage,cookie} 到 `$DSH_HOME/nano-kitesurf-state.jsonl`；`{action:load,name|state}` 恢复 |
 | POST | `/nano-kitesurf/wait` | `{selector|text|url|fn}+load+timeoutMs` 阻塞条件等待 |
 | POST | `/nano-kitesurf/history` | `{delta:-1|+1}` 真浏览器进退 |
 | POST | `/nano-kitesurf/settings` | `{userAgent?,viewport?,media?,extraHeaders?}` 事务性伪装 |

@@ -40,7 +40,7 @@ kitesurf_control {action:"release"}
 # 打开 → 诊断 → 快照取 ref → @N 驱动 → 点选 → 取包 → 改字 → 看 console
 POST /nano-kitesurf/open      {"url":"https://example.com"}
 GET  /nano-kitesurf/diagnostics?limit=10
-GET  /nano-kitesurf/snapshot                 # → tree + {"@1":{selector:"a"}}
+GET  /nano-local-sandbox/snapshot                 # → tree + {"@1":{selector:"a"}}
 POST /nano-kitesurf/wait      {"selector":"@1","timeoutMs":5000}   # @N 直解
 POST /nano-kitesurf/pick      {"selector":"@1"}                     # element.ref:"@1"
 POST /nano-kitesurf/pick      {"x":640,"y":320}

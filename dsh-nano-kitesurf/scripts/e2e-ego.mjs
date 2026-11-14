@@ -453,11 +453,11 @@ async function main() {
   // 16. P1-2 storage/state round-trip: set → save → clear → load → read back.
   const st = await page.evaluate(async () => {
     const J = (r) => r.json()
-    await fetch('/nano-kitesurf/storage', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ scope: 'local', op: 'set', name: 'e2e-k', value: 'e2e-v' }) }).then(J)
-    const saved = await fetch('/nano-kitesurf/state', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'save', name: 'e2e' }) }).then(J)
-    await fetch('/nano-kitesurf/storage', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ scope: 'local', op: 'clear' }) }).then(J)
-    const loaded = await fetch('/nano-kitesurf/state', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'load', name: 'e2e' }) }).then(J)
-    const rd = await fetch('/nano-kitesurf/storage?scope=local').then(J)
+    await fetch('/nano-local-sandbox/storage', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ scope: 'local', op: 'set', name: 'e2e-k', value: 'e2e-v' }) }).then(J)
+    const saved = await fetch('/nano-local-sandbox/state', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'save', name: 'e2e' }) }).then(J)
+    await fetch('/nano-local-sandbox/storage', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ scope: 'local', op: 'clear' }) }).then(J)
+    const loaded = await fetch('/nano-local-sandbox/state', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'load', name: 'e2e' }) }).then(J)
+    const rd = await fetch('/nano-local-sandbox/storage?scope=local').then(J)
     return { savedOk: saved.ok === true, restored: loaded.restored, readBack: rd.result?.entries?.['e2e-k'] }
   })
   record('storage-state-roundtrip', st.savedOk && st.restored >= 1 && st.readBack === 'e2e-v', JSON.stringify(st))

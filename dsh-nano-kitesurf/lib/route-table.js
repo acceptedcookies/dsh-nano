@@ -182,7 +182,7 @@ export const ROUTE_TABLE = [
   },
   {
     "plugin": "dsh-nano-kitesurf",
-    "path": "/nano-kitesurf/har",
+    "path": "/nano-local-sandbox/har",
     "methods": [
       "GET",
       "HEAD"
@@ -195,7 +195,7 @@ export const ROUTE_TABLE = [
   },
   {
     "plugin": "dsh-nano-kitesurf",
-    "path": "/nano-kitesurf/interact",
+    "path": "/nano-local-sandbox/interact",
     "methods": [
       "POST"
     ],
@@ -207,7 +207,7 @@ export const ROUTE_TABLE = [
   },
   {
     "plugin": "dsh-nano-kitesurf",
-    "path": "/nano-kitesurf/storage",
+    "path": "/nano-local-sandbox/storage",
     "methods": [
       "GET",
       "HEAD",
@@ -221,7 +221,7 @@ export const ROUTE_TABLE = [
   },
   {
     "plugin": "dsh-nano-kitesurf",
-    "path": "/nano-kitesurf/state",
+    "path": "/nano-local-sandbox/state",
     "methods": [
       "POST"
     ],
@@ -245,7 +245,7 @@ export const ROUTE_TABLE = [
   },
   {
     "plugin": "dsh-nano-kitesurf",
-    "path": "/nano-kitesurf/snapshot",
+    "path": "/nano-local-sandbox/snapshot",
     "methods": [
       "GET",
       "HEAD"
@@ -258,7 +258,7 @@ export const ROUTE_TABLE = [
   },
   {
     "plugin": "dsh-nano-kitesurf",
-    "path": "/nano-kitesurf/refs",
+    "path": "/nano-local-sandbox/refs",
     "methods": [
       "GET",
       "HEAD"

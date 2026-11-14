@@ -50,7 +50,7 @@ async function caseRun(dnkPage, egoPage, target) {
   try { await dnk(dnkPage, '/nano-kitesurf/open', { url: target.url }) } catch (e) { openErr = String(e).slice(0, 80) }
   c.dnk.openErr = openErr
   await new Promise((r) => setTimeout(r, 2500))
-  const snap = await dnk(dnkPage, '/nano-kitesurf/snapshot', null, 'GET')
+  const snap = await dnk(dnkPage, '/nano-local-sandbox/snapshot', null, 'GET')
   const sd = snap.json || {}
   const refs = Object.entries(sd.refs || {})
   const linkRef = refs.find(([, v]) => /learn more/i.test(v.text || '') || /learn more/i.test(v.name || '')) || refs[0]

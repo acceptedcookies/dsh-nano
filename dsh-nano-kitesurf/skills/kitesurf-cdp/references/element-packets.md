@@ -2,7 +2,7 @@
 
 ## 元素 ref `@N`（人=agent 同一语言）
 
-`GET /nano-kitesurf/snapshot` 的 a11y-lite walker 给每个可交互元素一个 `@N`，并返回该元素的 selector。`GET /nano-kitesurf/refs?ref=@N` 反查 selector。**人点选** `/pick` 返回 `element.ref:"@N"`——宿主在页内用 `querySelector` identity probe 把 pick 的 `html > body > a` 与 walker 的 `a` 归一到同一 `@N`。**同一次点选，人和 agent 引用的是同一个节点。** `@N` 直接可作 `wait`/`pick`/`edit` 的 `selector` 值；`@N` 不在当前表 = `kitesurf.ref.miss`（404，先 `/snapshot` 重建表）。
+`GET /nano-local-sandbox/snapshot` 的 a11y-lite walker 给每个可交互元素一个 `@N`，并返回该元素的 selector。`GET /nano-local-sandbox/refs?ref=@N` 反查 selector。**人点选** `/pick` 返回 `element.ref:"@N"`——宿主在页内用 `querySelector` identity probe 把 pick 的 `html > body > a` 与 walker 的 `a` 归一到同一 `@N`。**同一次点选，人和 agent 引用的是同一个节点。** `@N` 直接可作 `wait`/`pick`/`edit` 的 `selector` 值；`@N` 不在当前表 = `kitesurf.ref.miss`（404，先 `/snapshot` 重建表）。
 
 注意：pick 的 `element.selector` 是绝对路径（`html > body > a`），walker 的 `refs[@N].selector` 是简洁式（`a`）——**不要字符串比较**，用 `element.ref` 或 `GET /refs` 的 `@N` 作交接键。
 

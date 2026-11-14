@@ -41,7 +41,7 @@ agent-browser --cdp "$(curl -s .../nano-kitesurf/status | jq -r .kite.cdp)" snap
 - \`<img>\` 是 object-fit:contain：letterbox 带内点击合法地打空，先 \`/console?level=navigation\` 或重 \`/shot\` 再怪引擎。
 
 ## 4. 元素 ref @N — 人=agent 同一语言
-\`GET /nano-kitesurf/snapshot\` 的 a11y walker 给可交互元素 \`@N\` + selector；\`GET /refs?ref=@N\` 反查。**人点选 \`/pick\` 的 \`element.ref:"@N"\`** 与 agent 的 \`@N\` 指同一节点（页内 querySelector identity probe）。\`@N\` 可直接作 \`wait\`/\`pick\`/\`edit\` 的 selector；不在表=\`404 kitesurf.ref.miss\`（先 \`/snapshot\`）。别字符串比较 pick 的 \`html > body > a\` 与 walker 的 \`a\`——用 \`element.ref\`。
+\`GET /nano-local-sandbox/snapshot\` 的 a11y walker 给可交互元素 \`@N\` + selector；\`GET /refs?ref=@N\` 反查。**人点选 \`/pick\` 的 \`element.ref:"@N"\`** 与 agent 的 \`@N\` 指同一节点（页内 querySelector identity probe）。\`@N\` 可直接作 \`wait\`/\`pick\`/\`edit\` 的 selector；不在表=\`404 kitesurf.ref.miss\`（先 \`/snapshot\`）。别字符串比较 pick 的 \`html > body > a\` 与 walker 的 \`a\`——用 \`element.ref\`。
 
 ## 5. References（按需加载）
 | 文件 | 何时读 |

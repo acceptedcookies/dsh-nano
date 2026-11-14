@@ -786,6 +786,126 @@
       "bodyLimit": 0,
       "sessionBinding": false,
       "justification": "dsh-nano-terminal /dsh-nano-terminal/session"
+    },
+    {
+      "plugin": "dsh-nano-cloud-session",
+      "path": "/nano-cloud-session/status",
+      "methods": [
+        "POST"
+      ],
+      "sensitivity": "L0",
+      "capability": "read:none",
+      "bodyLimit": 16384,
+      "sessionBinding": false,
+      "justification": "dsh-nano-cloud-session/index.js — carrier profile 列表（脱敏，hasSecret 仅布尔）与 activeId；无 secret 出参。"
+    },
+    {
+      "plugin": "dsh-nano-cloud-session",
+      "path": "/nano-cloud-session/config",
+      "methods": [
+        "POST"
+      ],
+      "sensitivity": "L3",
+      "capability": "write:operator",
+      "bodyLimit": 16384,
+      "sessionBinding": false,
+      "justification": "dsh-nano-cloud-session/index.js — profile CRUD + activate + test：token 写入宿主 profile 文件（0600）与触发 upstream /v3/self；操作员配置面。"
+    },
+    {
+      "plugin": "dsh-nano-cloud-session",
+      "path": "/nano-cloud-session/sessions",
+      "methods": [
+        "POST"
+      ],
+      "sensitivity": "L2",
+      "capability": "net:fetch",
+      "bodyLimit": 65536,
+      "sessionBinding": false,
+      "justification": "dsh-nano-cloud-session/index.js — 经宿主代理 GET /v3/organizations/{org}/sessions；携带 PAT 的出站请求。"
+    },
+    {
+      "plugin": "dsh-nano-cloud-session",
+      "path": "/nano-cloud-session/session",
+      "methods": [
+        "POST"
+      ],
+      "sensitivity": "L2",
+      "capability": "net:fetch",
+      "bodyLimit": 65536,
+      "sessionBinding": false,
+      "justification": "dsh-nano-cloud-session/index.js — 会话详情/消息流/attachments/insights/tags/get+set_tags 代理。"
+    },
+    {
+      "plugin": "dsh-nano-cloud-session",
+      "path": "/nano-cloud-session/create",
+      "methods": [
+        "POST"
+      ],
+      "sensitivity": "L2",
+      "capability": "net:fetch+spawn:remote",
+      "bodyLimit": 262144,
+      "sessionBinding": false,
+      "justification": "dsh-nano-cloud-session/index.js — 创建 Devin cloud session（消耗 ACU、启动远端 VM、可带 prompt/repos/devin_mode/max_acu_limit 等）。"
+    },
+    {
+      "plugin": "dsh-nano-cloud-session",
+      "path": "/nano-cloud-session/message",
+      "methods": [
+        "POST"
+      ],
+      "sensitivity": "L2",
+      "capability": "net:fetch+spawn:remote",
+      "bodyLimit": 65536,
+      "sessionBinding": false,
+      "justification": "dsh-nano-cloud-session/index.js — 向既有 session 投递用户消息，可唤醒/接管 session。"
+    },
+    {
+      "plugin": "dsh-nano-cloud-session",
+      "path": "/nano-cloud-session/archive",
+      "methods": [
+        "POST"
+      ],
+      "sensitivity": "L2",
+      "capability": "net:fetch+write:remote",
+      "bodyLimit": 16384,
+      "sessionBinding": false,
+      "justification": "dsh-nano-cloud-session/index.js — 归档 session。"
+    },
+    {
+      "plugin": "dsh-nano-cloud-session",
+      "path": "/nano-cloud-session/unarchive",
+      "methods": [
+        "POST"
+      ],
+      "sensitivity": "L2",
+      "capability": "net:fetch+write:remote",
+      "bodyLimit": 16384,
+      "sessionBinding": false,
+      "justification": "dsh-nano-cloud-session/index.js — 取消归档。"
+    },
+    {
+      "plugin": "dsh-nano-cloud-session",
+      "path": "/nano-cloud-session/terminate",
+      "methods": [
+        "POST"
+      ],
+      "sensitivity": "L2",
+      "capability": "net:fetch+write:remote",
+      "bodyLimit": 16384,
+      "sessionBinding": false,
+      "justification": "dsh-nano-cloud-session/index.js — DELETE upstream = 终止 VM + 归档（非硬删，记录仍可读）。"
+    },
+    {
+      "plugin": "dsh-nano-cloud-session",
+      "path": "/nano-cloud-session/ssh",
+      "methods": [
+        "POST"
+      ],
+      "sensitivity": "L0",
+      "capability": "read:none",
+      "bodyLimit": 16384,
+      "sessionBinding": false,
+      "justification": "dsh-nano-cloud-session/index.js — 返回 ssh 命令串与 enroll 提示的纯信息路由；不 spawn。"
     }
   ]
 }

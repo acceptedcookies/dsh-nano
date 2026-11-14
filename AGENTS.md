@@ -28,6 +28,7 @@
 [DNN] = dsh-nano-notepad, 或简称 notepad, 跨 workspace 草稿编辑器;
 [DNT] = dsh-nano-terminal, 高性能基于 wasm 的内部专用跨平台 terminal;
 [DNLS] = dsh-nano-local-sandbox, macOS 本地沙箱宿主，容器特权只在这里;
+[DNCS] = dsh-nano-cloud-session, cloud-session 客户端（carrier 抽象），首个 carrier 为 devin-cloud-session;
 
 ---
 # 核心工作原则

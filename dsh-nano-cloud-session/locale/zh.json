@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "云会话",
+    "description": "cloud-session 客户端。首个 carrier 为 devin-cloud-session：在 dsh 内完成 Devin 云端会话的授权、同步与操作。"
+  }
+}

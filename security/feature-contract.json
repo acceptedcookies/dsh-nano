@@ -751,6 +751,96 @@
         "HEAD": 0
       },
       "responseShape": "REFS_ROUTE — resolves @N element refs to selectors from the host's stored ref table. No engine call; a host-memory read of the last /snapshot, same read-class as /context list."
+    },
+    {
+      "plugin": "dsh-nano-cloud-session",
+      "path": "/nano-cloud-session/status",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": 16384,
+      "responseShape": "200 {ok:true,profiles[],activeId,seededFromEnv} | 5xx {ok:false,reason}"
+    },
+    {
+      "plugin": "dsh-nano-cloud-session",
+      "path": "/nano-cloud-session/config",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": 16384,
+      "responseShape": "200 {ok:true,profile?,profiles[],activeId} / 200 {ok:true,self} | 4xx/5xx {ok:false,reason}"
+    },
+    {
+      "plugin": "dsh-nano-cloud-session",
+      "path": "/nano-cloud-session/sessions",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": 65536,
+      "responseShape": "200 upstream list json | 4xx/5xx {ok:false,reason,status}"
+    },
+    {
+      "plugin": "dsh-nano-cloud-session",
+      "path": "/nano-cloud-session/session",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": 65536,
+      "responseShape": "200 upstream op json | 4xx/5xx {ok:false,reason,status}"
+    },
+    {
+      "plugin": "dsh-nano-cloud-session",
+      "path": "/nano-cloud-session/create",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": 262144,
+      "responseShape": "200 upstream {session_id,url,...} | 4xx/5xx {ok:false,reason,status}"
+    },
+    {
+      "plugin": "dsh-nano-cloud-session",
+      "path": "/nano-cloud-session/message",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": 65536,
+      "responseShape": "200 upstream message ack | 4xx/5xx {ok:false,reason,status}"
+    },
+    {
+      "plugin": "dsh-nano-cloud-session",
+      "path": "/nano-cloud-session/archive",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": 16384,
+      "responseShape": "200 upstream session json | 4xx/5xx {ok:false,reason,status}"
+    },
+    {
+      "plugin": "dsh-nano-cloud-session",
+      "path": "/nano-cloud-session/unarchive",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": 16384,
+      "responseShape": "200 upstream session json | 4xx/5xx {ok:false,reason,status}"
+    },
+    {
+      "plugin": "dsh-nano-cloud-session",
+      "path": "/nano-cloud-session/terminate",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": 16384,
+      "responseShape": "200 upstream ack | 4xx/5xx {ok:false,reason,status}"
+    },
+    {
+      "plugin": "dsh-nano-cloud-session",
+      "path": "/nano-cloud-session/ssh",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": 16384,
+      "responseShape": "200 {ok:true,session_id,command,forwardHint,enrolledKeyHint} | 422 {ok:false,reason}"
     }
   ],
   "ui": {
@@ -784,6 +874,11 @@
     },
     "dsh-nano-terminal": {
       "surface": "wasm terminal tab via /dnt"
+    },
+    "dsh-nano-cloud-session": {
+      "launcher": "⌘E then 2 (Windows: Alt+E then 2, Ctrl+E then 2 also accepted) toggles cloud-session panel; circular launcher button",
+      "panel": "floating panel: sessions list (cursor paging, archived toggle), detail card with transcript + message box, new-session form, settings tab for carrier profiles",
+      "ssh": "detail card copies `ssh devin-<id>@ssh.devin.ai`; public-key enroll is a manual step in Devin account settings (info-only route, no spawn)"
     }
   },
   "dataLocations": {
@@ -810,6 +905,10 @@
     },
     "dsh-nano-terminal": {
       "state": "${DSH_HOME}/dsh-nano-terminal.state/"
+    },
+    "dsh-nano-cloud-session": {
+      "profiles": "${DSH_HOME}/nano-cloud-session.json (mode 0600, write-only secrets), seeded from DEVIN_API_TOKEN/DEVIN_ORG_ID/DEVIN_API_BASE env or ${DSH_HOME}/nano-cloud-session.env",
+      "config": "host Config defaults only (requestTimeoutMs 20000, defaultFirst 50, pollIntervalMs 5000); no client-side credential persistence"
     }
   }
 }

@@ -448,6 +448,7 @@ P0 批次在真机 dsh-dev 上构建→部署→e2e 完成。三项 **P0 内嵌�
 | **P0-4** 写互斥 | ✅ | 双 MCP 连接 e2e：`A claim`→`writer:true`；`B` 写被 `kitesurf.control.busy` 拒绝（**拒非排队**）；`B release` 不偷锁；`A release` 释放；断线 `releaseAll` 兜底。锁是**粘性**的（首写/`claim` 认领，`release`/断线才放），不只串行化并发调用 |
 | **P1-5**（提前）镜像瘦身 | ✅ | `runtime/linux-prefix` 343→249MB（删非 linux-arm64 的 agent-browser 二进制） |
 | **P0-5** 元素 ref 统一语言 | ✅ | `lib/snapshot.js` a11y-lite walker → `GET /snapshot`（tree+`@N` refs）+ `GET /refs?ref=@N`；`@N` 解析进 `wait`/`pick`/`edit`；`pick` 用页内 `querySelector` identity probe 回填 `element.ref`（人点选=agent ref）；`kitesurf_snapshot` MCP 工具走 30s 推送。e2e：snapshot→refs→`wait{selector:"@1"}`→`pick`→`element.ref:"@1"` 全绿 |
+| **P0-6** skill 包化分层 | ✅ | `lib/skill.js` → 目录包生成器：`skills/kitesurf-cdp/` = 54 行入口 + `references/`×8（routes/observability/mcp-bridge/element-packets/emulation/recipes/recovery-playbook/error-catalog 生成自 ERROR_CATALOG）+ `templates/`×2；注册带 `resourceBase:{kind:'directory'}`；frontmatter 注 `version`/`date`；build 断言 ROUTE_TABLE 27 路由 × 15 `kitesurf_*` 工具全被文档覆盖——**当场抓到真漂移** `/perf-report` 未记录。测试 59/59 |
 
 ### 7.2 e2e 暴露并当场修掉的真实 bug
 
@@ -467,6 +468,6 @@ P0 批次在真机 dsh-dev 上构建→部署→e2e 完成。三项 **P0 内嵌�
 
 ### 7.3 本轮结论
 
-P0 的**契约可信**目标已达成大半：错误可自查（P0-1）、开关是真的（P0-2）、等待是原语（P0-3）、单写者不被踩（P0-4）、**ref 是统一语言**（P0-5）。尚未闭合的是 P0-6（skill 分层）。P0-5 的「人标注 ↔ agent 引用同一元素」链已真正打通：人点选的 `element.ref` 与 agent 的 `@N` 指向同一 DOM 节点。
+P0 的**契约可信**目标已全数达成：错误可自查（P0-1）、开关是真的（P0-2）、等待是原语（P0-3）、单写者不被踩（P0-4）、**ref 是统一语言**（P0-5）、**skill 是分层目录包**（P0-6）。「人标注 ↔ agent 引用同一元素」链已真正打通：人点选的 `element.ref` 与 agent 的 `@N` 指向同一 DOM 节点。P0-6 的 build 对账第一次证明「接口真源 → 分层生成 → 覆盖断言」全链路可跑——会成为全仓 skill 工程模板。
 
 **三条不做的线**（守住定位）：① 不做本地 Chrome fallback（架构红线）；② 不做「先试样式再写代码」（design-mode-feedback 已裁决：`DOM.highlightNode` 是空的，假功能不做）；③ P2-6 远程面不在无业主决议时动（扩约）。

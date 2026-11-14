@@ -73,16 +73,58 @@ rmSync(body)
 // skills/<name>/SKILL.md are GENERATED from lib/skill.js — one body, two
 // consumers (runtime registration + filesystem discovery). Never edit
 // the SKILL.md files by hand; they drifted that way before (R18).
+// P0-6: kitesurf-cdp is a DIRECTORY skill — the entry is a ≤90-line index and
+// the topic bodies come from src/skill/kitesurf-cdp/{references,templates}.
 const { SKILL_BODIES } = await import(join(root, 'lib', 'skill.js'))
+const { ERROR_CATALOG } = await import(join(root, 'lib', 'diagnostics.js'))
+const pkgMeta = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
 const FRONTMATTER = {
   'kitesurf-cdp': 'Collaborate on a frontend through the Kitesurf CDP endpoint. Use when the user points at a page, or asks to inspect or change what Kitesurf is rendering. Do not launch Chrome.',
   'nano-kite': 'Initialize, start, suspend, or resume Kitesurf, and point MCP at a local or remote engine. Use when the user types /nano-kite.',
 }
+const buildDate = new Date().toISOString().slice(0, 10)
 for (const [name, text] of Object.entries(SKILL_BODIES)) {
   const dir = join(root, 'skills', name)
   mkdirSync(dir, { recursive: true })
   writeFileSync(join(dir, 'SKILL.md'),
-    `---\nname: ${name}\ndescription: ${FRONTMATTER[name]}\nuser-invocable: true\n---\n\n${text}\n`)
+    `---\nname: ${name}\ndescription: ${FRONTMATTER[name]}\nversion: ${pkgMeta.version}\ndate: ${buildDate}\nuser-invocable: true\n---\n\n${text}\n`)
+}
+
+// ── Directory skill: copy authored references/templates + generate the
+// error catalogue reference + reconcile ROUTE_TABLE × KITESURF_TOOLS coverage.
+const skillSrc = join(root, 'src', 'skill', 'kitesurf-cdp')
+const skillDst = join(root, 'skills', 'kitesurf-cdp')
+import { cpSync, readdirSync } from 'node:fs'
+cpSync(join(skillSrc, 'references'), join(skillDst, 'references'), { recursive: true })
+cpSync(join(skillSrc, 'templates'), join(skillDst, 'templates'), { recursive: true })
+
+// error-catalog.md is GENERATED from ERROR_CATALOG (same truth as /diagnostics).
+const catRows = ERROR_CATALOG.map(({ example, status, cause, next }) => `| \`${example}\` | ${status} | ${cause} | ${next} |`).join('\n')
+const catDoc = `# error-catalog — errorId → status → 原因 → 下一步（GENERATED from ERROR_CATALOG）
+
+A failed call returns \`{ok:false,errorId,error}\` with a real HTTP status. The same pair is the toast; \`/status\` repeats it as \`lastError\`; \`/operations\` keeps history; \`/diagnostics\` ships this whole table as \`observability.errorCatalog\`. **Do not paraphrase the id.** Unlisted ids are 502 (upstream/engine).
+
+| errorId | HTTP | 原因 | 下一步 |
+|---|---|---|---|
+${catRows}
+`
+writeFileSync(join(skillDst, 'references', 'error-catalog.md'), catDoc)
+
+// Coverage reconciliation (P0-6): every registered ROUTE_TABLE path and every
+// kitesurf_* MCP tool name must appear in the generated skill tree, or the
+// interface drifted from what the skill documents. Scan all generated .md.
+const { ROUTE_TABLE } = await import(join(root, 'lib', 'route-table.js'))
+const bridgeSrc = readFileSync(join(root, 'runtime', 'mcp-bridge.mjs'), 'utf8')
+const toolNames = [...bridgeSrc.matchAll(/name:\s*['"](kitesurf_[a-z_]+)['"]/g)].map((m) => m[1])
+const allMd = readdirSync(join(skillDst, 'references')).filter((f) => f.endsWith('.md'))
+  .map((f) => readFileSync(join(skillDst, 'references', f), 'utf8'))
+allMd.push(readFileSync(join(skillDst, 'SKILL.md'), 'utf8'))
+const treeText = allMd.join('\n')
+const missingRoutes = ROUTE_TABLE.filter((r) => !treeText.includes(r.path)).map((r) => r.path)
+const missingTools = toolNames.filter((t) => !treeText.includes(t))
+if (missingRoutes.length || missingTools.length) {
+  console.error(`skill coverage drift: missing routes ${JSON.stringify(missingRoutes)} tools ${JSON.stringify(missingTools)}`)
+  process.exit(1)
 }
 
 // Deliverable check (R1): every relative ./lib/ import in index.js must
@@ -99,4 +141,4 @@ if (missing.length) {
   console.error(`files check: index.js imports missing from package.json "files": ${missing.join(', ')}`)
   process.exit(1)
 }
-console.log('build ok: lib/route-table.js lib/route-guard.js lib/perf-host.js lib/client.js skills/*/SKILL.md; files check passed')
+console.log(`build ok: lib/route-table.js lib/route-guard.js lib/perf-host.js lib/client.js skills/*/SKILL.md + ${allMd.length - 1} references (coverage ${ROUTE_TABLE.length} routes/${toolNames.length} tools); files check passed`)

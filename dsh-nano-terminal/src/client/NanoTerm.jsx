@@ -30,38 +30,71 @@ function saveSettings(s) {
 }
 const fontFrom = (s) => ({ family: FONT_FAMILIES[s.font] ?? FONT_FAMILIES.jetbrains, size: s.fontSize })
 
+// Resolve the host TrajectoryToolbar CSS-module class names from the live
+// stylesheets. The module is identified by its signature custom property
+// (--dsh-trajectory-toolbar-height on .root); hashed prefixes differ per
+// host build, so they can never be hard-coded. Returns '' when the host
+// bundle has not injected its toolbar rules yet.
+const trajCache = {}
+function trajCls(local) {
+  if (trajCache.resolved === undefined) {
+    trajCache.map = {}
+    trajCache.resolved = true
+    try {
+      for (const sheet of document.styleSheets) {
+        let rules
+        try { rules = sheet.cssRules } catch { continue }
+        if (!rules) continue
+        for (const rule of rules) {
+          const sel = rule.selectorText
+          if (!sel || !/--dsh-trajectory-toolbar-height/.test(rule.cssText)) continue
+          const m = sel.match(/^\.([A-Za-z0-9_-]+)_root$/)
+          // the toolbar root is identified by its signature border; the
+          // views.module root only defines the height variable
+          if (!m || !/border-bottom/.test(rule.cssText)) continue
+          const prefix = m[1]
+          for (const r of rules) {
+            const sub = (r.selectorText ?? '').match(new RegExp(`^\\.${prefix}_([a-zA-Z]+)$`))
+            if (sub) trajCache.map[sub[1]] = `${prefix}_${sub[1]}`
+          }
+        }
+      }
+    } catch { /* sheets unreachable — degrade to no host class */ }
+  }
+  return trajCache.map[local] ?? ''
+}
+
 // Workbench-consistent chrome: the same toolbar/tool shapes the other right-
 // workspace plugins use, dressed entirely in --dsw-alias-* tokens.
 const STYLE = `
 ${NANO_STYLES}
 
-.dnt-root{position:relative;height:100%;min-height:0;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-base);flex-direction:column;display:flex;font:var(--dsw-font-xxs-12)}
-/* status bar mirrors 轨迹 toolbar exactly: sticky, 32px min-height,
-   4px 6px inner padding, bg-layer-1, border-l2 — no custom chrome */
-.dnt-statusbar{position:sticky;top:0;z-index:4;box-sizing:border-box;width:100%;flex:none;min-height:32px;border-bottom:.5px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1)}
-.dnt-statusbar-inner{display:flex;align-items:center;box-sizing:border-box;width:100%;min-height:32px;padding:4px 6px;gap:4px 8px;font:var(--dsw-font-xxs-12)}
-.dnt-statusbar-mark{display:inline-flex;color:var(--dsw-alias-brand-primary,var(--dsw-alias-link));flex:none}
-.dnt-statusbar-mark svg{width:14px;height:14px}
-.dnt-statusbar-title{color:var(--dsw-alias-label-primary);font-weight:600;flex:none}
-.dnt-statusbar-stat{display:inline-flex;align-items:center;gap:6px;color:var(--dsw-alias-label-tertiary);min-width:0}
-.dnt-statusbar-dim{font:10px var(--ds-font-family-code,monospace);color:var(--dsw-alias-label-quaternary)}
-.dnt-statusbar-phase{color:var(--dsw-alias-label-secondary)}
-.dnt-statusbar-termtitle{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-caption)}
-.dnt-statusbar-spacer{flex:1 1 auto}
-.dnt-statusbar-btnlabel{margin-left:2px}
-.dnt-tool{width:28px;height:28px;color:var(--dsw-alias-label-secondary);border-radius:var(--dsw-radius-sm);cursor:pointer;background:transparent;border:0;flex:none;justify-content:center;align-items:center;padding:0;display:inline-flex}
-.dnt-tool:hover:not(:disabled){color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}
-.dnt-tool:disabled{color:var(--dsw-alias-label-quaternary);cursor:default}
-.dnt-tool:focus-visible,.dnt-address:focus-visible{outline:2px solid var(--dsw-alias-brand-primary,var(--dsw-alias-link));outline-offset:1px}
-.dnt-tool svg{flex:none}
-.dnt-rotate{transform:rotate(90deg)}
-.dnt-address{box-sizing:border-box;width:220px;height:28px;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-12);background:var(--dsw-alias-bg-layer-1);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-sm);padding:0 9px}
-.dnt-address::placeholder{color:var(--dsw-alias-label-tertiary)}
+/* The host views.module root defines --dsh-trajectory-toolbar-height for the
+   trajectory view; our view has no such ancestor, so the token is declared
+   here to let the borrowed fV0t5q_* rules resolve to the same 32px. */
+.dnt-root{position:relative;height:100%;min-height:0;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-base);flex-direction:column;display:flex;font:var(--dsw-font-xxs-12);--dsh-trajectory-toolbar-height:32px}
+/* statusbar uses the host's own TrajectoryToolbar module classes — resolved
+   at runtime from document.styleSheets by trajCls(), never re-authored here.
+   Only layout glue lives below: sticky pinning and the spacer. */
+.dnt-statusbar{position:sticky;top:0;flex:none;display:block}
+.dnt-statusbar-spacer{flex:1 1 auto;min-width:4px}
+.dnt-statusbar-dim{font:10px var(--ds-font-family-code,monospace);color:var(--dsw-alias-label-quaternary);white-space:nowrap}
+.dnt-statusbar-termtitle{max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dnt-statusbar-mark{display:inline-flex;color:var(--dsw-alias-label-tertiary);flex:none}
+.dnt-statusbar-mark svg{width:14px;height:14px;stroke:currentColor;stroke-width:1.25;stroke-linecap:round;stroke-linejoin:round}
+/* stat group must not force the host inner (flex-wrap) into a second row —
+   ellipsis + shrinkable title keep the row single-line at any width */
+.dnt-statusbar-stat{display:inline-flex;align-items:center;gap:4px;min-width:0;overflow:hidden;flex:0 1 auto}
+.dnt-statusbar-btnlabel{white-space:nowrap}
+.dnt-header .dnt-toolbtn svg{width:13px;height:13px}
 .dnt-statusbar-info{margin-left:auto;cursor:default;color:var(--dsw-alias-label-quaternary)}
 .dnt-statusbar-info:hover{color:var(--dsw-alias-label-tertiary);background:transparent}
-/* content column mirrors 轨迹: centered, same L/R margins */
-.dnt-content{flex:1 1 0;min-height:0;min-width:0;display:flex;justify-content:center;overflow:hidden}
-.dnt-panes{display:flex;flex:1 1 auto;min-height:0;min-width:0;max-width:880px;gap:6px;padding:8px 16px;box-sizing:border-box}
+/* content fills the view edge-to-edge — zero outer padding so the pane
+   surface meets the view column border, matching how the trajectory body
+   and chat composer sit flush against the column. No symmetric margin is
+   left beside the panes. */
+.dnt-content{flex:1 1 0;min-height:0;min-width:0;display:flex;overflow:hidden}
+.dnt-panes{display:flex;flex:1 1 auto;min-height:0;min-width:0;gap:6px;padding:8px 0;box-sizing:border-box}
 .dnt-splitter{flex:0 0 6px;border-radius:3px;cursor:col-resize;transition:background .15s}
 .dnt-splitter:hover{background:var(--dsw-alias-interactive-bg-hover)}
 .dnt-pane{position:relative;flex:1 1 0;min-width:0;min-height:0;display:flex;flex-direction:column;overflow:hidden;container-type:size;container-name:dnt-pane;border-radius:var(--dsw-radius-md,8px);border:.5px solid var(--dsw-alias-border-l3);background:var(--dsw-alias-bg-base);transition:border-color .15s}
@@ -81,9 +114,9 @@ ${NANO_STYLES}
 .dnt-lane{font-size:10px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--dsw-alias-brand-primary,var(--dsw-alias-link));background:color-mix(in srgb,var(--dsw-alias-brand-primary,var(--dsw-alias-link)) 12%,transparent);border-radius:var(--dsw-radius-sm);padding:1px 6px;flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dnt-title{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary)}
 .dnt-scroll-lines{font-size:10px;color:var(--dsw-alias-label-quaternary);flex:0 0 auto;font-variant-numeric:tabular-nums}
-.dnt-header .dnt-tool{width:20px;height:20px;flex:0 0 auto;color:var(--dsw-alias-label-tertiary)}
-.dnt-header .dnt-tool:hover:not(:disabled){color:var(--dsw-alias-label-primary)}
-.dnt-header .dnt-tool svg{width:13px;height:13px}
+.dnt-header .dnt-toolbtn{width:20px;height:20px;padding:0}
+.dnt-header .dnt-toolbtn:hover:not(:disabled){color:var(--dsw-alias-label-primary)}
+.dnt-header .dnt-toolbtn svg{width:13px;height:13px}
 .dnt-header-actions{display:flex;align-items:center;gap:1px;flex:0 0 auto;margin-left:auto}
 .dnt-canvas-host{position:absolute;top:26px;left:0;right:0;bottom:0;overflow:hidden;cursor:text}
 .dnt-scrollbar-track{position:absolute;right:3px;top:32px;bottom:8px;width:6px;pointer-events:none;z-index:4}
@@ -211,6 +244,8 @@ export function NanoTerm({ sessionId, session, zh, openView }) {
     })
   }, [])
 
+  const rootRef = useRef(null)
+
   useEffect(() => {
     let live = true
     const style = document.createElement('style')
@@ -275,7 +310,7 @@ export function NanoTerm({ sessionId, session, zh, openView }) {
   if (!ready) return <div className="dnt-err">{zh ? '正在加载终端核心…' : 'loading terminal core…'}</div>
 
   return (
-    <div className="dnt-root" data-nano-terminal>
+    <div ref={rootRef} className="dnt-root" data-nano-terminal>
       <StatusBar sessionId={sessionId} split={split} openLeaf={openLeaf} focused={focused} zh={zh} tree={tree} paneSessions={paneSessions} statuses={statuses} settings={settings} onSettings={updateSettings} />
       {tree ? (
         <div className="dnt-content">
@@ -347,6 +382,7 @@ function firstLeaf(node) {
 /** Top status bar: 轨迹 toolbar convention — identity + lane status left, controls right. */
 function StatusBar({ sessionId, split, openLeaf, focused, zh, tree, paneSessions, statuses, settings, onSettings }) {
   const [mcpUrl, setMcpUrl] = useState('')
+  const [filterQuery, setFilterQuery] = useState('')
   const [dialog, setDialog] = useState(null) // 'mcp' | 'help' | 'settings'
   const [menu, setMenu] = useState(null)
   const target = focused ?? firstLeaf(tree)
@@ -376,31 +412,54 @@ function StatusBar({ sessionId, split, openLeaf, focused, zh, tree, paneSessions
   const phaseDot = { opening: 'ongoing', live: 'done', exited: 'idle', error: 'error' }
   const phaseText = { opening: zh ? '连接中' : 'connecting', live: zh ? '运行中' : 'live', exited: zh ? '已退出' : 'exited', error: zh ? '失败' : 'failed' }
   const laneText = { local: 'LOCAL', mcp: 'MCP', isolate: 'ISOLATE' }
+  // statusbar mirrors TrajectoryToolbar.tsx exactly: root→inner→actions→
+  // (toggle + action buttons with actionIcon text glyphs) + search on the
+  // right. Host module classes resolved by trajCls; zero local chrome rules.
+  const statSummary = cur
+    ? `${laneText[cur.lane] ?? cur.lane} · ${count}${zh ? ' 窗格' : ' panes'}${cur.dims ? ` · ${cur.dims.cols}×${cur.dims.rows}` : ''} · ${phaseText[cur.phase] ?? cur.phase}`
+    : null
   return (
-    <div className="dnt-statusbar" role="toolbar" aria-label={zh ? '终端状态栏' : 'terminal status bar'}>
-      <div className="dnt-statusbar-inner">
-        <span className="dnt-statusbar-mark" aria-hidden>{glyph('terminal')}</span>
-        <span className="dnt-statusbar-title">{zh ? 'Nano 终端' : 'Nano Terminal'}</span>
-        {count > 0 && cur && (
-          <span className="dnt-statusbar-stat">
-            <StateDot state={phaseDot[cur.phase] ?? 'idle'} />
-            <Tag tone="outline">{laneText[cur.lane] ?? cur.lane}</Tag>
-            <span className="dnt-statusbar-dim">{count}{zh ? ' 窗格' : ' panes'}{cur.dims ? ` · ${cur.dims.cols}×${cur.dims.rows}` : ''}</span>
-            <span className="dnt-statusbar-phase">{phaseText[cur.phase] ?? cur.phase}</span>
-            {cur.title && <span className="dnt-statusbar-termtitle" title={cur.title}>{cur.title}</span>}
-          </span>
-        )}
-        <span className="dnt-statusbar-spacer" />
-        <Button variant="ghost" size="sm" onClick={openMenu} aria-label={zh ? '新建窗格' : 'new pane'} title={zh ? '新建窗格' : 'new pane'}>
-          {glyph('add')}
-          <span className="dnt-statusbar-btnlabel">{zh ? '新建' : 'New'}</span>
-        </Button>
-        <Button variant="ghost" size="sm" onClick={() => setDialog('help')} aria-label={zh ? '快捷键与说明' : 'shortcuts'} title={zh ? '快捷键与说明' : 'shortcuts'}>
-          {glyph('help')}
-        </Button>
-        <Button variant="ghost" size="sm" onClick={() => setDialog('settings')} aria-label={zh ? '终端设置' : 'terminal settings'} title={zh ? '终端设置' : 'terminal settings'}>
-          {glyph('settings')}
-        </Button>
+    <div className={trajCls('root')} role="toolbar" aria-label={zh ? '终端状态栏' : 'terminal status bar'}>
+      <div className={trajCls('inner')}>
+        <div className={trajCls('actions')}>
+          <button type="button" className={trajCls('toggle')} aria-label={zh ? '当前终端状态' : 'current terminal status'} title={statSummary ?? (zh ? '尚无窗格' : 'no panes')}>
+            <svg className={trajCls('toggleIcon')} viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M2 4.5l3 3.5-3 3.5" />
+              <path d="M7 11.5h7" />
+            </svg>
+            {zh ? 'Nano 终端' : 'Nano Terminal'}
+          </button>
+          {count > 0 && cur && (
+            <button type="button" className={trajCls('toggle')} aria-label={zh ? '窗格与通道' : 'panes and lane'} title={cur.title ?? statSummary}>
+              <StateDot state={phaseDot[cur.phase] ?? 'idle'} />
+              {statSummary}
+            </button>
+          )}
+          <button type="button" className={trajCls('action')} aria-label={zh ? '新建窗格' : 'new pane'} title={zh ? '新建窗格' : 'new pane'} onClick={openMenu}>
+            <span className={trajCls('actionIcon')} aria-hidden="true">⊕</span>
+            {zh ? '新建' : 'New'}
+          </button>
+          <button type="button" className={trajCls('action')} aria-label={zh ? '快捷键与说明' : 'shortcuts'} title={zh ? '快捷键与说明' : 'shortcuts'} onClick={() => setDialog('help')}>
+            <span className={trajCls('actionIcon')} aria-hidden="true">?</span>
+          </button>
+          <button type="button" className={trajCls('action')} aria-label={zh ? '终端设置' : 'terminal settings'} title={zh ? '终端设置' : 'terminal settings'} onClick={() => setDialog('settings')}>
+            <span className={trajCls('actionIcon')} aria-hidden="true">⚙</span>
+          </button>
+        </div>
+        <div className={trajCls('search')}>
+          <svg className={trajCls('searchIcon')} width="11" height="11" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.4" />
+            <path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
+          </svg>
+          <input
+            type="search"
+            className={trajCls('searchInput')}
+            aria-label={zh ? '窗格标题' : 'pane title'}
+            placeholder={zh ? '窗格标题…' : 'pane title…'}
+            value={filterQuery}
+            onChange={(e) => setFilterQuery(e.currentTarget.value)}
+          />
+        </div>
         <NanoMenu menu={menu} actions={laneActions} onClose={() => setMenu(null)} width={200} />
       {dialog === 'mcp' && (
         <NanoDialog
@@ -849,17 +908,17 @@ function TermPane({ paneId, laneSpec, sessionId, session, focused, onFocus, onCl
         <span className="dnt-scroll-lines">{status.scroll?.total ? `${status.scroll.total}ln` : ''}</span>
         <span className="dnt-header-actions">
           {(status.phase === 'error' || status.phase === 'exited') && (
-            <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setRetrySeq((n) => n + 1) }}
+            <button type="button" className={`dnt-toolbtn ${trajCls('action')}`} onClick={(e) => { e.stopPropagation(); setRetrySeq((n) => n + 1) }}
               aria-label={zh ? '重试连接' : 'retry connection'} title={zh ? '重试连接' : 'retry connection'}>
               {glyph('retry')}
-            </Button>
+            </button>
           )}
-          <Button variant="ghost" size="sm" className="dnt-hide-narrow" onClick={(e) => { e.stopPropagation(); onSplit('h') }}
-            aria-label={zh ? '向右分屏' : 'split right'} title={zh ? '向右分屏' : 'split right'}>{glyph('splitRight')}</Button>
-          <Button variant="ghost" size="sm" className="dnt-hide-narrow" onClick={(e) => { e.stopPropagation(); onSplit('v') }}
-            aria-label={zh ? '向下分屏' : 'split down'} title={zh ? '向下分屏' : 'split down'}>{glyph('splitDown', true)}</Button>
-          <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onClose() }}
-            aria-label={zh ? '关闭' : 'close pane'} title={zh ? '关闭' : 'close pane'}>{glyph('close')}</Button>
+          <button type="button" className={`dnt-toolbtn dnt-hide-narrow ${trajCls('action')}`} onClick={(e) => { e.stopPropagation(); onSplit('h') }}
+            aria-label={zh ? '向右分屏' : 'split right'} title={zh ? '向右分屏' : 'split right'}>{glyph('splitRight')}</button>
+          <button type="button" className={`dnt-toolbtn dnt-hide-narrow ${trajCls('action')}`} onClick={(e) => { e.stopPropagation(); onSplit('v') }}
+            aria-label={zh ? '向下分屏' : 'split down'} title={zh ? '向下分屏' : 'split down'}>{glyph('splitDown', true)}</button>
+          <button type="button" className={`dnt-toolbtn ${trajCls('action')}`} onClick={(e) => { e.stopPropagation(); onClose() }}
+            aria-label={zh ? '关闭' : 'close pane'} title={zh ? '关闭' : 'close pane'}>{glyph('close')}</button>
         </span>
       </div>
       <div ref={canvasHostRef} className="dnt-canvas-host" />

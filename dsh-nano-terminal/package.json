@@ -42,6 +42,7 @@
         "@deepseek-ai/dsh-client-ui-layout",
         "@deepseek-ai/dsh-client-ui-commands",
         "@deepseek-ai/dsh-client-ui-primitives",
+        "@deepseek-ai/dsh-client-shortcuts",
         "@deepseek-ai/dsh-client-locale"
       ]
     }

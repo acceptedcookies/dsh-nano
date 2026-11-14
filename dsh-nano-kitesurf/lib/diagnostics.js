@@ -66,6 +66,8 @@ export const ERROR_CATALOG = [
   { match: '^kitesurf\\.diag\\.query$', example: 'kitesurf.diag.query', status: 400, cause: 'diagnostics/operations 查询参数非法', next: 'GET /diagnostics?limit=20；GET /operations?errorsOnly=true' },
   { match: '^kitesurf\\.evaluate\\.(empty|toolong)$', example: 'kitesurf.evaluate.empty', status: 400, cause: 'expression 为空或超过 2000 字符', next: 'POST /evaluate {expression:"document.title"}，≤2000 字符' },
   { match: '^kitesurf\\.evaluate\\.exception$', example: 'kitesurf.evaluate.exception', status: 400, cause: '页面 JS 求值抛异常（输入侧表达式错误）', next: '看 error 里的异常描述；先 /open 再求值；确认 selector/变量名存在' },
+  { match: '^kitesurf\\.wait\\.query$', example: 'kitesurf.wait.query', status: 400, cause: '/wait 条件不合法：selector/text/url/fn 必须恰好一个，load 必须是 commit|domcontentloaded|load|networkidle', next: 'POST /wait {selector:".ready"} 或 {text:"Done"} 或 {url:"/home"}；加 load:"networkidle" 等空闲' },
+  { match: '^kitesurf\\.wait\\.timeout$', example: 'kitesurf.wait.timeout', status: 504, cause: '等待超时：条件在 timeoutMs 内没成立（元素没出现/文本没渲染/导航没到）', next: '确认条件写对（selector 真实存在？）；加大 timeoutMs≤30000；GET /console 看页面是否报错' },
   { match: '^kitesurf\\.history\\.body$', example: 'kitesurf.history.body', status: 400, cause: '/browse-history POST body 不是 {clear:true}，或 /history body 不是 {delta:±1}', next: 'POST /browse-history {"clear":true}；导航用 POST /history {delta:-1|1}' },
   { match: '^kitesurf\\.network\\.query$', example: 'kitesurf.network.query', status: 400, cause: '/network 查询参数非法（limit 越界）', next: 'GET /network?limit=1..200&failedOnly=true；POST /network {clear:true} 清空' },
   { match: '^kitesurf\\.shot\\.empty$', example: 'kitesurf.shot.empty', status: 502, cause: '引擎返回了空截图（页面不可绘/渲染器忙）', next: '确认页面已 /open；等一秒重试；仍空则 GET /diagnostics 看页面是否 about:blank' },
@@ -326,6 +328,16 @@ export function listNetwork({ limit = 100, failedOnly = false } = {}) {
   let rows = netOrder.map((id) => netRequests.get(id)).filter(Boolean)
   if (failedOnly) rows = rows.filter((r) => r.failed || (r.status && r.status >= 400))
   return { entries: rows.slice(-cap), total: netOrder.length, dropped: droppedNetwork }
+}
+
+/** In-flight request count (requestWillBeSent seen, no finish/fail yet). */
+export function networkPending() {
+  let n = 0
+  for (const id of netOrder) {
+    const row = netRequests.get(id)
+    if (row && row.status === null && !row.failed && row.durationMs === null) n += 1
+  }
+  return n
 }
 
 export function clearNetwork() {

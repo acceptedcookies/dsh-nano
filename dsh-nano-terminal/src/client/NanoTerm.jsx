@@ -2,6 +2,7 @@
 // Each pane = wasm emulator + canvas renderer + one lane (local/mcp/isolate).
 
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react'
+import { copyMode } from './select.js'
 import * as primitives from '@deepseek-ai/dsh-client-ui-primitives'
 import { NanoDialog, NanoMenu, NANO_STYLES } from 'dsh-nano-ui'
 
@@ -118,6 +119,7 @@ ${NANO_STYLES}
 .dnt-pane[data-focused="false"]{border-color:var(--dsw-alias-border-l3)}
 .dnt-pane[data-focused="false"] .dnt-canvas-host{opacity:.82}
 .dnt-pane[data-focused="false"] .dnt-dot{opacity:.7}
+.dnt-copy-hint{position:absolute;right:12px;bottom:10px;z-index:5;font:600 11px/1 var(--dsw-alias-font-family-mono,ui-monospace,monospace);color:var(--dsw-alias-warning,#b57f2a);background:color-mix(in srgb,var(--dsw-alias-bg-l2,#1a1a1a) 92%,transparent);padding:3px 7px;border-radius:4px;border:1px solid var(--dsw-alias-border-l3);pointer-events:none}
 .dnt-header{display:flex;align-items:center;gap:7px;height:26px;padding:0 8px;border-bottom:.5px solid var(--dsw-alias-border-l3);user-select:none;flex:none}
 .dnt-pane[data-focused="true"] .dnt-header{border-bottom-color:var(--dsw-alias-border-l2);background:color-mix(in srgb,var(--dsw-alias-brand-primary,var(--dsw-alias-link)) 4%,transparent)}
 .dnt-dot{width:7px;height:7px;border-radius:50%;flex:none;background:var(--dsw-alias-label-quaternary)}
@@ -178,6 +180,8 @@ const glyph = (name, rotate = false) => {
     chevron: primitives.IconChevronDownOutlineRegular,
     add: primitives.IconPlusOutlineRegular,
     terminal: primitives.IconCommandOutlineRegular ?? primitives.IconTerminalOutlineRegular ?? primitives.IconPlusOutlineRegular,
+    copy: primitives.IconCopyOutlineRegular ?? primitives.IconClipboardOutlineRegular ?? primitives.IconCheckOutlineRegular,
+    paste: primitives.IconClipboardPasteOutlineRegular ?? primitives.IconPasteOutlineRegular ?? primitives.IconCopyOutlineRegular ?? primitives.IconCheckOutlineRegular,
   }[name]
   if (!Icon) return null
   return (
@@ -738,6 +742,7 @@ function TermPane({ paneId, laneSpec, sessionId, session, focused, onFocus, onCl
   const canvasHostRef = useRef(null)
   const [status, setStatus] = useState({ lane: laneSpec.lane, phase: 'opening', scroll: '0/0', title: '' })
   const [retrySeq, setRetrySeq] = useState(0)
+  const [menuAt, setMenuAt] = useState(null)
   const stateRef = useRef({})
 
   useEffect(() => {
@@ -856,6 +861,25 @@ function TermPane({ paneId, laneSpec, sessionId, session, focused, onFocus, onCl
 
     // input
     const keydown = (ev) => {
+      // ctrl+alt prefix family (herdr least-conflicting set): copy-mode,
+      // split, next-pane — intercepted before the program sees them.
+      if (ev.ctrlKey && ev.altKey) {
+        const k = ev.key.toLowerCase()
+        if (k === 'c') {
+          ev.preventDefault(); ev.stopPropagation()
+          if (!stateRef.current.copyMode) {
+            stateRef.current.copyMode = copyMode({
+              box, term, lane,
+              onCopy: (t) => { navigator.clipboard?.writeText(t).catch(() => {}) },
+              onHint: (h) => applyStatus((s) => ({ ...s, hint: h })),
+            })
+          }
+          return
+        }
+        if (k === '\\' || k === '|') { ev.preventDefault(); ev.stopPropagation(); onSplit('h'); return }
+        if (k === '-') { ev.preventDefault(); ev.stopPropagation(); onSplit('v'); return }
+        if (k === 'w') { ev.preventDefault(); ev.stopPropagation(); onClose(); return }
+      }
       const data = encodeKey(ev, term.modes())
       if (data?.length) {
         lane.write(data)
@@ -907,10 +931,18 @@ function TermPane({ paneId, laneSpec, sessionId, session, focused, onFocus, onCl
     }
     const focusin = () => { const d = encodeFocus(term.modes(), true); if (d) lane.write(d) }
     const focusout = () => { const d = encodeFocus(term.modes(), false); if (d) lane.write(d) }
+    // right-click = menu (herdr right_click=menu default): paste, copy-mode,
+    // split, close — rendered by the pane header menu owner, not the program.
+    const contextmenu = (ev) => {
+      ev.preventDefault()
+      onFocus()
+      setMenuAt({ x: ev.clientX, y: ev.clientY })
+    }
 
     box.addEventListener('keydown', keydown)
     box.addEventListener('paste', paste)
     box.addEventListener('wheel', wheel, { passive: false })
+    box.addEventListener('contextmenu', contextmenu)
     host.addEventListener('mousedown', mousedown)
     host.addEventListener('mouseup', mouseup)
     host.addEventListener('mousemove', mousemove)
@@ -974,6 +1006,8 @@ function TermPane({ paneId, laneSpec, sessionId, session, focused, onFocus, onCl
       box.removeEventListener('focusout', focusout)
       rec.hooks.schedulePaint = undefined
       rec.hooks.applyStatus = undefined
+      stateRef.current.copyMode?.()
+      stateRef.current.copyMode = null
       // unmount ≠ close: a split-remount reattaches; closeLeaf decides life.
       canvas.detach()
     }
@@ -1018,7 +1052,22 @@ function TermPane({ paneId, laneSpec, sessionId, session, focused, onFocus, onCl
         </span>
       </div>
       <div ref={canvasHostRef} className="dnt-canvas-host" />
+      {status.hint && <span className="dnt-copy-hint">{status.hint}</span>}
       <Scrollbar status={status} />
+      {menuAt && (
+        <NanoMenu
+          menu={menuAt}
+          onClose={() => setMenuAt(null)}
+          width={190}
+          actions={[
+            { id: 'paste', label: zh ? '粘贴' : 'Paste', icon: glyph('paste'), run: async () => { const rec = paneSessions.current.get(paneId); const t = await navigator.clipboard?.readText?.().catch(() => '') ; if (t) rec?.lane?.write(encodePaste(t, rec.term.modes())) } },
+            { id: 'copymode', label: zh ? '复制模式 (⌃⌥C)' : 'Copy mode (⌃⌥C)', icon: glyph('copy'), run: () => boxRef.current?.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', ctrlKey: true, altKey: true, bubbles: true })) },
+            { id: 'splith', label: zh ? '向右分屏' : 'Split right', icon: glyph('splitRight'), run: () => onSplit('h') },
+            { id: 'splitv', label: zh ? '向下分屏' : 'Split down', icon: glyph('splitDown'), run: () => onSplit('v') },
+            { id: 'close', label: zh ? '关闭窗格' : 'Close pane', icon: glyph('close'), run: () => onClose() },
+          ]}
+        />
+      )}
       {status.phase === 'error' && (
         <div className="dnt-overlay" role="alert">
           {glyph('warn')}

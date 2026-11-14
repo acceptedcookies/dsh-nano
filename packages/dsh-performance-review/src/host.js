@@ -6,8 +6,10 @@
  * dsh host process owns exactly one `globalThis.__perfReviewHost` (spec §3.3);
  * every bundled copy registers itself in `contributors`.
  *
- * Enablement: DSH_PERF_REVIEW=1, read once at first hostJoin(). Disabled path =
- * identity wrappers. While enabled a writer flushes
+ * Enablement: DSH_PERF_REVIEW=1 read lazily at first span/snapshot, or an
+ * explicit host.setEnabled(bool) which always wins. Resolution is deferred so
+ * a plugin that sets the env var inside apply() (after module import, where
+ * hostJoin fires) still turns collection on. While enabled a writer flushes
  *   <dataDir>/plugins/perf-review/host.json
  * every 30 s (timer.unref()) and once more on process beforeExit.
  */
@@ -114,7 +116,16 @@ export function createPerfReviewHost(env = {}) {
     } catch { /* fake process without once() */ }
   }
 
-  const decideEnabled = () => {
+  /**
+   * Resolve `enabled` lazily and exactly once — but only when something
+   * actually reads it, never at hostJoin time. Freezing on hostJoin meant a
+   * plugin that sets DSH_PERF_REVIEW inside apply() (which runs AFTER module
+   * import, where hostJoin fires) could never turn collection on: the switch
+   * looked on but recorded nothing. An explicit setEnabled() always wins;
+   * otherwise the env var is read at first span/snapshot, by which point
+   * apply() has run.
+   */
+  const isEnabled = () => {
     if (state.enabled === null) {
       state.enabled = env.forceEnabled !== undefined
         ? env.forceEnabled === true
@@ -124,8 +135,14 @@ export function createPerfReviewHost(env = {}) {
     return state.enabled
   }
 
+  /** Explicit on/off — wins over the env var and over lazy resolution. */
+  const setEnabled = (value) => {
+    state.enabled = value === true
+    if (state.enabled) startWriter()
+  }
+
   const recordSpan = (row, name, t0, t1) => {
-    if (!NAME_RE.test(name)) return
+    if (!NAME_RE.test(name) || !isEnabled()) return
     let span = row.spans.get(name)
     if (span === undefined) {
       span = createSpanRow()
@@ -144,28 +161,19 @@ export function createPerfReviewHost(env = {}) {
     }
   }
 
-  const disabledApi = () => ({
-    hostSpan(_name, fn) { return fn() },
-    count() {},
-    // Diagnostic access stays available even when collection is off: the
-    // browser poll then sees `{enabled:false}` rather than a 404.
-    snapshot: () => hostSnapshot(state),
-    takeWindow: () => takeWindow(state),
-  })
-
   /**
    * hostJoin(pluginId, impl) — impl: {version?}.
    * Returns { hostSpan(name, fn) } where fn may be sync or async (timed to settle).
+   * One API regardless of enablement: recording is gated inside recordSpan so
+   * a setEnabled(true) that lands after join still starts collecting.
    */
   const hostJoin = (pluginId, impl = {}) => {
-    decideEnabled()
     let row = state.plugins.get(pluginId)
     if (row === undefined) {
       row = { version: impl.version ?? null, spans: new Map() }
       state.plugins.set(pluginId, row)
     }
     state.contributors.push({ pluginId, libVersion: impl.libVersion ?? LIB_VERSION })
-    if (!state.enabled) return disabledApi()
     const clock = env.performance ?? globalThis.performance
     const now = () => clock.now()
     return {
@@ -186,14 +194,15 @@ export function createPerfReviewHost(env = {}) {
         return result
       },
       count() {},
-      snapshot: () => hostSnapshot(state),
+      snapshot: () => { isEnabled(); return hostSnapshot(state) },
       takeWindow: () => takeWindow(state),
     }
   }
 
   return {
     hostJoin,
-    snapshot: () => hostSnapshot(state),
+    setEnabled,
+    snapshot: () => { isEnabled(); return hostSnapshot(state) },
     takeWindow: () => takeWindow(state),
     flush: () => writeFile(),
     _state: () => state,

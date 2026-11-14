@@ -128,6 +128,78 @@ var NAMED_KEYS = {
   f12: "\x1B[24~"
 };
 
+// src/host/notes.js
+var MAX_NOTE = 32 * 1024;
+var noteSeq = 0;
+function makeEnvelope(fromAddr, body, id = null) {
+  const nid = id ?? `n${++noteSeq}`;
+  return `<dnt from=${fromAddr} id=${nid}>
+${body}
+</dnt>
+`;
+}
+async function sendNote(registry, fromRef, toRef, body) {
+  if (!body?.trim()) throw err(KIND.INVALID, "empty note");
+  if (body.length > MAX_NOTE) throw err(KIND.INVALID, `note exceeds ${MAX_NOTE} bytes`);
+  const to = registry.resolve(toRef);
+  if (!to) throw err(KIND.NOT_FOUND, `no such terminal '${toRef}'`);
+  if (to.exited) throw err(KIND.FINISHED, "target exited");
+  if (!to.handle) throw err(KIND.UNAVAILABLE, "target not spawned (attach to wake)");
+  const from = registry.resolve(fromRef);
+  const fromAddr = from?.addr ?? String(fromRef ?? "external");
+  const env = makeEnvelope(fromAddr, body);
+  const payload = `\x1B[200~${env}\x1B[201~`;
+  await to.gate.submit(() => to.handle.write(payload), { kind: "note" });
+  registry.bus?.emit("message", to.addr, { id: to.id, from: fromAddr, note: true });
+  registry.audit?.({ op: "note", from: fromAddr, to: to.addr, bytes: env.length });
+  return env.match(/id=([^ >]+)/)?.[1] ?? `n${noteSeq}`;
+}
+
+// src/host/templates.js
+var TEMPLATES = {
+  // fire a command, wait for its next turn end (or exit), return screen tail
+  "run-command": {
+    summary: "send a command, wait for the turn to finish, return output",
+    params: ["cmd", "timeout?"],
+    async run(rec, registry, bus, waitFor2, args, timeoutMs) {
+      await rec.agentSend(args.cmd, { enter: true });
+      const w = await waitFor2(rec, registry, bus, { timeoutMs });
+      return { turn: rec.turn, reason: w.reason, output: rec.screenText(200, "recent") };
+    }
+  },
+  // tail a long-running command: wait for an output pattern instead of a turn
+  "wait-output": {
+    summary: "send a command, wait for a screen pattern (not a turn end)",
+    params: ["cmd", "output", "timeout?"],
+    async run(rec, registry, bus, waitFor2, args, timeoutMs) {
+      if (!args.output) throw err(KIND.INVALID, "wait-output needs {output}");
+      await rec.agentSend(args.cmd, { enter: true });
+      const w = await waitFor2(rec, registry, bus, { output: args.output, timeoutMs });
+      return { turn: rec.turn, reason: w.reason, output: rec.screenText(60, "detection") };
+    }
+  },
+  // REPL loop: send one expression, wait for the prompt line back
+  repl: {
+    summary: "send an expression into a running REPL, wait for the next prompt",
+    params: ["expr", "prompt?", "timeout?"],
+    async run(rec, registry, bus, waitFor2, args, timeoutMs) {
+      const prompt = args.prompt ?? ">";
+      await rec.agentSend(args.expr, { enter: true });
+      const w = await waitFor2(rec, registry, bus, { output: prompt, timeoutMs });
+      return { turn: rec.turn, reason: w.reason, output: rec.screenText(40, "detection") };
+    }
+  }
+};
+function templateList() {
+  return Object.entries(TEMPLATES).map(([id, t]) => ({ id, summary: t.summary, params: t.params }));
+}
+async function templateRun(rec, registry, bus, waitFor2, name, args, timeoutMs) {
+  const t = TEMPLATES[name];
+  if (!t) throw err(KIND.INVALID, `unknown template '${name}' \u2014 see term.template.list`);
+  if (rec.exited) throw err(KIND.FINISHED, "terminal exited");
+  return t.run(rec, registry, bus, waitFor2, args ?? {}, timeoutMs);
+}
+
 // src/host/mcp.js
 var PROTOCOL_VERSION = "2025-06-18";
 var schema = JSON.parse(
@@ -248,6 +320,18 @@ function createMcpHandler({ registry, bus, auditPath, laneStatus }) {
         const rec = target(args.id);
         const labels = rec.setLabels(args.set, args.unset);
         return { ok: true, labels };
+      }
+      case "term.session.note": {
+        const rec = target(args.id);
+        const id = await sendNote(registry, args.from, rec.id, args.body);
+        return { ok: true, id };
+      }
+      case "term.template.list":
+        return { templates: templateList() };
+      case "term.template.run": {
+        const rec = target(args.id);
+        const r = await templateRun(rec, registry, bus, waitFor, args.template, args.args, (args.timeout ?? 180) * 1e3);
+        return { ok: true, ...r };
       }
       case "term.events":
         return bus.since(args.since ?? 0);

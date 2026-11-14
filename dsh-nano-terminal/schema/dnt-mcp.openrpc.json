@@ -186,6 +186,81 @@
       "errors": []
     },
     {
+      "name": "term.session.note",
+      "summary": "Deliver an agent note envelope to a terminal",
+      "description": "Deliver a <dnt from=…> note envelope into a terminal (usually child → parent). Delivery honors the gate as kind 'note': notes_quiet human silence AND no draft — a note never interrupts typing. The note arrives as a bracketed paste; the receiver's program reads it via 'dnt notes' or paste events.",
+      "params": {
+        "type": "object",
+        "properties": {
+          "id": { "$ref": "#/x-address" },
+          "body": { "type": "string", "maxLength": 32768, "description": "note text" },
+          "from": { "type": "string", "description": "sender addr/id (default: the caller's $DNT_TERMINAL_ID if set)" }
+        },
+        "required": ["id", "body"],
+        "additionalProperties": false
+      },
+      "result": {
+        "type": "object",
+        "properties": {
+          "ok": { "type": "boolean" },
+          "id": { "type": "string", "description": "note id" }
+        },
+        "required": ["ok", "id"]
+      },
+      "errors": ["not_found", "finished", "unavailable", "invalid"]
+    },
+    {
+      "name": "term.template.list",
+      "summary": "List reusable send/wait templates",
+      "description": "List the built-in terminal task templates: pre-canned {send,wait} sequences for common agent jobs (run-a-command, tail-a-log, REPL, test-watch). term.template.run expands one against a terminal.",
+      "params": { "type": "object", "properties": {}, "additionalProperties": false },
+      "result": {
+        "type": "object",
+        "properties": {
+          "templates": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" },
+                "summary": { "type": "string" },
+                "params": { "type": "array", "items": { "type": "string" } }
+              }
+            }
+          }
+        },
+        "required": ["templates"]
+      },
+      "errors": []
+    },
+    {
+      "name": "term.template.run",
+      "summary": "Run a task template against a terminal",
+      "description": "Expand a template (term.template.list) into a send+wait sequence. Returns {turn, reason, output} — the final wait outcome and the terminal's screen tail.",
+      "params": {
+        "type": "object",
+        "properties": {
+          "id": { "$ref": "#/x-address" },
+          "template": { "type": "string" },
+          "args": { "type": "object", "description": "template params", "additionalProperties": true },
+          "timeout": { "type": "integer", "default": 180 }
+        },
+        "required": ["id", "template"],
+        "additionalProperties": false
+      },
+      "result": {
+        "type": "object",
+        "properties": {
+          "ok": { "type": "boolean" },
+          "turn": { "type": "integer" },
+          "reason": { "type": "string" },
+          "output": { "type": "string" }
+        },
+        "required": ["ok"]
+      },
+      "errors": ["not_found", "blocked", "finished", "invalid"]
+    },
+    {
       "name": "term.session.close",
       "description": "Terminate a session and its process range.",
       "params": {

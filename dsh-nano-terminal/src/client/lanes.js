@@ -191,22 +191,35 @@ export class McpLane {
       throw new Error(reply?.error?.message ?? reply?.result?.content?.[0]?.text ?? 'mcp create failed')
     }
     this.id = result.id
+    this.wsUrl = this.#wsUrl(result)
+    await this.#connect(true)
+    return { session: this.id }
+  }
+
+  #wsUrl(result) {
     const attach = result.attach?.url ?? new URL(result.attach?.path ?? '/dsh-nano-terminal/stream', this.url).toString()
     const wsUrl = new URL(attach)
     wsUrl.searchParams.set('session', this.id)
     wsUrl.protocol = wsUrl.protocol === 'https:' ? 'wss' : 'ws'
-    await new Promise((resolve, reject) => {
-      const ws = new WebSocket(wsUrl.toString())
+    return wsUrl
+  }
+
+  /** Attach WS + reconnect with backoff (hc 2s→4s→…→30s, gives up after ~5m). */
+  #connect(first) {
+    this.attempt = first ? 0 : (this.attempt ?? 0) + 1
+    return new Promise((resolve, reject) => {
+      const ws = new WebSocket(this.wsUrl.toString())
       ws.binaryType = 'arraybuffer'
       this.ws = ws
       const timer = setTimeout(() => reject(new Error('attach timeout')), 10_000)
-      ws.onopen = () => ws.send(JSON.stringify({ type: 'attach' }))
+      ws.onopen = () => ws.send(JSON.stringify({ type: 'open', session: this.id, v: 2 }))
       ws.onmessage = (ev) => {
         if (typeof ev.data === 'string') {
           let msg
           try { msg = JSON.parse(ev.data) } catch { return }
           if (msg.type === 'ready') {
             clearTimeout(timer)
+            this.attempt = 0
             this.onReady(msg)
             resolve(msg)
           } else if (msg.type === 'error') {
@@ -220,9 +233,17 @@ export class McpLane {
         this.onOutput(new Uint8Array(ev.data))
       }
       ws.onerror = () => { clearTimeout(timer); reject(new Error('websocket error')) }
-      ws.onclose = () => { if (!this.closed) this.onExit({ reason: 'ws-close' }) }
+      ws.onclose = () => {
+        if (this.closed) return
+        // auto-reconnect on transport loss: the terminal object survives on
+        // the remote host — only the socket died. ~5m cap before giving up.
+        const delay = Math.min(30_000, 2000 * 2 ** Math.min(this.attempt ?? 0, 4))
+        this.reconnectTimer = setTimeout(() => {
+          if (this.closed) return
+          this.#connect(false).catch(() => { this.onExit({ reason: 'reconnect-failed' }) })
+        }, delay)
+      }
     })
-    return { session: this.id }
   }
 
   write(bytes) {
@@ -237,6 +258,7 @@ export class McpLane {
 
   close() {
     this.closed = true
+    clearTimeout(this.reconnectTimer)
     try { this.ws?.close() } catch { /* gone */ }
     if (this.id) {
       fetch(this.url, {

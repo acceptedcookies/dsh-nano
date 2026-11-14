@@ -269,7 +269,7 @@ export function apply(ctx) {
 
   const unregisterCommand = ctx.commands?.register?.({
     name: 'term',
-    description: 'nano-terminal: /term new|list|close|attach|send|read|wait|keys|interrupt|keep|label|events|skill',
+    description: 'nano-terminal: /term new|list|close|attach|send|read|wait|keys|interrupt|keep|label|note|template|events|skill',
     input: { hint: '[new|list|close|attach|send|read|wait|keys|interrupt|keep|label|events|skill] [args]' },
     handler: async ({ rawInput }) => {
       const [sub, ...rest] = String(rawInput ?? '').trim().split(/\s+/)
@@ -332,6 +332,17 @@ export function apply(ctx) {
               else { const i = p.indexOf('='); if (i > 0) set[p.slice(0, i)] = p.slice(i + 1) }
             }
             return rpc('term.session.label', { id, set, unset })
+          }
+          case 'note': {
+            const [id, ...body] = rest
+            return rpc('term.session.note', { id, body: body.join(' ') })
+          }
+          case 'template': {
+            if (!rest[0]) return rpc('term.template.list', {})
+            const [id, template, ...kv] = rest
+            const args = {}
+            for (const p of kv) { const i = p.indexOf('='); if (i > 0) args[p.slice(0, i)] = p.slice(i + 1) }
+            return rpc('term.template.run', { id, template, args })
           }
           case 'events':
             return rpc('term.events', { since: Number(rest[0]) || 0 })

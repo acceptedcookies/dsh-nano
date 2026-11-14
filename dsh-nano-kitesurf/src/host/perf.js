@@ -18,6 +18,11 @@ export function hostSpan(name, fn) {
   return review.hostSpan(name, fn)
 }
 
+/** Explicit perf switch — apply() calls it with config.perfReview. */
+export function setPerfEnabled(value) {
+  host.setEnabled(value === true)
+}
+
 export function perfSnapshot(mode) {
   return mode === 'window' ? host.takeWindow() : host.snapshot()
 }

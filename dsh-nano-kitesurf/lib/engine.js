@@ -10,7 +10,7 @@
  * the process-local ring buffer in ./diagnostics.js so an MCP client can read
  * the page's execution state without attaching a second socket.
  */
-import { networkFailed, networkFinished, networkRequest, networkResponse, recordConsole } from './diagnostics.js'
+import { networkFailed, networkFinished, networkPending, networkRequest, networkResponse, recordConsole } from './diagnostics.js'
 
 const CONNECT_MS = 4000
 const CALL_MS = 20000
@@ -790,7 +790,95 @@ export async function navigateHistory(httpBase, delta) {
 }
 
 /**
- * Browser disguise / emulation. All fields are optional; `null` clears the
+ * Block until a page condition holds. This is the automation loop's third
+ * primitive (snapshot → act → wait → verify) and the only one that is a pure
+ * read: the agent stops burning tokens on `sleep` guesses and gets a
+ * deterministic verdict instead.
+ *
+ * Conditions (exactly one is required):
+ *   selector — document.querySelector(selector) is present
+ *   text     — body.innerText contains the needle
+ *   url      — location.href contains the needle (substring, not exact: SPA
+ *              routes carry query/hash)
+ *   fn       — a JS expression evaluated in-page; truthy = matched
+ * Optional `load` gate: commit | domcontentloaded | load | networkidle.
+ * `commit`/readyState are read in-page; `networkidle` is host-side (the
+ * request ring sees in-flight count; a page-side poll cannot).
+ *
+ * @param {string} httpBase
+ * @param {{ selector?: string, text?: string, url?: string, fn?: string,
+ *   load?: string, timeoutMs?: number, intervalMs?: number }} spec
+ */
+export async function waitForCondition(httpBase, spec = {}) {
+  const s = spec && typeof spec === 'object' ? spec : {}
+  const conditions = ['selector', 'text', 'url', 'fn'].filter((k) => s[k] !== undefined && s[k] !== null && s[k] !== '')
+  if (conditions.length !== 1) {
+    throw new KitesurfError('kitesurf.wait.query', 'give exactly one of {selector, text, url, fn}')
+  }
+  const loads = { commit: 1, domcontentloaded: 1, load: 1, networkidle: 1 }
+  const load = s.load !== undefined ? String(s.load).toLowerCase() : null
+  if (load !== null && !loads[load]) {
+    throw new KitesurfError('kitesurf.wait.query', `load must be one of commit|domcontentloaded|load|networkidle, got ${load}`)
+  }
+  const timeoutMs = Math.max(100, Math.min(Number(s.timeoutMs) || 10000, 30000))
+  const intervalMs = Math.max(50, Math.min(Number(s.intervalMs) || 200, 2000))
+  const kind = conditions[0]
+  const needle = String(s[kind])
+  if (kind === 'fn' && needle.length > 2000) {
+    throw new KitesurfError('kitesurf.wait.query', 'fn exceeds 2000 characters')
+  }
+
+  // One in-page probe per kind. Strings are JSON-embedded so quoting in a
+  // selector/needle/fn expression cannot break the outer evaluate. Every
+  // probe returns {done, detail}; done ends the wait, detail rides along.
+  const probes = {
+    selector: `(() => { const el = document.querySelector(${JSON.stringify(needle)}); return el ? {done:true, detail:${JSON.stringify(needle)}} : {done:false} })()`,
+    text: `(() => { const t = (document.body && document.body.innerText || ''); const i = t.indexOf(${JSON.stringify(needle)}); return i < 0 ? {done:false} : {done:true, detail:${JSON.stringify(needle)}} })()`,
+    url: `(() => location.href.includes(${JSON.stringify(needle)}) ? {done:true, detail:location.href} : {done:false})()`,
+    fn: `(() => { const v = (${needle}); return v ? {done:true, detail:v} : {done:false} })()`,
+  }
+  const readyStates = { domcontentloaded: "document.readyState !== 'loading'", load: "document.readyState === 'complete'" }
+  const loadProbe = load && readyStates[load] ? `(() => ${readyStates[load]} ? {done:true, detail:document.readyState} : {done:false})()` : null
+
+  const started = Date.now()
+  return useLive(httpBase, async (client) => {
+    const page = await pageHandle(client)
+    const evalOnce = async (expr) => {
+      const r = await client.send('Runtime.evaluate', { expression: expr, returnByValue: true }, page.sessionId)
+      if (r.exceptionDetails) return { done: false }
+      return r.result?.value && typeof r.result.value === 'object' ? r.result.value : { done: false }
+    }
+    // `commit` needs no probe: waiting for a non-blank location IS the check.
+    if (load === 'commit') {
+      await waitForPage(client, page)
+    }
+    let idleSince = null
+    while (true) {
+      if (Date.now() - started > timeoutMs) {
+        throw new KitesurfError('kitesurf.wait.timeout', `${kind} did not match within ${timeoutMs}ms`)
+      }
+      if (loadProbe) {
+        const r = await evalOnce(loadProbe)
+        if (!r.done) { await new Promise((res) => setTimeout(res, intervalMs)); continue }
+      }
+      const r = await evalOnce(probes[kind])
+      if (r.done) {
+        // networkidle rides the host ring: wait for zero in-flight plus a
+        // quiet window so a single trailing fetch doesn't win early.
+        if (load === 'networkidle' && networkPending() > 0) {
+          idleSince = null
+          await new Promise((res) => setTimeout(res, intervalMs)); continue
+        }
+        if (load === 'networkidle') {
+          if (idleSince === null) { idleSince = Date.now(); await new Promise((res) => setTimeout(res, intervalMs)); continue }
+          if (Date.now() - idleSince < 450) { await new Promise((res) => setTimeout(res, intervalMs)); continue }
+        }
+        return { ok: true, matched: kind, value: r.detail ?? null, elapsedMs: Date.now() - started }
+      }
+      await new Promise((res) => setTimeout(res, intervalMs))
+    }
+  })
+}
  * corresponding override. Viewport is no longer limited to three presets —
  * any bounded integer width/height is accepted, with a preset supplying the
  * default mobile flag and height when only width is given.

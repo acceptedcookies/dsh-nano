@@ -13,6 +13,8 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { KIND, err } from './errors.js'
 import { waitFor, NAMED_KEYS } from './wait.js'
+import { sendNote } from './notes.js'
+import { templateList, templateRun } from './templates.js'
 
 const PROTOCOL_VERSION = '2025-06-18'
 const schema = JSON.parse(
@@ -150,6 +152,18 @@ export function createMcpHandler({ registry, bus, auditPath, laneStatus }) {
         const rec = target(args.id)
         const labels = rec.setLabels(args.set, args.unset)
         return { ok: true, labels }
+      }
+      case 'term.session.note': {
+        const rec = target(args.id)
+        const id = await sendNote(registry, args.from, rec.id, args.body)
+        return { ok: true, id }
+      }
+      case 'term.template.list':
+        return { templates: templateList() }
+      case 'term.template.run': {
+        const rec = target(args.id)
+        const r = await templateRun(rec, registry, bus, waitFor, args.template, args.args, (args.timeout ?? 180) * 1000)
+        return { ok: true, ...r }
       }
       case 'term.events':
         return bus.since(args.since ?? 0)

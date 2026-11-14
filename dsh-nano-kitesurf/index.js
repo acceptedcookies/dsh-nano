@@ -9,13 +9,13 @@ import { fileURLToPath } from 'node:url'
 import { registerRoutes } from './lib/route-guard.js'
 import { ROUTE_TABLE, PLUGIN } from './lib/route-table.js'
 import { createHistory } from './lib/history.js'
-import { browserSocketUrl, captureDom, captureElements, captureShot, currentEmulation, engineHistoryAdd, engineHistoryClear, engineHistoryList, engineHistoryRemove, currentUserAgent, currentViewport, engineTargets, evaluateInPage, fetchEngine, KitesurfError, navigateHistory, openPage, pickElement, pickBySelector, pickPoint, pickSelector, editBody, editElement, pageUrl, releaseEngine, scrollDelta, setBrowserSettings } from './lib/engine.js'
+import { browserSocketUrl, captureDom, captureElements, captureShot, currentEmulation, engineHistoryAdd, engineHistoryClear, engineHistoryList, engineHistoryRemove, currentUserAgent, currentViewport, engineTargets, evaluateInPage, fetchEngine, KitesurfError, navigateHistory, openPage, pickElement, pickBySelector, pickPoint, pickSelector, editBody, editElement, pageUrl, releaseEngine, scrollDelta, setBrowserSettings, waitForCondition } from './lib/engine.js'
 import { ERROR_STATUS, clearConsole, clearNetwork, clearOperations, diagnosticsSummary, getRef, listNetwork, listConsole, listOperations, listRefs, putRef, recordOperation, refChip, summarizeInput } from './lib/diagnostics.js'
 import { buildSrcDoc } from './lib/dom.js'
 import { kitesurfSkill, nanoKiteSkill } from './lib/skill.js'
 import { createNanoKite } from './lib/nano-kite.js'
 import { ensureLocalContainer, hostPort, stopLocalContainer } from './lib/container-engine.js'
-import { hostSpan, perfSnapshot } from './lib/perf-host.js'
+import { hostSpan, perfSnapshot, setPerfEnabled } from './lib/perf-host.js'
 
 export const name = 'nano-kitesurf'
 export const inject = ['webServer', 'connection', 'skills']
@@ -44,6 +44,7 @@ const BROWSE_HISTORY_ROUTE = '/nano-kitesurf/browse-history'
 const NETWORK_ROUTE = '/nano-kitesurf/network'
 const TARGETS_ROUTE = '/nano-kitesurf/targets'
 const EVALUATE_ROUTE = '/nano-kitesurf/evaluate'
+const WAIT_ROUTE = '/nano-kitesurf/wait'
 
 const DEFAULT_ORIGIN = 'http://127.0.0.1:8787'
 
@@ -340,6 +341,9 @@ async function statusOf(httpBase) {
 export function apply(ctx, config) {
   // perf-review capture is a documented plugin-side switch: perf spans feed
   // /nano-kitesurf/perf-review/host and the host's own perf-review UI.
+  // setEnabled lands the choice even though hostJoin already ran at import —
+  // the env var is kept as the lazy-resolution fallback for the same value.
+  setPerfEnabled(config?.perfReview !== false)
   if (config?.perfReview !== false) process.env.DSH_PERF_REVIEW = '1'
   const httpBase = config?.httpBase ?? DEFAULT_ORIGIN
   const kite = createNanoKite({
@@ -1089,6 +1093,25 @@ export function apply(ctx, config) {
             throw new KitesurfError('kitesurf.network.query', 'limit must be 1..200')
           }
           sendJson(res, 200, { ok: true, ...listNetwork({ limit, failedOnly: q.get('failedOnly') === 'true' }) })
+        } catch (error) {
+          fail(res, error)
+        }
+      },
+    },
+    {
+      // Blocking condition wait — the automation loop's third primitive. An
+      // agent stops polling `sleep` and gets a deterministic verdict:
+      // {selector|text|url|fn} matched, or kitesurf.wait.timeout. `load` adds
+      // a readyState/commit/networkidle gate. A bounded read (capability
+      // read:engine): it mutates nothing and holds the request ≤30s.
+      path: WAIT_ROUTE,
+      methods: ['POST'],
+      bodyLimit: 4096,
+      handler: async (req, res, route) => {
+        try {
+          const body = await readBody(req, route.bodyLimit)
+          const result = await hostSpan('wait', () => waitForCondition(origin(), body || {}))
+          sendJson(res, 200, result)
         } catch (error) {
           fail(res, error)
         }

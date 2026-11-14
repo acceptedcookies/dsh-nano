@@ -137,6 +137,37 @@ export class WasmTerm {
     return decoder.decode(memU8().subarray(ptr, ptr + len))
   }
 
+  viewStart() {
+    return coreExports().dnt_view_start(this.id)
+  }
+  rows() {
+    return coreExports().dnt_rows?.(this.id) ?? 24
+  }
+  scrollBy(delta) {
+    coreExports().dnt_scroll(this.id, delta)
+  }
+  /** Copy/copy-mode selection. aline/fline absolute into the full buffer. */
+  selectSet(aline, fline) {
+    coreExports().dnt_select_set?.(this.id, aline, 0, fline, 1e9)
+  }
+  selectRange(aline, acol, fline, fcol) {
+    coreExports().dnt_select_set?.(this.id, aline, acol, fline, fcol)
+  }
+  selectClear() {
+    coreExports().dnt_select_set?.(this.id, -1, 0, -1, 0)
+  }
+  /** Selected text, or ''. Rows absolute; cols optional (full lines). */
+  selectText(aline, fline, acol = 0, fcol = 1e9) {
+    const e = coreExports()
+    if (!e.dnt_select_extract) return ''
+    e.dnt_select_set(this.id, aline, acol, fline, fcol)
+    if (!e.dnt_select_extract(this.id)) return ''
+    const ptr = e.dnt_select_ptr(this.id)
+    const len = e.dnt_select_len(this.id)
+    e.dnt_select_set(this.id, -1, 0, -1, 0)
+    return len ? decoder.decode(memU8().subarray(ptr, ptr + len)) : ''
+  }
+
   totalLines() {
     return coreExports().dnt_total_lines(this.id)
   }

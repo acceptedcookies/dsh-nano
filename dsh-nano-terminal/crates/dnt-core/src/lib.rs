@@ -263,6 +263,10 @@ pub struct Term {
     state_dirty: bool,
     // text export buffer (dnt_screen_text) — separate from render's text_buf
     dump_buf: Vec<u8>,
+    /// selection: (line, col) absolute indices into grid.lines; None = cleared
+    sel_anchor: Option<(usize, usize)>,
+    sel_focus: Option<(usize, usize)>,
+    sel_buf: Vec<u8>,
 }
 
 /// One OSC 7501 record: `state=working:kind=permission:app=x:progress=40:msg=<b64>`
@@ -396,6 +400,9 @@ impl Term {
             state_buf: String::new(),
             state_dirty: false,
             dump_buf: Vec::with_capacity(8192),
+            sel_anchor: None,
+            sel_focus: None,
+            sel_buf: Vec::new(),
         }
     }
 
@@ -1540,4 +1547,68 @@ pub extern "C" fn dnt_dump(id: u32, source: u32, lines: u32) -> *const u8 {
 #[no_mangle]
 pub extern "C" fn dnt_dump_len(id: u32) -> u32 {
     with_term(id, |t| t.dump_buf.len() as u32).unwrap_or(0)
+}
+
+// --- Selection (copy / copy-mode) --------------------------------------------
+
+/// Set the selection range: absolute (line, col) into grid.lines.
+/// Pass aline < 0 to clear.
+#[no_mangle]
+pub extern "C" fn dnt_select_set(id: u32, aline: i32, acol: u32, fline: i32, fcol: u32) {
+    with_term(id, |t| {
+        if aline < 0 || fline < 0 {
+            t.sel_anchor = None;
+            t.sel_focus = None;
+        } else {
+            t.sel_anchor = Some((aline as usize, acol as usize));
+            t.sel_focus = Some((fline as usize, fcol as usize));
+        }
+    });
+}
+
+/// Extract the selected text into sel_buf. Pointer via dnt_select_ptr,
+/// length via dnt_select_len. Returns 1 when a selection exists.
+#[no_mangle]
+pub extern "C" fn dnt_select_extract(id: u32) -> u32 {
+    with_term(id, |t| {
+        t.sel_buf.clear();
+        let (Some(a), Some(f)) = (t.sel_anchor, t.sel_focus) else {
+            return 0;
+        };
+        let (top, bot) = if a <= f { (a, f) } else { (f, a) };
+        for line_idx in top.0..=bot.0.min(t.grid.lines.len().saturating_sub(1)) {
+            let line = &t.grid.lines[line_idx];
+            let c0 = if line_idx == top.0 { top.1 } else { 0 };
+            let c1 = if line_idx == bot.0 { bot.1 + 1 } else { line.len() };
+            let mut s = String::new();
+            for c in &line[c0.min(line.len())..c1.min(line.len())] {
+                if c.flags & WIDE_SPACER != 0 {
+                    continue;
+                }
+                s.push(char::from_u32(c.ch).unwrap_or(' '));
+            }
+            t.sel_buf.extend_from_slice(s.trim_end().as_bytes());
+            if line_idx < bot.0 {
+                t.sel_buf.push(b'\n');
+            }
+        }
+        1
+    })
+    .unwrap_or(0)
+}
+
+#[no_mangle]
+pub extern "C" fn dnt_select_ptr(id: u32) -> *const u8 {
+    with_term(id, |t| t.sel_buf.as_ptr()).unwrap_or(std::ptr::null())
+}
+
+#[no_mangle]
+pub extern "C" fn dnt_select_len(id: u32) -> u32 {
+    with_term(id, |t| t.sel_buf.len() as u32).unwrap_or(0)
+}
+
+/// Row count of the live screen.
+#[no_mangle]
+pub extern "C" fn dnt_rows(id: u32) -> u32 {
+    with_term(id, |t| t.grid.rows as u32).unwrap_or(0)
 }

@@ -5,6 +5,23 @@ import { CheckIcon, CloseIcon, CompactionIcon, WarningIcon } from './icons.jsx'
 import { fetchCompactState, postCompactSwitch, putCompactPolicy } from './compact.js'
 
 const BUNDLE_NAME = 'dsh-nano-model-selector-compaction'
+/** The summary model must cover the largest upstream window; the official
+ * DeepSeek-Flash (1M context) is the floor. Magpie mirrors whose route key
+ * carries both 'deepseek' and 'flash' are offered alongside. */
+const FLASH_RE = /deepseek.*flash|flash.*deepseek/i
+
+/** @param {Array<{provider:string, model:string}>} models catalog pairs */
+function flashChoices(models) {
+  const seen = new Set()
+  const picks = []
+  for (const item of models) {
+    const id = `${item.provider}/${item.model}`
+    if (seen.has(id)) continue
+    if (item.provider === 'deepseek-official' && /flash/i.test(item.model)) { seen.add(id); picks.push(item); continue }
+    if (item.provider === 'magpie' && FLASH_RE.test(item.model)) { seen.add(id); picks.push(item) }
+  }
+  return picks
+}
 
 /**
  * @param {{ copy: any, models: Array<{provider:string, model:string}>, onError: (text: string) => void }} props
@@ -14,12 +31,27 @@ export function CompactPanel({ copy, models, onError }) {
   const [state, setState] = React.useState(null) // GET payload
   const [busy, setBusy] = React.useState(false)
   const [confirm, setConfirm] = React.useState(false)
-  const [banner, setBanner] = React.useState(null) // {kind:'success'|'warn'|'fail', text}
+  const [banner, setBanner] = React.useState(null) // {kind:'success'|'warn'|'fail', text, code?}
+  const [heartbeat, setHeartbeat] = React.useState(null) // {at: Date, status: number}
 
   const reload = React.useCallback(() => {
-    fetchCompactState().then(value => { setState(value) }).catch(() => {})
+    fetchCompactState()
+      .then(value => { setState(value); setHeartbeat(value === null ? { at: new Date(), status: 'fail' } : { at: new Date(), status: 'ok' }) })
+      .catch(() => setHeartbeat({ at: new Date(), status: 'fail' }))
   }, [])
   React.useEffect(reload, [reload])
+  // Heartbeat poll: the meter/last-compaction numbers are host-side state; a
+  // quiet 30s re-read keeps the panel honest without user action.
+  React.useEffect(() => {
+    const timer = window.setInterval(reload, 30000)
+    return () => window.clearInterval(timer)
+  }, [reload])
+  // Auto-dismiss transient result notes; errors stay until dismissed.
+  React.useEffect(() => {
+    if (banner === null || banner.kind === 'fail') return
+    const timer = window.setTimeout(() => setBanner(null), 6000)
+    return () => window.clearTimeout(timer)
+  }, [banner])
 
   if (state === null) {
     return <div className="nms-loading"><span className="nms-pending-dot" />{copy.loading}</div>
@@ -42,6 +74,9 @@ export function CompactPanel({ copy, models, onError }) {
   const effective = policy.effective ?? {}
   const runtime = policy.runtime ?? {}
   const degraded = state.degraded === 'state-read-failed'
+  const meterDown = runtime.degraded === 'meter-unavailable'
+
+  const noteWithCode = (kind, text, code) => setBanner({ kind, text: code ? `${text}（${code}）` : text })
 
   const doSwitch = next => {
     if (busy) return
@@ -50,16 +85,20 @@ export function CompactPanel({ copy, models, onError }) {
     postCompactSwitch(next)
       .then(result => {
         const application = result.application ?? 'applied'
-        setBanner(application === 'applied'
-          ? { kind: 'success', text: copy.compactSwitchApplied }
-          : application === 'restart-required'
-            ? { kind: 'warn', text: `${copy.compactSwitchRestart}（dsh-dev restart）` }
-            : application === 'overridden'
-              ? { kind: 'warn', text: copy.compactSwitchOverridden }
-              : { kind: 'warn', text: application })
+        noteWithCode(
+          application === 'applied' ? 'success' : 'warn',
+          application === 'applied'
+            ? copy.compactSwitchApplied
+            : application === 'restart-required'
+              ? copy.compactSwitchRestart
+              : application === 'overridden'
+                ? copy.compactSwitchOverridden
+                : application,
+          application,
+        )
         reload()
       })
-      .catch(error => setBanner({ kind: 'fail', text: `${copy.compactSwitchFailed}: ${error.message}` }))
+      .catch(error => noteWithCode('fail', `${copy.compactSwitchFailed}: ${error.message}`, error.code))
       .finally(() => setBusy(false))
   }
 
@@ -72,27 +111,41 @@ export function CompactPanel({ copy, models, onError }) {
     const patch = field === 'model' ? { model: value } : { [field]: value }
     setBusy(true)
     putCompactPolicy(patch)
-      .then(() => { setBanner({ kind: 'success', text: copy.compactSwitchApplied }); reload() })
-      .catch(error => setBanner({ kind: 'fail', text: error.message }))
+      .then(() => { noteWithCode('success', `${copy.compactSwitchApplied} · ${field}`, 'applied'); reload() })
+      .catch(error => noteWithCode('fail', error.message, error.code))
       .finally(() => setBusy(false))
   }
 
-  const currentModel = `${policy.model?.provider ?? ''}/${policy.model?.model ?? ''}`
+  const savedModel = `${policy.model?.provider ?? ''}/${policy.model?.model ?? ''}`
+  const choices = flashChoices(models)
+  // The dropdown never shows a bogus selection: when the stored pair is not a
+  // flash-family route, it renders as "(select)" and the user picks a real one.
+  const modelValue = choices.some(item => `${item.provider}/${item.model}` === savedModel) ? savedModel : '/'
   const fill = runtime.fill == null ? null : Math.max(0, Math.min(1, runtime.fill))
 
   return (
     <div className="nms-compact">
       <div className="nms-group">
         <CompactionIcon className="nms-group-star" size={12} />{copy.compactTitle}
-        <span className="nms-group-count">{copy.compactSubtitle}</span>
       </div>
 
-      {/* Status card: state badge + toggle. */}
+      {/* Result chip: absolutely anchored to the panel's top-right strip — it
+          overlays instead of inserting, so the list never reflows. */}
+      {banner !== null && (
+        <div className="nms-compact-chip" data-kind={banner.kind} role="status">
+          {banner.kind === 'success' ? <CheckIcon size={12} /> : <WarningIcon size={12} />}
+          <span className="nms-compact-chip-copy">{banner.text}</span>
+          <button type="button" className="nms-compact-note-x" aria-label={copy.close} onClick={() => setBanner(null)}>
+            <CloseIcon size={11} />
+          </button>
+        </div>
+      )}
+
+      {/* Status card: state + toggle. */}
       <div className="nms-compact-card" data-enabled={enabled}>
         <div className="nms-compact-card-main">
           <span className="nms-model-name">{enabled ? copy.compactEnabled : copy.compactDisabled}</span>
           <span className="nms-model-desc">{copy.compactSubtitle}</span>
-          <span className="nms-compact-pkg">{BUNDLE_NAME}</span>
         </div>
         <button
           type="button"
@@ -107,26 +160,15 @@ export function CompactPanel({ copy, models, onError }) {
         </button>
       </div>
 
-      {/* Switch confirmation: inline, dismissible. */}
+      {/* Switch confirmation: inline note with real buttons. */}
       {confirm && (
         <div className="nms-compact-note" data-kind="warn">
           <WarningIcon size={13} />
           <span className="nms-compact-note-copy">{copy.compactSwitchConfirm}</span>
           <span className="nms-compact-note-actions">
-            <button type="button" className="nms-effort-button" disabled={busy} onClick={() => doSwitch(!enabled)}>{copy.compactConfirmOk ?? 'OK'}</button>
-            <button type="button" className="nms-effort-button" onClick={() => setConfirm(false)}>{copy.compactConfirmCancel ?? '✕'}</button>
+            <button type="button" className="nms-effort-button" disabled={busy} onClick={() => doSwitch(!enabled)}>{copy.compactConfirmOk}</button>
+            <button type="button" className="nms-effort-button" onClick={() => setConfirm(false)}>{copy.compactConfirmCancel}</button>
           </span>
-        </div>
-      )}
-
-      {/* Result banner: toast-style, dismissible. */}
-      {banner !== null && (
-        <div className="nms-compact-note" data-kind={banner.kind}>
-          {banner.kind === 'success' ? <CheckIcon size={13} /> : <WarningIcon size={13} />}
-          <span className="nms-compact-note-copy">{banner.text}</span>
-          <button type="button" className="nms-compact-note-x" aria-label={copy.close} onClick={() => setBanner(null)}>
-            <CloseIcon size={11} />
-          </button>
         </div>
       )}
 
@@ -146,7 +188,7 @@ export function CompactPanel({ copy, models, onError }) {
             <select
               className="nms-compact-input"
               aria-label={copy.compactFieldModel}
-              value={currentModel}
+              value={modelValue}
               disabled={busy}
               onChange={event => {
                 const [provider, ...rest] = event.target.value.split('/')
@@ -154,7 +196,7 @@ export function CompactPanel({ copy, models, onError }) {
               }}
             >
               <option value="/">{`（${copy.selectModel}）`}</option>
-              {models.map(item => (
+              {choices.map(item => (
                 <option key={`${item.provider}/${item.model}`} value={`${item.provider}/${item.model}`}>{`${item.provider}/${item.model}`}</option>
               ))}
             </select>
@@ -171,13 +213,13 @@ export function CompactPanel({ copy, models, onError }) {
         </div>
       )}
 
-      {/* Runtime readouts: fill meter + last compaction + effective caps. */}
+      {/* Runtime readouts: fill meter + last compaction + heartbeat. */}
       {enabled && state.policy !== null && (
         <div className="nms-compact-runtime">
           <div className="nms-compact-meter-row">
             <span className="nms-compact-field-label">{copy.compactRuntimeFill}</span>
             {fill === null ? (
-              <span className="nms-compact-field-static">{copy.compactMeterUnknown ?? '—'}</span>
+              <span className="nms-compact-field-static">{meterDown ? `${copy.compactMeterUnknown}（meter-unavailable）` : copy.compactMeterUnknown}</span>
             ) : (
               <>
                 <span className="nms-compact-meter" role="meter" aria-valuenow={Math.round(fill * 100)} aria-valuemin="0" aria-valuemax="100">
@@ -192,7 +234,12 @@ export function CompactPanel({ copy, models, onError }) {
           </div>
           <div className="nms-compact-meta-row">
             <span className="nms-model-meta">
-              {copy.compactEffectivePin ?? 'pin'}={effective.pin ?? '—'} · {copy.compactWindowMin ?? 'windowMin'}={effective.windowMin ?? '—'}
+              {copy.compactEffectivePin}={effective.pin ?? '—'} · {copy.compactWindowMin}={effective.windowMin ?? '—'}
+            </span>
+          </div>
+          <div className="nms-compact-meta-row">
+            <span className="nms-model-meta">
+              {copy.compactHeartbeat}: {heartbeat === null ? '—' : `${heartbeat.at.toLocaleTimeString()} · GET ${heartbeat.status === 'ok' ? '200' : '✕'}`}
             </span>
           </div>
         </div>
@@ -211,7 +258,7 @@ function NumberField({ label, field, value, step, min, max, onSave, busy }) {
       <span className="nms-compact-field-label">{label}</span>
       {editing ? (
         <input
-          className="nms-compact-input"
+          className="nms-compact-input nms-compact-input-num"
           type="number"
           autoFocus
           value={draft}

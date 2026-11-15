@@ -70,6 +70,7 @@ export const COPY = {
     compactMeterUnknown: '暂无计量',
     compactEffectivePin: 'pin',
     compactWindowMin: '最小窗口',
+    compactHeartbeat: '心跳',
   },
   en: {
     title: 'Model selection',
@@ -140,6 +141,7 @@ export const COPY = {
     compactMeterUnknown: 'No meter',
     compactEffectivePin: 'pin',
     compactWindowMin: 'windowMin',
+    compactHeartbeat: 'Heartbeat',
   },
 }
 

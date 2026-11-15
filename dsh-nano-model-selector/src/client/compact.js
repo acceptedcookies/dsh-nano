@@ -20,7 +20,9 @@ export async function putCompactPolicy(patch) {
   })
   const data = await response.json().catch(() => null)
   if (!response.ok || data?.ok !== true) {
-    throw new Error(data?.error?.reason ?? `PUT ${response.status}`)
+    const error = new Error(data?.error?.reason ?? `PUT ${response.status}`)
+    error.code = data?.error?.code ?? `HTTP-${response.status}`
+    throw error
   }
   return data.policy
 }

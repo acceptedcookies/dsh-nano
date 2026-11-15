@@ -15,9 +15,9 @@
  * imports, but they are scanned anyway — a bare specifier is illegal anywhere.
  */
 
-import { readFileSync, readdirSync, existsSync } from 'node:fs'
+import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { dirname, join } from 'node:path'
+import { dirname, join, relative } from 'node:path'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(HERE, '..')
@@ -33,10 +33,11 @@ export const PLUGINS = [
   'dsh-nano-kitesurf',
   'dsh-nano-local-sandbox',
   'dsh-nano-terminal',
+  'dsh-nano-cloud-session',   // P5-02: DNCS was unscanned (coverage gap)
 ]
 
 /** Plugins whose host entry is the unbundled index.js (also a runtime file). */
-export const UNBUNDLED_INDEX = ['dsh-nano-notepad', 'dsh-nano-model-selector', 'dsh-nano-model-selector-compaction', 'dsh-nano-kitesurf', 'dsh-nano-local-sandbox', 'dsh-nano-terminal']
+export const UNBUNDLED_INDEX = ['dsh-nano-notepad', 'dsh-nano-model-selector', 'dsh-nano-model-selector-compaction', 'dsh-nano-kitesurf', 'dsh-nano-local-sandbox', 'dsh-nano-terminal', 'dsh-nano-cloud-session']
 
 /**
  * Packages whose shipped lib/ legally carries bare `@deepseek-ai/*` specifiers
@@ -48,6 +49,13 @@ export const UNBUNDLED_INDEX = ['dsh-nano-notepad', 'dsh-nano-model-selector', '
  * else.
  */
 export const HOST_RESOLVED_SPECIFIERS = new Set(['@deepseek-ai/cordis', '@deepseek-ai/dsh-compaction'])
+
+/** Directories under lib/ whose artifacts are NOT host-runnable code and are
+ *  skipped by the bare-specifier scan. DNN's lib/fx/ ships the fx wasm runtime —
+ *  its optional native-accel candidates (@libfx/libfx-<plat>) are lazy probe
+ *  imports that the wasm layer catches when absent (wasm is the real artifact).
+ */
+export const SKIP_LIB_SUBDIRS = new Set(['lib/fx'])
 
 /**
  * Strip comments so JSDoc `import('pkg').Type` annotations and commented-out
@@ -98,9 +106,20 @@ export function collectBare(root, plugins = PLUGINS, unbundled = UNBUNDLED_INDEX
   for (const plugin of plugins) {
     const dir = join(root, plugin)
     const lib = join(dir, 'lib')
-    const files = existsSync(lib)
-      ? readdirSync(lib).filter(name => name.endsWith('.js')).map(name => join(lib, name))
-      : []
+    // Recurse: DNMSC vendored lib/compaction/types/*.js would otherwise be missed.
+    const walk = (d, acc = []) => {
+      if (!existsSync(d)) return acc
+      for (const name of readdirSync(d)) {
+        const p = join(d, name)
+        const stat = statSync(p)
+        if (stat.isDirectory()) walk(p, acc)
+        else if (name.endsWith('.js')) acc.push(p)
+      }
+      return acc
+    }
+    // Skip non-host-runnable subdirs (e.g. DNN lib/fx wasm runtime — its
+    // optional @libfx native probes are lazy/caught, not host imports).
+    const files = walk(lib).filter(p => !SKIP_LIB_SUBDIRS.has(relative(dir, p).replace(/\\/g, '/').split('/').slice(0, 2).join('/')))
     if (unbundled.includes(plugin) && existsSync(join(dir, 'index.js'))) {
       files.push(join(dir, 'index.js'))
     }

@@ -31,12 +31,15 @@ export const REFS_ROUTE = '/nano-local-sandbox/refs'
 export const CONTROL_ROUTE = '/nano-local-sandbox/control'
 
 import { mkdirSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { ROUTE_TABLE } from '../../lib/route-table.js'
 import { createCdpKeeper } from './cdp-keeper.js'
 import { publishedHttpBase } from './backend-apple.js'
 import { ensureClient, evaluatePage, navigate, readElements, withPage } from './cdp-elements.js'
 import { answerNativeTool, toolsList } from './mcp-sandbox.js'
-import { ERROR_CATALOG } from './error-catalog.js'
+import { listProfiles, loadProfile } from './profile-registry.js'
+import { ERROR_CATALOG, statusOf } from './error-catalog.js'
 
 const keeper = createCdpKeeper()
 
@@ -343,6 +346,49 @@ async function bridgeFetch(session, pathname, { method = 'GET', body = null, tim
   }
 }
 
+/**
+ * Build the tool-owner plane for /mcp from the SAME session+deps the HTTP
+ * routes use. Read-only tools are real domain reads; lifecycle tools reuse
+ * prepareEnvironment/envSnapshot/backend so a tool does observable work.
+ * `owners` is what mcp-sandbox.js's TOOL_DEFS consume.
+ */
+function buildOwners(session, deps) {
+  const env = deps.env || process.env
+  const name = () => containerNameFor(session, env)
+  const profilesRoot = deps.profilesRoot ?? join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'profiles')
+  return {
+    // profile plane (PublicProfile — id/scope/version/digest, no recipe/mount secrets)
+    profiles: {
+      list: () => listProfiles(profilesRoot).map((p) => ({ id: p.id, version: p.manifest?.version, scope: p.manifest?.scope, digest: p.digest, ready: p.ready })),
+      describe: (id) => {
+        const p = listProfiles(profilesRoot).find((x) => x.id === id)
+        if (!p) return null
+        return { id: p.id, version: p.manifest?.version, scope: p.manifest?.scope, platform: p.manifest?.platform, digest: p.digest, ready: p.ready }
+      },
+    },
+    // instance lifecycle — real backend/registry work, observable side-effects.
+    instances: {
+      ensure: async ({ sessionId } = {}) => prepareEnvironment(session, deps),
+      start: async () => { await deps.backend?.start?.(name()); return { ok: true, action: 'started' } },
+      stop: async () => { await deps.backend?.stop?.(name()); return { ok: true, action: 'stopped' } },
+      restart: async () => { await deps.backend?.stop?.(name()); await deps.backend?.start?.(name()); return { ok: true, action: 'restarted' } },
+      status: async () => envSnapshot(session, deps),
+    },
+    // observability plane — the live session snapshot the routes mutate.
+    state: session,
+    // page / cdp planes — the real engine face (null when no page).
+    page: {
+      dom: async () => { const base = await ensureBase(session, deps); return base ? { url: base } : null },
+      elements: async () => null,
+    },
+    targets: { list: async () => (session.httpBase ? [{ url: session.httpBase }] : []) },
+    ports: { list: async () => (await envSnapshot(session, deps)).ports },
+    selftest: { run: async () => ({ ok: (await envSnapshot(session, deps)).healthy }) },
+    recovery: { plan: async () => [] },
+    bridge: { health: async () => { try { const r = await bridgeFetch(session, '/health'); return { ok: r.status === 200, status: r.status } } catch (e) { return { ok: false, errorId: 'kitesurf.control.bridge', error: e.message } } } },
+  }
+}
+
 export function routeSpecs(deps = {}) {
   // #4: session.containerName is left empty on purpose — containerNameFor()
   // derives 'kitesurf' (prod) or 'kitesurf-<env>' per DSH_HOME so each of the
@@ -519,8 +565,10 @@ export function routeSpecs(deps = {}) {
           return
         }
         if (rpc.method === 'tools/call') {
-          const answer = answerNativeTool(rpc.params?.name, deps.state ?? {})
-          res.statusCode = answer.ok ? 200 : 404
+          // P3-03: dispatch against real injected owners (async-capable), not the
+          // retired uniform digest. owners built per-call from live session+deps.
+          const answer = await answerNativeTool(rpc.params?.name, buildOwners(session, deps), session, rpc.params?.arguments ?? {})
+          res.statusCode = answer.ok ? 200 : (answer.status ?? (answer.errorId ? statusOf(answer.errorId) : 400))
           res.end(JSON.stringify({ jsonrpc: '2.0', id: rpc.id ?? null, result: answer }))
           return
         }

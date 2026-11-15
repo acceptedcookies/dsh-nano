@@ -1,5 +1,5 @@
 {
-  "commit": "9c32410fafe0aeb9d939ac4a3292e8de6079a104",
+  "commit": "bedc2e2636c28ac2bc0cbd49026a52430c2dff96",
   "packs": {
     "dsh-nano-local-sandbox": [
       "AGENTS.md",
@@ -74,6 +74,7 @@
       "docs/skill.md",
       "icon.svg",
       "index.js",
+      "lib/bindings.js",
       "lib/client.js",
       "lib/dnt-core.wasm",
       "lib/errors.js",
@@ -83,11 +84,10 @@
       "lib/mirror.js",
       "lib/notes.js",
       "lib/persist.js",
-      "lib/route-guard.js",
-      "lib/route-table.js",
       "lib/sessions.js",
       "lib/templates.js",
       "lib/wait.js",
+      "lib/web-routes.js",
       "lib/ws.js",
       "locale/en.json",
       "locale/zh.json",

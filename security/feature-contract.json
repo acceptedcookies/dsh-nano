@@ -1043,7 +1043,8 @@
       "ssh": "detail card copies `ssh devin-<id>@ssh.devin.ai`; public-key enroll is a manual step in Devin account settings (info-only route, no spawn)",
       "firstRun": "no active profile -> section shows guide row; settings opens on 接入 with carrier preset Devin Cloud and 3-step guide; connect test shows principal_type/orgMatch",
       "settings": "NanoDialog + nanoTabs: 接入/会话/安全/SSH; 接入 folder holds Devin preset, token/org/baseURL, connection test, permission checklist and doc deep links; 会话 holds new-session defaults; 安全 is read-only store policy; SSH is keygen/enroll"
-    }
+    },
+    "dsh-nano-model-selector-compaction": "host-only companion: mounts ctx.compaction inside preset id:compaction isolate; no web routes, no UI; ON/OFF via dsh.profile.bundles or POST /nano-model-selector/async-compact/switch (route owned by dsh-nano-model-selector)"
   },
   "dataLocations": {
     "dsh-nano-notepad": {
@@ -1057,6 +1058,7 @@
     },
     "dsh-nano-model-selector": {
       "engineState": "${DSH_DATA_DIR||DSH_HOME||~/.dsh}/plugins/nano-model-selector/media-engine.json",
+      "asyncCompactState": "${DSH_DATA_DIR||DSH_HOME||~/.dsh}/plugins/nano-model-selector/async-compact.json",
       "clientCache": "localStorage 'dsh-nano-model-selector:media-engine.v1' + favorites key"
     },
     "dsh-nano-kitesurf": {
@@ -1076,6 +1078,9 @@
       "sshKey": "${DSH_HOME}/nano-cloud-session-ssh{,.pub} (0600, generated via ssh-keygen on demand; private key never leaves host)",
       "prefs": "localStorage 'dsh-nano-cloud-session:defaults.v1' (browser-local new-session defaults; no credentials)",
       "nativeProjection": "in-memory dsh Session per open Devin session (not persisted; Devin remains canonical)"
+    },
+    "dsh-nano-model-selector-compaction": {
+      "asyncCompactState": "${DSH_DATA_DIR||DSH_HOME||~/.dsh}/plugins/nano-model-selector/async-compact.json (written via the sibling DNMS switch route; takeover mutex layer)"
     }
   }
 }

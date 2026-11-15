@@ -275,7 +275,7 @@ var ROUTE_TABLE = [
     "capability": "net:fetch+write:remote",
     "bodyLimit": 16384,
     "sessionBinding": false,
-    "justification": "dsh-nano-cloud-session/index.js \u2014 DELETE upstream = \u7EC8\u6B62 VM + \u5F52\u6863\uFF08\u975E\u786C\u5220\uFF0C\u8BB0\u5F55\u4ECD\u53EF\u8BFB\uFF09\u3002"
+    "justification": "dsh-nano-cloud-session/index.js \u2014 DELETE upstream = \u4E2D\u6B62\uFF08\u5B58\u6D3B session \u2192 suspended\uFF0C\u975E\u786C\u5220\u3001\u4E0D\u81EA\u52A8\u5F52\u6863\uFF1B\u5F52\u6863\u9700\u53E6\u8D70 /archive\uFF09\u3002"
   },
   {
     "plugin": "dsh-nano-cloud-session",
@@ -288,6 +288,30 @@ var ROUTE_TABLE = [
     "bodyLimit": 16384,
     "sessionBinding": false,
     "justification": "dsh-nano-cloud-session/index.js \u2014 \u8FD4\u56DE ssh \u547D\u4EE4\u4E32\u4E0E enroll \u63D0\u793A\u7684\u7EAF\u4FE1\u606F\u8DEF\u7531\uFF1B\u4E0D spawn\u3002"
+  },
+  {
+    "plugin": "dsh-nano-cloud-session",
+    "path": "/nano-cloud-session/catalog",
+    "methods": [
+      "POST"
+    ],
+    "sensitivity": "L2",
+    "capability": "net:fetch",
+    "bodyLimit": 16384,
+    "sessionBinding": false,
+    "justification": "dsh-nano-cloud-session/index.js \u2014 \u7ECF\u5BBF\u4E3B\u4EE3\u7406 /v3/organizations/{org}/playbooks|secrets|knowledge/notes|repositories\uFF1B\u53EA\u8BFB\u76EE\u5F55\uFF0C\u643A\u5E26 PAT \u51FA\u7AD9\u3002"
+  },
+  {
+    "plugin": "dsh-nano-cloud-session",
+    "path": "/nano-cloud-session/upload",
+    "methods": [
+      "POST"
+    ],
+    "sensitivity": "L2",
+    "capability": "net:fetch+write:remote",
+    "bodyLimit": 33554432,
+    "sessionBinding": false,
+    "justification": "dsh-nano-cloud-session/index.js \u2014 \u628A base64 \u9644\u4EF6\u7ECF\u5BBF\u4E3B multipart \u4E0A\u4F20\u5230 /v3/organizations/{org}/attachments\uFF1B16 MiB \u6587\u4EF6\u4E0A\u9650\u300132 MiB JSON \u4FE1\u5C01\u3002"
   }
 ];
 export {

@@ -29,15 +29,16 @@ async function request(profile, { method = "GET", path, query, body, timeoutMs =
       else url.searchParams.set(key, String(value));
     }
   }
+  const isForm = typeof FormData !== "undefined" && body instanceof FormData;
   let res;
   try {
     res = await (fetchImpl ?? fetch)(url, {
       method,
       headers: {
         authorization: `Bearer ${profile.secret}`,
-        ...body !== void 0 ? { "content-type": "application/json" } : {}
+        ...body !== void 0 && !isForm ? { "content-type": "application/json" } : {}
       },
-      body: body !== void 0 ? JSON.stringify(body) : void 0,
+      body: isForm ? body : body !== void 0 ? JSON.stringify(body) : void 0,
       signal: AbortSignal.timeout(timeoutMs)
     });
   } catch (error) {
@@ -58,32 +59,77 @@ async function request(profile, { method = "GET", path, query, body, timeoutMs =
   return json;
 }
 var orgPath = (profile, suffix) => `/v3/organizations/${encodeURIComponent(profile.orgId)}${suffix}`;
+function sessionQuery({
+  first = 50,
+  after,
+  tags,
+  origins,
+  isArchived,
+  createdAfter,
+  createdBefore,
+  updatedAfter,
+  updatedBefore,
+  category,
+  userIds,
+  repoNames,
+  devinId,
+  sessionIds,
+  playbookId,
+  scheduleId,
+  serviceUserIds,
+  automationIds,
+  parentSessionId
+} = {}) {
+  return {
+    first,
+    after,
+    tags,
+    origins,
+    category,
+    is_archived: isArchived,
+    created_after: createdAfter,
+    created_before: createdBefore,
+    updated_after: updatedAfter,
+    updated_before: updatedBefore,
+    user_ids: userIds,
+    repo_names: repoNames,
+    devin_id: devinId,
+    session_ids: sessionIds,
+    playbook_id: playbookId,
+    schedule_id: scheduleId,
+    service_user_ids: serviceUserIds,
+    automation_ids: automationIds,
+    parent_session_id: parentSessionId
+  };
+}
 function createDevinApi({ timeoutMs = DEFAULT_TIMEOUT_MS, fetchImpl } = {}) {
   const call = (profile, spec) => request(profile, { timeoutMs, fetchImpl, ...spec });
   return {
     /** Connection test: who am I, which org does this PAT resolve to. */
     self: (profile) => call(profile, { path: "/v3/self" }),
-    listSessions: (profile, { first = 50, after, tags, origins, isArchived, createdAfter, createdBefore, category, userIds, repoNames, devinId } = {}) => call(profile, {
+    listSessions: (profile, params = {}) => call(profile, {
       path: orgPath(profile, "/sessions"),
-      query: {
-        first,
-        after,
-        tags,
-        origins,
-        category,
-        is_archived: isArchived,
-        created_after: createdAfter,
-        created_before: createdBefore,
-        user_ids: userIds,
-        repo_names: repoNames,
-        devin_id: devinId
-      }
+      query: sessionQuery(params)
+    }),
+    listSessionsInsights: (profile, params = {}) => call(profile, {
+      path: orgPath(profile, "/sessions/insights"),
+      query: sessionQuery(params)
     }),
     getSession: (profile, id) => call(profile, { path: orgPath(profile, `/sessions/${encodeURIComponent(id)}`) }),
     getMessages: (profile, id, { first = 100, after } = {}) => call(profile, { path: orgPath(profile, `/sessions/${encodeURIComponent(id)}/messages`), query: { first, after } }),
     getAttachments: (profile, id) => call(profile, { path: orgPath(profile, `/sessions/${encodeURIComponent(id)}/attachments`) }),
     getInsights: (profile, id) => call(profile, { path: orgPath(profile, `/sessions/${encodeURIComponent(id)}/insights`) }),
+    generateInsights: (profile, id) => call(profile, { method: "POST", path: orgPath(profile, `/sessions/${encodeURIComponent(id)}/insights/generate`) }),
     getTags: (profile, id) => call(profile, { path: orgPath(profile, `/sessions/${encodeURIComponent(id)}/tags`) }),
+    listPlaybooks: (profile, { first = 100, after, includeEnterprise = true } = {}) => call(profile, { path: orgPath(profile, "/playbooks"), query: { first, after, include_enterprise: includeEnterprise } }),
+    listSecrets: (profile, { first = 100, after } = {}) => call(profile, { path: orgPath(profile, "/secrets"), query: { first, after } }),
+    listKnowledgeNotes: (profile, { first = 100, after, search, folderPath, pinnedRepo } = {}) => call(profile, { path: orgPath(profile, "/knowledge/notes"), query: { first, after, search, folder_path: folderPath, pinned_repo: pinnedRepo } }),
+    listRepositories: (profile, { first = 100, after, filterName, loadIndexingStatus = false } = {}) => call(profile, { path: orgPath(profile, "/repositories"), query: { first, after, filter_name: filterName, load_indexing_status: loadIndexingStatus } }),
+    uploadAttachment: (profile, { name, contentType, bytes }) => {
+      const form = new FormData();
+      form.append("file", new Blob([bytes], { type: contentType || "application/octet-stream" }), name);
+      return call(profile, { method: "POST", path: orgPath(profile, "/attachments"), body: form });
+    },
     createSession: (profile, input) => call(profile, {
       method: "POST",
       path: orgPath(profile, "/sessions"),
@@ -92,15 +138,23 @@ function createDevinApi({ timeoutMs = DEFAULT_TIMEOUT_MS, fetchImpl } = {}) {
         title: input.title,
         tags: input.tags,
         repos: input.repos,
-        devin_mode: input.devinMode,
-        max_acu_limit: input.maxAcuLimit,
+        devin_mode: input.devinMode ?? input.devin_mode,
+        max_acu_limit: input.maxAcuLimit ?? input.max_acu_limit,
         resumable: input.resumable,
-        playbook_id: input.playbookId,
-        knowledge_ids: input.knowledgeIds,
-        attachment_urls: input.attachmentUrls,
-        structured_output_schema: input.structuredOutputSchema,
-        structured_output_required: input.structuredOutputRequired,
-        platform: input.platform
+        playbook_id: input.playbookId ?? input.playbook_id,
+        knowledge_ids: input.knowledgeIds ?? input.knowledge_ids,
+        attachment_urls: input.attachmentUrls ?? input.attachment_urls,
+        structured_output_schema: input.structuredOutputSchema ?? input.structured_output_schema,
+        structured_output_required: input.structuredOutputRequired ?? input.structured_output_required,
+        platform: input.platform,
+        bypass_approval: input.bypassApproval ?? input.bypass_approval,
+        child_playbook_id: input.childPlaybookId ?? input.child_playbook_id,
+        create_as_user_id: input.createAsUserId ?? input.create_as_user_id,
+        memory_enabled: input.memoryEnabled ?? input.memory_enabled,
+        secret_ids: input.secretIds ?? input.secret_ids,
+        session_secrets: input.sessionSecrets ?? input.session_secrets,
+        session_links: input.sessionLinks ?? input.session_links,
+        security_profile: input.securityProfile ?? input.security_profile
       }
     }),
     postMessage: (profile, id, message) => call(profile, {
@@ -113,9 +167,16 @@ function createDevinApi({ timeoutMs = DEFAULT_TIMEOUT_MS, fetchImpl } = {}) {
       path: orgPath(profile, `/sessions/${encodeURIComponent(id)}/tags`),
       body: { tags }
     }),
+    appendTags: (profile, id, tags) => call(profile, {
+      method: "POST",
+      path: orgPath(profile, `/sessions/${encodeURIComponent(id)}/tags`),
+      body: { tags }
+    }),
+    sleep: (profile, id) => call(profile, { method: "POST", path: orgPath(profile, `/sessions/${encodeURIComponent(id)}/sleep`) }),
     archive: (profile, id) => call(profile, { method: "POST", path: orgPath(profile, `/sessions/${encodeURIComponent(id)}/archive`) }),
     unarchive: (profile, id) => call(profile, { method: "POST", path: orgPath(profile, `/sessions/${encodeURIComponent(id)}/unarchive`) }),
-    /** Terminate + archive. NOT a hard delete: the record stays readable. */
+    /** Terminate/suspend only. NOT a hard delete and NOT an archive: the
+     *  record stays readable; call archive separately to close it out. */
     terminate: (profile, id) => call(profile, { method: "DELETE", path: orgPath(profile, `/sessions/${encodeURIComponent(id)}`) })
   };
 }

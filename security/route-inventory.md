@@ -99,19 +99,21 @@ Static enumeration of every `webServer.register` path across the (formerly four)
 | /nano-model-selector/media-engines | GET, HEAD | L0 | read:host | 0 | – | scan local media CLIs |
 | /nano-model-selector/media-engine | GET, HEAD, PUT | L2 | write:host | 16384 | – | GET engine state; PUT writes media-engine.json + re-registers /imagine |
 
-## dsh-nano-cloud-session — 10 (`index.js` ROUTE object + SPECS array, all POST)
+## dsh-nano-cloud-session — 12 (`index.js` ROUTE object + SPECS array, all POST)
 
 | path | methods | sensitivity | capability | bodyLimit | session | what it does |
 |---|---|---|---|---|---|---|
 | /nano-cloud-session/status | POST | L0 | read:none | 16384 | – | profile list + activeId + seededFromEnv（无密钥材料） |
 | /nano-cloud-session/config | POST | L3 | write:operator | 16384 | – | carrier profile 增删改/激活/连接测试（token 只写不读，0600 存 DSH_HOME） |
-| /nano-cloud-session/sessions | POST | L2 | net:fetch | 65536 | – | 代理 upstream session 列表（游标 ≤200） |
-| /nano-cloud-session/session | POST | L2 | net:fetch | 65536 | – | 详情/消息流/附件/insights/tags/set_tags op 路由 |
-| /nano-cloud-session/create | POST | L2 | net:fetch+spawn:remote | 262144 | – | 创建云 session（prompt 必填；带 schema/附件故 cap 大） |
+| /nano-cloud-session/sessions | POST | L2 | net:fetch | 65536 | – | 代理 upstream session 列表（全量过滤、游标 ≤200）或 insights 列表 |
+| /nano-cloud-session/session | POST | L2 | net:fetch | 65536 | – | 详情/消息流/附件/insights/generate_insights/tags/set_tags/append_tags/sleep op 路由 |
+| /nano-cloud-session/create | POST | L2 | net:fetch+spawn:remote | 262144 | – | 创建云 session（prompt 必填；全量 create 字段，schema/附件故 cap 大） |
 | /nano-cloud-session/message | POST | L2 | net:fetch+spawn:remote | 65536 | – | 向 session 发消息（可唤醒挂起） |
 | /nano-cloud-session/archive | POST | L2 | net:fetch+write:remote | 16384 | – | upstream archive |
 | /nano-cloud-session/unarchive | POST | L2 | net:fetch+write:remote | 16384 | – | upstream unarchive |
 | /nano-cloud-session/terminate | POST | L2 | net:fetch+write:remote | 16384 | – | upstream DELETE（中止，非硬删、不自动归档） |
 | /nano-cloud-session/ssh | POST | L0 | read:none | 16384 | – | 返回 SSH 命令/enroll 提示，纯信息，不 spawn |
+| /nano-cloud-session/catalog | POST | L2 | net:fetch | 16384 | – | playbooks/secrets/knowledge notes/repositories 只读目录 |
+| /nano-cloud-session/upload | POST | L2 | net:fetch+write:remote | 33554432 | – | base64 附件经宿主 multipart 上传（16 MiB 文件上限） |
 
 **历史 Totals（含退役 NSW 节）: 65 paths · 本清单覆盖活跃 = 45 条；权威口径是 route-sensitivity.json 73 条（DNLS/DNT 分节尚待补写）。** bodyLimit values: notepad /save+/read+/fetch-mp = MAX_SAVE_BYTES 8388608 (8 MiB), /s3/* = MAX_S3_BODY_BYTES 33554432 (32 MiB); explorer + nsw = 64 KiB (65536); model-selector GET/HEAD = 0, /media-engine PUT = 16384; cloud-session 全 POST 按上表。

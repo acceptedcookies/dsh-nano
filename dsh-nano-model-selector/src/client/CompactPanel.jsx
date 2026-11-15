@@ -264,39 +264,108 @@ export function CompactPanel({ copy, models, onError }) {
         </div>
       )}
 
-      {/* Runtime readouts: fill meter + last compaction + heartbeat. */}
+      {/* Compression explainer (-20): the runtime box is now a scenario tab
+          panel. Current water lines + model + effective pins are interpolated
+          into each case so the copy reflects live config. */}
       {enabled && state.policy !== null && (
-        <div className="nms-compact-runtime">
-          <div className="nms-compact-meter-row">
-            <span className="nms-compact-field-label">{copy.compactRuntimeFill}</span>
-            {fill === null ? (
-              <span className="nms-compact-field-static">{meterDown ? `${copy.compactMeterUnknown}（meter-unavailable）` : copy.compactMeterUnknown}</span>
-            ) : (
-              <>
-                <span className="nms-compact-meter" role="meter" aria-valuenow={Math.round(fill * 100)} aria-valuemin="0" aria-valuemax="100">
-                  <span className="nms-compact-meter-fill" data-level={fill >= 0.8 ? 'high' : fill >= 0.5 ? 'mid' : 'low'} style={{ width: `${(fill * 100).toFixed(1)}%` }} />
-                </span>
-                <span className="nms-compact-meter-num">{`${(fill * 100).toFixed(1)}%`}</span>
-              </>
-            )}
-          </div>
-          <div className="nms-compact-meta-row">
-            <span className="nms-model-meta">{copy.compactLastCompaction}: {formatLast(runtime.lastCompaction)}</span>
-          </div>
-          <div className="nms-compact-meta-row">
-            <span className="nms-model-meta">
-              {copy.compactEffectivePin}={effective.pin ?? '—'} · {copy.compactWindowMin}={effective.windowMin ?? '—'}
-            </span>
-          </div>
-          <div className="nms-compact-meta-row">
-            <span className="nms-model-meta">
-              {copy.compactHeartbeat}: {heartbeat === null ? '—' : `${heartbeat.at.toLocaleTimeString()} · GET ${heartbeat.status === 'ok' ? '200' : '✕'}`}
-            </span>
-          </div>
-        </div>
+        <ScenarioBox
+          copy={copy}
+          fill={fill}
+          meterDown={meterDown}
+          degraded={degraded}
+          policy={policy}
+          effective={effective}
+          runtime={runtime}
+          heartbeat={heartbeat}
+          modelLabel={modelValue === '/' ? '—' : modelLabelOf(modelValue, windowMap)}
+        />
       )}
     </div>
   )
+}
+
+const SCENARIO_KEYS = [
+  { tab: 'compactCaseTabIdle', body: 'compactCaseIdle' },
+  { tab: 'compactCaseTabBuffer', body: 'compactCaseBuffer' },
+  { tab: 'compactCaseTabSafety', body: 'compactCaseSafety' },
+  { tab: 'compactCaseTabDegraded', body: 'compactCaseDegraded' },
+]
+
+/** @param {{copy:any, fill:number|null, meterDown:boolean, degraded:boolean, policy:any, effective:any, runtime:any, heartbeat:any, modelLabel:string}} props */
+function ScenarioBox({ copy, fill, meterDown, degraded, policy, effective, runtime, heartbeat, modelLabel }) {
+  const [tab, setTab] = React.useState(1) // default: buffer-line scenario
+  const pct = value => (Number.isFinite(value) ? `${Math.round(value * 100)}` : '—')
+  const vars = {
+    bp: pct(policy.bufferSizeAsync),
+    hp: pct(policy.healthTargetAsync),
+    sp: pct(policy.bufferSizeSafety ?? 0.8),
+    pin: policy.pinnedAsyncTokens ?? '—',
+    epin: effective.pin ?? '—',
+    windowMin: effective.windowMin ?? '—',
+    model: modelLabel,
+    status: meterDown ? 'meter-unavailable' : degraded ? 'state-read-failed' : 'ok',
+    fill: fill === null ? '—' : `${(fill * 100).toFixed(1)}%`,
+  }
+  const active = SCENARIO_KEYS[tab] ?? SCENARIO_KEYS[0]
+  return (
+    <div className="nms-compact-explain">
+      <div className="nms-explain-head">
+        <span className="nms-compact-field-label">{copy.compactExplainTitle}</span>
+        <span className="nms-explain-tabs" role="tablist">
+          {SCENARIO_KEYS.map((scenario, index) => (
+            <button
+              key={scenario.tab}
+              type="button"
+              role="tab"
+              aria-selected={index === tab}
+              className="nms-explain-tab"
+              data-active={index === tab}
+              onClick={() => setTab(index)}
+            >
+              {copy[scenario.tab]}
+            </button>
+          ))}
+        </span>
+      </div>
+      <div className="nms-explain-body">{interpolate(copy[active.body], vars)}</div>
+      <div className="nms-compact-meter-row">
+        <span className="nms-model-meta">{copy.compactRuntimeFill}</span>
+        {fill === null ? (
+          <span className="nms-model-meta">{meterDown ? `${copy.compactMeterUnknown}（meter-unavailable）` : copy.compactMeterUnknown}</span>
+        ) : (
+          <>
+            <span className="nms-compact-meter" role="meter" aria-valuenow={Math.round(fill * 100)} aria-valuemin="0" aria-valuemax="100">
+              <span className="nms-compact-meter-fill" data-level={fill >= 0.8 ? 'high' : fill >= 0.5 ? 'mid' : 'low'} style={{ width: `${(fill * 100).toFixed(1)}%` }} />
+            </span>
+            <span className="nms-compact-meter-num">{`${(fill * 100).toFixed(1)}%`}</span>
+          </>
+        )}
+      </div>
+      <div className="nms-compact-meta-row">
+        <span className="nms-model-meta">
+          {copy.compactLastCompaction}: {formatLast(runtime.lastCompaction)} · {copy.compactEffectivePin}={effective.pin ?? '—'} · {copy.compactWindowMin}={effective.windowMin ?? '—'}
+        </span>
+      </div>
+      <div className="nms-compact-meta-row">
+        <span className="nms-model-meta">
+          {copy.compactHeartbeat}: {heartbeat === null ? '—' : `${heartbeat.at.toLocaleTimeString()} · GET ${heartbeat.status === 'ok' ? '200' : '✕'}`}
+        </span>
+      </div>
+    </div>
+  )
+}
+
+/** Tiny {key} template interp for the scenario copy. */
+function interpolate(template, vars) {
+  return String(template ?? '').replace(/\{(\w+)\}/g, (_, key) => String(vars[key] ?? `{${key}}`))
+}
+
+/** Render a stored provider/model pair as the dropdown's display label. */
+function modelLabelOf(pair, windowMap) {
+  const meta = windowMap[pair]
+  const [provider, ...rest] = pair.split('/')
+  const model = rest.join('/')
+  return meta?.name ? `${provider} · ${meta.name}` : pair
 }
 
 /** @param {{ label: string, field: string, value: any, step: string, min: string, max?: string, onSave: (field:string, raw:string)=>void, busy: boolean }} props */

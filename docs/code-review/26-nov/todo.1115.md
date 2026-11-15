@@ -124,11 +124,11 @@
   - **完成判据**：二十工具逐一接真实领域 owner、`{ok:true,data}`、PublicInstance/Snapshot 边界、catalog 与 dispatch 同源、无自造 sandbox 工具
   - **验证映射**：`CF1115-T16` · **依赖**：`P3-01`
   - **执行状态**：`partial` · **执行时间**：`2026-11-15` · **证据**：`68210f6` — TOOL_DEFS 单源表、每工具 own `additionalProperties:false` schema + 真实 owner（profiles/instances/state/page/ports/bridge），catalog↔dispatch 同源；mcp-tools.spike 4/4 + DNLS 66/66。留：CDP 深工具（dom/elements/selftest/network 等）当前为 owner-null/只读近似、bridge CDP-only 收窄未做 → `CF1115-T16` 二十项全真实业务调用未达。
-- [ ] `P3-04` — [DNK] 真实消费 + 容器时代旧资产/bridge 副本退役 — `deferred`
+- [x] `P3-04` — [DNK] 真实消费 + 容器时代旧资产/bridge 副本退役 — `partial`
   - **落点**：`dsh-nano-kitesurf/{index.js,src/client/index.js,package.json,runtime/mcp-bridge.mjs,lib/diagnostics.js}`
   - **完成判据**：端点常量/fetch 改指真实提供面、错误目录归属、旧容器资产/双载体退役、不删既有业务
   - **验证映射**：`CF1115-T17` · **依赖**：`P3-03`
-  - **执行状态**：`deferred` · **执行时间**：`2026-11-15` · **证据**：`-` · **因**：公开破坏性退役（删 `runtime/` 整树 + `lib/container-engine.js` + files 清单 + index.js import 解耦）触及「单一真源/不得擅自扩约」，且 DNK↔DNLS 双载体 `mcp-bridge.mjs` 哪份 canonical 需 [业主] 裁决；DNK 真实消费面亦跨插件域。列 P-EXEC 待裁决。
+  - **执行状态**：`partial` · **执行时间**：`2026-11-15` · **证据**：`e1b2e91` — `runtime/`（Dockerfile+entrypoint+双载体 mcp-bridge.mjs）退役、`container-engine.js` 只留端口工具（createArgs/checkoutPath/runContainer/ensureLocalContainer 等死函数删，测试断言零残留）、`persistedCheckout`/`rememberCheckout`/`effectiveCheckout` 死代码移除、files 清理。真实消费面=引擎 CDP+DNLS `/nano-local-sandbox/*` 已成立。留：`kitesurf.kite.container`/`kitesurf.kite.checkout` 等容器期 errorId 仍在 ERROR_CATALOG/SELFTEST_FIX 文案（不删既有错误目录属保留判据，未判是否过度承诺）；DNK 真实消费 live 链路未跑（无引擎实连）→ `CF1115-T17` 半收。
 - [x] `P3-05` — [DNT] MCP/attach/WS/SSE/审计消费 + 公开 nanoTerminal — `partial`
   - **落点**：`dsh-nano-terminal/{index.js,src/host/{mcp,events}.js,src/client/lanes.js}`
   - **完成判据**：真实工具分发、attach 用返回 url、SSE 生命周期、审计 writer 接线、公开 `ctx.provide('nanoTerminal')` 消费

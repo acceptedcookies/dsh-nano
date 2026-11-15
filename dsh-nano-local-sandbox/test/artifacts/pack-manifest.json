@@ -1,5 +1,5 @@
 {
-  "commit": "bedc2e2636c28ac2bc0cbd49026a52430c2dff96",
+  "commit": "e1b2e91f3c253b8e35dcd4e23c2c017754e5f206",
   "packs": {
     "dsh-nano-local-sandbox": [
       "AGENTS.md",
@@ -52,9 +52,6 @@
       "locale/en.json",
       "locale/zh.json",
       "package.json",
-      "runtime/Dockerfile",
-      "runtime/entrypoint.sh",
-      "runtime/mcp-bridge.mjs",
       "skills/kitesurf-cdp/SKILL.md",
       "skills/kitesurf-cdp/references/element-packets.md",
       "skills/kitesurf-cdp/references/emulation.md",

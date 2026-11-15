@@ -1,0 +1,26 @@
+{
+  "name": "dsh-interface",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Build-time shared归口 library (CF1115): contracts/host/build three exports. Pure ESM; not a plugin; no dsh.bundle/dsh.client; bundled into each plugin's lib/ artifacts via esbuild (devDependency, never resolved at runtime).",
+  "exports": {
+    "./contracts": "./src/contracts/index.js",
+    "./host": "./src/host/index.js",
+    "./build": "./src/build/index.js"
+  },
+  "files": [
+    "src",
+    "AGENTS.md"
+  ],
+  "scripts": {
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "dsh-host-route-guard": "file:../dsh-host-route-guard"
+  },
+  "engines": {
+    "dsh": ">=0.2.2-rc.1 <0.3.0",
+    "node": ">=20"
+  }
+}

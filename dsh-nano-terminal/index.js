@@ -18,8 +18,7 @@ import { EventBus } from './lib/events.js'
 import { Persist } from './lib/persist.js'
 import { createMcpHandler } from './lib/mcp.js'
 import { handshake, FrameParser, sendBinary, sendText, sendClose, encodeFrame, parseChannel, Attach, FR_KIND } from './lib/ws.js'
-import { registerRoutes } from './lib/route-guard.js'
-import { ROUTE_TABLE } from './lib/route-table.js'
+import { registerWebRoutes } from './lib/web-routes.js'
 
 export const name = 'dsh-nano-terminal'
 
@@ -61,213 +60,16 @@ export function apply(ctx) {
   registry.audit = mcp.audit
   bus.audit = mcp.audit
 
-  // -- data plane: WebSocket upgrade -----------------------------------------
+  // -- web surfaces: WS data plane + MCP/REST control plane ------------------
+  // All web surfaces (http exact/prefix + upgrade) register through the single
+  // createWebRegistrar mechanism (src/host/web-routes.js → lib/web-routes.js).
+  // Handlers are bound to the baked BINDING_TABLE by stable id; the registrar
+  // owns the requestRejection fence and unified ctx.effect teardown.
 
-  const unregisterUpgrade = ctx.webServer.registerUpgrade({
-    path: `${ROUTE}/stream`,
-    handler: (req, socket) => {
-      const rejection = ctx.get('connection')?.requestRejection?.(req)
-      if (rejection !== undefined) {
-        socket.end()
-        return
-      }
-      if (!handshake(req, socket)) return
-      const url = new URL(req.url ?? '/', 'http://localhost')
-      const attachId = url.searchParams.get('session')
-      let record = null
-      let ready = false
-      let attach = null
-
-      const parser = new FrameParser((opcode, payload) => {
-        if (opcode === 0x08) {
-          socket.end()
-          return
-        }
-        if (opcode === 0x09) {
-          socket.write(encodeFrame(payload, 0x0A))
-          return
-        }
-        if (!ready) {
-          if (opcode !== 0x01) return
-          let msg
-          try {
-            msg = JSON.parse(payload.toString('utf8'))
-          } catch {
-            sendClose(socket, 1003, 'expected open frame')
-            return
-          }
-          void openFlow(msg)
-          return
-        }
-        if (opcode === 0x02 && record) {
-          if (attach.v === 2) {
-            const fr = parseChannel(payload)
-            if (!fr) return
-            if (fr.kind === FR_KIND.CREDIT) {
-              attach.onCredit(fr.payload.readUInt32BE(0))
-            } else if (fr.kind === FR_KIND.DATA) {
-              // interactive bytes count as human input — the gate holds them
-              // while an agent delivery is in flight (never interleaves)
-              void record.writeInput(fr.payload, 'human').then((r) => {
-                if (r?.held) attach.channel(1, FR_KIND.HELD)
-              }).catch(() => {})
-            } else if (fr.kind === FR_KIND.AUTO_INPUT) {
-              // terminal auto-replies bypass the gate entirely (hc rule)
-              void record.writeInput(fr.payload, 'automatic').catch(() => {})
-            } else if (fr.kind === FR_KIND.FACTS) {
-              // headless attach reports its viewport — adopt its geometry
-              try {
-                const f = JSON.parse(fr.payload.toString('utf8'))
-                if (f.cols && f.rows) void record.resize(f.cols, f.rows)
-              } catch { /* ignore malformed facts */ }
-            } else if (fr.kind === FR_KIND.RESIZE && fr.payload.length >= 4) {
-              void record.resize(fr.payload.readUInt16BE(0), fr.payload.readUInt16BE(2))
-            }
-          } else {
-            void record.writeInput(payload, 'human').catch(() => {})
-          }
-        } else if (opcode === 0x01) {
-          try {
-            const msg = JSON.parse(payload.toString('utf8'))
-            if (msg.type === 'resize' && record) void record.resize(msg.cols, msg.rows)
-            if (msg.type === 'ping') sendText(socket, { type: 'pong', t: Date.now() })
-          } catch { /* ignore malformed control */ }
-        }
-      })
-
-      socket.on('data', (chunk) => parser.feed(chunk))
-      socket.on('error', () => {})
-
-      async function openFlow(msg) {
-        try {
-          const attachRef = attachId ?? msg.session
-          if (attachRef) {
-            // ?session= or open.session accepts id | name | addr
-            record = registry.resolve(attachRef)
-            if (!record) throw new Error('no such session')
-          } else if (msg.type === 'open') {
-            record = await registry.create({
-              sessionId: msg.owner,
-              shell: msg.shell,
-              args: msg.args,
-              cwd: msg.cwd,
-              cols: msg.cols,
-              rows: msg.rows,
-              title: msg.title,
-              owner: msg.owner,
-            })
-          } else {
-            throw new Error('expected {type:"open"}')
-          }
-          // pending placeholder: spawn the fresh shell on first attach
-          if (record.pending) await registry.spawnPending(record)
-          // v2 negotiated via open.v or ?v=2 — framed channels + credit
-          const wantV2 = msg.v === 2 || url.searchParams.get('v') === '2'
-          attach = new Attach(socket, record)
-          attach.v = wantV2 ? 2 : 1
-          record.attached.set(socket, attach)
-          socket.once('close', () => { record?.detach(socket); record?.attached.delete(socket) })
-          ready = true
-          sendText(socket, {
-            type: 'ready',
-            v: attach.v,
-            session: record.id,
-            addr: record.addr,
-            title: record.title,
-            lane: record.lane,
-            exited: record.exited,
-            replayBytes: record.replayLen,
-          })
-          record.replayInto(socket, (s, chunk) => attach.data(chunk))
-        } catch (err) {
-          sendText(socket, { type: 'error', message: String(err?.message ?? err) })
-          sendClose(socket, 1008, 'open failed')
-        }
-      }
-    },
+  const disposeRoutes = registerWebRoutes(ctx, {
+    registry, bus, mcp, laneStatus,
+    ws: { handshake, FrameParser, sendBinary, sendText, sendClose, encodeFrame, parseChannel, Attach, FR_KIND },
   })
-
-  // -- control plane: MCP JSON-RPC + management REST --------------------------
-
-  const unregisterRoutes = registerRoutes(ctx, [
-    {
-      path: `${ROUTE}/mcp`,
-      methods: ['POST'],
-      handler: async (req, res) => {
-        if (req.method !== 'POST') {
-          res.writeHead(405).end()
-          return
-        }
-        const body = await readBody(req, 512 * 1024)
-        let parsed
-        try {
-          parsed = JSON.parse(body)
-        } catch {
-          res.writeHead(400, { 'content-type': 'application/json' })
-          res.end(JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'parse error' } }))
-          return
-        }
-        mcp.audit({ op: 'mcp.req', method: Array.isArray(parsed) ? 'batch' : parsed?.method })
-        const reply = await mcp.handleRpc(parsed)
-        res.writeHead(200, { 'content-type': 'application/json' })
-        res.end(reply === undefined ? '' : JSON.stringify(reply))
-      },
-    },
-    {
-      path: `${ROUTE}/sessions`,
-      methods: ['GET'],
-      handler: async (req, res) => {
-        res.writeHead(200, { 'content-type': 'application/json' })
-        res.end(JSON.stringify({ sessions: registry.list() }))
-      },
-    },
-    // SSE event stream: subscribe → snapshot first frame, then live events.
-    // ?since=<seq> resumes from a position; falling behind the ring answers
-    // with {missed:true,snapshot}. Agents can poll the same data via
-    // term.events without holding a connection.
-    {
-      path: `${ROUTE}/events`,
-      methods: ['GET'],
-      handler: async (req, res) => {
-        const url = new URL(req.url ?? '/', 'http://localhost')
-        const since = Number(url.searchParams.get('since')) || 0
-        res.writeHead(200, {
-          'content-type': 'text/event-stream',
-          'cache-control': 'no-cache',
-          connection: 'keep-alive',
-        })
-        const unsub = bus.subscribe((ev) => {
-          try {
-            res.write(`data: ${JSON.stringify(ev)}\n\n`)
-          } catch { /* stream closing */ }
-        }, { since })
-        req.on('close', unsub)
-      },
-    },
-    {
-      path: `${ROUTE}/health`,
-      methods: ['GET'],
-      handler: async (req, res) => {
-        res.writeHead(200, { 'content-type': 'application/json' })
-        res.end(JSON.stringify({ ok: true, lanes: laneStatus(), sessions: registry.count() }))
-      },
-    },
-    {
-      path: `${ROUTE}/session`,
-      methods: ['POST'],
-      kind: 'prefix',
-      handler: async (req, res) => {
-        const m = (req.url ?? '').match(/\/session\/([^/]+)\/close$/)
-        if (req.method !== 'POST' || !m) {
-          res.writeHead(404).end()
-          return
-        }
-        const ok = await registry.close(decodeURIComponent(m[1]), 'route')
-        res.writeHead(ok ? 200 : 404, { 'content-type': 'application/json' })
-        res.end(JSON.stringify({ closed: ok }))
-      },
-    },
-  ], { table: ROUTE_TABLE, plugin: 'dsh-nano-terminal' })
 
   // -- slash command (host side, agent-facing): /term --------------------------
   // UI-level mapping lives on the client via ctx.commandUi ('/dnt'); this host
@@ -370,8 +172,7 @@ export function apply(ctx) {
   ctx.effect(() => () => {
     clearInterval(sweep)
     bus.dispose()
-    unregisterUpgrade()
-    for (const un of unregisterRoutes) un()
+    disposeRoutes()
     unregisterCommand()
     void registry.dispose()
   }, 'dsh-nano-terminal: dispose')

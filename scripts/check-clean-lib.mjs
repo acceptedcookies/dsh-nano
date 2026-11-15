@@ -42,9 +42,12 @@ export const UNBUNDLED_INDEX = ['dsh-nano-notepad', 'dsh-nano-model-selector', '
  * Packages whose shipped lib/ legally carries bare `@deepseek-ai/*` specifiers
  * resolved by the host's own dependency tree. The vendored dsh-compaction
  * seam (QNA R-16) imports only @deepseek-ai/cordis, which the profile resolves
- * via its hoisted runtime node_modules; flag anything else.
+ * via its hoisted runtime node_modules. dsh-nano-model-selector-compaction
+ * additionally probes @deepseek-ai/dsh-compaction via a fail-soft dynamic
+ * import() (vendored fallback when the host does not expose it). Flag anything
+ * else.
  */
-export const HOST_RESOLVED_SPECIFIERS = new Set(['@deepseek-ai/cordis'])
+export const HOST_RESOLVED_SPECIFIERS = new Set(['@deepseek-ai/cordis', '@deepseek-ai/dsh-compaction'])
 
 /**
  * Strip comments so JSDoc `import('pkg').Type` annotations and commented-out

@@ -20,7 +20,7 @@ mkdirSync(join(root, 'lib'), { recursive: true })
 // Host halves: index.js is unbundled and imports ./lib/*.js at runtime. The dev
 // instance copies lib/ but not node_modules — our host files have no external
 // deps, so bundling is just concatenation for a stable lib/ surface.
-for (const name of ['sessions', 'mcp', 'ws', 'mirror', 'events', 'errors', 'gate', 'wait', 'persist', 'notes', 'templates']) {
+for (const name of ['sessions', 'mcp', 'ws', 'mirror', 'events', 'errors', 'gate', 'wait', 'persist', 'notes', 'templates', 'web-routes']) {
   esbuild.buildSync({
     absWorkingDir: root, logLevel: 'warning',
     entryPoints: [`src/host/${name}.js`],
@@ -28,6 +28,10 @@ for (const name of ['sessions', 'mcp', 'ws', 'mirror', 'events', 'errors', 'gate
     outfile: join(root, `lib/${name}.js`),
   })
 }
+
+// CF1115: lib/web-routes.js (bundled above) self-contains the dsh-interface/host
+// facade + the single dsh-host-route-guard implementation it reuses, resolving
+// `dsh-interface` from this package's declared file: devDependency.
 
 // wasm asset for the host mirror
 copyFileSync(join(root, 'assets/dnt-core.wasm'), join(root, 'lib/dnt-core.wasm'))

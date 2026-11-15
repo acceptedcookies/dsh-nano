@@ -29,7 +29,9 @@
   },
   "devDependencies": {
     "esbuild": "0.25.0",
-    "dsh-nano-ui": "file:../packages/dsh-nano-ui"
+    "dsh-nano-ui": "file:../packages/dsh-nano-ui",
+    "dsh-interface": "file:../packages/dsh-interface",
+    "dsh-host-route-guard": "file:../packages/dsh-host-route-guard"
   },
   "engines": {
     "dsh": ">=0.2.2-rc.1 <0.3.0"

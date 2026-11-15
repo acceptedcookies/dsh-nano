@@ -7,6 +7,10 @@ dist/
 build/
 out/
 *.tsbuildinfo
+# dsh-interface ships a source dir literally named src/build (the ./build export
+# — build-time baking helpers). It is source, not output; un-ignore it.
+!packages/dsh-interface/src/build/
+!packages/dsh-interface/src/build/**
 
 # Logs
 *.log

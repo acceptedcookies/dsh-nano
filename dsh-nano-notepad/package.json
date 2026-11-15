@@ -58,6 +58,7 @@
     "dsh-performance-review": "file:../packages/dsh-performance-review",
     "dsh-remote-data-schema": "file:../packages/dsh-remote-data-schema",
     "dsh-s3-client": "file:../packages/dsh-s3-client",
-    "esbuild": "0.25.0"
+    "esbuild": "0.25.0",
+    "dsh-interface": "file:../packages/dsh-interface"
   }
 }

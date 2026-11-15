@@ -42,6 +42,34 @@ const lineOf = (text, needle, fromIndex = 0) => {
   return text.slice(0, idx).split('\n').length
 }
 
+/**
+ * Parse a baked CF1115 `lib/bindings.js` (channel/match ledger rows) into
+ * route-scan rows. Only `channel:'http'` rows surface in the web-route
+ * inventory — upgrade bindings live on the WS channel, outside the
+ * route-sensitivity route set. bodyLimit is per-method (0 for GET/HEAD).
+ * @param {string} file - source path (for the provenance line)
+ * @param {string} text - lib/bindings.js contents
+ * @param {string} plugin - plugin package name
+ */
+function parseBindings(file, text, plugin) {
+  const rows = []
+  const re = /\{\s*id:\s*'([^']+)'[\s\S]*?channel:\s*'(http|upgrade)'[\s\S]*?match:\s*'(exact|prefix)'[\s\S]*?path:\s*'([^']+)'[\s\S]*?methods:\s*\[([^\]]*)\][\s\S]*?bodyLimit:\s*(\d+)/g
+  for (const match of text.matchAll(re)) {
+    const [, id, channel, , path, methodBlock, cap] = match
+    if (channel !== 'http') continue // upgrade surfaces are not web routes
+    const methods = [...methodBlock.matchAll(/'(GET|HEAD|POST|PUT|DELETE|PATCH)'/g)].map(m => m[1])
+    if (methods.length === 0) continue
+    rows.push({
+      plugin,
+      path,
+      methods,
+      bodyLimit: Object.fromEntries(methods.map(m => [m, m === 'GET' || m === 'HEAD' ? 0 : Number(cap)])),
+      source: { file, line: lineOf(text, `id: '${id}'`) },
+    })
+  }
+  return rows
+}
+
 /* ------------------------------------------------------------------ *
  * dsh-nano-notepad — index.js                                        *
  * Routes: SAVE/READ/MP constants + four S3_* constants via s3Route(). *
@@ -50,59 +78,15 @@ const lineOf = (text, needle, fromIndex = 0) => {
  * MAX_S3_BODY_BYTES.                                                  *
  * ------------------------------------------------------------------ */
 function scanNanoNotepad() {
-  const file = 'dsh-nano-notepad/index.js'
+  // CF1115: notepad web surfaces are declared in lib/bindings.js (the baked
+  // channel/match ledger) and registered through lib/web-registrar.js. The
+  // scan reads the single binding-table source — route presence + bodyLimit
+  // come from the same baked rows the registrar dispatches on.
+  const file = 'dsh-nano-notepad/lib/bindings.js'
   const text = src(file)
-  const consts = {}
-  for (const match of text.matchAll(/^const ([A-Z0-9_]+) = '([^']+)'/gm)) {
-    consts[match[1]] = match[2]
-  }
-  const bytes = name => {
-    const m = text.match(new RegExp(`const ${name} = ([^\\n]+)`))
-    return m ? evalBytesExpr(m[1]) : undefined
-  }
-  const MAX_SAVE = bytes('MAX_SAVE_BYTES')
-  const MAX_S3 = bytes('MAX_S3_BODY_BYTES')
-
-  // Every spec in the SPECS array is `path: X_ROUTE, methods: [...]` — parse
-  // the array so an added route cannot slip past the gate. bodyLimit is NOT
-  // inline in the spec: handlers read `route.bodyLimit` off the baked route
-  // table, so the per-route byte cap is looked up there (the table itself is
-  // generated from security/route-sensitivity.json — route presence comes
-  // from index.js code, the cap is a lookup, not a second source of truth).
-  const tableText = src('dsh-nano-notepad/src/host/route-table.js')
-  const tableCap = {}
-  for (const match of tableText.matchAll(/"path": "([^"]+)"[\s\S]*?"bodyLimit": (\d+)/g)) {
-    tableCap[match[1]] = Number(match[2])
-  }
-
-  const rows = []
-  const seen = new Set()
-  for (const match of text.matchAll(/path: ([A-Z0-9_]+),\s*\n?\s*methods: \[([^\]]*)\]/g)) {
-    const path = consts[match[1]]
-    if (!path || seen.has(path)) continue
-    seen.add(path)
-    const methods = [...match[2].matchAll(/'(GET|HEAD|POST|PUT|DELETE|PATCH)'/g)].map((m) => m[1])
-    if (methods.length === 0) continue
-    const cap = tableCap[path]
-    if (cap === undefined) {
-      throw new Error(`route-scan: notepad spec ${match[1]} (${path}) has no baked bodyLimit in src/host/route-table.js — run scripts/build-client.mjs`)
-    }
-    rows.push({
-      plugin: 'dsh-nano-notepad',
-      path,
-      methods,
-      bodyLimit: Object.fromEntries(methods.map((method) => [method, method === 'GET' || method === 'HEAD' ? 0 : cap])),
-      source: { file, line: lineOf(text, `const ${match[1]}`) },
-    })
-  }
-  // The three oldest routes keep their constant-derived caps as a cross-check:
-  // if MAX_SAVE_BYTES/MAX_S3_BODY_BYTES drifted from the baked table, the
-  // ledger would silently lie — fail loudly instead.
-  for (const name of ['SAVE_ROUTE', 'READ_ROUTE', 'MP_ROUTE']) {
-    if (tableCap[consts[name]] !== MAX_SAVE) throw new Error(`route-scan: ${name} table cap ${tableCap[consts[name]]} != MAX_SAVE_BYTES ${MAX_SAVE}`)
-  }
-  for (const name of ['S3_STATUS_ROUTE', 'S3_TEST_ROUTE', 'S3_OBJECT_ROUTE', 'S3_CONFIG_ROUTE']) {
-    if (tableCap[consts[name]] !== MAX_S3) throw new Error(`route-scan: ${name} table cap ${tableCap[consts[name]]} != MAX_S3_BODY_BYTES ${MAX_S3}`)
+  const rows = parseBindings(file, text, 'dsh-nano-notepad')
+  if (rows.length === 0) {
+    throw new Error('route-scan: dsh-nano-notepad has no http bindings in lib/bindings.js — rebuild or redeclare')
   }
   return rows
 }
@@ -300,30 +284,16 @@ function scanLocalSandbox() {
 }
 
 function scanTerminal() {
-  const file = 'dsh-nano-terminal/index.js'
+  // CF1115: terminal web surfaces are declared in lib/bindings.js (the baked
+  // channel/match ledger) and registered through lib/web-routes.js. The
+  // channel:'upgrade' stream binding is excluded — upgrades are not web routes.
+  const file = 'dsh-nano-terminal/lib/bindings.js'
   const text = src(file)
-  const base = text.match(/const ROUTE = '([^']+)'/)?.[1]
-  if (!base) throw new Error('route-scan: dsh-nano-terminal is missing ROUTE')
-  const suffixes = [...text.matchAll(/path: `\$\{ROUTE\}([^`]*)`/g)].map((match) => match[1])
-  const unique = [...new Set(suffixes)]
-  const known = {
-    '/stream': { methods: ['GET'], cap: 0 },
-    '/mcp': { methods: ['POST'], cap: 524288 },
-    '/sessions': { methods: ['GET'], cap: 0 },
-    '/events': { methods: ['GET'], cap: 0 },
-    '/health': { methods: ['GET'], cap: 0 },
-    '/session': { methods: ['POST'], cap: 0 },
+  const rows = parseBindings(file, text, 'dsh-nano-terminal')
+  if (rows.length === 0) {
+    throw new Error('route-scan: dsh-nano-terminal has no http bindings in lib/bindings.js — rebuild or redeclare')
   }
-  if (unique.length !== Object.keys(known).length || unique.some((suffix) => !known[suffix])) {
-    throw new Error(`route-scan: dsh-nano-terminal paths ${unique.join(',')} do not match the known set`)
-  }
-  return unique.map((suffix) => ({
-    plugin: 'dsh-nano-terminal',
-    path: `${base}${suffix}`,
-    methods: known[suffix].methods,
-    bodyLimit: Object.fromEntries(known[suffix].methods.map((method) => [method, method === 'POST' ? known[suffix].cap : 0])),
-    source: { file, line: lineOf(text, 'const ROUTE =') },
-  }))
+  return rows
 }
 
 /* ------------------------------------------------------------------ *

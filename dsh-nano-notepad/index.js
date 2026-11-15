@@ -5,8 +5,7 @@ import { join, basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { ensurePerfReviewHost, LIB_VERSION } from './lib/perf-review-host.js'
 import { createSyncEngine } from './lib/s3-sync-host.js'
-import { registerRoutes } from './lib/route-guard.js'
-import { ROUTE_TABLE, PLUGIN } from './lib/route-table.js'
+import { createWebRegistrar, BINDING_TABLE, PLUGIN } from './lib/web-registrar.js'
 import { sanitizeMpHtml } from './lib/mp-sanitize.js'
 import { modelsHandler, chatHandler } from './lib/fx-bridge.js'
 import { pipelineS3Handler, pipelineClaimHandler, pipelineRpcHandler } from './lib/pipeline.js'
@@ -258,11 +257,13 @@ async function readMarkdown(filePath) {
 
 /** @param {import('@deepseek-ai/cordis').Context} ctx */
 export function apply(ctx) {
-  /* Every route registers through dsh-host-route-guard (P1-05 / T-O-7): the
-     guard owns requestRejection (Host/Origin fence + authenticated Peer, so
-     no web page or LAN client can drive the native save dialog) and the
-     uniform 405. Handlers keep their exact response work; only registration
-     moved. `route.bodyLimit` carries the baked per-route byte cap. */
+  /* Every web surface registers through createWebRegistrar (CF1115 / P1-04),
+     the single channel/match registration mechanism that unidirectionally
+     reuses the dsh-host-route-guard implementation. It owns requestRejection
+     (Host/Origin fence + authenticated Peer, so no web page or LAN client can
+     drive the native save dialog) and the uniform 405 across http-exact and
+     http-prefix bindings. Handlers keep their exact response work; only
+     registration moved. `route.bodyLimit` carries the baked byte cap. */
 
   /* S3 sync: the host is a signed proxy — credentials never reach the browser. */
   const s3 = createSyncEngine()
@@ -340,21 +341,18 @@ export function apply(ctx) {
     { path: PIPELINE_RPC_ROUTE, methods: ['POST'], handler: pipelineRpcHandler(ctx) },
   ]
 
-  registerRoutes(ctx, SPECS, { table: ROUTE_TABLE, plugin: PLUGIN })
-
-  /* SDK 前缀路由：route-guard 固定 kind:'exact' 不认 prefix，旁路注册，
-     手动补同一道 requestRejection 闸门（Host/Origin 围栏 + 已鉴权 Peer）。 */
-  const conn = ctx.get('connection')
+  /* SDK 前缀资产分发（basename-only）：现由 registrar 的 http+prefix 绑定注册，
+     不再旁路 register + 手动补 requestRejection（围栏由 registrar 统一负责）。 */
   const sdkServe = sdkHandler(FX_ASSETS_DIR)
-  ctx.effect?.(() => ctx.webServer.register({
-    kind: 'prefix',
-    path: FX_SDK_PREFIX,
-    handler: async (req, res) => {
-      const rejection = conn?.requestRejection?.(req)
-      if (rejection !== undefined) { res.statusCode = rejection; res.end(); return }
-      await sdkServe(req, res)
-    },
+
+  /* Bind every baked BINDING_TABLE row to its handler. http-exact rows resolve
+     their handler by path from SPECS; the fx/sdk prefix row binds sdkServe. */
+  const specByPath = new Map(SPECS.map(s => [s.path, s.handler]))
+  const bindings = BINDING_TABLE.map(row => ({
+    ...row,
+    handler: row.id === 'dnn.fx.sdk' ? ((req, res) => sdkServe(req, res)) : specByPath.get(row.path),
   }))
+  createWebRegistrar({ plugin: PLUGIN, bindings }).registerAll(ctx)
 }
 
 /* ---------- fx 资产分发（wasm + libfx SDK，同源静态） ---------- */

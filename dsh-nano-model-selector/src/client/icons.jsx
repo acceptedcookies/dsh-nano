@@ -14,6 +14,7 @@ import {
   IconRefreshOutlineRegular,
   IconSearchOutlineRegular,
   IconSparkleRegular,
+  IconLayersOutlineRegular,
   IconWarningTriangleOutlineRegular,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 
@@ -75,4 +76,15 @@ export function DragHandleIcon(props) {
 /** @param {{ className?: string, size?: number }} props */
 export function MediaIcon(props) {
   return <IconSparkleRegular {...props} />
+}
+
+/**
+ * Async-compaction takeover rail icon: a layered stack folded into one.
+ * `IconLayersOutlineRegular` only exists in ui-primitives ≥ rc.2; rc.1 falls
+ * back to the data-stack glyph (`IconDataOutlineRegular`, same outline family)
+ * instead of rendering an undefined component and crashing the slot.
+ */
+export function CompactionIcon(props) {
+  const Layered = IconLayersOutlineRegular ?? IconDataOutlineRegular
+  return <Layered {...props} />
 }

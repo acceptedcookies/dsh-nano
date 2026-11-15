@@ -155,7 +155,10 @@ function scanModelSelector() {
   const catalog = consts.ROUTE
   const engines = consts.ENGINES_ROUTE
   const engine = consts.ENGINE_ROUTE
-  // PUT body cap is the literal in readBody(req, 16384) inside mediaHandler.
+  const asyncCompact = consts.ASYNC_COMPACT_ROUTE
+  const asyncCompactSwitch = consts.ASYNC_COMPACT_SWITCH_ROUTE
+  // PUT body cap is the literal in readBody(req, 16384) inside mediaHandler /
+  // asyncCompactHandlers (the same helper, same literal).
   const putCap = (() => {
     const m = text.match(/readBody\(req,\s*(\d+)\)/)
     return m ? Number(m[1]) : 16384
@@ -181,6 +184,21 @@ function scanModelSelector() {
       methods: ['GET', 'HEAD', 'PUT'],
       bodyLimit: { GET: 0, HEAD: 0, PUT: putCap },
       source: { file, line: lineOf(text, 'const ENGINE_ROUTE =') },
+    },
+    {
+      plugin: 'dsh-nano-model-selector',
+      path: asyncCompact,
+      methods: ['GET', 'HEAD', 'PUT'],
+      bodyLimit: { GET: 0, HEAD: 0, PUT: putCap },
+      source: { file, line: lineOf(text, 'const ASYNC_COMPACT_ROUTE =') },
+    },
+    {
+      plugin: 'dsh-nano-model-selector',
+      path: asyncCompactSwitch,
+      methods: ['POST'],
+      // -20⑦: switch body is {"enabled":boolean} — hard cap 1024.
+      bodyLimit: { POST: 1024 },
+      source: { file, line: lineOf(text, 'const ASYNC_COMPACT_SWITCH_ROUTE =') },
     },
   ]
   return rows

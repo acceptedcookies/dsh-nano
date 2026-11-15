@@ -1297,3 +1297,72 @@
 | `0.5.0-draft` | 2026-11-14 | `DNMS01 架构 agent（lead）` | **Round 3 冻结 + Round 4（executional）提出**：[业主] 同意第 3 轮全部推荐 → Q5 / Q6 / Q7 业主回答填为 `✅ 已确认：选 A`，按 append 追加 `T-O-DNMS01-14`（专用 compaction bundle + `set_bundle` 一次写 / 一次重组合 + 触发层级 + 读态三件套 + per-profile + 禁重启 `dsh.local`）/ `-15`（7 字段 schema + [真相层] 数值 + 写时 reject + 一条 L3 路由 + 闭集错误码 + 五处台账一次对齐 + 原子写 / fail-closed）/ `-16`（按协议重实现三方法 + 仅复用 Cordis-free 导出原语 + 六失败码 + bracket / 三监听 / prune 时序 / no-cap / P0 前置 / 验收矩阵）进 §1，§1 现有 **16 条**已冻结真相；补 **R-10**（`-12` 执行细节的 append-only 修订：写者 `set_plugin`→`set_bundle`、文件 `cordis.patch.yml`→`package.json` bundles；真相结论不变）与 **R-11**（冻结动作补记）；§0 状态表翻转、§6 标题改已冻结。**§7 中场评估 III 补写实质内容**（7.1 逐题判定 / 7.2 已锁定真相 / 7.3 十五条诚实反方含本轮新发现：B 线 listener 抛错中止 turn 且丢 claim 消息、`request-error` 抛错掩盖原始 failure、manual 不总包装、`summary-error` 的 true 需 durable 进展、[dsh] 无 `compact.notify` / op-observations、专用 bundle 必为独立包、发布表只有三行、`dsh-dev` dependencies 规则绕开开关、首跑不创建状态文件、无 migrate 惯例、D3 无 T-O、无 breaker 先例 / 7.4 轮次判定与缺口表）。**§8 Round 4 开启**：新增 §8.0 本轮 20 条本仓 `file:line` 证据检索（三路独立只读调查：交付/版本 / 运行期失败与观测 / 残差盘点）+ 13 项关键新发现 + UNVERIFIED 清单；提出 **Q8（交付与切换：一仓两包 / 安装顺序 / 默认 OFF / 首跑不创建 / 卸载回滚 / 文档同步 / dsh-dev 边界）**、**Q9（运行期行为与失败降级：真 async 跨 turn 调度 + 下一请求 adoption + one-active + 多会话并发 + 按入口分型失败政策 + ephemeral circuit + safety-only degraded + overflow=1）**、**Q10（观测面闭集 + 六级验收矩阵 + 可判定 DoD + 发布授权归 [业主]）**，各含 4 组有效信息、驱动真相标注、治理对齐（拒绝 hotfix / 能硬切就不要双写 / 能彻底退役就不要提供兼容）。三题业主回答为空槽、未冻结；预留 `T-O-DNMS01-17` / `-18` / `-19`；**§9 及以后为骨架占位，不预设任何 Round 5+ 题目**。 |
 | `0.6.0-draft` | 2026-11-14 | `DNMS01 架构 agent（lead）` | **Round 4 冻结 + Round 5（收口前最后一轮）提出**：[业主] 同意第 4 轮全部推荐 → Q8 / Q9 / Q10 业主回答填为 `✅ 已确认：选 A`，按 append 追加 `T-O-DNMS01-17`（一仓两包 / 各自版本与发布行 / 安装与卸载序列 / **默认 OFF** / 首跑不创建状态文件 / 不 migrate / 文档同步 / `dsh-dev` 边界）/ `-18`（真 async 跨 turn + 下一请求 adoption + ephemeral intent + `one-active` 靠协议锁 + 多会话隔离 + 按入口分型失败 + safety-only degraded + pruner + 不清锁 + ephemeral circuit + overflow=1）/ `-19`（观测面五类闭集 + 不建 audit + L0–L5 六级矩阵 + 可判定 DoD + 不新设 gate + 发布授权归 [业主]）进 §1，§1 现有 **19 条**已冻结真相；补 **R-12**（冻结动作补记 + **§7.4 轮次判定的 append-only 修正**：§7.4 误将 UI / 观测派生 / 收口机制划为 IMPLEMENTATION-DETAIL，实为收口前必须冻结的三块；因此 Round 5 不是纯收口轮）；§0 状态表翻转、§8 标题改已冻结。**§9 中场评估 IV 补写实质内容**（9.1 逐题判定 / 9.2 已锁定真相 / 9.3 九条诚实反方含本轮新发现：UI 四态缺失、`filter !== 'media'` 四处漏扩展、`tokenMeter.measure` O(surface)、`lastCompaction` 无现成投影、草案 4 处陈旧语义、`T-R` 不进 QNA、deferral 需登记处 / 9.4 Round 5 三题各由哪条 `T-O` 驱动）。**§10 Round 5 开启**：新增 §10.0 本轮 15 条本仓 `file:line` 证据检索（UI 结构 / 性能与派生 / 收口规范三组）+ UNVERIFIED 清单；提出 **Q11（UI 面板与交互契约：rail 第 4 图标 + U1–U4 四态 + 切换确认与结果分类 + 18 个 i18n key + 四处条件清理）**、**Q12（观测派生与性能：projection 派生 `lastCompaction` + 按需 `measure` + 5s memo + 零轮询 + `meter-unavailable` 读面降级）**、**Q13（收口与交接：22 条收口 + 草案全面 banner + `T-O`→计划 §2.1 + P0 `T-R` 回灌 §2.2 + deferral 表 + 不设 Round 6）**，各含 4 组有效信息、驱动真相标注、治理对齐。三题业主回答为空槽、未冻结；预留 `T-O-DNMS01-20` / `-21` / `-22`；**收口后不预设任何 Round 6+ 题目**。 |
 | `0.7.0` | 2026-11-14 | `DNMS01 架构 agent（lead）` | **最终轮：Round 5 冻结 + 全轮收口（STEP.1–3）**：[业主] 同意第 5 轮全部推荐 → Q11 / Q12 / Q13 业主回答填为 `✅ 已确认：选 A`，按 append 追加 `T-O-DNMS01-20`（UI 面板与交互契约：rail 第 4 图标 + U1–U4 四态 + 切换确认与四类结果 + 18 key i18n + 四处条件清理 + switch 路由）/ `-21`（观测派生与性能：projection 派生 `lastCompaction` + 按需 `measure` + 5s memo + 零轮询 + `degraded` 四值闭集 + 读面降级 + projection 退化路径）/ `-22`（收口与交接：22 条收口 + 草案全面 banner + `T-O`→计划 §2.1 + P0 `T-R` 回灌 §2.2 + deferral 表 + 不设 Round 6）进 §1，§1 达 **22 条**已冻结真相。**STEP.1 全文一致性审查**（站位 / 计数 / 交叉引用 / 真相完整性）发现并修复：① 标题与§0/§11/§12 的旧状态与旧计数；② §1 冲突裁决口径未含 `-17`–`-22`；③ R-5 所列 D1/D3–D6 未结算（新增 **R-14**）；④ §7.4 旧轮次判定未标 R-12 修正指引；⑤ `-20` 新增路由的五处台账待补齐（已补）；⑥ `-21` 缺 `degraded` 四值闭集与 projection 退化路径（已补）。**STEP.2** 上述全部修复；**STEP.3** 文档状态改为 `已冻结`，全轮收口完成。 |
+
+---
+
+## Round 16 · [业主] 裁决请求（执行期暴露，append-only）
+
+> 本轮不是新冻结真相，而是**执行期发现的合同缺口**，需要 [业主] 裁决后才能在 truth ledger 落 `T-O-DNMS01-23`/`-24`。当前实现已按最保守读法落地，本表登记待确认。
+
+### R-16.1 全重放互斥机制（`-10` 实现路径）
+
+- **已落地**：`dsh-nano-model-selector-compaction/cordis.patch.yml` 对 preset-standard/ptc/minimal/cordis 四个 preset 做 `config.plugins` 全量重放——在 `id: compaction` 组内插入本包 Provider 行并把 `compaction-basic` 标 `disabled:true`。`--dump-config` 已验 ON/OFF 两态。
+- **待裁决**：QNA 未冻结「全重放」作为 `-10` 的唯一合法机制；若上游 preset 结构变化（新增 preset/组内行序变），本 patch 必须经 `scripts/gen-mutex-patch.mjs` 重新生成并由 `engines.dsh` 范围约束。请确认该机制即 `-10` 的合同面。
+
+### R-16.2 vendored `compaction-seam` 与 `ManualCompactionError` 身份
+
+- **已落地**：`lib/compaction-seam.js` 是 `@deepseek-ai/dsh-compaction@0.2.2-rc.1` 的 verbatim 副本（上游 `lib/index.js` 字节级相同），但 `ManualCompactionError` 改成可变导出 + `upgradeManualCompactionError()`；宿主加载时尝试 `import('@deepseek-ai/dsh-compaction')` 升级类身份，失败则回落 vendored 实现。
+- **待裁决**：QNA `-16` 裁决要求「verbatim 协议」，但未回答类身份分裂问题；`/compact` 的 `instanceof ManualCompactionError` 门在纯 vendored 下不命中。当前双轨（vendored 为底 + upstream 升级为优）是否即 `-16` 合同面？
+
+### R-16.3 异步车道 commit 归属（`-18` 修订）
+
+- **已落地**：arm 在 turn 内 pre-step，整条 `compactSurfaceRegion(owner:null)`（含 commit）收进 `agent.runMaintenance` 空闲窗口——`turn:None`，无跨 `turn/start` 括号。
+- **待裁决**：原读法把「adoption」理解为「下一 turn pre-step 写入 summary+checkpoint+end」。实测 `turn/start crosses an open compaction` → 会话 corrupt。当前实现把 commit 提前到同一 maintenance 窗口，`-18`「跨回合 arm」语义保留、commit 归属改判。请确认。
+
+### R-16.4 `agents` inject 在 `id: compaction` isolate 内 — 已闭环
+
+- **根因**：`static inject = ['llm','tokenMeter','sessions','agents']` 在 `id:compaction` isolate 内触发 cordis injector 对 `agents` 的解析——isolate 只声明 `compaction:true` + `toolResultPruner:true`，未列 `agents` → injector throw → preset-standard/ptc/cordis 组装 cascade → GUI 报 `tool-office: never started`（第一个挂掉的 preset 插件被点名）。headless 无 isolate 故逃逸。
+- **已落地**：`inject` 数组（模块导出 + `static inject`）均去掉 `agents`；`agent/status` listener 改走 `ctx.get('agents')` 惰性解析（穿 isolate 边界拿父层服务）。23/23 测试绿。
+- **结论**：`agents` inject 在 `id:compaction` isolate 内 = **非法**；`ctx.get()` 父层原型链 = 合法路径。R-16.4 不再是开放裁决项，改为登记读法：`-10` 的互斥 patch 不得向 inject 引入 isolate 白名单外的服务名。
+
+### R-16.5 `dsh plugin add` 默认 ON vs `-17` OFF
+
+- **现状矛盾**：`dsh plugin --profile web add <dir>` 同时写 `dependencies` + `dsh.profile.bundles` → 新安装即 ON；但 `dsh-nano-model-selector/AGENTS.md` 与 QNA `-17` 读法称「install ≠ 接管，默认 OFF」。`dsh-nano-model-selector-compaction/AGENTS.md` 已如实记录「fresh install is ON，推荐安装后 `set_bundle(false)`」。
+- **待裁决**：以哪份为准？若 `-17` 为准，需要在安装文档/脚本里明确「add 后必须显式 disable」；若 install-ON 为准，需改 `-17`/`[DNMS]/AGENTS.md` 表述。当前未回改任一台账，等 [业主] 定。
+
+### R-16.6 adoption-wake 可见性
+
+- **已落地**：maintenance commit 后 `agent.followup` 发 `(Context compacted asynchronously; continuing.)` 可见 user/message（`source.kind:'compaction-adoption-wake'`），作为下一 turn 的观察提示与审计锚点。
+- **待裁决**：该消息占用一个真实 turn（模型会消费 token 生成回复）。备选是 `send()` 静默投递（不驱动 turn）。当前取可见方案因为 GSTH 需要可观察的 adoption 证据；若 [业主] 要求静默，改一行即可。
+
+---
+
+## 修订 · Round 16
+
+| 版本 | 日期 | 变更 |
+|------|------|------|
+| `0.1.0` | 2026-11-14 | 首版 |
+| `0.1.1-exec` | 2026-11-15 | 追加 R-16 六项执行期裁决请求（`-10`/`-16`/`-18` 修订/`agents`-inject/`-17` 矛盾/adoption-wake）；均按最保守读法落地，待 [业主] 冻结 |
+
+
+
+---
+
+## R-17 preset 重放跨版本漂移：VERSION_GUARDED_ROWS 守卫机制
+
+- **现象（P0)**：dsh-dev(rc.1 安装）所有新建会话报 `agent-preset/invalid: tool-office (@deepseek-ai/dsh-tool-office): never started`。
+- **根因**:`engines.dsh >=0.2.2-rc.1 <0.3.0` 窗口横跨 preset 变更版本：rc.2 preset 新增 `tool-office` 行，而 rc.1 安装不携带 `dsh-tool-office` 包。我们的 `cordis.patch.yml` 是 rc.2 preset 的 verbatim 重放 → 在 rc.1 上挂载不存在的包 → preset 组装整体 cascade。
+- **处置**:`gen-mutex-patch.mjs` 新增 `VERSION_GUARDED_ROWS`(id→包名映射）。落在表内的行生成 `disabled: !!js (() => { try { createRequire(baseUrl).resolve(pkg); return false } catch { return true } })()` —— 包可解析则挂载，不可解析则自禁。占位符 post-pass 还原 `!!js` 标签（yaml stringify 会把字面量 `!!js` 当字符串引号化）。
+- **live 证据**:dsh-dev 重启后 `123` 工作区新建会话 + turn 完整跑通（PONG,5s)。
+- **裁决请求**：窗口内每跨一个 preset 变更版本，新版本独有行是否一律进 `VERSION_GUARDED_ROWS`（宁可守卫过多，不许裸挂载）？还是收紧 `engines.dsh` 到单一 rc?
+
+
+---
+
+## R-18 客户端侧同病：宿主 ui-primitives 图标表也随版本漂移
+
+- **现象（P0)**：点 `.nms-trigger` 后选择器整体消失，无 toast。宿主 console:`slot entry crashed in 'conversation.input.model'` + React #130。
+- **根因**:`CompactionIcon` → `IconLayersOutlineRegular` 是 rc.2 新增导出；rc.1 seed 表（310 个导出）无此项。`engines.dsh` 窗口跨 rc.1→rc.2，编译期按 rc.2 写死，运行期在 rc.1 上 `createElement(undefined)` → 宿主 slot 崩溃并卸载整个 entry。与 R-17 `tool-office` 同类（preset 行）但发生在客户端模块表。
+- **处置**:`CompactionIcon` 运行时守卫 `IconLayersOutlineRegular ?? IconDataOutlineRegular`（同 outline 家族、rc.1 存在）。未来任何"较新版本才出现的宿主导出"一律需 `?? 兜底` 或列入窗口守卫清单。
+- **live 证据**:dsh-dev rc.1 上点击触发 → 面板打开、rail 10 项含压缩项、console 零错（截图 /tmp/nms-panel-fixed.png)。
+- **裁决请求**：客户端侧是否需要与 `VERSION_GUARDED_ROWS` 平行的机制（构建期 lint：凡 `ui-primitives` 导入名不在窗口最低版导出集内即拒）？还是接受"逐个 `??` 兜底"的人工纪律？

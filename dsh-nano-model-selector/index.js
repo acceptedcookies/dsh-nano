@@ -6,7 +6,11 @@ import { readFileSync } from 'node:fs'
 import { defaultEngine, imagineSkill, imagineStub, readEngine, scanEngines, writeEngine } from './lib/host-media.js'
 import { ensurePerfReviewHost, LIB_VERSION } from './lib/perf-review-host.js'
 import { registerRoutes } from './lib/route-guard.js'
+import { compactRuntime } from './lib/compact-runtime.js'
 import { ROUTE_TABLE, PLUGIN } from './lib/route-table.js'
+import {
+  mergePutBody, readState, validateMasterOrder, validatePutBody, writeState,
+} from './lib/compact-policy.js'
 
 export const name = 'nano-model-selector'
 
@@ -30,11 +34,21 @@ const review = ensurePerfReviewHost().hostJoin('nano-model-selector', {
 const ROUTE = '/nano-model-selector/catalog'
 const ENGINES_ROUTE = '/nano-model-selector/media-engines'
 const ENGINE_ROUTE = '/nano-model-selector/media-engine'
+const ASYNC_COMPACT_ROUTE = '/nano-model-selector/async-compact'
+/** -20⑦: panel forwards the bundle flip through this one route (browser half cannot reach pluginManager). */
+const ASYNC_COMPACT_SWITCH_ROUTE = '/nano-model-selector/async-compact/switch'
+const COMPACTION_BUNDLE_NAME = 'dsh-nano-model-selector-compaction'
 
 /** Plugin-private state file holding the chosen media engine. */
 const STATE_PATH = join(
   process.env.DSH_DATA_DIR ?? process.env.DSH_HOME ?? join(homedir(), '.dsh'),
   'plugins', 'nano-model-selector', 'media-engine.json',
+)
+
+/** Async-compaction policy file — the sole writable authority while ON (-11). */
+const ASYNC_COMPACT_PATH = join(
+  process.env.DSH_DATA_DIR ?? process.env.DSH_HOME ?? join(homedir(), '.dsh'),
+  'plugins', 'nano-model-selector', 'async-compact.json',
 )
 
 /** Reuse a built catalog this long; the selector does not need per-open freshness. */
@@ -222,6 +236,157 @@ function mediaHandlers(ctx, imagine) {
   return { engines, engine }
 }
 
+/**
+ * Resolve the nominal context window for a policy's model target, when one is
+ * routed. An empty {provider,model} pair means "reuse the routed target" and
+ * yields no resolvable window here (the Provider resolves it at runtime).
+ * @returns context window in tokens, or null when unresolvable.
+ */
+async function policyWindow(ctx, model) {
+  if (!model || model.provider === '' || model.model === '') return null
+  try {
+    const info = await ctx.llm.resolveModelInfo(model.provider, model.model)
+    const w = info?.context?.contextWindow
+    return typeof w === 'number' && w > 0 ? w : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * GET/PUT /nano-model-selector/async-compact (L3, PUT bodyLimit 16384,
+ * sessionBinding:false — T-O-DNMS01-15).
+ * GET -> {...policy, effective:{pin,windowMin,dcs}, runtime:{fill,lastCompaction}};
+ * PUT -> partial update: validatePutBody -> optional model route check ->
+ * merge -> master-order -> atomic write. Every rejection is 400 with the
+ * closed error-code set; nothing is written on failure.
+ */
+function asyncCompactHandlers(ctx, runtimeHandle) {
+  const payload = async policy => {
+    const W = await policyWindow(ctx, policy.model)
+    const effective = W === null
+      ? { pin: null, windowMin: null, dcs: [] }
+      : (() => {
+        const r = validateMasterOrder(policy, W)
+        return r.ok ? { pin: r.effectivePin, windowMin: r.windowMin, dcs: r.dcs } : { pin: null, windowMin: null, dcs: [], invalid: r.reason }
+      })()
+    const rt = runtimeHandle?.runtime(null, W, null) ?? { fill: null, lastCompaction: null, degraded: null }
+    return {
+      ...policy,
+      effective,
+      runtime: rt,
+    }
+  }
+  const handler = async (req, res) => {
+    if (req.method === 'PUT') {
+      try {
+        const body = await readBody(req, 16384)
+        const shape = validatePutBody(body)
+        if (!shape.ok) { sendJson(res, 400, { ok: false, error: { code: 'invalid-schema', reason: shape.reason } }); return }
+        const state = readState(ASYNC_COMPACT_PATH)
+        if (!state.ok) { sendJson(res, 400, { ok: false, error: { code: 'state-read-failed', reason: state.reason } }); return }
+        const next = mergePutBody(state.policy, body)
+        const model = next.model
+        // A half-empty pair is never meaningful: either both fields are set or both empty.
+        if (model !== undefined && (model.provider === '') !== (model.model === '')) {
+          sendJson(res, 400, { ok: false, error: { code: 'invalid-model', reason: 'model pair must be fully set or fully empty' } }); return
+        }
+        const W = await policyWindow(ctx, model)
+        // Always run master-order validation (W-independent checks are mandatory);
+        // W only adds the DC-1 + effectivePin derivations on top.
+        const order = W === null
+          ? validateMasterOrder(next, 1000000) /* arbitrary large W for ordering checks */
+          : validateMasterOrder(next, W)
+        if (!order.ok) { sendJson(res, 400, { ok: false, error: { code: order.code, reason: order.reason } }); return }
+        // Model-route check: only when the merged target is a non-empty pair.
+        if (model !== undefined && model.provider !== '') {
+          if (W === null) { sendJson(res, 400, { ok: false, error: { code: 'invalid-model', reason: 'model target is not a registered route' } }); return }
+        }
+        const wrote = writeState(ASYNC_COMPACT_PATH, next)
+        if (!wrote.ok) { sendJson(res, 400, { ok: false, error: { code: 'state-write-failed', reason: wrote.reason } }); return }
+        sendJson(res, 200, { ok: true, policy: await payload(next) })
+      } catch (error) {
+        sendJson(res, 400, { ok: false, error: { code: error.message === 'body too large' ? 'body-too-large' : 'invalid-json-body', reason: messageOf(error) } })
+      }
+      return
+    }
+    // GET/HEAD: serve the stored policy plus derived read-only fields plus the
+    // read-only bundle projection (-20②: U1–U4 derive from this pair). A read
+    // failure projects `degraded:'state-read-failed'` (U4) instead of 500 — the
+    // panel never derives state itself; PUT stays fail-closed.
+    const state = readState(ASYNC_COMPACT_PATH)
+    if (!state.ok) {
+      sendJson(res, 200, {
+        ok: true,
+        policy: null,
+        degraded: 'state-read-failed',
+        missing: false,
+        runtime: runtimeHandle?.runtime(null, null, 'state-read-failed') ?? { fill: null, lastCompaction: null, degraded: 'state-read-failed' },
+        bundle: await compactionBundleState(ctx),
+      })
+      return
+    }
+    sendJson(res, 200, {
+      ok: true,
+      policy: await payload(state.policy),
+      missing: state.missing,
+      bundle: await compactionBundleState(ctx),
+    })
+  }
+  return handler
+}
+
+/** Read-only U1–U4 projection from the sanctioned inventory (-20②). */
+async function compactionBundleState(ctx) {
+  try {
+    const pm = ctx.get('pluginManager')
+    if (pm === undefined || pm === null) return { installed: false, enabled: false, known: false }
+    const row = (await pm.listBundles()).find(item => item.name === COMPACTION_BUNDLE_NAME)
+    if (row === undefined) return { installed: false, enabled: false, known: true }
+    return { installed: row.installed === true, enabled: row.enabled === true, known: true, availability: row.availability }
+  } catch {
+    return { installed: false, enabled: false, known: false }
+  }
+}
+
+/**
+ * -20⑦: the panel's only write path for the takeover toggle. Forwards to the
+ * sanctioned writer `pluginManager.setBundleEnabled` — not a second truth.
+ */
+async function asyncCompactSwitchHandler(ctx, req, res) {
+  try {
+    const body = await readBody(req, 1024)
+    if (typeof body?.enabled !== 'boolean') { sendJson(res, 400, { ok: false, error: { code: 'invalid-schema', reason: 'enabled must be a boolean' } }); return }
+    const parsed = body
+    const pm = ctx.get('pluginManager')
+    if (pm === undefined || pm === null) { sendJson(res, 400, { ok: false, error: { code: 'manager-unavailable', reason: 'pluginManager service is not reachable' } }); return }
+    try {
+      const result = await pm.setBundleEnabled(COMPACTION_BUNDLE_NAME, parsed.enabled)
+      const application = result?.application ?? 'applied'
+      if (application === 'failed') {
+        sendJson(res, 500, {
+          ok: false,
+          application,
+          error: { code: 'switch-failed', reason: result?.reason ?? 'setBundleEnabled reported application failure' },
+          ...(result?.restartReason === undefined ? {} : { restartReason: result.restartReason }),
+          bundle: await compactionBundleState(ctx),
+        })
+        return
+      }
+      sendJson(res, 200, {
+        ok: true,
+        application,
+        ...(result?.restartReason === undefined ? {} : { restartReason: result.restartReason }),
+        bundle: await compactionBundleState(ctx),
+      })
+    } catch (error) {
+      sendJson(res, 400, { ok: false, error: { code: 'switch-failed', reason: messageOf(error) } })
+    }
+  } catch (error) {
+    sendJson(res, 400, { ok: false, error: { code: error.message === 'body too large' ? 'body-too-large' : 'switch-failed', reason: messageOf(error) } })
+  }
+}
+
 /** @param {import('@deepseek-ai/cordis').Context} ctx */
 export function apply(ctx) {
   const imagine = registerImagine(ctx)
@@ -230,9 +395,12 @@ export function apply(ctx) {
   // All web routes register through dsh-host-route-guard (P1-05 / T-O-7): the
   // guard owns requestRejection and the uniform 405; handlers keep the work.
   const media = mediaHandlers(ctx, imagine)
+  const runtimeHandle = compactRuntime(ctx)
   registerRoutes(ctx, [
     { path: ROUTE, methods: ['GET', 'HEAD'], handler: catalogHandler(ctx) },
     { path: ENGINES_ROUTE, methods: ['GET', 'HEAD'], handler: media.engines },
     { path: ENGINE_ROUTE, methods: ['GET', 'HEAD', 'PUT'], handler: media.engine },
+    { path: ASYNC_COMPACT_ROUTE, methods: ['GET', 'HEAD', 'PUT'], handler: asyncCompactHandlers(ctx, runtimeHandle) },
+    { path: ASYNC_COMPACT_SWITCH_ROUTE, methods: ['POST'], handler: (req, res) => asyncCompactSwitchHandler(ctx, req, res) },
   ], { table: ROUTE_TABLE, plugin: PLUGIN })
 }

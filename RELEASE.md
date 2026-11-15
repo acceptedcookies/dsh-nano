@@ -12,6 +12,7 @@
 |---|---|---|---|
 | `dsh-nano-notepad` | [AGENTS.md](dsh-nano-notepad/AGENTS.md) | [规格](docs/specs/dsh-nano-notepad/README.md) | `index.js`、`lib/client.js` 等全部 `lib/` 运行时文件、`cordis.patch.yml`、`AGENTS.md`（以 `package.json` 的 `files` 为准） |
 | `dsh-nano-model-selector` | [AGENTS.md](dsh-nano-model-selector/AGENTS.md) | [README](docs/specs/dsh-nano-model-selector/README.md) | 同上，另加 `lib/host-media.js`（`index.js` 直接 import） |
+| `dsh-nano-model-selector-compaction` | [AGENTS.md](dsh-nano-model-selector-compaction/AGENTS.md) | [README](docs/specs/dsh-nano-model-selector/README.md)（DNMS01） | `index.js`、全部 `lib/`（含 vendored `lib/compaction/`）、`cordis.patch.yml`、`AGENTS.md` |
 | `dsh-nano-explorer-extra` | [AGENTS.md](dsh-nano-explorer-extra/AGENTS.md) | [README](docs/specs/dsh-nano-explorer-extra/README.md) | `index.js`、`lib/host.js`、`lib/client.js`、`cordis.patch.yml`、`AGENTS.md` |
 
 **发布包清单 = 上表三行，不含任何 `deprecated/` 下的条目。**
@@ -163,7 +164,7 @@ jobs:
             dsh-nano-notepad/SHA256SUMS.txt
 ```
 
-多插件时把 build/pack/checksum 三步抽成 matrix（`plugin: [dsh-nano-notepad, dsh-nano-model-selector, dsh-nano-explorer-extra]`），每个插件一个 tarball。**matrix 只能列上表三个活跃包；`deprecated/` 下的条目一律不得加入**——`dsh-nano-shared-workspace` 已于 2026-11-12 退役并设 `private: true`，把它放进 matrix 会让 CI 重新发布已弃用的插件。各包的构建入口都是 `npm run build`，见各包 AGENTS.md 的「构建」。构建脚本跨平台，`runs-on` 可以是 `ubuntu-latest`、`macos-latest` 或 `windows-latest`，产物一致。
+多插件时把 build/pack/checksum 三步抽成 matrix（`plugin: [dsh-nano-notepad, dsh-nano-model-selector, dsh-nano-model-selector-compaction, dsh-nano-explorer-extra]`），每个插件一个 tarball。**matrix 只能列上表四个活跃包；`deprecated/` 下的条目一律不得加入**——`dsh-nano-shared-workspace` 已于 2026-11-12 退役并设 `private: true`，把它放进 matrix 会让 CI 重新发布已弃用的插件。各包的构建入口都是 `npm run build`，见各包 AGENTS.md 的「构建」。构建脚本跨平台，`runs-on` 可以是 `ubuntu-latest`、`macos-latest` 或 `windows-latest`，产物一致。
 
 ### attestation 与 cosign 二选一
 

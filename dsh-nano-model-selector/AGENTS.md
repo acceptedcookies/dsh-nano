@@ -142,6 +142,20 @@ npm run build
 | `dsh plugin add` 报引擎不符 | `engines.dsh` 与正在跑的 dsh 不一致 | 换符合范围的 dsh，或在操作者明确接受风险后执行命令输出里的 `allow-version`。不要改本包的 `engines` |
 | pnpm 找不到 `dsh-nano-ui` | `../packages/dsh-nano-ui` 不存在 | 按「前置」放好，不要改依赖声明 |
 
+## 异步压缩接管（DNMS01）
+
+本包额外提供接管开关与策略路由；执行面在 host-only 姊妹包 `dsh-nano-model-selector-compaction`，其 `dsh.profile.bundles` 成员是 ON/OFF 唯一 canonical 开关（`install ≠ 接管`——`dsh plugin add` 后默认 OFF，需显式 `set_bundle(compaction,false→true)` 或面板切换）。
+
+| 方法 | 路径 | 作用 |
+|---|---|---|
+| GET/HEAD | `/nano-model-selector/async-compact` | `{ok,policy:{…,effective:{pin,windowMin,dcs},runtime:{fill,lastCompaction,degraded}},missing,bundle:{installed,enabled,known}}`。`policy=null`+`degraded='state-read-failed'` 表示状态文件不可读（U4） |
+| PUT | `/nano-model-selector/async-compact` | 部分更新 `async-compact.json`（16384 字节上限；master 序 + schema 校验 + fail-closed，400 不写） |
+| POST | `/nano-model-selector/async-compact/switch` | 面板唯一写入口（1024 字节上限）；转发 `pluginManager.setBundleEnabled('dsh-nano-model-selector-compaction')`，返回 `{application,restartReason?,bundle}` |
+
+状态文件：与 media-engine.json 同目录的 `plugins/nano-model-selector/async-compact.json`（tmp+rename 原子写，0600）。卸载不删。字段 7 项（无 `enabled`）：`model` / `bufferSizeAsync`（B，默认 0.65）/ `healthTargetAsync`（H，0.50）/ `bufferSizeSafety`（S，0.80 只读）/ `pinnedAsyncTokens`（100000）/ `pinnedFullTokens`（20000）/ `schema`（1）。`effectivePin = min(pinnedAsyncTokens, floor(0.15·W))`；DC-1 `B < windowMin` → `fullOnly`；fill = `totalTokens/W`。
+
+面板：rail 第 4 图标「压缩」四态（未安装/未启用/已启用/degraded），开关走 `POST …/switch`；B/H/pinnedAsyncTokens/model 可编辑 PUT。
+
 ## 不要
 
 - 不要把本目录拷进 `$DSH_HOME/plugins/` 当作安装。那不是这条合同。

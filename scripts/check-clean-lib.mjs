@@ -29,13 +29,22 @@ export const PLUGINS = [
   'dsh-nano-notepad',
   'dsh-nano-explorer-extra',
   'dsh-nano-model-selector',
+  'dsh-nano-model-selector-compaction',
   'dsh-nano-kitesurf',
   'dsh-nano-local-sandbox',
   'dsh-nano-terminal',
 ]
 
 /** Plugins whose host entry is the unbundled index.js (also a runtime file). */
-export const UNBUNDLED_INDEX = ['dsh-nano-notepad', 'dsh-nano-model-selector', 'dsh-nano-kitesurf', 'dsh-nano-local-sandbox', 'dsh-nano-terminal']
+export const UNBUNDLED_INDEX = ['dsh-nano-notepad', 'dsh-nano-model-selector', 'dsh-nano-model-selector-compaction', 'dsh-nano-kitesurf', 'dsh-nano-local-sandbox', 'dsh-nano-terminal']
+
+/**
+ * Packages whose shipped lib/ legally carries bare `@deepseek-ai/*` specifiers
+ * resolved by the host's own dependency tree. The vendored dsh-compaction
+ * seam (QNA R-16) imports only @deepseek-ai/cordis, which the profile resolves
+ * via its hoisted runtime node_modules; flag anything else.
+ */
+export const HOST_RESOLVED_SPECIFIERS = new Set(['@deepseek-ai/cordis'])
 
 /**
  * Strip comments so JSDoc `import('pkg').Type` annotations and commented-out
@@ -96,7 +105,7 @@ export function collectBare(root, plugins = PLUGINS, unbundled = UNBUNDLED_INDEX
       scanned.push(file)
       const text = readFileSync(file, 'utf8')
       for (const { spec, line } of specifiers(text)) {
-        if (isBare(spec) && spec.length < 180 && !/[\s,();]/.test(spec)) {
+        if (isBare(spec) && spec.length < 180 && !/[\s,();]/.test(spec) && !HOST_RESOLVED_SPECIFIERS.has(spec)) {
           problems.push(`${file.slice(root.length + 1)}:${line} — bare specifier '${spec}' would fail at runtime`)
         }
       }

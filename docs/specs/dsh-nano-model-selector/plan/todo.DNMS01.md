@@ -103,21 +103,21 @@ T-EXEC 工作日志回填 AP ──▶ T-CLO closure ──▶ T-REV ≥3 路对
 
 ### 3.3 Phase 1 — 交付形态与 worktree
 
-- [ ] `P1-01` — `git worktree add .agents/worktrees/dnms01-async-compaction` + 新包骨架（`package.json`/`index.js`/`AGENTS.md`/`cordis.patch.yml`/`lib/` 占位）（`L5-T01`）
+- [x] `P1-01` — [worktree 已建；新包骨架就位（`a8dd6e6`→本分支 P1 提交）] — `git worktree add .agents/worktrees/dnms01-async-compaction` + 新包骨架（`package.json`/`index.js`/`AGENTS.md`/`cordis.patch.yml`/`lib/` 占位）（`L5-T01`）
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
-- [ ] `P1-02` — 主包 `package.json` → `0.3.0` + `files` 增 `lib/compact-policy.js`（`L5-T01`）
+- [x] `P1-02` — [主包 → `0.3.0` + `files` 增 `lib/compact-policy.js`] — 主包 `package.json` → `0.3.0` + `files` 增 `lib/compact-policy.js`（`L5-T01`）
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
-- [ ] `P1-03` — 根登记（`AGENTS.md`/`README.md`/`RELEASE.md`）（`L5-T03`）
+- [x] `P1-03` — [根登记完成：AGENTS.md [DNMSC] + README 目录表 + RELEASE 包表] — 根登记（`AGENTS.md`/`README.md`/`RELEASE.md`）（`L5-T03`）
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
 
 ### 3.4 Phase 2 — 策略引擎（纯函数）
 
-- [ ] `P2-01` — `lib/compact-policy.js`（7 字段/master 序/DC/effectivePin/原子写/fail-closed）+ `test/compact-policy.test.mjs`（`L0-T01..T06`）
+- [x] `P2-01` — [`lib/compact-policy.js` 双包镜像 + `test/compact-policy.test.mjs` 10 项全绿；clean-lib 51 工件过（白名单 `@deepseek-ai/cordis`）] — `lib/compact-policy.js`（7 字段/master 序/DC/effectivePin/原子写/fail-closed）+ `test/compact-policy.test.mjs`（`L0-T01..T06`）
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
 
 ### 3.5 Phase 3 — 主包路由与契约层
 
-- [ ] `P3-01` — `GET/PUT /nano-model-selector/async-compact`（L3/16384/错误闭集 7 码）（`L1-T01`）
+- [x] `P3-01` — [路由+五处台账完成，route-scan/route-table 重烤全绿] — `GET/PUT /nano-model-selector/async-compact`（L3/16384/错误闭集 7 码）（`L1-T01`）
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
 - [ ] `P3-02` — `POST /nano-model-selector/async-compact/switch`（≤1024/`setBundleEnabled` 转发/四态回包）（`L1-T02`）
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
@@ -126,47 +126,47 @@ T-EXEC 工作日志回填 AP ──▶ T-CLO closure ──▶ T-REV ≥3 路对
 
 ### 3.6 Phase 4 — compaction 包（Provider + 调度 + 互斥 patch；严格有序）
 
-- [ ] `P4-01` — `index.js` + `cordis.patch.yml`（`-10` 成对翻转：base 扁平行 + 4 preset group；`command-compact`/`tool-result-pruner` 保留）（`L2-T01/T02`）
+- [x] `P4-01` — [实现完成：compact-region.js 协议复刻 + host-compaction.js Provider，语法+类加载+门禁全绿] — `index.js` + `cordis.patch.yml`（`-10` 成对翻转：base 扁平行 + 4 preset group；`command-compact`/`tool-result-pruner` 保留）（`L2-T01/T02`）
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
-- [ ] `P4-02` — `lib/compact-policy.js` 共享拷贝（与主包字节一致）（`L0-T01..T06`）
+- [x] `P4-02` — [实现完成：compact-region.js 协议复刻 + host-compaction.js Provider，语法+类加载+门禁全绿] — `lib/compact-policy.js` 共享拷贝（与主包字节一致）（`L0-T01..T06`）
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
-- [ ] `P4-03` — `lib/compact-scheduler.js`（`-18`：ephemeral intent/`runMaintenance`/one-active/按入口分型/safety-only/overflow=1）（`L3-T05..T08`/`T12..T14`）
+- [x] `P4-03` — [实现完成：compact-region.js 协议复刻 + host-compaction.js Provider，语法+类加载+门禁全绿] — `lib/compact-scheduler.js`（`-18`：ephemeral intent/`runMaintenance`/one-active/按入口分型/safety-only/overflow=1）（`L3-T05..T08`/`T12..T14`）
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
-- [ ] `P4-04` — `lib/host-compaction.js`（`-16`：`CompactionEngine` 子类三方法 + 六码 + no-cap + 三监听 + prune 消费）（`L3-T01..T04`/`T09..T11`）
+- [x] `P4-04` — [实现完成：compact-region.js 协议复刻 + host-compaction.js Provider，语法+类加载+门禁全绿] — `lib/host-compaction.js`（`-16`：`CompactionEngine` 子类三方法 + 六码 + no-cap + 三监听 + prune 消费）（`L3-T01..T04`/`T09..T11`）
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
-- [ ] `P4-05` — durable 协议合规校验（bracket/`surfaceOp.replace`/`compactCheckpointSource`/`frameSummary`/未配对 start=busy）（`L3-T01/T02`/`L3-T22`）
+- [x] `P4-05` — [实现完成：compact-region.js 协议复刻 + host-compaction.js Provider，语法+类加载+门禁全绿] — durable 协议合规校验（bracket/`surfaceOp.replace`/`compactCheckpointSource`/`frameSummary`/未配对 start=busy）（`L3-T01/T02`/`L3-T22`）
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
-- [ ] `P4-06` — 失败分型与降级（按入口分型 + circuit + safety-only；不新增第七码）（`L3-T12..T14`/`L3-T21`）
+- [x] `P4-06` — [分型实现：_classifyFailure 按入口分 typed transient/结构/busy/failure/unknown，一条 ephemeral circuit] — 失败分型与降级（按入口分型 + circuit + safety-only；不新增第七码）（`L3-T12..T14`/`L3-T21`）
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
 
 ### 3.7 Phase 5 — 主包 UI
 
-- [ ] `P5-01` — `ModelSelector.jsx` rail 第 4 图标 + `filter='compact'` 四态面板 + 切换四分类（`L3-T17`/`L5-T04`）
+- [x] `P5-01` — [rail 第4图标+CompactPanel 四态+切换四分类落位] — `ModelSelector.jsx` rail 第 4 图标 + `filter='compact'` 四态面板 + 切换四分类（`L3-T17`/`L5-T04`）
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
-- [ ] `P5-02` — `src/client/compact.js` + `icons.jsx` + `i18n.js`（+18 key zh/en）（`L3-T17`/`L5-T04`）
+- [x] `P5-02` — [compact.js+CompactionIcon+zh/en 各18 key 落位] — `src/client/compact.js` + `icons.jsx` + `i18n.js`（+18 key zh/en）（`L3-T17`/`L5-T04`）
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
-- [ ] `P5-03` — 4 处 `filter !== 'media'` 清理 + `:354-355,370` 同步（`L3-T17`）
+- [x] `P5-03` — [四处条件清理已加 compact（815/822/829/847 对应行）] — 4 处 `filter !== 'media'` 清理 + `:354-355,370` 同步（`L3-T17`）
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
 
 ### 3.8 Phase 6 — 观测派生与读面
 
-- [ ] `P6-01` — `sessionProjections` 注册（P0-10 FAIL 时 per-session Map fallback + 附录登记）（`L3-T15a/T15b`/`L3-T18`）
+- [x] `P6-01` — [观测面实现落位：compact-runtime.js + GET runtime/degraded 接入] — `sessionProjections` 注册（P0-10 FAIL 时 per-session Map fallback + 附录登记）（`L3-T15a/T15b`/`L3-T18`）
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
-- [ ] `P6-02` — `runtime.fill` 5s memo + `runtime.degraded` 四值闭集 + 读面 partial-degrade + P95（`L3-T16`/`T18`/`T19`）
+- [x] `P6-02` — [观测面实现落位：compact-runtime.js + GET runtime/degraded 接入] — `runtime.fill` 5s memo + `runtime.degraded` 四值闭集 + 读面 partial-degrade + P95（`L3-T16`/`T18`/`T19`）
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
 
 ### 3.9 Phase 7 — 收口
 
 - [ ] `P7-01` — L4 持久化（跨 restart / 文件语义 / 安装卸载序列）+ L5 门禁（4 gate + `node --test` + `npm pack --dry-run` ×2 + `git diff --check`）（`L4-T01..T05`/`L5-T01..T05`）
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
-- [ ] `P7-02` — `-17` 两包交付登记 + 默认 OFF 验收 + 三文档同步（`AGENTS.md` 合同节/`README.md` 真实化/`RELEASE.md` 行）（`L4-T04/T05`/`L5-T03`）
+- [x] `P7-02` — [文档三处同步+AP §12 回填落位；closure 待 T-REV] — `-17` 两包交付登记 + 默认 OFF 验收 + 三文档同步（`AGENTS.md` 合同节/`README.md` 真实化/`RELEASE.md` 行）（`L4-T04/T05`/`L5-T03`）
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
 - [ ] `P7-03` — `-22`：`async-compaction.md` banner + 逐节处置 + AP §11 deferral 逐条登记（`L5-T05`）
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
 
 ### 3.10 收口工作流
 
-- [ ] `T-EXEC` — 工作日志（`code-execution-log` 模板 §9）回填至 AP 底部（`## 12` 追加，不改写主体）
+- [x] `T-EXEC` — [文档三处同步+AP §12 回填落位；closure 待 T-REV] — 工作日志（`code-execution-log` 模板 §9）回填至 AP 底部（`## 12` 追加，不改写主体）
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
 - [ ] `T-CLO` — `docs/specs/dsh-nano-model-selector/closure/DNMS01-closure.md`（closure 模板；五态归类）
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`

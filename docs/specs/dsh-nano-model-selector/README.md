@@ -65,3 +65,12 @@ dsh-nano-model-selector/
 | 收藏 | ❌ | ✅ |
 | Effort 直选 | ❌ | ✅ 面板内 |
 | 模型详情 | 基础行 | ✅ 卡片式 |
+
+## DNMS01：异步压缩接管（2026-11 冻结执行）
+
+| 包 | 角色 | 说明 |
+|---|---|---|
+| `dsh-nano-model-selector` | 主包 | rail 第 4 图标「压缩」四态面板；`GET/PUT /nano-model-selector/async-compact`（策略唯一可写真源 `async-compact.json`，7 字段无 `enabled`）；`POST …/async-compact/switch`（面板唯一写入口 → `setBundleEnabled`） |
+| `dsh-nano-model-selector-compaction` | host-only bundle | `dsh.profile.bundles` 成员 = ON/OFF canonical 开关；ON 时 `NanoCompactionEngine` 经 4× preset `config.plugins` 全量回放替换各 isolate `id: compaction` 组的 `compaction-basic`；`lib/compaction/` 为 vendored seam（仅根导出 Cordis-free 原语） |
+
+真相冻结 `T-O-DNMS01-01..22`（`qna/DNMS01-qna.md`）；执行锚 `plan/todo.DNMS01.md`；收口 `closure/N-A/DNMS01-closure.md`。

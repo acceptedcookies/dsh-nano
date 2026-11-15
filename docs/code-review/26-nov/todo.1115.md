@@ -119,11 +119,11 @@
   - **完成判据**：两提供面分别标识、DNLS 单飞幂等 / DNT 多个不同 id、v1/v2 门控、断连至多一次不重跑写入
   - **验证映射**：`CF1115-T15` · **依赖**：`P3-01`
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
-- [ ] `P3-03` — sandbox 二十工具真实业务 + bridge 只做获准 CDP
+- [x] `P3-03` — sandbox 二十工具真实业务 + bridge 只做获准 CDP — `partial`
   - **落点**：`dsh-nano-local-sandbox/src/host/{mcp-sandbox,routes,instance-registry,error-catalog}.js`；`profiles/kitesurf/mcp-bridge.mjs`
   - **完成判据**：二十工具逐一接真实领域 owner、`{ok:true,data}`、PublicInstance/Snapshot 边界、catalog 与 dispatch 同源、无自造 sandbox 工具
   - **验证映射**：`CF1115-T16` · **依赖**：`P3-01`
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
+  - **执行状态**：`partial` · **执行时间**：`2026-11-15` · **证据**：`68210f6` — TOOL_DEFS 单源表、每工具 own `additionalProperties:false` schema + 真实 owner（profiles/instances/state/page/ports/bridge），catalog↔dispatch 同源；mcp-tools.spike 4/4 + DNLS 66/66。留：CDP 深工具（dom/elements/selftest/network 等）当前为 owner-null/只读近似、bridge CDP-only 收窄未做 → `CF1115-T16` 二十项全真实业务调用未达。
 - [ ] `P3-04` — [DNK] 真实消费 + 容器时代旧资产/bridge 副本退役
   - **落点**：`dsh-nano-kitesurf/{index.js,src/client/index.js,package.json,runtime/mcp-bridge.mjs,lib/diagnostics.js}`
   - **完成判据**：端点常量/fetch 改指真实提供面、错误目录归属、旧容器资产/双载体退役、不删既有业务
@@ -165,11 +165,11 @@
   - **完成判据**：逐观察号给覆盖/证据/旧源/离仓产物，不按数量销账、不静默缩范围、不另造替代账单
   - **验证映射**：`CF1115-T20` · **依赖**：`P1..P4`
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
-- [ ] `P5-02` — 旧源 / 离仓产物 / 扫描覆盖对账 + 五类退役清单
+- [x] `P5-02` — 旧源 / 离仓产物 / 扫描覆盖对账 + 五类退役清单 — `partial`
   - **落点**：`scripts/{check-feature-contract,check-clean-lib,route-scan}.mjs`；`security/route-inventory.md`（仅回溯）
   - **完成判据**：派生表/清单/说明同源、五类落点零残留、扫描覆盖遗漏修正
   - **验证映射**：`CF1115-T20` · **依赖**：`P5-01`
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
+  - **执行状态**：`partial` · **执行时间**：`2026-11-15` · **证据**：`68210f6` — feature-contract 8 插件（+DNCS/+DNMSC ui+dataLocations）、clean-lib 8 插件 + 递归 lib/（58→72 artifacts）、pack-manifest 基线重建。留：route-scan DNN/DNT/DNEE 读生成物 `lib/bindings.js`（投影自证，失独立 source-scan）—— `CF1115-T20` 未达。
 - [ ] `P5-03` — 五态如实归类 + 债务按原观察号 handoff
   - **落点**：QNA §7.3；truth §4.6 P6
   - **完成判据**：`verified/observed-OK/partial/未观察/deferred` 如实归类；未实施/未验证债务保留原号；任一退出硬闸 `degraded/未观察` ⇒ 不标 `executed`

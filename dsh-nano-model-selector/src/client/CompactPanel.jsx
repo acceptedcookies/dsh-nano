@@ -15,7 +15,7 @@ const FLASH_RE = /deepseek.*flash|flash.*deepseek/i
 function flashChoices(models) {
   const seen = new Set()
   const picks = []
-  for (const item of models) {
+  for (const item of Array.isArray(models) ? models : []) {
     const id = `${item.provider}/${item.model}`
     if (seen.has(id)) continue
     if (item.provider === 'deepseek-official' && /flash/i.test(item.model)) { seen.add(id); picks.push(item); continue }
@@ -470,8 +470,11 @@ function NumberField({ label, field, value, unit, display, step, min, max, editi
 function PromptField({ copy, value, onSave, busy }) {
   const [open, setOpen] = React.useState(false)
   const areaRef = React.useRef(null)
-  const custom = value.trim().length > 0
-  const seed = custom ? value : DEFAULT_SUMMARY_PROMPT
+  // Tolerate a non-string field on the read path — a stale or hand-edited state
+  // file must not take the whole selector down at render.
+  const text = typeof value === 'string' ? value : ''
+  const custom = text.trim().length > 0
+  const seed = custom ? text : DEFAULT_SUMMARY_PROMPT
   return (
     <div className="nms-compact-prompt">
       <div className="nms-compact-field" style={{ height: 'auto', padding: 0 }}>

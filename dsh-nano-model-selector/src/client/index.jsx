@@ -10,6 +10,27 @@ export const inject = ['slots', 'modelDirectories', 'sessions', 'locale']
 const ObservedModelSelector = profiler(ModelSelector)
 
 /**
+ * Slot render boundary. A throw inside the panel (e.g. a host primitives
+ * contract that changed across releases) used to escape to the slot system,
+ * which unmounted the whole seat — the selector just vanished on click.
+ * Catching here keeps the seat alive and shows the error as visible text so a
+ * reproduction report carries the actual message instead of "it disappeared".
+ */
+class SlotBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { error: null } }
+  static getDerivedStateFromError(error) { return { error } }
+  componentDidCatch(error) { console.error('[nano-model-selector] slot render failed:', error) }
+  render() {
+    if (this.state.error === null) return this.props.children
+    return (
+      <span className="nms-trigger nms-trigger-open" style={{ fontSize: '12px', padding: '0 8px' }}>
+        ⚠ {String(this.state.error?.message ?? this.state.error)}
+      </span>
+    )
+  }
+}
+
+/**
  * Replace the composer's model seat at a lower slot priority. The shipped
  * ui-model-selection plugin keeps providing `ctx.modelDirectories` and the
  * `/model` command; this plugin only takes over the composer presentation.
@@ -41,5 +62,9 @@ export function apply(ctx) {
         resolveText: text => ctx.locale.resolveText(text),
       }
     },
-  }, ObservedModelSelector))
+  }, props => (
+    <SlotBoundary>
+      <ObservedModelSelector {...props} />
+    </SlotBoundary>
+  )))
 }

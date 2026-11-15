@@ -1341,3 +1341,14 @@
 | `0.1.0` | 2026-11-14 | 首版 |
 | `0.1.1-exec` | 2026-11-15 | 追加 R-16 六项执行期裁决请求（`-10`/`-16`/`-18` 修订/`agents`-inject/`-17` 矛盾/adoption-wake）；均按最保守读法落地，待 [业主] 冻结 |
 
+
+
+---
+
+## R-17 preset 重放跨版本漂移：VERSION_GUARDED_ROWS 守卫机制
+
+- **现象（P0)**：dsh-dev(rc.1 安装）所有新建会话报 `agent-preset/invalid: tool-office (@deepseek-ai/dsh-tool-office): never started`。
+- **根因**:`engines.dsh >=0.2.2-rc.1 <0.3.0` 窗口横跨 preset 变更版本：rc.2 preset 新增 `tool-office` 行，而 rc.1 安装不携带 `dsh-tool-office` 包。我们的 `cordis.patch.yml` 是 rc.2 preset 的 verbatim 重放 → 在 rc.1 上挂载不存在的包 → preset 组装整体 cascade。
+- **处置**:`gen-mutex-patch.mjs` 新增 `VERSION_GUARDED_ROWS`(id→包名映射）。落在表内的行生成 `disabled: !!js (() => { try { createRequire(baseUrl).resolve(pkg); return false } catch { return true } })()` —— 包可解析则挂载，不可解析则自禁。占位符 post-pass 还原 `!!js` 标签（yaml stringify 会把字面量 `!!js` 当字符串引号化）。
+- **live 证据**:dsh-dev 重启后 `123` 工作区新建会话 + turn 完整跑通（PONG,5s)。
+- **裁决请求**：窗口内每跨一个 preset 变更版本，新版本独有行是否一律进 `VERSION_GUARDED_ROWS`（宁可守卫过多，不许裸挂载）？还是收紧 `engines.dsh` 到单一 rc?

@@ -352,7 +352,9 @@ ${NANO_STYLES}
 .np-fx-head-title { display: inline-flex; align-items: center; gap: 7px; height: 36px; padding: 0 2px; border: 0; background: transparent; font: inherit; font-size: var(--np-font-size); font-weight: 600; color: var(--dsw-alias-label-primary); flex: none; cursor: pointer; }
 .np-fx-head-title:hover { background: var(--dsw-alias-interactive-bg-hover); border-radius: var(--dsw-radius-sm); }
 .np-fx-head-title[aria-expanded="true"] .np-fx-nav-state { color: var(--dsw-alias-link); }
-.np-fx-nav-state, .np-fx-nav-state svg { display: inline-flex; width: 14px; height: 14px; color: var(--dsw-alias-label-tertiary); transition: color .12s ease; }
+.np-fx-nav-state { display: inline-flex; width: 14px; height: 14px; color: var(--dsw-alias-label-tertiary); transition: color .12s ease; }
+.np-fx-nav-state svg { display: block; width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1; }
+.np-fx-nav-state svg .np-panel-fill { fill: currentColor; stroke: none; }
 .np-fx-head-ico, .np-fx-head-ico svg { width: 16px; height: 16px; display: block; color: var(--dsw-alias-link); }
 .np-fx-head-sub { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--np-font-size-xs); color: var(--dsw-alias-label-tertiary); }
 .np-fx-head-space { flex: 1 1 auto; }

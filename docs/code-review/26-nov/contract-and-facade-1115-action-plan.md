@@ -696,7 +696,7 @@ CF1115 统一实施计划（P0–P4）
 
 三路审查 `.anote/.../47f0/` 总判「有条件通过」。修复：F20.2/F20.4 合同（曾由实现反推）、DNN/DNEE `files` 装包挂、registrar GET/fail-open/disposed、FamilyDefinition array 绕过、decode 非法 2xx→protocol。债务（deferred）：route-scan 自证性、三 facade 签名改约未登记、Test-ID T09/T11/T15–21 证据缺口。详见 closure §6。
 
-### 进行中 / deferred（不标 executed）
+### 进行中 / deferred（不标 executed）—— §11a 时点快照（`6446c5c`）
 
 - `P3-03`/`P3-04`（sandbox 二十工具真实业务 + DNK 消费 + 容器资产退役）：deferred — 领域大迁移，待续轮。
 - `P3-05`（DNT MCP/attach/WS/SSE/审计消费）：partial — `nanoTerminal` cordis 服务已存在（index.js:228），attach.url 用返回非猜测（lanes.js）；审计 writer 接线/断连至多一次未全验收。
@@ -709,6 +709,30 @@ CF1115 统一实施计划（P0–P4）
 - `node --test test/`（目录）在 DNN 失败是 pre-existing；统一用 `node --test test/*.test.mjs`。
 
 > 时间快照 `2026-11-15`（CST）。计数快照口径：route-scan 85 routes、coverage 6 plugins、clean-lib 58 artifacts、dsh-interface 37 tests。
+
+## §11b 续轮工作日志（P3-03/04/05 + P4 + P5，至 `8c5360f`/`baf718c`）
+
+§11a 快照后，继续按 DAG 把原 `deferred` 项推进至 `partial`。每行为「落点 → commit → 验证」：
+
+| 工作项 | 落点 | commit | 验证 | 状态 |
+|--------|------|--------|------|------|
+| P3-03 | [DNLS] `/mcp` 20 工具单源 `TOOL_DEFS` + `buildOwners` 接真域（`instances.ensure→prepareEnvironment`、start-stop-restart→`deps.backend`） | `68210f6`/`a162463` | DNLS 66/66 | `partial`（CDP 深工具 + bridge 合同 + bodyLimit/terminal-driver 未动，E1115-DNLS-02/03/06 债务保留） |
+| P3-04 | [DNK] `runtime/`+container-engine 彻底退役，消费端指 DNLS `/nano-local-sandbox/*`，mcp-bridge canonical 收敛 DNLS | `e1b2e91`/`187d1ff` | DNK 56/56，files 清 + 死函数零残留 | `partial`（真实引擎 live 链路离线无容器） |
+| P3-05 | [DNT] 审计 writer `appendFileSync` 落盘回读；route-guard fork→共享 devDep | — | `term.audit` 可回读 | `partial`（断连至多一次/MCP 消费 live 未全验） |
+| P4-02 | [DNCS] `native_open` 支持义务显式失败：`NATIVE_UNAVAILABLE`503/`UNSUPPORTED`422/`OUTCOME_UNKNOWN`502/`PROJECTION_FAILED`500，orphan session 拆，不再 `console.warn`+ok | `102796e`+`baf718c` | DNCS 23/23（UNAVAILABLE/OUTCOME 测试 + 钳位回归） | `partial`（PROJECTION_FAILED 需 live-https carrier；`ctx.agents`/`sessions` 真实 API 兼容挂 P4-01） |
+| P4-02 自审修复 | 删未登记 `code` wire 字段（扩约）；5xx 透传收窄至 `NativeError`（普通 CarrierError 保持上游 5xx→502 钳位） | `baf718c` | json.code===undefined 断言 + 钳位回归测试 | — |
+| P4-03 | [DNMSC] `FallbackService` 影子退役、`HostService` 惰性解析真 Service（缺失→激活失败）、`setHostService` 合法 loader 缝 | `1af7b18` | DNMSC 23/23 | `partial`（cordis resolve/4-preset/isolate live 互斥离线） |
+| P4-04 | [DNN] 两边界别名收窄（F21.6 已批准，非待裁）：`/s3/config` 删 `testOne`、`/rpc` 删 `lsrag.manifest`（零调用方死别名）；method 门前移按名拒；`manifest.get` null/denied/读失败三分；feature-contract 台账同步 | `180cf05` | DNN 74/74（rpc-alias 3 断言） | `partial`（DNEE open-in-app 所属服务挂 P4-01；S3 远端实连未授权；`lib/` 产物手改同步，正式重建待 build 授权） |
+| P5-01 | 40 项 eval 全结算入 closure §6.1（7 covered/17 partial/7 not-covered/9 kept-as-debt） | `1555f0b` | 台账逐包 | `partial`（partial 项残余如实留观察号） |
+| P5-02 | 收尾文档 + 计数快照刷新（clean-lib 72、dsh-interface 43） | `1555f0b` | — | `partial` |
+| P5-03 | 五态分类 + 债务交接入 closure §4.5（9 verified/1 未观察/1 deferred→partial/5 deferred/1 partial） | `5b77674` | 五态表 | `partial` |
+
+### 收口状态（`baf718c` 时点）
+
+- **21 工作项：20 ticked（10 partial）+ 1 deferred** — 唯余 `P4-01`（`@deepseek-ai/cordis` 离线不可解析；DNCS `ctx.agents`/`sessions` 真实 API 兼容、DNEE open-in-app 所属服务、DNMSC cordis resolve/4-preset live 互斥均挂此）。
+- **回归全绿**：dsh-interface 43 · DNN 74 · DNT 97+4 · DNMS 7 · DNMSC 23 · DNEE 5 · DNLS 66 · DNK 56 · DNCS 23 = 397。
+- **4 gate 绿**：route-scan 85 routes · clean-lib 72 artifacts/8 pkgs · feature-contract 8 plugins · route-sensitivity 0 drift。
+- **仍不标 `executed`**：硬闸 Test-ID 未全 `verified`（T16/T17 残余为 live/宿主域核验）；AP §11 规定 draft 态省略 §11，本表为 `respond-execution-log` 追加，residual 交 P4-01 后继 charter，不回填冻结章节。
 
 
 ## 修订

@@ -58,27 +58,27 @@
 
 ### Phase 1 — P0 · 归口基座与首批闭环
 
-- [ ] `P1-01` — `packages/dsh-interface` 纯 ESM 构建期私有库 + contracts/host/build 三出口
+- [x] `P1-01` — `packages/dsh-interface` 纯 ESM 构建期私有库 + contracts/host/build 三出口
   - **落点**：🆕 `packages/dsh-interface/{package.json,src/contracts/,src/host/,src/build/,test/}`；参照 `packages/dsh-host-route-guard/src/route-guard.js:1-24`
   - **完成判据**：contracts 无 I/O/Node/DOM/Cordis/store；host 只注入；build 仅构建期；无 `dsh.bundle`/`dsh.client`；无万能根入口
   - **验证映射**：`CF1115-T01` · **依赖**：`-`
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
-- [ ] `P1-02` — guard 唯一实现单向复用 + 每包 build 物化 / 离仓自包含
+- [x] `P1-02` — guard 唯一实现单向复用 + 每包 build 物化 / 离仓自包含
   - **落点**：`packages/dsh-host-route-guard/src/route-guard.js:162-166,243-245`；`dsh-nano-terminal/lib/route-guard.js:243`（私改点退役）；各包 `scripts/build-client.mjs`
   - **完成判据**：同一机制一份可修改实现；`file:../packages/dsh-interface` devDep；baked 表随产物；离仓不读邻居源码
   - **验证映射**：`CF1115-T02`/`T03` · **依赖**：`P1-01`
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
-- [ ] `P1-03` — `createWebRegistrar` channel/match 绑定表 + mixed-batch 注册
+- [x] `P1-03` — `createWebRegistrar` channel/match 绑定表 + mixed-batch 注册
   - **落点**：🆕 `packages/dsh-interface/src/host/createWebRegistrar.*`；`packages/dsh-host-route-guard/src/route-guard.js:157-166,243-247`
   - **完成判据**：全批预检后注册、失败回收、幂等 dispose 纳入 ctx.effect、inventory 只读有效绑定
   - **验证映射**：`CF1115-T04`/`T05`/`T06` · **依赖**：`P1-01`
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
-- [ ] `P1-04` — DNN/DNT 首批真实接线（HTTP + SDK prefix / exact·close prefix·stream upgrade）
+- [x] `P1-04` — DNN/DNT 首批真实接线（HTTP + SDK prefix / exact·close prefix·stream upgrade）
   - **落点**：`dsh-nano-notepad/index.js:67-82,334-357`；`dsh-nano-terminal/index.js:15-26,66-74,193-270`；`dsh-nano-terminal/lib/route-table.js:1-8`
   - **完成判据**：原 URL/字节/HEAD/MIME/MCP/SSE/WS/PTY 责任保留；真实 register/upgrade 经可注入 seam、撤销重装
   - **验证映射**：`CF1115-T08`/`T09` · **依赖**：`P1-02`/`P1-03`
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
-- [ ] `P1-05` — 首批验证层 + 成对硬切退役 + 条件销账
+- [x] `P1-05` — 首批验证层 + 成对硬切退役 + 条件销账
   - **落点**：`packages/dsh-host-route-guard/test/route-guard.test.mjs`；`dsh-nano-terminal/test/register-routes.smoke.mjs`；`scripts/check-{route-sensitivity,feature-contract,clean-lib}.mjs`
   - **完成判据**：三检查扩维不缩 scope、smoke 改更强装配断言不删、DNN-01/DNT-01 条件真实兑现才销账、CROSS-02 至多部分偿还
   - **验证映射**：`CF1115-T07` · **依赖**：`P1-01..P1-04`

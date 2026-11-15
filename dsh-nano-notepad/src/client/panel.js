@@ -172,7 +172,7 @@ ${NANO_STYLES}
 .np-tree[data-collapsed="true"] .np-nodes { display: flex; flex-direction: column; align-items: center; padding: 6px 0 var(--np-pad-x); }
 .np-tree[data-collapsed="true"] .np-node { width: 40px; padding-left: 0 !important; padding-right: 0; justify-content: center; gap: 0; }
 .np-tree[data-collapsed="true"] .np-node-main { flex: none; justify-content: center; padding-right: 0 !important; }
-.np-tree[data-collapsed="true"] .np-node-name, .np-tree[data-collapsed="true"] .np-caret, .np-tree[data-collapsed="true"] .np-node-actions, .np-tree[data-collapsed="true"] .np-group { display: none; }
+.np-tree[data-collapsed="true"] .np-node-name, .np-tree[data-collapsed="true"] .np-caret, .np-tree[data-collapsed="true"] .np-node-actions, .np-tree[data-collapsed="true"] .np-group, .np-tree[data-collapsed="true"] .np-cat { display: none; }
 .np-tree[data-collapsed="true"] .np-node-icon svg { width: 18px; height: 18px; }
 .np-tree-head { box-sizing: border-box; display: flex; flex: none; align-items: center; gap: 4px; width: 100%; height: 49px; padding: 6px var(--np-pad-x); color: var(--dsw-alias-label-tertiary); font-size: var(--np-font-size-sm); border-bottom: 1px solid var(--dsw-alias-border-l2); }
 .np-tree-toggle { box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; flex: none; padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); cursor: pointer; }
@@ -242,11 +242,12 @@ ${NANO_STYLES}
 .np-caret[data-open="true"] svg { transform: rotate(90deg); }
 .np-node-icon { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex: none; color: var(--dsw-alias-label-tertiary); }
 .np-node-name { display: block; min-width: 0; overflow: hidden; white-space: nowrap; }
-.np-cat { flex: none; font-size: 9px; line-height: 1; padding: 2px 4px; border-radius: 4px; letter-spacing: .02em; color: var(--dsw-alias-label-tertiary); background: var(--dsw-alias-bg-layer-3); }
-.np-node[data-cat="draft"] .np-cat { color: var(--dsw-alias-state-warn-primary); }
-.np-node[data-cat="knowledge"] .np-cat { color: var(--dsw-alias-state-success-primary); }
-.np-node[data-cat="prompt"] .np-cat { color: var(--dsw-alias-link); }
-.np-node[data-cat="memory"] .np-cat { color: var(--dsw-alias-label-secondary); }
+.np-cat { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex: none; border-radius: 4px; font-size: 10px; font-weight: 700; line-height: 1; color: var(--dsw-alias-label-secondary); background: var(--dsw-alias-bg-layer-3); }
+.np-node[data-cat="draft"] .np-cat { color: var(--dsw-alias-state-warn-primary); background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 22%, transparent); }
+.np-node[data-cat="note"] .np-cat { color: var(--dsw-alias-label-primary); background: var(--dsw-alias-interactive-bg-active); }
+.np-node[data-cat="knowledge"] .np-cat { color: var(--dsw-alias-state-success-primary); background: color-mix(in srgb, var(--dsw-alias-state-success-primary) 22%, transparent); }
+.np-node[data-cat="prompt"] .np-cat { color: var(--dsw-alias-link); background: color-mix(in srgb, var(--dsw-alias-link) 22%, transparent); }
+.np-node[data-cat="memory"] .np-cat { color: var(--dsw-alias-label-secondary); background: var(--dsw-alias-bg-layer-3); }
 .np-node-name[data-fade="true"] { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 18px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 18px), transparent); }
 .np-entry svg, .np-node-icon svg, .np-tree-tools svg, .np-tree-toggle svg, .np-tree-foot svg, .np-caret svg, .np-node-actions svg, .np-tool svg, .np-slash svg, .np-ws-caret svg { fill: currentColor; stroke: none; }
 .np-tree-toggle svg { fill: none; stroke: currentColor; stroke-width: 1; }
@@ -258,20 +259,24 @@ ${NANO_STYLES}
 .np-ws-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
 .np-ws-caret { display: inline-flex; width: 14px; height: 14px; flex: none; color: var(--dsw-alias-label-tertiary); }
 .np-ws-caret svg { width: 14px; height: 14px; }
-.np-kind { display: inline-flex; align-items: center; gap: 4px; flex: none; height: var(--np-icon-btn); box-sizing: border-box; padding: 0 6px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-secondary); font: inherit; font-size: 10px; cursor: pointer; }
-.np-kind:hover { background: var(--dsw-alias-interactive-bg-active); color: var(--dsw-alias-label-primary); }
+.np-kind { display: inline-flex; align-items: center; gap: 6px; flex: none; max-width: 42%; height: var(--np-icon-btn); box-sizing: border-box; padding: 0 8px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); font: inherit; font-size: var(--np-font-size-sm); cursor: pointer; }
+.np-kind:hover { background: var(--dsw-alias-interactive-bg-active); }
 .np-kind[data-active="true"] { color: var(--dsw-alias-link); border-color: var(--dsw-alias-link); }
-.np-kind-caret { display: inline-flex; width: 12px; height: 12px; color: var(--dsw-alias-label-tertiary); }
-.np-kind-caret svg { width: 12px; height: 12px; }
+.np-kind-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.np-kind-caret { display: inline-flex; width: 14px; height: 14px; flex: none; color: var(--dsw-alias-label-tertiary); }
+.np-kind-caret svg { width: 14px; height: 14px; }
 /* fx run 卡 */
 .np-fx-card { display: flex; flex-direction: column; gap: 6px; }
 .np-fx-card select, .np-fx-card textarea { width: 100%; box-sizing: border-box; font: inherit; background: var(--dsw-alias-bg-primary); color: var(--dsw-alias-label-primary); border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); padding: 4px 6px; }
 .np-fx-out { min-height: 60px; max-height: 180px; overflow: auto; white-space: pre-wrap; font-size: var(--np-font-size-sm); padding: 6px; background: var(--dsw-alias-interactive-bg-hover); border-radius: var(--dsw-radius-sm); }
 .np-fx-tools { list-style: none; margin: 0; padding: 0; max-height: 140px; overflow: auto; }
 .np-fx-toolhead { display: block; width: 100%; text-align: left; font: inherit; font-size: var(--np-font-size-xs); color: var(--dsw-alias-link); background: none; border: none; cursor: pointer; padding: 2px 0; }
-.np-fx-tooldet { font-size: 10px; margin: 0 0 4px; padding: 4px 6px; background: var(--dsw-alias-bg-secondary); border-radius: 4px; white-space: pre-wrap; word-break: break-all; }
+.np-fx-tooldet { font-size: var(--np-font-size-xs); margin: 0 0 4px; padding: 4px 6px; background: var(--dsw-alias-bg-secondary); border-radius: 4px; white-space: pre-wrap; word-break: break-all; }
 .np-fx-foot { font-size: var(--np-font-size-xs); }
 .np-fx-links a { color: var(--dsw-alias-link); margin-right: 8px; }
+.np-fx-pipe-del { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: var(--dsw-radius-sm); background: transparent; color: var(--dsw-alias-label-tertiary); cursor: pointer; }
+.np-fx-pipe-del svg { width: 12px; height: 12px; display: block; }
+.np-fx-pipe-del:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 .np-fx-hist-list { list-style: none; margin: 0; padding: 0; font-size: var(--np-font-size-xs); }
 .np-fx-hist-list li { display: flex; gap: 8px; padding: 3px 0; border-bottom: 1px solid var(--dsw-alias-border-l1); }
 .np-fx-hist-at { color: var(--dsw-alias-label-tertiary); margin-left: auto; }
@@ -279,7 +284,8 @@ ${NANO_STYLES}
 .np-fx-run { display: flex; flex-direction: column; gap: 10px; }
 .np-fx-empty { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 4px; padding: 8px 12px 2px; }
 .np-fx-empty[hidden] { display: none !important; }
-.np-fx-empty-icon { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-link); font-size: 20px; line-height: 1; }
+.np-fx-empty-icon { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-link); }
+.np-fx-empty-icon svg { width: 16px; height: 16px; display: block; }
 .np-fx-empty-title { font-size: var(--np-font-size); font-weight: 600; color: var(--dsw-alias-label-primary); }
 .np-fx-empty-desc { margin: 0; font-size: var(--np-font-size-sm); color: var(--dsw-alias-label-tertiary); line-height: 18px; }
 .np-fx-suggests { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 2px; }
@@ -294,34 +300,38 @@ ${NANO_STYLES}
 .np-fx-composer .np-fx-chip:hover { background: var(--dsw-alias-interactive-bg-active) !important; color: var(--dsw-alias-label-primary) !important; }
 .np-fx-composer .np-fx-promptbtn[data-active="true"] { background: var(--dsw-alias-interactive-bg-active) !important; color: var(--dsw-alias-label-primary) !important; }
 .np-fx-composer .np-fx-chip[data-on="false"] { opacity: .42; }
-.np-fx-chip-ico { opacity: .78; }
+.np-fx-chip-ico { display: inline-flex; align-items: center; opacity: .78; }
+.np-fx-chip-ico svg { width: 12px; height: 12px; display: block; }
 .np-fx-doc-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.np-fx-toolbadge { font-size: 10px; color: var(--dsw-alias-label-tertiary); border: 1px solid var(--dsw-alias-border-l2); border-radius: 999px; padding: 0 7px; line-height: 20px; background: transparent; font-family: inherit; cursor: pointer; }
+.np-fx-toolbadge { height: 24px; font-size: var(--np-font-size-xs) !important; color: var(--dsw-alias-label-tertiary); border: 1px solid var(--dsw-alias-border-l2); border-radius: 999px; padding: 0 8px; line-height: 24px; background: transparent; font: inherit; cursor: pointer; }
 .np-fx-toolbadge:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 .np-fx-composer .np-fx-model { display: inline-flex; align-items: center; gap: 4px; width: auto !important; max-width: 260px; height: 26px; padding: 0 8px !important; font-size: var(--np-font-size-xs) !important; border-radius: 999px !important; background: var(--dsw-alias-interactive-bg-hover) !important; border: 0 !important; color: var(--dsw-alias-label-secondary) !important; cursor: pointer; }
 .np-fx-model-label { display: inline-flex; align-items: baseline; gap: 4px; min-width: 0; overflow: hidden; }
 .np-fx-model-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.np-fx-model-provider { flex: none; font-size: 9px; color: var(--dsw-alias-label-tertiary); }
-.np-fx-model-ctx { flex: none; font-size: 9px; color: var(--dsw-alias-label-tertiary); }
-.np-fx-model-caret { flex: none; font-size: 9px; opacity: .7; }
+.np-fx-model-provider { flex: none; font-size: var(--np-font-size-xs); color: var(--dsw-alias-label-tertiary); }
+.np-fx-model-ctx { flex: none; font-size: var(--np-font-size-xs); color: var(--dsw-alias-label-tertiary); }
+.np-fx-model-caret { display: inline-flex; align-items: center; flex: none; color: var(--dsw-alias-label-tertiary); }
+.np-fx-model-caret svg { width: 12px; height: 12px; display: block; }
 .nano-menu-label:has(.np-fx-model-option) { white-space: normal; overflow: visible; }
 .np-fx-model-option { display: flex; flex-direction: row; align-items: baseline; gap: 8px; min-width: 0; padding: 2px 0; }
-.np-fx-model-option-provider { font-size: 10px; color: var(--dsw-alias-label-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.np-fx-model-option-provider { font-size: var(--np-font-size-xs); color: var(--dsw-alias-label-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .np-fx-model-option-line { display: flex; align-items: baseline; gap: 8px; min-width: 0; margin-left: auto; }
 .np-fx-model-option-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--dsw-alias-label-primary); font-size: var(--np-font-size-sm); }
-.np-fx-model-option-ctx { flex: none; margin-left: auto; font-size: 10px; color: var(--dsw-alias-label-tertiary); }
-.np-fx-composer .np-fx-send { width: 32px; height: 32px; border-radius: 50% !important; border: 0 !important; background: var(--dsw-alias-link) !important; color: var(--dsw-alias-bg-primary) !important; font-size: 16px; line-height: 1 !important; padding: 0 !important; cursor: pointer; flex: none; }
+.np-fx-model-option-ctx { flex: none; margin-left: auto; font-size: var(--np-font-size-xs); color: var(--dsw-alias-label-tertiary); }
+.np-fx-composer .np-fx-send { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50% !important; border: 0 !important; background: var(--dsw-alias-link) !important; color: var(--dsw-alias-bg-primary) !important; padding: 0 !important; cursor: pointer; flex: none; }
+.np-fx-composer .np-fx-send svg { width: 16px; height: 16px; display: block; }
 .np-fx-composer .np-fx-send:disabled { opacity: .4; cursor: default; }
 .np-fx-chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 0; min-height: 20px; }
 .np-fx-chips[hidden] { display: none !important; }
-.np-fx-tag { display: inline-flex; align-items: center; gap: 2px; font-size: 10px; background: var(--dsw-alias-interactive-bg-active); border-radius: var(--dsw-radius-sm); padding: 2px 4px 2px 6px; color: var(--dsw-alias-label-secondary); max-width: 220px; }
+.np-fx-tag { display: inline-flex; align-items: center; gap: 2px; font-size: var(--np-font-size-xs); background: var(--dsw-alias-interactive-bg-active); border-radius: var(--dsw-radius-sm); padding: 2px 4px 2px 6px; color: var(--dsw-alias-label-secondary); max-width: 220px; }
 .np-fx-tag > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.np-fx-tag-x { border: 0 !important; background: none !important; padding: 0 2px !important; color: var(--dsw-alias-label-tertiary) !important; cursor: pointer; line-height: 1 !important; }
+.np-fx-tag-x { display: inline-flex; align-items: center; border: 0 !important; background: none !important; padding: 0 2px !important; color: var(--dsw-alias-label-tertiary) !important; cursor: pointer; }
+.np-fx-tag-x svg { width: 12px; height: 12px; display: block; }
 .np-fx-pop { position: absolute; left: 8px; right: 8px; bottom: 40px; max-height: 80px; overflow: auto; background: var(--dsw-alias-bg-layer-3); border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md); box-shadow: var(--dsw-elevation-prominent); padding: 4px; z-index: 5; }
 .np-fx-pop[hidden] { display: none !important; }
 .np-fx-pop .np-fx-popitem { display: flex; align-items: center; gap: 8px; width: 100%; border: 0 !important; background: none !important; color: var(--dsw-alias-label-primary) !important; text-align: left; padding: 3px 8px !important; border-radius: var(--dsw-radius-sm) !important; font: inherit !important; font-size: var(--np-font-size-xs) !important; line-height: 16px !important; cursor: pointer; }
 .np-fx-pop .np-fx-popitem:hover, .np-fx-pop .np-fx-popitem[data-active="true"] { background: var(--dsw-alias-interactive-bg-hover) !important; }
-.np-fx-pop-sub { margin-left: auto; color: var(--dsw-alias-label-tertiary); font-size: 10px; }
+.np-fx-pop-sub { margin-left: auto; color: var(--dsw-alias-label-tertiary); font-size: var(--np-font-size-xs); }
 .np-fx-pop-empty { padding: 8px; color: var(--dsw-alias-label-tertiary); font-size: var(--np-font-size-xs); }
 .np-fx-out[hidden] { display: none !important; }
 /* P0-4：tab 条的 + 新建；P1-5：文件级 … 菜单入口 */
@@ -344,12 +354,12 @@ ${NANO_STYLES}
 .np-window[data-theme="light"] .np-fx-entry { background: #eef1f5; color: #0f1115; border-color: #0000001a; }
 .np-window[data-theme="light"] .np-fx-entry:hover { background: #e2e6ec; }
 .np-window[data-theme="light"][data-fx="true"] .np-fx-entry { background: #4176e6; color: #ffffff; border-color: #4176e6; }
-.np-fx-entry-ico, .np-fx-entry-ico svg { width: 14px; height: 14px; display: block; }
-.np-fx-view { position: absolute; left: 0; right: 0; top: var(--np-tabs-h, var(--np-row-h)); bottom: 0; z-index: 3; box-sizing: border-box; padding: 10px 12px 12px; background: var(--dsw-alias-bg-layer-1); display: flex; justify-content: center; }
+.np-fx-entry-ico, .np-fx-entry-ico svg { width: 16px; height: 16px; display: block; }
+.np-fx-view { position: absolute; left: var(--np-fx-left, 0px); right: 0; top: calc(var(--np-tabs-h, var(--np-row-h)) + var(--np-fx-top, 0px)); bottom: 0; z-index: 3; box-sizing: border-box; padding: 10px 12px 12px; background: var(--dsw-alias-bg-layer-1); display: flex; justify-content: center; }
 .np-fx-view[hidden] { display: none !important; }
-.np-fx-shell { width: 100%; max-width: 760px; height: 100%; min-height: 0; display: flex; flex-direction: column; gap: 10px; }
+.np-fx-shell { position: relative; width: 100%; max-width: 760px; height: 100%; min-height: 0; display: flex; flex-direction: column; gap: 10px; }
 .np-fx-head { display: flex; align-items: center; gap: 8px; height: 36px; flex: none; }
-.np-fx-head-title { display: inline-flex; align-items: center; gap: 7px; height: 36px; padding: 0 2px; border: 0; background: transparent; font: inherit; font-size: var(--np-font-size); font-weight: 600; color: var(--dsw-alias-label-primary); flex: none; cursor: pointer; }
+.np-fx-head-title { display: inline-flex; align-items: center; gap: 7px; height: 36px; padding: 0 10px; border: 0; background: transparent; font: inherit; font-size: var(--np-font-size); font-weight: 600; color: var(--dsw-alias-label-primary); flex: none; cursor: pointer; }
 .np-fx-head-title:hover { background: var(--dsw-alias-interactive-bg-hover); border-radius: var(--dsw-radius-sm); }
 .np-fx-head-title[aria-expanded="true"] .np-fx-nav-state { color: var(--dsw-alias-link); }
 .np-fx-nav-state { display: inline-flex; width: 14px; height: 14px; color: var(--dsw-alias-label-tertiary); transition: color .12s ease; }
@@ -363,29 +373,41 @@ ${NANO_STYLES}
 .np-fx-nav { position: absolute; z-index: 4; top: 48px; left: 12px; bottom: 12px; width: 272px; display: flex; flex-direction: column; box-sizing: border-box; background: var(--dsw-alias-bg-layer-2); border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-lg); box-shadow: var(--dsw-elevation-prominent); transform: translateX(calc(-100% - 16px)); visibility: hidden; transition: transform .24s ease, visibility 0s linear .24s; }
 .np-fx-nav[data-state="open"] { transform: none; visibility: visible; transition: transform .24s ease; }
 .np-fx-nav-head { display: flex; flex: none; align-items: center; height: 32px; padding: 0 10px; border-bottom: 1px solid var(--dsw-alias-border-l3); color: var(--dsw-alias-label-tertiary); font-size: var(--np-font-size-xs); }
-.np-fx-nav-head b { color: var(--dsw-alias-label-secondary); font-weight: 600; }
-.np-fx-nav-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 6px; padding: 6px; }
+.np-fx-nav-head b { flex: 1; color: var(--dsw-alias-label-secondary); font-weight: 600; }
+.np-fx-nav-close { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; margin-left: auto; padding: 0; border: 0; border-radius: var(--dsw-radius-sm); background: transparent; color: var(--dsw-alias-label-tertiary); cursor: pointer; }
+.np-fx-nav-close svg { width: 14px; height: 14px; display: block; }
+.np-fx-nav-close:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+.np-fx-nav-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 6px; padding: 6px; scrollbar-width: none; }
+.np-fx-nav-list::-webkit-scrollbar { width: 0; height: 0; }
 .np-fx-nav-card { border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-layer-1); overflow: hidden; }
 .np-fx-nav-card-head { display: flex; align-items: center; gap: 7px; width: 100%; min-height: 32px; padding: 5px 8px; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; font-size: var(--np-font-size-sm); text-align: left; cursor: pointer; }
 .np-fx-nav-card-head:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 .np-fx-nav-card-head[data-open="true"] { color: var(--dsw-alias-label-primary); background: var(--dsw-alias-markdown-tag, var(--dsw-alias-bg-layer-3)); }
-.np-fx-nav-card-icon, .np-fx-nav-card-icon svg { width: 14px; height: 14px; display: inline-flex; flex: none; opacity: .8; }
-.np-fx-nav-card-caret { margin-left: auto; color: var(--dsw-alias-label-tertiary); font-size: 10px; }
+.np-fx-nav-card-icon { display: inline-flex; flex: none; opacity: .8; }
+.np-fx-nav-card-icon svg { width: 16px; height: 16px; display: block; }
+.np-fx-nav-card-caret { display: inline-flex; align-items: center; margin-left: auto; color: var(--dsw-alias-label-tertiary); transition: transform .15s ease; }
+.np-fx-nav-card-caret svg { width: 12px; height: 12px; display: block; }
+.np-fx-nav-card-head[data-open="true"] .np-fx-nav-card-caret { transform: rotate(180deg); }
 .np-fx-nav-card-body { padding: 4px 8px 8px; border-top: 1px solid var(--dsw-alias-border-l1); }
 .np-fx-nav-card-body[hidden] { display: none !important; }
 .np-fx-nav-empty { padding: 8px 2px; color: var(--dsw-alias-label-tertiary); font-size: var(--np-font-size-xs); }
 .np-fx-nav-item { display: flex; align-items: center; gap: 6px; min-height: 26px; border-bottom: 1px solid var(--dsw-alias-border-l1); font-size: var(--np-font-size-xs); color: var(--dsw-alias-label-secondary); }
 .np-fx-nav-item:last-child { border-bottom: 0; }
 .np-fx-nav-item-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--dsw-alias-label-primary); }
-.np-fx-nav-item button { height: 22px; padding: 0 6px; border: 0; border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-secondary); font: inherit; font-size: 10px; cursor: pointer; }
+.np-fx-nav-item button { display: inline-flex; align-items: center; justify-content: center; height: 22px; padding: 0 6px; border: 0; border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-secondary); font: inherit; font-size: var(--np-font-size-xs); cursor: pointer; }
+.np-fx-nav-item button svg { width: 12px; height: 12px; display: block; }
 .np-fx-nav-item button:hover { background: var(--dsw-alias-interactive-bg-active); color: var(--dsw-alias-label-primary); }
 .np-fx-nav-add { width: 100%; margin-top: 6px; height: 24px; border: 1px dashed var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; font-size: var(--np-font-size-xs); cursor: pointer; }
 .np-fx-nav-add:hover { background: var(--dsw-alias-interactive-bg-hover); }
-.np-fx-thread { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 4px 2px 2px; scroll-behavior: smooth; }
+.np-fx-thread { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 4px 2px 2px; scroll-behavior: smooth; scrollbar-width: none; }
+.np-fx-thread::-webkit-scrollbar { width: 0; height: 0; }
+.np-fx-floatbar { position: absolute; top: 0; right: 3px; z-index: 2; width: 5px; border-radius: 3px; background: var(--dsw-alias-label-quaternary); opacity: 0; pointer-events: none; transition: opacity .18s; }
+.np-fx-floatbar[data-on="true"] { opacity: .8; }
 .np-fx-thread .np-fx-empty { margin: auto; padding: 24px 16px 12px; }
 .np-fx-msg { display: flex; gap: 8px; align-items: flex-start; max-width: 100%; }
 .np-fx-msg[data-role="user"] { justify-content: flex-end; }
-.np-fx-msg-avatar { width: 24px; height: 24px; flex: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-link); font-size: 12px; }
+.np-fx-msg-avatar { width: 24px; height: 24px; flex: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-link); }
+.np-fx-msg-avatar svg { width: 14px; height: 14px; display: block; }
 .np-fx-bubble { max-width: 84%; min-width: 0; padding: 8px 11px; border-radius: 12px; font-size: var(--np-font-size-sm); line-height: 1.55; color: var(--dsw-alias-label-primary); background: var(--dsw-alias-interactive-bg-hover); white-space: pre-wrap; overflow-wrap: anywhere; }
 .np-fx-msg[data-role="user"] .np-fx-bubble { background: var(--dsw-alias-interactive-bg-active); border-bottom-right-radius: 4px; }
 .np-fx-msg[data-role="assistant"] .np-fx-bubble { background: var(--dsw-alias-bg-layer-2); border: 1px solid var(--dsw-alias-border-l1); border-bottom-left-radius: 4px; }
@@ -393,18 +415,18 @@ ${NANO_STYLES}
 .np-fx-tools { margin-top: 6px; display: flex; flex-direction: column; gap: 2px; list-style: none; padding: 0; max-height: none; overflow: visible; }
 .np-fx-tool { font-size: var(--np-font-size-xs); color: var(--dsw-alias-link); }
 .np-fx-tool summary { cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.np-fx-tool pre { margin: 4px 0 0; padding: 4px 6px; background: var(--dsw-alias-bg-layer-1); border-radius: 4px; white-space: pre-wrap; word-break: break-all; font-size: 10px; line-height: 1.45; max-height: 180px; overflow: auto; color: var(--dsw-alias-label-secondary); }
+.np-fx-tool pre { margin: 4px 0 0; padding: 4px 6px; background: var(--dsw-alias-bg-layer-1); border-radius: 4px; white-space: pre-wrap; word-break: break-all; font-size: var(--np-font-size-xs); line-height: 1.45; max-height: 180px; overflow: auto; color: var(--dsw-alias-label-secondary); }
 .np-fx-artifacts { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 8px; }
 .np-fx-artifacts a { color: var(--dsw-alias-link); font-size: var(--np-font-size-xs); }
 .np-fx-composer { flex: none; }
-.np-fx-model-settings { display: flex; flex-direction: column; gap: 2px; max-height: 320px; overflow: auto; margin: 4px 0 8px; }
-.np-fx-model-row { display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: var(--dsw-radius-sm); cursor: pointer; }
-.np-fx-model-row:hover { background: var(--dsw-alias-interactive-bg-hover); }
-.np-fx-model-row input { width: 14px; height: 14px; flex: none; accent-color: var(--dsw-alias-link); }
-.np-fx-model-row-text { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
-.np-fx-model-row-provider { flex: none; font-size: 10px; color: var(--dsw-alias-label-tertiary); }
-.np-fx-model-row-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--np-font-size-sm); color: var(--dsw-alias-label-primary); }
-.np-fx-model-row-ctx { flex: none; margin-left: auto; font-size: 10px; color: var(--dsw-alias-label-tertiary); }
+.np-fx-model-settings { max-height: 320px; overflow: auto; }
+/* .np-dlg-body label 是纵向 flex，会把勾选框甩到文字下面并居中。这一行强制横向。 */
+.np-dlg-body label.np-fx-model-row { display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; align-items: center !important; justify-content: space-between !important; width: 100%; min-height: 44px; gap: 12px; padding: 8px 0; border-top: 1px solid var(--dsw-alias-border-l2); cursor: pointer; }
+.np-dlg-body label.np-fx-model-row .np-field-text { flex: 1 1 auto; min-width: 0; align-items: flex-start; }
+.np-dlg-body label.np-fx-model-row input[type="checkbox"] { width: 16px; height: 16px; flex: none; margin: 0; }
+.np-fx-credit-links { display: flex; gap: 12px; flex: none; }
+.np-fx-credit-links a { color: var(--dsw-alias-link); }
+.np-dlg-body .np-switch:disabled { opacity: .72; cursor: default; }
 .np-changed { animation: npChanged 2.4s; }
 @keyframes npChanged { 0% { background: var(--dsw-alias-interactive-bg-active); } 100% { background: transparent; } }
 .np-group { display: flex; align-items: center; gap: 6px; margin: 12px 0 4px; padding-left: 8px; color: var(--dsw-alias-label-tertiary); font-size: var(--np-font-size-xs); font-weight: 600; letter-spacing: .04em; line-height: 20px; }
@@ -862,8 +884,12 @@ const CHECK_ICON = dshIcon('check-outline')
 /* DSH sidebar glyph (panel-left-outline, 16px). Open fills the left pane; closed is the outline. */
 const PANEL_ICON = (filled) => `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 1.5H2.5C1.94772 1.5 1.5 1.94772 1.5 2.5V13.5C1.5 14.0523 1.94772 14.5 2.5 14.5H13.5C14.0523 14.5 14.5 14.0523 14.5 13.5V2.5C14.5 1.94772 14.0523 1.5 13.5 1.5Z"></path><path d="M5.5 1.5V14.5"></path>${filled ? '<path class="np-panel-fill" d="M2.5 1.5H5.5V14.5H2.5C1.94772 14.5 1.5 14.0523 1.5 13.5V2.5C1.5 1.94772 1.94772 1.5 2.5 1.5Z"></path>' : ''}</svg>`
 const WIN_MIN_ICON = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M1 6h10" fill="none" stroke="currentColor" stroke-width="1.1"/></svg>'
-/* fx 处理入口 / 面板头图标：四角星 + 小星 */
-const FX_ICON = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M7 1.6l1.25 3.75L12 6.6 8.25 7.85 7 11.6 5.75 7.85 2 6.6l3.75-1.25z" fill="currentColor"/><path d="M12.4 10.6l.55 1.65 1.65.55-1.65.55-.55 1.65-.55-1.65-1.65-.55 1.65-.55z" fill="currentColor"/></svg>'
+/* fx 处理入口 / 面板头图标：宿主 think-outline（四芒星 artwork）。 */
+const FX_ICON = dshIcon('think-outline')
+const FX_CHEVRON = dshIcon('chevron-down-outline', 'regular', 12)
+const FX_SEND = dshIcon('send-outline', 'regular', 16)
+const FX_DOC = dshIcon('browse-outline', 'regular', 12)
+const FX_CLOSE = dshIcon('close-outline', 'regular', 12)
 const ICON = FILE_ICON
 
 /** Format toolbar + slash menu share one definition list. */
@@ -932,7 +958,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
   panel.innerHTML = `
     <div class="np-tabs"><button type="button" class="np-tree-toggle" data-action="toggle-tree"></button><button type="button" class="np-close-tabs" data-action="close-tabs" data-i18n="saveCloseTabs" data-i18n-mode="title">${dshIcon('archive-check-outline')}</button><div class="np-tablist"></div><button type="button" class="np-new-tab" data-action="new-file" data-i18n="newBlankFile" data-i18n-mode="title" title="+">${PLUS_ICON}</button><button type="button" class="np-more" data-action="more-menu" data-i18n="more" data-i18n-mode="title">⋯</button><span class="np-tabs-spacer"></span><button type="button" class="np-fx-entry" data-action="fx-run"><span class="np-fx-entry-ico" aria-hidden="true">${FX_ICON}</span><span data-i18n="fxEntry">处理</span></button></div>
     <div class="np-body">
-      <aside class="np-tree"><div class="np-tree-head"><div class="np-ws"><button type="button" class="np-ws-btn" data-action="ws-toggle" aria-haspopup="listbox" aria-expanded="false"><span class="np-ws-label"></span><span class="np-ws-caret" aria-hidden="true">${CHEVRON_ICON}</span></button></div><button type="button" class="np-kind" data-action="kind-filter" data-i18n="kindFilter" data-i18n-mode="title"><span class="np-kind-label"></span><span class="np-kind-caret" aria-hidden="true">${CHEVRON_ICON}</span></button><span class="np-tree-tools"><button type="button" data-action="new-item" data-i18n="newItem" data-i18n-mode="title" aria-haspopup="menu">${PLUS_ICON}</button><button type="button" class="np-danger" data-action="delete" data-i18n="clearUnpinned" data-i18n-mode="title">${dshIcon('trash-outline')}</button><button type="button" class="np-tools-toggle" data-action="toggle-tools" data-i18n="expandTools" data-i18n-mode="title" aria-expanded="false">${CHEVRON_ICON}</button></span></div><div class="np-nodes" data-root="true"></div><div class="np-mp-zone"><input class="np-mp-input" type="text" inputmode="url" autocomplete="off" spellcheck="false" data-i18n="importMp" data-i18n-attr="placeholder"><span class="np-mp-hint" data-state="idle" aria-hidden="true"></span></div><button type="button" class="np-tools-toggle" data-action="toggle-tools" data-i18n="expandTools" data-i18n-mode="title" aria-expanded="false">${CHEVRON_ICON}</button><div class="np-tree-foot"><button type="button" data-action="settings" data-i18n="settings" data-i18n-mode="label">${SETTINGS_ICON}<span data-i18n="settings"></span></button><button type="button" data-action="close" data-i18n="close" data-i18n-mode="label">${CLOSE_ICON}<span data-i18n="close"></span></button></div></aside>
+      <aside class="np-tree"><div class="np-tree-head"><div class="np-ws"><button type="button" class="np-ws-btn" data-action="ws-toggle" aria-haspopup="listbox" aria-expanded="false"><span class="np-ws-label"></span><span class="np-ws-caret" aria-hidden="true">${CHEVRON_ICON}</span></button></div><button type="button" class="np-kind" data-action="kind-filter" data-i18n="kindFilter" data-i18n-mode="title"><span class="np-kind-label"></span><span class="np-kind-caret" aria-hidden="true">${CHEVRON_ICON}</span></button><span class="np-tree-tools"><button type="button" data-action="tree-settings" data-i18n="settings" data-i18n-mode="title" aria-haspopup="menu">${SETTINGS_ICON}</button><button type="button" class="np-tools-toggle" data-action="toggle-tools" data-i18n="expandTools" data-i18n-mode="title" aria-expanded="false">${CHEVRON_ICON}</button></span></div><div class="np-nodes" data-root="true"></div><div class="np-mp-zone"><input class="np-mp-input" type="text" inputmode="url" autocomplete="off" spellcheck="false" data-i18n="importMp" data-i18n-attr="placeholder"><span class="np-mp-hint" data-state="idle" aria-hidden="true"></span></div><button type="button" class="np-tools-toggle" data-action="toggle-tools" data-i18n="expandTools" data-i18n-mode="title" aria-expanded="false">${CHEVRON_ICON}</button><div class="np-tree-foot"><button type="button" data-action="settings" data-i18n="settings" data-i18n-mode="label">${SETTINGS_ICON}<span data-i18n="settings"></span></button><button type="button" data-action="close" data-i18n="close" data-i18n-mode="label">${CLOSE_ICON}<span data-i18n="close"></span></button></div></aside>
       <div class="np-editor" data-themefit="true">
         <div class="np-toolbar"><span class="np-md-tools">${toolbar}</span><span class="np-json-tools" hidden><button type="button" class="np-tool" data-json="expand" data-i18n="jsonExpand" data-i18n-mode="title">${EXPAND_ICON}</button><button type="button" class="np-tool" data-json="collapse" data-i18n="jsonCollapse" data-i18n-mode="title">${COLLAPSE_ICON}</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-json="format" data-i18n="jsonFormat" data-i18n-mode="title">${FORMAT_ICON}</button><button type="button" class="np-tool" data-json="minify" data-i18n="jsonMinify" data-i18n-mode="title">${MINIFY_ICON}</button><button type="button" class="np-tool" data-json="escape" data-i18n="jsonEscape" data-i18n-mode="title">${ESCAPE_ICON}</button><button type="button" class="np-tool" data-json="unescape" data-i18n="jsonUnescape" data-i18n-mode="title">${UNESCAPE_ICON}</button><button type="button" class="np-tool" data-json="strip" data-i18n="jsonStrip" data-i18n-mode="title">${STRIP_ICON}</button></span><span class="np-ht-tools" hidden><button type="button" class="np-tool" data-ht="format" data-i18n="htFormat" data-i18n-mode="title">${FORMAT_ICON}</button><button type="button" class="np-tool" data-ht="minify" data-i18n="htMinify" data-i18n-mode="title">${MINIFY_ICON}</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-ht="strip-styles" data-i18n="htStripStyles" data-i18n-mode="title">${STRIP_ICON}</button><button type="button" class="np-tool" data-ht="extract-images" data-i18n="htExtractImages" data-i18n-mode="title">${GRID_ICON}</button><button type="button" class="np-tool" data-ht="copy-text" data-i18n="htCopyText" data-i18n-mode="title">${dshIcon('copy-outline')}</button></span><span class="np-rt-tools" hidden><button type="button" class="np-tool" data-rt="gallery" data-i18n="rtGallery" data-i18n-mode="title">${GRID_ICON}</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-rt="font-minus" data-i18n="rtFontMinus" data-i18n-mode="title">A−</button><button type="button" class="np-tool" data-rt="font-plus" data-i18n="rtFontPlus" data-i18n-mode="title">A+</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-rt="width" data-i18n="rtWidth" data-i18n-mode="title">宽</button><button type="button" class="np-tool" data-rt="themefit" data-i18n="rtThemeFit" data-i18n-mode="title" aria-pressed="true">◐</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-rt="copy-rich" data-i18n="rtCopyRich" data-i18n-mode="title">${dshIcon('copy-outline')}</button><button type="button" class="np-tool" data-rt="copy-text" data-i18n="rtCopyText" data-i18n-mode="title">Tx</button><button type="button" class="np-tool" data-rt="links" data-i18n="rtLinks" data-i18n-mode="title">${LINK_ICON}</button></span><button type="button" class="np-switch" data-action="view" role="switch" aria-checked="false" data-i18n="viewGroup" data-i18n-mode="title"><span class="np-switch-label" data-i18n="source"></span><span class="np-switch-label" data-i18n="preview"></span><span class="np-switch-thumb" data-i18n="source"></span></button></div>
         <div class="np-mirror" aria-hidden="true"></div>
@@ -946,41 +972,41 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     <section class="np-fx-view" hidden>
       <div class="np-fx-shell">
         <header class="np-fx-head">
-          <button type="button" class="np-fx-head-title" data-action="fx-nav-toggle" aria-expanded="false"><span class="np-fx-head-ico" aria-hidden="true">${FX_ICON}</span><span data-i18n="fxViewTitle">fx 处理</span><span class="np-fx-nav-state" aria-hidden="true">${PANEL_ICON(false)}</span></button>
+          <button type="button" class="np-fx-head-title" data-action="fx-nav-toggle" aria-expanded="false"><span class="np-fx-head-ico" aria-hidden="true">${FX_ICON}</span><span data-i18n="fxViewTitle">单次文本处理</span><span class="np-fx-nav-state" aria-hidden="true">${PANEL_ICON(false)}</span></button>
           <span class="np-fx-head-sub" data-fx-scope></span>
           <span class="np-fx-head-space"></span>
         </header>
         <div class="np-fx-thread" role="log" aria-live="polite">
           <div class="np-fx-empty">
-            <div class="np-fx-empty-icon" aria-hidden="true">✦</div>
-            <div class="np-fx-empty-title" data-i18n="fxEmptyTitle">开始一次 fx 运行</div>
+            <div class="np-fx-empty-icon" aria-hidden="true">${FX_ICON}</div>
+            <div class="np-fx-empty-title" data-i18n="fxEmptyTitle">开始一次处理</div>
             <p class="np-fx-empty-desc" data-i18n="fxEmptyDesc">读语料、写 draft/knowledge——一次完成。</p>
             <div class="np-fx-suggests"></div>
           </div>
         </div>
         <div class="np-fx-composer">
-          <textarea class="np-fx-input" rows="2" placeholder="要 fx 做什么——可触发 note_* 工具写 draft/knowledge" data-i18n="fxInputPh" data-i18n-attr="placeholder"></textarea>
+          <textarea class="np-fx-input" rows="2" placeholder="要做什么——可触发 note_* 工具写 draft/knowledge" data-i18n="fxInputPh" data-i18n-attr="placeholder"></textarea>
           <div class="np-fx-chips" hidden></div>
           <div class="np-fx-bar">
-            <button type="button" class="np-fx-chip np-fx-doc" data-on="true"><span class="np-fx-chip-ico" aria-hidden="true">▣</span><span class="np-fx-doc-name"></span></button>
+            <button type="button" class="np-fx-chip np-fx-doc" data-on="true"><span class="np-fx-chip-ico" aria-hidden="true">${FX_DOC}</span><span class="np-fx-doc-name"></span></button>
             <button type="button" class="np-fx-chip np-fx-promptbtn"><span class="np-fx-chip-ico" aria-hidden="true">/</span><span data-i18n="fxPromptPick">提示语料</span></button>
             <button type="button" class="np-fx-toolbadge" data-action="fx-tools" title="本轮可用 note_* 工具">note_*</button>
             <span class="np-fx-grow"></span>
-            <button type="button" class="np-fx-model" title="模型"><span class="np-fx-model-label">载入中…</span><span class="np-fx-model-caret" aria-hidden="true">▾</span></button>
-            <button type="button" class="np-fx-send" title="运行" aria-label="运行">→</button>
+            <button type="button" class="np-fx-model" title="模型"><span class="np-fx-model-label">载入中…</span><span class="np-fx-model-caret" aria-hidden="true">${FX_CHEVRON}</span></button>
+            <button type="button" class="np-fx-send" title="运行" aria-label="运行">${FX_SEND}</button>
           </div>
           <div class="np-fx-pop" hidden></div>
         </div>
       </div>
-      <nav class="np-fx-nav" data-state="closed" aria-label="fx 管理">
-        <div class="np-fx-nav-head"><b data-i18n="fxManage">fx 管理</b></div>
+      <nav class="np-fx-nav" data-state="closed" aria-label="管理">
+        <div class="np-fx-nav-head"><b data-i18n="fxManage">管理</b><button type="button" class="np-fx-nav-close" data-action="fx-nav-close" data-i18n="close" data-i18n-mode="title" aria-label="关闭">${FX_CLOSE}</button></div>
         <div class="np-fx-nav-list">
           <section class="np-fx-nav-card" data-fx-nav-card="pipes">
-            <button type="button" class="np-fx-nav-card-head" data-action="fx-nav-card" data-card="pipes" data-open="true"><span class="np-fx-nav-card-icon" aria-hidden="true">${dshIcon('flat-list-outline')}</span><span data-i18n="fxPipes">管线</span><span class="np-fx-nav-card-caret" aria-hidden="true">▾</span></button>
+            <button type="button" class="np-fx-nav-card-head" data-action="fx-nav-card" data-card="pipes" data-open="true"><span class="np-fx-nav-card-icon" aria-hidden="true">${dshIcon('flat-list-outline')}</span><span data-i18n="fxPipes">管线</span><span class="np-fx-nav-card-caret" aria-hidden="true">${FX_CHEVRON}</span></button>
             <div class="np-fx-nav-card-body" data-fx-nav-body="pipes"></div>
           </section>
           <section class="np-fx-nav-card" data-fx-nav-card="records">
-            <button type="button" class="np-fx-nav-card-head" data-action="fx-nav-card" data-card="records" data-open="true"><span class="np-fx-nav-card-icon" aria-hidden="true">${dshIcon('clock-outline')}</span><span data-i18n="fxRuns">记录</span><span class="np-fx-nav-card-caret" aria-hidden="true">▾</span></button>
+            <button type="button" class="np-fx-nav-card-head" data-action="fx-nav-card" data-card="records" data-open="true"><span class="np-fx-nav-card-icon" aria-hidden="true">${dshIcon('clock-outline')}</span><span data-i18n="fxRuns">记录</span><span class="np-fx-nav-card-caret" aria-hidden="true">${FX_CHEVRON}</span></button>
             <div class="np-fx-nav-card-body" data-fx-nav-body="records"></div>
           </section>
         </div>
@@ -1622,10 +1648,13 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
           if (v.at) parts.push(new Date(v.at).toLocaleString())
           return parts.length ? ` · ${parts.join(' · ')}` : ''
         })()
-        const catBadge = typeof node.cat === 'string' && node.cat
-          ? `<span class="np-cat" data-cat="${escapeAttr(node.cat)}" title="${escapeAttr(node.cat)}${viaTip}${node.cat === 'draft' && Number.isInteger(node.rejectCount) && node.rejectCount > 0 ? ` · ×${node.rejectCount}` : ''}">${escapeHtml(node.cat.slice(0, 4))}</span>`
+        const kindMark = { draft: 'D', note: 'N', knowledge: 'K', prompt: 'P', memory: 'M' }
+        const catLetter = node.kind === 'file' ? (kindMark[node.cat] ?? '?') : ''
+        const catTitle = node.cat ? `${text().kinds?.[node.cat] ?? node.cat}${viaTip}${node.cat === 'draft' && Number.isInteger(node.rejectCount) && node.rejectCount > 0 ? ` · ×${node.rejectCount}` : ''}` : (text().kindClear ?? '')
+        const catBadge = catLetter
+          ? `<span class="np-cat" data-cat="${escapeAttr(node.cat ?? '')}" title="${escapeAttr(catTitle)}">${catLetter}</span>`
           : ''
-        lines.push(`<div class="np-node" data-kind="${node.kind}" data-cat="${escapeAttr(node.cat ?? '')}" data-pinned="${node.pinned === true}" data-active="${node.id === state.ui.currentId}" title="${name}" style="padding-left:${8 + depth * 16}px">${caret}<button class="np-node-main" type="button" draggable="true" data-id="${nodeId}" aria-label="${name}"><span class="np-node-icon" aria-hidden="true">${icon}</span><span class="np-node-name">${name}</span>${catBadge}</button><span class="np-node-actions">${pin}<button type="button" data-move="${nodeId}" title="${escapeHtml(text().transfer)}" aria-label="${escapeHtml(text().transfer)}">${MOVE_ICON}</button><button type="button" data-more="${nodeId}" title="${escapeHtml(text().more)}" aria-label="${escapeHtml(text().more)}" aria-haspopup="menu">${MORE_ICON}</button></span></div>`)
+        lines.push(`<div class="np-node" data-kind="${node.kind}" data-cat="${escapeAttr(node.cat ?? '')}" data-pinned="${node.pinned === true}" data-active="${node.id === state.ui.currentId}" title="${name}" style="padding-left:${8 + depth * 16}px">${caret}<button class="np-node-main" type="button" draggable="true" data-id="${nodeId}" aria-label="${name}"><span class="np-node-icon" aria-hidden="true">${icon}</span>${catBadge}<span class="np-node-name">${name}</span></button><span class="np-node-actions">${pin}<button type="button" data-move="${nodeId}" title="${escapeHtml(text().transfer)}" aria-label="${escapeHtml(text().transfer)}">${MOVE_ICON}</button><button type="button" data-more="${nodeId}" title="${escapeHtml(text().more)}" aria-label="${escapeHtml(text().more)}" aria-haspopup="menu">${MORE_ICON}</button></span></div>`)
         if (node.kind === 'folder' && !state.collapsed.has(node.id)) visit(node.id, depth + 1, workspaceId)
       }
     }
@@ -2256,18 +2285,21 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     const icon = markup => React.createElement('span', { dangerouslySetInnerHTML: { __html: markup } })
     const copy = text()
     const kf = kindFilter()
-    /* 联动：筛选到某 kind 时 + 直接新建该 kind；全部类型下加「以类型新建…」子菜单。 */
-    const items = kf === null
-      ? [
-          { id: 'file', label: copy.newBlankFile, icon: icon(FILE_ICON), run: () => { done(false); void add('file').catch(showError) } },
-          { id: 'kind', label: copy.newKindFile ?? '以类型新建…', icon: icon(FILE_ICON), run: () => { done(false); openKindCreateMenu(anchor) } },
-          { id: 'folder', label: copy.newBlankFolder, icon: icon(FOLDER_ICON), run: () => { done(false); void add('folder').catch(showError) } },
-        ]
-      : [
-          { id: `kind-${kf}`, label: `${copy.newKindFile ?? '新建'} · ${copy.kinds[kf] ?? kf}`, icon: icon(FILE_ICON), run: () => { done(false); void addKind(kf).catch(showError) } },
-          { id: 'folder', label: copy.newBlankFolder, icon: icon(FOLDER_ICON), run: () => { done(false); void add('folder').catch(showError) } },
-        ]
-    const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), items, width: 180, theme: resolvedTheme(), z: NP_PORTAL_Z })
+    const scoped = activeWorkspace().mode !== 'all'
+    /* 联动：筛选到某 kind 时直接新建该 kind；全部类型下加「以类型新建…」。清空未固定收在同一菜单里。 */
+    const items = [
+      ...(kf === null
+        ? [
+            { id: 'file', label: copy.newBlankFile, icon: icon(FILE_ICON), run: () => { done(false); void add('file').catch(showError) } },
+            { id: 'kind', label: copy.newKindFile ?? '以类型新建…', icon: icon(FILE_ICON), run: () => { done(false); openKindCreateMenu(anchor) } },
+          ]
+        : [
+            { id: `kind-${kf}`, label: `${copy.newKindFile ?? '新建'} · ${copy.kinds[kf] ?? kf}`, icon: icon(FILE_ICON), run: () => { done(false); void addKind(kf).catch(showError) } },
+          ]),
+      { id: 'folder', label: copy.newBlankFolder, icon: icon(FOLDER_ICON), run: () => { done(false); void add('folder').catch(showError) } },
+      { id: 'clear', label: scoped ? copy.clearUnpinned : `${copy.clearUnpinned} · ${copy.clearUnpinnedPick}`, tone: 'danger', icon: icon(dshIcon('trash-outline')), run: () => { done(false); if (scoped) confirmClearUnpinned() } },
+    ]
+    const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), items, width: 220, theme: resolvedTheme(), z: NP_PORTAL_Z })
     let closed = false
     const done = (unmount) => {
       if (closed) return
@@ -2297,6 +2329,34 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
      入口在窗口右上角；管线定义/运行记录收进 header 按钮后的 dialog。 ── */
   const fxView = must(panel, '.np-fx-view')
   const fxThread = must(panel, '.np-fx-thread')
+  /* 原生滚动条会占右侧一条，出现时把对话和 composer 挤偏。这里关掉占位，
+     用一条不接收点击的悬浮 thumb 跟着滚。 */
+  const fxOverlayScroll = scroller => {
+    const host = scroller.parentElement
+    if (!host) return
+    const bar = document.createElement('div')
+    bar.className = 'np-fx-floatbar'
+    host.appendChild(bar)
+    const update = () => {
+      const { scrollTop, scrollHeight, clientHeight } = scroller
+      if (scrollHeight <= clientHeight + 2) { bar.hidden = true; return }
+      bar.hidden = false
+      const h = Math.max(24, clientHeight * clientHeight / scrollHeight)
+      const top = scroller.offsetTop + (scrollTop / (scrollHeight - clientHeight)) * (clientHeight - h)
+      bar.style.height = `${h}px`
+      bar.style.transform = `translateY(${top}px)`
+    }
+    scroller.addEventListener('scroll', () => {
+      bar.dataset.on = 'true'
+      update()
+      clearTimeout(bar._t)
+      bar._t = setTimeout(() => { bar.dataset.on = 'false' }, 800)
+    }, { passive: true })
+    new ResizeObserver(update).observe(scroller)
+    update()
+  }
+  fxOverlayScroll(fxThread)
+  fxOverlayScroll(must(panel, '.np-fx-nav-list'))
   const fxEmpty = must(fxThread, '.np-fx-empty')
   const fxSuggests = must(fxThread, '.np-fx-suggests')
   const fxInput = /** @type {HTMLTextAreaElement} */ (must(panel, '.np-fx-input'))
@@ -2341,8 +2401,8 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     const pnode = state.fx.promptId ? state.nodes.find(n => n.id === state.fx.promptId) : null
     if (!pnode && state.fx.promptId) state.fx.promptId = null
     const items = []
-    if (pnode) items.push(`<span class="np-fx-tag"><span>${escapeHtml((copy.fxPromptTag ?? '提示') + '：' + fxCleanName(pnode.name))}</span><button type="button" class="np-fx-tag-x" data-fx-remove="prompt" aria-label="${escapeHtml(copy.fxRemove ?? '移除')}">×</button></span>`)
-    state.fx.refs.forEach((ref, index) => items.push(`<span class="np-fx-tag"><span>${escapeHtml(fxKindLabel(ref.cat) + '：' + fxCleanName(ref.name))}</span><button type="button" class="np-fx-tag-x" data-fx-remove="ref:${index}" aria-label="${escapeHtml(copy.fxRemove ?? '移除')}">×</button></span>`))
+    if (pnode) items.push(`<span class="np-fx-tag"><span>${escapeHtml((copy.fxPromptTag ?? '提示') + '：' + fxCleanName(pnode.name))}</span><button type="button" class="np-fx-tag-x" data-fx-remove="prompt" aria-label="${escapeHtml(copy.fxRemove ?? '移除')}">${FX_CLOSE}</button></span>`)
+    state.fx.refs.forEach((ref, index) => items.push(`<span class="np-fx-tag"><span>${escapeHtml(fxKindLabel(ref.cat) + '：' + fxCleanName(ref.name))}</span><button type="button" class="np-fx-tag-x" data-fx-remove="ref:${index}" aria-label="${escapeHtml(copy.fxRemove ?? '移除')}">${FX_CLOSE}</button></span>`))
     /* chips 行始终占位，避免选择/移除提示语料时 composer 高度抖动。 */
     fxChips.hidden = false
     fxChips.innerHTML = items.join('')
@@ -2372,9 +2432,32 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     if (icon) icon.innerHTML = PANEL_ICON(!!state.fx.navOpen)
     fxNav.dataset.state = state.fx.navOpen ? 'open' : 'closed'
   }
+  /* 文档树保持 notepad 原样，卡住原位。fx 只占它右边（窄窗时占它下面）。
+     侧栏宽度有 180ms 过渡，render 当下读到的还是旧宽度，所以用 ResizeObserver 跟到收完。 */
+  const fxDock = () => {
+    const tree = panel.querySelector('.np-tree')
+    const body = panel.querySelector('.np-body')
+    if (!state.fx.open || !tree || !body) {
+      panel.style.setProperty('--np-fx-left', '0px')
+      panel.style.setProperty('--np-fx-top', '0px')
+      return
+    }
+    const column = getComputedStyle(body).flexDirection === 'column'
+    panel.style.setProperty('--np-fx-left', column ? '0px' : `${tree.offsetWidth}px`)
+    panel.style.setProperty('--np-fx-top', column ? `${tree.offsetHeight}px` : '0px')
+  }
+  let fxDockObserver = null
+  const fxDockWatch = () => {
+    fxDock()
+    const tree = panel.querySelector('.np-tree')
+    if (!state.fx.open || !tree) { fxDockObserver?.disconnect(); fxDockObserver = null; return }
+    if (!fxDockObserver) fxDockObserver = new ResizeObserver(() => { if (state.fx.open) fxDock() })
+    fxDockObserver.observe(tree)
+  }
   const renderFx = () => {
     fxView.hidden = !state.fx.open
     panel.dataset.fx = String(!!state.fx.open)
+    fxDockWatch()
     fxNavApply()
     if (state.fx.open) fxPaint()
   }
@@ -2433,7 +2516,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     wrap.className = 'np-fx-msg'
     wrap.dataset.role = role
     if (role === 'assistant') {
-      const avatar = document.createElement('span'); avatar.className = 'np-fx-msg-avatar'; avatar.textContent = '✦'; wrap.appendChild(avatar)
+      const avatar = document.createElement('span'); avatar.className = 'np-fx-msg-avatar'; avatar.innerHTML = FX_ICON; wrap.appendChild(avatar)
     }
     const bubble = document.createElement('div'); bubble.className = 'np-fx-bubble'
     const body = document.createElement('div'); body.className = 'np-fx-text'; body.textContent = value
@@ -2563,7 +2646,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       assistant.body.textContent = `ERR: ${e?.message ?? e}`
     } finally {
       state.fx.busy = false
-      fxSend.textContent = '→'
+      fxSend.innerHTML = FX_SEND
       fxUpdateSend()
       fxInput.value = ''
       fxPaintChips()
@@ -2576,7 +2659,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     try {
       const defs = await window.__nanoNotepad.fx.pipelines.list()
       fxNavBodyPipes.innerHTML = (defs.length
-        ? defs.map(d => `<div class="np-fx-nav-item"><span class="np-fx-nav-item-name">${escapeHtml(d.name ?? d.id)}</span><button type="button" data-fx-nav-run="${d.id}">${escapeHtml(copy.fxRunBtn ?? '运行')}</button><button type="button" data-fx-nav-del="${d.id}" aria-label="${escapeHtml(copy.fxRemove ?? '删除')}">×</button></div>`).join('')
+        ? defs.map(d => `<div class="np-fx-nav-item"><span class="np-fx-nav-item-name">${escapeHtml(d.name ?? d.id)}</span><button type="button" data-fx-nav-run="${d.id}">${escapeHtml(copy.fxRunBtn ?? '运行')}</button><button type="button" data-fx-nav-del="${d.id}" aria-label="${escapeHtml(copy.fxRemove ?? '删除')}">${FX_CLOSE}</button></div>`).join('')
         : `<div class="np-fx-nav-empty">${escapeHtml(copy.fxPipeEmpty ?? '无管线定义')}</div>`) + `<button type="button" class="np-fx-nav-add" data-fx-nav-new>${escapeHtml(copy.fxPipeNew ?? '新建管线')}</button>`
     } catch { fxNavBodyPipes.innerHTML = `<div class="np-fx-nav-empty">${escapeHtml(copy.fxHistErr ?? '管线不可用')}</div>` }
   }
@@ -2597,6 +2680,11 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     state.fx.navOpen = !state.fx.navOpen
     fxNavApply()
     if (state.fx.navOpen) fxNavRefresh()
+  }
+  function closeFxNav() {
+    if (!state.fx.navOpen) return
+    state.fx.navOpen = false
+    fxNavApply()
   }
   function toggleFxNavCard(anchor) {
     const card = anchor.closest('.np-fx-nav-card')
@@ -2637,7 +2725,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
           try {
             const defs = await window.__nanoNotepad.fx.pipelines.list()
             list.innerHTML = defs.length
-              ? defs.map(d => `<li><b>${escapeHtml(d.name ?? d.id)}</b> <button type="button" class="np-fx-pipe-run" data-id="${d.id}">${escapeHtml(copy.fxRunBtn ?? '运行')}</button> <button type="button" class="np-fx-pipe-del" data-id="${d.id}">×</button></li>`).join('')
+              ? defs.map(d => `<li><b>${escapeHtml(d.name ?? d.id)}</b> <button type="button" class="np-fx-pipe-run" data-id="${d.id}">${escapeHtml(copy.fxRunBtn ?? '运行')}</button> <button type="button" class="np-fx-pipe-del" data-id="${d.id}">${FX_CLOSE}</button></li>`).join('')
               : `<li class="np-fx-pipe-none">${escapeHtml(copy.fxPipeEmpty ?? '无管线定义')}</li>`
           } catch { list.innerHTML = `<li>${escapeHtml(copy.fxHistErr ?? '管线不可用')}</li>` }
         }
@@ -2747,9 +2835,17 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       { id: 'note_search', label: `note_search — ${copy.fxToolsSearch ?? '按关键词搜索语料'}` },
     ]
     closeMenu?.()
-    const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), items, width: 320, maxHeight: 140, theme: resolvedTheme(), z: NP_PORTAL_Z, direction: 'up' })
+    /* 四条说明放得下。加上 maxHeight 会强制 overflow，滚动条把菜单右侧圆角切成直角。 */
+    const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), items, width: 320, theme: resolvedTheme(), z: NP_PORTAL_Z, direction: 'up' })
     closeMenu = () => raw.close()
   }
+  /* 点垂直栏以外的 fx 区域收起边栏；标题按钮自己 toggle，不在这里抢。 */
+  fxView.addEventListener('pointerdown', event => {
+    if (!state.fx.navOpen) return
+    const hit = event.target instanceof Element ? event.target : null
+    if (!hit || hit.closest('.np-fx-nav') || hit.closest('.np-fx-head-title')) return
+    closeFxNav()
+  })
   fxNav.addEventListener('click', async event => {
     const runBtn = event.target instanceof HTMLElement ? event.target.closest('[data-fx-nav-run]') : null
     const delBtn = event.target instanceof HTMLElement ? event.target.closest('[data-fx-nav-del]') : null
@@ -2995,6 +3091,8 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
         ${num('editorFontSizePx', 'px', values.editorFontSizePx, copy.editorFontSize, copy.editorFontSizeHint)}
       </section>
       <section class="np-section" data-tab="fx">
+        <div class="np-field"><div class="np-field-text"><span class="np-field-name">${escapeHtml(copy.fxRuntime)}</span><span class="np-field-desc">${escapeHtml(copy.fxRuntimeHint)}</span></div><button type="button" class="np-switch" disabled aria-disabled="true" style="--np-switch-n:2;--np-switch-i:0"><span class="np-switch-thumb">wasm</span><span class="np-switch-label">wasm</span><span class="np-switch-label">sandbox</span></button></div>
+        <div class="np-field"><div class="np-field-text"><span class="np-field-name">${escapeHtml(copy.fxCredit)}</span><span class="np-field-desc">${escapeHtml(copy.fxCreditHint)}</span></div><span class="np-fx-credit-links"><a href="https://github.com/vercel-labs/fx" target="_blank" rel="noreferrer noopener">${escapeHtml(copy.fxRepo)}</a><a href="https://www.apache.org/licenses/LICENSE-2.0" target="_blank" rel="noreferrer noopener">${escapeHtml(copy.fxLicenseLink)}</a></span></div>
         <div class="np-field"><div class="np-field-text"><span class="np-field-name">${escapeHtml(copy.fxModelHeading)}</span><span class="np-field-desc">${escapeHtml(copy.fxModelHint)}</span></div></div>
         <div class="np-fx-model-settings"><span class="np-field-desc">${escapeHtml(copy.fxModelLoading)}</span></div>
         <p class="np-setting-note np-fx-model-note" hidden>${escapeHtml(copy.fxModelNeedOne)}</p>
@@ -3127,7 +3225,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
             ? models.map(m => {
                 const key = m.key ?? m.id ?? m.name ?? m
                 const info = fxModelInfo(m)
-                return `<label class="np-fx-model-row"><input type="checkbox" data-fx-model-pick value="${escapeHtml(key)}"${selected.has(key) ? ' checked' : ''}><span class="np-fx-model-row-text"><span class="np-fx-model-row-provider">${escapeHtml(info.provider)}</span><span class="np-fx-model-row-name">${escapeHtml(info.model)}</span><span class="np-fx-model-row-ctx">${escapeHtml(info.ctx)}</span></span></label>`
+                return `<label class="np-fx-model-row"><span class="np-field-text"><span class="np-field-name">${escapeHtml(info.model)}</span><span class="np-field-desc">${escapeHtml(info.provider)} · ${escapeHtml(info.ctx)}</span></span><input type="checkbox" data-fx-model-pick value="${escapeHtml(key)}"${selected.has(key) ? ' checked' : ''}></label>`
               }).join('')
             : `<span class="np-field-desc">${escapeHtml(copy.fxModelNone)}</span>`
         }).catch(() => { fxModelHost.innerHTML = `<span class="np-field-desc">${escapeHtml(copy.fxModelNone)}</span>` })
@@ -3599,7 +3697,17 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       })),
       { id: 'kind-clear', label: copy.kindClear, run: () => void assignKind(id, null) },
     ]
-    const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), width: 160, theme: resolvedTheme(), z: NP_PORTAL_Z, items })
+    /* ⋯ 只在行悬停时显示。上一级菜单打开后鼠标离开该行，按钮变成 display:none，
+       getBoundingClientRect 全为 0，菜单就被放到视口左上角。改锚到仍在布局里的文件行右端。 */
+    let rect = anchor.getBoundingClientRect()
+    if ((rect.width === 0 || rect.height === 0) && anchor instanceof Element) {
+      const row = anchor.closest('.np-node')
+      if (row) {
+        const box = row.getBoundingClientRect()
+        rect = { left: box.right - 28, top: box.top, right: box.right, bottom: box.bottom, width: 28, height: box.height }
+      }
+    }
+    const raw = openNanoMenu({ anchor: rect, width: 160, theme: resolvedTheme(), z: NP_PORTAL_Z, items })
     closeMenu = () => raw.close()
   }
 
@@ -3790,7 +3898,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       state.toolsOpen = !state.toolsOpen
       render()
     }
-    if (action === 'new-item') { openCreateMenu(target); return }
+    if (action === 'tree-settings' || action === 'new-item') { openCreateMenu(target); return }
     if (action === 'new-file') void add('file').catch(showError)
     if (action === 'close-tabs') {
       /* Save the active draft first (other tabs were already flushed when the
@@ -3837,6 +3945,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     if (action === 'image') must(panel, '.np-file').click()
     if (action === 'fx-run') { if (state.fx.open) closeFx(); else openFx(); return }
     if (action === 'fx-nav-toggle') { toggleFxNav(); return }
+    if (action === 'fx-nav-close') { closeFxNav(); return }
     if (action === 'fx-nav-card') { toggleFxNavCard(target); return }
     /* Lint badge click: jump the source caret to the reported offset. */
     if (target.classList.contains('np-lint') && target.dataset.pos !== '') {

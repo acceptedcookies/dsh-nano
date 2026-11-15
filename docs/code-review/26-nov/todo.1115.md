@@ -128,7 +128,7 @@
   - **落点**：`dsh-nano-kitesurf/{index.js,src/client/index.js,package.json,runtime/mcp-bridge.mjs,lib/diagnostics.js}`
   - **完成判据**：端点常量/fetch 改指真实提供面、错误目录归属、旧容器资产/双载体退役、不删既有业务
   - **验证映射**：`CF1115-T17` · **依赖**：`P3-03`
-  - **执行状态**：`partial` · **执行时间**：`2026-11-15` · **证据**：`e1b2e91` — `runtime/`（Dockerfile+entrypoint+双载体 mcp-bridge.mjs）退役、`container-engine.js` 只留端口工具（createArgs/checkoutPath/runContainer/ensureLocalContainer 等死函数删，测试断言零残留）、`persistedCheckout`/`rememberCheckout`/`effectiveCheckout` 死代码移除、files 清理。真实消费面=引擎 CDP+DNLS `/nano-local-sandbox/*` 已成立。留：`kitesurf.kite.container`/`kitesurf.kite.checkout` 等容器期 errorId 仍在 ERROR_CATALOG/SELFTEST_FIX 文案（不删既有错误目录属保留判据，未判是否过度承诺）；DNK 真实消费 live 链路未跑（无引擎实连）→ `CF1115-T17` 半收。
+  - **执行状态**：`partial` · **执行时间**：`2026-11-15` · **证据**：`e1b2e91`+`187d1ff` — `runtime/`（Dockerfile+entrypoint+双载体 mcp-bridge.mjs）退役、`container-engine.js` 只留端口工具（容器期死函数删零残留、测试断言导出不存在 anti-shadow）、`persistedCheckout`/`rememberCheckout`/`effectiveCheckout` 死代码移除、files 清理、pack-manifest 基线重建；**follow-up**：`ERROR_CATALOG`/`nano-kite` skill/`recovery-playbook`/`recipes`/SELFTEST_FIX/hints 容器承诺全部改指 DNLS 沙箱提供面（`kitesurf.kite.container`/`checkout` 无 thrower 删行、`portbusy`/`start|resume` 改探针语义、build-client coverage 读 DNLS 载体+sandbox.interact 补文档）。真实消费面=引擎 CDP+DNLS `/nano-local-sandbox/*` 已成立。留：DNK 真实消费 live 链路（无引擎实连）未跑 → `CF1115-T17` 仍半收。
 - [x] `P3-05` — [DNT] MCP/attach/WS/SSE/审计消费 + 公开 nanoTerminal — `partial`
   - **落点**：`dsh-nano-terminal/{index.js,src/host/{mcp,events}.js,src/client/lanes.js}`
   - **完成判据**：真实工具分发、attach 用返回 url、SSE 生命周期、审计 writer 接线、公开 `ctx.provide('nanoTerminal')` 消费

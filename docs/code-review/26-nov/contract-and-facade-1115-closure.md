@@ -55,7 +55,7 @@
 | MCP 控制面归口（DNT） | `observed-OK-at-closure` | toolset/decoder 单测过；远端引擎区间未真实握手（无授权端点） |
 | Terminal 两提供面 / DNLS 八工具 / v1-v2 门控 | `partial` | schema 广告已对账；DNLS `terminal-driver` 19 工具分发、断连至多一次重跑语义未全验 |
 | Sandbox 二十工具真实业务 + bridge（DNLS/DNK） | `deferred` | 待续轮；容器内 script 是否引用 DNK `runtime/mcp-bridge.mjs` 需容器侧核验 |
-| DNK 容器时代双载体/bridge 副本退役 | `partial` | `e1b2e91` 已删 `runtime/` 全树 + 死函数/死字段零残留；mcp-bridge 唯一载体 = DNLS `profiles/kitesurf/mcp-bridge.mjs`（test 同读）。DNK 真实消费 live 链路（无引擎实连）未验 |
+| DNK 容器时代双载体/bridge 副本退役 | `partial` | `e1b2e91`+`187d1ff`：`runtime/` 全树+死函数零残留、mcp-bridge 唯一载体 = DNLS（test/build 同读）、容器期 errorId/文档承诺全改指沙箱宿主。DNK 真实消费 live 链路（无引擎实连）未验 |
 | host adapter / DNCS `NATIVE_*` / DNMSC R-16 | `deferred` | Phase-4 域迁移，超本会话预算 |
 | DNEE native 资源 / DNN fx·S3·RPC 边界收窄 | `deferred` | `/s3/config` 收窄与端点切换握手冲突，待 AP 原文裁决 |
 
@@ -111,8 +111,9 @@
 |--------|------|------|
 | P3-04 | DNK 容器时代资产**真实退役**（`runtime/` Dockerfile+entrypoint+双载体 mcp-bridge.mjs 删除、files 清单清理）；`container-engine.js` 只留端口探针（`isLoopback`/`hostPort`/`hostPortFree`），死函数 `createArgs`/`checkoutPath`/`runContainer`/`ensureLocalContainer`/`stopLocalContainer`/`firstFreePort`/`statePath`/`CONTAINER_NAME`/`ENGINE_IMAGE`/`scrubPaths`/`publishedPortsOf` 删零残留；`persistedCheckout`/`rememberCheckout`/`effectiveCheckout`（仅容器重建消费）死代码移除；测试断言退役导出**不存在**（anti-shadow）、diagnostics.test 弃 `runtime/` 源根、skill.test 改读 DNLS 唯一载体 | `e1b2e91` · DNK 56/56 |
 | — | pack-manifest 基线再重建（DNK `runtime/*` 退役致 `files` 收窄，fresh dry-run 失配） | `388a603` · DNLS 66/66 |
+| P3-04（follow-up） | **契约承诺对齐**：ERROR_CATALOG 容器期行（`kitesurf.kite.container`/`checkout`/`portbusy` 接管语义）无 thrower 删除/改指 DNLS；`nano-kite` skill + `recovery-playbook`/`recipes`/SELFTEST_FIX/hints 全部改指 `dsh-nano-local-sandbox` 提供面；build-client coverage 源改读 DNLS bridge 载体、`sandbox.interact` 补文档 | `187d1ff` · DNK 56/56 |
 
-**三轮回归**：dsh-interface 43 · DNN 71 · DNT 97+4 · DNMS 7 · DNMSC 23 · DNEE 5 · DNLS 66 · DNK 56 · 4 gates 全绿。
+**三轮回归**（`187d1ff` 后）：dsh-interface 43 · DNN 71 · DNT 97+4 · DNMS 7 · DNMSC 23 · DNEE 5 · DNLS 66 · DNK 56 · 4 gates 全绿。
 
 ## 4. 未收口原因（诚实）
 
@@ -121,7 +122,7 @@ Phase-4/5 的 host 适配 + 全范围结算与若干公开退役面（DNK 容器
 ## 5. 交接
 
 - **已完成**：P1·P2·P3-01/02 全、`P3-03`/`P3-05`/`P4-03`/`P5-02`/`P3-04` partial。
-- **下一动作 / deferred**：`P3-04` 余留（DNK 真实消费 live 链路、容器期 errorId/SELFTEST 文案是否过度承诺待核）→ `P4-01`（宿主域 cordis 核验）→ `P4-02`/`P4-04` → `P5-01`/`P5-03`。
+- **下一动作 / deferred**：`P3-04` 余留（仅 DNK 真实消费 live 链路，无引擎实连）→ `P4-01`（宿主域 cordis 核验）→ `P4-02`/`P4-04` → `P5-01`/`P5-03`。
 - **P-EXEC 待裁决**：3 个 facade 签名偏离（createMcpToolset/decodeMcpReply/createWebRegistrar）、clean-lib allowlist 扩 `@deepseek-ai/dsh-compaction`、spec↔binding 缺行静默丢弃、route-scan 读生成物失独立性、P4-04 /s3/config 收窄与 handshake 冲突；DNK mcp-bridge canonical 已由 `e1b2e91` 实证收敛至 DNLS（非第二作者源），P3-04 公开退役面已落地。
 - **阻塞**：无硬阻塞；容器/远端/S3/cordis 宿主域核验需授权。
 - 完成判据仍锚 `AP §10.1` 硬闸 + `§10.3` DoD。

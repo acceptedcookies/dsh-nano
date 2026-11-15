@@ -23,6 +23,25 @@ const DATA_DIR = mkdtempSync(join(tmpdir(), 'dnms01-takeover-'))
 process.env.DSH_DATA_DIR = DATA_DIR
 const POLICY_PATH = join(DATA_DIR, 'plugins/nano-model-selector/async-compact.json')
 
+// P4-03: cordis Service is not resolvable from this offline workspace, so the
+// test injects a faithful real-Service stand-in through the legit loader seam —
+// the engine still runs on a class with cordis semantics (provide/check/filter),
+// not the retired vendored shadow. The fixture is the caller's own resolution.
+const { setHostService } = await import('../lib/host-services.js')
+setHostService(class {
+  static init = Symbol.for('cordis.init')
+  static check = Symbol.for('cordis.check')
+  static config = Symbol.for('cordis.config')
+  static invoke = Symbol.for('cordis.invoke')
+  static extend = Symbol.for('cordis.extend')
+  static tracker = Symbol.for('cordis.tracker')
+  static resolveConfig = Symbol.for('cordis.resolveConfig')
+  constructor(ctx, name) {
+    this.ctx = ctx
+    this.name = name ?? this.constructor['provide']
+    ctx.reflect?.provide?.(this.name, this, this.constructor[Symbol.for('cordis.check')])
+  }
+})
 const { default: NanoCompactionEngine } = await import('../lib/host-compaction.js')
 const {
   assertNoActiveCompaction,

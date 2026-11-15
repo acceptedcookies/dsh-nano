@@ -512,7 +512,7 @@ ${Ga}
 .np-fx-view[hidden] { display: none !important; }
 .np-fx-shell { position: relative; width: 100%; max-width: 760px; height: 100%; min-height: 0; display: flex; flex-direction: column; gap: 10px; }
 .np-fx-head { display: flex; align-items: center; gap: 8px; height: 36px; flex: none; }
-.np-fx-head-title { display: inline-flex; align-items: center; gap: 7px; height: 36px; padding: 0 2px; border: 0; background: transparent; font: inherit; font-size: var(--np-font-size); font-weight: 600; color: var(--dsw-alias-label-primary); flex: none; cursor: pointer; }
+.np-fx-head-title { display: inline-flex; align-items: center; gap: 7px; height: 36px; padding: 0 10px; border: 0; background: transparent; font: inherit; font-size: var(--np-font-size); font-weight: 600; color: var(--dsw-alias-label-primary); flex: none; cursor: pointer; }
 .np-fx-head-title:hover { background: var(--dsw-alias-interactive-bg-hover); border-radius: var(--dsw-radius-sm); }
 .np-fx-head-title[aria-expanded="true"] .np-fx-nav-state { color: var(--dsw-alias-link); }
 .np-fx-nav-state { display: inline-flex; width: 14px; height: 14px; color: var(--dsw-alias-label-tertiary); transition: color .12s ease; }

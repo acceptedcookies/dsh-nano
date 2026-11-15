@@ -1,7 +1,7 @@
 /** Async-compaction takeover panel (-20): four states U1–U4 driven by the host's read-only projection. */
 
 import * as React from 'react'
-import { CompactionIcon, WarningIcon } from './icons.jsx'
+import { CheckIcon, CloseIcon, CompactionIcon, WarningIcon } from './icons.jsx'
 import { fetchCompactState, postCompactSwitch, putCompactPolicy } from './compact.js'
 
 const BUNDLE_NAME = 'dsh-nano-model-selector-compaction'
@@ -15,10 +15,9 @@ export function CompactPanel({ copy, models, onError }) {
   const [busy, setBusy] = React.useState(false)
   const [confirm, setConfirm] = React.useState(false)
   const [banner, setBanner] = React.useState(null) // {kind:'success'|'warn'|'fail', text}
-  const [draft, setDraft] = React.useState({})
 
   const reload = React.useCallback(() => {
-    fetchCompactState().then(value => { setState(value); setDraft({}) }).catch(() => {})
+    fetchCompactState().then(value => { setState(value) }).catch(() => {})
   }, [])
   React.useEffect(reload, [reload])
 
@@ -38,16 +37,17 @@ export function CompactPanel({ copy, models, onError }) {
     )
   }
 
+  const enabled = bundle.enabled === true
   const policy = state.policy ?? {}
   const effective = policy.effective ?? {}
   const runtime = policy.runtime ?? {}
   const degraded = state.degraded === 'state-read-failed'
 
-  const doSwitch = enabled => {
+  const doSwitch = next => {
     if (busy) return
     setBusy(true)
     setConfirm(false)
-    postCompactSwitch(enabled)
+    postCompactSwitch(next)
       .then(result => {
         const application = result.application ?? 'applied'
         setBanner(application === 'applied'
@@ -65,7 +65,7 @@ export function CompactPanel({ copy, models, onError }) {
 
   const saveField = (field, raw) => {
     const value = field === 'model' ? raw : Number(raw)
-    if (field !== 'model' && (!Number.isFinite(value))) {
+    if (field !== 'model' && !Number.isFinite(value)) {
       onError(`${copy.selectionError}: ${field} must be a number`)
       return
     }
@@ -77,88 +77,122 @@ export function CompactPanel({ copy, models, onError }) {
       .finally(() => setBusy(false))
   }
 
+  const currentModel = `${policy.model?.provider ?? ''}/${policy.model?.model ?? ''}`
+  const fill = runtime.fill == null ? null : Math.max(0, Math.min(1, runtime.fill))
+
   return (
-    <div>
+    <div className="nms-compact">
       <div className="nms-group">
         <CompactionIcon className="nms-group-star" size={12} />{copy.compactTitle}
         <span className="nms-group-count">{copy.compactSubtitle}</span>
       </div>
 
-      {banner !== null && (
-        <div className={`nms-error nms-banner-${banner.kind}`}>
-          {banner.kind !== 'success' && <WarningIcon size={14} />}
-          <span className="nms-error-copy">{banner.text}</span>
+      {/* Status card: state badge + toggle. */}
+      <div className="nms-compact-card" data-enabled={enabled}>
+        <div className="nms-compact-card-main">
+          <span className="nms-model-name">{enabled ? copy.compactEnabled : copy.compactDisabled}</span>
+          <span className="nms-model-desc">{copy.compactSubtitle}</span>
+          <span className="nms-compact-pkg">{BUNDLE_NAME}</span>
         </div>
-      )}
-
-      {/* U4 degraded banner (read failure keeps only the safety line live). */}
-      {degraded && (
-        <div className="nms-error">
-          <WarningIcon size={14} />
-          <span className="nms-error-copy">{copy.compactDegraded}</span>
-        </div>
-      )}
-
-      {/* U2/U3: enabled state + toggle. U2 shows the same toggle at OFF. */}
-      <div className="nms-model-row" data-active={bundle.enabled === true}>
-        <div className="nms-model-main" style={{ cursor: 'default' }}>
-          <span className="nms-model-copy">
-            <span className="nms-model-line">
-              <span className="nms-model-name">{bundle.enabled === true ? copy.compactEnabled : copy.compactDisabled}</span>
-              <span className={`nms-tag ${bundle.enabled === true ? 'nms-tag-success' : 'nms-tag-warning'}`}>{BUNDLE_NAME}</span>
-            </span>
-            <span className="nms-model-desc">{copy.compactSubtitle}</span>
-          </span>
-        </div>
-        <span className="nms-model-side">
-          <button
-            type="button"
-            className="nms-effort-button"
-            aria-pressed={bundle.enabled === true}
-            disabled={busy}
-            onClick={() => setConfirm(true)}
-          >{bundle.enabled === true ? 'ON' : 'OFF'}</button>
-        </span>
+        <button
+          type="button"
+          className="nms-switch"
+          role="switch"
+          aria-checked={enabled}
+          aria-label={enabled ? copy.compactEnabled : copy.compactDisabled}
+          disabled={busy}
+          onClick={() => setConfirm(true)}
+        >
+          <span className="nms-switch-thumb" />
+        </button>
       </div>
 
+      {/* Switch confirmation: inline, dismissible. */}
       {confirm && (
-        <div className="nms-error">
-          <WarningIcon size={14} />
-          <span className="nms-error-copy">
-            {copy.compactSwitchConfirm}{' '}
-            <button type="button" className="nms-retry" disabled={busy} onClick={() => doSwitch(!(bundle.enabled === true))}>OK</button>{' '}
-            <button type="button" className="nms-retry" onClick={() => setConfirm(false)}>✕</button>
+        <div className="nms-compact-note" data-kind="warn">
+          <WarningIcon size={13} />
+          <span className="nms-compact-note-copy">{copy.compactSwitchConfirm}</span>
+          <span className="nms-compact-note-actions">
+            <button type="button" className="nms-effort-button" disabled={busy} onClick={() => doSwitch(!enabled)}>{copy.compactConfirmOk ?? 'OK'}</button>
+            <button type="button" className="nms-effort-button" onClick={() => setConfirm(false)}>{copy.compactConfirmCancel ?? '✕'}</button>
           </span>
         </div>
       )}
 
-      {/* U3: policy fields only when enabled (degraded keeps them read-only). */}
-      {bundle.enabled === true && state.policy !== null && (
-        <div className="nms-model-row" data-active="false">
-          <div className="nms-model-main" style={{ cursor: 'default' }}>
-            <span className="nms-model-copy">
-              <span className="nms-model-line"><span className="nms-model-name">{copy.compactFieldModel}</span></span>
-              <select
-                aria-label={copy.compactFieldModel}
-                value={`${policy.model?.provider ?? ''}/${policy.model?.model ?? ''}`}
-                disabled={busy}
-                onChange={event => {
-                  const [provider, ...rest] = event.target.value.split('/')
-                  saveField('model', { provider, model: rest.join('/') })
-                }}
-              >
-                <option value="/">{`（${copy.selectModel}）`}</option>
-                {models.map(item => (
-                  <option key={`${item.provider}/${item.model}`} value={`${item.provider}/${item.model}`}>{`${item.provider}/${item.model}`}</option>
-                ))}
-              </select>
-              <EditableField label={copy.compactFieldBuffer} field="bufferSizeAsync" value={policy.bufferSizeAsync} onSave={saveField} />
-              <EditableField label={copy.compactFieldHealth} field="healthTargetAsync" value={policy.healthTargetAsync} onSave={saveField} />
-              <EditableField label={copy.compactFieldPinned} field="pinnedAsyncTokens" value={policy.pinnedAsyncTokens} onSave={saveField} />
-              <span className="nms-model-meta">{copy.compactFieldSafety}</span>
-              <span className="nms-model-meta">{copy.compactRuntimeFill}: {runtime.fill == null ? '—' : `${(runtime.fill * 100).toFixed(1)}%`}</span>
-              <span className="nms-model-meta">{copy.compactLastCompaction}: {runtime.lastCompaction == null ? '—' : JSON.stringify(runtime.lastCompaction)}</span>
-              <span className="nms-model-meta">pin={effective.pin ?? '—'} windowMin={effective.windowMin ?? '—'} dcs={JSON.stringify(effective.dcs ?? [])}</span>
+      {/* Result banner: toast-style, dismissible. */}
+      {banner !== null && (
+        <div className="nms-compact-note" data-kind={banner.kind}>
+          {banner.kind === 'success' ? <CheckIcon size={13} /> : <WarningIcon size={13} />}
+          <span className="nms-compact-note-copy">{banner.text}</span>
+          <button type="button" className="nms-compact-note-x" aria-label={copy.close} onClick={() => setBanner(null)}>
+            <CloseIcon size={11} />
+          </button>
+        </div>
+      )}
+
+      {/* U4 degraded: read failure keeps only the safety line live. */}
+      {degraded && (
+        <div className="nms-compact-note" data-kind="fail">
+          <WarningIcon size={13} />
+          <span className="nms-compact-note-copy">{copy.compactDegraded}</span>
+        </div>
+      )}
+
+      {/* U3: editable policy only when enabled. */}
+      {enabled && state.policy !== null && (
+        <div className="nms-compact-fields">
+          <label className="nms-compact-field">
+            <span className="nms-compact-field-label">{copy.compactFieldModel}</span>
+            <select
+              className="nms-compact-input"
+              aria-label={copy.compactFieldModel}
+              value={currentModel}
+              disabled={busy}
+              onChange={event => {
+                const [provider, ...rest] = event.target.value.split('/')
+                saveField('model', { provider, model: rest.join('/') })
+              }}
+            >
+              <option value="/">{`（${copy.selectModel}）`}</option>
+              {models.map(item => (
+                <option key={`${item.provider}/${item.model}`} value={`${item.provider}/${item.model}`}>{`${item.provider}/${item.model}`}</option>
+              ))}
+            </select>
+          </label>
+
+          <NumberField label={copy.compactFieldBuffer} field="bufferSizeAsync" value={policy.bufferSizeAsync} step="0.05" min="0" max="1" onSave={saveField} busy={busy} />
+          <NumberField label={copy.compactFieldHealth} field="healthTargetAsync" value={policy.healthTargetAsync} step="0.05" min="0" max="1" onSave={saveField} busy={busy} />
+          <NumberField label={copy.compactFieldPinned} field="pinnedAsyncTokens" value={policy.pinnedAsyncTokens} step="1000" min="0" onSave={saveField} busy={busy} />
+
+          <div className="nms-compact-field">
+            <span className="nms-compact-field-label">{copy.compactFieldSafety}</span>
+            <span className="nms-compact-field-static">0.80</span>
+          </div>
+        </div>
+      )}
+
+      {/* Runtime readouts: fill meter + last compaction + effective caps. */}
+      {enabled && state.policy !== null && (
+        <div className="nms-compact-runtime">
+          <div className="nms-compact-meter-row">
+            <span className="nms-compact-field-label">{copy.compactRuntimeFill}</span>
+            {fill === null ? (
+              <span className="nms-compact-field-static">{copy.compactMeterUnknown ?? '—'}</span>
+            ) : (
+              <>
+                <span className="nms-compact-meter" role="meter" aria-valuenow={Math.round(fill * 100)} aria-valuemin="0" aria-valuemax="100">
+                  <span className="nms-compact-meter-fill" data-level={fill >= 0.8 ? 'high' : fill >= 0.5 ? 'mid' : 'low'} style={{ width: `${(fill * 100).toFixed(1)}%` }} />
+                </span>
+                <span className="nms-compact-meter-num">{`${(fill * 100).toFixed(1)}%`}</span>
+              </>
+            )}
+          </div>
+          <div className="nms-compact-meta-row">
+            <span className="nms-model-meta">{copy.compactLastCompaction}: {formatLast(runtime.lastCompaction)}</span>
+          </div>
+          <div className="nms-compact-meta-row">
+            <span className="nms-model-meta">
+              {copy.compactEffectivePin ?? 'pin'}={effective.pin ?? '—'} · {copy.compactWindowMin ?? 'windowMin'}={effective.windowMin ?? '—'}
             </span>
           </div>
         </div>
@@ -167,26 +201,47 @@ export function CompactPanel({ copy, models, onError }) {
   )
 }
 
-function EditableField({ label, field, value, onSave }) {
-  const [draft, setDraft] = React.useState('')
-  const [editing, setEditing] = React.useState(false)
+/** @param {{ label: string, field: string, value: any, step: string, min: string, max?: string, onSave: (field:string, raw:string)=>void, busy: boolean }} props */
+function NumberField({ label, field, value, step, min, max, onSave, busy }) {
+  const [draft, setDraft] = React.useState(null) // null = not editing
+  const editing = draft !== null
+  const commit = () => { onSave(field, draft); setDraft(null) }
   return (
-    <span className="nms-model-meta">
-      {label}：
+    <label className="nms-compact-field">
+      <span className="nms-compact-field-label">{label}</span>
       {editing ? (
         <input
+          className="nms-compact-input"
+          type="number"
           autoFocus
-          defaultValue={value}
-          size={8}
+          value={draft}
+          step={step}
+          min={min}
+          max={max}
+          disabled={busy}
+          onChange={event => setDraft(event.target.value)}
           onKeyDown={event => {
-            if (event.key === 'Enter') { onSave(field, event.target.value); setEditing(false) }
-            if (event.key === 'Escape') setEditing(false)
+            if (event.key === 'Enter') commit()
+            if (event.key === 'Escape') setDraft(null)
           }}
-          onBlur={() => setEditing(false)}
+          onBlur={commit}
         />
       ) : (
-        <button type="button" className="nms-retry" onClick={() => setEditing(true)}>{value}</button>
+        <button type="button" className="nms-compact-value" disabled={busy} onClick={() => setDraft(String(value ?? ''))}>
+          {value ?? '—'}
+        </button>
       )}
-    </span>
+    </label>
   )
+}
+
+/** lastCompaction may be an epoch ms number or an object {at, tokens}; render quietly. */
+function formatLast(value) {
+  if (value == null) return '—'
+  const at = typeof value === 'number' ? value : value.at ?? value.time ?? null
+  if (at != null) {
+    const d = new Date(at)
+    if (!Number.isNaN(d.getTime())) return d.toLocaleString()
+  }
+  return String(value.tokens ?? value)
 }

@@ -65,6 +65,11 @@ export const COPY = {
     compactFieldModel: '摘要模型',
     compactRuntimeFill: '当前填充',
     compactLastCompaction: '上次压缩',
+    compactConfirmOk: '确认',
+    compactConfirmCancel: '取消',
+    compactMeterUnknown: '暂无计量',
+    compactEffectivePin: 'pin',
+    compactWindowMin: '最小窗口',
   },
   en: {
     title: 'Model selection',
@@ -130,6 +135,11 @@ export const COPY = {
     compactFieldModel: 'Summary model',
     compactRuntimeFill: 'Current fill',
     compactLastCompaction: 'Last compaction',
+    compactConfirmOk: 'Confirm',
+    compactConfirmCancel: 'Cancel',
+    compactMeterUnknown: 'No meter',
+    compactEffectivePin: 'pin',
+    compactWindowMin: 'windowMin',
   },
 }
 

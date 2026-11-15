@@ -419,6 +419,12 @@ ${NANO_STYLES}
 .np-fx-artifacts a { color: var(--dsw-alias-link); font-size: var(--np-font-size-xs); }
 .np-fx-composer { flex: none; }
 .np-fx-model-settings { max-height: 320px; overflow: auto; }
+/* .np-dlg-body label 是纵向 flex，会把勾选框甩到文字下面并居中。这一行强制横向。 */
+.np-dlg-body label.np-fx-model-row { display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; align-items: center !important; justify-content: space-between !important; width: 100%; min-height: 44px; gap: 12px; padding: 8px 0; border-top: 1px solid var(--dsw-alias-border-l2); cursor: pointer; }
+.np-dlg-body label.np-fx-model-row .np-field-text { flex: 1 1 auto; min-width: 0; align-items: flex-start; }
+.np-dlg-body label.np-fx-model-row input[type="checkbox"] { width: 16px; height: 16px; flex: none; margin: 0; }
+.np-fx-credit-links { display: flex; gap: 12px; flex: none; }
+.np-fx-credit-links a { color: var(--dsw-alias-link); }
 .np-dlg-body .np-switch:disabled { opacity: .72; cursor: default; }
 .np-changed { animation: npChanged 2.4s; }
 @keyframes npChanged { 0% { background: var(--dsw-alias-interactive-bg-active); } 100% { background: transparent; } }
@@ -965,20 +971,20 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     <section class="np-fx-view" hidden>
       <div class="np-fx-shell">
         <header class="np-fx-head">
-          <button type="button" class="np-fx-head-title" data-action="fx-nav-toggle" aria-expanded="false"><span class="np-fx-head-ico" aria-hidden="true">${FX_ICON}</span><span data-i18n="fxViewTitle">fx 处理</span><span class="np-fx-nav-state" aria-hidden="true">${PANEL_ICON(false)}</span></button>
+          <button type="button" class="np-fx-head-title" data-action="fx-nav-toggle" aria-expanded="false"><span class="np-fx-head-ico" aria-hidden="true">${FX_ICON}</span><span data-i18n="fxViewTitle">单次文本处理</span><span class="np-fx-nav-state" aria-hidden="true">${PANEL_ICON(false)}</span></button>
           <span class="np-fx-head-sub" data-fx-scope></span>
           <span class="np-fx-head-space"></span>
         </header>
         <div class="np-fx-thread" role="log" aria-live="polite">
           <div class="np-fx-empty">
             <div class="np-fx-empty-icon" aria-hidden="true">${FX_ICON}</div>
-            <div class="np-fx-empty-title" data-i18n="fxEmptyTitle">开始一次 fx 运行</div>
+            <div class="np-fx-empty-title" data-i18n="fxEmptyTitle">开始一次处理</div>
             <p class="np-fx-empty-desc" data-i18n="fxEmptyDesc">读语料、写 draft/knowledge——一次完成。</p>
             <div class="np-fx-suggests"></div>
           </div>
         </div>
         <div class="np-fx-composer">
-          <textarea class="np-fx-input" rows="2" placeholder="要 fx 做什么——可触发 note_* 工具写 draft/knowledge" data-i18n="fxInputPh" data-i18n-attr="placeholder"></textarea>
+          <textarea class="np-fx-input" rows="2" placeholder="要做什么——可触发 note_* 工具写 draft/knowledge" data-i18n="fxInputPh" data-i18n-attr="placeholder"></textarea>
           <div class="np-fx-chips" hidden></div>
           <div class="np-fx-bar">
             <button type="button" class="np-fx-chip np-fx-doc" data-on="true"><span class="np-fx-chip-ico" aria-hidden="true">${FX_DOC}</span><span class="np-fx-doc-name"></span></button>
@@ -991,8 +997,8 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
           <div class="np-fx-pop" hidden></div>
         </div>
       </div>
-      <nav class="np-fx-nav" data-state="closed" aria-label="fx 管理">
-        <div class="np-fx-nav-head"><b data-i18n="fxManage">fx 管理</b><button type="button" class="np-fx-nav-close" data-action="fx-nav-close" data-i18n="close" data-i18n-mode="title" aria-label="关闭">${FX_CLOSE}</button></div>
+      <nav class="np-fx-nav" data-state="closed" aria-label="管理">
+        <div class="np-fx-nav-head"><b data-i18n="fxManage">管理</b><button type="button" class="np-fx-nav-close" data-action="fx-nav-close" data-i18n="close" data-i18n-mode="title" aria-label="关闭">${FX_CLOSE}</button></div>
         <div class="np-fx-nav-list">
           <section class="np-fx-nav-card" data-fx-nav-card="pipes">
             <button type="button" class="np-fx-nav-card-head" data-action="fx-nav-card" data-card="pipes" data-open="true"><span class="np-fx-nav-card-icon" aria-hidden="true">${dshIcon('flat-list-outline')}</span><span data-i18n="fxPipes">管线</span><span class="np-fx-nav-card-caret" aria-hidden="true">${FX_CHEVRON}</span></button>
@@ -3082,6 +3088,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       </section>
       <section class="np-section" data-tab="fx">
         <div class="np-field"><div class="np-field-text"><span class="np-field-name">${escapeHtml(copy.fxRuntime)}</span><span class="np-field-desc">${escapeHtml(copy.fxRuntimeHint)}</span></div><button type="button" class="np-switch" disabled aria-disabled="true" style="--np-switch-n:2;--np-switch-i:0"><span class="np-switch-thumb">wasm</span><span class="np-switch-label">wasm</span><span class="np-switch-label">sandbox</span></button></div>
+        <div class="np-field"><div class="np-field-text"><span class="np-field-name">${escapeHtml(copy.fxCredit)}</span><span class="np-field-desc">${escapeHtml(copy.fxCreditHint)}</span></div><span class="np-fx-credit-links"><a href="https://github.com/vercel-labs/fx" target="_blank" rel="noreferrer noopener">${escapeHtml(copy.fxRepo)}</a><a href="https://www.apache.org/licenses/LICENSE-2.0" target="_blank" rel="noreferrer noopener">${escapeHtml(copy.fxLicenseLink)}</a></span></div>
         <div class="np-field"><div class="np-field-text"><span class="np-field-name">${escapeHtml(copy.fxModelHeading)}</span><span class="np-field-desc">${escapeHtml(copy.fxModelHint)}</span></div></div>
         <div class="np-fx-model-settings"><span class="np-field-desc">${escapeHtml(copy.fxModelLoading)}</span></div>
         <p class="np-setting-note np-fx-model-note" hidden>${escapeHtml(copy.fxModelNeedOne)}</p>
@@ -3214,7 +3221,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
             ? models.map(m => {
                 const key = m.key ?? m.id ?? m.name ?? m
                 const info = fxModelInfo(m)
-                return `<label class="np-field"><span class="np-field-text"><span class="np-field-name">${escapeHtml(info.model)}</span><span class="np-field-desc">${escapeHtml(info.provider)} · ${escapeHtml(info.ctx)}</span></span><input type="checkbox" data-fx-model-pick value="${escapeHtml(key)}"${selected.has(key) ? ' checked' : ''}></label>`
+                return `<label class="np-fx-model-row"><span class="np-field-text"><span class="np-field-name">${escapeHtml(info.model)}</span><span class="np-field-desc">${escapeHtml(info.provider)} · ${escapeHtml(info.ctx)}</span></span><input type="checkbox" data-fx-model-pick value="${escapeHtml(key)}"${selected.has(key) ? ' checked' : ''}></label>`
               }).join('')
             : `<span class="np-field-desc">${escapeHtml(copy.fxModelNone)}</span>`
         }).catch(() => { fxModelHost.innerHTML = `<span class="np-field-desc">${escapeHtml(copy.fxModelNone)}</span>` })

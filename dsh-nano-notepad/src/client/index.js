@@ -87,8 +87,21 @@ export function apply(ctx, config = {}) {
       mounted.setShortcut(label(), shortcutKeys())
       ready(mounted)
       const stop = subscribeShortcut(() => mounted.setShortcut(label(), shortcutKeys()))
+      /* CF1115 / P2-03: project ONLY the minimal import operation as the
+         `nanoNotepad` cordis service. It resolves the {id,name} receipt (never
+         the raw node / DB / debug handles). Provided while mounted, revoked on
+         unmount — a late/again mount re-provides a live handle. */
+      const disposeNotepad = typeof ctx.provide === 'function'
+        ? ctx.provide('nanoNotepad', {
+            import: async (name, content, meta) => {
+              const node = await mounted.controller.import(name, content, meta)
+              return { id: node.id, name: node.name }
+            },
+          })
+        : undefined
       return () => {
         stop()
+        disposeNotepad?.()
         mounted.stopTheme()
         ready(undefined)
         element.replaceChildren()

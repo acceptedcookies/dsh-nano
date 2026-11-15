@@ -2271,7 +2271,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     const name = nextKindUntitled(siblings, kind)
     const node = await createNode(state.db, 'file', destination.parentId, name, destination.workspaceId, { allowKindSuffix: true })
     state.nodes.push(node)
-    await window.__nanoNotepad.fx.corpus().setCat({ id: node.id, cat: kind })
+    await controller.fx.corpus().setCat({ id: node.id, cat: kind })
     const snap = await loadSnapshot(state.db); state.nodes = snap.nodes
     state.view = 'source'
     openFile(node.id)
@@ -2504,7 +2504,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     if (fxModelsLoaded || fxModelsLoading) return
     fxModelsLoading = true
     try {
-      const models = await window.__nanoNotepad.fx.models()
+      const models = await controller.fx.models()
       fxModelsAll = Array.isArray(models) ? models : []
       fxModelsLoaded = true
       fxPaintModel()
@@ -2611,7 +2611,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     if (state.fx.refs.length) parts.push(`参考语料（请先用 note_read 工具读取）：\n${state.fx.refs.map(r => `- ${r.cat}/${r.name}（id: ${r.id}）`).join('\n')}\n`)
     parts.push(`任务：${task || '总结当前内容'}`)
     try {
-      await window.__nanoNotepad.fx.runWithTools(parts.join('\n'), {
+      await controller.fx.runWithTools(parts.join('\n'), {
         model: state.fx.model || undefined,
         onEvent: e => {
           if (e.type === 'text_delta') {
@@ -2657,7 +2657,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
   const fxNavRefreshPipes = async () => {
     const copy = fxCopy()
     try {
-      const defs = await window.__nanoNotepad.fx.pipelines.list()
+      const defs = await controller.fx.pipelines.list()
       fxNavBodyPipes.innerHTML = (defs.length
         ? defs.map(d => `<div class="np-fx-nav-item"><span class="np-fx-nav-item-name">${escapeHtml(d.name ?? d.id)}</span><button type="button" data-fx-nav-run="${d.id}">${escapeHtml(copy.fxRunBtn ?? '运行')}</button><button type="button" data-fx-nav-del="${d.id}" aria-label="${escapeHtml(copy.fxRemove ?? '删除')}">${FX_CLOSE}</button></div>`).join('')
         : `<div class="np-fx-nav-empty">${escapeHtml(copy.fxPipeEmpty ?? '无管线定义')}</div>`) + `<button type="button" class="np-fx-nav-add" data-fx-nav-new>${escapeHtml(copy.fxPipeNew ?? '新建管线')}</button>`
@@ -2666,7 +2666,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
   const fxNavRefreshRecords = async () => {
     const copy = fxCopy()
     try {
-      const sq = await window.__nanoNotepad.fx.sqlite()
+      const sq = await controller.fx.sqlite()
       await sq.openPipeline()
       const rows = await sq.__probe('SELECT id,name,status,started_at,finished_at FROM runs ORDER BY started_at DESC LIMIT 30')
       const list = rows?.result?.resultRows ?? []
@@ -2723,7 +2723,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
         const fresh = el.querySelector('.np-fx-pipe-new')
         const refresh = async () => {
           try {
-            const defs = await window.__nanoNotepad.fx.pipelines.list()
+            const defs = await controller.fx.pipelines.list()
             list.innerHTML = defs.length
               ? defs.map(d => `<li><b>${escapeHtml(d.name ?? d.id)}</b> <button type="button" class="np-fx-pipe-run" data-id="${d.id}">${escapeHtml(copy.fxRunBtn ?? '运行')}</button> <button type="button" class="np-fx-pipe-del" data-id="${d.id}">${FX_CLOSE}</button></li>`).join('')
               : `<li class="np-fx-pipe-none">${escapeHtml(copy.fxPipeEmpty ?? '无管线定义')}</li>`
@@ -2735,7 +2735,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
           const name = el.querySelector('.np-fx-pipe-name').value.trim()
           try {
             const spec = JSON.parse(el.querySelector('.np-fx-pipe-spec').value)
-            await window.__nanoNotepad.fx.pipelines.define(name || spec.name || 'pipeline', spec)
+            await controller.fx.pipelines.define(name || spec.name || 'pipeline', spec)
             fresh.hidden = true
             out.textContent = `已存 ${name || spec.name}`
             void refresh()
@@ -2745,13 +2745,13 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
         list.onclick = async ev => {
           const runBtn = ev.target.closest('.np-fx-pipe-run')
           const delBtn = ev.target.closest('.np-fx-pipe-del')
-          if (delBtn) { await window.__nanoNotepad.fx.pipelines.remove(delBtn.dataset.id); void refresh(); if (state.fx.navOpen) void fxNavRefreshPipes(); return }
+          if (delBtn) { await controller.fx.pipelines.remove(delBtn.dataset.id); void refresh(); if (state.fx.navOpen) void fxNavRefreshPipes(); return }
           if (!runBtn) return
-          const def = await window.__nanoNotepad.fx.pipelines.get(runBtn.dataset.id)
+          const def = await controller.fx.pipelines.get(runBtn.dataset.id)
           if (!def?.spec) { out.textContent = 'def missing'; return }
           out.textContent = `运行 ${def.name}…`
           try {
-            const res = await window.__nanoNotepad.fx.runPipeline(def.spec, { model: state.fx.model || undefined, nodeId: state.ui.currentId, defId: def.id })
+            const res = await controller.fx.runPipeline(def.spec, { model: state.fx.model || undefined, nodeId: state.ui.currentId, defId: def.id })
             out.textContent = `${res.status} — ${res.stages.map(s => `${s.step}${s.ok ? '✓' : '✗'}`).join(' ')}`
           } catch (e) { out.textContent = `ERR: ${e?.message ?? e}` }
         }
@@ -2770,7 +2770,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
         const host = el.querySelector('.np-fx-hist')
         void (async () => {
           try {
-            const sq = await window.__nanoNotepad.fx.sqlite()
+            const sq = await controller.fx.sqlite()
             await sq.openPipeline()
             const rows = await sq.__probe('SELECT id,name,status,started_at,finished_at FROM runs ORDER BY started_at DESC LIMIT 50')
             const list = rows?.result?.resultRows ?? []
@@ -2851,13 +2851,13 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     const delBtn = event.target instanceof HTMLElement ? event.target.closest('[data-fx-nav-del]') : null
     const addBtn = event.target instanceof HTMLElement ? event.target.closest('[data-fx-nav-new]') : null
     if (addBtn) { openFxPipelines(); return }
-    if (delBtn) { await window.__nanoNotepad.fx.pipelines.remove(delBtn.dataset.fxNavDel); void fxNavRefreshPipes(); return }
+    if (delBtn) { await controller.fx.pipelines.remove(delBtn.dataset.fxNavDel); void fxNavRefreshPipes(); return }
     if (!runBtn) return
-    const def = await window.__nanoNotepad.fx.pipelines.get(runBtn.dataset.fxNavRun)
+    const def = await controller.fx.pipelines.get(runBtn.dataset.fxNavRun)
     if (!def?.spec) return
     fxNavBodyPipes.querySelector('.np-fx-nav-empty')?.remove()
     try {
-      const res = await window.__nanoNotepad.fx.runPipeline(def.spec, { model: state.fx.model || undefined, nodeId: state.ui.currentId, defId: def.id })
+      const res = await controller.fx.runPipeline(def.spec, { model: state.fx.model || undefined, nodeId: state.ui.currentId, defId: def.id })
       const line = document.createElement('div'); line.className = 'np-fx-nav-empty'
       line.textContent = `${res.status} — ${res.stages.map(st => `${st.step}${st.ok ? '✓' : '✗'}`).join(' ')}`
       fxNavBodyPipes.appendChild(line)
@@ -3219,7 +3219,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       const fxModelHost = el.querySelector('.np-fx-model-settings')
       if (fxModelHost) {
         const selected = new Set(state.settings.fxModels ?? [])
-        void window.__nanoNotepad.fx.models().then(models => {
+        void controller.fx.models().then(models => {
           if (!fxModelHost.isConnected) return
           fxModelHost.innerHTML = Array.isArray(models) && models.length
             ? models.map(m => {
@@ -3713,7 +3713,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
 
   async function assignKind(id, cat) {
     if (!state.db) return
-    await window.__nanoNotepad.fx.corpus().setCat({ id, cat })
+    await controller.fx.corpus().setCat({ id, cat })
     const snapshot = await loadSnapshot(state.db)
     state.nodes = snapshot.nodes
     state.renderCache.clear()
@@ -4497,12 +4497,27 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
   entry.addEventListener('pointerenter', () => { tip.hidden = false })
   entry.addEventListener('pointerleave', () => { tip.hidden = true })
 
-  /* Cross-plugin import surface: other bundles (explorer-extra) hand a file over as a
-     * fresh top-level note without touching the source on disk. The import lands as a
-     * draft, so edits stay local until "save as" picks a real target. */
+  /* Private controller (CF1115 / P2-03): the panel holds the DB + operations.
+     * The host half exposes ONLY the minimal `import` through the cordis
+     * service `nanoNotepad` (index.js → ctx.provide); every other handle
+     * (fx debug, settings, cloud, open/close) is internal to this panel and no
+     * longer a window global. Import keeps returning the node to internal
+     * callers; the service wrapper narrows it to the {id,name} receipt. */
   const dbReady = new Promise((resolve, reject) => { state.dbReadyResolve = resolve; state.dbReadyReject = reject })
-  window.__nanoNotepad = {
+  const controller = {
     async import(name, content, meta = {}) {
+      /* F16.1 contract: (name:string, content:string, meta?{sourcePath?:string}).
+         Reject illegal types / extra meta keys BEFORE any write. */
+      if (typeof name !== 'string' || typeof content !== 'string') {
+        throw new TypeError('import requires (name:string, content:string)')
+      }
+      if (meta !== undefined && meta !== null) {
+        const keys = typeof meta === 'object' && !Array.isArray(meta) ? Object.keys(meta) : null
+        if (keys === null || keys.some(k => k !== 'sourcePath')
+            || (meta.sourcePath !== undefined && typeof meta.sourcePath !== 'string')) {
+          throw new TypeError('import meta only permits optional string sourcePath')
+        }
+      }
       await dbReady
       const raw = String(name || 'note').trim() || 'note'
       const workspaceNodes = state.nodes.filter(node => (node.workspaceId ?? null) === activeWorkspace().id)
@@ -4565,8 +4580,8 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
         render()
       },
       run: (text, opts = {}) => import('./fx-runtime.js').then(async m => {
-        const res = await m.runOneShot(text, { tools: opts.tools ?? undefined, toolContext: { corpus: window.__nanoNotepad.fx.corpus() }, ...opts })
-        await window.__nanoNotepad.fx._refreshNodes()
+        const res = await m.runOneShot(text, { tools: opts.tools ?? undefined, toolContext: { corpus: controller.fx.corpus() }, ...opts })
+        await controller.fx._refreshNodes()
         return res
       }),
       runWithTools: (text, opts = {}) => import('./fx-runtime.js').then(async m => {
@@ -4574,18 +4589,18 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
         /* L2：run 留痕——beginRun/checkpoint/finishRun 写 sqlite runs 表，
            使 run 卡「历史」面板有据可查。casGate fail 时本地 sqlite 仍允许写。 */
         const runId = `run-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
-        const sq = await window.__nanoNotepad.fx.sqlite()
+        const sq = await controller.fx.sqlite()
         let res = null; let err = null
         try {
           try { await sq.openPipeline(); await sq.beginRun(runId, 'fx-run', { prompt: String(text).slice(0, 200) }) } catch {}
-          res = await perf.span('fx-turn', () => m.runOneShot(text, { tools: buildNoteTools({ corpus: window.__nanoNotepad.fx.corpus() }), toolContext: { corpus: window.__nanoNotepad.fx.corpus() }, ...opts }))
+          res = await perf.span('fx-turn', () => m.runOneShot(text, { tools: buildNoteTools({ corpus: controller.fx.corpus() }), toolContext: { corpus: controller.fx.corpus() }, ...opts }))
           try { await sq.checkpoint(runId, 'done', { toolCalls: res?.toolCalls?.length ?? 0 }) } catch {}
         } catch (e) { err = e } finally {
           try { await sq.finishRun(runId, err ? 'error' : 'done') } catch {}
         }
         /* 管线编排调用（opts.skipRefresh）跳过 per-stage 全量刷新——链尾统一一次，
            避免多 stage 每步 IDB 扫描+树渲染的 O(n×stages) 开销。 */
-        if (!opts.skipRefresh) await window.__nanoNotepad.fx._refreshNodes()
+        if (!opts.skipRefresh) await controller.fx._refreshNodes()
         if (err) throw err
         return res
       }),
@@ -4600,16 +4615,16 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       runPipeline: (spec, opts = {}) => import('./fx-pipeline.js').then(async m => {
         const res = await perf.span('fx-pipeline', () => m.runPipeline(spec, {
           idb: state.db,
-          corpus: () => window.__nanoNotepad.fx.corpus(),
-          sqlite: () => window.__nanoNotepad.fx.sqlite(),
-          runWithTools: (t, o) => window.__nanoNotepad.fx.runWithTools(t, o),
+          corpus: () => controller.fx.corpus(),
+          sqlite: () => controller.fx.sqlite(),
+          runWithTools: (t, o) => controller.fx.runWithTools(t, o),
           perf,
           model: opts.model,
           node: opts.nodeId ? state.nodes.find(n => n.id === opts.nodeId) : current(),
           vars: opts.vars ?? {},
           defId: spec.defId ?? null,
         }))
-        await window.__nanoNotepad.fx._refreshNodes()
+        await controller.fx._refreshNodes()
         return res
       }),
       pipelines: {
@@ -4619,7 +4634,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
         remove: (id) => import('./fx-sqlite.js').then(m => m.deletePipeline(id)),
       },
       __setCasGateForTest: (pass) => import('./fx-sqlite.js').then(m => m.__setCasGateForTest(pass)),
-      setCat: (id, cat) => window.__nanoNotepad.fx.corpus().setCat({ id, cat }),
+      setCat: (id, cat) => controller.fx.corpus().setCat({ id, cat }),
       acceptDraft: (id) => acceptDraft(state.db, id),
     },
     /** Set the syncing micro-motion ('a' | 'b' | 'c'), same path as the UI. */
@@ -4670,7 +4685,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       })
       const out = await res.json().catch(() => ({}))
       if (!res.ok || out.ok !== true) throw new Error(out.message || out.reason || 'fetch failed')
-      const node = await window.__nanoNotepad.import(out.name, out.content, { sourcePath: value })
+      const node = await controller.import(out.name, out.content, { sourcePath: value })
       if (out.meta) await updateNodeMeta(state.db, node.id, { mp: out.meta }).catch(() => {})
       input.value = ''
       hint.dataset.state = 'idle'
@@ -4697,7 +4712,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     state.ui.workspaceChoice = workspaceId ?? 'unassigned'
     restoreWorkspaceFile()
     state.ui.open = true
-    await window.__nanoNotepad.import(out.name, out.content, { sourcePath: path })
+    await controller.import(out.name, out.content, { sourcePath: path })
     button.textContent = text().copiedToNotepad
   }
 
@@ -4811,5 +4826,8 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     state.dbReadyResolve?.()
   }).catch(error => { state.dbReadyReject?.(error); api.failed(error) })
   render()
+  /* The host index projects ONLY controller.import as the `nanoNotepad` cordis
+     service; everything else stays a private panel handle. */
+  api.controller = controller
   return api
 }

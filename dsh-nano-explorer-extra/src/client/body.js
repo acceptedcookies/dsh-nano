@@ -952,7 +952,7 @@ export function ExplorerBody(props) {
         run: () => { void copyPath(menu.path, relativeTo(cwd ?? '', menu.path)) } },
       /* Seed a notepad note from this file's content; the note is a draft, so the
          source on disk stays untouched until the user saves elsewhere. */
-      menu.kind !== 'file' || window.__nanoNotepad === undefined ? null : {
+      menu.kind !== 'file' || nxe.notepadImport?.() === undefined ? null : {
         id: 'open-in-notepad', label: copy.openInNotepad,
         icon: React.createElement(primitives.IconEditOutlineRegular, { width: 14, height: 14 }),
         run: async () => {
@@ -963,7 +963,10 @@ export function ExplorerBody(props) {
              Windows drive form `C:/…`, where a bare `startsWith('/')` check would instead
              prefix the root a second time and the note lost its source folder. */
           const absolute = absoluteOf(cwd ?? '', menu.path)
-          await window.__nanoNotepad.import(menu.name, read.content, { sourcePath: absolute })
+          // Re-read lazily (F16.6): the service may have been mounted mid-click.
+          const importNote = nxe.notepadImport?.()
+          if (importNote === undefined) { setLinkNote(copy.openInNotepadFail); return }
+          await importNote(menu.name, read.content, { sourcePath: absolute })
         } },
       /* A changed file opens in the native diff tab: the experimental forge panel's local-changes
          view draws it with the shell's own FileDiff — hunks, line numbers, two columns, the real

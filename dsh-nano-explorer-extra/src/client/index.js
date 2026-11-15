@@ -90,6 +90,12 @@ export function apply(ctx) {
       ctx.sidebarRight.openTab('terminal', { sessionId })
       return 'terminal'
     },
+    /** The notepad plugin, when mounted, publishes a minimal `nanoNotepad`
+       * cordis service { import } (CF1115 / P2-03). `ctx.get` reads lazily so
+       * loading order never matters and an absent/unmounted service simply
+       * hides the menu row — re-read after the file content arrives so a mount
+       * that happened mid-click is honoured. */
+    notepadImport: () => ctx.get('nanoNotepad')?.import,
     /** The settings card writes one viewing switch through the same store the page reads. */
     setPref: (key, value) => store.set({ ...store.get(), [key]: value }),
   })

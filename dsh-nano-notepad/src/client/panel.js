@@ -2821,7 +2821,8 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       { id: 'note_search', label: `note_search — ${copy.fxToolsSearch ?? '按关键词搜索语料'}` },
     ]
     closeMenu?.()
-    const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), items, width: 320, maxHeight: 140, theme: resolvedTheme(), z: NP_PORTAL_Z, direction: 'up' })
+    /* 四条说明放得下。加上 maxHeight 会强制 overflow，滚动条把菜单右侧圆角切成直角。 */
+    const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), items, width: 320, theme: resolvedTheme(), z: NP_PORTAL_Z, direction: 'up' })
     closeMenu = () => raw.close()
   }
   /* 点垂直栏以外的 fx 区域收起边栏；标题按钮自己 toggle，不在这里抢。 */

@@ -3693,7 +3693,17 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       })),
       { id: 'kind-clear', label: copy.kindClear, run: () => void assignKind(id, null) },
     ]
-    const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), width: 160, theme: resolvedTheme(), z: NP_PORTAL_Z, items })
+    /* ⋯ 只在行悬停时显示。上一级菜单打开后鼠标离开该行，按钮变成 display:none，
+       getBoundingClientRect 全为 0，菜单就被放到视口左上角。改锚到仍在布局里的文件行右端。 */
+    let rect = anchor.getBoundingClientRect()
+    if ((rect.width === 0 || rect.height === 0) && anchor instanceof Element) {
+      const row = anchor.closest('.np-node')
+      if (row) {
+        const box = row.getBoundingClientRect()
+        rect = { left: box.right - 28, top: box.top, right: box.right, bottom: box.bottom, width: 28, height: box.height }
+      }
+    }
+    const raw = openNanoMenu({ anchor: rect, width: 160, theme: resolvedTheme(), z: NP_PORTAL_Z, items })
     closeMenu = () => raw.close()
   }
 

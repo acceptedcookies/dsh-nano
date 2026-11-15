@@ -161,20 +161,20 @@
 
 ### Phase 5 — P4 · 全范围结算
 
-- [ ] `P5-01` — 八包逐包覆盖证据 + 36 逐包 + 4 横向观察逐项结算 — `deferred`
+- [x] `P5-01` — 八包逐包覆盖证据 + 36 逐包 + 4 横向观察逐项结算 — `partial`
   - **落点**：`contract-and-facade-1115-eval.md`（E1115-* 台账）；QNA §7.3
   - **完成判据**：逐观察号给覆盖/证据/旧源/离仓产物，不按数量销账、不静默缩范围、不另造替代账单
   - **验证映射**：`CF1115-T20` · **依赖**：`P1..P4`
-  - **执行状态**：`deferred` · **执行时间**：`2026-11-15` · **证据**：`-` · **因**：依赖 P1–P4 全部落地后逐观察号结算；P3-04/P4-01/02/04 deferred 在先，36+4 台账无法封口。
+  - **执行状态**：`partial` · **执行时间**：`2026-11-15` · **证据**：`1555f0b` — 40 项 E1115 逐号结算表进 closure §6.1（7 covered/17 partial/7 not-covered/9 kept-as-debt，逐项锚 commit 或 deferred P-项，无 covered 夸大）。留：结算表如实保留 deferred/not-covered 观察号（P1-P4 未全落地），`CF1115-T20` 全硬闸未达。
 - [x] `P5-02` — 旧源 / 离仓产物 / 扫描覆盖对账 + 五类退役清单 — `partial`
   - **落点**：`scripts/{check-feature-contract,check-clean-lib,route-scan}.mjs`；`security/route-inventory.md`（仅回溯）
   - **完成判据**：派生表/清单/说明同源、五类落点零残留、扫描覆盖遗漏修正
   - **验证映射**：`CF1115-T20` · **依赖**：`P5-01`
   - **执行状态**：`partial` · **执行时间**：`2026-11-15` · **证据**：`68210f6` — feature-contract 8 插件（+DNCS/+DNMSC ui+dataLocations）、clean-lib 8 插件 + 递归 lib/（58→72 artifacts）、pack-manifest 基线重建。留：route-scan DNN/DNT/DNEE 读生成物 `lib/bindings.js`（投影自证，失独立 source-scan）—— `CF1115-T20` 未达。
-- [ ] `P5-03` — 五态如实归类 + 债务按原观察号 handoff — `deferred`
+- [x] `P5-03` — 五态如实归类 + 债务按原观察号 handoff — `partial`
   - **落点**：QNA §7.3；truth §4.6 P6
   - **完成判据**：`verified/observed-OK/partial/未观察/deferred` 如实归类；未实施/未验证债务保留原号；任一退出硬闸 `degraded/未观察` ⇒ 不标 `executed`
-  - **执行状态**：`deferred` · **执行时间**：`2026-11-15` · **证据**：`-` · **因**：依赖 P5-01 台账；任一硬闸 degraded/未观察 ⇒ 本计划整体不标 `executed`（已如实）。
+  - **执行状态**：`partial` · **执行时间**：`2026-11-15` · **证据**：closure §4.5 五态归类表（9 verified / 1 未观察 / deferred→partial 1 / deferred 5 / partial 1，债务按 E1115-* 原号 handoff）；closure §2 五态快照刷新（clean-lib 72、dsh-interface 43、Sandbox 行 partial）。留：硬闸 Test-ID 未全 verified ⇒ 本计划仍 `partial` 非 `executed`（如实）。
   - **验证映射**：`CF1115-T21` · **依赖**：`P5-01`/`P5-02`
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
 
@@ -188,9 +188,9 @@
 
 ## 5. 当前状态与交接
 
-- **当前节点 / 已完成（2026-11-15 三轮）**：`P1-01..P1-05`、`P2-01..P2-04`、`P3-01`、`P3-02`、`P3-03`(partial)、`P3-04`(partial)、`P3-05`(partial)、`P4-03`(partial)、`P5-02`(partial) — 16 ticked（5 partial）
-- **下一轮（deferred，待 [业主] 裁决 / 宿主授权）**：`P4-01`（离线无 cordis，真实宿主域 Service/Provider 核验）、`P4-02`（依赖 P4-01+远端 carrier）、`P4-04`（`/s3/config` 收窄与 handshake 冲突待裁决+S3 远端授权）、`P5-01`/`P5-03`（依赖 P1–P4 结算）
-- **当前阻塞**：`无硬阻塞`；P3-04 仅余 live 引擎实连核验；远端/S3/cordis 宿主域核验需授权
+- **当前节点 / 已完成（2026-11-15 三轮）**：`P1-01..P1-05`、`P2-01..P2-04`、`P3-01`、`P3-02`、`P3-03`(partial)、`P3-04`(partial)、`P3-05`(partial)、`P4-03`(partial)、`P5-01`(partial)、`P5-02`(partial)、`P5-03`(partial) — 18 ticked（8 partial）
+- **下一轮（deferred，待 [业主] 裁决 / 宿主授权）**：`P4-01`（离线无 cordis，真实宿主域 Service/Provider 核验）、`P4-02`（依赖 P4-01+远端 carrier）、`P4-04`（`/s3/config` 收窄与 handshake 冲突待裁决+S3 远端授权）
+- **当前阻塞**：`无硬阻塞`；P3-04 仅余 live 引擎实连核验；远端/S3/cordis 宿主域核验需授权。全部 21 项均有执行状态（18 ticked 含 8 partial + 3 deferred）
 - **待 owner / 外部决定**：`implementation grant 已由本 directive 框架内授予；容器/远端/S3 核验 deferred 至另立授权。mcp-bridge 双载体 canonical 已实证收敛（DNLS 唯一载体，e1b2e91）。P4-04 /s3/config 收窄、3 个 facade 签名偏离、DNT lane enum 收窄——均列 P-EXEC 待裁决`
 - **最终交接目标**：`closure + 工作日志回填 + 3 路审查`
 

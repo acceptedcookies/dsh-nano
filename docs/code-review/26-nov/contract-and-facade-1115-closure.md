@@ -44,7 +44,7 @@
 
 ## 2. 五态如实归类（按 `E1115-*` / 原观察号 handoff）
 
-> 计数为快照口径（route-scan 85 routes / clean-lib 58 artifacts / dsh-interface 37 tests / notepad 71 / DNMS 7 / DNEE 5 / DNT smoke 4 + wasm 97）。
+> 计数为快照口径（route-scan 85 routes / clean-lib 72 artifacts / dsh-interface 43 tests / notepad 71 / DNMS 7 / DNEE 5 / DNMSC 23 / DNLS 66 / DNK 56 / DNT smoke 4 + wasm 97）。
 
 | 观察面 | 状态 | 说明 / 债务号 |
 |--------|------|---------------|
@@ -54,7 +54,7 @@
 | `nanoNotepad` Cordis 服务（去 window 全局） | `verified` | `ctx.provide`/`ctx.get`；DNEE 消费 |
 | MCP 控制面归口（DNT） | `observed-OK-at-closure` | toolset/decoder 单测过；远端引擎区间未真实握手（无授权端点） |
 | Terminal 两提供面 / DNLS 八工具 / v1-v2 门控 | `partial` | schema 广告已对账；DNLS `terminal-driver` 19 工具分发、断连至多一次重跑语义未全验 |
-| Sandbox 二十工具真实业务 + bridge（DNLS/DNK） | `deferred` | 待续轮；容器内 script 是否引用 DNK `runtime/mcp-bridge.mjs` 需容器侧核验 |
+| Sandbox 二十工具真实业务 + bridge（DNLS/DNK） | `partial` | `68210f6` TOOL_DEFS 单源表+buildOwners 真域（profiles/instances/state/ports/bridge 实分发）；留：CDP 深工具近似、bridge CDP-only 收窄、host↔bridge 名/形合同（DNLS-02/03/06） |
 | DNK 容器时代双载体/bridge 副本退役 | `partial` | `e1b2e91`+`187d1ff`：`runtime/` 全树+死函数零残留、mcp-bridge 唯一载体 = DNLS（test/build 同读）、容器期 errorId/文档承诺全改指沙箱宿主。DNK 真实消费 live 链路（无引擎实连）未验 |
 | host adapter / DNCS `NATIVE_*` / DNMSC R-16 | `deferred` | Phase-4 域迁移，超本会话预算 |
 | DNEE native 资源 / DNN fx·S3·RPC 边界收窄 | `deferred` | `/s3/config` 收窄与端点切换握手冲突，待 AP 原文裁决 |
@@ -200,6 +200,30 @@
 ## 4. 未收口原因（诚实）
 
 Phase-4/5 的 host 适配 + 全范围结算与若干公开退役面（DNK 容器时代资产已在三轮删除，`/s3/config` 收窄仍待定）超出单轮授权域；离线 workspace 无 cordis 使官方-Service 直接引用核验不可在本地闭合；远端/S3/cordis 宿主域核验需另立授权。按 §10.4 NOT-成功识别，本文保持 `partial`——**不标 `executed`**。
+
+## 4.5 P5-03：五态归类 + 债务 handoff（2026-11-15 三轮）
+
+按 `verified/observed-OK-at-closure/partial/未观察/deferred` 五态，对全部收口目标如实归类；债务保留原 `E1115-*` 观察号交后继 charter，不在本阶段回填、不自动 defer。
+
+| 收口目标 | 五态 | 依据 |
+|----------|------|------|
+| dsh-interface 归口包（三出口+4 facade+43 测） | `verified` | 包骨架+契约全绿，file:devDep+esbuild 打包 |
+| Web 路由 channel×match 收敛（DNN/DNT/DNEE registrar） | `verified` | 单实现+幂等+dispose；`createWebRegistrar` 统一 |
+| JSON producer↔consumer codec（DNEE/DNMS/DNN `JsonOutcome`） | `verified` | 单一 `createJsonClient`/`jsonClient`，producer 形归一 |
+| `nanoNotepad` Cordis 服务（去 window root） | `verified` | `ctx.provide`/`ctx.get`，`window.__nanoNotepad` 0 hit |
+| DNCS feature-contract/clean-lib 覆盖（E1115-DNCS-04） | `verified` | PLUGINS 8 包、DNCS 12 routes+ui+dataLocations 全入台账 |
+| DNLS TOOL_DEFS 单源表 + buildOwners 真域（E1115-DNLS-01） | `verified` | 每工具 schema+owner，`/mcp` await 分发，66/66 |
+| DNT audit writer 接线（E1115-DNT-05） | `verified` | `appendFileSync` 落盘，`term.audit` 可回读 |
+| DNT route-guard fork→共享 devDep（E1115-DNT-01） | `verified` | 私有 fork 删，build 烘焙共享 guard |
+| DNK `runtime/`+container-engine 退役（E1115-DNK-03/04） | `verified` | `runtime/` 删、files 清、死函数零残留、mcp-bridge 唯一载体=DNLS |
+| DNK 真实消费 live 链路（引擎实连） | `未观察` | 离线无引擎/容器；`e1b2e91`+`187d1ff` 已改指 DNLS 提供面 |
+| DNLS `/mcp` CDP 深工具 + host↔bridge 合同 + bodyLimit + terminal-driver（E1115-DNLS-02/03/06） | `deferred` | `68210f6` 未触 bridge/readJson/terminal-driver；T16 未封口 |
+| DNMSC R-16 真实 cordis resolve + 4-preset/isolate live 互斥（E1115-DNMSC-01..03） | `deferred`→`partial` | `1af7b18` HostService 惰性解析+`setHostService` 缝落地；cordis 离线/互斥未验=P4-01 |
+| DNCS nativeOpen fake-agent 退役 + NATIVE_* 四码（E1115-DNCS-01/02/03） | `deferred` | `index.js:166-237` 未动；P4-01/P4-02 需 cordis+远端 carrier auth |
+| DNN `/s3/config`+`/rpc` 别名收窄 + fx/S3 边界（E1115-DNN-03/05、DNEE-03 open-in-app） | `deferred` | P4-04 公开 breaking 收窄，与 handshake 冲突+S3 auth 待裁 |
+| 跨包错误合同统一 + 全 kind registry + 扫描独立源（CROSS-01..04 残余） | `partial` | `dsh-interface`+`JsonOutcome`+8 包台账收敛；route-scan 读生成物、全 kind registry 未实现 |
+
+> **任一 `deferred`/`partial`/`未观察` ⇒ 本计划整体不标 `executed`**。`observed-OK-at-closure` 目标在 closure 时点观察正常；`未观察`/`deferred` 目标如实保留观察号——handoff 给 P4-01（cordis host-domain）、P4-02（native_*+carrier auth）、P4-04（/s3/config 裁决）与 T15/T16 续轮。
 
 ## 5. 交接
 

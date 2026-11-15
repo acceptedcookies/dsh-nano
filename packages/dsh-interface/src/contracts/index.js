@@ -10,3 +10,20 @@ export {
   normalizeBindings,
   bindingRecord,
 } from './webBinding.js'
+export {
+  FAILURE_KIND,
+  FAILURE_KINDS,
+  isFailureKind,
+  ok,
+  failure,
+  isFailure,
+  isOk,
+} from './jsonOutcome.js'
+export {
+  FamilyError,
+  defineFamily,
+  selectOperation,
+  projectWebTable,
+  projectOperations,
+  projectService,
+} from './FamilyDefinition.js'

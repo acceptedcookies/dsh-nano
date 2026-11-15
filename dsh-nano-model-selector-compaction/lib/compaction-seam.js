@@ -1,4 +1,4 @@
-import { Service } from "@deepseek-ai/cordis";
+import { HostService as Service } from './host-services.js';
 //#region lib/types/brand.js
 /**
 * Brand an implementation-minted compaction identity.

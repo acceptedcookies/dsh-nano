@@ -4,13 +4,13 @@ import React from 'react'
 import { NANO_STYLES } from 'dsh-nano-ui'
 import { CloudSectionGraft } from './section.js'
 import { SettingsDialog } from './settings-dialog.js'
-import { SessionDialog } from './session-dialog.js'
 import { NewSessionDialog } from './new-session-dialog.js'
+import { registerNativeWorkbench, rememberWorkbenchSession } from './native-workbench.js'
 import { CLOUD_CSS } from './styles.js'
 import { makeI18n } from './i18n.js'
 import { api } from './api.js'
 
-export const inject = ['slots', 'locale']
+export const inject = ['slots', 'locale', 'uiWorkspace', 'sessions', 'sidebarRight', 'sidebarRightTabs']
 
 const VERSION = typeof __DNCS_VERSION__ !== 'undefined' ? __DNCS_VERSION__ : '0.0.0'
 
@@ -27,6 +27,7 @@ function createStore(initial) {
 /** @param {import('@deepseek-ai/cordis').Context} ctx */
 export function apply(ctx, config = {}) {
   const t = makeI18n(() => ctx.locale.getSnapshot().active)
+  const workbenchKind = registerNativeWorkbench(ctx, t)
 
   const style = document.createElement('style')
   style.dataset.dncsStyle = 'true'
@@ -36,29 +37,38 @@ export function apply(ctx, config = {}) {
 
   const store = createStore({
     loading: true,
+    refreshing: false,
     profiles: [],
     activeId: null,
     sessions: [],
     expanded: true,
+    activeSessionId: null,
     settingsOpen: false,
     newOpen: false,
-    sessionId: null,
     error: '',
   })
 
-  const refresh = async () => {
+  const refresh = async ({ animate = false } = {}) => {
+    if (animate) store.set({ loading: true, refreshing: true, error: '' })
     try {
       const status = await api.status()
-      const list = status.activeId ? await api.sessions({ first: 50 }) : { items: [] }
       store.set({
-        loading: false,
         profiles: status.profiles ?? [],
         activeId: status.activeId ?? null,
-        sessions: list.items ?? list.sessions ?? [],
-        error: '',
       })
+      if (!status.activeId) {
+        store.set({ loading: false, refreshing: false, sessions: [] })
+        return
+      }
+      try {
+        const list = await api.sessions({ first: 50 })
+        store.set({ sessions: list.items ?? list.sessions ?? [] })
+      } catch (cause) {
+        store.set({ sessions: [], error: cause?.message ?? String(cause) })
+      }
+      store.set({ loading: false, refreshing: false, error: '' })
     } catch (cause) {
-      store.set({ loading: false, error: cause?.message ?? String(cause) })
+      store.set({ loading: false, refreshing: false, error: cause?.message ?? String(cause) })
     }
   }
 
@@ -69,11 +79,24 @@ export function apply(ctx, config = {}) {
     refresh,
     copy: () => t,
     openSettings: () => store.set({ settingsOpen: true }),
-    closeSettings: () => store.set({ settingsOpen: false }),
-    openNew: () => store.set({ newOpen: true }),
+    closeSettings: () => { store.set({ settingsOpen: false }); void refresh({ animate: true }) },
+    openNew: () => store.set(store.current.activeId ? { newOpen: true } : { settingsOpen: true }),
     closeNew: () => store.set({ newOpen: false }),
-    openSession: sessionId => store.set({ sessionId }),
-    closeSession: () => store.set({ sessionId: null }),
+    openSession: async sessionId => {
+      store.set({ opening: true, activeSessionId: sessionId, error: '' })
+      try {
+        const bridge = await api.nativeOpen(sessionId)
+        void ctx.sessions?.refresh?.()
+        rememberWorkbenchSession(bridge.local_session_id, sessionId)
+        ctx.uiWorkspace.openSession(bridge.local_session_id)
+        window.setTimeout(() => {
+          try { ctx.sidebarRight.openTabIn(bridge.local_session_id, workbenchKind) }
+          catch (cause) { console.warn('[nano-cloud-session] workbench open failed', cause) }
+        }, 500)
+      } catch (cause) {
+        store.set({ activeSessionId: null, error: cause?.message ?? String(cause) })
+      }
+    },
     toggleExpanded: () => store.set({ expanded: store.current.expanded !== true }),
   }
 
@@ -87,8 +110,7 @@ export function apply(ctx, config = {}) {
         face,
         onClose: face.closeNew,
         onCreated: id => { face.closeNew(); face.openSession(id) },
-      }) : null,
-      state.sessionId ? React.createElement(SessionDialog, { face, sessionId: state.sessionId, onClose: face.closeSession }) : null)
+      }) : null)
   }
 
   ctx.effect(() => ctx.slots.inject('shell.overlay', () => ctx.slots.register({

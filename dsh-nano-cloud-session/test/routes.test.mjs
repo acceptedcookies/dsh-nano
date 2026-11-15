@@ -51,9 +51,9 @@ function fakeRes() {
 }
 const call = (h, body) => new Promise(async (resolve) => { const res = fakeRes(); await h(fakeReq(body), res, { bodyLimit: 65536 }); resolve({ status: res.statusCode, json: JSON.parse(res.body || '{}') }) })
 
-test('all 10 routes register through guard (fail-closed table)', async () => {
+test('all 12 routes register through guard (fail-closed table)', async () => {
   const routes = await makeHandlers()
-  const expected = ['status', 'config', 'sessions', 'session', 'create', 'message', 'archive', 'unarchive', 'terminate', 'ssh']
+  const expected = ['status', 'config', 'sessions', 'session', 'create', 'message', 'archive', 'unarchive', 'terminate', 'ssh', 'catalog', 'upload']
   for (const name of expected) assert.ok(routes.get(`/nano-cloud-session/${name}`), name)
 })
 
@@ -100,4 +100,11 @@ test('sessions proxies upstream; ssh returns command', async () => {
   assert.match(ssh.json.forward, /-L <local>:127\.0\.0\.1:<remote>/)
   assert.match(ssh.json.publicKey, /^ssh-ed25519 /)
   assert.match(ssh.json.enrollHint, /SSH keys/)
+})
+
+test('session id accepts bare v3 ids and prefixes devin- for the upstream', async () => {
+  const routes = await makeHandlers()
+  const ssh = await call(routes.get('/nano-cloud-session/ssh'), { session_id: '787a9b68ddb94958880517d11a38da18' })
+  assert.equal(ssh.json.ok, true)
+  assert.match(ssh.json.shell, /devin-787a9b68ddb94958880517d11a38da18@ssh\.devin\.ai/)
 })

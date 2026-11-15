@@ -981,6 +981,28 @@
     "POST": 16384
    },
    "responseShape": "200 {ok:true,session_id,shell,forward,publicKey,enrollHint} | 422 {ok:false,reason}"
+  },
+  {
+   "plugin": "dsh-nano-cloud-session",
+   "path": "/nano-cloud-session/catalog",
+   "methods": [
+    "POST"
+   ],
+   "bodyLimit": {
+    "POST": 16384
+   },
+   "responseShape": "200 {ok:true,items[],has_next_page,end_cursor?} | 4xx/5xx {ok:false,reason}"
+  },
+  {
+   "plugin": "dsh-nano-cloud-session",
+   "path": "/nano-cloud-session/upload",
+   "methods": [
+    "POST"
+   ],
+   "bodyLimit": {
+    "POST": 33554432
+   },
+   "responseShape": "200 {ok:true,attachment:{attachment_id,name,url}} | 413/422 {ok:false,reason}"
   }
  ],
  "ui": {
@@ -1016,10 +1038,11 @@
    "surface": "wasm terminal tab via /dnt"
   },
   "dsh-nano-cloud-session": {
-   "launcher": "⌘E then 2 (Windows: Alt+E then 2, Ctrl+E then 2 also accepted) toggles cloud-session panel; circular launcher button",
-   "panel": "floating panel: sessions list (cursor paging, archived toggle), detail card with transcript + message box, new-session form, settings tab for carrier profiles",
+   "launcher": "sidebar '云端工作区' section above 工作区; no floating entry / no circular launcher",
+   "panel": "native dsh conversation (Chat) opened through a transient projection Session; carrier details/attachments/tags/insights/lifecycle live in a native right-workbench tab",
    "ssh": "detail card copies `ssh devin-<id>@ssh.devin.ai`; public-key enroll is a manual step in Devin account settings (info-only route, no spawn)",
-   "firstRun": "no active profile → panel lands on Settings with a 3-step guide card; security card (store path/mode/seed/policy) on top; SSH lane card generates dedicated ed25519 keypair"
+   "firstRun": "no active profile -> section shows guide row; settings opens on 接入 with carrier preset Devin Cloud and 3-step guide; connect test shows principal_type/orgMatch",
+   "settings": "NanoDialog + nanoTabs: 接入/会话/安全/SSH; 接入 folder holds Devin preset, token/org/baseURL, connection test, permission checklist and doc deep links; 会话 holds new-session defaults; 安全 is read-only store policy; SSH is keygen/enroll"
   }
  },
  "dataLocations": {
@@ -1050,7 +1073,9 @@
   "dsh-nano-cloud-session": {
    "profiles": "${DSH_HOME}/nano-cloud-session.json (mode 0600, write-only secrets), seeded from DEVIN_API_TOKEN/DEVIN_ORG_ID/DEVIN_API_BASE env or ${DSH_HOME}/nano-cloud-session.env",
    "config": "host Config defaults only (requestTimeoutMs 20000, defaultFirst 50, pollIntervalMs 5000); no client-side credential persistence",
-   "sshKey": "${DSH_HOME}/nano-cloud-session-ssh{,.pub} (0600, generated via ssh-keygen on demand; private key never leaves host)"
+   "sshKey": "${DSH_HOME}/nano-cloud-session-ssh{,.pub} (0600, generated via ssh-keygen on demand; private key never leaves host)",
+   "prefs": "localStorage 'dsh-nano-cloud-session:defaults.v1' (browser-local new-session defaults; no credentials)",
+   "nativeProjection": "in-memory dsh Session per open Devin session (not persisted; Devin remains canonical)"
   }
  }
 }

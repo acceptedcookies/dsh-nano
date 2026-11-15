@@ -15,7 +15,7 @@
 | 平台 | 仅 web |
 | 宿主入口 | `index.js` |
 | 浏览器入口 | `lib/client.js` |
-| 宿主 inject | `webServer`、`connection` |
+| 宿主 inject | `webServer`、`connection`、`sessions`、`agents`（native Chat projection） |
 
 ## 交付物
 
@@ -68,7 +68,7 @@ dsh plugin --profile web add <spec>
 1. profile 的 `package.json` 里，`dependencies` 和 `dsh.profile.bundles` 都有本包名。
 2. 重启并刷新后，页面里能找到本包的 client 模块（`dsh-nano-cloud-session`）。找不到说明 client 没进页面。
 3. 侧栏「工作区」上方出现「云端工作区」。无 profile 时小节显示「尚未配置云端工作区」；点右侧齿轮打开设置弹窗。
-4. 设置弹窗有「凭证 / 安全 / SSH」三个 tab；在「凭证」新增 profile（label + `org-…` + `cog_` token），点「连接测试」返回 `principal_type` 即为链路打通。无反应时先确认 `lib/client.js` 存在，再重启一次宿主。不要另找一条安装路径。
+4. 设置弹窗有「接入 / 会话 / 安全 / SSH」四个 tab；在「接入」新增 profile（label + `org-…` + `cog_` token），点「连接测试」返回 `principal_type` 即为链路打通。无反应时先确认 `lib/client.js` 存在，再重启一次宿主。不要另找一条安装路径。
 
 ## 初次运行
 
@@ -77,6 +77,7 @@ dsh plugin --profile web add <spec>
 - profile 存 `${DSH_HOME}/nano-cloud-session.json`（0600），token 只写不读，列表只回 `hasSecret`；新 token 必须是 `cog_` 前缀形态。
 - 空 store 首次启动会从 `DEVIN_API_TOKEN` / `DEVIN_ORG_ID` / `DEVIN_API_BASE` 环境变量或 `${DSH_HOME}/nano-cloud-session.env` 种子一个 profile。
 - 会话的 canonical 状态在 carrier（Devin 云），侧栏小节只做轮询视窗；插件不复制会话数据。
+- 浏览器默认值存 `localStorage['dsh-nano-cloud-session:defaults.v1']`，只含新建偏好，不含 token。
 
 宿主 `Config` 只提供默认：`requestTimeoutMs` 20000、`defaultFirst` 50、`pollIntervalMs` 5000。越界值被拒绝。
 
@@ -84,19 +85,20 @@ dsh plugin --profile web add <spec>
 
 | 动作 | 结果 |
 |---|---|
-| 侧栏「云端工作区」→ 设置（齿轮） | 打开「凭证 / 安全 / SSH」原生设置弹窗 |
-| 侧栏「云端工作区」→ 新建（文件夹+） | 打开新建云会话弹窗 |
-| 云端工作区 → 展开 → 点会话行 | 原生会话弹窗：详情 + 消息流 + 发消息（可唤醒挂起会话） |
-| 新建 | prompt（必填）/ title / repos / devin_mode / max_acu_limit / resumable → `POST /v3/organizations/{org}/sessions` |
+| 侧栏「云端工作区」→ 设置（齿轮） | 打开「接入 / 会话 / 安全 / SSH」原生设置弹窗；Devin 的 token/Org/Base URL/连接测试/权限清单都在「接入」tab |
+| 侧栏「云端工作区」→ 新建（文件夹+） | 打开新建云会话弹窗（上传附件 → 创建后会在右侧原生工作台的附件 tab 可见） |
+| 云端工作区 → 展开 → 点会话行 | 打开原生 dsh Session（native Chat）；右侧原生工作台 tab 提供附件、tags、insights 与生命周期操作 |
+| 新建 | prompt（必填）+ 全量 create 字段：title/tags/repos/devin_mode/max_acu_limit/resumable/playbook/knowledge/secrets/attachments/platform/structured output/security profile 等 → `POST /v3/organizations/{org}/sessions` |
+| 休眠 | `POST /v3/organizations/{org}/sessions/{id}/sleep`，保留 VM 快照 |
 | 归档 / 取消归档 | 对应 upstream archive / unarchive |
 | 中止 | `DELETE` upstream——存活 session → suspended；**不是硬删除、不自动归档**，收尾需再点归档 |
-| SSH 命令 | 面板生成/显示专用密钥对（`${DSH_HOME}/nano-cloud-session-ssh`，0600），复制 `ssh -i <key> devin-<id>@ssh.devin.ai`；公钥粘到 Devin 后台 SSH keys 一次性 enroll（账号级） |
+| SSH 命令 | 设置弹窗「SSH」tab 生成/显示专用密钥对（`${DSH_HOME}/nano-cloud-session-ssh`，0600），复制 `ssh -i <key> devin-<id>@ssh.devin.ai`；公钥粘到 Devin 后台 SSH keys 一次性 enroll（账号级） |
 
-宿主路由（全部 POST、全部走 route-guard）：`/nano-cloud-session/{status,config,sessions,session,create,message,archive,unarchive,terminate,ssh}`。`/config` action：list/save/remove/activate/test（返 orgMatch 校验）/security/ssh-key。错误面统一 `{ok:false,reason}`；403 表示「无权或不可见」（上游 fail-closed，不能当 404）。无 profile 时小节显示引导行，点右侧齿轮打开原生设置弹窗。
+宿主路由（全部 POST、全部走 route-guard）：`/nano-cloud-session/{status,config,sessions,session,create,message,archive,unarchive,terminate,ssh,catalog,upload}`。`session` op 含 native_open/get/messages/attachments/insights/generate_insights/tags/set_tags/append_tags/sleep；`sessions` op 含 list/insights；`catalog` 读 playbooks/secrets/knowledge/repositories；`upload` 走宿主 multipart。`/config` action：list/save/remove/activate/test（返 orgMatch 校验）/security/ssh-key。错误面统一 `{ok:false,reason}`；403 表示「无权或不可见」（上游 fail-closed，不能当 404）。无 profile 时小节显示引导行，点右侧齿轮打开原生设置弹窗。
 
 ## 配置与状态
 
-宿主配置可整段省略。profile 文件 `${DSH_HOME}/nano-cloud-session.json`（0600）。浏览器侧不持久化任何凭证；轮询偏好只活在小节内存。
+宿主配置可整段省略。profile 文件 `${DSH_HOME}/nano-cloud-session.json`（0600）。浏览器侧不持久化任何凭证；新建偏好与轮询偏好存 `localStorage['dsh-nano-cloud-session:defaults.v1']`。
 
 ## 构建
 

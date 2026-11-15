@@ -66,6 +66,8 @@ function readChrome() {
   const rowToken = tokens(classOf(row))[0] ?? ''
   const sessionEl = [...root.querySelectorAll('[class*="sessionRow"]')].find(node => !String(node.className).includes('selected')) ?? null
   const sessionClass = stripWide(tokens(classOf(sessionEl)).filter(token => !/selected/.test(token)).join(' '))
+  const selectedEl = [...root.querySelectorAll('[class*="sessionRow"]')].find(node => String(node.className).includes('selected'))
+  const selectedToken = (tokens(classOf(selectedEl)).find(token => /selected/.test(token)) || withLocal(rowToken, 'selected'))
 
   const template = []
   for (const child of header.children) {
@@ -97,6 +99,7 @@ function readChrome() {
     arrow: arrowToken,
     arrowOpen: arrowToken ? withLocal(arrowToken, 'arrowOpen') : '',
     sessionRow: sessionClass || withLocal(rowToken, 'sessionRow'),
+    selected: selectedToken,
     sessionSlot: classOf(sessionEl?.querySelector('[class*="slot"]') ?? null) || withLocal(rowToken, 'slot'),
     sessionTitle: classOf(sessionEl?.querySelector('[class*="title"]') ?? null) || withLocal(rowToken, 'title'),
     resting: classOf(sessionEl?.querySelector('[class*="Resting"]') ?? null) || withLocal(rowToken, 'rowResting'),
@@ -169,16 +172,17 @@ function sectionBody({ chrome, copy, face, state }) {
   const sessions = state.sessions ?? []
   const open = state.expanded !== false
 
-  if (state.loading === true) {
-    return h('div', { className: chrome.group },
-      h('div', { role: 'status', className: chrome.row, 'aria-busy': 'true' },
-        h('span', { className: iconCellClass(chrome) }, h(IconRefreshOutlineRegular, { size: 16, className: 'dncs-spin' })),
+  const bodyKey = state.loading === true || state.refreshing === true ? 'loading' : (state.activeId ?? 'empty')
+  if (state.loading === true || state.refreshing === true) {
+    return h('div', { key: bodyKey, className: `${chrome.group} dncs-section-body` },
+      h('div', { role: 'status', className: `${chrome.row} dncs-skeleton-row`, 'aria-busy': 'true' },
+        h('span', { className: iconCellClass(chrome) }, h('span', { className: 'dncs-skeleton-dot' })),
         h('span', { className: chrome.projectText },
-          h('span', { className: chrome.title }, copy('loading')))))
+          h('span', { className: 'dncs-skeleton-bar' }))))
   }
 
   if (profile == null) {
-    return h('div', { className: chrome.group },
+    return h('div', { key: bodyKey, className: `${chrome.group} dncs-section-body` },
       h('div', {
         role: 'button',
         className: chrome.row,
@@ -193,7 +197,7 @@ function sectionBody({ chrome, copy, face, state }) {
   const sessionRows = open ? sessions.map(session => h('div', {
     role: 'treeitem',
     key: session.session_id,
-    className: chrome.sessionRow,
+    className: `${chrome.sessionRow}${state.activeSessionId === session.session_id ? ` ${chrome.selected}` : ''}`,
     title: session.title || session.session_id,
     onClick: () => face.openSession(session.session_id),
   },
@@ -209,7 +213,7 @@ function sectionBody({ chrome, copy, face, state }) {
       h('span', { className: chrome.sessionTitle, style: { opacity: .65 } }, copy('noSessions')))
     : null
 
-  return h('div', { className: chrome.group },
+  return h('div', { key: bodyKey, className: `${chrome.group} dncs-section-body` },
     h('div', {
       role: 'treeitem',
       className: chrome.row,

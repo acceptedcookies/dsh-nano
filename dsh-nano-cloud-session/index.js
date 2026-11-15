@@ -4,6 +4,7 @@
  *  this host keeps only the profile store + consumption receipts — 单一真源. */
 
 import { readFileSync, statSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
 import { ensurePerfReviewHost, LIB_VERSION } from './lib/perf-review-host.js'
 import { createDevinApi, CarrierError } from './lib/devin-api.js'
 import { createProfileStore, storePath, envPath } from './lib/profiles-store.js'
@@ -12,7 +13,7 @@ import { registerRoutes, sendJson, readJsonBody } from './lib/route-guard.js'
 import { ROUTE_TABLE, PLUGIN } from './lib/route-table.js'
 
 export const name = 'nano-cloud-session'
-export const inject = ['webServer', 'connection']
+export const inject = ['webServer', 'connection', 'sessions', 'agents']
 
 const { version } = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'))
 const review = ensurePerfReviewHost().hostJoin('nano-cloud-session', { version, libVersion: LIB_VERSION })
@@ -28,6 +29,8 @@ const ROUTE = {
   unarchive: '/nano-cloud-session/unarchive',
   terminate: '/nano-cloud-session/terminate',
   ssh: '/nano-cloud-session/ssh',
+  catalog: '/nano-cloud-session/catalog',
+  upload: '/nano-cloud-session/upload',
 }
 
 export const Config = {
@@ -137,18 +140,149 @@ export function apply(ctx, config = {}) {
   /* ---- session surface ---- */
 
   const needSessionId = body => {
-    const id = String(body.session_id ?? '')
-    if (!id.startsWith('devin-')) throw new CarrierError('invalid-request', 'session_id must look like devin-…', { status: 422 })
-    return id
+    const raw = String(body.session_id ?? '').trim()
+    if (!/^(?:devin-)?[A-Za-z0-9-]+$/.test(raw)) {
+      throw new CarrierError('invalid-request', 'session_id must be a Devin session id', { status: 422 })
+    }
+    /* v3 list/get responses expose the bare session id; the path parameter is
+       the same id with a `devin-` prefix. Normalize once so every op accepts
+       either shape from the browser. */
+    return raw.startsWith('devin-') ? raw : `devin-${raw}`
+  }
+
+  /* ---- experimental native session bridge (spike) ----
+   * Creates a transient in-memory dsh Session and a lightweight proxy Agent
+   * for one Devin session. Native Chat renders the event log; the local
+   * session is a projection only and is never persisted. */
+  const nativeBridges = new Map()
+  const textOfMessage = message => {
+    if (typeof message === 'string') return message
+    const content = Array.isArray(message?.content) ? message.content : []
+    return content.filter(block => block?.type === 'text').map(block => block.text).join('\n')
+  }
+  const appendNative = (session, type, data, opts) => {
+    try { session.append(type, data, opts) } catch (error) { console.warn('[nano-cloud-session] native append failed', type, error?.message ?? error) }
+  }
+  const nativeTurn = (session, turn) => {
+    appendNative(session, 'turn/start', { turn })
+    appendNative(session, 'step/start', { turn, step: 1 })
+  }
+  const nativeClose = (session, turn) => {
+    appendNative(session, 'step/end', { turn, step: 1 })
+    appendNative(session, 'turn/end', { turn, reason: { kind: 'stop' } })
+  }
+  const appendNativeMessage = (session, source, text, turn, id = randomUUID()) => {
+    nativeTurn(session, turn)
+    if (source === 'user') {
+      appendNative(session, 'user/message', { id, role: 'user', content: [{ type: 'text', text }], source: { kind: 'user' } }, { surfaceOp: 'append' })
+    } else {
+      appendNative(session, 'assistant/message', {
+        turn, step: 1,
+        message: { id, role: 'assistant', content: [{ type: 'text', text }], source: { kind: 'model', provider: 'devin', model: 'devin-cloud-session' } },
+        stream: [],
+      }, { surfaceOp: 'append' })
+    }
+    nativeClose(session, turn)
+  }
+  const nativeOpen = async (profile, body) => {
+    const remote = needSessionId(body)
+    let bridge = nativeBridges.get(remote)
+    if (bridge && ctx.sessions.get(bridge.localId)) return { ok: true, local_session_id: bridge.localId, remote_session_id: remote }
+    const session = ctx.sessions.create(undefined, { meta: { cwd: process.cwd() } })
+    const bridgeState = { localId: session.id, remoteId: remote, profile, seen: new Set(), turn: 0, timer: null, agent: null }
+    const page = await api.getMessages(profile, remote, { first: 100 })
+    for (const message of page.items ?? page.messages ?? []) {
+      bridgeState.seen.add(message.event_id)
+      if (message.source === 'user' || message.source === 'devin') {
+        bridgeState.turn += 1
+        appendNativeMessage(session, message.source, String(message.message ?? ''), bridgeState.turn, message.event_id)
+      }
+    }
+    const fake = {
+      id: session.id,
+      session,
+      ctx,
+      model: { current: () => ({ provider: 'devin', model: 'devin-cloud-session' }), select: () => {} },
+      inbox: {
+        nextTurn: [], nextStep: [],
+        clear() {}, append() {}, prepend() {}, replace() { return false }, remove() { return false }, splice() { return [] },
+      },
+      followup: async message => {
+        const text = textOfMessage(message)
+        if (!text) return
+        bridgeState.turn += 1
+        appendNativeMessage(session, 'user', text, bridgeState.turn)
+        await api.postMessage(profile, remote, text)
+      },
+      steer: async message => fake.followup(message),
+      cancel: async () => {},
+      whenIdle: async () => {},
+    }
+    try { bridgeState.detach = ctx.agents.enter(fake) } catch (error) { console.warn('[nano-cloud-session] native agent register failed', error?.message ?? error) }
+    bridgeState.agent = fake
+    bridgeState.timer = setInterval(async () => {
+      try {
+        const next = await api.getMessages(profile, remote, { first: 100 })
+        for (const message of next.items ?? next.messages ?? []) {
+          if (bridgeState.seen.has(message.event_id)) continue
+          bridgeState.seen.add(message.event_id)
+          if (message.source === 'devin') {
+            bridgeState.turn += 1
+            appendNativeMessage(session, 'devin', String(message.message ?? ''), bridgeState.turn, message.event_id)
+          }
+        }
+      } catch { /* upstream polling is best-effort */ }
+    }, 2500)
+    nativeBridges.set(remote, bridgeState)
+    return { ok: true, local_session_id: session.id, remote_session_id: remote }
   }
 
   const sessionOps = {
+    native_open: (profile, body) => nativeOpen(profile, body),
     get: (profile, body) => api.getSession(profile, String(body.session_id)),
     messages: (profile, body) => api.getMessages(profile, String(body.session_id), { first: body.first, after: body.after }),
     attachments: (profile, body) => api.getAttachments(profile, String(body.session_id)),
     insights: (profile, body) => api.getInsights(profile, String(body.session_id)),
+    generate_insights: (profile, body) => api.generateInsights(profile, String(body.session_id)),
     tags: (profile, body) => api.getTags(profile, String(body.session_id)),
     set_tags: (profile, body) => api.setTags(profile, String(body.session_id), body.tags),
+    append_tags: (profile, body) => api.appendTags(profile, String(body.session_id), body.tags),
+    sleep: (profile, body) => api.sleep(profile, String(body.session_id)),
+  }
+
+  /** Read-only org context used by the new-session form. Each branch is a
+   *  documented list endpoint; a single route keeps the surface small. */
+  const catalog = async (body) => {
+    const profile = pick(body.profileId)
+    const resource = String(body.resource ?? '')
+    const first = body.first ?? 100
+    const after = body.after
+    switch (resource) {
+      case 'playbooks':
+        return { ok: true, ...(await api.listPlaybooks(profile, { first, after, includeEnterprise: body.include_enterprise !== false })) }
+      case 'secrets':
+        return { ok: true, ...(await api.listSecrets(profile, { first, after })) }
+      case 'knowledge':
+        return { ok: true, ...(await api.listKnowledgeNotes(profile, { first, after, search: body.search, folderPath: body.folder_path, pinnedRepo: body.pinned_repo })) }
+      case 'repositories':
+        return { ok: true, ...(await api.listRepositories(profile, { first, after, filterName: body.filter_name, loadIndexingStatus: body.load_indexing_status === true })) }
+      default:
+        throw new CarrierError('invalid-request', `unknown catalog resource ${resource}`, { status: 422 })
+    }
+  }
+
+  /** Upload one attachment by JSON base64 envelope. The host never exposes
+   *  the token; browser -> host same-origin, host -> Devin multipart. */
+  const upload = async (body) => {
+    const name = String(body.name ?? '').trim()
+    const data = String(body.data_base64 ?? '')
+    if (!name || !data) throw new CarrierError('invalid-request', 'name and data_base64 are required', { status: 422 })
+    let bytes
+    try { bytes = Buffer.from(data, 'base64') } catch { throw new CarrierError('invalid-request', 'data_base64 is not valid base64', { status: 422 }) }
+    if (bytes.length === 0) throw new CarrierError('invalid-request', 'attachment is empty', { status: 422 })
+    if (bytes.length > 16 * 1024 * 1024) throw new CarrierError('body-too-large', 'attachment exceeds 16 MiB', { status: 413 })
+    const result = await api.uploadAttachment(pick(body.profileId), { name, contentType: body.content_type ?? body.type, bytes })
+    return { ok: true, attachment: result }
   }
 
   const SPECS = [
@@ -159,14 +293,20 @@ export function apply(ctx, config = {}) {
       handler: work(body => {
         const profile = pick(body.profileId)
         const op = String(body.op ?? 'list')
-        if (op !== 'list') throw new CarrierError('invalid-request', `unknown sessions op ${op}`, { status: 422 })
-        return review.hostSpan('sessions', () => api.listSessions(profile, {
+        if (op !== 'list' && op !== 'insights') throw new CarrierError('invalid-request', `unknown sessions op ${op}`, { status: 422 })
+        const params = {
           first: body.first ?? defaultFirst, after: body.after,
           tags: body.tags, origins: body.origins, isArchived: body.is_archived,
           createdAfter: body.created_after, createdBefore: body.created_before,
+          updatedAfter: body.updated_after, updatedBefore: body.updated_before,
           category: body.category, userIds: body.user_ids, repoNames: body.repo_names,
-          devinId: body.devin_id,
-        }))
+          devinId: body.devin_id, sessionIds: body.session_ids,
+          playbookId: body.playbook_id, scheduleId: body.schedule_id,
+          serviceUserIds: body.service_user_ids, automationIds: body.automation_ids,
+          parentSessionId: body.parent_session_id,
+        }
+        const run = op === 'insights' ? api.listSessionsInsights : api.listSessions
+        return review.hostSpan('sessions', () => run(profile, params))
       }),
     },
     {
@@ -174,8 +314,8 @@ export function apply(ctx, config = {}) {
       handler: work(body => {
         const op = sessionOps[String(body.op ?? 'get')]
         if (!op) throw new CarrierError('invalid-request', `unknown session op ${body.op}`, { status: 422 })
-        needSessionId(body)
-        return op(pick(body.profileId), body)
+        const sessionId = needSessionId(body)
+        return op(pick(body.profileId), { ...body, session_id: sessionId })
       }),
     },
     {
@@ -193,12 +333,14 @@ export function apply(ctx, config = {}) {
         if (!body.session_id || typeof body.message !== 'string' || !body.message.trim()) {
           throw new CarrierError('invalid-request', 'session_id and message are required', { status: 422 })
         }
-        return api.postMessage(pick(body.profileId), String(body.session_id), body.message)
+        return api.postMessage(pick(body.profileId), needSessionId(body), body.message)
       }),
     },
     { path: ROUTE.archive, methods: ['POST'], bodyLimit: 16384, handler: work(body => api.archive(pick(body.profileId), needSessionId(body))) },
     { path: ROUTE.unarchive, methods: ['POST'], bodyLimit: 16384, handler: work(body => api.unarchive(pick(body.profileId), needSessionId(body))) },
     { path: ROUTE.terminate, methods: ['POST'], bodyLimit: 16384, handler: work(body => api.terminate(pick(body.profileId), needSessionId(body))) },
+    { path: ROUTE.catalog, methods: ['POST'], bodyLimit: 16384, handler: work(body => catalog(body)) },
+    { path: ROUTE.upload, methods: ['POST'], bodyLimit: 33554432, handler: work(body => upload(body)) },
     {
       path: ROUTE.ssh, methods: ['POST'], bodyLimit: 16384,
       handler: work(body => {
@@ -213,6 +355,11 @@ export function apply(ctx, config = {}) {
       }),
     },
   ]
+
+  ctx.effect(() => () => {
+    for (const bridge of nativeBridges.values()) { if (bridge.timer) clearInterval(bridge.timer); try { bridge.detach?.() } catch { /* noop */ } }
+    nativeBridges.clear()
+  }, 'nano-cloud-session: native bridges')
 
   registerRoutes(ctx, SPECS, { table: ROUTE_TABLE, plugin: PLUGIN })
 }

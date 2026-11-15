@@ -109,7 +109,7 @@ export const ROUTE_TABLE = [
     "capability": "net:fetch+write:remote",
     "bodyLimit": 16384,
     "sessionBinding": false,
-    "justification": "dsh-nano-cloud-session/index.js — DELETE upstream = 终止 VM + 归档（非硬删，记录仍可读）。"
+    "justification": "dsh-nano-cloud-session/index.js — DELETE upstream = 中止（存活 session → suspended，非硬删、不自动归档；归档需另走 /archive）。"
   },
   {
     "plugin": "dsh-nano-cloud-session",
@@ -122,5 +122,29 @@ export const ROUTE_TABLE = [
     "bodyLimit": 16384,
     "sessionBinding": false,
     "justification": "dsh-nano-cloud-session/index.js — 返回 ssh 命令串与 enroll 提示的纯信息路由；不 spawn。"
+  },
+  {
+    "plugin": "dsh-nano-cloud-session",
+    "path": "/nano-cloud-session/catalog",
+    "methods": [
+      "POST"
+    ],
+    "sensitivity": "L2",
+    "capability": "net:fetch",
+    "bodyLimit": 16384,
+    "sessionBinding": false,
+    "justification": "dsh-nano-cloud-session/index.js — 经宿主代理 /v3/organizations/{org}/playbooks|secrets|knowledge/notes|repositories；只读目录，携带 PAT 出站。"
+  },
+  {
+    "plugin": "dsh-nano-cloud-session",
+    "path": "/nano-cloud-session/upload",
+    "methods": [
+      "POST"
+    ],
+    "sensitivity": "L2",
+    "capability": "net:fetch+write:remote",
+    "bodyLimit": 33554432,
+    "sessionBinding": false,
+    "justification": "dsh-nano-cloud-session/index.js — 把 base64 附件经宿主 multipart 上传到 /v3/organizations/{org}/attachments；16 MiB 文件上限、32 MiB JSON 信封。"
   }
 ]

@@ -269,9 +269,12 @@ ${NANO_STYLES}
 .np-fx-out { min-height: 60px; max-height: 180px; overflow: auto; white-space: pre-wrap; font-size: var(--np-font-size-sm); padding: 6px; background: var(--dsw-alias-interactive-bg-hover); border-radius: var(--dsw-radius-sm); }
 .np-fx-tools { list-style: none; margin: 0; padding: 0; max-height: 140px; overflow: auto; }
 .np-fx-toolhead { display: block; width: 100%; text-align: left; font: inherit; font-size: var(--np-font-size-xs); color: var(--dsw-alias-link); background: none; border: none; cursor: pointer; padding: 2px 0; }
-.np-fx-tooldet { font-size: 10px; margin: 0 0 4px; padding: 4px 6px; background: var(--dsw-alias-bg-secondary); border-radius: 4px; white-space: pre-wrap; word-break: break-all; }
+.np-fx-tooldet { font-size: var(--np-font-size-xs); margin: 0 0 4px; padding: 4px 6px; background: var(--dsw-alias-bg-secondary); border-radius: 4px; white-space: pre-wrap; word-break: break-all; }
 .np-fx-foot { font-size: var(--np-font-size-xs); }
 .np-fx-links a { color: var(--dsw-alias-link); margin-right: 8px; }
+.np-fx-pipe-del { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: var(--dsw-radius-sm); background: transparent; color: var(--dsw-alias-label-tertiary); cursor: pointer; }
+.np-fx-pipe-del svg { width: 12px; height: 12px; display: block; }
+.np-fx-pipe-del:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 .np-fx-hist-list { list-style: none; margin: 0; padding: 0; font-size: var(--np-font-size-xs); }
 .np-fx-hist-list li { display: flex; gap: 8px; padding: 3px 0; border-bottom: 1px solid var(--dsw-alias-border-l1); }
 .np-fx-hist-at { color: var(--dsw-alias-label-tertiary); margin-left: auto; }
@@ -279,7 +282,8 @@ ${NANO_STYLES}
 .np-fx-run { display: flex; flex-direction: column; gap: 10px; }
 .np-fx-empty { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 4px; padding: 8px 12px 2px; }
 .np-fx-empty[hidden] { display: none !important; }
-.np-fx-empty-icon { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-link); font-size: 20px; line-height: 1; }
+.np-fx-empty-icon { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-link); }
+.np-fx-empty-icon svg { width: 16px; height: 16px; display: block; }
 .np-fx-empty-title { font-size: var(--np-font-size); font-weight: 600; color: var(--dsw-alias-label-primary); }
 .np-fx-empty-desc { margin: 0; font-size: var(--np-font-size-sm); color: var(--dsw-alias-label-tertiary); line-height: 18px; }
 .np-fx-suggests { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 2px; }
@@ -294,34 +298,38 @@ ${NANO_STYLES}
 .np-fx-composer .np-fx-chip:hover { background: var(--dsw-alias-interactive-bg-active) !important; color: var(--dsw-alias-label-primary) !important; }
 .np-fx-composer .np-fx-promptbtn[data-active="true"] { background: var(--dsw-alias-interactive-bg-active) !important; color: var(--dsw-alias-label-primary) !important; }
 .np-fx-composer .np-fx-chip[data-on="false"] { opacity: .42; }
-.np-fx-chip-ico { opacity: .78; }
+.np-fx-chip-ico { display: inline-flex; align-items: center; opacity: .78; }
+.np-fx-chip-ico svg { width: 12px; height: 12px; display: block; }
 .np-fx-doc-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.np-fx-toolbadge { font-size: 10px; color: var(--dsw-alias-label-tertiary); border: 1px solid var(--dsw-alias-border-l2); border-radius: 999px; padding: 0 7px; line-height: 20px; background: transparent; font-family: inherit; cursor: pointer; }
+.np-fx-toolbadge { height: 24px; font-size: var(--np-font-size-xs) !important; color: var(--dsw-alias-label-tertiary); border: 1px solid var(--dsw-alias-border-l2); border-radius: 999px; padding: 0 8px; line-height: 24px; background: transparent; font: inherit; cursor: pointer; }
 .np-fx-toolbadge:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 .np-fx-composer .np-fx-model { display: inline-flex; align-items: center; gap: 4px; width: auto !important; max-width: 260px; height: 26px; padding: 0 8px !important; font-size: var(--np-font-size-xs) !important; border-radius: 999px !important; background: var(--dsw-alias-interactive-bg-hover) !important; border: 0 !important; color: var(--dsw-alias-label-secondary) !important; cursor: pointer; }
 .np-fx-model-label { display: inline-flex; align-items: baseline; gap: 4px; min-width: 0; overflow: hidden; }
 .np-fx-model-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.np-fx-model-provider { flex: none; font-size: 9px; color: var(--dsw-alias-label-tertiary); }
-.np-fx-model-ctx { flex: none; font-size: 9px; color: var(--dsw-alias-label-tertiary); }
-.np-fx-model-caret { flex: none; font-size: 9px; opacity: .7; }
+.np-fx-model-provider { flex: none; font-size: var(--np-font-size-xs); color: var(--dsw-alias-label-tertiary); }
+.np-fx-model-ctx { flex: none; font-size: var(--np-font-size-xs); color: var(--dsw-alias-label-tertiary); }
+.np-fx-model-caret { display: inline-flex; align-items: center; flex: none; color: var(--dsw-alias-label-tertiary); }
+.np-fx-model-caret svg { width: 12px; height: 12px; display: block; }
 .nano-menu-label:has(.np-fx-model-option) { white-space: normal; overflow: visible; }
 .np-fx-model-option { display: flex; flex-direction: row; align-items: baseline; gap: 8px; min-width: 0; padding: 2px 0; }
-.np-fx-model-option-provider { font-size: 10px; color: var(--dsw-alias-label-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.np-fx-model-option-provider { font-size: var(--np-font-size-xs); color: var(--dsw-alias-label-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .np-fx-model-option-line { display: flex; align-items: baseline; gap: 8px; min-width: 0; margin-left: auto; }
 .np-fx-model-option-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--dsw-alias-label-primary); font-size: var(--np-font-size-sm); }
-.np-fx-model-option-ctx { flex: none; margin-left: auto; font-size: 10px; color: var(--dsw-alias-label-tertiary); }
-.np-fx-composer .np-fx-send { width: 32px; height: 32px; border-radius: 50% !important; border: 0 !important; background: var(--dsw-alias-link) !important; color: var(--dsw-alias-bg-primary) !important; font-size: 16px; line-height: 1 !important; padding: 0 !important; cursor: pointer; flex: none; }
+.np-fx-model-option-ctx { flex: none; margin-left: auto; font-size: var(--np-font-size-xs); color: var(--dsw-alias-label-tertiary); }
+.np-fx-composer .np-fx-send { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50% !important; border: 0 !important; background: var(--dsw-alias-link) !important; color: var(--dsw-alias-bg-primary) !important; padding: 0 !important; cursor: pointer; flex: none; }
+.np-fx-composer .np-fx-send svg { width: 16px; height: 16px; display: block; }
 .np-fx-composer .np-fx-send:disabled { opacity: .4; cursor: default; }
 .np-fx-chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 0; min-height: 20px; }
 .np-fx-chips[hidden] { display: none !important; }
-.np-fx-tag { display: inline-flex; align-items: center; gap: 2px; font-size: 10px; background: var(--dsw-alias-interactive-bg-active); border-radius: var(--dsw-radius-sm); padding: 2px 4px 2px 6px; color: var(--dsw-alias-label-secondary); max-width: 220px; }
+.np-fx-tag { display: inline-flex; align-items: center; gap: 2px; font-size: var(--np-font-size-xs); background: var(--dsw-alias-interactive-bg-active); border-radius: var(--dsw-radius-sm); padding: 2px 4px 2px 6px; color: var(--dsw-alias-label-secondary); max-width: 220px; }
 .np-fx-tag > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.np-fx-tag-x { border: 0 !important; background: none !important; padding: 0 2px !important; color: var(--dsw-alias-label-tertiary) !important; cursor: pointer; line-height: 1 !important; }
+.np-fx-tag-x { display: inline-flex; align-items: center; border: 0 !important; background: none !important; padding: 0 2px !important; color: var(--dsw-alias-label-tertiary) !important; cursor: pointer; }
+.np-fx-tag-x svg { width: 12px; height: 12px; display: block; }
 .np-fx-pop { position: absolute; left: 8px; right: 8px; bottom: 40px; max-height: 80px; overflow: auto; background: var(--dsw-alias-bg-layer-3); border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md); box-shadow: var(--dsw-elevation-prominent); padding: 4px; z-index: 5; }
 .np-fx-pop[hidden] { display: none !important; }
 .np-fx-pop .np-fx-popitem { display: flex; align-items: center; gap: 8px; width: 100%; border: 0 !important; background: none !important; color: var(--dsw-alias-label-primary) !important; text-align: left; padding: 3px 8px !important; border-radius: var(--dsw-radius-sm) !important; font: inherit !important; font-size: var(--np-font-size-xs) !important; line-height: 16px !important; cursor: pointer; }
 .np-fx-pop .np-fx-popitem:hover, .np-fx-pop .np-fx-popitem[data-active="true"] { background: var(--dsw-alias-interactive-bg-hover) !important; }
-.np-fx-pop-sub { margin-left: auto; color: var(--dsw-alias-label-tertiary); font-size: 10px; }
+.np-fx-pop-sub { margin-left: auto; color: var(--dsw-alias-label-tertiary); font-size: var(--np-font-size-xs); }
 .np-fx-pop-empty { padding: 8px; color: var(--dsw-alias-label-tertiary); font-size: var(--np-font-size-xs); }
 .np-fx-out[hidden] { display: none !important; }
 /* P0-4：tab 条的 + 新建；P1-5：文件级 … 菜单入口 */
@@ -344,7 +352,7 @@ ${NANO_STYLES}
 .np-window[data-theme="light"] .np-fx-entry { background: #eef1f5; color: #0f1115; border-color: #0000001a; }
 .np-window[data-theme="light"] .np-fx-entry:hover { background: #e2e6ec; }
 .np-window[data-theme="light"][data-fx="true"] .np-fx-entry { background: #4176e6; color: #ffffff; border-color: #4176e6; }
-.np-fx-entry-ico, .np-fx-entry-ico svg { width: 14px; height: 14px; display: block; }
+.np-fx-entry-ico, .np-fx-entry-ico svg { width: 16px; height: 16px; display: block; }
 .np-fx-view { position: absolute; left: 0; right: 0; top: var(--np-tabs-h, var(--np-row-h)); bottom: 0; z-index: 3; box-sizing: border-box; padding: 10px 12px 12px; background: var(--dsw-alias-bg-layer-1); display: flex; justify-content: center; }
 .np-fx-view[hidden] { display: none !important; }
 .np-fx-shell { width: 100%; max-width: 760px; height: 100%; min-height: 0; display: flex; flex-direction: column; gap: 10px; }
@@ -369,15 +377,19 @@ ${NANO_STYLES}
 .np-fx-nav-card-head { display: flex; align-items: center; gap: 7px; width: 100%; min-height: 32px; padding: 5px 8px; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; font-size: var(--np-font-size-sm); text-align: left; cursor: pointer; }
 .np-fx-nav-card-head:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 .np-fx-nav-card-head[data-open="true"] { color: var(--dsw-alias-label-primary); background: var(--dsw-alias-markdown-tag, var(--dsw-alias-bg-layer-3)); }
-.np-fx-nav-card-icon, .np-fx-nav-card-icon svg { width: 14px; height: 14px; display: inline-flex; flex: none; opacity: .8; }
-.np-fx-nav-card-caret { margin-left: auto; color: var(--dsw-alias-label-tertiary); font-size: 10px; }
+.np-fx-nav-card-icon { display: inline-flex; flex: none; opacity: .8; }
+.np-fx-nav-card-icon svg { width: 16px; height: 16px; display: block; }
+.np-fx-nav-card-caret { display: inline-flex; align-items: center; margin-left: auto; color: var(--dsw-alias-label-tertiary); transition: transform .15s ease; }
+.np-fx-nav-card-caret svg { width: 12px; height: 12px; display: block; }
+.np-fx-nav-card-head[data-open="true"] .np-fx-nav-card-caret { transform: rotate(180deg); }
 .np-fx-nav-card-body { padding: 4px 8px 8px; border-top: 1px solid var(--dsw-alias-border-l1); }
 .np-fx-nav-card-body[hidden] { display: none !important; }
 .np-fx-nav-empty { padding: 8px 2px; color: var(--dsw-alias-label-tertiary); font-size: var(--np-font-size-xs); }
 .np-fx-nav-item { display: flex; align-items: center; gap: 6px; min-height: 26px; border-bottom: 1px solid var(--dsw-alias-border-l1); font-size: var(--np-font-size-xs); color: var(--dsw-alias-label-secondary); }
 .np-fx-nav-item:last-child { border-bottom: 0; }
 .np-fx-nav-item-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--dsw-alias-label-primary); }
-.np-fx-nav-item button { height: 22px; padding: 0 6px; border: 0; border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-secondary); font: inherit; font-size: 10px; cursor: pointer; }
+.np-fx-nav-item button { display: inline-flex; align-items: center; justify-content: center; height: 22px; padding: 0 6px; border: 0; border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-secondary); font: inherit; font-size: var(--np-font-size-xs); cursor: pointer; }
+.np-fx-nav-item button svg { width: 12px; height: 12px; display: block; }
 .np-fx-nav-item button:hover { background: var(--dsw-alias-interactive-bg-active); color: var(--dsw-alias-label-primary); }
 .np-fx-nav-add { width: 100%; margin-top: 6px; height: 24px; border: 1px dashed var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; font-size: var(--np-font-size-xs); cursor: pointer; }
 .np-fx-nav-add:hover { background: var(--dsw-alias-interactive-bg-hover); }
@@ -385,7 +397,8 @@ ${NANO_STYLES}
 .np-fx-thread .np-fx-empty { margin: auto; padding: 24px 16px 12px; }
 .np-fx-msg { display: flex; gap: 8px; align-items: flex-start; max-width: 100%; }
 .np-fx-msg[data-role="user"] { justify-content: flex-end; }
-.np-fx-msg-avatar { width: 24px; height: 24px; flex: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-link); font-size: 12px; }
+.np-fx-msg-avatar { width: 24px; height: 24px; flex: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-link); }
+.np-fx-msg-avatar svg { width: 14px; height: 14px; display: block; }
 .np-fx-bubble { max-width: 84%; min-width: 0; padding: 8px 11px; border-radius: 12px; font-size: var(--np-font-size-sm); line-height: 1.55; color: var(--dsw-alias-label-primary); background: var(--dsw-alias-interactive-bg-hover); white-space: pre-wrap; overflow-wrap: anywhere; }
 .np-fx-msg[data-role="user"] .np-fx-bubble { background: var(--dsw-alias-interactive-bg-active); border-bottom-right-radius: 4px; }
 .np-fx-msg[data-role="assistant"] .np-fx-bubble { background: var(--dsw-alias-bg-layer-2); border: 1px solid var(--dsw-alias-border-l1); border-bottom-left-radius: 4px; }
@@ -393,7 +406,7 @@ ${NANO_STYLES}
 .np-fx-tools { margin-top: 6px; display: flex; flex-direction: column; gap: 2px; list-style: none; padding: 0; max-height: none; overflow: visible; }
 .np-fx-tool { font-size: var(--np-font-size-xs); color: var(--dsw-alias-link); }
 .np-fx-tool summary { cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.np-fx-tool pre { margin: 4px 0 0; padding: 4px 6px; background: var(--dsw-alias-bg-layer-1); border-radius: 4px; white-space: pre-wrap; word-break: break-all; font-size: 10px; line-height: 1.45; max-height: 180px; overflow: auto; color: var(--dsw-alias-label-secondary); }
+.np-fx-tool pre { margin: 4px 0 0; padding: 4px 6px; background: var(--dsw-alias-bg-layer-1); border-radius: 4px; white-space: pre-wrap; word-break: break-all; font-size: var(--np-font-size-xs); line-height: 1.45; max-height: 180px; overflow: auto; color: var(--dsw-alias-label-secondary); }
 .np-fx-artifacts { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 8px; }
 .np-fx-artifacts a { color: var(--dsw-alias-link); font-size: var(--np-font-size-xs); }
 .np-fx-composer { flex: none; }
@@ -402,9 +415,9 @@ ${NANO_STYLES}
 .np-fx-model-row:hover { background: var(--dsw-alias-interactive-bg-hover); }
 .np-fx-model-row input { width: 14px; height: 14px; flex: none; accent-color: var(--dsw-alias-link); }
 .np-fx-model-row-text { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
-.np-fx-model-row-provider { flex: none; font-size: 10px; color: var(--dsw-alias-label-tertiary); }
+.np-fx-model-row-provider { flex: none; font-size: var(--np-font-size-xs); color: var(--dsw-alias-label-tertiary); }
 .np-fx-model-row-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--np-font-size-sm); color: var(--dsw-alias-label-primary); }
-.np-fx-model-row-ctx { flex: none; margin-left: auto; font-size: 10px; color: var(--dsw-alias-label-tertiary); }
+.np-fx-model-row-ctx { flex: none; margin-left: auto; font-size: var(--np-font-size-xs); color: var(--dsw-alias-label-tertiary); }
 .np-changed { animation: npChanged 2.4s; }
 @keyframes npChanged { 0% { background: var(--dsw-alias-interactive-bg-active); } 100% { background: transparent; } }
 .np-group { display: flex; align-items: center; gap: 6px; margin: 12px 0 4px; padding-left: 8px; color: var(--dsw-alias-label-tertiary); font-size: var(--np-font-size-xs); font-weight: 600; letter-spacing: .04em; line-height: 20px; }
@@ -862,8 +875,12 @@ const CHECK_ICON = dshIcon('check-outline')
 /* DSH sidebar glyph (panel-left-outline, 16px). Open fills the left pane; closed is the outline. */
 const PANEL_ICON = (filled) => `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 1.5H2.5C1.94772 1.5 1.5 1.94772 1.5 2.5V13.5C1.5 14.0523 1.94772 14.5 2.5 14.5H13.5C14.0523 14.5 14.5 14.0523 14.5 13.5V2.5C14.5 1.94772 14.0523 1.5 13.5 1.5Z"></path><path d="M5.5 1.5V14.5"></path>${filled ? '<path class="np-panel-fill" d="M2.5 1.5H5.5V14.5H2.5C1.94772 14.5 1.5 14.0523 1.5 13.5V2.5C1.5 1.94772 1.94772 1.5 2.5 1.5Z"></path>' : ''}</svg>`
 const WIN_MIN_ICON = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M1 6h10" fill="none" stroke="currentColor" stroke-width="1.1"/></svg>'
-/* fx 处理入口 / 面板头图标：四角星 + 小星 */
-const FX_ICON = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M7 1.6l1.25 3.75L12 6.6 8.25 7.85 7 11.6 5.75 7.85 2 6.6l3.75-1.25z" fill="currentColor"/><path d="M12.4 10.6l.55 1.65 1.65.55-1.65.55-.55 1.65-.55-1.65-1.65-.55 1.65-.55z" fill="currentColor"/></svg>'
+/* fx 处理入口 / 面板头图标：宿主 think-outline（四芒星 artwork）。 */
+const FX_ICON = dshIcon('think-outline')
+const FX_CHEVRON = dshIcon('chevron-down-outline', 'regular', 12)
+const FX_SEND = dshIcon('send-outline', 'regular', 16)
+const FX_DOC = dshIcon('browse-outline', 'regular', 12)
+const FX_CLOSE = dshIcon('close-outline', 'regular', 12)
 const ICON = FILE_ICON
 
 /** Format toolbar + slash menu share one definition list. */
@@ -952,7 +969,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
         </header>
         <div class="np-fx-thread" role="log" aria-live="polite">
           <div class="np-fx-empty">
-            <div class="np-fx-empty-icon" aria-hidden="true">✦</div>
+            <div class="np-fx-empty-icon" aria-hidden="true">${FX_ICON}</div>
             <div class="np-fx-empty-title" data-i18n="fxEmptyTitle">开始一次 fx 运行</div>
             <p class="np-fx-empty-desc" data-i18n="fxEmptyDesc">读语料、写 draft/knowledge——一次完成。</p>
             <div class="np-fx-suggests"></div>
@@ -962,12 +979,12 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
           <textarea class="np-fx-input" rows="2" placeholder="要 fx 做什么——可触发 note_* 工具写 draft/knowledge" data-i18n="fxInputPh" data-i18n-attr="placeholder"></textarea>
           <div class="np-fx-chips" hidden></div>
           <div class="np-fx-bar">
-            <button type="button" class="np-fx-chip np-fx-doc" data-on="true"><span class="np-fx-chip-ico" aria-hidden="true">▣</span><span class="np-fx-doc-name"></span></button>
+            <button type="button" class="np-fx-chip np-fx-doc" data-on="true"><span class="np-fx-chip-ico" aria-hidden="true">${FX_DOC}</span><span class="np-fx-doc-name"></span></button>
             <button type="button" class="np-fx-chip np-fx-promptbtn"><span class="np-fx-chip-ico" aria-hidden="true">/</span><span data-i18n="fxPromptPick">提示语料</span></button>
             <button type="button" class="np-fx-toolbadge" data-action="fx-tools" title="本轮可用 note_* 工具">note_*</button>
             <span class="np-fx-grow"></span>
-            <button type="button" class="np-fx-model" title="模型"><span class="np-fx-model-label">载入中…</span><span class="np-fx-model-caret" aria-hidden="true">▾</span></button>
-            <button type="button" class="np-fx-send" title="运行" aria-label="运行">→</button>
+            <button type="button" class="np-fx-model" title="模型"><span class="np-fx-model-label">载入中…</span><span class="np-fx-model-caret" aria-hidden="true">${FX_CHEVRON}</span></button>
+            <button type="button" class="np-fx-send" title="运行" aria-label="运行">${FX_SEND}</button>
           </div>
           <div class="np-fx-pop" hidden></div>
         </div>
@@ -976,11 +993,11 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
         <div class="np-fx-nav-head"><b data-i18n="fxManage">fx 管理</b></div>
         <div class="np-fx-nav-list">
           <section class="np-fx-nav-card" data-fx-nav-card="pipes">
-            <button type="button" class="np-fx-nav-card-head" data-action="fx-nav-card" data-card="pipes" data-open="true"><span class="np-fx-nav-card-icon" aria-hidden="true">${dshIcon('flat-list-outline')}</span><span data-i18n="fxPipes">管线</span><span class="np-fx-nav-card-caret" aria-hidden="true">▾</span></button>
+            <button type="button" class="np-fx-nav-card-head" data-action="fx-nav-card" data-card="pipes" data-open="true"><span class="np-fx-nav-card-icon" aria-hidden="true">${dshIcon('flat-list-outline')}</span><span data-i18n="fxPipes">管线</span><span class="np-fx-nav-card-caret" aria-hidden="true">${FX_CHEVRON}</span></button>
             <div class="np-fx-nav-card-body" data-fx-nav-body="pipes"></div>
           </section>
           <section class="np-fx-nav-card" data-fx-nav-card="records">
-            <button type="button" class="np-fx-nav-card-head" data-action="fx-nav-card" data-card="records" data-open="true"><span class="np-fx-nav-card-icon" aria-hidden="true">${dshIcon('clock-outline')}</span><span data-i18n="fxRuns">记录</span><span class="np-fx-nav-card-caret" aria-hidden="true">▾</span></button>
+            <button type="button" class="np-fx-nav-card-head" data-action="fx-nav-card" data-card="records" data-open="true"><span class="np-fx-nav-card-icon" aria-hidden="true">${dshIcon('clock-outline')}</span><span data-i18n="fxRuns">记录</span><span class="np-fx-nav-card-caret" aria-hidden="true">${FX_CHEVRON}</span></button>
             <div class="np-fx-nav-card-body" data-fx-nav-body="records"></div>
           </section>
         </div>
@@ -2341,8 +2358,8 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     const pnode = state.fx.promptId ? state.nodes.find(n => n.id === state.fx.promptId) : null
     if (!pnode && state.fx.promptId) state.fx.promptId = null
     const items = []
-    if (pnode) items.push(`<span class="np-fx-tag"><span>${escapeHtml((copy.fxPromptTag ?? '提示') + '：' + fxCleanName(pnode.name))}</span><button type="button" class="np-fx-tag-x" data-fx-remove="prompt" aria-label="${escapeHtml(copy.fxRemove ?? '移除')}">×</button></span>`)
-    state.fx.refs.forEach((ref, index) => items.push(`<span class="np-fx-tag"><span>${escapeHtml(fxKindLabel(ref.cat) + '：' + fxCleanName(ref.name))}</span><button type="button" class="np-fx-tag-x" data-fx-remove="ref:${index}" aria-label="${escapeHtml(copy.fxRemove ?? '移除')}">×</button></span>`))
+    if (pnode) items.push(`<span class="np-fx-tag"><span>${escapeHtml((copy.fxPromptTag ?? '提示') + '：' + fxCleanName(pnode.name))}</span><button type="button" class="np-fx-tag-x" data-fx-remove="prompt" aria-label="${escapeHtml(copy.fxRemove ?? '移除')}">${FX_CLOSE}</button></span>`)
+    state.fx.refs.forEach((ref, index) => items.push(`<span class="np-fx-tag"><span>${escapeHtml(fxKindLabel(ref.cat) + '：' + fxCleanName(ref.name))}</span><button type="button" class="np-fx-tag-x" data-fx-remove="ref:${index}" aria-label="${escapeHtml(copy.fxRemove ?? '移除')}">${FX_CLOSE}</button></span>`))
     /* chips 行始终占位，避免选择/移除提示语料时 composer 高度抖动。 */
     fxChips.hidden = false
     fxChips.innerHTML = items.join('')
@@ -2433,7 +2450,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     wrap.className = 'np-fx-msg'
     wrap.dataset.role = role
     if (role === 'assistant') {
-      const avatar = document.createElement('span'); avatar.className = 'np-fx-msg-avatar'; avatar.textContent = '✦'; wrap.appendChild(avatar)
+      const avatar = document.createElement('span'); avatar.className = 'np-fx-msg-avatar'; avatar.innerHTML = FX_ICON; wrap.appendChild(avatar)
     }
     const bubble = document.createElement('div'); bubble.className = 'np-fx-bubble'
     const body = document.createElement('div'); body.className = 'np-fx-text'; body.textContent = value
@@ -2563,7 +2580,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       assistant.body.textContent = `ERR: ${e?.message ?? e}`
     } finally {
       state.fx.busy = false
-      fxSend.textContent = '→'
+      fxSend.innerHTML = FX_SEND
       fxUpdateSend()
       fxInput.value = ''
       fxPaintChips()
@@ -2576,7 +2593,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     try {
       const defs = await window.__nanoNotepad.fx.pipelines.list()
       fxNavBodyPipes.innerHTML = (defs.length
-        ? defs.map(d => `<div class="np-fx-nav-item"><span class="np-fx-nav-item-name">${escapeHtml(d.name ?? d.id)}</span><button type="button" data-fx-nav-run="${d.id}">${escapeHtml(copy.fxRunBtn ?? '运行')}</button><button type="button" data-fx-nav-del="${d.id}" aria-label="${escapeHtml(copy.fxRemove ?? '删除')}">×</button></div>`).join('')
+        ? defs.map(d => `<div class="np-fx-nav-item"><span class="np-fx-nav-item-name">${escapeHtml(d.name ?? d.id)}</span><button type="button" data-fx-nav-run="${d.id}">${escapeHtml(copy.fxRunBtn ?? '运行')}</button><button type="button" data-fx-nav-del="${d.id}" aria-label="${escapeHtml(copy.fxRemove ?? '删除')}">${FX_CLOSE}</button></div>`).join('')
         : `<div class="np-fx-nav-empty">${escapeHtml(copy.fxPipeEmpty ?? '无管线定义')}</div>`) + `<button type="button" class="np-fx-nav-add" data-fx-nav-new>${escapeHtml(copy.fxPipeNew ?? '新建管线')}</button>`
     } catch { fxNavBodyPipes.innerHTML = `<div class="np-fx-nav-empty">${escapeHtml(copy.fxHistErr ?? '管线不可用')}</div>` }
   }
@@ -2637,7 +2654,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
           try {
             const defs = await window.__nanoNotepad.fx.pipelines.list()
             list.innerHTML = defs.length
-              ? defs.map(d => `<li><b>${escapeHtml(d.name ?? d.id)}</b> <button type="button" class="np-fx-pipe-run" data-id="${d.id}">${escapeHtml(copy.fxRunBtn ?? '运行')}</button> <button type="button" class="np-fx-pipe-del" data-id="${d.id}">×</button></li>`).join('')
+              ? defs.map(d => `<li><b>${escapeHtml(d.name ?? d.id)}</b> <button type="button" class="np-fx-pipe-run" data-id="${d.id}">${escapeHtml(copy.fxRunBtn ?? '运行')}</button> <button type="button" class="np-fx-pipe-del" data-id="${d.id}">${FX_CLOSE}</button></li>`).join('')
               : `<li class="np-fx-pipe-none">${escapeHtml(copy.fxPipeEmpty ?? '无管线定义')}</li>`
           } catch { list.innerHTML = `<li>${escapeHtml(copy.fxHistErr ?? '管线不可用')}</li>` }
         }

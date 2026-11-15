@@ -148,11 +148,11 @@
   - **完成判据**：只在公开能力满足义务时发布、否则 503 + 可见原因 + 无伪 localId；四码只进唯一作者、403 不误判
   - **验证映射**：`CF1115-T19` · **依赖**：`P4-01`
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
-- [ ] `P4-03` — [DNMSC] R-16 精确例外 + 影子 FallbackService 退役
+- [x] `P4-03` — [DNMSC] R-16 精确例外 + 影子 FallbackService 退役 — `partial`
   - **落点**：`dsh-nano-model-selector-compaction/lib/{host-services,host-compaction,compact-policy}.js`、`scripts/gen-mutex-patch.mjs`；`dsh-nano-model-selector/lib/compact-policy.js`
   - **完成判据**：真实 Service 解析（无法解析即激活失败）、ON/OFF/四 preset/isolate、已准 instanceof 降级、无影子服务
   - **验证映射**：`CF1115-T19` · **依赖**：`P4-01`
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
+  - **执行状态**：`partial` · **执行时间**：`2026-11-15` · **证据**：`1af7b18` — `FallbackService`(:64-121) 影子 Service 退役（零残留）、`HostService` 惰性解析真实 Service（缺失→激活失败非影子）、`setHostService` 合法 loader 缝（测/宿主注入真实类非 vendored 副本）、instanceof 降级走 `Symbol.hasInstance`→Real、DNMSC 23/23。留：真实宿主域 cordis 解析路径未跑（离线无 cordis）、四 preset/isolate 的 live 互斥未验 → `CF1115-T19` 半收。
 - [ ] `P4-04` — [DNEE] native 资源 / [DNN] fx·S3·RPC·标准流 + 两组别名取舍
   - **落点**：`dsh-nano-explorer-extra/src/client/body.js`；`dsh-nano-notepad/src/host/{s3-sync,pipeline,fx-bridge}.js`
   - **完成判据**：`/s3/config` 只留 `probe`、`/rpc` 只留 `manifest.get`；四只读 RPC 唯一 codec；标准流/资源协议独立不 JSON 化

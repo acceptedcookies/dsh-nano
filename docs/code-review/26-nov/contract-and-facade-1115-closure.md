@@ -4,7 +4,7 @@
 > **会话快照**：`2026-11-15` CST · 分支 `main` · 基线 `653b15b` → HEAD（STEP.8 二轮修复后 `1af7b18`+docs）。三路对抗审查（truth-reconcile/completion/antigreen）总判「有条件通过」，报告落 `.anote/reviews/contract-and-facade/1115/47f0/`。
 > **真源**：[真相层] `CF1115-TRUTH` v0.1.1 `FROZEN` 只冻结决策；本文登记**施工面**实测结果，五态如实，不 overclaim、不另立第二账本。
 >
-> **对抗审查**：STEP.7 三路审查（真相层对账 / 完成度 / 防假绿侧载）已跑；报告落 `.anote/reviews/contract-and-facade/1115/47f0/`。判定「有条件通过」——核心归口真实落地，发现 **2 blocker + 6 major** 已在 STEP.8 修复（见 §6）。
+> **对抗审查**：STEP.7 三路审查（真相层对账 / 完成度 / 防假绿侧载）已跑；报告落 `.anote/reviews/contract-and-facade/1115/47f0/`。判定「有条件通过」——核心归口真实落地，发现 **2 blocker + 6 major** 已在 STEP.8 修复（见 §6）。**增量复审（round 2, `39ef320`）**：对 `6446c5c` 后的 P3/P4/P5 落地再跑三路，再判「有条件通过」——抓出 4 fake-green/死码/真缺陷（`NATIVE_UNSUPPORTED` 死码、clamp 回归假绿、`instanceof RealService`=false、claim null-伪造）+ 多项 minor，已在 STEP.8 二轮修复落 `39ef320`；残余如实 partial 记债（见 §6 增量段）。
 
 ---
 
@@ -184,7 +184,7 @@
 |---|---|---|---|
 | E1115-DNCS-01 | 自有 post helper+CarrierError+work wrapper；readJsonBody 异常非 CarrierError 落 500 | 12 路由仍 `work`+CarrierError；`index.js:87-88` 仍 `error instanceof CarrierError` 分型、余落通用 500——错误面未统一进 dsh-interface | **kept-as-debt** |
 | E1115-DNCS-02 | 路径内 config/action、sessions/op、session/op、catalog/resource 多分发；台账无分支级合同 | 12 路径已入 `feature-contract.json` routes（12 行）；但台账只到路径粒度，31 分支 op/resource 的独立参数/错误/副作用合同仍无 | **partial** |
-| E1115-DNCS-03 | nativeOpen 造 local session+投影远端、fake agent cancel 空操作 | `102796e`：`native_open` 支持义务显式失败（`NATIVE_UNAVAILABLE`503/`UNSUPPORTED`422/`OUTCOME_UNKNOWN`502/`PROJECTION_FAILED`500），agents.enter 拒不再 `console.warn`+ok——orphan session 拆掉。残余：fake-agent 投影本体（已登记 spike 架构）仍在、`close`/`enter` 真实 API 兼容性离线不可 cordis 验、PROJECTION_FAILED 分支 live-only | **partial** |
+| E1115-DNCS-03 | nativeOpen 造 local session+投影远端、fake agent cancel 空操作 | `102796e`+`baf718c`+`39ef320`：`native_open` 支持义务显式失败四码全可达（UNSUPPORTED 经 route 重映射 pick 失败）、orphan session 拆、bridges 键 remote+profile（F22.3）、`httpStatusForError` 钳位纯函数真测。残余：fake-agent 投影本体（spike 架构）仍发 ok 但 Q16 duty 未满足、`close`/`enter`/`appendNative` 真实 API 兼容离线不可 cordis 验、PROJECTION_FAILED 分支 live-only | **partial** |
 | E1115-DNCS-04 | feature-contract UI/dataLocations 必检清单+clean-lib 包清单漏 DNCS | `PLUGINS` 8 包全含 DNCS；`feature-contract.json` DNCS 12 routes+ui(5 键)+dataLocations(3 键) 全入；clean-lib 72 artifacts 递归 | **covered** |
 
 ### [CROSS]（横向 4 项）
@@ -219,8 +219,8 @@ Phase-4/5 的 host 适配 + 全范围结算与若干公开退役面（DNK 容器
 | DNK 真实消费 live 链路（引擎实连） | `未观察` | 离线无引擎/容器；`e1b2e91`+`187d1ff` 已改指 DNLS 提供面 |
 | DNLS `/mcp` CDP 深工具 + host↔bridge 合同 + bodyLimit + terminal-driver（E1115-DNLS-02/03/06） | `deferred` | `68210f6` 未触 bridge/readJson/terminal-driver；T16 未封口 |
 | DNMSC R-16 真实 cordis resolve + 4-preset/isolate live 互斥（E1115-DNMSC-01..03） | `deferred`→`partial` | `1af7b18` HostService 惰性解析+`setHostService` 缝落地；cordis 离线/互斥未验=P4-01 |
-| DNCS native_open 支持义务 + NATIVE_* 四码（E1115-DNCS-03） | `partial` | `102796e`：宿主 inject 缺失→`NATIVE_UNAVAILABLE`503、无 profile→`NATIVE_UNSUPPORTED`422、minted 后 carrier 失败→`NATIVE_OUTCOME_UNKNOWN`502+orphan 拆、`agents.enter` 拒→`NATIVE_PROJECTION_FAILED`500+orphan 拆；`code` 稳定字段。残余：fake-agent 投影本体仍登记 spike 架构、`close`/`enter` 真实 API 兼容离线不可验（P4-01）、PROJECTION_FAILED live-only |
-| DNN `/s3/config`+`/rpc` 别名收窄（E1115-DNN-03） | `partial` | `180cf05`：F21.6 已批准收窄落地——`testOne`/`lsrag.manifest` 死别名删（零调用方）、method 门前移按名拒、`manifest.get` null/denied/读失败三分、feature-contract 台账同步。残余：DNEE open-in-app 官方资源调用（P4-01）、fx SSE 独立保留已符合、S3 远端实连未授权 |
+| DNCS native_open 支持义务 + NATIVE_* 四码（E1115-DNCS-03） | `partial` | `102796e`+`baf718c`+`39ef320`：四码全可达（UNSUPPORTED 经 route 重映射）、orphan 拆、bridges 键 remote+profile、`httpStatusForError` 钳位纯函数真测。残余：fake-agent 投影本体（spike 架构）Q16 duty 未满足仍发 ok、真实 agents/sessions API 兼容+PROJECTION_FAILED live-only 挂 P4-01 |
+| DNN `/s3/config`+`/rpc` 别名收窄（E1115-DNN-03） | `partial` | `180cf05`+`39ef320`：F21.6 已批准收窄落地——`testOne`/`lsrag.manifest` 死别名删（零调用方）、method 门前移按名拒、`manifest.get` null/denied/读失败三分、claim/acquire/renew `.catch(()=>undefined)` 同款伪造删（F21.7）、feature-contract 台账同步、`_s3ForTest` seam 真测 denied→error。残余：DNEE open-in-app（P4-01）、S3 远端实连、`lib/` 重建授权 |
 | 跨包错误合同统一 + 全 kind registry + 扫描独立源（CROSS-01..04 残余） | `partial` | `dsh-interface`+`JsonOutcome`+8 包台账收敛；route-scan 读生成物、全 kind registry 未实现 |
 
 > **任一 `deferred`/`partial`/`未观察` ⇒ 本计划整体不标 `executed`**。`observed-OK-at-closure` 目标在 closure 时点观察正常；`未观察`/`deferred` 目标如实保留观察号——handoff 给 P4-01（cordis host-domain）、P4-02（native_*+carrier auth）、P4-04（/s3/config 裁决）与 T15/T16 续轮。

@@ -10,7 +10,7 @@ const BUNDLE_NAME = 'dsh-nano-model-selector-compaction'
  * carries both 'deepseek' and 'flash' are offered alongside. */
 const FLASH_RE = /deepseek.*flash|flash.*deepseek/i
 
-/** @param {Array<{provider:string, model:string}>} models catalog pairs */
+/** @param {Array<{provider:string, model:string, name?:string, contextWindow?:number}>} models catalog pairs */
 function flashChoices(models) {
   const seen = new Set()
   const picks = []
@@ -23,6 +23,24 @@ function flashChoices(models) {
   return picks
 }
 
+/** Group flash choices by provider id so the native popup reads as labeled sections. */
+function groupByProvider(choices) {
+  const map = new Map()
+  for (const item of choices) {
+    if (!map.has(item.provider)) map.set(item.provider, [])
+    map.get(item.provider).push(item)
+  }
+  return [...map.entries()]
+}
+
+/** "1M" / "256K" style window marker, or null when the catalog lacks one. */
+function windowMark(contextWindow) {
+  if (!Number.isFinite(contextWindow)) return null
+  if (contextWindow >= 1048576) return `${Math.round(contextWindow / 1048576)}M`
+  if (contextWindow >= 1024) return `${Math.round(contextWindow / 1024)}K`
+  return String(contextWindow)
+}
+
 /**
  * @param {{ copy: any, models: Array<{provider:string, model:string}>, onError: (text: string) => void }} props
  * `models` = catalog (provider, model) pairs for the summary-model dropdown.
@@ -33,6 +51,27 @@ export function CompactPanel({ copy, models, onError }) {
   const [confirm, setConfirm] = React.useState(false)
   const [banner, setBanner] = React.useState(null) // {kind:'success'|'warn'|'fail', text, code?}
   const [heartbeat, setHeartbeat] = React.useState(null) // {at: Date, status: number}
+  const [windowMap, setWindowMap] = React.useState({}) // provider/model -> {name, contextWindow}
+
+  // The injected directory's model objects carry no contextWindow; the host's
+  // /catalog route does. Fetch it once to decorate the dropdown options.
+  React.useEffect(() => {
+    let live = true
+    fetch('/nano-model-selector/catalog', { credentials: 'same-origin', cache: 'no-store' })
+      .then(res => (res.ok ? res.json() : null))
+      .then(data => {
+        if (!live || data == null) return
+        const map = {}
+        for (const group of data.groups ?? []) {
+          for (const model of group.models ?? []) {
+            map[`${group.id}/${model.id}`] = { name: model.name, contextWindow: model.contextWindow }
+          }
+        }
+        setWindowMap(map)
+      })
+      .catch(() => {})
+    return () => { live = false }
+  }, [])
 
   const reload = React.useCallback(() => {
     fetchCompactState()
@@ -186,7 +225,7 @@ export function CompactPanel({ copy, models, onError }) {
           <label className="nms-compact-field">
             <span className="nms-compact-field-label">{copy.compactFieldModel}</span>
             <select
-              className="nms-compact-input"
+              className="nms-compact-input nms-compact-select"
               aria-label={copy.compactFieldModel}
               value={modelValue}
               disabled={busy}
@@ -196,8 +235,20 @@ export function CompactPanel({ copy, models, onError }) {
               }}
             >
               <option value="/">{`（${copy.selectModel}）`}</option>
-              {choices.map(item => (
-                <option key={`${item.provider}/${item.model}`} value={`${item.provider}/${item.model}`}>{`${item.provider}/${item.model}`}</option>
+              {groupByProvider(choices).map(([provider, items]) => (
+                <optgroup key={provider} label={provider}>
+                  {items.map(item => {
+                    const meta = windowMap[`${item.provider}/${item.model}`]
+                    const mark = windowMark(meta?.contextWindow)
+                    return (
+                      <option key={`${item.provider}/${item.model}`} value={`${item.provider}/${item.model}`}>
+                        {mark !== null
+                          ? `${item.provider} · ${meta?.name ?? item.name ?? item.model} · ${mark}`
+                          : `${item.provider} · ${meta?.name ?? item.name ?? item.model}`}
+                      </option>
+                    )
+                  })}
+                </optgroup>
               ))}
             </select>
           </label>

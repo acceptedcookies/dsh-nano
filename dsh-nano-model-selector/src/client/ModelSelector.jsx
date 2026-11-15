@@ -326,9 +326,16 @@ export function ModelSelector({ locked, available, directory, load, select, lang
     }),
   })), [groupSource, detailMap])
   const allModels = React.useMemo(() => groups.flatMap(group => group.models), [groups])
-  // (provider, model) pairs for the summary-model dropdown (-20④).
+  // (provider, model) pairs for the summary-model dropdown (-20④); name and
+  // contextWindow ride along so the compact panel can mark the anchored
+  // window size on every option.
   const compactModelPairs = React.useMemo(
-    () => allModels.map(item => ({ provider: item.group.id, model: item.model.id })),
+    () => allModels.map(item => ({
+      provider: item.group.id,
+      model: item.model.id,
+      name: item.model.name,
+      contextWindow: item.model.contextWindow,
+    })),
     [allModels],
   )
   const brands = React.useMemo(() => {

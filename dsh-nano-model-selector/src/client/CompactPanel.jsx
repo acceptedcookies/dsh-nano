@@ -48,7 +48,6 @@ function windowMark(contextWindow) {
 export function CompactPanel({ copy, models, onError }) {
   const [state, setState] = React.useState(null) // GET payload
   const [busy, setBusy] = React.useState(false)
-  const [confirm, setConfirm] = React.useState(false)
   const [banner, setBanner] = React.useState(null) // {kind:'success'|'warn'|'fail', text, code?}
   const [heartbeat, setHeartbeat] = React.useState(null) // {at: Date, status: number}
   const [windowMap, setWindowMap] = React.useState({}) // provider/model -> {name, contextWindow}
@@ -120,19 +119,18 @@ export function CompactPanel({ copy, models, onError }) {
   const doSwitch = next => {
     if (busy) return
     setBusy(true)
-    setConfirm(false)
     postCompactSwitch(next)
       .then(result => {
         const application = result.application ?? 'applied'
+        const restart = application === 'restart-required'
+          ? (result.restartReason ? `${copy.compactSwitchRestart}：${result.restartReason}` : copy.compactSwitchRestart)
+          : null
         noteWithCode(
           application === 'applied' ? 'success' : 'warn',
           application === 'applied'
             ? copy.compactSwitchApplied
-            : application === 'restart-required'
-              ? copy.compactSwitchRestart
-              : application === 'overridden'
-                ? copy.compactSwitchOverridden
-                : application,
+            : restart
+              ?? (application === 'overridden' ? copy.compactSwitchOverridden : application),
           application,
         )
         reload()
@@ -212,23 +210,11 @@ export function CompactPanel({ copy, models, onError }) {
           aria-checked={enabled}
           aria-label={enabled ? copy.compactEnabled : copy.compactDisabled}
           disabled={busy}
-          onClick={() => setConfirm(true)}
+          onClick={() => doSwitch(!enabled)}
         >
           <span className="nms-switch-thumb" />
         </button>
       </div>
-
-      {/* Switch confirmation: inline note with real buttons. */}
-      {confirm && (
-        <div className="nms-compact-note" data-kind="warn">
-          <WarningIcon size={13} />
-          <span className="nms-compact-note-copy">{copy.compactSwitchConfirm}</span>
-          <span className="nms-compact-note-actions">
-            <button type="button" className="nms-effort-button" disabled={busy} onClick={() => doSwitch(!enabled)}>{copy.compactConfirmOk}</button>
-            <button type="button" className="nms-effort-button" onClick={() => setConfirm(false)}>{copy.compactConfirmCancel}</button>
-          </span>
-        </div>
-      )}
 
       {/* U4 degraded: read failure keeps only the safety line live. */}
       {degraded && (

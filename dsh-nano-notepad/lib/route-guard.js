@@ -262,7 +262,7 @@ var ROUTE_TABLE = [
     ],
     "sensitivity": "L1",
     "capability": "static:asset",
-    "bodyLimit": 4096,
+    "bodyLimit": 0,
     "sessionBinding": false,
     "justification": "index.js \u2014 serves vendored fx-core.wasm from lib/fx-core.wasm; read-only static asset, same-origin delivery for the page engine."
   },
@@ -274,7 +274,7 @@ var ROUTE_TABLE = [
     ],
     "sensitivity": "L2",
     "capability": "read:model-catalog",
-    "bodyLimit": 4096,
+    "bodyLimit": 0,
     "sessionBinding": false,
     "justification": "fx-bridge.js \u2014 lists ctx.llm provider~model catalog for the page engine picker; read-only model metadata, no credentials."
   },

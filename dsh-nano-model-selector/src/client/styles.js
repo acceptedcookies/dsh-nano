@@ -4,9 +4,13 @@ import { NANO_STYLES } from 'dsh-nano-ui'
 
 export const STYLE = `${NANO_STYLES}
 .nms-root { position: relative; display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
-.nms-compact-badge { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; flex: none; padding: 0; border: 0; border-radius: var(--dsw-radius-sm); background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 18%, transparent); color: var(--dsw-alias-state-business-primary); cursor: pointer; }
-.nms-compact-badge:hover { background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 28%, transparent); }
-.nms-compact-badge[aria-pressed="true"] { background: var(--dsw-alias-state-business-primary); color: var(--dsw-alias-bg-layer-1); }
+.nms-compact-badge { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; flex: none; padding: 0; border: 0; border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-bg-layer-2); cursor: pointer; }
+.nms-compact-badge:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.nms-compact-badge[aria-pressed="true"] { background: var(--dsw-alias-interactive-bg-active); }
+.nms-ring { fill: none; stroke-linecap: round; }
+.nms-ring-health { stroke: var(--dsw-alias-state-success-primary); stroke-width: 2.4; }
+.nms-ring-buffer { stroke: var(--dsw-alias-state-warn-primary); stroke-width: 2.4; }
+.nms-ring-pinned { stroke: var(--dsw-alias-state-business-primary); stroke-width: 2.4; }
 /* The shared toast is position:absolute, anchored for relative page bodies; .nms-root is a
    small inline seat, so this plugin re-anchors it to the viewport like the old .nms-toast. */
 .nms-root .nano-toast { position: fixed; bottom: 24px; z-index: 1300; }

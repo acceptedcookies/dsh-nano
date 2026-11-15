@@ -88,3 +88,27 @@ export function CompactionIcon(props) {
   const Glyph = IconCompactOutlineRegular ?? IconLayersOutlineRegular ?? IconDataOutlineRegular
   return <Glyph {...props} />
 }
+
+/**
+ * Composer badge: one circle made of three nested arcs, each anchored at the
+ * top and sweeping clockwise by its water line.
+ * green = health line (H), yellow = buffer line (B), blue = pinned-async
+ * share of the window (effectivePin / windowMin). Missing values read as a
+ * half turn so the badge stays a circle before the first reading.
+ * @param {{ size?: number, health?: number, buffer?: number, pinned?: number }} props
+ */
+export function WaterRingIcon({ size = 16, health, buffer, pinned }) {
+  const arc = (radius, ratio) => {
+    const sweep = Math.max(0.04, Math.min(0.98, Number.isFinite(ratio) ? ratio : 0.5)) * 2 * Math.PI
+    const x = 12 + radius * Math.sin(sweep)
+    const y = 12 - radius * Math.cos(sweep)
+    return `M12 ${12 - radius} A ${radius} ${radius} 0 ${sweep > Math.PI ? 1 : 0} 1 ${x.toFixed(3)} ${y.toFixed(3)}`
+  }
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path className="nms-ring nms-ring-buffer" d={arc(9, buffer)} />
+      <path className="nms-ring nms-ring-health" d={arc(6.1, health)} />
+      <path className="nms-ring nms-ring-pinned" d={arc(3.2, pinned)} />
+    </svg>
+  )
+}

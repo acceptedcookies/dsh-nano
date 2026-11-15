@@ -14,6 +14,7 @@ import {
   ChevronDownIcon,
   CloseIcon,
   CompactionIcon,
+  WaterRingIcon,
   GridIcon,
   MediaIcon,
   ModelIcon,
@@ -161,6 +162,8 @@ export function ModelSelector({ locked, available, directory, load, select, lang
   // composer badge appears only while takeover is actually enabled.
   const [compactInstalled, setCompactInstalled] = React.useState(false)
   const [compactEnabled, setCompactEnabled] = React.useState(false)
+  // Live water lines for the composer ring: H, B, and pinned-async / window.
+  const [compactLines, setCompactLines] = React.useState(null)
   const updateRailOverflow = React.useCallback(() => {
     const el = railBrandsRef.current
     if (el === null) return
@@ -255,11 +258,22 @@ export function ModelSelector({ locked, available, directory, load, select, lang
         if (!live) return
         setCompactInstalled(data?.bundle?.installed === true)
         setCompactEnabled(data?.bundle?.enabled === true)
+        const policy = data?.policy
+        const effective = policy?.effective
+        const pinned = Number.isFinite(effective?.pin) && Number.isFinite(effective?.windowMin) && effective.windowMin > 0
+          ? effective.pin / effective.windowMin
+          : null
+        setCompactLines(policy == null ? null : {
+          health: policy.healthTargetAsync,
+          buffer: policy.bufferSizeAsync,
+          pinned,
+        })
       })
       .catch(() => {
         if (!live) return
         setCompactInstalled(false)
         setCompactEnabled(false)
+        setCompactLines(null)
       })
     pull()
     const timer = window.setInterval(pull, 15000)
@@ -685,7 +699,7 @@ export function ModelSelector({ locked, available, directory, load, select, lang
           aria-pressed={open && filter === 'compact'}
           onClick={openCompact}
         >
-          <CompactionIcon size={15} />
+          <WaterRingIcon size={16} health={compactLines?.health} buffer={compactLines?.buffer} pinned={compactLines?.pinned} />
         </button>
       )}
       <button

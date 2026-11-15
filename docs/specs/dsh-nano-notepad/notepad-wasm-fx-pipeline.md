@@ -928,3 +928,13 @@ runPipeline(spec, ctx) → {runId, stages:[{name,ok,result}], status}
 - 主界面仍是 chat；抽屉只是覆盖层，不改变 fx 主界面高度/宽度。
 
 **ego 验证**：header 无 X；标题按钮 `aria-expanded` true/false 切换；nav rect 打开后 x33,y122,w272,h307 在 notepad 内；管线卡片显示「无管线定义/新建管线」，记录显示历史 runs；点标题开合、点 `处理` 关闭、ESC 关闭、再点处理重开均通过。
+
+### 13.11 fx 模型选择收敛（2026-11-15，业主第四轮）
+
+**业主反馈**：模型选择器改为一行高度；左侧 provider，右侧模型 + 上下文说明；模型只能是 `deepseek-flash`，不应出现 `deepseek-v4-pro`；右侧圆角不见了。
+
+**实现**：
+- 模型菜单/按钮改为单行：`provider` 左，`模型名 + ctx` 右（`ctx —` 当 upstream contextWindow 为 null）；删除两行布局。
+- `DEFAULT_SETTINGS.fxModels` 收敛为 **仅 `deepseek-official~deepseek-flash`**；旧默认三模型（flash/v4-pro/magpie）在 `normalizeSettings` 中识别为 legacy default 并迁移回单模型，避免老 IDB 设置继续显示 pro。
+- 菜单 `maxHeight` 降到 140，单行菜单无滚动条，右侧圆角恢复；仍向上展开留在 notepad 内。
+- 设置 fx tab 仍列出全量目录供后续调整；默认勾选仅 flash。

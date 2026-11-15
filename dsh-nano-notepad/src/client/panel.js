@@ -305,9 +305,9 @@ ${NANO_STYLES}
 .np-fx-model-ctx { flex: none; font-size: 9px; color: var(--dsw-alias-label-tertiary); }
 .np-fx-model-caret { flex: none; font-size: 9px; opacity: .7; }
 .nano-menu-label:has(.np-fx-model-option) { white-space: normal; overflow: visible; }
-.np-fx-model-option { display: flex; flex-direction: column; gap: 1px; min-width: 0; padding: 2px 0; }
+.np-fx-model-option { display: flex; flex-direction: row; align-items: baseline; gap: 8px; min-width: 0; padding: 2px 0; }
 .np-fx-model-option-provider { font-size: 10px; color: var(--dsw-alias-label-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.np-fx-model-option-line { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.np-fx-model-option-line { display: flex; align-items: baseline; gap: 8px; min-width: 0; margin-left: auto; }
 .np-fx-model-option-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--dsw-alias-label-primary); font-size: var(--np-font-size-sm); }
 .np-fx-model-option-ctx { flex: none; margin-left: auto; font-size: 10px; color: var(--dsw-alias-label-tertiary); }
 .np-fx-composer .np-fx-send { width: 32px; height: 32px; border-radius: 50% !important; border: 0 !important; background: var(--dsw-alias-link) !important; color: var(--dsw-alias-bg-primary) !important; font-size: 16px; line-height: 1 !important; padding: 0 !important; cursor: pointer; flex: none; }
@@ -2408,7 +2408,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     if (!state.fx.model || !keys.includes(state.fx.model)) state.fx.model = keys[0]
     const picked = models[keys.indexOf(state.fx.model)]
     const info = fxModelInfo(picked ?? models[0])
-    fxModelLabel.innerHTML = `<span class="np-fx-model-name">${escapeHtml(info.model)}</span><span class="np-fx-model-provider">${escapeHtml(info.provider)}</span>${info.ctx ? `<span class="np-fx-model-ctx">${escapeHtml(info.ctx)}</span>` : ''}`
+    fxModelLabel.innerHTML = `<span class="np-fx-model-provider">${escapeHtml(info.provider)}</span><span class="np-fx-model-name">${escapeHtml(info.model)}</span>${info.ctx ? `<span class="np-fx-model-ctx">${escapeHtml(info.ctx)}</span>` : ''}`
     fxModel.title = `${info.provider} · ${info.model}${info.ctx ? ` · ${info.ctx}` : ''}`
   }
   async function fxLoadModels() {
@@ -2721,10 +2721,10 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
         React.createElement('span', { className: 'np-fx-model-option-provider' }, info.provider),
         React.createElement('span', { className: 'np-fx-model-option-line' },
           React.createElement('span', { className: 'np-fx-model-option-name' }, info.model),
-          info.ctx ? React.createElement('span', { className: 'np-fx-model-option-ctx' }, info.ctx) : null))
+          React.createElement('span', { className: 'np-fx-model-option-ctx' }, info.ctx)))
       return { id: info.key, label, icon: info.key === state.fx.model ? check : undefined, run: () => { state.fx.model = info.key; fxPaintModel() } }
     })
-    const raw = openNanoMenu({ anchor: fxModel.getBoundingClientRect(), items, width: 300, maxHeight: 180, theme: resolvedTheme(), z: NP_PORTAL_Z, direction: 'up' })
+    const raw = openNanoMenu({ anchor: fxModel.getBoundingClientRect(), items, width: 300, maxHeight: 140, theme: resolvedTheme(), z: NP_PORTAL_Z, direction: 'up' })
     closeMenu = () => raw.close()
   })
   fxPop.addEventListener('mousedown', event => event.preventDefault())

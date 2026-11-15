@@ -85,8 +85,9 @@ export function apply(ctx, config = {}) {
       sendJson(res, 200, result === undefined ? { ok: true } : result)
     } catch (error) {
       if (error instanceof CarrierError) {
-        sendJson(res, error.status >= 400 && error.status < 500 ? error.status : 502,
-          { ok: false, reason: error.reason, message: error.message.slice(0, 300), status: error.status })
+        const status = error.status >= 400 ? error.status : 502
+        sendJson(res, status,
+          { ok: false, reason: error.reason, code: error.nativeCode ?? error.reason, message: error.message.slice(0, 300), status })
       } else {
         sendJson(res, 500, { ok: false, reason: 'failed', message: messageOf(error).slice(0, 300) })
       }
@@ -155,6 +156,24 @@ export function apply(ctx, config = {}) {
    * for one Devin session. Native Chat renders the event log; the local
    * session is a projection only and is never persisted. */
   const nativeBridges = new Map()
+  /* P4-02 NATIVE_* taxonomy — the native Chat projection (sessions+agents
+   * inject) is an optional support obligation. When the host cannot satisfy
+   * it, fail EXPLICITLY (no fabricated local session, no silent success):
+   *   NATIVE_UNAVAILABLE      503 — host did not inject sessions/agents or
+   *                                 refused session creation.
+   *   NATIVE_UNSUPPORTED      422 — the carrier/profile cannot be projected.
+   *   NATIVE_PROJECTION_FAILED 500 — session created but agents.enter refused;
+   *                                 the orphan local session is torn down.
+   *   NATIVE_OUTCOME_UNKNOWN  502 — upstream carrier read failed mid-projection;
+   *                                 the local session may be partially projected.
+   * A stable `code` rides alongside `reason` so callers classify on the
+   * stable field, not the message. */
+  const NativeError = class NativeError extends CarrierError {
+    constructor(code, message, status) {
+      super(code, message, { status })
+      this.nativeCode = code
+    }
+  }
   const textOfMessage = message => {
     if (typeof message === 'string') return message
     const content = Array.isArray(message?.content) ? message.content : []
@@ -186,11 +205,32 @@ export function apply(ctx, config = {}) {
   }
   const nativeOpen = async (profile, body) => {
     const remote = needSessionId(body)
+    /* Host support obligation: the projection needs both `sessions` (to mint
+     * the local transcript) and `agents` (to register the proxy). Absent
+     * either, fail explicitly — never mint a session that cannot project. */
+    if (typeof ctx.sessions?.create !== 'function' || typeof ctx.sessions?.get !== 'function'
+        || typeof ctx.agents?.enter !== 'function') {
+      throw new NativeError('NATIVE_UNAVAILABLE',
+        'host did not inject sessions/agents; native Chat projection is unavailable', 503)
+    }
+    if (!profile) {
+      throw new NativeError('NATIVE_UNSUPPORTED', 'no carrier profile to project from', 422)
+    }
     let bridge = nativeBridges.get(remote)
     if (bridge && ctx.sessions.get(bridge.localId)) return { ok: true, local_session_id: bridge.localId, remote_session_id: remote }
     const session = ctx.sessions.create(undefined, { meta: { cwd: process.cwd() } })
     const bridgeState = { localId: session.id, remoteId: remote, profile, seen: new Set(), turn: 0, timer: null, agent: null }
-    const page = await api.getMessages(profile, remote, { first: 100 })
+    let page
+    try {
+      page = await api.getMessages(profile, remote, { first: 100 })
+    } catch (error) {
+      /* Carrier read failed AFTER the local session was minted: the caller
+       * cannot tell whether the projection is usable. Surface the ambiguous
+       * outcome and drop the orphan session rather than claim ok. */
+      try { ctx.sessions.close?.(session.id) } catch { /* best-effort teardown */ }
+      throw new NativeError('NATIVE_OUTCOME_UNKNOWN',
+        `carrier read failed after local session minted: ${error?.message ?? 'unknown'}`, 502)
+    }
     for (const message of page.items ?? page.messages ?? []) {
       bridgeState.seen.add(message.event_id)
       if (message.source === 'user' || message.source === 'devin') {
@@ -218,7 +258,16 @@ export function apply(ctx, config = {}) {
       cancel: async () => {},
       whenIdle: async () => {},
     }
-    try { bridgeState.detach = ctx.agents.enter(fake) } catch (error) { console.warn('[nano-cloud-session] native agent register failed', error?.message ?? error) }
+    try {
+      bridgeState.detach = ctx.agents.enter(fake)
+    } catch (error) {
+      /* The session exists but the agent register refused → nothing will ever
+       * render the projection. Do NOT report ok against a dead transcript:
+       * tear the orphan session down and fail explicitly. */
+      try { ctx.sessions.close?.(session.id) } catch { /* best-effort */ }
+      throw new NativeError('NATIVE_PROJECTION_FAILED',
+        `agents.enter refused the proxy agent: ${error?.message ?? 'unknown'}`, 500)
+    }
     bridgeState.agent = fake
     bridgeState.timer = setInterval(async () => {
       try {
@@ -315,6 +364,15 @@ export function apply(ctx, config = {}) {
         const op = sessionOps[String(body.op ?? 'get')]
         if (!op) throw new CarrierError('invalid-request', `unknown session op ${body.op}`, { status: 422 })
         const sessionId = needSessionId(body)
+        /* native_open: the host support obligation is checked before pick() —
+         * no carrier profile should be resolved when the projection itself is
+         * impossible. Other ops resolve the profile first as before. */
+        if (body.op === 'native_open' &&
+            (typeof ctx.sessions?.create !== 'function' || typeof ctx.sessions?.get !== 'function'
+             || typeof ctx.agents?.enter !== 'function')) {
+          throw new NativeError('NATIVE_UNAVAILABLE',
+            'host did not inject sessions/agents; native Chat projection is unavailable', 503)
+        }
         return op(pick(body.profileId), { ...body, session_id: sessionId })
       }),
     },

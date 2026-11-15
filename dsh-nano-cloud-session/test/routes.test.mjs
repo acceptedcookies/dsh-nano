@@ -108,3 +108,41 @@ test('session id accepts bare v3 ids and prefixes devin- for the upstream', asyn
   assert.equal(ssh.json.ok, true)
   assert.match(ssh.json.shell, /devin-787a9b68ddb94958880517d11a38da18@ssh\.devin\.ai/)
 })
+
+test('P4-02 native_open fails explicitly (NATIVE_*) — never a silent ok', async () => {
+  const routes = await makeHandlers()
+  // ctx lacks sessions/agents inject (makeHandlers ctx has only connection/webServer)
+  // → NATIVE_UNAVAILABLE 503, stable `code` rides beside `reason`.
+  const r = await call(routes.get('/nano-cloud-session/session'), { op: 'native_open', session_id: 'devin-abc' })
+  assert.equal(r.status, 503)
+  assert.equal(r.json.ok, false)
+  assert.equal(r.json.reason, 'NATIVE_UNAVAILABLE')
+  assert.equal(r.json.code, 'NATIVE_UNAVAILABLE')
+})
+
+test('P4-02 native_open: carrier read fail → NATIVE_OUTCOME_UNKNOWN + orphan torn down', async () => {
+  const routes = await makeHandlers()
+  // ctx WITH sessions+agents inject but a profile pointing at unreachable https.
+  const { apply } = await import(`../index.js`)
+  const routes2 = new Map()
+  let closed = null
+  const ctx2 = {
+    get: n => n === 'connection' ? { requestRejection: () => undefined } : undefined,
+    webServer: { register: s => { routes2.set(s.path, s.handler); return () => {} } },
+    effect: f => f(),
+    sessions: { create: () => ({ id: 'loc-1', append() {} }), get: id => id === 'loc-1', close: id => { closed = id } },
+    agents: { enter: () => () => {} },
+  }
+  apply(ctx2, { requestTimeoutMs: 5000 })
+  const port = upstream.address().port
+  // https baseUrl unreachable (stub is http) → carrier read fails post-mint
+  await call(routes2.get('/nano-cloud-session/config'), { action: 'save', profile: { label: 't', orgId: 'org-t', baseUrl: `https://127.0.0.1:${port}`, secret: 'cog_xtok45678' } })
+  const r = await call(routes2.get('/nano-cloud-session/session'), { op: 'native_open', session_id: 'devin-abc' })
+  assert.equal(r.status, 502)
+  assert.equal(r.json.code, 'NATIVE_OUTCOME_UNKNOWN')
+  assert.equal(closed, 'loc-1') // orphan session torn down, not left ok
+  // NATIVE_PROJECTION_FAILED (agents.enter refuse) needs a reachable-https
+  // carrier + failing enter simultaneously — the profile layer forces https
+  // and the test stub is http, so that branch is exercised only under a live
+  // host. The two covered branches prove the no-silent-ok contract.
+})

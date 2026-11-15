@@ -413,14 +413,8 @@ ${NANO_STYLES}
 .np-fx-artifacts { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 8px; }
 .np-fx-artifacts a { color: var(--dsw-alias-link); font-size: var(--np-font-size-xs); }
 .np-fx-composer { flex: none; }
-.np-fx-model-settings { display: flex; flex-direction: column; gap: 2px; max-height: 320px; overflow: auto; margin: 4px 0 8px; }
-.np-fx-model-row { display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: var(--dsw-radius-sm); cursor: pointer; }
-.np-fx-model-row:hover { background: var(--dsw-alias-interactive-bg-hover); }
-.np-fx-model-row input { width: 14px; height: 14px; flex: none; accent-color: var(--dsw-alias-link); }
-.np-fx-model-row-text { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
-.np-fx-model-row-provider { flex: none; font-size: var(--np-font-size-xs); color: var(--dsw-alias-label-tertiary); }
-.np-fx-model-row-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--np-font-size-sm); color: var(--dsw-alias-label-primary); }
-.np-fx-model-row-ctx { flex: none; margin-left: auto; font-size: var(--np-font-size-xs); color: var(--dsw-alias-label-tertiary); }
+.np-fx-model-settings { max-height: 320px; overflow: auto; }
+.np-dlg-body .np-switch:disabled { opacity: .72; cursor: default; }
 .np-changed { animation: npChanged 2.4s; }
 @keyframes npChanged { 0% { background: var(--dsw-alias-interactive-bg-active); } 100% { background: transparent; } }
 .np-group { display: flex; align-items: center; gap: 6px; margin: 12px 0 4px; padding-left: 8px; color: var(--dsw-alias-label-tertiary); font-size: var(--np-font-size-xs); font-weight: 600; letter-spacing: .04em; line-height: 20px; }
@@ -3041,6 +3035,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
         ${num('editorFontSizePx', 'px', values.editorFontSizePx, copy.editorFontSize, copy.editorFontSizeHint)}
       </section>
       <section class="np-section" data-tab="fx">
+        <div class="np-field"><div class="np-field-text"><span class="np-field-name">${escapeHtml(copy.fxRuntime)}</span><span class="np-field-desc">${escapeHtml(copy.fxRuntimeHint)}</span></div><button type="button" class="np-switch" disabled aria-disabled="true" style="--np-switch-n:2;--np-switch-i:0"><span class="np-switch-thumb">wasm</span><span class="np-switch-label">wasm</span><span class="np-switch-label">sandbox</span></button></div>
         <div class="np-field"><div class="np-field-text"><span class="np-field-name">${escapeHtml(copy.fxModelHeading)}</span><span class="np-field-desc">${escapeHtml(copy.fxModelHint)}</span></div></div>
         <div class="np-fx-model-settings"><span class="np-field-desc">${escapeHtml(copy.fxModelLoading)}</span></div>
         <p class="np-setting-note np-fx-model-note" hidden>${escapeHtml(copy.fxModelNeedOne)}</p>
@@ -3173,7 +3168,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
             ? models.map(m => {
                 const key = m.key ?? m.id ?? m.name ?? m
                 const info = fxModelInfo(m)
-                return `<label class="np-fx-model-row"><input type="checkbox" data-fx-model-pick value="${escapeHtml(key)}"${selected.has(key) ? ' checked' : ''}><span class="np-fx-model-row-text"><span class="np-fx-model-row-provider">${escapeHtml(info.provider)}</span><span class="np-fx-model-row-name">${escapeHtml(info.model)}</span><span class="np-fx-model-row-ctx">${escapeHtml(info.ctx)}</span></span></label>`
+                return `<label class="np-field"><span class="np-field-text"><span class="np-field-name">${escapeHtml(info.model)}</span><span class="np-field-desc">${escapeHtml(info.provider)} · ${escapeHtml(info.ctx)}</span></span><input type="checkbox" data-fx-model-pick value="${escapeHtml(key)}"${selected.has(key) ? ' checked' : ''}></label>`
               }).join('')
             : `<span class="np-field-desc">${escapeHtml(copy.fxModelNone)}</span>`
         }).catch(() => { fxModelHost.innerHTML = `<span class="np-field-desc">${escapeHtml(copy.fxModelNone)}</span>` })

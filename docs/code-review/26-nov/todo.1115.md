@@ -153,11 +153,11 @@
   - **完成判据**：真实 Service 解析（无法解析即激活失败）、ON/OFF/四 preset/isolate、已准 instanceof 降级、无影子服务
   - **验证映射**：`CF1115-T19` · **依赖**：`P4-01`
   - **执行状态**：`partial` · **执行时间**：`2026-11-15` · **证据**：`1af7b18` — `FallbackService`(:64-121) 影子 Service 退役（零残留）、`HostService` 惰性解析真实 Service（缺失→激活失败非影子）、`setHostService` 合法 loader 缝（测/宿主注入真实类非 vendored 副本）、instanceof 降级走 `Symbol.hasInstance`→Real、DNMSC 23/23。留：真实宿主域 cordis 解析路径未跑（离线无 cordis）、四 preset/isolate 的 live 互斥未验 → `CF1115-T19` 半收。
-- [ ] `P4-04` — [DNEE] native 资源 / [DNN] fx·S3·RPC·标准流 + 两组别名取舍 — `deferred`
+- [x] `P4-04` — [DNEE] native 资源 / [DNN] fx·S3·RPC·标准流 + 两组别名取舍 — `partial`
   - **落点**：`dsh-nano-explorer-extra/src/client/body.js`；`dsh-nano-notepad/src/host/{s3-sync,pipeline,fx-bridge}.js`
   - **完成判据**：`/s3/config` 只留 `probe`、`/rpc` 只留 `manifest.get`；四只读 RPC 唯一 codec；标准流/资源协议独立不 JSON 化
   - **验证映射**：`CF1115-T17`/`T16` · **依赖**：`P4-01`
-  - **执行状态**：`deferred` · **执行时间**：`2026-11-15` · **证据**：`-` · **因**：`/s3/config` 仅留 `probe` 与既有 handshake 流程冲突（删 `testOne`/`config` 分支会破坏当前 S3 探测调用方）——删面需 AP 对取舍的明确裁决 + S3 远端核验授权；fx 标准流不 JSON 化亦触及 wire 协议。列 P-EXEC。
+  - **执行状态**：`partial` · **执行时间**：`2026-11-15` · **证据**：`180cf05` — F21.6 已批准的两边界别名收窄落地：`/s3/config` 删 `testOne`（→unknown action，probe 保留不激活语义，零调用方死别名）、`/rpc` 删 `lsrag.manifest`（RPC_METHODS/case/注释，method 门前移至 s3Target 之前按名拒）；`manifest.get` null 语义修正（NoSuchKey/404→null 确认缺失，403/网络/解析不再伪造 null→真错出）；`feature-contract.json` responseShape 同步除名（F8.6）。rpc-alias.test 3 断言（旧名按名拒+白名单保留+testOne→unknown），DNN 74/74。留：DNEE open-in-app 官方资源调用接真正所属服务（宿主域，依赖 P4-01）、fx chat SSE/WASM/SDK 标准协议独立保留已符合不改、四只读 RPC 的 S3 远端实连核验未授权 → `CF1115-T17`/`T16` 半收。
 
 ### Phase 5 — P4 · 全范围结算
 
@@ -188,9 +188,9 @@
 
 ## 5. 当前状态与交接
 
-- **当前节点 / 已完成（2026-11-15 三轮）**：`P1-01..P1-05`、`P2-01..P2-04`、`P3-01`、`P3-02`、`P3-03`(partial)、`P3-04`(partial)、`P3-05`(partial)、`P4-02`(partial)、`P4-03`(partial)、`P5-01`(partial)、`P5-02`(partial)、`P5-03`(partial) — 19 ticked（9 partial）
-- **下一轮（deferred，待 [业主] 裁决 / 宿主授权）**：`P4-01`（离线无 cordis，真实宿主域 Service/Provider 核验）、`P4-04`（`/s3/config`+`/rpc` 别名收窄，公开 breaking 待裁+S3 远端授权）
-- **当前阻塞**：`无硬阻塞`；P4-02/P4-03 余留均依赖 P4-01 cordis 宿主域实验；远端/S3/cordis 核验需授权。全部 21 项均有执行状态（19 ticked 含 9 partial + 2 deferred）
+- **当前节点 / 已完成（2026-11-15 三轮）**：`P1-01..P1-05`、`P2-01..P2-04`、`P3-01`、`P3-02`、`P3-03`(partial)、`P3-04`(partial)、`P3-05`(partial)、`P4-02`(partial)、`P4-03`(partial)、`P4-04`(partial)、`P5-01`(partial)、`P5-02`(partial)、`P5-03`(partial) — 20 ticked（10 partial）
+- **下一轮（deferred，待 [业主] 裁决 / 宿主授权）**：`P4-01`（离线无 cordis，真实宿主域 Service/Provider 核验——DNCS ctx.agents/sessions 真实 API 兼容、DNEE open-in-app 所属服务、DNMSC cordis resolve/4-preset live 互斥均挂此）+ 远端/S3 实连核验授权
+- **当前阻塞**：`无硬阻塞`；P4-02/P4-03/P4-04 余留均依赖 P4-01 cordis 宿主域实验或远端/S3 实连授权。全部 21 项均有执行状态（20 ticked 含 10 partial + 1 deferred）
 - **待 owner / 外部决定**：`implementation grant 已由本 directive 框架内授予；容器/远端/S3 核验 deferred 至另立授权。mcp-bridge 双载体 canonical 已实证收敛（DNLS 唯一载体，e1b2e91）。P4-04 /s3/config 收窄、3 个 facade 签名偏离、DNT lane enum 收窄——均列 P-EXEC 待裁决`
 - **最终交接目标**：`closure + 工作日志回填 + 3 路审查`
 

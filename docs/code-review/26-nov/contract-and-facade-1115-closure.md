@@ -155,7 +155,7 @@
 |---|---|---|---|
 | E1115-DNN-01 | SDK prefix 旁路注册+手工 connection fence（13 行扫不到） | prefix 成一等 `dnn.fx.sdk` binding（`lib/bindings.js`+`route-sensitivity.json` 行）；`createWebRegistrar().registerAll` 统一注册、手工 fence 删。残余：route-scan 读生成物 `lib/bindings.js`（投影自证，独立源扫为 deferred 债） | **covered** |
 | E1115-DNN-02 | ≥3 host reader+浏览器 sync 各有错误类；fx chat reader 不管 bodyLimit | 客户端 `jsonClient` 统一（sync/fx-runtime/fx-sqlite/panel）；`pipeline.js` 改 `readJsonBody(req,route?.bodyLimit)`。残余：`fx-bridge.js:150` 仍无限累 chunk；host reader 仍分散、无共享错误分类 | **partial** |
-| E1115-DNN-03 | 路径登记不盖 operation；`/rpc` 5 路径/27 标签含 1 语义别名 | 仅路径行 `dnn.rpc` 入台账，operation 未动。`/s3/config`/`/rpc` 别名收窄=P4-04 deferred（与 handshake 冲突+S3 auth 待裁） | **not-covered-deferred** |
+| E1115-DNN-03 | 路径登记不盖 operation；`/rpc` 5 路径/27 标签含 1 语义别名 | `180cf05`：`lsrag.manifest`/`testOne` 死别名删（零调用方）、method 门前移按名拒、`manifest.get` null/denied/读失败三分、台账同步。残余：路径登记仍只到 `dnn.rpc` 粒度（31→无分支级 operation 合同的 wider 债仍在）、S3 远端实连未授权 | **partial** |
 | E1115-DNN-04 | `__nanoNotepad` 窗口根带 import+诊断+fx/corpus/sqlite/pipeline，返活对象 | `window.__nanoNotepad` 全删（`lib/client.js` 0 hit）；公开面=`ctx.provide('nanoNotepad',{import})` 返 receipt；DNEE `ctx.get` 消费。残余：内部 controller 混 fx/test（`__setCasGateForTest`/`casGateState`） | **partial** |
 | E1115-DNN-05 | fx chat JSON 错→OpenAI SSE→SSE error 不可统一 facade | verbatim 未动（`fx-bridge.js:184` `text/event-stream`+`[DONE]`）；eval 裁=协议适配非新协议，deferred | **kept-as-debt** |
 
@@ -220,15 +220,15 @@ Phase-4/5 的 host 适配 + 全范围结算与若干公开退役面（DNK 容器
 | DNLS `/mcp` CDP 深工具 + host↔bridge 合同 + bodyLimit + terminal-driver（E1115-DNLS-02/03/06） | `deferred` | `68210f6` 未触 bridge/readJson/terminal-driver；T16 未封口 |
 | DNMSC R-16 真实 cordis resolve + 4-preset/isolate live 互斥（E1115-DNMSC-01..03） | `deferred`→`partial` | `1af7b18` HostService 惰性解析+`setHostService` 缝落地；cordis 离线/互斥未验=P4-01 |
 | DNCS native_open 支持义务 + NATIVE_* 四码（E1115-DNCS-03） | `partial` | `102796e`：宿主 inject 缺失→`NATIVE_UNAVAILABLE`503、无 profile→`NATIVE_UNSUPPORTED`422、minted 后 carrier 失败→`NATIVE_OUTCOME_UNKNOWN`502+orphan 拆、`agents.enter` 拒→`NATIVE_PROJECTION_FAILED`500+orphan 拆；`code` 稳定字段。残余：fake-agent 投影本体仍登记 spike 架构、`close`/`enter` 真实 API 兼容离线不可验（P4-01）、PROJECTION_FAILED live-only |
-| DNN `/s3/config`+`/rpc` 别名收窄 + fx/S3 边界（E1115-DNN-03/05、DNEE-03 open-in-app） | `deferred` | P4-04 公开 breaking 收窄，与 handshake 冲突+S3 auth 待裁 |
+| DNN `/s3/config`+`/rpc` 别名收窄（E1115-DNN-03） | `partial` | `180cf05`：F21.6 已批准收窄落地——`testOne`/`lsrag.manifest` 死别名删（零调用方）、method 门前移按名拒、`manifest.get` null/denied/读失败三分、feature-contract 台账同步。残余：DNEE open-in-app 官方资源调用（P4-01）、fx SSE 独立保留已符合、S3 远端实连未授权 |
 | 跨包错误合同统一 + 全 kind registry + 扫描独立源（CROSS-01..04 残余） | `partial` | `dsh-interface`+`JsonOutcome`+8 包台账收敛；route-scan 读生成物、全 kind registry 未实现 |
 
 > **任一 `deferred`/`partial`/`未观察` ⇒ 本计划整体不标 `executed`**。`observed-OK-at-closure` 目标在 closure 时点观察正常；`未观察`/`deferred` 目标如实保留观察号——handoff 给 P4-01（cordis host-domain）、P4-02（native_*+carrier auth）、P4-04（/s3/config 裁决）与 T15/T16 续轮。
 
 ## 5. 交接
 
-- **已完成**：P1·P2·P3-01/02 全、`P3-03`/`P3-04`/`P3-05`/`P4-02`/`P4-03`/`P5-01`/`P5-02`/`P5-03` partial。
-- **下一动作 / deferred**：`P4-01`（宿主域 cordis 核验，`@deepseek-ai/cordis` 离线不可解析）→ `P4-04`（`/s3/config`+`/rpc` 别名收窄，公开 breaking+S3 auth 待裁）；P4-02/P4-03 余留均依赖 P4-01 的 cordis 宿主域实验。
-- **P-EXEC 待裁决**：3 个 facade 签名偏离（createMcpToolset/decodeMcpReply/createWebRegistrar）、clean-lib allowlist 扩 `@deepseek-ai/dsh-compaction`、spec↔binding 缺行静默丢弃、route-scan 读生成物失独立性、P4-04 /s3/config 收窄与 handshake 冲突；DNK mcp-bridge canonical 已由 `e1b2e91` 实证收敛至 DNLS（非第二作者源），P3-04 公开退役面已落地。
+- **已完成**：P1·P2·P3-01/02 全、`P3-03`/`P3-04`/`P3-05`/`P4-02`/`P4-03`/`P4-04`/`P5-01`/`P5-02`/`P5-03` partial。
+- **下一动作 / deferred**：`P4-01`（宿主域 cordis 核验，`@deepseek-ai/cordis` 离线不可解析——DNCS `ctx.agents`/`ctx.sessions` 真实 API 兼容、DNEE open-in-app 所属服务、DNMSC cordis resolve/4-preset live 互斥均挂此）；远端/S3 实连核验需授权。
+- **P-EXEC 待裁决**：3 个 facade 签名偏离（createMcpToolset/decodeMcpReply/createWebRegistrar）、clean-lib allowlist 扩 `@deepseek-ai/dsh-compaction`、spec↔binding 缺行静默丢弃、route-scan 读生成物失独立性；P4-04 别名收窄已按 F21.6 已批准取舍落地（`180cf05`），DNK mcp-bridge canonical 已由 `e1b2e91` 实证收敛至 DNLS（非第二作者源），P3-04 公开退役面已落地。
 - **阻塞**：无硬阻塞；容器/远端/S3/cordis 宿主域核验需授权。
 - 完成判据仍锚 `AP §10.1` 硬闸 + `§10.3` DoD。

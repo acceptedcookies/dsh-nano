@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "异步压缩接管",
+    "description": "dsh-nano-model-selector 的宿主侧互斥扩展：通过 patch 覆盖四个 agent preset 的 id:compaction 组，挂载异步压缩引擎。在模型选择器面板的「压缩」页签管理。"
+  }
+}

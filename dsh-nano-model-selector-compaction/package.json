@@ -8,7 +8,9 @@
     "index.js",
     "AGENTS.md",
     "cordis.patch.yml",
-    "lib"
+    "lib",
+    "icon.svg",
+    "locale"
   ],
   "engines": {
     "dsh": ">=0.2.2-rc.1 <0.3.0"
@@ -17,5 +19,9 @@
     "bundle": {
       "patch": "./cordis.patch.yml"
     }
+  },
+  "icon": "./icon.svg",
+  "exports": {
+    "./icon": "./icon.svg"
   }
 }

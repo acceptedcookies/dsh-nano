@@ -172,13 +172,11 @@ function lockPathOf() {
   return path.join(process.env.DSH_HOME || homedir(), 'nano-kitesurf.lock.json')
 }
 
+// P3-04 container-era retirement: persistedCheckout()/rememberCheckout() are
+// gone — they existed only to rebuild a local container across host restarts.
+// The lock file remains the plugin's durable state but holds no checkout.
 function persistedCheckout() {
-  try {
-    const row = JSON.parse(readFileSync(lockPathOf(), 'utf8'))
-    return typeof row.checkout === 'string' && row.checkout ? row.checkout : undefined
-  } catch {
-    return undefined
-  }
+  return undefined
 }
 
 /**
@@ -194,18 +192,7 @@ function archiveSnapshot(kind, shape = {}) {
   } catch { /* best-effort */ }
 }
 
-async function rememberCheckout(checkout) {
-  if (!checkout) return
-  try {
-    const file = lockPathOf()
-    let row = {}
-    try { row = JSON.parse(await readFile(file, 'utf8')) } catch { /* fresh */ }
-    row.checkout = checkout
-    row.checkoutAt = new Date().toISOString()
-    await mkdir(path.dirname(file), { recursive: true })
-    await writeFile(file, `${JSON.stringify(row, null, 2)}\n`)
-  } catch { /* diagnostics/config must never break engine start */ }
-}
+// rememberCheckout retired alongside persistedCheckout (P3-04): no consumer.
 
 function sendJson(res, status, payload) {
   const body = JSON.stringify(payload)
@@ -460,7 +447,10 @@ export function apply(ctx, config) {
   // an unrecoverable 400 for someone who cannot edit their profile. Resolved
   // lazily so writing the lock file takes effect on the NEXT resume without
   // a host restart.
-  const effectiveCheckout = () => config?.checkout || process.env.KITESURF_CHECKOUT || persistedCheckout()
+  // P3-04: the checkout that used to seed a local container is retired — this
+  // package no longer creates containers. `config.checkout` still parses for
+  // back-compat but has no consumer inside the package.
+  void config?.checkout
 
   /**
    * Port truth: what the config asks for, what the engine actually uses, what

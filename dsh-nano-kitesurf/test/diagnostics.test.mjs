@@ -41,7 +41,9 @@ test('every real kitesurf.* errorId is catalogued or a bridge-local id', () => {
   const covered = (id) => ERROR_STATUS.some(([pattern]) => pattern.test(id))
   const roots = [fileURLToPath(new URL('..', import.meta.url))]
   const files = []
-  for (const dir of ['index.js', 'lib', 'runtime']) {
+  // P3-04: `runtime/` is retired — the bridge's only carrier is DNLS
+  // `profiles/kitesurf/mcp-bridge.mjs`; nothing under runtime/ is a source root.
+  for (const dir of ['index.js', 'lib']) {
     const full = join(roots[0], dir)
     if (dir === 'index.js') { files.push(full); continue }
     for (const entry of readdirSync(full)) {

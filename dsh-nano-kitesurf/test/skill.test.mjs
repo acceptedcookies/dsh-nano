@@ -57,7 +57,9 @@ test('kitesurf-cdp is a directory skill: entry ≤90 lines + resourceBase direct
 })
 
 test('coverage reconciliation: every ROUTE_TABLE path and kitesurf_* tool is documented in the tree', () => {
-  const bridge = readFileSync(join(root, 'runtime', 'mcp-bridge.mjs'), 'utf8')
+  // P3-04: the bridge's sole carrier is DNLS `profiles/kitesurf/mcp-bridge.mjs`
+  // (the DNK `runtime/` copy is retired). Read it from there.
+  const bridge = readFileSync(join(root, '..', 'dsh-nano-local-sandbox', 'profiles', 'kitesurf', 'mcp-bridge.mjs'), 'utf8')
   const tools = [...bridge.matchAll(/name:\s*['"](sandbox\.[a-z_]+)['"]/g)].map((m) => m[1])
   const dir = join(root, 'skills', 'kitesurf-cdp')
   let text = readFileSync(join(dir, 'SKILL.md'), 'utf8')

@@ -126,11 +126,12 @@ function makeCtx({ llm = makeLlm(), meter = makeMeter(), logger = makeLogger() }
   }
   const flushed = []
   const pruner = { calls: 0, pruneSession() { this.calls += 1 } }
-  const services = new Map([['toolResultPruner', pruner]])
+  const agents = { withInitiator: (_agent, fn) => fn() }
+  const services = new Map([['toolResultPruner', pruner], ['agents', agents]])
   return {
     logger, llm, tokenMeter: meter, flushed, pruner, listeners,
     sessions: { flush: async s => { flushed.push(s.id) } },
-    agents: { withInitiator: (_agent, fn) => fn() },
+    agents,
     reflect: { provide() {} },           // cordis Service constructor hook
     get(name) { return services.get(name) },
     _services: services,

@@ -83,7 +83,12 @@ function routedTarget(session) {
 }
 
 export default class NanoCompactionEngine extends CompactionEngine {
-  static inject = ['llm', 'tokenMeter', 'sessions', 'agents']
+  // `agents` deliberately omitted: the id:compaction isolate only declares
+  // compaction+toolResultPruner, so a static inject of 'agents' throws inside
+  // preset-standard/ptc/cordis and kills preset composition ("tool-office:
+  // never started" in the GUI). ctx.get('agents') resolves lazily at the
+  // agent/status listener instead.
+  static inject = ['llm', 'tokenMeter', 'sessions']
 
   constructor(ctx) {
     super(ctx)
@@ -160,7 +165,12 @@ export default class NanoCompactionEngine extends CompactionEngine {
       if (status === 'idle') this._overflowRetries.delete(agent)
       const episode = this._episodes.get(agent.session.id)
       if (status !== 'idle' || episode === undefined || episode.phase !== 'armed') return
-      ctx.agents.withInitiator(agent, () => this._claimEpisodeMaintenance(agent, episode))
+      const agents = ctx.get('agents')
+      if (agents === undefined) {
+        ctx.logger.warn('async compaction: ctx.agents unavailable; idle maintenance claim skipped')
+        return
+      }
+      agents.withInitiator(agent, () => this._claimEpisodeMaintenance(agent, episode))
     })
 
     // Model switch mirrors the native prepend listener: force the history under

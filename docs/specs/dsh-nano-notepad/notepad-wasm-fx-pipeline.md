@@ -899,3 +899,16 @@ runPipeline(spec, ctx) → {runId, stages:[{name,ok,result}], status}
 - 保留 P0-2/P0-3：当前文档 chip（短文档内联，>8000 字 note_read）、`/` prompt、`@` 语料引用。
 
 **ego 验证**：入口 `.np-fx-entry` 出现在 tab 行右端（562px 窗口下 x≈508，28px 高），旧 toolbar `[data-action=fx-run]` 为 null；点击后 `.np-fx-view` 位于 window 内（x21,y61→74,w560,h380），close 再开 window 尺寸不变；真实 LLM `html-summarize` 运行 11.7s，4 个 tool detail、产物 `untitled-2-DeepSeek-V3.kb.md`；管线新建/删除、记录列表均通过。
+
+### 13.9 fx 模型与 composer 细化（2026-11-15，业主第二轮）
+
+**业主反馈**：① 模型下拉需切原生 UI（非浏览器 select）；② 模型应是少数精选，不是全部 53 个；③ 总设置提供 fx 专项设置入口；④ fx composer 与主 composer 样式对齐（按 fx 需求适配，细节修正）；⑤ 处理按钮 light/dark 的激活/非激活态要明确。
+
+**实现**：
+- **原生 UI**：composer 模型 `<select>` 删除，改为 `.np-fx-model` 按钮 + `openNanoMenu`（NanoMenu 原生菜单，选中带 check 图标）；prompt 按钮同样改为 `openNanoMenu`，不再使用会停留的 `.np-fx-pop`；提示按钮打开时 `data-active` 高亮，选中/点外/Esc 清除。
+- **精选模型**：`DEFAULT_SETTINGS.fxModels` 默认 3 个——`deepseek-official~deepseek-flash`、`deepseek-official~deepseek-v4-pro`、`magpie~auto/deepseek-v4.1-flash-1017`；composer 只显示勾选集合，绝不显示全量 53。
+- **总设置 fx 专项**：设置 dialog 增加 `fx` tab；列出 `/fx/models` 全量供勾选，写入 `settings.fxModels`（归一化写入 IDB；至少保留一个）。
+- **composer 对齐**：外层 16px 圆角、layer-2 背景、12px 水平 padding、输入区 56px 最小高度、底部 chip/模型/发送一行；与主 composer 同层次。
+- **处理按钮态**：dark 未激活 `#2c2c2e` 底/`#f9fafb` 字，dark 激活 `#7aaaff` 底/`#0f1115` 字；light 未激活 `#eef1f5`/`#0f1115`，light 激活 `#4176e6`/白字；由 `.np-window[data-fx]` 驱动。
+
+**ego 验证**：模型菜单 3 项（选中 `deepseek-official~deepseek-v4-pro` 可切换）；prompt 原生菜单 3 项且 `data-active` 正常；设置 `fx` tab 列出 53 个候选、默认勾选 3 个，取消 v4-pro 后 composer 菜单变 2 个，恢复后 3 个；composer 高度 134.5px 不随 chip 切换抖动；暗/亮按钮四态颜色按上表。

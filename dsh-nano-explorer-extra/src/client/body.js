@@ -11,6 +11,7 @@ import * as primitives from '@deepseek-ai/dsh-client-ui-primitives'
 import { NanoToast } from 'dsh-nano-ui'
 import { perf } from './perf.js'
 import { getWorkspaceStore } from './workspace-store.js'
+import { request as hostRequest } from './jsonClient.js'
 import { absoluteOf, basenameOf, parentOf, relativeTo, treeKeyOf } from './paths.js'
 import { checkName, nextName } from './names.js'
 
@@ -145,23 +146,9 @@ export function ExplorerBody(props) {
   const prefsRef = useRef(prefs)
   prefsRef.current = prefs
 
-  /** Ask the Host for one thing, surfacing failures as `{ ok: false }`. */
-  const request = useCallback(async (path, body) => {
-    try {
-      const response = await fetch(`/nano-explorer-extra${path}`, {
-        method: body === undefined ? 'GET' : 'POST',
-        headers: body === undefined ? undefined : { 'content-type': 'application/json' },
-        body: body === undefined ? undefined : JSON.stringify(body),
-        credentials: 'same-origin',
-        cache: 'no-store',
-      })
-      const payload = await response.json().catch(() => ({ error: `HTTP ${response.status}` }))
-      if (!response.ok) return { ok: false, message: payload?.error ?? `HTTP ${response.status}` }
-      return { ok: true, ...payload }
-    } catch (error) {
-      return { ok: false, message: error instanceof Error ? error.message : String(error) }
-    }
-  }, [])
+  /** Ask the Host for one thing, surfacing failures as `{ ok: false }`. The
+     * shared JsonOutcome codec lives in ./jsonClient.js (CF1115 / T13). */
+  const request = useCallback((path, body) => hostRequest(path, body), [])
 
   /** Mount on the shared store; the first pane loads the root, a stale store re-reads quietly. */
   useEffect(() => {

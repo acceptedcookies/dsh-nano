@@ -2,8 +2,8 @@
 
 import { watch } from 'node:fs'
 import { ensurePerfReviewHost, LIB_VERSION } from 'dsh-performance-review/host'
-import { registerRoutes as registerGuardedRoutes } from 'dsh-host-route-guard'
-import { ROUTE_TABLE, PLUGIN } from './route-table.js'
+import { createWebRegistrar } from 'dsh-interface/host'
+import { BINDING_TABLE, PLUGIN } from '../../lib/bindings.js'
 import { checkoutBranch, commitAll, fetchAll, ignoredAmong, ignoredPathsOf, listBranches, listConflicts, listWorktrees, pullUpstream, pushUpstream, readStatus, writeRemote, writeAuthor, writeSshKey } from './git.js'
 import { absoluteOf, isLexicallyInside, listDirectory } from './listing.js'
 import { createFile, createFolder, moveEntry, removeEntry, rename } from './mutate.js'
@@ -628,16 +628,26 @@ export function createRoutes(ctx, config) {
  * @returns one disposer per registered route.
  */
 export function registerRoutes(ctx, routes) {
-  const specs = Object.entries(routes).map(([suffix, route]) => ({
-    path: `${PREFIX}${suffix}`,
-    methods: [route.method],
+  /* CF1115 / P2-04 / T12: register through the single createWebRegistrar
+     (channel http × match exact; http+exact internally reuses the single
+     createGuard admission pipeline — one guard impl, unidirectional reuse).
+     The producer envelope is the sanctioned JsonOutcome wire shape:
+     success → 200 {ok:true,data}; sanctioned business failure → 400
+     {ok:false,error:{reason}} (F14.5). BINDING_TABLE rows carry id/channel/
+     match; handlers resolve by suffix from the baked path. */
+  const bindings = BINDING_TABLE.map(row => ({
+    ...row,
     handler: async (req, res) => {
+      const suffix = row.path.slice(PREFIX.length)
+      const route = routes[suffix]
       try {
-        sendJson(res, 200, await route.run(req))
+        const data = await route.run(req)
+        sendJson(res, 200, { ok: true, data })
       } catch (error) {
-        sendJson(res, 400, { error: messageOf(error) })
+        sendJson(res, 400, { ok: false, error: { reason: messageOf(error) } })
       }
     },
   }))
-  return registerGuardedRoutes(ctx, specs, { table: ROUTE_TABLE, plugin: PLUGIN })
+  const registrar = createWebRegistrar({ plugin: PLUGIN, bindings })
+  return [registrar.registerAll(ctx)]
 }

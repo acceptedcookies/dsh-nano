@@ -10,6 +10,7 @@ import { readFavorites, writeFavorites } from './favorites.js'
 import { fetchEngine, fetchEngines, readEngineCache, selectEngine, writeEngineCache } from './media.js'
 import { CompactPanel } from './CompactPanel.jsx'
 import { fetchCompactState } from './compact.js'
+import { jsonOp, call } from './jsonClient.js'
 import {
   CheckIcon,
   ChevronDownIcon,
@@ -29,6 +30,9 @@ import { STYLE } from './styles.js'
 import { perf, setModelSelectorRoot } from './perf.js'
 
 const STYLE_ID = 'nano-model-selector-style'
+
+/* Catalog face through the single JsonOutcome codec (CF1115 / T13). */
+const CATALOG_OP = jsonOp({ method: 'GET', url: '/nano-model-selector/catalog' })
 
 /** Official tooltip copy: a title, then one water line per row (pre-line). */
 function waterTip(copy, lines) {
@@ -223,9 +227,9 @@ export function ModelSelector({ locked, available, directory, load, select, lang
   // R8). `detailsFetchedAt` remembers when we last pulled.
   const detailsFetchedAt = React.useRef(0)
   const DETAILS_TTL_MS = 15000
+  const catalogCall = () => call(CATALOG_OP).catch(() => undefined)
   const fetchDetails = React.useCallback(() => {
-    fetch('/nano-model-selector/catalog', { credentials: 'same-origin', cache: 'no-store' })
-      .then(response => response.ok ? response.json() : undefined)
+    catalogCall()
       .then(value => { if (value !== undefined) { setDetails(value); detailsFetchedAt.current = Date.now() } })
       .catch(() => { /* Keep the last good descriptions. */ })
   }, [])
@@ -234,8 +238,7 @@ export function ModelSelector({ locked, available, directory, load, select, lang
     if (!open) return undefined
     if (details !== null && Date.now() - detailsFetchedAt.current < DETAILS_TTL_MS) return undefined
     let cancelled = false
-    fetch('/nano-model-selector/catalog', { credentials: 'same-origin', cache: 'no-store' })
-      .then(response => response.ok ? response.json() : undefined)
+    catalogCall()
       .then(value => { if (!cancelled && value !== undefined) { setDetails(value); detailsFetchedAt.current = Date.now() } })
       .catch(() => { /* The directory already carries the basic catalog. */ })
     return () => { cancelled = true }

@@ -14,6 +14,7 @@
 
 import { readSyncMeta, writeSyncMeta, applyRemoteFiles, putImageFromRemote, allImages, createNode, saveDraft, deleteNode } from './db.js'
 import { checkImage } from 'dsh-remote-data-schema/image-check.js'
+import { rpc } from './jsonClient.js'
 
 const MANIFEST_KEY = 'manifest.json'
 const STATUS_ROUTE = '/nano-notepad/s3/status'
@@ -50,16 +51,9 @@ export function cleanRemoteFile(id, entry) {
   }
 }
 
-async function rpc(path, body) {
-  const response = await fetch(path, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body ?? {}),
-  })
-  const json = await response.json().catch(() => null)
-  if (!response.ok) throw new Error(json?.message || `s3 ${path} HTTP ${response.status}`)
-  return json
-}
+/* Single JsonOutcome codec in ./jsonClient.js (CF1115 / T13): this module's
+ * own fetch+parse wrapper is retired. `rpc` resolves the {ok,…} envelope and
+ * throws with the producer message on failure — same contract as before. */
 
 const object = body => rpc(OBJECT_ROUTE, body)
 const configRpc = (action, payload = {}) => rpc(CONFIG_ROUTE, { action, ...payload })

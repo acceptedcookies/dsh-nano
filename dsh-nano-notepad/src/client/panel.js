@@ -1462,15 +1462,10 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     /* browser picker refused (iframe/policy) — ask the host for a native macOS
        dialog via osascript; the dsh daemon shows choose-file-name itself */
     try {
-      const res = await fetch('/nano-notepad/save', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ name, content, dir: current()?.sourcePath?.replace(/\/[^/]*$/, '') }),
-      })
-      const out = await res.json().catch(() => ({}))
-      if (out.ok) { setSync('exported', out.path || name); return }
-      if (out.reason === 'cancelled') return
-      console.warn('[notepad] host save 失败：', out.message || out.reason)
+      const out = await import('./jsonClient.js').then(m => m.post('/nano-notepad/save', { name, content, dir: current()?.sourcePath?.replace(/\/[^/]*$/, '') }))
+      if (out?.ok) { setSync('exported', out.path || name); return }
+      if (out?.reason === 'cancelled') return
+      console.warn('[notepad] host save 失败：', out?.message || out?.reason)
     } catch (error) {
       console.warn('[notepad] host save 不可达：', String(error?.message || error).slice(0, 120))
     }
@@ -4678,13 +4673,8 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     hint.dataset.state = 'busy'
     input.disabled = true
     try {
-      const res = await fetch('/nano-notepad/fetch-mp', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ url: value }),
-      })
-      const out = await res.json().catch(() => ({}))
-      if (!res.ok || out.ok !== true) throw new Error(out.message || out.reason || 'fetch failed')
+      const out = await import('./jsonClient.js').then(m => m.post('/nano-notepad/fetch-mp', { url: value }))
+      if (out?.ok !== true) throw new Error(out?.message || out?.reason || 'fetch failed')
       const node = await controller.import(out.name, out.content, { sourcePath: value })
       if (out.meta) await updateNodeMeta(state.db, node.id, { mp: out.meta }).catch(() => {})
       input.value = ''
@@ -4701,13 +4691,8 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
   /** Chat cards named `[data-changed-files]` are one turn's edited files. */
   async function copyChangedMarkdown(path, button) {
     button.disabled = true
-    const response = await fetch('/nano-notepad/read', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ path }),
-    })
-    const out = await response.json().catch(() => ({}))
-    if (!response.ok || out.ok !== true) throw new Error(out.message || 'read failed')
+    const out = await import('./jsonClient.js').then(m => m.post('/nano-notepad/read', { path }))
+    if (out?.ok !== true) throw new Error(out?.message || out?.reason || 'read failed')
     const workspaceId = workspaceCatalog().currentId
     state.ui.workspaceChoice = workspaceId ?? 'unassigned'
     restoreWorkspaceFile()

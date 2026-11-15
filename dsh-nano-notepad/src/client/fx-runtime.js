@@ -81,7 +81,6 @@ export async function runOneShot(promptText, opts = {}) {
 
 /** Fetch the provider~model catalog the bridge mirrors from ctx.llm. */
 export async function fetchModels() {
-  const res = await fetch('/nano-notepad/fx/models')
-  const data = await res.json()
-  return data.ok ? data.models : []
+  const data = await import('./jsonClient.js').then(m => m.get('/nano-notepad/fx/models')).catch(() => null)
+  return data?.ok ? data.models : []
 }

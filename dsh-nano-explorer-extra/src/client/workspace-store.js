@@ -11,6 +11,7 @@
 import { absoluteOf, basenameOf, parentOf, relativeTo, treeKeyOf } from './paths.js'
 import { replaceDirectoryStatus } from './format.js'
 import { perf } from './perf.js'
+import { request } from './jsonClient.js'
 
 /** How long an orphaned store survives after its last pane unmounted. */
 const ORPHAN_TTL_MS = 5 * 60 * 1000
@@ -24,28 +25,9 @@ const STATS_PENDING_MS = 4000
 /** The live stores, keyed by workspace root. */
 const stores = new Map()
 
-/**
- * Fetch one plugin route and normalize the answer.
- * @param path - route suffix under `/nano-explorer-extra`.
- * @param body - optional JSON body; a GET is sent when absent.
- * @returns `{ ok, ...payload }`; failures surface as `{ ok: false, message }`.
- */
-async function request(path, body) {
-  try {
-    const response = await fetch(`/nano-explorer-extra${path}`, {
-      method: body === undefined ? 'GET' : 'POST',
-      headers: body === undefined ? undefined : { 'content-type': 'application/json' },
-      body: body === undefined ? undefined : JSON.stringify(body),
-      credentials: 'same-origin',
-      cache: 'no-store',
-    })
-    const payload = await response.json().catch(() => ({ error: `HTTP ${response.status}` }))
-    if (!response.ok) return { ok: false, message: payload?.error ?? `HTTP ${response.status}` }
-    return { ok: true, ...payload }
-  } catch (error) {
-    return { ok: false, message: error instanceof Error ? error.message : String(error) }
-  }
-}
+/* The single fetch codec lives in ./jsonClient.js (CF1115 / T13): this module
+ * once carried its own fetch+parse helper; consumers now funnel through the
+ * shared `request` so envelope decoding is one implementation. */
 
 /**
  * The store behind one workspace root.

@@ -11,6 +11,11 @@
  * notepad scoped bucket; restore-on-boot rehydrates. s3 为真源，本地副本。
  */
 
+/* Single JsonOutcome codec in ./jsonClient.js (CF1115 / T13): the bespoke
+ * text-parse+ok-check here is retired; pipelineCall unwraps both the envelope
+ * and the {ok,result} producer layer. */
+import { pipelineCall } from './jsonClient.js'
+
 const SDK_BASE = '/nano-notepad/fx/sdk'
 const WORKER_URL = `${SDK_BASE}/np-sqlite-worker.mjs`
 const S3_ROUTE = '/nano-notepad/pipeline/s3'
@@ -224,20 +229,6 @@ export async function finishRun(id, status = 'done') {
 export async function checkpoint(runId, stage, state = {}) {
   await exec('INSERT INTO checkpoints(run_id,stage,at,state) VALUES(?,?,?,?)',
     [runId, stage, Date.now(), JSON.stringify(state)])
-}
-
-async function pipelineCall(route, body) {
-  const res = await fetch(route, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  })
-  const text = await res.text()
-  let data = null
-  try { data = text ? JSON.parse(text) : null } catch { /* non-JSON body */ }
-  if (!res.ok || data === null) throw new Error(data?.message ?? data?.reason ?? `HTTP ${res.status}`)
-  if (!data.ok) throw new Error(data.message ?? data.reason ?? `HTTP ${res.status}`)
-  return data.result
 }
 
 /** Export the db bytes → PUT s3 sqlite/pipeline.db (manifest CAS around etag). */

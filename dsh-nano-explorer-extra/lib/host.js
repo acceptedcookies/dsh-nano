@@ -435,226 +435,472 @@ function createGuard({ table, plugin } = {}) {
   }
   return { registerRoutes: registerRoutes3, inventory, lookup };
 }
-function registerRoutes(ctx, specs, { table, plugin } = {}) {
-  return createGuard({ table, plugin }).registerRoutes(ctx, specs);
+
+// ../packages/dsh-interface/src/contracts/webBinding.js
+var BindingError = class extends Error {
+  constructor(reason, detail = "") {
+    super(detail ? `web-binding: ${reason} \u2014 ${detail}` : `web-binding: ${reason}`);
+    this.name = "BindingError";
+    this.reason = reason;
+  }
+};
+var CHANNEL = Object.freeze({ HTTP: "http", UPGRADE: "upgrade" });
+var MATCH = Object.freeze({ EXACT: "exact", PREFIX: "prefix" });
+var CHANNELS = new Set(Object.values(CHANNEL));
+var MATCHES = new Set(Object.values(MATCH));
+function normalizeBinding(binding, { plugin } = {}) {
+  if (!binding || typeof binding !== "object") {
+    throw new BindingError("binding-invalid", "every binding must be an object");
+  }
+  const b = binding;
+  if (typeof b.id !== "string" || b.id === "") {
+    throw new BindingError("binding-invalid", "every binding needs a stable non-empty `id`");
+  }
+  if (!CHANNELS.has(b.channel)) {
+    throw new BindingError("binding-invalid", `${b.id}: channel must be one of ${[...CHANNELS].join("/")}`);
+  }
+  const match = b.match ?? MATCH.EXACT;
+  if (!MATCHES.has(match)) {
+    throw new BindingError("binding-invalid", `${b.id}: match must be one of ${[...MATCHES].join("/")}`);
+  }
+  if (b.channel === CHANNEL.UPGRADE && match !== MATCH.EXACT) {
+    throw new BindingError("binding-invalid", `${b.id}: upgrade channel requires match=exact`);
+  }
+  if (typeof b.path !== "string" || !b.path.startsWith("/")) {
+    throw new BindingError("binding-invalid", `${b.id}: path must be a string starting with '/'`);
+  }
+  const methods = b.channel === CHANNEL.UPGRADE ? Object.freeze([...b.methods ?? ["GET"]].map((m) => String(m).toUpperCase())) : (() => {
+    const ms = Array.isArray(b.methods) && b.methods.length ? b.methods.map((m) => String(m).toUpperCase()) : b.method !== void 0 ? [String(b.method).toUpperCase()] : [];
+    if (ms.length === 0) throw new BindingError("binding-invalid", `${b.id}: declare method or methods`);
+    return Object.freeze(ms);
+  })();
+  if (typeof b.handler !== "function") {
+    throw new BindingError("binding-invalid", `${b.id}: handler must be a function`);
+  }
+  return Object.freeze({
+    id: b.id,
+    plugin: b.plugin ?? plugin,
+    channel: b.channel,
+    match,
+    path: b.path,
+    methods,
+    bodyLimit: b.bodyLimit,
+    sensitivity: b.sensitivity,
+    capability: b.capability,
+    sessionBinding: b.sessionBinding,
+    justification: b.justification,
+    handler: b.handler
+  });
+}
+function normalizeBindings(bindings, { plugin } = {}) {
+  if (!Array.isArray(bindings)) {
+    throw new BindingError("bindings-invalid", "bindings must be an array");
+  }
+  const seen = /* @__PURE__ */ new Set();
+  const surface = /* @__PURE__ */ new Set();
+  return bindings.map((b) => {
+    const n = normalizeBinding(b, { plugin });
+    if (seen.has(n.id)) throw new BindingError("bindings-invalid", `duplicate binding id "${n.id}"`);
+    const key = `${n.channel} ${n.match} ${n.path}`;
+    if (surface.has(key)) throw new BindingError("bindings-invalid", `duplicate surface ${key}`);
+    seen.add(n.id);
+    surface.add(key);
+    return n;
+  });
+}
+function bindingRecord(binding) {
+  return Object.freeze({
+    id: binding.id,
+    plugin: binding.plugin,
+    channel: binding.channel,
+    match: binding.match,
+    path: binding.path,
+    methods: Object.freeze([...binding.methods]),
+    bodyLimit: binding.bodyLimit,
+    sensitivity: binding.sensitivity,
+    capability: binding.capability,
+    sessionBinding: binding.sessionBinding,
+    justification: binding.justification
+  });
 }
 
-// src/host/route-table.js
+// ../packages/dsh-interface/src/contracts/jsonOutcome.js
+var FAILURE_KIND = Object.freeze({
+  /** signal aborted; issued-before cancellation makes no server-side claim. */
+  CANCELLED: "cancelled",
+  /** Network/read-body failure; keep real httpStatus only when headers landed. */
+  TRANSPORT: "transport",
+  /** Non-2xx that is not a recognized sanctioned business failure; keep status. */
+  HTTP: "http",
+  /** Pre-request encode/binding failure OR illegal 2xx — never becomes ok:true. */
+  PROTOCOL: "protocol",
+  /** Recognized sanctioned business failure (incl. legal 2xx business failures). */
+  DOMAIN: "domain"
+});
+var FAILURE_KINDS = Object.freeze(Object.values(FAILURE_KIND));
+
+// ../packages/dsh-interface/src/host/createWebRegistrar.js
+function createWebRegistrar({ plugin, bindings } = {}) {
+  const normalized = normalizeBindings(bindings ?? [], { plugin });
+  const effective = [];
+  let disposed = false;
+  const byChannel = {
+    httpExact: normalized.filter((b) => b.channel === CHANNEL.HTTP && b.match === MATCH.EXACT),
+    httpPrefix: normalized.filter((b) => b.channel === CHANNEL.HTTP && b.match === MATCH.PREFIX),
+    upgradeExact: normalized.filter((b) => b.channel === CHANNEL.UPGRADE && b.match === MATCH.EXACT)
+  };
+  function registerAll(ctx) {
+    const conn = ctx.get("connection");
+    if (!conn) throw new RouteGuardError("no-connection", "no connection service");
+    if (typeof conn.requestRejection !== "function") {
+      throw new RouteGuardError("no-request-rejection", "connection.requestRejection is not a function; refusing to register unauthenticated routes");
+    }
+    const disposers = [];
+    const rollback = () => {
+      for (const d of disposers.splice(0)) {
+        try {
+          d && d();
+        } catch {
+        }
+      }
+    };
+    try {
+      if (byChannel.httpExact.length) {
+        const view = { ...ctx, effect: void 0 };
+        const guard = createGuard({ table: byChannel.httpExact, plugin });
+        const ds = guard.registerRoutes(view, byChannel.httpExact);
+        disposers.push(...ds);
+      }
+      for (const b of byChannel.httpPrefix) {
+        const handler = async (req, res) => {
+          const rejection = conn.requestRejection?.(req);
+          if (rejection !== void 0) {
+            res.statusCode = rejection;
+            res.end();
+            return;
+          }
+          if (!b.methods.includes(String(req.method ?? "").toUpperCase())) {
+            res.setHeader("allow", b.methods.join(", "));
+            sendJson(res, 405, { ok: false, reason: "method-not-allowed" });
+            return;
+          }
+          try {
+            await b.handler(req, res, bindingRecord(b));
+          } catch (error) {
+            const reason = error instanceof RouteGuardError ? error.reason : "failed";
+            sendJson(res, 500, { ok: false, reason });
+          }
+        };
+        disposers.push(ctx.webServer.register({ kind: "prefix", path: b.path, handler }));
+      }
+      for (const b of byChannel.upgradeExact) {
+        const handler = (req, socket) => {
+          const rejection = conn.requestRejection?.(req);
+          if (rejection !== void 0) {
+            try {
+              socket.end();
+            } catch {
+            }
+            return;
+          }
+          return b.handler(req, socket, bindingRecord(b));
+        };
+        disposers.push(ctx.webServer.registerUpgrade({ path: b.path, handler }));
+      }
+    } catch (error) {
+      rollback();
+      throw error;
+    }
+    for (const b of normalized) effective.push(bindingRecord(b));
+    const disposeAll = () => {
+      if (disposed) return;
+      disposed = true;
+      rollback();
+    };
+    if (typeof ctx.effect === "function") {
+      ctx.effect(() => disposeAll(), `web-registrar: ${plugin ?? "plugin"} dispose`);
+    }
+    return disposeAll;
+  }
+  function inventory() {
+    return Object.freeze([...effective]);
+  }
+  function lookup(id) {
+    return effective.find((r) => r.id === id);
+  }
+  return { registerAll, inventory, lookup };
+}
+
+// lib/bindings.js
 var PLUGIN = "dsh-nano-explorer-extra";
-var ROUTE_TABLE = [
+var BINDING_TABLE = [
   {
+    "id": "dnee.status",
     "plugin": "dsh-nano-explorer-extra",
+    "channel": "http",
+    "match": "exact",
     "path": "/nano-explorer-extra/status",
     "methods": [
       "GET"
     ],
+    "bodyLimit": 0,
     "sensitivity": "L0",
     "capability": "proc:git",
-    "bodyLimit": 0,
     "sessionBinding": true,
     "justification": "dsh-nano-explorer-extra/src/host/routes.js:226 \u2014 read-only git status/stats for one session workspace; returns no secrets. scopeOf resolves caller-supplied sessionId (finding scopeof-cross-session, harden) \u2014 session-scoped read by design."
   },
   {
+    "id": "dnee.commit",
     "plugin": "dsh-nano-explorer-extra",
+    "channel": "http",
+    "match": "exact",
     "path": "/nano-explorer-extra/commit",
     "methods": [
       "POST"
     ],
+    "bodyLimit": 65536,
     "sensitivity": "L2",
     "capability": "proc:git",
-    "bodyLimit": 65536,
     "sessionBinding": true,
     "justification": "dsh-nano-explorer-extra/src/host/routes.js:261 \u2014 runs `git add --all` + `git commit` as the host user; executes a process and can invoke attacker-controlled .git filter drivers (finding git-config-filter-exec). Host-level exec."
   },
   {
+    "id": "dnee.pull",
     "plugin": "dsh-nano-explorer-extra",
+    "channel": "http",
+    "match": "exact",
     "path": "/nano-explorer-extra/pull",
     "methods": [
       "POST"
     ],
+    "bodyLimit": 65536,
     "sensitivity": "L2",
     "capability": "proc:git",
-    "bodyLimit": 65536,
     "sessionBinding": true,
     "justification": "dsh-nano-explorer-extra/src/host/routes.js:273 \u2014 `git pull --ff-only`: host process exec + outbound net to the configured remote + merge writes into the workspace."
   },
   {
+    "id": "dnee.fetch",
     "plugin": "dsh-nano-explorer-extra",
+    "channel": "http",
+    "match": "exact",
     "path": "/nano-explorer-extra/fetch",
     "methods": [
       "POST"
     ],
+    "bodyLimit": 65536,
     "sensitivity": "L2",
     "capability": "proc:git",
-    "bodyLimit": 65536,
     "sessionBinding": true,
     "justification": "dsh-nano-explorer-extra/src/host/routes.js \u2014 `git fetch --all --prune`: host process exec + outbound net to configured remotes; rewrites refs/remotes but never touches workspace files."
   },
   {
+    "id": "dnee.push",
     "plugin": "dsh-nano-explorer-extra",
+    "channel": "http",
+    "match": "exact",
     "path": "/nano-explorer-extra/push",
     "methods": [
       "POST"
     ],
+    "bodyLimit": 65536,
     "sensitivity": "L2",
     "capability": "proc:git",
-    "bodyLimit": 65536,
     "sessionBinding": true,
     "justification": "dsh-nano-explorer-extra/src/host/routes.js \u2014 `git push` or `git push -u <remote> HEAD`: host process exec + outbound net to a configured or caller-named remote; publishes commits off the machine."
   },
   {
+    "id": "dnee.remote",
     "plugin": "dsh-nano-explorer-extra",
+    "channel": "http",
+    "match": "exact",
     "path": "/nano-explorer-extra/remote",
     "methods": [
       "POST"
     ],
+    "bodyLimit": 65536,
     "sensitivity": "L2",
     "capability": "proc:git",
-    "bodyLimit": 65536,
     "sessionBinding": true,
     "justification": "dsh-nano-explorer-extra/src/host/routes.js \u2014 `git remote add|set-url|remove`: host process exec that rewrites .git/config; the URL operand steers where later pushes send the tree."
   },
   {
+    "id": "dnee.author",
     "plugin": "dsh-nano-explorer-extra",
+    "channel": "http",
+    "match": "exact",
     "path": "/nano-explorer-extra/author",
     "methods": [
       "POST"
     ],
+    "bodyLimit": 65536,
     "sensitivity": "L1",
     "capability": "proc:git",
-    "bodyLimit": 65536,
     "sessionBinding": true,
     "justification": "dsh-nano-explorer-extra/src/host/routes.js \u2014 `git config user.name|user.email` (local only): writes .git/config; no process exec beyond the config setter itself, no network."
   },
   {
+    "id": "dnee.ssh-key",
     "plugin": "dsh-nano-explorer-extra",
+    "channel": "http",
+    "match": "exact",
     "path": "/nano-explorer-extra/ssh-key",
     "methods": [
       "POST"
     ],
+    "bodyLimit": 65536,
     "sensitivity": "L1",
     "capability": "proc:git",
-    "bodyLimit": 65536,
     "sessionBinding": true,
     "justification": "dsh-nano-explorer-extra/src/host/routes.js \u2014 writes  (local only) to .git/config: binds a repo-local SSH identity; key path is validated against quotes/newlines before being embedded; no process exec beyond the config setter itself."
   },
   {
+    "id": "dnee.checkout",
     "plugin": "dsh-nano-explorer-extra",
+    "channel": "http",
+    "match": "exact",
     "path": "/nano-explorer-extra/checkout",
     "methods": [
       "POST"
     ],
+    "bodyLimit": 65536,
     "sensitivity": "L2",
     "capability": "proc:git",
-    "bodyLimit": 65536,
     "sessionBinding": true,
     "justification": "dsh-nano-explorer-extra/src/host/routes.js:285 \u2014 `git checkout` as the host user; process exec that can rewrite workspace files and trigger smudge filters."
   },
   {
+    "id": "dnee.create-file",
     "plugin": "dsh-nano-explorer-extra",
+    "channel": "http",
+    "match": "exact",
     "path": "/nano-explorer-extra/create-file",
     "methods": [
       "POST"
     ],
+    "bodyLimit": 65536,
     "sensitivity": "L1",
     "capability": "write:workspace",
-    "bodyLimit": 65536,
     "sessionBinding": true,
     "justification": "dsh-nano-explorer-extra/src/host/routes.js:297 + mutate.js \u2014 bounded write of a new file inside the session workspace after resolve+policy check; symlink-escape fence is the P2 harden item."
   },
   {
+    "id": "dnee.create-folder",
     "plugin": "dsh-nano-explorer-extra",
+    "channel": "http",
+    "match": "exact",
     "path": "/nano-explorer-extra/create-folder",
     "methods": [
       "POST"
     ],
+    "bodyLimit": 65536,
     "sensitivity": "L1",
     "capability": "write:workspace",
-    "bodyLimit": 65536,
     "sessionBinding": true,
     "justification": "dsh-nano-explorer-extra/src/host/routes.js:310 + mutate.js \u2014 bounded mkdir inside the session workspace; same realpath-fence hardening as the other mutations."
   },
   {
+    "id": "dnee.rename",
     "plugin": "dsh-nano-explorer-extra",
+    "channel": "http",
+    "match": "exact",
     "path": "/nano-explorer-extra/rename",
     "methods": [
       "POST"
     ],
+    "bodyLimit": 65536,
     "sensitivity": "L1",
     "capability": "write:workspace",
-    "bodyLimit": 65536,
     "sessionBinding": true,
     "justification": "dsh-nano-explorer-extra/src/host/routes.js:324 + mutate.js \u2014 rename/move inside the workspace; bounded write once realpath fencing is in place."
   },
   {
+    "id": "dnee.move",
     "plugin": "dsh-nano-explorer-extra",
+    "channel": "http",
+    "match": "exact",
     "path": "/nano-explorer-extra/move",
     "methods": [
       "POST"
     ],
+    "bodyLimit": 65536,
     "sensitivity": "L1",
     "capability": "write:workspace",
-    "bodyLimit": 65536,
     "sessionBinding": true,
     "justification": "dsh-nano-explorer-extra/src/host/routes.js:340 + mutate.js \u2014 move entries inside the workspace; bounded write (symlink-escape fence pending)."
   },
   {
+    "id": "dnee.delete",
     "plugin": "dsh-nano-explorer-extra",
+    "channel": "http",
+    "match": "exact",
     "path": "/nano-explorer-extra/delete",
     "methods": [
       "POST"
     ],
+    "bodyLimit": 65536,
     "sensitivity": "L1",
     "capability": "write:workspace",
-    "bodyLimit": 65536,
     "sessionBinding": true,
     "justification": "dsh-nano-explorer-extra/src/host/routes.js:358 + mutate.js \u2014 delete inside the workspace (root itself refused); bounded write once fenced."
   },
   {
+    "id": "dnee.ignored",
     "plugin": "dsh-nano-explorer-extra",
+    "channel": "http",
+    "match": "exact",
     "path": "/nano-explorer-extra/ignored",
     "methods": [
       "POST"
     ],
+    "bodyLimit": 65536,
     "sensitivity": "L0",
     "capability": "read:workspace",
-    "bodyLimit": 65536,
     "sessionBinding": true,
     "justification": "dsh-nano-explorer-extra/src/host/routes.js:373 \u2014 `git check-ignore` style read over workspace paths; no write, no secret."
   },
   {
+    "id": "dnee.list",
     "plugin": "dsh-nano-explorer-extra",
+    "channel": "http",
+    "match": "exact",
     "path": "/nano-explorer-extra/list",
     "methods": [
       "POST"
     ],
+    "bodyLimit": 65536,
     "sensitivity": "L2",
     "capability": "read:host",
-    "bodyLimit": 65536,
     "sessionBinding": true,
     "justification": "dsh-nano-explorer-extra/src/host/routes.js:384 \u2014 directory listing never fenced to the workspace (finding nxe:routes-read-arbitrary-file, accepted); enumerates arbitrary host dirs = host-level read."
   },
   {
+    "id": "dnee.perf-review.host",
     "plugin": "dsh-nano-explorer-extra",
+    "channel": "http",
+    "match": "exact",
     "path": "/nano-explorer-extra/perf-review/host",
     "methods": [
       "GET"
     ],
+    "bodyLimit": 0,
     "sensitivity": "L2",
     "capability": "read:host",
-    "bodyLimit": 0,
     "sessionBinding": false,
     "justification": "dsh-nano-explorer-extra/src/host/routes.js:400 \u2014 process-global perf reservoir; mode=window drains samples across all plugins/sessions (finding perf-review-window-drain, accepted). Cross-session process state, not session-scoped."
   },
   {
+    "id": "dnee.read",
     "plugin": "dsh-nano-explorer-extra",
+    "channel": "http",
+    "match": "exact",
     "path": "/nano-explorer-extra/read",
     "methods": [
       "POST"
     ],
+    "bodyLimit": 65536,
     "sensitivity": "L2",
     "capability": "read:host",
-    "bodyLimit": 65536,
     "sessionBinding": true,
     "justification": "dsh-nano-explorer-extra/src/host/routes.js:412 \u2014 returns any UTF-8 host file up to 1 MiB; client may pass allowOutsideWorkspace:true to skip the fence (finding routes-read-arbitrary-file, accepted). Host-level read."
   }
@@ -2146,18 +2392,21 @@ function createRoutes(ctx, config) {
   };
 }
 function registerRoutes2(ctx, routes) {
-  const specs = Object.entries(routes).map(([suffix, route]) => ({
-    path: `${PREFIX}${suffix}`,
-    methods: [route.method],
+  const bindings = BINDING_TABLE.map((row) => ({
+    ...row,
     handler: async (req, res) => {
+      const suffix = row.path.slice(PREFIX.length);
+      const route = routes[suffix];
       try {
-        sendJson2(res, 200, await route.run(req));
+        const data = await route.run(req);
+        sendJson2(res, 200, { ok: true, data });
       } catch (error) {
-        sendJson2(res, 400, { error: messageOf2(error) });
+        sendJson2(res, 400, { ok: false, error: { reason: messageOf2(error) } });
       }
     }
   }));
-  return registerRoutes(ctx, specs, { table: ROUTE_TABLE, plugin: PLUGIN });
+  const registrar = createWebRegistrar({ plugin: PLUGIN, bindings });
+  return [registrar.registerAll(ctx)];
 }
 
 // src/host/entry.js

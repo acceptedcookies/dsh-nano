@@ -85,9 +85,18 @@ export function apply(ctx, config = {}) {
       sendJson(res, 200, result === undefined ? { ok: true } : result)
     } catch (error) {
       if (error instanceof CarrierError) {
-        const status = error.status >= 400 ? error.status : 502
+        /* A NativeError carries its own authoritative status (503/422/502/500)
+         * — pass it through. A PLAIN CarrierError keeps the existing clamp:
+         * upstream 5xx → 502 (the carrier's fault, not ours), 4xx → passthrough.
+         * Do not change the upstream-error semantics while adding NATIVE_*. */
+        const status = error.nativeCode != null
+          ? (error.status >= 400 ? error.status : 502)
+          : (error.status >= 400 && error.status < 500 ? error.status : 502)
+        /* `reason` carries the NATIVE_* / carrier code — it is the stable
+         * classification field the ledger already describes. Do NOT mint a
+         * parallel `code` wire key (unregistered = contract expansion). */
         sendJson(res, status,
-          { ok: false, reason: error.reason, code: error.nativeCode ?? error.reason, message: error.message.slice(0, 300), status })
+          { ok: false, reason: error.reason, message: error.message.slice(0, 300), status })
       } else {
         sendJson(res, 500, { ok: false, reason: 'failed', message: messageOf(error).slice(0, 300) })
       }

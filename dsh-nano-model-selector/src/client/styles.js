@@ -141,6 +141,10 @@ export const STYLE = `${NANO_STYLES}
 .nms-switch:disabled { opacity: .5; cursor: default; }
 .nms-switch-thumb { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--dsw-alias-bg-layer-1); box-shadow: 0 1px 3px rgba(0,0,0,.3); transition: transform .15s; }
 .nms-switch[aria-checked="true"] .nms-switch-thumb { transform: translateX(16px); }
+.nms-compact-top-actions { position: absolute; top: -1px; right: 0; z-index: 6; display: flex; align-items: center; gap: 6px; }
+.nms-compact-top-actions .nms-compact-chip { position: static; }
+.nms-compact-confirm { height: 26px; padding: 0 12px; border: 0; border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-state-business-primary); color: var(--dsw-alias-label-on-color, #fff); font: inherit; font-size: 12px; line-height: 26px; cursor: pointer; }
+.nms-compact-confirm:disabled { opacity: .6; cursor: default; }
 .nms-compact-chip { position: absolute; top: -1px; right: 0; z-index: 5; display: flex; align-items: center; gap: 6px; max-width: 300px; padding: 4px 8px; border-radius: var(--dsw-radius-sm); font-size: 11px; line-height: 15px; box-shadow: var(--dsw-elevation-raised, 0 4px 12px rgba(0,0,0,.25)); animation: nms-pop 120ms ease-out; }
 .nms-compact-chip[data-kind="warn"] { background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 18%, var(--dsw-alias-bg-layer-2)); color: var(--dsw-alias-state-warn-primary); }
 .nms-compact-chip[data-kind="fail"] { background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 18%, var(--dsw-alias-bg-layer-2)); color: var(--dsw-alias-state-error-primary); }

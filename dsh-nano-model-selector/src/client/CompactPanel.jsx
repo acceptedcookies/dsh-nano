@@ -52,6 +52,9 @@ export function CompactPanel({ copy, models, onError }) {
   const [banner, setBanner] = React.useState(null) // {kind:'success'|'warn'|'fail', text, code?}
   const [heartbeat, setHeartbeat] = React.useState(null) // {at: Date, status: number}
   const [windowMap, setWindowMap] = React.useState({}) // provider/model -> {name, contextWindow}
+  // A number edits only after the top-right confirm; blank clicks discard it.
+  const [editField, setEditField] = React.useState(null)
+  const [pending, setPending] = React.useState(null) // {field, raw}
 
   // The injected directory's model objects carry no contextWindow; the host's
   // /catalog route does. Fetch it once to decorate the dropdown options.
@@ -164,6 +167,8 @@ export function CompactPanel({ copy, models, onError }) {
     setBusy(true)
     putCompactPolicy(patch)
       .then(data => {
+        setEditField(null)
+        setPending(null)
         noteWithCode('success', `${copy.compactSwitchApplied} · ${field}`, 'applied')
         setHeartbeat({ at: new Date(), status: 'ok' })
         setState(prev => (prev === null ? prev : { ...prev, policy: data.policy ?? prev.policy, bundle: data.bundle ?? prev.bundle }))
@@ -171,6 +176,29 @@ export function CompactPanel({ copy, models, onError }) {
       .catch(error => noteWithCode('fail', error.message, error.code))
       .finally(() => setBusy(false))
   }
+
+  const cancelEdit = React.useCallback(() => {
+    setEditField(null)
+    setPending(null)
+  }, [])
+  const activateField = field => {
+    setEditField(field)
+    setPending(null)
+  }
+  const stageDraft = (field, raw) => setPending({ field, raw })
+
+  // Anything that is not the number being edited, another number, or the
+  // confirm button discards the draft. Capture phase so it wins over focus.
+  React.useEffect(() => {
+    if (editField === null) return undefined
+    const onPointer = event => {
+      const target = event.target
+      if (target?.closest?.('.nms-compact-input-num, .nms-compact-confirm, .nms-compact-value')) return
+      cancelEdit()
+    }
+    document.addEventListener('pointerdown', onPointer, true)
+    return () => document.removeEventListener('pointerdown', onPointer, true)
+  }, [editField, cancelEdit])
 
   const savedModel = `${policy.model?.provider ?? ''}/${policy.model?.model ?? ''}`
   const choices = flashChoices(models)
@@ -187,13 +215,27 @@ export function CompactPanel({ copy, models, onError }) {
 
       {/* Result chip: absolutely anchored to the panel's top-right strip — it
           overlays instead of inserting, so the list never reflows. */}
-      {banner !== null && (
-        <div className="nms-compact-chip" data-kind={banner.kind} role="status">
-          {banner.kind === 'success' ? <CheckIcon size={12} /> : <WarningIcon size={12} />}
-          <span className="nms-compact-chip-copy">{banner.text}</span>
-          <button type="button" className="nms-compact-note-x" aria-label={copy.close} onClick={() => setBanner(null)}>
-            <CloseIcon size={11} />
-          </button>
+      {(banner !== null || (pending !== null && editField === pending.field)) && (
+        <div className="nms-compact-top-actions">
+          {banner !== null && (
+            <div className="nms-compact-chip" data-kind={banner.kind} role="status">
+              {banner.kind === 'success' ? <CheckIcon size={12} /> : <WarningIcon size={12} />}
+              <span className="nms-compact-chip-copy">{banner.text}</span>
+              <button type="button" className="nms-compact-note-x" aria-label={copy.close} onClick={() => setBanner(null)}>
+                <CloseIcon size={11} />
+              </button>
+            </div>
+          )}
+          {pending !== null && editField === pending.field && (
+            <button
+              type="button"
+              className="nms-compact-confirm"
+              disabled={busy}
+              onClick={() => saveField(pending.field, pending.raw)}
+            >
+              {copy.compactApply}
+            </button>
+          )}
         </div>
       )}
 
@@ -227,7 +269,7 @@ export function CompactPanel({ copy, models, onError }) {
       {/* U3: editable policy only when enabled. */}
       {enabled && state.policy !== null && (
         <div className="nms-compact-fields">
-          <label className="nms-compact-field">
+          <div className="nms-compact-field">
             <span className="nms-compact-field-label">{copy.compactFieldModel}</span>
             <select
               className="nms-compact-input nms-compact-select"
@@ -256,11 +298,11 @@ export function CompactPanel({ copy, models, onError }) {
                 </optgroup>
               ))}
             </select>
-          </label>
+          </div>
 
-          <NumberField label={copy.compactFieldBuffer} field="bufferSizeAsync" value={policy.bufferSizeAsync} unit="%" display={ratioText} step="0.05" min="0" max="1" onSave={saveField} busy={busy} />
-          <NumberField label={copy.compactFieldHealth} field="healthTargetAsync" value={policy.healthTargetAsync} unit="%" display={ratioText} step="0.05" min="0" max="1" onSave={saveField} busy={busy} />
-          <NumberField label={copy.compactFieldPinned} field="pinnedAsyncTokens" value={policy.pinnedAsyncTokens} unit="Tok" step="1000" min="0" onSave={saveField} busy={busy} />
+          <NumberField label={copy.compactFieldBuffer} field="bufferSizeAsync" value={policy.bufferSizeAsync} unit="%" display={ratioText} step="0.05" min="0" max="1" editing={editField === 'bufferSizeAsync'} onActivate={activateField} onDraft={stageDraft} onCancel={cancelEdit} busy={busy} />
+          <NumberField label={copy.compactFieldHealth} field="healthTargetAsync" value={policy.healthTargetAsync} unit="%" display={ratioText} step="0.05" min="0" max="1" editing={editField === 'healthTargetAsync'} onActivate={activateField} onDraft={stageDraft} onCancel={cancelEdit} busy={busy} />
+          <NumberField label={copy.compactFieldPinned} field="pinnedAsyncTokens" value={policy.pinnedAsyncTokens} unit="Tok" step="1000" min="0" editing={editField === 'pinnedAsyncTokens'} onActivate={activateField} onDraft={stageDraft} onCancel={cancelEdit} busy={busy} />
 
           <div className="nms-compact-field">
             <span className="nms-compact-field-label">{copy.compactFieldPinnedFull}</span>
@@ -389,18 +431,18 @@ function ratioText(value) {
   return Number.isFinite(value) ? String(Math.round(value * 100)) : '—'
 }
 
-/** @param {{ label: string, field: string, value: any, unit: string, display?: (value:any)=>string, step: string, min: string, max?: string, onSave: (field:string, raw:string)=>void, busy: boolean }} props */
-function NumberField({ label, field, value, unit, display, step, min, max, onSave, busy }) {
-  const [draft, setDraft] = React.useState(null) // null = not editing
-  const editing = draft !== null
+/** @param {{ label: string, field: string, value: any, unit: string, display?: (value:any)=>string, step: string, min: string, max?: string, editing: boolean, onActivate: (field:string)=>void, onDraft: (field:string, raw:string)=>void, onCancel: ()=>void, busy: boolean }} props */
+function NumberField({ label, field, value, unit, display, step, min, max, editing, onActivate, onDraft, onCancel, busy }) {
   const shown = display ? display(value) : String(value ?? '—')
-  const commit = () => {
-    const raw = display === ratioText ? String(Number(draft) / 100) : draft
-    onSave(field, raw)
-    setDraft(null)
+  const [draft, setDraft] = React.useState(shown)
+  React.useEffect(() => { if (editing) setDraft(shown === '—' ? '' : shown) }, [editing, shown])
+  const publish = text => {
+    setDraft(text)
+    const raw = display === ratioText ? String(Number(text) / 100) : text
+    onDraft(field, raw)
   }
   return (
-    <label className="nms-compact-field">
+    <div className="nms-compact-field">
       <span className="nms-compact-field-label">{label}</span>
       {editing ? (
         <input
@@ -412,19 +454,15 @@ function NumberField({ label, field, value, unit, display, step, min, max, onSav
           min={display === ratioText ? '0' : min}
           max={display === ratioText ? '100' : max}
           disabled={busy}
-          onChange={event => setDraft(event.target.value)}
-          onKeyDown={event => {
-            if (event.key === 'Enter') commit()
-            if (event.key === 'Escape') setDraft(null)
-          }}
-          onBlur={commit}
+          onChange={event => publish(event.target.value)}
+          onKeyDown={event => { if (event.key === 'Escape') onCancel() }}
         />
       ) : (
-        <button type="button" className="nms-compact-value" disabled={busy} onClick={() => setDraft(shown === '—' ? '' : shown)}>
+        <button type="button" className="nms-compact-value" disabled={busy} onClick={() => onActivate(field)}>
           {`${shown} ${unit}`}
         </button>
       )}
-    </label>
+    </div>
   )
 }
 

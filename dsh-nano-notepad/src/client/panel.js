@@ -371,7 +371,10 @@ ${NANO_STYLES}
 .np-fx-nav { position: absolute; z-index: 4; top: 48px; left: 12px; bottom: 12px; width: 272px; display: flex; flex-direction: column; box-sizing: border-box; background: var(--dsw-alias-bg-layer-2); border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-lg); box-shadow: var(--dsw-elevation-prominent); transform: translateX(calc(-100% - 16px)); visibility: hidden; transition: transform .24s ease, visibility 0s linear .24s; }
 .np-fx-nav[data-state="open"] { transform: none; visibility: visible; transition: transform .24s ease; }
 .np-fx-nav-head { display: flex; flex: none; align-items: center; height: 32px; padding: 0 10px; border-bottom: 1px solid var(--dsw-alias-border-l3); color: var(--dsw-alias-label-tertiary); font-size: var(--np-font-size-xs); }
-.np-fx-nav-head b { color: var(--dsw-alias-label-secondary); font-weight: 600; }
+.np-fx-nav-head b { flex: 1; color: var(--dsw-alias-label-secondary); font-weight: 600; }
+.np-fx-nav-close { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; margin-left: auto; padding: 0; border: 0; border-radius: var(--dsw-radius-sm); background: transparent; color: var(--dsw-alias-label-tertiary); cursor: pointer; }
+.np-fx-nav-close svg { width: 14px; height: 14px; display: block; }
+.np-fx-nav-close:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 .np-fx-nav-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 6px; padding: 6px; }
 .np-fx-nav-card { border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-layer-1); overflow: hidden; }
 .np-fx-nav-card-head { display: flex; align-items: center; gap: 7px; width: 100%; min-height: 32px; padding: 5px 8px; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; font-size: var(--np-font-size-sm); text-align: left; cursor: pointer; }
@@ -990,7 +993,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
         </div>
       </div>
       <nav class="np-fx-nav" data-state="closed" aria-label="fx 管理">
-        <div class="np-fx-nav-head"><b data-i18n="fxManage">fx 管理</b></div>
+        <div class="np-fx-nav-head"><b data-i18n="fxManage">fx 管理</b><button type="button" class="np-fx-nav-close" data-action="fx-nav-close" data-i18n="close" data-i18n-mode="title" aria-label="关闭">${FX_CLOSE}</button></div>
         <div class="np-fx-nav-list">
           <section class="np-fx-nav-card" data-fx-nav-card="pipes">
             <button type="button" class="np-fx-nav-card-head" data-action="fx-nav-card" data-card="pipes" data-open="true"><span class="np-fx-nav-card-icon" aria-hidden="true">${dshIcon('flat-list-outline')}</span><span data-i18n="fxPipes">管线</span><span class="np-fx-nav-card-caret" aria-hidden="true">${FX_CHEVRON}</span></button>
@@ -2615,6 +2618,11 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     fxNavApply()
     if (state.fx.navOpen) fxNavRefresh()
   }
+  function closeFxNav() {
+    if (!state.fx.navOpen) return
+    state.fx.navOpen = false
+    fxNavApply()
+  }
   function toggleFxNavCard(anchor) {
     const card = anchor.closest('.np-fx-nav-card')
     const body = card?.querySelector('.np-fx-nav-card-body')
@@ -2767,6 +2775,13 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), items, width: 320, maxHeight: 140, theme: resolvedTheme(), z: NP_PORTAL_Z, direction: 'up' })
     closeMenu = () => raw.close()
   }
+  /* 点垂直栏以外的 fx 区域收起边栏；标题按钮自己 toggle，不在这里抢。 */
+  fxView.addEventListener('pointerdown', event => {
+    if (!state.fx.navOpen) return
+    const hit = event.target instanceof Element ? event.target : null
+    if (!hit || hit.closest('.np-fx-nav') || hit.closest('.np-fx-head-title')) return
+    closeFxNav()
+  })
   fxNav.addEventListener('click', async event => {
     const runBtn = event.target instanceof HTMLElement ? event.target.closest('[data-fx-nav-run]') : null
     const delBtn = event.target instanceof HTMLElement ? event.target.closest('[data-fx-nav-del]') : null
@@ -3854,6 +3869,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     if (action === 'image') must(panel, '.np-file').click()
     if (action === 'fx-run') { if (state.fx.open) closeFx(); else openFx(); return }
     if (action === 'fx-nav-toggle') { toggleFxNav(); return }
+    if (action === 'fx-nav-close') { closeFxNav(); return }
     if (action === 'fx-nav-card') { toggleFxNavCard(target); return }
     /* Lint badge click: jump the source caret to the reported offset. */
     if (target.classList.contains('np-lint') && target.dataset.pos !== '') {

@@ -1138,8 +1138,6 @@ function createSyncEngine() {
           return { ok: true, profiles: store.list(), activeId: store.activeId() };
         case "probe":
           return probeProfile(store.get(String(payload.id ?? "")));
-        case "testOne":
-          return probeProfile(store.get(String(payload.id ?? "")));
         case "beginSwitch": {
           const pending = store.beginSwitch(String(payload.id ?? ""));
           rebuild();

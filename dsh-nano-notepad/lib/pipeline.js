@@ -369,24 +369,25 @@ function pipelineS3Handler(ctx) {
     }
   };
 }
-var RPC_METHODS = /* @__PURE__ */ new Set(["manifest.get", "corpus.list", "corpus.read", "lsrag.manifest", "claim.read"]);
+var RPC_METHODS = /* @__PURE__ */ new Set(["manifest.get", "corpus.list", "corpus.read", "claim.read"]);
 var RPC_READ_KEYS = /^(kb-|art-|sqlite\/|claims\/|corpus-manifest|pipeline-manifest)[A-Za-z0-9._/-]*$/;
 function pipelineRpcHandler(ctx) {
   return async (req, res, route) => {
     try {
       const body = await readJsonBody(req, route?.bodyLimit);
-      const s3 = await s3Target(ctx, body.target);
       const method = String(body.method ?? "");
       const params = body.params && typeof body.params === "object" ? body.params : {};
       if (!RPC_METHODS.has(method)) {
         sendJson(res, 200, { ok: false, reason: "unknown-method", method });
         return;
       }
+      const s3 = await s3Target(ctx, body.target);
       let result;
       switch (method) {
-        case "manifest.get":
-        case "lsrag.manifest": {
-          const got = await s3.getJson("sqlite/manifest.json", { withMeta: true }).catch(() => void 0);
+        case "manifest.get": {
+          const got = await s3.getJson("sqlite/manifest.json", { withMeta: true }).catch(
+            (error) => /HTTP 404|NoSuchKey/.test(messageOf(error)) ? void 0 : Promise.reject(error)
+          );
           result = got === void 0 ? null : { value: got.value, etag: got.etag };
           break;
         }

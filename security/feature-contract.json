@@ -146,7 +146,7 @@
       "bodyLimit": {
         "POST": 4096
       },
-      "responseShape": "200 {ok:true,result} | 200 {ok:false,reason:'unknown-method'} | 500 {ok:false,reason:'failed'} — read-only whitelist (manifest.get/corpus.list/corpus.read/lsrag.manifest/claim.read)"
+      "responseShape": "200 {ok:true,result} | 200 {ok:false,reason:'unknown-method'} | 500 {ok:false,reason:'failed'} — read-only whitelist (manifest.get/corpus.list/corpus.read/claim.read)"
     },
     {
       "plugin": "dsh-nano-explorer-extra",

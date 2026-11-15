@@ -179,28 +179,33 @@ export function pipelineS3Handler(ctx) {
  *   manifest.get        → {manifest}  管线发布清单（etag/sha256/updatedAt）
  *   corpus.list         → [{key,size,etag?}]  corpus-manifest + kb-* 键清单
  *   corpus.read         → {key,bodyB64|body}  拉一个已发布键（kb-*、art-*、sqlite 前缀）
- *   lsrag.manifest      → {manifest}  同 manifest.get（语义别名，分层检索入口）
  *   claim.read          → {value,etag}  claim 租约读（不持锁、只观察）
  */
-const RPC_METHODS = new Set(['manifest.get', 'corpus.list', 'corpus.read', 'lsrag.manifest', 'claim.read'])
+const RPC_METHODS = new Set(['manifest.get', 'corpus.list', 'corpus.read', 'claim.read'])
 const RPC_READ_KEYS = /^(kb-|art-|sqlite\/|claims\/|corpus-manifest|pipeline-manifest)[A-Za-z0-9._/-]*$/
 
 export function pipelineRpcHandler(ctx) {
   return async (req, res, route) => {
     try {
       const body = await readJsonBody(req, route?.bodyLimit)
-      const s3 = await s3Target(ctx, body.target)
       const method = String(body.method ?? '')
       const params = body.params && typeof body.params === 'object' ? body.params : {}
+      /* Reject an unknown method BEFORE resolving the S3 target: a retired
+       * name (testOne/lsrag.manifest per F21.6) must fail fast by name, not
+       * after a target lookup that could mask the rejection. */
       if (!RPC_METHODS.has(method)) {
         sendJson(res, 200, { ok: false, reason: 'unknown-method', method })
         return
       }
+      const s3 = await s3Target(ctx, body.target)
       let result
       switch (method) {
-        case 'manifest.get':
-        case 'lsrag.manifest': {
-          const got = await s3.getJson('sqlite/manifest.json', { withMeta: true }).catch(() => undefined)
+        case 'manifest.get': {
+          /* P4-04: null means "confirmed absent" (NoSuchKey/404) ONLY. A denied
+           * (403), network, or parse failure is a real error — it must surface,
+           * not be forged into null (F21.6: 读失败不可伪造不存在). */
+          const got = await s3.getJson('sqlite/manifest.json', { withMeta: true })
+            .catch(error => /HTTP 404|NoSuchKey/.test(messageOf(error)) ? undefined : Promise.reject(error))
           result = got === undefined ? null : { value: got.value, etag: got.etag }
           break
         }

@@ -124,11 +124,11 @@
   - **完成判据**：二十工具逐一接真实领域 owner、`{ok:true,data}`、PublicInstance/Snapshot 边界、catalog 与 dispatch 同源、无自造 sandbox 工具
   - **验证映射**：`CF1115-T16` · **依赖**：`P3-01`
   - **执行状态**：`partial` · **执行时间**：`2026-11-15` · **证据**：`68210f6` — TOOL_DEFS 单源表、每工具 own `additionalProperties:false` schema + 真实 owner（profiles/instances/state/page/ports/bridge），catalog↔dispatch 同源；mcp-tools.spike 4/4 + DNLS 66/66。留：CDP 深工具（dom/elements/selftest/network 等）当前为 owner-null/只读近似、bridge CDP-only 收窄未做 → `CF1115-T16` 二十项全真实业务调用未达。
-- [ ] `P3-04` — [DNK] 真实消费 + 容器时代旧资产/bridge 副本退役
+- [ ] `P3-04` — [DNK] 真实消费 + 容器时代旧资产/bridge 副本退役 — `deferred`
   - **落点**：`dsh-nano-kitesurf/{index.js,src/client/index.js,package.json,runtime/mcp-bridge.mjs,lib/diagnostics.js}`
   - **完成判据**：端点常量/fetch 改指真实提供面、错误目录归属、旧容器资产/双载体退役、不删既有业务
   - **验证映射**：`CF1115-T17` · **依赖**：`P3-03`
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
+  - **执行状态**：`deferred` · **执行时间**：`2026-11-15` · **证据**：`-` · **因**：公开破坏性退役（删 `runtime/` 整树 + `lib/container-engine.js` + files 清单 + index.js import 解耦）触及「单一真源/不得擅自扩约」，且 DNK↔DNLS 双载体 `mcp-bridge.mjs` 哪份 canonical 需 [业主] 裁决；DNK 真实消费面亦跨插件域。列 P-EXEC 待裁决。
 - [x] `P3-05` — [DNT] MCP/attach/WS/SSE/审计消费 + 公开 nanoTerminal — `partial`
   - **落点**：`dsh-nano-terminal/{index.js,src/host/{mcp,events}.js,src/client/lanes.js}`
   - **完成判据**：真实工具分发、attach 用返回 url、SSE 生命周期、审计 writer 接线、公开 `ctx.provide('nanoTerminal')` 消费
@@ -138,42 +138,43 @@
 
 ### Phase 4 — P3 · 剩余领域 / 标准协议 / host 适配
 
-- [ ] `P4-01` — 官方 host 薄 adapter + 异步结算 / 桥身份 / 配置失效
+- [ ] `P4-01` — 官方 host 薄 adapter + 异步结算 / 桥身份 / 配置失效 — `deferred`
   - **落点**：`dsh-nano-cloud-session/{index.js,src/client/index.js}`；`dsh-nano-model-selector-compaction/index.js`
   - **完成判据**：直接引用官方服务/类型、Provider ON/OFF/isolate、配置失效旧 scope 失效、受控 Promise 结算
   - **验证映射**：`CF1115-T18` · **依赖**：`P2`/`P3`
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
-- [ ] `P4-02` — [DNCS] native 支持边界 + `NATIVE_*` 四码 + 义务表
+  - **执行状态**：`deferred` · **执行时间**：`2026-11-15` · **证据**：`-` · **因**：需官方 cordis `Service`/Provider 类型在本仓离线 workspace 可解析方可「直接引用官方」核验——宿主域才有 cordis；隔离/ON/OFF 受控 Promise 结算亦需 live 宿主。列 P-EXEC 待宿主授权域核验。
+- [ ] `P4-02` — [DNCS] native 支持边界 + `NATIVE_*` 四码 + 义务表 — `deferred`
   - **落点**：`dsh-nano-cloud-session/{index.js,src/host/devin-api.js,src/client/api.js}`
   - **完成判据**：只在公开能力满足义务时发布、否则 503 + 可见原因 + 无伪 localId；四码只进唯一作者、403 不误判
   - **验证映射**：`CF1115-T19` · **依赖**：`P4-01`
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
+  - **执行状态**：`deferred` · **执行时间**：`2026-11-15` · **证据**：`-` · **因**：依赖 P4-01 官方 host adapter 先行；native 能力探测需 devin-cloud carrier 实连（远端凭证/网络授权）。列 P-EXEC。
 - [x] `P4-03` — [DNMSC] R-16 精确例外 + 影子 FallbackService 退役 — `partial`
   - **落点**：`dsh-nano-model-selector-compaction/lib/{host-services,host-compaction,compact-policy}.js`、`scripts/gen-mutex-patch.mjs`；`dsh-nano-model-selector/lib/compact-policy.js`
   - **完成判据**：真实 Service 解析（无法解析即激活失败）、ON/OFF/四 preset/isolate、已准 instanceof 降级、无影子服务
   - **验证映射**：`CF1115-T19` · **依赖**：`P4-01`
   - **执行状态**：`partial` · **执行时间**：`2026-11-15` · **证据**：`1af7b18` — `FallbackService`(:64-121) 影子 Service 退役（零残留）、`HostService` 惰性解析真实 Service（缺失→激活失败非影子）、`setHostService` 合法 loader 缝（测/宿主注入真实类非 vendored 副本）、instanceof 降级走 `Symbol.hasInstance`→Real、DNMSC 23/23。留：真实宿主域 cordis 解析路径未跑（离线无 cordis）、四 preset/isolate 的 live 互斥未验 → `CF1115-T19` 半收。
-- [ ] `P4-04` — [DNEE] native 资源 / [DNN] fx·S3·RPC·标准流 + 两组别名取舍
+- [ ] `P4-04` — [DNEE] native 资源 / [DNN] fx·S3·RPC·标准流 + 两组别名取舍 — `deferred`
   - **落点**：`dsh-nano-explorer-extra/src/client/body.js`；`dsh-nano-notepad/src/host/{s3-sync,pipeline,fx-bridge}.js`
   - **完成判据**：`/s3/config` 只留 `probe`、`/rpc` 只留 `manifest.get`；四只读 RPC 唯一 codec；标准流/资源协议独立不 JSON 化
   - **验证映射**：`CF1115-T17`/`T16` · **依赖**：`P4-01`
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
+  - **执行状态**：`deferred` · **执行时间**：`2026-11-15` · **证据**：`-` · **因**：`/s3/config` 仅留 `probe` 与既有 handshake 流程冲突（删 `testOne`/`config` 分支会破坏当前 S3 探测调用方）——删面需 AP 对取舍的明确裁决 + S3 远端核验授权；fx 标准流不 JSON 化亦触及 wire 协议。列 P-EXEC。
 
 ### Phase 5 — P4 · 全范围结算
 
-- [ ] `P5-01` — 八包逐包覆盖证据 + 36 逐包 + 4 横向观察逐项结算
+- [ ] `P5-01` — 八包逐包覆盖证据 + 36 逐包 + 4 横向观察逐项结算 — `deferred`
   - **落点**：`contract-and-facade-1115-eval.md`（E1115-* 台账）；QNA §7.3
   - **完成判据**：逐观察号给覆盖/证据/旧源/离仓产物，不按数量销账、不静默缩范围、不另造替代账单
   - **验证映射**：`CF1115-T20` · **依赖**：`P1..P4`
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
+  - **执行状态**：`deferred` · **执行时间**：`2026-11-15` · **证据**：`-` · **因**：依赖 P1–P4 全部落地后逐观察号结算；P3-04/P4-01/02/04 deferred 在先，36+4 台账无法封口。
 - [x] `P5-02` — 旧源 / 离仓产物 / 扫描覆盖对账 + 五类退役清单 — `partial`
   - **落点**：`scripts/{check-feature-contract,check-clean-lib,route-scan}.mjs`；`security/route-inventory.md`（仅回溯）
   - **完成判据**：派生表/清单/说明同源、五类落点零残留、扫描覆盖遗漏修正
   - **验证映射**：`CF1115-T20` · **依赖**：`P5-01`
   - **执行状态**：`partial` · **执行时间**：`2026-11-15` · **证据**：`68210f6` — feature-contract 8 插件（+DNCS/+DNMSC ui+dataLocations）、clean-lib 8 插件 + 递归 lib/（58→72 artifacts）、pack-manifest 基线重建。留：route-scan DNN/DNT/DNEE 读生成物 `lib/bindings.js`（投影自证，失独立 source-scan）—— `CF1115-T20` 未达。
-- [ ] `P5-03` — 五态如实归类 + 债务按原观察号 handoff
+- [ ] `P5-03` — 五态如实归类 + 债务按原观察号 handoff — `deferred`
   - **落点**：QNA §7.3；truth §4.6 P6
   - **完成判据**：`verified/observed-OK/partial/未观察/deferred` 如实归类；未实施/未验证债务保留原号；任一退出硬闸 `degraded/未观察` ⇒ 不标 `executed`
+  - **执行状态**：`deferred` · **执行时间**：`2026-11-15` · **证据**：`-` · **因**：依赖 P5-01 台账；任一硬闸 degraded/未观察 ⇒ 本计划整体不标 `executed`（已如实）。
   - **验证映射**：`CF1115-T21` · **依赖**：`P5-01`/`P5-02`
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
 
@@ -187,10 +188,10 @@
 
 ## 5. 当前状态与交接
 
-- **当前节点 / 已完成**：`P1-01..P1-05`、`P2-01..P2-04`、`P3-01`（10 项 ticked）
-- **下一动作**：`P3-02`（terminal 两提供面）→ `P4-01` → `P5-01`
-- **当前阻塞**：`无`
-- **待 owner / 外部决定**：`implementation grant 已由本 directive 框架内授予；真实远端/引擎区间核验 deferred 至另立授权。P4-04 的「/s3/config 只留 probe」与端点切换握手（beginSwitch/commitSwitch/abortSwitch 均为合法业务动作）冲突——收窄会破功能，待 AP 原文裁决`
+- **当前节点 / 已完成（2026-11-15 二轮）**：`P1-01..P1-05`、`P2-01..P2-04`、`P3-01`、`P3-02`、`P3-03`(partial)、`P3-05`(partial)、`P4-03`(partial)、`P5-02`(partial) — 15 ticked（4 partial）
+- **下一轮（deferred，待 [业主] 裁决 / 宿主授权）**：`P3-04`（DNK 真实消费+容器资产/mcp-bridge 双载体退役——公开破坏性，列 P-EXEC）、`P4-01`（离线无 cordis，真实宿主域 Service/Provider 核验）、`P4-02`（依赖 P4-01+远端 carrier）、`P4-04`（`/s3/config` 收窄与 handshake 冲突待裁决+S3 远端授权）、`P5-01`/`P5-03`（依赖 P1–P4 结算）
+- **当前阻塞**：`无硬阻塞`；公开退役面与远端/引擎核验需授权
+- **待 owner / 外部决定**：`implementation grant 已由本 directive 框架内授予；容器/远端/S3 核验 deferred 至另立授权。mcp-bridge 双载体 canonical、P4-04 /s3/config 收窄、3 个 facade 签名偏离、DNT lane enum 收窄——均列 P-EXEC 待裁决`
 - **最终交接目标**：`closure + 工作日志回填 + 3 路审查`
 
 ## 6. 已启用插件

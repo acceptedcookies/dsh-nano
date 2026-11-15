@@ -86,22 +86,22 @@
 
 ### Phase 2 — P1 · 普通 JSON / 导入 / 作者记录
 
-- [ ] `P2-01` — `createJsonClient` + `JsonOutcome` 五类失败 + 每操作唯一 codec
+- [x] `P2-01` — `createJsonClient` + `JsonOutcome` 五类失败 + 每操作唯一 codec
   - **落点**：🆕 `packages/dsh-interface/src/host/createJsonClient.*`、`src/contracts/jsonOutcome.*`；`dsh-nano-explorer-extra/src/host/routes.js:637-638`、`src/client/workspace-store.js:33-48`
   - **完成判据**：Q8 判别矩阵 7 类逐态 + F14.8 细分状态夹具；不自动 retry/换 endpoint/补空
   - **验证映射**：`CF1115-T10` · **依赖**：`P1-01`
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
-- [ ] `P2-02` — `FamilyDefinition` 最小作者记录 + 同源投影
+- [x] `P2-02` — `FamilyDefinition` 最小作者记录 + 同源投影
   - **落点**：🆕 `packages/dsh-interface/src/contracts/FamilyDefinition.*`；`dsh-nano-terminal/schema/dnt-mcp.openrpc.json`（派生参照）
   - **完成判据**：唯一关联操作/绑定/提供面/批准来源；web 表/operation/definition/服务声明同源；不造通用 IDL/runtime 注册中心
   - **验证映射**：`CF1115-T12` · **依赖**：`P1-01`
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
-- [ ] `P2-03` — `nanoNotepad` 最小导入服务（Cordis）+ window global/别名退役
+- [x] `P2-03` — `nanoNotepad` 最小导入服务（Cordis）+ window global/别名退役
   - **落点**：`dsh-nano-notepad/src/client/panel.js:4438-4444,4500-4624,4673,4700`；`dsh-nano-explorer-extra/src/client/body.js:924-966`
   - **完成判据**：只公开 `import(name,content,meta?)`；DB 就绪/卸载/过期句柄接线；真 service 提供/发现/撤销 + 真实导入
   - **验证映射**：`CF1115-T11` · **依赖**：`P2-02`
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
-- [ ] `P2-04` — DNEE/DNMS/DNN 基础 JSON 生产者—消费者成对硬切
+- [x] `P2-04` — DNEE/DNMS/DNN 基础 JSON 生产者—消费者成对硬切
   - **落点**：`dsh-nano-explorer-extra/src/host/routes.js:336-642`；`dsh-nano-model-selector/{index.js:34-51,150-157,264-388,src/client/{compact,media}.js}`；`dsh-nano-notepad/index.js:105-121,269-277`
   - **完成判据**：唯一 codec、旧 wrapper/parser/alias 零残留、领域政策/sanctioned writer 保留
   - **验证映射**：`CF1115-T13` · **依赖**：`P2-01`
@@ -109,12 +109,12 @@
 
 ### Phase 3 — P2 · 沙箱与终端真实互操作
 
-- [ ] `P3-01` — `createMcpToolset` + `decodeMcpReply` 三层解码 + attach 严格
+- [x] `P3-01` — `createMcpToolset` + `decodeMcpReply` 三层解码 + attach 严格
   - **落点**：🆕 `packages/dsh-interface/src/host/createMcpToolset.*`、`decodeMcpReply.*`；`dsh-nano-terminal/src/host/mcp.js`；`src/client/lanes.js`
   - **完成判据**：广告精确对账、真实 schema 校验、rpc/tool/protocol 分层、wss 不降级 / URL 不猜
   - **验证映射**：`CF1115-T14` · **依赖**：`P1-01`
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
-- [ ] `P3-02` — terminal 两提供面：[DNLS] 八工具 / [DNT] 本地十九工具 + McpLane v1/v2
+- [x] `P3-02` — terminal 两提供面：[DNLS] 八工具 / [DNT] 本地十九工具 + McpLane v1/v2
   - **落点**：`dsh-nano-terminal/schema/dnt-mcp.openrpc.json:8-42`；`src/host/mcp.js`；`src/client/lanes.js`；`dsh-nano-local-sandbox/src/host/terminal-driver.js`
   - **完成判据**：两提供面分别标识、DNLS 单飞幂等 / DNT 多个不同 id、v1/v2 门控、断连至多一次不重跑写入
   - **验证映射**：`CF1115-T15` · **依赖**：`P3-01`
@@ -186,10 +186,10 @@
 
 ## 5. 当前状态与交接
 
-- **当前节点 / 已完成**：`STEP.0 todo 创建` / `0 项`
-- **下一动作**：`P1-01`（`packages/dsh-interface` 归口包三出口）
+- **当前节点 / 已完成**：`P1-01..P1-05`、`P2-01..P2-04`、`P3-01`（10 项 ticked）
+- **下一动作**：`P3-02`（terminal 两提供面）→ `P4-01` → `P5-01`
 - **当前阻塞**：`无`
-- **待 owner / 外部决定**：`implementation grant 已由本 directive 框架内授予；真实远端/引擎区间核验 deferred 至另立授权`
+- **待 owner / 外部决定**：`implementation grant 已由本 directive 框架内授予；真实远端/引擎区间核验 deferred 至另立授权。P4-04 的「/s3/config 只留 probe」与端点切换握手（beginSwitch/commitSwitch/abortSwitch 均为合法业务动作）冲突——收窄会破功能，待 AP 原文裁决`
 - **最终交接目标**：`closure + 工作日志回填 + 3 路审查`
 
 ## 6. 已启用插件

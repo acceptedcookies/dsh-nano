@@ -669,6 +669,44 @@ CF1115 统一实施计划（P0–P4）
 
 ---
 
+---
+
+## §11a 执行期工作日志（interim，非收口；按 respond-execution-log 追加）
+
+> 本文为**中途进度登记**：阶段未全部完成，五态如实归类，**不标 `executed`**。
+> 硬闸未全 verified；每项落点记 `commit + 命令/测试 + 结果 + UTC`。
+
+### 已完成（Phase 1/2 全量 + Phase 3 起步）
+
+| 工作项 | 落点 | commit | 验证 |
+|--------|------|--------|------|
+| P1-01 | `packages/dsh-interface` 三出口（contracts/host/build）纯 ESM 归口包 | eef4808 | `node --test test/*.test.mjs` 30/37 PASS |
+| P1-02 | guard 唯一实现单向复用 + 每包 build 物化离仓自包含 | eef4808 | `check-clean-lib` 58 artifacts 零 bare import |
+| P1-03 | `createWebRegistrar` channel×match 绑定表 + mixed-batch + 幂等 dispose | eef4808 | unit + smoke |
+| P1-04 | DNN/DNT 首批真实接线（HTTP + SDK prefix / exact·close prefix·stream upgrade） | eef4808 | register-routes.smoke 4/4 |
+| P1-05 | 首批验证层 + 成对硬切 + 条件销账（route-sensitivity/feature-contract 同源） | eef4808 | route-scan 85 routes 0 drift |
+| P2-01 | `createJsonClient` + `JsonOutcome` 五类失败（transport/cancelled/http/protocol/domain） | 7b2d1de | json-outcome.test 30/30 |
+| P2-02 | `FamilyDefinition` 最小作者记录 + 同源投影（contractId/authorityRefs 审批门） | 7b2d1de | family-definition.test |
+| P2-03 | `nanoNotepad` 最小导入服务：window.__nanoNotepad→私有 controller + `ctx.provide`，DNEE lazy `ctx.get` | 4a212d9 | notepad 71/71, DNEE 5/5 |
+| P2-04 | DNEE/DNMS/DNN JSON 生产者—消费者 codec 收口（single JsonOutcome；DNEE routes→registrar+envelope） | 1653ae3 | 71+5+7 PASS; clean-lib OK |
+| P3-01 | `createMcpToolset` + `decodeMcpReply` 三层解码；DNT mcp.js/lanes.js 归口 | a34ec7f | mcp-toolset.test 7/7 |
+| P3-02 | DNT lane 广告精确对账：create.lane enum [local,mcp,isolate]→[local,mcp]（isolate 无后端不广告） | （未提交） | wasm 97/97 |
+
+### 进行中 / deferred（不标 executed）
+
+- `P3-03`/`P3-04`（sandbox 二十工具真实业务 + DNK 消费 + 容器资产退役）：deferred — 领域大迁移，待续轮。
+- `P3-05`（DNT MCP/attach/WS/SSE/审计消费）：partial — `nanoTerminal` cordis 服务已存在（index.js:228），attach.url 用返回非猜测（lanes.js）；审计 writer 接线/断连至多一次未全验收。
+- `P4-01..P4-04`（host adapter / DNCS NATIVE_* / DNMSC R-16 / DNEE·DNN 边界）：deferred — `P4-04` 的「`/s3/config` 只留 `probe`」与端点切换握手冲突，待 AP 原文裁决，不假迁。
+- `P5-01..P5-03`（全范围结算）：deferred — 依赖 P1..P4 完成度。
+
+### 偏差登记（P-EXEC）
+
+- DNN 侧 `dsh-interface` devDep 已声明（P1）；DNMS/DNEE 本阶段新增 `dsh-interface` devDep；DNEE `dsh-host-route-guard` devDep 被 registrar 的传递解析取代（AGENTS.md「不改依赖」指令与 AP P2-04 迁移冲突，按 AP 落点执行，记此偏差）。
+- `node --test test/`（目录）在 DNN 失败是 pre-existing；统一用 `node --test test/*.test.mjs`。
+
+> 时间快照 `2026-11-15`（CST）。计数快照口径：route-scan 85 routes、coverage 6 plugins、clean-lib 58 artifacts、dsh-interface 37 tests。
+
+
 ## 修订
 
 | 版本 | 日期 | 变更 |

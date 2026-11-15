@@ -16,7 +16,7 @@
  *    FULL intent.
  *  - -15  fill = tokenMeter.measure(session).totalTokens / W is the only
  *    formula; W = resolveModelInfo(...).context.contextWindow.
- *  - -18⑤ read failure -> safetyOnly: only the S line at 0.80, no B arming.
+ *  - -18⑤ read failure -> safetyOnly: only the S line at 0.90, no B arming.
  *  - -18② one typed-transient circuit: two consecutive transient failures
  *    suppress auto arming; S-line and manual remain live; adoption/manual
  *    success resets it.

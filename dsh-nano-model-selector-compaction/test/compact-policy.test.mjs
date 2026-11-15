@@ -45,11 +45,15 @@ test('fill uses totalTokens / nominal window only', () => {
   assert.equal(fill(800000, 1000000), 0.8)
 })
 
-// 4. DC-2/DC-3 reject: H>=B and B>=S are write-time invalid-range
-test('validateMasterOrder rejects DC-2 (H>=B) and DC-3 (B>=S)', () => {
+// 4. Equality is legal (H == B, B == S). Only a line strictly above the next rejects.
+test('validateMasterOrder rejects H > B and B > S, and accepts equality up to S', () => {
   const dc2 = { ...DEFAULT_POLICY, bufferSizeAsync: 0.5, healthTargetAsync: 0.55 }
-  assert.deepEqual(validateMasterOrder(dc2, W).code, 'invalid-range')
-  const dc3 = { ...DEFAULT_POLICY, bufferSizeAsync: 0.85, healthTargetAsync: 0.6 }
+  assert.equal(validateMasterOrder(dc2, W).code, 'invalid-range')
+  const equalLines = { ...DEFAULT_POLICY, healthTargetAsync: 0.5, bufferSizeAsync: 0.5 }
+  assert.equal(validateMasterOrder(equalLines, W).ok, true)
+  const atCeiling = { ...DEFAULT_POLICY, healthTargetAsync: 0.5, bufferSizeAsync: SAFETY_RATIO }
+  assert.equal(validateMasterOrder(atCeiling, W).ok, true)
+  const dc3 = { ...DEFAULT_POLICY, bufferSizeAsync: 0.95, healthTargetAsync: 0.6 }
   assert.equal(validateMasterOrder(dc3, W).ok, false)
 })
 

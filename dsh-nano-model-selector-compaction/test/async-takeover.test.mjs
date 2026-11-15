@@ -44,7 +44,7 @@ function writePolicy(overrides = {}) {
     model: { provider: '', model: '' },
     bufferSizeAsync: 0.65,   // B
     healthTargetAsync: 0.5,  // H
-    bufferSizeSafety: 0.8,   // S (read-only)
+    bufferSizeSafety: 0.8,   // legacy stamp; read restamps S to 0.90
     pinnedAsyncTokens: 100,  // < floor(0.15*W)=150 → effectivePin=100, no DC-1
     pinnedFullTokens: 100,
     ...overrides,
@@ -213,7 +213,7 @@ function makeSession(id) {
   return session
 }
 
-/** sys 150 + 6 msgs x100 → fill 0.75 ∈ [B=0.65, S=0.80). */
+/** sys 150 + 6 msgs x100 → fill 0.75 ∈ [B=0.65, S=0.90). */
 function makeBLineSession(id) {
   const session = makeSession(id)
   session.setHeader('prov', 'mod')
@@ -223,13 +223,13 @@ function makeBLineSession(id) {
   return { session, msgs }
 }
 
-/** sys 150 + 7 msgs x100 → fill 0.85 ≥ S=0.80. */
+/** sys 150 + 8 msgs x100 → fill 0.95 ≥ S=0.90. */
 function makeSLineSession(id) {
   const session = makeSession(id)
   session.setHeader('prov', 'mod')
   session.addMessage('system', 'sys', 150)
   const msgs = []
-  for (let i = 0; i < 7; i += 1) msgs.push(session.addMessage('user', `msg${i}`, 100))
+  for (let i = 0; i < 8; i += 1) msgs.push(session.addMessage('user', `msg${i}`, 100))
   return { session, msgs }
 }
 
@@ -488,7 +488,7 @@ test('a second idle while an episode attempt is in-flight is a no-op: one attemp
 
 /* ============================ 3. S-line FULL ============================ */
 
-test('S-line FULL: fill ≥ 0.80 runs synchronous compactSurfaceRegion inside pre-step, turn-scoped', async () => {
+test('S-line FULL: fill ≥ 0.90 runs synchronous compactSurfaceRegion inside pre-step, turn-scoped', async () => {
   writePolicy()
   const ctx = makeCtx()
   const engine = makeEngine(ctx)

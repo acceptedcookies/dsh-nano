@@ -7,11 +7,12 @@
  * Fields: { schema:1, model:{provider,model}, bufferSizeAsync,
  *           healthTargetAsync, bufferSizeSafety, pinnedAsyncTokens,
  *           pinnedFullTokens }.
- * Constants: S=0.80 (read-only; PUT carrying it -> 400), B floor 0.25,
+ * Constants: S=0.90 (read-only; PUT carrying it -> 400), B floor 0.25,
  * effectivePin = min(pinned, floor(0.15*W)), fill = totalTokens/W (single
  * formula, nominal window the only denominator).
- * Master order: effectivePin/W < H < B < S < 1, B in [0.25,S).
- * DC-1 (effectivePin/W >= H) -> fullOnly marker; DC-2 (H>=B) / DC-3 (B>=S) ->
+ * Master order: effectivePin/W < H <= B <= S < 1, B in [0.25,S].
+ * Owner 2026-11-15: equality is legal, and the async ceiling is S.
+ * DC-1 (effectivePin/W >= H) -> fullOnly marker; DC-2 (H>B) / DC-3 (B>S) ->
  * reject. Every violation: 400 + no write, no silent clamp, no audit file.
  */
 
@@ -19,7 +20,9 @@ import { readFileSync, writeFileSync, renameSync, mkdirSync, existsSync } from '
 import { dirname } from 'node:path'
 
 export const POLICY_SCHEMA = 1
-export const SAFETY_RATIO = 0.80
+export const SAFETY_RATIO = 0.90
+/** Files written while S was 0.80 still load; the constant wins on read. */
+const LEGACY_SAFETY_RATIO = 0.80
 export const BUFFER_FLOOR = 0.25
 export const PIN_FRACTION = 0.15
 
@@ -73,9 +76,9 @@ export function validateMasterOrder(policy, W) {
     return fail('invalid-range', 'bufferSizeAsync/healthTargetAsync/bufferSizeSafety must be finite numbers')
   }
   if (S !== SAFETY_RATIO) return fail('invalid-range', `bufferSizeSafety is read-only at ${SAFETY_RATIO}`)
-  if (!(B < S)) return fail('invalid-range', `DC-3: bufferSizeAsync ${B} >= bufferSizeSafety ${S}`)
+  if (!(B <= S)) return fail('invalid-range', `DC-3: bufferSizeAsync ${B} > bufferSizeSafety ${S}`)
   if (B < BUFFER_FLOOR) return fail('invalid-range', `bufferSizeAsync ${B} below write floor ${BUFFER_FLOOR}`)
-  if (!(H < B)) return fail('invalid-range', `DC-2: healthTargetAsync ${H} >= bufferSizeAsync ${B}`)
+  if (!(H <= B)) return fail('invalid-range', `DC-2: healthTargetAsync ${H} > bufferSizeAsync ${B}`)
   if (!(H > 0)) return fail('invalid-range', `healthTargetAsync ${H} must be positive`)
   if (!(S < 1)) return fail('invalid-range', `bufferSizeSafety ${S} must be below 1`)
   if (!isNonNegativeInt(policy.pinnedAsyncTokens) || !isNonNegativeInt(policy.pinnedFullTokens)) {
@@ -215,7 +218,11 @@ export function readState(path) {
   if (!parsed.ok) {
     return fail('state-read-failed', `${parsed.code}: ${parsed.reason}`)
   }
-  return ok({ policy: parsed.policy, missing: false })
+  const storedSafety = parsed.policy.bufferSizeSafety
+  if (storedSafety !== SAFETY_RATIO && storedSafety !== LEGACY_SAFETY_RATIO) {
+    return fail('state-read-failed', `invalid-range: bufferSizeSafety is read-only at ${SAFETY_RATIO}`)
+  }
+  return ok({ policy: { ...parsed.policy, bufferSizeSafety: SAFETY_RATIO }, missing: false })
 }
 
 /**

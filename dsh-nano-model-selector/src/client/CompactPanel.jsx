@@ -145,18 +145,17 @@ export function CompactPanel({ copy, models, onError }) {
       onError(`${copy.selectionError}: ${field} must be a number`)
       return
     }
-    // Cross-field invariant (-20): the health line must sit strictly below the
-    // buffer line, and the buffer line below the safety line. The server
-    // enforces it too (400), but checking here keeps the rejected value from
-    // ever hitting the wire and surfaces a precise field-scoped reason.
+    // Water order: H <= B <= S. Equality is legal; only a line sitting
+    // strictly above the one above it is rejected. S is the read-only ceiling.
+    const safety = policy.bufferSizeSafety ?? 0.9
     const next = { bufferSizeAsync: policy.bufferSizeAsync, healthTargetAsync: policy.healthTargetAsync, pinnedAsyncTokens: policy.pinnedAsyncTokens, [field]: value }
     if (field === 'bufferSizeAsync' || field === 'healthTargetAsync') {
-      if (!(next.healthTargetAsync >= 0 && next.healthTargetAsync < next.bufferSizeAsync)) {
-        noteWithCode('fail', `${copy.compactRejected}: H (${next.healthTargetAsync}) < B (${next.bufferSizeAsync})`, 'water-order')
+      if (!(next.healthTargetAsync >= 0 && next.healthTargetAsync <= next.bufferSizeAsync)) {
+        noteWithCode('fail', `${copy.compactRejected}: H (${next.healthTargetAsync}) ≤ B (${next.bufferSizeAsync})`, 'water-order')
         return
       }
-      if (!(next.bufferSizeAsync < (policy.bufferSizeSafety ?? 0.8))) {
-        noteWithCode('fail', `${copy.compactRejected}: B (${next.bufferSizeAsync}) < S (${policy.bufferSizeSafety ?? 0.8})`, 'water-order')
+      if (!(next.bufferSizeAsync <= safety)) {
+        noteWithCode('fail', `${copy.compactRejected}: B (${next.bufferSizeAsync}) ≤ S (${safety})`, 'water-order')
         return
       }
     }
@@ -264,7 +263,7 @@ export function CompactPanel({ copy, models, onError }) {
 
           <div className="nms-compact-field">
             <span className="nms-compact-field-label">{copy.compactFieldSafety}</span>
-            <span className="nms-compact-field-static">0.80</span>
+            <span className="nms-compact-field-static">{Number.isFinite(policy.bufferSizeSafety) ? policy.bufferSizeSafety.toFixed(2) : '0.90'}</span>
           </div>
         </div>
       )}
@@ -292,7 +291,7 @@ export function CompactPanel({ copy, models, onError }) {
             ) : (
               <>
                 <span className="nms-compact-meter" role="meter" aria-valuenow={Math.round(fill * 100)} aria-valuemin="0" aria-valuemax="100">
-                  <span className="nms-compact-meter-fill" data-level={fill >= 0.8 ? 'high' : fill >= 0.5 ? 'mid' : 'low'} style={{ width: `${(fill * 100).toFixed(1)}%` }} />
+                  <span className="nms-compact-meter-fill" data-level={fill >= (policy.bufferSizeSafety ?? 0.9) ? 'high' : fill >= 0.5 ? 'mid' : 'low'} style={{ width: `${(fill * 100).toFixed(1)}%` }} />
                 </span>
                 <span className="nms-compact-meter-num">{`${(fill * 100).toFixed(1)}%`}</span>
               </>
@@ -328,7 +327,7 @@ function ScenarioBox({ copy, meterDown, degraded, policy, effective, modelLabel 
   const vars = {
     bp: pct(policy.bufferSizeAsync),
     hp: pct(policy.healthTargetAsync),
-    sp: pct(policy.bufferSizeSafety ?? 0.8),
+    sp: pct(policy.bufferSizeSafety ?? 0.9),
     pin: policy.pinnedAsyncTokens ?? '—',
     epin: effective.pin ?? '—',
     windowMin: effective.windowMin ?? '—',

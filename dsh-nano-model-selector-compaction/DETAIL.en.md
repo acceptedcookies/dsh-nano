@@ -12,7 +12,7 @@ From that page you can:
 
 - Toggle takeover (the only write path). The host may ask for a restart; the page says so.
 - Pick the summary model (flash family). Each option marks provider, model name, and the anchored context window.
-- Edit buffer line B, health line H, and async reserved tokens. Safety line S (0.80) is read-only.
+- Edit buffer line B, health line H, and async reserved tokens. Safety line S (0.90) is read-only. H may equal B, and B may equal S.
 - H must stay below B, and B below S. A violating save is rejected and nothing is written.
 - Read “how compaction behaves” across four scenarios (steady, at buffer, at safety, degraded). The copy interpolates the live water lines and model.
 

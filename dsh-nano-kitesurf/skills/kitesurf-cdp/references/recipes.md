@@ -69,7 +69,7 @@ GET  /nano-local-sandbox/console?level=log
 | `POST /settings {"viewport":"phone"}` | `400 kitesurf.settings.viewport` | 存在但类型错，不静默吞 |
 | `POST /settings {"viewport":{"width":9999}}` | `400 kitesurf.settings.viewport` | 宽 320..3840、高 240..2160；dsf 只 1/2/3 |
 | `POST /settings {"extraHeaders":{"cookie":"a=b"}}` | `400 kitesurf.settings.headers` | 凭证类 header 名被禁 |
-| 把 `httpBase` 指到 8787（Cursor 占） | **不删容器**：接管现有 8798 并 `adopted:true`；若连现端口也不可用则 `409 kitesurf.kite.portbusy` | 端口占用不是引擎故障，不能拆能用的容器 |
+| 把 `httpBase` 指到 8787（Cursor 占） | `GET /nano-local-sandbox/ports` 看 `heldBy:'other'`；`409 kitesurf.kite.portbusy` 由宿主报告——端口接管/修复归 dsh-nano-local-sandbox | 端口占用不是引擎故障；本包不接管容器 |
 | `GET /nano-local-sandbox/ports` | `{configured,effective,container.published,ports.engine.free,lastRepair}` | 一眼看「配置 8787/实跑 8798」 |
 | `POST /nano-local-sandbox/recover {}` | 自动 suspend→resume 并回报 `engineAlive` | 一键自愈 |
 | `POST /history {"delta":2}` | `400 kitesurf.navigate.delta` | 只能 -1/+1 |

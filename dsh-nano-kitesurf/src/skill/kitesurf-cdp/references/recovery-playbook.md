@@ -3,12 +3,12 @@
 ## 决策树
 
 1. `GET /diagnostics` → 读 `hints`。
-2. `engine.ok=false` → `curl http://127.0.0.1:8798/health`、`container list`（本机 Apple container）、`container system start`；容器缺了就 `POST /kite {"action":"resume"}`（先 `suspend` 若 phase=running）。
+2. `engine.ok=false` → `curl http://127.0.0.1:8798/health`；本包不启动容器——引擎由 dsh-nano-local-sandbox 宿主带起（`POST /nano-local-sandbox/recover {}`）。先 `suspend` 若 phase=running，再 `POST /kite {"action":"resume"}` 重探。
 3. `engineMismatch=true` → `POST /kite {"action":"configure","httpBase":"http://127.0.0.1:8798"}`。
 4. 有失败调用 → `GET /operations?errorsOnly=true` 取 errorId → 查 `references/error-catalog.md`。
 5. 页面 JS 报错 → `GET /console?level=error,exception`；网络失败 `level=network`；导航漂移 `level=navigation`。
 6. 画面与 API 对不上 → `GET /targets` 确认附着页，重 `POST /shot`。
-7. 冷启动失败 → 看 `error` 里 stdout 尾部真因（`failed to bootstrap`=apiserver 冷），`container system start` 后重试；`kitesurf.kite.checkout` 说明缺 `KITESURF_CHECKOUT`/`config.checkout`。
+7. 引擎起不来 → `kitesurf.kite.start`/`resume`（502，/health 在重试预算内无应答）= 容器未在跑；引擎生命周期归 dsh-nano-local-sandbox，不在本包。
 8. 要复现 → `POST /evaluate` 注入 `console.log`/改 DOM，再 `/shot` 看效果。
 
 宿主日志：`~/Library/Logs/dsh-dev-web.err.log`（dsh-dev.local）；桥健康 `GET http://127.0.0.1:<mcpPort>/health`。
@@ -20,9 +20,9 @@
 | check | `fixCall` |
 |---|---|
 | `plugin` | `npm run build` → 同步 → `pnpm install --force` → 重启宿主 |
-| `engine` | `POST /recover {}`；若 `kitesurf.kite.checkout` 先配 `config.checkout` |
+| `engine` | `POST /recover {}`（引擎由沙箱宿主带起） |
 | `engine-identity` | `POST /kite {"action":"configure","httpBase":"…:<enginePort>"}` |
-| `container` | `container list --all` → `POST /kite {"action":"resume"}` |
+| `container` | `GET /nano-local-sandbox/instances` → `POST /nano-local-sandbox/recover {}` |
 | `ports-published` | `GET /ports` 看漂移 → `POST /recover {}` |
 | `ports-loopback` | `POST /recover {}` 重新发布到 127.0.0.1（公网暴露=安全风险） |
 | `mcp-bridge` | `GET :<mcpPort>/health` 验 → `POST /recover {}` |
@@ -33,14 +33,12 @@
 
 ## 端口韧性（本机最常见坑）
 
-本机 8787 常年被 Cursor 占用，引擎容器实际发布在 8798/8799。插件行为：
+本机 8787 常年被 Cursor 占用，引擎容器实际发布在 8798/8799。端口分配/容器接管归 dsh-nano-local-sandbox 宿主，本包只读端口真相：
 
-1. `config.httpBase` 只是**偏好**，不是硬约束。目标端口被别进程占、而现有 `kitesurf` 容器自己端口仍可用 → **接管**该容器并把 `httpBase` 改写成实际端口（`/status.ports.lastRepair` 记 from/to，reason=`adopted-existing-container`），**不删容器**。
-2. 首次创建且偏好端口被占 → 自动向后取下一空闲端口（步进 10），reason=`port-busy-repaired`。
-3. 只有「偏好端口被占且现有容器端口也不可用」才抛 `409 kitesurf.kite.portbusy`，此时容器保持原样。
-4. 自愈入口：`POST /nano-local-sandbox/recover {}`（suspend→resume→健康检查→端口报告）；只读诊断 `GET /nano-local-sandbox/ports`；MCP 对应 `sandbox.ports`/`sandbox.recovery_plan`。
+1. `config.httpBase` 只是**偏好**。`GET /nano-local-sandbox/ports` 看 configured/effective/published 漂移；端口被别进程占 → `heldBy: 'other'`。
+2. 自愈入口：`POST /nano-local-sandbox/recover {}`（suspend→resume→健康检查→端口报告）；只读诊断 `GET /nano-local-sandbox/ports`；MCP 对应 `sandbox.ports`/`sandbox.recovery_plan`。
 
-**关键**：把 `httpBase` 指到被 Cursor 占的 8787 **不会删容器**——会接管现有 8798 容器并 `adopted:true`。端口占用不是引擎故障，绝不能拆掉能用的容器。
+**关键**：本包不删、不重建容器。端口占用修复由沙箱宿主完成；`409 kitesurf.kite.portbusy` 只在「引擎要绑的端口被占」由宿主报告回传时出现，本包自身不做重建决策。
 
 ## 上下文引用（composer 里可能出现 ref）
 

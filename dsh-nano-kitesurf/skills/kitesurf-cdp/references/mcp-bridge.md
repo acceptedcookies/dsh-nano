@@ -22,6 +22,7 @@ MCP-over-WS：**每个文本帧一条完整 JSON-RPC**，无 `\n` 终止符（�
 | `sandbox.history` | 持久浏览历史最近 30 条 |
 | `sandbox.dom` | 最后抓取的 DOM 文本（推送，非 live） |
 | `sandbox.elements` | 最后抓取的元素列表（推送） |
+| `sandbox.interact` | 页内交互（click/type/scroll…，写所有权持有者） |
 | `sandbox.snapshot` | a11y-lite 树 + `@N` ref 表 + treePreview（推送，`liveSnapshot`/`resolveRef` 指 host 路由） |
 | `sandbox.control` | 写所有权 `{action:status|claim|release|takeover}`（`self={connId,clientName}`） |
 | `sandbox.selftest` | 引擎健康自检结果 |

@@ -116,8 +116,10 @@ writeFileSync(join(skillDst, 'references', 'error-catalog.md'), catDoc)
 // kitesurf_* MCP tool name must appear in the generated skill tree, or the
 // interface drifted from what the skill documents. Scan all generated .md.
 const { ROUTE_TABLE } = await import(join(root, 'lib', 'route-table.js'))
-const bridgeSrc = readFileSync(join(root, 'runtime', 'mcp-bridge.mjs'), 'utf8')
-const toolNames = [...bridgeSrc.matchAll(/name:\s*['"](kitesurf_[a-z_]+)['"]/g)].map((m) => m[1])
+// P3-04: the bridge's sole carrier is DNLS `profiles/kitesurf/mcp-bridge.mjs`
+// (the DNK `runtime/` copy is retired). Read tool names from there.
+const bridgeSrc = readFileSync(join(root, '..', 'dsh-nano-local-sandbox', 'profiles', 'kitesurf', 'mcp-bridge.mjs'), 'utf8')
+const toolNames = [...bridgeSrc.matchAll(/sandbox\.[a-z_]+/g)]
 const allMd = readdirSync(join(skillDst, 'references')).filter((f) => f.endsWith('.md'))
   .map((f) => readFileSync(join(skillDst, 'references', f), 'utf8'))
 allMd.push(readFileSync(join(skillDst, 'SKILL.md'), 'utf8'))

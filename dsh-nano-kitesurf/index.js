@@ -162,11 +162,9 @@ const history = createHistory(fileURLToPath(new URL('.', import.meta.url)))
 
 /**
  * The lock file is the plugin's only durable state (DSH_HOME, never inside
- * the plugin dir — a host restart replaces that). We remember the checkout
- * that last created the container so a later cold start can rebuild it even
- * when neither KITESURF_CHECKOUT nor config.checkout is set. It is a
- * consumption receipt of a *previous* config, not a new canonical source:
- * an explicit env/config value always wins.
+ * the plugin dir — a host restart replaces that). It carries the init
+ * receipt (version/pitfalls/node), not a container rebuild source — this
+ * package does not launch containers (P3-04).
  */
 function lockPathOf() {
   return path.join(process.env.DSH_HOME || homedir(), 'nano-kitesurf.lock.json')
@@ -500,7 +498,7 @@ export function apply(ctx, config) {
   // translate. FIX maps a failing check to a concrete next action.
   const SELFTEST_FIX = {
     plugin: 'buildId 缺失：在本包 npm run build → 同步到 profile 插件目录 → pnpm install --force → 重启宿主',
-    engine: 'POST /nano-local-sandbox/recover {}（自动 suspend→resume）；若 400 kitesurf.kite.checkout 先配 config.checkout',
+    engine: '引擎无应答：POST /nano-local-sandbox/recover {}（自动 suspend→resume）；引擎由沙箱宿主带起',
     'engine-identity': 'POST /nano-local-sandbox/kite {"action":"configure","httpBase":"http://127.0.0.1:<enginePort>"}（httpBase 指向了非 Kitesurf 服务）',
     container: 'container list --all 看容器；容器缺失/停止 → POST /nano-local-sandbox/kite {"action":"resume"}',
     'ports-published': '端口漂移：GET /nano-local-sandbox/ports 看 configured/effective/published → POST /nano-local-sandbox/recover {} 修复端口',
@@ -575,7 +573,7 @@ export function apply(ctx, config) {
     const summary = diagnosticsSummary()
     const hints = []
     if (!status.ok) hints.push('引擎不可达：看 status.error，然后 curl http://127.0.0.1:8798/health、container list --all、container logs kitesurf --tail 80')
-    if (!status.ok) hints.push('恢复顺序：先 GET /status 确认 phase（running 但死会自动降级为 idle）→ POST /kite {action:"suspend"}（若 suspended 可跳过）→ POST /kite {action:"resume"}；若返回 400 kitesurf.kite.checkout，说明缺 KITESURF_CHECKOUT/config.checkout，先在 profile cordis.patch.yml 写 config.checkout 或 export 后再试')
+    if (!status.ok) hints.push('恢复顺序：先 GET /status 确认 phase（running 但死会自动降级为 idle）→ POST /kite {action:"suspend"}（若 suspended 可跳过）→ POST /kite {action:"resume"}；引擎无应答说明容器没在跑，由 dsh-nano-local-sandbox 宿主带起（POST /nano-local-sandbox/recover）')
     if (status.engineMismatch) hints.push('engineMismatch：httpBase 指向了非 Kitesurf 服务，POST /kite configure 回 loopback 引擎端口')
     if (!targets && targetsError) hints.push(`Target.getTargets 失败：${targetsError}`)
     if (summary.operations.failures > 0) hints.push(`最近 ${summary.operations.failures} 次操作失败：GET /operations?errorsOnly=true 看 errorId，再对照 errorCatalog`)

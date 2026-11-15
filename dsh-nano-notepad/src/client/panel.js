@@ -349,13 +349,36 @@ ${NANO_STYLES}
 .np-fx-view[hidden] { display: none !important; }
 .np-fx-shell { width: 100%; max-width: 760px; height: 100%; min-height: 0; display: flex; flex-direction: column; gap: 10px; }
 .np-fx-head { display: flex; align-items: center; gap: 8px; height: 36px; flex: none; }
-.np-fx-head-title { display: inline-flex; align-items: center; gap: 7px; font-size: var(--np-font-size); font-weight: 600; color: var(--dsw-alias-label-primary); flex: none; }
+.np-fx-head-title { display: inline-flex; align-items: center; gap: 7px; height: 36px; padding: 0 2px; border: 0; background: transparent; font: inherit; font-size: var(--np-font-size); font-weight: 600; color: var(--dsw-alias-label-primary); flex: none; cursor: pointer; }
+.np-fx-head-title:hover { color: var(--dsw-alias-label-primary); }
+.np-fx-head-title[aria-expanded="true"] .np-fx-nav-state { color: var(--dsw-alias-link); }
+.np-fx-nav-state, .np-fx-nav-state svg { display: inline-flex; width: 14px; height: 14px; color: var(--dsw-alias-label-tertiary); transition: color .12s ease; }
 .np-fx-head-ico, .np-fx-head-ico svg { width: 16px; height: 16px; display: block; color: var(--dsw-alias-link); }
 .np-fx-head-sub { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--np-font-size-xs); color: var(--dsw-alias-label-tertiary); }
 .np-fx-head-space { flex: 1 1 auto; }
 .np-fx-headbtn { height: 26px; padding: 0 10px; border: 1px solid var(--dsw-alias-border-l2); background: transparent; border-radius: var(--dsw-radius-sm); color: var(--dsw-alias-label-secondary); font: inherit; font-size: var(--np-font-size-xs); cursor: pointer; }
-.np-fx-headbtn:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
-.np-fx-close { width: 26px; padding: 0; font-size: 16px; line-height: 1; }
+/* Kitesurf-style vertical nav drawer: 管线/记录 as stacked cards */
+.np-fx-nav { position: absolute; z-index: 4; top: 48px; left: 12px; bottom: 12px; width: 272px; display: flex; flex-direction: column; box-sizing: border-box; background: var(--dsw-alias-bg-layer-2); border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-lg); box-shadow: var(--dsw-elevation-prominent); transform: translateX(calc(-100% - 16px)); visibility: hidden; transition: transform .24s ease, visibility 0s linear .24s; }
+.np-fx-nav[data-state="open"] { transform: none; visibility: visible; transition: transform .24s ease; }
+.np-fx-nav-head { display: flex; flex: none; align-items: center; height: 32px; padding: 0 10px; border-bottom: 1px solid var(--dsw-alias-border-l3); color: var(--dsw-alias-label-tertiary); font-size: var(--np-font-size-xs); }
+.np-fx-nav-head b { color: var(--dsw-alias-label-secondary); font-weight: 600; }
+.np-fx-nav-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 6px; padding: 6px; }
+.np-fx-nav-card { border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-layer-1); overflow: hidden; }
+.np-fx-nav-card-head { display: flex; align-items: center; gap: 7px; width: 100%; min-height: 32px; padding: 5px 8px; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; font-size: var(--np-font-size-sm); text-align: left; cursor: pointer; }
+.np-fx-nav-card-head:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+.np-fx-nav-card-head[data-open="true"] { color: var(--dsw-alias-label-primary); background: var(--dsw-alias-markdown-tag, var(--dsw-alias-bg-layer-3)); }
+.np-fx-nav-card-icon, .np-fx-nav-card-icon svg { width: 14px; height: 14px; display: inline-flex; flex: none; opacity: .8; }
+.np-fx-nav-card-caret { margin-left: auto; color: var(--dsw-alias-label-tertiary); font-size: 10px; }
+.np-fx-nav-card-body { padding: 4px 8px 8px; border-top: 1px solid var(--dsw-alias-border-l1); }
+.np-fx-nav-card-body[hidden] { display: none !important; }
+.np-fx-nav-empty { padding: 8px 2px; color: var(--dsw-alias-label-tertiary); font-size: var(--np-font-size-xs); }
+.np-fx-nav-item { display: flex; align-items: center; gap: 6px; min-height: 26px; border-bottom: 1px solid var(--dsw-alias-border-l1); font-size: var(--np-font-size-xs); color: var(--dsw-alias-label-secondary); }
+.np-fx-nav-item:last-child { border-bottom: 0; }
+.np-fx-nav-item-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--dsw-alias-label-primary); }
+.np-fx-nav-item button { height: 22px; padding: 0 6px; border: 0; border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-secondary); font: inherit; font-size: 10px; cursor: pointer; }
+.np-fx-nav-item button:hover { background: var(--dsw-alias-interactive-bg-active); color: var(--dsw-alias-label-primary); }
+.np-fx-nav-add { width: 100%; margin-top: 6px; height: 24px; border: 1px dashed var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; font-size: var(--np-font-size-xs); cursor: pointer; }
+.np-fx-nav-add:hover { background: var(--dsw-alias-interactive-bg-hover); }
 .np-fx-thread { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 4px 2px 2px; scroll-behavior: smooth; }
 .np-fx-thread .np-fx-empty { margin: auto; padding: 24px 16px 12px; }
 .np-fx-msg { display: flex; gap: 8px; align-items: flex-start; max-width: 100%; }
@@ -921,12 +944,9 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     <section class="np-fx-view" hidden>
       <div class="np-fx-shell">
         <header class="np-fx-head">
-          <span class="np-fx-head-title"><span class="np-fx-head-ico" aria-hidden="true">${FX_ICON}</span><span data-i18n="fxViewTitle">fx 处理</span></span>
+          <button type="button" class="np-fx-head-title" data-action="fx-nav-toggle" aria-expanded="false"><span class="np-fx-head-ico" aria-hidden="true">${FX_ICON}</span><span data-i18n="fxViewTitle">fx 处理</span><span class="np-fx-nav-state" aria-hidden="true">${PANEL_ICON(false)}</span></button>
           <span class="np-fx-head-sub" data-fx-scope></span>
           <span class="np-fx-head-space"></span>
-          <button type="button" class="np-fx-headbtn" data-action="fx-pipes" data-i18n="fxPipes">管线</button>
-          <button type="button" class="np-fx-headbtn" data-action="fx-hist" data-i18n="fxRuns">记录</button>
-          <button type="button" class="np-fx-headbtn np-fx-close" data-action="fx-close" data-i18n="close" data-i18n-mode="title" aria-label="关闭">×</button>
         </header>
         <div class="np-fx-thread" role="log" aria-live="polite">
           <div class="np-fx-empty">
@@ -950,6 +970,19 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
           <div class="np-fx-pop" hidden></div>
         </div>
       </div>
+      <nav class="np-fx-nav" data-state="closed" aria-label="fx 管理">
+        <div class="np-fx-nav-head"><b data-i18n="fxManage">fx 管理</b></div>
+        <div class="np-fx-nav-list">
+          <section class="np-fx-nav-card" data-fx-nav-card="pipes">
+            <button type="button" class="np-fx-nav-card-head" data-action="fx-nav-card" data-card="pipes" data-open="true"><span class="np-fx-nav-card-icon" aria-hidden="true">${dshIcon('flat-list-outline')}</span><span data-i18n="fxPipes">管线</span><span class="np-fx-nav-card-caret" aria-hidden="true">▾</span></button>
+            <div class="np-fx-nav-card-body" data-fx-nav-body="pipes"></div>
+          </section>
+          <section class="np-fx-nav-card" data-fx-nav-card="records">
+            <button type="button" class="np-fx-nav-card-head" data-action="fx-nav-card" data-card="records" data-open="true"><span class="np-fx-nav-card-icon" aria-hidden="true">${dshIcon('clock-outline')}</span><span data-i18n="fxRuns">记录</span><span class="np-fx-nav-card-caret" aria-hidden="true">▾</span></button>
+            <div class="np-fx-nav-card-body" data-fx-nav-body="records"></div>
+          </section>
+        </div>
+      </nav>
     </section>
     <div class="np-resize" data-edge="n"></div><div class="np-resize" data-edge="s"></div><div class="np-resize" data-edge="e"></div><div class="np-resize" data-edge="w"></div><div class="np-resize" data-edge="nw"></div><div class="np-resize" data-edge="ne"></div><div class="np-resize" data-edge="sw"></div><div class="np-resize" data-edge="se"></div>
     <input class="np-file" type="file" accept="image/png,image/jpeg,image/gif,image/webp" hidden>
@@ -1002,7 +1035,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     settings: defaults,
     ui: { id: 'ui', open: false, tabs: /** @type {string[]} */ ([]), currentId: /** @type {string | null} */ (null), entryX: null, entryY: null, panelX: null, panelY: null, kindFilter: /** @type {string | null} */ (null), wordWrap: true },
     /* fx 处理（会话期状态，不落库）：open 控制面板；promptId/refs/docOn 是 composer 选择。 */
-    fx: { open: false, promptId: /** @type {string | null} */ (null), refs: /** @type {{id:string,name:string,cat:string}[]} */ ([]), docOn: true, busy: false, model: /** @type {string | null} */ (null) },
+    fx: { open: false, navOpen: false, promptId: /** @type {string | null} */ (null), refs: /** @type {{id:string,name:string,cat:string}[]} */ ([]), docOn: true, busy: false, model: /** @type {string | null} */ (null) },
     view: defaults.defaultView,
     slash: null,
     slashIndex: 0,
@@ -2275,6 +2308,9 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
   const fxSend = /** @type {HTMLButtonElement} */ (must(panel, '.np-fx-send'))
   const fxToolBadge = /** @type {HTMLButtonElement} */ (must(panel, '.np-fx-toolbadge'))
   const fxScope = must(panel, '.np-fx-head-sub')
+  const fxNav = must(panel, '.np-fx-nav')
+  const fxNavBodyPipes = must(panel, '[data-fx-nav-body="pipes"]')
+  const fxNavBodyRecords = must(panel, '[data-fx-nav-body="records"]')
   let fxPopMode = null
   let fxPopItems = []
   let fxPopIndex = 0
@@ -2327,9 +2363,17 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
   const fxSetEmpty = () => { fxEmpty.hidden = fxThread.querySelector('.np-fx-msg') !== null }
   const fxScroll = () => { fxThread.scrollTop = fxThread.scrollHeight }
   const fxPaint = () => { fxPaintDocChip(); fxPaintChips(); fxPaintSuggests(); fxPaintModel(); fxUpdateSend(); fxSetEmpty() }
+  const fxNavApply = () => {
+    const title = must(panel, '.np-fx-head-title')
+    title.setAttribute('aria-expanded', String(state.fx.navOpen))
+    const icon = title.querySelector('.np-fx-nav-state')
+    if (icon) icon.innerHTML = PANEL_ICON(!!state.fx.navOpen)
+    fxNav.dataset.state = state.fx.navOpen ? 'open' : 'closed'
+  }
   const renderFx = () => {
     fxView.hidden = !state.fx.open
     panel.dataset.fx = String(!!state.fx.open)
+    fxNavApply()
     if (state.fx.open) fxPaint()
   }
 
@@ -2515,16 +2559,51 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       fxUpdateSend()
       fxInput.value = ''
       fxPaintChips()
+      if (state.fx.navOpen) void fxNavRefreshRecords()
     }
   }
 
+  const fxNavRefreshPipes = async () => {
+    const copy = fxCopy()
+    try {
+      const defs = await window.__nanoNotepad.fx.pipelines.list()
+      fxNavBodyPipes.innerHTML = (defs.length
+        ? defs.map(d => `<div class="np-fx-nav-item"><span class="np-fx-nav-item-name">${escapeHtml(d.name ?? d.id)}</span><button type="button" data-fx-nav-run="${d.id}">${escapeHtml(copy.fxRunBtn ?? '运行')}</button><button type="button" data-fx-nav-del="${d.id}" aria-label="${escapeHtml(copy.fxRemove ?? '删除')}">×</button></div>`).join('')
+        : `<div class="np-fx-nav-empty">${escapeHtml(copy.fxPipeEmpty ?? '无管线定义')}</div>`) + `<button type="button" class="np-fx-nav-add" data-fx-nav-new>${escapeHtml(copy.fxPipeNew ?? '新建管线')}</button>`
+    } catch { fxNavBodyPipes.innerHTML = `<div class="np-fx-nav-empty">${escapeHtml(copy.fxHistErr ?? '管线不可用')}</div>` }
+  }
+  const fxNavRefreshRecords = async () => {
+    const copy = fxCopy()
+    try {
+      const sq = await window.__nanoNotepad.fx.sqlite()
+      await sq.openPipeline()
+      const rows = await sq.__probe('SELECT id,name,status,started_at,finished_at FROM runs ORDER BY started_at DESC LIMIT 30')
+      const list = rows?.result?.resultRows ?? []
+      fxNavBodyRecords.innerHTML = list.length
+        ? list.map(r => `<div class="np-fx-nav-item"><span class="np-fx-nav-item-name">${escapeHtml(r.name ?? r.id)}</span><span class="np-fx-nav-empty">${escapeHtml(r.status ?? '')}${r.started_at ? ` · ${new Date(r.started_at).toLocaleTimeString()}` : ''}</span></div>`).join('')
+        : `<div class="np-fx-nav-empty">${escapeHtml(copy.fxHistEmpty ?? '无 run 记录')}</div>`
+    } catch { fxNavBodyRecords.innerHTML = `<div class="np-fx-nav-empty">${escapeHtml(copy.fxHistErr ?? 'run 历史不可用')}</div>` }
+  }
+  function fxNavRefresh() { void fxNavRefreshPipes(); void fxNavRefreshRecords() }
+  function toggleFxNav() {
+    state.fx.navOpen = !state.fx.navOpen
+    fxNavApply()
+    if (state.fx.navOpen) fxNavRefresh()
+  }
+  function toggleFxNavCard(anchor) {
+    const card = anchor.closest('.np-fx-nav-card')
+    const body = card?.querySelector('.np-fx-nav-card-body')
+    if (!body) return
+    body.hidden = !body.hidden
+    anchor.dataset.open = String(!body.hidden)
+  }
   function openFx() {
     state.fx.open = true
     render()
     if (!fxModelsLoaded) void fxLoadModels()
     requestAnimationFrame(() => { fxView.hidden = false; fxInput.focus() })
   }
-  function closeFx() { state.fx.open = false; render() }
+  function closeFx() { state.fx.open = false; state.fx.navOpen = false; render() }
 
   /* ── 管线定义弹窗（原「管线」tab 的等价能力，不占 fx 主界面） ── */
   function openFxPipelines() {
@@ -2564,12 +2643,13 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
             fresh.hidden = true
             out.textContent = `已存 ${name || spec.name}`
             void refresh()
+            if (state.fx.navOpen) void fxNavRefreshPipes()
           } catch (e) { out.textContent = `ERR: ${e?.message ?? e}` }
         }
         list.onclick = async ev => {
           const runBtn = ev.target.closest('.np-fx-pipe-run')
           const delBtn = ev.target.closest('.np-fx-pipe-del')
-          if (delBtn) { await window.__nanoNotepad.fx.pipelines.remove(delBtn.dataset.id); void refresh(); return }
+          if (delBtn) { await window.__nanoNotepad.fx.pipelines.remove(delBtn.dataset.id); void refresh(); if (state.fx.navOpen) void fxNavRefreshPipes(); return }
           if (!runBtn) return
           const def = await window.__nanoNotepad.fx.pipelines.get(runBtn.dataset.id)
           if (!def?.spec) { out.textContent = 'def missing'; return }
@@ -2662,6 +2742,36 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), items, width: 320, maxHeight: 140, theme: resolvedTheme(), z: NP_PORTAL_Z, direction: 'up' })
     closeMenu = () => raw.close()
   }
+  fxNav.addEventListener('click', async event => {
+    const runBtn = event.target instanceof HTMLElement ? event.target.closest('[data-fx-nav-run]') : null
+    const delBtn = event.target instanceof HTMLElement ? event.target.closest('[data-fx-nav-del]') : null
+    const addBtn = event.target instanceof HTMLElement ? event.target.closest('[data-fx-nav-new]') : null
+    if (addBtn) { openFxPipelines(); return }
+    if (delBtn) { await window.__nanoNotepad.fx.pipelines.remove(delBtn.dataset.fxNavDel); void fxNavRefreshPipes(); return }
+    if (!runBtn) return
+    const def = await window.__nanoNotepad.fx.pipelines.get(runBtn.dataset.fxNavRun)
+    if (!def?.spec) return
+    fxNavBodyPipes.querySelector('.np-fx-nav-empty')?.remove()
+    try {
+      const res = await window.__nanoNotepad.fx.runPipeline(def.spec, { model: state.fx.model || undefined, nodeId: state.ui.currentId, defId: def.id })
+      const line = document.createElement('div'); line.className = 'np-fx-nav-empty'
+      line.textContent = `${res.status} — ${res.stages.map(st => `${st.step}${st.ok ? '✓' : '✗'}`).join(' ')}`
+      fxNavBodyPipes.appendChild(line)
+      void fxNavRefreshRecords()
+    } catch (e) {
+      const line = document.createElement('div'); line.className = 'np-fx-nav-empty'
+      line.textContent = `ERR: ${e?.message ?? e}`
+      fxNavBodyPipes.appendChild(line)
+    }
+  })
+  const fxEscClose = event => {
+    if (event.key !== 'Escape' || !state.fx.open) return
+    if (document.querySelector('.nano-menu') || document.querySelector('.nano-dialog-card')) return
+    if (!fxPop.hidden) return
+    closeFx()
+  }
+  document.addEventListener('keydown', fxEscClose)
+  disposers.push(() => document.removeEventListener('keydown', fxEscClose))
   fxToolBadge.addEventListener('click', () => openFxTools(fxToolBadge))
   fxPromptBtn.addEventListener('click', () => {
     /* 原生 NanoMenu，而不是持久悬在 composer 内的自定义面板；空语料也弹菜单说明。 */
@@ -3717,10 +3827,9 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       }).catch(showError)
     }
     if (action === 'image') must(panel, '.np-file').click()
-    if (action === 'fx-run') { openFx(); return }
-    if (action === 'fx-close') { closeFx(); return }
-    if (action === 'fx-pipes') { openFxPipelines(); return }
-    if (action === 'fx-hist') { openFxHistory(); return }
+    if (action === 'fx-run') { if (state.fx.open) closeFx(); else openFx(); return }
+    if (action === 'fx-nav-toggle') { toggleFxNav(); return }
+    if (action === 'fx-nav-card') { toggleFxNavCard(target); return }
     /* Lint badge click: jump the source caret to the reported offset. */
     if (target.classList.contains('np-lint') && target.dataset.pos !== '') {
       const pos = Number(target.dataset.pos)

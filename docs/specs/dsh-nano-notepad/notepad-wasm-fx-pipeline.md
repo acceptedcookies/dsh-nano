@@ -914,3 +914,17 @@ runPipeline(spec, ctx) → {runId, stages:[{name,ok,result}], status}
 **ego 验证**：模型菜单 3 项（选中 `deepseek-official~deepseek-v4-pro` 可切换）；prompt 原生菜单 3 项且 `data-active` 正常；设置 `fx` tab 列出 53 个候选、默认勾选 3 个，取消 v4-pro 后 composer 菜单变 2 个，恢复后 3 个；composer 高度 134.5px 不随 chip 切换抖动；暗/亮按钮四态颜色按上表。
 
 **13.9.1 追加（2026-11-15）**：① 模型菜单行改为 provider 小字 + 模型名主行 + contextWindow 小字（`fxModelInfo`；contextWindow 当前 upstream 为 null 时省略）；② 提示语料为空时也弹原生 NanoMenu 单行「没有提示语料」，不再点击无反应；③ composer DOM 顺序改为 input→chips→bar，placeholder/光标从 composer 顶部 11px 起；④ `note_*` 改为可点击按钮，弹原生菜单列出 `note_read`/`note_write`/`note_kind_get`/`note_search` 四个 host-tool 的用途。
+
+### 13.10 fx 处理入口与垂直管理卡片（2026-11-15，业主第三轮）
+
+**业主反馈**：① 取消 fx 内部 X；点右上「处理」按钮直接切回 notepad；② fx 页内按 ESC 也关闭回 notepad；③ 参考 Kitesurf 垂直标签卡片，把「管线」与「记录」合并进垂直标签栏，整个「fx 处理」标题作为开合入口并带展开/关闭 icon。
+
+**实现**：
+- 删除 `.np-fx-close` 按钮；`.np-fx-entry`（右上处理）改为 toggle：打开 fx / 点回 notepad；全局 keydown（排除 NanoMenu/NanoDialog/自定义 pop）ESC → `closeFx()`。
+- `.np-fx-head-title` 改为 `<button data-action="fx-nav-toggle">`，含 `FX_ICON + fx 处理 + PANEL_ICON(state)`；`aria-expanded`/`data-state` 驱动展开/关闭 icon。
+- 新增 `.np-fx-nav`：Kitesurf 式左侧滑出垂直卡片抽屉（272px，layer-2 背景、border、shadow、translateX 过渡）；内部两张卡片：
+  - **管线**：`fx.pipelines.list()` 行（运行/删除）+ 新建管线（打开原 pipeline dialog）；创建/删除后刷新。
+  - **记录**：sqlite `runs` 最近 30 条（name/status/time）。
+- 主界面仍是 chat；抽屉只是覆盖层，不改变 fx 主界面高度/宽度。
+
+**ego 验证**：header 无 X；标题按钮 `aria-expanded` true/false 切换；nav rect 打开后 x33,y122,w272,h307 在 notepad 内；管线卡片显示「无管线定义/新建管线」，记录显示历史 runs；点标题开合、点 `处理` 关闭、ESC 关闭、再点处理重开均通过。

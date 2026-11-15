@@ -296,13 +296,23 @@ ${NANO_STYLES}
 .np-fx-composer .np-fx-chip[data-on="false"] { opacity: .42; }
 .np-fx-chip-ico { opacity: .78; }
 .np-fx-doc-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.np-fx-toolbadge { font-size: 10px; color: var(--dsw-alias-label-tertiary); border: 1px solid var(--dsw-alias-border-l2); border-radius: 999px; padding: 0 7px; line-height: 20px; }
+.np-fx-toolbadge { font-size: 10px; color: var(--dsw-alias-label-tertiary); border: 1px solid var(--dsw-alias-border-l2); border-radius: 999px; padding: 0 7px; line-height: 20px; background: transparent; font-family: inherit; cursor: pointer; }
+.np-fx-toolbadge:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 .np-fx-composer .np-fx-model { display: inline-flex; align-items: center; gap: 4px; width: auto !important; max-width: 260px; height: 26px; padding: 0 8px !important; font-size: var(--np-font-size-xs) !important; border-radius: 999px !important; background: var(--dsw-alias-interactive-bg-hover) !important; border: 0 !important; color: var(--dsw-alias-label-secondary) !important; cursor: pointer; }
-.np-fx-model-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.np-fx-model-label { display: inline-flex; align-items: baseline; gap: 4px; min-width: 0; overflow: hidden; }
+.np-fx-model-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.np-fx-model-provider { flex: none; font-size: 9px; color: var(--dsw-alias-label-tertiary); }
+.np-fx-model-ctx { flex: none; font-size: 9px; color: var(--dsw-alias-label-tertiary); }
 .np-fx-model-caret { flex: none; font-size: 9px; opacity: .7; }
+.nano-menu-label:has(.np-fx-model-option) { white-space: normal; overflow: visible; }
+.np-fx-model-option { display: flex; flex-direction: column; gap: 1px; min-width: 0; padding: 2px 0; }
+.np-fx-model-option-provider { font-size: 10px; color: var(--dsw-alias-label-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.np-fx-model-option-line { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.np-fx-model-option-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--dsw-alias-label-primary); font-size: var(--np-font-size-sm); }
+.np-fx-model-option-ctx { flex: none; margin-left: auto; font-size: 10px; color: var(--dsw-alias-label-tertiary); }
 .np-fx-composer .np-fx-send { width: 32px; height: 32px; border-radius: 50% !important; border: 0 !important; background: var(--dsw-alias-link) !important; color: var(--dsw-alias-bg-primary) !important; font-size: 16px; line-height: 1 !important; padding: 0 !important; cursor: pointer; flex: none; }
 .np-fx-composer .np-fx-send:disabled { opacity: .4; cursor: default; }
-.np-fx-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px; min-height: 20px; }
+.np-fx-chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 0; min-height: 20px; }
 .np-fx-chips[hidden] { display: none !important; }
 .np-fx-tag { display: inline-flex; align-items: center; gap: 2px; font-size: 10px; background: var(--dsw-alias-interactive-bg-active); border-radius: var(--dsw-radius-sm); padding: 2px 4px 2px 6px; color: var(--dsw-alias-label-secondary); max-width: 220px; }
 .np-fx-tag > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -366,7 +376,10 @@ ${NANO_STYLES}
 .np-fx-model-row { display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: var(--dsw-radius-sm); cursor: pointer; }
 .np-fx-model-row:hover { background: var(--dsw-alias-interactive-bg-hover); }
 .np-fx-model-row input { width: 14px; height: 14px; flex: none; accent-color: var(--dsw-alias-link); }
-.np-fx-model-row span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--np-font-size-sm); color: var(--dsw-alias-label-primary); }
+.np-fx-model-row-text { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.np-fx-model-row-provider { flex: none; font-size: 10px; color: var(--dsw-alias-label-tertiary); }
+.np-fx-model-row-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--np-font-size-sm); color: var(--dsw-alias-label-primary); }
+.np-fx-model-row-ctx { flex: none; margin-left: auto; font-size: 10px; color: var(--dsw-alias-label-tertiary); }
 .np-changed { animation: npChanged 2.4s; }
 @keyframes npChanged { 0% { background: var(--dsw-alias-interactive-bg-active); } 100% { background: transparent; } }
 .np-group { display: flex; align-items: center; gap: 6px; margin: 12px 0 4px; padding-left: 8px; color: var(--dsw-alias-label-tertiary); font-size: var(--np-font-size-xs); font-weight: 600; letter-spacing: .04em; line-height: 20px; }
@@ -924,12 +937,12 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
           </div>
         </div>
         <div class="np-fx-composer">
-          <div class="np-fx-chips" hidden></div>
           <textarea class="np-fx-input" rows="2" placeholder="要 fx 做什么——可触发 note_* 工具写 draft/knowledge" data-i18n="fxInputPh" data-i18n-attr="placeholder"></textarea>
+          <div class="np-fx-chips" hidden></div>
           <div class="np-fx-bar">
             <button type="button" class="np-fx-chip np-fx-doc" data-on="true"><span class="np-fx-chip-ico" aria-hidden="true">▣</span><span class="np-fx-doc-name"></span></button>
             <button type="button" class="np-fx-chip np-fx-promptbtn"><span class="np-fx-chip-ico" aria-hidden="true">/</span><span data-i18n="fxPromptPick">提示语料</span></button>
-            <span class="np-fx-toolbadge" title="本轮可用 note_* 工具">note_*</span>
+            <button type="button" class="np-fx-toolbadge" data-action="fx-tools" title="本轮可用 note_* 工具">note_*</button>
             <span class="np-fx-grow"></span>
             <button type="button" class="np-fx-model" title="模型"><span class="np-fx-model-label">载入中…</span><span class="np-fx-model-caret" aria-hidden="true">▾</span></button>
             <button type="button" class="np-fx-send" title="运行" aria-label="运行">→</button>
@@ -2260,6 +2273,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
   const fxPromptBtn = must(panel, '.np-fx-promptbtn')
   const fxPop = must(panel, '.np-fx-pop')
   const fxSend = /** @type {HTMLButtonElement} */ (must(panel, '.np-fx-send'))
+  const fxToolBadge = /** @type {HTMLButtonElement} */ (must(panel, '.np-fx-toolbadge'))
   const fxScope = must(panel, '.np-fx-head-sub')
   let fxPopMode = null
   let fxPopItems = []
@@ -2320,6 +2334,16 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
   }
 
   const fxModelKey = m => m.key ?? m.id ?? m.name ?? m
+  const fxModelInfo = m => {
+    const key = fxModelKey(m)
+    const split = String(key).split('~')
+    return {
+      key,
+      provider: m.provider ?? (split.length > 1 ? split[0] : ''),
+      model: m.model ?? (split.length > 1 ? split.slice(1).join('~') : key),
+      ctx: Number(m.contextWindow) > 0 ? `${Math.round(Number(m.contextWindow) / 1000)}k` : 'ctx —',
+    }
+  }
   const fxCuratedModels = () => {
     const configured = new Set(state.settings.fxModels ?? [])
     const picked = fxModelsAll.filter(m => configured.has(fxModelKey(m)))
@@ -2337,9 +2361,9 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     const keys = models.map(fxModelKey)
     if (!state.fx.model || !keys.includes(state.fx.model)) state.fx.model = keys[0]
     const picked = models[keys.indexOf(state.fx.model)]
-    const ctx = Number(picked?.contextWindow) > 0 ? ` · ${Math.round(Number(picked.contextWindow) / 1000)}k` : ''
-    fxModelLabel.textContent = `${state.fx.model}${ctx}`
-    fxModel.title = copy.fxModel ?? '模型'
+    const info = fxModelInfo(picked ?? models[0])
+    fxModelLabel.innerHTML = `<span class="np-fx-model-name">${escapeHtml(info.model)}</span><span class="np-fx-model-provider">${escapeHtml(info.provider)}</span>${info.ctx ? `<span class="np-fx-model-ctx">${escapeHtml(info.ctx)}</span>` : ''}`
+    fxModel.title = `${info.provider} · ${info.model}${info.ctx ? ` · ${info.ctx}` : ''}`
   }
   async function fxLoadModels() {
     if (fxModelsLoaded || fxModelsLoading) return
@@ -2610,11 +2634,15 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     closeMenu?.()
     const check = React.createElement('span', { className: 'nano-menu-check', dangerouslySetInnerHTML: { __html: CHECK_ICON } })
     const items = models.map(m => {
-      const key = fxModelKey(m)
-      const ctx = Number(m.contextWindow) > 0 ? ` · ${Math.round(Number(m.contextWindow) / 1000)}k` : ''
-      return { id: key, label: `${key}${ctx}`, icon: key === state.fx.model ? check : undefined, run: () => { state.fx.model = key; fxPaintModel() } }
+      const info = fxModelInfo(m)
+      const label = React.createElement('span', { className: 'np-fx-model-option' },
+        React.createElement('span', { className: 'np-fx-model-option-provider' }, info.provider),
+        React.createElement('span', { className: 'np-fx-model-option-line' },
+          React.createElement('span', { className: 'np-fx-model-option-name' }, info.model),
+          info.ctx ? React.createElement('span', { className: 'np-fx-model-option-ctx' }, info.ctx) : null))
+      return { id: info.key, label, icon: info.key === state.fx.model ? check : undefined, run: () => { state.fx.model = info.key; fxPaintModel() } }
     })
-    const raw = openNanoMenu({ anchor: fxModel.getBoundingClientRect(), items, width: 300, theme: resolvedTheme(), z: NP_PORTAL_Z, direction: 'up' })
+    const raw = openNanoMenu({ anchor: fxModel.getBoundingClientRect(), items, width: 300, maxHeight: 180, theme: resolvedTheme(), z: NP_PORTAL_Z, direction: 'up' })
     closeMenu = () => raw.close()
   })
   fxPop.addEventListener('mousedown', event => event.preventDefault())
@@ -2622,15 +2650,31 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     const btn = event.target.closest?.('[data-fx-pop]')
     if (btn) fxChoosePop(Number(btn.dataset.fxPop))
   })
-  fxPromptBtn.addEventListener('click', () => {
-    /* 原生 NanoMenu，而不是持久悬在 composer 内的自定义面板。 */
-    const prompts = fxPromptNodes()
-    if (!prompts.length) return
+  function openFxTools(anchor) {
+    const copy = fxCopy()
+    const items = [
+      { id: 'note_read', label: `note_read — ${copy.fxToolsRead ?? '读取一条语料'}` },
+      { id: 'note_write', label: `note_write — ${copy.fxToolsWrite ?? '写入 draft/knowledge'}` },
+      { id: 'note_kind_get', label: `note_kind_get — ${copy.fxToolsKindGet ?? '按 kind 列出语料'}` },
+      { id: 'note_search', label: `note_search — ${copy.fxToolsSearch ?? '按关键词搜索语料'}` },
+    ]
     closeMenu?.()
+    const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), items, width: 320, maxHeight: 140, theme: resolvedTheme(), z: NP_PORTAL_Z, direction: 'up' })
+    closeMenu = () => raw.close()
+  }
+  fxToolBadge.addEventListener('click', () => openFxTools(fxToolBadge))
+  fxPromptBtn.addEventListener('click', () => {
+    /* 原生 NanoMenu，而不是持久悬在 composer 内的自定义面板；空语料也弹菜单说明。 */
+    const prompts = fxPromptNodes()
+    closeMenu?.()
+    const copy = fxCopy()
     const clearActive = () => { delete fxPromptBtn.dataset.active }
     fxPromptBtn.dataset.active = 'true'
-    const items = prompts.map(n => ({ id: n.id, label: fxCleanName(n.name), run: () => { clearActive(); state.fx.promptId = n.id; fxPaintChips(); fxUpdateSend() } }))
-    const raw = openNanoMenu({ anchor: fxPromptBtn.getBoundingClientRect(), items, width: 240, theme: resolvedTheme(), z: NP_PORTAL_Z, direction: 'up' })
+    const check = React.createElement('span', { className: 'nano-menu-check', dangerouslySetInnerHTML: { __html: CHECK_ICON } })
+    const items = prompts.length
+      ? prompts.map(n => ({ id: n.id, label: fxCleanName(n.name), icon: n.id === state.fx.promptId ? check : undefined, run: () => { clearActive(); state.fx.promptId = n.id; fxPaintChips(); fxUpdateSend() } }))
+      : [{ id: 'fx-no-prompt', label: copy.fxNoPrompt ?? '没有提示语料', run: clearActive }]
+    const raw = openNanoMenu({ anchor: fxPromptBtn.getBoundingClientRect(), items, width: 240, maxHeight: 120, theme: resolvedTheme(), z: NP_PORTAL_Z, direction: 'up' })
     const outside = event => {
       if (event.target.closest?.('.nano-menu') || fxPromptBtn.contains(event.target)) return
       clearActive()
@@ -2964,8 +3008,8 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
           fxModelHost.innerHTML = Array.isArray(models) && models.length
             ? models.map(m => {
                 const key = m.key ?? m.id ?? m.name ?? m
-                const ctx = Number(m.contextWindow) > 0 ? ` · ${Math.round(Number(m.contextWindow) / 1000)}k` : ''
-                return `<label class="np-fx-model-row"><input type="checkbox" data-fx-model-pick value="${escapeHtml(key)}"${selected.has(key) ? ' checked' : ''}><span>${escapeHtml(key + ctx)}</span></label>`
+                const info = fxModelInfo(m)
+                return `<label class="np-fx-model-row"><input type="checkbox" data-fx-model-pick value="${escapeHtml(key)}"${selected.has(key) ? ' checked' : ''}><span class="np-fx-model-row-text"><span class="np-fx-model-row-provider">${escapeHtml(info.provider)}</span><span class="np-fx-model-row-name">${escapeHtml(info.model)}</span><span class="np-fx-model-row-ctx">${escapeHtml(info.ctx)}</span></span></label>`
               }).join('')
             : `<span class="np-field-desc">${escapeHtml(copy.fxModelNone)}</span>`
         }).catch(() => { fxModelHost.innerHTML = `<span class="np-field-desc">${escapeHtml(copy.fxModelNone)}</span>` })

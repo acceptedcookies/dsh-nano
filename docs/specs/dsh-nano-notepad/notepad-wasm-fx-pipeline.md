@@ -912,3 +912,5 @@ runPipeline(spec, ctx) → {runId, stages:[{name,ok,result}], status}
 - **处理按钮态**：dark 未激活 `#2c2c2e` 底/`#f9fafb` 字，dark 激活 `#7aaaff` 底/`#0f1115` 字；light 未激活 `#eef1f5`/`#0f1115`，light 激活 `#4176e6`/白字；由 `.np-window[data-fx]` 驱动。
 
 **ego 验证**：模型菜单 3 项（选中 `deepseek-official~deepseek-v4-pro` 可切换）；prompt 原生菜单 3 项且 `data-active` 正常；设置 `fx` tab 列出 53 个候选、默认勾选 3 个，取消 v4-pro 后 composer 菜单变 2 个，恢复后 3 个；composer 高度 134.5px 不随 chip 切换抖动；暗/亮按钮四态颜色按上表。
+
+**13.9.1 追加（2026-11-15）**：① 模型菜单行改为 provider 小字 + 模型名主行 + contextWindow 小字（`fxModelInfo`；contextWindow 当前 upstream 为 null 时省略）；② 提示语料为空时也弹原生 NanoMenu 单行「没有提示语料」，不再点击无反应；③ composer DOM 顺序改为 input→chips→bar，placeholder/光标从 composer 顶部 11px 起；④ `note_*` 改为可点击按钮，弹原生菜单列出 `note_read`/`note_write`/`note_kind_get`/`note_search` 四个 host-tool 的用途。

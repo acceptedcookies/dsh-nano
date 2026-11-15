@@ -94,7 +94,7 @@ dsh plugin --profile web add <spec>
 | 中止 | `DELETE` upstream——存活 session → suspended；**不是硬删除、不自动归档**，收尾需再点归档 |
 | SSH 命令 | 设置弹窗「SSH」tab 生成/显示专用密钥对（`${DSH_HOME}/nano-cloud-session-ssh`，0600），复制 `ssh -i <key> devin-<id>@ssh.devin.ai`；公钥粘到 Devin 后台 SSH keys 一次性 enroll（账号级） |
 
-宿主路由（全部 POST、全部走 route-guard）：`/nano-cloud-session/{status,config,sessions,session,create,message,archive,unarchive,terminate,ssh,catalog,upload}`。`session` op 含 native_open/get/messages/attachments/insights/generate_insights/tags/set_tags/append_tags/sleep；`sessions` op 含 list/insights；`catalog` 读 playbooks/secrets/knowledge/repositories；`upload` 走宿主 multipart。`/config` action：list/save/remove/activate/test（返 orgMatch 校验）/security/ssh-key。错误面统一 `{ok:false,reason}`；403 表示「无权或不可见」（上游 fail-closed，不能当 404）。无 profile 时小节显示引导行，点右侧齿轮打开原生设置弹窗。
+宿主路由（全部 POST、全部走 route-guard）：`/nano-cloud-session/{status,config,sessions,session,create,message,archive,unarchive,terminate,ssh,catalog,upload}`。`session` op 含 native_open/get/messages/attachments/insights/generate_insights/tags/set_tags/append_tags/sleep；`native_open` 的 NATIVE_* 错误面：宿主未 inject sessions/agents→`NATIVE_UNAVAILABLE` 503、无 carrier profile→`NATIVE_UNSUPPORTED` 422、minted 后 carrier 读失败→`NATIVE_OUTCOME_UNKNOWN` 502、agents.enter 拒→`NATIVE_PROJECTION_FAILED` 500（显式失败不伪成功，orphan session 拆掉）；`sessions` op 含 list/insights；`catalog` 读 playbooks/secrets/knowledge/repositories；`upload` 走宿主 multipart。`/config` action：list/save/remove/activate/test（返 orgMatch 校验）/security/ssh-key。错误面统一 `{ok:false,reason}`；403 表示「无权或不可见」（上游 fail-closed，不能当 404）。无 profile 时小节显示引导行，点右侧齿轮打开原生设置弹窗。
 
 ## 配置与状态
 

@@ -28,6 +28,7 @@
 | `/compact` 手动命令 | `--json` 无命令面，模型 prompt 未路由；`compactNow()` 引擎层已由 S-line FULL 共享覆盖 | PARTIAL（命令面 live 未验，引擎路径已验） |
 | OFF 态原生 restore | 全重放 patch 下 OFF 时 `compaction-basic` 原样，`--dump-config` 验证 | PASS |
 | 前端面板 rail-4 + 水位编辑 | GUI「会话不可用」宿主 bug 阻塞交互测试；GET/PUT/switch 均 live 200 | PARTIAL（面板交互未验） |
+| **web profile preset 组装** | `agents` inject 在 `id:compaction` isolate 内 throw → preset-invalid → `tool-office: never started`；已修：`agents` 移出 inject，`ctx.get()` 惰性解析 | **PASS**（修复后 23/23 测试绿，待 GUI 重启验收） |
 
 ## 3. 拟真测试（node:test）
 
@@ -55,7 +56,7 @@
 - `/compact` 手动命令面：无 TTY 命令解析通道（`--json` 不路由），GUI composer 被宿主「会话不可用」bug 阻塞。引擎层 `compactNow()` 已由 S-line FULL 共享路径验证；命令面 live 验留 OPEN。
 - 前端面板 rail-4 交互：`nms-trigger` disabled（同宿主 bug），面板 DOM 未 live 渲染。`GET/PUT/switch` 三路由已 live 200，UI 层留 PARTIAL。
 - `ManualCompactionError` 升级依赖 headless `package.json` 的 `file:` dep（`@deepseek-ai/dsh-compaction` 从 dsh 全局 `node_modules` 解析）。无此 dep 的纯 link 安装下回落 vendored impl——`/compact` `instanceof` 门不命中（documented divergence，R-16.2 待裁决）。
-- `session/prompt` 门（GUI「会话不可用」）：非本包缺陷，宿主侧 unresolved。
+- `session/prompt` 门（GUI「会话不可用」）：**根因已定位并修复** —— `agents` inject 在 `id:compaction` isolate 内非法，导致 preset 组装 cascade；`ctx.get('agents')` 替代。修后需 GUI 重启验证 `session/prompt` 恢复。
 
 ## 6. R-16 待裁决（QNA append-only）
 

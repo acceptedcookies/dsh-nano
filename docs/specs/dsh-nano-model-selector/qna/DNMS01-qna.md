@@ -1316,10 +1316,11 @@
 - **已落地**：arm 在 turn 内 pre-step，整条 `compactSurfaceRegion(owner:null)`（含 commit）收进 `agent.runMaintenance` 空闲窗口——`turn:None`，无跨 `turn/start` 括号。
 - **待裁决**：原读法把「adoption」理解为「下一 turn pre-step 写入 summary+checkpoint+end」。实测 `turn/start crosses an open compaction` → 会话 corrupt。当前实现把 commit 提前到同一 maintenance 窗口，`-18`「跨回合 arm」语义保留、commit 归属改判。请确认。
 
-### R-16.4 `agents` inject 在 `id: compaction` isolate 内
+### R-16.4 `agents` inject 在 `id: compaction` isolate 内 — 已闭环
 
-- **已落地**：`static inject = ['llm','tokenMeter','sessions','agents']`；cordis isolate 只为具名服务建局部 realm，`agents` 经 `Object.setPrototypeOf(isolate, parent.isolate)` 落到父层，live probe `ctx.compaction=true` 已验。
-- **待裁决**：`agents` 在 isolate 内通过父层原型链可达是 cordis 既有语义，但 `-10`/`-18` 未显式登记该假设。请确认可依赖。
+- **根因**：`static inject = ['llm','tokenMeter','sessions','agents']` 在 `id:compaction` isolate 内触发 cordis injector 对 `agents` 的解析——isolate 只声明 `compaction:true` + `toolResultPruner:true`，未列 `agents` → injector throw → preset-standard/ptc/cordis 组装 cascade → GUI 报 `tool-office: never started`（第一个挂掉的 preset 插件被点名）。headless 无 isolate 故逃逸。
+- **已落地**：`inject` 数组（模块导出 + `static inject`）均去掉 `agents`；`agent/status` listener 改走 `ctx.get('agents')` 惰性解析（穿 isolate 边界拿父层服务）。23/23 测试绿。
+- **结论**：`agents` inject 在 `id:compaction` isolate 内 = **非法**；`ctx.get()` 父层原型链 = 合法路径。R-16.4 不再是开放裁决项，改为登记读法：`-10` 的互斥 patch 不得向 inject 引入 isolate 白名单外的服务名。
 
 ### R-16.5 `dsh plugin add` 默认 ON vs `-17` OFF
 

@@ -885,3 +885,70 @@ runPipeline(spec, ctx) → {runId, stages:[{name,ok,result}], status}
 | P1-6 模型 chip | 模型选项显示 `key · Nk`（`contextWindow` 可用时；当前 `/fx/models` 返回 null，故仅显示 key） | 无 |
 
 **ego 验证**：`/`、`@` 弹出选择器与 chips；当前文档注入（短文档内联 / 9000 字符走 note_read）；`+` 新建 tab；`⋯` 菜单四项 + 自动换行 `scrollWidth 75870→555`；真实 LLM `html-summarize` 一次跑通（`note_search`/`note_kind_get`/`note_write`，10.5s，产物 `DeepSeek-V3 发布-结构化摘要.kb.md`）。
+
+### 13.8 fx 处理界面重做（2026-11-15，业主指令）
+
+**业主裁决（原文要点）**：① fx 从编辑控件中独立，入口改为 icon+「处理」并放窗口右上角、与 Windows 控件并列靠最右，带按钮底色；② fx 弹窗只能在 notepad 视觉区域内居中，不能整个 dsh 居中；③ 界面高宽保持，任何切换不得抖动；④ fx 必须是 chat-interface，不能再用 tab 切换。整体结论：旧 fx UI 反人类。
+
+**实现**：
+- 入口：移除 `.np-md-tools` 里的 `fx` 文字钮；`.np-tabs` 右端新增 `.np-fx-entry`（`FX_ICON` + 「处理」+ `--dsw-alias-button-primary-fill` 底色），Windows chrome 下位于最小化/最大化之后的最右侧，mac chrome 仍靠右。
+- 界面：废弃 `openFxCard()` 的 NanoDialog + nanoTabs；新增 `.np-fx-view`（绝对定位在 `.np-window` 的 `--np-tabs-h` 下方，填满 notepad 可视区，`.np-fx-shell` 最大 760px 居中）。header（fx 处理 / 管线 / 记录 / ×）+ `.np-fx-thread` 滚动消息流 + 底部固定 composer。
+- 消息：user/assistant 气泡；assistant 内 `details.np-fx-tool` 记录 tool_start/tool_end；产物 `.np-fx-artifacts` 链接；空态图标+标题+prompt 场景 chips。
+- 无 tab：管线定义、运行记录改为 header 按钮打开的 NanoDialog，不挤占主界面；无任何 `nanoTabs` 在 fx 主面。
+- 稳定性：`.np-fx-view` 绝对定位，thread `flex:1/min-height:0`，composer `flex:none`；chips 行 `min-height:20px` 常驻占位；实测 view 560×380 在发消息前后不变、composer 138.5px 在选择提示前后不变。
+- 保留 P0-2/P0-3：当前文档 chip（短文档内联，>8000 字 note_read）、`/` prompt、`@` 语料引用。
+
+**ego 验证**：入口 `.np-fx-entry` 出现在 tab 行右端（562px 窗口下 x≈508，28px 高），旧 toolbar `[data-action=fx-run]` 为 null；点击后 `.np-fx-view` 位于 window 内（x21,y61→74,w560,h380），close 再开 window 尺寸不变；真实 LLM `html-summarize` 运行 11.7s，4 个 tool detail、产物 `untitled-2-DeepSeek-V3.kb.md`；管线新建/删除、记录列表均通过。
+
+### 13.9 fx 模型与 composer 细化（2026-11-15，业主第二轮）
+
+**业主反馈**：① 模型下拉需切原生 UI（非浏览器 select）；② 模型应是少数精选，不是全部 53 个；③ 总设置提供 fx 专项设置入口；④ fx composer 与主 composer 样式对齐（按 fx 需求适配，细节修正）；⑤ 处理按钮 light/dark 的激活/非激活态要明确。
+
+**实现**：
+- **原生 UI**：composer 模型 `<select>` 删除，改为 `.np-fx-model` 按钮 + `openNanoMenu`（NanoMenu 原生菜单，选中带 check 图标）；prompt 按钮同样改为 `openNanoMenu`，不再使用会停留的 `.np-fx-pop`；提示按钮打开时 `data-active` 高亮，选中/点外/Esc 清除。
+- **精选模型**：`DEFAULT_SETTINGS.fxModels` 默认 3 个——`deepseek-official~deepseek-flash`、`deepseek-official~deepseek-v4-pro`、`magpie~auto/deepseek-v4.1-flash-1017`；composer 只显示勾选集合，绝不显示全量 53。
+- **总设置 fx 专项**：设置 dialog 增加 `fx` tab；列出 `/fx/models` 全量供勾选，写入 `settings.fxModels`（归一化写入 IDB；至少保留一个）。
+- **composer 对齐**：外层 16px 圆角、layer-2 背景、12px 水平 padding、输入区 56px 最小高度、底部 chip/模型/发送一行；与主 composer 同层次。
+- **处理按钮态**：dark 未激活 `#2c2c2e` 底/`#f9fafb` 字，dark 激活 `#7aaaff` 底/`#0f1115` 字；light 未激活 `#eef1f5`/`#0f1115`，light 激活 `#4176e6`/白字；由 `.np-window[data-fx]` 驱动。
+
+**ego 验证**：模型菜单 3 项（选中 `deepseek-official~deepseek-v4-pro` 可切换）；prompt 原生菜单 3 项且 `data-active` 正常；设置 `fx` tab 列出 53 个候选、默认勾选 3 个，取消 v4-pro 后 composer 菜单变 2 个，恢复后 3 个；composer 高度 134.5px 不随 chip 切换抖动；暗/亮按钮四态颜色按上表。
+
+**13.9.1 追加（2026-11-15）**：① 模型菜单行改为 provider 小字 + 模型名主行 + contextWindow 小字（`fxModelInfo`；contextWindow 当前 upstream 为 null 时省略）；② 提示语料为空时也弹原生 NanoMenu 单行「没有提示语料」，不再点击无反应；③ composer DOM 顺序改为 input→chips→bar，placeholder/光标从 composer 顶部 11px 起；④ `note_*` 改为可点击按钮，弹原生菜单列出 `note_read`/`note_write`/`note_kind_get`/`note_search` 四个 host-tool 的用途。
+
+### 13.10 fx 处理入口与垂直管理卡片（2026-11-15，业主第三轮）
+
+**业主反馈**：① 取消 fx 内部 X；点右上「处理」按钮直接切回 notepad；② fx 页内按 ESC 也关闭回 notepad；③ 参考 Kitesurf 垂直标签卡片，把「管线」与「记录」合并进垂直标签栏，整个「fx 处理」标题作为开合入口并带展开/关闭 icon。
+
+**实现**：
+- 删除 `.np-fx-close` 按钮；`.np-fx-entry`（右上处理）改为 toggle：打开 fx / 点回 notepad；全局 keydown（排除 NanoMenu/NanoDialog/自定义 pop）ESC → `closeFx()`。
+- `.np-fx-head-title` 改为 `<button data-action="fx-nav-toggle">`，含 `FX_ICON + fx 处理 + PANEL_ICON(state)`；`aria-expanded`/`data-state` 驱动展开/关闭 icon。
+- 新增 `.np-fx-nav`：Kitesurf 式左侧滑出垂直卡片抽屉（272px，layer-2 背景、border、shadow、translateX 过渡）；内部两张卡片：
+  - **管线**：`fx.pipelines.list()` 行（运行/删除）+ 新建管线（打开原 pipeline dialog）；创建/删除后刷新。
+  - **记录**：sqlite `runs` 最近 30 条（name/status/time）。
+- 主界面仍是 chat；抽屉只是覆盖层，不改变 fx 主界面高度/宽度。
+
+**ego 验证**：header 无 X；标题按钮 `aria-expanded` true/false 切换；nav rect 打开后 x33,y122,w272,h307 在 notepad 内；管线卡片显示「无管线定义/新建管线」，记录显示历史 runs；点标题开合、点 `处理` 关闭、ESC 关闭、再点处理重开均通过。
+
+### 13.11 fx 模型选择收敛（2026-11-15，业主第四轮）
+
+**业主反馈**：模型选择器改为一行高度；左侧 provider，右侧模型 + 上下文说明；模型只能是 `deepseek-flash`，不应出现 `deepseek-v4-pro`；右侧圆角不见了。
+
+**实现**：
+- 模型菜单/按钮改为单行：`provider` 左，`模型名 + ctx` 右（`ctx —` 当 upstream contextWindow 为 null）；删除两行布局。
+- `DEFAULT_SETTINGS.fxModels` 收敛为 **仅 `deepseek-official~deepseek-flash`**；旧默认三模型（flash/v4-pro/magpie）在 `normalizeSettings` 中识别为 legacy default 并迁移回单模型，避免老 IDB 设置继续显示 pro。
+- 菜单 `maxHeight` 降到 140，单行菜单无滚动条，右侧圆角恢复；仍向上展开留在 notepad 内。
+- 设置 fx tab 仍列出全量目录供后续调整；默认勾选仅 flash。
+
+### 13.12 fx 模型 contextWindow 修复（2026-11-15，业主第五轮）
+
+**业主反馈**：`ctx` 没有显示；模型应仅 deepseek-flash；模型菜单应为一行，provider 左、模型+ctx 右；菜单右侧圆角缺失。
+
+**根因**：DSH 的 `LlmResolvedModelInfo` 把容量放在 **`resolved.context.contextWindow`**，而 `src/host/fx-bridge.js` 读的是顶层 `resolved.contextWindow`，所以 `/nano-notepad/fx/models` 一直返回 `null`，前端只能显示 `ctx —`。
+
+**修复**：
+- bridge：`contextWindow: resolved?.context?.contextWindow ?? resolved?.contextWindow ?? null`；重建 `lib/fx-bridge.js` 并重启 dsh-dev 宿主。
+- 前端 `fxFormatCtx`：≥1e6 显示 `1M`，否则 `128k`；模型按钮/菜单/设置行统一 provider 左、model + ctx 右。
+- `DEFAULT_SETTINGS.fxModels` 仅 `deepseek-official~deepseek-flash`；旧三模型默认值迁移回单模型。
+- 菜单单行、`maxHeight:140` 无滚动，右侧圆角恢复。
+
+**ego 验证**：`/nano-notepad/fx/models` 返回 `contextWindow:1048576`（flash/v4-pro 均）；composer 模型菜单仅 1 项，显示 `deepseek-official | deepseek-flash | 1M`；菜单 rect 300×47，`border-radius:16px`，右侧圆角可见。

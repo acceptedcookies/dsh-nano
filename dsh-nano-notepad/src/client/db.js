@@ -24,6 +24,8 @@ export const DEFAULT_SETTINGS = {
   s3IntervalSec: 30,
   /* Syncing micro-motion: a=breath, b=sweep (default), c=orbit. */
   cloudMotion: 'b',
+  /* fx 处理只暴露精选模型；业主可在「设置 → fx」勾选。当前精选只有 flash。 */
+  fxModels: ['deepseek-official~deepseek-flash'],
   settingsVersion: 2,
 }
 
@@ -44,6 +46,17 @@ export function normalizeSettings(config) {
   }
   /* schema v2: default commit interval 1h; migrate old default 60 → 3600 */
   const legacy = source.settingsVersion !== 2 && source.commitIntervalSec === 60
+  /* 旧版默认三模型（业主已要求只保留 flash）→ 迁移回单一默认；显式其他选择保留。 */
+  const LEGACY_FX_DEFAULT = [
+    'deepseek-official~deepseek-flash',
+    'deepseek-official~deepseek-v4-pro',
+    'magpie~auto/deepseek-v4.1-flash-1017',
+  ]
+  const rawFxModels = Array.isArray(source.fxModels)
+    ? source.fxModels.filter(item => typeof item === 'string' && item.length > 0)
+    : []
+  const legacyFxDefault = rawFxModels.length === LEGACY_FX_DEFAULT.length && rawFxModels.every((item, index) => item === LEGACY_FX_DEFAULT[index])
+  const fxModels = legacyFxDefault ? [] : rawFxModels
   return {
     autoSave: source.autoSave !== false,
     draftIntervalMs: number('draftIntervalMs', DEFAULT_SETTINGS.draftIntervalMs, 30 * 1000, 30 * 60 * 1000),
@@ -63,6 +76,7 @@ export function normalizeSettings(config) {
     s3Enabled: source.s3Enabled === true,
     s3IntervalSec: number('s3IntervalSec', DEFAULT_SETTINGS.s3IntervalSec, 10, 300),
     cloudMotion: ['a', 'b', 'c'].includes(source.cloudMotion) ? source.cloudMotion : DEFAULT_SETTINGS.cloudMotion,
+    fxModels: fxModels.length ? fxModels : DEFAULT_SETTINGS.fxModels,
     settingsVersion: 2,
   }
 }

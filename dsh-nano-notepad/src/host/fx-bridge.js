@@ -124,7 +124,8 @@ export function modelsHandler(ctx) {
             key: `${provider.id}~${model.id}`,
             provider: provider.id,
             model: model.id,
-            contextWindow: resolved?.contextWindow ?? null,
+            /* DSH LlmResolvedModelInfo 的容量在 context.contextWindow，不是顶层。 */
+            contextWindow: resolved?.context?.contextWindow ?? resolved?.contextWindow ?? null,
           })
         }
       }

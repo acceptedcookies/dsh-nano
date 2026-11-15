@@ -1,8 +1,9 @@
 /**
  * /nano-kite session. Init writes one lock. Later inits return that lock.
  * start, suspend, and resume move the phase and run the host hooks
- * (onStart/onSuspend/onResume) the plugin wires in; on the loopback engine
- * those hooks do spawn and stop the local container.
+ * (onStart/onSuspend/onResume) the plugin wires in; those hooks probe the
+ * loopback engine — the container itself is owned by dsh-nano-local-sandbox
+ * (P3-04: this package no longer spawns or stops it).
  */
 
 import { KitesurfError } from './engine.js'

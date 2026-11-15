@@ -1,8 +1,10 @@
 # `CF1115` Closure — 全活跃插件 Contract/Facade 统一实施
 
 > **文档状态**：`partial`（**非 `executed`** — 硬闸 Test-ID 未全 verified）。
-> **会话快照**：`2026-11-15` CST · 分支 `main` · 基线 `653b15b` → HEAD。
+> **会话快照**：`2026-11-15` CST · 分支 `main` · 基线 `653b15b` → HEAD（STEP.8 对抗修复后 `aab216d`）。
 > **真源**：[真相层] `CF1115-TRUTH` v0.1.1 `FROZEN` 只冻结决策；本文登记**施工面**实测结果，五态如实，不 overclaim、不另立第二账本。
+>
+> **对抗审查**：STEP.7 三路审查（真相层对账 / 完成度 / 防假绿侧载）已跑；报告落 `.anote/reviews/contract-and-facade/1115/47f0/`。判定「有条件通过」——核心归口真实落地，发现 **2 blocker + 6 major** 已在 STEP.8 修复（见 §6）。
 
 ---
 
@@ -29,8 +31,8 @@
 | P2-02 | `FamilyDefinition` 作者记录 + 同源投影 | `7b2d1de` | family-definition.test |
 | P2-03 | `nanoNotepad` 导入服务（Cordis） | `4a212d9` | notepad 71/71 · DNEE 5/5 |
 | P2-04 | DNEE/DNMS/DNN JSON codec 收口 | `1653ae3` | 71+5+7 PASS · clean-lib OK |
-| P3-01 | `createMcpToolset` + `decodeMcpReply` | `a34ec7f` | mcp-toolset.test 7/7 |
-| P3-02 | DNT lane 广告精确对账 | `b..`（本轮） | enum `[local,mcp]`；isolate 无后端不广告 |
+| P3-01 | `createMcpToolset` + `decodeMcpReply` | `a34ec7f` + `6446c5c` | mcp-toolset.test 7/7 |
+| P3-02 | DNT lane/schema 广告精确对账（F20.2/F20.4 全兑现） | `6446c5c` | enum `["local"]`；`template`/`task` 删；`x-address` 可执行；19 params 全 `additionalProperties:false` |
 
 ### 关键退役（防侧载/单真源落地）
 
@@ -67,6 +69,31 @@
 - DNN 侧 `node --test test/`（目录）失败为 pre-existing 探针，统一改 `test/*.test.mjs` glob；非本次回归。
 
 ---
+
+## 6. STEP.7 对抗审查发现 + STEP.8 修复（如实登记）
+
+三路审查 `.anote/reviews/contract-and-facade/1115/47f0/{truth-reconcile,completion,antigreen}`，总判「有条件通过」（0 blocker→修复 / majors→部分修复 / 余项记债务）。
+
+**已修（commit `6446c5c`）：**
+
+| 严重度 | 发现 | 修复 |
+|--------|------|------|
+| blocker | `term.session.create` lane enum 留 `mcp`，违背 F20.2（我只删 `isolate`，自洽注释=由实现反推合同） | enum → `["local"]`；mcp/isolate 均不广告 |
+| blocker | `template`/`task` create 字段仍在（F20.4 令删未兑现字段） | 删除 |
+| blocker | DNN `files` 列已删 `lib/route-guard.js`/`route-table.js`，漏 `lib/web-registrar.js`/`lib/bindings.js` → `index.js:8` import 挂载即挂 | 改正 `files` |
+| blocker | DNEE `files` 漏 `lib/bindings.js`（`lib/host.js` 依赖） | 加入 `files` |
+| major | `x-address` 仍是散文，非可执行 string schema（F20.4） | 改 `{type:string,minLength:1}` |
+| major | 多数 params 对象无 `additionalProperties:false`（F20.4 拒绝额外字段） | 19 个方法全部补齐 |
+| major | `createWebRegistrar` upgrade 未在请求时校验 GET；`?.` fail-open；`disposed` 跨 registerAll 共享致二次注册不回收 | GET 校验 + 直调 + per-call `disposed`；+5 fence 测试 |
+| major | `FamilyDefinition` array 形 `authorityRefs` 跳过审批门 | 修复 + 测试 |
+| nit | decode 抛错非法 2xx → transport（F14.3 应 protocol） | 分类修正 |
+
+**记为债务（deferred，不标 executed）：**
+- `route-scan.mjs` 现为 DNN/DNT/DNEE 改读生成物 `lib/bindings.js` —— 该文件由 `route-sensitivity.json` 生成，**扫描器比较一个投影与它自己的真源**，失独立校验性（agent-7 major）。恢复独立 source-scan 待续轮。
+- `check-clean-lib` `HOST_RESOLVED_SPECIFIERS` 加 `@deepseek-ai/dsh-compaction` 未登记 P-EXEC（全局放宽，非 per-plugin 域）。
+- `createMcpToolset`/`decodeMcpReply`/`createWebRegistrar` 三个签名偏离冻结形状 `{definition,handlers}.invoke()`/`{ok,layer,error}`/`{plugin,table}`——**未登记改约**，待 [业主] 在 P-EXEC 裁决保留或回退。
+- DNN/DNT `index.js` spec↔binding 缺行静默丢弃（无漂移告警）。
+- 测试盲区：T09 离线装载、T11 导入服务、T15–T21 无专测文件（AP 要求的 Test-ID 证据不全）。
 
 ## 4. 未收口原因（诚实）
 

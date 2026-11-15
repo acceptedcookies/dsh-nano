@@ -143,11 +143,11 @@
   - **完成判据**：直接引用官方服务/类型、Provider ON/OFF/isolate、配置失效旧 scope 失效、受控 Promise 结算
   - **验证映射**：`CF1115-T18` · **依赖**：`P2`/`P3`
   - **执行状态**：`deferred` · **执行时间**：`2026-11-15` · **证据**：`-` · **因**：需官方 cordis `Service`/Provider 类型在本仓离线 workspace 可解析方可「直接引用官方」核验——宿主域才有 cordis；隔离/ON/OFF 受控 Promise 结算亦需 live 宿主。列 P-EXEC 待宿主授权域核验。
-- [ ] `P4-02` — [DNCS] native 支持边界 + `NATIVE_*` 四码 + 义务表 — `deferred`
+- [x] `P4-02` — [DNCS] native 支持边界 + `NATIVE_*` 四码 + 义务表 — `partial`
   - **落点**：`dsh-nano-cloud-session/{index.js,src/host/devin-api.js,src/client/api.js}`
   - **完成判据**：只在公开能力满足义务时发布、否则 503 + 可见原因 + 无伪 localId；四码只进唯一作者、403 不误判
   - **验证映射**：`CF1115-T19` · **依赖**：`P4-01`
-  - **执行状态**：`deferred` · **执行时间**：`2026-11-15` · **证据**：`-` · **因**：依赖 P4-01 官方 host adapter 先行；native 能力探测需 devin-cloud carrier 实连（远端凭证/网络授权）。列 P-EXEC。
+  - **执行状态**：`partial` · **执行时间**：`2026-11-15` · **证据**：`102796e` — `native_open` 支持义务显式失败：`NATIVE_UNAVAILABLE`(503，宿主未 inject sessions/agents，先 pick 拦截)/`NATIVE_UNSUPPORTED`(422)/`NATIVE_OUTCOME_UNKNOWN`(502，carrier read 失败在 session minted 后，orphan 拆掉)/`NATIVE_PROJECTION_FAILED`(500，`agents.enter` 拒，orphan 拆掉)；`code` 稳定字段随 `{ok:false}` 出、5xx CarrierError 透传不钳 502；不再对死 transcript 报 ok。DNCS 22/22。留：`NATIVE_PROJECTION_FAILED` 分支需 live-https carrier+failing enter（profile 强制 https、stub http）→ 宿主域未验；`agents`/`sessions` 真实 API 兼容性（`close`/`enter` 签名）离线不可 cordis 验（依赖 P4-01）；远端 carrier 实连未授权。
 - [x] `P4-03` — [DNMSC] R-16 精确例外 + 影子 FallbackService 退役 — `partial`
   - **落点**：`dsh-nano-model-selector-compaction/lib/{host-services,host-compaction,compact-policy}.js`、`scripts/gen-mutex-patch.mjs`；`dsh-nano-model-selector/lib/compact-policy.js`
   - **完成判据**：真实 Service 解析（无法解析即激活失败）、ON/OFF/四 preset/isolate、已准 instanceof 降级、无影子服务
@@ -188,9 +188,9 @@
 
 ## 5. 当前状态与交接
 
-- **当前节点 / 已完成（2026-11-15 三轮）**：`P1-01..P1-05`、`P2-01..P2-04`、`P3-01`、`P3-02`、`P3-03`(partial)、`P3-04`(partial)、`P3-05`(partial)、`P4-03`(partial)、`P5-01`(partial)、`P5-02`(partial)、`P5-03`(partial) — 18 ticked（8 partial）
-- **下一轮（deferred，待 [业主] 裁决 / 宿主授权）**：`P4-01`（离线无 cordis，真实宿主域 Service/Provider 核验）、`P4-02`（依赖 P4-01+远端 carrier）、`P4-04`（`/s3/config` 收窄与 handshake 冲突待裁决+S3 远端授权）
-- **当前阻塞**：`无硬阻塞`；P3-04 仅余 live 引擎实连核验；远端/S3/cordis 宿主域核验需授权。全部 21 项均有执行状态（18 ticked 含 8 partial + 3 deferred）
+- **当前节点 / 已完成（2026-11-15 三轮）**：`P1-01..P1-05`、`P2-01..P2-04`、`P3-01`、`P3-02`、`P3-03`(partial)、`P3-04`(partial)、`P3-05`(partial)、`P4-02`(partial)、`P4-03`(partial)、`P5-01`(partial)、`P5-02`(partial)、`P5-03`(partial) — 19 ticked（9 partial）
+- **下一轮（deferred，待 [业主] 裁决 / 宿主授权）**：`P4-01`（离线无 cordis，真实宿主域 Service/Provider 核验）、`P4-04`（`/s3/config`+`/rpc` 别名收窄，公开 breaking 待裁+S3 远端授权）
+- **当前阻塞**：`无硬阻塞`；P4-02/P4-03 余留均依赖 P4-01 cordis 宿主域实验；远端/S3/cordis 核验需授权。全部 21 项均有执行状态（19 ticked 含 9 partial + 2 deferred）
 - **待 owner / 外部决定**：`implementation grant 已由本 directive 框架内授予；容器/远端/S3 核验 deferred 至另立授权。mcp-bridge 双载体 canonical 已实证收敛（DNLS 唯一载体，e1b2e91）。P4-04 /s3/config 收窄、3 个 facade 签名偏离、DNT lane enum 收窄——均列 P-EXEC 待裁决`
 - **最终交接目标**：`closure + 工作日志回填 + 3 路审查`
 

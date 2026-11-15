@@ -184,7 +184,7 @@
 |---|---|---|---|
 | E1115-DNCS-01 | 自有 post helper+CarrierError+work wrapper；readJsonBody 异常非 CarrierError 落 500 | 12 路由仍 `work`+CarrierError；`index.js:87-88` 仍 `error instanceof CarrierError` 分型、余落通用 500——错误面未统一进 dsh-interface | **kept-as-debt** |
 | E1115-DNCS-02 | 路径内 config/action、sessions/op、session/op、catalog/resource 多分发；台账无分支级合同 | 12 路径已入 `feature-contract.json` routes（12 行）；但台账只到路径粒度，31 分支 op/resource 的独立参数/错误/副作用合同仍无 | **partial** |
-| E1115-DNCS-03 | nativeOpen 造 local session+投影远端、fake agent cancel 空操作 | verbatim 未动（`index.js:201-220` fake agent）；`ctx.agents.enter`/`ctx.sessions.create` 需 cordis——P4-01/P4-02 deferred | **not-covered-deferred** |
+| E1115-DNCS-03 | nativeOpen 造 local session+投影远端、fake agent cancel 空操作 | `102796e`：`native_open` 支持义务显式失败（`NATIVE_UNAVAILABLE`503/`UNSUPPORTED`422/`OUTCOME_UNKNOWN`502/`PROJECTION_FAILED`500），agents.enter 拒不再 `console.warn`+ok——orphan session 拆掉。残余：fake-agent 投影本体（已登记 spike 架构）仍在、`close`/`enter` 真实 API 兼容性离线不可 cordis 验、PROJECTION_FAILED 分支 live-only | **partial** |
 | E1115-DNCS-04 | feature-contract UI/dataLocations 必检清单+clean-lib 包清单漏 DNCS | `PLUGINS` 8 包全含 DNCS；`feature-contract.json` DNCS 12 routes+ui(5 键)+dataLocations(3 键) 全入；clean-lib 72 artifacts 递归 | **covered** |
 
 ### [CROSS]（横向 4 项）
@@ -219,7 +219,7 @@ Phase-4/5 的 host 适配 + 全范围结算与若干公开退役面（DNK 容器
 | DNK 真实消费 live 链路（引擎实连） | `未观察` | 离线无引擎/容器；`e1b2e91`+`187d1ff` 已改指 DNLS 提供面 |
 | DNLS `/mcp` CDP 深工具 + host↔bridge 合同 + bodyLimit + terminal-driver（E1115-DNLS-02/03/06） | `deferred` | `68210f6` 未触 bridge/readJson/terminal-driver；T16 未封口 |
 | DNMSC R-16 真实 cordis resolve + 4-preset/isolate live 互斥（E1115-DNMSC-01..03） | `deferred`→`partial` | `1af7b18` HostService 惰性解析+`setHostService` 缝落地；cordis 离线/互斥未验=P4-01 |
-| DNCS nativeOpen fake-agent 退役 + NATIVE_* 四码（E1115-DNCS-01/02/03） | `deferred` | `index.js:166-237` 未动；P4-01/P4-02 需 cordis+远端 carrier auth |
+| DNCS native_open 支持义务 + NATIVE_* 四码（E1115-DNCS-03） | `partial` | `102796e`：宿主 inject 缺失→`NATIVE_UNAVAILABLE`503、无 profile→`NATIVE_UNSUPPORTED`422、minted 后 carrier 失败→`NATIVE_OUTCOME_UNKNOWN`502+orphan 拆、`agents.enter` 拒→`NATIVE_PROJECTION_FAILED`500+orphan 拆；`code` 稳定字段。残余：fake-agent 投影本体仍登记 spike 架构、`close`/`enter` 真实 API 兼容离线不可验（P4-01）、PROJECTION_FAILED live-only |
 | DNN `/s3/config`+`/rpc` 别名收窄 + fx/S3 边界（E1115-DNN-03/05、DNEE-03 open-in-app） | `deferred` | P4-04 公开 breaking 收窄，与 handshake 冲突+S3 auth 待裁 |
 | 跨包错误合同统一 + 全 kind registry + 扫描独立源（CROSS-01..04 残余） | `partial` | `dsh-interface`+`JsonOutcome`+8 包台账收敛；route-scan 读生成物、全 kind registry 未实现 |
 
@@ -227,8 +227,8 @@ Phase-4/5 的 host 适配 + 全范围结算与若干公开退役面（DNK 容器
 
 ## 5. 交接
 
-- **已完成**：P1·P2·P3-01/02 全、`P3-03`/`P3-05`/`P4-03`/`P5-02`/`P3-04` partial。
-- **下一动作 / deferred**：`P3-04` 余留（仅 DNK 真实消费 live 链路，无引擎实连）→ `P4-01`（宿主域 cordis 核验）→ `P4-02`/`P4-04` → `P5-01`/`P5-03`。
+- **已完成**：P1·P2·P3-01/02 全、`P3-03`/`P3-04`/`P3-05`/`P4-02`/`P4-03`/`P5-01`/`P5-02`/`P5-03` partial。
+- **下一动作 / deferred**：`P4-01`（宿主域 cordis 核验，`@deepseek-ai/cordis` 离线不可解析）→ `P4-04`（`/s3/config`+`/rpc` 别名收窄，公开 breaking+S3 auth 待裁）；P4-02/P4-03 余留均依赖 P4-01 的 cordis 宿主域实验。
 - **P-EXEC 待裁决**：3 个 facade 签名偏离（createMcpToolset/decodeMcpReply/createWebRegistrar）、clean-lib allowlist 扩 `@deepseek-ai/dsh-compaction`、spec↔binding 缺行静默丢弃、route-scan 读生成物失独立性、P4-04 /s3/config 收窄与 handshake 冲突；DNK mcp-bridge canonical 已由 `e1b2e91` 实证收敛至 DNLS（非第二作者源），P3-04 公开退役面已落地。
 - **阻塞**：无硬阻塞；容器/远端/S3/cordis 宿主域核验需授权。
 - 完成判据仍锚 `AP §10.1` 硬闸 + `§10.3` DoD。

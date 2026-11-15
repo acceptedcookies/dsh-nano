@@ -355,6 +355,10 @@ ${NANO_STYLES}
 .np-fx-entry-ico, .np-fx-entry-ico svg { width: 16px; height: 16px; display: block; }
 .np-fx-view { position: absolute; left: 0; right: 0; top: var(--np-tabs-h, var(--np-row-h)); bottom: 0; z-index: 3; box-sizing: border-box; padding: 10px 12px 12px; background: var(--dsw-alias-bg-layer-1); display: flex; justify-content: center; }
 .np-fx-view[hidden] { display: none !important; }
+/* fx 盖住了文档树。展开时把树抬到 fx 之上，从左侧滑出，用来换当前文档。 */
+.np-window[data-fx="true"] .np-tree:not([data-collapsed="true"]) { position: absolute; z-index: 5; top: calc(var(--np-tabs-h, var(--np-row-h)) + 12px); left: 12px; bottom: 12px; width: 260px; max-height: none; overflow: hidden; background: var(--dsw-alias-bg-layer-2); border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-lg); box-shadow: var(--dsw-elevation-prominent); animation: np-fx-tree-in .2s ease; }
+.np-window[data-fx="true"]:has(.np-tree:not([data-collapsed="true"])) .np-fx-view { padding-left: 284px; }
+@keyframes np-fx-tree-in { from { transform: translateX(calc(-100% - 16px)); } to { transform: none; } }
 .np-fx-shell { width: 100%; max-width: 760px; height: 100%; min-height: 0; display: flex; flex-direction: column; gap: 10px; }
 .np-fx-head { display: flex; align-items: center; gap: 8px; height: 36px; flex: none; }
 .np-fx-head-title { display: inline-flex; align-items: center; gap: 7px; height: 36px; padding: 0 2px; border: 0; background: transparent; font: inherit; font-size: var(--np-font-size); font-weight: 600; color: var(--dsw-alias-label-primary); flex: none; cursor: pointer; }
@@ -2078,6 +2082,8 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     state.ui.currentId = id
     rememberFile(state.nodes.find(node => node.id === id))
     state.ui.open = true
+    /* fx 里滑出的文档树选中一篇后收回，chip 露出新文档。 */
+    if (state.fx.open) state.ui.treeOpen = false
     render()
     void persistUi()
   }
@@ -2777,6 +2783,11 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
   }
   /* 点垂直栏以外的 fx 区域收起边栏；标题按钮自己 toggle，不在这里抢。 */
   fxView.addEventListener('pointerdown', event => {
+    if (state.ui.treeOpen !== false) {
+      state.ui.treeOpen = false
+      render()
+      void persistUi()
+    }
     if (!state.fx.navOpen) return
     const hit = event.target instanceof Element ? event.target : null
     if (!hit || hit.closest('.np-fx-nav') || hit.closest('.np-fx-head-title')) return

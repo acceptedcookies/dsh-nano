@@ -178,6 +178,7 @@
         name: "@deepseek-ai/dsh-tool-present"
       - id: tool-office
         name: "@deepseek-ai/dsh-tool-office"
+        disabled: !!js (() => { try { process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@deepseek-ai/dsh-tool-office/package.json'); return false } catch { return true } })()
       - id: tool-plugin-manager
         name: "@deepseek-ai/dsh-plugin-manager/tools"
         disabled: !!js "!ctx.get('profileContext')"
@@ -352,6 +353,7 @@
         name: "@deepseek-ai/dsh-tool-present"
       - id: tool-office
         name: "@deepseek-ai/dsh-tool-office"
+        disabled: !!js (() => { try { process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@deepseek-ai/dsh-tool-office/package.json'); return false } catch { return true } })()
       - id: tool-plugin-manager
         name: "@deepseek-ai/dsh-plugin-manager/tools"
         disabled: true

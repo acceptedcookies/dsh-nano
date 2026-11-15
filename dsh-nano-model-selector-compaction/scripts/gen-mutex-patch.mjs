@@ -27,6 +27,28 @@ const PROVIDER_ROW = {
   name: 'dsh-nano-model-selector-compaction',
 }
 
+/**
+ * Rows present in the newest upstream presets but absent from older releases
+ * inside the engines.dsh window. A full replay would mount a package that the
+ * target installation does not ship and take the whole preset down (the GUI
+ * reports "agent-preset/invalid: <row>: never started"). Emit a !!js guard so
+ * the row self-disables when its package cannot be resolved from the preset
+ * layer's baseUrl. Keep this list minimal: name resolution failures are the
+ * only fatal class; additive config keys on existing plugins are harmless.
+ */
+// id → package name for rows added after the oldest release inside
+// engines.dsh; extend when upstream presets gain more rows.
+const VERSION_GUARDED_ROWS = new Map([
+  ['tool-office', '@deepseek-ai/dsh-tool-office'],
+])
+// resolve() throws MODULE_NOT_FOUND on absent packages, so the guard must be
+// an IIFE with try/catch; a bare ternary would re-throw during disabled-eval.
+// Emitted through a placeholder: yaml stringify would quote a literal "!!js…"
+// scalar and drop the tag; the post-pass below restores the real `!!js` line.
+const guardPlaceholder = pkg => `__DNMSC_GUARD_${pkg.replace(/[^a-zA-Z]/g, '_')}__`
+const guardLine = pkg =>
+  `disabled: !!js (() => { try { process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('${pkg}/package.json'); return false } catch { return true } })()`
+
 const args = process.argv.slice(2)
 const ctxDir = args[args.indexOf('--context') + 1] ??
   '/Users/seanz/Documents/dsh-plugins/context/deepseek-harness/packages/bundle/web-app/presets'
@@ -72,7 +94,10 @@ for (const key of PRESETS) {
   const insert = rows.find(p => Array.isArray(p.insert))
   const preset = insert.insert.find(r => r.id === PRESET_IDS[key])
   if (!preset) throw new Error(`preset row ${PRESET_IDS[key]} not found in ${file}`)
-  const plugins = preset.config.plugins
+  const plugins = preset.config.plugins.map(row =>
+    VERSION_GUARDED_ROWS.has(row.id)
+      ? { ...row, disabled: guardPlaceholder(VERSION_GUARDED_ROWS.get(row.id)) }
+      : row)
   const ci = plugins.findIndex(r => r.id === 'compaction')
   if (ci < 0) throw new Error(`id:compaction group not found in preset ${key}`)
   const group = plugins[ci]
@@ -96,5 +121,12 @@ text = text.replace(
   /^(\s*-\s*)"(!!js .*)"$/gm,
   '$1$2',
 )
+// Restore guarded-row placeholders into real `disabled: !!js …` lines.
+for (const [, pkg] of VERSION_GUARDED_ROWS) {
+  text = text.replace(
+    new RegExp(`^(\\s*)disabled: ${guardPlaceholder(pkg).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'gm'),
+    (_m, p) => `${p}${guardLine(pkg)}`,
+  )
+}
 writeFileSync(out, header + text)
 console.log(`wrote ${out} (${patches.length} preset replays)`)

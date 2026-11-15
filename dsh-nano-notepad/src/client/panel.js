@@ -2386,7 +2386,8 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     if (icon) icon.innerHTML = PANEL_ICON(!!state.fx.navOpen)
     fxNav.dataset.state = state.fx.navOpen ? 'open' : 'closed'
   }
-  /* 文档树保持 notepad 原样，卡住原位。fx 只占它右边（窄窗时占它下面），不另做一套侧栏。 */
+  /* 文档树保持 notepad 原样，卡住原位。fx 只占它右边（窄窗时占它下面）。
+     侧栏宽度有 180ms 过渡，render 当下读到的还是旧宽度，所以用 ResizeObserver 跟到收完。 */
   const fxDock = () => {
     const tree = panel.querySelector('.np-tree')
     const body = panel.querySelector('.np-body')
@@ -2399,10 +2400,18 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     panel.style.setProperty('--np-fx-left', column ? '0px' : `${tree.offsetWidth}px`)
     panel.style.setProperty('--np-fx-top', column ? `${tree.offsetHeight}px` : '0px')
   }
+  let fxDockObserver = null
+  const fxDockWatch = () => {
+    fxDock()
+    const tree = panel.querySelector('.np-tree')
+    if (!state.fx.open || !tree) { fxDockObserver?.disconnect(); fxDockObserver = null; return }
+    if (!fxDockObserver) fxDockObserver = new ResizeObserver(() => { if (state.fx.open) fxDock() })
+    fxDockObserver.observe(tree)
+  }
   const renderFx = () => {
     fxView.hidden = !state.fx.open
     panel.dataset.fx = String(!!state.fx.open)
-    fxDock()
+    fxDockWatch()
     fxNavApply()
     if (state.fx.open) fxPaint()
   }

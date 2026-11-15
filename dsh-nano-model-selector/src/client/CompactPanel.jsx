@@ -3,6 +3,7 @@
 import * as React from 'react'
 import { CheckIcon, CloseIcon, CompactionIcon, WarningIcon } from './icons.jsx'
 import { fetchCompactState, postCompactSwitch, putCompactPolicy } from './compact.js'
+import { DEFAULT_SUMMARY_PROMPT } from '../../lib/compact-prompt.js'
 
 const BUNDLE_NAME = 'dsh-nano-model-selector-compaction'
 /** The summary model must cover the largest upstream window; the official
@@ -257,15 +258,25 @@ export function CompactPanel({ copy, models, onError }) {
             </select>
           </label>
 
-          <NumberField label={copy.compactFieldBuffer} field="bufferSizeAsync" value={policy.bufferSizeAsync} step="0.05" min="0" max="1" onSave={saveField} busy={busy} />
-          <NumberField label={copy.compactFieldHealth} field="healthTargetAsync" value={policy.healthTargetAsync} step="0.05" min="0" max="1" onSave={saveField} busy={busy} />
-          <NumberField label={copy.compactFieldPinned} field="pinnedAsyncTokens" value={policy.pinnedAsyncTokens} step="1000" min="0" onSave={saveField} busy={busy} />
+          <NumberField label={copy.compactFieldBuffer} field="bufferSizeAsync" value={policy.bufferSizeAsync} unit="%" display={ratioText} step="0.05" min="0" max="1" onSave={saveField} busy={busy} />
+          <NumberField label={copy.compactFieldHealth} field="healthTargetAsync" value={policy.healthTargetAsync} unit="%" display={ratioText} step="0.05" min="0" max="1" onSave={saveField} busy={busy} />
+          <NumberField label={copy.compactFieldPinned} field="pinnedAsyncTokens" value={policy.pinnedAsyncTokens} unit="Tok" step="1000" min="0" onSave={saveField} busy={busy} />
 
           <div className="nms-compact-field">
+            <span className="nms-compact-field-label">{copy.compactFieldPinnedFull}</span>
+            <span className="nms-compact-field-static">{`${policy.pinnedFullTokens ?? '—'} Tok`}</span>
+          </div>
+          <div className="nms-compact-field">
             <span className="nms-compact-field-label">{copy.compactFieldSafety}</span>
-            <span className="nms-compact-field-static">{Number.isFinite(policy.bufferSizeSafety) ? policy.bufferSizeSafety.toFixed(2) : '0.90'}</span>
+            <span className="nms-compact-field-static">{Number.isFinite(policy.bufferSizeSafety) ? `${Math.round(policy.bufferSizeSafety * 100)}%` : '90%'}</span>
           </div>
         </div>
+
+
+      )}
+
+      {enabled && state.policy !== null && (
+        <PromptField copy={copy} value={policy.summaryPrompt ?? ''} onSave={saveField} busy={busy} />
       )}
 
       {/* Compression explainer (-20): scenario tabs over live-config copy. */}
@@ -373,11 +384,21 @@ function modelLabelOf(pair, windowMap) {
   return meta?.name ? `${provider} · ${meta.name}` : pair
 }
 
-/** @param {{ label: string, field: string, value: any, step: string, min: string, max?: string, onSave: (field:string, raw:string)=>void, busy: boolean }} props */
-function NumberField({ label, field, value, step, min, max, onSave, busy }) {
+/** Ratios are stored as fractions and shown as whole percents. */
+function ratioText(value) {
+  return Number.isFinite(value) ? String(Math.round(value * 100)) : '—'
+}
+
+/** @param {{ label: string, field: string, value: any, unit: string, display?: (value:any)=>string, step: string, min: string, max?: string, onSave: (field:string, raw:string)=>void, busy: boolean }} props */
+function NumberField({ label, field, value, unit, display, step, min, max, onSave, busy }) {
   const [draft, setDraft] = React.useState(null) // null = not editing
   const editing = draft !== null
-  const commit = () => { onSave(field, draft); setDraft(null) }
+  const shown = display ? display(value) : String(value ?? '—')
+  const commit = () => {
+    const raw = display === ratioText ? String(Number(draft) / 100) : draft
+    onSave(field, raw)
+    setDraft(null)
+  }
   return (
     <label className="nms-compact-field">
       <span className="nms-compact-field-label">{label}</span>
@@ -387,9 +408,9 @@ function NumberField({ label, field, value, step, min, max, onSave, busy }) {
           type="number"
           autoFocus
           value={draft}
-          step={step}
-          min={min}
-          max={max}
+          step={display === ratioText ? '1' : step}
+          min={display === ratioText ? '0' : min}
+          max={display === ratioText ? '100' : max}
           disabled={busy}
           onChange={event => setDraft(event.target.value)}
           onKeyDown={event => {
@@ -399,11 +420,43 @@ function NumberField({ label, field, value, step, min, max, onSave, busy }) {
           onBlur={commit}
         />
       ) : (
-        <button type="button" className="nms-compact-value" disabled={busy} onClick={() => setDraft(String(value ?? ''))}>
-          {value ?? '—'}
+        <button type="button" className="nms-compact-value" disabled={busy} onClick={() => setDraft(shown === '—' ? '' : shown)}>
+          {`${shown} ${unit}`}
         </button>
       )}
     </label>
+  )
+}
+
+/** Preview and edit the summary instruction. An empty value means the built-in. */
+function PromptField({ copy, value, onSave, busy }) {
+  const [open, setOpen] = React.useState(false)
+  const areaRef = React.useRef(null)
+  const custom = value.trim().length > 0
+  const seed = custom ? value : DEFAULT_SUMMARY_PROMPT
+  return (
+    <div className="nms-compact-prompt">
+      <div className="nms-compact-field" style={{ height: 'auto', padding: 0 }}>
+        <span className="nms-compact-field-label">{copy.compactFieldPrompt}</span>
+        <button type="button" className="nms-compact-value" disabled={busy} onClick={() => setOpen(prev => !prev)}>
+          {custom ? copy.compactPromptCustom : copy.compactPromptBuiltin}
+        </button>
+      </div>
+      {open && (
+        <>
+          <textarea ref={areaRef} className="nms-compact-prompt-text" defaultValue={seed} disabled={busy} />
+          <span className="nms-compact-prompt-actions">
+            <button type="button" className="nms-effort-button" disabled={busy} onClick={() => {
+              const text = areaRef.current?.value ?? ''
+              onSave('summaryPrompt', text.trim() === DEFAULT_SUMMARY_PROMPT.trim() ? '' : text)
+              setOpen(false)
+            }}>{copy.compactPromptSave}</button>
+            <button type="button" className="nms-effort-button" disabled={busy} onClick={() => { onSave('summaryPrompt', ''); setOpen(false) }}>{copy.compactPromptReset}</button>
+            <button type="button" className="nms-effort-button" onClick={() => setOpen(false)}>{copy.compactPromptClose}</button>
+          </span>
+        </>
+      )}
+    </div>
   )
 }
 

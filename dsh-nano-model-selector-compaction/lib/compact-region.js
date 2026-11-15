@@ -187,7 +187,7 @@ function newLlmError(message, code, options) {
 const SUMMARY_OPEN_TAG = '<compacted-summary>'
 const SUMMARY_CLOSE_TAG = '</compacted-summary>'
 
-const COMPACTION_INSTRUCTION = [
+export const COMPACTION_INSTRUCTION = [
   'You are now acting as a compaction engine for this AI coding assistant. Condense the conversation ABOVE into a structured checkpoint that lets another model resume the work with no loss of essential context.',
   '',
   'Output EXACTLY the Markdown structure below: keep every section, in order. Use terse bullets, not prose paragraphs. Write "(none)" for an empty section — never drop a section.',
@@ -223,6 +223,11 @@ const COMPACTION_INSTRUCTION = [
   '- Output only the checkpoint text: do not call any tool or take any other action.',
   `- If the conversation already contains a ${SUMMARY_OPEN_TAG} block, it is a PRIOR checkpoint. Do not copy it forward verbatim: preserve still-true facts, drop stale ones, and merge newer information into a single consolidated summary under the same structure.`,
 ].join('\n')
+
+/** Empty or whitespace means the built-in checkpoint instruction. */
+function instructionText(override) {
+  return typeof override === 'string' && override.trim().length > 0 ? override : COMPACTION_INSTRUCTION
+}
 
 const CHECKPOINT_PREAMBLE =
   'This is an automatically generated checkpoint condensing an earlier span of the conversation to free up context. Treat the captured context as established background and build on it without restating it. Continue the task directly from the messages that follow, without acknowledging this checkpoint.'
@@ -268,9 +273,9 @@ function summaryText(blocks) {
  */
 export async function summarizeWithLlm(ctx, input, agent, signal, configuredTarget) {
   const latest = agent.session.requestHeader()?.config
-  const configured = configuredTarget === undefined
-    ? undefined
-    : { provider: configuredTarget.provider, model: configuredTarget.model }
+  const configured = configuredTarget?.provider && configuredTarget?.model
+    ? { provider: configuredTarget.provider, model: configuredTarget.model }
+    : undefined
   const agentTarget = agent.options.provider !== undefined
     && agent.options.provider.length > 0
     && agent.options.model !== undefined
@@ -289,7 +294,7 @@ export async function summarizeWithLlm(ctx, input, agent, signal, configuredTarg
     ...input.messages,
     deepFreeze({
       role: 'user',
-      content: [{ type: 'text', text: COMPACTION_INSTRUCTION }],
+      content: [{ type: 'text', text: instructionText(configuredTarget?.instruction) }],
     }),
   ]
   const options = {

@@ -34,6 +34,7 @@ export const DEFAULT_POLICY = Object.freeze({
   bufferSizeSafety: SAFETY_RATIO,
   pinnedAsyncTokens: 100000,
   pinnedFullTokens: 20000,
+  summaryPrompt: '',
 })
 
 /** Fields a PUT body may carry; `schema`, `bufferSizeSafety` are read-only. */
@@ -43,6 +44,7 @@ export const PUT_WRITABLE = Object.freeze([
   'healthTargetAsync',
   'pinnedAsyncTokens',
   'pinnedFullTokens',
+  'summaryPrompt',
 ])
 
 const ok = extra => ({ ok: true, ...extra })
@@ -102,7 +104,7 @@ export function validateMasterOrder(policy, W) {
 export function validatePolicyShape(value) {
   if (value === null || typeof value !== 'object') return fail('invalid-schema', 'policy must be an object')
   if (value.schema !== POLICY_SCHEMA) return fail('invalid-schema', `unknown schema ${JSON.stringify(value.schema)}`)
-  const allowed = new Set(['schema', 'model', 'bufferSizeAsync', 'healthTargetAsync', 'bufferSizeSafety', 'pinnedAsyncTokens', 'pinnedFullTokens', 'enabled'])
+  const allowed = new Set(['schema', 'model', 'bufferSizeAsync', 'healthTargetAsync', 'bufferSizeSafety', 'pinnedAsyncTokens', 'pinnedFullTokens', 'summaryPrompt', 'enabled'])
   for (const key of Object.keys(value)) {
     if (!allowed.has(key)) return fail('invalid-schema', `unknown field ${key}`)
   }
@@ -112,6 +114,9 @@ export function validatePolicyShape(value) {
   if (!isFiniteNumber(value.bufferSizeSafety)) return fail('invalid-schema', 'bufferSizeSafety must be a number')
   if (!isNonNegativeInt(value.pinnedAsyncTokens)) return fail('invalid-schema', 'pinnedAsyncTokens must be a non-negative integer')
   if (!isNonNegativeInt(value.pinnedFullTokens)) return fail('invalid-schema', 'pinnedFullTokens must be a non-negative integer')
+  if ('summaryPrompt' in value && (typeof value.summaryPrompt !== 'string' || value.summaryPrompt.length > 12000)) {
+    return fail('invalid-schema', 'summaryPrompt must be a string of at most 12000 characters')
+  }
   return ok({
     policy: {
       schema: POLICY_SCHEMA,
@@ -121,6 +126,7 @@ export function validatePolicyShape(value) {
       bufferSizeSafety: value.bufferSizeSafety,
       pinnedAsyncTokens: value.pinnedAsyncTokens,
       pinnedFullTokens: value.pinnedFullTokens,
+      summaryPrompt: typeof value.summaryPrompt === 'string' ? value.summaryPrompt : '',
     },
   })
 }
@@ -135,6 +141,7 @@ export function serializePolicy(policy) {
     bufferSizeSafety: policy.bufferSizeSafety,
     pinnedAsyncTokens: policy.pinnedAsyncTokens,
     pinnedFullTokens: policy.pinnedFullTokens,
+    ...(policy.summaryPrompt ? { summaryPrompt: policy.summaryPrompt } : {}),
   }, null, 2) + '\n'
 }
 
@@ -183,6 +190,9 @@ export function validatePutBody(body) {
   if ('model' in body && !isModel(body.model)) {
     return fail('invalid-schema', 'model must be {provider:string,model:string}')
   }
+  if ('summaryPrompt' in body && (typeof body.summaryPrompt !== 'string' || body.summaryPrompt.length > 12000)) {
+    return fail('invalid-schema', 'summaryPrompt must be a string of at most 12000 characters')
+  }
   return ok({})
 }
 
@@ -196,6 +206,7 @@ export function mergePutBody(base, body) {
     bufferSizeSafety: SAFETY_RATIO,
     pinnedAsyncTokens: 'pinnedAsyncTokens' in body ? body.pinnedAsyncTokens : base.pinnedAsyncTokens,
     pinnedFullTokens: 'pinnedFullTokens' in body ? body.pinnedFullTokens : base.pinnedFullTokens,
+    summaryPrompt: 'summaryPrompt' in body ? body.summaryPrompt : (base.summaryPrompt ?? ''),
   }
 }
 

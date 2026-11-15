@@ -622,8 +622,15 @@ export default class NanoCompactionEngine extends CompactionEngine {
   _regionDependencies(summarizationTarget) {
     return {
       meter: this.ctx.tokenMeter,
-      summarize: (input, agent, abort) =>
-        summarizeWithLlm(this.ctx, input, agent, abort, summarizationTarget ?? this._policyTarget(agent)),
+      summarize: (input, agent, abort) => {
+        const target = summarizationTarget ?? this._policyTarget(agent)
+        const { policy, safetyOnly } = this._policy()
+        const instruction = !safetyOnly && typeof policy?.summaryPrompt === 'string' && policy.summaryPrompt.trim().length > 0
+          ? policy.summaryPrompt
+          : undefined
+        const configured = instruction === undefined ? target : { ...(target ?? {}), instruction }
+        return summarizeWithLlm(this.ctx, input, agent, abort, configured)
+      },
       recover: (error, agent, sourceEventSeqs, signal) => this.ctx.waterfall('compaction/summary-error', {
         session: agent.session,
         sourceEventSeqs,

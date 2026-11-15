@@ -12,7 +12,8 @@
  *   GET  /dsh-nano-terminal/health
  */
 
-import { join } from 'node:path'
+import { join, dirname } from 'node:path'
+import { appendFileSync, mkdirSync } from 'node:fs'
 import { SessionRegistry } from './lib/sessions.js'
 import { EventBus } from './lib/events.js'
 import { Persist } from './lib/persist.js'
@@ -56,7 +57,16 @@ export function apply(ctx) {
     mcp: { status: 'client', detail: 'lane connects to remote MCP endpoints; this host is itself an MCP terminal server' },
   })
 
-  const mcp = createMcpHandler({ registry, bus, auditPath, laneStatus })
+  // P3-05 (T15): the audit writer must REALLY write — `writeAudit` is wired to
+  // appendFileSync(auditPath) so term.audit durable-reads back actual events
+  // (was: writeAudit never passed → audit was a silent no-op, term.audit empty).
+  mkdirSync(dirname(auditPath), { recursive: true })
+  const writeAudit = (event) => {
+    try {
+      appendFileSync(auditPath, JSON.stringify({ t: new Date().toISOString(), ...event }) + '\n')
+    } catch { /* audit write failure must not take the control plane down */ }
+  }
+  const mcp = createMcpHandler({ registry, bus, auditPath, laneStatus, writeAudit })
   registry.audit = mcp.audit
   bus.audit = mcp.audit
 

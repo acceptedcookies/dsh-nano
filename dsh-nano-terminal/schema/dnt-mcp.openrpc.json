@@ -18,11 +18,12 @@
   "methods": [
     {
       "name": "term.session.create",
-      "description": "Open a terminal session on a lane (local PTY | mcp remote | isolate). Returns id, addr and attach metadata.",
+      "description": "Open a terminal session on a lane (local PTY | mcp remote). Returns id, addr and attach metadata.",
       "params": {
         "type": "object",
         "properties": {
-          "lane": { "type": "string", "enum": ["local", "mcp", "isolate"], "default": "local" },
+          "lane": { "type": "string", "enum": ["local", "mcp"], "default": "local",
+            "x-advertise-note": "CF1115/P3-02/T15 精确对账: only lanes this host actually backs are advertised — `mcp` is client-side (this host is itself an MCP server); no `isolate` backend. A non-local lane request is rejected `incompatible` in mcp.js." },
           "name": { "type": "string", "description": "addressable name; unique per registry" },
           "parent": { "type": "string", "description": "parent terminal addr — notes fan-in and die_with_parent" },
           "keep": { "type": "boolean", "description": "respawn a shell when the program is lost; never reruns the command" },

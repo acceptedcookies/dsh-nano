@@ -355,7 +355,7 @@ ${NANO_STYLES}
 .np-fx-entry-ico, .np-fx-entry-ico svg { width: 16px; height: 16px; display: block; }
 .np-fx-view { position: absolute; left: var(--np-fx-left, 0px); right: 0; top: calc(var(--np-tabs-h, var(--np-row-h)) + var(--np-fx-top, 0px)); bottom: 0; z-index: 3; box-sizing: border-box; padding: 10px 12px 12px; background: var(--dsw-alias-bg-layer-1); display: flex; justify-content: center; }
 .np-fx-view[hidden] { display: none !important; }
-.np-fx-shell { width: 100%; max-width: 760px; height: 100%; min-height: 0; display: flex; flex-direction: column; gap: 10px; }
+.np-fx-shell { position: relative; width: 100%; max-width: 760px; height: 100%; min-height: 0; display: flex; flex-direction: column; gap: 10px; }
 .np-fx-head { display: flex; align-items: center; gap: 8px; height: 36px; flex: none; }
 .np-fx-head-title { display: inline-flex; align-items: center; gap: 7px; height: 36px; padding: 0 2px; border: 0; background: transparent; font: inherit; font-size: var(--np-font-size); font-weight: 600; color: var(--dsw-alias-label-primary); flex: none; cursor: pointer; }
 .np-fx-head-title:hover { background: var(--dsw-alias-interactive-bg-hover); border-radius: var(--dsw-radius-sm); }
@@ -375,7 +375,8 @@ ${NANO_STYLES}
 .np-fx-nav-close { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; margin-left: auto; padding: 0; border: 0; border-radius: var(--dsw-radius-sm); background: transparent; color: var(--dsw-alias-label-tertiary); cursor: pointer; }
 .np-fx-nav-close svg { width: 14px; height: 14px; display: block; }
 .np-fx-nav-close:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
-.np-fx-nav-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 6px; padding: 6px; }
+.np-fx-nav-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 6px; padding: 6px; scrollbar-width: none; }
+.np-fx-nav-list::-webkit-scrollbar { width: 0; height: 0; }
 .np-fx-nav-card { border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-layer-1); overflow: hidden; }
 .np-fx-nav-card-head { display: flex; align-items: center; gap: 7px; width: 100%; min-height: 32px; padding: 5px 8px; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; font-size: var(--np-font-size-sm); text-align: left; cursor: pointer; }
 .np-fx-nav-card-head:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
@@ -396,7 +397,10 @@ ${NANO_STYLES}
 .np-fx-nav-item button:hover { background: var(--dsw-alias-interactive-bg-active); color: var(--dsw-alias-label-primary); }
 .np-fx-nav-add { width: 100%; margin-top: 6px; height: 24px; border: 1px dashed var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; font-size: var(--np-font-size-xs); cursor: pointer; }
 .np-fx-nav-add:hover { background: var(--dsw-alias-interactive-bg-hover); }
-.np-fx-thread { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 4px 2px 2px; scroll-behavior: smooth; }
+.np-fx-thread { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 4px 2px 2px; scroll-behavior: smooth; scrollbar-width: none; }
+.np-fx-thread::-webkit-scrollbar { width: 0; height: 0; }
+.np-fx-floatbar { position: absolute; top: 0; right: 3px; z-index: 2; width: 5px; border-radius: 3px; background: var(--dsw-alias-label-quaternary); opacity: 0; pointer-events: none; transition: opacity .18s; }
+.np-fx-floatbar[data-on="true"] { opacity: .8; }
 .np-fx-thread .np-fx-empty { margin: auto; padding: 24px 16px 12px; }
 .np-fx-msg { display: flex; gap: 8px; align-items: flex-start; max-width: 100%; }
 .np-fx-msg[data-role="user"] { justify-content: flex-end; }
@@ -2311,6 +2315,34 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
      入口在窗口右上角；管线定义/运行记录收进 header 按钮后的 dialog。 ── */
   const fxView = must(panel, '.np-fx-view')
   const fxThread = must(panel, '.np-fx-thread')
+  /* 原生滚动条会占右侧一条，出现时把对话和 composer 挤偏。这里关掉占位，
+     用一条不接收点击的悬浮 thumb 跟着滚。 */
+  const fxOverlayScroll = scroller => {
+    const host = scroller.parentElement
+    if (!host) return
+    const bar = document.createElement('div')
+    bar.className = 'np-fx-floatbar'
+    host.appendChild(bar)
+    const update = () => {
+      const { scrollTop, scrollHeight, clientHeight } = scroller
+      if (scrollHeight <= clientHeight + 2) { bar.hidden = true; return }
+      bar.hidden = false
+      const h = Math.max(24, clientHeight * clientHeight / scrollHeight)
+      const top = scroller.offsetTop + (scrollTop / (scrollHeight - clientHeight)) * (clientHeight - h)
+      bar.style.height = `${h}px`
+      bar.style.transform = `translateY(${top}px)`
+    }
+    scroller.addEventListener('scroll', () => {
+      bar.dataset.on = 'true'
+      update()
+      clearTimeout(bar._t)
+      bar._t = setTimeout(() => { bar.dataset.on = 'false' }, 800)
+    }, { passive: true })
+    new ResizeObserver(update).observe(scroller)
+    update()
+  }
+  fxOverlayScroll(fxThread)
+  fxOverlayScroll(must(panel, '.np-fx-nav-list'))
   const fxEmpty = must(fxThread, '.np-fx-empty')
   const fxSuggests = must(fxThread, '.np-fx-suggests')
   const fxInput = /** @type {HTMLTextAreaElement} */ (must(panel, '.np-fx-input'))

@@ -188,10 +188,10 @@
 
 ## 5. 当前状态与交接
 
-- **当前节点 / 已完成（2026-11-15 二轮）**：`P1-01..P1-05`、`P2-01..P2-04`、`P3-01`、`P3-02`、`P3-03`(partial)、`P3-05`(partial)、`P4-03`(partial)、`P5-02`(partial) — 15 ticked（4 partial）
-- **下一轮（deferred，待 [业主] 裁决 / 宿主授权）**：`P3-04`（DNK 真实消费+容器资产/mcp-bridge 双载体退役——公开破坏性，列 P-EXEC）、`P4-01`（离线无 cordis，真实宿主域 Service/Provider 核验）、`P4-02`（依赖 P4-01+远端 carrier）、`P4-04`（`/s3/config` 收窄与 handshake 冲突待裁决+S3 远端授权）、`P5-01`/`P5-03`（依赖 P1–P4 结算）
-- **当前阻塞**：`无硬阻塞`；公开退役面与远端/引擎核验需授权
-- **待 owner / 外部决定**：`implementation grant 已由本 directive 框架内授予；容器/远端/S3 核验 deferred 至另立授权。mcp-bridge 双载体 canonical、P4-04 /s3/config 收窄、3 个 facade 签名偏离、DNT lane enum 收窄——均列 P-EXEC 待裁决`
+- **当前节点 / 已完成（2026-11-15 三轮）**：`P1-01..P1-05`、`P2-01..P2-04`、`P3-01`、`P3-02`、`P3-03`(partial)、`P3-04`(partial)、`P3-05`(partial)、`P4-03`(partial)、`P5-02`(partial) — 16 ticked（5 partial）
+- **下一轮（deferred，待 [业主] 裁决 / 宿主授权）**：`P4-01`（离线无 cordis，真实宿主域 Service/Provider 核验）、`P4-02`（依赖 P4-01+远端 carrier）、`P4-04`（`/s3/config` 收窄与 handshake 冲突待裁决+S3 远端授权）、`P5-01`/`P5-03`（依赖 P1–P4 结算）
+- **当前阻塞**：`无硬阻塞`；P3-04 仅余 live 引擎实连核验；远端/S3/cordis 宿主域核验需授权
+- **待 owner / 外部决定**：`implementation grant 已由本 directive 框架内授予；容器/远端/S3 核验 deferred 至另立授权。mcp-bridge 双载体 canonical 已实证收敛（DNLS 唯一载体，e1b2e91）。P4-04 /s3/config 收窄、3 个 facade 签名偏离、DNT lane enum 收窄——均列 P-EXEC 待裁决`
 - **最终交接目标**：`closure + 工作日志回填 + 3 路审查`
 
 ## 6. 已启用插件

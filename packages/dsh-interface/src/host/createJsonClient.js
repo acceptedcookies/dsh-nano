@@ -96,10 +96,12 @@ export function createJsonClient({ fetch: fetchImpl, resolveUrl } = {}) {
       decoded = await decodeResponse(operation, res, status)
     } catch (err) {
       if (isAbort(err)) return failure(FAILURE_KIND.CANCELLED, msg(err), { httpStatus: status })
-      // A thrown read/parse is transport when it is a body-read failure; a decode
-      // verdict throw is protocol (malformed). We distinguish via decode verdicts,
-      // so an unexpected throw here is a transport failure of the read.
-      return failure(FAILURE_KIND.TRANSPORT, msg(err), { httpStatus: status })
+      /* F14.3 非法 2xx → protocol: a decode that throws on a 2xx (e.g. malformed
+         JSON body) is a protocol violation, not a transport read failure. Only
+         a throw on a NON-2xx (where the body may be an opaque error payload the
+         transport itself couldn't surface) is transport. */
+      const twoXx = status >= 200 && status < 300
+      return failure(twoXx ? FAILURE_KIND.PROTOCOL : FAILURE_KIND.TRANSPORT, msg(err), { httpStatus: status })
     }
     return finalize(decoded, status)
   }

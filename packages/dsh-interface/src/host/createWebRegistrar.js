@@ -35,7 +35,6 @@ import {
 export function createWebRegistrar({ plugin, bindings } = {}) {
   const normalized = normalizeBindings(bindings ?? [], { plugin })
   const effective = [] // bindingRecords, only after successful registration
-  let disposed = false
 
   const byChannel = {
     httpExact: normalized.filter(b => b.channel === CHANNEL.HTTP && b.match === MATCH.EXACT),
@@ -76,7 +75,9 @@ export function createWebRegistrar({ plugin, bindings } = {}) {
       // http + prefix — same admission fence, prefix surface.
       for (const b of byChannel.httpPrefix) {
         const handler = async (req, res) => {
-          const rejection = conn.requestRejection?.(req)
+          // requestRejection is REQUIRED (prechecked above): direct call, never
+          // optional-chained into a fail-open pass (F12.3).
+          const rejection = conn.requestRejection(req)
           if (rejection !== undefined) { res.statusCode = rejection; res.end(); return }
           if (!b.methods.includes(String(req.method ?? '').toUpperCase())) {
             res.setHeader('allow', b.methods.join(', '))
@@ -94,7 +95,13 @@ export function createWebRegistrar({ plugin, bindings } = {}) {
       // upgrade + exact — same rejection fence, socket teardown on reject.
       for (const b of byChannel.upgradeExact) {
         const handler = (req, socket) => {
-          const rejection = conn.requestRejection?.(req)
+          // upgrade is GET-only by declaration (F12.2); enforce at request time
+          // too — a non-GET upgrade must not reach b.handler.
+          if (String(req.method ?? '').toUpperCase() !== 'GET') {
+            try { socket.end() } catch { /* socket gone */ }
+            return
+          }
+          const rejection = conn.requestRejection(req)
           if (rejection !== undefined) { try { socket.end() } catch {} return }
           return b.handler(req, socket, bindingRecord(b))
         }
@@ -108,6 +115,9 @@ export function createWebRegistrar({ plugin, bindings } = {}) {
     // Only now mark effective bindings (registered successfully).
     for (const b of normalized) effective.push(bindingRecord(b))
 
+    /* `disposed` is per-registerAll call (not shared on the registrar) so a
+       second registerAll's own batch still tears down correctly (agent-7). */
+    let disposed = false
     const disposeAll = () => {
       if (disposed) return
       disposed = true

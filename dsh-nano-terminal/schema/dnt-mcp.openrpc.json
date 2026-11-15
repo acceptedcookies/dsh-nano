@@ -6,15 +6,39 @@
     "description": "Canonical contract for term.* tools, error kinds and term.* events. The mcp.js tool table is generated from this document; /term slash subcommands and ws-v2 frames implement the same semantics. Contract only grows — never rename or remove a method, kind, or event type."
   },
   "x-errorKinds": [
-    "not_found", "blocked", "finished", "live", "unavailable",
-    "spawn_failed", "conflict", "status_mismatch", "name_taken",
-    "needs_target", "incompatible", "limit", "invalid"
+    "not_found",
+    "blocked",
+    "finished",
+    "live",
+    "unavailable",
+    "spawn_failed",
+    "conflict",
+    "status_mismatch",
+    "name_taken",
+    "needs_target",
+    "incompatible",
+    "limit",
+    "invalid"
   ],
   "x-events": [
-    "created", "lost", "finished", "removed", "status", "turn",
-    "title", "labels", "size", "restarted", "heartbeat", "missed"
+    "created",
+    "lost",
+    "finished",
+    "removed",
+    "status",
+    "turn",
+    "title",
+    "labels",
+    "size",
+    "restarted",
+    "heartbeat",
+    "missed"
   ],
-  "x-address": "A terminal is addressable by id, by name, or by addr '<lane>/<name|short6>'. All three resolve through the same registry.",
+  "x-address": {
+    "type": "string",
+    "minLength": 1,
+    "description": "Terminal addressable by id, by name, or by addr '<lane>/<name|short6>'. All three resolve through the same registry."
+  },
   "methods": [
     {
       "name": "term.session.create",
@@ -22,31 +46,103 @@
       "params": {
         "type": "object",
         "properties": {
-          "lane": { "type": "string", "enum": ["local", "mcp"], "default": "local",
-            "x-advertise-note": "CF1115/P3-02/T15 精确对账: only lanes this host actually backs are advertised — `mcp` is client-side (this host is itself an MCP server); no `isolate` backend. A non-local lane request is rejected `incompatible` in mcp.js." },
-          "name": { "type": "string", "description": "addressable name; unique per registry" },
-          "parent": { "type": "string", "description": "parent terminal addr — notes fan-in and die_with_parent" },
-          "keep": { "type": "boolean", "description": "respawn a shell when the program is lost; never reruns the command" },
-          "labels": { "type": "object", "additionalProperties": { "type": "string" } },
-          "sessionId": { "type": "string", "description": "owning dsh session (cwd + scoping)" },
-          "shell": { "type": "string" },
-          "args": { "type": "array", "items": { "type": "string" } },
-          "cwd": { "type": "string" },
-          "cols": { "type": "integer" },
-          "rows": { "type": "integer" },
-          "title": { "type": "string" },
-          "template": { "type": "string", "description": "templates/<name>.md to run" },
-          "task": { "type": "string", "description": "first_message payload appended to template body" }
+          "lane": {
+            "type": "string",
+            "enum": [
+              "local"
+            ],
+            "default": "local",
+            "x-advertise-note": "CF1115/P3-02/F20.2 广告精确对账: lane only `local` — this host's MCP create backs a local PTY; `mcp`/`isolate` are no longer advertised (client connect-mode != backend lane enum). Non-local requests are rejected `incompatible` in mcp.js."
+          },
+          "name": {
+            "type": "string",
+            "description": "addressable name; unique per registry"
+          },
+          "parent": {
+            "type": "string",
+            "description": "parent terminal addr — notes fan-in and die_with_parent"
+          },
+          "keep": {
+            "type": "boolean",
+            "description": "respawn a shell when the program is lost; never reruns the command"
+          },
+          "labels": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "sessionId": {
+            "type": "string",
+            "description": "owning dsh session (cwd + scoping)"
+          },
+          "shell": {
+            "type": "string"
+          },
+          "args": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "cwd": {
+            "type": "string"
+          },
+          "cols": {
+            "type": "integer"
+          },
+          "rows": {
+            "type": "integer"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "result": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "addr": {
+            "type": "string"
+          },
+          "lane": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "attach": {
+            "type": "object"
+          }
         }
       },
-      "result": { "type": "object", "properties": { "id": { "type": "string" }, "addr": { "type": "string" }, "lane": { "type": "string" }, "title": { "type": "string" }, "attach": { "type": "object" } } },
-      "errors": ["name_taken", "spawn_failed", "limit", "invalid"]
+      "errors": [
+        "name_taken",
+        "spawn_failed",
+        "limit",
+        "invalid"
+      ]
     },
     {
       "name": "term.session.list",
       "description": "List live terminal records with lane, addr, owner, title, status and exit state.",
-      "params": { "type": "object", "properties": {} },
-      "result": { "type": "object", "properties": { "sessions": { "type": "array" } } },
+      "params": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "result": {
+        "type": "object",
+        "properties": {
+          "sessions": {
+            "type": "array"
+          }
+        }
+      },
       "errors": []
     },
     {
@@ -54,11 +150,32 @@
       "description": "Write raw input bytes to a session (utf-8 text; \\r for Enter). Low-level: no draft-wait, no blocked guard. Prefer term.send for agent use.",
       "params": {
         "type": "object",
-        "properties": { "id": { "type": "string" }, "data": { "type": "string" } },
-        "required": ["id", "data"]
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "data": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "data"
+        ],
+        "additionalProperties": false
       },
-      "result": { "type": "object", "properties": { "ok": { "type": "boolean" } } },
-      "errors": ["not_found", "finished"]
+      "result": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          }
+        }
+      },
+      "errors": [
+        "not_found",
+        "finished"
+      ]
     },
     {
       "name": "term.send",
@@ -66,18 +183,67 @@
       "params": {
         "type": "object",
         "properties": {
-          "id": { "type": "string" },
-          "data": { "type": "string" },
-          "enter": { "type": "boolean", "default": true },
-          "force": { "type": "boolean", "default": false },
-          "if": { "type": "string", "enum": ["idle", "working"], "description": "only deliver when status matches" },
-          "wait": { "type": "boolean", "default": false },
-          "timeout": { "type": "integer", "default": 180 }
+          "id": {
+            "type": "string"
+          },
+          "data": {
+            "type": "string"
+          },
+          "enter": {
+            "type": "boolean",
+            "default": true
+          },
+          "force": {
+            "type": "boolean",
+            "default": false
+          },
+          "if": {
+            "type": "string",
+            "enum": [
+              "idle",
+              "working"
+            ],
+            "description": "only deliver when status matches"
+          },
+          "wait": {
+            "type": "boolean",
+            "default": false
+          },
+          "timeout": {
+            "type": "integer",
+            "default": 180
+          }
         },
-        "required": ["id", "data"]
+        "required": [
+          "id",
+          "data"
+        ],
+        "additionalProperties": false
       },
-      "result": { "type": "object", "properties": { "ok": { "type": "boolean" }, "turn": { "type": "integer" }, "held": { "type": "integer" }, "wait": { "type": "object" } } },
-      "errors": ["not_found", "blocked", "finished", "status_mismatch", "unavailable"]
+      "result": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "turn": {
+            "type": "integer"
+          },
+          "held": {
+            "type": "integer"
+          },
+          "wait": {
+            "type": "object"
+          }
+        }
+      },
+      "errors": [
+        "not_found",
+        "blocked",
+        "finished",
+        "status_mismatch",
+        "unavailable"
+      ]
     },
     {
       "name": "term.keys",
@@ -85,14 +251,40 @@
       "params": {
         "type": "object",
         "properties": {
-          "id": { "type": "string" },
-          "keys": { "type": "array", "items": { "type": "string" } },
-          "force": { "type": "boolean", "default": false }
+          "id": {
+            "type": "string"
+          },
+          "keys": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "force": {
+            "type": "boolean",
+            "default": false
+          }
         },
-        "required": ["id", "keys"]
+        "required": [
+          "id",
+          "keys"
+        ],
+        "additionalProperties": false
       },
-      "result": { "type": "object", "properties": { "ok": { "type": "boolean" } } },
-      "errors": ["not_found", "blocked", "finished", "invalid"]
+      "result": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          }
+        }
+      },
+      "errors": [
+        "not_found",
+        "blocked",
+        "finished",
+        "invalid"
+      ]
     },
     {
       "name": "term.interrupt",
@@ -100,13 +292,37 @@
       "params": {
         "type": "object",
         "properties": {
-          "id": { "type": "string" },
-          "timeout": { "type": "integer", "default": 10 }
+          "id": {
+            "type": "string"
+          },
+          "timeout": {
+            "type": "integer",
+            "default": 10
+          }
         },
-        "required": ["id"]
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false
       },
-      "result": { "type": "object", "properties": { "result": { "type": "string", "enum": ["stopped", "exited", "still_working", "unknown"] } } },
-      "errors": ["not_found", "finished"]
+      "result": {
+        "type": "object",
+        "properties": {
+          "result": {
+            "type": "string",
+            "enum": [
+              "stopped",
+              "exited",
+              "still_working",
+              "unknown"
+            ]
+          }
+        }
+      },
+      "errors": [
+        "not_found",
+        "finished"
+      ]
     },
     {
       "name": "term.wait",
@@ -114,15 +330,51 @@
       "params": {
         "type": "object",
         "properties": {
-          "id": { "type": "string" },
-          "output": { "type": "string" },
-          "children": { "type": "string", "enum": ["all", "any"] },
-          "timeout": { "type": "integer", "default": 180 }
+          "id": {
+            "type": "string"
+          },
+          "output": {
+            "type": "string"
+          },
+          "children": {
+            "type": "string",
+            "enum": [
+              "all",
+              "any"
+            ]
+          },
+          "timeout": {
+            "type": "integer",
+            "default": 180
+          }
         },
-        "required": ["id"]
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false
       },
-      "result": { "type": "object", "properties": { "reason": { "type": "string", "enum": ["status", "exit", "output", "children", "message", "timeout"] }, "turn": { "type": "integer" } } },
-      "errors": ["not_found"]
+      "result": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "enum": [
+              "status",
+              "exit",
+              "output",
+              "children",
+              "message",
+              "timeout"
+            ]
+          },
+          "turn": {
+            "type": "integer"
+          }
+        }
+      },
+      "errors": [
+        "not_found"
+      ]
     },
     {
       "name": "term.session.read",
@@ -130,36 +382,114 @@
       "params": {
         "type": "object",
         "properties": {
-          "id": { "type": "string" },
-          "lines": { "type": "integer", "default": 50 },
-          "source": { "type": "string", "enum": ["visible", "recent", "detection"], "default": "visible" }
+          "id": {
+            "type": "string"
+          },
+          "lines": {
+            "type": "integer",
+            "default": 50
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "visible",
+              "recent",
+              "detection"
+            ],
+            "default": "visible"
+          }
         },
-        "required": ["id"]
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false
       },
-      "result": { "type": "object", "properties": { "id": { "type": "string" }, "text": { "type": "string" }, "complete": { "type": "boolean" } } },
-      "errors": ["not_found"]
+      "result": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "complete": {
+            "type": "boolean"
+          }
+        }
+      },
+      "errors": [
+        "not_found"
+      ]
     },
     {
       "name": "term.session.resize",
       "description": "Resize a session terminal.",
       "params": {
         "type": "object",
-        "properties": { "id": { "type": "string" }, "cols": { "type": "integer" }, "rows": { "type": "integer" } },
-        "required": ["id", "cols", "rows"]
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "cols": {
+            "type": "integer"
+          },
+          "rows": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "cols",
+          "rows"
+        ],
+        "additionalProperties": false
       },
-      "result": { "type": "object", "properties": { "ok": { "type": "boolean" } } },
-      "errors": ["not_found"]
+      "result": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          }
+        }
+      },
+      "errors": [
+        "not_found"
+      ]
     },
     {
       "name": "term.session.keep",
       "description": "Mark a terminal keep:true (respawn a shell on program loss, never reruns) or keep:false.",
       "params": {
         "type": "object",
-        "properties": { "id": { "type": "string" }, "keep": { "type": "boolean", "default": true } },
-        "required": ["id"]
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "keep": {
+            "type": "boolean",
+            "default": true
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false
       },
-      "result": { "type": "object", "properties": { "ok": { "type": "boolean" }, "keep": { "type": "boolean" } } },
-      "errors": ["not_found"]
+      "result": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "keep": {
+            "type": "boolean"
+          }
+        }
+      },
+      "errors": [
+        "not_found"
+      ]
     },
     {
       "name": "term.session.label",
@@ -167,23 +497,58 @@
       "params": {
         "type": "object",
         "properties": {
-          "id": { "type": "string" },
-          "set": { "type": "object", "additionalProperties": { "type": "string" } },
-          "unset": { "type": "array", "items": { "type": "string" } }
+          "id": {
+            "type": "string"
+          },
+          "set": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "unset": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
         },
-        "required": ["id"]
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false
       },
-      "result": { "type": "object", "properties": { "ok": { "type": "boolean" }, "labels": { "type": "object" } } },
-      "errors": ["not_found"]
+      "result": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "labels": {
+            "type": "object"
+          }
+        }
+      },
+      "errors": [
+        "not_found"
+      ]
     },
     {
       "name": "term.events",
       "description": "Read events newer than `since` (a seq). Returns {seq, events} or {missed:true, snapshot} when the consumer fell behind. MCP polling counterpart of GET /events SSE.",
       "params": {
         "type": "object",
-        "properties": { "since": { "type": "integer", "default": 0 } }
+        "properties": {
+          "since": {
+            "type": "integer",
+            "default": 0
+          }
+        },
+        "additionalProperties": false
       },
-      "result": { "type": "object" },
+      "result": {
+        "type": "object"
+      },
       "errors": []
     },
     {
@@ -193,28 +558,57 @@
       "params": {
         "type": "object",
         "properties": {
-          "id": { "$ref": "#/x-address" },
-          "body": { "type": "string", "maxLength": 32768, "description": "note text" },
-          "from": { "type": "string", "description": "sender addr/id (default: the caller's $DNT_TERMINAL_ID if set)" }
+          "id": {
+            "$ref": "#/x-address"
+          },
+          "body": {
+            "type": "string",
+            "maxLength": 32768,
+            "description": "note text"
+          },
+          "from": {
+            "type": "string",
+            "description": "sender addr/id (default: the caller's $DNT_TERMINAL_ID if set)"
+          }
         },
-        "required": ["id", "body"],
+        "required": [
+          "id",
+          "body"
+        ],
         "additionalProperties": false
       },
       "result": {
         "type": "object",
         "properties": {
-          "ok": { "type": "boolean" },
-          "id": { "type": "string", "description": "note id" }
+          "ok": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string",
+            "description": "note id"
+          }
         },
-        "required": ["ok", "id"]
+        "required": [
+          "ok",
+          "id"
+        ]
       },
-      "errors": ["not_found", "finished", "unavailable", "invalid"]
+      "errors": [
+        "not_found",
+        "finished",
+        "unavailable",
+        "invalid"
+      ]
     },
     {
       "name": "term.template.list",
       "summary": "List reusable send/wait templates",
       "description": "List the built-in terminal task templates: pre-canned {send,wait} sequences for common agent jobs (run-a-command, tail-a-log, REPL, test-watch). term.template.run expands one against a terminal.",
-      "params": { "type": "object", "properties": {}, "additionalProperties": false },
+      "params": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
       "result": {
         "type": "object",
         "properties": {
@@ -223,14 +617,25 @@
             "items": {
               "type": "object",
               "properties": {
-                "id": { "type": "string" },
-                "summary": { "type": "string" },
-                "params": { "type": "array", "items": { "type": "string" } }
+                "id": {
+                  "type": "string"
+                },
+                "summary": {
+                  "type": "string"
+                },
+                "params": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
               }
             }
           }
         },
-        "required": ["templates"]
+        "required": [
+          "templates"
+        ]
       },
       "errors": []
     },
@@ -241,35 +646,81 @@
       "params": {
         "type": "object",
         "properties": {
-          "id": { "$ref": "#/x-address" },
-          "template": { "type": "string" },
-          "args": { "type": "object", "description": "template params", "additionalProperties": true },
-          "timeout": { "type": "integer", "default": 180 }
+          "id": {
+            "$ref": "#/x-address"
+          },
+          "template": {
+            "type": "string"
+          },
+          "args": {
+            "type": "object",
+            "description": "template params",
+            "additionalProperties": true
+          },
+          "timeout": {
+            "type": "integer",
+            "default": 180
+          }
         },
-        "required": ["id", "template"],
+        "required": [
+          "id",
+          "template"
+        ],
         "additionalProperties": false
       },
       "result": {
         "type": "object",
         "properties": {
-          "ok": { "type": "boolean" },
-          "turn": { "type": "integer" },
-          "reason": { "type": "string" },
-          "output": { "type": "string" }
+          "ok": {
+            "type": "boolean"
+          },
+          "turn": {
+            "type": "integer"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "output": {
+            "type": "string"
+          }
         },
-        "required": ["ok"]
+        "required": [
+          "ok"
+        ]
       },
-      "errors": ["not_found", "blocked", "finished", "invalid"]
+      "errors": [
+        "not_found",
+        "blocked",
+        "finished",
+        "invalid"
+      ]
     },
     {
       "name": "term.session.close",
       "description": "Terminate a session and its process range.",
       "params": {
         "type": "object",
-        "properties": { "id": { "type": "string" }, "reason": { "type": "string" } },
-        "required": ["id"]
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false
       },
-      "result": { "type": "object", "properties": { "closed": { "type": "boolean" } } },
+      "result": {
+        "type": "object",
+        "properties": {
+          "closed": {
+            "type": "boolean"
+          }
+        }
+      },
       "errors": []
     },
     {
@@ -277,23 +728,58 @@
       "description": "Read the audit log (newest last).",
       "params": {
         "type": "object",
-        "properties": { "lines": { "type": "integer", "default": 50 } }
+        "properties": {
+          "lines": {
+            "type": "integer",
+            "default": 50
+          }
+        },
+        "additionalProperties": false
       },
-      "result": { "type": "object", "properties": { "log": { "type": "array" } } },
+      "result": {
+        "type": "object",
+        "properties": {
+          "log": {
+            "type": "array"
+          }
+        }
+      },
       "errors": []
     },
     {
       "name": "term.lane.status",
       "description": "Report available lanes and their health.",
-      "params": { "type": "object", "properties": {} },
-      "result": { "type": "object", "properties": { "lanes": { "type": "object" } } },
+      "params": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "result": {
+        "type": "object",
+        "properties": {
+          "lanes": {
+            "type": "object"
+          }
+        }
+      },
       "errors": []
     },
     {
       "name": "term.skill",
       "description": "Print the agent skill document: how to spawn, send, wait, report back and clean up terminals.",
-      "params": { "type": "object", "properties": {} },
-      "result": { "type": "object", "properties": { "skill": { "type": "string" } } },
+      "params": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "result": {
+        "type": "object",
+        "properties": {
+          "skill": {
+            "type": "string"
+          }
+        }
+      },
       "errors": []
     }
   ]

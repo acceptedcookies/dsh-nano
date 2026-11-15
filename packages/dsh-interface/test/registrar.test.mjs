@@ -136,6 +136,80 @@ test('upgrade + prefix is rejected at normalize (axis contract)', () => {
   )
 })
 
+test('http+prefix handler runs requestRejection fence (rejection→status, no handler)', async () => {
+  let entered = 0
+  const { ctx, calls } = makeCtx({ rejection: () => 403 })
+  const r = createWebRegistrar({ plugin: 'p', bindings: [
+    { id: 'pre', channel: 'http', match: 'prefix', path: '/x/sdk', methods: ['GET'],
+      handler: () => { entered++ } },
+  ] })
+  r.registerAll(ctx)
+  const res = { statusCode: 0, setHeader(){}, end(){}, writeHead(){} }
+  await calls.register[0].handler({ method: 'GET', url: '/x/sdk/a', headers: {} }, res)
+  assert.equal(entered, 0, 'prefix handler not entered on rejection')
+  assert.equal(res.statusCode, 403)
+})
+
+test('http+prefix handler enforces method list (405 + allow) and legal passes', async () => {
+  let entered = 0
+  const { ctx, calls } = makeCtx()
+  const r = createWebRegistrar({ plugin: 'p', bindings: [
+    { id: 'pre', channel: 'http', match: 'prefix', path: '/x/sdk', methods: ['GET'],
+      handler: () => { entered++ } },
+  ] })
+  r.registerAll(ctx)
+  const res = { statusCode: 0, body: null, headers: {}, setHeader(k,v){ this.headers[k]=v }, end(b){ this.body=b } }
+  await calls.register[0].handler({ method: 'POST', url: '/x/sdk', headers: {} }, res)
+  assert.equal(res.statusCode, 405, 'non-listed method → 405')
+  assert.match(String(res.headers.allow), /GET/)
+  assert.equal(entered, 0)
+  await calls.register[0].handler({ method: 'GET', url: '/x/sdk', headers: {} }, res)
+  assert.equal(entered, 1, 'legal GET reaches handler')
+})
+
+test('upgrade handler rejects non-GET and applies requestRejection (socket.end)', () => {
+  let entered = 0, ended = 0
+  const socket = { end(){ ended++ }, write(){} }
+  const { ctx, calls } = makeCtx()
+  const r = createWebRegistrar({ plugin: 'p', bindings: [
+    { id: 'up', channel: 'upgrade', match: 'exact', path: '/x/stream', methods: ['GET'],
+      handler: () => { entered++ } },
+  ] })
+  r.registerAll(ctx)
+  // non-GET upgrade must not reach b.handler (F12.2 enforcement).
+  calls.upgrade[0].handler({ method: 'POST', url: '/x/stream', headers: {} }, socket)
+  assert.equal(entered, 0)
+  assert.equal(ended, 1, 'non-GET upgrade → socket.end')
+})
+
+test('upgrade handler applies requestRejection before dispatch', () => {
+  let entered = 0, ended = 0
+  const socket = { end(){ ended++ }, write(){} }
+  const { ctx, calls } = makeCtx({ rejection: () => 403 })
+  const r = createWebRegistrar({ plugin: 'p', bindings: [
+    { id: 'up', channel: 'upgrade', match: 'exact', path: '/x/stream', methods: ['GET'],
+      handler: () => { entered++ } },
+  ] })
+  r.registerAll(ctx)
+  calls.upgrade[0].handler({ method: 'GET', url: '/x/stream', headers: {} }, socket)
+  assert.equal(entered, 0)
+  assert.equal(ended, 1, 'rejected upgrade → socket.end, no handler')
+})
+
+test('second registerAll on the same registrar tears down its own batch', () => {
+  const { ctx, calls } = makeCtx()
+  const r = createWebRegistrar({ plugin: 'p', bindings: BINDINGS })
+  const d1 = r.registerAll(ctx)
+  const afterFirst = calls.register.length
+  const d2 = r.registerAll(ctx)
+  assert.equal(calls.register.length, afterFirst + 2, 'second batch registered')
+  d2()
+  const afterD2 = calls.disposals.length
+  assert.ok(afterD2 > 0, 'second batch dispose ran its own rollback')
+  d1()
+  assert.ok(calls.disposals.length > afterD2, 'first batch dispose still works')
+})
+
 test('sessionBinding is recorded but carries no authorization side-effect', () => {
   const { ctx } = makeCtx()
   const r = createWebRegistrar({ plugin: 'p', bindings: BINDINGS })

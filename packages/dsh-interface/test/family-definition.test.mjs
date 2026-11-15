@@ -38,6 +38,14 @@ test('unapproved authorityRefs rejected (existence ≠ approval)', () => {
   assert.throws(() => defineFamily(bad), /unapproved-authority/)
 })
 
+test('array authorityRefs cannot bypass the approval gate', () => {
+  // Anti-fake-green: an array form must not skip the approval check.
+  assert.throws(() => defineFamily({ ...FAMILY, authorityRefs: ['REVIEW', 'pending'] }), /unapproved-authority/)
+  assert.throws(() => defineFamily({ ...FAMILY, authorityRefs: [{ approved: false }] }), /unapproved-authority/)
+  const ok = defineFamily({ ...FAMILY, authorityRefs: [true, { approved: true }] })
+  assert.equal(ok.contractId, FAMILY.contractId)
+})
+
 test('binding → undeclared operation rejected; provider → undeclared binding rejected', () => {
   assert.throws(() => defineFamily({ ...FAMILY, bindings: { x: { operationIds: ['nope'], transport: 'w' } } }), /unknown-operation/)
   assert.throws(() => defineFamily({ ...FAMILY, providers: { p: { plugin: 'x', supports: [{ bindingId: 'nope' }] } } }), /unknown-binding/)

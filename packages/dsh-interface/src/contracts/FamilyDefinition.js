@@ -50,10 +50,14 @@ export function defineFamily(def) {
   req(isObj(authorityRefs) || Array.isArray(authorityRefs), 'missing-authorityRefs')
   // An authority entry is approval only when it is an explicit approved value.
   // `REVIEW`/absent/auto-false is not approval and must fail the definition.
-  for (const ref of Object.entries(isObj(authorityRefs) ? authorityRefs : {})) {
-    const [name, verdict] = ref
+  // Both object ({name: verdict}) and array ([verdict,...]) forms are checked —
+  // an array must not silently skip the approval gate (anti-fake-green).
+  const refEntries = Array.isArray(authorityRefs)
+    ? authorityRefs.map((verdict, i) => [i, verdict])
+    : Object.entries(authorityRefs)
+  for (const [name, verdict] of refEntries) {
     req(verdict === true || (isObj(verdict) && verdict.approved === true),
-      'unapproved-authority', `authorityRefs.${name} is not an approved source`)
+      'unapproved-authority', `authorityRefs[${name}] is not an approved source`)
   }
   const operations = def.operations, bindings = def.bindings, providers = def.providers
   req(isObj(operations) && Object.keys(operations).length > 0, 'missing-operations')

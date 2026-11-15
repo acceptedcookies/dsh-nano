@@ -256,7 +256,6 @@ var FAILURE_KINDS = Object.freeze(Object.values(FAILURE_KIND));
 function createWebRegistrar({ plugin, bindings } = {}) {
   const normalized = normalizeBindings(bindings ?? [], { plugin });
   const effective = [];
-  let disposed = false;
   const byChannel = {
     httpExact: normalized.filter((b) => b.channel === CHANNEL.HTTP && b.match === MATCH.EXACT),
     httpPrefix: normalized.filter((b) => b.channel === CHANNEL.HTTP && b.match === MATCH.PREFIX),
@@ -286,7 +285,7 @@ function createWebRegistrar({ plugin, bindings } = {}) {
       }
       for (const b of byChannel.httpPrefix) {
         const handler = async (req, res) => {
-          const rejection = conn.requestRejection?.(req);
+          const rejection = conn.requestRejection(req);
           if (rejection !== void 0) {
             res.statusCode = rejection;
             res.end();
@@ -308,7 +307,14 @@ function createWebRegistrar({ plugin, bindings } = {}) {
       }
       for (const b of byChannel.upgradeExact) {
         const handler = (req, socket) => {
-          const rejection = conn.requestRejection?.(req);
+          if (String(req.method ?? "").toUpperCase() !== "GET") {
+            try {
+              socket.end();
+            } catch {
+            }
+            return;
+          }
+          const rejection = conn.requestRejection(req);
           if (rejection !== void 0) {
             try {
               socket.end();
@@ -325,6 +331,7 @@ function createWebRegistrar({ plugin, bindings } = {}) {
       throw error;
     }
     for (const b of normalized) effective.push(bindingRecord(b));
+    let disposed = false;
     const disposeAll = () => {
       if (disposed) return;
       disposed = true;

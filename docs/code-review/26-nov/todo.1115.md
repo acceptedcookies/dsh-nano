@@ -129,10 +129,11 @@
   - **完成判据**：端点常量/fetch 改指真实提供面、错误目录归属、旧容器资产/双载体退役、不删既有业务
   - **验证映射**：`CF1115-T17` · **依赖**：`P3-03`
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
-- [ ] `P3-05` — [DNT] MCP/attach/WS/SSE/审计消费 + 公开 nanoTerminal
+- [x] `P3-05` — [DNT] MCP/attach/WS/SSE/审计消费 + 公开 nanoTerminal — `partial`
   - **落点**：`dsh-nano-terminal/{index.js,src/host/{mcp,events}.js,src/client/lanes.js}`
   - **完成判据**：真实工具分发、attach 用返回 url、SSE 生命周期、审计 writer 接线、公开 `ctx.provide('nanoTerminal')` 消费
   - **验证映射**：`CF1115-T15`/`T17` · **依赖**：`P3-02`
+  - **执行状态**：`partial` · **执行时间**：`2026-11-15` · **证据**：`a162463` — audit writer 真实落盘（`writeAudit`→appendFileSync 接线，term.audit 可回读，曾是无写者空文件）；`ctx.provide('nanoTerminal',{openLocal})` 已在 client；attach 用返回 `attach.url`（F20.7）、McpLane 至多一次重连（F20.6）已就。留：v1/v2 门控规定轨迹、SSE snapshot/seq/missed 逐项契约、断连净重发=0 的 live 验证 → `CF1115-T15` 全封口未达。
   - **执行状态**：`not-started` · **执行时间**：`-` · **证据**：`-`
 
 ### Phase 4 — P3 · 剩余领域 / 标准协议 / host 适配

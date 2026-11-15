@@ -885,3 +885,17 @@ runPipeline(spec, ctx) → {runId, stages:[{name,ok,result}], status}
 | P1-6 模型 chip | 模型选项显示 `key · Nk`（`contextWindow` 可用时；当前 `/fx/models` 返回 null，故仅显示 key） | 无 |
 
 **ego 验证**：`/`、`@` 弹出选择器与 chips；当前文档注入（短文档内联 / 9000 字符走 note_read）；`+` 新建 tab；`⋯` 菜单四项 + 自动换行 `scrollWidth 75870→555`；真实 LLM `html-summarize` 一次跑通（`note_search`/`note_kind_get`/`note_write`，10.5s，产物 `DeepSeek-V3 发布-结构化摘要.kb.md`）。
+
+### 13.8 fx 处理界面重做（2026-11-15，业主指令）
+
+**业主裁决（原文要点）**：① fx 从编辑控件中独立，入口改为 icon+「处理」并放窗口右上角、与 Windows 控件并列靠最右，带按钮底色；② fx 弹窗只能在 notepad 视觉区域内居中，不能整个 dsh 居中；③ 界面高宽保持，任何切换不得抖动；④ fx 必须是 chat-interface，不能再用 tab 切换。整体结论：旧 fx UI 反人类。
+
+**实现**：
+- 入口：移除 `.np-md-tools` 里的 `fx` 文字钮；`.np-tabs` 右端新增 `.np-fx-entry`（`FX_ICON` + 「处理」+ `--dsw-alias-button-primary-fill` 底色），Windows chrome 下位于最小化/最大化之后的最右侧，mac chrome 仍靠右。
+- 界面：废弃 `openFxCard()` 的 NanoDialog + nanoTabs；新增 `.np-fx-view`（绝对定位在 `.np-window` 的 `--np-tabs-h` 下方，填满 notepad 可视区，`.np-fx-shell` 最大 760px 居中）。header（fx 处理 / 管线 / 记录 / ×）+ `.np-fx-thread` 滚动消息流 + 底部固定 composer。
+- 消息：user/assistant 气泡；assistant 内 `details.np-fx-tool` 记录 tool_start/tool_end；产物 `.np-fx-artifacts` 链接；空态图标+标题+prompt 场景 chips。
+- 无 tab：管线定义、运行记录改为 header 按钮打开的 NanoDialog，不挤占主界面；无任何 `nanoTabs` 在 fx 主面。
+- 稳定性：`.np-fx-view` 绝对定位，thread `flex:1/min-height:0`，composer `flex:none`；chips 行 `min-height:20px` 常驻占位；实测 view 560×380 在发消息前后不变、composer 138.5px 在选择提示前后不变。
+- 保留 P0-2/P0-3：当前文档 chip（短文档内联，>8000 字 note_read）、`/` prompt、`@` 语料引用。
+
+**ego 验证**：入口 `.np-fx-entry` 出现在 tab 行右端（562px 窗口下 x≈508，28px 高），旧 toolbar `[data-action=fx-run]` 为 null；点击后 `.np-fx-view` 位于 window 内（x21,y61→74,w560,h380），close 再开 window 尺寸不变；真实 LLM `html-summarize` 运行 11.7s，4 个 tool detail、产物 `untitled-2-DeepSeek-V3.kb.md`；管线新建/删除、记录列表均通过。

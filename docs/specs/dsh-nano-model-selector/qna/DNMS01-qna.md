@@ -1352,3 +1352,14 @@
 - **处置**:`gen-mutex-patch.mjs` 新增 `VERSION_GUARDED_ROWS`(id→包名映射）。落在表内的行生成 `disabled: !!js (() => { try { createRequire(baseUrl).resolve(pkg); return false } catch { return true } })()` —— 包可解析则挂载，不可解析则自禁。占位符 post-pass 还原 `!!js` 标签（yaml stringify 会把字面量 `!!js` 当字符串引号化）。
 - **live 证据**:dsh-dev 重启后 `123` 工作区新建会话 + turn 完整跑通（PONG,5s)。
 - **裁决请求**：窗口内每跨一个 preset 变更版本，新版本独有行是否一律进 `VERSION_GUARDED_ROWS`（宁可守卫过多，不许裸挂载）？还是收紧 `engines.dsh` 到单一 rc?
+
+
+---
+
+## R-18 客户端侧同病：宿主 ui-primitives 图标表也随版本漂移
+
+- **现象（P0)**：点 `.nms-trigger` 后选择器整体消失，无 toast。宿主 console:`slot entry crashed in 'conversation.input.model'` + React #130。
+- **根因**:`CompactionIcon` → `IconLayersOutlineRegular` 是 rc.2 新增导出；rc.1 seed 表（310 个导出）无此项。`engines.dsh` 窗口跨 rc.1→rc.2，编译期按 rc.2 写死，运行期在 rc.1 上 `createElement(undefined)` → 宿主 slot 崩溃并卸载整个 entry。与 R-17 `tool-office` 同类（preset 行）但发生在客户端模块表。
+- **处置**:`CompactionIcon` 运行时守卫 `IconLayersOutlineRegular ?? IconDataOutlineRegular`（同 outline 家族、rc.1 存在）。未来任何"较新版本才出现的宿主导出"一律需 `?? 兜底` 或列入窗口守卫清单。
+- **live 证据**:dsh-dev rc.1 上点击触发 → 面板打开、rail 10 项含压缩项、console 零错（截图 /tmp/nms-panel-fixed.png)。
+- **裁决请求**：客户端侧是否需要与 `VERSION_GUARDED_ROWS` 平行的机制（构建期 lint：凡 `ui-primitives` 导入名不在窗口最低版导出集内即拒）？还是接受"逐个 `??` 兜底"的人工纪律？

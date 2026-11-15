@@ -67,9 +67,18 @@ export function createWebRegistrar({ plugin, bindings } = {}) {
       // view WITHOUT `effect` so per-route effects are not double-mounted; the
       // registrar owns unified batch disposal instead.
       if (byChannel.httpExact.length) {
-        const view = { ...ctx, effect: undefined }
+        /* A cordis Context is a Proxy: ctx.webServer/.connection resolve
+         * through the get-trap keyed on the trap's REAL context receiver.
+         * Any shim ({...ctx} or Object.create(ctx)) copies/loses methods, or
+         * — worse — resolves ctx.webServer against a SHADOW provision (the
+         * Object.create object's own scope) instead of the live listener
+         * instance, silently registering routes on a webServer that never
+         * serves them (live-verified: POST returned 405 while match() claimed
+         * a hit on the orphan instance). Pass the REAL ctx through unchanged;
+         * per-route ctx.effect registration is the guard's own contract, and
+         * disposeAll below is idempotent so teardown stays exact. */
         const guard = createGuard({ table: byChannel.httpExact, plugin })
-        const ds = guard.registerRoutes(view, byChannel.httpExact)
+        const ds = guard.registerRoutes(ctx, byChannel.httpExact)
         disposers.push(...ds)
       }
       // http + prefix — same admission fence, prefix surface.
@@ -90,7 +99,7 @@ export function createWebRegistrar({ plugin, bindings } = {}) {
             sendJson(res, 500, { ok: false, reason })
           }
         }
-        disposers.push(ctx.webServer.register({ kind: 'prefix', path: b.path, handler }))
+        disposers.push(ctx.get('webServer').register({ kind: 'prefix', path: b.path, handler }))
       }
       // upgrade + exact — same rejection fence, socket teardown on reject.
       for (const b of byChannel.upgradeExact) {
@@ -105,7 +114,7 @@ export function createWebRegistrar({ plugin, bindings } = {}) {
           if (rejection !== undefined) { try { socket.end() } catch {} return }
           return b.handler(req, socket, bindingRecord(b))
         }
-        disposers.push(ctx.webServer.registerUpgrade({ path: b.path, handler }))
+        disposers.push(ctx.get('webServer').registerUpgrade({ path: b.path, handler }))
       }
     } catch (error) {
       rollback()

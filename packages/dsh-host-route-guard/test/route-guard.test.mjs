@@ -49,7 +49,10 @@ function makeCtx({ connection = { requestRejection: () => undefined } } = {}) {
       },
     },
     effect(fn, label) { effects.push({ fn, label }); return fn() },
-    get(name) { return name === 'connection' ? connection : undefined },
+    // Route registration resolves the bound listener via ctx.get('webServer')
+    // (NOT ctx.webServer): on a real host the property-access trap returns a
+    // shadow provision while get() returns the injected singleton — mirror that.
+    get(name) { return name === 'connection' ? connection : name === 'webServer' ? ctx.webServer : undefined },
     _registered: registered,
     _effects: effects,
   }

@@ -240,7 +240,15 @@ export function createGuard({ table, plugin } = {}) {
         }
       }
 
-      const register = () => ctx.webServer.register({ kind: ROUTE_KIND, path: spec.path, handler })
+      /* A cordis Context is a Proxy. `ctx.webServer` (property access through
+       * the get-trap) resolves the service against the trap's receiver scope —
+       * on a real host that yields a SHADOW WebServer provision, not the bound
+       * listener instance, so routes register silently on an object that never
+       * serves them (live-verified 2026-11-16: registration "succeeded" but
+       * every POST 405'd while ctx.webServer.match() claimed a hit).
+       * `ctx.get('webServer')` is the explicit service-read path that resolves
+       * the injected, bound instance. Always use it for service resolution. */
+      const register = () => ctx.get('webServer').register({ kind: ROUTE_KIND, path: spec.path, handler })
       if (typeof ctx.effect === 'function') {
         disposers.push(ctx.effect(register, `route-guard: ${spec.path}`))
       } else {

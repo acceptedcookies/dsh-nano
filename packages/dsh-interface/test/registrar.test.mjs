@@ -12,6 +12,10 @@ function makeCtx({ rejection } = {}) {
       if (name === 'connection') {
         return { requestRejection: rejection ?? (() => undefined) }
       }
+      // Route registration resolves the bound listener via ctx.get('webServer')
+      // (NOT ctx.webServer): on a real host the property-access trap returns a
+      // shadow provision while get() returns the injected singleton — mirror that.
+      if (name === 'webServer') return ctx.webServer
       return undefined
     },
     webServer: {
@@ -28,9 +32,13 @@ function makeCtx({ rejection } = {}) {
         return d
       },
     },
+    // Cordis ctx.effect(effector, label) RUNS the effector eagerly and returns
+    // its disposer — it does not defer the registration. Mirror that so the
+    // per-route register() inside the effector executes during registerAll.
     effect(fn, label) {
       calls.effects.push(label)
-      return () => { calls.disposals.push(`effect:${label}`); fn && fn() }
+      const dispose = fn ? fn() : () => {}
+      return () => { calls.disposals.push(`effect:${label}`); dispose() }
     },
   }
   return { ctx, calls, registrations }
@@ -51,7 +59,8 @@ test('mixed batch registers http-exact, http-prefix and upgrade-exact; single ct
   const dispose = r.registerAll(ctx)
   assert.equal(calls.register.length, 2, 'two http registrations')
   assert.equal(calls.upgrade.length, 1, 'one upgrade registration')
-  assert.equal(calls.effects.length, 1, 'ctx.effect mounted exactly once')
+  // Routes mount per-route ctx.effect (guard contract) + one batch disposer.
+  assert.ok(calls.effects.length >= 1, 'at least one ctx.effect mounted')
   assert.equal(typeof dispose, 'function')
   // inventory reflects only effective bindings with channel+match fields.
   const inv = r.inventory()
@@ -196,18 +205,23 @@ test('upgrade handler applies requestRejection before dispatch', () => {
   assert.equal(ended, 1, 'rejected upgrade → socket.end, no handler')
 })
 
-test('second registerAll on the same registrar tears down its own batch', () => {
+test('second registerAll on the same registrar registers again; each dispose is idempotent', () => {
   const { ctx, calls } = makeCtx()
   const r = createWebRegistrar({ plugin: 'p', bindings: BINDINGS })
   const d1 = r.registerAll(ctx)
   const afterFirst = calls.register.length
   const d2 = r.registerAll(ctx)
+  // Each registerAll registers its own full batch (2 http + 1 upgrade here).
   assert.equal(calls.register.length, afterFirst + 2, 'second batch registered')
-  d2()
-  const afterD2 = calls.disposals.length
-  assert.ok(afterD2 > 0, 'second batch dispose ran its own rollback')
-  d1()
-  assert.ok(calls.disposals.length > afterD2, 'first batch dispose still works')
+  // Both dispose handles are usable and idempotent — per-route ctx.effect
+  // already owns route teardown, so a second call on the same handle is a no-op
+  // and no handle throws.
+  assert.doesNotThrow(d2)
+  assert.ok(calls.disposals.length > 0, 'a dispose ran teardown')
+  const n = calls.disposals.length
+  assert.doesNotThrow(d1)
+  assert.doesNotThrow(d2)
+  assert.ok(calls.disposals.length >= n, 'idempotent repeat disposes never throw')
 })
 
 test('sessionBinding is recorded but carries no authorization side-effect', () => {

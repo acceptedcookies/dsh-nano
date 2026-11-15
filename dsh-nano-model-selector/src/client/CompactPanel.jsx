@@ -147,10 +147,29 @@ export function CompactPanel({ copy, models, onError }) {
       onError(`${copy.selectionError}: ${field} must be a number`)
       return
     }
+    // Cross-field invariant (-20): the health line must sit strictly below the
+    // buffer line, and the buffer line below the safety line. The server
+    // enforces it too (400), but checking here keeps the rejected value from
+    // ever hitting the wire and surfaces a precise field-scoped reason.
+    const next = { bufferSizeAsync: policy.bufferSizeAsync, healthTargetAsync: policy.healthTargetAsync, pinnedAsyncTokens: policy.pinnedAsyncTokens, [field]: value }
+    if (field === 'bufferSizeAsync' || field === 'healthTargetAsync') {
+      if (!(next.healthTargetAsync >= 0 && next.healthTargetAsync < next.bufferSizeAsync)) {
+        noteWithCode('fail', `${copy.compactRejected}: H (${next.healthTargetAsync}) < B (${next.bufferSizeAsync})`, 'water-order')
+        return
+      }
+      if (!(next.bufferSizeAsync < (policy.bufferSizeSafety ?? 0.8))) {
+        noteWithCode('fail', `${copy.compactRejected}: B (${next.bufferSizeAsync}) < S (${policy.bufferSizeSafety ?? 0.8})`, 'water-order')
+        return
+      }
+    }
     const patch = field === 'model' ? { model: value } : { [field]: value }
     setBusy(true)
     putCompactPolicy(patch)
-      .then(() => { noteWithCode('success', `${copy.compactSwitchApplied} · ${field}`, 'applied'); reload() })
+      .then(data => {
+        noteWithCode('success', `${copy.compactSwitchApplied} · ${field}`, 'applied')
+        setHeartbeat({ at: new Date(), status: 'ok' })
+        setState(prev => (prev === null ? prev : { ...prev, policy: data.policy ?? prev.policy, bundle: data.bundle ?? prev.bundle }))
+      })
       .catch(error => noteWithCode('fail', error.message, error.code))
       .finally(() => setBusy(false))
   }

@@ -24,7 +24,7 @@ export async function putCompactPolicy(patch) {
     error.code = data?.error?.code ?? `HTTP-${response.status}`
     throw error
   }
-  return data.policy
+  return data // {ok, policy:{…, effective, runtime}, bundle} — caller merges, no refetch
 }
 
 /**

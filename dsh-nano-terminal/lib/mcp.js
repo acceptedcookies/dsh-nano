@@ -3,6 +3,97 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+// ../packages/dsh-interface/src/contracts/webBinding.js
+var CHANNEL = Object.freeze({ HTTP: "http", UPGRADE: "upgrade" });
+var MATCH = Object.freeze({ EXACT: "exact", PREFIX: "prefix" });
+var CHANNELS = new Set(Object.values(CHANNEL));
+var MATCHES = new Set(Object.values(MATCH));
+
+// ../packages/dsh-interface/src/contracts/jsonOutcome.js
+var FAILURE_KIND = Object.freeze({
+  /** signal aborted; issued-before cancellation makes no server-side claim. */
+  CANCELLED: "cancelled",
+  /** Network/read-body failure; keep real httpStatus only when headers landed. */
+  TRANSPORT: "transport",
+  /** Non-2xx that is not a recognized sanctioned business failure; keep status. */
+  HTTP: "http",
+  /** Pre-request encode/binding failure OR illegal 2xx — never becomes ok:true. */
+  PROTOCOL: "protocol",
+  /** Recognized sanctioned business failure (incl. legal 2xx business failures). */
+  DOMAIN: "domain"
+});
+var FAILURE_KINDS = Object.freeze(Object.values(FAILURE_KIND));
+
+// ../packages/dsh-interface/src/host/createMcpToolset.js
+var MCP_NOTIFICATIONS = "notifications/";
+function createMcpToolset({ schema: schema2, dispatch, protocolVersion = "2025-06-18", serverInfo = {}, onCall } = {}) {
+  if (schema2 == null || !Array.isArray(schema2.methods)) {
+    throw new TypeError("createMcpToolset requires a schema with a methods array");
+  }
+  if (typeof dispatch !== "function") {
+    throw new TypeError("createMcpToolset requires a dispatch(name,args) function");
+  }
+  const tools = schema2.methods.map((m) => ({ name: m.name, description: m.description, inputSchema: m.params }));
+  const toolMap = Object.fromEntries(tools.map((t) => [t.name, t]));
+  function rpcReply(id, result, error) {
+    return error ? { jsonrpc: "2.0", id, error } : { jsonrpc: "2.0", id, result };
+  }
+  async function handleRpc(body) {
+    const list = Array.isArray(body) ? body : [body];
+    const out = [];
+    for (const msg of list) {
+      if (!msg || msg.jsonrpc !== "2.0") {
+        out.push(rpcReply(msg?.id ?? null, null, { code: -32600, message: "invalid request" }));
+        continue;
+      }
+      if (msg.method === "initialize") {
+        out.push(rpcReply(msg.id, {
+          protocolVersion,
+          capabilities: { tools: {}, "dnt.events": { types: schema2["x-events"] } },
+          serverInfo: { name: "mcp", version: "0.0.0", ...serverInfo }
+        }));
+        continue;
+      }
+      if (typeof msg.method === "string" && msg.method.startsWith(MCP_NOTIFICATIONS)) continue;
+      if (msg.method === "ping") {
+        out.push(rpcReply(msg.id, {}));
+        continue;
+      }
+      if (msg.method === "tools/list") {
+        out.push(rpcReply(msg.id, { tools }));
+        continue;
+      }
+      if (msg.method === "tools/call") {
+        const { name, arguments: args } = msg.params ?? {};
+        if (!toolMap[name]) {
+          out.push(rpcReply(msg.id, null, { code: -32602, message: `unknown tool '${name}'` }));
+          continue;
+        }
+        onCall?.({ op: "mcp.call", name });
+        try {
+          const result = await dispatch(name, args ?? {});
+          out.push(rpcReply(msg.id, {
+            content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+            structuredContent: result
+          }));
+        } catch (e) {
+          out.push(rpcReply(msg.id, {
+            content: [{ type: "text", text: String(e?.message ?? e) }],
+            isError: true,
+            /* stable kind travels on structuredContent so callers map errors
+               without parsing message text. */
+            structuredContent: { kind: e?.kind ?? "invalid", message: String(e?.message ?? e) }
+          }));
+        }
+        continue;
+      }
+      out.push(rpcReply(msg.id ?? null, null, { code: -32601, message: `unknown method '${msg.method}'` }));
+    }
+    return Array.isArray(body) ? out : out[0];
+  }
+  return { handleRpc, tools };
+}
+
 // src/host/errors.js
 var KIND = Object.freeze({
   NOT_FOUND: "not_found",
@@ -333,8 +424,8 @@ function createMcpHandler({ registry, bus, auditPath, laneStatus, writeAudit }) 
       case "term.events":
         return bus.since(args.since ?? 0);
       case "term.session.close": {
-        const ok = await registry.close(args.id, args.reason ?? "mcp");
-        return { closed: ok };
+        const ok2 = await registry.close(args.id, args.reason ?? "mcp");
+        return { closed: ok2 };
       }
       case "term.audit":
         return { log: readAuditTail(auditPath, Math.min(args.lines ?? 50, 500)) };
@@ -348,75 +439,13 @@ function createMcpHandler({ registry, bus, auditPath, laneStatus, writeAudit }) 
         throw err(KIND.INVALID, `unknown tool '${name}'`);
     }
   }
-  async function handleRpc(body) {
-    const list = Array.isArray(body) ? body : [body];
-    const out = [];
-    for (const msg of list) {
-      if (!msg || msg.jsonrpc !== "2.0") {
-        out.push(rpcReply(msg?.id ?? null, null, { code: -32600, message: "invalid request" }));
-        continue;
-      }
-      if (msg.method === "initialize") {
-        out.push(
-          rpcReply(msg.id, {
-            protocolVersion: PROTOCOL_VERSION,
-            capabilities: {
-              tools: {},
-              // event notifications: clients may poll term.events or open the
-              // SSE stream at GET /dsh-nano-terminal/events?since=<seq>
-              "dnt.events": { types: schema["x-events"] }
-            },
-            serverInfo: { name: "dsh-nano-terminal", version: "0.2.0" }
-          })
-        );
-        continue;
-      }
-      if (typeof msg.method === "string" && msg.method.startsWith("notifications/")) {
-        continue;
-      }
-      if (msg.method === "ping") {
-        out.push(rpcReply(msg.id, {}));
-        continue;
-      }
-      if (msg.method === "tools/list") {
-        out.push(rpcReply(msg.id, { tools: TOOLS }));
-        continue;
-      }
-      if (msg.method === "tools/call") {
-        const { name, arguments: args } = msg.params ?? {};
-        if (!TOOL_MAP[name]) {
-          out.push(rpcReply(msg.id, null, { code: -32602, message: `unknown tool '${name}'` }));
-          continue;
-        }
-        try {
-          const result = await callTool(name, args ?? {});
-          out.push(
-            rpcReply(msg.id, {
-              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-              structuredContent: result
-            })
-          );
-        } catch (e) {
-          out.push(
-            rpcReply(msg.id, {
-              content: [{ type: "text", text: String(e?.message ?? e) }],
-              isError: true,
-              // stable kind travels on structuredContent so callers map errors
-              // without parsing message text
-              structuredContent: { kind: e?.kind ?? KIND.INVALID, message: String(e?.message ?? e) }
-            })
-          );
-        }
-        continue;
-      }
-      out.push(rpcReply(msg.id ?? null, null, { code: -32601, message: `unknown method '${msg.method}'` }));
-    }
-    return Array.isArray(body) ? out : out[0];
-  }
-  return { handleRpc, audit, tools: TOOLS };
-}
-function rpcReply(id, result, error) {
-  return error ? { jsonrpc: "2.0", id, error } : { jsonrpc: "2.0", id, result };
+  const toolset = createMcpToolset({
+    schema,
+    dispatch: (name, args) => callTool(name, args),
+    protocolVersion: PROTOCOL_VERSION,
+    serverInfo: { name: "dsh-nano-terminal", version: "0.2.0" }
+  });
+  return { handleRpc: (body) => toolset.handleRpc(body), audit, tools: TOOLS };
 }
 function readAuditTail(path, lines) {
   try {

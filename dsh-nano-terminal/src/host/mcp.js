@@ -10,6 +10,7 @@
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { createMcpToolset } from 'dsh-interface/host'
 import { KIND, err } from './errors.js'
 import { waitFor, NAMED_KEYS } from './wait.js'
 import { sendNote } from './notes.js'
@@ -181,78 +182,19 @@ export function createMcpHandler({ registry, bus, auditPath, laneStatus, writeAu
     }
   }
 
-  /** JSON-RPC dispatcher — supports single calls and batches. */
-  async function handleRpc(body) {
-    const list = Array.isArray(body) ? body : [body]
-    const out = []
-    for (const msg of list) {
-      if (!msg || msg.jsonrpc !== '2.0') {
-        out.push(rpcReply(msg?.id ?? null, null, { code: -32600, message: 'invalid request' }))
-        continue
-      }
-      if (msg.method === 'initialize') {
-        out.push(
-          rpcReply(msg.id, {
-            protocolVersion: PROTOCOL_VERSION,
-            capabilities: {
-              tools: {},
-              // event notifications: clients may poll term.events or open the
-              // SSE stream at GET /dsh-nano-terminal/events?since=<seq>
-              'dnt.events': { types: schema['x-events'] },
-            },
-            serverInfo: { name: 'dsh-nano-terminal', version: '0.2.0' },
-          }),
-        )
-        continue
-      }
-      if (typeof msg.method === 'string' && msg.method.startsWith('notifications/')) {
-        continue // notifications get no response
-      }
-      if (msg.method === 'ping') {
-        out.push(rpcReply(msg.id, {}))
-        continue
-      }
-      if (msg.method === 'tools/list') {
-        out.push(rpcReply(msg.id, { tools: TOOLS }))
-        continue
-      }
-      if (msg.method === 'tools/call') {
-        const { name, arguments: args } = msg.params ?? {}
-        if (!TOOL_MAP[name]) {
-          out.push(rpcReply(msg.id, null, { code: -32602, message: `unknown tool '${name}'` }))
-          continue
-        }
-        try {
-          const result = await callTool(name, args ?? {})
-          out.push(
-            rpcReply(msg.id, {
-              content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-              structuredContent: result,
-            }),
-          )
-        } catch (e) {
-          out.push(
-            rpcReply(msg.id, {
-              content: [{ type: 'text', text: String(e?.message ?? e) }],
-              isError: true,
-              // stable kind travels on structuredContent so callers map errors
-              // without parsing message text
-              structuredContent: { kind: e?.kind ?? KIND.INVALID, message: String(e?.message ?? e) },
-            }),
-          )
-        }
-        continue
-      }
-      out.push(rpcReply(msg.id ?? null, null, { code: -32601, message: `unknown method '${msg.method}'` }))
-    }
-    return Array.isArray(body) ? out : out[0]
-  }
+  /* The JSON-RPC 2.0 protocol surface (initialize/ping/tools-list/tools-call,
+     batch handling, the content+structuredContent/isError envelopes) is the
+     single shared createMcpToolset (CF1115 / P3-01 / T14). This plugin injects
+     its canonical schema + the domain dispatch above; the TOOLS table is still
+     generated from schema/dnt-mcp.openrpc.json — never hand-authored. */
+  const toolset = createMcpToolset({
+    schema,
+    dispatch: (name, args) => callTool(name, args),
+    protocolVersion: PROTOCOL_VERSION,
+    serverInfo: { name: 'dsh-nano-terminal', version: '0.2.0' },
+  })
 
-  return { handleRpc, audit, tools: TOOLS }
-}
-
-function rpcReply(id, result, error) {
-  return error ? { jsonrpc: '2.0', id, error } : { jsonrpc: '2.0', id, result }
+  return { handleRpc: (body) => toolset.handleRpc(body), audit, tools: TOOLS }
 }
 
 function readAuditTail(path, lines) {

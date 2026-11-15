@@ -4,6 +4,8 @@
 //   mcp     — remote MCP endpoint: term.session.create then ws attach
 //   local and mcp only. There is no isolate lane and no sandbox lane.
 
+import { decodeMcpReply } from 'dsh-interface/host'
+
 const ROUTE = '/dsh-nano-terminal'
 
 /**
@@ -186,9 +188,14 @@ export class McpLane {
       }),
     })
     const reply = await rpc.json()
-    const result = reply?.result?.structuredContent
+    /* Three-layer MCP decode via the shared decodeMcpReply (CF1115 / P3-01):
+       rpc.error → tool.isError → result.structuredContent. attach honesty is
+       still the caller's own check (#wsUrl throws on a missing attach.url). */
+    const decoded = decodeMcpReply(reply)
+    if (!decoded.ok) throw new Error(decoded.message ?? 'mcp create failed')
+    const result = decoded.data
     if (!result?.id) {
-      throw new Error(reply?.error?.message ?? reply?.result?.content?.[0]?.text ?? 'mcp create failed')
+      throw new Error('mcp create failed')
     }
     this.id = result.id
     this.wsUrl = this.#wsUrl(result)

@@ -4,3 +4,5 @@
  */
 export { createWebRegistrar, BindingError } from './createWebRegistrar.js'
 export { createJsonClient, JsonClientError } from './createJsonClient.js'
+export { createMcpToolset } from './createMcpToolset.js'
+export { decodeMcpReply } from './decodeMcpReply.js'

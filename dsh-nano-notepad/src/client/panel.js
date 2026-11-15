@@ -2380,6 +2380,12 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
   }
 
   const fxModelKey = m => m.key ?? m.id ?? m.name ?? m
+  const fxFormatCtx = value => {
+    const n = Number(value)
+    if (!(n > 0)) return 'ctx —'
+    if (n >= 1e6) return `${Number((n / 1e6).toFixed(1)).toString()}M`
+    return `${Math.round(n / 1000)}k`
+  }
   const fxModelInfo = m => {
     const key = fxModelKey(m)
     const split = String(key).split('~')
@@ -2387,7 +2393,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       key,
       provider: m.provider ?? (split.length > 1 ? split[0] : ''),
       model: m.model ?? (split.length > 1 ? split.slice(1).join('~') : key),
-      ctx: Number(m.contextWindow) > 0 ? `${Math.round(Number(m.contextWindow) / 1000)}k` : 'ctx —',
+      ctx: fxFormatCtx(m.contextWindow),
     }
   }
   const fxCuratedModels = () => {

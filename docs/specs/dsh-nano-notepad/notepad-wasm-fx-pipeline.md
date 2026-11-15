@@ -938,3 +938,17 @@ runPipeline(spec, ctx) → {runId, stages:[{name,ok,result}], status}
 - `DEFAULT_SETTINGS.fxModels` 收敛为 **仅 `deepseek-official~deepseek-flash`**；旧默认三模型（flash/v4-pro/magpie）在 `normalizeSettings` 中识别为 legacy default 并迁移回单模型，避免老 IDB 设置继续显示 pro。
 - 菜单 `maxHeight` 降到 140，单行菜单无滚动条，右侧圆角恢复；仍向上展开留在 notepad 内。
 - 设置 fx tab 仍列出全量目录供后续调整；默认勾选仅 flash。
+
+### 13.12 fx 模型 contextWindow 修复（2026-11-15，业主第五轮）
+
+**业主反馈**：`ctx` 没有显示；模型应仅 deepseek-flash；模型菜单应为一行，provider 左、模型+ctx 右；菜单右侧圆角缺失。
+
+**根因**：DSH 的 `LlmResolvedModelInfo` 把容量放在 **`resolved.context.contextWindow`**，而 `src/host/fx-bridge.js` 读的是顶层 `resolved.contextWindow`，所以 `/nano-notepad/fx/models` 一直返回 `null`，前端只能显示 `ctx —`。
+
+**修复**：
+- bridge：`contextWindow: resolved?.context?.contextWindow ?? resolved?.contextWindow ?? null`；重建 `lib/fx-bridge.js` 并重启 dsh-dev 宿主。
+- 前端 `fxFormatCtx`：≥1e6 显示 `1M`，否则 `128k`；模型按钮/菜单/设置行统一 provider 左、model + ctx 右。
+- `DEFAULT_SETTINGS.fxModels` 仅 `deepseek-official~deepseek-flash`；旧三模型默认值迁移回单模型。
+- 菜单单行、`maxHeight:140` 无滚动，右侧圆角恢复。
+
+**ego 验证**：`/nano-notepad/fx/models` 返回 `contextWindow:1048576`（flash/v4-pro 均）；composer 模型菜单仅 1 项，显示 `deepseek-official | deepseek-flash | 1M`；菜单 rect 300×47，`border-radius:16px`，右侧圆角可见。

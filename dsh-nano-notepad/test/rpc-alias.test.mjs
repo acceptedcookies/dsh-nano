@@ -24,15 +24,36 @@ test('/rpc retires lsrag.manifest → unknown-method (before target resolution)'
   assert.equal(r.json.method, 'lsrag.manifest')
 })
 
-test('/rpc still whitelists manifest.get + corpus.list/corpus.read/claim.read', async () => {
-  const h = pipelineRpcHandler({})
-  // A whitelisted name passes the method gate and only fails later (no s3
-  // target configured → a different rejection, NOT unknown-method). That
-  // proves the name is accepted; the alias names fail AT the gate.
-  for (const method of ['manifest.get', 'corpus.list', 'corpus.read', 'claim.read']) {
-    const r = await call(h, { method, target: 'nonexistent' })
-    assert.notEqual(r.json.reason, 'unknown-method', `${method} should pass the method gate`)
+test('/rpc whitelisted methods pass the gate and reach their branch', async () => {
+  /* A whitelisted method clears the gate AND dispatches to its case — each
+   * calls an s3 method that throws a DISTINCTIVE marker → 'failed' with the
+   * marker. An unknown method dies at the gate → 'unknown-method'. This proves
+   * gate-clearance + dispatch, not just Set membership. */
+  const MARK = '__s3-marker__'
+  const s3 = {
+    getJson: async () => { throw new Error(MARK) },
+    getBytes: async () => { throw new Error(MARK) },
+    list: async () => { throw new Error(MARK) },
   }
+  const h = pipelineRpcHandler({ _s3ForTest: s3 })
+  for (const method of ['manifest.get', 'corpus.list', 'corpus.read', 'claim.read']) {
+    const r = await call(h, { method, params: method === 'corpus.read' ? { key: 'kb-x' } : method === 'claim.read' ? { key: 'sess-1' } : {} })
+    assert.equal(r.json.reason, 'failed', `${method} should clear gate, reach s3, and fail with the marker`)
+    assert.ok(String(r.json.message).includes(MARK), `${method} should reach its s3 call`)
+  }
+})
+
+test('/rpc manifest.get: denied/network failure surfaces as error, never forged into null', async () => {
+  /* F21.7: null means "confirmed absent" (404) ONLY. A 403/network failure is
+   * a real error → {ok:false,reason:'failed'}, NOT {ok:true,result:null}. The
+   * _s3ForTest seam injects a stub whose getJson throws a non-404 denial. */
+  const MARK = 'S3 GET sqlite/manifest.json failed: HTTP 403'
+  const stubS3 = { getJson: async () => { throw new Error(MARK) }, list: async () => [], getBytes: async () => undefined }
+  const h = pipelineRpcHandler({ _s3ForTest: stubS3 })
+  const r = await call(h, { method: 'manifest.get', target: {} })
+  assert.equal(r.json.ok, false)
+  assert.equal(r.json.reason, 'failed')
+  assert.ok(String(r.json.message).includes('HTTP 403'))
 })
 
 test('/s3/config retires testOne → unknown action', async () => {

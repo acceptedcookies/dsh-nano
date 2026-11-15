@@ -60,6 +60,18 @@ export const Config = {
 
 const messageOf = error => (error instanceof Error ? error.message : String(error))
 
+/** HTTP status to send for a thrown error. A NativeError carries its own
+ * authoritative status (503/422/502/500) — pass it through. A PLAIN
+ * CarrierError keeps the existing contract: upstream 5xx → 502 (the carrier's
+ * fault, not ours), 4xx → passthrough, status<400 (network/timeout) → 502.
+ * Extracted as a pure function so the clamp is directly unit-testable — the
+ * route harness cannot produce a 5xx-bearing CarrierError (the profile layer
+ * forces https and the stub upstream is http). */
+export const httpStatusForError = (error) =>
+  error?.nativeCode != null
+    ? (error.status >= 400 ? error.status : 502)
+    : (error.status >= 400 && error.status < 500 ? error.status : 502)
+
 export function apply(ctx, config = {}) {
   const api = createDevinApi({ timeoutMs: config.requestTimeoutMs ?? 20000 })
   const store = createProfileStore()
@@ -85,18 +97,14 @@ export function apply(ctx, config = {}) {
       sendJson(res, 200, result === undefined ? { ok: true } : result)
     } catch (error) {
       if (error instanceof CarrierError) {
-        /* A NativeError carries its own authoritative status (503/422/502/500)
-         * — pass it through. A PLAIN CarrierError keeps the existing clamp:
-         * upstream 5xx → 502 (the carrier's fault, not ours), 4xx → passthrough.
-         * Do not change the upstream-error semantics while adding NATIVE_*. */
-        const status = error.nativeCode != null
-          ? (error.status >= 400 ? error.status : 502)
-          : (error.status >= 400 && error.status < 500 ? error.status : 502)
+        const status = httpStatusForError(error)
         /* `reason` carries the NATIVE_* / carrier code — it is the stable
          * classification field the ledger already describes. Do NOT mint a
-         * parallel `code` wire key (unregistered = contract expansion). */
+         * parallel `code` wire key (unregistered = contract expansion). The
+         * `status` body field echoes the error's own status (upstream code for
+         * a carrier error, the authoritative code for a NativeError). */
         sendJson(res, status,
-          { ok: false, reason: error.reason, message: error.message.slice(0, 300), status })
+          { ok: false, reason: error.reason, message: error.message.slice(0, 300), status: error.status })
       } else {
         sendJson(res, 500, { ok: false, reason: 'failed', message: messageOf(error).slice(0, 300) })
       }
@@ -163,20 +171,24 @@ export function apply(ctx, config = {}) {
   /* ---- experimental native session bridge (spike) ----
    * Creates a transient in-memory dsh Session and a lightweight proxy Agent
    * for one Devin session. Native Chat renders the event log; the local
-   * session is a projection only and is never persisted. */
+   * session is a projection only and is never persisted. Keyed by
+   * remote-session + profile identity — F22.3 forbids reusing a bridge whose
+   * profile/config changed, so a remote opened under a different account gets
+   * a fresh bridge, not the stale one. */
   const nativeBridges = new Map()
   /* P4-02 NATIVE_* taxonomy — the native Chat projection (sessions+agents
    * inject) is an optional support obligation. When the host cannot satisfy
    * it, fail EXPLICITLY (no fabricated local session, no silent success):
-   *   NATIVE_UNAVAILABLE      503 — host did not inject sessions/agents or
-   *                                 refused session creation.
-   *   NATIVE_UNSUPPORTED      422 — the carrier/profile cannot be projected.
+   *   NATIVE_UNAVAILABLE      503 — host did not inject sessions/agents, or
+   *                                 refused local session creation.
+   *   NATIVE_UNSUPPORTED      422 — no carrier profile can be resolved to
+   *                                 project from (pick() no-profile remapped).
    *   NATIVE_PROJECTION_FAILED 500 — session created but agents.enter refused;
    *                                 the orphan local session is torn down.
    *   NATIVE_OUTCOME_UNKNOWN  502 — upstream carrier read failed mid-projection;
    *                                 the local session may be partially projected.
-   * A stable `code` rides alongside `reason` so callers classify on the
-   * stable field, not the message. */
+   * `reason` carries the NATIVE_* code so callers classify on the stable field,
+   * not the message — it is the ledgered classification key. */
   const NativeError = class NativeError extends CarrierError {
     constructor(code, message, status) {
       super(code, message, { status })
@@ -214,20 +226,33 @@ export function apply(ctx, config = {}) {
   }
   const nativeOpen = async (profile, body) => {
     const remote = needSessionId(body)
-    /* Host support obligation: the projection needs both `sessions` (to mint
-     * the local transcript) and `agents` (to register the proxy). Absent
-     * either, fail explicitly — never mint a session that cannot project. */
-    if (typeof ctx.sessions?.create !== 'function' || typeof ctx.sessions?.get !== 'function'
-        || typeof ctx.agents?.enter !== 'function') {
+    /* Host support obligation: the projection needs `sessions` (to mint the
+     * local transcript) and `agents` (to register the proxy). Absent any —
+     * including `sessions.close` needed to tear an orphan down — fail
+     * explicitly, never mint a session that cannot project or be reclaimed.
+     * `profile` is guaranteed non-null: pick() throws first (remapped to
+     * NATIVE_UNSUPPORTED at the route). */
+    const bridgeKey = `${remote}@${profile.id ?? profile.orgId ?? 'default'}`
+    let bridge = nativeBridges.get(bridgeKey)
+    if (bridge && ctx.sessions.get(bridge.localId)) {
+      return { ok: true, local_session_id: bridge.localId, remote_session_id: remote }
+    }
+    /* A stale bridge whose local session is already gone leaks its poll timer
+     * and agents-enter detach — tear it down before minting a replacement. */
+    if (bridge) {
+      if (bridge.timer) clearInterval(bridge.timer)
+      try { bridge.detach?.() } catch { /* noop */ }
+      nativeBridges.delete(bridgeKey)
+    }
+    let session
+    try {
+      session = ctx.sessions.create(undefined, { meta: { cwd: process.cwd() } })
+    } catch (error) {
+      /* The host injected sessions but refused the mint — the projection is
+       * unavailable, not an internal fault. */
       throw new NativeError('NATIVE_UNAVAILABLE',
-        'host did not inject sessions/agents; native Chat projection is unavailable', 503)
+        `host refused local session creation: ${error?.message ?? 'unknown'}`, 503)
     }
-    if (!profile) {
-      throw new NativeError('NATIVE_UNSUPPORTED', 'no carrier profile to project from', 422)
-    }
-    let bridge = nativeBridges.get(remote)
-    if (bridge && ctx.sessions.get(bridge.localId)) return { ok: true, local_session_id: bridge.localId, remote_session_id: remote }
-    const session = ctx.sessions.create(undefined, { meta: { cwd: process.cwd() } })
     const bridgeState = { localId: session.id, remoteId: remote, profile, seen: new Set(), turn: 0, timer: null, agent: null }
     let page
     try {
@@ -236,7 +261,7 @@ export function apply(ctx, config = {}) {
       /* Carrier read failed AFTER the local session was minted: the caller
        * cannot tell whether the projection is usable. Surface the ambiguous
        * outcome and drop the orphan session rather than claim ok. */
-      try { ctx.sessions.close?.(session.id) } catch { /* best-effort teardown */ }
+      try { ctx.sessions.close(session.id) } catch { /* best-effort teardown */ }
       throw new NativeError('NATIVE_OUTCOME_UNKNOWN',
         `carrier read failed after local session minted: ${error?.message ?? 'unknown'}`, 502)
     }
@@ -273,7 +298,7 @@ export function apply(ctx, config = {}) {
       /* The session exists but the agent register refused → nothing will ever
        * render the projection. Do NOT report ok against a dead transcript:
        * tear the orphan session down and fail explicitly. */
-      try { ctx.sessions.close?.(session.id) } catch { /* best-effort */ }
+      try { ctx.sessions.close(session.id) } catch { /* best-effort */ }
       throw new NativeError('NATIVE_PROJECTION_FAILED',
         `agents.enter refused the proxy agent: ${error?.message ?? 'unknown'}`, 500)
     }
@@ -291,7 +316,7 @@ export function apply(ctx, config = {}) {
         }
       } catch { /* upstream polling is best-effort */ }
     }, 2500)
-    nativeBridges.set(remote, bridgeState)
+    nativeBridges.set(bridgeKey, bridgeState)
     return { ok: true, local_session_id: session.id, remote_session_id: remote }
   }
 
@@ -375,12 +400,30 @@ export function apply(ctx, config = {}) {
         const sessionId = needSessionId(body)
         /* native_open: the host support obligation is checked before pick() —
          * no carrier profile should be resolved when the projection itself is
-         * impossible. Other ops resolve the profile first as before. */
-        if (body.op === 'native_open' &&
-            (typeof ctx.sessions?.create !== 'function' || typeof ctx.sessions?.get !== 'function'
-             || typeof ctx.agents?.enter !== 'function')) {
-          throw new NativeError('NATIVE_UNAVAILABLE',
-            'host did not inject sessions/agents; native Chat projection is unavailable', 503)
+         * impossible. `sessions.close` is required too: it reclaims an orphan
+         * on failure, so its absence makes the op unsupported, not merely slow.
+         * Other ops resolve the profile first as before. */
+        if (body.op === 'native_open') {
+          const supported = typeof ctx.sessions?.create === 'function'
+            && typeof ctx.sessions?.get === 'function'
+            && typeof ctx.sessions?.close === 'function'
+            && typeof ctx.agents?.enter === 'function'
+          if (!supported) {
+            throw new NativeError('NATIVE_UNAVAILABLE',
+              'host did not inject sessions/agents; native Chat projection is unavailable', 503)
+          }
+          /* The projection needs a carrier profile. A missing/inactive profile
+           * is NATIVE_UNSUPPORTED (422) for THIS op, not the generic carrier
+           * failure pick() would raise — remap it so the code is reachable. */
+          let profile
+          try { profile = pick(body.profileId) } catch (error) {
+            if (error?.reason === 'no-active-profile' || error?.reason === 'profile-not-found') {
+              throw new NativeError('NATIVE_UNSUPPORTED',
+                `no carrier profile to project from: ${error.message}`, 422)
+            }
+            throw error
+          }
+          return op(profile, { ...body, session_id: sessionId })
         }
         return op(pick(body.profileId), { ...body, session_id: sessionId })
       }),

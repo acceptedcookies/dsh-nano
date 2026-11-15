@@ -181,7 +181,7 @@ async function acquireClaim(s3, key, writerId, heartbeatRev = 0) {
   }
   const claimKey = `claims/${key}.json`;
   for (let attempt = 0; attempt < CAS_ATTEMPTS; attempt += 1) {
-    const got = await s3.getJson(claimKey, { withMeta: true }).catch(() => void 0);
+    const got = await s3.getJson(claimKey, { withMeta: true });
     const existing = validClaim(got?.value) ? got.value : void 0;
     const etag = got?.value === void 0 ? void 0 : got.etag;
     const now = Date.now();
@@ -204,7 +204,7 @@ async function renewClaim(s3, key, writerId) {
   if (!SESSION_ID_RE.test(key)) return { renewed: false, reason: "schema:badKey", key };
   const claimKey = `claims/${key}.json`;
   for (let attempt = 0; attempt < CAS_ATTEMPTS; attempt += 1) {
-    const got = await s3.getJson(claimKey, { withMeta: true }).catch(() => void 0);
+    const got = await s3.getJson(claimKey, { withMeta: true });
     const existing = validClaim(got?.value) ? got.value : void 0;
     const now = Date.now();
     if (existing === void 0 || existing.writerId !== writerId || !(existing.expiresAt > now)) {
@@ -222,7 +222,7 @@ async function renewClaim(s3, key, writerId) {
   return { renewed: false, holder: writerId, expiresAt: null, raced: true, key };
 }
 async function readClaim(s3, key) {
-  const got = await s3.getJson(`claims/${key}.json`, { withMeta: true }).catch(() => void 0);
+  const got = await s3.getJson(`claims/${key}.json`, { withMeta: true });
   return got === void 0 ? void 0 : { value: got.value, etag: got.etag };
 }
 async function releaseClaim(s3, key) {
@@ -273,6 +273,7 @@ function notepadEnvTarget() {
   };
 }
 async function s3Target(ctx, override) {
+  if (ctx && ctx._s3ForTest) return ctx._s3ForTest;
   if (override && typeof override === "object") {
     const { endpoint, region = "shv1", bucket, prefix = DEFAULT_PREFIX, token, accessKey } = override;
     if (!endpoint || !bucket || !token && !accessKey) throw new Error("target requires endpoint/bucket + token or accessKey");
@@ -385,9 +386,7 @@ function pipelineRpcHandler(ctx) {
       let result;
       switch (method) {
         case "manifest.get": {
-          const got = await s3.getJson("sqlite/manifest.json", { withMeta: true }).catch(
-            (error) => /HTTP 404|NoSuchKey/.test(messageOf(error)) ? void 0 : Promise.reject(error)
-          );
+          const got = await s3.getJson("sqlite/manifest.json", { withMeta: true });
           result = got === void 0 ? null : { value: got.value, etag: got.etag };
           break;
         }

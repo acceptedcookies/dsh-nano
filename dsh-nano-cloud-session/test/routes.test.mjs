@@ -112,7 +112,7 @@ test('session id accepts bare v3 ids and prefixes devin- for the upstream', asyn
 test('P4-02 native_open fails explicitly (NATIVE_*) — never a silent ok', async () => {
   const routes = await makeHandlers()
   // ctx lacks sessions/agents inject (makeHandlers ctx has only connection/webServer)
-  // → NATIVE_UNAVAILABLE 503, stable `code` rides beside `reason`.
+  // → NATIVE_UNAVAILABLE 503, `reason` carries the NATIVE_* code.
   const r = await call(routes.get('/nano-cloud-session/session'), { op: 'native_open', session_id: 'devin-abc' })
   assert.equal(r.status, 503)
   assert.equal(r.json.ok, false)
@@ -122,16 +122,40 @@ test('P4-02 native_open fails explicitly (NATIVE_*) — never a silent ok', asyn
   assert.equal(r.json.code, undefined)
 })
 
-test('P4-02 regression: plain CarrierError keeps upstream-5xx→502 clamp', async () => {
-  // A NON-native carrier error (e.g. config test hitting unreachable upstream)
-  // must still flatten 5xx upstream statuses to 502 — the NATIVE_* passthrough
-  // only applies to NativeError, not the general upstream-error contract.
-  const routes = await makeHandlers()
-  const port = upstream.address().port
-  await call(routes.get('/nano-cloud-session/config'), { action: 'save', profile: { label: 't', orgId: 'org-t', baseUrl: `https://127.0.0.1:${port}`, secret: 'cog_xtok45678' } })
-  const t = await call(routes.get('/nano-cloud-session/config'), { action: 'test' })
-  assert.equal(t.status, 502) // unreachable upstream → 502, unchanged by NATIVE_* work
-  assert.equal(t.json.ok, false)
+test('P4-02 httpStatusForError: NativeError passthrough vs CarrierError 5xx→502 clamp', async () => {
+  // The route harness cannot produce a 5xx-bearing CarrierError (profile layer
+  // forces https, stub is http) — so the clamp is asserted directly on the
+  // pure status-selector, which is the single source the route calls.
+  const { httpStatusForError } = await import(`../index.js`)
+  const { CarrierError } = await import(`../lib/devin-api.js`)
+  const NativeError = class extends CarrierError { constructor(c, s) { super(c, c, { status: s }); this.nativeCode = c } }
+  // NativeError: authoritative status passthrough (503/422/502/500 all pass)
+  assert.equal(httpStatusForError(new NativeError('NATIVE_UNAVAILABLE', 503)), 503)
+  assert.equal(httpStatusForError(new NativeError('NATIVE_UNSUPPORTED', 422)), 422)
+  assert.equal(httpStatusForError(new NativeError('NATIVE_OUTCOME_UNKNOWN', 502)), 502)
+  // Plain CarrierError: 4xx passes, 5xx clamps to 502, status<400 → 502
+  assert.equal(httpStatusForError(new CarrierError('forbidden-or-invisible', 'x', { status: 403 })), 403)
+  assert.equal(httpStatusForError(new CarrierError('upstream-error', 'x', { status: 503 })), 502) // THE clamp
+  assert.equal(httpStatusForError(new CarrierError('upstream-error', 'x', { status: 500 })), 502)
+  assert.equal(httpStatusForError(new CarrierError('unreachable', 'x', { status: 0 })), 502)
+})
+
+test('P4-02 native_open: no carrier profile → NATIVE_UNSUPPORTED (pick remapped)', async () => {
+  // Full sessions/agents inject, but NO profile configured → pick() throws
+  // no-active-profile, remapped to NATIVE_UNSUPPORTED 422 (previously dead code).
+  const { apply } = await import(`../index.js`)
+  const routes2 = new Map()
+  const ctx2 = {
+    get: n => n === 'connection' ? { requestRejection: () => undefined } : undefined,
+    webServer: { register: s => { routes2.set(s.path, s.handler); return () => {} } },
+    effect: f => f(),
+    sessions: { create: () => ({ id: 'loc-1', append() {} }), get: () => true, close: () => {} },
+    agents: { enter: () => () => {} },
+  }
+  apply(ctx2, { requestTimeoutMs: 5000 })
+  const r = await call(routes2.get('/nano-cloud-session/session'), { op: 'native_open', session_id: 'devin-abc' })
+  assert.equal(r.status, 422)
+  assert.equal(r.json.reason, 'NATIVE_UNSUPPORTED')
 })
 
 test('P4-02 native_open: carrier read fail → NATIVE_OUTCOME_UNKNOWN + orphan torn down', async () => {

@@ -66,6 +66,10 @@ function notepadEnvTarget() {
 
 /** Build the pipeline s3 client off a request override or the notepad env seed. */
 async function s3Target(ctx, override) {
+  /* Test seam: a fixture may inject a stub s3 client via ctx._s3ForTest so
+   * error-propagation (denied/network → error, not forged null) is exercisable
+   * without a live S3. */
+  if (ctx && ctx._s3ForTest) return ctx._s3ForTest
   if (override && typeof override === 'object') {
     const { endpoint, region = 'shv1', bucket, prefix = DEFAULT_PREFIX, token, accessKey } = override
     if (!endpoint || !bucket || (!token && !accessKey)) throw new Error('target requires endpoint/bucket + token or accessKey')
@@ -201,17 +205,18 @@ export function pipelineRpcHandler(ctx) {
       let result
       switch (method) {
         case 'manifest.get': {
-          /* P4-04: null means "confirmed absent" (NoSuchKey/404) ONLY. A denied
-           * (403), network, or parse failure is a real error — it must surface,
-           * not be forged into null (F21.6: 读失败不可伪造不存在). */
+          /* P4-04/F21.7: `undefined` from getJson already means "confirmed
+           * absent" (404). A denied (403), network, or parse failure THROWS —
+           * let it surface as a real error, never forged into null. */
           const got = await s3.getJson('sqlite/manifest.json', { withMeta: true })
-            .catch(error => /HTTP 404|NoSuchKey/.test(messageOf(error)) ? undefined : Promise.reject(error))
           result = got === undefined ? null : { value: got.value, etag: got.etag }
           break
         }
         case 'corpus.list': {
           const under = typeof params.under === 'string' ? params.under : ''
-          /* 空桶 LIST 返回 NoSuchKey 404——对读面是「无已发布键」，非错误。 */
+          /* An empty listing (NoSuchKey 404) means "no published keys" — a
+           * legitimate empty set. A DENIED (403) or network error throws a
+           * different message and must surface, not be forged into []. */
           result = await s3.list(under).catch(error => /HTTP 404|NoSuchKey/.test(messageOf(error)) ? [] : Promise.reject(error))
           break
         }

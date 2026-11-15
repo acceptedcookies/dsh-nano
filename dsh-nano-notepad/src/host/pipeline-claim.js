@@ -35,7 +35,11 @@ export async function acquireClaim(s3, key, writerId, heartbeatRev = 0) {
   }
   const claimKey = `claims/${key}.json`
   for (let attempt = 0; attempt < CAS_ATTEMPTS; attempt += 1) {
-    const got = await s3.getJson(claimKey, { withMeta: true }).catch(() => undefined)
+    /* getJson returns undefined on 404 = "confirmed no claim". A denied (403),
+     * network, or parse failure throws — surfacing it is correct; forging it
+     * into "no existing claim" would let an acquire proceed over a real read
+     * error (F21.7: do not forge a read failure into absence). */
+    const got = await s3.getJson(claimKey, { withMeta: true })
     const existing = validClaim(got?.value) ? got.value : undefined
     const etag = got?.value === undefined ? undefined : got.etag
     const now = Date.now()
@@ -59,7 +63,7 @@ export async function renewClaim(s3, key, writerId) {
   if (!SESSION_ID_RE.test(key)) return { renewed: false, reason: 'schema:badKey', key }
   const claimKey = `claims/${key}.json`
   for (let attempt = 0; attempt < CAS_ATTEMPTS; attempt += 1) {
-    const got = await s3.getJson(claimKey, { withMeta: true }).catch(() => undefined)
+    const got = await s3.getJson(claimKey, { withMeta: true })
     const existing = validClaim(got?.value) ? got.value : undefined
     const now = Date.now()
     if (existing === undefined || existing.writerId !== writerId || !(existing.expiresAt > now)) {
@@ -78,7 +82,7 @@ export async function renewClaim(s3, key, writerId) {
 }
 
 export async function readClaim(s3, key) {
-  const got = await s3.getJson(`claims/${key}.json`, { withMeta: true }).catch(() => undefined)
+  const got = await s3.getJson(`claims/${key}.json`, { withMeta: true })
   return got === undefined ? undefined : { value: got.value, etag: got.etag }
 }
 

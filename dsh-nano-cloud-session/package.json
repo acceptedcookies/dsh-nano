@@ -16,7 +16,8 @@
     "./locale/*.json": "./locale/*.json",
     "./package.json": "./package.json"
   },
-  "files": ["lib/perf-review-host.js",
+  "files": [
+    "lib/perf-review-host.js",
     "index.js",
     "AGENTS.md",
     "cordis.patch.yml",
@@ -49,6 +50,7 @@
   "devDependencies": {
     "esbuild": "0.25.0",
     "dsh-host-route-guard": "file:../packages/dsh-host-route-guard",
-    "dsh-performance-review": "file:../packages/dsh-performance-review"
+    "dsh-performance-review": "file:../packages/dsh-performance-review",
+    "dsh-nano-ui": "file:../packages/dsh-nano-ui"
   }
 }

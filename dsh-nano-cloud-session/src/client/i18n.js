@@ -86,6 +86,21 @@ const ZH = {
   'reason_unreachable': '无法连通上游（网络/baseUrl）',
   'reason_timeout': '上游超时',
   'reason_failed': '宿主内部错误',
+  cloudWorkspace: '云端工作区',
+  newSession: '新建云会话',
+  settingsTitle: '云会话设置',
+  tabCredentials: '凭证',
+  tabSecurity: '安全',
+  tabSsh: 'SSH',
+  cancel: '取消',
+  close: '关闭',
+  saved: '已保存',
+  deleteConfirm: '删除这个配置？',
+  testOk: '连接正常',
+  emptyCloud: '尚未配置云端工作区',
+  noSessions: '暂无云会话',
+  noMessages: '暂无消息',
+
 }
 
 const EN = {
@@ -174,6 +189,21 @@ const EN = {
   'reason_unreachable': 'Upstream unreachable (network/baseUrl)',
   'reason_timeout': 'Upstream timeout',
   'reason_failed': 'Host internal error',
+  cloudWorkspace: 'Cloud Workspace',
+  newSession: 'New cloud session',
+  settingsTitle: 'Cloud session settings',
+  tabCredentials: 'Credentials',
+  tabSecurity: 'Security',
+  tabSsh: 'SSH',
+  cancel: 'Cancel',
+  close: 'Close',
+  saved: 'Saved',
+  deleteConfirm: 'Delete this profile?',
+  testOk: 'Connected',
+  emptyCloud: 'No cloud workspace configured',
+  noSessions: 'No cloud sessions',
+  noMessages: 'No messages',
+
 }
 
 export function makeI18n(current) {

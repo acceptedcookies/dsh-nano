@@ -26,7 +26,7 @@ cloud-session 客户端插件：**在 dsh 内完成云端工作区的授权、�
 | 终止/中止 | `POST /nano-cloud-session/terminate` | `DELETE …/sessions/{id}`（存活 session → suspended；**非硬删、不自动归档**，收尾需再 archive） |
 | SSH 引导 | `POST /nano-cloud-session/ssh`；`config action:ssh-key` | 生成专用密钥对（0600），返 `ssh -i` 命令 + `-L` 模板 + 公钥，不 spawn |
 
-首次打开无 profile 时面板自动落「设置」并显示三步引导卡；「连接测试」返回 token 解析 org 与填入 org_id 的匹配校验。安全状态卡（store 路径/权限/种子/token 策略）在设置页顶部（`config action:security`）。
+侧栏「工作区」上方激活「云端工作区」小节；无 profile 时显示三步引导行，点小节右侧齿轮打开设置弹窗（nano-ui tabs：凭证 / 安全 / SSH）。「连接测试」返回 token 解析 org 与填入 org_id 的匹配校验；安全状态（store 路径/权限/种子/token 策略）在「安全」tab（`config action:security`）。
 
 已实测的方言（spike `test/spike/cloud-session-devin` V-01..V-16 + live-smoke）：403 = 无权或不可见（非 404）；DELETE = 中止非硬删、不自动归档；org 不可枚举（profile 手填）；`repos` 浅校验；`first` ≤ 200；SSH gateway 断无 channel 的 `ssh -N`。
 

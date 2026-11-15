@@ -708,6 +708,7 @@ function RepoSettingsDialog({ copy, remotes, author, sshKey, busy, error, onRemo
   const [remoteError, setRemoteError] = useState(undefined)
   const [authorError, setAuthorError] = useState(undefined)
   const [sshError, setSshError] = useState(undefined)
+  const [settingsTab, setSettingsTab] = useState('remote')
 
   const submitRemote = async () => {
     const name = remoteName.trim()
@@ -744,86 +745,103 @@ function RepoSettingsDialog({ copy, remotes, author, sshKey, busy, error, onRemo
     onConfirm: onCancel,
     onCancel,
   },
-  React.createElement('section', { className: 'nxe-scm-group' },
-    React.createElement('h3', { className: 'nxe-drawer-heading' }, copy.remotesHeading),
-    (remotes ?? []).length === 0
-      ? React.createElement('p', { className: 'nxe-drawer-empty' }, copy.remotesEmpty)
-      : React.createElement('ul', { className: 'nxe-drawer-list' }, remotes.map(remote =>
-        React.createElement(RemoteRow, {
-          key: `${remote.name}:${remote.fetch}`, copy, remote, busy, onRemote,
-        }))),
-    React.createElement('div', { className: 'nxe-remote-add' },
-      React.createElement(Input, {
-        value: remoteName,
-        placeholder: copy.remoteNamePh,
-        'aria-label': copy.remoteNamePh,
-        spellCheck: false,
-        onChange: event => setRemoteName(event.currentTarget.value),
-      }),
-      React.createElement(Input, {
-        value: remoteUrl,
-        placeholder: copy.remoteUrlPh,
-        'aria-label': copy.remoteUrlPh,
-        spellCheck: false,
-        onChange: event => setRemoteUrl(event.currentTarget.value),
-      }),
-      React.createElement(Button, {
-        variant: 'outline', className: 'nano-modal-action',
-        disabled: busy === true,
-        onClick: () => { void submitRemote() },
-      }, (remotes ?? []).some(row => row.name === remoteName.trim()) ? copy.remoteSave : copy.remoteAdd)),
-    remoteError === undefined ? null : React.createElement('p', { className: 'nxe-dialog-error' }, remoteError)),
-  React.createElement('section', { className: 'nxe-scm-group' },
-    React.createElement('h3', { className: 'nxe-drawer-heading' }, copy.authorHeading),
-    React.createElement('p', { className: 'nxe-drawer-empty' },
-      author?.source === 'global' ? copy.authorInherited : author?.source === 'unset' ? copy.authorUnset : copy.authorLocal),
-    React.createElement('div', { className: 'nxe-remote-add' },
-      React.createElement(Input, {
-        value: authorName,
-        placeholder: copy.authorNamePh,
-        'aria-label': copy.authorNamePh,
-        onChange: event => setAuthorName(event.currentTarget.value),
-      }),
-      React.createElement(Input, {
-        value: authorEmail,
-        placeholder: copy.authorEmailPh,
-        'aria-label': copy.authorEmailPh,
-        spellCheck: false,
-        onChange: event => setAuthorEmail(event.currentTarget.value),
-      }),
-      React.createElement(Button, {
-        variant: 'outline', className: 'nano-modal-action',
-        disabled: busy === true,
-        onClick: () => { void submitAuthor() },
-      }, copy.authorSave)),
-    authorError === undefined ? null : React.createElement('p', { className: 'nxe-dialog-error' }, authorError)),
-  React.createElement('section', { className: 'nxe-scm-group' },
-    React.createElement('h3', { className: 'nxe-drawer-heading' }, copy.sshHeading),
-    React.createElement('p', { className: 'nxe-drawer-empty' },
-      sshKey?.source === 'global' ? copy.sshInherited : sshKey?.source === 'unset' ? copy.sshUnset : copy.sshLocal),
-    sshKey?.command ? React.createElement('p', {
-      className: 'nxe-drawer-empty', title: sshKey.command,
-      style: { fontFamily: 'monospace', wordBreak: 'break-all' },
-    }, sshKey.command) : null,
-    React.createElement('div', { className: 'nxe-remote-add' },
-      React.createElement(Input, {
-        value: sshPath,
-        placeholder: copy.sshPathPh,
-        'aria-label': copy.sshPathPh,
-        spellCheck: false,
-        onChange: event => setSshPath(event.currentTarget.value),
-      }),
-      React.createElement(Button, {
-        variant: 'outline', className: 'nano-modal-action',
-        disabled: busy === true || sshPath.trim() === '' || sshPath.trim() === (sshKey?.keyPath ?? ''),
-        onClick: () => { void submitSsh() },
-      }, copy.sshSave),
-      React.createElement(Button, {
-        variant: 'outline', className: 'nano-modal-action',
-        disabled: busy === true || (sshKey?.command ?? '') === '',
-        onClick: () => { setSshPath(''); void onSshKey('') },
-      }, copy.sshClear)),
-    sshError === undefined ? null : React.createElement('p', { className: 'nxe-dialog-error' }, sshError)))
+  React.createElement('div', { className: 'nxe-repo-settings' },
+    React.createElement('div', { className: 'nxe-local-filters', role: 'group', 'aria-label': copy.repoSettingsTabs },
+      [
+        { id: 'remote', label: copy.repoTabRemote },
+        { id: 'author', label: copy.repoTabAuthor },
+        { id: 'ssh', label: copy.repoTabSsh },
+      ].map(item => React.createElement(Button, {
+        key: item.id,
+        variant: settingsTab === item.id ? 'primary' : 'outline',
+        className: 'nxe-local-filter',
+        'aria-pressed': String(settingsTab === item.id),
+        'data-nxe-repo-tab': item.id,
+        onClick: () => setSettingsTab(item.id),
+      }, item.label))),
+    settingsTab === 'remote' ? React.createElement('div', { className: 'nxe-repo-panel', role: 'tabpanel' },
+      (remotes ?? []).length === 0
+        ? React.createElement('p', { className: 'nxe-drawer-empty' }, copy.remotesEmpty)
+        : React.createElement('ul', { className: 'nxe-drawer-list' }, remotes.map(remote =>
+          React.createElement(RemoteRow, {
+            key: `${remote.name}:${remote.fetch}`, copy, remote, busy, onRemote,
+          }))),
+      React.createElement('div', { className: 'nxe-set-row' },
+        React.createElement('span', { className: 'nxe-set-name' }, copy.remoteAdd),
+        React.createElement(Input, {
+          value: remoteName,
+          placeholder: copy.remoteNamePh,
+          'aria-label': copy.remoteNamePh,
+          spellCheck: false,
+          onChange: event => setRemoteName(event.currentTarget.value),
+        }),
+        React.createElement(Input, {
+          value: remoteUrl,
+          placeholder: copy.remoteUrlPh,
+          'aria-label': copy.remoteUrlPh,
+          spellCheck: false,
+          onChange: event => setRemoteUrl(event.currentTarget.value),
+        }),
+        React.createElement('div', { className: 'nxe-set-actions' },
+          React.createElement(Button, {
+            variant: 'outline', className: 'nano-modal-action',
+            disabled: busy === true,
+            onClick: () => { void submitRemote() },
+          }, (remotes ?? []).some(row => row.name === remoteName.trim()) ? copy.remoteSave : copy.remoteAdd))),
+      remoteError === undefined ? null : React.createElement('p', { className: 'nxe-dialog-error' }, remoteError))
+      : settingsTab === 'author' ? React.createElement('div', { className: 'nxe-repo-panel', role: 'tabpanel' },
+        React.createElement('div', { className: 'nxe-set-row' },
+          React.createElement('div', { className: 'nxe-set-text' },
+            React.createElement('span', { className: 'nxe-set-name' }, copy.authorHeading),
+            React.createElement('span', { className: 'nxe-set-desc' },
+              author?.source === 'global' ? copy.authorInherited : author?.source === 'unset' ? copy.authorUnset : copy.authorLocal)),
+          React.createElement('div', { className: 'nxe-set-pair' },
+            React.createElement(Input, {
+              value: authorName,
+              placeholder: copy.authorNamePh,
+              'aria-label': copy.authorNamePh,
+              onChange: event => setAuthorName(event.currentTarget.value),
+            }),
+            React.createElement(Input, {
+              value: authorEmail,
+              placeholder: copy.authorEmailPh,
+              'aria-label': copy.authorEmailPh,
+              spellCheck: false,
+              onChange: event => setAuthorEmail(event.currentTarget.value),
+            })),
+          React.createElement('div', { className: 'nxe-set-actions' },
+            React.createElement(Button, {
+              variant: 'outline', className: 'nano-modal-action',
+              disabled: busy === true,
+              onClick: () => { void submitAuthor() },
+            }, copy.authorSave))),
+        authorError === undefined ? null : React.createElement('p', { className: 'nxe-dialog-error' }, authorError))
+        : React.createElement('div', { className: 'nxe-repo-panel', role: 'tabpanel' },
+          React.createElement('div', { className: 'nxe-set-row' },
+            React.createElement('div', { className: 'nxe-set-text' },
+              React.createElement('span', { className: 'nxe-set-name' }, copy.sshHeading),
+              React.createElement('span', { className: 'nxe-set-desc' },
+                sshKey?.source === 'global' ? copy.sshInherited : sshKey?.source === 'unset' ? copy.sshUnset : copy.sshLocal)),
+            sshKey?.command ? React.createElement('p', { className: 'nxe-ssh-command', title: sshKey.command }, sshKey.command) : null,
+            React.createElement(Input, {
+              value: sshPath,
+              placeholder: copy.sshPathPh,
+              'aria-label': copy.sshPathPh,
+              spellCheck: false,
+              onChange: event => setSshPath(event.currentTarget.value),
+            }),
+            React.createElement('div', { className: 'nxe-set-actions' },
+              React.createElement(Button, {
+                variant: 'outline', className: 'nano-modal-action',
+                disabled: busy === true || (sshKey?.command ?? '') === '',
+                onClick: () => { setSshPath(''); void onSshKey('') },
+              }, copy.sshClear),
+              React.createElement(Button, {
+                variant: 'primary', className: 'nano-modal-action',
+                disabled: busy === true || sshPath.trim() === '' || sshPath.trim() === (sshKey?.keyPath ?? ''),
+                onClick: () => { void submitSsh() },
+              }, copy.sshSave))),
+          sshError === undefined ? null : React.createElement('p', { className: 'nxe-dialog-error' }, sshError))))
 }
 
 /**

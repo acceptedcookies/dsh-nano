@@ -635,11 +635,33 @@ button.nxe-local-filter {
 }
 .nxe-remote-row {
   display: grid; grid-template-columns: 64px minmax(0, 1fr) auto auto;
-  align-items: center; gap: 6px; padding: 2px 0;
+  align-items: center; gap: 6px; padding: 8px 0;
+  border-top: 1px solid var(--dsw-alias-border-l2);
 }
+.nxe-remote-row:first-child { border-top: 0; }
 .nxe-remote-name {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   font-size: 12px; font-weight: 600; color: var(--dsw-alias-label-primary);
+}
+/* Settings card: one topic per tab, one row per fact, a hairline between rows.
+   Inputs never share a row with an action — the path field used to lose its width to the Bind button. */
+.nxe-repo-settings { display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 220px; }
+.nxe-repo-settings .nxe-local-filters { flex: none; }
+.nxe-repo-panel { display: flex; flex-direction: column; gap: 0; min-width: 0; }
+.nxe-set-row {
+  display: flex; flex-direction: column; gap: 6px; min-width: 0;
+  padding: 10px 0; border-top: 1px solid var(--dsw-alias-border-l2);
+}
+.nxe-set-row:first-child { border-top: 0; padding-top: 2px; }
+.nxe-set-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.nxe-set-name { font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-primary); }
+.nxe-set-desc { font-size: 11px; line-height: 16px; color: var(--dsw-alias-label-tertiary); }
+.nxe-set-actions { display: flex; justify-content: flex-end; gap: 6px; }
+.nxe-set-pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 6px; }
+.nxe-ssh-command {
+  margin: 0; font-family: var(--dsw-font-markdown-code-font-family, ui-monospace, monospace);
+  font-size: 11px; line-height: 16px; color: var(--dsw-alias-label-secondary);
+  word-break: break-all;
 }
 .nxe-remote-add {
   display: grid; grid-template-columns: 88px minmax(0, 1fr) auto;

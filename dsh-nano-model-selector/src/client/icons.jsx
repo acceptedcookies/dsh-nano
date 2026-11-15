@@ -6,6 +6,7 @@ import {
   IconCheckOutlineRegular,
   IconChevronDownOutlineRegular,
   IconCloseOutlineRegular,
+  IconCompactOutlineRegular,
   IconDataOutlineRegular,
   IconDragHandleOutlineRegular,
   IconAppsAddOutlineRegular,
@@ -79,12 +80,11 @@ export function MediaIcon(props) {
 }
 
 /**
- * Async-compaction takeover rail icon: a layered stack folded into one.
- * `IconLayersOutlineRegular` only exists in ui-primitives ≥ rc.2; rc.1 falls
- * back to the data-stack glyph (`IconDataOutlineRegular`, same outline family)
- * instead of rendering an undefined component and crashing the slot.
+ * Async-compaction icon: the official compact glyph. rc.1 primitives do not
+ * export it, so fall back through the layered stack to the data-stack glyph
+ * rather than rendering an undefined component and crashing the slot.
  */
 export function CompactionIcon(props) {
-  const Layered = IconLayersOutlineRegular ?? IconDataOutlineRegular
-  return <Layered {...props} />
+  const Glyph = IconCompactOutlineRegular ?? IconLayersOutlineRegular ?? IconDataOutlineRegular
+  return <Glyph {...props} />
 }

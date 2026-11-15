@@ -157,8 +157,10 @@ export function ModelSelector({ locked, available, directory, load, select, lang
   const railBrandsRef = React.useRef(null)
   const [railMore, setRailMore] = React.useState(false)
   // Header compaction button exists only while the companion bundle is
-  // installed; otherwise the search field (flex:1) swallows that slot.
+  // installed; otherwise the search field (flex:1) swallows that slot. The
+  // composer badge appears only while takeover is actually enabled.
   const [compactInstalled, setCompactInstalled] = React.useState(false)
+  const [compactEnabled, setCompactEnabled] = React.useState(false)
   const updateRailOverflow = React.useCallback(() => {
     const el = railBrandsRef.current
     if (el === null) return
@@ -247,13 +249,22 @@ export function ModelSelector({ locked, available, directory, load, select, lang
   }, [open, engines, refreshEngines])
 
   React.useEffect(() => {
-    if (!open) return undefined
     let live = true
-    fetchCompactState()
-      .then(data => { if (live) setCompactInstalled(data?.bundle?.installed === true) })
-      .catch(() => { if (live) setCompactInstalled(false) })
-    return () => { live = false }
-  }, [open])
+    const pull = () => fetchCompactState()
+      .then(data => {
+        if (!live) return
+        setCompactInstalled(data?.bundle?.installed === true)
+        setCompactEnabled(data?.bundle?.enabled === true)
+      })
+      .catch(() => {
+        if (!live) return
+        setCompactInstalled(false)
+        setCompactEnabled(false)
+      })
+    pull()
+    const timer = window.setInterval(pull, 15000)
+    return () => { live = false; window.clearInterval(timer) }
+  }, [])
 
   const onCompactError = text => {
     toastSeq.current += 1
@@ -653,8 +664,30 @@ export function ModelSelector({ locked, available, directory, load, select, lang
 
   if (!visible) return null
 
+  const openCompact = () => {
+    setFilter('compact')
+    setQuery('')
+    if (!open) {
+      setOpen(true)
+      perf.count('panel-open')
+      perf.span('catalog-fetch', () => load())
+    }
+  }
+
   return (
     <div className="nms-root" data-nano-model-selector="root">
+      {compactEnabled && (
+        <button
+          type="button"
+          className="nms-compact-badge"
+          title={copy.compactTitle}
+          aria-label={copy.compactTitle}
+          aria-pressed={open && filter === 'compact'}
+          onClick={openCompact}
+        >
+          <CompactionIcon size={15} />
+        </button>
+      )}
       <button
         ref={triggerRef}
         type="button"

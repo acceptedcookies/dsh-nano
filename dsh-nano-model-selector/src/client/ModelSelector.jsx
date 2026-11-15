@@ -775,7 +775,9 @@ export function ModelSelector({ locked, available, directory, load, select, lang
                 aria-pressed={filter === 'compact'}
                 onClick={() => { setFilter(filter === 'compact' ? 'all' : 'compact'); setQuery('') }}
               >
-                <CompactionIcon size={16} />
+                {compactEnabled
+                  ? <WaterRingIcon size={16} health={compactLines?.health} buffer={compactLines?.buffer} pinned={compactLines?.pinned} />
+                  : <CompactionIcon size={16} />}
               </button>
             )}
             <button type="button" className="nms-icon-button" title={copy.close} aria-label={copy.close} onClick={() => close(true)}>

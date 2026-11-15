@@ -1,7 +1,7 @@
 # `CF1115` Closure — 全活跃插件 Contract/Facade 统一实施
 
 > **文档状态**：`partial`（**非 `executed`** — 硬闸 Test-ID 未全 verified）。
-> **会话快照**：`2026-11-15` CST · 分支 `main` · 基线 `653b15b` → HEAD（STEP.8 对抗修复后 `aab216d`）。
+> **会话快照**：`2026-11-15` CST · 分支 `main` · 基线 `653b15b` → HEAD（STEP.8 二轮修复后 `1af7b18`+docs）。三路对抗审查（truth-reconcile/completion/antigreen）总判「有条件通过」，报告落 `.anote/reviews/contract-and-facade/1115/47f0/`。
 > **真源**：[真相层] `CF1115-TRUTH` v0.1.1 `FROZEN` 只冻结决策；本文登记**施工面**实测结果，五态如实，不 overclaim、不另立第二账本。
 >
 > **对抗审查**：STEP.7 三路审查（真相层对账 / 完成度 / 防假绿侧载）已跑；报告落 `.anote/reviews/contract-and-facade/1115/47f0/`。判定「有条件通过」——核心归口真实落地，发现 **2 blocker + 6 major** 已在 STEP.8 修复（见 §6）。
@@ -95,12 +95,26 @@
 - DNN/DNT `index.js` spec↔binding 缺行静默丢弃（无漂移告警）。
 - 测试盲区：T09 离线装载、T11 导入服务、T15–T21 无专测文件（AP 要求的 Test-ID 证据不全）。
 
+### STEP.8 二轮修复（2026-11-15，commits `68210f6`/`a162463`/`1af7b18`）
+
+| 工作项 | 修复 | 证据 |
+|--------|------|------|
+| P5-02 | feature-contract/clean-lib 8 插件（补 DNCS+DNMSC ui/dataLocations），clean-lib 递归 lib/（58→72） | `68210f6` |
+| P3-03 | mcp-sandbox 重写为 TOOL_DEFS 单源表（每工具 own `additionalProperties:false` schema + 真实 owner，catalog↔dispatch 同源）；`/mcp` async+buildOwners 真域 | `68210f6` · DNLS 66/66 |
+| P3-05 | audit writer 真落盘（`writeAudit`→appendFileSync，term.audit 可回读——曾是无写者空文件） | `a162463` |
+| P4-03 | `FallbackService` 影子 Service 退役（R-16 精确例外：engine+instanceof，不扩 Service 复刻）；`HostService` 惰性解析真实类，缺失→激活失败非影子；`setHostService` 合法 loader 缝 | `1af7b18` · DNMSC 23/23 |
+| — | pack-manifest 基线重建（DNT files 改 bindings/web-routes 后旧基线脱节） | `68210f6` |
+
+**回归**：dsh-interface 43 · DNN 71 · DNT 97+4 · DNMS 7 · DNMSC 23 · DNEE 5 · DNLS 66 · 4 gates 全绿。
+
 ## 4. 未收口原因（诚实）
 
-Phase-3 后半（sandbox/terminal 领域深迁）与 Phase-4/5（host 适配 + 全范围结算）体量超本单轮上下文预算；容器侧核验需另立授权。按 §10.4 NOT-成功识别，未把所有 Test-ID 填四元组前本文保持 `partial`。
+Phase-4/5 的 host 适配 + 全范围结算与若干公开退役面（容器时代资产、mcp-bridge 双载体、`/s3/config` 收窄）超出单轮授权域；离线 workspace 无 cordis 使官方-Service 直接引用核验不可在本地闭合；远端/S3/容器核验需另立授权。按 §10.4 NOT-成功识别，本文保持 `partial`——**不标 `executed`**。
 
 ## 5. 交接
 
-- 下一动作：`P3-03` sandbox 二十工具逐一接真实领域 owner。
-- 阻塞：无硬阻塞；容器侧 / 远端引擎核验需授权。
+- **已完成**：P1·P2·P3-01/02 全、`P3-03`/`P3-05`/`P4-03`/`P5-02` partial。
+- **下一动作 / deferred**：`P3-04`（DNK 真实消费+容器资产退役，待 [业主] 对 mcp-bridge canonical 与公开退役面裁决）→ `P4-01`（宿主域 cordis 核验）→ `P4-02`/`P4-04` → `P5-01`/`P5-03`。
+- **P-EXEC 待裁决**：3 个 facade 签名偏离（createMcpToolset/decodeMcpReply/createWebRegistrar）、clean-lib allowlist 扩 `@deepseek-ai/dsh-compaction`、spec↔binding 缺行静默丢弃、route-scan 读生成物失独立性、P4-04 /s3/config 收窄与 handshake 冲突。
+- **阻塞**：无硬阻塞；容器/远端/S3/cordis 宿主域核验需授权。
 - 完成判据仍锚 `AP §10.1` 硬闸 + `§10.3` DoD。

@@ -2,6 +2,7 @@
 
 import * as React from 'react'
 import { createPortal } from 'react-dom'
+import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import { NanoToast } from 'dsh-nano-ui'
 import { copyFor } from './i18n.js'
 import { BrandMark } from './BrandMark.jsx'
@@ -28,6 +29,18 @@ import { STYLE } from './styles.js'
 import { perf, setModelSelectorRoot } from './perf.js'
 
 const STYLE_ID = 'nano-model-selector-style'
+
+/** Official tooltip copy: a title, then one water line per row (pre-line). */
+function waterTip(copy, lines) {
+  const pct = value => (Number.isFinite(value) ? `${Math.round(value * 100)}%` : '—')
+  const pin = Number.isFinite(lines?.pinnedTokens) ? String(lines.pinnedTokens) : '—'
+  return [
+    copy.compactWaterTitle,
+    `${copy.compactFieldHealth}  ${pct(lines?.health)}`,
+    `${copy.compactFieldBuffer}  ${pct(lines?.buffer)}`,
+    `${copy.compactFieldPinned}  ${pin}`,
+  ].join('\n')
+}
 
 /** One model row's fixed height. */
 const MODEL_CARD_HEIGHT = 64
@@ -267,6 +280,7 @@ export function ModelSelector({ locked, available, directory, load, select, lang
           health: policy.healthTargetAsync,
           buffer: policy.bufferSizeAsync,
           pinned,
+          pinnedTokens: policy.pinnedAsyncTokens,
         })
       })
       .catch(() => {
@@ -691,16 +705,17 @@ export function ModelSelector({ locked, available, directory, load, select, lang
   return (
     <div className="nms-root" data-nano-model-selector="root">
       {compactEnabled && (
-        <button
-          type="button"
-          className="nms-compact-badge"
-          title={copy.compactTitle}
-          aria-label={copy.compactTitle}
-          aria-pressed={open && filter === 'compact'}
-          onClick={openCompact}
-        >
-          <WaterRingIcon size={16} health={compactLines?.health} buffer={compactLines?.buffer} pinned={compactLines?.pinned} />
-        </button>
+        <Tooltip portal side="top" delayMs={300} label={() => waterTip(copy, compactLines)}>
+          <button
+            type="button"
+            className="nms-compact-badge"
+            aria-label={copy.compactWaterTitle}
+            aria-pressed={open && filter === 'compact'}
+            onClick={openCompact}
+          >
+            <WaterRingIcon size={16} health={compactLines?.health} buffer={compactLines?.buffer} pinned={compactLines?.pinned} />
+          </button>
+        </Tooltip>
       )}
       <button
         ref={triggerRef}
@@ -766,19 +781,21 @@ export function ModelSelector({ locked, available, directory, load, select, lang
               </button>
             </label>
             {compactInstalled && (
-              <button
-                type="button"
-                className="nms-icon-button"
-                data-active={filter === 'compact'}
-                title={copy.compactTitle}
-                aria-label={copy.compactTitle}
-                aria-pressed={filter === 'compact'}
-                onClick={() => { setFilter(filter === 'compact' ? 'all' : 'compact'); setQuery('') }}
-              >
-                {compactEnabled
-                  ? <WaterRingIcon size={16} health={compactLines?.health} buffer={compactLines?.buffer} pinned={compactLines?.pinned} />
-                  : <CompactionIcon size={16} />}
-              </button>
+              <Tooltip portal side="bottom" delayMs={300} disabled={!compactEnabled} label={() => waterTip(copy, compactLines)}>
+                <button
+                  type="button"
+                  className="nms-icon-button"
+                  data-active={filter === 'compact'}
+                  title={compactEnabled ? undefined : copy.compactTitle}
+                  aria-label={compactEnabled ? copy.compactWaterTitle : copy.compactTitle}
+                  aria-pressed={filter === 'compact'}
+                  onClick={() => { setFilter(filter === 'compact' ? 'all' : 'compact'); setQuery('') }}
+                >
+                  {compactEnabled
+                    ? <WaterRingIcon size={16} health={compactLines?.health} buffer={compactLines?.buffer} pinned={compactLines?.pinned} />
+                    : <CompactionIcon size={16} />}
+                </button>
+              </Tooltip>
             )}
             <button type="button" className="nms-icon-button" title={copy.close} aria-label={copy.close} onClick={() => close(true)}>
               <CloseIcon size={16} />

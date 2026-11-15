@@ -11,8 +11,9 @@ resident in both states.
 Install with `dsh plugin --profile web add <spec>`: it writes this package
 into BOTH `dependencies` and `dsh.profile.bundles`, then applies the patch —
 so a fresh install is ON. The recommended default is OFF: after `add`, run
-`set_bundle('dsh-nano-model-selector-compaction', false)` (or toggle in the
-selector's rail-4 compact panel, which calls the same sanctioned writer via
+`set_bundle('dsh-nano-model-selector-compaction', false)` (or toggle from the
+model selector's header button between search and close — shown only while
+this bundle is installed — which calls the same sanctioned writer via
 `POST /nano-model-selector/async-compact/switch`). A package that lands only
 in `dependencies` (no bundles row) is mounted as a `--patch` launch overlay
 and bypasses the bundles switch — do not hand-edit `package.json`; use the

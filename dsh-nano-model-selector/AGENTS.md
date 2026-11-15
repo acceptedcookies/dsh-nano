@@ -154,7 +154,7 @@ npm run build
 
 状态文件：与 media-engine.json 同目录的 `plugins/nano-model-selector/async-compact.json`（tmp+rename 原子写，0600）。卸载不删。字段 7 项（无 `enabled`）：`model` / `bufferSizeAsync`（B，默认 0.65）/ `healthTargetAsync`（H，0.50）/ `bufferSizeSafety`（S，0.80 只读）/ `pinnedAsyncTokens`（100000）/ `pinnedFullTokens`（20000）/ `schema`（1）。`effectivePin = min(pinnedAsyncTokens, floor(0.15·W))`；DC-1 `B < windowMin` → `fullOnly`；fill = `totalTokens/W`。
 
-面板：rail 第 4 图标「压缩」四态（未安装/未启用/已启用/degraded），开关走 `POST …/switch`；B/H/pinnedAsyncTokens/model 可编辑 PUT。
+面板入口：顶栏搜索框与关闭按钮之间的「异步压缩」按钮，仅当 companion bundle 已安装时出现，否则搜索框占满该位。目录刷新按钮在搜索框内。页内四态（未安装/未启用/已启用/degraded），开关走 `POST …/switch`；B/H/pinnedAsyncTokens/model 可编辑 PUT。
 
 ## 不要
 

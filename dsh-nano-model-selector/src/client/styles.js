@@ -43,9 +43,13 @@ export const STYLE = `${NANO_STYLES}
 .nms-search input::placeholder { color: var(--dsw-alias-label-tertiary); }
 .nms-search-clear { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; flex: none; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--dsw-alias-label-tertiary); cursor: pointer; }
 .nms-search-clear:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+.nms-search-refresh { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; flex: none; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--dsw-alias-label-tertiary); cursor: pointer; }
+.nms-search-refresh:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+.nms-search-refresh:disabled { color: var(--dsw-alias-label-dimmed); cursor: default; }
 .nms-icon-button { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; flex: none; padding: 0; border: 0; border-radius: var(--dsw-radius-sm); background: transparent; color: var(--dsw-alias-label-secondary); cursor: pointer; }
 .nms-icon-button:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 .nms-icon-button:disabled { color: var(--dsw-alias-label-dimmed); cursor: default; }
+.nms-icon-button[data-active="true"] { background: var(--dsw-alias-interactive-bg-active); color: var(--dsw-alias-brand-primary); }
 .nms-body { display: flex; flex: 1; min-height: 0; }
 .nms-rail { position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; flex: none; width: 54px; box-sizing: border-box; padding: 8px 4px; border-right: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-2); overflow: hidden; }
 .nms-rail-brands { display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 1; min-height: 0; width: 100%; overflow-y: auto; scrollbar-width: none; }

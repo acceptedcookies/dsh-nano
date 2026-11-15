@@ -8,6 +8,7 @@ import { BrandMark } from './BrandMark.jsx'
 import { readFavorites, writeFavorites } from './favorites.js'
 import { fetchEngine, fetchEngines, readEngineCache, selectEngine, writeEngineCache } from './media.js'
 import { CompactPanel } from './CompactPanel.jsx'
+import { fetchCompactState } from './compact.js'
 import {
   CheckIcon,
   ChevronDownIcon,
@@ -155,6 +156,9 @@ export function ModelSelector({ locked, available, directory, load, select, lang
   // flex, so no constant needs to track them.
   const railBrandsRef = React.useRef(null)
   const [railMore, setRailMore] = React.useState(false)
+  // Header compaction button exists only while the companion bundle is
+  // installed; otherwise the search field (flex:1) swallows that slot.
+  const [compactInstalled, setCompactInstalled] = React.useState(false)
   const updateRailOverflow = React.useCallback(() => {
     const el = railBrandsRef.current
     if (el === null) return
@@ -241,6 +245,15 @@ export function ModelSelector({ locked, available, directory, load, select, lang
     if (engines !== null && Date.now() - enginesFetchedAt.current < DETAILS_TTL_MS) return undefined
     return refreshEngines()
   }, [open, engines, refreshEngines])
+
+  React.useEffect(() => {
+    if (!open) return undefined
+    let live = true
+    fetchCompactState()
+      .then(data => { if (live) setCompactInstalled(data?.bundle?.installed === true) })
+      .catch(() => { if (live) setCompactInstalled(false) })
+    return () => { live = false }
+  }, [open])
 
   const onCompactError = text => {
     toastSeq.current += 1
@@ -701,10 +714,23 @@ export function ModelSelector({ locked, available, directory, load, select, lang
                   <CloseIcon size={12} />
                 </button>
               )}
+              <button type="button" className="nms-search-refresh" title={copy.refresh} aria-label={copy.refresh} onClick={refresh} disabled={state.status === 'loading'}>
+                <RefreshIcon size={14} />
+              </button>
             </label>
-            <button type="button" className="nms-icon-button" title={copy.refresh} aria-label={copy.refresh} onClick={refresh} disabled={state.status === 'loading'}>
-              <RefreshIcon size={16} />
-            </button>
+            {compactInstalled && (
+              <button
+                type="button"
+                className="nms-icon-button"
+                data-active={filter === 'compact'}
+                title={copy.compactTitle}
+                aria-label={copy.compactTitle}
+                aria-pressed={filter === 'compact'}
+                onClick={() => { setFilter(filter === 'compact' ? 'all' : 'compact'); setQuery('') }}
+              >
+                <CompactionIcon size={16} />
+              </button>
+            )}
             <button type="button" className="nms-icon-button" title={copy.close} aria-label={copy.close} onClick={() => close(true)}>
               <CloseIcon size={16} />
             </button>
@@ -745,17 +771,6 @@ export function ModelSelector({ locked, available, directory, load, select, lang
                 onClick={() => { setFilter('media'); setQuery('') }}
               >
                 <MediaIcon size={17} />
-              </button>
-              <button
-                type="button"
-                className="nms-rail-item"
-                data-active={filter === 'compact'}
-                title={copy.compactTitle}
-                aria-label={copy.compactTitle}
-                aria-pressed={filter === 'compact'}
-                onClick={() => { setFilter('compact'); setQuery('') }}
-              >
-                <CompactionIcon size={17} />
               </button>
               <span className="nms-rail-sep" aria-hidden="true" />
               <div className="nms-rail-brands" ref={railBrandsRef} data-more={railMore || undefined} onScroll={updateRailOverflow}>

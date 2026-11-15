@@ -10,7 +10,9 @@
     "cordis.patch.yml",
     "lib",
     "icon.svg",
-    "locale"
+    "locale",
+    "DETAIL.zh.md",
+    "DETAIL.en.md"
   ],
   "engines": {
     "dsh": ">=0.2.2-rc.1 <0.3.0"

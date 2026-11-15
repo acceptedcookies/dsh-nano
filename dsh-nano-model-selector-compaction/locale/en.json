@@ -1,6 +1,7 @@
 {
   "meta": {
     "title": "Async compaction takeover",
-    "description": "Host-only companion for dsh-nano-model-selector: mounts the async-compaction CompactionEngine via a mutually-exclusive patch overlay over the four agent presets' id:compaction groups. Managed from the model picker's Compact tab."
+    "description": "Host-only companion for dsh-nano-model-selector. When enabled it takes over compaction on the four agent presets. After install, manage it from the model selector header, between search and close.",
+    "detail": "DETAIL.en.md"
   }
 }

@@ -203,7 +203,7 @@ export function CompactPanel({ copy, models, onError }) {
       <div className="nms-compact-card" data-enabled={enabled}>
         <div className="nms-compact-card-main">
           <span className="nms-model-name">{enabled ? copy.compactEnabled : copy.compactDisabled}</span>
-          <span className="nms-model-desc">{copy.compactSubtitle}</span>
+          <span className="nms-compact-card-desc">{copy.compactSubtitle}</span>
         </div>
         <button
           type="button"
@@ -283,21 +283,46 @@ export function CompactPanel({ copy, models, onError }) {
         </div>
       )}
 
-      {/* Compression explainer (-20): the runtime box is now a scenario tab
-          panel. Current water lines + model + effective pins are interpolated
-          into each case so the copy reflects live config. */}
+      {/* Compression explainer (-20): scenario tabs over live-config copy. */}
       {enabled && state.policy !== null && (
         <ScenarioBox
           copy={copy}
-          fill={fill}
           meterDown={meterDown}
           degraded={degraded}
           policy={policy}
           effective={effective}
-          runtime={runtime}
-          heartbeat={heartbeat}
           modelLabel={modelValue === '/' ? '—' : modelLabelOf(modelValue, windowMap)}
         />
+      )}
+
+      {/* Live telemetry: own box below the explainer — meter, last run,
+          effective pins, heartbeat. */}
+      {enabled && state.policy !== null && (
+        <div className="nms-compact-runtime">
+          <div className="nms-compact-meter-row">
+            <span className="nms-model-meta">{copy.compactRuntimeFill}</span>
+            {fill === null ? (
+              <span className="nms-model-meta">{meterDown ? `${copy.compactMeterUnknown}（meter-unavailable）` : copy.compactMeterUnknown}</span>
+            ) : (
+              <>
+                <span className="nms-compact-meter" role="meter" aria-valuenow={Math.round(fill * 100)} aria-valuemin="0" aria-valuemax="100">
+                  <span className="nms-compact-meter-fill" data-level={fill >= 0.8 ? 'high' : fill >= 0.5 ? 'mid' : 'low'} style={{ width: `${(fill * 100).toFixed(1)}%` }} />
+                </span>
+                <span className="nms-compact-meter-num">{`${(fill * 100).toFixed(1)}%`}</span>
+              </>
+            )}
+          </div>
+          <div className="nms-compact-meta-row">
+            <span className="nms-model-meta">
+              {copy.compactLastCompaction}: {formatLast(runtime.lastCompaction)} · {copy.compactEffectivePin}={effective.pin ?? '—'} · {copy.compactWindowMin}={effective.windowMin ?? '—'}
+            </span>
+          </div>
+          <div className="nms-compact-meta-row">
+            <span className="nms-model-meta">
+              {copy.compactHeartbeat}: {heartbeat === null ? '—' : `${heartbeat.at.toLocaleTimeString()} · GET ${heartbeat.status === 'ok' ? '200' : '✕'}`}
+            </span>
+          </div>
+        </div>
       )}
     </div>
   )
@@ -310,8 +335,8 @@ const SCENARIO_KEYS = [
   { tab: 'compactCaseTabDegraded', body: 'compactCaseDegraded' },
 ]
 
-/** @param {{copy:any, fill:number|null, meterDown:boolean, degraded:boolean, policy:any, effective:any, runtime:any, heartbeat:any, modelLabel:string}} props */
-function ScenarioBox({ copy, fill, meterDown, degraded, policy, effective, runtime, heartbeat, modelLabel }) {
+/** @param {{copy:any, meterDown:boolean, degraded:boolean, policy:any, effective:any, modelLabel:string}} props */
+function ScenarioBox({ copy, meterDown, degraded, policy, effective, modelLabel }) {
   const [tab, setTab] = React.useState(1) // default: buffer-line scenario
   const pct = value => (Number.isFinite(value) ? `${Math.round(value * 100)}` : '—')
   const vars = {
@@ -323,7 +348,6 @@ function ScenarioBox({ copy, fill, meterDown, degraded, policy, effective, runti
     windowMin: effective.windowMin ?? '—',
     model: modelLabel,
     status: meterDown ? 'meter-unavailable' : degraded ? 'state-read-failed' : 'ok',
-    fill: fill === null ? '—' : `${(fill * 100).toFixed(1)}%`,
   }
   const active = SCENARIO_KEYS[tab] ?? SCENARIO_KEYS[0]
   return (
@@ -347,29 +371,6 @@ function ScenarioBox({ copy, fill, meterDown, degraded, policy, effective, runti
         </span>
       </div>
       <div className="nms-explain-body">{interpolate(copy[active.body], vars)}</div>
-      <div className="nms-compact-meter-row">
-        <span className="nms-model-meta">{copy.compactRuntimeFill}</span>
-        {fill === null ? (
-          <span className="nms-model-meta">{meterDown ? `${copy.compactMeterUnknown}（meter-unavailable）` : copy.compactMeterUnknown}</span>
-        ) : (
-          <>
-            <span className="nms-compact-meter" role="meter" aria-valuenow={Math.round(fill * 100)} aria-valuemin="0" aria-valuemax="100">
-              <span className="nms-compact-meter-fill" data-level={fill >= 0.8 ? 'high' : fill >= 0.5 ? 'mid' : 'low'} style={{ width: `${(fill * 100).toFixed(1)}%` }} />
-            </span>
-            <span className="nms-compact-meter-num">{`${(fill * 100).toFixed(1)}%`}</span>
-          </>
-        )}
-      </div>
-      <div className="nms-compact-meta-row">
-        <span className="nms-model-meta">
-          {copy.compactLastCompaction}: {formatLast(runtime.lastCompaction)} · {copy.compactEffectivePin}={effective.pin ?? '—'} · {copy.compactWindowMin}={effective.windowMin ?? '—'}
-        </span>
-      </div>
-      <div className="nms-compact-meta-row">
-        <span className="nms-model-meta">
-          {copy.compactHeartbeat}: {heartbeat === null ? '—' : `${heartbeat.at.toLocaleTimeString()} · GET ${heartbeat.status === 'ok' ? '200' : '✕'}`}
-        </span>
-      </div>
     </div>
   )
 }

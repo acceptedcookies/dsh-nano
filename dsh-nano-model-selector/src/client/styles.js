@@ -123,6 +123,7 @@ export const STYLE = `${NANO_STYLES}
 .nms-compact-card { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-layer-2); }
 .nms-compact-card[data-enabled="true"] { border-color: color-mix(in srgb, var(--dsw-alias-state-success-primary) 40%, var(--dsw-alias-border-l2)); }
 .nms-compact-card-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.nms-compact-card-desc { display: block; min-width: 0; overflow: hidden; color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 16px; white-space: nowrap; text-overflow: ellipsis; }
 .nms-compact-pkg { font-size: 10px; line-height: 13px; color: var(--dsw-alias-label-tertiary); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .nms-switch { position: relative; flex: none; width: 36px; height: 20px; padding: 0; border: 0; border-radius: 10px; background: var(--dsw-alias-interactive-bg-active); cursor: pointer; transition: background .15s; }
 .nms-switch[aria-checked="true"] { background: var(--dsw-alias-state-success-primary); }

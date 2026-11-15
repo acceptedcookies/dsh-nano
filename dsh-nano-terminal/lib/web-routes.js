@@ -237,6 +237,21 @@ function bindingRecord(binding) {
   });
 }
 
+// ../packages/dsh-interface/src/contracts/jsonOutcome.js
+var FAILURE_KIND = Object.freeze({
+  /** signal aborted; issued-before cancellation makes no server-side claim. */
+  CANCELLED: "cancelled",
+  /** Network/read-body failure; keep real httpStatus only when headers landed. */
+  TRANSPORT: "transport",
+  /** Non-2xx that is not a recognized sanctioned business failure; keep status. */
+  HTTP: "http",
+  /** Pre-request encode/binding failure OR illegal 2xx — never becomes ok:true. */
+  PROTOCOL: "protocol",
+  /** Recognized sanctioned business failure (incl. legal 2xx business failures). */
+  DOMAIN: "domain"
+});
+var FAILURE_KINDS = Object.freeze(Object.values(FAILURE_KIND));
+
 // ../packages/dsh-interface/src/host/createWebRegistrar.js
 function createWebRegistrar({ plugin, bindings } = {}) {
   const normalized = normalizeBindings(bindings ?? [], { plugin });
@@ -515,9 +530,9 @@ function registerWebRoutes(ctx, deps) {
         res.writeHead(404).end();
         return;
       }
-      const ok = await registry.close(decodeURIComponent(m[1]), "route");
-      res.writeHead(ok ? 200 : 404, { "content-type": "application/json" });
-      res.end(JSON.stringify({ closed: ok }));
+      const ok2 = await registry.close(decodeURIComponent(m[1]), "route");
+      res.writeHead(ok2 ? 200 : 404, { "content-type": "application/json" });
+      res.end(JSON.stringify({ closed: ok2 }));
     }
   };
   const registrar = createWebRegistrar({

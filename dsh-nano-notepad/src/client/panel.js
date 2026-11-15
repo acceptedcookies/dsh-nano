@@ -172,7 +172,7 @@ ${NANO_STYLES}
 .np-tree[data-collapsed="true"] .np-nodes { display: flex; flex-direction: column; align-items: center; padding: 6px 0 var(--np-pad-x); }
 .np-tree[data-collapsed="true"] .np-node { width: 40px; padding-left: 0 !important; padding-right: 0; justify-content: center; gap: 0; }
 .np-tree[data-collapsed="true"] .np-node-main { flex: none; justify-content: center; padding-right: 0 !important; }
-.np-tree[data-collapsed="true"] .np-node-name, .np-tree[data-collapsed="true"] .np-caret, .np-tree[data-collapsed="true"] .np-node-actions, .np-tree[data-collapsed="true"] .np-group { display: none; }
+.np-tree[data-collapsed="true"] .np-node-name, .np-tree[data-collapsed="true"] .np-caret, .np-tree[data-collapsed="true"] .np-node-actions, .np-tree[data-collapsed="true"] .np-group, .np-tree[data-collapsed="true"] .np-cat { display: none; }
 .np-tree[data-collapsed="true"] .np-node-icon svg { width: 18px; height: 18px; }
 .np-tree-head { box-sizing: border-box; display: flex; flex: none; align-items: center; gap: 4px; width: 100%; height: 49px; padding: 6px var(--np-pad-x); color: var(--dsw-alias-label-tertiary); font-size: var(--np-font-size-sm); border-bottom: 1px solid var(--dsw-alias-border-l2); }
 .np-tree-toggle { box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; flex: none; padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); cursor: pointer; }
@@ -242,11 +242,12 @@ ${NANO_STYLES}
 .np-caret[data-open="true"] svg { transform: rotate(90deg); }
 .np-node-icon { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex: none; color: var(--dsw-alias-label-tertiary); }
 .np-node-name { display: block; min-width: 0; overflow: hidden; white-space: nowrap; }
-.np-cat { flex: none; font-size: 9px; line-height: 1; padding: 2px 4px; border-radius: 4px; letter-spacing: .02em; color: var(--dsw-alias-label-tertiary); background: var(--dsw-alias-bg-layer-3); }
-.np-node[data-cat="draft"] .np-cat { color: var(--dsw-alias-state-warn-primary); }
-.np-node[data-cat="knowledge"] .np-cat { color: var(--dsw-alias-state-success-primary); }
-.np-node[data-cat="prompt"] .np-cat { color: var(--dsw-alias-link); }
-.np-node[data-cat="memory"] .np-cat { color: var(--dsw-alias-label-secondary); }
+.np-cat { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex: none; border-radius: 4px; font-size: 10px; font-weight: 700; line-height: 1; color: var(--dsw-alias-label-secondary); background: var(--dsw-alias-bg-layer-3); }
+.np-node[data-cat="draft"] .np-cat { color: var(--dsw-alias-state-warn-primary); background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 22%, transparent); }
+.np-node[data-cat="note"] .np-cat { color: var(--dsw-alias-label-primary); background: var(--dsw-alias-interactive-bg-active); }
+.np-node[data-cat="knowledge"] .np-cat { color: var(--dsw-alias-state-success-primary); background: color-mix(in srgb, var(--dsw-alias-state-success-primary) 22%, transparent); }
+.np-node[data-cat="prompt"] .np-cat { color: var(--dsw-alias-link); background: color-mix(in srgb, var(--dsw-alias-link) 22%, transparent); }
+.np-node[data-cat="memory"] .np-cat { color: var(--dsw-alias-label-secondary); background: var(--dsw-alias-bg-layer-3); }
 .np-node-name[data-fade="true"] { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 18px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 18px), transparent); }
 .np-entry svg, .np-node-icon svg, .np-tree-tools svg, .np-tree-toggle svg, .np-tree-foot svg, .np-caret svg, .np-node-actions svg, .np-tool svg, .np-slash svg, .np-ws-caret svg { fill: currentColor; stroke: none; }
 .np-tree-toggle svg { fill: none; stroke: currentColor; stroke-width: 1; }
@@ -1647,10 +1648,13 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
           if (v.at) parts.push(new Date(v.at).toLocaleString())
           return parts.length ? ` · ${parts.join(' · ')}` : ''
         })()
-        const catBadge = typeof node.cat === 'string' && node.cat
-          ? `<span class="np-cat" data-cat="${escapeAttr(node.cat)}" title="${escapeAttr(node.cat)}${viaTip}${node.cat === 'draft' && Number.isInteger(node.rejectCount) && node.rejectCount > 0 ? ` · ×${node.rejectCount}` : ''}">${escapeHtml(node.cat.slice(0, 4))}</span>`
+        const kindMark = { draft: 'D', note: 'N', knowledge: 'K', prompt: 'P', memory: 'M' }
+        const catLetter = node.kind === 'file' ? (kindMark[node.cat] ?? '?') : ''
+        const catTitle = node.cat ? `${text().kinds?.[node.cat] ?? node.cat}${viaTip}${node.cat === 'draft' && Number.isInteger(node.rejectCount) && node.rejectCount > 0 ? ` · ×${node.rejectCount}` : ''}` : (text().kindClear ?? '')
+        const catBadge = catLetter
+          ? `<span class="np-cat" data-cat="${escapeAttr(node.cat ?? '')}" title="${escapeAttr(catTitle)}">${catLetter}</span>`
           : ''
-        lines.push(`<div class="np-node" data-kind="${node.kind}" data-cat="${escapeAttr(node.cat ?? '')}" data-pinned="${node.pinned === true}" data-active="${node.id === state.ui.currentId}" title="${name}" style="padding-left:${8 + depth * 16}px">${caret}<button class="np-node-main" type="button" draggable="true" data-id="${nodeId}" aria-label="${name}"><span class="np-node-icon" aria-hidden="true">${icon}</span><span class="np-node-name">${name}</span>${catBadge}</button><span class="np-node-actions">${pin}<button type="button" data-move="${nodeId}" title="${escapeHtml(text().transfer)}" aria-label="${escapeHtml(text().transfer)}">${MOVE_ICON}</button><button type="button" data-more="${nodeId}" title="${escapeHtml(text().more)}" aria-label="${escapeHtml(text().more)}" aria-haspopup="menu">${MORE_ICON}</button></span></div>`)
+        lines.push(`<div class="np-node" data-kind="${node.kind}" data-cat="${escapeAttr(node.cat ?? '')}" data-pinned="${node.pinned === true}" data-active="${node.id === state.ui.currentId}" title="${name}" style="padding-left:${8 + depth * 16}px">${caret}<button class="np-node-main" type="button" draggable="true" data-id="${nodeId}" aria-label="${name}"><span class="np-node-icon" aria-hidden="true">${icon}</span>${catBadge}<span class="np-node-name">${name}</span></button><span class="np-node-actions">${pin}<button type="button" data-move="${nodeId}" title="${escapeHtml(text().transfer)}" aria-label="${escapeHtml(text().transfer)}">${MOVE_ICON}</button><button type="button" data-more="${nodeId}" title="${escapeHtml(text().more)}" aria-label="${escapeHtml(text().more)}" aria-haspopup="menu">${MORE_ICON}</button></span></div>`)
         if (node.kind === 'folder' && !state.collapsed.has(node.id)) visit(node.id, depth + 1, workspaceId)
       }
     }

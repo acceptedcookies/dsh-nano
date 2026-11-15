@@ -689,8 +689,12 @@ CF1115 统一实施计划（P0–P4）
 | P2-02 | `FamilyDefinition` 最小作者记录 + 同源投影（contractId/authorityRefs 审批门） | 7b2d1de | family-definition.test |
 | P2-03 | `nanoNotepad` 最小导入服务：window.__nanoNotepad→私有 controller + `ctx.provide`，DNEE lazy `ctx.get` | 4a212d9 | notepad 71/71, DNEE 5/5 |
 | P2-04 | DNEE/DNMS/DNN JSON 生产者—消费者 codec 收口（single JsonOutcome；DNEE routes→registrar+envelope） | 1653ae3 | 71+5+7 PASS; clean-lib OK |
-| P3-01 | `createMcpToolset` + `decodeMcpReply` 三层解码；DNT mcp.js/lanes.js 归口 | a34ec7f | mcp-toolset.test 7/7 |
-| P3-02 | DNT lane 广告精确对账：create.lane enum [local,mcp,isolate]→[local,mcp]（isolate 无后端不广告） | （未提交） | wasm 97/97 |
+| P3-01 | `createMcpToolset` + `decodeMcpReply` 三层解码；DNT mcp.js/lanes.js 归口 | a34ec7f + 6446c5c | mcp-toolset.test 7/7 |
+| P3-02 | DNT lane/schema 广告精确对账（F20.2/F20.4 全兑现）：enum `["local"]`、删 template/task、x-address 可执行、19 params 全 additionalProperties:false | 6446c5c | wasm 97/97 + smoke 4/4 |
+
+### STEP.7/8 对抗审查 + 修复（6446c5c）
+
+三路审查 `.anote/.../47f0/` 总判「有条件通过」。修复：F20.2/F20.4 合同（曾由实现反推）、DNN/DNEE `files` 装包挂、registrar GET/fail-open/disposed、FamilyDefinition array 绕过、decode 非法 2xx→protocol。债务（deferred）：route-scan 自证性、三 facade 签名改约未登记、Test-ID T09/T11/T15–21 证据缺口。详见 closure §6。
 
 ### 进行中 / deferred（不标 executed）
 

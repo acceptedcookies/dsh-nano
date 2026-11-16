@@ -481,6 +481,13 @@ function firstLeaf(node) {
   return node.type === 'leaf' ? node.id : firstLeaf(node.a) ?? firstLeaf(node.b)
 }
 
+function leafIds(node, out = []) {
+  if (!node) return out
+  if (node.type === 'leaf') out.push(node.id)
+  else { leafIds(node.a, out); leafIds(node.b, out) }
+  return out
+}
+
 /** Top status bar: 轨迹 toolbar convention — identity + lane status left, controls right. */
 function StatusBar({ sessionId, split, openLeaf, focused, zh, tree, paneSessions, statuses, settings, onSettings }) {
   const [mcpUrl, setMcpUrl] = useState('')
@@ -529,6 +536,23 @@ function StatusBar({ sessionId, split, openLeaf, focused, zh, tree, paneSessions
   const statSummary = cur
     ? `${laneText[cur.lane] ?? cur.lane} · ${count}${zh ? ' 窗格' : ' panes'}${cur.dims ? ` · ${cur.dims.cols}×${cur.dims.rows}` : ''} · ${phaseText[eff] ?? eff}${rollText ? ` · ${rollText}` : ''}`
     : null
+  // Enter jumps to the next pane whose title contains the query (wrapping
+  // past the focused one); DOM focus drives the pane's own onFocus so React
+  // focus state and keyboard ownership stay in step.
+  const jumpToPane = (e) => {
+    if (e.key === 'Escape') { setFilterQuery(''); return }
+    if (e.key !== 'Enter') return
+    e.preventDefault()
+    const q = filterQuery.trim().toLowerCase()
+    if (!q) return
+    const ids = leafIds(tree)
+    const start = ids.indexOf(focused) + 1
+    const order = [...ids.slice(start), ...ids.slice(0, start)]
+    const hit = order.find((id) => (statuses[id]?.title ?? '').toLowerCase().includes(q))
+    if (!hit) return
+    const root = e.currentTarget.closest('[data-nano-terminal]')
+    root?.querySelector(`[data-dnt-pane="${hit}"]`)?.focus()
+  }
   return (
     <div className={trajCls('root')} role="toolbar" aria-label={zh ? '终端状态栏' : 'terminal status bar'}>
       <div className={trajCls('inner')}>
@@ -569,6 +593,7 @@ function StatusBar({ sessionId, split, openLeaf, focused, zh, tree, paneSessions
             placeholder={zh ? '窗格标题…' : 'pane title…'}
             value={filterQuery}
             onChange={(e) => setFilterQuery(e.currentTarget.value)}
+            onKeyDown={jumpToPane}
           />
         </div>
         <NanoMenu menu={menu} actions={laneActions} onClose={() => setMenu(null)} width={200} />
@@ -1171,6 +1196,7 @@ function TermPane({ paneId, laneSpec, sessionId, session, focused, onFocus, onCl
       tabIndex={0}
       onFocus={onFocus}
       className="dnt-pane"
+      data-dnt-pane={paneId}
       data-focused={focused ? 'true' : 'false'}
     >
       <div className="dnt-header">

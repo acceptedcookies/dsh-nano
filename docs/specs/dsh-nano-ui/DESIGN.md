@@ -195,4 +195,4 @@
 
 | 位置 | 缺口说明 |
 |---|---|
-| （迁移中按插件追加） | |
+| `dsh-nano-model-selector/src/client/styles.js`（`.nms-trigger-label` / `.nms-trigger-effort` / `.nms-trigger-icon`） | 读 `--dsh-composer-model-text-display` / `--dsh-composer-model-icon-display`：宿主 `conversation.input.model` 槽位合同变量（`dsh-client-ui-conversation` `slots.d.ts`），不是 `--dsw` 令牌，catalog 不收录，U1 照报 |

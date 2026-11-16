@@ -11,9 +11,6 @@ export const STYLE = `${NANO_STYLES}
 .nms-ring-health { stroke: var(--dsw-alias-state-success-primary); stroke-width: 2.4; }
 .nms-ring-buffer { stroke: var(--dsw-alias-state-warn-primary); stroke-width: 2.4; }
 .nms-ring-pinned { stroke: var(--dsw-alias-state-business-primary); stroke-width: 2.4; }
-/* The shared toast is position:absolute, anchored for relative page bodies; .nms-root is a
-   small inline seat, so this plugin re-anchors it to the viewport like the old .nms-toast. */
-.nms-root .nano-toast { position: fixed; bottom: 24px; z-index: 1300; }
 .nms-trigger {
   display: flex; align-items: center; gap: 4px; min-width: 0; max-width: 360px; height: 28px;
   padding: 0 4px 0 8px; border: 0; border-radius: var(--dsw-radius-sm); outline: none;
@@ -23,6 +20,8 @@ export const STYLE = `${NANO_STYLES}
 .nms-trigger:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); }
 .nms-trigger:focus-visible { box-shadow: 0 0 0 2px var(--dsw-focus-ring-color, var(--dsw-alias-brand-primary)); }
 .nms-trigger:disabled { color: var(--dsw-alias-label-dimmed); cursor: default; }
+/* nano-ui-exempt: the next three --dsh-composer-model-*-display reads are the host slot contract of
+   conversation.input.model (dsh-client-ui-conversation slots.d.ts), not --dsw tokens, so catalog/tokens.json has no entry. */
 .nms-trigger-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: var(--dsh-composer-model-text-display, block); }
 .nms-trigger-effort { flex-shrink: 1000; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--dsw-alias-label-caption); display: var(--dsh-composer-model-text-display, block); }
 .nms-trigger-icon { display: var(--dsh-composer-model-icon-display, none); flex: none; }
@@ -31,7 +30,7 @@ export const STYLE = `${NANO_STYLES}
 .nms-trigger-busy { box-sizing: border-box; width: 14px; height: 14px; flex: none; border-radius: 50%; border: 1.5px solid var(--dsw-alias-label-tertiary); border-top-color: transparent; animation: nms-spin .8s linear infinite; }
 
 .nms-panel {
-  box-sizing: border-box; position: fixed; z-index: 1200; display: flex; flex-direction: column;
+  box-sizing: border-box; position: fixed; z-index: var(--nano-layer-window); display: flex; flex-direction: column;
   overflow: hidden; padding: 0; border: 1px solid var(--dsw-alias-border-l2);
   border-radius: var(--dsw-radius-panel, 16px); background: var(--dsw-alias-bg-layer-1);
   color: var(--dsw-alias-label-primary); box-shadow: var(--dsw-elevation-prominent);
@@ -62,7 +61,7 @@ export const STYLE = `${NANO_STYLES}
 .nms-rail-brands { display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 1; min-height: 0; width: 100%; overflow-y: auto; scrollbar-width: none; }
 .nms-rail-brands::-webkit-scrollbar { display: none; }
 .nms-rail-brands[data-more="true"] { -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 42px), transparent 100%); mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 42px), transparent 100%); }
-.nms-rail-more { position: absolute; left: 0; right: 0; bottom: 0; z-index: 1; display: flex; align-items: center; justify-content: center; height: 22px; padding: 0; border: none; background: transparent; color: var(--dsw-alias-label-secondary); cursor: pointer; animation: nms-rail-bob 1.6s ease-in-out infinite; }
+.nms-rail-more { position: absolute; left: 0; right: 0; bottom: 0; z-index: var(--nano-layer-overlay); display: flex; align-items: center; justify-content: center; height: 22px; padding: 0; border: none; background: transparent; color: var(--dsw-alias-label-secondary); cursor: pointer; animation: nms-rail-bob 1.6s ease-in-out infinite; }
 .nms-rail-more:hover { color: var(--dsw-alias-label-primary); }
 @keyframes nms-rail-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(2px); } }
 .nms-rail-item { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; flex: none; padding: 0; border: 1px solid transparent; border-radius: 10px; background: transparent; color: var(--dsw-alias-label-secondary); cursor: pointer; }
@@ -103,10 +102,6 @@ export const STYLE = `${NANO_STYLES}
 .nms-model-copy { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; overflow: hidden; }
 .nms-model-line { display: flex; align-items: center; flex-wrap: nowrap; gap: 6px; min-width: 0; overflow: hidden; }
 .nms-model-name { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; line-height: 18px; font-weight: 500; }
-.nms-tag { display: inline-flex; align-items: center; height: 17px; padding: 0 5px; border-radius: 5px; background: var(--dsw-alias-interactive-bg-active); color: var(--dsw-alias-label-secondary); font-size: 10px; line-height: 17px; font-weight: 500; white-space: nowrap; }
-.nms-tag-info { background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 18%, transparent); color: var(--dsw-alias-state-business-primary); }
-.nms-tag-success { background: color-mix(in srgb, var(--dsw-alias-state-success-primary) 18%, transparent); color: var(--dsw-alias-state-success-primary); }
-.nms-tag-warning { background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 18%, transparent); color: var(--dsw-alias-state-warn-primary); }
 .nms-model-desc { display: block; min-width: 0; overflow: hidden; color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 16px; white-space: nowrap; text-overflow: clip; -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); }
 .nms-model-meta { min-width: 0; overflow: hidden; color: var(--dsw-alias-label-tertiary); font-size: 10px; line-height: 14px; text-overflow: ellipsis; white-space: nowrap; }
 .nms-model-side { display: flex; align-items: center; gap: 4px; flex: none; padding: 0 8px 0 0; }
@@ -136,16 +131,10 @@ export const STYLE = `${NANO_STYLES}
 .nms-compact-card-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .nms-compact-card-desc { display: block; min-width: 0; overflow: hidden; color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 16px; white-space: nowrap; text-overflow: ellipsis; }
 .nms-compact-pkg { font-size: 10px; line-height: 13px; color: var(--dsw-alias-label-tertiary); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-.nms-switch { position: relative; flex: none; width: 36px; height: 20px; padding: 0; border: 0; border-radius: 10px; background: var(--dsw-alias-interactive-bg-active); cursor: pointer; transition: background .15s; }
-.nms-switch[aria-checked="true"] { background: var(--dsw-alias-state-success-primary); }
-.nms-switch:disabled { opacity: .5; cursor: default; }
-.nms-switch-thumb { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--dsw-alias-bg-layer-1); box-shadow: 0 1px 3px rgba(0,0,0,.3); transition: transform .15s; }
-.nms-switch[aria-checked="true"] .nms-switch-thumb { transform: translateX(16px); }
-.nms-compact-top-actions { position: absolute; top: -1px; right: 0; z-index: 6; display: flex; align-items: center; gap: 6px; }
-.nms-compact-top-actions .nms-compact-chip { position: static; }
-.nms-compact-confirm { height: 26px; padding: 0 12px; border: 0; border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-state-business-primary); color: var(--dsw-alias-label-on-color, #fff); font: inherit; font-size: 12px; line-height: 26px; cursor: pointer; }
+.nms-compact-top-actions { position: absolute; top: -1px; right: 0; z-index: var(--nano-layer-overlay); display: flex; align-items: center; gap: 6px; }
+.nms-compact-confirm { height: 26px; padding: 0 12px; border: 0; border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-state-business-primary); color: var(--dsw-alias-label-primary-foreground); font: inherit; font-size: 12px; line-height: 26px; cursor: pointer; }
 .nms-compact-confirm:disabled { opacity: .6; cursor: default; }
-.nms-compact-chip { position: absolute; top: -1px; right: 0; z-index: 5; display: flex; align-items: center; gap: 6px; max-width: 300px; padding: 4px 8px; border-radius: var(--dsw-radius-sm); font-size: 11px; line-height: 15px; box-shadow: var(--dsw-elevation-raised, 0 4px 12px rgba(0,0,0,.25)); animation: nms-pop 120ms ease-out; }
+.nms-compact-chip { display: flex; align-items: center; gap: 6px; max-width: 300px; padding: 4px 8px; border-radius: var(--dsw-radius-sm); font-size: 11px; line-height: 15px; box-shadow: var(--dsw-elevation-soft); animation: nms-pop 120ms ease-out; }
 .nms-compact-chip[data-kind="warn"] { background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 18%, var(--dsw-alias-bg-layer-2)); color: var(--dsw-alias-state-warn-primary); }
 .nms-compact-chip[data-kind="fail"] { background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 18%, var(--dsw-alias-bg-layer-2)); color: var(--dsw-alias-state-error-primary); }
 .nms-compact-chip[data-kind="success"] { background: color-mix(in srgb, var(--dsw-alias-state-success-primary) 18%, var(--dsw-alias-bg-layer-2)); color: var(--dsw-alias-state-success-primary); }
@@ -184,10 +173,6 @@ select.nms-compact-input { width: 210px; cursor: pointer; }
 
 .nms-compact-explain { display: flex; flex-direction: column; gap: 6px; padding: 9px 12px 10px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-layer-1); }
 .nms-explain-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.nms-explain-tabs { display: inline-flex; align-items: center; gap: 2px; padding: 2px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-bg-layer-2); }
-.nms-explain-tab { display: inline-flex; align-items: center; height: 18px; padding: 0 7px; border: 0; border-radius: 4px; background: transparent; color: var(--dsw-alias-label-tertiary); font: inherit; font-size: 10px; cursor: pointer; }
-.nms-explain-tab:hover { color: var(--dsw-alias-label-primary); }
-.nms-explain-tab[data-active="true"] { background: var(--dsw-alias-state-business-primary); color: var(--dsw-alias-bg-layer-1); }
 .nms-explain-body { color: var(--dsw-alias-label-secondary); font-size: 11px; line-height: 16px; }
 /* ── async-compaction status badge (session header) ─────────────────────────
    A quiet pill in the header's action area. It is session state, not input
@@ -201,8 +186,8 @@ select.nms-compact-input { width: 210px; cursor: pointer; }
   white-space: nowrap; cursor: default; }
 .nms-badge-glyph { display: inline-flex; align-items: center; justify-content: center; flex: none; }
 .nms-badge-glyph svg { display: block; }
-.nms-badge[data-state="armed"] .nms-badge-glyph { color: var(--dsw-alias-state-info-primary, #4c9aff); }
-.nms-badge[data-state="running"] .nms-badge-glyph { color: var(--dsw-alias-state-warning-primary, #d29922);
+.nms-badge[data-state="armed"] .nms-badge-glyph { color: var(--dsw-alias-state-business-primary); }
+.nms-badge[data-state="running"] .nms-badge-glyph { color: var(--dsw-alias-state-warn-primary);
   animation: nms-pulse 1.4s ease-in-out infinite; }
 .nms-badge[data-state="committed"] .nms-badge-glyph { color: var(--dsw-alias-state-success-primary, #3fb950); }
 .nms-badge[data-state="failed"] .nms-badge-glyph { color: var(--dsw-alias-state-error-primary, #f25a5a); }
@@ -216,27 +201,13 @@ select.nms-compact-input { width: 210px; cursor: pointer; }
   background: var(--dsw-alias-label-tertiary); }
 .nms-hist-row-mark[data-kind="commit"] { background: var(--dsw-alias-state-success-primary, #3fb950); }
 .nms-hist-row-mark[data-kind="drop"] { background: var(--dsw-alias-state-error-primary, #f25a5a); }
-.nms-hist-row-mark[data-kind="arm"] { background: var(--dsw-alias-state-info-primary, #4c9aff); }
-.nms-hist-row-mark[data-kind="skip"] { background: var(--dsw-alias-state-warning-primary, #d29922); }
+.nms-hist-row-mark[data-kind="arm"] { background: var(--dsw-alias-state-business-primary); }
+.nms-hist-row-mark[data-kind="skip"] { background: var(--dsw-alias-state-warn-primary); }
 
 /* ── async-compaction history dialog ─────────────────────────────────────────
-   The dialog belongs to the chat pane, not to the whole workspace: the shell
-   portals the card to <body> and centres it in the viewport, so the overlay's
-   own box is pulled in to the conversation region measured by the component.
-   The :has() selector degrades to the default full-window overlay if the
-   engine lacks it, which
-   is the previous behaviour — never a broken layout. */
-body > div:has(> .nms-hist-dialog) {
-  top: var(--nms-region-top, 0) !important;
-  left: var(--nms-region-left, 0) !important;
-  right: var(--nms-region-right, 0) !important;
-  bottom: var(--nms-region-bottom, 0) !important;
-}
-/* Fixed height: the timeline and the diagnostics tab hold very different
-   amounts of content, and a content-sized card made the dialog jump every time
-   the tab changed. The body scrolls instead. */
-.nms-hist-dialog { height: min(560px, calc(100vh - 96px)) !important; }
-.nms-hist-dialog .nano-dialog-content { min-height: 0; }
+   NanoDialog fixes the height of its own body (fixedHeight); the card fills it
+   and only the tab panel scrolls. */
+.nms-hist-dialog .nano-dialog-body { display: flex; flex-direction: column; }
 .nms-hist-dialog .nms-hist { flex: 1; min-height: 0; }
 .nms-hist-dialog .nms-hist-panel { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 /* ── async-compaction history card ─────────────────────────────────────────
@@ -258,19 +229,19 @@ body > div:has(> .nms-hist-dialog) {
 .nms-hist-axis-label { position: absolute; top: 0; font-size: 10px; line-height: 12px;
   white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--dsw-alias-label-tertiary); }
 .nms-hist-axis-label[data-tone="health"] { color: var(--dsw-alias-state-success-primary, #3fb950); }
-.nms-hist-axis-label[data-tone="buffer"] { color: var(--dsw-alias-state-warning-primary, #d29922); }
+.nms-hist-axis-label[data-tone="buffer"] { color: var(--dsw-alias-state-warn-primary); }
 .nms-hist-axis-label[data-tone="safety"] { color: var(--dsw-alias-state-error-primary, #f25a5a); }
 .nms-hist-water-track { position: relative; height: 8px; border-radius: 4px; margin-top: 2px;
   background: var(--dsw-alias-bg-layer-1, #202020);
   box-shadow: inset 0 0 0 var(--dsh-hairline-width, .5px) var(--dsw-alias-border-l2); }
 .nms-hist-water-fill { position: absolute; inset: 0 auto 0 0; border-radius: 4px;
   background: var(--dsw-alias-label-tertiary); transition: width .18s ease; }
-.nms-hist-water-fill[data-over="true"] { background: var(--dsw-alias-state-warning-primary, #d29922); }
+.nms-hist-water-fill[data-over="true"] { background: var(--dsw-alias-state-warn-primary); }
 /* Ticks are marks on the track only; their labels live on the axis above. */
 .nms-hist-tick { position: absolute; top: -2px; width: 0; height: 12px;
   border-left: var(--dsh-hairline-width, .5px) dashed var(--dsw-alias-border-l2); }
 .nms-hist-tick[data-tone="health"] { border-left-color: var(--dsw-alias-state-success-primary, #3fb950); }
-.nms-hist-tick[data-tone="buffer"] { border-left-style: solid; border-left-color: var(--dsw-alias-state-warning-primary, #d29922); }
+.nms-hist-tick[data-tone="buffer"] { border-left-style: solid; border-left-color: var(--dsw-alias-state-warn-primary); }
 .nms-hist-tick[data-tone="safety"] { border-left-color: var(--dsw-alias-state-error-primary, #f25a5a); }
 .nms-hist-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
 .nms-hist-stat { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px;
@@ -292,7 +263,7 @@ body > div:has(> .nms-hist-dialog) {
 .nms-hist-row-time { flex: none; font-size: 11px; color: var(--dsw-alias-label-tertiary); }
 .nms-hist-raw { margin: 2px 0 6px 22px; padding: 8px 10px; border-radius: var(--dsw-radius-sm, 8px);
   background: var(--dsw-alias-bg-layer-1, #202020); color: var(--dsw-alias-label-secondary);
-  font-family: var(--dsw-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-family: var(--dsw-font-markdown-code-font-family);
   font-size: 11px; line-height: 16px; white-space: pre-wrap; word-break: break-word;
   overflow: auto; max-height: 240px; }
 .nms-hist-diag { display: flex; flex-direction: column; min-height: 0; }

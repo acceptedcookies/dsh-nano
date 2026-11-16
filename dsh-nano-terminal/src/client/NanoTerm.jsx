@@ -85,11 +85,12 @@ ${NANO_STYLES}
 .dnt-pane[data-focused="true"]{border-color:color-mix(in srgb,var(--dsw-alias-brand-primary,var(--dsw-alias-link)) 55%,transparent)}
 .dnt-pane[data-focused="false"]{border-color:var(--dsw-alias-border-l3)}
 .dnt-pane[data-focused="false"] .dnt-canvas-host{opacity:.82}
-.dnt-copy-hint{position:absolute;right:12px;bottom:10px;z-index:5;font:600 11px/1 var(--dsw-alias-font-family-mono,ui-monospace,monospace);color:var(--dsw-alias-warning,#b57f2a);background:color-mix(in srgb,var(--dsw-alias-bg-l2,#1a1a1a) 92%,transparent);padding:3px 7px;border-radius:4px;border:1px solid var(--dsw-alias-border-l3);pointer-events:none}
+.dnt-copy-hint{position:absolute;right:12px;bottom:10px;z-index:var(--nano-layer-local5);font:600 11px/1 var(--dsh-font-family-code);color:var(--dsw-alias-state-warn-primary);background:color-mix(in srgb,var(--dsw-alias-bg-layer-2) 92%,transparent);padding:3px 7px;border-radius:4px;border:1px solid var(--dsw-alias-border-l3);pointer-events:none}
 .dnt-header{display:flex;align-items:center;gap:7px;height:26px;padding:0 8px;border-bottom:.5px solid var(--dsw-alias-border-l3);user-select:none;flex:none}
 .dnt-pane[data-focused="true"] .dnt-header{border-bottom-color:var(--dsw-alias-border-l2);background:color-mix(in srgb,var(--dsw-alias-brand-primary,var(--dsw-alias-link)) 4%,transparent)}
 .dnt-title{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary)}
-.dnt-scroll-lines{font-size:10px;color:var(--dsw-alias-label-quaternary);flex:0 0 auto;font-variant-numeric:tabular-nums}
+.dnt-scroll-lines{font-size:10px;color:var(--dsw-alias-label-dimmed);flex:0 0 auto;font-variant-numeric:tabular-nums}
+/* nano-ui-exempt: 宿主 Button 最小 28px，窗格头 20px 密度无对应档 */
 /* 窗格头按钮：只有本包这里用的 20px 图标密度（宿主 Button 无此密度），
    inline-flex 自身居中，否则 X 按 baseline 悬挂在按钮顶边。 */
 .dnt-header .dnt-toolbtn{width:20px;height:20px;padding:0;display:inline-flex;align-items:center;justify-content:center;line-height:0;border:0;border-radius:var(--dsw-radius-sm);background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer}
@@ -101,10 +102,10 @@ ${NANO_STYLES}
 .dnt-rotate{transform:rotate(90deg)}
 .dnt-header-actions{display:flex;align-items:center;gap:1px;flex:0 0 auto;margin-left:auto}
 .dnt-canvas-host{position:absolute;top:26px;left:0;right:0;bottom:0;overflow:hidden;cursor:text}
-.dnt-scrollbar-track{position:absolute;right:3px;top:32px;bottom:8px;width:6px;pointer-events:none;z-index:4}
-.dnt-scrollbar-thumb{position:absolute;right:0;width:6px;border-radius:3px;background:var(--dsw-alias-label-quaternary);opacity:.55;transition:opacity .15s}
+.dnt-scrollbar-track{position:absolute;right:3px;top:32px;bottom:8px;width:6px;pointer-events:none;z-index:var(--nano-layer-local4)}
+.dnt-scrollbar-thumb{position:absolute;right:0;width:6px;border-radius:3px;background:var(--dsw-alias-label-dimmed);opacity:.55;transition:opacity .15s}
 .dnt-pane:hover .dnt-scrollbar-thumb{opacity:.9}
-.dnt-overlay{position:absolute;inset:0;top:26px;z-index:6;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:color-mix(in srgb,var(--dsw-alias-bg-base) 88%,transparent);color:var(--dsw-alias-label-secondary);text-align:center;padding:16px;border-bottom-left-radius:inherit;border-bottom-right-radius:inherit}
+.dnt-overlay{position:absolute;inset:0;top:26px;z-index:var(--nano-layer-local6);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:color-mix(in srgb,var(--dsw-alias-bg-base) 88%,transparent);color:var(--dsw-alias-label-secondary);text-align:center;padding:16px;border-bottom-left-radius:inherit;border-bottom-right-radius:inherit}
 .dnt-overlay svg{color:var(--dsw-alias-label-tertiary)}
 .dnt-overlay-title{font-weight:600;color:var(--dsw-alias-label-primary)}
 .dnt-overlay-msg{max-width:80%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-tertiary)}
@@ -707,7 +708,7 @@ function PaneNode({ node, sessionId, session, focused, setFocused, split, closeL
         </div>
         <div
           className="dnt-splitter"
-          style={{ cursor: horizontal ? 'col-resize' : 'row-resize', zIndex: 3 }}
+          style={{ cursor: horizontal ? 'col-resize' : 'row-resize', zIndex: 'var(--nano-layer-local3)' }}
           onMouseDown={startDrag}
         />
         <div className="dnt-split-row">

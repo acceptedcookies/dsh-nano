@@ -3,7 +3,7 @@
 import { readFileSync, statSync, createReadStream } from 'node:fs'
 import { join, basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { ensurePerfReviewHost, handleHostRead, LIB_VERSION } from './lib/perf-review-host.js'
+import { ensurePerfReviewHost, handleHostRead } from './lib/perf-review-host.js'
 import { createSyncEngine } from './lib/s3-sync-host.js'
 import { createWebRegistrar } from './lib/web-registrar.js'
 import { BINDING_TABLE, PLUGIN } from './lib/bindings.js'
@@ -19,7 +19,7 @@ export const inject = ['webServer', 'connection', 'subprocess', 'llm', 'attachme
 // (lib/perf-review-host.js). Disabled path is identity wrappers; DSH_PERF_REVIEW=1
 // enables hostSpan timing. The host view is read-only; nothing writes host.json.
 const { version } = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'))
-const review = ensurePerfReviewHost().hostJoin('nano-notepad', { version, libVersion: LIB_VERSION })
+const review = ensurePerfReviewHost().hostJoin('nano-notepad', { version })
 
 export const Config = {
   '~standard': {

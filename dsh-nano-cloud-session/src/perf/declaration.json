@@ -9,6 +9,7 @@
       "self"
     ]
   },
+  "buckets": [],
   "contract": [
     "dncs.status",
     "dncs.config",

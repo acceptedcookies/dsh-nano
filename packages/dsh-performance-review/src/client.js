@@ -15,7 +15,6 @@ import {
   createCollectorState,
   createStructure,
   ensurePlugin,
-  LIB_VERSION,
   NAME_RE,
   CONTRACT_KEY_RE,
   CLIENT_KEY,
@@ -64,20 +63,18 @@ export function readEnabledFlag(env) {
  * ancestor chain (a click on a row's icon should still hit `files-row`).
  * Returns the first non-'other' bucket, else 'other'.
  * @param {Element|null} el
- * @param {string[]} attrs - data-* names, priority order
+ * @param {Array<[string,string]>} entries - [attr, bucket] pairs registered by join()
  */
-export function bucketForElement(el, attrs) {
+export function bucketForElement(el, entries) {
   let node = el
   let depth = 0
   while (node != null && typeof node === 'object' && depth < 12) {
-    const descriptor = { tag: node.tagName, attrs: {} }
-    for (const name of attrs) {
+    for (const [name, bucket] of entries) {
       try {
-        if (typeof node.hasAttribute === 'function' && node.hasAttribute(name)) {
-          descriptor.attrs[name] = true
-        }
+        if (typeof node.hasAttribute === 'function' && node.hasAttribute(name)) return bucket
       } catch { /* ignore */ }
     }
+    const descriptor = { tag: node.tagName, attrs: {} }
     const bucket = targetBucket(descriptor)
     if (bucket !== 'other') return bucket
     node = node.parentElement ?? null
@@ -86,14 +83,8 @@ export function bucketForElement(el, attrs) {
   return targetBucket({ tag: el?.tagName, attrs: {} })
 }
 
-// 'data-nano-shared-workspace' is a HISTORICAL anchor for a plugin moved to
-// deprecated/ on 2026-11-12. Kept only so old pages still bucket correctly.
-const BUCKET_ATTRS = [
-  'data-composer', 'data-chat-input',
-  'data-nano-notepad', 'data-nano-model-selector',
-  'data-nxe', 'data-nano-shared-workspace',
-  'data-row-key', 'data-sidebar-row',
-]
+// Interaction target buckets are registered by each join() from its
+// declaration (T-O-PRE1116-09.5). The shared package keeps only native buckets.
 
 const HIDDEN_SELECTOR = '[hidden],[aria-hidden="true"]'
 
@@ -210,6 +201,48 @@ export function createPerfReview(env = {}) {
   const plugins = new Map()
   const contributors = []
   const contributorKeys = new Set()
+  /** Host read sources, in registration order (T-O-PRE1116-10.3). */
+  const hostSources = []
+  let hostCursor = null
+  let hostSnapshotCache = null
+  let hostSourceIndex = 0
+  let hostFailures = 0
+  let hostTimer = null
+  const fetchRef = env.fetch ?? globalThis.fetch
+  const setIntervalRef = env.setInterval ?? globalThis.setInterval
+  const visible = () => typeof document === 'undefined' || document.visibilityState !== 'hidden'
+
+  const pollHost = async () => {
+    if (enabled !== true || hostSources.length === 0 || !visible()) return
+    const url = hostSources[hostSourceIndex % hostSources.length]
+    try {
+      const res = await fetchRef(`${url}${hostCursor ? `?since=${encodeURIComponent(hostCursor)}` : ''}`, { credentials: 'same-origin', cache: 'no-store' })
+      const body = await res?.json?.()
+      if (body != null && typeof body === 'object' && body.status !== 400) {
+        hostSnapshotCache = body
+        hostCursor = body.next ?? hostCursor
+        hostFailures = 0
+      }
+    } catch {
+      hostFailures += 1
+      if (hostFailures >= 2) { hostSourceIndex += 1; hostFailures = 0 }
+    }
+  }
+  const startHostPoll = () => {
+    if (hostTimer != null || hostSources.length === 0 || enabled !== true) return
+    if (typeof setIntervalRef !== 'function') return
+    hostTimer = setIntervalRef(pollHost, 5000)
+    if (typeof hostTimer?.unref === 'function') hostTimer.unref()
+    pollHost()
+  }
+
+  /** Native target buckets; plugin buckets are registered by join(). */
+  const bucketMap = new Map([
+    ['data-composer', 'composer-textarea'],
+    ['data-chat-input', 'composer-textarea'],
+    ['data-row-key', 'sidebar-row'],
+    ['data-sidebar-row', 'sidebar-row'],
+  ])
   let collector = createCollectorState()
   let frozenAt = new Date().toISOString()
   const touch = () => { frozenAt = new Date().toISOString() }
@@ -292,7 +325,7 @@ export function createPerfReview(env = {}) {
       if (windowEnd > cutoff) continue
       collector.pendingInteractions.delete(key)
       const owner = pickOwner(plugins, pending.target, structure)
-      const bucket = bucketForElement(pending.target, BUCKET_ATTRS)
+      const bucket = bucketForElement(pending.target, [...bucketMap.entries()])
       const samples = interactionSamples(pending, collector.spanEvents, collector.trackEvents)
       pushInteraction(collector, {
         interactionId: pending.interactionId,
@@ -541,20 +574,29 @@ export function createPerfReview(env = {}) {
    * registers a contributor entry.
    */
   const join = (pluginId, impl = {}) => {
+    if (typeof impl.hostRoute === 'string' && impl.hostRoute !== '' && !hostSources.includes(impl.hostRoute)) {
+      hostSources.push(impl.hostRoute)
+    }
+    for (const entry of impl.buckets ?? []) {
+      if (entry && typeof entry.attr === 'string' && typeof entry.bucket === 'string') {
+        bucketMap.set(entry.attr, entry.bucket)
+      }
+    }
     decideEnabled()
     const row = ensurePlugin(plugins, pluginId)
-    const libVersion = impl.libVersion ?? LIB_VERSION
-    const build = impl.build ?? libVersion
+    const build = impl.build ?? BUILD_STAMP
+    const decl = impl.decl ?? null
     const key = `${pluginId}@${build}`
     if (!contributorKeys.has(key)) {
       contributorKeys.add(key)
-      contributors.push({ pluginId, libVersion, build })
+      contributors.push({ pluginId, build, decl })
     }
     if (impl.version != null) row.meta.version = impl.version
     if (row.meta.implantedAt == null) row.meta.implantedAt = new Date().toISOString()
     if (typeof impl.root === 'function') row._root = impl.root
     if (impl.react != null) row._react = impl.react
     if (!enabled) return disabledApi()
+    startHostPoll()
     return makeApi(pluginId, row)
   }
 
@@ -639,6 +681,9 @@ export function createPerfReview(env = {}) {
     bucket.outcomes[admitted.outcome] = (bucket.outcomes[admitted.outcome] ?? 0) + 1
     const klass = statusClass(admitted.status)
     if (klass) bucket.status[klass] += 1
+    hostCursor = null
+    hostSnapshotCache = null
+    pollHost()
     touch()
   }
 
@@ -652,7 +697,7 @@ export function createPerfReview(env = {}) {
     const navigatorRef = env.navigator ?? globalThis.navigator
     const chrome = /Chrome\/(\d+)/.exec(navigatorRef?.userAgent ?? '')
     const provided = Object.prototype.hasOwnProperty.call(input, 'host')
-    const hostSnapshot = provided ? input.host : null
+    const hostSnapshot = provided ? input.host : hostSnapshotCache
     const hostBad = provided && hostSnapshot != null && !hostSnapshotUsable(hostSnapshot)
     return buildReport({
       meta: {
@@ -684,12 +729,8 @@ export function createPerfReview(env = {}) {
     _absorbLoafEntry: absorbLoafEntry,
     _absorbResourceEntry: absorbResourceEntry,
     _build: env.build ?? BUILD_STAMP,
-    libVersion: LIB_VERSION,
   }
 }
-
-/** Each bundled copy carries its own LIB_VERSION: implants must pass it to join(). */
-export { LIB_VERSION }
 
 /**
  * Install-or-reuse the page singleton on the v2 symbol only

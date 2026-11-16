@@ -593,3 +593,70 @@ PRE-1116
 ## 11. 执行日志回填
 
 文档状态为 `draft`，本节不回填执行。实施完成后另用 append 模板；residual 不回写本阶段的规则句。
+
+### 11.1 执行日志回填（PRE-1116）
+
+> 执行者：`workbuddy/deepseek-v4.1-flash`（agent）
+> 执行时间：`2026-11-16T15:05Z` 起，`2026-11-17T01:10Z` 本轮回填
+> 文档状态：`draft → executing`（未到 `executed`：live 门未跑）
+> 代码改动统计：W1 22 文件 / W2 69 文件 / W3 见下；`schema` 从 v1 升到 `dnpr.report/2`
+
+- **实际执行摘要**：W1 落 `06`（四门面可选 `observe`、`onCall` 退役）；W2 落 `05`（87 行账本身份、命名表烘焙闸、`routeTableModule` 与 `route-table.js` 退役）；W3 落 `07`–`10` 的代码面（协议键、v2 报告、`read`/`cutWindow`、宿主只读读面、七份声明、9 span 处置、排空与侧载退役、lab 声明驱动）。`P1-01`–`P2-03` 完成；`P2-04` 的 `route-inventory.md` 未改；`P3-09` 的对照与基线重录未做；`P3-10` 由同批文档回填。
+- **Phase 偏差（计划 vs 实际）**：
+  - `P3-01`（计划偏差）：`LIB_VERSION` 与 `libVersion` 先保留，后在同批内完整退役；`observerVersion` 已不再写入。构建戳改用 `scripts/dnpr-build-stamp.mjs` 的内容哈希，经 `scripts/dnpr-define.mjs` 注入七个插件。
+  - `P3-02`（substrate-fit）：v2 顶层采用 `schema: "dnpr.report/2"` + `meta/page/plugins/evidence/structure/notes`（`08.1`），不再保留 v1 的 `generatedAt/audits` 顶层键。
+  - `P3-04`（计划偏差）：[DNEE] 的 `mode=window` 没有留在 ①，已按 `11.5` ③ 与 [DNLS]/[DNK] 侧载一并删除。
+  - `P3-05`（substrate-fit）：七份声明使用 `keys/buckets/contract/scenarios/budgets`；运行时切片由 `scripts/bake-declaration.mjs` 只烘焙 `KEYS/BUCKETS/DECL_HASH`。
+  - `P3-08`（计划偏差）：`lab/budgets.mjs` 的旧逐轨道规则迁入 [DNEE]/[DNN] 声明；`evaluate` 保留为 `diagnose()` 的 lab 适配层，等待 `P3-09` ⑤ 的对照。
+  - `P3-09`（顺序调整）：未执行。没有 `lab/config.local.json`，本轮不驱动真实浏览器；`evaluate` 未删，基线未重录。
+- **阻塞与处理**：
+  - `P3-09` 对照与 `P3-10` 的 live 证据：无本机 grant，按 `T26` 同口径保持 `未观察`。
+  - `PRE1116-T28`：`dsh-nano-s3-client` 的三条 rate 用例在 `main` 与 W3 都报 `Promise resolution is still pending…`（Node 22.23.4；`main` 同样 13 pass / 3 cancelled），属 pre-existing 环境失败，不计入本阶段引入。
+- **测试发现**：
+  - DNPR 包：`npm test` 82/82。
+  - [DNLS]：`npm test` 95/95。
+  - `packages/dsh-interface`：58/58。
+  - `node scripts/check-route-sensitivity.mjs`：87 routes, 0 drift；`check-feature-contract`：87 routes。
+  - `node scripts/check-clean-lib.mjs`：74 runtime artifacts。
+  - 对抗审查见 `.anote/reviews/PRE/1116/`（三路）。
+- **后续 handoff**：`P3-09`（对照表 + 基线 + 删 `evaluate`）、`P3-10` 的 spec rev5 已在同批文档落盘但 live 证据待补、`T26` 本机页面阅读、合并到 `main` 与 worktree 删除均由 [业主] 决定。
+
+### 11.2 逐工作项状态
+
+| 工作项 | 状态 | PR / commit | 实际落点 | 备注 |
+|--------|------|-------------|----------|------|
+| `P1-01` | ✅ done | `fee3a42` | `packages/dsh-interface/src/contracts/observeEvent.js`；四门面 | T01–T04 |
+| `P1-02` | ✅ done | `fee3a42` | `packages/dsh-interface/src/host/emitObserve.js` | 同步、吞异常、不读时钟 |
+| `P1-03` | ✅ done | `fee3a42` | 七插件 `lib/` 重建 | `onCall` 0 命中 |
+| `P2-01` | ✅ done | `ce29091` | `security/route-sensitivity.json` | 87 行含 upgrade |
+| `P2-02` | ✅ done | `ce29091` | `security/perf-binding-ids.md`、`scripts/bake-plugin-bindings.mjs` | 缺 id / 表不一致即失败 |
+| `P2-03` | ✅ done | `ce29091` | 七份 `lib/bindings.js`；`routeTableModule` 删除 | 空 [DNK] 表合法 |
+| `P2-04` | 🟩 partial | `ce29091` | `packages/dsh-host-route-guard/src/route-guard.js` | `route-inventory.md` 未改 |
+| `P3-01` | ✅ done | `dcddf80` + 本批 | `state.js`、七插件构建脚本 | `__DNPR_BUILD__` 内容哈希 |
+| `P3-02` | ✅ done | `dcddf80` + 本批 | `aggregate.js`、`client.js`、`host.js` | 顶层 `dnpr.report/2` |
+| `P3-03` | ✅ done | `dcddf80` | `src/diagnose.js`、`src/declaration.js` | 浏览器出口不含 |
+| `P3-04` | ✅ done | `2c1874b` | `handleHostRead`；[DNN]/[DNMS] 路由 | 只接受 `since` |
+| `P3-05` | ✅ done | `77fa108` + 本批 | 七份 declaration；`bake-declaration.mjs` | 4 处页面 join 统一传 `buckets/decl/hostRoute` |
+| `P3-06` | ✅ done | `dd5e2dd` | 9 个 hostSpan 处置 | 5 退役 / 4 保留 |
+| `P3-07` | ✅ done | `bd3422c` | [DNEE]/[DNLS]/[DNK] 排空与侧载 | 账本 87 行 |
+| `P3-08` | ✅ done | 本批 | `lab/declarations.mjs`、`lab/drivers/*`、`lab/budgets.mjs` | 插件名/轨道名清零 |
+| `P3-09` | ⏸ live-pending | - | - | 未跑真实浏览器对照 |
+| `P3-10` | 🟩 partial | 本批 | spec rev5、README、AGENTS 事实句 | live 句仍待 T26 |
+
+### 11.3 关键指标演进
+
+| 指标 | `main`（W0） | 本分支 W3 | Δ |
+|------|--------------|-----------|---|
+| 账本路由行 | 87（无 id） | 87（全部 id/channel/match） | 0 行，身份从 path 推导改为审定 |
+| DNPR 单测 | 60 | 82 | +22 |
+| `routeTableModule` 标识符 | 存在 | 0 | 退役 |
+| `onCall` 标识符 | 存在 | 0 | 退役 |
+| `report()` 页面动词 | 存在 | 0（`read`） | 硬切 |
+| 写盘器 / `host.json` | 存在 | 0 | 退役 |
+
+### 11.4 pre-existing 失败
+
+| 失败项 | 证据（git / 命令） | 判断 |
+|--------|---------------------|------|
+| `packages/dsh-s3-client` 3 条 rate 用例 `cancelled` | `main` checkout 同命令：13 pass / 3 cancelled；worktree 相同 | pre-existing, non-blocking |
+| `deprecated/dsh-nano-shared-workspace` 缺 `node_modules` | worktree 未安装 `deprecated/` 依赖；`main` checkout 有 | 环境搭建，已用符号链接补齐后 security gate 8/8 |

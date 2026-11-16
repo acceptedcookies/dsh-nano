@@ -15,7 +15,7 @@
 | `GET /nano-local-sandbox/network?limit=1..200&failedOnly=true` | 网络生命周期（requestWillBeSent→responseReceived） |
 | `GET /nano-local-sandbox/targets` | 引擎 Target.getTargets：page target id/url、当前附着页 |
 | `POST /nano-local-sandbox/evaluate {"expression":"document.title"}` | 引擎页面有界 JS（≤2000 字符，结果 ≤4000 字符） |
-| `GET /nano-local-sandbox/perf-review/host` | 进程 perf span（DSH_PERF_REVIEW=1 时） |
+| `GET /nano-explorer-extra/perf-review/host` | 只读全进程视图（其他插件各有一条同型路由）；只接受 `since` |
 | `GET /nano-local-sandbox/browse-history` | 持久浏览历史；`DELETE ?id=…` / `POST {clear:true}` 改 |
 
 console 采集走插件自己那条 CDP socket 的 `Runtime.consoleAPICalled` / `Runtime.exceptionThrown` / `Log.entryAdded` / `Network.loadingFailed` / `Page.frameNavigated`，**不需要**再注入 `window.__ksLogs`。`/evaluate` 里 `console.log("probe")` 会立刻出现在 `GET /console`。

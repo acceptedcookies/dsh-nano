@@ -5,29 +5,25 @@
  * see the deviation note in lab/README.md. The generated script runs in the
  * ego-browser Node.js host, NEVER in the web Page; all DOM work goes through
  * page.evaluate(). It prints exactly one `LAB_REPORT_JSON=<json>` line.
+ *
+ * Scenario and budget names come from each plugin's src/perf/declaration.json
+ * (T-O-PRE1116-09.8). This file names only the page-level scenarios.
  */
+import { loadDeclarations, PAGE_SCENARIOS, scenarioList } from './declarations.mjs'
 
-const SCENARIOS = [
-  'idle-10s',
-  'composer-type',
-  'files-expand',
-  'notepad-type',
-  'model-open',
-  'shared-open',
-  'observer-purity',
-]
+export const SCENARIOS = Object.freeze(scenarioList(loadDeclarations()))
 
-export { SCENARIOS }
+export { PAGE_SCENARIOS }
 
 /**
  * @param {object} cfg - lab/config.local.json
  * @param {string} scenario
  * @param {string} arm - on | off | purity
- * @param {string} iife - standalone DNPR client bundle PATH (purity arm);
- *   read at runtime so the -e argv stays under the Windows 32 KB cmdline limit
+ * @param {string} iife - standalone DNPR client bundle PATH (purity arm)
+ * @param {string|null} driver - absolute path of a plugin scenario driver
  * @returns {string} JavaScript source for `ego-browser nodejs -e`
  */
-export function scenarioScript(cfg, scenario, arm, iife = '') {
+export function scenarioScript(cfg, scenario, arm, iife = '', driver = null) {
   const S = JSON.stringify
   return `
 const LAB_SCENARIO = ${S(scenario)};
@@ -39,6 +35,7 @@ async function main() {
   const HOST_ROUTE = ${S(cfg.hostRoute)};
   const SCENARIO = ${S(scenario)};
   const ARM = ${S(arm)};
+  const DRIVER = ${S(driver ?? '')};
   const STANDALONE = ${S(iife)} ? (await import('node:fs')).readFileSync(${S(iife)}, 'utf8') : '';
   const notes = [];
   const steps = {};
@@ -54,17 +51,21 @@ async function main() {
     }
   };
   const evalInPage = (fn, arg) => arg === undefined ? page.evaluate(fn) : page.evaluate(fn, arg);
+  const wait = (ms) => page.waitForTimeout(ms);
   const openFiles = () => evalInPage(() => {
     const t = [...document.querySelectorAll("[data-dockkit-tab]")].find(e => (e.textContent || "").trim().includes("文件"));
     if (t) { t.click(); return true; }
     return false;
   });
-  const hostWindow = () => evalInPage(async (route) => {
+  // Read the host view. Without a cursor: cumulative; with one: rows newer
+  // than the cursor. Never drains (T-O-PRE1116-08.8).
+  const hostRead = (since) => evalInPage(async (payload) => {
     try {
-      const r = await fetch(route + "?mode=window", { credentials: "same-origin", cache: "no-store" });
+      const url = payload.since ? payload.route + "?since=" + encodeURIComponent(payload.since) : payload.route;
+      const r = await fetch(url, { credentials: "same-origin", cache: "no-store" });
       return await r.json();
     } catch (e) { return null; }
-  }, HOST_ROUTE);
+  }, { route: HOST_ROUTE, since: since ?? null });
 
   // ---------------- purity arm: only the observer on a blank page ----------------
   if (ARM === "purity") {
@@ -78,15 +79,15 @@ async function main() {
     const purity = await safe("purityReport", () => evalInPage(async () => {
       const lib = window.__perfReviewLib;
       if (!lib || typeof lib.createPerfReview !== "function") return { error: "standalone lib missing" };
-      window.__perfReview = lib.createPerfReview({ forceEnabled: true });
-      window.__perfReview.join("purity-probe");
+      const singleton = lib.createPerfReview({ forceEnabled: true });
+      singleton.join("purity-probe");
       await new Promise(r => setTimeout(r, 2000));
-      const report = window.__perfReview.report({ scenario: "observer-purity", arm: "purity" });
+      const report = singleton.read({ scenario: "observer-purity", arm: "purity" });
       return {
         loafCount: report.page.loafCount,
         observerErrors: report.structure.observerErrors,
         observersMissing: report.structure.observersMissing,
-        enabled: report.enabled,
+        enabled: report.page.enabled,
       };
     }));
     console.log("LAB_REPORT_JSON=" + JSON.stringify({ scenario: SCENARIO, arm: ARM, report: null, purity, notes, steps }));
@@ -98,7 +99,10 @@ async function main() {
   await gotoWithRetry(url);
   // A cold browser has no auth cookie; the bare URL goes through the token
   // broker and drops the query. Retry once through the bare URL if needed.
-  const enabledNow = await safe("probeEnabled", () => evalInPage(() => window.__perfReview?._state?.().enabled ?? null));
+  const enabledNow = await safe("probeEnabled", () => evalInPage(() => {
+    const r = window[Symbol.for("dsh.perfReview.v2")];
+    return r?._state?.().enabled ?? null;
+  }));
   if (ARM === "on" && enabledNow !== true) {
     await gotoWithRetry(BASE + "/");
     await gotoWithRetry(BASE + "/?perf-review=1");
@@ -106,12 +110,13 @@ async function main() {
   // The SPA mounts its panels after the load event; give the shell one bounded beat so
   // the Files tab / composer exist before scenario steps run.
   await page.waitForTimeout(1800);
-  await safe("resetWindow", () => evalInPage(() => {
-    window.__perfReview?.reset?.();
-    window.__perfReview?.resetCounters?.();
-    return window.__perfReview?._state?.().enabled ?? null;
+  await safe("cutWindow", () => evalInPage(() => {
+    const r = window[Symbol.for("dsh.perfReview.v2")];
+    if (!r) return null;
+    r.cutWindow();
+    return r._state?.().enabled ?? null;
   }));
-  await safe("hostWindowStart", hostWindow); // drain: exact per-scenario window starts here
+  const hostStart = await safe("hostWindowStart", () => hostRead(null));
 
   // ---------------- scenario steps ----------------
   if (SCENARIO === "idle-10s") {
@@ -132,62 +137,13 @@ async function main() {
         { delay: 80 }));
     }
     await page.waitForTimeout(1200);
-  } else if (SCENARIO === "files-expand") {
-    await safe("openFiles", openFiles);
-    await page.waitForTimeout(1800);
-    await safe("expand3", () => evalInPage(() => {
-      const root = document.querySelector("[data-nxe]");
-      if (!root) return 0;
-      const rows = [...root.querySelectorAll("button")].filter(e => {
-        const text = (e.textContent || "").trim();
-        const cls = (e.className || "").toString();
-        return text.length > 0 && /action/i.test(cls) && !/hidden/i.test(cls);
-      });
-      let n = 0;
-      for (const e of rows.slice(0, 3)) { e.click(); n += 1; }
-      return n;
-    }));
-    await page.waitForTimeout(2500);
-  } else if (SCENARIO === "notepad-type") {
-    await safe("shortcut", async () => {
-      await page.keyboard.press("Meta+e");
-      await page.waitForTimeout(250);
-      await page.keyboard.press("1");
-      return "meta+e then 1";
-    });
-    await page.waitForTimeout(900);
-    const focused = await safe("focusNotepad", () => evalInPage(() => {
-      const e = document.querySelector(".np-layer textarea, [data-nano-notepad] textarea, textarea");
-      if (!e) return false;
-      e.focus();
-      return true;
-    }));
-    if (focused) await safe("type", () => page.keyboard.type("Notepad performance scenario: a short note typed into the floating panel, then we wait for the debounce.", { delay: 60 }));
-    await page.waitForTimeout(2000);
-  } else if (SCENARIO === "model-open") {
-    await safe("openTrigger", () => evalInPage(() => {
-      const e = document.querySelector(".nms-trigger");
-      if (!e) return false;
-      e.click();
-      return true;
-    }));
-    await page.waitForTimeout(900);
-    await safe("typeSearch", () => page.keyboard.type("gpt", { delay: 90 }));
-    await page.waitForTimeout(600);
-    await safe("close", () => page.keyboard.press("Escape"));
-    await page.waitForTimeout(600);
-  } else if (SCENARIO === "shared-open") {
-    await safe("expandShared", () => evalInPage(() => {
-      const e = [...document.querySelectorAll("button")].find(b => /展开共享工作区|展开/.test(b.getAttribute("aria-label") || ""));
-      if (!e) return false;
-      e.click();
-      return true;
-    }));
-    await page.waitForTimeout(2500);
+  } else if (DRIVER) {
+    const mod = await import((await import("node:url")).pathToFileURL(DRIVER).href);
+    await mod.default({ page, safe, evalInPage, wait });
   }
 
   // ---------------- collect ----------------
-  const hostSnapshot = await safe("hostWindowEnd", hostWindow);
+  const hostView = await safe("hostWindowEnd", () => hostRead(hostStart?.next ?? null));
   const meta = await safe("domMeta", () => evalInPage(() => ({
     nxeRoots: document.querySelectorAll("[data-nxe]").length,
     visibleNxeRoots: [...document.querySelectorAll("[data-nxe]")].filter(e => e.closest('[hidden],[aria-hidden="true"]') === null).length,
@@ -196,14 +152,16 @@ async function main() {
   })));
 
   const report = await safe("report", () => evalInPage((payload) => {
-    if (!window.__perfReview) return null;
-    return window.__perfReview.report(
-      { scenario: SCENARIO_PLACEHOLDER, arm: SCENARIO_ARM_PLACEHOLDER, gitSha: null },
-      payload,
-    );
-  }, hostSnapshot));
+    const r = window[Symbol.for("dsh.perfReview.v2")];
+    if (!r) return null;
+    return r.read({
+      scenario: payload.scenario,
+      arm: payload.arm,
+      host: payload.host ?? undefined,
+    });
+  }, { scenario: SCENARIO, arm: ARM, host: hostView }));
 
-  console.log("LAB_REPORT_JSON=" + JSON.stringify({ scenario: SCENARIO, arm: ARM, report, hostSnapshot, notes, steps, domMeta: meta }));
+  console.log("LAB_REPORT_JSON=" + JSON.stringify({ scenario: SCENARIO, arm: ARM, report, hostSnapshot: hostView, notes, steps, domMeta: meta }));
 }
 
 try {
@@ -216,6 +174,5 @@ try {
     error: String((e && e.message) || e), notes: [], steps: {},
   }));
 }
-`.replace('SCENARIO_PLACEHOLDER', S(scenario))
-   .replace('SCENARIO_ARM_PLACEHOLDER', S(arm))
+`
 }

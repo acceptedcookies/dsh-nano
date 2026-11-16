@@ -2,6 +2,7 @@ import { createRequire } from 'node:module'
 import { readFileSync, writeFileSync, rmSync, mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { dnprDefine } from '../../scripts/dnpr-define.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -12,6 +13,8 @@ function bakeBindings() {
   const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
   const result = spawnSync(process.execPath, [join(repoRoot, 'scripts/bake-plugin-bindings.mjs'), '--plugin', pkg.name], { stdio: 'inherit' })
   if (result.status !== 0) process.exit(result.status ?? 1)
+  const decl = spawnSync(process.execPath, [join(repoRoot, 'scripts/bake-declaration.mjs'), '--plugin', pkg.name], { stdio: 'inherit' })
+  if (decl.status !== 0) process.exit(decl.status ?? 1)
 }
 
 bakeBindings()
@@ -59,7 +62,7 @@ bundle({
   outfile: join(root, 'lib/host.js'),
   format: 'esm',
   platform: 'node',
-  define: versionDefine,
+  define: { ...versionDefine, ...dnprDefine },
 })
 
 // Browser half: an IIFE wrapped in the client module-loader factory format.
@@ -73,7 +76,7 @@ bundle({
   external: ['react', 'react-dom', 'react-dom/client',
     // Shared through PLATFORM_MODULES: the shell seeds this identity, so the bundle must not copy it.
     '@deepseek-ai/dsh-client-ui-primitives'],
-  define: versionDefine,
+  define: { ...versionDefine, ...dnprDefine },
 })
 
 const body = join(root, 'lib/client.body.js')

@@ -51,27 +51,35 @@ const log = (...a) => console.log('[lab]', ...a)
 const readJson = p => (existsSync(p) ? JSON.parse(readFileSync(p, 'utf8')) : null)
 
 /** Build a standalone IIFE of the DNPR client for the purity arm. */
-function buildStandalone() {
-  const esbuild = join(ROOT, 'dsh-nano-explorer-extra', 'node_modules', '.bin', isWin ? 'esbuild.cmd' : 'esbuild')
+async function buildStandalone() {
+  const { DECLARATION_PLUGINS } = await import('./declarations.mjs')
+  const { createRequire } = await import('node:module')
+  let esbuild
+  for (const name of DECLARATION_PLUGINS) {
+    try { esbuild = createRequire(join(ROOT, name, 'package.json'))('esbuild'); break } catch { /* next package */ }
+  }
+  if (!esbuild) throw new Error('standalone build failed: esbuild not installed')
   const out = join(OUT, 'perf-review-standalone.js')
-  const r = spawnSync(esbuild, [
-    join(ROOT, 'packages', 'dsh-performance-review', 'src', 'client.js'),
-    '--bundle', '--format=iife', '--global-name=__perfReviewLib', '--platform=browser',
-    `--outfile=${out}`,
-  ], { encoding: 'utf8', shell: isWin })
-  if (r.status !== 0) throw new Error(`standalone build failed: ${r.stderr}`)
+  await esbuild.build({
+    entryPoints: [join(ROOT, 'packages', 'dsh-performance-review', 'src', 'client.js')],
+    bundle: true, format: 'iife', globalName: '__perfReviewLib', platform: 'browser',
+    outfile: out,
+  })
   return out
 }
 
-/** B2: exact DNPR byte footprint in NDEE's client bundle (normal vs aliased stub). */
-function footprint() {
-  const pkg = join(ROOT, 'dsh-nano-explorer-extra')
+/** B2: exact DNPR byte footprint in one declared plugin's client bundle
+ *  (normal vs aliased stub). The package is discovered, not named here. */
+async function footprint() {
+  const { DECLARATION_PLUGINS } = await import('./declarations.mjs')
+  const pkgName = DECLARATION_PLUGINS.find(name => existsSync(join(ROOT, name, 'src', 'client', 'index.js')))
+  if (!pkgName) throw new Error('footprint: no declaration plugin ships src/client/index.js')
+  const pkg = join(ROOT, pkgName)
   const esbuild = join(pkg, 'node_modules', '.bin', isWin ? 'esbuild.cmd' : 'esbuild')
   const stub = join(OUT, 'no-review-stub.mjs')
   writeFileSync(stub, [
-    "export const LIB_VERSION = 'no-review'",
     'const api = { span:(n,f)=>f(), track:()=>({wrap:f=>f,attach(){},detach(){},resetLive(){}}), count(){}, profiler:c=>c }',
-    'export function ensurePerfReview(){ return { join:()=>api, configure(){}, report:()=>({}), reset(){}, resetCounters(){} } }',
+    'export function ensurePerfReview(){ return { join:()=>api, read:()=>({}), cutWindow(){}, observe(){} } }',
     'export function firstVisibleRoot(){ return null }',
   ].join('\n'))
   const common = [
@@ -90,7 +98,7 @@ function footprint() {
   const withoutB = statSync(bare).size
   const result = {
     measuredAt: new Date().toISOString(),
-    package: 'dsh-nano-explorer-extra',
+    package: pkgName,
     withReviewBytes: withB,
     withoutReviewBytes: withoutB,
     dnprFootprintBytes: withB - withoutB,
@@ -159,18 +167,19 @@ function mergeRepeats(payloads) {
     ['page', 'nanoCombined', 'comboResources'],
   ]
   for (const [id, plugin] of Object.entries(firstReport?.plugins ?? {})) {
+    const hand = plugin.hand ?? {}
     for (const p of ['native.spanMsP95', 'native.trackMsP95', 'native.samples.spans',
       'native.samples.callbacks', 'own.inpP75', 'own.inpCount', 'scriptMs']) {
-      paths.push(['plugins', id, ...p.split('.')])
+      paths.push(['plugins', id, 'hand', ...p.split('.')])
     }
-    for (const name of Object.keys(plugin.tracks ?? {})) {
-      for (const k of ['callbacks', 'live', 'callbackMs']) paths.push(['plugins', id, 'tracks', name, k])
+    for (const name of Object.keys(hand.tracks ?? {})) {
+      for (const k of ['callbacks', 'live', 'callbackMs']) paths.push(['plugins', id, 'hand', 'tracks', name, k])
     }
-    for (const name of Object.keys(plugin.spans ?? {})) {
-      for (const k of ['n', 'p50', 'p95', 'maxMs']) paths.push(['plugins', id, 'spans', name, k])
+    for (const name of Object.keys(hand.spans ?? {})) {
+      for (const k of ['n', 'p50', 'p95', 'maxMs']) paths.push(['plugins', id, 'hand', 'spans', name, k])
     }
-    for (const name of Object.keys(plugin.hostSpan ?? {})) {
-      for (const k of ['n', 'p50', 'p95']) paths.push(['plugins', id, 'hostSpan', name, k])
+    for (const name of Object.keys(plugin.host ?? {})) {
+      for (const k of ['n', 'p50', 'p95']) paths.push(['plugins', id, 'host', name, k])
     }
   }
   for (const path of paths) {
@@ -217,9 +226,10 @@ function runOnce(scenario, actualArm, script) {
 }
 
 async function main() {
-  if (measureFootprint) { footprint(); return 0 }
+  if (measureFootprint) { await footprint(); return 0 }
 
   const { SCENARIOS, scenarioScript } = await import('./scenarios.mjs')
+  const { driverFor } = await import('./declarations.mjs')
   const { evaluate, versionsFrom, versionsMatch } = await import('./budgets.mjs')
   const { renderMarkdown } = await import('../packages/dsh-performance-review/src/markdown.js')
 
@@ -227,7 +237,7 @@ async function main() {
   const needsStandalone = arm === 'purity' || want.includes('observer-purity')
   // Pass the bundle PATH, not its source: inlining ~37 KB into the -e argv
   // exceeds the Windows CreateProcess 32 KB command-line limit.
-  const standalone = needsStandalone ? buildStandalone() : ''
+  const standalone = needsStandalone ? await buildStandalone() : ''
   let baselineStore = readJson(BASELINE)
   const firstRun = writeBaseline || baselineStore === null
   const results = []
@@ -235,7 +245,7 @@ async function main() {
 
   for (const scenario of want) {
     const actualArm = scenario === 'observer-purity' ? 'purity' : arm
-    const script = scenarioScript(cfg, scenario, actualArm, standalone)
+    const script = scenarioScript(cfg, scenario, actualArm, standalone, driverFor(scenario))
     const payloads = []
     for (let i = 0; i < repeats; i += 1) {
       if (repeats > 1) log(`  repeat ${i + 1}/${repeats}`)
@@ -254,17 +264,20 @@ async function main() {
       repeatRuns = merged.repeatRuns
     }
     // B3 injection: apply AFTER merging so the injected value is not diluted.
-    // D2 removed the standing card-wake observer, so that row no longer exists
-    // on an idle page — recreate a minimal row to simulate that exact regression.
-    if (injectFailure && payload.report?.plugins?.['nano-explorer-extra']) {
-      const plugin = payload.report.plugins['nano-explorer-extra']
-      plugin.tracks ??= {}
-      plugin.tracks['card-wake'] = {
-        kind: 'mutation', callbacks: 0, live: 0, callbackMs: 0,
-        ...(plugin.tracks['card-wake'] ?? {}),
-        callbacks: 999999,
+    // The subject comes from a hard declaration budget, never a name written
+    // here: any regression a declaration can catch is a valid injection target.
+    if (injectFailure && payload.report) {
+      const { loadDeclarations } = await import('./declarations.mjs')
+      const target = loadDeclarations()
+        .flatMap(declaration => (declaration.budgets ?? [])
+          .filter(budget => budget.gate === 'hard' && (!budget.scenario || budget.scenario === scenario))
+          .map(budget => ({ declaration, budget })))[0]
+      if (target) {
+        setAt(payload.report, ['plugins', target.declaration.plugin, ...target.budget.subject.split('.')], 999999)
+        payload.notes = [...(payload.notes ?? []), `INJECT-FAILURE: ${target.declaration.plugin} ${target.budget.subject} forced to 999999`]
+      } else {
+        payload.notes = [...(payload.notes ?? []), 'INJECT-FAILURE: no hard declaration budget applies to this scenario']
       }
-      payload.notes = [...(payload.notes ?? []), 'INJECT-FAILURE: card-wake.callbacks forced to 999999 (simulated standing-observer regression)']
     }
     // L0 injection: verify the NEW attributable red line fires exit 1.
     if (injectDelay && payload.report?.page) {
@@ -314,7 +327,7 @@ async function main() {
     let md = report
       ? renderMarkdown(report)
       : `# perf-review · ${scenario} · arm=${actualArm}\n\nPurity arm: no page report.\n`
-    md += `\n## scenario\n\n- arm: ${actualArm}\n- repeats: ${repeats}${repeats > 1 ? '（判定使用各指标中位数）' : ''}\n- steps: ${JSON.stringify(bundle.steps)}\n- domMeta: ${JSON.stringify(bundle.domMeta)}\n- hostWindow: ${payload.hostSnapshot?.window === true}\n`
+    md += `\n## scenario\n\n- arm: ${actualArm}\n- repeats: ${repeats}${repeats > 1 ? '（判定使用各指标中位数）' : ''}\n- steps: ${JSON.stringify(bundle.steps)}\n- domMeta: ${JSON.stringify(bundle.domMeta)}\n- hostRead: ${payload.hostSnapshot?.basis ?? 'absent'}${payload.hostSnapshot?.truncated?.length ? ` (truncated: ${payload.hostSnapshot.truncated.map(t => typeof t === 'string' ? t : t.name).join(',')})` : ''}\n`
     if (repeatRuns) {
       md += `\n## repeat runs\n\n| run | nativeInpP75 | inputDelayP95 | processingP95 | presentationP95 | n |\n|---|---|---|---|---|---|\n`
       for (const r of repeatRuns) {

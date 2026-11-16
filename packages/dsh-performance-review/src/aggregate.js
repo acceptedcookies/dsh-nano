@@ -339,7 +339,7 @@ export function buildReport(input) {
 
   const contributors = (input.meta?.contributors ?? []).map(item => ({
     plugin: item.plugin ?? item.pluginId ?? null,
-    build: item.build ?? item.libVersion ?? null,
+    build: item.build ?? null,
     decl: item.decl ?? null,
   }))
   return clipOversize({

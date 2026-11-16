@@ -1,4 +1,4 @@
-// packages/dsh-interface/src/contracts/jsonOutcome.js
+// ../packages/dsh-interface/src/contracts/jsonOutcome.js
 var FAILURE_KIND = Object.freeze({
   /** signal aborted; issued-before cancellation makes no server-side claim. */
   CANCELLED: "cancelled",
@@ -13,7 +13,7 @@ var FAILURE_KIND = Object.freeze({
 });
 var FAILURE_KINDS = Object.freeze(Object.values(FAILURE_KIND));
 
-// packages/dsh-interface/src/contracts/observeEvent.js
+// ../packages/dsh-interface/src/contracts/observeEvent.js
 var OBSERVE_SURFACES = Object.freeze(["http", "upgrade", "json", "mcp"]);
 var HTTP_OUTCOMES = Object.freeze(["ok", "rejected", "method", "failed"]);
 var UPGRADE_OUTCOMES = Object.freeze(["accepted", "rejected", "method"]);
@@ -72,11 +72,10 @@ function assertObserveEvent(event) {
   return event;
 }
 
-// packages/dsh-performance-review/src/state.js
-var LIB_VERSION = "0.1.0";
+// ../packages/dsh-performance-review/src/state.js
 var CLIENT_KEY = Symbol.for("dsh.perfReview.v2");
 var HOST_KEY = Symbol.for("dsh.perfReviewHost.v2");
-var BUILD_STAMP = "dev";
+var BUILD_STAMP = true ? "3ee91d65ad6f" : "dev";
 var NAME_RE = /^[a-z0-9][a-z0-9-]{0,39}$/;
 var CONTRACT_KEY_RE = /^[a-z0-9][a-z0-9.-]{0,63}$/;
 var MAX_USAGE_KEYS = 32;
@@ -145,7 +144,7 @@ function roundMs(value) {
   return value == null ? null : Math.round(value * 10) / 10;
 }
 
-// packages/dsh-performance-review/src/host.js
+// ../packages/dsh-performance-review/src/host.js
 var WINDOW_SAMPLE_CAP = 512;
 var EVENT_CAP = 32;
 var isPromiseLike = (value) => value !== null && typeof value === "object" && typeof value.then === "function";
@@ -326,11 +325,11 @@ function createPerfReviewHost(env = {}) {
       state.plugins.set(pluginId, row);
     }
     if (!(row.counts instanceof Map)) row.counts = /* @__PURE__ */ new Map();
-    const libVersion = impl.libVersion ?? LIB_VERSION;
-    const key = `${pluginId}@${libVersion}`;
+    const build = impl.build ?? BUILD_STAMP;
+    const key = `${pluginId}@${build}`;
     if (!state.contributorKeys.has(key)) {
       state.contributorKeys.add(key);
-      state.contributors.push({ pluginId, libVersion });
+      state.contributors.push({ pluginId, build });
     }
     const clock = env.performance ?? globalThis.performance;
     const now = () => clock.now();
@@ -458,8 +457,7 @@ function createPerfReviewHost(env = {}) {
       return hostSnapshot(state);
     },
     _state: () => state,
-    _build: state._build,
-    libVersion: LIB_VERSION
+    _build: state._build
   };
 }
 function handleHostRead(req, res, host) {
@@ -496,7 +494,6 @@ function ensurePerfReviewHost(env = {}) {
   return installSingleton(global, HOST_KEY, "__perfReviewHost", stamp, () => createPerfReviewHost(env));
 }
 export {
-  LIB_VERSION,
   createPerfReviewHost,
   ensurePerfReviewHost,
   handleHostRead,

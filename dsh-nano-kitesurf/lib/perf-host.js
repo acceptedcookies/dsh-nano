@@ -76,10 +76,9 @@ function assertObserveEvent(event) {
 }
 
 // ../packages/dsh-performance-review/src/state.js
-var LIB_VERSION = "0.1.0";
 var CLIENT_KEY = Symbol.for("dsh.perfReview.v2");
 var HOST_KEY = Symbol.for("dsh.perfReviewHost.v2");
-var BUILD_STAMP = "dev";
+var BUILD_STAMP = true ? "3ee91d65ad6f" : "dev";
 var NAME_RE = /^[a-z0-9][a-z0-9-]{0,39}$/;
 var CONTRACT_KEY_RE = /^[a-z0-9][a-z0-9.-]{0,63}$/;
 var MAX_USAGE_KEYS = 32;
@@ -329,11 +328,11 @@ function createPerfReviewHost(env = {}) {
       state.plugins.set(pluginId, row);
     }
     if (!(row.counts instanceof Map)) row.counts = /* @__PURE__ */ new Map();
-    const libVersion = impl.libVersion ?? LIB_VERSION;
-    const key = `${pluginId}@${libVersion}`;
+    const build = impl.build ?? BUILD_STAMP;
+    const key = `${pluginId}@${build}`;
     if (!state.contributorKeys.has(key)) {
       state.contributorKeys.add(key);
-      state.contributors.push({ pluginId, libVersion });
+      state.contributors.push({ pluginId, build });
     }
     const clock = env.performance ?? globalThis.performance;
     const now = () => clock.now();
@@ -461,8 +460,7 @@ function createPerfReviewHost(env = {}) {
       return hostSnapshot(state);
     },
     _state: () => state,
-    _build: state._build,
-    libVersion: LIB_VERSION
+    _build: state._build
   };
 }
 function ensurePerfReviewHost(env = {}) {
@@ -480,7 +478,7 @@ function pluginVersion() {
   }
 }
 var host = ensurePerfReviewHost();
-var review = host.hostJoin("nano-kitesurf", { version: pluginVersion(), libVersion: LIB_VERSION });
+var review = host.hostJoin("nano-kitesurf", { version: pluginVersion() });
 function hostSpan(name, fn, ctx = null) {
   return review.hostSpan(name, fn, ctx);
 }

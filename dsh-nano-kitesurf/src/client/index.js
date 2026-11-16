@@ -4,6 +4,7 @@ const React = require('react')
 const primitives = require('@deepseek-ai/dsh-client-ui-primitives')
 const { openNanoDialog, openNanoMenu, NANO_STYLES, NanoToast } = require('dsh-nano-ui')
 const { ensurePerfReview } = require('dsh-performance-review/client')
+const { BUCKETS, DECL_HASH } = require('../../lib/perf-declaration.js')
 const { copyFor } = require('./i18n.js')
 const { batchNote, designNote, multiNote } = require('../shared/note.js')
 const { contentFrame, shotPoint } = require('../shared/shot-point.js')
@@ -38,6 +39,8 @@ const perf = {
     try {
       const collector = perfReview.join(OWN_ID, {
         version: typeof __NKS_VERSION__ === 'string' ? __NKS_VERSION__ : '0.0.0',
+        buckets: BUCKETS,
+        decl: DECL_HASH,
         react: React,
         root: () => document.querySelector('[data-nks-workspace]'),
       })

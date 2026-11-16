@@ -44,7 +44,7 @@ async function main() {
       await page.goto(t.url, { timeout: 40000 });
       await page.waitForTimeout(2600);
       const env = await page.evaluate(() => ({
-        perfReview: typeof window.__perfReview !== 'undefined',
+        perfReview: typeof window[Symbol.for('dsh.perfReview.v2')] !== 'undefined',
         nxeRoots: document.querySelectorAll('[data-nxe]').length,
         hasTextarea: !!document.querySelector('textarea'),
       }));
@@ -84,11 +84,12 @@ async function main() {
         let pluginSpans = 0;
         let pluginCallbacks = 0;
         let pluginCollectionEnabled = false;
-        if (window.__perfReview) {
-          pluginCollectionEnabled = window.__perfReview._state?.().enabled === true;
-          const rep = window.__perfReview.report({ scenario: 'inp-diagnosis', arm: 'on' });
+        const review = window[Symbol.for('dsh.perfReview.v2')];
+        if (review) {
+          pluginCollectionEnabled = review._state?.().enabled === true;
+          const rep = review.read({ scenario: 'inp-diagnosis', arm: 'on' });
           for (const p of Object.values(rep.plugins || {})) {
-            for (const t of Object.values(p.tracks || {})) pluginCallbackMs += (t.callbackMs || 0);
+            for (const t of Object.values(p.hand?.tracks || {})) pluginCallbackMs += (t.callbackMs || 0);
             pluginSpans += p.native?.samples?.spans || 0;
             pluginCallbacks += p.native?.samples?.callbacks || 0;
           }

@@ -2,13 +2,17 @@
   "schema": "dnpr.declaration/1",
   "plugin": "nano-kitesurf",
   "keys": {
-    "spans": [],
+    "spans": [
+      "pane-op",
+      "navigate"
+    ],
     "tracks": [],
     "usage": [],
     "hostSpans": [
       "kite-warmup"
     ]
   },
+  "buckets": [],
   "contract": [],
   "scenarios": [],
   "budgets": []

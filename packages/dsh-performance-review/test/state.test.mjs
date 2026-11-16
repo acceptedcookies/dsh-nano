@@ -52,11 +52,12 @@ test('packageNameToPluginId maps dsh-nano-* → nano-*; others → null', () => 
   assert.equal(packageNameToPluginId(''), null)
 })
 
-test('targetBucket maps attribute descriptors to sanitized buckets', () => {
+test('targetBucket keeps only native buckets; plugin buckets are declarations', () => {
   assert.equal(targetBucket({ tag: 'TEXTAREA', attrs: {} }), 'composer-textarea')
-  assert.equal(targetBucket({ tag: 'DIV', attrs: { 'data-nxe': '' } }), 'files-row')
-  assert.equal(targetBucket({ tag: 'DIV', attrs: { 'data-nano-model-selector': 'root' } }), 'model-trigger')
-  assert.equal(targetBucket({ tag: 'DIV', attrs: { 'data-nano-shared-workspace': '' } }), 'shared-row')
+  assert.equal(targetBucket({ tag: 'DIV', attrs: { 'data-composer': '' } }), 'composer-textarea')
+  assert.equal(targetBucket({ tag: 'DIV', attrs: { 'data-row-key': 'x' } }), 'sidebar-row')
+  assert.equal(targetBucket({ tag: 'DIV', attrs: { 'data-nxe': '' } }), 'other')
+  assert.equal(targetBucket({ tag: 'DIV', attrs: { 'data-nano-model-selector': 'root' } }), 'other')
   assert.equal(targetBucket({ tag: 'SPAN', attrs: {} }), 'other')
   assert.equal(targetBucket(null), 'other')
 })

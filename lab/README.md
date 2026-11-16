@@ -62,13 +62,16 @@ node lab/diagnose-inp.mjs --repeats 3
 
 ## 场景
 
-`idle-10s`、`composer-type`、`files-expand`、`notepad-type`、`model-open`、
-`shared-open`、`observer-purity`。每个场景的步骤、DOM 元信息、浏览器侧异常
-都写进 JSON 的 `steps` / `notes`，失败步骤不会让整轮塌掉，但会如实记录。
+页级场景固定为 `idle-10s`、`composer-type`、`observer-purity`，写在
+`lab/declarations.mjs`。插件场景从各包 `src/perf/declaration.json` 的
+`scenarios[{id, driver}]` 读出，步骤在 `lab/drivers/*.mjs`；`--scenario all`
+不写死插件名单。每个场景的步骤、DOM 元信息、浏览器侧异常都写进 JSON 的
+`steps` / `notes`，失败步骤不会让整轮塌掉，但会如实记录。
 
-宿主数据用 `GET /nano-explorer-extra/perf-review/host?mode=window` 在场景首尾
-各调一次：首调排空窗口，尾调返回精确的场景内 `hostSpan`（`n` 是场景增量，
-不是进程累计），再经 `report(meta, hostSnapshot)` 合并进报告。
+场景开始时页面调 `cutWindow()` 并记下宿主返回的 `next`；结束时带
+`?since=<起点>` 读 `GET /nano-explorer-extra/perf-review/host`（其他装了 DNPR
+的插件也有同型路由），把该视图作为 `read({ host })` 的输入。读不是排空，
+两个读者用不同 `since` 互不影响。
 
 ## 诊断剩余 fail 项
 
@@ -101,10 +104,10 @@ node lab/diagnose-inp.mjs --repeats 3
 说明 ~1 s 的延迟全在 presentation，主线程两段 <6 ms。
 
 **判定分两层**（spec rev4.1 §7）：低方差 / 结构性 / 可归因指标是硬门禁；
-高方差相对项（span p95、hostSpan p95、observer callbacks 相对基线倍数、页级
+高方差相对项（span p95、host p95、observer callbacks 相对基线倍数、页级
 `nativeInpP75`）是 **audit**——仍写进报告与 D1 候选表，但不产生 exit 1。
 理由与实测见 `docs/code-review/26-nov/performance-alpha.md` §12。
 
 > 机器级前置：dev 宿主 `ai.deepseek.dsh.dev.web.plist` 加了 `DSH_PERF_REVIEW=1`
-> 并重载过 LaunchAgent（备份 `.bak-perf-review`）。没有它 `hostSpan` 为空。
+> 并重载过 LaunchAgent（备份 `.bak-perf-review`）。没有它 `host` 行为空。
 

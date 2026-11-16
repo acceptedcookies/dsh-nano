@@ -757,10 +757,6 @@ var __kitesurfExport = (() => {
     const attrs = descriptor.attrs ?? {};
     const has = (key) => attrs[key] !== void 0 && attrs[key] !== null;
     if (has("data-composer") || has("data-chat-input")) return "composer-textarea";
-    if (has("data-nano-notepad")) return "notepad-panel";
-    if (has("data-nano-model-selector")) return "model-trigger";
-    if (has("data-nxe")) return "files-row";
-    if (has("data-nano-shared-workspace")) return "shared-row";
     if (has("data-row-key") || has("data-sidebar-row")) return "sidebar-row";
     if (descriptor.tag === "TEXTAREA") return "composer-textarea";
     return "other";
@@ -768,14 +764,13 @@ var __kitesurfExport = (() => {
   function roundMs(value) {
     return value == null ? null : Math.round(value * 10) / 10;
   }
-  var LIB_VERSION, REPORT_VERSION, CLIENT_KEY, HOST_KEY, BUILD_STAMP, NAME_RE, CONTRACT_KEY_RE, MAX_SPAN_KEYS, MAX_USAGE_KEYS, INTERACTION_CAP, RESERVOIR_CAP, EVENT_DURATION_THRESHOLD, WINDOW_PAD_BEFORE_MS, WINDOW_PAD_AFTER_MS, NANO_PKG_PREFIX;
+  var REPORT_VERSION, CLIENT_KEY, HOST_KEY, BUILD_STAMP, NAME_RE, CONTRACT_KEY_RE, MAX_SPAN_KEYS, MAX_USAGE_KEYS, INTERACTION_CAP, RESERVOIR_CAP, EVENT_DURATION_THRESHOLD, WINDOW_PAD_BEFORE_MS, WINDOW_PAD_AFTER_MS, NANO_PKG_PREFIX;
   var init_state = __esm({
     "../packages/dsh-performance-review/src/state.js"() {
-      LIB_VERSION = "0.1.0";
       REPORT_VERSION = 2;
       CLIENT_KEY = Symbol.for("dsh.perfReview.v2");
       HOST_KEY = Symbol.for("dsh.perfReviewHost.v2");
-      BUILD_STAMP = "dev";
+      BUILD_STAMP = true ? "3ee91d65ad6f" : "dev";
       NAME_RE = /^[a-z0-9][a-z0-9-]{0,39}$/;
       CONTRACT_KEY_RE = /^[a-z0-9][a-z0-9.-]{0,63}$/;
       MAX_SPAN_KEYS = 32;
@@ -1029,7 +1024,7 @@ var __kitesurfExport = (() => {
     if (input.hostBad === true) structureOut.badShape = (structureOut.badShape ?? 0) + 1;
     const contributors = (input.meta?.contributors ?? []).map((item) => ({
       plugin: item.plugin ?? item.pluginId ?? null,
-      build: item.build ?? item.libVersion ?? null,
+      build: item.build ?? null,
       decl: item.decl ?? null
     }));
     return clipOversize({
@@ -1174,7 +1169,6 @@ var __kitesurfExport = (() => {
   // ../packages/dsh-performance-review/src/client.js
   var client_exports = {};
   __export(client_exports, {
-    LIB_VERSION: () => LIB_VERSION,
     bucketForElement: () => bucketForElement,
     createPerfReview: () => createPerfReview,
     ensurePerfReview: () => ensurePerfReview,
@@ -1196,19 +1190,17 @@ var __kitesurfExport = (() => {
     }
     return false;
   }
-  function bucketForElement(el, attrs) {
+  function bucketForElement(el, entries) {
     let node = el;
     let depth = 0;
     while (node != null && typeof node === "object" && depth < 12) {
-      const descriptor = { tag: node.tagName, attrs: {} };
-      for (const name of attrs) {
+      for (const [name, bucket2] of entries) {
         try {
-          if (typeof node.hasAttribute === "function" && node.hasAttribute(name)) {
-            descriptor.attrs[name] = true;
-          }
+          if (typeof node.hasAttribute === "function" && node.hasAttribute(name)) return bucket2;
         } catch {
         }
       }
+      const descriptor = { tag: node.tagName, attrs: {} };
       const bucket = targetBucket(descriptor);
       if (bucket !== "other") return bucket;
       node = node.parentElement ?? null;
@@ -1283,6 +1275,47 @@ var __kitesurfExport = (() => {
     const plugins = /* @__PURE__ */ new Map();
     const contributors = [];
     const contributorKeys = /* @__PURE__ */ new Set();
+    const hostSources = [];
+    let hostCursor = null;
+    let hostSnapshotCache = null;
+    let hostSourceIndex = 0;
+    let hostFailures = 0;
+    let hostTimer = null;
+    const fetchRef = env.fetch ?? globalThis.fetch;
+    const setIntervalRef = env.setInterval ?? globalThis.setInterval;
+    const visible = () => typeof document === "undefined" || document.visibilityState !== "hidden";
+    const pollHost = async () => {
+      if (enabled !== true || hostSources.length === 0 || !visible()) return;
+      const url = hostSources[hostSourceIndex % hostSources.length];
+      try {
+        const res = await fetchRef(`${url}${hostCursor ? `?since=${encodeURIComponent(hostCursor)}` : ""}`, { credentials: "same-origin", cache: "no-store" });
+        const body = await res?.json?.();
+        if (body != null && typeof body === "object" && body.status !== 400) {
+          hostSnapshotCache = body;
+          hostCursor = body.next ?? hostCursor;
+          hostFailures = 0;
+        }
+      } catch {
+        hostFailures += 1;
+        if (hostFailures >= 2) {
+          hostSourceIndex += 1;
+          hostFailures = 0;
+        }
+      }
+    };
+    const startHostPoll = () => {
+      if (hostTimer != null || hostSources.length === 0 || enabled !== true) return;
+      if (typeof setIntervalRef !== "function") return;
+      hostTimer = setIntervalRef(pollHost, 5e3);
+      if (typeof hostTimer?.unref === "function") hostTimer.unref();
+      pollHost();
+    };
+    const bucketMap = /* @__PURE__ */ new Map([
+      ["data-composer", "composer-textarea"],
+      ["data-chat-input", "composer-textarea"],
+      ["data-row-key", "sidebar-row"],
+      ["data-sidebar-row", "sidebar-row"]
+    ]);
     let collector = createCollectorState();
     let frozenAt = (/* @__PURE__ */ new Date()).toISOString();
     const touch = () => {
@@ -1349,7 +1382,7 @@ var __kitesurfExport = (() => {
         if (windowEnd > cutoff) continue;
         collector.pendingInteractions.delete(key);
         const owner = pickOwner(plugins, pending.target, structure);
-        const bucket = bucketForElement(pending.target, BUCKET_ATTRS);
+        const bucket = bucketForElement(pending.target, [...bucketMap.entries()]);
         const samples = interactionSamples(pending, collector.spanEvents, collector.trackEvents);
         pushInteraction(collector, {
           interactionId: pending.interactionId,
@@ -1452,9 +1485,9 @@ var __kitesurfExport = (() => {
     };
     const startFinalizeSweep = () => {
       if (finalizeTimer !== null) return;
-      const setIntervalRef = env.setInterval ?? globalThis.setInterval;
-      if (typeof setIntervalRef !== "function") return;
-      finalizeTimer = setIntervalRef(() => {
+      const setIntervalRef2 = env.setInterval ?? globalThis.setInterval;
+      if (typeof setIntervalRef2 !== "function") return;
+      finalizeTimer = setIntervalRef2(() => {
         try {
           finalizeDue(now(perf2));
         } catch {
@@ -1591,20 +1624,29 @@ var __kitesurfExport = (() => {
       }
     });
     const join = (pluginId, impl = {}) => {
+      if (typeof impl.hostRoute === "string" && impl.hostRoute !== "" && !hostSources.includes(impl.hostRoute)) {
+        hostSources.push(impl.hostRoute);
+      }
+      for (const entry of impl.buckets ?? []) {
+        if (entry && typeof entry.attr === "string" && typeof entry.bucket === "string") {
+          bucketMap.set(entry.attr, entry.bucket);
+        }
+      }
       decideEnabled();
       const row = ensurePlugin(plugins, pluginId);
-      const libVersion = impl.libVersion ?? LIB_VERSION;
-      const build = impl.build ?? libVersion;
+      const build = impl.build ?? BUILD_STAMP;
+      const decl = impl.decl ?? null;
       const key = `${pluginId}@${build}`;
       if (!contributorKeys.has(key)) {
         contributorKeys.add(key);
-        contributors.push({ pluginId, libVersion, build });
+        contributors.push({ pluginId, build, decl });
       }
       if (impl.version != null) row.meta.version = impl.version;
       if (row.meta.implantedAt == null) row.meta.implantedAt = (/* @__PURE__ */ new Date()).toISOString();
       if (typeof impl.root === "function") row._root = impl.root;
       if (impl.react != null) row._react = impl.react;
       if (!enabled) return disabledApi();
+      startHostPoll();
       return makeApi(pluginId, row);
     };
     const cutWindow = () => {
@@ -1674,6 +1716,9 @@ var __kitesurfExport = (() => {
       bucket.outcomes[admitted.outcome] = (bucket.outcomes[admitted.outcome] ?? 0) + 1;
       const klass = statusClass(admitted.status);
       if (klass) bucket.status[klass] += 1;
+      hostCursor = null;
+      hostSnapshotCache = null;
+      pollHost();
       touch();
     };
     const read = (meta = {}) => {
@@ -1682,7 +1727,7 @@ var __kitesurfExport = (() => {
       const navigatorRef = env.navigator ?? globalThis.navigator;
       const chrome = /Chrome\/(\d+)/.exec(navigatorRef?.userAgent ?? "");
       const provided = Object.prototype.hasOwnProperty.call(input, "host");
-      const hostSnapshot = provided ? input.host : null;
+      const hostSnapshot = provided ? input.host : hostSnapshotCache;
       const hostBad = provided && hostSnapshot != null && !hostSnapshotUsable(hostSnapshot);
       return buildReport({
         meta: {
@@ -1712,8 +1757,7 @@ var __kitesurfExport = (() => {
       _absorbEventEntry: absorbEventEntry,
       _absorbLoafEntry: absorbLoafEntry,
       _absorbResourceEntry: absorbResourceEntry,
-      _build: env.build ?? BUILD_STAMP,
-      libVersion: LIB_VERSION
+      _build: env.build ?? BUILD_STAMP
     };
   }
   function ensurePerfReview(env = {}) {
@@ -1721,7 +1765,7 @@ var __kitesurfExport = (() => {
     const stamp = env.build ?? BUILD_STAMP;
     return installSingleton(global, CLIENT_KEY, "__perfReview", stamp, () => createPerfReview({ ...env, build: stamp }));
   }
-  var TRACK_EVENT_CAP, SPAN_EVENT_CAP, PROFILER_SAMPLE_CAP, now, isPromiseLike, BUCKET_ATTRS, HIDDEN_SELECTOR, contains, statusClass;
+  var TRACK_EVENT_CAP, SPAN_EVENT_CAP, PROFILER_SAMPLE_CAP, now, isPromiseLike, HIDDEN_SELECTOR, contains, statusClass;
   var init_client = __esm({
     "../packages/dsh-performance-review/src/client.js"() {
       init_state();
@@ -1732,16 +1776,6 @@ var __kitesurfExport = (() => {
       PROFILER_SAMPLE_CAP = 128;
       now = (perf2) => perf2.now();
       isPromiseLike = (value) => value !== null && typeof value === "object" && typeof value.then === "function";
-      BUCKET_ATTRS = [
-        "data-composer",
-        "data-chat-input",
-        "data-nano-notepad",
-        "data-nano-model-selector",
-        "data-nxe",
-        "data-nano-shared-workspace",
-        "data-row-key",
-        "data-sidebar-row"
-      ];
       HIDDEN_SELECTOR = '[hidden],[aria-hidden="true"]';
       contains = (parent, child) => {
         if (parent == null || child == null) return false;
@@ -1760,6 +1794,22 @@ var __kitesurfExport = (() => {
       if (typeof window !== "undefined" && typeof document !== "undefined") {
         ensurePerfReview();
       }
+    }
+  });
+
+  // lib/perf-declaration.js
+  var perf_declaration_exports = {};
+  __export(perf_declaration_exports, {
+    BUCKETS: () => BUCKETS,
+    DECL_HASH: () => DECL_HASH,
+    KEYS: () => KEYS
+  });
+  var KEYS, BUCKETS, DECL_HASH;
+  var init_perf_declaration = __esm({
+    "lib/perf-declaration.js"() {
+      KEYS = Object.freeze({ "spans": ["pane-op", "navigate"], "tracks": [], "usage": [], "hostSpans": ["kite-warmup"] });
+      BUCKETS = Object.freeze([]);
+      DECL_HASH = "462f22bc6836";
     }
   });
 
@@ -2150,6 +2200,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
   var primitives = __require("@deepseek-ai/dsh-client-ui-primitives");
   var { openNanoDialog: openNanoDialog2, openNanoMenu: openNanoMenu2, NANO_STYLES: NANO_STYLES2, NanoToast: NanoToast2 } = (init_dsh_nano_ui(), __toCommonJS(dsh_nano_ui_exports));
   var { ensurePerfReview: ensurePerfReview2 } = (init_client(), __toCommonJS(client_exports));
+  var { BUCKETS: BUCKETS2, DECL_HASH: DECL_HASH2 } = (init_perf_declaration(), __toCommonJS(perf_declaration_exports));
   var { copyFor: copyFor2 } = (init_i18n(), __toCommonJS(i18n_exports));
   var { batchNote: batchNote2, designNote: designNote2, multiNote: multiNote2 } = (init_note(), __toCommonJS(note_exports));
   var { contentFrame: contentFrame2, shotPoint: shotPoint2 } = (init_shot_point(), __toCommonJS(shot_point_exports));
@@ -2181,6 +2232,8 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       try {
         const collector = perfReview.join(OWN_ID, {
           version: true ? "0.1.0" : "0.0.0",
+          buckets: BUCKETS2,
+          decl: DECL_HASH2,
           react: React5,
           root: () => document.querySelector("[data-nks-workspace]")
         });

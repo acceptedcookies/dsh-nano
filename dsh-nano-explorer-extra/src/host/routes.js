@@ -1,7 +1,7 @@
 /** The six HTTP routes: one request gate, one JSON envelope, and the session-scoped work behind them. */
 
 import { watch } from 'node:fs'
-import { ensurePerfReviewHost, handleHostRead, LIB_VERSION } from 'dsh-performance-review/host'
+import { ensurePerfReviewHost, handleHostRead } from 'dsh-performance-review/host'
 import { createWebRegistrar } from 'dsh-interface/host'
 import { BINDING_TABLE, PLUGIN } from '../../lib/bindings.js'
 import { checkoutBranch, commitAll, fetchAll, ignoredAmong, ignoredPathsOf, listBranches, listConflicts, listWorktrees, pullUpstream, pushUpstream, readStatus, writeRemote, writeAuthor, writeSshKey } from './git.js'
@@ -331,8 +331,7 @@ export function createRoutes(ctx, config) {
   const review = ensurePerfReviewHost().hostJoin('nano-explorer-extra', {
     version: typeof __NXE_VERSION__ === 'string' ? __NXE_VERSION__ : undefined,
     // This host bundle's own copy of the library version (A3 / §10.4.4).
-    libVersion: LIB_VERSION,
-  })
+    })
 
   return {
     '/status': {

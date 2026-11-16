@@ -1,7 +1,7 @@
 /**
  * Performance instrumentation wiring for nano-model-selector.
  *
- * The page-wide singleton is `window.__perfReview`; this module only names this
+ * The page-wide singleton is `Symbol.for("dsh.perfReview.v2")`; this module only names this
  * plugin's root and version so attribution can tell our rows from native UI.
  * With the flag off every helper is an identity wrapper — fn is called
  * directly, no marks, no clocks (spec §6.2). NDEE owns the host-snapshot poll,
@@ -9,7 +9,8 @@
  */
 
 import React from 'react'
-import { ensurePerfReview, LIB_VERSION } from 'dsh-performance-review/client'
+import { ensurePerfReview } from 'dsh-performance-review/client'
+import { BUCKETS, DECL_HASH } from '../../lib/perf-declaration.js'
 
 export const OWN_ID = 'nano-model-selector'
 
@@ -22,9 +23,10 @@ const root = () => (rootGetter === null ? null : rootGetter())
 
 export const perf = ensurePerfReview().join(OWN_ID, {
   version: typeof __NMS_VERSION__ === 'string' ? __NMS_VERSION__ : undefined,
+  buckets: BUCKETS,
+  decl: DECL_HASH,
+  hostRoute: '/nano-model-selector/perf-review/host',
   // Pass THIS bundle copy's version: the singleton belongs to whichever copy
-  // loaded first, so its own LIB_VERSION would hide version skew (§3.3).
-  libVersion: LIB_VERSION,
   react: React,
   root,
 })

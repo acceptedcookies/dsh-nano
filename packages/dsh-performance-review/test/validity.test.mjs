@@ -9,7 +9,6 @@ import {
   isUsableRoot,
   firstVisibleRoot,
   pickOwner,
-  LIB_VERSION as CLIENT_LIB_VERSION,
 } from '../src/client.js'
 import {
   buildReport,
@@ -17,7 +16,9 @@ import {
   NOTE_GLOSSARY,
 } from '../src/aggregate.js'
 import { createCollectorState, createPluginRow, createStructure } from '../src/state.js'
-import { createPerfReviewHost, LIB_VERSION as HOST_LIB_VERSION } from '../src/host.js'
+import { createPerfReviewHost } from '../src/host.js'
+import * as client from '../src/client.js'
+import * as host from '../src/host.js'
 import { fakeEnv, fakePerf, el } from '../test-helpers/index.mjs'
 
 const hostEnv = (over = {}) => ({
@@ -174,20 +175,19 @@ test('A3: plugin.scriptMs reads collector.pluginScriptMs (was a dead field)', ()
   assert.equal(report.plugins['nano-x'].hand.scriptMs, 42.4)
 })
 
-test('A3: LIB_VERSION is exported from both halves for implants to pass explicitly', () => {
-  assert.equal(typeof CLIENT_LIB_VERSION, 'string')
-  assert.equal(typeof HOST_LIB_VERSION, 'string')
-  assert.equal(CLIENT_LIB_VERSION, HOST_LIB_VERSION)
+test('A3: LIB_VERSION and libVersion are retired; the build stamp is the identity', () => {
+  assert.equal('LIB_VERSION' in client, false)
+  assert.equal('LIB_VERSION' in host, false)
 })
 
-test('A3: join honours the caller copy libVersion (not the singleton default)', () => {
+test('A3: join records each caller copy build stamp (not a singleton version)', () => {
   const review = createPerfReview(fakeEnv())
-  review.join('nano-a', { libVersion: CLIENT_LIB_VERSION })
-  review.join('nano-b', { libVersion: '0.9.9-skew' })
+  review.join('nano-a', { build: 'stamp-a' })
+  review.join('nano-b', { build: 'stamp-b' })
   const report = review.read()
-  const versions = Object.fromEntries(report.page.contributors.map(c => [c.pluginId, c.libVersion]))
-  assert.equal(versions['nano-a'], CLIENT_LIB_VERSION)
-  assert.equal(versions['nano-b'], '0.9.9-skew')
+  const versions = Object.fromEntries(report.page.contributors.map(c => [c.pluginId, c.build]))
+  assert.equal(versions['nano-a'], 'stamp-a')
+  assert.equal(versions['nano-b'], 'stamp-b')
 })
 
 // ---------- A4: multi-instance live, nested spans, counter reset ----------

@@ -9,7 +9,6 @@
 
 import { assertObserveEvent } from '../../dsh-interface/src/contracts/observeEvent.js'
 import {
-  LIB_VERSION,
   NAME_RE,
   CONTRACT_KEY_RE,
   HOST_KEY,
@@ -228,11 +227,11 @@ export function createPerfReviewHost(env = {}) {
       state.plugins.set(pluginId, row)
     }
     if (!(row.counts instanceof Map)) row.counts = new Map()
-    const libVersion = impl.libVersion ?? LIB_VERSION
-    const key = `${pluginId}@${libVersion}`
+    const build = impl.build ?? BUILD_STAMP
+    const key = `${pluginId}@${build}`
     if (!state.contributorKeys.has(key)) {
       state.contributorKeys.add(key)
-      state.contributors.push({ pluginId, libVersion })
+      state.contributors.push({ pluginId, build })
     }
     const clock = env.performance ?? globalThis.performance
     const now = () => clock.now()
@@ -355,11 +354,8 @@ export function createPerfReviewHost(env = {}) {
     snapshot: () => { isEnabled(); return hostSnapshot(state) },
     _state: () => state,
     _build: state._build,
-    libVersion: LIB_VERSION,
   }
 }
-
-export { LIB_VERSION }
 
 /**
  * Install-or-reuse the process singleton on the v2 symbol only.

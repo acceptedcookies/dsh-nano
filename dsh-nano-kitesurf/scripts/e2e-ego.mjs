@@ -388,12 +388,14 @@ async function main() {
   // 12. perf-review instrumentation: pane actions must be recorded as spans.
   // Read the collector's local report — the host copy only updates on the
   // pane's periodic post and can lag the run() we triggered seconds ago.
-  const perf = await page.evaluate(() => {
-    const rep = window.__perfReview?.report?.({ scenario: 'e2e' })
-    const last = fetch('/nano-local-sandbox/perf-review/host').then((r) => r.json())
-    return Promise.all([rep, last]).then(([local, host]) => ({ local, host }))
+  const perf = await page.evaluate(async () => {
+    const review = window[Symbol.for('dsh.perfReview.v2')]
+    const local = review ? review.read({ scenario: 'e2e' }) : null
+    let host = null
+    try { host = await fetch('/nano-explorer-extra/perf-review/host').then((r) => r.json()) } catch {}
+    return { local, host }
   })
-  const ksSpans = perf.local?.plugins?.['nano-kitesurf']?.spans || {}
+  const ksSpans = perf.local?.plugins?.['nano-kitesurf']?.hand?.spans || {}
   const spanNames = Object.keys(ksSpans)
   const spanCount = spanNames.reduce((sum, name) => sum + (ksSpans[name]?.n || 0), 0)
   record('perf-spans', spanCount > 0, `${spanCount} spans (${spanNames.join(',')}) ${perf.host?.client ? 'host-synced' : 'host-pending'}`)
@@ -402,7 +404,7 @@ async function main() {
   // and the hot-path p95 must stay under a sane ceiling. Budget is generous —
   // the engine is a local container, network latency dominates; this catches
   // regressions (e.g. a span suddenly taking seconds), not micro-optimisation.
-  const hostSpans = perf.host?.plugins?.['nano-kitesurf']?.spans || {}
+  const hostSpans = perf.host?.plugins?.['nano-kitesurf']?.hand?.spans || {}
   const shotStats = hostSpans['shot']?.stats
   if (shotStats) {
     record('perf-stats-shape', typeof shotStats.p95 === 'number' && typeof shotStats.p50 === 'number',

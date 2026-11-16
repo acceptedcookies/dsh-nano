@@ -4,7 +4,7 @@ import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { readFileSync } from 'node:fs'
 import { defaultEngine, imagineSkill, imagineStub, readEngine, scanEngines, writeEngine } from './lib/host-media.js'
-import { ensurePerfReviewHost, handleHostRead, LIB_VERSION } from './lib/perf-review-host.js'
+import { ensurePerfReviewHost, handleHostRead } from './lib/perf-review-host.js'
 import { registerRoutes } from './lib/route-guard.js'
 import { compactRuntime } from './lib/compact-runtime.js'
 import { COMPACTION_BUNDLE_NAME, createBundleInventory } from './lib/bundle-inventory.js'
@@ -29,7 +29,6 @@ function pluginVersion() {
 /** Host-side observability; identity wrapper unless DSH_PERF_REVIEW=1. */
 const review = ensurePerfReviewHost().hostJoin('nano-model-selector', {
   version: pluginVersion(),
-  libVersion: LIB_VERSION,
 })
 
 const ROUTE = '/nano-model-selector/catalog'

@@ -2,6 +2,7 @@ import { createRequire } from 'node:module'
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { dnprDefine } from '../../scripts/dnpr-define.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const require = createRequire(join(root, 'package.json'))
@@ -13,6 +14,8 @@ function bakeBindings() {
   const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
   const result = spawnSync(process.execPath, [join(repoRoot, 'scripts/bake-plugin-bindings.mjs'), '--plugin', pkg.name], { stdio: 'inherit' })
   if (result.status !== 0) process.exit(result.status ?? 1)
+  const decl = spawnSync(process.execPath, [join(repoRoot, 'scripts/bake-declaration.mjs'), '--plugin', pkg.name], { stdio: 'inherit' })
+  if (decl.status !== 0) process.exit(decl.status ?? 1)
 }
 
 bakeBindings()
@@ -35,6 +38,7 @@ esbuild.buildSync({
   bundle: true,
   format: 'esm',
   platform: 'node',
+  define: dnprDefine,
   outfile: join(root, 'lib/perf-host.js'),
 })
 
@@ -48,7 +52,7 @@ esbuild.buildSync({
   platform: 'browser',
   external: ['react', 'react-dom', 'react-dom/client', '@deepseek-ai/dsh-client-ui-primitives'],
   // Bake the package version so perf.join never reports a stale literal (S3-2).
-  define: { __NKS_VERSION__: JSON.stringify(pkgVersion) },
+  define: { __NKS_VERSION__: JSON.stringify(pkgVersion), ...dnprDefine },
   outfile: body,
 })
 

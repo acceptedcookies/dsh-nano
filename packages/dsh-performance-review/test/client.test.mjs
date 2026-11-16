@@ -236,15 +236,17 @@ test('pickOwner: deepest root wins over ancestor root; throws → rootErrors', (
   assert.equal(pickOwner(plugins, lonely, structure), 'native')
 })
 
-test('bucketForElement walks ancestors to nearest data-* marker', () => {
+test('bucketForElement walks ancestors using the buckets join() registered', () => {
   const row = el('div', { 'data-nxe': '' })
   const icon = el('span')
   icon.parentElement = row
-  assert.equal(bucketForElement(icon, ['data-nxe']), 'files-row')
+  assert.equal(bucketForElement(icon, [['data-nxe', 'files-row']]), 'files-row')
   const deep = el('i')
   const mid = el('div', { 'data-nano-notepad': 'root' }, [deep])
-  assert.equal(bucketForElement(deep, ['data-nano-notepad']), 'notepad-panel')
-  assert.equal(bucketForElement(el('div'), ['data-nxe']), 'other')
+  assert.equal(bucketForElement(deep, [['data-nano-notepad', 'notepad-panel']]), 'notepad-panel')
+  assert.equal(bucketForElement(el('div'), [['data-nxe', 'files-row']]), 'other')
+  // Not registered → the shared package does not know plugin markers.
+  assert.equal(bucketForElement(row, []), 'other')
 })
 
 test('firstVisibleRoot picks the connected, unhidden pane via scope', () => {
@@ -309,11 +311,11 @@ test('two bundled copies share one singleton; contributors recorded per join', (
   const a = ensurePerfReview(envA)
   const b = ensurePerfReview(envB)
   assert.equal(a, b)
-  a.join('nano-x', { libVersion: '0.1.0' })
-  b.join('nano-y', { libVersion: '0.2.0' }) // skewed copy
+  a.join('nano-x', { build: 'aaaa' })
+  b.join('nano-y', { build: 'bbbb' }) // skewed copy
   const report = a.read()
-  const ids = report.page.contributors.map(c => `${c.pluginId}@${c.libVersion}`)
-  assert.deepEqual(ids.sort(), ['nano-x@0.1.0', 'nano-y@0.2.0'].sort())
+  const ids = report.page.contributors.map(c => `${c.pluginId}@${c.build}`)
+  assert.deepEqual(ids.sort(), ['nano-x@aaaa', 'nano-y@bbbb'].sort())
   assert.equal(typeof report.plugins['nano-x'].hand, 'object')
   assert.equal(typeof report.plugins['nano-y'].hand, 'object')
 })
@@ -361,4 +363,26 @@ test('read() is side-effect free; cutWindow() clears window columns only', () =>
   assert.equal(report2.plugins[PLUGIN].hand.usage['panel-open'].window, 0)
   assert.equal(report2.plugins[PLUGIN].hand.usage['panel-open'].total, 2)
   assert.equal(report2.page.counts['panel-open'].total, 2)
+})
+
+
+test('host read poller registers routes, sends since, and does nothing while disabled', async () => {
+  const calls = []
+  const env = fakeEnv({ forceEnabled: true })
+  env.fetch = async (url) => { calls.push(url); return { json: async () => ({ status: 200, next: 'e1.7', plugins: {} }) } }
+  env.setInterval = () => ({ unref() {} })
+  const review = createPerfReview(env)
+  review.join('nano-a', { hostRoute: '/nano-a/perf-review/host' })
+  review.join('nano-b', { hostRoute: '/nano-b/perf-review/host' })
+  await new Promise(resolve => setTimeout(resolve, 0))
+  assert.equal(calls.length, 1, 'exactly one healthy entry is polled')
+  assert.equal(calls[0], '/nano-a/perf-review/host')
+  const report = review.read()
+  assert.equal(report.page.host.source, 'snapshot')
+  assert.equal(calls.length >= 1, true)
+
+  const off = createPerfReview(fakeEnv({ forceEnabled: false }))
+  off.join('nano-a', { hostRoute: '/nano-a/perf-review/host' })
+  await new Promise(resolve => setTimeout(resolve, 0))
+  assert.equal(off.read().page.host.source, null)
 })

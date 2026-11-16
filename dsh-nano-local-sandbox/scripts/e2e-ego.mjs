@@ -404,11 +404,10 @@ async function main() {
   // Read the collector's local report — the host copy only updates on the
   // pane's periodic post and can lag the run() we triggered seconds ago.
   const perf = await page.evaluate(() => {
-    const rep = window.__perfReview?.report?.({ scenario: 'e2e' })
-    const last = fetch('/nano-local-sandbox/perf-review/host').then((r) => r.json())
-    return Promise.all([rep, last]).then(([local, host]) => ({ local, host }))
+    const review = window[Symbol.for('dsh.perfReview.v2')]
+    return { local: review ? review.read({ scenario: 'e2e' }) : null, host: null }
   })
-  const ksSpans = perf.local?.plugins?.['nano-kitesurf']?.spans || {}
+  const ksSpans = perf.local?.plugins?.['nano-kitesurf']?.hand?.spans || {}
   const spanNames = Object.keys(ksSpans)
   const spanCount = spanNames.reduce((sum, name) => sum + (ksSpans[name]?.n || 0), 0)
   record('perf-spans', spanCount > 0, `${spanCount} spans (${spanNames.join(',')}) ${perf.host?.client ? 'host-synced' : 'host-pending'}`)

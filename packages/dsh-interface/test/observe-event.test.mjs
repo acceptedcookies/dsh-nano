@@ -392,21 +392,25 @@ test('PRE1116-T03 onCall is gone from facade src and the vendored lib copies', (
   assert.deepEqual(hits, [])
 })
 
-test('PRE1116-T04 W1 production sources do not inject observe', () => {
-  const files = []
-  for (const name of readdirSync(ROOT)) {
-    if (!name.startsWith('dsh-nano-')) continue
-    const dir = join(ROOT, name)
-    if (!statSync(dir).isDirectory()) continue
-    const index = join(dir, 'index.js')
-    try { statSync(index); files.push(index) } catch { /* no index */ }
-    const src = join(dir, 'src')
-    try { if (statSync(src).isDirectory()) walk(src, files) } catch { /* no src */ }
+test('PRE1116-T16 the six contract-surface plugins pass observe; DNK/DNMSC do not', () => {
+  const CONTRACT = [
+    'dsh-nano-explorer-extra', 'dsh-nano-notepad', 'dsh-nano-model-selector',
+    'dsh-nano-cloud-session', 'dsh-nano-terminal', 'dsh-nano-local-sandbox',
+  ]
+  const filesOf = name => {
+    const out = []
+    const index = join(ROOT, name, 'index.js')
+    try { statSync(index); out.push(index) } catch { /* no index */ }
+    const src = join(ROOT, name, 'src')
+    try { if (statSync(src).isDirectory()) walk(src, out) } catch { /* no src */ }
+    return out
   }
-  const hits = []
-  for (const file of files) {
-    const text = readFileSync(file, 'utf8')
-    if (/\bobserve\s*:/.test(text)) hits.push(relative(ROOT, file))
+  for (const name of CONTRACT) {
+    const hits = filesOf(name).filter(file => /\bobserve\s*:/.test(readFileSync(file, 'utf8')))
+    assert.ok(hits.length > 0, `${name} must pass observe`)
   }
-  assert.deepEqual(hits, [], 'W1 must not inject observe; W3 updates this allowlist')
+  for (const name of ['dsh-nano-kitesurf', 'dsh-nano-model-selector-compaction']) {
+    const hits = filesOf(name).filter(file => /\bobserve\s*:/.test(readFileSync(file, 'utf8')))
+    assert.deepEqual(hits.map(file => relative(ROOT, file)), [], `${name} has no contract surface`)
+  }
 })

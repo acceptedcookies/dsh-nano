@@ -1,6 +1,6 @@
 /** Bundled so the host entry does not import dsh-performance-review at runtime. */
 import { readFileSync } from 'node:fs'
-import { ensurePerfReviewHost, LIB_VERSION } from 'dsh-performance-review/host'
+import { ensurePerfReviewHost } from 'dsh-performance-review/host'
 
 function pluginVersion() {
   try {
@@ -12,7 +12,7 @@ function pluginVersion() {
 }
 
 const host = ensurePerfReviewHost()
-const review = host.hostJoin('nano-kitesurf', { version: pluginVersion(), libVersion: LIB_VERSION })
+const review = host.hostJoin('nano-kitesurf', { version: pluginVersion() })
 
 export function hostSpan(name, fn, ctx = null) {
   return review.hostSpan(name, fn, ctx)

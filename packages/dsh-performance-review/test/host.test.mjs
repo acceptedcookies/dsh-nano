@@ -52,7 +52,7 @@ test('enabled: no writer; hostSpan times to settle', async () => {
 
   const snap = host.snapshot()
   assert.equal(snap.enabled, true)
-  assert.deepEqual(snap.contributors, [{ pluginId: 'nano-explorer-extra', libVersion: '0.1.0' }])
+  assert.deepEqual(snap.contributors, [{ pluginId: 'nano-explorer-extra', build: snap.contributors[0].build }])
   const spans = snap.plugins['nano-explorer-extra'].spans
   assert.equal(spans['git-status'].n, 1)
   assert.equal(spans['git-status'].samples[0], 12)

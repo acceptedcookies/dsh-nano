@@ -46,8 +46,8 @@ test('T10 same source same stamp; a second stamp audits and does not replace', (
   assert.equal(again, first)
   assert.equal(first._state().structure.audits.filter(item => item.code === 'build-stamp').length, 0)
 
-  first.join('nano-x', { libVersion: '1' })
-  const api = first.join('nano-x', { build: '1', libVersion: '1' })
+  first.join('nano-x', { build: '1' })
+  const api = first.join('nano-x', { build: '1' })
   api.span('s', () => {})
   const second = ensurePerfReview({ ...fakeEnv(), global, build: 'bbb' })
   assert.equal(second, first)
@@ -62,7 +62,7 @@ test('T10 same source same stamp; a second stamp audits and does not replace', (
   assert.equal(detached.read().plugins['nano-x'], undefined)
   assert.equal(first.read().plugins['nano-x'].hand.spans.s.n, 1)
 
-  first.join('nano-x', { libVersion: '1' })
+  first.join('nano-x', { build: '1' })
   assert.equal(first.read().page.contributors.filter(item => item.pluginId === 'nano-x').length, 1)
 })
 

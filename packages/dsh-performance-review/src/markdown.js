@@ -23,7 +23,7 @@ export function renderMarkdown(report) {
     ` · chrome ${page.chromeMajor ?? '?'} · enabled=${page.enabled === true}`)
   const contributors = Array.isArray(page.contributors) ? page.contributors : []
   if (contributors.length > 0) {
-    lines.push(`contributors: ${contributors.map(item => `${item.pluginId}@${item.libVersion ?? item.build ?? '?'}`).join(', ')}`)
+    lines.push(`contributors: ${contributors.map(item => `${item.pluginId ?? item.plugin}@${item.build ?? '?'}`).join(', ')}`)
   }
   if (page.loafSupported === false) lines.push('> LoAF unsupported in this environment; Event Timing + spans only.')
   const host = page.host ?? {}

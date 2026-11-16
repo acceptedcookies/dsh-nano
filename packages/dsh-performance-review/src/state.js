@@ -6,7 +6,6 @@
  * performance-review spec §6.5.
  */
 
-export const LIB_VERSION = '0.1.0'
 export const REPORT_VERSION = 2
 
 /**
@@ -17,7 +16,7 @@ export const CLIENT_KEY = Symbol.for('dsh.perfReview.v2')
 export const HOST_KEY = Symbol.for('dsh.perfReviewHost.v2')
 
 /** Default build stamp. esbuild may replace this; tests pass `env.build`. */
-export const BUILD_STAMP = 'dev'
+export const BUILD_STAMP = typeof __DNPR_BUILD__ === 'string' ? __DNPR_BUILD__ : 'dev'
 
 /**
  * Content stamp for one source text. Same text → same stamp; a one-byte
@@ -318,12 +317,6 @@ export function targetBucket(descriptor) {
   const attrs = descriptor.attrs ?? {}
   const has = key => attrs[key] !== undefined && attrs[key] !== null
   if (has('data-composer') || has('data-chat-input')) return 'composer-textarea'
-  if (has('data-nano-notepad')) return 'notepad-panel'
-  if (has('data-nano-model-selector')) return 'model-trigger'
-  if (has('data-nxe')) return 'files-row'
-  // Historical anchor for the DEPRECATED (2026-11-12) shared-workspace plugin;
-  // see deprecated/README.md. No active producer, kept for old pages.
-  if (has('data-nano-shared-workspace')) return 'shared-row'
   if (has('data-row-key') || has('data-sidebar-row')) return 'sidebar-row'
   if (descriptor.tag === 'TEXTAREA') return 'composer-textarea'
   return 'other'

@@ -103,6 +103,20 @@ test('.np-window is the np container, so the query measures the window', () => {
   assert.match(box[1], /container-type:\s*inline-size/)
 })
 
+test('.np-window does not clip; the content layers own the overflow', () => {
+  /* In-window menus render with `portal:false` and the host menu does no anchor
+     clamping, so an overflow:hidden on the shell cut every menu that crossed an
+     edge (DESIGN.md §8 「窗口内浮层裁剪」). */
+  const windowRules = [...panel.matchAll(/\.np-window\s*\{([^}]*)\}/g)].map(match => match[1])
+  const box = windowRules.find(decls => /container-name:\s*np/.test(decls))
+  assert.ok(box, '.np-window must still be the np container')
+  assert.doesNotMatch(box, /overflow(?:-x|-y)?\s*:\s*hidden/, '.np-window must not clip its own menus')
+  const body = [...panel.matchAll(/\.np-body\s*\{([^}]*)\}/g)].map(match => match[1]).join(';')
+  assert.match(body, /border-bottom-right-radius/, '.np-body carries the panel radius that used to clip')
+  const fxView = [...panel.matchAll(/\.np-fx-view\s*\{([^}]*)\}/g)].map(match => match[1]).join(';')
+  assert.match(fxView, /overflow:\s*clip/, '.np-fx-view clips its own drawer')
+})
+
 test('applyWindowSize writes the viewport only while maximized', () => {
   const start = panel.indexOf('function applyWindowSize()')
   assert.ok(start >= 0)

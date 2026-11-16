@@ -6,7 +6,7 @@ import { mountNotepad } from './panel.js'
 import { perf } from './perf.js'
 import { chordAria, chordKeys, primaryDown } from './shortcut.js'
 
-export const inject = ['slots', 'shortcuts', 'theme', 'locale', 'workspaces', 'sessions', 'sidebarRight']
+export const inject = ['slots', 'shortcuts', 'theme', 'locale', 'workspaces', 'sessions']
 
 /** @param {import('@deepseek-ai/cordis').Context} ctx */
 function shortcutLabel(ctx) {
@@ -69,23 +69,6 @@ export function apply(ctx, config = {}) {
           const list = ctx.workspaces?.list ?? ctx.workspaces
           return list?.subscribe?.(listener) ?? (() => {})
         },
-      }, (path) => {
-        const { id: sessionId, row } = currentSession()
-        if (!sessionId || typeof ctx.sidebarRight?.openResource !== 'function') return false
-        const cwd = String(row?.cwd ?? '').replace(/\\/g, '/').replace(/\/+$/, '')
-        let normalized = String(path).replace(/\\/g, '/').replace(/^(?:\.\/)+/, '')
-        if (cwd && (normalized === cwd || normalized.startsWith(`${cwd}/`))) {
-          normalized = normalized === cwd ? '' : normalized.slice(cwd.length + 1)
-        }
-        const encode = segment => encodeURIComponent(segment).replace(/%3A/gi, ':')
-        const address = `dsh-resource://file/session/${encode(sessionId)}/${normalized.split('/').filter(Boolean).map(encode).join('/')}`
-        try {
-          ctx.sidebarRight.openResource(address)
-        } catch (error) {
-          if (typeof ctx.sidebarRight.openResourceIn === 'function') ctx.sidebarRight.openResourceIn(sessionId, address)
-          else throw error
-        }
-        return true
       })
       mounted.setShortcut(label(), shortcutKeys())
       ready(mounted)

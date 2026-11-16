@@ -2,7 +2,7 @@
 
 const React = require('react')
 const primitives = require('@deepseek-ai/dsh-client-ui-primitives')
-const { openNanoDialog, openNanoMenu, NANO_STYLES, NanoToast, NanoTabs } = require('dsh-nano-ui')
+const { createThemeScope, openNanoDialog, openNanoMenu, NANO_STYLES, NanoToast, NanoTabs } = require('dsh-nano-ui')
 const { ensurePerfReview } = require('dsh-performance-review/client')
 const { BUCKETS, DECL_HASH } = require('../../lib/perf-declaration.js')
 const { copyFor } = require('./i18n.js')
@@ -106,10 +106,11 @@ const STYLE = `
 .nks-tool:disabled:hover{background:transparent}
 .nks-tool:focus-visible,.nks-address:focus-visible{outline:2px solid var(--dsw-alias-link);outline-offset:1px}
 .nks-tool[aria-pressed="true"]{color:var(--dsw-alias-label-primary);background:color-mix(in srgb,var(--dsw-alias-link) 18%,transparent)}
+.nks-tool-glyph{display:inline-flex}
 /* Matches the host workspace tab (_tabActive_123xe): markdown-tag fill,
    radius-sm, 28px tall, strip inline-start margin 10px (toolbar padding is
    6px, so 4px extra here lands the button's left edge on the same axis). */
-.nks-tool.nks-nav-toggle{width:auto;height:28px;margin-left:4px;padding:0 10px;gap:5px;box-sizing:border-box;background:var(--dsw-alias-markdown-tag,var(--dsw-alias-bg-layer-2));border:0;border-radius:var(--dsw-radius-sm);font:var(--dsw-font-xxs-12);font-size:var(--dsh-content-font-size-secondary,13px);color:var(--dsw-alias-label-primary);white-space:nowrap}
+.nks-nav-toggle{width:auto;height:28px;margin-left:4px;padding:0 10px;gap:5px;box-sizing:border-box;background:var(--dsw-alias-markdown-tag,var(--dsw-alias-bg-layer-2));border:0;border-radius:var(--dsw-radius-sm);font:var(--dsw-font-xxs-12);font-size:var(--dsh-content-font-size-secondary,13px);color:var(--dsw-alias-label-primary);white-space:nowrap}
 .nks-tool.nks-nav-toggle:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}
 .nks-tool.nks-nav-toggle[aria-pressed="true"]{background:color-mix(in srgb,var(--dsw-alias-link) 14%,var(--dsw-alias-markdown-tag,var(--dsw-alias-bg-layer-2)))}
 .nks-toolbar-nav{display:flex;flex:none;align-items:center;gap:8px}
@@ -120,14 +121,9 @@ const STYLE = `
 .nks-go{visibility:hidden;opacity:0;position:absolute;top:0;right:0}
 .nks-address-box:focus-within .nks-go,.nks-address-box[data-dirty="true"] .nks-go{visibility:visible;opacity:1}
 .nks-frame{position:relative;z-index:0;order:1;overflow:auto;flex:auto;min-height:0;overflow:hidden;contain:layout paint;background:var(--dsw-alias-bg-layer-1)}
-.nks-frame iframe.nks-dom{width:100%;height:100%;border:0;display:block;background:#fff}
+.nks-dom{width:100%;height:100%;border:0;display:block;background:#fff}
 .nks-frame img{width:100%;height:100%;object-fit:contain;object-position:center;display:block}
 .nks-empty{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:10px;padding:24px;text-align:center;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxs-12)}
-/* Interactive error toast: shared .nano-toast chrome is pointer-events:none —
-   re-enable it on our variant and lay the text + repair button in a row. */
-.nks-toast-fix{pointer-events:auto;display:flex;align-items:center;gap:10px}
-.nks-toast-btn{background:var(--dsw-alias-fill-brand,#2f6fed);color:var(--dsw-alias-label-invert,#fff);border:0;border-radius:var(--dsw-radius-sm,6px);padding:2px 8px;font:inherit;cursor:pointer;white-space:nowrap}
-.nks-toast-btn:hover{filter:brightness(1.1)}
 .nks-empty-icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-link,#2f6fed);border:.5px solid var(--dsw-alias-border-l2)}
 .nks-empty-title{color:var(--dsw-alias-label-primary);font:var(--dsw-font-xs-13,var(--dsw-font-xxs-12));font-weight:600}
 .nks-empty-body{max-width:340px;line-height:1.55}
@@ -193,6 +189,7 @@ const STYLE = `
 .nks-dt-msg{flex:auto;min-width:0;white-space:pre-wrap;word-break:break-word;color:var(--dsw-alias-label-secondary)}
 
 .nks-dt-url{flex:1 1 auto;min-width:0;max-width:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary);direction:ltr}
+.nks-dt-grow{flex:1 1 auto;min-width:0}
 .nks-dt-st{flex:none;width:34px;text-align:right}
 .nks-dt-st[data-bad="true"]{color:var(--dsw-alias-fill-error,#d5455c)}
 .nks-dt-dur{flex:none;width:56px;text-align:right;color:var(--dsw-alias-label-tertiary)}
@@ -352,7 +349,7 @@ function selectRadio(group, value) {
   }
 }
 
-function BrowserPane({ copy, languageOf, schemeOf }) {
+function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
   const [status, setStatus] = React.useState(null)
   const statusDown = status != null && (status.ok === false || status.ready === false)
   const [pageUrl, setPageUrl] = React.useState('')
@@ -404,6 +401,7 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
   /** Content-rect of the letterboxed image — state, never read during render. */
   const [frame, setFrame] = React.useState(null)
   const toastTimer = React.useRef(0)
+  const workspaceRef = React.useRef(null)
   const frameRef = React.useRef(null)
   const dragRef = React.useRef(null)
   const busyRef = React.useRef(false)
@@ -434,6 +432,16 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
   commentRef.current = comment
   editingRef.current = editing
   shotMetaRef.current = shotMeta
+
+  // The host owns light/dark; the pane follows it through nano-ui's ThemeScope.
+  // The service and its event are stable for the life of the page, so the
+  // scope is created once on the workspace element.
+  React.useEffect(() => {
+    const element = workspaceRef.current
+    if (element === null) return undefined
+    const scope = createThemeScope({ theme, element, subscribe: onThemeChange })
+    return () => scope.dispose()
+  }, [])
 
   // The address bar mirrors the live page unless the human is typing in it —
   // a page opened by an agent (or by history) used to leave the field blank,
@@ -1247,17 +1255,12 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
     || (activeFrame && anchor ? { left: activeFrame.left + anchor.x * activeFrame.scale, top: activeFrame.top + anchor.y * activeFrame.scale, width: 0, height: 0 } : null)
     || (activeFrame ? { left: activeFrame.left + 16, top: activeFrame.top + 16, width: 0, height: 0 } : null)
 
-  // Browser chrome needs real left/right arrows — the primitives icon set
-  // only ships chevron-up/down, so draw 16px strokes inline.
-  const arrowGlyph = (dir) => h('svg', {
-    width: 16, height: 16, viewBox: '0 0 16 16', fill: 'none',
-    stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round', strokeLinejoin: 'round',
-    'aria-hidden': true,
-  }, h('path', { d: dir === 'back' ? 'M10 3 L5 8 L10 13' : 'M6 3 L11 8 L6 13' }))
-
+  // Back/forward use the catalog's own chevrons — the primitives set ships
+  // both directions, so browser chrome no longer draws 16px strokes inline.
   const glyph = (name) => {
-    if (name === 'back' || name === 'forward') return arrowGlyph(name)
     const Icon = {
+      back: primitives.IconChevronLeftOutlineRegular,
+      forward: primitives.IconChevronRightOutlineRegular,
       history: primitives.IconClockOutlineRegular,
       refresh: primitives.IconRefreshOutlineRegular,
       go: primitives.IconLinkOutlineRegular,
@@ -1706,8 +1709,11 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
 
   function openSettings() {
     if (dialogOpenRef.current) return
+    // The dialog is a window overlay inside the pane itself, not a viewport
+    // rectangle: the workspace element is the containing block.
+    const workspaceEl = workspaceRef.current
+    if (workspaceEl === null) return
     dialogOpenRef.current = true
-    const region = document.querySelector('[data-nks-workspace]')?.getBoundingClientRect()
     let close = () => {}
     let current = { userAgent: '', viewportWidth: '', httpBase: '', mcpPort: '' }
     const dialog = openNanoDialog({
@@ -1717,7 +1723,7 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
       width: 420,
       // Fixed height: the tab strip changes panels, never the card size.
       fixedHeight: 560,
-      region,
+      container: workspaceEl,
       // openNanoDialog already closes itself after onCancel — closing here
       // again would double root.unmount()/host.remove() (S3-3).
       onCancel: () => { dialogOpenRef.current = false },
@@ -1812,6 +1818,7 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
   }
 
   return h('section', {
+    ref: workspaceRef,
     className: 'nks-root',
     'data-nano-kitesurf': '1',
     'data-nks-workspace': '1',
@@ -1909,7 +1916,9 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
           }
           openNanoMenu({
             anchor: { left: rect.left, top: rect.top, bottom: rect.bottom },
-            theme: schemeOf?.(),
+            // Rendered inside the pane (portal:false) so the list inherits the
+            // workspace's scheme and stacking; no theme or z parameters.
+            container: workspaceRef.current,
             direction: 'up',
             maxHeight: 6 * 28 + 8,
             items: [
@@ -2010,7 +2019,7 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
           // repairs the port, starts/resumes the container and polls health.
           h('button', {
             type: 'button',
-            className: 'nks-start-btn nks-primary',
+            className: 'nks-start-btn',
             'data-nks-start-engine': '1',
             'data-nks-prepare': '1',
             onClick: oneClickPrepare,
@@ -2129,14 +2138,14 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
       Array.isArray(pick.elements[0].componentStack) && pick.elements[0].componentStack.length
         ? h('span', { 'data-nks-stack': '1', title: pick.elements[0].componentStack.join(' → ') },
             `⚛ ${pick.elements[0].componentStack.slice(-3).join(' → ')}`) : null) : null,
-    toast ? (toastFix
-      // Interactive toast: same .nano-toast chrome but pointer-events on + a
-      // repair button. Shared NanoToast is text-only; re-implementing here
-      // keeps dsh-nano-ui's contract untouched.
-      ? h('div', { className: 'nano-toast nks-toast-fix', role: 'status', 'aria-live': 'polite', 'data-nano-toast': 'true' },
-          h('span', null, toast),
-          h('button', { type: 'button', className: 'nks-toast-btn', 'data-nks-repair': '1', onClick: repairNow }, copy.prepareEnv))
-      : h(NanoToast, { text: toast })) : null,
+    // One carrier for both toasts: the host Toast through nano-ui. A
+    // recoverable failure adds its repair action to the same toast instead of
+    // re-implementing the chrome.
+    toast ? h(NanoToast, {
+      text: toast,
+      anchor: workspaceRef.current,
+      actions: toastFix ? [{ label: copy.prepareEnv, onClick: repairNow }] : undefined,
+    }) : null,
     pick?.elements?.length ? h('pre', {
       'data-nks-pick': '1',
       style: { display: 'none' },
@@ -2155,9 +2164,15 @@ export function apply(ctx) {
   ctx.effect(() => () => style.remove())
 
   const languageOf = () => ctx.locale?.getSnapshot?.().active ?? 'zh'
-  const schemeOf = () => ctx.theme?.getTheme?.().colorScheme === 'light' ? 'light' : 'dark'
   const copy = () => copyFor(languageOf())
-  const Pane = () => h(BrowserPane, { copy: copy(), languageOf, schemeOf })
+  // The host theme service and its change event; the pane hands both to
+  // nano-ui's ThemeScope instead of resolving a local scheme.
+  const Pane = () => h(BrowserPane, {
+    copy: copy(),
+    languageOf,
+    theme: ctx.theme,
+    onThemeChange: (listener) => ctx.on('theme/change', listener),
+  })
 
   ctx.effect(() => ctx.sidebarRightTabs.register({
     id: OWN_ID,

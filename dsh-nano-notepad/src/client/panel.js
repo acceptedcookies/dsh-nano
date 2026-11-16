@@ -1923,8 +1923,8 @@ export function mountNotepad(host, defaults, hostTheme = { theme: undefined, sub
   }
 
   /** The notepad's own scheme. ThemeScope resolves it from the host `ctx.theme`
-   *  service, or from the pinned `theme` setting (DESIGN.md §3) — no second
-   *  `schemeOf` lives here. */
+   *  service, or from the pinned `theme` setting (DESIGN.md §3); the plugin
+   *  keeps no scheme resolver of its own. */
   function resolvedTheme() {
     return themeScope.scheme()
   }

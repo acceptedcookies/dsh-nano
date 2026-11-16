@@ -359,16 +359,23 @@ package.json ──dsh.bundle.patch──► cordis.patch.yml ──insert──
 packages/dsh-nano-ui/
 ├── index.js        # 纯 re-export 桶，无逻辑
 ├── package.json
+├── CHANGELOG.md
+├── catalog/        # primitives / icons / tokens 三件套（scripts/gen-nano-catalog.mjs 生成）
+├── test/           # npm test（node --test）
 └── src/
-    ├── dialog.js   # NanoDialog
-    ├── menu.js     # NanoMenu / NanoMenuItem
-    ├── toast.js    # NanoToast
-    ├── dom.js      # openNanoDialog / openNanoMenu（命令式挂载）
-    ├── tabs.js     # nanoTabs（纯 DOM tablist）
-    └── styles.js   # NANO_STYLES（共享 CSS）
+    ├── version.js  # VERSION 与产物版本标记
+    ├── layers.js   # NANO_LAYER / NANO_SPACE
+    ├── theme.js    # createThemeScope（亮暗由宿主主题服务决定，可 pin）
+    ├── icons.js    # Icon* 门面
+    ├── dialog.js / overlay.js / dom.js  # NanoDialog、窗口覆盖层、openNanoDialog / openNanoMenu
+    ├── menu.js     # NanoMenu（包装宿主 Menu）
+    ├── toast.js    # NanoToast（包装宿主 Toast）
+    ├── tabs.js     # NanoTabs / nanoTabs（宿主 SegmentedControl）
+    ├── toolbar.js / empty.js / window.js / button.js / mount.js
+    └── styles.js   # NANO_STYLES
 ```
 
-[packages/dsh-nano-ui/index.js](packages/dsh-nano-ui/index.js) 只有六行 re-export。消费例子：
+[packages/dsh-nano-ui/index.js](packages/dsh-nano-ui/index.js) 只做 re-export，导出全集与组件选型以 DESIGN.md 为准。消费例子：
 
 - [dsh-nano-notepad/src/client/panel.js](dsh-nano-notepad/src/client/panel.js)：`openNanoDialog, openNanoMenu, nanoTabs, NANO_STYLES`
 - [dsh-nano-explorer-extra/src/client/dialogs.js](dsh-nano-explorer-extra/src/client/dialogs.js)：`NanoDialog`

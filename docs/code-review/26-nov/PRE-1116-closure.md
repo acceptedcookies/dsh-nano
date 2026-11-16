@@ -15,7 +15,7 @@
 
 ## 0. 一句话 verdict
 
-> W1–W3 的代码、分组提交、单测与文档已落盘，`test-all --build` 26/27 套件通过（唯一失败为 `dsh-nano-s3-client` 的 pre-existing rate 用例，`main` 同样失败）；**本机 live 对照（T23/T24）与本机页面阅读（T26）未观察**，因此 close-type 是 `implementation-complete-awaiting-live-verification`，不是 `full-close`。
+> W1–W3 的代码、分组提交、单测与文档已落盘，`test-all --build` 27/28 套件通过（唯一失败为 `dsh-nano-s3-client` 的 pre-existing rate 用例，`main` 同样失败）；**本机 live 对照（T23/T24）与本机页面阅读（T26）未观察**，因此 close-type 是 `implementation-complete-awaiting-live-verification`，不是 `full-close`。
 
 > **本阶段最关键的 known gap（对下游影响）**：
 > 1. `PRE1116-T23`/`T24`：旧 `evaluate` 与 v2 `diagnose` 的对照表未生成，基线未按三次稳定性重录；`evaluate` 因此保留，未删。

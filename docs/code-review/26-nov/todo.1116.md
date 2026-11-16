@@ -178,7 +178,7 @@ P0-00 干净树 + worktree
 | `PRE1116-T06` | 命名表负例 | 烘焙负例 | 缺表 / 不一致 / path 改 id 不变 | path 改了 id 仍是原 id；命名不一致抛错 | 同上 | `pass` |
 | `PRE1116-T07` | 单一烘焙作者 | check-clean-lib + 存在性 | 7 份 bindings；无 routeTableModule | `routeTableModule` 导出不存在；clean-lib OK | 同上 + check-clean-lib | `pass` |
 | `PRE1116-T08` | inventory id | route-guard 测试 + inventory 生成 | id 等于账本 | `route-inventory.md` 87 行，全部带账本 id | 2026-11-17T01:15Z | `pass` |
-| `PRE1116-T09`–`T15` | W3 包内协议、报告、判定 | `npm test`（dsh-performance-review） | 全绿 | 2026-11-17T01:00Z `npm test` 82/82；构建戳 `__DNPR_BUILD__` 已进七插件；`LIB_VERSION` 已退役 | `packages/dsh-performance-review` | `pass` |
+| `PRE1116-T09`–`T15` | W3 包内协议、报告、判定 | `npm test`（dsh-performance-review） | 全绿 | 2026-11-17T02:00Z `npm test` 92/92；构建戳 `__DNPR_BUILD__` 已进七插件；`LIB_VERSION` 已退役 | `packages/dsh-performance-review` | `pass` |
 | `PRE1116-T16` | 六合同面注入 | `dsh-interface` T16 | 六包有、DNK/DNMSC 无 | 59/59 | 2026-11-17T02:00Z | `pass` |
 | `PRE1116-T17` | span 退役与保留 | `docs.test.mjs` | 5 退役名 0；4 保留名在声明 | pass | 2026-11-17T02:00Z | `pass` |
 | `PRE1116-T18` | 采集开关 | `docs.test.mjs` | DNK `perfReview/setPerfEnabled/DSH_PERF_REVIEW` 0 | pass | 2026-11-17T02:00Z | `pass` |

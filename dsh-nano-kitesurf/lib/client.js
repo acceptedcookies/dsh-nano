@@ -2808,7 +2808,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
   var { batchNote: batchNote2, designNote: designNote2, multiNote: multiNote2 } = (init_note(), __toCommonJS(note_exports));
   var { contentFrame: contentFrame2, shotPoint: shotPoint2 } = (init_shot_point(), __toCommonJS(shot_point_exports));
   var h7 = React12.createElement;
-  var CLIENT_BUILD_ID = true ? "0.1.0+35facad" : "dev";
+  var CLIENT_BUILD_ID = true ? "0.1.0+196b6fd" : "dev";
   var STATUS = "/nano-local-sandbox/status";
   var OPEN = "/nano-local-sandbox/open";
   var SHOT = "/nano-local-sandbox/shot";

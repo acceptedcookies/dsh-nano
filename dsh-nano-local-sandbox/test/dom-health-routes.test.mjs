@@ -134,7 +134,7 @@ test('/diagnostics collapses repeated polling rows instead of drowning the trace
   assert.equal(result.body.operations.some((row) => row.errorId === 'kitesurf.shot.empty'), true)
 })
 
-test('/ports exposes per-plane checks so OK cannot mean "container up only"', async () => {
+test('/ports probes every plane so the OK badge cannot mean "container up only"', async () => {
   const routes = routesFor(depsWith())
   const result = await call(routes['/nano-local-sandbox/ports'])
   assert.equal(result.status, 200)
@@ -142,6 +142,37 @@ test('/ports exposes per-plane checks so OK cannot mean "container up only"', as
   assert.equal(typeof result.body.checks, 'object')
   assert.equal(typeof result.body.checks.container.ok, 'boolean')
   assert.equal(typeof result.body.checks.engine.ok, 'boolean')
-  // Shallow poll: the expensive planes are not probed on every tick.
-  assert.equal(result.body.checks.page, undefined)
+  // Deep: the badge the panel renders must be computed from the same planes
+  // the panel lists. Shallow health is what made OK sit next to red rows.
+  assert.equal(typeof result.body.checks.page.ok, 'boolean')
+  assert.equal(typeof result.body.checks.dom.ok, 'boolean')
+  assert.equal(typeof result.body.checks.bridge.ok, 'boolean')
+  assert.equal(result.body.healthy, Object.entries(result.body.checks).every(([key, row]) => row.ok === true || (key === 'dom' && row.skipped === true)))
+})
+
+test('/recover restarts a running-but-wedged container instead of reporting noop', async () => {
+  const calls = { restart: [], start: [], stop: [] }
+  const routes = routesFor(depsWith({
+    // A running container whose engine never answers: inspect says running,
+    // the published port points at a closed socket.
+    backend: {
+      async inspect() {
+        return { raw: JSON.stringify([{ status: { state: 'running' }, configuration: { publishedPorts: [
+          { containerPort: 8787, hostAddress: '127.0.0.1', hostPort: 1 },
+          { containerPort: 8791, hostAddress: '127.0.0.1', hostPort: 2 },
+        ] } }]) }
+      },
+      async restart(name) { calls.restart.push(name) },
+      async start(name) { calls.start.push(name) },
+      async stop(name) { calls.stop.push(name) },
+    },
+    session: { phase: 'running', history: [], containerName: 'kitesurf-dev' },
+    prepareTimeoutMs: 0,
+  }))
+  const result = await call(routes['/nano-local-sandbox/recover'], { method: 'POST', body: {} })
+  assert.equal(result.status, 200)
+  assert.equal(calls.restart.length, 1)
+  assert.equal(calls.restart[0], 'kitesurf-dev')
+  assert.equal(result.body.action, 'restarted')
+  assert.equal(typeof result.body.summary, 'object')
 })

@@ -171,6 +171,17 @@ function registryFor(deps, profilesRoot) {
   return deps.registry
 }
 
+/** Per-plane rows for the pane's summary block — one shape for every route. */
+function summaryOf(snap) {
+  return [
+    { label: '容器', ...(snap.checks?.container || { ok: false, detail: '未探测' }) },
+    { label: '引擎', ...(snap.checks?.engine || { ok: false, detail: '未探测' }) },
+    { label: '页面', ...(snap.checks?.page || { ok: false, detail: '未探测' }) },
+    { label: 'DOM', ...(snap.checks?.dom || { ok: false, detail: '未探测' }) },
+    { label: '桥', ...(snap.checks?.bridge || { ok: false, detail: '未探测' }) },
+  ]
+}
+
 /**
  * Collapse the operations ring for human eyes: the pane polls /control every
  * 1.5s, which used to fill most of the trace with identical rows and bury the
@@ -228,7 +239,12 @@ async function envSnapshot(session, deps, { deep = false } = {}) {
     checks.dom = page.ok ? await probeDom(session, httpBase, deps) : { ok: false, detail: 'no page' }
     checks.bridge = await probeBridge(bridgeBase)
   }
-  const healthy = Object.values(checks).every((row) => row.ok === true)
+  // "Ready" means the environment can serve a page: container + engine + page
+  // target + bridge. DOM is only meaningful once a URL is open, so a blank
+  // page is `skipped`, not a failure — otherwise a fresh pane could never be
+  // reported as prepared.
+  const healthy = Object.entries(checks)
+    .every(([key, row]) => row.ok === true || (key === 'dom' && row.skipped === true))
   return {
     containerName: name,
     container: { state, name },
@@ -270,7 +286,7 @@ async function probeDom(session, httpBase, deps) {
       return result?.result?.value
     })
     if (!value?.root) return { ok: false, detail: 'no document root' }
-    if (value.url === 'about:blank') return { ok: false, detail: 'page is about:blank' }
+    if (value.url === 'about:blank') return { ok: true, skipped: true, detail: '未打开页面（等待打开地址）' }
     return { ok: true, detail: `${value.url} · ${value.bytes}B` }
   } catch (error) {
     return { ok: false, detail: error?.errorId || error?.message || 'dom unreachable' }
@@ -322,7 +338,9 @@ async function runSelftest(session, deps) {
   push('container-running', snap.container.state === 'running', snap.container.state)
   push('engine-cdp-reachable', snap.engineAlive === true, snap.effective.httpBase || 'no port')
   push('page-target', snap.checks.page?.ok === true, snap.checks.page?.detail)
-  push('dom-renderable', snap.checks.dom?.ok === true, snap.checks.dom?.detail)
+  // `ok` may be true with skipped:true for a blank page; selftest is strict —
+  // "renderable" needs a real document, not an empty shell.
+  push('dom-renderable', snap.checks.dom?.ok === true && snap.checks.dom?.skipped !== true, snap.checks.dom?.detail)
   push('bridge-health', snap.checks.bridge?.ok === true, snap.checks.bridge?.detail)
   push('history-consistent', Array.isArray(session.history), `${(session.history || []).length} entries`)
 
@@ -336,7 +354,7 @@ async function runSelftest(session, deps) {
       const client = await clientFor(session, snap.effective.httpBase, deps)
       version = (await client.send('Browser.getVersion'))?.product || null
       const dom = await probeDom(session, snap.effective.httpBase, deps)
-      blank = dom.detail === 'page is about:blank' ? false : true
+      blank = dom.skipped === true ? false : true
       const cap = await withPage(client, (sessionId) => client.send('Page.captureScreenshot', { format: 'png' }, sessionId))
       shot = typeof cap?.data === 'string' && cap.data.length > 0
     } catch { /* each probe reports its own failure below */ }
@@ -420,14 +438,29 @@ async function prepareEnvironment(session, deps) {
   // engine face briefly so a first-time "prepare" reports real health instead
   // of always saying "created but not answering yet".
   const settleMs = Number(deps.prepareTimeoutMs ?? 6000)
-  const deadline = Date.now() + (action === 'noop' ? 0 : settleMs)
-  let snap = await envSnapshot(session, deps)
-  while (!snap.engineAlive && Date.now() < deadline) {
-    await new Promise((resolve) => setTimeout(resolve, 600))
-    snap = await envSnapshot(session, deps)
+  const waitUntil = async (predicate, ms) => {
+    const deadline = Date.now() + ms
+    let snap = await envSnapshot(session, deps, { deep: true })
+    while (!predicate(snap) && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 600))
+      snap = await envSnapshot(session, deps, { deep: true })
+    }
+    return snap
+  }
+  let snap = await waitUntil((row) => row.engineAlive, action === 'noop' ? 0 : settleMs)
+  // A container that is "running" can still be wedged: HTTP /json/list answers
+  // while the CDP socket never replies. That was the desktop state where
+  // 一键准备环境 reported "noop" forever. Repair means restart, then verify.
+  if (snap.container.state === 'running' && (!snap.engineAlive || snap.checks.page?.ok !== true)) {
+    try {
+      if (typeof deps.backend?.restart === 'function') await deps.backend.restart(name)
+      else { await deps.backend?.stop?.(name); await deps.backend?.start?.(name) }
+      if (action === 'noop') action = 'restarted'
+      snap = await waitUntil((row) => row.engineAlive && row.checks.page?.ok === true, settleMs)
+    } catch { /* keep the snapshot; the failure stays visible in checks */ }
   }
   if (snap.httpBase) session.httpBase = session.httpBase || snap.httpBase
-  if (snap.healthy && session.phase === 'idle') session.phase = 'running'
+  if (snap.healthy) session.phase = 'running'
   return { action, ...snap }
 }
 
@@ -1025,13 +1058,7 @@ export function routeSpecs(deps = {}) {
           if (targetInfos.length === 0 && snap.engineAlive) hints.push('无 page target：先 POST /open 打开一个页面')
           if (snap.checks.page?.ok && snap.checks.dom && !snap.checks.dom.ok) hints.push(`DOM 不可渲染（${snap.checks.dom.detail}）：面板会退回截图模式`)
           if (snap.checks.bridge && !snap.checks.bridge.ok) hints.push(`MCP 桥不可达（${snap.checks.bridge.detail}）：HITL 控制态与 agent 工具会失败`)
-          const summary = [
-            { label: '容器', ...snap.checks.container },
-            { label: '引擎', ...snap.checks.engine },
-            { label: '页面', ...(snap.checks.page || { ok: false, detail: '未探测' }) },
-            { label: 'DOM', ...(snap.checks.dom || { ok: false, detail: '未探测' }) },
-            { label: '桥', ...(snap.checks.bridge || { ok: false, detail: '未探测' }) },
-          ]
+          const summary = summaryOf(snap)
           const text = [
             `Kitesurf 环境诊断 · ${snap.healthy ? '正常' : '异常'}`,
             `实例 ${snap.containerName} · 容器 ${snap.container.state}`,
@@ -1063,7 +1090,10 @@ export function routeSpecs(deps = {}) {
           return
         }
         if (row.path.endsWith('/ports')) {
-          const snap = await envSnapshot(session, deps)
+          // Deep on purpose: this is what the panel's健康灯 reads. A shallow
+          // probe (container+engine only) produced the exact bug where the
+          // badge said OK while 页面/DOM rows were red.
+          const snap = await envSnapshot(session, deps, { deep: true })
           send(res, 200, {
             ok: true,
             httpBase: snap.httpBase ?? session.httpBase ?? null,
@@ -1105,6 +1135,8 @@ export function routeSpecs(deps = {}) {
             container: snap.container,
             containerName: snap.containerName,
             effective: snap.effective,
+            checks: snap.checks,
+            summary: summaryOf(snap),
             buildId: BUILD_ID,
           })
           return

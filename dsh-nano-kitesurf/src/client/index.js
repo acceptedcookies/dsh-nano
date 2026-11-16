@@ -242,6 +242,7 @@ const STYLE = `
 .nks-env-check-dot{flex:none;width:10px;text-align:center}
 .nks-env-check[data-ok="true"] .nks-env-check-dot{color:var(--dsw-alias-fill-success,#3fb950)}
 .nks-env-check[data-ok="false"] .nks-env-check-dot{color:var(--dsw-alias-fill-error,#d5455c)}
+.nks-env-check[data-ok="skip"] .nks-env-check-dot{color:var(--dsw-alias-label-tertiary);opacity:.7}
 .nks-env-check-detail{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;unicode-bidi:plaintext}
 .nks-env-note{font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-tertiary);line-height:1.5}
 .nks-settings-body label{color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxxs-11)}
@@ -1308,7 +1309,12 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
         // from it directly instead of a second /ports round-trip.
         const ports = result.ports ? result : (await fetch(PORTS).then((r) => r.json()).catch(() => null))
         setSnap(ports)
-        setNote(result.ok ? (result.action === 'noop' ? copy.prepareDone : `${copy.prepareDone} · ${result.action}`) : `${copy.prepareFailed}: ${result.errorId || result.error || `HTTP ${response.status}`}`)
+        if (Array.isArray(result.summary)) setDiag(result)
+        // Never say "ready" when a plane failed — name the failing plane.
+        const failed = Array.isArray(result.summary) ? result.summary.filter((row) => !row.ok && !row.skipped) : []
+        if (!result.ok) setNote(`${copy.prepareFailed}: ${result.errorId || result.error || `HTTP ${response.status}`}`)
+        else if (result.healthy === false || failed.length) setNote(`${copy.prepareNotReady}: ${failed.map((row) => row.label).join(' / ')}`)
+        else setNote(result.action === 'noop' ? copy.prepareDone : `${copy.prepareDone} · ${result.action}`)
         await refreshStatus()
         await reloadShot(0, { keepPick: true }).catch(() => {})
       } catch (cause) {
@@ -1334,7 +1340,11 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
     const portRow = snap?.ports?.engine
       ? `${snap.ports.engine.port} · ${snap.ports.engine.heldBy === 'this-container' ? '本插件容器' : snap.ports.engine.heldBy === 'other' ? '被其他程序占用' : '空闲'}`
       : '—'
-    const healthy = snap?.healthy === true
+    // /ports is deep now, and after a prepare the recover snapshot (diag) is
+    // authoritative. Never let the badge say OK while a row is ✗.
+    const rows = Array.isArray(diag?.summary) ? diag.summary : []
+    const rowsOk = rows.every((row) => row.ok === true || row.skipped === true)
+    const healthy = (typeof diag?.healthy === 'boolean' ? diag.healthy : snap?.healthy === true) && rowsOk
     return h('div', { className: 'nks-env', 'data-nks-env': '1' },
       h('div', { className: 'nks-env-title' }, copy.envTitle,
         h('span', { className: healthy ? 'nks-env-ok' : 'nks-env-bad' }, healthy ? '● OK' : '● 异常')),
@@ -1345,9 +1355,9 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
       h('div', { className: 'nks-env-row' }, h('b', null, copy.envPorts), h('span', null, portRow)),
       // Per-plane health, so "OK" can no longer mean "container up but the
       // pane silently fell back to screenshots".
-      Array.isArray(diag?.summary) ? h('div', { className: 'nks-env-checks', 'data-nks-checks': String(diag.summary.length) },
-        diag.summary.map((row) => h('div', { key: row.label, className: 'nks-env-check', 'data-ok': row.ok ? 'true' : 'false' },
-          h('span', { className: 'nks-env-check-dot' }, row.ok ? '✓' : '✗'),
+      rows.length ? h('div', { className: 'nks-env-checks', 'data-nks-checks': String(rows.length) },
+        rows.map((row) => h('div', { key: row.label, className: 'nks-env-check', 'data-ok': row.skipped ? 'skip' : row.ok ? 'true' : 'false' },
+          h('span', { className: 'nks-env-check-dot' }, row.skipped ? '○' : row.ok ? '✓' : '✗'),
           h('b', null, row.label),
           h('span', { className: 'nks-env-check-detail' }, row.detail || '—')))) : null,
       h('div', { className: 'nks-env-actions' },

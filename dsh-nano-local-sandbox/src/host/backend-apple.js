@@ -99,7 +99,11 @@ export function createAppleBackend(spec = {}, io = {}) {
     },
     async restart(name) {
       calls.restart += 1
-      await run(bound, ['restart', name])
+      // Apple's `container` CLI has no `restart` subcommand (exit 64). A
+      // restart is stop + start on the same container: mounts, ports and the
+      // state volume survive, only the processes are replaced.
+      await run(bound, ['stop', name])
+      await run(bound, ['start', name])
       return { ok: true }
     },
     async inspect(name) {

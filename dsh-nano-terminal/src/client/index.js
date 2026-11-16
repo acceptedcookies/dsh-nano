@@ -205,12 +205,22 @@ export function apply(ctx) {
       ro.observe(sp)
       bar._cleanup = () => { sp.removeEventListener('scroll', onScroll); ro.disconnect() }
     }
-    const mo = new MutationObserver(attach)
+    // Coalesce to one attach per frame: the wake-up is body-wide, and running
+    // `attach` synchronously on every mutation batch means a querySelector plus
+    // a getComputedStyle (forced layout) per batch — interleaved with whatever
+    // animation is running on the page.
+    let attachFrame = 0
+    const scheduleAttach = () => {
+      if (attachFrame) return
+      attachFrame = window.requestAnimationFrame(() => { attachFrame = 0; attach() })
+    }
+    const mo = new MutationObserver(scheduleAttach)
     mo.observe(document.body, { childList: true, subtree: true })
     attach()
     mark('floatbar applied')
     return () => {
       mo.disconnect()
+      if (attachFrame) window.cancelAnimationFrame(attachFrame)
       bar._cleanup?.()
       bar.remove()
       style.remove()

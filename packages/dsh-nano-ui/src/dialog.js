@@ -24,11 +24,13 @@ import { Button, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
  *   minimum so the dialog still reads when the owning overlay is narrow.
  * @param {DOMRect} [props.region] - contain the whole overlay (mask included) inside this rect,
  *   e.g. the floating window's own bounds so the dialog never paints over the workspace.
+ * @param {string} [props.className] - extra class on the card, for an owner that needs a
+ *   fixed height or its own spacing. Appended after the shared classes so it can win.
  * @param {() => void} props.onConfirm - primary action.
  * @param {() => void} props.onCancel - cancel action.
  * @param {React.ReactNode} [props.children] - the body.
  */
-export function NanoDialog({ copy, title, description, confirmLabel, confirmDisabled, busy, error, danger, footer, maxHeight, width, region, onConfirm, onCancel, children }) {
+export function NanoDialog({ copy, title, description, confirmLabel, confirmDisabled, busy, error, danger, footer, maxHeight, width, region, className, onConfirm, onCancel, children }) {
   return React.createElement(Modal, {
     open: true,
     onClose: onCancel,
@@ -40,6 +42,7 @@ export function NanoDialog({ copy, title, description, confirmLabel, confirmDisa
       maxHeight === undefined ? '' : 'nano-dialog-capped',
       width === undefined ? '' : 'nano-dialog-sized',
       region === undefined ? '' : 'nano-dialog-regioned',
+      className ?? '',
     ].filter(Boolean).join(' '),
     contentClassName: 'nano-dialog-content',
     footer: footer ?? React.createElement(React.Fragment, null,

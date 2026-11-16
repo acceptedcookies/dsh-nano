@@ -68,7 +68,10 @@ function WaterLine({ fill, fillFromDecision = false, health, buffer, safety, cop
   return React.createElement('div', { className: 'nms-hist-water' },
     React.createElement('div', { className: 'nms-hist-water-head' },
       React.createElement('span', { className: 'nms-hist-water-value' }, pct(fill)),
-      fillFromDecision ? React.createElement('span', { className: 'nms-hist-water-source' }, copy.historyFillAtDecision) : null),
+      fillFromDecision ? React.createElement('span', { className: 'nms-hist-water-source' }, copy.historyFillAtDecision) : null,
+      live ? React.createElement('span', { className: 'nms-hist-live' },
+        React.createElement('span', { className: 'nms-hist-live-dot', 'aria-hidden': 'true' }),
+        copy.historyLive) : null),
     React.createElement('div', { className: 'nms-hist-axis' }, axis.map(axisLabel)),
     React.createElement('div', {
       className: 'nms-hist-water-track',
@@ -133,6 +136,18 @@ export function AsyncHistoryDialog({ copy, sessionId, onClose }) {
   }, [sessionId])
 
   React.useEffect(() => { load() }, [load])
+
+  // The ledger is append-only, but an episode in flight is exactly when the
+  // view must not be stale: a dialog opened at arm time would otherwise keep
+  // showing "触发 1 / 执行 0" after the commit already happened, which reads as
+  // "stuck". Refresh while armed/running, stop as soon as it settles.
+  const phaseState = state.data?.history?.phase?.state ?? 'idle'
+  const live = phaseState === 'armed' || phaseState === 'running'
+  React.useEffect(() => {
+    if (state.status !== 'ready' || !live) return undefined
+    const timer = setTimeout(load, LIVE_REFRESH_MS)
+    return () => clearTimeout(timer)
+  }, [state.status, live, state.data, load])
 
   const history = state.data?.history ?? null
   const policy = state.data?.policy ?? null

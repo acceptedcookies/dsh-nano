@@ -2,7 +2,7 @@
   "schema": "dnpr.declaration/1",
   "plugin": "nano-notepad",
   "keys": {
-    "spans": [],
+    "spans": ["fx-run", "fx-set-cat", "fx-rename", "fx-accept", "fx-reject", "fx-write-back", "fx-claim"],
     "tracks": [],
     "usage": [],
     "hostSpans": []

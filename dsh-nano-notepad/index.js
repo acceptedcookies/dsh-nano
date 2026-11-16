@@ -287,8 +287,7 @@ export function apply(ctx) {
       handler: async (req, res, route) => {
         try {
           const body = await jsonBody(req, route.bodyLimit)
-          // perf-review: time the read route's actual work (§6.7 hostSpan read).
-          const file = await review.hostSpan('read', () => readMarkdown(body.path))
+          const file = await readMarkdown(body.path)
           sendJson(res, 200, { ok: true, ...file })
         } catch (error) {
           sendJson(res, 500, { ok: false, reason: 'failed', message: messageOf(error).slice(0, 200) })
@@ -303,8 +302,7 @@ export function apply(ctx) {
         if (!type.toLowerCase().startsWith('application/json')) { sendJson(res, 415, { ok: false, reason: 'content-type' }); return }
         try {
           const body = await jsonBody(req, route.bodyLimit)
-          // perf-review: time the save route's actual work (§6.7 hostSpan save).
-          const result = await review.hostSpan('save', () => nativeSave(ctx, { name: body.name, content: body.content, dir: body.dir }))
+          const result = await nativeSave(ctx, { name: body.name, content: body.content, dir: body.dir })
           sendJson(res, result.ok ? 200 : result.reason === 'cancelled' ? 200 : 500, result)
         } catch (error) {
           sendJson(res, 500, { ok: false, reason: 'failed', message: messageOf(error).slice(0, 200) })

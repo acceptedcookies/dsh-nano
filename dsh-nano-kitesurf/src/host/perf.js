@@ -18,16 +18,4 @@ export function hostSpan(name, fn, ctx = null) {
   return review.hostSpan(name, fn, ctx)
 }
 
-/** Per-name cumulative counter (P1-4) — usage-style tallies next to spans. */
-export function perfCount(name, n = 1) {
-  return review.count(name, n)
-}
 
-/** Explicit perf switch — apply() calls it with config.perfReview. */
-export function setPerfEnabled(value) {
-  host.setEnabled(value === true)
-}
-
-export function perfSnapshot(mode) {
-  return mode === 'window' ? host.takeWindow() : host.snapshot()
-}

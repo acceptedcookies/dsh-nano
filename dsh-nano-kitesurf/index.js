@@ -15,7 +15,7 @@ import { buildSrcDoc } from './lib/dom.js'
 import { kitesurfSkill, nanoKiteSkill } from './lib/skill.js'
 import { createNanoKite } from './lib/nano-kite.js'
 import { hostPort, hostPortFree } from './lib/container-engine.js'
-import { hostSpan as rawHostSpan, perfCount, perfSnapshot, setPerfEnabled } from './lib/perf-host.js'
+import { hostSpan as rawHostSpan } from './lib/perf-host.js'
 
 // Request-scoped incident id (P1-4): traced() opens an ALS context per request
 // so every hostSpan inside correlates to the incidentId that fail() stamps on
@@ -23,7 +23,7 @@ import { hostSpan as rawHostSpan, perfCount, perfSnapshot, setPerfEnabled } from
 // span event can jump straight to the incident row and vice versa.
 const reqContext = new AsyncLocalStorage()
 const activeIncidentId = () => reqContext.getStore()?.incidentId ?? null
-const hostSpan = (name, fn) => rawHostSpan(name, fn, { incidentId: activeIncidentId() })
+const hostSpan = (name, fn) => rawHostSpan(name, fn)
 
 export const name = 'nano-kitesurf'
 export const inject = ['webServer', 'connection', 'skills']
@@ -343,12 +343,6 @@ function traced(spec) {
           } catch { /* diagnostics must never break a route */ }
           // P1-4 usage counters: route failures + slow calls, per route name —
           // cheap tallies an agent can read next to the span stats.
-          try {
-            const short = spec.path.replace(/^\/nano-kitesurf\//, '').replace(/[^a-z0-9-]/g, '-').slice(0, 32)
-            if (!ok) perfCount(`route-err-${short}`)
-            const dur = Date.now() - started
-            if (dur >= 500) perfCount(`route-slow-${short}`)
-          } catch { /* counters are best effort */ }
         }
         // Push a fresh snapshot to the MCP bridge, immediately on failure and
         // debounced otherwise. An agent using only MCP sees the same state.
@@ -411,12 +405,6 @@ async function statusOf(httpBase) {
 
 /** @param {import('@deepseek-ai/cordis').Context} ctx */
 export function apply(ctx, config) {
-  // perf-review capture is a documented plugin-side switch: perf spans feed
-  // /nano-local-sandbox/perf-review/host and the host's own perf-review UI.
-  // setEnabled lands the choice even though hostJoin already ran at import —
-  // the env var is kept as the lazy-resolution fallback for the same value.
-  setPerfEnabled(config?.perfReview !== false)
-  if (config?.perfReview !== false) process.env.DSH_PERF_REVIEW = '1'
   const httpBase = config?.httpBase ?? DEFAULT_ORIGIN
   const kite = createNanoKite({
     httpBase,
@@ -623,7 +611,6 @@ export function apply(ctx, config) {
       console: listConsole({ limit }),
       network: listNetwork({ limit }),
       operations: listOperations({ limit }),
-      perf: (() => { try { return perfSnapshot() } catch { return null } })(),
       hints,
     }
   }

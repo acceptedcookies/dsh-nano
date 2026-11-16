@@ -399,7 +399,7 @@ export function apply(ctx, config = {}) {
           parentSessionId: body.parent_session_id,
         }
         const run = op === 'insights' ? api.listSessionsInsights : api.listSessions
-        return review.hostSpan('sessions', () => run(profile, params))
+        return run(profile, params)
       }),
     },
     {

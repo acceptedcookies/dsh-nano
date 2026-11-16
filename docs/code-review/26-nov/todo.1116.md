@@ -128,7 +128,7 @@ P0-00 干净树 + worktree
   - **落点**：§7.1 A-24；[DNK] `src/host/perf.js` 留 `hostSpan`
   - **完成判据**：退役 5 名不在 `keys.hostSpans`；插件不再写 `process.env.DSH_PERF_REVIEW`
   - **验证映射**：`PRE1116-T17` `PRE1116-T18` · **依赖**：`P3-05`
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
+  - **执行状态**：`partial` · **执行时间**：`2026-11-16T16:55:00Z` · **证据 / 备注**：`catalog`/`read`/`save`/`list`/`sessions` 已从插件源码拿掉。保留 `git-status`、`stats`、`self`、`kite-warmup`。[DNK] 不再写 `DSH_PERF_REVIEW`，`setPerfEnabled` 与 `perfSnapshot` 已删。动态步骤走 `FX_STEP_SPAN`。
 - [ ] `P3-07` — `11.5` ③ 排空与侧载退役（不提前）
   - **落点**：[DNEE] `mode=window`；[DNLS] 两条 perf 路由（按符号，不按 `:1137`）；[DNK] configure / POST / `perf` 字段
   - **完成判据**：`read:host` 恰好三条；其余 [DNLS] 路由不漂
@@ -188,8 +188,8 @@ P0-00 干净树 + worktree
 
 ## 5. 当前状态与交接
 
-- **当前节点**：七份声明和合同面 `observe` 已接到源码，待提交。span 退役、排空删除、lab 与文档还没做。
-- **下一动作**：提交这一刀，然后退役 5 个手写 span，保留 4 个。
+- **当前节点**：5 个手写 span 已退役，待提交。[DNEE] 排空和 lab 还没动。
+- **下一动作**：提交这一刀，然后按 `11.5` ③ 删排空和侧载。
 - **当前阻塞**：无。
 - **待 owner**：合并到 `main`；T26 部署；worktree 删除。
 - **最终交接**：分支 `facade-observe-binding-v2`，closure 指向本 todo。

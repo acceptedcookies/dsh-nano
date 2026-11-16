@@ -162,7 +162,6 @@ function sendJson(res, status, payload) {
 /**
  * Serve the catalog behind the connection's request admission, with a short
  * cache + in-flight dedupe so each panel open does not rebuild the registry.
- * The whole route (TTL hit or miss) is timed by review.hostSpan('catalog').
  * @param ctx - host context.
  */
 function catalogHandler(ctx) {
@@ -174,7 +173,7 @@ function catalogHandler(ctx) {
     }
     return inflight
   }
-  return (req, res) => review.hostSpan('catalog', async () => {
+  return async (req, res) => {
     // The guard owns requestRejection + the method gate; this handler only runs
     // for admitted GET/HEAD (the catalog still discloses the deployment's
     // provider/model fingerprint, so it stays behind that fence).
@@ -187,7 +186,7 @@ function catalogHandler(ctx) {
     } catch (error) {
       sendJson(res, 500, { error: messageOf(error) })
     }
-  })
+  }
 }
 
 /** Read at most `maxBytes` of request body as UTF-8 JSON. */

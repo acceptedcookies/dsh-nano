@@ -563,11 +563,11 @@ export function createRoutes(ctx, config) {
       async run(req) {
         const body = await jsonBody(req)
         const { root } = await scopeOf(ctx, body.sessionId)
-        return review.hostSpan('list', () => listDirectory(fs(), {
+        return listDirectory(fs(), {
           workspaceRoot: root,
           path: typeof body.path === 'string' ? body.path : '',
           allowOutsideWorkspace: body.allowOutsideWorkspace === true,
-        }, { maxEntries: config.listingMaxEntries }))
+        }, { maxEntries: config.listingMaxEntries })
       },
     },
     /* A1: the browser cannot read host.json from disk. This route is the

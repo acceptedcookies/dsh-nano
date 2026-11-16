@@ -49,7 +49,7 @@ export function apply(ctx, config = {}) {
       const mounted = mountNotepad(element, initial, {
         /* nano-ui's ThemeScope reads the host service directly (DESIGN.md §3). The
            notepad's own light/dark pin comes from its `theme` setting inside the
-           panel, so there is no second `schemeOf` wrapper here. */
+           panel, so no scheme wrapper is passed from here. */
         theme: ctx.theme,
         subscribe: listener => ctx.on('theme/change', listener),
       }, {

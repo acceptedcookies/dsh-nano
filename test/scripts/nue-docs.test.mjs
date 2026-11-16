@@ -81,3 +81,42 @@ test('T02 design skill exists and is in no package files list', () => {
     for (const f of files) assert.ok(!/skills\/dsh-nano-design|docs\/agents/.test(f), `${p} ships ${f}`)
   }
 })
+
+// ---- NUE1117-T29 (Phase 10): final documentation sync ----
+
+const CONSUMER_AGENTS = ['dsh-nano-model-selector', 'dsh-nano-explorer-extra', 'dsh-nano-terminal', 'dsh-nano-kitesurf', 'dsh-nano-cloud-session', 'dsh-nano-notepad'].map(d => `${d}/AGENTS.md`)
+const STALE_ZH = ['区域收束', '隐藏样式', 'portal 主题', '才到得了弹层']
+const STALE_EN = ['regionElement', 'data-nano-theme', 'NP_PORTAL_Z', 'data-dncs-cloud']
+
+export function staleHits(text) {
+  return [...STALE_ZH, ...STALE_EN].filter(word => text.includes(word))
+}
+
+test('T29 stale-word scan can fail (positive control)', () => {
+  const fixture = '区域收束 … 隐藏样式 … portal 主题 … regionElement … data-nano-theme … NP_PORTAL_Z'
+  assert.ok(staleHits(fixture).some(w => STALE_ZH.includes(w)))
+  assert.ok(staleHits(fixture).some(w => STALE_EN.includes(w)))
+})
+
+test('T29 INTRODUCTION and every consumer AGENTS carry no retired UI wording; INTRODUCTION has no nano-ui 0.1.0', () => {
+  const docs = ['INTRODUCTION.md', ...CONSUMER_AGENTS]
+  assert.equal(docs.length, 7)
+  for (const doc of docs) assert.deepEqual(staleHits(read(doc)), [], doc)
+  const intro = read('INTRODUCTION.md')
+  assert.ok(!intro.split('\n').some(l => l.includes('dsh-nano-ui') && l.includes('0.1.0')), 'nano-ui 0.1.0 in INTRODUCTION')
+})
+
+test('T29 DESIGN.md gap table lists all seven §5.1 items as rows', () => {
+  const gaps = read(DESIGN).split(/^## 8\./m)[1].split(/^## 9\./m)[0]
+  const rows = gaps.split('\n').filter(l => l.startsWith('| ') && !l.startsWith('| 缺口') && !l.startsWith('|---'))
+  for (const gap of GAPS) assert.ok(rows.some(r => r.startsWith(`| ${gap}`)), `gap row ${gap}`)
+})
+
+test('T29 every nano-ui-exempt marker has a DESIGN.md §10 row naming its file, and the counts match', async () => {
+  const { run } = await import(join(root, 'scripts', 'check-ui-rules.mjs'))
+  const markers = run({ root }).findings.filter(f => f.rule === 'U10')
+  assert.ok(markers.length > 0, 'U10 found markers')
+  const rows = read(DESIGN).split(/^## 10\./m)[1].split('\n').filter(l => l.startsWith('| `'))
+  assert.equal(rows.length, markers.length, 'one §10 row per marker')
+  for (const m of markers) assert.ok(rows.some(r => r.includes(m.file)), `§10 row for ${m.file}:${m.line}`)
+})

@@ -51,6 +51,7 @@ pub const M_ALT_SCREEN: u32 = 1 << 9; // 47/1047/1049
 pub const M_ALT_SCROLL: u32 = 1 << 10; // 1007
 pub const M_MOUSE_UTF8: u32 = 1 << 11; // 1005 (advertised only)
 pub const M_WRAPAROUND: u32 = 1 << 12; // DECAWM 7
+pub const M_SYNC_OUTPUT: u32 = 1 << 13; // 2026 synchronized output
 
 // ---------------------------------------------------------------------------
 // Cells and lines
@@ -78,10 +79,50 @@ impl Cell {
     }
 }
 
-type Line = Vec<Cell>;
+#[derive(Clone)]
+struct Line {
+    cells: Vec<Cell>,
+    /// 软折行：下一物理行是本行的续行（自动换行写出来的），不是 LF。
+    /// resize 靠它把被拆开的逻辑行拼回去再按新宽度重排，跟 ghostty 的 reflow 一样。
+    wrapped: bool,
+}
+
+impl std::ops::Deref for Line {
+    type Target = Vec<Cell>;
+    fn deref(&self) -> &Vec<Cell> {
+        &self.cells
+    }
+}
+impl std::ops::DerefMut for Line {
+    fn deref_mut(&mut self) -> &mut Vec<Cell> {
+        &mut self.cells
+    }
+}
+impl<'a> IntoIterator for &'a Line {
+    type Item = &'a Cell;
+    type IntoIter = std::slice::Iter<'a, Cell>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.cells.iter()
+    }
+}
 
 fn blank_line(cols: usize, fill: Cell) -> Line {
-    vec![fill; cols]
+    Line { cells: vec![fill; cols], wrapped: false }
+}
+
+fn cell_cols(c: &Cell) -> usize {
+    if c.flags & WIDE_SPACER != 0 {
+        0
+    } else if c.flags & WIDE != 0 {
+        2
+    } else {
+        1
+    }
+}
+
+/// 行尾用来补齐宽度的空格，重排时可以丢掉。带颜色/属性的空格是内容，留着。
+fn is_pad(c: &Cell) -> bool {
+    c.flags == 0 && c.ch == ' ' as u32 && c.attr == 0 && c.fg == C_DEFAULT && c.bg == C_DEFAULT
 }
 
 // ---------------------------------------------------------------------------
@@ -140,6 +181,8 @@ impl Grid {
             self.lines.insert(base + bottom - 1, blank_line(self.cols, fill));
         }
         self.mark_dirty_range(top, bottom.max(top + 1));
+        // 行被搬走后按旧行号记脏会漏。herdr 拿不准局部补丁就整帧重画。
+        self.dirty_all = true;
     }
 
     fn scroll_down(&mut self, top: usize, bottom: usize, fill: Cell) {
@@ -147,6 +190,7 @@ impl Grid {
         self.lines.remove(base + bottom - 1);
         self.lines.insert(base + top, blank_line(self.cols, fill));
         self.mark_dirty_range(top, bottom.max(top + 1));
+        self.dirty_all = true;
     }
 
     fn insert_lines(&mut self, at: usize, bottom: usize, n: usize, fill: Cell) {
@@ -156,6 +200,7 @@ impl Grid {
             self.lines.insert(base + at, blank_line(self.cols, fill));
         }
         self.mark_dirty_range(at, bottom.max(at + 1));
+        self.dirty_all = true;
     }
 
     fn delete_lines(&mut self, at: usize, bottom: usize, n: usize, fill: Cell) {
@@ -165,6 +210,7 @@ impl Grid {
             self.lines.insert(base + bottom - 1, blank_line(self.cols, fill));
         }
         self.mark_dirty_range(at, bottom.max(at + 1));
+        self.dirty_all = true;
     }
 
     fn mark_dirty_range(&mut self, a: usize, b: usize) {
@@ -174,29 +220,124 @@ impl Grid {
         }
     }
 
-    fn resize(&mut self, cols: usize, rows: usize, fill: Cell) {
+    /// 改宽度时按软折行标记重排；只改高度时原行不动，屏幕仍是 deque 的末尾 rows 行。
+    /// 返回光标所在格的新绝对行号和列。
+    fn resize(&mut self, cols: usize, rows: usize, fill: Cell, cursor_abs: usize, cursor_col: usize) -> (usize, usize) {
+        let mut cursor_abs = cursor_abs.min(self.lines.len().saturating_sub(1));
+        let mut cursor_col = cursor_col;
+        if cols != self.cols {
+            let mapped = self.reflow_cols(cols, fill, cursor_abs, cursor_col);
+            cursor_abs = mapped.0;
+            cursor_col = mapped.1;
+        }
         self.cols = cols;
-        // reflowless resize: truncate/pad every retained line
-        for line in self.lines.iter_mut() {
-            line.resize(cols, fill);
-        }
-        // adjust screen height: pull from scrollback or push blanks at top
-        while self.lines.len() > rows && self.lines.len() - self.rows > self.scrollback.min(usize::MAX) {
-            // shrink screen: move extra screen lines to scrollback top… keep simple:
-            if self.lines.len() - self.rows > 0 && self.lines.len() > rows {
-                // dropping from top keeps the newest content visible
-                self.lines.pop_front();
-            }
-        }
         while self.lines.len() < rows {
             self.lines.push_back(blank_line(cols, fill));
         }
         while self.lines.len() > self.scrollback + rows {
             self.lines.pop_front();
+            cursor_abs = cursor_abs.saturating_sub(1);
         }
         self.rows = rows;
         self.dirty = vec![true; rows];
         self.dirty_all = true;
+        let abs = cursor_abs.min(self.lines.len().saturating_sub(1));
+        let col = cursor_col.min(cols.saturating_sub(1));
+        (abs, col)
+    }
+
+    /// 把软折行拼成逻辑行，再按 new_cols 切开。硬换行（wrapped=false）保持断开。
+    fn reflow_cols(&mut self, new_cols: usize, fill: Cell, cursor_abs: usize, cursor_col: usize) -> (usize, usize) {
+        let old = std::mem::take(&mut self.lines);
+        let mut logical: Vec<Vec<Cell>> = Vec::new();
+        let mut acc: Vec<Cell> = Vec::new();
+        let mut cursor_logical: Option<(usize, usize)> = None;
+        for (pi, line) in old.into_iter().enumerate() {
+            if pi == cursor_abs {
+                let idx = cursor_col.min(line.cells.len().saturating_sub(1));
+                cursor_logical = Some((logical.len(), acc.len() + idx));
+            }
+            let wrapped = line.wrapped;
+            let mut cells = line.cells;
+            // 软折行末尾的空格是补齐到列宽的，不是内容。留着的话重排会在
+            // 两段之间插进空格（「中」+ 补齐 +「文」变成「中 文」）。
+            if wrapped {
+                while cells.last().copied().map(|c| is_pad(&c)).unwrap_or(false) {
+                    cells.pop();
+                }
+            }
+            acc.extend(cells);
+            if !wrapped {
+                logical.push(std::mem::take(&mut acc));
+            }
+        }
+        if !acc.is_empty() {
+            logical.push(acc);
+        }
+
+        let mut out: VecDeque<Line> = VecDeque::new();
+        let mut new_cursor: Option<(usize, usize)> = None;
+        for (li, mut cells) in logical.into_iter().enumerate() {
+            while cells.last().copied().map(|c| is_pad(&c)).unwrap_or(false) {
+                cells.pop();
+            }
+            let target = cursor_logical.filter(|(l, _)| *l == li).map(|(_, i)| i.min(cells.len()));
+            if cells.is_empty() {
+                if target.is_some() {
+                    new_cursor = Some((out.len(), 0));
+                }
+                out.push_back(blank_line(new_cols, fill));
+                continue;
+            }
+            let mut i = 0usize;
+            while i < cells.len() {
+                let start = i;
+                let mut col = 0usize;
+                while i < cells.len() {
+                    let w = cell_cols(&cells[i]);
+                    if w == 0 {
+                        i += 1;
+                        continue;
+                    }
+                    if col + w > new_cols {
+                        break;
+                    }
+                    col += w;
+                    i += 1;
+                    if w == 2 && i < cells.len() && cells[i].flags & WIDE_SPACER != 0 {
+                        i += 1;
+                    }
+                }
+                if i == start {
+                    i += 1;
+                    continue;
+                }
+                if let Some(t) = target {
+                    let hit = if i < cells.len() { t >= start && t < i } else { t >= start && t <= i };
+                    if hit {
+                        let mut ccol = 0usize;
+                        let end = t.min(i);
+                        for c in &cells[start..end] {
+                            ccol += cell_cols(c);
+                        }
+                        new_cursor = Some((out.len(), ccol.min(new_cols.saturating_sub(1))));
+                    }
+                }
+                let mut slice = cells[start..i].to_vec();
+                while slice.len() < new_cols {
+                    slice.push(fill);
+                }
+                if slice.len() > new_cols {
+                    slice.truncate(new_cols);
+                }
+                out.push_back(Line { cells: slice, wrapped: i < cells.len() });
+            }
+        }
+        if out.is_empty() {
+            out.push_back(blank_line(new_cols, fill));
+        }
+        self.lines = out;
+        new_cursor.unwrap_or((0, 0))
     }
 
     fn total_lines(&self) -> usize {
@@ -524,12 +665,14 @@ impl Term {
         }
         if self.pending_wrap {
             self.pending_wrap = false;
+            self.grid.line_mut(self.cursor.y).wrapped = true;
             self.newline();
         }
         let cols = self.grid.cols;
         let x = self.cursor.x.min(cols.saturating_sub(1));
         if width == 2 && x + 1 >= cols {
             if self.mode(M_WRAPAROUND) {
+                self.grid.line_mut(self.cursor.y).wrapped = true;
                 self.newline();
             } else {
                 return;
@@ -568,6 +711,9 @@ impl Term {
                 for c in x..cols {
                     line[c] = fill;
                 }
+                if x == 0 {
+                    line.wrapped = false;
+                }
             }
             1 => {
                 for c in 0..=x.min(cols - 1) {
@@ -578,6 +724,7 @@ impl Term {
                 for c in 0..cols {
                     line[c] = fill;
                 }
+                line.wrapped = false;
             }
             _ => {}
         }
@@ -752,6 +899,16 @@ impl Term {
                             }
                         }
                         2004 => self.set_mode_bit(M_BRACKETED_PASTE, set),
+                        2026 => {
+                            let was = self.mode(M_SYNC_OUTPUT);
+                            self.set_mode_bit(M_SYNC_OUTPUT, set);
+                            if was && !set {
+                                self.grid.dirty_all = true;
+                                for d in self.grid.dirty.iter_mut() {
+                                    *d = true;
+                                }
+                            }
+                        }
                         _ => {}
                     }
                 } else {
@@ -843,12 +1000,18 @@ impl Term {
         if cols == 0 || rows == 0 || (cols == self.grid.cols && rows == self.grid.rows) {
             return;
         }
-        self.grid.resize(cols, rows, Cell::BLANK);
+        let abs = self.grid.screen_base() + self.cursor.y.min(self.grid.rows.saturating_sub(1));
+        let (new_abs, new_col) = self.grid.resize(cols, rows, Cell::BLANK, abs, self.cursor.x);
         if let Some(g) = &mut self.saved_grid {
-            g.resize(cols, rows, Cell::BLANK);
+            let _ = g.resize(cols, rows, Cell::BLANK, 0, 0);
         }
-        self.cursor.x = self.cursor.x.min(cols - 1);
-        self.cursor.y = self.cursor.y.min(rows - 1);
+        let base = self.grid.screen_base();
+        if new_abs >= base {
+            self.cursor.y = (new_abs - base).min(self.grid.rows.saturating_sub(1));
+        } else {
+            self.cursor.y = 0;
+        }
+        self.cursor.x = new_col.min(cols.saturating_sub(1));
         self.scroll_region = (0, rows);
         self.pending_wrap = false;
         self.scroll_off = self.scroll_off.min(self.grid.history_len());
@@ -903,6 +1066,13 @@ impl Term {
         self.render_buf.push(0);
         let count_idx = self.render_buf.len() - 1;
         let mut count = 0i32;
+
+        // herdr 在 synchronized output 期间不发 request_render。半帧留在网格里，
+        // 脏标记不清，模式关掉时下一帧整屏刷出。
+        if self.mode(M_SYNC_OUTPUT) {
+            self.render_buf[count_idx] = 0;
+            return;
+        }
 
         for r in 0..rows {
             let abs = view_start + r;
@@ -1046,6 +1216,12 @@ impl Perform for Term {
         // 其余必须忽略——把 XTSAVE/XTRESTORE(`?s`/`?u`)、kitty 键盘查询(`?u`)、
         // modifyOtherKeys(`>4;2m`) 当标准序列执行，会让光标瞬间跳回旧保存点、
         // 画笔莫名带上下划线，整屏 TUI 立刻花屏（业主截图就是这么来的）。
+        // `CSI ? u` 本身要应答（flags=0：听得见，但没有启用任何键盘增强），
+        // 只是不能当成无前缀的 SCO 恢复光标。
+        if prefix == Some(b'?') && c == 'u' {
+            self.reply.extend_from_slice(b"\x1b[?0u");
+            return;
+        }
         if matches!(prefix, Some(b'<') | Some(b'=') | Some(b'>') | Some(b'?'))
             && !matches!(c, 'h' | 'l' | 'n' | 'c' | 'p' | 'q')
         {
@@ -1208,15 +1384,26 @@ impl Perform for Term {
                     if let Some(v) = params.iter().next().and_then(|p| p.first()) {
                         let (bit, base) = match *v {
                             1 => (M_APP_CURSOR, 1u16),
+                            7 => (M_WRAPAROUND, 7),
                             25 => (M_CURSOR_VISIBLE, 25),
                             1000 => (M_MOUSE_CLICK, 1000),
                             1002 => (M_MOUSE_BTN_MOTION, 1002),
                             1003 => (M_MOUSE_ANY_MOTION, 1003),
+                            1004 => (M_FOCUS_EVENTS, 1004),
                             1006 => (M_MOUSE_SGR, 1006),
+                            1049 => (M_ALT_SCREEN, 1049),
                             2004 => (M_BRACKETED_PASTE, 2004),
+                            2026 => (M_SYNC_OUTPUT, 2026),
                             _ => (0, *v),
                         };
-                        let state = if bit != 0 && self.mode(bit) { 2 } else { 1 };
+                        // xterm DECRQM：0 不认识，1 set，2 reset。之前写反了。
+                        let state = if bit == 0 {
+                            0
+                        } else if self.mode(bit) {
+                            1
+                        } else {
+                            2
+                        };
                         self.reply.extend_from_slice(
                             format!("\x1b[?{};{}$y", base, state).as_bytes(),
                         );
@@ -1234,7 +1421,11 @@ impl Perform for Term {
                 }
             }
             'q' => {
-                // DECSCUSR cursor style — ignore (JS cursor fixed)
+                if prefix == Some(b'>') {
+                    // XTVERSION。不答的话 TUI 的能力探测会空等然后降级。
+                    self.reply.extend_from_slice(b"\x1bP>|dnt\x1b\\");
+                }
+                // DECSCUSR（CSI Ps SP q）仍忽略，光标形状在画布侧固定。
             }
             'g' | 'b' | 'x' | 'y' | 'z' | '{' | '|' | '}' | '~' => {}
             _ => {}

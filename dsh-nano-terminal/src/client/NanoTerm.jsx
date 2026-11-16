@@ -829,7 +829,9 @@ function TermPane({ paneId, laneSpec, sessionId, session, focused, onFocus, onCl
       raf = 0
       const packed = term.render()
       if (packed) {
-        canvas.paint(packed)
+        // herdr：synchronized output 期间压住 request_render，半帧（含游标）不落画布。
+        const syncHeld = (packed.modes & MODES.SYNC_OUTPUT) && packed.rows.length === 0
+        if (!syncHeld) canvas.paint(packed)
         lastViewStart = packed.viewStart ?? 0
         // 选区层跟随视口滚动重新定位（滚动/输出移位时高亮不漂移）
         canvas.paintSelection(rec.sel?.a, rec.sel?.f, lastViewStart, contentCols)
@@ -1115,6 +1117,9 @@ function TermPane({ paneId, laneSpec, sessionId, session, focused, onFocus, onCl
     rec.reconfigure = (next) => {
       canvas.setFont(fontFrom(next))
       canvas.setBlink(next.blink)
+      // 字体度量变了但列数可能不变。render() 只吐脏行，不整帧的话旧字形留在画布上。
+      // herdr 在这种拿不准的时候整帧重画。
+      term.invalidate()
       fit()
       schedulePaint()
     }

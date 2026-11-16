@@ -27,6 +27,23 @@ function cursorOf(id) {
   return { x: b[i + 4], y: b[i + 5] - b[i + 3] }
 }
 
+function renderRowCount(id) {
+  const ptr = e.dnt_render(id)
+  return i32()[(ptr >> 2) + 7]
+}
+
+function replyOf(id) {
+  const len = e.dnt_reply_len(id)
+  const ptr = e.dnt_reply_ptr(id)
+  return dec.decode(mem().subarray(ptr, ptr + len))
+}
+
+function dumpLines(id, source) {
+  const p = e.dnt_dump(id, source, 50)
+  const l = e.dnt_dump_len(id)
+  return dec.decode(mem().subarray(p, p + l))
+}
+
 function renderRows(id) {
   e.dnt_invalidate(id)
   const ptr = e.dnt_render(id)
@@ -378,6 +395,61 @@ e.dnt_free(id)
   rects.length = 0
   cv.paintSelection({ line: 0, col: 0 }, { line: 1, col: 19 }, 0, null)
   t('paint: 无 lineCols 退回整行（旧 wasm 兼容）', rects.length === 2 && rects.every((r) => r.w === 200))
+}
+
+// 12. 借鉴 herdr：查询要答、同步输出压帧、软折行重排、字体变更整帧
+{
+  id = e.dnt_new(20, 5, 20)
+  write(id, '\x1b[2;4H')
+  const before = cursorOf(id)
+  write(id, '\x1b[?u')
+  const after = cursorOf(id)
+  t('kitty ?u 不移动光标', before.x === after.x && before.y === after.y)
+  t('kitty ?u 应答 flags=0', replyOf(id) === '\x1b[?0u')
+  write(id, '\x1b[>0q')
+  t('XTVERSION 应答 dnt', replyOf(id) === '\x1bP>|dnt\x1b\\')
+  write(id, '\x1b[?25$p')
+  t('DECRQM set = 1', replyOf(id) === '\x1b[?25;1$y')
+  write(id, '\x1b[?25l\x1b[?25$p')
+  t('DECRQM reset = 2', replyOf(id) === '\x1b[?25;2$y')
+  write(id, '\x1b[?2026$p')
+  t('DECRQM 2026 认识且为 reset', replyOf(id) === '\x1b[?2026;2$y')
+  write(id, '\x1b[?9999$p')
+  t('DECRQM 不认识 = 0', replyOf(id) === '\x1b[?9999;0$y')
+  e.dnt_free(id)
+
+  id = e.dnt_new(20, 4, 10)
+  write(id, 'AAA')
+  renderRowCount(id)
+  write(id, '\x1b[?2026hBBB')
+  t('sync 期间不吐半帧', renderRowCount(id) === 0)
+  write(id, '\x1b[?2026l')
+  const shown = renderRows(id).map((r) => r.runs.map((x) => x.text).join('')).join('\n')
+  t('sync 结束整屏含 BBB', shown.includes('AAABBB'))
+  e.dnt_free(id)
+
+  id = e.dnt_new(5, 8, 20)
+  write(id, 'hello world\r\nNEXT')
+  e.dnt_resize(id, 20, 8)
+  const wide = dumpLines(id, 0)
+  t('reflow 加宽拼回逻辑行', wide.split('\n').some((l) => l.includes('hello world')))
+  t('reflow 硬换行不断开', wide.includes('NEXT') && !wide.includes('hello worldNEXT'))
+  t('reflow 光标跟到 NEXT', cursorOf(id).x === 4)
+  e.dnt_resize(id, 4, 8)
+  // 变窄后逻辑行变高，超出屏幕的前半段进 scrollback，整段仍在
+  const narrow = dumpLines(id, 1).replace(/\n/g, '')
+  t('reflow 变窄仍含全部字符', narrow.includes('hello world') && narrow.includes('NEXT'))
+  e.dnt_free(id)
+
+  id = e.dnt_new(3, 4, 10)
+  write(id, '中文ab')
+  e.dnt_resize(id, 10, 4)
+  const wideCjk = dumpLines(id, 1).replace(/\n/g, '')
+  t('reflow 宽字符不插入补齐空格', wideCjk.includes('中文ab'))
+  e.dnt_free(id)
+
+  const jsx = readFileSync(join(root, 'src/client/NanoTerm.jsx'), 'utf8')
+  t('字体变更走整帧 invalidate', /reconfigure = \(next\) => \{[\s\S]*?term\.invalidate\(\)/.test(jsx))
 }
 
 console.log(`${pass} passed, ${fail} failed`)

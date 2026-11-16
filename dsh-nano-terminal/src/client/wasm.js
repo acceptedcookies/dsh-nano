@@ -278,6 +278,7 @@ export const MODES = {
   MOUSE_ANY_MOTION: 1 << 6,
   MOUSE_SGR: 1 << 7,
   FOCUS_EVENTS: 1 << 8,
+  SYNC_OUTPUT: 1 << 13,
   ALT_SCREEN: 1 << 9,
   ALT_SCROLL: 1 << 10,
   MOUSE_UTF8: 1 << 11,

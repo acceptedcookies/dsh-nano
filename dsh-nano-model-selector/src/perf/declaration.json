@@ -1,0 +1,47 @@
+{
+  "schema": "dnpr.declaration/1",
+  "plugin": "nano-model-selector",
+  "keys": {
+    "spans": [
+      "catalog-fetch",
+      "filter-render",
+      "panel-place"
+    ],
+    "tracks": [
+      {
+        "name": "panel-outside",
+        "kind": "listener"
+      },
+      {
+        "name": "panel-place",
+        "kind": "listener"
+      }
+    ],
+    "usage": [
+      "panel-open"
+    ],
+    "hostSpans": []
+  },
+  "buckets": [
+    {
+      "attr": "data-nano-model-selector",
+      "bucket": "model-trigger"
+    }
+  ],
+  "contract": [
+    "dnms.catalog",
+    "dnms.media-engines",
+    "dnms.media-engine",
+    "dnms.async-compact",
+    "dnms.async-compact.bundle",
+    "dnms.async-compact.switch",
+    "dnms.perf-review.host"
+  ],
+  "scenarios": [
+    {
+      "id": "model-open",
+      "driver": "lab/drivers/model-open.mjs"
+    }
+  ],
+  "budgets": []
+}

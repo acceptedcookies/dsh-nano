@@ -39,6 +39,22 @@ function bind(value, ctx) {
  * ctx = {idb, corpus, runWithTools, model, node, vars, defId}
  * 返回 {runId, status:'done'|'error', stages:[{step,ok,result,error}]}
  */
+const FX_STEP_SPAN = Object.freeze({
+  run: 'fx-run',
+  setCat: 'fx-set-cat',
+  rename: 'fx-rename',
+  accept: 'fx-accept',
+  reject: 'fx-reject',
+  writeBack: 'fx-write-back',
+  claim: 'fx-claim',
+})
+
+function noteUnmappedStep() {
+  const review = globalThis[Symbol.for('dsh.perfReview.v2')]
+  const structure = review?._state?.().structure
+  if (structure) structure.unmappedKey += 1
+}
+
 export async function runPipeline(spec, ctx) {
   const sq = await ctx.sqlite()
   await sq.openPipeline()
@@ -129,7 +145,13 @@ export async function runPipeline(spec, ctx) {
     if (!fn) { stages.push({ step: stage.step, ok: false, error: `unknown step ${stage.step}` }); status = 'error'; break }
     const args = bind(stage.args ?? {}, local)
     try {
-      const result = ctx.perf?.span ? await ctx.perf.span(`fx-stage-${stage.step}`, () => fn(args)) : await fn(args)
+      const spanName = FX_STEP_SPAN[stage.step]
+      let result
+      if (spanName && ctx.perf?.span) result = await ctx.perf.span(spanName, () => fn(args))
+      else {
+        if (!spanName) noteUnmappedStep()
+        result = await fn(args)
+      }
       stages.push({ step: stage.step, ok: true, result })
       try { await sq.checkpoint(runId, stage.step, { index: i, args, ok: true }) } catch {}
     } catch (e) {

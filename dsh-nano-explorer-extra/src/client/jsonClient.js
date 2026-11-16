@@ -7,17 +7,22 @@
  * surface changes.
  */
 import { createJsonClient } from 'dsh-interface/host'
+import { BROWSER_BINDINGS } from '../../lib/browser-bindings.js'
 
 const PREFIX = '/nano-explorer-extra'
+const BINDING_IDS = new Map(BROWSER_BINDINGS.map(row => [row.path, row.id]))
 
 const client = createJsonClient({
   fetch: (url, init) => fetch(url, { credentials: 'same-origin', cache: 'no-store', ...init }),
   resolveUrl: (_op, req) => req.url,
+  plugin: 'dsh-nano-explorer-extra',
+  observe: event => globalThis[Symbol.for('dsh.perfReview.v2')]?.observe?.(event),
 })
 
 /** One suffix-face codec: encode → POST(JSON body)|GET, decode → {ok,data}|domain. */
 function opFor(path) {
   return {
+    bindingId: BINDING_IDS.get(`${PREFIX}${path}`) ?? null,
     encode: (body) => body === undefined
       ? { url: `${PREFIX}${path}`, method: 'GET' }
       : { url: `${PREFIX}${path}`, method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) },

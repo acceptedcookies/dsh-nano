@@ -14,6 +14,8 @@
  * it must return the real `attach.url`, never a guess.
  */
 
+import { emitObserve, observeStamp } from './emitObserve.js'
+
 const MCP_NOTIFICATIONS = 'notifications/'
 
 /**
@@ -24,10 +26,11 @@ const MCP_NOTIFICATIONS = 'notifications/'
  *   call → result object. Throw `err` (with `.kind`) to surface a domain error.
  * @param {string} [opts.protocolVersion]
  * @param {object} [opts.serverInfo] — {name,version} for initialize.
- * @param {(event:object)=>void} [opts.onCall] — audit hook per admitted call.
+ * @param {Function} [opts.observe] — optional end-of-call hook (T-O-PRE1116-06). Not an alias of a removed audit hook.
+ * @param {string} [opts.plugin]
  * @returns {{ handleRpc(body), tools }}
  */
-export function createMcpToolset({ schema, dispatch, protocolVersion = '2025-06-18', serverInfo = {}, onCall } = {}) {
+export function createMcpToolset({ schema, dispatch, protocolVersion = '2025-06-18', serverInfo = {}, observe, plugin } = {}) {
   if (schema == null || !Array.isArray(schema.methods)) {
     throw new TypeError('createMcpToolset requires a schema with a methods array')
   }
@@ -64,26 +67,45 @@ export function createMcpToolset({ schema, dispatch, protocolVersion = '2025-06-
       if (msg.method === 'ping') { out.push(rpcReply(msg.id, {})); continue }
       if (msg.method === 'tools/list') { out.push(rpcReply(msg.id, { tools })); continue }
       if (msg.method === 'tools/call') {
+        const t0 = observeStamp(observe)
         const { name, arguments: args } = msg.params ?? {}
+        const id = typeof name === 'string' && name !== '' ? name : null
+        let sent = false
+        const finish = (outcome, kind) => {
+          if (sent || t0 == null) return
+          sent = true
+          const event = {
+            surface: 'mcp',
+            id,
+            plugin: plugin ?? null,
+            outcome,
+            ms: globalThis.performance.now() - t0,
+          }
+          if (kind !== undefined) event.kind = kind
+          emitObserve(observe, event)
+        }
         if (!toolMap[name]) {
           out.push(rpcReply(msg.id, null, { code: -32602, message: `unknown tool '${name}'` }))
+          finish('rejected')
           continue
         }
-        onCall?.({ op: 'mcp.call', name })
         try {
           const result = await dispatch(name, args ?? {})
           out.push(rpcReply(msg.id, {
             content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
             structuredContent: result,
           }))
+          finish('ok')
         } catch (e) {
           out.push(rpcReply(msg.id, {
             content: [{ type: 'text', text: String(e?.message ?? e) }],
             isError: true,
             /* stable kind travels on structuredContent so callers map errors
-               without parsing message text. */
+               without parsing message text. The observe event does not. */
             structuredContent: { kind: e?.kind ?? 'invalid', message: String(e?.message ?? e) },
           }))
+          const kind = typeof e?.kind === 'string' && e.kind !== '' ? e.kind : 'invalid'
+          finish('error', kind)
         }
         continue
       }

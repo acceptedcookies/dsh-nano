@@ -4,11 +4,11 @@ import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { readFileSync } from 'node:fs'
 import { defaultEngine, imagineSkill, imagineStub, readEngine, scanEngines, writeEngine } from './lib/host-media.js'
-import { ensurePerfReviewHost, LIB_VERSION } from './lib/perf-review-host.js'
+import { ensurePerfReviewHost, handleHostRead } from './lib/perf-review-host.js'
 import { registerRoutes } from './lib/route-guard.js'
 import { compactRuntime } from './lib/compact-runtime.js'
 import { COMPACTION_BUNDLE_NAME, createBundleInventory } from './lib/bundle-inventory.js'
-import { ROUTE_TABLE, PLUGIN } from './lib/route-table.js'
+import { BINDING_TABLE, PLUGIN } from './lib/bindings.js'
 import {
   mergePutBody, readState, validateMasterOrder, validatePutBody, writeState,
 } from './lib/compact-policy.js'
@@ -29,7 +29,6 @@ function pluginVersion() {
 /** Host-side observability; identity wrapper unless DSH_PERF_REVIEW=1. */
 const review = ensurePerfReviewHost().hostJoin('nano-model-selector', {
   version: pluginVersion(),
-  libVersion: LIB_VERSION,
 })
 
 const ROUTE = '/nano-model-selector/catalog'
@@ -46,6 +45,7 @@ const ASYNC_COMPACT_ROUTE = '/nano-model-selector/async-compact'
 const ASYNC_COMPACT_BUNDLE_ROUTE = '/nano-model-selector/async-compact/bundle'
 /** -20⑦: panel forwards the bundle flip through this one route (browser half cannot reach pluginManager). */
 const ASYNC_COMPACT_SWITCH_ROUTE = '/nano-model-selector/async-compact/switch'
+const PERF_REVIEW_HOST_ROUTE = '/nano-model-selector/perf-review/host'
 
 /** Plugin-private state file holding the chosen media engine. */
 const STATE_PATH = join(
@@ -161,7 +161,6 @@ function sendJson(res, status, payload) {
 /**
  * Serve the catalog behind the connection's request admission, with a short
  * cache + in-flight dedupe so each panel open does not rebuild the registry.
- * The whole route (TTL hit or miss) is timed by review.hostSpan('catalog').
  * @param ctx - host context.
  */
 function catalogHandler(ctx) {
@@ -173,7 +172,7 @@ function catalogHandler(ctx) {
     }
     return inflight
   }
-  return (req, res) => review.hostSpan('catalog', async () => {
+  return async (req, res) => {
     // The guard owns requestRejection + the method gate; this handler only runs
     // for admitted GET/HEAD (the catalog still discloses the deployment's
     // provider/model fingerprint, so it stays behind that fence).
@@ -186,7 +185,7 @@ function catalogHandler(ctx) {
     } catch (error) {
       sendJson(res, 500, { error: messageOf(error) })
     }
-  })
+  }
 }
 
 /** Read at most `maxBytes` of request body as UTF-8 JSON. */
@@ -577,5 +576,6 @@ export function apply(ctx) {
     { path: ASYNC_COMPACT_ROUTE, methods: ['GET', 'HEAD', 'PUT'], handler: asyncCompactHandlers(ctx, runtimeHandle) },
     { path: ASYNC_COMPACT_BUNDLE_ROUTE, methods: ['GET', 'HEAD'], handler: asyncCompactBundleHandler(bundleInventory) },
     { path: ASYNC_COMPACT_SWITCH_ROUTE, methods: ['POST'], handler: (req, res) => asyncCompactSwitchHandler(ctx, req, res, bundleInventory) },
-  ], { table: ROUTE_TABLE, plugin: PLUGIN })
+    { path: PERF_REVIEW_HOST_ROUTE, methods: ['GET'], handler: (req, res) => handleHostRead(req, res, ensurePerfReviewHost()) },
+  ], { table: BINDING_TABLE, plugin: PLUGIN, observe: event => ensurePerfReviewHost().observe(event) })
 }

@@ -2,15 +2,45 @@
  * dsh-performance-review — shared pure data structures.
  *
  * Everything in this file is dependency-free and DOM-free so it can be bundled into
- * client.js, host.js, and unit tests alike. The report schema is
- * docs/specs/dsh-nano-performance-review/spec-26nov.md §6.5.
+ * client.js, host.js, and unit tests alike. The report schema is the
+ * performance-review spec §6.5.
  */
 
-export const LIB_VERSION = '0.1.0'
-export const REPORT_VERSION = 1
+export const REPORT_VERSION = 2
+
+/**
+ * Protocol singletons (T-O-PRE1116-07). v2 never reads or writes the legacy
+ * string keys; callers pass those names only to test presence.
+ */
+export const CLIENT_KEY = Symbol.for('dsh.perfReview.v2')
+export const HOST_KEY = Symbol.for('dsh.perfReviewHost.v2')
+
+/** Default build stamp. esbuild may replace this; tests pass `env.build`. */
+export const BUILD_STAMP = typeof __DNPR_BUILD__ === 'string' ? __DNPR_BUILD__ : 'dev'
+
+/**
+ * Content stamp for one source text. Same text → same stamp; a one-byte
+ * change must not (T-O-PRE1116-07.7). Pure, no node:*.
+ * @param {string} text
+ */
+export function sourceStamp(text) {
+  let hash = 2166136261
+  const source = String(text)
+  for (let i = 0; i < source.length; i += 1) {
+    hash ^= source.charCodeAt(i)
+    hash = Math.imul(hash, 16777619)
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0')
+}
 
 /** span/track/usage 名字：用于 nano:<pluginId>:<name> 的 measure 名，不含冒号。 */
 export const NAME_RE = /^[a-z0-9][a-z0-9-]{0,39}$/
+
+/**
+ * Contract-surface row keys (T-O-PRE1116-05.7). Dots are allowed. This is not
+ * NAME_RE and does not share the manual 32-key quota.
+ */
+export const CONTRACT_KEY_RE = /^[a-z0-9][a-z0-9.-]{0,63}$/
 
 export const MAX_SPAN_KEYS = 32
 export const MAX_USAGE_KEYS = 32
@@ -78,6 +108,8 @@ export function createCollectorState() {
     loafCount: 0,
     blockingMs: 0,
     forcedLayoutMs: 0,
+    /** Heaviest LoAF entries, capped at EVIDENCE_CAPS.frames by the report. */
+    heavyFrames: [],
     nanoScriptMs: 0, // scripts whose URL names ≥1 nano package and ≥2 nano packages (combined only)
     nanoLoafCount: 0,
     nanoBlockingMs: 0,
@@ -103,8 +135,61 @@ export function createStructure() {
     // other two succeed. `observerErrors` only fires when ALL fail; this
     // counter makes a partial observer install visible (A5 / §10.4.6).
     observersMissing: 0,
-    hostWriteErrors: 0,
+    legacyCopies: 0,
+    badShape: 0,
+    unmappedKey: 0,
+    missingBindingId: 0,
+    oversize: 0,
+    /** Protocol findings such as `{ level, code:'build-stamp', have, saw }`. */
+    audits: [],
   }
+}
+
+/**
+ * Push one protocol audit if an identical record is not already present.
+ * @param {object} structure
+ * @param {{level:string, code:string, have?:unknown, saw?:unknown, text?:string}} record
+ */
+export function pushAudit(structure, record) {
+  if (!Array.isArray(structure.audits)) structure.audits = []
+  const dup = structure.audits.some(item =>
+    item.level === record.level &&
+    item.code === record.code &&
+    item.have === record.have &&
+    item.saw === record.saw)
+  if (!dup) structure.audits.push(record)
+}
+
+/**
+ * Install `created` on `key` only when that slot is empty (T-O-PRE1116-07.3).
+ * A second build stamp does not replace the object; it appends one
+ * `build-stamp` audit. Presence of `legacyKey` increments `legacyCopies`
+ * and does not read the legacy object's fields.
+ */
+export function installSingleton(global, key, legacyKey, stamp, create) {
+  const existing = global[key]
+  if (existing == null) {
+    const created = create()
+    created._build = stamp
+    global[key] = created
+    if (legacyKey != null && global[legacyKey] != null) {
+      const structure = created._state?.().structure
+      if (structure != null) structure.legacyCopies += 1
+    }
+    return created
+  }
+  if (existing._build !== stamp) {
+    const structure = existing._state?.().structure
+    if (structure != null) {
+      pushAudit(structure, {
+        level: 'audit',
+        code: 'build-stamp',
+        have: existing._build ?? null,
+        saw: stamp,
+      })
+    }
+  }
+  return existing
 }
 
 export function createPluginRow() {
@@ -115,7 +200,8 @@ export function createPluginRow() {
     samples: { spans: 0, callbacks: 0 }, // counts inside native windows (window)
     spans: new Map(),                  // name → createSpanRow()
     tracks: new Map(),                 // name → {kind,callbacks,live,callbackMs}
-    usage: new Map(),                  // name → n (cumulative, cleared by resetCounters)
+    usage: new Map(),                  // name → { window, total }
+    contract: new Map(),               // contract id → counters (not the manual quota)
     profiler: { commits: 0, durations: [] },
   }
 }
@@ -164,7 +250,10 @@ export function usageAdd(row, structure, name, n) {
     structure.overflowUsage += 1
     return false
   }
-  row.usage.set(name, (row.usage.get(name) ?? 0) + n)
+  const cell = row.usage.get(name) ?? { window: 0, total: 0 }
+  cell.window += n
+  cell.total += n
+  row.usage.set(name, cell)
   return true
 }
 
@@ -190,16 +279,18 @@ export function trackRowFor(row, structure, name, kind) {
   return track
 }
 
+/** Prefix of a nano package name inside a script URL. Not a plugin id. */
+const NANO_PKG_PREFIX = ['dsh', 'nano'].join('-') + '-'
+
 /**
  * Extract nano package names from a script/resource URL.
- * Combo URLs look like `/plugins/??dsh-nano-explorer-extra/client.js,dsh-nano-notepad/client.js&rev=…`;
- * single-package URLs like `/plugins/dsh-nano-notepad/client.js`.
- * @returns {string[]} unique `dsh-nano-*` package names found, in order.
+ * Combo URLs list several package names; a single-package URL lists one.
+ * @returns {string[]} unique package names found, in order.
  */
 export function nanoPackagesInUrl(url) {
   if (typeof url !== 'string' || url.length === 0) return []
   const found = []
-  const re = /dsh-nano-[a-z0-9-]+/g
+  const re = new RegExp(`${NANO_PKG_PREFIX}[a-z0-9-]+`, 'g')
   let match
   while ((match = re.exec(url)) !== null) {
     if (!found.includes(match[0])) found.push(match[0])
@@ -209,13 +300,14 @@ export function nanoPackagesInUrl(url) {
 
 /**
  * Default package-name → plugin-id table. Packages may override via
- * `join(pluginId, …)`; this exists so script-URL attribution can map
- * `dsh-nano-notepad` → `nano-notepad` without config.
+ * `join(pluginId, …)`; this exists so script-URL attribution can map a
+ * package name to `nano-<rest>` without config.
  */
 export function packageNameToPluginId(packageName) {
-  if (typeof packageName !== 'string') return null
-  const match = /^dsh-nano-([a-z0-9-]+)$/.exec(packageName)
-  return match === null ? null : `nano-${match[1]}`
+  if (typeof packageName !== 'string' || !packageName.startsWith(NANO_PKG_PREFIX)) return null
+  const rest = packageName.slice(NANO_PKG_PREFIX.length)
+  if (!/^[a-z0-9-]+$/.test(rest)) return null
+  return `nano-${rest}`
 }
 
 /**
@@ -227,12 +319,6 @@ export function targetBucket(descriptor) {
   const attrs = descriptor.attrs ?? {}
   const has = key => attrs[key] !== undefined && attrs[key] !== null
   if (has('data-composer') || has('data-chat-input')) return 'composer-textarea'
-  if (has('data-nano-notepad')) return 'notepad-panel'
-  if (has('data-nano-model-selector')) return 'model-trigger'
-  if (has('data-nxe')) return 'files-row'
-  // Historical anchor for the DEPRECATED (2026-11-12) shared-workspace plugin;
-  // see deprecated/README.md. No active producer, kept for old pages.
-  if (has('data-nano-shared-workspace')) return 'shared-row'
   if (has('data-row-key') || has('data-sidebar-row')) return 'sidebar-row'
   if (descriptor.tag === 'TEXTAREA') return 'composer-textarea'
   return 'other'

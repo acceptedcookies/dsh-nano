@@ -236,15 +236,17 @@ test('pickOwner: deepest root wins over ancestor root; throws → rootErrors', (
   assert.equal(pickOwner(plugins, lonely, structure), 'native')
 })
 
-test('bucketForElement walks ancestors to nearest data-* marker', () => {
+test('bucketForElement walks ancestors using the buckets join() registered', () => {
   const row = el('div', { 'data-nxe': '' })
   const icon = el('span')
   icon.parentElement = row
-  assert.equal(bucketForElement(icon, ['data-nxe']), 'files-row')
+  assert.equal(bucketForElement(icon, [['data-nxe', 'files-row']]), 'files-row')
   const deep = el('i')
   const mid = el('div', { 'data-nano-notepad': 'root' }, [deep])
-  assert.equal(bucketForElement(deep, ['data-nano-notepad']), 'notepad-panel')
-  assert.equal(bucketForElement(el('div'), ['data-nxe']), 'other')
+  assert.equal(bucketForElement(deep, [['data-nano-notepad', 'notepad-panel']]), 'notepad-panel')
+  assert.equal(bucketForElement(el('div'), [['data-nxe', 'files-row']]), 'other')
+  // Not registered → the shared package does not know plugin markers.
+  assert.equal(bucketForElement(row, []), 'other')
 })
 
 test('firstVisibleRoot picks the connected, unhidden pane via scope', () => {
@@ -309,18 +311,18 @@ test('two bundled copies share one singleton; contributors recorded per join', (
   const a = ensurePerfReview(envA)
   const b = ensurePerfReview(envB)
   assert.equal(a, b)
-  a.join('nano-x', { libVersion: '0.1.0' })
-  b.join('nano-y', { libVersion: '0.2.0' }) // skewed copy
-  const report = a.report()
-  const ids = report.meta.contributors.map(c => `${c.pluginId}@${c.libVersion}`)
-  assert.deepEqual(ids.sort(), ['nano-x@0.1.0', 'nano-y@0.2.0'].sort())
-  assert.ok(report.plugins['nano-x'].meta.implanted)
-  assert.ok(report.plugins['nano-y'].meta.implanted)
+  a.join('nano-x', { build: 'aaaa' })
+  b.join('nano-y', { build: 'bbbb' }) // skewed copy
+  const report = a.read()
+  const ids = report.page.contributors.map(c => `${c.pluginId}@${c.build}`)
+  assert.deepEqual(ids.sort(), ['nano-x@aaaa', 'nano-y@bbbb'].sort())
+  assert.equal(typeof report.plugins['nano-x'].hand, 'object')
+  assert.equal(typeof report.plugins['nano-y'].hand, 'object')
 })
 
-// ---------- report / reset ----------
+// ---------- read / cutWindow ----------
 
-test('report() flushes pending, returns JSON, and clears window (not totals)', () => {
+test('read() is side-effect free; cutWindow() clears window columns only', () => {
   const env = fakeEnv()
   const review = createPerfReview(env)
   const api = joinRow(review)
@@ -331,23 +333,56 @@ test('report() flushes pending, returns JSON, and clears window (not totals)', (
   api.count('panel-open', 2)
   emitEvent(review, { interactionId: 1, startTime: 50, duration: 20, target: el('div') })
 
-  const report = review.report({ scenario: 'idle-10s' })
-  assert.equal(report.version, 1)
-  assert.equal(report.meta.scenario, 'idle-10s')
-  assert.equal(report.meta.chromeMajor, 143)
-  assert.equal(report.enabled, true)
-  assert.equal(report.plugins[PLUGIN].spans.s1.n, 1)
-  assert.equal(report.plugins[PLUGIN].tracks.l.callbacks, 2)
-  assert.equal(report.plugins[PLUGIN].usage['panel-open'], 2)
-  assert.equal(report.counts['panel-open'], 2)
+  const report = review.read({ scenario: 'idle-10s' })
+  assert.equal(report.meta.protocol, 2)
+  assert.equal(report.page.scenario, 'idle-10s')
+  assert.equal(report.page.chromeMajor, 143)
+  assert.equal(report.page.enabled, true)
+  assert.equal(report.plugins[PLUGIN].hand.spans.s1.n, 1)
+  assert.equal(report.plugins[PLUGIN].hand.spans.s1.basis, 'window')
+  assert.equal(report.plugins[PLUGIN].hand.tracks.l.callbacks, 2)
+  assert.equal(report.plugins[PLUGIN].hand.usage['panel-open'].window, 2)
+  assert.equal(report.plugins[PLUGIN].hand.usage['panel-open'].total, 2)
+  assert.equal(report.page.counts['panel-open'].total, 2)
+  assert.deepEqual(Object.keys(report).sort(), ['evidence', 'meta', 'notes', 'page', 'plugins', 'schema', 'structure'])
 
-  // window cleared; totals persist
+  const again = review.read({ scenario: 'idle-10s' })
+  assert.deepEqual(again, report)
   const row = review._state().plugins.get(PLUGIN)
+  assert.equal(row.spans.get('s1').window.length, 1)
+  assert.equal(row.tracks.get('l').callbacks, 2)
+
+  review.cutWindow()
   assert.equal(row.samples.callbacks, 0)
   assert.equal(row.spans.get('s1').window.length, 0)
+  assert.equal(row.spans.get('s1').n, 1)
   assert.equal(row.tracks.get('l').totalCallbacks, 2)
-  const report2 = review.report()
-  assert.equal(report2.plugins[PLUGIN].tracks.l.callbacks, 0)
-  assert.equal(report2.plugins[PLUGIN].tracks.l.totalCallbacks, 2)
-  assert.equal(report2.plugins[PLUGIN].usage['panel-open'], 2)
+  const report2 = review.read()
+  assert.equal(report2.plugins[PLUGIN].hand.tracks.l.callbacks, 0)
+  assert.equal(report2.plugins[PLUGIN].hand.tracks.l.totalCallbacks, 2)
+  assert.equal(report2.plugins[PLUGIN].hand.usage['panel-open'].window, 0)
+  assert.equal(report2.plugins[PLUGIN].hand.usage['panel-open'].total, 2)
+  assert.equal(report2.page.counts['panel-open'].total, 2)
+})
+
+
+test('host read poller registers routes, sends since, and does nothing while disabled', async () => {
+  const calls = []
+  const env = fakeEnv({ forceEnabled: true })
+  env.fetch = async (url) => { calls.push(url); return { json: async () => ({ status: 200, next: 'e1.7', plugins: {} }) } }
+  env.setInterval = () => ({ unref() {} })
+  const review = createPerfReview(env)
+  review.join('nano-a', { hostRoute: '/nano-a/perf-review/host' })
+  review.join('nano-b', { hostRoute: '/nano-b/perf-review/host' })
+  await new Promise(resolve => setTimeout(resolve, 0))
+  assert.equal(calls.length, 1, 'exactly one healthy entry is polled')
+  assert.equal(calls[0], '/nano-a/perf-review/host')
+  const report = review.read()
+  assert.equal(report.page.host.source, 'snapshot')
+  assert.equal(calls.length >= 1, true)
+
+  const off = createPerfReview(fakeEnv({ forceEnabled: false }))
+  off.join('nano-a', { hostRoute: '/nano-a/perf-review/host' })
+  await new Promise(resolve => setTimeout(resolve, 0))
+  assert.equal(off.read().page.host.source, null)
 })

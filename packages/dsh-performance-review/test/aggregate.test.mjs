@@ -67,13 +67,13 @@ test('buildReport: INP is page-level; plugin rows get own/native only', () => {
   assert.equal(report.page.nativeInpCount, 3)
   assert.equal(report.page.nativeInpP75, 90) // p75 of [30,60,90]
   const px = report.plugins['nano-x']
-  assert.equal(px.own.inpP75, 30)
-  assert.equal(px.own.inpCount, 1)
-  assert.equal(px.native.spanMsP95, 20)
-  assert.equal(px.native.trackMsP95, 2)
-  assert.equal(px.native.samples.spans, 2)
+  assert.equal(px.hand.own.inpP75, 30)
+  assert.equal(px.hand.own.inpCount, 1)
+  assert.equal(px.hand.native.spanMsP95, 20)
+  assert.equal(px.hand.native.trackMsP95, 2)
+  assert.equal(px.hand.native.samples.spans, 2)
   // no INP copied into the plugin row
-  assert.equal(px.native.inpP75, undefined)
+  assert.equal(px.hand.native.inpP75, undefined)
   assert.equal(px.inpP75, undefined)
 })
 
@@ -103,19 +103,21 @@ test('buildReport merges hostSnapshot into hostSpan rows', () => {
       },
     },
   })
-  const hs = report.plugins['nano-explorer-extra'].hostSpan['git-status']
+  const hs = report.plugins['nano-explorer-extra'].host['git-status']
   assert.equal(hs.n, 4)
   assert.equal(hs.p50, 20)
   assert.equal(hs.p95, 40)
+  assert.equal(hs.basis, 'cumulative')
 })
 
-test('buildReport notes: <8 interactions warned; nanoBlocking noted', () => {
+test('buildReport audits: <8 interactions warned; nanoBlocking noted; no top-level notes', () => {
   const collector = createCollectorState()
   collector.interactions.push(ix(), ix({ interactionId: 2 }))
   collector.nanoBlockingMs = 12
   const report = buildReport({
     collector, plugins: new Map(), structure: createStructure(), enabled: true,
   })
-  assert.ok(report.notes.some(n => n.includes('nativeInpCount')))
-  assert.ok(report.notes.some(n => n.includes('nanoBlockingMs')))
+  assert.ok(report.notes.some(n => n.id === 'native-inp-small-sample'))
+  assert.ok(report.notes.some(n => n.id === 'nano-blocking-over-attribute'))
+  assert.ok(report.notes.every(n => n.id !== 'event-timing-split'))
 })

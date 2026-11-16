@@ -29,7 +29,7 @@
 | `src/host/` | 实例、profile、CDP、terminal、错误目录 |
 | `profiles/kitesurf/` | kitesurf 配方与 manifest。`linux-prefix/` 不入库 |
 | `profiles/terminal/` | 终端 PTY 入口 |
-| `lib/route-guard.js`、`lib/route-table.js` | 路由注册。运行时必需 |
+| `lib/route-guard.js`、`lib/bindings.js` | 路由注册。绑定表从仓根账本按 id 烘焙。运行时必需 |
 | `icon.svg`、`locale/` | 图标与中英文案 |
 
 特权只写在这里和 `backend-apple.js`：容器 CLI，以及构建期的 `ctx.sandbox.confine`。不写消费者的路径。
@@ -41,6 +41,7 @@
 3. 目标是已经能打开的 Web profile，默认名 `web`。不要装进 headless、sdk 或 acp。
 4. 本机 Apple `container` 只在真正构建或启动 macOS 实例时需要。没有 CLI 时，夹具 backend 仍须能完成契约测试。
 5. 本包构建期依赖 `dsh-host-route-guard`，声明为 `devDependencies` 的 `file:../packages/dsh-host-route-guard`。运行中的宿主不解析这个包名；`lib/route-guard.js` 是打进本包的副本。不要改这条依赖。
+6. 本包构建期依赖 `dsh-performance-review`，声明为 `devDependencies` 的 `file:../packages/dsh-performance-review`。它只用于宿主合同面观测，构建时打进 `lib/perf-review-host.js`；不加入页面单例，不加手写植入。不要改这条依赖。
 
 未被告知 `DSH_HOME` 或 profile 名时，只动默认的 `web`。不要猜第二套实例。
 
@@ -81,6 +82,7 @@ dsh plugin --profile web add <spec>
 | `sandbox.instance.ensure` | 按 session 复用或创建实例 |
 | 策略指纹变化 | `sandbox.instance.policy-stale`，不热改挂载 |
 | 终端 attach | 只认返回的 `attach.url` |
+| 性能读取 | 本包不拥有 `/perf-review/host`；只读视图在资源管理器、记事本和模型选择器入口 |
 
 ## 配置与状态
 

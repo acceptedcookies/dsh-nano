@@ -3,7 +3,8 @@
 const React = require('react')
 const primitives = require('@deepseek-ai/dsh-client-ui-primitives')
 const { openNanoDialog, openNanoMenu, NANO_STYLES, NanoToast, NanoTabs } = require('dsh-nano-ui')
-const { ensurePerfReview, LIB_VERSION } = require('dsh-performance-review/client')
+const { ensurePerfReview } = require('dsh-performance-review/client')
+const { BUCKETS, DECL_HASH } = require('../../lib/perf-declaration.js')
 const { copyFor } = require('./i18n.js')
 const { batchNote, designNote, multiNote } = require('../shared/note.js')
 const { contentFrame, shotPoint } = require('../shared/shot-point.js')
@@ -54,16 +55,14 @@ function planeRows(snap) {
   })
 }
 
-const perfReview = ensurePerfReview()
-perfReview.configure({ hostSnapshotUrl: '/nano-local-sandbox/perf-review/host?mode=snapshot' })
-// join() freezes the collector's enabled state at call time. The pane mounts
-// before the perf-review enable flag is visible, so join lazily on first use.
+const pagePerf = ensurePerfReview()
 const perf = {
   span(name, fn) {
     try {
-      const collector = window.__perfReview?.join?.(OWN_ID, {
+      const collector = pagePerf.join(OWN_ID, {
         version: typeof __NKS_VERSION__ === 'string' ? __NKS_VERSION__ : '0.0.0',
-        libVersion: LIB_VERSION,
+        buckets: BUCKETS,
+        decl: DECL_HASH,
         react: React,
         root: () => document.querySelector('[data-nks-workspace]'),
       })
@@ -72,18 +71,6 @@ const perf = {
     return fn()
   },
 }
-
-// Report collected spans to the host so /perf-review/host can show them.
-try {
-  const reportPerf = () => {
-    try {
-      const report = perfReview.report({ scenario: 'pane' })
-      fetch('/nano-local-sandbox/perf-report', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(report) }).catch(() => {})
-    } catch { /* collector not ready */ }
-  }
-  setInterval(reportPerf, 10000)
-  setTimeout(reportPerf, 3000)
-} catch { /* no collector */ }
 
 const STYLE = `
 .nks-root{position:relative;height:100%;min-height:0;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-base);flex-direction:column;flex:auto;display:flex;font:var(--dsw-font-xxs-12);container-type:inline-size}

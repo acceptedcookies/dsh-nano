@@ -5,18 +5,18 @@
 
 import { readFileSync, statSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
-import { ensurePerfReviewHost, LIB_VERSION } from './lib/perf-review-host.js'
+import { ensurePerfReviewHost } from './lib/perf-review-host.js'
 import { createDevinApi, CarrierError } from './lib/devin-api.js'
 import { createProfileStore, storePath, envPath } from './lib/profiles-store.js'
 import { ensureSshKeypair, sshCommands } from './lib/ssh-keys.js'
 import { registerRoutes, sendJson, readJsonBody } from './lib/route-guard.js'
-import { ROUTE_TABLE, PLUGIN } from './lib/route-table.js'
+import { BINDING_TABLE, PLUGIN } from './lib/bindings.js'
 
 export const name = 'nano-cloud-session'
 export const inject = ['webServer', 'connection', 'sessions', 'agents']
 
 const { version } = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'))
-const review = ensurePerfReviewHost().hostJoin('nano-cloud-session', { version, libVersion: LIB_VERSION })
+const review = ensurePerfReviewHost().hostJoin('nano-cloud-session', { version })
 
 const ROUTE = {
   status: '/nano-cloud-session/status',
@@ -399,7 +399,7 @@ export function apply(ctx, config = {}) {
           parentSessionId: body.parent_session_id,
         }
         const run = op === 'insights' ? api.listSessionsInsights : api.listSessions
-        return review.hostSpan('sessions', () => run(profile, params))
+        return run(profile, params)
       }),
     },
     {
@@ -482,5 +482,5 @@ export function apply(ctx, config = {}) {
     nativeBridges.clear()
   }, 'nano-cloud-session: native bridges')
 
-  registerRoutes(ctx, SPECS, { table: ROUTE_TABLE, plugin: PLUGIN })
+  registerRoutes(ctx, SPECS, { table: BINDING_TABLE, plugin: PLUGIN, observe: event => ensurePerfReviewHost().observe(event) })
 }

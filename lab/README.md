@@ -50,7 +50,7 @@ node lab/diagnose-inp.mjs --repeats 3
 `## budget verdict` 段；失败时逐行列出 `pluginId | metric | value | limit | reason`。
 
 基线落在 `lab/baseline/baseline.json`（**入库**），记 `versions` 指纹
-（chromeMajor / dshVersion / observerVersion / 四个插件 version）。指纹不一致 → 退出码 2。
+（protocol / schema / chromeMajor / dshVersion / 各插件构建戳与 version）。指纹不一致 → 退出码 2。
 
 ## 退出码
 
@@ -62,13 +62,16 @@ node lab/diagnose-inp.mjs --repeats 3
 
 ## 场景
 
-`idle-10s`、`composer-type`、`files-expand`、`notepad-type`、`model-open`、
-`shared-open`、`observer-purity`。每个场景的步骤、DOM 元信息、浏览器侧异常
-都写进 JSON 的 `steps` / `notes`，失败步骤不会让整轮塌掉，但会如实记录。
+页级场景固定为 `idle-10s`、`composer-type`、`observer-purity`，写在
+`lab/declarations.mjs`。插件场景从各包 `src/perf/declaration.json` 的
+`scenarios[{id, driver}]` 读出，步骤在 `lab/drivers/*.mjs`；`--scenario all`
+不写死插件名单。每个场景的步骤、DOM 元信息、浏览器侧异常都写进 JSON 的
+`steps` / `notes`，失败步骤不会让整轮塌掉，但会如实记录。
 
-宿主数据用 `GET /nano-explorer-extra/perf-review/host?mode=window` 在场景首尾
-各调一次：首调排空窗口，尾调返回精确的场景内 `hostSpan`（`n` 是场景增量，
-不是进程累计），再经 `report(meta, hostSnapshot)` 合并进报告。
+场景开始时页面调 `cutWindow()` 并记下宿主返回的 `next`；结束时带
+`?since=<起点>` 读 `GET /nano-explorer-extra/perf-review/host`（其他拥有读取入口
+的插件也有同型路由），把该视图作为 `read({ host })` 的输入。读不是排空，
+两个读者用不同 `since` 互不影响。
 
 ## 诊断剩余 fail 项
 
@@ -81,10 +84,10 @@ node lab/diagnose-inp.mjs --repeats 3
 产出 `lab/out/inp-diagnosis.json`。只读：打字后清空 composer，不按 Enter、不新建会话。
 结论与优化方案见 `docs/code-review/26-nov/performance-alpha.md` §12。
 
-## 2026-11-10 真机执行结果
+## 2026-11-10 真机执行结果（v1 历史）
 
-四个插件（notepad / shared-workspace / model-selector / explorer-extra）全部植入并
-在 `https://dsh-dev.local/` 加载；`contributors` 4/4，`structure` 全 0。
+v1 时期的四个植入对象（notepad / shared-workspace / model-selector / explorer-extra，其中
+shared-workspace 已退役）全部植入并在 `https://dsh-dev.local/` 加载；`contributors` 4/4，`structure` 全 0。本节是 v1 对照记录，现行声明驱动流程见「场景」。
 
 | 项 | 结果 |
 |---|---|
@@ -100,11 +103,11 @@ node lab/diagnose-inp.mjs --repeats 3
 `composer-type` 基线为 112 / 0.8 / 5.1 / 844.3 ms（`nativeInpP75` / 三段），
 说明 ~1 s 的延迟全在 presentation，主线程两段 <6 ms。
 
-**判定分两层**（spec rev4.1 §7）：低方差 / 结构性 / 可归因指标是硬门禁；
-高方差相对项（span p95、hostSpan p95、observer callbacks 相对基线倍数、页级
+**判定分两层**（spec §7）：低方差 / 结构性 / 可归因指标是硬门禁；
+高方差相对项（span p95、host p95、observer callbacks 相对基线倍数、页级
 `nativeInpP75`）是 **audit**——仍写进报告与 D1 候选表，但不产生 exit 1。
 理由与实测见 `docs/code-review/26-nov/performance-alpha.md` §12。
 
 > 机器级前置：dev 宿主 `ai.deepseek.dsh.dev.web.plist` 加了 `DSH_PERF_REVIEW=1`
-> 并重载过 LaunchAgent（备份 `.bak-perf-review`）。没有它 `hostSpan` 为空。
+> 并重载过 LaunchAgent（备份 `.bak-perf-review`）。没有它 `host` 行为空。
 

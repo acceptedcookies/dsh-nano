@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { registerRoutes } from '../lib/route-guard.js'
-import { ROUTE_TABLE } from '../lib/route-table.js'
+import { BINDING_TABLE } from '../lib/bindings.js'
 import { routeSpecs } from '../src/host/routes.js'
 
 function host(deps) {
@@ -13,7 +13,7 @@ function host(deps) {
     },
     webServer: { register(route) { routes.push(route); return () => {} } },
   }
-  registerRoutes(ctx, routeSpecs(deps), { table: ROUTE_TABLE, plugin: 'dsh-nano-local-sandbox' })
+  registerRoutes(ctx, routeSpecs(deps), { table: BINDING_TABLE, plugin: 'dsh-nano-local-sandbox' })
   return routes.find((route) => route.path.endsWith('/elements'))
 }
 

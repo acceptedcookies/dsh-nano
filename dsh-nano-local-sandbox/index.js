@@ -4,7 +4,8 @@
  * There is no second product UI in this package.
  */
 import { registerRoutes } from './lib/route-guard.js'
-import { ROUTE_TABLE } from './lib/route-table.js'
+import { BINDING_TABLE } from './lib/bindings.js'
+import { ensurePerfReviewHost } from './lib/perf-review-host.js'
 import { createAppleBackend } from './src/host/backend-apple.js'
 import { routeSpecs } from './src/host/routes.js'
 
@@ -18,5 +19,9 @@ export function apply(ctx, deps = {}) {
   if (!deps.backend) deps.backend = createAppleBackend()
   // deps.ctx is the live host context: routes resolve sandboxPolicy from it so
   // a terminal cannot attach across a policy remount.
-  return registerRoutes(ctx, routeSpecs({ ...deps, ctx }), { table: ROUTE_TABLE, plugin: 'dsh-nano-local-sandbox' })
+  return registerRoutes(ctx, routeSpecs({ ...deps, ctx }), {
+    table: BINDING_TABLE,
+    plugin: 'dsh-nano-local-sandbox',
+    observe: event => ensurePerfReviewHost().observe(event),
+  })
 }

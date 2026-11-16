@@ -1,0 +1,21 @@
+{
+  "schema": "dnpr.declaration/1",
+  "plugin": "nano-terminal",
+  "keys": {
+    "spans": [],
+    "tracks": [],
+    "usage": [],
+    "hostSpans": []
+  },
+  "buckets": [],
+  "contract": [
+    "dnt.mcp",
+    "dnt.sessions",
+    "dnt.events",
+    "dnt.health",
+    "dnt.session.close",
+    "dnt.stream"
+  ],
+  "scenarios": [],
+  "budgets": []
+}

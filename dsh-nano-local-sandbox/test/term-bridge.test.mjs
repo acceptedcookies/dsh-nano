@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process'
 import test from 'node:test'
 import { decodeMcpReply } from '../../packages/dsh-interface/src/host/decodeMcpReply.js'
 import { registerRoutes } from '../lib/route-guard.js'
-import { ROUTE_TABLE } from '../lib/route-table.js'
+import { BINDING_TABLE } from '../lib/bindings.js'
 import { spawnContainerPty, spawnPtyProcess } from '../src/host/backend-apple.js'
 import { routeSpecs } from '../src/host/routes.js'
 import { resetClient } from '../src/host/cdp-elements.js'
@@ -25,7 +25,7 @@ function ctxFor(routes) {
 
 function routesFor(deps) {
   const routes = []
-  registerRoutes(ctxFor(routes), routeSpecs(deps), { table: ROUTE_TABLE, plugin: 'dsh-nano-local-sandbox' })
+  registerRoutes(ctxFor(routes), routeSpecs(deps), { table: BINDING_TABLE, plugin: 'dsh-nano-local-sandbox' })
   return Object.fromEntries(routes.map((route) => [route.path, route]))
 }
 

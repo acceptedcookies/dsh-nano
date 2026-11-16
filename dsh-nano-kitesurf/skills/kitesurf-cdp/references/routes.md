@@ -20,7 +20,7 @@
 | GET | `/nano-local-sandbox/dom` | 页面 DOM 文本 |
 | GET | `/nano-local-sandbox/snapshot?maxNodes=1..500` | a11y-lite 树 + `@N` ref 表（人=agent 同一语言） |
 | GET | `/nano-local-sandbox/refs?ref=@N` | `@N`→selector 反查；`?` 无参=整表 summary |
-| GET | `/nano-local-sandbox/perf-review/host` | 进程 perf 快照（`?mode=window` 排水仅 POST） |
+| GET | `/nano-explorer-extra/perf-review/host` | 只读全进程视图。只接受 `since`。本包不注册这条路由。 |
 | GET | `/nano-local-sandbox/selftest` | 引擎健康自检 |
 | GET | `/nano-local-sandbox/client-perf` | 客户端 perf 缓冲 |
 
@@ -42,7 +42,6 @@
 | POST | `/nano-local-sandbox/settings` | `{userAgent?,viewport?,media?,extraHeaders?}` 事务性伪装 |
 | POST | `/nano-local-sandbox/kite` | `{action:init|start|suspend|resume|configure,httpBase?,mcpPort?}` 生命周期 |
 | POST | `/nano-local-sandbox/recover` | `{}` 一键自愈（suspend→resume→健康→端口） |
-| POST | `/nano-local-sandbox/perf-report` | pane 上报客户端 perf 样本（≤200KB body）；`GET /client-perf` 读 |
-| POST | `/nano-local-sandbox/perf-review/host?mode=window` | perf 窗口排水（仅 POST） |
+
 | POST | `/nano-local-sandbox/console`/`operations`/`network` | `{clear:true}` 清环形缓冲 |
 | POST/DELETE | `/nano-local-sandbox/browse-history` | `{clear:true}`/`?id=` 改持久历史 |

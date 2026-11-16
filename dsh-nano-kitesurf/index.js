@@ -7,8 +7,7 @@ import path from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { fileURLToPath } from 'node:url'
-import { registerRoutes } from './lib/route-guard.js'
-import { ROUTE_TABLE, PLUGIN } from './lib/route-table.js'
+
 import { createHistory } from './lib/history.js'
 import { browserSocketUrl, captureDom, captureElements, captureShot, captureSnapshot, currentEmulation, engineHistoryAdd, engineHistoryClear, engineHistoryList, engineHistoryRemove, currentUserAgent, currentViewport, engineTargets, evaluateInPage, evaluateChunked, fetchEngine, interactElement, KitesurfError, navigateHistory, openPage, pickElement, pickBySelector, pickPoint, pickSelector, editBody, editElement, pageUrl, releaseEngine, scrollDelta, setBrowserSettings, stateOp, storageOp, waitForCondition } from './lib/engine.js'
 import { ERROR_STATUS, clearConsole, clearNetwork, clearOperations, diagnosticsSummary, elementRefSelector, elementRefSummary, getElementRef, getLastSnapshot, getRef, isElementRef, listNetwork, listNetworkHar, listConsole, listOperations, listRefs, putElementRefs, putRef, recordOperation, refChip, setLastSnapshot, summarizeInput } from './lib/diagnostics.js'
@@ -16,7 +15,7 @@ import { buildSrcDoc } from './lib/dom.js'
 import { kitesurfSkill, nanoKiteSkill } from './lib/skill.js'
 import { createNanoKite } from './lib/nano-kite.js'
 import { hostPort, hostPortFree } from './lib/container-engine.js'
-import { hostSpan as rawHostSpan, perfCount, perfSnapshot, setPerfEnabled } from './lib/perf-host.js'
+import { hostSpan as rawHostSpan } from './lib/perf-host.js'
 
 // Request-scoped incident id (P1-4): traced() opens an ALS context per request
 // so every hostSpan inside correlates to the incidentId that fail() stamps on
@@ -24,7 +23,7 @@ import { hostSpan as rawHostSpan, perfCount, perfSnapshot, setPerfEnabled } from
 // span event can jump straight to the incident row and vice versa.
 const reqContext = new AsyncLocalStorage()
 const activeIncidentId = () => reqContext.getStore()?.incidentId ?? null
-const hostSpan = (name, fn) => rawHostSpan(name, fn, { incidentId: activeIncidentId() })
+const hostSpan = (name, fn) => rawHostSpan(name, fn)
 
 export const name = 'nano-kitesurf'
 export const inject = ['webServer', 'connection', 'skills']
@@ -129,7 +128,6 @@ export const Config = {
         return { issues: [{ message: 'httpBase must be loopback unless allowRemote is true' }] }
       }
       const checkout = typeof source.checkout === 'string' && source.checkout ? source.checkout : undefined
-      const perfReview = source.perfReview !== false
       let mcpPort
       if (source.mcpPort != null) {
         const port = Number(source.mcpPort)
@@ -138,7 +136,7 @@ export const Config = {
         }
         mcpPort = port
       }
-      return { value: { httpBase: url.origin, allowRemote, checkout, perfReview, mcpPort } }
+      return { value: { httpBase: url.origin, allowRemote, checkout, mcpPort } }
     },
   },
 }
@@ -153,9 +151,8 @@ function pluginVersion() {
 
 /**
  * Answer "which code am I actually running?" — the single most useful field
- * during a broken deploy. Two files (index.js / route-table.js) drift once
- * caused the whole plugin to fail activation with route-not-listed; hashing
- * both plus the client bundle makes that visible in /status.
+ * during a broken deploy. Hashing this file, the baked binding table, and the
+ * client bundle makes a route-not-listed mismatch visible in /status.
  */
 function digestOf(relative) {
   try {
@@ -164,7 +161,7 @@ function digestOf(relative) {
     return 'missing'
   }
 }
-const buildId = `${pluginVersion() ?? '0'}-i${digestOf('./index.js')}r${digestOf('./lib/route-table.js')}c${digestOf('./lib/client.js')}`
+const buildId = `${pluginVersion() ?? '0'}-i${digestOf('./index.js')}r${digestOf('./lib/bindings.js')}c${digestOf('./lib/client.js')}`
 const storePath = fileURLToPath(new URL('./index.js', import.meta.url))
 const history = createHistory(fileURLToPath(new URL('.', import.meta.url)))
 
@@ -322,15 +319,10 @@ function traced(spec) {
       try {
         await reqContext.run({ incidentId }, () => original(req, res, route))
       } finally {
-        // The pane polls perf-review ~1/s; recording it would push every real
-        // failure out of the 200-row ring within minutes. Skip it entirely —
-        // but never `return` from finally (that would swallow a throw).
-        const skip = spec.path === PERF_ROUTE
         const status = res.statusCode || 0
         const ok = payload ? payload.ok !== false && status < 400 : status < 400
-        if (!skip) {
-          try {
-            recordOperation({
+        try {
+          recordOperation({
             route: spec.path,
             method: req.method || 'GET',
             status,
@@ -340,20 +332,9 @@ function traced(spec) {
             error: payload?.error || null,
             incidentId: payload?.incidentId || req.__dnkIncidentId || null,
             input: summarizeInput(req.__dnkBody),
-              result: payload?.moved === false ? 'no-op' : (payload?.mimeType ? 'png' : null),
-            })
-          } catch { /* diagnostics must never break a route */ }
-          // P1-4 usage counters: route failures + slow calls, per route name —
-          // cheap tallies an agent can read next to the span stats.
-          try {
-            const short = spec.path.replace(/^\/nano-kitesurf\//, '').replace(/[^a-z0-9-]/g, '-').slice(0, 32)
-            if (!ok) perfCount(`route-err-${short}`)
-            const dur = Date.now() - started
-            if (dur >= 500) perfCount(`route-slow-${short}`)
-          } catch { /* counters are best effort */ }
-        }
-        // Push a fresh snapshot to the MCP bridge, immediately on failure and
-        // debounced otherwise. An agent using only MCP sees the same state.
+            result: payload?.moved === false ? 'no-op' : (payload?.mimeType ? 'png' : null),
+          })
+        } catch { /* diagnostics must never break a route */ }
         try { diagnosticsPusher?.(!ok) } catch { /* best effort */ }
       }
     },
@@ -413,12 +394,6 @@ async function statusOf(httpBase) {
 
 /** @param {import('@deepseek-ai/cordis').Context} ctx */
 export function apply(ctx, config) {
-  // perf-review capture is a documented plugin-side switch: perf spans feed
-  // /nano-local-sandbox/perf-review/host and the host's own perf-review UI.
-  // setEnabled lands the choice even though hostJoin already ran at import —
-  // the env var is kept as the lazy-resolution fallback for the same value.
-  setPerfEnabled(config?.perfReview !== false)
-  if (config?.perfReview !== false) process.env.DSH_PERF_REVIEW = '1'
   const httpBase = config?.httpBase ?? DEFAULT_ORIGIN
   const kite = createNanoKite({
     httpBase,
@@ -558,7 +533,7 @@ export function apply(ctx, config) {
       add('dom', page.bytes > 200, `${page.bytes} bytes · ${page.url}`)
     } catch (error) { add('dom', false, `${errorIdOf(error)}: ${messageOf(error)}`) }
 
-    add('routes', ROUTE_TABLE.length >= 15, `${ROUTE_TABLE.length} routes in the baked table`)
+    add('routes', true, 'this package does not register page routes')
     const phase = kite.snapshot().phase
     add('phase', status?.ok ? phase === 'running' : phase !== 'running', `phase=${phase} engineAlive=${status?.ok === true}`)
 
@@ -625,7 +600,6 @@ export function apply(ctx, config) {
       console: listConsole({ limit }),
       network: listNetwork({ limit }),
       operations: listOperations({ limit }),
-      perf: (() => { try { return perfSnapshot() } catch { return null } })(),
       hints,
     }
   }
@@ -673,6 +647,5 @@ export function apply(ctx, config) {
     disposeKite?.()
   }, 'nano-kitesurf: skill')
 
-  registerRoutes(ctx, [
-  ].map(traced), { table: ROUTE_TABLE, plugin: PLUGIN })
+  // This package registers skills only. Page routes live in dsh-nano-local-sandbox.
 }

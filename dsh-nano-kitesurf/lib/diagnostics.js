@@ -60,7 +60,6 @@ export const ERROR_CATALOG = [
   { match: '^kitesurf\\.navigate\\.(timeout|failed)$', example: 'kitesurf.navigate.failed', status: 502, cause: 'Page.navigate 超时或被拒绝（DNS/网络）', next: '检查 URL 可达；超时后不要立刻重复 open（可能已在导航）' },
   { match: '^kitesurf\\.engine\\.context$', example: 'kitesurf.engine.context', status: 409, cause: '页面正在导航，JS 执行上下文被销毁（竞态，不是引擎故障）', next: '已自动重试一次；仍失败时等页面稳定后重试，或 POST /recover 一键恢复' },
   { match: '^kitesurf\\.engine\\.', example: 'kitesurf.engine.connect', status: 502, cause: 'CDP 连接失败/服务不是 Kitesurf/socket 关闭/命令超时', next: 'GET /status；container list；curl http://127.0.0.1:8798/health；必要时 /kite resume' },
-  { match: '^kitesurf\\.perf\\.', example: 'kitesurf.perf.method', status: 400, cause: 'mode=window 排水只允许 POST', next: 'GET /perf-review/host 读快照；POST /perf-review/host?mode=window 排水' },
   { match: '^kitesurf\\.context\\.(text|miss)$', example: 'kitesurf.context.miss', status: 404, cause: '上下文引用不存在或 text 为空（ref 环只保留最近 50 条，宿主重启即清空）', next: '重新点选生成新 ref；GET /nano-local-sandbox/context 列出最近引用' },
   { match: '^kitesurf\\.console\\.', example: 'kitesurf.console.query', status: 400, cause: 'console 查询参数非法', next: 'GET /console?level=error&limit=50；POST /console {clear:true} 清空' },
   { match: '^kitesurf\\.diag\\.query$', example: 'kitesurf.diag.query', status: 400, cause: 'diagnostics/operations 查询参数非法', next: 'GET /diagnostics?limit=20；GET /operations?errorsOnly=true' },

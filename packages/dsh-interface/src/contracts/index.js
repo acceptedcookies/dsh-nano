@@ -20,6 +20,15 @@ export {
   isOk,
 } from './jsonOutcome.js'
 export {
+  OBSERVE_SURFACES,
+  HTTP_OUTCOMES,
+  UPGRADE_OUTCOMES,
+  JSON_OUTCOMES,
+  MCP_OUTCOMES,
+  OBSERVE_FIELDS,
+  assertObserveEvent,
+} from './observeEvent.js'
+export {
   FamilyError,
   defineFamily,
   selectOperation,

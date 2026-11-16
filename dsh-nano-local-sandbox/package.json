@@ -6,7 +6,8 @@
   "icon": "./icon.svg",
   "main": "./index.js",
   "scripts": {
-    "test": "node --test test/*.mjs"
+    "test": "node --test test/*.mjs",
+    "build": "node scripts/build-client.mjs"
   },
   "exports": {
     ".": "./index.js",
@@ -27,7 +28,8 @@
     "profiles/kitesurf/mcp-bridge.mjs",
     "profiles/terminal",
     "lib/route-guard.js",
-    "lib/route-table.js"
+    "lib/bindings.js",
+    "lib/perf-review-host.js"
   ],
   "engines": {
     "dsh": ">=0.2.2-rc.1 <0.3.0"
@@ -38,6 +40,8 @@
     }
   },
   "devDependencies": {
-    "dsh-host-route-guard": "file:../packages/dsh-host-route-guard"
+    "dsh-host-route-guard": "file:../packages/dsh-host-route-guard",
+    "dsh-performance-review": "file:../packages/dsh-performance-review",
+    "esbuild": "0.25.0"
   }
 }

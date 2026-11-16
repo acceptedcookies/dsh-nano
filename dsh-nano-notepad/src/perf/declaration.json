@@ -1,0 +1,109 @@
+{
+  "schema": "dnpr.declaration/1",
+  "plugin": "nano-notepad",
+  "keys": {
+    "spans": [
+      "idb-write",
+      "highlight",
+      "highlight-dom",
+      "render",
+      "commit",
+      "fx-turn",
+      "fx-pipeline",
+      "fx-run",
+      "fx-set-cat",
+      "fx-rename",
+      "fx-accept",
+      "fx-reject",
+      "fx-write-back",
+      "fx-claim"
+    ],
+    "tracks": [
+      {
+        "name": "draft-commit",
+        "kind": "interval"
+      },
+      {
+        "name": "keystroke-input",
+        "kind": "listener"
+      },
+      {
+        "name": "mirror-resize",
+        "kind": "resize"
+      },
+      {
+        "name": "visibility",
+        "kind": "listener"
+      },
+      {
+        "name": "page-resize",
+        "kind": "listener"
+      },
+      {
+        "name": "escape-key",
+        "kind": "listener"
+      },
+      {
+        "name": "bc-message",
+        "kind": "broadcast"
+      },
+      {
+        "name": "ctia-watch",
+        "kind": "mutation"
+      },
+      {
+        "name": "shortcut-key",
+        "kind": "listener"
+      }
+    ],
+    "usage": [
+      "version-save",
+      "tab-open",
+      "panel-open"
+    ],
+    "hostSpans": []
+  },
+  "buckets": [
+    {
+      "attr": "data-nano-notepad",
+      "bucket": "notepad-panel"
+    }
+  ],
+  "contract": [
+    "dnn.save",
+    "dnn.read",
+    "dnn.fetch-mp",
+    "dnn.s3.status",
+    "dnn.s3.test",
+    "dnn.s3.object",
+    "dnn.s3.config",
+    "dnn.fx-core.wasm",
+    "dnn.fx.models",
+    "dnn.fx.chat",
+    "dnn.pipeline.s3",
+    "dnn.pipeline.claim",
+    "dnn.rpc",
+    "dnn.fx.sdk",
+    "dnn.perf-review.host"
+  ],
+  "scenarios": [
+    {
+      "id": "notepad-type",
+      "driver": "lab/drivers/notepad-type.mjs"
+    }
+  ],
+  "budgets": [
+    {
+      "id": "track.ctia-watch.callbacks",
+      "scenario": "idle-10s",
+      "subject": "hand.tracks.ctia-watch.callbacks",
+      "gate": "audit",
+      "rule": {
+        "op": "relBaseline",
+        "factor": 2,
+        "floor": 1,
+        "initial": 1
+      }
+    }
+  ]
+}

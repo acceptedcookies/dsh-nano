@@ -30,7 +30,7 @@ test('the live scanners include DNLS, and dropping it fails both route gates', (
 
 test('an extra DNLS route constant fails the scanner, and a bare import fails clean-lib', () => {
   const source = readFileSync(join(root, 'dsh-nano-local-sandbox', 'src', 'host', 'routes.js'), 'utf8')
-  const table = readFileSync(join(root, 'dsh-nano-local-sandbox', 'lib', 'route-table.js'), 'utf8')
+  const table = readFileSync(join(root, 'dsh-nano-local-sandbox', 'lib', 'bindings.js'), 'utf8')
   assert.throws(() => scanLocalSandboxSource(`${source}\nexport const EXTRA_ROUTE = '/nano-local-sandbox/extra'\n`, table), /dsh-nano-local-sandbox/)
   const fixture = mkdtempSync(join(tmpdir(), 'dnls-clean-'))
   mkdirSync(join(fixture, 'dsh-nano-local-sandbox', 'lib'), { recursive: true })

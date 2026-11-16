@@ -1,6 +1,6 @@
 /** Bundled so the host entry does not import dsh-performance-review at runtime. */
 import { readFileSync } from 'node:fs'
-import { ensurePerfReviewHost, LIB_VERSION } from 'dsh-performance-review/host'
+import { ensurePerfReviewHost } from 'dsh-performance-review/host'
 
 function pluginVersion() {
   try {
@@ -12,22 +12,10 @@ function pluginVersion() {
 }
 
 const host = ensurePerfReviewHost()
-const review = host.hostJoin('nano-kitesurf', { version: pluginVersion(), libVersion: LIB_VERSION })
+const review = host.hostJoin('nano-kitesurf', { version: pluginVersion() })
 
-export function hostSpan(name, fn, ctx = null) {
-  return review.hostSpan(name, fn, ctx)
+export function hostSpan(name, fn) {
+  return review.hostSpan(name, fn)
 }
 
-/** Per-name cumulative counter (P1-4) — usage-style tallies next to spans. */
-export function perfCount(name, n = 1) {
-  return review.count(name, n)
-}
 
-/** Explicit perf switch — apply() calls it with config.perfReview. */
-export function setPerfEnabled(value) {
-  host.setEnabled(value === true)
-}
-
-export function perfSnapshot(mode) {
-  return mode === 'window' ? host.takeWindow() : host.snapshot()
-}

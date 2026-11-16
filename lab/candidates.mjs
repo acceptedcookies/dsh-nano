@@ -21,23 +21,23 @@ const rows = []
 for (const [scenario, report] of Object.entries(baseline.reports ?? {})) {
   if (!report || report.enabled === false) continue
   for (const [pluginId, plugin] of Object.entries(report.plugins ?? {})) {
-    for (const [name, s] of Object.entries(plugin.spans ?? {})) {
+    for (const [name, s] of Object.entries(plugin.hand?.spans ?? {})) {
       const n = s.n ?? 0
       const p95 = s.p95 ?? 0
       if (n < 2) continue // single sample is an anecdote, not an optimisation input
       rows.push({ pluginId, kind: 'span', name, scenario, n, p95, score: Math.round(n * p95), note: 'browser span (may include I/O wait)' })
     }
-    for (const [name, t] of Object.entries(plugin.tracks ?? {})) {
+    for (const [name, t] of Object.entries(plugin.hand?.tracks ?? {})) {
       const n = t.callbacks ?? 0
       const ms = t.callbackMs ?? 0
       if (n < 2) continue
       rows.push({ pluginId, kind: 'track', name, scenario, n, p95: ms, score: Math.round(n * ms), note: 'callback count × total callback ms' })
     }
-    for (const [name, h] of Object.entries(plugin.hostSpan ?? {})) {
+    for (const [name, h] of Object.entries(plugin.host ?? {})) {
       const n = h.n ?? 0
       const p95 = h.p95 ?? 0
       if (n < 2) continue
-      rows.push({ pluginId, kind: 'hostSpan', name, scenario, n, p95, score: Math.round(n * p95), note: 'host wall clock (I/O + git/spawn)' })
+      rows.push({ pluginId, kind: 'host', name, scenario, n, p95, score: Math.round(n * p95), note: 'host wall clock (I/O + git/spawn)' })
     }
   }
 }
@@ -49,7 +49,7 @@ const lines = [
   `来源基线：\`${path}\`，生成 ${new Date().toISOString()}`,
   '',
   '> 唯一合法的优化输入。单次样本（n<2）不进表；`stats-count` 14.4s 之类单样本不得据此改代码。',
-  '> span/hostSpan 的 p95 含 I/O 等待，不等同主线程时间；优化前需先判断它到底是不是主线程成本。',
+  '> span/host 的 p95 含 I/O 等待，不等同主线程时间；优化前需先判断它到底是不是主线程成本。',
   '',
   '| # | pluginId | kind | name | scenario | n | p95/ms | 次数×耗时 | 备注 |',
   '|---|---|---|---|---|---|---|---|---|',

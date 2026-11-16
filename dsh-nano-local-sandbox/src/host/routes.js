@@ -5,8 +5,6 @@ export const HISTORY_ROUTE = '/nano-local-sandbox/history'
 export const PICK_ROUTE = '/nano-local-sandbox/pick'
 export const EDIT_ROUTE = '/nano-local-sandbox/edit'
 export const SETTINGS_ROUTE = '/nano-local-sandbox/settings'
-export const PERF_REVIEW_HOST_ROUTE = '/nano-local-sandbox/perf-review/host'
-export const PERF_REPORT_ROUTE = '/nano-local-sandbox/perf-report'
 export const KITE_ROUTE = '/nano-local-sandbox/kite'
 export const CONSOLE_ROUTE = '/nano-local-sandbox/console'
 export const OPERATIONS_ROUTE = '/nano-local-sandbox/operations'
@@ -34,7 +32,7 @@ import { request as httpRequest } from 'node:http'
 import { mkdirSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
-import { ROUTE_TABLE } from '../../lib/route-table.js'
+import { BINDING_TABLE } from '../../lib/bindings.js'
 import { createCdpKeeper } from './cdp-keeper.js'
 import { publishedHttpBase } from './backend-apple.js'
 import { ensureClient, evaluatePage, navigate, readElements, withPage } from './cdp-elements.js'
@@ -826,10 +824,9 @@ export function routeSpecs(deps = {}) {
   // derives 'kitesurf' (prod) or 'kitesurf-<env>' per DSH_HOME so each of the
   // three local environments owns a distinct, concurrently-running instance.
   const session = deps.session ?? { phase: 'idle', history: [], containerName: '' }
-  return ROUTE_TABLE.map((row) => ({
+  return BINDING_TABLE.map((row) => ({
     path: row.path,
     methods: [...row.methods],
-    sessionBinding: true,
     bodyLimit: row.bodyLimit,
     async handler(req, res) {
       deps.onHandler?.()
@@ -1320,16 +1317,6 @@ export function routeSpecs(deps = {}) {
             return
           }
           send(res, 200, found)
-          return
-        }
-        if (row.path.endsWith('/perf-report')) {
-          session.spans = session.spans || []
-          session.spans.push({ at: new Date().toISOString(), ...pageBody })
-          send(res, 200, { ok: true, count: session.spans.length })
-          return
-        }
-        if (row.path.endsWith('/perf-review/host')) {
-          send(res, 200, { ok: true, spans: session.spans || [] })
           return
         }
         send(res, 404, { ok: false, errorId: 'kitesurf.tool.unknown', error: row.path })

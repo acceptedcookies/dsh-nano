@@ -41,7 +41,7 @@ client inject 以 `package.json` 的 `dsh.client.inject` 为准，不在这里�
 4. `git` 必须在跑宿主的那台机器的 PATH 上。浏览器里没有 git 不影响。状态栏读的是宿主上的仓库。
 5. 本包构建期依赖 `dsh-nano-ui`，声明为 `devDependencies` 的 `file:../packages/dsh-nano-ui`。`npm install`/`npm run build` 时解析这个相对路径；构建时它被打进 `lib/client.js`，运行中的页面不单独加载它。不要改这条依赖。tarball 只含构建产物，`dsh plugin add` 不再需要旁边的 `packages/` 目录。
 6. 本包还构建期依赖 `dsh-performance-review`，同样声明为 `devDependencies` 的 `file:`，约束同上。它被打进 `lib/client.js` 和 `lib/host.js` 两份产物；默认是恒等包装，只有页面带 `?perf-review=1` 或 `localStorage['dsh-perf-review']='1'`、宿主带 `DSH_PERF_REVIEW=1` 时才采集。不要改这条依赖。
-7. 本包还构建期依赖路由注册库 `dsh-host-route-guard`，同样声明为 `devDependencies` 的 `file:`，约束同上。构建把它与本插件 16 条路由行的烤入常量表一起打进 `lib/host.js`；全部 web 路由经它注册，Host/Origin 围栏与 405 在 guard 内。不要改这条依赖。
+7. 本包还构建期依赖路由注册库 `dsh-host-route-guard`，同样声明为 `devDependencies` 的 `file:`，约束同上。构建把它与本插件 18 条路由行的烤入常量表一起打进 `lib/host.js`；全部 web 路由经它注册，Host/Origin 围栏与 405 在 guard 内。不要改这条依赖。
 
 未被告知 `DSH_HOME` 或 profile 名时，只动默认的 `web`。不要猜第二套实例。
 
@@ -106,7 +106,7 @@ Git 报为冲突（`U`）或删除（`D`）但磁盘上已不存在的文件，�
 | 方法 | 路径 | 作用 |
 |---|---|---|
 | GET | `/status?sessionId=` | 整仓 Git 状态。`only=stats` 返回体积：数据来自宿主后台采样缓存（30min 新鲜期、两次遍历至少隔 60s），响应恒定毫秒级；未就绪时 `statsPending:true`、客户端短延迟重询，`stats` 字段始终给上一次完成的值或 null，`statsAgeMs` 为缓存年龄。`path=` 只查一个目录（scoped 读不跑 branches/history/remotes 等全仓套件）。`only=stats` 额外接受 `g=0|1`（是否排除 `.git`）、`i=0|1`（是否排除 Git 忽略内容，由 `git ls-files -o -i --exclude-standard --directory` 一次取全量、遍历剪枝）、`s=0|1`（是否下钻软链接；为 0 时链接只算自身、不计目标体积）——缺省走宿主配置，缓存键随三者组合 |
-| GET | `/perf-review/host` | 性能观测宿主快照。带 `mode=window` 时排空并返回「上次调用以来的场景窗口」（实验室用），默认返回累计快照。宿主没开 `DSH_PERF_REVIEW=1` 时 `enabled` 为 false，路由仍返回 200 |
+| GET | `/perf-review/host` | 只读全进程视图。只接受 `since`。`mode` 和其他参数返回 400，不排空。 |
 | POST | `/list` | `{ sessionId, path }` |
 | POST | `/commit` | `{ sessionId, message }`。会 `git add --all`。没有「只提交已暂存」 |
 | POST | `/fetch` | `{ sessionId }`。`git fetch --all --prune`：只刷新 `refs/remotes` 快照（远端分支列表、ahead/behind、提交图已推送车道），不动工作区文件 |

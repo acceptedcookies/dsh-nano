@@ -9,7 +9,9 @@
     "./host": "./src/host.js",
     "./aggregate": "./src/aggregate.js",
     "./markdown": "./src/markdown.js",
-    "./state": "./src/state.js"
+    "./state": "./src/state.js",
+    "./diagnose": "./src/diagnose.js",
+    "./declaration": "./src/declaration.js"
   },
   "files": [
     "src",

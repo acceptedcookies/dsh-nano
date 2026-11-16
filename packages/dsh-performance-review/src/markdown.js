@@ -1,12 +1,10 @@
 /**
- * dsh-performance-review — render a report object (schema v1) to Markdown.
- * Pure function; used by lab/run.mjs to write `lab/out/*.md`. The JSON report
- * stays the single source of truth — this renderer only formats it.
+ * dsh-performance-review — render a v2 report object to Markdown.
+ * Pure. Does not require the retired top-level keys.
  */
 
 const fmt = (value, unit = 'ms') => (value == null ? '—' : `${value}${unit}`)
 const fmtBytes = bytes => (bytes == null ? '—' : `${(bytes / 1024).toFixed(1)} KB`)
-
 const row = cells => `| ${cells.join(' | ')} |`
 
 /**
@@ -15,24 +13,25 @@ const row = cells => `| ${cells.join(' | ')} |`
  */
 export function renderMarkdown(report) {
   const lines = []
-  const meta = report.meta ?? {}
-  lines.push(`# perf-review · ${meta.scenario ?? 'manual'} · arm=${meta.arm ?? 'on'}`)
+  const page = report?.page ?? {}
+  const scenario = page.scenario ?? 'manual'
+  const arm = page.arm ?? 'on'
+  lines.push(`# perf-review · ${scenario} · arm=${arm}`)
   lines.push('')
   lines.push(
-    `generated ${meta.generatedAt ?? '?'} · dsh ${meta.dshVersion ?? '?'} · chrome ${meta.chromeMajor ?? '?'}` +
-    ` · observer ${meta.observerVersion ?? '?'} · enabled=${report.enabled === true}` +
-    (meta.gitSha ? ` · ${meta.gitSha}` : ''))
-  if (Array.isArray(meta.contributors) && meta.contributors.length > 0) {
-    lines.push(`contributors: ${meta.contributors.map(c => `${c.pluginId}@${c.libVersion}`).join(', ')}`)
+    `generated ${report?.meta?.generatedAt ?? '?'} · schema ${report?.schema ?? '?'}` +
+    ` · chrome ${page.chromeMajor ?? '?'} · enabled=${page.enabled === true}`)
+  const contributors = Array.isArray(page.contributors) ? page.contributors : []
+  if (contributors.length > 0) {
+    lines.push(`contributors: ${contributors.map(item => `${item.pluginId ?? item.plugin}@${item.build ?? '?'}`).join(', ')}`)
   }
-  if (report.loafSupported === false) lines.push('> LoAF unsupported in this environment; Event Timing + spans only.')
-  if (meta.hostWrittenAt) {
-    lines.push(`host snapshot ${meta.hostWrittenAt} · sinceStart=${meta.hostSinceStart ?? '?'} · enabled=${meta.hostEnabled} · window=${meta.hostWindow === true}`)
+  if (page.loafSupported === false) lines.push('> LoAF unsupported in this environment; Event Timing + spans only.')
+  const host = page.host ?? {}
+  if (host.writtenAt) {
+    lines.push(`host snapshot ${host.writtenAt} · sinceStart=${host.sinceStart ?? '?'} · enabled=${host.enabled} · source=${host.source ?? '?'}`)
   }
   lines.push('')
 
-  // Page level
-  const page = report.page ?? {}
   lines.push('## page')
   lines.push('')
   lines.push(row(['metric', 'value']))
@@ -49,83 +48,117 @@ export function renderMarkdown(report) {
   lines.push(row(['nanoCombined.clientJsBytes', fmtBytes(page.nanoCombined?.clientJsBytes)]))
   lines.push('')
 
-  // Plugins
-  const plugins = report.plugins ?? {}
+  const plugins = report?.plugins ?? {}
   for (const [pluginId, plugin] of Object.entries(plugins)) {
-    lines.push(`## ${pluginId} ${plugin.meta?.version != null ? `v${plugin.meta.version}` : ''}`)
+    const hand = plugin.hand ?? {}
+    lines.push(`## ${pluginId} ${hand.version != null ? `v${hand.version}` : ''}`)
     lines.push('')
     lines.push(row(['metric', 'value']))
     lines.push(row(['---', '---']))
-    lines.push(row(['own.inpP75 / n', `${fmt(plugin.own?.inpP75)} / ${plugin.own?.inpCount ?? 0}`]))
-    lines.push(row(['native.spanMsP95', fmt(plugin.native?.spanMsP95)]))
-    lines.push(row(['native.trackMsP95', fmt(plugin.native?.trackMsP95)]))
-    lines.push(row(['native.samples', `${plugin.native?.samples?.spans ?? 0} spans, ${plugin.native?.samples?.callbacks ?? 0} callbacks`]))
-    lines.push(row(['scriptMs', fmt(plugin.scriptMs)]))
+    lines.push(row(['own.inpP75 / n', `${fmt(hand.own?.inpP75)} / ${hand.own?.inpCount ?? 0}`]))
+    lines.push(row(['native.spanMsP95', fmt(hand.native?.spanMsP95)]))
+    lines.push(row(['native.trackMsP95', fmt(hand.native?.trackMsP95)]))
+    lines.push(row(['native.samples', `${hand.native?.samples?.spans ?? 0} spans, ${hand.native?.samples?.callbacks ?? 0} callbacks`]))
+    lines.push(row(['scriptMs', fmt(hand.scriptMs)]))
     lines.push('')
 
-    const spans = Object.entries(plugin.spans ?? {})
+    const spans = Object.entries(hand.spans ?? {})
     if (spans.length > 0) {
-      lines.push(row(['span', 'n', 'windowN', 'p50', 'p95', 'maxMs']))
-      lines.push(row(['---', '---', '---', '---', '---', '---']))
-      for (const [name, s] of spans) {
-        lines.push(row([name, String(s.n ?? 0), String(s.windowN ?? 0), fmt(s.p50), fmt(s.p95), fmt(s.maxMs)]))
+      lines.push(row(['span', 'n', 'windowN', 'p50', 'p95', 'maxMs', 'basis']))
+      lines.push(row(['---', '---', '---', '---', '---', '---', '---']))
+      for (const [name, span] of spans) {
+        lines.push(row([
+          name,
+          String(span.n ?? 0),
+          String(span.windowN ?? 0),
+          fmt(span.p50),
+          fmt(span.p95),
+          fmt(span.maxMs),
+          String(span.basis ?? 'window'),
+        ]))
       }
       lines.push('')
     }
 
-    const tracks = Object.entries(plugin.tracks ?? {})
+    const tracks = Object.entries(hand.tracks ?? {})
     if (tracks.length > 0) {
       lines.push(row(['track', 'kind', 'callbacks', 'live', 'callbackMs', 'totalCallbacks']))
       lines.push(row(['---', '---', '---', '---', '---', '---']))
-      for (const [name, t] of tracks) {
-        lines.push(row([name, t.kind, String(t.callbacks ?? 0), String(t.live ?? 0), fmt(t.callbackMs), String(t.totalCallbacks ?? 0)]))
+      for (const [name, track] of tracks) {
+        lines.push(row([
+          name,
+          String(track.kind ?? ''),
+          String(track.callbacks ?? 0),
+          String(track.live ?? 0),
+          fmt(track.callbackMs),
+          String(track.totalCallbacks ?? 0),
+        ]))
       }
       lines.push('')
     }
 
-    const usage = Object.entries(plugin.usage ?? {})
+    const usage = Object.entries(hand.usage ?? {})
     if (usage.length > 0) {
-      lines.push(`usage: ${usage.map(([k, v]) => `${k}=${v}`).join(', ')}`)
+      lines.push(`usage: ${usage.map(([key, value]) => {
+        const total = typeof value === 'number' ? value : value?.total
+        return `${key}=${total}`
+      }).join(', ')}`)
       lines.push('')
     }
 
-    const hostSpan = Object.entries(plugin.hostSpan ?? {})
-    if (hostSpan.length > 0) {
-      lines.push(row(['hostSpan', 'n', 'p50', 'p95']))
+    const contract = Object.entries(plugin.contract ?? {})
+    if (contract.length > 0) {
+      lines.push(row(['contract', 'n', 'windowN', 'basis']))
       lines.push(row(['---', '---', '---', '---']))
-      for (const [name, h] of hostSpan) {
-        lines.push(row([name, String(h.n ?? 0), fmt(h.p50), fmt(h.p95)]))
+      for (const [name, item] of contract) {
+        lines.push(row([name, String(item.n ?? 0), String(item.windowN ?? 0), String(item.basis ?? 'window')]))
       }
       lines.push('')
     }
 
-    if ((plugin.profiler?.commits ?? 0) > 0) {
-      lines.push(`profiler: commits=${plugin.profiler.commits} commitP95=${fmt(plugin.profiler.commitP95)}`)
+    const hostSpan = Object.entries(plugin.host ?? {})
+    if (hostSpan.length > 0) {
+      lines.push(row(['hostSpan', 'n', 'p50', 'p95', 'errors']))
+      lines.push(row(['---', '---', '---', '---', '---']))
+      for (const [name, item] of hostSpan) {
+        lines.push(row([name, String(item.n ?? 0), fmt(item.p50), fmt(item.p95), String(item.errors ?? 0)]))
+      }
+      lines.push('')
+    }
+
+    if ((hand.profiler?.commits ?? 0) > 0) {
+      lines.push(`profiler: commits=${hand.profiler.commits} commitP95=${fmt(hand.profiler.commitP95)}`)
       lines.push('')
     }
   }
 
-  const counts = Object.entries(report.counts ?? {})
+  const counts = Object.entries(page.counts ?? {})
   if (counts.length > 0) {
     lines.push('## counts')
     lines.push('')
-    lines.push(counts.map(([k, v]) => `- ${k}: ${v}`).join('\n'))
+    lines.push(counts.map(([key, value]) => {
+      const total = typeof value === 'number' ? value : value?.total
+      return `- ${key}: ${total}`
+    }).join('\n'))
     lines.push('')
   }
 
   lines.push('## structure')
   lines.push('')
-  const structure = report.structure ?? {}
+  const structure = report?.structure ?? {}
   lines.push(row(['check', 'value']))
   lines.push(row(['---', '---']))
-  for (const [key, value] of Object.entries(structure)) lines.push(row([key, String(value)]))
+  for (const [key, value] of Object.entries(structure)) {
+    if (key === 'audits') continue
+    lines.push(row([key, String(value)]))
+  }
   lines.push('')
 
-  const notes = report.notes ?? []
+  const notes = report?.notes ?? []
   if (notes.length > 0) {
     lines.push('## notes')
     lines.push('')
-    for (const note of notes) lines.push(`- ${note}`)
+    for (const item of notes) lines.push(`- ${item.id ?? ''}: ${item.text ?? ''}`)
     lines.push('')
   }
 

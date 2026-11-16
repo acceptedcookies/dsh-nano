@@ -9,16 +9,16 @@ import {
   isUsableRoot,
   firstVisibleRoot,
   pickOwner,
-  LIB_VERSION as CLIENT_LIB_VERSION,
 } from '../src/client.js'
 import {
   buildReport,
   interactionSamples,
-  mergeHostSnapshot,
-  diffHostSnapshots,
+  NOTE_GLOSSARY,
 } from '../src/aggregate.js'
 import { createCollectorState, createPluginRow, createStructure } from '../src/state.js'
-import { createPerfReviewHost, LIB_VERSION as HOST_LIB_VERSION } from '../src/host.js'
+import { createPerfReviewHost } from '../src/host.js'
+import * as client from '../src/client.js'
+import * as host from '../src/host.js'
 import { fakeEnv, fakePerf, el } from '../test-helpers/index.mjs'
 
 const hostEnv = (over = {}) => ({
@@ -60,58 +60,54 @@ const hostSnapshotFixture = () => ({
   structure: { hostWriteErrors: 2 },
 })
 
-test('A1: report(meta, hostSnapshot) actually fills hostSpan + host errors + timing meta', () => {
+test('A1: read({ host }) fills manual.host rows and host timing; it does not clear the window', () => {
   const review = createPerfReview(fakeEnv())
   review.join('nano-explorer-extra')
-  const report = review.report({ scenario: 'files-expand' }, hostSnapshotFixture())
+  const report = review.read({ scenario: 'files-expand', host: hostSnapshotFixture() })
   const plugin = report.plugins['nano-explorer-extra']
-  assert.equal(plugin.hostSpan['git-status'].n, 4)
-  assert.equal(plugin.hostSpan['git-status'].p95, 40)
-  assert.equal(plugin.hostSpan.list.n, 2)
-  assert.equal(plugin.hostSpan.stats.p95, 14444.8)
-  assert.equal(report.structure.hostWriteErrors, 2)
-  assert.equal(report.meta.hostWrittenAt, '2026-11-10T01:00:00Z')
-  assert.equal(report.meta.hostSinceStart, '2026-11-10T00:00:00Z')
-  assert.equal(report.meta.hostWindow, true)
+  assert.equal(plugin.host['git-status'].n, 4)
+  assert.equal(plugin.host['git-status'].p95, 40)
+  assert.equal(plugin.host.list.n, 2)
+  assert.equal(plugin.host.stats.p95, 14444.8)
+  assert.equal(report.structure.hostWriteErrors, undefined)
+  assert.equal(report.page.host.writtenAt, '2026-11-10T01:00:00Z')
+  assert.equal(report.page.host.sinceStart, '2026-11-10T00:00:00Z')
+  assert.deepEqual(review.read({ scenario: 'files-expand', host: hostSnapshotFixture() }).plugins, report.plugins)
 })
 
-test('A1: mergeHostSnapshot is pure w.r.t. absent/disabled host data', () => {
-  const report = buildReport({
+test('A1: a bad host shape does not enter plugin rows', () => {
+  const review = createPerfReview(fakeEnv())
+  review.join('nano-x')
+  const absent = review.read()
+  assert.deepEqual(absent.plugins['nano-x'].host, {})
+  assert.equal(absent.page.host.source, null)
+  const bad = review.read({ host: { plugins: 'nope' } })
+  assert.deepEqual(bad.plugins['nano-x'].host, {})
+  assert.equal(bad.structure.badShape, absent.structure.badShape + 1)
+  const other = buildReport({
     collector: createCollectorState(),
     plugins: new Map([['nano-x', createPluginRow()]]),
     structure: createStructure(),
     enabled: true,
+    hostSnapshot: hostSnapshotFixture(),
   })
-  assert.deepEqual(report.plugins['nano-x'].hostSpan, {})
-  mergeHostSnapshot(report, null)
-  assert.deepEqual(report.plugins['nano-x'].hostSpan, {})
-  mergeHostSnapshot(report, hostSnapshotFixture())
-  assert.deepEqual(report.plugins['nano-x'].hostSpan, {}) // no matching pluginId
+  assert.deepEqual(other.plugins['nano-x'].host, {})
 })
 
-test('A1: diffHostSnapshots turns cumulative n into a per-scenario delta', () => {
-  const before = { plugins: { 'nano-x': { spans: { list: { n: 10, samples: [1, 2] } } } } }
-  const after = { plugins: { 'nano-x': { spans: { list: { n: 13, samples: [1, 2, 3] } } } } }
-  const diff = diffHostSnapshots(before, after)
-  assert.equal(diff.plugins['nano-x'].spans.list.n, 3)
-  assert.deepEqual(diff.plugins['nano-x'].spans.list.samples, [1, 2, 3])
-  assert.equal(diffHostSnapshots(null, after).plugins['nano-x'].spans.list.n, 13)
-})
-
-test('A1: host takeWindow() is exact-per-window and does not disturb snapshot()', () => {
+test('A1: host read/cutWindow keeps cumulative n and clears the window column', () => {
   const host = createPerfReviewHost(hostEnv())
   const api = host.hostJoin('nano-x', { version: '0.1.1' })
   api.hostSpan('list', () => { host._state().enabled === true })
   const cumulative = host.snapshot()
   assert.equal(cumulative.plugins['nano-x'].spans.list.n, 1)
-  const window = host.takeWindow()
-  assert.equal(window.window, true)
-  assert.equal(window.plugins['nano-x'].spans.list.n, 1)
-  assert.equal(window.plugins['nano-x'].spans.list.samples.length, 1)
-  // second takeWindow is empty; cumulative snapshot is unchanged
-  assert.equal(host.takeWindow().plugins['nano-x'].spans.list.n, 0)
+  const seen = host.read({ since: 0 })
+  assert.equal(seen.status, 200)
+  assert.equal(seen.rows.length, 1)
+  assert.equal(host.cutWindow, undefined)
+  assert.equal(host.read({ since: host._state().seq }).rows.length, 0)
+  assert.equal(host.read({ since: 0 }).rows.length, 1)
   assert.equal(host.snapshot().plugins['nano-x'].spans.list.n, 1)
-  assert.equal(host.snapshot().plugins['nano-x'].spans.list.windowN, 0)
+  assert.equal(host.snapshot().plugins['nano-x'].spans.list.windowN, 1)
 })
 
 // ---------- A2: finalizeDue on a clock, no lost samples ----------
@@ -176,23 +172,22 @@ test('A3: plugin.scriptMs reads collector.pluginScriptMs (was a dead field)', ()
     structure: createStructure(),
     enabled: true,
   })
-  assert.equal(report.plugins['nano-x'].scriptMs, 42.4)
+  assert.equal(report.plugins['nano-x'].hand.scriptMs, 42.4)
 })
 
-test('A3: LIB_VERSION is exported from both halves for implants to pass explicitly', () => {
-  assert.equal(typeof CLIENT_LIB_VERSION, 'string')
-  assert.equal(typeof HOST_LIB_VERSION, 'string')
-  assert.equal(CLIENT_LIB_VERSION, HOST_LIB_VERSION)
+test('A3: LIB_VERSION and libVersion are retired; the build stamp is the identity', () => {
+  assert.equal('LIB_VERSION' in client, false)
+  assert.equal('LIB_VERSION' in host, false)
 })
 
-test('A3: join honours the caller copy libVersion (not the singleton default)', () => {
+test('A3: join records each caller copy build stamp (not a singleton version)', () => {
   const review = createPerfReview(fakeEnv())
-  review.join('nano-a', { libVersion: CLIENT_LIB_VERSION })
-  review.join('nano-b', { libVersion: '0.9.9-skew' })
-  const report = review.report()
-  const versions = Object.fromEntries(report.meta.contributors.map(c => [c.pluginId, c.libVersion]))
-  assert.equal(versions['nano-a'], CLIENT_LIB_VERSION)
-  assert.equal(versions['nano-b'], '0.9.9-skew')
+  review.join('nano-a', { build: 'stamp-a' })
+  review.join('nano-b', { build: 'stamp-b' })
+  const report = review.read()
+  const versions = Object.fromEntries(report.page.contributors.map(c => [c.pluginId, c.build]))
+  assert.equal(versions['nano-a'], 'stamp-a')
+  assert.equal(versions['nano-b'], 'stamp-b')
 })
 
 // ---------- A4: multi-instance live, nested spans, counter reset ----------
@@ -221,15 +216,17 @@ test('A4: nested spans contribute NET ms, not a double-counted sum', () => {
   assert.equal(samples['nano-x'].spanMs, 100, 'union of [100,200] and [120,150] is 100 ms')
 })
 
-test('A4: resetCounters clears cumulative usage and page counts', () => {
+test('A4: cutWindow clears usage window columns and keeps totals', () => {
   const review = createPerfReview(fakeEnv())
   const api = review.join('nano-x')
   api.count('panel-open', 5)
-  assert.equal(review.report().counts['panel-open'], 5)
-  review.resetCounters()
-  const after = review.report()
-  assert.equal(after.plugins['nano-x'].usage['panel-open'], undefined)
-  assert.equal(after.counts['panel-open'], undefined)
+  assert.equal(review.read().page.counts['panel-open'].total, 5)
+  review.cutWindow()
+  const after = review.read()
+  assert.equal(after.plugins['nano-x'].hand.usage['panel-open'].window, 0)
+  assert.equal(after.plugins['nano-x'].hand.usage['panel-open'].total, 5)
+  assert.equal(after.page.counts['panel-open'].window, 0)
+  assert.equal(after.page.counts['panel-open'].total, 5)
 })
 
 // ---------- A5: partial observer install is visible ----------
@@ -275,9 +272,10 @@ test('A5: report notes state the nanoCombined sampling conditions', () => {
     structure: createStructure(),
     enabled: true,
   })
-  assert.ok(report.notes.some(n => n.includes('长帧')))
-  assert.ok(report.notes.some(n => n.includes('过度归因')))
-  assert.ok(report.notes.some(n => n.includes('combo')))
+  assert.equal(report.notes.some(item => item.id === 'script-ms-long-frames'), false)
+  assert.ok(NOTE_GLOSSARY.some(n => n.text.includes('长帧')))
+  assert.ok(NOTE_GLOSSARY.some(n => n.text.includes('非 nano')))
+  assert.ok(NOTE_GLOSSARY.some(n => n.text.includes('combo')))
 })
 
 // ---------- L1: Event Timing three-way split ----------
@@ -291,11 +289,11 @@ test('L1: report carries inputDelay/processing/presentation P95', () => {
     processingStart: 102, processingEnd: 110, target: el('div'),
   })
   review._finalizeDue(1000)
-  const report = review.report()
+  const report = review.read()
   assert.equal(report.page.inputDelayP95, 2)
   assert.equal(report.page.processingP95, 8)
   assert.equal(report.page.presentationP95, 290)
-  assert.ok(report.notes.some(n => n.includes('Event Timing 三段')))
+  assert.ok(NOTE_GLOSSARY.some(n => n.id === 'event-timing-split'))
 })
 
 test('L1: merged interaction keeps parts from the max-duration entry', () => {
@@ -306,7 +304,7 @@ test('L1: merged interaction keeps parts from the max-duration entry', () => {
   review._absorbEventEntry({ interactionId: 7, startTime: 100, duration: 40, processingStart: 101, processingEnd: 103, target })
   review._absorbEventEntry({ interactionId: 7, startTime: 100, duration: 300, processingStart: 150, processingEnd: 160, target })
   review._finalizeDue(1000)
-  const report = review.report()
+  const report = review.read()
   assert.equal(report.page.nativeInpP75, 300)
   assert.equal(report.page.inputDelayP95, 50)
   assert.equal(report.page.processingP95, 10)
@@ -319,7 +317,7 @@ test('L1: missing processingStart/End degrades to zero, never throws', () => {
   review.join('nano-x')
   review._absorbEventEntry({ interactionId: 3, startTime: 10, duration: 24, target: el('div') })
   review._finalizeDue(1000)
-  const report = review.report()
+  const report = review.read()
   assert.equal(report.page.inputDelayP95, 0)
   assert.equal(report.page.processingP95, 0)
   assert.equal(report.page.presentationP95, 24)
@@ -335,11 +333,11 @@ test('A5: reset() preserves initial-load resource bytes across scenarios', () =>
     name: '/plugins/??dsh-nano-explorer-extra/client.js,dsh-nano-notepad/client.js&rev=x',
     initiatorType: 'script', encodedBodySize: 681043,
   })
-  const before = review.report()
+  const before = review.read()
   assert.equal(before.page.nanoCombined.clientJsBytes, 681043)
-  // The lab calls reset() at the start of the next scenario; bytes must survive.
-  review.reset()
-  const after = review.report()
+  // The lab calls cutWindow() at the start of the next scenario; bytes must survive.
+  review.cutWindow()
+  const after = review.read()
   assert.equal(after.page.nanoCombined.clientJsBytes, 681043)
   assert.equal(after.page.nanoCombined.comboResources, 1)
 })

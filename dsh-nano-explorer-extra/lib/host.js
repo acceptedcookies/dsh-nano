@@ -1,9 +1,86 @@
 // src/host/routes.js
 import { watch } from "node:fs";
 
+// ../packages/dsh-interface/src/contracts/jsonOutcome.js
+var FAILURE_KIND = Object.freeze({
+  /** signal aborted; issued-before cancellation makes no server-side claim. */
+  CANCELLED: "cancelled",
+  /** Network/read-body failure; keep real httpStatus only when headers landed. */
+  TRANSPORT: "transport",
+  /** Non-2xx that is not a recognized sanctioned business failure; keep status. */
+  HTTP: "http",
+  /** Pre-request encode/binding failure OR illegal 2xx — never becomes ok:true. */
+  PROTOCOL: "protocol",
+  /** Recognized sanctioned business failure (incl. legal 2xx business failures). */
+  DOMAIN: "domain"
+});
+var FAILURE_KINDS = Object.freeze(Object.values(FAILURE_KIND));
+
+// ../packages/dsh-interface/src/contracts/observeEvent.js
+var OBSERVE_SURFACES = Object.freeze(["http", "upgrade", "json", "mcp"]);
+var HTTP_OUTCOMES = Object.freeze(["ok", "rejected", "method", "failed"]);
+var UPGRADE_OUTCOMES = Object.freeze(["accepted", "rejected", "method"]);
+var JSON_OUTCOMES = Object.freeze(["ok", ...FAILURE_KINDS]);
+var MCP_OUTCOMES = Object.freeze(["ok", "error", "rejected"]);
+var OBSERVE_FIELDS = Object.freeze([
+  "surface",
+  "id",
+  "plugin",
+  "outcome",
+  "ms",
+  "status",
+  "kind"
+]);
+var REQUIRED = ["surface", "id", "plugin", "outcome", "ms"];
+var OPTIONAL = /* @__PURE__ */ new Set(["status", "kind"]);
+var OUTCOMES = {
+  http: new Set(HTTP_OUTCOMES),
+  upgrade: new Set(UPGRADE_OUTCOMES),
+  json: new Set(JSON_OUTCOMES),
+  mcp: new Set(MCP_OUTCOMES)
+};
+function fail(message) {
+  throw new TypeError(`observe-event: ${message}`);
+}
+function assertObserveEvent(event) {
+  if (event == null || typeof event !== "object" || Array.isArray(event)) {
+    fail("event must be an object");
+  }
+  const keys = Object.keys(event);
+  for (const key of keys) {
+    if (!REQUIRED.includes(key) && !OPTIONAL.has(key)) fail(`unknown field ${key}`);
+  }
+  for (const key of REQUIRED) {
+    if (!Object.prototype.hasOwnProperty.call(event, key)) fail(`missing ${key}`);
+  }
+  if (!OUTCOMES[event.surface]) fail(`unknown surface ${String(event.surface)}`);
+  if (event.id !== null && (typeof event.id !== "string" || event.id === "")) {
+    fail("id must be a non-empty string or null");
+  }
+  if (event.plugin !== null && (typeof event.plugin !== "string" || event.plugin === "")) {
+    fail("plugin must be a non-empty string or null");
+  }
+  if (typeof event.outcome !== "string" || !OUTCOMES[event.surface].has(event.outcome)) {
+    fail(`unknown outcome ${String(event.outcome)} for ${event.surface}`);
+  }
+  if (typeof event.ms !== "number" || !Number.isFinite(event.ms)) fail("ms must be a finite number");
+  if (Object.prototype.hasOwnProperty.call(event, "status")) {
+    if (typeof event.status !== "number" || !Number.isFinite(event.status)) fail("status must be a finite number");
+  }
+  if (event.surface === "mcp" && event.outcome === "error") {
+    if (typeof event.kind !== "string" || event.kind === "") fail("mcp error requires kind");
+  } else if (Object.prototype.hasOwnProperty.call(event, "kind")) {
+    if (typeof event.kind !== "string" || event.kind === "") fail("kind must be a non-empty string");
+  }
+  return event;
+}
+
 // ../packages/dsh-performance-review/src/state.js
-var LIB_VERSION = "0.1.0";
+var CLIENT_KEY = Symbol.for("dsh.perfReview.v2");
+var HOST_KEY = Symbol.for("dsh.perfReviewHost.v2");
+var BUILD_STAMP = true ? "ff5694c57be1" : "dev";
 var NAME_RE = /^[a-z0-9][a-z0-9-]{0,39}$/;
+var CONTRACT_KEY_RE = /^[a-z0-9][a-z0-9.-]{0,63}$/;
 var MAX_USAGE_KEYS = 32;
 var RESERVOIR_CAP = 64;
 function percentile(values, p) {
@@ -15,15 +92,64 @@ function percentile(values, p) {
 function createSpanRow() {
   return { n: 0, window: [], reservoir: [] };
 }
+function createStructure() {
+  return {
+    rootErrors: 0,
+    badNames: 0,
+    overflowSpans: 0,
+    overflowUsage: 0,
+    observerErrors: 0,
+    // A single observe() can fail silently (e.g. LoAF unsupported) while the
+    // other two succeed. `observerErrors` only fires when ALL fail; this
+    // counter makes a partial observer install visible (A5 / §10.4.6).
+    observersMissing: 0,
+    legacyCopies: 0,
+    badShape: 0,
+    unmappedKey: 0,
+    missingBindingId: 0,
+    oversize: 0,
+    /** Protocol findings such as `{ level, code:'build-stamp', have, saw }`. */
+    audits: []
+  };
+}
+function pushAudit(structure, record) {
+  if (!Array.isArray(structure.audits)) structure.audits = [];
+  const dup = structure.audits.some((item) => item.level === record.level && item.code === record.code && item.have === record.have && item.saw === record.saw);
+  if (!dup) structure.audits.push(record);
+}
+function installSingleton(global, key, legacyKey, stamp, create) {
+  const existing = global[key];
+  if (existing == null) {
+    const created = create();
+    created._build = stamp;
+    global[key] = created;
+    if (legacyKey != null && global[legacyKey] != null) {
+      const structure = created._state?.().structure;
+      if (structure != null) structure.legacyCopies += 1;
+    }
+    return created;
+  }
+  if (existing._build !== stamp) {
+    const structure = existing._state?.().structure;
+    if (structure != null) {
+      pushAudit(structure, {
+        level: "audit",
+        code: "build-stamp",
+        have: existing._build ?? null,
+        saw: stamp
+      });
+    }
+  }
+  return existing;
+}
+var NANO_PKG_PREFIX = ["dsh", "nano"].join("-") + "-";
 function roundMs(value) {
   return value == null ? null : Math.round(value * 10) / 10;
 }
 
 // ../packages/dsh-performance-review/src/host.js
-var WRITE_INTERVAL_MS = 3e4;
 var WINDOW_SAMPLE_CAP = 512;
 var EVENT_CAP = 32;
-var JSONL_CAP_BYTES = 8 * 1024 * 1024;
 var isPromiseLike = (value) => value !== null && typeof value === "object" && typeof value.then === "function";
 function spanStats(span) {
   const reservoir = span.reservoir ?? [];
@@ -35,8 +161,7 @@ function spanStats(span) {
     errors: span.errors ?? 0,
     lastMs: span.lastMs ?? null,
     lastAt: span.lastAt ?? null,
-    lastErrorAt: span.lastErrorAt ?? null,
-    lastTraceId: span.lastTraceId ?? null
+    lastErrorAt: span.lastErrorAt ?? null
   };
 }
 function hostSnapshot(state) {
@@ -61,118 +186,120 @@ function hostSnapshot(state) {
   }
   return {
     version: 2,
-    enabled: state.enabled,
-    observerVersion: LIB_VERSION,
-    contributors: state.contributors.map((c) => ({ ...c })),
+    enabled: state.enabled === true,
+    contributors: state.contributors.map((item) => ({ ...item })),
     sinceStart: state.sinceStart,
-    writtenAt: (/* @__PURE__ */ new Date()).toISOString(),
+    epoch: state.epoch,
+    seq: state.seq,
+    cursor: state.cursor,
+    writtenAt: state.sinceStart,
     plugins,
-    structure: { hostWriteErrors: state.writeErrors }
+    structure: { ...state.structure, audits: [...state.structure.audits ?? []] }
   };
 }
-function takeWindow(state) {
-  const snap = hostSnapshot(state);
-  const plugins = {};
+function parseCursor(since, epoch) {
+  if (typeof since === "number") {
+    if (!Number.isInteger(since) || since < 0) return { error: true };
+    return { epoch, seq: since };
+  }
+  if (typeof since === "string") {
+    const dot = since.lastIndexOf(".");
+    if (dot <= 0) return { error: true };
+    const ep = since.slice(0, dot);
+    const seq = Number(since.slice(dot + 1));
+    if (ep.length === 0 || !Number.isInteger(seq) || seq < 0) return { error: true };
+    return { epoch: ep, seq };
+  }
+  if (since !== null && typeof since === "object" && !Array.isArray(since)) {
+    const seq = since.seq;
+    if (since.epoch == null || !Number.isInteger(seq) || seq < 0) return { error: true };
+    return { epoch: String(since.epoch), seq };
+  }
+  return { error: true };
+}
+function collectRows(state, predicate) {
+  const rows = [];
+  const truncated = [];
   for (const [pluginId, row] of state.plugins) {
-    const spans = {};
     for (const [name2, span] of row.spans) {
-      spans[name2] = { n: span.window.length, samples: [...span.window] };
+      const minKept = span.minKeptSeq;
+      if (predicate && minKept != null) {
+        const floor = predicate.seq;
+        if (floor + 1 < minKept) {
+          truncated.push({ pluginId, name: name2, lost: minKept - floor - 1 });
+        }
+      } else if (!predicate && (span.lost ?? 0) > 0) {
+        truncated.push({ pluginId, name: name2, lost: span.lost });
+      }
+      for (const event of span.log ?? []) {
+        if (predicate && !(event.seq > predicate.seq)) continue;
+        rows.push({
+          seq: event.seq,
+          pluginId,
+          name: name2,
+          ms: event.ms,
+          err: event.err === true,
+          at: event.at
+        });
+      }
     }
-    const counts = {};
-    if (row.counts instanceof Map) {
-      for (const [name2, n] of row.counts) counts[name2] = n;
+    for (const [name2, bucket] of row.contract ?? []) {
+      for (const event of bucket.log ?? []) {
+        if (predicate && !(event.seq > predicate.seq)) continue;
+        rows.push({
+          seq: event.seq,
+          pluginId,
+          name: name2,
+          kind: "contract",
+          outcome: event.outcome,
+          ms: event.ms
+        });
+      }
     }
-    plugins[pluginId] = { version: row.version ?? null, spans, counts };
   }
-  for (const row of state.plugins.values()) {
-    for (const span of row.spans.values()) span.window.length = 0;
-  }
-  return { ...snap, window: true, plugins };
+  rows.sort((a, b) => a.seq - b.seq);
+  return { rows, truncated };
 }
 function createPerfReviewHost(env = {}) {
   const processRef = env.process ?? globalThis.process;
+  const epoch = env.epoch != null ? String(env.epoch) : Math.floor(Math.random() * 1e9).toString(36);
   const state = {
     enabled: env.forceEnabled !== void 0 ? env.forceEnabled === true : null,
     plugins: /* @__PURE__ */ new Map(),
     contributors: [],
-    writeErrors: 0,
+    contributorKeys: /* @__PURE__ */ new Set(),
     sinceStart: (/* @__PURE__ */ new Date()).toISOString(),
-    writer: null
-  };
-  const dataDir = () => processRef.env?.DSH_DATA_DIR ?? processRef.env?.DSH_HOME ?? null;
-  const writeFile = async () => {
-    const fs = env.fs ?? await import("node:fs/promises");
-    const path = env.path ?? await import("node:path");
-    const dir = dataDir() ?? `${processRef.env?.HOME ?? ""}/.dsh`;
-    const target = path.join(dir, "plugins", "perf-review");
-    try {
-      await fs.mkdir(target, { recursive: true });
-      const snap = hostSnapshot(state);
-      await fs.writeFile(path.join(target, "host.json"), JSON.stringify(snap, null, 2));
-      const series = { at: snap.writtenAt, plugins: {} };
-      for (const [pluginId, row] of state.plugins) {
-        const spans = {};
-        for (const [name2, span] of row.spans) {
-          spans[name2] = { n: span.n, p95: roundMs(percentile(span.reservoir, 0.95)), errors: span.errors ?? 0 };
-        }
-        series.plugins[pluginId] = { spans };
-      }
-      const jsonlPath = path.join(target, "host-snapshots.jsonl");
-      let existing = "";
-      try {
-        existing = await fs.readFile(jsonlPath, "utf8");
-      } catch {
-      }
-      if (existing.length > JSONL_CAP_BYTES) {
-        existing = existing.slice(-Math.floor(JSONL_CAP_BYTES / 2));
-        const nl = existing.indexOf("\n");
-        if (nl >= 0) existing = existing.slice(nl + 1);
-      }
-      await fs.writeFile(jsonlPath, existing + JSON.stringify(series) + "\n");
-    } catch {
-      state.writeErrors += 1;
-    }
-  };
-  const startWriter = () => {
-    if (state.writer !== null) return;
-    const setIntervalRef = env.setInterval ?? setInterval;
-    state.writer = setIntervalRef(() => {
-      void writeFile();
-    }, WRITE_INTERVAL_MS);
-    if (typeof state.writer?.unref === "function") state.writer.unref();
-    try {
-      processRef.once?.("beforeExit", () => {
-        void writeFile();
-      });
-    } catch {
-    }
+    epoch,
+    seq: 0,
+    cursor: 0,
+    structure: createStructure(),
+    _build: env.build ?? BUILD_STAMP
   };
   const isEnabled = () => {
     if (state.enabled === null) {
-      state.enabled = env.forceEnabled !== void 0 ? env.forceEnabled === true : processRef.env?.DSH_PERF_REVIEW === "1";
-      if (state.enabled) startWriter();
+      state.enabled = env.forceEnabled !== void 0 ? env.forceEnabled === true : processRef?.env?.DSH_PERF_REVIEW === "1";
     }
-    return state.enabled;
+    return state.enabled === true;
   };
-  const setEnabled = (value) => {
-    state.enabled = value === true;
-    if (state.enabled) startWriter();
-  };
-  const recordSpan = (row, name2, t0, t1, err = false, traceId = null) => {
-    if (!NAME_RE.test(name2) || !isEnabled()) return;
+  const recordSpan = (row, name2, t0, t1, err) => {
+    if (!isEnabled()) return;
     let span = row.spans.get(name2);
     if (span === void 0) {
       span = createSpanRow();
       span.errors = 0;
       span.events = [];
+      span.log = [];
+      span.lost = 0;
+      span.minKeptSeq = null;
       row.spans.set(name2, span);
     }
     span.n += 1;
     const ms = t1 - t0;
     const at = (/* @__PURE__ */ new Date()).toISOString();
+    const seq = state.seq + 1;
+    state.seq = seq;
     span.lastMs = ms;
     span.lastAt = at;
-    if (traceId != null) span.lastTraceId = traceId;
     if (err) {
       span.errors += 1;
       span.lastErrorAt = at;
@@ -184,8 +311,15 @@ function createPerfReviewHost(env = {}) {
       const slot = Math.floor(Math.random() * span.n);
       if (slot < RESERVOIR_CAP) span.reservoir[slot] = ms;
     }
-    span.events.push(traceId != null ? { ms: Math.round(ms * 10) / 10, at, err, traceId } : { ms: Math.round(ms * 10) / 10, at, err });
+    const rounded = Math.round(ms * 10) / 10;
+    span.events.push({ ms: rounded, at, err: err === true, seq });
     while (span.events.length > EVENT_CAP) span.events.shift();
+    span.log.push({ seq, ms, err: err === true, at });
+    while (span.log.length > WINDOW_SAMPLE_CAP) {
+      span.log.shift();
+      span.lost += 1;
+      span.minKeptSeq = span.log[0]?.seq ?? null;
+    }
   };
   const hostJoin = (pluginId, impl = {}) => {
     let row = state.plugins.get(pluginId);
@@ -194,43 +328,48 @@ function createPerfReviewHost(env = {}) {
       state.plugins.set(pluginId, row);
     }
     if (!(row.counts instanceof Map)) row.counts = /* @__PURE__ */ new Map();
-    state.contributors.push({ pluginId, libVersion: impl.libVersion ?? LIB_VERSION });
+    const build = impl.build ?? BUILD_STAMP;
+    const key = `${pluginId}@${build}`;
+    if (!state.contributorKeys.has(key)) {
+      state.contributorKeys.add(key);
+      state.contributors.push({ pluginId, build });
+    }
     const clock = env.performance ?? globalThis.performance;
     const now = () => clock.now();
     return {
       /**
-       * hostSpan(name, fn, ctx?) — ctx: {traceId?, incidentId?} correlates the
-       * span event with a caller-side trace (e.g. an incidentId from the
-       * operations ring); only the LAST-seen trace is kept per span plus the
-       * traceId on each event row.
+       * hostSpan(name, fn). No trace context is stored (T-O-PRE1116-12).
+       * A name that fails NAME_RE still runs `fn`, increments
+       * `structure.unmappedKey`, and is not recorded.
        */
-      hostSpan(name2, fn, ctx = null) {
-        if (!NAME_RE.test(name2)) return fn();
-        const traceId = ctx && (ctx.traceId ?? ctx.incidentId ?? null);
+      hostSpan(name2, fn) {
+        if (typeof name2 !== "string" || !NAME_RE.test(name2)) {
+          state.structure.unmappedKey += 1;
+          return fn();
+        }
         const t0 = now();
         let result;
         try {
           result = fn();
         } catch (error) {
-          recordSpan(row, name2, t0, now(), true, traceId);
+          recordSpan(row, name2, t0, now(), true);
           throw error;
         }
         if (isPromiseLike(result)) {
           return result.then(
             (value) => {
-              recordSpan(row, name2, t0, now(), false, traceId);
+              recordSpan(row, name2, t0, now(), false);
               return value;
             },
             (error) => {
-              recordSpan(row, name2, t0, now(), true, traceId);
+              recordSpan(row, name2, t0, now(), true);
               throw error;
             }
           );
         }
-        recordSpan(row, name2, t0, now(), false, traceId);
+        recordSpan(row, name2, t0, now(), false);
         return result;
       },
-      /** count(name, n?) — cumulative counter per name (usage-style). */
       count(name2, n = 1) {
         if (!NAME_RE.test(name2) || !isEnabled()) return;
         if (!(row.counts instanceof Map)) row.counts = /* @__PURE__ */ new Map();
@@ -241,48 +380,123 @@ function createPerfReviewHost(env = {}) {
         isEnabled();
         return hostSnapshot(state);
       },
-      takeWindow: () => takeWindow(state)
+      read: (query) => read(query)
     };
+  };
+  const read = (query = {}) => {
+    const seq = state.seq;
+    const base = {
+      epoch: state.epoch,
+      seq,
+      cursor: state.cursor,
+      since: null,
+      next: `${state.epoch}.${seq}`
+    };
+    if (query != null && query.mode !== void 0) {
+      return { status: 400, error: "mode", basis: null, rows: [], truncated: [], ...base };
+    }
+    if (query == null || query.since === void 0) {
+      const { rows: rows2, truncated: truncated2 } = collectRows(state, null);
+      return { status: 200, basis: "cumulative", rows: rows2, truncated: truncated2, ...base };
+    }
+    base.since = typeof query.since === "number" ? query.since : String(query.since);
+    const parsed = parseCursor(query.since, state.epoch);
+    if (parsed.error) {
+      return { status: 400, error: "cursor", basis: null, rows: [], truncated: [], ...base };
+    }
+    if (parsed.epoch !== state.epoch) {
+      const { rows: rows2 } = collectRows(state, null);
+      return { status: 200, basis: "cumulative", rows: rows2, truncated: ["epoch"], ...base };
+    }
+    const { rows, truncated } = collectRows(state, { seq: parsed.seq });
+    return { status: 200, basis: "window", rows, truncated, ...base };
+  };
+  const observe = (event) => {
+    if (!isEnabled()) return;
+    if (event == null || typeof event !== "object" || Array.isArray(event)) {
+      state.structure.badShape += 1;
+      return;
+    }
+    let admitted;
+    try {
+      admitted = assertObserveEvent(event);
+    } catch {
+      state.structure.badShape += 1;
+      return;
+    }
+    if (admitted.id == null || admitted.id === "") {
+      state.structure.missingBindingId += 1;
+      return;
+    }
+    if (!CONTRACT_KEY_RE.test(admitted.id) || typeof admitted.plugin !== "string" || admitted.plugin === "") {
+      state.structure.badShape += 1;
+      return;
+    }
+    let row = state.plugins.get(admitted.plugin);
+    if (row === void 0) {
+      row = { version: null, spans: /* @__PURE__ */ new Map(), counts: /* @__PURE__ */ new Map(), contract: /* @__PURE__ */ new Map() };
+      state.plugins.set(admitted.plugin, row);
+    }
+    if (!(row.contract instanceof Map)) row.contract = /* @__PURE__ */ new Map();
+    state.seq += 1;
+    let bucket = row.contract.get(admitted.id);
+    if (bucket === void 0) {
+      bucket = { n: 0, window: 0, outcomes: {}, log: [] };
+      row.contract.set(admitted.id, bucket);
+    }
+    bucket.n += 1;
+    bucket.window += 1;
+    bucket.outcomes[admitted.outcome] = (bucket.outcomes[admitted.outcome] ?? 0) + 1;
+    bucket.log.push({ seq: state.seq, outcome: admitted.outcome, ms: admitted.ms });
+    if (bucket.log.length > WINDOW_SAMPLE_CAP) {
+      bucket.log.shift();
+      bucket.lost = (bucket.lost ?? 0) + 1;
+    }
   };
   return {
     hostJoin,
-    setEnabled,
+    read,
+    observe,
     snapshot: () => {
       isEnabled();
       return hostSnapshot(state);
     },
-    takeWindow: () => takeWindow(state),
-    flush: () => writeFile(),
     _state: () => state,
-    libVersion: LIB_VERSION
+    _build: state._build
   };
+}
+function handleHostRead(req, res, host) {
+  const method = req?.method ?? "GET";
+  const finish = (status, body) => {
+    res.statusCode = status;
+    res.setHeader("content-type", "application/json; charset=utf-8");
+    if (method === "HEAD") res.end();
+    else res.end(JSON.stringify(body));
+  };
+  if (method !== "GET") {
+    finish(405, { status: 405, error: "method" });
+    return;
+  }
+  let keys = [];
+  try {
+    const url = new URL(req?.url ?? "/", "http://localhost");
+    keys = [...url.searchParams.keys()];
+    const extra = keys.filter((key) => key !== "since");
+    if (extra.length > 0) {
+      finish(400, { status: 400, error: extra.includes("mode") ? "mode" : "query" });
+      return;
+    }
+    const since = url.searchParams.get("since");
+    const view = host.read(since == null ? {} : { since });
+    finish(view.status ?? 200, view);
+  } catch {
+    finish(400, { status: 400, error: "query" });
+  }
 }
 function ensurePerfReviewHost(env = {}) {
   const global = env.global ?? globalThis;
-  const incumbent = global.__perfReviewHost;
-  if (incumbent == null) {
-    global.__perfReviewHost = createPerfReviewHost(env);
-    return global.__perfReviewHost;
-  }
-  if (typeof incumbent.setEnabled !== "function" || typeof incumbent._state !== "function") {
-    const fresh = createPerfReviewHost(env);
-    try {
-      const old = typeof incumbent._state === "function" ? incumbent._state() : null;
-      const next = fresh._state();
-      if (old && typeof old === "object") {
-        if (old.plugins instanceof Map) next.plugins = old.plugins;
-        if (Array.isArray(old.contributors)) next.contributors = old.contributors;
-        if (typeof old.enabled === "boolean") next.enabled = old.enabled;
-        if (typeof old.writeErrors === "number") next.writeErrors = old.writeErrors;
-        if (typeof old.sinceStart === "string") next.sinceStart = old.sinceStart;
-        if (old.writer) next.writer = old.writer;
-      }
-    } catch {
-    }
-    global.__perfReviewHost = fresh;
-    return fresh;
-  }
-  return incumbent;
+  const stamp = env.build ?? BUILD_STAMP;
+  return installSingleton(global, HOST_KEY, "__perfReviewHost", stamp, () => createPerfReviewHost(env));
 }
 
 // ../packages/dsh-host-route-guard/src/route-guard.js
@@ -324,7 +538,8 @@ function indexTable(table, plugin) {
       bodyLimit: row.bodyLimit,
       sessionBinding: row.sessionBinding,
       justification: row.justification,
-      plugin: row.plugin ?? plugin
+      plugin: row.plugin ?? plugin,
+      id: typeof row.id === "string" && row.id !== "" ? row.id : null
     });
   }
   return byPath;
@@ -346,7 +561,36 @@ function normalizeSpec(spec) {
   }
   return { ...spec, methods: [...methods] };
 }
-function createGuard({ table, plugin } = {}) {
+function observeEnabled(observe) {
+  return typeof observe === "function";
+}
+function observeStamp(observe) {
+  if (!observeEnabled(observe)) return null;
+  return globalThis.performance.now();
+}
+function emitObserve(observe, event) {
+  if (!observeEnabled(observe)) return;
+  try {
+    const ret = observe(event);
+    if (ret != null && typeof ret.then === "function") ret.then(() => {
+    }, () => {
+    });
+  } catch {
+  }
+}
+function emitHttp(observe, t0, { id, plugin, outcome, status }) {
+  if (!observeEnabled(observe) || t0 == null) return;
+  const event = {
+    surface: "http",
+    id: id ?? null,
+    plugin: plugin ?? null,
+    outcome,
+    ms: globalThis.performance.now() - t0
+  };
+  if (status !== void 0) event.status = status;
+  emitObserve(observe, event);
+}
+function createGuard({ table, plugin, observe } = {}) {
   const byPath = indexTable(table ?? [], plugin);
   const records = [];
   function registerRoutes3(ctx, specs) {
@@ -396,26 +640,33 @@ function createGuard({ table, plugin } = {}) {
         bodyLimit: spec.bodyLimit ?? row.bodyLimit,
         sessionBinding: row.sessionBinding,
         justification: row.justification,
-        plugin: row.plugin
+        plugin: row.plugin,
+        ...row.id ? { id: row.id } : {}
       });
       records.push(route);
       const handler = async (req, res) => {
+        const t0 = observeStamp(observe);
+        const identity = { id: row.id, plugin: route.plugin };
         const rejection = conn.requestRejection?.(req);
         if (rejection !== void 0) {
           res.statusCode = rejection;
           res.end();
+          emitHttp(observe, t0, { ...identity, outcome: "rejected", status: rejection });
           return;
         }
         if (!route.methods.includes(String(req.method ?? "").toUpperCase())) {
           res.setHeader("allow", route.methods.join(", "));
           sendJson(res, 405, { ok: false, reason: "method-not-allowed" });
+          emitHttp(observe, t0, { ...identity, outcome: "method", status: 405 });
           return;
         }
         try {
           await spec.handler(req, res, route);
+          emitHttp(observe, t0, { ...identity, outcome: "ok", status: res.statusCode });
         } catch (error) {
           const reason = error instanceof RouteGuardError ? error.reason : "failed";
           sendJson(res, 500, { ok: false, reason });
+          emitHttp(observe, t0, { ...identity, outcome: "failed", status: 500 });
         }
       };
       const register = () => ctx.get("webServer").register({ kind: ROUTE_KIND, path: spec.path, handler });
@@ -524,23 +775,24 @@ function bindingRecord(binding) {
   });
 }
 
-// ../packages/dsh-interface/src/contracts/jsonOutcome.js
-var FAILURE_KIND = Object.freeze({
-  /** signal aborted; issued-before cancellation makes no server-side claim. */
-  CANCELLED: "cancelled",
-  /** Network/read-body failure; keep real httpStatus only when headers landed. */
-  TRANSPORT: "transport",
-  /** Non-2xx that is not a recognized sanctioned business failure; keep status. */
-  HTTP: "http",
-  /** Pre-request encode/binding failure OR illegal 2xx — never becomes ok:true. */
-  PROTOCOL: "protocol",
-  /** Recognized sanctioned business failure (incl. legal 2xx business failures). */
-  DOMAIN: "domain"
-});
-var FAILURE_KINDS = Object.freeze(Object.values(FAILURE_KIND));
+// ../packages/dsh-interface/src/host/emitObserve.js
+function observeStamp2(observe) {
+  if (typeof observe !== "function") return null;
+  return globalThis.performance.now();
+}
+function emitObserve2(observe, event) {
+  if (typeof observe !== "function") return;
+  try {
+    const ret = observe(event);
+    if (ret != null && typeof ret.then === "function") ret.then(() => {
+    }, () => {
+    });
+  } catch {
+  }
+}
 
 // ../packages/dsh-interface/src/host/createWebRegistrar.js
-function createWebRegistrar({ plugin, bindings } = {}) {
+function createWebRegistrar({ plugin, bindings, observe } = {}) {
   const normalized = normalizeBindings(bindings ?? [], { plugin });
   const effective = [];
   const byChannel = {
@@ -565,39 +817,68 @@ function createWebRegistrar({ plugin, bindings } = {}) {
     };
     try {
       if (byChannel.httpExact.length) {
-        const guard = createGuard({ table: byChannel.httpExact, plugin });
+        const guard = createGuard({ table: byChannel.httpExact, plugin, observe });
         const ds = guard.registerRoutes(ctx, byChannel.httpExact);
         disposers.push(...ds);
       }
       for (const b of byChannel.httpPrefix) {
         const handler = async (req, res) => {
+          const t0 = observeStamp2(observe);
+          const done = (outcome, status) => {
+            if (t0 == null) return;
+            const event = {
+              surface: "http",
+              id: b.id ?? null,
+              plugin: b.plugin ?? plugin ?? null,
+              outcome,
+              ms: globalThis.performance.now() - t0
+            };
+            if (status !== void 0) event.status = status;
+            emitObserve2(observe, event);
+          };
           const rejection = conn.requestRejection(req);
           if (rejection !== void 0) {
             res.statusCode = rejection;
             res.end();
+            done("rejected", rejection);
             return;
           }
           if (!b.methods.includes(String(req.method ?? "").toUpperCase())) {
             res.setHeader("allow", b.methods.join(", "));
             sendJson(res, 405, { ok: false, reason: "method-not-allowed" });
+            done("method", 405);
             return;
           }
           try {
             await b.handler(req, res, bindingRecord(b));
+            done("ok", res.statusCode);
           } catch (error) {
             const reason = error instanceof RouteGuardError ? error.reason : "failed";
             sendJson(res, 500, { ok: false, reason });
+            done("failed", 500);
           }
         };
         disposers.push(ctx.get("webServer").register({ kind: "prefix", path: b.path, handler }));
       }
       for (const b of byChannel.upgradeExact) {
         const handler = (req, socket) => {
+          const t0 = observeStamp2(observe);
+          const done = (outcome) => {
+            if (t0 == null) return;
+            emitObserve2(observe, {
+              surface: "upgrade",
+              id: b.id ?? null,
+              plugin: b.plugin ?? plugin ?? null,
+              outcome,
+              ms: globalThis.performance.now() - t0
+            });
+          };
           if (String(req.method ?? "").toUpperCase() !== "GET") {
             try {
               socket.end();
             } catch {
             }
+            done("method");
             return;
           }
           const rejection = conn.requestRejection(req);
@@ -606,9 +887,12 @@ function createWebRegistrar({ plugin, bindings } = {}) {
               socket.end();
             } catch {
             }
+            done("rejected");
             return;
           }
-          return b.handler(req, socket, bindingRecord(b));
+          const ret = b.handler(req, socket, bindingRecord(b));
+          done("accepted");
+          return ret;
         };
         disposers.push(ctx.get("webServer").registerUpgrade({ path: b.path, handler }));
       }
@@ -639,278 +923,26 @@ function createWebRegistrar({ plugin, bindings } = {}) {
 
 // lib/bindings.js
 var PLUGIN = "dsh-nano-explorer-extra";
-var BINDING_TABLE = [
-  {
-    "id": "dnee.status",
-    "plugin": "dsh-nano-explorer-extra",
-    "channel": "http",
-    "match": "exact",
-    "path": "/nano-explorer-extra/status",
-    "methods": [
-      "GET"
-    ],
-    "bodyLimit": 0,
-    "sensitivity": "L0",
-    "capability": "proc:git",
-    "sessionBinding": true,
-    "justification": "dsh-nano-explorer-extra/src/host/routes.js:226 \u2014 read-only git status/stats for one session workspace; returns no secrets. scopeOf resolves caller-supplied sessionId (finding scopeof-cross-session, harden) \u2014 session-scoped read by design."
-  },
-  {
-    "id": "dnee.commit",
-    "plugin": "dsh-nano-explorer-extra",
-    "channel": "http",
-    "match": "exact",
-    "path": "/nano-explorer-extra/commit",
-    "methods": [
-      "POST"
-    ],
-    "bodyLimit": 65536,
-    "sensitivity": "L2",
-    "capability": "proc:git",
-    "sessionBinding": true,
-    "justification": "dsh-nano-explorer-extra/src/host/routes.js:261 \u2014 runs `git add --all` + `git commit` as the host user; executes a process and can invoke attacker-controlled .git filter drivers (finding git-config-filter-exec). Host-level exec."
-  },
-  {
-    "id": "dnee.pull",
-    "plugin": "dsh-nano-explorer-extra",
-    "channel": "http",
-    "match": "exact",
-    "path": "/nano-explorer-extra/pull",
-    "methods": [
-      "POST"
-    ],
-    "bodyLimit": 65536,
-    "sensitivity": "L2",
-    "capability": "proc:git",
-    "sessionBinding": true,
-    "justification": "dsh-nano-explorer-extra/src/host/routes.js:273 \u2014 `git pull --ff-only`: host process exec + outbound net to the configured remote + merge writes into the workspace."
-  },
-  {
-    "id": "dnee.fetch",
-    "plugin": "dsh-nano-explorer-extra",
-    "channel": "http",
-    "match": "exact",
-    "path": "/nano-explorer-extra/fetch",
-    "methods": [
-      "POST"
-    ],
-    "bodyLimit": 65536,
-    "sensitivity": "L2",
-    "capability": "proc:git",
-    "sessionBinding": true,
-    "justification": "dsh-nano-explorer-extra/src/host/routes.js \u2014 `git fetch --all --prune`: host process exec + outbound net to configured remotes; rewrites refs/remotes but never touches workspace files."
-  },
-  {
-    "id": "dnee.push",
-    "plugin": "dsh-nano-explorer-extra",
-    "channel": "http",
-    "match": "exact",
-    "path": "/nano-explorer-extra/push",
-    "methods": [
-      "POST"
-    ],
-    "bodyLimit": 65536,
-    "sensitivity": "L2",
-    "capability": "proc:git",
-    "sessionBinding": true,
-    "justification": "dsh-nano-explorer-extra/src/host/routes.js \u2014 `git push` or `git push -u <remote> HEAD`: host process exec + outbound net to a configured or caller-named remote; publishes commits off the machine."
-  },
-  {
-    "id": "dnee.remote",
-    "plugin": "dsh-nano-explorer-extra",
-    "channel": "http",
-    "match": "exact",
-    "path": "/nano-explorer-extra/remote",
-    "methods": [
-      "POST"
-    ],
-    "bodyLimit": 65536,
-    "sensitivity": "L2",
-    "capability": "proc:git",
-    "sessionBinding": true,
-    "justification": "dsh-nano-explorer-extra/src/host/routes.js \u2014 `git remote add|set-url|remove`: host process exec that rewrites .git/config; the URL operand steers where later pushes send the tree."
-  },
-  {
-    "id": "dnee.author",
-    "plugin": "dsh-nano-explorer-extra",
-    "channel": "http",
-    "match": "exact",
-    "path": "/nano-explorer-extra/author",
-    "methods": [
-      "POST"
-    ],
-    "bodyLimit": 65536,
-    "sensitivity": "L1",
-    "capability": "proc:git",
-    "sessionBinding": true,
-    "justification": "dsh-nano-explorer-extra/src/host/routes.js \u2014 `git config user.name|user.email` (local only): writes .git/config; no process exec beyond the config setter itself, no network."
-  },
-  {
-    "id": "dnee.ssh-key",
-    "plugin": "dsh-nano-explorer-extra",
-    "channel": "http",
-    "match": "exact",
-    "path": "/nano-explorer-extra/ssh-key",
-    "methods": [
-      "POST"
-    ],
-    "bodyLimit": 65536,
-    "sensitivity": "L1",
-    "capability": "proc:git",
-    "sessionBinding": true,
-    "justification": "dsh-nano-explorer-extra/src/host/routes.js \u2014 writes  (local only) to .git/config: binds a repo-local SSH identity; key path is validated against quotes/newlines before being embedded; no process exec beyond the config setter itself."
-  },
-  {
-    "id": "dnee.checkout",
-    "plugin": "dsh-nano-explorer-extra",
-    "channel": "http",
-    "match": "exact",
-    "path": "/nano-explorer-extra/checkout",
-    "methods": [
-      "POST"
-    ],
-    "bodyLimit": 65536,
-    "sensitivity": "L2",
-    "capability": "proc:git",
-    "sessionBinding": true,
-    "justification": "dsh-nano-explorer-extra/src/host/routes.js:285 \u2014 `git checkout` as the host user; process exec that can rewrite workspace files and trigger smudge filters."
-  },
-  {
-    "id": "dnee.create-file",
-    "plugin": "dsh-nano-explorer-extra",
-    "channel": "http",
-    "match": "exact",
-    "path": "/nano-explorer-extra/create-file",
-    "methods": [
-      "POST"
-    ],
-    "bodyLimit": 65536,
-    "sensitivity": "L1",
-    "capability": "write:workspace",
-    "sessionBinding": true,
-    "justification": "dsh-nano-explorer-extra/src/host/routes.js:297 + mutate.js \u2014 bounded write of a new file inside the session workspace after resolve+policy check; symlink-escape fence is the P2 harden item."
-  },
-  {
-    "id": "dnee.create-folder",
-    "plugin": "dsh-nano-explorer-extra",
-    "channel": "http",
-    "match": "exact",
-    "path": "/nano-explorer-extra/create-folder",
-    "methods": [
-      "POST"
-    ],
-    "bodyLimit": 65536,
-    "sensitivity": "L1",
-    "capability": "write:workspace",
-    "sessionBinding": true,
-    "justification": "dsh-nano-explorer-extra/src/host/routes.js:310 + mutate.js \u2014 bounded mkdir inside the session workspace; same realpath-fence hardening as the other mutations."
-  },
-  {
-    "id": "dnee.rename",
-    "plugin": "dsh-nano-explorer-extra",
-    "channel": "http",
-    "match": "exact",
-    "path": "/nano-explorer-extra/rename",
-    "methods": [
-      "POST"
-    ],
-    "bodyLimit": 65536,
-    "sensitivity": "L1",
-    "capability": "write:workspace",
-    "sessionBinding": true,
-    "justification": "dsh-nano-explorer-extra/src/host/routes.js:324 + mutate.js \u2014 rename/move inside the workspace; bounded write once realpath fencing is in place."
-  },
-  {
-    "id": "dnee.move",
-    "plugin": "dsh-nano-explorer-extra",
-    "channel": "http",
-    "match": "exact",
-    "path": "/nano-explorer-extra/move",
-    "methods": [
-      "POST"
-    ],
-    "bodyLimit": 65536,
-    "sensitivity": "L1",
-    "capability": "write:workspace",
-    "sessionBinding": true,
-    "justification": "dsh-nano-explorer-extra/src/host/routes.js:340 + mutate.js \u2014 move entries inside the workspace; bounded write (symlink-escape fence pending)."
-  },
-  {
-    "id": "dnee.delete",
-    "plugin": "dsh-nano-explorer-extra",
-    "channel": "http",
-    "match": "exact",
-    "path": "/nano-explorer-extra/delete",
-    "methods": [
-      "POST"
-    ],
-    "bodyLimit": 65536,
-    "sensitivity": "L1",
-    "capability": "write:workspace",
-    "sessionBinding": true,
-    "justification": "dsh-nano-explorer-extra/src/host/routes.js:358 + mutate.js \u2014 delete inside the workspace (root itself refused); bounded write once fenced."
-  },
-  {
-    "id": "dnee.ignored",
-    "plugin": "dsh-nano-explorer-extra",
-    "channel": "http",
-    "match": "exact",
-    "path": "/nano-explorer-extra/ignored",
-    "methods": [
-      "POST"
-    ],
-    "bodyLimit": 65536,
-    "sensitivity": "L0",
-    "capability": "read:workspace",
-    "sessionBinding": true,
-    "justification": "dsh-nano-explorer-extra/src/host/routes.js:373 \u2014 `git check-ignore` style read over workspace paths; no write, no secret."
-  },
-  {
-    "id": "dnee.list",
-    "plugin": "dsh-nano-explorer-extra",
-    "channel": "http",
-    "match": "exact",
-    "path": "/nano-explorer-extra/list",
-    "methods": [
-      "POST"
-    ],
-    "bodyLimit": 65536,
-    "sensitivity": "L2",
-    "capability": "read:host",
-    "sessionBinding": true,
-    "justification": "dsh-nano-explorer-extra/src/host/routes.js:384 \u2014 directory listing never fenced to the workspace (finding nxe:routes-read-arbitrary-file, accepted); enumerates arbitrary host dirs = host-level read."
-  },
-  {
-    "id": "dnee.perf-review.host",
-    "plugin": "dsh-nano-explorer-extra",
-    "channel": "http",
-    "match": "exact",
-    "path": "/nano-explorer-extra/perf-review/host",
-    "methods": [
-      "GET"
-    ],
-    "bodyLimit": 0,
-    "sensitivity": "L2",
-    "capability": "read:host",
-    "sessionBinding": false,
-    "justification": "dsh-nano-explorer-extra/src/host/routes.js:400 \u2014 process-global perf reservoir; mode=window drains samples across all plugins/sessions (finding perf-review-window-drain, accepted). Cross-session process state, not session-scoped."
-  },
-  {
-    "id": "dnee.read",
-    "plugin": "dsh-nano-explorer-extra",
-    "channel": "http",
-    "match": "exact",
-    "path": "/nano-explorer-extra/read",
-    "methods": [
-      "POST"
-    ],
-    "bodyLimit": 65536,
-    "sensitivity": "L2",
-    "capability": "read:host",
-    "sessionBinding": true,
-    "justification": "dsh-nano-explorer-extra/src/host/routes.js:412 \u2014 returns any UTF-8 host file up to 1 MiB; client may pass allowOutsideWorkspace:true to skip the fence (finding routes-read-arbitrary-file, accepted). Host-level read."
-  }
-];
+var BINDING_TABLE = Object.freeze([
+  { "id": "dnee.status", "plugin": "dsh-nano-explorer-extra", "channel": "http", "match": "exact", "path": "/nano-explorer-extra/status", "methods": ["GET"], "bodyLimit": 0, "sensitivity": "L0", "capability": "proc:git", "sessionBinding": true, "justification": "dsh-nano-explorer-extra/src/host/routes.js:226 \u2014 read-only git status/stats for one session workspace; returns no secrets. scopeOf resolves caller-supplied sessionId (finding scopeof-cross-session, harden) \u2014 session-scoped read by design." },
+  { "id": "dnee.commit", "plugin": "dsh-nano-explorer-extra", "channel": "http", "match": "exact", "path": "/nano-explorer-extra/commit", "methods": ["POST"], "bodyLimit": 65536, "sensitivity": "L2", "capability": "proc:git", "sessionBinding": true, "justification": "dsh-nano-explorer-extra/src/host/routes.js:261 \u2014 runs `git add --all` + `git commit` as the host user; executes a process and can invoke attacker-controlled .git filter drivers (finding git-config-filter-exec). Host-level exec." },
+  { "id": "dnee.pull", "plugin": "dsh-nano-explorer-extra", "channel": "http", "match": "exact", "path": "/nano-explorer-extra/pull", "methods": ["POST"], "bodyLimit": 65536, "sensitivity": "L2", "capability": "proc:git", "sessionBinding": true, "justification": "dsh-nano-explorer-extra/src/host/routes.js:273 \u2014 `git pull --ff-only`: host process exec + outbound net to the configured remote + merge writes into the workspace." },
+  { "id": "dnee.fetch", "plugin": "dsh-nano-explorer-extra", "channel": "http", "match": "exact", "path": "/nano-explorer-extra/fetch", "methods": ["POST"], "bodyLimit": 65536, "sensitivity": "L2", "capability": "proc:git", "sessionBinding": true, "justification": "dsh-nano-explorer-extra/src/host/routes.js \u2014 `git fetch --all --prune`: host process exec + outbound net to configured remotes; rewrites refs/remotes but never touches workspace files." },
+  { "id": "dnee.push", "plugin": "dsh-nano-explorer-extra", "channel": "http", "match": "exact", "path": "/nano-explorer-extra/push", "methods": ["POST"], "bodyLimit": 65536, "sensitivity": "L2", "capability": "proc:git", "sessionBinding": true, "justification": "dsh-nano-explorer-extra/src/host/routes.js \u2014 `git push` or `git push -u <remote> HEAD`: host process exec + outbound net to a configured or caller-named remote; publishes commits off the machine." },
+  { "id": "dnee.remote", "plugin": "dsh-nano-explorer-extra", "channel": "http", "match": "exact", "path": "/nano-explorer-extra/remote", "methods": ["POST"], "bodyLimit": 65536, "sensitivity": "L2", "capability": "proc:git", "sessionBinding": true, "justification": "dsh-nano-explorer-extra/src/host/routes.js \u2014 `git remote add|set-url|remove`: host process exec that rewrites .git/config; the URL operand steers where later pushes send the tree." },
+  { "id": "dnee.author", "plugin": "dsh-nano-explorer-extra", "channel": "http", "match": "exact", "path": "/nano-explorer-extra/author", "methods": ["POST"], "bodyLimit": 65536, "sensitivity": "L1", "capability": "proc:git", "sessionBinding": true, "justification": "dsh-nano-explorer-extra/src/host/routes.js \u2014 `git config user.name|user.email` (local only): writes .git/config; no process exec beyond the config setter itself, no network." },
+  { "id": "dnee.ssh-key", "plugin": "dsh-nano-explorer-extra", "channel": "http", "match": "exact", "path": "/nano-explorer-extra/ssh-key", "methods": ["POST"], "bodyLimit": 65536, "sensitivity": "L1", "capability": "proc:git", "sessionBinding": true, "justification": "dsh-nano-explorer-extra/src/host/routes.js \u2014 writes  (local only) to .git/config: binds a repo-local SSH identity; key path is validated against quotes/newlines before being embedded; no process exec beyond the config setter itself." },
+  { "id": "dnee.checkout", "plugin": "dsh-nano-explorer-extra", "channel": "http", "match": "exact", "path": "/nano-explorer-extra/checkout", "methods": ["POST"], "bodyLimit": 65536, "sensitivity": "L2", "capability": "proc:git", "sessionBinding": true, "justification": "dsh-nano-explorer-extra/src/host/routes.js:285 \u2014 `git checkout` as the host user; process exec that can rewrite workspace files and trigger smudge filters." },
+  { "id": "dnee.create-file", "plugin": "dsh-nano-explorer-extra", "channel": "http", "match": "exact", "path": "/nano-explorer-extra/create-file", "methods": ["POST"], "bodyLimit": 65536, "sensitivity": "L1", "capability": "write:workspace", "sessionBinding": true, "justification": "dsh-nano-explorer-extra/src/host/routes.js:297 + mutate.js \u2014 bounded write of a new file inside the session workspace after resolve+policy check; symlink-escape fence is the P2 harden item." },
+  { "id": "dnee.create-folder", "plugin": "dsh-nano-explorer-extra", "channel": "http", "match": "exact", "path": "/nano-explorer-extra/create-folder", "methods": ["POST"], "bodyLimit": 65536, "sensitivity": "L1", "capability": "write:workspace", "sessionBinding": true, "justification": "dsh-nano-explorer-extra/src/host/routes.js:310 + mutate.js \u2014 bounded mkdir inside the session workspace; same realpath-fence hardening as the other mutations." },
+  { "id": "dnee.rename", "plugin": "dsh-nano-explorer-extra", "channel": "http", "match": "exact", "path": "/nano-explorer-extra/rename", "methods": ["POST"], "bodyLimit": 65536, "sensitivity": "L1", "capability": "write:workspace", "sessionBinding": true, "justification": "dsh-nano-explorer-extra/src/host/routes.js:324 + mutate.js \u2014 rename/move inside the workspace; bounded write once realpath fencing is in place." },
+  { "id": "dnee.move", "plugin": "dsh-nano-explorer-extra", "channel": "http", "match": "exact", "path": "/nano-explorer-extra/move", "methods": ["POST"], "bodyLimit": 65536, "sensitivity": "L1", "capability": "write:workspace", "sessionBinding": true, "justification": "dsh-nano-explorer-extra/src/host/routes.js:340 + mutate.js \u2014 move entries inside the workspace; bounded write (symlink-escape fence pending)." },
+  { "id": "dnee.delete", "plugin": "dsh-nano-explorer-extra", "channel": "http", "match": "exact", "path": "/nano-explorer-extra/delete", "methods": ["POST"], "bodyLimit": 65536, "sensitivity": "L1", "capability": "write:workspace", "sessionBinding": true, "justification": "dsh-nano-explorer-extra/src/host/routes.js:358 + mutate.js \u2014 delete inside the workspace (root itself refused); bounded write once fenced." },
+  { "id": "dnee.ignored", "plugin": "dsh-nano-explorer-extra", "channel": "http", "match": "exact", "path": "/nano-explorer-extra/ignored", "methods": ["POST"], "bodyLimit": 65536, "sensitivity": "L0", "capability": "read:workspace", "sessionBinding": true, "justification": "dsh-nano-explorer-extra/src/host/routes.js:373 \u2014 `git check-ignore` style read over workspace paths; no write, no secret." },
+  { "id": "dnee.list", "plugin": "dsh-nano-explorer-extra", "channel": "http", "match": "exact", "path": "/nano-explorer-extra/list", "methods": ["POST"], "bodyLimit": 65536, "sensitivity": "L2", "capability": "read:host", "sessionBinding": true, "justification": "dsh-nano-explorer-extra/src/host/routes.js:384 \u2014 directory listing never fenced to the workspace (finding nxe:routes-read-arbitrary-file, accepted); enumerates arbitrary host dirs = host-level read." },
+  { "id": "dnee.perf-review.host", "plugin": "dsh-nano-explorer-extra", "channel": "http", "match": "exact", "path": "/nano-explorer-extra/perf-review/host", "methods": ["GET"], "bodyLimit": 0, "sensitivity": "L2", "capability": "read:host", "sessionBinding": false, "justification": "\u53EA\u8BFB\u5168\u8FDB\u7A0B\u89C6\u56FE\u3002\u4E0D\u6392\u7A7A\uFF0C\u53EA\u63A5\u53D7 since\u3002" },
+  { "id": "dnee.read", "plugin": "dsh-nano-explorer-extra", "channel": "http", "match": "exact", "path": "/nano-explorer-extra/read", "methods": ["POST"], "bodyLimit": 65536, "sensitivity": "L2", "capability": "read:host", "sessionBinding": true, "justification": "dsh-nano-explorer-extra/src/host/routes.js:412 \u2014 returns any UTF-8 host file up to 1 MiB; client may pass allowOutsideWorkspace:true to skip the fence (finding routes-read-arbitrary-file, accepted). Host-level read." }
+]);
 
 // src/host/git.js
 var GIT_TOMBSTONES = [
@@ -2102,9 +2134,8 @@ function createRoutes(ctx, config) {
   const fs = () => ctx.fs;
   const external = (request) => runExternal(ctx, config, request);
   const review = ensurePerfReviewHost().hostJoin("nano-explorer-extra", {
-    version: true ? "0.3.0" : void 0,
+    version: true ? "0.3.0" : void 0
     // This host bundle's own copy of the library version (A3 / §10.4.4).
-    libVersion: LIB_VERSION
   });
   return {
     "/status": {
@@ -2345,22 +2376,20 @@ function createRoutes(ctx, config) {
       async run(req) {
         const body = await jsonBody(req);
         const { root } = await scopeOf(ctx, body.sessionId);
-        return review.hostSpan("list", () => listDirectory(fs(), {
+        return listDirectory(fs(), {
           workspaceRoot: root,
           path: typeof body.path === "string" ? body.path : "",
           allowOutsideWorkspace: body.allowOutsideWorkspace === true
-        }, { maxEntries: config.listingMaxEntries }));
+        }, { maxEntries: config.listingMaxEntries });
       }
     },
-    /* A1: the browser cannot read host.json from disk. This route is the
-       bridge. `mode=window` drains the per-scenario window (lab calls it at
-       scenario start and end); the default returns a non-destructive
-       cumulative snapshot for the page's low-frequency poll. */
+    /* Read-only process view. The registrar calls handleHostRead for this
+       path. `mode` is rejected. This entry exists so the route scanner still
+       sees the GET. */
     "/perf-review/host": {
       method: "GET",
-      async run(req) {
-        const url = new URL(String(req.url), "http://localhost");
-        return url.searchParams.get("mode") === "window" ? review.takeWindow() : review.snapshot();
+      async run() {
+        throw new Error("perf-review host is served by handleHostRead");
       }
     },
     /* Read one file as UTF-8, capped — enough to seed a notepad note.
@@ -2400,7 +2429,7 @@ function createRoutes(ctx, config) {
 function registerRoutes2(ctx, routes) {
   const bindings = BINDING_TABLE.map((row) => ({
     ...row,
-    handler: async (req, res) => {
+    handler: row.id === "dnee.perf-review.host" ? (req, res) => handleHostRead(req, res, ensurePerfReviewHost()) : async (req, res) => {
       const suffix = row.path.slice(PREFIX.length);
       const route = routes[suffix];
       try {
@@ -2411,7 +2440,11 @@ function registerRoutes2(ctx, routes) {
       }
     }
   }));
-  const registrar = createWebRegistrar({ plugin: PLUGIN, bindings });
+  const registrar = createWebRegistrar({
+    plugin: PLUGIN,
+    bindings,
+    observe: (event) => globalThis[Symbol.for("dsh.perfReviewHost.v2")]?.observe?.(event)
+  });
   return [registrar.registerAll(ctx)];
 }
 

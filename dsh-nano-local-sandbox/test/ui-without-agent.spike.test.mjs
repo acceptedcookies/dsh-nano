@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { registerRoutes } from '../lib/route-guard.js'
-import { ROUTE_TABLE } from '../lib/route-table.js'
+import { BINDING_TABLE } from '../lib/bindings.js'
 import { routeSpecs } from '../src/host/routes.js'
 import { ERROR_CATALOG } from '../src/host/error-catalog.js'
 
@@ -27,7 +27,7 @@ function host(rejection) {
 
 test('a shot with no agent is not 200, and rejection runs before the handler', async () => {
   const denied = host(() => 401)
-  registerRoutes(denied.ctx, routeSpecs(), { table: ROUTE_TABLE, plugin: 'dsh-nano-local-sandbox' })
+  registerRoutes(denied.ctx, routeSpecs(), { table: BINDING_TABLE, plugin: 'dsh-nano-local-sandbox' })
   const shot = denied.registered.find((route) => route.path === '/nano-local-sandbox/shot')
   let deniedBody
   const res = { statusCode: 0, end(payload) { deniedBody = payload } }
@@ -36,7 +36,7 @@ test('a shot with no agent is not 200, and rejection runs before the handler', a
   assert.equal(deniedBody, undefined)
 
   const open = host(() => undefined)
-  registerRoutes(open.ctx, routeSpecs({ mcpConnections: 0 }), { table: ROUTE_TABLE, plugin: 'dsh-nano-local-sandbox' })
+  registerRoutes(open.ctx, routeSpecs({ mcpConnections: 0 }), { table: BINDING_TABLE, plugin: 'dsh-nano-local-sandbox' })
   const live = open.registered.find((route) => route.path === '/nano-local-sandbox/shot')
   let body = ''
   const okRes = {

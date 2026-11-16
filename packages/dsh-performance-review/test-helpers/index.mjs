@@ -67,3 +67,28 @@ export function fakeEnv(overrides = {}) {
     performance: perf,
   }
 }
+
+/**
+ * Plugin-neutral three-way check (T-O-PRE1116-09.7): implanted key names must
+ * equal the declaration key set, and every contract id must exist on the
+ * binding table or the MCP schema. No plugin names are built in.
+ */
+export function reconcileDeclaration({ declaration, implantedKeys, bindingIds = [], mcpMethods = [] }) {
+  const declared = new Set([
+    ...(declaration?.keys?.spans ?? []),
+    ...(declaration?.keys?.tracks ?? []).map(track => track.name),
+    ...(declaration?.keys?.usage ?? []),
+    ...(declaration?.keys?.hostSpans ?? []),
+  ])
+  const implanted = new Set(implantedKeys ?? [])
+  const missingInCode = [...declared].filter(key => !implanted.has(key))
+  const missingInDecl = [...implanted].filter(key => !declared.has(key))
+  const known = new Set([...(bindingIds ?? []), ...(mcpMethods ?? [])])
+  const unknownContract = (declaration?.contract ?? []).filter(id => !known.has(id))
+  return {
+    ok: missingInCode.length === 0 && missingInDecl.length === 0 && unknownContract.length === 0,
+    missingInCode,
+    missingInDecl,
+    unknownContract,
+  }
+}

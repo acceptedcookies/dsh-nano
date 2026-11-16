@@ -43,28 +43,27 @@ const lineOf = (text, needle, fromIndex = 0) => {
 }
 
 /**
- * Parse a baked CF1115 `lib/bindings.js` (channel/match ledger rows) into
- * route-scan rows. Only `channel:'http'` rows surface in the web-route
- * inventory — upgrade bindings live on the WS channel, outside the
- * route-sensitivity route set. bodyLimit is per-method (0 for GET/HEAD).
+ * Parse a baked `lib/bindings.js` into route-scan rows. http and upgrade
+ * both belong in the ledger (T-O-PRE1116-05.1). bodyLimit is per-method
+ * (0 for GET/HEAD).
  * @param {string} file - source path (for the provenance line)
  * @param {string} text - lib/bindings.js contents
  * @param {string} plugin - plugin package name
  */
 function parseBindings(file, text, plugin) {
   const rows = []
-  const re = /\{\s*id:\s*'([^']+)'[\s\S]*?channel:\s*'(http|upgrade)'[\s\S]*?match:\s*'(exact|prefix)'[\s\S]*?path:\s*'([^']+)'[\s\S]*?methods:\s*\[([^\]]*)\][\s\S]*?bodyLimit:\s*(\d+)/g
+  const re = /\{\s*"id"\s*:\s*"([^"]+)"[\s\S]*?"channel"\s*:\s*"(http|upgrade)"[\s\S]*?"match"\s*:\s*"(exact|prefix)"[\s\S]*?"path"\s*:\s*"([^"]+)"[\s\S]*?"methods"\s*:\s*\[([^\]]*)\][\s\S]*?"bodyLimit"\s*:\s*(\d+)/g
   for (const match of text.matchAll(re)) {
     const [, id, channel, , path, methodBlock, cap] = match
-    if (channel !== 'http') continue // upgrade surfaces are not web routes
-    const methods = [...methodBlock.matchAll(/'(GET|HEAD|POST|PUT|DELETE|PATCH)'/g)].map(m => m[1])
+    const methods = [...methodBlock.matchAll(/"(GET|HEAD|POST|PUT|DELETE|PATCH)"/g)].map(m => m[1])
+    void channel
     if (methods.length === 0) continue
     rows.push({
       plugin,
       path,
       methods,
       bodyLimit: Object.fromEntries(methods.map(m => [m, m === 'GET' || m === 'HEAD' ? 0 : Number(cap)])),
-      source: { file, line: lineOf(text, `id: '${id}'`) },
+      source: { file, line: lineOf(text, `"id":"${id}"`) },
     })
   }
   return rows
@@ -142,6 +141,7 @@ function scanModelSelector() {
   const asyncCompact = consts.ASYNC_COMPACT_ROUTE
   const asyncCompactBundle = consts.ASYNC_COMPACT_BUNDLE_ROUTE
   const asyncCompactSwitch = consts.ASYNC_COMPACT_SWITCH_ROUTE
+  const perfReviewHost = consts.PERF_REVIEW_HOST_ROUTE
   // PUT body cap is the literal in readBody(req, 16384) inside mediaHandler /
   // asyncCompactHandlers (the same helper, same literal).
   const putCap = (() => {
@@ -193,6 +193,13 @@ function scanModelSelector() {
       // -20⑦: switch body is {"enabled":boolean} — hard cap 1024.
       bodyLimit: { POST: 1024 },
       source: { file, line: lineOf(text, 'const ASYNC_COMPACT_SWITCH_ROUTE =') },
+    },
+    {
+      plugin: 'dsh-nano-model-selector',
+      path: perfReviewHost,
+      methods: ['GET'],
+      bodyLimit: { GET: 0 },
+      source: { file, line: lineOf(text, 'const PERF_REVIEW_HOST_ROUTE =') },
     },
   ]
   return rows
@@ -247,7 +254,7 @@ function scanKitesurf() {
 
 function tableRows(text) {
   const rows = []
-  const re = /"path": "([^"]+)"[\s\S]*?"methods": \[([^\]]*)\][\s\S]*?"bodyLimit": (\d+)/g
+  const re = /"path"\s*:\s*"([^"]+)"[\s\S]*?"methods"\s*:\s*\[([^\]]*)\][\s\S]*?"bodyLimit"\s*:\s*(\d+)/g
   for (const match of text.matchAll(re)) {
     const methods = [...match[2].matchAll(/"([A-Z]+)"/g)].map((item) => item[1])
     rows.push({ path: match[1], methods, bodyLimit: Number(match[3]) })
@@ -289,14 +296,13 @@ export function scanLocalSandboxSource(text, tableText, file = 'dsh-nano-local-s
 function scanLocalSandbox() {
   return scanLocalSandboxSource(
     src('dsh-nano-local-sandbox/src/host/routes.js'),
-    src('dsh-nano-local-sandbox/lib/route-table.js'),
+    src('dsh-nano-local-sandbox/lib/bindings.js'),
   )
 }
 
 function scanTerminal() {
-  // CF1115: terminal web surfaces are declared in lib/bindings.js (the baked
-  // channel/match ledger) and registered through lib/web-routes.js. The
-  // channel:'upgrade' stream binding is excluded — upgrades are not web routes.
+  // Terminal surfaces, including the upgrade stream, are declared in
+  // lib/bindings.js. Upgrade rows stay in the ledger (T-O-PRE1116-05.1).
   const file = 'dsh-nano-terminal/lib/bindings.js'
   const text = src(file)
   const rows = parseBindings(file, text, 'dsh-nano-terminal')

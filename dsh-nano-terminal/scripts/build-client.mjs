@@ -1,9 +1,18 @@
+import { spawnSync } from 'node:child_process'
 import { createRequire } from 'node:module'
 import { readFileSync, writeFileSync, rmSync, mkdirSync, copyFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { dnprDefine } from '../../scripts/dnpr-define.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
+{
+  const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
+  const baked = spawnSync(process.execPath, [join(root, '..', 'scripts/bake-plugin-bindings.mjs'), '--plugin', pkg.name], { stdio: 'inherit' })
+  if (baked.status !== 0) process.exit(baked.status ?? 1)
+  const decl = spawnSync(process.execPath, [join(root, '..', 'scripts/bake-declaration.mjs'), '--plugin', pkg.name], { stdio: 'inherit' })
+  if (decl.status !== 0) process.exit(decl.status ?? 1)
+}
 const body = join(root, 'lib/client.body.js')
 
 const require = createRequire(join(root, 'package.json'))
@@ -20,6 +29,14 @@ mkdirSync(join(root, 'lib'), { recursive: true })
 // Host halves: index.js is unbundled and imports ./lib/*.js at runtime. The dev
 // instance copies lib/ but not node_modules — our host files have no external
 // deps, so bundling is just concatenation for a stable lib/ surface.
+esbuild.buildSync({
+  absWorkingDir: root, logLevel: 'warning',
+  entryPoints: [join(root, '../packages/dsh-performance-review/src/host.js')],
+  bundle: true, format: 'esm', platform: 'node',
+  define: dnprDefine,
+  outfile: join(root, 'lib/perf-review-host.js'),
+})
+
 for (const name of ['sessions', 'mcp', 'ws', 'mirror', 'events', 'errors', 'gate', 'wait', 'persist', 'notes', 'templates', 'web-routes']) {
   esbuild.buildSync({
     absWorkingDir: root, logLevel: 'warning',

@@ -27,7 +27,7 @@
 | `lib/engine.js` | CDP 客户端。运行时必需。不持有模块级页面 socket |
 | `lib/skill.js` | 两份技能正文的单一真源。运行时必需 |
 | `lib/route-guard.js` | 路由注册 guard bundle。运行时必需 |
-| `lib/route-table.js` | 空路由表。本包不再拥有页面路由 |
+| `lib/bindings.js` | 空绑定表。页面路由不在本包，从账本按 id 烘焙 |
 | `lib/perf-host.js` | perf-review host bundle。运行时必需 |
 | `lib/client.js` | 浏览器包。运行时必需。安装时不重建。页面请求打到本地沙箱宿主 |
 | `icon.svg`、`locale/` | 图标与中英文案 |
@@ -43,6 +43,7 @@ client inject 以 `package.json` 的 `dsh.client.inject` 为准，不在这里�
 3. 目标是已经能打开的 Web profile，默认名 `web`。不要装进 headless、sdk 或 acp。
 4. 引擎不在本包里。容器的构建和启动不由本包执行。没有引擎时插件仍能装上，面板可以显示 engine down。
 5. 本包构建期依赖 `dsh-host-route-guard`，声明为 `devDependencies` 的 `file:../packages/dsh-host-route-guard`。`npm install`/`npm run build` 时解析这个相对路径；构建时它被打进 `lib/route-guard.js`。不要改这条依赖。
+6. 本包构建期依赖 `dsh-performance-review`，声明为 `devDependencies` 的 `file:../packages/dsh-performance-review`。它被打进 `lib/client.js` 与 `lib/perf-host.js`；页面侧手动 join，宿主侧采集。不要改这条依赖。
 
 未被告知 `DSH_HOME` 或 profile 名时，只动默认的 `web`。不要猜第二套实例。
 
@@ -102,10 +103,10 @@ dsh plugin --profile web add <spec>
 | POST | `见 QNA edit` | `{selector, text}`：把文本写回该元素（双击就地改字），≤4000 字符 |
 | POST | `见 QNA settings` | `{ userAgent?, viewport?, media?, extraHeaders? }`：viewport `{width:320..3840, height:240..2160, mobile?, deviceScaleFactor?:1\|2\|3}` 或 `null`；media `screen\|print\|null`；extraHeaders ≤20 项（禁 cookie/authorization 等）；全部事务性，失败回滚 |
 | POST | `见 QNA kite` | `{action: init\|start\|suspend\|resume\|configure, httpBase?, mcpPort?}` |
-| GET/POST | `见 QNA perf-review/host` | 进程 perf 快照；`?mode=window` 会清空全局桶，只允许 POST |
+| — | 本包不拥有 `/perf-review/host` | 只读视图在资源管理器、记事本和模型选择器上 |
 | GET/POST | `见 QNA console` | 页面 console/exception/network/navigation 环形缓冲；`?level=error,exception&limit=50`；`POST {"clear":true}` 清空 |
 | GET/POST | `见 QNA operations` | 每次路由调用的执行埋点（route/status/errorId/耗时/输入摘要）；`?errorsOnly=true`；`POST {"clear":true}` 清空 |
-| GET | `见 QNA diagnostics` | 一击全量诊断：status + target 列表 + console + 操作 trace + errorCatalog + perf + 自动 hints |
+| GET | `见 QNA diagnostics` | 一击全量诊断：status + target 列表 + console + 操作 trace + errorCatalog + 自动 hints |
 | GET | `见 QNA targets` | 引擎 `Target.getTargets`（page target id/url、当前附着页） |
 | POST | `见 QNA evaluate` | `{expression}` 在引擎页面执行有界 JS（≤2000 字符，returnByValue，结果 ≤4000 字符） |
 
@@ -129,13 +130,7 @@ MCP 客户端
 
 宿主配置可省略。要写就写在 profile 的 patch 里。
 
-```yaml
-- id: nano-kitesurf
-  config:
-    perfReview: true              # 可选：perf-span 采集开启（等价 DSH_PERF_REVIEW=1，仅本插件进程）
-```
-
-本包不读取 checkout 环境变量，也不启动容器。点选结果只在宿主进程内存里，重启即丢。卸载不需要清浏览器存储，因为没有。
+本包不读取 checkout 环境变量，也不启动容器。采集开关不在本包配置里。点选结果只在宿主进程内存里，重启即丢。卸载不需要清浏览器存储，因为没有。
 
 ## 构建
 

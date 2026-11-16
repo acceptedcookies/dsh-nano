@@ -12,7 +12,6 @@ const ALLOW = [
   'docs/specs/dsh-nano-local-sandbox/plan/DNLS01-macos-platform-cutover.md',
   'docs/specs/dsh-nano-local-sandbox/closure/DNLS01-full-close.md',
   'docs/specs/dsh-nano-model-selector/qna/DNMS01-qna.md',
-  // An early review note that lists the retired route in a "do not build" table.
   'docs/code-review/26-nov/PRE-1116-qna.md',
 ]
 

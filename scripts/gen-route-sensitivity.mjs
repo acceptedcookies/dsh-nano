@@ -3,10 +3,10 @@
  * Regenerate security/route-sensitivity.json from the plugin code.
  *
  * Paths/methods/bodyLimit are read from code via scripts/route-scan.mjs.
- * sensitivity / capability / sessionBinding / justification are hand-reviewed
- * fields: when a matching row already exists in the JSON they are carried over;
- * a brand-new route gets a "REVIEW" marker so the run fails review instead of
- * silently shipping an ungraded route.
+ * sensitivity / capability / sessionBinding / justification / id / channel / match
+ * are hand-reviewed fields: when a matching row already exists they are carried
+ * over. A path with no authored id/channel/match fails the run. Ids are never
+ * derived from the path (T-O-PRE1116-05).
  *
  * Usage:
  *   node scripts/gen-route-sensitivity.mjs           # print JSON to stdout
@@ -35,7 +35,7 @@ const HEADER = {
   purpose:
     'Per-route sensitivity ledger for dsh-host-route-guard (T-O-2 / T-O-7). One row per registered path (43 total). sensitivity = validation strength required when a same-origin page script calls the route: L0 read-only/no-secret, L1 bounded workspace write, L2 host-level capability, L3 operator config. bodyLimit is the route-level cap (max over methods; GET/HEAD carry no body). sessionBinding records whether the route takes a sessionId; it is metadata, not a runtime assertion (M8).',
   generatedBy:
-    'scripts/gen-route-sensitivity.mjs (paths/methods/bodyLimit from code; sensitivity/capability/justification hand-reviewed and preserved on merge)',
+    'scripts/gen-route-sensitivity.mjs (paths/methods/bodyLimit from code; sensitivity/capability/justification/id/channel/match hand-reviewed and preserved on merge)',
 }
 
 function main() {
@@ -43,15 +43,22 @@ function main() {
   const existing = loadExisting()
   const routes = code.map(row => {
     const prior = existing.get(row.path)
+    if (!prior || typeof prior.id !== 'string' || prior.id === '' || !prior.channel || !prior.match) {
+      console.error(`gen-route-sensitivity: ${row.path} has no authored id/channel/match; refusing to derive an id from the path`)
+      process.exit(1)
+    }
     return {
       plugin: row.plugin,
       path: row.path,
       methods: row.methods,
-      sensitivity: prior?.sensitivity ?? 'REVIEW',
-      capability: prior?.capability ?? 'REVIEW',
+      sensitivity: prior.sensitivity ?? 'REVIEW',
+      capability: prior.capability ?? 'REVIEW',
       bodyLimit: routeBodyLimit(row),
-      sessionBinding: prior?.sessionBinding ?? false,
-      justification: prior?.justification ?? `AUTO — review me (registered at ${row.source.file}:${row.source.line})`,
+      sessionBinding: prior.sessionBinding ?? false,
+      justification: prior.justification ?? `AUTO — review me (registered at ${row.source.file}:${row.source.line})`,
+      id: prior.id,
+      channel: prior.channel,
+      match: prior.match,
     }
   })
   const out = JSON.stringify({ ...HEADER, routes }, null, 2) + '\n'

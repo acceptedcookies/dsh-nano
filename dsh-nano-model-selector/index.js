@@ -1,7 +1,7 @@
 /** Host half. Exposes an enriched model catalog and the media engine routes for the browser selector. */
 
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { readFileSync } from 'node:fs'
 import { defaultEngine, imagineSkill, imagineStub, readEngine, scanEngines, writeEngine } from './lib/host-media.js'
 import { ensurePerfReviewHost, LIB_VERSION } from './lib/perf-review-host.js'
@@ -50,6 +50,28 @@ const ASYNC_COMPACT_PATH = join(
   process.env.DSH_DATA_DIR ?? process.env.DSH_HOME ?? join(homedir(), '.dsh'),
   'plugins', 'nano-model-selector', 'async-compact.json',
 )
+
+/**
+ * Async-compaction audit ledger directory (DNMS01 observability).
+ *
+ * The companion bundle `dsh-nano-model-selector-compaction` is the ONLY writer:
+ * it appends one JSON line per engine decision to `<sessionId>.jsonl` here.
+ * This half only reads it. The location is the same plugin state directory the
+ * policy file already lives in — a published contract between DNMS and its own
+ * companion, not a private side channel between unrelated plugins.
+ */
+const ASYNC_HISTORY_DIR = join(dirname(ASYNC_COMPACT_PATH), 'async-history')
+
+/** Ledger read cap: the newest N records are enough for one dialog. */
+const ASYNC_HISTORY_LIMIT = 200
+
+/** Freshness windows for the live phase derived from the ledger tail. */
+const ASYNC_ARMED_TTL_MS = 15 * 60 * 1000
+const ASYNC_RUNNING_TTL_MS = 3 * 60 * 1000
+const ASYNC_FAILED_TTL_MS = 10 * 60 * 1000
+
+/** Session ids only; anything else could escape the ledger directory. */
+const ASYNC_HISTORY_ID = /^(?!\.{1,2}$)[A-Za-z0-9._-]{1,128}$/
 
 /** Reuse a built catalog this long; the selector does not need per-open freshness. */
 const CATALOG_TTL_MS = 15000
@@ -254,9 +276,117 @@ async function policyWindow(ctx, model) {
 }
 
 /**
+ * `?sessionId=` opts into the audit ledger; without it the response keeps its
+ * original shape so existing callers see no change.
+ * @param {import('node:http').IncomingMessage} req
+ * @returns {ReturnType<typeof readAsyncHistory>|undefined}
+ */
+function historyQuery(req) {
+  try {
+    const sessionId = new URL(req.url ?? '/', 'http://localhost').searchParams.get('sessionId')
+    return sessionId === null || sessionId.length === 0 ? undefined : readAsyncHistory(sessionId)
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * Read one session's async-compaction ledger (newest last).
+ *
+ * Degrades instead of failing: a missing ledger is `records: []` with
+ * `degraded: null` (the engine simply never decided anything for this
+ * session), while an unreadable one reports `degraded: 'history-read-failed'`
+ * so the dialog can say why the timeline is empty.
+ *
+ * @param {string} sessionId
+ * @returns {{sessionId: string, records: object[], summary: object, degraded: string|null}}
+ */
+export function readAsyncHistory(sessionId) {
+  const empty = {
+    sessionId,
+    records: [],
+    summary: { arm: 0, claim: 0, commit: 0, drop: 0, skip: 0, lastCommitAt: null, lastDropReason: null },
+    phase: { state: 'idle', since: null, model: null, promptVersion: null, reason: null, detail: null },
+    degraded: null,
+  }
+  if (!ASYNC_HISTORY_ID.test(sessionId)) return { ...empty, degraded: 'history-read-failed' }
+  let text
+  try {
+    text = readFileSync(join(ASYNC_HISTORY_DIR, `${sessionId}.jsonl`), 'utf8')
+  } catch (error) {
+    // ENOENT is the normal "no decisions yet" case, not a degradation.
+    return error?.code === 'ENOENT' ? empty : { ...empty, degraded: 'history-read-failed' }
+  }
+  const records = []
+  for (const line of text.split('\n')) {
+    if (line.length === 0) continue
+    try {
+      const record = JSON.parse(line)
+      if (record !== null && typeof record === 'object' && typeof record.kind === 'string') records.push(record)
+    } catch { /* a torn tail line is not a read failure */ }
+  }
+  const summary = { ...empty.summary }
+  for (const record of records) {
+    if (record.kind in summary) summary[record.kind] += 1
+    if (record.kind === 'commit') summary.lastCommitAt = record.at ?? null
+    if (record.kind === 'drop') summary.lastDropReason = record.reason ?? null
+  }
+  return {
+    sessionId,
+    records: records.slice(-ASYNC_HISTORY_LIMIT),
+    summary,
+    phase: derivePhase(records.at(-1)),
+    degraded: null,
+  }
+}
+
+/**
+ * Live phase of the async lane, derived from the ledger tail.
+ *
+ * The engine keeps its episode state in memory only, so the ledger is the one
+ * place the browser can learn "an episode is queued / running right now". The
+ * derivation is deliberately conservative: a record older than its window is
+ * treated as settled, because a stale `arm` (host restarted mid-episode) must
+ * never leave a permanent "compacting…" line on screen.
+ *
+ * @param {object|undefined} tail - newest ledger record.
+ * @returns {{state: 'idle'|'armed'|'running'|'failed', since: string|null, model: object|null, promptVersion: string|null, reason: string|null, detail: string|null}}
+ */
+export function derivePhase(tail) {
+  const idle = { state: 'idle', since: null, model: null, promptVersion: null, reason: null, detail: null }
+  if (tail === undefined || typeof tail.at !== 'string') return idle
+  const at = Date.parse(tail.at)
+  if (!Number.isFinite(at)) return idle
+  const age = Date.now() - at
+  const model = tail.target ?? null
+  const promptVersion = typeof tail.promptVersion === 'string' ? tail.promptVersion : null
+  // A claim is bounded by the engine's own 120 s episode timeout plus margin;
+  // an arm waits for the next idle boundary, which can be much later.
+  if (tail.kind === 'claim' && age <= ASYNC_RUNNING_TTL_MS) {
+    return { state: 'running', since: tail.at, model, promptVersion, reason: null, detail: null }
+  }
+  if (tail.kind === 'arm' && age <= ASYNC_ARMED_TTL_MS) {
+    return { state: 'armed', since: tail.at, model, promptVersion, reason: null, detail: null }
+  }
+  if (tail.kind === 'drop' && age <= ASYNC_FAILED_TTL_MS) {
+    return {
+      state: 'failed',
+      since: tail.at,
+      model,
+      promptVersion,
+      reason: tail.reason ?? null,
+      detail: tail.detail ?? null,
+    }
+  }
+  return idle
+}
+
+/**
  * GET/PUT /nano-model-selector/async-compact (L3, PUT bodyLimit 16384,
  * sessionBinding:false — T-O-DNMS01-15).
  * GET -> {...policy, effective:{pin,windowMin,dcs}, runtime:{fill,lastCompaction}};
+ * GET ?sessionId=<id> additionally returns `history` (the companion's audit
+ * ledger for that session) — additive only, the policy shape is unchanged.
  * PUT -> partial update: validatePutBody -> optional model route check ->
  * merge -> master-order -> atomic write. Every rejection is 400 with the
  * closed error-code set; nothing is written on failure.
@@ -316,6 +446,9 @@ function asyncCompactHandlers(ctx, runtimeHandle) {
     // panel never derives state itself; PUT stays fail-closed.
     const state = readState(ASYNC_COMPACT_PATH)
     if (!state.ok) {
+      // The ledger matters most in exactly this state: a broken policy is a
+      // prime suspect for "async compaction stopped", so serve it too.
+      const degradedHistory = historyQuery(req)
       sendJson(res, 200, {
         ok: true,
         policy: null,
@@ -323,14 +456,17 @@ function asyncCompactHandlers(ctx, runtimeHandle) {
         missing: false,
         runtime: runtimeHandle?.runtime(null, null, 'state-read-failed') ?? { fill: null, lastCompaction: null, degraded: 'state-read-failed' },
         bundle: await compactionBundleState(ctx),
+        ...(degradedHistory === undefined ? {} : { history: degradedHistory }),
       })
       return
     }
+    const history = historyQuery(req)
     sendJson(res, 200, {
       ok: true,
       policy: await payload(state.policy),
       missing: state.missing,
       bundle: await compactionBundleState(ctx),
+      ...(history === undefined ? {} : { history }),
     })
   }
   return handler

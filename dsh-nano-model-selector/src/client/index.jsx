@@ -1,10 +1,14 @@
 /** Browser half. The host serves this file at the package's ./client export. */
 
 import * as React from 'react'
+import { createRoot } from 'react-dom/client'
 import { ModelSelector } from './ModelSelector.jsx'
+import { AsyncHistoryDialog, historyMenuIcon } from './AsyncHistoryDialog.jsx'
+import { AsyncActivityLine } from './AsyncActivityLine.jsx'
 import { profiler } from './perf.js'
+import { copyFor } from './i18n.js'
 
-export const inject = ['slots', 'modelDirectories', 'sessions', 'locale']
+export const inject = ['slots', 'modelDirectories', 'sessions', 'locale', 'contextMenus']
 
 // Wrap with <React.Profiler> when perf-review is enabled; identity wrapper otherwise.
 const ObservedModelSelector = profiler(ModelSelector)
@@ -67,4 +71,80 @@ export function apply(ctx) {
       <ObservedModelSelector {...props} />
     </SlotBoundary>
   )))
+
+  // Async-compaction history: one entry in the session header's overflow menu
+  // opens the diagnostic dialog. The glyph registers through the shell's own
+  // icon slot so the menu row renders exactly like the shipped entries.
+  // The dialog lives in the shell overlay slot, not inside the menu: the menu
+  // unmounts on selection, the dialog must outlive it.
+  const openHistory = sessionId => {
+    const host = document.createElement('div')
+    host.className = 'nano-dialog-host'
+    document.body.append(host)
+    const root = createRoot(host)
+    const close = () => {
+      root.unmount()
+      host.remove()
+    }
+    root.render(
+      <SlotBoundary>
+        <AsyncHistoryDialog
+          copy={copyFor(ctx.locale.getSnapshot().active)}
+          sessionId={sessionId}
+          onClose={close}
+        />
+      </SlotBoundary>,
+    )
+  }
+
+  // `contextMenus` is resolved through ctx.get(): property access on a cordis
+  // context can hand back a shadow provision (the fe63eec trap), and a menu
+  // registered into a shadow looks successful while never reaching the real
+  // registry. The package also declares @deepseek-ai/dsh-client-ui-context-menu
+  // in dsh.client.inject so the loader composes this plugin into the same
+  // client scope as the shell's own menu contributors.
+  const menus = ctx.get('contextMenus') ?? ctx.contextMenus
+  ctx.effect(() => menus.register({
+    id: 'nano-model-selector.async-history',
+    target: 'sessionHeader',
+    order: 500,
+    observe: () => [ctx.locale],
+    resolve: ({ sessionId }) => [{
+      id: 'async-history',
+      label: copyFor(ctx.locale.getSnapshot().active).historyMenu,
+      icon: { key: 'nano-model-selector.async-history' },
+      run: () => openHistory(sessionId),
+    }],
+  }), 'nano-model-selector: async compaction history')
+
+  // In-flight async-compaction status, in the composer's own activity row.
+  // The shell reserves that row only while a plugin reports itself active, so
+  // the line stays invisible whenever the lane is idle.
+  ctx.slots.inject('conversation.input.activity', () => ctx.slots.register({
+    name: 'conversation.input.activity',
+    registrant: 'nano-model-selector',
+    inject: sessionId => ({
+      sessionId,
+      copy: copyFor(ctx.locale.getSnapshot().active),
+    }),
+  }, props => (
+    <SlotBoundary>
+      <AsyncActivityLine {...props} />
+    </SlotBoundary>
+  )))
+
+  // The glyph goes in through the shell's own icon slot so the row renders like
+  // the shipped entries. Guarded: a slot-contract change must degrade to a
+  // label-only row, never abort apply() and take the menu entry with it.
+  try {
+    ctx.slots.inject('contextMenu.icon', function* registerHistoryIcon() {
+      yield ctx.slots.register({
+        name: 'contextMenu.icon',
+        key: 'nano-model-selector.async-history',
+      }, historyMenuIcon)
+    })
+  } catch (error) {
+    console.warn('[nano-model-selector] context menu icon slot unavailable:', error)
+  }
+
 }

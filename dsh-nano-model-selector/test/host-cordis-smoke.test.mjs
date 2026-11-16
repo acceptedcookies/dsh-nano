@@ -119,3 +119,58 @@ test('real cordis: fail-closed without connection service', { skip: !haveCordis 
   const { apply } = await import('../index.js')
   assert.throws(() => apply(ctx), /no-connection|no-request-rejection/)
 })
+
+test('real cordis: GET async-compact?sessionId= serves the companion ledger as `history`', { skip: !haveCordis }, async () => {
+  // End-to-end through the real guard + handler: the ledger reader is only
+  // useful if the query parameter actually reaches it and the field lands in
+  // the JSON body the dialog parses.
+  const { Context, Service } = cordis
+  const ctx = new Context()
+  const { registered } = installStubs(ctx, Service)
+  const { apply } = await import('../index.js')
+  apply(ctx)
+
+  const route = registered.find(r => r.path === '/nano-model-selector/async-compact')
+  assert.ok(route !== undefined, 'async-compact route must be registered')
+
+  // Seed a ledger through the documented location only.
+  const { mkdirSync, writeFileSync } = await import('node:fs')
+  const dir = join(process.env.DSH_DATA_DIR, 'plugins/nano-model-selector/async-history')
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(join(dir, 'session-route.jsonl'), [
+    { at: '2026-11-16T03:00:00.000Z', kind: 'arm', fill: 0.71, window: 262000, retain: 39300 },
+    { at: '2026-11-16T03:00:02.000Z', kind: 'commit', compactionId: 'c-1', tokens: 862, records: 5 },
+  ].map(r => `${JSON.stringify(r)}\n`).join(''))
+
+  const invoke = async url => {
+    let body = null
+    const res = {
+      statusCode: 0,
+      headers: {},
+      setHeader(name, value) { this.headers[name] = value },
+      end(text) { body = text },
+      writeHead(code) { this.statusCode = code; return this },
+      write() {},
+    }
+    await route.handler({ method: 'GET', url, headers: { host: 'localhost' } }, res)
+    return body === null ? null : JSON.parse(body)
+  }
+
+  const withHistory = await invoke('/nano-model-selector/async-compact?sessionId=session-route')
+  assert.equal(withHistory.ok, true)
+  assert.ok(withHistory.history !== undefined, 'history must be present when sessionId is given')
+  assert.equal(withHistory.history.records.length, 2)
+  assert.equal(withHistory.history.summary.arm, 1)
+  assert.equal(withHistory.history.summary.commit, 1)
+  assert.equal(withHistory.history.degraded, null)
+
+  // Without the parameter the response keeps its original shape.
+  const withoutHistory = await invoke('/nano-model-selector/async-compact')
+  assert.equal(withoutHistory.ok, true)
+  assert.equal(withoutHistory.history, undefined, 'history must stay opt-in')
+
+  // An unknown session is an empty timeline, not an error.
+  const unknown = await invoke('/nano-model-selector/async-compact?sessionId=session-absent')
+  assert.deepEqual(unknown.history.records, [])
+  assert.equal(unknown.history.degraded, null)
+})

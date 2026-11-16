@@ -28,3 +28,14 @@ export async function putCompactPolicy(patch) {
 export async function postCompactSwitch(enabled) {
   return call(SWITCH_OP, { enabled })
 }
+
+/**
+ * GET the policy face plus the companion's audit ledger for one session.
+ * The ledger is additive (`history`), so this reuses the same route the panel
+ * already reads — no second contract, no extra route.
+ * @param {string} sessionId
+ */
+export async function fetchCompactHistory(sessionId) {
+  const op = jsonOp({ method: 'GET', url: `${BASE}?${new URLSearchParams({ sessionId }).toString()}` })
+  return call(op)
+}

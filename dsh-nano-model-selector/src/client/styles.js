@@ -189,6 +189,72 @@ select.nms-compact-input { width: 210px; cursor: pointer; }
 .nms-explain-tab:hover { color: var(--dsw-alias-label-primary); }
 .nms-explain-tab[data-active="true"] { background: var(--dsw-alias-state-business-primary); color: var(--dsw-alias-bg-layer-1); }
 .nms-explain-body { color: var(--dsw-alias-label-secondary); font-size: 11px; line-height: 16px; }
+/* ── async-compaction activity line (composer activity row) ─────────────────
+   One line, never two: the composer's activity row is narrow and grows the
+   input bar, so the text ellipsises before it can wrap. State is carried by
+   the glyph colour only — the row must stay quiet next to the composer. */
+.nms-activity { display: flex; align-items: center; gap: 6px; min-width: 0; width: 100%;
+  font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); }
+.nms-activity-glyph { display: inline-flex; align-items: center; justify-content: center;
+  flex: none; color: var(--dsw-alias-label-tertiary); }
+.nms-activity-glyph svg { display: block; }
+.nms-activity[data-state="armed"] .nms-activity-glyph { color: var(--dsw-alias-state-info-primary, #4c9aff); }
+.nms-activity[data-state="running"] .nms-activity-glyph { color: var(--dsw-alias-state-warning-primary, #d29922);
+  animation: nms-pulse 1.4s ease-in-out infinite; }
+.nms-activity[data-state="failed"] .nms-activity-glyph { color: var(--dsw-alias-state-error-primary, #f25a5a); }
+.nms-activity-text { flex: none; font-weight: 500; color: var(--dsw-alias-label-primary); white-space: nowrap; }
+.nms-activity-meta { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; color: var(--dsw-alias-label-tertiary); font-variant-numeric: tabular-nums; }
+@keyframes nms-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
+@media (prefers-reduced-motion: reduce) { .nms-activity[data-state="running"] .nms-activity-glyph { animation: none; } }
+
+/* ── async-compaction history dialog ─────────────────────────────────────────
+   Every value is a shell token: the card must follow the active theme without
+   a second palette. Layout only — no control is restyled here. */
+.nms-hist { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+.nms-hist-water { display: flex; flex-direction: column; gap: 6px; }
+.nms-hist-water-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.nms-hist-water-value { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums;
+  color: var(--dsw-alias-label-primary); line-height: 24px; }
+.nms-hist-water-caption { font-size: 11px; color: var(--dsw-alias-label-tertiary); }
+.nms-hist-water-track { position: relative; height: 8px; border-radius: 4px;
+  background: var(--dsw-alias-bg-layer-1, #202020);
+  box-shadow: inset 0 0 0 var(--dsh-hairline-width, .5px) var(--dsw-alias-border-l2); }
+.nms-hist-water-fill { position: absolute; inset: 0 auto 0 0; border-radius: 4px;
+  background: var(--dsw-alias-label-tertiary); transition: width .18s ease; }
+.nms-hist-water-fill[data-over="true"] { background: var(--dsw-alias-state-warning-primary, #d29922); }
+.nms-hist-tick { position: absolute; top: -3px; width: 0; height: 14px;
+  border-left: var(--dsh-hairline-width, .5px) dashed var(--dsw-alias-border-l2); }
+.nms-hist-tick[data-tone="buffer"] { border-left-style: solid; border-left-color: var(--dsw-alias-state-warning-primary, #d29922); }
+.nms-hist-tick[data-tone="safety"] { border-left-color: var(--dsw-alias-state-error-primary, #f25a5a); }
+.nms-hist-tick-label { position: absolute; top: 14px; left: 0; transform: translateX(-50%);
+  font-size: 10px; color: var(--dsw-alias-label-tertiary); }
+.nms-hist-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.nms-hist-stat { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px;
+  border-radius: var(--dsw-radius-sm, 8px); background: var(--dsw-alias-bg-layer-1, #202020);
+  box-shadow: inset 0 0 0 var(--dsh-hairline-width, .5px) var(--dsw-alias-border-l2); }
+.nms-hist-stat-value { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums;
+  color: var(--dsw-alias-label-primary); line-height: 20px; }
+.nms-hist-stat[data-kind="commit"] .nms-hist-stat-value { color: var(--dsw-alias-state-success-primary, #3fb950); }
+.nms-hist-stat[data-kind="drop"] .nms-hist-stat-value { color: var(--dsw-alias-state-error-primary, #f25a5a); }
+.nms-hist-stat-label { font-size: 11px; color: var(--dsw-alias-label-tertiary); }
+.nms-hist-panel { min-height: 0; }
+.nms-hist-rows { display: flex; flex-direction: column; gap: 2px; }
+.nms-hist-row-head { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 8px;
+  border: 0; border-radius: var(--dsw-radius-sm, 8px); background: transparent;
+  color: var(--dsw-alias-label-primary); font: inherit; text-align: left; cursor: pointer; }
+.nms-hist-row-head:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.nms-hist-row-headline { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; font-size: 12px; color: var(--dsw-alias-label-secondary); }
+.nms-hist-row-time { flex: none; font-size: 11px; color: var(--dsw-alias-label-tertiary); }
+.nms-hist-raw { margin: 2px 0 6px 22px; padding: 8px 10px; border-radius: var(--dsw-radius-sm, 8px);
+  background: var(--dsw-alias-bg-layer-1, #202020); color: var(--dsw-alias-label-secondary);
+  font-family: var(--dsw-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 11px; line-height: 16px; white-space: pre-wrap; word-break: break-word;
+  overflow: auto; max-height: 240px; }
+.nms-hist-diag { display: flex; flex-direction: column; min-height: 0; }
+.nms-hist-diag .nms-hist-raw { margin: 0; max-height: 46vh; }
+.nms-hist-empty { margin: 12px 0; font-size: 12px; color: var(--dsw-alias-label-tertiary); text-align: center; }
 @keyframes nms-spin { to { transform: rotate(360deg); } }
 @keyframes nms-pop { from { opacity: 0; transform: translateY(6px) scale(.985); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .nms-panel { animation: none; } .nms-trigger-chevron { transition: none; } }

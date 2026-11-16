@@ -152,9 +152,27 @@ npm run build
 | PUT | `/nano-model-selector/async-compact` | 部分更新 `async-compact.json`（16384 字节上限；master 序 + schema 校验 + fail-closed，400 不写） |
 | POST | `/nano-model-selector/async-compact/switch` | 面板唯一写入口（1024 字节上限）；转发 `pluginManager.setBundleEnabled('dsh-nano-model-selector-compaction')`，返回 `{application,restartReason?,bundle}` |
 
+`GET …/async-compact?sessionId=<id>` 额外返回 `history`（附加字段，不传则响应形状不变）：
+
+| 字段 | 含义 |
+|---|---|
+| `history.records` | 该会话的引擎决策账本，按追加顺序，最多 200 条 |
+| `history.summary` | 从 records 折叠出的 `{arm,claim,commit,drop,skip,lastCommitAt,lastDropReason}`，不另存一份 |
+| `history.degraded` | `null` 正常；`history-read-failed` 表示账本不可读或 sessionId 不合法 |
+
+账本位置 `plugins/nano-model-selector/async-history/<sessionId>.jsonl`（与 `async-compact.json` 同目录）。**唯一写入方是 companion bundle**，本包只读；它是审计遥测，不是权威——一次压缩的权威仍是 session journal 的 `compaction/start|summary|end` 括号。
+
 状态文件：与 media-engine.json 同目录的 `plugins/nano-model-selector/async-compact.json`（tmp+rename 原子写，0600）。卸载不删。字段 7 项（无 `enabled`）：`model` / `bufferSizeAsync`（B，默认 0.65）/ `healthTargetAsync`（H，0.50）/ `bufferSizeSafety`（S，0.90 只读）/ `pinnedAsyncTokens`（100000）/ `pinnedFullTokens`（20000）/ `schema`（1）。`effectivePin = min(pinnedAsyncTokens, floor(0.15·W))`；DC-1 `B < windowMin` → `fullOnly`；fill = `totalTokens/W`。
 
 面板入口：顶栏搜索框与关闭按钮之间的「异步压缩」按钮，仅当 companion bundle 已安装时出现，否则搜索框占满该位。目录刷新按钮在搜索框内。页内四态（未安装/未启用/已启用/degraded），开关走 `POST …/switch`；B/H/pinnedAsyncTokens/model 可编辑 PUT。
+
+历史视图：会话头部「更多操作」菜单里的「异步压缩历史」（`ctx.contextMenus.register({target:'sessionHeader', order:500})`），打开 nano-ui `NanoDialog`。卡片顶部是水位尺（当前 fill 对 H/B/S 三条线，越过 B 即为应有 episode 的状态），下面是触发/执行/成功/失败四个计数，再下是「时间线 / 诊断」两个页签：时间线逐条列出决策（可展开看原始 JSON），诊断给出 `bundle/policy/effective/runtime/history` 的完整快照并支持一键复制。全部控件来自官方 primitive（`SegmentedTabs`/`Tag`/`StateDot`/`Tooltip`/`Button`/`relativeTime`/`writeClipboard`），配色只读 `--dsw-*` token。
+
+进行中状态：composer 上方的活动行（`conversation.input.activity`）显示 `异步压缩已排队` / `正在异步压缩` / `异步压缩失败`，并附摘要模型与 `摘要 v<8位指纹>`。指纹是生效摘要 prompt 的 sha256 前 8 位（内置与自定义不同，改 `summaryPrompt` 即变），用来判断某次摘要是哪套摘要契约产出的。该行只在非 idle 时出现，提交后自动让位给宿主的「上下文已压缩」行；数据来自同一 GET 的 `history.phase`，空闲时 15s 轮询、armed/running 时 3s。
+
+`history.phase` 由账本末条推导：`arm`→`armed`（15 分钟内有效）、`claim`→`running`（3 分钟内有效，引擎单次尝试上限 120s）、`drop`→`failed`（10 分钟内有效，带 `reason`/`detail`），`commit`/`skip` 与过期记录一律 `idle`——宿主重启留下的陈旧 `arm` 不会让界面永久显示「正在压缩」。
+
+`dsh.client.inject` 必须含 `@deepseek-ai/dsh-client-ui-context-menu`：缺了它，`ctx.contextMenus` 能拿到对象、`register()` 也返回 disposer，但注册进的是另一个 registry，菜单永远不出现。
 
 ## 不要
 

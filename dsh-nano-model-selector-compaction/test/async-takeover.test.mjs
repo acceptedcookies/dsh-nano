@@ -14,7 +14,7 @@
  */
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 
@@ -759,4 +759,135 @@ test('model-switch veto: same target or empty target passes through without comp
   const empty = await ctx.emitRequest(agent, { provider: '', model: 'mod2' })
   assert.deepEqual(empty, { provider: '', model: 'mod2' })
   assert.equal(session.eventsOf('compaction/start').length, 0)
+})
+
+/* ================= 8. async-history ledger (DNMS01 observability) ======== */
+
+/** Read the ledger the engine appended for one session id. */
+function ledgerOf(sessionId) {
+  const path = join(DATA_DIR, 'plugins/nano-model-selector/async-history', `${sessionId}.jsonl`)
+  if (!existsSync(path)) return null
+  return readFileSync(path, 'utf8').split('\n').filter(Boolean).map(line => JSON.parse(line))
+}
+
+test('ledger: a committed episode records arm → claim → commit in order', async () => {
+  writePolicy()
+  const ctx = makeCtx()
+  makeEngine(ctx)
+  const { session } = makeBLineSession('s-ledger-commit')
+  const agent = makeAgent(session)
+
+  await ctx.emitPreStep(agent)
+  ctx.emitStatus(agent, 'idle')
+  await agent.maintenanceCalls[0].promise
+
+  const records = ledgerOf('s-ledger-commit')
+  assert.ok(records !== null, 'ledger file was not written')
+  assert.deepEqual(records.map(r => r.kind), ['arm', 'claim', 'commit'])
+
+  const [arm, claim, commit] = records
+  // arm carries the numbers that justified the decision
+  assert.ok(arm.fill >= 0.65, `arm.fill ${arm.fill} should be at or above B`)
+  assert.equal(arm.window, 1000)
+  assert.equal(arm.retain, 100)
+  assert.equal(arm.orderOk, true)
+  assert.equal(typeof arm.at, 'string')
+  // claim carries the summarizer target actually used
+  assert.equal(claim.retain, 100)
+  // commit carries the durable compaction id so the ledger joins the journal
+  const durableId = session.eventsOf('compaction/start')[0].data.compactionId
+  assert.equal(commit.compactionId, durableId)
+  assert.ok(commit.tokens > 0)
+})
+
+test('ledger: a pre-bracket drop is recorded with bracketed:false (the silent case)', async () => {
+  writePolicy()
+  const ctx = makeCtx()
+  makeEngine(ctx)
+  const { session } = makeBLineSession('s-ledger-degraded')
+  const agent = makeAgent(session)
+
+  // Arm against a healthy policy, then make it unreadable before the idle
+  // claim. _runEpisodeAttempt rejects on safetyOnly BEFORE opening the durable
+  // bracket, so the journal keeps no record of this failure at all — exactly
+  // the case the ledger exists for.
+  await ctx.emitPreStep(agent)
+  corruptPolicy()
+  ctx.emitStatus(agent, 'idle')
+  await agent.maintenanceCalls[0].promise
+
+  const records = ledgerOf('s-ledger-degraded')
+  assert.ok(records !== null)
+  const drop = records.find(r => r.kind === 'drop')
+  assert.ok(drop !== undefined, `expected a drop record in ${JSON.stringify(records.map(r => r.kind))}`)
+  assert.equal(drop.reason, 'degraded')
+  // No durable bracket exists for this failure — the ledger is the only trace.
+  assert.equal(drop.bracketed, false)
+  assert.equal(session.eventsOf('compaction/start').length, 0)
+})
+
+test('ledger: circuit-open suppression records a skip, not a second arm', async () => {
+  writePolicy()
+  const ctx = makeCtx()
+  makeEngine(ctx)
+  const { session } = makeBLineSession('s-ledger-skip')
+  const agent = makeAgent(session)
+
+  // Two consecutive transient failures open the circuit.
+  ctx.llm.state.failWith = [transientError('NETWORK'), transientError('NETWORK')]
+  for (let i = 0; i < 2; i += 1) {
+    await ctx.emitPreStep(agent)
+    ctx.emitStatus(agent, 'idle')
+    await agent.maintenanceCalls[i].promise
+  }
+  const before = ledgerOf('s-ledger-skip').length
+
+  await ctx.emitPreStep(agent)
+  const records = ledgerOf('s-ledger-skip')
+  const skip = records.at(-1)
+  assert.equal(records.length, before + 1)
+  assert.equal(skip.kind, 'skip')
+  assert.equal(skip.reason, 'circuit-open')
+})
+
+test('ledger: every decision carries the instruction version actually in force', async () => {
+  writePolicy({ summaryPrompt: '' })
+  const ctx = makeCtx()
+  makeEngine(ctx)
+  const { session } = makeBLineSession('s-ledger-version')
+  const agent = makeAgent(session)
+
+  await ctx.emitPreStep(agent)
+  ctx.emitStatus(agent, 'idle')
+  await agent.maintenanceCalls[0].promise
+
+  const { instructionVersion } = await import('../lib/compact-region.js')
+  const builtin = instructionVersion('')
+  const records = ledgerOf('s-ledger-version')
+  for (const record of records) {
+    assert.equal(record.promptVersion, builtin, `${record.kind} must report the built-in version`)
+  }
+
+  // A custom instruction is a different contract and must fingerprint differently.
+  writePolicy({ summaryPrompt: 'Summarize tersely.' })
+  const ctx2 = makeCtx()
+  makeEngine(ctx2)
+  const second = makeBLineSession('s-ledger-version-2')
+  const agent2 = makeAgent(second.session)
+  await ctx2.emitPreStep(agent2)
+  ctx2.emitStatus(agent2, 'idle')
+  await agent2.maintenanceCalls[0].promise
+
+  const custom = instructionVersion('Summarize tersely.')
+  assert.notEqual(custom, builtin)
+  const customRecords = ledgerOf('s-ledger-version-2')
+  assert.equal(customRecords[0].promptVersion, custom)
+})
+
+test('ledger: an unsafe session id is never written outside the ledger dir', async () => {
+  const { asyncHistoryPath } = await import('../lib/async-history.js')
+  assert.equal(asyncHistoryPath('../escape'), null)
+  assert.equal(asyncHistoryPath('a/b'), null)
+  assert.equal(asyncHistoryPath(''), null)
+  assert.ok(asyncHistoryPath('session-767f1813-91b2-4ca7-a0f8-150ae6e7b6c5')?.endsWith('.jsonl'))
 })

@@ -16,6 +16,7 @@ import {
   IconSearchOutlineRegular,
   IconSparkleRegular,
   IconLayersOutlineRegular,
+  IconClockOutlineRegular,
   IconWarningTriangleOutlineRegular,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 
@@ -86,6 +87,16 @@ export function MediaIcon(props) {
  */
 export function CompactionIcon(props) {
   const Glyph = IconCompactOutlineRegular ?? IconLayersOutlineRegular ?? IconDataOutlineRegular
+  return <Glyph {...props} />
+}
+
+/**
+ * Session-header menu glyph for the async-compaction history dialog. A clock
+ * reads as "history" in the shell's own icon language; compaction is already
+ * represented by CompactionIcon inside the panel.
+ */
+export function HistoryIcon(props) {
+  const Glyph = IconClockOutlineRegular ?? IconCompactOutlineRegular
   return <Glyph {...props} />
 }
 

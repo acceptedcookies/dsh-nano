@@ -43,11 +43,13 @@ import {
   createUserMessage,
   inspectCompactionEntryState,
   prepareCompactionTransaction,
+  instructionVersion,
   selectCompactableRange,
   summarizeWithLlm,
   SurfaceChangedError,
 } from './compact-region.js'
 import { readState, SAFETY_RATIO, validateMasterOrder } from './compact-policy.js'
+import { recordAsyncDecision } from './async-history.js'
 
 const CONTEXT_WINDOW_EXCEEDED_CODE = 'CONTEXT_WINDOW_EXCEEDED'
 
@@ -249,6 +251,11 @@ export default class NanoCompactionEngine extends CompactionEngine {
       if (!episode.circuit.suppressedLogged) {
         episode.circuit.suppressedLogged = true
         this.ctx.logger.warn('async compaction circuit open after consecutive transient failures; auto arming suppressed (S-line and /compact unaffected)')
+        recordAsyncDecision(agent.session.id, {
+          kind: 'skip',
+          reason: 'circuit-open',
+          detail: 'consecutive transient failures; auto arming suppressed',
+        })
       }
       return false
     }
@@ -262,6 +269,9 @@ export default class NanoCompactionEngine extends CompactionEngine {
     episode.summarizationTarget = policy.model.provider.length > 0 && policy.model.model.length > 0
       ? { provider: policy.model.provider, model: policy.model.model }
       : undefined
+    // The instruction in force at arm time; the ledger and the activity line
+    // report it so a summary can be traced back to the contract that made it.
+    episode.promptVersion = instructionVersion(policy.summaryPrompt)
     return true
   }
 
@@ -271,6 +281,13 @@ export default class NanoCompactionEngine extends CompactionEngine {
     // corrupts the durable bracket with a second compaction/end.
     if (episode.phase !== 'armed') return
     episode.phase = 'running'
+    recordAsyncDecision(agent.session.id, {
+      kind: 'claim',
+      attempt: (episode.claimAttempts ?? 0) + 1,
+      retain: episode.retainTokens,
+      target: episode.summarizationTarget ?? null,
+      promptVersion: episode.promptVersion ?? null,
+    })
     try {
       void agent.runMaintenance(async (agentSignal) => {
         try {
@@ -355,6 +372,14 @@ export default class NanoCompactionEngine extends CompactionEngine {
     episode.circuit.suppressedLogged = false
     const result = episode._lastResult
     episode._lastResult = undefined
+    recordAsyncDecision(session.id, {
+      kind: 'commit',
+      compactionId: episode.tx.compactionId,
+      promptVersion: episode.promptVersion ?? null,
+      tokens: result?.shadowedTokenCount ?? null,
+      records: result?.shadowedSeqs?.length ?? null,
+      range: result?.shadowedRange ?? null,
+    })
     this._settleEpisode(episode)
     this._logResult(result, 'async maintenance')
   }
@@ -383,6 +408,9 @@ export default class NanoCompactionEngine extends CompactionEngine {
   }
 
   _dropEpisode(session, episode, reason, error) {
+    // Captured before the tx is cleared: the ledger must say whether this
+    // drop left a durable end{error} bracket or vanished without a trace.
+    const bracketed = episode.tx !== null
     // Durable-lock hygiene: if the episode already opened its compaction/start
     // bracket (tx exists), close it with end{error} BEFORE clearing, or the
     // unmatched start blocks this session's compactions until the next
@@ -410,6 +438,15 @@ export default class NanoCompactionEngine extends CompactionEngine {
     this.ctx.logger.warn(
       `async compaction episode dropped (${reason})${error === undefined ? '' : `: ${messageOf(error)}`}`,
     )
+    // The ledger is the only trace for a drop that never opened a bracket.
+    recordAsyncDecision(session.id, {
+      kind: 'drop',
+      reason,
+      detail: error === undefined ? null : messageOf(error),
+      code: error?.code ?? null,
+      bracketed,
+      circuitOpen: episode.circuit.open,
+    })
   }
 
   _classifyFailure(error) {
@@ -526,6 +563,13 @@ export default class NanoCompactionEngine extends CompactionEngine {
         assertNoActiveCompaction(agent.session, 'async compaction arming')
       } catch {
         this.ctx.logger.info('async compaction arm suppressed: durable compaction lock already held')
+        recordAsyncDecision(agent.session.id, {
+          kind: 'skip',
+          reason: 'lock-held',
+          detail: 'durable compaction bracket already open',
+          fill: fillRatio,
+          window: W,
+        })
         return null
       }
       // prune + remeasure before arming (trigger qualified already; the free
@@ -537,7 +581,18 @@ export default class NanoCompactionEngine extends CompactionEngine {
         if (measurement.totalTokens / W < policy.bufferSizeAsync) return null
       }
       const effectivePin = order.ok ? order.effectivePin : Math.min(policy.pinnedAsyncTokens, Math.floor(0.15 * W))
-      this._armEpisode(agent, policy, effectivePin)
+      if (this._armEpisode(agent, policy, effectivePin)) {
+        recordAsyncDecision(agent.session.id, {
+          kind: 'arm',
+          fill: fillRatio,
+          window: W,
+          bufferSizeAsync: policy.bufferSizeAsync,
+          retain: effectivePin,
+          target: policy.model.provider.length > 0 ? { provider: policy.model.provider, model: policy.model.model } : null,
+          promptVersion: instructionVersion(policy.summaryPrompt),
+          orderOk: order.ok,
+        })
+      }
     }
     return null
   }

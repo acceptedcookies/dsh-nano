@@ -14,7 +14,7 @@
  * stability assertions, six failure codes) mirrors region.ts line-for-line.
  */
 
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { isDeepStrictEqual } from 'node:util'
 import {
   CompactionId,
@@ -227,6 +227,22 @@ export const COMPACTION_INSTRUCTION = [
 /** Empty or whitespace means the built-in checkpoint instruction. */
 function instructionText(override) {
   return typeof override === 'string' && override.trim().length > 0 ? override : COMPACTION_INSTRUCTION
+}
+
+/**
+ * Short, stable fingerprint of the instruction that will actually be sent.
+ *
+ * "Which summarizer contract produced this summary?" is unanswerable from the
+ * model name alone — the same model summarises differently under the built-in
+ * instruction and under a user override, and an override edited between two
+ * compactions is a different contract too. Eight hex characters is enough to
+ * tell versions apart by eye and to correlate a summary with the policy that
+ * produced it, without putting the prompt itself into an event or a log.
+ * @param {string|undefined} override - `policy.summaryPrompt`; empty means built-in.
+ * @returns {string} 8 lowercase hex characters.
+ */
+export function instructionVersion(override) {
+  return createHash('sha256').update(instructionText(override), 'utf8').digest('hex').slice(0, 8)
 }
 
 const CHECKPOINT_PREAMBLE =

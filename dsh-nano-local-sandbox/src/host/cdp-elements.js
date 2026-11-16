@@ -98,10 +98,10 @@ export async function navigate(session, httpBase, url, connect = connectCdp) {
   return { ok: true, url }
 }
 
-/** Liveness probe budget: local CDP must answer in single-digit ms. */
+/** Liveness probe budget: Browser.getVersion must answer within this. */
 const PROBE_TIMEOUT_MS = 1500
-/** Re-probe an idle socket at most this often. */
-const PROBE_EVERY_MS = 2500
+/** Idle keepalive. Chrome drops a quiet DevTools socket near 30s; don't probe every call. */
+const PROBE_EVERY_MS = 25000
 
 /**
  * Drop the cached CDP client. The socket carries the page session, so callers
@@ -111,6 +111,9 @@ const PROBE_EVERY_MS = 2500
 export function resetClient(session) {
   const client = session?.cdp
   session.cdp = null
+  session.cdpGeneration = (session.cdpGeneration || 0) + 1
+  session.network = session.network || []
+  session.network.push({ gap: true, at: new Date().toISOString(), generation: session.cdpGeneration })
   try { client?.close?.() } catch { /* already gone */ }
 }
 
@@ -199,8 +202,13 @@ export function connectCdp(httpBase) {
   ws.addEventListener('close', () => { client.alive = false; rejectPending('cdp socket closed') })
   ws.addEventListener('error', () => { client.alive = false; rejectPending('cdp socket error') })
   const ready = new Promise((resolve, reject) => {
-    ws.addEventListener('open', () => resolve(), { once: true })
-    ws.addEventListener('error', () => reject(new Error('cdp connect failed')), { once: true })
+    const timer = setTimeout(() => {
+      client.alive = false
+      try { ws.close() } catch { /* already closed */ }
+      reject(new Error('cdp connect timeout'))
+    }, PROBE_TIMEOUT_MS)
+    ws.addEventListener('open', () => { clearTimeout(timer); resolve() }, { once: true })
+    ws.addEventListener('error', () => { clearTimeout(timer); reject(new Error('cdp connect failed')) }, { once: true })
   })
   const client = {
     alive: true,

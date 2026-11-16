@@ -409,14 +409,14 @@ export function apply(ctx, config) {
   let portRepair = null
   async function bringUp(id) {
     await hostSpan('kite-warmup', async () => {
-      for (let attempt = 0; attempt < 5; attempt += 1) {
-        try {
-          const health = await fetchEngine(kite.snapshot().httpBase, '/health')
-          if (health.status === 200) return { healthy: true }
-        } catch { /* the engine is not answering */ }
-        await new Promise((resolve) => setTimeout(resolve, 200))
+      // Engine liveness is a CDP answer at the configured origin, never an
+      // HTTP /health 200: an http-only engine cannot serve a page.
+      try {
+        await engineTargets(kite.snapshot().httpBase)
+      } catch {
+        throw new KitesurfError(id, '引擎没有应答。容器的启动不在这个包里。')
       }
-      throw new KitesurfError(id, '引擎没有应答。容器的启动不在这个包里。')
+      return { live: true }
     })
   }
   async function sleepEngine() {
@@ -453,7 +453,7 @@ export function apply(ctx, config) {
     // healthy, not a conflict. Say who holds it.
     const own = new Set((published || []).map((p) => p.hostPort))
     const who = (row) => row == null ? null
-      : row.free ? 'free' : (own.has(row.port) ? 'this-container' : 'other')
+      : row.free ? 'free' : (own.has(row.port) ? 'this-container' : null)
     return {
       configured: want,
       effective: { httpBase: snap.httpBase, mcpPort: snap.mcpPort },
@@ -463,7 +463,7 @@ export function apply(ctx, config) {
         mcp: wantMcp ? { ...wantMcp, heldBy: who(wantMcp) } : null,
       },
       lastRepair: portRepair,
-      healthy: (await statusOf(snap.httpBase)).ok === true,
+      authority: 'dnls-snapshot',
     }
   }
 

@@ -101,10 +101,14 @@ test('/selftest runs the 11 declared checks and names every one', async () => {
     'page-target', 'page-not-blank', 'dom-renderable', 'shot-capturable',
     'bridge-health', 'bridge-writer-free', 'history-consistent',
   ])
-  assert.equal(result.body.ok, result.body.failed === 0)
+  assert.equal(result.body.ok, true)
+  assert.equal(result.body.passed, result.body.failed === 0)
   // The fixture has no real engine face, so the CDP-backed checks must fail
   // rather than report a hard-coded pass.
   assert.equal(result.body.failed > 0, true)
+  assert.equal(result.body.passed, false)
+  assert.equal(result.body.v, 1)
+  assert.equal(result.body.snapshot?.v, 1)
 })
 
 test('/diagnostics ships a human report and only includes the catalog on request', async () => {
@@ -150,16 +154,18 @@ test('/ports probes every plane so the OK badge cannot mean "container up only"'
   assert.equal(result.body.healthy, Object.entries(result.body.checks).every(([key, row]) => row.ok === true || (key === 'dom' && row.skipped === true)))
 })
 
-test('/recover restarts a running-but-wedged container instead of reporting noop', async () => {
+test('/recover stop+starts a running http-only engine and does not call restart', async () => {
   const calls = { restart: [], start: [], stop: [] }
   const routes = routesFor(depsWith({
-    // A running container whose engine never answers: inspect says running,
-    // the published port points at a closed socket.
+    httpProbe: () => true,
+    connect: async () => ({
+      async send() { throw new Error('Browser.getVersion timed out') },
+    }),
     backend: {
       async inspect() {
         return { raw: JSON.stringify([{ status: { state: 'running' }, configuration: { publishedPorts: [
-          { containerPort: 8787, hostAddress: '127.0.0.1', hostPort: 1 },
-          { containerPort: 8791, hostAddress: '127.0.0.1', hostPort: 2 },
+          { containerPort: 8787, hostAddress: '127.0.0.1', hostPort: 8800 },
+          { containerPort: 8791, hostAddress: '127.0.0.1', hostPort: 8801 },
         ] } }]) }
       },
       async restart(name) { calls.restart.push(name) },
@@ -171,8 +177,44 @@ test('/recover restarts a running-but-wedged container instead of reporting noop
   }))
   const result = await call(routes['/nano-local-sandbox/recover'], { method: 'POST', body: {} })
   assert.equal(result.status, 200)
-  assert.equal(calls.restart.length, 1)
-  assert.equal(calls.restart[0], 'kitesurf-dev')
+  assert.deepEqual(calls.restart, [])
+  assert.deepEqual(calls.stop, ['kitesurf-dev'])
+  assert.deepEqual(calls.start, ['kitesurf-dev'])
   assert.equal(result.body.action, 'restarted')
-  assert.equal(typeof result.body.summary, 'object')
+  assert.equal(result.body.v, 1)
+  assert.equal(result.body.ok, true)
+  assert.equal(result.body.ready, false)
+  assert.equal(result.body.planes.engine.state, 'http-only')
+})
+
+test('a blank page is not a reason to restart', async () => {
+  const calls = { stop: [] }
+  const routes = routesFor(depsWith({
+    httpProbe: () => true,
+    connect: async () => ({
+      async send(method) {
+        if (method === 'Target.getTargets') return { targetInfos: [{ targetId: 't1', type: 'page', url: 'about:blank' }] }
+        if (method === 'Target.attachToTarget') return { sessionId: 's1' }
+        if (method === 'Browser.getVersion') return { product: 'Kitesurf' }
+        if (method === 'Runtime.evaluate') return { result: { value: { url: 'about:blank', root: true, bytes: 0 } } }
+        return {}
+      },
+    }),
+    backend: {
+      async inspect() {
+        return { raw: JSON.stringify([{ status: { state: 'running' }, configuration: { publishedPorts: [
+          { containerPort: 8787, hostAddress: '127.0.0.1', hostPort: 8800 },
+          { containerPort: 8791, hostAddress: '127.0.0.1', hostPort: 8801 },
+        ] } }]) }
+      },
+      async stop(name) { calls.stop.push(name) },
+      async start() {},
+    },
+    prepareTimeoutMs: 0,
+  }))
+  const result = await call(routes['/nano-local-sandbox/recover'], { method: 'POST', body: {} })
+  assert.equal(result.body.action, 'noop')
+  assert.deepEqual(calls.stop, [])
+  assert.equal(result.body.planes.page.state, 'blank')
+  assert.equal(result.body.planes.dom.state, 'skipped')
 })

@@ -62,7 +62,7 @@ export function AsyncStatusBadge({ sessionId, copy }) {
   const badge = statusBadgeFor(phase, copy)
   if (badge === null) return null
 
-  return React.createElement(Tooltip, { content: badge.tooltip },
+  return React.createElement(Tooltip, { label: badge.tooltip },
     React.createElement('span', {
       className: 'nms-badge',
       'data-state': badge.state,

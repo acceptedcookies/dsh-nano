@@ -29,7 +29,7 @@ function files(dir, out = []) {
   return out
 }
 
-test('retired literals stay in the seven historical documents, and the container CLI stays in backend-apple.js', () => {
+test('retired literals stay in the historical documents, and the container CLI stays in backend-apple.js', () => {
   assert.equal(ALLOW.length, 7)
   const allowed = new Set(ALLOW.map((path) => resolve(root, path)))
   const apple = resolve(root, 'dsh-nano-local-sandbox/src/host/backend-apple.js')

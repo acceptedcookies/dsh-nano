@@ -14,8 +14,11 @@ test('terminal schemas reject bounds and extra fields, and create has no path', 
   assert.equal(validateTermCall('term.session.resize', { id: 'a', cols: 80, rows: 513 }).ok, false)
   assert.equal(validateTermCall('term.session.create', { cols: 80, rows: 24, extra: true }).ok, false)
   const audit = []
-  const created = createTermSession({ cols: 80, rows: 24 }, audit, 'ws://127.0.0.1:9/term?session=a')
+  const missing = createTermSession({ cols: 80, rows: 24 }, audit, 'ws://127.0.0.1:9/term?session=a')
+  assert.equal(missing.ok, false)
+  const created = createTermSession({ cols: 80, rows: 24, sessionId: 'sess-a' }, audit, 'ws://127.0.0.1:9/term?session=a')
   assert.equal(created.ok, true)
+  assert.notEqual(created.id, 'term-1')
   assert.equal(Object.prototype.hasOwnProperty.call(created.attach, 'path'), false)
   assert.equal(created.attach.protocol, 'dnt-ws-v1')
   assert.equal(created.attach.url, 'ws://127.0.0.1:9/term?session=a')

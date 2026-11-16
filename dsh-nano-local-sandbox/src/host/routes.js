@@ -28,6 +28,7 @@ export const SNAPSHOT_ROUTE = '/nano-local-sandbox/snapshot'
 export const REFS_ROUTE = '/nano-local-sandbox/refs'
 export const CONTROL_ROUTE = '/nano-local-sandbox/control'
 
+import { request as httpRequest } from 'node:http'
 import { mkdirSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
@@ -38,18 +39,27 @@ import { ensureClient, evaluatePage, navigate, readElements, withPage } from './
 import { answerNativeTool, toolsList } from './mcp-sandbox.js'
 import { listProfiles, loadProfile } from './profile-registry.js'
 import { createInstanceRegistry } from './instance-registry.js'
+import { policyFingerprint, tupleFromPolicy } from './policy-adapter.js'
 import { ERROR_CATALOG, statusOf } from './error-catalog.js'
 import { buildSrcDoc } from './dom-srcdoc.js'
+import { bumpEpoch, projectSnapshot } from './observe.js'
+import { closeTermSession, listTermSessions, openTermSession, readTermSession, resizeTermSession, termStateFor, writeTermSession } from './term-bridge.js'
+import { TERM_TOOLS } from './terminal-driver.js'
+import { spawnContainerPty } from './backend-apple.js'
 
 const keeper = createCdpKeeper()
 
 // The package version shown in EnvPanel's 插件 row — read once at load, the
 // deployed copy's package.json is the source of truth.
 const BUILD_ID = (() => {
+  const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
+  // deploy-local writes build.json (version+git sha) so the pane can compare
+  // it with the bundle's baked build id. Source-tree runs fall back to version.
   try {
-    const here = dirname(fileURLToPath(import.meta.url))
-    return JSON.parse(readFileSync(join(here, '..', '..', 'package.json'), 'utf8')).version || null
-  } catch { return null }
+    const info = JSON.parse(readFileSync(join(root, 'build.json'), 'utf8'))
+    if (typeof info?.buildId === 'string' && info.buildId) return info.buildId
+  } catch { /* no deploy manifest */ }
+  try { return JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version || null } catch { return null }
 })()
 
 /**
@@ -107,18 +117,55 @@ function parseInspect(raw, containerPort = 8787) {
   return { state, ports, containerPort }
 }
 
-/** Engine liveness probe: reachable CDP /json/list, bounded so the UI never hangs. */
-async function engineAlive(base, timeoutMs = 900) {
+/** One HTTP GET with no keep-alive pool, so a probe cannot pin the process. */
+function probeHttp(url, timeoutMs) {
+  return new Promise((resolve) => {
+    let settled = false
+    let timer = null
+    const finish = (value) => {
+      if (settled) return
+      settled = true
+      if (timer) clearTimeout(timer)
+      resolve(value)
+    }
+    let req
+    try {
+      const target = new URL(url)
+      req = httpRequest({
+        hostname: target.hostname,
+        port: target.port,
+        path: `${target.pathname}${target.search}`,
+        method: 'GET',
+        agent: false,
+        headers: { connection: 'close' },
+      }, (res) => {
+        const chunks = []
+        res.on('data', (chunk) => chunks.push(chunk))
+        res.on('end', () => {
+          let data = null
+          try { data = JSON.parse(Buffer.concat(chunks).toString('utf8')) } catch { data = null }
+          res.destroy()
+          req.destroy()
+          finish({ ok: res.statusCode >= 200 && res.statusCode < 300, status: res.statusCode, data })
+        })
+      })
+    } catch {
+      finish({ ok: false, status: 0, data: null })
+      return
+    }
+    timer = setTimeout(() => { req.destroy(); finish({ ok: false, status: 0, data: null }) }, timeoutMs)
+    req.on('socket', (socket) => socket.unref())
+    req.on('error', () => { req.destroy(); finish({ ok: false, status: 0, data: null }) })
+    req.end()
+  })
+}
+
+/** HTTP face only. A 200 here is not CDP liveness. */
+async function engineHttpUp(base, deps, timeoutMs = 900) {
   if (!base) return false
-  try {
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), timeoutMs)
-    const response = await fetch(`${base}/json/list`, { signal: controller.signal }).catch(() => null)
-    clearTimeout(timer)
-    return Boolean(response && response.ok)
-  } catch {
-    return false
-  }
+  if (typeof deps?.httpProbe === 'function') return deps.httpProbe(base) === true
+  const response = await probeHttp(`${base}/json/list`, timeoutMs)
+  return response.ok === true
 }
 
 /**
@@ -149,6 +196,7 @@ function registryFor(deps, profilesRoot) {
     volumeFor: (id) => join(stateRoot, id),
     imageFor: () => env.KITESURF_IMAGE || 'kitesurf-engine:latest',
     portSpecFor: (instance) => {
+      if (!instance.endpoints?.engine || !instance.endpoints?.mcp) return []
       const enginePort = Number(new URL(instance.endpoints.engine).port)
       const bridgePort = Number(new URL(instance.endpoints.mcp).port)
       return [
@@ -169,14 +217,15 @@ function registryFor(deps, profilesRoot) {
   return deps.registry
 }
 
-/** Per-plane rows for the pane's summary block — one shape for every route. */
+/** Display rows. Identity is `plane`, not the Chinese label. */
 function summaryOf(snap) {
+  if (Array.isArray(snap?.summary) && snap.summary.length) return snap.summary
   return [
-    { label: '容器', ...(snap.checks?.container || { ok: false, detail: '未探测' }) },
-    { label: '引擎', ...(snap.checks?.engine || { ok: false, detail: '未探测' }) },
-    { label: '页面', ...(snap.checks?.page || { ok: false, detail: '未探测' }) },
-    { label: 'DOM', ...(snap.checks?.dom || { ok: false, detail: '未探测' }) },
-    { label: '桥', ...(snap.checks?.bridge || { ok: false, detail: '未探测' }) },
+    { plane: 'container', label: '容器', ...(snap.checks?.container || { ok: false, detail: '未探测' }) },
+    { plane: 'engine', label: '引擎', ...(snap.checks?.engine || { ok: false, detail: '未探测' }) },
+    { plane: 'page', label: '页面', ...(snap.checks?.page || { ok: false, detail: '未探测' }) },
+    { plane: 'dom', label: 'DOM', ...(snap.checks?.dom || { ok: false, detail: '未探测' }) },
+    { plane: 'bridge', label: '桥', ...(snap.checks?.bridge || { ok: false, detail: '未探测' }) },
   ]
 }
 
@@ -200,17 +249,37 @@ function collapseOperations(rows) {
   return folded.slice(-20)
 }
 
+/** CDP answered Browser.getVersion. HTTP /json/list is not enough. */
+async function probeCdp(session, httpBase, httpUp, deps) {
+  if (!httpUp || !httpBase) return false
+  try {
+    const client = await clientFor(session, httpBase, deps)
+    await client.send('Browser.getVersion', {}, undefined, 1500)
+    return true
+  } catch {
+    return false
+  }
+}
+
+const inflight = new WeakMap()
+
 /**
- * The env self-heal / diagnostics snapshot EnvPanel reads: container state,
- * published ports, resolved httpBase, engine liveness, and a derived healthy
- * flag. Failure degrades to a partial shape rather than throwing.
- *
- * `deep` adds the functional-plane probes (page / dom / bridge). Shallow is the
- * cheap poll EnvPanel runs; deep is what /diagnostics and /selftest use, because
- * "container running + CDP answers" alone cannot tell a working pane from one
- * that silently fell back to screenshots.
+ * The only observation document. There is no shallow mode: every caller
+ * sees the same planes. `ready` is the pane bit; `healthy` is that same bit.
+ * Overlapping reads for one session share a single probe pass, so the pane's
+ * 1.5s poll plus MCP reads never stack CDP/bridge probes.
  */
-async function envSnapshot(session, deps, { deep = false } = {}) {
+function envSnapshot(session, deps) {
+  const running = inflight.get(session)
+  if (running) return running
+  const pass = observeOnce(session, deps).finally(() => {
+    if (inflight.get(session) === pass) inflight.delete(session)
+  })
+  inflight.set(session, pass)
+  return pass
+}
+
+async function observeOnce(session, deps) {
   const name = containerNameFor(session, deps.env || process.env)
   const host = envHostPorts(deps.env || process.env)
   let info = null
@@ -220,43 +289,54 @@ async function envSnapshot(session, deps, { deep = false } = {}) {
   } catch { info = null }
   const engineRow = info?.ports?.find((p) => p.containerPort === host.engineContainerPort) || null
   const bridgeRow = info?.ports?.find((p) => p.containerPort === host.bridgeContainerPort) || null
-  // Prefer the port THIS env's container actually published — session.httpBase
-  // may be stale from a previous env (dev used to adopt the prod container).
   const derived = engineRow ? `http://${engineRow.hostAddress === '0.0.0.0' ? '127.0.0.1' : engineRow.hostAddress}:${engineRow.hostPort}` : null
   const httpBase = derived || session.httpBase || null
-  const alive = await engineAlive(httpBase)
+  const httpUp = await engineHttpUp(httpBase, deps)
+  const cdpUp = await probeCdp(session, httpBase, httpUp, deps)
   const state = info?.state || 'missing'
   const bridgeBase = bridgeControlBase({ httpBase })
-  const checks = {
-    container: { ok: state === 'running', detail: state },
-    engine: { ok: alive === true, detail: httpBase || 'no published port' },
+  const pageRaw = await probePage(session, httpBase, httpUp && cdpUp, deps)
+  const pageUrl = pageRaw.ok ? (pageRaw.detail || '') : ''
+  const page = !pageRaw.ok
+    ? { state: 'none', detail: pageRaw.detail || 'no page' }
+    : pageUrl === 'about:blank'
+      ? { state: 'blank', url: pageUrl, detail: pageUrl }
+      : { state: 'open', url: pageUrl, detail: pageUrl }
+  const domRaw = page.state === 'none' ? { ok: false, detail: 'no page' } : await probeDom(session, httpBase, deps)
+  const dom = domRaw.skipped === true
+    ? { state: 'skipped', detail: domRaw.detail || '' }
+    : domRaw.ok === true
+      ? { state: 'ready', detail: domRaw.detail || '' }
+      : { state: 'failed', detail: domRaw.detail || 'dom unreachable' }
+  const bridgeRaw = await probeBridge(bridgeBase)
+  const bridge = bridgeRaw.ok ? { state: 'up', detail: bridgeRaw.detail || '' } : { state: 'down', detail: bridgeRaw.detail || '' }
+  const terminal = deps.termPolicyStale
+    ? { state: 'policy-stale' }
+    : { state: termStateFor(session.termSessionId) === 'listening' || listTermSessions().length > 0 ? 'listening' : 'absent' }
+  const effective = { httpBase, enginePort: engineRow?.hostPort ?? host.engineHostPort, bridgePort: bridgeRow?.hostPort ?? host.bridgeHostPort }
+  const ports = {
+    engine: engineRow ? { port: engineRow.hostPort, containerPort: engineRow.containerPort, heldBy: 'this-container' } : { port: host.engineHostPort, containerPort: host.engineContainerPort, heldBy: 'free' },
+    bridge: bridgeRow ? { port: bridgeRow.hostPort, containerPort: bridgeRow.containerPort, heldBy: 'this-container' } : { port: host.bridgeHostPort, containerPort: host.bridgeContainerPort, heldBy: 'free' },
   }
-  if (deep) {
-    const page = await probePage(session, httpBase, alive, deps)
-    checks.page = page
-    checks.dom = page.ok ? await probeDom(session, httpBase, deps) : { ok: false, detail: 'no page' }
-    checks.bridge = await probeBridge(bridgeBase)
-  }
-  // "Ready" means the environment can serve a page: container + engine + page
-  // target + bridge. DOM is only meaningful once a URL is open, so a blank
-  // page is `skipped`, not a failure — otherwise a fresh pane could never be
-  // reported as prepared.
-  const healthy = Object.entries(checks)
-    .every(([key, row]) => row.ok === true || (key === 'dom' && row.skipped === true))
-  return {
+  const draft = projectSnapshot({
     containerName: name,
-    container: { state, name },
-    effective: { httpBase, enginePort: engineRow?.hostPort ?? host.engineHostPort, bridgePort: bridgeRow?.hostPort ?? host.bridgeHostPort },
-    ports: {
-      engine: engineRow ? { port: engineRow.hostPort, containerPort: engineRow.containerPort, heldBy: 'this-container' } : { port: host.engineHostPort, containerPort: host.engineContainerPort, heldBy: 'free' },
-      bridge: bridgeRow ? { port: bridgeRow.hostPort, containerPort: bridgeRow.containerPort, heldBy: 'this-container' } : { port: host.bridgeHostPort, containerPort: host.bridgeContainerPort, heldBy: 'free' },
-    },
-    engineAlive: alive,
-    checks,
-    healthy,
-    phase: session.phase,
-    httpBase,
-  }
+    containerState: state,
+    httpUp,
+    cdpUp,
+    cdpGeneration: session.cdpGeneration || 0,
+    page,
+    dom,
+    bridge,
+    terminal,
+    epoch: 0,
+    observedAt: new Date().toISOString(),
+    buildId: BUILD_ID,
+    effective,
+    ports,
+  })
+  const epoch = bumpEpoch(session, draft.planes)
+  const snap = { ...draft, epoch, phase: session.phase, httpBase }
+  return snap
 }
 
 /** Does the engine expose a page target? (cheap: Target.getTargets) */
@@ -295,12 +375,9 @@ async function probeDom(session, httpBase, deps) {
 async function probeBridge(bridgeBase) {
   if (!bridgeBase) return { ok: false, detail: 'no bridge port' }
   try {
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), 900)
-    const response = await fetch(`${bridgeBase}/health`, { signal: controller.signal }).catch(() => null)
-    clearTimeout(timer)
-    if (!response || !response.ok) return { ok: false, detail: `HTTP ${response?.status ?? 'unreachable'}` }
-    const data = await response.json().catch(() => null)
+    const response = await probeHttp(`${bridgeBase}/health`, 900)
+    if (!response.ok) return { ok: false, detail: `HTTP ${response.status || 'unreachable'}` }
+    const data = response.data
     if (!data?.ok) return { ok: false, detail: 'bridge reported not ok' }
     return { ok: true, detail: `conns ${data.conns ?? 0} · accepted ${data.accepted ?? 0} · rejected ${data.rejected ?? 0}` }
   } catch (error) {
@@ -328,13 +405,13 @@ export const SELFTEST_IDS = Object.freeze([
 ])
 
 async function runSelftest(session, deps) {
-  const snap = await envSnapshot(session, deps, { deep: true })
+  const snap = await envSnapshot(session, deps)
   const found = new Map()
   const push = (id, ok, detail) => found.set(id, { id, ok: ok === true, detail: detail ?? '' })
 
   push('container-exists', snap.container.state !== 'missing', snap.container.state)
   push('container-running', snap.container.state === 'running', snap.container.state)
-  push('engine-cdp-reachable', snap.engineAlive === true, snap.effective.httpBase || 'no port')
+  push('engine-cdp-reachable', snap.live === true, snap.planes?.engine?.state || 'down')
   push('page-target', snap.checks.page?.ok === true, snap.checks.page?.detail)
   // `ok` may be true with skipped:true for a blank page; selftest is strict —
   // "renderable" needs a real document, not an empty shell.
@@ -364,8 +441,8 @@ async function runSelftest(session, deps) {
   const bridgeBase = bridgeControlBase({ httpBase: snap.effective.httpBase })
   if (snap.checks.bridge?.ok) {
     try {
-      const response = await fetch(`${bridgeBase}/health`).catch(() => null)
-      const data = response ? await response.json().catch(() => null) : null
+      const response = await probeHttp(`${bridgeBase}/health`, 900)
+      const data = response.ok ? response.data : null
       writer = data?.control?.writer ?? null
       // The bridge reports `writer:false` when free; only a truthy id is a holder.
       if (writer === false) writer = null
@@ -376,7 +453,10 @@ async function runSelftest(session, deps) {
   // Emit in the declared order so the response reads like the profile contract.
   const checks = SELFTEST_IDS.map((id) => found.get(id) || { id, ok: false, detail: 'not run' })
   const failed = checks.filter((row) => !row.ok).length
-  return { ok: failed === 0, failed, total: checks.length, checks, snapshot: snap }
+  // `ok` means the call ran; `passed` is the strict verdict. The snapshot rides
+  // along at the top level and nested, so this response is the same document
+  // every other read returns.
+  return { ...snap, ok: true, passed: failed === 0, failed, total: checks.length, checks, snapshot: snap }
 }
 
 /**
@@ -438,24 +518,25 @@ async function prepareEnvironment(session, deps) {
   const settleMs = Number(deps.prepareTimeoutMs ?? 6000)
   const waitUntil = async (predicate, ms) => {
     const deadline = Date.now() + ms
-    let snap = await envSnapshot(session, deps, { deep: true })
+    let snap = await envSnapshot(session, deps)
     while (!predicate(snap) && Date.now() < deadline) {
       await new Promise((resolve) => setTimeout(resolve, 600))
-      snap = await envSnapshot(session, deps, { deep: true })
+      snap = await envSnapshot(session, deps)
     }
     return snap
   }
-  let snap = await waitUntil((row) => row.engineAlive, action === 'noop' ? 0 : settleMs)
-  // A container that is "running" can still be wedged: HTTP /json/list answers
-  // while the CDP socket never replies. That was the desktop state where
-  // 一键准备环境 reported "noop" forever. Repair means restart, then verify.
-  if (snap.container.state === 'running' && (!snap.engineAlive || snap.checks.page?.ok !== true)) {
+  let snap = await waitUntil((row) => row.live === true, action === 'noop' ? 0 : settleMs)
+  // Only a container that was already running and whose HTTP face answers
+  // while CDP does not (http-only) is restarted. A blank page is not a wedge.
+  // Creation and start get a grace pass: this call does not stop what it just
+  // started. Apple container has no restart subcommand; stop+start only.
+  if (action === 'noop' && snap.planes?.engine?.state === 'http-only') {
     try {
-      if (typeof deps.backend?.restart === 'function') await deps.backend.restart(name)
-      else { await deps.backend?.stop?.(name); await deps.backend?.start?.(name) }
-      if (action === 'noop') action = 'restarted'
-      snap = await waitUntil((row) => row.engineAlive && row.checks.page?.ok === true, settleMs)
-    } catch { /* keep the snapshot; the failure stays visible in checks */ }
+      await deps.backend?.stop?.(name)
+      await deps.backend?.start?.(name)
+      action = 'restarted'
+      snap = await waitUntil((row) => row.live === true, settleMs)
+    } catch { /* keep the snapshot; the failure stays visible in planes */ }
   }
   if (snap.httpBase) session.httpBase = session.httpBase || snap.httpBase
   if (snap.healthy) session.phase = 'running'
@@ -629,12 +710,25 @@ function buildOwners(session, deps) {
       // so the registry's per-session support was unreachable from the route.
       ensure: async ({ sessionId, policy } = {}) => {
         if (!sessionId) return prepareEnvironment(session, deps)
+        const snap = await envSnapshot(session, deps)
         const registry = registryFor(deps, profilesRoot)
-        const result = await registry.ensure({ sessionId, policy })
+        const httpBase = snap.effective?.httpBase || null
+        const result = await registry.ensure({
+          sessionId,
+          policy,
+          adopt: {
+            skipCreate: true,
+            containerName: snap.containerName,
+            endpoints: {
+              engine: httpBase,
+              cdp: httpBase ? `${String(httpBase).replace(/^http/, 'ws')}/devtools/browser` : null,
+              mcp: snap.effective?.bridgePort ? `ws://127.0.0.1:${snap.effective.bridgePort}/mcp` : null,
+            },
+          },
+        })
         if (!result.ok) return result
         const instance = result.instance
-        try { await deps.backend?.start?.(instance.containerName) } catch { /* create already started it */ }
-        instance.phase = 'running'
+        instance.phase = snap.container?.state === 'running' ? 'running' : instance.phase
         instance.attached = true
         instance.lastAttach = Date.now()
         return {
@@ -661,11 +755,68 @@ function buildOwners(session, deps) {
       elements: async () => null,
     },
     targets: { list: async () => (session.httpBase ? [{ url: session.httpBase }] : []) },
-    ports: { list: async () => (await envSnapshot(session, deps)).ports },
-    selftest: { run: async () => ({ ok: (await envSnapshot(session, deps)).healthy }) },
+    ports: { list: async () => envSnapshot(session, deps) },
+    selftest: { run: async () => runSelftest(session, deps) },
     recovery: { plan: async () => [] },
     bridge: { health: async () => { try { const r = await bridgeFetch(session, '/health'); return { ok: r.status === 200, status: r.status } } catch (e) { return { ok: false, errorId: 'kitesurf.control.bridge', error: e.message } } } },
   }
+}
+
+/** The live policy the host resolved for this session, or null when unavailable. */
+function livePolicy(session, deps) {
+  if (typeof deps?.policy === 'function') {
+    try { return deps.policy(session) } catch { return null }
+  }
+  try {
+    const service = deps?.ctx?.get?.('sandboxPolicy')
+    return service?.resolve?.({ session }) ?? null
+  } catch { return null }
+}
+
+/**
+ * A terminal must not attach to a container whose policy fingerprint no longer
+ * matches the live session policy. The registry row is the only durable record
+ * of the fingerprint that was actually mounted.
+ */
+function termPolicyStale(session, sessionId, deps) {
+  if (deps?.termPolicyStale === true) return true
+  if (session?.policyStale === true) return true
+  const policy = livePolicy(session, deps)
+  if (!policy || !sessionId) return false
+  const profilesRoot = deps?.profilesRoot ?? join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'profiles')
+  const registry = registryFor(deps, profilesRoot)
+  const row = registry?.instances ? [...registry.instances.values()].find((item) => item.sessionId === sessionId) : null
+  if (!row?.policyFingerprint) return false
+  try {
+    return policyFingerprint(tupleFromPolicy({ ...policy, sessionId })) !== row.policyFingerprint
+  } catch { return false }
+}
+
+async function callTermTool(name, args, session, deps) {
+  if (name === 'term.session.create') {
+    const snap = await envSnapshot(session, deps)
+    const created = await openTermSession({
+      sessionId: args.sessionId,
+      cols: args.cols,
+      rows: args.rows,
+      containerRunning: snap.planes?.container?.state === 'running',
+      policyStale: termPolicyStale(session, args.sessionId, deps),
+      spawnPty: (spec) => {
+        if (typeof deps.spawnPty === 'function') return deps.spawnPty(spec)
+        if (typeof deps.backend?.openPty === 'function') return deps.backend.openPty(snap.containerName, spec)
+        return spawnContainerPty(snap.containerName, spec)
+      },
+    })
+    if (created.ok) session.termSessionId = created.id
+    return created
+  }
+  if (name === 'term.session.close') return closeTermSession(args.id)
+  if (name === 'term.session.list') return { ok: true, sessions: listTermSessions() }
+  if (name === 'term.session.input') return writeTermSession(args.id, args.data)
+  if (name === 'term.session.read') return readTermSession(args.id, args.lines)
+  if (name === 'term.session.resize') return resizeTermSession(args.id, args.cols, args.rows)
+  if (name === 'term.audit' || name === 'term.lane.status') return { ok: true, sessions: listTermSessions() }
+  return { ok: false, kind: 'invalid', status: 400, error: `no terminal tool ${name}` }
 }
 
 export function routeSpecs(deps = {}) {
@@ -744,7 +895,8 @@ export function routeSpecs(deps = {}) {
       }
       if (row.path.endsWith('/status')) {
         await ensureBase(session, deps)
-        send(res, 200, { ok: session.phase === 'running', httpBase: session.httpBase ?? null, kite: { phase: session.phase }, buildId: BUILD_ID, containerName: containerNameFor(session, deps.env || process.env) })
+        const snap = await envSnapshot(session, deps)
+        send(res, 200, { ...snap, ok: true, kite: { phase: session.phase } })
         return
       }
       if (row.path.endsWith('/kite')) {
@@ -784,7 +936,7 @@ export function routeSpecs(deps = {}) {
         // 11 real probes, matching profiles/kitesurf/profile.yaml `health.selftest`.
         try {
           const result = await runSelftest(session, deps)
-          send(res, 200, { ok: result.ok, failed: result.failed, total: result.total, checks: result.checks })
+          send(res, 200, result)
         } catch (error) {
           send(res, 502, { ok: false, errorId: error.errorId || 'kitesurf.engine.connect', error: error.message })
         }
@@ -871,16 +1023,30 @@ export function routeSpecs(deps = {}) {
       if (row.path.endsWith('/mcp')) {
         const rpc = deps.rpc ?? await readJson(req)
         if (rpc.method === 'tools/list') {
+          const term = TERM_TOOLS.map((tool) => ({ name: tool.name, description: tool.name, inputSchema: tool.inputSchema }))
           res.statusCode = 200
-          res.end(JSON.stringify({ jsonrpc: '2.0', id: rpc.id ?? null, result: { tools: toolsList() } }))
+          res.end(JSON.stringify({ jsonrpc: '2.0', id: rpc.id ?? null, result: { tools: [...toolsList(), ...term] } }))
           return
         }
         if (rpc.method === 'tools/call') {
-          // P3-03: dispatch against real injected owners (async-capable), not the
-          // retired uniform digest. owners built per-call from live session+deps.
-          const answer = await answerNativeTool(rpc.params?.name, buildOwners(session, deps), session, rpc.params?.arguments ?? {})
-          res.statusCode = answer.ok ? 200 : (answer.status ?? (answer.errorId ? statusOf(answer.errorId) : 400))
-          res.end(JSON.stringify({ jsonrpc: '2.0', id: rpc.id ?? null, result: answer }))
+          const name = rpc.params?.name
+          const args = rpc.params?.arguments ?? {}
+          const answer = String(name).startsWith('term.')
+            ? await callTermTool(name, args, session, deps)
+            : await answerNativeTool(name, buildOwners(session, deps), session, args)
+          const failed = answer?.ok === false
+          const payload = failed ? answer : (answer?.data !== undefined ? answer.data : answer)
+          res.statusCode = failed ? (answer.status ?? (answer.errorId ? statusOf(answer.errorId) : 400)) : 200
+          res.end(JSON.stringify({
+            jsonrpc: '2.0',
+            id: rpc.id ?? null,
+            result: {
+              ...answer,
+              isError: failed,
+              structuredContent: payload,
+              content: [{ type: 'text', text: JSON.stringify(payload) }],
+            },
+          }))
           return
         }
         res.statusCode = 200
@@ -1037,7 +1203,7 @@ export function routeSpecs(deps = {}) {
           // rows that actually explain a failure.
           const query = new URL(req.url ?? '/', 'http://localhost').searchParams
           const withCatalog = query.get('catalog') === '1'
-          const snap = await envSnapshot(session, deps, { deep: true })
+          const snap = await envSnapshot(session, deps)
           let targetInfos = []
           let engineError = null
           if (snap.engineAlive && snap.httpBase) {
@@ -1060,11 +1226,12 @@ export function routeSpecs(deps = {}) {
             `Kitesurf 环境诊断 · ${snap.healthy ? '正常' : '异常'}`,
             `实例 ${snap.containerName} · 容器 ${snap.container.state}`,
             `引擎 ${snap.effective.httpBase || '—'} · 桥 ${snap.effective.bridgePort || '—'}`,
-            ...summary.map((row) => `${row.ok ? '✓' : '✗'} ${row.label}：${row.detail || '—'}`),
+            ...summary.map((row) => `${row.skipped ? '○' : row.ok ? '✓' : '✗'} ${row.label}：${row.detail || '—'}`),
             ...(hints.length ? ['', '建议：', ...hints.map((hint) => `· ${hint}`)] : []),
           ].join('\n')
           send(res, 200, {
-            ok: snap.healthy,
+            ...snap,
+            ok: true,
             httpBase: snap.httpBase,
             kite: { phase: session.phase },
             container: snap.container,
@@ -1090,20 +1257,8 @@ export function routeSpecs(deps = {}) {
           // Deep on purpose: this is what the panel's健康灯 reads. A shallow
           // probe (container+engine only) produced the exact bug where the
           // badge said OK while 页面/DOM rows were red.
-          const snap = await envSnapshot(session, deps, { deep: true })
-          send(res, 200, {
-            ok: true,
-            httpBase: snap.httpBase ?? session.httpBase ?? null,
-            phase: session.phase,
-            containerName: snap.containerName,
-            container: snap.container,
-            effective: snap.effective,
-            ports: snap.ports,
-            engineAlive: snap.engineAlive,
-            checks: snap.checks,
-            healthy: snap.healthy,
-            buildId: BUILD_ID,
-          })
+          const snap = await envSnapshot(session, deps)
+          send(res, 200, { ...snap, ok: true, phase: session.phase })
           return
         }
         if (row.path.endsWith('/recover')) {
@@ -1122,6 +1277,7 @@ export function routeSpecs(deps = {}) {
             try { await navigate(session, snap.httpBase, last.url) } catch { /* replay is best-effort */ }
           }
           send(res, 200, {
+            ...snap,
             ok: true,
             action: snap.action,
             healthy: snap.healthy,

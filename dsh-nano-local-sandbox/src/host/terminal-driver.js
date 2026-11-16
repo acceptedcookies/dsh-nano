@@ -63,7 +63,10 @@ export function appendTermAudit(file, record) {
 export function createTermSession(args, audit, url, auditFile) {
   const checked = validateTermCall('term.session.create', args)
   if (!checked.ok) return checked
-  const id = args.sessionId ?? 'term-1'
+  if (typeof args.sessionId !== 'string' || args.sessionId.length === 0 || args.sessionId === 'term-1') {
+    return { ok: false, kind: 'needs_target', error: 'session' }
+  }
+  const id = args.sessionId
   const session = {
     id,
     attach: { protocol: 'dnt-ws-v1', url },

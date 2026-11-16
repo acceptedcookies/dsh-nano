@@ -399,9 +399,46 @@ var __kitesurfExport = (() => {
     select(value, { focus: false });
     return { el, select, value: () => current };
   }
-  var nanoTabsSeq;
+  function NanoTabs({ items, value, onChange, label, className }) {
+    const [inner, setInner] = import_react5.default.useState(() => value ?? items[0]?.value);
+    const current = value ?? inner;
+    const select = (next) => {
+      if (value === void 0) setInner(next);
+      onChange?.(next);
+    };
+    const idBase = import_react5.default.useMemo(() => `nano-tabs-${Math.random().toString(36).slice(2, 9)}`, []);
+    return import_react5.default.createElement(
+      "div",
+      { className: ["nano-tabs-wrap", className ?? ""].filter(Boolean).join(" ") },
+      import_react5.default.createElement(
+        "div",
+        { className: "nano-tabs", role: "tablist", "aria-label": label },
+        items.map((item) => import_react5.default.createElement("button", {
+          key: item.value,
+          id: `${idBase}-tab-${item.value}`,
+          type: "button",
+          role: "tab",
+          className: "nano-tab",
+          "aria-selected": String(item.value === current),
+          "aria-controls": `${idBase}-panel-${item.value}`,
+          tabIndex: item.value === current ? 0 : -1,
+          onClick: () => select(item.value)
+        }, item.label))
+      ),
+      items.map((item) => import_react5.default.createElement("div", {
+        key: item.value,
+        id: `${idBase}-panel-${item.value}`,
+        role: "tabpanel",
+        className: "nano-tabs-panel",
+        "aria-labelledby": `${idBase}-tab-${item.value}`,
+        hidden: item.value !== current
+      }, item.content))
+    );
+  }
+  var import_react5, nanoTabsSeq;
   var init_tabs = __esm({
     "../packages/dsh-nano-ui/src/tabs.js"() {
+      import_react5 = __toESM(__require("react"), 1);
       nanoTabsSeq = 0;
     }
   });
@@ -536,6 +573,11 @@ var __kitesurfExport = (() => {
 .nano-tab[aria-selected="true"]::after { content: ''; position: absolute; left: 22%; right: 22%; bottom: -3px;
   height: 2px; border-radius: 1px; background: var(--dsw-alias-focus-ring, #4c9aff); }
 .nano-tab:focus-visible { outline: 2px solid var(--dsw-alias-focus-ring, #4c9aff); outline-offset: -2px; }
+/* React tabbed body (NanoTabs): the strip stays fixed and only the active
+   panel scrolls, so a fixed-height dialog never resizes when tabs switch. */
+.nano-tabs-wrap { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.nano-tabs-panel { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-top: 10px; }
+.nano-tabs-panel[hidden] { display: none; }
 `;
     }
   });
@@ -547,6 +589,7 @@ var __kitesurfExport = (() => {
     NanoDialog: () => NanoDialog,
     NanoMenu: () => NanoMenu,
     NanoMenuItem: () => NanoMenuItem,
+    NanoTabs: () => NanoTabs,
     NanoToast: () => NanoToast,
     nanoTabs: () => nanoTabs,
     openNanoDialog: () => openNanoDialog,
@@ -1629,8 +1672,8 @@ var __kitesurfExport = (() => {
        * React comes from impl.react at join (it's an external in every bundle).
        */
       profiler(Component) {
-        const React6 = row._react;
-        if (React6 == null || typeof React6.Profiler !== "function") return Component;
+        const React7 = row._react;
+        if (React7 == null || typeof React7.Profiler !== "function") return Component;
         const capture = (...args) => {
           const actualDuration = args[2];
           row.profiler.commits += 1;
@@ -1638,10 +1681,10 @@ var __kitesurfExport = (() => {
           while (row.profiler.durations.length > PROFILER_SAMPLE_CAP) row.profiler.durations.shift();
         };
         return function PerfReviewProfiler(props) {
-          return React6.createElement(
-            React6.Profiler,
+          return React7.createElement(
+            React7.Profiler,
             { id: `nano:${pluginId}:root`, onRender: capture },
-            React6.createElement(Component, props)
+            React7.createElement(Component, props)
           );
         };
       }
@@ -1939,6 +1982,9 @@ var __kitesurfExport = (() => {
           editSend: "\u5199\u56DE\u5143\u7D20",
           stalePage: "\u9875\u9762\u5DF2\u53D8\u5316\uFF0C\u753B\u9762\u5DF2\u5237\u65B0\u2014\u2014\u8BF7\u91CD\u65B0\u70B9\u9009",
           settingsTitle: "\u6D4F\u89C8\u8BBE\u7F6E",
+          tabEnv: "\u73AF\u5883",
+          tabBrowse: "\u6D4F\u89C8",
+          tabHistory: "\u5386\u53F2",
           settingsDesc: "\u53EA\u4F5C\u7528\u4E8E\u8FD9\u4E00\u6B21\u5F15\u64CE\u8FDB\u7A0B\u3002\u89C6\u53E3\u7528\u6765\u6309\u624B\u673A\u3001\u5E73\u677F\u3001\u684C\u9762\u770B\u540C\u4E00\u9875\u3002\u5F15\u64CE\u5730\u5740\u6539\u52A8\u5373\u65F6\u751F\u6548\u3002",
           cancel: "\u53D6\u6D88",
           save: "\u4FDD\u5B58",
@@ -2034,6 +2080,9 @@ var __kitesurfExport = (() => {
           editSend: "Write back",
           stalePage: "Page changed \u2014 frame refreshed, pick again",
           settingsTitle: "Browser settings",
+          tabEnv: "Environment",
+          tabBrowse: "Browsing",
+          tabHistory: "History",
           settingsDesc: "Applies to this engine process only. Viewport previews the same page as phone, tablet, or desktop. Engine-address changes take effect immediately.",
           cancel: "Cancel",
           save: "Save",
@@ -2238,15 +2287,16 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
     apply: () => apply,
     inject: () => inject
   });
-  var React5 = __require("react");
+  var React6 = __require("react");
   var primitives = __require("@deepseek-ai/dsh-client-ui-primitives");
-  var { openNanoDialog: openNanoDialog2, openNanoMenu: openNanoMenu2, NANO_STYLES: NANO_STYLES2, NanoToast: NanoToast2 } = (init_dsh_nano_ui(), __toCommonJS(dsh_nano_ui_exports));
+  var { openNanoDialog: openNanoDialog2, openNanoMenu: openNanoMenu2, NANO_STYLES: NANO_STYLES2, NanoToast: NanoToast2, NanoTabs: NanoTabs2 } = (init_dsh_nano_ui(), __toCommonJS(dsh_nano_ui_exports));
   var { ensurePerfReview: ensurePerfReview2 } = (init_client(), __toCommonJS(client_exports));
   var { BUCKETS: BUCKETS2, DECL_HASH: DECL_HASH2 } = (init_perf_declaration(), __toCommonJS(perf_declaration_exports));
   var { copyFor: copyFor2 } = (init_i18n(), __toCommonJS(i18n_exports));
   var { batchNote: batchNote2, designNote: designNote2, multiNote: multiNote2 } = (init_note(), __toCommonJS(note_exports));
   var { contentFrame: contentFrame2, shotPoint: shotPoint2 } = (init_shot_point(), __toCommonJS(shot_point_exports));
-  var h = React5.createElement;
+  var h = React6.createElement;
+  var CLIENT_BUILD_ID = true ? "0.1.0+4261a38" : "dev";
   var STATUS = "/nano-local-sandbox/status";
   var OPEN = "/nano-local-sandbox/open";
   var SHOT = "/nano-local-sandbox/shot";
@@ -2268,6 +2318,23 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
   var KIND = "kitesurf";
   var OWN_ID = "nano-kitesurf";
   var MAX_PINS = 8;
+  var PLANE_LABEL = { container: "\u5BB9\u5668", engine: "\u5F15\u64CE", page: "\u9875\u9762", dom: "DOM", bridge: "\u6865" };
+  var LAMP_PLANES = ["container", "engine", "page", "dom", "bridge"];
+  function planeRows(snap) {
+    const planes = snap?.planes;
+    if (!planes || typeof planes !== "object") return [];
+    return LAMP_PLANES.filter((id) => planes[id]).map((id) => {
+      const row = planes[id];
+      const skipped = row.state === "skipped" || row.skipped === true;
+      return {
+        plane: id,
+        label: PLANE_LABEL[id] || id,
+        ok: row.ok === true,
+        skipped,
+        detail: row.detail || row.url || row.state || ""
+      };
+    });
+  }
   var pagePerf = ensurePerfReview2();
   var perf = {
     span(name, fn) {
@@ -2276,7 +2343,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           version: true ? "0.1.0" : "0.0.0",
           buckets: BUCKETS2,
           decl: DECL_HASH2,
-          react: React5,
+          react: React6,
           root: () => document.querySelector("[data-nks-workspace]")
         });
         if (collector?.span) return collector.span(name, fn);
@@ -2422,10 +2489,6 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
 .nks-dt-rule{display:flex;gap:8px;padding:1px 0;color:var(--dsw-alias-label-tertiary)}
 .nks-dt-rule b{color:var(--dsw-alias-link,#7aaaff);font-weight:500;max-width:45%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .nks-dt-rule span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.nks-tabs-wrap{display:flex;flex-direction:column;min-height:0}
-.nks-tabs{display:flex;gap:2px;border-bottom:.5px solid var(--dsw-alias-border-l2);margin-bottom:8px}
-.nks-tabs button{height:30px;padding:0 12px;border:0;border-bottom:2px solid transparent;background:transparent;color:var(--dsw-alias-label-tertiary);font:inherit;cursor:pointer}
-.nks-tabs button[aria-selected="true"]{color:var(--dsw-alias-label-primary);border-bottom-color:var(--dsw-alias-link,#7aaaff)}
 .nks-hist-tab{display:flex;flex-direction:column;min-height:0;max-height:360px}
 .nks-hist-list{overflow:auto}
 .nks-modal-mask{position:absolute;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.45)}
@@ -2555,67 +2618,68 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
     }
   }
   function BrowserPane({ copy, languageOf, schemeOf }) {
-    const [status, setStatus] = React5.useState(null);
-    const [pageUrl, setPageUrl] = React5.useState("");
-    const [draftUrl, setDraftUrl] = React5.useState("");
-    const [history, setHistory] = React5.useState([]);
-    const [historyOpen, setHistoryOpen] = React5.useState(false);
-    const [shot, setShot] = React5.useState(null);
-    const [shotMime, setShotMime] = React5.useState("image/webp");
-    const [shotMeta, setShotMeta] = React5.useState(null);
-    const [annotate, setAnnotate] = React5.useState(false);
-    const [pick, setPick] = React5.useState(null);
-    const [pins, setPins] = React5.useState([]);
-    const [draftBox, setDraftBox] = React5.useState(null);
-    const [draftKind, setDraftKind] = React5.useState(null);
-    const [comment, setComment] = React5.useState("");
-    const [editing, setEditing] = React5.useState(false);
-    const [composing, setComposing] = React5.useState(false);
-    const refSeq = React5.useRef(0);
-    const [devtoolsOpen, setDevtoolsOpen] = React5.useState(false);
-    const [navOpen, setNavOpen] = React5.useState(false);
-    const [navTabs, setNavTabs] = React5.useState([]);
-    const [nativeHtml, setNativeHtml] = React5.useState(true);
-    const [domDoc, setDomDoc] = React5.useState(null);
-    const [vp, setVp] = React5.useState(null);
-    const [vpCustom, setVpCustom] = React5.useState(false);
-    const domFrameRef = React5.useRef(null);
-    const [toast, setToast] = React5.useState(null);
-    const [toastFix, setToastFix] = React5.useState(false);
-    const [control, setControl] = React5.useState(null);
-    const [actionToast, setActionToast] = React5.useState(null);
-    const lastActionStamp = React5.useRef("");
-    const actionToastTimer = React5.useRef(0);
-    const [busy, setBusy] = React5.useState(false);
-    const [hover, setHover] = React5.useState(null);
-    const [frame, setFrame] = React5.useState(null);
-    const toastTimer = React5.useRef(0);
-    const frameRef = React5.useRef(null);
-    const dragRef = React5.useRef(null);
-    const busyRef = React5.useRef(false);
-    const shotInFlightRef = React5.useRef(false);
-    const dialogOpenRef = React5.useRef(false);
-    const hoverTimerRef = React5.useRef(0);
-    const clickTimerRef = React5.useRef(0);
-    const lastDblClickRef = React5.useRef(0);
-    const annotateRef = React5.useRef(false);
-    const pickRef = React5.useRef(null);
-    const pinsRef = React5.useRef([]);
-    const commentRef = React5.useRef("");
-    const editingRef = React5.useRef(false);
-    const shotMetaRef = React5.useRef(null);
-    const sendPickRef = React5.useRef(null);
+    const [status, setStatus] = React6.useState(null);
+    const statusDown = status != null && (status.ok === false || status.ready === false);
+    const [pageUrl, setPageUrl] = React6.useState("");
+    const [draftUrl, setDraftUrl] = React6.useState("");
+    const [history, setHistory] = React6.useState([]);
+    const [historyOpen, setHistoryOpen] = React6.useState(false);
+    const [shot, setShot] = React6.useState(null);
+    const [shotMime, setShotMime] = React6.useState("image/webp");
+    const [shotMeta, setShotMeta] = React6.useState(null);
+    const [annotate, setAnnotate] = React6.useState(false);
+    const [pick, setPick] = React6.useState(null);
+    const [pins, setPins] = React6.useState([]);
+    const [draftBox, setDraftBox] = React6.useState(null);
+    const [draftKind, setDraftKind] = React6.useState(null);
+    const [comment, setComment] = React6.useState("");
+    const [editing, setEditing] = React6.useState(false);
+    const [composing, setComposing] = React6.useState(false);
+    const refSeq = React6.useRef(0);
+    const [devtoolsOpen, setDevtoolsOpen] = React6.useState(false);
+    const [navOpen, setNavOpen] = React6.useState(false);
+    const [navTabs, setNavTabs] = React6.useState([]);
+    const [nativeHtml, setNativeHtml] = React6.useState(true);
+    const [domDoc, setDomDoc] = React6.useState(null);
+    const [vp, setVp] = React6.useState(null);
+    const [vpCustom, setVpCustom] = React6.useState(false);
+    const domFrameRef = React6.useRef(null);
+    const [toast, setToast] = React6.useState(null);
+    const [toastFix, setToastFix] = React6.useState(false);
+    const [control, setControl] = React6.useState(null);
+    const [actionToast, setActionToast] = React6.useState(null);
+    const lastActionStamp = React6.useRef("");
+    const actionToastTimer = React6.useRef(0);
+    const [busy, setBusy] = React6.useState(false);
+    const [hover, setHover] = React6.useState(null);
+    const [frame, setFrame] = React6.useState(null);
+    const toastTimer = React6.useRef(0);
+    const frameRef = React6.useRef(null);
+    const dragRef = React6.useRef(null);
+    const busyRef = React6.useRef(false);
+    const shotInFlightRef = React6.useRef(false);
+    const dialogOpenRef = React6.useRef(false);
+    const hoverTimerRef = React6.useRef(0);
+    const clickTimerRef = React6.useRef(0);
+    const lastDblClickRef = React6.useRef(0);
+    const annotateRef = React6.useRef(false);
+    const pickRef = React6.useRef(null);
+    const pinsRef = React6.useRef([]);
+    const commentRef = React6.useRef("");
+    const editingRef = React6.useRef(false);
+    const shotMetaRef = React6.useRef(null);
+    const sendPickRef = React6.useRef(null);
     annotateRef.current = annotate;
     pickRef.current = pick;
     pinsRef.current = pins;
     commentRef.current = comment;
     editingRef.current = editing;
     shotMetaRef.current = shotMeta;
-    const addressFocusedRef = React5.useRef(false);
-    React5.useEffect(() => {
+    const addressFocusedRef = React6.useRef(false);
+    React6.useEffect(() => {
       if (pageUrl && !addressFocusedRef.current) setDraftUrl(pageUrl);
     }, [pageUrl]);
-    const refreshStatus = React5.useCallback(() => {
+    const refreshStatus = React6.useCallback(() => {
       return fetch(STATUS).then((response) => response.json()).then((payload) => {
         setStatus(payload);
         return payload;
@@ -2625,7 +2689,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         return fallback;
       });
     }, []);
-    React5.useEffect(() => {
+    React6.useEffect(() => {
       if (!navOpen) return;
       let alive = true;
       fetch(`${BROWSE_HISTORY}?limit=120`).then((r) => r.json()).then((data) => {
@@ -2650,7 +2714,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       });
       setNavTabs((current) => current.filter((row) => row.url !== url));
     };
-    React5.useEffect(() => {
+    React6.useEffect(() => {
       refreshStatus().then(async (statusPayload) => {
         if (!statusPayload?.ok) return;
         try {
@@ -2666,7 +2730,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         }
       });
     }, []);
-    React5.useEffect(() => {
+    React6.useEffect(() => {
       const onKey = (event) => {
         if (dialogOpenRef.current) return;
         const meta = event.metaKey || event.ctrlKey;
@@ -2724,11 +2788,11 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       window.addEventListener("keydown", onKey);
       return () => window.removeEventListener("keydown", onKey);
     }, []);
-    React5.useEffect(() => {
+    React6.useEffect(() => {
       if (nativeHtml && shot && !domDoc) loadDom().catch(() => {
       });
     }, [shot, nativeHtml]);
-    React5.useEffect(() => {
+    React6.useEffect(() => {
       if (shot) return void 0;
       const timer = window.setInterval(() => {
         if (!busyRef.current) reloadShot(0, { keepPick: true }).catch(() => {
@@ -2736,7 +2800,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       }, 2e3);
       return () => clearInterval(timer);
     }, [shot]);
-    React5.useEffect(() => {
+    React6.useEffect(() => {
       let armed = 0;
       const onKey = (event) => {
         if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "e") {
@@ -2752,7 +2816,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       window.addEventListener("keydown", onKey, true);
       return () => window.removeEventListener("keydown", onKey, true);
     }, []);
-    React5.useEffect(() => {
+    React6.useEffect(() => {
       if (!nativeHtml) return;
       const frame2 = domFrameRef.current;
       if (frame2 && domDoc) {
@@ -2762,7 +2826,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         }
       }
     }, [domDoc, nativeHtml]);
-    React5.useEffect(() => {
+    React6.useEffect(() => {
       const onMessage = (event) => {
         const data = event.data;
         if (!data || data.__nks !== "pick" || !data.packet) return;
@@ -2773,7 +2837,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       window.addEventListener("message", onMessage);
       return () => window.removeEventListener("message", onMessage);
     }, []);
-    React5.useEffect(() => {
+    React6.useEffect(() => {
       const phase = status?.kite?.phase;
       if (phase && phase !== "running" && shot) {
         setShot(null);
@@ -2782,7 +2846,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         setShotMeta(null);
       }
     }, [status?.kite?.phase]);
-    React5.useEffect(() => {
+    React6.useEffect(() => {
       const element = frameRef.current;
       if (!element || typeof ResizeObserver === "undefined") return void 0;
       let timer = 0;
@@ -2807,7 +2871,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         observer.disconnect();
       };
     }, []);
-    React5.useEffect(() => {
+    React6.useEffect(() => {
       const onFocus = () => {
         if (!busyRef.current) reloadShot(0, { keepPick: true }).catch(() => {
         });
@@ -2815,7 +2879,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       window.addEventListener("focus", onFocus);
       return () => window.removeEventListener("focus", onFocus);
     }, []);
-    React5.useLayoutEffect(() => {
+    React6.useLayoutEffect(() => {
       const element = frameRef.current;
       if (!element) return void 0;
       const measure = () => {
@@ -3244,10 +3308,10 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       await run(async () => {
         try {
           const response = await post(RECOVER, {});
-          const after = await refreshStatus();
-          if (after?.ok !== false) await reloadShot(0, { keepPick: true });
-          else if (response?.ports) showToast(`${copy.prepareFailed}`);
-          else showToast(copy.prepareDone);
+          await refreshStatus();
+          if (response?.v != null && response.v !== 1) showToast("\u89C2\u5BDF\u5408\u540C\u4E0D\u5339\u914D");
+          else if (response?.ready === true) await reloadShot(0, { keepPick: true });
+          else showToast(copy.prepareNotReady || copy.prepareFailed);
         } catch (cause) {
           showError(cause);
         }
@@ -3288,7 +3352,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
     })) : [];
     const hasPage = !!shot && !!shotMeta?.url && shotMeta.url !== "about:blank";
     const engineHasPage = hasPage || status?.phase === "running" || !!status?.httpBase;
-    React5.useEffect(() => {
+    React6.useEffect(() => {
       if (!engineHasPage) {
         setControl(null);
         return void 0;
@@ -3325,7 +3389,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         clearTimeout(actionToastTimer.current);
       };
     }, [engineHasPage]);
-    const controlOp = React5.useCallback(async (action) => {
+    const controlOp = React6.useCallback(async (action) => {
       try {
         const data = await fetch(CONTROL, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action, owner: "kitesurf-pane" }) }).then((r) => r.json());
         if (data?.control) setControl(data.control);
@@ -3371,23 +3435,35 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       );
     };
     function EnvPanel() {
-      const [snap, setSnap] = React5.useState(null);
-      const [diag, setDiag] = React5.useState(null);
-      const copyRawDiag = React5.useRef(false);
-      const [busyLocal, setBusyLocal] = React5.useState(false);
-      const [note, setNote] = React5.useState("");
-      React5.useEffect(() => {
+      const [snap, setSnap] = React6.useState(null);
+      const [diag, setDiag] = React6.useState(null);
+      const copyRawDiag = React6.useRef(false);
+      const [busyLocal, setBusyLocal] = React6.useState(false);
+      const [note, setNote] = React6.useState("");
+      React6.useEffect(() => {
         let alive = true;
-        fetch(PORTS).then((r) => r.json()).then((data) => {
-          if (alive) setSnap(data);
+        let seen = null;
+        const load = () => fetch(PORTS).then((r) => r.json()).then((data) => {
+          if (!alive || !data) return;
+          const sig = `${data.v ?? ""}:${data.epoch ?? ""}:${data.ready ?? ""}`;
+          if (sig === seen) return;
+          seen = sig;
+          setSnap(data);
         }).catch(() => {
         });
-        fetch(DIAGNOSTICS).then((r) => r.json()).then((data) => {
-          if (alive) setDiag(data);
-        }).catch(() => {
-        });
+        load();
+        const period = () => document.visibilityState === "hidden" ? 12e3 : 1500;
+        let timer = window.setInterval(load, period());
+        const onVis = () => {
+          clearInterval(timer);
+          timer = window.setInterval(load, period());
+          if (document.visibilityState !== "hidden") load();
+        };
+        document.addEventListener("visibilitychange", onVis);
         return () => {
           alive = false;
+          clearInterval(timer);
+          document.removeEventListener("visibilitychange", onVis);
         };
       }, []);
       async function prepare() {
@@ -3399,9 +3475,10 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           const ports = result.ports ? result : await fetch(PORTS).then((r) => r.json()).catch(() => null);
           setSnap(ports);
           if (Array.isArray(result.summary)) setDiag(result);
-          const failed = Array.isArray(result.summary) ? result.summary.filter((row) => !row.ok && !row.skipped) : [];
-          if (!result.ok) setNote(`${copy.prepareFailed}: ${result.errorId || result.error || `HTTP ${response.status}`}`);
-          else if (result.healthy === false || failed.length) setNote(`${copy.prepareNotReady}: ${failed.map((row) => row.label).join(" / ")}`);
+          const failed = planeRows(result).filter((row) => !row.ok && !row.skipped);
+          if (result.planes && result.v !== 1) setNote("\u89C2\u5BDF\u5408\u540C\u4E0D\u5339\u914D");
+          else if (!result.ok) setNote(`${copy.prepareFailed}: ${result.errorId || result.error || `HTTP ${response.status}`}`);
+          else if (result.ready !== true) setNote(`${copy.prepareNotReady}: ${failed.map((row) => row.plane || row.label).join(" / ")}`);
           else setNote(result.action === "noop" ? copy.prepareDone : `${copy.prepareDone} \xB7 ${result.action}`);
           await refreshStatus();
           await reloadShot(0, { keepPick: true }).catch(() => {
@@ -3425,10 +3502,10 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       }
       const engine = snap?.effective?.httpBase || "\u2014";
       const container = snap?.container?.state || "\u2014";
-      const portRow = snap?.ports?.engine ? `${snap.ports.engine.port} \xB7 ${snap.ports.engine.heldBy === "this-container" ? "\u672C\u63D2\u4EF6\u5BB9\u5668" : snap.ports.engine.heldBy === "other" ? "\u88AB\u5176\u4ED6\u7A0B\u5E8F\u5360\u7528" : "\u7A7A\u95F2"}` : "\u2014";
-      const rows = Array.isArray(diag?.summary) ? diag.summary : [];
-      const rowsOk = rows.every((row) => row.ok === true || row.skipped === true);
-      const healthy = (typeof diag?.healthy === "boolean" ? diag.healthy : snap?.healthy === true) && rowsOk;
+      const portRow = snap?.ports?.engine ? `${snap.ports.engine.port} \xB7 ${snap.ports.engine.heldBy === "this-container" ? "\u672C\u63D2\u4EF6\u5BB9\u5668" : "\u7A7A\u95F2"}` : "\u2014";
+      const contractMismatch = snap != null && snap.v !== 1;
+      const rows = planeRows(snap);
+      const healthy = !contractMismatch && snap?.ready === true;
       return h(
         "div",
         { className: "nks-env", "data-nks-env": "1" },
@@ -3436,9 +3513,9 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           "div",
           { className: "nks-env-title" },
           copy.envTitle,
-          h("span", { className: healthy ? "nks-env-ok" : "nks-env-bad" }, healthy ? "\u25CF OK" : "\u25CF \u5F02\u5E38")
+          h("span", { className: healthy ? "nks-env-ok" : "nks-env-bad" }, contractMismatch ? "\u89C2\u5BDF\u5408\u540C\u4E0D\u5339\u914D" : healthy ? "\u25CF OK" : "\u25CF \u5F02\u5E38")
         ),
-        h("div", { className: "nks-env-row" }, h("b", null, copy.envPlugin), h("span", null, status?.buildId || "\u2014")),
+        h("div", { className: "nks-env-row" }, h("b", null, copy.envPlugin), h("span", null, snap?.buildId || "\u672A\u77E5")),
         h("div", { className: "nks-env-row" }, h("b", null, copy.envEngine), h("span", null, engine)),
         h("div", { className: "nks-env-row" }, h("b", null, copy.envContainer), h("span", null, container)),
         snap?.containerName ? h("div", { className: "nks-env-row" }, h("b", null, copy.envInstance), h("span", null, snap.containerName)) : null,
@@ -3600,28 +3677,24 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       }, true);
       doc.addEventListener("mouseleave", clearHover, true);
     }
-    function SettingsTabs({ children }) {
-      const [tab, setTab] = React5.useState("env");
-      return h(
-        "div",
-        { className: "nks-tabs-wrap" },
-        h(
-          "div",
-          { className: "nks-tabs", role: "tablist" },
-          h("button", { type: "button", role: "tab", "data-nks-tab": "env", "aria-selected": tab === "env" ? "true" : "false", onClick: () => setTab("env") }, "\u8BBE\u7F6E"),
-          h("button", { type: "button", role: "tab", "data-nks-tab": "history", "aria-selected": tab === "history" ? "true" : "false", onClick: () => setTab("history") }, "\u6D4F\u89C8\u5386\u53F2")
-        ),
-        tab === "env" ? children : h(HistoryTab)
-      );
+    function SettingsTabs({ env, browse }) {
+      return h(NanoTabs2, {
+        label: copy.settingsTitle,
+        items: [
+          { value: "env", label: copy.tabEnv, content: env },
+          { value: "browse", label: copy.tabBrowse, content: browse },
+          { value: "history", label: copy.tabHistory, content: h(HistoryTab) }
+        ]
+      });
     }
     function HistoryTab() {
-      const [rows, setRows] = React5.useState([]);
-      const [q, setQ] = React5.useState("");
-      const load = React5.useCallback(async (needle) => {
+      const [rows, setRows] = React6.useState([]);
+      const [q, setQ] = React6.useState("");
+      const load = React6.useCallback(async (needle) => {
         const data = await fetch(`${BROWSE_HISTORY}?limit=100${needle ? "&q=" + encodeURIComponent(needle) : ""}`).then((r) => r.json());
         setRows(data.entries || []);
       }, []);
-      React5.useEffect(() => {
+      React6.useEffect(() => {
         load("").catch(() => {
         });
       }, [load]);
@@ -3662,14 +3735,14 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       );
     }
     function HistoryDialog({ open, onClose }) {
-      const [rows, setRows] = React5.useState([]);
-      const [q, setQ] = React5.useState("");
-      const [busy2, setBusy2] = React5.useState(false);
-      const load = React5.useCallback(async (needle) => {
+      const [rows, setRows] = React6.useState([]);
+      const [q, setQ] = React6.useState("");
+      const [busy2, setBusy2] = React6.useState(false);
+      const load = React6.useCallback(async (needle) => {
         const data = await fetch(`${BROWSE_HISTORY}?limit=100${needle ? "&q=" + encodeURIComponent(needle) : ""}`).then((r) => r.json());
         setRows(data.entries || []);
       }, []);
-      React5.useEffect(() => {
+      React6.useEffect(() => {
         if (open) load("").catch(() => {
         });
       }, [open, load]);
@@ -3739,11 +3812,11 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       );
     }
     function DevTools({ open, onClose }) {
-      const [tab, setTab] = React5.useState("console");
-      const [rows, setRows] = React5.useState([]);
-      const [failedOnly, setFailedOnly] = React5.useState(false);
-      const [styles, setStyles] = React5.useState(null);
-      React5.useEffect(() => {
+      const [tab, setTab] = React6.useState("console");
+      const [rows, setRows] = React6.useState([]);
+      const [failedOnly, setFailedOnly] = React6.useState(false);
+      const [styles, setStyles] = React6.useState(null);
+      React6.useEffect(() => {
         if (!open) return void 0;
         let alive = true;
         let since = null;
@@ -3915,6 +3988,8 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         title: copy.settingsTitle,
         description: copy.settingsDesc,
         width: 420,
+        // Fixed height: the tab strip changes panels, never the card size.
+        fixedHeight: 560,
         region,
         // openNanoDialog already closes itself after onCancel — closing here
         // again would double root.unmount()/host.remove() (S3-3).
@@ -3922,7 +3997,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           dialogOpenRef.current = false;
         },
         onConfirm: () => save(),
-        children: h(SettingsTabs, null, h(
+        children: h(SettingsTabs, { env: h(EnvPanel, null), browse: h(
           "form",
           {
             className: "nks-settings-body",
@@ -3931,7 +4006,6 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
               save();
             }
           },
-          h(EnvPanel, null),
           h("label", { htmlFor: "nks-ua" }, copy.uaLabel),
           h("input", { id: "nks-ua", className: "nks-address", autoFocus: true, placeholder: copy.uaPlaceholder }),
           h("label", { htmlFor: "nks-origin" }, copy.originLabel),
@@ -3971,7 +4045,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
             onClick: (event) => selectRadio(event.currentTarget.parentElement, value)
           }, label))),
           h("button", { type: "submit", style: { display: "none" }, "aria-hidden": "true", tabIndex: -1 })
-        ))
+        ) })
       });
       close = () => {
         dialogOpenRef.current = false;
@@ -4084,8 +4158,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
               setAnnotate((value) => {
                 if (value) {
                   setHover(null);
-                  setDraftBox(null);
-                  setDrag(null);
+                  endDrag();
                 }
                 return !value;
               });
@@ -4217,13 +4290,23 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
             }
           }
         }) : null,
-        h(
-          "span",
-          { "data-nks-mode": nativeHtml && domDoc ? "html" : "img", style: { color: nativeHtml && domDoc ? "var(--dsw-alias-fill-success,#3fb950)" : "var(--dsw-alias-fill-warning,#d29922)" } },
-          nativeHtml && domDoc ? "HTML \u539F\u751F\u6E32\u67D3" : "IMG \u622A\u56FE\u56DE\u9000"
-        ),
+        // Three states, not two: an empty pane is neither native HTML nor a
+        // screenshot. Calling it "IMG 截图回退" made a fresh pane look broken.
+        h("span", {
+          "data-nks-mode": nativeHtml && domDoc ? "html" : hasPage ? "img" : "empty",
+          style: { color: nativeHtml && domDoc ? "var(--dsw-alias-fill-success,#3fb950)" : hasPage ? "var(--dsw-alias-fill-warning,#d29922)" : "var(--dsw-alias-label-tertiary)" }
+        }, nativeHtml && domDoc ? "HTML \u539F\u751F\u6E32\u67D3" : hasPage ? "IMG \u622A\u56FE\u56DE\u9000" : "\u672A\u6253\u5F00\u9875\u9762"),
         h("span", { style: { flex: "auto" } }),
-        status?.buildId ? h("span", { style: { opacity: 0.6 } }, String(status.buildId).slice(0, 18)) : null
+        (() => {
+          const hostBuild = typeof status?.buildId === "string" ? status.buildId : "";
+          const mismatch = Boolean(hostBuild) && hostBuild.includes("+") && hostBuild !== CLIENT_BUILD_ID;
+          const text = mismatch ? `\u7248\u672C\u4E0D\u4E00\u81F4 \u5BA2\u6237\u7AEF ${CLIENT_BUILD_ID} / \u5BBF\u4E3B ${hostBuild}` : hostBuild ? hostBuild : "";
+          return text ? h("span", {
+            "data-nks-build": mismatch ? "mismatch" : "ok",
+            style: { opacity: mismatch ? 1 : 0.6, color: mismatch ? "var(--dsw-alias-fill-error,#d5455c)" : void 0 },
+            title: `\u5BA2\u6237\u7AEF\u6784\u5EFA ${CLIENT_BUILD_ID} \xB7 \u5BBF\u4E3B ${hostBuild || "\u672A\u77E5"}`
+          }, text.slice(0, 40)) : null;
+        })()
       ),
       h(HistoryDialog, { open: historyOpen, onClose: () => setHistoryOpen(false) }),
       h(DevTools, { open: devtoolsOpen, onClose: () => setDevtoolsOpen(false) }),
@@ -4278,6 +4361,8 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         }) : h(
           "div",
           { className: "nks-empty", "data-nks-empty": "" },
+          // /status always answers ok:true (the call completed); whether the
+          // environment can serve a page is `ready` alone.
           // One container, one column: the old layout rendered an absolutely
           // positioned .nks-start on top of a flex-centred .nks-empty, which
           // painted the opaque Start button straight over the error text
@@ -4286,11 +4371,11 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           h(
             "div",
             { className: "nks-empty-title" },
-            busy ? copy.opening : status?.engineMismatch === true ? copy.engineMismatch : status?.ok === false ? copy.errorTitle : copy.emptyTitle
+            busy ? copy.opening : status?.engineMismatch === true ? copy.engineMismatch : statusDown ? copy.errorTitle : copy.emptyTitle
           ),
-          !busy && status?.ok !== false && !status?.engineMismatch ? h("div", { className: "nks-empty-body" }, copy.emptyBody) : null,
-          !busy && status?.ok === false && !status?.engineMismatch ? h("div", { className: "nks-empty-body" }, copy.errorBody) : null,
-          !busy && status?.ok === false ? h(
+          !busy && !statusDown && !status?.engineMismatch ? h("div", { className: "nks-empty-body" }, copy.emptyBody) : null,
+          !busy && statusDown && !status?.engineMismatch ? h("div", { className: "nks-empty-body" }, copy.errorBody) : null,
+          !busy && statusDown ? h(
             "div",
             { className: "nks-empty-actions" },
             // Ordinary users get ONE button: it reconciles phase, adopts or
@@ -4305,7 +4390,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
             h("button", { type: "button", className: "nks-start-btn", "data-nks-diagnose": "1", onClick: () => run(() => refreshStatus()) }, copy.retry),
             h("button", { type: "button", className: "nks-start-btn", "data-nks-open-settings": "1", onClick: openSettings }, copy.settings)
           ) : null,
-          !busy && status?.ok !== false && !status?.engineMismatch ? h(
+          !busy && !statusDown && !status?.engineMismatch ? h(
             "div",
             { className: "nks-empty-actions" },
             h("button", { type: "button", className: "nks-empty-link", "data-nks-try": "1", onClick: () => {
@@ -4313,8 +4398,8 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
               run(() => navigate("https://example.com"));
             } }, copy.emptyTry)
           ) : null,
-          status?.ok === false ? h("div", { className: "nks-empty-meta" }, `${status?.lastError?.errorId || status?.errorId || "kitesurf.engine.failed"} \xB7 ${status?.httpBase || ""}`) : null,
-          status?.ok === false ? h("div", { className: "nks-empty-meta" }, status?.lastError?.error || status?.error || "") : null
+          statusDown ? h("div", { className: "nks-empty-meta" }, `${status?.lastError?.errorId || status?.errorId || (status?.degraded?.length ? status.degraded.join(" / ") : "kitesurf.engine.failed")} \xB7 ${status?.httpBase || ""}`) : null,
+          statusDown ? h("div", { className: "nks-empty-meta" }, status?.lastError?.error || status?.error || "") : null
         ),
         overlays.map((box, index) => h("div", {
           key: index,

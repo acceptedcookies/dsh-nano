@@ -1,7 +1,7 @@
 {
   "name": "dsh-nano-terminal",
   "version": "0.1.0",
-  "description": "WASM-core terminal for dsh: split panes, local/MCP/isolate lanes, MCP control plane",
+  "description": "WASM-core terminal for dsh: split panes, local/MCP lanes, MCP control plane",
   "type": "module",
   "main": "./index.js",
   "icon": "./icon.svg",

@@ -19,7 +19,7 @@ A failed call returns `{ok:false,errorId,error}` with a real HTTP status. The sa
 | `kitesurf.kite.remote` | 400 | configure 参数非法、远程地址未开 allowRemote、或 action 未知 | loopback 地址；mcpPort 1..65535；action ∈ init|start|suspend|resume|configure |
 | `kitesurf.kite.node` | 500 | Node 版本过低或锁文件不可写 | 需要 Node ≥22；检查 DSH_HOME 可写 |
 | `kitesurf.kite.portbusy` | 409 | 引擎要绑的宿主端口被其他程序占用（本机 8787 常被 Cursor 占用） | 把 profile 的 config.httpBase 指到空闲端口（如 http://127.0.0.1:8798）后重启宿主；端口分配由 dsh-nano-local-sandbox 宿主管 |
-| `kitesurf.kite.resume` | 502 | 引擎 /health 在重试预算内无应答——本包不启动容器，引擎须由沙箱宿主带起 | GET /status 看 engineAlive；引擎由 dsh-nano-local-sandbox 宿主启动（POST /nano-local-sandbox/recover） |
+| `kitesurf.kite.resume` | 502 | 引擎 CDP 无应答——本包不启动容器，引擎须由沙箱宿主带起 | GET /status 看 engineAlive；引擎由 dsh-nano-local-sandbox 宿主启动（POST /nano-local-sandbox/recover） |
 | `kitesurf.navigate.egress` | 504 | 目标站点出站超过 25s（引擎写入 egress timeout） | 换可达站点；不要重试同一地址；GET /status 确认引擎仍活 |
 | `kitesurf.navigate.delta` | 400 | /history delta 不是 -1 或 +1 | POST /history {delta:-1} 后退 / {delta:1} 前进 |
 | `kitesurf.navigate.failed` | 502 | Page.navigate 超时或被拒绝（DNS/网络） | 检查 URL 可达；超时后不要立刻重复 open（可能已在导航） |

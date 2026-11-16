@@ -394,7 +394,7 @@ async function main() {
     const r = await fetch('/nano-local-sandbox/selftest')
     return r.json()
   })
-  record('host-selftest', selftest.ok === true, `${selftest.failed}/${selftest.total} failed`)
+  record('host-selftest', selftest.ok === true && selftest.passed === true, `${selftest.failed}/${selftest.total} failed`)
 
   // 11. history is served from the workerd KV
   const history = await page.evaluate(() => fetch('/nano-local-sandbox/browse-history?limit=5').then((r) => r.json()))

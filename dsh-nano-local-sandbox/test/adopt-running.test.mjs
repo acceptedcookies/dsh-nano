@@ -26,6 +26,7 @@ test('an idle session adopts a running container inspect', async () => {
   }
   registerRoutes(ctx, routeSpecs({
     session,
+    httpProbe: () => false,
     backend: { async inspect() { return { raw: JSON.stringify([{ configuration: { publishedPorts: [{ containerPort: 8787, hostAddress: '127.0.0.1', hostPort: 8798 }] } }]) } } },
   }), { table: BINDING_TABLE, plugin: 'dsh-nano-local-sandbox' })
   const status = routes.find((route) => route.path.endsWith('/status'))

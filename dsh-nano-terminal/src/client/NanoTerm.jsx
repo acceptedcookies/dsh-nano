@@ -1,5 +1,5 @@
 // NanoTerm: the terminal tab body — a binary split tree of independent panes.
-// Each pane = wasm emulator + canvas renderer + one lane (local/mcp/isolate).
+// Each pane = wasm emulator + canvas renderer + one lane (local/mcp).
 
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { copyMode, clampSelection } from './select.js'
@@ -174,7 +174,6 @@ const glyph = (name, rotate = false) => {
   const Icon = {
     splitRight: primitives.IconPanelLeftOutlineRegular,
     splitDown: primitives.IconPanelLeftOutlineRegular,
-    isolate: primitives.IconAppsAddOutlineRegular,
     mcp: primitives.IconApiOutlineRegular,
     go: primitives.IconRightUpOutlineRegular,
     close: primitives.IconCloseOutlineRegular,
@@ -439,15 +438,12 @@ export function NanoTerm({ sessionId, session, zh, openView }) {
           <div className="dnt-empty-title">{zh ? '新建终端' : 'New terminal'}</div>
           <div className="dnt-empty-body">
             {zh
-              ? '每个窗格是一个独立实例：本地 lane 直连宿主 shell，isolate 在 wasm 内运行，MCP 连接远端容器终端。'
-              : 'Each pane is an independent instance: local lanes talk to the host shell, isolate runs inside wasm, MCP reaches remote container terminals.'}
+              ? '每个窗格是一个独立实例。本地窗格直连宿主 shell。沙箱终端由返回的 attach.url 接入，不在这里新开一种 lane。'
+              : 'Each pane is its own instance. A local pane talks to the host shell. A sandbox terminal attaches to the returned URL. There is no separate lane for it.'}
           </div>
           <div className="dnt-empty-actions">
             <Button variant="primary" onClick={() => openLeaf()}>
               {zh ? '本地终端' : 'Local terminal'}
-            </Button>
-            <Button variant="outline" onClick={() => openLeaf({ lane: 'isolate' })}>
-              {zh ? '隔离实例' : 'Isolate pane'}
             </Button>
           </div>
         </div>
@@ -481,6 +477,13 @@ function firstLeaf(node) {
   return node.type === 'leaf' ? node.id : firstLeaf(node.a) ?? firstLeaf(node.b)
 }
 
+function leafIds(node, out = []) {
+  if (!node) return out
+  if (node.type === 'leaf') out.push(node.id)
+  else { leafIds(node.a, out); leafIds(node.b, out) }
+  return out
+}
+
 /** Top status bar: 轨迹 toolbar convention — identity + lane status left, controls right. */
 function StatusBar({ sessionId, split, openLeaf, focused, zh, tree, paneSessions, statuses, settings, onSettings }) {
   const [mcpUrl, setMcpUrl] = useState('')
@@ -504,8 +507,7 @@ function StatusBar({ sessionId, split, openLeaf, focused, zh, tree, paneSessions
   }
   const laneActions = [
     { id: 'local', label: zh ? '新建本地窗格' : 'New local pane', icon: glyph('terminal'), run: () => open() },
-    { id: 'isolate', label: zh ? '新建隔离实例' : 'New isolate pane', icon: glyph('isolate'), run: () => open({ lane: 'isolate' }) },
-    { id: 'mcp', label: zh ? '连接 MCP 终端…' : 'Connect MCP terminal…', icon: glyph('mcp'), run: () => setDialog('mcp') },
+    { id: 'mcp', label: zh ? '连接 MCP 终端' : 'Connect MCP terminal', icon: glyph('mcp'), run: () => setDialog('mcp') },
   ]
   const copy = { cancel: zh ? '取消' : 'Cancel', confirm: zh ? '确定' : 'OK', close: zh ? '关闭' : 'Close' }
 
@@ -520,7 +522,7 @@ function StatusBar({ sessionId, split, openLeaf, focused, zh, tree, paneSessions
   }, {})
   const phaseDot = { opening: 'ongoing', live: 'done', exited: 'idle', error: 'error', working: 'ongoing', blocked: 'error', done: 'done', idle: 'idle' }
   const phaseText = { opening: zh ? '连接中' : 'connecting', live: zh ? '运行中' : 'live', exited: zh ? '已退出' : 'exited', error: zh ? '失败' : 'failed', working: zh ? '工作中' : 'working', blocked: zh ? '待处理' : 'blocked', done: zh ? '已完成' : 'done', idle: zh ? '空闲' : 'idle' }
-  const laneText = { local: 'LOCAL', mcp: 'MCP', isolate: 'ISOLATE' }
+  const laneText = { local: 'LOCAL', mcp: 'MCP' }
   // statusbar mirrors TrajectoryToolbar.tsx exactly: root→inner→actions→
   // (toggle + action buttons with actionIcon text glyphs) + search on the
   // right. Host module classes resolved by trajCls; zero local chrome rules.
@@ -529,6 +531,23 @@ function StatusBar({ sessionId, split, openLeaf, focused, zh, tree, paneSessions
   const statSummary = cur
     ? `${laneText[cur.lane] ?? cur.lane} · ${count}${zh ? ' 窗格' : ' panes'}${cur.dims ? ` · ${cur.dims.cols}×${cur.dims.rows}` : ''} · ${phaseText[eff] ?? eff}${rollText ? ` · ${rollText}` : ''}`
     : null
+  // Enter jumps to the next pane whose title contains the query (wrapping
+  // past the focused one); DOM focus drives the pane's own onFocus so React
+  // focus state and keyboard ownership stay in step.
+  const jumpToPane = (e) => {
+    if (e.key === 'Escape') { setFilterQuery(''); return }
+    if (e.key !== 'Enter') return
+    e.preventDefault()
+    const q = filterQuery.trim().toLowerCase()
+    if (!q) return
+    const ids = leafIds(tree)
+    const start = ids.indexOf(focused) + 1
+    const order = [...ids.slice(start), ...ids.slice(0, start)]
+    const hit = order.find((id) => (statuses[id]?.title ?? '').toLowerCase().includes(q))
+    if (!hit) return
+    const root = e.currentTarget.closest('[data-nano-terminal]')
+    root?.querySelector(`[data-dnt-pane="${hit}"]`)?.focus()
+  }
   return (
     <div className={trajCls('root')} role="toolbar" aria-label={zh ? '终端状态栏' : 'terminal status bar'}>
       <div className={trajCls('inner')}>
@@ -569,6 +588,7 @@ function StatusBar({ sessionId, split, openLeaf, focused, zh, tree, paneSessions
             placeholder={zh ? '窗格标题…' : 'pane title…'}
             value={filterQuery}
             onChange={(e) => setFilterQuery(e.currentTarget.value)}
+            onKeyDown={jumpToPane}
           />
         </div>
         <NanoMenu menu={menu} actions={laneActions} onClose={() => setMenu(null)} width={200} />
@@ -586,7 +606,7 @@ function StatusBar({ sessionId, split, openLeaf, focused, zh, tree, paneSessions
         >
           <Input
             value={mcpUrl}
-            placeholder="http://container:PORT/mcp"
+            placeholder=""
             data-modal-autofocus
             spellCheck={false}
             autoComplete="off"
@@ -1164,13 +1184,14 @@ function TermPane({ paneId, laneSpec, sessionId, session, focused, onFocus, onCl
   // blocked carries kind=permission|question|auth for the caller to act on.
   const eff = effState(status)
   const phaseDot = { opening: 'ongoing', live: 'done', exited: 'idle', error: 'error', working: 'ongoing', blocked: 'error', done: 'done', idle: 'idle' }
-  const laneText = { local: 'LOCAL', mcp: 'MCP', isolate: 'ISOLATE' }
+  const laneText = { local: 'LOCAL', mcp: 'MCP' }
   return (
     <div
       ref={boxRef}
       tabIndex={0}
       onFocus={onFocus}
       className="dnt-pane"
+      data-dnt-pane={paneId}
       data-focused={focused ? 'true' : 'false'}
     >
       <div className="dnt-header">

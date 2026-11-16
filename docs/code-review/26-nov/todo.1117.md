@@ -131,10 +131,12 @@ P0-00 干净树（main@9792da0）
   - **依赖**：PH4 合入 · **执行状态**：`complete`
 ### PH6 — [DNT]（`nue-1117-migrate-dnt`）
 
-- [ ] `P6-01` — trajCls → nano-ui `Toolbar` · `NUE1117-T21`
-- [ ] `P6-02` — 死样式（U8 确认）与 unicode 图标 → `Icon*` · `NUE1117-T21`
-  - **依赖**：PH5 合入 · **执行状态**：`not-started`
-
+- [x] `P6-01` — trajCls → nano-ui `Toolbar` · `NUE1117-T21`
+  - **执行状态**：`complete` · **证据**：`4659e49`（合并 `c47b0eb`）；`trajCls`/`trajCache`（运行时 `document.styleSheets` 哈希类反查）整段删除，状态栏根改 `Toolbar`，行内布局由本包 `.dnt-bar*` 承担（全部令牌）；`--dsh-trajectory-toolbar-height` 源码/产物 0；窗格头 4 个按钮去掉宿主类
+- [x] `P6-02` — 死样式（U8 确认）与 unicode 图标 → `Icon*` · `NUE1117-T21`
+  - **执行状态**：`complete` · **证据**：`4659e49`；U8 报出的 12 个类名真删（`dnt-statusbar*` 8 个、`dnt-dot`、`dnt-lane`、`dnt-overlay-retry`、`dnt-size-field`）；`⊕`/`⚙`/`?` 与两段内联 svg → `glyph()`（新增 `IconSearchOutlineRegular`，catalog 内）
+  - **测试四元组**：`c47b0eb` · `cd dsh-nano-terminal && node test/run.mjs` · 145/145（≥137；含 `nue-migration.test.mjs` 8 条，对照 main 源码 3 过 5 败）· 2026-11-16T19:04:04Z；`node scripts/test-all.mjs` @4659e49 21/22（仅 s3-client）；`check-ui-rules --plugin DNT` 前 U1 10/U3 9/U4 8/U6 5/U8 12（44）→ 后 U1 6/U3 9/U4 4/U6 5/U8 0（24）；`check-client-rules` ok；`lib/client.js` 含 `dsh-nano-ui@0.2.0` 1 处；同 HEAD 重建无 diff
+  - **依赖**：PH5 合入 · **执行状态**：`complete`
 ### PH7 — [DNK]（`nue-1117-migrate-dnk`）
 
 - [ ] `P7-01` — 图标与过期注释 · `NUE1117-T22`
@@ -186,14 +188,15 @@ P0-00 干净树（main@9792da0）
 | `NUE1117-T18` | [DNMS] 迁移 | `npm test`（含 `nue-migration.test.mjs`） | 62/62 @e52ef13 | pass |
 | `NUE1117-T19` | [DNMS] 云会话自判 | — | 宿主无判据，停止 | deferred（Q18） |
 | `NUE1117-T20` | [DNEE] 迁移 | `node --test test/*.mjs`（含 `nue-migration.test.mjs`） | 26/26 @3cfd282 | pass |
-| `NUE1117-T21`–`T26` | 其余四插件迁移 | 各插件测试 + `nue-migration.test.mjs` | — | pending |
+| `NUE1117-T21` | [DNT] 迁移 | `node test/run.mjs`（含 `nue-migration.test.mjs`） | 145/145 @c47b0eb | pass |
+| `NUE1117-T22`–`T26` | 其余三插件迁移 | 各插件测试 + `nue-migration.test.mjs` | — | pending |
 | `NUE1117-T27a`–`e` | 视觉核对（live） | 本机 profile + ego-browser 截图 | — | pending（需 live 授权与部署） |
 | `NUE1117-T28`–`T30` | 收口 | 两次构建 sha；`nue-docs`/`nue-endstate` | — | pending |
 
 ## 5. 当前状态与交接
 
-- **当前节点 / 已完成**：P0-00、PH1、PH2、PH3、PH4（P4-01 deferred）、PH5
-- **下一动作**：PH6（[DNT]）
+- **当前节点 / 已完成**：P0-00、PH1、PH2、PH3、PH4（P4-01 deferred）、PH5、PH6
+- **下一动作**：PH7（[DNK]）
 - **当前阻塞**：无
 - **待 owner 决定**：Q18（P4-01，推荐 A）；P9-05（执行到时判定）
 - **最终交接目标**：[业主]
@@ -232,7 +235,8 @@ P0-00 干净树（main@9792da0）
 - `2026-11-16` · P4-01 停止（Q18）。P4-03 的 U1 中 3 条 `--dsh-composer-model-*-display` 是宿主 `conversation.input.model` 槽位合同变量（`dsh-client-ui-conversation` `slots.d.ts:415`），catalog 只收 `--dsw`/主题令牌，按「豁免并登记」处理（DESIGN §10 第一行），不改 catalog 口径。
 - `2026-11-16` · PH5 [DNEE]：保留 4 处宿主属性锚点（`styles.js:14` `[data-nxe] .nxe-tree button`、`:15` `[data-files-path]`、`:55` `[data-custom-tree] {height:auto}`、`:199` `[data-custom-tree] button:hover .nxe-open`，宿主无行悬停钩子）。它们不是 `:has()`/`[class*=`/哈希类，不在 T20 清零清单，留待 T27 视觉核对与 closure 列出。
 - `2026-11-16` · PH5 [DNEE]：`formatBytes` 与宿主 `fileSizeText` 14 个样本全部不同，按 P5-03「条件替换」保留并标 `nano-ui-exempt`；`.nxe-git-alert` 因宿主 Toast 无常驻模式保留自绘并豁免，材质随令牌改变。DESIGN §10 各 1 行。
-- `2026-11-16` · PH5 [DNEE]：「在应用中打开」下拉原为自绘菜单，与 P5-02 同一类问题，一并改 NanoMenu（同写面，不扩约）。
+- `2026-11-16` · PH5 [DNEE]：「在应用中打开」下拉原为自绘菜单，与 P5-02 同一类问题，一并改 NanoMenu（同写面，不扩约）。- `2026-11-16` · PH6 [DNT]：`test/run.mjs` 原无测试发现机制，新增第 13 段用 `node --test` 收集 `test/*.test.mjs` 并计入总数（崩溃且无摘要计 1 败）；N6 下限 137 指 wasm 冒烟部分，合计 145。
+- `2026-11-16` · PH6 [DNT]：`⌘`/`→` 是 `ShortcutKeys` 按键图例文本，非图标，保留（U4 剩 4）；原生 `<button>` 保留（U3 9 持平，窗格头 20px 密度宿主 Button 无对应档，AP P6 未列 U3）；`?` 帮助按钮随同族换 `glyph('help')`。
 ## 8. 附件：[业主] 发车指令（原文）
 
 > 本 directive 注册为 `NUE-1117` 执行授权来源。

@@ -223,9 +223,9 @@ async function envSnapshot(session, deps, { deep = false } = {}) {
     engine: { ok: alive === true, detail: httpBase || 'no published port' },
   }
   if (deep) {
-    const page = await probePage(session, httpBase, alive)
+    const page = await probePage(session, httpBase, alive, deps)
     checks.page = page
-    checks.dom = page.ok ? await probeDom(session, httpBase) : { ok: false, detail: 'no page' }
+    checks.dom = page.ok ? await probeDom(session, httpBase, deps) : { ok: false, detail: 'no page' }
     checks.bridge = await probeBridge(bridgeBase)
   }
   const healthy = Object.values(checks).every((row) => row.ok === true)
@@ -246,7 +246,7 @@ async function envSnapshot(session, deps, { deep = false } = {}) {
 }
 
 /** Does the engine expose a page target? (cheap: Target.getTargets) */
-async function probePage(session, httpBase, alive) {
+async function probePage(session, httpBase, alive, deps) {
   if (!alive || !httpBase) return { ok: false, detail: 'engine not answering' }
   try {
     const client = await clientFor(session, httpBase, deps)
@@ -259,7 +259,7 @@ async function probePage(session, httpBase, alive) {
 }
 
 /** Can the pane render native HTML? Needs a non-blank document with a root. */
-async function probeDom(session, httpBase) {
+async function probeDom(session, httpBase, deps) {
   try {
     const client = await clientFor(session, httpBase, deps)
     const value = await withPage(client, async (sessionId) => {
@@ -335,7 +335,7 @@ async function runSelftest(session, deps) {
     try {
       const client = await clientFor(session, snap.effective.httpBase, deps)
       version = (await client.send('Browser.getVersion'))?.product || null
-      const dom = await probeDom(session, snap.effective.httpBase)
+      const dom = await probeDom(session, snap.effective.httpBase, deps)
       blank = dom.detail === 'page is about:blank' ? false : true
       const cap = await withPage(client, (sessionId) => client.send('Page.captureScreenshot', { format: 'png' }, sessionId))
       shot = typeof cap?.data === 'string' && cap.data.length > 0
@@ -351,6 +351,8 @@ async function runSelftest(session, deps) {
       const response = await fetch(`${bridgeBase}/health`).catch(() => null)
       const data = response ? await response.json().catch(() => null) : null
       writer = data?.control?.writer ?? null
+      // The bridge reports `writer:false` when free; only a truthy id is a holder.
+      if (writer === false) writer = null
     } catch { /* reported as not free */ }
   }
   push('bridge-writer-free', writer === null, writer === null ? 'no writer held' : `held by ${writer}`)

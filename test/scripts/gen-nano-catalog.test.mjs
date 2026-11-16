@@ -59,6 +59,18 @@ test('T03 tokens: at least 437, every entry has light/dark, declared entries car
   }
 })
 
+test('T03 schemes hold exactly the --dsw-* tokens whose light and dark values differ', () => {
+  const { tokens, schemes } = load('tokens')
+  const differing = Object.entries(tokens).filter(([n, t]) => n.startsWith('--dsw-') && t.declared && t.light !== null && t.dark !== null && t.light !== t.dark).map(([n]) => n).sort()
+  assert.ok(differing.length > 0)
+  assert.deepEqual(Object.keys(schemes.light).sort(), differing)
+  assert.deepEqual(Object.keys(schemes.dark).sort(), differing)
+  for (const n of differing) {
+    assert.equal(schemes.light[n], tokens[n].light)
+    assert.equal(schemes.dark[n], tokens[n].dark)
+  }
+})
+
 test('T03 icons are a subset of primitives and the sprite carries glyphs × weights', () => {
   const { exports } = load('primitives')
   const { components, sprite } = load('icons')

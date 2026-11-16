@@ -1496,10 +1496,18 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     } catch { return false }
   }
 
+  /** Short workspace mark for a context anchor. UUID keeps its own first 8 hex; anything else is hashed. Unassigned is fixed. */
+  function workspaceStamp(workspaceId) {
+    if (typeof workspaceId !== 'string' || workspaceId.length === 0) return '00000000'
+    const id = workspaceId.toLowerCase()
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(id)) return id.slice(0, 8)
+    return md5Hex(workspaceId).slice(0, 8)
+  }
+
   async function copyPath(id) {
     const file = id ? state.nodes.find(node => node.id === id) : current()
     if (!file) return
-    const value = `[ DNN:vfs@${pathOf(file.id).replace(/^\//, '')} ]`
+    const value = `[ DNN:${workspaceStamp(file.workspaceId)}@${pathOf(file.id).replace(/^\//, '')} ]`
     if (await writeClipboard(value)) setSync('copied', value)
   }
 

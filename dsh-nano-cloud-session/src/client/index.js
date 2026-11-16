@@ -24,6 +24,47 @@ function createStore(initial) {
   }
 }
 
+/** Cloud sessions talk to Devin. Hide the local permission chip, model
+ *  picker and skill/attachment menu, and show a static Devin chip instead. */
+function installCloudComposer() {
+  let frame = 0
+  const mark = () => {
+    const cloud = document.documentElement.dataset.dncsCloud === '1'
+    const seat = document.querySelector('[class*="composerSeat"]')
+    if (!seat) return
+    let chip = seat.querySelector('.dncs-devin-chip')
+    if (!cloud) { chip?.remove(); return }
+    if (chip) return
+    chip = document.createElement('span')
+    chip.className = 'dncs-devin-chip'
+    chip.textContent = 'Devin'
+    const anchor = seat.querySelector('.nms-root, [data-nano-model-selector="root"], button[aria-label*="工作区内修改"], button[aria-label*="Workspace Write"]')
+    if (anchor?.parentElement) anchor.parentElement.insertBefore(chip, anchor)
+    else seat.append(chip)
+  }
+  const schedule = () => {
+    if (frame) return
+    frame = window.requestAnimationFrame(() => { frame = 0; mark() })
+  }
+  const onClick = event => {
+    const row = event.target?.closest?.('[data-slot="sidebar.workspaces"] [role="treeitem"]')
+    if (!row) return
+    document.documentElement.dataset.dncsCloud = '0'
+    delete document.documentElement.dataset.dncsLocal
+    schedule()
+  }
+  document.addEventListener('click', onClick, true)
+  const observer = new MutationObserver(schedule)
+  observer.observe(document.body, { childList: true, subtree: true })
+  schedule()
+  return () => {
+    observer.disconnect()
+    document.removeEventListener('click', onClick, true)
+    if (frame) window.cancelAnimationFrame(frame)
+    document.querySelector('.dncs-devin-chip')?.remove()
+  }
+}
+
 /** @param {import('@deepseek-ai/cordis').Context} ctx */
 export function apply(ctx, config = {}) {
   const t = makeI18n(() => ctx.locale.getSnapshot().active)
@@ -34,6 +75,7 @@ export function apply(ctx, config = {}) {
   style.textContent = NANO_STYLES + CLOUD_CSS
   document.head.append(style)
   ctx.effect(() => () => style.remove(), 'nano-cloud-session: styles')
+  ctx.effect(() => installCloudComposer(), 'nano-cloud-session: devin composer')
 
   const store = createStore({
     loading: true,
@@ -88,6 +130,8 @@ export function apply(ctx, config = {}) {
         const bridge = await api.nativeOpen(sessionId)
         void ctx.sessions?.refresh?.()
         rememberWorkbenchSession(bridge.local_session_id, sessionId)
+        document.documentElement.dataset.dncsLocal = bridge.local_session_id
+        document.documentElement.dataset.dncsCloud = '1'
         ctx.uiWorkspace.openSession(bridge.local_session_id)
         window.setTimeout(() => {
           try { ctx.sidebarRight.openTabIn(bridge.local_session_id, workbenchKind) }

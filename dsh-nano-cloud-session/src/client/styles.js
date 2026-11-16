@@ -10,8 +10,24 @@ export const CLOUD_CSS = `
 .dncs-working-meta { margin-top: 4px; color: var(--dsw-alias-label-tertiary, #888); font-size: 11px; }
 .dncs-working-section { display: flex; flex-direction: column; gap: 8px; padding-top: 12px; border-top: 1px solid var(--dsw-alias-border-l3, #33363c); }
 .dncs-working-section-title { display: flex; align-items: center; gap: 7px; font-weight: 600; }
-.dncs-working-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--dsw-alias-border-l3, #33363c); border-radius: 10px; }
-.dncs-working-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dncs-working-row { display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 0 8px; border-radius: 8px; color: var(--dsw-alias-label-primary); }
+.dncs-working-row:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.dncs-working-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.dncs-working-kind { flex: none; color: var(--dsw-alias-label-tertiary); font-size: 11px; }
+.dncs-file-list { display: flex; flex-direction: column; min-height: 0; }
+.dncs-devin-chip { flex: none; align-self: center; height: 24px; padding: 0 8px; border-radius: 999px; display: inline-flex; align-items: center; color: var(--dsw-alias-label-secondary); background: var(--dsw-alias-interactive-bg-hover); font: var(--dsw-font-xxs-12, 12px/24px sans-serif); pointer-events: none; }
+html[data-dncs-cloud="1"] [class*="composerSeat"] .nms-root,
+html[data-dncs-cloud="1"] [class*="composerSeat"] [data-nano-model-selector="root"],
+html[data-dncs-cloud="1"] [class*="composerSeat"] button[aria-label*="工作区内修改"],
+html[data-dncs-cloud="1"] [class*="composerSeat"] button[aria-label*="Workspace Write"],
+html[data-dncs-cloud="1"] [class*="composerSeat"] button[aria-label*="仅可查看"],
+html[data-dncs-cloud="1"] [class*="composerSeat"] button[aria-label*="完全权限"],
+html[data-dncs-cloud="1"] [class*="composerSeat"] button[aria-label*="Read Only"],
+html[data-dncs-cloud="1"] [class*="composerSeat"] button[aria-label*="Full access"],
+html[data-dncs-cloud="1"] [class*="composerSeat"] button[aria-label="添加文件或调用指令"],
+html[data-dncs-cloud="1"] [class*="composerSeat"] button[aria-label*="Add files or"] {
+  display: none !important;
+}
 
 [data-nano-cloud-session-section] { flex: none; min-height: 0; }
 [data-nano-cloud-session-section] > * { flex: none; }
@@ -23,6 +39,10 @@ export const CLOUD_CSS = `
 @keyframes dncs-skeleton { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
 @media (prefers-reduced-motion: reduce) { .dncs-section-body, .dncs-skeleton-dot, .dncs-skeleton-bar { animation: none; } }
 .dncs-section { display: flex; flex-direction: column; flex: none; box-sizing: border-box; width: 100%; padding-right: 9px; }
+/* Collapsed rail entry: a single centered 36px icon row matching the native
+ * workspaces rail buttons. No padding-right — the rail is 56px wide. */
+.dncs-section.dncs-rail { padding-right: 0; align-items: center; margin-bottom: 12px; }
+.dncs-section.dncs-rail button { width: 36px; height: 36px; justify-content: center; }
 .dncs-section [class*="listArea"], .dncs-section [class*="list"] { flex: none; }
 .dncs-section [class*="list"] { padding-bottom: 0; }
 .dncs-section-empty { color: var(--dsw-alias-label-tertiary, #999); }

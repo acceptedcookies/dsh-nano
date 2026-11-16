@@ -37,25 +37,67 @@ const withLocal = (token, name) => {
 }
 
 /** Read the workspace browser's current class names. Null until the header,
- *  list area, tree, and search/action controls are all mounted. */
+ *  list area, tree, and search/action controls are all mounted.
+ *
+ *  Detection is STRUCTURAL, not label-text based: the collapsed rail renders
+ *  no "工作区" label, so keying off it returned null and hid the whole section
+ *  (CF1115 regression — the rail then showed only the native icon column and
+ *  the workspaces add/search pair, misaligned). We anchor on the
+ *  `sidebar.workspaces` slot host itself and walk its subtree. */
 function readChrome() {
   const graft = document.querySelector(`[${HOST_ATTR}]`)
-  const label = [...document.querySelectorAll('span')].find(node =>
-    !graft?.contains(node)
-    && node.children.length === 0
-    && (node.textContent?.trim() === '工作区' || node.textContent?.trim() === 'Workspace'))
-  const header = label?.parentElement
-  const root = header?.parentElement
+  const wsSlot = document.querySelector('[data-slot="sidebar.workspaces"]')
+  const wsRoot = wsSlot?.children?.[0] ?? null
+  // Expanded mode: header holds the visible "工作区" label; rail mode keeps the
+  // same `sectionHeader` shell but drops the label, so resolve header by class.
+  let header = null
+  let root = null
+  let label = null
+  if (wsRoot != null) {
+    header = wsRoot.querySelector('[class*="sectionHeader"]')
+    root = wsRoot
+    label = header ? [...header.children].find(child =>
+      /sectionLabel/.test(classOf(child))) ?? null : null
+  }
+  if (header == null) {
+    label = [...document.querySelectorAll('span')].find(node =>
+      !graft?.contains(node)
+      && node.children.length === 0
+      && (node.textContent?.trim() === '工作区' || node.textContent?.trim() === 'Workspace')) ?? null
+    header = label?.parentElement
+    root = header?.parentElement
+  }
   if (header == null || root == null) return null
   const listArea = [...root.children].find(el => /listArea/.test(classOf(el)))
   const tree = listArea?.querySelector('[role="tree"]')
   const row = [...root.querySelectorAll('[class*="projectRow"]')]
     .find(node => !String(node.className).includes('menuOpen')) ?? null
-  if (listArea == null || tree == null || row == null) return null
   const searchSlot = header.querySelector('[class*="searchSlot"]')
   const actions = header.querySelector('[class*="headerActions"]')
   const search = searchSlot?.querySelector(':scope > div')
   const searchButton = search?.querySelector('button') ?? searchSlot?.querySelector('button')
+
+  /* Rail mode (sidebar collapsed): the native workspaces tree renders no rows
+   * and the header has no label/search — only the add-workspace icon button
+   * inside headerActions. Degrade to a minimal chrome: rail geometry + a 36px
+   * icon button class so the cloud section can still show its rail entry. */
+  const rail = /_rail\b/.test(classOf(root)) || /_rail\b/.test(classOf(wsSlot?.children?.[0]))
+  if (rail) {
+    const railBtn = root.querySelector('[class*="iconButton"]') ?? root.querySelector('button')
+    if (railBtn == null) return null
+    return {
+      rail: true,
+      header: '',
+      template: [],
+      iconButton: stripWide(classOf(railBtn)) || classOf(railBtn),
+      listArea: classOf(listArea) || '',
+      list: '',
+      group: '', row: '', folder: '', chevron: '', projectText: '', title: '',
+      rowActions: '', rowButton: '', arrow: '', arrowOpen: '',
+      sessionRow: '', selected: '', sessionSlot: '', sessionTitle: '', resting: '', time: '',
+    }
+  }
+  if (listArea == null || tree == null || row == null) return null
   if (searchSlot == null || actions == null || searchButton == null) return null
 
   const folder = row?.querySelector('[class*="folder"]') ?? null
@@ -110,16 +152,39 @@ function readChrome() {
 function useNativeChrome() {
   const [chrome, setChrome] = useState(null)
   useLayoutEffect(() => {
-    let tries = 0
+    /* Chrome must re-read on EVERY relevant DOM change, not just at mount:
+     * collapsing the sidebar rebuilds the workspaces subtree into rail mode,
+     * and a stale expanded-mode chrome renders wide rows inside the 56px rail
+     * — which is exactly the broken "E"-only icon regression (text clipped to
+     * its first letter by the rail width). */
     let timer = 0
-    const tick = () => {
+    const reread = () => {
       const next = readChrome()
-      if (next) { setChrome(next); return }
-      if (++tries > 60) return
-      timer = window.setTimeout(tick, 50)
+      setChrome(prev => {
+        if (next == null) return prev === null ? prev : null
+        // Cheap signature compare to avoid render loops.
+        const sig = c => c && [c.rail ? 1 : 0, c.header, c.iconButton, c.row, c.list, c.group].join('|')
+        return sig(prev) === sig(next) ? prev : next
+      })
     }
-    tick()
-    return () => window.clearTimeout(timer)
+    reread()
+    // Slow poll until first success (slot may mount later), plus re-read on
+    // every DOM mutation (collapse/expand rebuilds the workspaces subtree).
+    let tries = 0
+    const poll = () => {
+      reread()
+      if (tries++ < 200) timer = window.setTimeout(poll, 100)
+    }
+    timer = window.setTimeout(poll, 100)
+    const observer = new MutationObserver(() => {
+      window.clearTimeout(timer)
+      timer = window.setTimeout(reread, 80)
+    })
+    observer.observe(document.body, { childList: true, subtree: true })
+    return () => {
+      observer.disconnect()
+      window.clearTimeout(timer)
+    }
   }, [])
   return chrome
 }
@@ -231,6 +296,32 @@ function sectionBody({ chrome, copy, face, state }) {
 }
 
 function CloudSection({ chrome, copy, face, state }) {
+  /* Rail mode: one 36×36 icon entry mirroring the native add-workspace rail
+   * button. Clicking it re-expands the sidebar so the full cloud section is
+   * reachable; the icon stays a real native glyph, never painted text. */
+  if (chrome.rail) {
+    return h('div', { className: 'dncs-section dncs-rail' },
+      h(Button, {
+        variant: 'ghost',
+        size: 'sm',
+        className: chrome.iconButton,
+        icon: h(IconGlobeOutlineRegular, { size: 18 }),
+        title: copy('cloudWorkspace'),
+        'aria-label': copy('cloudWorkspace'),
+        onClick: () => {
+          // Re-expand the sidebar to reveal the full cloud section. The toggle
+          // button is labelled by the host locale (打开侧边栏 / Open sidebar);
+          // if it is not found (unexpected host layout) fall back to opening
+          // the section settings so the entry is never dead.
+          const btn = [...document.querySelectorAll('button')].find(b => {
+            const label = `${b.getAttribute('aria-label') || ''} ${b.title || ''}`
+            return /打开侧边栏|展开侧边|open sidebar|expand sidebar/i.test(label)
+          })
+          if (btn) btn.click()
+          else face.openSettings()
+        },
+      }))
+  }
   const headerChildren = chrome.template.map((cell, index) => {
     if (cell.slot === 'label') {
       return h('span', { key: index, className: cell.cls }, copy('cloudWorkspace'))

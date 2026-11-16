@@ -226,12 +226,13 @@ export function apply(ctx, config = {}) {
   }
   const nativeOpen = async (profile, body) => {
     const remote = needSessionId(body)
-    /* Host support obligation: the projection needs `sessions` (to mint the
-     * local transcript) and `agents` (to register the proxy). Absent any —
-     * including `sessions.close` needed to tear an orphan down — fail
-     * explicitly, never mint a session that cannot project or be reclaimed.
-     * `profile` is guaranteed non-null: pick() throws first (remapped to
-     * NATIVE_UNSUPPORTED at the route). */
+    /* Host support obligation: the projection needs `sessions.create/get`
+     * (to mint and re-find the local transcript) and `agents.enter` (to
+     * register the proxy). This dsh SessionStore has no public
+     * `sessions.close` — teardown is the disposer from `agents.enter`, and
+     * `close(id)` is only called when a host actually provides it. Requiring
+     * the missing method made every open 503. `profile` is guaranteed
+     * non-null: pick() throws first (remapped to NATIVE_UNSUPPORTED). */
     const bridgeKey = `${remote}@${profile.id ?? profile.orgId ?? 'default'}`
     let bridge = nativeBridges.get(bridgeKey)
     if (bridge && ctx.sessions.get(bridge.localId)) {
@@ -282,10 +283,19 @@ export function apply(ctx, config = {}) {
         clear() {}, append() {}, prepend() {}, replace() { return false }, remove() { return false }, splice() { return [] },
       },
       followup: async message => {
-        const text = textOfMessage(message)
+        const text = textOfMessage(message).trim()
         if (!text) return
+        /* The composer already painted a submission echo keyed by source.rpcId.
+         * Appending a second synthesized user message leaves both bubbles.
+         * Publish the Host's own message so the echo retires, then forward
+         * the text to Devin. Do not run the local model. */
         bridgeState.turn += 1
-        appendNativeMessage(session, 'user', text, bridgeState.turn)
+        nativeTurn(session, bridgeState.turn)
+        const payload = message?.content
+          ? { id: message.id, role: 'user', content: message.content, source: message.source }
+          : { id: randomUUID(), role: 'user', content: [{ type: 'text', text }], source: { kind: 'user' } }
+        appendNative(session, 'user/message', payload, { surfaceOp: 'append' })
+        nativeClose(session, bridgeState.turn)
         await api.postMessage(profile, remote, text)
       },
       steer: async message => fake.followup(message),
@@ -400,17 +410,18 @@ export function apply(ctx, config = {}) {
         const sessionId = needSessionId(body)
         /* native_open: the host support obligation is checked before pick() —
          * no carrier profile should be resolved when the projection itself is
-         * impossible. `sessions.close` is required too: it reclaims an orphan
-         * on failure, so its absence makes the op unsupported, not merely slow.
+         * impossible. `sessions.close` is NOT part of the obligation: the
+         * public store has create/get/enter, and close(id) does not exist.
          * Other ops resolve the profile first as before. */
         if (body.op === 'native_open') {
-          const supported = typeof ctx.sessions?.create === 'function'
-            && typeof ctx.sessions?.get === 'function'
-            && typeof ctx.sessions?.close === 'function'
-            && typeof ctx.agents?.enter === 'function'
-          if (!supported) {
+          const missing = [
+            typeof ctx.sessions?.create === 'function' ? null : 'sessions.create',
+            typeof ctx.sessions?.get === 'function' ? null : 'sessions.get',
+            typeof ctx.agents?.enter === 'function' ? null : 'agents.enter',
+          ].filter(Boolean)
+          if (missing.length) {
             throw new NativeError('NATIVE_UNAVAILABLE',
-              'host did not inject sessions/agents; native Chat projection is unavailable', 503)
+              `host did not inject ${missing.join(', ')}; native Chat projection is unavailable`, 503)
           }
           /* The projection needs a carrier profile. A missing/inactive profile
            * is NATIVE_UNSUPPORTED (422) for THIS op, not the generic carrier

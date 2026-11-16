@@ -29,7 +29,10 @@ async function makeHandlers() {
   const { apply } = await import(`../index.js`)
   const routes = new Map()
   const ctx = {
-    get: (n) => n === 'connection' ? { requestRejection: () => undefined } : undefined,
+    // Route registration resolves the bound listener via ctx.get('webServer')
+    // (NOT ctx.webServer): on a real host the property-access trap returns a
+    // shadow provision while get() returns the injected singleton — mirror that.
+    get: (n) => n === 'connection' ? { requestRejection: () => undefined } : n === 'webServer' ? ctx.webServer : undefined,
     webServer: { register: (spec) => { routes.set(spec.path, spec.handler); return () => {} } },
     effect: (fn) => fn(),
   }
@@ -146,7 +149,7 @@ test('P4-02 native_open: no carrier profile → NATIVE_UNSUPPORTED (pick remappe
   const { apply } = await import(`../index.js`)
   const routes2 = new Map()
   const ctx2 = {
-    get: n => n === 'connection' ? { requestRejection: () => undefined } : undefined,
+    get: n => n === 'connection' ? { requestRejection: () => undefined } : n === 'webServer' ? ctx2.webServer : undefined,
     webServer: { register: s => { routes2.set(s.path, s.handler); return () => {} } },
     effect: f => f(),
     sessions: { create: () => ({ id: 'loc-1', append() {} }), get: () => true, close: () => {} },
@@ -165,7 +168,7 @@ test('P4-02 native_open: carrier read fail → NATIVE_OUTCOME_UNKNOWN + orphan t
   const routes2 = new Map()
   let closed = null
   const ctx2 = {
-    get: n => n === 'connection' ? { requestRejection: () => undefined } : undefined,
+    get: n => n === 'connection' ? { requestRejection: () => undefined } : n === 'webServer' ? ctx2.webServer : undefined,
     webServer: { register: s => { routes2.set(s.path, s.handler); return () => {} } },
     effect: f => f(),
     sessions: { create: () => ({ id: 'loc-1', append() {} }), get: id => id === 'loc-1', close: id => { closed = id } },

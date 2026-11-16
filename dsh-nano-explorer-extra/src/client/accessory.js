@@ -19,7 +19,6 @@ export function createAccessory(api) {
     const ignored = api.ignoredOf(entry.path)
     const link = api.linkOf(entry.path)
     const broken = api.linkBrokenOf(entry.path) === true
-    const ghost = entry.meta?.ghost === true
     const isFile = entry.meta?.kind !== 'directory'
     const folderStatus = isFile ? undefined : api.folderStatusOf(entry.path)
     // `ignored` de-emphasizes the row but must not hide a real Git status: a tracked file inside an
@@ -35,11 +34,6 @@ export function createAccessory(api) {
 
     return React.createElement('span', {
       className: 'nxe-acc',
-      // A zero-size flag the row CSS reads with :has(), so an ignored row de-emphasizes its own label
-      // and glyph without the plugin needing to reach into the shared tree's markup. The ghost flag
-      // does the same for the struck-through name of a file that is only on Git's mind.
-      ...(ignored ? { 'data-nxe-ignored': 'true' } : {}),
-      ...(ghost ? { 'data-nxe-ghost': 'true' } : {}),
     },
       // A link keeps the link glyph whatever it points at; where it leads is a tooltip detail, not a
       // warning. A link whose target is unreachable gets a struck-through variant so the row
@@ -55,7 +49,7 @@ export function createAccessory(api) {
       // Remote divergence sits left of the local letter: it answers "what changed on the other side".
       remote === undefined ? null : React.createElement('span', {
         className: 'nxe-acc-remote',
-        'data-status': remote.status,
+        'data-nxe-status': remote.status,
         'data-direction': remote.direction,
         title: remote.direction === 'pulled' ? copy.remotePulled(remote.status) : copy.remotePushed(remote.status),
         'aria-label': remote.direction === 'pulled' ? copy.remotePulled(remote.status) : copy.remotePushed(remote.status),
@@ -63,7 +57,7 @@ export function createAccessory(api) {
       showGit && status !== undefined
         ? React.createElement('span', {
           className: 'nxe-acc-letter',
-          'data-status': status,
+          'data-nxe-status': status,
           // The dimmed form means "the working tree has changes the index does not", which is what
           // an unstaged edit is; a fully staged file keeps the solid letter.
           'data-staged': staged === undefined ? 'false' : 'true',
@@ -75,7 +69,7 @@ export function createAccessory(api) {
       showGit && folderStatus !== undefined
         ? React.createElement('span', {
           className: 'nxe-acc-dot',
-          'data-status': folderStatus,
+          'data-nxe-status': folderStatus,
           title: api.statusLabel(folderStatus),
           'aria-label': api.statusLabel(folderStatus),
         })
@@ -86,7 +80,7 @@ export function createAccessory(api) {
       // error boundary once swallowed this whole accessory for it.
       ignored && api.showIgnoredBadge() ? React.createElement('span', {
         className: 'nxe-acc-ignored-letter',
-        'data-status': 'ignored',
+        'data-nxe-status': 'ignored',
         title: copy.ignoredBadge,
         'aria-label': copy.ignoredBadge,
       }, React.createElement(IconCloseCircleFillRegular, { width: 14, height: 14, 'aria-hidden': 'true' })) : null,

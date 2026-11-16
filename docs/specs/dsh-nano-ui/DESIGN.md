@@ -169,7 +169,7 @@
 | TrajectoryToolbar 导出 | 宿主未导出 | nano-ui `Toolbar` 替代（`T11`） |
 | 云会话 composer 按钮 | 宿主不提供「云会话下隐藏权限/附件按钮」的开关 | [DNCS] 隐藏样式删除，按钮照常显示（`T06`） |
 | 云会话标识 | 宿主 composer 没有给插件放会话来源标识的挂载点 | [DNCS] Devin 标签删除，不另找挂载点（`T17`） |
-| 文件树状态钩子 | 宿主文件树行不接受插件着色 | [DNEE] 依赖 `:has()` 的着色删除（`T11`） |
+| 文件树状态钩子 | 宿主文件树行不接受插件着色，也不接受插件改写行几何（chevron 槽位、accessory 列宽） | [DNEE] 行着色、幽灵行删除线、行内边距与 chevron 全部删除，状态只剩 accessory 上的字母与圆点（`T11`） |
 | Modal 尺寸参数 | 宿主 `Modal` 卡片宽度写死，不接受尺寸参数 | 主窗口级对话框只有预设尺寸（§7） |
 
 ## 9. 检测规则
@@ -196,3 +196,5 @@
 | 位置 | 缺口说明 |
 |---|---|
 | `dsh-nano-model-selector/src/client/styles.js`（`.nms-trigger-label` / `.nms-trigger-effort` / `.nms-trigger-icon`） | 读 `--dsh-composer-model-text-display` / `--dsh-composer-model-icon-display`：宿主 `conversation.input.model` 槽位合同变量（`dsh-client-ui-conversation` `slots.d.ts`），不是 `--dsw` 令牌，catalog 不收录，U1 照报 |
+| `dsh-nano-explorer-extra/src/client/format.js`（`formatBytes`） | 宿主 `fileSizeText` 输出不等价：不加空格、1024 进制套十进制单位名（`1.0KB`）、最高 GB、对 0/NaN 无兜底；本包状态栏读 `1 KiB`，替换会改掉全部体积文案 |
+| `dsh-nano-explorer-extra/src/client/styles.js`（`.nxe-git-alert`） | 宿主 `Toast` 到 `holdMs` 自动结束，没有「常驻到用户关闭」的形态；Git 读取失败提示必须常驻，故由本包自绘 |

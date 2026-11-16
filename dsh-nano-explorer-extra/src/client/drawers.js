@@ -6,7 +6,7 @@
  */
 
 import React from 'react'
-import { Button, FileTypeIcon, IconLoadingOutlineRegular, Input } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, FileTypeIcon, IconLoadingOutlineRegular, Input, SegmentedControl } from '@deepseek-ai/dsh-client-ui-primitives'
 import { NanoDialog } from 'dsh-nano-ui'
 import { Dialog, usePanelConfinedLayer } from './dialogs.js'
 import { ageParts, partitionChanges, shortenPath, splitPath } from './format.js'
@@ -57,8 +57,8 @@ function matches(query, fields) {
  */
 function ChangeRow({ file }) {
   const { name, dir } = splitPath(file.path)
-  return React.createElement('li', { className: 'nxe-change', 'data-status': file.status, title: file.path },
-    React.createElement('span', { className: 'nxe-change-status', 'data-status': file.status }, file.status),
+  return React.createElement('li', { className: 'nxe-change', 'data-nxe-status': file.status, title: file.path },
+    React.createElement('span', { className: 'nxe-change-status', 'data-nxe-status': file.status }, file.status),
     // The row reads like the source-control row it mirrors: status letter, then the type glyph the
     // platform classifier picks for this filename — language, test file, lockfile, or generic.
     // `path:` — not `kind:` — so the primitives' filename map still fires (README.md → markdown,
@@ -442,7 +442,7 @@ export function BranchDrawer({ copy, open, git, onClose, onPull, onPush, onRefre
         : ahead > 0 ? `${copy.pushNow} ${ahead}` : copy.pushNow)),
     onCancel: onClose,
   },
-  React.createElement('div', { className: 'nxe-scm nxe-repo', 'data-nxe-scm': 'branch' },
+  React.createElement('div', { className: 'nxe-scm nxe-repo', 'data-nxe-scm': 'branch', 'data-nxe-card': 'true' },
     conflicts.length === 0 ? null : React.createElement('section', {
       className: 'nxe-repo-conflict', 'data-nxe-conflicts': String(conflicts.length),
     },
@@ -453,8 +453,8 @@ export function BranchDrawer({ copy, open, git, onClose, onPull, onPush, onRefre
     React.createElement('p', { className: 'nxe-drawer-empty' }, copy.branchConflictBlocks),
     React.createElement('ul', { className: 'nxe-drawer-list nxe-repo-conflict-list' }, conflicts.map(path => {
       const { name, dir } = splitPath(path)
-      return React.createElement('li', { key: path, className: 'nxe-change', 'data-status': 'U' },
-        React.createElement('span', { className: 'nxe-change-status', 'data-status': 'U' }, 'U'),
+      return React.createElement('li', { key: path, className: 'nxe-change', 'data-nxe-status': 'U' },
+        React.createElement('span', { className: 'nxe-change-status', 'data-nxe-status': 'U' }, 'U'),
         // The .nxe-change grid is letter/icon/name; the commit drawer's conflict rows already carry
         // the glyph, and without it the button lands in the 16px icon column and reads as "d…".
         React.createElement(FileTypeIcon, { path: name, size: 16, className: 'nxe-change-icon' }),
@@ -477,21 +477,16 @@ export function BranchDrawer({ copy, open, git, onClose, onPull, onPush, onRefre
     filteredOut
       ? React.createElement('p', { className: 'nxe-drawer-empty' }, copy.branchFilterEmpty)
       : React.createElement(React.Fragment, null,
-        remotes.length === 0 ? null : React.createElement('div', {
-          className: 'nxe-local-filters', role: 'group', 'aria-label': copy.branchTabLabel,
-        },
-        [
-          { id: 'local', label: copy.branchTabLocal, count: branches.length, title: copy.branchTabLocalTitle },
-          { id: 'remote', label: copy.branchTabRemote, count: remoteBranches.length, title: fetchStamp },
-        ].map(item => React.createElement(Button, {
-          key: item.id,
-          variant: tab === item.id ? 'primary' : 'outline',
-          className: 'nxe-local-filter',
-          'aria-pressed': String(tab === item.id),
-          title: item.title,
-          'data-nxe-branch-tab': item.id,
-          onClick: () => setBranchTab(item.id),
-        }, `${item.label} ${item.count}`))),
+        remotes.length === 0 ? null : React.createElement(SegmentedControl, {
+          id: 'nxe-branch-scope',
+          value: tab,
+          label: copy.branchTabLabel,
+          options: [
+            { value: 'local', label: `${copy.branchTabLocal} ${branches.length}`, title: copy.branchTabLocalTitle },
+            { value: 'remote', label: `${copy.branchTabRemote} ${remoteBranches.length}`, title: fetchStamp },
+          ],
+          onChange: value => setBranchTab(value),
+        }),
         React.createElement('section', { className: 'nxe-branch-pane' },
         tab === 'local'
           ? (branches.length === 0
@@ -746,19 +741,17 @@ function RepoSettingsDialog({ copy, remotes, author, sshKey, busy, error, onRemo
     onCancel,
   },
   React.createElement('div', { className: 'nxe-repo-settings' },
-    React.createElement('div', { className: 'nxe-local-filters', role: 'group', 'aria-label': copy.repoSettingsTabs },
-      [
-        { id: 'remote', label: copy.repoTabRemote },
-        { id: 'author', label: copy.repoTabAuthor },
-        { id: 'ssh', label: copy.repoTabSsh },
-      ].map(item => React.createElement(Button, {
-        key: item.id,
-        variant: settingsTab === item.id ? 'primary' : 'outline',
-        className: 'nxe-local-filter',
-        'aria-pressed': String(settingsTab === item.id),
-        'data-nxe-repo-tab': item.id,
-        onClick: () => setSettingsTab(item.id),
-      }, item.label))),
+    React.createElement(SegmentedControl, {
+      id: 'nxe-repo-settings-scope',
+      value: settingsTab,
+      label: copy.repoSettingsTabs,
+      options: [
+        { value: 'remote', label: copy.repoTabRemote },
+        { value: 'author', label: copy.repoTabAuthor },
+        { value: 'ssh', label: copy.repoTabSsh },
+      ],
+      onChange: value => setSettingsTab(value),
+    }),
     settingsTab === 'remote' ? React.createElement('div', { className: 'nxe-repo-panel', role: 'tabpanel' },
       (remotes ?? []).length === 0
         ? React.createElement('p', { className: 'nxe-drawer-empty' }, copy.remotesEmpty)
@@ -889,7 +882,7 @@ export function CommitDrawer({ copy, open, git, onClose, onCommit, busy, error, 
       }, copy.commit)),
     onCancel: onClose,
   },
-  React.createElement('div', { className: 'nxe-scm nxe-local', 'data-nxe-scm': 'commit' },
+  React.createElement('div', { className: 'nxe-scm', 'data-nxe-scm': 'commit', 'data-nxe-card': 'true' },
     React.createElement(Input, {
       value: message,
       placeholder: current === null ? copy.commitPlaceholder : copy.commitPlaceholderOn(current),
@@ -904,30 +897,28 @@ export function CommitDrawer({ copy, open, git, onClose, onCommit, busy, error, 
         }
       },
     }),
-    React.createElement('div', { className: 'nxe-local-filters', role: 'group', 'aria-label': copy.filterChanges },
-      [
-        { id: 'all', label: copy.filterAll, count: pending },
-        { id: 'staged', label: copy.localStaged, count: groups.staged.length },
-        { id: 'unstaged', label: copy.localUnstaged, count: groups.unstaged.length },
-        { id: 'untracked', label: copy.localUntracked, count: groups.untracked.length },
-        ...(conflicts.length === 0 ? [] : [{ id: 'conflict', label: copy.localConflicts, count: conflicts.length }]),
-      ].map(item => React.createElement(Button, {
-        key: item.id,
-        variant: filter === item.id ? 'primary' : 'outline',
-        className: 'nxe-local-filter',
-        disabled: item.id !== 'all' && item.count === 0,
-        'aria-pressed': String(filter === item.id),
-        onClick: () => setFilter(item.id),
-      }, `${item.label} ${item.count}`))),
+    React.createElement(SegmentedControl, {
+      id: 'nxe-commit-filter',
+      value: filter,
+      label: copy.filterChanges,
+      options: [
+        { value: 'all', label: `${copy.filterAll} ${pending}` },
+        { value: 'staged', label: `${copy.localStaged} ${groups.staged.length}`, disabled: groups.staged.length === 0 },
+        { value: 'unstaged', label: `${copy.localUnstaged} ${groups.unstaged.length}`, disabled: groups.unstaged.length === 0 },
+        { value: 'untracked', label: `${copy.localUntracked} ${groups.untracked.length}`, disabled: groups.untracked.length === 0 },
+        ...(conflicts.length === 0 ? [] : [{ value: 'conflict', label: `${copy.localConflicts} ${conflicts.length}` }]),
+      ],
+      onChange: value => setFilter(value),
+    }),
     filter !== 'all' && filter !== 'conflict' ? null : conflicts.length === 0 ? null : React.createElement('section', { className: 'nxe-scm-group', 'data-tone': 'danger' },
       React.createElement('h3', { className: 'nxe-local-head', 'data-tone': 'danger' },
         React.createElement('span', null, copy.localConflicts),
         React.createElement('span', { className: 'nxe-local-badge' }, String(conflicts.length))),
       React.createElement('p', { className: 'nxe-drawer-empty' }, copy.conflictsBody),
       React.createElement('ul', { className: 'nxe-drawer-list' }, conflicts.map(file => React.createElement('li', {
-        key: file.path, className: 'nxe-change', 'data-status': 'U',
+        key: file.path, className: 'nxe-change', 'data-nxe-status': 'U',
       },
-      React.createElement('span', { className: 'nxe-change-status', 'data-status': 'U' }, 'U'),
+      React.createElement('span', { className: 'nxe-change-status', 'data-nxe-status': 'U' }, 'U'),
       React.createElement(FileTypeIcon, { path: file.path, size: 16, className: 'nxe-change-icon' }),
       React.createElement('button', {
         type: 'button', className: 'nxe-drawer-link', title: file.path,

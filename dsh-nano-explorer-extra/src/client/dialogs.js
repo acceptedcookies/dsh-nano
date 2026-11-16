@@ -18,7 +18,13 @@ const { useState } = React
 export function Dialog(props) {
   usePanelConfinedLayer()
   React.useEffect(() => { perf.count('dialog-open') }, [])
-  return React.createElement(NanoDialog, props)
+  // One marker inside every card this plugin draws: the confinement effect tells these cards from
+  // other plugins' full-viewport dialogs by it, and `display: contents` keeps the wrapper out of the
+  // card's layout.
+  return React.createElement(NanoDialog, {
+    ...props,
+    children: React.createElement('div', { className: 'nxe-dialog-body', 'data-nxe-card': 'true' }, props.children),
+  })
 }
 
 /**
@@ -55,30 +61,29 @@ export function usePanelConfinedLayer(active = true) {
         if (!(host instanceof HTMLElement)) continue
         const box = host.getBoundingClientRect()
         const area = box.width * box.height
-        if (area > bestArea) { best = host; bestArea = area }
+        if (area > bestArea) { best = { host, root: node }; bestArea = area }
       }
       return best
     }
     let watched = null
     let resize = null
-    const hasCard = () => document.querySelector('.nano-dialog-card [class*="nxe-"]') !== null
+    const hasCard = () => document.querySelector('.nano-dialog-card [data-nxe-card]') !== null
     const apply = () => {
       if (!live || !hasCard()) return
       const panel = filesPanel()
-      if (!(panel instanceof HTMLElement)) return
-      if (panel !== watched && typeof ResizeObserver === 'function') {
+      if (panel === null) return
+      if (panel.host !== watched && typeof ResizeObserver === 'function') {
         resize?.disconnect()
-        watched = panel
+        watched = panel.host
         resize = new ResizeObserver(apply)
-        resize.observe(panel)
+        resize.observe(panel.host)
       }
-      const rect = panel.getBoundingClientRect()
+      const rect = panel.host.getBoundingClientRect()
       if (rect.width < 1 || rect.height < 1) return
       for (const card of document.querySelectorAll('.nano-dialog-card')) {
-        // Only fence cards this plugin drew: every dialog here renders nxe-*
-        // classes inside the body. Other plugins' cards (e.g. the shared
-        // workspace settings) stay full-viewport centered.
-        if (card.querySelector('[class*="nxe-"]') === null) continue
+        // Only fence cards this plugin drew: every dialog here marks its body with `data-nxe-card`.
+        // Other plugins' cards (e.g. the shared workspace settings) stay full-viewport centered.
+        if (card.querySelector('[data-nxe-card]') === null) continue
         const layer = card.parentElement
         if (!(layer instanceof HTMLElement)) continue
         layer.classList.add('nxe-confined-layer')
@@ -97,8 +102,8 @@ export function usePanelConfinedLayer(active = true) {
         // not leave an empty field under one row. Rename and settings stay compact.
         if (card.querySelector('.nxe-scm') !== null) {
           card.dataset.nxeFill = '1'
-          const theme = panel.getAttribute('data-theme')
-          if (theme) card.setAttribute('data-theme', theme)
+          const scheme = panel.root.getAttribute('data-nano-scheme')
+          if (scheme !== null) card.setAttribute('data-nano-scheme', scheme)
           write(layer, {
             display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
             alignItems: 'center', overflow: 'hidden',

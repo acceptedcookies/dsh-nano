@@ -97,7 +97,7 @@ dsh plugin --profile web add <spec>
 
 行尾字母：`M` 修改，`A` 新增，`D` 删除，`R` 重命名，`U` 冲突，`?` 未跟踪。默认不显示 `.git` 和 `.DS_Store`。其他点开头的名字照常显示。软链接当作普通条目跟随。
 
-Git 报为冲突（`U`）或删除（`D`）但磁盘上已不存在的文件，会在其父目录里渲染成一行删除线「幽灵行」，字母照常着色——DU/UD 冲突或被 `rm` 掉的冲突文件不再出现「目录红点却找不到内容」。被 ignore 目录里被跟踪的文件（提交早于 ignore 规则或 force-add）照常显示 Git 字母；被 ignore 且未跟踪的路径本来就没有状态可画。
+Git 报为冲突（`U`）或删除（`D`）但磁盘上已不存在的文件，仍会在其父目录里渲染成一行「幽灵行」，但行名不带删除线：宿主文件树的行不接受插件着色或改写，状态只由行尾的字母与圆点表达（见 DESIGN.md §8「文件树状态钩子」）。DU/UD 冲突或被 `rm` 掉的冲突文件不会出现「目录红点却找不到内容」。被 ignore 目录里被跟踪的文件（提交早于 ignore 规则或 force-add）照常显示 Git 字母；被 ignore 且未跟踪的路径本来就没有状态可画。
 
 用户没明确要求时，不要提交、拉取、切分支或删除。
 
@@ -149,7 +149,7 @@ Git 报为冲突（`U`）或删除（`D`）但磁盘上已不存在的文件，�
 | `openPreviewOnDoubleClick` | `false` | 双击文件打开预览 |
 | `showOpenButton` | `true` | 行尾打开按钮 |
 | `showIgnoredBadge` | `false` | 被 gitignore 的行显示角标 |
-| `showGitStatus` | `true` | 树上的 Git 颜色和状态栏里的 Git |
+| `showGitStatus` | `true` | 树行尾的 Git 字母、圆点与状态栏里的 Git |
 | `showStatusBar` | `true` | 底部整条状态栏 |
 | `statsExcludeGit` | `true` | 统计体积时跳过 `.git` |
 | `statsExcludeIgnored` | `true` | 统计体积时跳过被 .gitignore 忽略的内容 |

@@ -265,7 +265,11 @@ async function main() {
   const consoleRows = await page.evaluate(() => document.querySelectorAll('[data-nks-devtools] .nks-dt-row').length)
   record('devtools-console', consoleRows > 0, `${consoleRows} rows`)
   const netTab = await page.evaluate(() => {
-    const b = document.querySelector('[data-nks-dt-network]')
+    // The view switch is the host SegmentedControl (no per-option data attribute):
+    // find the head's option whose text is the Network label.
+    const head = document.querySelector('[data-nks-devtools] .nks-dt-head')
+    const b = [...(head?.querySelectorAll('button, [role="radio"], [role="tab"]') ?? [])]
+      .find((node) => node.textContent.trim() === 'Network')
     if (!b) return null
     const r = b.getBoundingClientRect()
     return { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) }
@@ -278,7 +282,9 @@ async function main() {
 
   // 8. Elements tab (DOM tree) and computed styles
   const elTab = await page.evaluate(() => {
-    const b = document.querySelector('[data-nks-dt-elements]')
+    const head = document.querySelector('[data-nks-devtools] .nks-dt-head')
+    const b = [...(head?.querySelectorAll('button, [role="radio"], [role="tab"]') ?? [])]
+      .find((node) => node.textContent.trim() === 'Elements')
     if (!b) return null
     const r = b.getBoundingClientRect()
     return { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) }

@@ -16,6 +16,7 @@ import assert from 'node:assert/strict'
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { HOST_CLASS_ATTR_RE } from '../../scripts/check-ui-rules.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const repo = join(root, '..')
@@ -119,6 +120,7 @@ test('T20 control: the zero-scan patterns do report a fixture that carries them'
       '.nxe-acc-letter[data-status="M"]',
       'button:has(> div [data-status])',
       'document.querySelector(\'[class*="nxe-"]\')',
+      'div[ CLASS ^= "nxe-"]',
       '.nxe-menu-item { }',
       'const MENU_LAYER = 80',
       'const schemeOf = () => "dark"',
@@ -127,7 +129,7 @@ test('T20 control: the zero-scan patterns do report a fixture that carries them'
   assert.equal(countIn(fixture, /\bdata-files-entry\b/g).length, 1)
   assert.equal(countIn(fixture, /\bdata-status\b/g).length, 1)
   assert.equal(countIn(fixture, /:has\(/g).length, 1)
-  assert.equal(countIn(fixture, /\[class\*=/g).length, 1)
+  assert.equal(countIn(fixture, HOST_CLASS_ATTR_RE)[0]?.count, 2)
   assert.equal(countIn(fixture, /\.nxe-menu/g).length, 1)
   assert.equal(countIn(fixture, /\bMENU_LAYER\b/g).length, 1)
   assert.equal(countIn(fixture, /\bschemeOf\b/g).length, 1)
@@ -138,7 +140,7 @@ test('T20: no selector reaches into the host file tree rows', () => {
   assert.deepEqual(countIn(all, /\[data-files-entry/g), [], 'data-files-entry selectors')
   assert.deepEqual(countIn(all, /\[data-status/g), [], 'data-status selectors')
   assert.deepEqual(countIn(all, /:has\(/g), [], ':has() selectors')
-  assert.deepEqual(countIn(sources, /\[class\*=/g), [], '[class*=] probes')
+  assert.deepEqual(countIn(sources, HOST_CLASS_ATTR_RE), [], 'class attribute selector probes')
 })
 
 test('T20: the host gap for the file tree is registered in DESIGN.md §8', () => {

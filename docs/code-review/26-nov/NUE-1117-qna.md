@@ -3,7 +3,7 @@
 > **范围**：`NUE-1117` = nano-ui-enhancement。证据输入为 [NUE-1117-initial-assessment.md](NUE-1117-initial-assessment.md)（下称「初评」）。初评是证据，不是合同；其中的推荐只有在本文冻结后才生效。
 > **角色**：提问 `Droid` · second-opinion `none` · 裁决 [业主]
 > **基线**：`main` @ `5a41133`（初评 §0 所列 BUG-1..4 已于 `60c3a4d`/`fefd590`/`5a41133` 修复，不再属于 NUE 范围）
-> **文档状态**：`已冻结`（2026-11-17）。Round 1–4 全部冻结，`T-O-NUE1117-B01–B04` 与 `01–14` 均已锁定。Round 4 是 qna-truth 复核后的补充裁决。**冻结不是实施授权。**
+> **文档状态**：`已冻结`（2026-11-17）。Round 1–5 全部冻结，`T-O-NUE1117-B01–B04` 与 `01–17` 均已锁定。Round 4 是 qna-truth 复核后的补充裁决；Round 5 是 action-plan 对抗审查后的执行取舍裁决。**冻结不是实施授权。**
 
 ---
 
@@ -16,6 +16,7 @@
 | Round 2 | `Q5–Q8` | executional | 检测脚本归属 · 宿主 DOM 嫁接处置 · design skill 位置 · catalog 形态 | **已冻结**（→ `T-O-NUE1117-05..08`） |
 | Round 3 | `Q9–Q11` | executional | 迁移顺序 · 共享包版本与提交纪律 · 其余宿主 DOM 嫁接的替代 | **已冻结**（→ `T-O-NUE1117-09..11`） |
 | Round 4 | `Q12–Q14` | 复核补充 | nano-ui 自身的宿主 DOM 嫁接 · [DNMS] 区域测量 · [DNMS] Tooltip 参数缺陷 | **已冻结**（→ `T-O-NUE1117-12..14`） |
+| Round 5 | `Q15–Q17` | 执行取舍 | nano-ui 旧接口退役时点 · 收尾重建产物 · [DNCS] Devin 标签 | **已冻结**（→ `T-O-NUE1117-15..17`） |
 
 ---
 
@@ -65,6 +66,16 @@
 | `T-O-NUE1117-12` | Q12 nano-ui 自身嫁接（`packages/dsh-nano-ui/src/dom.js:39-93` 经 `parentElement` 改写宿主 Modal 根节点） | 拆成两种承载：主窗口级对话框继续包装宿主 `Modal`；浮窗或区域内的对话框由 nano-ui 窗口覆盖层承载，接入宿主 `useModalLayer`。MutationObserver 补丁、对话框的 `theme`/`z` 参数、`--nano-dlg-*` 文档级变量一起退役 | 落实 `01`、`04`、`11`；[DNN] 全部对话框迁到窗口覆盖层；规格 README 的主题/层级契约退役 |
 | `T-O-NUE1117-13` | Q13 [DNMS] 区域测量（`dsh-nano-model-selector/src/client/index.jsx:94` 查询 `[data-conversation-region="chat"]`） | 取消区域收束，历史对话框改为主窗口级 `Modal` | [DNMS] `styles.js:229-234` 与 `regionElement` 删除；`11` 中「[DNMS] 区域遮罩改用 nano-ui 区域选项」由本条替代 |
 | `T-O-NUE1117-14` | Q14 [DNMS] `AsyncStatusBadge.jsx:65` 传 `content`，宿主 `Tooltip` 只认 `label` | 在 `main` 单独修复，不并入 NUE | 已修复：`3f43bf2` |
+
+### 1.6 Round 5（执行取舍 · 已冻结 2026-11-17）
+
+来源：`NUE-1117-action-plan.md` 初稿的两路对抗审查（`.anote/reviews/NUE/1117/5748/`）。
+
+| Truth-ID | 题 | [业主] 裁决 | 下游约束 |
+|---|---|---|---|
+| `T-O-NUE1117-15` | Q15 nano-ui 旧接口（`openNanoDialog` 的 `region`/`theme`/`z`、NanoMenu 的 `theme`/`z`、自绘 Toast/页签）在迁移窗口内如何处理：A 保留到最后使用方再删；B nano-ui 增强时一次硬切 | 选 B。nano-ui 增强时一次删除旧接口与旧实现，不保留过渡路径 | 尚未迁移的插件在各自迁移前若从 `main` 重建，会失去被删接口提供的行为；这段窗口内不宜从 `main` 重建发布它们 |
+| `T-O-NUE1117-16` | Q16 全部迁移完成后是否在收尾 worktree 重建六个插件的 `lib/client.js`：A 重建；B 不重建 | 选 A。重建，只改 `lib/`，不改 `src/` | 六份产物最终都打进同一版 nano-ui；这是产物层的重建，不是第二次源码迁移 |
+| `T-O-NUE1117-17` | Q17 [DNCS] 插入宿主 composer 的「Devin」标签在删除嫁接后是否另设挂载点：A 直接删除并登记宿主缺口；B 迁到 [DNCS] 自有挂载点 | 选 A | 云会话标识登记为宿主缺口；[DNCS] 不新增替代界面 |
 
 ---
 

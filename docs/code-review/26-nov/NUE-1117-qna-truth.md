@@ -1,9 +1,9 @@
 # NUE-1117 QnA Truth · 已冻结真相台账（nano-ui-enhancement）
 
-> **范围**：只登记 [业主] 在 [NUE-1117-qna.md](NUE-1117-qna.md) 中已接受的 `T-O-NUE1117-B01`–`B04` 与 `T-O-NUE1117-01`–`14`，共 18 条。
+> **范围**：只登记 [业主] 在 [NUE-1117-qna.md](NUE-1117-qna.md) 中已接受的 `T-O-NUE1117-B01`–`B04` 与 `T-O-NUE1117-01`–`17`，共 21 条（`15`–`17` 为 2026-11-17 Round 5 追加）。
 > **性质**：`frozen-truth ledger / compact consumption entry`。问答是决策出处，本文不是第二真源；本文只做三件事：给每条真相钉上复核过的 `file:line` 证据，写出执行时必须遵守的推论，列出复核中发现的偏差。
 > **复核基线**：`main` @ `5a41133`（2026-11-17）。宿主口径：`@deepseek-ai/dsh@0.2.2-rc.1` CLI 安装；primitives 导出快照 rc.1 = 311、rc.3 = 321（`dsh-nano-model-selector/test/primitives-exports.json`）；令牌来源 `dsh-client-ui-theme/lib/client.js`；组件签名从 `dsh-web-frontend/dist/assets/index-BgUyXZcc.js` 解码。
-> **状态**：18 条全部 FROZEN。**冻结不是实施授权。** 复核发现的 3 项冲突（§7）已由 [业主] 于 2026-11-17 裁决，登记为 `12`–`14`。
+> **状态**：21 条全部 FROZEN。**冻结不是实施授权。** 复核发现的 3 项冲突（§7）已由 [业主] 于 2026-11-17 裁决，登记为 `12`–`14`。
 
 ---
 
@@ -23,6 +23,7 @@ baseline     T-O-NUE1117-B01..B04   FROZEN（随问答冻结，2026-11-16）
 foundational T-O-NUE1117-01..04     FROZEN（Round 1）
 executional  T-O-NUE1117-05..11     FROZEN（Round 2–3）
 review       T-O-NUE1117-12..14     FROZEN（Round 4，本文 §7 复核补充）
+execution    T-O-NUE1117-15..17     FROZEN（Round 5，action-plan 审查后的执行取舍）
 ```
 
 | 复核结论 | 条目 |
@@ -55,6 +56,9 @@ review       T-O-NUE1117-12..14     FROZEN（Round 4，本文 §7 复核补充�
 | `12` | 对话框拆成两种承载：主窗口级包装宿主 `Modal`；浮窗或区域内由 nano-ui 窗口覆盖层承载并接入 `useModalLayer`；`dom.js` 补丁、`theme`/`z` 参数、`--nano-dlg-*` 退役 | `dom.js:39-93`（MutationObserver + `card.parentElement` 改写宿主根节点）；宿主 `useModalLayer` 在 rc.1 与 rc.3 都有导出 | 见 §4.3。[DNN] 是唯一需要窗口覆盖层的现有使用方；规格 README `:80-115` 不迁入 DESIGN.md，直接退役 |
 | `13` | [DNMS] 取消区域收束，历史对话框改为主窗口级 `Modal` | `index.jsx:94`；`styles.js:229-234`；`--nms-region-*` 变量 | [DNMS] 迁移时删除 `regionElement`、区域测量与 `body > div:has(> .nms-hist-dialog)`；包 AGENTS「三个必须遵守的呈现约束」第 1 条同步删除 |
 | `14` | [DNMS] Tooltip 参数缺陷在 `main` 单独修复 | `AsyncStatusBadge.jsx:65` | 已修复：`3f43bf2`（DNMS 54 项单测通过） |
+| `15` | nano-ui 旧接口在 nano-ui 增强时一次硬切，不保留过渡路径 | 旧接口使用方（`fb67904`）：`openNanoDialog` — [DNK] `index.js:1694-1706`、[DNN] `panel.js:2153`；`openNanoMenu` — [DNK] `index.js:1894-1896`、[DNN] `panel.js` 9 处；`NanoMenu` `z` — [DNEE] `menu.js:22-33`；DOM `nanoTabs` — [DNCS] `settings-dialog.js:74`、[DNN] `panel.js:3157`；`.nano-toast` 类 — [DNK] `index.js:2118` | 未迁移插件在迁移前从 `main` 重建会退化；导出名能保留的保留并换成新实现，使未迁移插件仍可构建，被删参数不再生效 |
+| `16` | 收尾 worktree 重建六份 `lib/client.js`，只改 `lib/` | `TB04`：产物打的是构建当时的 nano-ui | 收尾提交只含 `lib/` 与版本核对，不含 `src/` |
+| `17` | [DNCS] Devin 标签随嫁接删除，登记宿主缺口 | [DNCS] `index.js:27-70,82` | [DNCS] 不新增替代挂载点 |
 
 ---
 
@@ -163,6 +167,8 @@ review       T-O-NUE1117-12..14     FROZEN（Round 4，本文 §7 复核补充�
 | E12 | 嫁接清单只列插件 | 漏了 nano-ui 自身：`dom.js:39-93` 通过 `card.parentElement` 改写宿主 Modal 根节点的位置、z-index、主题属性 |
 | E13 | [DNEE] 复刻了 `fileSizeText`/`relativeTime` | 名字不同，是语义重叠（`formatBytes` 用 KiB），需要比对输出 |
 | E14 | nano-ui 层级只提到 [DNN] 硬编码 | nano-ui 默认值本身有缺陷：菜单 30 低于宿主 Modal 1000，在对话框里打开菜单会被遮住 |
+| E15 | 本文 `12` 推论：「[DNN] 是唯一需要窗口覆盖层的现有使用方」（2026-11-17 追加勘误） | [DNK] 设置对话框也以自有 `[data-nks-workspace]` 的矩形作为 `region`（`dsh-nano-kitesurf/src/client/index.js:1694-1704`），同样需要窗口覆盖层 |
+| E16 | 本文 `08` 推论：「`check-client-rules` 与 [DNMS] 测试同时改读 catalog」（2026-11-17 追加勘误） | `fb67904` 时 [DNMS] 测试不读 `primitives-exports.json`；读取方只有 `scripts/check-client-rules.mjs:33` 与 `scripts/gen-primitives-exports.mjs:24` |
 
 ---
 

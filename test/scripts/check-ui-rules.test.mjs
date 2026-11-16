@@ -6,11 +6,12 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'nod
 import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const repo = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
 const SCRIPT = join(repo, 'scripts', 'check-ui-rules.mjs')
 const RULES = ['U1', 'U2', 'U3', 'U4', 'U5', 'U6', 'U8', 'U9', 'U10']
+const { scanPlugin } = await import(pathToFileURL(SCRIPT).href)
 
 const VIOLATIONS = `
 const STYLES = \`
@@ -18,6 +19,11 @@ const STYLES = \`
 .nks-dead{color:var(--dsw-not-a-token)}
 .nks-box{z-index:30}
 [class*="_toolbar_"]{display:none}
+[class *= "_toolbar_"]{display:none}
+[ class*= "_toolbar_"]{display:none}
+[class^="_toolbar_"]{display:none}
+[class$="_toolbar_"]{display:none}
+[CLASS|="_toolbar_"]{display:none}
 \`
 // nano-ui-exempt: fixture marker
 export const view = () => [
@@ -79,4 +85,45 @@ test('T07 the real repo scan covers files and exits 0', () => {
 
 test('T07 check-ui-rules is not a test-all gate', () => {
   assert.equal(readFileSync(join(repo, 'scripts', 'test-all.mjs'), 'utf8').includes('check-ui-rules'), false)
+})
+
+const DNK = { abbr: 'DNK', prefixes: ['nks-'] }
+const scan = text => scanPlugin(DNK, [{ rel: 'probe.js', text }], { tokens: {}, exemptRows: [] })
+
+test('T07 U5 catches every spelling of a class attribute selector', () => {
+  const selectors = [
+    '[class*="a"]',
+    '[class *= "a"]',
+    '[ class*= "a"]',
+    '[class ^= "a"]',
+    '[class^="a"]',
+    '[class$="a"]',
+    '[class~="a"]',
+    '[class|="a"]',
+    '[class="a"]',
+    '[CLASS*="a"]',
+  ]
+  const text = selectors.map(s => `.probe ${s} { display: none }`).join('\n')
+  const hits = scan(text).filter(f => f.rule === 'U5')
+  assert.deepEqual(hits.map(f => f.line), selectors.map((_, i) => i + 1), 'every spelling fires on its own line')
+})
+
+test('T07 U8 counts a template-built class family as referenced', () => {
+  const text = [
+    '.nks-cap-120 { max-height: 120px; }',
+    '.nks-dead { color: red; }',
+    'const capClass = cap => `nks-cap-${cap}`',
+  ].join('\n')
+  const dead = scan(text).filter(f => f.rule === 'U8').map(f => f.detail)
+  assert.deepEqual(dead, ['.nks-dead 只在样式中定义'], 'only the genuinely unreferenced class is reported')
+})
+
+test('T07 U9 accepts classes defined inside compound and element-qualified selectors', () => {
+  const text = [
+    '.nks-action.nks-danger { color: red; }',
+    '.nks-host button.nks-chrome-close { color: red; }',
+    "export const view = () => h('button', { className: 'nks-action nks-danger nks-chrome-close nks-ghost' })",
+  ].join('\n')
+  const undefinedClasses = scan(text).filter(f => f.rule === 'U9').map(f => f.detail)
+  assert.deepEqual(undefinedClasses, ['nks-ghost 没有样式定义'])
 })

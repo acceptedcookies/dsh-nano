@@ -44,6 +44,15 @@ const CONTROL_RE = /(?:^|-)(switch|tabs?|tag|tooltip|tip|toast|menu)(?:-|$)/
 const SYMBOL_RE = /^[\u00d7\u2190-\u21ff\u2295-\u22ff\u2300-\u23ff\u25a0-\u25ff\u2600-\u27bf\u2b00-\u2bff]{1,2}$/
 const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
+/** Class-attribute selector in any spelling: `[class*=`, `[class *=`, `[ class ^=`,
+ *  `[CLASS$=`, `[class~=`, `[class|=`, and the exact `[class=`. Whitespace around the
+ *  attribute name and around the operator is legal CSS, and HTML attribute names are
+ *  case-insensitive, so the literal `[class*=` misses equivalent source. */
+export const HOST_CLASS_ATTR_RE = /\[\s*class\s*[*^$|~]?=/gi
+
+/** A class built from a template prefix (`nano-cap-${cap}`) is defined dynamically. */
+const TEMPLATE_STEM_RE = (prefixRe) => new RegExp(`(?<![\\w$-])((?:${prefixRe})[a-z0-9_-]*-?)\\$\\{`, 'g')
+
 function* walk(dir) {
   if (!existsSync(dir)) return
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -68,7 +77,8 @@ export function scanPlugin(plugin, files, ctx) {
   const findings = []
   const push = (rule, file, line, detail) => findings.push({ plugin: plugin.abbr, rule, file, line, detail })
   const prefixRe = plugin.prefixes.map(esc).join('|')
-  const classRe = new RegExp(`(?<![\\w$-])(\\.?)((?:${prefixRe})[a-z0-9_-]*[a-z0-9])(\\$\\{)?`, 'g')
+  const classRe = new RegExp(`(?<![\\w$-])(\\.?)((?:${prefixRe})[a-z0-9_-]*[a-z0-9])(-?\\$\\{)?`, 'g')
+  const templateStemRe = TEMPLATE_STEM_RE(prefixRe)
   const defined = new Map()
   const referenced = new Map()
   const classRefs = new Map()
@@ -90,7 +100,7 @@ export function scanPlugin(plugin, files, ctx) {
     if (!/icons?\.(jsx?|mjs)$/.test(basename(rel))) {
       for (const m of text.matchAll(/<svg\b|createElementNS\([^)]*['"]svg['"]/g)) push('U4', rel, lineAt(text, m.index), '内联 <svg> 未经图标门面')
     }
-    for (const m of text.matchAll(/\[class[*^$|~]?=/g)) push('U5', rel, lineAt(text, m.index), '属性选择器匹配宿主类名')
+    for (const m of text.matchAll(HOST_CLASS_ATTR_RE)) push('U5', rel, lineAt(text, m.index), '属性选择器匹配宿主类名')
     for (const m of text.matchAll(/:has\(([^)]*)\)/g)) {
       if (!new RegExp(prefixRe).test(m[1])) push('U5', rel, lineAt(text, m.index), `:has(${m[1]}) 指向非本插件结构`)
     }
@@ -104,14 +114,18 @@ export function scanPlugin(plugin, files, ctx) {
       const registered = ctx.exemptRows.some(row => row.includes(rel) || row.includes(`${rel}:${line}`))
       push('U10', rel, line, registered ? '已登记' : '未在 DESIGN.md §10 登记')
     }
+    for (const m of text.matchAll(templateStemRe)) stems.push(m[1])
     for (const m of text.matchAll(classRe)) {
       const [, dot, name, dynamic] = m
       const at = { rel, line: lineAt(text, m.index) }
       if (dynamic) { stems.push(name); continue }
-      const map = dot ? defined : referenced
+      // `.a.b` is one compound selector: the engine consumes the leading dot with the
+      // previous token, so the match starts right after it. Still a definition.
+      const compound = dot === '' && m.index > 0 && text[m.index - 1] === '.'
+      const map = dot !== '' || compound ? defined : referenced
       if (!map.has(name)) map.set(name, at)
       const isId = /\b(?:id|htmlFor|for)\s*[:=]\s*['"`]$/.test(text.slice(Math.max(0, m.index - 16), m.index))
-      if (!dot && !isId && !classRefs.has(name) && /class/i.test(lineText(text, m.index))) classRefs.set(name, at)
+      if (dot === '' && !compound && !isId && !classRefs.has(name) && /class/i.test(lineText(text, m.index))) classRefs.set(name, at)
     }
   }
   for (const name of keyframes) { defined.delete(name); referenced.delete(name); classRefs.delete(name) }

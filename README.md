@@ -252,7 +252,7 @@ BFF 就是 dsh 宿主进程里的插件 `apply(ctx)`。浏览器请求 `https://
 | `/nano-explorer-extra/commit` | POST | `git add --all` 后提交。没有「只提交已暂存」 |
 | `/nano-explorer-extra/pull` | POST | `git pull --ff-only` |
 | `/nano-explorer-extra/checkout` | POST | 切换当前工作树的分支 |
-| `/nano-explorer-extra/perf-review/host` | GET | 观测快照。默认关闭时仍返回 200，`enabled` 为 false |
+| `/nano-explorer-extra/perf-review/host` | GET | 只读全进程视图。只接受 `since`；`mode` 和其他参数返回 400 |
 > **`/nano-shared-workspace/*` 的 20+ 条路由已从本表移除** —— 该插件 2026-11-12 deprecated，源码归档在 [`deprecated/dsh-nano-shared-workspace/`](deprecated/README.md)。历史路由清单见 `security/route-inventory.md`（已标注 deprecated）与归档包内 `src/host/routes.js`。现行门禁 `security/route-sensitivity.json` / `security/feature-contract.json` 已不再收录这些路由。
 
 文件树另有右键「查看差异」：不走本插件的 diff 路由（该路由已删），而是打开 forge 面板的本地差异 tab。profile 没装「变更请求与工作树」时，界面只提示不可用。

@@ -398,26 +398,33 @@ async function main() {
   const ksSpans = perf.local?.plugins?.['nano-kitesurf']?.hand?.spans || {}
   const spanNames = Object.keys(ksSpans)
   const spanCount = spanNames.reduce((sum, name) => sum + (ksSpans[name]?.n || 0), 0)
-  record('perf-spans', spanCount > 0, `${spanCount} spans (${spanNames.join(',')}) ${perf.host?.client ? 'host-synced' : 'host-pending'}`)
+  record('perf-spans', spanCount > 0, `${spanCount} spans (${spanNames.join(',')}) ${Array.isArray(perf.host?.rows) ? 'host-read' : 'host-absent'}`)
 
   // 13. P1-4 latency budget: host-side spans must report pre-aggregated stats
   // and the hot-path p95 must stay under a sane ceiling. Budget is generous —
   // the engine is a local container, network latency dominates; this catches
   // regressions (e.g. a span suddenly taking seconds), not micro-optimisation.
-  const hostSpans = perf.host?.plugins?.['nano-kitesurf']?.hand?.spans || {}
-  const shotStats = hostSpans['shot']?.stats
+  const hostRows = Array.isArray(perf.host?.rows)
+    ? perf.host.rows.filter((row) => row.pluginId === 'nano-kitesurf' && row.kind !== 'contract')
+    : []
+  const shotSamples = hostRows.filter((row) => row.name === 'shot').map((row) => row.ms).filter((ms) => typeof ms === 'number').sort((a, b) => a - b)
+  const percentile = (p) => shotSamples.length === 0 ? null : shotSamples[Math.min(shotSamples.length - 1, Math.max(0, Math.ceil(p * shotSamples.length) - 1))]
+  const shotStats = shotSamples.length === 0 ? null : {
+    n: shotSamples.length, p50: percentile(0.5), p95: percentile(0.95),
+    max: shotSamples.at(-1), errors: hostRows.filter((row) => row.name === 'shot' && row.err === true).length,
+  }
   if (shotStats) {
     record('perf-stats-shape', typeof shotStats.p95 === 'number' && typeof shotStats.p50 === 'number',
       `shot p50=${shotStats.p50} p95=${shotStats.p95} max=${shotStats.max} errors=${shotStats.errors}`)
     record('perf-budget-shot-p95', shotStats.p95 != null && shotStats.p95 < 3000, `shot p95=${shotStats.p95}ms < 3000ms`)
   } else {
-    record('perf-stats-shape', false, 'shot span missing stats block')
-    record('perf-budget-shot-p95', false, 'no shot stats')
+    record('perf-stats-shape', false, 'shot rows missing from the v2 host read view')
+    record('perf-budget-shot-p95', false, 'no shot rows')
   }
-  // Event ring must carry {ms,at,err,traceId} — the incidentId correlation.
-  const shotEvents = hostSpans['shot']?.events || []
-  const hasTriple = shotEvents.length === 0 || shotEvents.every((e) => typeof e.ms === 'number' && typeof e.at === 'string' && 'err' in e)
-  record('perf-event-triples', hasTriple, `${shotEvents.length} events, triple shape ok=${hasTriple}`)
+  // Each host row carries {ms,seq,err,at}; the event ring is optional.
+  const shotRows = hostRows.filter((row) => row.name === 'shot')
+  const hasTriple = shotRows.length === 0 || shotRows.every((row) => typeof row.ms === 'number' && typeof row.at === 'string' && 'err' in row)
+  record('perf-event-triples', hasTriple, `${shotRows.length} rows, row shape ok=${hasTriple}`)
 
   // 14. P1-6 feedback-report: every field the template asks for must be
   // fetchable from a real route — buildId/phase (status), route sequence

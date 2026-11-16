@@ -184,6 +184,9 @@ export function pickOwner(plugins, target, structure) {
  *   {performance, PerformanceObserver, localStorage, location, forceEnabled,
  *    navigator, hostSnapshotProvider}
  */
+const isHostView = value => value != null && typeof value === 'object' &&
+  (Array.isArray(value.rows) || (value.plugins != null && typeof value.plugins === 'object'))
+
 const statusClass = status => {
   if (typeof status !== 'number' || !Number.isFinite(status)) return null
   const hundred = Math.floor(status / 100)
@@ -244,6 +247,7 @@ export function createPerfReview(env = {}) {
     ['data-sidebar-row', 'sidebar-row'],
   ])
   let collector = createCollectorState()
+  collector.startedAt = now(perf)
   let frozenAt = new Date().toISOString()
   const touch = () => { frozenAt = new Date().toISOString() }
   // Real callers pass no env: read the flag sources off the page globals then.
@@ -364,6 +368,15 @@ export function createPerfReview(env = {}) {
   const absorbLoafEntry = entry => {
     collector.loafCount += 1
     collector.blockingMs += entry.blockingDuration ?? 0
+    if ((entry.blockingDuration ?? 0) >= 50 || (entry.duration ?? 0) >= 100) {
+      collector.heavyFrames.push({
+        startTime: entry.startTime ?? null,
+        duration: entry.duration ?? null,
+        blockingDuration: entry.blockingDuration ?? null,
+        styleAndLayoutDuration: entry.styleAndLayoutDuration ?? null,
+      })
+      if (collector.heavyFrames.length > 50) collector.heavyFrames.shift()
+    }
     let nanoInFrame = false
     for (const script of entry.scripts ?? []) {
       collector.forcedLayoutMs += script.forcedStyleAndLayoutDuration ?? 0
@@ -632,6 +645,9 @@ export function createPerfReview(env = {}) {
       }
       row.profiler.durations = []
     }
+    if (hostSnapshotCache?.next != null) hostCursor = hostSnapshotCache.next
+    hostSnapshotCache = null
+    pollHost()
     touch()
   }
 
@@ -681,9 +697,6 @@ export function createPerfReview(env = {}) {
     bucket.outcomes[admitted.outcome] = (bucket.outcomes[admitted.outcome] ?? 0) + 1
     const klass = statusClass(admitted.status)
     if (klass) bucket.status[klass] += 1
-    hostCursor = null
-    hostSnapshotCache = null
-    pollHost()
     touch()
   }
 
@@ -698,7 +711,7 @@ export function createPerfReview(env = {}) {
     const chrome = /Chrome\/(\d+)/.exec(navigatorRef?.userAgent ?? '')
     const provided = Object.prototype.hasOwnProperty.call(input, 'host')
     const hostSnapshot = provided ? input.host : hostSnapshotCache
-    const hostBad = provided && hostSnapshot != null && !hostSnapshotUsable(hostSnapshot)
+    const hostBad = hostSnapshot != null && !isHostView(hostSnapshot)
     return buildReport({
       meta: {
         generatedAt: input.generatedAt ?? frozenAt,
@@ -706,6 +719,8 @@ export function createPerfReview(env = {}) {
         arm: input.arm,
         chromeMajor: input.chromeMajor ?? (chrome === null ? null : Number(chrome[1])),
         contributors: contributors.map(item => ({ ...item })),
+        windowStartedAt: Number.isFinite(collector.startedAt) ? new Date(collector.startedAt).toISOString() : null,
+        windowMs: Number.isFinite(collector.startedAt) ? Math.max(0, Math.round(now(perf) - collector.startedAt)) : null,
       },
       collector,
       plugins,

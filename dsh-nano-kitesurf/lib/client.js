@@ -596,6 +596,8 @@ var __kitesurfExport = (() => {
       loafCount: 0,
       blockingMs: 0,
       forcedLayoutMs: 0,
+      /** Heaviest LoAF entries, capped at EVIDENCE_CAPS.frames by the report. */
+      heavyFrames: [],
       nanoScriptMs: 0,
       // scripts whose URL names ≥1 nano package and ≥2 nano packages (combined only)
       nanoLoafCount: 0,
@@ -770,7 +772,7 @@ var __kitesurfExport = (() => {
       REPORT_VERSION = 2;
       CLIENT_KEY = Symbol.for("dsh.perfReview.v2");
       HOST_KEY = Symbol.for("dsh.perfReviewHost.v2");
-      BUILD_STAMP = true ? "d84f685f322e" : "dev";
+      BUILD_STAMP = true ? "ff5694c57be1" : "dev";
       NAME_RE = /^[a-z0-9][a-z0-9-]{0,39}$/;
       CONTRACT_KEY_RE = /^[a-z0-9][a-z0-9.-]{0,63}$/;
       MAX_SPAN_KEYS = 32;
@@ -845,20 +847,44 @@ var __kitesurfExport = (() => {
   }
   function clipOversize(report) {
     if (byteLength(report) <= MAX_REPORT_BYTES) return report;
-    if (report.page) {
-      report.page.evidence = { interactions: [], frames: [], hostErrors: [] };
-    }
+    const empty = { interactions: [], frames: [], hostErrors: [] };
+    if (report.page) report.page.evidence = empty;
+    report.evidence = empty;
     if (report.structure) report.structure.oversize = (report.structure.oversize ?? 0) + 1;
     return report;
   }
   function hostSnapshotUsable(value) {
     if (value == null || typeof value !== "object" || Array.isArray(value)) return false;
+    if (Array.isArray(value.rows)) return true;
     const plugins = value.plugins;
     if (plugins == null || typeof plugins !== "object" || Array.isArray(plugins)) return false;
     return true;
   }
   function hostSpanObject(hostSnapshot, pluginId) {
     const out = {};
+    if (Array.isArray(hostSnapshot?.rows)) {
+      const grouped = /* @__PURE__ */ new Map();
+      for (const row of hostSnapshot.rows) {
+        if (row == null || row.pluginId !== pluginId || row.kind === "contract") continue;
+        const name = row.name;
+        if (typeof name !== "string") continue;
+        const cell = grouped.get(name) ?? { samples: [], errors: 0 };
+        if (typeof row.ms === "number" && Number.isFinite(row.ms)) cell.samples.push(row.ms);
+        if (row.err === true) cell.errors += 1;
+        grouped.set(name, cell);
+      }
+      for (const [name, cell] of grouped) {
+        out[name] = {
+          n: cell.samples.length,
+          p50: roundMs(percentile(cell.samples, 0.5)),
+          p95: roundMs(percentile(cell.samples, 0.95)),
+          maxMs: roundMs(cell.samples.length === 0 ? null : Math.max(...cell.samples)),
+          errors: cell.errors,
+          basis: hostSnapshot.basis === "cumulative" ? "cumulative" : "window"
+        };
+      }
+      return out;
+    }
     const source = hostSnapshot?.plugins?.[pluginId]?.spans;
     if (source == null || typeof source !== "object") return out;
     for (const [name, row] of Object.entries(source)) {
@@ -867,6 +893,7 @@ var __kitesurfExport = (() => {
         n: row?.n ?? samples.length,
         p50: roundMs(percentile(samples, 0.5)),
         p95: roundMs(percentile(samples, 0.95)),
+        maxMs: roundMs(samples.length === 0 ? null : Math.max(...samples)),
         errors: row?.stats?.errors ?? row?.errors ?? 0,
         basis: row?.basis === "window" ? "window" : "cumulative"
       };
@@ -970,7 +997,7 @@ var __kitesurfExport = (() => {
     const ranked = [...collector.interactions].sort((a, b) => (b.duration ?? 0) - (a.duration ?? 0));
     const hostErrors = [];
     const usableHost = hostSnapshotUsable(input.hostSnapshot) ? input.hostSnapshot : null;
-    if (usableHost) {
+    if (usableHost && usableHost.plugins != null && typeof usableHost.plugins === "object") {
       for (const plugin of Object.values(usableHost.plugins)) {
         for (const span of Object.values(plugin?.spans ?? {})) {
           for (const event of span?.events ?? []) {
@@ -990,15 +1017,16 @@ var __kitesurfExport = (() => {
       hostErrors: hostErrors.slice(0, EVIDENCE_CAPS.hostErrors)
     };
     page.host = usableHost ? {
-      source: usableHost.source ?? "snapshot",
+      source: Array.isArray(usableHost.rows) ? "read" : usableHost.source ?? "snapshot",
       epoch: usableHost.epoch ?? null,
-      from: usableHost.from ?? usableHost.sinceStart ?? null,
-      to: usableHost.to ?? usableHost.writtenAt ?? null,
+      from: usableHost.since ?? usableHost.from ?? usableHost.sinceStart ?? null,
+      to: usableHost.next ?? usableHost.to ?? usableHost.writtenAt ?? null,
       truncated: Array.isArray(usableHost.truncated) ? [...usableHost.truncated] : [],
+      basis: usableHost.basis ?? null,
       sinceStart: usableHost.sinceStart ?? null,
       writtenAt: usableHost.writtenAt ?? null,
       enabled: usableHost.enabled ?? null
-    } : { source: null, epoch: null, from: null, to: null, truncated: [], sinceStart: null, writtenAt: null, enabled: null };
+    } : { source: null, epoch: null, from: null, to: null, truncated: [], basis: null, sinceStart: null, writtenAt: null, enabled: null };
     const notes = [];
     const note = (id, text) => notes.push({ id, text });
     const afterWindow = collector.interactions.some((ix) => Object.values(ix.samples ?? {}).some((sample) => sample.spanAfterWindow));
@@ -1021,7 +1049,8 @@ var __kitesurfExport = (() => {
       ...structure,
       audits: Array.isArray(structure?.audits) ? structure.audits.map((item) => ({ ...item })) : []
     };
-    if (input.hostBad === true) structureOut.badShape = (structureOut.badShape ?? 0) + 1;
+    if (input.hostBad === true) structure.badShape = (structure.badShape ?? 0) + 1;
+    structureOut.badShape = structure.badShape ?? 0;
     const contributors = (input.meta?.contributors ?? []).map((item) => ({
       plugin: item.plugin ?? item.pluginId ?? null,
       build: item.build ?? null,
@@ -1317,6 +1346,7 @@ var __kitesurfExport = (() => {
       ["data-sidebar-row", "sidebar-row"]
     ]);
     let collector = createCollectorState();
+    collector.startedAt = now(perf2);
     let frozenAt = (/* @__PURE__ */ new Date()).toISOString();
     const touch = () => {
       frozenAt = (/* @__PURE__ */ new Date()).toISOString();
@@ -1416,6 +1446,15 @@ var __kitesurfExport = (() => {
     const absorbLoafEntry = (entry) => {
       collector.loafCount += 1;
       collector.blockingMs += entry.blockingDuration ?? 0;
+      if ((entry.blockingDuration ?? 0) >= 50 || (entry.duration ?? 0) >= 100) {
+        collector.heavyFrames.push({
+          startTime: entry.startTime ?? null,
+          duration: entry.duration ?? null,
+          blockingDuration: entry.blockingDuration ?? null,
+          styleAndLayoutDuration: entry.styleAndLayoutDuration ?? null
+        });
+        if (collector.heavyFrames.length > 50) collector.heavyFrames.shift();
+      }
       let nanoInFrame = false;
       for (const script of entry.scripts ?? []) {
         collector.forcedLayoutMs += script.forcedStyleAndLayoutDuration ?? 0;
@@ -1673,6 +1712,9 @@ var __kitesurfExport = (() => {
         }
         row.profiler.durations = [];
       }
+      if (hostSnapshotCache?.next != null) hostCursor = hostSnapshotCache.next;
+      hostSnapshotCache = null;
+      pollHost();
       touch();
     };
     const observe = (event) => {
@@ -1716,9 +1758,6 @@ var __kitesurfExport = (() => {
       bucket.outcomes[admitted.outcome] = (bucket.outcomes[admitted.outcome] ?? 0) + 1;
       const klass = statusClass(admitted.status);
       if (klass) bucket.status[klass] += 1;
-      hostCursor = null;
-      hostSnapshotCache = null;
-      pollHost();
       touch();
     };
     const read = (meta = {}) => {
@@ -1728,14 +1767,16 @@ var __kitesurfExport = (() => {
       const chrome = /Chrome\/(\d+)/.exec(navigatorRef?.userAgent ?? "");
       const provided = Object.prototype.hasOwnProperty.call(input, "host");
       const hostSnapshot = provided ? input.host : hostSnapshotCache;
-      const hostBad = provided && hostSnapshot != null && !hostSnapshotUsable(hostSnapshot);
+      const hostBad = hostSnapshot != null && !isHostView(hostSnapshot);
       return buildReport({
         meta: {
           generatedAt: input.generatedAt ?? frozenAt,
           scenario: input.scenario,
           arm: input.arm,
           chromeMajor: input.chromeMajor ?? (chrome === null ? null : Number(chrome[1])),
-          contributors: contributors.map((item) => ({ ...item }))
+          contributors: contributors.map((item) => ({ ...item })),
+          windowStartedAt: Number.isFinite(collector.startedAt) ? new Date(collector.startedAt).toISOString() : null,
+          windowMs: Number.isFinite(collector.startedAt) ? Math.max(0, Math.round(now(perf2) - collector.startedAt)) : null
         },
         collector,
         plugins,
@@ -1765,7 +1806,7 @@ var __kitesurfExport = (() => {
     const stamp = env.build ?? BUILD_STAMP;
     return installSingleton(global, CLIENT_KEY, "__perfReview", stamp, () => createPerfReview({ ...env, build: stamp }));
   }
-  var TRACK_EVENT_CAP, SPAN_EVENT_CAP, PROFILER_SAMPLE_CAP, now, isPromiseLike, HIDDEN_SELECTOR, contains, statusClass;
+  var TRACK_EVENT_CAP, SPAN_EVENT_CAP, PROFILER_SAMPLE_CAP, now, isPromiseLike, HIDDEN_SELECTOR, contains, isHostView, statusClass;
   var init_client = __esm({
     "../packages/dsh-performance-review/src/client.js"() {
       init_state();
@@ -1782,6 +1823,7 @@ var __kitesurfExport = (() => {
         if (parent === child) return true;
         return typeof parent.contains === "function" ? parent.contains(child) : false;
       };
+      isHostView = (value) => value != null && typeof value === "object" && (Array.isArray(value.rows) || value.plugins != null && typeof value.plugins === "object");
       statusClass = (status) => {
         if (typeof status !== "number" || !Number.isFinite(status)) return null;
         const hundred = Math.floor(status / 100);
@@ -2226,11 +2268,11 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
   var KIND = "kitesurf";
   var OWN_ID = "nano-kitesurf";
   var MAX_PINS = 8;
-  var perfReview = ensurePerfReview2();
+  var pagePerf = ensurePerfReview2();
   var perf = {
     span(name, fn) {
       try {
-        const collector = perfReview.join(OWN_ID, {
+        const collector = pagePerf.join(OWN_ID, {
           version: true ? "0.1.0" : "0.0.0",
           buckets: BUCKETS2,
           decl: DECL_HASH2,

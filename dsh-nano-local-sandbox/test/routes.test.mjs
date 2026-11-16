@@ -35,10 +35,15 @@ test('missing requestRejection registers nothing', () => {
   assert.equal(calls, 0)
 })
 
-test('every nano-local-sandbox spec binds the session and apply does not register directly', () => {
-  for (const spec of routeSpecs()) assert.equal(spec.sessionBinding, undefined)
+test('the ledger is the only sessionBinding source and apply does not register directly', () => {
+  const ledger = JSON.parse(readFileSync(join(root, '..', '..', 'security', 'route-sensitivity.json'), 'utf8'))
+  const expected = new Map(ledger.routes
+    .filter(row => row.plugin === 'dsh-nano-local-sandbox')
+    .map(row => [row.path, row.sessionBinding]))
+  assert.equal(expected.size, BINDING_TABLE.length)
+  for (const spec of routeSpecs()) assert.equal('sessionBinding' in spec, false)
   for (const row of BINDING_TABLE) {
-    assert.equal(typeof row.sessionBinding, 'boolean')
+    assert.equal(row.sessionBinding, expected.get(row.path), row.path)
     assert.equal(row.path.startsWith('/nano-local-sandbox/'), true)
     assert.equal(row.path.includes('/nano-' + 'kitesurf/'), false)
   }

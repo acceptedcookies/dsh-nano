@@ -1084,7 +1084,7 @@
     "dsh-nano-kitesurf": {
       "lastPick": "in-memory only, cleared on host restart; no browser storage and no last or context route",
       "history": "client in-memory recent addresses (max 8), not persisted",
-      "config": "optional perfReview only; this package does not read a checkout path and does not start a container"
+      "config": "this package does not read a checkout path and does not start a container"
     },
     "dsh-nano-local-sandbox": {
       "state": "per-instance stateVolume history.json"

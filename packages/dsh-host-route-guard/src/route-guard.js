@@ -306,8 +306,9 @@ export function createGuard({ table, plugin, observe } = {}) {
 
   /**
    * inventory() → frozen array of route records (registration order):
-   *   { path, methods, sensitivity, capability, bodyLimit, sessionBinding,
+   *   { id, path, methods, sensitivity, capability, bodyLimit, sessionBinding,
    *     justification, plugin }
+   * `id` is the authored ledger identity; it is null when the table row has none.
    * Consumed by `scripts/gen-route-inventory` to write
    * `security/route-inventory.md`.
    */
@@ -342,10 +343,11 @@ export function inventoryMarkdown(rows, { title = 'route-inventory' } = {}) {
   const header = [
     `# ${title}`,
     '',
-    '| path | methods | sensitivity | capability | bodyLimit | sessionBinding | justification |',
-    '|---|---|---|---|---|---|---|',
+    '| id | path | methods | sensitivity | capability | bodyLimit | sessionBinding | justification |',
+    '|---|---|---|---|---|---|---|---|',
   ]
   const body = rows.map(r => [
+    `\`${r.id ?? '—'}\``,
     `\`${r.path}\``,
     r.methods.join(', '),
     r.sensitivity ?? '',

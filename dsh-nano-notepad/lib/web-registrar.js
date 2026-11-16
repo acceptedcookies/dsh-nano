@@ -476,23 +476,6 @@ var BINDING_TABLE = Object.freeze([
   { "id": "dnn.fx.sdk", "plugin": "dsh-nano-notepad", "channel": "http", "match": "prefix", "path": "/nano-notepad/fx/sdk", "methods": ["GET"], "bodyLimit": 0, "sensitivity": "L1", "capability": "static:asset", "sessionBinding": false, "justification": "dsh-nano-notepad/lib/bindings.js \u2014 fx/sdk http+prefix asset serve (basename-only); static ESM+sqlite/pdf assets" },
   { "id": "dnn.perf-review.host", "plugin": "dsh-nano-notepad", "channel": "http", "match": "exact", "path": "/nano-notepad/perf-review/host", "methods": ["GET"], "bodyLimit": 0, "sensitivity": "L2", "capability": "read:host", "sessionBinding": false, "justification": "\u53EA\u8BFB\u5168\u8FDB\u7A0B\u89C6\u56FE\u3002\u4E0D\u6392\u7A7A\uFF0C\u53EA\u63A5\u53D7 since\u3002" }
 ]);
-var BROWSER_BINDINGS = Object.freeze([
-  { "id": "dnn.save", "path": "/nano-notepad/save" },
-  { "id": "dnn.read", "path": "/nano-notepad/read" },
-  { "id": "dnn.fetch-mp", "path": "/nano-notepad/fetch-mp" },
-  { "id": "dnn.s3.status", "path": "/nano-notepad/s3/status" },
-  { "id": "dnn.s3.test", "path": "/nano-notepad/s3/test" },
-  { "id": "dnn.s3.object", "path": "/nano-notepad/s3/object" },
-  { "id": "dnn.s3.config", "path": "/nano-notepad/s3/config" },
-  { "id": "dnn.fx-core.wasm", "path": "/nano-notepad/fx-core.wasm" },
-  { "id": "dnn.fx.models", "path": "/nano-notepad/fx/models" },
-  { "id": "dnn.fx.chat", "path": "/nano-notepad/fx/chat/completions" },
-  { "id": "dnn.pipeline.s3", "path": "/nano-notepad/pipeline/s3" },
-  { "id": "dnn.pipeline.claim", "path": "/nano-notepad/pipeline/claim" },
-  { "id": "dnn.rpc", "path": "/nano-notepad/rpc" },
-  { "id": "dnn.fx.sdk", "path": "/nano-notepad/fx/sdk" },
-  { "id": "dnn.perf-review.host", "path": "/nano-notepad/perf-review/host" }
-]);
 export {
   BINDING_TABLE,
   BindingError,

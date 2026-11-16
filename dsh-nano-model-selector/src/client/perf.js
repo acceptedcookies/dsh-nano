@@ -4,8 +4,9 @@
  * The page-wide singleton is `Symbol.for("dsh.perfReview.v2")`; this module only names this
  * plugin's root and version so attribution can tell our rows from native UI.
  * With the flag off every helper is an identity wrapper — fn is called
- * directly, no marks, no clocks (spec §6.2). NDEE owns the host-snapshot poll,
- * so we deliberately do NOT call ensurePerfReview().configure() here.
+ * directly, no marks, no clocks (spec §6.2). Each plugin registers its own
+ * hostRoute; the page polls one healthy entry at a time every 5 s and merges
+ * the rows into read().
  */
 
 import React from 'react'

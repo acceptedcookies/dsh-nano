@@ -237,11 +237,11 @@ export function createPerfReviewHost(env = {}) {
     const now = () => clock.now()
     return {
       /**
-       * hostSpan(name, fn, ctx?). ctx is ignored: traceId is not stored
-       * (T-O-PRE1116-12 / P3-06). A name that fails NAME_RE still runs `fn`,
-       * increments `structure.unmappedKey`, and is not recorded.
+       * hostSpan(name, fn). No trace context is stored (T-O-PRE1116-12).
+       * A name that fails NAME_RE still runs `fn`, increments
+       * `structure.unmappedKey`, and is not recorded.
        */
-      hostSpan(name, fn, _ctx) {
+      hostSpan(name, fn) {
         if (typeof name !== 'string' || !NAME_RE.test(name)) {
           state.structure.unmappedKey += 1
           return fn()
@@ -285,6 +285,7 @@ export function createPerfReviewHost(env = {}) {
       epoch: state.epoch,
       seq,
       cursor: state.cursor,
+      since: null,
       next: `${state.epoch}.${seq}`,
     }
     if (query != null && query.mode !== undefined) {
@@ -294,6 +295,7 @@ export function createPerfReviewHost(env = {}) {
       const { rows, truncated } = collectRows(state, null)
       return { status: 200, basis: 'cumulative', rows, truncated, ...base }
     }
+    base.since = typeof query.since === 'number' ? query.since : String(query.since)
     const parsed = parseCursor(query.since, state.epoch)
     if (parsed.error) {
       return { status: 400, error: 'cursor', basis: null, rows: [], truncated: [], ...base }

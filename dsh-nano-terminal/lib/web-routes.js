@@ -466,14 +466,6 @@ var BINDING_TABLE = Object.freeze([
   { "id": "dnt.session.close", "plugin": "dsh-nano-terminal", "channel": "http", "match": "prefix", "path": "/dsh-nano-terminal/session", "methods": ["POST"], "bodyLimit": 0, "sensitivity": "L2", "capability": "read:host", "sessionBinding": false, "justification": "dsh-nano-terminal /dsh-nano-terminal/session" },
   { "id": "dnt.stream", "plugin": "dsh-nano-terminal", "channel": "upgrade", "match": "exact", "path": "/dsh-nano-terminal/stream", "methods": ["GET"], "bodyLimit": 0, "sensitivity": "L2", "capability": "proc:terminal", "sessionBinding": true, "justification": "ws data plane" }
 ]);
-var BROWSER_BINDINGS = Object.freeze([
-  { "id": "dnt.mcp", "path": "/dsh-nano-terminal/mcp" },
-  { "id": "dnt.sessions", "path": "/dsh-nano-terminal/sessions" },
-  { "id": "dnt.events", "path": "/dsh-nano-terminal/events" },
-  { "id": "dnt.health", "path": "/dsh-nano-terminal/health" },
-  { "id": "dnt.session.close", "path": "/dsh-nano-terminal/session" },
-  { "id": "dnt.stream", "path": "/dsh-nano-terminal/stream" }
-]);
 
 // src/host/web-routes.js
 function registerWebRoutes(ctx, deps) {

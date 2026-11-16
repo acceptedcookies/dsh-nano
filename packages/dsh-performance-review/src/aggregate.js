@@ -120,16 +120,21 @@ const byteLength = value => new TextEncoder().encode(JSON.stringify(value)).leng
  */
 export function clipOversize(report) {
   if (byteLength(report) <= MAX_REPORT_BYTES) return report
-  if (report.page) {
-    report.page.evidence = { interactions: [], frames: [], hostErrors: [] }
-  }
+  const empty = { interactions: [], frames: [], hostErrors: [] }
+  if (report.page) report.page.evidence = empty
+  report.evidence = empty
   if (report.structure) report.structure.oversize = (report.structure.oversize ?? 0) + 1
   return report
 }
 
-/** A host snapshot is usable only when `plugins` is a plain object. */
+/**
+ * A host view is usable in either authored shape:
+ * - v2 `host.read()` → `{rows:[{seq,pluginId,name,ms,err,...}], basis, epoch, next, truncated}`
+ * - legacy snapshot fixture → `{plugins:{id:{spans:{name:{n,samples}}}}}`
+ */
 export function hostSnapshotUsable(value) {
   if (value == null || typeof value !== 'object' || Array.isArray(value)) return false
+  if (Array.isArray(value.rows)) return true
   const plugins = value.plugins
   if (plugins == null || typeof plugins !== 'object' || Array.isArray(plugins)) return false
   return true
@@ -142,6 +147,29 @@ export function hostSnapshotUsable(value) {
  */
 function hostSpanObject(hostSnapshot, pluginId) {
   const out = {}
+  if (Array.isArray(hostSnapshot?.rows)) {
+    const grouped = new Map()
+    for (const row of hostSnapshot.rows) {
+      if (row == null || row.pluginId !== pluginId || row.kind === 'contract') continue
+      const name = row.name
+      if (typeof name !== 'string') continue
+      const cell = grouped.get(name) ?? { samples: [], errors: 0 }
+      if (typeof row.ms === 'number' && Number.isFinite(row.ms)) cell.samples.push(row.ms)
+      if (row.err === true) cell.errors += 1
+      grouped.set(name, cell)
+    }
+    for (const [name, cell] of grouped) {
+      out[name] = {
+        n: cell.samples.length,
+        p50: roundMs(percentile(cell.samples, 0.5)),
+        p95: roundMs(percentile(cell.samples, 0.95)),
+        maxMs: roundMs(cell.samples.length === 0 ? null : Math.max(...cell.samples)),
+        errors: cell.errors,
+        basis: hostSnapshot.basis === 'cumulative' ? 'cumulative' : 'window',
+      }
+    }
+    return out
+  }
   const source = hostSnapshot?.plugins?.[pluginId]?.spans
   if (source == null || typeof source !== 'object') return out
   for (const [name, row] of Object.entries(source)) {
@@ -150,6 +178,7 @@ function hostSpanObject(hostSnapshot, pluginId) {
       n: row?.n ?? samples.length,
       p50: roundMs(percentile(samples, 0.5)),
       p95: roundMs(percentile(samples, 0.95)),
+      maxMs: roundMs(samples.length === 0 ? null : Math.max(...samples)),
       errors: row?.stats?.errors ?? row?.errors ?? 0,
       basis: row?.basis === 'window' ? 'window' : 'cumulative',
     }
@@ -163,15 +192,15 @@ const usageCell = cell => {
 }
 
 /**
- * Build the report object (schema v1, spec §6.5).
+ * Build the report object (`dnpr.report/2`, spec §6.5).
  *
  * @param {object} input
- * @param {object} input.meta - {generatedAt,scenario,arm,dshVersion,chromeMajor,observerVersion,contributors,gitSha,labels}
+ * @param {object} input.meta - {generatedAt,scenario,arm,dshVersion,chromeMajor,contributors,gitSha,labels,windowStartedAt,windowMs}
  * @param {object} input.collector - createCollectorState(); interactions must be
  *   finalized ({interactionId,start,duration,owner,bucket,samples}).
  * @param {Map<string,object>} input.plugins - pluginId → createPluginRow()
  * @param {object} input.structure - createStructure()
- * @param {object} [input.hostSnapshot] - latest host.json content, if present
+ * @param {object} [input.hostSnapshot] - `host.read()` view or legacy snapshot
  * @param {boolean} [input.enabled]
  * @param {boolean} [input.loafSupported]
  */
@@ -277,7 +306,7 @@ export function buildReport(input) {
   const ranked = [...collector.interactions].sort((a, b) => (b.duration ?? 0) - (a.duration ?? 0))
   const hostErrors = []
   const usableHost = hostSnapshotUsable(input.hostSnapshot) ? input.hostSnapshot : null
-  if (usableHost) {
+  if (usableHost && usableHost.plugins != null && typeof usableHost.plugins === 'object') {
     for (const plugin of Object.values(usableHost.plugins)) {
       for (const span of Object.values(plugin?.spans ?? {})) {
         for (const event of span?.events ?? []) {
@@ -300,16 +329,17 @@ export function buildReport(input) {
   }
   page.host = usableHost
     ? {
-      source: usableHost.source ?? 'snapshot',
+      source: Array.isArray(usableHost.rows) ? 'read' : (usableHost.source ?? 'snapshot'),
       epoch: usableHost.epoch ?? null,
-      from: usableHost.from ?? usableHost.sinceStart ?? null,
-      to: usableHost.to ?? usableHost.writtenAt ?? null,
+      from: usableHost.since ?? usableHost.from ?? usableHost.sinceStart ?? null,
+      to: usableHost.next ?? usableHost.to ?? usableHost.writtenAt ?? null,
       truncated: Array.isArray(usableHost.truncated) ? [...usableHost.truncated] : [],
+      basis: usableHost.basis ?? null,
       sinceStart: usableHost.sinceStart ?? null,
       writtenAt: usableHost.writtenAt ?? null,
       enabled: usableHost.enabled ?? null,
     }
-    : { source: null, epoch: null, from: null, to: null, truncated: [], sinceStart: null, writtenAt: null, enabled: null }
+    : { source: null, epoch: null, from: null, to: null, truncated: [], basis: null, sinceStart: null, writtenAt: null, enabled: null }
 
   const notes = []
   const note = (id, text) => notes.push({ id, text })
@@ -335,7 +365,8 @@ export function buildReport(input) {
     ...structure,
     audits: Array.isArray(structure?.audits) ? structure.audits.map(item => ({ ...item })) : [],
   }
-  if (input.hostBad === true) structureOut.badShape = (structureOut.badShape ?? 0) + 1
+  if (input.hostBad === true) structure.badShape = (structure.badShape ?? 0) + 1
+  structureOut.badShape = structure.badShape ?? 0
 
   const contributors = (input.meta?.contributors ?? []).map(item => ({
     plugin: item.plugin ?? item.pluginId ?? null,

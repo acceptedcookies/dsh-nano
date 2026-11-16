@@ -86,3 +86,20 @@ test('PRE1116-T08 route inventory is a faithful projection of the ledger', () =>
   assert.ok(onDisk.includes('87 active host routes'))
   for (const row of ledger.routes) assert.ok(onDisk.includes(`\`${row.id}\``), row.path)
 })
+
+
+test('browser bindings carry id/path only and every JSON client uses them', () => {
+  const plugins = ['dsh-nano-explorer-extra', 'dsh-nano-notepad', 'dsh-nano-model-selector']
+  for (const plugin of plugins) {
+    const source = readFileSync(join(ROOT, plugin, 'lib', 'browser-bindings.js'), 'utf8')
+    assert.equal(source.includes('justification'), false, plugin)
+    assert.equal(source.includes('sensitivity'), false, plugin)
+    assert.equal(source.includes('bodyLimit'), false, plugin)
+    const client = readFileSync(join(ROOT, plugin, 'src', 'client', 'jsonClient.js'), 'utf8')
+    assert.equal(client.includes('BROWSER_BINDINGS'), true, plugin)
+    assert.equal(client.includes('bindingId'), true, plugin)
+  }
+  const host = readFileSync(join(ROOT, 'dsh-nano-explorer-extra', 'lib', 'bindings.js'), 'utf8')
+  assert.equal(host.includes('justification'), true)
+  assert.equal(host.includes('BROWSER_BINDINGS'), false)
+})

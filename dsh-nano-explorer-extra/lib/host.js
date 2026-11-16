@@ -78,7 +78,7 @@ function assertObserveEvent(event) {
 // ../packages/dsh-performance-review/src/state.js
 var CLIENT_KEY = Symbol.for("dsh.perfReview.v2");
 var HOST_KEY = Symbol.for("dsh.perfReviewHost.v2");
-var BUILD_STAMP = true ? "d84f685f322e" : "dev";
+var BUILD_STAMP = true ? "ff5694c57be1" : "dev";
 var NAME_RE = /^[a-z0-9][a-z0-9-]{0,39}$/;
 var CONTRACT_KEY_RE = /^[a-z0-9][a-z0-9.-]{0,63}$/;
 var MAX_USAGE_KEYS = 32;
@@ -338,11 +338,11 @@ function createPerfReviewHost(env = {}) {
     const now = () => clock.now();
     return {
       /**
-       * hostSpan(name, fn, ctx?). ctx is ignored: traceId is not stored
-       * (T-O-PRE1116-12 / P3-06). A name that fails NAME_RE still runs `fn`,
-       * increments `structure.unmappedKey`, and is not recorded.
+       * hostSpan(name, fn). No trace context is stored (T-O-PRE1116-12).
+       * A name that fails NAME_RE still runs `fn`, increments
+       * `structure.unmappedKey`, and is not recorded.
        */
-      hostSpan(name2, fn, _ctx) {
+      hostSpan(name2, fn) {
         if (typeof name2 !== "string" || !NAME_RE.test(name2)) {
           state.structure.unmappedKey += 1;
           return fn();
@@ -389,6 +389,7 @@ function createPerfReviewHost(env = {}) {
       epoch: state.epoch,
       seq,
       cursor: state.cursor,
+      since: null,
       next: `${state.epoch}.${seq}`
     };
     if (query != null && query.mode !== void 0) {
@@ -398,6 +399,7 @@ function createPerfReviewHost(env = {}) {
       const { rows: rows2, truncated: truncated2 } = collectRows(state, null);
       return { status: 200, basis: "cumulative", rows: rows2, truncated: truncated2, ...base };
     }
+    base.since = typeof query.since === "number" ? query.since : String(query.since);
     const parsed = parseCursor(query.since, state.epoch);
     if (parsed.error) {
       return { status: 400, error: "cursor", basis: null, rows: [], truncated: [], ...base };
@@ -940,26 +942,6 @@ var BINDING_TABLE = Object.freeze([
   { "id": "dnee.list", "plugin": "dsh-nano-explorer-extra", "channel": "http", "match": "exact", "path": "/nano-explorer-extra/list", "methods": ["POST"], "bodyLimit": 65536, "sensitivity": "L2", "capability": "read:host", "sessionBinding": true, "justification": "dsh-nano-explorer-extra/src/host/routes.js:384 \u2014 directory listing never fenced to the workspace (finding nxe:routes-read-arbitrary-file, accepted); enumerates arbitrary host dirs = host-level read." },
   { "id": "dnee.perf-review.host", "plugin": "dsh-nano-explorer-extra", "channel": "http", "match": "exact", "path": "/nano-explorer-extra/perf-review/host", "methods": ["GET"], "bodyLimit": 0, "sensitivity": "L2", "capability": "read:host", "sessionBinding": false, "justification": "\u53EA\u8BFB\u5168\u8FDB\u7A0B\u89C6\u56FE\u3002\u4E0D\u6392\u7A7A\uFF0C\u53EA\u63A5\u53D7 since\u3002" },
   { "id": "dnee.read", "plugin": "dsh-nano-explorer-extra", "channel": "http", "match": "exact", "path": "/nano-explorer-extra/read", "methods": ["POST"], "bodyLimit": 65536, "sensitivity": "L2", "capability": "read:host", "sessionBinding": true, "justification": "dsh-nano-explorer-extra/src/host/routes.js:412 \u2014 returns any UTF-8 host file up to 1 MiB; client may pass allowOutsideWorkspace:true to skip the fence (finding routes-read-arbitrary-file, accepted). Host-level read." }
-]);
-var BROWSER_BINDINGS = Object.freeze([
-  { "id": "dnee.status", "path": "/nano-explorer-extra/status" },
-  { "id": "dnee.commit", "path": "/nano-explorer-extra/commit" },
-  { "id": "dnee.pull", "path": "/nano-explorer-extra/pull" },
-  { "id": "dnee.fetch", "path": "/nano-explorer-extra/fetch" },
-  { "id": "dnee.push", "path": "/nano-explorer-extra/push" },
-  { "id": "dnee.remote", "path": "/nano-explorer-extra/remote" },
-  { "id": "dnee.author", "path": "/nano-explorer-extra/author" },
-  { "id": "dnee.ssh-key", "path": "/nano-explorer-extra/ssh-key" },
-  { "id": "dnee.checkout", "path": "/nano-explorer-extra/checkout" },
-  { "id": "dnee.create-file", "path": "/nano-explorer-extra/create-file" },
-  { "id": "dnee.create-folder", "path": "/nano-explorer-extra/create-folder" },
-  { "id": "dnee.rename", "path": "/nano-explorer-extra/rename" },
-  { "id": "dnee.move", "path": "/nano-explorer-extra/move" },
-  { "id": "dnee.delete", "path": "/nano-explorer-extra/delete" },
-  { "id": "dnee.ignored", "path": "/nano-explorer-extra/ignored" },
-  { "id": "dnee.list", "path": "/nano-explorer-extra/list" },
-  { "id": "dnee.perf-review.host", "path": "/nano-explorer-extra/perf-review/host" },
-  { "id": "dnee.read", "path": "/nano-explorer-extra/read" }
 ]);
 
 // src/host/git.js

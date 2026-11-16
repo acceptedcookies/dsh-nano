@@ -6,7 +6,8 @@
   "icon": "./icon.svg",
   "main": "./index.js",
   "scripts": {
-    "build": "node scripts/build-client.mjs"
+    "build": "node scripts/build-client.mjs",
+    "test": "node --test test/*.mjs"
   },
   "exports": {
     ".": "./index.js",

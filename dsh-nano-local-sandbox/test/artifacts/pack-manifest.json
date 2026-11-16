@@ -74,6 +74,7 @@
       "icon.svg",
       "index.js",
       "lib/bindings.js",
+      "lib/browser-bindings.js",
       "lib/client.js",
       "lib/dnt-core.wasm",
       "lib/errors.js",

@@ -410,7 +410,7 @@ async function main() {
   const ksSpans = perf.local?.plugins?.['nano-kitesurf']?.hand?.spans || {}
   const spanNames = Object.keys(ksSpans)
   const spanCount = spanNames.reduce((sum, name) => sum + (ksSpans[name]?.n || 0), 0)
-  record('perf-spans', spanCount > 0, `${spanCount} spans (${spanNames.join(',')}) ${perf.host?.client ? 'host-synced' : 'host-pending'}`)
+  record('perf-spans', spanCount > 0, `${spanCount} spans (${spanNames.join(',')})`)
 
   const failed = results.filter((r) => !r.ok)
   console.log(`\n${results.length - failed.length}/${results.length} checks passed`)

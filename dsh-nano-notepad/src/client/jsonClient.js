@@ -1,5 +1,8 @@
 /** Browser-side JSON codec for /nano-notepad faces (CF1115 / P2-04 / T13). */
 import { createJsonClient } from 'dsh-interface/host'
+import { BROWSER_BINDINGS } from '../../lib/browser-bindings.js'
+
+const BINDING_IDS = new Map(BROWSER_BINDINGS.map(row => [row.path, row.id]))
 
 const client = createJsonClient({
   fetch: (url, init) => fetch(url, { credentials: 'same-origin', cache: 'no-store', ...init }),
@@ -12,6 +15,7 @@ const client = createJsonClient({
  * sanctioned business failure. Decode that envelope through JsonOutcome. */
 function jsonOp(url, method = 'POST') {
   return {
+    bindingId: BINDING_IDS.get(url) ?? null,
     encode: (body) => body === undefined && method === 'GET'
       ? { url, method: 'GET' }
       : { url, method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body ?? {}) },

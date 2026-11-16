@@ -106,7 +106,7 @@ dsh plugin --profile web add <spec>
 | — | 本包不拥有 `/perf-review/host` | 只读视图在资源管理器、记事本和模型选择器上 |
 | GET/POST | `见 QNA console` | 页面 console/exception/network/navigation 环形缓冲；`?level=error,exception&limit=50`；`POST {"clear":true}` 清空 |
 | GET/POST | `见 QNA operations` | 每次路由调用的执行埋点（route/status/errorId/耗时/输入摘要）；`?errorsOnly=true`；`POST {"clear":true}` 清空 |
-| GET | `见 QNA diagnostics` | 一击全量诊断：status + target 列表 + console + 操作 trace + errorCatalog + perf + 自动 hints |
+| GET | `见 QNA diagnostics` | 一击全量诊断：status + target 列表 + console + 操作 trace + errorCatalog + 自动 hints |
 | GET | `见 QNA targets` | 引擎 `Target.getTargets`（page target id/url、当前附着页） |
 | POST | `见 QNA evaluate` | `{expression}` 在引擎页面执行有界 JS（≤2000 字符，returnByValue，结果 ≤4000 字符） |
 

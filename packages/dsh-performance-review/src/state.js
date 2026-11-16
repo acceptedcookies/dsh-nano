@@ -108,6 +108,8 @@ export function createCollectorState() {
     loafCount: 0,
     blockingMs: 0,
     forcedLayoutMs: 0,
+    /** Heaviest LoAF entries, capped at EVIDENCE_CAPS.frames by the report. */
+    heavyFrames: [],
     nanoScriptMs: 0, // scripts whose URL names ≥1 nano package and ≥2 nano packages (combined only)
     nanoLoafCount: 0,
     nanoBlockingMs: 0,

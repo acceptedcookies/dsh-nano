@@ -1,11 +1,13 @@
 /**
  * createJsonClient — the JSON consumer facade (CF1115 / P2-01 / T-O-14 / Q8).
  *
- *   createJsonClient({ fetch, resolveUrl })
+ *   createJsonClient({ fetch, resolveUrl, observe?, plugin? })
  *     .call(operation, input, { signal }?) -> Promise<JsonOutcome<T>>
  *
  * `operation` is the唯一 codec + binding record for one call:
  *   {
+ *     bindingId?     // authored id from the baked browser bindings; the ONLY
+ *                    // identity source for observe(). Never derived from the URL.
  *     encode(input) -> { url?, method?, headers?, body? }   // pre-request; may throw
  *     url | path                                          // when encode does not supply it
  *     decode(res)    -> domain | data                       // sees status; reads body once

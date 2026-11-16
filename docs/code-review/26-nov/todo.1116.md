@@ -84,11 +84,11 @@ P0-00 干净树 + worktree
   - **完成判据**：旧字段逐条不漂；upgrade 行仍在；缺 id 时 gen 非 0
   - **验证映射**：`PRE1116-T05` `PRE1116-T27` · **依赖**：W1 commit
   - **执行状态**：`complete` · **执行时间**：`2026-11-16T15:45:00Z` · **证据 / 备注**：`check-route-sensitivity` 87 routes 0 drift；缺 id 时 gen 非 0（binding-bake.test.mjs）
-- [x] `P2-02` — 命名表与烘焙闸
+- [ ] `P2-02` — 命名表与烘焙闸
   - **落点**：`security/perf-binding-ids.md`
   - **完成判据**：缺表或不一致时构建失败；path 变化不改 id
   - **验证映射**：`PRE1116-T06` · **依赖**：`P2-01`
-  - **执行状态**：`complete` · **执行时间**：`2026-11-16T15:45:00Z` · **证据 / 备注**：`security/perf-binding-ids.md` 87 行。抽查记录：发车指令授权按 `05.2` 沿用已有 id 并补 `<abbr>.<face>`，不是测试绿灯。
+  - **执行状态**：`partial` · **执行时间**：`2026-11-16T15:45:00Z` · **证据 / 备注**：`security/perf-binding-ids.md` 87 行；缺 id / 表不一致即失败。**业主抽查未执行**：发车指令授权按 `05.2` 冻结规则使用本表，不把授权或 T06 绿灯写成抽查记录。
 - [x] `P2-03` — 七插件 `bindingTableModule`；退役 `routeTableModule` 与现存 route-table
   - **落点**：`packages/dsh-interface/src/build/index.js` 与七个插件构建脚本 / `lib/bindings.js`；[DNLS] 新建只烘焙绑定表的脚本
   - **完成判据**：两次烘焙字节相同；[DNMSC] 无绑定表；[DNLS] 无新浏览器 client
@@ -103,22 +103,22 @@ P0-00 干净树 + worktree
   - **落点**：DNPR `client.js` / `host.js` / `state.js`；七插件构建 define
   - **完成判据**：旧键对象字段不变；`legacyCopies` 增加；双构建戳一条 audit
   - **验证映射**：`PRE1116-T09` `PRE1116-T10` · **依赖**：W2 commit
-  - **执行状态**：`partial` · **执行时间**：`2026-11-16T16:20:00Z` · **证据 / 备注**：新键 `Symbol.for('dsh.perfReview.v2'|'dsh.perfReviewHost.v2')`；旧键不迁移；`legacyCopies` 与双戳 audit 有单测。`LIB_VERSION` 仍导出，七插件构建戳 define 未注入。
+  - **执行状态**：`complete` · **执行时间**：`2026-11-17T01:40:00Z` · **证据 / 备注**：新键只有 `Symbol.for(...v2)`；旧字符串键只检查存在性计 `legacyCopies`；`LIB_VERSION`/`libVersion`/`observerVersion` 运行字段 0 命中；七插件 `__DNPR_BUILD__` 内容哈希，`docs.test.mjs` T21 断言七份 bundle 带当前戳。
 - [x] `P3-02` — v2 报告、`read` / `cutWindow`、宿主游标
   - **落点**：`client.js`、`aggregate.js`、`host.js`、`state.js`、`markdown.js`
   - **完成判据**：连续 `read()` 深相等；退役动词无别名
   - **验证映射**：`PRE1116-T11` `PRE1116-T12` `PRE1116-T13` `PRE1116-T21` · **依赖**：`P3-01`
-  - **执行状态**：`partial` · **执行时间**：`2026-11-16T16:20:00Z` · **证据 / 备注**：顶层 `schema: dnpr.report/2`；页面 `read`/`cutWindow`；宿主无切窗动词，`read({since})` 不删样本。页面 `cutWindow` 尚未记住宿主 `next`。
+  - **执行状态**：`complete` · **执行时间**：`2026-11-17T01:40:00Z` · **证据 / 备注**：顶层 `schema: dnpr.report/2`；宿主 `read({since})` 不删样本；`aggregate` 把 v2 `rows` 聚成 `plugins[].host`；`cutWindow` 前移 `hostCursor` 并清缓存；`meta.window` 与 `evidence.frames` 有来源；`clipOversize` 同清顶层与 page evidence。`integration.test.mjs` 五项。
 - [x] `P3-03` — `diagnose` 与 `validateDeclaration`
   - **落点**：`src/diagnose.js`、`src/declaration.js`、`test-helpers`
   - **完成判据**：浏览器产物不含 diagnose；插件名不出现在 DNPR 与 lab 源码
   - **验证映射**：`PRE1116-T14` `PRE1116-T15` · **依赖**：`P3-02`
-  - **执行状态**：`partial` · **执行时间**：`2026-11-16T16:20:00Z` · **证据 / 备注**：`src/diagnose.js` 与 `src/declaration.js` 已从 `./client`、`./host` 分开导出。`npm test` 74 pass。七份声明与三方对账未做。
+  - **执行状态**：`complete` · **执行时间**：`2026-11-17T01:40:00Z` · **证据 / 备注**：`diagnose`/`declaration` 不在 `./client`、`./host`；`declarations.test.mjs` 对七包真实源码提取 `span/track/count/hostSpan/FX_STEP_SPAN`，调用 `reconcileDeclaration` 全绿。
 - [x] `P3-04` — 只读 handler；写盘器退役；先挂 [DNN]/[DNMS]
   - **落点**：DNPR host 出口；[DNN]/[DNMS] 注册点。不含 [DNEE] `mode=window`
   - **完成判据**：双读者互不删样本；夹具不产生 `host.json`
   - **验证映射**：`PRE1116-T13` `PRE1116-T19`（写盘部分） · **依赖**：`P3-03`
-  - **执行状态**：`partial` · **执行时间**：`2026-11-16T16:30:00Z` · **证据 / 备注**：`handleHostRead` 只接受 `since`。账本新增 `dnn.perf-review.host` 与 `dnms.perf-review.host`。写盘链已从 host.js 删除。[DNEE] 的 `mode=window` 没动。
+  - **执行状态**：`complete` · **执行时间**：`2026-11-17T01:40:00Z` · **证据 / 备注**：`handleHostRead` 只接受 GET + `since`，HEAD/`mode`/其他 query 400/405；账本三条 `read:host`；写盘链、`beforeExit`、`host.json` 0 命中；形状不合格计 `structure.badShape`（integration 测试）。
 - [x] `P3-05` — 七份声明、适配器、四处 join 替换、六个合同面传入 `observe`
   - **落点**：`src/perf/declaration.json` ×7；三份 `src/client/perf.js` 与 [DNK] 懒 join
   - **完成判据**：不新建第四份 `perf.js`；[DNMSC] 零依赖
@@ -179,11 +179,17 @@ P0-00 干净树 + worktree
 | `PRE1116-T07` | 单一烘焙作者 | check-clean-lib + 存在性 | 7 份 bindings；无 routeTableModule | `routeTableModule` 导出不存在；clean-lib OK | 同上 + check-clean-lib | `pass` |
 | `PRE1116-T08` | inventory id | route-guard 测试 + inventory 生成 | id 等于账本 | `route-inventory.md` 87 行，全部带账本 id | 2026-11-17T01:15Z | `pass` |
 | `PRE1116-T09`–`T15` | W3 包内协议、报告、判定 | `npm test`（dsh-performance-review） | 全绿 | 2026-11-17T01:00Z `npm test` 82/82；构建戳 `__DNPR_BUILD__` 已进七插件；`LIB_VERSION` 已退役 | `packages/dsh-performance-review` | `pass` |
-| `PRE1116-T16`–`T22` | 声明、span、lab | `npm test` + 源码断言 | 各有负例 | 82 pass；lab 3 pass；DNLS 95 pass | 2026-11-17T01:00Z | `pass` |
+| `PRE1116-T16` | 六合同面注入 | `dsh-interface` T16 | 六包有、DNK/DNMSC 无 | 59/59 | 2026-11-17T02:00Z | `pass` |
+| `PRE1116-T17` | span 退役与保留 | `docs.test.mjs` | 5 退役名 0；4 保留名在声明 | pass | 2026-11-17T02:00Z | `pass` |
+| `PRE1116-T18` | 采集开关 | `docs.test.mjs` | DNK `perfReview/setPerfEnabled/DSH_PERF_REVIEW` 0 | pass | 2026-11-17T02:00Z | `pass` |
+| `PRE1116-T19` | 写盘链退役 | `docs.test.mjs` | `writeFile/beforeExit/host.json` 0 | pass | 2026-11-17T02:00Z | `pass` |
+| `PRE1116-T20` | 攻击向量 | `observe-event.test.mjs` T02 | 假 token/路径/session 不入事件 | pass | 2026-11-17T02:00Z | `pass` |
+| `PRE1116-T21` | 构建戳 | `docs.test.mjs` T21 | 七份 bundle 带当前内容哈希 | pass | 2026-11-17T02:00Z | `pass` |
+| `PRE1116-T22` | lab 声明驱动 | `lab.test.mjs` | 3 pass | 2026-11-17T02:00Z | `pass` |
 | `PRE1116-T23`–`T25` | 对照、基线、文档 | 真实浏览器 + grep | 对照表 + 0 过期句 | T23/T24 未跑；T25 部分 | - | `partial` |
-| `PRE1116-T26` | 本机真实页面 | 不执行 | 保持未观察 | 无 grant 不部署 | - | `not-applicable` |
-| `PRE1116-T27` | route-scan | `node scripts/route-scan.mjs` | 漂移类 0；upgrade 仍在 | 87 routes，含 `dnt.stream` upgrade | 2026-11-17T01:00Z | `pass` |
-| `PRE1116-T28` | test-all --build | W2 与 W3 各一次 | 退出码 0，不销其他 ID | 26/27；唯一失败 `dsh-nano-s3-client` pre-existing（main 同失败） | 2026-11-17T01:00Z | `partial` |
+| `PRE1116-T26` | 本机真实页面 | 不执行 | 保持未观察 | 无 grant 不部署 | - | `未观察` |
+| `PRE1116-T27` | 账本漂移与 upgrade | `node scripts/check-route-sensitivity.mjs` | 87 routes / 0 drift；`dnt.stream` upgrade 仍在 | `route-sensitivity OK: 87 routes, 0 drift` | 2026-11-17T02:10Z | `pass` |
+| `PRE1116-T28` | test-all --build | W2 与 W3 各一次 | 退出码 0，不销其他 ID | 27/28；唯一失败 `dsh-nano-s3-client` pre-existing（main 同失败） | 2026-11-17T02:10Z | `partial` |
 
 - **真实成功**：T26 不用单测冒充。命名抽查不由 T06 绿灯代替，记录在执行日志。
 

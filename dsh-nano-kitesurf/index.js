@@ -128,7 +128,6 @@ export const Config = {
         return { issues: [{ message: 'httpBase must be loopback unless allowRemote is true' }] }
       }
       const checkout = typeof source.checkout === 'string' && source.checkout ? source.checkout : undefined
-      const perfReview = source.perfReview !== false
       let mcpPort
       if (source.mcpPort != null) {
         const port = Number(source.mcpPort)
@@ -137,7 +136,7 @@ export const Config = {
         }
         mcpPort = port
       }
-      return { value: { httpBase: url.origin, allowRemote, checkout, perfReview, mcpPort } }
+      return { value: { httpBase: url.origin, allowRemote, checkout, mcpPort } }
     },
   },
 }

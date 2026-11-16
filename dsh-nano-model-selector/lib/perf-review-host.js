@@ -75,7 +75,7 @@ function assertObserveEvent(event) {
 // ../packages/dsh-performance-review/src/state.js
 var CLIENT_KEY = Symbol.for("dsh.perfReview.v2");
 var HOST_KEY = Symbol.for("dsh.perfReviewHost.v2");
-var BUILD_STAMP = true ? "d84f685f322e" : "dev";
+var BUILD_STAMP = true ? "ff5694c57be1" : "dev";
 var NAME_RE = /^[a-z0-9][a-z0-9-]{0,39}$/;
 var CONTRACT_KEY_RE = /^[a-z0-9][a-z0-9.-]{0,63}$/;
 var MAX_USAGE_KEYS = 32;
@@ -335,11 +335,11 @@ function createPerfReviewHost(env = {}) {
     const now = () => clock.now();
     return {
       /**
-       * hostSpan(name, fn, ctx?). ctx is ignored: traceId is not stored
-       * (T-O-PRE1116-12 / P3-06). A name that fails NAME_RE still runs `fn`,
-       * increments `structure.unmappedKey`, and is not recorded.
+       * hostSpan(name, fn). No trace context is stored (T-O-PRE1116-12).
+       * A name that fails NAME_RE still runs `fn`, increments
+       * `structure.unmappedKey`, and is not recorded.
        */
-      hostSpan(name, fn, _ctx) {
+      hostSpan(name, fn) {
         if (typeof name !== "string" || !NAME_RE.test(name)) {
           state.structure.unmappedKey += 1;
           return fn();
@@ -386,6 +386,7 @@ function createPerfReviewHost(env = {}) {
       epoch: state.epoch,
       seq,
       cursor: state.cursor,
+      since: null,
       next: `${state.epoch}.${seq}`
     };
     if (query != null && query.mode !== void 0) {
@@ -395,6 +396,7 @@ function createPerfReviewHost(env = {}) {
       const { rows: rows2, truncated: truncated2 } = collectRows(state, null);
       return { status: 200, basis: "cumulative", rows: rows2, truncated: truncated2, ...base };
     }
+    base.since = typeof query.since === "number" ? query.since : String(query.since);
     const parsed = parseCursor(query.since, state.epoch);
     if (parsed.error) {
       return { status: 400, error: "cursor", basis: null, rows: [], truncated: [], ...base };

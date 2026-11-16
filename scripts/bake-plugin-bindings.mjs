@@ -103,8 +103,17 @@ export function bindingsModule(rows, { plugin }) {
     ? `export const PREFIX = ${JSON.stringify('/nano-explorer-extra')}\n`
     : ''
   const host = bindingTableModule(rows, { plugin, constName: 'BINDING_TABLE' })
-  const browser = bindingTableModule(rows.map(r => ({ id: r.id, path: r.path })), { constName: 'BROWSER_BINDINGS' })
-  return `export const PLUGIN = ${JSON.stringify(plugin)}\n${extra}${host}\n${browser}`
+  return `export const PLUGIN = ${JSON.stringify(plugin)}\n${extra}${host}`
+}
+
+/** Browser half: id + path only (T-O-PRE1116-05.5). No ledger metadata. */
+export function browserBindingsModule(rows) {
+  const lines = rows.map(row => `  Object.freeze({ id: ${JSON.stringify(row.id)}, path: ${JSON.stringify(row.path)} }),`)
+  return `/** GENERATED: browser-safe binding identity (id + path only). */
+export const BROWSER_BINDINGS = Object.freeze([
+${lines.join('\n')}
+])
+`
 }
 
 function writePlugin(plugin, rows, naming) {
@@ -120,6 +129,7 @@ function writePlugin(plugin, rows, naming) {
   mkdirSync(dir, { recursive: true })
   const out = join(dir, 'bindings.js')
   writeFileSync(out, bindingsModule(mine, { plugin }))
+  writeFileSync(join(dir, 'browser-bindings.js'), browserBindingsModule(mine))
   return out
 }
 

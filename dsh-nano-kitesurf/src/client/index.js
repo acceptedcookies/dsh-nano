@@ -33,11 +33,11 @@ const OWN_ID = 'nano-kitesurf'
 const CAPTURE_HEIGHT = 800
 const MAX_PINS = 8
 
-const perfReview = ensurePerfReview()
+const pagePerf = ensurePerfReview()
 const perf = {
   span(name, fn) {
     try {
-      const collector = perfReview.join(OWN_ID, {
+      const collector = pagePerf.join(OWN_ID, {
         version: typeof __NKS_VERSION__ === 'string' ? __NKS_VERSION__ : '0.0.0',
         buckets: BUCKETS,
         decl: DECL_HASH,

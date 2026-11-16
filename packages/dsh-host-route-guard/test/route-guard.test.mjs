@@ -61,6 +61,7 @@ function makeCtx({ connection = { requestRejection: () => undefined } } = {}) {
 
 const TABLE = [
   {
+    id: 'nxx.read',
     path: '/nano-x/read',
     methods: ['POST'],
     sensitivity: 'L0',
@@ -71,6 +72,7 @@ const TABLE = [
     plugin: 'nano-x',
   },
   {
+    id: 'nxx.list',
     path: '/nano-x/list',
     methods: ['GET', 'POST'],
     sensitivity: 'L1',
@@ -275,6 +277,7 @@ test('inventory() emits route records incl. sessionBinding metadata', () => {
   assert.equal(inv.length, 2)
   const read = inv.find(r => r.path === '/nano-x/read')
   assert.deepEqual(read, {
+    id: 'nxx.read',
     path: '/nano-x/read',
     methods: ['POST'],
     sensitivity: 'L0',
@@ -286,7 +289,7 @@ test('inventory() emits route records incl. sessionBinding metadata', () => {
   })
   const md = inventoryMarkdown(inv, { title: 'route-inventory' })
   assert.match(md, /route-inventory/)
-  assert.match(md, /\| `\/nano-x\/read` \| POST \| L0 \|/)
+  assert.match(md, /\| `nxx\.read` \| `\/nano-x\/read` \| POST \| L0 \|/)
 })
 
 /* ---------- standalone vs bound forms ---------- */

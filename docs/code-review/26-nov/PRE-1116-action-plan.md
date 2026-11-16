@@ -609,15 +609,16 @@ PRE-1116
   - `P3-05`（substrate-fit）：七份声明使用 `keys/buckets/contract/scenarios/budgets`；运行时切片由 `scripts/bake-declaration.mjs` 只烘焙 `KEYS/BUCKETS/DECL_HASH`。
   - `P3-08`（计划偏差）：`lab/budgets.mjs` 的旧逐轨道规则迁入 [DNEE]/[DNN] 声明；`evaluate` 保留为 `diagnose()` 的 lab 适配层，等待 `P3-09` ⑤ 的对照。
   - `P3-09`（顺序调整）：未执行。没有 `lab/config.local.json`，本轮不驱动真实浏览器；`evaluate` 未删，基线未重录。
+  - 审查修复（2026-11-17T02:00Z）：三路审查提出 2 个假绿 + 9 个 truth blocker + 13 个完成度缺口；已修复 DNEE 客户端缺 import、`aggregate` v2 rows 适配、`cutWindow` host 游标、`clipOversize` 顶层证据、`meta.window`/`evidence.frames`、browser `bindingId`、guard inventory `id`、七包真实三方对账、DNK `perfReview`、`hostSpan` ctx、e2e v2 rows、T25 文档断言。
 - **阻塞与处理**：
   - `P3-09` 对照与 `P3-10` 的 live 证据：无本机 grant，按 `T26` 同口径保持 `未观察`。
   - `PRE1116-T28`：`dsh-nano-s3-client` 的三条 rate 用例在 `main` 与 W3 都报 `Promise resolution is still pending…`（Node 22.23.4；`main` 同样 13 pass / 3 cancelled），属 pre-existing 环境失败，不计入本阶段引入。
 - **测试发现**：
-  - DNPR 包：`npm test` 82/82。
+  - DNPR 包：`npm test` 92/92。
   - [DNLS]：`npm test` 95/95。
-  - `packages/dsh-interface`：58/58。
+  - `packages/dsh-interface`：60/60。
   - `node scripts/check-route-sensitivity.mjs`：87 routes, 0 drift；`check-feature-contract`：87 routes。
-  - `node scripts/check-clean-lib.mjs`：74 runtime artifacts。
+  - `node scripts/check-clean-lib.mjs`：90 runtime artifacts。
   - 对抗审查见 `.anote/reviews/PRE/1116/`（三路）。
 - **后续 handoff**：`P3-09`（对照表 + 基线 + 删 `evaluate`）、`P3-10` 的 spec rev5 已在同批文档落盘但 live 证据待补、`T26` 本机页面阅读、合并到 `main` 与 worktree 删除均由 [业主] 决定。
 
@@ -631,9 +632,9 @@ PRE-1116
 | `P2-01` | ✅ done | `ce29091` | `security/route-sensitivity.json` | 87 行含 upgrade |
 | `P2-02` | ✅ done | `ce29091` | `security/perf-binding-ids.md`、`scripts/bake-plugin-bindings.mjs` | 缺 id / 表不一致即失败 |
 | `P2-03` | ✅ done | `ce29091` | 七份 `lib/bindings.js`；`routeTableModule` 删除 | 空 [DNK] 表合法 |
-| `P2-04` | 🟩 partial | `ce29091` | `packages/dsh-host-route-guard/src/route-guard.js` | `route-inventory.md` 未改 |
+| `P2-04` | ✅ done | `ce29091` + `112ee58` | `route-guard.js` + `security/route-inventory.md` | id 进 inventory；87 行生成 |
 | `P3-01` | ✅ done | `dcddf80` + 本批 | `state.js`、七插件构建脚本 | `__DNPR_BUILD__` 内容哈希 |
-| `P3-02` | ✅ done | `dcddf80` + 本批 | `aggregate.js`、`client.js`、`host.js` | 顶层 `dnpr.report/2` |
+| `P3-02` | ✅ done | `dcddf80` + 本批 | `aggregate.js`、`client.js`、`host.js` | v2 rows 适配 + cursor + oversize |
 | `P3-03` | ✅ done | `dcddf80` | `src/diagnose.js`、`src/declaration.js` | 浏览器出口不含 |
 | `P3-04` | ✅ done | `2c1874b` | `handleHostRead`；[DNN]/[DNMS] 路由 | 只接受 `since` |
 | `P3-05` | ✅ done | `77fa108` + 本批 | 七份 declaration；`bake-declaration.mjs` | 4 处页面 join 统一传 `buckets/decl/hostRoute` |

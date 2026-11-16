@@ -12,6 +12,7 @@ import {
   ensurePerfReview,
   firstVisibleRoot,
 } from 'dsh-performance-review/client'
+import { BUCKETS, DECL_HASH } from '../../lib/perf-declaration.js'
 
 export const OWN_ID = 'nano-explorer-extra'
 

@@ -4,6 +4,9 @@
  * transport/http/protocol/domain classification is uniform and the legacy
  * `error.code`/`reason` guessing is gone. */
 import { createJsonClient } from 'dsh-interface/host'
+import { BROWSER_BINDINGS } from '../../lib/browser-bindings.js'
+
+const BINDING_IDS = new Map(BROWSER_BINDINGS.map(row => [row.path, row.id]))
 
 const client = createJsonClient({
   fetch: (url, init) => fetch(url, { credentials: 'same-origin', ...init }),
@@ -17,6 +20,7 @@ export function jsonOp({ method = 'GET', url, encode, decode } = {}) {
   return {
     url,
     method,
+    bindingId: BINDING_IDS.get(url) ?? null,
     encode: encode ?? ((body) => ({
       url,
       method,

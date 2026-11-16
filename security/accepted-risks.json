@@ -93,12 +93,12 @@
     },
     {
       "fingerprint": "nxe:perf-review-window-drain",
-      "subject": "dsh-nano-explorer-extra /perf-review/host?mode=window",
-      "existingFeature": "mode=window drains and returns the process-global perf window (cross-plugin/session samples) for lab use.",
+      "subject": "dsh-nano-explorer-extra /perf-review/host",
+      "existingFeature": "只读全进程 perf 视图；只接受 since，不排空（v2 硬切后原 mode=window 排空已退役）。",
       "disposition": "accept",
-      "rationale": "Window drain is the intended lab observability behaviour and only active when DSH_PERF_REVIEW=1; low severity, accept.",
-      "optionalHardening": "Optional: gate mode=window on DSH_PERF_REVIEW=1 (already env-gated); consider a per-session drain instead of process-global.",
-      "monitoring": "route-inventory L0; env flag required.",
+      "rationale": "只读视图返回跨插件/会话的进程级计时数据；仅 DSH_PERF_REVIEW=1 时采集，低严重度，接受。",
+      "optionalHardening": "可选：按会话过滤 rows，或对读路由加更细的能力门。",
+      "monitoring": "route-inventory L2 read:host；env flag required。",
       "ownerSignoff": "owner (26-nov AP closure)",
       "reviewDate": "2026-11-19"
     },

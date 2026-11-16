@@ -14,8 +14,8 @@ function pluginVersion() {
 const host = ensurePerfReviewHost()
 const review = host.hostJoin('nano-kitesurf', { version: pluginVersion() })
 
-export function hostSpan(name, fn, ctx = null) {
-  return review.hostSpan(name, fn, ctx)
+export function hostSpan(name, fn) {
+  return review.hostSpan(name, fn)
 }
 
 

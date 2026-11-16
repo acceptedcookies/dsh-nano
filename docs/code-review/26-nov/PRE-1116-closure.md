@@ -20,7 +20,7 @@
 > **本阶段最关键的 known gap（对下游影响）**：
 > 1. `PRE1116-T23`/`T24`：旧 `evaluate` 与 v2 `diagnose` 的对照表未生成，基线未按三次稳定性重录；`evaluate` 因此保留，未删。
 > 2. `PRE1116-T26`：没有本机 grant，真实页面未部署/未阅读；`route-inventory.md` 与部分 live 文档句留待该步。
-> 3. `PRE1116-T28`：受 `dsh-nano-s3-client` pre-existing 失败影响，全仓 gate 未到 0；其余 26 套件全绿。
+> 3. `PRE1116-T28`：受 `dsh-nano-s3-client` pre-existing 失败影响，全仓 gate 未到 0；其余 27/28 套件全绿。
 
 ---
 
@@ -28,16 +28,17 @@
 
 | Item | 状态 | 证据（commit + query/test + run-time） |
 |------|------|----------------------------------------|
-| `W1 / P1-01` 四门面可选 `observe` | ✅ | `fee3a42` + `packages/dsh-interface/test/observe-event.test.mjs` T01–T04 + `2026-11-16T15:20Z` |
-| `W1 / P1-02` `onCall` 退役 | ✅ | `fee3a42` + 全仓 `onCall` 0 命中（含 `lib/`）+ `2026-11-16T15:20Z` |
+| `W1 / P1-01` `observe` 事件闭集与四门面合同 | ✅ | `fee3a42` + `observe-event.test.mjs` T01/T02 + `2026-11-16T15:20Z` |
+| `W1 / P1-02` 四门面可选 `observe`、未注入逐字一致 | ✅ | `fee3a42` + `observe-event.test.mjs` T01（字节比较、零时钟）+ `2026-11-16T15:20Z` |
+| `W1 / P1-03` `onCall` 退役（无别名） | ✅ | `fee3a42` + `observe-event.test.mjs` T03（`src/` + `lib/` 0 命中）+ `2026-11-16T15:20Z` |
 | `W2 / P2-01` 账本补身份 | ✅ | `ce29091` + `node scripts/check-route-sensitivity.mjs`（87 routes / 0 drift）+ `2026-11-16T16:05Z` |
-| `W2 / P2-02` 命名表与烘焙闸 | ✅ | `ce29091` + `packages/dsh-interface/test/binding-bake.test.mjs` T05–T07 + `2026-11-16T16:05Z` |
+| `W2 / P2-02` 命名表与烘焙闸 | 🟡 partial | `ce29091` + `binding-bake.test.mjs` T05–T07。**业主抽查未执行**，handoff → 业主确认表版本 |
 | `W2 / P2-03` `route-table` 退役 | ✅ | `ce29091` + `check-clean-lib` 74 artifacts + `2026-11-16T16:05Z` |
-| `W2 / P2-04` guard 记录带 id | 🟡 partial | `ce29091` 改 `route-guard.js`；`route-inventory.md` 未改，handoff → `T26` 同批文档 |
+| `W2 / P2-04` guard 记录带 id | ✅ | `ce29091` + `112ee58`：`route-guard.js` 冻结记录带 `id`；`security/route-inventory.md` 由 `gen-route-inventory.mjs` 生成（87 行）；`binding-bake.test.mjs` 投影断言 + `2026-11-17T01:15Z` |
 | `W3 / P3-01` 协议键与构建戳 | ✅ | `dcddf80` + `92a1f64` + `protocol.test.mjs` T09/T10 + `2026-11-17T00:55Z` |
-| `W3 / P3-02` v2 报告与游标 | ✅ | `dcddf80` + `92a1f64` + `client.test.mjs`/`host.test.mjs` + `2026-11-17T00:55Z` |
-| `W3 / P3-03` `diagnose`/声明校验 | ✅ | `dcddf80` + `test/diagnose.test.mjs` + `2026-11-17T00:55Z` |
-| `W3 / P3-04` 只读 handler | ✅ | `2c1874b` + `host.test.mjs` `GET perf-review host accepts only since` + `2026-11-17T00:20Z` |
+| `W3 / P3-02` v2 报告与游标 | ✅ | `dcddf80` + `92a1f64` + `integration.test.mjs`（v2 rows→host、cutWindow cursor、meta.window、oversize）+ `2026-11-17T02:00Z` |
+| `W3 / P3-03` `diagnose`/声明校验 | ✅ | `dcddf80` + `test/diagnose.test.mjs` + `declarations.test.mjs` 真实三方对账 + `2026-11-17T02:00Z` |
+| `W3 / P3-04` 只读 handler | ✅ | `2c1874b` + `host.test.mjs`（GET/`since`/400/405）+ `integration.test.mjs`（badShape）+ `2026-11-17T02:00Z` |
 | `W3 / P3-05` 七份声明与 `observe` 注入 | ✅ | `77fa108` + `92a1f64` + `declarations.test.mjs` + `2026-11-17T00:55Z` |
 | `W3 / P3-06` 9 个 hostSpan 处置 | ✅ | `dd5e2dd` + 5 个退役名在插件 `src/` 0 命中 + `2026-11-17T00:35Z` |
 | `W3 / P3-07` 排空与侧载退役 | ✅ | `bd3422c` + 账本 87 行 + `grep takeWindow|perf-report` 0 命中 + `2026-11-17T00:45Z` |
@@ -51,14 +52,14 @@
 
 | 验证项 | 命令 / 证据 | 结果 | 覆盖范围 |
 |--------|-------------|------|----------|
-| DNPR 单测 | `cd packages/dsh-performance-review && npm test` | 82 pass / 0 fail | v2 协议、报告、游标、判定、声明、lab |
+| DNPR 单测 | `cd packages/dsh-performance-review && npm test` | 92 pass / 0 fail | v2 协议、报告、游标、判定、声明、lab、集成 |
 | [DNLS] 单测 | `cd dsh-nano-local-sandbox && npm test` | 95 pass / 0 fail | 路由、生命周期、打包清单 |
-| [DHS-interface] 单测 | `cd packages/dsh-interface && npm test` | 58 pass / 0 fail | 门面、事件闭集、T16 注入清单 |
+| [DHS-interface] 单测 | `cd packages/dsh-interface && npm test` | 60 pass / 0 fail | 门面、事件闭集、T16 注入清单、browser bindings |
 | 账本漂移 | `node scripts/check-route-sensitivity.mjs` | `87 routes, 0 drift` | 七插件账本 |
 | 功能合同 | `node scripts/check-feature-contract.mjs` | `87 routes` | 合同 ↔ 代码 |
-| 运行时纯净 | `node scripts/check-clean-lib.mjs` | `74 runtime artifact(s)` | 只 `node:*` + 相对 import |
+| 运行时纯净 | `node scripts/check-clean-lib.mjs` | `90 runtime artifact(s)` | 只 `node:*` + 相对 import |
 | 安全回归 | `node scripts/security-regression/run.mjs` | 8 cases / 0 not-rejected | 旧漏洞不回归 |
-| 全仓 gate | `node scripts/test-all.mjs --build` | 26/27 套件通过；唯一失败 `packages/dsh-s3-client`（main 同失败） | 全仓 |
+| 全仓 gate | `node scripts/test-all.mjs --build` | 27/28 套件通过；唯一失败 `packages/dsh-s3-client`（main 同失败） | 全仓 |
 | lab 源码断言 | `node --test packages/dsh-performance-review/test/lab.test.mjs` | 3 pass | 无插件名/轨道名、三页级场景、`read`/`cutWindow` |
 
 ---
@@ -72,9 +73,9 @@
 | T03 `onCall` 0 命中 | facade `src/` + `lib/` | 单测 T03 | ✅ PASS |
 | T05–T07 身份与烘焙 | gen 保留三字段；缺 id 非 0；7 份 bindings | binding-bake + check-route-sensitivity | ✅ PASS |
 | T09/T10 旧键隔离与构建戳 | 旧对象字段不变；双戳一条 audit | protocol.test.mjs | ✅ PASS |
-| T11/T12 v2 形状与无副作用读 | 连读深相等；`cutWindow` 只清窗口 | client/aggregate tests | ✅ PASS |
+| T11/T12 v2 形状与无副作用读 | 连读深相等；`cutWindow` 只清窗口且前移 host cursor | client/aggregate/integration tests | ✅ PASS |
 | T13 游标 | `since`/epoch/400/双读者 | host.test.mjs | ✅ PASS |
-| T14/T15 判定与声明 | 无插件名；坏声明抛错；三方对账 | diagnose/declarations tests | ✅ PASS |
+| T14/T15 判定与声明 | 无插件名；坏声明抛错；七包真实源码三方对账 | diagnose/declarations tests | ✅ PASS |
 | T16 六合同面注入 | 六包 `observe:` 存在；[DNK]/[DNMSC] 0 | dsh-interface T16 | ✅ PASS |
 | T17/T18 span 与开关 | 5 退役名 0；[DNK] 不写 `DSH_PERF_REVIEW` | `rg` + 单测 | ✅ PASS |
 | T19 写盘与侧载 | 无 `host.json` 写入；[DNLS] 两条路由删除 | `rg` + 账本 | ✅ PASS |
@@ -109,6 +110,7 @@
 | 项 | 类型 | 承接 |
 |----|------|------|
 | 旧/新判定对照表缺失 | B（本阶段主动 defer） | `P3-09` ⑤；本机 live grant 后执行 |
+| 命名表业主抽查未执行 | C（handoff 下游） | 业主确认 `security/perf-binding-ids.md` 87 行版本 |
 | 基线未重录 | B | `P3-09` ⑥ |
 | `route-inventory.md` 未改 | C（handoff 下游） | `T26` 同批文档 |
 | `dsh-nano-s3-client` 3 cancelled | A（charter 未承诺） | 独立包维护者；不阻塞本阶段 |

@@ -183,7 +183,7 @@ test('P1-4: span rows carry pre-aggregated stats + {ms,at,err} event ring', asyn
   const env = fakeEnv()
   const host = createPerfReviewHost(env)
   const api = host.hostJoin('nano-x')
-  api.hostSpan('shot', () => env.performance.advance(10), { traceId: 'inc-7' })
+  api.hostSpan('shot', () => env.performance.advance(10))
   api.hostSpan('shot', () => env.performance.advance(30))
   try { api.hostSpan('shot', () => { env.performance.advance(5); throw new Error('k') }) } catch {}
   const span = host.snapshot().plugins['nano-x'].spans.shot

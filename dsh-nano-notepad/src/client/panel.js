@@ -145,9 +145,9 @@ ${NANO_STYLES}
 .np-window[data-chrome="windows"] .np-chrome button.np-chrome-close:hover { background: var(--dsw-alias-state-error-primary, #e81123); color: #fff; }
 .np-window[data-chrome="windows"] .np-chrome button svg { width: 11px; height: 11px; }
 .np-window[data-chrome="windows"] .np-chrome button.np-chrome-close svg { width: 12px; height: 12px; }
-.np-window[data-maximized="true"] .np-chrome button.np-chrome-max svg.np-icon-restore { display: block; }
-.np-window[data-maximized="true"] .np-chrome button.np-chrome-max svg.np-icon-max { display: none; }
-.np-window:not([data-maximized="true"]) .np-chrome button.np-chrome-max svg.np-icon-restore { display: none; }
+.np-window[data-maximized="true"] .np-chrome button.np-chrome-max .np-icon-restore { display: block; }
+.np-window[data-maximized="true"] .np-chrome button.np-chrome-max .np-icon-max { display: none; }
+.np-window:not([data-maximized="true"]) .np-chrome button.np-chrome-max .np-icon-restore { display: none; }
 .np-tab-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .np-tab-x { position: absolute; top: 4px; right: 4px; display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; flex: none; border: 0; background: transparent; border-radius: var(--dsw-radius-sm); color: var(--dsw-alias-label-tertiary); font: inherit; padding: 0; cursor: pointer; opacity: 0; pointer-events: none; }
 .np-tab-x:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
@@ -178,8 +178,9 @@ ${NANO_STYLES}
 .np-tree-head { box-sizing: border-box; display: flex; flex: none; align-items: center; gap: 4px; width: 100%; height: 49px; padding: 6px var(--np-pad-x); color: var(--dsw-alias-label-tertiary); font-size: var(--np-font-size-sm); border-bottom: 1px solid var(--dsw-alias-border-l2); }
 .np-tree-toggle { box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; flex: none; padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); cursor: pointer; }
 .np-tree-toggle:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
-.np-tree-toggle svg { width: 16px; height: 16px; display: block; fill: none; stroke: currentColor; stroke-width: 1; }
-.np-tree-toggle svg .np-panel-fill { fill: currentColor; stroke: none; }
+/* Sprite glyphs are filled paths (fill: currentColor set below); the tree state is
+   carried by the button's own aria-expanded instead of a filled variant. */
+.np-tree-toggle[aria-expanded="false"] { color: var(--dsw-alias-label-tertiary); }
 .np-tree-tools { display: flex; align-items: center; gap: 4px; flex: none; }
 .np-tree-tools button { display: inline-flex; align-items: center; justify-content: center; width: var(--np-icon-btn); height: var(--np-icon-btn); padding: 0; border: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); cursor: pointer; }
 .np-tree-tools button svg { width: 16px; height: 16px; display: block; }
@@ -251,8 +252,6 @@ ${NANO_STYLES}
 .np-node[data-cat="memory"] .np-cat { color: var(--dsw-alias-label-secondary); background: var(--dsw-alias-bg-layer-3); }
 .np-node-name[data-fade="true"] { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 18px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 18px), transparent); }
 .np-entry svg, .np-node-icon svg, .np-tree-tools svg, .np-tree-toggle svg, .np-tree-foot svg, .np-caret svg, .np-node-actions svg, .np-tool svg, .np-slash svg, .np-ws-caret svg { fill: currentColor; stroke: none; }
-.np-tree-toggle svg { fill: none; stroke: currentColor; stroke-width: 1; }
-.np-tree-toggle svg .np-panel-fill { fill: currentColor; stroke: none; }
 .np-node-icon svg, .np-tree-tools svg, .np-tree-toggle svg, .np-caret svg, .np-node-actions svg, .np-tool svg, .np-slash svg { width: 16px; height: 16px; display: block; }
 .np-ws { position: relative; flex: 1 1 auto; min-width: 0; }
 .np-ws-btn { display: flex; align-items: center; gap: 6px; width: 100%; height: var(--np-icon-btn); box-sizing: border-box; padding: 0 8px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); font: inherit; font-size: var(--np-font-size-sm); cursor: pointer; }
@@ -361,8 +360,7 @@ ${NANO_STYLES}
 .np-fx-head-title:hover { background: var(--dsw-alias-interactive-bg-hover); border-radius: var(--dsw-radius-sm); }
 .np-fx-head-title[aria-expanded="true"] .np-fx-nav-state { color: var(--dsw-alias-link); }
 .np-fx-nav-state { display: inline-flex; width: 14px; height: 14px; color: var(--dsw-alias-label-tertiary); transition: color .12s ease; }
-.np-fx-nav-state svg { display: block; width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1; }
-.np-fx-nav-state svg .np-panel-fill { fill: currentColor; stroke: none; }
+.np-fx-nav-state svg { display: block; width: 14px; height: 14px; fill: currentColor; stroke: none; }
 .np-fx-head-ico, .np-fx-head-ico svg { width: 16px; height: 16px; display: block; color: var(--dsw-alias-link); }
 .np-fx-head-sub { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--np-font-size-xs); color: var(--dsw-alias-label-tertiary); }
 .np-fx-head-space { flex: 1 1 auto; }
@@ -399,7 +397,7 @@ ${NANO_STYLES}
 .np-fx-nav-add:hover { background: var(--dsw-alias-interactive-bg-hover); }
 .np-fx-thread { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 4px 2px 2px; scroll-behavior: smooth; scrollbar-width: none; }
 .np-fx-thread::-webkit-scrollbar { width: 0; height: 0; }
-.np-fx-floatbar { position: absolute; top: 0; right: 3px; z-index: 2; width: 5px; border-radius: 3px; background: var(--dsw-alias-label-quaternary); opacity: 0; pointer-events: none; transition: opacity .18s; }
+.np-fx-floatbar { position: absolute; top: 0; right: 3px; z-index: 2; width: 5px; border-radius: 3px; background: var(--dsw-alias-label-caption); opacity: 0; pointer-events: none; transition: opacity .18s; }
 .np-fx-floatbar[data-on="true"] { opacity: .8; }
 .np-fx-thread .np-fx-empty { margin: auto; padding: 24px 16px 12px; }
 .np-fx-msg { display: flex; gap: 8px; align-items: flex-start; max-width: 100%; }
@@ -409,7 +407,7 @@ ${NANO_STYLES}
 .np-fx-bubble { max-width: 84%; min-width: 0; padding: 8px 11px; border-radius: 12px; font-size: var(--np-font-size-sm); line-height: 1.55; color: var(--dsw-alias-label-primary); background: var(--dsw-alias-interactive-bg-hover); white-space: pre-wrap; overflow-wrap: anywhere; }
 .np-fx-msg[data-role="user"] .np-fx-bubble { background: var(--dsw-alias-interactive-bg-active); border-bottom-right-radius: 4px; }
 .np-fx-msg[data-role="assistant"] .np-fx-bubble { background: var(--dsw-alias-bg-layer-2); border: 1px solid var(--dsw-alias-border-l1); border-bottom-left-radius: 4px; }
-.np-fx-msg[data-error="true"] .np-fx-bubble { border-color: var(--dsw-alias-state-error-secondary); color: var(--dsw-alias-label-error); }
+.np-fx-msg[data-error="true"] .np-fx-bubble { border-color: var(--dsw-alias-state-error-secondary); color: var(--dsw-alias-state-error-primary); }
 .np-fx-tools { margin-top: 6px; display: flex; flex-direction: column; gap: 2px; list-style: none; padding: 0; max-height: none; overflow: visible; }
 .np-fx-tool { font-size: var(--np-font-size-xs); color: var(--dsw-alias-link); }
 .np-fx-tool summary { cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -424,7 +422,6 @@ ${NANO_STYLES}
 .np-dlg-body label.np-fx-model-row input[type="checkbox"] { width: 16px; height: 16px; flex: none; margin: 0; }
 .np-fx-credit-links { display: flex; gap: 12px; flex: none; }
 .np-fx-credit-links a { color: var(--dsw-alias-link); }
-.np-dlg-body .np-switch:disabled { opacity: .72; cursor: default; }
 .np-changed { animation: npChanged 2.4s; }
 @keyframes npChanged { 0% { background: var(--dsw-alias-interactive-bg-active); } 100% { background: transparent; } }
 .np-group { display: flex; align-items: center; gap: 6px; margin: 12px 0 4px; padding-left: 8px; color: var(--dsw-alias-label-tertiary); font-size: var(--np-font-size-xs); font-weight: 600; letter-spacing: .04em; line-height: 20px; }
@@ -435,29 +432,22 @@ ${NANO_STYLES}
 .np-toolbar, .np-footer { min-width: 0; }
 .np-toolbar { display: flex; gap: var(--np-gap); align-items: center; padding: 6px var(--np-pad-x); }
 /* native segmented control: hover-gray track + layer-1 thumb sliding by translate */
-.np-switch { flex: none; margin-left: 0; display: inline-grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 2px; position: relative; padding: 4px; border: 0; background: var(--dsw-alias-interactive-bg-hover); border-radius: var(--dsw-radius-md); cursor: pointer; font: inherit; min-width: 148px; }
-.np-switch .np-switch-label { display: inline-flex; align-items: center; justify-content: center; min-width: 0; height: 28px; padding: 0 14px; font-size: var(--np-font-size); font-weight: 500; color: var(--dsw-alias-label-secondary); z-index: 0; }
-/* Three-segment controls (sync motion) need a wider track and tighter labels. */
-.np-switch[data-segments="3"] { min-width: 186px; }
-.np-switch[data-segments="3"] .np-switch-label,
-.np-switch[data-segments="3"] .np-switch-thumb { padding: 0 8px; }
-.np-switch { --np-switch-n: 2; --np-switch-i: 0; }
-.np-switch .np-switch-thumb { position: absolute; top: 4px; left: 4px; width: calc((100% - 8px - (var(--np-switch-n) - 1) * 2px) / var(--np-switch-n)); height: calc(100% - 8px); display: flex; align-items: center; justify-content: center; padding: 0 14px; box-sizing: border-box; background: var(--dsw-alias-bg-layer-1); border-radius: var(--dsw-radius-sm); box-shadow: var(--dsw-elevation-soft); font-size: var(--np-font-size); font-weight: 500; color: var(--dsw-alias-label-primary); white-space: nowrap; overflow: hidden; transition: transform .16s ease; z-index: 1; }
-.np-switch[data-view="rendered"] .np-switch-thumb { transform: translateX(calc(100% + 2px)); }
+.np-view-switch, .np-seg { flex: none; display: inline-flex; margin-left: 0; min-width: 0; }
+.np-view-switch { min-width: 148px; }
 .np-toolbar { flex-wrap: wrap; gap: 2px; border-bottom: 1px solid var(--dsw-alias-border-l2); }
 .np-tool { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); cursor: pointer; }
 .np-tool:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 .np-tool svg { width: 18px; height: 18px; }
 .np-tool-sep { width: 1px; height: 18px; margin: 6px 4px; background: var(--dsw-alias-border-l2); flex: none; }
-.np-window button:not([class]):not(.np-tree-tools button):not(.np-node-actions button):not(.np-slash button):not(.np-versions button), .np-footer-actions button.np-danger, .np-dlg-body button:not(.np-switch):not(.np-transfer-row):not(.nano-tab) { border: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); border-radius: var(--dsw-radius-sm); padding: 4px 10px; cursor: pointer; font: inherit; line-height: 20px; }
-.np-window button:hover, .np-dlg-body button:not(.np-switch):not(.nano-tab):hover { background: var(--dsw-alias-interactive-bg-hover); }
+.np-window button:not([class]):not(.np-tree-tools button):not(.np-node-actions button):not(.np-slash button):not(.np-versions button), .np-footer-actions button.np-danger, .np-dlg-body button:not(.np-transfer-row) { border: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); border-radius: var(--dsw-radius-sm); padding: 4px 10px; cursor: pointer; font: inherit; line-height: 20px; }
+.np-window button:hover, .np-dlg-body button:not(.np-transfer-row):hover { background: var(--dsw-alias-interactive-bg-hover); }
 /* keep the row/tab as the only hover surface; inner buttons must not double-fill
    — scoped to .np-window so we beat the generic .np-window button:hover rule */
 .np-window .np-node-main:hover, .np-window .np-node-actions button:hover, .np-window .np-tab-btn:hover { background: transparent; }
 .np-node-main, .np-caret, .np-node { border: 0; background: transparent; box-shadow: none; }
 .np-tabs > button, .np-tab { background: transparent; }
-.np-danger { color: var(--dsw-alias-label-error); }
-.np-footer-actions button.np-danger { color: var(--dsw-alias-label-error); }
+.np-danger { color: var(--dsw-alias-state-error-primary); }
+.np-footer-actions button.np-danger { color: var(--dsw-alias-state-error-primary); }
 .np-footer-actions button.np-danger:hover, .np-dlg-body button.np-danger:hover { border-color: var(--dsw-alias-state-error-secondary); color: var(--dsw-alias-state-error-secondary); background: var(--dsw-alias-interactive-bg-hover-danger); }
 .np-write, .np-read { flex: 1; min-height: 0; margin: 0; }
 .np-view-switch[hidden], .np-md-tools[hidden], .np-json-tools[hidden] { display: none !important; }
@@ -551,14 +541,6 @@ ${NANO_STYLES}
 .np-gallery-item:hover .np-g-act, .np-gallery-item:focus-within .np-g-act { opacity: 1; }
 .np-g-act button { border: 0; border-radius: 3px; padding: 2px 4px; font-size: 10px; line-height: 1.3; white-space: nowrap; background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-primary); cursor: pointer; }
 .np-g-act button:hover { background: var(--dsw-alias-interactive-bg-hover); }
-/* Custom instant tooltip for np-tool buttons (native title feels absent). */
-.np-tool[data-tip] { position: relative; }
-.np-tool[data-tip]:hover::after, .np-tool[data-tip]:focus-visible::after {
-  content: attr(data-tip); position: absolute; left: 50%; top: calc(100% + 6px); transform: translateX(-50%);
-  z-index: 20; padding: 3px 8px; border-radius: var(--dsw-radius-sm); font-size: 11px; line-height: 1.4;
-  white-space: nowrap; pointer-events: none;
-  background: var(--dsw-alias-tooltip-bg); color: var(--dsw-alias-tooltip-label, var(--dsw-alias-label-primary));
-  box-shadow: 0 4px 12px rgba(0,0,0,.25); }
 .np-gallery-empty { padding: 18px; text-align: center; color: var(--dsw-alias-label-tertiary); font-size: 12px; }
 .np-slash { position: absolute; z-index: 4; background: var(--dsw-menu-surface-fill, var(--dsw-alias-bg-layer-3)); color: var(--dsw-alias-label-primary); border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-lg); box-shadow: var(--dsw-elevation-prominent); backdrop-filter: var(--dsw-menu-backdrop-filter); }
 /* .np-dlg-body wraps every NanoDialog's injected children: stacked content with the
@@ -580,15 +562,11 @@ ${NANO_STYLES}
 /* pill number input with embedded unit */
 .np-dlg-body input[type="number"] { appearance: none; -webkit-appearance: none; }
 .np-dlg-body input::-webkit-outer-spin-button, .np-dlg-body input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-.np-num { flex: none; display: inline-flex; align-items: center; gap: 6px; background: var(--dsw-alias-interactive-bg-hover); border: 1px solid transparent; border-radius: var(--dsw-radius-full, 999px); padding: 3px 12px; color: var(--dsw-alias-label-primary); }
+.np-num { flex: none; display: inline-flex; align-items: center; gap: 6px; background: var(--dsw-alias-interactive-bg-hover); border: 1px solid transparent; border-radius: 999px; padding: 3px 12px; color: var(--dsw-alias-label-primary); }
 .np-num:focus-within { border-color: var(--dsw-focus-ring-color, var(--dsw-alias-link)); }
 .np-num input { width: auto; min-width: 4.5em; field-sizing: content; border: 0; background: transparent; padding: 2px 0; font: inherit; color: inherit; text-align: right; }
 .np-num input:focus { outline: none; }
 .np-num .np-num-unit { color: var(--dsw-alias-label-tertiary); font-size: var(--np-font-size-sm); white-space: nowrap; }
-/* segmented control matching the app's color-scheme switch */
-/* settings switches carry their index in --np-switch-i: thumb steps by
-   (segment width + 2px gap), generic for N segments */
-.np-switch[data-seg-field] .np-switch-thumb { transform: translateX(calc(var(--np-switch-i) * (100% + 2px))); }
 /* Text-like controls fill the row; a checkbox or radio must keep its intrinsic
    box, or the 100% width turns it into a 300px slab and the 8px padding makes it
    taller than the label it belongs to. */
@@ -598,7 +576,7 @@ ${NANO_STYLES}
 .np-versions { max-height: 240px; overflow: auto; display: flex; flex-direction: column; }
 .np-versions button { display: block; width: 100%; border: 0; background: transparent; color: var(--dsw-alias-label-primary); border-radius: var(--dsw-radius-sm); padding: 6px 8px; text-align: left; font: inherit; cursor: pointer; }
 .np-versions button:hover { background: var(--dsw-alias-interactive-bg-hover); }
-.np-error { display: flex; align-items: flex-start; gap: 8px; color: var(--dsw-alias-label-error); padding: 0 var(--np-pad-x) 8px; }
+.np-error { display: flex; align-items: flex-start; gap: 8px; color: var(--dsw-alias-state-error-primary); padding: 0 var(--np-pad-x) 8px; }
 .np-error-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .np-error button { display: inline-flex; align-items: center; justify-content: center; width: var(--np-icon-btn-sm); height: var(--np-icon-btn-sm); flex: none; padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-tertiary); border-radius: var(--dsw-radius-xs, 4px); cursor: pointer; }
 .np-error button:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
@@ -644,10 +622,6 @@ ${NANO_STYLES}
   .np-tree[data-collapsed="true"] .np-tree-foot button:hover { background: var(--dsw-alias-interactive-bg-hover); }
   .np-toolbar { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; mask-image: linear-gradient(to right, #000 88%, transparent); -webkit-mask-image: linear-gradient(to right, #000 88%, transparent); }
   .np-toolbar::-webkit-scrollbar { display: none; }
-  .np-switch { min-width: 62px; grid-auto-columns: auto; }
-  .np-switch .np-switch-label { display: none; }
-  .np-switch .np-switch-thumb { position: static; transform: none; width: auto; height: 22px; padding: 0 8px; box-shadow: none; font-size: var(--np-font-size-sm); }
-  .np-switch[data-view="rendered"] .np-switch-thumb { transform: none; }
   /* Four footer actions become icon-only squares like the tree's settings /
      close buttons; their titles carry the labels for hover + a11y. */
   .np-footer-actions button { width: var(--np-icon-btn); height: var(--np-icon-btn); padding: 0 !important; gap: 0; justify-content: center; }
@@ -746,19 +720,17 @@ ${NANO_STYLES}
    strip never scrolls and is never painted over by panel content. */
 .np-dlg-tabs { flex: none; padding-bottom: 10px; border-bottom: 1px solid var(--dsw-alias-border-l2); }
 .np-dlg-body > .np-dlg-panels { margin-top: 0; flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
-/* The shared tab control must not inherit the dialog's generic button skin. */
-.np-dlg-body .nano-tab { border: 0; padding: 0 8px; }
 /* ── S3 endpoint management + switch wizard ─────────────────────────────── */
 .np-cloud-settings { margin-top: 4px; }
 .np-endpoint-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
 .np-endpoint-row { display: flex; align-items: center; gap: 6px; padding: 8px 10px;
   border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm, 8px); }
-.np-endpoint-row[data-active="true"] { border-color: var(--dsw-alias-focus-ring, #4c9aff); }
+.np-endpoint-row[data-active="true"] { border-color: var(--dsw-focus-ring-color); }
 .np-endpoint-meta { flex: 1; min-width: 0; }
 .np-endpoint-meta b { display: block; font-size: 12px; font-weight: 600; }
 .np-endpoint-meta small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   color: var(--dsw-alias-label-secondary); font-size: 11px; }
-.np-endpoint-form, .np-switch-wizard { display: flex; flex-direction: column; gap: 8px;
+.np-endpoint-form, .np-cloud-wizard { display: flex; flex-direction: column; gap: 8px;
   padding: 10px; margin-bottom: 10px; border: 1px solid var(--dsw-alias-border-l2);
   border-radius: var(--dsw-radius-sm, 8px); }
 .np-endpoint-form label span, .np-check span { color: var(--dsw-alias-label-secondary); font-size: 11px; }
@@ -1031,9 +1003,6 @@ export function mountNotepad(host, defaults, hostTheme = { theme: undefined, sub
       if (node.dataset.i18nMode === 'title' || node.dataset.i18nMode === 'label') {
         node.title = value
         node.setAttribute('aria-label', value)
-        /* Custom tooltip for toolbar tools — native title has a ~1s delay and
-           reads as "no tooltip"; an on-hover label answers instantly. */
-        if (node.classList.contains('np-tool')) node.setAttribute('data-tip', value)
       }
       if (node.dataset.i18nMode !== 'title' && node.dataset.i18nMode !== 'label' && !node.dataset.i18nAttr) node.textContent = value
       if (node.dataset.i18nAttr) node.setAttribute(node.dataset.i18nAttr, value)
@@ -1047,7 +1016,6 @@ export function mountNotepad(host, defaults, hostTheme = { theme: undefined, sub
       node.setAttribute('aria-label', titled)
       if (!node.querySelector('svg')) node.textContent = label
     }
-    panel.querySelector('.np-switch')?.setAttribute('aria-label', copy.viewGroup)
     panel.querySelector('.np-read')?.setAttribute('aria-label', copy.editHint)
     panel.querySelector('.np-read')?.setAttribute('title', copy.editHint)
     write().placeholder = copy.placeholder
@@ -1620,10 +1588,10 @@ export function mountNotepad(host, defaults, hostTheme = { theme: undefined, sub
     const group = document.createElement('span')
     group.className = 'np-chrome'
     if (chrome === 'mac') {
-      group.innerHTML = `<button type="button" class="np-chrome-min" data-action="close" title="${escapeHtml(copy.minimize)}" aria-label="${escapeHtml(copy.minimize)}"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6h7" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg></button><button type="button" class="np-chrome-max" data-action="maximize" title="${escapeHtml(state.maximized ? copy.restoreWindow : copy.maximize)}" aria-label="${escapeHtml(state.maximized ? copy.restoreWindow : copy.maximize)}"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M6 2.5v7M2.5 6h7" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg></button>`
+      group.innerHTML = `<button type="button" class="np-chrome-min" data-action="close" title="${escapeHtml(copy.minimize)}" aria-label="${escapeHtml(copy.minimize)}">${MAC_MIN_ICON}</button><button type="button" class="np-chrome-max" data-action="maximize" title="${escapeHtml(state.maximized ? copy.restoreWindow : copy.maximize)}" aria-label="${escapeHtml(state.maximized ? copy.restoreWindow : copy.maximize)}">${MAC_MAX_ICON}</button>`
       tabs.prepend(group)
     } else {
-      group.innerHTML = `<button type="button" class="np-chrome-min" data-action="close" title="${escapeHtml(copy.minimize)}" aria-label="${escapeHtml(copy.minimize)}">${WIN_MIN_ICON}</button><button type="button" class="np-chrome-max" data-action="maximize" title="${escapeHtml(state.maximized ? copy.restoreWindow : copy.maximize)}" aria-label="${escapeHtml(state.maximized ? copy.restoreWindow : copy.maximize)}"><svg class="np-icon-max" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 2h8v8H2z" fill="none" stroke="currentColor" stroke-width="1.1"/></svg><svg class="np-icon-restore" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 3h6v6H3z M1 5V1h4" fill="none" stroke="currentColor" stroke-width="1.1"/></svg></button>`
+      group.innerHTML = `<button type="button" class="np-chrome-min" data-action="close" title="${escapeHtml(copy.minimize)}" aria-label="${escapeHtml(copy.minimize)}">${WIN_MIN_ICON}</button><button type="button" class="np-chrome-max" data-action="maximize" title="${escapeHtml(state.maximized ? copy.restoreWindow : copy.maximize)}" aria-label="${escapeHtml(state.maximized ? copy.restoreWindow : copy.maximize)}">${WIN_MAX_ICON}${WIN_RESTORE_ICON}</button>`
       const spacer = tabs.querySelector('.np-tabs-spacer')
       tabs.insertBefore(group, spacer ? spacer.nextSibling : null)
     }
@@ -1836,16 +1804,14 @@ export function mountNotepad(host, defaults, hostTheme = { theme: undefined, sub
       if (Number.isFinite(savedPos.selStart)) source.setSelectionRange(savedPos.selStart, savedPos.selEnd ?? savedPos.selStart)
       paintMirror()
     }
-    const sw = panel.querySelector('.np-switch')
-    if (sw) {
-      sw.dataset.view = state.view
-      sw.setAttribute('aria-checked', String(rendered))
-      const thumb = sw.querySelector('.np-switch-thumb')
-      if (thumb) thumb.textContent = rendered ? (json ? text().jsonTree : text().preview) : text().source
-      const copy = text()
-      const segLabels = json ? [copy.source, copy.jsonTree] : [copy.source, copy.preview]
-      sw.querySelectorAll('.np-switch-label').forEach((label, i) => { label.textContent = segLabels[i] ?? segLabels[0] })
-    }
+    /* Keep the host SegmentedControl in step with the view. The rendered label is a
+       JSON tree for .json files and the markdown preview otherwise (DESIGN.md §6.1). */
+    const copy = text()
+    const viewOptions = [
+      { value: 'source', label: copy.source },
+      { value: 'rendered', label: json ? copy.jsonTree : copy.preview },
+    ]
+    viewSwitch.update({ value: rendered ? 'rendered' : 'source', options: viewOptions, label: copy.viewGroup })
     if (!rendered || state.db === null) return
     if (json) {
       const collapsed = jsonCollapsedFor(file.id)
@@ -2023,7 +1989,7 @@ export function mountNotepad(host, defaults, hostTheme = { theme: undefined, sub
     const treeCollapsed = state.ui.treeOpen === false
     tree.dataset.collapsed = String(treeCollapsed)
     const treeToggle = must(panel, '.np-tree-toggle')
-    treeToggle.innerHTML = treeCollapsed ? PANEL_ICON(false) : PANEL_ICON(true)
+    treeToggle.innerHTML = PANEL_ICON()
     treeToggle.title = treeCollapsed ? text().expandTree : text().collapseTree
     treeToggle.setAttribute('aria-label', treeToggle.title)
     treeToggle.setAttribute('aria-expanded', String(!treeCollapsed))
@@ -2047,8 +2013,6 @@ export function mountNotepad(host, defaults, hostTheme = { theme: undefined, sub
       applyWindowSize()
       place(entry, state.ui.entryX, state.ui.entryY, 72)
       if (!state.maximized) place(panel, state.ui.panelX, state.ui.panelY, 80)
-      // tooltip reads left of the entry; flip when it would clip offscreen
-      entry.classList.toggle('np-tip-left', entry.getBoundingClientRect().left < 96)
     })
   })
 
@@ -2145,9 +2109,6 @@ export function mountNotepad(host, defaults, hostTheme = { theme: undefined, sub
   let closeMenu = /** @type {(() => void) | null} */ (null)
   let closeDialog = () => {}
   let dialogOpen = false
-  /* The open card's adapter handle. The settings card can flip our scheme while
-     it is up, so render() re-stamps it instead of leaving it on the old palette. */
-  let activeDialog = /** @type {{ close: () => void, setTheme?: (theme: string) => void } | null} */ (null)
   /* the ws button sits outside the anchored menu, so its own pointerdown makes
      NanoMenu close the menu before the click — suppress the immediate reopen. */
   let wsToggleJustClosed = false
@@ -2166,8 +2127,17 @@ export function mountNotepad(host, defaults, hostTheme = { theme: undefined, sub
     /* A second dialog() call would orphan the previous handle — its overlay would
        then sit on top and eat clicks meant for the new card. Close any open one first. */
     closeDialog?.()
-    let handle = /** @type {{ close: () => void, setTheme?: (theme: string) => void } | undefined} */ (undefined)
-    const finish = () => { dialogOpen = false; activeDialog = null; if (closeDialog === closeSelf) closeDialog = () => {} }
+    let handle = /** @type {{ close: () => void } | undefined} */ (undefined)
+    /* setup() may mount React primitives into the card body (the settings rows are
+       host SegmentedControls). nano-ui unmounts its own tree when the card closes,
+       not ours, so the setup's teardown runs here on every exit path. */
+    let teardown = /** @type {(() => void) | null} */ (null)
+    const finish = () => {
+      dialogOpen = false
+      if (closeDialog === closeSelf) closeDialog = () => {}
+      teardown?.()
+      teardown = null
+    }
     // every exit path — footer buttons, Escape, mask, programmatic close —
     // funnels through finish()+adapter close so the panel guards release.
     const closeSelf = () => { if (!dialogOpen || !handle) return; finish(); handle.close() }
@@ -2197,10 +2167,9 @@ export function mountNotepad(host, defaults, hostTheme = { theme: undefined, sub
       children: React.createElement('div', {
         className: 'np-dlg-body',
         dangerouslySetInnerHTML: { __html: spec.body },
-        ref: el => { if (el) spec.setup?.(el, closeSelf) },
+        ref: el => { if (el) teardown = spec.setup?.(el, closeSelf) ?? null },
       }),
     })
-    activeDialog = handle
   }
 
   /** Pixels between a control and its menu. One custom property, every notepad menu. */
@@ -2449,7 +2418,7 @@ export function mountNotepad(host, defaults, hostTheme = { theme: undefined, sub
     const title = must(panel, '.np-fx-head-title')
     title.setAttribute('aria-expanded', String(state.fx.navOpen))
     const icon = title.querySelector('.np-fx-nav-state')
-    if (icon) icon.innerHTML = PANEL_ICON(!!state.fx.navOpen)
+    if (icon) icon.innerHTML = PANEL_ICON()
     fxNav.dataset.state = state.fx.navOpen ? 'open' : 'closed'
   }
   /* 文档树保持 notepad 原样，卡住原位。fx 只占它右边（窄窗时占它下面）。
@@ -3082,14 +3051,16 @@ export function mountNotepad(host, defaults, hostTheme = { theme: undefined, sub
     const num = (name, unit, value, desc, range, factor = 1) => `
       <div class="np-field"><div class="np-field-text"><span class="np-field-name">${escapeHtml(desc)}</span><span class="np-field-desc">${escapeHtml(range)}</span></div>
       <span class="np-num"><input name="${name}" type="number" step="${factor > 1 ? 'any' : '1'}" value="${factor > 1 ? value / factor : value}" data-factor="${factor}"><i class="np-num-unit">${escapeHtml(unit)}</i></span></div>`
-    /* N-segment sliding switch — same anatomy as the toolbar view switch */
+    /* Settings rows are the host SettingsValueField anatomy: title + description
+       on the left, the control on the right, one hairline between rows. The
+       control itself is the host SegmentedControl, mounted into `.np-seg` by
+       setup() below (DESIGN.md §6.1). */
     const sw = (field, desc, hint, options) => {
       const current = field === 'autoSave' || field === 'followSessionWorkspace' ? String(values[field] !== false) : String(values[field])
       const index = Math.max(0, options.findIndex(o => String(o.value) === current))
-      const labels = options.map(o => `<span class="np-switch-label">${escapeHtml(o.label)}</span>`).join('')
       return `
       <div class="np-field"><div class="np-field-text"><span class="np-field-name">${escapeHtml(desc)}</span><span class="np-field-desc">${escapeHtml(hint)}</span></div>
-      <button type="button" class="np-switch" data-seg-field="${field}" data-segments="${options.length}" role="switch" aria-checked="${index === 0}" style="--np-switch-n:${options.length};--np-switch-i:${index}"><span class="np-switch-thumb">${escapeHtml(options[index].label)}</span>${labels}</button></div>`
+      <span class="np-seg" data-seg-field="${field}" data-seg-value="${escapeAttr(String(options[index].value))}"></span></div>`
     }
     dialog({
       title: copy.settingsTitle,
@@ -3130,7 +3101,7 @@ export function mountNotepad(host, defaults, hostTheme = { theme: undefined, sub
         ${num('editorFontSizePx', 'px', values.editorFontSizePx, copy.editorFontSize, copy.editorFontSizeHint)}
       </section>
       <section class="np-section" data-tab="fx">
-        <div class="np-field"><div class="np-field-text"><span class="np-field-name">${escapeHtml(copy.fxRuntime)}</span><span class="np-field-desc">${escapeHtml(copy.fxRuntimeHint)}</span></div><button type="button" class="np-switch" disabled aria-disabled="true" style="--np-switch-n:2;--np-switch-i:0"><span class="np-switch-thumb">wasm</span><span class="np-switch-label">wasm</span><span class="np-switch-label">sandbox</span></button></div>
+        <div class="np-field"><div class="np-field-text"><span class="np-field-name">${escapeHtml(copy.fxRuntime)}</span><span class="np-field-desc">${escapeHtml(copy.fxRuntimeHint)}</span></div><span class="np-seg" data-seg-static="runtime" data-seg-value="wasm"></span></div>
         <div class="np-field"><div class="np-field-text"><span class="np-field-name">${escapeHtml(copy.fxCredit)}</span><span class="np-field-desc">${escapeHtml(copy.fxCreditHint)}</span></div><span class="np-fx-credit-links"><a href="https://github.com/vercel-labs/fx" target="_blank" rel="noreferrer noopener">${escapeHtml(copy.fxRepo)}</a><a href="https://www.apache.org/licenses/LICENSE-2.0" target="_blank" rel="noreferrer noopener">${escapeHtml(copy.fxLicenseLink)}</a></span></div>
         <div class="np-field"><div class="np-field-text"><span class="np-field-name">${escapeHtml(copy.fxModelHeading)}</span><span class="np-field-desc">${escapeHtml(copy.fxModelHint)}</span></div></div>
         <div class="np-fx-model-settings"><span class="np-field-desc">${escapeHtml(copy.fxModelLoading)}</span></div>
@@ -3277,37 +3248,55 @@ export function mountNotepad(host, defaults, hostTheme = { theme: undefined, sub
         showError,
       })
 
+      /* Every segmented settings row is the host SegmentedControl, mounted into its
+         `.np-seg` placeholder. Each control owns its value; the read-back after a
+         write is forced back through `update` because normalizeSettings may coerce
+         the stored value (autoSave-family defaults ON, mpEnabled/s3Enabled default OFF). */
+      const segmentValue = (field, isBoolField) => {
+        if (field === 'mpEnabled' || field === 's3Enabled') return String(state.settings[field] === true)
+        return isBoolField ? String(state.settings[field] !== false) : String(state.settings[field])
+      }
+      /* React roots mounted into the card body; dialog() runs their unmount when the
+         card closes, because nano-ui only disposes its own tree. */
+      const mounts = []
+      for (const hostEl of el.querySelectorAll('.np-seg[data-seg-field]')) {
+        const field = hostEl.dataset.segField
+        const options = SW_OPTIONS[field]
+        if (!options) continue
+        const isBoolField = field === 'autoSave' || field === 'followSessionWorkspace' || field === 'mpEnabled' || field === 's3Enabled'
+        const handle = mountNano(hostEl, SegmentedControl, {
+          id: `np-seg-${field}`,
+          value: hostEl.dataset.segValue,
+          label: hostEl.previousElementSibling?.querySelector('.np-field-name')?.textContent ?? field,
+          options,
+          onChange: next => {
+            const merged = { ...state.settings }
+            if (isBoolField) merged[field] = next === 'true'
+            else merged[field] = next
+            state.settings = normalizeSettings(merged)
+            if (state.db) void writeSettings(state.db, state.settings).catch(showError)
+            const current = segmentValue(field, isBoolField)
+            handle.update({ value: options.some(option => String(option.value) === current) ? current : options[0].value })
+            /* Turning cloud sync on/off starts or stops the polling loop. */
+            if (field === 's3Enabled') sync.start()
+            /* Repaint the chip immediately so the new motion is visible. */
+            if (field === 'cloudMotion') paintCloud(sync.info())
+            render()
+          },
+        })
+        mounts.push(handle)
+      }
+      const staticSeg = el.querySelector('.np-seg[data-seg-static]')
+      if (staticSeg) {
+        mounts.push(mountNano(staticSeg, SegmentedControl, {
+          id: 'np-seg-runtime',
+          value: staticSeg.dataset.segValue,
+          disabled: true,
+          options: [{ value: 'wasm', label: 'wasm' }, { value: 'sandbox', label: 'sandbox' }],
+        }))
+      }
+
       el.addEventListener('click', event => {
-        /* N-segment switch: pick the segment under the pointer, slide the labelled thumb */
-        const seg = event.target instanceof HTMLElement ? event.target.closest('.np-switch[data-seg-field]') : null
-        if (seg) {
-          const field = seg.dataset.segField
-          const options = SW_OPTIONS[field]
-          if (!options) return
-          const rect = seg.getBoundingClientRect()
-          const index = Math.min(options.length - 1, Math.max(0, Math.floor((event.clientX - rect.left) / (rect.width / options.length))))
-          const merged = { ...state.settings }
-          const isBoolField = field === 'autoSave' || field === 'followSessionWorkspace' || field === 'mpEnabled' || field === 's3Enabled'
-          if (isBoolField) merged[field] = options[index].value === 'true'
-          else merged[field] = options[index].value
-          state.settings = normalizeSettings(merged)
-          if (state.db) void writeSettings(state.db, state.settings).catch(showError)
-          /* Readback differs: autoSave-family defaults ON (off only when
-             explicitly false), mpEnabled defaults OFF (on only when true). */
-          const value = field === 'mpEnabled' || field === 's3Enabled'
-            ? String(state.settings[field] === true)
-            : (isBoolField ? String(state.settings[field] !== false) : String(state.settings[field]))
-          const active = Math.max(0, options.findIndex(o => String(o.value) === value))
-          seg.style.setProperty('--np-switch-i', String(active))
-          seg.setAttribute('aria-checked', String(active === 0))
-          seg.querySelector('.np-switch-thumb').textContent = options[active].label
-          /* Turning cloud sync on/off starts or stops the polling loop. */
-          if (field === 's3Enabled') sync.start()
-          /* Repaint the chip immediately so the new motion is visible. */
-          if (field === 'cloudMotion') paintCloud(sync.info())
-          render()
-          return
-        }
         const action = event.target instanceof HTMLElement ? event.target.dataset.go : undefined
         if (action === 'reset-position') {
           state.ui.entryX = null
@@ -3387,6 +3376,7 @@ export function mountNotepad(host, defaults, hostTheme = { theme: undefined, sub
         if (merged.s3IntervalSec !== previousInterval) sync.start()
         render()
       })
+      return () => { for (const mount of mounts) mount.unmount() }
       },
     })
   }
@@ -3556,7 +3546,6 @@ export function mountNotepad(host, defaults, hostTheme = { theme: undefined, sub
   }
 
   drag(entry, (moved, x, y) => {
-    entry.classList.toggle('np-tip-left', entry.getBoundingClientRect().left < 96)
     if (moved) {
       state.ui.entryX = x
       state.ui.entryY = y
@@ -3969,10 +3958,6 @@ export function mountNotepad(host, defaults, hostTheme = { theme: undefined, sub
     /* The status chip replaces the old footer Save button: one click flushes
        the draft and commits a manual version. */
     if (action === 'save-now') { perf.count('version-save'); void commit('manual').catch(showError) }
-    if (action === 'view') {
-      state.view = state.view === 'rendered' ? 'source' : 'rendered'
-      void renderBody()
-    }
     if (action === 'toggle-wrap') {
       state.ui.wordWrap = state.ui.wordWrap === false
       applyWrap()

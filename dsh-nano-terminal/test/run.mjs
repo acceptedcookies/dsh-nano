@@ -20,6 +20,35 @@ function write(id, s) {
   e.dnt_dealloc(p, b.length)
 }
 
+function cursorOf(id) {
+  const ptr = e.dnt_render(id)
+  const b = i32()
+  const i = ptr >> 2
+  return { x: b[i + 4], y: b[i + 5] - b[i + 3] }
+}
+
+function renderRows(id) {
+  e.dnt_invalidate(id)
+  const ptr = e.dnt_render(id)
+  const tLen = e.dnt_render_text_len(id), tPtr = e.dnt_render_text(id)
+  const tb = mem().subarray(tPtr, tPtr + tLen)
+  const b = i32()
+  let i = (ptr >> 2) + 7
+  const n = b[i++]
+  const rows = []
+  for (let k = 0; k < n; k++) {
+    const y = b[i++]; const cols = b[i++]; const tl = b[i++]; const nr = b[i++]
+    i += 3
+    const runs = []
+    for (let r = 0; r < nr; r++) {
+      const col = b[i++], off = b[i++], blen = b[i++], attr = b[i++], fg = b[i++], bg = b[i++]
+      runs.push({ col, text: dec.decode(tb.subarray(off, off + blen)), attr, fg, bg })
+    }
+    rows.push({ y, cols, runs })
+  }
+  return rows
+}
+
 function render(id) {
   const ptr = e.dnt_render(id)
   const len = e.dnt_render_len(id)
@@ -263,6 +292,48 @@ e.dnt_free(id)
   const r2 = reg2.resolve('local/myterm')
   t('restored placeholder', r2?.pending === true && r2?.keep === true && r2?.labels?.k === 'v')
   t('preserved screen staged', r2?.preservedScreen?.toString() === 'old screen bytes')
+}
+
+// 10b. TUI 花屏两个根因：私有前缀 CSI 误执行 + 擦除继承字符属性
+{
+  // CSI ? u 是 kitty 键盘查询 / XTRESTORE，绝不能当成 SCO 恢复光标
+  id = e.dnt_new(20, 5, 50)
+  write(id, '\x1b[2;3H')          // 光标到 (2,3)
+  write(id, '\x1b[s')             // SCO 保存
+  write(id, '\x1b[4;5H')          // 移到别处
+  write(id, '\x1b[?u')            // 私有前缀：必须忽略
+  let c = cursorOf(id)
+  t('CSI ? u 不动光标', c.x === 4 && c.y === 3)
+  write(id, '\x1b[u')             // 无前缀：真恢复
+  c = cursorOf(id)
+  t('CSI u 恢复光标', c.x === 2 && c.y === 1)
+  write(id, '\x1b[?s')            // XTSAVE：不该覆盖保存点
+  write(id, '\x1b[1;1H')
+  write(id, '\x1b[u')
+  c = cursorOf(id)
+  t('CSI ? s 不覆盖保存点', c.x === 2 && c.y === 1)
+  // CSI > 4 ; 2 m 是 modifyOtherKeys，不是下划线+暗色
+  write(id, '\x1b[>4;2m')
+  write(id, 'ab')
+  let row0 = renderRows(id).find((r) => r.y === 0)
+  t('CSI > 4;2m 不改画笔属性', row0 && row0.runs.every((r) => r.attr === 0))
+  e.dnt_free(id)
+
+  // 擦除只继承背景色，不继承下划线/删除线/反色
+  id = e.dnt_new(20, 3, 50)
+  write(id, '\x1b[4mhi\x1b[K')      // 下划线画笔擦到行尾
+  write(id, '\x1b[9m\x1b[2J')       // 删除线画笔清屏
+  let rows = renderRows(id)
+  t('擦除不继承下划线/删除线', rows.every((r) => r.runs.every((x) => x.attr === 0)))
+  e.dnt_free(id)
+
+  // 反色画笔擦除：可见背景应是前景色
+  id = e.dnt_new(10, 2, 10)
+  write(id, '\x1b[31;7m\x1b[2J')
+  rows = renderRows(id)
+  const bg = rows[0].runs[0].bg
+  t('反色擦除用前景色作背景', bg !== 0 && rows[0].runs[0].attr === 0)
+  e.dnt_free(id)
 }
 
 // 11. 选区裁剪（clampSelection）+ 高亮只画有内容的格子

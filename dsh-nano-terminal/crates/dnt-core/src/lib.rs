@@ -475,7 +475,7 @@ impl Term {
     fn move_down_or_scroll(&mut self) {
         let (top, bottom) = self.scroll_region;
         if self.cursor.y + 1 == bottom {
-            self.grid.scroll_up(top, bottom, Cell::blank_with(self.pen_attr, self.pen_fg, self.pen_bg));
+            self.grid.scroll_up(top, bottom, self.erase_fill());
         } else if self.cursor.y + 1 < self.grid.rows {
             self.cursor.y += 1;
         }
@@ -484,10 +484,19 @@ impl Term {
     fn move_up_or_scroll(&mut self) {
         let (top, bottom) = self.scroll_region;
         if self.cursor.y == top {
-            self.grid.scroll_down(top, bottom, Cell::blank_with(self.pen_attr, self.pen_fg, self.pen_bg));
+            self.grid.scroll_down(top, bottom, self.erase_fill());
         } else if self.cursor.y > 0 {
             self.cursor.y -= 1;
         }
+    }
+
+    /// DEC 擦除/滚动填充：只继承当前**背景色**，不继承字符属性。
+    /// 下划线/删除线/反色/隐藏这类属性一旦漏进空白格，整片被擦过的区域都会
+    /// 被画成一条横线（Claude Code 这类 Ink TUI 用带下划线的画笔擦行，业主
+    /// 截图里每行一道横线就是这么来的）。反色时可见背景是前景色，按此换算。
+    fn erase_fill(&self) -> Cell {
+        let bg = if self.pen_attr & A_INVERSE != 0 { self.pen_fg } else { self.pen_bg };
+        Cell::blank_with(0, C_DEFAULT, bg)
     }
 
     fn newline(&mut self) {
@@ -552,7 +561,7 @@ impl Term {
     fn erase_in_line(&mut self, mode: u16) {
         let cols = self.grid.cols;
         let x = self.cursor.x.min(cols);
-        let fill = Cell::blank_with(self.pen_attr, C_DEFAULT, self.pen_bg);
+        let fill = self.erase_fill();
         let line = self.grid.line_mut(self.cursor.y);
         match mode {
             0 => {
@@ -575,7 +584,7 @@ impl Term {
     }
 
     fn erase_in_display(&mut self, mode: u16) {
-        let fill = Cell::blank_with(self.pen_attr, C_DEFAULT, self.pen_bg);
+        let fill = self.erase_fill();
         let (cx, cy) = (self.cursor.x, self.cursor.y);
         match mode {
             0 => {
@@ -1030,7 +1039,18 @@ impl Perform for Term {
         if ignore {
             return;
         }
-        let private = intermediates.first().copied() == Some(b'?');
+        let prefix = intermediates.first().copied();
+        let private = prefix == Some(b'?');
+        // 私有前缀（`<` `=` `>` `?`）的 CSI 只走它自己定义的那条路：DECSET/
+        // DECRST(h/l)、光标位置与设备属性查询(n/c)、DECRQM(p)、DECSCUSR(q)。
+        // 其余必须忽略——把 XTSAVE/XTRESTORE(`?s`/`?u`)、kitty 键盘查询(`?u`)、
+        // modifyOtherKeys(`>4;2m`) 当标准序列执行，会让光标瞬间跳回旧保存点、
+        // 画笔莫名带上下划线，整屏 TUI 立刻花屏（业主截图就是这么来的）。
+        if matches!(prefix, Some(b'<') | Some(b'=') | Some(b'>') | Some(b'?'))
+            && !matches!(c, 'h' | 'l' | 'n' | 'c' | 'p' | 'q')
+        {
+            return;
+        }
         let param = |i: usize, d: u16| -> u16 {
             params
                 .iter()
@@ -1094,18 +1114,20 @@ impl Perform for Term {
             'L' => {
                 let n = param(0, 1) as usize;
                 let (_, bottom) = self.scroll_region;
-                self.grid.insert_lines(self.cursor.y, bottom.max(self.cursor.y + 1), n, Cell::blank_with(self.pen_attr, C_DEFAULT, self.pen_bg));
+                let fill = self.erase_fill();
+                self.grid.insert_lines(self.cursor.y, bottom.max(self.cursor.y + 1), n, fill);
             }
             'M' => {
                 let n = param(0, 1) as usize;
                 let (_, bottom) = self.scroll_region;
-                self.grid.delete_lines(self.cursor.y, bottom.max(self.cursor.y + 1), n, Cell::blank_with(self.pen_attr, C_DEFAULT, self.pen_bg));
+                let fill = self.erase_fill();
+                self.grid.delete_lines(self.cursor.y, bottom.max(self.cursor.y + 1), n, fill);
             }
             'P' => {
                 let n = param(0, 1) as usize;
                 let cols = self.grid.cols;
                 let x = self.cursor.x;
-                let fill = Cell::blank_with(self.pen_attr, C_DEFAULT, self.pen_bg);
+                let fill = self.erase_fill();
                 let line = self.grid.line_mut(self.cursor.y);
                 for c in x..cols {
                     let src = (c + n).min(cols - 1);
@@ -1116,7 +1138,8 @@ impl Perform for Term {
                 let n = param(0, 1) as usize;
                 let (top, bottom) = self.scroll_region;
                 for _ in 0..n {
-                    self.grid.scroll_up(top, bottom, Cell::blank_with(self.pen_attr, C_DEFAULT, self.pen_bg));
+                    let fill = self.erase_fill();
+                    self.grid.scroll_up(top, bottom, fill);
                 }
             }
             'T' => {
@@ -1124,13 +1147,14 @@ impl Perform for Term {
                 let (top, bottom) = self.scroll_region;
                 if intermediates.is_empty() {
                     for _ in 0..n {
-                        self.grid.scroll_down(top, bottom, Cell::blank_with(self.pen_attr, C_DEFAULT, self.pen_bg));
+                        let fill = self.erase_fill();
+                        self.grid.scroll_down(top, bottom, fill);
                     }
                 } // else mouse-tracking Hilite — ignore
             }
             'X' => {
                 let n = (param(0, 1) as usize).min(self.grid.cols - self.cursor.x);
-                let fill = Cell::blank_with(self.pen_attr, C_DEFAULT, self.pen_bg);
+                let fill = self.erase_fill();
                 let line = self.grid.line_mut(self.cursor.y);
                 for c in self.cursor.x..self.cursor.x + n {
                     line[c] = fill;
@@ -1140,7 +1164,7 @@ impl Perform for Term {
                 let n = param(0, 1) as usize;
                 let cols = self.grid.cols;
                 let x = self.cursor.x;
-                let fill = Cell::blank_with(self.pen_attr, C_DEFAULT, self.pen_bg);
+                let fill = self.erase_fill();
                 let line = self.grid.line_mut(self.cursor.y);
                 let mut c = cols;
                 while c > x {
@@ -1157,8 +1181,12 @@ impl Perform for Term {
                 self.cursor.y = 0;
                 self.pending_wrap = false;
             }
-            's' => self.save_cursor(),
-            'u' => self.restore_cursor(),
+            // SCO save/restore 没有私有前缀；`CSI ? s` / `CSI ? u` 是
+            // XTSAVE / XTRESTORE（kitty 键盘查询也用 `CSI ? u`），把它们当成
+            // 保存/恢复光标会让光标瞬间跳到旧的保存位置——Claude Code 每次
+            // 查询键盘协议都会把整屏内容错位 6 行（业主截图的 TUI 花屏）。
+            's' if !private => self.save_cursor(),
+            'u' if !private => self.restore_cursor(),
             'h' => self.decset(params, true, private),
             'l' => self.decset(params, false, private),
             'n' => match param(0, 0) {

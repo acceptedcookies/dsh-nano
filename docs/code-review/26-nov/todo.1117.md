@@ -8,7 +8,7 @@
 > 关联 action-plan：`docs/code-review/26-nov/NUE-1117-action-plan.md`
 > authority / owner：[业主] 发车指令（本文 §8 附件）授权按 DAG 实施全部 Phase、在 `.agents/worktrees/nue-1117-*` 内工作并合入 `main`、合并后删除 worktree。停止点 P4-01 / P9-05 不在授权内自行裁决，回问答 append-only。
 > 基线：`main` @ `9792da0`（PRE-1116 已合入：`94050b4`，满足 Phase 3 前置）。开工时工作区干净。
-> 文档状态：`executing` · 执行状态：`in-progress`
+> 文档状态：`executing` · 执行状态：`in-progress`（编码 PH1–PH10 已合入；停止项 Q18/Q19 待裁决）
 
 ## 1. 核心脊
 
@@ -181,11 +181,16 @@ P0-00 干净树（main@9792da0）
   - **依赖**：PH8 合入 · **执行状态**：`complete`（P9-05 `deferred`，Q19）
 ### PH10 — 收口（`nue-1117-closeout`）
 
-- [ ] `P10-01` — 六份 `lib/client.js` 重建（同 HEAD 两次构建 sha 一致；版本标记；只改 `lib/`） · `NUE1117-T28`
-- [ ] `P10-02` — 文档终同步 + 宿主缺口终表 + 终态扫描 · `NUE1117-T29` `NUE1117-T30`
-- [ ] `P10-03` — 删除 `nue-1117-*` worktree 与分支
-  - **依赖**：PH9 合入 · **执行状态**：`not-started`
-
+- [x] `P10-01` — 六份 `lib/client.js` 重建（同 HEAD 两次构建 sha 一致；版本标记；只改 `lib/`） · `NUE1117-T28`
+  - **执行状态**：`complete` · **证据**：HEAD `196b6fd`、两次构建之间不提交，六个使用方 `npm run build` × 2，十二个 sha256 两两相同：DNMS `a94b237e…`、DNEE `1db8bf76…`、DNT `34aac0f3…`、DNK `2b853492…`、DNCS `5141a4ef…`、DNN `cb033812…` · 2026-11-16T20:18:27Z；`grep -c 'dsh-nano-ui@0.2.0'` 六份各 1；lib 提交 `1cc787c` 只含 `dsh-nano-kitesurf/lib/client.js`（buildId `0.1.0+35facad` → `0.1.0+196b6fd`，其余五份与迁移合并时入库产物逐字节相同）；`node scripts/test-all.mjs` @1cc787c 21/22（仅 s3-client）
+- [x] `P10-02` — 文档终同步 + 宿主缺口终表 + 终态扫描 · `NUE1117-T29` `NUE1117-T30`
+  - **执行状态**：`complete` · **证据**：`196b6fd`；INTRODUCTION §3.2 目录树按 0.2.0 重写；[DNN] AGENTS「portal 主题」旧措辞、[DNN] 两处注释 `schemeOf` 字样清零；DESIGN §8 侧栏小节外壳同步 layout 软读取；`nue-docs.test.mjs` 追加 T29 四条，新增 `nue-endstate.test.mjs`（T30，扫描六个使用方 + nano-ui `src/**`，>50 文件，正控六规则全报，P9-05 唯一 `:has(` 单列 Q19）；对照之前的树 T29/T30 各 1 败
+  - **测试四元组**：`a85ec54` · `node --test test/scripts/*.test.mjs` · 39/39 · 2026-11-16T20:19:43Z
+- [x] `P10-03` — 删除 `nue-1117-*` worktree 与分支
+  - **执行状态**：`complete` · **证据**：`git worktree list` 只剩主树（`d7a6b6b` 合并后）；`nue-1117-*` 分支 0
+- 附：`a85ec54`（`bff49dd`）修正 T03——自 PH4 `e52ef13` 起 `gen-nano-catalog.test` 把 DESIGN §10 豁免登记的宿主槽位变量当令牌声明扫描，1 条失败（§9）
+- **终态总验**（`a85ec54`，2026-11-16T20:19:43Z）：DNMS 62/62、DNEE 26/26、DNT 145/145、DNK 65/65、DNCS 39/39、DNN 90/90（N6 下限 54/12/137/56/24/80 全部满足）、nano-ui 42/42、`test/scripts` 39/39、`test-all` 21/22（仅 s3-client）、`check-client-rules` ok；`check-ui-rules` 94 文件 339 条（PH2 基线 78 文件 573 条）
+  - **依赖**：PH9 合入 · **执行状态**：`complete`（T27a–e 未观察）
 ### POST — 日志、closure、审查
 
 - [ ] `POST-01` — 工作日志按 `code-execution-log` 模板回填 AP §11
@@ -208,12 +213,13 @@ P0-00 干净树（main@9792da0）
 | `NUE1117-T23`–`T24` | [DNCS] 迁移 + 确认攻击向量 | `node --test`（含 `nue-migration`、`confirm`） | 39/39 @28b8202 | pass |
 | `NUE1117-T25`–`T26` | [DNN] 迁移 + 合同测试改写 | `node --test dsh-nano-notepad/test/*.test.mjs`；旧实现经 `NP_SRC`/`NANO_UI_SRC` 实跑 | 90/90 @81c90cc；旧实现三文件各 ≥1 AssertionError | pass（P9-05 deferred Q19） |
 | `NUE1117-T27a`–`e` | 视觉核对（live） | 本机 profile + ego-browser 截图 | — | pending（需 live 授权与部署） |
-| `NUE1117-T28`–`T30` | 收口 | 两次构建 sha；`nue-docs`/`nue-endstate` | — | pending |
+| `NUE1117-T28` | 收尾重建 | 同 HEAD 两次构建 12 个 sha256；版本标记；lib 提交 diff | 六对相同 @196b6fd；标记各 1；`1cc787c` 只含 lib；test-all 21/22 | pass |
+| `NUE1117-T29`–`T30` | 文档与终态扫描 | `node --test test/scripts/{nue-docs,nue-endstate}.test.mjs` | 全部 `test/scripts` 39/39 @a85ec54；P9-05 单列 | pass（P9-05 deferred Q19） |
 
 ## 5. 当前状态与交接
 
-- **当前节点 / 已完成**：P0-00、PH1、PH2、PH3、PH4（P4-01 deferred）、PH5、PH6、PH7、PH8、PH9（P9-05 deferred）
-- **下一动作**：PH10（收口）
+- **当前节点 / 已完成**：P0-00、PH1、PH2、PH3、PH4（P4-01 deferred）、PH5、PH6、PH7、PH8、PH9（P9-05 deferred）、PH10
+- **下一动作**：POST-01 工作日志 → POST-02 closure → POST-03 审查
 - **当前阻塞**：无
 - **待 owner 决定**：Q18（P4-01，推荐 A）；Q19（P9-05，推荐 A）
 - **最终交接目标**：[业主]
@@ -256,7 +262,9 @@ P0-00 干净树（main@9792da0）
 - `2026-11-16` · PH6 [DNT]：`⌘`/`→` 是 `ShortcutKeys` 按键图例文本，非图标，保留（U4 剩 4）；原生 `<button>` 保留（U3 9 持平，窗格头 20px 密度宿主 Button 无对应档，AP P6 未列 U3）；`?` 帮助按钮随同族换 `glyph('help')`。- `2026-11-16` · PH7 [DNK]：AP P7-01 提到的「查找」自绘图标在源码中不存在，只替换前进/后退箭头；P7-02 实际 U9 为 5 条（扫描器把 compound 选择器第二个类计为引用），全部清零；lib 产物在源码提交 `35facad` 上构建，buildId 对应源码提交，PH10 统一重建。- `2026-11-16` · PH8 [DNCS]：子代理首版用 `ctx.layout?.toggleSidebar` 而 `inject` 未声明 `layout`，cordis 属性代理会抛错、宿主路径成死代码；审查后改 `ctx.get('layout')` 软读取（`7ac0085`，不新增启动期依赖），测试加桩 ctx 行为断言。
 - `2026-11-16` · PH8 [DNCS]：顺带修正 5 个错名令牌与 6 条 U8 死样式（同文件、同规则表，避免 U1/U8 残留）；新建弹窗 600×680 无预设档，取 560×640；会话时间改宿主 `relativeTime` 分桶，未来时间钳到「现在」；包 AGENTS 使用/不要两节同提交更新。- `2026-11-16` · PH9 [DNN]：AP P9-03 写 `np-switch → Switch`；该控件实为 2–3 段选择（含只读段），按 DESIGN §6.1 分段/页签归 `SegmentedControl` 执行。`np-tip → Tooltip` 不可行（宿主 Tooltip 只包单个 React 子元素，启动器与工具条是 innerHTML 串且挂载前读回几何），改原生 `title`+`aria-label`+`aria-keyshortcuts` 并登记 DESIGN §10。
 - `2026-11-16` · PH9 [DNN]：AP 要求按 P9-01..05 拆提交；视图开关、图标门面与启动器提示与对话框/主题落在同一代码块，拆开会得到不能构建的中间提交，故并入 P9-01 提交，其余按 P9-02/03/04 + lib 分提交，分支合并一次。`.np-fx-model-option` 换行依赖宿主 Menu label 处理，留待 T27 视觉核对。
-- `2026-11-16` · P9-05 停止，问答 Q19 登记（`9348347`，推荐 A 整段删除 + 登记「变更文件卡片动作」缺口），待 [业主] 裁决。
+- `2026-11-16` · P9-05 停止，问答 Q19 登记（`9348347`，推荐 A 整段删除 + 登记「变更文件卡片动作」缺口），待 [业主] 裁决。- `2026-11-16` · PH10：首次 lib 重建提交（`8c96e8e`，HEAD `c4c9001`）先于 P10-02 文档/注释修改，为让 [DNK] buildId 与最终源码 HEAD 一致，在未合并的 closeout 分支上撤掉该提交，先提交 P10-02（`196b6fd`），再在该 HEAD 重做两次构建并提交 lib（`1cc787c`）。worktree 构建会把三个宿主 bundle（DNEE `lib/host.js`、DNN `lib/web-registrar.js`、DNT `lib/web-routes.js`）的源路径注释改成 `../../../../packages/...`，属 worktree 软链产物，已还原不入提交。
+- `2026-11-16` · PH10：终态总验发现 `test/scripts/gen-nano-catalog.test.mjs` T03 自 PH4 `e52ef13` 起失败 1 条（DESIGN §10 登记的 `--dsh-composer-model-*-display` 被当作令牌声明）。PH4–PH9 只跑了各插件套件与 `test-all`（`test/scripts` 不在 `test-all` 内），漏检。修正为 T03 只扫 §1–§9（`bff49dd`，合并 `a85ec54`），PH4 回写里「T18 pass」的结论不受影响，但「每 Phase 跑全部相关检测」的执行纪律有缺口，如实登记。
+- `2026-11-16` · P10-02：DESIGN §8 缺口终表未加入 Q19 相关条目（「变更文件卡片动作」）——该登记等同选择 Q19 选项 A，留待 [业主] 裁决。
 ## 8. 附件：[业主] 发车指令（原文）
 
 > 本 directive 注册为 `NUE-1117` 执行授权来源。

@@ -334,13 +334,7 @@ ${NANO_STYLES}
 .np-fx-pop-sub { margin-left: auto; color: var(--dsw-alias-label-tertiary); font-size: var(--np-font-size-xs); }
 .np-fx-pop-empty { padding: 8px; color: var(--dsw-alias-label-tertiary); font-size: var(--np-font-size-xs); }
 .np-fx-out[hidden] { display: none !important; }
-/* P0-4：tab 条的 + 新建；P1-5：文件级 … 菜单入口 */
-.np-tabs > button.np-new-tab { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; flex: none; box-sizing: border-box; padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); cursor: pointer; }
-.np-tabs > button.np-new-tab:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
-.np-tabs > button.np-new-tab svg { width: 16px; height: 16px; }
-.np-tabs > button.np-more { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; flex: none; box-sizing: border-box; padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); cursor: pointer; font-size: 18px; line-height: 1; }
-.np-tabs > button.np-more:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
-/* P1-5：自动换行开关（源编辑 + 高亮镜像同步；横向滚动由既有 scroll 同步） */
+/* 自动换行开关（源编辑 + 高亮镜像同步；横向滚动由既有 scroll 同步）。入口在文件行菜单。 */
 .np-editor[data-wrap="off"] .np-write,
 .np-editor[data-wrap="off"] .np-mirror { white-space: pre; overflow-wrap: normal; word-break: normal; }
 .np-editor[data-wrap="off"] .np-write { overflow-x: auto; }
@@ -957,7 +951,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     ? `<button type="button" class="np-tool" data-action="image" data-format-kind="image">${def.icon}</button>`
     : `<button type="button" class="np-tool" data-format="${def.kind}" data-format-kind="${def.kind}">${def.icon}</button>`).join('')
   panel.innerHTML = `
-    <div class="np-tabs"><button type="button" class="np-tree-toggle" data-action="toggle-tree"></button><button type="button" class="np-close-tabs" data-action="close-tabs" data-i18n="saveCloseTabs" data-i18n-mode="title">${dshIcon('archive-check-outline')}</button><div class="np-tablist"></div><button type="button" class="np-new-tab" data-action="new-file" data-i18n="newBlankFile" data-i18n-mode="title" title="+">${PLUS_ICON}</button><button type="button" class="np-more" data-action="more-menu" data-i18n="more" data-i18n-mode="title">⋯</button><span class="np-tabs-spacer"></span><button type="button" class="np-fx-entry" data-action="fx-run"><span class="np-fx-entry-ico" aria-hidden="true">${FX_ICON}</span><span data-i18n="fxEntry">处理</span></button></div>
+    <div class="np-tabs"><button type="button" class="np-tree-toggle" data-action="toggle-tree"></button><button type="button" class="np-close-tabs" data-action="close-tabs" data-i18n="saveCloseTabs" data-i18n-mode="title">${dshIcon('archive-check-outline')}</button><div class="np-tablist"></div><span class="np-tabs-spacer"></span><button type="button" class="np-fx-entry" data-action="fx-run"><span class="np-fx-entry-ico" aria-hidden="true">${FX_ICON}</span><span data-i18n="fxEntry">处理</span></button></div>
     <div class="np-body">
       <aside class="np-tree"><div class="np-tree-head"><div class="np-ws"><button type="button" class="np-ws-btn" data-action="ws-toggle" aria-haspopup="listbox" aria-expanded="false"><span class="np-ws-label"></span><span class="np-ws-caret" aria-hidden="true">${CHEVRON_ICON}</span></button></div><button type="button" class="np-kind" data-action="kind-filter" data-i18n="kindFilter" data-i18n-mode="title"><span class="np-kind-label"></span><span class="np-kind-caret" aria-hidden="true">${CHEVRON_ICON}</span></button><span class="np-tree-tools"><button type="button" data-action="tree-settings" data-i18n="settings" data-i18n-mode="title" aria-haspopup="menu">${SETTINGS_ICON}</button><button type="button" class="np-tools-toggle" data-action="toggle-tools" data-i18n="expandTools" data-i18n-mode="title" aria-expanded="false">${CHEVRON_ICON}</button></span></div><div class="np-nodes" data-root="true"></div><div class="np-mp-zone"><input class="np-mp-input" type="text" inputmode="url" autocomplete="off" spellcheck="false" data-i18n="importMp" data-i18n-attr="placeholder"><span class="np-mp-hint" data-state="idle" aria-hidden="true"></span></div><button type="button" class="np-tools-toggle" data-action="toggle-tools" data-i18n="expandTools" data-i18n-mode="title" aria-expanded="false">${CHEVRON_ICON}</button><div class="np-tree-foot"><button type="button" data-action="settings" data-i18n="settings" data-i18n-mode="label">${SETTINGS_ICON}<span data-i18n="settings"></span></button><button type="button" data-action="close" data-i18n="close" data-i18n-mode="label">${CLOSE_ICON}<span data-i18n="close"></span></button></div></aside>
       <div class="np-editor" data-themefit="true">
@@ -1434,10 +1428,10 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     return `/${names.join('/')}`
   }
 
-  async function exportFile() {
-    const file = current()
+  async function exportFile(id) {
+    const file = id ? state.nodes.find(node => node.id === id) : current()
     if (!file) return
-    const content = write().value ?? file.draft ?? ''
+    const content = file.id === state.ui.currentId ? (write().value ?? file.draft ?? '') : (file.draft ?? '')
     const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
     /* Save under the file's real name and extension. No `types` filter: the
        picker must accept whatever suffix the user wants (including none). */
@@ -1482,7 +1476,6 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     console.warn('[notepad] 仅浏览器下载可用')
   }
 
-  /** P1-5：文档级 … 菜单——复制路径/相对路径、自动换行、导出。 */
   async function writeClipboard(value) {
     try { await navigator.clipboard.writeText(value); return true } catch { /* fall through */ }
     try {
@@ -1497,8 +1490,8 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     } catch { return false }
   }
 
-  async function copyPath(relative) {
-    const file = current()
+  async function copyPath(relative, id) {
+    const file = id ? state.nodes.find(node => node.id === id) : current()
     if (!file) return
     const value = relative
       ? pathOf(file.id).replace(/^\//, '')
@@ -1506,23 +1499,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     if (await writeClipboard(value)) setSync('copied', value)
   }
 
-  function openMoreMenu(anchor) {
-    const copy = text()
-    const file = current()
-    if (!file) return
-    closeMenu?.()
-    const wrapOn = state.ui.wordWrap !== false
-    const items = [
-      { id: 'copy-path', label: copy.fxMenuPath ?? '复制路径', run: () => void copyPath(false) },
-      { id: 'copy-rel', label: copy.fxMenuRelPath ?? '复制相对路径', run: () => void copyPath(true) },
-      { id: 'wrap', label: `${copy.fxMenuWrap ?? '自动换行'}${wrapOn ? ' ✓' : ''}`, run: () => { state.ui.wordWrap = !wrapOn; applyWrap(); void persistUi() } },
-      { id: 'export', label: copy.fxMenuExport ?? '导出', run: () => void exportFile() },
-    ]
-    const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), width: 190, theme: resolvedTheme(), z: NP_PORTAL_Z, items })
-    closeMenu = () => raw.close()
-  }
-
-  /** P1-5：自动换行开关的视觉落点（源编辑 + 高亮镜像同步）。 */
+  /** 自动换行开关的视觉落点（源编辑 + 高亮镜像同步）。 */
   function applyWrap() {
     const editor = panel.querySelector('.np-editor')
     if (editor) editor.dataset.wrap = state.ui.wordWrap === false ? 'off' : 'on'
@@ -3764,15 +3741,22 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     if (!node || !state.db) return
     closeMenu?.()
     const copy = text()
+    const wrapOn = state.ui.wordWrap !== false
     const raw = openNanoMenu({
-      anchor: anchor.getBoundingClientRect(), width: 160, theme: resolvedTheme(), z: NP_PORTAL_Z,
+      anchor: anchor.getBoundingClientRect(), width: node.kind === 'file' ? 190 : 160, theme: resolvedTheme(), z: NP_PORTAL_Z,
       items: [
         { id: 'rename', label: copy.rename, run: () => askName(copy.renameTitle, node.name, async name => {
           const renamed = await renameNode(state.db, node.id, name)
           Object.assign(node, renamed)
           render()
         }) },
-        ...(node.kind === 'file' ? [{ id: 'kind', label: `${copy.kindMenu}${node.cat ? ` · ${copy.kinds[node.cat] ?? node.cat}` : ''}`, run: () => openKindMenu(id, anchor) }] : []),
+        ...(node.kind === 'file' ? [
+          { id: 'kind', label: `${copy.kindMenu}${node.cat ? ` · ${copy.kinds[node.cat] ?? node.cat}` : ''}`, run: () => openKindMenu(id, anchor) },
+          { id: 'copy-path', label: copy.fxMenuPath ?? '复制路径', run: () => void copyPath(false, id) },
+          { id: 'copy-rel', label: copy.fxMenuRelPath ?? '复制相对路径', run: () => void copyPath(true, id) },
+          { id: 'wrap', label: `${copy.fxMenuWrap ?? '自动换行'}${wrapOn ? ' ✓' : ''}`, run: () => { state.ui.wordWrap = !wrapOn; applyWrap(); void persistUi() } },
+          { id: 'export', label: copy.fxMenuExport ?? '导出', run: () => void exportFile(id) },
+        ] : []),
         ...(node.cat === 'draft' && node.draftStatus !== 'accepted' ? [{ id: 'accept-draft', label: copy.acceptDraftTitle, run: () => requestAcceptDraft(id) }] : []),
         ...(node.cat === 'draft' ? [{ id: 'reject-draft', label: `${copy.rejectDraftTitle}${Number.isInteger(node.rejectCount) && node.rejectCount > 0 ? ` (×${node.rejectCount})` : ''}`, tone: 'danger', run: () => requestRejectDraft(id) }] : []),
         { id: 'delete', label: copy.delete, tone: 'danger', run: () => requestDelete(id) },
@@ -3924,7 +3908,6 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       void renderBody()
     }
     if (action === 'export-file') void exportFile()
-    if (action === 'more-menu') { openMoreMenu(target); return }
     if (action === 'history') void openHistory().catch(showError)
     if (action === 'dismiss-error' || action === 'keep-mine') must(panel, '.np-error').hidden = true
     if (action === 'load-remote' && state.db) {

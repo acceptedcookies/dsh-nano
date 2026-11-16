@@ -1539,7 +1539,7 @@ var __kitesurfExport = (() => {
           settings: "\u8BBE\u7F6E",
           navToggleLabel: "\u6807\u7B7E\u680F",
           navOpen: "\u6807\u7B7E\u9875\u680F",
-          navOpenTitle: "\u5C55\u5F00\u6807\u7B7E\u9875\u680F\uFF08\u2318E \u7136\u540E\u6309 1\uFF09",
+          navOpenTitle: "\u5C55\u5F00\u6807\u7B7E\u9875\u680F",
           navClose: "\u6536\u8D77\u6807\u7B7E\u9875\u680F",
           navCloseTitle: "\u6536\u8D77\u6807\u7B7E\u9875\u680F\uFF08Esc\uFF09",
           navTabs: "\u6807\u7B7E\u9875",
@@ -1632,7 +1632,7 @@ var __kitesurfExport = (() => {
           settings: "Settings",
           navToggleLabel: "Tabs",
           navOpen: "Tab rail",
-          navOpenTitle: "Show tab rail (\u2318E then 1)",
+          navOpenTitle: "Show tab rail",
           navClose: "Hide tab rail",
           navCloseTitle: "Hide tab rail (Esc)",
           navTabs: "Tabs",
@@ -2404,11 +2404,6 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           event.preventDefault();
           armed = 0;
           setDevtoolsOpen((value) => !value);
-        }
-        if (armed && Date.now() - armed < 1200 && event.key === "1") {
-          event.preventDefault();
-          armed = 0;
-          setNavOpen((value) => !value);
         }
       };
       window.addEventListener("keydown", onKey, true);

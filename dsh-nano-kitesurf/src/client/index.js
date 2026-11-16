@@ -572,8 +572,8 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
     let armed = 0
     const onKey = (event) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'e') { armed = Date.now(); return }
+      // ⌘E,1 is reserved for DNN's wake/close — kitesurf only owns ⌘E,2.
       if (armed && Date.now() - armed < 1200 && event.key === '2') { event.preventDefault(); armed = 0; setDevtoolsOpen((value) => !value) }
-      if (armed && Date.now() - armed < 1200 && event.key === '1') { event.preventDefault(); armed = 0; setNavOpen((value) => !value) }
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)

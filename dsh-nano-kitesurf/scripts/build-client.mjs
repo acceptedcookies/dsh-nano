@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process'
 import { createRequire } from 'node:module'
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -48,6 +49,17 @@ esbuild.buildSync({
 })
 
 const { version: pkgVersion } = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
+// Build identity travels inside the bundle. The footer compares it with the
+// host's build id: equal means "the pane and the host are the same deploy",
+// different means a stale client bundle is loaded (the exact failure that made
+// a redeploy look like a broken Kitesurf).
+const gitSha = (() => {
+  try {
+    const r = spawnSync('git', ['rev-parse', '--short', 'HEAD'], { cwd: root, encoding: 'utf8' })
+    return r.status === 0 ? r.stdout.trim() : 'dev'
+  } catch { return 'dev' }
+})()
+const buildId = `${pkgVersion}+${gitSha}`
 esbuild.buildSync({
   absWorkingDir: root,
   entryPoints: ['src/client/index.js'],
@@ -57,7 +69,7 @@ esbuild.buildSync({
   platform: 'browser',
   external: ['react', 'react-dom', 'react-dom/client', '@deepseek-ai/dsh-client-ui-primitives'],
   // Bake the package version so perf.join never reports a stale literal (S3-2).
-  define: { __NKS_VERSION__: JSON.stringify(pkgVersion) },
+  define: { __NKS_VERSION__: JSON.stringify(pkgVersion), __NKS_BUILD_ID__: JSON.stringify(buildId) },
   outfile: body,
 })
 

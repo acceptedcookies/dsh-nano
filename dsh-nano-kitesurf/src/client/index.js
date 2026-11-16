@@ -2,13 +2,16 @@
 
 const React = require('react')
 const primitives = require('@deepseek-ai/dsh-client-ui-primitives')
-const { openNanoDialog, openNanoMenu, NANO_STYLES, NanoToast } = require('dsh-nano-ui')
+const { openNanoDialog, openNanoMenu, NANO_STYLES, NanoToast, NanoTabs } = require('dsh-nano-ui')
 const { ensurePerfReview, LIB_VERSION } = require('dsh-performance-review/client')
 const { copyFor } = require('./i18n.js')
 const { batchNote, designNote, multiNote } = require('../shared/note.js')
 const { contentFrame, shotPoint } = require('../shared/shot-point.js')
 const h = React.createElement
 
+// Baked by scripts/build-client.mjs. Compared with the host buildId so a
+// stale client bundle can never masquerade as a working deploy.
+const CLIENT_BUILD_ID = typeof __NKS_BUILD_ID__ === 'string' ? __NKS_BUILD_ID__ : 'dev'
 const STATUS = '/nano-local-sandbox/status'
 const OPEN = '/nano-local-sandbox/open'
 const SHOT = '/nano-local-sandbox/shot'
@@ -200,10 +203,6 @@ const STYLE = `
 .nks-dt-rule{display:flex;gap:8px;padding:1px 0;color:var(--dsw-alias-label-tertiary)}
 .nks-dt-rule b{color:var(--dsw-alias-link,#7aaaff);font-weight:500;max-width:45%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .nks-dt-rule span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.nks-tabs-wrap{display:flex;flex-direction:column;min-height:0}
-.nks-tabs{display:flex;gap:2px;border-bottom:.5px solid var(--dsw-alias-border-l2);margin-bottom:8px}
-.nks-tabs button{height:30px;padding:0 12px;border:0;border-bottom:2px solid transparent;background:transparent;color:var(--dsw-alias-label-tertiary);font:inherit;cursor:pointer}
-.nks-tabs button[aria-selected="true"]{color:var(--dsw-alias-label-primary);border-bottom-color:var(--dsw-alias-link,#7aaaff)}
 .nks-hist-tab{display:flex;flex-direction:column;min-height:0;max-height:360px}
 .nks-hist-list{overflow:auto}
 .nks-modal-mask{position:absolute;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.45)}
@@ -1489,13 +1488,17 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
   }
 
   /** Settings shell with tabs: environment/settings vs browse history. */
-  function SettingsTabs({ children }) {
-    const [tab, setTab] = React.useState('env')
-    return h('div', { className: 'nks-tabs-wrap' },
-      h('div', { className: 'nks-tabs', role: 'tablist' },
-        h('button', { type: 'button', role: 'tab', 'data-nks-tab': 'env', 'aria-selected': tab === 'env' ? 'true' : 'false', onClick: () => setTab('env') }, '设置'),
-        h('button', { type: 'button', role: 'tab', 'data-nks-tab': 'history', 'aria-selected': tab === 'history' ? 'true' : 'false', onClick: () => setTab('history') }, '浏览历史')),
-      tab === 'env' ? children : h(HistoryTab))
+  // Semantic split, rendered with the shared nano-ui tab primitive (no
+  // per-plugin tab chrome): environment health / browsing config / history.
+  function SettingsTabs({ env, browse }) {
+    return h(NanoTabs, {
+      label: copy.settingsTitle,
+      items: [
+        { value: 'env', label: copy.tabEnv, content: env },
+        { value: 'browse', label: copy.tabBrowse, content: browse },
+        { value: 'history', label: copy.tabHistory, content: h(HistoryTab) },
+      ],
+    })
   }
 
   function HistoryTab() {
@@ -1696,16 +1699,17 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
       title: copy.settingsTitle,
       description: copy.settingsDesc,
       width: 420,
+      // Fixed height: the tab strip changes panels, never the card size.
+      fixedHeight: 560,
       region,
       // openNanoDialog already closes itself after onCancel — closing here
       // again would double root.unmount()/host.remove() (S3-3).
       onCancel: () => { dialogOpenRef.current = false },
       onConfirm: () => save(),
-      children: h(SettingsTabs, null, h('form', {
+      children: h(SettingsTabs, { env: h(EnvPanel, null), browse: h('form', {
         className: 'nks-settings-body',
         onSubmit: (event) => { event.preventDefault(); save() },
       },
-        h(EnvPanel, null),
         h('label', { htmlFor: 'nks-ua' }, copy.uaLabel),
         h('input', { id: 'nks-ua', className: 'nks-address', autoFocus: true, placeholder: copy.uaPlaceholder }),
         h('label', { htmlFor: 'nks-origin' }, copy.originLabel),
@@ -1746,7 +1750,7 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
           className: 'nks-choice',
           onClick: (event) => selectRadio(event.currentTarget.parentElement, value),
         }, label))),
-        h('button', { type: 'submit', style: { display: 'none' }, 'aria-hidden': 'true', tabIndex: -1 }))),
+        h('button', { type: 'submit', style: { display: 'none' }, 'aria-hidden': 'true', tabIndex: -1 })) }),
     })
     close = () => { dialogOpenRef.current = false; dialog.close() }
 
@@ -1917,7 +1921,20 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
         style: { color: nativeHtml && domDoc ? 'var(--dsw-alias-fill-success,#3fb950)' : hasPage ? 'var(--dsw-alias-fill-warning,#d29922)' : 'var(--dsw-alias-label-tertiary)' },
       }, nativeHtml && domDoc ? 'HTML 原生渲染' : hasPage ? 'IMG 截图回退' : '未打开页面'),
       h('span', { style: { flex: 'auto' } }),
-      status?.buildId ? h('span', { style: { opacity: .6 } }, String(status.buildId).slice(0, 18)) : null),
+      (() => {
+        const hostBuild = typeof status?.buildId === 'string' ? status.buildId : ''
+        // Only deploy-produced ids carry '+<sha>'; a tarball install reports a plain
+        // version and must not be flagged as a mismatch.
+        const mismatch = Boolean(hostBuild) && hostBuild.includes('+') && hostBuild !== CLIENT_BUILD_ID
+        const text = mismatch
+          ? `版本不一致 客户端 ${CLIENT_BUILD_ID} / 宿主 ${hostBuild}`
+          : (hostBuild ? hostBuild : '')
+        return text ? h('span', {
+          'data-nks-build': mismatch ? 'mismatch' : 'ok',
+          style: { opacity: mismatch ? 1 : .6, color: mismatch ? 'var(--dsw-alias-fill-error,#d5455c)' : undefined },
+          title: `客户端构建 ${CLIENT_BUILD_ID} · 宿主 ${hostBuild || '未知'}`,
+        }, text.slice(0, 40)) : null
+      })()),
     h(HistoryDialog, { open: historyOpen, onClose: () => setHistoryOpen(false) }),
     h(DevTools, { open: devtoolsOpen, onClose: () => setDevtoolsOpen(false) }),
     pins.length ? h('div', { className: 'nks-pins', 'data-nks-pins': String(pins.length), 'aria-live': 'polite' },

@@ -87,11 +87,13 @@ node scripts/deploy-local.mjs --home <home> --profile <p> \
 2. 把 `package.json` 的 `files` 条目逐个拷到 `<dshHome>/plugins/<pkg>/`（`lib/`、`locale/` 整目录覆盖，源符号链接解引用成真实文件）；
 3. 部署出的 `package.json` 重写：`dependencies` 清空、`devDependencies` 删除——构建期 `file:` 依赖已打进 `lib/`，相对路径在 dsh home 里解析不到；
 4. profile 接线：`<dshHome>/profiles/<profile>/package.json` 补 `file:../../plugins/<pkg>` 依赖与 `dsh.profile.bundles` 条目；`profiles/<profile>/node_modules/<pkg>` 建指向插件目录的符号链接（Windows 为 junction）；
-5. 自检：每个 `files` 条目都已落盘、部署出的 dependencies 为空，否则报错退出。
+5. 自检（内容级）：每个 `files` 条目都与源码逐文件 SHA-256 比对；profile 的 `require.resolve('<pkg>/package.json')` 必须落在本次 staged 的 `<dshHome>/plugins/<pkg>`；pnpm 虚拟store里旧的实体副本会被改成指向该目录的符号链接。任何不一致都报错退出——只查「文件存在」不足以证明加载的是新代码。
 
 部署完成后**重启服务该 profile 的宿主进程**再刷新页面——插件代码在宿主启动时加载，只刷新页面不会换宿主路由。
 
 可选验证（不阻塞发布）：装了 `dsh-nano-model-selector` 的实例，刷新后跑 `SMOKE_URL='<带 token 的 GUI URL>' bash scripts/gui-smoke.sh`——四条断言（slot 挂载、徽标开压缩面板、触发器回模型列表、无 React 错误文本）全 PASS 才算界面层真的活了。
+
+装了 `dsh-nano-kitesurf` / `dsh-nano-local-sandbox` 的实例再跑 `SMOKE_URL='<带 token 的 GUI URL>' bash scripts/gui-smoke-kitesurf.sh`——六条断言（pane 挂载、mode 三态、client/host build id 一致、`/ports` 五面健康、`/selftest` 11 项、`/dom` 可渲染 srcdoc）全 PASS 才算 Kitesurf 真的可用。
 
 ## 信任链总览
 

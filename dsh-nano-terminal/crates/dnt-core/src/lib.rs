@@ -1576,7 +1576,9 @@ pub extern "C" fn dnt_select_extract(id: u32) -> u32 {
             return 0;
         };
         let (top, bot) = if a <= f { (a, f) } else { (f, a) };
-        for line_idx in top.0..=bot.0.min(t.grid.lines.len().saturating_sub(1)) {
+        let last = bot.0.min(t.grid.lines.len().saturating_sub(1));
+        let mut out: Vec<String> = Vec::new();
+        for line_idx in top.0..=last {
             let line = &t.grid.lines[line_idx];
             let c0 = if line_idx == top.0 { top.1 } else { 0 };
             let c1 = if line_idx == bot.0 { bot.1 + 1 } else { line.len() };
@@ -1587,12 +1589,42 @@ pub extern "C" fn dnt_select_extract(id: u32) -> u32 {
                 }
                 s.push(char::from_u32(c.ch).unwrap_or(' '));
             }
-            t.sel_buf.extend_from_slice(s.trim_end().as_bytes());
-            if line_idx < bot.0 {
-                t.sel_buf.push(b'\n');
+            out.push(s.trim_end().to_string());
+        }
+        // 拖拽越过内容后落进空白区，末尾那些空行不是用户想复制的东西：
+        // 只保留内容行，中间的空行（段落间距）照旧保留。
+        while out.last().map_or(false, |l| l.is_empty()) {
+            out.pop();
+        }
+        t.sel_buf.extend_from_slice(out.join("\n").as_bytes());
+        1
+    })
+    .unwrap_or(0)
+}
+
+/// Content width of one buffer line, in columns (trailing blanks excluded).
+/// 0 = blank line, or the line index is out of range. The client uses this to
+/// clamp a mouse selection to cells that actually hold text -- dragging into
+/// the empty area below the content must not extend the selection.
+#[no_mangle]
+pub extern "C" fn dnt_line_cols(id: u32, line: i32) -> u32 {
+    with_term(id, |t| {
+        if line < 0 {
+            return 0;
+        }
+        let Some(l) = t.grid.lines.get(line as usize) else {
+            return 0;
+        };
+        let mut end = 0usize;
+        for (i, c) in l.iter().enumerate() {
+            if c.flags & WIDE_SPACER != 0 {
+                continue;
+            }
+            if char::from_u32(c.ch).unwrap_or(' ') != ' ' {
+                end = i + if c.flags & WIDE != 0 { 2 } else { 1 };
             }
         }
-        1
+        end as u32
     })
     .unwrap_or(0)
 }

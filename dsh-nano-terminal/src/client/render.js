@@ -336,7 +336,7 @@ export class TermCanvas {
    * 首行从 aCol 到行尾，末行到 fCol，中间整行；上行选择自动归一化。
    * 宿主规范用品牌主色做半透明覆盖，不反色文字（文字仍由 base 层承载）。
    */
-  paintSelection(a, f, viewStart = this.viewStart) {
+  paintSelection(a, f, viewStart = this.viewStart, lineCols = null) {
     const ctx = this.sctx
     ctx.clearRect(0, 0, this.cols * this.charW, this.rows * this.charH)
     if (!a || !f) return
@@ -344,8 +344,11 @@ export class TermCanvas {
     const selBg = this.palette.selBg ?? 'rgba(96,128,255,.30)'
     ctx.fillStyle = selBg
     for (let line = Math.max(top.line, viewStart); line <= Math.min(bot.line, viewStart + this.rows - 1); line++) {
+      // 只画有内容的格子：空行不画，行尾空白也不画（业主反馈：能选中空白区）
+      const end = lineCols ? lineCols(line) : this.cols
+      if (end <= 0) continue
       const c0 = line === top.line ? top.col : 0
-      const c1 = line === bot.line ? bot.col : this.cols - 1
+      const c1 = Math.min(line === bot.line ? bot.col : this.cols - 1, end - 1)
       if (c1 < c0) continue
       const y = this.cellY(line - viewStart)
       ctx.fillRect(this.cellX(c0), y, (c1 - c0 + 1) * this.charW, this.charH)

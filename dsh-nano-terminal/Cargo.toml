@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/dnt-core", "crates/dnt-agent"]
+members = ["crates/dnt-core"]
 
 [workspace.dependencies]
 vte = "0.15"

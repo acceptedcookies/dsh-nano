@@ -71,3 +71,35 @@ export function dragText(term, aRow, aCol, bRow, bCol) {
   const [ra, rb] = aRow <= bRow ? [aRow, bRow] : [bRow, aRow]
   return term.selectText?.(ra, rb, aRow <= bRow ? aCol : bCol, aRow <= bRow ? bCol : aCol) ?? ''
 }
+
+/**
+ * 把原始拖拽区间裁到「真正有字」的范围。
+ *
+ * 业主反馈：能选中终端里没有内容的空白区并复制出一堆换行符。选区必须只覆盖
+ * 有内容的格子，因此：
+ *   - 起点行：起点列已在该行内容之后 → 整行不算，往下挪一行
+ *   - 终点行：拖过内容底部 → 收回最后一个有内容的行
+ *   - 每行列上限：不超过该行内容宽度（行尾空白 / 宽字符按列算）
+ *   - 全空区间 → null（不画高亮、不复制）
+ *
+ * @param {{line:number,col:number}} a 锚点（绝对行）
+ * @param {{line:number,col:number}} f 焦点（绝对行）
+ * @param {(line:number)=>number} contentCols 该行内容宽度（列），0 = 空行
+ * @param {number} cols 终端列数（整行选区的右边界）
+ * @returns {{a:{line:number,col:number},f:{line:number,col:number}}|null}
+ */
+export function clampSelection(a, f, contentCols, cols) {
+  if (!a || !f) return null
+  const [s, t] = (a.line < f.line || (a.line === f.line && a.col <= f.col)) ? [a, f] : [f, a]
+  let top = s.line
+  let bot = t.line
+  while (top < bot && contentCols(top) <= s.col) top += 1
+  while (bot > top && contentCols(bot) === 0) bot -= 1
+  const eTop = contentCols(top)
+  const eBot = contentCols(bot)
+  if (eTop <= 0 || eBot <= 0) return null
+  const c0 = top === s.line ? Math.min(s.col, eTop - 1) : 0
+  const c1 = Math.min(bot === t.line ? t.col : cols - 1, eBot - 1)
+  if (bot === top && c1 < c0) return null
+  return { a: { line: top, col: c0 }, f: { line: bot, col: c1 } }
+}

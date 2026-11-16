@@ -132,6 +132,36 @@ dt = dec.decode(mem().subarray(dp, dp + dl))
 t('dump recent incl. scrollback', dt.split('\n').length === 5 && dt.includes('l1'))
 e.dnt_free(id)
 
+// 8b. 选区：内容宽度 + 复制不夹带空白行（业主反馈：能选中空白区并复制）
+id = e.dnt_new(40, 8, 100)
+write(id, 'abc\r\n')
+write(id, '中文ab\r\n')
+write(id, '\r\n')
+write(id, '   \r\n')
+write(id, 'x   \r\n')
+write(id, 'tail\r\n')
+let vs = e.dnt_view_start(id)
+t('line_cols ascii', e.dnt_line_cols(id, vs) === 3)
+t('line_cols wide chars count 2 cols', e.dnt_line_cols(id, vs + 1) === 6)
+t('line_cols blank line = 0', e.dnt_line_cols(id, vs + 2) === 0)
+t('line_cols spaces-only = 0', e.dnt_line_cols(id, vs + 3) === 0)
+t('line_cols trailing spaces ignored', e.dnt_line_cols(id, vs + 4) === 1)
+t('line_cols out of range = 0', e.dnt_line_cols(id, 9999) === 0 && e.dnt_line_cols(id, -1) === 0)
+// 拖到面板底部（越过内容）→ 只应拿到内容行，不带尾部空行
+e.dnt_select_set(id, vs, 0, vs + 7, 30)
+e.dnt_select_extract(id)
+let sp = e.dnt_select_ptr(id)
+let sl = e.dnt_select_len(id)
+let stext = dec.decode(mem().subarray(sp, sp + sl))
+t('select trims trailing blank rows', stext === 'abc\n中文ab\n\n\nx\ntail')
+t('select keeps interior blank rows', stext.includes('中文ab\n\n\nx'))
+// 全空白区间 → 空串
+e.dnt_select_set(id, vs + 2, 0, vs + 3, 10)
+e.dnt_select_extract(id)
+sl = e.dnt_select_len(id)
+t('select all-blank range = empty', sl === 0)
+e.dnt_free(id)
+
 // 9. schema ↔ tools consistency
 {
   const { readFileSync } = await import('node:fs')
@@ -233,6 +263,50 @@ e.dnt_free(id)
   const r2 = reg2.resolve('local/myterm')
   t('restored placeholder', r2?.pending === true && r2?.keep === true && r2?.labels?.k === 'v')
   t('preserved screen staged', r2?.preservedScreen?.toString() === 'old screen bytes')
+}
+
+// 11. 选区裁剪（clampSelection）+ 高亮只画有内容的格子
+{
+  const { clampSelection } = await import(pathToFileURL(join(root, 'src/client/select.js')).href)
+  const cols = 89
+  const W = [26, 12, 0, 0, 0, 0]
+  const cc = (l) => W[l] ?? 0
+  const eq = (got, want) => JSON.stringify(got) === JSON.stringify(want)
+  t('clamp: 拖到空白区收回内容行',
+    eq(clampSelection({ line: 0, col: 0 }, { line: 5, col: 30 }, cc, cols), { a: { line: 0, col: 0 }, f: { line: 1, col: 11 } }))
+  t('clamp: 行尾空白不算',
+    eq(clampSelection({ line: 0, col: 0 }, { line: 0, col: 80 }, cc, cols), { a: { line: 0, col: 0 }, f: { line: 0, col: 25 } }))
+  t('clamp: 反向拖归一化',
+    eq(clampSelection({ line: 1, col: 5 }, { line: 0, col: 2 }, cc, cols), { a: { line: 0, col: 2 }, f: { line: 1, col: 5 } }))
+  t('clamp: 起点列在内容之后整行不算',
+    eq(clampSelection({ line: 0, col: 40 }, { line: 1, col: 3 }, cc, cols), { a: { line: 1, col: 0 }, f: { line: 1, col: 3 } }))
+  t('clamp: 全空白区间 = null', clampSelection({ line: 2, col: 0 }, { line: 5, col: 10 }, cc, cols) === null)
+  t('clamp: 点空白行 = null', clampSelection({ line: 2, col: 5 }, { line: 2, col: 5 }, cc, cols) === null)
+  const mid = clampSelection({ line: 0, col: 0 }, { line: 5, col: 3 }, (l) => [10, 0, 0, 0, 0, 7][l] ?? 0, cols)
+  t('clamp: 中间空行保留', mid?.f.line === 5 && mid?.f.col === 3)
+
+  // paintSelection：空行不画、行尾裁到内容宽度（假 canvas，直接跑 render.js）
+  const rects = []
+  const ctxStub = {
+    clearRect() { rects.length = 0 },
+    fillRect(x, y, w, h) { rects.push({ x, y, w, h }) },
+    set fillStyle(_) {}, get fillStyle() { return '' },
+    set font(_) {}, get font() { return '' },
+    measureText: (str) => ({ width: str.length * 10, actualBoundingBoxAscent: 10, actualBoundingBoxDescent: 3 }),
+  }
+  const canvasStub = () => ({ width: 0, height: 0, style: {}, getContext: () => ctxStub, remove() {}, parentNode: null })
+  globalThis.window = { devicePixelRatio: 1 }
+  globalThis.document = { createElement: canvasStub, documentElement: {} }
+  const { TermCanvas } = await import(pathToFileURL(join(root, 'src/client/render.js')).href)
+  const cv = new TermCanvas({ appendChild() {} }, { bg: '#000' }, { family: 'mono', size: 13 })
+  cv.cols = 20; cv.rows = 5; cv.charW = 10; cv.charH = 20
+  const widths = [5, 0, 12, 0, 3]
+  cv.paintSelection({ line: 0, col: 0 }, { line: 4, col: 19 }, 0, (l) => widths[l] ?? 0)
+  t('paint: 空行不画高亮', rects.length === 3 && rects.map((r) => r.y).join() === '0,40,80')
+  t('paint: 行尾裁到内容宽度', rects[0].w === 50 && rects[1].w === 120 && rects[2].w === 30)
+  rects.length = 0
+  cv.paintSelection({ line: 0, col: 0 }, { line: 1, col: 19 }, 0, null)
+  t('paint: 无 lineCols 退回整行（旧 wasm 兼容）', rects.length === 2 && rects.every((r) => r.w === 200))
 }
 
 console.log(`${pass} passed, ${fail} failed`)

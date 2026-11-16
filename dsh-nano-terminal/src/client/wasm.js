@@ -156,6 +156,15 @@ export class WasmTerm {
   selectClear() {
     coreExports().dnt_select_set?.(this.id, -1, 0, -1, 0)
   }
+  /**
+   * 该 buffer 行的内容宽度（列，宽字符算 2）。0 = 空行 / 越界。
+   * 鼠标选区靠它裁到真正有字的格子：拖到内容下方的空白区不该被算进选区。
+   */
+  lineCols(line) {
+    const fn = coreExports().dnt_line_cols
+    // 旧 wasm 没有这个导出时退回整行宽度（老行为），而不是把整屏判成空行
+    return fn ? fn(this.id, line) : this.cols
+  }
   /** Selected text, or ''. Rows absolute; cols optional (full lines). */
   selectText(aline, fline, acol = 0, fcol = 1e9) {
     const e = coreExports()

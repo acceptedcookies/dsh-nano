@@ -2,7 +2,7 @@
 // Each pane = wasm emulator + canvas renderer + one lane (local/mcp/isolate).
 
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react'
-import { copyMode } from './select.js'
+import { copyMode, clampSelection } from './select.js'
 import * as primitives from '@deepseek-ai/dsh-client-ui-primitives'
 import { NanoDialog, NanoMenu, NANO_STYLES } from 'dsh-nano-ui'
 
@@ -832,7 +832,7 @@ function TermPane({ paneId, laneSpec, sessionId, session, focused, onFocus, onCl
         canvas.paint(packed)
         lastViewStart = packed.viewStart ?? 0
         // 选区层跟随视口滚动重新定位（滚动/输出移位时高亮不漂移）
-        canvas.paintSelection(rec.sel?.a, rec.sel?.f, lastViewStart)
+        canvas.paintSelection(rec.sel?.a, rec.sel?.f, lastViewStart, contentCols)
         const total = term.totalLines()
         const key = `${total}/${lastViewStart}/${canvas.rows}`
         if (key !== lastScrollKey) {
@@ -974,11 +974,12 @@ function TermPane({ paneId, laneSpec, sessionId, session, focused, onFocus, onCl
     // 下一次点击。行索引用 buffer 绝对行（viewStart + 屏幕行），滚动后仍对。
     const mouseCaptured = () => !!(term.modes() & (MODES.MOUSE_CLICK | MODES.MOUSE_BTN_MOTION | MODES.MOUSE_ANY_MOTION))
     const absCell = (ev) => { const { x, y } = cellAt(ev); return { line: lastViewStart + y, col: x } }
+    const contentCols = (line) => term.lineCols?.(line) ?? term.cols
     const setSel = (a, f) => {
-      rec.sel = a && f ? { a, f } : null
-      if (rec.sel) term.selectRange?.(a.line, a.col, f.line, f.col)
-      else term.selectClear?.()
-      canvas.paintSelection(rec.sel?.a, rec.sel?.f, lastViewStart)
+      rec.selRaw = a && f ? { a, f } : null
+      rec.sel = rec.selRaw ? clampSelection(a, f, contentCols, term.cols) : null
+      if (!rec.sel) term.selectClear?.()
+      canvas.paintSelection(rec.sel?.a, rec.sel?.f, lastViewStart, contentCols)
     }
     const selText = () => {
       const s = rec.sel
@@ -996,12 +997,14 @@ function TermPane({ paneId, laneSpec, sessionId, session, focused, onFocus, onCl
         applyStatus((s) => ({ ...s, hint: zh ? '复制失败（剪贴板不可用）' : 'copy failed (clipboard unavailable)' }))
       })
     }
-    const drag = { on: false, moved: false, detach: null }
+    const drag = { on: false, moved: false, detach: null, anchor: null }
     const endDrag = (ev) => {
       drag.detach?.(); drag.detach = null
       if (!drag.on) return
       drag.on = false
-      if (!drag.moved || !rec.sel) return
+      // 单击不是选区：清掉上一次的高亮（shift+click 延伸选区除外）
+      if (!drag.moved) { if (!ev?.shiftKey) setSel(null); return }
+      if (!rec.sel) return
       // tmux 风格：拖选松开即复制；高亮保留作视觉反馈，Esc/再点清除
       copySel(false)
       ev?.preventDefault()
@@ -1010,10 +1013,12 @@ function TermPane({ paneId, laneSpec, sessionId, session, focused, onFocus, onCl
       if (!drag.on) return
       const f = absCell(ev)
       if (!drag.moved) {
+        // 同一格内的抖动不算拖拽：单击不应该留下一个格子的高亮
+        if (f.line === drag.anchor.line && f.col === drag.anchor.col) return
         drag.moved = true
         ev.preventDefault() // 阻止默认拖拽，避免把 pane 当文本拖走
       }
-      setSel(rec.sel?.a ?? f, f)
+      setSel(drag.anchor, f)
     }
     const beginDrag = () => {
       const mm = (e) => dragMove(e)
@@ -1032,10 +1037,11 @@ function TermPane({ paneId, laneSpec, sessionId, session, focused, onFocus, onCl
         ev.preventDefault()
         drag.on = true
         drag.moved = false
-        beginDrag()
         const a = absCell(ev)
-        if (ev.shiftKey && rec.sel) setSel(rec.sel.a, a) // shift+click 延伸选区
-        else setSel(a, a)
+        // shift+click 从原锚点延伸；普通按下先清旧高亮，真拖动才建立选区
+        drag.anchor = ev.shiftKey && rec.selRaw ? rec.selRaw.a : a
+        setSel(ev.shiftKey && rec.selRaw ? drag.anchor : null, ev.shiftKey && rec.selRaw ? a : null)
+        beginDrag()
         return
       }
       const data = encodeMouse(term.modes(), { btn: ev.button, x, y, release: false, shift: ev.shiftKey, alt: ev.altKey, ctrl: ev.ctrlKey })

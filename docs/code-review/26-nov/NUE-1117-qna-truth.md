@@ -1,9 +1,9 @@
 # NUE-1117 QnA Truth · 已冻结真相台账（nano-ui-enhancement）
 
-> **范围**：只登记 [业主] 在 [NUE-1117-qna.md](NUE-1117-qna.md) 中已接受的 `T-O-NUE1117-B01`–`B04` 与 `T-O-NUE1117-01`–`17`，共 21 条（`15`–`17` 为 2026-11-17 Round 5 追加）。
+> **范围**：只登记 [业主] 在 [NUE-1117-qna.md](NUE-1117-qna.md) 中已接受的 `T-O-NUE1117-B01`–`B04` 与 `T-O-NUE1117-01`–`17`，共 27 条（`15`–`17` 为 2026-11-17 Round 5 追加；`18`–`19` 为 Round 6、`20`–`23` 为 Round 7 追加）。
 > **性质**：`frozen-truth ledger / compact consumption entry`。问答是决策出处，本文不是第二真源；本文只做三件事：给每条真相钉上复核过的 `file:line` 证据，写出执行时必须遵守的推论，列出复核中发现的偏差。
 > **复核基线**：`main` @ `5a41133`（2026-11-17）。宿主口径：`@deepseek-ai/dsh@0.2.2-rc.1` CLI 安装；primitives 导出快照 rc.1 = 311、rc.3 = 321（`dsh-nano-model-selector/test/primitives-exports.json`）；令牌来源 `dsh-client-ui-theme/lib/client.js`；组件签名从 `dsh-web-frontend/dist/assets/index-BgUyXZcc.js` 解码。
-> **状态**：21 条全部 FROZEN。**冻结不是实施授权。** 复核发现的 3 项冲突（§7）已由 [业主] 于 2026-11-17 裁决，登记为 `12`–`14`。
+> **状态**：27 条全部 FROZEN。**冻结不是实施授权。** 复核发现的 3 项冲突（§7）已由 [业主] 于 2026-11-17 裁决，登记为 `12`–`14`。
 
 ---
 
@@ -24,6 +24,8 @@ foundational T-O-NUE1117-01..04     FROZEN（Round 1）
 executional  T-O-NUE1117-05..11     FROZEN（Round 2–3）
 review       T-O-NUE1117-12..14     FROZEN（Round 4，本文 §7 复核补充）
 execution    T-O-NUE1117-15..17     FROZEN（Round 5，action-plan 审查后的执行取舍）
+stop-point   T-O-NUE1117-18..19     FROZEN（Round 6，执行中停止点）
+post-review  T-O-NUE1117-20..23     FROZEN（Round 7，收尾三路审查后的补充）
 ```
 
 | 复核结论 | 条目 |
@@ -42,7 +44,7 @@ execution    T-O-NUE1117-15..17     FROZEN（Round 5，action-plan 审查后的�
 | `B02` | 判据 = 仓根五原则 + 硬切、退役、平台中立、不耦合私域 | 仓根 `AGENTS.md`「核心工作原则」 | 每个工作项都要逐条对照（§6） |
 | `B03` | 设计检测只给警告，不是发布闸门，可由 design skill 触发 | 初评 §7 | `check-ui-rules.mjs` 退出码恒为 0（脚本崩溃除外），不加入 `scripts/test-all.mjs:57-65` 的闸门列表 |
 | `B04` | nano-ui 是构建期 `file:` 依赖，打进各插件 bundle | `dsh-nano-terminal/package.json:32`；各包 AGENTS「前置」 | nano-ui 升级不会影响尚未重建的插件。哪个插件打进了哪一版，只能从产物看出来，所以必须在产物里标出 nano-ui 版本（落实 `10`） |
-| `01` | AGENTS 原则：宿主 primitive 优先，其次 nano-ui；两者都没有才在插件内实现并标 `nano-ui-exempt`；不得嫁接宿主内部 DOM | 嫁接现场：[DNEE] `styles.js:234-238`（`li[data-files-entry]:has(> div > div [data-status])`）；[DNCS] `section.js:36-39,59-61,164`，`styles.js:20-29`；[DNT] `NanoTerm.jsx:51-83`；[DNMS] `styles.js:229-234`；**nano-ui 自身** `dom.js:39-93` | ① 优先级同样约束 nano-ui：宿主已有的组件，nano-ui 只能包装，不能重画（§4.2）。② nano-ui 自身的嫁接也在禁止范围内（§7 A1）。③ 读取宿主组件的内部变量（如 `composer-model-*-display`、`session-list-edge-inset`）同样算嫁接 |
+| `01` | AGENTS 原则：宿主 primitive 优先，其次 nano-ui；两者都没有才在插件内实现并标 `nano-ui-exempt`；不得嫁接宿主内部 DOM | 嫁接现场：[DNEE] `styles.js:234-238`（`li[data-files-entry]:has(> div > div [data-status])`）；[DNCS] `section.js:36-39,59-61,164`，`styles.js:20-29`；[DNT] `NanoTerm.jsx:51-83`；[DNMS] `styles.js:229-234`；**nano-ui 自身** `dom.js:39-93` | ① 优先级同样约束 nano-ui：宿主已有的组件，nano-ui 只能包装，不能重画（§4.2）。② nano-ui 自身的嫁接也在禁止范围内（§7 A1）。③ 读取宿主组件的内部变量（如 `session-list-edge-inset`）同样算嫁接；宿主 `slots.d.ts` 公开的 slot 合同变量（如 `--dsh-composer-model-*-display`）不算，见 `20` |
 | `02` | `docs/specs/dsh-nano-ui/DESIGN.md` 为 UI 规格唯一真源 | 现有 `docs/specs/dsh-nano-ui/README.md`（115 行）已含排版令牌（`:66-78`）、弹层主题（`:80-102`）、弹层层级（`:104-115`）三项约定，但内容过期（`:3` 写「三个插件」，`:10` 日期 11-09，`:62` 把 primitives 称为「headless 无样式」，缺 NanoTabs/`region`/`className`）。`packages/dsh-nano-ui/README.md` 是指向它的软链 | 创建 DESIGN.md 时把 README 的三项约定迁入并改正，README 降为一页入口，不再保留独立条款，否则会有两份真源 |
 | `03` | 每插件一次硬切，旧样式同提交删除 | 初评 §4 各插件台账 | 每个插件一个 worktree、一次合并；不留新旧两套样式 |
 | `04` | ThemeScope、FloatingWindow、z 层令牌本期全做 | 宿主**没有** z 令牌，也没有 spacing 令牌（主题 437 个名字中均为 0）；宿主层级常量写死在哈希类中：Modal 根 1000、toast/portal 1100、`shell.overlay` 槽 20（[DNN] `panel.js:77-80,943-948,1105-1110`；规格 README `:106`）；宿主主题服务 `ctx.theme.getTheme().colorScheme` 已被 3 个插件各自封装（[DNK] `index.js:2140`，[DNEE] `index.js:66`，[DNN] `index.js:50`） | ① z 层令牌只能是 nano-ui 自有常量，以观测到的宿主层级为锚，并在 DESIGN.md 里登记为宿主缺口。② ThemeScope 读取宿主 `theme` 服务（由插件传入 `ctx.theme`），不读 `body[data-ds-dark-theme]`。③ 亮暗两套颜色值从 catalog 生成，不再手抄十六进制（[DNN] `panel.js:93-94` 的写法退役）。④ FloatingWindow 内的弹层不经宿主 body portal，由窗口自己的覆盖层承载（§4.3） |
@@ -59,6 +61,12 @@ execution    T-O-NUE1117-15..17     FROZEN（Round 5，action-plan 审查后的�
 | `15` | nano-ui 旧接口在 nano-ui 增强时一次硬切，不保留过渡路径 | 旧接口使用方（`fb67904`）：`openNanoDialog` — [DNK] `index.js:1694-1706`、[DNN] `panel.js:2153`；`openNanoMenu` — [DNK] `index.js:1894-1896`、[DNN] `panel.js` 9 处；`NanoMenu` `z` — [DNEE] `menu.js:22-33`；DOM `nanoTabs` — [DNCS] `settings-dialog.js:74`、[DNN] `panel.js:3157`；`.nano-toast` 类 — [DNK] `index.js:2118` | 未迁移插件在迁移前从 `main` 重建会退化；导出名能保留的保留并换成新实现，使未迁移插件仍可构建，被删参数不再生效 |
 | `16` | 收尾 worktree 重建六份 `lib/client.js`，只改 `lib/` | `TB04`：产物打的是构建当时的 nano-ui | 收尾提交只含 `lib/` 与版本核对，不含 `src/` |
 | `17` | [DNCS] Devin 标签随嫁接删除，登记宿主缺口 | [DNCS] `index.js:27-70,82` | [DNCS] 不新增替代挂载点 |
+| `18` | [DNMS] 不做云会话判定，登记宿主缺口 | 宿主 `SessionHeader`（`@deepseek-ai/dsh-session` `lib/types/types.d.ts:60-100`）无来源字段 | `06` 的「[DNMS] 自行判断」在宿主补字段前不执行；T19 守卫保留 |
+| `19` | [DNN]「到记事本」卡片注入整段删除，登记宿主缺口 | [DNN] `panel.js:159-167`、`attachNotepadCtas`（`main@4c39634`） | 不另找挂载点 |
+| `20` | slot 合同变量不算宿主内部变量（勘误 `01` 推论③） | 宿主 `dsh-client-ui-conversation` `slots.d.ts:415-416`；[DNMS] `styles.js:23-27` | 读取须在 DESIGN §10 登记 |
+| `21` | [DNT] 会话滚动条嫁接整段删除，登记宿主缺口 | [DNT] `src/client/index.js:146-228`（`962d552`） | 不另找替代 |
+| `22` | 自有容器内的先后改用 nano-ui 局部层令牌 | [DNT] `NanoTerm.jsx:88,104,107,710`；[DNK] `index.js:85-211`；[DNN] `panel.js:87-591` | nano-ui 升 `0.2.1`；只为建立层叠上下文的 `z-index:0` 改 `isolation:isolate` |
+| `23` | [DNEE] 对话框迁到窗口覆盖层 | [DNEE] `dialogs.js:41-227`（`962d552`） | 容器为 [DNEE] 自有根节点；不再读 `.nano-dialog-card` 或宿主 pane 几何 |
 
 ---
 

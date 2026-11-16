@@ -3,7 +3,7 @@
 > **范围**：`NUE-1117` = nano-ui-enhancement。证据输入为 [NUE-1117-initial-assessment.md](NUE-1117-initial-assessment.md)（下称「初评」）。初评是证据，不是合同；其中的推荐只有在本文冻结后才生效。
 > **角色**：提问 `Droid` · second-opinion `none` · 裁决 [业主]
 > **基线**：`main` @ `5a41133`（初评 §0 所列 BUG-1..4 已于 `60c3a4d`/`fefd590`/`5a41133` 修复，不再属于 NUE 范围）
-> **文档状态**：`已冻结`（2026-11-17）。Round 1–5 全部冻结，`T-O-NUE1117-B01–B04` 与 `01–17` 均已锁定。Round 4 是 qna-truth 复核后的补充裁决；Round 5 是 action-plan 对抗审查后的执行取舍裁决。**冻结不是实施授权。**
+> **文档状态**：`已冻结`（2026-11-17）。Round 1–7 全部冻结，`T-O-NUE1117-B01–B04` 与 `01–23` 均已锁定。Round 6 是执行中的停止点裁决；Round 7 是收尾三路审查（`.anote/reviews/NUE/1117/exec-962d552/`）后的补充裁决。Round 4 是 qna-truth 复核后的补充裁决；Round 5 是 action-plan 对抗审查后的执行取舍裁决。**冻结不是实施授权。**
 
 ---
 
@@ -17,7 +17,8 @@
 | Round 3 | `Q9–Q11` | executional | 迁移顺序 · 共享包版本与提交纪律 · 其余宿主 DOM 嫁接的替代 | **已冻结**（→ `T-O-NUE1117-09..11`） |
 | Round 4 | `Q12–Q14` | 复核补充 | nano-ui 自身的宿主 DOM 嫁接 · [DNMS] 区域测量 · [DNMS] Tooltip 参数缺陷 | **已冻结**（→ `T-O-NUE1117-12..14`） |
 | Round 5 | `Q15–Q17` | 执行取舍 | nano-ui 旧接口退役时点 · 收尾重建产物 · [DNCS] Devin 标签 | **已冻结**（→ `T-O-NUE1117-15..17`） |
-| Round 6 | `Q18–Q19` | 执行中补充 | [DNMS] 云会话自判没有宿主判据（AP P4-01 停止点）· [DNN] 宿主变更文件卡片注入（AP P9-05 停止点） | **待裁决** |
+| Round 6 | `Q18–Q19` | 执行中补充 | [DNMS] 云会话自判没有宿主判据（AP P4-01 停止点）· [DNN] 宿主变更文件卡片注入（AP P9-05 停止点） | **已冻结**（→ `T-O-NUE1117-18..19`） |
+| Round 7 | `Q20–Q23` | 审查补充 | DESIGN §1 slot 合同变量勘误 · [DNT] 会话滚动条嫁接 · 自有容器内的数字层级 · [DNEE] 改写宿主 Modal 外层 | **已冻结**（→ `T-O-NUE1117-20..23`） |
 
 ---
 
@@ -77,6 +78,26 @@
 | `T-O-NUE1117-15` | Q15 nano-ui 旧接口（`openNanoDialog` 的 `region`/`theme`/`z`、NanoMenu 的 `theme`/`z`、自绘 Toast/页签）在迁移窗口内如何处理：A 保留到最后使用方再删；B nano-ui 增强时一次硬切 | 选 B。nano-ui 增强时一次删除旧接口与旧实现，不保留过渡路径 | 尚未迁移的插件在各自迁移前若从 `main` 重建，会失去被删接口提供的行为；这段窗口内不宜从 `main` 重建发布它们 |
 | `T-O-NUE1117-16` | Q16 全部迁移完成后是否在收尾 worktree 重建六个插件的 `lib/client.js`：A 重建；B 不重建 | 选 A。重建，只改 `lib/`，不改 `src/` | 六份产物最终都打进同一版 nano-ui；这是产物层的重建，不是第二次源码迁移 |
 | `T-O-NUE1117-17` | Q17 [DNCS] 插入宿主 composer 的「Devin」标签在删除嫁接后是否另设挂载点：A 直接删除并登记宿主缺口；B 迁到 [DNCS] 自有挂载点 | 选 A | 云会话标识登记为宿主缺口；[DNCS] 不新增替代界面 |
+
+### 1.7 Round 6（执行中补充 · 已冻结 2026-11-17）
+
+来源：本文 §4 题面。
+
+| Truth-ID | 题 | [业主] 裁决 | 下游约束 |
+|---|---|---|---|
+| `T-O-NUE1117-18` | Q18 [DNMS] 云会话自判没有宿主判据 | 选 A。登记宿主缺口，[DNMS] 不做云会话判定，云会话里照常渲染 | `06` 中「[DNMS] 依据宿主会话元数据自行决定是否渲染」由本条收窄为「宿主提供公开字段前不判定」；`NUE1117-T19` 保持 deferred，守卫（不读 `dncs` / `data-dncs-cloud`）保留 |
+| `T-O-NUE1117-19` | Q19 [DNN] 向宿主「变更文件」卡片注入「到记事本」按钮 | 选 A。整段删除（样式、`attachNotepadCtas`、文案），登记宿主缺口 | DESIGN §8 增「变更文件卡片动作」；T30 不再单列 `[data-changed-files]:has(` |
+
+### 1.8 Round 7（审查补充 · 已冻结 2026-11-17）
+
+来源：本文 §5 题面；证据见三路审查报告。
+
+| Truth-ID | 题 | [业主] 裁决 | 下游约束 |
+|---|---|---|---|
+| `T-O-NUE1117-20` | Q20 DESIGN §1 禁读 `composer-model-*-display` 与 §10 [DNMS] 豁免矛盾 | 选 A。勘误 §1：宿主 `slots.d.ts` 公开的 slot 合同变量不算宿主内部变量，读取时在 §10 登记 | `01` 推论③的例子去掉 `composer-model-*-display`；[DNMS] 现有读取保留 |
+| `T-O-NUE1117-21` | Q21 [DNT] 改写宿主 `[data-conversation-scroll]`（隐藏滚动条、撤销槽位、插入悬浮滚动条、body 级观察者） | 选 A。整段删除，登记宿主缺口 | DESIGN §8 增「会话滚动条槽位」；右侧约 7px 空白交给宿主 |
+| `T-O-NUE1117-22` | Q22 [DNT]/[DNK]/[DNN] 自有容器内的数字 `z-index` | 选 A。nano-ui 增加局部层令牌，插件改用 `var(--nano-layer-local*)` | nano-ui `0.2.1`（`10`：对外变化即升版本）；DESIGN §4 加行；六份产物重建到同一版 |
+| `T-O-NUE1117-23` | Q23 [DNEE] `usePanelConfinedLayer` 经 `card.parentElement` 改写宿主 Modal 外层 | 选 A。迁到 nano-ui 窗口覆盖层（`openNanoDialog({ container })` / `NanoWindowDialog`），删除改写与 body 级观察者 | 落实 `01`、`12`；容器取 [DNEE] 自有根节点 |
 
 ---
 
@@ -142,7 +163,7 @@
 
 ---
 
-## 4. Round 6（执行中补充 · 待裁决，题面）
+## 4. Round 6（执行中补充 · 已冻结，题面留档）
 
 来源：`NUE-1117-action-plan.md` §5.4 P4-01 有序子步骤 1、§3 P9-05 的核实结果（停止点）。本轮不改变 Round 1–5 的冻结状态。
 
@@ -161,7 +182,7 @@
 - **C**：由 [DNCS] 在宿主会话 `meta` 或其他公开面写入云标记，[DNMS] 读取。这是新的插件间合同，需要 [业主] 决定是否扩约。
 - **推荐 A**：与 `06` 的「宿主改不了的登记为宿主缺口，插件不补」一致；代价是宿主补字段前，云会话 composer 里会出现 [DNMS] 选择器（[DNCS] 隐藏样式在 P8 照删）。
 
-状态：**待裁决**。
+状态：**已冻结**（选 A → `T-O-NUE1117-18`）。
 
 ### Q19 [DNN] 向宿主「变更文件」对话卡片注入「到记事本」按钮（AP P9-05 停止点）
 
@@ -178,4 +199,44 @@
 - **C**：改为不碰宿主卡片的入口（例如记事本内「从本轮变更导入」菜单，读宿主公开的 `/api/changes.summary`）。需要 [业主] 确认该路由是否算公开合同，属新功能，超出 NUE-1117 范围。
 - **推荐 A**：与 `01`、`06`、`17`（[DNCS] Devin 标签同样整段删除、不另设挂载点）一致；代价是失去一个便捷入口。
 
-状态：**待裁决**。
+状态：**已冻结**（选 A → `T-O-NUE1117-19`）。
+
+---
+
+## 5. Round 7（审查补充 · 已冻结，题面留档）
+
+来源：收尾三路审查（真相对账、完成度、反假绿与侧载），报告在 `.anote/reviews/NUE/1117/exec-962d552/`。
+
+### Q20 DESIGN §1 与 §10 对 slot 合同变量的矛盾
+
+`DESIGN.md` §1「永远不做」把 `composer-model-*-display` 列为宿主内部变量；§10 却登记 [DNMS] `styles.js` 读取 `--dsh-composer-model-text-display` / `--dsh-composer-model-icon-display`。宿主 `dsh-client-ui-conversation` 的 `slots.d.ts` 把这两个变量写成 `conversation.input.model` 槽位合同。
+
+- **A**：勘误 §1，slot 类型声明公开的合同变量不算内部变量，读取时在 §10 登记。
+- **B**：[DNMS] 删除读取，§10 删行。
+- **推荐 A**。
+
+### Q21 [DNT] 会话滚动条嫁接
+
+[DNT] `src/client/index.js` 向 `[data-conversation-scroll]` 注入样式（隐藏原生滚动条、撤销 `scrollbar-gutter` 与外边距），改写其父节点 `style.position` 并插入 `.dnt-floatbar`，在 `document.body` 上挂 `MutationObserver`。存量早于本期，AP P6 未覆盖。
+
+- **A**：整段删除，DESIGN §8 登记缺口。
+- **B**：保留并豁免（需修改 §1）。
+- **C**：暂缓。
+- **推荐 A**：与 Q19 同口径。
+
+### Q22 自有容器内的数字层级
+
+[DNT] 5 处、[DNK] 11 处、[DNN] 13 处 `z-index` 数字，均在插件自有定位容器内，与 DESIGN §4「插件不写数字层级」冲突。
+
+- **A**：nano-ui 增加局部层令牌（`--nano-layer-local*`），插件改用 `var()`。
+- **B**：逐条 `nano-ui-exempt` 并在 §10 登记。
+- **C**：用 `isolation` 与 DOM 顺序去掉。
+- **推荐 A**。
+
+### Q23 [DNEE] 改写宿主 Modal 外层
+
+[DNEE] `src/client/dialogs.js` 的 `usePanelConfinedLayer` 取宿主 Modal 卡片的 `parentElement`，加类名并写 `position:fixed` 与几何，在 `document.body` 上挂两个 `MutationObserver`，把卡片围进文件面板。违反 §1「改写宿主 portal 根节点」。
+
+- **A**：迁到窗口覆盖层（`openNanoDialog({ container })`）。
+- **B**：暂缓。
+- **推荐 A**：DESIGN §5 的合法承载。

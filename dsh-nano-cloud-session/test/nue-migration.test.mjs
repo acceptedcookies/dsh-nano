@@ -19,7 +19,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const srcDir = join(root, 'src')
@@ -40,6 +40,7 @@ const styles = textOf('styles.js')
 const settings = textOf('settings-dialog.js')
 const workbench = textOf('native-workbench.js')
 const newDialog = textOf('new-session-dialog.js')
+const sidebar = textOf('sidebar.js')
 
 /** Constructs that must not appear anywhere in the author tree (per file). */
 const ZERO_PATTERNS = [
@@ -56,6 +57,7 @@ const ZERO_PATTERNS = [
   ['nanoTabs (DOM tab factory)', /\bnanoTabs\b/g],
   ['getComputedStyle (host custom property read)', /\bgetComputedStyle\b/g],
   ['data-dncs-cloud', /data-dncs-cloud/g],
+  ['ctx.layout (undeclared service proxy)', /\bctx\.layout\b/g],
 ]
 
 const count = (text, re) => (text.match(re) ?? []).length
@@ -74,7 +76,7 @@ const allowedSelector = (selector) => selector.startsWith('[') && !/class/i.test
 
 test('T23: the source walk reached the DNCS author tree', () => {
   assert.ok(sources.length >= 10, `expected the DNCS author tree, walked ${sources.length} file(s)`)
-  for (const rel of ['index.js', 'section.js', 'styles.js', 'settings-dialog.js', 'native-workbench.js', 'new-session-dialog.js', 'confirm.js']) {
+  for (const rel of ['index.js', 'section.js', 'styles.js', 'settings-dialog.js', 'native-workbench.js', 'new-session-dialog.js', 'confirm.js', 'sidebar.js']) {
     assert.ok(sources.some((file) => file.path === join('src', 'client', rel)), `src/client/${rel} is part of the scan`)
   }
   assert.ok(index.length > 3_000 && section.length > 3_000, 'the browser entry and the section are the files under test')
@@ -93,6 +95,7 @@ test('T23 control: every zero pattern still fires on a fixture that carries it',
     'const stripWide = cls => cls',
     'const tabs = nanoTabs({ items: [] })',
     'const shown = getComputedStyle(node)',
+    'ctx.layout.toggleSidebar()',
   ].join('\n')
   for (const [name, re] of ZERO_PATTERNS) {
     assert.ok(count(fixture, re) > 0, `fixture carries ${name}`)
@@ -156,4 +159,28 @@ test('T23: the section body is rendered from primitives and tokens', () => {
   assert.equal(/window\.document\.querySelectorAll\('button'\)/.test(section), false, 'no host button scan')
   assert.match(section, /ResizeObserver/, 'the rail is detected from our own host width')
   assert.match(section, /face\.expandSidebar\(\)/, 'the rail entry uses the host layout service')
+})
+
+test('T23: the rail expand soft-reads the layout service instead of the inject proxy', async () => {
+  // Cordis throws `cannot get property "layout" without inject` on ctx.layout and an
+  // optional chain cannot catch that proxy error, so the only correct read is ctx.get.
+  assert.match(sidebar, /ctx\?\.get\?\.\('layout'\)/, 'layout is soft-read through ctx.get')
+  assert.equal(/\bctx\.layout\b/.test(sidebar), false, 'sidebar.js never touches the undeclared proxy')
+  assert.equal(/\bctx\.layout\b/.test(index), false, 'index.js never touches the undeclared proxy')
+  assert.equal(/inject\s*=\s*\[[^\]]*'layout'/.test(index), false, 'layout stays out of inject (no startup hard dependency)')
+  assert.match(index, /from '\.\/sidebar\.js'/, 'the helper is imported')
+  assert.match(index, /expandSidebar: \(\) => expandSidebar\(ctx\)/, 'the face delegates to the helper')
+
+  const { expandSidebar } = await import(pathToFileURL(join(root, 'src', 'client', 'sidebar.js')).href)
+  let toggles = 0
+  const ctx = {
+    get: name => (name === 'layout' ? { toggleSidebar: () => { toggles += 1 } } : undefined),
+    get layout() { throw new Error('cannot get property "layout" without inject') },
+  }
+  assert.equal(expandSidebar(ctx), true)
+  assert.equal(toggles, 1, 'the host toggle ran exactly once')
+  assert.equal(expandSidebar({ get: () => undefined }), false, 'an absent layout service falls back')
+  assert.equal(expandSidebar({ get: () => ({}) }), false, 'a layout service without the method falls back')
+  assert.equal(expandSidebar({ get: () => { throw new Error('boom') } }), false, 'a throwing lookup never escapes')
+  assert.equal(expandSidebar(undefined), false, 'a missing context falls back')
 })

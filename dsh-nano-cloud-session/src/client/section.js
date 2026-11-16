@@ -260,10 +260,11 @@ function sectionBody({ copy, face, state }) {
 }
 
 function CloudSection({ copy, face, state, rail }) {
-  /* Rail mode: one 36×36 icon entry. The host owns the sidebar toggle
-   * (`ctx.layout.toggleSidebar`), so the entry re-expands the sidebar instead of
-   * scanning the document for the host's own button; if the layout service is
-   * unavailable the entry opens the settings dialog so it is never dead. */
+  /* Rail mode: one 36×36 icon entry. The host owns the sidebar toggle (the
+   * `layout` service, soft-read in index.js), so the entry re-expands the sidebar
+   * instead of scanning the document for the host's own button; if the layout
+   * service is unavailable the entry opens the settings dialog so it is never
+   * dead. */
   if (rail) {
     return h('div', { className: 'dncs-section dncs-rail' },
       h(IconButton, {

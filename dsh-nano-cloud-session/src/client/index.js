@@ -9,6 +9,7 @@ import { registerNativeWorkbench, rememberWorkbenchSession } from './native-work
 import { CLOUD_CSS } from './styles.js'
 import { makeI18n } from './i18n.js'
 import { api } from './api.js'
+import { expandSidebar } from './sidebar.js'
 
 export const inject = ['slots', 'locale', 'uiWorkspace', 'sessions', 'sidebarRight', 'sidebarRightTabs']
 
@@ -91,16 +92,9 @@ export function apply(ctx, config = {}) {
     },
     copy: () => t,
     get locale() { return ctx.locale.getSnapshot().active },
-    /** Rail entry: the host owns the sidebar toggle, so no document scan. */
-    expandSidebar: () => {
-      try {
-        if (typeof ctx.layout?.toggleSidebar !== 'function') return false
-        ctx.layout.toggleSidebar()
-        return true
-      } catch {
-        return false
-      }
-    },
+    /** Rail entry: the host owns the sidebar toggle, so no document scan.
+     *  `layout` is soft-read (`ctx.get`); see sidebar.js. */
+    expandSidebar: () => expandSidebar(ctx),
     openSettings: () => store.set({ settingsOpen: true }),
     closeSettings: () => { store.set({ settingsOpen: false }); void refresh({ animate: true }) },
     openNew: () => store.set(store.current.activeId ? { newOpen: true } : { settingsOpen: true }),

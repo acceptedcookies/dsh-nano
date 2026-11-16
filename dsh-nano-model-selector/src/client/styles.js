@@ -239,7 +239,7 @@ body > div:has(> .nms-hist-dialog) {
 .nms-hist-dialog .nano-dialog-content { min-height: 0; }
 .nms-hist-dialog .nms-hist { flex: 1; min-height: 0; }
 .nms-hist-dialog .nms-hist-panel { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
-────────────────────────────────────────
+/* ── async-compaction history card ─────────────────────────────────────────
    Every value is a shell token: the card must follow the active theme without
    a second palette. Layout only — no control is restyled here. */
 .nms-hist { display: flex; flex-direction: column; gap: 12px; min-height: 0; }

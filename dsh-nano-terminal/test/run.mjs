@@ -455,20 +455,44 @@ e.dnt_free(id)
 
 // 13. 合同套件：test/*.test.mjs（node:test）由本入口一起收集，
 //     这样 `npm test` 一条命令同时覆盖 wasm 冒烟与迁移合同。
+//     `--test-reporter=tap` 显式固定：Node ≥ 24 在部分场景改用非 TAP 默认
+//     报告器，输出里没有 `# pass N`，整份合同套件会被静默记成 0 条通过而
+//     退出码仍是 0。这里同时要求出现 TAP 汇总、子文件至少收集到一条用例、
+//     退出码为 0，三者缺一即失败；空测试文件不再算通过。
 for (const file of readdirSync(join(root, 'test')).filter((f) => f.endsWith('.test.mjs')).sort()) {
-  const suite = spawnSync(process.execPath, ['--test', join(root, 'test', file)], { encoding: 'utf8' })
+  const suite = spawnSync(process.execPath, ['--test', '--test-reporter=tap', join(root, 'test', file)], { encoding: 'utf8' })
   const out = `${suite.stdout ?? ''}${suite.stderr ?? ''}`
-  const suitePass = Number(/# pass (\d+)/.exec(out)?.[1] ?? 0)
-  const suiteFail = Number(/# fail (\d+)/.exec(out)?.[1] ?? 0)
-  if (suite.status !== 0 && suiteFail === 0) {
-    // 崩溃 / 语法错不能当成 0 条通过。
-    console.error('FAIL:', `${file} exited ${suite.status} without a test summary`)
+  const passMatch = /^# pass (\d+)\s*$/m.exec(out)
+  const failMatch = /^# fail (\d+)\s*$/m.exec(out)
+  if (!passMatch || !failMatch) {
+    // 崩溃 / 语法错 / 报告器变更不能当成 0 条通过。
+    console.error('FAIL:', `${file} exited ${suite.status} without a TAP summary`)
     fail += 1
-  } else {
-    console.log(`  ${file}: ${suitePass} passed, ${suiteFail} failed`)
-    pass += suitePass
-    fail += suiteFail
+    continue
   }
+  const suitePass = Number(passMatch[1])
+  const suiteFail = Number(failMatch[1])
+  // Node 把「文件本身」也算成一条通过用例：空文件会输出
+  // `# Subtest: <路径>` + `ok 1 - <路径>` 与 `# pass 1`。去掉这个包装条目
+  // 后若一条真实用例都没有，就是空的合同文件，不能算通过。
+  const suitePath = join(root, 'test', file)
+  const subtests = [...out.matchAll(/^# Subtest: (.+)$/gm)]
+    .map((m) => m[1].trim())
+    .filter((name) => name !== suitePath && name !== file)
+  if (subtests.length === 0) {
+    // 空文件（或收集不到用例）不是通过。
+    console.error('FAIL:', `${file} reported 0 tests`)
+    fail += 1
+    continue
+  }
+  if (suite.status !== 0 && suiteFail === 0) {
+    console.error('FAIL:', `${file} exited ${suite.status} with no failing test`)
+    fail += 1
+    continue
+  }
+  console.log(`  ${file}: ${suitePass} passed, ${suiteFail} failed`)
+  pass += suitePass
+  fail += suiteFail
 }
 
 console.log(`${pass} passed, ${fail} failed`)

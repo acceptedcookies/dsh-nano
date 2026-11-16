@@ -168,11 +168,40 @@ test('T21: the repo U8 detector outputs zero for [DNT]', () => {
   assert.deepEqual(result.findings.filter(finding => finding.rule === 'U8'), [], 'no dead-style warning')
 })
 
-test('T21: the row does not add an exemption for the host toolbar', () => {
+test('T21: the only exemption is the pane-header button density, not the toolbar', () => {
   // nano-ui `Toolbar` is the sanctioned replacement (DESIGN.md §8), so this
-  // migration must not need a per-plugin exemption marker.
-  assert.deepEqual(countIn(sources, /nano-ui-exempt/g), [], 'nano-ui-exempt markers')
+  // migration must not need an exemption for the host toolbar. The one marker
+  // this package does carry is P3-03: the host `Button` bottoms out at 28px and
+  // the 20px pane-header density has no matching tier.
+  const markers = countIn(sources, /nano-ui-exempt/g)
+  assert.deepEqual(markers.map(marker => marker.path), [join('src', 'client', 'NanoTerm.jsx')], 'one marker, in NanoTerm.jsx')
+  assert.equal(markers[0].count, 1, 'exactly one nano-ui-exempt marker')
+  assert.ok(nanoTerm.includes('nano-ui-exempt: 宿主 Button 最小 28px，窗格头 20px 密度无对应档'), 'P3-03 marker text')
+  assert.ok(!/nano-ui-exempt[^\n]*[Tt]oolbar/.test(nanoTerm), 'the marker does not cover the host toolbar')
   const gaps = design.split(/^## 8\./m)[1].split(/^## 9\./m)[0]
   assert.match(gaps, /TrajectoryToolbar/)
   assert.match(gaps, /Toolbar/)
+})
+
+test('T21: no scrollbar takeover of the host conversation scroller', () => {
+  // Q21 / T-O-NUE1117-21: hiding the host scrollbar, cancelling its gutter and
+  // painting a floating replacement are deleted; the host keeps its scrollbar.
+  for (const [re, label] of [
+    [/data-conversation-scroll/g, 'host conversation scroll anchor'],
+    [/dnt-floatbar/g, 'floating scrollbar stand-in'],
+    [/\.observe\s*\(\s*document\s*\.\s*body/g, 'MutationObserver on document.body'],
+  ]) assert.deepEqual(countIn(sources, re), [], label)
+  // Positive control: whitespace variants must still be caught, so a reformatted
+  // reintroduction cannot slip past the zero assertions above.
+  const fixture = [{
+    path: join('src', 'client', 'fixture.js'),
+    text: 'document\n  .querySelector(\n    `[data-conversation-scroll]`)\n'
+      + 'new MutationObserver(fn)\n  .observe(\n    document.body,\n    { childList: true })\n'
+      + 'const bar = "dnt-floatbar"\n',
+  }]
+  for (const [re, label] of [
+    [/data-conversation-scroll/g, 'anchor'],
+    [/dnt-floatbar/g, 'floatbar'],
+    [/\.observe\s*\(\s*document\s*\.\s*body/g, 'body observer'],
+  ]) assert.equal(countIn(fixture, re).length, 1, label)
 })

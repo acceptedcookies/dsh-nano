@@ -219,3 +219,4 @@ U5 只覆盖上面三种模式。宿主 `data-*` 属性被当作样式钩子或�
 | `dsh-nano-explorer-extra/src/client/styles.js`（`.nxe-git-alert`） | 宿主 `Toast` 到 `holdMs` 自动结束，没有「常驻到用户关闭」的形态；Git 读取失败提示必须常驻，故由本包自绘 |
 | `dsh-nano-notepad/src/client/icons.js`（`googleIcon` / `textIcon` / `WIN_MIN_ICON` / `MAC_MIN_ICON` / `MAC_MAX_ICON` / `WIN_MAX_ICON` / `WIN_RESTORE_ICON`） | sprite 没有排版字形（段落 / H1–H3 / 粗体 / 斜体 / 删除线 / 有序列表 / 引用）与窗口按钮字形（最小化 / 最大化 / 还原 / macOS 交通灯），也没有 `Icon*` 的对应导出；且工具条与标题栏由 innerHTML 同步构建，宿主 `Icon*` React 组件无法在其中渲染 |
 | `dsh-nano-notepad/src/client/panel.js:919`（`setShortcut` 的悬浮提示） | 宿主 `Tooltip` 只接受**单个** React 子元素并 clone 后挂 handler / `aria-describedby`；启动器与工具条按钮是 innerHTML 串，且在挂载前要被读回几何做定位与拖拽，无法交给 React 持有，故改用原生 `title` + `aria-label` + `aria-keyshortcuts` |
+| `dsh-nano-terminal/src/client/NanoTerm.jsx`（`.dnt-bar-btn` / `.dnt-header .dnt-toolbtn`，9 个原生 `<button>`） | 宿主 `Button` 最小档 28px（size md/sm），状态条 24px 与窗格头 20px 图标密度没有对应档；9 个按钮保留原生实现（`P3-03`） |

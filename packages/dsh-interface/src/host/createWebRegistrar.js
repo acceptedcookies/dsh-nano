@@ -133,8 +133,13 @@ export function createWebRegistrar({ plugin, bindings } = {}) {
       rollback()
     }
     // Fold the whole batch into a single ctx.effect (idempotent teardown).
+    // The callback must RETURN the disposer: cordis runs the effect body
+    // immediately and treats its return value as the teardown function.
+    // `() => disposeAll()` would call rollback right now — registering every
+    // route and un-registering it in the same tick (live-verified 2026-11-16:
+    // all routes registered then DISPOSEd instantly, every plugin route 404).
     if (typeof ctx.effect === 'function') {
-      ctx.effect(() => disposeAll(), `web-registrar: ${plugin ?? 'plugin'} dispose`)
+      ctx.effect(() => disposeAll, `web-registrar: ${plugin ?? 'plugin'} dispose`)
     }
     return disposeAll
   }

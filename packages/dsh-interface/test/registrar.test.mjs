@@ -62,6 +62,11 @@ test('mixed batch registers http-exact, http-prefix and upgrade-exact; single ct
   // Routes mount per-route ctx.effect (guard contract) + one batch disposer.
   assert.ok(calls.effects.length >= 1, 'at least one ctx.effect mounted')
   assert.equal(typeof dispose, 'function')
+  // Regression (2026-11-16): ctx.effect runs its body eagerly — the batch
+  // disposer must be RETURNED, not invoked inside the body. Calling
+  // disposeAll() inside registered then unregistered every route in the same
+  // tick: all plugin routes 404'd on a live host.
+  assert.equal(calls.disposals.length, 0, 'no teardown may run during registerAll')
   // inventory reflects only effective bindings with channel+match fields.
   const inv = r.inventory()
   assert.equal(inv.length, 3)

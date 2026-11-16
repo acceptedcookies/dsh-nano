@@ -131,7 +131,7 @@ function createGuard({ table, plugin } = {}) {
           sendJson(res, 500, { ok: false, reason });
         }
       };
-      const register = () => ctx.get('webServer').register({ kind: ROUTE_KIND, path: spec.path, handler });
+      const register = () => ctx.get("webServer").register({ kind: ROUTE_KIND, path: spec.path, handler });
       if (typeof ctx.effect === "function") {
         disposers.push(ctx.effect(register, `route-guard: ${spec.path}`));
       } else {

@@ -418,7 +418,7 @@ function createGuard({ table, plugin } = {}) {
           sendJson(res, 500, { ok: false, reason });
         }
       };
-      const register = () => ctx.get('webServer').register({ kind: ROUTE_KIND, path: spec.path, handler });
+      const register = () => ctx.get("webServer").register({ kind: ROUTE_KIND, path: spec.path, handler });
       if (typeof ctx.effect === "function") {
         disposers.push(ctx.effect(register, `route-guard: ${spec.path}`));
       } else {
@@ -589,7 +589,7 @@ function createWebRegistrar({ plugin, bindings } = {}) {
             sendJson(res, 500, { ok: false, reason });
           }
         };
-        disposers.push(ctx.get('webServer').register({ kind: "prefix", path: b.path, handler }));
+        disposers.push(ctx.get("webServer").register({ kind: "prefix", path: b.path, handler }));
       }
       for (const b of byChannel.upgradeExact) {
         const handler = (req, socket) => {
@@ -610,7 +610,7 @@ function createWebRegistrar({ plugin, bindings } = {}) {
           }
           return b.handler(req, socket, bindingRecord(b));
         };
-        disposers.push(ctx.get('webServer').registerUpgrade({ path: b.path, handler }));
+        disposers.push(ctx.get("webServer").registerUpgrade({ path: b.path, handler }));
       }
     } catch (error) {
       rollback();
@@ -624,7 +624,7 @@ function createWebRegistrar({ plugin, bindings } = {}) {
       rollback();
     };
     if (typeof ctx.effect === "function") {
-      ctx.effect(() => disposeAll(), `web-registrar: ${plugin ?? "plugin"} dispose`);
+      ctx.effect(() => disposeAll, `web-registrar: ${plugin ?? "plugin"} dispose`);
     }
     return disposeAll;
   }

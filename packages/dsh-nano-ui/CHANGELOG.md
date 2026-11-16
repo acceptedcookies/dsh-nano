@@ -8,7 +8,7 @@ One hard cut: nano-ui wraps host primitives instead of redrawing them. No compat
 
 ### Added
 
-- `VERSION`; `NANO_STYLES` starts with `/* dsh-nano-ui@<version> */` so built bundles can be searched for it.
+- `VERSION`; `NANO_STYLES` starts with `/* dsh-nano-ui@<version> */`, and `src/version.js` opens with the legal comment `/*! dsh-nano-ui@<version> */`, which minified consumer bundles keep verbatim, so `grep dsh-nano-ui@<version>` finds it.
 - `NANO_LAYER` and `NANO_SPACE` (`src/layers.js`), emitted as `--nano-layer-*` and `--nano-space-1…6`. The only numeric layers in nano-ui.
 - `createThemeScope({ theme, element, pin, subscribe })` and `resolveScheme({ pin, theme })`: writes `data-nano-scheme`; when `pin` differs from the host scheme, re-declares that scheme's `--dsw-*` values from `catalog/tokens.json`.
 - `NanoWindowDialog`: a dialog inside its owner's container, joined to the host modal stack through `useModalLayer`.

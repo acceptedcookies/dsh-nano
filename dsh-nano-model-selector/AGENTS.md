@@ -169,13 +169,12 @@ npm run build
 
 面板入口：顶栏搜索框与关闭按钮之间的「异步压缩」按钮，仅当 companion bundle 已安装时出现，否则搜索框占满该位。目录刷新按钮在搜索框内。页内四态（未安装/未启用/已启用/degraded），开关走 `POST …/switch`；B/H/pinnedAsyncTokens/model 可编辑 PUT。
 
-历史视图：会话头部「更多操作」菜单里的「异步压缩历史」（`ctx.contextMenus.register({target:'sessionHeader', order:500})`），打开 nano-ui `NanoDialog`。卡片顶部是水位尺（当前 fill 对 H/B/S 三条线，越过 B 即为应有 episode 的状态），下面是触发/执行/成功/失败四个计数，再下是「时间线 / 诊断」两个页签：时间线逐条列出决策（可展开看原始 JSON），诊断给出 `bundle/policy/effective/runtime/history` 的完整快照并支持一键复制。全部控件来自官方 primitive（`SegmentedControl`/`Tag`/`Tooltip`/`Button`/`relativeTime`/`writeClipboard`），配色只读 `--dsw-*` token。
+历史视图：会话头部「更多操作」菜单里的「异步压缩历史」（`ctx.contextMenus.register({target:'sessionHeader', order:500})`），打开 nano-ui `NanoDialog`（主窗口级，宿主 `Modal` 承载遮罩、居中与焦点）。卡片顶部是水位尺（当前 fill 对 H/B/S 三条线，越过 B 即为应有 episode 的状态），下面是触发/执行/成功/失败四个计数，再下是「时间线 / 诊断」两个页签：时间线逐条列出决策（可展开看原始 JSON），诊断给出 `bundle/policy/effective/runtime/history` 的完整快照并支持一键复制。全部控件来自官方 primitive（`SegmentedControl`/`Tag`/`Button`/`relativeTime`/`writeClipboard`），配色只读 `--dsw-*` token。面板里的接管开关是宿主 `Switch`，场景页签是宿主 `SegmentedControl`，模型与媒体引擎标签是宿主 `Tag`。
 
-三个必须遵守的呈现约束：
+两个必须遵守的呈现约束：
 
-1. **归属 chat-interface**：卡片由 shell portal 到 `<body>` 并在视口居中，所以用 `body > div:has(> .nms-hist-dialog)` 把遮罩盒收进 `[data-conversation-region="chat"]` 的矩形（组件测出后写 `--nms-region-*` 变量）。引擎不支持 `:has()` 时退回整窗，不会坏版。
-2. **固定高度**：时间线与诊断内容量差很大，内容撑高会让卡片在切页签时跳。`.nms-hist-dialog { height: min(560px, calc(100vh - 96px)) }`，正文滚动。
-3. **页签用 `SegmentedControl` 而非 `SegmentedTabs`**：后者每个页签渲染一个 `Pill`，看起来像自绘的描边控件；前者是 shell 自己的滑动指示器。
+1. **固定高度**：时间线与诊断内容量差很大，内容撑高会让卡片在切页签时跳。`NanoDialog` 传 `fixedHeight: 560`，正文滚动。
+2. **页签用 `SegmentedControl` 而非 `SegmentedTabs`**：后者每个页签渲染一个 `Pill`，看起来像自绘的描边控件；前者是 shell 自己的滑动指示器。
 
 状态徽标：会话头部操作区（`conversation.session.header.utilities`，list slot，**必须带 `id`**，否则注册被拒）显示 `异步压缩已排队` / `正在异步压缩` / `已异步压缩 · N 条` / `异步压缩失败`，悬停给出摘要模型与 `摘要 v<8位指纹>`。指纹是生效摘要 prompt 的 sha256 前 8 位（内置与自定义不同，改 `summaryPrompt` 即变）。
 

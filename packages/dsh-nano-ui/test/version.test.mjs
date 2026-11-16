@@ -12,6 +12,10 @@ test('VERSION is 0.2.0 and matches package.json', () => {
   assert.equal(pkg.version, '0.2.0')
 })
 
+test('version.js carries a legal-comment marker equal to VERSION', () => {
+  assert.ok(readSrc('version.js').startsWith(`/*! dsh-nano-ui@${VERSION} */\n`))
+})
+
 test('NANO_STYLES opens with the dsh-nano-ui@VERSION comment', () => {
   assert.match(readSrc('styles.js'), /export const NANO_STYLES = `\/\* dsh-nano-ui@\$\{VERSION\} \*\/\n/)
 })

@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import { createPortal } from 'react-dom'
-import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Tag, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import { NanoToast } from 'dsh-nano-ui'
 import { copyFor } from './i18n.js'
 import { BrandMark } from './BrandMark.jsx'
@@ -30,6 +30,9 @@ import { STYLE } from './styles.js'
 import { perf, setModelSelectorRoot } from './perf.js'
 
 const STYLE_ID = 'nano-model-selector-style'
+/** Tones the host Tag styles; a catalog badge tone outside this set falls back to neutral. */
+const TAG_TONES = new Set(['neutral', 'info', 'success', 'warning', 'danger', 'outline', 'quiet', 'solid'])
+const tagTone = tone => TAG_TONES.has(tone) ? tone : 'neutral'
 
 /* Catalog face through the single JsonOutcome codec (CF1115 / T13). */
 const CATALOG_OP = jsonOp({ method: 'GET', url: '/nano-model-selector/catalog' })
@@ -912,9 +915,9 @@ export function ModelSelector({ locked, available, directory, load, select, lang
                               <span className="nms-model-copy">
                                 <span className="nms-model-line">
                                   <span className="nms-model-name">{engine.label}</span>
-                                  <span className={`nms-tag ${engine.available ? 'nms-tag-success' : 'nms-tag-warning'}`}>
+                                  <Tag tone={engine.available ? 'success' : 'warning'}>
                                     {engine.available ? copy.mediaEngineDetected : copy.mediaEngineMissing}
-                                  </span>
+                                  </Tag>
                                 </span>
                                 <span className="nms-model-desc">{engine.available ? engine.path : engine.detail}</span>
                                 <span className="nms-model-meta">{copy.mediaHint}</span>
@@ -998,7 +1001,7 @@ export function ModelSelector({ locked, available, directory, load, select, lang
         document.body,
       )}
 
-      {toast !== null && <NanoToast key={toast.seq} text={toast.text} />}
+      {toast !== null && <NanoToast key={toast.seq} text={toast.text} anchor={triggerRef.current} />}
     </div>
   )
 
@@ -1052,8 +1055,8 @@ export function ModelSelector({ locked, available, directory, load, select, lang
           <span className="nms-model-copy">
             <span className="nms-model-line">
               <span className="nms-model-name">{item.model.name}</span>
-              {badge !== undefined && <span className={`nms-tag nms-tag-${badge.tone ?? 'neutral'}`}>{resolveText(badge.text) || textValue(badge.text)}</span>}
-              {context !== '' && <span className="nms-tag">{context}</span>}
+              {badge !== undefined && <Tag tone={tagTone(badge.tone)}>{resolveText(badge.text) || textValue(badge.text)}</Tag>}
+              {context !== '' && <Tag tone="neutral">{context}</Tag>}
             </span>
             <span className="nms-model-desc">{description ?? item.model.id}</span>
             <span className="nms-model-meta">{meta}</span>

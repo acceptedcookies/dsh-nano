@@ -10,8 +10,9 @@
  *
  * Design rules honoured here:
  *  - chrome comes from nano-ui's NanoDialog, never a bespoke modal;
- *  - every control and glyph is an official shell primitive (`SegmentedTabs`,
- *    `Tag`, `StateDot`, `Tooltip`, `Button`, `relativeTime`, `writeClipboard`);
+ *  - every control is an official shell primitive (`SegmentedControl`, `Tag`,
+ *    `Button`, `relativeTime`, `writeClipboard`);
+ *  - it is a main-window dialog: the host Modal owns mask, placement and focus;
  *  - every color/space/radius reads a `--dsw-*` token, so the card follows the
  *    active theme in both light and dark;
  *  - the water-line gauge is the diagnostic core: it shows fill against H/B/S
@@ -22,7 +23,6 @@ import {
   Button,
   SegmentedControl,
   Tag,
-  Tooltip,
   relativeTime,
   writeClipboard,
 } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -68,7 +68,7 @@ function RecordRow({ record, now, copy }) {
  * so a manual refresh is the honest interaction (no polling that would imply
  * live progress the engine does not publish).
  */
-export function AsyncHistoryDialog({ copy, sessionId, regionElement, onClose }) {
+export function AsyncHistoryDialog({ copy, sessionId, onClose }) {
   const [state, setState] = React.useState({ status: 'loading', data: null, error: null })
   // Diagnostics only: the bundle inventory is a separate, on-demand read
   // (see lib/bundle-inventory.js) and must never ride the ledger refresh.
@@ -103,29 +103,6 @@ export function AsyncHistoryDialog({ copy, sessionId, regionElement, onClose }) 
     const timer = setTimeout(load, LIVE_REFRESH_MS)
     return () => clearTimeout(timer)
   }, [state.status, live, state.data, load])
-
-  // Contain the whole overlay (mask included) inside the chat pane. NanoDialog
-  // portals the card to <body>, so the only lever is the overlay's own box; the
-  // `:has()` rule in the stylesheet reads these variables.
-  React.useEffect(() => {
-    const root = document.body
-    const apply = () => {
-      const rect = regionElement?.getBoundingClientRect?.()
-      if (rect === undefined || rect === null || rect.width === 0) return
-      root.style.setProperty('--nms-region-top', `${Math.round(rect.top)}px`)
-      root.style.setProperty('--nms-region-left', `${Math.round(rect.left)}px`)
-      root.style.setProperty('--nms-region-right', `${Math.round(globalThis.innerWidth - rect.right)}px`)
-      root.style.setProperty('--nms-region-bottom', `${Math.round(globalThis.innerHeight - rect.bottom)}px`)
-    }
-    apply()
-    globalThis.addEventListener('resize', apply)
-    return () => {
-      globalThis.removeEventListener('resize', apply)
-      for (const key of ['--nms-region-top', '--nms-region-left', '--nms-region-right', '--nms-region-bottom']) {
-        root.style.removeProperty(key)
-      }
-    }
-  }, [regionElement])
 
   const history = state.data?.history ?? null
   const policy = state.data?.policy ?? null
@@ -189,6 +166,9 @@ export function AsyncHistoryDialog({ copy, sessionId, regionElement, onClose }) 
     title: copy.historyTitle,
     description: copy.historySubtitle.replace('{session}', sessionId.slice(0, 18)),
     width: 620,
+    // Timeline and diagnostics hold very different amounts of content; a
+    // content-sized card jumped on every tab switch, so the body is fixed and scrolls.
+    fixedHeight: 560,
     className: 'nms-hist-dialog',
     footer: React.createElement(React.Fragment, null,
       React.createElement(Button, {

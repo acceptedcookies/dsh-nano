@@ -1,6 +1,7 @@
 /** Async-compaction takeover panel (-20): four states U1–U4 driven by the host's read-only projection. */
 
 import * as React from 'react'
+import { SegmentedControl, Switch } from '@deepseek-ai/dsh-client-ui-primitives'
 import { CheckIcon, CloseIcon, CompactionIcon, WarningIcon } from './icons.jsx'
 import { fetchBundleState, fetchCompactState, postCompactSwitch, putCompactPolicy } from './compact.js'
 import { DEFAULT_SUMMARY_PROMPT } from '../../lib/compact-prompt.js'
@@ -260,17 +261,12 @@ export function CompactPanel({ copy, models, onError }) {
           <span className="nms-model-name">{enabled ? copy.compactEnabled : copy.compactDisabled}</span>
           <span className="nms-compact-card-desc">{copy.compactSubtitle}</span>
         </div>
-        <button
-          type="button"
-          className="nms-switch"
-          role="switch"
-          aria-checked={enabled}
-          aria-label={enabled ? copy.compactEnabled : copy.compactDisabled}
+        <Switch
+          checked={enabled}
+          onChange={doSwitch}
+          label={enabled ? copy.compactEnabled : copy.compactDisabled}
           disabled={busy}
-          onClick={() => doSwitch(!enabled)}
-        >
-          <span className="nms-switch-thumb" />
-        </button>
+        />
       </div>
 
       {/* U4 degraded: read failure keeps only the safety line live. */}
@@ -407,21 +403,13 @@ function ScenarioBox({ copy, meterDown, degraded, policy, effective, modelLabel 
     <div className="nms-compact-explain">
       <div className="nms-explain-head">
         <span className="nms-compact-field-label">{copy.compactExplainTitle}</span>
-        <span className="nms-explain-tabs" role="tablist">
-          {SCENARIO_KEYS.map((scenario, index) => (
-            <button
-              key={scenario.tab}
-              type="button"
-              role="tab"
-              aria-selected={index === tab}
-              className="nms-explain-tab"
-              data-active={index === tab}
-              onClick={() => setTab(index)}
-            >
-              {copy[scenario.tab]}
-            </button>
-          ))}
-        </span>
+        <SegmentedControl
+          id="nms-compact-explain"
+          value={active.tab}
+          options={SCENARIO_KEYS.map(scenario => ({ value: scenario.tab, label: copy[scenario.tab] }))}
+          onChange={value => setTab(Math.max(0, SCENARIO_KEYS.findIndex(scenario => scenario.tab === value)))}
+          label={copy.compactExplainTitle}
+        />
       </div>
       <div className="nms-explain-body">{interpolate(copy[active.body], vars)}</div>
     </div>

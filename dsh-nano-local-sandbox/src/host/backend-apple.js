@@ -157,10 +157,25 @@ rows = int(os.environ.get("DNLS_ROWS", "24"))
 pid, fd = pty.fork()
 if pid == 0:
     os.execvp(cmd[0], cmd)
-winsz = struct.pack("HHHH", rows, cols, 0, 0)
-fcntl.ioctl(fd, termios.TIOCSWINSZ, winsz)
+fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
+# fd 3 carries "rows cols\\n" resize lines; the kernel sends SIGWINCH on change.
+ctl = os.fdopen(3, "rb", buffering=0)
+pending = b""
+watch = [fd, sys.stdin, ctl]
 while True:
-    ready, _, _ = select.select([fd, sys.stdin], [], [])
+    ready, _, _ = select.select(watch, [], [])
+    if ctl in ready:
+        chunk = os.read(3, 256)
+        if not chunk:
+            watch.remove(ctl)
+        pending += chunk
+        while b"\\n" in pending:
+            line, pending = pending.split(b"\\n", 1)
+            try:
+                r, c = (int(x) for x in line.split())
+                fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", r, c, 0, 0))
+            except (ValueError, OSError):
+                pass
     if fd in ready:
         try:
             data = os.read(fd, 4096)
@@ -181,10 +196,20 @@ export function spawnContainerPty(containerName, { cols = 80, rows = 24 } = {}, 
   const argv = ['container', 'exec', '-it', String(containerName), '/bin/sh']
   if (typeof io.spawnPty === 'function') return io.spawnPty(argv, { cols, rows })
   if (io.calls) io.calls.spawn += 1
+  return spawnPtyProcess(argv, { cols, rows })
+}
+
+/** Runs argv under a local pty; `resize(cols, rows)` reaches it through fd 3. */
+export function spawnPtyProcess(argv, { cols = 80, rows = 24 } = {}) {
   const child = spawn('python3', ['-c', PTY_PY, ...argv], {
-    stdio: ['pipe', 'pipe', 'pipe'],
+    stdio: ['pipe', 'pipe', 'pipe', 'pipe'],
     env: { ...process.env, DNLS_COLS: String(cols), DNLS_ROWS: String(rows) },
   })
-  child.resize = () => {}
+  child.resize = (nextCols, nextRows) => {
+    const c = Math.trunc(Number(nextCols))
+    const r = Math.trunc(Number(nextRows))
+    if (!(c >= 2 && c <= 512 && r >= 2 && r <= 512)) return
+    try { child.stdio[3]?.write(`${r} ${c}\n`) } catch { /* pty exiting */ }
+  }
   return child
 }

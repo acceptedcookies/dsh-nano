@@ -17,3 +17,9 @@
 
 - P2-1 八个 `term.session.*` 与二十个 `sandbox.*` 同挂 `/nano-local-sandbox/mcp`。`sessionId` 必填，不得变成 `term-1`。同一会话一张活动 PTY。`attach.protocol=dnt-ws-v1`，`attach.url` 是正在听的绝对地址。容器未运行或 `sandbox.instance.policy-stale` 不回 URL。快照的 `terminal` 面不参与 `ready`。
 - P2-2 [DNT] `McpLane` 只接受绝对 `ws|wss`，不改 query，不降级 `wss`，不发送 `v:2`，传输重连至多一次。菜单去掉「新建隔离实例」，不再出现 `http://container:PORT/mcp`。
+
+## P3（[业主] 授权按推荐裁量，2026-11-17）
+
+- P3-1 `term.session.*` 失败不新增 DNLS errorId。沿用已冻结的 dnt 十三 errorKinds，以 `kind` 返回：缺 `sessionId` 为 `needs_target`（400），无此终端为 `not_found`（404），容器未运行为 `unavailable`（409），PTY 起不来为 `spawn_failed`（502），未知工具为 `invalid`（400）。策略失配仍是已登记的 `sandbox.instance.policy-stale`（409）。
+- P3-2 容器 PTY 的 resize 生效：PTY 辅助进程经 fd 3 收 `rows cols` 行并设置窗口尺寸，范围与 `term.session.resize` 的 2..512 一致。
+- P3-3 同一会话的重叠观察共享一次探测，不做跨次缓存；每次新读取仍是新快照。

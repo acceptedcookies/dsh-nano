@@ -4,7 +4,7 @@ import test from 'node:test'
 import { decodeMcpReply } from '../../packages/dsh-interface/src/host/decodeMcpReply.js'
 import { registerRoutes } from '../lib/route-guard.js'
 import { ROUTE_TABLE } from '../lib/route-table.js'
-import { spawnContainerPty } from '../src/host/backend-apple.js'
+import { spawnContainerPty, spawnPtyProcess } from '../src/host/backend-apple.js'
 import { routeSpecs } from '../src/host/routes.js'
 import { resetClient } from '../src/host/cdp-elements.js'
 import { shutdownTerms } from '../src/host/term-bridge.js'
@@ -209,6 +209,26 @@ test('a changed live policy fingerprint blocks create from the registry row', as
   assert.equal(JSON.stringify(result.body).includes('ws://'), false)
 })
 
+test('overlapping status reads share one probe pass', async () => {
+  let inspects = 0
+  const routes = routesFor(deps({
+    session: { phase: 'running', history: [], containerName: 'kitesurf-dev', httpBase: 'http://127.0.0.1:1' },
+    backend: { async inspect() { inspects += 1; await new Promise((r) => setTimeout(r, 30)); return running.inspect() } },
+  }))
+  const get = async () => {
+    let raw = ''
+    const res = { statusCode: 0, setHeader() {}, end(text) { raw = text } }
+    await routes['/nano-local-sandbox/status'].handler({ method: 'GET', url: '/nano-local-sandbox/status' }, res)
+    return JSON.parse(raw)
+  }
+  const [a, b, c] = await Promise.all([get(), get(), get()])
+  assert.equal(inspects, 1)
+  assert.equal(a.epoch, b.epoch)
+  assert.equal(b.epoch, c.epoch)
+  await get()
+  assert.equal(inspects, 2, 'a later read probes again; nothing is cached past the pass')
+})
+
 test('resetClient bumps generation and records one network gap', () => {
   const session = { cdp: { close() {} }, network: [{ url: 'https://example.com' }] }
   resetClient(session)
@@ -218,4 +238,49 @@ test('resetClient bumps generation and records one network gap', () => {
   resetClient(session)
   assert.equal(session.cdpGeneration, 2)
   assert.equal(session.network.filter((row) => row.gap === true).length, 2)
+})
+
+test('resize reaches the pty: stty sees the new size', { skip: process.platform === 'win32' }, async () => {
+  const child = spawnPtyProcess(['/bin/sh', '-c', 'stty size; read x; stty size'], { cols: 80, rows: 24 })
+  let seen = ''
+  child.stdout.on('data', (chunk) => { seen += chunk.toString('utf8') })
+  const waitFor = (re) => new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`no ${re} in ${JSON.stringify(seen)}`)), 5000)
+    const tick = setInterval(() => { if (re.test(seen)) { clearTimeout(timer); clearInterval(tick); resolve() } }, 20)
+  })
+  try {
+    await waitFor(/24 80/)
+    child.resize(100, 30)
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    child.stdin.write('\n')
+    await waitFor(/30 100/)
+  } finally {
+    child.kill('SIGKILL')
+  }
+})
+
+test('term.session.* failures use frozen dnt kinds and HTTP status, not new errorIds', async () => {
+  const routes = routesFor(deps())
+  const noSession = await call(routes['/nano-local-sandbox/mcp'], {
+    jsonrpc: '2.0', id: 41, method: 'tools/call',
+    params: { name: 'term.session.create', arguments: { cols: 80, rows: 24 } },
+  })
+  assert.equal(noSession.status, 400)
+  assert.equal(noSession.body.result.kind, 'needs_target')
+  assert.equal(noSession.body.result.errorId, undefined)
+  const gone = await call(routes['/nano-local-sandbox/mcp'], {
+    jsonrpc: '2.0', id: 42, method: 'tools/call',
+    params: { name: 'term.session.read', arguments: { id: 'never-opened' } },
+  })
+  assert.equal(gone.status, 404)
+  assert.equal(gone.body.result.kind, 'not_found')
+  const down = routesFor(deps({
+    backend: { async inspect() { return { raw: JSON.stringify([{ status: { state: 'stopped' }, configuration: { publishedPorts: [] } }]) } } },
+  }))
+  const unavailable = await call(down['/nano-local-sandbox/mcp'], {
+    jsonrpc: '2.0', id: 43, method: 'tools/call',
+    params: { name: 'term.session.create', arguments: { sessionId: 'sess-k', cols: 80, rows: 24 } },
+  })
+  assert.equal(unavailable.status, 409)
+  assert.equal(unavailable.body.result.kind, 'unavailable')
 })

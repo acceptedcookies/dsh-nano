@@ -4,9 +4,15 @@ import { listenTermSocket } from './term-ws.js'
 /** One active PTY per dsh sessionId. The URL is published only after listen(). */
 const active = new Map()
 
-function reject(errorId, error) {
-  return { ok: false, errorId, error }
+// Terminal failures use the frozen dnt error kinds, not new DNLS errorIds.
+// Policy staleness keeps its catalogued sandbox.* id.
+const KIND_STATUS = { needs_target: 400, not_found: 404, unavailable: 409, spawn_failed: 502 }
+
+function reject(kind, error) {
+  return { ok: false, kind, status: KIND_STATUS[kind], error }
 }
+
+const missing = () => reject('not_found', 'no terminal')
 
 export function termStateFor(sessionId) {
   const row = sessionId ? active.get(sessionId) : null
@@ -16,24 +22,24 @@ export function termStateFor(sessionId) {
 
 export async function openTermSession({ sessionId, cols = 80, rows = 24, containerRunning, policyStale, spawnPty }) {
   if (typeof sessionId !== 'string' || sessionId.length === 0 || sessionId === 'term-1') {
-    return reject('term.session.session', 'sessionId is required')
+    return reject('needs_target', 'sessionId is required')
   }
-  if (policyStale) return reject('sandbox.instance.policy-stale', 'policy fingerprint mismatch')
-  if (containerRunning !== true) return reject('kitesurf.engine.connect', 'container is not running')
+  if (policyStale) return { ok: false, errorId: 'sandbox.instance.policy-stale', error: 'policy fingerprint mismatch' }
+  if (containerRunning !== true) return reject('unavailable', 'container is not running')
   const existing = active.get(sessionId)
   if (existing && !existing.closed) {
     return { ok: true, id: existing.id, attach: { protocol: 'dnt-ws-v1', url: existing.url } }
   }
-  if (typeof spawnPty !== 'function') return reject('kitesurf.engine.connect', 'no pty spawn')
+  if (typeof spawnPty !== 'function') return reject('spawn_failed', 'no pty spawn')
   let child
   try {
     child = spawnPty({ sessionId, cols, rows })
   } catch (error) {
-    return reject('kitesurf.engine.connect', error.message || 'pty spawn failed')
+    return reject('spawn_failed', error.message || 'pty spawn failed')
   }
   if (!child?.stdin || !child?.stdout) {
     try { child?.kill?.() } catch { /* not started */ }
-    return reject('kitesurf.engine.connect', 'pty spawn failed')
+    return reject('spawn_failed', 'pty spawn failed')
   }
   const path = `/term?session=${encodeURIComponent(sessionId)}&token=${randomBytes(16).toString('hex')}`
   const bridge = listenTermSocket({
@@ -56,7 +62,7 @@ export async function openTermSession({ sessionId, cols = 80, rows = 24, contain
     bridge.close()
     return error
   })
-  if (port instanceof Error || !port) return reject('kitesurf.engine.connect', 'pty socket failed')
+  if (port instanceof Error || !port) return reject('spawn_failed', 'pty socket failed')
   bridge.server.unref()
   child.unref?.()
   const url = `ws://127.0.0.1:${port}${path}`
@@ -78,16 +84,16 @@ export async function openTermSession({ sessionId, cols = 80, rows = 24, contain
 
 export function writeTermSession(sessionId, data) {
   const row = active.get(sessionId)
-  if (!row || row.closed) return { ok: false, errorId: 'term.session.missing', error: 'no terminal' }
+  if (!row || row.closed) return missing()
   try { row.child.stdin.write(Buffer.from(String(data))) } catch (error) {
-    return { ok: false, errorId: 'kitesurf.engine.connect', error: error.message }
+    return reject('unavailable', error.message)
   }
   return { ok: true, id: sessionId }
 }
 
 export function readTermSession(sessionId, lines = 50) {
   const row = active.get(sessionId)
-  if (!row || row.closed) return { ok: false, errorId: 'term.session.missing', error: 'no terminal' }
+  if (!row || row.closed) return missing()
   const text = row.output.join('')
   const tail = text.split('\n').slice(-lines).join('\n')
   return { ok: true, id: sessionId, text: tail }
@@ -95,14 +101,14 @@ export function readTermSession(sessionId, lines = 50) {
 
 export function resizeTermSession(sessionId, cols, rows) {
   const row = active.get(sessionId)
-  if (!row || row.closed) return { ok: false, errorId: 'term.session.missing', error: 'no terminal' }
-  try { row.child.resize?.(cols, rows) } catch { /* size is best-effort */ }
+  if (!row || row.closed) return missing()
+  try { row.child.resize?.(cols, rows) } catch { /* the pty may be exiting */ }
   return { ok: true, id: sessionId, cols, rows }
 }
 
 export function closeTermSession(sessionId) {
   const row = active.get(sessionId)
-  if (!row) return { ok: false, errorId: 'term.session.missing', error: 'no terminal' }
+  if (!row) return missing()
   row.closed = true
   active.delete(sessionId)
   try { row.child.kill?.('SIGKILL') } catch { /* already gone */ }

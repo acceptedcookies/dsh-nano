@@ -263,11 +263,25 @@ async function probeCdp(session, httpBase, httpUp, deps) {
   }
 }
 
+const inflight = new WeakMap()
+
 /**
  * The only observation document. There is no shallow mode: every caller
  * sees the same planes. `ready` is the pane bit; `healthy` is that same bit.
+ * Overlapping reads for one session share a single probe pass, so the pane's
+ * 1.5s poll plus MCP reads never stack CDP/bridge probes.
  */
-async function envSnapshot(session, deps) {
+function envSnapshot(session, deps) {
+  const running = inflight.get(session)
+  if (running) return running
+  const pass = observeOnce(session, deps).finally(() => {
+    if (inflight.get(session) === pass) inflight.delete(session)
+  })
+  inflight.set(session, pass)
+  return pass
+}
+
+async function observeOnce(session, deps) {
   const name = containerNameFor(session, deps.env || process.env)
   const host = envHostPorts(deps.env || process.env)
   let info = null
@@ -804,7 +818,7 @@ async function callTermTool(name, args, session, deps) {
   if (name === 'term.session.read') return readTermSession(args.id, args.lines)
   if (name === 'term.session.resize') return resizeTermSession(args.id, args.cols, args.rows)
   if (name === 'term.audit' || name === 'term.lane.status') return { ok: true, sessions: listTermSessions() }
-  return { ok: false, errorId: 'kitesurf.tool.unknown', error: `no terminal tool ${name}` }
+  return { ok: false, kind: 'invalid', status: 400, error: `no terminal tool ${name}` }
 }
 
 export function routeSpecs(deps = {}) {

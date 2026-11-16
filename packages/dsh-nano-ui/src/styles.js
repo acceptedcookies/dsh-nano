@@ -127,4 +127,9 @@ export const NANO_STYLES = `
 .nano-tab[aria-selected="true"]::after { content: ''; position: absolute; left: 22%; right: 22%; bottom: -3px;
   height: 2px; border-radius: 1px; background: var(--dsw-alias-focus-ring, #4c9aff); }
 .nano-tab:focus-visible { outline: 2px solid var(--dsw-alias-focus-ring, #4c9aff); outline-offset: -2px; }
+/* React tabbed body (NanoTabs): the strip stays fixed and only the active
+   panel scrolls, so a fixed-height dialog never resizes when tabs switch. */
+.nano-tabs-wrap { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.nano-tabs-panel { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-top: 10px; }
+.nano-tabs-panel[hidden] { display: none; }
 `

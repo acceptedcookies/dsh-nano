@@ -35,9 +35,11 @@
  * links are created as junctions.
  */
 import { spawnSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
+import { createRequire } from 'node:module'
 import {
   cpSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync,
-  rmSync, symlinkSync, writeFileSync,
+  realpathSync, rmSync, statSync, symlinkSync, writeFileSync,
 } from 'node:fs'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -45,6 +47,10 @@ import { homedir } from 'node:os'
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
 const isWin = process.platform === 'win32'
+const repoGitSha = (() => {
+  const r = spawnSync('git', ['rev-parse', '--short', 'HEAD'], { cwd: repoRoot, encoding: 'utf8' })
+  return r.status === 0 ? r.stdout.trim() : 'dev'
+})()
 
 function fail(msg) { console.error(`[deploy] ${msg}`); process.exit(1) }
 function log(msg) { console.log(`[deploy] ${msg}`) }
@@ -161,6 +167,66 @@ if (!profile) {
 }
 const profileDir = join(profilesRoot, profile)
 
+
+// ---- integrity -----------------------------------------------------------------
+/** SHA-256 of one file. */
+function sha256(path) {
+  return createHash('sha256').update(readFileSync(path)).digest('hex')
+}
+
+/** Walk `root` and return every regular file as a posix-ish relative path. */
+function walkFiles(root, prefix = '', out = []) {
+  for (const entry of readdirSync(root, { withFileTypes: true })) {
+    const rel = prefix ? `${prefix}/${entry.name}` : entry.name
+    const full = join(root, entry.name)
+    if (entry.isDirectory()) walkFiles(full, rel, out)
+    else if (entry.isFile()) out.push(rel)
+  }
+  return out
+}
+
+/** Compare a copied file/dir tree against its source; push every mismatch. */
+function verifyTree(src, dst, entry, problems) {
+  if (!existsSync(dst)) { problems.push(`deployed file missing: ${entry}`); return }
+  const srcStat = statSync(src)
+  const dstStat = statSync(dst)
+  if (srcStat.isDirectory() !== dstStat.isDirectory()) { problems.push(`type mismatch: ${entry}`); return }
+  if (srcStat.isDirectory()) {
+    const srcFiles = walkFiles(src).sort()
+    const dstFiles = walkFiles(dst).sort()
+    if (srcFiles.join('\0') !== dstFiles.join('\0')) { problems.push(`file set differs: ${entry}`); return }
+    for (const rel of srcFiles) {
+      if (sha256(join(src, rel)) !== sha256(join(dst, rel))) problems.push(`content differs: ${entry}/${rel}`)
+    }
+    return
+  }
+  if (sha256(src) !== sha256(dst)) problems.push(`content differs: ${entry}`)
+}
+
+/** Replace a pnpm virtual-store copy with a symlink to the staged plugin.
+ *  pnpm materialises `file:` deps as real directories; a deploy that only
+ *  refreshes <dshHome>/plugins leaves that second copy stale and the app can
+ *  load the old bundle. One package, one physical copy. */
+function relinkPnpmCopies(name, profileDir, pluginDir, summary) {
+  const pnpmDir = join(profileDir, 'node_modules', '.pnpm')
+  if (!existsSync(pnpmDir)) return
+  for (const entry of readdirSync(pnpmDir)) {
+    if (!entry.startsWith(`${name}@`)) continue
+    const holder = join(pnpmDir, entry, 'node_modules')
+    const copy = join(holder, name)
+    const stat = lstatSync(copy, { throwIfNoEntry: false })
+    if (!stat) continue
+    if (stat.isSymbolicLink()) {
+      // Already a link — retarget if it points somewhere else.
+      if (resolve(realpathSync(copy)) === resolve(pluginDir)) continue
+    }
+    rmSync(copy, { recursive: true, force: true })
+    const target = relative(holder, pluginDir)
+    symlinkSync(target, copy, isWin ? 'junction' : 'dir')
+    summary.push(`  relink ${copy} -> ${target}`)
+  }
+}
+
 // ---- deploy -------------------------------------------------------------------
 log(`home=${dshHome} profile=${profile} plugins=${plugins.map(p => p.name).join(',')}${dryRun ? ' [dry-run]' : ''}`)
 
@@ -223,6 +289,14 @@ for (const plugin of plugins) {
     const deployed = { ...pkg, dependencies: {} }
     delete deployed.devDependencies
     writeFileSync(join(dst, 'package.json'), JSON.stringify(deployed, null, 2) + '\n')
+    // Build identity the host reports as buildId; the client bundle bakes the
+    // same value. A mismatch means two different deploys are in memory.
+    writeFileSync(join(dst, 'build.json'), JSON.stringify({
+      version: pkg.version,
+      gitSha: repoGitSha,
+      buildId: `${pkg.version}+${repoGitSha}`,
+      builtAt: new Date().toISOString(),
+    }, null, 2) + '\n')
   }
   summary.push(`  ${name} -> ${dst} (${files.length} file entries)`)
   restoreGenerated(name, plugin)
@@ -267,18 +341,33 @@ for (const { name } of plugins) {
   // Junction on Windows (no admin needed), dir symlink elsewhere.
   symlinkSync(target, link, isWin ? 'junction' : 'dir')
   summary.push(`  link ${link} -> ${target}`)
+  relinkPnpmCopies(name, profileDir, join(dshHome, 'plugins', name), summary)
 }
 
 // ---- verify ---------------------------------------------------------------------
 // In --dry-run nothing was copied, so deployed files cannot be checked.
+// Verification is content-based: a deploy that "succeeded" while a consumer
+// resolves an older copy is the exact failure this guard exists for.
 const problems = []
-for (const { name, files } of dryRun ? [] : plugins) {
+for (const { name, dir, files } of dryRun ? [] : plugins) {
   const dst = join(dshHome, 'plugins', name)
   for (const entry of files) {
-    if (!existsSync(join(dst, entry))) problems.push(`${name}: deployed file missing: ${entry}`)
+    if (entry === 'package.json') continue
+    verifyTree(join(dir, entry), join(dst, entry), entry, problems)
   }
   const dep = JSON.parse(readFileSync(join(dst, 'package.json'), 'utf8')).dependencies
   if (dep && Object.keys(dep).length > 0) problems.push(`${name}: deployed dependencies not empty`)
+
+  // The profile must resolve the package to the staged copy, not to a stale
+  // pnpm virtual-store directory or an old global link.
+  try {
+    const req = createRequire(join(profileDir, 'package.json'))
+    const resolved = realpathSync(req.resolve(`${name}/package.json`))
+    const expected = realpathSync(join(dst, 'package.json'))
+    if (resolved !== expected) problems.push(`${name}: profile resolves to ${resolved}, expected ${expected}`)
+  } catch (error) {
+    problems.push(`${name}: profile cannot resolve package (${error.message})`)
+  }
 }
 for (const line of summary) log(line)
 if (problems.length > 0) {

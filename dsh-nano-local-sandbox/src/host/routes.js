@@ -48,10 +48,14 @@ const keeper = createCdpKeeper()
 // The package version shown in EnvPanel's 插件 row — read once at load, the
 // deployed copy's package.json is the source of truth.
 const BUILD_ID = (() => {
+  const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
+  // deploy-local writes build.json (version+git sha) so the pane can compare
+  // it with the bundle's baked build id. Source-tree runs fall back to version.
   try {
-    const here = dirname(fileURLToPath(import.meta.url))
-    return JSON.parse(readFileSync(join(here, '..', '..', 'package.json'), 'utf8')).version || null
-  } catch { return null }
+    const info = JSON.parse(readFileSync(join(root, 'build.json'), 'utf8'))
+    if (typeof info?.buildId === 'string' && info.buildId) return info.buildId
+  } catch { /* no deploy manifest */ }
+  try { return JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version || null } catch { return null }
 })()
 
 /**

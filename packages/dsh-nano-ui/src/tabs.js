@@ -1,3 +1,5 @@
+import React from 'react'
+
 /** Plain-DOM tab strip for Nano surfaces that build UI from HTML strings
  *  (e.g. the notepad settings dialog body). Mirrors the DSH SegmentedTabs
  *  interaction contract: role=tablist/tab/tabpanel wiring, roving tabindex,
@@ -97,4 +99,52 @@ export function nanoTabs({ items, value, onChange, label }) {
 
   select(value, { focus: false })
   return { el, select, value: () => current }
+}
+
+
+/**
+ * React counterpart of nanoTabs for plugin surfaces built with React (DNK's
+ * settings dialog). Same `.nano-tabs` / `.nano-tab` classes and the same
+ * role=tablist/tab/tabpanel contract, so the look is the shared nano-ui tab
+ * style rather than a per-plugin reimplementation.
+ *
+ * Panels stay mounted (hidden) so form state survives tab switches — the
+ * fixed-height dialog only changes which panel is visible.
+ *
+ * @param {object} props
+ * @param {Array<{value:string,label:string,content:React.ReactNode}>} props.items
+ * @param {string} [props.value] - controlled selected value
+ * @param {(value:string)=>void} [props.onChange]
+ * @param {string} [props.label] - accessible name for the tab list
+ * @param {string} [props.className]
+ */
+export function NanoTabs({ items, value, onChange, label, className }) {
+  const [inner, setInner] = React.useState(() => value ?? items[0]?.value)
+  const current = value ?? inner
+  const select = (next) => {
+    if (value === undefined) setInner(next)
+    onChange?.(next)
+  }
+  const idBase = React.useMemo(() => `nano-tabs-${Math.random().toString(36).slice(2, 9)}`, [])
+  return React.createElement('div', { className: ['nano-tabs-wrap', className ?? ''].filter(Boolean).join(' ') },
+    React.createElement('div', { className: 'nano-tabs', role: 'tablist', 'aria-label': label },
+      items.map((item) => React.createElement('button', {
+        key: item.value,
+        id: `${idBase}-tab-${item.value}`,
+        type: 'button',
+        role: 'tab',
+        className: 'nano-tab',
+        'aria-selected': String(item.value === current),
+        'aria-controls': `${idBase}-panel-${item.value}`,
+        tabIndex: item.value === current ? 0 : -1,
+        onClick: () => select(item.value),
+      }, item.label))),
+    items.map((item) => React.createElement('div', {
+      key: item.value,
+      id: `${idBase}-panel-${item.value}`,
+      role: 'tabpanel',
+      className: 'nano-tabs-panel',
+      'aria-labelledby': `${idBase}-tab-${item.value}`,
+      hidden: item.value !== current,
+    }, item.content)))
 }

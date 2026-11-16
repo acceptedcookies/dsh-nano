@@ -9,6 +9,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { bindingTableModule } from '../src/build/index.js'
 import { assertMatchesNaming, bindingsModule, parseNamingTable } from '../../../scripts/bake-plugin-bindings.mjs'
+import { renderInventory } from '../../../scripts/gen-route-inventory.mjs'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..')
 
@@ -75,4 +76,13 @@ test('PRE1116-T07 routeTableModule is gone and the browser constant has no justi
   const browser = bindingTableModule([{ id: row.id, path: row.path }], { constName: 'BROWSER_BINDINGS' })
   assert.equal(browser.includes('SECRET-JUSTIFICATION'), false)
   assert.match(browser, /BROWSER_BINDINGS/)
+})
+
+
+test('PRE1116-T08 route inventory is a faithful projection of the ledger', () => {
+  const ledger = JSON.parse(readFileSync(join(ROOT, 'security/route-sensitivity.json'), 'utf8'))
+  const onDisk = readFileSync(join(ROOT, 'security/route-inventory.md'), 'utf8')
+  assert.equal(onDisk, renderInventory(ledger))
+  assert.ok(onDisk.includes('87 active host routes'))
+  for (const row of ledger.routes) assert.ok(onDisk.includes(`\`${row.id}\``), row.path)
 })

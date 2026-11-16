@@ -114,6 +114,8 @@ await window.__nanoNotepad.import(name, content, meta)
 
 `POST /nano-notepad/save` 只是 macOS「另存为」对话框。它不是存储，也不是导入。正文上限 8MB。必须是已经通过鉴权的 Harness 页面请求。
 
+`GET /nano-notepad/perf-review/host` 是只读全进程性能视图；只接受 `since`，`mode` 和其他参数返回 400，不排空。
+
 ## 配置与状态
 
 宿主配置可整段省略。要写就写在 profile 的 patch 里，不写在本包。键和默认值见「初次运行」。

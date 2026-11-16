@@ -43,6 +43,7 @@ client inject 以 `package.json` 的 `dsh.client.inject` 为准，不在这里�
 3. 目标是已经能打开的 Web profile，默认名 `web`。不要装进 headless、sdk 或 acp。
 4. 引擎不在本包里。容器的构建和启动不由本包执行。没有引擎时插件仍能装上，面板可以显示 engine down。
 5. 本包构建期依赖 `dsh-host-route-guard`，声明为 `devDependencies` 的 `file:../packages/dsh-host-route-guard`。`npm install`/`npm run build` 时解析这个相对路径；构建时它被打进 `lib/route-guard.js`。不要改这条依赖。
+6. 本包构建期依赖 `dsh-performance-review`，声明为 `devDependencies` 的 `file:../packages/dsh-performance-review`。它被打进 `lib/client.js` 与 `lib/perf-host.js`；页面侧手动 join，宿主侧采集。不要改这条依赖。
 
 未被告知 `DSH_HOME` 或 profile 名时，只动默认的 `web`。不要猜第二套实例。
 
@@ -102,7 +103,7 @@ dsh plugin --profile web add <spec>
 | POST | `见 QNA edit` | `{selector, text}`：把文本写回该元素（双击就地改字），≤4000 字符 |
 | POST | `见 QNA settings` | `{ userAgent?, viewport?, media?, extraHeaders? }`：viewport `{width:320..3840, height:240..2160, mobile?, deviceScaleFactor?:1\|2\|3}` 或 `null`；media `screen\|print\|null`；extraHeaders ≤20 项（禁 cookie/authorization 等）；全部事务性，失败回滚 |
 | POST | `见 QNA kite` | `{action: init\|start\|suspend\|resume\|configure, httpBase?, mcpPort?}` |
-| — | 本包不拥有 `/perf-review/host` | 只读视图在资源管理器、记事本和模型选择器上。`mode=window` 已退役 |
+| — | 本包不拥有 `/perf-review/host` | 只读视图在资源管理器、记事本和模型选择器上 |
 | GET/POST | `见 QNA console` | 页面 console/exception/network/navigation 环形缓冲；`?level=error,exception&limit=50`；`POST {"clear":true}` 清空 |
 | GET/POST | `见 QNA operations` | 每次路由调用的执行埋点（route/status/errorId/耗时/输入摘要）；`?errorsOnly=true`；`POST {"clear":true}` 清空 |
 | GET | `见 QNA diagnostics` | 一击全量诊断：status + target 列表 + console + 操作 trace + errorCatalog + perf + 自动 hints |

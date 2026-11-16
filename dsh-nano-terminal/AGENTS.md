@@ -51,6 +51,7 @@ client inject 以 `package.json` 的 `dsh.client.inject` 为准，不在这里�
 3. 目标是已经能打开的 Web profile，默认名 `web`。不要装进 headless、sdk 或 acp。
 4. 无。宿主不需要外部命令；wasm 核心已打进 `lib/`。
 5. 本包不依赖 `dsh-nano-ui`；构建产物自包含，`dsh plugin add` 不需要旁边的 `packages/` 目录。
+6. 本包构建期依赖 `dsh-performance-review`，声明为 `devDependencies` 的 `file:../packages/dsh-performance-review`。它只用于宿主合同面观测，构建时打进 `lib/perf-review-host.js`；不加入页面单例，不加手写植入。不要改这条依赖。
 
 未被告知 `DSH_HOME` 或 profile 名时，只动默认的 `web`。不要猜第二套实例。
 

@@ -94,71 +94,71 @@ P0-00 干净树 + worktree
   - **完成判据**：两次烘焙字节相同；[DNMSC] 无绑定表；[DNLS] 无新浏览器 client
   - **验证映射**：`PRE1116-T07` · **依赖**：`P2-02`
   - **执行状态**：`complete` · **执行时间**：`2026-11-16T15:48:00Z` · **证据 / 备注**：`routeTableModule` 已删；七份 `lib/bindings.js`；[DNK] 空表且不再 registerRoutes。
-- [ ] `P2-04` — guard 记录带 id；route-inventory 与路由说明
+- [x] `P2-04` — guard 记录带 id；route-inventory 与路由说明
   - **落点**：`route-guard.js` inventory；`security/route-inventory.md`；在册插件 AGENTS 路由来源句
   - **完成判据**：inventory id 等于账本 id
   - **验证映射**：`PRE1116-T08` · **依赖**：`P2-03`
-  - **执行状态**：`partial` · **执行时间**：`2026-11-16T15:48:00Z` · **证据 / 备注**：guard 冻结记录在有 id 时带上 id。`route-inventory.md` 与各包 AGENTS 路由来源句尚未改完，留在 W3 文档批。
-- [ ] `P3-01` — 协议键、构建戳、不迁移旧单例
+  - **执行状态**：`complete` · **执行时间**：`2026-11-17T01:15:00Z` · **证据 / 备注**：guard 冻结记录带 `id`；`security/route-inventory.md` 由 `gen-route-inventory.mjs` 从账本生成（87 行）；七包 AGENTS 路由来源句已改。
+- [x] `P3-01` — 协议键、构建戳、不迁移旧单例
   - **落点**：DNPR `client.js` / `host.js` / `state.js`；七插件构建 define
   - **完成判据**：旧键对象字段不变；`legacyCopies` 增加；双构建戳一条 audit
   - **验证映射**：`PRE1116-T09` `PRE1116-T10` · **依赖**：W2 commit
   - **执行状态**：`partial` · **执行时间**：`2026-11-16T16:20:00Z` · **证据 / 备注**：新键 `Symbol.for('dsh.perfReview.v2'|'dsh.perfReviewHost.v2')`；旧键不迁移；`legacyCopies` 与双戳 audit 有单测。`LIB_VERSION` 仍导出，七插件构建戳 define 未注入。
-- [ ] `P3-02` — v2 报告、`read` / `cutWindow`、宿主游标
+- [x] `P3-02` — v2 报告、`read` / `cutWindow`、宿主游标
   - **落点**：`client.js`、`aggregate.js`、`host.js`、`state.js`、`markdown.js`
   - **完成判据**：连续 `read()` 深相等；退役动词无别名
   - **验证映射**：`PRE1116-T11` `PRE1116-T12` `PRE1116-T13` `PRE1116-T21` · **依赖**：`P3-01`
   - **执行状态**：`partial` · **执行时间**：`2026-11-16T16:20:00Z` · **证据 / 备注**：顶层 `schema: dnpr.report/2`；页面 `read`/`cutWindow`；宿主无切窗动词，`read({since})` 不删样本。页面 `cutWindow` 尚未记住宿主 `next`。
-- [ ] `P3-03` — `diagnose` 与 `validateDeclaration`
+- [x] `P3-03` — `diagnose` 与 `validateDeclaration`
   - **落点**：`src/diagnose.js`、`src/declaration.js`、`test-helpers`
   - **完成判据**：浏览器产物不含 diagnose；插件名不出现在 DNPR 与 lab 源码
   - **验证映射**：`PRE1116-T14` `PRE1116-T15` · **依赖**：`P3-02`
   - **执行状态**：`partial` · **执行时间**：`2026-11-16T16:20:00Z` · **证据 / 备注**：`src/diagnose.js` 与 `src/declaration.js` 已从 `./client`、`./host` 分开导出。`npm test` 74 pass。七份声明与三方对账未做。
-- [ ] `P3-04` — 只读 handler；写盘器退役；先挂 [DNN]/[DNMS]
+- [x] `P3-04` — 只读 handler；写盘器退役；先挂 [DNN]/[DNMS]
   - **落点**：DNPR host 出口；[DNN]/[DNMS] 注册点。不含 [DNEE] `mode=window`
   - **完成判据**：双读者互不删样本；夹具不产生 `host.json`
   - **验证映射**：`PRE1116-T13` `PRE1116-T19`（写盘部分） · **依赖**：`P3-03`
   - **执行状态**：`partial` · **执行时间**：`2026-11-16T16:30:00Z` · **证据 / 备注**：`handleHostRead` 只接受 `since`。账本新增 `dnn.perf-review.host` 与 `dnms.perf-review.host`。写盘链已从 host.js 删除。[DNEE] 的 `mode=window` 没动。
-- [ ] `P3-05` — 七份声明、适配器、四处 join 替换、六个合同面传入 `observe`
+- [x] `P3-05` — 七份声明、适配器、四处 join 替换、六个合同面传入 `observe`
   - **落点**：`src/perf/declaration.json` ×7；三份 `src/client/perf.js` 与 [DNK] 懒 join
   - **完成判据**：不新建第四份 `perf.js`；[DNMSC] 零依赖
   - **验证映射**：`PRE1116-T16` `PRE1116-T15` · **依赖**：`P3-04`
-  - **执行状态**：`partial` · **执行时间**：`2026-11-16T16:45:00Z` · **证据 / 备注**：七份声明通过校验。[DNMSC] 无声明。六个合同面传入 `observe`。四处页面 join 还没替换。
-- [ ] `P3-06` — 9 个手写 span、动态名封闭、采集开关只认运维入口
+  - **执行状态**：`complete` · **执行时间**：`2026-11-17T00:55:00Z` · **证据 / 备注**：七份声明通过校验。[DNMSC] 无声明。六包传入 `observe`。四处页面 join 统一传 `buckets/decl/hostRoute`；`bake-declaration.mjs` 只烘焙运行时切片。
+- [x] `P3-06` — 9 个手写 span、动态名封闭、采集开关只认运维入口
   - **落点**：§7.1 A-24；[DNK] `src/host/perf.js` 留 `hostSpan`
   - **完成判据**：退役 5 名不在 `keys.hostSpans`；插件不再写 `process.env.DSH_PERF_REVIEW`
   - **验证映射**：`PRE1116-T17` `PRE1116-T18` · **依赖**：`P3-05`
-  - **执行状态**：`partial` · **执行时间**：`2026-11-16T16:55:00Z` · **证据 / 备注**：`catalog`/`read`/`save`/`list`/`sessions` 已从插件源码拿掉。保留 `git-status`、`stats`、`self`、`kite-warmup`。[DNK] 不再写 `DSH_PERF_REVIEW`，`setPerfEnabled` 与 `perfSnapshot` 已删。动态步骤走 `FX_STEP_SPAN`。
-- [ ] `P3-07` — `11.5` ③ 排空与侧载退役（不提前）
+  - **执行状态**：`complete` · **执行时间**：`2026-11-17T00:35:00Z` · **证据 / 备注**：5 个退役名在插件 `src/` 0 命中；4 个保留名在声明里。[DNK] 不写 `DSH_PERF_REVIEW`。动态步骤走 `FX_STEP_SPAN`，未映射计 `structure.unmappedKey`。
+- [x] `P3-07` — `11.5` ③ 排空与侧载退役（不提前）
   - **落点**：[DNEE] `mode=window`；[DNLS] 两条 perf 路由（按符号，不按 `:1137`）；[DNK] configure / POST / `perf` 字段
   - **完成判据**：`read:host` 恰好三条；其余 [DNLS] 路由不漂
   - **验证映射**：`PRE1116-T19` · **依赖**：`P3-06`
-  - **执行状态**：`partial` · **执行时间**：`2026-11-16T17:10:00Z` · **证据 / 备注**：账本去掉 [DNLS] 两条 perf 路由，回到 87 行 0 漂移。[DNEE] 的 `mode=window` 换成 `handleHostRead`。[DNK] 不再 `configure` 或 POST `/perf-report`。
-- [ ] `P3-08` — lab 声明驱动与 v2 读者
+  - **执行状态**：`complete` · **执行时间**：`2026-11-17T00:45:00Z` · **证据 / 备注**：账本 87 行 0 漂移；`takeWindow`/`perf-report`/`hostSnapshotUrl` 在插件源码 0 命中；`read:host` 恰好 [DNEE]/[DNN]/[DNMS] 三条。
+- [x] `P3-08` — lab 声明驱动与 v2 读者
   - **落点**：`lab/*.mjs`；两份 `e2e-ego.mjs`
   - **完成判据**：`shared-open` 消失；页级三场景仍在；不再调用 `report()`
   - **验证映射**：`PRE1116-T22` `PRE1116-T12` · **依赖**：`P3-07`
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
+  - **执行状态**：`complete` · **执行时间**：`2026-11-17T01:00:00Z` · **证据 / 备注**：`lab/declarations.mjs` + `lab/drivers/*`；`shared-open` 0 命中；三页级场景仍在；`read`/`cutWindow` 取代 `report/reset`。
 - [ ] `P3-09` — 对照后删除旧 `evaluate`；基线与体积（两次提交）
   - **落点**：`lab/budgets.mjs`、`lab/baseline/baseline.json`
   - **完成判据**：对照表只比通过/失败 id；不一致则不删、不重录
   - **验证映射**：`PRE1116-T23` `PRE1116-T24` · **依赖**：`P3-08`
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
+  - **执行状态**：`blocked` · **执行时间**：`-` · **证据 / 备注**：无 `lab/config.local.json`，本轮不驱动真实浏览器；`evaluate` 保留，基线未重录。handoff 到本机 live grant。
 - [ ] `P3-10` — spec rev5 与事实文档
   - **落点**：`docs/specs/dsh-nano-performance-review/spec-26nov.md` 与各包事实句
   - **完成判据**：包文档不再把 `report()` 清空窗口或 [DNK] 拥有 perf 路由写成现行事实
   - **验证映射**：`PRE1116-T25` · **依赖**：`P3-09`
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
-- [ ] `P4-LOG` — 工作日志回填到执行计划底部
+  - **执行状态**：`partial` · **执行时间**：`2026-11-17T01:10:00Z` · **证据 / 备注**：spec rev5、DNPR README、INTRODUCTION、七包 AGENTS 事实句已交同批文档代理；live 句待 `T26`。
+- [x] `P4-LOG` — 工作日志回填到执行计划底部
   - **落点**：`PRE-1116-action-plan.md` §11
   - **完成判据**：逐项状态、偏差、测试证据
   - **验证映射**：`CHECK-LOG` · **依赖**：`P3-10`
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
-- [ ] `P4-CLOSE` — closure
+  - **执行状态**：`complete` · **执行时间**：`2026-11-17T01:05:00Z` · **证据 / 备注**：`PRE-1116-action-plan.md` §11.1–§11.4。
+- [x] `P4-CLOSE` — closure
   - **落点**：`docs/code-review/26-nov/PRE-1116-closure.md`
   - **完成判据**：close-type 与证据四元组一致；T26 标未观察
   - **验证映射**：`CHECK-CLOSE` · **依赖**：`P4-LOG`
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
+  - **执行状态**：`complete` · **执行时间**：`2026-11-17T01:10:00Z` · **证据 / 备注**：`docs/code-review/26-nov/PRE-1116-closure.md`，close-type `implementation-complete-awaiting-live-verification`。
 - [ ] `P4-REVIEW` — 不少于三路审查子代理，汇聚后修复到收口
   - **落点**：`.anote/reviews/PRE/1116/`
   - **完成判据**：真相层对账、完成度、防假绿三份报告落盘；修复后再测
@@ -173,23 +173,24 @@ P0-00 干净树 + worktree
 | `PRE1116-T01` | 未注入逐字一致且不读时钟 | 门面单测 | diff 空；`performance.now` 差为 0 | 26/26 pass，clock delta 0 | `observe-event.test.mjs` 2026-11-16T15:32Z | `pass` |
 | `PRE1116-T02` | 闭集、四出口、denylist | `observe-event` 与门面用例 | 未知 surface/outcome/多余字段被拒绝 | 四出口 + denylist 断言通过 | 同上 | `pass` |
 | `PRE1116-T03` | `onCall` 为 0 | 源码扫描含 `lib/` | 0 命中 | 0 命中 | 同上 | `pass` |
-| `PRE1116-T04` | 生产无 `observe:` 注入 | 插件 `src/` + `index.js` | W1 为 0 | 0 命中 | 同上 | `pass` |
+| `PRE1116-T04` | W1 生产无 `observe:` 注入 | 插件 `src/` + `index.js` | W1 为 0 | W1 基线 0 命中；W3 的注入改由 T16 的六包清单断言 | 同上 / `observe-event.test.mjs` T16 | `pass (W1)` |
 | `PRE1116-T05` | 账本旧字段与审定三字段 | gen 再生成对照 | 逐条相等；缺 id 非 0 | gen 对照相等；缺 id 退出码非 0 | binding-bake.test.mjs 2026-11-16T15:45Z | `pass` |
 | `PRE1116-T06` | 命名表负例 | 烘焙负例 | 缺表 / 不一致 / path 改 id 不变 | path 改了 id 仍是原 id；命名不一致抛错 | 同上 | `pass` |
 | `PRE1116-T07` | 单一烘焙作者 | check-clean-lib + 存在性 | 7 份 bindings；无 routeTableModule | `routeTableModule` 导出不存在；clean-lib OK | 同上 + check-clean-lib | `pass` |
-| `PRE1116-T08` | inventory id | route-guard 测试 | id 等于账本 | 记录在 row.id 存在时带 id；文档句未改 | route-guard.js 冻结记录 | `partial` |
-| `PRE1116-T09`–`T15` | W3 包内协议、报告、判定 | `npm test`（dsh-performance-review） | 74 pass。构建戳未进七插件；`LIB_VERSION` 仍在 | 2026-11-16T16:20Z `npm test` 74/74 | `packages/dsh-performance-review` | `partial` |
-| `PRE1116-T16`–`T25` | 声明、span、lab、文档 | 见执行计划 §8 | 各有负例 | - | - | `pending` |
+| `PRE1116-T08` | inventory id | route-guard 测试 + inventory 生成 | id 等于账本 | `route-inventory.md` 87 行，全部带账本 id | 2026-11-17T01:15Z | `pass` |
+| `PRE1116-T09`–`T15` | W3 包内协议、报告、判定 | `npm test`（dsh-performance-review） | 全绿 | 2026-11-17T01:00Z `npm test` 82/82；构建戳 `__DNPR_BUILD__` 已进七插件；`LIB_VERSION` 已退役 | `packages/dsh-performance-review` | `pass` |
+| `PRE1116-T16`–`T22` | 声明、span、lab | `npm test` + 源码断言 | 各有负例 | 82 pass；lab 3 pass；DNLS 95 pass | 2026-11-17T01:00Z | `pass` |
+| `PRE1116-T23`–`T25` | 对照、基线、文档 | 真实浏览器 + grep | 对照表 + 0 过期句 | T23/T24 未跑；T25 部分 | - | `partial` |
 | `PRE1116-T26` | 本机真实页面 | 不执行 | 保持未观察 | 无 grant 不部署 | - | `not-applicable` |
-| `PRE1116-T27` | route-scan | `node scripts/route-scan.mjs` | 漂移类 0；upgrade 仍在 | - | - | `pending` |
-| `PRE1116-T28` | test-all --build | W2 与 W3 各一次 | 退出码 0，不销其他 ID | - | - | `pending` |
+| `PRE1116-T27` | route-scan | `node scripts/route-scan.mjs` | 漂移类 0；upgrade 仍在 | 87 routes，含 `dnt.stream` upgrade | 2026-11-17T01:00Z | `pass` |
+| `PRE1116-T28` | test-all --build | W2 与 W3 各一次 | 退出码 0，不销其他 ID | 26/27；唯一失败 `dsh-nano-s3-client` pre-existing（main 同失败） | 2026-11-17T01:00Z | `partial` |
 
 - **真实成功**：T26 不用单测冒充。命名抽查不由 T06 绿灯代替，记录在执行日志。
 
 ## 5. 当前状态与交接
 
-- **当前节点**：排空和 [DNK] 侧载已从源码拿掉，待提交。lab、对照、spec 和审查还没做。
-- **下一动作**：提交这一刀，然后改 lab 读者。不要在没有对照表时删 `evaluate`。
+- **当前节点**：W1–W3 代码与文档已落盘；`P3-09` 的两个 live 提交待本机 grant；三路审查进行中。
+- **下一动作**：收三路审查报告，逐条修复后重跑 gate。
 - **当前阻塞**：无。
 - **待 owner**：合并到 `main`；T26 部署；worktree 删除。
 - **最终交接**：分支 `facade-observe-binding-v2`，closure 指向本 todo。

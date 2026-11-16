@@ -109,6 +109,7 @@ media-engine.json 里的显式选择
 | GET | `/nano-model-selector/media-engines` | `{ engines: [{key,label,detail,path,available}] }` |
 | GET | `/nano-model-selector/media-engine` | `{ engine, explicit }`。`explicit: false` 表示自动挑选，未持久化 |
 | PUT | `/nano-model-selector/media-engine` | 正文 `{"engine":"<key>"}`。写入状态文件并重注册 `imagine`。正文上限 16384 字节 |
+| GET | `/nano-model-selector/perf-review/host` | 只读全进程性能视图。只接受 `since`；`mode` 和其他参数返回 400，不排空 |
 
 ## 配置与状态
 

@@ -6,9 +6,9 @@ import { readFileSync, existsSync, mkdtempSync, writeFileSync, readdirSync } fro
 import { createHash } from 'node:crypto'
 import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
-import { join, dirname } from 'node:path'
+import { join, dirname, isAbsolute } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { buildCatalog, bundleFile, stableJson } from '../../scripts/gen-nano-catalog.mjs'
+import { buildCatalog, defaultSourcesPresent, probeSources, stableJson } from '../../scripts/gen-nano-catalog.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
 const SCRIPT = join(root, 'scripts', 'gen-nano-catalog.mjs')
@@ -23,10 +23,12 @@ function digest(dir, name) {
   return createHash('sha256').update(stableJson(body)).digest('hex')
 }
 
-const DEFAULT_SOURCES = load('primitives').sources
-const sourcesPresent = Object.values(DEFAULT_SOURCES).every(s => s !== 'missing' && bundleFile(s) !== null)
+const probe = defaultSourcesPresent()
 
-test('T03 two generations from the real host artifacts are byte-identical apart from `generated`, and match the committed catalog', { skip: sourcesPresent ? false : 'host artifacts not on this machine' }, () => {
+test('T03 two generations from the real host artifacts are byte-identical apart from `generated`, and match the committed catalog', (t) => {
+  if (!probe.present) {
+    return t.skip(`local host artifacts missing (${probe.missing.join(', ')}); run node scripts/gen-nano-catalog.mjs on a machine with the dsh CLI and desktop install`)
+  }
   const outs = [mkdtempSync(join(tmpdir(), 'nue-cat-a-')), mkdtempSync(join(tmpdir(), 'nue-cat-b-'))]
   for (const out of outs) {
     const r = spawnSync(process.execPath, [SCRIPT, '--out', out], { encoding: 'utf8' })
@@ -37,6 +39,22 @@ test('T03 two generations from the real host artifacts are byte-identical apart 
     console.log(`# ${name}.json sha256(without generated) run1=${a} run2=${b}`)
     assert.equal(a, b, `${name}.json differs between runs`)
     assert.equal(a, digest(CATALOG, name), `${name}.json is stale — rerun scripts/gen-nano-catalog.mjs`)
+  }
+})
+
+test('T03 the skip probe reports every missing artifact by label', () => {
+  assert.deepEqual(probeSources([['x', '/definitely/not/here'], ['y', '/definitely/not/here.js']], '/definitely/not/here/theme.js'), { present: false, missing: ['x', 'y', 'theme'] })
+})
+
+test('T03 the committed catalog records no local install path', () => {
+  for (const name of NAMES) {
+    const text = readFileSync(join(CATALOG, `${name}.json`), 'utf8')
+    assert.equal(text.includes('/Users/'), false, `${name}.json embeds a home directory path`)
+    assert.equal(text.includes('/Applications/'), false, `${name}.json embeds a macOS application path`)
+    for (const [label, source] of Object.entries(load(name).sources)) {
+      assert.equal(isAbsolute(source), false, `${name}.json sources.${label} is an absolute path`)
+      assert.ok(source === 'missing' || (source.includes(':') && !source.startsWith('/')), `${name}.json sources.${label} is not a platform-neutral identity — ${source}`)
+    }
   }
 })
 

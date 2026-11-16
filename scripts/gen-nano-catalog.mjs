@@ -14,7 +14,7 @@
  */
 import { readFileSync, writeFileSync, existsSync, readdirSync, mkdirSync, openSync, readSync, closeSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join, dirname, resolve } from 'node:path'
+import { join, dirname, resolve, basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -106,6 +106,55 @@ export function bundleFile(spec) {
   if (spec.endsWith('.js')) return spec
   const names = listDir(spec)?.filter(n => /^index-.*\.js$/.test(n)).sort()
   return names && names.length > 0 ? `${spec}/${names[names.length - 1]}` : null
+}
+
+function readPackageVersion(packageDir) {
+  const text = readSource(`${packageDir}/package.json`)
+  if (text === null) return null
+  try {
+    const { version } = JSON.parse(text)
+    return typeof version === 'string' ? version : null
+  } catch { return null }
+}
+
+/**
+ * Platform-neutral identity of a source file, recorded in the catalog instead of a
+ * local install path: `@scope/pkg@version:path/inside/pkg` for a node_modules tree,
+ * `App.app (label):app.asar/path/inside/archive` for a desktop archive, and the bare
+ * file name for anything else (test fixtures). Never an absolute local path.
+ */
+export function describeSource(label, file) {
+  if (file === null) return 'missing'
+  const asar = splitAsar(file)
+  if (asar !== null) {
+    const app = /([^/]+\.app)\//.exec(file)?.[1] ?? 'app'
+    return `${app} (${label}):app.asar/${asar.inner}`
+  }
+  const marker = '/node_modules/'
+  const at = file.lastIndexOf(marker)
+  if (at < 0) return basename(file)
+  const prefix = file.slice(0, at + marker.length)
+  const segments = file.slice(prefix.length).split('/').filter(Boolean)
+  const nameParts = segments[0]?.startsWith('@') ? segments.slice(0, 2) : segments.slice(0, 1)
+  const name = nameParts.join('/')
+  if (name === '') return basename(file)
+  const version = readPackageVersion(prefix + name)
+  return `${name}${version === null ? '' : `@${version}`}:${segments.slice(nameParts.length).join('/')}`
+}
+
+/** Whether the given host artifacts exist, for the freshness test's skip reason. */
+export function probeSources(bundles, theme) {
+  const missing = []
+  for (const [label, spec] of bundles) {
+    const file = bundleFile(spec)
+    if (file === null || readSource(file) === null) missing.push(label)
+  }
+  if (readSource(theme) === null) missing.push('theme')
+  return { present: missing.length === 0, missing }
+}
+
+export function defaultSourcesPresent() {
+  return probeSources(DEFAULT_BUNDLES, DEFAULT_THEME)
 }
 
 /* ---------------------------- extraction -------------------------------- */
@@ -245,7 +294,7 @@ export function buildCatalog({ bundles, theme, generated }) {
     const file = bundleFile(spec)
     const text = file === null ? null : readSource(file)
     if (text === null) { sources[label] = 'missing'; continue }
-    sources[label] = file
+    sources[label] = describeSource(label, file)
     exportsMap[label] = extractExports(text)
     iconComponents[label] = exportsMap[label].filter(n => /^Icon[A-Z]/.test(n))
     if (sprite === null) {
@@ -254,7 +303,7 @@ export function buildCatalog({ bundles, theme, generated }) {
     }
   }
   const themeText = theme === null ? null : readSource(theme)
-  const tokenSources = { theme: themeText === null ? 'missing' : theme }
+  const tokenSources = { theme: themeText === null ? 'missing' : describeSource('theme', theme) }
   const resolved = Object.values(sources).filter(s => s !== 'missing').length
   if (resolved === 0 && themeText === null) return null
   return {

@@ -23,6 +23,13 @@
  * cordis.patch.yml; build runs `node scripts/build-client.mjs` per plugin
  * (requires `npm ci` to have been run in each plugin first).
  *
+ * The build writes `lib/` (and other generated files) in the source tree so
+ * the copy below can read them. When that plugin's own sources and the shared
+ * `packages/` inputs were clean, those generated writes are restored after the
+ * copy. A desktop deploy must not leave a git diff that is only esbuild
+ * re-emitting a committed bundle. A real source edit is left in place so it
+ * can be committed with its bundle.
+ *
  * After deploying, restart the host that serves the profile — plugin code is
  * loaded at host start. On Windows no admin rights are needed: node_modules
  * links are created as junctions.
@@ -41,6 +48,45 @@ const isWin = process.platform === 'win32'
 
 function fail(msg) { console.error(`[deploy] ${msg}`); process.exit(1) }
 function log(msg) { console.log(`[deploy] ${msg}`) }
+
+/** Repo-relative paths a plugin build may rewrite without an author edit.
+ *  `lib/` is the runtime bundle, `src/host/route-table.js` is baked from the
+ *  route ledger, and kitesurf `skills/**.md` is generated from `lib/skill.js`. */
+function isGeneratedPath(rel) {
+  const norm = rel.replaceAll('\\', '/')
+  if (norm.includes('/lib/')) return true
+  if (norm.endsWith('/src/host/route-table.js')) return true
+  if (/\/skills\/.+\.md$/.test(norm)) return true
+  return false
+}
+
+function gitPaths(args) {
+  const result = spawnSync('git', args, { cwd: repoRoot, encoding: 'utf8' })
+  if (result.status !== 0) return null
+  return result.stdout.split('\0').filter(Boolean)
+}
+
+/** Differences from HEAD, plus untracked files, under `scope`. Null when git cannot say. */
+function snapshot(scope) {
+  const tracked = gitPaths(['diff', 'HEAD', '--name-only', '-z', '--', scope])
+  const untracked = gitPaths(['ls-files', '--others', '--exclude-standard', '-z', '--', scope])
+  if (tracked === null || untracked === null) return null
+  return { tracked: new Set(tracked), untracked: new Set(untracked) }
+}
+
+function scopeDirty(snap) {
+  return snap !== null && (snap.tracked.size > 0 || snap.untracked.size > 0)
+}
+
+/** True when this plugin has an author edit outside generated bundles. */
+function ownSourceDirty(name, snap) {
+  if (snap === null) return true
+  for (const rel of [...snap.tracked, ...snap.untracked]) {
+    if (!rel.startsWith(`${name}/`)) continue
+    if (!isGeneratedPath(rel)) return true
+  }
+  return false
+}
 
 /** Expand `~` and resolve to an absolute path (portable, no shell). */
 function resolvePath(p) {
@@ -80,13 +126,22 @@ const plugins = pluginDirs.map(name => {
 })
 
 // ---- build ------------------------------------------------------------------
+// Shared-package or ledger edits must keep the rebuilt bundles: those diffs
+// are the commit that ships the shared change. A clean tree must not.
+const sharedDirty = !noBuild && (
+  scopeDirty(snapshot('packages')) || scopeDirty(snapshot('security/route-sensitivity.json'))
+)
 if (!noBuild) {
-  for (const { name, dir } of plugins) {
+  for (const plugin of plugins) {
+    const { name, dir } = plugin
     const script = join(dir, 'scripts', 'build-client.mjs')
     if (!existsSync(script)) { log(`${name}: no build script, skipping build`); continue }
     if (!existsSync(join(dir, 'node_modules', 'esbuild'))) {
       fail(`${name}: esbuild not installed — run \`npm ci\` in ${name} first`)
     }
+    plugin.built = true
+    plugin.before = snapshot(name)
+    plugin.ownDirty = ownSourceDirty(name, plugin.before)
     log(`build ${name}`)
     const r = spawnSync(process.execPath, [script], { cwd: dir, stdio: 'inherit' })
     if (r.error) fail(`${name}: build spawn failed: ${r.error.message}`)
@@ -128,8 +183,33 @@ function copyEntry(srcDir, dstDir, entry) {
   }
 }
 
+/** Drop generated diffs a clean tree did not ask for. The dsh home already
+ *  received the fresh bytes; the worktree goes back to the committed bundle. */
+function restoreGenerated(name, plugin) {
+  if (!plugin?.built || sharedDirty || plugin.ownDirty || plugin.before === null) return
+  const after = snapshot(name)
+  if (after === null) return
+  // Any generated path that differs from HEAD, including one a previous deploy
+  // already left dirty. Source was clean, so the bundle is not a commit.
+  const restore = [...after.tracked].filter(isGeneratedPath)
+  if (restore.length > 0) {
+    const result = spawnSync('git', ['restore', '--worktree', '--source=HEAD', '--', ...restore], { cwd: repoRoot, encoding: 'utf8' })
+    if (result.status !== 0) {
+      log(`${name}: could not restore generated files (${(result.stderr || '').trim()})`)
+    } else {
+      log(`${name}: restored ${restore.length} generated file(s) — source was clean, so the bundle diff is not a commit`)
+    }
+  }
+  for (const rel of after.untracked) {
+    if (plugin.before.untracked.has(rel) || !isGeneratedPath(rel)) continue
+    rmSync(join(repoRoot, rel), { recursive: true, force: true })
+    log(`${name}: removed generated untracked ${rel}`)
+  }
+}
+
 const summary = []
-for (const { name, dir, pkg, files } of plugins) {
+for (const plugin of plugins) {
+  const { name, dir, pkg, files } = plugin
   const dst = join(dshHome, 'plugins', name)
   if (!dryRun) {
     mkdirSync(dst, { recursive: true })
@@ -145,6 +225,7 @@ for (const { name, dir, pkg, files } of plugins) {
     writeFileSync(join(dst, 'package.json'), JSON.stringify(deployed, null, 2) + '\n')
   }
   summary.push(`  ${name} -> ${dst} (${files.length} file entries)`)
+  restoreGenerated(name, plugin)
 }
 
 // ---- profile wiring -----------------------------------------------------------

@@ -83,7 +83,7 @@ node scripts/deploy-local.mjs --home <home> --profile <p> \
 
 它做的事（与手工部署一致）：
 
-1. 对每个插件跑 `node scripts/build-client.mjs`（`--no-build` 跳过；要求先 `npm ci`）；
+1. 对每个插件跑 `node scripts/build-client.mjs`（`--no-build` 跳过；要求先 `npm ci`）。构建写在源码树里，拷走之后：若该插件自己的源码和 `packages/` 都是干净的，生成文件（`lib/`、烤出来的 route-table、kitesurf 的 `skills/*.md`）会还原。部署不把「重跑 esbuild」留成未提交 diff；只有源码或共享包真有改动时，产物 diff 才留在工作区里等提交；
 2. 把 `package.json` 的 `files` 条目逐个拷到 `<dshHome>/plugins/<pkg>/`（`lib/`、`locale/` 整目录覆盖，源符号链接解引用成真实文件）；
 3. 部署出的 `package.json` 重写：`dependencies` 清空、`devDependencies` 删除——构建期 `file:` 依赖已打进 `lib/`，相对路径在 dsh home 里解析不到；
 4. profile 接线：`<dshHome>/profiles/<profile>/package.json` 补 `file:../../plugins/<pkg>` 依赖与 `dsh.profile.bundles` 条目；`profiles/<profile>/node_modules/<pkg>` 建指向插件目录的符号链接（Windows 为 junction）；

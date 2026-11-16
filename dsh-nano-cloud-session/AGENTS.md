@@ -85,13 +85,13 @@ dsh plugin --profile web add <spec>
 
 | 动作 | 结果 |
 |---|---|
-| 侧栏「云端工作区」→ 设置（齿轮） | 打开「接入 / 会话 / 安全 / SSH」原生设置弹窗；Devin 的 token/Org/Base URL/连接测试/权限清单都在「接入」tab |
+| 侧栏「云端工作区」→ 设置（齿轮） | 打开「接入 / 会话 / 安全 / SSH」原生设置弹窗；Devin 的 token/Org/Base URL/连接测试/权限清单都在「接入」tab。删除某个 profile 是不可逆的（token 只写不读），须在宿主 `RiskConfirmation` 里勾选确认才能点删除 |
 | 侧栏「云端工作区」→ 新建（文件夹+） | 打开新建云会话弹窗（上传附件 → 创建后会在右侧原生工作台的附件 tab 可见） |
 | 云端工作区 → 展开 → 点会话行 | 打开原生 dsh Session（native Chat）；右侧原生工作台 tab 提供附件、tags、insights 与生命周期操作 |
 | 新建 | prompt（必填）+ 全量 create 字段：title/tags/repos/devin_mode/max_acu_limit/resumable/playbook/knowledge/secrets/attachments/platform/structured output/security profile 等 → `POST /v3/organizations/{org}/sessions` |
 | 休眠 | `POST /v3/organizations/{org}/sessions/{id}/sleep`，保留 VM 快照 |
-| 归档 / 取消归档 | 对应 upstream archive / unarchive |
-| 中止 | `DELETE` upstream——存活 session → suspended；**不是硬删除、不自动归档**，收尾需再点归档 |
+| 归档 / 取消归档 | 对应 upstream archive / unarchive；归档前弹 `NanoDialog` 危险确认，取消不发请求 |
+| 中止 | `DELETE` upstream——存活 session → suspended；**不是硬删除、不自动归档**，收尾需再点归档。中止前必须在 `RiskConfirmation` 里勾选确认，未勾选时确认键禁用、Enter 不触发 |
 | SSH 命令 | 设置弹窗「SSH」tab 生成/显示专用密钥对（`${DSH_HOME}/nano-cloud-session-ssh`，0600），复制 `ssh -i <key> devin-<id>@ssh.devin.ai`；公钥粘到 Devin 后台 SSH keys 一次性 enroll（账号级） |
 
 宿主路由（全部 POST、全部走 route-guard）：`/nano-cloud-session/{status,config,sessions,session,create,message,archive,unarchive,terminate,ssh,catalog,upload}`。`session` op 含 native_open/get/messages/attachments/insights/generate_insights/tags/set_tags/append_tags/sleep；`native_open` 的 NATIVE_* 错误面：宿主未 inject sessions/agents→`NATIVE_UNAVAILABLE` 503、无 carrier profile→`NATIVE_UNSUPPORTED` 422、minted 后 carrier 读失败→`NATIVE_OUTCOME_UNKNOWN` 502、agents.enter 拒→`NATIVE_PROJECTION_FAILED` 500（显式失败不伪成功，orphan session 拆掉）；`sessions` op 含 list/insights；`catalog` 读 playbooks/secrets/knowledge/repositories；`upload` 走宿主 multipart。`/config` action：list/save/remove/activate/test（返 orgMatch 校验）/security/ssh-key。错误面统一 `{ok:false,reason}`；403 表示「无权或不可见」（上游 fail-closed，不能当 404）。无 profile 时小节显示引导行，点右侧齿轮打开原生设置弹窗。
@@ -130,4 +130,6 @@ npm run build
 - 不要把 403 渲染成「会话不存在」。
 - 不要装进非 web profile 后期待出现云端工作区。
 - 不要恢复悬浮启动器或右下角浮动入口；侧栏「云端工作区」是唯一入口。
+- 不要用 `[class*=…]`、`:has()` 或宿主列表几何变量去读侧栏 / composer 的内部结构。小节只按 `data-slot="sidebar.workspaces"` 的 slot 属性插在自己那一格，标题行、会话行、折叠态一律用宿主 primitive（`Button`、`DisclosureRow`、`StateDot`、`Tag`、`Icon*`）加令牌自绘；原生外壳的像素对齐是 DESIGN.md §8 已登记的宿主缺口。
+- 不要把 Devin 标签搬回 composer 或另找挂载点；宿主没有会话来源标识的挂载点（DESIGN.md §8）。
 - 不要把 `context/` 或本机手册当成安装步骤。它们不在这个包里。

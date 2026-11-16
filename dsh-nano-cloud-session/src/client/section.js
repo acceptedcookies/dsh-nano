@@ -1,20 +1,24 @@
 /** Sidebar "云端工作区" section.
  *
  *  `sidebar.workspaces` is a single-seat slot owned by the shipped workspace
- *  browser, so a sibling section cannot be registered as a slot. This mirrors
- *  the retired shared-workspace graft: find the live workspace section, insert
- *  a host immediately before it, and portal the section into that host.
+ *  browser, so a sibling section cannot be registered as a slot. This inserts
+ *  our own host before that slot and portals the section into it.
  *
- *  The section reuses the workspace browser's native class names (read once
- *  from the live DOM) for its root/header/rows, and every control is a native
- *  Button carrying native artwork from dsh-client-ui-primitives. Nothing is
- *  painted from a guessed frame.
+ *  The section paints itself from host tokens and the nano-ui spacing scale:
+ *  one header row, one disclosure row for the active profile and one row per
+ *  cloud session. Every control, glyph and status dot is a host primitive
+ *  (`Button`, `DisclosureRow`, `StateDot`, `Tag`, `Icon*`). It does not read
+ *  host class names or host custom properties: the collapsed rail is detected
+ *  from the measured width of our own host, and the only host selector is the
+ *  `sidebar.workspaces` slot attribute used for placement — the shell gap is
+ *  registered in DESIGN.md §8.
  */
 import React from 'react'
 import { createPortal } from 'react-dom'
 import {
-  Button,
+  DisclosureRow,
   StateDot,
+  Tag,
   IconArchiveOutlineRegular,
   IconFolderCloseRegular,
   IconFolderOpenRegular,
@@ -22,163 +26,24 @@ import {
   IconProjectAddOutlineRegular,
   IconRefreshOutlineRegular,
   IconSettingsOutlineRegular,
-  IconTriangleRightFillRegular,
+  relativeTime,
 } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconButton } from 'dsh-nano-ui'
 
-const { createElement: h, useEffect, useLayoutEffect, useRef, useState } = React
+const { createElement: h, useEffect, useState } = React
 
 const HOST_ATTR = 'data-nano-cloud-session-section'
 const GRAFT_ATTR = 'data-nano-cloud-session-section-graft'
+/** Below this width the sidebar is the collapsed rail. */
+const RAIL_WIDTH = 120
 
-const classOf = el => el?.getAttribute?.('class') ?? ''
-const tokens = cls => String(cls).split(/\s+/).filter(Boolean)
-const stripWide = cls => tokens(cls).filter(token => !/_wide$/.test(token)).join(' ')
-const withLocal = (token, name) => {
-  const cut = String(token).lastIndexOf('_')
-  return cut < 0 ? '' : token.slice(0, cut + 1) + name
-}
-
-/** Read the workspace browser's current class names. Null until the header,
- *  list area, tree, and search/action controls are all mounted.
+/** Watch the workspaces slot's parent for the graft host position.
  *
- *  Detection is STRUCTURAL, not label-text based: the collapsed rail renders
- *  no "工作区" label, so keying off it returned null and hid the whole section
- *  (CF1115 regression — the rail then showed only the native icon column and
- *  the workspaces add/search pair, misaligned). We anchor on the
- *  `sidebar.workspaces` slot host itself and walk its subtree. */
-function readChrome() {
-  const graft = document.querySelector(`[${HOST_ATTR}]`)
-  const wsSlot = document.querySelector('[data-slot="sidebar.workspaces"]')
-  const wsRoot = wsSlot?.children?.[0] ?? null
-  // Expanded mode: header holds the visible "工作区" label; rail mode keeps the
-  // same `sectionHeader` shell but drops the label, so resolve header by class.
-  let header = null
-  let root = null
-  let label = null
-  if (wsRoot != null) {
-    header = wsRoot.querySelector('[class*="sectionHeader"]')
-    root = wsRoot
-    label = header ? [...header.children].find(child =>
-      /sectionLabel/.test(classOf(child))) ?? null : null
-  }
-  if (header == null) {
-    label = [...document.querySelectorAll('span')].find(node =>
-      !graft?.contains(node)
-      && node.children.length === 0
-      && (node.textContent?.trim() === '工作区' || node.textContent?.trim() === 'Workspace')) ?? null
-    header = label?.parentElement
-    root = header?.parentElement
-  }
-  if (header == null || root == null) return null
-  const listArea = [...root.children].find(el => /listArea/.test(classOf(el)))
-  const tree = listArea?.querySelector('[role="tree"]')
-  const row = [...root.querySelectorAll('[class*="projectRow"]')]
-    .find(node => !String(node.className).includes('menuOpen')) ?? null
-  const searchSlot = header.querySelector('[class*="searchSlot"]')
-  const actions = header.querySelector('[class*="headerActions"]')
-  const search = searchSlot?.querySelector(':scope > div')
-  const searchButton = search?.querySelector('button') ?? searchSlot?.querySelector('button')
-
-  /* Rail mode (sidebar collapsed): the native workspaces tree renders no rows
-   * and the header has no label/search — only the add-workspace icon button
-   * inside headerActions. Degrade to a minimal chrome: rail geometry + a 36px
-   * icon button class so the cloud section can still show its rail entry. */
-  const rail = /_rail\b/.test(classOf(root)) || /_rail\b/.test(classOf(wsSlot?.children?.[0]))
-  if (rail) {
-    const railBtn = root.querySelector('[class*="iconButton"]') ?? root.querySelector('button')
-    if (railBtn == null) return null
-    return {
-      rail: true,
-      header: '',
-      template: [],
-      iconButton: stripWide(classOf(railBtn)) || classOf(railBtn),
-      listArea: classOf(listArea) || '',
-      list: '',
-      group: '', row: '', folder: '', chevron: '', projectText: '', title: '',
-      rowActions: '', rowButton: '', arrow: '', arrowOpen: '',
-      sessionRow: '', selected: '', sessionSlot: '', sessionTitle: '', resting: '', time: '',
-    }
-  }
-  if (listArea == null || tree == null || row == null) return null
-  if (searchSlot == null || actions == null || searchButton == null) return null
-
-  const folder = row?.querySelector('[class*="folder"]') ?? null
-  const chevron = row?.querySelector('[class*="chevron"]') ?? null
-  const projectText = row == null ? null : [...row.children].find(child => /Text/.test(classOf(child))) ?? null
-  const titleEl = projectText?.querySelector('[class*="title"]') ?? null
-  const arrowToken = tokens(classOf(chevron?.querySelector('svg'))).find(token => /arrow/.test(token) && !/Open/.test(token)) ?? ''
-  const rowToken = tokens(classOf(row))[0] ?? ''
-  const sessionEl = [...root.querySelectorAll('[class*="sessionRow"]')].find(node => !String(node.className).includes('selected')) ?? null
-  const sessionClass = stripWide(tokens(classOf(sessionEl)).filter(token => !/selected/.test(token)).join(' '))
-  const selectedEl = [...root.querySelectorAll('[class*="sessionRow"]')].find(node => String(node.className).includes('selected'))
-  const selectedToken = (tokens(classOf(selectedEl)).find(token => /selected/.test(token)) || withLocal(rowToken, 'selected'))
-
-  const template = []
-  for (const child of header.children) {
-    const shown = getComputedStyle(child)
-    if (shown.display === 'none' || shown.position === 'absolute' || shown.position === 'fixed') continue
-    if (child !== label && child.getBoundingClientRect().width === 0) continue
-    const slot = child === label ? 'label' : child === searchSlot ? 'search' : child === actions ? 'actions' : 'other'
-    template.push({ slot, cls: stripWide(classOf(child)) })
-  }
-
-  return {
-    header: stripWide(classOf(header)),
-    /* The native list geometry is driven by custom properties declared on the
-     * native list root. Our section is a sibling of that root, so they do not
-     * inherit; read the resolved values and re-declare them here so the copied
-     * `listArea` / `list` classes compute the same right edge. */
-    listVars: (() => {
-      const cs = getComputedStyle(root)
-      const names = ['--dsh-session-list-edge-inset', '--dsh-session-list-scrollbar-width', '--dsh-session-list-scrollbar-offset']
-      const out = {}
-      for (const name of names) {
-        const value = cs.getPropertyValue(name).trim()
-        if (value) out[name] = value
-      }
-      return out
-    })(),
-    template,
-    search: classOf(search),
-    searchButton: stripWide(classOf(searchButton)),
-    actions: stripWide(classOf(actions)),
-    button: stripWide(classOf(actions.querySelector('button'))),
-    listArea: classOf(listArea),
-    treeBody: tree.parentElement === listArea ? '' : stripWide(classOf(tree.parentElement)),
-    list: classOf(tree),
-    group: tokens(classOf(row?.closest('[class*="groupSection"]'))).filter(token => !/drop/.test(token)).join(' '),
-    row: tokens(classOf(row)).filter(token => !/menuOpen|drop/.test(token)).join(' '),
-    folder: tokens(classOf(folder)).filter(token => !/Active/.test(token)).join(' '),
-    chevron: classOf(chevron),
-    projectText: classOf(projectText),
-    title: classOf(titleEl) || withLocal(rowToken, 'title'),
-    rowActions: classOf(sessionEl?.querySelector('[class*="rowActions"]') ?? null) || withLocal(rowToken, 'rowActions'),
-    rowButton: stripWide(classOf(sessionEl?.querySelector('[class*="rowActions"] button') ?? null)) || withLocal(rowToken, 'iconButton'),
-    arrow: arrowToken,
-    arrowOpen: arrowToken ? withLocal(arrowToken, 'arrowOpen') : '',
-    sessionRow: sessionClass || withLocal(rowToken, 'sessionRow'),
-    selected: selectedToken,
-    sessionSlot: classOf(sessionEl?.querySelector('[class*="slot"]') ?? null) || withLocal(rowToken, 'slot'),
-    sessionTitle: classOf(sessionEl?.querySelector('[class*="title"]') ?? null) || withLocal(rowToken, 'title'),
-    resting: classOf(sessionEl?.querySelector('[class*="Resting"]') ?? null) || withLocal(rowToken, 'rowResting'),
-    time: classOf(sessionEl?.querySelector('[class*="time"]') ?? null) || withLocal(rowToken, 'time'),
-  }
-}
-
-/** Watch the workspaces slot subtree — NOT the whole document.
- *
- *  A body-wide observer fires for every mutation anywhere (a chat token, a
- *  hover class, the workbench slide), and `readChrome()` reads computed style
- *  plus bounding boxes, i.e. a forced synchronous layout in the middle of the
- *  frame. The slot is the only subtree whose shape we care about, so the
- *  observer is scoped to it; a slow poll re-attaches when React replaces the
- *  slot element and re-reads only on that identity change.
- *
- *  `region` watches the slot's PARENT instead (childList only): the graft host
- *  lives there as a sibling, so a host removal is a mutation of the region.
- */
+ *  The host lives as a sibling of the slot, so a host removal or a slot
+ *  replacement is a direct child mutation of the region: nothing else on the
+ *  page wakes us, and no host class is read. */
 function useSlotWatch(onChange, region = false) {
-  const latest = useRef(onChange)
+  const latest = React.useRef(onChange)
   latest.current = onChange
   useEffect(() => {
     let target = null
@@ -189,11 +54,7 @@ function useSlotWatch(onChange, region = false) {
       if (next === target) return false
       observer.disconnect()
       target = next
-      if (target != null) {
-        observer.observe(target, region
-          ? { childList: true }
-          : { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] })
-      }
+      if (target != null) observer.observe(target, region ? { childList: true } : { childList: true, subtree: true })
       return true
     }
     if (attach()) latest.current()
@@ -203,26 +64,6 @@ function useSlotWatch(onChange, region = false) {
       observer.disconnect()
     }
   }, [])
-}
-
-function useNativeChrome() {
-  const [chrome, setChrome] = useState(null)
-  /* Chrome must re-read whenever the workspaces subtree changes shape:
-   * collapsing the sidebar rebuilds it into rail mode, and a stale
-   * expanded-mode chrome renders wide rows inside the 56px rail — the broken
-   * "E"-only icon regression (text clipped to its first letter). */
-  const reread = () => {
-    const next = readChrome()
-    setChrome(prev => {
-      if (next == null) return prev === null ? prev : null
-      // Cheap signature compare to avoid render loops.
-      const sig = c => c && [c.rail ? 1 : 0, c.header, c.iconButton, c.row, c.list, c.group].join('|')
-      return sig(prev) === sig(next) ? prev : next
-    })
-  }
-  useSlotWatch(reread)
-  useLayoutEffect(() => { reread() }, [])
-  return chrome
 }
 
 /** Find the region area and prepend our host before the workspace slot. */
@@ -242,7 +83,7 @@ function findHost() {
 
 function useGraftHost() {
   const [host, setHost] = useState(null)
-  const hostRef = useRef(null)
+  const hostRef = React.useRef(null)
   /* The host is a sibling of the slot, so watch the region (slot's parent)
    * rather than the document: a host removal or a slot replacement is a direct
    * child mutation there, and nothing else on the page wakes us. */
@@ -260,11 +101,19 @@ function useGraftHost() {
   return host
 }
 
-function iconCellClass(chrome) {
-  // The native projectRow hides `.folder` on hover and reveals `.chevron`.
-  // Rows without a chevron must use the stable slot class or the glyph
-  // vanishes and the title jumps sideways.
-  return tokens(chrome.folder).filter(token => !/folder/i.test(token)).join(' ') || chrome.sessionSlot
+/** Collapsed-rail detection from our own host box (never from a host class). */
+function useHostWidth(host) {
+  const [width, setWidth] = useState(0)
+  useEffect(() => {
+    if (host == null) return
+    const read = () => setWidth(Math.round(host.getBoundingClientRect().width))
+    read()
+    if (typeof ResizeObserver !== 'function') return
+    const observer = new ResizeObserver(read)
+    observer.observe(host)
+    return () => observer.disconnect()
+  }, [host])
+  return width
 }
 
 /** Devin session status → the native StateDot state vocabulary
@@ -289,192 +138,177 @@ const dotState = status => {
   }
 }
 
-const relativeTime = (value, locale) => {
+/** Host bucketing (`relativeTime`) + the locale's own wording. */
+const RELATIVE_UNIT = {
+  minutes: ['minute', -1],
+  hours: ['hour', -1],
+  days: ['day', -1],
+  months: ['month', -1],
+  years: ['year', -1],
+}
+
+const relativeLabel = (value, locale) => {
   if (!value) return ''
   const then = Date.parse(value)
   if (Number.isNaN(then)) return ''
-  const minutes = Math.round((then - Date.now()) / 60000)
-  const abs = Math.abs(minutes)
-  const unit = abs < 60 ? 'minute' : abs < 1440 ? 'hour' : abs < 43200 ? 'day' : 'month'
-  const amount = unit === 'minute' ? minutes : unit === 'hour' ? Math.round(minutes / 60) : unit === 'day' ? Math.round(minutes / 1440) : Math.round(minutes / 43200)
+  const { unit, n } = relativeTime(then, Date.now())
+  const [intlUnit, sign] = RELATIVE_UNIT[unit] ?? ['second', 0]
   try {
-    return new Intl.RelativeTimeFormat(locale, { numeric: 'auto', style: 'narrow' }).format(amount, unit)
+    return new Intl.RelativeTimeFormat(locale, { numeric: 'auto', style: 'narrow' }).format(sign * n, intlUnit)
   } catch {
     return ''
   }
 }
 
-function sectionBody({ chrome, copy, face, state }) {
+const onKeyActivate = action => event => {
+  if (event.key !== 'Enter' && event.key !== ' ') return
+  event.preventDefault()
+  action()
+}
+
+function skeleton() {
+  return h('div', { className: 'dncs-skeleton-row', role: 'status', 'aria-busy': 'true' },
+    h('span', { className: 'dncs-skeleton-dot' }),
+    h('span', { className: 'dncs-skeleton-bar' }))
+}
+
+function SessionRow({ session, selected, copy, face, locale }) {
+  const open = () => face.openSession(session.session_id)
+  const title = session.title || session.session_id
+  return h('div', {
+    key: session.session_id,
+    className: 'dncs-session',
+    'data-active': selected ? 'true' : undefined,
+    title,
+  },
+    h('div', {
+      role: 'button',
+      tabIndex: 0,
+      className: 'dncs-session-main',
+      'aria-pressed': selected,
+      onClick: open,
+      onKeyDown: onKeyActivate(open),
+    },
+      h('span', { className: 'dncs-session-dot' },
+        h(StateDot, { state: dotState(session.status) }),
+        h('span', { className: 'dncs-sr-only' }, session.status ?? '')),
+      h('span', { className: 'dncs-session-title' }, title),
+      h('span', { className: 'dncs-session-time' }, relativeLabel(session.updated_at ?? session.created_at, locale))),
+    h(IconButton, {
+      icon: h(IconArchiveOutlineRegular, { size: 16 }),
+      'aria-label': copy('archive'),
+      onClick: event => {
+        event.stopPropagation()
+        event.preventDefault()
+        face.askArchive(session.session_id)
+      },
+    }))
+}
+
+function sectionBody({ copy, face, state }) {
   const profile = (state.profiles ?? []).find(item => item.id === state.activeId) ?? null
   const sessions = state.sessions ?? []
   const open = state.expanded !== false
+  const locale = state.locale
 
-  const bodyKey = state.loading === true ? 'loading' : (state.activeId ?? 'empty')
-  if (state.loading === true) {
-    return h('div', { key: bodyKey, className: `${chrome.group} dncs-section-body` },
-      h('div', { role: 'status', className: `${chrome.row} dncs-skeleton-row`, 'aria-busy': 'true' },
-        h('span', { className: iconCellClass(chrome) }, h('span', { className: 'dncs-skeleton-dot' })),
-        h('span', { className: chrome.projectText },
-          h('span', { className: 'dncs-skeleton-bar' }))))
-  }
+  if (state.loading === true) return skeleton()
 
   if (profile == null) {
-    return h('div', { key: bodyKey, className: `${chrome.group} dncs-section-body` },
-      h('div', {
-        role: 'button',
-        className: chrome.row,
-        title: copy('emptyCloud'),
-        onClick: () => face.openSettings(),
-      },
-        h('span', { className: iconCellClass(chrome) }, h(IconGlobeOutlineRegular, { size: 16 })),
-        h('span', { className: chrome.projectText },
-          h('span', { className: chrome.title }, copy('emptyCloud')))))
+    return h('div', { className: 'dncs-section-body' }, h('div', {
+      role: 'button',
+      tabIndex: 0,
+      className: 'dncs-empty-row',
+      title: copy('emptyCloud'),
+      onClick: () => face.openSettings(),
+      onKeyDown: onKeyActivate(() => face.openSettings()),
+    },
+      h(IconGlobeOutlineRegular, { size: 16 }),
+      h('span', { className: 'dncs-empty-label' }, copy('emptyCloud'))))
   }
 
-  const sessionRows = open ? sessions.map(session => h('div', {
-    role: 'treeitem',
-    key: session.session_id,
-    className: `${chrome.sessionRow}${state.activeSessionId === session.session_id ? ` ${chrome.selected}` : ''}`,
-    title: session.title || session.session_id,
-    'aria-selected': state.activeSessionId === session.session_id,
-    onClick: () => face.openSession(session.session_id),
-  },
-    h('span', { className: chrome.sessionSlot },
-      h(StateDot, { state: dotState(session.status) }),
-      h('span', { className: 'dncs-sr-only' }, session.status ?? '')),
-    h('span', { className: chrome.sessionTitle }, session.title || session.session_id),
-    h('span', { className: chrome.resting },
-      h('span', { className: chrome.time }, relativeTime(session.updated_at ?? session.created_at, state.locale))),
-    h('span', {
-      className: chrome.rowActions,
-      onClick: event => event.stopPropagation(),
-    },
-      h('button', {
-        type: 'button',
-        className: chrome.rowButton,
-        title: copy('archive'),
-        'aria-label': copy('archive'),
-        onClick: event => {
-          event.stopPropagation()
-          event.preventDefault()
-          void face.archiveSession(session.session_id)
-        },
-      }, h(IconArchiveOutlineRegular, { size: 16 })))),
-  ) : []
-
-  const empty = open && sessions.length === 0
-    ? h('div', { className: chrome.sessionRow },
-      h('span', { className: chrome.sessionSlot }),
-      h('span', { className: chrome.sessionTitle, style: { opacity: .65 } }, copy('noSessions')))
-    : null
-
-  /* A failed list read or a failed open must be visible: the section is the
-   * only surface the owner has before a native Chat exists. */
   const errorRow = state.error
-    ? h('div', { className: `${chrome.sessionRow} dncs-error-row`, role: 'alert', title: state.error },
-      h('span', { className: chrome.sessionSlot }),
-      h('span', { className: chrome.sessionTitle }, state.error))
+    ? h('div', { className: 'dncs-error-row', role: 'alert', title: state.error }, state.error)
     : null
 
-  return h('div', { key: bodyKey, className: `${chrome.group} dncs-section-body` },
-    h('div', {
-      role: 'treeitem',
-      className: chrome.row,
-      'aria-expanded': open,
-      onClick: () => face.toggleExpanded(),
-    },
-      h('span', { className: chrome.folder }, h(open ? IconFolderOpenRegular : IconFolderCloseRegular, { size: 16 })),
-      h('span', { className: chrome.chevron },
-        h(IconTriangleRightFillRegular, { size: 10, className: open ? `${chrome.arrow} ${chrome.arrowOpen}` : chrome.arrow })),
-      h('span', { className: chrome.projectText },
-        h('span', { className: chrome.title }, profile.label || 'Devin Cloud')),
-      h('span', { className: chrome.time }, String(sessions.length))),
-    ...sessionRows,
-    errorRow,
-    empty)
+  const sessionRows = !open
+    ? []
+    : sessions.length === 0
+      ? h('div', { className: 'dncs-empty-row dncs-section-muted' }, copy('noSessions'))
+      : sessions.map(session => h(SessionRow, {
+        key: session.session_id,
+        session,
+        selected: state.activeSessionId === session.session_id,
+        copy,
+        face,
+        locale,
+      }))
+
+  return h('div', { className: 'dncs-section-body' },
+    h(DisclosureRow, {
+      open,
+      expandable: true,
+      expandOnRowClick: true,
+      onToggle: () => face.toggleExpanded(),
+      icon: h(open ? IconFolderOpenRegular : IconFolderCloseRegular, { size: 16 }),
+      title: profile.label || copy('carrierDevin'),
+      headerAccessory: h('span', { className: 'dncs-section-count' }, h(Tag, { tone: 'quiet' }, String(sessions.length))),
+    }, sessionRows),
+    /* A failed list read or a failed open must stay visible even when the
+     * profile row is collapsed: the section is the only surface the owner has
+     * before a native Chat exists. */
+    errorRow)
 }
 
-function CloudSection({ chrome, copy, face, state }) {
-  /* Rail mode: one 36×36 icon entry mirroring the native add-workspace rail
-   * button. Clicking it re-expands the sidebar so the full cloud section is
-   * reachable; the icon stays a real native glyph, never painted text. */
-  if (chrome.rail) {
+function CloudSection({ copy, face, state, rail }) {
+  /* Rail mode: one 36×36 icon entry. The host owns the sidebar toggle (the
+   * `layout` service, soft-read in index.js), so the entry re-expands the sidebar
+   * instead of scanning the document for the host's own button; if the layout
+   * service is unavailable the entry opens the settings dialog so it is never
+   * dead. */
+  if (rail) {
     return h('div', { className: 'dncs-section dncs-rail' },
-      h(Button, {
-        variant: 'ghost',
-        size: 'sm',
-        className: chrome.iconButton,
+      h(IconButton, {
         icon: h(IconGlobeOutlineRegular, { size: 18 }),
-        title: copy('cloudWorkspace'),
         'aria-label': copy('cloudWorkspace'),
         onClick: () => {
-          // Re-expand the sidebar to reveal the full cloud section. The toggle
-          // button is labelled by the host locale (打开侧边栏 / Open sidebar);
-          // if it is not found (unexpected host layout) fall back to opening
-          // the section settings so the entry is never dead.
-          const btn = [...document.querySelectorAll('button')].find(b => {
-            const label = `${b.getAttribute('aria-label') || ''} ${b.title || ''}`
-            return /打开侧边栏|展开侧边|open sidebar|expand sidebar/i.test(label)
-          })
-          if (btn) btn.click()
-          else face.openSettings()
+          if (face.expandSidebar()) return
+          face.openSettings()
         },
       }))
   }
-  const headerChildren = chrome.template.map((cell, index) => {
-    if (cell.slot === 'label') {
-      return h('span', { key: index, className: cell.cls }, copy('cloudWorkspace'))
-    }
-    if (cell.slot === 'search') {
-      return h('div', { key: index, className: cell.cls },
-        chrome.search
-          ? h('div', { className: chrome.search },
-            h('button', {
-              type: 'button',
-              className: chrome.searchButton,
-              title: copy('refresh'),
-              'aria-label': copy('refresh'),
-              disabled: state.refreshing === true,
-              onClick: event => { event.stopPropagation(); event.preventDefault(); void face.refresh() },
-            }, h(IconRefreshOutlineRegular, { size: 14, className: state.refreshing ? 'dncs-spin' : '' })))
-          : h('button', {
-            type: 'button',
-            className: chrome.searchButton,
-            title: copy('refresh'),
-            'aria-label': copy('refresh'),
-            disabled: state.refreshing === true,
-            onClick: event => { event.stopPropagation(); event.preventDefault(); void face.refresh() },
-          }, h(IconRefreshOutlineRegular, { size: 14, className: state.refreshing ? 'dncs-spin' : '' })))
-    }
-    if (cell.slot === 'actions') {
-      return h('div', { key: index, className: cell.cls },
-        h('button', {
-          type: 'button',
-          className: chrome.button,
-          title: copy('settingsTitle'),
+
+  return h('div', { className: 'dncs-section' },
+    h('div', { className: 'dncs-section-header' },
+      h('span', { className: 'dncs-section-label' }, copy('cloudWorkspace')),
+      h('div', { className: 'dncs-section-actions' },
+        h(IconButton, {
+          icon: h(IconRefreshOutlineRegular, { size: 14, className: state.refreshing ? 'dncs-spin' : undefined }),
+          'aria-label': copy('refresh'),
+          disabled: state.refreshing === true,
+          onClick: () => { void face.refresh() },
+        }),
+        h(IconButton, {
+          icon: h(IconSettingsOutlineRegular, { size: 16 }),
           'aria-label': copy('settingsTitle'),
           onClick: () => face.openSettings(),
-        }, h(IconSettingsOutlineRegular, { size: 16 })),
-        h('button', {
-          type: 'button',
-          className: chrome.button,
-          title: copy('newSession'),
+        }),
+        h(IconButton, {
+          icon: h(IconProjectAddOutlineRegular, { size: 16 }),
           'aria-label': copy('newSession'),
           onClick: () => face.openNew(),
-        }, h(IconProjectAddOutlineRegular, { size: 16 })))
-    }
-    return h('div', { key: index, className: cell.cls })
-  })
-
-  return h('div', { className: 'dncs-section', style: chrome.listVars },
-    h('div', { className: chrome.header }, ...headerChildren),
-    h('div', { className: `${chrome.listArea} dncs-section-list` },
-      h('div', { className: chrome.list, role: 'tree' }, sectionBody({ chrome, copy, face, state }))))
+        }))),
+    h('div', { className: 'dncs-section-list' }, sectionBody({ copy, face, state })))
 }
 
 export function CloudSectionGraft({ face, state }) {
   const host = useGraftHost()
-  const chrome = useNativeChrome()
-  if (host == null || chrome == null) return null
-  return createPortal(h(CloudSection, { chrome, copy: face.copy(), face, state: { ...state, locale: face.locale } }), host)
+  const width = useHostWidth(host)
+  if (host == null) return null
+  const rail = width > 0 && width < RAIL_WIDTH
+  return createPortal(h(CloudSection, {
+    copy: face.copy(),
+    face,
+    rail,
+    state: { ...state, locale: face.locale },
+  }), host)
 }

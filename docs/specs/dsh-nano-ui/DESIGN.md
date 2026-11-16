@@ -167,8 +167,9 @@
 | spacing 令牌 | 宿主没有 | nano-ui 自有间距刻度（§4） |
 | 区域 API | 宿主没有公开的对话区 / 工作区矩形 | [DNMS] 历史对话框改主窗口级（`T13`） |
 | TrajectoryToolbar 导出 | 宿主未导出 | nano-ui `Toolbar` 替代（`T11`） |
-| 云会话 composer 按钮 | 宿主不提供「云会话下隐藏权限/附件按钮」的开关 | [DNCS] 隐藏样式删除，按钮照常显示（`T06`） |
-| 云会话标识 | 宿主 composer 没有给插件放会话来源标识的挂载点 | [DNCS] Devin 标签删除，不另找挂载点（`T17`） |
+| 云会话 composer 按钮 | 宿主不提供「云会话下隐藏权限/附件按钮」的开关 | [DNCS] `styles.js` 里 `html[data-dncs-cloud="1"] [class*="composerSeat"] …` 隐藏段已删除，按钮照常显示（`T06`） |
+| 云会话标识 | 宿主 composer 没有给插件放会话来源标识的挂载点 | [DNCS] composer 嫁接整段与 `.dncs-devin-chip` 已删除，不另找挂载点（`T17`） |
+| 侧栏小节外壳 | `sidebar.workspaces` 是单座 slot，宿主不提供「侧栏分区」外壳组件，也不公开列表几何变量（`--dsh-session-list-*` 属内部实现） | [DNCS] 只按 slot 属性插入自有小节，标题行、行高与折叠态用令牌与 `--nano-space-*` 自绘；折叠态取自自有 host 宽度，展开走宿主 `ctx.layout.toggleSidebar`；与原生「工作区」的像素对齐无法保证（`T23`） |
 | 文件树状态钩子 | 宿主文件树行不接受插件着色，也不接受插件改写行几何（chevron 槽位、accessory 列宽） | [DNEE] 行着色、幽灵行删除线、行内边距与 chevron 全部删除，状态只剩 accessory 上的字母与圆点（`T11`） |
 | Modal 尺寸参数 | 宿主 `Modal` 卡片宽度写死，不接受尺寸参数 | 主窗口级对话框只有预设尺寸（§7） |
 

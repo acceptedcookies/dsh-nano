@@ -4,7 +4,7 @@
  *  carrier-specific details, attachments, tags and lifecycle actions. */
 import React from 'react'
 import {
-  Button, Input,
+  Button, Input, RiskConfirmation,
   IconAlarmClockOutlineRegular,
   IconArchiveOutlineRegular,
   IconChecklistOutlineRegular,
@@ -15,6 +15,7 @@ import {
   IconUnarchiveOutlineRegular,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { api } from './api.js'
+import { runTerminate } from './confirm.js'
 
 const { createElement: h, useEffect, useState } = React
 const ID = 'dsh-nano-cloud-session.workbench'
@@ -42,6 +43,8 @@ function WorkbenchBody(props) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
+  const [confirmTerminate, setConfirmTerminate] = useState(false)
+  const [acknowledged, setAcknowledged] = useState(false)
 
   const load = async ({ quiet = false } = {}) => {
     if (!remoteId) return
@@ -110,7 +113,8 @@ function WorkbenchBody(props) {
   }
 
   if (!remoteId) return h('div', { className: 'dncs-note' }, t('accessIntro'))
-  return h('div', { className: 'dncs-working-page' },
+  return h(React.Fragment, null,
+    h('div', { className: 'dncs-working-page' },
     h('div', { className: 'dncs-working-head' },
       h('div', null,
         h('div', { className: 'dncs-working-title' }, detail?.title || t('carrierDevin')),
@@ -120,7 +124,7 @@ function WorkbenchBody(props) {
         h(Button, { variant: 'ghost', size: 'sm', onClick: () => openTerminal?.(sessionId), 'aria-label': t('terminal') }, t('terminal')),
         h(Button, { variant: 'ghost', size: 'sm', icon: h(IconAlarmClockOutlineRegular, { size: 16 }), onClick: () => action(() => api.session('sleep', { session_id: remoteId })), 'aria-label': t('sleep') }),
         h(Button, { variant: 'ghost', size: 'sm', icon: h(detail?.is_archived ? IconUnarchiveOutlineRegular : IconArchiveOutlineRegular, { size: 16 }), onClick: () => action(() => detail?.is_archived ? api.unarchive(remoteId) : api.archive(remoteId)), 'aria-label': detail?.is_archived ? t('unarchive') : t('archive') }),
-        h(Button, { variant: 'ghost', size: 'sm', onClick: () => { if (window.confirm(t('terminateConfirm'))) action(() => api.terminate(remoteId)) }, 'aria-label': t('terminate') }, t('terminate')),
+        h(Button, { variant: 'ghost', size: 'sm', onClick: () => { setAcknowledged(false); setConfirmTerminate(true) }, 'aria-label': t('terminate') }, t('terminate')),
       )),
     error === '' ? null : h('div', { className: 'dncs-note', 'data-kind': 'error' }, error),
     notice === '' ? null : h('div', { className: 'dncs-note' }, notice),
@@ -154,7 +158,28 @@ function WorkbenchBody(props) {
       h(Button, { variant: 'outline', size: 'sm', icon: h(IconRefreshOutlineRegular, { size: 14 }), onClick: generate, disabled: busy }, t('generateInsights')),
       insights == null ? h('div', { className: 'dncs-note' }, t('insightsEmpty')) : h('div', { className: 'dncs-note' }, t('insightsReady'))),
     detail?.url ? h('div', { className: 'dncs-working-section' },
-      h(Button, { variant: 'outline', size: 'sm', icon: h(IconLinkOutlineRegular, { size: 14 }), onClick: () => window.open(detail.url, '_blank', 'noreferrer') }, t('openInWebapp'))) : null)
+      h(Button, { variant: 'outline', size: 'sm', icon: h(IconLinkOutlineRegular, { size: 14 }), onClick: () => window.open(detail.url, '_blank', 'noreferrer') }, t('openInWebapp'))) : null),
+    confirmTerminate ? h(RiskConfirmation, {
+      open: true,
+      title: t('terminate'),
+      description: t('terminateConfirm'),
+      acknowledgeLabel: t('terminateAcknowledge'),
+      cancelLabel: t('cancel'),
+      closeLabel: t('close'),
+      confirmLabel: t('terminate'),
+      acknowledged,
+      disabled: busy,
+      onAcknowledgedChange: setAcknowledged,
+      onCancel: () => { setConfirmTerminate(false); setAcknowledged(false) },
+      onConfirm: () => {
+        if (!acknowledged) return
+        setConfirmTerminate(false)
+        void runTerminate({
+          acknowledged,
+          terminate: () => action(() => api.terminate(remoteId)),
+        })
+      },
+    }) : null)
 }
 
 /** Register the real workbench tab type and its body. */

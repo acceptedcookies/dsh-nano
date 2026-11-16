@@ -1,7 +1,7 @@
 /** Browser half: a native "云端工作区" sidebar section plus native dialogs.
  *  No floating entry and no floating panel. */
 import React from 'react'
-import { NANO_STYLES } from 'dsh-nano-ui'
+import { NanoDialog, NANO_STYLES } from 'dsh-nano-ui'
 import { CloudSectionGraft } from './section.js'
 import { SettingsDialog } from './settings-dialog.js'
 import { NewSessionDialog } from './new-session-dialog.js'
@@ -9,6 +9,7 @@ import { registerNativeWorkbench, rememberWorkbenchSession } from './native-work
 import { CLOUD_CSS } from './styles.js'
 import { makeI18n } from './i18n.js'
 import { api } from './api.js'
+import { expandSidebar } from './sidebar.js'
 
 export const inject = ['slots', 'locale', 'uiWorkspace', 'sessions', 'sidebarRight', 'sidebarRightTabs']
 
@@ -24,51 +25,6 @@ function createStore(initial) {
   }
 }
 
-/** Cloud sessions talk to Devin. Hide the local permission chip, model
- *  picker and skill/attachment menu, and show a static Devin chip instead. */
-function installCloudComposer() {
-  let frame = 0
-  let seat = null
-  const mark = () => {
-    const cloud = document.documentElement.dataset.dncsCloud === '1'
-    // Cache the seat: the body-wide wake-up runs on every mutation batch, and
-    // a document-wide `[class*=composerSeat]` scan there is pure waste once the
-    // seat is known. Re-resolve only when it is missing or was replaced.
-    if (seat == null || !seat.isConnected) seat = document.querySelector('[class*="composerSeat"]')
-    if (seat == null) return
-    let chip = seat.querySelector('.dncs-devin-chip')
-    if (!cloud) { chip?.remove(); return }
-    if (chip) return
-    chip = document.createElement('span')
-    chip.className = 'dncs-devin-chip'
-    chip.textContent = 'Devin'
-    const anchor = seat.querySelector('.nms-root, [data-nano-model-selector="root"], button[aria-label*="工作区内修改"], button[aria-label*="Workspace Write"]')
-    if (anchor?.parentElement) anchor.parentElement.insertBefore(chip, anchor)
-    else seat.append(chip)
-  }
-  const schedule = () => {
-    if (frame) return
-    frame = window.requestAnimationFrame(() => { frame = 0; mark() })
-  }
-  const onClick = event => {
-    const row = event.target?.closest?.('[data-slot="sidebar.workspaces"] [role="treeitem"]')
-    if (!row) return
-    document.documentElement.dataset.dncsCloud = '0'
-    delete document.documentElement.dataset.dncsLocal
-    schedule()
-  }
-  document.addEventListener('click', onClick, true)
-  const observer = new MutationObserver(schedule)
-  observer.observe(document.body, { childList: true, subtree: true })
-  schedule()
-  return () => {
-    observer.disconnect()
-    document.removeEventListener('click', onClick, true)
-    if (frame) window.cancelAnimationFrame(frame)
-    document.querySelector('.dncs-devin-chip')?.remove()
-  }
-}
-
 /** @param {import('@deepseek-ai/cordis').Context} ctx */
 export function apply(ctx, config = {}) {
   const t = makeI18n(() => ctx.locale.getSnapshot().active)
@@ -79,7 +35,6 @@ export function apply(ctx, config = {}) {
   style.textContent = NANO_STYLES + CLOUD_CSS
   document.head.append(style)
   ctx.effect(() => () => style.remove(), 'nano-cloud-session: styles')
-  ctx.effect(() => installCloudComposer(), 'nano-cloud-session: devin composer')
 
   const store = createStore({
     loading: true,
@@ -91,6 +46,7 @@ export function apply(ctx, config = {}) {
     activeSessionId: null,
     settingsOpen: false,
     newOpen: false,
+    archiveTarget: null,
     error: '',
   })
 
@@ -121,9 +77,12 @@ export function apply(ctx, config = {}) {
     get current() { return store.current },
     subscribe: listener => store.subscribe(listener),
     refresh,
+    /** The archive dialog is reversible upstream (unarchive), so it is a
+     *  `NanoDialog danger` and not a RiskConfirmation acknowledgment gate. */
+    askArchive: sessionId => store.set({ archiveTarget: sessionId }),
+    closeArchive: () => store.set({ archiveTarget: null }),
     archiveSession: async sessionId => {
-      if (!window.confirm(t('archiveConfirm'))) return
-      store.set({ refreshing: true, error: '' })
+      store.set({ archiveTarget: null, refreshing: true, error: '' })
       try {
         await api.archive(sessionId)
         await refresh()
@@ -133,6 +92,9 @@ export function apply(ctx, config = {}) {
     },
     copy: () => t,
     get locale() { return ctx.locale.getSnapshot().active },
+    /** Rail entry: the host owns the sidebar toggle, so no document scan.
+     *  `layout` is soft-read (`ctx.get`); see sidebar.js. */
+    expandSidebar: () => expandSidebar(ctx),
     openSettings: () => store.set({ settingsOpen: true }),
     closeSettings: () => { store.set({ settingsOpen: false }); void refresh({ animate: true }) },
     openNew: () => store.set(store.current.activeId ? { newOpen: true } : { settingsOpen: true }),
@@ -143,8 +105,6 @@ export function apply(ctx, config = {}) {
         const bridge = await api.nativeOpen(sessionId)
         void ctx.sessions?.refresh?.()
         rememberWorkbenchSession(bridge.local_session_id, sessionId)
-        document.documentElement.dataset.dncsLocal = bridge.local_session_id
-        document.documentElement.dataset.dncsCloud = '1'
         ctx.uiWorkspace.openSession(bridge.local_session_id)
         window.setTimeout(() => {
           try { ctx.sidebarRight.openTabIn(bridge.local_session_id, workbenchKind) }
@@ -159,6 +119,19 @@ export function apply(ctx, config = {}) {
     toggleExpanded: () => store.set({ expanded: store.current.expanded !== true }),
   }
 
+  function ArchiveDialog({ face, sessionId, onClose }) {
+    const session = (face.current.sessions ?? []).find(item => item.session_id === sessionId) ?? null
+    return React.createElement(NanoDialog, {
+      copy: { cancel: t('cancel'), confirm: t('archive') },
+      title: t('archive'),
+      description: t('archiveConfirm'),
+      confirmLabel: t('archive'),
+      danger: true,
+      onConfirm: () => { void face.archiveSession(sessionId) },
+      onCancel: onClose,
+    }, React.createElement('div', { className: 'dncs-profile-meta' }, session?.title || sessionId))
+  }
+
   function CloudSessionRoot() {
     const [state, setState] = React.useState(face.current)
     React.useEffect(() => face.subscribe(setState), [])
@@ -169,7 +142,12 @@ export function apply(ctx, config = {}) {
         face,
         onClose: face.closeNew,
         onCreated: id => { face.closeNew(); face.openSession(id) },
-      }) : null)
+      }) : null,
+      state.archiveTarget == null ? null : React.createElement(ArchiveDialog, {
+        face,
+        sessionId: state.archiveTarget,
+        onClose: face.closeArchive,
+      }))
   }
 
   ctx.effect(() => ctx.slots.inject('shell.overlay', () => ctx.slots.register({

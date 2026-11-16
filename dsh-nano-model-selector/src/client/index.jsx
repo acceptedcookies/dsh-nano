@@ -79,7 +79,6 @@ export function apply(ctx) {
   // unmounts on selection, the dialog must outlive it.
   const openHistory = sessionId => {
     const host = document.createElement('div')
-    host.className = 'nano-dialog-host'
     document.body.append(host)
     const root = createRoot(host)
     const close = () => {

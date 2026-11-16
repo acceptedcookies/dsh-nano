@@ -30,6 +30,9 @@ test('lib/client.js loads in a stubbed module loader and exports a factory', () 
   assert.equal(loaded.length, 1)
   assert.equal(loaded[0].id, 'dsh-nano-explorer-extra')
   assert.equal(typeof loaded[0].factory, 'function')
-  const exports = loaded[0].factory(() => ({}))
+  // Runtime modules stay external, so the loader hands the bundle just enough of `react` for the
+  // module body to run: the dialog layer creates a context while the bundle loads. Nothing renders.
+  const react = { createContext: () => ({ Provider: null, Consumer: null }), createElement: () => null }
+  const exports = loaded[0].factory(id => (id === 'react' ? react : {}))
   assert.equal(typeof exports, 'object')
 })

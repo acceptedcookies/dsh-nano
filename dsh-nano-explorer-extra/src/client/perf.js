@@ -18,9 +18,10 @@ export const OWN_ID = 'nano-explorer-extra'
 
 /**
  * Attribution root for event ownership (spec §6.7). keepMounted leaves one
- * `[data-nxe]` root per session on the page; hidden panes live under a
- * `[data-sidebar-right-pane]` host carrying `hidden`. `firstVisibleRoot`
- * picks the first connected, unhidden pane — and does it without layout reads.
+ * `[data-nxe]` root per session on the page; hidden panes are the ones a
+ * `hidden` attribute or an `aria-hidden="true"` ancestor takes out of paint.
+ * `firstVisibleRoot` picks the first connected, unhidden root — and does it
+ * without layout reads. `[data-nxe]` is this plugin's own marker.
  */
 const explorerRoot = () => firstVisibleRoot(document.querySelectorAll('[data-nxe]'))
 

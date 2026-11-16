@@ -1,230 +1,63 @@
-/** The commit and name-entry cards, drawn through the shared nano-ui primitives. */
+/** The commit and name-entry cards, drawn in this plugin's own layer through nano-ui. */
 
 import React from 'react'
 import { Input } from '@deepseek-ai/dsh-client-ui-primitives'
-import { NanoDialog } from 'dsh-nano-ui'
+import { NanoWindowDialog } from 'dsh-nano-ui'
 import { perf } from './perf.js'
 
 const { useState } = React
 
 /**
- * One modal card. The chrome, the mask, Escape handling, focus return, and the outline+primary
- * action row all come from `dsh-nano-ui`'s NanoDialog, which is a thin forwarder over the shell's
- * Modal and Button, so this plugin adds no dialog styling of its own.
+ * The element every card is drawn into (DESIGN.md §5).
  *
- * @param props - copy, title, body, and the two actions.
- * @returns the dialog.
+ * A card raised from the files panel is a window overlay, not a main-window Modal: it belongs to this
+ * region of the shell, so it takes the region's own box, theme, and stacking. The carrier draws the
+ * mask and the card inside a container this plugin owns; a missing container means the layer has not
+ * mounted yet, and the card waits a commit instead of falling back to `document.body` (nano-ui
+ * refuses that fallback, and a files-panel card has no business covering the conversation).
  */
-export function Dialog(props) {
-  usePanelConfinedLayer()
-  React.useEffect(() => { perf.count('dialog-open') }, [])
-  // One marker inside every card this plugin draws: the confinement effect tells these cards from
-  // other plugins' full-viewport dialogs by it, and `display: contents` keeps the wrapper out of the
-  // card's layout.
-  return React.createElement(NanoDialog, {
-    ...props,
-    children: React.createElement('div', { className: 'nxe-dialog-body', 'data-nxe-card': 'true' }, props.children),
-  })
+export const DialogLayerContext = React.createContext(null)
+
+/**
+ * The plugin's own positioning layer: one absolutely positioned box inside the page root.
+ *
+ * It is the containing block for every card this plugin draws, which is what keeps a card in the
+ * files panel while the panel moves, resizes, scrolls, or belongs to another session. The layer
+ * itself never takes a pointer event; nano-ui's overlay turns hit-testing back on for the open card.
+ *
+ * @param props - the page, whose subtree becomes the container consumers.
+ * @returns the page followed by the empty layer element.
+ */
+export function DialogLayer({ children }) {
+  const [layer, setLayer] = useState(null)
+  return React.createElement(React.Fragment, null,
+    React.createElement(DialogLayerContext.Provider, { value: layer }, children),
+    React.createElement('div', { className: 'nxe-dialog-layer', ref: setLayer }))
 }
 
 /**
- * Keep the open card inside this plugin's own panel instead of the whole workspace.
- *
- * The shell's Modal portals to `document.body` and its layer is a fixed full-viewport box, so a card
- * raised from the files panel covered the conversation too. The shared declarative dialog only tags a
- * class for this; the geometry that class describes is applied by the imperative opener. This reads
- * the panel's rect and mirrors that same geometry onto the portaled layer, following the panel while
- * it is open.
- *
- * @returns nothing; it only affects the DOM.
+ * The container cards are drawn into.
+ * @returns the layer element, or null until it mounts.
  */
-export function usePanelConfinedLayer(active = true) {
-  React.useEffect(() => {
-    // D2 (P4, named by the idle-10s budget): a CLOSED drawer must not keep a
-    // document.body childList+subtree observer alive. `active` gates the whole
-    // effect; when it flips, the previous effect's cleanup detaches exactly
-    // once. Dialog passes no argument (always active).
-    if (!active) return undefined
-    let live = true
-    const write = (element, styles) => {
-      for (const [key, value] of Object.entries(styles)) {
-        if (element.style[key] !== value) element.style[key] = value
-      }
-    }
-    // Several files pages can stay mounted. The first [data-nxe] is often a hidden session
-    // with a zero rect, and sizing against that leaves the card as tall as its content.
-    const filesPanel = () => {
-      let best = null
-      let bestArea = 0
-      for (const node of document.querySelectorAll('[data-nxe]')) {
-        const host = node.closest('[data-sidebar-right-pane]') ?? node
-        if (!(host instanceof HTMLElement)) continue
-        const box = host.getBoundingClientRect()
-        const area = box.width * box.height
-        if (area > bestArea) { best = { host, root: node }; bestArea = area }
-      }
-      return best
-    }
-    let watched = null
-    let resize = null
-    const hasCard = () => document.querySelector('.nano-dialog-card [data-nxe-card]') !== null
-    const apply = () => {
-      if (!live || !hasCard()) return
-      const panel = filesPanel()
-      if (panel === null) return
-      if (panel.host !== watched && typeof ResizeObserver === 'function') {
-        resize?.disconnect()
-        watched = panel.host
-        resize = new ResizeObserver(apply)
-        resize.observe(panel.host)
-      }
-      const rect = panel.host.getBoundingClientRect()
-      if (rect.width < 1 || rect.height < 1) return
-      for (const card of document.querySelectorAll('.nano-dialog-card')) {
-        // Only fence cards this plugin drew: every dialog here marks its body with `data-nxe-card`.
-        // Other plugins' cards (e.g. the shared workspace settings) stay full-viewport centered.
-        if (card.querySelector('[data-nxe-card]') === null) continue
-        const layer = card.parentElement
-        if (!(layer instanceof HTMLElement)) continue
-        layer.classList.add('nxe-confined-layer')
-        write(layer, {
-          position: 'fixed',
-          top: `${rect.top}px`, left: `${rect.left}px`,
-          right: 'auto', bottom: 'auto',
-          // Border-box, so the padding below insets the card instead of growing the fence past the
-          // panel's own edges.
-          boxSizing: 'border-box',
-          width: `${rect.width}px`, height: `${rect.height}px`,
-          padding: '12px',
-        })
-        // The source-control cards rise from the footer and use the pane's width. Height follows
-        // the content up to the pane, so a long change list fills it and a short branch list does
-        // not leave an empty field under one row. Rename and settings stay compact.
-        if (card.querySelector('.nxe-scm') !== null) {
-          card.dataset.nxeFill = '1'
-          const scheme = panel.root.getAttribute('data-nano-scheme')
-          if (scheme !== null) card.setAttribute('data-nano-scheme', scheme)
-          write(layer, {
-            display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
-            alignItems: 'center', overflow: 'hidden',
-          })
-          // The shell centers the card on the viewport with its own inline position. Pin it back into
-          // this layer so a short card cannot drift out of the files pane.
-          write(card, { position: 'relative', top: 'auto', left: 'auto', right: 'auto', transform: 'none' })
-          // The working-tree card is a fixed half of the window. Filter tabs must not resize it.
-          // The repository card still follows its content, capped so it stays inside the pane.
-          const kind = card.querySelector('[data-nxe-scm]')?.getAttribute('data-nxe-scm')
-          const room = Math.max(240, rect.height - 24)
-          if (kind === 'commit') {
-            const fixed = `${Math.min(Math.round(window.innerHeight * 0.5), room)}px`
-            write(card, {
-              width: '100%', maxWidth: '100%', minWidth: '0', margin: '0',
-              height: fixed, minHeight: fixed, maxHeight: fixed,
-              display: 'flex', flexDirection: 'column', overflow: 'hidden',
-            })
-          } else {
-            write(card, {
-              width: '100%', maxWidth: '100%', minWidth: '0', margin: '0',
-              height: 'auto', minHeight: '0',
-              maxHeight: `${Math.min(room, Math.round(rect.height * 0.68))}px`,
-              display: '', flexDirection: '', overflow: '',
-            })
-          }
-        }
-      }
-    }
-    // Idle is almost silent: the only standing listener is the arrival detector below. The
-    // MutationObserver, the resize hook, the ResizeObserver, and the frame chain all live only
-    // while a card does.
-    let observer = null
-    let frame = 0
-    let following = false
-    // perf: card-shape watches mutations while a card is open; card-follow is the
-    // rAF chain that pins the layer to the panel; card-wake is the standing
-    // arrival detector (itself only alive while a Dialog is mounted).
-    const shapeTrack = perf.track('mutation', 'card-shape')
-    const followTrack = perf.track('raf', 'card-follow')
-    const wakeTrack = perf.track('mutation', 'card-wake')
-    const stop = () => {
-      // `live` is ONE counter shared by every mounted hook instance (drawers
-      // mount two of these even while closed). Detach exactly once per begin()
-      // — resetLive() here would zero the other instance's still-live observer
-      // and hide a leak (§10.5 / A4).
-      if (following) {
-        shapeTrack.detach()
-        followTrack.detach()
-        following = false
-      }
-      if (observer !== null) { observer.disconnect(); observer = null }
-      if (frame !== 0) { window.cancelAnimationFrame(frame); frame = 0 }
-      resize?.disconnect()
-      resize = null
-      watched = null
-      window.removeEventListener('resize', apply)
-    }
-    // A mutation batch containing a mounted card: either the layer arriving or content inside it.
-    const cardMutation = mutations => {
-      for (const mutation of mutations) {
-        for (const node of mutation.addedNodes) {
-          if (node instanceof Element && (node.matches('.nano-dialog-card, .nano-dialog-card *') || node.querySelector('.nano-dialog-card') !== null)) return true
-        }
-      }
-      return false
-    }
-    const follow = followTrack.wrap(() => {
-      frame = 0
-      if (!live) return
-      // The card closed: shed every listener and stop scheduling. Nothing here runs again until
-      // the detector sees the next card.
-      if (!hasCard()) { stop(); return }
-      apply()
-      frame = window.requestAnimationFrame(follow)
-    })
-    const begin = () => {
-      if (following || !live || !hasCard()) return
-      following = true
-      // Child list only. Watching every style write on the page re-entered apply forever and froze
-      // it. The observer leaves as soon as the card does, so a closed tree costs zero callbacks.
-      observer = new MutationObserver(shapeTrack.wrap(mutations => { if (cardMutation(mutations)) apply() }))
-      observer.observe(document.body, { childList: true, subtree: true })
-      shapeTrack.attach()
-      followTrack.attach()
-      window.addEventListener('resize', apply)
-      apply()
-      frame = window.requestAnimationFrame(follow)
-    }
-    // The standing wake-up: childList on the shell's modal host (under body, subtree needed because
-    // portals nest). A callback here means the page moved, not that a card exists — the cheap
-    // `hasCard()` gate inside keeps an idle files pane's per-mutation cost at one querySelector.
-    const detect = new MutationObserver(wakeTrack.wrap(mutations => {
-      if (!live || following || !cardMutation(mutations)) return
-      begin()
-    }))
-    detect.observe(document.body, { childList: true, subtree: true })
-    wakeTrack.attach()
-    // A card mounted between this component's render and effect: the detector still sees it, but
-    // opening directly keeps the first frame from waiting a mutation turn.
-    begin()
-    return () => {
-      live = false
-      stop()
-      detect.disconnect()
-      wakeTrack.detach()
-      for (const layer of document.querySelectorAll('.nxe-confined-layer')) {
-        layer.classList.remove('nxe-confined-layer')
-        for (const key of ['position', 'top', 'left', 'right', 'bottom', 'width', 'height', 'padding', 'box-sizing', 'display', 'align-items', 'justify-content', 'flex-direction', 'overflow']) {
-          layer.style.removeProperty(key)
-        }
-      }
-      for (const card of document.querySelectorAll('[data-nxe-fill]')) {
-        if (!(card instanceof HTMLElement)) continue
-        delete card.dataset.nxeFill
-        for (const key of ['width', 'max-width', 'height', 'max-height', 'min-height', 'min-width', 'margin', 'position', 'top', 'left', 'right', 'transform', 'display', 'flex-direction', 'overflow']) {
-          card.style.removeProperty(key)
-        }
-      }
-    }
-  }, [active])
+export function useDialogContainer() {
+  return React.useContext(DialogLayerContext)
+}
+
+/**
+ * One modal card.
+ *
+ * The mask, the chrome, Escape handling, focus return, and the outline+primary action row all come
+ * from `dsh-nano-ui`'s window dialog, which is a thin forwarder over the shell's own Button and
+ * `useModalLayer`; this plugin adds no dialog chrome of its own.
+ *
+ * @param props - copy, title, body, and the two actions.
+ * @returns the dialog, or null while the layer is not mounted.
+ */
+export function Dialog(props) {
+  const container = useDialogContainer()
+  React.useEffect(() => { perf.count('dialog-open') }, [])
+  if (container === null) return null
+  return React.createElement(NanoWindowDialog, { ...props, container })
 }
 
 /**

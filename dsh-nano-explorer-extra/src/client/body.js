@@ -1,7 +1,7 @@
 /** The files page this plugin takes over: header controls over the shared tree, and a footer status bar. */
 
 import React from 'react'
-import { CommitDialog, Dialog, MoveConfirmDialog, RenameDialog } from './dialogs.js'
+import { CommitDialog, Dialog, DialogLayer, MoveConfirmDialog, RenameDialog } from './dialogs.js'
 import { BranchDrawer, CommitDrawer } from './drawers.js'
 import { SettingsDialog } from './settings.js'
 import { createAccessory } from './accessory.js'
@@ -996,134 +996,138 @@ export function ExplorerBody(props) {
   }, [menu, copy, openApps, cwd, copyPath, statusOf, openDiff, nxe, sessionId, openEntry])
 
   return React.createElement('div', { 'data-nxe': 'true', ref: rootEl },
-    React.createElement('div', { className: 'nxe-header' },
-      React.createElement('span', { className: 'nxe-path', title: cwd, 'data-nxe-path': 'true' }, cwd),
-      React.createElement(ToolButton, { label: copy.newFile, onClick: () => { create('file') } }, iconFilePlus()),
-      React.createElement(ToolButton, { label: copy.newFolder, onClick: () => { create('folder') } }, iconFolderPlus()),
-      React.createElement(ToolButton, {
-        label: copy.rename, disabled: tree.selected === null,
-        onClick: () => {
-          const target = tree.selected
-          if (target === null) return
-          setDialogError(undefined)
-          setDialog({ kind: 'rename', entry: { path: target, name: basenameOf(target), meta: { kind: tree.levels.has(target) ? 'directory' : 'file' } } })
+    // Every card this page raises is a window overlay inside the page's own layer (DESIGN.md §5):
+    // the layer is a positioned box in this panel, so a card stays here instead of covering the
+    // conversation. The layer renders no chrome of its own; nano-ui draws the mask and the card.
+    React.createElement(DialogLayer, null,
+      React.createElement('div', { className: 'nxe-header' },
+        React.createElement('span', { className: 'nxe-path', title: cwd, 'data-nxe-path': 'true' }, cwd),
+        React.createElement(ToolButton, { label: copy.newFile, onClick: () => { create('file') } }, iconFilePlus()),
+        React.createElement(ToolButton, { label: copy.newFolder, onClick: () => { create('folder') } }, iconFolderPlus()),
+        React.createElement(ToolButton, {
+          label: copy.rename, disabled: tree.selected === null,
+          onClick: () => {
+            const target = tree.selected
+            if (target === null) return
+            setDialogError(undefined)
+            setDialog({ kind: 'rename', entry: { path: target, name: basenameOf(target), meta: { kind: tree.levels.has(target) ? 'directory' : 'file' } } })
+          },
+        }, iconRename()),
+        // The shipped open-in-app package owns the reveal control: its own icon, its own tooltip, its
+        // own split button with the application list. Rendering its seat keeps that exact UI instead of
+        // a look-alike this page would have to maintain. `renderSlot` reads the entries other packages
+        // registered, so declaring the child slot here is neither needed nor allowed.
+        React.createElement(RevealButton, { copy, cwd: cwd ?? '', apps: openApps }),
+        React.createElement(ToolButton, { label: copy.reload, onClick: () => { void tree.refresh(); void refreshGit() } }, iconRefresh()),
+      ),
+      linkNote === undefined ? null : React.createElement('p', { className: 'nxe-row-note', role: 'status' }, linkNote),
+      deleteRequest === null ? null : React.createElement(Dialog, {
+        copy, title: copy.deleteTitle, busy, confirmLabel: copy.delete,
+        onConfirm: () => { void doDelete(deleteRequest) },
+        onCancel: () => { setDeleteRequest(null); setLinkNote(undefined) },
+        // The confirmation line is the title's explanation, so it goes into the Modal's own
+        // description slot; the destructive warning stays a muted note under it.
+        description: React.createElement(React.Fragment, null,
+          copy.deleteBody(deleteRequest.name),
+          deleteRequest.kind === 'directory'
+            ? React.createElement('span', { className: 'nxe-dialog-note-inline' }, ` ${copy.deleteFolderNote}`)
+            : null),
+      }),
+      // A folder drop is staged here until the reader confirms; the card remounts per request so its
+      // two-second countdown always starts fresh. The destination is shown relative to the workspace
+      // root, with the root itself named instead of left as an empty string.
+      moveRequest === null ? null : React.createElement(MoveConfirmDialog, {
+        key: `${moveRequest.entry.path}->${moveRequest.targetDir}`,
+        copy,
+        name: basenameOf(moveRequest.entry.path),
+        destination: relativeTo(cwd ?? '', moveRequest.targetDir) || copy.moveFolderRoot,
+        onConfirm: () => {
+          const pending = moveRequest
+          setMoveRequest(null)
+          void doMove(pending.entry, pending.targetDir)
         },
-      }, iconRename()),
-      // The shipped open-in-app package owns the reveal control: its own icon, its own tooltip, its
-      // own split button with the application list. Rendering its seat keeps that exact UI instead of
-      // a look-alike this page would have to maintain. `renderSlot` reads the entries other packages
-      // registered, so declaring the child slot here is neither needed nor allowed.
-      React.createElement(RevealButton, { copy, cwd: cwd ?? '', apps: openApps }),
-      React.createElement(ToolButton, { label: copy.reload, onClick: () => { void tree.refresh(); void refreshGit() } }, iconRefresh()),
-    ),
-    linkNote === undefined ? null : React.createElement('p', { className: 'nxe-row-note', role: 'status' }, linkNote),
-    deleteRequest === null ? null : React.createElement(Dialog, {
-      copy, title: copy.deleteTitle, busy, confirmLabel: copy.delete,
-      onConfirm: () => { void doDelete(deleteRequest) },
-      onCancel: () => { setDeleteRequest(null); setLinkNote(undefined) },
-      // The confirmation line is the title's explanation, so it goes into the Modal's own
-      // description slot; the destructive warning stays a muted note under it.
-      description: React.createElement(React.Fragment, null,
-        copy.deleteBody(deleteRequest.name),
-        deleteRequest.kind === 'directory'
-          ? React.createElement('span', { className: 'nxe-dialog-note-inline' }, ` ${copy.deleteFolderNote}`)
-          : null),
-    }),
-    // A folder drop is staged here until the reader confirms; the card remounts per request so its
-    // two-second countdown always starts fresh. The destination is shown relative to the workspace
-    // root, with the root itself named instead of left as an empty string.
-    moveRequest === null ? null : React.createElement(MoveConfirmDialog, {
-      key: `${moveRequest.entry.path}->${moveRequest.targetDir}`,
-      copy,
-      name: basenameOf(moveRequest.entry.path),
-      destination: relativeTo(cwd ?? '', moveRequest.targetDir) || copy.moveFolderRoot,
-      onConfirm: () => {
-        const pending = moveRequest
-        setMoveRequest(null)
-        void doMove(pending.entry, pending.targetDir)
+        onCancel: () => setMoveRequest(null),
+      }),
+      createRequest === null ? null : React.createElement(RenameDialog, {
+        copy, mode: 'create', busy,
+        currentName: createRequest.proposed,
+        onConfirm: name => { void doCreate(name) },
+        onCancel: () => { setCreateRequest(null); setLinkNote(undefined) },
+      }),
+      React.createElement('div', {
+        className: 'nxe-tree', 'data-nxe-tree': 'true', onKeyDown: onTreeKeyDown,
+        // Empty space below the rows is the workspace root: a drop landing there moves the entry to
+        // the top level, the same destination a root-level folder row offers.
+        onDragOver: event => {
+          if (event.dataTransfer?.types?.includes('application/x-nxe-move') !== true) return
+          event.preventDefault()
+          event.dataTransfer.dropEffect = 'move'
+          if (hovering.current !== event.currentTarget) markHover(null, event.currentTarget)
+        },
+        onDragLeave: event => {
+          if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return
+          if (hovering.current === event.currentTarget) clearHover()
+        },
+        onDrop: event => {
+          // A folder row already claimed this drop — its handler stopped propagation.
+          const source = dropOn(event)
+          if (source === '') return
+          requestMove({ path: source, meta: { kind: dragKind.current } }, cwd)
+        },
+      }, content),
+      React.createElement(NanoToast, { text: toast, anchor: rootEl.current }),
+      // A Git read failure is a persistent floating warning over the pane's lower edge, not a row in
+      // the flow: an inline line pushed the whole tree down, and it stayed as long as the error did.
+      gitError === undefined ? null : React.createElement('div', {
+        className: 'nxe-git-alert', role: 'alert', 'data-nxe-git-alert': 'true',
       },
-      onCancel: () => setMoveRequest(null),
-    }),
-    createRequest === null ? null : React.createElement(RenameDialog, {
-      copy, mode: 'create', busy,
-      currentName: createRequest.proposed,
-      onConfirm: name => { void doCreate(name) },
-      onCancel: () => { setCreateRequest(null); setLinkNote(undefined) },
-    }),
-    React.createElement('div', {
-      className: 'nxe-tree', 'data-nxe-tree': 'true', onKeyDown: onTreeKeyDown,
-      // Empty space below the rows is the workspace root: a drop landing there moves the entry to
-      // the top level, the same destination a root-level folder row offers.
-      onDragOver: event => {
-        if (event.dataTransfer?.types?.includes('application/x-nxe-move') !== true) return
-        event.preventDefault()
-        event.dataTransfer.dropEffect = 'move'
-        if (hovering.current !== event.currentTarget) markHover(null, event.currentTarget)
-      },
-      onDragLeave: event => {
-        if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return
-        if (hovering.current === event.currentTarget) clearHover()
-      },
-      onDrop: event => {
-        // A folder row already claimed this drop — its handler stopped propagation.
-        const source = dropOn(event)
-        if (source === '') return
-        requestMove({ path: source, meta: { kind: dragKind.current } }, cwd)
-      },
-    }, content),
-    React.createElement(NanoToast, { text: toast, anchor: rootEl.current }),
-    // A Git read failure is a persistent floating warning over the pane's lower edge, not a row in
-    // the flow: an inline line pushed the whole tree down, and it stayed as long as the error did.
-    gitError === undefined ? null : React.createElement('div', {
-      className: 'nxe-git-alert', role: 'alert', 'data-nxe-git-alert': 'true',
-    },
-    React.createElement(primitives.IconWarningOutlineRegular, {
-      width: 14, height: 14, className: 'nxe-git-alert-icon', 'aria-hidden': 'true',
-    }),
-    React.createElement('span', { className: 'nxe-git-alert-text' }, gitError),
-    React.createElement('button', {
-      type: 'button', className: 'nxe-git-alert-x', title: copy.dismiss,
-      'aria-label': copy.dismiss, onClick: () => store?.dismissGitError(),
-    }, React.createElement(primitives.IconCloseOutlineRegular, { width: 12, height: 12, 'aria-hidden': 'true' }))),
-    React.createElement(StatusBar, {
-      copy, git, stats, statsState, prefs,
-      onOpenBranch: () => openDrawer('branch'),
-      onOpenCommit: () => openDrawer('commit'),
-      onRetryStats: () => { void refreshStats() },
-      onOpenSettings: () => setSettingsOpen(true),
-    }),
-    dialogNode,
-    React.createElement(SettingsDialog, {
-      copy, open: settingsOpen, prefs, onClose: () => setSettingsOpen(false),
-      setPref: (key, value) => {
-        nxe.setPref(key, value)
-        // A stats-scope switch changes what the number means, not just the label: recount under the
-        // new flags immediately instead of waiting for the next file write to queue a walk.
-        if (key === 'statsExcludeGit' || key === 'statsExcludeIgnored' || key === 'statsFollowSymlinks') {
-          queueStats()
-        }
-      },
-    }),
-    React.createElement(BranchDrawer, {
-      copy, open: drawer === 'branch', git, busy: drawerBusy, error: drawerError,
-      onClose: () => { setDrawer(null); setDrawerError(undefined) },
-      onPull: doPull,
-      onPush: doPush,
-      onRemote: doRemote,
-      onAuthor: doAuthor,
-      onSshKey: doSshKey,
-      onCheckout: doCheckout,
-      onRefresh: doRefresh,
-      onOpenConflict: path => { openEntry({ path: absoluteOf(cwd ?? '', path) }); setDrawer(null) },
-    }),
-    React.createElement(CommitDrawer, {
-      copy, open: drawer === 'commit', git, busy: drawerBusy, error: drawerError, refreshing: drawerRefresh,
-      onClose: () => { setDrawer(null); setDrawerError(undefined) },
-      onCommit: doDrawerCommit,
-      onPull: doPull,
-      onOpenConflict: path => { openEntry({ path: absoluteOf(cwd ?? '', path) }); setDrawer(null) },
-    }),
-    React.createElement(RowMenu, { menu, copy, actions: rowActions, onClose: () => setMenu(null) }))
+      React.createElement(primitives.IconWarningOutlineRegular, {
+        width: 14, height: 14, className: 'nxe-git-alert-icon', 'aria-hidden': 'true',
+      }),
+      React.createElement('span', { className: 'nxe-git-alert-text' }, gitError),
+      React.createElement('button', {
+        type: 'button', className: 'nxe-git-alert-x', title: copy.dismiss,
+        'aria-label': copy.dismiss, onClick: () => store?.dismissGitError(),
+      }, React.createElement(primitives.IconCloseOutlineRegular, { width: 12, height: 12, 'aria-hidden': 'true' }))),
+      React.createElement(StatusBar, {
+        copy, git, stats, statsState, prefs,
+        onOpenBranch: () => openDrawer('branch'),
+        onOpenCommit: () => openDrawer('commit'),
+        onRetryStats: () => { void refreshStats() },
+        onOpenSettings: () => setSettingsOpen(true),
+      }),
+      dialogNode,
+      React.createElement(SettingsDialog, {
+        copy, open: settingsOpen, prefs, onClose: () => setSettingsOpen(false),
+        setPref: (key, value) => {
+          nxe.setPref(key, value)
+          // A stats-scope switch changes what the number means, not just the label: recount under the
+          // new flags immediately instead of waiting for the next file write to queue a walk.
+          if (key === 'statsExcludeGit' || key === 'statsExcludeIgnored' || key === 'statsFollowSymlinks') {
+            queueStats()
+          }
+        },
+      }),
+      React.createElement(BranchDrawer, {
+        copy, open: drawer === 'branch', git, busy: drawerBusy, error: drawerError,
+        onClose: () => { setDrawer(null); setDrawerError(undefined) },
+        onPull: doPull,
+        onPush: doPush,
+        onRemote: doRemote,
+        onAuthor: doAuthor,
+        onSshKey: doSshKey,
+        onCheckout: doCheckout,
+        onRefresh: doRefresh,
+        onOpenConflict: path => { openEntry({ path: absoluteOf(cwd ?? '', path) }); setDrawer(null) },
+      }),
+      React.createElement(CommitDrawer, {
+        copy, open: drawer === 'commit', git, busy: drawerBusy, error: drawerError, refreshing: drawerRefresh,
+        onClose: () => { setDrawer(null); setDrawerError(undefined) },
+        onCommit: doDrawerCommit,
+        onPull: doPull,
+        onOpenConflict: path => { openEntry({ path: absoluteOf(cwd ?? '', path) }); setDrawer(null) },
+      }),
+      React.createElement(RowMenu, { menu, copy, actions: rowActions, onClose: () => setMenu(null) })))
 }
 
 /**

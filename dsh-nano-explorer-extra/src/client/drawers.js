@@ -7,8 +7,8 @@
 
 import React from 'react'
 import { Button, FileTypeIcon, IconLoadingOutlineRegular, Input, SegmentedControl } from '@deepseek-ai/dsh-client-ui-primitives'
-import { NanoDialog } from 'dsh-nano-ui'
-import { Dialog, usePanelConfinedLayer } from './dialogs.js'
+import { NanoWindowDialog } from 'dsh-nano-ui'
+import { Dialog, useDialogContainer } from './dialogs.js'
 import { ageParts, partitionChanges, shortenPath, splitPath } from './format.js'
 
 const { useEffect, useState } = React
@@ -336,7 +336,8 @@ function HistoryRail({ copy, history, currentBranch, upstream, remotes }) {
  * @returns the panel, or null while closed.
  */
 export function BranchDrawer({ copy, open, git, onClose, onPull, onPush, onRefresh, onCheckout, onOpenConflict, onRemote, onAuthor, onSshKey, busy, error }) {
-  usePanelConfinedLayer(open)
+  // The card is drawn inside this page's own layer (DESIGN.md §5), so it stays in the files panel.
+  const container = useDialogContainer()
   const [query, setQuery] = useState('')
   const [branchTab, setBranchTab] = useState('local')
   const [pendingBranch, setPendingBranch] = useState(null)
@@ -348,7 +349,7 @@ export function BranchDrawer({ copy, open, git, onClose, onPull, onPush, onRefre
   useEffect(() => {
     if (!open) { setQuery(''); setBranchTab('local'); setPendingBranch(null); setPendingRemote(null); setPendingPush(false); setSettingsOpen(false) }
   }, [open])
-  if (!open) return null
+  if (!open || container === null) return null
   const current = branchName(git)
   const upstream = git?.upstream ?? null
   const behind = git?.behind ?? 0
@@ -388,7 +389,10 @@ export function BranchDrawer({ copy, open, git, onClose, onPull, onPush, onRefre
     copy.worktreesHeadingCount((git?.worktrees ?? []).length),
     remotes.length === 0 ? '' : fetchStamp,
   )
-  return React.createElement(NanoDialog, {
+  return React.createElement(NanoWindowDialog, {
+    container,
+    // The repository card fills the pane's width and rises from its bottom edge (plugin-owned CSS).
+    className: 'nxe-scm-card',
     copy,
     title: React.createElement('span', { className: 'nxe-drawer-title' },
       copy.branchDrawerTitle,
@@ -442,7 +446,7 @@ export function BranchDrawer({ copy, open, git, onClose, onPull, onPush, onRefre
         : ahead > 0 ? `${copy.pushNow} ${ahead}` : copy.pushNow)),
     onCancel: onClose,
   },
-  React.createElement('div', { className: 'nxe-scm nxe-repo', 'data-nxe-scm': 'branch', 'data-nxe-card': 'true' },
+  React.createElement('div', { className: 'nxe-scm nxe-repo', 'data-nxe-scm': 'branch' },
     conflicts.length === 0 ? null : React.createElement('section', {
       className: 'nxe-repo-conflict', 'data-nxe-conflicts': String(conflicts.length),
     },
@@ -844,11 +848,12 @@ function RepoSettingsDialog({ copy, remotes, author, sshKey, busy, error, onRemo
  * @returns the panel, or null while closed.
  */
 export function CommitDrawer({ copy, open, git, onClose, onCommit, busy, error, refreshing, onOpenConflict }) {
-  usePanelConfinedLayer(open)
+  // Same own-layer carrier as the branch card: the working tree belongs to this pane (DESIGN.md §5).
+  const container = useDialogContainer()
   const [message, setMessage] = useState('')
   const [filter, setFilter] = useState('all')
   useEffect(() => { if (!open) setFilter('all') }, [open])
-  if (!open) return null
+  if (!open || container === null) return null
   const files = git?.files ?? []
   const groups = partitionChanges(files)
   const conflicts = groups.conflicts.length > 0 ? groups.conflicts : (git?.conflicts ?? []).map(path => ({ path, status: 'U' }))
@@ -859,7 +864,11 @@ export function CommitDrawer({ copy, open, git, onClose, onCommit, busy, error, 
     if (!canCommit) return
     void Promise.resolve(onCommit(message)).then(ok => { if (ok === true) setMessage('') })
   }
-  return React.createElement(NanoDialog, {
+  return React.createElement(NanoWindowDialog, {
+    container,
+    // The working-tree card fills the pane width, rises from its bottom edge, and holds one height
+    // across filter switches (plugin-owned CSS on the class it hands the shared dialog).
+    className: 'nxe-scm-card nxe-scm-commit',
     copy,
     // Opening the panel fires a fresh status read; the spinner sits on the title until it lands.
     title: React.createElement('span', { className: 'nxe-drawer-title' },
@@ -882,7 +891,7 @@ export function CommitDrawer({ copy, open, git, onClose, onCommit, busy, error, 
       }, copy.commit)),
     onCancel: onClose,
   },
-  React.createElement('div', { className: 'nxe-scm', 'data-nxe-scm': 'commit', 'data-nxe-card': 'true' },
+  React.createElement('div', { className: 'nxe-scm', 'data-nxe-scm': 'commit' },
     React.createElement(Input, {
       value: message,
       placeholder: current === null ? copy.commitPlaceholder : copy.commitPlaceholderOn(current),

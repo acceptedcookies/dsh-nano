@@ -110,11 +110,15 @@ P0-00 干净树（main@9792da0）
 
 ### PH4 — [DNMS]（`nue-1117-migrate-dnms`）
 
-- [ ] `P4-01` — 云会话自判（宿主公开判据核实；无判据即停、回问答） · `NUE1117-T19`
-- [ ] `P4-02` — 区域收束退役（主窗口级 Modal；包 AGENTS 约束第 1 条删除） · `NUE1117-T18`
-- [ ] `P4-03` — `Tag`/`Switch`/`SegmentedControl`、删未用 Tooltip、Toast 带 `anchor` · `NUE1117-T18`
-  - **依赖**：PH3 合入 · **执行状态**：`not-started`
-
+- [x] `P4-01` — 云会话自判（宿主公开判据核实；无判据即停、回问答） · `NUE1117-T19`
+  - **执行状态**：`deferred`（问答 `Q18`，`807c357`）· **证据**：宿主 `SessionHeader`（`dsh-session` `types.d.ts:60-100`）与 `CreateSessionOptions.meta` 只有 `cwd/parentSession/isSeeded/origin:'subagent'/delegationDepth/agentPreset` 等字段，无来源/carrier/remote；[DNCS] 以 `ctx.sessions.create(undefined,{meta:{cwd}})` + `agents.enter(fake)` 投影，宿主侧为普通本地会话，唯一差异值 `model.current().provider='devin'` 由 [DNCS] 写入，不算宿主合同 → 按 §5.4 子步骤 4 停止。未读 `html[data-dncs-cloud]`、未建插件间约定。防侧载守卫断言（[DNMS] `src/` 无 `dncs`/`data-dncs-cloud`/`dncsCloud`）落 `test/nue-migration.test.mjs`；`isCloudSession` 用例待 Q18 裁决
+- [x] `P4-02` — 区域收束退役（主窗口级 Modal；包 AGENTS 约束第 1 条删除） · `NUE1117-T18`
+  - **执行状态**：`complete` · **证据**：`faf9831`（合并 `e52ef13`）；删 `index.jsx` 区域查询与 `regionElement`、测量 effect、`body > div:has(> .nms-hist-dialog)` 段；固定高度改 `NanoDialog fixedHeight: 560`（0.2.0 已无 `.nano-dialog-content`）；AGENTS 改「两个必须遵守的呈现约束」
+- [x] `P4-03` — `Tag`/`Switch`/`SegmentedControl`、删未用 Tooltip、Toast 带 `anchor` · `NUE1117-T18`
+  - **执行状态**：`complete` · **证据**：`faf9831`；`.nms-tag`→宿主 `Tag`（本机解码 tone 集合 neutral/info/success/warning/danger/outline/quiet/solid，catalog 徽标越界回落 neutral）、`.nms-switch`→`Switch`、场景页签→`SegmentedControl`、`NanoToast anchor={triggerRef.current}`、删 `.nms-root .nano-toast`。U1/U6 处理：未定义令牌换 catalog 令牌，数字 z-index 换 `--nano-layer-*`，`--dsh-composer-model-*-display`（宿主槽位合同变量）标 `nano-ui-exempt` 并登记 DESIGN §10
+  - **测试四元组**：`e52ef13` · `cd dsh-nano-model-selector && npm test` · 62/62（≥54；新增 `nue-migration.test.mjs` 8 条，对照 main 源码 6 败 2 过，2 过为 T14/T19 回归守卫）· 2026-11-16T18:30:55Z；`node scripts/test-all.mjs` 21/22（仅 s3-client）；`cd packages/dsh-nano-ui && npm test` 42/42；`check-ui-rules` DNMS U1 3（已登记）/U2 0/U3 25/U4 1/U5 0/U6 0/U8 2/U9 5/U10 1，合计 37 ≤ 基线 62；`check-client-rules` ok；`lib/client.js` 含 `dsh-nano-ui@0.2.0` 1 处
+  - **附**：`e1b2a5a` nano-ui 产物版本标记改为 `src/version.js` 首行 legal comment（见 §9）
+  - **依赖**：PH3 合入 · **执行状态**：`complete`（P4-01 `deferred`，Q18）
 ### PH5 — [DNEE]（`nue-1117-migrate-dnee`）
 
 - [ ] `P5-01` — `:has()` 退役（文件树状态钩子登记宿主缺口） · `NUE1117-T20`
@@ -176,16 +180,18 @@ P0-00 干净树（main@9792da0）
 | `NUE1117-T01`–`T02` | 规格与原则 | `node --test test/scripts/nue-docs.test.mjs` | 7/7 @2c5af77 | pass |
 | `NUE1117-T03`–`T07` | catalog 与检测 | `node --test test/scripts/{gen-nano-catalog,check-client-rules,check-ui-rules}.test.mjs`；`test-all` | 31/31 @2c5af77；test-all 20/21（s3-client 既有失败） | pass（T06 partial） |
 | `NUE1117-T08`–`T17` | nano-ui 0.2.0 | `cd packages/dsh-nano-ui && npm test`；六套件；`test-all` | 41/41 @a94f135；六套件 ≥ N6；DNN 失败 = 预登记 6 条；test-all 21/22（s3-client 既有） | pass（P3-05/P3-08 partial 待 T27） |
-| `NUE1117-T18`–`T26` | 六插件迁移 | 各插件测试 + `nue-migration.test.mjs` | — | pending |
+| `NUE1117-T18` | [DNMS] 迁移 | `npm test`（含 `nue-migration.test.mjs`） | 62/62 @e52ef13 | pass |
+| `NUE1117-T19` | [DNMS] 云会话自判 | — | 宿主无判据，停止 | deferred（Q18） |
+| `NUE1117-T20`–`T26` | 其余五插件迁移 | 各插件测试 + `nue-migration.test.mjs` | — | pending |
 | `NUE1117-T27a`–`e` | 视觉核对（live） | 本机 profile + ego-browser 截图 | — | pending（需 live 授权与部署） |
 | `NUE1117-T28`–`T30` | 收口 | 两次构建 sha；`nue-docs`/`nue-endstate` | — | pending |
 
 ## 5. 当前状态与交接
 
-- **当前节点 / 已完成**：P0-00、PH1、PH2、PH3
-- **下一动作**：PH4（[DNMS]）
+- **当前节点 / 已完成**：P0-00、PH1、PH2、PH3、PH4（P4-01 deferred）
+- **下一动作**：PH5（[DNEE]）
 - **当前阻塞**：无
-- **待 owner 决定**：P4-01、P9-05（执行到时判定是否触发停止）
+- **待 owner 决定**：Q18（P4-01，推荐 A）；P9-05（执行到时判定）
 - **最终交接目标**：[业主]
 
 ## 6. 已启用插件
@@ -217,6 +223,9 @@ P0-00 干净树（main@9792da0）
 - `2026-11-16` · AP/DESIGN 原写 `theme.getTheme().colorScheme`；本机解码宿主快照为 `{ preference, active: { id, colorScheme, tokens }, … }`，方案在 `active.colorScheme`，主题变化只经 `ctx.on('theme/change')`、服务无订阅接口。ThemeScope 读 `active.colorScheme`（兼读扁平字段），收 `subscribe` 参数；DESIGN §3 回写。
 - `2026-11-16` · P3-12 c) 要求 diff 只在 `packages/dsh-nano-ui/**`；P3-05 a)/P3-06 b) 要求把宿主签名结论写入 DESIGN.md。按更具体的后者执行，DESIGN 回写单独提交 `a94f135`。
 - `2026-11-16` · 宿主 `Menu` 不暴露列表 style，`width` 用列表内零高占位元素实现最小宽度，`maxHeight` 用预设档类（能否压过宿主列表上限待 T27e 视觉核对，已在 DESIGN §6.2 标注）。
+- `2026-11-16` · P3-10 的产物版本标记：`NANO_STYLES` 的 `/* dsh-nano-ui@${VERSION} */` 在 esbuild 压缩后只剩 `dsh-nano-ui@${x}`，T28 的 `grep 'dsh-nano-ui@<版本>'` 必然为 0（PH3 冒烟只检了前缀）。PH4 worktree 内先提交 nano-ui `e1b2a5a`：`src/version.js` 首行加 legal comment `/*! dsh-nano-ui@0.2.0 */`（压缩产物原样保留），`VERSION` 仍是字面量，version.test 断言二者一致。运行时行为不变，未升版本。
+- `2026-11-16` · worktree 内若把主树 `node_modules` 整目录软链进来，`file:` 依赖（`dsh-nano-ui -> ../../packages/dsh-nano-ui`）会按主树真实路径解析，构建打进的是主树 nano-ui。PH4 起，需要构建的插件在 worktree 内建实目录 `node_modules`，逐项复制相对软链、外部包用绝对软链；PH4 产物已按此重建。
+- `2026-11-16` · P4-01 停止（Q18）。P4-03 的 U1 中 3 条 `--dsh-composer-model-*-display` 是宿主 `conversation.input.model` 槽位合同变量（`dsh-client-ui-conversation` `slots.d.ts:415`），catalog 只收 `--dsw`/主题令牌，按「豁免并登记」处理（DESIGN §10 第一行），不改 catalog 口径。
 
 ## 8. 附件：[业主] 发车指令（原文）
 

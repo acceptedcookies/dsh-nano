@@ -140,6 +140,7 @@ function scanModelSelector() {
   const engines = consts.ENGINES_ROUTE
   const engine = consts.ENGINE_ROUTE
   const asyncCompact = consts.ASYNC_COMPACT_ROUTE
+  const asyncCompactBundle = consts.ASYNC_COMPACT_BUNDLE_ROUTE
   const asyncCompactSwitch = consts.ASYNC_COMPACT_SWITCH_ROUTE
   // PUT body cap is the literal in readBody(req, 16384) inside mediaHandler /
   // asyncCompactHandlers (the same helper, same literal).
@@ -175,6 +176,15 @@ function scanModelSelector() {
       methods: ['GET', 'HEAD', 'PUT'],
       bodyLimit: { GET: 0, HEAD: 0, PUT: putCap },
       source: { file, line: lineOf(text, 'const ASYNC_COMPACT_ROUTE =') },
+    },
+    {
+      plugin: 'dsh-nano-model-selector',
+      path: asyncCompactBundle,
+      // Read-only U1–U4 inventory projection, split off the status route so a
+      // polling badge never pays pluginManager.listBundles().
+      methods: ['GET', 'HEAD'],
+      bodyLimit: { GET: 0, HEAD: 0 },
+      source: { file, line: lineOf(text, 'const ASYNC_COMPACT_BUNDLE_ROUTE =') },
     },
     {
       plugin: 'dsh-nano-model-selector',

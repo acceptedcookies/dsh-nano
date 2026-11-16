@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import { CheckIcon, CloseIcon, CompactionIcon, WarningIcon } from './icons.jsx'
-import { fetchCompactState, postCompactSwitch, putCompactPolicy } from './compact.js'
+import { fetchBundleState, fetchCompactState, postCompactSwitch, putCompactPolicy } from './compact.js'
 import { DEFAULT_SUMMARY_PROMPT } from '../../lib/compact-prompt.js'
 
 const BUNDLE_NAME = 'dsh-nano-model-selector-compaction'
@@ -47,7 +47,12 @@ function windowMark(contextWindow) {
  * `models` = catalog (provider, model) pairs for the summary-model dropdown.
  */
 export function CompactPanel({ copy, models, onError }) {
-  const [state, setState] = React.useState(null) // GET payload
+  const [state, setState] = React.useState(null) // GET payload (policy face)
+  // The inventory is a SEPARATE, one-shot read: it is the only host read that
+  // costs a full `pluginManager.listBundles()` (~0.9 s of blocking disk work),
+  // so it must never ride the 30 s heartbeat below. Read once when the panel
+  // opens; refreshed only by an explicit switch, whose response carries it.
+  const [bundle, setBundle] = React.useState(null) // {installed, enabled, known} | null while loading
   const [busy, setBusy] = React.useState(false)
   const [banner, setBanner] = React.useState(null) // {kind:'success'|'warn'|'fail', text, code?}
   const [heartbeat, setHeartbeat] = React.useState(null) // {at: Date, status: number}
@@ -82,6 +87,14 @@ export function CompactPanel({ copy, models, onError }) {
       .catch(() => setHeartbeat({ at: new Date(), status: 'fail' }))
   }, [])
   React.useEffect(reload, [reload])
+  // One-shot inventory read, deliberately outside the heartbeat.
+  React.useEffect(() => {
+    let live = true
+    fetchBundleState()
+      .then(value => { if (live && value !== null) setBundle(value) })
+      .catch(() => {})
+    return () => { live = false }
+  }, [])
   // Heartbeat poll: the meter/last-compaction numbers are host-side state; a
   // quiet 30s re-read keeps the panel honest without user action.
   React.useEffect(() => {
@@ -113,11 +126,9 @@ export function CompactPanel({ copy, models, onError }) {
     return () => document.removeEventListener('pointerdown', onPointer, true)
   }, [editField, cancelEdit])
 
-  if (state === null) {
+  if (state === null || bundle === null) {
     return <div className="nms-loading"><span className="nms-pending-dot" />{copy.loading}</div>
   }
-
-  const bundle = state.bundle ?? { installed: false, enabled: false, known: false }
 
   // U1: bundle not installed.
   if (bundle.installed !== true) {
@@ -155,6 +166,9 @@ export function CompactPanel({ copy, models, onError }) {
               ?? (application === 'overridden' ? copy.compactSwitchOverridden : application),
           application,
         )
+        // The switch response carries the projection the host just re-read
+        // after dropping its snapshot — no second round trip.
+        if (result.bundle !== undefined) setBundle(result.bundle)
         reload()
       })
       .catch(error => noteWithCode('fail', `${copy.compactSwitchFailed}: ${error.message}`, error.code))
@@ -189,7 +203,7 @@ export function CompactPanel({ copy, models, onError }) {
         setPending(null)
         noteWithCode('success', `${copy.compactSwitchApplied} · ${field}`, 'applied')
         setHeartbeat({ at: new Date(), status: 'ok' })
-        setState(prev => (prev === null ? prev : { ...prev, policy: data.policy ?? prev.policy, bundle: data.bundle ?? prev.bundle }))
+        setState(prev => (prev === null ? prev : { ...prev, policy: data.policy ?? prev.policy }))
       })
       .catch(error => noteWithCode('fail', error.message, error.code))
       .finally(() => setBusy(false))

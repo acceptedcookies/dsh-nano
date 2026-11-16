@@ -7,6 +7,7 @@ import { defaultEngine, imagineSkill, imagineStub, readEngine, scanEngines, writ
 import { ensurePerfReviewHost, LIB_VERSION } from './lib/perf-review-host.js'
 import { registerRoutes } from './lib/route-guard.js'
 import { compactRuntime } from './lib/compact-runtime.js'
+import { COMPACTION_BUNDLE_NAME, createBundleInventory } from './lib/bundle-inventory.js'
 import { ROUTE_TABLE, PLUGIN } from './lib/route-table.js'
 import {
   mergePutBody, readState, validateMasterOrder, validatePutBody, writeState,
@@ -35,9 +36,16 @@ const ROUTE = '/nano-model-selector/catalog'
 const ENGINES_ROUTE = '/nano-model-selector/media-engines'
 const ENGINE_ROUTE = '/nano-model-selector/media-engine'
 const ASYNC_COMPACT_ROUTE = '/nano-model-selector/async-compact'
+/**
+ * The bundle inventory lives on its own read surface. `pluginManager.listBundles()`
+ * costs ~0.9 s of blocking disk work, so it must never ride the status poll the
+ * session-header badge makes — that turned every badge tick into an event-loop
+ * stall and took the host down behind Caddy (502). Only the settings panel,
+ * on open, asks for this.
+ */
+const ASYNC_COMPACT_BUNDLE_ROUTE = '/nano-model-selector/async-compact/bundle'
 /** -20⑦: panel forwards the bundle flip through this one route (browser half cannot reach pluginManager). */
 const ASYNC_COMPACT_SWITCH_ROUTE = '/nano-model-selector/async-compact/switch'
-const COMPACTION_BUNDLE_NAME = 'dsh-nano-model-selector-compaction'
 
 /** Plugin-private state file holding the chosen media engine. */
 const STATE_PATH = join(
@@ -458,10 +466,10 @@ function asyncCompactHandlers(ctx, runtimeHandle) {
       }
       return
     }
-    // GET/HEAD: serve the stored policy plus derived read-only fields plus the
-    // read-only bundle projection (-20②: U1–U4 derive from this pair). A read
-    // failure projects `degraded:'state-read-failed'` (U4) instead of 500 — the
-    // panel never derives state itself; PUT stays fail-closed.
+    // GET/HEAD: the policy face. Deliberately NO bundle projection — see
+    // ASYNC_COMPACT_BUNDLE_ROUTE. A read failure projects
+    // `degraded:'state-read-failed'` (U4) instead of 500 — the panel never
+    // derives state itself; PUT stays fail-closed.
     const state = readState(ASYNC_COMPACT_PATH)
     if (!state.ok) {
       // The ledger matters most in exactly this state: a broken policy is a
@@ -473,7 +481,6 @@ function asyncCompactHandlers(ctx, runtimeHandle) {
         degraded: 'state-read-failed',
         missing: false,
         runtime: runtimeHandle?.runtime(null, null, 'state-read-failed') ?? { fill: null, lastCompaction: null, degraded: 'state-read-failed' },
-        bundle: await compactionBundleState(ctx),
         ...(degradedHistory === undefined ? {} : { history: degradedHistory }),
       })
       return
@@ -483,31 +490,34 @@ function asyncCompactHandlers(ctx, runtimeHandle) {
       ok: true,
       policy: await payload(state.policy),
       missing: state.missing,
-      bundle: await compactionBundleState(ctx),
       ...(history === undefined ? {} : { history }),
     })
   }
   return handler
 }
 
-/** Read-only U1–U4 projection from the sanctioned inventory (-20②). */
-async function compactionBundleState(ctx) {
-  try {
-    const pm = ctx.get('pluginManager')
-    if (pm === undefined || pm === null) return { installed: false, enabled: false, known: false }
-    const row = (await pm.listBundles()).find(item => item.name === COMPACTION_BUNDLE_NAME)
-    if (row === undefined) return { installed: false, enabled: false, known: true }
-    return { installed: row.installed === true, enabled: row.enabled === true, known: true, availability: row.availability }
-  } catch {
-    return { installed: false, enabled: false, known: false }
+/**
+ * GET/HEAD /nano-model-selector/async-compact/bundle — the read-only U1–U4
+ * projection from the sanctioned inventory.
+ *
+ * Separate from the policy face on purpose: this is the only read that touches
+ * `pluginManager.listBundles()`, it is expensive by nature, and only the
+ * settings panel needs it. Keeping it off the status route is what keeps a
+ * polling badge from stalling the host.
+ */
+function asyncCompactBundleHandler(bundleInventory) {
+  return async (req, res) => {
+    sendJson(res, 200, { ok: true, bundle: await bundleInventory.get() })
   }
 }
 
 /**
  * -20⑦: the panel's only write path for the takeover toggle. Forwards to the
  * sanctioned writer `pluginManager.setBundleEnabled` — not a second truth.
+ * The inventory changes here, so the cached snapshot is dropped before it is
+ * re-read for the response.
  */
-async function asyncCompactSwitchHandler(ctx, req, res) {
+async function asyncCompactSwitchHandler(ctx, req, res, bundleInventory) {
   try {
     const body = await readBody(req, 1024)
     if (typeof body?.enabled !== 'boolean') { sendJson(res, 400, { ok: false, error: { code: 'invalid-schema', reason: 'enabled must be a boolean' } }); return }
@@ -516,6 +526,7 @@ async function asyncCompactSwitchHandler(ctx, req, res) {
     if (pm === undefined || pm === null) { sendJson(res, 400, { ok: false, error: { code: 'manager-unavailable', reason: 'pluginManager service is not reachable' } }); return }
     try {
       const result = await pm.setBundleEnabled(COMPACTION_BUNDLE_NAME, parsed.enabled)
+      bundleInventory.invalidate()
       const application = result?.application ?? 'applied'
       if (application === 'failed') {
         sendJson(res, 500, {
@@ -523,7 +534,7 @@ async function asyncCompactSwitchHandler(ctx, req, res) {
           application,
           error: { code: 'switch-failed', reason: result?.reason ?? 'setBundleEnabled reported application failure' },
           ...(result?.restartReason === undefined ? {} : { restartReason: result.restartReason }),
-          bundle: await compactionBundleState(ctx),
+          bundle: await bundleInventory.get(),
         })
         return
       }
@@ -531,7 +542,7 @@ async function asyncCompactSwitchHandler(ctx, req, res) {
         ok: true,
         application,
         ...(result?.restartReason === undefined ? {} : { restartReason: result.restartReason }),
-        bundle: await compactionBundleState(ctx),
+        bundle: await bundleInventory.get(),
       })
     } catch (error) {
       sendJson(res, 400, { ok: false, error: { code: 'switch-failed', reason: messageOf(error) } })
@@ -550,11 +561,21 @@ export function apply(ctx) {
   // guard owns requestRejection and the uniform 405; handlers keep the work.
   const media = mediaHandlers(ctx, imagine)
   const runtimeHandle = compactRuntime(ctx)
+  // One inventory reader for the whole plugin; every caller shares its cache
+  // and its in-flight read. `plugin-manager/changed` fires from every
+  // install/remove/update/enable operation, so the snapshot never outlives a
+  // real change — the TTL only guards against a missed event.
+  const bundleInventory = createBundleInventory(ctx)
+  ctx.effect(
+    () => ctx.on('plugin-manager/changed', () => bundleInventory.invalidate()),
+    'nano-model-selector: bundle inventory invalidation',
+  )
   registerRoutes(ctx, [
     { path: ROUTE, methods: ['GET', 'HEAD'], handler: catalogHandler(ctx) },
     { path: ENGINES_ROUTE, methods: ['GET', 'HEAD'], handler: media.engines },
     { path: ENGINE_ROUTE, methods: ['GET', 'HEAD', 'PUT'], handler: media.engine },
     { path: ASYNC_COMPACT_ROUTE, methods: ['GET', 'HEAD', 'PUT'], handler: asyncCompactHandlers(ctx, runtimeHandle) },
-    { path: ASYNC_COMPACT_SWITCH_ROUTE, methods: ['POST'], handler: (req, res) => asyncCompactSwitchHandler(ctx, req, res) },
+    { path: ASYNC_COMPACT_BUNDLE_ROUTE, methods: ['GET', 'HEAD'], handler: asyncCompactBundleHandler(bundleInventory) },
+    { path: ASYNC_COMPACT_SWITCH_ROUTE, methods: ['POST'], handler: (req, res) => asyncCompactSwitchHandler(ctx, req, res, bundleInventory) },
   ], { table: ROUTE_TABLE, plugin: PLUGIN })
 }

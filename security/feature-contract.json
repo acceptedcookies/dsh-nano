@@ -400,7 +400,20 @@
         "HEAD": 0,
         "PUT": 16384
       },
-      "responseShape": "GET/HEAD 200 {ok:true, policy:{schema,model,bufferSizeAsync,healthTargetAsync,bufferSizeSafety,pinnedAsyncTokens,pinnedFullTokens, effective:{pin,windowMin,dcs}, runtime:{fill,lastCompaction,degraded}}, missing, bundle:{installed,enabled,known}} ; GET degraded-state 200 {ok:true,policy:null,degraded:'state-read-failed',missing,runtime,bundle} ; PUT 200 {ok:true, policy:{...same}} | {ok:false,error:{code,reason}} where code ∈ {invalid-schema,invalid-range,invalid-model,body-too-large,invalid-json-body,state-read-failed,state-write-failed}"
+      "responseShape": "GET/HEAD 200 {ok:true, policy:{schema,model,bufferSizeAsync,healthTargetAsync,bufferSizeSafety,pinnedAsyncTokens,pinnedFullTokens, effective:{pin,windowMin,dcs}, runtime:{fill,lastCompaction,degraded}}, missing, history?} ; GET degraded-state 200 {ok:true,policy:null,degraded:'state-read-failed',missing,runtime, history?} ; PUT 200 {ok:true, policy:{...same}} | {ok:false,error:{code,reason}} where code ∈ {invalid-schema,invalid-range,invalid-model,body-too-large,invalid-json-body,state-read-failed,state-write-failed}"
+    },
+    {
+      "plugin": "dsh-nano-model-selector",
+      "path": "/nano-model-selector/async-compact/bundle",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "bodyLimit": {
+        "GET": 0,
+        "HEAD": 0
+      },
+      "responseShape": "GET/HEAD 200 {ok:true, bundle:{installed,enabled,known,availability?}}"
     },
     {
       "plugin": "dsh-nano-model-selector",

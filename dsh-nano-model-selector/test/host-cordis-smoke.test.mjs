@@ -69,11 +69,30 @@ function installStubs(ctx, Service) {
     listProviders() { return [] }
     async listModels() { return [] }
   }
+  // The async-compaction inventory reads pluginManager.listBundles(). The stub
+  // counts calls so the tests can pin "cached across polls" and "invalidated by
+  // plugin-manager/changed" instead of trusting the comment.
+  const bundles = {
+    calls: 0,
+    enabled: true,
+    rows: [{ name: 'dsh-nano-model-selector-compaction', installed: true, enabled: true, availability: 'profile' }],
+    switches: [],
+  }
+  class PluginManagerService extends Service {
+    static provide = 'pluginManager'
+    async listBundles() { bundles.calls += 1; return bundles.rows.map(r => ({ ...r, enabled: bundles.enabled })) }
+    async setBundleEnabled(_name, enabled) {
+      bundles.switches.push(enabled)
+      bundles.enabled = enabled
+      return { application: 'applied' }
+    }
+  }
   new WebServerService(ctx)
   new ConnectionService(ctx)
   new SkillsService(ctx)
   new LlmService(ctx)
-  return { registered, effects }
+  new PluginManagerService(ctx)
+  return { registered, effects, bundles }
 }
 
 /* -------------------------------- tests --------------------------------- */
@@ -168,9 +187,100 @@ test('real cordis: GET async-compact?sessionId= serves the companion ledger as `
   const withoutHistory = await invoke('/nano-model-selector/async-compact')
   assert.equal(withoutHistory.ok, true)
   assert.equal(withoutHistory.history, undefined, 'history must stay opt-in')
+  // The inventory moved to its own route: the status face must stay cheap.
+  assert.equal(withoutHistory.bundle, undefined, 'the status face must not carry the inventory')
+  assert.equal(withHistory.bundle, undefined, '`bundle` must not ride the history variant either')
 
   // An unknown session is an empty timeline, not an error.
   const unknown = await invoke('/nano-model-selector/async-compact?sessionId=session-absent')
   assert.deepEqual(unknown.history.records, [])
   assert.equal(unknown.history.degraded, null)
+})
+
+test('real cordis: the bundle inventory has its own route, cached and event-invalidated', { skip: !haveCordis }, async () => {
+  // The regression this pins: the inventory used to ride the status poll, so
+  // every session-header badge tick paid a ~0.9 s synchronous
+  // pluginManager.listBundles() and starved the host event loop (Caddy 502).
+  const { Context, Service } = cordis
+  const ctx = new Context()
+  const { registered, bundles } = installStubs(ctx, Service)
+  const { apply } = await import('../index.js')
+  apply(ctx)
+
+  const route = registered.find(r => r.path === '/nano-model-selector/async-compact/bundle')
+  assert.ok(route !== undefined, 'the inventory route must be registered')
+
+  const invoke = async () => {
+    let body = null
+    const res = {
+      statusCode: 0,
+      headers: {},
+      setHeader(name, value) { this.headers[name] = value },
+      end(text) { body = text },
+      writeHead(code) { this.statusCode = code; return this },
+      write() {},
+    }
+    await route.handler({ method: 'GET', url: '/nano-model-selector/async-compact/bundle', headers: { host: 'localhost' } }, res)
+    return JSON.parse(body)
+  }
+
+  const first = await invoke()
+  assert.deepEqual(first, { ok: true, bundle: { installed: true, enabled: true, known: true, availability: 'profile' } })
+  assert.equal(bundles.calls, 1, 'first read hits the manager')
+
+  // A poll inside the TTL is served from the snapshot: no disk work.
+  await invoke()
+  await invoke()
+  assert.equal(bundles.calls, 1, 'repeated polls must not re-read the inventory')
+
+  // A real host change emits `plugin-manager/changed`; the next poll re-reads.
+  bundles.enabled = false
+  ctx.emit('plugin-manager/changed', { reason: 'test-enable' })
+  const after = await invoke()
+  assert.equal(after.bundle.enabled, false, 'the event must drop the snapshot')
+  assert.equal(bundles.calls, 2, 'exactly one re-read after invalidation')
+})
+
+test('real cordis: POST async-compact/switch goes through the sanctioned writer and refreshes the projection', { skip: !haveCordis }, async () => {
+  const { Context, Service } = cordis
+  const ctx = new Context()
+  const { registered, bundles } = installStubs(ctx, Service)
+  const { apply } = await import('../index.js')
+  apply(ctx)
+
+  const route = registered.find(r => r.path === '/nano-model-selector/async-compact/switch')
+  assert.ok(route !== undefined, 'the switch route must be registered')
+
+  // Warm the inventory, then flip the switch: the response must carry the NEW
+  // projection, which can only happen if the handler invalidates before reading.
+  const bundleRoute = registered.find(r => r.path === '/nano-model-selector/async-compact/bundle')
+  const invokeBundle = async () => {
+    let body = null
+    await bundleRoute.handler({ method: 'GET', url: '/nano-model-selector/async-compact/bundle', headers: { host: 'localhost' } }, {
+      statusCode: 0, headers: {}, setHeader() {}, end(t) { body = t }, writeHead(c) { this.statusCode = c; return this }, write() {},
+    })
+    return JSON.parse(body).bundle
+  }
+  assert.equal((await invokeBundle()).enabled, true)
+  const readsBefore = bundles.calls
+
+  const { EventEmitter } = await import('node:events')
+  const req = new EventEmitter()
+  req.method = 'POST'
+  req.url = '/nano-model-selector/async-compact/switch'
+  req.headers = { host: 'localhost', 'content-type': 'application/json' }
+  req.destroy = () => {}
+  // readBody consumes the stream API (`data`/`end`), not async iteration.
+  const payload = Buffer.from(JSON.stringify({ enabled: false }))
+  queueMicrotask(() => { req.emit('data', payload); req.emit('end') })
+  let body = null
+  await route.handler(req, {
+    statusCode: 0, headers: {}, setHeader() {}, end(t) { body = t }, writeHead(c) { this.statusCode = c; return this }, write() {},
+  })
+  const parsed = JSON.parse(body)
+  assert.equal(parsed.ok, true)
+  assert.equal(parsed.application, 'applied')
+  assert.deepEqual(bundles.switches, [false], 'must forward to pluginManager.setBundleEnabled')
+  assert.equal(parsed.bundle.enabled, false, 'the response carries the post-switch projection')
+  assert.ok(bundles.calls > readsBefore, 'invalidation forces a fresh inventory read')
 })

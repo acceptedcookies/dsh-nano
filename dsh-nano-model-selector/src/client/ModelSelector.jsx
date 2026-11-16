@@ -9,7 +9,7 @@ import { BrandMark } from './BrandMark.jsx'
 import { readFavorites, writeFavorites } from './favorites.js'
 import { fetchEngine, fetchEngines, readEngineCache, selectEngine, writeEngineCache } from './media.js'
 import { CompactPanel } from './CompactPanel.jsx'
-import { fetchCompactState } from './compact.js'
+import { fetchBundleState, fetchCompactState } from './compact.js'
 import { jsonOp, call } from './jsonClient.js'
 import {
   CheckIcon,
@@ -269,29 +269,28 @@ export function ModelSelector({ locked, available, directory, load, select, lang
 
   React.useEffect(() => {
     let live = true
-    const pull = () => fetchCompactState()
-      .then(data => {
-        if (!live) return
-        setCompactInstalled(data?.bundle?.installed === true)
-        setCompactEnabled(data?.bundle?.enabled === true)
-        const policy = data?.policy
-        const effective = policy?.effective
-        const pinned = Number.isFinite(effective?.pin) && Number.isFinite(effective?.windowMin) && effective.windowMin > 0
-          ? effective.pin / effective.windowMin
-          : null
-        setCompactLines(policy == null ? null : {
-          health: policy.healthTargetAsync,
-          buffer: policy.bufferSizeAsync,
-          pinned,
-          pinnedTokens: policy.pinnedAsyncTokens,
-        })
+    const pull = async () => {
+      // Two read surfaces on purpose: the policy face is a cheap status read,
+      // while the bundle inventory is the expensive one (a full
+      // pluginManager.listBundles() on the host). They are fetched together on
+      // the same 15 s tick, but the inventory route is snapshot-cached host-side
+      // so a warm tick costs nothing.
+      const [data, bundle] = await Promise.all([fetchCompactState(), fetchBundleState()])
+      if (!live) return
+      setCompactInstalled(bundle?.installed === true)
+      setCompactEnabled(bundle?.enabled === true)
+      const policy = data?.policy
+      const effective = policy?.effective
+      const pinned = Number.isFinite(effective?.pin) && Number.isFinite(effective?.windowMin) && effective.windowMin > 0
+        ? effective.pin / effective.windowMin
+        : null
+      setCompactLines(policy == null ? null : {
+        health: policy.healthTargetAsync,
+        buffer: policy.bufferSizeAsync,
+        pinned,
+        pinnedTokens: policy.pinnedAsyncTokens,
       })
-      .catch(() => {
-        if (!live) return
-        setCompactInstalled(false)
-        setCompactEnabled(false)
-        setCompactLines(null)
-      })
+    }
     pull()
     const timer = window.setInterval(pull, 15000)
     return () => { live = false; window.clearInterval(timer) }

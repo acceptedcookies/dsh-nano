@@ -20,74 +20,21 @@
 import * as React from 'react'
 import {
   Button,
-  SegmentedTabs,
+  SegmentedControl,
   Tag,
   Tooltip,
   relativeTime,
   writeClipboard,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { NanoDialog } from 'dsh-nano-ui'
-import { fetchCompactHistory } from './compact.js'
-import { HISTORY_KINDS, UNKNOWN_KIND, agoText, axisLabels, pct, recordHeadline, resolveFill } from './history-format.js'
+import { fetchBundleState, fetchCompactHistory } from './compact.js'
+import { HISTORY_KINDS, UNKNOWN_KIND, agoText, recordHeadline, resolveFill } from './history-format.js'
 import { HistoryIcon } from './icons.jsx'
+import { WaterLine } from './WaterLine.jsx'
 
-/**
- * Water-line gauge: fill against the three policy lines.
- *
- * Layout rule learned the hard way: the line labels must NOT sit under the
- * track, because that row is where the stat cards begin and the two collided.
- * They live on an axis ABOVE the track, each anchored at its own threshold and
- * carrying its own value, so "which line is where" is readable without a
- * legend that points at nothing. The track itself is then free to show only
- * the fill and the tick marks.
- *
- * @param {{fill: number|null, fillFromDecision?: boolean, health: number, buffer: number, safety: number, copy: object}} props
- */
-function WaterLine({ fill, fillFromDecision = false, health, buffer, safety, copy }) {
-  const clamped = typeof fill === 'number' && Number.isFinite(fill) ? Math.min(1, Math.max(0, fill)) : null
-
-  const axis = axisLabels(health, buffer, safety)
-  const axisLabel = line => React.createElement('span', {
-    key: line.letter,
-    className: 'nms-hist-axis-label',
-    'data-tone': line.tone,
-    style: {
-      left: `${line.value * 100}%`,
-      transform: `translateX(${line.anchor === 'start' ? '0' : line.anchor === 'end' ? '-100%' : '-50%'})`,
-    },
-  }, line.text)
-
-  const tick = (value, letter, tone) => React.createElement('span', {
-    key: `tick-${letter}`,
-    className: 'nms-hist-tick',
-    'data-tone': tone,
-    style: { left: `${value * 100}%` },
-    'aria-hidden': 'true',
-  })
-
-  return React.createElement('div', { className: 'nms-hist-water' },
-    React.createElement('div', { className: 'nms-hist-water-head' },
-      React.createElement('span', { className: 'nms-hist-water-value' }, pct(fill)),
-      fillFromDecision ? React.createElement('span', { className: 'nms-hist-water-source' }, copy.historyFillAtDecision) : null,
-      live ? React.createElement('span', { className: 'nms-hist-live' },
-        React.createElement('span', { className: 'nms-hist-live-dot', 'aria-hidden': 'true' }),
-        copy.historyLive) : null),
-    React.createElement('div', { className: 'nms-hist-axis' }, axis.map(axisLabel)),
-    React.createElement('div', {
-      className: 'nms-hist-water-track',
-      role: 'img',
-      'aria-label': copy.historyWaterAria
-        .replace('{fill}', pct(fill)).replace('{buffer}', pct(buffer)).replace('{safety}', pct(safety)),
-    },
-    clamped === null ? null : React.createElement('span', {
-      className: 'nms-hist-water-fill',
-      'data-over': clamped >= buffer ? 'true' : 'false',
-      style: { width: `${clamped * 100}%` },
-    }),
-    tick(health, 'H', 'health'),
-    tick(buffer, 'B', 'buffer'),
-    tick(safety, 'S', 'safety')))
-}
+/** Refresh cadence while an episode is armed or running. The ledger is
+ *  append-only, so an idle dialog never needs this tick. */
+const LIVE_REFRESH_MS = 3_000
 
 /**
  * One ledger record. Collapsed shows the decision and its headline number;
@@ -121,8 +68,11 @@ function RecordRow({ record, now, copy }) {
  * so a manual refresh is the honest interaction (no polling that would imply
  * live progress the engine does not publish).
  */
-export function AsyncHistoryDialog({ copy, sessionId, onClose }) {
+export function AsyncHistoryDialog({ copy, sessionId, regionElement, onClose }) {
   const [state, setState] = React.useState({ status: 'loading', data: null, error: null })
+  // Diagnostics only: the bundle inventory is a separate, on-demand read
+  // (see lib/bundle-inventory.js) and must never ride the ledger refresh.
+  const [bundle, setBundle] = React.useState(null)
   const [tab, setTab] = React.useState('timeline')
   const [copied, setCopied] = React.useState(false)
   const now = Date.now()
@@ -136,6 +86,11 @@ export function AsyncHistoryDialog({ copy, sessionId, onClose }) {
   }, [sessionId])
 
   React.useEffect(() => { load() }, [load])
+  React.useEffect(() => {
+    let live = true
+    fetchBundleState().then(value => { if (live && value !== null) setBundle(value) }).catch(() => {})
+    return () => { live = false }
+  }, [])
 
   // The ledger is append-only, but an episode in flight is exactly when the
   // view must not be stale: a dialog opened at arm time would otherwise keep
@@ -149,6 +104,29 @@ export function AsyncHistoryDialog({ copy, sessionId, onClose }) {
     return () => clearTimeout(timer)
   }, [state.status, live, state.data, load])
 
+  // Contain the whole overlay (mask included) inside the chat pane. NanoDialog
+  // portals the card to <body>, so the only lever is the overlay's own box; the
+  // `:has()` rule in the stylesheet reads these variables.
+  React.useEffect(() => {
+    const root = document.body
+    const apply = () => {
+      const rect = regionElement?.getBoundingClientRect?.()
+      if (rect === undefined || rect === null || rect.width === 0) return
+      root.style.setProperty('--nms-region-top', `${Math.round(rect.top)}px`)
+      root.style.setProperty('--nms-region-left', `${Math.round(rect.left)}px`)
+      root.style.setProperty('--nms-region-right', `${Math.round(globalThis.innerWidth - rect.right)}px`)
+      root.style.setProperty('--nms-region-bottom', `${Math.round(globalThis.innerHeight - rect.bottom)}px`)
+    }
+    apply()
+    globalThis.addEventListener('resize', apply)
+    return () => {
+      globalThis.removeEventListener('resize', apply)
+      for (const key of ['--nms-region-top', '--nms-region-left', '--nms-region-right', '--nms-region-bottom']) {
+        root.style.removeProperty(key)
+      }
+    }
+  }, [regionElement])
+
   const history = state.data?.history ?? null
   const policy = state.data?.policy ?? null
   const effective = policy?.effective ?? null
@@ -159,7 +137,7 @@ export function AsyncHistoryDialog({ copy, sessionId, onClose }) {
 
   const diagnostics = React.useMemo(() => JSON.stringify({
     sessionId,
-    bundle: state.data?.bundle ?? null,
+    bundle,
     policy: policy === null ? null : {
       model: policy.model,
       bufferSizeAsync: policy.bufferSizeAsync,
@@ -172,7 +150,7 @@ export function AsyncHistoryDialog({ copy, sessionId, onClose }) {
     runtime,
     historyDegraded: history?.degraded ?? null,
     summary,
-  }, null, 2), [sessionId, state.data, policy, effective, runtime, history, summary])
+  }, null, 2), [sessionId, bundle, policy, effective, runtime, history, summary])
 
   const copyDiagnostics = React.useCallback(() => {
     writeClipboard(diagnostics)
@@ -211,7 +189,7 @@ export function AsyncHistoryDialog({ copy, sessionId, onClose }) {
     title: copy.historyTitle,
     description: copy.historySubtitle.replace('{session}', sessionId.slice(0, 18)),
     width: 620,
-    maxHeight: Math.round((globalThis.innerHeight ?? 900) * 0.72),
+    className: 'nms-hist-dialog',
     footer: React.createElement(React.Fragment, null,
       React.createElement(Button, {
         variant: 'outline',
@@ -239,20 +217,24 @@ export function AsyncHistoryDialog({ copy, sessionId, onClose }) {
       buffer: policy?.bufferSizeAsync ?? 0.65,
       safety: policy?.bufferSizeSafety ?? 0.9,
       copy,
+      live,
     }),
     React.createElement('div', { className: 'nms-hist-stats' },
       stats.map(stat => React.createElement('div', { key: stat.key, className: 'nms-hist-stat', 'data-kind': stat.key },
         React.createElement('span', { className: 'nms-hist-stat-value' }, String(stat.value)),
         React.createElement('span', { className: 'nms-hist-stat-label' }, stat.label)))),
-    React.createElement(SegmentedTabs, {
-      items: [
+    // SegmentedControl is the shell's own segmented switch (sliding indicator).
+    // SegmentedTabs renders a Pill per tab, which reads as a custom bordered
+    // control rather than a native one.
+    React.createElement(SegmentedControl, {
+      id: `nms-history-${sessionId}`,
+      value: tab,
+      options: [
         { value: 'timeline', label: copy.historyTabTimeline },
         { value: 'diagnostics', label: copy.historyTabDiagnostics },
       ],
-      value: tab,
       onChange: setTab,
       label: copy.historyTitle,
-      size: 'sm',
     }),
     React.createElement('div', { className: 'nms-hist-panel' }, tab === 'timeline' ? timeline : diagnosticsTab)))
 }

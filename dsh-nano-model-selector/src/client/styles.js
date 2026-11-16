@@ -220,6 +220,26 @@ select.nms-compact-input { width: 210px; cursor: pointer; }
 .nms-hist-row-mark[data-kind="skip"] { background: var(--dsw-alias-state-warning-primary, #d29922); }
 
 /* ── async-compaction history dialog ─────────────────────────────────────────
+   The dialog belongs to the chat pane, not to the whole workspace: the shell
+   portals the card to <body> and centres it in the viewport, so the overlay's
+   own box is pulled in to the conversation region measured by the component.
+   The :has() selector degrades to the default full-window overlay if the
+   engine lacks it, which
+   is the previous behaviour — never a broken layout. */
+body > div:has(> .nms-hist-dialog) {
+  top: var(--nms-region-top, 0) !important;
+  left: var(--nms-region-left, 0) !important;
+  right: var(--nms-region-right, 0) !important;
+  bottom: var(--nms-region-bottom, 0) !important;
+}
+/* Fixed height: the timeline and the diagnostics tab hold very different
+   amounts of content, and a content-sized card made the dialog jump every time
+   the tab changed. The body scrolls instead. */
+.nms-hist-dialog { height: min(560px, calc(100vh - 96px)) !important; }
+.nms-hist-dialog .nano-dialog-content { min-height: 0; }
+.nms-hist-dialog .nms-hist { flex: 1; min-height: 0; }
+.nms-hist-dialog .nms-hist-panel { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+────────────────────────────────────────
    Every value is a shell token: the card must follow the active theme without
    a second palette. Layout only — no control is restyled here. */
 .nms-hist { display: flex; flex-direction: column; gap: 12px; min-height: 0; }

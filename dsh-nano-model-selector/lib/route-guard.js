@@ -225,6 +225,19 @@ var ROUTE_TABLE = [
   },
   {
     "plugin": "dsh-nano-model-selector",
+    "path": "/nano-model-selector/async-compact/bundle",
+    "methods": [
+      "GET",
+      "HEAD"
+    ],
+    "sensitivity": "L0",
+    "capability": "read:host",
+    "bodyLimit": 0,
+    "sessionBinding": false,
+    "justification": "dsh-nano-model-selector/index.js \u2014 DNMS01/-20\u2461. GET returns the read-only U1\u2013U4 projection {installed,enabled,known,availability} of the companion bundle from the sanctioned pluginManager.listBundles() inventory; split off the status route so the polling session-header badge never pays its ~0.9s synchronous inventory read. No write, no secret."
+  },
+  {
+    "plugin": "dsh-nano-model-selector",
     "path": "/nano-model-selector/async-compact/switch",
     "methods": [
       "POST"

@@ -91,6 +91,7 @@ export function apply(ctx) {
         <AsyncHistoryDialog
           copy={copyFor(ctx.locale.getSnapshot().active)}
           sessionId={sessionId}
+          regionElement={document.querySelector('[data-conversation-region="chat"]')}
           onClose={close}
         />
       </SlotBoundary>,

@@ -25,6 +25,7 @@
 | `cordis.patch.yml` | 插入插件 id。`name` 是包名 |
 | `index.js` | 宿主。运行时必需。目录路由、媒体路由、`imagine` 注册 |
 | `lib/host-media.js` | 引擎探测、状态读写、技能正文。运行时必需。`index.js` 直接 import 它 |
+| `lib/bundle-inventory.js` | 异步压缩 companion bundle 的只读库存投影（single-flight + 快照 + 事件失效）。运行时必需（`index.js` 相对 import） |
 | `lib/perf-review-host.js` | 宿主 perf-review bundle。运行时必需（`index.js` 相对 import） |
 | `lib/route-guard.js` | 路由注册 guard bundle。运行时必需（`index.js` 相对 import） |
 | `lib/route-table.js` | 烤进的插件路由表常量。运行时必需（`index.js` 相对 import） |
@@ -148,9 +149,10 @@ npm run build
 
 | 方法 | 路径 | 作用 |
 |---|---|---|
-| GET/HEAD | `/nano-model-selector/async-compact` | `{ok,policy:{…,effective:{pin,windowMin,dcs},runtime:{fill,lastCompaction,degraded}},missing,bundle:{installed,enabled,known}}`。`policy=null`+`degraded='state-read-failed'` 表示状态文件不可读（U4） |
+| GET/HEAD | `/nano-model-selector/async-compact` | `{ok,policy:{…,effective:{pin,windowMin,dcs},runtime:{fill,lastCompaction,degraded}},missing}`。`policy=null`+`degraded='state-read-failed'` 表示状态文件不可读（U4）。**不携带 `bundle`**——库存投影在独立路由上，见下 |
+| GET/HEAD | `/nano-model-selector/async-compact/bundle` | `{ok,bundle:{installed,enabled,known,availability?}}`。唯一的 U1–U4 库存读口。宿主侧快照缓存（默认 30 分钟，正确性由 `plugin-manager/changed` 立即失效保证，TTL 只兜底漏事件）+ 并发去重；**不得**把它并回状态面，`pluginManager.listBundles()` 单次约 0.9 秒同步磁盘枚举，轮询会把宿主事件循环打死 |
 | PUT | `/nano-model-selector/async-compact` | 部分更新 `async-compact.json`（16384 字节上限；master 序 + schema 校验 + fail-closed，400 不写） |
-| POST | `/nano-model-selector/async-compact/switch` | 面板唯一写入口（1024 字节上限）；转发 `pluginManager.setBundleEnabled('dsh-nano-model-selector-compaction')`，返回 `{application,restartReason?,bundle}` |
+| POST | `/nano-model-selector/async-compact/switch` | 面板唯一写入口（1024 字节上限）；转发 `pluginManager.setBundleEnabled('dsh-nano-model-selector-compaction')`，返回 `{application,restartReason?,bundle}`（先失效库存快照再重读） |
 
 `GET …/async-compact?sessionId=<id>` 额外返回 `history`（附加字段，不传则响应形状不变）：
 
@@ -166,7 +168,13 @@ npm run build
 
 面板入口：顶栏搜索框与关闭按钮之间的「异步压缩」按钮，仅当 companion bundle 已安装时出现，否则搜索框占满该位。目录刷新按钮在搜索框内。页内四态（未安装/未启用/已启用/degraded），开关走 `POST …/switch`；B/H/pinnedAsyncTokens/model 可编辑 PUT。
 
-历史视图：会话头部「更多操作」菜单里的「异步压缩历史」（`ctx.contextMenus.register({target:'sessionHeader', order:500})`），打开 nano-ui `NanoDialog`。卡片顶部是水位尺（当前 fill 对 H/B/S 三条线，越过 B 即为应有 episode 的状态），下面是触发/执行/成功/失败四个计数，再下是「时间线 / 诊断」两个页签：时间线逐条列出决策（可展开看原始 JSON），诊断给出 `bundle/policy/effective/runtime/history` 的完整快照并支持一键复制。全部控件来自官方 primitive（`SegmentedTabs`/`Tag`/`StateDot`/`Tooltip`/`Button`/`relativeTime`/`writeClipboard`），配色只读 `--dsw-*` token。
+历史视图：会话头部「更多操作」菜单里的「异步压缩历史」（`ctx.contextMenus.register({target:'sessionHeader', order:500})`），打开 nano-ui `NanoDialog`。卡片顶部是水位尺（当前 fill 对 H/B/S 三条线，越过 B 即为应有 episode 的状态），下面是触发/执行/成功/失败四个计数，再下是「时间线 / 诊断」两个页签：时间线逐条列出决策（可展开看原始 JSON），诊断给出 `bundle/policy/effective/runtime/history` 的完整快照并支持一键复制。全部控件来自官方 primitive（`SegmentedControl`/`Tag`/`Tooltip`/`Button`/`relativeTime`/`writeClipboard`），配色只读 `--dsw-*` token。
+
+三个必须遵守的呈现约束：
+
+1. **归属 chat-interface**：卡片由 shell portal 到 `<body>` 并在视口居中，所以用 `body > div:has(> .nms-hist-dialog)` 把遮罩盒收进 `[data-conversation-region="chat"]` 的矩形（组件测出后写 `--nms-region-*` 变量）。引擎不支持 `:has()` 时退回整窗，不会坏版。
+2. **固定高度**：时间线与诊断内容量差很大，内容撑高会让卡片在切页签时跳。`.nms-hist-dialog { height: min(560px, calc(100vh - 96px)) }`，正文滚动。
+3. **页签用 `SegmentedControl` 而非 `SegmentedTabs`**：后者每个页签渲染一个 `Pill`，看起来像自绘的描边控件；前者是 shell 自己的滑动指示器。
 
 状态徽标：会话头部操作区（`conversation.session.header.utilities`，list slot，**必须带 `id`**，否则注册被拒）显示 `异步压缩已排队` / `正在异步压缩` / `已异步压缩 · N 条` / `异步压缩失败`，悬停给出摘要模型与 `摘要 v<8位指纹>`。指纹是生效摘要 prompt 的 sha256 前 8 位（内置与自定义不同，改 `summaryPrompt` 即变）。
 

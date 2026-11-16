@@ -2,17 +2,31 @@
 import { jsonOp, call } from './jsonClient.js'
 
 const BASE = '/nano-model-selector/async-compact'
+/** The U1–U4 inventory projection has its own read surface: it is the only
+ *  read that costs a `pluginManager.listBundles()` on the host, so the status
+ *  poll must never touch it. */
+const BUNDLE_BASE = `${BASE}/bundle`
 
 const GET_OP = jsonOp({ method: 'GET', url: BASE })
+const BUNDLE_GET_OP = jsonOp({ method: 'GET', url: BUNDLE_BASE })
 const PUT_OP = jsonOp({ method: 'PUT', url: BASE })
 const SWITCH_OP = jsonOp({ method: 'POST', url: `${BASE}/switch` })
 
-/** GET the stored policy + derived read-only fields + bundle projection.
+/** GET the stored policy + derived read-only fields + ledger `history`.
  * Returns null when the face is unreachable (non-domain failure). */
 export async function fetchCompactState() {
   try {
     const data = await call(GET_OP)
     return data?.ok === true ? data : null
+  } catch { return null }
+}
+
+/** GET the companion-bundle projection ({installed, enabled, known, availability}).
+ * Read once when the panel opens; never on the status heartbeat. */
+export async function fetchBundleState() {
+  try {
+    const data = await call(BUNDLE_GET_OP)
+    return data?.ok === true ? data.bundle : null
   } catch { return null }
 }
 

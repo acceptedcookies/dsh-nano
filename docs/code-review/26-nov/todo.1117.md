@@ -167,13 +167,18 @@ P0-00 干净树（main@9792da0）
   - **依赖**：PH7 合入 · **执行状态**：`complete`（T27b/c 双层 Modal 观感未观察）
 ### PH9 — [DNN]（`nue-1117-migrate-dnn`）
 
-- [ ] `P9-01` — 对话框：窗口覆盖层 + 主窗口级 · `NUE1117-T25`
-- [ ] `P9-02` — 菜单与层级：`container`、删 `NP_PORTAL_Z` · `NUE1117-T25`
-- [ ] `P9-03` — 控件、图标、色值、ThemeScope · `NUE1117-T25`
-- [ ] `P9-04` — 三个合同测试改写（`NANO_UI_SRC`/`NP_SRC` 可覆盖，旧实现上失败） · `NUE1117-T26`
-- [ ] `P9-05` — 宿主对话卡片注入：停止点，回问答，不改 · `—`
-  - **依赖**：PH8 合入 · **执行状态**：`not-started`
-
+- [x] `P9-01` — 对话框：窗口覆盖层 + 主窗口级 · `NUE1117-T25`
+  - **执行状态**：`complete`（T27c 未观察）· **证据**：`e4757bc`（合并 `81c90cc`）；`.np-window` 与启动器各挂 `createThemeScope`（`pin` 取面板 `theme` 设置，`system` 交宿主），`index.js` 传 `theme: ctx.theme` 与 `theme/change` 订阅；非 viewport 对话框 `container: panel`，viewport 卡主窗口级；删 `theme: resolvedTheme()`/`z: NP_PORTAL_Z`/`handle.setTheme`/`region` 与 `[data-nano-theme]` 手抄调色板
+- [x] `P9-02` — 菜单与层级：`container`、删 `NP_PORTAL_Z` · `NUE1117-T25`
+  - **执行状态**：`complete` · **证据**：`f3f1c0b`；9 处 `openNanoMenu` 与斜杠菜单 `container: panel`，无 `theme`/`z`；`NP_PORTAL_Z` 及 11 处引用 0；`.np-layer` `z-index: var(--nano-layer-window)`，body 重挂保留；删 `.nano-menu-label:has(.np-fx-model-option)`，斜杠菜单改自有类
+- [x] `P9-03` — 控件、图标、色值、ThemeScope · `NUE1117-T25`
+  - **执行状态**：`complete` · **证据**：`16a8d14`（部分随 `e4757bc`）；`np-switch` → 宿主 `SegmentedControl`（§9）；`np-tip` 删除改原生 `title`+`aria-*`（豁免）；设置行对齐 `SettingsValueField` 解剖；`icons.js` 门面（sprite 无排版/窗口字形 → 豁免）；4 个未登记令牌换 catalog 名；DESIGN §10 +2 行
+- [x] `P9-04` — 三个合同测试改写（`NANO_UI_SRC`/`NP_SRC` 可覆盖，旧实现上失败） · `NUE1117-T26`
+  - **执行状态**：`complete` · **证据**：`4506137`；`portal-theme` 6、`z-order` 5、`dialog-layout` 4 条；旧实现（`d2e2b47` = `12bb081^1`）经 `NP_SRC`/`NANO_UI_SRC` 实跑：6/6、4/5、2/4 条 `AssertionError` 失败，0 ENOENT · 2026-11-16T20:13:24Z；预登记 6 条在新断言下消解，`dnn-expected-failures.json` 标 `resolvedBy: NUE-1117 P9-04`、`currentExpectedFailures: []`
+- [x] `P9-05` — 宿主对话卡片注入：停止点，回问答，不改 · `—`
+  - **执行状态**：`deferred`（问答 `Q19`，`9348347`）· **证据**：`panel.js` 样式 `:158-166`（`[data-changed-files]`、`:has(> .np-to-notepad)`）、注入 `attachNotepadCtas` `:4766-4828`、`MutationObserver` `:4833-4840`，保持原样；宿主 `ChangedFiles` 无动作座位；`check-ui-rules` 对该区 0 条（`:has()` 参数为 `np-` 自有类，U5 不报），T30 单列
+  - **测试四元组**：`81c90cc` · `node --test dsh-nano-notepad/test/*.test.mjs` · 90/90（≥80；`nue-migration` 9 条，对照旧实现 1 过 8 败）· 2026-11-16T20:15:02Z；`cd packages/dsh-nano-ui && npm test` 42/42 同时；`node scripts/test-all.mjs` @4506137 21/22（仅 s3-client）；`check-ui-rules --plugin DNN` 前 12/18/100/18/0/17/11/12/0（188）→ 后 3/13/97/9/0/13/11/9/2（157，U10 2 条均已登记）；`check-client-rules` ok；`lib/client.js` 含 `dsh-nano-ui@0.2.0`，同 HEAD 两次构建 sha256 相同；nano-ui 源码未改
+  - **依赖**：PH8 合入 · **执行状态**：`complete`（P9-05 `deferred`，Q19）
 ### PH10 — 收口（`nue-1117-closeout`）
 
 - [ ] `P10-01` — 六份 `lib/client.js` 重建（同 HEAD 两次构建 sha 一致；版本标记；只改 `lib/`） · `NUE1117-T28`
@@ -201,16 +206,16 @@ P0-00 干净树（main@9792da0）
 | `NUE1117-T21` | [DNT] 迁移 | `node test/run.mjs`（含 `nue-migration.test.mjs`） | 145/145 @c47b0eb | pass |
 | `NUE1117-T22` | [DNK] 迁移 | `npm test`（含 `nue-migration.test.mjs`） | 65/65 @18b30f4 | pass |
 | `NUE1117-T23`–`T24` | [DNCS] 迁移 + 确认攻击向量 | `node --test`（含 `nue-migration`、`confirm`） | 39/39 @28b8202 | pass |
-| `NUE1117-T25`–`T26` | [DNN] 迁移 | 各插件测试 + `nue-migration.test.mjs` | — | pending |
+| `NUE1117-T25`–`T26` | [DNN] 迁移 + 合同测试改写 | `node --test dsh-nano-notepad/test/*.test.mjs`；旧实现经 `NP_SRC`/`NANO_UI_SRC` 实跑 | 90/90 @81c90cc；旧实现三文件各 ≥1 AssertionError | pass（P9-05 deferred Q19） |
 | `NUE1117-T27a`–`e` | 视觉核对（live） | 本机 profile + ego-browser 截图 | — | pending（需 live 授权与部署） |
 | `NUE1117-T28`–`T30` | 收口 | 两次构建 sha；`nue-docs`/`nue-endstate` | — | pending |
 
 ## 5. 当前状态与交接
 
-- **当前节点 / 已完成**：P0-00、PH1、PH2、PH3、PH4（P4-01 deferred）、PH5、PH6、PH7、PH8
-- **下一动作**：PH9（[DNN]）
+- **当前节点 / 已完成**：P0-00、PH1、PH2、PH3、PH4（P4-01 deferred）、PH5、PH6、PH7、PH8、PH9（P9-05 deferred）
+- **下一动作**：PH10（收口）
 - **当前阻塞**：无
-- **待 owner 决定**：Q18（P4-01，推荐 A）；P9-05（执行到时判定）
+- **待 owner 决定**：Q18（P4-01，推荐 A）；Q19（P9-05，推荐 A）
 - **最终交接目标**：[业主]
 
 ## 6. 已启用插件
@@ -249,7 +254,9 @@ P0-00 干净树（main@9792da0）
 - `2026-11-16` · PH5 [DNEE]：`formatBytes` 与宿主 `fileSizeText` 14 个样本全部不同，按 P5-03「条件替换」保留并标 `nano-ui-exempt`；`.nxe-git-alert` 因宿主 Toast 无常驻模式保留自绘并豁免，材质随令牌改变。DESIGN §10 各 1 行。
 - `2026-11-16` · PH5 [DNEE]：「在应用中打开」下拉原为自绘菜单，与 P5-02 同一类问题，一并改 NanoMenu（同写面，不扩约）。- `2026-11-16` · PH6 [DNT]：`test/run.mjs` 原无测试发现机制，新增第 13 段用 `node --test` 收集 `test/*.test.mjs` 并计入总数（崩溃且无摘要计 1 败）；N6 下限 137 指 wasm 冒烟部分，合计 145。
 - `2026-11-16` · PH6 [DNT]：`⌘`/`→` 是 `ShortcutKeys` 按键图例文本，非图标，保留（U4 剩 4）；原生 `<button>` 保留（U3 9 持平，窗格头 20px 密度宿主 Button 无对应档，AP P6 未列 U3）；`?` 帮助按钮随同族换 `glyph('help')`。- `2026-11-16` · PH7 [DNK]：AP P7-01 提到的「查找」自绘图标在源码中不存在，只替换前进/后退箭头；P7-02 实际 U9 为 5 条（扫描器把 compound 选择器第二个类计为引用），全部清零；lib 产物在源码提交 `35facad` 上构建，buildId 对应源码提交，PH10 统一重建。- `2026-11-16` · PH8 [DNCS]：子代理首版用 `ctx.layout?.toggleSidebar` 而 `inject` 未声明 `layout`，cordis 属性代理会抛错、宿主路径成死代码；审查后改 `ctx.get('layout')` 软读取（`7ac0085`，不新增启动期依赖），测试加桩 ctx 行为断言。
-- `2026-11-16` · PH8 [DNCS]：顺带修正 5 个错名令牌与 6 条 U8 死样式（同文件、同规则表，避免 U1/U8 残留）；新建弹窗 600×680 无预设档，取 560×640；会话时间改宿主 `relativeTime` 分桶，未来时间钳到「现在」；包 AGENTS 使用/不要两节同提交更新。
+- `2026-11-16` · PH8 [DNCS]：顺带修正 5 个错名令牌与 6 条 U8 死样式（同文件、同规则表，避免 U1/U8 残留）；新建弹窗 600×680 无预设档，取 560×640；会话时间改宿主 `relativeTime` 分桶，未来时间钳到「现在」；包 AGENTS 使用/不要两节同提交更新。- `2026-11-16` · PH9 [DNN]：AP P9-03 写 `np-switch → Switch`；该控件实为 2–3 段选择（含只读段），按 DESIGN §6.1 分段/页签归 `SegmentedControl` 执行。`np-tip → Tooltip` 不可行（宿主 Tooltip 只包单个 React 子元素，启动器与工具条是 innerHTML 串且挂载前读回几何），改原生 `title`+`aria-label`+`aria-keyshortcuts` 并登记 DESIGN §10。
+- `2026-11-16` · PH9 [DNN]：AP 要求按 P9-01..05 拆提交；视图开关、图标门面与启动器提示与对话框/主题落在同一代码块，拆开会得到不能构建的中间提交，故并入 P9-01 提交，其余按 P9-02/03/04 + lib 分提交，分支合并一次。`.np-fx-model-option` 换行依赖宿主 Menu label 处理，留待 T27 视觉核对。
+- `2026-11-16` · P9-05 停止，问答 Q19 登记（`9348347`，推荐 A 整段删除 + 登记「变更文件卡片动作」缺口），待 [业主] 裁决。
 ## 8. 附件：[业主] 发车指令（原文）
 
 > 本 directive 注册为 `NUE-1117` 执行授权来源。

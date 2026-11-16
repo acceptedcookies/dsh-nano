@@ -3908,11 +3908,12 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
             }
           }
         }) : null,
-        h(
-          "span",
-          { "data-nks-mode": nativeHtml && domDoc ? "html" : "img", style: { color: nativeHtml && domDoc ? "var(--dsw-alias-fill-success,#3fb950)" : "var(--dsw-alias-fill-warning,#d29922)" } },
-          nativeHtml && domDoc ? "HTML \u539F\u751F\u6E32\u67D3" : "IMG \u622A\u56FE\u56DE\u9000"
-        ),
+        // Three states, not two: an empty pane is neither native HTML nor a
+        // screenshot. Calling it "IMG 截图回退" made a fresh pane look broken.
+        h("span", {
+          "data-nks-mode": nativeHtml && domDoc ? "html" : hasPage ? "img" : "empty",
+          style: { color: nativeHtml && domDoc ? "var(--dsw-alias-fill-success,#3fb950)" : hasPage ? "var(--dsw-alias-fill-warning,#d29922)" : "var(--dsw-alias-label-tertiary)" }
+        }, nativeHtml && domDoc ? "HTML \u539F\u751F\u6E32\u67D3" : hasPage ? "IMG \u622A\u56FE\u56DE\u9000" : "\u672A\u6253\u5F00\u9875\u9762"),
         h("span", { style: { flex: "auto" } }),
         status?.buildId ? h("span", { style: { opacity: 0.6 } }, String(status.buildId).slice(0, 18)) : null
       ),

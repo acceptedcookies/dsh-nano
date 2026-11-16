@@ -1910,8 +1910,12 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
         'data-nks-vp-h': '1', type: 'number', placeholder: '高', className: 'nks-vp-input',
         onKeyDown: async (e) => { if (e.key !== 'Enter') return; const h = Number(e.currentTarget.value); if (h >= 240) { const next = { width: vp?.width || 1280, height: h }; setVp(next); setVpCustom(false); try { await post(SETTINGS, { viewport: next }) } catch {} } },
       }) : null,
-      h('span', { 'data-nks-mode': nativeHtml && domDoc ? 'html' : 'img', style: { color: nativeHtml && domDoc ? 'var(--dsw-alias-fill-success,#3fb950)' : 'var(--dsw-alias-fill-warning,#d29922)' } },
-        nativeHtml && domDoc ? 'HTML 原生渲染' : 'IMG 截图回退'),
+      // Three states, not two: an empty pane is neither native HTML nor a
+      // screenshot. Calling it "IMG 截图回退" made a fresh pane look broken.
+      h('span', {
+        'data-nks-mode': nativeHtml && domDoc ? 'html' : hasPage ? 'img' : 'empty',
+        style: { color: nativeHtml && domDoc ? 'var(--dsw-alias-fill-success,#3fb950)' : hasPage ? 'var(--dsw-alias-fill-warning,#d29922)' : 'var(--dsw-alias-label-tertiary)' },
+      }, nativeHtml && domDoc ? 'HTML 原生渲染' : hasPage ? 'IMG 截图回退' : '未打开页面'),
       h('span', { style: { flex: 'auto' } }),
       status?.buildId ? h('span', { style: { opacity: .6 } }, String(status.buildId).slice(0, 18)) : null),
     h(HistoryDialog, { open: historyOpen, onClose: () => setHistoryOpen(false) }),

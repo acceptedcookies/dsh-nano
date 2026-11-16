@@ -1845,7 +1845,7 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
           onPointerDown: (event) => {
             event.preventDefault(); event.stopPropagation()
             setAnnotate((value) => {
-              if (value) { setHover(null); setDraftBox(null); setDrag(null) }
+              if (value) { setHover(null); endDrag() }
               return !value
             })
           },

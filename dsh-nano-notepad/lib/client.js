@@ -820,9 +820,10 @@ ${ro}
   .np-tree-tools .np-tools-toggle { display: inline-flex; }
   .np-tree[data-collapsed="true"] > .np-tools-toggle { display: inline-flex; }
 }
-/* Viewport-level mobile layout still applies when the whole page is small. */
-@media (max-width: 760px) {
-  .np-window { inset: 12px auto auto 12px; width: calc(100% - 24px); height: min(82dvh, calc(100% - 24px)); }
+/* Same stack as the 560px container query, but keyed off the window's own width.
+   A viewport media query matched the page, so a 396px window sitting on a
+   wide page still stacked the file tree and grew to the viewport. */
+@container np (max-width: 560px) {
   .np-body { flex-direction: column; }
   .np-tree { width: auto; max-height: 34%; border-right: 0; border-bottom: 1px solid var(--dsw-alias-border-l2); }
   .np-tree[data-collapsed="true"] { width: auto; max-height: none; flex-direction: row; align-items: center; padding: 6px var(--np-pad-x); gap: 4px; }

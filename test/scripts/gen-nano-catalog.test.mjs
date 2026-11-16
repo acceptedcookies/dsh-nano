@@ -85,8 +85,9 @@ test('T03 icons are a subset of primitives and the sprite carries glyphs × weig
 test('T03 every token named in DESIGN.md exists in tokens.json', () => {
   const { tokens } = load('tokens')
   const design = readFileSync(join(root, 'docs', 'specs', 'dsh-nano-ui', 'DESIGN.md'), 'utf8')
-  // Lines that name host-internal variables as forbidden examples are not token claims.
-  const claimed = design.split('\n').filter(l => !l.includes('宿主组件内部变量'))
+  // Lines that name host-internal variables as forbidden examples are not token claims, and
+  // §10 registers exempt reads of names the catalog does not carry, so it is not scanned.
+  const claimed = design.split(/^## 10\./m)[0].split('\n').filter(l => !l.includes('宿主组件内部变量'))
     .flatMap(l => l.match(/--(?:dsw|dsh|ds)-[a-z0-9-]*[a-z0-9]\b(?!-)/g) ?? [])
   assert.ok(claimed.length > 0)
   const missing = [...new Set(claimed)].filter(n => tokens[n] === undefined)

@@ -68,21 +68,17 @@ P0-00 干净树（main@9792da0）
 
 ### PH2 — catalog 与检测（`nue-1117-catalog`）
 
-- [ ] `P2-01` — `scripts/gen-nano-catalog.mjs`（取代并删除 `gen-primitives-exports.mjs`）
-  - **验证映射**：`NUE1117-T03` · **依赖**：PH1 合入
-  - **执行状态**：`not-started`
-- [ ] `P2-02` — catalog 三件套入库；与旧快照一次性比对；删除 [DNMS] 快照
-  - **验证映射**：`NUE1117-T03` `NUE1117-T04` · **依赖**：P2-01
-  - **执行状态**：`not-started`
-- [ ] `P2-03` — `check-client-rules` 规则 2 泛化（六使用方 + nano-ui，多种导入形式，`--root`）
-  - **验证映射**：`NUE1117-T05` · **依赖**：P2-02
-  - **执行状态**：`not-started`
-- [ ] `P2-04` — 修复泛化暴露的问题（与 P2-03 同一提交）
-  - **验证映射**：`NUE1117-T06` · **依赖**：P2-03
-  - **执行状态**：`not-started`
-- [ ] `P2-05` — `scripts/check-ui-rules.mjs`（只警告，不进 `test-all`），首跑基线
-  - **验证映射**：`NUE1117-T07` · **依赖**：P2-04
-  - **执行状态**：`not-started`
+- [x] `P2-01` — `scripts/gen-nano-catalog.mjs`（取代并删除 `gen-primitives-exports.mjs`）
+  - **验证映射**：`NUE1117-T03` · **执行状态**：`complete` · **证据**：`9d4a536`（合并 `860f34c`）· `node --test test/scripts/*.test.mjs` 31/31 · 2026-11-16T18:03:12Z；两次生成剔除 `generated` 后 sha256 相同（primitives `6b43fc3a…`、icons `0aabb54d…`、tokens `0fbe1391…`），且等于入库版本
+- [x] `P2-02` — catalog 三件套入库；与旧快照一次性比对；删除 [DNMS] 快照
+  - **验证映射**：`NUE1117-T03` `NUE1117-T04` · **执行状态**：`complete` · **证据**：同上；rc.1 311 / rc.3 321 与旧快照逐项相等（写入合并说明）；tokens 437（1 个模板前缀、7 个 runtime 项）；旧快照与旧脚本删除，八个目录字面量 0
+- [x] `P2-03` — `check-client-rules` 规则 2 泛化（六使用方 + nano-ui，多种导入形式，`--root`）
+  - **验证映射**：`NUE1117-T05` · **执行状态**：`complete` · **证据**：`9d4a536` · T05 12 条（六种形式、nano-ui、部分缺失、catalog 缺失、空扫描、默认扫描根）全过；主树 78 文件 / 136 个名字
+- [x] `P2-04` — 修复泛化暴露的问题（与 P2-03 同一提交）
+  - **验证映射**：`NUE1117-T06` · **执行状态**：`partial` · **证据**：`9d4a536` 修正 7 个不存在图标名（DNT 6、DNK 1，详见提交说明）；`node scripts/test-all.mjs` @9d4a536 20/21，exit 1，唯一失败 `packages/dsh-s3-client`（3 cancelled），@2c0ad72 同样失败 · 2026-11-16T18:03:23Z。T06 字面「退出码 0」因既有 s3-client 失败无法满足，见 §9
+- [x] `P2-05` — `scripts/check-ui-rules.mjs`（只警告，不进 `test-all`），首跑基线
+  - **验证映射**：`NUE1117-T07` · **执行状态**：`complete` · **证据**：`04d148b` · T07 5 条全过；基线 78 文件 573 条警告（按插件 × 规则的表在合并说明 `860f34c`）
+- 附：`a9bb0b5`（合并 `2c5af77`）修正 PH1 的 T02 测试，只扫已跟踪 package.json（主树未跟踪 `context/` 含断开软链导致 ENOENT）
 
 ### PH3 — nano-ui 0.2.0 硬切（`nue-1117-nano-ui`）
 
@@ -165,8 +161,8 @@ P0-00 干净树（main@9792da0）
 
 | Check ID | 验证什么 | 方法 | 实际结果 | 状态 |
 |----------|----------|------|----------|------|
-| `NUE1117-T01`–`T02` | 规格与原则 | `node --test test/scripts/nue-docs.test.mjs` | — | pending |
-| `NUE1117-T03`–`T07` | catalog 与检测 | `node --test test/scripts/{gen-nano-catalog,check-client-rules,check-ui-rules}.test.mjs`；`test-all` | — | pending |
+| `NUE1117-T01`–`T02` | 规格与原则 | `node --test test/scripts/nue-docs.test.mjs` | 7/7 @2c5af77 | pass |
+| `NUE1117-T03`–`T07` | catalog 与检测 | `node --test test/scripts/{gen-nano-catalog,check-client-rules,check-ui-rules}.test.mjs`；`test-all` | 31/31 @2c5af77；test-all 20/21（s3-client 既有失败） | pass（T06 partial） |
 | `NUE1117-T08`–`T17` | nano-ui 0.2.0 | `cd packages/dsh-nano-ui && npm test`；六套件；`test-all` | — | pending |
 | `NUE1117-T18`–`T26` | 六插件迁移 | 各插件测试 + `nue-migration.test.mjs` | — | pending |
 | `NUE1117-T27a`–`e` | 视觉核对（live） | 本机 profile + ego-browser 截图 | — | pending（需 live 授权与部署） |
@@ -174,8 +170,8 @@ P0-00 干净树（main@9792da0）
 
 ## 5. 当前状态与交接
 
-- **当前节点 / 已完成**：P0-00、PH1
-- **下一动作**：PH2
+- **当前节点 / 已完成**：P0-00、PH1、PH2
+- **下一动作**：PH3
 - **当前阻塞**：无
 - **待 owner 决定**：P4-01、P9-05（执行到时判定是否触发停止）
 - **最终交接目标**：[业主]
@@ -203,6 +199,8 @@ P0-00 干净树（main@9792da0）
 
 - `2026-11-17` · 发车 STEP.6 的 closure 路径写作 `PRE-1116-closure.md`，按工作项目改落 `NUE-1117-closure.md`（避免覆盖 PRE-1116 closure）。
 - `2026-11-17` · AP §7.0 N3 写「[DNEE] 无 `test` 脚本」；当前 `main` 上 [DNEE] `package.json` 已有 `"test": "node --test test/*.mjs"`（PRE-1116 引入 `bundle-smoke.test.mjs`），[DNEE] 已在 `test-all` 内。本 todo 照常以 `node --test` 显式跑并记条数，不改 `test-all` 成员。
+- `2026-11-17` · T06 要求 P2-03 提交上 `test-all` 退出 0；`packages/dsh-s3-client` 在 PH2 之前的 `2c0ad72` 上已失败（3 cancelled），属范围外既有问题，未修。本计划后续所有「test-all 退出 0」判据按「除 s3-client 外全过」执行并如实记录。
+- `2026-11-17` · catalog tokens 口径：`--dsh-font-family-` 是主题 JS 模板前缀，保留为条目并标 `prefix:true`；7 个由宿主 JS 运行时写入的名字标 `runtime:true`（含 `--dsh-hairline-width`、`--dsh-font-family-code`），U1 以 catalog 存在性判定，无需另立白名单。
 
 ## 8. 附件：[业主] 发车指令（原文）
 

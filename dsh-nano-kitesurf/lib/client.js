@@ -770,7 +770,7 @@ var __kitesurfExport = (() => {
       REPORT_VERSION = 2;
       CLIENT_KEY = Symbol.for("dsh.perfReview.v2");
       HOST_KEY = Symbol.for("dsh.perfReviewHost.v2");
-      BUILD_STAMP = true ? "3ee91d65ad6f" : "dev";
+      BUILD_STAMP = true ? "d84f685f322e" : "dev";
       NAME_RE = /^[a-z0-9][a-z0-9-]{0,39}$/;
       CONTRACT_KEY_RE = /^[a-z0-9][a-z0-9.-]{0,63}$/;
       MAX_SPAN_KEYS = 32;

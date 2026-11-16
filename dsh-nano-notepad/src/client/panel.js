@@ -12,6 +12,7 @@ import {
   imagesById,
   importTarget,
   loadSnapshot,
+  stampContentMd5,
   moveNode,
   nextAvailableName,
   nextUntitled,
@@ -28,6 +29,7 @@ import {
   writeSettings,
   writeUi as writeUiRaw,
 } from './db.js'
+import { md5Hex } from './md5.js'
 import { applyFormat, escapeAttr, escapeHtml, extractImageUrls, formatHtml, htmlToText, minifyHtml, renderMarkdown, sanitizeRichHtml, stripHtmlStyles } from './markdown.js'
 import { validateJson, positionOf, formatJson, minifyJson, escapeJson, unescapeJson, decodeEscapes, renderJsonTree } from './json.js'
 import { highlightSource } from './highlight.js'
@@ -1494,12 +1496,10 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     } catch { return false }
   }
 
-  async function copyPath(relative, id) {
+  async function copyPath(id) {
     const file = id ? state.nodes.find(node => node.id === id) : current()
     if (!file) return
-    const value = relative
-      ? pathOf(file.id).replace(/^\//, '')
-      : `${workspaceTitle(file.workspaceId)}${pathOf(file.id)}`
+    const value = `[ DNN:vfs@${pathOf(file.id).replace(/^\//, '')} ]`
     if (await writeClipboard(value)) setSync('copied', value)
   }
 
@@ -2033,6 +2033,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     state.pendingDraft = null
     if (!file || !state.db) return
     file.draft = draft
+    file.md5 = md5Hex(draft)
     state.lastDraftWrite[file.id] = Date.now()
     setSync('saving')
     void saveDraft(state.db, file.id, draft).then(() => {
@@ -2963,6 +2964,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       state.pendingDraft = null
       if (!file || !state.db) return
       file.draft = draft
+      file.md5 = md5Hex(draft)
       state.lastDraftWrite[file.id] = Date.now()
       setSync('saving')
       void saveDraft(state.db, file.id, draft).then(() => {
@@ -3016,6 +3018,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     const file = current()
     if (!file || !state.db) return
     file.draft = ''
+    file.md5 = md5Hex('')
     write().value = ''
     state.dirty = false
     await commit('manual')
@@ -3468,7 +3471,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
               }
               write().value = version.markdown
               const live = current()
-              if (live) live.draft = version.markdown
+              if (live) { live.draft = version.markdown; live.md5 = md5Hex(version.markdown) }
               void commit('restore').then(() => { closePreview(); render() }).catch(showError)
             },
             setup: el => { note = el.querySelector('.np-restore-note') },
@@ -3773,8 +3776,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     const fileOps = [
       { id: 'rename', label: copy.rename, run: () => renameAsked(node) },
       ...(file ? [
-        { id: 'copy-path', label: copy.fxMenuPath ?? '复制路径', run: () => void copyPath(false, id) },
-        { id: 'copy-rel', label: copy.fxMenuRelPath ?? '复制相对路径', run: () => void copyPath(true, id) },
+        { id: 'copy-rel', label: copy.fxMenuRelPath ?? '复制相对路径', run: () => void copyPath(id) },
         { id: 'export', label: copy.fxMenuExport ?? '导出', run: () => void exportFile(id) },
       ] : []),
       { id: 'delete', label: copy.delete, tone: 'danger', run: () => requestDelete(id) },
@@ -4581,6 +4583,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
         await saveDraft(state.db, node.id, String(content ?? ''))
         if (node.sourcePath !== undefined) await updateNodeMeta(state.db, node.id, { sourcePath: node.sourcePath })
         node.draft = String(content ?? '')
+        node.md5 = md5Hex(node.draft)
       }
       openFile(node.id)
       /* openFile renders before node.draft lands; repaint both views once the
@@ -4818,6 +4821,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
 
   void openDatabase().then(async db => {
     state.db = db
+    await stampContentMd5(db)
     const snapshot = await loadSnapshot(db)
     state.nodes = snapshot.nodes
     state.settings = { ...defaults, ...snapshot.settings }

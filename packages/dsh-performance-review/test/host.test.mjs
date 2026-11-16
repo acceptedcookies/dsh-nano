@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { createPerfReviewHost, ensurePerfReviewHost } from '../src/host.js'
+import { createPerfReviewHost, ensurePerfReviewHost, handleHostRead } from '../src/host.js'
 import { RESERVOIR_CAP } from '../src/state.js'
 
 const fakeEnv = (over = {}) => {
@@ -82,6 +82,30 @@ test('read({ since }) does not delete; cutWindow advances the cursor', () => {
   assert.equal(host.snapshot().plugins['nano-x'].spans.list.windowN, 2)
   assert.equal(host.read({ since: `e1.${seq}` }).rows.length, 0)
   assert.equal(host.read({ since: 'e1.0' }).rows.length, 2)
+})
+
+test('GET perf-review host accepts only since', () => {
+  const env = fakeEnv({ epoch: 'e1' })
+  const host = createPerfReviewHost(env)
+  host.hostJoin('nano-x').hostSpan('list', () => { env.performance.advance(2) })
+  const capture = (url, method = 'GET') => {
+    const res = { statusCode: 0, headers: {}, body: '', setHeader(k, v) { this.headers[k] = v }, end(s) { this.body = s ?? '' } }
+    handleHostRead({ method, url }, res, host)
+    return res
+  }
+  const ok = capture('/nano-notepad/perf-review/host?since=e1.0')
+  assert.equal(ok.statusCode, 200)
+  const view = JSON.parse(ok.body)
+  assert.equal(view.rows.length, 1)
+  assert.equal(ok.body.includes('/nano-notepad'), false)
+  const mode = capture('/perf-review/host?mode=window')
+  assert.equal(mode.statusCode, 400)
+  assert.equal(host.read().rows.length, 1)
+  const head = capture('/perf-review/host', 'HEAD')
+  assert.equal(head.statusCode, 200)
+  assert.equal(head.body, '')
+  const post = capture('/perf-review/host', 'POST')
+  assert.equal(post.statusCode, 405)
 })
 
 test('illegal cursor and mode are 400 and do not drop samples', () => {

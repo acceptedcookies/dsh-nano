@@ -141,6 +141,7 @@ function scanModelSelector() {
   const asyncCompact = consts.ASYNC_COMPACT_ROUTE
   const asyncCompactBundle = consts.ASYNC_COMPACT_BUNDLE_ROUTE
   const asyncCompactSwitch = consts.ASYNC_COMPACT_SWITCH_ROUTE
+  const perfReviewHost = consts.PERF_REVIEW_HOST_ROUTE
   // PUT body cap is the literal in readBody(req, 16384) inside mediaHandler /
   // asyncCompactHandlers (the same helper, same literal).
   const putCap = (() => {
@@ -192,6 +193,13 @@ function scanModelSelector() {
       // -20⑦: switch body is {"enabled":boolean} — hard cap 1024.
       bodyLimit: { POST: 1024 },
       source: { file, line: lineOf(text, 'const ASYNC_COMPACT_SWITCH_ROUTE =') },
+    },
+    {
+      plugin: 'dsh-nano-model-selector',
+      path: perfReviewHost,
+      methods: ['GET', 'HEAD'],
+      bodyLimit: { GET: 0, HEAD: 0 },
+      source: { file, line: lineOf(text, 'const PERF_REVIEW_HOST_ROUTE =') },
     },
   ]
   return rows

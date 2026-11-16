@@ -92,3 +92,5 @@
 | `/nano-cloud-session/catalog` | — | `dncs.catalog` | http | exact |
 | `/nano-cloud-session/upload` | — | `dncs.upload` | http | exact |
 | `/nano-cloud-session/ssh` | — | `dncs.ssh` | http | exact |
+| `/nano-notepad/perf-review/host` | — | `dnn.perf-review.host` | http | exact |
+| `/nano-model-selector/perf-review/host` | — | `dnms.perf-review.host` | http | exact |

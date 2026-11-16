@@ -473,7 +473,8 @@ var BINDING_TABLE = Object.freeze([
   { "id": "dnn.pipeline.s3", "plugin": "dsh-nano-notepad", "channel": "http", "match": "exact", "path": "/nano-notepad/pipeline/s3", "methods": ["POST"], "bodyLimit": 33554432, "sensitivity": "L2", "capability": "s3:write", "sessionBinding": false, "justification": "pipeline.js \u2014 signed pipeline-bucket ops (putJson/putBytes/getJson/getBytes/del/list) for pipeline state + sqlite export; CAS ifMatch/ifNoneMatch; scoped S3_NOTEPAD_* or DSH_NP_PIPELINE_IDENTITY; host-signed (credentials never reach page)." },
   { "id": "dnn.pipeline.claim", "plugin": "dsh-nano-notepad", "channel": "http", "match": "exact", "path": "/nano-notepad/pipeline/claim", "methods": ["POST"], "bodyLimit": 4096, "sensitivity": "L2", "capability": "s3:write", "sessionBinding": false, "justification": "pipeline.js \u2014 claim lease lifecycle on notepad bucket (acquire/renew/read/release); ETag CAS read-modify-write, 90s TTL, CLAIM_KEYS whitelist; writerId from request (scoped by host auth)." },
   { "id": "dnn.rpc", "plugin": "dsh-nano-notepad", "channel": "http", "match": "exact", "path": "/nano-notepad/rpc", "methods": ["POST"], "bodyLimit": 4096, "sensitivity": "L1", "capability": "s3:read", "sessionBinding": false, "justification": "pipeline.js \u2014 A3 cross-plugin read surface (internal MCP/RPC): read-only whitelisted methods (manifest.get/corpus.list/corpus.read/claim.read) over the published pipeline bucket; key allowlist kb-*/art-*/sqlite/claims; host-signed, no credentials exposed, no writes." },
-  { "id": "dnn.fx.sdk", "plugin": "dsh-nano-notepad", "channel": "http", "match": "prefix", "path": "/nano-notepad/fx/sdk", "methods": ["GET"], "bodyLimit": 0, "sensitivity": "L1", "capability": "static:asset", "sessionBinding": false, "justification": "dsh-nano-notepad/lib/bindings.js \u2014 fx/sdk http+prefix asset serve (basename-only); static ESM+sqlite/pdf assets" }
+  { "id": "dnn.fx.sdk", "plugin": "dsh-nano-notepad", "channel": "http", "match": "prefix", "path": "/nano-notepad/fx/sdk", "methods": ["GET"], "bodyLimit": 0, "sensitivity": "L1", "capability": "static:asset", "sessionBinding": false, "justification": "dsh-nano-notepad/lib/bindings.js \u2014 fx/sdk http+prefix asset serve (basename-only); static ESM+sqlite/pdf assets" },
+  { "id": "dnn.perf-review.host", "plugin": "dsh-nano-notepad", "channel": "http", "match": "exact", "path": "/nano-notepad/perf-review/host", "methods": ["GET", "HEAD"], "bodyLimit": 0, "sensitivity": "L2", "capability": "read:host", "sessionBinding": false, "justification": "\u53EA\u8BFB\u5168\u8FDB\u7A0B\u89C6\u56FE\u3002\u4E0D\u6392\u7A7A\uFF0C\u53EA\u63A5\u53D7 since\u3002" }
 ]);
 var BROWSER_BINDINGS = Object.freeze([
   { "id": "dnn.save", "path": "/nano-notepad/save" },
@@ -489,7 +490,8 @@ var BROWSER_BINDINGS = Object.freeze([
   { "id": "dnn.pipeline.s3", "path": "/nano-notepad/pipeline/s3" },
   { "id": "dnn.pipeline.claim", "path": "/nano-notepad/pipeline/claim" },
   { "id": "dnn.rpc", "path": "/nano-notepad/rpc" },
-  { "id": "dnn.fx.sdk", "path": "/nano-notepad/fx/sdk" }
+  { "id": "dnn.fx.sdk", "path": "/nano-notepad/fx/sdk" },
+  { "id": "dnn.perf-review.host", "path": "/nano-notepad/perf-review/host" }
 ]);
 export {
   BINDING_TABLE,

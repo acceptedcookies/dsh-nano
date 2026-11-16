@@ -3,9 +3,10 @@
 import { readFileSync, statSync, createReadStream } from 'node:fs'
 import { join, basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { ensurePerfReviewHost, LIB_VERSION } from './lib/perf-review-host.js'
+import { ensurePerfReviewHost, handleHostRead, LIB_VERSION } from './lib/perf-review-host.js'
 import { createSyncEngine } from './lib/s3-sync-host.js'
-import { createWebRegistrar, BINDING_TABLE, PLUGIN } from './lib/web-registrar.js'
+import { createWebRegistrar } from './lib/web-registrar.js'
+import { BINDING_TABLE, PLUGIN } from './lib/bindings.js'
 import { sanitizeMpHtml } from './lib/mp-sanitize.js'
 import { modelsHandler, chatHandler } from './lib/fx-bridge.js'
 import { pipelineS3Handler, pipelineClaimHandler, pipelineRpcHandler } from './lib/pipeline.js'
@@ -16,7 +17,7 @@ export const inject = ['webServer', 'connection', 'subprocess', 'llm', 'attachme
 // perf-review: register a host contributor. index.js is unbundled and the dev
 // instance copies lib/ but not node_modules, so the helper is a bundled file
 // (lib/perf-review-host.js). Disabled path is identity wrappers; DSH_PERF_REVIEW=1
-// enables hostSpan timing + the 30 s host.json writer (spec §6.1 / §6.2).
+// enables hostSpan timing. The host view is read-only; nothing writes host.json.
 const { version } = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'))
 const review = ensurePerfReviewHost().hostJoin('nano-notepad', { version, libVersion: LIB_VERSION })
 
@@ -350,7 +351,11 @@ export function apply(ctx) {
   const specByPath = new Map(SPECS.map(s => [s.path, s.handler]))
   const bindings = BINDING_TABLE.map(row => ({
     ...row,
-    handler: row.id === 'dnn.fx.sdk' ? ((req, res) => sdkServe(req, res)) : specByPath.get(row.path),
+    handler: row.id === 'dnn.fx.sdk'
+      ? ((req, res) => sdkServe(req, res))
+      : row.id === 'dnn.perf-review.host'
+        ? ((req, res) => handleHostRead(req, res, ensurePerfReviewHost()))
+        : specByPath.get(row.path),
   }))
   createWebRegistrar({ plugin: PLUGIN, bindings }).registerAll(ctx)
 }

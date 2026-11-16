@@ -1,5 +1,8 @@
 // ../packages/dsh-performance-review/src/state.js
 var LIB_VERSION = "0.1.0";
+var CLIENT_KEY = Symbol.for("dsh.perfReview.v2");
+var HOST_KEY = Symbol.for("dsh.perfReviewHost.v2");
+var BUILD_STAMP = "dev";
 var NAME_RE = /^[a-z0-9][a-z0-9-]{0,39}$/;
 var MAX_USAGE_KEYS = 32;
 var RESERVOIR_CAP = 64;
@@ -12,15 +15,64 @@ function percentile(values, p) {
 function createSpanRow() {
   return { n: 0, window: [], reservoir: [] };
 }
+function createStructure() {
+  return {
+    rootErrors: 0,
+    badNames: 0,
+    overflowSpans: 0,
+    overflowUsage: 0,
+    observerErrors: 0,
+    // A single observe() can fail silently (e.g. LoAF unsupported) while the
+    // other two succeed. `observerErrors` only fires when ALL fail; this
+    // counter makes a partial observer install visible (A5 / §10.4.6).
+    observersMissing: 0,
+    legacyCopies: 0,
+    badShape: 0,
+    unmappedKey: 0,
+    missingBindingId: 0,
+    oversize: 0,
+    /** Protocol findings such as `{ level, code:'build-stamp', have, saw }`. */
+    audits: []
+  };
+}
+function pushAudit(structure, record) {
+  if (!Array.isArray(structure.audits)) structure.audits = [];
+  const dup = structure.audits.some((item) => item.level === record.level && item.code === record.code && item.have === record.have && item.saw === record.saw);
+  if (!dup) structure.audits.push(record);
+}
+function installSingleton(global, key, legacyKey, stamp, create) {
+  const existing = global[key];
+  if (existing == null) {
+    const created = create();
+    created._build = stamp;
+    global[key] = created;
+    if (legacyKey != null && global[legacyKey] != null) {
+      const structure = created._state?.().structure;
+      if (structure != null) structure.legacyCopies += 1;
+    }
+    return created;
+  }
+  if (existing._build !== stamp) {
+    const structure = existing._state?.().structure;
+    if (structure != null) {
+      pushAudit(structure, {
+        level: "audit",
+        code: "build-stamp",
+        have: existing._build ?? null,
+        saw: stamp
+      });
+    }
+  }
+  return existing;
+}
+var NANO_PKG_PREFIX = ["dsh", "nano"].join("-") + "-";
 function roundMs(value) {
   return value == null ? null : Math.round(value * 10) / 10;
 }
 
 // ../packages/dsh-performance-review/src/host.js
-var WRITE_INTERVAL_MS = 3e4;
 var WINDOW_SAMPLE_CAP = 512;
 var EVENT_CAP = 32;
-var JSONL_CAP_BYTES = 8 * 1024 * 1024;
 var isPromiseLike = (value) => value !== null && typeof value === "object" && typeof value.then === "function";
 function spanStats(span) {
   const reservoir = span.reservoir ?? [];
@@ -32,8 +84,7 @@ function spanStats(span) {
     errors: span.errors ?? 0,
     lastMs: span.lastMs ?? null,
     lastAt: span.lastAt ?? null,
-    lastErrorAt: span.lastErrorAt ?? null,
-    lastTraceId: span.lastTraceId ?? null
+    lastErrorAt: span.lastErrorAt ?? null
   };
 }
 function hostSnapshot(state) {
@@ -58,118 +109,107 @@ function hostSnapshot(state) {
   }
   return {
     version: 2,
-    enabled: state.enabled,
-    observerVersion: LIB_VERSION,
-    contributors: state.contributors.map((c) => ({ ...c })),
+    enabled: state.enabled === true,
+    contributors: state.contributors.map((item) => ({ ...item })),
     sinceStart: state.sinceStart,
-    writtenAt: (/* @__PURE__ */ new Date()).toISOString(),
+    epoch: state.epoch,
+    seq: state.seq,
+    cursor: state.cursor,
+    writtenAt: state.sinceStart,
     plugins,
-    structure: { hostWriteErrors: state.writeErrors }
+    structure: { ...state.structure, audits: [...state.structure.audits ?? []] }
   };
 }
-function takeWindow(state) {
-  const snap = hostSnapshot(state);
-  const plugins = {};
+function parseCursor(since, epoch) {
+  if (typeof since === "number") {
+    if (!Number.isInteger(since) || since < 0) return { error: true };
+    return { epoch, seq: since };
+  }
+  if (typeof since === "string") {
+    const dot = since.lastIndexOf(".");
+    if (dot <= 0) return { error: true };
+    const ep = since.slice(0, dot);
+    const seq = Number(since.slice(dot + 1));
+    if (ep.length === 0 || !Number.isInteger(seq) || seq < 0) return { error: true };
+    return { epoch: ep, seq };
+  }
+  if (since !== null && typeof since === "object" && !Array.isArray(since)) {
+    const seq = since.seq;
+    if (since.epoch == null || !Number.isInteger(seq) || seq < 0) return { error: true };
+    return { epoch: String(since.epoch), seq };
+  }
+  return { error: true };
+}
+function collectRows(state, predicate) {
+  const rows = [];
+  const truncated = [];
   for (const [pluginId, row] of state.plugins) {
-    const spans = {};
     for (const [name, span] of row.spans) {
-      spans[name] = { n: span.window.length, samples: [...span.window] };
+      const minKept = span.minKeptSeq;
+      if (predicate && minKept != null) {
+        const floor = predicate.seq;
+        if (floor + 1 < minKept) {
+          truncated.push({ pluginId, name, lost: minKept - floor - 1 });
+        }
+      } else if (!predicate && (span.lost ?? 0) > 0) {
+        truncated.push({ pluginId, name, lost: span.lost });
+      }
+      for (const event of span.log ?? []) {
+        if (predicate && !(event.seq > predicate.seq)) continue;
+        rows.push({
+          seq: event.seq,
+          pluginId,
+          name,
+          ms: event.ms,
+          err: event.err === true,
+          at: event.at
+        });
+      }
     }
-    const counts = {};
-    if (row.counts instanceof Map) {
-      for (const [name, n] of row.counts) counts[name] = n;
-    }
-    plugins[pluginId] = { version: row.version ?? null, spans, counts };
   }
-  for (const row of state.plugins.values()) {
-    for (const span of row.spans.values()) span.window.length = 0;
-  }
-  return { ...snap, window: true, plugins };
+  rows.sort((a, b) => a.seq - b.seq);
+  return { rows, truncated };
 }
 function createPerfReviewHost(env = {}) {
   const processRef = env.process ?? globalThis.process;
+  const epoch = env.epoch != null ? String(env.epoch) : Math.floor(Math.random() * 1e9).toString(36);
   const state = {
     enabled: env.forceEnabled !== void 0 ? env.forceEnabled === true : null,
     plugins: /* @__PURE__ */ new Map(),
     contributors: [],
-    writeErrors: 0,
+    contributorKeys: /* @__PURE__ */ new Set(),
     sinceStart: (/* @__PURE__ */ new Date()).toISOString(),
-    writer: null
-  };
-  const dataDir = () => processRef.env?.DSH_DATA_DIR ?? processRef.env?.DSH_HOME ?? null;
-  const writeFile = async () => {
-    const fs = env.fs ?? await import("node:fs/promises");
-    const path = env.path ?? await import("node:path");
-    const dir = dataDir() ?? `${processRef.env?.HOME ?? ""}/.dsh`;
-    const target = path.join(dir, "plugins", "perf-review");
-    try {
-      await fs.mkdir(target, { recursive: true });
-      const snap = hostSnapshot(state);
-      await fs.writeFile(path.join(target, "host.json"), JSON.stringify(snap, null, 2));
-      const series = { at: snap.writtenAt, plugins: {} };
-      for (const [pluginId, row] of state.plugins) {
-        const spans = {};
-        for (const [name, span] of row.spans) {
-          spans[name] = { n: span.n, p95: roundMs(percentile(span.reservoir, 0.95)), errors: span.errors ?? 0 };
-        }
-        series.plugins[pluginId] = { spans };
-      }
-      const jsonlPath = path.join(target, "host-snapshots.jsonl");
-      let existing = "";
-      try {
-        existing = await fs.readFile(jsonlPath, "utf8");
-      } catch {
-      }
-      if (existing.length > JSONL_CAP_BYTES) {
-        existing = existing.slice(-Math.floor(JSONL_CAP_BYTES / 2));
-        const nl = existing.indexOf("\n");
-        if (nl >= 0) existing = existing.slice(nl + 1);
-      }
-      await fs.writeFile(jsonlPath, existing + JSON.stringify(series) + "\n");
-    } catch {
-      state.writeErrors += 1;
-    }
-  };
-  const startWriter = () => {
-    if (state.writer !== null) return;
-    const setIntervalRef = env.setInterval ?? setInterval;
-    state.writer = setIntervalRef(() => {
-      void writeFile();
-    }, WRITE_INTERVAL_MS);
-    if (typeof state.writer?.unref === "function") state.writer.unref();
-    try {
-      processRef.once?.("beforeExit", () => {
-        void writeFile();
-      });
-    } catch {
-    }
+    epoch,
+    seq: 0,
+    cursor: 0,
+    structure: createStructure(),
+    _build: env.build ?? BUILD_STAMP
   };
   const isEnabled = () => {
     if (state.enabled === null) {
-      state.enabled = env.forceEnabled !== void 0 ? env.forceEnabled === true : processRef.env?.DSH_PERF_REVIEW === "1";
-      if (state.enabled) startWriter();
+      state.enabled = env.forceEnabled !== void 0 ? env.forceEnabled === true : processRef?.env?.DSH_PERF_REVIEW === "1";
     }
-    return state.enabled;
+    return state.enabled === true;
   };
-  const setEnabled = (value) => {
-    state.enabled = value === true;
-    if (state.enabled) startWriter();
-  };
-  const recordSpan = (row, name, t0, t1, err = false, traceId = null) => {
-    if (!NAME_RE.test(name) || !isEnabled()) return;
+  const recordSpan = (row, name, t0, t1, err) => {
+    if (!isEnabled()) return;
     let span = row.spans.get(name);
     if (span === void 0) {
       span = createSpanRow();
       span.errors = 0;
       span.events = [];
+      span.log = [];
+      span.lost = 0;
+      span.minKeptSeq = null;
       row.spans.set(name, span);
     }
     span.n += 1;
     const ms = t1 - t0;
     const at = (/* @__PURE__ */ new Date()).toISOString();
+    const seq = state.seq + 1;
+    state.seq = seq;
     span.lastMs = ms;
     span.lastAt = at;
-    if (traceId != null) span.lastTraceId = traceId;
     if (err) {
       span.errors += 1;
       span.lastErrorAt = at;
@@ -181,8 +221,15 @@ function createPerfReviewHost(env = {}) {
       const slot = Math.floor(Math.random() * span.n);
       if (slot < RESERVOIR_CAP) span.reservoir[slot] = ms;
     }
-    span.events.push(traceId != null ? { ms: Math.round(ms * 10) / 10, at, err, traceId } : { ms: Math.round(ms * 10) / 10, at, err });
+    const rounded = Math.round(ms * 10) / 10;
+    span.events.push({ ms: rounded, at, err: err === true, seq });
     while (span.events.length > EVENT_CAP) span.events.shift();
+    span.log.push({ seq, ms, err: err === true, at });
+    while (span.log.length > WINDOW_SAMPLE_CAP) {
+      span.log.shift();
+      span.lost += 1;
+      span.minKeptSeq = span.log[0]?.seq ?? null;
+    }
   };
   const hostJoin = (pluginId, impl = {}) => {
     let row = state.plugins.get(pluginId);
@@ -191,43 +238,48 @@ function createPerfReviewHost(env = {}) {
       state.plugins.set(pluginId, row);
     }
     if (!(row.counts instanceof Map)) row.counts = /* @__PURE__ */ new Map();
-    state.contributors.push({ pluginId, libVersion: impl.libVersion ?? LIB_VERSION });
+    const libVersion = impl.libVersion ?? LIB_VERSION;
+    const key = `${pluginId}@${libVersion}`;
+    if (!state.contributorKeys.has(key)) {
+      state.contributorKeys.add(key);
+      state.contributors.push({ pluginId, libVersion });
+    }
     const clock = env.performance ?? globalThis.performance;
     const now = () => clock.now();
     return {
       /**
-       * hostSpan(name, fn, ctx?) — ctx: {traceId?, incidentId?} correlates the
-       * span event with a caller-side trace (e.g. an incidentId from the
-       * operations ring); only the LAST-seen trace is kept per span plus the
-       * traceId on each event row.
+       * hostSpan(name, fn, ctx?). ctx is ignored: traceId is not stored
+       * (T-O-PRE1116-12 / P3-06). A name that fails NAME_RE still runs `fn`,
+       * increments `structure.unmappedKey`, and is not recorded.
        */
-      hostSpan(name, fn, ctx = null) {
-        if (!NAME_RE.test(name)) return fn();
-        const traceId = ctx && (ctx.traceId ?? ctx.incidentId ?? null);
+      hostSpan(name, fn, _ctx) {
+        if (typeof name !== "string" || !NAME_RE.test(name)) {
+          state.structure.unmappedKey += 1;
+          return fn();
+        }
         const t0 = now();
         let result;
         try {
           result = fn();
         } catch (error) {
-          recordSpan(row, name, t0, now(), true, traceId);
+          recordSpan(row, name, t0, now(), true);
           throw error;
         }
         if (isPromiseLike(result)) {
           return result.then(
             (value) => {
-              recordSpan(row, name, t0, now(), false, traceId);
+              recordSpan(row, name, t0, now(), false);
               return value;
             },
             (error) => {
-              recordSpan(row, name, t0, now(), true, traceId);
+              recordSpan(row, name, t0, now(), true);
               throw error;
             }
           );
         }
-        recordSpan(row, name, t0, now(), false, traceId);
+        recordSpan(row, name, t0, now(), false);
         return result;
       },
-      /** count(name, n?) — cumulative counter per name (usage-style). */
       count(name, n = 1) {
         if (!NAME_RE.test(name) || !isEnabled()) return;
         if (!(row.counts instanceof Map)) row.counts = /* @__PURE__ */ new Map();
@@ -238,53 +290,85 @@ function createPerfReviewHost(env = {}) {
         isEnabled();
         return hostSnapshot(state);
       },
-      takeWindow: () => takeWindow(state)
+      read: (query) => read(query)
     };
+  };
+  const read = (query = {}) => {
+    const seq = state.seq;
+    const base = {
+      epoch: state.epoch,
+      seq,
+      cursor: state.cursor,
+      next: `${state.epoch}.${seq}`
+    };
+    if (query != null && query.mode !== void 0) {
+      return { status: 400, error: "mode", basis: null, rows: [], truncated: [], ...base };
+    }
+    if (query == null || query.since === void 0) {
+      const { rows: rows2, truncated: truncated2 } = collectRows(state, null);
+      return { status: 200, basis: "cumulative", rows: rows2, truncated: truncated2, ...base };
+    }
+    const parsed = parseCursor(query.since, state.epoch);
+    if (parsed.error) {
+      return { status: 400, error: "cursor", basis: null, rows: [], truncated: [], ...base };
+    }
+    if (parsed.epoch !== state.epoch) {
+      const { rows: rows2 } = collectRows(state, null);
+      return { status: 200, basis: "cumulative", rows: rows2, truncated: ["epoch"], ...base };
+    }
+    const { rows, truncated } = collectRows(state, { seq: parsed.seq });
+    return { status: 200, basis: "window", rows, truncated, ...base };
   };
   return {
     hostJoin,
-    setEnabled,
+    read,
     snapshot: () => {
       isEnabled();
       return hostSnapshot(state);
     },
-    takeWindow: () => takeWindow(state),
-    flush: () => writeFile(),
     _state: () => state,
+    _build: state._build,
     libVersion: LIB_VERSION
   };
 }
+function handleHostRead(req, res, host) {
+  const method = req?.method ?? "GET";
+  const finish = (status, body) => {
+    res.statusCode = status;
+    res.setHeader("content-type", "application/json; charset=utf-8");
+    if (method === "HEAD") res.end();
+    else res.end(JSON.stringify(body));
+  };
+  if (method !== "GET" && method !== "HEAD") {
+    finish(405, { status: 405, error: "method" });
+    return;
+  }
+  let keys = [];
+  try {
+    const url = new URL(req?.url ?? "/", "http://localhost");
+    keys = [...url.searchParams.keys()];
+    const extra = keys.filter((key) => key !== "since");
+    if (extra.length > 0) {
+      finish(400, { status: 400, error: extra.includes("mode") ? "mode" : "query" });
+      return;
+    }
+    const since = url.searchParams.get("since");
+    const view = host.read(since == null ? {} : { since });
+    finish(view.status ?? 200, view);
+  } catch {
+    finish(400, { status: 400, error: "query" });
+  }
+}
 function ensurePerfReviewHost(env = {}) {
   const global = env.global ?? globalThis;
-  const incumbent = global.__perfReviewHost;
-  if (incumbent == null) {
-    global.__perfReviewHost = createPerfReviewHost(env);
-    return global.__perfReviewHost;
-  }
-  if (typeof incumbent.setEnabled !== "function" || typeof incumbent._state !== "function") {
-    const fresh = createPerfReviewHost(env);
-    try {
-      const old = typeof incumbent._state === "function" ? incumbent._state() : null;
-      const next = fresh._state();
-      if (old && typeof old === "object") {
-        if (old.plugins instanceof Map) next.plugins = old.plugins;
-        if (Array.isArray(old.contributors)) next.contributors = old.contributors;
-        if (typeof old.enabled === "boolean") next.enabled = old.enabled;
-        if (typeof old.writeErrors === "number") next.writeErrors = old.writeErrors;
-        if (typeof old.sinceStart === "string") next.sinceStart = old.sinceStart;
-        if (old.writer) next.writer = old.writer;
-      }
-    } catch {
-    }
-    global.__perfReviewHost = fresh;
-    return fresh;
-  }
-  return incumbent;
+  const stamp = env.build ?? BUILD_STAMP;
+  return installSingleton(global, HOST_KEY, "__perfReviewHost", stamp, () => createPerfReviewHost(env));
 }
 export {
   LIB_VERSION,
   createPerfReviewHost,
   ensurePerfReviewHost,
+  handleHostRead,
   hostSnapshot,
-  takeWindow
+  parseCursor
 };

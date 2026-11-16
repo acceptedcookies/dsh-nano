@@ -1341,6 +1341,38 @@
       "id": "dncs.ssh",
       "channel": "http",
       "match": "exact"
+    },
+    {
+      "plugin": "dsh-nano-notepad",
+      "path": "/nano-notepad/perf-review/host",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "sensitivity": "L2",
+      "capability": "read:host",
+      "bodyLimit": 0,
+      "sessionBinding": false,
+      "justification": "只读全进程视图。不排空，只接受 since。",
+      "id": "dnn.perf-review.host",
+      "channel": "http",
+      "match": "exact"
+    },
+    {
+      "plugin": "dsh-nano-model-selector",
+      "path": "/nano-model-selector/perf-review/host",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "sensitivity": "L2",
+      "capability": "read:host",
+      "bodyLimit": 0,
+      "sessionBinding": false,
+      "justification": "只读全进程视图。不排空，只接受 since。",
+      "id": "dnms.perf-review.host",
+      "channel": "http",
+      "match": "exact"
     }
   ]
 }

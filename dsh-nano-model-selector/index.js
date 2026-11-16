@@ -4,7 +4,7 @@ import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { readFileSync } from 'node:fs'
 import { defaultEngine, imagineSkill, imagineStub, readEngine, scanEngines, writeEngine } from './lib/host-media.js'
-import { ensurePerfReviewHost, LIB_VERSION } from './lib/perf-review-host.js'
+import { ensurePerfReviewHost, handleHostRead, LIB_VERSION } from './lib/perf-review-host.js'
 import { registerRoutes } from './lib/route-guard.js'
 import { compactRuntime } from './lib/compact-runtime.js'
 import { COMPACTION_BUNDLE_NAME, createBundleInventory } from './lib/bundle-inventory.js'
@@ -46,6 +46,7 @@ const ASYNC_COMPACT_ROUTE = '/nano-model-selector/async-compact'
 const ASYNC_COMPACT_BUNDLE_ROUTE = '/nano-model-selector/async-compact/bundle'
 /** -20⑦: panel forwards the bundle flip through this one route (browser half cannot reach pluginManager). */
 const ASYNC_COMPACT_SWITCH_ROUTE = '/nano-model-selector/async-compact/switch'
+const PERF_REVIEW_HOST_ROUTE = '/nano-model-selector/perf-review/host'
 
 /** Plugin-private state file holding the chosen media engine. */
 const STATE_PATH = join(
@@ -577,5 +578,6 @@ export function apply(ctx) {
     { path: ASYNC_COMPACT_ROUTE, methods: ['GET', 'HEAD', 'PUT'], handler: asyncCompactHandlers(ctx, runtimeHandle) },
     { path: ASYNC_COMPACT_BUNDLE_ROUTE, methods: ['GET', 'HEAD'], handler: asyncCompactBundleHandler(bundleInventory) },
     { path: ASYNC_COMPACT_SWITCH_ROUTE, methods: ['POST'], handler: (req, res) => asyncCompactSwitchHandler(ctx, req, res, bundleInventory) },
+    { path: PERF_REVIEW_HOST_ROUTE, methods: ['GET', 'HEAD'], handler: (req, res) => handleHostRead(req, res, ensurePerfReviewHost()) },
   ], { table: BINDING_TABLE, plugin: PLUGIN })
 }

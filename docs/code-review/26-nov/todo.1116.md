@@ -118,7 +118,7 @@ P0-00 干净树 + worktree
   - **落点**：DNPR host 出口；[DNN]/[DNMS] 注册点。不含 [DNEE] `mode=window`
   - **完成判据**：双读者互不删样本；夹具不产生 `host.json`
   - **验证映射**：`PRE1116-T13` `PRE1116-T19`（写盘部分） · **依赖**：`P3-03`
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
+  - **执行状态**：`partial` · **执行时间**：`2026-11-16T16:30:00Z` · **证据 / 备注**：`handleHostRead` 只接受 `since`。账本新增 `dnn.perf-review.host` 与 `dnms.perf-review.host`。写盘链已从 host.js 删除。[DNEE] 的 `mode=window` 没动。
 - [ ] `P3-05` — 七份声明、适配器、四处 join 替换、六个合同面传入 `observe`
   - **落点**：`src/perf/declaration.json` ×7；三份 `src/client/perf.js` 与 [DNK] 懒 join
   - **完成判据**：不新建第四份 `perf.js`；[DNMSC] 零依赖
@@ -188,8 +188,8 @@ P0-00 干净树 + worktree
 
 ## 5. 当前状态与交接
 
-- **当前节点**：W3 的协议、报告和判定在 [DNPR] 包内，单测 74 通过，待提交。插件声明、读取路由、span 退役、lab 与文档未做。
-- **下一动作**：提交 ①②③ 的包内改动，然后做只读 handler，先挂 [DNN] 与 [DNMS]。
+- **当前节点**：只读 host 路由已挂在 [DNN] 与 [DNMS]，待提交。[DNEE] 排空仍在，按 `11.5` ③ 不能提前删。
+- **下一动作**：提交这一刀，然后做七份声明和 `observe` 注入。
 - **当前阻塞**：无。
 - **待 owner**：合并到 `main`；T26 部署；worktree 删除。
 - **最终交接**：分支 `facade-observe-binding-v2`，closure 指向本 todo。

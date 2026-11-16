@@ -308,6 +308,43 @@ export { LIB_VERSION }
  * Install-or-reuse the process singleton on the v2 symbol only.
  * @param {object} [env]
  */
+/**
+ * GET handler for `/<prefix>/perf-review/host` (T-O-PRE1116-10.1 / 10.2).
+ * Only `since` is accepted. `mode` and any other query key are 400.
+ * The body is the cursor view. It does not echo the URL, session, or headers.
+ * @param {object} req
+ * @param {object} res
+ * @param {{ read: (query?: object) => object }} host
+ */
+export function handleHostRead(req, res, host) {
+  const method = req?.method ?? 'GET'
+  const finish = (status, body) => {
+    res.statusCode = status
+    res.setHeader('content-type', 'application/json; charset=utf-8')
+    if (method === 'HEAD') res.end()
+    else res.end(JSON.stringify(body))
+  }
+  if (method !== 'GET' && method !== 'HEAD') {
+    finish(405, { status: 405, error: 'method' })
+    return
+  }
+  let keys = []
+  try {
+    const url = new URL(req?.url ?? '/', 'http://localhost')
+    keys = [...url.searchParams.keys()]
+    const extra = keys.filter(key => key !== 'since')
+    if (extra.length > 0) {
+      finish(400, { status: 400, error: extra.includes('mode') ? 'mode' : 'query' })
+      return
+    }
+    const since = url.searchParams.get('since')
+    const view = host.read(since == null ? {} : { since })
+    finish(view.status ?? 200, view)
+  } catch {
+    finish(400, { status: 400, error: 'query' })
+  }
+}
+
 export function ensurePerfReviewHost(env = {}) {
   const global = env.global ?? globalThis
   const stamp = env.build ?? BUILD_STAMP

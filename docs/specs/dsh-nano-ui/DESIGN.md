@@ -1,7 +1,7 @@
 # dsh-nano-ui DESIGN
 
 > 本文是 [dsh-nano] 浏览器 UI 的唯一规格（`T-O-NUE1117-02`）。`README.md` 只是入口页；包 `AGENTS.md`、`INTRODUCTION.md` 只描述用法并链接到这里，不复制条款。
-> 依据：`docs/code-review/26-nov/NUE-1117-qna-truth.md`（Truth-ID 简写 `T01`…`T17`、`TB01`…`TB04`）。规则与真相层冲突时以真相层为准。
+> 依据：`docs/code-review/26-nov/NUE-1117-qna-truth.md`（Truth-ID 简写 `T01`…`T23`、`TB01`…`TB04`）。规则与真相层冲突时以真相层为准。
 > 宿主口径：`@deepseek-ai/dsh@0.2.2-rc.1`。令牌、图标、导出以 `packages/dsh-nano-ui/catalog/*.json` 为准（由 `scripts/gen-nano-catalog.mjs` 生成，不手改）。
 > nano-ui 版本与变更：[`packages/dsh-nano-ui/CHANGELOG.md`](../../../packages/dsh-nano-ui/CHANGELOG.md)。
 
@@ -23,7 +23,7 @@
 **永远不做**（`T01`、`T12`）：
 
 - 嫁接宿主内部 DOM：`[class*=…]`、`:has()` 套宿主结构、运行时扫描或合成宿主哈希类、改写宿主 portal 根节点。
-- 读取宿主组件内部变量（如 `composer-model-*-display`、`session-list-edge-inset`、`--dsh-trajectory-toolbar-height`）。
+- 读取宿主组件内部变量（如 `session-list-edge-inset`、`--dsh-trajectory-toolbar-height`）。宿主 slot 类型声明（`slots.d.ts`）公开的 slot 合同变量不算内部变量，读取时在 §10 登记一行（`T20`）。
 - 猜令牌名、写十六进制色值、用 unicode 字符当图标。
 - 插件之间通过 DOM 属性互相感知（如读别的插件写在 `<html>` 上的标记）。
 
@@ -41,7 +41,7 @@
 | 信息 | `--dsw-alias-state-business-primary`（宿主没有 info，语义近似；**待视觉核对**） | `state-info-primary` |
 | 焦点环 | `--dsw-focus-ring-color` + `--dsw-focus-ring-width` | `focus-ring` |
 | 反色文字（含 Toast 文字） | `--dsw-alias-label-primary-inverted`（Toast 文字用法**待视觉核对**） | `label-invert`、`label-inverted`、`label-on-color`、`tooltip-label` |
-| 第四级文字 | 宿主没有 quaternary；候选 `--dsw-alias-label-dimmed` / `--dsw-alias-label-caption`（**待视觉核对**后定一个） | `label-quaternary` |
+| 第四级文字 | 宿主没有 quaternary；现用 `--dsw-alias-label-dimmed`（备选 `--dsw-alias-label-caption`，**待视觉核对**） | `label-quaternary` |
 | 文字 | `--dsw-alias-label-primary` / `-secondary` / `-tertiary` | — |
 | 背景层 | `--dsw-alias-bg-layer-1` / `-layer-2` / `-layer-3` | `bg-primary`、`bg-secondary`、`bg-l2` |
 | 描边 | `--dsw-alias-border-l1` … `-l4` | `border-primary`、`border-subtle` |
@@ -74,7 +74,7 @@
 
 ## 4. 层级与间距
 
-宿主没有层级令牌。nano-ui 的层级常量全部在 `packages/dsh-nano-ui/src/layers.js`（`NANO_LAYER`），以观测到的宿主层级为锚；插件与 nano-ui 其他源码不写数字层级。
+宿主没有层级令牌。nano-ui 的层级常量全部在 `packages/dsh-nano-ui/src/layers.js`（`NANO_LAYER`），以观测到的宿主层级为锚；插件与 nano-ui 其他源码不写数字层级，自有容器内的先后也用 `--nano-layer-local1` … `--nano-layer-local7`（`T22`）。只为建立层叠上下文写的零层级改用 `isolation: isolate`。
 
 | 名称 | 值 | 锚 |
 |---|---|---|
@@ -85,6 +85,13 @@
 | `window` | 1200 | 浮窗层（[DNN] `.np-layer`） |
 | `windowRaised` | 1210 | 浮窗之上的同窗附属层 |
 | `overlay` | 10 | 窗口覆盖层在其容器内的相对层级 |
+| `local1` | 1 | 自有层叠上下文内的兄弟先后（最低） |
+| `local2` | 2 | 同上 |
+| `local3` | 3 | 同上 |
+| `local4` | 4 | 同上 |
+| `local5` | 5 | 同上 |
+| `local6` | 6 | 同上 |
+| `local7` | 7 | 同上（最高，仍低于 `overlay`） |
 
 间距刻度（nano-ui 自有，`layers.js` 导出并生成 `--nano-space-1` … `--nano-space-6`）：4 / 8 / 12 / 16 / 20 / 24 px。
 
@@ -134,8 +141,8 @@
 |---|---|
 | 窗口覆盖层（`NanoWindowDialog`） | §5 |
 | `Toolbar` | 宿主 TrajectoryToolbar 未导出 |
-| `EmptyState` | 空态 |
-| `FloatingWindow` | 拥有覆盖层容器与 ThemeScope 的窗口外壳 |
+| `EmptyState` | 空态（当前无使用方） |
+| `FloatingWindow` | 拥有覆盖层容器与 ThemeScope 的窗口外壳（当前无使用方；[DNN]/[DNK] 仍用自有窗口） |
 | `IconButton` | `Button` + `icon`，无文字，`aria-label` 必填 |
 | `mountNano(el, Component, props)` | DOM 代码挂 React 组件，返回 `{ update, unmount }` |
 | `createThemeScope` / `resolveScheme` | §3 |
@@ -149,7 +156,7 @@
 
 | 宿主组件 | 结论 |
 |---|---|
-| `Menu` | `anchor` 是 **ReactNode**（触发元素），渲染在 Menu 自己的根 `<span>` 内；矩形定位用 `getAnchorRect: () => DOMRect`，配合 `portal:true`。`portal` 默认 `false`，此时列表相对根 span 以 CSS 定位（`side:'top'`、`align:'end'` 改方向）。项：`{ id, label, icon, danger, disabled, shortcut, submenu }`，分隔 `{ type:'separator', id }`，组标题 `{ type:'label', id, text }`。选中触发 `onSelect(id)`，**不会自己关闭**；Esc 与外部 `pointerdown` 触发 `onClose` |
+| `Menu` | `anchor` 是 **ReactNode**（触发元素），渲染在 Menu 自己的根 `<span>` 内；矩形定位用 `getAnchorRect: () => DOMRect`，配合 `portal:true`。`portal` 默认 `false`，此时列表相对根 span 以 CSS 定位（`side:'top'`、`align:'end'` 改方向）。项：`{ id, label, icon, danger, disabled, shortcut, submenu }`，分隔 `{ type:'separator', id }`，组标题 `{ type:'label', id, text }`。选中触发 `onSelect(id)`，**不会自己关闭**；Esc 与外部 `pointerdown` 触发 `onClose`。`portal:false` 时不做锚定测量（不翻转、不夹取）。nano-ui `NanoMenu` 不传 `anchor`，用零高 `children` 撑出最小宽度 |
 | `Toast` | `{ text, icon, tone, anchor, holdMs = 3000, actions, onDone }`。`anchor` 可省（省略时不做水平定位）；`onDone` **必填**，在 `holdMs + 1000ms` 后被调用；没有「不自动结束」。nano-ui 契约：寿命由调用方 `holdMs` 决定，`text` 变化时以 `text` 作 key 重挂 |
 | `Modal` | 只接受 `className`/`contentClassName`，卡片宽度由宿主写死为 `min(380px, 100%)`，不随内容收缩；根层级 1000；内部调用 `useModalLayer`。主窗口级对话框的宽度因此只能用 nano-ui 预设类（380 / 480 / 560 / 720，`nano-dialog-w-<档>`），数值参数取不小于它的最近一档；高度施加在 nano-ui 自己渲染的正文元素上：`fixedHeight` 取不小于它的最近一档（480 / 560 / 640）减去宿主卡片框架 136px，`maxHeight` 减去同一框架值作正文上限 |
 | `useModalLayer(ref, open, onClose)` | 维护文档级弹层栈：Esc 只关栈顶、Tab 焦点圈在栈顶内、关闭后焦点回到打开前元素；`isBehindModal(el)` 对不在栈顶内的元素返回 `true`（窗口覆盖层下层的元素因此被视为「在弹层之后」） |
@@ -169,9 +176,18 @@
 | TrajectoryToolbar 导出 | 宿主未导出 | nano-ui `Toolbar` 替代（`T11`） |
 | 云会话 composer 按钮 | 宿主不提供「云会话下隐藏权限/附件按钮」的开关 | [DNCS] `styles.js` 里 `html[data-dncs-cloud="1"] [class*="composerSeat"] …` 隐藏段已删除，按钮照常显示（`T06`） |
 | 云会话标识 | 宿主 composer 没有给插件放会话来源标识的挂载点 | [DNCS] composer 嫁接整段与 `.dncs-devin-chip` 已删除，不另找挂载点（`T17`） |
-| 侧栏小节外壳 | `sidebar.workspaces` 是单座 slot，宿主不提供「侧栏分区」外壳组件，也不公开列表几何变量（`--dsh-session-list-*` 属内部实现） | [DNCS] 只按 slot 属性插入自有小节，标题行、行高与折叠态用令牌与 `--nano-space-*` 自绘；折叠态取自自有 host 宽度，展开走宿主 layout 服务的 `toggleSidebar`（`ctx.get('layout')` 软读取，未声明 inject）；与原生「工作区」的像素对齐无法保证（`T23`） |
+| 侧栏小节外壳 | `sidebar.workspaces` 是单座 slot，宿主不提供「侧栏分区」外壳组件，也不公开列表几何变量（`--dsh-session-list-*` 属内部实现） | [DNCS] 以宿主 renderer 发出的 `data-slot="sidebar.workspaces"` 锚点定位，`insertBefore` 插入自有小节（`MutationObserver` 加 400ms 轮询兜底），标题行、行高与折叠态用令牌与 `--nano-space-*` 自绘；折叠态取自自有 host 宽度，展开走宿主 layout 服务的 `toggleSidebar`（`ctx.get('layout')` 软读取，未声明 inject）；与原生「工作区」的像素对齐无法保证（`T23`） |
 | 文件树状态钩子 | 宿主文件树行不接受插件着色，也不接受插件改写行几何（chevron 槽位、accessory 列宽） | [DNEE] 行着色、幽灵行删除线、行内边距与 chevron 全部删除，状态只剩 accessory 上的字母与圆点（`T11`） |
-| Modal 尺寸参数 | 宿主 `Modal` 卡片宽度写死，不接受尺寸参数 | 主窗口级对话框只有预设尺寸（§7） |
+| Modal 尺寸参数 | 宿主 `Modal` 卡片宽度写死，不接受尺寸参数 | 主窗口级对话框只有预设尺寸（§7）；[DNCS] 新建会话弹窗由 600×680 取 560×640 预设 |
+| 会话来源字段 | 宿主会话头（`SessionHeader` / `CreateSessionOptions.meta`）没有来源、carrier 或 remote 字段 | [DNMS] 不判定云会话，云会话里照常渲染选择器（`T18`） |
+| 变更文件卡片动作 | 宿主 `ChangedFiles` 卡片没有动作插槽或渲染回调 | [DNN]「到记事本」按钮与对应样式已删除，不另找挂载点（`T19`） |
+| 会话滚动条槽位 | 宿主 `[data-conversation-scroll]` 的原生滚动条与 `scrollbar-gutter` 占右侧约 7px，宿主不提供悬浮滚动条或去槽位的开关 | [DNT] 隐藏滚动条、撤销槽位与悬浮滚动条替身整段删除，接受宿主行为（`T21`） |
+| Menu 最大高度 | 宿主 `Menu` 没有 `maxHeight` 参数，列表上限由宿主 CSS 决定 | nano-ui 用 `.nano-cap-*` 预设档（§6.2，**待视觉核对**能否压过宿主上限） |
+| Toast 常驻 | 宿主 `Toast` 在 `holdMs + 1000ms` 后必然结束，没有「常驻到用户关闭」 | [DNEE] Git 读取失败提示自绘（§10） |
+| Tooltip 包裹 DOM | 宿主 `Tooltip` 只接受单个 React 子元素并 clone | innerHTML 构建的界面用原生 `title` + `aria-label`（§10 [DNN]） |
+| 排版与窗口字形 | sprite 与 `Icon*` 没有段落 / 标题 / 粗体 / 斜体 / 列表 / 引用，也没有最小化 / 最大化 / 还原 | [DNN] `icons.js` 自绘（§10） |
+| 文件体积格式化 | 宿主 `fileSizeText` 与插件文案不等价（无空格、1024 进制配十进制单位名、无 0/NaN 兜底） | [DNEE] 保留 `formatBytes`（§10） |
+| 窗口内浮层裁剪 | 宿主 `Menu` 在 `portal:false` 时不做锚定测量，列表受拥有者 `overflow` 裁剪 | 窗口内菜单（[DNN]）靠近窗口边缘时可能被裁；窗口不在外壳上设 `overflow:hidden`，裁剪下沉到内容层 |
 
 ## 9. 检测规则
 
@@ -190,13 +206,15 @@
 | U9 未定义类 | 源码引用、样式中未定义的本插件前缀类 |
 | U10 豁免登记 | 统计 `nano-ui-exempt` 标记；每条须在 §10 有说明 |
 
+U5 只覆盖上面三种模式。宿主 `data-*` 属性被当作样式钩子或查询锚点、十六进制色值、对宿主节点的结构写入（插节点、改内联样式）不在自动检测范围内，由审查逐项核对；U5 为 0 不等于 §1「永远不做」全部成立。
+
 ## 10. 豁免登记
 
 `nano-ui-exempt` 标记的说明。每条标记在这里有一行；`check-ui-rules --json` 的 U10 输出与本表条数相等。
 
 | 位置 | 缺口说明 |
 |---|---|
-| `dsh-nano-model-selector/src/client/styles.js`（`.nms-trigger-label` / `.nms-trigger-effort` / `.nms-trigger-icon`） | 读 `--dsh-composer-model-text-display` / `--dsh-composer-model-icon-display`：宿主 `conversation.input.model` 槽位合同变量（`dsh-client-ui-conversation` `slots.d.ts`），不是 `--dsw` 令牌，catalog 不收录，U1 照报 |
+| `dsh-nano-model-selector/src/client/styles.js`（`.nms-trigger-label` / `.nms-trigger-effort` / `.nms-trigger-icon`） | 读 `--dsh-composer-model-text-display` / `--dsh-composer-model-icon-display`：宿主 `conversation.input.model` 槽位合同变量（`dsh-client-ui-conversation` `slots.d.ts`），不是 `--dsw` 令牌，catalog 不收录，U1 照报（`T20`） |
 | `dsh-nano-explorer-extra/src/client/format.js`（`formatBytes`） | 宿主 `fileSizeText` 输出不等价：不加空格、1024 进制套十进制单位名（`1.0KB`）、最高 GB、对 0/NaN 无兜底；本包状态栏读 `1 KiB`，替换会改掉全部体积文案 |
 | `dsh-nano-explorer-extra/src/client/styles.js`（`.nxe-git-alert`） | 宿主 `Toast` 到 `holdMs` 自动结束，没有「常驻到用户关闭」的形态；Git 读取失败提示必须常驻，故由本包自绘 |
 | `dsh-nano-notepad/src/client/icons.js`（`googleIcon` / `textIcon` / `WIN_MIN_ICON` / `MAC_MIN_ICON` / `MAC_MAX_ICON` / `WIN_MAX_ICON` / `WIN_RESTORE_ICON`） | sprite 没有排版字形（段落 / H1–H3 / 粗体 / 斜体 / 删除线 / 有序列表 / 引用）与窗口按钮字形（最小化 / 最大化 / 还原 / macOS 交通灯），也没有 `Icon*` 的对应导出；且工具条与标题栏由 innerHTML 同步构建，宿主 `Icon*` React 组件无法在其中渲染 |

@@ -7,9 +7,9 @@ import { PKG, read, readSrc } from './_lib.mjs'
 
 const pkg = JSON.parse(read(join(PKG, 'package.json')))
 
-test('VERSION is 0.2.0 and matches package.json', () => {
-  assert.equal(VERSION, '0.2.0')
-  assert.equal(pkg.version, '0.2.0')
+test('VERSION is 0.2.1 and matches package.json', () => {
+  assert.equal(VERSION, '0.2.1')
+  assert.equal(pkg.version, '0.2.1')
 })
 
 test('version.js carries a legal-comment marker equal to VERSION', () => {
@@ -30,6 +30,7 @@ test('CHANGELOG 0.2.0 Removed lists every retired nano-ui surface', () => {
   const section = log.slice(log.indexOf('## 0.2.0'), log.indexOf('## 0.1.0'))
   const removed = section.slice(section.indexOf('### Removed'))
   assert.ok(section.includes('### Added') && section.includes('### Changed') && removed.length > 0)
+  assert.ok(log.indexOf('## 0.2.1') < log.indexOf('## 0.2.0'))
   for (const word of ['MutationObserver', '`region`', '`theme`', '`z`', '--nano-dlg-', 'setTheme', 'NanoMenuItem', '.nano-menu', '.nano-tab', '.nano-toast', '[class*=', 'hex']) {
     assert.ok(removed.includes(word), word)
   }

@@ -2,6 +2,12 @@
 
 Spec: [`docs/specs/dsh-nano-ui/DESIGN.md`](../../docs/specs/dsh-nano-ui/DESIGN.md).
 
+## 0.2.1
+
+### Added
+
+- `NANO_LAYER.local1` … `local7` (`--nano-layer-local1` … `--nano-layer-local7`): sibling order inside one owner-made stacking context, so consumers stop writing numeric `z-index` for their own panels. They sit below `overlay` and never compete with host layers.
+
 ## 0.2.0
 
 One hard cut: nano-ui wraps host primitives instead of redrawing them. No compatibility layer.

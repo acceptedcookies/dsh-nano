@@ -20,6 +20,13 @@ test('layers.js emits one custom property per layer and spacing step', () => {
   assert.match(LAYER_CSS, /--nano-space-6: 24px;/)
 })
 
+test('local layers order siblings below every shared band', () => {
+  const locals = Object.entries(NANO_LAYER).filter(([name]) => name.startsWith('local'))
+  assert.deepEqual(locals.map(([, value]) => value), [1, 2, 3, 4, 5, 6, 7])
+  for (const [, value] of locals) assert.ok(value < NANO_LAYER.overlay)
+  assert.match(LAYER_CSS, /--nano-layer-local7: 7;/)
+})
+
 test('no numeric z-index / zIndex outside layers.js', () => {
   const files = sourceFiles().filter(({ path }) => !path.endsWith('layers.js'))
   assert.ok(files.length > 0)

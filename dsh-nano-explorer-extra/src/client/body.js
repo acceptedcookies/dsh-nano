@@ -7,6 +7,7 @@ import { SettingsDialog } from './settings.js'
 import { createAccessory } from './accessory.js'
 import { StatusBar } from './statusbar.js'
 import { RowMenu } from './menu.js'
+import { paneToTheRightOf } from './pane-right.js'
 import * as primitives from '@deepseek-ai/dsh-client-ui-primitives'
 import { NanoToast } from 'dsh-nano-ui'
 import { perf } from './perf.js'
@@ -346,8 +347,10 @@ export function ExplorerBody(props) {
     return remoteByPath.get(relative)
   }, [remoteByPath, statusKeyOf])
 
-  /** Open one entry in the resource viewer the same way the shipped tree does. */
-  const openEntry = useCallback(entry => {
+  /** Open one entry in the resource viewer the same way the shipped tree does.
+   *  `paneId` sends the preview to another workbench pane (the one to the right);
+   *  omitted, it stays in this pane, which is what a click and the row button do. */
+  const openEntry = useCallback((entry, paneId) => {
     const absolute = absoluteOf(cwd ?? '', entry.path)
     // A `session` address resolves its path against that session's workspace root, so it must carry a
     // workspace-relative path. Sending the absolute path with its leading slash stripped made the
@@ -359,7 +362,9 @@ export function ExplorerBody(props) {
     const address = inside
       ? `dsh-resource://file/session/${encodeURIComponent(sessionId)}/${encodePath(relative)}`
       : `dsh-resource://file/absolute/${encodePath(absolute.replace(/^\/+/, ''))}`
-    if (panel.isFloating) tab.actions.openResource(address)
+    const target = typeof paneId === 'string' && paneId !== '' ? paneId : undefined
+    if (target !== undefined) tab.actions.openResource(address, { paneId: target })
+    else if (panel.isFloating) tab.actions.openResource(address)
     else tab.actions.openResource(address, { paneId: panel.id })
   }, [cwd, sessionId, tab.actions, panel.id, panel.isFloating])
 
@@ -907,6 +912,9 @@ export function ExplorerBody(props) {
   const rowActions = useMemo(() => {
     if (menu === null) return []
     const target = { path: menu.path, name: menu.name, kind: menu.kind }
+    // Only a file has a preview, and only while another workbench pane is actually
+    // sitting to the right of this one. A pane below, or none, leaves the row out.
+    const rightPane = menu.kind === 'file' ? paneToTheRightOf(panel.id) : undefined
     const revealId = openApps[0]
     const open = app => {
       // The launch route only accepts an absolute directory: a file row reveals its containing
@@ -920,6 +928,13 @@ export function ExplorerBody(props) {
       })
     }
     return [
+      rightPane === undefined ? null : {
+        id: 'open-right', label: copy.openInRightPane,
+        // The shared glyph draws the panel on the left; mirroring it reads as "the pane on the right".
+        icon: React.createElement('span', { style: { display: 'inline-flex', transform: 'scaleX(-1)' } },
+          React.createElement(primitives.IconPanelLeftOutlineRegular ?? primitives.IconChevronRightOutlineRegular, { width: 14, height: 14 })),
+        run: () => openEntry({ path: menu.path, name: menu.name, meta: { kind: 'file' } }, rightPane),
+      },
       // Double-click already opens a file, so the menu spends its first row on the opener instead.
       revealId === undefined ? null : { id: 'reveal', label: copy.revealIn(APP_LABELS[revealId] ?? revealId),
         icon: React.createElement('img', { src: `/open-in-app/icon/${encodeURIComponent(revealId)}`, alt: '', width: 14, height: 14 }),
@@ -968,7 +983,7 @@ export function ExplorerBody(props) {
       { id: 'delete', label: copy.delete, tone: 'danger', icon: React.createElement(primitives.IconTrashOutlineRegular, { width: 14, height: 14 }),
         run: () => { setLinkNote(undefined); setDeleteRequest(target) } },
     ].filter(Boolean)
-  }, [menu, copy, openApps, cwd, copyPath, statusOf, openDiff, nxe, sessionId])
+  }, [menu, copy, openApps, cwd, copyPath, statusOf, openDiff, nxe, sessionId, panel.id, openEntry])
 
   return React.createElement('div', { className: 'nxe-root', 'data-nxe': 'true', 'data-theme': nxe.scheme(), ref: rootEl },
     React.createElement('div', { className: 'nxe-header' },

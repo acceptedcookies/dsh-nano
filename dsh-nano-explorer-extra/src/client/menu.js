@@ -9,7 +9,17 @@
  */
 
 import React from 'react'
+import { createPortal } from 'react-dom'
 import { NanoMenu } from 'dsh-nano-ui'
+
+/**
+ * Above the right-sidebar dock (layer 10) and its floating panes (layer 60).
+ * The shell's own modals sit at 1000, so a menu never covers a dialog.
+ * The popup is portaled to `document.body`: the sidebar host is
+ * `transform` + `overflow: clip`, which traps a `position: fixed` menu
+ * inside the files pane, and the pane beside it then paints over the list.
+ */
+const MENU_LAYER = 80
 
 /**
  * One menu occurrence anchored to the viewport point that opened it.
@@ -17,5 +27,8 @@ import { NanoMenu } from 'dsh-nano-ui'
  * @returns the popup, or null while closed.
  */
 export function RowMenu({ menu, actions, onClose }) {
-  return React.createElement(NanoMenu, { menu, actions, onClose })
+  if (menu === null) return null
+  const popup = React.createElement(NanoMenu, { menu, actions, onClose, z: MENU_LAYER })
+  if (typeof document === 'undefined') return popup
+  return createPortal(popup, document.body)
 }

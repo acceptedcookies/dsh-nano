@@ -15,12 +15,12 @@ export function mountCloudSettings({ host, sync, copy, escapeHtml, onChanged, sh
     <div class="np-endpoint-list"></div>
     <div class="np-field"><div class="np-field-text"><span class="np-field-name">${e(copy.endpointSection)}</span><span class="np-field-desc">${e(copy.endpointSecretHint)}</span></div><button type="button" data-cloud="new">${e(copy.endpointNew)}</button></div>
     <div class="np-endpoint-form" hidden></div>
-    <div class="np-switch-wizard" hidden></div>`
+    <div class="np-cloud-wizard" hidden></div>`
 
   const listEl = host.querySelector('.np-endpoint-list')
   const currentEl = host.querySelector('.np-endpoint-current')
   const formEl = host.querySelector('.np-endpoint-form')
-  const wizardEl = host.querySelector('.np-switch-wizard')
+  const wizardEl = host.querySelector('.np-cloud-wizard')
 
   function note(message, tone = '') {
     const el = host.querySelector('.np-cloud-note') ?? document.createElement('p')

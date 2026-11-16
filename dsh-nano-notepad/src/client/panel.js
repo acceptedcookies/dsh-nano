@@ -34,10 +34,11 @@ import { applyFormat, escapeAttr, escapeHtml, extractImageUrls, formatHtml, html
 import { validateJson, positionOf, formatJson, minifyJson, escapeJson, unescapeJson, decodeEscapes, renderJsonTree } from './json.js'
 import { highlightSource } from './highlight.js'
 import { checkImage } from 'dsh-remote-data-schema/image-check.js'
-import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, SegmentedControl } from '@deepseek-ai/dsh-client-ui-primitives'
 import { copyFor } from './i18n.js'
 import React from 'react'
-import { openNanoDialog, openNanoMenu, nanoTabs, NANO_STYLES } from 'dsh-nano-ui'
+import { createThemeScope, mountNano, openNanoDialog, openNanoMenu, nanoTabs, NANO_STYLES } from 'dsh-nano-ui'
+import { googleIcon, textIcon, dshIcon, PANEL_ICON, WIN_MIN_ICON, MAC_MIN_ICON, MAC_MAX_ICON, WIN_MAX_ICON, WIN_RESTORE_ICON } from './icons.js'
 import { perf, setNotepadRoot } from './perf.js'
 import { createSync } from './sync.js'
 import { mountCloudSettings } from './cloud-settings.js'
@@ -52,15 +53,15 @@ const writeUi = (...args) => perf.span('idb-write', () => writeUiRaw(...args))
 const STYLE = `
 ${NANO_STYLES}
 [data-nano-notepad] { pointer-events: none; }
-/* ── notepad typography + portal theme tokens ──────────────────────────────────
-   Declared on :root because nano-ui menus/dialogs portal to document.body —
-   outside .np-layer — so only a document-level custom property reaches them.
-   nano-ui reads the --nano-* vars (fallback = shell default); --np-* retunes
-   the notepad's own text. Both stay on --dsw-* for theme colours.
-   Colours cannot ride :root, though: the portaled surface must follow the
-   notepad's own scheme, which can differ from the host's (light notepad inside
-   a dark shell). So every portal call passes resolvedTheme(), nano-ui stamps
-   it as [data-nano-theme], and the palette rules below repaint that subtree. */
+/* ── notepad typography tokens ────────────────────────────────────────────────
+   Declared on :root because nano-ui reads the --nano-* typography hooks off the
+   owner element and every menu/dialog now renders inside .np-window (window
+   overlay or a portal:false host menu) or is the host Modal. --np-* retunes the
+   notepad's own text; both stay on --dsw-* for theme colours.
+   The light/dark palette is NOT declared here: nano-ui's ThemeScope owns it
+   (DESIGN.md §3). When the notepad is pinned to the other scheme than the host,
+   the scope injects that scheme's --dsw-* values onto .np-window and .np-entry,
+   and everything inside — dialogs and menus included — inherits them. */
 :root {
   --np-font-family: var(--dsw-font-family);
   --np-font-size: 13px;
@@ -75,10 +76,12 @@ ${NANO_STYLES}
   --nano-toast-size: var(--np-font-size-sm);
 }
 /* The layer must outrank the shell's own overlays: the shell modal root and
-   backdrop sit at z-index:1000, its toasts/portals at 1100. 1200 beats both.
+   backdrop sit at the host modal layer, its toasts/portals at the host portal
+   layer. nano-ui owns those numbers (NANO_LAYER, DESIGN.md §4); --nano-layer-window
+   is emitted by NANO_STYLES above, so this file writes no figure of its own.
    z-index only applies once the layer escapes the shell.overlay slot's own
    stacking context — see the document.body reparent in mountNotepad. */
-.np-layer { position: fixed; inset: 0; pointer-events: none; z-index: 1200; color: var(--dsw-alias-label-primary); font-family: var(--np-font-family); font-size: var(--np-font-size); }
+.np-layer { position: fixed; inset: 0; pointer-events: none; z-index: var(--nano-layer-window); color: var(--dsw-alias-label-primary); font-family: var(--np-font-family); font-size: var(--np-font-size); }
 .np-entry, .np-window, .np-slash { pointer-events: auto; }
 .np-entry, .np-window { position: absolute; }
 .np-entry { z-index: 3; }
@@ -90,13 +93,9 @@ ${NANO_STYLES}
    setting the property has no visual effect (the WeChat paste zone stayed
    visible with the integration switched off). */
 .np-mp-zone[hidden], .np-cloud[hidden], .np-tab-panel[hidden], .np-dlg-body [hidden] { display: none !important; }
-.np-window[data-theme="dark"], .np-entry[data-theme="dark"], [data-nano-theme="dark"] { color-scheme: dark; --dsw-menu-surface-fill: #303136a3; --dsw-alias-button-primary-fill: #f9fafb; --dsw-alias-button-primary-hover: #ebeef2; --dsw-alias-label-primary-foreground: #0f1115; --dsw-alias-bg-layer-1: #232324; --dsw-alias-bg-layer-2: #2c2c2e; --dsw-alias-bg-layer-3: #353638; --dsw-alias-bg-mask-1: #00000080; --dsw-alias-label-primary: #f9fafb; --dsw-alias-label-secondary: #cfd3d6; --dsw-alias-label-tertiary: #adb2b8; --dsw-alias-border-l2: #ffffff1f; --dsw-alias-border-l3: #ffffff29; --dsw-alias-interactive-bg-hover: #ffffff14; --dsw-alias-interactive-bg-active: #ffffff24; --dsw-alias-brand-primary: #f9fafb; --dsw-alias-brand-primary-invert: #0f1115; --dsw-alias-link: #7aaaff; --dsw-alias-state-error-primary: #f25a5a; --dsw-alias-state-error-secondary: #f25a5a; --dsw-alias-state-success-primary: #22c55e; --dsw-alias-state-success-secondary: #4ed17e; --dsw-alias-state-warn-primary: #f59e0b; --dsw-alias-state-warn-secondary: #f7ad31; --dsw-alias-interactive-bg-hover-danger: #f25a5a26; --dsw-alias-label-error: #f25a5a; --dsw-alias-tooltip-bg: #43454a; --dsw-alias-tooltip-label: #f9fafb; --dsw-alias-markdown-inline-code: #43454a; }
-.np-window[data-theme="light"], .np-entry[data-theme="light"], [data-nano-theme="light"] { color-scheme: light; --dsw-menu-surface-fill: #fcfdfeb3; --dsw-alias-button-primary-fill: #0f1115; --dsw-alias-button-primary-hover: #43454a; --dsw-alias-label-primary-foreground: #ffffff; --dsw-alias-bg-layer-1: #ffffff; --dsw-alias-bg-layer-2: #ffffff; --dsw-alias-bg-layer-3: #ffffff; --dsw-alias-bg-mask-1: #0000003d; --dsw-alias-label-primary: #0f1115; --dsw-alias-label-secondary: #61666b; --dsw-alias-label-tertiary: #81858c; --dsw-alias-border-l2: #0000001a; --dsw-alias-border-l3: #0000001f; --dsw-alias-interactive-bg-hover: #2631480f; --dsw-alias-interactive-bg-active: #2631481a; --dsw-alias-brand-primary: #0f1115; --dsw-alias-brand-primary-invert: #f9fafb; --dsw-alias-link: #4176e6; --dsw-alias-state-error-primary: #ec1313; --dsw-alias-state-error-secondary: #f25a5a; --dsw-alias-state-success-primary: #22c55e; --dsw-alias-state-success-secondary: #4ed17e; --dsw-alias-state-warn-primary: #f59e0b; --dsw-alias-state-warn-secondary: #f7ad31; --dsw-alias-interactive-bg-hover-danger: #ec13130d; --dsw-alias-label-error: #ec1313; --dsw-alias-tooltip-bg: #43454a; --dsw-alias-tooltip-label: #f9fafb; --dsw-alias-markdown-inline-code: #f5f6f7; }
 .np-entry { width: 36px; height: 36px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-primary); cursor: grab; box-shadow: var(--dsw-elevation-soft); }
 .np-entry:active { cursor: grabbing; }
 .np-entry svg { width: 18px; height: 18px; display: block; margin: auto; }
-.np-tip { position: absolute; right: 44px; top: 2px; white-space: nowrap; background: var(--dsw-alias-tooltip-bg); color: var(--dsw-alias-tooltip-label, var(--dsw-alias-label-primary)); border-radius: var(--dsw-radius-sm); padding: 4px 8px; }
-.np-entry.np-tip-left .np-tip { right: auto; left: 44px; }
 .np-unit { color: var(--dsw-alias-label-tertiary); font-style: normal; font-size: .85em; margin-inline-start: .5em; }
 .np-window { --np-menu-gap: 4px; width: min(920px, calc(100vw - 48px)); height: min(640px, calc(100vh - 48px)); min-width: 320px; min-height: 240px; display: flex; flex-direction: column; background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-panel, 28px); box-shadow: var(--dsw-elevation-prominent); overflow: hidden; container-type: inline-size; container-name: np; }
 .np-resize { position: absolute; z-index: 6; pointer-events: auto; }
@@ -146,9 +145,9 @@ ${NANO_STYLES}
 .np-window[data-chrome="windows"] .np-chrome button.np-chrome-close:hover { background: var(--dsw-alias-state-error-primary, #e81123); color: #fff; }
 .np-window[data-chrome="windows"] .np-chrome button svg { width: 11px; height: 11px; }
 .np-window[data-chrome="windows"] .np-chrome button.np-chrome-close svg { width: 12px; height: 12px; }
-.np-window[data-maximized="true"] .np-chrome button.np-chrome-max svg.np-icon-restore { display: block; }
-.np-window[data-maximized="true"] .np-chrome button.np-chrome-max svg.np-icon-max { display: none; }
-.np-window:not([data-maximized="true"]) .np-chrome button.np-chrome-max svg.np-icon-restore { display: none; }
+.np-window[data-maximized="true"] .np-chrome button.np-chrome-max .np-icon-restore { display: block; }
+.np-window[data-maximized="true"] .np-chrome button.np-chrome-max .np-icon-max { display: none; }
+.np-window:not([data-maximized="true"]) .np-chrome button.np-chrome-max .np-icon-restore { display: none; }
 .np-tab-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .np-tab-x { position: absolute; top: 4px; right: 4px; display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; flex: none; border: 0; background: transparent; border-radius: var(--dsw-radius-sm); color: var(--dsw-alias-label-tertiary); font: inherit; padding: 0; cursor: pointer; opacity: 0; pointer-events: none; }
 .np-tab-x:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
@@ -179,8 +178,9 @@ ${NANO_STYLES}
 .np-tree-head { box-sizing: border-box; display: flex; flex: none; align-items: center; gap: 4px; width: 100%; height: 49px; padding: 6px var(--np-pad-x); color: var(--dsw-alias-label-tertiary); font-size: var(--np-font-size-sm); border-bottom: 1px solid var(--dsw-alias-border-l2); }
 .np-tree-toggle { box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; flex: none; padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); cursor: pointer; }
 .np-tree-toggle:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
-.np-tree-toggle svg { width: 16px; height: 16px; display: block; fill: none; stroke: currentColor; stroke-width: 1; }
-.np-tree-toggle svg .np-panel-fill { fill: currentColor; stroke: none; }
+/* Sprite glyphs are filled paths (fill: currentColor set below); the tree state is
+   carried by the button's own aria-expanded instead of a filled variant. */
+.np-tree-toggle[aria-expanded="false"] { color: var(--dsw-alias-label-tertiary); }
 .np-tree-tools { display: flex; align-items: center; gap: 4px; flex: none; }
 .np-tree-tools button { display: inline-flex; align-items: center; justify-content: center; width: var(--np-icon-btn); height: var(--np-icon-btn); padding: 0; border: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); cursor: pointer; }
 .np-tree-tools button svg { width: 16px; height: 16px; display: block; }
@@ -252,8 +252,6 @@ ${NANO_STYLES}
 .np-node[data-cat="memory"] .np-cat { color: var(--dsw-alias-label-secondary); background: var(--dsw-alias-bg-layer-3); }
 .np-node-name[data-fade="true"] { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 18px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 18px), transparent); }
 .np-entry svg, .np-node-icon svg, .np-tree-tools svg, .np-tree-toggle svg, .np-tree-foot svg, .np-caret svg, .np-node-actions svg, .np-tool svg, .np-slash svg, .np-ws-caret svg { fill: currentColor; stroke: none; }
-.np-tree-toggle svg { fill: none; stroke: currentColor; stroke-width: 1; }
-.np-tree-toggle svg .np-panel-fill { fill: currentColor; stroke: none; }
 .np-node-icon svg, .np-tree-tools svg, .np-tree-toggle svg, .np-caret svg, .np-node-actions svg, .np-tool svg, .np-slash svg { width: 16px; height: 16px; display: block; }
 .np-ws { position: relative; flex: 1 1 auto; min-width: 0; }
 .np-ws-btn { display: flex; align-items: center; gap: 6px; width: 100%; height: var(--np-icon-btn); box-sizing: border-box; padding: 0 8px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); font: inherit; font-size: var(--np-font-size-sm); cursor: pointer; }
@@ -314,7 +312,6 @@ ${NANO_STYLES}
 .np-fx-model-ctx { flex: none; font-size: var(--np-font-size-xs); color: var(--dsw-alias-label-tertiary); }
 .np-fx-model-caret { display: inline-flex; align-items: center; flex: none; color: var(--dsw-alias-label-tertiary); }
 .np-fx-model-caret svg { width: 12px; height: 12px; display: block; }
-.nano-menu-label:has(.np-fx-model-option) { white-space: normal; overflow: visible; }
 .np-fx-model-option { display: flex; flex-direction: row; align-items: baseline; gap: 8px; min-width: 0; padding: 2px 0; }
 .np-fx-model-option-provider { font-size: var(--np-font-size-xs); color: var(--dsw-alias-label-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .np-fx-model-option-line { display: flex; align-items: baseline; gap: 8px; min-width: 0; margin-left: auto; }
@@ -363,8 +360,7 @@ ${NANO_STYLES}
 .np-fx-head-title:hover { background: var(--dsw-alias-interactive-bg-hover); border-radius: var(--dsw-radius-sm); }
 .np-fx-head-title[aria-expanded="true"] .np-fx-nav-state { color: var(--dsw-alias-link); }
 .np-fx-nav-state { display: inline-flex; width: 14px; height: 14px; color: var(--dsw-alias-label-tertiary); transition: color .12s ease; }
-.np-fx-nav-state svg { display: block; width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1; }
-.np-fx-nav-state svg .np-panel-fill { fill: currentColor; stroke: none; }
+.np-fx-nav-state svg { display: block; width: 14px; height: 14px; fill: currentColor; stroke: none; }
 .np-fx-head-ico, .np-fx-head-ico svg { width: 16px; height: 16px; display: block; color: var(--dsw-alias-link); }
 .np-fx-head-sub { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--np-font-size-xs); color: var(--dsw-alias-label-tertiary); }
 .np-fx-head-space { flex: 1 1 auto; }
@@ -401,7 +397,7 @@ ${NANO_STYLES}
 .np-fx-nav-add:hover { background: var(--dsw-alias-interactive-bg-hover); }
 .np-fx-thread { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 4px 2px 2px; scroll-behavior: smooth; scrollbar-width: none; }
 .np-fx-thread::-webkit-scrollbar { width: 0; height: 0; }
-.np-fx-floatbar { position: absolute; top: 0; right: 3px; z-index: 2; width: 5px; border-radius: 3px; background: var(--dsw-alias-label-quaternary); opacity: 0; pointer-events: none; transition: opacity .18s; }
+.np-fx-floatbar { position: absolute; top: 0; right: 3px; z-index: 2; width: 5px; border-radius: 3px; background: var(--dsw-alias-label-caption); opacity: 0; pointer-events: none; transition: opacity .18s; }
 .np-fx-floatbar[data-on="true"] { opacity: .8; }
 .np-fx-thread .np-fx-empty { margin: auto; padding: 24px 16px 12px; }
 .np-fx-msg { display: flex; gap: 8px; align-items: flex-start; max-width: 100%; }
@@ -411,7 +407,7 @@ ${NANO_STYLES}
 .np-fx-bubble { max-width: 84%; min-width: 0; padding: 8px 11px; border-radius: 12px; font-size: var(--np-font-size-sm); line-height: 1.55; color: var(--dsw-alias-label-primary); background: var(--dsw-alias-interactive-bg-hover); white-space: pre-wrap; overflow-wrap: anywhere; }
 .np-fx-msg[data-role="user"] .np-fx-bubble { background: var(--dsw-alias-interactive-bg-active); border-bottom-right-radius: 4px; }
 .np-fx-msg[data-role="assistant"] .np-fx-bubble { background: var(--dsw-alias-bg-layer-2); border: 1px solid var(--dsw-alias-border-l1); border-bottom-left-radius: 4px; }
-.np-fx-msg[data-error="true"] .np-fx-bubble { border-color: var(--dsw-alias-state-error-secondary); color: var(--dsw-alias-label-error); }
+.np-fx-msg[data-error="true"] .np-fx-bubble { border-color: var(--dsw-alias-state-error-secondary); color: var(--dsw-alias-state-error-primary); }
 .np-fx-tools { margin-top: 6px; display: flex; flex-direction: column; gap: 2px; list-style: none; padding: 0; max-height: none; overflow: visible; }
 .np-fx-tool { font-size: var(--np-font-size-xs); color: var(--dsw-alias-link); }
 .np-fx-tool summary { cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -426,7 +422,6 @@ ${NANO_STYLES}
 .np-dlg-body label.np-fx-model-row input[type="checkbox"] { width: 16px; height: 16px; flex: none; margin: 0; }
 .np-fx-credit-links { display: flex; gap: 12px; flex: none; }
 .np-fx-credit-links a { color: var(--dsw-alias-link); }
-.np-dlg-body .np-switch:disabled { opacity: .72; cursor: default; }
 .np-changed { animation: npChanged 2.4s; }
 @keyframes npChanged { 0% { background: var(--dsw-alias-interactive-bg-active); } 100% { background: transparent; } }
 .np-group { display: flex; align-items: center; gap: 6px; margin: 12px 0 4px; padding-left: 8px; color: var(--dsw-alias-label-tertiary); font-size: var(--np-font-size-xs); font-weight: 600; letter-spacing: .04em; line-height: 20px; }
@@ -437,32 +432,25 @@ ${NANO_STYLES}
 .np-toolbar, .np-footer { min-width: 0; }
 .np-toolbar { display: flex; gap: var(--np-gap); align-items: center; padding: 6px var(--np-pad-x); }
 /* native segmented control: hover-gray track + layer-1 thumb sliding by translate */
-.np-switch { flex: none; margin-left: 0; display: inline-grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 2px; position: relative; padding: 4px; border: 0; background: var(--dsw-alias-interactive-bg-hover); border-radius: var(--dsw-radius-md); cursor: pointer; font: inherit; min-width: 148px; }
-.np-switch .np-switch-label { display: inline-flex; align-items: center; justify-content: center; min-width: 0; height: 28px; padding: 0 14px; font-size: var(--np-font-size); font-weight: 500; color: var(--dsw-alias-label-secondary); z-index: 0; }
-/* Three-segment controls (sync motion) need a wider track and tighter labels. */
-.np-switch[data-segments="3"] { min-width: 186px; }
-.np-switch[data-segments="3"] .np-switch-label,
-.np-switch[data-segments="3"] .np-switch-thumb { padding: 0 8px; }
-.np-switch { --np-switch-n: 2; --np-switch-i: 0; }
-.np-switch .np-switch-thumb { position: absolute; top: 4px; left: 4px; width: calc((100% - 8px - (var(--np-switch-n) - 1) * 2px) / var(--np-switch-n)); height: calc(100% - 8px); display: flex; align-items: center; justify-content: center; padding: 0 14px; box-sizing: border-box; background: var(--dsw-alias-bg-layer-1); border-radius: var(--dsw-radius-sm); box-shadow: var(--dsw-elevation-soft); font-size: var(--np-font-size); font-weight: 500; color: var(--dsw-alias-label-primary); white-space: nowrap; overflow: hidden; transition: transform .16s ease; z-index: 1; }
-.np-switch[data-view="rendered"] .np-switch-thumb { transform: translateX(calc(100% + 2px)); }
+.np-view-switch, .np-seg { flex: none; display: inline-flex; margin-left: 0; min-width: 0; }
+.np-view-switch { min-width: 148px; }
 .np-toolbar { flex-wrap: wrap; gap: 2px; border-bottom: 1px solid var(--dsw-alias-border-l2); }
 .np-tool { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); cursor: pointer; }
 .np-tool:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 .np-tool svg { width: 18px; height: 18px; }
 .np-tool-sep { width: 1px; height: 18px; margin: 6px 4px; background: var(--dsw-alias-border-l2); flex: none; }
-.np-window button:not([class]):not(.np-tree-tools button):not(.np-node-actions button):not(.np-slash button):not(.np-versions button), .np-footer-actions button.np-danger, .np-dlg-body button:not(.np-switch):not(.np-transfer-row):not(.nano-tab) { border: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); border-radius: var(--dsw-radius-sm); padding: 4px 10px; cursor: pointer; font: inherit; line-height: 20px; }
-.np-window button:hover, .np-dlg-body button:not(.np-switch):not(.nano-tab):hover { background: var(--dsw-alias-interactive-bg-hover); }
+.np-window button:not([class]):not(.np-tree-tools button):not(.np-node-actions button):not(.np-slash button):not(.np-versions button), .np-footer-actions button.np-danger, .np-dlg-body button:not(.np-transfer-row) { border: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); border-radius: var(--dsw-radius-sm); padding: 4px 10px; cursor: pointer; font: inherit; line-height: 20px; }
+.np-window button:hover, .np-dlg-body button:not(.np-transfer-row):hover { background: var(--dsw-alias-interactive-bg-hover); }
 /* keep the row/tab as the only hover surface; inner buttons must not double-fill
    — scoped to .np-window so we beat the generic .np-window button:hover rule */
 .np-window .np-node-main:hover, .np-window .np-node-actions button:hover, .np-window .np-tab-btn:hover { background: transparent; }
 .np-node-main, .np-caret, .np-node { border: 0; background: transparent; box-shadow: none; }
 .np-tabs > button, .np-tab { background: transparent; }
-.np-danger { color: var(--dsw-alias-label-error); }
-.np-footer-actions button.np-danger { color: var(--dsw-alias-label-error); }
+.np-danger { color: var(--dsw-alias-state-error-primary); }
+.np-footer-actions button.np-danger { color: var(--dsw-alias-state-error-primary); }
 .np-footer-actions button.np-danger:hover, .np-dlg-body button.np-danger:hover { border-color: var(--dsw-alias-state-error-secondary); color: var(--dsw-alias-state-error-secondary); background: var(--dsw-alias-interactive-bg-hover-danger); }
 .np-write, .np-read { flex: 1; min-height: 0; margin: 0; }
-.np-switch[hidden], .np-md-tools[hidden], .np-json-tools[hidden] { display: none !important; }
+.np-view-switch[hidden], .np-md-tools[hidden], .np-json-tools[hidden] { display: none !important; }
 .np-write { box-sizing: border-box; width: 100%; max-width: 100%; resize: none; border: 0; outline: 0; background: transparent; color: transparent; caret-color: var(--dsw-alias-label-primary); padding: var(--np-pad-x); margin: 0; font-family: var(--dsw-font-markdown-code-font-family); font-size: var(--np-editor-font-size, 14px); line-height: calc(var(--np-editor-font-size, 14px) * 1.45); letter-spacing: 0; word-spacing: 0; tab-size: 4; overflow-wrap: anywhere; word-break: break-word; white-space: pre-wrap; position: relative; font-kerning: none; font-variant-ligatures: none; font-feature-settings: "liga" 0, "calt" 0; }
 /* Transparent text over a colourised mirror: keep the caret crisp and let the
    selection paint show through so the mirror reads underneath it. */
@@ -553,14 +541,6 @@ ${NANO_STYLES}
 .np-gallery-item:hover .np-g-act, .np-gallery-item:focus-within .np-g-act { opacity: 1; }
 .np-g-act button { border: 0; border-radius: 3px; padding: 2px 4px; font-size: 10px; line-height: 1.3; white-space: nowrap; background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-primary); cursor: pointer; }
 .np-g-act button:hover { background: var(--dsw-alias-interactive-bg-hover); }
-/* Custom instant tooltip for np-tool buttons (native title feels absent). */
-.np-tool[data-tip] { position: relative; }
-.np-tool[data-tip]:hover::after, .np-tool[data-tip]:focus-visible::after {
-  content: attr(data-tip); position: absolute; left: 50%; top: calc(100% + 6px); transform: translateX(-50%);
-  z-index: 20; padding: 3px 8px; border-radius: var(--dsw-radius-sm); font-size: 11px; line-height: 1.4;
-  white-space: nowrap; pointer-events: none;
-  background: var(--dsw-alias-tooltip-bg); color: var(--dsw-alias-tooltip-label, var(--dsw-alias-label-primary));
-  box-shadow: 0 4px 12px rgba(0,0,0,.25); }
 .np-gallery-empty { padding: 18px; text-align: center; color: var(--dsw-alias-label-tertiary); font-size: 12px; }
 .np-slash { position: absolute; z-index: 4; background: var(--dsw-menu-surface-fill, var(--dsw-alias-bg-layer-3)); color: var(--dsw-alias-label-primary); border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-lg); box-shadow: var(--dsw-elevation-prominent); backdrop-filter: var(--dsw-menu-backdrop-filter); }
 /* .np-dlg-body wraps every NanoDialog's injected children: stacked content with the
@@ -582,15 +562,11 @@ ${NANO_STYLES}
 /* pill number input with embedded unit */
 .np-dlg-body input[type="number"] { appearance: none; -webkit-appearance: none; }
 .np-dlg-body input::-webkit-outer-spin-button, .np-dlg-body input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-.np-num { flex: none; display: inline-flex; align-items: center; gap: 6px; background: var(--dsw-alias-interactive-bg-hover); border: 1px solid transparent; border-radius: var(--dsw-radius-full, 999px); padding: 3px 12px; color: var(--dsw-alias-label-primary); }
+.np-num { flex: none; display: inline-flex; align-items: center; gap: 6px; background: var(--dsw-alias-interactive-bg-hover); border: 1px solid transparent; border-radius: 999px; padding: 3px 12px; color: var(--dsw-alias-label-primary); }
 .np-num:focus-within { border-color: var(--dsw-focus-ring-color, var(--dsw-alias-link)); }
 .np-num input { width: auto; min-width: 4.5em; field-sizing: content; border: 0; background: transparent; padding: 2px 0; font: inherit; color: inherit; text-align: right; }
 .np-num input:focus { outline: none; }
 .np-num .np-num-unit { color: var(--dsw-alias-label-tertiary); font-size: var(--np-font-size-sm); white-space: nowrap; }
-/* segmented control matching the app's color-scheme switch */
-/* settings switches carry their index in --np-switch-i: thumb steps by
-   (segment width + 2px gap), generic for N segments */
-.np-switch[data-seg-field] .np-switch-thumb { transform: translateX(calc(var(--np-switch-i) * (100% + 2px))); }
 /* Text-like controls fill the row; a checkbox or radio must keep its intrinsic
    box, or the 100% width turns it into a 300px slab and the 8px padding makes it
    taller than the label it belongs to. */
@@ -600,7 +576,7 @@ ${NANO_STYLES}
 .np-versions { max-height: 240px; overflow: auto; display: flex; flex-direction: column; }
 .np-versions button { display: block; width: 100%; border: 0; background: transparent; color: var(--dsw-alias-label-primary); border-radius: var(--dsw-radius-sm); padding: 6px 8px; text-align: left; font: inherit; cursor: pointer; }
 .np-versions button:hover { background: var(--dsw-alias-interactive-bg-hover); }
-.np-error { display: flex; align-items: flex-start; gap: 8px; color: var(--dsw-alias-label-error); padding: 0 var(--np-pad-x) 8px; }
+.np-error { display: flex; align-items: flex-start; gap: 8px; color: var(--dsw-alias-state-error-primary); padding: 0 var(--np-pad-x) 8px; }
 .np-error-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .np-error button { display: inline-flex; align-items: center; justify-content: center; width: var(--np-icon-btn-sm); height: var(--np-icon-btn-sm); flex: none; padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-tertiary); border-radius: var(--dsw-radius-xs, 4px); cursor: pointer; }
 .np-error button:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
@@ -608,6 +584,10 @@ ${NANO_STYLES}
 .np-error button[data-action="load-remote"], .np-error button[data-action="keep-mine"] { width: auto; height: auto; flex: none; padding: 4px 10px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); color: var(--dsw-alias-label-primary); font: inherit; line-height: 20px; }
 .np-slash { width: var(--np-menu-w); max-height: 260px; overflow-y: auto; padding: 4px; display: flex; flex-direction: column; gap: 1px; }
 .np-slash .np-slash-empty { padding: 8px; color: var(--dsw-alias-label-tertiary); font-size: var(--np-font-size-sm); }
+.np-slash .np-slash-item { display: flex; align-items: center; gap: 8px; width: 100%; border: 0; background: transparent; color: var(--dsw-alias-label-primary); border-radius: var(--dsw-radius-sm); padding: 5px 8px; font: inherit; text-align: left; cursor: pointer; }
+.np-slash .np-slash-item[data-active="true"], .np-slash .np-slash-item:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.np-slash .np-slash-icon { display: inline-flex; align-items: center; flex: none; color: var(--dsw-alias-label-secondary); }
+.np-slash .np-slash-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .np-footer { position: relative; z-index: 1; box-sizing: border-box; display: flex; align-items: center; gap: var(--np-gap); min-height: var(--np-foot-h); padding: 0 var(--np-pad-x); border-top: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-2); }
 /* Panel-width responsiveness: container queries react to the floating window, not the viewport. */
 @container np (max-width: 720px) {
@@ -642,10 +622,6 @@ ${NANO_STYLES}
   .np-tree[data-collapsed="true"] .np-tree-foot button:hover { background: var(--dsw-alias-interactive-bg-hover); }
   .np-toolbar { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; mask-image: linear-gradient(to right, #000 88%, transparent); -webkit-mask-image: linear-gradient(to right, #000 88%, transparent); }
   .np-toolbar::-webkit-scrollbar { display: none; }
-  .np-switch { min-width: 62px; grid-auto-columns: auto; }
-  .np-switch .np-switch-label { display: none; }
-  .np-switch .np-switch-thumb { position: static; transform: none; width: auto; height: 22px; padding: 0 8px; box-shadow: none; font-size: var(--np-font-size-sm); }
-  .np-switch[data-view="rendered"] .np-switch-thumb { transform: none; }
   /* Four footer actions become icon-only squares like the tree's settings /
      close buttons; their titles carry the labels for hover + a11y. */
   .np-footer-actions button { width: var(--np-icon-btn); height: var(--np-icon-btn); padding: 0 !important; gap: 0; justify-content: center; }
@@ -744,19 +720,17 @@ ${NANO_STYLES}
    strip never scrolls and is never painted over by panel content. */
 .np-dlg-tabs { flex: none; padding-bottom: 10px; border-bottom: 1px solid var(--dsw-alias-border-l2); }
 .np-dlg-body > .np-dlg-panels { margin-top: 0; flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
-/* The shared tab control must not inherit the dialog's generic button skin. */
-.np-dlg-body .nano-tab { border: 0; padding: 0 8px; }
 /* ── S3 endpoint management + switch wizard ─────────────────────────────── */
 .np-cloud-settings { margin-top: 4px; }
 .np-endpoint-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
 .np-endpoint-row { display: flex; align-items: center; gap: 6px; padding: 8px 10px;
   border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm, 8px); }
-.np-endpoint-row[data-active="true"] { border-color: var(--dsw-alias-focus-ring, #4c9aff); }
+.np-endpoint-row[data-active="true"] { border-color: var(--dsw-focus-ring-color); }
 .np-endpoint-meta { flex: 1; min-width: 0; }
 .np-endpoint-meta b { display: block; font-size: 12px; font-weight: 600; }
 .np-endpoint-meta small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   color: var(--dsw-alias-label-secondary); font-size: 11px; }
-.np-endpoint-form, .np-switch-wizard { display: flex; flex-direction: column; gap: 8px;
+.np-endpoint-form, .np-cloud-wizard { display: flex; flex-direction: column; gap: 8px;
   padding: 10px; margin-bottom: 10px; border: 1px solid var(--dsw-alias-border-l2);
   border-radius: var(--dsw-radius-sm, 8px); }
 .np-endpoint-form label span, .np-check span { color: var(--dsw-alias-label-secondary); font-size: 11px; }
@@ -853,12 +827,9 @@ details[open] > .nj-node > .nj-preview { display: none; }
 .nj-count { color: var(--dsw-alias-label-tertiary); font-size: .8em; }
 `
 
-const googleIcon = (path) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${path}"></path></svg>`
-const textIcon = (label) => `<svg viewBox="0 0 24 24" aria-hidden="true"><text x="12" y="16.5" text-anchor="middle" font-size="10" font-weight="700" font-family="inherit">${label}</text></svg>`
-/* dsh-native product glyph: renders a <use> against the document icon sprite
-   maintained by ui-theme (symbol id dsw-icon-<glyph>-<weight>). Falls back
-   silently when the shell predates the sprite. */
-const dshIcon = (glyph, weight = 'regular', size = 16) => `<svg width="${size}" height="${size}" data-icon="dsw-icon-${glyph}-${weight}" aria-hidden="true"><use href="#dsw-icon-${glyph}-${weight}"/></svg>`
+/* Sprite and hand-drawn glyphs live in ./icons.js (the icon facade, DESIGN.md §6.1):
+   check-ui-rules treats an `icons.js` as the one file allowed to emit inline svg
+   markup, so nothing here may build one. */
 const FILE_ICON = dshIcon('browse-outline')
 const FOLDER_ICON = dshIcon('folder-close')
 const PLUS_ICON = dshIcon('plus-outline')
@@ -882,9 +853,6 @@ const LINK_ICON = googleIcon('M10.59 13.41c-.41.39-1.07.39-1.48 0l-4-4c-.39-.41-
 const CHEVRON_ICON = dshIcon('chevron-down-outline')
 const CARET_ICON = dshIcon('triangle-right-fill')
 const CHECK_ICON = dshIcon('check-outline')
-/* DSH sidebar glyph (panel-left-outline, 16px). Open fills the left pane; closed is the outline. */
-const PANEL_ICON = (filled) => `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 1.5H2.5C1.94772 1.5 1.5 1.94772 1.5 2.5V13.5C1.5 14.0523 1.94772 14.5 2.5 14.5H13.5C14.0523 14.5 14.5 14.0523 14.5 13.5V2.5C14.5 1.94772 14.0523 1.5 13.5 1.5Z"></path><path d="M5.5 1.5V14.5"></path>${filled ? '<path class="np-panel-fill" d="M2.5 1.5H5.5V14.5H2.5C1.94772 14.5 1.5 14.0523 1.5 13.5V2.5C1.5 1.94772 1.94772 1.5 2.5 1.5Z"></path>' : ''}</svg>`
-const WIN_MIN_ICON = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M1 6h10" fill="none" stroke="currentColor" stroke-width="1.1"/></svg>'
 /* fx 处理入口 / 面板头图标：宿主 think-outline（四芒星 artwork）。 */
 const FX_ICON = dshIcon('think-outline')
 const FX_CHEVRON = dshIcon('chevron-down-outline', 'regular', 12)
@@ -940,18 +908,18 @@ function caretRect(area, position) {
   return rect
 }
 
-/* Z-index scale for the notepad's own surface and its body-level portals.
-   .np-layer sits at 1200 (see the stylesheet) — above the shell modal root
-   (1000) and toast/portal band (1100). Notepad dialogs and menus must clear
-   the layer too: a portal on document.body at the shell default (1000/30)
-   would sink beneath the window that opened it. */
-const NP_PORTAL_Z = 1210
+/* The notepad no longer owns a portal layer: dialogs and menus render inside
+   .np-window (window overlay / `portal:false` menus), so the window's own
+   NANO_LAYER figure governs them. See DESIGN.md §4, §5. */
 
-export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', subscribe: () => () => {} }, language = { current: () => 'en', subscribe: () => () => {} }, workspaces = { current: () => ({ items: [], currentId: null }), subscribe: () => () => {} }, previewFile = () => false) {
-  host.innerHTML = `<div class="np-layer"><button class="np-entry" type="button">${ICON}<span class="np-tip" hidden></span></button><section class="np-window" hidden></section></div>`
+export function mountNotepad(host, defaults, hostTheme = { theme: undefined, subscribe: () => () => {} }, language = { current: () => 'en', subscribe: () => () => {} }, workspaces = { current: () => ({ items: [], currentId: null }), subscribe: () => () => {} }, previewFile = () => false) {
+  /* The launcher's hover hint is the native title + aria-label set in
+     setShortcut(): the host `Tooltip` clones a React child element, and this
+     button is innerHTML-built and read synchronously below (drag/placement).
+     nano-ui-exempt: host Tooltip cannot wrap a DOM-built trigger; see DESIGN.md §10. */
+  host.innerHTML = `<div class="np-layer"><button class="np-entry" type="button">${ICON}</button><section class="np-window" hidden></section></div>`
   const layer = must(host, '.np-layer')
   const entry = must(host, '.np-entry')
-  const tip = must(host, '.np-tip')
   const panel = must(host, '.np-window')
   const toolbar = FORMAT_DEFS.map(def => def.kind === 'image'
     ? `<button type="button" class="np-tool" data-action="image" data-format-kind="image">${def.icon}</button>`
@@ -961,7 +929,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     <div class="np-body">
       <aside class="np-tree"><div class="np-tree-head"><div class="np-ws"><button type="button" class="np-ws-btn" data-action="ws-toggle" aria-haspopup="listbox" aria-expanded="false"><span class="np-ws-label"></span><span class="np-ws-caret" aria-hidden="true">${CHEVRON_ICON}</span></button></div><button type="button" class="np-kind" data-action="kind-filter" data-i18n="kindFilter" data-i18n-mode="title"><span class="np-kind-label"></span><span class="np-kind-caret" aria-hidden="true">${CHEVRON_ICON}</span></button><span class="np-tree-tools"><button type="button" data-action="tree-settings" data-i18n="settings" data-i18n-mode="title" aria-haspopup="menu">${SETTINGS_ICON}</button><button type="button" class="np-tools-toggle" data-action="toggle-tools" data-i18n="expandTools" data-i18n-mode="title" aria-expanded="false">${CHEVRON_ICON}</button></span></div><div class="np-nodes" data-root="true"></div><div class="np-mp-zone"><input class="np-mp-input" type="text" inputmode="url" autocomplete="off" spellcheck="false" data-i18n="importMp" data-i18n-attr="placeholder"><span class="np-mp-hint" data-state="idle" aria-hidden="true"></span></div><button type="button" class="np-tools-toggle" data-action="toggle-tools" data-i18n="expandTools" data-i18n-mode="title" aria-expanded="false">${CHEVRON_ICON}</button><div class="np-tree-foot"><button type="button" data-action="settings" data-i18n="settings" data-i18n-mode="label">${SETTINGS_ICON}<span data-i18n="settings"></span></button><button type="button" data-action="close" data-i18n="close" data-i18n-mode="label">${CLOSE_ICON}<span data-i18n="close"></span></button></div></aside>
       <div class="np-editor" data-themefit="true">
-        <div class="np-toolbar"><span class="np-md-tools">${toolbar}</span><span class="np-json-tools" hidden><button type="button" class="np-tool" data-json="expand" data-i18n="jsonExpand" data-i18n-mode="title">${EXPAND_ICON}</button><button type="button" class="np-tool" data-json="collapse" data-i18n="jsonCollapse" data-i18n-mode="title">${COLLAPSE_ICON}</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-json="format" data-i18n="jsonFormat" data-i18n-mode="title">${FORMAT_ICON}</button><button type="button" class="np-tool" data-json="minify" data-i18n="jsonMinify" data-i18n-mode="title">${MINIFY_ICON}</button><button type="button" class="np-tool" data-json="escape" data-i18n="jsonEscape" data-i18n-mode="title">${ESCAPE_ICON}</button><button type="button" class="np-tool" data-json="unescape" data-i18n="jsonUnescape" data-i18n-mode="title">${UNESCAPE_ICON}</button><button type="button" class="np-tool" data-json="strip" data-i18n="jsonStrip" data-i18n-mode="title">${STRIP_ICON}</button></span><span class="np-ht-tools" hidden><button type="button" class="np-tool" data-ht="format" data-i18n="htFormat" data-i18n-mode="title">${FORMAT_ICON}</button><button type="button" class="np-tool" data-ht="minify" data-i18n="htMinify" data-i18n-mode="title">${MINIFY_ICON}</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-ht="strip-styles" data-i18n="htStripStyles" data-i18n-mode="title">${STRIP_ICON}</button><button type="button" class="np-tool" data-ht="extract-images" data-i18n="htExtractImages" data-i18n-mode="title">${GRID_ICON}</button><button type="button" class="np-tool" data-ht="copy-text" data-i18n="htCopyText" data-i18n-mode="title">${dshIcon('copy-outline')}</button></span><span class="np-rt-tools" hidden><button type="button" class="np-tool" data-rt="gallery" data-i18n="rtGallery" data-i18n-mode="title">${GRID_ICON}</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-rt="font-minus" data-i18n="rtFontMinus" data-i18n-mode="title">A−</button><button type="button" class="np-tool" data-rt="font-plus" data-i18n="rtFontPlus" data-i18n-mode="title">A+</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-rt="width" data-i18n="rtWidth" data-i18n-mode="title">宽</button><button type="button" class="np-tool" data-rt="themefit" data-i18n="rtThemeFit" data-i18n-mode="title" aria-pressed="true">◐</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-rt="copy-rich" data-i18n="rtCopyRich" data-i18n-mode="title">${dshIcon('copy-outline')}</button><button type="button" class="np-tool" data-rt="copy-text" data-i18n="rtCopyText" data-i18n-mode="title">Tx</button><button type="button" class="np-tool" data-rt="links" data-i18n="rtLinks" data-i18n-mode="title">${LINK_ICON}</button></span><button type="button" class="np-tool np-wrap" data-action="toggle-wrap" data-i18n="fxMenuWrap" data-i18n-mode="title" aria-pressed="true">${dshIcon('wrap-lines-outline')}</button><button type="button" class="np-switch" data-action="view" role="switch" aria-checked="false" data-i18n="viewGroup" data-i18n-mode="title"><span class="np-switch-label" data-i18n="source"></span><span class="np-switch-label" data-i18n="preview"></span><span class="np-switch-thumb" data-i18n="source"></span></button></div>
+        <div class="np-toolbar"><span class="np-md-tools">${toolbar}</span><span class="np-json-tools" hidden><button type="button" class="np-tool" data-json="expand" data-i18n="jsonExpand" data-i18n-mode="title">${EXPAND_ICON}</button><button type="button" class="np-tool" data-json="collapse" data-i18n="jsonCollapse" data-i18n-mode="title">${COLLAPSE_ICON}</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-json="format" data-i18n="jsonFormat" data-i18n-mode="title">${FORMAT_ICON}</button><button type="button" class="np-tool" data-json="minify" data-i18n="jsonMinify" data-i18n-mode="title">${MINIFY_ICON}</button><button type="button" class="np-tool" data-json="escape" data-i18n="jsonEscape" data-i18n-mode="title">${ESCAPE_ICON}</button><button type="button" class="np-tool" data-json="unescape" data-i18n="jsonUnescape" data-i18n-mode="title">${UNESCAPE_ICON}</button><button type="button" class="np-tool" data-json="strip" data-i18n="jsonStrip" data-i18n-mode="title">${STRIP_ICON}</button></span><span class="np-ht-tools" hidden><button type="button" class="np-tool" data-ht="format" data-i18n="htFormat" data-i18n-mode="title">${FORMAT_ICON}</button><button type="button" class="np-tool" data-ht="minify" data-i18n="htMinify" data-i18n-mode="title">${MINIFY_ICON}</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-ht="strip-styles" data-i18n="htStripStyles" data-i18n-mode="title">${STRIP_ICON}</button><button type="button" class="np-tool" data-ht="extract-images" data-i18n="htExtractImages" data-i18n-mode="title">${GRID_ICON}</button><button type="button" class="np-tool" data-ht="copy-text" data-i18n="htCopyText" data-i18n-mode="title">${dshIcon('copy-outline')}</button></span><span class="np-rt-tools" hidden><button type="button" class="np-tool" data-rt="gallery" data-i18n="rtGallery" data-i18n-mode="title">${GRID_ICON}</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-rt="font-minus" data-i18n="rtFontMinus" data-i18n-mode="title">A−</button><button type="button" class="np-tool" data-rt="font-plus" data-i18n="rtFontPlus" data-i18n-mode="title">A+</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-rt="width" data-i18n="rtWidth" data-i18n-mode="title">宽</button><button type="button" class="np-tool" data-rt="themefit" data-i18n="rtThemeFit" data-i18n-mode="title" aria-pressed="true">◐</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-rt="copy-rich" data-i18n="rtCopyRich" data-i18n-mode="title">${dshIcon('copy-outline')}</button><button type="button" class="np-tool" data-rt="copy-text" data-i18n="rtCopyText" data-i18n-mode="title">Tx</button><button type="button" class="np-tool" data-rt="links" data-i18n="rtLinks" data-i18n-mode="title">${LINK_ICON}</button></span><button type="button" class="np-tool np-wrap" data-action="toggle-wrap" data-i18n="fxMenuWrap" data-i18n-mode="title" aria-pressed="true">${dshIcon('wrap-lines-outline')}</button><span class="np-view-switch"></span></div>
         <div class="np-mirror" aria-hidden="true"></div>
         <textarea class="np-write" spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
         <div class="np-slash" hidden></div>
@@ -973,7 +941,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     <section class="np-fx-view" hidden>
       <div class="np-fx-shell">
         <header class="np-fx-head">
-          <button type="button" class="np-fx-head-title" data-action="fx-nav-toggle" aria-expanded="false"><span class="np-fx-head-ico" aria-hidden="true">${FX_ICON}</span><span data-i18n="fxViewTitle">单次文本处理</span><span class="np-fx-nav-state" aria-hidden="true">${PANEL_ICON(false)}</span></button>
+          <button type="button" class="np-fx-head-title" data-action="fx-nav-toggle" aria-expanded="false"><span class="np-fx-head-ico" aria-hidden="true">${FX_ICON}</span><span data-i18n="fxViewTitle">单次文本处理</span><span class="np-fx-nav-state" aria-hidden="true">${PANEL_ICON()}</span></button>
           <span class="np-fx-head-sub" data-fx-scope></span>
           <span class="np-fx-head-space"></span>
         </header>
@@ -1035,9 +1003,6 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       if (node.dataset.i18nMode === 'title' || node.dataset.i18nMode === 'label') {
         node.title = value
         node.setAttribute('aria-label', value)
-        /* Custom tooltip for toolbar tools — native title has a ~1s delay and
-           reads as "no tooltip"; an on-hover label answers instantly. */
-        if (node.classList.contains('np-tool')) node.setAttribute('data-tip', value)
       }
       if (node.dataset.i18nMode !== 'title' && node.dataset.i18nMode !== 'label' && !node.dataset.i18nAttr) node.textContent = value
       if (node.dataset.i18nAttr) node.setAttribute(node.dataset.i18nAttr, value)
@@ -1051,7 +1016,6 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       node.setAttribute('aria-label', titled)
       if (!node.querySelector('svg')) node.textContent = label
     }
-    panel.querySelector('.np-switch')?.setAttribute('aria-label', copy.viewGroup)
     panel.querySelector('.np-read')?.setAttribute('aria-label', copy.editHint)
     panel.querySelector('.np-read')?.setAttribute('title', copy.editHint)
     write().placeholder = copy.placeholder
@@ -1110,6 +1074,41 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
      the top level; removal rides the normal disposer list. */
   document.body.append(layer)
   disposers.push(() => layer.remove())
+
+  /* ThemeScope is the only place this plugin learns its light/dark scheme
+     (DESIGN.md §3): the window and the launcher are the two owner elements, and
+     the pin comes from the notepad's own `theme` setting — `system` means "follow
+     the host", expressed by leaving `pin` undefined. Everything that used to
+     portal to document.body (dialog cards, menus) now renders inside .np-window,
+     so it inherits the injected `--dsw-*` values instead of a hand-copied palette. */
+  const pinTheme = () => (state.settings.theme === 'light' || state.settings.theme === 'dark' ? state.settings.theme : undefined)
+  const themeScope = createThemeScope({ theme: hostTheme.theme, element: panel, pin: pinTheme(), subscribe: hostTheme.subscribe })
+  const entryScope = createThemeScope({ theme: hostTheme.theme, element: entry, pin: pinTheme(), subscribe: hostTheme.subscribe })
+  let appliedPin = pinTheme() ?? null
+  /** Re-pin both scopes only when the setting actually changed (setPin rewrites every token). */
+  function syncThemePin() {
+    const pin = pinTheme() ?? null
+    if (pin === appliedPin) return
+    appliedPin = pin
+    themeScope.setPin(pin ?? undefined)
+    entryScope.setPin(pin ?? undefined)
+  }
+  disposers.push(() => { themeScope.dispose(); entryScope.dispose() })
+
+  /* The view switch is the host SegmentedControl (DESIGN.md §6.1) mounted into
+     an innerHTML host span; renderBody keeps it in step with state.view. */
+  const viewSwitchHost = must(panel, '.np-view-switch')
+  const viewSwitch = mountNano(viewSwitchHost, SegmentedControl, {
+    id: 'np-view',
+    value: state.view === 'rendered' ? 'rendered' : 'source',
+    label: text().viewGroup,
+    options: [{ value: 'source', label: text().source }, { value: 'rendered', label: text().preview }],
+    onChange: value => {
+      state.view = value === 'rendered' ? 'rendered' : 'source'
+      void renderBody()
+    },
+  })
+  disposers.push(() => viewSwitch.unmount())
 
   /* Cloud sync engine. `render` is declared further down but only referenced
      from onApplied, which runs after the database is ready — no TDZ hit. */
@@ -1589,10 +1588,10 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     const group = document.createElement('span')
     group.className = 'np-chrome'
     if (chrome === 'mac') {
-      group.innerHTML = `<button type="button" class="np-chrome-min" data-action="close" title="${escapeHtml(copy.minimize)}" aria-label="${escapeHtml(copy.minimize)}"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6h7" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg></button><button type="button" class="np-chrome-max" data-action="maximize" title="${escapeHtml(state.maximized ? copy.restoreWindow : copy.maximize)}" aria-label="${escapeHtml(state.maximized ? copy.restoreWindow : copy.maximize)}"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M6 2.5v7M2.5 6h7" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg></button>`
+      group.innerHTML = `<button type="button" class="np-chrome-min" data-action="close" title="${escapeHtml(copy.minimize)}" aria-label="${escapeHtml(copy.minimize)}">${MAC_MIN_ICON}</button><button type="button" class="np-chrome-max" data-action="maximize" title="${escapeHtml(state.maximized ? copy.restoreWindow : copy.maximize)}" aria-label="${escapeHtml(state.maximized ? copy.restoreWindow : copy.maximize)}">${MAC_MAX_ICON}</button>`
       tabs.prepend(group)
     } else {
-      group.innerHTML = `<button type="button" class="np-chrome-min" data-action="close" title="${escapeHtml(copy.minimize)}" aria-label="${escapeHtml(copy.minimize)}">${WIN_MIN_ICON}</button><button type="button" class="np-chrome-max" data-action="maximize" title="${escapeHtml(state.maximized ? copy.restoreWindow : copy.maximize)}" aria-label="${escapeHtml(state.maximized ? copy.restoreWindow : copy.maximize)}"><svg class="np-icon-max" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 2h8v8H2z" fill="none" stroke="currentColor" stroke-width="1.1"/></svg><svg class="np-icon-restore" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 3h6v6H3z M1 5V1h4" fill="none" stroke="currentColor" stroke-width="1.1"/></svg></button>`
+      group.innerHTML = `<button type="button" class="np-chrome-min" data-action="close" title="${escapeHtml(copy.minimize)}" aria-label="${escapeHtml(copy.minimize)}">${WIN_MIN_ICON}</button><button type="button" class="np-chrome-max" data-action="maximize" title="${escapeHtml(state.maximized ? copy.restoreWindow : copy.maximize)}" aria-label="${escapeHtml(state.maximized ? copy.restoreWindow : copy.maximize)}">${WIN_MAX_ICON}${WIN_RESTORE_ICON}</button>`
       const spacer = tabs.querySelector('.np-tabs-spacer')
       tabs.insertBefore(group, spacer ? spacer.nextSibling : null)
     }
@@ -1739,8 +1738,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     /* JSON files swap the markdown-format cluster for JSON tools. */
     const mdTools = panel.querySelector('.np-md-tools')
     const jsonTools = panel.querySelector('.np-json-tools')
-    const viewSwitch = panel.querySelector('.np-switch')
-    if (viewSwitch) viewSwitch.hidden = !previewable
+    viewSwitchHost.hidden = !previewable
     const htTools = panel.querySelector('.np-ht-tools')
     if (mdTools) mdTools.hidden = json || richHtml || !markdownFile
     if (jsonTools) jsonTools.hidden = !json
@@ -1806,16 +1804,14 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       if (Number.isFinite(savedPos.selStart)) source.setSelectionRange(savedPos.selStart, savedPos.selEnd ?? savedPos.selStart)
       paintMirror()
     }
-    const sw = panel.querySelector('.np-switch')
-    if (sw) {
-      sw.dataset.view = state.view
-      sw.setAttribute('aria-checked', String(rendered))
-      const thumb = sw.querySelector('.np-switch-thumb')
-      if (thumb) thumb.textContent = rendered ? (json ? text().jsonTree : text().preview) : text().source
-      const copy = text()
-      const segLabels = json ? [copy.source, copy.jsonTree] : [copy.source, copy.preview]
-      sw.querySelectorAll('.np-switch-label').forEach((label, i) => { label.textContent = segLabels[i] ?? segLabels[0] })
-    }
+    /* Keep the host SegmentedControl in step with the view. The rendered label is a
+       JSON tree for .json files and the markdown preview otherwise (DESIGN.md §6.1). */
+    const copy = text()
+    const viewOptions = [
+      { value: 'source', label: copy.source },
+      { value: 'rendered', label: json ? copy.jsonTree : copy.preview },
+    ]
+    viewSwitch.update({ value: rendered ? 'rendered' : 'source', options: viewOptions, label: copy.viewGroup })
     if (!rendered || state.db === null) return
     if (json) {
       const collapsed = jsonCollapsedFor(file.id)
@@ -1926,12 +1922,11 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     if (fPlus) fPlus.disabled = state.readFontPx !== null && state.readFontPx >= 28
   }
 
+  /** The notepad's own scheme. ThemeScope resolves it from the host `ctx.theme`
+   *  service, or from the pinned `theme` setting (DESIGN.md §3) — no second
+   *  `schemeOf` lives here. */
   function resolvedTheme() {
-    if (state.settings.followApp === false && (state.settings.theme === 'light' || state.settings.theme === 'dark')) {
-      return state.settings.theme
-    }
-    if (state.settings.theme === 'light' || state.settings.theme === 'dark') return state.settings.theme
-    return appTheme.scheme() === 'light' ? 'light' : 'dark'
+    return themeScope.scheme()
   }
 
   const CHECK_ICON = dshIcon('check-outline')
@@ -1954,7 +1949,8 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     ]
   }
 
-  /** Settings and menus are portaled onto document.body, so hiding the panel leaves them on top. */
+  /** Card and menu handles live inside the window, so hiding the notepad also
+   *  closes whatever is open over it. */
   function dismissOverlays() {
     closeDialog()
     closeMenu?.()
@@ -1982,13 +1978,10 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     panel.hidden = !state.ui.open
     /* A file/view switch invalidates whatever image the preview was showing. */
     hideImagePeek()
-    const theme = resolvedTheme()
-    panel.dataset.theme = theme
-    entry.dataset.theme = theme
-    /* The settings card is open while the user flips this very setting, and the
-       card lives on document.body — re-stamp it so it does not stay on the old
-       palette until reopened. */
-    activeDialog?.setTheme?.(theme)
+    /* Re-pin ThemeScope first: an open settings card flips the very setting that
+       decides the palette, and the injected tokens update in place (DESIGN.md §3). */
+    syncThemePin()
+    panel.dataset.theme = resolvedTheme()
     panel.style.setProperty('--np-editor-font-size', `${state.settings.editorFontSizePx}px`)
     applyCopy()
     applyWrap()
@@ -1996,7 +1989,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     const treeCollapsed = state.ui.treeOpen === false
     tree.dataset.collapsed = String(treeCollapsed)
     const treeToggle = must(panel, '.np-tree-toggle')
-    treeToggle.innerHTML = treeCollapsed ? PANEL_ICON(false) : PANEL_ICON(true)
+    treeToggle.innerHTML = PANEL_ICON()
     treeToggle.title = treeCollapsed ? text().expandTree : text().collapseTree
     treeToggle.setAttribute('aria-label', treeToggle.title)
     treeToggle.setAttribute('aria-expanded', String(!treeCollapsed))
@@ -2020,8 +2013,6 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       applyWindowSize()
       place(entry, state.ui.entryX, state.ui.entryY, 72)
       if (!state.maximized) place(panel, state.ui.panelX, state.ui.panelY, 80)
-      // tooltip reads left of the entry; flip when it would clip offscreen
-      entry.classList.toggle('np-tip-left', entry.getBoundingClientRect().left < 96)
     })
   })
 
@@ -2118,36 +2109,43 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
   let closeMenu = /** @type {(() => void) | null} */ (null)
   let closeDialog = () => {}
   let dialogOpen = false
-  /* The open card's adapter handle. The settings card can flip our scheme while
-     it is up, so render() re-stamps it instead of leaving it on the old palette. */
-  let activeDialog = /** @type {{ close: () => void, setTheme?: (theme: string) => void } | null} */ (null)
   /* the ws button sits outside the anchored menu, so its own pointerdown makes
      NanoMenu close the menu before the click — suppress the immediate reopen. */
   let wsToggleJustClosed = false
 
   /**
-   * Every card is a shared NanoDialog now (mounted into document.body by the
-   * adapter). `spec.body` is the old inner HTML; `spec.setup(el, close)` runs on
-   * the live content node so callers keep wiring the same inputs/switches.
-   * Escape, mask click, focus trap, and focus return are the Modal's job.
+   * Every card goes through openNanoDialog (DESIGN.md §5): a card that belongs to
+   * the window renders as a nano-ui window overlay inside `.np-window`, and the
+   * fx card — which needs more room than the 640px-tall window — is the one
+   * main-window dialog. `spec.body` is the card's inner HTML; `spec.setup(el, close)`
+   * runs on the live content node so callers keep wiring the same inputs/segments.
+   * Escape, mask click, focus trap, and focus return are the host Modal's job.
    */
   function dialog(spec) {
     closeSlash()
     closeMenu?.()
-    /* A second dialog() call would orphan the previous handle — its empty
-       .nano-dialog-host overlay then sits fullscreen on top and eats clicks
-       meant for the new card. Close any open one first. */
+    /* A second dialog() call would orphan the previous handle — its overlay would
+       then sit on top and eat clicks meant for the new card. Close any open one first. */
     closeDialog?.()
-    let handle = /** @type {{ close: () => void, setTheme?: (theme: string) => void } | undefined} */ (undefined)
-    const finish = () => { dialogOpen = false; activeDialog = null; if (closeDialog === closeSelf) closeDialog = () => {} }
+    let handle = /** @type {{ close: () => void } | undefined} */ (undefined)
+    /* setup() may mount React primitives into the card body (the settings rows are
+       host SegmentedControls). nano-ui unmounts its own tree when the card closes,
+       not ours, so the setup's teardown runs here on every exit path. */
+    let teardown = /** @type {(() => void) | null} */ (null)
+    const finish = () => {
+      dialogOpen = false
+      if (closeDialog === closeSelf) closeDialog = () => {}
+      teardown?.()
+      teardown = null
+    }
     // every exit path — footer buttons, Escape, mask, programmatic close —
     // funnels through finish()+adapter close so the panel guards release.
     const closeSelf = () => { if (!dialogOpen || !handle) return; finish(); handle.close() }
     closeDialog = closeSelf
     dialogOpen = true
     const rect = panel.getBoundingClientRect()
-    /* fx 卡（spec.viewport）需要比浮窗更大的编辑面：居中于视口，不被
-       422px 高的 notepad 窗口切掉 composer；其余卡片仍贴浮窗 region。 */
+    /* fx 卡（spec.viewport）需要比浮窗更大的编辑面：主窗口级，居中于视口，不被
+       422px 高的 notepad 窗口切掉 composer；其余卡片是窗口覆盖层，贴着 .np-window。 */
     const viewport = spec.viewport === true
     const cap = viewport ? Math.min(700, Math.round(window.innerHeight * 0.82)) : Math.min(520, Math.round(rect.height * 0.8))
     handle = openNanoDialog({
@@ -2159,12 +2157,9 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       footer: spec.footer?.(closeSelf),
       maxHeight: cap + 24,
       width: viewport ? Math.min(680, Math.round(window.innerWidth * 0.7)) : Math.round(rect.width * 0.6),
-      region: viewport ? undefined : rect,
-      /* The card portals to document.body: name our scheme so a light notepad
-         inside a dark shell still paints a light card, and raise it over both
-         the shell's modal band and our own 1200 layer. */
-      theme: resolvedTheme(),
-      z: NP_PORTAL_Z,
+      /* The window is the containing block for the overlay: the card inherits the
+         window's ThemeScope tokens and its NANO_LAYER figure, so no theme/z props. */
+      container: viewport ? undefined : panel,
       /* Tabbed dialogs get one fixed height; panels scroll inside it. */
       fixedHeight: spec.fixedHeight === true ? cap : undefined,
       onConfirm: () => spec.onConfirm?.(closeSelf),
@@ -2172,10 +2167,9 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       children: React.createElement('div', {
         className: 'np-dlg-body',
         dangerouslySetInnerHTML: { __html: spec.body },
-        ref: el => { if (el) spec.setup?.(el, closeSelf) },
+        ref: el => { if (el) teardown = spec.setup?.(el, closeSelf) ?? null },
       }),
     })
-    activeDialog = handle
   }
 
   /** Pixels between a control and its menu. One custom property, every notepad menu. */
@@ -2193,7 +2187,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     closeMenu?.()
     anchor.setAttribute('aria-expanded', 'true')
     const current = state.ui.workspaceChoice ?? 'all'
-    const check = React.createElement('span', { className: 'nano-menu-check', dangerouslySetInnerHTML: { __html: CHECK_ICON } })
+    const check = React.createElement('span', { dangerouslySetInnerHTML: { __html: CHECK_ICON } })
     const items = workspaceOptions().map(([value, name]) => ({
       id: value,
       label: name,
@@ -2211,7 +2205,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     /* The portal sits on document.body and would happily outgrow the floating
        window — cap it at the space actually left inside the panel. */
     const room = panel.getBoundingClientRect().bottom - anchor.getBoundingClientRect().bottom - 10
-    const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), items, width: 190, maxHeight: Math.max(120, room), gap: menuGap(), theme: resolvedTheme(), z: NP_PORTAL_Z })
+    const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), items, width: 190, maxHeight: Math.max(120, room), gap: menuGap(), container: panel })
     let closed = false
     const done = (unmount) => {
       if (closed) return
@@ -2232,7 +2226,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     }
     const out = event => {
       if (!closeMenu || !(event.target instanceof Element)) return
-      if (event.target.closest('.nano-menu')) return
+      if (event.target.closest('.nano-anchor')) return
       // NanoMenu's own outside handler already unmounted; just release state. A
       // press on the switcher button itself counts as "click again to close" —
       // the flag lasts until the next click anywhere so a drag-off can't eat it.
@@ -2294,7 +2288,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       { id: 'folder', label: copy.newBlankFolder, icon: icon(FOLDER_ICON), run: () => { done(false); void add('folder').catch(showError) } },
       { id: 'clear', label: scoped ? copy.clearUnpinned : `${copy.clearUnpinned} · ${copy.clearUnpinnedPick}`, tone: 'danger', icon: icon(dshIcon('trash-outline')), run: () => { done(false); if (scoped) confirmClearUnpinned() } },
     ]
-    const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), items, width: 220, gap: menuGap(), theme: resolvedTheme(), z: NP_PORTAL_Z })
+    const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), items, width: 220, gap: menuGap(), container: panel })
     let closed = false
     const done = (unmount) => {
       if (closed) return
@@ -2316,7 +2310,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       label: copy.kinds[k] ?? k,
       run: () => void addKind(k).catch(showError),
     }))
-    const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), width: 160, gap: menuGap(), theme: resolvedTheme(), z: NP_PORTAL_Z, items })
+    const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), width: 160, gap: menuGap(), container: panel, items })
     closeMenu = () => raw.close()
   }
 
@@ -2424,7 +2418,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     const title = must(panel, '.np-fx-head-title')
     title.setAttribute('aria-expanded', String(state.fx.navOpen))
     const icon = title.querySelector('.np-fx-nav-state')
-    if (icon) icon.innerHTML = PANEL_ICON(!!state.fx.navOpen)
+    if (icon) icon.innerHTML = PANEL_ICON()
     fxNav.dataset.state = state.fx.navOpen ? 'open' : 'closed'
   }
   /* 文档树保持 notepad 原样，卡住原位。fx 只占它右边（窄窗时占它下面）。
@@ -2803,7 +2797,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     const models = fxCuratedModels()
     if (!models.length) return
     closeMenu?.()
-    const check = React.createElement('span', { className: 'nano-menu-check', dangerouslySetInnerHTML: { __html: CHECK_ICON } })
+    const check = React.createElement('span', { dangerouslySetInnerHTML: { __html: CHECK_ICON } })
     const items = models.map(m => {
       const info = fxModelInfo(m)
       const label = React.createElement('span', { className: 'np-fx-model-option' },
@@ -2813,7 +2807,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
           React.createElement('span', { className: 'np-fx-model-option-ctx' }, info.ctx)))
       return { id: info.key, label, icon: info.key === state.fx.model ? check : undefined, run: () => { state.fx.model = info.key; fxPaintModel() } }
     })
-    const raw = openNanoMenu({ anchor: fxModel.getBoundingClientRect(), items, width: 300, maxHeight: 140, gap: menuGap(), theme: resolvedTheme(), z: NP_PORTAL_Z, direction: 'up' })
+    const raw = openNanoMenu({ anchor: fxModel.getBoundingClientRect(), items, width: 300, maxHeight: 140, gap: menuGap(), container: panel, direction: 'up' })
     closeMenu = () => raw.close()
   })
   fxPop.addEventListener('mousedown', event => event.preventDefault())
@@ -2831,7 +2825,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     ]
     closeMenu?.()
     /* 四条说明放得下。加上 maxHeight 会强制 overflow，滚动条把菜单右侧圆角切成直角。 */
-    const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), items, width: 320, gap: menuGap(), theme: resolvedTheme(), z: NP_PORTAL_Z, direction: 'up' })
+    const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), items, width: 320, gap: menuGap(), container: panel, direction: 'up' })
     closeMenu = () => raw.close()
   }
   /* 点垂直栏以外的 fx 区域收起边栏；标题按钮自己 toggle，不在这里抢。 */
@@ -2865,7 +2859,9 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
   })
   const fxEscClose = event => {
     if (event.key !== 'Escape' || !state.fx.open) return
-    if (document.querySelector('.nano-menu') || document.querySelector('.nano-dialog-card')) return
+    /* One Escape closes one layer: an open menu or card handles it first, and
+       both are tracked by the panel's own handles instead of DOM probes. */
+    if (closeMenu !== null || dialogOpen) return
     if (!fxPop.hidden) return
     closeFx()
   }
@@ -2879,13 +2875,13 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     const copy = fxCopy()
     const clearActive = () => { delete fxPromptBtn.dataset.active }
     fxPromptBtn.dataset.active = 'true'
-    const check = React.createElement('span', { className: 'nano-menu-check', dangerouslySetInnerHTML: { __html: CHECK_ICON } })
+    const check = React.createElement('span', { dangerouslySetInnerHTML: { __html: CHECK_ICON } })
     const items = prompts.length
       ? prompts.map(n => ({ id: n.id, label: fxCleanName(n.name), icon: n.id === state.fx.promptId ? check : undefined, run: () => { clearActive(); state.fx.promptId = n.id; fxPaintChips(); fxUpdateSend() } }))
       : [{ id: 'fx-no-prompt', label: copy.fxNoPrompt ?? '没有提示语料', run: clearActive }]
-    const raw = openNanoMenu({ anchor: fxPromptBtn.getBoundingClientRect(), items, width: 240, maxHeight: 120, gap: menuGap(), theme: resolvedTheme(), z: NP_PORTAL_Z, direction: 'up' })
+    const raw = openNanoMenu({ anchor: fxPromptBtn.getBoundingClientRect(), items, width: 240, maxHeight: 120, gap: menuGap(), container: panel, direction: 'up' })
     const outside = event => {
-      if (event.target.closest?.('.nano-menu') || fxPromptBtn.contains(event.target)) return
+      if (event.target.closest?.('.nano-anchor') || fxPromptBtn.contains(event.target)) return
       clearActive()
     }
     document.addEventListener('pointerdown', outside, true)
@@ -3055,14 +3051,16 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     const num = (name, unit, value, desc, range, factor = 1) => `
       <div class="np-field"><div class="np-field-text"><span class="np-field-name">${escapeHtml(desc)}</span><span class="np-field-desc">${escapeHtml(range)}</span></div>
       <span class="np-num"><input name="${name}" type="number" step="${factor > 1 ? 'any' : '1'}" value="${factor > 1 ? value / factor : value}" data-factor="${factor}"><i class="np-num-unit">${escapeHtml(unit)}</i></span></div>`
-    /* N-segment sliding switch — same anatomy as the toolbar view switch */
+    /* Settings rows are the host SettingsValueField anatomy: title + description
+       on the left, the control on the right, one hairline between rows. The
+       control itself is the host SegmentedControl, mounted into `.np-seg` by
+       setup() below (DESIGN.md §6.1). */
     const sw = (field, desc, hint, options) => {
       const current = field === 'autoSave' || field === 'followSessionWorkspace' ? String(values[field] !== false) : String(values[field])
       const index = Math.max(0, options.findIndex(o => String(o.value) === current))
-      const labels = options.map(o => `<span class="np-switch-label">${escapeHtml(o.label)}</span>`).join('')
       return `
       <div class="np-field"><div class="np-field-text"><span class="np-field-name">${escapeHtml(desc)}</span><span class="np-field-desc">${escapeHtml(hint)}</span></div>
-      <button type="button" class="np-switch" data-seg-field="${field}" data-segments="${options.length}" role="switch" aria-checked="${index === 0}" style="--np-switch-n:${options.length};--np-switch-i:${index}"><span class="np-switch-thumb">${escapeHtml(options[index].label)}</span>${labels}</button></div>`
+      <span class="np-seg" data-seg-field="${field}" data-seg-value="${escapeAttr(String(options[index].value))}"></span></div>`
     }
     dialog({
       title: copy.settingsTitle,
@@ -3103,7 +3101,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
         ${num('editorFontSizePx', 'px', values.editorFontSizePx, copy.editorFontSize, copy.editorFontSizeHint)}
       </section>
       <section class="np-section" data-tab="fx">
-        <div class="np-field"><div class="np-field-text"><span class="np-field-name">${escapeHtml(copy.fxRuntime)}</span><span class="np-field-desc">${escapeHtml(copy.fxRuntimeHint)}</span></div><button type="button" class="np-switch" disabled aria-disabled="true" style="--np-switch-n:2;--np-switch-i:0"><span class="np-switch-thumb">wasm</span><span class="np-switch-label">wasm</span><span class="np-switch-label">sandbox</span></button></div>
+        <div class="np-field"><div class="np-field-text"><span class="np-field-name">${escapeHtml(copy.fxRuntime)}</span><span class="np-field-desc">${escapeHtml(copy.fxRuntimeHint)}</span></div><span class="np-seg" data-seg-static="runtime" data-seg-value="wasm"></span></div>
         <div class="np-field"><div class="np-field-text"><span class="np-field-name">${escapeHtml(copy.fxCredit)}</span><span class="np-field-desc">${escapeHtml(copy.fxCreditHint)}</span></div><span class="np-fx-credit-links"><a href="https://github.com/vercel-labs/fx" target="_blank" rel="noreferrer noopener">${escapeHtml(copy.fxRepo)}</a><a href="https://www.apache.org/licenses/LICENSE-2.0" target="_blank" rel="noreferrer noopener">${escapeHtml(copy.fxLicenseLink)}</a></span></div>
         <div class="np-field"><div class="np-field-text"><span class="np-field-name">${escapeHtml(copy.fxModelHeading)}</span><span class="np-field-desc">${escapeHtml(copy.fxModelHint)}</span></div></div>
         <div class="np-fx-model-settings"><span class="np-field-desc">${escapeHtml(copy.fxModelLoading)}</span></div>
@@ -3250,37 +3248,55 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
         showError,
       })
 
+      /* Every segmented settings row is the host SegmentedControl, mounted into its
+         `.np-seg` placeholder. Each control owns its value; the read-back after a
+         write is forced back through `update` because normalizeSettings may coerce
+         the stored value (autoSave-family defaults ON, mpEnabled/s3Enabled default OFF). */
+      const segmentValue = (field, isBoolField) => {
+        if (field === 'mpEnabled' || field === 's3Enabled') return String(state.settings[field] === true)
+        return isBoolField ? String(state.settings[field] !== false) : String(state.settings[field])
+      }
+      /* React roots mounted into the card body; dialog() runs their unmount when the
+         card closes, because nano-ui only disposes its own tree. */
+      const mounts = []
+      for (const hostEl of el.querySelectorAll('.np-seg[data-seg-field]')) {
+        const field = hostEl.dataset.segField
+        const options = SW_OPTIONS[field]
+        if (!options) continue
+        const isBoolField = field === 'autoSave' || field === 'followSessionWorkspace' || field === 'mpEnabled' || field === 's3Enabled'
+        const handle = mountNano(hostEl, SegmentedControl, {
+          id: `np-seg-${field}`,
+          value: hostEl.dataset.segValue,
+          label: hostEl.previousElementSibling?.querySelector('.np-field-name')?.textContent ?? field,
+          options,
+          onChange: next => {
+            const merged = { ...state.settings }
+            if (isBoolField) merged[field] = next === 'true'
+            else merged[field] = next
+            state.settings = normalizeSettings(merged)
+            if (state.db) void writeSettings(state.db, state.settings).catch(showError)
+            const current = segmentValue(field, isBoolField)
+            handle.update({ value: options.some(option => String(option.value) === current) ? current : options[0].value })
+            /* Turning cloud sync on/off starts or stops the polling loop. */
+            if (field === 's3Enabled') sync.start()
+            /* Repaint the chip immediately so the new motion is visible. */
+            if (field === 'cloudMotion') paintCloud(sync.info())
+            render()
+          },
+        })
+        mounts.push(handle)
+      }
+      const staticSeg = el.querySelector('.np-seg[data-seg-static]')
+      if (staticSeg) {
+        mounts.push(mountNano(staticSeg, SegmentedControl, {
+          id: 'np-seg-runtime',
+          value: staticSeg.dataset.segValue,
+          disabled: true,
+          options: [{ value: 'wasm', label: 'wasm' }, { value: 'sandbox', label: 'sandbox' }],
+        }))
+      }
+
       el.addEventListener('click', event => {
-        /* N-segment switch: pick the segment under the pointer, slide the labelled thumb */
-        const seg = event.target instanceof HTMLElement ? event.target.closest('.np-switch[data-seg-field]') : null
-        if (seg) {
-          const field = seg.dataset.segField
-          const options = SW_OPTIONS[field]
-          if (!options) return
-          const rect = seg.getBoundingClientRect()
-          const index = Math.min(options.length - 1, Math.max(0, Math.floor((event.clientX - rect.left) / (rect.width / options.length))))
-          const merged = { ...state.settings }
-          const isBoolField = field === 'autoSave' || field === 'followSessionWorkspace' || field === 'mpEnabled' || field === 's3Enabled'
-          if (isBoolField) merged[field] = options[index].value === 'true'
-          else merged[field] = options[index].value
-          state.settings = normalizeSettings(merged)
-          if (state.db) void writeSettings(state.db, state.settings).catch(showError)
-          /* Readback differs: autoSave-family defaults ON (off only when
-             explicitly false), mpEnabled defaults OFF (on only when true). */
-          const value = field === 'mpEnabled' || field === 's3Enabled'
-            ? String(state.settings[field] === true)
-            : (isBoolField ? String(state.settings[field] !== false) : String(state.settings[field]))
-          const active = Math.max(0, options.findIndex(o => String(o.value) === value))
-          seg.style.setProperty('--np-switch-i', String(active))
-          seg.setAttribute('aria-checked', String(active === 0))
-          seg.querySelector('.np-switch-thumb').textContent = options[active].label
-          /* Turning cloud sync on/off starts or stops the polling loop. */
-          if (field === 's3Enabled') sync.start()
-          /* Repaint the chip immediately so the new motion is visible. */
-          if (field === 'cloudMotion') paintCloud(sync.info())
-          render()
-          return
-        }
         const action = event.target instanceof HTMLElement ? event.target.dataset.go : undefined
         if (action === 'reset-position') {
           state.ui.entryX = null
@@ -3360,6 +3376,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
         if (merged.s3IntervalSec !== previousInterval) sync.start()
         render()
       })
+      return () => { for (const mount of mounts) mount.unmount() }
       },
     })
   }
@@ -3529,7 +3546,6 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
   }
 
   drag(entry, (moved, x, y) => {
-    entry.classList.toggle('np-tip-left', entry.getBoundingClientRect().left < 96)
     if (moved) {
       state.ui.entryX = x
       state.ui.entryY = y
@@ -3719,7 +3735,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
         rect = { left: box.right - 28, top: box.top, right: box.right, bottom: box.bottom, width: 28, height: box.height }
       }
     }
-    const raw = openNanoMenu({ anchor: rect, width: 160, gap: menuGap(), theme: resolvedTheme(), z: NP_PORTAL_Z, items })
+    const raw = openNanoMenu({ anchor: rect, width: 160, gap: menuGap(), container: panel, items })
     closeMenu = () => raw.close()
   }
 
@@ -3742,7 +3758,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       { id: 'all', label: `${copy.kindAll ?? copy.kindFilter}${current === null ? ' ✓' : ''}`, run: () => { state.ui.kindFilter = null; render() } },
       ...KINDS.map(k => ({ id: k, label: `${copy.kinds[k] ?? k}${current === k ? ' ✓' : ''}`, run: () => { state.ui.kindFilter = k; render() } })),
     ]
-    const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), width: 160, gap: menuGap(), theme: resolvedTheme(), z: NP_PORTAL_Z, items })
+    const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), width: 160, gap: menuGap(), container: panel, items })
     closeMenu = () => raw.close()
   }
 
@@ -3806,7 +3822,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       ? { left: point.x, top: point.y, right: point.x, bottom: point.y, width: 0, height: 0 }
       : anchor.getBoundingClientRect()
     const raw = openNanoMenu({
-      anchor: anchorRect, width: file ? 190 : 160, gap: menuGap(), theme: resolvedTheme(), z: NP_PORTAL_Z, items,
+      anchor: anchorRect, width: file ? 190 : 160, gap: menuGap(), container: panel, items,
     })
     closeMenu = () => raw.close()
   }
@@ -3942,10 +3958,6 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     /* The status chip replaces the old footer Save button: one click flushes
        the draft and commits a manual version. */
     if (action === 'save-now') { perf.count('version-save'); void commit('manual').catch(showError) }
-    if (action === 'view') {
-      state.view = state.view === 'rendered' ? 'source' : 'rendered'
-      void renderBody()
-    }
     if (action === 'toggle-wrap') {
       state.ui.wordWrap = state.ui.wordWrap === false
       applyWrap()
@@ -4203,9 +4215,12 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
   function paintSlash() {
     const items = slashItems()
     state.slashIndex = clamp(state.slashIndex, 0, Math.max(0, items.length - 1))
+    /* The slash menu is plain in-window DOM (it is positioned at the caret and
+       driven by the editor's own Arrow/Enter keys), so its rows carry this
+       plugin's class names, never a nano-ui menu class (DESIGN.md §6.2). */
     slashMenu.innerHTML = items.length === 0
       ? `<p class="np-slash-empty">${escapeHtml(text().noMatches)}</p>`
-      : items.map((def, index) => `<button type="button" class="nano-menu-item" data-slash="${def.kind}" data-active="${index === state.slashIndex}"><span class="nano-menu-icon" aria-hidden="true">${def.icon}</span><span class="nano-menu-label">${escapeHtml(formatLabel(def.kind))}</span></button>`).join('')
+      : items.map((def, index) => `<button type="button" class="np-slash-item" data-slash="${def.kind}" data-active="${index === state.slashIndex}"><span class="np-slash-icon" aria-hidden="true">${def.icon}</span><span class="np-slash-label">${escapeHtml(formatLabel(def.kind))}</span></button>`).join('')
     slashMenu.querySelector('[data-active="true"]')?.scrollIntoView({ block: 'nearest' })
   }
 
@@ -4498,7 +4513,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     disposers.push(() => { channel.close(); bcTrack.detach() })
   }
 
-  const stop = appTheme.subscribe(() => render())
+  const stop = hostTheme.subscribe(() => render())
   const stopThemeInner = typeof stop === 'function' ? stop : () => {}
   const languageStop = language.subscribe(() => render())
   const stopLanguage = typeof languageStop === 'function' ? languageStop : () => {}
@@ -4525,10 +4540,11 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       void persistUi()
     },
     setShortcut(label, keys) {
+      /* Native title + aria-label are the launcher's hint (no hand-drawn tooltip; the
+         host Tooltip needs a React child, see the mount comment at the top). */
       entry.title = label
       entry.setAttribute('aria-label', label)
       if (keys) entry.setAttribute('aria-keyshortcuts', keys)
-      tip.textContent = label
     },
     failed(error) {
       state.db = null
@@ -4536,8 +4552,6 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       showError(error)
     },
   }
-  entry.addEventListener('pointerenter', () => { tip.hidden = false })
-  entry.addEventListener('pointerleave', () => { tip.hidden = true })
 
   /* Private controller (CF1115 / P2-03): the panel holds the DB + operations.
      * The host half exposes ONLY the minimal `import` through the cordis

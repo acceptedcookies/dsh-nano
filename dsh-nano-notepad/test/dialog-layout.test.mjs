@@ -1,47 +1,75 @@
 /**
- * Dialog geometry + form-control skin.
+ * Dialog geometry + form-control skin (NUE-1117 P9-01; DESIGN.md §5).
  *
- * Two bugs the owner hit on Windows, both from a rule being wider than it meant
- * to be:
+ * Two bugs from the region era are kept as regressions, and the region contract
+ * itself is replaced by the window-overlay one:
  *
- *   1. The dialog's portal layer is the shell Modal's `.root`, which is
- *      content-box with its own padding, and the mask is an absolutely
- *      positioned child (`inset: 0` → the padding box). Setting a `region`
- *      without border-box grows the layer by twice the padding, so the dimmed
- *      area hangs past the owning window's right and bottom edges.
+ *   1. The old adapter resized the shell Modal's portal layer to a measured rect
+ *      (`region`), so the mask hung past the owning window's corners unless the
+ *      layer was border-box. Window cards now render into `.np-window` through
+ *      nano-ui's overlay, whose mask is `inset: 0` inside the window itself — the
+ *      card keeps its pixel sizes (`width` / `maxHeight` / `fixedHeight`) and the
+ *      overlay supplies the geometry.
  *   2. `.np-dlg-body input` styled *every* input as a full-width text field, so
- *      the S3 endpoint form's checkbox rendered as a 300px slab with 8px
- *      padding instead of a 13px box.
+ *      the S3 endpoint form's checkbox rendered as a 300px slab with 8px padding
+ *      instead of a 13px box. That rule and its row variant stay pinned here.
+ *
+ * `NANO_UI_SRC` / `NP_SRC` let NUE1117-T26 run this file against the pre-hard-cut
+ * tree (which still carries `region` and no `container`).
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
-const PANEL = readFileSync(join(ROOT, 'src', 'client', 'panel.js'), 'utf8')
-const NANO_DOM = readFileSync(join(ROOT, '..', 'packages', 'dsh-nano-ui', 'src', 'dom.js'), 'utf8')
+const NP_SRC = process.env.NP_SRC ?? join(ROOT, 'src', 'client')
+const NANO_UI_SRC = process.env.NANO_UI_SRC ?? join(ROOT, '..', 'packages', 'dsh-nano-ui', 'src')
 
-/** The `Object.assign(layer.style, {...})` block that applies a dialog region. */
-function regionBlock() {
-  const at = NANO_DOM.indexOf('if (wantsRegion)')
-  assert.ok(at >= 0, 'openNanoDialog must handle the region option')
-  const end = NANO_DOM.indexOf('})', at)
-  return NANO_DOM.slice(at, end)
+const read = path => readFileSync(path, 'utf8')
+/** A nano-ui source file, or '' when the tree predates it (NUE1117-T26 runs this against 0.1.0). */
+const readOrEmpty = path => (existsSync(path) ? read(path) : '')
+
+const PANEL = read(join(NP_SRC, 'panel.js'))
+const NANO_DOM = readOrEmpty(join(NANO_UI_SRC, 'dom.js'))
+const NANO_OVERLAY = readOrEmpty(join(NANO_UI_SRC, 'overlay.js'))
+const NANO_STYLES = readOrEmpty(join(NANO_UI_SRC, 'styles.js'))
+
+/** The one `openNanoDialog({…})` call's argument text (the notepad has a single adapter). */
+function dialogArgs() {
+  const at = PANEL.indexOf('openNanoDialog({')
+  assert.ok(at >= 0, 'panel.js must call openNanoDialog')
+  let depth = 0
+  const start = at + 'openNanoDialog'.length
+  for (let i = start; i < PANEL.length; i += 1) {
+    if (PANEL[i] === '{') depth += 1
+    else if (PANEL[i] === '}') {
+      depth -= 1
+      if (depth === 0) return PANEL.slice(start, i + 1)
+    }
+  }
+  throw new Error('unbalanced openNanoDialog call')
 }
 
-test('a regioned dialog layer is border-box so the mask cannot overhang', () => {
-  const block = regionBlock()
-  assert.match(block, /boxSizing:\s*'border-box'/, 'the regioned layer must be border-box')
-  assert.match(block, /width:\s*`\$\{r\.width\}px`/)
-  assert.match(block, /height:\s*`\$\{r\.height\}px`/)
+test('window cards declare the window container and keep their pixel sizes', () => {
+  const args = dialogArgs()
+  assert.match(args, /container:\s*viewport \? undefined : panel/, 'a window card renders inside .np-window; the fx card is main-window level')
+  assert.equal(/(^|[\s,{])region\s*:/.test(args), false, 'the measured-rect region is retired')
+  assert.match(args, /width:\s*viewport \? Math\.min\(680, Math\.round\(window\.innerWidth \* 0\.7\)\) : Math\.round\(rect\.width \* 0\.6\)/, 'card width keeps its original figures')
+  assert.match(args, /maxHeight:\s*cap \+ 24/, 'card max height keeps its original figure')
+  assert.match(args, /fixedHeight:\s*spec\.fixedHeight === true \? cap : undefined/, 'tabbed cards keep their fixed height')
 })
 
-test('a regioned dialog layer follows the owning window shape', () => {
-  const block = regionBlock()
-  assert.match(block, /borderRadius:\s*'var\(--dsw-radius-panel/, 'the mask must follow the window radius')
-  assert.match(block, /overflow:\s*'hidden'/, 'the layer must clip the mask to that radius')
+test('the window overlay owns the mask and the card box', () => {
+  assert.match(NANO_OVERLAY, /assertContainer\(container, 'NanoWindowDialog'\)/, 'a detached container throws instead of falling back to body')
+  assert.match(NANO_OVERLAY, /style\.width = `min\(\$\{Math\.round\(width\)\}px, 100%\)`/, 'width is capped by the container')
+  assert.match(NANO_OVERLAY, /style\.maxHeight = `min\(\$\{Math\.round\(maxHeight\)\}px, 100%\)`/, 'max height is capped by the container')
+  assert.match(NANO_OVERLAY, /style\.height = `min\(\$\{Math\.round\(fixedHeight\)\}px, 100%\)`/, 'fixed height is capped by the container')
+  assert.match(NANO_OVERLAY, /useModalLayer\(cardRef, true, onCancel\)/, 'Escape / focus trap / focus return come from the host modal stack')
+  assert.match(NANO_STYLES, /\.nano-overlay \{[^}]*inset: 0/, 'the mask covers the container')
+  assert.match(NANO_STYLES, /\.nano-overlay \{[^}]*pointer-events: auto/, 'the layer turns hit-testing back on inside the window')
+  assert.equal(/MutationObserver/.test(NANO_DOM), false, 'the portal observer is gone')
 })
 
 test('the generic dialog input skin skips checkbox and radio', () => {

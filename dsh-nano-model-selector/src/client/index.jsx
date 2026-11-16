@@ -4,7 +4,7 @@ import * as React from 'react'
 import { createRoot } from 'react-dom/client'
 import { ModelSelector } from './ModelSelector.jsx'
 import { AsyncHistoryDialog, historyMenuIcon } from './AsyncHistoryDialog.jsx'
-import { AsyncActivityLine } from './AsyncActivityLine.jsx'
+import { AsyncStatusBadge } from './AsyncStatusBadge.jsx'
 import { profiler } from './perf.js'
 import { copyFor } from './i18n.js'
 
@@ -117,11 +117,13 @@ export function apply(ctx) {
     }],
   }), 'nano-model-selector: async compaction history')
 
-  // In-flight async-compaction status, in the composer's own activity row.
-  // The shell reserves that row only while a plugin reports itself active, so
-  // the line stays invisible whenever the lane is idle.
-  ctx.slots.inject('conversation.input.activity', () => ctx.slots.register({
-    name: 'conversation.input.activity',
+  // Async-compaction status, in the SESSION header — not the composer. The
+  // composer's activity row means "the input bar is busy"; a background
+  // compaction job is session state and must not look like input state.
+  // A list slot: `id` is required or the registration is rejected outright.
+  ctx.slots.inject('conversation.session.header.utilities', () => ctx.slots.register({
+    name: 'conversation.session.header.utilities',
+    id: 'nano-model-selector.async-status',
     registrant: 'nano-model-selector',
     inject: sessionId => ({
       sessionId,
@@ -129,7 +131,7 @@ export function apply(ctx) {
     }),
   }, props => (
     <SlotBoundary>
-      <AsyncActivityLine {...props} />
+      <AsyncStatusBadge {...props} />
     </SlotBoundary>
   )))
 

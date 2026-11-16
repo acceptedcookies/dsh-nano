@@ -69,6 +69,7 @@ const ASYNC_HISTORY_LIMIT = 200
 const ASYNC_ARMED_TTL_MS = 15 * 60 * 1000
 const ASYNC_RUNNING_TTL_MS = 3 * 60 * 1000
 const ASYNC_FAILED_TTL_MS = 10 * 60 * 1000
+const ASYNC_COMMITTED_TTL_MS = 10 * 60 * 1000
 
 /** Session ids only; anything else could escape the ledger directory. */
 const ASYNC_HISTORY_ID = /^(?!\.{1,2}$)[A-Za-z0-9._-]{1,128}$/
@@ -376,6 +377,23 @@ export function derivePhase(tail) {
       promptVersion,
       reason: tail.reason ?? null,
       detail: tail.detail ?? null,
+    }
+  }
+  // A fresh commit is reported as `committed`, not `idle`: the shell's own
+  // 「上下文已压缩」 row does not say WHICH lane produced it, so the async
+  // attribution has to come from us, and it has to outlive the moment of
+  // commit long enough to be read.
+  if (tail.kind === 'commit' && age <= ASYNC_COMMITTED_TTL_MS) {
+    return {
+      state: 'committed',
+      since: tail.at,
+      model,
+      promptVersion,
+      reason: null,
+      detail: null,
+      compactionId: typeof tail.compactionId === 'string' ? tail.compactionId : null,
+      tokens: typeof tail.tokens === 'number' ? tail.tokens : null,
+      records: typeof tail.records === 'number' ? tail.records : null,
     }
   }
   return idle

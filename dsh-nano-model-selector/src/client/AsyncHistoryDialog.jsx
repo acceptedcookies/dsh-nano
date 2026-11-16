@@ -21,7 +21,6 @@ import * as React from 'react'
 import {
   Button,
   SegmentedTabs,
-  StateDot,
   Tag,
   Tooltip,
   relativeTime,
@@ -29,33 +28,48 @@ import {
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { NanoDialog } from 'dsh-nano-ui'
 import { fetchCompactHistory } from './compact.js'
-import { HISTORY_KINDS, UNKNOWN_KIND, agoText, pct, recordHeadline } from './history-format.js'
+import { HISTORY_KINDS, UNKNOWN_KIND, agoText, axisLabels, pct, recordHeadline, resolveFill } from './history-format.js'
 import { HistoryIcon } from './icons.jsx'
 
 /**
  * Water-line gauge: fill against the three policy lines.
  *
- * The bar is drawn with plain divs (layout, not a control) so it can sit on the
- * card's own token scale; the ticks are the H/B/S thresholds. A fill past B is
- * the state in which an episode must exist — that is the whole point of the
- * gauge, so the B tick is emphasized.
+ * Layout rule learned the hard way: the line labels must NOT sit under the
+ * track, because that row is where the stat cards begin and the two collided.
+ * They live on an axis ABOVE the track, each anchored at its own threshold and
+ * carrying its own value, so "which line is where" is readable without a
+ * legend that points at nothing. The track itself is then free to show only
+ * the fill and the tick marks.
  *
- * @param {{fill: number|null, health: number, buffer: number, safety: number, copy: object}} props
+ * @param {{fill: number|null, fillFromDecision?: boolean, health: number, buffer: number, safety: number, copy: object}} props
  */
-function WaterLine({ fill, health, buffer, safety, copy }) {
+function WaterLine({ fill, fillFromDecision = false, health, buffer, safety, copy }) {
   const clamped = typeof fill === 'number' && Number.isFinite(fill) ? Math.min(1, Math.max(0, fill)) : null
-  const tick = (value, label, tone) => React.createElement('span', {
-    key: label,
+
+  const axis = axisLabels(health, buffer, safety)
+  const axisLabel = line => React.createElement('span', {
+    key: line.letter,
+    className: 'nms-hist-axis-label',
+    'data-tone': line.tone,
+    style: {
+      left: `${line.value * 100}%`,
+      transform: `translateX(${line.anchor === 'start' ? '0' : line.anchor === 'end' ? '-100%' : '-50%'})`,
+    },
+  }, line.text)
+
+  const tick = (value, letter, tone) => React.createElement('span', {
+    key: `tick-${letter}`,
     className: 'nms-hist-tick',
     'data-tone': tone,
     style: { left: `${value * 100}%` },
-  }, React.createElement(Tooltip, { content: `${label} ${pct(value)}` },
-    React.createElement('span', { className: 'nms-hist-tick-label' }, label)))
+    'aria-hidden': 'true',
+  })
 
   return React.createElement('div', { className: 'nms-hist-water' },
     React.createElement('div', { className: 'nms-hist-water-head' },
       React.createElement('span', { className: 'nms-hist-water-value' }, pct(fill)),
-      React.createElement('span', { className: 'nms-hist-water-caption' }, copy.historyWaterCaption)),
+      fillFromDecision ? React.createElement('span', { className: 'nms-hist-water-source' }, copy.historyFillAtDecision) : null),
+    React.createElement('div', { className: 'nms-hist-axis' }, axis.map(axisLabel)),
     React.createElement('div', {
       className: 'nms-hist-water-track',
       role: 'img',
@@ -91,7 +105,7 @@ function RecordRow({ record, now, copy }) {
       'aria-expanded': open,
       onClick: () => setOpen(value => !value),
     },
-    React.createElement(StateDot, { state: kind.dot }),
+    React.createElement('span', { className: 'nms-hist-row-mark', 'data-kind': record.kind, 'aria-hidden': 'true' }),
     React.createElement(Tag, { tone: kind.tone }, label),
     React.createElement('span', { className: 'nms-hist-row-headline', title: headline }, headline),
     React.createElement('span', { className: 'nms-hist-row-time' },
@@ -126,7 +140,7 @@ export function AsyncHistoryDialog({ copy, sessionId, onClose }) {
   const runtime = policy?.runtime ?? null
   const records = Array.isArray(history?.records) ? history.records : []
   const summary = history?.summary ?? null
-  const fill = typeof runtime?.fill === 'number' ? runtime.fill : null
+  const fill = resolveFill(runtime?.fill, records)
 
   const diagnostics = React.useMemo(() => JSON.stringify({
     sessionId,
@@ -204,7 +218,8 @@ export function AsyncHistoryDialog({ copy, sessionId, onClose }) {
   },
   React.createElement('div', { className: 'nms-hist' },
     React.createElement(WaterLine, {
-      fill,
+      fill: fill.value,
+      fillFromDecision: fill.fromDecision,
       health: policy?.healthTargetAsync ?? 0.5,
       buffer: policy?.bufferSizeAsync ?? 0.65,
       safety: policy?.bufferSizeSafety ?? 0.9,

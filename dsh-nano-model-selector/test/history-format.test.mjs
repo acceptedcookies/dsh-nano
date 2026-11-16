@@ -10,7 +10,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  HISTORY_KINDS, UNKNOWN_KIND, activityLineFor, agoText, foldSummary, pct, recordHeadline, relativeTimeOf,
+  HISTORY_KINDS, UNKNOWN_KIND, agoText, axisLabels, foldSummary, pct, recordHeadline, relativeTimeOf, resolveFill, resolvePhase, statusBadgeFor,
 } from '../src/client/history-format.js'
 
 const COPY = {
@@ -18,13 +18,16 @@ const COPY = {
   historyRetain: '保留',
   historyJustNow: '刚刚',
   historyAgo: { minutes: '{n} 分钟前', hours: '{n} 小时前', days: '{n} 天前', months: '{n} 个月前', years: '{n} 年前' },
-  historyActivityArmed: '异步压缩已排队',
-  historyActivityArmedTip: '等空闲',
-  historyActivityRunning: '正在异步压缩',
-  historyActivityRunningTip: '正在摘要',
-  historyActivityFailed: '异步压缩失败',
-  historyActivityFailedTip: '原因：{reason}',
-  historyActivityUnknownReason: '未知原因',
+  historyBadgeArmed: '异步压缩已排队',
+  historyBadgeArmedTip: '等空闲',
+  historyBadgeRunning: '正在异步压缩',
+  historyBadgeRunningTip: '正在摘要',
+  historyBadgeCommitted: '已异步压缩',
+  historyBadgeCommittedSize: '{n} 条',
+  historyBadgeCommittedTip: '上一轮由异步通道完成',
+  historyBadgeFailed: '异步压缩失败',
+  historyBadgeFailedTip: '原因：{reason}',
+  historyUnknownReason: '未知原因',
   historyModelRouted: '跟随会话模型',
   historyPromptVersion: '摘要 v{v}',
 }
@@ -82,15 +85,16 @@ test('recordHeadline never prints undefined for a partial record', () => {
   assert.equal(recordHeadline(undefined, COPY), '—')
 })
 
-test('every known kind has a shell tone and a StateDot state', () => {
+test('every known kind has a shell Tag tone and no live-state dot', () => {
   const tones = new Set(['danger', 'info', 'neutral', 'outline', 'quiet', 'solid', 'success', 'warning'])
-  const dots = new Set(['ongoing', 'done', 'idle', 'error'])
   for (const [kind, spec] of Object.entries(HISTORY_KINDS)) {
     assert.ok(tones.has(spec.tone), `${kind} tone ${spec.tone} is not a shell Tag tone`)
-    assert.ok(dots.has(spec.dot), `${kind} dot ${spec.dot} is not a StateDot state`)
+    // A historical record must never carry a live-state marker: the shell's
+    // 'ongoing' dot is a hollow ring that reads as a spinner that never stops.
+    assert.equal(spec.dot, undefined, `${kind} must not declare a StateDot state`)
   }
   assert.ok(tones.has(UNKNOWN_KIND.tone))
-  assert.ok(dots.has(UNKNOWN_KIND.dot))
+  assert.equal(UNKNOWN_KIND.dot, undefined)
 })
 
 test('foldSummary counts what the timeline renders, in one pass', () => {
@@ -110,38 +114,104 @@ test('foldSummary counts what the timeline renders, in one pass', () => {
   assert.equal(foldSummary(null).commit, 0)
 })
 
-test('activityLineFor is silent while the lane is idle', () => {
-  assert.equal(activityLineFor(null, COPY), null)
-  assert.equal(activityLineFor(undefined, COPY), null)
-  assert.equal(activityLineFor({ state: 'idle' }, COPY), null)
+test('statusBadgeFor is silent while the lane is idle', () => {
+  assert.equal(statusBadgeFor(null, COPY), null)
+  assert.equal(statusBadgeFor(undefined, COPY), null)
+  assert.equal(statusBadgeFor({ state: 'idle' }, COPY), null)
 })
 
-test('activityLineFor names the model and the instruction version', () => {
-  const running = activityLineFor({
+test('statusBadgeFor names the model and the instruction version', () => {
+  const running = statusBadgeFor({
     state: 'running',
     model: { provider: 'magpie', model: 'auto/deepseek-v4.1-flash-1017' },
     promptVersion: '3b7aa71f',
   }, COPY)
   assert.equal(running.state, 'running')
   assert.equal(running.text, '正在异步压缩')
-  assert.equal(running.meta, 'magpie/auto/deepseek-v4.1-flash-1017 · 摘要 v3b7aa71f')
-  assert.equal(running.tooltip, '正在摘要')
+  assert.match(running.tooltip, /正在摘要/)
+  assert.match(running.tooltip, /magpie\/auto\/deepseek-v4\.1-flash-1017 · 摘要 v3b7aa71f/)
 
-  const armed = activityLineFor({ state: 'armed', model: null, promptVersion: null }, COPY)
+  const armed = statusBadgeFor({ state: 'armed', model: null, promptVersion: null }, COPY)
   assert.equal(armed.text, '异步压缩已排队')
   // An empty policy model means "reuse the routed target": say so instead of
   // printing "undefined/undefined".
-  assert.equal(armed.meta, '跟随会话模型')
+  assert.match(armed.tooltip, /跟随会话模型/)
 })
 
-test('activityLineFor reports the failure reason and never hides it', () => {
-  const failed = activityLineFor({ state: 'failed', reason: 'transient', detail: '429: usage limit reached' }, COPY)
+test('statusBadgeFor keeps saying async after the commit', () => {
+  // The shell's own 「上下文已压缩」 row is host-owned and cannot say which lane
+  // produced it, so the badge has to carry that attribution.
+  const committed = statusBadgeFor({ state: 'committed', records: 332, tokens: 90010, promptVersion: '3b7aa71f' }, COPY)
+  assert.equal(committed.state, 'committed')
+  assert.equal(committed.text, '已异步压缩 · 332 条')
+  assert.match(committed.tooltip, /上一轮由异步通道完成/)
+
+  // A commit without a record count still says async, just without the size.
+  assert.equal(statusBadgeFor({ state: 'committed' }, COPY).text, '已异步压缩')
+})
+
+test('statusBadgeFor reports the failure reason and never hides it', () => {
+  const failed = statusBadgeFor({ state: 'failed', reason: 'transient', detail: '429: usage limit reached' }, COPY)
   assert.equal(failed.text, '异步压缩失败')
-  assert.equal(failed.meta, '429: usage limit reached')
   assert.equal(failed.tooltip, '原因：429: usage limit reached')
 
-  // A drop without detail still names its reason class.
-  assert.equal(activityLineFor({ state: 'failed', reason: 'no-range' }, COPY).meta, 'no-range')
-  // A drop with neither falls back to the localized placeholder.
-  assert.equal(activityLineFor({ state: 'failed' }, COPY).meta, '未知原因')
+  assert.match(statusBadgeFor({ state: 'failed', reason: 'no-range' }, COPY).tooltip, /no-range/)
+  assert.match(statusBadgeFor({ state: 'failed' }, COPY).tooltip, /未知原因/)
+})
+
+test('resolvePhase prefers the host projection whenever it has something to say', () => {
+  const host = { state: 'running', model: { provider: 'p', model: 'm' } }
+  assert.equal(resolvePhase(host, [], Date.now()), host)
+  // A host that predates `committed` reports idle; the ledger wins.
+  const now = Date.now()
+  const records = [{ at: new Date(now - 60_000).toISOString(), kind: 'commit', tokens: 90010, records: 332 }]
+  assert.equal(resolvePhase({ state: 'idle' }, records, now).state, 'committed')
+  assert.equal(resolvePhase(null, records, now).state, 'committed')
+})
+
+test('resolvePhase keeps the commit attribution only while it is fresh', () => {
+  const now = Date.now()
+  const old = [{ at: new Date(now - 60 * 60_000).toISOString(), kind: 'commit', tokens: 1, records: 1 }]
+  assert.equal(resolvePhase({ state: 'idle' }, old, now).state, 'idle')
+  // A non-commit tail is not an attribution.
+  const drop = [{ at: new Date(now - 60_000).toISOString(), kind: 'drop', reason: 'transient' }]
+  assert.equal(resolvePhase({ state: 'idle' }, drop, now).state, 'idle')
+  assert.equal(resolvePhase(null, [], now), null)
+  assert.equal(resolvePhase(null, [{ kind: 'commit' }], now), null)
+})
+
+test('a committed phase renders as the async attribution badge', () => {
+  const now = Date.now()
+  const records = [{
+    at: new Date(now - 30_000).toISOString(), kind: 'commit', tokens: 90010, records: 332,
+    promptVersion: '3b7aa71f', target: { provider: 'magpie', model: 'auto/deepseek-v4.1-flash-1017' },
+  }]
+  const badge = statusBadgeFor(resolvePhase({ state: 'idle' }, records, now), COPY)
+  assert.equal(badge.state, 'committed')
+  assert.equal(badge.text, '已异步压缩 · 332 条')
+  assert.match(badge.tooltip, /摘要 v3b7aa71f/)
+})
+
+test('axisLabels puts each threshold at its own position with its value', () => {
+  const axis = axisLabels(0.5, 0.65, 0.9)
+  assert.deepEqual(axis.map(l => l.text), ['H 50.0%', 'B 65.0%', 'S 90.0%'])
+  assert.deepEqual(axis.map(l => l.value), [0.5, 0.65, 0.9])
+  assert.deepEqual(axis.map(l => l.tone), ['health', 'buffer', 'safety'])
+  assert.deepEqual(axis.map(l => l.anchor), ['middle', 'middle', 'end'])
+})
+
+test('axisLabels keeps end labels inside the track', () => {
+  // A centred label at 0.9 would hang past the right edge and clip.
+  assert.equal(axisLabels(0.05, 0.5, 0.95)[0].anchor, 'start')
+  assert.equal(axisLabels(0.05, 0.5, 0.95)[2].anchor, 'end')
+})
+
+test('axisLabels drops the value when two thresholds would collide', () => {
+  // H ≤ B ≤ S is enforced, but they can still be a percentage point apart.
+  const crowded = axisLabels(0.64, 0.65, 0.9)
+  assert.equal(crowded[0].text, 'H')
+  assert.equal(crowded[1].text, 'B')
+  assert.equal(crowded[2].text, 'S 90.0%')
+  // Colliding labels keep their values on the object even when the text is short.
+  assert.equal(crowded[0].value, 0.64)
 })

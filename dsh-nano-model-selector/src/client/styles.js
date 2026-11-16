@@ -189,46 +189,69 @@ select.nms-compact-input { width: 210px; cursor: pointer; }
 .nms-explain-tab:hover { color: var(--dsw-alias-label-primary); }
 .nms-explain-tab[data-active="true"] { background: var(--dsw-alias-state-business-primary); color: var(--dsw-alias-bg-layer-1); }
 .nms-explain-body { color: var(--dsw-alias-label-secondary); font-size: 11px; line-height: 16px; }
-/* ── async-compaction activity line (composer activity row) ─────────────────
-   One line, never two: the composer's activity row is narrow and grows the
-   input bar, so the text ellipsises before it can wrap. State is carried by
-   the glyph colour only — the row must stay quiet next to the composer. */
-.nms-activity { display: flex; align-items: center; gap: 6px; min-width: 0; width: 100%;
-  font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); }
-.nms-activity-glyph { display: inline-flex; align-items: center; justify-content: center;
-  flex: none; color: var(--dsw-alias-label-tertiary); }
-.nms-activity-glyph svg { display: block; }
-.nms-activity[data-state="armed"] .nms-activity-glyph { color: var(--dsw-alias-state-info-primary, #4c9aff); }
-.nms-activity[data-state="running"] .nms-activity-glyph { color: var(--dsw-alias-state-warning-primary, #d29922);
+/* ── async-compaction status badge (session header) ─────────────────────────
+   A quiet pill in the header's action area. It is session state, not input
+   state, so it must read as a label rather than as a control: no border on
+   hover, no pointer affordance, and the glyph alone carries the tone. */
+.nms-badge { display: inline-flex; align-items: center; gap: 5px; flex: none;
+  height: 24px; padding: 0 8px; border-radius: var(--dsw-radius-sm, 8px);
+  background: var(--dsw-alias-bg-layer-1, #202020);
+  box-shadow: inset 0 0 0 var(--dsh-hairline-width, .5px) var(--dsw-alias-border-l2);
+  font-size: 11px; line-height: 1; color: var(--dsw-alias-label-secondary);
+  white-space: nowrap; cursor: default; }
+.nms-badge-glyph { display: inline-flex; align-items: center; justify-content: center; flex: none; }
+.nms-badge-glyph svg { display: block; }
+.nms-badge[data-state="armed"] .nms-badge-glyph { color: var(--dsw-alias-state-info-primary, #4c9aff); }
+.nms-badge[data-state="running"] .nms-badge-glyph { color: var(--dsw-alias-state-warning-primary, #d29922);
   animation: nms-pulse 1.4s ease-in-out infinite; }
-.nms-activity[data-state="failed"] .nms-activity-glyph { color: var(--dsw-alias-state-error-primary, #f25a5a); }
-.nms-activity-text { flex: none; font-weight: 500; color: var(--dsw-alias-label-primary); white-space: nowrap; }
-.nms-activity-meta { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis;
-  white-space: nowrap; color: var(--dsw-alias-label-tertiary); font-variant-numeric: tabular-nums; }
+.nms-badge[data-state="committed"] .nms-badge-glyph { color: var(--dsw-alias-state-success-primary, #3fb950); }
+.nms-badge[data-state="failed"] .nms-badge-glyph { color: var(--dsw-alias-state-error-primary, #f25a5a); }
+.nms-badge[data-state="failed"] { color: var(--dsw-alias-state-error-primary, #f25a5a); }
 @keyframes nms-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
-@media (prefers-reduced-motion: reduce) { .nms-activity[data-state="running"] .nms-activity-glyph { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .nms-badge[data-state="running"] .nms-badge-glyph { animation: none; } }
+
+/* History timeline marker: a static square, deliberately NOT a StateDot ring —
+   a historical record must never look like an in-flight spinner. */
+.nms-hist-row-mark { flex: none; width: 6px; height: 6px; border-radius: 2px;
+  background: var(--dsw-alias-label-tertiary); }
+.nms-hist-row-mark[data-kind="commit"] { background: var(--dsw-alias-state-success-primary, #3fb950); }
+.nms-hist-row-mark[data-kind="drop"] { background: var(--dsw-alias-state-error-primary, #f25a5a); }
+.nms-hist-row-mark[data-kind="arm"] { background: var(--dsw-alias-state-info-primary, #4c9aff); }
+.nms-hist-row-mark[data-kind="skip"] { background: var(--dsw-alias-state-warning-primary, #d29922); }
 
 /* ── async-compaction history dialog ─────────────────────────────────────────
    Every value is a shell token: the card must follow the active theme without
    a second palette. Layout only — no control is restyled here. */
 .nms-hist { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
-.nms-hist-water { display: flex; flex-direction: column; gap: 6px; }
-.nms-hist-water-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.nms-hist-water { display: flex; flex-direction: column; gap: 0; margin-bottom: 4px; }
+.nms-hist-water-head { display: flex; align-items: baseline; gap: 6px; }
 .nms-hist-water-value { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums;
   color: var(--dsw-alias-label-primary); line-height: 24px; }
-.nms-hist-water-caption { font-size: 11px; color: var(--dsw-alias-label-tertiary); }
-.nms-hist-water-track { position: relative; height: 8px; border-radius: 4px;
+/* The provenance tag sits beside the number, not in a caption on the far side:
+   "触发时" qualifies the value it is next to. */
+.nms-hist-water-source { font-size: 11px; color: var(--dsw-alias-label-tertiary);
+  padding: 1px 6px; border-radius: 999px; background: var(--dsw-alias-bg-layer-1, #202020);
+  box-shadow: inset 0 0 0 var(--dsh-hairline-width, .5px) var(--dsw-alias-border-l2); }
+/* Axis row: one label per threshold, anchored at its own position so the
+   reader never has to match a legend to a tick. */
+.nms-hist-axis { position: relative; height: 16px; margin-top: 2px; }
+.nms-hist-axis-label { position: absolute; top: 0; font-size: 10px; line-height: 12px;
+  white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--dsw-alias-label-tertiary); }
+.nms-hist-axis-label[data-tone="health"] { color: var(--dsw-alias-state-success-primary, #3fb950); }
+.nms-hist-axis-label[data-tone="buffer"] { color: var(--dsw-alias-state-warning-primary, #d29922); }
+.nms-hist-axis-label[data-tone="safety"] { color: var(--dsw-alias-state-error-primary, #f25a5a); }
+.nms-hist-water-track { position: relative; height: 8px; border-radius: 4px; margin-top: 2px;
   background: var(--dsw-alias-bg-layer-1, #202020);
   box-shadow: inset 0 0 0 var(--dsh-hairline-width, .5px) var(--dsw-alias-border-l2); }
 .nms-hist-water-fill { position: absolute; inset: 0 auto 0 0; border-radius: 4px;
   background: var(--dsw-alias-label-tertiary); transition: width .18s ease; }
 .nms-hist-water-fill[data-over="true"] { background: var(--dsw-alias-state-warning-primary, #d29922); }
-.nms-hist-tick { position: absolute; top: -3px; width: 0; height: 14px;
+/* Ticks are marks on the track only; their labels live on the axis above. */
+.nms-hist-tick { position: absolute; top: -2px; width: 0; height: 12px;
   border-left: var(--dsh-hairline-width, .5px) dashed var(--dsw-alias-border-l2); }
+.nms-hist-tick[data-tone="health"] { border-left-color: var(--dsw-alias-state-success-primary, #3fb950); }
 .nms-hist-tick[data-tone="buffer"] { border-left-style: solid; border-left-color: var(--dsw-alias-state-warning-primary, #d29922); }
 .nms-hist-tick[data-tone="safety"] { border-left-color: var(--dsw-alias-state-error-primary, #f25a5a); }
-.nms-hist-tick-label { position: absolute; top: 14px; left: 0; transform: translateX(-50%);
-  font-size: 10px; color: var(--dsw-alias-label-tertiary); }
 .nms-hist-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
 .nms-hist-stat { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px;
   border-radius: var(--dsw-radius-sm, 8px); background: var(--dsw-alias-bg-layer-1, #202020);

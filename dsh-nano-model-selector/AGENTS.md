@@ -168,9 +168,17 @@ npm run build
 
 历史视图：会话头部「更多操作」菜单里的「异步压缩历史」（`ctx.contextMenus.register({target:'sessionHeader', order:500})`），打开 nano-ui `NanoDialog`。卡片顶部是水位尺（当前 fill 对 H/B/S 三条线，越过 B 即为应有 episode 的状态），下面是触发/执行/成功/失败四个计数，再下是「时间线 / 诊断」两个页签：时间线逐条列出决策（可展开看原始 JSON），诊断给出 `bundle/policy/effective/runtime/history` 的完整快照并支持一键复制。全部控件来自官方 primitive（`SegmentedTabs`/`Tag`/`StateDot`/`Tooltip`/`Button`/`relativeTime`/`writeClipboard`），配色只读 `--dsw-*` token。
 
-进行中状态：composer 上方的活动行（`conversation.input.activity`）显示 `异步压缩已排队` / `正在异步压缩` / `异步压缩失败`，并附摘要模型与 `摘要 v<8位指纹>`。指纹是生效摘要 prompt 的 sha256 前 8 位（内置与自定义不同，改 `summaryPrompt` 即变），用来判断某次摘要是哪套摘要契约产出的。该行只在非 idle 时出现，提交后自动让位给宿主的「上下文已压缩」行；数据来自同一 GET 的 `history.phase`，空闲时 15s 轮询、armed/running 时 3s。
+状态徽标：会话头部操作区（`conversation.session.header.utilities`，list slot，**必须带 `id`**，否则注册被拒）显示 `异步压缩已排队` / `正在异步压缩` / `已异步压缩 · N 条` / `异步压缩失败`，悬停给出摘要模型与 `摘要 v<8位指纹>`。指纹是生效摘要 prompt 的 sha256 前 8 位（内置与自定义不同，改 `summaryPrompt` 即变）。
 
-`history.phase` 由账本末条推导：`arm`→`armed`（15 分钟内有效）、`claim`→`running`（3 分钟内有效，引擎单次尝试上限 120s）、`drop`→`failed`（10 分钟内有效，带 `reason`/`detail`），`commit`/`skip` 与过期记录一律 `idle`——宿主重启留下的陈旧 `arm` 不会让界面永久显示「正在压缩」。
+**不要放在 `conversation.input.activity`**：那是 composer 自己的活动行，语义是「输入框正忙」；异步压缩是会话级后台任务，放进去会让人以为在等输入。
+
+`已异步压缩` 这一态是必需的：宿主的「上下文已压缩 · 已压缩 N 条历史记录」行由 `CompactionNodeView` 渲染，只传 `node.data`、标题固定回落到 `message.compaction`，**没有异步变体**（上层建筑归 host，插件改不了）。所以异步归属只能由本徽标承担，并在 commit 后保留 10 分钟。
+
+该态由客户端从账本末条推导（`resolvePhase`），不依赖宿主是否已升级：宿主 `phase` 非 idle 时优先用宿主，否则若末条是 10 分钟内的 `commit` 就合成 `committed`。轮询空闲 15s、armed/running 3s。
+
+`history.phase` 由账本末条推导：`arm`→`armed`（15 分钟内有效）、`claim`→`running`（3 分钟内有效，引擎单次尝试上限 120s）、`drop`→`failed`（10 分钟内有效，带 `reason`/`detail`）、`commit`→`committed`（10 分钟内有效，带 `tokens`/`records`/`compactionId`），`skip` 与过期记录一律 `idle`——宿主重启留下的陈旧 `arm` 不会让界面永久显示「正在压缩」。
+
+历史时间线**不使用 `StateDot`**：`ongoing` 是空心环，看起来像永远转不完的 spinner；历史记录是既成事实，用静态方块标记 + `Tag` 语义色即可。
 
 `dsh.client.inject` 必须含 `@deepseek-ai/dsh-client-ui-context-menu`：缺了它，`ctx.contextMenus` 能拿到对象、`register()` 也返回 disposer，但注册进的是另一个 registry，菜单永远不出现。
 

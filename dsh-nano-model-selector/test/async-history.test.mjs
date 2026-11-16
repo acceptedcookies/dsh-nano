@@ -122,8 +122,17 @@ test('derivePhase: a recent drop surfaces its reason, an old one does not', () =
   assert.equal(derivePhase({ at: iso(60 * 60_000), kind: 'drop', reason: 'transient' }).state, 'idle')
 })
 
-test('derivePhase: commit is idle — the shell renders its own compaction row', () => {
-  assert.equal(derivePhase({ at: iso(5_000), kind: 'commit', compactionId: 'c' }).state, 'idle')
+test('derivePhase: a fresh commit reports committed, an old one goes idle', () => {
+  // The shell's compaction row does not say which lane produced it, so the
+  // async attribution has to outlive the commit itself.
+  const fresh = derivePhase({ at: iso(5_000), kind: 'commit', compactionId: 'c', tokens: 90010, records: 332 })
+  assert.equal(fresh.state, 'committed')
+  assert.equal(fresh.tokens, 90010)
+  assert.equal(fresh.records, 332)
+  assert.equal(fresh.compactionId, 'c')
+
+  assert.equal(derivePhase({ at: iso(60 * 60_000), kind: 'commit', compactionId: 'c' }).state, 'idle')
+  // A skip is never a state the badge should show.
   assert.equal(derivePhase({ at: iso(5_000), kind: 'skip', reason: 'lock-held' }).state, 'idle')
 })
 

@@ -28,12 +28,12 @@
 | `lib/bundle-inventory.js` | 异步压缩 companion bundle 的只读库存投影（single-flight + 快照 + 事件失效）。运行时必需（`index.js` 相对 import） |
 | `lib/perf-review-host.js` | 宿主 perf-review bundle。运行时必需（`index.js` 相对 import） |
 | `lib/route-guard.js` | 路由注册 guard bundle。运行时必需（`index.js` 相对 import） |
-| `lib/route-table.js` | 烤进的插件路由表常量。运行时必需（`index.js` 相对 import） |
+| `lib/bindings.js` | 从仓根 `security/route-sensitivity.json` 按 id 烘焙的绑定表。运行时必需（`index.js` 相对 import） |
 | `lib/client.js` | 浏览器包。运行时必需。安装时不重建 |
 | `icon.svg`、`locale/` | 图标与中英文案 |
 | `src/` | 作者树。已有上面的 `lib/` 时安装不需要它 |
 
-client inject 以 `package.json` 的 `dsh.client.inject` 为准，不在这里抄。`files` 必须含 `lib/host-media.js`、`lib/route-guard.js`、`lib/route-table.js` 和这份 `AGENTS.md`，否则发包后宿主找不到模块。
+client inject 以 `package.json` 的 `dsh.client.inject` 为准，不在这里抄。`files` 必须含 `lib/host-media.js`、`lib/route-guard.js`、`lib/bindings.js` 和这份 `AGENTS.md`，否则发包后宿主找不到模块。
 
 ## 前置
 
@@ -43,7 +43,7 @@ client inject 以 `package.json` 的 `dsh.client.inject` 为准，不在这里�
 4. 图片生成需要本机 CLI。没有也能装：`/imagine` 会注册成引导 stub。探测顺序见「初次运行」。
 5. 本包构建期依赖 `dsh-nano-ui`，声明为 `devDependencies` 的 `file:../packages/dsh-nano-ui`。`npm install`/`npm run build` 时解析这个相对路径；构建时它被打进 `lib/client.js`，运行中的页面不单独加载它。不要改这条依赖。tarball 只含构建产物，`dsh plugin add` 不再需要旁边的 `packages/` 目录。
 6. 本包还构建期依赖 `dsh-performance-review`，同样声明为 `devDependencies` 的 `file:`，约束同上。它被打进 `lib/client.js` 和 `lib/perf-review-host.js` 两份产物；默认是恒等包装，只有页面带 `?perf-review=1` 或 `localStorage['dsh-perf-review']='1'`、宿主带 `DSH_PERF_REVIEW=1` 时才采集。不要改这条依赖。
-7. 本包还构建期依赖路由注册库 `dsh-host-route-guard`，同样声明为 `devDependencies` 的 `file:`，约束同上。宿主侧由构建生成 `lib/route-guard.js` 与 `lib/route-table.js`（烤进本插件 3 条路由行的常量表）供 `index.js` 相对 import；全部 web 路由经它注册，Host/Origin 围栏与 405 在 guard 内。不要改这条依赖。
+7. 本包还构建期依赖路由注册库 `dsh-host-route-guard`，同样声明为 `devDependencies` 的 `file:`，约束同上。宿主侧由构建生成 `lib/route-guard.js`，绑定表从仓根账本按 id 烘焙进 `lib/bindings.js` 供 `index.js` 相对 import；全部 web 路由经 guard 注册，Host/Origin 围栏与 405 在 guard 内。不要改这条依赖。
 
 未被告知 `DSH_HOME` 或 profile 名时，只动默认的 `web`。不要猜第二套实例。
 

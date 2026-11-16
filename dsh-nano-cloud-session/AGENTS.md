@@ -28,7 +28,7 @@
 | `lib/devin-api.js` | devin carrier REST v3 客户端 bundle。运行时必需（`index.js` 相对 import） |
 | `lib/profiles-store.js` | 凭证 profile 存储 bundle。运行时必需（`index.js` 相对 import） |
 | `lib/route-guard.js` | 路由注册 guard bundle。运行时必需（`index.js` 相对 import） |
-| `lib/route-table.js` | 烤进的插件路由表常量。运行时必需（`index.js` 相对 import） |
+| `lib/bindings.js` | 从仓根账本按 id 烘焙的绑定表。运行时必需（`index.js` 相对 import） |
 | `lib/perf-review-host.js` | 宿主 perf-review bundle。运行时必需（`index.js` 相对 import） |
 | `icon.svg`、`locale/` | 图标与中英文案 |
 | `src/` | 作者树。已有 `lib/` 产物时安装不需要它 |

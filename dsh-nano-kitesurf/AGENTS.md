@@ -27,7 +27,7 @@
 | `lib/engine.js` | CDP 客户端。运行时必需。不持有模块级页面 socket |
 | `lib/skill.js` | 两份技能正文的单一真源。运行时必需 |
 | `lib/route-guard.js` | 路由注册 guard bundle。运行时必需 |
-| `lib/route-table.js` | 空路由表。本包不再拥有页面路由 |
+| `lib/bindings.js` | 空绑定表。页面路由不在本包，从账本按 id 烘焙 |
 | `lib/perf-host.js` | perf-review host bundle。运行时必需 |
 | `lib/client.js` | 浏览器包。运行时必需。安装时不重建。页面请求打到本地沙箱宿主 |
 | `icon.svg`、`locale/` | 图标与中英文案 |

@@ -29,7 +29,7 @@
 | `src/host/` | 实例、profile、CDP、terminal、错误目录 |
 | `profiles/kitesurf/` | kitesurf 配方与 manifest。`linux-prefix/` 不入库 |
 | `profiles/terminal/` | 终端 PTY 入口 |
-| `lib/route-guard.js`、`lib/route-table.js` | 路由注册。运行时必需 |
+| `lib/route-guard.js`、`lib/bindings.js` | 路由注册。绑定表从仓根账本按 id 烘焙。运行时必需 |
 | `icon.svg`、`locale/` | 图标与中英文案 |
 
 特权只写在这里和 `backend-apple.js`：容器 CLI，以及构建期的 `ctx.sandbox.confine`。不写消费者的路径。

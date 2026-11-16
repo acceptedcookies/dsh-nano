@@ -172,7 +172,7 @@ ${NANO_STYLES}
 .np-tree[data-collapsed="true"] .np-nodes { display: flex; flex-direction: column; align-items: center; padding: 6px 0 var(--np-pad-x); }
 .np-tree[data-collapsed="true"] .np-node { width: 40px; padding-left: 0 !important; padding-right: 0; justify-content: center; gap: 0; }
 .np-tree[data-collapsed="true"] .np-node-main { flex: none; justify-content: center; padding-right: 0 !important; }
-.np-tree[data-collapsed="true"] .np-node-name, .np-tree[data-collapsed="true"] .np-caret, .np-tree[data-collapsed="true"] .np-node-actions, .np-tree[data-collapsed="true"] .np-group, .np-tree[data-collapsed="true"] .np-cat { display: none; }
+.np-tree[data-collapsed="true"] .np-node-name, .np-tree[data-collapsed="true"] .np-caret, .np-tree[data-collapsed="true"] .np-node-actions, .np-tree[data-collapsed="true"] .np-group { display: none; }
 .np-tree[data-collapsed="true"] .np-node-icon svg { width: 18px; height: 18px; }
 .np-tree-head { box-sizing: border-box; display: flex; flex: none; align-items: center; gap: 4px; width: 100%; height: 49px; padding: 6px var(--np-pad-x); color: var(--dsw-alias-label-tertiary); font-size: var(--np-font-size-sm); border-bottom: 1px solid var(--dsw-alias-border-l2); }
 .np-tree-toggle { box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; flex: none; padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); cursor: pointer; }
@@ -1604,7 +1604,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
          within the same kind. */
       nodes.sort((a, b) => Number(a.kind === 'file') - Number(b.kind === 'file') || Number(b.pinned === true) - Number(a.pinned === true) || a.name.localeCompare(b.name))
       for (const node of nodes) {
-        const icon = node.kind === 'folder' ? FOLDER_ICON : FILE_ICON
+        const icon = node.kind === 'folder' ? `<span class="np-node-icon" aria-hidden="true">${FOLDER_ICON}</span>` : ''
         const name = escapeHtml(node.name)
         const expanded = !state.collapsed.has(node.id)
         const nodeId = escapeAttr(node.id)
@@ -1627,7 +1627,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
         const catBadge = catLetter
           ? `<span class="np-cat" data-cat="${escapeAttr(node.cat ?? '')}" title="${escapeAttr(catTitle)}">${catLetter}</span>`
           : ''
-        lines.push(`<div class="np-node" data-kind="${node.kind}" data-cat="${escapeAttr(node.cat ?? '')}" data-pinned="${node.pinned === true}" data-active="${node.id === state.ui.currentId}" title="${name}" style="padding-left:${8 + depth * 16}px">${caret}<button class="np-node-main" type="button" draggable="true" data-id="${nodeId}" aria-label="${name}"><span class="np-node-icon" aria-hidden="true">${icon}</span>${catBadge}<span class="np-node-name">${name}</span></button><span class="np-node-actions">${pin}<button type="button" data-move="${nodeId}" title="${escapeHtml(text().transfer)}" aria-label="${escapeHtml(text().transfer)}">${MOVE_ICON}</button><button type="button" data-more="${nodeId}" title="${escapeHtml(text().more)}" aria-label="${escapeHtml(text().more)}" aria-haspopup="menu">${MORE_ICON}</button></span></div>`)
+        lines.push(`<div class="np-node" data-kind="${node.kind}" data-cat="${escapeAttr(node.cat ?? '')}" data-pinned="${node.pinned === true}" data-active="${node.id === state.ui.currentId}" title="${name}" style="padding-left:${8 + depth * 16}px">${caret}<button class="np-node-main" type="button" draggable="true" data-id="${nodeId}" aria-label="${name}">${icon}${catBadge}<span class="np-node-name">${name}</span></button><span class="np-node-actions">${pin}<button type="button" data-move="${nodeId}" title="${escapeHtml(text().transfer)}" aria-label="${escapeHtml(text().transfer)}">${MOVE_ICON}</button><button type="button" data-more="${nodeId}" title="${escapeHtml(text().more)}" aria-label="${escapeHtml(text().more)}" aria-haspopup="menu">${MORE_ICON}</button></span></div>`)
         if (node.kind === 'folder' && !state.collapsed.has(node.id)) visit(node.id, depth + 1, workspaceId)
       }
     }
@@ -2898,6 +2898,15 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     setTimeout(() => row?.classList.remove('np-changed'), 2400)
   }
 
+  function renameAsked(node) {
+    if (!node || !state.db) return
+    askName(text().renameTitle, node.name, async name => {
+      const renamed = await renameNode(state.db, node.id, name)
+      Object.assign(node, renamed)
+      render()
+    })
+  }
+
   function askName(title, initial, done) {
     let input = /** @type {HTMLInputElement | null} */ (null)
     const submit = close => { if (input) { close(); void done(input.value).catch(showError) } }
@@ -2908,7 +2917,13 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       setup: (el, close) => {
         input = el.querySelector('[name="node-name"]')
         if (!(input instanceof HTMLInputElement)) return
-        input.select()
+        /* 选中文件名本身，最后一段后缀留在选区外面。untitled-2.md 选中 untitled-2。 */
+        const dot = initial.lastIndexOf('.')
+        const stem = dot > 0 ? dot : initial.length
+        const place = () => input.setSelectionRange(0, stem)
+        input.addEventListener('focus', place)
+        place()
+        requestAnimationFrame(place)
         input.addEventListener('keydown', event => {
           if (event.key === 'Enter' && !event.isComposing) { event.preventDefault(); submit(close) }
         })
@@ -3745,11 +3760,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     const raw = openNanoMenu({
       anchor: anchor.getBoundingClientRect(), width: node.kind === 'file' ? 190 : 160, theme: resolvedTheme(), z: NP_PORTAL_Z,
       items: [
-        { id: 'rename', label: copy.rename, run: () => askName(copy.renameTitle, node.name, async name => {
-          const renamed = await renameNode(state.db, node.id, name)
-          Object.assign(node, renamed)
-          render()
-        }) },
+        { id: 'rename', label: copy.rename, run: () => renameAsked(node) },
         ...(node.kind === 'file' ? [
           { id: 'kind', label: `${copy.kindMenu}${node.cat ? ` · ${copy.kinds[node.cat] ?? node.cat}` : ''}`, run: () => openKindMenu(id, anchor) },
           { id: 'copy-path', label: copy.fxMenuPath ?? '复制路径', run: () => void copyPath(false, id) },
@@ -3890,14 +3901,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       void persistUi()
     }
     if (action === 'new-folder') void add('folder').catch(showError)
-    if (action === 'rename' && state.ui.currentId) {
-      const node = state.nodes.find(item => item.id === state.ui.currentId)
-      if (node && state.db) askName(text().renameTitle, node.name, async name => {
-        const renamed = await renameNode(state.db, node.id, name)
-        Object.assign(node, renamed)
-        render()
-      })
-    }
+    if (action === 'rename' && state.ui.currentId) renameAsked(state.nodes.find(item => item.id === state.ui.currentId))
     if (action === 'delete') confirmClearUnpinned()
     if (action === 'clear-file') confirmClearFile()
     /* The status chip replaces the old footer Save button: one click flushes
@@ -4096,11 +4100,20 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     }
     const row = target.closest('[data-id]')
     const id = row?.dataset.id
+    if (id && event.detail > 1) return
     if (id) {
       const node = state.nodes.find(item => item.id === id)
       if (node?.kind === 'file') openFile(id)
       else { state.ui.currentId = id; render() }
     }
+  })
+  panel.addEventListener('dblclick', event => {
+    const hit = event.target instanceof Element ? event.target : null
+    if (!hit || hit.closest('[data-pin], [data-move], [data-more], [data-caret]')) return
+    const row = hit.closest('.np-node[data-kind="file"] [data-id]')
+    if (!row) return
+    event.preventDefault()
+    renameAsked(state.nodes.find(item => item.id === row.dataset.id))
   })
   /* Keep per-file JSON fold state in sync: toggling a <details> updates the
      file's collapsed path set, so re-renders preserve the user's folds. */

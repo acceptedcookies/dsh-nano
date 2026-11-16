@@ -121,11 +121,14 @@ P0-00 干净树（main@9792da0）
   - **依赖**：PH3 合入 · **执行状态**：`complete`（P4-01 `deferred`，Q18）
 ### PH5 — [DNEE]（`nue-1117-migrate-dnee`）
 
-- [ ] `P5-01` — `:has()` 退役（文件树状态钩子登记宿主缺口） · `NUE1117-T20`
-- [ ] `P5-02` — `.nxe-menu*` 死样式、三处页签 → `SegmentedControl`、宿主 Menu · `NUE1117-T20`
-- [ ] `P5-03` — ThemeScope、对话框探测去 `[class*=`、Toast `anchor`、`format.js` 条件替换 · `NUE1117-T20`
-  - **依赖**：PH4 合入 · **执行状态**：`not-started`
-
+- [x] `P5-01` — `:has()` 退役（文件树状态钩子登记宿主缺口） · `NUE1117-T20`
+  - **执行状态**：`complete` · **证据**：`42878d4`（合并 `3cfd282`）；宿主文件树 `:has()` 行着色与几何改写整段删除，DESIGN §8「文件树状态钩子」缺口补写；`[class*="nxe-"]` 改 `data-nxe-card`；ghost 行失去删除线（缺口内）
+- [x] `P5-02` — `.nxe-menu*` 死样式、三处页签 → `SegmentedControl`、宿主 Menu · `NUE1117-T20`
+  - **执行状态**：`complete` · **证据**：`42878d4`；`nxe-branch-scope`/`nxe-repo-settings-scope`/`nxe-commit-filter` → `SegmentedControl`；`.nxe-menu*` 删除；`menu.js` 用 `NanoMenu portal:true`，删 `MENU_LAYER`；「在应用中打开」下拉同改 NanoMenu
+- [x] `P5-03` — ThemeScope、对话框探测去 `[class*=`、Toast `anchor`、`format.js` 条件替换 · `NUE1117-T20`
+  - **执行状态**：`complete` · **证据**：`42878d4` + `487eec6`（perf.js 过期注释）；`body.js` 用 `createThemeScope`（`index.js` 传 `theme: ctx.theme` 与 `onThemeChange`），`data-theme`→`data-nano-scheme`、`data-status`→`data-nxe-status`；Toast 带 `anchor`；`formatBytes` 与宿主 `fileSizeText` 14 个样本全部不同 → 保留并豁免；`.nxe-git-alert` 自绘豁免（宿主 Toast 无常驻模式）；DESIGN §10 +2 行
+  - **测试四元组**：`3cfd282` · `cd dsh-nano-explorer-extra && node --test test/*.mjs` · 26/26（≥12；新增 `nue-migration.test.mjs` 13 条，对照 main 源码 10 败 3 过，3 过为结构守卫）· 2026-11-16T18:48:57Z；`node scripts/test-all.mjs` 21/22（仅 s3-client）；`check-ui-rules` DNEE 前 U1 19/U2 4/U3 16/U4 2/U5 9/U6 3/U8 24/U9 4/U10 0 → 后 0/0/15/2/0/0/0/0/2；`check-client-rules` ok；`lib/client.js` 含 `dsh-nano-ui@0.2.0`
+  - **依赖**：PH4 合入 · **执行状态**：`complete`
 ### PH6 — [DNT]（`nue-1117-migrate-dnt`）
 
 - [ ] `P6-01` — trajCls → nano-ui `Toolbar` · `NUE1117-T21`
@@ -182,14 +185,15 @@ P0-00 干净树（main@9792da0）
 | `NUE1117-T08`–`T17` | nano-ui 0.2.0 | `cd packages/dsh-nano-ui && npm test`；六套件；`test-all` | 41/41 @a94f135；六套件 ≥ N6；DNN 失败 = 预登记 6 条；test-all 21/22（s3-client 既有） | pass（P3-05/P3-08 partial 待 T27） |
 | `NUE1117-T18` | [DNMS] 迁移 | `npm test`（含 `nue-migration.test.mjs`） | 62/62 @e52ef13 | pass |
 | `NUE1117-T19` | [DNMS] 云会话自判 | — | 宿主无判据，停止 | deferred（Q18） |
-| `NUE1117-T20`–`T26` | 其余五插件迁移 | 各插件测试 + `nue-migration.test.mjs` | — | pending |
+| `NUE1117-T20` | [DNEE] 迁移 | `node --test test/*.mjs`（含 `nue-migration.test.mjs`） | 26/26 @3cfd282 | pass |
+| `NUE1117-T21`–`T26` | 其余四插件迁移 | 各插件测试 + `nue-migration.test.mjs` | — | pending |
 | `NUE1117-T27a`–`e` | 视觉核对（live） | 本机 profile + ego-browser 截图 | — | pending（需 live 授权与部署） |
 | `NUE1117-T28`–`T30` | 收口 | 两次构建 sha；`nue-docs`/`nue-endstate` | — | pending |
 
 ## 5. 当前状态与交接
 
-- **当前节点 / 已完成**：P0-00、PH1、PH2、PH3、PH4（P4-01 deferred）
-- **下一动作**：PH5（[DNEE]）
+- **当前节点 / 已完成**：P0-00、PH1、PH2、PH3、PH4（P4-01 deferred）、PH5
+- **下一动作**：PH6（[DNT]）
 - **当前阻塞**：无
 - **待 owner 决定**：Q18（P4-01，推荐 A）；P9-05（执行到时判定）
 - **最终交接目标**：[业主]
@@ -226,7 +230,9 @@ P0-00 干净树（main@9792da0）
 - `2026-11-16` · P3-10 的产物版本标记：`NANO_STYLES` 的 `/* dsh-nano-ui@${VERSION} */` 在 esbuild 压缩后只剩 `dsh-nano-ui@${x}`，T28 的 `grep 'dsh-nano-ui@<版本>'` 必然为 0（PH3 冒烟只检了前缀）。PH4 worktree 内先提交 nano-ui `e1b2a5a`：`src/version.js` 首行加 legal comment `/*! dsh-nano-ui@0.2.0 */`（压缩产物原样保留），`VERSION` 仍是字面量，version.test 断言二者一致。运行时行为不变，未升版本。
 - `2026-11-16` · worktree 内若把主树 `node_modules` 整目录软链进来，`file:` 依赖（`dsh-nano-ui -> ../../packages/dsh-nano-ui`）会按主树真实路径解析，构建打进的是主树 nano-ui。PH4 起，需要构建的插件在 worktree 内建实目录 `node_modules`，逐项复制相对软链、外部包用绝对软链；PH4 产物已按此重建。
 - `2026-11-16` · P4-01 停止（Q18）。P4-03 的 U1 中 3 条 `--dsh-composer-model-*-display` 是宿主 `conversation.input.model` 槽位合同变量（`dsh-client-ui-conversation` `slots.d.ts:415`），catalog 只收 `--dsw`/主题令牌，按「豁免并登记」处理（DESIGN §10 第一行），不改 catalog 口径。
-
+- `2026-11-16` · PH5 [DNEE]：保留 4 处宿主属性锚点（`styles.js:14` `[data-nxe] .nxe-tree button`、`:15` `[data-files-path]`、`:55` `[data-custom-tree] {height:auto}`、`:199` `[data-custom-tree] button:hover .nxe-open`，宿主无行悬停钩子）。它们不是 `:has()`/`[class*=`/哈希类，不在 T20 清零清单，留待 T27 视觉核对与 closure 列出。
+- `2026-11-16` · PH5 [DNEE]：`formatBytes` 与宿主 `fileSizeText` 14 个样本全部不同，按 P5-03「条件替换」保留并标 `nano-ui-exempt`；`.nxe-git-alert` 因宿主 Toast 无常驻模式保留自绘并豁免，材质随令牌改变。DESIGN §10 各 1 行。
+- `2026-11-16` · PH5 [DNEE]：「在应用中打开」下拉原为自绘菜单，与 P5-02 同一类问题，一并改 NanoMenu（同写面，不扩约）。
 ## 8. 附件：[业主] 发车指令（原文）
 
 > 本 directive 注册为 `NUE-1117` 执行授权来源。

@@ -1,15 +1,20 @@
 {
   "name": "dsh-nano-ui",
-  "version": "0.1.0",
-  "description": "Shared UI primitives for the dsh-nano overlay plugins: dialog, menu, toast built on @deepseek-ai/dsh-client-ui-primitives.",
+  "version": "0.2.0",
+  "description": "Shared UI layer for the dsh-nano overlay plugins: thin wrappers over @deepseek-ai/dsh-client-ui-primitives plus the few pieces the host lacks. Spec: docs/specs/dsh-nano-ui/DESIGN.md.",
   "type": "module",
   "main": "index.js",
   "module": "index.js",
   "sideEffects": false,
   "files": [
     "index.js",
-    "src"
+    "src",
+    "catalog",
+    "CHANGELOG.md"
   ],
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
   "peerDependencies": {
     "react": ">=18",
     "react-dom": ">=18",

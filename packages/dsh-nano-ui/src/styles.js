@@ -1,135 +1,81 @@
-/** Shared `nano-*` styles, all bound to shell `--dsw-*` tokens so every plugin follows the theme.
- * Exported as a string the plugin appends to its own stylesheet at build time. */
+/** Shared `nano-*` styles. Colors, radii and shadows are host tokens only (DESIGN.md §2); layers and
+ * spacing come from layers.js. Exported as a string each plugin appends to its own stylesheet. */
+import { LAYER_CSS } from './layers.js'
+import { VERSION } from './version.js'
 
-export const NANO_STYLES = `
-/* ── anchored popup menu (NanoMenu, NanoMenuItem) ───────────────────────────── */
-/* ── type tokens ──────────────────────────────────────────────────────────────
-   Every shared surface reads from --nano-* custom properties so an owning
-   plugin (e.g. the notepad) can retune typography by declaring them once on its
-   own root. Each falls back to the shell default so nano-ui stays self-contained. */
-.nano-menu { position: fixed; box-sizing: border-box; padding: 4px; display: flex; flex-direction: column; gap: 1px; z-index: 30;
-  background: var(--dsw-menu-surface-fill, var(--dsw-alias-bg-layer-3)); color: var(--dsw-alias-label-primary);
-  border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-lg, 12px);
-  box-shadow: var(--dsw-elevation-prominent); backdrop-filter: var(--dsw-menu-backdrop-filter);
-  font-family: var(--nano-font-family, inherit);
-  font-size: var(--nano-font-size, inherit);
-  line-height: var(--nano-line-height, inherit); }
-.nano-menu-item { display: flex; align-items: center; gap: 8px; width: 100%; border: 0; background: transparent;
-  color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm, 8px); padding: 6px 8px;
-  font: inherit; text-align: left; cursor: pointer; }
-.nano-menu-item[data-active="true"], .nano-menu-item:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
-.nano-menu-item[data-tone="danger"] { color: var(--dsw-alias-label-error, #e5534b); }
-.nano-menu-item[data-tone="danger"][data-active="true"] { background: color-mix(in oklab, var(--dsw-alias-label-error, #e5534b) 14%, transparent); }
-.nano-menu-icon { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex: none; color: var(--dsw-alias-label-tertiary); }
-.nano-menu-icon svg { display: block; width: 14px; height: 14px; }
-.nano-menu-item[data-active="true"] .nano-menu-icon { color: inherit; }
-.nano-menu-check { display: inline-flex; color: inherit; }
-.nano-menu-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.nano-menu-sep { height: 1px; margin: 4px 6px; background: var(--dsw-alias-border-l2); flex: none; pointer-events: none; }
+export const NANO_STYLES = `/* dsh-nano-ui@${VERSION} */
+${LAYER_CSS}
+[data-nano-scheme="light"] { color-scheme: light; }
+[data-nano-scheme="dark"] { color-scheme: dark; }
 
-/* ── transient toast (NanoToast) ────────────────────────────────────────────── */
-.nano-toast { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); z-index: 40;
-  padding: 6px 12px; border-radius: var(--dsw-radius-sm, 8px); font-size: var(--nano-toast-size, 12px);
-  background: var(--dsw-alias-tooltip-bg, #43454a); color: var(--dsw-alias-tooltip-label, #f9fafb);
-  box-shadow: var(--dsw-elevation-prominent); pointer-events: none; }
-@keyframes nano-toast-in { from { opacity: 0; transform: translate(-50%, 4px); } to { opacity: 1; transform: translate(-50%, 0); } }
-.nano-toast { animation: nano-toast-in .12s ease; }
-
-/* ── shared dialog helpers ──────────────────────────────────────────────────── */
-.nano-dialog-host { position: fixed; inset: 0; z-index: 50; pointer-events: none;
-  /* This host is only the React mount point — NanoDialog/Modal portals the card
-     into document.body at a separate layer. Leaving pointer-events on here
-     makes the empty fullscreen host sit above its own card and eat every click. */
-  font-family: var(--nano-font-family, inherit);
-  font-size: var(--nano-font-size, inherit);
-  line-height: var(--nano-line-height, inherit); }
-/* The Modal portals straight into document.body, outside .nano-dialog-host, so
-   the card itself must consume the owner tokens — not the host.
-   The color declaration is deliberate: inheritance would otherwise carry the
-   host's computed ink onto the card, and an owner whose scheme differs from the
-   host (light notepad inside a dark shell) would paint near-white text on the
-   card's light surface. Resolving the token here keeps ink and surface paired. */
-.nano-dialog-card { font-family: var(--nano-font-family, inherit); font-size: var(--nano-font-size, inherit); line-height: var(--nano-line-height, inherit); color: var(--dsw-alias-label-primary); }
-/* The Modal title is a hashed class — size it and the description through the
-   shared tokens so dialogs read at the same scale as the owning surface. */
-.nano-dialog-card [class*="title"], .nano-dialog-card [class*="title_"] { font-size: var(--nano-title-size, inherit); }
-.nano-dialog-card [class*="description"], .nano-dialog-card [class*="description_"] { font-size: var(--nano-desc-size, inherit); color: var(--dsw-alias-label-secondary); }
-/* Shell Button defaults to its own size; pull dialog actions down to the owner
-   scale too so the whole card reads at one size. */
-.nano-dialog-card button { font-size: var(--nano-font-size, inherit); font-family: var(--nano-font-family, inherit); }
-.nano-dialog-error { margin: 8px 0 0; font-size: var(--nano-desc-size, 12px); color: var(--dsw-alias-danger, #cf222e); }
-/* Height cap (e.g. 80% of the owning overlay): the card's own overflow:hidden
-   clips nothing because the body becomes the flex child that scrolls. The last
-   content child is .body — target it structurally since the class is hashed. */
-.nano-dialog-capped { max-height: var(--nano-dlg-max) !important; }
-/* Card width follows the owning overlay (e.g. 60% of the floating window) with
-   a floor so a narrow window still leaves a readable dialog. The value itself
-   is set per dialog on the portal layer (see openNanoDialog). */
-.nano-dialog-sized { width: clamp(320px, var(--nano-dlg-w, 380px), 100%) !important; }
-/* A tabbed dialog owns a fixed height so switching panels never resizes the
-   card under the pointer. The variable is set per dialog (see openNanoDialog). */
-.nano-dialog-card { height: var(--nano-dlg-h, auto); }
-
-.nano-dialog-content { display: flex; flex-direction: column; flex: 1; min-height: 0; }
-/* The shell Modal's body carries margin-top:20px on top of the header's own
-   12px padding-bottom, so a title-only dialog floats its first row ~32px
-   below the heading. Pull it back to the header's rhythm. */
-.nano-dialog-card [class*="_body_"] { margin-top: 8px; }
-/* The shell Button has no danger variant, so a destructive confirm was plain text
-   with no hover. Keep the outline metrics and paint the warning color ourselves. */
+/* ── main-window dialog (NanoDialog over the host Modal) ───────────────────── */
+.nano-dialog-card { color: var(--dsw-alias-label-primary); }
+.nano-dialog-card.nano-dialog-w-480 { width: min(480px, 100%); }
+.nano-dialog-card.nano-dialog-w-560 { width: min(560px, 100%); }
+.nano-dialog-card.nano-dialog-w-720 { width: min(720px, 100%); }
+.nano-dialog-body { display: flex; flex-direction: column; gap: var(--nano-space-2); min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.nano-dialog-error { margin: var(--nano-space-2) 0 0; font-size: var(--nano-desc-size, inherit); color: var(--dsw-alias-state-error-primary); }
+/* The host Button has no danger variant: keep the outline metrics, paint the error state. */
 .nano-modal-action.nano-modal-danger {
-  color: var(--dsw-alias-state-error-primary, #f25a5a);
-  box-shadow: inset 0 0 0 var(--dsh-hairline-width, .5px) var(--dsw-alias-state-error-primary, #f25a5a);
+  color: var(--dsw-alias-state-error-primary);
+  box-shadow: inset 0 0 0 var(--dsh-hairline-width) var(--dsw-alias-state-error-primary);
   transition: background-color .12s ease, color .12s ease, box-shadow .12s ease;
 }
 @media (hover: hover) {
   .nano-modal-action.nano-modal-danger:hover:not(:disabled) {
-    background: var(--dsw-alias-interactive-bg-hover-danger, rgba(242, 90, 90, .15));
-    color: var(--dsw-alias-state-error-secondary, #f25a5a);
-    box-shadow: inset 0 0 0 var(--dsh-hairline-width, .5px) var(--dsw-alias-state-error-secondary, #f25a5a);
+    background: var(--dsw-alias-interactive-bg-hover-danger);
+    color: var(--dsw-alias-state-error-secondary);
+    box-shadow: inset 0 0 0 var(--dsh-hairline-width) var(--dsw-alias-state-error-secondary);
   }
 }
-.nano-dialog-content > div:last-child { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
-/* Fixed-height tabbed dialog: the shell's body stops scrolling; the card's
-   injected body becomes a flex column and its panels own the scroll. */
-.nano-dialog-fixed .nano-dialog-content > div:last-child { overflow: hidden; }
-.nano-dialog-fixed .np-dlg-body { display: flex; flex-direction: column; height: 100%; min-height: 0; overflow: hidden; }
 
-/* ── tab strip (nanoTabs) ─────────────────────────────────────────────────────
-   Follows the DSH settings mobile pattern: one row of pill cells that scroll
-   horizontally past the edge instead of wrapping. Sticky so the strip stays
-   reachable while a long tab panel scrolls. */
-.nano-tabs { position: relative; z-index: 2; display: flex; gap: 2px;
-  margin: 0; padding: 4px; border-radius: var(--dsw-radius-md, 10px);
-  /* Opaque track: a translucent token lets scrolling panel text show through. */
-  background: var(--dsw-alias-bg-layer-1, #202020); overflow-x: auto; scrollbar-width: none;
-  font-family: var(--nano-font-family, inherit); font-size: var(--nano-font-size, inherit); }
-.nano-tabs::-webkit-scrollbar { display: none; }
-/* Equal-width cells fill the strip; horizontal scrolling only kicks in when
-   the strip itself is narrower than the labels (mobile / narrow window). */
-.nano-tab { flex: 1 1 0; min-width: 0; display: inline-flex; align-items: center; justify-content: center;
-  height: 28px; padding: 0 8px; border: 0; border-radius: var(--dsw-radius-sm, 8px);
-  background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; cursor: pointer;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-@media (hover: hover) {
-  .nano-tab:hover:not([aria-selected="true"]) { color: var(--dsw-alias-label-primary); }
-}
-/* Selected tab is an inverted solid pill — the only bright element in the
-   strip, so the active section is unmistakable at a glance (and in both
-   themes, since both tokens invert together). */
-.nano-tab[aria-selected="true"] {
-  background: var(--dsw-alias-label-primary, #f7f8f8);
-  color: var(--dsw-alias-bg-layer-1, #191919);
-  font-weight: 600;
-  box-shadow: var(--dsw-elevation-soft);
-  position: relative;
-}
-.nano-tab[aria-selected="true"]::after { content: ''; position: absolute; left: 22%; right: 22%; bottom: -3px;
-  height: 2px; border-radius: 1px; background: var(--dsw-alias-focus-ring, #4c9aff); }
-.nano-tab:focus-visible { outline: 2px solid var(--dsw-alias-focus-ring, #4c9aff); outline-offset: -2px; }
-/* React tabbed body (NanoTabs): the strip stays fixed and only the active
-   panel scrolls, so a fixed-height dialog never resizes when tabs switch. */
-.nano-tabs-wrap { display: flex; flex-direction: column; height: 100%; min-height: 0; }
-.nano-tabs-panel { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-top: 10px; }
-.nano-tabs-panel[hidden] { display: none; }
+/* ── window overlay (NanoWindowDialog) ───────────────────────────────────────
+   Positioned against the owner container; the owner layer may be pointer-events:none,
+   so the overlay turns hit-testing back on. */
+.nano-overlay { position: absolute; inset: 0; z-index: var(--nano-layer-overlay); box-sizing: border-box;
+  display: flex; align-items: center; justify-content: center; padding: var(--nano-space-3); pointer-events: auto;
+  font-family: var(--nano-font-family, inherit); font-size: var(--nano-font-size, inherit); line-height: var(--nano-line-height, inherit); }
+.nano-overlay-mask { position: absolute; inset: 0; background: var(--dsw-alias-bg-mask-1); border-radius: inherit; }
+.nano-wdlg { position: relative; box-sizing: border-box; display: flex; flex-direction: column; gap: var(--nano-space-3);
+  width: min(380px, 100%); max-height: 100%; padding: var(--nano-space-5); outline: none;
+  background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-primary);
+  border: var(--dsh-hairline-width) solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-lg);
+  box-shadow: var(--dsw-elevation-prominent); }
+.nano-wdlg-head { display: flex; align-items: center; justify-content: space-between; gap: var(--nano-space-2); }
+.nano-wdlg-title { margin: 0; font-size: var(--nano-title-size, 1.1em); font-weight: 600; }
+.nano-wdlg-desc { margin: 0; font-size: var(--nano-desc-size, inherit); color: var(--dsw-alias-label-secondary); }
+.nano-wdlg-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: var(--nano-space-2); overflow-y: auto; overscroll-behavior: contain; }
+.nano-wdlg-foot { display: flex; justify-content: flex-end; gap: var(--nano-space-2); }
+.nano-wdlg button { font-family: inherit; }
+
+/* ── menus (host Menu) ───────────────────────────────────────────────────── */
+.nano-anchor { position: absolute; z-index: var(--nano-layer-menu); width: 0; height: 0; }
+.nano-cap-120 { max-height: 120px; }
+.nano-cap-160 { max-height: 160px; }
+.nano-cap-200 { max-height: 200px; }
+.nano-cap-240 { max-height: 240px; }
+.nano-cap-320 { max-height: 320px; }
+.nano-cap-400 { max-height: 400px; }
+.nano-cap-480 { max-height: 480px; }
+
+/* ── panels behind a SegmentedControl (NanoTabs) ─────────────────────────── */
+.nano-panes { display: flex; flex-direction: column; gap: var(--nano-space-2); height: 100%; min-height: 0; }
+.nano-pane { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.nano-pane[hidden] { display: none; }
+
+/* ── toolbar / empty state / window shell ────────────────────────────────── */
+.nano-toolbar { display: flex; align-items: center; gap: var(--nano-space-1); min-height: 36px; padding: 0 var(--nano-space-2);
+  border-bottom: var(--dsh-hairline-width) solid var(--dsw-alias-border-l1); }
+.nano-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--nano-space-2);
+  padding: var(--nano-space-6); text-align: center; color: var(--dsw-alias-label-secondary); }
+.nano-empty-icon { display: inline-flex; color: var(--dsw-alias-label-tertiary); }
+.nano-empty-title { margin: 0; color: var(--dsw-alias-label-primary); font-weight: 600; }
+.nano-empty-desc { margin: 0; }
+.nano-window { position: relative; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden;
+  background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-primary);
+  border: var(--dsh-hairline-width) solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-panel);
+  box-shadow: var(--dsw-elevation-panel); }
+.nano-window-floating { position: fixed; z-index: var(--nano-layer-window); }
+.nano-window-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.nano-window-body { position: relative; flex: 1 1 auto; min-height: 0; overflow: auto; }
 `

@@ -66,9 +66,10 @@
 
 ## 3. 主题
 
-- 判定只经 nano-ui `ThemeScope`（`createThemeScope({ theme, element, pin })`），`theme` 是插件拿到的宿主 `ctx.theme` 服务（`T04`）。
-- `resolveScheme({ pin, theme })`：`pin` 为 `light`/`dark` 时用 `pin`；否则 `theme.getTheme().colorScheme`，非 `light` 一律 `dark`；`getTheme` 缺失或抛错 → `dark`。
-- `ThemeScope` 在拥有者元素上写 `data-nano-scheme`；`pin` 与宿主不同时，把该 scheme 的 `--dsw-*` 值（来自 `catalog/tokens.json`）注入该元素。插件源码不写亮暗两套色值。
+- 判定只经 nano-ui `ThemeScope`（`createThemeScope({ theme, element, pin, subscribe })`），`theme` 是插件拿到的宿主 `ctx.theme` 服务（`T04`）。返回 `{ scheme, refresh, setPin, dispose }`。
+- `resolveScheme({ pin, theme })`：`pin` 为 `light`/`dark` 时用 `pin`；否则读 `theme.getTheme()` 快照的方案（宿主快照的方案字段在 `active.colorScheme`，扁平的 `colorScheme` 同样读取），非 `light` 一律 `dark`；`getTheme` 缺失或抛错 → `dark`。
+- 宿主主题服务没有订阅接口，变化只经 `theme/change` 事件：传 `subscribe: listener => ctx.on('theme/change', listener)`，`dispose()` 时一并解除；不传则由调用方在变化时调用 `refresh()`。`pin` 变化用 `setPin()`，不重建。
+- `ThemeScope` 在拥有者元素上写 `data-nano-scheme`；`pin` 与宿主不同时，把该 scheme 的 `--dsw-*` 值（`catalog/tokens.json` 的 `schemes`，已解析的终值）以内联自定义属性注入该元素；`dispose()` 移除属性与全部注入值。插件源码不写亮暗两套色值。
 - 不读 `body[data-ds-dark-theme]`，插件不再各写一份 `schemeOf`。
 
 ## 4. 层级与间距
@@ -122,9 +123,9 @@
 |---|---|---|
 | `NanoDialog` | `Modal` | 主窗口级；默认 Cancel / Confirm 两键；`danger` 描边红字；尺寸只有预设（§7 Modal） |
 | `openNanoDialog` | `Modal` 或窗口覆盖层 | 有 `container` → 窗口覆盖层；否则主窗口级 |
-| `NanoMenu` | `Menu` | `{ menu, actions, onClose, width, maxHeight, portal, container }` |
-| `openNanoMenu` | `Menu` | `{ anchor, items, width, maxHeight, gap, direction, container }`；`direction:'up'` 映射宿主 `side:'top'` |
-| `NanoToast` | `Toast` | `{ text, anchor, tone, actions, holdMs, onDone }`；`text` 为空不渲染 |
+| `NanoMenu` | `Menu` | `{ menu, actions, onClose, width, maxHeight, portal, direction }`；`portal`（默认）时 `menu` 是视口矩形，经 `getAnchorRect` 定位；`portal:false` 时 `menu` 是相对最近定位祖先的偏移。行 `{ id, label, icon, tone:'danger', disabled, separator, run }` 映射宿主项；选中先 `onClose` 再 `run`。`width` 是最小宽度；`maxHeight` 取不大于它的最大预设档（120/160/200/240/320/400/480，**待视觉核对**能否压过宿主列表自身上限） |
+| `openNanoMenu` | `Menu` | `{ anchor, items, width, maxHeight, gap, direction, container }`；`direction:'up'` 映射宿主 `side:'top'`；有 `container`（须是定位祖先）时在其内挂载、`portal:false`，否则 `portal:true`；`gap` 超出宿主固定 4px 的部分并入锚矩形 |
+| `NanoToast` | `Toast` | `{ text, anchor, tone, icon, actions, holdMs, onDone }`；`text` 为空不渲染；`text` 变化以 `text` 作 key 重挂；未传 `onDone` 时给空函数（宿主要求必填） |
 | `NanoTabs` / `nanoTabs` | `SegmentedControl` | nano-ui 只负责「面板常驻、只切 `hidden`」；`nanoTabs` 返回 `{ el, select, value }` |
 
 ### 6.3 nano-ui 自建（宿主没有）
@@ -150,7 +151,7 @@
 |---|---|
 | `Menu` | `anchor` 是 **ReactNode**（触发元素），渲染在 Menu 自己的根 `<span>` 内；矩形定位用 `getAnchorRect: () => DOMRect`，配合 `portal:true`。`portal` 默认 `false`，此时列表相对根 span 以 CSS 定位（`side:'top'`、`align:'end'` 改方向）。项：`{ id, label, icon, danger, disabled, shortcut, submenu }`，分隔 `{ type:'separator', id }`，组标题 `{ type:'label', id, text }`。选中触发 `onSelect(id)`，**不会自己关闭**；Esc 与外部 `pointerdown` 触发 `onClose` |
 | `Toast` | `{ text, icon, tone, anchor, holdMs = 3000, actions, onDone }`。`anchor` 可省（省略时不做水平定位）；`onDone` **必填**，在 `holdMs + 1000ms` 后被调用；没有「不自动结束」。nano-ui 契约：寿命由调用方 `holdMs` 决定，`text` 变化时以 `text` 作 key 重挂 |
-| `Modal` | 只接受 `className`/`contentClassName`，卡片宽度由宿主写死为 `min(380px, 100%)`，不随内容收缩；根层级 1000；内部调用 `useModalLayer`。主窗口级对话框的尺寸因此只能用 nano-ui 预设类（宽 sm 380 / md 480 / lg 560 / xl 720；定高 md 480 / lg 560 / xl 640），数值参数取不小于它的最近一档 |
+| `Modal` | 只接受 `className`/`contentClassName`，卡片宽度由宿主写死为 `min(380px, 100%)`，不随内容收缩；根层级 1000；内部调用 `useModalLayer`。主窗口级对话框的宽度因此只能用 nano-ui 预设类（380 / 480 / 560 / 720，`nano-dialog-w-<档>`），数值参数取不小于它的最近一档；高度施加在 nano-ui 自己渲染的正文元素上：`fixedHeight` 取不小于它的最近一档（480 / 560 / 640）减去宿主卡片框架 136px，`maxHeight` 减去同一框架值作正文上限 |
 | `useModalLayer(ref, open, onClose)` | 维护文档级弹层栈：Esc 只关栈顶、Tab 焦点圈在栈顶内、关闭后焦点回到打开前元素；`isBehindModal(el)` 对不在栈顶内的元素返回 `true`（窗口覆盖层下层的元素因此被视为「在弹层之后」） |
 | `SegmentedControl` | `{ id, value, options: [{ value, label, disabled, title }], onChange, label, disabled, className }`，内部处理方向键 |
 | `RiskConfirmation` | `{ open, title, description, acknowledgeLabel, acknowledged, onAcknowledgedChange, confirmLabel, cancelLabel, closeLabel, onConfirm, onCancel, disabled }`；`!acknowledged` 时确认按钮禁用 |

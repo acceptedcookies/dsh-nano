@@ -1,0 +1,12 @@
+{
+  "purpose": "NUE-1117 P3-12 b): DNN contract tests expected to fail once nano-ui 0.2.0 lands (they assert the retired portal-theme / z / region adapter). Registered before the Phase 3 test run; P9-04 rewrites them.",
+  "argv": "node --test dsh-nano-notepad/test/*.test.mjs",
+  "expectedFailures": [
+    "portal-theme.test.mjs > nano-ui threads the scheme onto the portaled menu",
+    "portal-theme.test.mjs > nano-ui threads the scheme onto the portaled dialog layer",
+    "portal-theme.test.mjs > an open dialog can be re-stamped when the owner flips scheme",
+    "z-order.test.mjs > nano-ui honours an explicit z on the dialog layer and menu root",
+    "dialog-layout.test.mjs > a regioned dialog layer is border-box so the mask cannot overhang",
+    "dialog-layout.test.mjs > a regioned dialog layer follows the owning window shape"
+  ]
+}

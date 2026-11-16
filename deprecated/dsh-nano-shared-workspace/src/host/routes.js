@@ -8,7 +8,7 @@ import { createS3 } from './s3.js'
 import { createWorkspace, instanceId, joinWorkspace, listWorkspaces, ownMember, readMarker, trustedMember, unpinWorkspaceLocalPath } from './workspaces.js'
 import { acquireClaim, fetchTranscript, foreignActiveClaim, listRemoteSessions, materializeSession, readPulledRev, renewClaim, syncAll } from './session-io.js'
 import { purgeWorkspaceObjects, pullWorkspace, pushWorkspace, registerIdentity } from './tree.js'
-import { ensurePerfReviewHost, LIB_VERSION } from 'dsh-performance-review/host'
+import { ensurePerfReviewHost } from 'dsh-performance-review/host'
 import { registerRoutes as registerGuardedRoutes } from 'dsh-host-route-guard'
 import { ROUTE_TABLE, PLUGIN } from './route-table.js'
 import { SESSION_ID_RE, WORKSPACE_ID_RE } from 'dsh-remote-data-schema'
@@ -244,8 +244,6 @@ export function createRoutes(ctx, config) {
   // names stay inside the v1 set — sync-tick / settings / remote-sessions / workspaces.
   const review = ensurePerfReviewHost().hostJoin('nano-shared-workspace', {
     version: typeof __NSW_VERSION__ === 'string' ? __NSW_VERSION__ : undefined,
-    // This host bundle's own copy of the library version (A3 / §10.4.4).
-    libVersion: LIB_VERSION,
   })
   const dshHome = process.env.DSH_HOME ?? `${homedir()}/.dsh`
   const syncState = { bySession: new Map(), remoteRev: new Map(), remoteTries: new Map() }
@@ -844,7 +842,6 @@ export function startBackgroundSync(ctx, config, sharedSync) {
   // Same singleton/row as createRoutes; hostJoin is idempotent per plugin id.
   const review = ensurePerfReviewHost().hostJoin('nano-shared-workspace', {
     version: typeof __NSW_VERSION__ === 'string' ? __NSW_VERSION__ : undefined,
-    libVersion: LIB_VERSION,
   })
   const dshHome = process.env.DSH_HOME ?? `${homedir()}/.dsh`
   const shared = sharedSync?.state ?? { bySession: new Map(), remoteRev: new Map(), remoteTries: new Map() }

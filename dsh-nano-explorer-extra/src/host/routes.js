@@ -330,8 +330,7 @@ export function createRoutes(ctx, config) {
   // The disabled path is an identity wrapper, so the spans cost nothing by default.
   const review = ensurePerfReviewHost().hostJoin('nano-explorer-extra', {
     version: typeof __NXE_VERSION__ === 'string' ? __NXE_VERSION__ : undefined,
-    // This host bundle's own copy of the library version (A3 / §10.4.4).
-    })
+  })
 
   return {
     '/status': {

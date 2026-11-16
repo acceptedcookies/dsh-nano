@@ -2135,7 +2135,6 @@ function createRoutes(ctx, config) {
   const external = (request) => runExternal(ctx, config, request);
   const review = ensurePerfReviewHost().hostJoin("nano-explorer-extra", {
     version: true ? "0.3.0" : void 0
-    // This host bundle's own copy of the library version (A3 / §10.4.4).
   });
   return {
     "/status": {

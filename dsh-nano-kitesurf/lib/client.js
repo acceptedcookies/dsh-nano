@@ -1575,6 +1575,7 @@ var __kitesurfExport = (() => {
           prepareDone: "\u73AF\u5883\u5DF2\u5C31\u7EEA",
           prepareFailed: "\u51C6\u5907\u5931\u8D25",
           copyDiag: "\u590D\u5236\u8BCA\u65AD\u4FE1\u606F",
+          copyDiagHint: "\u590D\u5236\u53EF\u8BFB\u8BCA\u65AD\u6458\u8981\uFF1B\u6309\u4F4F Shift \u590D\u5236\u5B8C\u6574 JSON",
           diagCopied: "\u8BCA\u65AD\u4FE1\u606F\u5DF2\u590D\u5236",
           envHint: "\u4F9D\u6B21\u68C0\u67E5\u5BB9\u5668\u3001\u7AEF\u53E3\u3001\u5F15\u64CE\u5065\u5EB7\u5E76\u81EA\u52A8\u4FEE\u590D",
           noteEmpty: "\u53EF\u76F4\u63A5\u6CE8\u5165\uFF0C\u65E0\u9700\u586B\u5199",
@@ -1668,6 +1669,7 @@ var __kitesurfExport = (() => {
           prepareDone: "Environment ready",
           prepareFailed: "Prepare failed",
           copyDiag: "Copy diagnostics",
+          copyDiagHint: "Copies the readable summary; hold Shift for full JSON",
           diagCopied: "Diagnostics copied",
           envHint: "Checks container, ports and engine health, then repairs automatically",
           noteEmpty: "Insert without typing",
@@ -2123,6 +2125,13 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
 .nks-env-ok{color:var(--dsw-alias-fill-success,#3fb950)}
 .nks-env-bad{color:var(--dsw-alias-fill-error,#d5455c)}
 .nks-env-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:2px}
+.nks-env-checks{display:flex;flex-direction:column;gap:2px;margin-top:2px;padding-top:4px;border-top:.5px solid var(--dsw-alias-border-l2)}
+.nks-env-check{display:flex;align-items:baseline;gap:6px;font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-tertiary)}
+.nks-env-check b{font-weight:500;color:var(--dsw-alias-label-secondary);flex:none;min-width:34px}
+.nks-env-check-dot{flex:none;width:10px;text-align:center}
+.nks-env-check[data-ok="true"] .nks-env-check-dot{color:var(--dsw-alias-fill-success,#3fb950)}
+.nks-env-check[data-ok="false"] .nks-env-check-dot{color:var(--dsw-alias-fill-error,#d5455c)}
+.nks-env-check-detail{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;unicode-bidi:plaintext}
 .nks-env-note{font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-tertiary);line-height:1.5}
 .nks-settings-body label{color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxxs-11)}
 .nks-choices{display:flex;gap:4px}
@@ -3029,12 +3038,18 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
     };
     function EnvPanel() {
       const [snap, setSnap] = React5.useState(null);
+      const [diag, setDiag] = React5.useState(null);
+      const copyRawDiag = React5.useRef(false);
       const [busyLocal, setBusyLocal] = React5.useState(false);
       const [note, setNote] = React5.useState("");
       React5.useEffect(() => {
         let alive = true;
         fetch(PORTS).then((r) => r.json()).then((data) => {
           if (alive) setSnap(data);
+        }).catch(() => {
+        });
+        fetch(DIAGNOSTICS).then((r) => r.json()).then((data) => {
+          if (alive) setDiag(data);
         }).catch(() => {
         });
         return () => {
@@ -3062,7 +3077,9 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       async function copyDiagnostics() {
         try {
           const data = await fetch(DIAGNOSTICS).then((r) => r.json());
-          await navigator.clipboard.writeText(JSON.stringify(data, null, 2));
+          setDiag(data);
+          const text = copyRawDiag.current ? JSON.stringify(data, null, 2) : data.text || JSON.stringify(data, null, 2);
+          await navigator.clipboard.writeText(text);
           showToast(copy.diagCopied);
         } catch (cause) {
           showError(cause);
@@ -3086,11 +3103,33 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         h("div", { className: "nks-env-row" }, h("b", null, copy.envContainer), h("span", null, container)),
         snap?.containerName ? h("div", { className: "nks-env-row" }, h("b", null, copy.envInstance), h("span", null, snap.containerName)) : null,
         h("div", { className: "nks-env-row" }, h("b", null, copy.envPorts), h("span", null, portRow)),
+        // Per-plane health, so "OK" can no longer mean "container up but the
+        // pane silently fell back to screenshots".
+        Array.isArray(diag?.summary) ? h(
+          "div",
+          { className: "nks-env-checks", "data-nks-checks": String(diag.summary.length) },
+          diag.summary.map((row) => h(
+            "div",
+            { key: row.label, className: "nks-env-check", "data-ok": row.ok ? "true" : "false" },
+            h("span", { className: "nks-env-check-dot" }, row.ok ? "\u2713" : "\u2717"),
+            h("b", null, row.label),
+            h("span", { className: "nks-env-check-detail" }, row.detail || "\u2014")
+          ))
+        ) : null,
         h(
           "div",
           { className: "nks-env-actions" },
           h("button", { type: "button", className: "nks-start-btn", "data-nks-prepare": "1", disabled: busyLocal, onClick: prepare }, busyLocal ? copy.preparingEnv : copy.prepareEnv),
-          h("button", { type: "button", className: "nks-start-btn", "data-nks-copy-diag": "1", onClick: copyDiagnostics }, copy.copyDiag)
+          h("button", {
+            type: "button",
+            className: "nks-start-btn",
+            "data-nks-copy-diag": "1",
+            title: copy.copyDiagHint,
+            onClick: (event) => {
+              copyRawDiag.current = event.shiftKey === true;
+              copyDiagnostics();
+            }
+          }, copy.copyDiag)
         ),
         h("div", { className: "nks-env-note" }, note || copy.envHint)
       );
@@ -3881,7 +3920,11 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           ref: domFrameRef,
           className: "nks-dom",
           title: "Kitesurf page",
-          sandbox: "allow-scripts allow-same-origin",
+          // No allow-scripts: the host already strips scripts/handlers/js: URLs,
+          // and this is the second lock — a sanitizer miss must not become XSS
+          // into the DSH host page. Picking is bound from the parent
+          // (bindDomFrame → doc.addEventListener), which needs only same-origin.
+          sandbox: "allow-same-origin",
           style: vp ? { width: `${vp.width}px`, height: `${vp.height}px`, flex: "none", display: "block", margin: "0 auto", background: "#fff" } : { width: "100%", height: "100%", display: "block", border: 0 },
           ref: (el) => {
             domFrameRef.current = el;

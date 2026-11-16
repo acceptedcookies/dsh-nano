@@ -1,0 +1,59 @@
+import assert from 'node:assert/strict'
+import test from 'node:test'
+import { buildSrcDoc, sanitizeHtml } from '../src/host/dom-srcdoc.js'
+
+test('sanitizeHtml strips scripts, base, meta-refresh, handlers and javascript: urls', () => {
+  const html = [
+    '<html><head><base href="https://evil.example/">',
+    '<meta http-equiv="refresh" content="0;url=https://evil.example/">',
+    '<script>window.x=1</script></head>',
+    '<body onload="steal()"><a href="javascript:alert(1)">a</a>',
+    '<img src="javascript:alert(2)"><p onclick="x()">text</p></body></html>',
+  ].join('')
+  const { html: clean, stripped } = sanitizeHtml(html)
+  assert.equal(clean.includes('<script'), false)
+  assert.equal(clean.includes('<base'), false)
+  assert.equal(clean.includes('http-equiv'), false)
+  assert.equal(clean.includes('onload'), false)
+  assert.equal(clean.includes('onclick'), false)
+  assert.equal(clean.includes('javascript:'), false)
+  assert.equal(clean.includes('text'), true)
+  assert.equal(stripped.scripts, 1)
+  assert.equal(stripped.base, 1)
+  assert.equal(stripped.metaRefresh, 1)
+  assert.equal(stripped.handlers, 2)
+  assert.equal(stripped.jsUrls, 2)
+})
+
+test('buildSrcDoc rebases on the live url and keeps one base tag', () => {
+  const built = buildSrcDoc({ url: 'https://example.com/a/b', html: '<html><head><title>t</title></head><body>x</body></html>' })
+  assert.equal(built.url, 'https://example.com/a/b')
+  assert.equal(built.srcdoc.includes('<base href="https://example.com/a/b">'), true)
+  assert.equal((built.srcdoc.match(/<base /g) || []).length, 1)
+  assert.equal(built.srcdoc.includes('<title>t</title>'), true)
+  assert.equal(built.bytes, built.srcdoc.length)
+})
+
+test('buildSrcDoc wraps a fragment that has no head', () => {
+  const built = buildSrcDoc({ url: 'https://example.com/', html: '<p>hi</p>' })
+  assert.equal(built.srcdoc.startsWith('<!doctype html>'), true)
+  assert.equal(built.srcdoc.includes('<body><p>hi</p></body>'), true)
+})
+
+test('buildSrcDoc never injects a picker script (the pane binds its own)', () => {
+  const built = buildSrcDoc({ url: 'https://example.com/', html: '<html><head></head><body>x</body></html>' })
+  assert.equal(built.srcdoc.includes('<script'), false)
+})
+
+test('buildSrcDoc escapes the url so it cannot break out of the attribute', () => {
+  const built = buildSrcDoc({ url: 'https://e.test/"><script>alert(1)</script>', html: '<html><head></head><body>x</body></html>' })
+  assert.equal(built.srcdoc.includes('"><script>'), false)
+  assert.equal(built.srcdoc.includes('&quot;'), true)
+})
+
+test('an empty page degrades to an empty document, not a throw', () => {
+  const built = buildSrcDoc({})
+  assert.equal(built.url, '')
+  assert.equal(typeof built.srcdoc, 'string')
+  assert.equal(built.srcdoc.includes('<body>'), true)
+})

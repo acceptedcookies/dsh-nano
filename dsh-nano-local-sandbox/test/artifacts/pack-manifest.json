@@ -1,5 +1,5 @@
 {
-  "commit": "e1b2e91f3c253b8e35dcd4e23c2c017754e5f206",
+  "commit": "b8f9884b9bf424879a900197521d05f3f0ab38c5",
   "packs": {
     "dsh-nano-local-sandbox": [
       "AGENTS.md",
@@ -22,6 +22,7 @@
       "src/host/build.js",
       "src/host/cdp-elements.js",
       "src/host/cdp-keeper.js",
+      "src/host/dom-srcdoc.js",
       "src/host/error-catalog.js",
       "src/host/instance-registry.js",
       "src/host/mcp-sandbox.js",

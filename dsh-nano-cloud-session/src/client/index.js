@@ -28,10 +28,14 @@ function createStore(initial) {
  *  picker and skill/attachment menu, and show a static Devin chip instead. */
 function installCloudComposer() {
   let frame = 0
+  let seat = null
   const mark = () => {
     const cloud = document.documentElement.dataset.dncsCloud === '1'
-    const seat = document.querySelector('[class*="composerSeat"]')
-    if (!seat) return
+    // Cache the seat: the body-wide wake-up runs on every mutation batch, and
+    // a document-wide `[class*=composerSeat]` scan there is pure waste once the
+    // seat is known. Re-resolve only when it is missing or was replaced.
+    if (seat == null || !seat.isConnected) seat = document.querySelector('[class*="composerSeat"]')
+    if (seat == null) return
     let chip = seat.querySelector('.dncs-devin-chip')
     if (!cloud) { chip?.remove(); return }
     if (chip) return

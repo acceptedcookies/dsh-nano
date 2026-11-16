@@ -165,43 +165,63 @@ function readChrome() {
   }
 }
 
-function useNativeChrome() {
-  const [chrome, setChrome] = useState(null)
-  useLayoutEffect(() => {
-    /* Chrome must re-read on EVERY relevant DOM change, not just at mount:
-     * collapsing the sidebar rebuilds the workspaces subtree into rail mode,
-     * and a stale expanded-mode chrome renders wide rows inside the 56px rail
-     * — which is exactly the broken "E"-only icon regression (text clipped to
-     * its first letter by the rail width). */
-    let timer = 0
-    const reread = () => {
-      const next = readChrome()
-      setChrome(prev => {
-        if (next == null) return prev === null ? prev : null
-        // Cheap signature compare to avoid render loops.
-        const sig = c => c && [c.rail ? 1 : 0, c.header, c.iconButton, c.row, c.list, c.group].join('|')
-        return sig(prev) === sig(next) ? prev : next
-      })
-    }
-    reread()
-    // Slow poll until first success (slot may mount later), plus re-read on
-    // every DOM mutation (collapse/expand rebuilds the workspaces subtree).
-    let tries = 0
-    const poll = () => {
-      reread()
-      if (tries++ < 200) timer = window.setTimeout(poll, 100)
-    }
-    timer = window.setTimeout(poll, 100)
-    const observer = new MutationObserver(() => {
-      window.clearTimeout(timer)
-      timer = window.setTimeout(reread, 80)
-    })
-    observer.observe(document.body, { childList: true, subtree: true })
-    return () => {
+/** Watch the workspaces slot subtree — NOT the whole document.
+ *
+ *  A body-wide observer fires for every mutation anywhere (a chat token, a
+ *  hover class, the workbench slide), and `readChrome()` reads computed style
+ *  plus bounding boxes, i.e. a forced synchronous layout in the middle of the
+ *  frame. The slot is the only subtree whose shape we care about, so the
+ *  observer is scoped to it; a slow poll re-attaches when React replaces the
+ *  slot element and re-reads only on that identity change.
+ *
+ *  `region` watches the slot's PARENT instead (childList only): the graft host
+ *  lives there as a sibling, so a host removal is a mutation of the region.
+ */
+function useSlotWatch(onChange, region = false) {
+  const latest = useRef(onChange)
+  latest.current = onChange
+  useEffect(() => {
+    let target = null
+    const observer = new MutationObserver(() => latest.current())
+    const attach = () => {
+      const slot = document.querySelector('[data-slot="sidebar.workspaces"]')
+      const next = region ? slot?.parentElement ?? null : slot
+      if (next === target) return false
       observer.disconnect()
-      window.clearTimeout(timer)
+      target = next
+      if (target != null) {
+        observer.observe(target, region
+          ? { childList: true }
+          : { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] })
+      }
+      return true
+    }
+    if (attach()) latest.current()
+    const poll = window.setInterval(() => { if (attach()) latest.current() }, 400)
+    return () => {
+      window.clearInterval(poll)
+      observer.disconnect()
     }
   }, [])
+}
+
+function useNativeChrome() {
+  const [chrome, setChrome] = useState(null)
+  /* Chrome must re-read whenever the workspaces subtree changes shape:
+   * collapsing the sidebar rebuilds it into rail mode, and a stale
+   * expanded-mode chrome renders wide rows inside the 56px rail — the broken
+   * "E"-only icon regression (text clipped to its first letter). */
+  const reread = () => {
+    const next = readChrome()
+    setChrome(prev => {
+      if (next == null) return prev === null ? prev : null
+      // Cheap signature compare to avoid render loops.
+      const sig = c => c && [c.rail ? 1 : 0, c.header, c.iconButton, c.row, c.list, c.group].join('|')
+      return sig(prev) === sig(next) ? prev : next
+    })
+  }
+  useSlotWatch(reread)
+  useLayoutEffect(() => { reread() }, [])
   return chrome
 }
 
@@ -223,20 +243,19 @@ function findHost() {
 function useGraftHost() {
   const [host, setHost] = useState(null)
   const hostRef = useRef(null)
+  /* The host is a sibling of the slot, so watch the region (slot's parent)
+   * rather than the document: a host removal or a slot replacement is a direct
+   * child mutation there, and nothing else on the page wakes us. */
+  const sync = () => {
+    const next = findHost()
+    if (next === hostRef.current) return
+    hostRef.current = next
+    setHost(next)
+  }
+  useSlotWatch(sync, true)
   useEffect(() => {
-    const observer = new MutationObserver(() => {
-      const next = findHost()
-      hostRef.current = next
-      setHost(next)
-    })
-    observer.observe(document.body, { childList: true, subtree: true })
-    const first = findHost()
-    hostRef.current = first
-    setHost(first)
-    return () => {
-      observer.disconnect()
-      hostRef.current?.remove()
-    }
+    sync()
+    return () => { hostRef.current?.remove() }
   }, [])
   return host
 }

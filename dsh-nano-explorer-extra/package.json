@@ -49,6 +49,7 @@
     "dsh-nano-ui": "file:../packages/dsh-nano-ui",
     "dsh-performance-review": "file:../packages/dsh-performance-review",
     "esbuild": "0.25.0",
-    "dsh-interface": "file:../packages/dsh-interface"
+    "dsh-interface": "file:../packages/dsh-interface",
+    "@deepseek-ai/cordis": "^4.1.0"
   }
 }

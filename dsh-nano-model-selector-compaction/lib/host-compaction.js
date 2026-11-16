@@ -420,13 +420,21 @@ export default class NanoCompactionEngine extends CompactionEngine {
       episode.circuit.suppressedLogged = false
       const result = episode._lastResult
       episode._lastResult = undefined
+      // `shadowedRange` comes from the seam and names the first/last SURFACE
+      // positions, which are not the min/max event seqs: after a replace the
+      // surface head can hold a newer checkpoint, making that pair inverted.
+      // The ledger reports the true event span instead, so an operator can
+      // correlate a compaction with the journal without decoding the seam.
+      const shadowedSeqs = result?.shadowedSeqs ?? []
       recordAsyncDecision(session.id, {
         kind: 'commit',
         compactionId: episode.tx.compactionId,
         promptVersion: episode.promptVersion ?? null,
         tokens: result?.shadowedTokenCount ?? null,
-        records: result?.shadowedSeqs?.length ?? null,
-        range: result?.shadowedRange ?? null,
+        records: shadowedSeqs.length === 0 ? null : shadowedSeqs.length,
+        range: shadowedSeqs.length === 0
+          ? null
+          : { first: Math.min(...shadowedSeqs), last: Math.max(...shadowedSeqs) },
       })
       this._settleEpisode(episode)
       this._logResult(result, 'async maintenance')

@@ -801,6 +801,12 @@ test('ledger: a committed episode records arm → claim → commit in order', as
   const durableId = session.eventsOf('compaction/start')[0].data.compactionId
   assert.equal(commit.compactionId, durableId)
   assert.ok(commit.tokens > 0)
+  // `range` is the true event span, not the seam's surface-position pair
+  // (which can be inverted after a replace).
+  const summary = session.eventsOf('compaction/summary')[0]
+  const seqs = summary.data.shadowedSeqs
+  assert.deepEqual(commit.range, { first: Math.min(...seqs), last: Math.max(...seqs) })
+  assert.ok(commit.range.first <= commit.range.last)
 })
 
 test('ledger: a dropped episode is recorded with bracketed:false (the silent case)', async () => {

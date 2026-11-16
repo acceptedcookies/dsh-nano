@@ -24,9 +24,47 @@ var FAILURE_KIND = Object.freeze({
 });
 var FAILURE_KINDS = Object.freeze(Object.values(FAILURE_KIND));
 
+// ../packages/dsh-interface/src/contracts/observeEvent.js
+var OBSERVE_SURFACES = Object.freeze(["http", "upgrade", "json", "mcp"]);
+var HTTP_OUTCOMES = Object.freeze(["ok", "rejected", "method", "failed"]);
+var UPGRADE_OUTCOMES = Object.freeze(["accepted", "rejected", "method"]);
+var JSON_OUTCOMES = Object.freeze(["ok", ...FAILURE_KINDS]);
+var MCP_OUTCOMES = Object.freeze(["ok", "error", "rejected"]);
+var OBSERVE_FIELDS = Object.freeze([
+  "surface",
+  "id",
+  "plugin",
+  "outcome",
+  "ms",
+  "status",
+  "kind"
+]);
+var OUTCOMES = {
+  http: new Set(HTTP_OUTCOMES),
+  upgrade: new Set(UPGRADE_OUTCOMES),
+  json: new Set(JSON_OUTCOMES),
+  mcp: new Set(MCP_OUTCOMES)
+};
+
+// ../packages/dsh-interface/src/host/emitObserve.js
+function observeStamp(observe) {
+  if (typeof observe !== "function") return null;
+  return globalThis.performance.now();
+}
+function emitObserve(observe, event) {
+  if (typeof observe !== "function") return;
+  try {
+    const ret = observe(event);
+    if (ret != null && typeof ret.then === "function") ret.then(() => {
+    }, () => {
+    });
+  } catch {
+  }
+}
+
 // ../packages/dsh-interface/src/host/createMcpToolset.js
 var MCP_NOTIFICATIONS = "notifications/";
-function createMcpToolset({ schema: schema2, dispatch, protocolVersion = "2025-06-18", serverInfo = {}, onCall } = {}) {
+function createMcpToolset({ schema: schema2, dispatch, protocolVersion = "2025-06-18", serverInfo = {}, observe, plugin } = {}) {
   if (schema2 == null || !Array.isArray(schema2.methods)) {
     throw new TypeError("createMcpToolset requires a schema with a methods array");
   }
@@ -64,26 +102,45 @@ function createMcpToolset({ schema: schema2, dispatch, protocolVersion = "2025-0
         continue;
       }
       if (msg.method === "tools/call") {
+        const t0 = observeStamp(observe);
         const { name, arguments: args } = msg.params ?? {};
+        const id = typeof name === "string" && name !== "" ? name : null;
+        let sent = false;
+        const finish = (outcome, kind) => {
+          if (sent || t0 == null) return;
+          sent = true;
+          const event = {
+            surface: "mcp",
+            id,
+            plugin: plugin ?? null,
+            outcome,
+            ms: globalThis.performance.now() - t0
+          };
+          if (kind !== void 0) event.kind = kind;
+          emitObserve(observe, event);
+        };
         if (!toolMap[name]) {
           out.push(rpcReply(msg.id, null, { code: -32602, message: `unknown tool '${name}'` }));
+          finish("rejected");
           continue;
         }
-        onCall?.({ op: "mcp.call", name });
         try {
           const result = await dispatch(name, args ?? {});
           out.push(rpcReply(msg.id, {
             content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
             structuredContent: result
           }));
+          finish("ok");
         } catch (e) {
           out.push(rpcReply(msg.id, {
             content: [{ type: "text", text: String(e?.message ?? e) }],
             isError: true,
             /* stable kind travels on structuredContent so callers map errors
-               without parsing message text. */
+               without parsing message text. The observe event does not. */
             structuredContent: { kind: e?.kind ?? "invalid", message: String(e?.message ?? e) }
           }));
+          const kind = typeof e?.kind === "string" && e.kind !== "" ? e.kind : "invalid";
+          finish("error", kind);
         }
         continue;
       }

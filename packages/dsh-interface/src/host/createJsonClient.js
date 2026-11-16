@@ -33,6 +33,13 @@
  */
 
 import { FAILURE_KIND, ok, failure } from '../contracts/jsonOutcome.js'
+import { emitObserve, observeStamp } from './emitObserve.js'
+
+function bindingIdOf(operation) {
+  if (operation == null || typeof operation !== 'object') return null
+  const id = operation.bindingId
+  return typeof id === 'string' && id !== '' ? id : null
+}
 
 export class JsonClientError extends Error {
   constructor(reason, detail) {
@@ -45,7 +52,7 @@ export class JsonClientError extends Error {
 
 const isAbort = (err) => err != null && (err.name === 'AbortError' || err.code === 'ABORT_ERR')
 
-export function createJsonClient({ fetch: fetchImpl, resolveUrl } = {}) {
+export function createJsonClient({ fetch: fetchImpl, resolveUrl, observe, plugin } = {}) {
   if (typeof fetchImpl !== 'function') {
     throw new JsonClientError('missing-fetch', 'createJsonClient requires { fetch }')
   }
@@ -54,8 +61,23 @@ export function createJsonClient({ fetch: fetchImpl, resolveUrl } = {}) {
   }
 
   async function call(operation, input, { signal } = {}) {
+    // Identity is the operation's bindingId only. Never the resolved URL
+    // (T-O-PRE1116-06 / 05.5). Missing id stays the key with value null.
+    const t0 = observeStamp(observe)
+    const id = bindingIdOf(operation)
+    const plug = plugin ?? null
+    let sent = false
+    const finish = (outcome, status) => {
+      if (sent || t0 == null) return
+      sent = true
+      const event = { surface: 'json', id, plugin: plug, outcome, ms: globalThis.performance.now() - t0 }
+      if (status !== undefined) event.status = status
+      emitObserve(observe, event)
+    }
+
     // (1) aborted before we even try — fetch is never invoked.
     if (signal?.aborted) {
+      finish(FAILURE_KIND.CANCELLED)
       return failure(FAILURE_KIND.CANCELLED, 'cancelled before request')
     }
 
@@ -64,6 +86,7 @@ export function createJsonClient({ fetch: fetchImpl, resolveUrl } = {}) {
     try {
       request = encodeRequest(operation, input)
     } catch (err) {
+      finish(FAILURE_KIND.PROTOCOL)
       return failure(FAILURE_KIND.PROTOCOL, msg(err))
     }
     let url
@@ -71,6 +94,7 @@ export function createJsonClient({ fetch: fetchImpl, resolveUrl } = {}) {
       url = resolveUrl(operation, request)
       if (typeof url !== 'string' || url === '') throw new Error('resolveUrl returned no URL')
     } catch (err) {
+      finish(FAILURE_KIND.PROTOCOL)
       return failure(FAILURE_KIND.PROTOCOL, msg(err))
     }
 
@@ -84,9 +108,12 @@ export function createJsonClient({ fetch: fetchImpl, resolveUrl } = {}) {
         signal,
       })
     } catch (err) {
-      return isAbort(err)
-        ? failure(FAILURE_KIND.CANCELLED, msg(err))
-        : failure(FAILURE_KIND.TRANSPORT, msg(err))
+      if (isAbort(err)) {
+        finish(FAILURE_KIND.CANCELLED)
+        return failure(FAILURE_KIND.CANCELLED, msg(err))
+      }
+      finish(FAILURE_KIND.TRANSPORT)
+      return failure(FAILURE_KIND.TRANSPORT, msg(err))
     }
 
     // Headers landed → we have a real status. Decode reads the body at most once.
@@ -95,15 +122,22 @@ export function createJsonClient({ fetch: fetchImpl, resolveUrl } = {}) {
     try {
       decoded = await decodeResponse(operation, res, status)
     } catch (err) {
-      if (isAbort(err)) return failure(FAILURE_KIND.CANCELLED, msg(err), { httpStatus: status })
+      if (isAbort(err)) {
+        finish(FAILURE_KIND.CANCELLED, status)
+        return failure(FAILURE_KIND.CANCELLED, msg(err), { httpStatus: status })
+      }
       /* F14.3 非法 2xx → protocol: a decode that throws on a 2xx (e.g. malformed
          JSON body) is a protocol violation, not a transport read failure. Only
          a throw on a NON-2xx (where the body may be an opaque error payload the
          transport itself couldn't surface) is transport. */
       const twoXx = status >= 200 && status < 300
-      return failure(twoXx ? FAILURE_KIND.PROTOCOL : FAILURE_KIND.TRANSPORT, msg(err), { httpStatus: status })
+      const kind = twoXx ? FAILURE_KIND.PROTOCOL : FAILURE_KIND.TRANSPORT
+      finish(kind, status)
+      return failure(kind, msg(err), { httpStatus: status })
     }
-    return finalize(decoded, status)
+    const out = finalize(decoded, status)
+    finish(out.ok ? 'ok' : out.error.kind, out.ok ? status : out.error.httpStatus)
+    return out
   }
 
   return { call }

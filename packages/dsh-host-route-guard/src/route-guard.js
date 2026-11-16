@@ -78,6 +78,9 @@ export async function readJsonBody(req, maxBytes) {
  * Row shape: { path, methods:[...], sensitivity, capability, bodyLimit,
  *              sessionBinding, justification }.
  * `plugin` is recorded on each row's provenance for inventory output.
+ * `id` is kept on the internal row for a later observe event. It is not
+ * copied onto the frozen registration record in this step (that field lands
+ * with the ledger id, T-O-PRE1116-05.4).
  */
 function indexTable(table, plugin) {
   if (!Array.isArray(table)) {
@@ -104,6 +107,7 @@ function indexTable(table, plugin) {
       sessionBinding: row.sessionBinding,
       justification: row.justification,
       plugin: row.plugin ?? plugin,
+      id: typeof row.id === 'string' && row.id !== '' ? row.id : null,
     })
   }
   return byPath
@@ -140,14 +144,49 @@ function normalizeSpec(spec) {
 /* Guard factory                                                       */
 /* ------------------------------------------------------------------ */
 
+function observeEnabled(observe) {
+  return typeof observe === 'function'
+}
+
+/** No clock read when observe is omitted (T-O-PRE1116-06.5). */
+function observeStamp(observe) {
+  if (!observeEnabled(observe)) return null
+  return globalThis.performance.now()
+}
+
+/** Synchronous, not awaited. A thrown or rejected callback is swallowed. */
+function emitObserve(observe, event) {
+  if (!observeEnabled(observe)) return
+  try {
+    const ret = observe(event)
+    if (ret != null && typeof ret.then === 'function') ret.then(() => {}, () => {})
+  } catch {
+    /* callback failure must not change the response */
+  }
+}
+
+function emitHttp(observe, t0, { id, plugin, outcome, status }) {
+  if (!observeEnabled(observe) || t0 == null) return
+  const event = {
+    surface: 'http',
+    id: id ?? null,
+    plugin: plugin ?? null,
+    outcome,
+    ms: globalThis.performance.now() - t0,
+  }
+  if (status !== undefined) event.status = status
+  emitObserve(observe, event)
+}
+
 /**
- * createGuard({ table, plugin? }) →
+ * createGuard({ table, plugin?, observe? }) →
  *   { registerRoutes(ctx, specs), inventory(), lookup(path) }
  *
  * `table` is validated eagerly at construction. `plugin` is optional and used
  * for inventory provenance and `ctx.effect` labels.
+ * `observe` is optional (T-O-PRE1116-06). Omitted: no clock read, no event.
  */
-export function createGuard({ table, plugin } = {}) {
+export function createGuard({ table, plugin, observe } = {}) {
   const byPath = indexTable(table ?? [], plugin)
   const records = [] // registration records, in registration order
 
@@ -221,22 +260,28 @@ export function createGuard({ table, plugin } = {}) {
       records.push(route)
 
       const handler = async (req, res) => {
+        const t0 = observeStamp(observe)
+        const identity = { id: row.id, plugin: route.plugin }
         const rejection = conn.requestRejection?.(req)
         if (rejection !== undefined) {
           res.statusCode = rejection
           res.end()
+          emitHttp(observe, t0, { ...identity, outcome: 'rejected', status: rejection })
           return
         }
         if (!route.methods.includes(String(req.method ?? '').toUpperCase())) {
           res.setHeader('allow', route.methods.join(', '))
           sendJson(res, 405, { ok: false, reason: 'method-not-allowed' })
+          emitHttp(observe, t0, { ...identity, outcome: 'method', status: 405 })
           return
         }
         try {
           await spec.handler(req, res, route)
+          emitHttp(observe, t0, { ...identity, outcome: 'ok', status: res.statusCode })
         } catch (error) {
           const reason = error instanceof RouteGuardError ? error.reason : 'failed'
           sendJson(res, 500, { ok: false, reason })
+          emitHttp(observe, t0, { ...identity, outcome: 'failed', status: 500 })
         }
       }
 
@@ -279,13 +324,13 @@ export function createGuard({ table, plugin } = {}) {
 
 /**
  * Standalone entry mirroring the bound signature used by the migration:
- *   registerRoutes(ctx, specs, { table, plugin? }) → disposer[]
- * Equivalent to `createGuard({ table, plugin }).registerRoutes(ctx, specs)`
+ *   registerRoutes(ctx, specs, { table, plugin?, observe? }) → disposer[]
+ * Equivalent to `createGuard({ table, plugin, observe }).registerRoutes(ctx, specs)`
  * but creates a fresh guard per call (intended for one-shot registration).
  * For inventory access use `createGuard` directly.
  */
-export function registerRoutes(ctx, specs, { table, plugin } = {}) {
-  return createGuard({ table, plugin }).registerRoutes(ctx, specs)
+export function registerRoutes(ctx, specs, { table, plugin, observe } = {}) {
+  return createGuard({ table, plugin, observe }).registerRoutes(ctx, specs)
 }
 
 /**

@@ -24,15 +24,18 @@ import {
   bindingRecord,
   BindingError,
 } from '../contracts/index.js'
+import { emitObserve, observeStamp } from './emitObserve.js'
 
 /**
- * createWebRegistrar({ plugin, bindings }) →
+ * createWebRegistrar({ plugin, bindings, observe? }) →
  *   { registerAll(ctx), inventory(), lookup(id) }
  *
  * `bindings` is the baked declaration table (id/channel/match/path/methods/
  * handler + ledger fields). Validated eagerly at construction.
+ * `observe` is optional (T-O-PRE1116-06) and is forwarded to the exact-http
+ * guard. Omitted: no clock read, no event.
  */
-export function createWebRegistrar({ plugin, bindings } = {}) {
+export function createWebRegistrar({ plugin, bindings, observe } = {}) {
   const normalized = normalizeBindings(bindings ?? [], { plugin })
   const effective = [] // bindingRecords, only after successful registration
 
@@ -77,42 +80,85 @@ export function createWebRegistrar({ plugin, bindings } = {}) {
          * a hit on the orphan instance). Pass the REAL ctx through unchanged;
          * per-route ctx.effect registration is the guard's own contract, and
          * disposeAll below is idempotent so teardown stays exact. */
-        const guard = createGuard({ table: byChannel.httpExact, plugin })
+        const guard = createGuard({ table: byChannel.httpExact, plugin, observe })
         const ds = guard.registerRoutes(ctx, byChannel.httpExact)
         disposers.push(...ds)
       }
       // http + prefix — same admission fence, prefix surface.
       for (const b of byChannel.httpPrefix) {
         const handler = async (req, res) => {
+          const t0 = observeStamp(observe)
+          const done = (outcome, status) => {
+            if (t0 == null) return
+            const event = {
+              surface: 'http',
+              id: b.id ?? null,
+              plugin: b.plugin ?? plugin ?? null,
+              outcome,
+              ms: globalThis.performance.now() - t0,
+            }
+            if (status !== undefined) event.status = status
+            emitObserve(observe, event)
+          }
           // requestRejection is REQUIRED (prechecked above): direct call, never
           // optional-chained into a fail-open pass (F12.3).
           const rejection = conn.requestRejection(req)
-          if (rejection !== undefined) { res.statusCode = rejection; res.end(); return }
+          if (rejection !== undefined) {
+            res.statusCode = rejection
+            res.end()
+            done('rejected', rejection)
+            return
+          }
           if (!b.methods.includes(String(req.method ?? '').toUpperCase())) {
             res.setHeader('allow', b.methods.join(', '))
             sendJson(res, 405, { ok: false, reason: 'method-not-allowed' })
+            done('method', 405)
             return
           }
-          try { await b.handler(req, res, bindingRecord(b)) }
-          catch (error) {
+          try {
+            await b.handler(req, res, bindingRecord(b))
+            done('ok', res.statusCode)
+          } catch (error) {
             const reason = error instanceof RouteGuardError ? error.reason : 'failed'
             sendJson(res, 500, { ok: false, reason })
+            done('failed', 500)
           }
         }
         disposers.push(ctx.get('webServer').register({ kind: 'prefix', path: b.path, handler }))
       }
       // upgrade + exact — same rejection fence, socket teardown on reject.
+      // Timing stops when the handler function returns. A long-lived socket
+      // is not wrapped (T-O-PRE1116-06.4). There is no `failed` outcome on
+      // this surface; a throw still propagates.
       for (const b of byChannel.upgradeExact) {
         const handler = (req, socket) => {
+          const t0 = observeStamp(observe)
+          const done = (outcome) => {
+            if (t0 == null) return
+            emitObserve(observe, {
+              surface: 'upgrade',
+              id: b.id ?? null,
+              plugin: b.plugin ?? plugin ?? null,
+              outcome,
+              ms: globalThis.performance.now() - t0,
+            })
+          }
           // upgrade is GET-only by declaration (F12.2); enforce at request time
           // too — a non-GET upgrade must not reach b.handler.
           if (String(req.method ?? '').toUpperCase() !== 'GET') {
             try { socket.end() } catch { /* socket gone */ }
+            done('method')
             return
           }
           const rejection = conn.requestRejection(req)
-          if (rejection !== undefined) { try { socket.end() } catch {} return }
-          return b.handler(req, socket, bindingRecord(b))
+          if (rejection !== undefined) {
+            try { socket.end() } catch { /* socket gone */ }
+            done('rejected')
+            return
+          }
+          const ret = b.handler(req, socket, bindingRecord(b))
+          done('accepted')
+          return ret
         }
         disposers.push(ctx.get('webServer').registerUpgrade({ path: b.path, handler }))
       }

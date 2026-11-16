@@ -51,7 +51,8 @@ function indexTable(table, plugin) {
       bodyLimit: row.bodyLimit,
       sessionBinding: row.sessionBinding,
       justification: row.justification,
-      plugin: row.plugin ?? plugin
+      plugin: row.plugin ?? plugin,
+      id: typeof row.id === "string" && row.id !== "" ? row.id : null
     });
   }
   return byPath;
@@ -73,7 +74,36 @@ function normalizeSpec(spec) {
   }
   return { ...spec, methods: [...methods] };
 }
-function createGuard({ table, plugin } = {}) {
+function observeEnabled(observe) {
+  return typeof observe === "function";
+}
+function observeStamp(observe) {
+  if (!observeEnabled(observe)) return null;
+  return globalThis.performance.now();
+}
+function emitObserve(observe, event) {
+  if (!observeEnabled(observe)) return;
+  try {
+    const ret = observe(event);
+    if (ret != null && typeof ret.then === "function") ret.then(() => {
+    }, () => {
+    });
+  } catch {
+  }
+}
+function emitHttp(observe, t0, { id, plugin, outcome, status }) {
+  if (!observeEnabled(observe) || t0 == null) return;
+  const event = {
+    surface: "http",
+    id: id ?? null,
+    plugin: plugin ?? null,
+    outcome,
+    ms: globalThis.performance.now() - t0
+  };
+  if (status !== void 0) event.status = status;
+  emitObserve(observe, event);
+}
+function createGuard({ table, plugin, observe } = {}) {
   const byPath = indexTable(table ?? [], plugin);
   const records = [];
   function registerRoutes2(ctx, specs) {
@@ -127,22 +157,28 @@ function createGuard({ table, plugin } = {}) {
       });
       records.push(route);
       const handler = async (req, res) => {
+        const t0 = observeStamp(observe);
+        const identity = { id: row.id, plugin: route.plugin };
         const rejection = conn.requestRejection?.(req);
         if (rejection !== void 0) {
           res.statusCode = rejection;
           res.end();
+          emitHttp(observe, t0, { ...identity, outcome: "rejected", status: rejection });
           return;
         }
         if (!route.methods.includes(String(req.method ?? "").toUpperCase())) {
           res.setHeader("allow", route.methods.join(", "));
           sendJson(res, 405, { ok: false, reason: "method-not-allowed" });
+          emitHttp(observe, t0, { ...identity, outcome: "method", status: 405 });
           return;
         }
         try {
           await spec.handler(req, res, route);
+          emitHttp(observe, t0, { ...identity, outcome: "ok", status: res.statusCode });
         } catch (error) {
           const reason = error instanceof RouteGuardError ? error.reason : "failed";
           sendJson(res, 500, { ok: false, reason });
+          emitHttp(observe, t0, { ...identity, outcome: "failed", status: 500 });
         }
       };
       const register = () => ctx.get("webServer").register({ kind: ROUTE_KIND, path: spec.path, handler });
@@ -162,8 +198,8 @@ function createGuard({ table, plugin } = {}) {
   }
   return { registerRoutes: registerRoutes2, inventory, lookup };
 }
-function registerRoutes(ctx, specs, { table, plugin } = {}) {
-  return createGuard({ table, plugin }).registerRoutes(ctx, specs);
+function registerRoutes(ctx, specs, { table, plugin, observe } = {}) {
+  return createGuard({ table, plugin, observe }).registerRoutes(ctx, specs);
 }
 
 // src/host/route-table.js

@@ -153,13 +153,18 @@ P0-00 干净树（main@9792da0）
   - **依赖**：PH6 合入 · **执行状态**：`complete`（T27d 未观察）
 ### PH8 — [DNCS]（`nue-1117-migrate-dncs`）
 
-- [ ] `P8-01` — 删 composer 隐藏样式与卡片 `:has` · `NUE1117-T23`
-- [ ] `P8-02` — composer 嫁接与 Devin 标签整段删除（登记「云会话标识」缺口） · `NUE1117-T23`
-- [ ] `P8-03` — section 哈希类改宿主 primitive + 令牌 · `NUE1117-T23`
-- [ ] `P8-04` — `window.confirm` → `RiskConfirmation` / `NanoDialog danger`；`mayTerminate` · `NUE1117-T23` `NUE1117-T24`
-- [ ] `P8-05` — 设置页签改 React `NanoTabs` · `NUE1117-T23`
-  - **依赖**：PH7 合入 · **执行状态**：`not-started`
-
+- [x] `P8-01` — 删 composer 隐藏样式与卡片 `:has` · `NUE1117-T23`
+  - **执行状态**：`complete` · **证据**：`95b2149`（合并 `28b8202`）；composer 隐藏段 10 条、`[class*="list"]`、`.nano-dialog-card:has(...)` 6 条删除；设置 `width:720/fixedHeight:640`、新建 `width:560/fixedHeight:640`（预设档就近，§9）
+- [x] `P8-02` — composer 嫁接与 Devin 标签整段删除（登记「云会话标识」缺口） · `NUE1117-T23`
+  - **执行状态**：`complete` · **证据**：`95b2149`；`installCloudComposer` 与注册删除，`dncsCloud`/`dncsLocal` 读写 0，无替代挂载点（T17）；DESIGN §8「云会话 composer 按钮」「云会话标识」补删除事实
+- [x] `P8-03` — section 哈希类改宿主 primitive + 令牌 · `NUE1117-T23`
+  - **执行状态**：`complete` · **证据**：`95b2149`；用途→替代物：标题行→自有外壳 + `IconButton`；项目行→宿主 `DisclosureRow` + `Tag quiet`；会话行→`StateDot` + 宿主 `relativeTime` 分桶 + `Intl.RelativeTimeFormat` + `IconButton`；收起态→自有 `ResizeObserver`，展开→`ctx.get('layout').toggleSidebar()`（`7ac0085` 审查修复）；`withLocal`/`classOf`/`stripWide`/`readChrome`/`useNativeChrome` 等删除；DESIGN §8 新增「侧栏小节外壳」缺口
+- [x] `P8-04` — `window.confirm` → `RiskConfirmation` / `NanoDialog danger`；`mayTerminate` · `NUE1117-T23` `NUE1117-T24`
+  - **执行状态**：`complete` · **证据**：`95b2149`；中止、删除 profile → 宿主 `RiskConfirmation`（未勾选确认键禁用，handler 自拒）；归档 → `NanoDialog danger`，取消只清状态；`src/client/confirm.js` `mayTerminate`/`runTerminate`（react-free）；`test/confirm.test.mjs` 6 条攻击向量
+- [x] `P8-05` — 设置页签改 React `NanoTabs` · `NUE1117-T23`
+  - **执行状态**：`complete` · **证据**：`95b2149`；effect 内 DOM `nanoTabs` → React `NanoTabs`，`nanoTabs` 0
+  - **测试四元组**：`28b8202` · `cd dsh-nano-cloud-session && node --test` · 39/39（≥24；`nue-migration` 9 条 + `confirm` 6 条，对照 main 源码 1 过 8 败；`ctx.layout` 用例对照 `95b2149` 6 过 3 败）· 2026-11-16T19:37:23Z；`node scripts/test-all.mjs` @7ac0085 21/22（仅 s3-client）；`check-ui-rules --plugin DNCS` 前 16/1/5/0/31/0/6/2/0（61）→ 后全 0；`check-client-rules` ok；`lib/client.js` 含 `dsh-nano-ui@0.2.0` 1 处，同 HEAD 两次构建 sha256 相同；nano-ui 未改
+  - **依赖**：PH7 合入 · **执行状态**：`complete`（T27b/c 双层 Modal 观感未观察）
 ### PH9 — [DNN]（`nue-1117-migrate-dnn`）
 
 - [ ] `P9-01` — 对话框：窗口覆盖层 + 主窗口级 · `NUE1117-T25`
@@ -195,14 +200,15 @@ P0-00 干净树（main@9792da0）
 | `NUE1117-T20` | [DNEE] 迁移 | `node --test test/*.mjs`（含 `nue-migration.test.mjs`） | 26/26 @3cfd282 | pass |
 | `NUE1117-T21` | [DNT] 迁移 | `node test/run.mjs`（含 `nue-migration.test.mjs`） | 145/145 @c47b0eb | pass |
 | `NUE1117-T22` | [DNK] 迁移 | `npm test`（含 `nue-migration.test.mjs`） | 65/65 @18b30f4 | pass |
-| `NUE1117-T23`–`T26` | 其余两插件迁移 | 各插件测试 + `nue-migration.test.mjs` | — | pending |
+| `NUE1117-T23`–`T24` | [DNCS] 迁移 + 确认攻击向量 | `node --test`（含 `nue-migration`、`confirm`） | 39/39 @28b8202 | pass |
+| `NUE1117-T25`–`T26` | [DNN] 迁移 | 各插件测试 + `nue-migration.test.mjs` | — | pending |
 | `NUE1117-T27a`–`e` | 视觉核对（live） | 本机 profile + ego-browser 截图 | — | pending（需 live 授权与部署） |
 | `NUE1117-T28`–`T30` | 收口 | 两次构建 sha；`nue-docs`/`nue-endstate` | — | pending |
 
 ## 5. 当前状态与交接
 
-- **当前节点 / 已完成**：P0-00、PH1、PH2、PH3、PH4（P4-01 deferred）、PH5、PH6、PH7
-- **下一动作**：PH8（[DNCS]）
+- **当前节点 / 已完成**：P0-00、PH1、PH2、PH3、PH4（P4-01 deferred）、PH5、PH6、PH7、PH8
+- **下一动作**：PH9（[DNN]）
 - **当前阻塞**：无
 - **待 owner 决定**：Q18（P4-01，推荐 A）；P9-05（执行到时判定）
 - **最终交接目标**：[业主]
@@ -242,7 +248,8 @@ P0-00 干净树（main@9792da0）
 - `2026-11-16` · PH5 [DNEE]：保留 4 处宿主属性锚点（`styles.js:14` `[data-nxe] .nxe-tree button`、`:15` `[data-files-path]`、`:55` `[data-custom-tree] {height:auto}`、`:199` `[data-custom-tree] button:hover .nxe-open`，宿主无行悬停钩子）。它们不是 `:has()`/`[class*=`/哈希类，不在 T20 清零清单，留待 T27 视觉核对与 closure 列出。
 - `2026-11-16` · PH5 [DNEE]：`formatBytes` 与宿主 `fileSizeText` 14 个样本全部不同，按 P5-03「条件替换」保留并标 `nano-ui-exempt`；`.nxe-git-alert` 因宿主 Toast 无常驻模式保留自绘并豁免，材质随令牌改变。DESIGN §10 各 1 行。
 - `2026-11-16` · PH5 [DNEE]：「在应用中打开」下拉原为自绘菜单，与 P5-02 同一类问题，一并改 NanoMenu（同写面，不扩约）。- `2026-11-16` · PH6 [DNT]：`test/run.mjs` 原无测试发现机制，新增第 13 段用 `node --test` 收集 `test/*.test.mjs` 并计入总数（崩溃且无摘要计 1 败）；N6 下限 137 指 wasm 冒烟部分，合计 145。
-- `2026-11-16` · PH6 [DNT]：`⌘`/`→` 是 `ShortcutKeys` 按键图例文本，非图标，保留（U4 剩 4）；原生 `<button>` 保留（U3 9 持平，窗格头 20px 密度宿主 Button 无对应档，AP P6 未列 U3）；`?` 帮助按钮随同族换 `glyph('help')`。- `2026-11-16` · PH7 [DNK]：AP P7-01 提到的「查找」自绘图标在源码中不存在，只替换前进/后退箭头；P7-02 实际 U9 为 5 条（扫描器把 compound 选择器第二个类计为引用），全部清零；lib 产物在源码提交 `35facad` 上构建，buildId 对应源码提交，PH10 统一重建。
+- `2026-11-16` · PH6 [DNT]：`⌘`/`→` 是 `ShortcutKeys` 按键图例文本，非图标，保留（U4 剩 4）；原生 `<button>` 保留（U3 9 持平，窗格头 20px 密度宿主 Button 无对应档，AP P6 未列 U3）；`?` 帮助按钮随同族换 `glyph('help')`。- `2026-11-16` · PH7 [DNK]：AP P7-01 提到的「查找」自绘图标在源码中不存在，只替换前进/后退箭头；P7-02 实际 U9 为 5 条（扫描器把 compound 选择器第二个类计为引用），全部清零；lib 产物在源码提交 `35facad` 上构建，buildId 对应源码提交，PH10 统一重建。- `2026-11-16` · PH8 [DNCS]：子代理首版用 `ctx.layout?.toggleSidebar` 而 `inject` 未声明 `layout`，cordis 属性代理会抛错、宿主路径成死代码；审查后改 `ctx.get('layout')` 软读取（`7ac0085`，不新增启动期依赖），测试加桩 ctx 行为断言。
+- `2026-11-16` · PH8 [DNCS]：顺带修正 5 个错名令牌与 6 条 U8 死样式（同文件、同规则表，避免 U1/U8 残留）；新建弹窗 600×680 无预设档，取 560×640；会话时间改宿主 `relativeTime` 分桶，未来时间钳到「现在」；包 AGENTS 使用/不要两节同提交更新。
 ## 8. 附件：[业主] 发车指令（原文）
 
 > 本 directive 注册为 `NUE-1117` 执行授权来源。

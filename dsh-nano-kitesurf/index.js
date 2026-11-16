@@ -130,7 +130,15 @@ export const Config = {
       }
       const checkout = typeof source.checkout === 'string' && source.checkout ? source.checkout : undefined
       const perfReview = source.perfReview !== false
-      return { value: { httpBase: url.origin, allowRemote, checkout, perfReview } }
+      let mcpPort
+      if (source.mcpPort != null) {
+        const port = Number(source.mcpPort)
+        if (!Number.isInteger(port) || port < 1 || port > 65535) {
+          return { issues: [{ message: 'mcpPort must be an integer between 1 and 65535' }] }
+        }
+        mcpPort = port
+      }
+      return { value: { httpBase: url.origin, allowRemote, checkout, perfReview, mcpPort } }
     },
   },
 }
@@ -414,7 +422,7 @@ export function apply(ctx, config) {
   const httpBase = config?.httpBase ?? DEFAULT_ORIGIN
   const kite = createNanoKite({
     httpBase,
-    mcpPort: 8799,
+    mcpPort: config?.mcpPort ?? 8799,
     allowRemote: config?.allowRemote === true,
     lockPath: path.join(process.env.DSH_HOME || homedir(), 'nano-kitesurf.lock.json'),
     fs: { readFile, writeFile, mkdir },

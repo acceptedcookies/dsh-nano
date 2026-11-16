@@ -733,6 +733,9 @@ export function ModelSelector({ locked, available, directory, load, select, lang
         onClick={() => {
           if (open) close(true)
           else {
+            // The trigger always lands on the model list — do not inherit a
+            // 'compact' filter left over from an earlier badge click.
+            setFilter('all')
             setQuery('')
             setOpen(true)
             perf.count('panel-open')

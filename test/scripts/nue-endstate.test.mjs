@@ -5,6 +5,7 @@ import assert from 'node:assert/strict'
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { HOST_CLASS_ATTR_RE } from '../../scripts/check-ui-rules.mjs'
 
 const root = process.env.NUE_ROOT ?? join(dirname(fileURLToPath(import.meta.url)), '..', '..')
 
@@ -32,9 +33,12 @@ export function scanText(rel, text, own) {
   const hits = []
   text.split('\n').forEach((line, i) => {
     const at = `${rel}:${i + 1}`
-    if (line.includes('[class*=')) hits.push({ rule: 'class*=', at, line })
+    // Same matcher as U5: whitespace, every class attribute operator, any case.
+    if (line.match(HOST_CLASS_ATTR_RE) !== null) hits.push({ rule: 'class attribute selector', at, line })
     if (line.includes(':has(')) hits.push({ rule: ':has(', at, line })
     if (/\bschemeOf\b/.test(line)) hits.push({ rule: 'schemeOf', at, line })
+    // DESIGN.md §3: the scheme comes from ThemeScope, never from the host body attribute.
+    if (/data-ds-dark-theme|dsDarkTheme/.test(line)) hits.push({ rule: 'host theme attribute', at, line })
     if (line.includes('window.confirm')) hits.push({ rule: 'window.confirm', at, line })
     for (const m of MARKERS) if (!own.includes(m) && line.includes(m)) hits.push({ rule: `marker ${m}`, at, line })
   })
@@ -57,17 +61,26 @@ function scanAll() {
 test('T30 positive control: the scanner reports every rule on a violating fixture', () => {
   const fixture = [
     '.x [class*="composerSeat"] {}',
+    '.x [class *= "composerSeat"] {}',
+    '.x [ class*= "composerSeat"] {}',
+    '.x [class^="composerSeat"] {}',
+    '.x [class$="composerSeat"] {}',
     '.card:has(.host) {}',
     'const schemeOf = () => "dark"',
     'if (window.confirm("go")) run()',
+    'document.body.getAttribute("data-ds-dark-theme")',
+    'document.body.dataset.dsDarkTheme',
     'document.querySelector(".nms-root")',
     'html[data-dncs-cloud="1"]',
   ].join('\n')
-  const rules = new Set(scanText('fixture.js', fixture, []).map(h => h.rule))
-  for (const r of ['class*=', ':has(', 'schemeOf', 'window.confirm', 'marker nms-root', 'marker dncs']) assert.ok(rules.has(r), r)
+  const hits = scanText('fixture.js', fixture, [])
+  const rules = new Set(hits.map(h => h.rule))
+  for (const r of ['class attribute selector', ':has(', 'schemeOf', 'window.confirm', 'host theme attribute', 'marker nms-root', 'marker dncs']) assert.ok(rules.has(r), r)
+  const classHits = hits.filter(h => h.rule === 'class attribute selector')
+  assert.deepEqual(classHits.map(h => h.at), ['fixture.js:1', 'fixture.js:2', 'fixture.js:3', 'fixture.js:4', 'fixture.js:5'], 'every class attribute spelling fires')
 })
 
-test('T30 end state: no host grafting, schemeOf, window.confirm or cross-package markers', () => {
+test('T30 end state: no host grafting, schemeOf, host theme read, window.confirm or cross-package markers', () => {
   const { files, hits } = scanAll()
   for (const pkg of PACKAGES) assert.ok(files.some(f => f.startsWith(`${pkg.dir}/src/`)), `${pkg.dir} scanned`)
   assert.ok(files.length > 50, `scanned ${files.length} files`)

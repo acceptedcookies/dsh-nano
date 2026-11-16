@@ -49,7 +49,7 @@ const ZERO_PATTERNS = [
   ['data-nano-model-selector', /data-nano-model-selector/g],
   ['dncsCloud', /dncsCloud/g],
   ['window.confirm', /window\.confirm/g],
-  ['a host class attribute selector', /\[class[*^$|~]?=/g],
+  ['a host class attribute selector', /\[\s*class\s*[*^$|~]?=/gi],
   [':has(', /:has\(/g],
   ['withLocal', /\bwithLocal\b/g],
   ['classOf', /\bclassOf\b/g],
@@ -85,6 +85,9 @@ test('T23: the source walk reached the DNCS author tree', () => {
 test('T23 control: every zero pattern still fires on a fixture that carries it', () => {
   const fixture = [
     "const seat = document.querySelector('[class*=\"composerSeat\"]')",
+    '.dncs-root [class *= "composerSeat"] { display: none }',
+    '.dncs-root [ class^= "composerSeat"] { display: none }',
+    '.dncs-root [CLASS$= "composerSeat"] { display: none }',
     "const anchor = seat.querySelector('.nms-root, [data-nano-model-selector=\"root\"]')",
     "document.documentElement.dataset.dncsCloud = '1'",
     'if (!window.confirm(text)) return',

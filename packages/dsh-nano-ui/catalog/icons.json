@@ -404,8 +404,8 @@
   "generated": "2026-11-16",
   "method": "components: primitives names matching ^Icon[A-Z]; sprite: glyph keys of the object passed to Object.entries() in the ICON_SYMBOLS builder × weight keys of the weight map; sprite id = dsw-icon-<glyph>-<weight>",
   "sources": {
-    "rc.1": "/Users/seanz/.nvm/versions/node/v24.22.2/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-web-frontend/dist/assets/index-BgUyXZcc.js",
-    "rc.3": "/Applications/DeepSeek Harness.app/Contents/Resources/app.asar/dsh/node_modules/@deepseek-ai/dsh-web-frontend/dist/assets/index-Ciz7DZxv.js"
+    "rc.1": "@deepseek-ai/dsh-web-frontend@0.2.2-rc.1:dist/assets/index-BgUyXZcc.js",
+    "rc.3": "DeepSeek Harness.app (rc.3):app.asar/dsh/node_modules/@deepseek-ai/dsh-web-frontend/dist/assets/index-Ciz7DZxv.js"
   },
   "sprite": {
     "from": "rc.3",

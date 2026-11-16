@@ -14,6 +14,8 @@ import React from 'react'
 import { createPortal } from 'react-dom'
 import {
   Button,
+  StateDot,
+  IconArchiveOutlineRegular,
   IconFolderCloseRegular,
   IconFolderOpenRegular,
   IconGlobeOutlineRegular,
@@ -122,6 +124,20 @@ function readChrome() {
 
   return {
     header: stripWide(classOf(header)),
+    /* The native list geometry is driven by custom properties declared on the
+     * native list root. Our section is a sibling of that root, so they do not
+     * inherit; read the resolved values and re-declare them here so the copied
+     * `listArea` / `list` classes compute the same right edge. */
+    listVars: (() => {
+      const cs = getComputedStyle(root)
+      const names = ['--dsh-session-list-edge-inset', '--dsh-session-list-scrollbar-width', '--dsh-session-list-scrollbar-offset']
+      const out = {}
+      for (const name of names) {
+        const value = cs.getPropertyValue(name).trim()
+        if (value) out[name] = value
+      }
+      return out
+    })(),
     template,
     search: classOf(search),
     searchButton: stripWide(classOf(searchButton)),
@@ -136,8 +152,8 @@ function readChrome() {
     chevron: classOf(chevron),
     projectText: classOf(projectText),
     title: classOf(titleEl) || withLocal(rowToken, 'title'),
-    rowActions: classOf([...(row?.children ?? [])].find(child => /Actions/.test(classOf(child))) ?? null),
-    rowButton: stripWide(classOf(row?.querySelector('[class*="rowActions"] button') ?? null)),
+    rowActions: classOf(sessionEl?.querySelector('[class*="rowActions"]') ?? null) || withLocal(rowToken, 'rowActions'),
+    rowButton: stripWide(classOf(sessionEl?.querySelector('[class*="rowActions"] button') ?? null)) || withLocal(rowToken, 'iconButton'),
     arrow: arrowToken,
     arrowOpen: arrowToken ? withLocal(arrowToken, 'arrowOpen') : '',
     sessionRow: sessionClass || withLocal(rowToken, 'sessionRow'),
@@ -232,13 +248,50 @@ function iconCellClass(chrome) {
   return tokens(chrome.folder).filter(token => !/folder/i.test(token)).join(' ') || chrome.sessionSlot
 }
 
+/** Devin session status → the native StateDot state vocabulary
+ *  (`ongoing` | `idle` | `done` | `warning`). The dot carries the meaning; the
+ *  localized label rides beside it as screen-reader-only text. */
+const dotState = status => {
+  switch (String(status ?? '').toLowerCase()) {
+    case 'running':
+    case 'working':
+    case 'resuming':
+    case 'pending':
+      return 'ongoing'
+    case 'suspended':
+    case 'sleeping':
+      return 'idle'
+    case 'blocked':
+    case 'error':
+    case 'failed':
+      return 'warning'
+    default:
+      return 'done'
+  }
+}
+
+const relativeTime = (value, locale) => {
+  if (!value) return ''
+  const then = Date.parse(value)
+  if (Number.isNaN(then)) return ''
+  const minutes = Math.round((then - Date.now()) / 60000)
+  const abs = Math.abs(minutes)
+  const unit = abs < 60 ? 'minute' : abs < 1440 ? 'hour' : abs < 43200 ? 'day' : 'month'
+  const amount = unit === 'minute' ? minutes : unit === 'hour' ? Math.round(minutes / 60) : unit === 'day' ? Math.round(minutes / 1440) : Math.round(minutes / 43200)
+  try {
+    return new Intl.RelativeTimeFormat(locale, { numeric: 'auto', style: 'narrow' }).format(amount, unit)
+  } catch {
+    return ''
+  }
+}
+
 function sectionBody({ chrome, copy, face, state }) {
   const profile = (state.profiles ?? []).find(item => item.id === state.activeId) ?? null
   const sessions = state.sessions ?? []
   const open = state.expanded !== false
 
-  const bodyKey = state.loading === true || state.refreshing === true ? 'loading' : (state.activeId ?? 'empty')
-  if (state.loading === true || state.refreshing === true) {
+  const bodyKey = state.loading === true ? 'loading' : (state.activeId ?? 'empty')
+  if (state.loading === true) {
     return h('div', { key: bodyKey, className: `${chrome.group} dncs-section-body` },
       h('div', { role: 'status', className: `${chrome.row} dncs-skeleton-row`, 'aria-busy': 'true' },
         h('span', { className: iconCellClass(chrome) }, h('span', { className: 'dncs-skeleton-dot' })),
@@ -264,18 +317,44 @@ function sectionBody({ chrome, copy, face, state }) {
     key: session.session_id,
     className: `${chrome.sessionRow}${state.activeSessionId === session.session_id ? ` ${chrome.selected}` : ''}`,
     title: session.title || session.session_id,
+    'aria-selected': state.activeSessionId === session.session_id,
     onClick: () => face.openSession(session.session_id),
   },
-    h('span', { className: chrome.sessionSlot }),
+    h('span', { className: chrome.sessionSlot },
+      h(StateDot, { state: dotState(session.status) }),
+      h('span', { className: 'dncs-sr-only' }, session.status ?? '')),
     h('span', { className: chrome.sessionTitle }, session.title || session.session_id),
     h('span', { className: chrome.resting },
-      h('span', { className: chrome.time }, session.status ?? ''))
-  )) : []
+      h('span', { className: chrome.time }, relativeTime(session.updated_at ?? session.created_at, state.locale))),
+    h('span', {
+      className: chrome.rowActions,
+      onClick: event => event.stopPropagation(),
+    },
+      h('button', {
+        type: 'button',
+        className: chrome.rowButton,
+        title: copy('archive'),
+        'aria-label': copy('archive'),
+        onClick: event => {
+          event.stopPropagation()
+          event.preventDefault()
+          void face.archiveSession(session.session_id)
+        },
+      }, h(IconArchiveOutlineRegular, { size: 16 })))),
+  ) : []
 
   const empty = open && sessions.length === 0
     ? h('div', { className: chrome.sessionRow },
       h('span', { className: chrome.sessionSlot }),
       h('span', { className: chrome.sessionTitle, style: { opacity: .65 } }, copy('noSessions')))
+    : null
+
+  /* A failed list read or a failed open must be visible: the section is the
+   * only surface the owner has before a native Chat exists. */
+  const errorRow = state.error
+    ? h('div', { className: `${chrome.sessionRow} dncs-error-row`, role: 'alert', title: state.error },
+      h('span', { className: chrome.sessionSlot }),
+      h('span', { className: chrome.sessionTitle }, state.error))
     : null
 
   return h('div', { key: bodyKey, className: `${chrome.group} dncs-section-body` },
@@ -292,6 +371,7 @@ function sectionBody({ chrome, copy, face, state }) {
         h('span', { className: chrome.title }, profile.label || 'Devin Cloud')),
       h('span', { className: chrome.time }, String(sessions.length))),
     ...sessionRows,
+    errorRow,
     empty)
 }
 
@@ -330,50 +410,44 @@ function CloudSection({ chrome, copy, face, state }) {
       return h('div', { key: index, className: cell.cls },
         chrome.search
           ? h('div', { className: chrome.search },
-            h(Button, {
-              variant: 'ghost',
-              size: 'sm',
+            h('button', {
+              type: 'button',
               className: chrome.searchButton,
-              icon: h(IconRefreshOutlineRegular, { size: 14 }),
               title: copy('refresh'),
               'aria-label': copy('refresh'),
-              onClick: () => face.refresh(),
-            }))
-          : h(Button, {
-            variant: 'ghost',
-            size: 'sm',
+              disabled: state.refreshing === true,
+              onClick: event => { event.stopPropagation(); event.preventDefault(); void face.refresh() },
+            }, h(IconRefreshOutlineRegular, { size: 14, className: state.refreshing ? 'dncs-spin' : '' })))
+          : h('button', {
+            type: 'button',
             className: chrome.searchButton,
-            icon: h(IconRefreshOutlineRegular, { size: 14 }),
             title: copy('refresh'),
             'aria-label': copy('refresh'),
-            onClick: () => face.refresh(),
-          }))
+            disabled: state.refreshing === true,
+            onClick: event => { event.stopPropagation(); event.preventDefault(); void face.refresh() },
+          }, h(IconRefreshOutlineRegular, { size: 14, className: state.refreshing ? 'dncs-spin' : '' })))
     }
     if (cell.slot === 'actions') {
       return h('div', { key: index, className: cell.cls },
-        h(Button, {
-          variant: 'ghost',
-          size: 'sm',
+        h('button', {
+          type: 'button',
           className: chrome.button,
-          icon: h(IconSettingsOutlineRegular, { size: 16 }),
           title: copy('settingsTitle'),
           'aria-label': copy('settingsTitle'),
           onClick: () => face.openSettings(),
-        }),
-        h(Button, {
-          variant: 'ghost',
-          size: 'sm',
+        }, h(IconSettingsOutlineRegular, { size: 16 })),
+        h('button', {
+          type: 'button',
           className: chrome.button,
-          icon: h(IconProjectAddOutlineRegular, { size: 16 }),
           title: copy('newSession'),
           'aria-label': copy('newSession'),
           onClick: () => face.openNew(),
-        }))
+        }, h(IconProjectAddOutlineRegular, { size: 16 })))
     }
     return h('div', { key: index, className: cell.cls })
   })
 
-  return h('div', { className: 'dncs-section' },
+  return h('div', { className: 'dncs-section', style: chrome.listVars },
     h('div', { className: chrome.header }, ...headerChildren),
     h('div', { className: `${chrome.listArea} dncs-section-list` },
       h('div', { className: chrome.list, role: 'tree' }, sectionBody({ chrome, copy, face, state }))))
@@ -383,5 +457,5 @@ export function CloudSectionGraft({ face, state }) {
   const host = useGraftHost()
   const chrome = useNativeChrome()
   if (host == null || chrome == null) return null
-  return createPortal(h(CloudSection, { chrome, copy: face.copy(), face, state }), host)
+  return createPortal(h(CloudSection, { chrome, copy: face.copy(), face, state: { ...state, locale: face.locale } }), host)
 }

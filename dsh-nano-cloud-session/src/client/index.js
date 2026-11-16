@@ -91,7 +91,7 @@ export function apply(ctx, config = {}) {
   })
 
   const refresh = async ({ animate = false } = {}) => {
-    if (animate) store.set({ loading: true, refreshing: true, error: '' })
+    store.set({ refreshing: true, ...(animate ? { loading: true } : {}), error: '' })
     try {
       const status = await api.status()
       store.set({
@@ -99,18 +99,16 @@ export function apply(ctx, config = {}) {
         activeId: status.activeId ?? null,
       })
       if (!status.activeId) {
-        store.set({ loading: false, refreshing: false, sessions: [] })
+        store.set({ sessions: [] })
         return
       }
-      try {
-        const list = await api.sessions({ first: 50 })
-        store.set({ sessions: list.items ?? list.sessions ?? [] })
-      } catch (cause) {
-        store.set({ sessions: [], error: cause?.message ?? String(cause) })
-      }
-      store.set({ loading: false, refreshing: false, error: '' })
+      const list = await api.sessions({ first: 50, isArchived: false })
+      const sessions = (list.items ?? list.sessions ?? []).filter(item => item?.is_archived !== true)
+      store.set({ sessions })
     } catch (cause) {
-      store.set({ loading: false, refreshing: false, error: cause?.message ?? String(cause) })
+      store.set({ error: cause?.message ?? String(cause) })
+    } finally {
+      store.set({ loading: false, refreshing: false })
     }
   }
 
@@ -119,7 +117,18 @@ export function apply(ctx, config = {}) {
     get current() { return store.current },
     subscribe: listener => store.subscribe(listener),
     refresh,
+    archiveSession: async sessionId => {
+      if (!window.confirm(t('archiveConfirm'))) return
+      store.set({ refreshing: true, error: '' })
+      try {
+        await api.archive(sessionId)
+        await refresh()
+      } catch (cause) {
+        store.set({ refreshing: false, error: cause?.message ?? String(cause) })
+      }
+    },
     copy: () => t,
+    get locale() { return ctx.locale.getSnapshot().active },
     openSettings: () => store.set({ settingsOpen: true }),
     closeSettings: () => { store.set({ settingsOpen: false }); void refresh({ animate: true }) },
     openNew: () => store.set(store.current.activeId ? { newOpen: true } : { settingsOpen: true }),
@@ -138,7 +147,9 @@ export function apply(ctx, config = {}) {
           catch (cause) { console.warn('[nano-cloud-session] workbench open failed', cause) }
         }, 500)
       } catch (cause) {
-        store.set({ activeSessionId: null, error: cause?.message ?? String(cause) })
+        /* Opening failed (carrier 401/403/5xx, or a host that cannot project).
+         * The section renders `error`, so the row never fails silently. */
+        store.set({ activeSessionId: null, opening: false, error: cause?.message ?? String(cause) })
       }
     },
     toggleExpanded: () => store.set({ expanded: store.current.expanded !== true }),

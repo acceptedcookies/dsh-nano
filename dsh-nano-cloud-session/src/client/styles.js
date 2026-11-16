@@ -14,6 +14,7 @@ export const CLOUD_CSS = `
 .dncs-working-row:hover { background: var(--dsw-alias-interactive-bg-hover); }
 .dncs-working-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
 .dncs-working-kind { flex: none; color: var(--dsw-alias-label-tertiary); font-size: 11px; }
+
 .dncs-file-list { display: flex; flex-direction: column; min-height: 0; }
 .dncs-devin-chip { flex: none; align-self: center; height: 24px; padding: 0 8px; border-radius: 999px; display: inline-flex; align-items: center; color: var(--dsw-alias-label-secondary); background: var(--dsw-alias-interactive-bg-hover); font: var(--dsw-font-xxs-12, 12px/24px sans-serif); pointer-events: none; }
 html[data-dncs-cloud="1"] [class*="composerSeat"] .nms-root,
@@ -38,11 +39,16 @@ html[data-dncs-cloud="1"] [class*="composerSeat"] button[aria-label*="Add files 
 @keyframes dncs-section-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes dncs-skeleton { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
 @media (prefers-reduced-motion: reduce) { .dncs-section-body, .dncs-skeleton-dot, .dncs-skeleton-bar { animation: none; } }
-.dncs-section { display: flex; flex-direction: column; flex: none; box-sizing: border-box; width: 100%; padding-right: 9px; }
+/* Same edge rule as the native list root; the matching custom property is
+ * re-declared on this element from the live native value. */
+.dncs-section { display: flex; flex-direction: column; flex: none; box-sizing: border-box; width: 100%; padding-right: var(--dsh-session-list-edge-inset, 0px); }
 /* Collapsed rail entry: a single centered 36px icon row matching the native
  * workspaces rail buttons. No padding-right — the rail is 56px wide. */
 .dncs-section.dncs-rail { padding-right: 0; align-items: center; margin-bottom: 12px; }
 .dncs-section.dncs-rail button { width: 36px; height: 36px; justify-content: center; }
+/* Screen-reader-only status label beside the native StateDot marker. */
+.dncs-sr-only { clip: rect(0 0 0 0); white-space: nowrap; width: 1px; height: 1px; position: absolute; overflow: hidden; }
+.dncs-error-row { color: var(--dsw-alias-label-danger, #ff7b72); }
 .dncs-section [class*="listArea"], .dncs-section [class*="list"] { flex: none; }
 .dncs-section [class*="list"] { padding-bottom: 0; }
 .dncs-section-empty { color: var(--dsw-alias-label-tertiary, #999); }

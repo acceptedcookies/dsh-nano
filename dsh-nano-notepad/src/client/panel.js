@@ -34,10 +34,11 @@ import { applyFormat, escapeAttr, escapeHtml, extractImageUrls, formatHtml, html
 import { validateJson, positionOf, formatJson, minifyJson, escapeJson, unescapeJson, decodeEscapes, renderJsonTree } from './json.js'
 import { highlightSource } from './highlight.js'
 import { checkImage } from 'dsh-remote-data-schema/image-check.js'
-import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, SegmentedControl } from '@deepseek-ai/dsh-client-ui-primitives'
 import { copyFor } from './i18n.js'
 import React from 'react'
-import { openNanoDialog, openNanoMenu, nanoTabs, NANO_STYLES } from 'dsh-nano-ui'
+import { createThemeScope, mountNano, openNanoDialog, openNanoMenu, nanoTabs, NANO_STYLES } from 'dsh-nano-ui'
+import { googleIcon, textIcon, dshIcon, PANEL_ICON, WIN_MIN_ICON, MAC_MIN_ICON, MAC_MAX_ICON, WIN_MAX_ICON, WIN_RESTORE_ICON } from './icons.js'
 import { perf, setNotepadRoot } from './perf.js'
 import { createSync } from './sync.js'
 import { mountCloudSettings } from './cloud-settings.js'
@@ -52,15 +53,15 @@ const writeUi = (...args) => perf.span('idb-write', () => writeUiRaw(...args))
 const STYLE = `
 ${NANO_STYLES}
 [data-nano-notepad] { pointer-events: none; }
-/* ── notepad typography + portal theme tokens ──────────────────────────────────
-   Declared on :root because nano-ui menus/dialogs portal to document.body —
-   outside .np-layer — so only a document-level custom property reaches them.
-   nano-ui reads the --nano-* vars (fallback = shell default); --np-* retunes
-   the notepad's own text. Both stay on --dsw-* for theme colours.
-   Colours cannot ride :root, though: the portaled surface must follow the
-   notepad's own scheme, which can differ from the host's (light notepad inside
-   a dark shell). So every portal call passes resolvedTheme(), nano-ui stamps
-   it as [data-nano-theme], and the palette rules below repaint that subtree. */
+/* ── notepad typography tokens ────────────────────────────────────────────────
+   Declared on :root because nano-ui reads the --nano-* typography hooks off the
+   owner element and every menu/dialog now renders inside .np-window (window
+   overlay or a portal:false host menu) or is the host Modal. --np-* retunes the
+   notepad's own text; both stay on --dsw-* for theme colours.
+   The light/dark palette is NOT declared here: nano-ui's ThemeScope owns it
+   (DESIGN.md §3). When the notepad is pinned to the other scheme than the host,
+   the scope injects that scheme's --dsw-* values onto .np-window and .np-entry,
+   and everything inside — dialogs and menus included — inherits them. */
 :root {
   --np-font-family: var(--dsw-font-family);
   --np-font-size: 13px;
@@ -90,13 +91,9 @@ ${NANO_STYLES}
    setting the property has no visual effect (the WeChat paste zone stayed
    visible with the integration switched off). */
 .np-mp-zone[hidden], .np-cloud[hidden], .np-tab-panel[hidden], .np-dlg-body [hidden] { display: none !important; }
-.np-window[data-theme="dark"], .np-entry[data-theme="dark"], [data-nano-theme="dark"] { color-scheme: dark; --dsw-menu-surface-fill: #303136a3; --dsw-alias-button-primary-fill: #f9fafb; --dsw-alias-button-primary-hover: #ebeef2; --dsw-alias-label-primary-foreground: #0f1115; --dsw-alias-bg-layer-1: #232324; --dsw-alias-bg-layer-2: #2c2c2e; --dsw-alias-bg-layer-3: #353638; --dsw-alias-bg-mask-1: #00000080; --dsw-alias-label-primary: #f9fafb; --dsw-alias-label-secondary: #cfd3d6; --dsw-alias-label-tertiary: #adb2b8; --dsw-alias-border-l2: #ffffff1f; --dsw-alias-border-l3: #ffffff29; --dsw-alias-interactive-bg-hover: #ffffff14; --dsw-alias-interactive-bg-active: #ffffff24; --dsw-alias-brand-primary: #f9fafb; --dsw-alias-brand-primary-invert: #0f1115; --dsw-alias-link: #7aaaff; --dsw-alias-state-error-primary: #f25a5a; --dsw-alias-state-error-secondary: #f25a5a; --dsw-alias-state-success-primary: #22c55e; --dsw-alias-state-success-secondary: #4ed17e; --dsw-alias-state-warn-primary: #f59e0b; --dsw-alias-state-warn-secondary: #f7ad31; --dsw-alias-interactive-bg-hover-danger: #f25a5a26; --dsw-alias-label-error: #f25a5a; --dsw-alias-tooltip-bg: #43454a; --dsw-alias-tooltip-label: #f9fafb; --dsw-alias-markdown-inline-code: #43454a; }
-.np-window[data-theme="light"], .np-entry[data-theme="light"], [data-nano-theme="light"] { color-scheme: light; --dsw-menu-surface-fill: #fcfdfeb3; --dsw-alias-button-primary-fill: #0f1115; --dsw-alias-button-primary-hover: #43454a; --dsw-alias-label-primary-foreground: #ffffff; --dsw-alias-bg-layer-1: #ffffff; --dsw-alias-bg-layer-2: #ffffff; --dsw-alias-bg-layer-3: #ffffff; --dsw-alias-bg-mask-1: #0000003d; --dsw-alias-label-primary: #0f1115; --dsw-alias-label-secondary: #61666b; --dsw-alias-label-tertiary: #81858c; --dsw-alias-border-l2: #0000001a; --dsw-alias-border-l3: #0000001f; --dsw-alias-interactive-bg-hover: #2631480f; --dsw-alias-interactive-bg-active: #2631481a; --dsw-alias-brand-primary: #0f1115; --dsw-alias-brand-primary-invert: #f9fafb; --dsw-alias-link: #4176e6; --dsw-alias-state-error-primary: #ec1313; --dsw-alias-state-error-secondary: #f25a5a; --dsw-alias-state-success-primary: #22c55e; --dsw-alias-state-success-secondary: #4ed17e; --dsw-alias-state-warn-primary: #f59e0b; --dsw-alias-state-warn-secondary: #f7ad31; --dsw-alias-interactive-bg-hover-danger: #ec13130d; --dsw-alias-label-error: #ec1313; --dsw-alias-tooltip-bg: #43454a; --dsw-alias-tooltip-label: #f9fafb; --dsw-alias-markdown-inline-code: #f5f6f7; }
 .np-entry { width: 36px; height: 36px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-primary); cursor: grab; box-shadow: var(--dsw-elevation-soft); }
 .np-entry:active { cursor: grabbing; }
 .np-entry svg { width: 18px; height: 18px; display: block; margin: auto; }
-.np-tip { position: absolute; right: 44px; top: 2px; white-space: nowrap; background: var(--dsw-alias-tooltip-bg); color: var(--dsw-alias-tooltip-label, var(--dsw-alias-label-primary)); border-radius: var(--dsw-radius-sm); padding: 4px 8px; }
-.np-entry.np-tip-left .np-tip { right: auto; left: 44px; }
 .np-unit { color: var(--dsw-alias-label-tertiary); font-style: normal; font-size: .85em; margin-inline-start: .5em; }
 .np-window { --np-menu-gap: 4px; width: min(920px, calc(100vw - 48px)); height: min(640px, calc(100vh - 48px)); min-width: 320px; min-height: 240px; display: flex; flex-direction: column; background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-panel, 28px); box-shadow: var(--dsw-elevation-prominent); overflow: hidden; container-type: inline-size; container-name: np; }
 .np-resize { position: absolute; z-index: 6; pointer-events: auto; }
@@ -462,7 +459,7 @@ ${NANO_STYLES}
 .np-footer-actions button.np-danger { color: var(--dsw-alias-label-error); }
 .np-footer-actions button.np-danger:hover, .np-dlg-body button.np-danger:hover { border-color: var(--dsw-alias-state-error-secondary); color: var(--dsw-alias-state-error-secondary); background: var(--dsw-alias-interactive-bg-hover-danger); }
 .np-write, .np-read { flex: 1; min-height: 0; margin: 0; }
-.np-switch[hidden], .np-md-tools[hidden], .np-json-tools[hidden] { display: none !important; }
+.np-view-switch[hidden], .np-md-tools[hidden], .np-json-tools[hidden] { display: none !important; }
 .np-write { box-sizing: border-box; width: 100%; max-width: 100%; resize: none; border: 0; outline: 0; background: transparent; color: transparent; caret-color: var(--dsw-alias-label-primary); padding: var(--np-pad-x); margin: 0; font-family: var(--dsw-font-markdown-code-font-family); font-size: var(--np-editor-font-size, 14px); line-height: calc(var(--np-editor-font-size, 14px) * 1.45); letter-spacing: 0; word-spacing: 0; tab-size: 4; overflow-wrap: anywhere; word-break: break-word; white-space: pre-wrap; position: relative; font-kerning: none; font-variant-ligatures: none; font-feature-settings: "liga" 0, "calt" 0; }
 /* Transparent text over a colourised mirror: keep the caret crisp and let the
    selection paint show through so the mirror reads underneath it. */
@@ -853,12 +850,9 @@ details[open] > .nj-node > .nj-preview { display: none; }
 .nj-count { color: var(--dsw-alias-label-tertiary); font-size: .8em; }
 `
 
-const googleIcon = (path) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${path}"></path></svg>`
-const textIcon = (label) => `<svg viewBox="0 0 24 24" aria-hidden="true"><text x="12" y="16.5" text-anchor="middle" font-size="10" font-weight="700" font-family="inherit">${label}</text></svg>`
-/* dsh-native product glyph: renders a <use> against the document icon sprite
-   maintained by ui-theme (symbol id dsw-icon-<glyph>-<weight>). Falls back
-   silently when the shell predates the sprite. */
-const dshIcon = (glyph, weight = 'regular', size = 16) => `<svg width="${size}" height="${size}" data-icon="dsw-icon-${glyph}-${weight}" aria-hidden="true"><use href="#dsw-icon-${glyph}-${weight}"/></svg>`
+/* Sprite and hand-drawn glyphs live in ./icons.js (the icon facade, DESIGN.md §6.1):
+   check-ui-rules treats an `icons.js` as the one file allowed to emit inline svg
+   markup, so nothing here may build one. */
 const FILE_ICON = dshIcon('browse-outline')
 const FOLDER_ICON = dshIcon('folder-close')
 const PLUS_ICON = dshIcon('plus-outline')
@@ -882,9 +876,6 @@ const LINK_ICON = googleIcon('M10.59 13.41c-.41.39-1.07.39-1.48 0l-4-4c-.39-.41-
 const CHEVRON_ICON = dshIcon('chevron-down-outline')
 const CARET_ICON = dshIcon('triangle-right-fill')
 const CHECK_ICON = dshIcon('check-outline')
-/* DSH sidebar glyph (panel-left-outline, 16px). Open fills the left pane; closed is the outline. */
-const PANEL_ICON = (filled) => `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 1.5H2.5C1.94772 1.5 1.5 1.94772 1.5 2.5V13.5C1.5 14.0523 1.94772 14.5 2.5 14.5H13.5C14.0523 14.5 14.5 14.0523 14.5 13.5V2.5C14.5 1.94772 14.0523 1.5 13.5 1.5Z"></path><path d="M5.5 1.5V14.5"></path>${filled ? '<path class="np-panel-fill" d="M2.5 1.5H5.5V14.5H2.5C1.94772 14.5 1.5 14.0523 1.5 13.5V2.5C1.5 1.94772 1.94772 1.5 2.5 1.5Z"></path>' : ''}</svg>`
-const WIN_MIN_ICON = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M1 6h10" fill="none" stroke="currentColor" stroke-width="1.1"/></svg>'
 /* fx 处理入口 / 面板头图标：宿主 think-outline（四芒星 artwork）。 */
 const FX_ICON = dshIcon('think-outline')
 const FX_CHEVRON = dshIcon('chevron-down-outline', 'regular', 12)
@@ -947,11 +938,14 @@ function caretRect(area, position) {
    would sink beneath the window that opened it. */
 const NP_PORTAL_Z = 1210
 
-export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', subscribe: () => () => {} }, language = { current: () => 'en', subscribe: () => () => {} }, workspaces = { current: () => ({ items: [], currentId: null }), subscribe: () => () => {} }, previewFile = () => false) {
-  host.innerHTML = `<div class="np-layer"><button class="np-entry" type="button">${ICON}<span class="np-tip" hidden></span></button><section class="np-window" hidden></section></div>`
+export function mountNotepad(host, defaults, hostTheme = { theme: undefined, subscribe: () => () => {} }, language = { current: () => 'en', subscribe: () => () => {} }, workspaces = { current: () => ({ items: [], currentId: null }), subscribe: () => () => {} }, previewFile = () => false) {
+  /* The launcher's hover hint is the native title + aria-label set in
+     setShortcut(): the host `Tooltip` clones a React child element, and this
+     button is innerHTML-built and read synchronously below (drag/placement).
+     nano-ui-exempt: host Tooltip cannot wrap a DOM-built trigger; see DESIGN.md §10. */
+  host.innerHTML = `<div class="np-layer"><button class="np-entry" type="button">${ICON}</button><section class="np-window" hidden></section></div>`
   const layer = must(host, '.np-layer')
   const entry = must(host, '.np-entry')
-  const tip = must(host, '.np-tip')
   const panel = must(host, '.np-window')
   const toolbar = FORMAT_DEFS.map(def => def.kind === 'image'
     ? `<button type="button" class="np-tool" data-action="image" data-format-kind="image">${def.icon}</button>`
@@ -961,7 +955,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     <div class="np-body">
       <aside class="np-tree"><div class="np-tree-head"><div class="np-ws"><button type="button" class="np-ws-btn" data-action="ws-toggle" aria-haspopup="listbox" aria-expanded="false"><span class="np-ws-label"></span><span class="np-ws-caret" aria-hidden="true">${CHEVRON_ICON}</span></button></div><button type="button" class="np-kind" data-action="kind-filter" data-i18n="kindFilter" data-i18n-mode="title"><span class="np-kind-label"></span><span class="np-kind-caret" aria-hidden="true">${CHEVRON_ICON}</span></button><span class="np-tree-tools"><button type="button" data-action="tree-settings" data-i18n="settings" data-i18n-mode="title" aria-haspopup="menu">${SETTINGS_ICON}</button><button type="button" class="np-tools-toggle" data-action="toggle-tools" data-i18n="expandTools" data-i18n-mode="title" aria-expanded="false">${CHEVRON_ICON}</button></span></div><div class="np-nodes" data-root="true"></div><div class="np-mp-zone"><input class="np-mp-input" type="text" inputmode="url" autocomplete="off" spellcheck="false" data-i18n="importMp" data-i18n-attr="placeholder"><span class="np-mp-hint" data-state="idle" aria-hidden="true"></span></div><button type="button" class="np-tools-toggle" data-action="toggle-tools" data-i18n="expandTools" data-i18n-mode="title" aria-expanded="false">${CHEVRON_ICON}</button><div class="np-tree-foot"><button type="button" data-action="settings" data-i18n="settings" data-i18n-mode="label">${SETTINGS_ICON}<span data-i18n="settings"></span></button><button type="button" data-action="close" data-i18n="close" data-i18n-mode="label">${CLOSE_ICON}<span data-i18n="close"></span></button></div></aside>
       <div class="np-editor" data-themefit="true">
-        <div class="np-toolbar"><span class="np-md-tools">${toolbar}</span><span class="np-json-tools" hidden><button type="button" class="np-tool" data-json="expand" data-i18n="jsonExpand" data-i18n-mode="title">${EXPAND_ICON}</button><button type="button" class="np-tool" data-json="collapse" data-i18n="jsonCollapse" data-i18n-mode="title">${COLLAPSE_ICON}</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-json="format" data-i18n="jsonFormat" data-i18n-mode="title">${FORMAT_ICON}</button><button type="button" class="np-tool" data-json="minify" data-i18n="jsonMinify" data-i18n-mode="title">${MINIFY_ICON}</button><button type="button" class="np-tool" data-json="escape" data-i18n="jsonEscape" data-i18n-mode="title">${ESCAPE_ICON}</button><button type="button" class="np-tool" data-json="unescape" data-i18n="jsonUnescape" data-i18n-mode="title">${UNESCAPE_ICON}</button><button type="button" class="np-tool" data-json="strip" data-i18n="jsonStrip" data-i18n-mode="title">${STRIP_ICON}</button></span><span class="np-ht-tools" hidden><button type="button" class="np-tool" data-ht="format" data-i18n="htFormat" data-i18n-mode="title">${FORMAT_ICON}</button><button type="button" class="np-tool" data-ht="minify" data-i18n="htMinify" data-i18n-mode="title">${MINIFY_ICON}</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-ht="strip-styles" data-i18n="htStripStyles" data-i18n-mode="title">${STRIP_ICON}</button><button type="button" class="np-tool" data-ht="extract-images" data-i18n="htExtractImages" data-i18n-mode="title">${GRID_ICON}</button><button type="button" class="np-tool" data-ht="copy-text" data-i18n="htCopyText" data-i18n-mode="title">${dshIcon('copy-outline')}</button></span><span class="np-rt-tools" hidden><button type="button" class="np-tool" data-rt="gallery" data-i18n="rtGallery" data-i18n-mode="title">${GRID_ICON}</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-rt="font-minus" data-i18n="rtFontMinus" data-i18n-mode="title">A−</button><button type="button" class="np-tool" data-rt="font-plus" data-i18n="rtFontPlus" data-i18n-mode="title">A+</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-rt="width" data-i18n="rtWidth" data-i18n-mode="title">宽</button><button type="button" class="np-tool" data-rt="themefit" data-i18n="rtThemeFit" data-i18n-mode="title" aria-pressed="true">◐</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-rt="copy-rich" data-i18n="rtCopyRich" data-i18n-mode="title">${dshIcon('copy-outline')}</button><button type="button" class="np-tool" data-rt="copy-text" data-i18n="rtCopyText" data-i18n-mode="title">Tx</button><button type="button" class="np-tool" data-rt="links" data-i18n="rtLinks" data-i18n-mode="title">${LINK_ICON}</button></span><button type="button" class="np-tool np-wrap" data-action="toggle-wrap" data-i18n="fxMenuWrap" data-i18n-mode="title" aria-pressed="true">${dshIcon('wrap-lines-outline')}</button><button type="button" class="np-switch" data-action="view" role="switch" aria-checked="false" data-i18n="viewGroup" data-i18n-mode="title"><span class="np-switch-label" data-i18n="source"></span><span class="np-switch-label" data-i18n="preview"></span><span class="np-switch-thumb" data-i18n="source"></span></button></div>
+        <div class="np-toolbar"><span class="np-md-tools">${toolbar}</span><span class="np-json-tools" hidden><button type="button" class="np-tool" data-json="expand" data-i18n="jsonExpand" data-i18n-mode="title">${EXPAND_ICON}</button><button type="button" class="np-tool" data-json="collapse" data-i18n="jsonCollapse" data-i18n-mode="title">${COLLAPSE_ICON}</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-json="format" data-i18n="jsonFormat" data-i18n-mode="title">${FORMAT_ICON}</button><button type="button" class="np-tool" data-json="minify" data-i18n="jsonMinify" data-i18n-mode="title">${MINIFY_ICON}</button><button type="button" class="np-tool" data-json="escape" data-i18n="jsonEscape" data-i18n-mode="title">${ESCAPE_ICON}</button><button type="button" class="np-tool" data-json="unescape" data-i18n="jsonUnescape" data-i18n-mode="title">${UNESCAPE_ICON}</button><button type="button" class="np-tool" data-json="strip" data-i18n="jsonStrip" data-i18n-mode="title">${STRIP_ICON}</button></span><span class="np-ht-tools" hidden><button type="button" class="np-tool" data-ht="format" data-i18n="htFormat" data-i18n-mode="title">${FORMAT_ICON}</button><button type="button" class="np-tool" data-ht="minify" data-i18n="htMinify" data-i18n-mode="title">${MINIFY_ICON}</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-ht="strip-styles" data-i18n="htStripStyles" data-i18n-mode="title">${STRIP_ICON}</button><button type="button" class="np-tool" data-ht="extract-images" data-i18n="htExtractImages" data-i18n-mode="title">${GRID_ICON}</button><button type="button" class="np-tool" data-ht="copy-text" data-i18n="htCopyText" data-i18n-mode="title">${dshIcon('copy-outline')}</button></span><span class="np-rt-tools" hidden><button type="button" class="np-tool" data-rt="gallery" data-i18n="rtGallery" data-i18n-mode="title">${GRID_ICON}</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-rt="font-minus" data-i18n="rtFontMinus" data-i18n-mode="title">A−</button><button type="button" class="np-tool" data-rt="font-plus" data-i18n="rtFontPlus" data-i18n-mode="title">A+</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-rt="width" data-i18n="rtWidth" data-i18n-mode="title">宽</button><button type="button" class="np-tool" data-rt="themefit" data-i18n="rtThemeFit" data-i18n-mode="title" aria-pressed="true">◐</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-rt="copy-rich" data-i18n="rtCopyRich" data-i18n-mode="title">${dshIcon('copy-outline')}</button><button type="button" class="np-tool" data-rt="copy-text" data-i18n="rtCopyText" data-i18n-mode="title">Tx</button><button type="button" class="np-tool" data-rt="links" data-i18n="rtLinks" data-i18n-mode="title">${LINK_ICON}</button></span><button type="button" class="np-tool np-wrap" data-action="toggle-wrap" data-i18n="fxMenuWrap" data-i18n-mode="title" aria-pressed="true">${dshIcon('wrap-lines-outline')}</button><span class="np-view-switch"></span></div>
         <div class="np-mirror" aria-hidden="true"></div>
         <textarea class="np-write" spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
         <div class="np-slash" hidden></div>
@@ -973,7 +967,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     <section class="np-fx-view" hidden>
       <div class="np-fx-shell">
         <header class="np-fx-head">
-          <button type="button" class="np-fx-head-title" data-action="fx-nav-toggle" aria-expanded="false"><span class="np-fx-head-ico" aria-hidden="true">${FX_ICON}</span><span data-i18n="fxViewTitle">单次文本处理</span><span class="np-fx-nav-state" aria-hidden="true">${PANEL_ICON(false)}</span></button>
+          <button type="button" class="np-fx-head-title" data-action="fx-nav-toggle" aria-expanded="false"><span class="np-fx-head-ico" aria-hidden="true">${FX_ICON}</span><span data-i18n="fxViewTitle">单次文本处理</span><span class="np-fx-nav-state" aria-hidden="true">${PANEL_ICON()}</span></button>
           <span class="np-fx-head-sub" data-fx-scope></span>
           <span class="np-fx-head-space"></span>
         </header>
@@ -1110,6 +1104,41 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
      the top level; removal rides the normal disposer list. */
   document.body.append(layer)
   disposers.push(() => layer.remove())
+
+  /* ThemeScope is the only place this plugin learns its light/dark scheme
+     (DESIGN.md §3): the window and the launcher are the two owner elements, and
+     the pin comes from the notepad's own `theme` setting — `system` means "follow
+     the host", expressed by leaving `pin` undefined. Everything that used to
+     portal to document.body (dialog cards, menus) now renders inside .np-window,
+     so it inherits the injected `--dsw-*` values instead of a hand-copied palette. */
+  const pinTheme = () => (state.settings.theme === 'light' || state.settings.theme === 'dark' ? state.settings.theme : undefined)
+  const themeScope = createThemeScope({ theme: hostTheme.theme, element: panel, pin: pinTheme(), subscribe: hostTheme.subscribe })
+  const entryScope = createThemeScope({ theme: hostTheme.theme, element: entry, pin: pinTheme(), subscribe: hostTheme.subscribe })
+  let appliedPin = pinTheme() ?? null
+  /** Re-pin both scopes only when the setting actually changed (setPin rewrites every token). */
+  function syncThemePin() {
+    const pin = pinTheme() ?? null
+    if (pin === appliedPin) return
+    appliedPin = pin
+    themeScope.setPin(pin ?? undefined)
+    entryScope.setPin(pin ?? undefined)
+  }
+  disposers.push(() => { themeScope.dispose(); entryScope.dispose() })
+
+  /* The view switch is the host SegmentedControl (DESIGN.md §6.1) mounted into
+     an innerHTML host span; renderBody keeps it in step with state.view. */
+  const viewSwitchHost = must(panel, '.np-view-switch')
+  const viewSwitch = mountNano(viewSwitchHost, SegmentedControl, {
+    id: 'np-view',
+    value: state.view === 'rendered' ? 'rendered' : 'source',
+    label: text().viewGroup,
+    options: [{ value: 'source', label: text().source }, { value: 'rendered', label: text().preview }],
+    onChange: value => {
+      state.view = value === 'rendered' ? 'rendered' : 'source'
+      void renderBody()
+    },
+  })
+  disposers.push(() => viewSwitch.unmount())
 
   /* Cloud sync engine. `render` is declared further down but only referenced
      from onApplied, which runs after the database is ready — no TDZ hit. */
@@ -1739,8 +1768,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     /* JSON files swap the markdown-format cluster for JSON tools. */
     const mdTools = panel.querySelector('.np-md-tools')
     const jsonTools = panel.querySelector('.np-json-tools')
-    const viewSwitch = panel.querySelector('.np-switch')
-    if (viewSwitch) viewSwitch.hidden = !previewable
+    viewSwitchHost.hidden = !previewable
     const htTools = panel.querySelector('.np-ht-tools')
     if (mdTools) mdTools.hidden = json || richHtml || !markdownFile
     if (jsonTools) jsonTools.hidden = !json
@@ -1926,12 +1954,11 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     if (fPlus) fPlus.disabled = state.readFontPx !== null && state.readFontPx >= 28
   }
 
+  /** The notepad's own scheme. ThemeScope resolves it from the host `ctx.theme`
+   *  service, or from the pinned `theme` setting (DESIGN.md §3) — no second
+   *  `schemeOf` lives here. */
   function resolvedTheme() {
-    if (state.settings.followApp === false && (state.settings.theme === 'light' || state.settings.theme === 'dark')) {
-      return state.settings.theme
-    }
-    if (state.settings.theme === 'light' || state.settings.theme === 'dark') return state.settings.theme
-    return appTheme.scheme() === 'light' ? 'light' : 'dark'
+    return themeScope.scheme()
   }
 
   const CHECK_ICON = dshIcon('check-outline')
@@ -1954,7 +1981,8 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     ]
   }
 
-  /** Settings and menus are portaled onto document.body, so hiding the panel leaves them on top. */
+  /** Card and menu handles live inside the window, so hiding the notepad also
+   *  closes whatever is open over it. */
   function dismissOverlays() {
     closeDialog()
     closeMenu?.()
@@ -1982,13 +2010,10 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     panel.hidden = !state.ui.open
     /* A file/view switch invalidates whatever image the preview was showing. */
     hideImagePeek()
-    const theme = resolvedTheme()
-    panel.dataset.theme = theme
-    entry.dataset.theme = theme
-    /* The settings card is open while the user flips this very setting, and the
-       card lives on document.body — re-stamp it so it does not stay on the old
-       palette until reopened. */
-    activeDialog?.setTheme?.(theme)
+    /* Re-pin ThemeScope first: an open settings card flips the very setting that
+       decides the palette, and the injected tokens update in place (DESIGN.md §3). */
+    syncThemePin()
+    panel.dataset.theme = resolvedTheme()
     panel.style.setProperty('--np-editor-font-size', `${state.settings.editorFontSizePx}px`)
     applyCopy()
     applyWrap()
@@ -2126,17 +2151,18 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
   let wsToggleJustClosed = false
 
   /**
-   * Every card is a shared NanoDialog now (mounted into document.body by the
-   * adapter). `spec.body` is the old inner HTML; `spec.setup(el, close)` runs on
-   * the live content node so callers keep wiring the same inputs/switches.
-   * Escape, mask click, focus trap, and focus return are the Modal's job.
+   * Every card goes through openNanoDialog (DESIGN.md §5): a card that belongs to
+   * the window renders as a nano-ui window overlay inside `.np-window`, and the
+   * fx card — which needs more room than the 640px-tall window — is the one
+   * main-window dialog. `spec.body` is the card's inner HTML; `spec.setup(el, close)`
+   * runs on the live content node so callers keep wiring the same inputs/segments.
+   * Escape, mask click, focus trap, and focus return are the host Modal's job.
    */
   function dialog(spec) {
     closeSlash()
     closeMenu?.()
-    /* A second dialog() call would orphan the previous handle — its empty
-       .nano-dialog-host overlay then sits fullscreen on top and eats clicks
-       meant for the new card. Close any open one first. */
+    /* A second dialog() call would orphan the previous handle — its overlay would
+       then sit on top and eat clicks meant for the new card. Close any open one first. */
     closeDialog?.()
     let handle = /** @type {{ close: () => void, setTheme?: (theme: string) => void } | undefined} */ (undefined)
     const finish = () => { dialogOpen = false; activeDialog = null; if (closeDialog === closeSelf) closeDialog = () => {} }
@@ -2146,8 +2172,8 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     closeDialog = closeSelf
     dialogOpen = true
     const rect = panel.getBoundingClientRect()
-    /* fx 卡（spec.viewport）需要比浮窗更大的编辑面：居中于视口，不被
-       422px 高的 notepad 窗口切掉 composer；其余卡片仍贴浮窗 region。 */
+    /* fx 卡（spec.viewport）需要比浮窗更大的编辑面：主窗口级，居中于视口，不被
+       422px 高的 notepad 窗口切掉 composer；其余卡片是窗口覆盖层，贴着 .np-window。 */
     const viewport = spec.viewport === true
     const cap = viewport ? Math.min(700, Math.round(window.innerHeight * 0.82)) : Math.min(520, Math.round(rect.height * 0.8))
     handle = openNanoDialog({
@@ -2159,12 +2185,9 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       footer: spec.footer?.(closeSelf),
       maxHeight: cap + 24,
       width: viewport ? Math.min(680, Math.round(window.innerWidth * 0.7)) : Math.round(rect.width * 0.6),
-      region: viewport ? undefined : rect,
-      /* The card portals to document.body: name our scheme so a light notepad
-         inside a dark shell still paints a light card, and raise it over both
-         the shell's modal band and our own 1200 layer. */
-      theme: resolvedTheme(),
-      z: NP_PORTAL_Z,
+      /* The window is the containing block for the overlay: the card inherits the
+         window's ThemeScope tokens and its NANO_LAYER figure, so no theme/z props. */
+      container: viewport ? undefined : panel,
       /* Tabbed dialogs get one fixed height; panels scroll inside it. */
       fixedHeight: spec.fixedHeight === true ? cap : undefined,
       onConfirm: () => spec.onConfirm?.(closeSelf),
@@ -4498,7 +4521,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     disposers.push(() => { channel.close(); bcTrack.detach() })
   }
 
-  const stop = appTheme.subscribe(() => render())
+  const stop = hostTheme.subscribe(() => render())
   const stopThemeInner = typeof stop === 'function' ? stop : () => {}
   const languageStop = language.subscribe(() => render())
   const stopLanguage = typeof languageStop === 'function' ? languageStop : () => {}
@@ -4525,10 +4548,11 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       void persistUi()
     },
     setShortcut(label, keys) {
+      /* Native title + aria-label are the launcher's hint (no hand-drawn tooltip; the
+         host Tooltip needs a React child, see the mount comment at the top). */
       entry.title = label
       entry.setAttribute('aria-label', label)
       if (keys) entry.setAttribute('aria-keyshortcuts', keys)
-      tip.textContent = label
     },
     failed(error) {
       state.db = null
@@ -4536,8 +4560,6 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       showError(error)
     },
   }
-  entry.addEventListener('pointerenter', () => { tip.hidden = false })
-  entry.addEventListener('pointerleave', () => { tip.hidden = true })
 
   /* Private controller (CF1115 / P2-03): the panel holds the DB + operations.
      * The host half exposes ONLY the minimal `import` through the cordis

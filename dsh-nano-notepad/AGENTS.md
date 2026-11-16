@@ -90,6 +90,8 @@ dsh plugin --profile web add <spec>
 
 宿主 `Config` 只提供首次默认：`saveDelayMs` 800、`commitIntervalSec` 60、`versionLimit` 50、`imageLimitBytes` 5MB、`defaultView`（`rendered` 或 `source`）、`theme`（`dark`、`light` 或 `system`）。越界值被拒绝。面板保存过一次之后，以面板设置为准。面板默认的自动版本间隔是 3600 秒，不是宿主的 60。
 
+面板里的 `theme` 是钉住（pin）语义：`light` / `dark` 由 nano-ui 的 ThemeScope 往 `.np-window` 与启动器注入 `--dsw-*`，菜单、对话框、设置行都在同一个窗口里继承；`system` 跟随宿主。插件不再自己写主题色，也没有独立于窗口的 portal 主题层。
+
 ## 使用
 
 | 动作 | 结果 |

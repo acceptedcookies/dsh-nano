@@ -17,7 +17,7 @@
 | Round 3 | `Q9–Q11` | executional | 迁移顺序 · 共享包版本与提交纪律 · 其余宿主 DOM 嫁接的替代 | **已冻结**（→ `T-O-NUE1117-09..11`） |
 | Round 4 | `Q12–Q14` | 复核补充 | nano-ui 自身的宿主 DOM 嫁接 · [DNMS] 区域测量 · [DNMS] Tooltip 参数缺陷 | **已冻结**（→ `T-O-NUE1117-12..14`） |
 | Round 5 | `Q15–Q17` | 执行取舍 | nano-ui 旧接口退役时点 · 收尾重建产物 · [DNCS] Devin 标签 | **已冻结**（→ `T-O-NUE1117-15..17`） |
-| Round 6 | `Q18` | 执行中补充 | [DNMS] 云会话自判没有宿主判据（AP P4-01 停止点） | **待裁决** |
+| Round 6 | `Q18–Q19` | 执行中补充 | [DNMS] 云会话自判没有宿主判据（AP P4-01 停止点）· [DNN] 宿主变更文件卡片注入（AP P9-05 停止点） | **待裁决** |
 
 ---
 
@@ -144,7 +144,7 @@
 
 ## 4. Round 6（执行中补充 · 待裁决，题面）
 
-来源：`NUE-1117-action-plan.md` §5.4 P4-01 有序子步骤 1 的核实结果（停止点）。本轮不改变 Round 1–5 的冻结状态。
+来源：`NUE-1117-action-plan.md` §5.4 P4-01 有序子步骤 1、§3 P9-05 的核实结果（停止点）。本轮不改变 Round 1–5 的冻结状态。
 
 ### Q18 [DNMS] 云会话自判没有宿主判据
 
@@ -160,5 +160,22 @@
 - **B**：[DNMS] 读代理 agent 的模型投影（`provider === 'devin'`）。这个值由 [DNCS] 写入，等于在两个插件间新建约定，与 `T-O-NUE1117-06` 和「不得侧载」冲突。
 - **C**：由 [DNCS] 在宿主会话 `meta` 或其他公开面写入云标记，[DNMS] 读取。这是新的插件间合同，需要 [业主] 决定是否扩约。
 - **推荐 A**：与 `06` 的「宿主改不了的登记为宿主缺口，插件不补」一致；代价是宿主补字段前，云会话 composer 里会出现 [DNMS] 选择器（[DNCS] 隐藏样式在 P8 照删）。
+
+状态：**待裁决**。
+
+### Q19 [DNN] 向宿主「变更文件」对话卡片注入「到记事本」按钮（AP P9-05 停止点）
+
+核实（[dsh] `0.2.2-rc.1`，`main@4c39634`）：
+
+- [DNN] `src/client/panel.js:159-167` 样式直接写宿主卡片：`[data-changed-files] { position: relative }`、`[data-changed-files]:has(> .np-to-notepad) { padding-right: 128px }`、`[data-changed-files] li …` 三条行内布局；`:4739-4780` `attachNotepadCtas` 用 `querySelectorAll('[data-changed-files]')` / `closest(...)` 找卡片，读 `data-single` 与 `span[hidden]` 里的路径，向卡片 `appendChild` 一个 `button.np-to-notepad`。对 `.md/.markdown` 单文件卡片生效，点击后经 `/nano-notepad/read` 读文件导入记事本。
+- `[data-changed-files]` 卡片由宿主 `@deepseek-ai/dsh-client-ui-deliverables` 的 `ChangedFiles` 渲染（`lib/types/client/ChangedFiles.d.ts`），props 只有 `changes/cwd/openReview/t/sessionId/useChangesDiff/loadChangesDiff`，没有动作插槽或渲染回调；本机类型声明中没有面向插件的「变更文件卡片动作」座位。
+- 按 `T-O-NUE1117-01`（不得嫁接宿主内部 DOM，含 `:has()` 套宿主结构）属嫁接；但真相层逐项清单未列出此处，删除会去掉一项用户功能。AP 规定停在本项，P9 其余迁移照常合并，此处保持原样。
+
+选项：
+
+- **A**：整段删除（样式 + `attachNotepadCtas` + 文案），DESIGN.md §8 登记「变更文件卡片动作」宿主缺口；宿主提供座位后再接回。用户失去「到记事本」入口，仍可从 [DNEE] 或记事本自身导入。
+- **B**：保留现状，加 `nano-ui-exempt` 并在 DESIGN §10 登记为已知嫁接例外；`check-ui-rules` 与 T30 终态扫描对它单列。
+- **C**：改为不碰宿主卡片的入口（例如记事本内「从本轮变更导入」菜单，读宿主公开的 `/api/changes.summary`）。需要 [业主] 确认该路由是否算公开合同，属新功能，超出 NUE-1117 范围。
+- **推荐 A**：与 `01`、`06`、`17`（[DNCS] Devin 标签同样整段删除、不另设挂载点）一致；代价是失去一个便捷入口。
 
 状态：**待裁决**。

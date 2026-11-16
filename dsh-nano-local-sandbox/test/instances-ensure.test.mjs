@@ -63,7 +63,7 @@ test('sandbox.instance.ensure without a sessionId keeps the env-scoped container
   assert.equal(backend.calls.create.length, 0)
 })
 
-test('sandbox.instance.ensure with a sessionId provisions its own container and port pair', async () => {
+test('sandbox.instance.ensure with a sessionId indexes the env container and invents no terminal endpoint', async () => {
   const backend = recordingBackend()
   const routes = routesFor(baseDeps(backend))
   const answer = await tool(routes, 'sandbox.instance.ensure', {
@@ -72,28 +72,21 @@ test('sandbox.instance.ensure with a sessionId provisions its own container and 
   })
   assert.equal(answer.ok, true)
   assert.equal(answer.data.sessionId, 'sess-a')
-  assert.equal(answer.data.containerName.startsWith('dnls-'), true)
-  assert.equal(backend.calls.create.length, 1)
-  const created = backend.calls.create[0]
-  // The registry's bare default (no image, no ports) would be unusable; the
-  // kitesurf hooks must supply the runtime image and both published ports.
-  assert.equal(created.image, 'kitesurf-engine:latest')
-  assert.equal(created.ports.length, 2)
-  assert.equal(created.ports[0].publish.endsWith(':8787'), true)
-  assert.equal(created.ports[1].publish.endsWith(':8791'), true)
-  assert.equal(created.mounts.some((row) => row.arg.includes('target=/opt/kitesurf')), true)
-  assert.equal(created.mounts.some((row) => row.arg.includes('target=/var/lib/kitesurf-state')), true)
-  assert.equal(backend.calls.start.includes(answer.data.containerName), true)
+  assert.equal(answer.data.containerName, 'kitesurf-dev')
+  assert.equal(backend.calls.create.length, 0)
+  assert.equal(Object.hasOwn(answer.data.endpoints, 'terminal'), false)
+  assert.equal(JSON.stringify(answer.data).includes('20000'), false)
 })
 
-test('two sessions get two containers and two distinct port pairs', async () => {
+test('two sessions index the same env container', async () => {
   const backend = recordingBackend()
   const routes = routesFor(baseDeps(backend))
-  const a = await tool(routes, 'sandbox.instance.ensure', { sessionId: 'sess-a', policy: { mode: 'workspace-write', workspaceRoot: '/work/a', extraRoots: [] } })
-  const b = await tool(routes, 'sandbox.instance.ensure', { sessionId: 'sess-b', policy: { mode: 'workspace-write', workspaceRoot: '/work/b', extraRoots: [] } })
-  assert.notEqual(a.data.containerName, b.data.containerName)
-  assert.notEqual(a.data.endpoints.engine, b.data.endpoints.engine)
-  assert.equal(backend.calls.create.length, 2)
+  const policy = { mode: 'workspace-write', workspaceRoot: '/work/a', extraRoots: [] }
+  const a = await tool(routes, 'sandbox.instance.ensure', { sessionId: 'sess-a', policy })
+  const b = await tool(routes, 'sandbox.instance.ensure', { sessionId: 'sess-b', policy })
+  assert.equal(a.data.containerName, b.data.containerName)
+  assert.equal(a.data.endpoints.engine, b.data.endpoints.engine)
+  assert.equal(backend.calls.create.length, 0)
 })
 
 test('the same session reuses its instance instead of creating a second container', async () => {
@@ -103,7 +96,7 @@ test('the same session reuses its instance instead of creating a second containe
   const first = await tool(routes, 'sandbox.instance.ensure', { sessionId: 'sess-a', policy })
   const second = await tool(routes, 'sandbox.instance.ensure', { sessionId: 'sess-a', policy })
   assert.equal(first.data.instanceId, second.data.instanceId)
-  assert.equal(backend.calls.create.length, 1)
+  assert.equal(backend.calls.create.length, 0)
 })
 
 test('a changed policy fingerprint is refused, not hot-remounted', async () => {
@@ -113,7 +106,8 @@ test('a changed policy fingerprint is refused, not hot-remounted', async () => {
   const stale = await tool(routes, 'sandbox.instance.ensure', { sessionId: 'sess-a', policy: { mode: 'read-only', workspaceRoot: '/work/a', extraRoots: [] } })
   assert.equal(stale.ok, false)
   assert.equal(stale.errorId, 'sandbox.instance.policy-stale')
-  assert.equal(backend.calls.create.length, 1)
+  assert.equal(backend.calls.create.length, 0)
+  assert.equal(JSON.stringify(stale).includes('ws://'), false)
 })
 
 test('the tool catalog still advertises every instance tool', async () => {

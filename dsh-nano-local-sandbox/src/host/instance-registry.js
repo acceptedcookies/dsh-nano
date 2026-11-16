@@ -15,21 +15,16 @@ import { policyFingerprint, tupleFromPolicy } from './policy-adapter.js'
  */
 export function createInstanceRegistry({ backend, profile, volumeFor, now = () => Date.now(), ids, imageFor, portSpecFor, mountsFor } = {}) {
   const instances = new Map()
-  let portCursor = 20000
 
-  function endpointsFor() {
-    const engine = portCursor
-    const bridge = portCursor + 1
-    portCursor += 2
+  function endpointsFor(published) {
     return {
-      engine: `http://127.0.0.1:${engine}`,
-      cdp: `ws://127.0.0.1:${engine}/devtools/browser`,
-      mcp: `ws://127.0.0.1:${bridge}/mcp`,
-      terminal: `ws://127.0.0.1:${engine}/term`,
+      engine: published?.engine ?? null,
+      cdp: published?.cdp ?? null,
+      mcp: published?.mcp ?? null,
     }
   }
 
-  async function ensure({ sessionId, policy }) {
+  async function ensure({ sessionId, policy, adopt = null }) {
     if (profile.scope === 'session' && !sessionId) return { ok: false, status: 400 }
     const tuple = tupleFromPolicy({ ...policy, sessionId: sessionId ?? policy.sessionId })
     const fingerprint = policyFingerprint(tuple)
@@ -58,7 +53,7 @@ export function createInstanceRegistry({ backend, profile, volumeFor, now = () =
       policyFingerprint: fingerprint,
       workspaceRoot: tuple.workspaceRoot ?? null,
       mounts,
-      endpoints: endpointsFor(),
+      endpoints: endpointsFor(adopt?.endpoints),
       stateVolume: volumeFor(instanceId),
       artifacts: {
         identity: profile.build.digest,
@@ -67,7 +62,11 @@ export function createInstanceRegistry({ backend, profile, volumeFor, now = () =
       },
       attached: false,
       lastAttach: now(),
-      containerName: `dnls-${instanceId}`,
+      containerName: adopt?.containerName || `dnls-${instanceId}`,
+    }
+    if (adopt?.skipCreate) {
+      instances.set(instanceId, instance)
+      return { ok: true, status: 201, instance }
     }
     await backend.create({
       containerName: instance.containerName,

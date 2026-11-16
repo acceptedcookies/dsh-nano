@@ -16,5 +16,7 @@ export const inject = ['webServer', 'connection', 'sandboxPolicy', 'sandbox', 's
 export function apply(ctx, deps = {}) {
   if (!deps.session) deps.session = { phase: 'idle', history: [], containerName: '' } // '' → containerNameFor() derives per-env
   if (!deps.backend) deps.backend = createAppleBackend()
-  return registerRoutes(ctx, routeSpecs(deps), { table: ROUTE_TABLE, plugin: 'dsh-nano-local-sandbox' })
+  // deps.ctx is the live host context: routes resolve sandboxPolicy from it so
+  // a terminal cannot attach across a policy remount.
+  return registerRoutes(ctx, routeSpecs({ ...deps, ctx }), { table: ROUTE_TABLE, plugin: 'dsh-nano-local-sandbox' })
 }

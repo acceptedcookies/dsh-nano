@@ -1974,7 +1974,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
   var { batchNote: batchNote2, designNote: designNote2, multiNote: multiNote2 } = (init_note(), __toCommonJS(note_exports));
   var { contentFrame: contentFrame2, shotPoint: shotPoint2 } = (init_shot_point(), __toCommonJS(shot_point_exports));
   var h = React6.createElement;
-  var CLIENT_BUILD_ID = true ? "0.1.0+ed2fc56" : "dev";
+  var CLIENT_BUILD_ID = true ? "0.1.0+6b814f2" : "dev";
   var STATUS = "/nano-local-sandbox/status";
   var OPEN = "/nano-local-sandbox/open";
   var SHOT = "/nano-local-sandbox/shot";
@@ -1996,6 +1996,23 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
   var KIND = "kitesurf";
   var OWN_ID = "nano-kitesurf";
   var MAX_PINS = 8;
+  var PLANE_LABEL = { container: "\u5BB9\u5668", engine: "\u5F15\u64CE", page: "\u9875\u9762", dom: "DOM", bridge: "\u6865" };
+  var LAMP_PLANES = ["container", "engine", "page", "dom", "bridge"];
+  function planeRows(snap) {
+    const planes = snap?.planes;
+    if (!planes || typeof planes !== "object") return [];
+    return LAMP_PLANES.filter((id) => planes[id]).map((id) => {
+      const row = planes[id];
+      const skipped = row.state === "skipped" || row.skipped === true;
+      return {
+        plane: id,
+        label: PLANE_LABEL[id] || id,
+        ok: row.ok === true,
+        skipped,
+        detail: row.detail || row.url || row.state || ""
+      };
+    });
+  }
   var perfReview = ensurePerfReview2();
   perfReview.configure({ hostSnapshotUrl: "/nano-local-sandbox/perf-review/host?mode=snapshot" });
   var perf = {
@@ -2293,6 +2310,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
   }
   function BrowserPane({ copy, languageOf, schemeOf }) {
     const [status, setStatus] = React6.useState(null);
+    const statusDown = status != null && (status.ok === false || status.ready === false);
     const [pageUrl, setPageUrl] = React6.useState("");
     const [draftUrl, setDraftUrl] = React6.useState("");
     const [history, setHistory] = React6.useState([]);
@@ -2981,10 +2999,10 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       await run(async () => {
         try {
           const response = await post(RECOVER, {});
-          const after = await refreshStatus();
-          if (after?.ok !== false) await reloadShot(0, { keepPick: true });
-          else if (response?.ports) showToast(`${copy.prepareFailed}`);
-          else showToast(copy.prepareDone);
+          await refreshStatus();
+          if (response?.v != null && response.v !== 1) showToast("\u89C2\u5BDF\u5408\u540C\u4E0D\u5339\u914D");
+          else if (response?.ready === true) await reloadShot(0, { keepPick: true });
+          else showToast(copy.prepareNotReady || copy.prepareFailed);
         } catch (cause) {
           showError(cause);
         }
@@ -3115,16 +3133,28 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       const [note, setNote] = React6.useState("");
       React6.useEffect(() => {
         let alive = true;
-        fetch(PORTS).then((r) => r.json()).then((data) => {
-          if (alive) setSnap(data);
+        let seen = null;
+        const load = () => fetch(PORTS).then((r) => r.json()).then((data) => {
+          if (!alive || !data) return;
+          const sig = `${data.v ?? ""}:${data.epoch ?? ""}:${data.ready ?? ""}`;
+          if (sig === seen) return;
+          seen = sig;
+          setSnap(data);
         }).catch(() => {
         });
-        fetch(DIAGNOSTICS).then((r) => r.json()).then((data) => {
-          if (alive) setDiag(data);
-        }).catch(() => {
-        });
+        load();
+        const period = () => document.visibilityState === "hidden" ? 12e3 : 1500;
+        let timer = window.setInterval(load, period());
+        const onVis = () => {
+          clearInterval(timer);
+          timer = window.setInterval(load, period());
+          if (document.visibilityState !== "hidden") load();
+        };
+        document.addEventListener("visibilitychange", onVis);
         return () => {
           alive = false;
+          clearInterval(timer);
+          document.removeEventListener("visibilitychange", onVis);
         };
       }, []);
       async function prepare() {
@@ -3136,9 +3166,10 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           const ports = result.ports ? result : await fetch(PORTS).then((r) => r.json()).catch(() => null);
           setSnap(ports);
           if (Array.isArray(result.summary)) setDiag(result);
-          const failed = Array.isArray(result.summary) ? result.summary.filter((row) => !row.ok && !row.skipped) : [];
-          if (!result.ok) setNote(`${copy.prepareFailed}: ${result.errorId || result.error || `HTTP ${response.status}`}`);
-          else if (result.healthy === false || failed.length) setNote(`${copy.prepareNotReady}: ${failed.map((row) => row.label).join(" / ")}`);
+          const failed = planeRows(result).filter((row) => !row.ok && !row.skipped);
+          if (result.planes && result.v !== 1) setNote("\u89C2\u5BDF\u5408\u540C\u4E0D\u5339\u914D");
+          else if (!result.ok) setNote(`${copy.prepareFailed}: ${result.errorId || result.error || `HTTP ${response.status}`}`);
+          else if (result.ready !== true) setNote(`${copy.prepareNotReady}: ${failed.map((row) => row.plane || row.label).join(" / ")}`);
           else setNote(result.action === "noop" ? copy.prepareDone : `${copy.prepareDone} \xB7 ${result.action}`);
           await refreshStatus();
           await reloadShot(0, { keepPick: true }).catch(() => {
@@ -3162,10 +3193,10 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       }
       const engine = snap?.effective?.httpBase || "\u2014";
       const container = snap?.container?.state || "\u2014";
-      const portRow = snap?.ports?.engine ? `${snap.ports.engine.port} \xB7 ${snap.ports.engine.heldBy === "this-container" ? "\u672C\u63D2\u4EF6\u5BB9\u5668" : snap.ports.engine.heldBy === "other" ? "\u88AB\u5176\u4ED6\u7A0B\u5E8F\u5360\u7528" : "\u7A7A\u95F2"}` : "\u2014";
-      const rows = Array.isArray(diag?.summary) ? diag.summary : [];
-      const rowsOk = rows.every((row) => row.ok === true || row.skipped === true);
-      const healthy = (typeof diag?.healthy === "boolean" ? diag.healthy : snap?.healthy === true) && rowsOk;
+      const portRow = snap?.ports?.engine ? `${snap.ports.engine.port} \xB7 ${snap.ports.engine.heldBy === "this-container" ? "\u672C\u63D2\u4EF6\u5BB9\u5668" : "\u7A7A\u95F2"}` : "\u2014";
+      const contractMismatch = snap != null && snap.v !== 1;
+      const rows = planeRows(snap);
+      const healthy = !contractMismatch && snap?.ready === true;
       return h(
         "div",
         { className: "nks-env", "data-nks-env": "1" },
@@ -3173,9 +3204,9 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           "div",
           { className: "nks-env-title" },
           copy.envTitle,
-          h("span", { className: healthy ? "nks-env-ok" : "nks-env-bad" }, healthy ? "\u25CF OK" : "\u25CF \u5F02\u5E38")
+          h("span", { className: healthy ? "nks-env-ok" : "nks-env-bad" }, contractMismatch ? "\u89C2\u5BDF\u5408\u540C\u4E0D\u5339\u914D" : healthy ? "\u25CF OK" : "\u25CF \u5F02\u5E38")
         ),
-        h("div", { className: "nks-env-row" }, h("b", null, copy.envPlugin), h("span", null, status?.buildId || "\u2014")),
+        h("div", { className: "nks-env-row" }, h("b", null, copy.envPlugin), h("span", null, snap?.buildId || "\u672A\u77E5")),
         h("div", { className: "nks-env-row" }, h("b", null, copy.envEngine), h("span", null, engine)),
         h("div", { className: "nks-env-row" }, h("b", null, copy.envContainer), h("span", null, container)),
         snap?.containerName ? h("div", { className: "nks-env-row" }, h("b", null, copy.envInstance), h("span", null, snap.containerName)) : null,
@@ -4022,6 +4053,8 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         }) : h(
           "div",
           { className: "nks-empty", "data-nks-empty": "" },
+          // /status always answers ok:true (the call completed); whether the
+          // environment can serve a page is `ready` alone.
           // One container, one column: the old layout rendered an absolutely
           // positioned .nks-start on top of a flex-centred .nks-empty, which
           // painted the opaque Start button straight over the error text
@@ -4030,11 +4063,11 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           h(
             "div",
             { className: "nks-empty-title" },
-            busy ? copy.opening : status?.engineMismatch === true ? copy.engineMismatch : status?.ok === false ? copy.errorTitle : copy.emptyTitle
+            busy ? copy.opening : status?.engineMismatch === true ? copy.engineMismatch : statusDown ? copy.errorTitle : copy.emptyTitle
           ),
-          !busy && status?.ok !== false && !status?.engineMismatch ? h("div", { className: "nks-empty-body" }, copy.emptyBody) : null,
-          !busy && status?.ok === false && !status?.engineMismatch ? h("div", { className: "nks-empty-body" }, copy.errorBody) : null,
-          !busy && status?.ok === false ? h(
+          !busy && !statusDown && !status?.engineMismatch ? h("div", { className: "nks-empty-body" }, copy.emptyBody) : null,
+          !busy && statusDown && !status?.engineMismatch ? h("div", { className: "nks-empty-body" }, copy.errorBody) : null,
+          !busy && statusDown ? h(
             "div",
             { className: "nks-empty-actions" },
             // Ordinary users get ONE button: it reconciles phase, adopts or
@@ -4049,7 +4082,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
             h("button", { type: "button", className: "nks-start-btn", "data-nks-diagnose": "1", onClick: () => run(() => refreshStatus()) }, copy.retry),
             h("button", { type: "button", className: "nks-start-btn", "data-nks-open-settings": "1", onClick: openSettings }, copy.settings)
           ) : null,
-          !busy && status?.ok !== false && !status?.engineMismatch ? h(
+          !busy && !statusDown && !status?.engineMismatch ? h(
             "div",
             { className: "nks-empty-actions" },
             h("button", { type: "button", className: "nks-empty-link", "data-nks-try": "1", onClick: () => {
@@ -4057,8 +4090,8 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
               run(() => navigate("https://example.com"));
             } }, copy.emptyTry)
           ) : null,
-          status?.ok === false ? h("div", { className: "nks-empty-meta" }, `${status?.lastError?.errorId || status?.errorId || "kitesurf.engine.failed"} \xB7 ${status?.httpBase || ""}`) : null,
-          status?.ok === false ? h("div", { className: "nks-empty-meta" }, status?.lastError?.error || status?.error || "") : null
+          statusDown ? h("div", { className: "nks-empty-meta" }, `${status?.lastError?.errorId || status?.errorId || (status?.degraded?.length ? status.degraded.join(" / ") : "kitesurf.engine.failed")} \xB7 ${status?.httpBase || ""}`) : null,
+          statusDown ? h("div", { className: "nks-empty-meta" }, status?.lastError?.error || status?.error || "") : null
         ),
         overlays.map((box, index) => h("div", {
           key: index,

@@ -4,6 +4,8 @@
 
 读者是只拿到这一个包或它的 `.tgz`、要把它装进 dsh Web profile 的 agent。不写规格、不写变更记录、不写本机双实例。规格在 `docs/specs/<包名>/`。本机环境在仓库根 [AGENTS.md](../../AGENTS.md) 和 `.local-dsh-setup.md`。
 
+写插件浏览器 UI 前，先查 [docs/specs/dsh-nano-ui/DESIGN.md](../specs/dsh-nano-ui/DESIGN.md) 与 `packages/dsh-nano-ui/catalog/`：宿主 primitive 优先，其次 nano-ui，都没有才在插件内实现并标 `nano-ui-exempt`。包内 `AGENTS.md` 只描述用到的界面，不复制 DESIGN.md 条款。
+
 改安装合同时，先改本文件里的不变段落，再逐字抄回：
 
 - [dsh-nano-notepad/AGENTS.md](../../dsh-nano-notepad/AGENTS.md)

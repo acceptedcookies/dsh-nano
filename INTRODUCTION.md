@@ -390,7 +390,7 @@ lib/client.js 里已内联，运行时不再解析这个包
 tarball 是单文件分发，安装侧不需要这些共享包
 ```
 
-**排版解耦**（[docs/specs/dsh-nano-ui/README.md](docs/specs/dsh-nano-ui/README.md)）：共享样式不硬编码字号，改读一组可选 `--nano-*` CSS 变量并带 shell 回退。因为 `NanoMenu` / `NanoDialog` portal 到 `document.body`，令牌必须声明在 `:root` 或 `body` 上才到得了弹层。
+**UI 规格**：令牌、主题、层级、弹层承载与组件选型以 [docs/specs/dsh-nano-ui/DESIGN.md](docs/specs/dsh-nano-ui/DESIGN.md) 为准，本文不复述。
 
 ### 3.4 当前全部 package 用途总表
 
@@ -400,7 +400,7 @@ tarball 是单文件分发，安装侧不需要这些共享包
 | [dsh-nano-model-selector/](dsh-nano-model-selector/AGENTS.md) | overlay 插件（host+client） | 是 | `0.1.1` | 增强模型选择器 + `/imagine`；`lib/client.js`、手写 `lib/host-media.js`、`lib/perf-review-host.js` |
 | [dsh-nano-explorer-extra/](dsh-nano-explorer-extra/AGENTS.md) | overlay 插件（host+client） | 是 | `0.1.1` | 接管文件页：Git 状态、状态栏、内联增删改；`lib/host.js`、`lib/client.js` |
 | ~~[dsh-nano-shared-workspace/]~~ | **⛔ DEPRECATED 2026-11-12** | — | — | 已移至 [`deprecated/dsh-nano-shared-workspace/`](deprecated/README.md)；不再安装、构建、打包、发布 |
-| [packages/dsh-nano-ui/](docs/specs/dsh-nano-ui/README.md) | 构建期共享 UI 库 | **否** | `0.1.0` | 打进各 `lib/client.js` |
+| [packages/dsh-nano-ui/](docs/specs/dsh-nano-ui/DESIGN.md) | 构建期共享 UI 库 | **否** | 见 `package.json` | 打进各 `lib/client.js`；规格见 DESIGN.md |
 | [packages/dsh-performance-review/](packages/dsh-performance-review/README.md) | 构建期性能观测库 | **否** | `0.1.0` | 打进 `lib/client.js` / 宿主产物；协议 v2；默认关闭，机制见 spec |
 | [packages/dsh-s3-client/](packages/dsh-s3-client/README.md) | 宿主侧 S3 客户端 | **否** | `0.1.0` | SigV4 签名 + 令牌桶 + 用量账本；打进 `lib/s3-sync-host.js`，密钥只在宿主 |
 

@@ -25,6 +25,7 @@ export const NANO_STYLES = `
 .nano-menu-item[data-active="true"] .nano-menu-icon { color: inherit; }
 .nano-menu-check { display: inline-flex; color: inherit; }
 .nano-menu-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nano-menu-sep { height: 1px; margin: 4px 6px; background: var(--dsw-alias-border-l2); flex: none; pointer-events: none; }
 
 /* ── transient toast (NanoToast) ────────────────────────────────────────────── */
 .nano-toast { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); z-index: 40;

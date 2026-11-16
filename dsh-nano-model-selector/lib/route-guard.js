@@ -153,7 +153,8 @@ function createGuard({ table, plugin, observe } = {}) {
         bodyLimit: spec.bodyLimit ?? row.bodyLimit,
         sessionBinding: row.sessionBinding,
         justification: row.justification,
-        plugin: row.plugin
+        plugin: row.plugin,
+        ...row.id ? { id: row.id } : {}
       });
       records.push(route);
       const handler = async (req, res) => {
@@ -201,93 +202,7 @@ function createGuard({ table, plugin, observe } = {}) {
 function registerRoutes(ctx, specs, { table, plugin, observe } = {}) {
   return createGuard({ table, plugin, observe }).registerRoutes(ctx, specs);
 }
-
-// src/host/route-table.js
-var PLUGIN = "dsh-nano-model-selector";
-var ROUTE_TABLE = [
-  {
-    "plugin": "dsh-nano-model-selector",
-    "path": "/nano-model-selector/catalog",
-    "methods": [
-      "GET",
-      "HEAD"
-    ],
-    "sensitivity": "L0",
-    "capability": "read:host",
-    "bodyLimit": 0,
-    "sessionBinding": false,
-    "justification": "dsh-nano-model-selector/index.js:28,242 \u2014 enriched LLM model catalog for the selector; read-only registry projection, no secret."
-  },
-  {
-    "plugin": "dsh-nano-model-selector",
-    "path": "/nano-model-selector/media-engines",
-    "methods": [
-      "GET",
-      "HEAD"
-    ],
-    "sensitivity": "L0",
-    "capability": "read:host",
-    "bodyLimit": 0,
-    "sessionBinding": false,
-    "justification": "dsh-nano-model-selector/index.js:29,252 \u2014 scans for local media CLIs and returns {key,label,detail,path,available}; read-only host enumeration, no secret."
-  },
-  {
-    "plugin": "dsh-nano-model-selector",
-    "path": "/nano-model-selector/media-engine",
-    "methods": [
-      "GET",
-      "HEAD",
-      "PUT"
-    ],
-    "sensitivity": "L2",
-    "capability": "write:host",
-    "bodyLimit": 16384,
-    "sessionBinding": false,
-    "justification": "dsh-nano-model-selector/index.js:30,252 \u2014 GET reads {engine,explicit}; PUT (16384-byte cap) writes DSH_HOME/plugins/nano-model-selector/media-engine.json and re-registers the /imagine skill = DSH_HOME write + skill mutation."
-  },
-  {
-    "plugin": "dsh-nano-model-selector",
-    "path": "/nano-model-selector/async-compact",
-    "methods": [
-      "GET",
-      "HEAD",
-      "PUT"
-    ],
-    "sensitivity": "L3",
-    "capability": "write:operator",
-    "bodyLimit": 16384,
-    "sessionBinding": false,
-    "justification": "dsh-nano-model-selector/index.js \u2014 DNMS01/-15. GET returns {policy, effective, runtime}; PUT (16384-byte cap) rewrites plugins/nano-model-selector/async-compact.json, the sole writable authority for the async-compaction takeover (master-order + schema validation, fail-closed). Operator-level config surface = L3 write:operator."
-  },
-  {
-    "plugin": "dsh-nano-model-selector",
-    "path": "/nano-model-selector/async-compact/bundle",
-    "methods": [
-      "GET",
-      "HEAD"
-    ],
-    "sensitivity": "L0",
-    "capability": "read:host",
-    "bodyLimit": 0,
-    "sessionBinding": false,
-    "justification": "dsh-nano-model-selector/index.js \u2014 DNMS01/-20\u2461. GET returns the read-only U1\u2013U4 projection {installed,enabled,known,availability} of the companion bundle from the sanctioned pluginManager.listBundles() inventory; split off the status route so the polling session-header badge never pays its ~0.9s synchronous inventory read. No write, no secret."
-  },
-  {
-    "plugin": "dsh-nano-model-selector",
-    "path": "/nano-model-selector/async-compact/switch",
-    "methods": [
-      "POST"
-    ],
-    "sensitivity": "L3",
-    "capability": "write:operator",
-    "bodyLimit": 1024,
-    "sessionBinding": false,
-    "justification": `dsh-nano-model-selector/index.js \u2014 DNMS01/-20\u2466. POST {"enabled":boolean} (1024-byte cap) forwards to ctx.get('pluginManager').setBundleEnabled('dsh-nano-model-selector-compaction') \u2014 the panel's single write entry to the takeover toggle; same sanctioned writer, not a second truth source.`
-  }
-];
 export {
-  PLUGIN,
-  ROUTE_TABLE,
   RouteGuardError,
   createGuard,
   readJsonBody,

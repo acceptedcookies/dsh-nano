@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { SKILL_BODIES, kitesurfSkill, nanoKiteSkill } from '../lib/skill.js'
 import { ERROR_CATALOG } from '../lib/diagnostics.js'
-import { ROUTE_TABLE } from '../lib/route-table.js'
+import { BINDING_TABLE } from '../lib/bindings.js'
 
 const root = join(fileURLToPath(new URL('.', import.meta.url)), '..')
 const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
@@ -56,7 +56,7 @@ test('kitesurf-cdp is a directory skill: entry ≤90 lines + resourceBase direct
   for (const f of refs) assert.ok(entry.includes(`references/${f}`), `entry doesn't index references/${f}`)
 })
 
-test('coverage reconciliation: every ROUTE_TABLE path and kitesurf_* tool is documented in the tree', () => {
+test('coverage reconciliation: every BINDING_TABLE path and kitesurf_* tool is documented in the tree', () => {
   // P3-04: the bridge's sole carrier is DNLS `profiles/kitesurf/mcp-bridge.mjs`
   // (the DNK `runtime/` copy is retired). Read it from there.
   const bridge = readFileSync(join(root, '..', 'dsh-nano-local-sandbox', 'profiles', 'kitesurf', 'mcp-bridge.mjs'), 'utf8')
@@ -64,7 +64,7 @@ test('coverage reconciliation: every ROUTE_TABLE path and kitesurf_* tool is doc
   const dir = join(root, 'skills', 'kitesurf-cdp')
   let text = readFileSync(join(dir, 'SKILL.md'), 'utf8')
   for (const f of readdirSync(join(dir, 'references'))) text += readFileSync(join(dir, 'references', f), 'utf8')
-  for (const r of ROUTE_TABLE) assert.ok(text.includes(r.path), `route not documented: ${r.path}`)
+  for (const r of BINDING_TABLE) assert.ok(text.includes(r.path), `route not documented: ${r.path}`)
   for (const t of tools) assert.ok(text.includes(t), `MCP tool not documented: ${t}`)
 })
 

@@ -426,7 +426,8 @@ function createGuard({ table, plugin, observe } = {}) {
         bodyLimit: spec.bodyLimit ?? row.bodyLimit,
         sessionBinding: row.sessionBinding,
         justification: row.justification,
-        plugin: row.plugin
+        plugin: row.plugin,
+        ...row.id ? { id: row.id } : {}
       });
       records.push(route);
       const handler = async (req, res) => {
@@ -745,278 +746,46 @@ function createWebRegistrar({ plugin, bindings, observe } = {}) {
 
 // lib/bindings.js
 var PLUGIN = "dsh-nano-explorer-extra";
-var BINDING_TABLE = [
-  {
-    "id": "dnee.status",
-    "plugin": "dsh-nano-explorer-extra",
-    "channel": "http",
-    "match": "exact",
-    "path": "/nano-explorer-extra/status",
-    "methods": [
-      "GET"
-    ],
-    "bodyLimit": 0,
-    "sensitivity": "L0",
-    "capability": "proc:git",
-    "sessionBinding": true,
-    "justification": "dsh-nano-explorer-extra/src/host/routes.js:226 \u2014 read-only git status/stats for one session workspace; returns no secrets. scopeOf resolves caller-supplied sessionId (finding scopeof-cross-session, harden) \u2014 session-scoped read by design."
-  },
-  {
-    "id": "dnee.commit",
-    "plugin": "dsh-nano-explorer-extra",
-    "channel": "http",
-    "match": "exact",
-    "path": "/nano-explorer-extra/commit",
-    "methods": [
-      "POST"
-    ],
-    "bodyLimit": 65536,
-    "sensitivity": "L2",
-    "capability": "proc:git",
-    "sessionBinding": true,
-    "justification": "dsh-nano-explorer-extra/src/host/routes.js:261 \u2014 runs `git add --all` + `git commit` as the host user; executes a process and can invoke attacker-controlled .git filter drivers (finding git-config-filter-exec). Host-level exec."
-  },
-  {
-    "id": "dnee.pull",
-    "plugin": "dsh-nano-explorer-extra",
-    "channel": "http",
-    "match": "exact",
-    "path": "/nano-explorer-extra/pull",
-    "methods": [
-      "POST"
-    ],
-    "bodyLimit": 65536,
-    "sensitivity": "L2",
-    "capability": "proc:git",
-    "sessionBinding": true,
-    "justification": "dsh-nano-explorer-extra/src/host/routes.js:273 \u2014 `git pull --ff-only`: host process exec + outbound net to the configured remote + merge writes into the workspace."
-  },
-  {
-    "id": "dnee.fetch",
-    "plugin": "dsh-nano-explorer-extra",
-    "channel": "http",
-    "match": "exact",
-    "path": "/nano-explorer-extra/fetch",
-    "methods": [
-      "POST"
-    ],
-    "bodyLimit": 65536,
-    "sensitivity": "L2",
-    "capability": "proc:git",
-    "sessionBinding": true,
-    "justification": "dsh-nano-explorer-extra/src/host/routes.js \u2014 `git fetch --all --prune`: host process exec + outbound net to configured remotes; rewrites refs/remotes but never touches workspace files."
-  },
-  {
-    "id": "dnee.push",
-    "plugin": "dsh-nano-explorer-extra",
-    "channel": "http",
-    "match": "exact",
-    "path": "/nano-explorer-extra/push",
-    "methods": [
-      "POST"
-    ],
-    "bodyLimit": 65536,
-    "sensitivity": "L2",
-    "capability": "proc:git",
-    "sessionBinding": true,
-    "justification": "dsh-nano-explorer-extra/src/host/routes.js \u2014 `git push` or `git push -u <remote> HEAD`: host process exec + outbound net to a configured or caller-named remote; publishes commits off the machine."
-  },
-  {
-    "id": "dnee.remote",
-    "plugin": "dsh-nano-explorer-extra",
-    "channel": "http",
-    "match": "exact",
-    "path": "/nano-explorer-extra/remote",
-    "methods": [
-      "POST"
-    ],
-    "bodyLimit": 65536,
-    "sensitivity": "L2",
-    "capability": "proc:git",
-    "sessionBinding": true,
-    "justification": "dsh-nano-explorer-extra/src/host/routes.js \u2014 `git remote add|set-url|remove`: host process exec that rewrites .git/config; the URL operand steers where later pushes send the tree."
-  },
-  {
-    "id": "dnee.author",
-    "plugin": "dsh-nano-explorer-extra",
-    "channel": "http",
-    "match": "exact",
-    "path": "/nano-explorer-extra/author",
-    "methods": [
-      "POST"
-    ],
-    "bodyLimit": 65536,
-    "sensitivity": "L1",
-    "capability": "proc:git",
-    "sessionBinding": true,
-    "justification": "dsh-nano-explorer-extra/src/host/routes.js \u2014 `git config user.name|user.email` (local only): writes .git/config; no process exec beyond the config setter itself, no network."
-  },
-  {
-    "id": "dnee.ssh-key",
-    "plugin": "dsh-nano-explorer-extra",
-    "channel": "http",
-    "match": "exact",
-    "path": "/nano-explorer-extra/ssh-key",
-    "methods": [
-      "POST"
-    ],
-    "bodyLimit": 65536,
-    "sensitivity": "L1",
-    "capability": "proc:git",
-    "sessionBinding": true,
-    "justification": "dsh-nano-explorer-extra/src/host/routes.js \u2014 writes  (local only) to .git/config: binds a repo-local SSH identity; key path is validated against quotes/newlines before being embedded; no process exec beyond the config setter itself."
-  },
-  {
-    "id": "dnee.checkout",
-    "plugin": "dsh-nano-explorer-extra",
-    "channel": "http",
-    "match": "exact",
-    "path": "/nano-explorer-extra/checkout",
-    "methods": [
-      "POST"
-    ],
-    "bodyLimit": 65536,
-    "sensitivity": "L2",
-    "capability": "proc:git",
-    "sessionBinding": true,
-    "justification": "dsh-nano-explorer-extra/src/host/routes.js:285 \u2014 `git checkout` as the host user; process exec that can rewrite workspace files and trigger smudge filters."
-  },
-  {
-    "id": "dnee.create-file",
-    "plugin": "dsh-nano-explorer-extra",
-    "channel": "http",
-    "match": "exact",
-    "path": "/nano-explorer-extra/create-file",
-    "methods": [
-      "POST"
-    ],
-    "bodyLimit": 65536,
-    "sensitivity": "L1",
-    "capability": "write:workspace",
-    "sessionBinding": true,
-    "justification": "dsh-nano-explorer-extra/src/host/routes.js:297 + mutate.js \u2014 bounded write of a new file inside the session workspace after resolve+policy check; symlink-escape fence is the P2 harden item."
-  },
-  {
-    "id": "dnee.create-folder",
-    "plugin": "dsh-nano-explorer-extra",
-    "channel": "http",
-    "match": "exact",
-    "path": "/nano-explorer-extra/create-folder",
-    "methods": [
-      "POST"
-    ],
-    "bodyLimit": 65536,
-    "sensitivity": "L1",
-    "capability": "write:workspace",
-    "sessionBinding": true,
-    "justification": "dsh-nano-explorer-extra/src/host/routes.js:310 + mutate.js \u2014 bounded mkdir inside the session workspace; same realpath-fence hardening as the other mutations."
-  },
-  {
-    "id": "dnee.rename",
-    "plugin": "dsh-nano-explorer-extra",
-    "channel": "http",
-    "match": "exact",
-    "path": "/nano-explorer-extra/rename",
-    "methods": [
-      "POST"
-    ],
-    "bodyLimit": 65536,
-    "sensitivity": "L1",
-    "capability": "write:workspace",
-    "sessionBinding": true,
-    "justification": "dsh-nano-explorer-extra/src/host/routes.js:324 + mutate.js \u2014 rename/move inside the workspace; bounded write once realpath fencing is in place."
-  },
-  {
-    "id": "dnee.move",
-    "plugin": "dsh-nano-explorer-extra",
-    "channel": "http",
-    "match": "exact",
-    "path": "/nano-explorer-extra/move",
-    "methods": [
-      "POST"
-    ],
-    "bodyLimit": 65536,
-    "sensitivity": "L1",
-    "capability": "write:workspace",
-    "sessionBinding": true,
-    "justification": "dsh-nano-explorer-extra/src/host/routes.js:340 + mutate.js \u2014 move entries inside the workspace; bounded write (symlink-escape fence pending)."
-  },
-  {
-    "id": "dnee.delete",
-    "plugin": "dsh-nano-explorer-extra",
-    "channel": "http",
-    "match": "exact",
-    "path": "/nano-explorer-extra/delete",
-    "methods": [
-      "POST"
-    ],
-    "bodyLimit": 65536,
-    "sensitivity": "L1",
-    "capability": "write:workspace",
-    "sessionBinding": true,
-    "justification": "dsh-nano-explorer-extra/src/host/routes.js:358 + mutate.js \u2014 delete inside the workspace (root itself refused); bounded write once fenced."
-  },
-  {
-    "id": "dnee.ignored",
-    "plugin": "dsh-nano-explorer-extra",
-    "channel": "http",
-    "match": "exact",
-    "path": "/nano-explorer-extra/ignored",
-    "methods": [
-      "POST"
-    ],
-    "bodyLimit": 65536,
-    "sensitivity": "L0",
-    "capability": "read:workspace",
-    "sessionBinding": true,
-    "justification": "dsh-nano-explorer-extra/src/host/routes.js:373 \u2014 `git check-ignore` style read over workspace paths; no write, no secret."
-  },
-  {
-    "id": "dnee.list",
-    "plugin": "dsh-nano-explorer-extra",
-    "channel": "http",
-    "match": "exact",
-    "path": "/nano-explorer-extra/list",
-    "methods": [
-      "POST"
-    ],
-    "bodyLimit": 65536,
-    "sensitivity": "L2",
-    "capability": "read:host",
-    "sessionBinding": true,
-    "justification": "dsh-nano-explorer-extra/src/host/routes.js:384 \u2014 directory listing never fenced to the workspace (finding nxe:routes-read-arbitrary-file, accepted); enumerates arbitrary host dirs = host-level read."
-  },
-  {
-    "id": "dnee.perf-review.host",
-    "plugin": "dsh-nano-explorer-extra",
-    "channel": "http",
-    "match": "exact",
-    "path": "/nano-explorer-extra/perf-review/host",
-    "methods": [
-      "GET"
-    ],
-    "bodyLimit": 0,
-    "sensitivity": "L2",
-    "capability": "read:host",
-    "sessionBinding": false,
-    "justification": "dsh-nano-explorer-extra/src/host/routes.js:400 \u2014 process-global perf reservoir; mode=window drains samples across all plugins/sessions (finding perf-review-window-drain, accepted). Cross-session process state, not session-scoped."
-  },
-  {
-    "id": "dnee.read",
-    "plugin": "dsh-nano-explorer-extra",
-    "channel": "http",
-    "match": "exact",
-    "path": "/nano-explorer-extra/read",
-    "methods": [
-      "POST"
-    ],
-    "bodyLimit": 65536,
-    "sensitivity": "L2",
-    "capability": "read:host",
-    "sessionBinding": true,
-    "justification": "dsh-nano-explorer-extra/src/host/routes.js:412 \u2014 returns any UTF-8 host file up to 1 MiB; client may pass allowOutsideWorkspace:true to skip the fence (finding routes-read-arbitrary-file, accepted). Host-level read."
-  }
-];
+var BINDING_TABLE = Object.freeze([
+  { "id": "dnee.status", "plugin": "dsh-nano-explorer-extra", "channel": "http", "match": "exact", "path": "/nano-explorer-extra/status", "methods": ["GET"], "bodyLimit": 0, "sensitivity": "L0", "capability": "proc:git", "sessionBinding": true, "justification": "dsh-nano-explorer-extra/src/host/routes.js:226 \u2014 read-only git status/stats for one session workspace; returns no secrets. scopeOf resolves caller-supplied sessionId (finding scopeof-cross-session, harden) \u2014 session-scoped read by design." },
+  { "id": "dnee.commit", "plugin": "dsh-nano-explorer-extra", "channel": "http", "match": "exact", "path": "/nano-explorer-extra/commit", "methods": ["POST"], "bodyLimit": 65536, "sensitivity": "L2", "capability": "proc:git", "sessionBinding": true, "justification": "dsh-nano-explorer-extra/src/host/routes.js:261 \u2014 runs `git add --all` + `git commit` as the host user; executes a process and can invoke attacker-controlled .git filter drivers (finding git-config-filter-exec). Host-level exec." },
+  { "id": "dnee.pull", "plugin": "dsh-nano-explorer-extra", "channel": "http", "match": "exact", "path": "/nano-explorer-extra/pull", "methods": ["POST"], "bodyLimit": 65536, "sensitivity": "L2", "capability": "proc:git", "sessionBinding": true, "justification": "dsh-nano-explorer-extra/src/host/routes.js:273 \u2014 `git pull --ff-only`: host process exec + outbound net to the configured remote + merge writes into the workspace." },
+  { "id": "dnee.fetch", "plugin": "dsh-nano-explorer-extra", "channel": "http", "match": "exact", "path": "/nano-explorer-extra/fetch", "methods": ["POST"], "bodyLimit": 65536, "sensitivity": "L2", "capability": "proc:git", "sessionBinding": true, "justification": "dsh-nano-explorer-extra/src/host/routes.js \u2014 `git fetch --all --prune`: host process exec + outbound net to configured remotes; rewrites refs/remotes but never touches workspace files." },
+  { "id": "dnee.push", "plugin": "dsh-nano-explorer-extra", "channel": "http", "match": "exact", "path": "/nano-explorer-extra/push", "methods": ["POST"], "bodyLimit": 65536, "sensitivity": "L2", "capability": "proc:git", "sessionBinding": true, "justification": "dsh-nano-explorer-extra/src/host/routes.js \u2014 `git push` or `git push -u <remote> HEAD`: host process exec + outbound net to a configured or caller-named remote; publishes commits off the machine." },
+  { "id": "dnee.remote", "plugin": "dsh-nano-explorer-extra", "channel": "http", "match": "exact", "path": "/nano-explorer-extra/remote", "methods": ["POST"], "bodyLimit": 65536, "sensitivity": "L2", "capability": "proc:git", "sessionBinding": true, "justification": "dsh-nano-explorer-extra/src/host/routes.js \u2014 `git remote add|set-url|remove`: host process exec that rewrites .git/config; the URL operand steers where later pushes send the tree." },
+  { "id": "dnee.author", "plugin": "dsh-nano-explorer-extra", "channel": "http", "match": "exact", "path": "/nano-explorer-extra/author", "methods": ["POST"], "bodyLimit": 65536, "sensitivity": "L1", "capability": "proc:git", "sessionBinding": true, "justification": "dsh-nano-explorer-extra/src/host/routes.js \u2014 `git config user.name|user.email` (local only): writes .git/config; no process exec beyond the config setter itself, no network." },
+  { "id": "dnee.ssh-key", "plugin": "dsh-nano-explorer-extra", "channel": "http", "match": "exact", "path": "/nano-explorer-extra/ssh-key", "methods": ["POST"], "bodyLimit": 65536, "sensitivity": "L1", "capability": "proc:git", "sessionBinding": true, "justification": "dsh-nano-explorer-extra/src/host/routes.js \u2014 writes  (local only) to .git/config: binds a repo-local SSH identity; key path is validated against quotes/newlines before being embedded; no process exec beyond the config setter itself." },
+  { "id": "dnee.checkout", "plugin": "dsh-nano-explorer-extra", "channel": "http", "match": "exact", "path": "/nano-explorer-extra/checkout", "methods": ["POST"], "bodyLimit": 65536, "sensitivity": "L2", "capability": "proc:git", "sessionBinding": true, "justification": "dsh-nano-explorer-extra/src/host/routes.js:285 \u2014 `git checkout` as the host user; process exec that can rewrite workspace files and trigger smudge filters." },
+  { "id": "dnee.create-file", "plugin": "dsh-nano-explorer-extra", "channel": "http", "match": "exact", "path": "/nano-explorer-extra/create-file", "methods": ["POST"], "bodyLimit": 65536, "sensitivity": "L1", "capability": "write:workspace", "sessionBinding": true, "justification": "dsh-nano-explorer-extra/src/host/routes.js:297 + mutate.js \u2014 bounded write of a new file inside the session workspace after resolve+policy check; symlink-escape fence is the P2 harden item." },
+  { "id": "dnee.create-folder", "plugin": "dsh-nano-explorer-extra", "channel": "http", "match": "exact", "path": "/nano-explorer-extra/create-folder", "methods": ["POST"], "bodyLimit": 65536, "sensitivity": "L1", "capability": "write:workspace", "sessionBinding": true, "justification": "dsh-nano-explorer-extra/src/host/routes.js:310 + mutate.js \u2014 bounded mkdir inside the session workspace; same realpath-fence hardening as the other mutations." },
+  { "id": "dnee.rename", "plugin": "dsh-nano-explorer-extra", "channel": "http", "match": "exact", "path": "/nano-explorer-extra/rename", "methods": ["POST"], "bodyLimit": 65536, "sensitivity": "L1", "capability": "write:workspace", "sessionBinding": true, "justification": "dsh-nano-explorer-extra/src/host/routes.js:324 + mutate.js \u2014 rename/move inside the workspace; bounded write once realpath fencing is in place." },
+  { "id": "dnee.move", "plugin": "dsh-nano-explorer-extra", "channel": "http", "match": "exact", "path": "/nano-explorer-extra/move", "methods": ["POST"], "bodyLimit": 65536, "sensitivity": "L1", "capability": "write:workspace", "sessionBinding": true, "justification": "dsh-nano-explorer-extra/src/host/routes.js:340 + mutate.js \u2014 move entries inside the workspace; bounded write (symlink-escape fence pending)." },
+  { "id": "dnee.delete", "plugin": "dsh-nano-explorer-extra", "channel": "http", "match": "exact", "path": "/nano-explorer-extra/delete", "methods": ["POST"], "bodyLimit": 65536, "sensitivity": "L1", "capability": "write:workspace", "sessionBinding": true, "justification": "dsh-nano-explorer-extra/src/host/routes.js:358 + mutate.js \u2014 delete inside the workspace (root itself refused); bounded write once fenced." },
+  { "id": "dnee.ignored", "plugin": "dsh-nano-explorer-extra", "channel": "http", "match": "exact", "path": "/nano-explorer-extra/ignored", "methods": ["POST"], "bodyLimit": 65536, "sensitivity": "L0", "capability": "read:workspace", "sessionBinding": true, "justification": "dsh-nano-explorer-extra/src/host/routes.js:373 \u2014 `git check-ignore` style read over workspace paths; no write, no secret." },
+  { "id": "dnee.list", "plugin": "dsh-nano-explorer-extra", "channel": "http", "match": "exact", "path": "/nano-explorer-extra/list", "methods": ["POST"], "bodyLimit": 65536, "sensitivity": "L2", "capability": "read:host", "sessionBinding": true, "justification": "dsh-nano-explorer-extra/src/host/routes.js:384 \u2014 directory listing never fenced to the workspace (finding nxe:routes-read-arbitrary-file, accepted); enumerates arbitrary host dirs = host-level read." },
+  { "id": "dnee.perf-review.host", "plugin": "dsh-nano-explorer-extra", "channel": "http", "match": "exact", "path": "/nano-explorer-extra/perf-review/host", "methods": ["GET"], "bodyLimit": 0, "sensitivity": "L2", "capability": "read:host", "sessionBinding": false, "justification": "dsh-nano-explorer-extra/src/host/routes.js:400 \u2014 process-global perf reservoir; mode=window drains samples across all plugins/sessions (finding perf-review-window-drain, accepted). Cross-session process state, not session-scoped." },
+  { "id": "dnee.read", "plugin": "dsh-nano-explorer-extra", "channel": "http", "match": "exact", "path": "/nano-explorer-extra/read", "methods": ["POST"], "bodyLimit": 65536, "sensitivity": "L2", "capability": "read:host", "sessionBinding": true, "justification": "dsh-nano-explorer-extra/src/host/routes.js:412 \u2014 returns any UTF-8 host file up to 1 MiB; client may pass allowOutsideWorkspace:true to skip the fence (finding routes-read-arbitrary-file, accepted). Host-level read." }
+]);
+var BROWSER_BINDINGS = Object.freeze([
+  { "id": "dnee.status", "path": "/nano-explorer-extra/status" },
+  { "id": "dnee.commit", "path": "/nano-explorer-extra/commit" },
+  { "id": "dnee.pull", "path": "/nano-explorer-extra/pull" },
+  { "id": "dnee.fetch", "path": "/nano-explorer-extra/fetch" },
+  { "id": "dnee.push", "path": "/nano-explorer-extra/push" },
+  { "id": "dnee.remote", "path": "/nano-explorer-extra/remote" },
+  { "id": "dnee.author", "path": "/nano-explorer-extra/author" },
+  { "id": "dnee.ssh-key", "path": "/nano-explorer-extra/ssh-key" },
+  { "id": "dnee.checkout", "path": "/nano-explorer-extra/checkout" },
+  { "id": "dnee.create-file", "path": "/nano-explorer-extra/create-file" },
+  { "id": "dnee.create-folder", "path": "/nano-explorer-extra/create-folder" },
+  { "id": "dnee.rename", "path": "/nano-explorer-extra/rename" },
+  { "id": "dnee.move", "path": "/nano-explorer-extra/move" },
+  { "id": "dnee.delete", "path": "/nano-explorer-extra/delete" },
+  { "id": "dnee.ignored", "path": "/nano-explorer-extra/ignored" },
+  { "id": "dnee.list", "path": "/nano-explorer-extra/list" },
+  { "id": "dnee.perf-review.host", "path": "/nano-explorer-extra/perf-review/host" },
+  { "id": "dnee.read", "path": "/nano-explorer-extra/read" }
+]);
 
 // src/host/git.js
 var GIT_TOMBSTONES = [

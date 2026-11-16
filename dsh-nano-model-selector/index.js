@@ -8,7 +8,7 @@ import { ensurePerfReviewHost, LIB_VERSION } from './lib/perf-review-host.js'
 import { registerRoutes } from './lib/route-guard.js'
 import { compactRuntime } from './lib/compact-runtime.js'
 import { COMPACTION_BUNDLE_NAME, createBundleInventory } from './lib/bundle-inventory.js'
-import { ROUTE_TABLE, PLUGIN } from './lib/route-table.js'
+import { BINDING_TABLE, PLUGIN } from './lib/bindings.js'
 import {
   mergePutBody, readState, validateMasterOrder, validatePutBody, writeState,
 } from './lib/compact-policy.js'
@@ -577,5 +577,5 @@ export function apply(ctx) {
     { path: ASYNC_COMPACT_ROUTE, methods: ['GET', 'HEAD', 'PUT'], handler: asyncCompactHandlers(ctx, runtimeHandle) },
     { path: ASYNC_COMPACT_BUNDLE_ROUTE, methods: ['GET', 'HEAD'], handler: asyncCompactBundleHandler(bundleInventory) },
     { path: ASYNC_COMPACT_SWITCH_ROUTE, methods: ['POST'], handler: (req, res) => asyncCompactSwitchHandler(ctx, req, res, bundleInventory) },
-  ], { table: ROUTE_TABLE, plugin: PLUGIN })
+  ], { table: BINDING_TABLE, plugin: PLUGIN })
 }

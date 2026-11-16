@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { publishedHttpBase } from '../src/host/backend-apple.js'
 import { registerRoutes } from '../lib/route-guard.js'
-import { ROUTE_TABLE } from '../lib/route-table.js'
+import { BINDING_TABLE } from '../lib/bindings.js'
 import { routeSpecs } from '../src/host/routes.js'
 
 test('inspect JSON yields the loopback host port for the engine', () => {
@@ -27,7 +27,7 @@ test('an idle session adopts a running container inspect', async () => {
   registerRoutes(ctx, routeSpecs({
     session,
     backend: { async inspect() { return { raw: JSON.stringify([{ configuration: { publishedPorts: [{ containerPort: 8787, hostAddress: '127.0.0.1', hostPort: 8798 }] } }]) } } },
-  }), { table: ROUTE_TABLE, plugin: 'dsh-nano-local-sandbox' })
+  }), { table: BINDING_TABLE, plugin: 'dsh-nano-local-sandbox' })
   const status = routes.find((route) => route.path.endsWith('/status'))
   let raw = ''
   const res = { statusCode: 0, end(text) { raw = text } }

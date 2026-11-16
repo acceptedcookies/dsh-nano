@@ -1,9 +1,15 @@
+import { spawnSync } from 'node:child_process'
 import { createRequire } from 'node:module'
 import { readFileSync, writeFileSync, rmSync, mkdirSync, copyFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
+{
+  const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
+  const baked = spawnSync(process.execPath, [join(root, '..', 'scripts/bake-plugin-bindings.mjs'), '--plugin', pkg.name], { stdio: 'inherit' })
+  if (baked.status !== 0) process.exit(baked.status ?? 1)
+}
 const body = join(root, 'lib/client.body.js')
 
 const require = createRequire(join(root, 'package.json'))

@@ -102,16 +102,16 @@ test('real cordis: apply() registers every route-table path through ctx.get("web
   const ctx = new Context()
   const { registered } = installStubs(ctx, Service)
   const { apply } = await import('../index.js')
-  const { ROUTE_TABLE } = await import('../lib/route-table.js')
+  const { BINDING_TABLE } = await import('../lib/bindings.js')
 
   assert.doesNotThrow(() => apply(ctx))
   // fe63eec fingerprint: registration went through the real proxy into our
   // webServer stub — NOT a shadow provision that silently ate the calls.
   const paths = new Set(registered.map(r => r.path))
-  for (const row of ROUTE_TABLE) {
+  for (const row of BINDING_TABLE) {
     assert.ok(paths.has(row.path), `route ${row.path} must reach webServer.register`)
   }
-  assert.ok(registered.length >= ROUTE_TABLE.length, 'at least one register call per table row')
+  assert.ok(registered.length >= BINDING_TABLE.length, 'at least one register call per table row')
 })
 
 test('real cordis: route registration runs as a cordis effect (runs immediately)', { skip: !haveCordis }, async () => {

@@ -10,6 +10,7 @@ function makeCtx({ rejection } = {}) {
   const ctx = {
     get(name) {
       if (name === 'connection') return { requestRejection: rejection ?? (() => undefined) }
+      if (name === 'webServer') return ctx.webServer
       return undefined
     },
     webServer: {
@@ -24,7 +25,8 @@ function makeCtx({ rejection } = {}) {
     },
     effect(fn, label) {
       calls.effects.push(label)
-      return () => { calls.disposals.push(label); fn && fn() }
+      const dispose = typeof fn === 'function' ? fn() : undefined
+      return () => { calls.disposals.push(label); if (typeof dispose === 'function') dispose() }
     },
     commands: { register: () => () => {} },
   }
@@ -62,8 +64,9 @@ test('web surfaces declared in BINDING_TABLE register through createWebRegistrar
   const prefix = calls.register.find(s => s.kind === 'prefix')
   assert.ok(prefix, 'a prefix-kind http binding is registered')
   assert.equal(prefix.path, '/dsh-nano-terminal/session')
-  // ctx.effect mounted once for unified teardown.
-  assert.equal(calls.effects.length, 1)
+  // Exact http rows mount one guard effect each, plus one registrar batch disposer.
+  const exact = httpRows.filter(row => row.match === 'exact').length
+  assert.equal(calls.effects.length, exact + 1)
   assert.equal(typeof dispose, 'function')
 })
 
@@ -76,8 +79,9 @@ test('requestRejection fence runs before handler; dispose tears down every bindi
   assert.equal(res.statusCode, 403, 'rejection short-circuits the handler')
   // Dispose removes all registrations (5 http + 1 upgrade) exactly once.
   dispose()
+  const bindingDisposals = calls.disposals.filter(item => item.startsWith('http:') || item.startsWith('up:'))
+  assert.equal(bindingDisposals.length, 6, 'all six bindings disposed')
   const n = calls.disposals.length
-  assert.equal(n, 6, 'all six bindings disposed')
   dispose()
   assert.equal(calls.disposals.length, n, 'dispose is idempotent')
 })

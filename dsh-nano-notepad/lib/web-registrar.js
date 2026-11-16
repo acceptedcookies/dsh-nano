@@ -139,7 +139,8 @@ function createGuard({ table, plugin, observe } = {}) {
         bodyLimit: spec.bodyLimit ?? row.bodyLimit,
         sessionBinding: row.sessionBinding,
         justification: row.justification,
-        plugin: row.plugin
+        plugin: row.plugin,
+        ...row.id ? { id: row.id } : {}
       });
       records.push(route);
       const handler = async (req, res) => {
@@ -458,22 +459,38 @@ function createWebRegistrar({ plugin, bindings, observe } = {}) {
 
 // lib/bindings.js
 var PLUGIN = "dsh-nano-notepad";
-var BINDING_TABLE = [
-  { id: "dnn.save", plugin: PLUGIN, channel: "http", match: "exact", path: "/nano-notepad/save", methods: ["POST"], bodyLimit: 8388608, sensitivity: "L2", capability: "write:host", sessionBinding: false, justification: "native save dialog \u2192 host write + proc exec" },
-  { id: "dnn.read", plugin: PLUGIN, channel: "http", match: "exact", path: "/nano-notepad/read", methods: ["POST"], bodyLimit: 8388608, sensitivity: "L2", capability: "read:host", sessionBinding: false, justification: "out-of-workspace host text read" },
-  { id: "dnn.fetch-mp", plugin: PLUGIN, channel: "http", match: "exact", path: "/nano-notepad/fetch-mp", methods: ["POST"], bodyLimit: 8388608, sensitivity: "L2", capability: "net:fetch", sessionBinding: false, justification: "outbound fetch mp allowlist; redirect SSRF" },
-  { id: "dnn.s3.status", plugin: PLUGIN, channel: "http", match: "exact", path: "/nano-notepad/s3/status", methods: ["POST"], bodyLimit: 33554432, sensitivity: "L2", capability: "s3:credentials", sessionBinding: false, justification: "S3 profile state incl endpoint/accessKeyId" },
-  { id: "dnn.s3.test", plugin: PLUGIN, channel: "http", match: "exact", path: "/nano-notepad/s3/test", methods: ["POST"], bodyLimit: 33554432, sensitivity: "L2", capability: "credential:probe", sessionBinding: false, justification: "signed S3 probe; exercises stored secrets" },
-  { id: "dnn.s3.object", plugin: PLUGIN, channel: "http", match: "exact", path: "/nano-notepad/s3/object", methods: ["POST"], bodyLimit: 33554432, sensitivity: "L2", capability: "s3:write", sessionBinding: false, justification: "signed S3 get/put/delete/head" },
-  { id: "dnn.s3.config", plugin: PLUGIN, channel: "http", match: "exact", path: "/nano-notepad/s3/config", methods: ["POST"], bodyLimit: 33554432, sensitivity: "L2", capability: "s3:credentials", sessionBinding: false, justification: "S3 endpoint/bucket/secret profiles write+probe" },
-  { id: "dnn.fx-core.wasm", plugin: PLUGIN, channel: "http", match: "exact", path: "/nano-notepad/fx-core.wasm", methods: ["GET", "HEAD"], bodyLimit: 0, sensitivity: "L1", capability: "static:asset", sessionBinding: false, justification: "vendored fx-core.wasm static asset" },
-  { id: "dnn.fx.models", plugin: PLUGIN, channel: "http", match: "exact", path: "/nano-notepad/fx/models", methods: ["GET"], bodyLimit: 0, sensitivity: "L2", capability: "read:model-catalog", sessionBinding: false, justification: "ctx.llm provider~model catalog read" },
-  { id: "dnn.fx.chat", plugin: PLUGIN, channel: "http", match: "exact", path: "/nano-notepad/fx/chat/completions", methods: ["POST"], bodyLimit: 33554432, sensitivity: "L2", capability: "llm:generate", sessionBinding: false, justification: "OpenAI\u2192GenerateOptions bridge on ctx.llm" },
-  { id: "dnn.pipeline.s3", plugin: PLUGIN, channel: "http", match: "exact", path: "/nano-notepad/pipeline/s3", methods: ["POST"], bodyLimit: 33554432, sensitivity: "L2", capability: "s3:write", sessionBinding: false, justification: "pipeline-bucket signed ops + CAS" },
-  { id: "dnn.pipeline.claim", plugin: PLUGIN, channel: "http", match: "exact", path: "/nano-notepad/pipeline/claim", methods: ["POST"], bodyLimit: 4096, sensitivity: "L2", capability: "s3:write", sessionBinding: false, justification: "claim lease lifecycle ETag CAS" },
-  { id: "dnn.rpc", plugin: PLUGIN, channel: "http", match: "exact", path: "/nano-notepad/rpc", methods: ["POST"], bodyLimit: 4096, sensitivity: "L1", capability: "s3:read", sessionBinding: false, justification: "A3 cross-plugin read surface (internal MCP/RPC)" },
-  { id: "dnn.fx.sdk", plugin: PLUGIN, channel: "http", match: "prefix", path: "/nano-notepad/fx/sdk", methods: ["GET"], bodyLimit: 0, sensitivity: "L1", capability: "static:asset", sessionBinding: false, justification: "libfx ESM + sqlite/pdf asset prefix (basename-only)" }
-];
+var BINDING_TABLE = Object.freeze([
+  { "id": "dnn.save", "plugin": "dsh-nano-notepad", "channel": "http", "match": "exact", "path": "/nano-notepad/save", "methods": ["POST"], "bodyLimit": 8388608, "sensitivity": "L2", "capability": "write:host", "sessionBinding": false, "justification": "dsh-nano-notepad/index.js:60,251 \u2014 spawns osascript (subprocess) to show a native save dialog, then writes the chosen path; user-driven but writes anywhere the user picks = host-level write + proc exec." },
+  { "id": "dnn.read", "plugin": "dsh-nano-notepad", "channel": "http", "match": "exact", "path": "/nano-notepad/read", "methods": ["POST"], "bodyLimit": 8388608, "sensitivity": "L2", "capability": "read:host", "sessionBinding": false, "justification": "dsh-nano-notepad/index.js:61,257 \u2014 reads any UTF-8 host text file up to MAX_READ_BYTES (2 MiB) with no workspace confinement (finding nano-notepad/read-arbitrary-md-read, accepted); out-of-workspace host read." },
+  { "id": "dnn.fetch-mp", "plugin": "dsh-nano-notepad", "channel": "http", "match": "exact", "path": "/nano-notepad/fetch-mp", "methods": ["POST"], "bodyLimit": 8388608, "sensitivity": "L2", "capability": "net:fetch", "sessionBinding": false, "justification": "dsh-nano-notepad/index.js:62,274 \u2014 outbound fetch of a submitted URL (mp allowlist upstream) from the host; redirect-follow SSRF surface (finding fetch-mp-redirect-ssrf). Arbitrary outbound net." },
+  { "id": "dnn.s3.status", "plugin": "dsh-nano-notepad", "channel": "http", "match": "exact", "path": "/nano-notepad/s3/status", "methods": ["POST"], "bodyLimit": 33554432, "sensitivity": "L2", "capability": "s3:credentials", "sessionBinding": false, "justification": "dsh-nano-notepad/index.js:63,299-314 \u2014 returns active S3 profile state incl. endpoint + accessKeyId + usage ledger read from ${DSH_HOME}/nano-notepad-s3.json; read-only but discloses credential/store metadata (host-level), no secret plaintext." },
+  { "id": "dnn.s3.test", "plugin": "dsh-nano-notepad", "channel": "http", "match": "exact", "path": "/nano-notepad/s3/test", "methods": ["POST"], "bodyLimit": 33554432, "sensitivity": "L2", "capability": "credential:probe", "sessionBinding": false, "justification": "dsh-nano-notepad/index.js:64,299 \u2014 signs a real outbound S3 probe with stored credentials (dsh-s3-client SigV4 + limiter); exercises stored secrets + outbound net." },
+  { "id": "dnn.s3.object", "plugin": "dsh-nano-notepad", "channel": "http", "match": "exact", "path": "/nano-notepad/s3/object", "methods": ["POST"], "bodyLimit": 33554432, "sensitivity": "L2", "capability": "s3:write", "sessionBinding": false, "justification": "dsh-nano-notepad/index.js:65,299 \u2014 generic signed S3 get/put/delete/head on the active profile (remote-data ingress for sync; P0 remote-cross boundary + SSRF). Credentials + outbound net." },
+  { "id": "dnn.s3.config", "plugin": "dsh-nano-notepad", "channel": "http", "match": "exact", "path": "/nano-notepad/s3/config", "methods": ["POST"], "bodyLimit": 33554432, "sensitivity": "L2", "capability": "s3:credentials", "sessionBinding": false, "justification": "dsh-nano-notepad/index.js:66,317 \u2014 writes endpoint/bucket/secret profiles to ${DSH_HOME}/nano-notepad-s3.json (0600) and probes them; endpoint-SSRF oracle + credential write (finding s3-config-endpoint-ssrf, accepted)." },
+  { "id": "dnn.fx-core.wasm", "plugin": "dsh-nano-notepad", "channel": "http", "match": "exact", "path": "/nano-notepad/fx-core.wasm", "methods": ["GET", "HEAD"], "bodyLimit": 0, "sensitivity": "L1", "capability": "static:asset", "sessionBinding": false, "justification": "index.js \u2014 serves vendored fx-core.wasm from lib/fx-core.wasm; read-only static asset, same-origin delivery for the page engine." },
+  { "id": "dnn.fx.models", "plugin": "dsh-nano-notepad", "channel": "http", "match": "exact", "path": "/nano-notepad/fx/models", "methods": ["GET"], "bodyLimit": 0, "sensitivity": "L2", "capability": "read:model-catalog", "sessionBinding": false, "justification": "fx-bridge.js \u2014 lists ctx.llm provider~model catalog for the page engine picker; read-only model metadata, no credentials." },
+  { "id": "dnn.fx.chat", "plugin": "dsh-nano-notepad", "channel": "http", "match": "exact", "path": "/nano-notepad/fx/chat/completions", "methods": ["POST"], "bodyLimit": 33554432, "sensitivity": "L2", "capability": "llm:generate", "sessionBinding": false, "justification": "fx-bridge.js \u2014 OpenAI\u2192GenerateOptions bridge onto ctx.llm.prepareCall().stream(); model invocations + tool calls consume model quota; attachments via ctx.attachments." },
+  { "id": "dnn.pipeline.s3", "plugin": "dsh-nano-notepad", "channel": "http", "match": "exact", "path": "/nano-notepad/pipeline/s3", "methods": ["POST"], "bodyLimit": 33554432, "sensitivity": "L2", "capability": "s3:write", "sessionBinding": false, "justification": "pipeline.js \u2014 signed pipeline-bucket ops (putJson/putBytes/getJson/getBytes/del/list) for pipeline state + sqlite export; CAS ifMatch/ifNoneMatch; scoped S3_NOTEPAD_* or DSH_NP_PIPELINE_IDENTITY; host-signed (credentials never reach page)." },
+  { "id": "dnn.pipeline.claim", "plugin": "dsh-nano-notepad", "channel": "http", "match": "exact", "path": "/nano-notepad/pipeline/claim", "methods": ["POST"], "bodyLimit": 4096, "sensitivity": "L2", "capability": "s3:write", "sessionBinding": false, "justification": "pipeline.js \u2014 claim lease lifecycle on notepad bucket (acquire/renew/read/release); ETag CAS read-modify-write, 90s TTL, CLAIM_KEYS whitelist; writerId from request (scoped by host auth)." },
+  { "id": "dnn.rpc", "plugin": "dsh-nano-notepad", "channel": "http", "match": "exact", "path": "/nano-notepad/rpc", "methods": ["POST"], "bodyLimit": 4096, "sensitivity": "L1", "capability": "s3:read", "sessionBinding": false, "justification": "pipeline.js \u2014 A3 cross-plugin read surface (internal MCP/RPC): read-only whitelisted methods (manifest.get/corpus.list/corpus.read/claim.read) over the published pipeline bucket; key allowlist kb-*/art-*/sqlite/claims; host-signed, no credentials exposed, no writes." },
+  { "id": "dnn.fx.sdk", "plugin": "dsh-nano-notepad", "channel": "http", "match": "prefix", "path": "/nano-notepad/fx/sdk", "methods": ["GET"], "bodyLimit": 0, "sensitivity": "L1", "capability": "static:asset", "sessionBinding": false, "justification": "dsh-nano-notepad/lib/bindings.js \u2014 fx/sdk http+prefix asset serve (basename-only); static ESM+sqlite/pdf assets" }
+]);
+var BROWSER_BINDINGS = Object.freeze([
+  { "id": "dnn.save", "path": "/nano-notepad/save" },
+  { "id": "dnn.read", "path": "/nano-notepad/read" },
+  { "id": "dnn.fetch-mp", "path": "/nano-notepad/fetch-mp" },
+  { "id": "dnn.s3.status", "path": "/nano-notepad/s3/status" },
+  { "id": "dnn.s3.test", "path": "/nano-notepad/s3/test" },
+  { "id": "dnn.s3.object", "path": "/nano-notepad/s3/object" },
+  { "id": "dnn.s3.config", "path": "/nano-notepad/s3/config" },
+  { "id": "dnn.fx-core.wasm", "path": "/nano-notepad/fx-core.wasm" },
+  { "id": "dnn.fx.models", "path": "/nano-notepad/fx/models" },
+  { "id": "dnn.fx.chat", "path": "/nano-notepad/fx/chat/completions" },
+  { "id": "dnn.pipeline.s3", "path": "/nano-notepad/pipeline/s3" },
+  { "id": "dnn.pipeline.claim", "path": "/nano-notepad/pipeline/claim" },
+  { "id": "dnn.rpc", "path": "/nano-notepad/rpc" },
+  { "id": "dnn.fx.sdk", "path": "/nano-notepad/fx/sdk" }
+]);
 export {
   BINDING_TABLE,
   BindingError,

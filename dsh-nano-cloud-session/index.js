@@ -10,7 +10,7 @@ import { createDevinApi, CarrierError } from './lib/devin-api.js'
 import { createProfileStore, storePath, envPath } from './lib/profiles-store.js'
 import { ensureSshKeypair, sshCommands } from './lib/ssh-keys.js'
 import { registerRoutes, sendJson, readJsonBody } from './lib/route-guard.js'
-import { ROUTE_TABLE, PLUGIN } from './lib/route-table.js'
+import { BINDING_TABLE, PLUGIN } from './lib/bindings.js'
 
 export const name = 'nano-cloud-session'
 export const inject = ['webServer', 'connection', 'sessions', 'agents']
@@ -482,5 +482,5 @@ export function apply(ctx, config = {}) {
     nativeBridges.clear()
   }, 'nano-cloud-session: native bridges')
 
-  registerRoutes(ctx, SPECS, { table: ROUTE_TABLE, plugin: PLUGIN })
+  registerRoutes(ctx, SPECS, { table: BINDING_TABLE, plugin: PLUGIN })
 }

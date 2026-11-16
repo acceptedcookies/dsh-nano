@@ -49,21 +49,4 @@ export function bindingTableModule(rows, { plugin, constName = 'BINDING_TABLE' }
   ].join('\n')
 }
 
-/** Back-compat helper: emit the legacy path-keyed ROUTE_TABLE (exact http). */
-export function routeTableModule(rows, { plugin, constName = 'ROUTE_TABLE' } = {}) {
-  if (!Array.isArray(rows)) throw new Error('route-table: rows must be an array')
-  const lines = rows.map(r => {
-    const fields = ['path', 'methods', 'sensitivity', 'capability', 'bodyLimit', 'sessionBinding', 'justification']
-      .filter(f => r[f] !== undefined)
-      .map(f => `${JSON.stringify(f)}:${lit(r[f])}`)
-      .join(', ')
-    return `  { ${fields} },`
-  })
-  return [
-    `export const PLUGIN = ${JSON.stringify(plugin ?? 'unknown')}`,
-    `export const ${constName} = [`,
-    ...lines,
-    `]`,
-    ``,
-  ].join('\n')
-}
+

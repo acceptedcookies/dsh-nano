@@ -256,6 +256,7 @@ export function createGuard({ table, plugin, observe } = {}) {
         sessionBinding: row.sessionBinding,
         justification: row.justification,
         plugin: row.plugin,
+        ...(row.id ? { id: row.id } : {}),
       })
       records.push(route)
 

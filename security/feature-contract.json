@@ -784,6 +784,17 @@
       "responseShape": "JSON"
     },
     {
+      "plugin": "dsh-nano-terminal",
+      "path": "/dsh-nano-terminal/stream",
+      "methods": [
+        "GET"
+      ],
+      "bodyLimit": {
+        "GET": 0
+      },
+      "responseShape": "upgrade"
+    },
+    {
       "plugin": "dsh-nano-local-sandbox",
       "path": "/nano-local-sandbox/control",
       "methods": [

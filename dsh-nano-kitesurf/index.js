@@ -7,8 +7,7 @@ import path from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { fileURLToPath } from 'node:url'
-import { registerRoutes } from './lib/route-guard.js'
-import { ROUTE_TABLE, PLUGIN } from './lib/route-table.js'
+
 import { createHistory } from './lib/history.js'
 import { browserSocketUrl, captureDom, captureElements, captureShot, captureSnapshot, currentEmulation, engineHistoryAdd, engineHistoryClear, engineHistoryList, engineHistoryRemove, currentUserAgent, currentViewport, engineTargets, evaluateInPage, evaluateChunked, fetchEngine, interactElement, KitesurfError, navigateHistory, openPage, pickElement, pickBySelector, pickPoint, pickSelector, editBody, editElement, pageUrl, releaseEngine, scrollDelta, setBrowserSettings, stateOp, storageOp, waitForCondition } from './lib/engine.js'
 import { ERROR_STATUS, clearConsole, clearNetwork, clearOperations, diagnosticsSummary, elementRefSelector, elementRefSummary, getElementRef, getLastSnapshot, getRef, isElementRef, listNetwork, listNetworkHar, listConsole, listOperations, listRefs, putElementRefs, putRef, recordOperation, refChip, setLastSnapshot, summarizeInput } from './lib/diagnostics.js'
@@ -153,9 +152,8 @@ function pluginVersion() {
 
 /**
  * Answer "which code am I actually running?" — the single most useful field
- * during a broken deploy. Two files (index.js / route-table.js) drift once
- * caused the whole plugin to fail activation with route-not-listed; hashing
- * both plus the client bundle makes that visible in /status.
+ * during a broken deploy. Hashing this file, the baked binding table, and the
+ * client bundle makes a route-not-listed mismatch visible in /status.
  */
 function digestOf(relative) {
   try {
@@ -164,7 +162,7 @@ function digestOf(relative) {
     return 'missing'
   }
 }
-const buildId = `${pluginVersion() ?? '0'}-i${digestOf('./index.js')}r${digestOf('./lib/route-table.js')}c${digestOf('./lib/client.js')}`
+const buildId = `${pluginVersion() ?? '0'}-i${digestOf('./index.js')}r${digestOf('./lib/bindings.js')}c${digestOf('./lib/client.js')}`
 const storePath = fileURLToPath(new URL('./index.js', import.meta.url))
 const history = createHistory(fileURLToPath(new URL('.', import.meta.url)))
 
@@ -558,7 +556,7 @@ export function apply(ctx, config) {
       add('dom', page.bytes > 200, `${page.bytes} bytes · ${page.url}`)
     } catch (error) { add('dom', false, `${errorIdOf(error)}: ${messageOf(error)}`) }
 
-    add('routes', ROUTE_TABLE.length >= 15, `${ROUTE_TABLE.length} routes in the baked table`)
+    add('routes', true, 'this package does not register page routes')
     const phase = kite.snapshot().phase
     add('phase', status?.ok ? phase === 'running' : phase !== 'running', `phase=${phase} engineAlive=${status?.ok === true}`)
 
@@ -673,6 +671,5 @@ export function apply(ctx, config) {
     disposeKite?.()
   }, 'nano-kitesurf: skill')
 
-  registerRoutes(ctx, [
-  ].map(traced), { table: ROUTE_TABLE, plugin: PLUGIN })
+  // This package registers skills only. Page routes live in dsh-nano-local-sandbox.
 }

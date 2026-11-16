@@ -79,26 +79,26 @@ P0-00 干净树 + worktree
   - **完成判据**：`onCall` 为 0；生产调用没有注入 `observe`
   - **验证映射**：`PRE1116-T03` `PRE1116-T04` · **依赖**：`P1-02`
   - **执行状态**：`complete` · **执行时间**：`2026-11-16T15:32:00Z` · **证据 / 备注**：T03/T04 pass。`lib/mcp.js` 已无 `onCall`。未提交 package-lock 噪声
-- [ ] `P2-01` — 账本补 `id`/`channel`/`match`，生成器保留且不从 path 推导
+- [x] `P2-01` — 账本补 `id`/`channel`/`match`，生成器保留且不从 path 推导
   - **落点**：`security/route-sensitivity.json`、`scripts/gen-route-sensitivity.mjs`、`scripts/route-scan.mjs`
   - **完成判据**：旧字段逐条不漂；upgrade 行仍在；缺 id 时 gen 非 0
   - **验证映射**：`PRE1116-T05` `PRE1116-T27` · **依赖**：W1 commit
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
-- [ ] `P2-02` — 命名表与烘焙闸
+  - **执行状态**：`complete` · **执行时间**：`2026-11-16T15:45:00Z` · **证据 / 备注**：`check-route-sensitivity` 87 routes 0 drift；缺 id 时 gen 非 0（binding-bake.test.mjs）
+- [x] `P2-02` — 命名表与烘焙闸
   - **落点**：`security/perf-binding-ids.md`
   - **完成判据**：缺表或不一致时构建失败；path 变化不改 id
   - **验证映射**：`PRE1116-T06` · **依赖**：`P2-01`
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：抽查记录写执行日志，不写进测试断言
-- [ ] `P2-03` — 七插件 `bindingTableModule`；退役 `routeTableModule` 与现存 route-table
+  - **执行状态**：`complete` · **执行时间**：`2026-11-16T15:45:00Z` · **证据 / 备注**：`security/perf-binding-ids.md` 87 行。抽查记录：发车指令授权按 `05.2` 沿用已有 id 并补 `<abbr>.<face>`，不是测试绿灯。
+- [x] `P2-03` — 七插件 `bindingTableModule`；退役 `routeTableModule` 与现存 route-table
   - **落点**：`packages/dsh-interface/src/build/index.js` 与七个插件构建脚本 / `lib/bindings.js`；[DNLS] 新建只烘焙绑定表的脚本
   - **完成判据**：两次烘焙字节相同；[DNMSC] 无绑定表；[DNLS] 无新浏览器 client
   - **验证映射**：`PRE1116-T07` · **依赖**：`P2-02`
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
+  - **执行状态**：`complete` · **执行时间**：`2026-11-16T15:48:00Z` · **证据 / 备注**：`routeTableModule` 已删；七份 `lib/bindings.js`；[DNK] 空表且不再 registerRoutes。
 - [ ] `P2-04` — guard 记录带 id；route-inventory 与路由说明
   - **落点**：`route-guard.js` inventory；`security/route-inventory.md`；在册插件 AGENTS 路由来源句
   - **完成判据**：inventory id 等于账本 id
   - **验证映射**：`PRE1116-T08` · **依赖**：`P2-03`
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
+  - **执行状态**：`partial` · **执行时间**：`2026-11-16T15:48:00Z` · **证据 / 备注**：guard 冻结记录在有 id 时带上 id。`route-inventory.md` 与各包 AGENTS 路由来源句尚未改完，留在 W3 文档批。
 - [ ] `P3-01` — 协议键、构建戳、不迁移旧单例
   - **落点**：DNPR `client.js` / `host.js` / `state.js`；七插件构建 define
   - **完成判据**：旧键对象字段不变；`legacyCopies` 增加；双构建戳一条 audit
@@ -174,10 +174,10 @@ P0-00 干净树 + worktree
 | `PRE1116-T02` | 闭集、四出口、denylist | `observe-event` 与门面用例 | 未知 surface/outcome/多余字段被拒绝 | 四出口 + denylist 断言通过 | 同上 | `pass` |
 | `PRE1116-T03` | `onCall` 为 0 | 源码扫描含 `lib/` | 0 命中 | 0 命中 | 同上 | `pass` |
 | `PRE1116-T04` | 生产无 `observe:` 注入 | 插件 `src/` + `index.js` | W1 为 0 | 0 命中 | 同上 | `pass` |
-| `PRE1116-T05` | 账本旧字段与审定三字段 | gen 再生成对照 | 逐条相等；缺 id 非 0 | - | - | `pending` |
-| `PRE1116-T06` | 命名表负例 | 烘焙负例 | 缺表 / 不一致 / path 改 id 不变 | - | - | `pending` |
-| `PRE1116-T07` | 单一烘焙作者 | check-clean-lib + 存在性 | 7 份 bindings；无 routeTableModule | - | - | `pending` |
-| `PRE1116-T08` | inventory id | route-guard 测试 | id 等于账本 | - | - | `pending` |
+| `PRE1116-T05` | 账本旧字段与审定三字段 | gen 再生成对照 | 逐条相等；缺 id 非 0 | gen 对照相等；缺 id 退出码非 0 | binding-bake.test.mjs 2026-11-16T15:45Z | `pass` |
+| `PRE1116-T06` | 命名表负例 | 烘焙负例 | 缺表 / 不一致 / path 改 id 不变 | path 改了 id 仍是原 id；命名不一致抛错 | 同上 | `pass` |
+| `PRE1116-T07` | 单一烘焙作者 | check-clean-lib + 存在性 | 7 份 bindings；无 routeTableModule | `routeTableModule` 导出不存在；clean-lib OK | 同上 + check-clean-lib | `pass` |
+| `PRE1116-T08` | inventory id | route-guard 测试 | id 等于账本 | 记录在 row.id 存在时带 id；文档句未改 | route-guard.js 冻结记录 | `partial` |
 | `PRE1116-T09`–`T25` | W3 行为与文档 | 见执行计划 §8 | 各有负例 | - | - | `pending` |
 | `PRE1116-T26` | 本机真实页面 | 不执行 | 保持未观察 | 无 grant 不部署 | - | `not-applicable` |
 | `PRE1116-T27` | route-scan | `node scripts/route-scan.mjs` | 漂移类 0；upgrade 仍在 | - | - | `pending` |
@@ -187,8 +187,8 @@ P0-00 干净树 + worktree
 
 ## 5. 当前状态与交接
 
-- **当前节点**：W1 代码与单测已绿，待分组 commit 后进入 `P2-01`。
-- **下一动作**：commit W1，然后账本补 `id`/`channel`/`match`。
+- **当前节点**：W2 身份与烘焙已落地，待 commit。P2-04 的 inventory 文档句未收完。
+- **下一动作**：commit W2，然后进入 W3 协议硬切。
 - **当前阻塞**：无。
 - **待 owner**：合并到 `main`；T26 部署；worktree 删除。
 - **最终交接**：分支 `facade-observe-binding-v2`，closure 指向本 todo。

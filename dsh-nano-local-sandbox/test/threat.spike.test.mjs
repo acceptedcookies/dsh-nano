@@ -11,7 +11,7 @@ import { policyFingerprint } from '../src/host/policy-adapter.js'
 import { ensureReady } from '../src/host/profile-registry.js'
 import { acceptUpgrade, routeSpecs } from '../src/host/routes.js'
 import { registerRoutes } from '../lib/route-guard.js'
-import { ROUTE_TABLE } from '../lib/route-table.js'
+import { BINDING_TABLE } from '../lib/bindings.js'
 import { createTermSession } from '../src/host/terminal-driver.js'
 import { profileFixture } from './support/profile-fixture.mjs'
 import { createMcpHandler } from '../../dsh-nano-terminal/lib/mcp.js'
@@ -120,7 +120,7 @@ test('unauthenticated HTTP and websocket upgrade do not run the handler first', 
     get(name) { return name === 'webServer' ? this.webServer : { requestRejection: () => 401 } },
     webServer: { register(route) { return route } },
   }
-  const registered = registerRoutes(ctx, routeSpecs({ onHandler() { handlers += 1 } }), { table: ROUTE_TABLE, plugin: 'dsh-nano-local-sandbox' })
+  const registered = registerRoutes(ctx, routeSpecs({ onHandler() { handlers += 1 } }), { table: BINDING_TABLE, plugin: 'dsh-nano-local-sandbox' })
   const shot = registered.find ? null : null
   void shot
   const routes = []
@@ -128,7 +128,7 @@ test('unauthenticated HTTP and websocket upgrade do not run the handler first', 
     get(name) { return name === 'webServer' ? this.webServer : { requestRejection: () => 401 } },
     webServer: { register(route) { routes.push(route); return () => {} } },
   }
-  registerRoutes(host, routeSpecs({ onHandler() { handlers += 1 } }), { table: ROUTE_TABLE, plugin: 'dsh-nano-local-sandbox' })
+  registerRoutes(host, routeSpecs({ onHandler() { handlers += 1 } }), { table: BINDING_TABLE, plugin: 'dsh-nano-local-sandbox' })
   const live = routes.find((route) => route.path.endsWith('/shot'))
   const res = { statusCode: 0, end() {} }
   await live.handler({ method: 'POST' }, res)

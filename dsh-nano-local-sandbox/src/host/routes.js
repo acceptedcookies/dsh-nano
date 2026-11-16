@@ -33,7 +33,7 @@ export const CONTROL_ROUTE = '/nano-local-sandbox/control'
 import { mkdirSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
-import { ROUTE_TABLE } from '../../lib/route-table.js'
+import { BINDING_TABLE } from '../../lib/bindings.js'
 import { createCdpKeeper } from './cdp-keeper.js'
 import { publishedHttpBase } from './backend-apple.js'
 import { ensureClient, evaluatePage, navigate, readElements, withPage } from './cdp-elements.js'
@@ -675,10 +675,9 @@ export function routeSpecs(deps = {}) {
   // derives 'kitesurf' (prod) or 'kitesurf-<env>' per DSH_HOME so each of the
   // three local environments owns a distinct, concurrently-running instance.
   const session = deps.session ?? { phase: 'idle', history: [], containerName: '' }
-  return ROUTE_TABLE.map((row) => ({
+  return BINDING_TABLE.map((row) => ({
     path: row.path,
     methods: [...row.methods],
-    sessionBinding: true,
     bodyLimit: row.bodyLimit,
     async handler(req, res) {
       deps.onHandler?.()

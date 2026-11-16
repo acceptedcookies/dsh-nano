@@ -6,7 +6,8 @@
   "icon": "./icon.svg",
   "main": "./index.js",
   "scripts": {
-    "test": "node --test test/*.mjs"
+    "test": "node --test test/*.mjs",
+    "build": "node scripts/build-client.mjs"
   },
   "exports": {
     ".": "./index.js",
@@ -27,7 +28,7 @@
     "profiles/kitesurf/mcp-bridge.mjs",
     "profiles/terminal",
     "lib/route-guard.js",
-    "lib/route-table.js"
+    "lib/bindings.js"
   ],
   "engines": {
     "dsh": ">=0.2.2-rc.1 <0.3.0"

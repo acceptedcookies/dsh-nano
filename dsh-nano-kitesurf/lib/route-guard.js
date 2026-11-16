@@ -139,7 +139,8 @@ function createGuard({ table, plugin, observe } = {}) {
         bodyLimit: spec.bodyLimit ?? row.bodyLimit,
         sessionBinding: row.sessionBinding,
         justification: row.justification,
-        plugin: row.plugin
+        plugin: row.plugin,
+        ...row.id ? { id: row.id } : {}
       });
       records.push(route);
       const handler = async (req, res) => {

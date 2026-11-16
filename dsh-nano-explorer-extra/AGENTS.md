@@ -106,7 +106,7 @@ Git 报为冲突（`U`）或删除（`D`）但磁盘上已不存在的文件，�
 | 方法 | 路径 | 作用 |
 |---|---|---|
 | GET | `/status?sessionId=` | 整仓 Git 状态。`only=stats` 返回体积：数据来自宿主后台采样缓存（30min 新鲜期、两次遍历至少隔 60s），响应恒定毫秒级；未就绪时 `statsPending:true`、客户端短延迟重询，`stats` 字段始终给上一次完成的值或 null，`statsAgeMs` 为缓存年龄。`path=` 只查一个目录（scoped 读不跑 branches/history/remotes 等全仓套件）。`only=stats` 额外接受 `g=0|1`（是否排除 `.git`）、`i=0|1`（是否排除 Git 忽略内容，由 `git ls-files -o -i --exclude-standard --directory` 一次取全量、遍历剪枝）、`s=0|1`（是否下钻软链接；为 0 时链接只算自身、不计目标体积）——缺省走宿主配置，缓存键随三者组合 |
-| GET | `/perf-review/host` | 性能观测宿主快照。带 `mode=window` 时排空并返回「上次调用以来的场景窗口」（实验室用），默认返回累计快照。宿主没开 `DSH_PERF_REVIEW=1` 时 `enabled` 为 false，路由仍返回 200 |
+| GET | `/perf-review/host` | 只读全进程视图。只接受 `since`。`mode` 和其他参数返回 400，不排空。 |
 | POST | `/list` | `{ sessionId, path }` |
 | POST | `/commit` | `{ sessionId, message }`。会 `git add --all`。没有「只提交已暂存」 |
 | POST | `/fetch` | `{ sessionId }`。`git fetch --all --prune`：只刷新 `refs/remotes` 快照（远端分支列表、ahead/behind、提交图已推送车道），不动工作区文件 |

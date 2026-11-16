@@ -15,8 +15,6 @@
     "dnls.pick",
     "dnls.edit",
     "dnls.settings",
-    "dnls.perf-review.host",
-    "dnls.perf-report",
     "dnls.kite",
     "dnls.console",
     "dnls.operations",

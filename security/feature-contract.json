@@ -507,32 +507,6 @@
     },
     {
       "plugin": "dsh-nano-local-sandbox",
-      "path": "/nano-local-sandbox/perf-review/host",
-      "methods": [
-        "GET",
-        "HEAD",
-        "POST"
-      ],
-      "bodyLimit": {
-        "GET": 0,
-        "HEAD": 0,
-        "POST": 0
-      },
-      "responseShape": "JSON"
-    },
-    {
-      "plugin": "dsh-nano-local-sandbox",
-      "path": "/nano-local-sandbox/perf-report",
-      "methods": [
-        "POST"
-      ],
-      "bodyLimit": {
-        "POST": 200000
-      },
-      "responseShape": "JSON"
-    },
-    {
-      "plugin": "dsh-nano-local-sandbox",
       "path": "/nano-local-sandbox/kite",
       "methods": [
         "POST"

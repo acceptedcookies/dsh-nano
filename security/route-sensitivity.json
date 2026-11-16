@@ -464,7 +464,7 @@
       "capability": "read:host",
       "bodyLimit": 0,
       "sessionBinding": false,
-      "justification": "dsh-nano-explorer-extra/src/host/routes.js:400 — process-global perf reservoir; mode=window drains samples across all plugins/sessions (finding perf-review-window-drain, accepted). Cross-session process state, not session-scoped.",
+      "justification": "只读全进程视图。不排空，只接受 since。",
       "id": "dnee.perf-review.host",
       "channel": "http",
       "match": "exact"
@@ -684,38 +684,6 @@
       "sessionBinding": true,
       "justification": "dsh-nano-local-sandbox /nano-local-sandbox/settings",
       "id": "dnls.settings",
-      "channel": "http",
-      "match": "exact"
-    },
-    {
-      "plugin": "dsh-nano-local-sandbox",
-      "path": "/nano-local-sandbox/perf-review/host",
-      "methods": [
-        "GET",
-        "HEAD",
-        "POST"
-      ],
-      "sensitivity": "L2",
-      "capability": "read:host",
-      "bodyLimit": 0,
-      "sessionBinding": true,
-      "justification": "dsh-nano-local-sandbox /nano-local-sandbox/perf-review/host",
-      "id": "dnls.perf-review.host",
-      "channel": "http",
-      "match": "exact"
-    },
-    {
-      "plugin": "dsh-nano-local-sandbox",
-      "path": "/nano-local-sandbox/perf-report",
-      "methods": [
-        "POST"
-      ],
-      "sensitivity": "L2",
-      "capability": "read:host",
-      "bodyLimit": 200000,
-      "sessionBinding": true,
-      "justification": "dsh-nano-local-sandbox /nano-local-sandbox/perf-report",
-      "id": "dnls.perf-report",
       "channel": "http",
       "match": "exact"
     },

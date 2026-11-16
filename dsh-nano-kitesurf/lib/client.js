@@ -622,8 +622,44 @@ var __kitesurfExport = (() => {
       // other two succeed. `observerErrors` only fires when ALL fail; this
       // counter makes a partial observer install visible (A5 / §10.4.6).
       observersMissing: 0,
-      hostWriteErrors: 0
+      legacyCopies: 0,
+      badShape: 0,
+      unmappedKey: 0,
+      missingBindingId: 0,
+      oversize: 0,
+      /** Protocol findings such as `{ level, code:'build-stamp', have, saw }`. */
+      audits: []
     };
+  }
+  function pushAudit(structure, record) {
+    if (!Array.isArray(structure.audits)) structure.audits = [];
+    const dup = structure.audits.some((item) => item.level === record.level && item.code === record.code && item.have === record.have && item.saw === record.saw);
+    if (!dup) structure.audits.push(record);
+  }
+  function installSingleton(global, key, legacyKey, stamp, create) {
+    const existing = global[key];
+    if (existing == null) {
+      const created = create();
+      created._build = stamp;
+      global[key] = created;
+      if (legacyKey != null && global[legacyKey] != null) {
+        const structure = created._state?.().structure;
+        if (structure != null) structure.legacyCopies += 1;
+      }
+      return created;
+    }
+    if (existing._build !== stamp) {
+      const structure = existing._state?.().structure;
+      if (structure != null) {
+        pushAudit(structure, {
+          level: "audit",
+          code: "build-stamp",
+          have: existing._build ?? null,
+          saw: stamp
+        });
+      }
+    }
+    return existing;
   }
   function createPluginRow() {
     return {
@@ -639,7 +675,9 @@ var __kitesurfExport = (() => {
       tracks: /* @__PURE__ */ new Map(),
       // name → {kind,callbacks,live,callbackMs}
       usage: /* @__PURE__ */ new Map(),
-      // name → n (cumulative, cleared by resetCounters)
+      // name → { window, total }
+      contract: /* @__PURE__ */ new Map(),
+      // contract id → counters (not the manual quota)
       profiler: { commits: 0, durations: [] }
     };
   }
@@ -676,7 +714,10 @@ var __kitesurfExport = (() => {
       structure.overflowUsage += 1;
       return false;
     }
-    row.usage.set(name, (row.usage.get(name) ?? 0) + n);
+    const cell = row.usage.get(name) ?? { window: 0, total: 0 };
+    cell.window += n;
+    cell.total += n;
+    row.usage.set(name, cell);
     return true;
   }
   function trackRowFor(row, structure, name, kind) {
@@ -698,7 +739,7 @@ var __kitesurfExport = (() => {
   function nanoPackagesInUrl(url) {
     if (typeof url !== "string" || url.length === 0) return [];
     const found = [];
-    const re = /dsh-nano-[a-z0-9-]+/g;
+    const re = new RegExp(`${NANO_PKG_PREFIX}[a-z0-9-]+`, "g");
     let match;
     while ((match = re.exec(url)) !== null) {
       if (!found.includes(match[0])) found.push(match[0]);
@@ -706,9 +747,10 @@ var __kitesurfExport = (() => {
     return found;
   }
   function packageNameToPluginId(packageName) {
-    if (typeof packageName !== "string") return null;
-    const match = /^dsh-nano-([a-z0-9-]+)$/.exec(packageName);
-    return match === null ? null : `nano-${match[1]}`;
+    if (typeof packageName !== "string" || !packageName.startsWith(NANO_PKG_PREFIX)) return null;
+    const rest = packageName.slice(NANO_PKG_PREFIX.length);
+    if (!/^[a-z0-9-]+$/.test(rest)) return null;
+    return `nano-${rest}`;
   }
   function targetBucket(descriptor) {
     if (descriptor == null || typeof descriptor !== "object") return "other";
@@ -726,12 +768,16 @@ var __kitesurfExport = (() => {
   function roundMs(value) {
     return value == null ? null : Math.round(value * 10) / 10;
   }
-  var LIB_VERSION, REPORT_VERSION, NAME_RE, MAX_SPAN_KEYS, MAX_USAGE_KEYS, INTERACTION_CAP, RESERVOIR_CAP, EVENT_DURATION_THRESHOLD, WINDOW_PAD_BEFORE_MS, WINDOW_PAD_AFTER_MS;
+  var LIB_VERSION, REPORT_VERSION, CLIENT_KEY, HOST_KEY, BUILD_STAMP, NAME_RE, CONTRACT_KEY_RE, MAX_SPAN_KEYS, MAX_USAGE_KEYS, INTERACTION_CAP, RESERVOIR_CAP, EVENT_DURATION_THRESHOLD, WINDOW_PAD_BEFORE_MS, WINDOW_PAD_AFTER_MS, NANO_PKG_PREFIX;
   var init_state = __esm({
     "../packages/dsh-performance-review/src/state.js"() {
       LIB_VERSION = "0.1.0";
-      REPORT_VERSION = 1;
+      REPORT_VERSION = 2;
+      CLIENT_KEY = Symbol.for("dsh.perfReview.v2");
+      HOST_KEY = Symbol.for("dsh.perfReviewHost.v2");
+      BUILD_STAMP = "dev";
       NAME_RE = /^[a-z0-9][a-z0-9-]{0,39}$/;
+      CONTRACT_KEY_RE = /^[a-z0-9][a-z0-9.-]{0,63}$/;
       MAX_SPAN_KEYS = 32;
       MAX_USAGE_KEYS = 32;
       INTERACTION_CAP = 50;
@@ -739,6 +785,7 @@ var __kitesurfExport = (() => {
       EVENT_DURATION_THRESHOLD = 16;
       WINDOW_PAD_BEFORE_MS = 1;
       WINDOW_PAD_AFTER_MS = 8;
+      NANO_PKG_PREFIX = ["dsh", "nano"].join("-") + "-";
     }
   });
 
@@ -801,23 +848,38 @@ var __kitesurfExport = (() => {
     }
     return samples;
   }
+  function clipOversize(report) {
+    if (byteLength(report) <= MAX_REPORT_BYTES) return report;
+    if (report.page) {
+      report.page.evidence = { interactions: [], frames: [], hostErrors: [] };
+    }
+    if (report.structure) report.structure.oversize = (report.structure.oversize ?? 0) + 1;
+    return report;
+  }
+  function hostSnapshotUsable(value) {
+    if (value == null || typeof value !== "object" || Array.isArray(value)) return false;
+    const plugins = value.plugins;
+    if (plugins == null || typeof plugins !== "object" || Array.isArray(plugins)) return false;
+    return true;
+  }
   function hostSpanObject(hostSnapshot, pluginId) {
     const out = {};
     const source = hostSnapshot?.plugins?.[pluginId]?.spans;
-    if (source == null) return out;
+    if (source == null || typeof source !== "object") return out;
     for (const [name, row] of Object.entries(source)) {
-      const samples = Array.isArray(row.samples) ? row.samples : [];
+      const samples = Array.isArray(row?.samples) ? row.samples : [];
       out[name] = {
-        n: row.n ?? samples.length,
+        n: row?.n ?? samples.length,
         p50: roundMs(percentile(samples, 0.5)),
-        p95: roundMs(percentile(samples, 0.95))
+        p95: roundMs(percentile(samples, 0.95)),
+        errors: row?.stats?.errors ?? row?.errors ?? 0,
+        basis: row?.basis === "window" ? "window" : "cumulative"
       };
     }
     return out;
   }
   function buildReport(input) {
     const { collector, plugins, structure } = input;
-    const notes = [];
     const durations = collector.interactions.map((ix) => ix.duration);
     const part = (key) => roundMs(percentile(
       collector.interactions.map((ix) => ix[key]).filter((v) => typeof v === "number"),
@@ -862,108 +924,140 @@ var __kitesurfExport = (() => {
         };
       }
       const usage = {};
-      for (const [name, n] of row.usage) usage[name] = n;
+      for (const [name, cell] of row.usage) usage[name] = usageCell(cell);
+      const contract = {};
+      if (row.contract instanceof Map) {
+        for (const [key, bucket] of row.contract) {
+          contract[key] = {
+            n: bucket.n,
+            windowN: bucket.window,
+            basis: "window",
+            outcomes: { ...bucket.outcomes ?? {} },
+            status: { ...bucket.status ?? {} }
+          };
+        }
+      }
+      const usableHost2 = hostSnapshotUsable(input.hostSnapshot) ? input.hostSnapshot : null;
       pluginOut[pluginId] = {
-        meta: {
-          version: row.meta.version ?? null,
-          implantedAt: row.meta.implantedAt ?? null,
-          implanted: true
+        hand: {
+          spans,
+          tracks,
+          usage,
+          own: {
+            inpP75: roundMs(percentile(ownDurations, 0.75)),
+            inpCount: ownDurations.length
+          },
+          native: {
+            spanMsP95: roundMs(percentile(row.native.spanMs, 0.95)),
+            trackMsP95: roundMs(percentile(row.native.trackMs, 0.95)),
+            samples: { spans: row.samples.spans, callbacks: row.samples.callbacks }
+          },
+          profiler: {
+            commits: row.profiler.commits,
+            commitP95: roundMs(percentile(row.profiler.durations, 0.95))
+          },
+          scriptMs: roundMs(collector.pluginScriptMs.get(pluginId) ?? 0),
+          version: row.meta?.version ?? null
         },
-        own: {
-          inpP75: roundMs(percentile(ownDurations, 0.75)),
-          inpCount: ownDurations.length
-        },
-        native: {
-          spanMsP95: roundMs(percentile(row.native.spanMs, 0.95)),
-          trackMsP95: roundMs(percentile(row.native.trackMs, 0.95)),
-          samples: { spans: row.samples.spans, callbacks: row.samples.callbacks }
-        },
-        spans,
-        tracks,
-        usage,
-        hostSpan: hostSpanObject(input.hostSnapshot, pluginId),
-        profiler: {
-          commits: row.profiler.commits,
-          commitP95: roundMs(percentile(row.profiler.durations, 0.95))
-        },
-        // Uniquely-attributable script ms live on the collector (single-nano-
-        // package URLs only), NOT on the plugin row. Reading row.scriptMs here
-        // used to return a field that was never written (§10.4.3 / A3).
-        scriptMs: roundMs(collector.pluginScriptMs.get(pluginId) ?? 0)
+        contract,
+        host: hostSpanObject(usableHost2, pluginId)
       };
     }
     const counts = {};
-    for (const [name, n] of collector.counts) counts[name] = n;
+    for (const [name, cell] of collector.counts) counts[name] = usageCell(cell);
+    page.counts = counts;
+    page.scenario = input.meta?.scenario ?? null;
+    page.arm = input.meta?.arm ?? "on";
+    page.chromeMajor = input.meta?.chromeMajor ?? null;
+    page.contributors = input.meta?.contributors ?? [];
+    page.enabled = input.enabled === true;
+    page.loafSupported = input.loafSupported !== false;
+    const ranked = [...collector.interactions].sort((a, b) => (b.duration ?? 0) - (a.duration ?? 0));
+    const hostErrors = [];
+    const usableHost = hostSnapshotUsable(input.hostSnapshot) ? input.hostSnapshot : null;
+    if (usableHost) {
+      for (const plugin of Object.values(usableHost.plugins)) {
+        for (const span of Object.values(plugin?.spans ?? {})) {
+          for (const event of span?.events ?? []) {
+            if (event?.err === true) hostErrors.push({ ms: event.ms ?? null, at: event.at ?? null });
+          }
+        }
+      }
+    }
+    page.evidence = {
+      interactions: ranked.slice(0, EVIDENCE_CAPS.interactions).map((ix) => ({
+        interactionId: ix.interactionId ?? null,
+        duration: ix.duration ?? null,
+        owner: ix.owner ?? null,
+        bucket: ix.bucket ?? null
+      })),
+      frames: Array.isArray(collector.heavyFrames) ? collector.heavyFrames.slice(0, EVIDENCE_CAPS.frames) : [],
+      hostErrors: hostErrors.slice(0, EVIDENCE_CAPS.hostErrors)
+    };
+    page.host = usableHost ? {
+      source: usableHost.source ?? "snapshot",
+      epoch: usableHost.epoch ?? null,
+      from: usableHost.from ?? usableHost.sinceStart ?? null,
+      to: usableHost.to ?? usableHost.writtenAt ?? null,
+      truncated: Array.isArray(usableHost.truncated) ? [...usableHost.truncated] : [],
+      sinceStart: usableHost.sinceStart ?? null,
+      writtenAt: usableHost.writtenAt ?? null,
+      enabled: usableHost.enabled ?? null
+    } : { source: null, epoch: null, from: null, to: null, truncated: [], sinceStart: null, writtenAt: null, enabled: null };
+    const notes = [];
+    const note = (id, text) => notes.push({ id, text });
     const afterWindow = collector.interactions.some((ix) => Object.values(ix.samples ?? {}).some((sample) => sample.spanAfterWindow));
     if (afterWindow) {
-      notes.push("spanAfterWindow: \u6709\u5F02\u6B65 span \u5728\u4EA4\u4E92\u7A97\u53E3\u7ED3\u675F\u540E\u624D settle\uFF0C\u4ECD\u6309\u8D77\u70B9\u5212\u5165\u8BE5\u7A97\u53E3\u3002");
+      note("span-after-window", "\u6709\u5F02\u6B65 span \u5728\u4EA4\u4E92\u7A97\u53E3\u7ED3\u675F\u540E\u624D settle\uFF0C\u4ECD\u6309\u8D77\u70B9\u5212\u5165\u8BE5\u7A97\u53E3\u3002");
     }
     if (collector.nanoBlockingMs > 0) {
-      notes.push("nanoBlockingMs \u6309\u6574\u6761 LoAF \u6761\u76EE\u5F52\u5E76\uFF1B\u542B\u975E nano \u811A\u672C\u7684\u5E27\u4F1A\u628A\u90A3\u90E8\u5206\u65F6\u95F4\u4E00\u5E76\u8BA1\u5165\u3002");
+      note("nano-blocking-over-attribute", "nanoBlockingMs \u6309\u6574\u6761 LoAF \u6761\u76EE\u5F52\u5E76\uFF1B\u542B\u975E nano \u811A\u672C\u7684\u5E27\u4F1A\u628A\u90A3\u90E8\u5206\u65F6\u95F4\u4E00\u5E76\u8BA1\u5165\u3002");
     }
     if (durations.length > 0 && durations.length < 8) {
-      notes.push(`nativeInpCount=${durations.length} < 8\uFF1Ap75 \u4EC5\u4F9B\u53C2\u8003\uFF0C\u4E0D\u4F5C\u9884\u7B97\u5224\u65AD\uFF1B\u8FD9\u4E0D\u662F web-vitals INP\u3002`);
+      note("native-inp-small-sample", `nativeInpCount=${durations.length} < 8\uFF1Ap75 \u4EC5\u4F9B\u53C2\u8003\uFF0C\u4E0D\u4F5C\u9884\u7B97\u5224\u65AD\uFF1B\u8FD9\u4E0D\u662F web-vitals INP\u3002`);
     }
-    notes.push("Event Timing \u4E09\u6BB5\uFF1AinputDelay=\u4E3B\u7EBF\u7A0B\u5FD9/\u6392\u961F\uFF0Cprocessing=\u4E8B\u4EF6\u5904\u7406\u5668\uFF0Cpresentation=\u7B49\u4E0B\u4E00\u6B21\u7ED8\u5236\u3002\u9875\u7EA7 nativeInpP75 \u542B presentation\uFF0C\u5C5E\u73AF\u5883\u7EA7\u8BFB\u6570\uFF0C\u4E0D\u6284\u8FDB\u63D2\u4EF6\u884C\uFF08spec \xA75.1\uFF09\uFF1B\u63D2\u4EF6\u9884\u7B97\u4EE5 inputDelayP95/processingP95 \u4E0E native.spanMsP95/trackMsP95 \u4E3A\u51C6\u3002");
-    notes.push("lab \u7684 composer-type \u7528 CDP \u5408\u6210\u6309\u952E\uFF08page.keyboard.type\uFF09\uFF0C\u62AC\u8D77\u7684\u662F presentation \u6BB5\uFF1B\u8BFB\u6570\u6807\u6CE8\u4E3A synthetic input\uFF0C\u4E0D\u7B49\u540C\u771F\u5B9E\u7528\u6237 INP\u3002");
-    notes.push("nanoCombined.scriptMs \u53EA\u7EDF\u8BA1 >50ms \u957F\u5E27\u91CC >5ms \u7684\u811A\u672C\u6761\u76EE\uFF0C\u4E0D\u662F\u603B\u811A\u672C\u8017\u65F6\uFF1B\u5FEB\u800C\u9891\u7E41\u7684\u811A\u672C\u5DE5\u4F5C\u4E0D\u53EF\u89C1\u3002");
-    notes.push("nanoCombined.blockingMs \u628A\u300C\u542B\u4EFB\u4E00 nano \u811A\u672C\u300D\u7684\u6574\u6761 LoAF blockingDuration \u8BA1\u5165\uFF0C\u542B\u975E nano \u90E8\u5206\uFF0C\u5C5E\u8FC7\u5EA6\u5F52\u56E0\u3002");
-    notes.push("nanoCombined.clientJsBytes \u662F\u6240\u6709 dsh-nano-* \u5305 combo \u7684 encodedBodySize \u5408\u8BA1\uFF0C\u4E0D\u662F\u5355\u4E2A\u63D2\u4EF6\u7684\u4F53\u79EF\u3002");
     if (collector.pluginScriptMs.size === 0) {
-      notes.push("\u9010\u5305 scriptMs \u5168\u4E3A 0\uFF1Acombo URL \u542B\u591A\u4E2A\u5305\u540D\uFF0C\u5355\u5305 URL \u6781\u5C11\u51FA\u73B0\uFF1B\u6309 \xA73.1 \u4E0D\u4E88\u62C6\u5206\u3002");
+      note("script-ms-unsplit", "\u9010\u5305 scriptMs \u5168\u4E3A 0\uFF1Acombo URL \u542B\u591A\u4E2A\u5305\u540D\uFF0C\u5355\u5305 URL \u6781\u5C11\u51FA\u73B0\uFF1B\u6309 \xA73.1 \u4E0D\u4E88\u62C6\u5206\u3002");
     }
-    return {
-      version: REPORT_VERSION,
+    if (page.host.source == null) {
+      note("host-source-absent", "no host read source");
+    }
+    const structureOut = {
+      ...structure,
+      audits: Array.isArray(structure?.audits) ? structure.audits.map((item) => ({ ...item })) : []
+    };
+    if (input.hostBad === true) structureOut.badShape = (structureOut.badShape ?? 0) + 1;
+    const contributors = (input.meta?.contributors ?? []).map((item) => ({
+      plugin: item.plugin ?? item.pluginId ?? null,
+      build: item.build ?? item.libVersion ?? null,
+      decl: item.decl ?? null
+    }));
+    return clipOversize({
+      schema: "dnpr.report/2",
       meta: {
+        protocol: REPORT_VERSION,
         generatedAt: input.meta?.generatedAt ?? null,
-        scenario: input.meta?.scenario ?? null,
-        arm: input.meta?.arm ?? "on",
-        dshVersion: input.meta?.dshVersion ?? null,
-        chromeMajor: input.meta?.chromeMajor ?? null,
-        observerVersion: input.meta?.observerVersion ?? null,
-        contributors: input.meta?.contributors ?? [],
-        gitSha: input.meta?.gitSha ?? null,
-        labels: input.meta?.labels ?? {}
+        contributors,
+        window: {
+          startedAt: input.meta?.windowStartedAt ?? null,
+          ms: input.meta?.windowMs ?? null
+        },
+        host: {
+          source: page.host.source,
+          epoch: page.host.epoch,
+          from: page.host.from,
+          to: page.host.to,
+          truncated: page.host.truncated
+        }
       },
-      enabled: input.enabled === true,
-      loafSupported: input.loafSupported !== false,
       page,
       plugins: pluginOut,
-      counts,
-      structure: { ...structure },
+      evidence: page.evidence,
+      structure: structureOut,
       notes
-    };
+    });
   }
-  function mergeHostSnapshot(report, hostSnapshot) {
-    if (hostSnapshot == null || typeof hostSnapshot !== "object") return report;
-    for (const [pluginId, plugin] of Object.entries(report.plugins ?? {})) {
-      const source = hostSnapshot.plugins?.[pluginId]?.spans;
-      if (source == null) continue;
-      const merged = { ...plugin.hostSpan ?? {} };
-      for (const [name, row] of Object.entries(source)) {
-        const samples = Array.isArray(row.samples) ? row.samples : [];
-        merged[name] = {
-          n: row.n ?? samples.length,
-          p50: roundMs(percentile(samples, 0.5)),
-          p95: roundMs(percentile(samples, 0.95))
-        };
-      }
-      plugin.hostSpan = merged;
-    }
-    report.structure = {
-      ...report.structure ?? {},
-      hostWriteErrors: (report.structure?.hostWriteErrors ?? 0) + (hostSnapshot.structure?.hostWriteErrors ?? 0)
-    };
-    report.meta = {
-      ...report.meta ?? {},
-      hostSinceStart: hostSnapshot.sinceStart ?? null,
-      hostWrittenAt: hostSnapshot.writtenAt ?? null,
-      hostEnabled: hostSnapshot.enabled ?? null,
-      hostWindow: hostSnapshot.window === true
-    };
-    return report;
-  }
-  var spanStats;
+  var spanStats, MAX_REPORT_BYTES, EVIDENCE_CAPS, byteLength, usageCell, NOTE_GLOSSARY;
   var init_aggregate = __esm({
     "../packages/dsh-performance-review/src/aggregate.js"() {
       init_state();
@@ -972,8 +1066,108 @@ var __kitesurfExport = (() => {
         windowN: row.window.length,
         p50: roundMs(percentile(row.window, 0.5)),
         p95: roundMs(percentile(row.window, 0.95)),
-        maxMs: roundMs(row.window.length === 0 ? null : Math.max(...row.window))
+        maxMs: roundMs(row.window.length === 0 ? null : Math.max(...row.window)),
+        basis: "window"
       });
+      MAX_REPORT_BYTES = 256 * 1024;
+      EVIDENCE_CAPS = Object.freeze({ interactions: 5, frames: 5, hostErrors: 20 });
+      byteLength = (value) => new TextEncoder().encode(JSON.stringify(value)).length;
+      usageCell = (cell) => {
+        if (typeof cell === "number") return { window: cell, total: cell };
+        return { window: cell?.window ?? 0, total: cell?.total ?? 0 };
+      };
+      NOTE_GLOSSARY = Object.freeze([
+        { id: "event-timing-split", text: "Event Timing \u4E09\u6BB5\uFF1AinputDelay\u3001processing\u3001presentation\u3002\u9875\u7EA7 nativeInpP75 \u542B presentation\uFF0C\u4E0D\u6284\u8FDB\u63D2\u4EF6\u884C\u3002" },
+        { id: "synthetic-input", text: "lab \u7684 composer-type \u7528\u5408\u6210\u6309\u952E\uFF0Cpresentation \u6BB5\u4E0D\u7B49\u540C\u771F\u5B9E\u7528\u6237 INP\u3002" },
+        { id: "script-ms-long-frames", text: "nanoCombined.scriptMs \u53EA\u7EDF\u8BA1\u957F\u5E27\u91CC\u7684\u957F\u811A\u672C\uFF0C\u4E0D\u662F\u603B\u811A\u672C\u8017\u65F6\u3002" },
+        { id: "blocking-over-attribute", text: "nanoCombined.blockingMs \u628A\u542B nano \u811A\u672C\u7684\u6574\u6761 LoAF \u8BA1\u5165\uFF0C\u542B\u975E nano \u90E8\u5206\u3002" },
+        { id: "client-js-bytes", text: "nanoCombined.clientJsBytes \u662F\u5168\u90E8 nano \u5305 combo \u7684\u5408\u8BA1\uFF0C\u4E0D\u662F\u5355\u4E2A\u63D2\u4EF6\u7684\u4F53\u79EF\u3002" }
+      ]);
+    }
+  });
+
+  // ../packages/dsh-interface/src/contracts/jsonOutcome.js
+  var FAILURE_KIND, FAILURE_KINDS;
+  var init_jsonOutcome = __esm({
+    "../packages/dsh-interface/src/contracts/jsonOutcome.js"() {
+      FAILURE_KIND = Object.freeze({
+        /** signal aborted; issued-before cancellation makes no server-side claim. */
+        CANCELLED: "cancelled",
+        /** Network/read-body failure; keep real httpStatus only when headers landed. */
+        TRANSPORT: "transport",
+        /** Non-2xx that is not a recognized sanctioned business failure; keep status. */
+        HTTP: "http",
+        /** Pre-request encode/binding failure OR illegal 2xx — never becomes ok:true. */
+        PROTOCOL: "protocol",
+        /** Recognized sanctioned business failure (incl. legal 2xx business failures). */
+        DOMAIN: "domain"
+      });
+      FAILURE_KINDS = Object.freeze(Object.values(FAILURE_KIND));
+    }
+  });
+
+  // ../packages/dsh-interface/src/contracts/observeEvent.js
+  function fail(message) {
+    throw new TypeError(`observe-event: ${message}`);
+  }
+  function assertObserveEvent(event) {
+    if (event == null || typeof event !== "object" || Array.isArray(event)) {
+      fail("event must be an object");
+    }
+    const keys = Object.keys(event);
+    for (const key of keys) {
+      if (!REQUIRED.includes(key) && !OPTIONAL.has(key)) fail(`unknown field ${key}`);
+    }
+    for (const key of REQUIRED) {
+      if (!Object.prototype.hasOwnProperty.call(event, key)) fail(`missing ${key}`);
+    }
+    if (!OUTCOMES[event.surface]) fail(`unknown surface ${String(event.surface)}`);
+    if (event.id !== null && (typeof event.id !== "string" || event.id === "")) {
+      fail("id must be a non-empty string or null");
+    }
+    if (event.plugin !== null && (typeof event.plugin !== "string" || event.plugin === "")) {
+      fail("plugin must be a non-empty string or null");
+    }
+    if (typeof event.outcome !== "string" || !OUTCOMES[event.surface].has(event.outcome)) {
+      fail(`unknown outcome ${String(event.outcome)} for ${event.surface}`);
+    }
+    if (typeof event.ms !== "number" || !Number.isFinite(event.ms)) fail("ms must be a finite number");
+    if (Object.prototype.hasOwnProperty.call(event, "status")) {
+      if (typeof event.status !== "number" || !Number.isFinite(event.status)) fail("status must be a finite number");
+    }
+    if (event.surface === "mcp" && event.outcome === "error") {
+      if (typeof event.kind !== "string" || event.kind === "") fail("mcp error requires kind");
+    } else if (Object.prototype.hasOwnProperty.call(event, "kind")) {
+      if (typeof event.kind !== "string" || event.kind === "") fail("kind must be a non-empty string");
+    }
+    return event;
+  }
+  var OBSERVE_SURFACES, HTTP_OUTCOMES, UPGRADE_OUTCOMES, JSON_OUTCOMES, MCP_OUTCOMES, OBSERVE_FIELDS, REQUIRED, OPTIONAL, OUTCOMES;
+  var init_observeEvent = __esm({
+    "../packages/dsh-interface/src/contracts/observeEvent.js"() {
+      init_jsonOutcome();
+      OBSERVE_SURFACES = Object.freeze(["http", "upgrade", "json", "mcp"]);
+      HTTP_OUTCOMES = Object.freeze(["ok", "rejected", "method", "failed"]);
+      UPGRADE_OUTCOMES = Object.freeze(["accepted", "rejected", "method"]);
+      JSON_OUTCOMES = Object.freeze(["ok", ...FAILURE_KINDS]);
+      MCP_OUTCOMES = Object.freeze(["ok", "error", "rejected"]);
+      OBSERVE_FIELDS = Object.freeze([
+        "surface",
+        "id",
+        "plugin",
+        "outcome",
+        "ms",
+        "status",
+        "kind"
+      ]);
+      REQUIRED = ["surface", "id", "plugin", "outcome", "ms"];
+      OPTIONAL = /* @__PURE__ */ new Set(["status", "kind"]);
+      OUTCOMES = {
+        http: new Set(HTTP_OUTCOMES),
+        upgrade: new Set(UPGRADE_OUTCOMES),
+        json: new Set(JSON_OUTCOMES),
+        mcp: new Set(MCP_OUTCOMES)
+      };
     }
   });
 
@@ -1084,10 +1278,16 @@ var __kitesurfExport = (() => {
   }
   function createPerfReview(env = {}) {
     const perf2 = env.performance ?? globalThis.performance;
+    const globalRef = env.global ?? globalThis;
     const structure = createStructure();
     const plugins = /* @__PURE__ */ new Map();
     const contributors = [];
+    const contributorKeys = /* @__PURE__ */ new Set();
     let collector = createCollectorState();
+    let frozenAt = (/* @__PURE__ */ new Date()).toISOString();
+    const touch = () => {
+      frozenAt = (/* @__PURE__ */ new Date()).toISOString();
+    };
     if (env.localStorage === void 0) {
       try {
         if (typeof localStorage !== "undefined") env = { ...env, localStorage };
@@ -1103,9 +1303,6 @@ var __kitesurfExport = (() => {
     let enabled = env.forceEnabled !== void 0 ? env.forceEnabled === true : null;
     let observers = null;
     let loafSupported = true;
-    let hostSnapshotProvider = env.hostSnapshotProvider ?? null;
-    let hostSnapshotCache = null;
-    let hostSnapshotTimer = null;
     let finalizeTimer = null;
     collector.startedAt = now(perf2);
     const pushCapped = (array, cap, item) => {
@@ -1278,6 +1475,7 @@ var __kitesurfExport = (() => {
       const span = spanRowFor(row, structure, name);
       if (span === null) return;
       recordSpanSample(span, t1 - t0);
+      touch();
       pushCapped(collector.spanEvents, SPAN_EVENT_CAP, { start: t0, end: t1, pluginId, name });
       try {
         perf2.measure?.(`nano:${pluginId}:${name}`, { start: t0, end: t1 });
@@ -1347,7 +1545,11 @@ var __kitesurfExport = (() => {
       /** count(name, n) — usage.<name> for this plugin plus page-level counts. */
       count(name, n = 1) {
         if (usageAdd(row, structure, name, n)) {
-          collector.counts.set(name, (collector.counts.get(name) ?? 0) + n);
+          const cell = collector.counts.get(name) ?? { window: 0, total: 0 };
+          cell.window += n;
+          cell.total += n;
+          collector.counts.set(name, cell);
+          touch();
         }
       },
       /**
@@ -1391,7 +1593,13 @@ var __kitesurfExport = (() => {
     const join = (pluginId, impl = {}) => {
       decideEnabled();
       const row = ensurePlugin(plugins, pluginId);
-      contributors.push({ pluginId, libVersion: impl.libVersion ?? LIB_VERSION });
+      const libVersion = impl.libVersion ?? LIB_VERSION;
+      const build = impl.build ?? libVersion;
+      const key = `${pluginId}@${build}`;
+      if (!contributorKeys.has(key)) {
+        contributorKeys.add(key);
+        contributors.push({ pluginId, libVersion, build });
+      }
       if (impl.version != null) row.meta.version = impl.version;
       if (row.meta.implantedAt == null) row.meta.implantedAt = (/* @__PURE__ */ new Date()).toISOString();
       if (typeof impl.root === "function") row._root = impl.root;
@@ -1399,13 +1607,14 @@ var __kitesurfExport = (() => {
       if (!enabled) return disabledApi();
       return makeApi(pluginId, row);
     };
-    const resetWindow = () => {
+    const cutWindow = () => {
       const counts = collector.counts;
       const resources = collector.resources;
       collector = createCollectorState();
       collector.counts = counts;
       collector.resources = resources;
       collector.startedAt = now(perf2);
+      for (const cell of counts.values()) cell.window = 0;
       for (const row of plugins.values()) {
         row.own.interactions = [];
         row.native.spanMs = [];
@@ -1416,97 +1625,108 @@ var __kitesurfExport = (() => {
           track.callbacks = 0;
           track.callbackMs = 0;
         }
+        for (const cell of row.usage.values()) cell.window = 0;
+        if (row.contract instanceof Map) {
+          for (const bucket of row.contract.values()) bucket.window = 0;
+        }
         row.profiler.durations = [];
       }
+      touch();
     };
-    const configure = (opts = {}) => {
-      if (typeof opts.hostSnapshotProvider === "function") {
-        hostSnapshotProvider = opts.hostSnapshotProvider;
+    const observe = (event) => {
+      if (enabled === false) return;
+      if (event == null || typeof event !== "object" || Array.isArray(event)) {
+        structure.badShape += 1;
         return;
       }
-      if (typeof opts.hostSnapshotUrl !== "string") return;
-      if (hostSnapshotProvider !== null || hostSnapshotTimer !== null || enabled !== true) return;
-      const fetchRef = env.fetch ?? globalThis.fetch;
-      const setIntervalRef = env.setInterval ?? globalThis.setInterval;
-      if (typeof fetchRef !== "function" || typeof setIntervalRef !== "function") return;
-      const pull = () => {
-        try {
-          Promise.resolve(fetchRef(opts.hostSnapshotUrl, { credentials: "same-origin", cache: "no-store" })).then((response) => response?.json?.()).then((snapshot) => {
-            if (snapshot !== null && typeof snapshot === "object") hostSnapshotCache = snapshot;
-          }).catch(() => {
-          });
-        } catch {
-        }
-      };
-      pull();
-      hostSnapshotTimer = setIntervalRef(pull, 5e3);
-      if (typeof hostSnapshotTimer?.unref === "function") hostSnapshotTimer.unref();
-    };
-    const setHostSnapshotProvider = (fn) => {
-      hostSnapshotProvider = typeof fn === "function" ? fn : null;
-    };
-    const resetCounters = () => {
-      collector.counts.clear();
-      for (const row of plugins.values()) row.usage.clear();
-    };
-    const report = (meta = {}, hostSnapshot = null) => {
-      finalizeDue(now(perf2) + 6e4);
-      const contributorsSeen = [];
-      const seen = /* @__PURE__ */ new Set();
-      for (const c of contributors) {
-        const key = `${c.pluginId}@${c.libVersion}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        contributorsSeen.push(c);
+      if (!Object.prototype.hasOwnProperty.call(event, "id") || event.id == null || event.id === "") {
+        structure.missingBindingId += 1;
+        return;
       }
+      let admitted;
+      try {
+        admitted = assertObserveEvent(event);
+      } catch {
+        structure.badShape += 1;
+        return;
+      }
+      if (typeof admitted.id !== "string" || !CONTRACT_KEY_RE.test(admitted.id)) {
+        structure.badShape += 1;
+        return;
+      }
+      if (typeof admitted.plugin !== "string" || admitted.plugin.length === 0) {
+        structure.badShape += 1;
+        return;
+      }
+      const row = ensurePlugin(plugins, admitted.plugin);
+      let bucket = row.contract.get(admitted.id);
+      if (bucket === void 0) {
+        bucket = {
+          n: 0,
+          window: 0,
+          outcomes: {},
+          status: { "2xx": 0, "3xx": 0, "4xx": 0, "5xx": 0 }
+        };
+        row.contract.set(admitted.id, bucket);
+      }
+      bucket.n += 1;
+      bucket.window += 1;
+      bucket.outcomes[admitted.outcome] = (bucket.outcomes[admitted.outcome] ?? 0) + 1;
+      const klass = statusClass(admitted.status);
+      if (klass) bucket.status[klass] += 1;
+      touch();
+    };
+    const read = (meta = {}) => {
+      const input = meta == null || typeof meta !== "object" ? {} : meta;
+      finalizeDue(now(perf2));
       const navigatorRef = env.navigator ?? globalThis.navigator;
       const chrome = /Chrome\/(\d+)/.exec(navigatorRef?.userAgent ?? "");
-      const snapshot = hostSnapshot ?? (typeof hostSnapshotProvider === "function" ? hostSnapshotProvider() : hostSnapshotCache);
-      const result = buildReport({
+      const provided = Object.prototype.hasOwnProperty.call(input, "host");
+      const hostSnapshot = provided ? input.host : null;
+      const hostBad = provided && hostSnapshot != null && !hostSnapshotUsable(hostSnapshot);
+      return buildReport({
         meta: {
-          generatedAt: (/* @__PURE__ */ new Date()).toISOString(),
-          chromeMajor: chrome === null ? null : Number(chrome[1]),
-          observerVersion: LIB_VERSION,
-          contributors: contributorsSeen,
-          ...meta
+          generatedAt: input.generatedAt ?? frozenAt,
+          scenario: input.scenario,
+          arm: input.arm,
+          chromeMajor: input.chromeMajor ?? (chrome === null ? null : Number(chrome[1])),
+          contributors: contributors.map((item) => ({ ...item }))
         },
         collector,
         plugins,
         structure,
-        hostSnapshot: snapshot ?? null,
+        hostSnapshot: hostBad ? null : hostSnapshot,
+        hostBad,
         enabled: enabled === true,
         loafSupported
       });
-      if (snapshot != null) mergeHostSnapshot(result, snapshot);
-      resetWindow();
-      return result;
     };
     return {
       join,
-      report,
-      configure,
-      setHostSnapshotProvider,
-      reset: resetWindow,
-      resetCounters,
+      read,
+      cutWindow,
+      observe,
       /** test/diagnostic accessors — not part of the implant contract. */
       _state: () => ({ collector, plugins, structure, enabled, loafSupported, contributors }),
       _finalizeDue: finalizeDue,
       _absorbEventEntry: absorbEventEntry,
       _absorbLoafEntry: absorbLoafEntry,
       _absorbResourceEntry: absorbResourceEntry,
+      _build: env.build ?? BUILD_STAMP,
       libVersion: LIB_VERSION
     };
   }
   function ensurePerfReview(env = {}) {
     const global = env.global ?? globalThis;
-    if (global.__perfReview == null) global.__perfReview = createPerfReview(env);
-    return global.__perfReview;
+    const stamp = env.build ?? BUILD_STAMP;
+    return installSingleton(global, CLIENT_KEY, "__perfReview", stamp, () => createPerfReview({ ...env, build: stamp }));
   }
-  var TRACK_EVENT_CAP, SPAN_EVENT_CAP, PROFILER_SAMPLE_CAP, now, isPromiseLike, BUCKET_ATTRS, HIDDEN_SELECTOR, contains;
+  var TRACK_EVENT_CAP, SPAN_EVENT_CAP, PROFILER_SAMPLE_CAP, now, isPromiseLike, BUCKET_ATTRS, HIDDEN_SELECTOR, contains, statusClass;
   var init_client = __esm({
     "../packages/dsh-performance-review/src/client.js"() {
       init_state();
       init_aggregate();
+      init_observeEvent();
       TRACK_EVENT_CAP = 4096;
       SPAN_EVENT_CAP = 4096;
       PROFILER_SAMPLE_CAP = 128;
@@ -1527,6 +1747,15 @@ var __kitesurfExport = (() => {
         if (parent == null || child == null) return false;
         if (parent === child) return true;
         return typeof parent.contains === "function" ? parent.contains(child) : false;
+      };
+      statusClass = (status) => {
+        if (typeof status !== "number" || !Number.isFinite(status)) return null;
+        const hundred = Math.floor(status / 100);
+        if (hundred === 2) return "2xx";
+        if (hundred === 3) return "3xx";
+        if (hundred === 4) return "4xx";
+        if (hundred === 5) return "5xx";
+        return null;
       };
       if (typeof window !== "undefined" && typeof document !== "undefined") {
         ensurePerfReview();
@@ -1920,7 +2149,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
   var React5 = __require("react");
   var primitives = __require("@deepseek-ai/dsh-client-ui-primitives");
   var { openNanoDialog: openNanoDialog2, openNanoMenu: openNanoMenu2, NANO_STYLES: NANO_STYLES2, NanoToast: NanoToast2 } = (init_dsh_nano_ui(), __toCommonJS(dsh_nano_ui_exports));
-  var { ensurePerfReview: ensurePerfReview2, LIB_VERSION: LIB_VERSION2 } = (init_client(), __toCommonJS(client_exports));
+  var { ensurePerfReview: ensurePerfReview2 } = (init_client(), __toCommonJS(client_exports));
   var { copyFor: copyFor2 } = (init_i18n(), __toCommonJS(i18n_exports));
   var { batchNote: batchNote2, designNote: designNote2, multiNote: multiNote2 } = (init_note(), __toCommonJS(note_exports));
   var { contentFrame: contentFrame2, shotPoint: shotPoint2 } = (init_shot_point(), __toCommonJS(shot_point_exports));
@@ -1947,13 +2176,11 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
   var OWN_ID = "nano-kitesurf";
   var MAX_PINS = 8;
   var perfReview = ensurePerfReview2();
-  perfReview.configure({ hostSnapshotUrl: "/nano-local-sandbox/perf-review/host?mode=snapshot" });
   var perf = {
     span(name, fn) {
       try {
-        const collector = window.__perfReview?.join?.(OWN_ID, {
+        const collector = perfReview.join(OWN_ID, {
           version: true ? "0.1.0" : "0.0.0",
-          libVersion: LIB_VERSION2,
           react: React5,
           root: () => document.querySelector("[data-nks-workspace]")
         });
@@ -1963,19 +2190,6 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       return fn();
     }
   };
-  try {
-    const reportPerf = () => {
-      try {
-        const report = perfReview.report({ scenario: "pane" });
-        fetch("/nano-local-sandbox/perf-report", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(report) }).catch(() => {
-        });
-      } catch {
-      }
-    };
-    setInterval(reportPerf, 1e4);
-    setTimeout(reportPerf, 3e3);
-  } catch {
-  }
   var STYLE = `
 .nks-root{position:relative;height:100%;min-height:0;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-base);flex-direction:column;flex:auto;display:flex;font:var(--dsw-font-xxs-12);container-type:inline-size}
 /*

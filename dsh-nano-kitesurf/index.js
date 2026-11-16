@@ -320,15 +320,10 @@ function traced(spec) {
       try {
         await reqContext.run({ incidentId }, () => original(req, res, route))
       } finally {
-        // The pane polls perf-review ~1/s; recording it would push every real
-        // failure out of the 200-row ring within minutes. Skip it entirely —
-        // but never `return` from finally (that would swallow a throw).
-        const skip = spec.path === PERF_ROUTE
         const status = res.statusCode || 0
         const ok = payload ? payload.ok !== false && status < 400 : status < 400
-        if (!skip) {
-          try {
-            recordOperation({
+        try {
+          recordOperation({
             route: spec.path,
             method: req.method || 'GET',
             status,
@@ -338,14 +333,9 @@ function traced(spec) {
             error: payload?.error || null,
             incidentId: payload?.incidentId || req.__dnkIncidentId || null,
             input: summarizeInput(req.__dnkBody),
-              result: payload?.moved === false ? 'no-op' : (payload?.mimeType ? 'png' : null),
-            })
-          } catch { /* diagnostics must never break a route */ }
-          // P1-4 usage counters: route failures + slow calls, per route name —
-          // cheap tallies an agent can read next to the span stats.
-        }
-        // Push a fresh snapshot to the MCP bridge, immediately on failure and
-        // debounced otherwise. An agent using only MCP sees the same state.
+            result: payload?.moved === false ? 'no-op' : (payload?.mimeType ? 'png' : null),
+          })
+        } catch { /* diagnostics must never break a route */ }
         try { diagnosticsPusher?.(!ok) } catch { /* best effort */ }
       }
     },

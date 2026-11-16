@@ -465,6 +465,34 @@ function createPerfReviewHost(env = {}) {
     libVersion: LIB_VERSION
   };
 }
+function handleHostRead(req, res, host) {
+  const method = req?.method ?? "GET";
+  const finish = (status, body) => {
+    res.statusCode = status;
+    res.setHeader("content-type", "application/json; charset=utf-8");
+    if (method === "HEAD") res.end();
+    else res.end(JSON.stringify(body));
+  };
+  if (method !== "GET" && method !== "HEAD") {
+    finish(405, { status: 405, error: "method" });
+    return;
+  }
+  let keys = [];
+  try {
+    const url = new URL(req?.url ?? "/", "http://localhost");
+    keys = [...url.searchParams.keys()];
+    const extra = keys.filter((key) => key !== "since");
+    if (extra.length > 0) {
+      finish(400, { status: 400, error: extra.includes("mode") ? "mode" : "query" });
+      return;
+    }
+    const since = url.searchParams.get("since");
+    const view = host.read(since == null ? {} : { since });
+    finish(view.status ?? 200, view);
+  } catch {
+    finish(400, { status: 400, error: "query" });
+  }
+}
 function ensurePerfReviewHost(env = {}) {
   const global = env.global ?? globalThis;
   const stamp = env.build ?? BUILD_STAMP;
@@ -912,7 +940,7 @@ var BINDING_TABLE = Object.freeze([
   { "id": "dnee.delete", "plugin": "dsh-nano-explorer-extra", "channel": "http", "match": "exact", "path": "/nano-explorer-extra/delete", "methods": ["POST"], "bodyLimit": 65536, "sensitivity": "L1", "capability": "write:workspace", "sessionBinding": true, "justification": "dsh-nano-explorer-extra/src/host/routes.js:358 + mutate.js \u2014 delete inside the workspace (root itself refused); bounded write once fenced." },
   { "id": "dnee.ignored", "plugin": "dsh-nano-explorer-extra", "channel": "http", "match": "exact", "path": "/nano-explorer-extra/ignored", "methods": ["POST"], "bodyLimit": 65536, "sensitivity": "L0", "capability": "read:workspace", "sessionBinding": true, "justification": "dsh-nano-explorer-extra/src/host/routes.js:373 \u2014 `git check-ignore` style read over workspace paths; no write, no secret." },
   { "id": "dnee.list", "plugin": "dsh-nano-explorer-extra", "channel": "http", "match": "exact", "path": "/nano-explorer-extra/list", "methods": ["POST"], "bodyLimit": 65536, "sensitivity": "L2", "capability": "read:host", "sessionBinding": true, "justification": "dsh-nano-explorer-extra/src/host/routes.js:384 \u2014 directory listing never fenced to the workspace (finding nxe:routes-read-arbitrary-file, accepted); enumerates arbitrary host dirs = host-level read." },
-  { "id": "dnee.perf-review.host", "plugin": "dsh-nano-explorer-extra", "channel": "http", "match": "exact", "path": "/nano-explorer-extra/perf-review/host", "methods": ["GET"], "bodyLimit": 0, "sensitivity": "L2", "capability": "read:host", "sessionBinding": false, "justification": "dsh-nano-explorer-extra/src/host/routes.js:400 \u2014 process-global perf reservoir; mode=window drains samples across all plugins/sessions (finding perf-review-window-drain, accepted). Cross-session process state, not session-scoped." },
+  { "id": "dnee.perf-review.host", "plugin": "dsh-nano-explorer-extra", "channel": "http", "match": "exact", "path": "/nano-explorer-extra/perf-review/host", "methods": ["GET"], "bodyLimit": 0, "sensitivity": "L2", "capability": "read:host", "sessionBinding": false, "justification": "\u53EA\u8BFB\u5168\u8FDB\u7A0B\u89C6\u56FE\u3002\u4E0D\u6392\u7A7A\uFF0C\u53EA\u63A5\u53D7 since\u3002" },
   { "id": "dnee.read", "plugin": "dsh-nano-explorer-extra", "channel": "http", "match": "exact", "path": "/nano-explorer-extra/read", "methods": ["POST"], "bodyLimit": 65536, "sensitivity": "L2", "capability": "read:host", "sessionBinding": true, "justification": "dsh-nano-explorer-extra/src/host/routes.js:412 \u2014 returns any UTF-8 host file up to 1 MiB; client may pass allowOutsideWorkspace:true to skip the fence (finding routes-read-arbitrary-file, accepted). Host-level read." }
 ]);
 var BROWSER_BINDINGS = Object.freeze([
@@ -2376,15 +2404,13 @@ function createRoutes(ctx, config) {
         }, { maxEntries: config.listingMaxEntries });
       }
     },
-    /* A1: the browser cannot read host.json from disk. This route is the
-       bridge. `mode=window` drains the per-scenario window (lab calls it at
-       scenario start and end); the default returns a non-destructive
-       cumulative snapshot for the page's low-frequency poll. */
+    /* Read-only process view. The registrar calls handleHostRead for this
+       path. `mode` is rejected. This entry exists so the route scanner still
+       sees the GET. */
     "/perf-review/host": {
       method: "GET",
-      async run(req) {
-        const url = new URL(String(req.url), "http://localhost");
-        return url.searchParams.get("mode") === "window" ? review.takeWindow() : review.snapshot();
+      async run() {
+        throw new Error("perf-review host is served by handleHostRead");
       }
     },
     /* Read one file as UTF-8, capped — enough to seed a notepad note.
@@ -2424,7 +2450,7 @@ function createRoutes(ctx, config) {
 function registerRoutes2(ctx, routes) {
   const bindings = BINDING_TABLE.map((row) => ({
     ...row,
-    handler: async (req, res) => {
+    handler: row.id === "dnee.perf-review.host" ? (req, res) => handleHostRead(req, res, ensurePerfReviewHost()) : async (req, res) => {
       const suffix = row.path.slice(PREFIX.length);
       const route = routes[suffix];
       try {

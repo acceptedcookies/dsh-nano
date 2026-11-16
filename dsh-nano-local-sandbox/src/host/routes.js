@@ -5,8 +5,6 @@ export const HISTORY_ROUTE = '/nano-local-sandbox/history'
 export const PICK_ROUTE = '/nano-local-sandbox/pick'
 export const EDIT_ROUTE = '/nano-local-sandbox/edit'
 export const SETTINGS_ROUTE = '/nano-local-sandbox/settings'
-export const PERF_REVIEW_HOST_ROUTE = '/nano-local-sandbox/perf-review/host'
-export const PERF_REPORT_ROUTE = '/nano-local-sandbox/perf-report'
 export const KITE_ROUTE = '/nano-local-sandbox/kite'
 export const CONSOLE_ROUTE = '/nano-local-sandbox/console'
 export const OPERATIONS_ROUTE = '/nano-local-sandbox/operations'
@@ -1163,16 +1161,6 @@ export function routeSpecs(deps = {}) {
             return
           }
           send(res, 200, found)
-          return
-        }
-        if (row.path.endsWith('/perf-report')) {
-          session.spans = session.spans || []
-          session.spans.push({ at: new Date().toISOString(), ...pageBody })
-          send(res, 200, { ok: true, count: session.spans.length })
-          return
-        }
-        if (row.path.endsWith('/perf-review/host')) {
-          send(res, 200, { ok: true, spans: session.spans || [] })
           return
         }
         send(res, 404, { ok: false, errorId: 'kitesurf.tool.unknown', error: row.path })

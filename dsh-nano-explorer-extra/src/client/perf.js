@@ -32,9 +32,3 @@ export const perf = ensurePerfReview().join(OWN_ID, {
   react: React,
   root: explorerRoot,
 })
-
-// A1: the page report cannot read host.json on its own. Poll this plugin's
-// host route (non-destructive cumulative snapshot); the lab passes an exact
-// per-scenario window snapshot to report() instead. First implant wins, so
-// four bundles do not start four pollers. Disabled pages do nothing.
-ensurePerfReview().configure({ hostSnapshotUrl: '/nano-explorer-extra/perf-review/host?mode=snapshot' })

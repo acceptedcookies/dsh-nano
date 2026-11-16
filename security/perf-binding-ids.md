@@ -50,8 +50,6 @@
 | `/nano-local-sandbox/pick` | — | `dnls.pick` | http | exact |
 | `/nano-local-sandbox/edit` | — | `dnls.edit` | http | exact |
 | `/nano-local-sandbox/settings` | — | `dnls.settings` | http | exact |
-| `/nano-local-sandbox/perf-review/host` | — | `dnls.perf-review.host` | http | exact |
-| `/nano-local-sandbox/perf-report` | — | `dnls.perf-report` | http | exact |
 | `/nano-local-sandbox/kite` | — | `dnls.kite` | http | exact |
 | `/nano-local-sandbox/console` | — | `dnls.console` | http | exact |
 | `/nano-local-sandbox/operations` | — | `dnls.operations` | http | exact |

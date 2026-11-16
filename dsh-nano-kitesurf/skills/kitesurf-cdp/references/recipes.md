@@ -77,4 +77,4 @@ GET  /nano-local-sandbox/console?level=log
 | `configure` 到 `http://evil.example` | `400 kitesurf.kite.remote` | 远程需 allowRemote |
 | `suspend` 中 `/pick` | `502 kitesurf.engine.connect` | 引擎已停，<10ms 不挂 |
 | 黑洞地址 `/open` | `504 kitesurf.navigate.egress` | 出站 25s 超时 |
-| `POST /perf-review/host?mode=window`（GET） | `400 kitesurf.perf.method` | 排水只允许 POST |
+

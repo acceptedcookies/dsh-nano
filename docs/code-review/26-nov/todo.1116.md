@@ -133,7 +133,7 @@ P0-00 干净树 + worktree
   - **落点**：[DNEE] `mode=window`；[DNLS] 两条 perf 路由（按符号，不按 `:1137`）；[DNK] configure / POST / `perf` 字段
   - **完成判据**：`read:host` 恰好三条；其余 [DNLS] 路由不漂
   - **验证映射**：`PRE1116-T19` · **依赖**：`P3-06`
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
+  - **执行状态**：`partial` · **执行时间**：`2026-11-16T17:10:00Z` · **证据 / 备注**：账本去掉 [DNLS] 两条 perf 路由，回到 87 行 0 漂移。[DNEE] 的 `mode=window` 换成 `handleHostRead`。[DNK] 不再 `configure` 或 POST `/perf-report`。
 - [ ] `P3-08` — lab 声明驱动与 v2 读者
   - **落点**：`lab/*.mjs`；两份 `e2e-ego.mjs`
   - **完成判据**：`shared-open` 消失；页级三场景仍在；不再调用 `report()`
@@ -188,8 +188,8 @@ P0-00 干净树 + worktree
 
 ## 5. 当前状态与交接
 
-- **当前节点**：5 个手写 span 已退役，待提交。[DNEE] 排空和 lab 还没动。
-- **下一动作**：提交这一刀，然后按 `11.5` ③ 删排空和侧载。
+- **当前节点**：排空和 [DNK] 侧载已从源码拿掉，待提交。lab、对照、spec 和审查还没做。
+- **下一动作**：提交这一刀，然后改 lab 读者。不要在没有对照表时删 `evaluate`。
 - **当前阻塞**：无。
 - **待 owner**：合并到 `main`；T26 部署；worktree 删除。
 - **最终交接**：分支 `facade-observe-binding-v2`，closure 指向本 todo。

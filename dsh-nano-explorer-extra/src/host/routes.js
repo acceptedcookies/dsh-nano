@@ -1,7 +1,7 @@
 /** The six HTTP routes: one request gate, one JSON envelope, and the session-scoped work behind them. */
 
 import { watch } from 'node:fs'
-import { ensurePerfReviewHost, LIB_VERSION } from 'dsh-performance-review/host'
+import { ensurePerfReviewHost, handleHostRead, LIB_VERSION } from 'dsh-performance-review/host'
 import { createWebRegistrar } from 'dsh-interface/host'
 import { BINDING_TABLE, PLUGIN } from '../../lib/bindings.js'
 import { checkoutBranch, commitAll, fetchAll, ignoredAmong, ignoredPathsOf, listBranches, listConflicts, listWorktrees, pullUpstream, pushUpstream, readStatus, writeRemote, writeAuthor, writeSshKey } from './git.js'
@@ -570,17 +570,13 @@ export function createRoutes(ctx, config) {
         }, { maxEntries: config.listingMaxEntries })
       },
     },
-    /* A1: the browser cannot read host.json from disk. This route is the
-       bridge. `mode=window` drains the per-scenario window (lab calls it at
-       scenario start and end); the default returns a non-destructive
-       cumulative snapshot for the page's low-frequency poll. */
+    /* Read-only process view. The registrar calls handleHostRead for this
+       path. `mode` is rejected. This entry exists so the route scanner still
+       sees the GET. */
     '/perf-review/host': {
       method: 'GET',
-      async run(req) {
-        const url = new URL(String(req.url), 'http://localhost')
-        return url.searchParams.get('mode') === 'window'
-          ? review.takeWindow()
-          : review.snapshot()
+      async run() {
+        throw new Error('perf-review host is served by handleHostRead')
       },
     },
     /* Read one file as UTF-8, capped — enough to seed a notepad note.
@@ -637,7 +633,9 @@ export function registerRoutes(ctx, routes) {
      match; handlers resolve by suffix from the baked path. */
   const bindings = BINDING_TABLE.map(row => ({
     ...row,
-    handler: async (req, res) => {
+    handler: row.id === 'dnee.perf-review.host'
+      ? (req, res) => handleHostRead(req, res, ensurePerfReviewHost())
+      : async (req, res) => {
       const suffix = row.path.slice(PREFIX.length)
       const route = routes[suffix]
       try {

@@ -102,7 +102,7 @@ dsh plugin --profile web add <spec>
 | POST | `见 QNA edit` | `{selector, text}`：把文本写回该元素（双击就地改字），≤4000 字符 |
 | POST | `见 QNA settings` | `{ userAgent?, viewport?, media?, extraHeaders? }`：viewport `{width:320..3840, height:240..2160, mobile?, deviceScaleFactor?:1\|2\|3}` 或 `null`；media `screen\|print\|null`；extraHeaders ≤20 项（禁 cookie/authorization 等）；全部事务性，失败回滚 |
 | POST | `见 QNA kite` | `{action: init\|start\|suspend\|resume\|configure, httpBase?, mcpPort?}` |
-| GET/POST | `见 QNA perf-review/host` | 进程 perf 快照；`?mode=window` 会清空全局桶，只允许 POST |
+| — | 本包不拥有 `/perf-review/host` | 只读视图在资源管理器、记事本和模型选择器上。`mode=window` 已退役 |
 | GET/POST | `见 QNA console` | 页面 console/exception/network/navigation 环形缓冲；`?level=error,exception&limit=50`；`POST {"clear":true}` 清空 |
 | GET/POST | `见 QNA operations` | 每次路由调用的执行埋点（route/status/errorId/耗时/输入摘要）；`?errorsOnly=true`；`POST {"clear":true}` 清空 |
 | GET | `见 QNA diagnostics` | 一击全量诊断：status + target 列表 + console + 操作 trace + errorCatalog + perf + 自动 hints |
@@ -129,13 +129,7 @@ MCP 客户端
 
 宿主配置可省略。要写就写在 profile 的 patch 里。
 
-```yaml
-- id: nano-kitesurf
-  config:
-    perfReview: true              # 可选：perf-span 采集开启（等价 DSH_PERF_REVIEW=1，仅本插件进程）
-```
-
-本包不读取 checkout 环境变量，也不启动容器。点选结果只在宿主进程内存里，重启即丢。卸载不需要清浏览器存储，因为没有。
+本包不读取 checkout 环境变量，也不启动容器。采集开关不在本包配置里。点选结果只在宿主进程内存里，重启即丢。卸载不需要清浏览器存储，因为没有。
 
 ## 构建
 

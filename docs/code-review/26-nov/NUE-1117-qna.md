@@ -17,6 +17,7 @@
 | Round 3 | `Q9–Q11` | executional | 迁移顺序 · 共享包版本与提交纪律 · 其余宿主 DOM 嫁接的替代 | **已冻结**（→ `T-O-NUE1117-09..11`） |
 | Round 4 | `Q12–Q14` | 复核补充 | nano-ui 自身的宿主 DOM 嫁接 · [DNMS] 区域测量 · [DNMS] Tooltip 参数缺陷 | **已冻结**（→ `T-O-NUE1117-12..14`） |
 | Round 5 | `Q15–Q17` | 执行取舍 | nano-ui 旧接口退役时点 · 收尾重建产物 · [DNCS] Devin 标签 | **已冻结**（→ `T-O-NUE1117-15..17`） |
+| Round 6 | `Q18` | 执行中补充 | [DNMS] 云会话自判没有宿主判据（AP P4-01 停止点） | **待裁决** |
 
 ---
 
@@ -138,3 +139,26 @@
 - **A**：全部由 nano-ui 替代：[DNT] 状态栏改用 nano-ui `Toolbar`（只用宿主令牌，外观对齐但不读宿主类名）；[DNMS] 区域遮罩改由 nano-ui 对话框自带的「区域作用域」选项实现（nano-ui 自己控制挂载层，不再改宿主 portal）；[DNEE] 按迁移时逐条判断：能用插件自有容器的改自有容器，确实只能靠宿主结构的登记为宿主缺口并删除。
 - **B**：三处都加 `nano-ui-exempt` 标记保留。
 - **推荐 A**：与 Q1、Q3 一致，硬切且不留例外；代价是 [DNT] 状态栏与宿主轨迹栏可能出现像素级差异，需要 GUI 验收。
+
+---
+
+## 4. Round 6（执行中补充 · 待裁决，题面）
+
+来源：`NUE-1117-action-plan.md` §5.4 P4-01 有序子步骤 1 的核实结果（停止点）。本轮不改变 Round 1–5 的冻结状态。
+
+### Q18 [DNMS] 云会话自判没有宿主判据
+
+核实（[dsh] `0.2.2-rc.1`）：
+
+- 宿主会话头 `SessionHeader`（`@deepseek-ai/dsh-session` `lib/types/types.d.ts:60-100`）只有 `version`、`id`、`createdAt`、`cwd`、`parentSession`、`isSeeded`、`origin?: 'subagent'`、`delegationDepth`、`agentPreset`；`CreateSessionOptions.meta` 是同一子集。没有来源、carrier、remote、projection 一类字段。
+- [DNCS] 打开云会话时调用 `ctx.sessions.create(undefined, { meta: { cwd } })`，再 `ctx.agents.enter(fake)`（`dsh-nano-cloud-session/index.js:250,306`）。宿主侧看到的是一个普通本地会话。唯一能区分的值（代理 agent 的 `model.current()` 返回 `provider: 'devin'`）由 [DNCS] 写入，按 AP §5.4 不算宿主合同。
+- [DNMS] `src/` 现无 `dncs` / `data-dncs-cloud` 读取（`NUE1117-T19` 守卫断言已落 `test/nue-migration.test.mjs`）。
+
+选项：
+
+- **A**：登记为宿主缺口（DESIGN.md §8「云会话标识」）。[DNMS] 不做云会话判定，云会话里照常渲染，等宿主提供公开字段后再迁移。`NUE1117-T19` 保持 `deferred`。
+- **B**：[DNMS] 读代理 agent 的模型投影（`provider === 'devin'`）。这个值由 [DNCS] 写入，等于在两个插件间新建约定，与 `T-O-NUE1117-06` 和「不得侧载」冲突。
+- **C**：由 [DNCS] 在宿主会话 `meta` 或其他公开面写入云标记，[DNMS] 读取。这是新的插件间合同，需要 [业主] 决定是否扩约。
+- **推荐 A**：与 `06` 的「宿主改不了的登记为宿主缺口，插件不补」一致；代价是宿主补字段前，云会话 composer 里会出现 [DNMS] 选择器（[DNCS] 隐藏样式在 P8 照删）。
+
+状态：**待裁决**。

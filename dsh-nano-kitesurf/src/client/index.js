@@ -1266,7 +1266,7 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
       send: primitives.IconRightUpOutlineRegular,
       undo: primitives.IconCloseOutlineRegular,
       exit: primitives.IconCloseOutlineRegular,
-      clear: primitives.IconDeleteOutlineRegular || primitives.IconCloseOutlineRegular,
+      clear: primitives.IconTrashOutlineRegular,
       edit: primitives.IconEditOutlineRegular || primitives.IconRightUpOutlineRegular,
       copy: primitives.IconCopyOutlineRegular || primitives.IconEditOutlineRegular,
       panel: primitives.IconPanelLeftOutlineRegular || primitives.IconEditOutlineRegular,

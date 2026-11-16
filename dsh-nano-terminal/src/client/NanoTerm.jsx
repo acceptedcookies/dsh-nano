@@ -180,13 +180,13 @@ const glyph = (name, rotate = false) => {
     retry: primitives.IconRefreshOutlineRegular,
     warn: primitives.IconWarningOutlineRegular,
     help: primitives.IconQuestionOutlineRegular,
-    settings: primitives.IconSettingsOutlineRegular ?? primitives.IconGearOutlineRegular,
+    settings: primitives.IconSettingsOutlineRegular,
     check: primitives.IconCheckOutlineRegular,
     chevron: primitives.IconChevronDownOutlineRegular,
     add: primitives.IconPlusOutlineRegular,
-    terminal: primitives.IconCommandOutlineRegular ?? primitives.IconTerminalOutlineRegular ?? primitives.IconPlusOutlineRegular,
-    copy: primitives.IconCopyOutlineRegular ?? primitives.IconClipboardOutlineRegular ?? primitives.IconCheckOutlineRegular,
-    paste: primitives.IconClipboardPasteOutlineRegular ?? primitives.IconPasteOutlineRegular ?? primitives.IconCopyOutlineRegular ?? primitives.IconCheckOutlineRegular,
+    terminal: primitives.IconCodeOutlineRegular,
+    copy: primitives.IconCopyOutlineRegular,
+    paste: primitives.IconCopyOutlineRegular,
   }[name]
   if (!Icon) return null
   return (

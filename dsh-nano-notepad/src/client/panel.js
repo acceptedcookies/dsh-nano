@@ -76,10 +76,12 @@ ${NANO_STYLES}
   --nano-toast-size: var(--np-font-size-sm);
 }
 /* The layer must outrank the shell's own overlays: the shell modal root and
-   backdrop sit at z-index:1000, its toasts/portals at 1100. 1200 beats both.
+   backdrop sit at the host modal layer, its toasts/portals at the host portal
+   layer. nano-ui owns those numbers (NANO_LAYER, DESIGN.md §4); --nano-layer-window
+   is emitted by NANO_STYLES above, so this file writes no figure of its own.
    z-index only applies once the layer escapes the shell.overlay slot's own
    stacking context — see the document.body reparent in mountNotepad. */
-.np-layer { position: fixed; inset: 0; pointer-events: none; z-index: 1200; color: var(--dsw-alias-label-primary); font-family: var(--np-font-family); font-size: var(--np-font-size); }
+.np-layer { position: fixed; inset: 0; pointer-events: none; z-index: var(--nano-layer-window); color: var(--dsw-alias-label-primary); font-family: var(--np-font-family); font-size: var(--np-font-size); }
 .np-entry, .np-window, .np-slash { pointer-events: auto; }
 .np-entry, .np-window { position: absolute; }
 .np-entry { z-index: 3; }
@@ -311,7 +313,6 @@ ${NANO_STYLES}
 .np-fx-model-ctx { flex: none; font-size: var(--np-font-size-xs); color: var(--dsw-alias-label-tertiary); }
 .np-fx-model-caret { display: inline-flex; align-items: center; flex: none; color: var(--dsw-alias-label-tertiary); }
 .np-fx-model-caret svg { width: 12px; height: 12px; display: block; }
-.nano-menu-label:has(.np-fx-model-option) { white-space: normal; overflow: visible; }
 .np-fx-model-option { display: flex; flex-direction: row; align-items: baseline; gap: 8px; min-width: 0; padding: 2px 0; }
 .np-fx-model-option-provider { font-size: var(--np-font-size-xs); color: var(--dsw-alias-label-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .np-fx-model-option-line { display: flex; align-items: baseline; gap: 8px; min-width: 0; margin-left: auto; }
@@ -605,6 +606,10 @@ ${NANO_STYLES}
 .np-error button[data-action="load-remote"], .np-error button[data-action="keep-mine"] { width: auto; height: auto; flex: none; padding: 4px 10px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); color: var(--dsw-alias-label-primary); font: inherit; line-height: 20px; }
 .np-slash { width: var(--np-menu-w); max-height: 260px; overflow-y: auto; padding: 4px; display: flex; flex-direction: column; gap: 1px; }
 .np-slash .np-slash-empty { padding: 8px; color: var(--dsw-alias-label-tertiary); font-size: var(--np-font-size-sm); }
+.np-slash .np-slash-item { display: flex; align-items: center; gap: 8px; width: 100%; border: 0; background: transparent; color: var(--dsw-alias-label-primary); border-radius: var(--dsw-radius-sm); padding: 5px 8px; font: inherit; text-align: left; cursor: pointer; }
+.np-slash .np-slash-item[data-active="true"], .np-slash .np-slash-item:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.np-slash .np-slash-icon { display: inline-flex; align-items: center; flex: none; color: var(--dsw-alias-label-secondary); }
+.np-slash .np-slash-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .np-footer { position: relative; z-index: 1; box-sizing: border-box; display: flex; align-items: center; gap: var(--np-gap); min-height: var(--np-foot-h); padding: 0 var(--np-pad-x); border-top: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-2); }
 /* Panel-width responsiveness: container queries react to the floating window, not the viewport. */
 @container np (max-width: 720px) {
@@ -931,12 +936,9 @@ function caretRect(area, position) {
   return rect
 }
 
-/* Z-index scale for the notepad's own surface and its body-level portals.
-   .np-layer sits at 1200 (see the stylesheet) — above the shell modal root
-   (1000) and toast/portal band (1100). Notepad dialogs and menus must clear
-   the layer too: a portal on document.body at the shell default (1000/30)
-   would sink beneath the window that opened it. */
-const NP_PORTAL_Z = 1210
+/* The notepad no longer owns a portal layer: dialogs and menus render inside
+   .np-window (window overlay / `portal:false` menus), so the window's own
+   NANO_LAYER figure governs them. See DESIGN.md §4, §5. */
 
 export function mountNotepad(host, defaults, hostTheme = { theme: undefined, subscribe: () => () => {} }, language = { current: () => 'en', subscribe: () => () => {} }, workspaces = { current: () => ({ items: [], currentId: null }), subscribe: () => () => {} }, previewFile = () => false) {
   /* The launcher's hover hint is the native title + aria-label set in
@@ -2216,7 +2218,7 @@ export function mountNotepad(host, defaults, hostTheme = { theme: undefined, sub
     closeMenu?.()
     anchor.setAttribute('aria-expanded', 'true')
     const current = state.ui.workspaceChoice ?? 'all'
-    const check = React.createElement('span', { className: 'nano-menu-check', dangerouslySetInnerHTML: { __html: CHECK_ICON } })
+    const check = React.createElement('span', { dangerouslySetInnerHTML: { __html: CHECK_ICON } })
     const items = workspaceOptions().map(([value, name]) => ({
       id: value,
       label: name,
@@ -2234,7 +2236,7 @@ export function mountNotepad(host, defaults, hostTheme = { theme: undefined, sub
     /* The portal sits on document.body and would happily outgrow the floating
        window — cap it at the space actually left inside the panel. */
     const room = panel.getBoundingClientRect().bottom - anchor.getBoundingClientRect().bottom - 10
-    const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), items, width: 190, maxHeight: Math.max(120, room), gap: menuGap(), theme: resolvedTheme(), z: NP_PORTAL_Z })
+    const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), items, width: 190, maxHeight: Math.max(120, room), gap: menuGap(), container: panel })
     let closed = false
     const done = (unmount) => {
       if (closed) return
@@ -2255,7 +2257,7 @@ export function mountNotepad(host, defaults, hostTheme = { theme: undefined, sub
     }
     const out = event => {
       if (!closeMenu || !(event.target instanceof Element)) return
-      if (event.target.closest('.nano-menu')) return
+      if (event.target.closest('.nano-anchor')) return
       // NanoMenu's own outside handler already unmounted; just release state. A
       // press on the switcher button itself counts as "click again to close" —
       // the flag lasts until the next click anywhere so a drag-off can't eat it.
@@ -2317,7 +2319,7 @@ export function mountNotepad(host, defaults, hostTheme = { theme: undefined, sub
       { id: 'folder', label: copy.newBlankFolder, icon: icon(FOLDER_ICON), run: () => { done(false); void add('folder').catch(showError) } },
       { id: 'clear', label: scoped ? copy.clearUnpinned : `${copy.clearUnpinned} · ${copy.clearUnpinnedPick}`, tone: 'danger', icon: icon(dshIcon('trash-outline')), run: () => { done(false); if (scoped) confirmClearUnpinned() } },
     ]
-    const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), items, width: 220, gap: menuGap(), theme: resolvedTheme(), z: NP_PORTAL_Z })
+    const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), items, width: 220, gap: menuGap(), container: panel })
     let closed = false
     const done = (unmount) => {
       if (closed) return
@@ -2339,7 +2341,7 @@ export function mountNotepad(host, defaults, hostTheme = { theme: undefined, sub
       label: copy.kinds[k] ?? k,
       run: () => void addKind(k).catch(showError),
     }))
-    const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), width: 160, gap: menuGap(), theme: resolvedTheme(), z: NP_PORTAL_Z, items })
+    const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), width: 160, gap: menuGap(), container: panel, items })
     closeMenu = () => raw.close()
   }
 
@@ -2826,7 +2828,7 @@ export function mountNotepad(host, defaults, hostTheme = { theme: undefined, sub
     const models = fxCuratedModels()
     if (!models.length) return
     closeMenu?.()
-    const check = React.createElement('span', { className: 'nano-menu-check', dangerouslySetInnerHTML: { __html: CHECK_ICON } })
+    const check = React.createElement('span', { dangerouslySetInnerHTML: { __html: CHECK_ICON } })
     const items = models.map(m => {
       const info = fxModelInfo(m)
       const label = React.createElement('span', { className: 'np-fx-model-option' },
@@ -2836,7 +2838,7 @@ export function mountNotepad(host, defaults, hostTheme = { theme: undefined, sub
           React.createElement('span', { className: 'np-fx-model-option-ctx' }, info.ctx)))
       return { id: info.key, label, icon: info.key === state.fx.model ? check : undefined, run: () => { state.fx.model = info.key; fxPaintModel() } }
     })
-    const raw = openNanoMenu({ anchor: fxModel.getBoundingClientRect(), items, width: 300, maxHeight: 140, gap: menuGap(), theme: resolvedTheme(), z: NP_PORTAL_Z, direction: 'up' })
+    const raw = openNanoMenu({ anchor: fxModel.getBoundingClientRect(), items, width: 300, maxHeight: 140, gap: menuGap(), container: panel, direction: 'up' })
     closeMenu = () => raw.close()
   })
   fxPop.addEventListener('mousedown', event => event.preventDefault())
@@ -2854,7 +2856,7 @@ export function mountNotepad(host, defaults, hostTheme = { theme: undefined, sub
     ]
     closeMenu?.()
     /* 四条说明放得下。加上 maxHeight 会强制 overflow，滚动条把菜单右侧圆角切成直角。 */
-    const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), items, width: 320, gap: menuGap(), theme: resolvedTheme(), z: NP_PORTAL_Z, direction: 'up' })
+    const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), items, width: 320, gap: menuGap(), container: panel, direction: 'up' })
     closeMenu = () => raw.close()
   }
   /* 点垂直栏以外的 fx 区域收起边栏；标题按钮自己 toggle，不在这里抢。 */
@@ -2888,7 +2890,9 @@ export function mountNotepad(host, defaults, hostTheme = { theme: undefined, sub
   })
   const fxEscClose = event => {
     if (event.key !== 'Escape' || !state.fx.open) return
-    if (document.querySelector('.nano-menu') || document.querySelector('.nano-dialog-card')) return
+    /* One Escape closes one layer: an open menu or card handles it first, and
+       both are tracked by the panel's own handles instead of DOM probes. */
+    if (closeMenu !== null || dialogOpen) return
     if (!fxPop.hidden) return
     closeFx()
   }
@@ -2902,13 +2906,13 @@ export function mountNotepad(host, defaults, hostTheme = { theme: undefined, sub
     const copy = fxCopy()
     const clearActive = () => { delete fxPromptBtn.dataset.active }
     fxPromptBtn.dataset.active = 'true'
-    const check = React.createElement('span', { className: 'nano-menu-check', dangerouslySetInnerHTML: { __html: CHECK_ICON } })
+    const check = React.createElement('span', { dangerouslySetInnerHTML: { __html: CHECK_ICON } })
     const items = prompts.length
       ? prompts.map(n => ({ id: n.id, label: fxCleanName(n.name), icon: n.id === state.fx.promptId ? check : undefined, run: () => { clearActive(); state.fx.promptId = n.id; fxPaintChips(); fxUpdateSend() } }))
       : [{ id: 'fx-no-prompt', label: copy.fxNoPrompt ?? '没有提示语料', run: clearActive }]
-    const raw = openNanoMenu({ anchor: fxPromptBtn.getBoundingClientRect(), items, width: 240, maxHeight: 120, gap: menuGap(), theme: resolvedTheme(), z: NP_PORTAL_Z, direction: 'up' })
+    const raw = openNanoMenu({ anchor: fxPromptBtn.getBoundingClientRect(), items, width: 240, maxHeight: 120, gap: menuGap(), container: panel, direction: 'up' })
     const outside = event => {
-      if (event.target.closest?.('.nano-menu') || fxPromptBtn.contains(event.target)) return
+      if (event.target.closest?.('.nano-anchor') || fxPromptBtn.contains(event.target)) return
       clearActive()
     }
     document.addEventListener('pointerdown', outside, true)
@@ -3742,7 +3746,7 @@ export function mountNotepad(host, defaults, hostTheme = { theme: undefined, sub
         rect = { left: box.right - 28, top: box.top, right: box.right, bottom: box.bottom, width: 28, height: box.height }
       }
     }
-    const raw = openNanoMenu({ anchor: rect, width: 160, gap: menuGap(), theme: resolvedTheme(), z: NP_PORTAL_Z, items })
+    const raw = openNanoMenu({ anchor: rect, width: 160, gap: menuGap(), container: panel, items })
     closeMenu = () => raw.close()
   }
 
@@ -3765,7 +3769,7 @@ export function mountNotepad(host, defaults, hostTheme = { theme: undefined, sub
       { id: 'all', label: `${copy.kindAll ?? copy.kindFilter}${current === null ? ' ✓' : ''}`, run: () => { state.ui.kindFilter = null; render() } },
       ...KINDS.map(k => ({ id: k, label: `${copy.kinds[k] ?? k}${current === k ? ' ✓' : ''}`, run: () => { state.ui.kindFilter = k; render() } })),
     ]
-    const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), width: 160, gap: menuGap(), theme: resolvedTheme(), z: NP_PORTAL_Z, items })
+    const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), width: 160, gap: menuGap(), container: panel, items })
     closeMenu = () => raw.close()
   }
 
@@ -3829,7 +3833,7 @@ export function mountNotepad(host, defaults, hostTheme = { theme: undefined, sub
       ? { left: point.x, top: point.y, right: point.x, bottom: point.y, width: 0, height: 0 }
       : anchor.getBoundingClientRect()
     const raw = openNanoMenu({
-      anchor: anchorRect, width: file ? 190 : 160, gap: menuGap(), theme: resolvedTheme(), z: NP_PORTAL_Z, items,
+      anchor: anchorRect, width: file ? 190 : 160, gap: menuGap(), container: panel, items,
     })
     closeMenu = () => raw.close()
   }
@@ -4226,9 +4230,12 @@ export function mountNotepad(host, defaults, hostTheme = { theme: undefined, sub
   function paintSlash() {
     const items = slashItems()
     state.slashIndex = clamp(state.slashIndex, 0, Math.max(0, items.length - 1))
+    /* The slash menu is plain in-window DOM (it is positioned at the caret and
+       driven by the editor's own Arrow/Enter keys), so its rows carry this
+       plugin's class names, never a nano-ui menu class (DESIGN.md §6.2). */
     slashMenu.innerHTML = items.length === 0
       ? `<p class="np-slash-empty">${escapeHtml(text().noMatches)}</p>`
-      : items.map((def, index) => `<button type="button" class="nano-menu-item" data-slash="${def.kind}" data-active="${index === state.slashIndex}"><span class="nano-menu-icon" aria-hidden="true">${def.icon}</span><span class="nano-menu-label">${escapeHtml(formatLabel(def.kind))}</span></button>`).join('')
+      : items.map((def, index) => `<button type="button" class="np-slash-item" data-slash="${def.kind}" data-active="${index === state.slashIndex}"><span class="np-slash-icon" aria-hidden="true">${def.icon}</span><span class="np-slash-label">${escapeHtml(formatLabel(def.kind))}</span></button>`).join('')
     slashMenu.querySelector('[data-active="true"]')?.scrollIntoView({ block: 'nearest' })
   }
 

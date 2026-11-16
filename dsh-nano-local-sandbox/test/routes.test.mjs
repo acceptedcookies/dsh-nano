@@ -12,6 +12,7 @@ const root = dirname(fileURLToPath(import.meta.url))
 function host(rejection, register) {
   return {
     get(name) {
+      if (name === 'webServer') return this.webServer
       if (name !== 'connection') return null
       return { requestRejection: rejection }
     },

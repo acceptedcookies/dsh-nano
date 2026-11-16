@@ -18,7 +18,10 @@ test('an idle session adopts a running container inspect', async () => {
   const session = { phase: 'idle', history: [], containerName: 'kitesurf' }
   const routes = []
   const ctx = {
-    get() { return { requestRejection() { return undefined } } },
+    get(name) {
+      if (name === 'webServer') return this.webServer
+      return { requestRejection() { return undefined } }
+    },
     webServer: { register(route) { routes.push(route); return () => {} } },
   }
   registerRoutes(ctx, routeSpecs({

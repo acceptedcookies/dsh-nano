@@ -30,9 +30,9 @@ export const SNAPSHOT_ROUTE = '/nano-local-sandbox/snapshot'
 export const REFS_ROUTE = '/nano-local-sandbox/refs'
 export const CONTROL_ROUTE = '/nano-local-sandbox/control'
 
-import { mkdirSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { mkdirSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
+import { dirname, join } from 'node:path'
 import { ROUTE_TABLE } from '../../lib/route-table.js'
 import { createCdpKeeper } from './cdp-keeper.js'
 import { publishedHttpBase } from './backend-apple.js'
@@ -42,6 +42,15 @@ import { listProfiles, loadProfile } from './profile-registry.js'
 import { ERROR_CATALOG, statusOf } from './error-catalog.js'
 
 const keeper = createCdpKeeper()
+
+// The package version shown in EnvPanel's 插件 row — read once at load, the
+// deployed copy's package.json is the source of truth.
+const BUILD_ID = (() => {
+  try {
+    const here = dirname(fileURLToPath(import.meta.url))
+    return JSON.parse(readFileSync(join(here, '..', '..', 'package.json'), 'utf8')).version || null
+  } catch { return null }
+})()
 
 /**
  * #4 multi-env: one host owns ONE kitesurf-family container, but that name +
@@ -466,7 +475,7 @@ export function routeSpecs(deps = {}) {
       }
       if (row.path.endsWith('/status')) {
         await ensureBase(session, deps)
-        send(res, 200, { ok: session.phase === 'running', httpBase: session.httpBase ?? null, kite: { phase: session.phase } })
+        send(res, 200, { ok: session.phase === 'running', httpBase: session.httpBase ?? null, kite: { phase: session.phase }, buildId: BUILD_ID, containerName: containerNameFor(session, deps) })
         return
       }
       if (row.path.endsWith('/kite')) {
@@ -768,6 +777,7 @@ export function routeSpecs(deps = {}) {
             ports: snap.ports,
             engineAlive: snap.engineAlive,
             healthy: snap.healthy,
+            buildId: BUILD_ID,
           })
           return
         }
@@ -795,6 +805,9 @@ export function routeSpecs(deps = {}) {
             replay: Boolean(last),
             ports: snap.ports,
             container: snap.container,
+            containerName: snap.containerName,
+            effective: snap.effective,
+            buildId: BUILD_ID,
           })
           return
         }

@@ -7,7 +7,10 @@ import { routeSpecs } from '../src/host/routes.js'
 function routesFor(session, backend) {
   const routes = []
   const ctx = {
-    get() { return { requestRejection() { return undefined } } },
+    get(name) {
+      if (name === 'webServer') return this.webServer
+      return { requestRejection() { return undefined } }
+    },
     webServer: { register(route) { routes.push(route); return () => {} } },
   }
   registerRoutes(ctx, routeSpecs({ session, backend }), { table: ROUTE_TABLE, plugin: 'dsh-nano-local-sandbox' })

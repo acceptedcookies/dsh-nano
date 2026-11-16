@@ -11,6 +11,7 @@ function host(rejection) {
     registered,
     ctx: {
       get(name) {
+        if (name === 'webServer') return this.webServer
         if (name !== 'connection') return null
         return { requestRejection: rejection }
       },

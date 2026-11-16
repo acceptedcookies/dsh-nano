@@ -117,7 +117,7 @@ test('unauthenticated HTTP and websocket upgrade do not run the handler first', 
   let handlers = 0
   let handshakes = 0
   const ctx = {
-    get() { return { requestRejection: () => 401 } },
+    get(name) { return name === 'webServer' ? this.webServer : { requestRejection: () => 401 } },
     webServer: { register(route) { return route } },
   }
   const registered = registerRoutes(ctx, routeSpecs({ onHandler() { handlers += 1 } }), { table: ROUTE_TABLE, plugin: 'dsh-nano-local-sandbox' })
@@ -125,7 +125,7 @@ test('unauthenticated HTTP and websocket upgrade do not run the handler first', 
   void shot
   const routes = []
   const host = {
-    get() { return { requestRejection: () => 401 } },
+    get(name) { return name === 'webServer' ? this.webServer : { requestRejection: () => 401 } },
     webServer: { register(route) { routes.push(route); return () => {} } },
   }
   registerRoutes(host, routeSpecs({ onHandler() { handlers += 1 } }), { table: ROUTE_TABLE, plugin: 'dsh-nano-local-sandbox' })

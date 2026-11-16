@@ -1,7 +1,7 @@
 /**
  * dsh-performance-review — pure report aggregation.
  *
- * Spec: docs/specs/dsh-nano-performance-review/spec-26nov.md §5/§6.4/§6.5.
+ * Spec: performance-review spec §5/§6.4/§6.5.
  * No DOM, no PerformanceObserver, no I/O — the browser collector feeds
  * finalized interactions/events in; this module decides attribution and
  * renders the report object.
@@ -105,7 +105,35 @@ const spanStats = row => ({
   p50: roundMs(percentile(row.window, 0.5)),
   p95: roundMs(percentile(row.window, 0.95)),
   maxMs: roundMs(row.window.length === 0 ? null : Math.max(...row.window)),
+  basis: 'window',
 })
+
+/** Serialized report budget (T-O-PRE1116-08.3). Evidence is trimmed first. */
+export const MAX_REPORT_BYTES = 256 * 1024
+export const EVIDENCE_CAPS = Object.freeze({ interactions: 5, frames: 5, hostErrors: 20 })
+
+const byteLength = value => new TextEncoder().encode(JSON.stringify(value)).length
+
+/**
+ * If the report exceeds {@link MAX_REPORT_BYTES}, drop evidence and count
+ * `structure.oversize` once. Mutates `report`.
+ */
+export function clipOversize(report) {
+  if (byteLength(report) <= MAX_REPORT_BYTES) return report
+  if (report.page) {
+    report.page.evidence = { interactions: [], frames: [], hostErrors: [] }
+  }
+  if (report.structure) report.structure.oversize = (report.structure.oversize ?? 0) + 1
+  return report
+}
+
+/** A host snapshot is usable only when `plugins` is a plain object. */
+export function hostSnapshotUsable(value) {
+  if (value == null || typeof value !== 'object' || Array.isArray(value)) return false
+  const plugins = value.plugins
+  if (plugins == null || typeof plugins !== 'object' || Array.isArray(plugins)) return false
+  return true
+}
 
 /**
  * Merge a host snapshot ({plugins:{id:{spans:{name:{n,samples:[ms]}}}}})
@@ -115,16 +143,23 @@ const spanStats = row => ({
 function hostSpanObject(hostSnapshot, pluginId) {
   const out = {}
   const source = hostSnapshot?.plugins?.[pluginId]?.spans
-  if (source == null) return out
+  if (source == null || typeof source !== 'object') return out
   for (const [name, row] of Object.entries(source)) {
-    const samples = Array.isArray(row.samples) ? row.samples : []
+    const samples = Array.isArray(row?.samples) ? row.samples : []
     out[name] = {
-      n: row.n ?? samples.length,
+      n: row?.n ?? samples.length,
       p50: roundMs(percentile(samples, 0.5)),
       p95: roundMs(percentile(samples, 0.95)),
+      errors: row?.stats?.errors ?? row?.errors ?? 0,
+      basis: row?.basis === 'window' ? 'window' : 'cumulative',
     }
   }
   return out
+}
+
+const usageCell = cell => {
+  if (typeof cell === 'number') return { window: cell, total: cell }
+  return { window: cell?.window ?? 0, total: cell?.total ?? 0 }
 }
 
 /**
@@ -142,7 +177,6 @@ function hostSpanObject(hostSnapshot, pluginId) {
  */
 export function buildReport(input) {
   const { collector, plugins, structure } = input
-  const notes = []
   const durations = collector.interactions.map(ix => ix.duration)
   // L1: Event Timing three-way split. `nativeInpP75` alone cannot say whether
   // a slow interaction was our main thread, our handlers, or the paint
@@ -190,147 +224,158 @@ export function buildReport(input) {
       }
     }
     const usage = {}
-    for (const [name, n] of row.usage) usage[name] = n
+    for (const [name, cell] of row.usage) usage[name] = usageCell(cell)
+    const contract = {}
+    if (row.contract instanceof Map) {
+      for (const [key, bucket] of row.contract) {
+        contract[key] = {
+          n: bucket.n,
+          windowN: bucket.window,
+          basis: 'window',
+          outcomes: { ...(bucket.outcomes ?? {}) },
+          status: { ...(bucket.status ?? {}) },
+        }
+      }
+    }
+    const usableHost = hostSnapshotUsable(input.hostSnapshot) ? input.hostSnapshot : null
     pluginOut[pluginId] = {
-      meta: {
-        version: row.meta.version ?? null,
-        implantedAt: row.meta.implantedAt ?? null,
-        implanted: true,
+      hand: {
+        spans,
+        tracks,
+        usage,
+        own: {
+          inpP75: roundMs(percentile(ownDurations, 0.75)),
+          inpCount: ownDurations.length,
+        },
+        native: {
+          spanMsP95: roundMs(percentile(row.native.spanMs, 0.95)),
+          trackMsP95: roundMs(percentile(row.native.trackMs, 0.95)),
+          samples: { spans: row.samples.spans, callbacks: row.samples.callbacks },
+        },
+        profiler: {
+          commits: row.profiler.commits,
+          commitP95: roundMs(percentile(row.profiler.durations, 0.95)),
+        },
+        scriptMs: roundMs(collector.pluginScriptMs.get(pluginId) ?? 0),
+        version: row.meta?.version ?? null,
       },
-      own: {
-        inpP75: roundMs(percentile(ownDurations, 0.75)),
-        inpCount: ownDurations.length,
-      },
-      native: {
-        spanMsP95: roundMs(percentile(row.native.spanMs, 0.95)),
-        trackMsP95: roundMs(percentile(row.native.trackMs, 0.95)),
-        samples: { spans: row.samples.spans, callbacks: row.samples.callbacks },
-      },
-      spans,
-      tracks,
-      usage,
-      hostSpan: hostSpanObject(input.hostSnapshot, pluginId),
-      profiler: {
-        commits: row.profiler.commits,
-        commitP95: roundMs(percentile(row.profiler.durations, 0.95)),
-      },
-      // Uniquely-attributable script ms live on the collector (single-nano-
-      // package URLs only), NOT on the plugin row. Reading row.scriptMs here
-      // used to return a field that was never written (§10.4.3 / A3).
-      scriptMs: roundMs(collector.pluginScriptMs.get(pluginId) ?? 0),
+      contract,
+      host: hostSpanObject(usableHost, pluginId),
     }
   }
 
   const counts = {}
-  for (const [name, n] of collector.counts) counts[name] = n
+  for (const [name, cell] of collector.counts) counts[name] = usageCell(cell)
+  page.counts = counts
+  page.scenario = input.meta?.scenario ?? null
+  page.arm = input.meta?.arm ?? 'on'
+  page.chromeMajor = input.meta?.chromeMajor ?? null
+  page.contributors = input.meta?.contributors ?? []
+  page.enabled = input.enabled === true
+  page.loafSupported = input.loafSupported !== false
 
-  // Explanatory notes (spec §6.4 / §6.5).
+  const ranked = [...collector.interactions].sort((a, b) => (b.duration ?? 0) - (a.duration ?? 0))
+  const hostErrors = []
+  const usableHost = hostSnapshotUsable(input.hostSnapshot) ? input.hostSnapshot : null
+  if (usableHost) {
+    for (const plugin of Object.values(usableHost.plugins)) {
+      for (const span of Object.values(plugin?.spans ?? {})) {
+        for (const event of span?.events ?? []) {
+          if (event?.err === true) hostErrors.push({ ms: event.ms ?? null, at: event.at ?? null })
+        }
+      }
+    }
+  }
+  page.evidence = {
+    interactions: ranked.slice(0, EVIDENCE_CAPS.interactions).map(ix => ({
+      interactionId: ix.interactionId ?? null,
+      duration: ix.duration ?? null,
+      owner: ix.owner ?? null,
+      bucket: ix.bucket ?? null,
+    })),
+    frames: Array.isArray(collector.heavyFrames)
+      ? collector.heavyFrames.slice(0, EVIDENCE_CAPS.frames)
+      : [],
+    hostErrors: hostErrors.slice(0, EVIDENCE_CAPS.hostErrors),
+  }
+  page.host = usableHost
+    ? {
+      source: usableHost.source ?? 'snapshot',
+      epoch: usableHost.epoch ?? null,
+      from: usableHost.from ?? usableHost.sinceStart ?? null,
+      to: usableHost.to ?? usableHost.writtenAt ?? null,
+      truncated: Array.isArray(usableHost.truncated) ? [...usableHost.truncated] : [],
+      sinceStart: usableHost.sinceStart ?? null,
+      writtenAt: usableHost.writtenAt ?? null,
+      enabled: usableHost.enabled ?? null,
+    }
+    : { source: null, epoch: null, from: null, to: null, truncated: [], sinceStart: null, writtenAt: null, enabled: null }
+
+  const notes = []
+  const note = (id, text) => notes.push({ id, text })
   const afterWindow = collector.interactions.some(ix =>
     Object.values(ix.samples ?? {}).some(sample => sample.spanAfterWindow))
   if (afterWindow) {
-    notes.push('spanAfterWindow: 有异步 span 在交互窗口结束后才 settle，仍按起点划入该窗口。')
+    note('span-after-window', '有异步 span 在交互窗口结束后才 settle，仍按起点划入该窗口。')
   }
   if (collector.nanoBlockingMs > 0) {
-    notes.push('nanoBlockingMs 按整条 LoAF 条目归并；含非 nano 脚本的帧会把那部分时间一并计入。')
+    note('nano-blocking-over-attribute', 'nanoBlockingMs 按整条 LoAF 条目归并；含非 nano 脚本的帧会把那部分时间一并计入。')
   }
   if (durations.length > 0 && durations.length < 8) {
-    notes.push(`nativeInpCount=${durations.length} < 8：p75 仅供参考，不作预算判断；这不是 web-vitals INP。`)
+    note('native-inp-small-sample', `nativeInpCount=${durations.length} < 8：p75 仅供参考，不作预算判断；这不是 web-vitals INP。`)
   }
-  notes.push('Event Timing 三段：inputDelay=主线程忙/排队，processing=事件处理器，presentation=等下一次绘制。页级 nativeInpP75 含 presentation，属环境级读数，不抄进插件行（spec §5.1）；插件预算以 inputDelayP95/processingP95 与 native.spanMsP95/trackMsP95 为准。')
-  notes.push('lab 的 composer-type 用 CDP 合成按键（page.keyboard.type），抬起的是 presentation 段；读数标注为 synthetic input，不等同真实用户 INP。')
-  notes.push('nanoCombined.scriptMs 只统计 >50ms 长帧里 >5ms 的脚本条目，不是总脚本耗时；快而频繁的脚本工作不可见。')
-  notes.push('nanoCombined.blockingMs 把「含任一 nano 脚本」的整条 LoAF blockingDuration 计入，含非 nano 部分，属过度归因。')
-  notes.push('nanoCombined.clientJsBytes 是所有 dsh-nano-* 包 combo 的 encodedBodySize 合计，不是单个插件的体积。')
   if (collector.pluginScriptMs.size === 0) {
-    notes.push('逐包 scriptMs 全为 0：combo URL 含多个包名，单包 URL 极少出现；按 §3.1 不予拆分。')
+    note('script-ms-unsplit', '逐包 scriptMs 全为 0：combo URL 含多个包名，单包 URL 极少出现；按 §3.1 不予拆分。')
+  }
+  if (page.host.source == null) {
+    note('host-source-absent', 'no host read source')
   }
 
-  return {
-    version: REPORT_VERSION,
+  const structureOut = {
+    ...structure,
+    audits: Array.isArray(structure?.audits) ? structure.audits.map(item => ({ ...item })) : [],
+  }
+  if (input.hostBad === true) structureOut.badShape = (structureOut.badShape ?? 0) + 1
+
+  const contributors = (input.meta?.contributors ?? []).map(item => ({
+    plugin: item.plugin ?? item.pluginId ?? null,
+    build: item.build ?? item.libVersion ?? null,
+    decl: item.decl ?? null,
+  }))
+  return clipOversize({
+    schema: 'dnpr.report/2',
     meta: {
+      protocol: REPORT_VERSION,
       generatedAt: input.meta?.generatedAt ?? null,
-      scenario: input.meta?.scenario ?? null,
-      arm: input.meta?.arm ?? 'on',
-      dshVersion: input.meta?.dshVersion ?? null,
-      chromeMajor: input.meta?.chromeMajor ?? null,
-      observerVersion: input.meta?.observerVersion ?? null,
-      contributors: input.meta?.contributors ?? [],
-      gitSha: input.meta?.gitSha ?? null,
-      labels: input.meta?.labels ?? {},
+      contributors,
+      window: {
+        startedAt: input.meta?.windowStartedAt ?? null,
+        ms: input.meta?.windowMs ?? null,
+      },
+      host: {
+        source: page.host.source,
+        epoch: page.host.epoch,
+        from: page.host.from,
+        to: page.host.to,
+        truncated: page.host.truncated,
+      },
     },
-    enabled: input.enabled === true,
-    loafSupported: input.loafSupported !== false,
     page,
     plugins: pluginOut,
-    counts,
-    structure: { ...structure },
+    evidence: page.evidence,
+    structure: structureOut,
     notes,
-  }
+  })
 }
 
-/**
- * Merge a host snapshot into an ALREADY-BUILT report (A1).
- *
- * The browser's `report()` has no access to the host's host.json by itself —
- * `hostSnapshotProvider` is a test injection only. The lab reads host.json on
- * the Node side and calls this pure function (or passes the snapshot as the
- * second argument to `report()`), so `hostSpan` finally reaches the report.
- *
- * Mutates and returns `report`.
- */
-export function mergeHostSnapshot(report, hostSnapshot) {
-  if (hostSnapshot == null || typeof hostSnapshot !== 'object') return report
-  for (const [pluginId, plugin] of Object.entries(report.plugins ?? {})) {
-    const source = hostSnapshot.plugins?.[pluginId]?.spans
-    if (source == null) continue
-    const merged = { ...(plugin.hostSpan ?? {}) }
-    for (const [name, row] of Object.entries(source)) {
-      const samples = Array.isArray(row.samples) ? row.samples : []
-      merged[name] = {
-        n: row.n ?? samples.length,
-        p50: roundMs(percentile(samples, 0.5)),
-        p95: roundMs(percentile(samples, 0.95)),
-      }
-    }
-    plugin.hostSpan = merged
-  }
-  report.structure = {
-    ...(report.structure ?? {}),
-    hostWriteErrors: (report.structure?.hostWriteErrors ?? 0) +
-      (hostSnapshot.structure?.hostWriteErrors ?? 0),
-  }
-  report.meta = {
-    ...(report.meta ?? {}),
-    hostSinceStart: hostSnapshot.sinceStart ?? null,
-    hostWrittenAt: hostSnapshot.writtenAt ?? null,
-    hostEnabled: hostSnapshot.enabled ?? null,
-    hostWindow: hostSnapshot.window === true,
-  }
-  return report
-}
-
-/**
- * Diff two cumulative host snapshots into a scenario-scoped one (A1).
- * `n` becomes the per-scenario delta; samples stay the latest reservoir
- * (host samples are a reservoir, so exact per-window quantiles are not
- * recoverable — `n` is exact, p50/p95 are labelled as cumulative in notes).
- * Prefer host `takeWindow()` when an exact window is available.
- */
-export function diffHostSnapshots(before, after) {
-  const out = { ...(after ?? {}), plugins: {} }
-  for (const [pluginId, plugin] of Object.entries(after?.plugins ?? {})) {
-    const spans = {}
-    for (const [name, row] of Object.entries(plugin?.spans ?? {})) {
-      const prevN = before?.plugins?.[pluginId]?.spans?.[name]?.n ?? 0
-      spans[name] = {
-        n: Math.max(0, (row.n ?? 0) - prevN),
-        samples: Array.isArray(row.samples) ? row.samples : [],
-      }
-    }
-    out.plugins[pluginId] = { ...plugin, spans }
-  }
-  return out
-}
+/** Unconditional explanations. They are not copied into every report (T-O-PRE1116-08.4). */
+export const NOTE_GLOSSARY = Object.freeze([
+  { id: 'event-timing-split', text: 'Event Timing 三段：inputDelay、processing、presentation。页级 nativeInpP75 含 presentation，不抄进插件行。' },
+  { id: 'synthetic-input', text: 'lab 的 composer-type 用合成按键，presentation 段不等同真实用户 INP。' },
+  { id: 'script-ms-long-frames', text: 'nanoCombined.scriptMs 只统计长帧里的长脚本，不是总脚本耗时。' },
+  { id: 'blocking-over-attribute', text: 'nanoCombined.blockingMs 把含 nano 脚本的整条 LoAF 计入，含非 nano 部分。' },
+  { id: 'client-js-bytes', text: 'nanoCombined.clientJsBytes 是全部 nano 包 combo 的合计，不是单个插件的体积。' },
+])
 
 /**
  * Target-bucket helper re-export for callers that hold descriptors.

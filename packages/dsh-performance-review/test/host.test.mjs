@@ -36,13 +36,16 @@ test('disabled without env flag: passthrough hostSpan, no writer', () => {
   assert.equal(host.snapshot().enabled, false)
 })
 
-test('enabled: writer armed lazily (first read, not hostJoin), hostSpan times to settle', async () => {
+test('enabled: no writer; hostSpan times to settle', async () => {
   const env = fakeEnv()
   const host = createPerfReviewHost(env)
   const api = host.hostJoin('nano-explorer-extra', { version: '0.1.1' })
-  assert.equal(env.timers.length, 0) // lazy resolution — apply() may set the env var after import
-  host.snapshot() // first enablement read arms the writer
-  assert.equal(env.timers.length, 1)
+  assert.equal(env.timers.length, 0)
+  host.snapshot()
+  assert.equal(env.timers.length, 0)
+  assert.equal(host.flush, undefined)
+  assert.equal(host.setEnabled, undefined)
+  assert.equal(host.takeWindow, undefined)
 
   api.hostSpan('git-status', () => { env.performance.advance(12) })
   await api.hostSpan('list', () => Promise.resolve().then(() => env.performance.advance(8)))
@@ -57,32 +60,60 @@ test('enabled: writer armed lazily (first read, not hostJoin), hostSpan times to
   assert.equal(spans['list'].samples[0], 8)
 })
 
-test('writeFile failures count hostWriteErrors; no throw, no retry', async () => {
-  const env = fakeEnv()
-  env.fs.writeFile = async () => { throw new Error('disk full') }
+test('read({ since }) does not delete; cutWindow advances the cursor', () => {
+  const env = fakeEnv({ epoch: 'e1' })
   const host = createPerfReviewHost(env)
-  host.hostJoin('nano-x')
-  await host.flush()
-  await host.flush()
-  assert.equal(host.snapshot().structure.hostWriteErrors, 2)
+  const api = host.hostJoin('nano-x')
+  api.hostSpan('list', () => { env.performance.advance(4) })
+  api.hostSpan('list', () => { env.performance.advance(6) })
+  const seq = host._state().seq
+  const first = host.read({ since: 'e1.0' })
+  const second = host.read({ since: 0 })
+  assert.equal(first.status, 200)
+  assert.equal(first.basis, 'window')
+  assert.equal(first.rows.length, 2)
+  assert.equal(second.rows.length, 2)
+  assert.equal(host._state().seq, seq)
+  const early = host.read({ since: 'e1.1' })
+  assert.equal(early.rows.length, 1)
+  assert.equal(early.rows[0].seq, 2)
+  assert.equal(host.cutWindow, undefined)
+  assert.equal(host.snapshot().plugins['nano-x'].spans.list.n, 2)
+  assert.equal(host.snapshot().plugins['nano-x'].spans.list.windowN, 2)
+  assert.equal(host.read({ since: `e1.${seq}` }).rows.length, 0)
+  assert.equal(host.read({ since: 'e1.0' }).rows.length, 2)
 })
 
-test('flush writes host.json + host-snapshots.jsonl under data dir (P1-4 time series)', async () => {
-  const env = fakeEnv()
-  env.fs.readFile = async () => { throw new Error('ENOENT') }
+test('illegal cursor and mode are 400 and do not drop samples', () => {
+  const env = fakeEnv({ epoch: 'e1' })
   const host = createPerfReviewHost(env)
-  host.hostJoin('nano-x')
-  host.snapshot() // resolve enablement lazily before flushing (first read wins)
-  await host.flush()
-  assert.equal(env.fs.writes.length, 2)
-  assert.ok(env.fs.writes[0].path.endsWith('/tmp/dsh-test/plugins/perf-review/host.json'))
-  assert.ok(env.fs.writes[1].path.endsWith('/tmp/dsh-test/plugins/perf-review/host-snapshots.jsonl'))
-  const parsed = JSON.parse(env.fs.writes[0].data)
-  assert.equal(parsed.version, 2)
-  assert.equal(parsed.enabled, true)
-  const seriesRow = JSON.parse(env.fs.writes[1].data.trim())
-  assert.ok(typeof seriesRow.at === 'string')
-  assert.ok('plugins' in seriesRow)
+  const api = host.hostJoin('nano-x')
+  api.hostSpan('list', () => { env.performance.advance(1) })
+  const seq = host._state().seq
+  const n = host.read().rows.length
+  const bad = host.read({ mode: 'window', since: 'e1.0' })
+  assert.equal(bad.status, 400)
+  assert.equal(bad.rows.length, 0)
+  assert.equal(host._state().seq, seq)
+  assert.equal(host.read().rows.length, n)
+  assert.equal(host.read({ since: 'not-a-cursor' }).status, 400)
+  const skew = host.read({ since: 'other.0' })
+  assert.equal(skew.status, 200)
+  assert.equal(skew.basis, 'cumulative')
+  assert.ok(skew.truncated.includes('epoch'))
+  assert.equal(skew.rows.length, 1)
+})
+
+test('hostSpan names outside NAME_RE increment unmappedKey and still run', () => {
+  const env = fakeEnv()
+  const host = createPerfReviewHost(env)
+  const api = host.hostJoin('nano-x')
+  let ran = 0
+  api.hostSpan('Bad Name', () => { ran += 1 })
+  assert.equal(ran, 1)
+  assert.equal(host._state().structure.unmappedKey, 1)
+  assert.equal(host.snapshot().plugins['nano-x'].spans['Bad Name'], undefined)
+  assert.equal(host.read().rows.length, 0)
 })
 
 test('reservoir caps host span samples at RESERVOIR_CAP', () => {
@@ -126,9 +157,9 @@ test('P1-4: span rows carry pre-aggregated stats + {ms,at,err} event ring', asyn
   assert.equal(typeof span.stats.p50, 'number')
   assert.equal(typeof span.stats.p95, 'number')
   assert.ok(span.stats.lastErrorAt)
-  assert.equal(span.stats.lastTraceId, 'inc-7')
+  assert.equal(span.stats.lastTraceId, undefined)
   assert.equal(span.events.length, 3)
-  assert.equal(span.events[0].traceId, 'inc-7')
+  assert.equal(span.events[0].traceId, undefined)
   assert.equal(span.events[2].err, true)
 })
 

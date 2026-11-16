@@ -2,9 +2,9 @@
  * dsh-performance-review — browser singleton.
  *
  * Bundled into each plugin's lib/client.js. One page owns exactly one
- * `window.__perfReview` regardless of how many plugin bundles carry a copy
- * (spec §3.3); the first copy to run installs it, later copies join the same
- * instance and record themselves in `meta.contributors`.
+ * `globalThis[Symbol.for('dsh.perfReview.v2')]` regardless of how many plugin
+ * bundles carry a copy (T-O-PRE1116-07); the first copy installs it, later
+ * copies reuse it. The legacy string key is never read, written, or upgraded.
  *
  * Enablement: localStorage['dsh-perf-review'] === '1' or ?perf-review=1,
  * decided once at the FIRST join() call, never re-read (spec §6.2).
@@ -17,6 +17,10 @@ import {
   ensurePlugin,
   LIB_VERSION,
   NAME_RE,
+  CONTRACT_KEY_RE,
+  CLIENT_KEY,
+  HOST_KEY,
+  BUILD_STAMP,
   nanoPackagesInUrl,
   packageNameToPluginId,
   recordSpanSample,
@@ -24,10 +28,12 @@ import {
   targetBucket,
   trackRowFor,
   usageAdd,
+  installSingleton,
   WINDOW_PAD_AFTER_MS,
   EVENT_DURATION_THRESHOLD,
 } from './state.js'
-import { buildReport, interactionSamples, pushInteraction, mergeHostSnapshot } from './aggregate.js'
+import { buildReport, hostSnapshotUsable, interactionSamples, pushInteraction } from './aggregate.js'
+import { assertObserveEvent } from '../../dsh-interface/src/contracts/observeEvent.js'
 
 const TRACK_EVENT_CAP = 4096
 const SPAN_EVENT_CAP = 4096
@@ -80,9 +86,8 @@ export function bucketForElement(el, attrs) {
   return targetBucket({ tag: el?.tagName, attrs: {} })
 }
 
-// 'data-nano-shared-workspace' is a HISTORICAL anchor for the plugin
-// dsh-nano-shared-workspace, DEPRECATED 2026-11-12 (moved to deprecated/).
-// Kept only so old pages still bucket correctly; there is no active producer.
+// 'data-nano-shared-workspace' is a HISTORICAL anchor for a plugin moved to
+// deprecated/ on 2026-11-12. Kept only so old pages still bucket correctly.
 const BUCKET_ATTRS = [
   'data-composer', 'data-chat-input',
   'data-nano-notepad', 'data-nano-model-selector',
@@ -188,12 +193,26 @@ export function pickOwner(plugins, target, structure) {
  *   {performance, PerformanceObserver, localStorage, location, forceEnabled,
  *    navigator, hostSnapshotProvider}
  */
+const statusClass = status => {
+  if (typeof status !== 'number' || !Number.isFinite(status)) return null
+  const hundred = Math.floor(status / 100)
+  if (hundred === 2) return '2xx'
+  if (hundred === 3) return '3xx'
+  if (hundred === 4) return '4xx'
+  if (hundred === 5) return '5xx'
+  return null
+}
+
 export function createPerfReview(env = {}) {
   const perf = env.performance ?? globalThis.performance
+  const globalRef = env.global ?? globalThis
   const structure = createStructure()
   const plugins = new Map()
   const contributors = []
+  const contributorKeys = new Set()
   let collector = createCollectorState()
+  let frozenAt = new Date().toISOString()
+  const touch = () => { frozenAt = new Date().toISOString() }
   // Real callers pass no env: read the flag sources off the page globals then.
   // env.localStorage/env.location only override in tests. `typeof localStorage`
   // itself THROWS on opaque origins (about:blank, sandboxed frames), so each
@@ -207,12 +226,6 @@ export function createPerfReview(env = {}) {
   let enabled = env.forceEnabled !== undefined ? env.forceEnabled === true : null
   let observers = null
   let loafSupported = true
-  // A1: the host snapshot reaches the browser report either by explicit
-  // argument (lab), by an injected provider (tests), or by a polled host
-  // route (real page, see configure()). Never by a bare import.
-  let hostSnapshotProvider = env.hostSnapshotProvider ?? null
-  let hostSnapshotCache = null
-  let hostSnapshotTimer = null
   let finalizeTimer = null
 
   collector.startedAt = now(perf)
@@ -366,7 +379,7 @@ export function createPerfReview(env = {}) {
           try {
             for (const entry of list.getEntries()) handler(entry)
             // A2: settle each interaction as soon as its window has passed.
-            // Without this, pendingInteractions only drained at report() and
+            // Without this, pendingInteractions only drained at read() and
             // the 4096-event ring silently lost older samples.
             finalizeDue(now(perf))
           } catch {
@@ -414,6 +427,7 @@ export function createPerfReview(env = {}) {
     const span = spanRowFor(row, structure, name)
     if (span === null) return
     recordSpanSample(span, t1 - t0)
+    touch()
     pushCapped(collector.spanEvents, SPAN_EVENT_CAP, { start: t0, end: t1, pluginId, name })
     try {
       perf.measure?.(`nano:${pluginId}:${name}`, { start: t0, end: t1 })
@@ -479,7 +493,11 @@ export function createPerfReview(env = {}) {
     /** count(name, n) — usage.<name> for this plugin plus page-level counts. */
     count(name, n = 1) {
       if (usageAdd(row, structure, name, n)) {
-        collector.counts.set(name, (collector.counts.get(name) ?? 0) + n)
+        const cell = collector.counts.get(name) ?? { window: 0, total: 0 }
+        cell.window += n
+        cell.total += n
+        collector.counts.set(name, cell)
+        touch()
       }
     },
 
@@ -525,7 +543,13 @@ export function createPerfReview(env = {}) {
   const join = (pluginId, impl = {}) => {
     decideEnabled()
     const row = ensurePlugin(plugins, pluginId)
-    contributors.push({ pluginId, libVersion: impl.libVersion ?? LIB_VERSION })
+    const libVersion = impl.libVersion ?? LIB_VERSION
+    const build = impl.build ?? libVersion
+    const key = `${pluginId}@${build}`
+    if (!contributorKeys.has(key)) {
+      contributorKeys.add(key)
+      contributors.push({ pluginId, libVersion, build })
+    }
     if (impl.version != null) row.meta.version = impl.version
     if (row.meta.implantedAt == null) row.meta.implantedAt = new Date().toISOString()
     if (typeof impl.root === 'function') row._root = impl.root
@@ -534,17 +558,22 @@ export function createPerfReview(env = {}) {
     return makeApi(pluginId, row)
   }
 
-  /** Clear per-window accumulators (spans keep n/reservoir; tracks keep totals/live). */
-  const resetWindow = () => {
+  /**
+   * Clear window columns only (T-O-PRE1116-08.6). Cumulative n / reservoir /
+   * usage total / track totals stay. Also advances the host cursor when the
+   * v2 host singleton is already installed on the same global.
+   */
+  const cutWindow = () => {
     const counts = collector.counts
     // Resource Timing is an INITIAL-LOAD measurement: buffered entries only
-    // arrive once. Preserve it across scenario resets or clientJsBytes is
-    // always 0 after the lab's reset() (§10.7 B3).
+    // arrive once. Preserve it across scenario windows or clientJsBytes is
+    // always 0 after the lab's cutWindow (§10.7 B3).
     const resources = collector.resources
     collector = createCollectorState()
     collector.counts = counts
     collector.resources = resources
     collector.startedAt = now(perf)
+    for (const cell of counts.values()) cell.window = 0
     for (const row of plugins.values()) {
       row.own.interactions = []
       row.native.spanMs = []
@@ -555,99 +584,106 @@ export function createPerfReview(env = {}) {
         track.callbacks = 0
         track.callbackMs = 0
       }
+      for (const cell of row.usage.values()) cell.window = 0
+      if (row.contract instanceof Map) {
+        for (const bucket of row.contract.values()) bucket.window = 0
+      }
       row.profiler.durations = []
     }
+    touch()
   }
 
   /**
-   * A1: wire a host-snapshot source into the page singleton. The first
-   * implant that has a host route calls this; later calls are ignored so four
-   * bundles do not start four pollers. Disabled pages pay nothing.
+   * Contract-surface event (T-O-PRE1116-06). Outcome admission is the shared
+   * contract, not a second list. A missing id increments missingBindingId and
+   * is not keyed by URL. Dotted ids do not share the manual 32-key quota.
    */
-  const configure = (opts = {}) => {
-    if (typeof opts.hostSnapshotProvider === 'function') {
-      hostSnapshotProvider = opts.hostSnapshotProvider
+  const observe = event => {
+    if (enabled === false) return
+    if (event == null || typeof event !== 'object' || Array.isArray(event)) {
+      structure.badShape += 1
       return
     }
-    if (typeof opts.hostSnapshotUrl !== 'string') return
-    if (hostSnapshotProvider !== null || hostSnapshotTimer !== null || enabled !== true) return
-    const fetchRef = env.fetch ?? globalThis.fetch
-    const setIntervalRef = env.setInterval ?? globalThis.setInterval
-    if (typeof fetchRef !== 'function' || typeof setIntervalRef !== 'function') return
-    const pull = () => {
-      try {
-        Promise.resolve(fetchRef(opts.hostSnapshotUrl, { credentials: 'same-origin', cache: 'no-store' }))
-          .then(response => response?.json?.())
-          .then(snapshot => {
-            if (snapshot !== null && typeof snapshot === 'object') hostSnapshotCache = snapshot
-          })
-          .catch(() => { /* host route absent / not enabled: keep last good snapshot */ })
-      } catch { /* best-effort */ }
+    if (!Object.prototype.hasOwnProperty.call(event, 'id') || event.id == null || event.id === '') {
+      structure.missingBindingId += 1
+      return
     }
-    pull()
-    hostSnapshotTimer = setIntervalRef(pull, 5000)
-    if (typeof hostSnapshotTimer?.unref === 'function') hostSnapshotTimer.unref()
-  }
-
-  const setHostSnapshotProvider = fn => {
-    hostSnapshotProvider = typeof fn === 'function' ? fn : null
-  }
-
-  /** A4: clear cumulative usage/counts at a lab scenario boundary. */
-  const resetCounters = () => {
-    collector.counts.clear()
-    for (const row of plugins.values()) row.usage.clear()
-  }
-
-  const report = (meta = {}, hostSnapshot = null) => {
-    finalizeDue(now(perf) + 60_000) // flush every pending interaction
-    const contributorsSeen = []
-    const seen = new Set()
-    for (const c of contributors) {
-      const key = `${c.pluginId}@${c.libVersion}`
-      if (seen.has(key)) continue
-      seen.add(key)
-      contributorsSeen.push(c)
+    let admitted
+    try {
+      admitted = assertObserveEvent(event)
+    } catch {
+      structure.badShape += 1
+      return
     }
+    if (typeof admitted.id !== 'string' || !CONTRACT_KEY_RE.test(admitted.id)) {
+      structure.badShape += 1
+      return
+    }
+    if (typeof admitted.plugin !== 'string' || admitted.plugin.length === 0) {
+      structure.badShape += 1
+      return
+    }
+    const row = ensurePlugin(plugins, admitted.plugin)
+    let bucket = row.contract.get(admitted.id)
+    if (bucket === undefined) {
+      bucket = {
+        n: 0,
+        window: 0,
+        outcomes: {},
+        status: { '2xx': 0, '3xx': 0, '4xx': 0, '5xx': 0 },
+      }
+      row.contract.set(admitted.id, bucket)
+    }
+    bucket.n += 1
+    bucket.window += 1
+    bucket.outcomes[admitted.outcome] = (bucket.outcomes[admitted.outcome] ?? 0) + 1
+    const klass = statusClass(admitted.status)
+    if (klass) bucket.status[klass] += 1
+    touch()
+  }
+
+  /**
+   * read(meta) has no side effects on window columns or host seq
+   * (T-O-PRE1116-02.4 / 08.6). It does not flush pending interactions past now.
+   */
+  const read = (meta = {}) => {
+    const input = meta == null || typeof meta !== 'object' ? {} : meta
+    finalizeDue(now(perf))
     const navigatorRef = env.navigator ?? globalThis.navigator
     const chrome = /Chrome\/(\d+)/.exec(navigatorRef?.userAgent ?? '')
-    const snapshot = hostSnapshot ??
-      (typeof hostSnapshotProvider === 'function' ? hostSnapshotProvider() : hostSnapshotCache)
-    const result = buildReport({
+    const provided = Object.prototype.hasOwnProperty.call(input, 'host')
+    const hostSnapshot = provided ? input.host : null
+    const hostBad = provided && hostSnapshot != null && !hostSnapshotUsable(hostSnapshot)
+    return buildReport({
       meta: {
-        generatedAt: new Date().toISOString(),
-        chromeMajor: chrome === null ? null : Number(chrome[1]),
-        observerVersion: LIB_VERSION,
-        contributors: contributorsSeen,
-        ...meta,
+        generatedAt: input.generatedAt ?? frozenAt,
+        scenario: input.scenario,
+        arm: input.arm,
+        chromeMajor: input.chromeMajor ?? (chrome === null ? null : Number(chrome[1])),
+        contributors: contributors.map(item => ({ ...item })),
       },
       collector,
       plugins,
       structure,
-      hostSnapshot: snapshot ?? null,
+      hostSnapshot: hostBad ? null : hostSnapshot,
+      hostBad,
       enabled: enabled === true,
       loafSupported,
     })
-    // buildReport fills hostSpan rows; mergeHostSnapshot adds host write errors
-    // and host timing metadata so staleness is visible in the report.
-    if (snapshot != null) mergeHostSnapshot(result, snapshot)
-    resetWindow()
-    return result
   }
 
   return {
     join,
-    report,
-    configure,
-    setHostSnapshotProvider,
-    reset: resetWindow,
-    resetCounters,
+    read,
+    cutWindow,
+    observe,
     /** test/diagnostic accessors — not part of the implant contract. */
     _state: () => ({ collector, plugins, structure, enabled, loafSupported, contributors }),
     _finalizeDue: finalizeDue,
     _absorbEventEntry: absorbEventEntry,
     _absorbLoafEntry: absorbLoafEntry,
     _absorbResourceEntry: absorbResourceEntry,
+    _build: env.build ?? BUILD_STAMP,
     libVersion: LIB_VERSION,
   }
 }
@@ -656,13 +692,13 @@ export function createPerfReview(env = {}) {
 export { LIB_VERSION }
 
 /**
- * Install-or-reuse the page singleton. Each bundled copy calls this at module
- * evaluation; the first creates it, later copies get the same object.
+ * Install-or-reuse the page singleton on the v2 symbol only
+ * (T-O-PRE1116-07.1–07.3). The legacy string key is not migrated.
  */
 export function ensurePerfReview(env = {}) {
   const global = env.global ?? globalThis
-  if (global.__perfReview == null) global.__perfReview = createPerfReview(env)
-  return global.__perfReview
+  const stamp = env.build ?? BUILD_STAMP
+  return installSingleton(global, CLIENT_KEY, '__perfReview', stamp, () => createPerfReview({ ...env, build: stamp }))
 }
 
 // Auto-install in real pages (skipped under node --test where window is absent).

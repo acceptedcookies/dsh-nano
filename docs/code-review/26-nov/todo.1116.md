@@ -103,17 +103,17 @@ P0-00 干净树 + worktree
   - **落点**：DNPR `client.js` / `host.js` / `state.js`；七插件构建 define
   - **完成判据**：旧键对象字段不变；`legacyCopies` 增加；双构建戳一条 audit
   - **验证映射**：`PRE1116-T09` `PRE1116-T10` · **依赖**：W2 commit
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
+  - **执行状态**：`partial` · **执行时间**：`2026-11-16T16:20:00Z` · **证据 / 备注**：新键 `Symbol.for('dsh.perfReview.v2'|'dsh.perfReviewHost.v2')`；旧键不迁移；`legacyCopies` 与双戳 audit 有单测。`LIB_VERSION` 仍导出，七插件构建戳 define 未注入。
 - [ ] `P3-02` — v2 报告、`read` / `cutWindow`、宿主游标
   - **落点**：`client.js`、`aggregate.js`、`host.js`、`state.js`、`markdown.js`
   - **完成判据**：连续 `read()` 深相等；退役动词无别名
   - **验证映射**：`PRE1116-T11` `PRE1116-T12` `PRE1116-T13` `PRE1116-T21` · **依赖**：`P3-01`
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
+  - **执行状态**：`partial` · **执行时间**：`2026-11-16T16:20:00Z` · **证据 / 备注**：顶层 `schema: dnpr.report/2`；页面 `read`/`cutWindow`；宿主无切窗动词，`read({since})` 不删样本。页面 `cutWindow` 尚未记住宿主 `next`。
 - [ ] `P3-03` — `diagnose` 与 `validateDeclaration`
   - **落点**：`src/diagnose.js`、`src/declaration.js`、`test-helpers`
   - **完成判据**：浏览器产物不含 diagnose；插件名不出现在 DNPR 与 lab 源码
   - **验证映射**：`PRE1116-T14` `PRE1116-T15` · **依赖**：`P3-02`
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
+  - **执行状态**：`partial` · **执行时间**：`2026-11-16T16:20:00Z` · **证据 / 备注**：`src/diagnose.js` 与 `src/declaration.js` 已从 `./client`、`./host` 分开导出。`npm test` 74 pass。七份声明与三方对账未做。
 - [ ] `P3-04` — 只读 handler；写盘器退役；先挂 [DNN]/[DNMS]
   - **落点**：DNPR host 出口；[DNN]/[DNMS] 注册点。不含 [DNEE] `mode=window`
   - **完成判据**：双读者互不删样本；夹具不产生 `host.json`
@@ -178,7 +178,8 @@ P0-00 干净树 + worktree
 | `PRE1116-T06` | 命名表负例 | 烘焙负例 | 缺表 / 不一致 / path 改 id 不变 | path 改了 id 仍是原 id；命名不一致抛错 | 同上 | `pass` |
 | `PRE1116-T07` | 单一烘焙作者 | check-clean-lib + 存在性 | 7 份 bindings；无 routeTableModule | `routeTableModule` 导出不存在；clean-lib OK | 同上 + check-clean-lib | `pass` |
 | `PRE1116-T08` | inventory id | route-guard 测试 | id 等于账本 | 记录在 row.id 存在时带 id；文档句未改 | route-guard.js 冻结记录 | `partial` |
-| `PRE1116-T09`–`T25` | W3 行为与文档 | 见执行计划 §8 | 各有负例 | - | - | `pending` |
+| `PRE1116-T09`–`T15` | W3 包内协议、报告、判定 | `npm test`（dsh-performance-review） | 74 pass。构建戳未进七插件；`LIB_VERSION` 仍在 | 2026-11-16T16:20Z `npm test` 74/74 | `packages/dsh-performance-review` | `partial` |
+| `PRE1116-T16`–`T25` | 声明、span、lab、文档 | 见执行计划 §8 | 各有负例 | - | - | `pending` |
 | `PRE1116-T26` | 本机真实页面 | 不执行 | 保持未观察 | 无 grant 不部署 | - | `not-applicable` |
 | `PRE1116-T27` | route-scan | `node scripts/route-scan.mjs` | 漂移类 0；upgrade 仍在 | - | - | `pending` |
 | `PRE1116-T28` | test-all --build | W2 与 W3 各一次 | 退出码 0，不销其他 ID | - | - | `pending` |
@@ -187,8 +188,8 @@ P0-00 干净树 + worktree
 
 ## 5. 当前状态与交接
 
-- **当前节点**：W2 身份与烘焙已落地，待 commit。P2-04 的 inventory 文档句未收完。
-- **下一动作**：commit W2，然后进入 W3 协议硬切。
+- **当前节点**：W3 的协议、报告和判定在 [DNPR] 包内，单测 74 通过，待提交。插件声明、读取路由、span 退役、lab 与文档未做。
+- **下一动作**：提交 ①②③ 的包内改动，然后做只读 handler，先挂 [DNN] 与 [DNMS]。
 - **当前阻塞**：无。
 - **待 owner**：合并到 `main`；T26 部署；worktree 删除。
 - **最终交接**：分支 `facade-observe-binding-v2`，closure 指向本 todo。

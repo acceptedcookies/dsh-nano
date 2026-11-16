@@ -105,12 +105,22 @@ bundle({
 // `exports.apply = apply` would never find (this was the "apply is not defined"
 // regression). The IIFE body is embedded verbatim; no brace-slicing.
 const source = readFileSync(body, 'utf8').trim()
-writeFileSync(join(root, 'lib/client.js'), `window.__ModuleLoader__.load({
+const wrapped = `window.__ModuleLoader__.load({
 	id: "dsh-nano-model-selector",
 	factory: (require) => {
 ${source}
 		return __modelSelectorExport;
 	}
 });
-`)
+`
+// Post-build self-check: the three loader externals must still be referenced
+// by name — an external-config drift silently inlines or drops them and the
+// slot dies at require time on the host.
+for (const name of ['react', 'react-dom', '@deepseek-ai/dsh-client-ui-primitives']) {
+  if (!wrapped.includes(`"${name}"`)) {
+    console.error(`[build] externals self-check failed: "${name}" not referenced in lib/client.js`)
+    process.exit(1)
+  }
+}
+writeFileSync(join(root, 'lib/client.js'), wrapped)
 rmSync(body)

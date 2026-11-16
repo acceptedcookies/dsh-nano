@@ -91,6 +91,8 @@ node scripts/deploy-local.mjs --home <home> --profile <p> \
 
 部署完成后**重启服务该 profile 的宿主进程**再刷新页面——插件代码在宿主启动时加载，只刷新页面不会换宿主路由。
 
+可选验证（不阻塞发布）：装了 `dsh-nano-model-selector` 的实例，刷新后跑 `SMOKE_URL='<带 token 的 GUI URL>' bash scripts/gui-smoke.sh`——四条断言（slot 挂载、徽标开压缩面板、触发器回模型列表、无 React 错误文本）全 PASS 才算界面层真的活了。
+
 ## 信任链总览
 
 ```

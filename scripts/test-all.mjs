@@ -56,6 +56,7 @@ if (existsSync(smoke)) {
 // Repo-level gates.
 for (const gate of [
   'scripts/check-clean-lib.mjs',
+  'scripts/check-client-rules.mjs',
   'scripts/check-feature-contract.mjs',
   'scripts/check-route-sensitivity.mjs',
   'scripts/route-scan.mjs',

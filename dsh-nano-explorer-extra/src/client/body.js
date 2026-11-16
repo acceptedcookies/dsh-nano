@@ -914,7 +914,10 @@ export function ExplorerBody(props) {
     const target = { path: menu.path, name: menu.name, kind: menu.kind }
     // Only a file has a preview, and only while another workbench pane is actually
     // sitting to the right of this one. A pane below, or none, leaves the row out.
-    const rightPane = menu.kind === 'file' ? paneToTheRightOf(panel.id) : undefined
+    // Anchor on this page's own root. Pane ids repeat across sessions, so a
+    // lookup by `panel.id` can hit a hidden session's zero-size copy and miss
+    // the pane that is actually open on the right.
+    const rightPane = menu.kind === 'file' ? paneToTheRightOf(rootEl.current) : undefined
     const revealId = openApps[0]
     const open = app => {
       // The launch route only accepts an absolute directory: a file row reveals its containing
@@ -983,7 +986,7 @@ export function ExplorerBody(props) {
       { id: 'delete', label: copy.delete, tone: 'danger', icon: React.createElement(primitives.IconTrashOutlineRegular, { width: 14, height: 14 }),
         run: () => { setLinkNote(undefined); setDeleteRequest(target) } },
     ].filter(Boolean)
-  }, [menu, copy, openApps, cwd, copyPath, statusOf, openDiff, nxe, sessionId, panel.id, openEntry])
+  }, [menu, copy, openApps, cwd, copyPath, statusOf, openDiff, nxe, sessionId, openEntry])
 
   return React.createElement('div', { className: 'nxe-root', 'data-nxe': 'true', 'data-theme': nxe.scheme(), ref: rootEl },
     React.createElement('div', { className: 'nxe-header' },

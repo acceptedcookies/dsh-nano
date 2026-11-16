@@ -18,7 +18,7 @@ export const OWN_ID = 'nano-explorer-extra'
 
 /**
  * Attribution root for event ownership (spec §6.7). keepMounted leaves one
- * `.nxe-root` per session on the page; hidden panes live under a
+ * `[data-nxe]` root per session on the page; hidden panes live under a
  * `[data-sidebar-right-pane]` host carrying `hidden`. `firstVisibleRoot`
  * picks the first connected, unhidden pane — and does it without layout reads.
  */

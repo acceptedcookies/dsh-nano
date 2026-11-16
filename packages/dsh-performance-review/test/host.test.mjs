@@ -108,6 +108,19 @@ test('GET perf-review host accepts only since', () => {
   assert.equal(post.statusCode, 405)
 })
 
+test('observe records a contract row and does not drop earlier spans', () => {
+  const env = fakeEnv({ epoch: 'e1' })
+  const host = createPerfReviewHost(env)
+  host.hostJoin('nano-x').hostSpan('list', () => { env.performance.advance(1) })
+  host.observe({ surface: 'http', id: 'nx.health', plugin: 'nano-x', outcome: 'ok', ms: 3, status: 200 })
+  host.observe({ surface: 'http', id: null, plugin: 'nano-x', outcome: 'ok', ms: 1 })
+  const view = host.read({ since: 'e1.0' })
+  assert.equal(view.rows.filter(row => row.kind === 'contract').length, 1)
+  assert.equal(view.rows.some(row => row.name === 'list'), true)
+  assert.equal(host._state().structure.missingBindingId, 1)
+  assert.equal(host.read().rows.length, view.rows.length)
+})
+
 test('illegal cursor and mode are 400 and do not drop samples', () => {
   const env = fakeEnv({ epoch: 'e1' })
   const host = createPerfReviewHost(env)

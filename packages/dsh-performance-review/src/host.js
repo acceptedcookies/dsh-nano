@@ -7,9 +7,11 @@
  * span or snapshot. There is no writer and no `setEnabled`.
  */
 
+import { assertObserveEvent } from '../../dsh-interface/src/contracts/observeEvent.js'
 import {
   LIB_VERSION,
   NAME_RE,
+  CONTRACT_KEY_RE,
   HOST_KEY,
   BUILD_STAMP,
   percentile,
@@ -129,6 +131,19 @@ function collectRows(state, predicate) {
           ms: event.ms,
           err: event.err === true,
           at: event.at,
+        })
+      }
+    }
+    for (const [name, bucket] of row.contract ?? []) {
+      for (const event of bucket.log ?? []) {
+        if (predicate && !(event.seq > predicate.seq)) continue
+        rows.push({
+          seq: event.seq,
+          pluginId,
+          name,
+          kind: 'contract',
+          outcome: event.outcome,
+          ms: event.ms,
         })
       }
     }
@@ -292,9 +307,51 @@ export function createPerfReviewHost(env = {}) {
     return { status: 200, basis: 'window', rows, truncated, ...base }
   }
 
+  const observe = event => {
+    if (!isEnabled()) return
+    if (event == null || typeof event !== 'object' || Array.isArray(event)) {
+      state.structure.badShape += 1
+      return
+    }
+    let admitted
+    try { admitted = assertObserveEvent(event) } catch {
+      state.structure.badShape += 1
+      return
+    }
+    if (admitted.id == null || admitted.id === '') {
+      state.structure.missingBindingId += 1
+      return
+    }
+    if (!CONTRACT_KEY_RE.test(admitted.id) || typeof admitted.plugin !== 'string' || admitted.plugin === '') {
+      state.structure.badShape += 1
+      return
+    }
+    let row = state.plugins.get(admitted.plugin)
+    if (row === undefined) {
+      row = { version: null, spans: new Map(), counts: new Map(), contract: new Map() }
+      state.plugins.set(admitted.plugin, row)
+    }
+    if (!(row.contract instanceof Map)) row.contract = new Map()
+    state.seq += 1
+    let bucket = row.contract.get(admitted.id)
+    if (bucket === undefined) {
+      bucket = { n: 0, window: 0, outcomes: {}, log: [] }
+      row.contract.set(admitted.id, bucket)
+    }
+    bucket.n += 1
+    bucket.window += 1
+    bucket.outcomes[admitted.outcome] = (bucket.outcomes[admitted.outcome] ?? 0) + 1
+    bucket.log.push({ seq: state.seq, outcome: admitted.outcome, ms: admitted.ms })
+    if (bucket.log.length > WINDOW_SAMPLE_CAP) {
+      bucket.log.shift()
+      bucket.lost = (bucket.lost ?? 0) + 1
+    }
+  }
+
   return {
     hostJoin,
     read,
+    observe,
     snapshot: () => { isEnabled(); return hostSnapshot(state) },
     _state: () => state,
     _build: state._build,

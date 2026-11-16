@@ -123,7 +123,7 @@ P0-00 干净树 + worktree
   - **落点**：`src/perf/declaration.json` ×7；三份 `src/client/perf.js` 与 [DNK] 懒 join
   - **完成判据**：不新建第四份 `perf.js`；[DNMSC] 零依赖
   - **验证映射**：`PRE1116-T16` `PRE1116-T15` · **依赖**：`P3-04`
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
+  - **执行状态**：`partial` · **执行时间**：`2026-11-16T16:45:00Z` · **证据 / 备注**：七份声明通过校验。[DNMSC] 无声明。六个合同面传入 `observe`。四处页面 join 还没替换。
 - [ ] `P3-06` — 9 个手写 span、动态名封闭、采集开关只认运维入口
   - **落点**：§7.1 A-24；[DNK] `src/host/perf.js` 留 `hostSpan`
   - **完成判据**：退役 5 名不在 `keys.hostSpans`；插件不再写 `process.env.DSH_PERF_REVIEW`
@@ -188,8 +188,8 @@ P0-00 干净树 + worktree
 
 ## 5. 当前状态与交接
 
-- **当前节点**：只读 host 路由已挂在 [DNN] 与 [DNMS]，待提交。[DNEE] 排空仍在，按 `11.5` ③ 不能提前删。
-- **下一动作**：提交这一刀，然后做七份声明和 `observe` 注入。
+- **当前节点**：七份声明和合同面 `observe` 已接到源码，待提交。span 退役、排空删除、lab 与文档还没做。
+- **下一动作**：提交这一刀，然后退役 5 个手写 span，保留 4 个。
 - **当前阻塞**：无。
 - **待 owner**：合并到 `main`；T26 部署；worktree 删除。
 - **最终交接**：分支 `facade-observe-binding-v2`，closure 指向本 todo。

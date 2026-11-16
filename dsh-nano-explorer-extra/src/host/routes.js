@@ -648,6 +648,10 @@ export function registerRoutes(ctx, routes) {
       }
     },
   }))
-  const registrar = createWebRegistrar({ plugin: PLUGIN, bindings })
+  const registrar = createWebRegistrar({
+    plugin: PLUGIN,
+    bindings,
+    observe: event => globalThis[Symbol.for('dsh.perfReviewHost.v2')]?.observe?.(event),
+  })
   return [registrar.registerAll(ctx)]
 }

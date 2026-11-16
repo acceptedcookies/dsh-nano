@@ -482,5 +482,5 @@ export function apply(ctx, config = {}) {
     nativeBridges.clear()
   }, 'nano-cloud-session: native bridges')
 
-  registerRoutes(ctx, SPECS, { table: BINDING_TABLE, plugin: PLUGIN })
+  registerRoutes(ctx, SPECS, { table: BINDING_TABLE, plugin: PLUGIN, observe: event => ensurePerfReviewHost().observe(event) })
 }

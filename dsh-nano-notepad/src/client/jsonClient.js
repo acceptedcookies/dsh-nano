@@ -4,6 +4,8 @@ import { createJsonClient } from 'dsh-interface/host'
 const client = createJsonClient({
   fetch: (url, init) => fetch(url, { credentials: 'same-origin', cache: 'no-store', ...init }),
   resolveUrl: (_op, req) => req.url,
+  plugin: 'dsh-nano-notepad',
+  observe: event => globalThis[Symbol.for('dsh.perfReview.v2')]?.observe?.(event),
 })
 
 /* The host writes {ok:true,…} on success and {ok:false,reason,message} on a

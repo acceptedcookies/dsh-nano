@@ -1,0 +1,15 @@
+{
+  "schema": "dnpr.declaration/1",
+  "plugin": "nano-kitesurf",
+  "keys": {
+    "spans": [],
+    "tracks": [],
+    "usage": [],
+    "hostSpans": [
+      "kite-warmup"
+    ]
+  },
+  "contract": [],
+  "scenarios": [],
+  "budgets": []
+}

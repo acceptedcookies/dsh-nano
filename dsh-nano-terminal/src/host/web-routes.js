@@ -198,6 +198,7 @@ export function registerWebRoutes(ctx, deps) {
   const registrar = createWebRegistrar({
     plugin: 'dsh-nano-terminal',
     bindings: BINDING_TABLE.map(b => ({ ...b, handler: HANDLERS[b.id] })),
+    observe: event => globalThis[Symbol.for('dsh.perfReviewHost.v2')]?.observe?.(event),
   })
   return registrar.registerAll(ctx)
 }

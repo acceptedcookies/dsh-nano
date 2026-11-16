@@ -1,9 +1,87 @@
 // src/host/routes.js
 import { watch } from "node:fs";
 
+// ../packages/dsh-interface/src/contracts/jsonOutcome.js
+var FAILURE_KIND = Object.freeze({
+  /** signal aborted; issued-before cancellation makes no server-side claim. */
+  CANCELLED: "cancelled",
+  /** Network/read-body failure; keep real httpStatus only when headers landed. */
+  TRANSPORT: "transport",
+  /** Non-2xx that is not a recognized sanctioned business failure; keep status. */
+  HTTP: "http",
+  /** Pre-request encode/binding failure OR illegal 2xx — never becomes ok:true. */
+  PROTOCOL: "protocol",
+  /** Recognized sanctioned business failure (incl. legal 2xx business failures). */
+  DOMAIN: "domain"
+});
+var FAILURE_KINDS = Object.freeze(Object.values(FAILURE_KIND));
+
+// ../packages/dsh-interface/src/contracts/observeEvent.js
+var OBSERVE_SURFACES = Object.freeze(["http", "upgrade", "json", "mcp"]);
+var HTTP_OUTCOMES = Object.freeze(["ok", "rejected", "method", "failed"]);
+var UPGRADE_OUTCOMES = Object.freeze(["accepted", "rejected", "method"]);
+var JSON_OUTCOMES = Object.freeze(["ok", ...FAILURE_KINDS]);
+var MCP_OUTCOMES = Object.freeze(["ok", "error", "rejected"]);
+var OBSERVE_FIELDS = Object.freeze([
+  "surface",
+  "id",
+  "plugin",
+  "outcome",
+  "ms",
+  "status",
+  "kind"
+]);
+var REQUIRED = ["surface", "id", "plugin", "outcome", "ms"];
+var OPTIONAL = /* @__PURE__ */ new Set(["status", "kind"]);
+var OUTCOMES = {
+  http: new Set(HTTP_OUTCOMES),
+  upgrade: new Set(UPGRADE_OUTCOMES),
+  json: new Set(JSON_OUTCOMES),
+  mcp: new Set(MCP_OUTCOMES)
+};
+function fail(message) {
+  throw new TypeError(`observe-event: ${message}`);
+}
+function assertObserveEvent(event) {
+  if (event == null || typeof event !== "object" || Array.isArray(event)) {
+    fail("event must be an object");
+  }
+  const keys = Object.keys(event);
+  for (const key of keys) {
+    if (!REQUIRED.includes(key) && !OPTIONAL.has(key)) fail(`unknown field ${key}`);
+  }
+  for (const key of REQUIRED) {
+    if (!Object.prototype.hasOwnProperty.call(event, key)) fail(`missing ${key}`);
+  }
+  if (!OUTCOMES[event.surface]) fail(`unknown surface ${String(event.surface)}`);
+  if (event.id !== null && (typeof event.id !== "string" || event.id === "")) {
+    fail("id must be a non-empty string or null");
+  }
+  if (event.plugin !== null && (typeof event.plugin !== "string" || event.plugin === "")) {
+    fail("plugin must be a non-empty string or null");
+  }
+  if (typeof event.outcome !== "string" || !OUTCOMES[event.surface].has(event.outcome)) {
+    fail(`unknown outcome ${String(event.outcome)} for ${event.surface}`);
+  }
+  if (typeof event.ms !== "number" || !Number.isFinite(event.ms)) fail("ms must be a finite number");
+  if (Object.prototype.hasOwnProperty.call(event, "status")) {
+    if (typeof event.status !== "number" || !Number.isFinite(event.status)) fail("status must be a finite number");
+  }
+  if (event.surface === "mcp" && event.outcome === "error") {
+    if (typeof event.kind !== "string" || event.kind === "") fail("mcp error requires kind");
+  } else if (Object.prototype.hasOwnProperty.call(event, "kind")) {
+    if (typeof event.kind !== "string" || event.kind === "") fail("kind must be a non-empty string");
+  }
+  return event;
+}
+
 // ../packages/dsh-performance-review/src/state.js
 var LIB_VERSION = "0.1.0";
+var CLIENT_KEY = Symbol.for("dsh.perfReview.v2");
+var HOST_KEY = Symbol.for("dsh.perfReviewHost.v2");
+var BUILD_STAMP = "dev";
 var NAME_RE = /^[a-z0-9][a-z0-9-]{0,39}$/;
+var CONTRACT_KEY_RE = /^[a-z0-9][a-z0-9.-]{0,63}$/;
 var MAX_USAGE_KEYS = 32;
 var RESERVOIR_CAP = 64;
 function percentile(values, p) {
@@ -15,15 +93,64 @@ function percentile(values, p) {
 function createSpanRow() {
   return { n: 0, window: [], reservoir: [] };
 }
+function createStructure() {
+  return {
+    rootErrors: 0,
+    badNames: 0,
+    overflowSpans: 0,
+    overflowUsage: 0,
+    observerErrors: 0,
+    // A single observe() can fail silently (e.g. LoAF unsupported) while the
+    // other two succeed. `observerErrors` only fires when ALL fail; this
+    // counter makes a partial observer install visible (A5 / §10.4.6).
+    observersMissing: 0,
+    legacyCopies: 0,
+    badShape: 0,
+    unmappedKey: 0,
+    missingBindingId: 0,
+    oversize: 0,
+    /** Protocol findings such as `{ level, code:'build-stamp', have, saw }`. */
+    audits: []
+  };
+}
+function pushAudit(structure, record) {
+  if (!Array.isArray(structure.audits)) structure.audits = [];
+  const dup = structure.audits.some((item) => item.level === record.level && item.code === record.code && item.have === record.have && item.saw === record.saw);
+  if (!dup) structure.audits.push(record);
+}
+function installSingleton(global, key, legacyKey, stamp, create) {
+  const existing = global[key];
+  if (existing == null) {
+    const created = create();
+    created._build = stamp;
+    global[key] = created;
+    if (legacyKey != null && global[legacyKey] != null) {
+      const structure = created._state?.().structure;
+      if (structure != null) structure.legacyCopies += 1;
+    }
+    return created;
+  }
+  if (existing._build !== stamp) {
+    const structure = existing._state?.().structure;
+    if (structure != null) {
+      pushAudit(structure, {
+        level: "audit",
+        code: "build-stamp",
+        have: existing._build ?? null,
+        saw: stamp
+      });
+    }
+  }
+  return existing;
+}
+var NANO_PKG_PREFIX = ["dsh", "nano"].join("-") + "-";
 function roundMs(value) {
   return value == null ? null : Math.round(value * 10) / 10;
 }
 
 // ../packages/dsh-performance-review/src/host.js
-var WRITE_INTERVAL_MS = 3e4;
 var WINDOW_SAMPLE_CAP = 512;
 var EVENT_CAP = 32;
-var JSONL_CAP_BYTES = 8 * 1024 * 1024;
 var isPromiseLike = (value) => value !== null && typeof value === "object" && typeof value.then === "function";
 function spanStats(span) {
   const reservoir = span.reservoir ?? [];
@@ -35,8 +162,7 @@ function spanStats(span) {
     errors: span.errors ?? 0,
     lastMs: span.lastMs ?? null,
     lastAt: span.lastAt ?? null,
-    lastErrorAt: span.lastErrorAt ?? null,
-    lastTraceId: span.lastTraceId ?? null
+    lastErrorAt: span.lastErrorAt ?? null
   };
 }
 function hostSnapshot(state) {
@@ -61,118 +187,120 @@ function hostSnapshot(state) {
   }
   return {
     version: 2,
-    enabled: state.enabled,
-    observerVersion: LIB_VERSION,
-    contributors: state.contributors.map((c) => ({ ...c })),
+    enabled: state.enabled === true,
+    contributors: state.contributors.map((item) => ({ ...item })),
     sinceStart: state.sinceStart,
-    writtenAt: (/* @__PURE__ */ new Date()).toISOString(),
+    epoch: state.epoch,
+    seq: state.seq,
+    cursor: state.cursor,
+    writtenAt: state.sinceStart,
     plugins,
-    structure: { hostWriteErrors: state.writeErrors }
+    structure: { ...state.structure, audits: [...state.structure.audits ?? []] }
   };
 }
-function takeWindow(state) {
-  const snap = hostSnapshot(state);
-  const plugins = {};
+function parseCursor(since, epoch) {
+  if (typeof since === "number") {
+    if (!Number.isInteger(since) || since < 0) return { error: true };
+    return { epoch, seq: since };
+  }
+  if (typeof since === "string") {
+    const dot = since.lastIndexOf(".");
+    if (dot <= 0) return { error: true };
+    const ep = since.slice(0, dot);
+    const seq = Number(since.slice(dot + 1));
+    if (ep.length === 0 || !Number.isInteger(seq) || seq < 0) return { error: true };
+    return { epoch: ep, seq };
+  }
+  if (since !== null && typeof since === "object" && !Array.isArray(since)) {
+    const seq = since.seq;
+    if (since.epoch == null || !Number.isInteger(seq) || seq < 0) return { error: true };
+    return { epoch: String(since.epoch), seq };
+  }
+  return { error: true };
+}
+function collectRows(state, predicate) {
+  const rows = [];
+  const truncated = [];
   for (const [pluginId, row] of state.plugins) {
-    const spans = {};
     for (const [name2, span] of row.spans) {
-      spans[name2] = { n: span.window.length, samples: [...span.window] };
+      const minKept = span.minKeptSeq;
+      if (predicate && minKept != null) {
+        const floor = predicate.seq;
+        if (floor + 1 < minKept) {
+          truncated.push({ pluginId, name: name2, lost: minKept - floor - 1 });
+        }
+      } else if (!predicate && (span.lost ?? 0) > 0) {
+        truncated.push({ pluginId, name: name2, lost: span.lost });
+      }
+      for (const event of span.log ?? []) {
+        if (predicate && !(event.seq > predicate.seq)) continue;
+        rows.push({
+          seq: event.seq,
+          pluginId,
+          name: name2,
+          ms: event.ms,
+          err: event.err === true,
+          at: event.at
+        });
+      }
     }
-    const counts = {};
-    if (row.counts instanceof Map) {
-      for (const [name2, n] of row.counts) counts[name2] = n;
+    for (const [name2, bucket] of row.contract ?? []) {
+      for (const event of bucket.log ?? []) {
+        if (predicate && !(event.seq > predicate.seq)) continue;
+        rows.push({
+          seq: event.seq,
+          pluginId,
+          name: name2,
+          kind: "contract",
+          outcome: event.outcome,
+          ms: event.ms
+        });
+      }
     }
-    plugins[pluginId] = { version: row.version ?? null, spans, counts };
   }
-  for (const row of state.plugins.values()) {
-    for (const span of row.spans.values()) span.window.length = 0;
-  }
-  return { ...snap, window: true, plugins };
+  rows.sort((a, b) => a.seq - b.seq);
+  return { rows, truncated };
 }
 function createPerfReviewHost(env = {}) {
   const processRef = env.process ?? globalThis.process;
+  const epoch = env.epoch != null ? String(env.epoch) : Math.floor(Math.random() * 1e9).toString(36);
   const state = {
     enabled: env.forceEnabled !== void 0 ? env.forceEnabled === true : null,
     plugins: /* @__PURE__ */ new Map(),
     contributors: [],
-    writeErrors: 0,
+    contributorKeys: /* @__PURE__ */ new Set(),
     sinceStart: (/* @__PURE__ */ new Date()).toISOString(),
-    writer: null
-  };
-  const dataDir = () => processRef.env?.DSH_DATA_DIR ?? processRef.env?.DSH_HOME ?? null;
-  const writeFile = async () => {
-    const fs = env.fs ?? await import("node:fs/promises");
-    const path = env.path ?? await import("node:path");
-    const dir = dataDir() ?? `${processRef.env?.HOME ?? ""}/.dsh`;
-    const target = path.join(dir, "plugins", "perf-review");
-    try {
-      await fs.mkdir(target, { recursive: true });
-      const snap = hostSnapshot(state);
-      await fs.writeFile(path.join(target, "host.json"), JSON.stringify(snap, null, 2));
-      const series = { at: snap.writtenAt, plugins: {} };
-      for (const [pluginId, row] of state.plugins) {
-        const spans = {};
-        for (const [name2, span] of row.spans) {
-          spans[name2] = { n: span.n, p95: roundMs(percentile(span.reservoir, 0.95)), errors: span.errors ?? 0 };
-        }
-        series.plugins[pluginId] = { spans };
-      }
-      const jsonlPath = path.join(target, "host-snapshots.jsonl");
-      let existing = "";
-      try {
-        existing = await fs.readFile(jsonlPath, "utf8");
-      } catch {
-      }
-      if (existing.length > JSONL_CAP_BYTES) {
-        existing = existing.slice(-Math.floor(JSONL_CAP_BYTES / 2));
-        const nl = existing.indexOf("\n");
-        if (nl >= 0) existing = existing.slice(nl + 1);
-      }
-      await fs.writeFile(jsonlPath, existing + JSON.stringify(series) + "\n");
-    } catch {
-      state.writeErrors += 1;
-    }
-  };
-  const startWriter = () => {
-    if (state.writer !== null) return;
-    const setIntervalRef = env.setInterval ?? setInterval;
-    state.writer = setIntervalRef(() => {
-      void writeFile();
-    }, WRITE_INTERVAL_MS);
-    if (typeof state.writer?.unref === "function") state.writer.unref();
-    try {
-      processRef.once?.("beforeExit", () => {
-        void writeFile();
-      });
-    } catch {
-    }
+    epoch,
+    seq: 0,
+    cursor: 0,
+    structure: createStructure(),
+    _build: env.build ?? BUILD_STAMP
   };
   const isEnabled = () => {
     if (state.enabled === null) {
-      state.enabled = env.forceEnabled !== void 0 ? env.forceEnabled === true : processRef.env?.DSH_PERF_REVIEW === "1";
-      if (state.enabled) startWriter();
+      state.enabled = env.forceEnabled !== void 0 ? env.forceEnabled === true : processRef?.env?.DSH_PERF_REVIEW === "1";
     }
-    return state.enabled;
+    return state.enabled === true;
   };
-  const setEnabled = (value) => {
-    state.enabled = value === true;
-    if (state.enabled) startWriter();
-  };
-  const recordSpan = (row, name2, t0, t1, err = false, traceId = null) => {
-    if (!NAME_RE.test(name2) || !isEnabled()) return;
+  const recordSpan = (row, name2, t0, t1, err) => {
+    if (!isEnabled()) return;
     let span = row.spans.get(name2);
     if (span === void 0) {
       span = createSpanRow();
       span.errors = 0;
       span.events = [];
+      span.log = [];
+      span.lost = 0;
+      span.minKeptSeq = null;
       row.spans.set(name2, span);
     }
     span.n += 1;
     const ms = t1 - t0;
     const at = (/* @__PURE__ */ new Date()).toISOString();
+    const seq = state.seq + 1;
+    state.seq = seq;
     span.lastMs = ms;
     span.lastAt = at;
-    if (traceId != null) span.lastTraceId = traceId;
     if (err) {
       span.errors += 1;
       span.lastErrorAt = at;
@@ -184,8 +312,15 @@ function createPerfReviewHost(env = {}) {
       const slot = Math.floor(Math.random() * span.n);
       if (slot < RESERVOIR_CAP) span.reservoir[slot] = ms;
     }
-    span.events.push(traceId != null ? { ms: Math.round(ms * 10) / 10, at, err, traceId } : { ms: Math.round(ms * 10) / 10, at, err });
+    const rounded = Math.round(ms * 10) / 10;
+    span.events.push({ ms: rounded, at, err: err === true, seq });
     while (span.events.length > EVENT_CAP) span.events.shift();
+    span.log.push({ seq, ms, err: err === true, at });
+    while (span.log.length > WINDOW_SAMPLE_CAP) {
+      span.log.shift();
+      span.lost += 1;
+      span.minKeptSeq = span.log[0]?.seq ?? null;
+    }
   };
   const hostJoin = (pluginId, impl = {}) => {
     let row = state.plugins.get(pluginId);
@@ -194,43 +329,48 @@ function createPerfReviewHost(env = {}) {
       state.plugins.set(pluginId, row);
     }
     if (!(row.counts instanceof Map)) row.counts = /* @__PURE__ */ new Map();
-    state.contributors.push({ pluginId, libVersion: impl.libVersion ?? LIB_VERSION });
+    const libVersion = impl.libVersion ?? LIB_VERSION;
+    const key = `${pluginId}@${libVersion}`;
+    if (!state.contributorKeys.has(key)) {
+      state.contributorKeys.add(key);
+      state.contributors.push({ pluginId, libVersion });
+    }
     const clock = env.performance ?? globalThis.performance;
     const now = () => clock.now();
     return {
       /**
-       * hostSpan(name, fn, ctx?) — ctx: {traceId?, incidentId?} correlates the
-       * span event with a caller-side trace (e.g. an incidentId from the
-       * operations ring); only the LAST-seen trace is kept per span plus the
-       * traceId on each event row.
+       * hostSpan(name, fn, ctx?). ctx is ignored: traceId is not stored
+       * (T-O-PRE1116-12 / P3-06). A name that fails NAME_RE still runs `fn`,
+       * increments `structure.unmappedKey`, and is not recorded.
        */
-      hostSpan(name2, fn, ctx = null) {
-        if (!NAME_RE.test(name2)) return fn();
-        const traceId = ctx && (ctx.traceId ?? ctx.incidentId ?? null);
+      hostSpan(name2, fn, _ctx) {
+        if (typeof name2 !== "string" || !NAME_RE.test(name2)) {
+          state.structure.unmappedKey += 1;
+          return fn();
+        }
         const t0 = now();
         let result;
         try {
           result = fn();
         } catch (error) {
-          recordSpan(row, name2, t0, now(), true, traceId);
+          recordSpan(row, name2, t0, now(), true);
           throw error;
         }
         if (isPromiseLike(result)) {
           return result.then(
             (value) => {
-              recordSpan(row, name2, t0, now(), false, traceId);
+              recordSpan(row, name2, t0, now(), false);
               return value;
             },
             (error) => {
-              recordSpan(row, name2, t0, now(), true, traceId);
+              recordSpan(row, name2, t0, now(), true);
               throw error;
             }
           );
         }
-        recordSpan(row, name2, t0, now(), false, traceId);
+        recordSpan(row, name2, t0, now(), false);
         return result;
       },
-      /** count(name, n?) — cumulative counter per name (usage-style). */
       count(name2, n = 1) {
         if (!NAME_RE.test(name2) || !isEnabled()) return;
         if (!(row.counts instanceof Map)) row.counts = /* @__PURE__ */ new Map();
@@ -241,48 +381,94 @@ function createPerfReviewHost(env = {}) {
         isEnabled();
         return hostSnapshot(state);
       },
-      takeWindow: () => takeWindow(state)
+      read: (query) => read(query)
     };
+  };
+  const read = (query = {}) => {
+    const seq = state.seq;
+    const base = {
+      epoch: state.epoch,
+      seq,
+      cursor: state.cursor,
+      next: `${state.epoch}.${seq}`
+    };
+    if (query != null && query.mode !== void 0) {
+      return { status: 400, error: "mode", basis: null, rows: [], truncated: [], ...base };
+    }
+    if (query == null || query.since === void 0) {
+      const { rows: rows2, truncated: truncated2 } = collectRows(state, null);
+      return { status: 200, basis: "cumulative", rows: rows2, truncated: truncated2, ...base };
+    }
+    const parsed = parseCursor(query.since, state.epoch);
+    if (parsed.error) {
+      return { status: 400, error: "cursor", basis: null, rows: [], truncated: [], ...base };
+    }
+    if (parsed.epoch !== state.epoch) {
+      const { rows: rows2 } = collectRows(state, null);
+      return { status: 200, basis: "cumulative", rows: rows2, truncated: ["epoch"], ...base };
+    }
+    const { rows, truncated } = collectRows(state, { seq: parsed.seq });
+    return { status: 200, basis: "window", rows, truncated, ...base };
+  };
+  const observe = (event) => {
+    if (!isEnabled()) return;
+    if (event == null || typeof event !== "object" || Array.isArray(event)) {
+      state.structure.badShape += 1;
+      return;
+    }
+    let admitted;
+    try {
+      admitted = assertObserveEvent(event);
+    } catch {
+      state.structure.badShape += 1;
+      return;
+    }
+    if (admitted.id == null || admitted.id === "") {
+      state.structure.missingBindingId += 1;
+      return;
+    }
+    if (!CONTRACT_KEY_RE.test(admitted.id) || typeof admitted.plugin !== "string" || admitted.plugin === "") {
+      state.structure.badShape += 1;
+      return;
+    }
+    let row = state.plugins.get(admitted.plugin);
+    if (row === void 0) {
+      row = { version: null, spans: /* @__PURE__ */ new Map(), counts: /* @__PURE__ */ new Map(), contract: /* @__PURE__ */ new Map() };
+      state.plugins.set(admitted.plugin, row);
+    }
+    if (!(row.contract instanceof Map)) row.contract = /* @__PURE__ */ new Map();
+    state.seq += 1;
+    let bucket = row.contract.get(admitted.id);
+    if (bucket === void 0) {
+      bucket = { n: 0, window: 0, outcomes: {}, log: [] };
+      row.contract.set(admitted.id, bucket);
+    }
+    bucket.n += 1;
+    bucket.window += 1;
+    bucket.outcomes[admitted.outcome] = (bucket.outcomes[admitted.outcome] ?? 0) + 1;
+    bucket.log.push({ seq: state.seq, outcome: admitted.outcome, ms: admitted.ms });
+    if (bucket.log.length > WINDOW_SAMPLE_CAP) {
+      bucket.log.shift();
+      bucket.lost = (bucket.lost ?? 0) + 1;
+    }
   };
   return {
     hostJoin,
-    setEnabled,
+    read,
+    observe,
     snapshot: () => {
       isEnabled();
       return hostSnapshot(state);
     },
-    takeWindow: () => takeWindow(state),
-    flush: () => writeFile(),
     _state: () => state,
+    _build: state._build,
     libVersion: LIB_VERSION
   };
 }
 function ensurePerfReviewHost(env = {}) {
   const global = env.global ?? globalThis;
-  const incumbent = global.__perfReviewHost;
-  if (incumbent == null) {
-    global.__perfReviewHost = createPerfReviewHost(env);
-    return global.__perfReviewHost;
-  }
-  if (typeof incumbent.setEnabled !== "function" || typeof incumbent._state !== "function") {
-    const fresh = createPerfReviewHost(env);
-    try {
-      const old = typeof incumbent._state === "function" ? incumbent._state() : null;
-      const next = fresh._state();
-      if (old && typeof old === "object") {
-        if (old.plugins instanceof Map) next.plugins = old.plugins;
-        if (Array.isArray(old.contributors)) next.contributors = old.contributors;
-        if (typeof old.enabled === "boolean") next.enabled = old.enabled;
-        if (typeof old.writeErrors === "number") next.writeErrors = old.writeErrors;
-        if (typeof old.sinceStart === "string") next.sinceStart = old.sinceStart;
-        if (old.writer) next.writer = old.writer;
-      }
-    } catch {
-    }
-    global.__perfReviewHost = fresh;
-    return fresh;
-  }
-  return incumbent;
+  const stamp = env.build ?? BUILD_STAMP;
+  return installSingleton(global, HOST_KEY, "__perfReviewHost", stamp, () => createPerfReviewHost(env));
 }
 
 // ../packages/dsh-host-route-guard/src/route-guard.js
@@ -560,43 +746,6 @@ function bindingRecord(binding) {
     justification: binding.justification
   });
 }
-
-// ../packages/dsh-interface/src/contracts/jsonOutcome.js
-var FAILURE_KIND = Object.freeze({
-  /** signal aborted; issued-before cancellation makes no server-side claim. */
-  CANCELLED: "cancelled",
-  /** Network/read-body failure; keep real httpStatus only when headers landed. */
-  TRANSPORT: "transport",
-  /** Non-2xx that is not a recognized sanctioned business failure; keep status. */
-  HTTP: "http",
-  /** Pre-request encode/binding failure OR illegal 2xx — never becomes ok:true. */
-  PROTOCOL: "protocol",
-  /** Recognized sanctioned business failure (incl. legal 2xx business failures). */
-  DOMAIN: "domain"
-});
-var FAILURE_KINDS = Object.freeze(Object.values(FAILURE_KIND));
-
-// ../packages/dsh-interface/src/contracts/observeEvent.js
-var OBSERVE_SURFACES = Object.freeze(["http", "upgrade", "json", "mcp"]);
-var HTTP_OUTCOMES = Object.freeze(["ok", "rejected", "method", "failed"]);
-var UPGRADE_OUTCOMES = Object.freeze(["accepted", "rejected", "method"]);
-var JSON_OUTCOMES = Object.freeze(["ok", ...FAILURE_KINDS]);
-var MCP_OUTCOMES = Object.freeze(["ok", "error", "rejected"]);
-var OBSERVE_FIELDS = Object.freeze([
-  "surface",
-  "id",
-  "plugin",
-  "outcome",
-  "ms",
-  "status",
-  "kind"
-]);
-var OUTCOMES = {
-  http: new Set(HTTP_OUTCOMES),
-  upgrade: new Set(UPGRADE_OUTCOMES),
-  json: new Set(JSON_OUTCOMES),
-  mcp: new Set(MCP_OUTCOMES)
-};
 
 // ../packages/dsh-interface/src/host/emitObserve.js
 function observeStamp2(observe) {
@@ -2286,7 +2435,11 @@ function registerRoutes2(ctx, routes) {
       }
     }
   }));
-  const registrar = createWebRegistrar({ plugin: PLUGIN, bindings });
+  const registrar = createWebRegistrar({
+    plugin: PLUGIN,
+    bindings,
+    observe: (event) => globalThis[Symbol.for("dsh.perfReviewHost.v2")]?.observe?.(event)
+  });
   return [registrar.registerAll(ctx)];
 }
 

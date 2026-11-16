@@ -13,6 +13,8 @@ const PREFIX = '/nano-explorer-extra'
 const client = createJsonClient({
   fetch: (url, init) => fetch(url, { credentials: 'same-origin', cache: 'no-store', ...init }),
   resolveUrl: (_op, req) => req.url,
+  plugin: 'dsh-nano-explorer-extra',
+  observe: event => globalThis[Symbol.for('dsh.perfReview.v2')]?.observe?.(event),
 })
 
 /** One suffix-face codec: encode → POST(JSON body)|GET, decode → {ok,data}|domain. */

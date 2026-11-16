@@ -1,9 +1,84 @@
-// ../packages/dsh-performance-review/src/state.js
+// packages/dsh-interface/src/contracts/jsonOutcome.js
+var FAILURE_KIND = Object.freeze({
+  /** signal aborted; issued-before cancellation makes no server-side claim. */
+  CANCELLED: "cancelled",
+  /** Network/read-body failure; keep real httpStatus only when headers landed. */
+  TRANSPORT: "transport",
+  /** Non-2xx that is not a recognized sanctioned business failure; keep status. */
+  HTTP: "http",
+  /** Pre-request encode/binding failure OR illegal 2xx — never becomes ok:true. */
+  PROTOCOL: "protocol",
+  /** Recognized sanctioned business failure (incl. legal 2xx business failures). */
+  DOMAIN: "domain"
+});
+var FAILURE_KINDS = Object.freeze(Object.values(FAILURE_KIND));
+
+// packages/dsh-interface/src/contracts/observeEvent.js
+var OBSERVE_SURFACES = Object.freeze(["http", "upgrade", "json", "mcp"]);
+var HTTP_OUTCOMES = Object.freeze(["ok", "rejected", "method", "failed"]);
+var UPGRADE_OUTCOMES = Object.freeze(["accepted", "rejected", "method"]);
+var JSON_OUTCOMES = Object.freeze(["ok", ...FAILURE_KINDS]);
+var MCP_OUTCOMES = Object.freeze(["ok", "error", "rejected"]);
+var OBSERVE_FIELDS = Object.freeze([
+  "surface",
+  "id",
+  "plugin",
+  "outcome",
+  "ms",
+  "status",
+  "kind"
+]);
+var REQUIRED = ["surface", "id", "plugin", "outcome", "ms"];
+var OPTIONAL = /* @__PURE__ */ new Set(["status", "kind"]);
+var OUTCOMES = {
+  http: new Set(HTTP_OUTCOMES),
+  upgrade: new Set(UPGRADE_OUTCOMES),
+  json: new Set(JSON_OUTCOMES),
+  mcp: new Set(MCP_OUTCOMES)
+};
+function fail(message) {
+  throw new TypeError(`observe-event: ${message}`);
+}
+function assertObserveEvent(event) {
+  if (event == null || typeof event !== "object" || Array.isArray(event)) {
+    fail("event must be an object");
+  }
+  const keys = Object.keys(event);
+  for (const key of keys) {
+    if (!REQUIRED.includes(key) && !OPTIONAL.has(key)) fail(`unknown field ${key}`);
+  }
+  for (const key of REQUIRED) {
+    if (!Object.prototype.hasOwnProperty.call(event, key)) fail(`missing ${key}`);
+  }
+  if (!OUTCOMES[event.surface]) fail(`unknown surface ${String(event.surface)}`);
+  if (event.id !== null && (typeof event.id !== "string" || event.id === "")) {
+    fail("id must be a non-empty string or null");
+  }
+  if (event.plugin !== null && (typeof event.plugin !== "string" || event.plugin === "")) {
+    fail("plugin must be a non-empty string or null");
+  }
+  if (typeof event.outcome !== "string" || !OUTCOMES[event.surface].has(event.outcome)) {
+    fail(`unknown outcome ${String(event.outcome)} for ${event.surface}`);
+  }
+  if (typeof event.ms !== "number" || !Number.isFinite(event.ms)) fail("ms must be a finite number");
+  if (Object.prototype.hasOwnProperty.call(event, "status")) {
+    if (typeof event.status !== "number" || !Number.isFinite(event.status)) fail("status must be a finite number");
+  }
+  if (event.surface === "mcp" && event.outcome === "error") {
+    if (typeof event.kind !== "string" || event.kind === "") fail("mcp error requires kind");
+  } else if (Object.prototype.hasOwnProperty.call(event, "kind")) {
+    if (typeof event.kind !== "string" || event.kind === "") fail("kind must be a non-empty string");
+  }
+  return event;
+}
+
+// packages/dsh-performance-review/src/state.js
 var LIB_VERSION = "0.1.0";
 var CLIENT_KEY = Symbol.for("dsh.perfReview.v2");
 var HOST_KEY = Symbol.for("dsh.perfReviewHost.v2");
 var BUILD_STAMP = "dev";
 var NAME_RE = /^[a-z0-9][a-z0-9-]{0,39}$/;
+var CONTRACT_KEY_RE = /^[a-z0-9][a-z0-9.-]{0,63}$/;
 var MAX_USAGE_KEYS = 32;
 var RESERVOIR_CAP = 64;
 function percentile(values, p) {
@@ -70,7 +145,7 @@ function roundMs(value) {
   return value == null ? null : Math.round(value * 10) / 10;
 }
 
-// ../packages/dsh-performance-review/src/host.js
+// packages/dsh-performance-review/src/host.js
 var WINDOW_SAMPLE_CAP = 512;
 var EVENT_CAP = 32;
 var isPromiseLike = (value) => value !== null && typeof value === "object" && typeof value.then === "function";
@@ -163,6 +238,19 @@ function collectRows(state, predicate) {
           ms: event.ms,
           err: event.err === true,
           at: event.at
+        });
+      }
+    }
+    for (const [name, bucket] of row.contract ?? []) {
+      for (const event of bucket.log ?? []) {
+        if (predicate && !(event.seq > predicate.seq)) continue;
+        rows.push({
+          seq: event.seq,
+          pluginId,
+          name,
+          kind: "contract",
+          outcome: event.outcome,
+          ms: event.ms
         });
       }
     }
@@ -319,9 +407,52 @@ function createPerfReviewHost(env = {}) {
     const { rows, truncated } = collectRows(state, { seq: parsed.seq });
     return { status: 200, basis: "window", rows, truncated, ...base };
   };
+  const observe = (event) => {
+    if (!isEnabled()) return;
+    if (event == null || typeof event !== "object" || Array.isArray(event)) {
+      state.structure.badShape += 1;
+      return;
+    }
+    let admitted;
+    try {
+      admitted = assertObserveEvent(event);
+    } catch {
+      state.structure.badShape += 1;
+      return;
+    }
+    if (admitted.id == null || admitted.id === "") {
+      state.structure.missingBindingId += 1;
+      return;
+    }
+    if (!CONTRACT_KEY_RE.test(admitted.id) || typeof admitted.plugin !== "string" || admitted.plugin === "") {
+      state.structure.badShape += 1;
+      return;
+    }
+    let row = state.plugins.get(admitted.plugin);
+    if (row === void 0) {
+      row = { version: null, spans: /* @__PURE__ */ new Map(), counts: /* @__PURE__ */ new Map(), contract: /* @__PURE__ */ new Map() };
+      state.plugins.set(admitted.plugin, row);
+    }
+    if (!(row.contract instanceof Map)) row.contract = /* @__PURE__ */ new Map();
+    state.seq += 1;
+    let bucket = row.contract.get(admitted.id);
+    if (bucket === void 0) {
+      bucket = { n: 0, window: 0, outcomes: {}, log: [] };
+      row.contract.set(admitted.id, bucket);
+    }
+    bucket.n += 1;
+    bucket.window += 1;
+    bucket.outcomes[admitted.outcome] = (bucket.outcomes[admitted.outcome] ?? 0) + 1;
+    bucket.log.push({ seq: state.seq, outcome: admitted.outcome, ms: admitted.ms });
+    if (bucket.log.length > WINDOW_SAMPLE_CAP) {
+      bucket.log.shift();
+      bucket.lost = (bucket.lost ?? 0) + 1;
+    }
+  };
   return {
     hostJoin,
     read,
+    observe,
     snapshot: () => {
       isEnabled();
       return hostSnapshot(state);

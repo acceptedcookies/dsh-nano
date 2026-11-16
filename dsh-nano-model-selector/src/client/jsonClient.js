@@ -8,6 +8,8 @@ import { createJsonClient } from 'dsh-interface/host'
 const client = createJsonClient({
   fetch: (url, init) => fetch(url, { credentials: 'same-origin', ...init }),
   resolveUrl: (_op, req) => req.url,
+  plugin: 'dsh-nano-model-selector',
+  observe: event => globalThis[Symbol.for('dsh.perfReview.v2')]?.observe?.(event),
 })
 
 /** A JSON-operation codec: encode input → request, decode res → ok/domain. */

@@ -357,7 +357,11 @@ export function apply(ctx) {
         ? ((req, res) => handleHostRead(req, res, ensurePerfReviewHost()))
         : specByPath.get(row.path),
   }))
-  createWebRegistrar({ plugin: PLUGIN, bindings }).registerAll(ctx)
+  createWebRegistrar({
+    plugin: PLUGIN,
+    bindings,
+    observe: event => ensurePerfReviewHost().observe(event),
+  }).registerAll(ctx)
 }
 
 /* ---------- fx 资产分发（wasm + libfx SDK，同源静态） ---------- */

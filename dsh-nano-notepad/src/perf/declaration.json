@@ -1,0 +1,29 @@
+{
+  "schema": "dnpr.declaration/1",
+  "plugin": "nano-notepad",
+  "keys": {
+    "spans": [],
+    "tracks": [],
+    "usage": [],
+    "hostSpans": []
+  },
+  "contract": [
+    "dnn.save",
+    "dnn.read",
+    "dnn.fetch-mp",
+    "dnn.s3.status",
+    "dnn.s3.test",
+    "dnn.s3.object",
+    "dnn.s3.config",
+    "dnn.fx-core.wasm",
+    "dnn.fx.models",
+    "dnn.fx.chat",
+    "dnn.pipeline.s3",
+    "dnn.pipeline.claim",
+    "dnn.rpc",
+    "dnn.fx.sdk",
+    "dnn.perf-review.host"
+  ],
+  "scenarios": [],
+  "budgets": []
+}

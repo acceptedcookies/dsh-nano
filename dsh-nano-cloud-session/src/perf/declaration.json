@@ -1,0 +1,28 @@
+{
+  "schema": "dnpr.declaration/1",
+  "plugin": "nano-cloud-session",
+  "keys": {
+    "spans": [],
+    "tracks": [],
+    "usage": [],
+    "hostSpans": [
+      "self"
+    ]
+  },
+  "contract": [
+    "dncs.status",
+    "dncs.config",
+    "dncs.sessions",
+    "dncs.session",
+    "dncs.create",
+    "dncs.message",
+    "dncs.archive",
+    "dncs.unarchive",
+    "dncs.terminate",
+    "dncs.catalog",
+    "dncs.upload",
+    "dncs.ssh"
+  ],
+  "scenarios": [],
+  "budgets": []
+}

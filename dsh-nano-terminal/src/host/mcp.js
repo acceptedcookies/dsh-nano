@@ -192,6 +192,8 @@ export function createMcpHandler({ registry, bus, auditPath, laneStatus, writeAu
     dispatch: (name, args) => callTool(name, args),
     protocolVersion: PROTOCOL_VERSION,
     serverInfo: { name: 'dsh-nano-terminal', version: '0.2.0' },
+    plugin: 'dsh-nano-terminal',
+    observe: event => globalThis[Symbol.for('dsh.perfReviewHost.v2')]?.observe?.(event),
   })
 
   return { handleRpc: (body) => toolset.handleRpc(body), audit, tools: TOOLS }

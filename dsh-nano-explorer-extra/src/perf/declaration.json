@@ -1,0 +1,35 @@
+{
+  "schema": "dnpr.declaration/1",
+  "plugin": "nano-explorer-extra",
+  "keys": {
+    "spans": [],
+    "tracks": [],
+    "usage": [],
+    "hostSpans": [
+      "git-status",
+      "stats"
+    ]
+  },
+  "contract": [
+    "dnee.status",
+    "dnee.commit",
+    "dnee.pull",
+    "dnee.fetch",
+    "dnee.push",
+    "dnee.remote",
+    "dnee.author",
+    "dnee.ssh-key",
+    "dnee.checkout",
+    "dnee.create-file",
+    "dnee.create-folder",
+    "dnee.rename",
+    "dnee.move",
+    "dnee.delete",
+    "dnee.ignored",
+    "dnee.list",
+    "dnee.perf-review.host",
+    "dnee.read"
+  ],
+  "scenarios": [],
+  "budgets": []
+}

@@ -63,7 +63,18 @@ await check('2. mode label is a known state', () => {
   const node = document.querySelector('[data-nks-mode]');
   return !!node && ['empty', 'html', 'img'].includes(node.getAttribute('data-nks-mode'));
 });
+// The build-id marker lives in the settings dialog footer; open it first so
+// this check is not vacuously true.
+await page.evaluate(() => document.querySelector('[data-nks-settings]')?.click());
+await page.waitForTimeout(1800);
 await check('3. no client/host build mismatch', () => !document.querySelector('[data-nks-build="mismatch"]'));
+// Close the dialog again (取消) before touching the page routes.
+await page.evaluate(() => {
+  const btn = [...document.querySelectorAll('.nano-dialog-card button')]
+    .find(b => /取消|Cancel/.test(b.textContent || ''));
+  if (btn) btn.click();
+});
+await page.waitForTimeout(600);
 
 let ports = {};
 try { ports = await api('/nano-local-sandbox/ports'); } catch { ports = {}; }

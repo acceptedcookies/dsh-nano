@@ -82,19 +82,31 @@ P0-00 干净树（main@9792da0）
 
 ### PH3 — nano-ui 0.2.0 硬切（`nue-1117-nano-ui`）
 
-- [ ] `P3-01` — 令牌错名、十六进制回退、`[class*=` 清零 · `NUE1117-T08`
-- [ ] `P3-02` — `layers.js`（NANO_LAYER + 间距） · `NUE1117-T09`
-- [ ] `P3-03` — ThemeScope（`theme-scheme.js` + `theme.js`） · `NUE1117-T10`
-- [ ] `P3-04` — 图标门面 `icons.js` · `NUE1117-T14`
-- [ ] `P3-05` — NanoMenu / openNanoMenu 包装宿主 `Menu` · `NUE1117-T11`
-- [ ] `P3-06` — NanoToast 包装宿主 `Toast` · `NUE1117-T12`
-- [ ] `P3-07` — NanoTabs / nanoTabs 改宿主 `SegmentedControl` · `NUE1117-T12`
-- [ ] `P3-08` — 窗口覆盖层 + openNanoDialog 两条路径；删除 MutationObserver/`region`/`theme`/`z`/`--nano-dlg-*` · `NUE1117-T13`
-- [ ] `P3-09` — Toolbar / EmptyState / FloatingWindow / IconButton / mountNano · `NUE1117-T14`
-- [ ] `P3-10` — 0.2.0 + `VERSION` + CHANGELOG + 产物版本标记 · `NUE1117-T15`
-- [ ] `P3-11` — nano-ui 包内测试（`test` 脚本） · `NUE1117-T16`
-- [ ] `P3-12` — 硬切兼容核对（导入名、六套件条数、[DNN] 预登记失败集合、diff 只在 nano-ui） · `NUE1117-T17`
-  - **依赖（整组）**：PH2 合入 + PRE-1116 合入 · **执行状态**：`not-started`
+- [x] `P3-01` — 令牌错名、十六进制回退、`[class*=` 清零 · `NUE1117-T08`
+  - **执行状态**：`complete` · **证据**：`44612c4`/`5ebd20d`（合并 `12bb081`）· `cd packages/dsh-nano-ui && npm test` 41/41 @a94f135 · 2026-11-16T18:20:36Z；tokens.test 5 条（catalog 缺失即失败、未知令牌 0、六错名 0、hex 0、`[class*=` 0、正控夹具各报 1）；check-ui-rules nano-ui U1/U5 = 0
+- [x] `P3-02` — `layers.js`（NANO_LAYER + 间距） · `NUE1117-T09`
+  - **执行状态**：`complete` · **证据**：同上；layers.test 4 条（menu 1100 > 1000、1200/1210、`z-index`/`zIndex` 只在 layers.js + 正控、DESIGN §4 同值）
+- [x] `P3-03` — ThemeScope（`theme-scheme.js` + `theme.js`） · `NUE1117-T10`
+  - **执行状态**：`complete` · **证据**：同上；theme.test 5 条（light/dark/未知/缺失/抛错 × pin 同异；注入值逐项等于 catalog schemes；dispose 路径）。宿主快照方案字段实为 `active.colorScheme`，见 §9
+- [x] `P3-04` — 图标门面 `icons.js` · `NUE1117-T14`
+  - **执行状态**：`complete` · **证据**：同上；exports.test 5 条（sprite/Icon* 名称校验单测、nano-ui 引用 Icon* 全在 catalog）；`node scripts/check-client-rules.mjs` ok，91 文件 / 144 名（扫描根含 `packages/dsh-nano-ui/src`）
+- [x] `P3-05` — NanoMenu / openNanoMenu 包装宿主 `Menu` · `NUE1117-T11`
+  - **执行状态**：`partial` · **证据**：同上；menu.test 7 条。宿主 Menu 签名本机解码与 DESIGN 一致，未触发停止；DESIGN §6.2 回写（`a94f135`）。T27a（Modal 内菜单可见）未观察 → 按 AP §8.4 最多 `partial`
+- [x] `P3-06` — NanoToast 包装宿主 `Toast` · `NUE1117-T12`
+  - **执行状态**：`complete` · **证据**：同上；components.test。宿主 `anchor` 可省 → 未传 anchor 照常渲染；契约「holdMs 定寿命、text 作 key 重挂」写入 DESIGN §6.2/§7
+- [x] `P3-07` — NanoTabs / nanoTabs 改宿主 `SegmentedControl` · `NUE1117-T12`
+  - **执行状态**：`complete` · **证据**：同上；components.test（两种形态都用 SegmentedControl，`{ el, select, value }` 保留，`.nano-tab` 0）
+- [x] `P3-08` — 窗口覆盖层 + openNanoDialog 两条路径；删除 MutationObserver/`region`/`theme`/`z`/`--nano-dlg-*` · `NUE1117-T13`
+  - **执行状态**：`partial` · **证据**：同上；overlay.test 5 条（useModalLayer 顶层、无 body portal/MutationObserver/parentElement、container 缺失抛错、两条承载、`pointer-events: auto`）。交互（Esc/焦点/LIFO）只有契约层证据，T27 未观察 → `partial`
+- [x] `P3-09` — Toolbar / EmptyState / FloatingWindow / IconButton / mountNano · `NUE1117-T14`
+  - **执行状态**：`complete` · **证据**：同上；exports.test（index 导出全部新名、react-free 模块逐个 typeof、IconButton aria-label 检查）
+- [x] `P3-10` — 0.2.0 + `VERSION` + CHANGELOG + 产物版本标记 · `NUE1117-T15`
+  - **执行状态**：`complete` · **证据**：同上；version.test 4 条（'0.2.0' 写死、files 含 catalog、NANO_STYLES 首行注释、Removed 12 个关键词）；esbuild 冒烟打包 39.0kb，`dsh-nano-ui@` 1 处，tokens.json 只保留 `schemes`
+- [x] `P3-11` — nano-ui 包内测试（`test` 脚本） · `NUE1117-T16`
+  - **执行状态**：`complete` · **证据**：`node scripts/test-all.mjs` @a94f135 · 2026-11-16T18:20:36Z 输出 `PASS  packages/dsh-nano-ui`，该套件 41 条
+- [x] `P3-12` — 硬切兼容核对（导入名、六套件条数、[DNN] 预登记失败集合、diff 只在 nano-ui） · `NUE1117-T17`
+  - **执行状态**：`complete` · **证据**：预登记 `fbe31fb`（早于跑测）；`node --test dsh-nano-notepad/test/*.test.mjs` @a94f135 80 条 74 过 6 败，失败集合与清单逐项相等；DNMS 54/54、DNT 137/137、DNK 56/56、DNCS 24/24、DNEE 13/13；legacy.test 导入名全在新导出；`test-all` exit 1，PASS 21，FAIL 仅 s3-client（§9）。diff 另含 DESIGN.md（§9）
+  - **依赖（整组）**：PH2 合入 + PRE-1116 合入 · **执行状态**：`complete`（P3-05/P3-08 `partial`，待 T27）
 
 ### PH4 — [DNMS]（`nue-1117-migrate-dnms`）
 
@@ -163,15 +175,15 @@ P0-00 干净树（main@9792da0）
 |----------|----------|------|----------|------|
 | `NUE1117-T01`–`T02` | 规格与原则 | `node --test test/scripts/nue-docs.test.mjs` | 7/7 @2c5af77 | pass |
 | `NUE1117-T03`–`T07` | catalog 与检测 | `node --test test/scripts/{gen-nano-catalog,check-client-rules,check-ui-rules}.test.mjs`；`test-all` | 31/31 @2c5af77；test-all 20/21（s3-client 既有失败） | pass（T06 partial） |
-| `NUE1117-T08`–`T17` | nano-ui 0.2.0 | `cd packages/dsh-nano-ui && npm test`；六套件；`test-all` | — | pending |
+| `NUE1117-T08`–`T17` | nano-ui 0.2.0 | `cd packages/dsh-nano-ui && npm test`；六套件；`test-all` | 41/41 @a94f135；六套件 ≥ N6；DNN 失败 = 预登记 6 条；test-all 21/22（s3-client 既有） | pass（P3-05/P3-08 partial 待 T27） |
 | `NUE1117-T18`–`T26` | 六插件迁移 | 各插件测试 + `nue-migration.test.mjs` | — | pending |
 | `NUE1117-T27a`–`e` | 视觉核对（live） | 本机 profile + ego-browser 截图 | — | pending（需 live 授权与部署） |
 | `NUE1117-T28`–`T30` | 收口 | 两次构建 sha；`nue-docs`/`nue-endstate` | — | pending |
 
 ## 5. 当前状态与交接
 
-- **当前节点 / 已完成**：P0-00、PH1、PH2
-- **下一动作**：PH3
+- **当前节点 / 已完成**：P0-00、PH1、PH2、PH3
+- **下一动作**：PH4（[DNMS]）
 - **当前阻塞**：无
 - **待 owner 决定**：P4-01、P9-05（执行到时判定是否触发停止）
 - **最终交接目标**：[业主]
@@ -201,6 +213,10 @@ P0-00 干净树（main@9792da0）
 - `2026-11-17` · AP §7.0 N3 写「[DNEE] 无 `test` 脚本」；当前 `main` 上 [DNEE] `package.json` 已有 `"test": "node --test test/*.mjs"`（PRE-1116 引入 `bundle-smoke.test.mjs`），[DNEE] 已在 `test-all` 内。本 todo 照常以 `node --test` 显式跑并记条数，不改 `test-all` 成员。
 - `2026-11-17` · T06 要求 P2-03 提交上 `test-all` 退出 0；`packages/dsh-s3-client` 在 PH2 之前的 `2c0ad72` 上已失败（3 cancelled），属范围外既有问题，未修。本计划后续所有「test-all 退出 0」判据按「除 s3-client 外全过」执行并如实记录。
 - `2026-11-17` · catalog tokens 口径：`--dsh-font-family-` 是主题 JS 模板前缀，保留为条目并标 `prefix:true`；7 个由宿主 JS 运行时写入的名字标 `runtime:true`（含 `--dsh-hairline-width`、`--dsh-font-family-code`），U1 以 catalog 存在性判定，无需另立白名单。
+- `2026-11-16` · PH3 前另起小合并 `d2e2b47`（`7f082d1`）：`gen-nano-catalog` 输出 `tokens.json#schemes.{light,dark}`（119 个随方案变化的 `--dsw-*` 终值），供 ThemeScope 注入；不属 nano-ui 目录，单独提交。
+- `2026-11-16` · AP/DESIGN 原写 `theme.getTheme().colorScheme`；本机解码宿主快照为 `{ preference, active: { id, colorScheme, tokens }, … }`，方案在 `active.colorScheme`，主题变化只经 `ctx.on('theme/change')`、服务无订阅接口。ThemeScope 读 `active.colorScheme`（兼读扁平字段），收 `subscribe` 参数；DESIGN §3 回写。
+- `2026-11-16` · P3-12 c) 要求 diff 只在 `packages/dsh-nano-ui/**`；P3-05 a)/P3-06 b) 要求把宿主签名结论写入 DESIGN.md。按更具体的后者执行，DESIGN 回写单独提交 `a94f135`。
+- `2026-11-16` · 宿主 `Menu` 不暴露列表 style，`width` 用列表内零高占位元素实现最小宽度，`maxHeight` 用预设档类（能否压过宿主列表上限待 T27e 视觉核对，已在 DESIGN §6.2 标注）。
 
 ## 8. 附件：[业主] 发车指令（原文）
 

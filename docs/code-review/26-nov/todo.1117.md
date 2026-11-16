@@ -57,18 +57,14 @@ P0-00 干净树（main@9792da0）
 
 ### PH1 — 规格与原则基座（`nue-1117-foundation`）
 
-- [ ] `P1-01` — 新建 `docs/specs/dsh-nano-ui/DESIGN.md`（章节、令牌、层级与间距、承载模型、组件清单、U1–U10、宿主缺口）
-  - **验证映射**：`NUE1117-T01` · **依赖**：P0-00
-  - **执行状态**：`not-started`
-- [ ] `P1-02` — README 降为入口页（`:80-115` 删除不迁移）
-  - **验证映射**：`NUE1117-T01` · **依赖**：P1-01
-  - **执行状态**：`not-started`
-- [ ] `P1-03` — 仓根原则 + TEMPLATE + INTRODUCTION `:393,:403`
-  - **验证映射**：`NUE1117-T02` · **依赖**：P1-01
-  - **执行状态**：`not-started`
-- [ ] `P1-04` — `docs/agents/skills/dsh-nano-design/SKILL.md`
-  - **验证映射**：`NUE1117-T02` · **依赖**：P1-01
-  - **执行状态**：`not-started`
+- [x] `P1-01` — 新建 `docs/specs/dsh-nano-ui/DESIGN.md`（章节、令牌、层级与间距、承载模型、组件清单、U1–U10、宿主缺口）
+  - **验证映射**：`NUE1117-T01` · **执行状态**：`complete` · **证据**：`7e423f5`（合并 `09290dc`）· `node --test test/scripts/nue-docs.test.mjs` 7/7 pass · 2026-11-16T17:52:21Z（T01 四条：章节/组件/U1–U10/缺口；禁词扫描含正控）。另含 §7 宿主接口解码（Menu `anchor` 为 ReactNode + `getAnchorRect`；Toast `onDone` 必填、无不自动结束；Modal 宽度写死 → 预设尺寸并登记缺口）
+- [x] `P1-02` — README 降为入口页（`:80-115` 删除不迁移）
+  - **验证映射**：`NUE1117-T01` · **执行状态**：`complete` · **证据**：同上；软链 realpath 相同
+- [x] `P1-03` — 仓根原则 + TEMPLATE + INTRODUCTION `:393,:403`
+  - **验证映射**：`NUE1117-T02` · **执行状态**：`complete` · **证据**：同上；仓根新增「UI 宿主优先」一条（`T01` 转写，不扩约）
+- [x] `P1-04` — `docs/agents/skills/dsh-nano-design/SKILL.md`
+  - **验证映射**：`NUE1117-T02` · **执行状态**：`complete` · **证据**：同上；遍历全部 package.json `files` 无该路径
 
 ### PH2 — catalog 与检测（`nue-1117-catalog`）
 
@@ -178,8 +174,8 @@ P0-00 干净树（main@9792da0）
 
 ## 5. 当前状态与交接
 
-- **当前节点 / 已完成**：P0-00
-- **下一动作**：PH1
+- **当前节点 / 已完成**：P0-00、PH1
+- **下一动作**：PH2
 - **当前阻塞**：无
 - **待 owner 决定**：P4-01、P9-05（执行到时判定是否触发停止）
 - **最终交接目标**：[业主]

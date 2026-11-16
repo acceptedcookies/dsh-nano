@@ -2,8 +2,9 @@
 // single UI spec. Run explicitly: node --test test/scripts/nue-docs.test.mjs
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync, readdirSync, statSync, realpathSync, existsSync } from 'node:fs'
+import { readFileSync, realpathSync, existsSync } from 'node:fs'
 import { join, dirname } from 'node:path'
+import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
@@ -63,22 +64,17 @@ test('T02 TEMPLATE links DESIGN.md; INTRODUCTION no longer restates the portal t
   assert.ok(!intro.includes('才到得了弹层'))
 })
 
-function packageJsons(dir, out = []) {
-  for (const name of readdirSync(dir)) {
-    if (name === 'node_modules' || name.startsWith('.')) continue
-    const p = join(dir, name)
-    const st = statSync(p)
-    if (st.isDirectory()) packageJsons(p, out)
-    else if (name === 'package.json') out.push(p)
-  }
-  return out
+// Tracked manifests only: untracked trees (context/, build caches) are not shipped.
+function packageJsons() {
+  return execFileSync('git', ['ls-files', '--', 'package.json', '*/package.json'], { cwd: root, encoding: 'utf8' })
+    .split('\n').filter(Boolean).map(p => join(root, p))
 }
 
 test('T02 design skill exists and is in no package files list', () => {
   const skill = 'docs/agents/skills/dsh-nano-design/SKILL.md'
   assert.ok(existsSync(join(root, skill)))
   assert.match(read(skill), /^name: dsh-nano-design$/m)
-  const pkgs = packageJsons(root)
+  const pkgs = packageJsons()
   assert.ok(pkgs.length > 5, `scanned ${pkgs.length} package.json files`)
   for (const p of pkgs) {
     const files = JSON.parse(readFileSync(p, 'utf8')).files ?? []

@@ -2,7 +2,7 @@
 name: nano-kite
 description: Initialize, start, suspend, or resume Kitesurf, and point MCP at a local or remote engine. Use when the user types /nano-kite.
 version: 0.1.0
-date: 2026-11-15
+date: 2026-11-16
 user-invocable: true
 ---
 

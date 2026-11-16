@@ -39,407 +39,33 @@ var __kitesurfExport = (() => {
   ));
   var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
-  // ../packages/dsh-nano-ui/src/dialog.js
-  function NanoDialog({ copy, title, description, confirmLabel, confirmDisabled, busy, error, danger, footer, maxHeight, width, region, className, onConfirm, onCancel, children }) {
-    return import_react.default.createElement(import_dsh_client_ui_primitives.Modal, {
-      open: true,
-      onClose: onCancel,
-      title,
-      description,
-      closeLabel: copy.cancel,
-      className: [
-        "nano-dialog-card",
-        maxHeight === void 0 ? "" : "nano-dialog-capped",
-        width === void 0 ? "" : "nano-dialog-sized",
-        region === void 0 ? "" : "nano-dialog-regioned",
-        className ?? ""
-      ].filter(Boolean).join(" "),
-      contentClassName: "nano-dialog-content",
-      footer: footer ?? import_react.default.createElement(
-        import_react.default.Fragment,
-        null,
-        import_react.default.createElement(import_dsh_client_ui_primitives.Button, { variant: "outline", className: "nano-modal-action", onClick: onCancel }, copy.cancel),
-        import_react.default.createElement(import_dsh_client_ui_primitives.Button, {
-          variant: danger ? "outline" : "primary",
-          className: danger ? "nano-modal-action nano-modal-danger" : "nano-modal-action",
-          disabled: confirmDisabled === true || busy === true,
-          onClick: onConfirm
-        }, confirmLabel ?? copy.confirm)
-      )
-    }, children, error === void 0 ? null : import_react.default.createElement("p", { className: "nano-dialog-error", role: "alert" }, error));
-  }
-  var import_react, import_dsh_client_ui_primitives;
-  var init_dialog = __esm({
-    "../packages/dsh-nano-ui/src/dialog.js"() {
-      import_react = __toESM(__require("react"), 1);
-      import_dsh_client_ui_primitives = __require("@deepseek-ai/dsh-client-ui-primitives");
+  // ../packages/dsh-nano-ui/src/version.js
+  var VERSION;
+  var init_version = __esm({
+    "../packages/dsh-nano-ui/src/version.js"() {
+      VERSION = "0.2.0";
     }
   });
 
-  // ../packages/dsh-nano-ui/src/menu.js
-  function menuHeight(items) {
-    let height = 8;
-    for (const item of items) height += item?.separator === true ? 9 : 28;
-    return height;
-  }
-  function NanoMenu({ menu, actions, onClose, width = 208, maxHeight, theme, z }) {
-    const ref = useRef(null);
-    const [active, setActive] = useState(0);
-    const items = menu === null ? [] : actions;
-    const count = items.length;
-    const latest = useRef(items);
-    latest.current = items;
-    const openedAt = menu === null ? null : menu.openedAt;
-    const step = (from, dir) => {
-      const list = latest.current;
-      const n = list.length;
-      if (n === 0) return 0;
-      let index = from;
-      for (let guard = 0; guard < n; guard++) {
-        index = (index + dir + n) % n;
-        if (list[index]?.separator !== true) return index;
-      }
-      return from;
-    };
-    useEffect(() => {
-      if (openedAt === null) return;
-      const first = items.findIndex((item) => item?.separator !== true);
-      setActive(first < 0 ? 0 : first);
-    }, [openedAt]);
-    useEffect(() => {
-      if (menu === null) return void 0;
-      const onPointer = (event) => {
-        if (ref.current !== null && !ref.current.contains(event.target)) onClose();
-      };
-      const onKey = (event) => {
-        if (event.key === "Escape") {
-          event.stopPropagation();
-          onClose();
-          return;
-        }
-        if (event.key === "ArrowDown") {
-          event.preventDefault();
-          setActive((i) => step(i, 1));
-          return;
-        }
-        if (event.key === "ArrowUp") {
-          event.preventDefault();
-          setActive((i) => step(i, -1));
-          return;
-        }
-        if (event.key === "Enter") {
-          event.preventDefault();
-          const item = latest.current[active];
-          if (!item || item.separator === true) return;
-          onClose();
-          item.run();
-        }
-      };
-      document.addEventListener("pointerdown", onPointer, true);
-      document.addEventListener("keydown", onKey, true);
-      return () => {
-        document.removeEventListener("pointerdown", onPointer, true);
-        document.removeEventListener("keydown", onKey, true);
-      };
-    }, [menu, active, count, onClose]);
-    if (menu === null || count === 0) return null;
-    const height = menuHeight(items);
-    const left = Math.min(menu.x, (window.innerWidth || width) - width - 8);
-    const top = Math.min(menu.y, (window.innerHeight || height) - height - 8);
-    return import_react2.default.createElement("div", {
-      className: "nano-menu",
-      role: "menu",
-      ref,
-      style: {
-        position: "fixed",
-        left: `${Math.max(8, left)}px`,
-        top: `${Math.max(8, top)}px`,
-        minWidth: `${width}px`,
-        ...typeof z === "number" ? { zIndex: String(Math.round(z)) } : {},
-        ...typeof maxHeight === "number" ? { maxHeight: `${Math.round(maxHeight)}px`, overflowY: "auto", overscrollBehavior: "contain" } : {}
-      },
-      "data-nano-menu": "true",
-      /* Undefined is dropped by React, so an owner that follows the shell simply omits it. */
-      "data-nano-theme": theme
-    }, items.map((item, index) => item?.separator === true ? import_react2.default.createElement("div", { key: item.id, className: "nano-menu-sep", role: "separator" }) : import_react2.default.createElement(NanoMenuItem, {
-      key: item.id,
-      item,
-      index,
-      active: index === active,
-      onHover: setActive,
-      onRun: onClose
-    })));
-  }
-  function NanoMenuItem({ item, index, active, onHover, onRun }) {
-    return import_react2.default.createElement(
-      "button",
-      {
-        type: "button",
-        role: "menuitem",
-        className: "nano-menu-item",
-        "data-active": String(active),
-        "data-tone": item.tone ?? "default",
-        onMouseEnter: () => onHover(index),
-        onClick: () => {
-          onRun();
-          item.run();
-        }
-      },
-      item.icon === void 0 ? null : import_react2.default.createElement("span", { className: "nano-menu-icon", "aria-hidden": "true" }, item.icon),
-      import_react2.default.createElement("span", { className: "nano-menu-label" }, item.label)
-    );
-  }
-  var import_react2, useEffect, useRef, useState;
-  var init_menu = __esm({
-    "../packages/dsh-nano-ui/src/menu.js"() {
-      import_react2 = __toESM(__require("react"), 1);
-      ({ useEffect, useRef, useState } = import_react2.default);
-    }
-  });
-
-  // ../packages/dsh-nano-ui/src/toast.js
-  function NanoToast({ text }) {
-    if (text === void 0 || text === null) return null;
-    return import_react3.default.createElement("div", { className: "nano-toast", role: "status", "aria-live": "polite", "data-nano-toast": "true" }, text);
-  }
-  var import_react3;
-  var init_toast = __esm({
-    "../packages/dsh-nano-ui/src/toast.js"() {
-      import_react3 = __toESM(__require("react"), 1);
-    }
-  });
-
-  // ../packages/dsh-nano-ui/src/dom.js
-  function openNanoDialog(options) {
-    const host = document.createElement("div");
-    host.className = "nano-dialog-host";
-    document.body.appendChild(host);
-    const maxKey = "--nano-dlg-max";
-    const maxValue = typeof options.maxHeight === "number" ? `${Math.round(options.maxHeight)}px` : null;
-    if (maxValue !== null) document.documentElement.style.setProperty(maxKey, maxValue);
-    const heightKey = "--nano-dlg-h";
-    const heightValue = typeof options.fixedHeight === "number" ? `${Math.round(options.fixedHeight)}px` : null;
-    if (heightValue !== null) document.documentElement.style.setProperty(heightKey, heightValue);
-    const wantsRegion = options.region instanceof DOMRect;
-    const wantsWidth = typeof options.width === "number";
-    let theme = options.theme;
-    const wantsTheme = theme === "light" || theme === "dark";
-    let layerEl = (
-      /** @type {HTMLElement | null} */
-      null
-    );
-    const wantsZ = typeof options.z === "number";
-    const observer = wantsRegion || wantsWidth || wantsTheme || wantsZ ? new MutationObserver(() => {
-      for (const card of document.querySelectorAll(".nano-dialog-card")) {
-        if (card instanceof HTMLElement === false || card.dataset.nanoBound === "1") continue;
-        const layer = card.parentElement;
-        if (!(layer instanceof HTMLElement)) continue;
-        card.dataset.nanoBound = "1";
-        if (wantsZ) layer.style.zIndex = String(Math.round(options.z));
-        if (wantsTheme) {
-          layerEl = layer;
-          layer.setAttribute("data-nano-theme", theme);
-        }
-        if (heightValue !== null) card.classList.add("nano-dialog-fixed");
-        if (wantsWidth) layer.style.setProperty("--nano-dlg-w", `${Math.round(options.width)}px`);
-        if (wantsRegion) {
-          const r = options.region;
-          layer.classList.add("nano-regioned");
-          Object.assign(layer.style, {
-            position: "fixed",
-            top: `${r.top}px`,
-            left: `${r.left}px`,
-            right: "auto",
-            bottom: "auto",
-            boxSizing: "border-box",
-            width: `${r.width}px`,
-            height: `${r.height}px`,
-            padding: "12px",
-            borderRadius: "var(--dsw-radius-panel, 28px)",
-            overflow: "hidden"
-          });
-        }
-      }
-    }) : null;
-    observer?.observe(document.body, { childList: true });
-    const root = (0, import_client.createRoot)(host);
-    const close = () => {
-      observer?.disconnect();
-      root.unmount();
-      host.remove();
-      if (maxValue !== null && document.documentElement.style.getPropertyValue(maxKey) === maxValue) {
-        document.documentElement.style.removeProperty(maxKey);
-      }
-      if (heightValue !== null && document.documentElement.style.getPropertyValue(heightKey) === heightValue) {
-        document.documentElement.style.removeProperty(heightKey);
-      }
-    };
-    root.render(import_react4.default.createElement(NanoDialog, { ...options, onCancel: () => {
-      options.onCancel?.();
-      close();
-    } }));
-    const setTheme = (next) => {
-      if (next !== "light" && next !== "dark") return;
-      theme = next;
-      if (layerEl !== null && layerEl.isConnected) layerEl.setAttribute("data-nano-theme", next);
-    };
-    return { close, setTheme };
-  }
-  function openNanoMenu(options) {
-    const host = document.createElement("div");
-    host.className = "nano-menu-host";
-    document.body.appendChild(host);
-    const root = (0, import_client.createRoot)(host);
-    const close = () => {
-      root.unmount();
-      host.remove();
-    };
-    const r = options.anchor;
-    const x = r.left !== void 0 ? r.left : r.x;
-    const up = options.direction === "up";
-    const estimatedHeight = Math.min(
-      options.maxHeight ?? Number.POSITIVE_INFINITY,
-      menuHeight(options.items ?? [])
-    );
-    const anchorTop = r.top !== void 0 ? r.top : r.y ?? 0;
-    const y = up ? anchorTop - (options.gap ?? 0) - (Number.isFinite(estimatedHeight) ? estimatedHeight : 0) : (r.bottom !== void 0 ? r.bottom : (r.y ?? 0) + (r.height ?? 0)) + (options.gap ?? 0);
-    root.render(import_react4.default.createElement(NanoMenu, {
-      menu: { x, y, openedAt: Date.now() },
-      actions: options.items ?? [],
-      width: options.width,
-      maxHeight: options.maxHeight,
-      theme: options.theme,
-      z: options.z,
-      onClose: close
-    }));
-    return { close };
-  }
-  var import_react4, import_client;
-  var init_dom = __esm({
-    "../packages/dsh-nano-ui/src/dom.js"() {
-      import_react4 = __toESM(__require("react"), 1);
-      import_client = __require("react-dom/client");
-      init_dialog();
-      init_menu();
-    }
-  });
-
-  // ../packages/dsh-nano-ui/src/tabs.js
-  function nanoTabs({ items, value, onChange, label }) {
-    const seq = ++nanoTabsSeq;
-    const el = document.createElement("div");
-    el.className = "nano-tabs";
-    el.setAttribute("role", "tablist");
-    if (label) el.setAttribute("aria-label", label);
-    const tabs = items.map((item) => {
-      const tab = document.createElement("button");
-      tab.type = "button";
-      tab.className = "nano-tab";
-      tab.id = `nano-tab-${seq}-${item.value}`;
-      tab.setAttribute("role", "tab");
-      tab.textContent = item.label;
-      const panelId = `nano-tabpanel-${seq}-${item.value}`;
-      tab.setAttribute("aria-controls", panelId);
-      item.panel.id = panelId;
-      item.panel.setAttribute("role", "tabpanel");
-      item.panel.setAttribute("aria-labelledby", tab.id);
-      el.append(tab);
-      return { item, tab };
-    });
-    let current = (
-      /** @type {string | undefined} */
-      void 0
-    );
-    function select(next, { focus = false } = {}) {
-      const entry = tabs.find((entry2) => entry2.item.value === next);
-      if (!entry) return;
-      current = entry.item.value;
-      for (const candidate of tabs) {
-        const active = candidate === entry;
-        candidate.tab.setAttribute("aria-selected", String(active));
-        candidate.tab.tabIndex = active ? 0 : -1;
-        candidate.item.panel.hidden = !active;
-      }
-      if (focus) {
-        entry.tab.focus();
-        entry.tab.scrollIntoView({ block: "nearest", inline: "nearest" });
-      }
-      onChange?.(entry.item.value);
-    }
-    el.addEventListener("click", (event) => {
-      const tab = event.target instanceof Element ? event.target.closest(".nano-tab") : null;
-      const entry = tabs.find((candidate) => candidate.tab === tab);
-      if (entry) select(entry.item.value);
-    });
-    el.addEventListener("keydown", (event) => {
-      const tab = event.target instanceof Element ? event.target.closest(".nano-tab") : null;
-      const index = tabs.findIndex((candidate) => candidate.tab === tab);
-      if (index < 0) return;
-      let next;
-      switch (event.key) {
-        case "ArrowLeft":
-          next = (index + tabs.length - 1) % tabs.length;
-          break;
-        case "ArrowRight":
-          next = (index + 1) % tabs.length;
-          break;
-        case "Home":
-          next = 0;
-          break;
-        case "End":
-          next = tabs.length - 1;
-          break;
-        default:
-          return;
-      }
-      event.preventDefault();
-      event.stopPropagation();
-      select(tabs[next].item.value, { focus: true });
-    });
-    select(value, { focus: false });
-    return { el, select, value: () => current };
-  }
-  function NanoTabs({ items, value, onChange, label, className }) {
-    const [inner, setInner] = import_react5.default.useState(() => value ?? items[0]?.value);
-    const current = value ?? inner;
-    const select = (next) => {
-      if (value === void 0) setInner(next);
-      onChange?.(next);
-    };
-    const idBase = import_react5.default.useMemo(() => `nano-tabs-${Math.random().toString(36).slice(2, 9)}`, []);
-    return import_react5.default.createElement(
-      "div",
-      { className: ["nano-tabs-wrap", className ?? ""].filter(Boolean).join(" ") },
-      import_react5.default.createElement(
-        "div",
-        { className: "nano-tabs", role: "tablist", "aria-label": label },
-        items.map((item) => import_react5.default.createElement("button", {
-          key: item.value,
-          id: `${idBase}-tab-${item.value}`,
-          type: "button",
-          role: "tab",
-          className: "nano-tab",
-          "aria-selected": String(item.value === current),
-          "aria-controls": `${idBase}-panel-${item.value}`,
-          tabIndex: item.value === current ? 0 : -1,
-          onClick: () => select(item.value)
-        }, item.label))
-      ),
-      items.map((item) => import_react5.default.createElement("div", {
-        key: item.value,
-        id: `${idBase}-panel-${item.value}`,
-        role: "tabpanel",
-        className: "nano-tabs-panel",
-        "aria-labelledby": `${idBase}-tab-${item.value}`,
-        hidden: item.value !== current
-      }, item.content))
-    );
-  }
-  var import_react5, nanoTabsSeq;
-  var init_tabs = __esm({
-    "../packages/dsh-nano-ui/src/tabs.js"() {
-      import_react5 = __toESM(__require("react"), 1);
-      nanoTabsSeq = 0;
+  // ../packages/dsh-nano-ui/src/layers.js
+  var NANO_LAYER, NANO_SPACE, kebab, LAYER_CSS;
+  var init_layers = __esm({
+    "../packages/dsh-nano-ui/src/layers.js"() {
+      NANO_LAYER = Object.freeze({
+        shellSlot: 20,
+        hostModal: 1e3,
+        hostPortal: 1100,
+        menu: 1100,
+        window: 1200,
+        windowRaised: 1210,
+        overlay: 10
+      });
+      NANO_SPACE = Object.freeze([4, 8, 12, 16, 20, 24]);
+      kebab = (name) => name.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
+      LAYER_CSS = `:root {
+${Object.entries(NANO_LAYER).map(([name, value]) => `  --nano-layer-${kebab(name)}: ${value};`).join("\n")}
+${NANO_SPACE.map((value, index) => `  --nano-space-${index + 1}: ${value}px;`).join("\n")}
+}`;
     }
   });
 
@@ -447,162 +73,1048 @@ var __kitesurfExport = (() => {
   var NANO_STYLES;
   var init_styles = __esm({
     "../packages/dsh-nano-ui/src/styles.js"() {
-      NANO_STYLES = `
-/* \u2500\u2500 anchored popup menu (NanoMenu, NanoMenuItem) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
-/* \u2500\u2500 type tokens \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-   Every shared surface reads from --nano-* custom properties so an owning
-   plugin (e.g. the notepad) can retune typography by declaring them once on its
-   own root. Each falls back to the shell default so nano-ui stays self-contained. */
-.nano-menu { position: fixed; box-sizing: border-box; padding: 4px; display: flex; flex-direction: column; gap: 1px; z-index: 30;
-  background: var(--dsw-menu-surface-fill, var(--dsw-alias-bg-layer-3)); color: var(--dsw-alias-label-primary);
-  border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-lg, 12px);
-  box-shadow: var(--dsw-elevation-prominent); backdrop-filter: var(--dsw-menu-backdrop-filter);
-  font-family: var(--nano-font-family, inherit);
-  font-size: var(--nano-font-size, inherit);
-  line-height: var(--nano-line-height, inherit); }
-.nano-menu-item { display: flex; align-items: center; gap: 8px; width: 100%; border: 0; background: transparent;
-  color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm, 8px); padding: 6px 8px;
-  font: inherit; text-align: left; cursor: pointer; }
-.nano-menu-item[data-active="true"], .nano-menu-item:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
-.nano-menu-item[data-tone="danger"] { color: var(--dsw-alias-label-error, #e5534b); }
-.nano-menu-item[data-tone="danger"][data-active="true"] { background: color-mix(in oklab, var(--dsw-alias-label-error, #e5534b) 14%, transparent); }
-.nano-menu-icon { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex: none; color: var(--dsw-alias-label-tertiary); }
-.nano-menu-icon svg { display: block; width: 14px; height: 14px; }
-.nano-menu-item[data-active="true"] .nano-menu-icon { color: inherit; }
-.nano-menu-check { display: inline-flex; color: inherit; }
-.nano-menu-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.nano-menu-sep { height: 1px; margin: 4px 6px; background: var(--dsw-alias-border-l2); flex: none; pointer-events: none; }
+      init_layers();
+      init_version();
+      NANO_STYLES = `/* dsh-nano-ui@${VERSION} */
+${LAYER_CSS}
+[data-nano-scheme="light"] { color-scheme: light; }
+[data-nano-scheme="dark"] { color-scheme: dark; }
 
-/* \u2500\u2500 transient toast (NanoToast) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
-.nano-toast { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); z-index: 40;
-  padding: 6px 12px; border-radius: var(--dsw-radius-sm, 8px); font-size: var(--nano-toast-size, 12px);
-  background: var(--dsw-alias-tooltip-bg, #43454a); color: var(--dsw-alias-tooltip-label, #f9fafb);
-  box-shadow: var(--dsw-elevation-prominent); pointer-events: none; }
-@keyframes nano-toast-in { from { opacity: 0; transform: translate(-50%, 4px); } to { opacity: 1; transform: translate(-50%, 0); } }
-.nano-toast { animation: nano-toast-in .12s ease; }
-
-/* \u2500\u2500 shared dialog helpers \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
-.nano-dialog-host { position: fixed; inset: 0; z-index: 50; pointer-events: none;
-  /* This host is only the React mount point \u2014 NanoDialog/Modal portals the card
-     into document.body at a separate layer. Leaving pointer-events on here
-     makes the empty fullscreen host sit above its own card and eat every click. */
-  font-family: var(--nano-font-family, inherit);
-  font-size: var(--nano-font-size, inherit);
-  line-height: var(--nano-line-height, inherit); }
-/* The Modal portals straight into document.body, outside .nano-dialog-host, so
-   the card itself must consume the owner tokens \u2014 not the host.
-   The color declaration is deliberate: inheritance would otherwise carry the
-   host's computed ink onto the card, and an owner whose scheme differs from the
-   host (light notepad inside a dark shell) would paint near-white text on the
-   card's light surface. Resolving the token here keeps ink and surface paired. */
-.nano-dialog-card { font-family: var(--nano-font-family, inherit); font-size: var(--nano-font-size, inherit); line-height: var(--nano-line-height, inherit); color: var(--dsw-alias-label-primary); }
-/* The Modal title is a hashed class \u2014 size it and the description through the
-   shared tokens so dialogs read at the same scale as the owning surface. */
-.nano-dialog-card [class*="title"], .nano-dialog-card [class*="title_"] { font-size: var(--nano-title-size, inherit); }
-.nano-dialog-card [class*="description"], .nano-dialog-card [class*="description_"] { font-size: var(--nano-desc-size, inherit); color: var(--dsw-alias-label-secondary); }
-/* Shell Button defaults to its own size; pull dialog actions down to the owner
-   scale too so the whole card reads at one size. */
-.nano-dialog-card button { font-size: var(--nano-font-size, inherit); font-family: var(--nano-font-family, inherit); }
-.nano-dialog-error { margin: 8px 0 0; font-size: var(--nano-desc-size, 12px); color: var(--dsw-alias-danger, #cf222e); }
-/* Height cap (e.g. 80% of the owning overlay): the card's own overflow:hidden
-   clips nothing because the body becomes the flex child that scrolls. The last
-   content child is .body \u2014 target it structurally since the class is hashed. */
-.nano-dialog-capped { max-height: var(--nano-dlg-max) !important; }
-/* Card width follows the owning overlay (e.g. 60% of the floating window) with
-   a floor so a narrow window still leaves a readable dialog. The value itself
-   is set per dialog on the portal layer (see openNanoDialog). */
-.nano-dialog-sized { width: clamp(320px, var(--nano-dlg-w, 380px), 100%) !important; }
-/* A tabbed dialog owns a fixed height so switching panels never resizes the
-   card under the pointer. The variable is set per dialog (see openNanoDialog). */
-.nano-dialog-card { height: var(--nano-dlg-h, auto); }
-
-.nano-dialog-content { display: flex; flex-direction: column; flex: 1; min-height: 0; }
-/* The shell Modal's body carries margin-top:20px on top of the header's own
-   12px padding-bottom, so a title-only dialog floats its first row ~32px
-   below the heading. Pull it back to the header's rhythm. */
-.nano-dialog-card [class*="_body_"] { margin-top: 8px; }
-/* The shell Button has no danger variant, so a destructive confirm was plain text
-   with no hover. Keep the outline metrics and paint the warning color ourselves. */
+/* \u2500\u2500 main-window dialog (NanoDialog over the host Modal) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
+.nano-dialog-card { color: var(--dsw-alias-label-primary); }
+.nano-dialog-card.nano-dialog-w-480 { width: min(480px, 100%); }
+.nano-dialog-card.nano-dialog-w-560 { width: min(560px, 100%); }
+.nano-dialog-card.nano-dialog-w-720 { width: min(720px, 100%); }
+.nano-dialog-body { display: flex; flex-direction: column; gap: var(--nano-space-2); min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.nano-dialog-error { margin: var(--nano-space-2) 0 0; font-size: var(--nano-desc-size, inherit); color: var(--dsw-alias-state-error-primary); }
+/* The host Button has no danger variant: keep the outline metrics, paint the error state. */
 .nano-modal-action.nano-modal-danger {
-  color: var(--dsw-alias-state-error-primary, #f25a5a);
-  box-shadow: inset 0 0 0 var(--dsh-hairline-width, .5px) var(--dsw-alias-state-error-primary, #f25a5a);
+  color: var(--dsw-alias-state-error-primary);
+  box-shadow: inset 0 0 0 var(--dsh-hairline-width) var(--dsw-alias-state-error-primary);
   transition: background-color .12s ease, color .12s ease, box-shadow .12s ease;
 }
 @media (hover: hover) {
   .nano-modal-action.nano-modal-danger:hover:not(:disabled) {
-    background: var(--dsw-alias-interactive-bg-hover-danger, rgba(242, 90, 90, .15));
-    color: var(--dsw-alias-state-error-secondary, #f25a5a);
-    box-shadow: inset 0 0 0 var(--dsh-hairline-width, .5px) var(--dsw-alias-state-error-secondary, #f25a5a);
+    background: var(--dsw-alias-interactive-bg-hover-danger);
+    color: var(--dsw-alias-state-error-secondary);
+    box-shadow: inset 0 0 0 var(--dsh-hairline-width) var(--dsw-alias-state-error-secondary);
   }
 }
-.nano-dialog-content > div:last-child { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
-/* Fixed-height tabbed dialog: the shell's body stops scrolling; the card's
-   injected body becomes a flex column and its panels own the scroll. */
-.nano-dialog-fixed .nano-dialog-content > div:last-child { overflow: hidden; }
-.nano-dialog-fixed .np-dlg-body { display: flex; flex-direction: column; height: 100%; min-height: 0; overflow: hidden; }
 
-/* \u2500\u2500 tab strip (nanoTabs) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-   Follows the DSH settings mobile pattern: one row of pill cells that scroll
-   horizontally past the edge instead of wrapping. Sticky so the strip stays
-   reachable while a long tab panel scrolls. */
-.nano-tabs { position: relative; z-index: 2; display: flex; gap: 2px;
-  margin: 0; padding: 4px; border-radius: var(--dsw-radius-md, 10px);
-  /* Opaque track: a translucent token lets scrolling panel text show through. */
-  background: var(--dsw-alias-bg-layer-1, #202020); overflow-x: auto; scrollbar-width: none;
-  font-family: var(--nano-font-family, inherit); font-size: var(--nano-font-size, inherit); }
-.nano-tabs::-webkit-scrollbar { display: none; }
-/* Equal-width cells fill the strip; horizontal scrolling only kicks in when
-   the strip itself is narrower than the labels (mobile / narrow window). */
-.nano-tab { flex: 1 1 0; min-width: 0; display: inline-flex; align-items: center; justify-content: center;
-  height: 28px; padding: 0 8px; border: 0; border-radius: var(--dsw-radius-sm, 8px);
-  background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; cursor: pointer;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-@media (hover: hover) {
-  .nano-tab:hover:not([aria-selected="true"]) { color: var(--dsw-alias-label-primary); }
-}
-/* Selected tab is an inverted solid pill \u2014 the only bright element in the
-   strip, so the active section is unmistakable at a glance (and in both
-   themes, since both tokens invert together). */
-.nano-tab[aria-selected="true"] {
-  background: var(--dsw-alias-label-primary, #f7f8f8);
-  color: var(--dsw-alias-bg-layer-1, #191919);
-  font-weight: 600;
-  box-shadow: var(--dsw-elevation-soft);
-  position: relative;
-}
-.nano-tab[aria-selected="true"]::after { content: ''; position: absolute; left: 22%; right: 22%; bottom: -3px;
-  height: 2px; border-radius: 1px; background: var(--dsw-alias-focus-ring, #4c9aff); }
-.nano-tab:focus-visible { outline: 2px solid var(--dsw-alias-focus-ring, #4c9aff); outline-offset: -2px; }
-/* React tabbed body (NanoTabs): the strip stays fixed and only the active
-   panel scrolls, so a fixed-height dialog never resizes when tabs switch. */
-.nano-tabs-wrap { display: flex; flex-direction: column; height: 100%; min-height: 0; }
-.nano-tabs-panel { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-top: 10px; }
-.nano-tabs-panel[hidden] { display: none; }
+/* \u2500\u2500 window overlay (NanoWindowDialog) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+   Positioned against the owner container; the owner layer may be pointer-events:none,
+   so the overlay turns hit-testing back on. */
+.nano-overlay { position: absolute; inset: 0; z-index: var(--nano-layer-overlay); box-sizing: border-box;
+  display: flex; align-items: center; justify-content: center; padding: var(--nano-space-3); pointer-events: auto;
+  font-family: var(--nano-font-family, inherit); font-size: var(--nano-font-size, inherit); line-height: var(--nano-line-height, inherit); }
+.nano-overlay-mask { position: absolute; inset: 0; background: var(--dsw-alias-bg-mask-1); border-radius: inherit; }
+.nano-wdlg { position: relative; box-sizing: border-box; display: flex; flex-direction: column; gap: var(--nano-space-3);
+  width: min(380px, 100%); max-height: 100%; padding: var(--nano-space-5); outline: none;
+  background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-primary);
+  border: var(--dsh-hairline-width) solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-lg);
+  box-shadow: var(--dsw-elevation-prominent); }
+.nano-wdlg-head { display: flex; align-items: center; justify-content: space-between; gap: var(--nano-space-2); }
+.nano-wdlg-title { margin: 0; font-size: var(--nano-title-size, 1.1em); font-weight: 600; }
+.nano-wdlg-desc { margin: 0; font-size: var(--nano-desc-size, inherit); color: var(--dsw-alias-label-secondary); }
+.nano-wdlg-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: var(--nano-space-2); overflow-y: auto; overscroll-behavior: contain; }
+.nano-wdlg-foot { display: flex; justify-content: flex-end; gap: var(--nano-space-2); }
+.nano-wdlg button { font-family: inherit; }
+
+/* \u2500\u2500 menus (host Menu) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
+.nano-anchor { position: absolute; z-index: var(--nano-layer-menu); width: 0; height: 0; }
+.nano-cap-120 { max-height: 120px; }
+.nano-cap-160 { max-height: 160px; }
+.nano-cap-200 { max-height: 200px; }
+.nano-cap-240 { max-height: 240px; }
+.nano-cap-320 { max-height: 320px; }
+.nano-cap-400 { max-height: 400px; }
+.nano-cap-480 { max-height: 480px; }
+
+/* \u2500\u2500 panels behind a SegmentedControl (NanoTabs) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
+.nano-panes { display: flex; flex-direction: column; gap: var(--nano-space-2); height: 100%; min-height: 0; }
+.nano-pane { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.nano-pane[hidden] { display: none; }
+
+/* \u2500\u2500 toolbar / empty state / window shell \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
+.nano-toolbar { display: flex; align-items: center; gap: var(--nano-space-1); min-height: 36px; padding: 0 var(--nano-space-2);
+  border-bottom: var(--dsh-hairline-width) solid var(--dsw-alias-border-l1); }
+.nano-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--nano-space-2);
+  padding: var(--nano-space-6); text-align: center; color: var(--dsw-alias-label-secondary); }
+.nano-empty-icon { display: inline-flex; color: var(--dsw-alias-label-tertiary); }
+.nano-empty-title { margin: 0; color: var(--dsw-alias-label-primary); font-weight: 600; }
+.nano-empty-desc { margin: 0; }
+.nano-window { position: relative; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden;
+  background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-primary);
+  border: var(--dsh-hairline-width) solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-panel);
+  box-shadow: var(--dsw-elevation-panel); }
+.nano-window-floating { position: fixed; z-index: var(--nano-layer-window); }
+.nano-window-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.nano-window-body { position: relative; flex: 1 1 auto; min-height: 0; overflow: auto; }
 `;
+    }
+  });
+
+  // ../packages/dsh-nano-ui/catalog/tokens.json
+  var schemes;
+  var init_tokens = __esm({
+    "../packages/dsh-nano-ui/catalog/tokens.json"() {
+      schemes = {
+        dark: {
+          "--dsw-alias-bg-base": "#151517",
+          "--dsw-alias-bg-document-preview": "#151517",
+          "--dsw-alias-bg-layer-1": "#232324",
+          "--dsw-alias-bg-layer-2": "#2c2c2e",
+          "--dsw-alias-bg-layer-3": "#353638",
+          "--dsw-alias-bg-mask-1": "#00000080",
+          "--dsw-alias-bg-mask-2": "#0003",
+          "--dsw-alias-bg-mask-drop": "#272730b3",
+          "--dsw-alias-bg-module-platform": "#353638",
+          "--dsw-alias-bg-multi-select": "#212123",
+          "--dsw-alias-bg-overlay": "#61666b",
+          "--dsw-alias-bg-skeleton": "#ffffff14",
+          "--dsw-alias-border-inverted": "#ffffff0f",
+          "--dsw-alias-border-inverted2": "#ffffff14",
+          "--dsw-alias-border-l1": "#ffffff0f",
+          "--dsw-alias-border-l2": "#ffffff1f",
+          "--dsw-alias-border-l2-darkmode-thin": "#ffffff0f",
+          "--dsw-alias-border-l3": "#ffffff29",
+          "--dsw-alias-border-l4": "#fff3",
+          "--dsw-alias-brand-primary": "#f9fafb",
+          "--dsw-alias-brand-primary-invert": "#f9fafb",
+          "--dsw-alias-brand-primary-new-colorprimary-new-color": "#5686fe",
+          "--dsw-alias-brand-text": "#f9fafb",
+          "--dsw-alias-button-contrast-fill": "#f9fafb",
+          "--dsw-alias-button-elevated-fill": "#43454a",
+          "--dsw-alias-button-floating-fill": "#2c2c2e",
+          "--dsw-alias-button-floating-hover": "#353638",
+          "--dsw-alias-button-ghost-active-border": "#81858c",
+          "--dsw-alias-button-ghost-active-fill": "#43454a",
+          "--dsw-alias-button-ghost-active-hover": "#61666b",
+          "--dsw-alias-button-info-fill": "#7aaaff",
+          "--dsw-alias-button-info-hover": "#4176e6",
+          "--dsw-alias-button-primary-dimmed": "#43454a",
+          "--dsw-alias-button-primary-fill": "#f9fafb",
+          "--dsw-alias-button-primary-hover": "#ebeef2",
+          "--dsw-alias-code-diff-added": "#22c55e1f",
+          "--dsw-alias-code-diff-deleted": "#f25a5a1f",
+          "--dsw-alias-file-diff-added-bg": "#1f3124",
+          "--dsw-alias-file-diff-added-gutter": "#132016",
+          "--dsw-alias-file-diff-added-marker": "#41c977",
+          "--dsw-alias-file-diff-deleted-bg": "#3c1f1b",
+          "--dsw-alias-file-diff-deleted-gutter": "#28130e",
+          "--dsw-alias-file-diff-deleted-marker": "#fa423e",
+          "--dsw-alias-illustration-background": "#2c2c2e",
+          "--dsw-alias-illustration-backing": "#43454a",
+          "--dsw-alias-illustration-detail": "#81858c",
+          "--dsw-alias-illustration-inset": "#43454a",
+          "--dsw-alias-illustration-shadow": "#43454a",
+          "--dsw-alias-illustration-surface": "#61666b",
+          "--dsw-alias-interactive-bg-active": "#ffffff24",
+          "--dsw-alias-interactive-bg-hover": "#ffffff14",
+          "--dsw-alias-interactive-bg-hover-accent": "#ffffff3d",
+          "--dsw-alias-interactive-bg-hover-danger": "#f25a5a26",
+          "--dsw-alias-interactive-bg-hover-solid": "#353638",
+          "--dsw-alias-label-caption": "#81858c",
+          "--dsw-alias-label-deep-diving": "color-mix(in srgb, #5686fe 55%, #adb2b8)",
+          "--dsw-alias-label-deep-diving-shimmer": "color-mix(in srgb, #93c5fd 65%, #7aaaff)",
+          "--dsw-alias-label-dimmed": "#43454a",
+          "--dsw-alias-label-document-preview": "#cfd3d6",
+          "--dsw-alias-label-primary": "#f9fafb",
+          "--dsw-alias-label-primary-bluish": "#f9fafb",
+          "--dsw-alias-label-primary-dimmed": "#ebeef2",
+          "--dsw-alias-label-primary-foreground": "#0f1115",
+          "--dsw-alias-label-primary-inverted": "#353638",
+          "--dsw-alias-label-secondary": "#cfd3d6",
+          "--dsw-alias-label-shimmer": "color-mix(in srgb, #fff 45%, transparent)",
+          "--dsw-alias-label-tertiary": "#adb2b8",
+          "--dsw-alias-link": "#7aaaff",
+          "--dsw-alias-markdown-citation": "#353638",
+          "--dsw-alias-markdown-code-block": "#1b1b1c",
+          "--dsw-alias-markdown-code-block-banner": "#2c2c2e",
+          "--dsw-alias-markdown-code-segment-selected": "#353638",
+          "--dsw-alias-markdown-code-segment-unselected": "#1b1b1c",
+          "--dsw-alias-markdown-inline-code": "#292929",
+          "--dsw-alias-markdown-placeholder": "#2c2c2e",
+          "--dsw-alias-markdown-tag": "#2c2c2e",
+          "--dsw-alias-menu-group-header-fill": "#303136f0",
+          "--dsw-alias-menu-icon": "#ebeef2",
+          "--dsw-alias-onboarding-card-fill": "color-mix(in srgb, #2c2c2e 80%, transparent)",
+          "--dsw-alias-onboarding-checkbox-border": "#ffffff1f",
+          "--dsw-alias-onboarding-secondary-fill": "#48494c",
+          "--dsw-alias-scrollbar-bg-l1": "#3c3c3d",
+          "--dsw-alias-scrollbar-bg-l2": "#545557",
+          "--dsw-alias-scrollbar-hover-l1": "#545557",
+          "--dsw-alias-scrollbar-hover-l2": "#65676b",
+          "--dsw-alias-settings-card-fill": "#2c2c2e",
+          "--dsw-alias-settings-card-stroke": "#fff3",
+          "--dsw-alias-state-business-primary": "#7aaaff",
+          "--dsw-alias-state-business-tertiary": "#34415b",
+          "--dsw-alias-state-done-primary": "#a78bfa",
+          "--dsw-alias-state-error-primary": "#f25a5a",
+          "--dsw-alias-state-idle-primary": "#545557",
+          "--dsw-alias-state-success-tertiary": "#233c2c",
+          "--dsw-alias-state-warn-tertiary": "#27241f",
+          "--dsw-alias-switch-thumb": "#adb2b8",
+          "--dsw-alias-toast-bg": "#43454a",
+          "--dsw-alias-tooltip-bg": "#43454a",
+          "--dsw-alias-tooltip-key-bg": "color-mix(in srgb, #43454a, white 18%)",
+          "--dsw-alias-turn-trigger-bg": "#ffffff14",
+          "--dsw-alias-turn-trigger-bg-hover": "#ffffff24",
+          "--dsw-elevation-panel": "0 0 0 .5px #fff3, 0 3px 8px 0 #00000008, 0 0 16px 0 #00000005",
+          "--dsw-elevation-prominent": "0 0 0 .5px #fff3, 0 3px 8px 0 #0000000a, 0 0 20px 0 #0000000d",
+          "--dsw-elevation-soft": "0 0 0 .5px #fff3, 0 4px 16px 0 #00000008, 0 0 24px 0 #00000008",
+          "--dsw-elevation-stroke": "0 0 0 .5px #fff3",
+          "--dsw-elevation-stroke-color": "#fff3",
+          "--dsw-linear-gradient-think": "linear-gradient(180deg, #151517 20.19%, #15151700 100%)",
+          "--dsw-linear-think-select": "linear-gradient(180deg, #232325 20.19%, #23232500 100%)",
+          "--dsw-menu-surface-fill": "#303136a3",
+          "--dsw-specific-bubble": "#2c2c2e",
+          "--dsw-specific-bubble-highlight": "#43454a",
+          "--dsw-specific-input-major": "#2c2c2e",
+          "--dsw-specific-login-input": "#1b1b1c",
+          "--dsw-specific-menu": "#303136a3",
+          "--dsw-specific-selector": "#353638",
+          "--dsw-specific-sidebar-fill": "#1b1b1c",
+          "--dsw-specific-sidebar-nav-item-active": "#43454a",
+          "--dsw-specific-sidebar-nav-item-active-accent": "#353638",
+          "--dsw-specific-tip": "#353638",
+          "--dsw-static-neutral-bluish-60": "#f9fafb"
+        },
+        light: {
+          "--dsw-alias-bg-base": "#fff",
+          "--dsw-alias-bg-document-preview": "#ebeef2",
+          "--dsw-alias-bg-layer-1": "#fff",
+          "--dsw-alias-bg-layer-2": "#fff",
+          "--dsw-alias-bg-layer-3": "#fff",
+          "--dsw-alias-bg-mask-1": "#0000003d",
+          "--dsw-alias-bg-mask-2": "#0000001f",
+          "--dsw-alias-bg-mask-drop": "#ffffffb3",
+          "--dsw-alias-bg-module-platform": "#f5f6f7",
+          "--dsw-alias-bg-multi-select": "#f5f6f7",
+          "--dsw-alias-bg-overlay": "#e9ecf2",
+          "--dsw-alias-bg-skeleton": "#0000000a",
+          "--dsw-alias-border-inverted": "#0000",
+          "--dsw-alias-border-inverted2": "#0000",
+          "--dsw-alias-border-l1": "#0000000a",
+          "--dsw-alias-border-l2": "#0000001a",
+          "--dsw-alias-border-l2-darkmode-thin": "#0000001a",
+          "--dsw-alias-border-l3": "#0000001f",
+          "--dsw-alias-border-l4": "#00000029",
+          "--dsw-alias-brand-primary": "#0f1115",
+          "--dsw-alias-brand-primary-invert": "#0f1115",
+          "--dsw-alias-brand-primary-new-colorprimary-new-color": "#4176e6",
+          "--dsw-alias-brand-text": "#0f1115",
+          "--dsw-alias-button-contrast-fill": "#61666b",
+          "--dsw-alias-button-elevated-fill": "#fff",
+          "--dsw-alias-button-floating-fill": "#fff",
+          "--dsw-alias-button-floating-hover": "#f1f3f5",
+          "--dsw-alias-button-ghost-active-border": "#979da6",
+          "--dsw-alias-button-ghost-active-fill": "#ebeef2",
+          "--dsw-alias-button-ghost-active-hover": "#e9ecf2",
+          "--dsw-alias-button-info-fill": "#4176e6",
+          "--dsw-alias-button-info-hover": "#7aaaff",
+          "--dsw-alias-button-primary-dimmed": "#ebeef2",
+          "--dsw-alias-button-primary-fill": "#0f1115",
+          "--dsw-alias-button-primary-hover": "#43454a",
+          "--dsw-alias-code-diff-added": "#22c55e14",
+          "--dsw-alias-code-diff-deleted": "#ec131314",
+          "--dsw-alias-file-diff-added-bg": "#e6f4e7",
+          "--dsw-alias-file-diff-added-gutter": "#edf7ed",
+          "--dsw-alias-file-diff-added-marker": "#01a241",
+          "--dsw-alias-file-diff-deleted-bg": "#fce6e2",
+          "--dsw-alias-file-diff-deleted-gutter": "#fdece9",
+          "--dsw-alias-file-diff-deleted-marker": "#ba2723",
+          "--dsw-alias-illustration-background": "#f5f7fa",
+          "--dsw-alias-illustration-backing": "#cad2db",
+          "--dsw-alias-illustration-detail": "#cad2db",
+          "--dsw-alias-illustration-inset": "#edf0f4",
+          "--dsw-alias-illustration-shadow": "#edf0f4",
+          "--dsw-alias-illustration-surface": "#edf0f4",
+          "--dsw-alias-interactive-bg-active": "#2631481a",
+          "--dsw-alias-interactive-bg-hover": "#2631480f",
+          "--dsw-alias-interactive-bg-hover-accent": "#26314824",
+          "--dsw-alias-interactive-bg-hover-danger": "#ec13130d",
+          "--dsw-alias-interactive-bg-hover-solid": "#f1f3f5",
+          "--dsw-alias-label-caption": "#adb2b8",
+          "--dsw-alias-label-deep-diving": "color-mix(in srgb, #4176e6 70%, #172554)",
+          "--dsw-alias-label-deep-diving-shimmer": "color-mix(in srgb, #4176e6 30%, #172554)",
+          "--dsw-alias-label-dimmed": "#e1e5ee",
+          "--dsw-alias-label-document-preview": "#61666b",
+          "--dsw-alias-label-primary": "#0f1115",
+          "--dsw-alias-label-primary-bluish": "#0e3074",
+          "--dsw-alias-label-primary-dimmed": "#151517",
+          "--dsw-alias-label-primary-foreground": "#fff",
+          "--dsw-alias-label-primary-inverted": "#fff",
+          "--dsw-alias-label-secondary": "#61666b",
+          "--dsw-alias-label-shimmer": "color-mix(in srgb, #000 30%, transparent)",
+          "--dsw-alias-label-tertiary": "#81858c",
+          "--dsw-alias-link": "#4176e6",
+          "--dsw-alias-markdown-citation": "#ebeef2",
+          "--dsw-alias-markdown-code-block": "#f9fafb",
+          "--dsw-alias-markdown-code-block-banner": "#f9fafb",
+          "--dsw-alias-markdown-code-segment-selected": "#fff",
+          "--dsw-alias-markdown-code-segment-unselected": "#f1f3f5",
+          "--dsw-alias-markdown-inline-code": "#fafafa",
+          "--dsw-alias-markdown-placeholder": "#f5f6f7",
+          "--dsw-alias-markdown-tag": "#f1f3f5",
+          "--dsw-alias-menu-group-header-fill": "#f8f9faf0",
+          "--dsw-alias-menu-icon": "#353638",
+          "--dsw-alias-onboarding-card-fill": "color-mix(in srgb, #fff 80%, transparent)",
+          "--dsw-alias-onboarding-checkbox-border": "color-mix(in srgb, #0f1115 20%, transparent)",
+          "--dsw-alias-onboarding-secondary-fill": "#fff",
+          "--dsw-alias-scrollbar-bg-l1": "#e5e5e5",
+          "--dsw-alias-scrollbar-bg-l2": "#e5e5e5",
+          "--dsw-alias-scrollbar-hover-l1": "#d4d4d4",
+          "--dsw-alias-scrollbar-hover-l2": "#d4d4d4",
+          "--dsw-alias-settings-card-fill": "#fff",
+          "--dsw-alias-settings-card-stroke": "#00000029",
+          "--dsw-alias-state-business-primary": "#4176e6",
+          "--dsw-alias-state-business-tertiary": "#e4edfd",
+          "--dsw-alias-state-done-primary": "#7c3aed",
+          "--dsw-alias-state-error-primary": "#ec1313",
+          "--dsw-alias-state-idle-primary": "#d4d4d4",
+          "--dsw-alias-state-success-tertiary": "#e6faed",
+          "--dsw-alias-state-warn-tertiary": "#fef5e7",
+          "--dsw-alias-switch-thumb": "#fff",
+          "--dsw-alias-toast-bg": "#353638",
+          "--dsw-alias-tooltip-bg": "#2c2c2e",
+          "--dsw-alias-tooltip-key-bg": "color-mix(in srgb, #2c2c2e, white 18%)",
+          "--dsw-alias-turn-trigger-bg": "#f9fafb",
+          "--dsw-alias-turn-trigger-bg-hover": "#2631480f",
+          "--dsw-elevation-panel": "0 0 0 .5px #00000029, 0 3px 8px 0 #00000008, 0 0 16px 0 #00000005",
+          "--dsw-elevation-prominent": "0 0 0 .5px #00000029, 0 3px 8px 0 #0000000a, 0 0 20px 0 #0000000d",
+          "--dsw-elevation-soft": "0 0 0 .5px #00000029, 0 4px 16px 0 #00000008, 0 0 24px 0 #00000008",
+          "--dsw-elevation-stroke": "0 0 0 .5px #00000029",
+          "--dsw-elevation-stroke-color": "#00000029",
+          "--dsw-linear-gradient-think": "linear-gradient(180deg, #fff 20.19%, #fff0 100%)",
+          "--dsw-linear-think-select": "linear-gradient(180deg, #f5f6f7 20.19%, #f5f6f700 100%)",
+          "--dsw-menu-surface-fill": "#fcfdfeb3",
+          "--dsw-specific-bubble": "#edf3fe",
+          "--dsw-specific-bubble-highlight": "#d3e2ff",
+          "--dsw-specific-input-major": "#fff",
+          "--dsw-specific-login-input": "#f9fafb",
+          "--dsw-specific-menu": "#fcfdfeb3",
+          "--dsw-specific-selector": "#f5f6f7",
+          "--dsw-specific-sidebar-fill": "#f9fafb",
+          "--dsw-specific-sidebar-nav-item-active": "#ebeef2",
+          "--dsw-specific-sidebar-nav-item-active-accent": "#e4edfd",
+          "--dsw-specific-tip": "#f5f6f7",
+          "--dsw-static-neutral-bluish-60": "#f5f6f7"
+        }
+      };
+    }
+  });
+
+  // ../packages/dsh-nano-ui/src/theme-scheme.js
+  function hostScheme(theme) {
+    try {
+      const snapshot = theme?.getTheme?.();
+      const value = snapshot?.active?.colorScheme ?? snapshot?.colorScheme;
+      return value === "light" ? "light" : "dark";
+    } catch {
+      return "dark";
+    }
+  }
+  function resolveScheme({ pin, theme } = {}) {
+    if (pin === "light" || pin === "dark") return pin;
+    return hostScheme(theme);
+  }
+  function schemeDeclarations({ schemes: schemes2, scheme, host }) {
+    if (scheme === host) return [];
+    const table = schemes2?.[scheme];
+    if (table === void 0 || table === null) throw new Error(`dsh-nano-ui: catalog has no "${scheme}" scheme table`);
+    return Object.entries(table);
+  }
+  var init_theme_scheme = __esm({
+    "../packages/dsh-nano-ui/src/theme-scheme.js"() {
+    }
+  });
+
+  // ../packages/dsh-nano-ui/src/theme.js
+  function createThemeScope({ theme, element, pin, subscribe }) {
+    if (!(element instanceof HTMLElement)) throw new TypeError("dsh-nano-ui: createThemeScope needs an owner element");
+    let current = pin;
+    let scheme = resolveScheme({ pin: current, theme });
+    let written = [];
+    let disposed = false;
+    const clear = () => {
+      for (const name of written) element.style.removeProperty(name);
+      written = [];
+    };
+    const apply2 = () => {
+      if (disposed) return;
+      scheme = resolveScheme({ pin: current, theme });
+      clear();
+      for (const [name, value] of schemeDeclarations({ schemes, scheme, host: hostScheme(theme) })) {
+        element.style.setProperty(name, value);
+        written.push(name);
+      }
+      element.setAttribute("data-nano-scheme", scheme);
+    };
+    apply2();
+    const unsubscribe = typeof subscribe === "function" ? subscribe(apply2) : void 0;
+    return {
+      scheme: () => scheme,
+      refresh: apply2,
+      setPin: (next) => {
+        current = next === "light" || next === "dark" ? next : void 0;
+        apply2();
+      },
+      dispose: () => {
+        if (disposed) return;
+        disposed = true;
+        if (typeof unsubscribe === "function") unsubscribe();
+        clear();
+        element.removeAttribute("data-nano-scheme");
+      }
+    };
+  }
+  var init_theme = __esm({
+    "../packages/dsh-nano-ui/src/theme.js"() {
+      init_tokens();
+      init_theme_scheme();
+    }
+  });
+
+  // ../packages/dsh-nano-ui/catalog/icons.json
+  var sprite;
+  var init_icons = __esm({
+    "../packages/dsh-nano-ui/catalog/icons.json"() {
+      sprite = {
+        from: "rc.3",
+        glyphs: [
+          "agent-preset-outline",
+          "alarm-clock-outline",
+          "api-outline",
+          "apps-add-compact-outline",
+          "apps-add-outline",
+          "archive-check-outline",
+          "archive-off-outline",
+          "archive-outline",
+          "branch-outline",
+          "browse-outline",
+          "check-circle-fill",
+          "check-circle-outline",
+          "check-outline",
+          "checklist-outline",
+          "chevron-down-outline",
+          "chevron-left-outline",
+          "chevron-right-outline",
+          "chevron-up-outline",
+          "chevrons-up-down-outline",
+          "clock-outline",
+          "close-circle-fill",
+          "close-fill",
+          "close-outline",
+          "code-outline",
+          "compact-outline",
+          "compare-split-outline",
+          "context-injection-outline",
+          "copy-outline",
+          "cordis-plugin-outline",
+          "dark-outline",
+          "data-outline",
+          "database-outline",
+          "deliver-doc",
+          "dislike-fill",
+          "dislike-outline",
+          "download-outline",
+          "drag-handle-outline",
+          "edit-outline",
+          "ellipsis-outline",
+          "enhance-outline",
+          "eye-off-outline",
+          "eye-outline",
+          "flat-list-outline",
+          "folder-close",
+          "folder-open",
+          "folder-open-outline",
+          "followsystem-outline",
+          "fullscreen-outline",
+          "gauge-outline",
+          "globe-outline",
+          "goal-outline",
+          "info-outline",
+          "inspect-outline",
+          "layers-outline",
+          "light-outline",
+          "like-fill",
+          "like-outline",
+          "link-outline",
+          "list-pen-outline",
+          "loading-outline",
+          "microphone-outline",
+          "new-chat-outline",
+          "nowrap-fill",
+          "panel-left-outline",
+          "paper-plane-outline",
+          "paperclip-outline",
+          "pause-outline",
+          "personalization-outline",
+          "pin-fill",
+          "pin-outline",
+          "plan-outline",
+          "play-outline",
+          "plugin-pinwheel-outline",
+          "plus-outline",
+          "project-add-outline",
+          "question-outline",
+          "queue-outline",
+          "refresh-outline",
+          "right-up-outline",
+          "save-outline",
+          "search-outline",
+          "send-outline",
+          "settings-outline",
+          "share-outline",
+          "shield-outline",
+          "skill-outline",
+          "sliders-two-outline",
+          "stop-fill",
+          "think-outline",
+          "trash-outline",
+          "tree-corner",
+          "triangle-right-fill",
+          "unarchive-outline",
+          "upload-outline",
+          "user-outline",
+          "users-outline",
+          "warning-outline",
+          "warning-triangle-outline",
+          "workspace-tree-outline",
+          "wrap-fill",
+          "wrap-lines-outline"
+        ],
+        weights: [
+          "medium",
+          "regular"
+        ]
+      };
+    }
+  });
+
+  // ../packages/dsh-nano-ui/src/icon-markup.js
+  function spriteMarkup(glyph, weight = "regular", size = 16) {
+    if (typeof glyph !== "string" || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(glyph)) throw new TypeError(`dsh-nano-ui: bad sprite glyph "${glyph}"`);
+    if (!SPRITE_WEIGHTS.includes(weight)) throw new TypeError(`dsh-nano-ui: bad sprite weight "${weight}"`);
+    const id = `dsw-icon-${glyph}-${weight}`;
+    return `<svg width="${size}" height="${size}" data-icon="${id}" aria-hidden="true"><use href="#${id}"/></svg>`;
+  }
+  function isSpriteGlyph(sprite2, glyph, weight = "regular") {
+    return sprite2?.glyphs?.includes(glyph) === true && sprite2?.weights?.includes(weight) === true;
+  }
+  var SPRITE_WEIGHTS;
+  var init_icon_markup = __esm({
+    "../packages/dsh-nano-ui/src/icon-markup.js"() {
+      SPRITE_WEIGHTS = Object.freeze(["regular", "medium"]);
+    }
+  });
+
+  // ../packages/dsh-nano-ui/src/icons.js
+  function icon(name) {
+    const component = /^Icon[A-Z]/.test(name) ? primitives[name] : void 0;
+    if (component === void 0) throw new Error(`dsh-nano-ui: the host exports no icon "${name}"`);
+    return component;
+  }
+  function iconMarkup(glyph, weight = "regular", size = 16) {
+    if (!isSpriteGlyph(sprite, glyph, weight) && !warned.has(`${glyph}-${weight}`)) {
+      warned.add(`${glyph}-${weight}`);
+      console.warn(`dsh-nano-ui: sprite glyph "${glyph}-${weight}" is not in the catalog`);
+    }
+    return spriteMarkup(glyph, weight, size);
+  }
+  var primitives, warned;
+  var init_icons2 = __esm({
+    "../packages/dsh-nano-ui/src/icons.js"() {
+      primitives = __toESM(__require("@deepseek-ai/dsh-client-ui-primitives"), 1);
+      init_icons();
+      init_icon_markup();
+      warned = /* @__PURE__ */ new Set();
+    }
+  });
+
+  // ../packages/dsh-nano-ui/src/dialog.js
+  function preset(list, value) {
+    if (typeof value !== "number" || !Number.isFinite(value)) return void 0;
+    return list.find((step) => step >= value) ?? list[list.length - 1];
+  }
+  function bodyStyle({ maxHeight, fixedHeight }) {
+    const style = {};
+    const fixed = preset(DIALOG_HEIGHTS, fixedHeight);
+    if (fixed !== void 0) style.height = `${fixed - DIALOG_CHROME}px`;
+    if (typeof maxHeight === "number" && Number.isFinite(maxHeight)) style.maxHeight = `${Math.max(120, Math.round(maxHeight) - DIALOG_CHROME)}px`;
+    return style;
+  }
+  function actionRow({ copy, confirmLabel, confirmDisabled, busy, danger, onConfirm, onCancel }) {
+    return h(
+      import_react.default.Fragment,
+      null,
+      h(import_dsh_client_ui_primitives.Button, { variant: "outline", className: "nano-modal-action", onClick: onCancel }, copy.cancel),
+      h(import_dsh_client_ui_primitives.Button, {
+        variant: danger ? "outline" : "primary",
+        className: danger ? "nano-modal-action nano-modal-danger" : "nano-modal-action",
+        disabled: confirmDisabled === true || busy === true,
+        onClick: onConfirm
+      }, confirmLabel ?? copy.confirm)
+    );
+  }
+  function NanoDialog({ copy, title, description, confirmLabel, confirmDisabled, busy, error, danger, footer, width, maxHeight, fixedHeight, className, onConfirm, onCancel, children }) {
+    const w = preset(DIALOG_WIDTHS, width);
+    return h(import_dsh_client_ui_primitives.Modal, {
+      open: true,
+      onClose: onCancel,
+      title,
+      description,
+      closeLabel: copy.close ?? copy.cancel,
+      className: ["nano-dialog-card", w === void 0 || w === DIALOG_WIDTHS[0] ? "" : `nano-dialog-w-${w}`, className ?? ""].filter(Boolean).join(" "),
+      footer: footer ?? actionRow({ copy, confirmLabel, confirmDisabled, busy, danger, onConfirm, onCancel })
+    }, h(
+      "div",
+      { className: "nano-dialog-body", style: bodyStyle({ maxHeight, fixedHeight }) },
+      children,
+      error === void 0 ? null : h("p", { className: "nano-dialog-error", role: "alert" }, error)
+    ));
+  }
+  var import_react, import_dsh_client_ui_primitives, h, DIALOG_WIDTHS, DIALOG_HEIGHTS, DIALOG_CHROME;
+  var init_dialog = __esm({
+    "../packages/dsh-nano-ui/src/dialog.js"() {
+      import_react = __toESM(__require("react"), 1);
+      import_dsh_client_ui_primitives = __require("@deepseek-ai/dsh-client-ui-primitives");
+      h = import_react.default.createElement;
+      DIALOG_WIDTHS = Object.freeze([380, 480, 560, 720]);
+      DIALOG_HEIGHTS = Object.freeze([480, 560, 640]);
+      DIALOG_CHROME = 136;
+    }
+  });
+
+  // ../packages/dsh-nano-ui/src/overlay.js
+  function assertContainer(container, who) {
+    if (!(container instanceof HTMLElement) || !container.isConnected) {
+      throw new Error(`dsh-nano-ui: ${who} needs a container element attached to the document; overlays never fall back to document.body`);
+    }
+  }
+  function NanoWindowDialog({ container, copy, title, description, confirmLabel, confirmDisabled, busy, error, danger, footer, width, maxHeight, fixedHeight, className, onConfirm, onCancel, children }) {
+    const cardRef = import_react2.default.useRef(null);
+    (0, import_dsh_client_ui_primitives2.useModalLayer)(cardRef, true, onCancel);
+    if (container !== void 0) assertContainer(container, "NanoWindowDialog");
+    const style = {};
+    if (typeof width === "number") style.width = `min(${Math.round(width)}px, 100%)`;
+    if (typeof maxHeight === "number") style.maxHeight = `min(${Math.round(maxHeight)}px, 100%)`;
+    if (typeof fixedHeight === "number") style.height = `min(${Math.round(fixedHeight)}px, 100%)`;
+    const overlay = h2(
+      "div",
+      { className: "nano-overlay", role: "presentation" },
+      h2("div", { className: "nano-overlay-mask", "aria-hidden": "true", onClick: onCancel }),
+      h2(
+        "div",
+        {
+          ref: cardRef,
+          tabIndex: -1,
+          role: "dialog",
+          "aria-modal": "true",
+          "aria-label": title,
+          className: ["nano-wdlg", className ?? ""].filter(Boolean).join(" "),
+          style
+        },
+        h2(
+          "div",
+          { className: "nano-wdlg-head" },
+          h2("h2", { className: "nano-wdlg-title" }, title),
+          h2(import_dsh_client_ui_primitives2.Button, { variant: "ghost", size: "sm", icon: h2(import_dsh_client_ui_primitives2.IconCloseOutlineRegular, { size: 14 }), "aria-label": copy.close ?? copy.cancel, onClick: onCancel })
+        ),
+        description === void 0 || description === "" ? null : h2("p", { className: "nano-wdlg-desc" }, description),
+        h2(
+          "div",
+          { className: "nano-wdlg-body" },
+          children,
+          error === void 0 ? null : h2("p", { className: "nano-dialog-error", role: "alert" }, error)
+        ),
+        h2(
+          "div",
+          { className: "nano-wdlg-foot" },
+          footer ?? actionRow({ copy, confirmLabel, confirmDisabled, busy, danger, onConfirm, onCancel })
+        )
+      )
+    );
+    return container === void 0 ? overlay : (0, import_react_dom.createPortal)(overlay, container);
+  }
+  var import_react2, import_react_dom, import_dsh_client_ui_primitives2, h2;
+  var init_overlay = __esm({
+    "../packages/dsh-nano-ui/src/overlay.js"() {
+      import_react2 = __toESM(__require("react"), 1);
+      import_react_dom = __require("react-dom");
+      import_dsh_client_ui_primitives2 = __require("@deepseek-ai/dsh-client-ui-primitives");
+      init_dialog();
+      h2 = import_react2.default.createElement;
+    }
+  });
+
+  // ../packages/dsh-nano-ui/src/menu-model.js
+  function menuHeight(items) {
+    let height = 8;
+    for (const item of items) height += item?.separator === true ? 9 : 28;
+    return height;
+  }
+  function capClass(maxHeight) {
+    if (typeof maxHeight !== "number" || !Number.isFinite(maxHeight)) return void 0;
+    const cap = [...MENU_CAPS].reverse().find((step) => step <= maxHeight) ?? MENU_CAPS[0];
+    return `nano-cap-${cap}`;
+  }
+  function toHostItems(actions) {
+    return actions.map((action) => action?.separator === true ? { type: "separator", id: action.id } : { id: action.id, label: action.label, icon: action.icon, danger: action.tone === "danger", disabled: action.disabled === true });
+  }
+  var MENU_CAPS;
+  var init_menu_model = __esm({
+    "../packages/dsh-nano-ui/src/menu-model.js"() {
+      MENU_CAPS = Object.freeze([120, 160, 200, 240, 320, 400, 480]);
+    }
+  });
+
+  // ../packages/dsh-nano-ui/src/menu.js
+  function NanoMenu({ menu, actions, onClose, width = 208, maxHeight, portal = true, direction }) {
+    if (menu === null || menu === void 0 || actions.length === 0) return null;
+    const onSelect = (id) => {
+      const action = actions.find((candidate) => candidate?.separator !== true && candidate?.id === id);
+      onClose();
+      action?.run?.();
+    };
+    const list = h3(import_dsh_client_ui_primitives3.Menu, {
+      open: true,
+      items: toHostItems(actions),
+      onSelect,
+      onClose,
+      side: direction === "up" ? "top" : "bottom",
+      portal,
+      getAnchorRect: portal ? () => new DOMRect(menu.x, menu.y, menu.width ?? 0, menu.height ?? 0) : void 0,
+      listClassName: capClass(maxHeight)
+    }, h3("div", { "aria-hidden": "true", style: { width: `${width}px`, height: 0 } }));
+    if (portal) return list;
+    return h3("span", { className: "nano-anchor", style: { left: `${menu.x}px`, top: `${menu.y}px` } }, list);
+  }
+  var import_react3, import_dsh_client_ui_primitives3, h3;
+  var init_menu = __esm({
+    "../packages/dsh-nano-ui/src/menu.js"() {
+      import_react3 = __toESM(__require("react"), 1);
+      import_dsh_client_ui_primitives3 = __require("@deepseek-ai/dsh-client-ui-primitives");
+      init_menu_model();
+      h3 = import_react3.default.createElement;
+    }
+  });
+
+  // ../packages/dsh-nano-ui/src/toast.js
+  function NanoToast({ text, anchor, tone, icon: icon2, actions, holdMs, onDone }) {
+    if (text === void 0 || text === null || text === "") return null;
+    return import_react4.default.createElement(import_dsh_client_ui_primitives4.Toast, { key: String(text), text, anchor: anchor ?? void 0, tone, icon: icon2, actions, holdMs, onDone: onDone ?? noop });
+  }
+  var import_react4, import_dsh_client_ui_primitives4, noop;
+  var init_toast = __esm({
+    "../packages/dsh-nano-ui/src/toast.js"() {
+      import_react4 = __toESM(__require("react"), 1);
+      import_dsh_client_ui_primitives4 = __require("@deepseek-ai/dsh-client-ui-primitives");
+      noop = () => {
+      };
+    }
+  });
+
+  // ../packages/dsh-nano-ui/src/mount.js
+  function mountNano(el, Component, props = {}) {
+    if (!(el instanceof Element)) throw new TypeError("dsh-nano-ui: mountNano needs an element");
+    const root = (0, import_client.createRoot)(el);
+    let current = { ...props };
+    let mounted = true;
+    root.render(import_react5.default.createElement(Component, current));
+    return {
+      update: (next) => {
+        if (!mounted) return;
+        current = { ...current, ...next };
+        root.render(import_react5.default.createElement(Component, current));
+      },
+      unmount: () => {
+        if (!mounted) return;
+        mounted = false;
+        root.unmount();
+      }
+    };
+  }
+  var import_react5, import_client;
+  var init_mount = __esm({
+    "../packages/dsh-nano-ui/src/mount.js"() {
+      import_react5 = __toESM(__require("react"), 1);
+      import_client = __require("react-dom/client");
+    }
+  });
+
+  // ../packages/dsh-nano-ui/src/tabs.js
+  function nanoTabs({ items, value, onChange, label }) {
+    const id = `nano-seg-${++seq}`;
+    const el = document.createElement("div");
+    for (const item of items) {
+      item.panel.id = `${id}-${item.value}-panel`;
+      item.panel.setAttribute("role", "tabpanel");
+      item.panel.setAttribute("aria-labelledby", `${id}-${item.value}`);
+    }
+    let current;
+    const strip = mountNano(el, import_dsh_client_ui_primitives5.SegmentedControl, {
+      id,
+      value,
+      label,
+      options: items.map((item) => ({ value: item.value, label: item.label })),
+      onChange: (next) => select(next)
+    });
+    function select(next) {
+      if (!items.some((item) => item.value === next)) return;
+      current = next;
+      for (const item of items) item.panel.hidden = item.value !== next;
+      strip.update({ value: next });
+      onChange?.(next);
+    }
+    select(value);
+    return { el, select, value: () => current };
+  }
+  function NanoTabs({ items, value, onChange, label, className }) {
+    const [inner, setInner] = import_react6.default.useState(() => value ?? items[0]?.value);
+    const id = `nano-seg-${import_react6.default.useId().replaceAll(":", "")}`;
+    const current = value ?? inner;
+    const select = (next) => {
+      if (value === void 0) setInner(next);
+      onChange?.(next);
+    };
+    return h4(
+      "div",
+      { className: ["nano-panes", className ?? ""].filter(Boolean).join(" ") },
+      h4(import_dsh_client_ui_primitives5.SegmentedControl, { id, value: current, label, options: items.map((item) => ({ value: item.value, label: item.label })), onChange: select }),
+      items.map((item) => h4("div", {
+        key: item.value,
+        id: `${id}-${item.value}-panel`,
+        role: "tabpanel",
+        className: "nano-pane",
+        "aria-labelledby": `${id}-${item.value}`,
+        hidden: item.value !== current
+      }, item.content))
+    );
+  }
+  var import_react6, import_dsh_client_ui_primitives5, h4, seq;
+  var init_tabs = __esm({
+    "../packages/dsh-nano-ui/src/tabs.js"() {
+      import_react6 = __toESM(__require("react"), 1);
+      import_dsh_client_ui_primitives5 = __require("@deepseek-ai/dsh-client-ui-primitives");
+      init_mount();
+      h4 = import_react6.default.createElement;
+      seq = 0;
+    }
+  });
+
+  // ../packages/dsh-nano-ui/src/dom.js
+  function mount(parent) {
+    const host = document.createElement("div");
+    parent.appendChild(host);
+    const root = (0, import_client2.createRoot)(host);
+    let closed = false;
+    const close = () => {
+      if (closed) return;
+      closed = true;
+      root.unmount();
+      host.remove();
+    };
+    return { host, root, close };
+  }
+  function openNanoDialog(options) {
+    const { container, ...props } = options;
+    if (container !== void 0) assertContainer(container, "openNanoDialog");
+    const { root, close } = mount(container ?? document.body);
+    const onCancel = () => {
+      options.onCancel?.();
+      close();
+    };
+    root.render(import_react7.default.createElement(container === void 0 ? NanoDialog : NanoWindowDialog, { ...props, onCancel }));
+    return { close };
+  }
+  function openNanoMenu(options) {
+    const { container } = options;
+    if (container !== void 0) assertContainer(container, "openNanoMenu");
+    const { host, root, close } = mount(container ?? document.body);
+    const r = options.anchor;
+    const left = r.left ?? r.x ?? 0;
+    const top = r.top ?? r.y ?? 0;
+    const right = r.right ?? left + (r.width ?? 0);
+    const bottom = r.bottom ?? top + (r.height ?? 0);
+    const gap = options.gap ?? 0;
+    const up = options.direction === "up";
+    let menu;
+    if (container === void 0) {
+      const extra = Math.max(0, gap - HOST_MENU_GAP);
+      menu = { x: left, y: up ? top - extra : top, width: right - left, height: bottom - top + extra };
+    } else {
+      const box = (host.offsetParent ?? container).getBoundingClientRect();
+      const scroller = host.offsetParent ?? container;
+      menu = {
+        x: left - box.left - scroller.clientLeft + scroller.scrollLeft,
+        y: (up ? top - gap : bottom + gap) - box.top - scroller.clientTop + scroller.scrollTop
+      };
+    }
+    root.render(import_react7.default.createElement(NanoMenu, {
+      menu,
+      actions: options.items ?? [],
+      width: options.width,
+      maxHeight: options.maxHeight,
+      direction: options.direction,
+      portal: container === void 0,
+      onClose: close
+    }));
+    return { close };
+  }
+  var import_react7, import_client2, HOST_MENU_GAP;
+  var init_dom = __esm({
+    "../packages/dsh-nano-ui/src/dom.js"() {
+      import_react7 = __toESM(__require("react"), 1);
+      import_client2 = __require("react-dom/client");
+      init_dialog();
+      init_menu();
+      init_overlay();
+      HOST_MENU_GAP = 4;
+    }
+  });
+
+  // ../packages/dsh-nano-ui/src/button.js
+  function IconButton({ icon: icon2, variant = "ghost", size = "sm", ...rest }) {
+    const label = rest["aria-label"];
+    if (typeof label !== "string" || label.trim() === "") throw new TypeError("dsh-nano-ui: IconButton needs an aria-label");
+    return import_react8.default.createElement(import_dsh_client_ui_primitives6.Button, { variant, size, icon: icon2, title: label, ...rest });
+  }
+  var import_react8, import_dsh_client_ui_primitives6;
+  var init_button = __esm({
+    "../packages/dsh-nano-ui/src/button.js"() {
+      import_react8 = __toESM(__require("react"), 1);
+      import_dsh_client_ui_primitives6 = __require("@deepseek-ai/dsh-client-ui-primitives");
+    }
+  });
+
+  // ../packages/dsh-nano-ui/src/toolbar.js
+  function Toolbar({ label, className, children }) {
+    return import_react9.default.createElement("div", { role: "toolbar", "aria-label": label, className: ["nano-toolbar", className ?? ""].filter(Boolean).join(" ") }, children);
+  }
+  var import_react9;
+  var init_toolbar = __esm({
+    "../packages/dsh-nano-ui/src/toolbar.js"() {
+      import_react9 = __toESM(__require("react"), 1);
+    }
+  });
+
+  // ../packages/dsh-nano-ui/src/empty.js
+  function EmptyState({ icon: icon2, title, description, action, className }) {
+    return h5(
+      "div",
+      { className: ["nano-empty", className ?? ""].filter(Boolean).join(" ") },
+      icon2 === void 0 ? null : h5("span", { className: "nano-empty-icon", "aria-hidden": "true" }, icon2),
+      h5("p", { className: "nano-empty-title" }, title),
+      description === void 0 ? null : h5("p", { className: "nano-empty-desc" }, description),
+      action ?? null
+    );
+  }
+  var import_react10, h5;
+  var init_empty = __esm({
+    "../packages/dsh-nano-ui/src/empty.js"() {
+      import_react10 = __toESM(__require("react"), 1);
+      h5 = import_react10.default.createElement;
+    }
+  });
+
+  // ../packages/dsh-nano-ui/src/window.js
+  function useNanoWindow() {
+    return import_react11.default.useContext(WindowContext);
+  }
+  function FloatingWindow({ theme, pin, subscribe, title, actions, onClose, closeLabel, floating, className, style, children }) {
+    const ref = import_react11.default.useRef(null);
+    const scope = import_react11.default.useRef(null);
+    const [element, setElement] = import_react11.default.useState(null);
+    import_react11.default.useLayoutEffect(() => {
+      const next = createThemeScope({ theme, element: ref.current, pin, subscribe });
+      scope.current = next;
+      setElement(ref.current);
+      return () => {
+        next.dispose();
+        scope.current = null;
+      };
+    }, [theme, subscribe]);
+    import_react11.default.useLayoutEffect(() => {
+      scope.current?.setPin(pin);
+    }, [pin]);
+    return h6(
+      "section",
+      {
+        ref,
+        "aria-label": title,
+        className: ["nano-window", floating ? "nano-window-floating" : "", className ?? ""].filter(Boolean).join(" "),
+        style
+      },
+      h6(
+        Toolbar,
+        { label: title },
+        h6("span", { className: "nano-window-title" }, title),
+        actions ?? null,
+        onClose === void 0 ? null : h6(IconButton, { icon: h6(import_dsh_client_ui_primitives7.IconCloseOutlineRegular, { size: 14 }), "aria-label": closeLabel ?? "Close", onClick: onClose })
+      ),
+      h6("div", { className: "nano-window-body" }, h6(WindowContext.Provider, { value: element }, children))
+    );
+  }
+  var import_react11, import_dsh_client_ui_primitives7, h6, WindowContext;
+  var init_window = __esm({
+    "../packages/dsh-nano-ui/src/window.js"() {
+      import_react11 = __toESM(__require("react"), 1);
+      import_dsh_client_ui_primitives7 = __require("@deepseek-ai/dsh-client-ui-primitives");
+      init_button();
+      init_theme();
+      init_toolbar();
+      h6 = import_react11.default.createElement;
+      WindowContext = import_react11.default.createContext(null);
     }
   });
 
   // ../packages/dsh-nano-ui/index.js
   var dsh_nano_ui_exports = {};
   __export(dsh_nano_ui_exports, {
+    EmptyState: () => EmptyState,
+    FloatingWindow: () => FloatingWindow,
+    IconButton: () => IconButton,
+    NANO_LAYER: () => NANO_LAYER,
+    NANO_SPACE: () => NANO_SPACE,
     NANO_STYLES: () => NANO_STYLES,
     NanoDialog: () => NanoDialog,
     NanoMenu: () => NanoMenu,
-    NanoMenuItem: () => NanoMenuItem,
     NanoTabs: () => NanoTabs,
     NanoToast: () => NanoToast,
+    NanoWindowDialog: () => NanoWindowDialog,
+    Toolbar: () => Toolbar,
+    VERSION: () => VERSION,
+    createThemeScope: () => createThemeScope,
+    icon: () => icon,
+    iconMarkup: () => iconMarkup,
+    menuHeight: () => menuHeight,
+    mountNano: () => mountNano,
     nanoTabs: () => nanoTabs,
     openNanoDialog: () => openNanoDialog,
-    openNanoMenu: () => openNanoMenu
+    openNanoMenu: () => openNanoMenu,
+    resolveScheme: () => resolveScheme,
+    useNanoWindow: () => useNanoWindow
   });
   var init_dsh_nano_ui = __esm({
     "../packages/dsh-nano-ui/index.js"() {
+      init_version();
+      init_layers();
+      init_styles();
+      init_theme();
+      init_icons2();
       init_dialog();
+      init_overlay();
       init_menu();
       init_toast();
-      init_dom();
       init_tabs();
-      init_styles();
+      init_dom();
+      init_mount();
+      init_button();
+      init_toolbar();
+      init_empty();
+      init_window();
     }
   });
 
@@ -1672,8 +2184,8 @@ var __kitesurfExport = (() => {
        * React comes from impl.react at join (it's an external in every bundle).
        */
       profiler(Component) {
-        const React7 = row._react;
-        if (React7 == null || typeof React7.Profiler !== "function") return Component;
+        const React13 = row._react;
+        if (React13 == null || typeof React13.Profiler !== "function") return Component;
         const capture = (...args) => {
           const actualDuration = args[2];
           row.profiler.commits += 1;
@@ -1681,10 +2193,10 @@ var __kitesurfExport = (() => {
           while (row.profiler.durations.length > PROFILER_SAMPLE_CAP) row.profiler.durations.shift();
         };
         return function PerfReviewProfiler(props) {
-          return React7.createElement(
-            React7.Profiler,
+          return React13.createElement(
+            React13.Profiler,
             { id: `nano:${pluginId}:root`, onRender: capture },
-            React7.createElement(Component, props)
+            React13.createElement(Component, props)
           );
         };
       }
@@ -2218,9 +2730,9 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
     const x = Math.round(Number(box.x) || 0);
     const y = Math.round(Number(box.y) || 0);
     const w = Math.round(Number(box.width) || 0);
-    const h2 = Math.round(Number(box.height) || 0);
-    if (w <= 0 || h2 <= 0) return `${x},${y} empty`;
-    return `${x},${y} ${w}x${h2}`;
+    const h8 = Math.round(Number(box.height) || 0);
+    if (w <= 0 || h8 <= 0) return `${x},${y} empty`;
+    return `${x},${y} ${w}x${h8}`;
   }
   function cssLine(style) {
     if (!style || typeof style !== "object") return "";
@@ -2287,16 +2799,16 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
     apply: () => apply,
     inject: () => inject
   });
-  var React6 = __require("react");
-  var primitives = __require("@deepseek-ai/dsh-client-ui-primitives");
-  var { openNanoDialog: openNanoDialog2, openNanoMenu: openNanoMenu2, NANO_STYLES: NANO_STYLES2, NanoToast: NanoToast2, NanoTabs: NanoTabs2 } = (init_dsh_nano_ui(), __toCommonJS(dsh_nano_ui_exports));
+  var React12 = __require("react");
+  var primitives2 = __require("@deepseek-ai/dsh-client-ui-primitives");
+  var { createThemeScope: createThemeScope2, openNanoDialog: openNanoDialog2, openNanoMenu: openNanoMenu2, NANO_STYLES: NANO_STYLES2, NanoToast: NanoToast2, NanoTabs: NanoTabs2 } = (init_dsh_nano_ui(), __toCommonJS(dsh_nano_ui_exports));
   var { ensurePerfReview: ensurePerfReview2 } = (init_client(), __toCommonJS(client_exports));
   var { BUCKETS: BUCKETS2, DECL_HASH: DECL_HASH2 } = (init_perf_declaration(), __toCommonJS(perf_declaration_exports));
   var { copyFor: copyFor2 } = (init_i18n(), __toCommonJS(i18n_exports));
   var { batchNote: batchNote2, designNote: designNote2, multiNote: multiNote2 } = (init_note(), __toCommonJS(note_exports));
   var { contentFrame: contentFrame2, shotPoint: shotPoint2 } = (init_shot_point(), __toCommonJS(shot_point_exports));
-  var h = React6.createElement;
-  var CLIENT_BUILD_ID = true ? "0.1.0+4261a38" : "dev";
+  var h7 = React12.createElement;
+  var CLIENT_BUILD_ID = true ? "0.1.0+35facad" : "dev";
   var STATUS = "/nano-local-sandbox/status";
   var OPEN = "/nano-local-sandbox/open";
   var SHOT = "/nano-local-sandbox/shot";
@@ -2343,7 +2855,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           version: true ? "0.1.0" : "0.0.0",
           buckets: BUCKETS2,
           decl: DECL_HASH2,
-          react: React6,
+          react: React12,
           root: () => document.querySelector("[data-nks-workspace]")
         });
         if (collector?.span) return collector.span(name, fn);
@@ -2386,10 +2898,11 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
 .nks-tool:disabled:hover{background:transparent}
 .nks-tool:focus-visible,.nks-address:focus-visible{outline:2px solid var(--dsw-alias-link);outline-offset:1px}
 .nks-tool[aria-pressed="true"]{color:var(--dsw-alias-label-primary);background:color-mix(in srgb,var(--dsw-alias-link) 18%,transparent)}
+.nks-tool-glyph{display:inline-flex}
 /* Matches the host workspace tab (_tabActive_123xe): markdown-tag fill,
    radius-sm, 28px tall, strip inline-start margin 10px (toolbar padding is
    6px, so 4px extra here lands the button's left edge on the same axis). */
-.nks-tool.nks-nav-toggle{width:auto;height:28px;margin-left:4px;padding:0 10px;gap:5px;box-sizing:border-box;background:var(--dsw-alias-markdown-tag,var(--dsw-alias-bg-layer-2));border:0;border-radius:var(--dsw-radius-sm);font:var(--dsw-font-xxs-12);font-size:var(--dsh-content-font-size-secondary,13px);color:var(--dsw-alias-label-primary);white-space:nowrap}
+.nks-nav-toggle{width:auto;height:28px;margin-left:4px;padding:0 10px;gap:5px;box-sizing:border-box;background:var(--dsw-alias-markdown-tag,var(--dsw-alias-bg-layer-2));border:0;border-radius:var(--dsw-radius-sm);font:var(--dsw-font-xxs-12);font-size:var(--dsh-content-font-size-secondary,13px);color:var(--dsw-alias-label-primary);white-space:nowrap}
 .nks-tool.nks-nav-toggle:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}
 .nks-tool.nks-nav-toggle[aria-pressed="true"]{background:color-mix(in srgb,var(--dsw-alias-link) 14%,var(--dsw-alias-markdown-tag,var(--dsw-alias-bg-layer-2)))}
 .nks-toolbar-nav{display:flex;flex:none;align-items:center;gap:8px}
@@ -2400,14 +2913,9 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
 .nks-go{visibility:hidden;opacity:0;position:absolute;top:0;right:0}
 .nks-address-box:focus-within .nks-go,.nks-address-box[data-dirty="true"] .nks-go{visibility:visible;opacity:1}
 .nks-frame{position:relative;z-index:0;order:1;overflow:auto;flex:auto;min-height:0;overflow:hidden;contain:layout paint;background:var(--dsw-alias-bg-layer-1)}
-.nks-frame iframe.nks-dom{width:100%;height:100%;border:0;display:block;background:#fff}
+.nks-dom{width:100%;height:100%;border:0;display:block;background:#fff}
 .nks-frame img{width:100%;height:100%;object-fit:contain;object-position:center;display:block}
 .nks-empty{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:10px;padding:24px;text-align:center;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxs-12)}
-/* Interactive error toast: shared .nano-toast chrome is pointer-events:none \u2014
-   re-enable it on our variant and lay the text + repair button in a row. */
-.nks-toast-fix{pointer-events:auto;display:flex;align-items:center;gap:10px}
-.nks-toast-btn{background:var(--dsw-alias-fill-brand,#2f6fed);color:var(--dsw-alias-label-invert,#fff);border:0;border-radius:var(--dsw-radius-sm,6px);padding:2px 8px;font:inherit;cursor:pointer;white-space:nowrap}
-.nks-toast-btn:hover{filter:brightness(1.1)}
 .nks-empty-icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-link,#2f6fed);border:.5px solid var(--dsw-alias-border-l2)}
 .nks-empty-title{color:var(--dsw-alias-label-primary);font:var(--dsw-font-xs-13,var(--dsw-font-xxs-12));font-weight:600}
 .nks-empty-body{max-width:340px;line-height:1.55}
@@ -2473,6 +2981,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
 .nks-dt-msg{flex:auto;min-width:0;white-space:pre-wrap;word-break:break-word;color:var(--dsw-alias-label-secondary)}
 
 .nks-dt-url{flex:1 1 auto;min-width:0;max-width:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary);direction:ltr}
+.nks-dt-grow{flex:1 1 auto;min-width:0}
 .nks-dt-st{flex:none;width:34px;text-align:right}
 .nks-dt-st[data-bad="true"]{color:var(--dsw-alias-fill-error,#d5455c)}
 .nks-dt-dur{flex:none;width:56px;text-align:right;color:var(--dsw-alias-label-tertiary)}
@@ -2617,69 +3126,76 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       button.tabIndex = on ? 0 : -1;
     }
   }
-  function BrowserPane({ copy, languageOf, schemeOf }) {
-    const [status, setStatus] = React6.useState(null);
+  function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
+    const [status, setStatus] = React12.useState(null);
     const statusDown = status != null && (status.ok === false || status.ready === false);
-    const [pageUrl, setPageUrl] = React6.useState("");
-    const [draftUrl, setDraftUrl] = React6.useState("");
-    const [history, setHistory] = React6.useState([]);
-    const [historyOpen, setHistoryOpen] = React6.useState(false);
-    const [shot, setShot] = React6.useState(null);
-    const [shotMime, setShotMime] = React6.useState("image/webp");
-    const [shotMeta, setShotMeta] = React6.useState(null);
-    const [annotate, setAnnotate] = React6.useState(false);
-    const [pick, setPick] = React6.useState(null);
-    const [pins, setPins] = React6.useState([]);
-    const [draftBox, setDraftBox] = React6.useState(null);
-    const [draftKind, setDraftKind] = React6.useState(null);
-    const [comment, setComment] = React6.useState("");
-    const [editing, setEditing] = React6.useState(false);
-    const [composing, setComposing] = React6.useState(false);
-    const refSeq = React6.useRef(0);
-    const [devtoolsOpen, setDevtoolsOpen] = React6.useState(false);
-    const [navOpen, setNavOpen] = React6.useState(false);
-    const [navTabs, setNavTabs] = React6.useState([]);
-    const [nativeHtml, setNativeHtml] = React6.useState(true);
-    const [domDoc, setDomDoc] = React6.useState(null);
-    const [vp, setVp] = React6.useState(null);
-    const [vpCustom, setVpCustom] = React6.useState(false);
-    const domFrameRef = React6.useRef(null);
-    const [toast, setToast] = React6.useState(null);
-    const [toastFix, setToastFix] = React6.useState(false);
-    const [control, setControl] = React6.useState(null);
-    const [actionToast, setActionToast] = React6.useState(null);
-    const lastActionStamp = React6.useRef("");
-    const actionToastTimer = React6.useRef(0);
-    const [busy, setBusy] = React6.useState(false);
-    const [hover, setHover] = React6.useState(null);
-    const [frame, setFrame] = React6.useState(null);
-    const toastTimer = React6.useRef(0);
-    const frameRef = React6.useRef(null);
-    const dragRef = React6.useRef(null);
-    const busyRef = React6.useRef(false);
-    const shotInFlightRef = React6.useRef(false);
-    const dialogOpenRef = React6.useRef(false);
-    const hoverTimerRef = React6.useRef(0);
-    const clickTimerRef = React6.useRef(0);
-    const lastDblClickRef = React6.useRef(0);
-    const annotateRef = React6.useRef(false);
-    const pickRef = React6.useRef(null);
-    const pinsRef = React6.useRef([]);
-    const commentRef = React6.useRef("");
-    const editingRef = React6.useRef(false);
-    const shotMetaRef = React6.useRef(null);
-    const sendPickRef = React6.useRef(null);
+    const [pageUrl, setPageUrl] = React12.useState("");
+    const [draftUrl, setDraftUrl] = React12.useState("");
+    const [history, setHistory] = React12.useState([]);
+    const [historyOpen, setHistoryOpen] = React12.useState(false);
+    const [shot, setShot] = React12.useState(null);
+    const [shotMime, setShotMime] = React12.useState("image/webp");
+    const [shotMeta, setShotMeta] = React12.useState(null);
+    const [annotate, setAnnotate] = React12.useState(false);
+    const [pick, setPick] = React12.useState(null);
+    const [pins, setPins] = React12.useState([]);
+    const [draftBox, setDraftBox] = React12.useState(null);
+    const [draftKind, setDraftKind] = React12.useState(null);
+    const [comment, setComment] = React12.useState("");
+    const [editing, setEditing] = React12.useState(false);
+    const [composing, setComposing] = React12.useState(false);
+    const refSeq = React12.useRef(0);
+    const [devtoolsOpen, setDevtoolsOpen] = React12.useState(false);
+    const [navOpen, setNavOpen] = React12.useState(false);
+    const [navTabs, setNavTabs] = React12.useState([]);
+    const [nativeHtml, setNativeHtml] = React12.useState(true);
+    const [domDoc, setDomDoc] = React12.useState(null);
+    const [vp, setVp] = React12.useState(null);
+    const [vpCustom, setVpCustom] = React12.useState(false);
+    const domFrameRef = React12.useRef(null);
+    const [toast, setToast] = React12.useState(null);
+    const [toastFix, setToastFix] = React12.useState(false);
+    const [control, setControl] = React12.useState(null);
+    const [actionToast, setActionToast] = React12.useState(null);
+    const lastActionStamp = React12.useRef("");
+    const actionToastTimer = React12.useRef(0);
+    const [busy, setBusy] = React12.useState(false);
+    const [hover, setHover] = React12.useState(null);
+    const [frame, setFrame] = React12.useState(null);
+    const toastTimer = React12.useRef(0);
+    const workspaceRef = React12.useRef(null);
+    const frameRef = React12.useRef(null);
+    const dragRef = React12.useRef(null);
+    const busyRef = React12.useRef(false);
+    const shotInFlightRef = React12.useRef(false);
+    const dialogOpenRef = React12.useRef(false);
+    const hoverTimerRef = React12.useRef(0);
+    const clickTimerRef = React12.useRef(0);
+    const lastDblClickRef = React12.useRef(0);
+    const annotateRef = React12.useRef(false);
+    const pickRef = React12.useRef(null);
+    const pinsRef = React12.useRef([]);
+    const commentRef = React12.useRef("");
+    const editingRef = React12.useRef(false);
+    const shotMetaRef = React12.useRef(null);
+    const sendPickRef = React12.useRef(null);
     annotateRef.current = annotate;
     pickRef.current = pick;
     pinsRef.current = pins;
     commentRef.current = comment;
     editingRef.current = editing;
     shotMetaRef.current = shotMeta;
-    const addressFocusedRef = React6.useRef(false);
-    React6.useEffect(() => {
+    React12.useEffect(() => {
+      const element = workspaceRef.current;
+      if (element === null) return void 0;
+      const scope = createThemeScope2({ theme, element, subscribe: onThemeChange });
+      return () => scope.dispose();
+    }, []);
+    const addressFocusedRef = React12.useRef(false);
+    React12.useEffect(() => {
       if (pageUrl && !addressFocusedRef.current) setDraftUrl(pageUrl);
     }, [pageUrl]);
-    const refreshStatus = React6.useCallback(() => {
+    const refreshStatus = React12.useCallback(() => {
       return fetch(STATUS).then((response) => response.json()).then((payload) => {
         setStatus(payload);
         return payload;
@@ -2689,7 +3205,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         return fallback;
       });
     }, []);
-    React6.useEffect(() => {
+    React12.useEffect(() => {
       if (!navOpen) return;
       let alive = true;
       fetch(`${BROWSE_HISTORY}?limit=120`).then((r) => r.json()).then((data) => {
@@ -2714,7 +3230,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       });
       setNavTabs((current) => current.filter((row) => row.url !== url));
     };
-    React6.useEffect(() => {
+    React12.useEffect(() => {
       refreshStatus().then(async (statusPayload) => {
         if (!statusPayload?.ok) return;
         try {
@@ -2730,7 +3246,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         }
       });
     }, []);
-    React6.useEffect(() => {
+    React12.useEffect(() => {
       const onKey = (event) => {
         if (dialogOpenRef.current) return;
         const meta = event.metaKey || event.ctrlKey;
@@ -2788,11 +3304,11 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       window.addEventListener("keydown", onKey);
       return () => window.removeEventListener("keydown", onKey);
     }, []);
-    React6.useEffect(() => {
+    React12.useEffect(() => {
       if (nativeHtml && shot && !domDoc) loadDom().catch(() => {
       });
     }, [shot, nativeHtml]);
-    React6.useEffect(() => {
+    React12.useEffect(() => {
       if (shot) return void 0;
       const timer = window.setInterval(() => {
         if (!busyRef.current) reloadShot(0, { keepPick: true }).catch(() => {
@@ -2800,7 +3316,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       }, 2e3);
       return () => clearInterval(timer);
     }, [shot]);
-    React6.useEffect(() => {
+    React12.useEffect(() => {
       let armed = 0;
       const onKey = (event) => {
         if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "e") {
@@ -2816,7 +3332,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       window.addEventListener("keydown", onKey, true);
       return () => window.removeEventListener("keydown", onKey, true);
     }, []);
-    React6.useEffect(() => {
+    React12.useEffect(() => {
       if (!nativeHtml) return;
       const frame2 = domFrameRef.current;
       if (frame2 && domDoc) {
@@ -2826,7 +3342,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         }
       }
     }, [domDoc, nativeHtml]);
-    React6.useEffect(() => {
+    React12.useEffect(() => {
       const onMessage = (event) => {
         const data = event.data;
         if (!data || data.__nks !== "pick" || !data.packet) return;
@@ -2837,7 +3353,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       window.addEventListener("message", onMessage);
       return () => window.removeEventListener("message", onMessage);
     }, []);
-    React6.useEffect(() => {
+    React12.useEffect(() => {
       const phase = status?.kite?.phase;
       if (phase && phase !== "running" && shot) {
         setShot(null);
@@ -2846,7 +3362,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         setShotMeta(null);
       }
     }, [status?.kite?.phase]);
-    React6.useEffect(() => {
+    React12.useEffect(() => {
       const element = frameRef.current;
       if (!element || typeof ResizeObserver === "undefined") return void 0;
       let timer = 0;
@@ -2871,7 +3387,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         observer.disconnect();
       };
     }, []);
-    React6.useEffect(() => {
+    React12.useEffect(() => {
       const onFocus = () => {
         if (!busyRef.current) reloadShot(0, { keepPick: true }).catch(() => {
         });
@@ -2879,7 +3395,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       window.addEventListener("focus", onFocus);
       return () => window.removeEventListener("focus", onFocus);
     }, []);
-    React6.useLayoutEffect(() => {
+    React12.useLayoutEffect(() => {
       const element = frameRef.current;
       if (!element) return void 0;
       const measure = () => {
@@ -3352,7 +3868,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
     })) : [];
     const hasPage = !!shot && !!shotMeta?.url && shotMeta.url !== "about:blank";
     const engineHasPage = hasPage || status?.phase === "running" || !!status?.httpBase;
-    React6.useEffect(() => {
+    React12.useEffect(() => {
       if (!engineHasPage) {
         setControl(null);
         return void 0;
@@ -3389,7 +3905,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         clearTimeout(actionToastTimer.current);
       };
     }, [engineHasPage]);
-    const controlOp = React6.useCallback(async (action) => {
+    const controlOp = React12.useCallback(async (action) => {
       try {
         const data = await fetch(CONTROL, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action, owner: "kitesurf-pane" }) }).then((r) => r.json());
         if (data?.control) setControl(data.control);
@@ -3400,47 +3916,37 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
     }, []);
     const anchor = pick?.anchor;
     const pickAnchor = overlays.find((o) => o.kind === "pick" || o.kind === "ellipse") || (activeFrame && anchor ? { left: activeFrame.left + anchor.x * activeFrame.scale, top: activeFrame.top + anchor.y * activeFrame.scale, width: 0, height: 0 } : null) || (activeFrame ? { left: activeFrame.left + 16, top: activeFrame.top + 16, width: 0, height: 0 } : null);
-    const arrowGlyph = (dir) => h("svg", {
-      width: 16,
-      height: 16,
-      viewBox: "0 0 16 16",
-      fill: "none",
-      stroke: "currentColor",
-      strokeWidth: 1.5,
-      strokeLinecap: "round",
-      strokeLinejoin: "round",
-      "aria-hidden": true
-    }, h("path", { d: dir === "back" ? "M10 3 L5 8 L10 13" : "M6 3 L11 8 L6 13" }));
     const glyph = (name) => {
-      if (name === "back" || name === "forward") return arrowGlyph(name);
       const Icon = {
-        history: primitives.IconClockOutlineRegular,
-        refresh: primitives.IconRefreshOutlineRegular,
-        go: primitives.IconLinkOutlineRegular,
-        annotate: primitives.IconEditOutlineRegular,
-        settings: primitives.IconSettingsOutlineRegular,
-        send: primitives.IconRightUpOutlineRegular,
-        undo: primitives.IconCloseOutlineRegular,
-        exit: primitives.IconCloseOutlineRegular,
-        clear: primitives.IconDeleteOutlineRegular || primitives.IconCloseOutlineRegular,
-        edit: primitives.IconEditOutlineRegular || primitives.IconRightUpOutlineRegular,
-        copy: primitives.IconCopyOutlineRegular || primitives.IconEditOutlineRegular,
-        panel: primitives.IconPanelLeftOutlineRegular || primitives.IconEditOutlineRegular,
-        globe: primitives.IconGlobeOutlineRegular || primitives.IconLinkOutlineRegular
+        back: primitives2.IconChevronLeftOutlineRegular,
+        forward: primitives2.IconChevronRightOutlineRegular,
+        history: primitives2.IconClockOutlineRegular,
+        refresh: primitives2.IconRefreshOutlineRegular,
+        go: primitives2.IconLinkOutlineRegular,
+        annotate: primitives2.IconEditOutlineRegular,
+        settings: primitives2.IconSettingsOutlineRegular,
+        send: primitives2.IconRightUpOutlineRegular,
+        undo: primitives2.IconCloseOutlineRegular,
+        exit: primitives2.IconCloseOutlineRegular,
+        clear: primitives2.IconTrashOutlineRegular,
+        edit: primitives2.IconEditOutlineRegular || primitives2.IconRightUpOutlineRegular,
+        copy: primitives2.IconCopyOutlineRegular || primitives2.IconEditOutlineRegular,
+        panel: primitives2.IconPanelLeftOutlineRegular || primitives2.IconEditOutlineRegular,
+        globe: primitives2.IconGlobeOutlineRegular || primitives2.IconLinkOutlineRegular
       }[name];
-      return h(
+      return h7(
         "span",
         { className: "nks-tool-glyph", style: !navOpen && name === "panel" ? { display: "inline-flex", transform: "scaleX(-1)" } : { display: "inline-flex" } },
-        h(Icon, { width: 15, height: 15, "aria-hidden": true })
+        h7(Icon, { width: 15, height: 15, "aria-hidden": true })
       );
     };
     function EnvPanel() {
-      const [snap, setSnap] = React6.useState(null);
-      const [diag, setDiag] = React6.useState(null);
-      const copyRawDiag = React6.useRef(false);
-      const [busyLocal, setBusyLocal] = React6.useState(false);
-      const [note, setNote] = React6.useState("");
-      React6.useEffect(() => {
+      const [snap, setSnap] = React12.useState(null);
+      const [diag, setDiag] = React12.useState(null);
+      const copyRawDiag = React12.useRef(false);
+      const [busyLocal, setBusyLocal] = React12.useState(false);
+      const [note, setNote] = React12.useState("");
+      React12.useEffect(() => {
         let alive = true;
         let seen = null;
         const load = () => fetch(PORTS).then((r) => r.json()).then((data) => {
@@ -3506,38 +4012,38 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       const contractMismatch = snap != null && snap.v !== 1;
       const rows = planeRows(snap);
       const healthy = !contractMismatch && snap?.ready === true;
-      return h(
+      return h7(
         "div",
         { className: "nks-env", "data-nks-env": "1" },
-        h(
+        h7(
           "div",
           { className: "nks-env-title" },
           copy.envTitle,
-          h("span", { className: healthy ? "nks-env-ok" : "nks-env-bad" }, contractMismatch ? "\u89C2\u5BDF\u5408\u540C\u4E0D\u5339\u914D" : healthy ? "\u25CF OK" : "\u25CF \u5F02\u5E38")
+          h7("span", { className: healthy ? "nks-env-ok" : "nks-env-bad" }, contractMismatch ? "\u89C2\u5BDF\u5408\u540C\u4E0D\u5339\u914D" : healthy ? "\u25CF OK" : "\u25CF \u5F02\u5E38")
         ),
-        h("div", { className: "nks-env-row" }, h("b", null, copy.envPlugin), h("span", null, snap?.buildId || "\u672A\u77E5")),
-        h("div", { className: "nks-env-row" }, h("b", null, copy.envEngine), h("span", null, engine)),
-        h("div", { className: "nks-env-row" }, h("b", null, copy.envContainer), h("span", null, container)),
-        snap?.containerName ? h("div", { className: "nks-env-row" }, h("b", null, copy.envInstance), h("span", null, snap.containerName)) : null,
-        h("div", { className: "nks-env-row" }, h("b", null, copy.envPorts), h("span", null, portRow)),
+        h7("div", { className: "nks-env-row" }, h7("b", null, copy.envPlugin), h7("span", null, snap?.buildId || "\u672A\u77E5")),
+        h7("div", { className: "nks-env-row" }, h7("b", null, copy.envEngine), h7("span", null, engine)),
+        h7("div", { className: "nks-env-row" }, h7("b", null, copy.envContainer), h7("span", null, container)),
+        snap?.containerName ? h7("div", { className: "nks-env-row" }, h7("b", null, copy.envInstance), h7("span", null, snap.containerName)) : null,
+        h7("div", { className: "nks-env-row" }, h7("b", null, copy.envPorts), h7("span", null, portRow)),
         // Per-plane health, so "OK" can no longer mean "container up but the
         // pane silently fell back to screenshots".
-        rows.length ? h(
+        rows.length ? h7(
           "div",
           { className: "nks-env-checks", "data-nks-checks": String(rows.length) },
-          rows.map((row) => h(
+          rows.map((row) => h7(
             "div",
             { key: row.label, className: "nks-env-check", "data-ok": row.skipped ? "skip" : row.ok ? "true" : "false" },
-            h("span", { className: "nks-env-check-dot" }, row.skipped ? "\u25CB" : row.ok ? "\u2713" : "\u2717"),
-            h("b", null, row.label),
-            h("span", { className: "nks-env-check-detail" }, row.detail || "\u2014")
+            h7("span", { className: "nks-env-check-dot" }, row.skipped ? "\u25CB" : row.ok ? "\u2713" : "\u2717"),
+            h7("b", null, row.label),
+            h7("span", { className: "nks-env-check-detail" }, row.detail || "\u2014")
           ))
         ) : null,
-        h(
+        h7(
           "div",
           { className: "nks-env-actions" },
-          h("button", { type: "button", className: "nks-start-btn", "data-nks-prepare": "1", disabled: busyLocal, onClick: prepare }, busyLocal ? copy.preparingEnv : copy.prepareEnv),
-          h("button", {
+          h7("button", { type: "button", className: "nks-start-btn", "data-nks-prepare": "1", disabled: busyLocal, onClick: prepare }, busyLocal ? copy.preparingEnv : copy.prepareEnv),
+          h7("button", {
             type: "button",
             className: "nks-start-btn",
             "data-nks-copy-diag": "1",
@@ -3548,7 +4054,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
             }
           }, copy.copyDiag)
         ),
-        h("div", { className: "nks-env-note" }, note || copy.envHint)
+        h7("div", { className: "nks-env-note" }, note || copy.envHint)
       );
     }
     function packetFromDom(el, doc, x, y) {
@@ -3678,23 +4184,23 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       doc.addEventListener("mouseleave", clearHover, true);
     }
     function SettingsTabs({ env, browse }) {
-      return h(NanoTabs2, {
+      return h7(NanoTabs2, {
         label: copy.settingsTitle,
         items: [
           { value: "env", label: copy.tabEnv, content: env },
           { value: "browse", label: copy.tabBrowse, content: browse },
-          { value: "history", label: copy.tabHistory, content: h(HistoryTab) }
+          { value: "history", label: copy.tabHistory, content: h7(HistoryTab) }
         ]
       });
     }
     function HistoryTab() {
-      const [rows, setRows] = React6.useState([]);
-      const [q, setQ] = React6.useState("");
-      const load = React6.useCallback(async (needle) => {
+      const [rows, setRows] = React12.useState([]);
+      const [q, setQ] = React12.useState("");
+      const load = React12.useCallback(async (needle) => {
         const data = await fetch(`${BROWSE_HISTORY}?limit=100${needle ? "&q=" + encodeURIComponent(needle) : ""}`).then((r) => r.json());
         setRows(data.entries || []);
       }, []);
-      React6.useEffect(() => {
+      React12.useEffect(() => {
         load("").catch(() => {
         });
       }, [load]);
@@ -3706,43 +4212,43 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         await fetch(BROWSE_HISTORY, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ clear: true }) });
         await load(q);
       };
-      return h(
+      return h7(
         "div",
         { className: "nks-hist-tab", "data-nks-hist-tab": "1" },
-        h(
+        h7(
           "div",
           { className: "nks-modal-bar", style: { padding: "4px 0" } },
-          h("input", { "data-nks-history-q": "1", placeholder: "\u641C\u7D22\u5730\u5740\u2026", value: q, onChange: async (e) => {
+          h7("input", { "data-nks-history-q": "1", placeholder: "\u641C\u7D22\u5730\u5740\u2026", value: q, onChange: async (e) => {
             setQ(e.target.value);
             await load(e.target.value);
           } }),
-          h("button", { type: "button", "data-nks-history-clear": "1", disabled: !rows.length, onClick: clear }, "\u6E05\u7A7A")
+          h7("button", { type: "button", "data-nks-history-clear": "1", disabled: !rows.length, onClick: clear }, "\u6E05\u7A7A")
         ),
-        h("div", { className: "nks-hist-list" }, rows.length ? rows.map((row) => h(
+        h7("div", { className: "nks-hist-list" }, rows.length ? rows.map((row) => h7(
           "div",
           { className: "nks-hist-row", key: row.id, "data-nks-history-row": row.id },
-          h(
+          h7(
             "button",
             { type: "button", className: "nks-hist-open", onClick: () => {
               setDraftUrl(row.url);
               run(() => navigate(row.url));
             } },
-            h("span", { className: "nks-hist-url" }, row.url),
-            h("span", { className: "nks-hist-meta" }, `${String(row.at).slice(0, 16).replace("T", " ")}${row.count > 1 ? " \xB7 " + row.count + " \u6B21" : ""}`)
+            h7("span", { className: "nks-hist-url" }, row.url),
+            h7("span", { className: "nks-hist-meta" }, `${String(row.at).slice(0, 16).replace("T", " ")}${row.count > 1 ? " \xB7 " + row.count + " \u6B21" : ""}`)
           ),
-          h("button", { type: "button", className: "nks-hist-del", onClick: () => del(row.id), "aria-label": "\u5220\u9664" }, "\xD7")
-        )) : h("div", { className: "nks-modal-empty" }, "\u8FD8\u6CA1\u6709\u6D4F\u89C8\u8BB0\u5F55"))
+          h7("button", { type: "button", className: "nks-hist-del", onClick: () => del(row.id), "aria-label": "\u5220\u9664" }, "\xD7")
+        )) : h7("div", { className: "nks-modal-empty" }, "\u8FD8\u6CA1\u6709\u6D4F\u89C8\u8BB0\u5F55"))
       );
     }
     function HistoryDialog({ open, onClose }) {
-      const [rows, setRows] = React6.useState([]);
-      const [q, setQ] = React6.useState("");
-      const [busy2, setBusy2] = React6.useState(false);
-      const load = React6.useCallback(async (needle) => {
+      const [rows, setRows] = React12.useState([]);
+      const [q, setQ] = React12.useState("");
+      const [busy2, setBusy2] = React12.useState(false);
+      const load = React12.useCallback(async (needle) => {
         const data = await fetch(`${BROWSE_HISTORY}?limit=100${needle ? "&q=" + encodeURIComponent(needle) : ""}`).then((r) => r.json());
         setRows(data.entries || []);
       }, []);
-      React6.useEffect(() => {
+      React12.useEffect(() => {
         if (open) load("").catch(() => {
         });
       }, [open, load]);
@@ -3765,58 +4271,58 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           setBusy2(false);
         }
       };
-      return h(
+      return h7(
         "div",
         { className: "nks-modal-mask", "data-nks-history": "1", onClick: (e) => {
           if (e.target === e.currentTarget) onClose();
         } },
-        h(
+        h7(
           "div",
           { className: "nks-modal" },
-          h(
+          h7(
             "div",
             { className: "nks-modal-head" },
-            h("b", null, "\u6D4F\u89C8\u5386\u53F2"),
-            h("span", { className: "nks-modal-sub" }, `${rows.length} \u6761`),
-            h("button", { type: "button", className: "nks-modal-x", onClick: onClose, "aria-label": "\u5173\u95ED" }, "\xD7")
+            h7("b", null, "\u6D4F\u89C8\u5386\u53F2"),
+            h7("span", { className: "nks-modal-sub" }, `${rows.length} \u6761`),
+            h7("button", { type: "button", className: "nks-modal-x", onClick: onClose, "aria-label": "\u5173\u95ED" }, "\xD7")
           ),
-          h(
+          h7(
             "div",
             { className: "nks-modal-bar" },
-            h("input", { "data-nks-history-q": "1", placeholder: "\u641C\u7D22\u5730\u5740\u2026", value: q, onChange: async (e) => {
+            h7("input", { "data-nks-history-q": "1", placeholder: "\u641C\u7D22\u5730\u5740\u2026", value: q, onChange: async (e) => {
               setQ(e.target.value);
               await load(e.target.value);
             } }),
-            h("button", { type: "button", "data-nks-history-clear": "1", disabled: busy2 || !rows.length, onClick: clear }, "\u6E05\u7A7A")
+            h7("button", { type: "button", "data-nks-history-clear": "1", disabled: busy2 || !rows.length, onClick: clear }, "\u6E05\u7A7A")
           ),
-          h(
+          h7(
             "div",
             { className: "nks-modal-body" },
-            rows.length ? rows.map((row) => h(
+            rows.length ? rows.map((row) => h7(
               "div",
               { className: "nks-hist-row", key: row.id, "data-nks-history-row": row.id },
-              h(
+              h7(
                 "button",
                 { type: "button", className: "nks-hist-open", onClick: () => {
                   setDraftUrl(row.url);
                   setHistoryOpen(false);
                   run(() => navigate(row.url));
                 } },
-                h("span", { className: "nks-hist-url" }, row.url),
-                h("span", { className: "nks-hist-meta" }, `${String(row.at).slice(0, 16).replace("T", " ")}${row.count > 1 ? " \xB7 " + row.count + " \u6B21" : ""}`)
+                h7("span", { className: "nks-hist-url" }, row.url),
+                h7("span", { className: "nks-hist-meta" }, `${String(row.at).slice(0, 16).replace("T", " ")}${row.count > 1 ? " \xB7 " + row.count + " \u6B21" : ""}`)
               ),
-              h("button", { type: "button", className: "nks-hist-del", "data-nks-history-del": row.id, onClick: () => del(row.id), "aria-label": "\u5220\u9664" }, "\xD7")
-            )) : h("div", { className: "nks-modal-empty" }, "\u8FD8\u6CA1\u6709\u6D4F\u89C8\u8BB0\u5F55")
+              h7("button", { type: "button", className: "nks-hist-del", "data-nks-history-del": row.id, onClick: () => del(row.id), "aria-label": "\u5220\u9664" }, "\xD7")
+            )) : h7("div", { className: "nks-modal-empty" }, "\u8FD8\u6CA1\u6709\u6D4F\u89C8\u8BB0\u5F55")
           )
         )
       );
     }
     function DevTools({ open, onClose }) {
-      const [tab, setTab] = React6.useState("console");
-      const [rows, setRows] = React6.useState([]);
-      const [failedOnly, setFailedOnly] = React6.useState(false);
-      const [styles, setStyles] = React6.useState(null);
-      React6.useEffect(() => {
+      const [tab, setTab] = React12.useState("console");
+      const [rows, setRows] = React12.useState([]);
+      const [failedOnly, setFailedOnly] = React12.useState(false);
+      const [styles, setStyles] = React12.useState(null);
+      React12.useEffect(() => {
         if (!open) return void 0;
         let alive = true;
         let since = null;
@@ -3889,77 +4395,77 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         });
         setRows([]);
       };
-      return h(
+      return h7(
         "div",
         { className: "nks-dt", "data-nks-devtools": "1" },
-        h(
+        h7(
           "div",
           { className: "nks-dt-head" },
-          h("button", { type: "button", className: "nks-dt-tab", "aria-selected": tab === "console" ? "true" : "false", "data-nks-dt-console": "1", onClick: () => setTab("console") }, copy.devtoolsConsole),
-          h("button", { type: "button", className: "nks-dt-tab", "aria-selected": tab === "network" ? "true" : "false", "data-nks-dt-network": "1", onClick: () => setTab("network") }, copy.devtoolsNetwork),
-          h("button", { type: "button", className: "nks-dt-tab", "aria-selected": tab === "elements" ? "true" : "false", "data-nks-dt-elements": "1", onClick: () => setTab("elements") }, "Elements"),
-          tab === "network" ? h("button", { type: "button", className: "nks-dt-tab", "aria-selected": failedOnly ? "true" : "false", onClick: () => setFailedOnly((v) => !v) }, copy.devtoolsFailedOnly) : null,
-          h("span", { style: { flex: "auto" } }),
-          h("button", { type: "button", className: "nks-dt-tab", "data-nks-dt-clear": "1", onClick: clear }, copy.devtoolsClear),
-          h("button", { type: "button", className: "nks-dt-tab", "data-nks-dt-close": "1", onClick: onClose }, copy.devtoolsClose)
+          h7("button", { type: "button", className: "nks-dt-tab", "aria-selected": tab === "console" ? "true" : "false", "data-nks-dt-console": "1", onClick: () => setTab("console") }, copy.devtoolsConsole),
+          h7("button", { type: "button", className: "nks-dt-tab", "aria-selected": tab === "network" ? "true" : "false", "data-nks-dt-network": "1", onClick: () => setTab("network") }, copy.devtoolsNetwork),
+          h7("button", { type: "button", className: "nks-dt-tab", "aria-selected": tab === "elements" ? "true" : "false", "data-nks-dt-elements": "1", onClick: () => setTab("elements") }, "Elements"),
+          tab === "network" ? h7("button", { type: "button", className: "nks-dt-tab", "aria-selected": failedOnly ? "true" : "false", onClick: () => setFailedOnly((v) => !v) }, copy.devtoolsFailedOnly) : null,
+          h7("span", { style: { flex: "auto" } }),
+          h7("button", { type: "button", className: "nks-dt-tab", "data-nks-dt-clear": "1", onClick: clear }, copy.devtoolsClear),
+          h7("button", { type: "button", className: "nks-dt-tab", "data-nks-dt-close": "1", onClick: onClose }, copy.devtoolsClose)
         ),
-        styles ? h(
+        styles ? h7(
           "div",
           { className: "nks-dt-styles", "data-nks-dt-styles": "1" },
-          h("div", { className: "nks-dt-style-head" }, `${styles.selector} \xB7 ${styles.matched.length} rules \xB7 ${Object.keys(styles.computed).length} computed`),
-          styles.matched.slice(0, 6).map((rule, i) => h(
+          h7("div", { className: "nks-dt-style-head" }, `${styles.selector} \xB7 ${styles.matched.length} rules \xB7 ${Object.keys(styles.computed).length} computed`),
+          styles.matched.slice(0, 6).map((rule, i) => h7(
             "div",
             { className: "nks-dt-rule", key: `r${i}` },
-            h("b", null, rule.selector || "(anonymous)"),
-            h("span", null, (rule.properties || []).slice(0, 6).join("; "))
+            h7("b", null, rule.selector || "(anonymous)"),
+            h7("span", null, (rule.properties || []).slice(0, 6).join("; "))
           ))
         ) : null,
-        tab === "console" ? h(
+        tab === "console" ? h7(
           "div",
           { className: "nks-dt-cols" },
-          h("span", { className: "nks-dt-time" }, "Time"),
-          h("span", { className: "nks-dt-lv" }, "Level"),
-          h("span", { className: "nks-dt-msg", style: { textAlign: "left" } }, "Message"),
-          h("span", { className: "nks-dt-src" }, "Source")
+          h7("span", { className: "nks-dt-time" }, "Time"),
+          h7("span", { className: "nks-dt-lv" }, "Level"),
+          h7("span", { className: "nks-dt-msg", style: { textAlign: "left" } }, "Message"),
+          h7("span", { className: "nks-dt-src" }, "Source")
         ) : null,
-        tab === "network" ? h(
+        tab === "network" ? h7(
           "div",
           { className: "nks-dt-cols" },
-          h("span", { className: "nks-dt-lv" }, "Method"),
-          h("span", { className: "nks-dt-st" }, "Status"),
-          h("span", { className: "nks-dt-type" }, "Type"),
-          h("span", { className: "nks-dt-url nks-dt-grow", style: { maxWidth: "none", textAlign: "left" } }, "URL"),
-          h("span", { className: "nks-dt-size" }, "Size"),
-          h("span", { className: "nks-dt-dur" }, "Time"),
-          h("span", { className: "nks-dt-wf", style: { height: "auto" } }, "Waterfall")
+          h7("span", { className: "nks-dt-lv" }, "Method"),
+          h7("span", { className: "nks-dt-st" }, "Status"),
+          h7("span", { className: "nks-dt-type" }, "Type"),
+          h7("span", { className: "nks-dt-url nks-dt-grow", style: { maxWidth: "none", textAlign: "left" } }, "URL"),
+          h7("span", { className: "nks-dt-size" }, "Size"),
+          h7("span", { className: "nks-dt-dur" }, "Time"),
+          h7("span", { className: "nks-dt-wf", style: { height: "auto" } }, "Waterfall")
         ) : null,
-        h(
+        h7(
           "div",
           { className: "nks-dt-body", "data-nks-dt-body": "1" },
-          rows.length === 0 ? h("div", { className: "nks-dt-empty" }, copy.devtoolsEmpty) : null,
-          rows.map((row, index) => tab === "elements" ? h(
+          rows.length === 0 ? h7("div", { className: "nks-dt-empty" }, copy.devtoolsEmpty) : null,
+          rows.map((row, index) => tab === "elements" ? h7(
             "div",
             { className: "nks-dt-row", key: `e${row.nodeId || index}`, style: { paddingLeft: `${8 + (row.level || 0) * 12}px`, cursor: "pointer" }, onClick: () => inspectNode(row), "data-nks-el-node": String(row.nodeId) },
-            h("span", { className: "nks-dt-lv" }, row.tag),
-            h("span", { className: "nks-dt-msg" }, `${row.id ? "#" + row.id : ""}${row.cls ? "." + String(row.cls).split(/\s+/).slice(0, 2).join(".") : ""}`),
-            h("span", { className: "nks-dt-dur" }, row.childNodeCount ? String(row.childNodeCount) : "")
-          ) : tab === "console" ? h(
+            h7("span", { className: "nks-dt-lv" }, row.tag),
+            h7("span", { className: "nks-dt-msg" }, `${row.id ? "#" + row.id : ""}${row.cls ? "." + String(row.cls).split(/\s+/).slice(0, 2).join(".") : ""}`),
+            h7("span", { className: "nks-dt-dur" }, row.childNodeCount ? String(row.childNodeCount) : "")
+          ) : tab === "console" ? h7(
             "div",
             { className: "nks-dt-row", key: `c${row.seq || index}` },
-            h("span", { className: "nks-dt-time" }, String(row.at || "").slice(11, 19)),
-            h("span", { className: "nks-dt-lv", "data-lv": row.level }, row.level),
-            h("span", { className: "nks-dt-msg" }, row.text),
-            h("span", { className: "nks-dt-src" }, row.url ? `${row.url}${row.lineNumber != null ? ":" + row.lineNumber : ""}` : row.source || "")
-          ) : h(
+            h7("span", { className: "nks-dt-time" }, String(row.at || "").slice(11, 19)),
+            h7("span", { className: "nks-dt-lv", "data-lv": row.level }, row.level),
+            h7("span", { className: "nks-dt-msg" }, row.text),
+            h7("span", { className: "nks-dt-src" }, row.url ? `${row.url}${row.lineNumber != null ? ":" + row.lineNumber : ""}` : row.source || "")
+          ) : h7(
             "div",
             { className: "nks-dt-row", key: `n${row.id || index}` },
-            h("span", { className: "nks-dt-lv" }, row.method),
-            h("span", { className: "nks-dt-st", "data-bad": row.failed || row.status && row.status >= 400 ? "true" : "false" }, row.failed ? "ERR" : String(row.status || "\u2026")),
-            h("span", { className: "nks-dt-type" }, String(row.mimeType || row.type || "").split(";")[0].replace("application/", "").replace("text/", "").slice(0, 12)),
-            h("span", { className: "nks-dt-url nks-dt-grow", "data-bad": row.failed || (row.status || 0) >= 400 ? "true" : "false" }, row.url),
-            h("span", { className: "nks-dt-size" }, row.size == null ? "" : row.size > 1024 ? `${(row.size / 1024).toFixed(1)}kb` : `${row.size}b`),
-            h("span", { className: "nks-dt-dur" }, row.durationMs == null ? "" : `${row.durationMs}ms`),
-            h("span", { className: "nks-dt-wf", "data-nks-dt-wf": "1" }, wfBar(row, rows))
+            h7("span", { className: "nks-dt-lv" }, row.method),
+            h7("span", { className: "nks-dt-st", "data-bad": row.failed || row.status && row.status >= 400 ? "true" : "false" }, row.failed ? "ERR" : String(row.status || "\u2026")),
+            h7("span", { className: "nks-dt-type" }, String(row.mimeType || row.type || "").split(";")[0].replace("application/", "").replace("text/", "").slice(0, 12)),
+            h7("span", { className: "nks-dt-url nks-dt-grow", "data-bad": row.failed || (row.status || 0) >= 400 ? "true" : "false" }, row.url),
+            h7("span", { className: "nks-dt-size" }, row.size == null ? "" : row.size > 1024 ? `${(row.size / 1024).toFixed(1)}kb` : `${row.size}b`),
+            h7("span", { className: "nks-dt-dur" }, row.durationMs == null ? "" : `${row.durationMs}ms`),
+            h7("span", { className: "nks-dt-wf", "data-nks-dt-wf": "1" }, wfBar(row, rows))
           ))
         )
       );
@@ -3974,12 +4480,13 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       const left = Math.max(0, Math.min(100, (start - min) / span * 100));
       const width = dur > 0 ? Math.max(1.5, Math.min(100 - left, dur / span * 100)) : 1.5;
       const pending = row.durationMs == null && !row.failed;
-      return h("i", { style: { left: `${left}%`, width: `${width}%` }, "data-bad": row.failed || (row.status || 0) >= 400 ? "true" : "false", "data-pending": pending ? "true" : "false" });
+      return h7("i", { style: { left: `${left}%`, width: `${width}%` }, "data-bad": row.failed || (row.status || 0) >= 400 ? "true" : "false", "data-pending": pending ? "true" : "false" });
     }
     function openSettings() {
       if (dialogOpenRef.current) return;
+      const workspaceEl = workspaceRef.current;
+      if (workspaceEl === null) return;
       dialogOpenRef.current = true;
-      const region = document.querySelector("[data-nks-workspace]")?.getBoundingClientRect();
       let close = () => {
       };
       let current = { userAgent: "", viewportWidth: "", httpBase: "", mcpPort: "" };
@@ -3990,14 +4497,14 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         width: 420,
         // Fixed height: the tab strip changes panels, never the card size.
         fixedHeight: 560,
-        region,
+        container: workspaceEl,
         // openNanoDialog already closes itself after onCancel — closing here
         // again would double root.unmount()/host.remove() (S3-3).
         onCancel: () => {
           dialogOpenRef.current = false;
         },
         onConfirm: () => save(),
-        children: h(SettingsTabs, { env: h(EnvPanel, null), browse: h(
+        children: h7(SettingsTabs, { env: h7(EnvPanel, null), browse: h7(
           "form",
           {
             className: "nks-settings-body",
@@ -4006,14 +4513,14 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
               save();
             }
           },
-          h("label", { htmlFor: "nks-ua" }, copy.uaLabel),
-          h("input", { id: "nks-ua", className: "nks-address", autoFocus: true, placeholder: copy.uaPlaceholder }),
-          h("label", { htmlFor: "nks-origin" }, copy.originLabel),
-          h("input", { id: "nks-origin", className: "nks-address", placeholder: "http://127.0.0.1:8787", inputMode: "url", spellCheck: false, autoComplete: "off" }),
-          h("label", { htmlFor: "nks-mcp" }, copy.mcpLabel),
-          h("input", { id: "nks-mcp", className: "nks-address", inputMode: "numeric", placeholder: "8799" }),
-          h("span", { id: "nks-viewport-label" }, copy.viewportLabel),
-          h("div", {
+          h7("label", { htmlFor: "nks-ua" }, copy.uaLabel),
+          h7("input", { id: "nks-ua", className: "nks-address", autoFocus: true, placeholder: copy.uaPlaceholder }),
+          h7("label", { htmlFor: "nks-origin" }, copy.originLabel),
+          h7("input", { id: "nks-origin", className: "nks-address", placeholder: "http://127.0.0.1:8787", inputMode: "url", spellCheck: false, autoComplete: "off" }),
+          h7("label", { htmlFor: "nks-mcp" }, copy.mcpLabel),
+          h7("input", { id: "nks-mcp", className: "nks-address", inputMode: "numeric", placeholder: "8799" }),
+          h7("span", { id: "nks-viewport-label" }, copy.viewportLabel),
+          h7("div", {
             id: "nks-viewport",
             className: "nks-choices",
             role: "radiogroup",
@@ -4034,7 +4541,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
             ["1280", copy.viewportDesktop],
             ["768", copy.viewportTablet],
             ["390", copy.viewportPhone]
-          ].map(([value, label]) => h("button", {
+          ].map(([value, label]) => h7("button", {
             key: value,
             type: "button",
             role: "radio",
@@ -4044,7 +4551,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
             className: "nks-choice",
             onClick: (event) => selectRadio(event.currentTarget.parentElement, value)
           }, label))),
-          h("button", { type: "submit", style: { display: "none" }, "aria-hidden": "true", tabIndex: -1 })
+          h7("button", { type: "submit", style: { display: "none" }, "aria-hidden": "true", tabIndex: -1 })
         ) })
       });
       close = () => {
@@ -4089,17 +4596,18 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         selectRadio(document.getElementById("nks-viewport"), current.viewportWidth || "default");
       });
     }
-    return h(
+    return h7(
       "section",
       {
+        ref: workspaceRef,
         className: "nks-root",
         "data-nano-kitesurf": "1",
         "data-nks-workspace": "1"
       },
-      h(
+      h7(
         "form",
         { className: "nks-toolbar", onSubmit: onSubmitAddress },
-        h("button", {
+        h7("button", {
           type: "button",
           className: "nks-tool nks-nav-toggle",
           "data-nks-nav-toggle": "1",
@@ -4107,20 +4615,20 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           "aria-label": navOpen ? copy.navClose : copy.navOpen,
           title: navOpen ? copy.navCloseTitle : copy.navOpenTitle,
           onClick: () => setNavOpen((value) => !value)
-        }, glyph("panel", navOpen), h("span", null, copy.navToggleLabel)),
+        }, glyph("panel", navOpen), h7("span", null, copy.navToggleLabel)),
         // Navigation trio shares the host strip's 8px pitch with the
         // trailing cluster — one rhythm across the whole toolbar.
-        h(
+        h7(
           "div",
           { className: "nks-toolbar-nav" },
-          h("button", { type: "button", className: "nks-tool", "data-nks-back": "1", "aria-label": copy.back, title: copy.back, disabled: busy || !hasPage, onClick: () => run(() => historyNav(-1)) }, glyph("back")),
-          h("button", { type: "button", className: "nks-tool", "data-nks-forward": "1", "aria-label": copy.forward, title: copy.forward, disabled: busy || !hasPage, onClick: () => run(() => historyNav(1)) }, glyph("forward")),
-          h("button", { type: "button", className: "nks-tool", "data-nks-reload": "1", "aria-label": copy.refresh, title: copy.refresh, disabled: busy, onClick: onRefresh }, glyph("refresh"))
+          h7("button", { type: "button", className: "nks-tool", "data-nks-back": "1", "aria-label": copy.back, title: copy.back, disabled: busy || !hasPage, onClick: () => run(() => historyNav(-1)) }, glyph("back")),
+          h7("button", { type: "button", className: "nks-tool", "data-nks-forward": "1", "aria-label": copy.forward, title: copy.forward, disabled: busy || !hasPage, onClick: () => run(() => historyNav(1)) }, glyph("forward")),
+          h7("button", { type: "button", className: "nks-tool", "data-nks-reload": "1", "aria-label": copy.refresh, title: copy.refresh, disabled: busy, onClick: onRefresh }, glyph("refresh"))
         ),
-        h(
+        h7(
           "span",
           { className: "nks-address-box", "data-dirty": draftUrl ? "true" : "false" },
-          h("input", {
+          h7("input", {
             className: "nks-address",
             "aria-label": copy.addressAria,
             placeholder: copy.addressPlaceholder,
@@ -4136,16 +4644,16 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
               addressFocusedRef.current = false;
             }
           }),
-          h("button", { type: "submit", className: "nks-tool nks-go", "aria-label": copy.go, disabled: busy }, glyph("go"))
+          h7("button", { type: "submit", className: "nks-tool nks-go", "aria-label": copy.go, disabled: busy }, glyph("go"))
         ),
         // Trailing cluster mirrors the host's three icon buttons (分栏 /
         // 全屏 / 侧栏): same 28×28 seats at an 8px pitch, so each of ours
         // lands under its native counterpart instead of walking 4px apart.
-        h(
+        h7(
           "div",
           { className: "nks-toolbar-tail" },
-          h("button", { type: "button", className: "nks-tool", "data-nks-history-open": "1", "aria-label": copy.history, title: copy.history, disabled: busy, onClick: openHistory }, glyph("history")),
-          h("button", {
+          h7("button", { type: "button", className: "nks-tool", "data-nks-history-open": "1", "aria-label": copy.history, title: copy.history, disabled: busy, onClick: openHistory }, glyph("history")),
+          h7("button", {
             type: "button",
             className: "nks-tool",
             "data-nks-annotate": "1",
@@ -4164,10 +4672,10 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
               });
             }
           }, glyph("annotate")),
-          h("button", { type: "button", className: "nks-tool", "data-nks-settings": "1", "aria-label": copy.settings, title: copy.settings, onClick: openSettings }, glyph("settings"))
+          h7("button", { type: "button", className: "nks-tool", "data-nks-settings": "1", "aria-label": copy.settings, title: copy.settings, onClick: openSettings }, glyph("settings"))
         )
       ),
-      h(
+      h7(
         "nav",
         {
           className: "nks-nav",
@@ -4175,15 +4683,15 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           "data-nks-nav-state": navOpen ? "open" : "closed",
           "aria-label": copy.navTabs
         },
-        h(
+        h7(
           "div",
           { className: "nks-nav-head" },
-          h("b", null, copy.navTabs)
+          h7("b", null, copy.navTabs)
         ),
-        h(
+        h7(
           "div",
           { className: "nks-nav-tabs", role: "list", "data-nks-nav-tabs": "1" },
-          navTabs.length ? navTabs.map((row) => h(
+          navTabs.length ? navTabs.map((row) => h7(
             "button",
             {
               type: "button",
@@ -4198,9 +4706,9 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
               }
             },
             glyph("globe"),
-            h("span", { className: "nks-nav-tab-url" }, row.url.replace(/^https?:\/\//, "")),
-            row.count > 1 ? h("span", { className: "nks-nav-tab-count" }, `\xD7${row.count}`) : null,
-            h("span", {
+            h7("span", { className: "nks-nav-tab-url" }, row.url.replace(/^https?:\/\//, "")),
+            row.count > 1 ? h7("span", { className: "nks-nav-tab-count" }, `\xD7${row.count}`) : null,
+            h7("span", {
               className: "nks-nav-tab-x",
               role: "button",
               "aria-label": "\u5173\u95ED\u6807\u7B7E\u9875",
@@ -4210,19 +4718,19 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
                 delNavTab(row.url);
               }
             }, "\xD7")
-          )) : h("div", { className: "nks-nav-empty" }, copy.navEmpty)
+          )) : h7("div", { className: "nks-nav-empty" }, copy.navEmpty)
         )
       ),
-      h(
+      h7(
         "div",
         { className: "nks-status", "data-nks-status": "1" },
-        h("button", { type: "button", "data-nks-native-toggle": "1", "aria-pressed": nativeHtml ? "true" : "false", title: "\u539F\u751F HTML \u6E32\u67D3", onClick: () => {
+        h7("button", { type: "button", "data-nks-native-toggle": "1", "aria-pressed": nativeHtml ? "true" : "false", title: "\u539F\u751F HTML \u6E32\u67D3", onClick: () => {
           setNativeHtml((v) => !v);
           if (!nativeHtml) loadDom().catch(() => {
           });
         } }, "HTML"),
-        h("button", { type: "button", "data-nks-devtools-toggle": "1", "aria-pressed": devtoolsOpen ? "true" : "false", title: "\u5F00\u53D1\u8005\u5DE5\u5177\uFF08\u2318E \u7136\u540E\u6309 2\uFF09", onClick: () => setDevtoolsOpen((v) => !v) }, copy.devtools),
-        h("button", {
+        h7("button", { type: "button", "data-nks-devtools-toggle": "1", "aria-pressed": devtoolsOpen ? "true" : "false", title: "\u5F00\u53D1\u8005\u5DE5\u5177\uFF08\u2318E \u7136\u540E\u6309 2\uFF09", onClick: () => setDevtoolsOpen((v) => !v) }, copy.devtools),
+        h7("button", {
           type: "button",
           "data-nks-vp": "1",
           className: "nks-chip",
@@ -4239,7 +4747,9 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
             };
             openNanoMenu2({
               anchor: { left: rect.left, top: rect.top, bottom: rect.bottom },
-              theme: schemeOf?.(),
+              // Rendered inside the pane (portal:false) so the list inherits the
+              // workspace's scheme and stacking; no theme or z parameters.
+              container: workspaceRef.current,
               direction: "up",
               maxHeight: 6 * 28 + 8,
               items: [
@@ -4252,7 +4762,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
             });
           }
         }, vp ? `${vp.width}\xD7${vp.height}` : "\u81EA\u9002\u5E94"),
-        vpCustom ? h("input", {
+        vpCustom ? h7("input", {
           "data-nks-vp-w": "1",
           type: "number",
           placeholder: "\u5BBD",
@@ -4271,16 +4781,16 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
             }
           }
         }) : null,
-        vpCustom ? h("input", {
+        vpCustom ? h7("input", {
           "data-nks-vp-h": "1",
           type: "number",
           placeholder: "\u9AD8",
           className: "nks-vp-input",
           onKeyDown: async (e) => {
             if (e.key !== "Enter") return;
-            const h2 = Number(e.currentTarget.value);
-            if (h2 >= 240) {
-              const next = { width: vp?.width || 1280, height: h2 };
+            const h8 = Number(e.currentTarget.value);
+            if (h8 >= 240) {
+              const next = { width: vp?.width || 1280, height: h8 };
               setVp(next);
               setVpCustom(false);
               try {
@@ -4292,39 +4802,39 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         }) : null,
         // Three states, not two: an empty pane is neither native HTML nor a
         // screenshot. Calling it "IMG 截图回退" made a fresh pane look broken.
-        h("span", {
+        h7("span", {
           "data-nks-mode": nativeHtml && domDoc ? "html" : hasPage ? "img" : "empty",
           style: { color: nativeHtml && domDoc ? "var(--dsw-alias-fill-success,#3fb950)" : hasPage ? "var(--dsw-alias-fill-warning,#d29922)" : "var(--dsw-alias-label-tertiary)" }
         }, nativeHtml && domDoc ? "HTML \u539F\u751F\u6E32\u67D3" : hasPage ? "IMG \u622A\u56FE\u56DE\u9000" : "\u672A\u6253\u5F00\u9875\u9762"),
-        h("span", { style: { flex: "auto" } }),
+        h7("span", { style: { flex: "auto" } }),
         (() => {
           const hostBuild = typeof status?.buildId === "string" ? status.buildId : "";
           const mismatch = Boolean(hostBuild) && hostBuild.includes("+") && hostBuild !== CLIENT_BUILD_ID;
           const text = mismatch ? `\u7248\u672C\u4E0D\u4E00\u81F4 \u5BA2\u6237\u7AEF ${CLIENT_BUILD_ID} / \u5BBF\u4E3B ${hostBuild}` : hostBuild ? hostBuild : "";
-          return text ? h("span", {
+          return text ? h7("span", {
             "data-nks-build": mismatch ? "mismatch" : "ok",
             style: { opacity: mismatch ? 1 : 0.6, color: mismatch ? "var(--dsw-alias-fill-error,#d5455c)" : void 0 },
             title: `\u5BA2\u6237\u7AEF\u6784\u5EFA ${CLIENT_BUILD_ID} \xB7 \u5BBF\u4E3B ${hostBuild || "\u672A\u77E5"}`
           }, text.slice(0, 40)) : null;
         })()
       ),
-      h(HistoryDialog, { open: historyOpen, onClose: () => setHistoryOpen(false) }),
-      h(DevTools, { open: devtoolsOpen, onClose: () => setDevtoolsOpen(false) }),
-      pins.length ? h(
+      h7(HistoryDialog, { open: historyOpen, onClose: () => setHistoryOpen(false) }),
+      h7(DevTools, { open: devtoolsOpen, onClose: () => setDevtoolsOpen(false) }),
+      pins.length ? h7(
         "div",
         { className: "nks-pins", "data-nks-pins": String(pins.length), "aria-live": "polite" },
         `${pins.length} ${copy.pinsCount}${pins.length === MAX_PINS ? copy.pinsFull : ""}`,
-        h("button", { type: "button", className: "nks-tool", "data-nks-undo-pin": "1", "aria-label": copy.undoPin, onClick: () => setPins((current) => current.slice(0, -1)) }, glyph("undo")),
-        h("button", { type: "button", className: "nks-tool", "data-nks-clear-pins": "1", "aria-label": copy.clearPins, onClick: () => setPins([]) }, glyph("clear")),
-        h("button", { type: "button", className: "nks-tool", "data-nks-send-all": "1", "aria-label": copy.sendAll, onClick: onSendAll }, glyph("send"))
+        h7("button", { type: "button", className: "nks-tool", "data-nks-undo-pin": "1", "aria-label": copy.undoPin, onClick: () => setPins((current) => current.slice(0, -1)) }, glyph("undo")),
+        h7("button", { type: "button", className: "nks-tool", "data-nks-clear-pins": "1", "aria-label": copy.clearPins, onClick: () => setPins([]) }, glyph("clear")),
+        h7("button", { type: "button", className: "nks-tool", "data-nks-send-all": "1", "aria-label": copy.sendAll, onClick: onSendAll }, glyph("send"))
       ) : null,
-      annotate && hasPage ? h(
+      annotate && hasPage ? h7(
         "div",
         { className: "nks-hint", "data-nks-hint": "1" },
-        h("span", { className: "nks-hint-text" }, copy.hintBar),
-        h("button", { type: "button", className: "nks-tool", "data-nks-exit-annotate": "1", "aria-label": copy.annotate, onClick: () => setAnnotate(false) }, glyph("exit"))
+        h7("span", { className: "nks-hint-text" }, copy.hintBar),
+        h7("button", { type: "button", className: "nks-tool", "data-nks-exit-annotate": "1", "aria-label": copy.annotate, onClick: () => setAnnotate(false) }, glyph("exit"))
       ) : null,
-      h(
+      h7(
         "div",
         {
           ref: frameRef,
@@ -4338,8 +4848,8 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           onWheel,
           style: { cursor: annotate ? "crosshair" : "default" }
         },
-        busy ? h("div", { className: "nks-busy", "data-nks-loading": "1", role: "progressbar", "aria-label": copy.opening }) : null,
-        nativeHtml && domDoc ? h("iframe", {
+        busy ? h7("div", { className: "nks-busy", "data-nks-loading": "1", role: "progressbar", "aria-label": copy.opening }) : null,
+        nativeHtml && domDoc ? h7("iframe", {
           ref: domFrameRef,
           className: "nks-dom",
           title: "Kitesurf page",
@@ -4353,12 +4863,12 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
             domFrameRef.current = el;
             if (el) writeDomFrame(el);
           }
-        }) : hasPage ? h("img", {
+        }) : hasPage ? h7("img", {
           alt: "",
           draggable: false,
           src: `data:${shotMime || "image/webp"};base64,${shot}`,
           style: { pointerEvents: annotate ? "none" : "auto" }
-        }) : h(
+        }) : h7(
           "div",
           { className: "nks-empty", "data-nks-empty": "" },
           // /status always answers ok:true (the call completed); whether the
@@ -4367,41 +4877,41 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           // positioned .nks-start on top of a flex-centred .nks-empty, which
           // painted the opaque Start button straight over the error text
           // ("引启动引擎答"). Everything below is a single vertical stack.
-          h("div", { className: "nks-empty-icon" }, glyph("annotate")),
-          h(
+          h7("div", { className: "nks-empty-icon" }, glyph("annotate")),
+          h7(
             "div",
             { className: "nks-empty-title" },
             busy ? copy.opening : status?.engineMismatch === true ? copy.engineMismatch : statusDown ? copy.errorTitle : copy.emptyTitle
           ),
-          !busy && !statusDown && !status?.engineMismatch ? h("div", { className: "nks-empty-body" }, copy.emptyBody) : null,
-          !busy && statusDown && !status?.engineMismatch ? h("div", { className: "nks-empty-body" }, copy.errorBody) : null,
-          !busy && statusDown ? h(
+          !busy && !statusDown && !status?.engineMismatch ? h7("div", { className: "nks-empty-body" }, copy.emptyBody) : null,
+          !busy && statusDown && !status?.engineMismatch ? h7("div", { className: "nks-empty-body" }, copy.errorBody) : null,
+          !busy && statusDown ? h7(
             "div",
             { className: "nks-empty-actions" },
             // Ordinary users get ONE button: it reconciles phase, adopts or
             // repairs the port, starts/resumes the container and polls health.
-            h("button", {
+            h7("button", {
               type: "button",
-              className: "nks-start-btn nks-primary",
+              className: "nks-start-btn",
               "data-nks-start-engine": "1",
               "data-nks-prepare": "1",
               onClick: oneClickPrepare
             }, status?.kite?.phase === "running" ? copy.resumeEngine : copy.prepareEnv),
-            h("button", { type: "button", className: "nks-start-btn", "data-nks-diagnose": "1", onClick: () => run(() => refreshStatus()) }, copy.retry),
-            h("button", { type: "button", className: "nks-start-btn", "data-nks-open-settings": "1", onClick: openSettings }, copy.settings)
+            h7("button", { type: "button", className: "nks-start-btn", "data-nks-diagnose": "1", onClick: () => run(() => refreshStatus()) }, copy.retry),
+            h7("button", { type: "button", className: "nks-start-btn", "data-nks-open-settings": "1", onClick: openSettings }, copy.settings)
           ) : null,
-          !busy && !statusDown && !status?.engineMismatch ? h(
+          !busy && !statusDown && !status?.engineMismatch ? h7(
             "div",
             { className: "nks-empty-actions" },
-            h("button", { type: "button", className: "nks-empty-link", "data-nks-try": "1", onClick: () => {
+            h7("button", { type: "button", className: "nks-empty-link", "data-nks-try": "1", onClick: () => {
               setDraftUrl("https://example.com");
               run(() => navigate("https://example.com"));
             } }, copy.emptyTry)
           ) : null,
-          statusDown ? h("div", { className: "nks-empty-meta" }, `${status?.lastError?.errorId || status?.errorId || (status?.degraded?.length ? status.degraded.join(" / ") : "kitesurf.engine.failed")} \xB7 ${status?.httpBase || ""}`) : null,
-          statusDown ? h("div", { className: "nks-empty-meta" }, status?.lastError?.error || status?.error || "") : null
+          statusDown ? h7("div", { className: "nks-empty-meta" }, `${status?.lastError?.errorId || status?.errorId || (status?.degraded?.length ? status.degraded.join(" / ") : "kitesurf.engine.failed")} \xB7 ${status?.httpBase || ""}`) : null,
+          statusDown ? h7("div", { className: "nks-empty-meta" }, status?.lastError?.error || status?.error || "") : null
         ),
-        overlays.map((box, index) => h("div", {
+        overlays.map((box, index) => h7("div", {
           key: index,
           className: "nks-box",
           "data-nks-box": box.kind,
@@ -4410,7 +4920,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         })),
         // Numbered pin dots stay over their shot until the shot changes; a
         // refreshed page clears them with the old pixels.
-        frame ? pins.filter((pin) => pin.anchor && pin.shot === shot).map((pin, index) => h("div", {
+        frame ? pins.filter((pin) => pin.anchor && pin.shot === shot).map((pin, index) => h7("div", {
           key: `pin-${index}`,
           className: "nks-pin-dot",
           "data-nks-pin-dot": String(index + 1),
@@ -4424,7 +4934,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           },
           style: { left: frame.left + pin.anchor.x * frame.scale, top: frame.top + pin.anchor.y * frame.scale }
         }, String(index + 1))) : null,
-        pickAnchor && pick ? h(
+        pickAnchor && pick ? h7(
           "div",
           {
             className: "nks-note",
@@ -4438,11 +4948,11 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
               top: pickAnchor.top + pickAnchor.height + 8 > (frameRef.current?.clientHeight || 0) - 44 ? Math.max(8, pickAnchor.top - 44) : pickAnchor.top + pickAnchor.height + 8
             }
           },
-          pick.elements.length > 1 ? h("span", { "data-nks-multi": String(pick.elements.length) }, `\xD7${pick.elements.length}`) : null,
-          editing ? h(
+          pick.elements.length > 1 ? h7("span", { "data-nks-multi": String(pick.elements.length) }, `\xD7${pick.elements.length}`) : null,
+          editing ? h7(
             "form",
             { className: "nks-note-form", onSubmit: onSend },
-            h("input", {
+            h7("input", {
               "aria-label": copy.editAria,
               "data-nks-comment": "1",
               value: comment,
@@ -4450,12 +4960,12 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
               autoFocus: true,
               onChange: (event) => setComment(event.target.value)
             }),
-            h("button", { type: "submit", className: "nks-tool", "data-nks-send": "1", "aria-label": copy.editSend }, glyph("edit"))
+            h7("button", { type: "submit", className: "nks-tool", "data-nks-send": "1", "aria-label": copy.editSend }, glyph("edit"))
           ) : null,
-          !editing ? composing ? h(
+          !editing ? composing ? h7(
             "form",
             { className: "nks-note-form", onSubmit: onSend },
-            h("input", {
+            h7("input", {
               "aria-label": copy.noteAria,
               "data-nks-comment": "1",
               value: comment,
@@ -4463,11 +4973,11 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
               autoFocus: true,
               onChange: (event) => setComment(event.target.value)
             }),
-            h("button", { type: "submit", className: "nks-tool", "data-nks-send": "1", title: copy.injectContext, "aria-label": copy.injectContext }, glyph("send"))
-          ) : h(
+            h7("button", { type: "submit", className: "nks-tool", "data-nks-send": "1", title: copy.injectContext, "aria-label": copy.injectContext }, glyph("send"))
+          ) : h7(
             "div",
             { className: "nks-note-actions" },
-            h("button", {
+            h7("button", {
               type: "button",
               className: "nks-tool",
               "data-nks-send": "1",
@@ -4478,8 +4988,8 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
                 else injectNote();
               }
             }, glyph("send")),
-            h("button", { type: "button", className: "nks-tool", "data-nks-copy-note": "1", title: copy.copyContext, "aria-label": copy.copyContext, onClick: copyNote }, glyph("copy")),
-            h("button", { type: "button", className: "nks-tool", "data-nks-compose": "1", title: copy.inputContext, "aria-label": copy.inputContext, onClick: () => setComposing(true) }, glyph("annotate"))
+            h7("button", { type: "button", className: "nks-tool", "data-nks-copy-note": "1", title: copy.copyContext, "aria-label": copy.copyContext, onClick: copyNote }, glyph("copy")),
+            h7("button", { type: "button", className: "nks-tool", "data-nks-compose": "1", title: copy.inputContext, "aria-label": copy.inputContext, onClick: () => setComposing(true) }, glyph("annotate"))
           ) : null
         ) : null
       ),
@@ -4487,7 +4997,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       // an agent holds the bridge writer lock or the human holds the override.
       // "停止写入" is honest wording — the pane cannot kill the agent's run
       // (that lives in the host), it can only hold its page writes.
-      control?.humanHold?.active || control?.writer ? h(
+      control?.humanHold?.active || control?.writer ? h7(
         "div",
         {
           className: "nks-hitl",
@@ -4496,17 +5006,17 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           onPointerDown: (event) => event.stopPropagation(),
           onClick: (event) => event.stopPropagation()
         },
-        h("span", {
+        h7("span", {
           className: "nks-hitl-dot",
           "data-held": control?.humanHold?.active ? "true" : "false",
           "aria-hidden": true
         }),
-        control?.humanHold?.active ? h("span", { className: "nks-hitl-label" }, copy.hitlHeld) : h("span", { className: "nks-hitl-label" }, copy.hitlAgent, h("b", null, control?.owner || "agent")),
-        control?.humanHold?.active ? h("button", { type: "button", className: "nks-hitl-btn nks-hitl-primary", "data-nks-hitl-release": "1", onClick: () => controlOp("release") }, copy.hitlRelease) : h("button", { type: "button", className: "nks-hitl-btn nks-hitl-primary", "data-nks-hitl-takeover": "1", title: copy.hitlTakeoverTitle, onClick: () => controlOp("takeover") }, copy.hitlTakeover)
+        control?.humanHold?.active ? h7("span", { className: "nks-hitl-label" }, copy.hitlHeld) : h7("span", { className: "nks-hitl-label" }, copy.hitlAgent, h7("b", null, control?.owner || "agent")),
+        control?.humanHold?.active ? h7("button", { type: "button", className: "nks-hitl-btn nks-hitl-primary", "data-nks-hitl-release": "1", onClick: () => controlOp("release") }, copy.hitlRelease) : h7("button", { type: "button", className: "nks-hitl-btn nks-hitl-primary", "data-nks-hitl-takeover": "1", title: copy.hitlTakeoverTitle, onClick: () => controlOp("takeover") }, copy.hitlTakeover)
       ) : null,
       // ego's "Clicking element" tooltip: brief tool-name flash on each new
       // agent action the bridge records.
-      actionToast ? h("div", {
+      actionToast ? h7("div", {
         className: "nks-act",
         "data-nks-act": "1",
         role: "status",
@@ -4514,28 +5024,30 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       }, `${copy.hitlAction} ${actionToast.tool}`) : null,
       // Inspector strip: the picked element's live computed styles under the
       // frame — Cursor's design-mode sidebar reduced to one readable row.
-      pick?.elements?.[0] && pick.elements[0].style && Object.keys(pick.elements[0].style).length ? h(
+      pick?.elements?.[0] && pick.elements[0].style && Object.keys(pick.elements[0].style).length ? h7(
         "div",
         { className: "nks-inspector", "data-nks-inspector": "1" },
-        h("span", null, h("b", null, pick.elements[0].selector || pick.elements[0].tag)),
-        pick.elements[0].style.color ? h("span", null, `color ${pick.elements[0].style.color}`) : null,
-        pick.elements[0].style.fontSize ? h("span", null, `font ${pick.elements[0].style.fontSize}`) : null,
-        pick.elements[0].style.fontFamily ? h("span", null, pick.elements[0].style.fontFamily.split(",")[0].replace(/["']/g, "")) : null,
-        pick.elements[0].style.display ? h("span", null, pick.elements[0].style.display) : null,
-        pick.elements[0].box ? h("span", null, `${Math.round(pick.elements[0].box.width)}\xD7${Math.round(pick.elements[0].box.height)}`) : null,
-        Array.isArray(pick.elements[0].componentStack) && pick.elements[0].componentStack.length ? h(
+        h7("span", null, h7("b", null, pick.elements[0].selector || pick.elements[0].tag)),
+        pick.elements[0].style.color ? h7("span", null, `color ${pick.elements[0].style.color}`) : null,
+        pick.elements[0].style.fontSize ? h7("span", null, `font ${pick.elements[0].style.fontSize}`) : null,
+        pick.elements[0].style.fontFamily ? h7("span", null, pick.elements[0].style.fontFamily.split(",")[0].replace(/["']/g, "")) : null,
+        pick.elements[0].style.display ? h7("span", null, pick.elements[0].style.display) : null,
+        pick.elements[0].box ? h7("span", null, `${Math.round(pick.elements[0].box.width)}\xD7${Math.round(pick.elements[0].box.height)}`) : null,
+        Array.isArray(pick.elements[0].componentStack) && pick.elements[0].componentStack.length ? h7(
           "span",
           { "data-nks-stack": "1", title: pick.elements[0].componentStack.join(" \u2192 ") },
           `\u269B ${pick.elements[0].componentStack.slice(-3).join(" \u2192 ")}`
         ) : null
       ) : null,
-      toast ? toastFix ? h(
-        "div",
-        { className: "nano-toast nks-toast-fix", role: "status", "aria-live": "polite", "data-nano-toast": "true" },
-        h("span", null, toast),
-        h("button", { type: "button", className: "nks-toast-btn", "data-nks-repair": "1", onClick: repairNow }, copy.prepareEnv)
-      ) : h(NanoToast2, { text: toast }) : null,
-      pick?.elements?.length ? h("pre", {
+      // One carrier for both toasts: the host Toast through nano-ui. A
+      // recoverable failure adds its repair action to the same toast instead of
+      // re-implementing the chrome.
+      toast ? h7(NanoToast2, {
+        text: toast,
+        anchor: workspaceRef.current,
+        actions: toastFix ? [{ label: copy.prepareEnv, onClick: repairNow }] : void 0
+      }) : null,
+      pick?.elements?.length ? h7("pre", {
         "data-nks-pick": "1",
         style: { display: "none" }
       }, pick.elements.length > 1 ? multiNote2(pick.elements, { url: pageUrl, comment }) : designNote2(pick.elements[0], { url: pageUrl, comment })) : null
@@ -4549,9 +5061,13 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
     document.head.append(style);
     ctx.effect(() => () => style.remove());
     const languageOf = () => ctx.locale?.getSnapshot?.().active ?? "zh";
-    const schemeOf = () => ctx.theme?.getTheme?.().colorScheme === "light" ? "light" : "dark";
     const copy = () => copyFor2(languageOf());
-    const Pane = () => h(BrowserPane, { copy: copy(), languageOf, schemeOf });
+    const Pane = () => h7(BrowserPane, {
+      copy: copy(),
+      languageOf,
+      theme: ctx.theme,
+      onThemeChange: (listener) => ctx.on("theme/change", listener)
+    });
     ctx.effect(() => ctx.sidebarRightTabs.register({
       id: OWN_ID,
       kind: KIND,
@@ -4579,6 +5095,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
   }
   return __toCommonJS(index_exports);
 })();
+/*! dsh-nano-ui@0.2.0 */
 		return __kitesurfExport;
 	}
 });

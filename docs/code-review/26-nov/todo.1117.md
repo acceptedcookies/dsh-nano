@@ -139,13 +139,18 @@ P0-00 干净树（main@9792da0）
   - **依赖**：PH5 合入 · **执行状态**：`complete`
 ### PH7 — [DNK]（`nue-1117-migrate-dnk`）
 
-- [ ] `P7-01` — 图标与过期注释 · `NUE1117-T22`
-- [ ] `P7-02` — 未定义类（U9 = 0） · `NUE1117-T22`
-- [ ] `P7-03` — ThemeScope、菜单窗口内 · `NUE1117-T22`
-- [ ] `P7-04` — 设置对话框改窗口覆盖层（`container`） · `NUE1117-T22`
-- [ ] `P7-05` — 交互 Toast 改宿主 Toast `actions`；页签跟随 · `NUE1117-T22`
-  - **依赖**：PH6 合入 · **执行状态**：`not-started`
-
+- [x] `P7-01` — 图标与过期注释 · `NUE1117-T22`
+  - **执行状态**：`complete` · **证据**：`35facad`（合并 `18b30f4`）；自绘 `arrowGlyph` svg → `IconChevronLeftOutlineRegular`/`IconChevronRightOutlineRegular`；注释改为新事实。源码中无自绘「查找」图标（§9）
+- [x] `P7-02` — 未定义类（U9 = 0） · `NUE1117-T22`
+  - **执行状态**：`complete` · **证据**：`35facad`；U9 5 → 0（`nks-tool-glyph`、`nks-dt-grow` 补规则；`nks-nav-toggle`、`nks-dom` 拆出独立选择器；删 `nks-primary` 引用）
+- [x] `P7-03` — ThemeScope、菜单窗口内 · `NUE1117-T22`
+  - **执行状态**：`complete` · **证据**：`35facad`；`schemeOf` 定义/`BrowserPane` 参数/菜单调用全删（全文件 0）；`createThemeScope({ theme: ctx.theme, element: workspace, subscribe: theme/change })`；视口菜单 `openNanoMenu({ container: workspaceRef.current })`，无 `theme`
+- [x] `P7-04` — 设置对话框改窗口覆盖层（`container`） · `NUE1117-T22`
+  - **执行状态**：`complete` · **证据**：`35facad`；`openNanoDialog({ container: workspaceEl, width: 420, fixedHeight: 560 })`，`workspaceEl` 为 `[data-nks-workspace]` 元素本身（React ref），删 `region`/`getBoundingClientRect`。T27d 未观察
+- [x] `P7-05` — 交互 Toast 改宿主 Toast `actions`；页签跟随 · `NUE1117-T22`
+  - **执行状态**：`complete` · **证据**：`35facad`；两种 Toast 合一 `NanoToast({ text, anchor, actions })`；删 `.nks-toast-fix`/`.nks-toast-btn` 与注释，`nano-toast` 字面量 0；`NanoTabs` 调用不变并加回归断言
+  - **测试四元组**：`18b30f4` · `cd dsh-nano-kitesurf && npm test` · 65/65（≥56；含 `nue-migration.test.mjs` 9 条，对照 main 源码 3 过 6 败）· 2026-11-16T19:17:51Z；`node scripts/test-all.mjs` @a8b7c61 21/22（仅 s3-client）；`check-ui-rules --plugin DNK` 前 24/9/45/7/0/12/1/5/0（103）→ 后 22/7/44/7/0/11/1/0/0（92）；`check-client-rules` ok；`lib/client.js`（buildId `0.1.0+35facad`）含 `dsh-nano-ui@0.2.0` 1 处，同 HEAD 两次构建 sha256 相同；nano-ui 未改
+  - **依赖**：PH6 合入 · **执行状态**：`complete`（T27d 未观察）
 ### PH8 — [DNCS]（`nue-1117-migrate-dncs`）
 
 - [ ] `P8-01` — 删 composer 隐藏样式与卡片 `:has` · `NUE1117-T23`
@@ -189,14 +194,15 @@ P0-00 干净树（main@9792da0）
 | `NUE1117-T19` | [DNMS] 云会话自判 | — | 宿主无判据，停止 | deferred（Q18） |
 | `NUE1117-T20` | [DNEE] 迁移 | `node --test test/*.mjs`（含 `nue-migration.test.mjs`） | 26/26 @3cfd282 | pass |
 | `NUE1117-T21` | [DNT] 迁移 | `node test/run.mjs`（含 `nue-migration.test.mjs`） | 145/145 @c47b0eb | pass |
-| `NUE1117-T22`–`T26` | 其余三插件迁移 | 各插件测试 + `nue-migration.test.mjs` | — | pending |
+| `NUE1117-T22` | [DNK] 迁移 | `npm test`（含 `nue-migration.test.mjs`） | 65/65 @18b30f4 | pass |
+| `NUE1117-T23`–`T26` | 其余两插件迁移 | 各插件测试 + `nue-migration.test.mjs` | — | pending |
 | `NUE1117-T27a`–`e` | 视觉核对（live） | 本机 profile + ego-browser 截图 | — | pending（需 live 授权与部署） |
 | `NUE1117-T28`–`T30` | 收口 | 两次构建 sha；`nue-docs`/`nue-endstate` | — | pending |
 
 ## 5. 当前状态与交接
 
-- **当前节点 / 已完成**：P0-00、PH1、PH2、PH3、PH4（P4-01 deferred）、PH5、PH6
-- **下一动作**：PH7（[DNK]）
+- **当前节点 / 已完成**：P0-00、PH1、PH2、PH3、PH4（P4-01 deferred）、PH5、PH6、PH7
+- **下一动作**：PH8（[DNCS]）
 - **当前阻塞**：无
 - **待 owner 决定**：Q18（P4-01，推荐 A）；P9-05（执行到时判定）
 - **最终交接目标**：[业主]
@@ -236,7 +242,7 @@ P0-00 干净树（main@9792da0）
 - `2026-11-16` · PH5 [DNEE]：保留 4 处宿主属性锚点（`styles.js:14` `[data-nxe] .nxe-tree button`、`:15` `[data-files-path]`、`:55` `[data-custom-tree] {height:auto}`、`:199` `[data-custom-tree] button:hover .nxe-open`，宿主无行悬停钩子）。它们不是 `:has()`/`[class*=`/哈希类，不在 T20 清零清单，留待 T27 视觉核对与 closure 列出。
 - `2026-11-16` · PH5 [DNEE]：`formatBytes` 与宿主 `fileSizeText` 14 个样本全部不同，按 P5-03「条件替换」保留并标 `nano-ui-exempt`；`.nxe-git-alert` 因宿主 Toast 无常驻模式保留自绘并豁免，材质随令牌改变。DESIGN §10 各 1 行。
 - `2026-11-16` · PH5 [DNEE]：「在应用中打开」下拉原为自绘菜单，与 P5-02 同一类问题，一并改 NanoMenu（同写面，不扩约）。- `2026-11-16` · PH6 [DNT]：`test/run.mjs` 原无测试发现机制，新增第 13 段用 `node --test` 收集 `test/*.test.mjs` 并计入总数（崩溃且无摘要计 1 败）；N6 下限 137 指 wasm 冒烟部分，合计 145。
-- `2026-11-16` · PH6 [DNT]：`⌘`/`→` 是 `ShortcutKeys` 按键图例文本，非图标，保留（U4 剩 4）；原生 `<button>` 保留（U3 9 持平，窗格头 20px 密度宿主 Button 无对应档，AP P6 未列 U3）；`?` 帮助按钮随同族换 `glyph('help')`。
+- `2026-11-16` · PH6 [DNT]：`⌘`/`→` 是 `ShortcutKeys` 按键图例文本，非图标，保留（U4 剩 4）；原生 `<button>` 保留（U3 9 持平，窗格头 20px 密度宿主 Button 无对应档，AP P6 未列 U3）；`?` 帮助按钮随同族换 `glyph('help')`。- `2026-11-16` · PH7 [DNK]：AP P7-01 提到的「查找」自绘图标在源码中不存在，只替换前进/后退箭头；P7-02 实际 U9 为 5 条（扫描器把 compound 选择器第二个类计为引用），全部清零；lib 产物在源码提交 `35facad` 上构建，buildId 对应源码提交，PH10 统一重建。
 ## 8. 附件：[业主] 发车指令（原文）
 
 > 本 directive 注册为 `NUE-1117` 执行授权来源。

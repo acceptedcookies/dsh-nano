@@ -90,7 +90,7 @@ dsh plugin --profile web add <spec>
 
 宿主 `Config` 只提供首次默认：`saveDelayMs` 800、`commitIntervalSec` 60、`versionLimit` 50、`imageLimitBytes` 5MB、`defaultView`（`rendered` 或 `source`）、`theme`（`dark`、`light` 或 `system`）。越界值被拒绝。面板保存过一次之后，以面板设置为准。面板默认的自动版本间隔是 3600 秒，不是宿主的 60。
 
-面板里的 `theme` 是钉住（pin）语义：`light` / `dark` 由 nano-ui 的 ThemeScope 往 `.np-window` 与启动器注入 `--dsw-*`，菜单、对话框、设置行都在同一个窗口里继承；`system` 跟随宿主。插件不再自己写主题色，菜单与对话框也不再另挂一层主题。
+面板里的 `theme` 是钉住（pin）语义：`light` / `dark` 由 nano-ui 的 ThemeScope 往 `.np-window` 与启动器注入 `--dsw-*`，菜单、对话框、设置行都在同一个窗口里继承；`system` 跟随宿主。插件不再自己写亮暗两套主题色（`[data-theme]` 分档已删），菜单与对话框也不再另挂一层主题。
 
 ## 使用
 
@@ -102,11 +102,13 @@ dsh plugin --profile web add <spec>
 | 笔记内图片 | png、jpeg、gif、webp，存在同一个库 |
 | 源码视图里鼠标悬浮 `![…](notepad-image:…)` | 弹出小窗预览该图。仅 `.md` / `.markdown`，预览视图不弹 |
 
-页面里的 agent，且这个记事本已经打开过一次：
+页面里的 agent（持有 cordis 上下文），且这个记事本已经打开过一次：
 
 ```js
-await window.__nanoNotepad.import(name, content, meta)
+await ctx.get('nanoNotepad')?.import(name, content, meta)
 ```
+
+`nanoNotepad` 是插件挂载期间由 `ctx.provide('nanoNotepad', { import })` 提供的可选 cordis 服务（`src/client/index.js`），惰性读取；记事本没打开过或已卸载时 `ctx.get` 拿到 `undefined`。没有 `window.__nanoNotepad` 全局，也没有别名转发。
 
 - `name`：**原样保留任意后缀**（`.env`、`config.yaml`、`script.sh`、无后缀均可）。记事本是文本编辑器，不会追加或改写扩展名。**同名未 pin 的文件会被直接覆盖**（旧草稿先存成一个版本，可在历史里找回），不会造第二份；只有当同名文件已 pin、或同名是个文件夹时，才落 `-2` 新副本。Markdown 只是可选的渲染视图，仅 `.md` / `.markdown` 提供预览与 Markdown 工具栏。
 - `content`：整篇草稿字符串。

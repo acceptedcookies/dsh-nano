@@ -48,10 +48,6 @@
         "kind": "broadcast"
       },
       {
-        "name": "ctia-watch",
-        "kind": "mutation"
-      },
-      {
         "name": "shortcut-key",
         "kind": "listener"
       }
@@ -92,18 +88,5 @@
       "driver": "lab/drivers/notepad-type.mjs"
     }
   ],
-  "budgets": [
-    {
-      "id": "track.ctia-watch.callbacks",
-      "scenario": "idle-10s",
-      "subject": "hand.tracks.ctia-watch.callbacks",
-      "gate": "audit",
-      "rule": {
-        "op": "relBaseline",
-        "factor": 2,
-        "floor": 1,
-        "initial": 1
-      }
-    }
-  ]
+  "budgets": []
 }

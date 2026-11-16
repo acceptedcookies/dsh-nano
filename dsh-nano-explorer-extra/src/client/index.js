@@ -63,7 +63,6 @@ export function apply(ctx) {
   const requestRename = target => { renameRequest.handler?.(target) }
 
   const languageOf = () => ctx.locale.getSnapshot().active
-  const schemeOf = () => (ctx.theme.getTheme().colorScheme === 'light' ? 'light' : 'dark')
 
   /** The live copy and preference snapshot the body reads on every render. */
   const face = () => ({
@@ -72,7 +71,9 @@ export function apply(ctx) {
     /** Live read and subscription, so a settings switch redraws the tree without waiting for another update. */
     getPrefs: () => store.get(),
     subscribePrefs: listener => store.subscribe(listener),
-    scheme: schemeOf,
+    /** The host theme service and its change event; the page hands both to nano-ui's ThemeScope. */
+    theme: ctx.theme,
+    onThemeChange: listener => ctx.on('theme/change', listener),
     statusLabel,
     onListed: () => {},
     /** The open page lends its rename dialog to the row menus. */

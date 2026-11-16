@@ -9,7 +9,7 @@ import { StatusBar } from './statusbar.js'
 import { RowMenu } from './menu.js'
 import { paneToTheRightOf } from './pane-right.js'
 import * as primitives from '@deepseek-ai/dsh-client-ui-primitives'
-import { NanoToast } from 'dsh-nano-ui'
+import { createThemeScope, NanoMenu, NanoToast } from 'dsh-nano-ui'
 import { perf } from './perf.js'
 import { getWorkspaceStore } from './workspace-store.js'
 import { request as hostRequest } from './jsonClient.js'
@@ -242,6 +242,14 @@ export function ExplorerBody(props) {
   // the store without spending requests. Whichever pane is visible effectively leads, and the
   // store's in-flight dedupe keeps simultaneous ticks to a single /status round trip.
   const rootEl = useRef(null)
+  // The host owns light/dark; the pane's own Git palette only needs to follow it. The service and its
+  // event are stable for the life of the page, so the scope is created once.
+  useEffect(() => {
+    const element = rootEl.current
+    if (element === null) return undefined
+    const scope = createThemeScope({ theme: nxe.theme, element, subscribe: nxe.onThemeChange })
+    return () => scope.dispose()
+  }, [])
   useEffect(() => {
     if (store === null) return undefined
     // perf: one timer per pane is expected — the leak signal is `live` staying
@@ -828,7 +836,6 @@ export function ExplorerBody(props) {
         kind: entry.type === 'directory' ? 'directory' : entry.type === 'file' ? 'file' : 'other',
         ...(entry.symlink === true ? { link: true } : {}),
         ...(entry.outside === true ? { outside: true } : {}),
-        ...(entry.ghost === true ? { ghost: true } : {}),
         ...(ignoredOf(entry.path) ? { hidden: true } : {}),
       },
     }))
@@ -988,7 +995,7 @@ export function ExplorerBody(props) {
     ].filter(Boolean)
   }, [menu, copy, openApps, cwd, copyPath, statusOf, openDiff, nxe, sessionId, openEntry])
 
-  return React.createElement('div', { className: 'nxe-root', 'data-nxe': 'true', 'data-theme': nxe.scheme(), ref: rootEl },
+  return React.createElement('div', { 'data-nxe': 'true', ref: rootEl },
     React.createElement('div', { className: 'nxe-header' },
       React.createElement('span', { className: 'nxe-path', title: cwd, 'data-nxe-path': 'true' }, cwd),
       React.createElement(ToolButton, { label: copy.newFile, onClick: () => { create('file') } }, iconFilePlus()),
@@ -1064,11 +1071,11 @@ export function ExplorerBody(props) {
         requestMove({ path: source, meta: { kind: dragKind.current } }, cwd)
       },
     }, content),
-    React.createElement(NanoToast, { text: toast }),
+    React.createElement(NanoToast, { text: toast, anchor: rootEl.current }),
     // A Git read failure is a persistent floating warning over the pane's lower edge, not a row in
     // the flow: an inline line pushed the whole tree down, and it stayed as long as the error did.
     gitError === undefined ? null : React.createElement('div', {
-      className: 'nano-toast nxe-git-alert', role: 'alert', 'data-nxe-git-alert': 'true',
+      className: 'nxe-git-alert', role: 'alert', 'data-nxe-git-alert': 'true',
     },
     React.createElement(primitives.IconWarningOutlineRegular, {
       width: 14, height: 14, className: 'nxe-git-alert-icon', 'aria-hidden': 'true',
@@ -1195,21 +1202,9 @@ function RevealButton({ copy, cwd, apps }) {
   const list = Array.isArray(apps) ? apps : []
   if (cwd === '' || list.length === 0) return null
   const [choice, setChoice] = React.useState(list[0])
-  const [menuOpen, setMenuOpen] = React.useState(false)
-  const wrap = React.useRef(null)
+  const [menu, setMenu] = React.useState(null)
+  const moreRef = React.useRef(null)
   const active = list.includes(choice) ? choice : list[0]
-
-  React.useEffect(() => {
-    if (!menuOpen) return undefined
-    const close = event => { if (wrap.current !== null && !wrap.current.contains(event.target)) setMenuOpen(false) }
-    const escape = event => { if (event.key === 'Escape') setMenuOpen(false) }
-    document.addEventListener('pointerdown', close, true)
-    document.addEventListener('keydown', escape, true)
-    return () => {
-      document.removeEventListener('pointerdown', close, true)
-      document.removeEventListener('keydown', escape, true)
-    }
-  }, [menuOpen])
 
   const open = app => {
     void fetch('/open-in-app/open', {
@@ -1218,7 +1213,7 @@ function RevealButton({ copy, cwd, apps }) {
     })
   }
 
-  return React.createElement('span', { className: 'nxe-reveal', ref: wrap, 'data-nxe-reveal': active },
+  return React.createElement('span', { className: 'nxe-reveal', 'data-nxe-reveal': active },
     React.createElement('button', {
       type: 'button', className: 'nxe-reveal-main',
       title: copy.revealIn(APP_LABELS[active] ?? active),
@@ -1228,20 +1223,27 @@ function RevealButton({ copy, cwd, apps }) {
     React.createElement('img', { src: `/open-in-app/icon/${encodeURIComponent(active)}`, alt: '', width: 14, height: 14 })),
     React.createElement('span', { className: 'nxe-reveal-divider', 'aria-hidden': 'true' }),
     React.createElement('button', {
-      type: 'button', className: 'nxe-reveal-more',
+      type: 'button', className: 'nxe-reveal-more', ref: moreRef,
       title: copy.revealChoose,
       'aria-label': copy.revealChoose,
-      'aria-expanded': String(menuOpen),
-      onClick: () => setMenuOpen(v => !v),
-    }, React.createElement(primitives.IconChevronDownOutlineRegular, { width: 10, height: 10, 'aria-hidden': 'true' })),
-    menuOpen ? React.createElement('div', { className: 'nano-menu', role: 'menu', style: { position: 'absolute', right: 0, top: '26px' } },
-      list.map(app => React.createElement('button', {
-        key: app, type: 'button', role: 'menuitem', className: 'nano-menu-item',
-        onClick: () => { setChoice(app); setMenuOpen(false); open(app) },
+      'aria-expanded': String(menu !== null),
+      onClick: () => {
+        const box = moreRef.current?.getBoundingClientRect()
+        if (box === undefined) return
+        setMenu({ x: box.left, y: box.bottom + 2, width: box.width, height: box.height })
       },
-      React.createElement('span', { className: 'nano-menu-icon', 'aria-hidden': 'true' },
-        React.createElement('img', { src: `/open-in-app/icon/${encodeURIComponent(app)}`, alt: '', width: 14, height: 14 })),
-      React.createElement('span', { className: 'nano-menu-label' }, APP_LABELS[app] ?? app)))) : null)
+    }, React.createElement(primitives.IconChevronDownOutlineRegular, { width: 10, height: 10, 'aria-hidden': 'true' })),
+    React.createElement(NanoMenu, {
+      menu,
+      actions: list.map(app => ({
+        id: app,
+        label: APP_LABELS[app] ?? app,
+        icon: React.createElement('img', { src: `/open-in-app/icon/${encodeURIComponent(app)}`, alt: '', width: 14, height: 14 }),
+        run: () => { setChoice(app); open(app) },
+      })),
+      onClose: () => setMenu(null),
+      portal: true,
+    }))
 }
 
 /**

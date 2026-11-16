@@ -1,5 +1,8 @@
 /** Pure formatting helpers with no dependencies, so they can be exercised outside the browser. */
 
+/* nano-ui-exempt: the host `fileSizeText` renders "1.0KB" — no space, 1024-based under a decimal
+   unit name, GB ceiling, no zero/NaN guard — while this footer reads "1 KiB". Swapping it would
+   rewrite every size the status bar shows, so the helper stays here (DESIGN.md §10). */
 /**
  * Render one byte count in the units the status bar uses.
  * @param bytes - total size.

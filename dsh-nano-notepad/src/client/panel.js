@@ -12,6 +12,7 @@ import {
   imagesById,
   importTarget,
   loadSnapshot,
+  stampContentMd5,
   moveNode,
   nextAvailableName,
   nextUntitled,
@@ -28,6 +29,7 @@ import {
   writeSettings,
   writeUi as writeUiRaw,
 } from './db.js'
+import { md5Hex } from './md5.js'
 import { applyFormat, escapeAttr, escapeHtml, extractImageUrls, formatHtml, htmlToText, minifyHtml, renderMarkdown, sanitizeRichHtml, stripHtmlStyles } from './markdown.js'
 import { validateJson, positionOf, formatJson, minifyJson, escapeJson, unescapeJson, decodeEscapes, renderJsonTree } from './json.js'
 import { highlightSource } from './highlight.js'
@@ -96,7 +98,7 @@ ${NANO_STYLES}
 .np-tip { position: absolute; right: 44px; top: 2px; white-space: nowrap; background: var(--dsw-alias-tooltip-bg); color: var(--dsw-alias-tooltip-label, var(--dsw-alias-label-primary)); border-radius: var(--dsw-radius-sm); padding: 4px 8px; }
 .np-entry.np-tip-left .np-tip { right: auto; left: 44px; }
 .np-unit { color: var(--dsw-alias-label-tertiary); font-style: normal; font-size: .85em; margin-inline-start: .5em; }
-.np-window { width: min(920px, calc(100vw - 48px)); height: min(640px, calc(100vh - 48px)); min-width: 320px; min-height: 240px; display: flex; flex-direction: column; background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-panel, 28px); box-shadow: var(--dsw-elevation-prominent); overflow: hidden; container-type: inline-size; container-name: np; }
+.np-window { --np-menu-gap: 4px; width: min(920px, calc(100vw - 48px)); height: min(640px, calc(100vh - 48px)); min-width: 320px; min-height: 240px; display: flex; flex-direction: column; background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-panel, 28px); box-shadow: var(--dsw-elevation-prominent); overflow: hidden; container-type: inline-size; container-name: np; }
 .np-resize { position: absolute; z-index: 6; pointer-events: auto; }
 .np-resize[data-edge="n"], .np-resize[data-edge="s"] { left: 16px; right: 16px; height: 10px; cursor: ns-resize; }
 .np-resize[data-edge="n"] { top: -5px; }
@@ -172,7 +174,7 @@ ${NANO_STYLES}
 .np-tree[data-collapsed="true"] .np-nodes { display: flex; flex-direction: column; align-items: center; padding: 6px 0 var(--np-pad-x); }
 .np-tree[data-collapsed="true"] .np-node { width: 40px; padding-left: 0 !important; padding-right: 0; justify-content: center; gap: 0; }
 .np-tree[data-collapsed="true"] .np-node-main { flex: none; justify-content: center; padding-right: 0 !important; }
-.np-tree[data-collapsed="true"] .np-node-name, .np-tree[data-collapsed="true"] .np-caret, .np-tree[data-collapsed="true"] .np-node-actions, .np-tree[data-collapsed="true"] .np-group, .np-tree[data-collapsed="true"] .np-cat { display: none; }
+.np-tree[data-collapsed="true"] .np-node-name, .np-tree[data-collapsed="true"] .np-caret, .np-tree[data-collapsed="true"] .np-node-actions, .np-tree[data-collapsed="true"] .np-group { display: none; }
 .np-tree[data-collapsed="true"] .np-node-icon svg { width: 18px; height: 18px; }
 .np-tree-head { box-sizing: border-box; display: flex; flex: none; align-items: center; gap: 4px; width: 100%; height: 49px; padding: 6px var(--np-pad-x); color: var(--dsw-alias-label-tertiary); font-size: var(--np-font-size-sm); border-bottom: 1px solid var(--dsw-alias-border-l2); }
 .np-tree-toggle { box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; flex: none; padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); cursor: pointer; }
@@ -212,7 +214,7 @@ ${NANO_STYLES}
 .np-tree[data-collapsed="true"] .np-tree-foot { flex-direction: column; margin-top: auto; min-height: 0; padding: 8px 0 var(--np-pad-x); border-top: 0; }
 .np-tree[data-collapsed="true"] .np-tree-foot span { display: none; }
 .np-tree[data-collapsed="true"] .np-tree-foot button { width: var(--np-icon-btn); height: var(--np-icon-btn); padding: 0 !important; }
-.np-node { position: relative; box-sizing: border-box; display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; height: var(--np-node-h); margin: 1px 0; padding-right: 8px; border-radius: var(--dsw-radius-sm); color: var(--dsw-alias-label-secondary); overflow: hidden; }
+.np-node { position: relative; box-sizing: border-box; display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; height: var(--np-node-h); margin: 3px 0; padding-right: 8px; border-radius: var(--dsw-radius-sm); color: var(--dsw-alias-label-secondary); overflow: hidden; }
 .np-node:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 .np-node[data-active="true"] { background: var(--dsw-alias-interactive-bg-active); color: var(--dsw-alias-label-primary); }
 .np-node[data-drop="true"] { box-shadow: inset 0 0 0 1.5px var(--dsw-alias-link); }
@@ -334,16 +336,14 @@ ${NANO_STYLES}
 .np-fx-pop-sub { margin-left: auto; color: var(--dsw-alias-label-tertiary); font-size: var(--np-font-size-xs); }
 .np-fx-pop-empty { padding: 8px; color: var(--dsw-alias-label-tertiary); font-size: var(--np-font-size-xs); }
 .np-fx-out[hidden] { display: none !important; }
-/* P0-4：tab 条的 + 新建；P1-5：文件级 … 菜单入口 */
-.np-tabs > button.np-new-tab { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; flex: none; box-sizing: border-box; padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); cursor: pointer; }
-.np-tabs > button.np-new-tab:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
-.np-tabs > button.np-new-tab svg { width: 16px; height: 16px; }
-.np-tabs > button.np-more { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; flex: none; box-sizing: border-box; padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); border-radius: var(--dsw-radius-sm); cursor: pointer; font-size: 18px; line-height: 1; }
-.np-tabs > button.np-more:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
-/* P1-5：自动换行开关（源编辑 + 高亮镜像同步；横向滚动由既有 scroll 同步） */
+/* 自动换行开关（源编辑 + 高亮镜像同步；横向滚动由既有 scroll 同步）。入口在文件行菜单。 */
 .np-editor[data-wrap="off"] .np-write,
-.np-editor[data-wrap="off"] .np-mirror { white-space: pre; overflow-wrap: normal; word-break: normal; }
-.np-editor[data-wrap="off"] .np-write { overflow-x: auto; }
+.np-editor[data-wrap="off"] .np-mirror,
+.np-editor[data-wrap="off"] .np-read { white-space: pre; overflow-wrap: normal; word-break: normal; }
+.np-editor[data-wrap="off"] .np-write,
+.np-editor[data-wrap="off"] .np-read { overflow-x: auto; }
+.np-wrap { margin-left: auto; }
+.np-wrap[aria-pressed="true"] { background: var(--dsw-alias-interactive-bg-active); color: var(--dsw-alias-label-primary); }
 /* ── fx 处理：窗口右上入口 + 视觉区内 chat 面板（非 modal、非 tab） ── */
 .np-tabs > button.np-fx-entry { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; flex: none; border: 1px solid transparent; border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-interactive-bg-active); color: var(--dsw-alias-label-primary); font: inherit; font-size: var(--np-font-size-sm); font-weight: 600; cursor: pointer; transition: background-color .12s ease, color .12s ease, border-color .12s ease; }
 .np-tabs > button.np-fx-entry:hover { background: var(--dsw-alias-interactive-bg-hover); }
@@ -437,7 +437,7 @@ ${NANO_STYLES}
 .np-toolbar, .np-footer { min-width: 0; }
 .np-toolbar { display: flex; gap: var(--np-gap); align-items: center; padding: 6px var(--np-pad-x); }
 /* native segmented control: hover-gray track + layer-1 thumb sliding by translate */
-.np-switch { flex: none; margin-left: auto; display: inline-grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 2px; position: relative; padding: 4px; border: 0; background: var(--dsw-alias-interactive-bg-hover); border-radius: var(--dsw-radius-md); cursor: pointer; font: inherit; min-width: 148px; }
+.np-switch { flex: none; margin-left: 0; display: inline-grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 2px; position: relative; padding: 4px; border: 0; background: var(--dsw-alias-interactive-bg-hover); border-radius: var(--dsw-radius-md); cursor: pointer; font: inherit; min-width: 148px; }
 .np-switch .np-switch-label { display: inline-flex; align-items: center; justify-content: center; min-width: 0; height: 28px; padding: 0 14px; font-size: var(--np-font-size); font-weight: 500; color: var(--dsw-alias-label-secondary); z-index: 0; }
 /* Three-segment controls (sync motion) need a wider track and tighter labels. */
 .np-switch[data-segments="3"] { min-width: 186px; }
@@ -957,11 +957,11 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     ? `<button type="button" class="np-tool" data-action="image" data-format-kind="image">${def.icon}</button>`
     : `<button type="button" class="np-tool" data-format="${def.kind}" data-format-kind="${def.kind}">${def.icon}</button>`).join('')
   panel.innerHTML = `
-    <div class="np-tabs"><button type="button" class="np-tree-toggle" data-action="toggle-tree"></button><button type="button" class="np-close-tabs" data-action="close-tabs" data-i18n="saveCloseTabs" data-i18n-mode="title">${dshIcon('archive-check-outline')}</button><div class="np-tablist"></div><button type="button" class="np-new-tab" data-action="new-file" data-i18n="newBlankFile" data-i18n-mode="title" title="+">${PLUS_ICON}</button><button type="button" class="np-more" data-action="more-menu" data-i18n="more" data-i18n-mode="title">⋯</button><span class="np-tabs-spacer"></span><button type="button" class="np-fx-entry" data-action="fx-run"><span class="np-fx-entry-ico" aria-hidden="true">${FX_ICON}</span><span data-i18n="fxEntry">处理</span></button></div>
+    <div class="np-tabs"><button type="button" class="np-tree-toggle" data-action="toggle-tree"></button><button type="button" class="np-close-tabs" data-action="close-tabs" data-i18n="saveCloseTabs" data-i18n-mode="title">${dshIcon('archive-check-outline')}</button><div class="np-tablist"></div><span class="np-tabs-spacer"></span><button type="button" class="np-fx-entry" data-action="fx-run"><span class="np-fx-entry-ico" aria-hidden="true">${FX_ICON}</span><span data-i18n="fxEntry">处理</span></button></div>
     <div class="np-body">
       <aside class="np-tree"><div class="np-tree-head"><div class="np-ws"><button type="button" class="np-ws-btn" data-action="ws-toggle" aria-haspopup="listbox" aria-expanded="false"><span class="np-ws-label"></span><span class="np-ws-caret" aria-hidden="true">${CHEVRON_ICON}</span></button></div><button type="button" class="np-kind" data-action="kind-filter" data-i18n="kindFilter" data-i18n-mode="title"><span class="np-kind-label"></span><span class="np-kind-caret" aria-hidden="true">${CHEVRON_ICON}</span></button><span class="np-tree-tools"><button type="button" data-action="tree-settings" data-i18n="settings" data-i18n-mode="title" aria-haspopup="menu">${SETTINGS_ICON}</button><button type="button" class="np-tools-toggle" data-action="toggle-tools" data-i18n="expandTools" data-i18n-mode="title" aria-expanded="false">${CHEVRON_ICON}</button></span></div><div class="np-nodes" data-root="true"></div><div class="np-mp-zone"><input class="np-mp-input" type="text" inputmode="url" autocomplete="off" spellcheck="false" data-i18n="importMp" data-i18n-attr="placeholder"><span class="np-mp-hint" data-state="idle" aria-hidden="true"></span></div><button type="button" class="np-tools-toggle" data-action="toggle-tools" data-i18n="expandTools" data-i18n-mode="title" aria-expanded="false">${CHEVRON_ICON}</button><div class="np-tree-foot"><button type="button" data-action="settings" data-i18n="settings" data-i18n-mode="label">${SETTINGS_ICON}<span data-i18n="settings"></span></button><button type="button" data-action="close" data-i18n="close" data-i18n-mode="label">${CLOSE_ICON}<span data-i18n="close"></span></button></div></aside>
       <div class="np-editor" data-themefit="true">
-        <div class="np-toolbar"><span class="np-md-tools">${toolbar}</span><span class="np-json-tools" hidden><button type="button" class="np-tool" data-json="expand" data-i18n="jsonExpand" data-i18n-mode="title">${EXPAND_ICON}</button><button type="button" class="np-tool" data-json="collapse" data-i18n="jsonCollapse" data-i18n-mode="title">${COLLAPSE_ICON}</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-json="format" data-i18n="jsonFormat" data-i18n-mode="title">${FORMAT_ICON}</button><button type="button" class="np-tool" data-json="minify" data-i18n="jsonMinify" data-i18n-mode="title">${MINIFY_ICON}</button><button type="button" class="np-tool" data-json="escape" data-i18n="jsonEscape" data-i18n-mode="title">${ESCAPE_ICON}</button><button type="button" class="np-tool" data-json="unescape" data-i18n="jsonUnescape" data-i18n-mode="title">${UNESCAPE_ICON}</button><button type="button" class="np-tool" data-json="strip" data-i18n="jsonStrip" data-i18n-mode="title">${STRIP_ICON}</button></span><span class="np-ht-tools" hidden><button type="button" class="np-tool" data-ht="format" data-i18n="htFormat" data-i18n-mode="title">${FORMAT_ICON}</button><button type="button" class="np-tool" data-ht="minify" data-i18n="htMinify" data-i18n-mode="title">${MINIFY_ICON}</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-ht="strip-styles" data-i18n="htStripStyles" data-i18n-mode="title">${STRIP_ICON}</button><button type="button" class="np-tool" data-ht="extract-images" data-i18n="htExtractImages" data-i18n-mode="title">${GRID_ICON}</button><button type="button" class="np-tool" data-ht="copy-text" data-i18n="htCopyText" data-i18n-mode="title">${dshIcon('copy-outline')}</button></span><span class="np-rt-tools" hidden><button type="button" class="np-tool" data-rt="gallery" data-i18n="rtGallery" data-i18n-mode="title">${GRID_ICON}</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-rt="font-minus" data-i18n="rtFontMinus" data-i18n-mode="title">A−</button><button type="button" class="np-tool" data-rt="font-plus" data-i18n="rtFontPlus" data-i18n-mode="title">A+</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-rt="width" data-i18n="rtWidth" data-i18n-mode="title">宽</button><button type="button" class="np-tool" data-rt="themefit" data-i18n="rtThemeFit" data-i18n-mode="title" aria-pressed="true">◐</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-rt="copy-rich" data-i18n="rtCopyRich" data-i18n-mode="title">${dshIcon('copy-outline')}</button><button type="button" class="np-tool" data-rt="copy-text" data-i18n="rtCopyText" data-i18n-mode="title">Tx</button><button type="button" class="np-tool" data-rt="links" data-i18n="rtLinks" data-i18n-mode="title">${LINK_ICON}</button></span><button type="button" class="np-switch" data-action="view" role="switch" aria-checked="false" data-i18n="viewGroup" data-i18n-mode="title"><span class="np-switch-label" data-i18n="source"></span><span class="np-switch-label" data-i18n="preview"></span><span class="np-switch-thumb" data-i18n="source"></span></button></div>
+        <div class="np-toolbar"><span class="np-md-tools">${toolbar}</span><span class="np-json-tools" hidden><button type="button" class="np-tool" data-json="expand" data-i18n="jsonExpand" data-i18n-mode="title">${EXPAND_ICON}</button><button type="button" class="np-tool" data-json="collapse" data-i18n="jsonCollapse" data-i18n-mode="title">${COLLAPSE_ICON}</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-json="format" data-i18n="jsonFormat" data-i18n-mode="title">${FORMAT_ICON}</button><button type="button" class="np-tool" data-json="minify" data-i18n="jsonMinify" data-i18n-mode="title">${MINIFY_ICON}</button><button type="button" class="np-tool" data-json="escape" data-i18n="jsonEscape" data-i18n-mode="title">${ESCAPE_ICON}</button><button type="button" class="np-tool" data-json="unescape" data-i18n="jsonUnescape" data-i18n-mode="title">${UNESCAPE_ICON}</button><button type="button" class="np-tool" data-json="strip" data-i18n="jsonStrip" data-i18n-mode="title">${STRIP_ICON}</button></span><span class="np-ht-tools" hidden><button type="button" class="np-tool" data-ht="format" data-i18n="htFormat" data-i18n-mode="title">${FORMAT_ICON}</button><button type="button" class="np-tool" data-ht="minify" data-i18n="htMinify" data-i18n-mode="title">${MINIFY_ICON}</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-ht="strip-styles" data-i18n="htStripStyles" data-i18n-mode="title">${STRIP_ICON}</button><button type="button" class="np-tool" data-ht="extract-images" data-i18n="htExtractImages" data-i18n-mode="title">${GRID_ICON}</button><button type="button" class="np-tool" data-ht="copy-text" data-i18n="htCopyText" data-i18n-mode="title">${dshIcon('copy-outline')}</button></span><span class="np-rt-tools" hidden><button type="button" class="np-tool" data-rt="gallery" data-i18n="rtGallery" data-i18n-mode="title">${GRID_ICON}</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-rt="font-minus" data-i18n="rtFontMinus" data-i18n-mode="title">A−</button><button type="button" class="np-tool" data-rt="font-plus" data-i18n="rtFontPlus" data-i18n-mode="title">A+</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-rt="width" data-i18n="rtWidth" data-i18n-mode="title">宽</button><button type="button" class="np-tool" data-rt="themefit" data-i18n="rtThemeFit" data-i18n-mode="title" aria-pressed="true">◐</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-rt="copy-rich" data-i18n="rtCopyRich" data-i18n-mode="title">${dshIcon('copy-outline')}</button><button type="button" class="np-tool" data-rt="copy-text" data-i18n="rtCopyText" data-i18n-mode="title">Tx</button><button type="button" class="np-tool" data-rt="links" data-i18n="rtLinks" data-i18n-mode="title">${LINK_ICON}</button></span><button type="button" class="np-tool np-wrap" data-action="toggle-wrap" data-i18n="fxMenuWrap" data-i18n-mode="title" aria-pressed="true">${dshIcon('wrap-lines-outline')}</button><button type="button" class="np-switch" data-action="view" role="switch" aria-checked="false" data-i18n="viewGroup" data-i18n-mode="title"><span class="np-switch-label" data-i18n="source"></span><span class="np-switch-label" data-i18n="preview"></span><span class="np-switch-thumb" data-i18n="source"></span></button></div>
         <div class="np-mirror" aria-hidden="true"></div>
         <textarea class="np-write" spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
         <div class="np-slash" hidden></div>
@@ -1434,10 +1434,10 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     return `/${names.join('/')}`
   }
 
-  async function exportFile() {
-    const file = current()
+  async function exportFile(id) {
+    const file = id ? state.nodes.find(node => node.id === id) : current()
     if (!file) return
-    const content = write().value ?? file.draft ?? ''
+    const content = file.id === state.ui.currentId ? (write().value ?? file.draft ?? '') : (file.draft ?? '')
     const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
     /* Save under the file's real name and extension. No `types` filter: the
        picker must accept whatever suffix the user wants (including none). */
@@ -1482,7 +1482,6 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     console.warn('[notepad] 仅浏览器下载可用')
   }
 
-  /** P1-5：文档级 … 菜单——复制路径/相对路径、自动换行、导出。 */
   async function writeClipboard(value) {
     try { await navigator.clipboard.writeText(value); return true } catch { /* fall through */ }
     try {
@@ -1497,35 +1496,28 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     } catch { return false }
   }
 
-  async function copyPath(relative) {
-    const file = current()
+  /** Short workspace mark for a context anchor. UUID keeps its own first 8 hex; anything else is hashed. Unassigned is fixed. */
+  function workspaceStamp(workspaceId) {
+    if (typeof workspaceId !== 'string' || workspaceId.length === 0) return '00000000'
+    const id = workspaceId.toLowerCase()
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(id)) return id.slice(0, 8)
+    return md5Hex(workspaceId).slice(0, 8)
+  }
+
+  async function copyPath(id) {
+    const file = id ? state.nodes.find(node => node.id === id) : current()
     if (!file) return
-    const value = relative
-      ? pathOf(file.id).replace(/^\//, '')
-      : `${workspaceTitle(file.workspaceId)}${pathOf(file.id)}`
+    const value = `[ DNN:${workspaceStamp(file.workspaceId)}@${pathOf(file.id).replace(/^\//, '')} ]`
     if (await writeClipboard(value)) setSync('copied', value)
   }
 
-  function openMoreMenu(anchor) {
-    const copy = text()
-    const file = current()
-    if (!file) return
-    closeMenu?.()
-    const wrapOn = state.ui.wordWrap !== false
-    const items = [
-      { id: 'copy-path', label: copy.fxMenuPath ?? '复制路径', run: () => void copyPath(false) },
-      { id: 'copy-rel', label: copy.fxMenuRelPath ?? '复制相对路径', run: () => void copyPath(true) },
-      { id: 'wrap', label: `${copy.fxMenuWrap ?? '自动换行'}${wrapOn ? ' ✓' : ''}`, run: () => { state.ui.wordWrap = !wrapOn; applyWrap(); void persistUi() } },
-      { id: 'export', label: copy.fxMenuExport ?? '导出', run: () => void exportFile() },
-    ]
-    const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), width: 190, theme: resolvedTheme(), z: NP_PORTAL_Z, items })
-    closeMenu = () => raw.close()
-  }
-
-  /** P1-5：自动换行开关的视觉落点（源编辑 + 高亮镜像同步）。 */
+  /** 自动换行开关的视觉落点（源编辑 + 高亮镜像同步）。 */
   function applyWrap() {
     const editor = panel.querySelector('.np-editor')
-    if (editor) editor.dataset.wrap = state.ui.wordWrap === false ? 'off' : 'on'
+    const on = state.ui.wordWrap !== false
+    if (editor) editor.dataset.wrap = on ? 'on' : 'off'
+    const button = panel.querySelector('.np-wrap')
+    if (button) button.setAttribute('aria-pressed', String(on))
   }
 
   function clamp(value, min, max) {
@@ -1627,7 +1619,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
          within the same kind. */
       nodes.sort((a, b) => Number(a.kind === 'file') - Number(b.kind === 'file') || Number(b.pinned === true) - Number(a.pinned === true) || a.name.localeCompare(b.name))
       for (const node of nodes) {
-        const icon = node.kind === 'folder' ? FOLDER_ICON : FILE_ICON
+        const icon = node.kind === 'folder' ? `<span class="np-node-icon" aria-hidden="true">${FOLDER_ICON}</span>` : ''
         const name = escapeHtml(node.name)
         const expanded = !state.collapsed.has(node.id)
         const nodeId = escapeAttr(node.id)
@@ -1650,7 +1642,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
         const catBadge = catLetter
           ? `<span class="np-cat" data-cat="${escapeAttr(node.cat ?? '')}" title="${escapeAttr(catTitle)}">${catLetter}</span>`
           : ''
-        lines.push(`<div class="np-node" data-kind="${node.kind}" data-cat="${escapeAttr(node.cat ?? '')}" data-pinned="${node.pinned === true}" data-active="${node.id === state.ui.currentId}" title="${name}" style="padding-left:${8 + depth * 16}px">${caret}<button class="np-node-main" type="button" draggable="true" data-id="${nodeId}" aria-label="${name}"><span class="np-node-icon" aria-hidden="true">${icon}</span>${catBadge}<span class="np-node-name">${name}</span></button><span class="np-node-actions">${pin}<button type="button" data-move="${nodeId}" title="${escapeHtml(text().transfer)}" aria-label="${escapeHtml(text().transfer)}">${MOVE_ICON}</button><button type="button" data-more="${nodeId}" title="${escapeHtml(text().more)}" aria-label="${escapeHtml(text().more)}" aria-haspopup="menu">${MORE_ICON}</button></span></div>`)
+        lines.push(`<div class="np-node" data-kind="${node.kind}" data-cat="${escapeAttr(node.cat ?? '')}" data-pinned="${node.pinned === true}" data-active="${node.id === state.ui.currentId}" title="${name}" style="padding-left:${8 + depth * 16}px">${caret}<button class="np-node-main" type="button" draggable="true" data-id="${nodeId}" aria-label="${name}">${icon}${catBadge}<span class="np-node-name">${name}</span></button><span class="np-node-actions">${pin}<button type="button" data-move="${nodeId}" title="${escapeHtml(text().transfer)}" aria-label="${escapeHtml(text().transfer)}">${MOVE_ICON}</button><button type="button" data-more="${nodeId}" title="${escapeHtml(text().more)}" aria-label="${escapeHtml(text().more)}" aria-haspopup="menu">${MORE_ICON}</button></span></div>`)
         if (node.kind === 'folder' && !state.collapsed.has(node.id)) visit(node.id, depth + 1, workspaceId)
       }
     }
@@ -2049,6 +2041,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     state.pendingDraft = null
     if (!file || !state.db) return
     file.draft = draft
+    file.md5 = md5Hex(draft)
     state.lastDraftWrite[file.id] = Date.now()
     setSync('saving')
     void saveDraft(state.db, file.id, draft).then(() => {
@@ -2185,6 +2178,12 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     activeDialog = handle
   }
 
+  /** Pixels between a control and its menu. One custom property, every notepad menu. */
+  function menuGap() {
+    const n = Number.parseFloat(getComputedStyle(panel).getPropertyValue('--np-menu-gap'))
+    return Number.isFinite(n) ? n : 4
+  }
+
   /**
    * Workspace switcher as a shared NanoMenu. NanoMenu self-closes on Escape,
    * outside press, or an item running; `done(unmount)` tracks whether the menu
@@ -2212,7 +2211,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     /* The portal sits on document.body and would happily outgrow the floating
        window — cap it at the space actually left inside the panel. */
     const room = panel.getBoundingClientRect().bottom - anchor.getBoundingClientRect().bottom - 10
-    const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), items, width: 190, maxHeight: Math.max(120, room), gap: 4, theme: resolvedTheme(), z: NP_PORTAL_Z })
+    const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), items, width: 190, maxHeight: Math.max(120, room), gap: menuGap(), theme: resolvedTheme(), z: NP_PORTAL_Z })
     let closed = false
     const done = (unmount) => {
       if (closed) return
@@ -2295,7 +2294,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       { id: 'folder', label: copy.newBlankFolder, icon: icon(FOLDER_ICON), run: () => { done(false); void add('folder').catch(showError) } },
       { id: 'clear', label: scoped ? copy.clearUnpinned : `${copy.clearUnpinned} · ${copy.clearUnpinnedPick}`, tone: 'danger', icon: icon(dshIcon('trash-outline')), run: () => { done(false); if (scoped) confirmClearUnpinned() } },
     ]
-    const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), items, width: 220, theme: resolvedTheme(), z: NP_PORTAL_Z })
+    const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), items, width: 220, gap: menuGap(), theme: resolvedTheme(), z: NP_PORTAL_Z })
     let closed = false
     const done = (unmount) => {
       if (closed) return
@@ -2317,7 +2316,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       label: copy.kinds[k] ?? k,
       run: () => void addKind(k).catch(showError),
     }))
-    const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), width: 160, theme: resolvedTheme(), z: NP_PORTAL_Z, items })
+    const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), width: 160, gap: menuGap(), theme: resolvedTheme(), z: NP_PORTAL_Z, items })
     closeMenu = () => raw.close()
   }
 
@@ -2814,7 +2813,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
           React.createElement('span', { className: 'np-fx-model-option-ctx' }, info.ctx)))
       return { id: info.key, label, icon: info.key === state.fx.model ? check : undefined, run: () => { state.fx.model = info.key; fxPaintModel() } }
     })
-    const raw = openNanoMenu({ anchor: fxModel.getBoundingClientRect(), items, width: 300, maxHeight: 140, theme: resolvedTheme(), z: NP_PORTAL_Z, direction: 'up' })
+    const raw = openNanoMenu({ anchor: fxModel.getBoundingClientRect(), items, width: 300, maxHeight: 140, gap: menuGap(), theme: resolvedTheme(), z: NP_PORTAL_Z, direction: 'up' })
     closeMenu = () => raw.close()
   })
   fxPop.addEventListener('mousedown', event => event.preventDefault())
@@ -2832,7 +2831,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     ]
     closeMenu?.()
     /* 四条说明放得下。加上 maxHeight 会强制 overflow，滚动条把菜单右侧圆角切成直角。 */
-    const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), items, width: 320, theme: resolvedTheme(), z: NP_PORTAL_Z, direction: 'up' })
+    const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), items, width: 320, gap: menuGap(), theme: resolvedTheme(), z: NP_PORTAL_Z, direction: 'up' })
     closeMenu = () => raw.close()
   }
   /* 点垂直栏以外的 fx 区域收起边栏；标题按钮自己 toggle，不在这里抢。 */
@@ -2884,7 +2883,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     const items = prompts.length
       ? prompts.map(n => ({ id: n.id, label: fxCleanName(n.name), icon: n.id === state.fx.promptId ? check : undefined, run: () => { clearActive(); state.fx.promptId = n.id; fxPaintChips(); fxUpdateSend() } }))
       : [{ id: 'fx-no-prompt', label: copy.fxNoPrompt ?? '没有提示语料', run: clearActive }]
-    const raw = openNanoMenu({ anchor: fxPromptBtn.getBoundingClientRect(), items, width: 240, maxHeight: 120, theme: resolvedTheme(), z: NP_PORTAL_Z, direction: 'up' })
+    const raw = openNanoMenu({ anchor: fxPromptBtn.getBoundingClientRect(), items, width: 240, maxHeight: 120, gap: menuGap(), theme: resolvedTheme(), z: NP_PORTAL_Z, direction: 'up' })
     const outside = event => {
       if (event.target.closest?.('.nano-menu') || fxPromptBtn.contains(event.target)) return
       clearActive()
@@ -2921,6 +2920,15 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     setTimeout(() => row?.classList.remove('np-changed'), 2400)
   }
 
+  function renameAsked(node) {
+    if (!node || !state.db) return
+    askName(text().renameTitle, node.name, async name => {
+      const renamed = await renameNode(state.db, node.id, name)
+      Object.assign(node, renamed)
+      render()
+    })
+  }
+
   function askName(title, initial, done) {
     let input = /** @type {HTMLInputElement | null} */ (null)
     const submit = close => { if (input) { close(); void done(input.value).catch(showError) } }
@@ -2931,7 +2939,13 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       setup: (el, close) => {
         input = el.querySelector('[name="node-name"]')
         if (!(input instanceof HTMLInputElement)) return
-        input.select()
+        /* 选中文件名本身，最后一段后缀留在选区外面。untitled-2.md 选中 untitled-2。 */
+        const dot = initial.lastIndexOf('.')
+        const stem = dot > 0 ? dot : initial.length
+        const place = () => input.setSelectionRange(0, stem)
+        input.addEventListener('focus', place)
+        place()
+        requestAnimationFrame(place)
         input.addEventListener('keydown', event => {
           if (event.key === 'Enter' && !event.isComposing) { event.preventDefault(); submit(close) }
         })
@@ -2958,6 +2972,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       state.pendingDraft = null
       if (!file || !state.db) return
       file.draft = draft
+      file.md5 = md5Hex(draft)
       state.lastDraftWrite[file.id] = Date.now()
       setSync('saving')
       void saveDraft(state.db, file.id, draft).then(() => {
@@ -3011,6 +3026,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     const file = current()
     if (!file || !state.db) return
     file.draft = ''
+    file.md5 = md5Hex('')
     write().value = ''
     state.dirty = false
     await commit('manual')
@@ -3072,8 +3088,8 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       </section>
       <section class="np-section" data-tab="appearance">
         ${sw('defaultView', copy.openAs, copy.openAsHint, [
-          { value: 'rendered', label: copy.rendered },
           { value: 'source', label: copy.source },
+          { value: 'rendered', label: copy.rendered },
         ])}
         ${sw('theme', copy.windowTheme, copy.windowThemeHint, [
           { value: 'dark', label: copy.dark },
@@ -3154,8 +3170,8 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
           { value: 'false', label: copy.autoSaveOff },
         ],
         defaultView: [
-          { value: 'rendered', label: copy.rendered },
           { value: 'source', label: copy.source },
+          { value: 'rendered', label: copy.rendered },
         ],
         theme: [
           { value: 'dark', label: copy.dark },
@@ -3463,7 +3479,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
               }
               write().value = version.markdown
               const live = current()
-              if (live) live.draft = version.markdown
+              if (live) { live.draft = version.markdown; live.md5 = md5Hex(version.markdown) }
               void commit('restore').then(() => { closePreview(); render() }).catch(showError)
             },
             setup: el => { note = el.querySelector('.np-restore-note') },
@@ -3703,7 +3719,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
         rect = { left: box.right - 28, top: box.top, right: box.right, bottom: box.bottom, width: 28, height: box.height }
       }
     }
-    const raw = openNanoMenu({ anchor: rect, width: 160, theme: resolvedTheme(), z: NP_PORTAL_Z, items })
+    const raw = openNanoMenu({ anchor: rect, width: 160, gap: menuGap(), theme: resolvedTheme(), z: NP_PORTAL_Z, items })
     closeMenu = () => raw.close()
   }
 
@@ -3726,7 +3742,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       { id: 'all', label: `${copy.kindAll ?? copy.kindFilter}${current === null ? ' ✓' : ''}`, run: () => { state.ui.kindFilter = null; render() } },
       ...KINDS.map(k => ({ id: k, label: `${copy.kinds[k] ?? k}${current === k ? ' ✓' : ''}`, run: () => { state.ui.kindFilter = k; render() } })),
     ]
-    const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), width: 160, theme: resolvedTheme(), z: NP_PORTAL_Z, items })
+    const raw = openNanoMenu({ anchor: anchor.getBoundingClientRect(), width: 160, gap: menuGap(), theme: resolvedTheme(), z: NP_PORTAL_Z, items })
     closeMenu = () => raw.close()
   }
 
@@ -3758,25 +3774,39 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     })
   }
 
-  /** Row ⋯ menu: rename/delete live inside so the row itself stays at two icon buttons. */
-  function openNodeMenu(id, anchor) {
+  /** Row menu, from the ⋯ button or a right-click. `point` opens it at the pointer. */
+  function openNodeMenu(id, anchor, point) {
     const node = state.nodes.find(item => item.id === id)
     if (!node || !state.db) return
     closeMenu?.()
     const copy = text()
+    const file = node.kind === 'file'
+    const fileOps = [
+      { id: 'rename', label: copy.rename, run: () => renameAsked(node) },
+      ...(file ? [
+        { id: 'copy-rel', label: copy.fxMenuRelPath ?? '复制相对路径', run: () => void copyPath(id) },
+        { id: 'export', label: copy.fxMenuExport ?? '导出', run: () => void exportFile(id) },
+      ] : []),
+      { id: 'delete', label: copy.delete, tone: 'danger', run: () => requestDelete(id) },
+    ]
+    const fxOps = file ? [
+      { id: 'kind', label: `${copy.kindMenu}${node.cat ? ` · ${copy.kinds[node.cat] ?? node.cat}` : ''}`, run: () => openKindMenu(id, anchor) },
+      ...(node.cat === 'draft' && node.draftStatus !== 'accepted' ? [{ id: 'accept-draft', label: copy.acceptDraftTitle, run: () => requestAcceptDraft(id) }] : []),
+      ...(node.cat === 'draft' ? [{ id: 'reject-draft', label: `${copy.rejectDraftTitle}${Number.isInteger(node.rejectCount) && node.rejectCount > 0 ? ` (×${node.rejectCount})` : ''}`, tone: 'danger', run: () => requestRejectDraft(id) }] : []),
+    ] : []
+    /* Knowledge-base actions land here. An empty group draws no rule. */
+    const knowledgeOps = []
+    const items = []
+    for (const group of [fileOps, fxOps, knowledgeOps]) {
+      if (group.length === 0) continue
+      if (items.length > 0) items.push({ id: `sep-${items.length}`, separator: true })
+      items.push(...group)
+    }
+    const anchorRect = point
+      ? { left: point.x, top: point.y, right: point.x, bottom: point.y, width: 0, height: 0 }
+      : anchor.getBoundingClientRect()
     const raw = openNanoMenu({
-      anchor: anchor.getBoundingClientRect(), width: 160, theme: resolvedTheme(), z: NP_PORTAL_Z,
-      items: [
-        { id: 'rename', label: copy.rename, run: () => askName(copy.renameTitle, node.name, async name => {
-          const renamed = await renameNode(state.db, node.id, name)
-          Object.assign(node, renamed)
-          render()
-        }) },
-        ...(node.kind === 'file' ? [{ id: 'kind', label: `${copy.kindMenu}${node.cat ? ` · ${copy.kinds[node.cat] ?? node.cat}` : ''}`, run: () => openKindMenu(id, anchor) }] : []),
-        ...(node.cat === 'draft' && node.draftStatus !== 'accepted' ? [{ id: 'accept-draft', label: copy.acceptDraftTitle, run: () => requestAcceptDraft(id) }] : []),
-        ...(node.cat === 'draft' ? [{ id: 'reject-draft', label: `${copy.rejectDraftTitle}${Number.isInteger(node.rejectCount) && node.rejectCount > 0 ? ` (×${node.rejectCount})` : ''}`, tone: 'danger', run: () => requestRejectDraft(id) }] : []),
-        { id: 'delete', label: copy.delete, tone: 'danger', run: () => requestDelete(id) },
-      ],
+      anchor: anchorRect, width: file ? 190 : 160, gap: menuGap(), theme: resolvedTheme(), z: NP_PORTAL_Z, items,
     })
     closeMenu = () => raw.close()
   }
@@ -3906,14 +3936,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       void persistUi()
     }
     if (action === 'new-folder') void add('folder').catch(showError)
-    if (action === 'rename' && state.ui.currentId) {
-      const node = state.nodes.find(item => item.id === state.ui.currentId)
-      if (node && state.db) askName(text().renameTitle, node.name, async name => {
-        const renamed = await renameNode(state.db, node.id, name)
-        Object.assign(node, renamed)
-        render()
-      })
-    }
+    if (action === 'rename' && state.ui.currentId) renameAsked(state.nodes.find(item => item.id === state.ui.currentId))
     if (action === 'delete') confirmClearUnpinned()
     if (action === 'clear-file') confirmClearFile()
     /* The status chip replaces the old footer Save button: one click flushes
@@ -3923,8 +3946,13 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       state.view = state.view === 'rendered' ? 'source' : 'rendered'
       void renderBody()
     }
+    if (action === 'toggle-wrap') {
+      state.ui.wordWrap = state.ui.wordWrap === false
+      applyWrap()
+      void persistUi()
+      return
+    }
     if (action === 'export-file') void exportFile()
-    if (action === 'more-menu') { openMoreMenu(target); return }
     if (action === 'history') void openHistory().catch(showError)
     if (action === 'dismiss-error' || action === 'keep-mine') must(panel, '.np-error').hidden = true
     if (action === 'load-remote' && state.db) {
@@ -4113,11 +4141,29 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     }
     const row = target.closest('[data-id]')
     const id = row?.dataset.id
+    if (id && event.detail > 1) return
     if (id) {
       const node = state.nodes.find(item => item.id === id)
       if (node?.kind === 'file') openFile(id)
       else { state.ui.currentId = id; render() }
     }
+  })
+  panel.addEventListener('dblclick', event => {
+    const hit = event.target instanceof Element ? event.target : null
+    if (!hit || hit.closest('[data-pin], [data-move], [data-more], [data-caret]')) return
+    const row = hit.closest('.np-node[data-kind="file"] [data-id]')
+    if (!row) return
+    event.preventDefault()
+    renameAsked(state.nodes.find(item => item.id === row.dataset.id))
+  })
+  panel.addEventListener('contextmenu', event => {
+    const hit = event.target instanceof Element ? event.target : null
+    const row = hit?.closest('.np-node[data-kind="file"]')
+    if (!row) return
+    const id = row.querySelector('[data-id]')?.dataset.id
+    if (!id) return
+    event.preventDefault()
+    openNodeMenu(id, row, { x: event.clientX, y: event.clientY })
   })
   /* Keep per-file JSON fold state in sync: toggling a <details> updates the
      file's collapsed path set, so re-renders preserve the user's folds. */
@@ -4545,6 +4591,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
         await saveDraft(state.db, node.id, String(content ?? ''))
         if (node.sourcePath !== undefined) await updateNodeMeta(state.db, node.id, { sourcePath: node.sourcePath })
         node.draft = String(content ?? '')
+        node.md5 = md5Hex(node.draft)
       }
       openFile(node.id)
       /* openFile renders before node.draft lands; repaint both views once the
@@ -4782,6 +4829,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
 
   void openDatabase().then(async db => {
     state.db = db
+    await stampContentMd5(db)
     const snapshot = await loadSnapshot(db)
     state.nodes = snapshot.nodes
     state.settings = { ...defaults, ...snapshot.settings }

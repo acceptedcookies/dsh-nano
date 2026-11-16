@@ -1,5 +1,7 @@
 /** Browser database for the notepad. One origin, one database. */
 
+import { md5Hex } from './md5.js'
+
 export const DB_NAME = 'dsh-nano-notepad'
 /* v4 adds the `sync` store (cloud cursor + outbox). Existing v3 databases keep
    every note; onupgradeneeded only creates the new store. */
@@ -14,7 +16,7 @@ export const DEFAULT_SETTINGS = {
   versionLimit: 50,
   imageLimitBytes: 5 * 1024 * 1024,
   editorFontSizePx: 14,
-  defaultView: 'rendered',
+  defaultView: 'source',
   theme: 'system',
   chromeStyle: 'mac',
   followApp: true,
@@ -26,7 +28,7 @@ export const DEFAULT_SETTINGS = {
   cloudMotion: 'b',
   /* fx 处理只暴露精选模型；业主可在「设置 → fx」勾选。当前精选只有 flash。 */
   fxModels: ['deepseek-official~deepseek-flash'],
-  settingsVersion: 2,
+  settingsVersion: 3,
 }
 
 const IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp'])
@@ -45,7 +47,7 @@ export function normalizeSettings(config) {
     return value
   }
   /* schema v2: default commit interval 1h; migrate old default 60 → 3600 */
-  const legacy = source.settingsVersion !== 2 && source.commitIntervalSec === 60
+  const legacy = (source.settingsVersion == null || source.settingsVersion < 2) && source.commitIntervalSec === 60
   /* 旧版默认三模型（业主已要求只保留 flash）→ 迁移回单一默认；显式其他选择保留。 */
   const LEGACY_FX_DEFAULT = [
     'deepseek-official~deepseek-flash',
@@ -65,7 +67,8 @@ export function normalizeSettings(config) {
     versionLimit: number('versionLimit', DEFAULT_SETTINGS.versionLimit, 5, 500),
     imageLimitBytes: number('imageLimitBytes', DEFAULT_SETTINGS.imageLimitBytes, 256 * 1024, 20 * 1024 * 1024),
     editorFontSizePx: number('editorFontSizePx', DEFAULT_SETTINGS.editorFontSizePx, 10, 32),
-    defaultView: source.defaultView === 'source' ? 'source' : 'rendered',
+    /* v3：纯文本优先。v2 及更早把缺省写成预览，那是旧默认，不是业主选过的值。 */
+    defaultView: source.settingsVersion === 3 && source.defaultView === 'rendered' ? 'rendered' : 'source',
     theme: source.theme === 'light' || source.theme === 'dark' ? source.theme : 'system',
     chromeStyle: source.chromeStyle === 'windows' ? 'windows' : 'mac',
     followApp: source.followApp !== false,
@@ -77,7 +80,7 @@ export function normalizeSettings(config) {
     s3IntervalSec: number('s3IntervalSec', DEFAULT_SETTINGS.s3IntervalSec, 10, 300),
     cloudMotion: ['a', 'b', 'c'].includes(source.cloudMotion) ? source.cloudMotion : DEFAULT_SETTINGS.cloudMotion,
     fxModels: fxModels.length ? fxModels : DEFAULT_SETTINGS.fxModels,
-    settingsVersion: 2,
+    settingsVersion: 3,
   }
 }
 
@@ -274,6 +277,7 @@ export function sanitizeNodes(rows) {
     node.parentId = typeof node.parentId === 'string' ? node.parentId : null
     node.workspaceId = typeof node.workspaceId === 'string' ? node.workspaceId : null
     if (typeof node.draft !== 'string') node.draft = node.kind === 'file' ? '' : undefined
+    if (node.kind === 'file') node.md5 = typeof node.md5 === 'string' && /^[a-f0-9]{32}$/.test(node.md5) ? node.md5 : md5Hex(node.draft ?? '')
     /* five-kind corpus fields (fx pipeline): cat ∈ prompt|note|draft|
        knowledge|memory on file nodes; machine artifacts carry lineage. */
     if (typeof node.cat === 'string' && ['prompt', 'note', 'draft', 'knowledge', 'memory'].includes(node.cat)) {
@@ -294,6 +298,29 @@ export function sanitizeNodes(rows) {
     clean.push(node)
   }
   return clean
+}
+
+/** Fill a missing or stale content md5 on every file and every stored version. */
+export async function stampContentMd5(db) {
+  const transaction = db.transaction(['nodes', 'versions'], 'readwrite')
+  const nodeStore = transaction.objectStore('nodes')
+  const versionStore = transaction.objectStore('versions')
+  const nodes = await requestToPromise(nodeStore.getAll())
+  const versions = await requestToPromise(versionStore.getAll())
+  for (const node of nodes) {
+    if (node.kind !== 'file') continue
+    const digest = md5Hex(typeof node.draft === 'string' ? node.draft : '')
+    if (node.md5 === digest) continue
+    node.md5 = digest
+    nodeStore.put(node)
+  }
+  for (const version of versions) {
+    const digest = md5Hex(typeof version.markdown === 'string' ? version.markdown : '')
+    if (version.md5 === digest) continue
+    version.md5 = digest
+    versionStore.put(version)
+  }
+  await transactionDone(transaction)
 }
 
 /** @param {IDBDatabase} db */
@@ -336,7 +363,7 @@ export async function createNode(db, kind, parentId, name, workspaceId = null, o
     name: finalName,
     createdAt: now,
     updatedAt: now,
-    ...(kind === 'file' ? { draft: '' } : {}),
+    ...(kind === 'file' ? { draft: '', md5: md5Hex('') } : {}),
   }
   const transaction = db.transaction('nodes', 'readwrite')
   transaction.objectStore('nodes').put(node)
@@ -555,16 +582,19 @@ export async function commitVersion(db, fileId, markdown, reason, limit) {
     transaction.abort()
     return null
   }
+  const digest = md5Hex(markdown)
   const version = {
     id: crypto.randomUUID(),
     fileId,
     createdAt: Date.now(),
     reason,
     markdown,
+    md5: digest,
     imageIds: imageIdsIn(markdown),
   }
   versionStore.put(version)
   node.draft = markdown
+  node.md5 = digest
   node.updatedAt = version.createdAt
   nodeStore.put(node)
   const kept = [...rows, version].sort((left, right) => left.createdAt - right.createdAt)
@@ -612,11 +642,13 @@ export async function saveDraft(db, fileId, draft) {
     transaction.abort()
     throw new Error('notepad file no longer exists')
   }
-  if (node.draft === draft) {
+  const digest = md5Hex(draft)
+  if (node.draft === draft && node.md5 === digest) {
     transaction.abort()
     return node
   }
   node.draft = draft
+  node.md5 = digest
   node.updatedAt = Date.now()
   store.put(node)
   await transactionDone(transaction)
@@ -756,6 +788,7 @@ export async function applyRemoteFiles(db, remotes) {
     if (remote.parentId !== undefined) node.parentId = remote.parentId
     if (remote.workspaceId !== undefined) node.workspaceId = remote.workspaceId
     node.draft = remote.draft ?? ''
+    node.md5 = md5Hex(node.draft)
     node.updatedAt = remote.updatedAt ?? Date.now()
     store.put(node)
   }

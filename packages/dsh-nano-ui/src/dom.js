@@ -6,7 +6,7 @@
 import React from 'react'
 import { createRoot } from 'react-dom/client'
 import { NanoDialog } from './dialog.js'
-import { NanoMenu } from './menu.js'
+import { NanoMenu, menuHeight } from './menu.js'
 
 /**
  * Open a NanoDialog. Returns a `close()` that unmounts and removes the portal host.
@@ -141,7 +141,7 @@ export function openNanoMenu(options) {
   const up = options.direction === 'up'
   const estimatedHeight = Math.min(
     options.maxHeight ?? Number.POSITIVE_INFINITY,
-    (options.items?.length ?? 0) * 28 + 8,
+    menuHeight(options.items ?? []),
   )
   const anchorTop = r.top !== undefined ? r.top : (r.y ?? 0)
   const y = up

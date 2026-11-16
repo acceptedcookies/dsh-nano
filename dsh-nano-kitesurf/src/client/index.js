@@ -34,6 +34,25 @@ const KIND = 'kitesurf'
 const OWN_ID = 'nano-kitesurf'
 const CAPTURE_HEIGHT = 800
 const MAX_PINS = 8
+const PLANE_LABEL = { container: '容器', engine: '引擎', page: '页面', dom: 'DOM', bridge: '桥' }
+const LAMP_PLANES = ['container', 'engine', 'page', 'dom', 'bridge']
+
+/** Rows for the lamp. Identity is planes[id], not a second boolean and not the Chinese label. */
+function planeRows(snap) {
+  const planes = snap?.planes
+  if (!planes || typeof planes !== 'object') return []
+  return LAMP_PLANES.filter((id) => planes[id]).map((id) => {
+    const row = planes[id]
+    const skipped = row.state === 'skipped' || row.skipped === true
+    return {
+      plane: id,
+      label: PLANE_LABEL[id] || id,
+      ok: row.ok === true,
+      skipped,
+      detail: row.detail || row.url || row.state || '',
+    }
+  })
+}
 
 const perfReview = ensurePerfReview()
 perfReview.configure({ hostSnapshotUrl: '/nano-local-sandbox/perf-review/host?mode=snapshot' })
@@ -348,6 +367,7 @@ function selectRadio(group, value) {
 
 function BrowserPane({ copy, languageOf, schemeOf }) {
   const [status, setStatus] = React.useState(null)
+  const statusDown = status != null && (status.ok === false || status.ready === false)
   const [pageUrl, setPageUrl] = React.useState('')
   const [draftUrl, setDraftUrl] = React.useState('')
   const [history, setHistory] = React.useState([])
@@ -1139,10 +1159,10 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
     await run(async () => {
       try {
         const response = await post(RECOVER, {})
-        const after = await refreshStatus()
-        if (after?.ok !== false) await reloadShot(0, { keepPick: true })
-        else if (response?.ports) showToast(`${copy.prepareFailed}`)
-        else showToast(copy.prepareDone)
+        await refreshStatus()
+        if (response?.v != null && response.v !== 1) showToast('观察合同不匹配')
+        else if (response?.ready === true) await reloadShot(0, { keepPick: true })
+        else showToast(copy.prepareNotReady || copy.prepareFailed)
       } catch (cause) {
         showError(cause)
       }
@@ -1293,11 +1313,20 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
     const [note, setNote] = React.useState('')
     React.useEffect(() => {
       let alive = true
-      fetch(PORTS).then((r) => r.json()).then((data) => { if (alive) setSnap(data) }).catch(() => {})
-      // Deep probe on open: the panel must show per-plane health, not just the
-      // cheap container/engine poll.
-      fetch(DIAGNOSTICS).then((r) => r.json()).then((data) => { if (alive) setDiag(data) }).catch(() => {})
-      return () => { alive = false }
+      let seen = null
+      const load = () => fetch(PORTS).then((r) => r.json()).then((data) => {
+        if (!alive || !data) return
+        const sig = `${data.v ?? ''}:${data.epoch ?? ''}:${data.ready ?? ''}`
+        if (sig === seen) return
+        seen = sig
+        setSnap(data)
+      }).catch(() => {})
+      load()
+      const period = () => (document.visibilityState === 'hidden' ? 12000 : 1500)
+      let timer = window.setInterval(load, period())
+      const onVis = () => { clearInterval(timer); timer = window.setInterval(load, period()); if (document.visibilityState !== 'hidden') load() }
+      document.addEventListener('visibilitychange', onVis)
+      return () => { alive = false; clearInterval(timer); document.removeEventListener('visibilitychange', onVis) }
     }, [])
     async function prepare() {
       setBusyLocal(true); setNote(copy.preparingEnv)
@@ -1310,9 +1339,10 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
         setSnap(ports)
         if (Array.isArray(result.summary)) setDiag(result)
         // Never say "ready" when a plane failed — name the failing plane.
-        const failed = Array.isArray(result.summary) ? result.summary.filter((row) => !row.ok && !row.skipped) : []
-        if (!result.ok) setNote(`${copy.prepareFailed}: ${result.errorId || result.error || `HTTP ${response.status}`}`)
-        else if (result.healthy === false || failed.length) setNote(`${copy.prepareNotReady}: ${failed.map((row) => row.label).join(' / ')}`)
+        const failed = planeRows(result).filter((row) => !row.ok && !row.skipped)
+        if (result.planes && result.v !== 1) setNote('观察合同不匹配')
+        else if (!result.ok) setNote(`${copy.prepareFailed}: ${result.errorId || result.error || `HTTP ${response.status}`}`)
+        else if (result.ready !== true) setNote(`${copy.prepareNotReady}: ${failed.map((row) => row.plane || row.label).join(' / ')}`)
         else setNote(result.action === 'noop' ? copy.prepareDone : `${copy.prepareDone} · ${result.action}`)
         await refreshStatus()
         await reloadShot(0, { keepPick: true }).catch(() => {})
@@ -1337,17 +1367,16 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
     const engine = snap?.effective?.httpBase || '—'
     const container = snap?.container?.state || '—'
     const portRow = snap?.ports?.engine
-      ? `${snap.ports.engine.port} · ${snap.ports.engine.heldBy === 'this-container' ? '本插件容器' : snap.ports.engine.heldBy === 'other' ? '被其他程序占用' : '空闲'}`
+      ? `${snap.ports.engine.port} · ${snap.ports.engine.heldBy === 'this-container' ? '本插件容器' : '空闲'}`
       : '—'
-    // /ports is deep now, and after a prepare the recover snapshot (diag) is
-    // authoritative. Never let the badge say OK while a row is ✗.
-    const rows = Array.isArray(diag?.summary) ? diag.summary : []
-    const rowsOk = rows.every((row) => row.ok === true || row.skipped === true)
-    const healthy = (typeof diag?.healthy === 'boolean' ? diag.healthy : snap?.healthy === true) && rowsOk
+    // The badge reads planes and ready. It does not recompute ready from rows.
+    const contractMismatch = snap != null && snap.v !== 1
+    const rows = planeRows(snap)
+    const healthy = !contractMismatch && snap?.ready === true
     return h('div', { className: 'nks-env', 'data-nks-env': '1' },
       h('div', { className: 'nks-env-title' }, copy.envTitle,
-        h('span', { className: healthy ? 'nks-env-ok' : 'nks-env-bad' }, healthy ? '● OK' : '● 异常')),
-      h('div', { className: 'nks-env-row' }, h('b', null, copy.envPlugin), h('span', null, status?.buildId || '—')),
+        h('span', { className: healthy ? 'nks-env-ok' : 'nks-env-bad' }, contractMismatch ? '观察合同不匹配' : healthy ? '● OK' : '● 异常')),
+      h('div', { className: 'nks-env-row' }, h('b', null, copy.envPlugin), h('span', null, snap?.buildId || '未知')),
       h('div', { className: 'nks-env-row' }, h('b', null, copy.envEngine), h('span', null, engine)),
       h('div', { className: 'nks-env-row' }, h('b', null, copy.envContainer), h('span', null, container)),
       snap?.containerName ? h('div', { className: 'nks-env-row' }, h('b', null, copy.envInstance), h('span', null, snap.containerName)) : null,
@@ -1975,6 +2004,8 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
         src: `data:${shotMime || 'image/webp'};base64,${shot}`,
         style: { pointerEvents: annotate ? 'none' : 'auto' },
       }) : h('div', { className: 'nks-empty', 'data-nks-empty': '' },
+        // /status always answers ok:true (the call completed); whether the
+        // environment can serve a page is `ready` alone.
         // One container, one column: the old layout rendered an absolutely
         // positioned .nks-start on top of a flex-centred .nks-empty, which
         // painted the opaque Start button straight over the error text
@@ -1983,11 +2014,11 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
         h('div', { className: 'nks-empty-title' },
           busy ? copy.opening
             : status?.engineMismatch === true ? copy.engineMismatch
-            : status?.ok === false ? copy.errorTitle
+            : statusDown ? copy.errorTitle
             : copy.emptyTitle),
-        !busy && status?.ok !== false && !status?.engineMismatch ? h('div', { className: 'nks-empty-body' }, copy.emptyBody) : null,
-        !busy && status?.ok === false && !status?.engineMismatch ? h('div', { className: 'nks-empty-body' }, copy.errorBody) : null,
-        !busy && status?.ok === false ? h('div', { className: 'nks-empty-actions' },
+        !busy && !statusDown && !status?.engineMismatch ? h('div', { className: 'nks-empty-body' }, copy.emptyBody) : null,
+        !busy && statusDown && !status?.engineMismatch ? h('div', { className: 'nks-empty-body' }, copy.errorBody) : null,
+        !busy && statusDown ? h('div', { className: 'nks-empty-actions' },
           // Ordinary users get ONE button: it reconciles phase, adopts or
           // repairs the port, starts/resumes the container and polls health.
           h('button', {
@@ -1999,10 +2030,10 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
           }, status?.kite?.phase === 'running' ? copy.resumeEngine : copy.prepareEnv),
           h('button', { type: 'button', className: 'nks-start-btn', 'data-nks-diagnose': '1', onClick: () => run(() => refreshStatus()) }, copy.retry),
           h('button', { type: 'button', className: 'nks-start-btn', 'data-nks-open-settings': '1', onClick: openSettings }, copy.settings)) : null,
-        !busy && status?.ok !== false && !status?.engineMismatch ? h('div', { className: 'nks-empty-actions' },
+        !busy && !statusDown && !status?.engineMismatch ? h('div', { className: 'nks-empty-actions' },
           h('button', { type: 'button', className: 'nks-empty-link', 'data-nks-try': '1', onClick: () => { setDraftUrl('https://example.com'); run(() => navigate('https://example.com')) } }, copy.emptyTry)) : null,
-        status?.ok === false ? h('div', { className: 'nks-empty-meta' }, `${status?.lastError?.errorId || status?.errorId || 'kitesurf.engine.failed'} · ${status?.httpBase || ''}`) : null,
-        status?.ok === false ? h('div', { className: 'nks-empty-meta' }, status?.lastError?.error || status?.error || '') : null),
+        statusDown ? h('div', { className: 'nks-empty-meta' }, `${status?.lastError?.errorId || status?.errorId || (status?.degraded?.length ? status.degraded.join(' / ') : 'kitesurf.engine.failed')} · ${status?.httpBase || ''}`) : null,
+        statusDown ? h('div', { className: 'nks-empty-meta' }, status?.lastError?.error || status?.error || '') : null),
       overlays.map((box, index) => h('div', {
         key: index,
         className: 'nks-box',

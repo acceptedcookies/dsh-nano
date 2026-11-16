@@ -8,7 +8,7 @@
 4. 有失败调用 → `GET /operations?errorsOnly=true` 取 errorId → 查 `references/error-catalog.md`。
 5. 页面 JS 报错 → `GET /console?level=error,exception`；网络失败 `level=network`；导航漂移 `level=navigation`。
 6. 画面与 API 对不上 → `GET /targets` 确认附着页，重 `POST /shot`。
-7. 引擎起不来 → `kitesurf.kite.start`/`resume`（502，/health 在重试预算内无应答）= 容器未在跑；引擎生命周期归 dsh-nano-local-sandbox，不在本包。
+7. 引擎起不来 → `kitesurf.kite.start`/`resume`（502，引擎 CDP 无应答）= 容器未在跑；引擎生命周期归 dsh-nano-local-sandbox，不在本包。
 8. 要复现 → `POST /evaluate` 注入 `console.log`/改 DOM，再 `/shot` 看效果。
 
 宿主日志：`~/Library/Logs/dsh-dev-web.err.log`（dsh-dev.local）；桥健康 `GET http://127.0.0.1:<mcpPort>/health`。

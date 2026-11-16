@@ -68,7 +68,9 @@ test('a container whose published ports drifted is deleted and recreated', async
   const { box } = registry()
   const first = await box.ensure({ sessionId: 'a', policy: { mode: 'read-only', workspaceRoot: '/a', extraRoots: [] } })
   const second = await box.ensure({ sessionId: 'b', policy: { mode: 'read-only', workspaceRoot: '/b', extraRoots: [] } })
-  assert.notEqual(first.instance.endpoints.engine, second.instance.endpoints.engine)
+  assert.equal(first.instance.endpoints.engine, null)
+  assert.equal(second.instance.endpoints.engine, null)
+  assert.equal(Object.hasOwn(first.instance.endpoints, 'terminal'), false)
   assert.notEqual(first.instance.instanceId, second.instance.instanceId)
 })
 
@@ -83,12 +85,24 @@ test('a remap onto an occupied host port must NOT delete the working container',
 
 test('when the requested port is busy but the container still owns its own port, adopt it', async () => {
   const { box } = registry()
-  const created = await box.ensure({ sessionId: 's', policy: { mode: 'read-only', workspaceRoot: '/work', extraRoots: [] } })
+  const created = await box.ensure({
+    sessionId: 's',
+    policy: { mode: 'read-only', workspaceRoot: '/work', extraRoots: [] },
+    adopt: {
+      skipCreate: true,
+      containerName: 'kitesurf-dev',
+      endpoints: {
+        engine: 'http://127.0.0.1:8800',
+        cdp: 'ws://127.0.0.1:8800/devtools/browser',
+        mcp: 'ws://127.0.0.1:8801/mcp',
+      },
+    },
+  })
   box.reconcile(created.instance.instanceId, { healthy: true })
   assert.equal(created.instance.phase, 'running')
-  assert.equal(typeof created.instance.endpoints.engine, 'string')
-  assert.equal(created.instance.endpoints.engine.startsWith('http://127.0.0.1:'), true)
-  assert.notEqual(created.instance.endpoints.cdp, created.instance.endpoints.mcp)
+  assert.equal(created.instance.containerName, 'kitesurf-dev')
+  assert.equal(created.instance.endpoints.engine, 'http://127.0.0.1:8800')
+  assert.equal(Object.hasOwn(created.instance.endpoints, 'terminal'), false)
   assert.equal(box.instances.size, 1)
 })
 

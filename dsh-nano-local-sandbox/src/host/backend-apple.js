@@ -143,5 +143,48 @@ export function createAppleBackend(spec = {}, io = {}) {
     capabilities() {
       return capabilityReport()
     },
+    openPty(containerName, opts = {}) {
+      return spawnContainerPty(containerName, opts, bound)
+    },
   }
+}
+
+const PTY_PY = `
+import os, pty, select, sys, struct, fcntl, termios
+cmd = sys.argv[1:]
+cols = int(os.environ.get("DNLS_COLS", "80"))
+rows = int(os.environ.get("DNLS_ROWS", "24"))
+pid, fd = pty.fork()
+if pid == 0:
+    os.execvp(cmd[0], cmd)
+winsz = struct.pack("HHHH", rows, cols, 0, 0)
+fcntl.ioctl(fd, termios.TIOCSWINSZ, winsz)
+while True:
+    ready, _, _ = select.select([fd, sys.stdin], [], [])
+    if fd in ready:
+        try:
+            data = os.read(fd, 4096)
+        except OSError:
+            break
+        if not data:
+            break
+        os.write(sys.stdout.fileno(), data)
+    if sys.stdin in ready:
+        data = os.read(sys.stdin.fileno(), 4096)
+        if not data:
+            break
+        os.write(fd, data)
+`
+
+/** PTY inside the named container. `io.spawnPty` is the test seam. */
+export function spawnContainerPty(containerName, { cols = 80, rows = 24 } = {}, io = {}) {
+  const argv = ['container', 'exec', '-it', String(containerName), '/bin/sh']
+  if (typeof io.spawnPty === 'function') return io.spawnPty(argv, { cols, rows })
+  if (io.calls) io.calls.spawn += 1
+  const child = spawn('python3', ['-c', PTY_PY, ...argv], {
+    stdio: ['pipe', 'pipe', 'pipe'],
+    env: { ...process.env, DNLS_COLS: String(cols), DNLS_ROWS: String(rows) },
+  })
+  child.resize = () => {}
+  return child
 }

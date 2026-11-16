@@ -26,10 +26,13 @@
       "src/host/error-catalog.js",
       "src/host/instance-registry.js",
       "src/host/mcp-sandbox.js",
+      "src/host/observe.js",
       "src/host/policy-adapter.js",
       "src/host/profile-registry.js",
       "src/host/routes.js",
       "src/host/state-service.js",
+      "src/host/term-bridge.js",
+      "src/host/term-ws.js",
       "src/host/terminal-driver.js",
       "src/host/yaml.js"
     ],

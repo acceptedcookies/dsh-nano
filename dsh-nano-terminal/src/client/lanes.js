@@ -206,25 +206,29 @@ export class McpLane {
   #wsUrl(result) {
     const raw = result.attach?.url
     if (!raw) throw new Error('attach.url missing')
-    const absolute = /^(ws|wss|http|https):/.test(raw)
-      ? raw
-      : new URL(raw, (globalThis.__DSH_TRANSPORT__?.streamBaseUrl ? new URL(globalThis.__DSH_TRANSPORT__.streamBaseUrl).origin : location.origin)).toString()
-    const attach = absolute
-    const wsUrl = new URL(attach)
-    wsUrl.searchParams.set('session', this.id)
-    wsUrl.protocol = wsUrl.protocol === 'https:' ? 'wss' : 'ws'
-    return wsUrl
+    if (!/^(ws|wss):/.test(raw)) throw new Error('attach.url must be an absolute ws or wss URL')
+    return new URL(raw)
   }
 
-  /** Attach WS + reconnect with backoff (hc 2s→4s→…→30s, gives up after ~5m). */
+  /** Attach once. A dropped socket may be retried a single time, without replaying writes. */
   #connect(first) {
-    this.attempt = first ? 0 : (this.attempt ?? 0) + 1
+    clearTimeout(this.reconnectTimer)
+    this.reconnectTimer = null
+    if (first) {
+      this.retried = false
+      this.exited = false
+    } else this.retried = true
+    const previous = this.ws
+    if (previous) {
+      previous.onclose = null
+      try { previous.close() } catch { /* replaced */ }
+    }
     return new Promise((resolve, reject) => {
       const ws = new WebSocket(this.wsUrl.toString())
       ws.binaryType = 'arraybuffer'
       this.ws = ws
       const timer = setTimeout(() => reject(new Error('attach timeout')), 10_000)
-      ws.onopen = () => ws.send(JSON.stringify({ type: 'open', session: this.id, v: 2 }))
+      ws.onopen = () => ws.send(JSON.stringify({ type: 'open', session: this.id }))
       ws.onmessage = (ev) => {
         if (typeof ev.data === 'string') {
           let msg
@@ -238,6 +242,8 @@ export class McpLane {
             clearTimeout(timer)
             reject(new Error(msg.message))
           } else if (msg.type === 'exit') {
+            this.exited = true
+            clearTimeout(this.reconnectTimer)
             this.onExit(msg)
           }
           return
@@ -246,14 +252,16 @@ export class McpLane {
       }
       ws.onerror = () => { clearTimeout(timer); reject(new Error('websocket error')) }
       ws.onclose = () => {
-        if (this.closed) return
-        // auto-reconnect on transport loss: the terminal object survives on
-        // the remote host — only the socket died. ~5m cap before giving up.
-        const delay = Math.min(30_000, 2000 * 2 ** Math.min(this.attempt ?? 0, 4))
+        if (this.closed || this.exited || this.ws !== ws) return
+        if (this.retried) {
+          this.onExit({ reason: 'reconnect-failed' })
+          return
+        }
+        clearTimeout(this.reconnectTimer)
         this.reconnectTimer = setTimeout(() => {
-          if (this.closed) return
+          if (this.closed || this.exited) return
           this.#connect(false).catch(() => { this.onExit({ reason: 'reconnect-failed' }) })
-        }, delay)
+        }, 2000)
       }
     })
   }

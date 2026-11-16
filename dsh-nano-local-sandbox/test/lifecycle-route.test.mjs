@@ -49,6 +49,10 @@ test('kite suspend and resume follow the running session and history stays off w
   // rather than the old hard-coded ok:true.
   assert.equal(selftest.body.total, 11)
   assert.equal(selftest.body.checks.length, 11)
-  assert.equal(selftest.body.ok, selftest.body.failed === 0)
+  assert.equal(selftest.body.ok, true)
+  assert.equal(selftest.body.passed, false)
   assert.equal(selftest.body.failed > 0, true)
+  assert.equal(selftest.body.v, 1)
+  assert.equal(Array.isArray(selftest.body.degraded), true)
+  assert.equal(selftest.body.snapshot?.v, 1)
 })

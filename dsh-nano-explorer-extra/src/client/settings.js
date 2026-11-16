@@ -2,7 +2,7 @@
 
 import React from 'react'
 import { Switch } from '@deepseek-ai/dsh-client-ui-primitives'
-import { NanoDialog } from 'dsh-nano-ui'
+import { Dialog } from './dialogs.js'
 import { DEFAULT_PREFS } from './prefs.js'
 
 /**
@@ -31,7 +31,7 @@ function Row({ label, hint, checked, onChange, warn }) {
 export function SettingsDialog({ copy, open, prefs, setPref, onClose }) {
   if (!open) return null
   const bothOff = prefs.openPreviewOnClick === false && prefs.openPreviewOnDoubleClick === false
-  return React.createElement(NanoDialog, {
+  return React.createElement(Dialog, {
     copy, title: copy.settingsTitle, description: copy.settingsDescription,
     maxHeight: 520, onCancel: onClose, onConfirm: onClose,
   },

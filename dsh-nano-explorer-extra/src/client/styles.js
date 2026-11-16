@@ -12,7 +12,6 @@ export const STYLE = `${NANO_STYLES}
   position: relative;
 }
 [data-nxe] .nxe-tree button { font-size: 13px; line-height: 18px; }
-[data-nxe] .nxe-tree [data-files-path] { font-size: 13px; }
 
 /* Git status palette: DSH has no Git semantic colors, so this plugin owns them,
    with a separately tuned value per theme rather than one value at two opacities. */
@@ -52,7 +51,6 @@ export const STYLE = `${NANO_STYLES}
 .nxe-tool:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary, var(--dsw-alias-link)); outline-offset: 1px; }
 
 .nxe-tree { flex: 1; min-height: 0; overflow: auto; padding: 4px 8px 4px 16px; }
-.nxe-tree [data-custom-tree] { height: auto; }
 
 .nxe-row-note { padding: 8px 12px; font-size: 12px; color: var(--dsw-alias-label-secondary); }
 
@@ -180,8 +178,10 @@ export const STYLE = `${NANO_STYLES}
   font: inherit; font-variant-numeric: tabular-nums; padding: 1px 8px; border-radius: var(--dsw-radius-sm);
 }
 
-/* Dialog body: the card material, the mask and the action row all come from the shared dialog. */
-.nxe-dialog-body { display: contents; }
+/* Dialog content: the card material, the mask, and the action row all come from the shared dialog.
+   The card is a window overlay inside this page's own layer (DESIGN.md §5), so it inherits the pane's
+   theme and stacking; the layer is only a containing block and never takes a pointer event. */
+.nxe-dialog-layer { position: absolute; inset: 0; pointer-events: none; }
 .nxe-dialog-note-inline { color: var(--dsw-alias-label-tertiary); }
 .nxe-move-countdown { margin: 8px 0 0; font-size: 12px; color: var(--dsw-alias-label-secondary); }
 .nxe-dialog-error { margin: 8px 0 0; font-size: 12px; color: var(--dsw-alias-state-error-primary); }
@@ -194,10 +194,6 @@ export const STYLE = `${NANO_STYLES}
 .nxe-settings-label { font-size: 13px; color: var(--dsw-alias-label-primary); }
 .nxe-settings-hint { margin-top: 2px; font-size: 11px; color: var(--dsw-alias-label-tertiary); }
 .nxe-warn { margin: 0; padding: 8px; border: .5px solid var(--dsw-alias-state-warn-primary); border-radius: var(--dsw-radius-sm); font-size: 12px; color: var(--dsw-alias-label-secondary); }
-
-@media (hover: hover) {
-  .nxe-tree [data-custom-tree] button:hover .nxe-open { display: inline-flex; }
-}
 
 /* A changed row cannot be tinted from here: the shared tree owns its row markup and hands the
    plugin only the accessory seat, so the marks below carry the status (DESIGN.md §8). */
@@ -327,26 +323,17 @@ export const STYLE = `${NANO_STYLES}
 }
 .nxe-gear:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary, var(--dsw-alias-link)); outline-offset: 1px; }
 
-/* Source-control cards. The Git palette normally lives on [data-nxe], but these cards are portaled
-   outside that subtree, so they carry the same variables. The confinement layer copies
-   data-nano-scheme onto the card, which selects the dark set. */
+/* Source-control cards. Both are window overlays inside [data-nxe], so they inherit the Git palette
+   (and its dark set) from the page root; only their own layout is declared here. */
 .nxe-scm {
   display: flex; flex-direction: column; gap: 8px; min-width: 0;
-  --nxe-git-modified: #bf8700;
-  --nxe-git-added: #1a7f37;
-  --nxe-git-deleted: #cf222e;
-  --nxe-git-renamed: #0969da;
-  --nxe-git-conflicted: #bc4c00;
-  --nxe-git-untracked: #1a7f37;
 }
-[data-nano-scheme="dark"] .nxe-scm {
-  --nxe-git-modified: #d9a63b;
-  --nxe-git-added: #4ac26b;
-  --nxe-git-deleted: #f85149;
-  --nxe-git-renamed: #58a6ff;
-  --nxe-git-conflicted: #f0883e;
-  --nxe-git-untracked: #3fb950;
-}
+/* The two cards take the pane's full width and rise from its bottom edge: the shared overlay centers
+   its card, and these two align themselves bottom-end inside it. The working-tree card holds one
+   height across filter switches, so a filter change cannot resize it; the repository card follows
+   its content up to the pane. */
+.nxe-dialog-layer .nxe-scm-card { align-self: flex-end; width: 100%; max-width: 100%; min-height: 0; }
+.nxe-dialog-layer .nxe-scm-commit { height: 50vh; }
 .nxe-scm-group { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .nxe-local-head {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
@@ -456,7 +443,7 @@ export const STYLE = `${NANO_STYLES}
   background: color-mix(in oklab, var(--dsw-alias-brand-primary, var(--dsw-alias-link)) 22%, transparent);
 }
 /* The footer's dismissal parks at the left edge; the margin pushes the working actions right. */
-.nano-dialog-card .nxe-drawer-close { margin-right: auto; }
+.nxe-scm-card .nxe-drawer-close { margin-right: auto; }
 .nxe-worktree {
   display: grid; grid-template-columns: 14px minmax(0, 1fr); gap: 6px; align-items: start;
   padding: 3px 4px; border-radius: var(--dsw-radius-sm);
@@ -511,5 +498,4 @@ export const STYLE = `${NANO_STYLES}
   margin: 4px 0 0; font-size: 11px; line-height: 16px;
   color: var(--dsw-alias-state-error-primary);
 }
-.nxe-confined-layer .nano-dialog-content { scrollbar-width: thin; scrollbar-color: var(--dsw-alias-border-l2) transparent; }
 `

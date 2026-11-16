@@ -11,18 +11,6 @@
     ],
     "tracks": [
       {
-        "name": "card-shape",
-        "kind": "mutation"
-      },
-      {
-        "name": "card-follow",
-        "kind": "raf"
-      },
-      {
-        "name": "card-wake",
-        "kind": "mutation"
-      },
-      {
         "name": "git-poll",
         "kind": "interval"
       }
@@ -71,26 +59,6 @@
   ],
   "budgets": [
     {
-      "id": "track.card-follow.callbacks",
-      "scenario": "idle-10s",
-      "subject": "hand.tracks.card-follow.callbacks",
-      "gate": "hard",
-      "rule": {
-        "op": "eq",
-        "limit": 0
-      }
-    },
-    {
-      "id": "track.card-follow.live",
-      "scenario": "idle-10s",
-      "subject": "hand.tracks.card-follow.live",
-      "gate": "hard",
-      "rule": {
-        "op": "eq",
-        "limit": 0
-      }
-    },
-    {
       "id": "track.git-poll.live",
       "scenario": "idle-10s",
       "subject": "hand.tracks.git-poll.live",
@@ -104,40 +72,6 @@
       "id": "track.git-poll.callbacks",
       "scenario": "idle-10s",
       "subject": "hand.tracks.git-poll.callbacks",
-      "gate": "audit",
-      "rule": {
-        "op": "relBaseline",
-        "factor": 2,
-        "floor": 1,
-        "initial": 1
-      }
-    },
-    {
-      "id": "track.card-wake.callbacks",
-      "scenario": "idle-10s",
-      "subject": "hand.tracks.card-wake.callbacks",
-      "gate": "hard",
-      "rule": {
-        "op": "relBaseline",
-        "factor": 2,
-        "floor": 40,
-        "initial": 40
-      }
-    },
-    {
-      "id": "track.card-wake.live",
-      "scenario": "idle-10s",
-      "subject": "hand.tracks.card-wake.live",
-      "gate": "hard",
-      "rule": {
-        "op": "max",
-        "limit": 4
-      }
-    },
-    {
-      "id": "track.card-shape.callbacks",
-      "scenario": "idle-10s",
-      "subject": "hand.tracks.card-shape.callbacks",
       "gate": "audit",
       "rule": {
         "op": "relBaseline",

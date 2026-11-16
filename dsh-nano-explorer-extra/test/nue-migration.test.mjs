@@ -4,7 +4,9 @@
  * NUE1117-T20: the file tree's host rows are no longer styled or probed from here
  * (`:has()`, `data-files-entry`, `data-status`, `[class*=`, `.nxe-menu*`), the three
  * button-as-tabs strips are host `SegmentedControl`, the row menu is the host `Menu`
- * through nano-ui, and the pane's scheme comes from `createThemeScope`.
+ * through nano-ui, the pane's scheme comes from `createThemeScope`, and every card is a
+ * nano-ui window overlay inside this plugin's own layer instead of a rewrite of the
+ * host Modal's portal layer.
  *
  * The scan helpers are guarded by a positive control: a fixture that carries each
  * violation must be reported, so a typo in a pattern cannot turn a zero into a pass.
@@ -33,6 +35,7 @@ const styles = read('src/client/styles.js')
 const drawers = read('src/client/drawers.js')
 const dialogs = read('src/client/dialogs.js')
 const body = read('src/client/body.js')
+const settings = read('src/client/settings.js')
 const menu = read('src/client/menu.js')
 const format = read('src/client/format.js')
 const agents = read('AGENTS.md')
@@ -65,6 +68,42 @@ function nanoUiCalls(files) {
 const exemptMarkers = sources
   .filter(file => file.text.includes('nano-ui-exempt'))
   .map(file => file.path)
+
+/**
+ * Spellings of the retired panel-confined carrier. Each one either rewrote a node this plugin does
+ * not own (the host Modal's portal layer), stood a document-wide observer on `document.body`, or
+ * probed a class / dead host attribute (`.nano-dialog-card`, `data-sidebar-right-pane`).
+ */
+const RETIRED_CARRIER = [
+  { label: 'parentElement', re: /\bparentElement\b/g },
+  { label: 'MutationObserver', re: /\bMutationObserver\b/g },
+  { label: 'nano-dialog-card', re: /\.nano-dialog-card\b/g },
+  { label: 'data-sidebar-right-pane', re: /data-sidebar-right-pane/g },
+  { label: 'usePanelConfinedLayer', re: /\busePanelConfinedLayer\b/g },
+  { label: 'data-nxe-card', re: /\bdata-nxe-card\b/g },
+  { label: 'data-nxe-fill', re: /\bnxeFill\b|\bdata-nxe-fill\b/g },
+  { label: 'nxe-confined-layer', re: /\bnxe-confined-layer\b/g },
+]
+
+/** Which retired carrier spellings these files still carry. */
+function retiredCarrier(files) {
+  return RETIRED_CARRIER
+    .map(rule => ({ label: rule.label, hits: countIn(files, rule.re) }))
+    .filter(rule => rule.hits.length > 0)
+}
+
+/** `createElement(NanoWindowDialog, {…})` sites, and whether each one names its container. */
+function windowDialogCalls(files) {
+  const calls = []
+  for (const file of files) {
+    for (const match of file.text.matchAll(/createElement\(\s*NanoWindowDialog\s*,\s*\{/g)) {
+      const args = file.text.slice(match.index, match.index + 400)
+      // `container: …` or the shorthand `container`; either way the property is present.
+      calls.push({ path: file.path, container: /(^|[{,\s])container\s*(?=[,}:])/.test(args) })
+    }
+  }
+  return calls
+}
 
 test('T20: the source walk reached the client tree', () => {
   assert.ok(sources.length > 10, `expected the client tree, walked ${sources.length} file(s)`)
@@ -163,14 +202,42 @@ test('T20: three button-as-tabs strips are host SegmentedControl', () => {
   assert.match(drawers, /onChange: value => setFilter\(value\)/)
 })
 
-test('T20: dialogs mark their own cards instead of probing plugin classes', () => {
-  assert.deepEqual(countIn(sources, /\[class\*=/g), [])
-  assert.match(dialogs, /querySelector\('\.nano-dialog-card \[data-nxe-card\]'\)/)
-  assert.match(dialogs, /card\.querySelector\('\[data-nxe-card\]'\)/)
-  assert.match(dialogs, /'data-nxe-card': 'true'/)
-  // The two footer cards render NanoDialog directly, so they carry the marker themselves.
-  assert.equal((drawers.match(/'data-nxe-card': 'true'/g) ?? []).length, 2)
-  assert.match(dialogs, /panel\.root\.getAttribute\('data-nano-scheme'\)/)
+test('T20 control: the carrier scan reports a fixture that still confines and probes', () => {
+  const fixture = [{
+    path: 'fixture.js',
+    text: [
+      'const layer = card.parentElement',
+      'new MutationObserver(run).observe(document.body, { childList: true, subtree: true })',
+      "document.querySelector('.nano-dialog-card [data-nxe-card]')",
+      "node.closest('[data-sidebar-right-pane]')",
+      'usePanelConfinedLayer(open)',
+      "card.dataset.nxeFill = '1'",
+      "layer.classList.add('nxe-confined-layer')",
+    ].join('\n'),
+  }]
+  assert.equal(retiredCarrier(fixture).length, RETIRED_CARRIER.length,
+    retiredCarrier(fixture).map(rule => rule.label).join(', '))
+  // The container detector must be able to fail: the same call shape without one is reported.
+  const loose = [{ path: 'fixture.js', text: 'createElement(NanoWindowDialog, { copy, title })' }]
+  assert.deepEqual(windowDialogCalls(loose).map(call => call.container), [false])
+})
+
+test("T20: cards are window overlays in the plugin's own layer, not rewrites of the host portal", () => {
+  assert.deepEqual(retiredCarrier(sources), [], 'a retired carrier spelling came back')
+  // The carrier: one plugin-owned positioned layer, handed to every card through a context.
+  assert.match(dialogs, /import \{ NanoWindowDialog \} from 'dsh-nano-ui'/)
+  assert.match(dialogs, /createContext\(null\)/)
+  assert.match(dialogs, /className: 'nxe-dialog-layer'/)
+  assert.match(dialogs, /createElement\(NanoWindowDialog, \{ \.\.\.props, container \}\)/)
+  assert.match(body, /createElement\(DialogLayer, null,/)
+  assert.match(styles, /\.nxe-dialog-layer\s*\{[^}]*position:\s*absolute[^}]*pointer-events:\s*none/)
+  // The settings card rides the same carrier instead of the main-window Modal.
+  assert.match(settings, /import \{ Dialog \} from '\.\/dialogs\.js'/)
+  assert.equal(/NanoDialog/.test(dialogs + drawers + settings), false, 'a card still uses the main-window Modal')
+  // Every window dialog names the container it draws into; there is no body fallback.
+  const calls = windowDialogCalls(sources)
+  assert.ok(calls.length >= 3, `expected the window dialog call sites, found ${calls.length}`)
+  assert.deepEqual(calls.filter(call => !call.container).map(call => call.path), [], 'a card does not name its container')
 })
 
 test('T20: NanoToast is anchored on the pane', () => {

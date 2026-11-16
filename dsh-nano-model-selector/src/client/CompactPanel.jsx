@@ -95,6 +95,24 @@ export function CompactPanel({ copy, models, onError }) {
     return () => window.clearTimeout(timer)
   }, [banner])
 
+  // Draft-cancel callback and the outside-click listener MUST be declared
+  // before every early return below — a hook that only runs on later renders
+  // throws React invariant #310 and unmounts the whole slot.
+  const cancelEdit = React.useCallback(() => {
+    setEditField(null)
+    setPending(null)
+  }, [])
+  React.useEffect(() => {
+    if (editField === null) return undefined
+    const onPointer = event => {
+      const target = event.target instanceof Element ? event.target : null
+      if (target?.closest?.('.nms-compact-input-num, .nms-compact-confirm, .nms-compact-value')) return
+      cancelEdit()
+    }
+    document.addEventListener('pointerdown', onPointer, true)
+    return () => document.removeEventListener('pointerdown', onPointer, true)
+  }, [editField, cancelEdit])
+
   if (state === null) {
     return <div className="nms-loading"><span className="nms-pending-dot" />{copy.loading}</div>
   }
@@ -177,28 +195,11 @@ export function CompactPanel({ copy, models, onError }) {
       .finally(() => setBusy(false))
   }
 
-  const cancelEdit = React.useCallback(() => {
-    setEditField(null)
-    setPending(null)
-  }, [])
   const activateField = field => {
     setEditField(field)
     setPending(null)
   }
   const stageDraft = (field, raw) => setPending({ field, raw })
-
-  // Anything that is not the number being edited, another number, or the
-  // confirm button discards the draft. Capture phase so it wins over focus.
-  React.useEffect(() => {
-    if (editField === null) return undefined
-    const onPointer = event => {
-      const target = event.target
-      if (target?.closest?.('.nms-compact-input-num, .nms-compact-confirm, .nms-compact-value')) return
-      cancelEdit()
-    }
-    document.addEventListener('pointerdown', onPointer, true)
-    return () => document.removeEventListener('pointerdown', onPointer, true)
-  }, [editField, cancelEdit])
 
   const savedModel = `${policy.model?.provider ?? ''}/${policy.model?.model ?? ''}`
   const choices = flashChoices(models)

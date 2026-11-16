@@ -336,8 +336,12 @@ ${NANO_STYLES}
 .np-fx-out[hidden] { display: none !important; }
 /* 自动换行开关（源编辑 + 高亮镜像同步；横向滚动由既有 scroll 同步）。入口在文件行菜单。 */
 .np-editor[data-wrap="off"] .np-write,
-.np-editor[data-wrap="off"] .np-mirror { white-space: pre; overflow-wrap: normal; word-break: normal; }
-.np-editor[data-wrap="off"] .np-write { overflow-x: auto; }
+.np-editor[data-wrap="off"] .np-mirror,
+.np-editor[data-wrap="off"] .np-read { white-space: pre; overflow-wrap: normal; word-break: normal; }
+.np-editor[data-wrap="off"] .np-write,
+.np-editor[data-wrap="off"] .np-read { overflow-x: auto; }
+.np-wrap { margin-left: auto; }
+.np-wrap[aria-pressed="true"] { background: var(--dsw-alias-interactive-bg-active); color: var(--dsw-alias-label-primary); }
 /* ── fx 处理：窗口右上入口 + 视觉区内 chat 面板（非 modal、非 tab） ── */
 .np-tabs > button.np-fx-entry { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; flex: none; border: 1px solid transparent; border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-interactive-bg-active); color: var(--dsw-alias-label-primary); font: inherit; font-size: var(--np-font-size-sm); font-weight: 600; cursor: pointer; transition: background-color .12s ease, color .12s ease, border-color .12s ease; }
 .np-tabs > button.np-fx-entry:hover { background: var(--dsw-alias-interactive-bg-hover); }
@@ -431,7 +435,7 @@ ${NANO_STYLES}
 .np-toolbar, .np-footer { min-width: 0; }
 .np-toolbar { display: flex; gap: var(--np-gap); align-items: center; padding: 6px var(--np-pad-x); }
 /* native segmented control: hover-gray track + layer-1 thumb sliding by translate */
-.np-switch { flex: none; margin-left: auto; display: inline-grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 2px; position: relative; padding: 4px; border: 0; background: var(--dsw-alias-interactive-bg-hover); border-radius: var(--dsw-radius-md); cursor: pointer; font: inherit; min-width: 148px; }
+.np-switch { flex: none; margin-left: 0; display: inline-grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 2px; position: relative; padding: 4px; border: 0; background: var(--dsw-alias-interactive-bg-hover); border-radius: var(--dsw-radius-md); cursor: pointer; font: inherit; min-width: 148px; }
 .np-switch .np-switch-label { display: inline-flex; align-items: center; justify-content: center; min-width: 0; height: 28px; padding: 0 14px; font-size: var(--np-font-size); font-weight: 500; color: var(--dsw-alias-label-secondary); z-index: 0; }
 /* Three-segment controls (sync motion) need a wider track and tighter labels. */
 .np-switch[data-segments="3"] { min-width: 186px; }
@@ -955,7 +959,7 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     <div class="np-body">
       <aside class="np-tree"><div class="np-tree-head"><div class="np-ws"><button type="button" class="np-ws-btn" data-action="ws-toggle" aria-haspopup="listbox" aria-expanded="false"><span class="np-ws-label"></span><span class="np-ws-caret" aria-hidden="true">${CHEVRON_ICON}</span></button></div><button type="button" class="np-kind" data-action="kind-filter" data-i18n="kindFilter" data-i18n-mode="title"><span class="np-kind-label"></span><span class="np-kind-caret" aria-hidden="true">${CHEVRON_ICON}</span></button><span class="np-tree-tools"><button type="button" data-action="tree-settings" data-i18n="settings" data-i18n-mode="title" aria-haspopup="menu">${SETTINGS_ICON}</button><button type="button" class="np-tools-toggle" data-action="toggle-tools" data-i18n="expandTools" data-i18n-mode="title" aria-expanded="false">${CHEVRON_ICON}</button></span></div><div class="np-nodes" data-root="true"></div><div class="np-mp-zone"><input class="np-mp-input" type="text" inputmode="url" autocomplete="off" spellcheck="false" data-i18n="importMp" data-i18n-attr="placeholder"><span class="np-mp-hint" data-state="idle" aria-hidden="true"></span></div><button type="button" class="np-tools-toggle" data-action="toggle-tools" data-i18n="expandTools" data-i18n-mode="title" aria-expanded="false">${CHEVRON_ICON}</button><div class="np-tree-foot"><button type="button" data-action="settings" data-i18n="settings" data-i18n-mode="label">${SETTINGS_ICON}<span data-i18n="settings"></span></button><button type="button" data-action="close" data-i18n="close" data-i18n-mode="label">${CLOSE_ICON}<span data-i18n="close"></span></button></div></aside>
       <div class="np-editor" data-themefit="true">
-        <div class="np-toolbar"><span class="np-md-tools">${toolbar}</span><span class="np-json-tools" hidden><button type="button" class="np-tool" data-json="expand" data-i18n="jsonExpand" data-i18n-mode="title">${EXPAND_ICON}</button><button type="button" class="np-tool" data-json="collapse" data-i18n="jsonCollapse" data-i18n-mode="title">${COLLAPSE_ICON}</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-json="format" data-i18n="jsonFormat" data-i18n-mode="title">${FORMAT_ICON}</button><button type="button" class="np-tool" data-json="minify" data-i18n="jsonMinify" data-i18n-mode="title">${MINIFY_ICON}</button><button type="button" class="np-tool" data-json="escape" data-i18n="jsonEscape" data-i18n-mode="title">${ESCAPE_ICON}</button><button type="button" class="np-tool" data-json="unescape" data-i18n="jsonUnescape" data-i18n-mode="title">${UNESCAPE_ICON}</button><button type="button" class="np-tool" data-json="strip" data-i18n="jsonStrip" data-i18n-mode="title">${STRIP_ICON}</button></span><span class="np-ht-tools" hidden><button type="button" class="np-tool" data-ht="format" data-i18n="htFormat" data-i18n-mode="title">${FORMAT_ICON}</button><button type="button" class="np-tool" data-ht="minify" data-i18n="htMinify" data-i18n-mode="title">${MINIFY_ICON}</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-ht="strip-styles" data-i18n="htStripStyles" data-i18n-mode="title">${STRIP_ICON}</button><button type="button" class="np-tool" data-ht="extract-images" data-i18n="htExtractImages" data-i18n-mode="title">${GRID_ICON}</button><button type="button" class="np-tool" data-ht="copy-text" data-i18n="htCopyText" data-i18n-mode="title">${dshIcon('copy-outline')}</button></span><span class="np-rt-tools" hidden><button type="button" class="np-tool" data-rt="gallery" data-i18n="rtGallery" data-i18n-mode="title">${GRID_ICON}</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-rt="font-minus" data-i18n="rtFontMinus" data-i18n-mode="title">A−</button><button type="button" class="np-tool" data-rt="font-plus" data-i18n="rtFontPlus" data-i18n-mode="title">A+</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-rt="width" data-i18n="rtWidth" data-i18n-mode="title">宽</button><button type="button" class="np-tool" data-rt="themefit" data-i18n="rtThemeFit" data-i18n-mode="title" aria-pressed="true">◐</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-rt="copy-rich" data-i18n="rtCopyRich" data-i18n-mode="title">${dshIcon('copy-outline')}</button><button type="button" class="np-tool" data-rt="copy-text" data-i18n="rtCopyText" data-i18n-mode="title">Tx</button><button type="button" class="np-tool" data-rt="links" data-i18n="rtLinks" data-i18n-mode="title">${LINK_ICON}</button></span><button type="button" class="np-switch" data-action="view" role="switch" aria-checked="false" data-i18n="viewGroup" data-i18n-mode="title"><span class="np-switch-label" data-i18n="source"></span><span class="np-switch-label" data-i18n="preview"></span><span class="np-switch-thumb" data-i18n="source"></span></button></div>
+        <div class="np-toolbar"><span class="np-md-tools">${toolbar}</span><span class="np-json-tools" hidden><button type="button" class="np-tool" data-json="expand" data-i18n="jsonExpand" data-i18n-mode="title">${EXPAND_ICON}</button><button type="button" class="np-tool" data-json="collapse" data-i18n="jsonCollapse" data-i18n-mode="title">${COLLAPSE_ICON}</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-json="format" data-i18n="jsonFormat" data-i18n-mode="title">${FORMAT_ICON}</button><button type="button" class="np-tool" data-json="minify" data-i18n="jsonMinify" data-i18n-mode="title">${MINIFY_ICON}</button><button type="button" class="np-tool" data-json="escape" data-i18n="jsonEscape" data-i18n-mode="title">${ESCAPE_ICON}</button><button type="button" class="np-tool" data-json="unescape" data-i18n="jsonUnescape" data-i18n-mode="title">${UNESCAPE_ICON}</button><button type="button" class="np-tool" data-json="strip" data-i18n="jsonStrip" data-i18n-mode="title">${STRIP_ICON}</button></span><span class="np-ht-tools" hidden><button type="button" class="np-tool" data-ht="format" data-i18n="htFormat" data-i18n-mode="title">${FORMAT_ICON}</button><button type="button" class="np-tool" data-ht="minify" data-i18n="htMinify" data-i18n-mode="title">${MINIFY_ICON}</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-ht="strip-styles" data-i18n="htStripStyles" data-i18n-mode="title">${STRIP_ICON}</button><button type="button" class="np-tool" data-ht="extract-images" data-i18n="htExtractImages" data-i18n-mode="title">${GRID_ICON}</button><button type="button" class="np-tool" data-ht="copy-text" data-i18n="htCopyText" data-i18n-mode="title">${dshIcon('copy-outline')}</button></span><span class="np-rt-tools" hidden><button type="button" class="np-tool" data-rt="gallery" data-i18n="rtGallery" data-i18n-mode="title">${GRID_ICON}</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-rt="font-minus" data-i18n="rtFontMinus" data-i18n-mode="title">A−</button><button type="button" class="np-tool" data-rt="font-plus" data-i18n="rtFontPlus" data-i18n-mode="title">A+</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-rt="width" data-i18n="rtWidth" data-i18n-mode="title">宽</button><button type="button" class="np-tool" data-rt="themefit" data-i18n="rtThemeFit" data-i18n-mode="title" aria-pressed="true">◐</button><span class="np-tool-sep"></span><button type="button" class="np-tool" data-rt="copy-rich" data-i18n="rtCopyRich" data-i18n-mode="title">${dshIcon('copy-outline')}</button><button type="button" class="np-tool" data-rt="copy-text" data-i18n="rtCopyText" data-i18n-mode="title">Tx</button><button type="button" class="np-tool" data-rt="links" data-i18n="rtLinks" data-i18n-mode="title">${LINK_ICON}</button></span><button type="button" class="np-tool np-wrap" data-action="toggle-wrap" data-i18n="fxMenuWrap" data-i18n-mode="title" aria-pressed="true">${dshIcon('wrap-lines-outline')}</button><button type="button" class="np-switch" data-action="view" role="switch" aria-checked="false" data-i18n="viewGroup" data-i18n-mode="title"><span class="np-switch-label" data-i18n="source"></span><span class="np-switch-label" data-i18n="preview"></span><span class="np-switch-thumb" data-i18n="source"></span></button></div>
         <div class="np-mirror" aria-hidden="true"></div>
         <textarea class="np-write" spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
         <div class="np-slash" hidden></div>
@@ -1502,7 +1506,10 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
   /** 自动换行开关的视觉落点（源编辑 + 高亮镜像同步）。 */
   function applyWrap() {
     const editor = panel.querySelector('.np-editor')
-    if (editor) editor.dataset.wrap = state.ui.wordWrap === false ? 'off' : 'on'
+    const on = state.ui.wordWrap !== false
+    if (editor) editor.dataset.wrap = on ? 'on' : 'off'
+    const button = panel.querySelector('.np-wrap')
+    if (button) button.setAttribute('aria-pressed', String(on))
   }
 
   function clamp(value, min, max) {
@@ -3070,8 +3077,8 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
       </section>
       <section class="np-section" data-tab="appearance">
         ${sw('defaultView', copy.openAs, copy.openAsHint, [
-          { value: 'rendered', label: copy.rendered },
           { value: 'source', label: copy.source },
+          { value: 'rendered', label: copy.rendered },
         ])}
         ${sw('theme', copy.windowTheme, copy.windowThemeHint, [
           { value: 'dark', label: copy.dark },
@@ -3152,8 +3159,8 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
           { value: 'false', label: copy.autoSaveOff },
         ],
         defaultView: [
-          { value: 'rendered', label: copy.rendered },
           { value: 'source', label: copy.source },
+          { value: 'rendered', label: copy.rendered },
         ],
         theme: [
           { value: 'dark', label: copy.dark },
@@ -3762,14 +3769,12 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     if (!node || !state.db) return
     closeMenu?.()
     const copy = text()
-    const wrapOn = state.ui.wordWrap !== false
     const file = node.kind === 'file'
     const fileOps = [
       { id: 'rename', label: copy.rename, run: () => renameAsked(node) },
       ...(file ? [
         { id: 'copy-path', label: copy.fxMenuPath ?? '复制路径', run: () => void copyPath(false, id) },
         { id: 'copy-rel', label: copy.fxMenuRelPath ?? '复制相对路径', run: () => void copyPath(true, id) },
-        { id: 'wrap', label: `${copy.fxMenuWrap ?? '自动换行'}${wrapOn ? ' ✓' : ''}`, run: () => { state.ui.wordWrap = !wrapOn; applyWrap(); void persistUi() } },
         { id: 'export', label: copy.fxMenuExport ?? '导出', run: () => void exportFile(id) },
       ] : []),
       { id: 'delete', label: copy.delete, tone: 'danger', run: () => requestDelete(id) },
@@ -3930,6 +3935,12 @@ export function mountNotepad(host, defaults, appTheme = { scheme: () => 'dark', 
     if (action === 'view') {
       state.view = state.view === 'rendered' ? 'source' : 'rendered'
       void renderBody()
+    }
+    if (action === 'toggle-wrap') {
+      state.ui.wordWrap = state.ui.wordWrap === false
+      applyWrap()
+      void persistUi()
+      return
     }
     if (action === 'export-file') void exportFile()
     if (action === 'history') void openHistory().catch(showError)

@@ -14,7 +14,7 @@ export const DEFAULT_SETTINGS = {
   versionLimit: 50,
   imageLimitBytes: 5 * 1024 * 1024,
   editorFontSizePx: 14,
-  defaultView: 'rendered',
+  defaultView: 'source',
   theme: 'system',
   chromeStyle: 'mac',
   followApp: true,
@@ -26,7 +26,7 @@ export const DEFAULT_SETTINGS = {
   cloudMotion: 'b',
   /* fx 处理只暴露精选模型；业主可在「设置 → fx」勾选。当前精选只有 flash。 */
   fxModels: ['deepseek-official~deepseek-flash'],
-  settingsVersion: 2,
+  settingsVersion: 3,
 }
 
 const IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp'])
@@ -45,7 +45,7 @@ export function normalizeSettings(config) {
     return value
   }
   /* schema v2: default commit interval 1h; migrate old default 60 → 3600 */
-  const legacy = source.settingsVersion !== 2 && source.commitIntervalSec === 60
+  const legacy = (source.settingsVersion == null || source.settingsVersion < 2) && source.commitIntervalSec === 60
   /* 旧版默认三模型（业主已要求只保留 flash）→ 迁移回单一默认；显式其他选择保留。 */
   const LEGACY_FX_DEFAULT = [
     'deepseek-official~deepseek-flash',
@@ -65,7 +65,8 @@ export function normalizeSettings(config) {
     versionLimit: number('versionLimit', DEFAULT_SETTINGS.versionLimit, 5, 500),
     imageLimitBytes: number('imageLimitBytes', DEFAULT_SETTINGS.imageLimitBytes, 256 * 1024, 20 * 1024 * 1024),
     editorFontSizePx: number('editorFontSizePx', DEFAULT_SETTINGS.editorFontSizePx, 10, 32),
-    defaultView: source.defaultView === 'source' ? 'source' : 'rendered',
+    /* v3：纯文本优先。v2 及更早把缺省写成预览，那是旧默认，不是业主选过的值。 */
+    defaultView: source.settingsVersion === 3 && source.defaultView === 'rendered' ? 'rendered' : 'source',
     theme: source.theme === 'light' || source.theme === 'dark' ? source.theme : 'system',
     chromeStyle: source.chromeStyle === 'windows' ? 'windows' : 'mac',
     followApp: source.followApp !== false,
@@ -77,7 +78,7 @@ export function normalizeSettings(config) {
     s3IntervalSec: number('s3IntervalSec', DEFAULT_SETTINGS.s3IntervalSec, 10, 300),
     cloudMotion: ['a', 'b', 'c'].includes(source.cloudMotion) ? source.cloudMotion : DEFAULT_SETTINGS.cloudMotion,
     fxModels: fxModels.length ? fxModels : DEFAULT_SETTINGS.fxModels,
-    settingsVersion: 2,
+    settingsVersion: 3,
   }
 }
 

@@ -45,10 +45,21 @@ invisible. Records carry `at` + `kind`:
 | `commit` | the durable bracket committed | `compactionId`, `tokens`, `records` |
 | `drop` | the episode was dropped | `reason`, `detail`, `bracketed` |
 | `skip` | arming was suppressed | `reason` (`circuit-open` / `lock-held`) |
+| `drop` (`reason: 'disarmed'`) | the owner raised B above the current fill while an episode was armed or running | `detail` (the fill/B pair that triggered it) |
+
+Policy changes take effect at the next `agent/pre-step`: `_policy()` re-reads
+the state file on every call, so B and H apply to the very next step boundary.
+Two things are deliberately frozen for the duration of one episode — the
+effective pin (`retainTokens`) and the summarizer target — because they were
+decided when the episode armed. Raising B above the current fill now **disarms**
+an armed or in-flight episode (`drop` with `reason: 'disarmed'`); before that the
+gate could only arm, so raising the line could not stop work already under way.
 
 Every record also carries `promptVersion`: the first eight hex characters of
 the sha256 of the instruction actually sent (`policy.summaryPrompt` when set,
-otherwise the built-in `COMPACTION_INSTRUCTION`). The model name alone cannot
+otherwise the built-in `COMPACTION_INSTRUCTION`). It is stamped inside the
+summarize closure, where the prompt is read — not at arm time, which could name
+a contract the request never used. The model name alone cannot
 answer "which summarizer contract produced this summary?" — the same model
 behaves differently under a user override, and an override edited between two
 compactions is a different contract.

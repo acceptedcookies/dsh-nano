@@ -162,6 +162,18 @@ function makeCtx({ llm = makeLlm(), meter = makeMeter(), logger = makeLogger() }
     emitStatus(agent, status) {
       for (const h of listeners['agent/status']) h({ agent, status })
     },
+    /**
+     * Drive one async episode to completion under the concurrent contract:
+     * the summarizer runs in the background after the step boundary, and the
+     * commit lands at the NEXT step boundary (or at idle if the turn ended).
+     */
+    async settle(agent) {
+      const episode = this.engine._episode(agent.session)
+      if (episode.attempt !== undefined) { try { await episode.attempt } catch { /* dropped inside */ } }
+      // Commit through the engine's own boundary method: driving another
+      // pre-step here would re-arm a dropped episode and start a new attempt.
+      await this.engine._finishEpisode(agent, episode)
+    },
     async emitRequest(agent, config, signal = new AbortController().signal) {
       let result = config
       for (const h of listeners['agent/request']) result = await h({ agent, signal }, async () => result)
@@ -273,7 +285,7 @@ function makeAgent(session, options = {}) {
   }
 }
 
-function makeEngine(ctx) { return new NanoCompactionEngine(ctx) }
+function makeEngine(ctx) { return (ctx.engine = new NanoCompactionEngine(ctx)) }
 
 function transientError(code = 'NETWORK', message = `${code.toLowerCase()} down`) {
   const e = new Error(message)
@@ -283,7 +295,7 @@ function transientError(code = 'NETWORK', message = `${code.toLowerCase()} down`
 
 /* ============================ 1. B-line arm ============================== */
 
-test('B-line arm → idle maintenance commits the durable bracket in order, owner:null, adoption wake', async () => {
+test('B-line arm → background summarize → commit at the next step boundary, no wake turn', async () => {
   writePolicy()
   const ctx = makeCtx()
   makeEngine(ctx)
@@ -296,9 +308,7 @@ test('B-line arm → idle maintenance commits the durable bracket in order, owne
   assert.equal(session.eventsOf('compaction/end').length, 0)
 
   // idle boundary: the one physical summarizer attempt runs in runMaintenance.
-  ctx.emitStatus(agent, 'idle')
-  assert.equal(agent.maintenanceCalls.length, 1)
-  await agent.maintenanceCalls[0].promise
+  await ctx.settle(agent)
 
   // Durable events: start → summary → checkpoint user/message → end, in order.
   const types = session.events.map(e => e.type)
@@ -321,13 +331,10 @@ test('B-line arm → idle maintenance commits the durable bracket in order, owne
   assert.equal(session.events[iCkpt].data.source.compactionId, compactionId)
   assert.equal(session.events[iEnd].data.compactionId, compactionId)
 
-  // adoption wake turns the next turn into the adoption boundary.
-  assert.equal(agent.followups.length, 1)
-  const wake = agent.followups[0]
-  assert.equal(wake.role, 'user')
-  assert.equal(wake.source.kind, 'compaction-adoption-wake')
-  assert.equal(wake.source.compactionId, compactionId)
-  assert.equal(wake.content[0].text, '(Context compacted asynchronously; continuing.)')
+  // No wake message: the commit lands at a step boundary, so the surface is
+  // already replaced when the next request assembles. Sending a followup here
+  // used to start a fresh turn on a session the user had already finished.
+  assert.equal(agent.followups.length, 0, 'async compaction must not start a turn')
 
   // episode settled; durability checkpoint flushed.
   assert.deepEqual(ctx.flushed, ['s-bline'])
@@ -343,8 +350,7 @@ test('checkpoint user/message carries surfaceOp.replace covering the shadowed ra
   const agent = makeAgent(session)
 
   await ctx.emitPreStep(agent)
-  ctx.emitStatus(agent, 'idle')
-  await agent.maintenanceCalls[0].promise
+  await ctx.settle(agent)
 
   const summary = session.eventsOf('compaction/summary')[0]
   // retain=100 → only the last msg kept; shadowed = m0..m4.
@@ -393,13 +399,16 @@ test('one-active: a second B-line arm does not double-start; open bracket blocks
 
   await ctx.emitPreStep(agent)
   const episode = engine._episodes.get(session.id)
-  assert.equal(episode.phase, 'armed')
+  // The summarizer is kicked at the boundary, so the phase is already running.
+  assert.equal(episode.phase, 'running')
 
-  // second arm while phase='armed' is a no-op (no tx, no events, still armed).
+  // A second boundary must not start a second attempt, and the durable bracket
+  // is still deferred (nothing is written until commit).
   await ctx.emitPreStep(agent)
-  assert.equal(episode.phase, 'armed')
+  assert.equal(episode.phase, 'running')
   assert.equal(session.eventsOf('compaction/start').length, 0)
   assert.equal(agent.maintenanceCalls.length, 0)
+  await episode.attempt
 
   // durable one-active gate: an open compaction/start bracket blocks.
   const foreign = makeSession('s-foreign')
@@ -443,23 +452,22 @@ test('one-active: durable lock suppresses a second B-line arm while the bracket 
   const { session } = makeBLineSession('s-lock2')
   const agent = makeAgent(session)
 
-  await ctx.emitPreStep(agent)
-  ctx.llm.state.resetGate() // maintenance attempt will hang inside stream()
-  ctx.emitStatus(agent, 'idle')
-  assert.equal(agent.maintenanceCalls.length, 1)
-  await ctx.llm.state.streamStarted
+  // A foreign bracket holds the durable one-active gate.
+  session.append('compaction/start', { compactionId: 'foreign', turn: null })
 
-  // bracket open → B-line re-qualification is suppressed before arming.
   await ctx.emitPreStep(agent)
-  assert.equal(session.eventsOf('compaction/start').length, 1)
+  // B-line re-qualification is suppressed before arming.
   assert.ok(ctx.logger.records.info.some(m => m.includes('durable compaction lock already held')))
-  // phase is 'running' (not 'armed'): the claim flips it before runMaintenance.
-  assert.equal(engine._episodes.get(session.id).phase, 'running')
-
-  ctx.llm.state.hangGate.release()
-  await agent.maintenanceCalls[0].promise
+  assert.equal(engine._episodes.get(session.id).phase, 'none')
   assert.equal(session.eventsOf('compaction/start').length, 1)
-  assert.equal(session.eventsOf('compaction/end').length, 1)
+
+  // Releasing the foreign bracket lets the next boundary arm and run.
+  session.append('compaction/end', { compactionId: 'foreign', turn: null })
+  await ctx.emitPreStep(agent)
+  assert.equal(engine._episodes.get(session.id).phase, 'running')
+  await ctx.settle(agent)
+  assert.equal(session.eventsOf('compaction/start').length, 2)
+  assert.equal(session.eventsOf('compaction/end').length, 2)
 })
 
 /* ==================== in-flight re-entry guard ========================== */
@@ -471,24 +479,22 @@ test('a second idle while an episode attempt is in-flight is a no-op: one attemp
   const { session } = makeBLineSession('s-race')
   const agent = makeAgent(session)
 
+  ctx.llm.state.resetGate()                        // the attempt will hang inside stream()
   await ctx.emitPreStep(agent)
-  ctx.llm.state.resetGate()
-  ctx.emitStatus(agent, 'idle')                    // attempt claimed; hangs inside stream()
   await ctx.llm.state.streamStarted
 
-  // Re-entry guard: the claim flips phase 'armed' → 'running' before
-  // runMaintenance, so both the status listener (gates on 'armed') and
-  // _claimEpisodeMaintenance (re-checks 'armed') no-op on a second idle.
+  // Re-entry guard: the boundary flips phase 'armed' → 'running' before the
+  // async work, so a second boundary or a second idle is a no-op.
   const episode = engine._episodes.get(session.id)
   assert.equal(episode.phase, 'running')
+  await ctx.emitPreStep(agent)
   ctx.emitStatus(agent, 'idle')
-  assert.equal(agent.maintenanceCalls.length, 1)
   assert.equal(episode.phase, 'running')
-  assert.equal(session.eventsOf('compaction/start').length, 1)
-  assert.equal(session.eventsOf('compaction/end').length, 0)
+  assert.equal(session.eventsOf('compaction/start').length, 0)
 
   ctx.llm.state.hangGate.release()
-  await agent.maintenanceCalls[0].promise
+  await episode.attempt
+  await ctx.emitPreStep(agent)
 
   // Exactly one clean transaction committed — one start/summary/ckpt/end pair.
   assert.equal(session.eventsOf('compaction/start').length, 1)
@@ -502,7 +508,8 @@ test('a second idle while an episode attempt is in-flight is a no-op: one attemp
     session.eventsOf('compaction/start')[0].data.compactionId,
   )
   assert.equal(episode.phase, 'none')
-  assert.equal(agent.followups.length, 1)
+  // No wake: a finished session must not be re-triggered by a compaction.
+  assert.equal(agent.followups.length, 0)
 })
 
 /* ============================ 3. S-line FULL ============================ */
@@ -544,23 +551,19 @@ test('circuit: two consecutive transient failures open it; next arm suppressed; 
 
   ctx.llm.state.failWith = [transientError('NETWORK'), transientError('NETWORK')]
 
-  // attempt 1 → transient drop
+  // attempt 1 → transient drop. The bracket is deferred, so a summarize
+  // failure writes NOTHING durable: no unmatched start to clean up.
   await ctx.emitPreStep(agent)
-  assert.equal(episode.phase, 'armed')
-  ctx.emitStatus(agent, 'idle')
-  await agent.maintenanceCalls[0].promise
+  await ctx.settle(agent)
   assert.equal(episode.phase, 'none')
   assert.equal(episode.circuit.transientFailures, 1)
   assert.equal(episode.circuit.open, false)
-  // bracket closed with error — no unmatched start
-  assert.equal(session.eventsOf('compaction/start').length, 1)
-  assert.match(session.eventsOf('compaction/end')[0].data.error, /network down/i)
+  assert.equal(session.eventsOf('compaction/start').length, 0)
+  assert.equal(session.eventsOf('compaction/end').length, 0)
 
   // attempt 2 → transient drop → circuit opens
   await ctx.emitPreStep(agent)
-  assert.equal(episode.phase, 'armed')
-  ctx.emitStatus(agent, 'idle')
-  await agent.maintenanceCalls[1].promise
+  await ctx.settle(agent)
   assert.equal(episode.circuit.transientFailures, 2)
   assert.equal(episode.circuit.open, true)
   assert.ok(ctx.logger.records.warn.some(m => m.includes('circuit opened')))
@@ -569,7 +572,7 @@ test('circuit: two consecutive transient failures open it; next arm suppressed; 
   const warnCount = ctx.logger.records.warn.length
   await ctx.emitPreStep(agent)
   assert.equal(episode.phase, 'none')
-  assert.equal(session.eventsOf('compaction/start').length, 2)
+  assert.equal(session.eventsOf('compaction/start').length, 0)
   assert.ok(ctx.logger.records.warn.slice(warnCount).some(m => m.includes('auto arming suppressed')))
   await ctx.emitPreStep(agent) // suppressedLogged latch: no repeat warn
   assert.equal(ctx.logger.records.warn.filter(m => m.includes('auto arming suppressed')).length, 1)
@@ -579,7 +582,7 @@ test('circuit: two consecutive transient failures open it; next arm suppressed; 
   session.addMessage('user', 'extra2', 100) // 950/1000 = 0.95 ≥ S
   session.append('turn/start', { turn: 'turn-s' })
   await ctx.emitPreStep(agent)
-  assert.equal(session.eventsOf('compaction/start').length, 3)
+  assert.equal(session.eventsOf('compaction/start').length, 1)
   assert.equal(session.eventsOf('compaction/summary').length, 1)
   assert.equal(episode.circuit.open, false)
   assert.equal(episode.circuit.transientFailures, 0)
@@ -622,9 +625,8 @@ test('missing policy file → DEFAULT_POLICY (B-line arms) — diverges from spe
   const { session } = makeBLineSession('s-missing')
   const agent = makeAgent(session)
   await ctx.emitPreStep(agent)
-  assert.equal(engine._episodes.get(session.id).phase, 'armed')
-  ctx.emitStatus(agent, 'idle')
-  await agent.maintenanceCalls[0].promise
+  assert.equal(engine._episodes.get(session.id).phase, 'running')
+  await ctx.settle(agent)
   assert.equal(session.eventsOf('compaction/end').length, 1)
 })
 
@@ -684,32 +686,34 @@ test('compact-runtime: fold start→busy, summary→busy+meta, end→completed/f
 
 /* ================= 8. abort/timeout drop path =========================== */
 
-test('abort during summarize → episode dropped via tx.fail: end{error} written, bracket closed', async () => {
+test('abort during summarize → episode dropped with no bracket written at all', async () => {
   writePolicy()
   const ctx = makeCtx()
   const engine = makeEngine(ctx)
   const { session } = makeBLineSession('s-timeout')
   const agent = makeAgent(session)
 
-  await ctx.emitPreStep(agent)
   ctx.llm.state.resetGate()
-  ctx.emitStatus(agent, 'idle')
-  assert.equal(agent.maintenanceCalls.length, 1)
+  await ctx.emitPreStep(agent)
   await ctx.llm.state.streamStarted // summarizer is inside ctx.llm.stream, hanging
 
   // Deterministic abort: the agentSignal arm of AbortSignal.any fires (same
   // drop path as the EPISODE_TIMEOUT_MS arm — the test cannot patch the
   // internal constant, so it exercises the real signal plumbing instead).
-  agent.maintenanceCtl.abort()
+  const aborted = engine._episode(session)
+  aborted.attemptAbort?.abort()
   ctx.llm.state.hangGate.release()
-  await agent.maintenanceCalls[0].promise
+  await aborted.attempt
 
-  const starts = session.eventsOf('compaction/start')
-  const ends = session.eventsOf('compaction/end')
-  assert.equal(starts.length, 1)
-  assert.equal(ends.length, 1)
-  assert.match(ends[0].data.error, /./) // end{error} non-empty
-  assert.equal(ends[0].data.compactionId, starts[0].data.compactionId)
+  // Deferred bracket: an abort during summarize writes NOTHING durable. The
+  // old contract opened compaction/start at prepare and had to close it with
+  // end{error}; now there is no bracket to leak in the first place.
+  assert.equal(session.eventsOf('compaction/start').length, 0)
+  assert.equal(session.eventsOf('compaction/end').length, 0)
+  assert.equal(engine._episode(session).phase, 'none')
+  const drop = ledgerOf('s-timeout').find(r => r.kind === 'drop')
+  assert.ok(drop !== undefined)
+  assert.equal(drop.bracketed, false)
   // no unmatched start — the one-active gate is released.
   assert.equal(inspectCompactionEntryState(session).unmatchedCompactionStart, undefined)
   assert.equal(session.eventsOf('compaction/summary').length, 0)
@@ -778,8 +782,7 @@ test('ledger: a committed episode records arm → claim → commit in order', as
   const agent = makeAgent(session)
 
   await ctx.emitPreStep(agent)
-  ctx.emitStatus(agent, 'idle')
-  await agent.maintenanceCalls[0].promise
+  await ctx.settle(agent)
 
   const records = ledgerOf('s-ledger-commit')
   assert.ok(records !== null, 'ledger file was not written')
@@ -800,27 +803,24 @@ test('ledger: a committed episode records arm → claim → commit in order', as
   assert.ok(commit.tokens > 0)
 })
 
-test('ledger: a pre-bracket drop is recorded with bracketed:false (the silent case)', async () => {
+test('ledger: a dropped episode is recorded with bracketed:false (the silent case)', async () => {
   writePolicy()
   const ctx = makeCtx()
   makeEngine(ctx)
   const { session } = makeBLineSession('s-ledger-degraded')
   const agent = makeAgent(session)
 
-  // Arm against a healthy policy, then make it unreadable before the idle
-  // claim. _runEpisodeAttempt rejects on safetyOnly BEFORE opening the durable
-  // bracket, so the journal keeps no record of this failure at all — exactly
-  // the case the ledger exists for.
+  // A summarize failure under the deferred-bracket contract leaves no durable
+  // trace at all — exactly the case the ledger exists for.
+  ctx.llm.state.failWith = [transientError('NETWORK')]
   await ctx.emitPreStep(agent)
-  corruptPolicy()
-  ctx.emitStatus(agent, 'idle')
-  await agent.maintenanceCalls[0].promise
+  await ctx.settle(agent)
 
   const records = ledgerOf('s-ledger-degraded')
   assert.ok(records !== null)
   const drop = records.find(r => r.kind === 'drop')
   assert.ok(drop !== undefined, `expected a drop record in ${JSON.stringify(records.map(r => r.kind))}`)
-  assert.equal(drop.reason, 'degraded')
+  assert.equal(drop.reason, 'transient')
   // No durable bracket exists for this failure — the ledger is the only trace.
   assert.equal(drop.bracketed, false)
   assert.equal(session.eventsOf('compaction/start').length, 0)
@@ -837,8 +837,7 @@ test('ledger: circuit-open suppression records a skip, not a second arm', async 
   ctx.llm.state.failWith = [transientError('NETWORK'), transientError('NETWORK')]
   for (let i = 0; i < 2; i += 1) {
     await ctx.emitPreStep(agent)
-    ctx.emitStatus(agent, 'idle')
-    await agent.maintenanceCalls[i].promise
+    await ctx.settle(agent)
   }
   const before = ledgerOf('s-ledger-skip').length
 
@@ -858,8 +857,7 @@ test('ledger: every decision carries the instruction version actually in force',
   const agent = makeAgent(session)
 
   await ctx.emitPreStep(agent)
-  ctx.emitStatus(agent, 'idle')
-  await agent.maintenanceCalls[0].promise
+  await ctx.settle(agent)
 
   const { instructionVersion } = await import('../lib/compact-region.js')
   const builtin = instructionVersion('')
@@ -875,8 +873,7 @@ test('ledger: every decision carries the instruction version actually in force',
   const second = makeBLineSession('s-ledger-version-2')
   const agent2 = makeAgent(second.session)
   await ctx2.emitPreStep(agent2)
-  ctx2.emitStatus(agent2, 'idle')
-  await agent2.maintenanceCalls[0].promise
+  await ctx2.settle(agent2)
 
   const custom = instructionVersion('Summarize tersely.')
   assert.notEqual(custom, builtin)
@@ -890,4 +887,77 @@ test('ledger: an unsafe session id is never written outside the ledger dir', asy
   assert.equal(asyncHistoryPath('a/b'), null)
   assert.equal(asyncHistoryPath(''), null)
   assert.ok(asyncHistoryPath('session-767f1813-91b2-4ca7-a0f8-150ae6e7b6c5')?.endsWith('.jsonl'))
+})
+
+/* ============ 9. policy changes mid-flight ============================== */
+
+test('raising B above the current fill disarms an in-flight episode', async () => {
+  writePolicy()
+  const ctx = makeCtx()
+  const engine = makeEngine(ctx)
+  const { session } = makeBLineSession('s-disarm')
+  const agent = makeAgent(session)
+
+  ctx.llm.state.resetGate()
+  await ctx.emitPreStep(agent)
+  await ctx.llm.state.streamStarted          // summarizer is running
+  const episode = engine._episode(session)
+  assert.equal(episode.phase, 'running')
+
+  // The owner raises the buffer line above the current fill mid-turn.
+  writePolicy({ bufferSizeAsync: 0.99 })
+  await ctx.emitPreStep(agent)
+
+  assert.equal(episode.phase, 'none', 'the episode must be settled')
+  assert.equal(session.eventsOf('compaction/start').length, 0, 'no bracket may be written')
+  const drop = ledgerOf('s-disarm').find(r => r.kind === 'drop')
+  assert.ok(drop !== undefined)
+  assert.equal(drop.reason, 'disarmed')
+  assert.equal(drop.bracketed, false)
+  // Exactly one drop record: the attempt's own catch must not add a second.
+  assert.equal(ledgerOf('s-disarm').filter(r => r.kind === 'drop').length, 1)
+
+  ctx.llm.state.hangGate.release()
+  await episode.attempt
+  assert.equal(session.eventsOf('compaction/start').length, 0)
+})
+
+test('lowering B below the current fill arms on the very next step boundary', async () => {
+  writePolicy({ bufferSizeAsync: 0.9 })      // above the fixture's 0.75 fill
+  const ctx = makeCtx()
+  const engine = makeEngine(ctx)
+  const { session } = makeBLineSession('s-rearm')
+  const agent = makeAgent(session)
+
+  await ctx.emitPreStep(agent)
+  assert.equal(engine._episode(session).phase, 'none', 'no arm above the line')
+
+  writePolicy({ bufferSizeAsync: 0.5 })      // the owner lowers it mid-turn
+  await ctx.emitPreStep(agent)
+  assert.equal(engine._episode(session).phase, 'running', 'the new line applies immediately')
+  await ctx.settle(agent)
+  assert.equal(session.eventsOf('compaction/start').length, 1)
+})
+
+test('the instruction version is stamped where the prompt is read, not at arm time', async () => {
+  // The prompt is resolved inside the summarize closure, so that is where the
+  // version must be computed. Recording the arm-time version made the ledger
+  // claim a contract that could differ from the one actually sent.
+  writePolicy({ summaryPrompt: '' })
+  const ctx = makeCtx()
+  const engine = makeEngine(ctx)
+  const { session } = makeBLineSession('s-version-live')
+  const agent = makeAgent(session)
+  const episode = engine._episode(session)
+
+  const { instructionVersion } = await import('../lib/compact-region.js')
+  episode.promptVersion = instructionVersion('')          // what arm would have stamped
+
+  writePolicy({ summaryPrompt: 'Summarize tersely.' })    // policy changes before the read
+  const deps = engine._regionDependencies(undefined, episode)
+  // The LLM call itself is irrelevant here; the stamp happens before it.
+  await deps.summarize({}, agent, undefined).catch(() => {})
+
+  assert.equal(episode.promptVersion, instructionVersion('Summarize tersely.'))
+  assert.notEqual(episode.promptVersion, instructionVersion(''))
 })

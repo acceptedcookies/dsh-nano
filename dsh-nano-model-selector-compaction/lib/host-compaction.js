@@ -72,9 +72,6 @@ const ASYNC_COMPACT_PATH = join(
   'plugins', 'nano-model-selector', 'async-compact.json',
 )
 
-/** Wake message that turns the next turn into the adoption boundary. */
-const ADOPTION_WAKE_TEXT = '(Context compacted asynchronously; continuing.)'
-
 /** Resolve the exact provider/model durably routed for the latest request. */
 function routedTarget(session) {
   const config = session.requestHeader()?.config
@@ -142,6 +139,17 @@ export default class NanoCompactionEngine extends CompactionEngine {
     ctx.on('agent/pre-step', async ({ agent, signal }, next) => {
       ctx.logger.debug(`nano-async-pre-step ${agent.session.id}`)
       if (signal.aborted) return next()
+      // Commit a summary that finished while the turn was running. Doing it
+      // here (before the step assembles) means the request that follows already
+      // sees the compacted surface — no wake message, no extra turn.
+      const pending = this._episodes.get(agent.session.id)
+      if (pending !== undefined && pending.phase === 'running' && pending.attemptReady === true) {
+        try {
+          await this._finishEpisode(agent, pending)
+        } catch (error) {
+          ctx.logger.warn(`async compaction commit at step boundary failed: ${messageOf(error)}`)
+        }
+      }
       try {
         const result = await this.compactIfNeeded(agent, 'pressure', signal)
         if (result !== null) {
@@ -167,12 +175,16 @@ export default class NanoCompactionEngine extends CompactionEngine {
       if (status === 'idle') this._overflowRetries.delete(agent)
       const episode = this._episodes.get(agent.session.id)
       if (status !== 'idle' || episode === undefined || episode.phase !== 'armed') return
-      const agents = ctx.get('agents')
-      if (agents === undefined) {
-        ctx.logger.warn('async compaction: ctx.agents unavailable; idle maintenance claim skipped')
-        return
+      // Fallback for a turn that ended before the summary was ready: wait for
+      // the in-flight attempt, then commit. This is the only path that still
+      // needs the idle boundary, and it never starts a new turn.
+      const settle = async () => {
+        try {
+          await episode.attempt
+        } catch { /* already dropped inside the attempt */ }
+        await this._finishEpisode(agent, episode)
       }
-      agents.withInitiator(agent, () => this._claimEpisodeMaintenance(agent, episode))
+      void settle()
     })
 
     // Model switch mirrors the native prepend listener: force the history under
@@ -275,11 +287,20 @@ export default class NanoCompactionEngine extends CompactionEngine {
     return true
   }
 
-  _claimEpisodeMaintenance(agent, episode) {
-    // Re-entry guard: flip phase BEFORE claiming runMaintenance, or a second
-    // idle event during an in-flight attempt starts a concurrent episode and
-    // corrupts the durable bracket with a second compaction/end.
+  /**
+   * Start the summarizer WITHOUT blocking the turn (true async, -18 revised).
+   *
+   * The old flow claimed the episode at `agent/status: idle`, which meant the
+   * physical summarization only began after the whole turn had finished — from
+   * the main task's point of view that is serial, not asynchronous. Here the
+   * attempt is kicked at the step boundary and runs alongside the turn; the
+   * durable bracket is deferred to commit so nothing is left open if the turn
+   * outlives the summary.
+   */
+  _beginEpisodeAttempt(agent, episode) {
     if (episode.phase !== 'armed') return
+    // Flip BEFORE the async work: a second boundary during an in-flight
+    // attempt must not start a concurrent episode.
     episode.phase = 'running'
     recordAsyncDecision(agent.session.id, {
       kind: 'claim',
@@ -288,36 +309,55 @@ export default class NanoCompactionEngine extends CompactionEngine {
       target: episode.summarizationTarget ?? null,
       promptVersion: episode.promptVersion ?? null,
     })
-    try {
-      void agent.runMaintenance(async (agentSignal) => {
-        try {
-          // Bound the episode attempt: a hung summarizer must not pin the arm.
-          const attemptTimeout = AbortSignal.timeout(EPISODE_TIMEOUT_MS)
-          const combined = AbortSignal.any([agentSignal, attemptTimeout])
-          await this._runEpisodeAttempt(agent, episode, combined)
-        } catch (error) {
-          this._dropEpisode(agent.session, episode, this._classifyFailure(error), error)
-        }
-      }).catch(error => {
-        this._dropEpisode(agent.session, episode, this._classifyFailure(error), error)
-      })
-    } catch (error) {
-      // Agent was claimed by a turn before we could claim idle maintenance —
-      // restore the arm so the next idle boundary retries the claim, bounded.
-      if (episode.phase === 'running') {
-        episode.phase = 'armed'
-        episode.claimAttempts = (episode.claimAttempts ?? 0) + 1
-        if (episode.claimAttempts >= MAX_CLAIM_ATTEMPTS) {
-          this._dropEpisode(agent.session, episode, 'starved', error)
-          return
-        }
-        this.ctx.logger.info(`async compaction maintenance deferred: ${messageOf(error)}`)
+    const controller = new AbortController()
+    episode.attemptAbort = controller
+    // Bound the attempt: a hung summarizer must not pin the episode forever.
+    const timer = setTimeout(() => controller.abort(new Error('async compaction attempt timed out')), EPISODE_TIMEOUT_MS)
+    episode.attempt = (async () => {
+      try {
+        await this._summarizeEpisode(agent, episode, controller.signal)
+      } catch (error) {
+        // A disarm settles the episode first; recording a second drop here
+        // would report one failure twice.
+        if (episode.phase !== 'none') this._dropEpisode(agent.session, episode, this._classifyFailure(error), error)
+      } finally {
+        clearTimeout(timer)
       }
-    }
+    })()
   }
 
-  /** One physical summarizer attempt inside maintenance (-18②). */
-  async _runEpisodeAttempt(agent, episode, signal) {
+  /**
+   * Cancel an armed or in-flight episode because the policy no longer asks for
+   * it (the owner raised B above the current fill).
+   *
+   * Without this, raising the water line could not stop a compaction already
+   * under way: the gate only ever armed, never disarmed. The abort is
+   * best-effort — the episode is settled here so the attempt's own catch sees
+   * `phase === 'none'` and does not record a second, misleading drop.
+   */
+  _disarmEpisode(agent, episode, reason) {
+    if (episode.phase === 'none') return false
+    try {
+      episode.attemptAbort?.abort(new Error(`async compaction disarmed: ${reason}`))
+    } catch { /* already aborted */ }
+    if (episode.tx?.opened === true) {
+      try {
+        episode.tx.fail(new Error(`disarmed: ${reason}`), 'disarmed')
+      } catch { /* bracket already closed */ }
+    }
+    this._settleEpisode(episode)
+    recordAsyncDecision(agent.session.id, {
+      kind: 'drop',
+      reason: 'disarmed',
+      detail: reason,
+      bracketed: false,
+    })
+    this.ctx.logger.info(`async compaction disarmed: ${reason}`)
+    return true
+  }
+
+  /** Prepare + summarize only. Writes no durable event: the bracket is deferred. */
+  async _summarizeEpisode(agent, episode, signal) {
     const session = agent.session
     const policy = this._policy()
     if (policy.safetyOnly) {
@@ -331,64 +371,70 @@ export default class NanoCompactionEngine extends CompactionEngine {
       return
     }
     const tx = prepareCompactionTransaction(
-      this._regionDependencies(episode.summarizationTarget),
+      this._regionDependencies(episode.summarizationTarget, episode),
       session, range.start, range.end,
-      { owner: null, stability: 'selected-span' },
+      { owner: null, stability: 'selected-span', deferStart: true },
       agent,
     )
     episode.tx = tx
     const prepared = tx.prepared()
-    const summarized = await tx.summarize(prepared, signal)
-    // Format law: turn/start must never cross an open compaction bracket —
-    // commit inside the maintenance window, not at a later turn's pre-step.
-    const outcome = tx.commit(summarized, signal)
-    if (outcome.failure !== undefined) {
-      // commit already closed the bracket with end{error} — detach the tx so
-      // the drop path does not append a second end{error}.
-      episode.tx = null
-      throw outcome.failure.error
-    }
-    try {
-      await this.ctx.sessions.flush(session)
-    } catch (error) {
-      this.ctx.logger.warn(`async compaction durability checkpoint failed: ${messageOf(error)}`)
-    }
-    episode._lastResult = outcome.result
-    // Over-health adoption primes the -13 FULL closed set on the next B crossing.
-    try {
-      const policy = this._policy()
-      const W = await this._window(agent, policy)
-      if (!policy.safetyOnly && W !== null) {
-        const measurement = this.ctx.tokenMeter.measure(session)
-        episode.adoptedAsyncOverHealth = measurement.totalTokens / W >= policy.policy.healthTargetAsync
-      }
-    } catch {
-      episode.adoptedAsyncOverHealth = false
-    }
-    // Wake the driver so the compacted surface is observed by a fresh turn.
-    agent.followup(this._adoptionWakeMessage(episode))
-    episode.circuit.transientFailures = 0
-    episode.circuit.open = false
-    episode.circuit.suppressedLogged = false
-    const result = episode._lastResult
-    episode._lastResult = undefined
-    recordAsyncDecision(session.id, {
-      kind: 'commit',
-      compactionId: episode.tx.compactionId,
-      promptVersion: episode.promptVersion ?? null,
-      tokens: result?.shadowedTokenCount ?? null,
-      records: result?.shadowedSeqs?.length ?? null,
-      range: result?.shadowedRange ?? null,
-    })
-    this._settleEpisode(episode)
-    this._logResult(result, 'async maintenance')
+    episode.summarized = await tx.summarize(prepared, signal)
+    episode.attemptReady = true
   }
 
-  _adoptionWakeMessage(episode) {
-    return createUserMessage({
-      content: [{ type: 'text', text: ADOPTION_WAKE_TEXT }],
-      source: { kind: 'compaction-adoption-wake', compactionId: episode.tx.compactionId },
-    })
+  /**
+   * Commit a ready attempt. Called at the next step boundary (so the request
+   * that follows already sees the compacted surface) or at idle when the turn
+   * ended first. The durable bracket lives only for the duration of this call.
+   */
+  async _finishEpisode(agent, episode) {
+    if (episode.phase !== 'running' || episode.attemptReady !== true) return false
+    const session = agent.session
+    try {
+      const outcome = episode.tx.commit(episode.summarized, undefined)
+      if (outcome.failure !== undefined) {
+        // commit already closed the bracket with end{error} — detach the tx so
+        // the drop path does not append a second end{error}.
+        episode.tx = null
+        throw outcome.failure.error
+      }
+      try {
+        await this.ctx.sessions.flush(session)
+      } catch (error) {
+        this.ctx.logger.warn(`async compaction durability checkpoint failed: ${messageOf(error)}`)
+      }
+      episode._lastResult = outcome.result
+      // Over-health adoption primes the -13 FULL closed set on the next B crossing.
+      try {
+        const policy = this._policy()
+        const W = await this._window(agent, policy)
+        if (!policy.safetyOnly && W !== null) {
+          const measurement = this.ctx.tokenMeter.measure(session)
+          episode.adoptedAsyncOverHealth = measurement.totalTokens / W >= policy.policy.healthTargetAsync
+        }
+      } catch {
+        episode.adoptedAsyncOverHealth = false
+      }
+      episode.circuit.transientFailures = 0
+      episode.circuit.open = false
+      episode.circuit.suppressedLogged = false
+      const result = episode._lastResult
+      episode._lastResult = undefined
+      recordAsyncDecision(session.id, {
+        kind: 'commit',
+        compactionId: episode.tx.compactionId,
+        promptVersion: episode.promptVersion ?? null,
+        tokens: result?.shadowedTokenCount ?? null,
+        records: result?.shadowedSeqs?.length ?? null,
+        range: result?.shadowedRange ?? null,
+      })
+      this._settleEpisode(episode)
+      this._logResult(result, 'async maintenance')
+      return true
+    } catch (error) {
+      this._dropEpisode(session, episode, this._classifyFailure(error), error)
+      return false
+    }
   }
 
   _settleEpisode(episode) {
@@ -396,6 +442,9 @@ export default class NanoCompactionEngine extends CompactionEngine {
     episode.tx = null
     episode.prepared = null
     episode.summarized = null
+    episode.attemptReady = false
+    episode.attempt = undefined
+    episode.attemptAbort = undefined
   }
 
   _logResult(result, trigger) {
@@ -408,9 +457,11 @@ export default class NanoCompactionEngine extends CompactionEngine {
   }
 
   _dropEpisode(session, episode, reason, error) {
-    // Captured before the tx is cleared: the ledger must say whether this
-    // drop left a durable end{error} bracket or vanished without a trace.
-    const bracketed = episode.tx !== null
+    // Captured before the tx is cleared: the ledger must say whether this drop
+    // left a durable bracket behind or vanished without a trace. A deferred tx
+    // exists from prepare onward but writes nothing until commit, so `tx !==
+    // null` would overstate it.
+    const bracketed = episode.tx?.opened === true
     // Durable-lock hygiene: if the episode already opened its compaction/start
     // bracket (tx exists), close it with end{error} BEFORE clearing, or the
     // unmatched start blocks this session's compactions until the next
@@ -549,6 +600,13 @@ export default class NanoCompactionEngine extends CompactionEngine {
     const fullOnly = order.ok && order.fullOnly
     const episode = this._episode(agent.session)
 
+    // A raised B must be able to stop work that is already under way: the gate
+    // used to only ever arm, so lowering the line took effect immediately while
+    // raising it could not cancel anything.
+    if (episode.phase !== 'none' && fillRatio < policy.bufferSizeAsync) {
+      this._disarmEpisode(agent, episode, `fill ${(fillRatio * 100).toFixed(1)}% fell below B ${(policy.bufferSizeAsync * 100).toFixed(1)}%`)
+    }
+
     // FULL closed set (-13): trusted safety / DC-1 / post-adoption over-health.
     if (fillRatio >= SAFETY_RATIO
       || (fullOnly && fillRatio >= policy.bufferSizeAsync)
@@ -592,6 +650,9 @@ export default class NanoCompactionEngine extends CompactionEngine {
           promptVersion: instructionVersion(policy.summaryPrompt),
           orderOk: order.ok,
         })
+        // Kick the summarizer now: it runs alongside the turn instead of after
+        // it. The commit lands at the next step boundary.
+        this._beginEpisodeAttempt(agent, this._episode(agent.session))
       }
     }
     return null
@@ -674,7 +735,7 @@ export default class NanoCompactionEngine extends CompactionEngine {
     }
   }
 
-  _regionDependencies(summarizationTarget) {
+  _regionDependencies(summarizationTarget, episode) {
     return {
       meter: this.ctx.tokenMeter,
       summarize: (input, agent, abort) => {
@@ -683,6 +744,11 @@ export default class NanoCompactionEngine extends CompactionEngine {
         const instruction = !safetyOnly && typeof policy?.summaryPrompt === 'string' && policy.summaryPrompt.trim().length > 0
           ? policy.summaryPrompt
           : undefined
+        // The prompt is read HERE, so the version recorded for this episode
+        // must be computed HERE too. Recording the arm-time version made the
+        // ledger claim a contract that could differ from the one actually sent
+        // if the policy changed between arming and summarising.
+        if (episode !== undefined) episode.promptVersion = instructionVersion(instruction)
         const configured = instruction === undefined ? target : { ...(target ?? {}), instruction }
         return summarizeWithLlm(this.ctx, input, agent, abort, configured)
       },

@@ -601,8 +601,18 @@ export function prepareCompactionTransaction(
   const entryState = inspectCompactionEntryState(session)
   assertCompactionInactive(entryState.unmatchedCompactionStart, entryState.latestEndSeedSeq, 'compaction')
 
+  // `deferStart` splits the expensive half (summarize) from the durable half
+  // (the bracket). Without it the bracket opens at prepare time, which forces
+  // the async lane to wait for an idle session: `owner: null` refuses to open
+  // while a turn is running. With it the summarizer can run WHILE the turn
+  // continues and the bracket is written only at commit, microseconds wide.
+  const deferStart = options.deferStart === true
   let owner
-  if (options.owner === null) {
+  if (deferStart) {
+    // Resolved at commit: a turn-scoped bracket if a turn is open then, a
+    // maintenance bracket otherwise.
+    owner = entryState.openTurn
+  } else if (options.owner === null) {
     if (entryState.openTurn !== null) {
       throw new ManualCompactionError('busy', 'manual compaction: the session already has an open turn')
     }
@@ -620,7 +630,19 @@ export function prepareCompactionTransaction(
     ...(options.sourceCommandId === undefined ? {} : { sourceCommandId: options.sourceCommandId }),
     turn: owner,
   }
-  const startEvent = session.append('compaction/start', lifecycle)
+  let startEvent = deferStart ? undefined : session.append('compaction/start', lifecycle)
+
+  /**
+   * Open the bracket (deferred mode) or return the one opened at prepare.
+   * Re-checks the one-active gate because time has passed since prepare.
+   */
+  const openBracket = () => {
+    if (startEvent !== undefined) return startEvent
+    const state = inspectCompactionEntryState(session)
+    assertCompactionInactive(state.unmatchedCompactionStart, state.latestEndSeedSeq, 'compaction')
+    startEvent = session.append('compaction/start', { ...lifecycle, turn: state.openTurn })
+    return startEvent
+  }
   const assertStable = options.stability === 'whole-surface'
     ? assertWholeSurfaceUnchanged
     : assertSelectedSpanStable
@@ -629,6 +651,8 @@ export function prepareCompactionTransaction(
     compactionId,
     lifecycle,
     startEvent,
+    /** Whether the durable bracket has actually been written yet. */
+    get opened() { return startEvent !== undefined },
     assertStable,
     prepared: () => prepareCompaction(dependencies, session, selection),
     summarize: async (prepared, signal) =>
@@ -637,23 +661,29 @@ export function prepareCompactionTransaction(
       try {
         signal?.throwIfAborted()
         assertStable(dependencies, session, summarized)
-        const pending = commitCompactionBody(session, startEvent, summarized)
-        const endEvent = session.append('compaction/end', lifecycle)
+        const opened = openBracket()
+        const pending = commitCompactionBody(session, opened, summarized)
+        const endEvent = session.append('compaction/end', { ...lifecycle, turn: opened.data.turn })
         return { result: completeCompaction(pending, endEvent), failure: undefined }
       } catch (error) {
         let closed = false
-        try {
-          session.append('compaction/end', { ...lifecycle, error: errorChain(error) })
-          closed = true
-        } catch (closeError) {
-          return { result: undefined, failure: { error: closeError, stage: 'commit' } }
+        // A deferred bracket that never opened has nothing to close: appending
+        // an unmatched end would corrupt the one-active gate.
+        if (startEvent !== undefined) {
+          try {
+            session.append('compaction/end', { ...lifecycle, turn: startEvent.data.turn, error: errorChain(error) })
+            closed = true
+          } catch (closeError) {
+            return { result: undefined, failure: { error: closeError, stage: 'commit' } }
+          }
         }
         return { result: undefined, failure: { error, stage: 'commit' }, closed }
       }
     },
     fail: (error, stage) => {
+      if (startEvent === undefined) return
       try {
-        session.append('compaction/end', { ...lifecycle, error: errorChain(error) })
+        session.append('compaction/end', { ...lifecycle, turn: startEvent.data.turn, error: errorChain(error) })
       } catch (closeError) {
         return { error: closeError, stage: 'commit' }
       }

@@ -159,11 +159,11 @@ P0-00 干净树 + worktree
   - **完成判据**：close-type 与证据四元组一致；T26 标未观察
   - **验证映射**：`CHECK-CLOSE` · **依赖**：`P4-LOG`
   - **执行状态**：`complete` · **执行时间**：`2026-11-17T01:10:00Z` · **证据 / 备注**：`docs/code-review/26-nov/PRE-1116-closure.md`，close-type `implementation-complete-awaiting-live-verification`。
-- [ ] `P4-REVIEW` — 不少于三路审查子代理，汇聚后修复到收口
+- [x] `P4-REVIEW` — 不少于三路审查子代理，汇聚后修复到收口
   - **落点**：`.anote/reviews/PRE/1116/`
   - **完成判据**：真相层对账、完成度、防假绿三份报告落盘；修复后再测
   - **验证映射**：`CHECK-REVIEW` · **依赖**：`P4-CLOSE`
-  - **执行状态**：`not-started` · **执行时间**：`-` · **证据 / 备注**：`-`
+  - **执行状态**：`complete` · **执行时间**：`2026-11-17T02:20:00Z` · **证据 / 备注**：三份报告 + 回应落盘 `.anote/reviews/PRE/1116/`；F1/F2 与 M-01–M-13 逐条修复并补测试；修复后 27/28 套件通过（唯一 pre-existing s3）。
 
 ## 4. 验收与证据
 
@@ -195,8 +195,8 @@ P0-00 干净树 + worktree
 
 ## 5. 当前状态与交接
 
-- **当前节点**：W1–W3 代码与文档已落盘；`P3-09` 的两个 live 提交待本机 grant；三路审查进行中。
-- **下一动作**：收三路审查报告，逐条修复后重跑 gate。
+- **当前节点**：W1–W3 代码、文档、工作日志与 closure 已落盘；三路审查已收口并修复（`.anote/reviews/PRE/1116/review-response.md`）；`P3-09`/`T23`/`T24`/`T26` 保持 live-pending。
+- **下一动作**：交业主决定合并；本机 live grant 后执行对照、基线与页面阅读。
 - **当前阻塞**：无。
 - **待 owner**：合并到 `main`；T26 部署；worktree 删除。
 - **最终交接**：分支 `facade-observe-binding-v2`，closure 指向本 todo。

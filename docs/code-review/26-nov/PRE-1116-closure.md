@@ -9,7 +9,7 @@
 > 关联 design: `docs/specs/dsh-nano-performance-review/spec-26nov.md`（rev5）
 > 关联 action-plan: `docs/code-review/26-nov/PRE-1116-action-plan.md` §1–§11
 > 关联 evidence: `docs/code-review/26-nov/todo.1116.md` + inline §2
-> 关联 review: `.anote/reviews/PRE/1116/`
+> 关联 review: `.anote/reviews/PRE/1116/`（三份报告 + `review-response.md`）
 
 ---
 
@@ -19,7 +19,7 @@
 
 > **本阶段最关键的 known gap（对下游影响）**：
 > 1. `PRE1116-T23`/`T24`：旧 `evaluate` 与 v2 `diagnose` 的对照表未生成，基线未按三次稳定性重录；`evaluate` 因此保留，未删。
-> 2. `PRE1116-T26`：没有本机 grant，真实页面未部署/未阅读；`route-inventory.md` 与部分 live 文档句留待该步。
+> 2. `PRE1116-T26`：没有本机 grant，真实页面未部署/未阅读；`route-inventory.md` 已改为账本生成（87 行）。
 > 3. `PRE1116-T28`：受 `dsh-nano-s3-client` pre-existing 失败影响，全仓 gate 未到 0；其余 27/28 套件全绿。
 
 ---

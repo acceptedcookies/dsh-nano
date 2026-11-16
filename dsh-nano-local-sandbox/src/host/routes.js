@@ -306,7 +306,7 @@ async function ensureBase(session, deps) {
   if (session.httpBase) return session.httpBase
   if (!deps.backend?.inspect) return null
   try {
-    const inspected = await deps.backend.inspect(containerNameFor(session, deps))
+    const inspected = await deps.backend.inspect(containerNameFor(session, deps.env || process.env))
     const base = publishedHttpBase(inspected.raw ?? inspected)
     if (!base) return null
     if (session.phase === 'idle') session.phase = 'running'
@@ -475,13 +475,13 @@ export function routeSpecs(deps = {}) {
       }
       if (row.path.endsWith('/status')) {
         await ensureBase(session, deps)
-        send(res, 200, { ok: session.phase === 'running', httpBase: session.httpBase ?? null, kite: { phase: session.phase }, buildId: BUILD_ID, containerName: containerNameFor(session, deps) })
+        send(res, 200, { ok: session.phase === 'running', httpBase: session.httpBase ?? null, kite: { phase: session.phase }, buildId: BUILD_ID, containerName: containerNameFor(session, deps.env || process.env) })
         return
       }
       if (row.path.endsWith('/kite')) {
         const body = await readJson(req)
         const action = body.action
-        const name = containerNameFor(session, deps)
+        const name = containerNameFor(session, deps.env || process.env)
         if (action === 'suspend' && session.phase === 'running') {
           await deps.backend?.stop?.(name)
           session.phase = 'suspended'

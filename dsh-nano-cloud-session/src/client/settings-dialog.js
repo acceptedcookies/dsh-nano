@@ -4,14 +4,17 @@
  *  everything needed to connect a carrier lives in the first tab; session
  *  defaults are separate from credentials; security and SSH are read-only or
  *  account-level follow-ups. NanoDialog supplies the native Modal shell and
- *  nanoTabs the native tab contract; every control is a primitive Button/Input
- *  and every glyph is dsh artwork.
+ *  React `NanoTabs` the native tab contract; every control is a primitive
+ *  Button/Input and every glyph is dsh artwork. Deleting a credential profile
+ *  is irreversible (the token is write-only, so it must be re-entered) and goes
+ *  through the host `RiskConfirmation` acknowledgement.
  */
 import React from 'react'
-import { NanoDialog, nanoTabs } from 'dsh-nano-ui'
+import { NanoDialog, NanoTabs } from 'dsh-nano-ui'
 import {
   Button,
   Input,
+  RiskConfirmation,
   IconCheckCircleOutlineRegular,
   IconCodeOutlineRegular,
   IconGlobeOutlineRegular,
@@ -21,9 +24,10 @@ import {
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { api } from './api.js'
 import { DEVIN_PRESET } from './carriers.js'
+import { mayTerminate } from './confirm.js'
 import { readPrefs, writePrefs } from './prefs.js'
 
-const { createElement: h, useEffect, useRef, useState } = React
+const { createElement: h, useEffect, useState } = React
 
 function field(label, control) {
   return h('div', { className: 'dncs-field-row' },
@@ -47,11 +51,9 @@ export function SettingsDialog({ face, onClose }) {
   const [busy, setBusy] = useState(false)
   const [prefs, setPrefs] = useState(() => readPrefs())
   const [prefsNotice, setPrefsNotice] = useState('')
-  const tabsHost = useRef(null)
-  const accessPanel = useRef(null)
-  const prefsPanel = useRef(null)
-  const securityPanelRef = useRef(null)
-  const sshPanelRef = useRef(null)
+  const [tab, setTab] = useState('access')
+  const [removeTarget, setRemoveTarget] = useState(null)
+  const [acknowledged, setAcknowledged] = useState(false)
 
   const load = async () => {
     try {
@@ -67,23 +69,6 @@ export function SettingsDialog({ face, onClose }) {
   }
 
   useEffect(() => { void load() }, [])
-
-  useEffect(() => {
-    if (tabsHost.current == null || accessPanel.current == null || prefsPanel.current == null
-      || securityPanelRef.current == null || sshPanelRef.current == null) return
-    const tabs = nanoTabs({
-      label: t('settingsTitle'),
-      value: 'access',
-      items: [
-        { value: 'access', label: t('tabAccess'), panel: accessPanel.current },
-        { value: 'session', label: t('tabSession'), panel: prefsPanel.current },
-        { value: 'security', label: t('tabSecurity'), panel: securityPanelRef.current },
-        { value: 'ssh', label: t('tabSsh'), panel: sshPanelRef.current },
-      ],
-    })
-    tabsHost.current.append(tabs.el)
-    return () => tabs.el.remove()
-  }, [])
 
   const save = async () => {
     if (busy) return
@@ -129,12 +114,14 @@ export function SettingsDialog({ face, onClose }) {
     finally { setBusy(false) }
   }
 
+  /** Irreversible: the token is write-only, so a removed profile needs the
+   *  secret re-entered. The acknowledgement gate lives in confirm.js. */
   const remove = async id => {
-    if (!window.confirm(t('deleteConfirm'))) return
+    if (!mayTerminate({ acknowledged })) return
     setBusy(true); setProfileError('')
     try { await api.config('remove', { profileId: id }); await load(); face.refresh() }
     catch (cause) { setProfileError(cause?.message ?? String(cause)) }
-    finally { setBusy(false) }
+    finally { setBusy(false); setRemoveTarget(null); setAcknowledged(false) }
   }
 
   const makeSshKey = async () => {
@@ -168,7 +155,7 @@ export function SettingsDialog({ face, onClose }) {
         h(Button, { variant: 'primary', onClick: () => test(profile.id), disabled: busy }, t('test')),
         h(Button, { variant: 'outline', size: 'sm', onClick: () => setForm({ id: profile.id, label: profile.label, orgId: profile.orgId, secret: '', baseUrl: profile.baseUrl }), disabled: busy }, t('edit')),
         profile.active === true ? null : h(Button, { variant: 'outline', size: 'sm', onClick: () => activate(profile.id), disabled: busy }, t('activate')),
-        profile.active === true ? null : h(Button, { variant: 'outline', size: 'sm', onClick: () => remove(profile.id), disabled: busy }, t('delete')))))
+        profile.active === true ? null : h(Button, { variant: 'outline', size: 'sm', onClick: () => { setAcknowledged(false); setRemoveTarget(profile.id) }, disabled: busy }, t('delete')))))
 
   const guide = profiles.length === 0 ? h('div', { className: 'dncs-guide' },
     h('div', { className: 'dncs-profile-head' }, h(IconCheckCircleOutlineRegular, { size: 16 }), h('b', null, t('guideTitle'))),
@@ -245,17 +232,44 @@ export function SettingsDialog({ face, onClose }) {
         h(Button, { variant: 'outline', size: 'sm', onClick: () => navigator.clipboard?.writeText(sshKey.publicKey).catch(() => {}) }, t('copy'))),
       h('div', { className: 'dncs-profile-meta' }, t('enrollSteps'))))
 
-  return h(NanoDialog, {
-    copy,
-    title: t('settingsTitle'),
-    footer: h(Button, { variant: 'outline', onClick: onClose }, t('close')),
-    onConfirm: onClose,
-    onCancel: onClose,
-  },
-    h('div', { className: 'dncs-settings-root' },
-      h('div', { ref: tabsHost, className: 'dncs-tabs-host' }),
-      h('div', { ref: accessPanel }, access),
-      h('div', { ref: prefsPanel }, session),
-      h('div', { ref: securityPanelRef }, securityPanel),
-      h('div', { ref: sshPanelRef }, sshPanel)))
+  const tabs = h(NanoTabs, {
+    className: 'dncs-settings-panes',
+    label: t('settingsTitle'),
+    value: tab,
+    onChange: setTab,
+    items: [
+      { value: 'access', label: t('tabAccess'), content: access },
+      { value: 'session', label: t('tabSession'), content: session },
+      { value: 'security', label: t('tabSecurity'), content: securityPanel },
+      { value: 'ssh', label: t('tabSsh'), content: sshPanel },
+    ],
+  })
+
+  return h(React.Fragment, null,
+    h(NanoDialog, {
+      copy,
+      title: t('settingsTitle'),
+      // Settings needs room for the form: 704×640 measured for the old card
+      // maps to the nearest NanoDialog presets (720 wide, 640 tall).
+      width: 720,
+      fixedHeight: 640,
+      footer: h(Button, { variant: 'outline', onClick: onClose }, t('close')),
+      onConfirm: onClose,
+      onCancel: onClose,
+    },
+      h('div', { className: 'dncs-settings-root' }, tabs)),
+    removeTarget == null ? null : h(RiskConfirmation, {
+      open: true,
+      title: t('delete'),
+      description: t('deleteConfirm'),
+      acknowledgeLabel: t('deleteAcknowledge'),
+      cancelLabel: t('cancel'),
+      closeLabel: t('close'),
+      confirmLabel: t('delete'),
+      acknowledged,
+      disabled: busy,
+      onAcknowledgedChange: setAcknowledged,
+      onCancel: () => { setRemoveTarget(null); setAcknowledged(false) },
+      onConfirm: () => { void remove(removeTarget) },
+    }))
 }

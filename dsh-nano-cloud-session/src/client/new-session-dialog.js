@@ -210,6 +210,10 @@ export function NewSessionDialog({ face, onClose, onCreated }) {
   return h(NanoDialog, {
     copy,
     title: t('newSession'),
+    // The old card was 600×680: 560 is the nearest NanoDialog width preset and
+    // 640 the tallest height preset, so the form keeps its scrolling body.
+    width: 560,
+    fixedHeight: 640,
     confirmDisabled: form.prompt.trim() === '' || busy,
     busy,
     onConfirm: create,

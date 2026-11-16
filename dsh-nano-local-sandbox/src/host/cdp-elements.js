@@ -98,11 +98,49 @@ export async function navigate(session, httpBase, url, connect = connectCdp) {
   return { ok: true, url }
 }
 
+/** Liveness probe budget: local CDP must answer in single-digit ms. */
+const PROBE_TIMEOUT_MS = 1500
+/** Re-probe an idle socket at most this often. */
+const PROBE_EVERY_MS = 2500
+
+/**
+ * Drop the cached CDP client. The socket carries the page session, so callers
+ * must only reset when the socket is known dead — a healthy reset would strand
+ * the live page.
+ */
+export function resetClient(session) {
+  const client = session?.cdp
+  session.cdp = null
+  try { client?.close?.() } catch { /* already gone */ }
+}
+
+/**
+ * A cached socket proves its liveness cheaply before every burst of work.
+ * Without this, a container restart leaves `session.cdp` pointing at a
+ * half-open socket: `ws.send` silently buffers, every call dies on the 4s
+ * timeout, and the pane can never again reach the engine — even though
+ * `GET /json/list` (plain HTTP) still says the engine is up.
+ */
+async function clientUsable(client) {
+  if (!client || client.alive === false) return false
+  if (Date.now() - (client.probedAt || 0) < PROBE_EVERY_MS) return true
+  try {
+    await client.send('Browser.getVersion', {}, undefined, PROBE_TIMEOUT_MS)
+    client.probedAt = Date.now()
+    return true
+  } catch {
+    client.alive = false
+    return false
+  }
+}
+
 export async function ensureClient(session, httpBase, connect = connectCdp) {
-  if (session.cdp) return session.cdp
+  if (session.cdp && await clientUsable(session.cdp)) return session.cdp
+  if (session.cdp) resetClient(session)
   session.console = session.console || []
   session.network = session.network || []
   session.cdp = await connect(httpBase)
+  session.cdp.probedAt = Date.now()
   if (typeof session.cdp.listen === 'function') {
     session.cdp.listen((message) => {
       const params = message.params || {}
@@ -139,24 +177,36 @@ export function connectCdp(httpBase) {
   let next = 1
   const pending = new Map()
   const listeners = new Set()
+  const rejectPending = (reason) => {
+    for (const [, settle] of pending) settle.reject(new Error(reason))
+    pending.clear()
+  }
   ws.addEventListener('message', (event) => {
     let message
     try { message = JSON.parse(String(event.data)) } catch { return }
     if (typeof message.id === 'number' && pending.has(message.id)) {
-      pending.get(message.id)(message)
+      const settle = pending.get(message.id)
       pending.delete(message.id)
+      settle.resolve(message)
       return
     }
     if (message.method) {
       for (const listener of listeners) listener(message)
     }
   })
+  // A close/error event flips `alive`, so the next ensureClient() reconnects
+  // instead of writing into a dead pipe.
+  ws.addEventListener('close', () => { client.alive = false; rejectPending('cdp socket closed') })
+  ws.addEventListener('error', () => { client.alive = false; rejectPending('cdp socket error') })
   const ready = new Promise((resolve, reject) => {
     ws.addEventListener('open', () => resolve(), { once: true })
     ws.addEventListener('error', () => reject(new Error('cdp connect failed')), { once: true })
   })
-  return ready.then(() => ({
-    send(method, params = {}, sessionId) {
+  const client = {
+    alive: true,
+    probedAt: 0,
+    send(method, params = {}, sessionId, timeoutMs = 4000) {
+      if (!client.alive) return Promise.reject(new Error('cdp socket closed'))
       const id = next
       next += 1
       const frame = { id, method, params }
@@ -164,19 +214,36 @@ export function connectCdp(httpBase) {
       return new Promise((resolve, reject) => {
         const timer = setTimeout(() => {
           pending.delete(id)
+          // No answer on a loopback socket means the pipe is broken; flip the
+          // flag so the next caller gets a fresh connection instead of
+          // inheriting the same dead socket forever.
+          client.alive = false
           reject(new Error(`${method} timed out`))
-        }, 4000)
-        pending.set(id, (message) => {
-          clearTimeout(timer)
-          if (message.error) reject(new Error(message.error.message || method))
-          else resolve(message.result ?? {})
+        }, timeoutMs)
+        pending.set(id, {
+          resolve: (message) => {
+            clearTimeout(timer)
+            if (message.error) reject(new Error(message.error.message || method))
+            else resolve(message.result ?? {})
+          },
+          reject: (error) => { clearTimeout(timer); reject(error) },
         })
-        ws.send(JSON.stringify(frame))
+        try { ws.send(JSON.stringify(frame)) } catch (error) {
+          clearTimeout(timer)
+          pending.delete(id)
+          client.alive = false
+          reject(error)
+        }
       })
     },
     listen(fn) {
       listeners.add(fn)
       return () => listeners.delete(fn)
     },
-  }))
+    close() {
+      client.alive = false
+      try { ws.close() } catch { /* already closed */ }
+    },
+  }
+  return ready.then(() => client)
 }

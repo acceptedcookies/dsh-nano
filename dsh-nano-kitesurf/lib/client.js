@@ -40,7 +40,7 @@ var __kitesurfExport = (() => {
   var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
   // ../packages/dsh-nano-ui/src/dialog.js
-  function NanoDialog({ copy, title, description, confirmLabel, confirmDisabled, busy, error, danger, footer, maxHeight, width, region, onConfirm, onCancel, children }) {
+  function NanoDialog({ copy, title, description, confirmLabel, confirmDisabled, busy, error, danger, footer, maxHeight, width, region, className, onConfirm, onCancel, children }) {
     return import_react.default.createElement(import_dsh_client_ui_primitives.Modal, {
       open: true,
       onClose: onCancel,
@@ -51,7 +51,8 @@ var __kitesurfExport = (() => {
         "nano-dialog-card",
         maxHeight === void 0 ? "" : "nano-dialog-capped",
         width === void 0 ? "" : "nano-dialog-sized",
-        region === void 0 ? "" : "nano-dialog-regioned"
+        region === void 0 ? "" : "nano-dialog-regioned",
+        className ?? ""
       ].filter(Boolean).join(" "),
       contentClassName: "nano-dialog-content",
       footer: footer ?? import_react.default.createElement(
@@ -76,6 +77,11 @@ var __kitesurfExport = (() => {
   });
 
   // ../packages/dsh-nano-ui/src/menu.js
+  function menuHeight(items) {
+    let height = 8;
+    for (const item of items) height += item?.separator === true ? 9 : 28;
+    return height;
+  }
   function NanoMenu({ menu, actions, onClose, width = 208, maxHeight, theme, z }) {
     const ref = useRef(null);
     const [active, setActive] = useState(0);
@@ -84,8 +90,21 @@ var __kitesurfExport = (() => {
     const latest = useRef(items);
     latest.current = items;
     const openedAt = menu === null ? null : menu.openedAt;
+    const step = (from, dir) => {
+      const list = latest.current;
+      const n = list.length;
+      if (n === 0) return 0;
+      let index = from;
+      for (let guard = 0; guard < n; guard++) {
+        index = (index + dir + n) % n;
+        if (list[index]?.separator !== true) return index;
+      }
+      return from;
+    };
     useEffect(() => {
-      if (openedAt !== null) setActive(0);
+      if (openedAt === null) return;
+      const first = items.findIndex((item) => item?.separator !== true);
+      setActive(first < 0 ? 0 : first);
     }, [openedAt]);
     useEffect(() => {
       if (menu === null) return void 0;
@@ -100,18 +119,20 @@ var __kitesurfExport = (() => {
         }
         if (event.key === "ArrowDown") {
           event.preventDefault();
-          setActive((i) => (i + 1) % count);
+          setActive((i) => step(i, 1));
           return;
         }
         if (event.key === "ArrowUp") {
           event.preventDefault();
-          setActive((i) => (i - 1 + count) % count);
+          setActive((i) => step(i, -1));
           return;
         }
         if (event.key === "Enter") {
           event.preventDefault();
+          const item = latest.current[active];
+          if (!item || item.separator === true) return;
           onClose();
-          latest.current[active]?.run();
+          item.run();
         }
       };
       document.addEventListener("pointerdown", onPointer, true);
@@ -122,7 +143,7 @@ var __kitesurfExport = (() => {
       };
     }, [menu, active, count, onClose]);
     if (menu === null || count === 0) return null;
-    const height = count * 28 + 8;
+    const height = menuHeight(items);
     const left = Math.min(menu.x, (window.innerWidth || width) - width - 8);
     const top = Math.min(menu.y, (window.innerHeight || height) - height - 8);
     return import_react2.default.createElement("div", {
@@ -140,7 +161,7 @@ var __kitesurfExport = (() => {
       "data-nano-menu": "true",
       /* Undefined is dropped by React, so an owner that follows the shell simply omits it. */
       "data-nano-theme": theme
-    }, items.map((item, index) => import_react2.default.createElement(NanoMenuItem, {
+    }, items.map((item, index) => item?.separator === true ? import_react2.default.createElement("div", { key: item.id, className: "nano-menu-sep", role: "separator" }) : import_react2.default.createElement(NanoMenuItem, {
       key: item.id,
       item,
       index,
@@ -168,11 +189,11 @@ var __kitesurfExport = (() => {
       import_react2.default.createElement("span", { className: "nano-menu-label" }, item.label)
     );
   }
-  var import_react2, useCallback, useEffect, useRef, useState;
+  var import_react2, useEffect, useRef, useState;
   var init_menu = __esm({
     "../packages/dsh-nano-ui/src/menu.js"() {
       import_react2 = __toESM(__require("react"), 1);
-      ({ useCallback, useEffect, useRef, useState } = import_react2.default);
+      ({ useEffect, useRef, useState } = import_react2.default);
     }
   });
 
@@ -278,7 +299,7 @@ var __kitesurfExport = (() => {
     const up = options.direction === "up";
     const estimatedHeight = Math.min(
       options.maxHeight ?? Number.POSITIVE_INFINITY,
-      (options.items?.length ?? 0) * 28 + 8
+      menuHeight(options.items ?? [])
     );
     const anchorTop = r.top !== void 0 ? r.top : r.y ?? 0;
     const y = up ? anchorTop - (options.gap ?? 0) - (Number.isFinite(estimatedHeight) ? estimatedHeight : 0) : (r.bottom !== void 0 ? r.bottom : (r.y ?? 0) + (r.height ?? 0)) + (options.gap ?? 0);
@@ -413,6 +434,7 @@ var __kitesurfExport = (() => {
 .nano-menu-item[data-active="true"] .nano-menu-icon { color: inherit; }
 .nano-menu-check { display: inline-flex; color: inherit; }
 .nano-menu-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nano-menu-sep { height: 1px; margin: 4px 6px; background: var(--dsw-alias-border-l2); flex: none; pointer-events: none; }
 
 /* \u2500\u2500 transient toast (NanoToast) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
 .nano-toast { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); z-index: 40;
@@ -1574,6 +1596,7 @@ var __kitesurfExport = (() => {
           preparingEnv: "\u6B63\u5728\u51C6\u5907\u2026",
           prepareDone: "\u73AF\u5883\u5DF2\u5C31\u7EEA",
           prepareFailed: "\u51C6\u5907\u5931\u8D25",
+          prepareNotReady: "\u73AF\u5883\u672A\u5C31\u7EEA\uFF0C\u672A\u901A\u8FC7",
           copyDiag: "\u590D\u5236\u8BCA\u65AD\u4FE1\u606F",
           copyDiagHint: "\u590D\u5236\u53EF\u8BFB\u8BCA\u65AD\u6458\u8981\uFF1B\u6309\u4F4F Shift \u590D\u5236\u5B8C\u6574 JSON",
           diagCopied: "\u8BCA\u65AD\u4FE1\u606F\u5DF2\u590D\u5236",
@@ -1668,6 +1691,7 @@ var __kitesurfExport = (() => {
           preparingEnv: "Preparing\u2026",
           prepareDone: "Environment ready",
           prepareFailed: "Prepare failed",
+          prepareNotReady: "Environment not ready \u2014 failed",
           copyDiag: "Copy diagnostics",
           copyDiagHint: "Copies the readable summary; hold Shift for full JSON",
           diagCopied: "Diagnostics copied",
@@ -2131,6 +2155,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
 .nks-env-check-dot{flex:none;width:10px;text-align:center}
 .nks-env-check[data-ok="true"] .nks-env-check-dot{color:var(--dsw-alias-fill-success,#3fb950)}
 .nks-env-check[data-ok="false"] .nks-env-check-dot{color:var(--dsw-alias-fill-error,#d5455c)}
+.nks-env-check[data-ok="skip"] .nks-env-check-dot{color:var(--dsw-alias-label-tertiary);opacity:.7}
 .nks-env-check-detail{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;unicode-bidi:plaintext}
 .nks-env-note{font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-tertiary);line-height:1.5}
 .nks-settings-body label{color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxxs-11)}
@@ -3064,7 +3089,11 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           const result = await response.json().catch(() => ({}));
           const ports = result.ports ? result : await fetch(PORTS).then((r) => r.json()).catch(() => null);
           setSnap(ports);
-          setNote(result.ok ? result.action === "noop" ? copy.prepareDone : `${copy.prepareDone} \xB7 ${result.action}` : `${copy.prepareFailed}: ${result.errorId || result.error || `HTTP ${response.status}`}`);
+          if (Array.isArray(result.summary)) setDiag(result);
+          const failed = Array.isArray(result.summary) ? result.summary.filter((row) => !row.ok && !row.skipped) : [];
+          if (!result.ok) setNote(`${copy.prepareFailed}: ${result.errorId || result.error || `HTTP ${response.status}`}`);
+          else if (result.healthy === false || failed.length) setNote(`${copy.prepareNotReady}: ${failed.map((row) => row.label).join(" / ")}`);
+          else setNote(result.action === "noop" ? copy.prepareDone : `${copy.prepareDone} \xB7 ${result.action}`);
           await refreshStatus();
           await reloadShot(0, { keepPick: true }).catch(() => {
           });
@@ -3088,7 +3117,9 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       const engine = snap?.effective?.httpBase || "\u2014";
       const container = snap?.container?.state || "\u2014";
       const portRow = snap?.ports?.engine ? `${snap.ports.engine.port} \xB7 ${snap.ports.engine.heldBy === "this-container" ? "\u672C\u63D2\u4EF6\u5BB9\u5668" : snap.ports.engine.heldBy === "other" ? "\u88AB\u5176\u4ED6\u7A0B\u5E8F\u5360\u7528" : "\u7A7A\u95F2"}` : "\u2014";
-      const healthy = snap?.healthy === true;
+      const rows = Array.isArray(diag?.summary) ? diag.summary : [];
+      const rowsOk = rows.every((row) => row.ok === true || row.skipped === true);
+      const healthy = (typeof diag?.healthy === "boolean" ? diag.healthy : snap?.healthy === true) && rowsOk;
       return h(
         "div",
         { className: "nks-env", "data-nks-env": "1" },
@@ -3105,13 +3136,13 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         h("div", { className: "nks-env-row" }, h("b", null, copy.envPorts), h("span", null, portRow)),
         // Per-plane health, so "OK" can no longer mean "container up but the
         // pane silently fell back to screenshots".
-        Array.isArray(diag?.summary) ? h(
+        rows.length ? h(
           "div",
-          { className: "nks-env-checks", "data-nks-checks": String(diag.summary.length) },
-          diag.summary.map((row) => h(
+          { className: "nks-env-checks", "data-nks-checks": String(rows.length) },
+          rows.map((row) => h(
             "div",
-            { key: row.label, className: "nks-env-check", "data-ok": row.ok ? "true" : "false" },
-            h("span", { className: "nks-env-check-dot" }, row.ok ? "\u2713" : "\u2717"),
+            { key: row.label, className: "nks-env-check", "data-ok": row.skipped ? "skip" : row.ok ? "true" : "false" },
+            h("span", { className: "nks-env-check-dot" }, row.skipped ? "\u25CB" : row.ok ? "\u2713" : "\u2717"),
             h("b", null, row.label),
             h("span", { className: "nks-env-check-detail" }, row.detail || "\u2014")
           ))

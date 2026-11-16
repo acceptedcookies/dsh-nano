@@ -1,5 +1,6 @@
 // Smoke test: instantiate dnt-core.wasm on Node, feed ANSI, read render output.
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { dirname, join } from 'node:path'
 
@@ -450,6 +451,24 @@ e.dnt_free(id)
 
   const jsx = readFileSync(join(root, 'src/client/NanoTerm.jsx'), 'utf8')
   t('字体变更走整帧 invalidate', /reconfigure = \(next\) => \{[\s\S]*?term\.invalidate\(\)/.test(jsx))
+}
+
+// 13. 合同套件：test/*.test.mjs（node:test）由本入口一起收集，
+//     这样 `npm test` 一条命令同时覆盖 wasm 冒烟与迁移合同。
+for (const file of readdirSync(join(root, 'test')).filter((f) => f.endsWith('.test.mjs')).sort()) {
+  const suite = spawnSync(process.execPath, ['--test', join(root, 'test', file)], { encoding: 'utf8' })
+  const out = `${suite.stdout ?? ''}${suite.stderr ?? ''}`
+  const suitePass = Number(/# pass (\d+)/.exec(out)?.[1] ?? 0)
+  const suiteFail = Number(/# fail (\d+)/.exec(out)?.[1] ?? 0)
+  if (suite.status !== 0 && suiteFail === 0) {
+    // 崩溃 / 语法错不能当成 0 条通过。
+    console.error('FAIL:', `${file} exited ${suite.status} without a test summary`)
+    fail += 1
+  } else {
+    console.log(`  ${file}: ${suitePass} passed, ${suiteFail} failed`)
+    pass += suitePass
+    fail += suiteFail
+  }
 }
 
 console.log(`${pass} passed, ${fail} failed`)

@@ -111,14 +111,14 @@ P0-00 干净树（main@9792da0）
 ### PH4 — [DNMS]（`nue-1117-migrate-dnms`）
 
 - [x] `P4-01` — 云会话自判（宿主公开判据核实；无判据即停、回问答） · `NUE1117-T19`
-  - **执行状态**：`deferred`（问答 `Q18`，`807c357`）· **证据**：宿主 `SessionHeader`（`dsh-session` `types.d.ts:60-100`）与 `CreateSessionOptions.meta` 只有 `cwd/parentSession/isSeeded/origin:'subagent'/delegationDepth/agentPreset` 等字段，无来源/carrier/remote；[DNCS] 以 `ctx.sessions.create(undefined,{meta:{cwd}})` + `agents.enter(fake)` 投影，宿主侧为普通本地会话，唯一差异值 `model.current().provider='devin'` 由 [DNCS] 写入，不算宿主合同 → 按 §5.4 子步骤 4 停止。未读 `html[data-dncs-cloud]`、未建插件间约定。防侧载守卫断言（[DNMS] `src/` 无 `dncs`/`data-dncs-cloud`/`dncsCloud`）落 `test/nue-migration.test.mjs`；`isCloudSession` 用例待 Q18 裁决
+  - **执行状态**：`deferred`（问答 `Q18`，`807c357`；[业主] 裁决 A，`cf9a912` T-O-NUE1117-18：不判定，DESIGN §8 登记「会话来源字段」缺口，T19 保持 deferred）· **证据**：宿主 `SessionHeader`（`dsh-session` `types.d.ts:60-100`）与 `CreateSessionOptions.meta` 只有 `cwd/parentSession/isSeeded/origin:'subagent'/delegationDepth/agentPreset` 等字段，无来源/carrier/remote；[DNCS] 以 `ctx.sessions.create(undefined,{meta:{cwd}})` + `agents.enter(fake)` 投影，宿主侧为普通本地会话，唯一差异值 `model.current().provider='devin'` 由 [DNCS] 写入，不算宿主合同 → 按 §5.4 子步骤 4 停止。未读 `html[data-dncs-cloud]`、未建插件间约定。防侧载守卫断言（[DNMS] `src/` 无 `dncs`/`data-dncs-cloud`/`dncsCloud`）落 `test/nue-migration.test.mjs`；`isCloudSession` 用例待 Q18 裁决
 - [x] `P4-02` — 区域收束退役（主窗口级 Modal；包 AGENTS 约束第 1 条删除） · `NUE1117-T18`
   - **执行状态**：`complete` · **证据**：`faf9831`（合并 `e52ef13`）；删 `index.jsx` 区域查询与 `regionElement`、测量 effect、`body > div:has(> .nms-hist-dialog)` 段；固定高度改 `NanoDialog fixedHeight: 560`（0.2.0 已无 `.nano-dialog-content`）；AGENTS 改「两个必须遵守的呈现约束」
 - [x] `P4-03` — `Tag`/`Switch`/`SegmentedControl`、删未用 Tooltip、Toast 带 `anchor` · `NUE1117-T18`
   - **执行状态**：`complete` · **证据**：`faf9831`；`.nms-tag`→宿主 `Tag`（本机解码 tone 集合 neutral/info/success/warning/danger/outline/quiet/solid，catalog 徽标越界回落 neutral）、`.nms-switch`→`Switch`、场景页签→`SegmentedControl`、`NanoToast anchor={triggerRef.current}`、删 `.nms-root .nano-toast`。U1/U6 处理：未定义令牌换 catalog 令牌，数字 z-index 换 `--nano-layer-*`，`--dsh-composer-model-*-display`（宿主槽位合同变量）标 `nano-ui-exempt` 并登记 DESIGN §10
   - **测试四元组**：`e52ef13` · `cd dsh-nano-model-selector && npm test` · 62/62（≥54；新增 `nue-migration.test.mjs` 8 条，对照 main 源码 6 败 2 过，2 过为 T14/T19 回归守卫）· 2026-11-16T18:30:55Z；`node scripts/test-all.mjs` 21/22（仅 s3-client）；`cd packages/dsh-nano-ui && npm test` 42/42；`check-ui-rules` DNMS U1 3（已登记）/U2 0/U3 25/U4 1/U5 0/U6 0/U8 2/U9 5/U10 1，合计 37 ≤ 基线 62；`check-client-rules` ok；`lib/client.js` 含 `dsh-nano-ui@0.2.0` 1 处
   - **附**：`e1b2a5a` nano-ui 产物版本标记改为 `src/version.js` 首行 legal comment（见 §9）
-  - **依赖**：PH3 合入 · **执行状态**：`complete`（P4-01 `deferred`，Q18）
+  - **依赖**：PH3 合入 · **执行状态**：`complete`（P4-01 `deferred`，Q18 裁决 A：宿主缺口）
 ### PH5 — [DNEE]（`nue-1117-migrate-dnee`）
 
 - [x] `P5-01` — `:has()` 退役（文件树状态钩子登记宿主缺口） · `NUE1117-T20`
@@ -176,9 +176,9 @@ P0-00 干净树（main@9792da0）
 - [x] `P9-04` — 三个合同测试改写（`NANO_UI_SRC`/`NP_SRC` 可覆盖，旧实现上失败） · `NUE1117-T26`
   - **执行状态**：`complete` · **证据**：`4506137`；`portal-theme` 6、`z-order` 5、`dialog-layout` 4 条；旧实现（`d2e2b47` = `12bb081^1`）经 `NP_SRC`/`NANO_UI_SRC` 实跑：6/6、4/5、2/4 条 `AssertionError` 失败，0 ENOENT · 2026-11-16T20:13:24Z；预登记 6 条在新断言下消解，`dnn-expected-failures.json` 标 `resolvedBy: NUE-1117 P9-04`、`currentExpectedFailures: []`
 - [x] `P9-05` — 宿主对话卡片注入：停止点，回问答，不改 · `—`
-  - **执行状态**：`deferred`（问答 `Q19`，`9348347`）· **证据**：`panel.js` 样式 `:158-166`（`[data-changed-files]`、`:has(> .np-to-notepad)`）、注入 `attachNotepadCtas` `:4766-4828`、`MutationObserver` `:4833-4840`，保持原样；宿主 `ChangedFiles` 无动作座位；`check-ui-rules` 对该区 0 条（`:has()` 参数为 `np-` 自有类，U5 不报），T30 单列
+  - **执行状态**：`complete`（问答 `Q19`，`9348347`；[业主] 裁决 A，`cf9a912` T-O-NUE1117-19；注入、样式与 `MutationObserver` 整段删除 `49b0f1d`，合入 `7e79530`；DESIGN §8 登记「变更文件卡片动作」；T30 豁免移除）· **停止时证据**：`panel.js` 样式 `:158-166`（`[data-changed-files]`、`:has(> .np-to-notepad)`）、注入 `attachNotepadCtas` `:4766-4828`、`MutationObserver` `:4833-4840`，保持原样；宿主 `ChangedFiles` 无动作座位；`check-ui-rules` 对该区 0 条（`:has()` 参数为 `np-` 自有类，U5 不报），T30 单列
   - **测试四元组**：`81c90cc` · `node --test dsh-nano-notepad/test/*.test.mjs` · 90/90（≥80；`nue-migration` 9 条，对照旧实现 1 过 8 败）· 2026-11-16T20:15:02Z；`cd packages/dsh-nano-ui && npm test` 42/42 同时；`node scripts/test-all.mjs` @4506137 21/22（仅 s3-client）；`check-ui-rules --plugin DNN` 前 12/18/100/18/0/17/11/12/0（188）→ 后 3/13/97/9/0/13/11/9/2（157，U10 2 条均已登记）；`check-client-rules` ok；`lib/client.js` 含 `dsh-nano-ui@0.2.0`，同 HEAD 两次构建 sha256 相同；nano-ui 源码未改
-  - **依赖**：PH8 合入 · **执行状态**：`complete`（P9-05 `deferred`，Q19）
+  - **依赖**：PH8 合入 · **执行状态**：`complete`（P9-05 按 Q19 裁决 A 删除）
 ### PH10 — 收口（`nue-1117-closeout`）
 
 - [x] `P10-01` — 六份 `lib/client.js` 重建（同 HEAD 两次构建 sha 一致；版本标记；只改 `lib/`） · `NUE1117-T28`
@@ -193,10 +193,14 @@ P0-00 干净树（main@9792da0）
   - **依赖**：PH9 合入 · **执行状态**：`complete`（T27a–e 未观察）
 ### POST — 日志、closure、审查
 
-- [ ] `POST-01` — 工作日志按 `code-execution-log` 模板回填 AP §11
-- [ ] `POST-02` — closure（`docs/code-review/26-nov/NUE-1117-closure.md`）
-- [ ] `POST-03` — ≥3 路审查（真相层对账 / 工作完成度 / 防假绿与防侧载），PROMPT 与报告落 `.anote/reviews/NUE/1117/`
-- [ ] `POST-04` — 汇总、核实、修复，测试↔修复循环，更新 closure
+- [x] `POST-01` — 工作日志按 `code-execution-log` 模板回填 AP §11
+  - **执行状态**：`complete` · **证据**：AP §11（r1 `6eda98f`；r2 补审查修复轮、统计口径 F-04、状态枚举 F-05）
+- [x] `POST-02` — closure（`docs/code-review/26-nov/NUE-1117-closure.md`）
+  - **执行状态**：`complete` · **证据**：r1 `962d552`；r2 close-type `implementation-complete-awaiting-live-verification`、§8 审查与修复
+- [x] `POST-03` — ≥3 路审查（真相层对账 / 工作完成度 / 防假绿与防侧载），PROMPT 与报告落 `.anote/reviews/NUE/1117/`
+  - **执行状态**：`complete` · **证据**：`.anote/reviews/NUE/1117/exec-962d552/{truth-reconciliation,completeness,antigreen-antisideload}.report.md`；P1 合计 6 条，主代理逐条核实
+- [x] `POST-04` — 汇总、核实、修复，测试↔修复循环，更新 closure
+  - **执行状态**：`complete` · **证据**：裁决 Q18–Q23 `cf9a912`；修复合并 `b2aace6`、`bb42857`、`345738b`、`7e79530`、`4cadeb8`、`54e5805`；终态 @54e5805 2026-11-16T23:36:59Z：DNMS 62/62、DNEE 27/27、DNT 146/146、DNK 67/67、DNCS 41/41、DNN 91/91、nano-ui 43/43、`test/scripts` 43/43、`test-all` 21/22（仅 s3-client）、`check-client-rules` ok、`check-ui-rules` 258 条（U5/U6 0，U10 9 = §10 9 行）、六份 lib 各含 `dsh-nano-ui@0.2.1` 1 处
 
 ## 4. 验收与证据
 
@@ -206,22 +210,22 @@ P0-00 干净树（main@9792da0）
 | `NUE1117-T03`–`T07` | catalog 与检测 | `node --test test/scripts/{gen-nano-catalog,check-client-rules,check-ui-rules}.test.mjs`；`test-all` | 31/31 @2c5af77；test-all 20/21（s3-client 既有失败） | pass（T06 partial） |
 | `NUE1117-T08`–`T17` | nano-ui 0.2.0 | `cd packages/dsh-nano-ui && npm test`；六套件；`test-all` | 41/41 @a94f135；六套件 ≥ N6；DNN 失败 = 预登记 6 条；test-all 21/22（s3-client 既有） | pass（P3-05/P3-08 partial 待 T27） |
 | `NUE1117-T18` | [DNMS] 迁移 | `npm test`（含 `nue-migration.test.mjs`） | 62/62 @e52ef13 | pass |
-| `NUE1117-T19` | [DNMS] 云会话自判 | — | 宿主无判据，停止 | deferred（Q18） |
+| `NUE1117-T19` | [DNMS] 云会话自判 | — | 宿主无判据，停止 | deferred（Q18 裁决 A：宿主缺口） |
 | `NUE1117-T20` | [DNEE] 迁移 | `node --test test/*.mjs`（含 `nue-migration.test.mjs`） | 26/26 @3cfd282 | pass |
 | `NUE1117-T21` | [DNT] 迁移 | `node test/run.mjs`（含 `nue-migration.test.mjs`） | 145/145 @c47b0eb | pass |
 | `NUE1117-T22` | [DNK] 迁移 | `npm test`（含 `nue-migration.test.mjs`） | 65/65 @18b30f4 | pass |
 | `NUE1117-T23`–`T24` | [DNCS] 迁移 + 确认攻击向量 | `node --test`（含 `nue-migration`、`confirm`） | 39/39 @28b8202 | pass |
-| `NUE1117-T25`–`T26` | [DNN] 迁移 + 合同测试改写 | `node --test dsh-nano-notepad/test/*.test.mjs`；旧实现经 `NP_SRC`/`NANO_UI_SRC` 实跑 | 90/90 @81c90cc；旧实现三文件各 ≥1 AssertionError | pass（P9-05 deferred Q19） |
+| `NUE1117-T25`–`T26` | [DNN] 迁移 + 合同测试改写 | `node --test dsh-nano-notepad/test/*.test.mjs`；旧实现经 `NP_SRC`/`NANO_UI_SRC` 实跑 | 90/90 @81c90cc；旧实现三文件各 ≥1 AssertionError；修复轮 91/91 @54e5805 | pass（P9-05 按 Q19 删除） |
 | `NUE1117-T27a`–`e` | 视觉核对（live） | 本机 profile + ego-browser 截图 | — | pending（需 live 授权与部署） |
 | `NUE1117-T28` | 收尾重建 | 同 HEAD 两次构建 12 个 sha256；版本标记；lib 提交 diff | 六对相同 @196b6fd；标记各 1；`1cc787c` 只含 lib；test-all 21/22 | pass |
-| `NUE1117-T29`–`T30` | 文档与终态扫描 | `node --test test/scripts/{nue-docs,nue-endstate}.test.mjs` | 全部 `test/scripts` 39/39 @a85ec54；P9-05 单列 | pass（P9-05 deferred Q19） |
+| `NUE1117-T29`–`T30` | 文档与终态扫描 | `node --test test/scripts/{nue-docs,nue-endstate}.test.mjs` | 全部 `test/scripts` 39/39 @a85ec54；修复轮 43/43 @54e5805，T30 无豁免 | pass |
 
 ## 5. 当前状态与交接
 
-- **当前节点 / 已完成**：P0-00、PH1、PH2、PH3、PH4（P4-01 deferred）、PH5、PH6、PH7、PH8、PH9（P9-05 deferred）、PH10
-- **下一动作**：POST-01 工作日志 → POST-02 closure → POST-03 审查
+- **当前节点 / 已完成**：P0-00、PH1、PH2、PH3、PH4（P4-01 deferred，Q18 裁决 A）、PH5、PH6、PH7、PH8、PH9（P9-05 按 Q19 删除）、PH10、POST-01..04
+- **下一动作**：T27a–e live 视觉核对（需 [业主] 授权）
 - **当前阻塞**：无
-- **待 owner 决定**：Q18（P4-01，推荐 A）；Q19（P9-05，推荐 A）
+- **待 owner 决定**：T27a–e 授权；closure §4 A 类残留是否另立工作项
 - **最终交接目标**：[业主]
 
 ## 6. 已启用插件
@@ -265,6 +269,7 @@ P0-00 干净树（main@9792da0）
 - `2026-11-16` · P9-05 停止，问答 Q19 登记（`9348347`，推荐 A 整段删除 + 登记「变更文件卡片动作」缺口），待 [业主] 裁决。- `2026-11-16` · PH10：首次 lib 重建提交（`8c96e8e`，HEAD `c4c9001`）先于 P10-02 文档/注释修改，为让 [DNK] buildId 与最终源码 HEAD 一致，在未合并的 closeout 分支上撤掉该提交，先提交 P10-02（`196b6fd`），再在该 HEAD 重做两次构建并提交 lib（`1cc787c`）。worktree 构建会把三个宿主 bundle（DNEE `lib/host.js`、DNN `lib/web-registrar.js`、DNT `lib/web-routes.js`）的源路径注释改成 `../../../../packages/...`，属 worktree 软链产物，已还原不入提交。
 - `2026-11-16` · PH10：终态总验发现 `test/scripts/gen-nano-catalog.test.mjs` T03 自 PH4 `e52ef13` 起失败 1 条（DESIGN §10 登记的 `--dsh-composer-model-*-display` 被当作令牌声明）。PH4–PH9 只跑了各插件套件与 `test-all`（`test/scripts` 不在 `test-all` 内），漏检。修正为 T03 只扫 §1–§9（`bff49dd`，合并 `a85ec54`），PH4 回写里「T18 pass」的结论不受影响，但「每 Phase 跑全部相关检测」的执行纪律有缺口，如实登记。
 - `2026-11-16` · P10-02：DESIGN §8 缺口终表未加入 Q19 相关条目（「变更文件卡片动作」）——该登记等同选择 Q19 选项 A，留待 [业主] 裁决。
+- `2026-11-17` · 审查修复轮：r1 闸门未抓住未解析令牌/数字层级未豁免、[DNEE] 改写宿主 portal 层、[DNT] 滚动条嫁接、U5 只认字面量，均由三路审查发现；[业主] 裁决 Q18–Q23 后按包分 worktree 修复。合并时 DESIGN §10 末尾三次冲突，均保留两侧行（终 9 行 = U10 9）；`nue-endstate.test.mjs` 冲突取闸门分支实现。[DNEE] 分支基于加固前扫描器，合并前 rebase 到 main，并把 T20 的 class 属性扫描改用 `HOST_CLASS_ATTR_RE`（`2039fe7`）。修复轮 lib 在各分支 HEAD 重建，未在最终 HEAD 重做双构建 sha 比对。
 ## 8. 附件：[业主] 发车指令（原文）
 
 > 本 directive 注册为 `NUE-1117` 执行授权来源。

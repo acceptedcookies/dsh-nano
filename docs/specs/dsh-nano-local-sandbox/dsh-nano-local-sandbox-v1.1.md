@@ -447,7 +447,16 @@ GET /dsh-nano-terminal/health → 200 · local:up / mcp:client / isolate:stub
 | `instance.logs / buildInfo` | `buildId`（`index.js:107`）、宿主 stderr | 镜像 digest、版本 pin、构建时间 | **迁（新建完整版）** |
 | `cdp.endpoint / cdp.targets / cdp.evaluate` | `browserSocketUrl` `/targets` `/evaluate` | 端点从 status 动态取，不烤地址 | **迁**（L1 CDP driver） |
 | `cdp.open / shot / pick / edit / history / settings` | `lib/engine.js` 各导出 | 单页、有界、漂移检测 | **迁**（L1 driver；[DNK] 保留 note 预算与 UI） |
-| `dom.srcdoc` | `lib/dom.js:140` `buildSrcDoc` | 脚本剥离 / base 重基 / picker 注入 | **留 [DNK]**（前端呈现） |
+| `dom.srcdoc` | `src/host/dom-srcdoc.js` `buildSrcDoc` | 脚本剥离 / base 重基（picker 由 pane 自绑） | **迁 [DNLS]**（2026-11-16 修订，见下） |
+
+> **归属修订登记（2026-11-16，[业主] 授权 agent 裁定，truth 面无独立 truth-id，以本节为唯一登记真源）**
+>
+> `dom.srcdoc` 的构建方从 **[DNK]** 改为 **[DNLS]**。理由三条：
+> 1. **安全边界**：脚本剥离必须发生在宿主侧（信任侧），不能在被渲染不可信 HTML 的那一侧做；
+> 2. **单一真源**：路由已归 [DNLS]，[DNK] 的 `lib/dom.js` 已成不可达死代码，留两份违反单一真源；
+> 3. **picker 归属不变**：pane 早已在 `bindDomFrame` 里对 iframe 文档自绑 picker，宿主注入的 `PICKER` 是死重量，已删除。
+>
+> 随之固定：`/dom` 返回 `{ok,url,srcdoc,bytes,stripped}`；`stripped` 报告被剥离的 script/base/meta-refresh/on*/javascript: 计数，供诊断读取。iframe `sandbox` 去掉 `allow-scripts`（picker 由父页绑定，只需 `allow-same-origin`），作为 sanitizer 之外的第二道锁。
 | `history.list / remove / clear` | `/browse-history` + `lib/history.js` + KV | 收敛双写为一份 | **迁**（L1 state） |
 | `context.ref` | `/context` + `putRef/getRef` | 短 token 解析完整上下文 | **留 [DNK]** |
 | `note.design / batch / multi` | `src/shared/note.js` | 80 字 / 640 字 / 1600 字预算 | **留 [DNK]** |

@@ -236,6 +236,13 @@ const STYLE = `
 .nks-env-ok{color:var(--dsw-alias-fill-success,#3fb950)}
 .nks-env-bad{color:var(--dsw-alias-fill-error,#d5455c)}
 .nks-env-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:2px}
+.nks-env-checks{display:flex;flex-direction:column;gap:2px;margin-top:2px;padding-top:4px;border-top:.5px solid var(--dsw-alias-border-l2)}
+.nks-env-check{display:flex;align-items:baseline;gap:6px;font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-tertiary)}
+.nks-env-check b{font-weight:500;color:var(--dsw-alias-label-secondary);flex:none;min-width:34px}
+.nks-env-check-dot{flex:none;width:10px;text-align:center}
+.nks-env-check[data-ok="true"] .nks-env-check-dot{color:var(--dsw-alias-fill-success,#3fb950)}
+.nks-env-check[data-ok="false"] .nks-env-check-dot{color:var(--dsw-alias-fill-error,#d5455c)}
+.nks-env-check-detail{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;unicode-bidi:plaintext}
 .nks-env-note{font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-tertiary);line-height:1.5}
 .nks-settings-body label{color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxxs-11)}
 .nks-choices{display:flex;gap:4px}
@@ -1280,11 +1287,16 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
    */
   function EnvPanel() {
     const [snap, setSnap] = React.useState(null)
+    const [diag, setDiag] = React.useState(null)
+    const copyRawDiag = React.useRef(false)
     const [busyLocal, setBusyLocal] = React.useState(false)
     const [note, setNote] = React.useState('')
     React.useEffect(() => {
       let alive = true
       fetch(PORTS).then((r) => r.json()).then((data) => { if (alive) setSnap(data) }).catch(() => {})
+      // Deep probe on open: the panel must show per-plane health, not just the
+      // cheap container/engine poll.
+      fetch(DIAGNOSTICS).then((r) => r.json()).then((data) => { if (alive) setDiag(data) }).catch(() => {})
       return () => { alive = false }
     }, [])
     async function prepare() {
@@ -1308,7 +1320,12 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
     async function copyDiagnostics() {
       try {
         const data = await fetch(DIAGNOSTICS).then((r) => r.json())
-        await navigator.clipboard.writeText(JSON.stringify(data, null, 2))
+        // Humans get the short report the host already renders; the full JSON
+        // stays available to agents via the same route. Shift-click copies the
+        // raw payload for a bug report that needs every field.
+        setDiag(data)
+        const text = copyRawDiag.current ? JSON.stringify(data, null, 2) : (data.text || JSON.stringify(data, null, 2))
+        await navigator.clipboard.writeText(text)
         showToast(copy.diagCopied)
       } catch (cause) { showError(cause) }
     }
@@ -1326,9 +1343,22 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
       h('div', { className: 'nks-env-row' }, h('b', null, copy.envContainer), h('span', null, container)),
       snap?.containerName ? h('div', { className: 'nks-env-row' }, h('b', null, copy.envInstance), h('span', null, snap.containerName)) : null,
       h('div', { className: 'nks-env-row' }, h('b', null, copy.envPorts), h('span', null, portRow)),
+      // Per-plane health, so "OK" can no longer mean "container up but the
+      // pane silently fell back to screenshots".
+      Array.isArray(diag?.summary) ? h('div', { className: 'nks-env-checks', 'data-nks-checks': String(diag.summary.length) },
+        diag.summary.map((row) => h('div', { key: row.label, className: 'nks-env-check', 'data-ok': row.ok ? 'true' : 'false' },
+          h('span', { className: 'nks-env-check-dot' }, row.ok ? '✓' : '✗'),
+          h('b', null, row.label),
+          h('span', { className: 'nks-env-check-detail' }, row.detail || '—')))) : null,
       h('div', { className: 'nks-env-actions' },
         h('button', { type: 'button', className: 'nks-start-btn', 'data-nks-prepare': '1', disabled: busyLocal, onClick: prepare }, busyLocal ? copy.preparingEnv : copy.prepareEnv),
-        h('button', { type: 'button', className: 'nks-start-btn', 'data-nks-copy-diag': '1', onClick: copyDiagnostics }, copy.copyDiag)),
+        h('button', {
+          type: 'button',
+          className: 'nks-start-btn',
+          'data-nks-copy-diag': '1',
+          title: copy.copyDiagHint,
+          onClick: (event) => { copyRawDiag.current = event.shiftKey === true; copyDiagnostics() },
+        }, copy.copyDiag)),
       h('div', { className: 'nks-env-note' }, note || copy.envHint))
   }
 
@@ -1901,7 +1931,11 @@ function BrowserPane({ copy, languageOf, schemeOf }) {
         ref: domFrameRef,
         className: 'nks-dom',
         title: 'Kitesurf page',
-        sandbox: 'allow-scripts allow-same-origin',
+        // No allow-scripts: the host already strips scripts/handlers/js: URLs,
+        // and this is the second lock — a sanitizer miss must not become XSS
+        // into the DSH host page. Picking is bound from the parent
+        // (bindDomFrame → doc.addEventListener), which needs only same-origin.
+        sandbox: 'allow-same-origin',
         style: vp ? { width: `${vp.width}px`, height: `${vp.height}px`, flex: 'none', display: 'block', margin: '0 auto', background: '#fff' } : { width: '100%', height: '100%', display: 'block', border: 0 },
         ref: (el) => { domFrameRef.current = el; if (el) writeDomFrame(el) },
       }) : hasPage ? h('img', {

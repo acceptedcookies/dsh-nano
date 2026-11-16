@@ -4,7 +4,7 @@ import { registerRoutes } from '../lib/route-guard.js'
 import { ROUTE_TABLE } from '../lib/route-table.js'
 import { routeSpecs } from '../src/host/routes.js'
 
-function routesFor(session, backend) {
+function routesFor(session, backend, extra = {}) {
   const routes = []
   const ctx = {
     get(name) {
@@ -13,7 +13,7 @@ function routesFor(session, backend) {
     },
     webServer: { register(route) { routes.push(route); return () => {} } },
   }
-  registerRoutes(ctx, routeSpecs({ session, backend }), { table: ROUTE_TABLE, plugin: 'dsh-nano-local-sandbox' })
+  registerRoutes(ctx, routeSpecs({ session, backend, ...extra }), { table: ROUTE_TABLE, plugin: 'dsh-nano-local-sandbox' })
   return Object.fromEntries(routes.map((route) => [route.path, route]))
 }
 
@@ -27,7 +27,7 @@ async function call(route, { method = 'GET', url = route.path, body } = {}) {
 test('kite suspend and resume follow the running session and history stays off workerd-kv', async () => {
   const stops = []
   const session = { phase: 'running', history: [], containerName: 'dnls-a' }
-  const routes = routesFor(session, { async stop(name) { stops.push(name) }, async start(name) { stops.push(`start:${name}`) } })
+  const routes = routesFor(session, { async stop(name) { stops.push(name) }, async start(name) { stops.push(`start:${name}`) } }, { prepareTimeoutMs: 0 })
   const opened = await call(routes['/nano-local-sandbox/open'], { method: 'POST', body: { url: 'https://example.com' } })
   assert.equal(opened.body.ok, true)
   const suspended = await call(routes['/nano-local-sandbox/kite'], { method: 'POST', body: { action: 'suspend' } })
@@ -44,6 +44,11 @@ test('kite suspend and resume follow the running session and history stays off w
   assert.deepEqual(stops, ['dnls-a', 'start:dnls-a'])
   assert.equal(history.body.source, 'plugin-store')
   assert.equal(history.body.entries.length, 1)
-  assert.equal(selftest.body.ok, true)
-  assert.equal(selftest.body.failed, 0)
+  // /selftest is 11 real probes now (profile.yaml `health.selftest: 11`).
+  // This fixture has no container and no engine, so it must report failures
+  // rather than the old hard-coded ok:true.
+  assert.equal(selftest.body.total, 11)
+  assert.equal(selftest.body.checks.length, 11)
+  assert.equal(selftest.body.ok, selftest.body.failed === 0)
+  assert.equal(selftest.body.failed > 0, true)
 })

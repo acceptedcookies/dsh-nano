@@ -2,7 +2,18 @@ import { randomUUID } from 'node:crypto'
 import { appendHistory } from './state-service.js'
 import { policyFingerprint, tupleFromPolicy } from './policy-adapter.js'
 
-export function createInstanceRegistry({ backend, profile, volumeFor, now = () => Date.now(), ids } = {}) {
+/**
+ * Per-session instance bookkeeping: identity, port allocation, policy
+ * fingerprint, idle sweep.
+ *
+ * Three optional hooks let the caller decide what a container actually looks
+ * like, so this module stays free of platform nouns and of the kitesurf recipe:
+ *  - `imageFor(profile, instance)`  → runtime image reference
+ *  - `portSpecFor(instance)`        → `[{publish}]` rows for `container run -p`
+ *  - `mountsFor(instance, tuple)`   → `[{arg}]` rows for `container run --mount`
+ * Without them the registry still works for tests (no image, no ports).
+ */
+export function createInstanceRegistry({ backend, profile, volumeFor, now = () => Date.now(), ids, imageFor, portSpecFor, mountsFor } = {}) {
   const instances = new Map()
   let portCursor = 20000
 
@@ -60,10 +71,10 @@ export function createInstanceRegistry({ backend, profile, volumeFor, now = () =
     }
     await backend.create({
       containerName: instance.containerName,
-      image: profile.build.base,
+      image: typeof imageFor === 'function' ? imageFor(profile, instance) : profile.build.base,
       resources: profile.runtime.isolation.resources,
-      mounts,
-      ports: [],
+      mounts: typeof mountsFor === 'function' ? mountsFor(instance, tuple) : mounts,
+      ports: typeof portSpecFor === 'function' ? portSpecFor(instance) : [],
     })
     instances.set(instanceId, instance)
     return { ok: true, status: 201, instance }
@@ -91,5 +102,19 @@ export function createInstanceRegistry({ backend, profile, volumeFor, now = () =
     return appendHistory(instances.get(instanceId).stateVolume, row)
   }
 
-  return { ensure, reconcile, sweep, recordHistory, instances }
+  /** Public, serializable view — never leaks mounts or stateVolume paths. */
+  function list() {
+    return [...instances.values()].map((row) => ({
+      instanceId: row.instanceId,
+      profileId: row.profileId,
+      sessionId: row.sessionId,
+      phase: row.phase,
+      containerName: row.containerName,
+      endpoints: row.endpoints,
+      attached: row.attached,
+      lastAttach: row.lastAttach,
+    }))
+  }
+
+  return { ensure, reconcile, sweep, recordHistory, list, instances }
 }

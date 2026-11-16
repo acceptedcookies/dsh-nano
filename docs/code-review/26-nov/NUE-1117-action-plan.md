@@ -754,4 +754,81 @@ NUE-1117
 
 ## 11. 执行日志回填
 
-文档状态非 `executed`，本节省略。
+> 执行者：`Droid（主代理）+ worker 子代理（PH5–PH9 各一路，主代理审查后合并）`
+> 执行时间：`2026-11-16 ~ 2026-11-17`（UTC 证据时间 2026-11-16T17:52Z – 20:19Z）
+> 文档状态：`draft → executing → 除停止项外已完成（代码已合并、视觉未核对）`。按 §10.1 第 5、6 条与 §10.4，T27a–e `未观察`、T19 `deferred`（Q18）、P9-05 `deferred`（Q19），本文**不标 `executed`**。本节在 [业主] 发车指令 STEP.5 要求下提前回填，偏离本节原「非 executed 省略」的写法，见 todo §9。
+> 代码改动统计：`9792da0..a85ec54` 共 103 文件（修改 54 / 新建 47 / 删除 1），+11178 / −4199；无 schema bump；nano-ui `0.1.0 → 0.2.0`（硬切，一次）
+> 跟踪文件：[`todo.1117.md`](./todo.1117.md)（逐项证据四元组与 §9 偏差日志为本节明细真源）
+
+- **实际执行摘要**：PH1（`09290dc`）DESIGN.md 唯一规格 + 仓根原则 + design skill；PH2（`860f34c`、`2c5af77`、`d2e2b47`）catalog 三件套、导出检查泛化、`check-ui-rules`；PH3（`12bb081`）nano-ui 0.2.0 硬切（包装宿主 Menu/Toast/SegmentedControl/Modal，ThemeScope，NANO_LAYER，窗口覆盖层，旧接口全删）；PH4 [DNMS]（`e52ef13`）；PH5 [DNEE]（`3cfd282`）；PH6 [DNT]（`c47b0eb`）；PH7 [DNK]（`18b30f4`）；PH8 [DNCS]（`28b8202`）；PH9 [DNN]（`81c90cc`）；PH10（`d7a6b6b`）文档终同步、T29/T30、六份产物重建；修正 T03（`a85ec54`）。每个 Phase 合并后回写 todo（`2c0ad72`…`7a2a24e`）。
+- **Phase 偏差（计划 vs 实际）**：
+  1. （substrate-fit）宿主主题快照方案字段在 `active.colorScheme`，主题变化只经 `ctx.on('theme/change')`；ThemeScope 收 `subscribe` 参数，DESIGN §3 回写。
+  2. （substrate-fit）nano-ui 产物版本标记：模板注释被压缩掉，改 `src/version.js` 首行 legal comment（`e1b2a5a`）。
+  3. （计划偏差）T06「test-all 退出 0」因既有 `packages/dsh-s3-client` 失败不可满足，全程按「除 s3-client 外全过」执行。
+  4. （计划偏差）P3-12 diff 另含 DESIGN.md 回写（P3-05/P3-06 更具体要求）。
+  5. （substrate-fit）PH8 [DNCS] 收起态展开改宿主 layout 服务，首版 `ctx.layout?.` 在未声明 inject 时会抛错，审查后改 `ctx.get('layout')`（`7ac0085`）。
+  6. （substrate-fit）PH9 [DNN] `np-switch` 实为多段选择 → `SegmentedControl`（非 AP 写的 `Switch`）；`np-tip` → 宿主 `Tooltip` 不可行，原生 `title` + 豁免。
+  7. （顺序调整）PH9 提交粒度：视图开关/图标门面/启动器提示并入 P9-01 提交，避免不可构建的中间提交。
+  8. （顺序调整）PH10 lib 提交在未合并分支上重做一次，使 [DNK] buildId 对应最终源码 HEAD。
+  9. （执行缺口）`test/scripts` 不在 `test-all` 内，PH4–PH9 未跑，T03 自 `e52ef13` 起红 1 条，PH10 终态总验发现并修正（`a85ec54`）。
+  10. （计划偏差）[DNEE] 保留 4 处宿主属性锚点（非 `:has`/`[class*=`/哈希类），待 T27 视觉核对。
+- **阻塞与处理**：
+  1. P4-01：宿主无云会话判据 → 停止，问答 Q18（`807c357`），推荐 A，待 [业主]。
+  2. P9-05：[DNN] 向宿主 `[data-changed-files]` 卡片注入 → 停止，问答 Q19（`9348347`），推荐 A，待 [业主]；T30 单列。
+  3. T27a–e：需 live 部署与 [业主] 授权，未执行。
+- **测试发现**：终态（`a85ec54`，2026-11-16T20:19:43Z）DNMS 62/62、DNEE 26/26、DNT 145/145、DNK 65/65、DNCS 39/39、DNN 90/90，均高于 N6 下限（54/12/137/56/24/80）；nano-ui 42/42；`test/scripts` 39/39；`test-all` 21/22（仅 s3-client）；`check-client-rules` ok。每个插件的 `nue-migration.test.mjs` 都对迁移前源码实跑过负控（DNMS 6 败、DNEE 10 败、DNT 5 败、DNK 6 败、DNCS 8 败、DNN 8 败）；T26 旧实现经 `NP_SRC`/`NANO_UI_SRC` 三文件各 ≥1 条 AssertionError、0 ENOENT；T29/T30 对照之前的树各 1 败。P3-12 预登记 [DNN] 6 条失败与实际集合相等，P9-04 后消解。`check-ui-rules` 573 → 339 条。
+- **后续 handoff**：Q18/Q19 裁决（[业主]）；T27a–e live 视觉核对（[业主] 授权后）；宿主缺口（DESIGN §8 九项）待宿主提供后迁移；[DNK] 重复 `ref` 键、s3-client 既有失败不在本期。
+
+### 11.1 逐工作项状态
+
+| 工作项 | 状态 | PR | 实际落点（file:line） | 备注 |
+|--------|------|----|------------------------|------|
+| `P1-01..04` | `✅ done` | `7e423f5` / `a9bb0b5` | `docs/specs/dsh-nano-ui/DESIGN.md`；`AGENTS.md`「UI 宿主优先」；`docs/agents/skills/dsh-nano-design/SKILL.md` | T01/T02 |
+| `P2-01..05` | `✅ done`（P2-04 🟩） | `9d4a536` / `04d148b` / `7f082d1` | `scripts/gen-nano-catalog.mjs`；`packages/dsh-nano-ui/catalog/*.json`；`scripts/check-client-rules.mjs`；`scripts/check-ui-rules.mjs` | T06 受 s3-client 既有失败 |
+| `P3-01..04, 06, 07, 09..12` | `✅ done` | `44612c4` / `5ebd20d` / `a94f135` / `fbe31fb` | `packages/dsh-nano-ui/src/{layers,theme,theme-scheme,icons,toast,tabs,toolbar,empty,window,button,mount,version}.js` | T08–T10、T12、T14–T17 |
+| `P3-05, P3-08` | `🟩 partial` | `44612c4` | `packages/dsh-nano-ui/src/{menu,overlay,dom}.js` | 交互仅契约层；T27a 未观察 |
+| `P4-01` | `⚠️ deferred` | `807c357` | — | Q18 |
+| `P4-02, P4-03` | `✅ done` | `faf9831` | `dsh-nano-model-selector/src/client/{index.jsx,styles.js,…}` | T18 |
+| `P5-01..03` | `✅ done` | `42878d4` / `487eec6` | `dsh-nano-explorer-extra/src/client/{styles,menu,body,index,format}.js` | T20；4 处宿主属性锚点保留 |
+| `P6-01, P6-02` | `✅ done` | `4659e49` | `dsh-nano-terminal/src/client/NanoTerm.jsx` | T21 |
+| `P7-01..05` | `✅ done`（P7-04 视觉 🟩） | `35facad` / `a8b7c61` | `dsh-nano-kitesurf/src/client/index.js` | T22；T27d 未观察 |
+| `P8-01..05` | `✅ done` | `95b2149` / `7ac0085` | `dsh-nano-cloud-session/src/client/{styles,index,section,settings-dialog,native-workbench,confirm,sidebar}.js` | T23/T24 |
+| `P9-01..04` | `✅ done`（P9-01 视觉 🟩） | `e4757bc` / `f3f1c0b` / `16a8d14` / `4506137` / `0735193` | `dsh-nano-notepad/src/client/{panel,index,icons}.js`；`dsh-nano-notepad/test/*.test.mjs` | T25/T26；T27c 未观察 |
+| `P9-05` | `⚠️ deferred` | `9348347` | `dsh-nano-notepad/src/client/panel.js:158-166,4766-4840`（保持原样） | Q19 |
+| `P10-01..03` | `✅ done` | `196b6fd` / `1cc787c` / `d7a6b6b` | 六份 `lib/client.js`；`test/scripts/nue-{docs,endstate}.test.mjs` | T28–T30 |
+| `T27a–e` | `⚠️ env-blocked No-Go` | — | — | 需 live 授权 |
+
+### 11.2 关键指标演进
+
+| 指标 | 基线（`9792da0` / PH2 首跑） | 终态（`a85ec54`） | Δ |
+|------|---------------|---------------|---|
+| `check-ui-rules` 警告总数 | 573（78 文件） | 339（94 文件） | −234 |
+| U5 宿主 DOM 嫁接（六插件 + nano-ui） | DNEE 9、DNCS 31、nano-ui 若干 | 0 | 清零（P9-05 单列） |
+| DNCS 警告 | 61 | 0 | −61 |
+| 六插件测试条数 | 54/13/137/56/24/80 | 62/26/145/65/39/90 | +63 |
+| nano-ui 测试 | 0 | 42 | +42 |
+
+### 11.3 关键决策日志
+
+#### Decision-1 — 停止项不在实现中裁决
+- **背景**：P4-01、P9-05 均触及真相层未覆盖的范围问题。
+- **决议**：按 AP §5.4 / P9-05 停止，问答 Q18、Q19 append-only，相关代码保持原样或不新增读取。
+- **理由**：「不得擅自扩约」；AP 预先登记的停止点。
+- **代价**：[DNMS] 在云会话中照常渲染；[DNN] 仍有一处 `:has()` 套宿主卡片。
+
+#### Decision-2 — 子代理分 Phase 执行、主代理审查合并
+- **背景**：PH5–PH9 每个插件面大、相互串行。
+- **决议**：每 Phase 一路 worker 在独立 worktree 内实现并自测，主代理审 diff 后合并、回写 todo。
+- **理由**：保持 DAG 串行与每 Phase 回写纪律。
+- **代价**：PH8 首版缺陷（`ctx.layout`）靠审查拦下；PH4 起 `test/scripts` 漏跑由终态总验补救。
+
+### 11.4 pre-existing 失败甩锅
+
+| 失败项 | 证据（git / 命令） | 判断 |
+|--------|---------------------|------|
+| `packages/dsh-s3-client`（`# suites 0` / 3 cancelled） | PH2 之前的 `2c0ad72` 上 `node scripts/test-all.mjs` 同样失败；本期未改 `packages/dsh-s3-client/**`（`git diff --name-only 9792da0..a85ec54 -- packages/dsh-s3-client` 为空） | `pre-existing, non-blocking` |
+
+### 11.5 文档状态
+
+`draft → executing → 除停止项外已完成（2026-11-17，代码已合并、视觉未核对）`。
+residual / follow-up → Q18、Q19 裁决；T27a–e live 核对；宿主缺口迁移（**不回填本阶段**）。

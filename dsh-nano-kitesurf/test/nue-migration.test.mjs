@@ -183,3 +183,56 @@ test('T22: the settings tab strip still follows the nano-ui NanoTabs contract', 
   assert.match(SETTINGS_TABS, /value:\s*'browse'/)
   assert.match(SETTINGS_TABS, /value:\s*'history'/)
 })
+
+// ---- NUE-1117 review fix: layers (U6) and tokens (U1) ----
+
+/** DESIGN.md §4: numeric stacking values live only in nano-ui `layers.js`; everything else
+ *  reads `--nano-layer-*`, and a zero layer used to open a stacking context is `isolation`. */
+const NUMERIC_LAYER = /z-index\s*:\s*-?\d|zIndex\s*:\s*-?\d/g
+
+/** DESIGN.md §2 「不要写」column. Matched as the token reference a plugin would write, so the
+ *  sanctioned `--dsw-alias-state-warn-primary` / `-interactive-bg-hover-danger` stay clear. */
+const FORBIDDEN_TOKENS = [
+  'label-error', 'danger', 'label-danger', 'fill-error',
+  'warning', 'warn', 'fill-warning', 'state-warning-primary',
+  'fill-success', 'state-info-primary', 'focus-ring',
+  'label-invert', 'label-inverted', 'label-on-color', 'tooltip-label',
+  'label-quaternary',
+  'bg-primary', 'bg-secondary', 'bg-l2',
+  'border-primary', 'border-subtle',
+  'accent-primary', 'fill-brand',
+  'link-hover', 'elevation-raised', 'radius-full', 'hairline',
+]
+const FORBIDDEN_TOKEN_RE = new RegExp(`--dsw-(?:alias-)?(?:${FORBIDDEN_TOKENS.join('|')})(?![\\w-])`, 'g')
+const FORBIDDEN_FONT_RE = /font-family-mono|font-mono|dsw-mono|--ds-font-family-code/g
+
+test('T22 control: the layer and token scans report a fixture that carries them', () => {
+  const fixture = [{
+    path: 'fixture.js',
+    text: [
+      '.nks-fix-a{z-index:20}',
+      "style: { zIndex: 3 }",
+      ...FORBIDDEN_TOKENS.map((name) => `.nks-fix-${name}{color:var(--dsw-alias-${name})}`),
+      '.nks-fix-font{font:11px font-mono}',
+      '.nks-fix-ok{color:var(--dsw-alias-state-warn-primary);z-index:var(--nano-layer-local2)}',
+    ].join('\n'),
+  }]
+  assert.equal(countIn(fixture, NUMERIC_LAYER)[0]?.count, 2, 'z-index / zIndex fixtures')
+  const hits = [...fixture[0].text.matchAll(FORBIDDEN_TOKEN_RE)].map((match) => match[0])
+  assert.equal(hits.length, FORBIDDEN_TOKENS.length, 'one hit per §2 「不要写」name')
+  for (const name of FORBIDDEN_TOKENS) assert.ok(hits.includes(`--dsw-alias-${name}`), name)
+  assert.deepEqual([...fixture[0].text.matchAll(FORBIDDEN_FONT_RE)].map((match) => match[0]), ['font-mono'])
+})
+
+test('T22: no numeric stacking values and no DESIGN.md §2 「不要写」tokens', () => {
+  assert.deepEqual(countIn(sources, NUMERIC_LAYER), [], 'numeric z-index / zIndex in the author tree')
+  assert.deepEqual(countIn(sources, FORBIDDEN_TOKEN_RE), [], 'tokens on the DESIGN.md §2 「不要写」list')
+  assert.deepEqual(countIn(sources, FORBIDDEN_FONT_RE), [], 'monospace font keywords instead of --dsh-font-family-code')
+  // The replacement tokens are the sanctioned ones, and the nano-ui layer variables the
+  // plugin now reads are emitted by NANO_STYLES (LAYER_CSS :root) before STYLE.
+  assert.match(index, /style\.textContent = NANO_STYLES \+ STYLE/)
+  assert.match(index, /var\(--nano-layer-local\d\)/)
+  assert.match(index, /var\(--nano-layer-overlay\)/)
+  assert.match(index, /var\(--dsw-alias-state-error-primary\)/)
+})
+

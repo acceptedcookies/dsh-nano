@@ -377,7 +377,7 @@ export function handleHostRead(req, res, host) {
     if (method === 'HEAD') res.end()
     else res.end(JSON.stringify(body))
   }
-  if (method !== 'GET' && method !== 'HEAD') {
+  if (method !== 'GET') {
     finish(405, { status: 405, error: 'method' })
     return
   }

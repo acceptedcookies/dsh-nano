@@ -78,7 +78,7 @@ function assertObserveEvent(event) {
 // ../packages/dsh-performance-review/src/state.js
 var CLIENT_KEY = Symbol.for("dsh.perfReview.v2");
 var HOST_KEY = Symbol.for("dsh.perfReviewHost.v2");
-var BUILD_STAMP = true ? "3ee91d65ad6f" : "dev";
+var BUILD_STAMP = true ? "d84f685f322e" : "dev";
 var NAME_RE = /^[a-z0-9][a-z0-9-]{0,39}$/;
 var CONTRACT_KEY_RE = /^[a-z0-9][a-z0-9.-]{0,63}$/;
 var MAX_USAGE_KEYS = 32;
@@ -471,7 +471,7 @@ function handleHostRead(req, res, host) {
     if (method === "HEAD") res.end();
     else res.end(JSON.stringify(body));
   };
-  if (method !== "GET" && method !== "HEAD") {
+  if (method !== "GET") {
     finish(405, { status: 405, error: "method" });
     return;
   }

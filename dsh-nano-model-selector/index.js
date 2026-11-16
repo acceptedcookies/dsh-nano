@@ -576,6 +576,6 @@ export function apply(ctx) {
     { path: ASYNC_COMPACT_ROUTE, methods: ['GET', 'HEAD', 'PUT'], handler: asyncCompactHandlers(ctx, runtimeHandle) },
     { path: ASYNC_COMPACT_BUNDLE_ROUTE, methods: ['GET', 'HEAD'], handler: asyncCompactBundleHandler(bundleInventory) },
     { path: ASYNC_COMPACT_SWITCH_ROUTE, methods: ['POST'], handler: (req, res) => asyncCompactSwitchHandler(ctx, req, res, bundleInventory) },
-    { path: PERF_REVIEW_HOST_ROUTE, methods: ['GET', 'HEAD'], handler: (req, res) => handleHostRead(req, res, ensurePerfReviewHost()) },
+    { path: PERF_REVIEW_HOST_ROUTE, methods: ['GET'], handler: (req, res) => handleHostRead(req, res, ensurePerfReviewHost()) },
   ], { table: BINDING_TABLE, plugin: PLUGIN, observe: event => ensurePerfReviewHost().observe(event) })
 }

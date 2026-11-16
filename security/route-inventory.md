@@ -33,7 +33,7 @@
 | `dnn.pipeline.claim` | `/nano-notepad/pipeline/claim` | POST | http | exact | L2 | s3:write | 4096 | – |
 | `dnn.rpc` | `/nano-notepad/rpc` | POST | http | exact | L1 | s3:read | 4096 | – |
 | `dnn.fx.sdk` | `/nano-notepad/fx/sdk` | GET | http | prefix | L1 | static:asset | 0 | – |
-| `dnn.perf-review.host` | `/nano-notepad/perf-review/host` | GET,HEAD | http | exact | L2 | read:host | 0 | – |
+| `dnn.perf-review.host` | `/nano-notepad/perf-review/host` | GET | http | exact | L2 | read:host | 0 | – |
 
 ## dsh-nano-explorer-extra — 18
 
@@ -68,7 +68,7 @@
 | `dnms.async-compact` | `/nano-model-selector/async-compact` | GET,HEAD,PUT | http | exact | L3 | write:operator | 16384 | – |
 | `dnms.async-compact.bundle` | `/nano-model-selector/async-compact/bundle` | GET,HEAD | http | exact | L0 | read:host | 0 | – |
 | `dnms.async-compact.switch` | `/nano-model-selector/async-compact/switch` | POST | http | exact | L3 | write:operator | 1024 | – |
-| `dnms.perf-review.host` | `/nano-model-selector/perf-review/host` | GET,HEAD | http | exact | L2 | read:host | 0 | – |
+| `dnms.perf-review.host` | `/nano-model-selector/perf-review/host` | GET | http | exact | L2 | read:host | 0 | – |
 
 ## dsh-nano-local-sandbox — 29
 

@@ -197,8 +197,8 @@ function scanModelSelector() {
     {
       plugin: 'dsh-nano-model-selector',
       path: perfReviewHost,
-      methods: ['GET', 'HEAD'],
-      bodyLimit: { GET: 0, HEAD: 0 },
+      methods: ['GET'],
+      bodyLimit: { GET: 0 },
       source: { file, line: lineOf(text, 'const PERF_REVIEW_HOST_ROUTE =') },
     },
   ]

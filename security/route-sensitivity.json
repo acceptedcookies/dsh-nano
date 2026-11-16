@@ -1314,8 +1314,7 @@
       "plugin": "dsh-nano-notepad",
       "path": "/nano-notepad/perf-review/host",
       "methods": [
-        "GET",
-        "HEAD"
+        "GET"
       ],
       "sensitivity": "L2",
       "capability": "read:host",
@@ -1330,8 +1329,7 @@
       "plugin": "dsh-nano-model-selector",
       "path": "/nano-model-selector/perf-review/host",
       "methods": [
-        "GET",
-        "HEAD"
+        "GET"
       ],
       "sensitivity": "L2",
       "capability": "read:host",

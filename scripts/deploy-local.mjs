@@ -289,17 +289,37 @@ for (const plugin of plugins) {
     const deployed = { ...pkg, dependencies: {} }
     delete deployed.devDependencies
     writeFileSync(join(dst, 'package.json'), JSON.stringify(deployed, null, 2) + '\n')
-    // Build identity the host reports as buildId; the client bundle bakes the
-    // same value. A mismatch means two different deploys are in memory.
-    writeFileSync(join(dst, 'build.json'), JSON.stringify({
-      version: pkg.version,
-      gitSha: repoGitSha,
-      buildId: `${pkg.version}+${repoGitSha}`,
-      builtAt: new Date().toISOString(),
-    }, null, 2) + '\n')
+
   }
   summary.push(`  ${name} -> ${dst} (${files.length} file entries)`)
   restoreGenerated(name, plugin)
+}
+
+/** Build id baked into a deployed client bundle (version+sha). The host reads
+ *  the same value from build.json, so a stale bundle is visible as a mismatch
+ *  instead of silently serving an old UI. */
+function clientBuildId(plugin) {
+  try {
+    const text = readFileSync(join(dshHome, 'plugins', plugin.name, 'lib', 'client.js'), 'utf8')
+    const escaped = plugin.pkg.version.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const hit = text.match(new RegExp(`${escaped}\\+[0-9a-f]{6,}`))
+    return hit ? hit[0] : null
+  } catch { return null }
+}
+
+// One deploy generation for every plugin in this home: the client bundle is
+// the only artifact carrying a baked id, and the host must report the value
+// the pane will actually compare against.
+const generation = (dryRun ? null : (plugins.map(clientBuildId).find(Boolean))) || `${plugins[0].pkg.version}+${repoGitSha}`
+if (!dryRun) {
+  for (const plugin of plugins) {
+    writeFileSync(join(dshHome, 'plugins', plugin.name, 'build.json'), JSON.stringify({
+      version: plugin.pkg.version,
+      gitSha: repoGitSha,
+      buildId: generation,
+      builtAt: new Date().toISOString(),
+    }, null, 2) + '\n')
+  }
 }
 
 // ---- profile wiring -----------------------------------------------------------

@@ -29,7 +29,7 @@ const DEFAULT_THEME = `${CLI}/dsh-client-ui-theme/lib/client.js`
 export const METHOD = {
   primitives: 'keys of the object literal that contains `Tooltip:` in the dsh-web-frontend index-*.js bundle (the primitives export map), sorted',
   icons: 'components: primitives names matching ^Icon[A-Z]; sprite: glyph keys of the object passed to Object.entries() in the ICON_SYMBOLS builder × weight keys of the weight map; sprite id = dsw-icon-<glyph>-<weight>',
-  tokens: 'names: every distinct match of /--(?:dsw|dsh|ds)-[a-z0-9-]+/ in dsh-client-ui-theme lib/client.js; a name ending in "-" is a template prefix (prefix=true). values: light = declarations in blocks whose selector list is only :root / html / body / body *, dark = light overlaid with blocks whose selector list is only body[data-ds-dark-theme] (optionally followed by " *"); var() chains resolved within the same scheme; platform-scoped and nested selectors ignored. declared=false means no such declaration; runtime=true means the name is a quoted JS string literal or extends a template prefix (written by host code at runtime)',
+  tokens: 'names: every distinct match of /--(?:dsw|dsh|ds)-[a-z0-9-]+/ in dsh-client-ui-theme lib/client.js; a name ending in "-" is a template prefix (prefix=true). values: light = declarations in blocks whose selector list is only :root / html / body / body *, dark = light overlaid with blocks whose selector list is only body[data-ds-dark-theme] (optionally followed by " *"); var() chains resolved within the same scheme; platform-scoped and nested selectors ignored. schemes.light/dark = the --dsw-* names whose declared light and dark values differ, with the resolved value per scheme (what a scope pinned to the other scheme must re-declare). declared=false means no such declaration; runtime=true means the name is a quoted JS string literal or extends a template prefix (written by host code at runtime)',
 }
 
 const TOKEN_NAME_RE = /--(?:dsw|dsh|ds)-[a-z0-9-]+/g
@@ -209,6 +209,18 @@ export function extractTokens(text) {
   return tokens
 }
 
+/** Per-scheme values of the --dsw-* tokens that differ between light and dark. */
+export function schemesOf(tokens) {
+  const light = {}
+  const dark = {}
+  for (const [name, t] of Object.entries(tokens)) {
+    if (!name.startsWith('--dsw-') || !t.declared || t.light === null || t.dark === null || t.light === t.dark) continue
+    light[name] = t.light
+    dark[name] = t.dark
+  }
+  return { light, dark }
+}
+
 /* ------------------------------- output --------------------------------- */
 
 function sortDeep(value) {
@@ -249,8 +261,8 @@ export function buildCatalog({ bundles, theme, generated }) {
     primitives: { generated, method: METHOD.primitives, sources, exports: exportsMap },
     icons: { generated, method: METHOD.icons, sources, components: iconComponents, sprite: sprite === null ? null : { from: spriteFrom, ...sprite } },
     tokens: themeText === null
-      ? { generated, method: METHOD.tokens, sources: tokenSources, count: 0, tokens: {} }
-      : (() => { const tokens = extractTokens(themeText); return { generated, method: METHOD.tokens, sources: tokenSources, count: Object.keys(tokens).length, tokens } })(),
+      ? { generated, method: METHOD.tokens, sources: tokenSources, count: 0, schemes: { light: {}, dark: {} }, tokens: {} }
+      : (() => { const tokens = extractTokens(themeText); return { generated, method: METHOD.tokens, sources: tokenSources, count: Object.keys(tokens).length, schemes: schemesOf(tokens), tokens } })(),
   }
 }
 

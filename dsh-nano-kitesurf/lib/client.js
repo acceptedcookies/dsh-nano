@@ -2492,6 +2492,11 @@ ${LAYER_CSS}
           diagCopied: "\u8BCA\u65AD\u4FE1\u606F\u5DF2\u590D\u5236",
           envHint: "\u4F9D\u6B21\u68C0\u67E5\u5BB9\u5668\u3001\u7AEF\u53E3\u3001\u5F15\u64CE\u5065\u5EB7\u5E76\u81EA\u52A8\u4FEE\u590D",
           contractNewer: "\u5BBF\u4E3B\u89C2\u5BDF\u5408\u540C\u7248\u672C\u8F83\u65B0",
+          logsButton: "\u5F15\u64CE\u65E5\u5FD7",
+          logsTitle: "\u5F15\u64CE\u65E5\u5FD7",
+          logsDesc: "\u5BB9\u5668\u91CC Kitesurf \u81EA\u5DF1\u7684\u8F93\u51FA\uFF0C\u6700\u8FD1 300 \u884C\u3002",
+          logsLoading: "\u8BFB\u53D6\u4E2D\u2026",
+          logsEmpty: "\uFF08\u6CA1\u6709\u8F93\u51FA\uFF09",
           legacyHost: "\u65E7\u5BBF\u4E3B",
           legacyHostTitle: "\u5BBF\u4E3B\u63D2\u4EF6\u6BD4\u9762\u677F\u65E7\uFF0C\u5C11\u62A5\u51E0\u9879\u660E\u7EC6\uFF0C\u4E0D\u5F71\u54CD\u6D4F\u89C8",
           noteEmpty: "\u53EF\u76F4\u63A5\u6CE8\u5165\uFF0C\u65E0\u9700\u586B\u5199",
@@ -2596,6 +2601,11 @@ ${LAYER_CSS}
           diagCopied: "Diagnostics copied",
           envHint: "Checks container, ports and engine health, then repairs automatically",
           contractNewer: "Host reports a newer observation contract",
+          logsButton: "Engine log",
+          logsTitle: "Engine log",
+          logsDesc: "Kitesurf output from inside the container, last 300 lines.",
+          logsLoading: "Reading\u2026",
+          logsEmpty: "(no output)",
           legacyHost: "older host",
           legacyHostTitle: "The host plugin predates this pane and reports fewer fields; browsing still works",
           noteEmpty: "Insert without typing",
@@ -2848,6 +2858,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
   var NETWORK = "/nano-local-sandbox/network";
   var ELEMENTS = "/nano-local-sandbox/elements";
   var BROWSE_HISTORY = "/nano-local-sandbox/browse-history";
+  var LOGS = "/nano-local-sandbox/logs";
   var DOM = "/nano-local-sandbox/dom";
   var CONTROL = "/nano-local-sandbox/control";
   var localNotes = [];
@@ -3059,6 +3070,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
 .nks-env-row span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right;unicode-bidi:plaintext}
 .nks-env-ok{color:var(--dsw-alias-state-success-primary)}
 .nks-env-legacy{color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11);margin-left:6px}
+.nks-logs{margin:0;max-height:380px;overflow:auto;white-space:pre-wrap;word-break:break-all;font:11px/1.45 ui-monospace,Menlo,monospace;color:var(--dsw-alias-label-secondary)}
 .nks-env-bad{color:var(--dsw-alias-state-error-primary)}
 .nks-env-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:2px}
 .nks-env-checks{display:flex;flex-direction:column;gap:2px;margin-top:2px;padding-top:4px;border-top:.5px solid var(--dsw-alias-border-l2)}
@@ -4111,6 +4123,38 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           setBusyLocal(false);
         }
       }
+      async function showLogs() {
+        const workspaceEl = workspaceRef.current;
+        if (workspaceEl === null || dialogOpenRef.current) return;
+        let text = copy.logsLoading;
+        try {
+          const data = await fetch(`${LOGS}?tail=300`).then((r) => r.json());
+          text = data.ok ? data.text || copy.logsEmpty : `${data.errorId || "kitesurf.engine.connect"} ${data.error || ""}`;
+        } catch (cause) {
+          text = String(cause?.message || cause);
+        }
+        if (workspaceEl !== workspaceRef.current) return;
+        dialogOpenRef.current = true;
+        let dialog = null;
+        const close = () => {
+          dialogOpenRef.current = false;
+        };
+        dialog = openNanoDialog2({
+          copy: { cancel: copy.close, confirm: copy.close, close: copy.close },
+          title: copy.logsTitle,
+          description: copy.logsDesc,
+          width: 720,
+          maxHeight: 560,
+          container: workspaceEl,
+          confirmLabel: copy.close,
+          onCancel: close,
+          onConfirm: () => {
+            close();
+            dialog?.close();
+          },
+          children: h7("pre", { className: "nks-logs", "data-nks-logs": "1" }, text)
+        });
+      }
       async function copyDiagnostics() {
         try {
           const data = await fetch(DIAGNOSTICS).then((r) => r.json());
@@ -4174,7 +4218,8 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
               copyRawDiag.current = event.shiftKey === true;
               copyDiagnostics();
             }
-          }, copy.copyDiag)
+          }, copy.copyDiag),
+          h7("button", { type: "button", className: "nks-start-btn", "data-nks-logs-open": "1", onClick: showLogs }, copy.logsButton)
         ),
         h7("div", { className: "nks-env-note" }, note || copy.envHint)
       );

@@ -157,7 +157,9 @@ ${NANO_STYLES}
 .dnt-settings-label{color:var(--dsw-alias-label-primary)}
 .dnt-settings-hint{margin-top:2px;font-size:11px;color:var(--dsw-alias-label-tertiary)}
 .dnt-settings-row .dnt-pick{display:inline-flex;align-items:center;gap:6px;min-width:132px;justify-content:space-between}
-.dnt-empty{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:10px;padding:24px;text-align:center;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxs-12)}
+/* The empty state must stay inside the flex column below the statusbar —
+   inset:0 over the whole root swallows every toolbar click (+ and gear). */
+.dnt-empty{flex:1;min-height:0;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:10px;padding:24px;text-align:center;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxs-12)}
 .dnt-empty-icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-link,#2f6fed);border:.5px solid var(--dsw-alias-border-l2)}
 .dnt-empty-icon svg{width:20px;height:20px}
 .dnt-empty-title{color:var(--dsw-alias-label-primary);font-weight:600}

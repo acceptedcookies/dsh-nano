@@ -383,10 +383,35 @@ export const STYLE = `${NANO_STYLES}
 .nxe-drawer-spin { color: var(--dsw-alias-label-tertiary); animation: nxe-spin 0.9s linear infinite; }
 @keyframes nxe-spin { to { transform: rotate(360deg); } }
 .nxe-change {
-  display: grid; grid-template-columns: 14px 16px minmax(0, 1fr); gap: 6px; align-items: baseline;
+  display: grid; grid-template-columns: 14px 16px minmax(0, 1fr) auto auto; gap: 6px; align-items: center;
   min-height: 20px; padding: 1px 4px; border-radius: var(--dsw-radius-sm);
   font-size: 12px; line-height: 18px;
 }
+.nxe-change[data-selected="true"] { background: var(--dsw-alias-interactive-bg-hover); }
+.nxe-change-name {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  border: 0; background: transparent; color: inherit; font: inherit; text-align: left;
+  padding: 0; cursor: pointer;
+}
+.nxe-change-open {
+  border: 0; background: transparent; color: var(--dsw-alias-label-tertiary); cursor: pointer;
+  width: 16px; height: 16px; padding: 0; display: inline-flex; align-items: center; justify-content: center;
+}
+.nxe-change-open:hover { color: var(--dsw-alias-label-primary); }
+.nxe-commit-note { margin: 4px 0 0; font-size: 11px; line-height: 16px; color: var(--dsw-alias-label-tertiary); }
+.nxe-commit-diff {
+  height: 160px; overflow: auto; margin-top: 8px;
+  border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-1, transparent);
+}
+.nxe-commit-diff-stat { margin: 0; padding: 4px 8px; font-size: 11px; line-height: 16px; position: sticky; top: 0; background: inherit; }
+.nxe-commit-diff-stat [data-tone="add"] { color: var(--nxe-git-added, #3fb950); }
+.nxe-commit-diff-stat [data-tone="del"] { color: var(--nxe-git-deleted, #f85149); }
+.nxe-commit-diff-pre { margin: 0; padding: 0 8px 8px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; line-height: 16px; }
+.nxe-commit-diff-line { white-space: pre; }
+.nxe-commit-diff-line[data-kind="add"] { color: var(--nxe-git-added, #3fb950); }
+.nxe-commit-diff-line[data-kind="del"] { color: var(--nxe-git-deleted, #f85149); }
+.nxe-commit-diff-line[data-kind="hunk"] { color: var(--dsw-alias-label-tertiary); }
 .nxe-change-status {
   font-weight: 700; text-align: center; font-variant-numeric: tabular-nums;
   color: var(--dsw-alias-label-secondary);

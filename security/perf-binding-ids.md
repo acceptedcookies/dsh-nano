@@ -37,6 +37,7 @@
 | `/nano-explorer-extra/list` | — | `dnee.list` | http | exact |
 | `/nano-explorer-extra/perf-review/host` | — | `dnee.perf-review.host` | http | exact |
 | `/nano-explorer-extra/read` | — | `dnee.read` | http | exact |
+| `/nano-explorer-extra/diff` | — | `dnee.diff` | http | exact |
 | `/nano-model-selector/catalog` | — | `dnms.catalog` | http | exact |
 | `/nano-model-selector/media-engines` | — | `dnms.media-engines` | http | exact |
 | `/nano-model-selector/media-engine` | — | `dnms.media-engine` | http | exact |

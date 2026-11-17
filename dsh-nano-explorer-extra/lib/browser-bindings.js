@@ -18,4 +18,5 @@ export const BROWSER_BINDINGS = Object.freeze([
   Object.freeze({ id: "dnee.list", path: "/nano-explorer-extra/list" }),
   Object.freeze({ id: "dnee.perf-review.host", path: "/nano-explorer-extra/perf-review/host" }),
   Object.freeze({ id: "dnee.read", path: "/nano-explorer-extra/read" }),
+  Object.freeze({ id: "dnee.diff", path: "/nano-explorer-extra/diff" }),
 ])

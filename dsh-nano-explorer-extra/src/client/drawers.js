@@ -6,7 +6,7 @@
  */
 
 import React from 'react'
-import { Button, FileTypeIcon, IconLoadingOutlineRegular, Input, SegmentedControl } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, FileTypeIcon, IconLoadingOutlineRegular, IconRightUpOutlineRegular, Input, SegmentedControl } from '@deepseek-ai/dsh-client-ui-primitives'
 import { NanoWindowDialog } from 'dsh-nano-ui'
 import { Dialog, useDialogContainer } from './dialogs.js'
 import { ageParts, partitionChanges, shortenPath, splitPath } from './format.js'
@@ -55,18 +55,28 @@ function matches(query, fields) {
  * @param props - the status entry.
  * @returns the row.
  */
-function ChangeRow({ file }) {
+function ChangeRow({ file, selected, onSelect, onOpen, openLabel }) {
   const { name, dir } = splitPath(file.path)
-  return React.createElement('li', { className: 'nxe-change', 'data-nxe-status': file.status, title: file.path },
-    React.createElement('span', { className: 'nxe-change-status', 'data-nxe-status': file.status }, file.status),
-    // The row reads like the source-control row it mirrors: status letter, then the type glyph the
-    // platform classifier picks for this filename — language, test file, lockfile, or generic.
-    // `path:` — not `kind:` — so the primitives' filename map still fires (README.md → markdown,
-    // .gitignore → git) the same way the official file tree uses it.
-    React.createElement(FileTypeIcon, { path: name, size: 16, className: 'nxe-change-icon' }),
-    React.createElement('span', { className: 'nxe-change-name' },
-      name,
-      dir === '' ? null : React.createElement('span', { className: 'nxe-change-dir' }, dir)))
+  const additions = Number(file.additions)
+  const deletions = Number(file.deletions)
+  return React.createElement('li', {
+    className: 'nxe-change', 'data-nxe-status': file.status, 'data-selected': String(selected === true), title: file.path,
+  },
+  React.createElement('span', { className: 'nxe-change-status', 'data-nxe-status': file.status }, file.status),
+  React.createElement(FileTypeIcon, { path: name, size: 16, className: 'nxe-change-icon' }),
+  React.createElement('button', {
+    type: 'button', className: 'nxe-change-name',
+    onClick: () => onSelect(file),
+  },
+  name,
+  dir === '' ? null : React.createElement('span', { className: 'nxe-change-dir' }, dir)),
+  React.createElement('span', { className: 'nxe-graph-stat' },
+    Number.isFinite(additions) && additions > 0 ? React.createElement('span', { 'data-tone': 'add' }, `+${additions}`) : null,
+    Number.isFinite(deletions) && deletions > 0 ? React.createElement('span', { 'data-tone': 'del' }, `−${deletions}`) : null),
+  React.createElement('button', {
+    type: 'button', className: 'nxe-change-open', title: openLabel, 'aria-label': openLabel,
+    onClick: event => { event.stopPropagation(); onOpen(file.path) },
+  }, React.createElement(IconRightUpOutlineRegular, { width: 12, height: 12, 'aria-hidden': 'true' })))
 }
 
 /**
@@ -74,14 +84,17 @@ function ChangeRow({ file }) {
  * @param props - the heading and the rows.
  * @returns the section, or null.
  */
-function ChangeGroup({ label, count, files, tone }) {
+function ChangeGroup({ label, count, files, tone, selected, onSelect, onOpen, openLabel }) {
   if (files.length === 0) return null
   return React.createElement('section', { className: 'nxe-scm-group', 'data-tone': tone ?? 'default' },
     React.createElement('h3', { className: 'nxe-local-head', 'data-tone': tone ?? 'default' },
       React.createElement('span', null, label),
       React.createElement('span', { className: 'nxe-local-badge' }, String(count))),
     React.createElement('ul', { className: 'nxe-drawer-list' }, files.slice(0, 400).map(file =>
-      React.createElement(ChangeRow, { key: `${tone ?? ''}:${file.path}`, file }))))
+      React.createElement(ChangeRow, {
+        key: `${tone ?? ''}:${file.path}`, file, selected: selected === file.path,
+        onSelect, onOpen, openLabel,
+      }))))
 }
 
 /* The lane palette mirrors the VS Code git-graph one: eight hues, so lanes that appear together
@@ -905,12 +918,29 @@ function RepoSettingsDialog({ copy, remotes, author, sshKey, busy, error, onRemo
  * @param props - copy, Git summary, and the actions the panel can start.
  * @returns the panel, or null while closed.
  */
-export function CommitDrawer({ copy, open, git, onClose, onCommit, busy, error, refreshing, onOpenConflict }) {
+export function CommitDrawer({ copy, open, git, onClose, onCommit, busy, error, refreshing, onOpenConflict, onDiff }) {
   // Same own-layer carrier as the branch card: the working tree belongs to this pane (DESIGN.md §5).
   const container = useDialogContainer()
   const [message, setMessage] = useState('')
   const [filter, setFilter] = useState('all')
-  useEffect(() => { if (!open) setFilter('all') }, [open])
+  const [selected, setSelected] = useState(null)
+  const [diff, setDiff] = useState(null)
+  const [diffError, setDiffError] = useState(undefined)
+  useEffect(() => {
+    if (!open) { setFilter('all'); setSelected(null); setDiff(null); setDiffError(undefined) }
+  }, [open])
+  useEffect(() => {
+    if (!open || selected === null || typeof onDiff !== 'function') return undefined
+    let cancelled = false
+    setDiff(null)
+    setDiffError(undefined)
+    void Promise.resolve(onDiff(selected.path, selected.status === '?')).then(result => {
+      if (cancelled) return
+      if (result?.ok === false) setDiffError(result.message ?? copy.diffFailed)
+      else setDiff(result)
+    })
+    return () => { cancelled = true }
+  }, [open, selected, onDiff])
   if (!open || container === null) return null
   const files = git?.files ?? []
   const groups = partitionChanges(files)
@@ -964,6 +994,7 @@ export function CommitDrawer({ copy, open, git, onClose, onCommit, busy, error, 
         }
       },
     }),
+    React.createElement('p', { className: 'nxe-commit-note' }, copy.commitAllNote),
     React.createElement(SegmentedControl, {
       id: 'nxe-commit-filter',
       value: filter,
@@ -989,18 +1020,58 @@ export function CommitDrawer({ copy, open, git, onClose, onCommit, busy, error, 
       React.createElement(FileTypeIcon, { path: file.path, size: 16, className: 'nxe-change-icon' }),
       React.createElement('button', {
         type: 'button', className: 'nxe-drawer-link', title: file.path,
+        onClick: () => setSelected({ path: file.path, status: 'U' }),
+      }, file.path),
+      React.createElement('button', {
+        type: 'button', className: 'nxe-change-open', title: copy.openFile, 'aria-label': copy.openFile,
         onClick: () => onOpenConflict(file.path),
-      }, file.path))))),
+      }, React.createElement(IconRightUpOutlineRegular, { width: 12, height: 12, 'aria-hidden': 'true' })))))),
     pending === 0
       ? React.createElement('p', { className: 'nxe-drawer-empty' }, copy.pendingEmpty)
       : React.createElement(React.Fragment, null,
         filter === 'all' || filter === 'staged'
-          ? React.createElement(ChangeGroup, { label: copy.localStaged, count: groups.staged.length, files: groups.staged, tone: 'staged' })
+          ? React.createElement(ChangeGroup, {
+            label: copy.localStaged, count: groups.staged.length, files: groups.staged, tone: 'staged',
+            selected: selected?.path, onSelect: file => setSelected({ path: file.path, status: file.status }),
+            onOpen: onOpenConflict, openLabel: copy.openFile,
+          })
           : null,
         filter === 'all' || filter === 'unstaged'
-          ? React.createElement(ChangeGroup, { label: copy.localUnstaged, count: groups.unstaged.length, files: groups.unstaged, tone: 'unstaged' })
+          ? React.createElement(ChangeGroup, {
+            label: copy.localUnstaged, count: groups.unstaged.length, files: groups.unstaged, tone: 'unstaged',
+            selected: selected?.path, onSelect: file => setSelected({ path: file.path, status: file.status }),
+            onOpen: onOpenConflict, openLabel: copy.openFile,
+          })
           : null,
         filter === 'all' || filter === 'untracked'
-          ? React.createElement(ChangeGroup, { label: copy.localUntracked, count: groups.untracked.length, files: groups.untracked, tone: 'untracked' })
-          : null)))
+          ? React.createElement(ChangeGroup, {
+            label: copy.localUntracked, count: groups.untracked.length, files: groups.untracked, tone: 'untracked',
+            selected: selected?.path, onSelect: file => setSelected({ path: file.path, status: file.status }),
+            onOpen: onOpenConflict, openLabel: copy.openFile,
+          })
+          : null,
+        selected === null ? null : React.createElement('div', {
+          className: 'nxe-commit-diff', 'data-nxe-commit-diff': selected.path, role: 'region', 'aria-label': selected.path,
+        },
+        diffError !== undefined
+          ? React.createElement('p', { className: 'nxe-drawer-empty' }, diffError)
+          : diff === null
+            ? React.createElement('p', { className: 'nxe-drawer-empty' }, copy.diffLoading)
+            : React.createElement(React.Fragment, null,
+              React.createElement('p', { className: 'nxe-commit-diff-stat' },
+                React.createElement('span', { 'data-tone': 'add' }, `+${diff.additions ?? 0}`),
+                ' ',
+                React.createElement('span', { 'data-tone': 'del' }, `−${diff.deletions ?? 0}`),
+                diff.binary === true ? ` · ${copy.diffBinary}` : null,
+                diff.truncated === true ? ` · ${copy.diffTruncated}` : null),
+              diff.binary === true
+                ? null
+                : React.createElement('pre', { className: 'nxe-commit-diff-pre' }, (diff.patch ?? '').split('\n').map((line, index) =>
+                  React.createElement('div', {
+                    key: index,
+                    className: 'nxe-commit-diff-line',
+                    'data-kind': line.startsWith('+') && !line.startsWith('+++') ? 'add'
+                      : line.startsWith('-') && !line.startsWith('---') ? 'del'
+                        : line.startsWith('@@') ? 'hunk' : 'ctx',
+                  }, line === '' ? ' ' : line))))))))
 }

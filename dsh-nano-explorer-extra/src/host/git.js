@@ -215,6 +215,76 @@ function checkoutRelative(root, path) {
  * @param stdout - NUL-separated records.
  * @returns branch facts, changed files, and ignored paths.
  */
+/**
+ * The path a numstat rename row names after the change. Git prints either
+ * `old => new` or `dir/{old => new}/file`.
+ * @param path - the third numstat column.
+ * @returns the destination path.
+ */
+export function numstatDestination(path) {
+  const brace = /^(.*)\{(?:[^}]* => )?([^}]*)\}(.*)$/u.exec(path)
+  if (brace !== null) return `${brace[1]}${brace[2]}${brace[3]}`.replace(/\/{2,}/gu, '/')
+  const arrow = path.split(' => ')
+  return arrow.length === 2 ? arrow[1] : path
+}
+
+/**
+ * Parse `git diff --numstat`. Binary rows (`-`) count as zero lines.
+ * @param stdout - one file per line.
+ * @returns path → `{ additions, deletions }`, keyed by the destination path.
+ */
+export function parseNumstat(stdout) {
+  const rows = new Map()
+  for (const line of stdout.split('\n')) {
+    if (line.trim() === '') continue
+    const tab = line.split('\t')
+    if (tab.length < 3) continue
+    const additions = tab[0] === '-' ? 0 : Number(tab[0])
+    const deletions = tab[1] === '-' ? 0 : Number(tab[1])
+    if (!Number.isFinite(additions) || !Number.isFinite(deletions)) continue
+    rows.set(numstatDestination(tab.slice(2).join('\t')), { additions, deletions })
+  }
+  return rows
+}
+
+/**
+ * Copy numstat counts onto status rows that name the same path. Rows Git did
+ * not mention (untracked, typically) are left without counts.
+ * @param files - status entries `{ path }`.
+ * @param stdout - `git diff HEAD --numstat`.
+ * @returns the same array.
+ */
+export function applyNumstat(files, stdout) {
+  const rows = parseNumstat(stdout)
+  for (const file of files) {
+    const stat = rows.get(file.path)
+    if (stat === undefined) continue
+    file.additions = stat.additions
+    file.deletions = stat.deletions
+  }
+  return files
+}
+
+/**
+ * Count a unified diff. Header lines (`+++`/`---`) are not changes. A binary
+ * patch contributes nothing and is flagged.
+ * @param patch - `git diff` stdout.
+ * @returns `{ additions, deletions, binary }`.
+ */
+export function summarizePatch(patch) {
+  const binary = patch.includes('Binary files ') || patch.includes('GIT binary patch')
+  let additions = 0
+  let deletions = 0
+  if (!binary) {
+    for (const line of patch.split('\n')) {
+      if (line.startsWith('+++') || line.startsWith('---')) continue
+      if (line.startsWith('+')) additions += 1
+      else if (line.startsWith('-')) deletions += 1
+    }
+  }
+  return { additions, deletions, binary }
+}
+
 export function parseStatus(stdout) {
   const records = stdout.split('\0')
   const result = { branch: null, detached: false, upstream: null, ahead: 0, behind: 0, files: [], ignored: [] }
@@ -496,6 +566,16 @@ export async function readStatus(ctx, config, request) {
       readRepoConfig(ctx, config, request),
       fetchStamp(ctx, config, request),
     ])
+  // Line counts for the commit card. `git diff HEAD` is the set `git add --all`
+  // will commit, staged and unstaged together. Untracked paths are absent here;
+  // their counts arrive with the on-demand diff. A scoped read only colours
+  // directory rows, so it does not pay for this.
+  if (!scoped) {
+    const numstat = await runGit(ctx, config, {
+      ...request, args: ['diff', 'HEAD', '--numstat'], allowedExitCodes: [0, 128],
+    }).catch(() => undefined)
+    if (numstat !== undefined && numstat.exitCode === 0) applyNumstat(parsed.files, numstat.stdout)
+  }
   const author = repoConfig === undefined ? undefined : authorOf(repoConfig)
   const sshKey = repoConfig === undefined ? undefined : sshKeyOf(repoConfig)
   const conflicts = parsed.files.filter(file => file.status === 'U').map(file => file.path)
@@ -517,6 +597,32 @@ export async function readStatus(ctx, config, request) {
  * @returns the new commit subject line.
  * @throws with Git's own diagnostic when either step fails.
  */
+/** How much of a patch the commit card will render. The rest is marked truncated. */
+const DIFF_PATCH_CAP = 80_000
+
+/**
+ * The working-tree diff of one path against HEAD — the text `git add --all` would commit.
+ * An untracked path is diffed against `/dev/null`. `git diff --no-index` exits 1 when the
+ * files differ; that is a result, not a failure.
+ * @param ctx - context providing the process services.
+ * @param config - executable and process limits.
+ * @param request - `{ cwd, policy, path, untracked }`. `path` is checkout-relative.
+ * @returns `{ path, patch, additions, deletions, binary, truncated }`.
+ */
+export async function readPathDiff(ctx, config, request) {
+  const rel = request.path
+  const args = request.untracked === true
+    ? ['diff', '--no-index', '--unified=3', '--', '/dev/null', rel]
+    : ['diff', 'HEAD', '--unified=3', '--', rel]
+  const result = await runGit(ctx, config, {
+    ...request, args, allowedExitCodes: [0, 1],
+  })
+  const full = result.stdout
+  const truncated = full.length > DIFF_PATCH_CAP
+  const patch = truncated ? full.slice(0, DIFF_PATCH_CAP) : full
+  return { path: rel, patch, truncated, ...summarizePatch(patch) }
+}
+
 export async function commitAll(ctx, config, request) {
   const { message } = request
   await runGit(ctx, config, { ...request, args: ['add', '--all'] })

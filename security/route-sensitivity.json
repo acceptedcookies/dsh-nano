@@ -485,6 +485,21 @@
       "match": "exact"
     },
     {
+      "plugin": "dsh-nano-explorer-extra",
+      "path": "/nano-explorer-extra/diff",
+      "methods": [
+        "POST"
+      ],
+      "sensitivity": "L2",
+      "capability": "read:host",
+      "bodyLimit": 65536,
+      "sessionBinding": true,
+      "justification": "Read-only unified diff of one workspace path against HEAD. Rejects paths that leave the checkout. No allowOutsideWorkspace.",
+      "id": "dnee.diff",
+      "channel": "http",
+      "match": "exact"
+    },
+    {
       "plugin": "dsh-nano-model-selector",
       "path": "/nano-model-selector/catalog",
       "methods": [

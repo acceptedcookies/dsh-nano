@@ -41,7 +41,7 @@ client inject 以 `package.json` 的 `dsh.client.inject` 为准，不在这里�
 4. `git` 必须在跑宿主的那台机器的 PATH 上。浏览器里没有 git 不影响。状态栏读的是宿主上的仓库。
 5. 本包构建期依赖 `dsh-nano-ui`，声明为 `devDependencies` 的 `file:../packages/dsh-nano-ui`。`npm install`/`npm run build` 时解析这个相对路径；构建时它被打进 `lib/client.js`，运行中的页面不单独加载它。不要改这条依赖。tarball 只含构建产物，`dsh plugin add` 不再需要旁边的 `packages/` 目录。
 6. 本包还构建期依赖 `dsh-performance-review`，同样声明为 `devDependencies` 的 `file:`，约束同上。它被打进 `lib/client.js` 和 `lib/host.js` 两份产物；默认是恒等包装，只有页面带 `?perf-review=1` 或 `localStorage['dsh-perf-review']='1'`、宿主带 `DSH_PERF_REVIEW=1` 时才采集。不要改这条依赖。
-7. 本包还构建期依赖路由注册库 `dsh-host-route-guard`，同样声明为 `devDependencies` 的 `file:`，约束同上。构建把它与本插件 18 条路由行的烤入常量表一起打进 `lib/host.js`；全部 web 路由经它注册，Host/Origin 围栏与 405 在 guard 内。不要改这条依赖。
+7. 本包还构建期依赖路由注册库 `dsh-host-route-guard`，同样声明为 `devDependencies` 的 `file:`，约束同上。构建把它与本插件 19 条路由行的烤入常量表一起打进 `lib/host.js`；全部 web 路由经它注册，Host/Origin 围栏与 405 在 guard 内。不要改这条依赖。
 
 未被告知 `DSH_HOME` 或 profile 名时，只动默认的 `web`。不要猜第二套实例。
 
@@ -90,7 +90,7 @@ dsh plugin --profile web add <spec>
 
 | 顶栏新建文件或文件夹 | 先问名字，确认后才落盘 |
 | 底部分支按钮 | 仓库视图：多车道彩色提交图（亮段=未推送、暗段=已推送）、工作树列表、刷新、拉取、推送、仓库设置（远端 / 署名 / SSH 三个分页，每项一行、按钮另起一行）。本地/远端分支在固定高度的分页面板内切换（与提交卡的筛选条同款）：本地页按「已检出（物理工作树）/仅本地 ref」分组，远端页标「refs/remotes 快照」组头；标题小字给「仓库 · 分支 · 上游 · 工作树数 · 远端快照时间」的定位说明，不含 ↓↑ 计数（那是提交卡的事）。远端行点击即 `checkout --track` 检出跟踪分支，已跟踪的行标徽章。「刷新」= `git fetch --all --prune` + 整仓重读（离线或凭证失败不遮蔽本地视图，错误照常上屏），标题栏 spin 期间禁用。切换分支先确认，成功后「当前」跟着变。状态栏的 `!` 会列出冲突路径，并在解决前禁用切换。卡片沉在文件区底部，不会跑到工作区外面 |
-| 底部提交 | 只看本地工作区：已暂存 / 未暂存 / 未跟踪 / 冲突。确认后 `git add --all` 再提交。有冲突时按钮不可用。`Ctrl+Enter` 同样会提交。这里没有提交图，也没有拉取 |
+| 底部提交 | 只看本地工作区：已暂存 / 未暂存 / 未跟踪 / 冲突。确认后 `git add --all` 再提交，筛选不会缩小范围。有冲突时按钮不可用。`Ctrl+Enter` 同样会提交。点一行在卡片里看该文件相对 HEAD 的差异；行尾箭头打开预览。这里没有提交图，也没有拉取 |
 | 分支卡片里的拉取 | `git pull --ff-only`。不能快进就失败并显示 Git 原文，不会自动产生合并提交 |
 | 顶栏刷新 | 重读目录和整仓 Git 状态。不重算右下角的文件数量和体积 |
 | 右下角齿轮 | 只改这一台浏览器的显示 |
@@ -109,6 +109,7 @@ dsh plugin --profile web add <spec>
 | GET | `/perf-review/host` | 只读全进程视图。只接受 `since`。`mode` 和其他参数返回 400，不排空。 |
 | POST | `/list` | `{ sessionId, path }` |
 | POST | `/commit` | `{ sessionId, message }`。会 `git add --all`。没有「只提交已暂存」 |
+| POST | `/diff` | `{ sessionId, path, untracked? }`。只读。`path` 必须留在工作区里。返回相对 HEAD 的统一差异；未跟踪文件相对空文件。 |
 | POST | `/fetch` | `{ sessionId }`。`git fetch --all --prune`：只刷新 `refs/remotes` 快照（远端分支列表、ahead/behind、提交图已推送车道），不动工作区文件 |
 | POST | `/pull` | `{ sessionId }`。快进拉取 |
 | POST | `/push` | `{ sessionId, remote? }`。有上游走 `git push`；无上游时 `remote` 必填，走 `git push -u <remote> HEAD` 并绑定 |

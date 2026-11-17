@@ -1,7 +1,7 @@
 // src/host/routes.js
 import { watch } from "node:fs";
 
-// ../packages/dsh-interface/src/contracts/jsonOutcome.js
+// ../../../../packages/dsh-interface/src/contracts/jsonOutcome.js
 var FAILURE_KIND = Object.freeze({
   /** signal aborted; issued-before cancellation makes no server-side claim. */
   CANCELLED: "cancelled",
@@ -16,7 +16,7 @@ var FAILURE_KIND = Object.freeze({
 });
 var FAILURE_KINDS = Object.freeze(Object.values(FAILURE_KIND));
 
-// ../packages/dsh-interface/src/contracts/observeEvent.js
+// ../../../../packages/dsh-interface/src/contracts/observeEvent.js
 var OBSERVE_SURFACES = Object.freeze(["http", "upgrade", "json", "mcp"]);
 var HTTP_OUTCOMES = Object.freeze(["ok", "rejected", "method", "failed"]);
 var UPGRADE_OUTCOMES = Object.freeze(["accepted", "rejected", "method"]);
@@ -75,7 +75,7 @@ function assertObserveEvent(event) {
   return event;
 }
 
-// ../packages/dsh-performance-review/src/state.js
+// ../../../../packages/dsh-performance-review/src/state.js
 var CLIENT_KEY = Symbol.for("dsh.perfReview.v2");
 var HOST_KEY = Symbol.for("dsh.perfReviewHost.v2");
 var BUILD_STAMP = true ? "ff5694c57be1" : "dev";
@@ -147,7 +147,7 @@ function roundMs(value) {
   return value == null ? null : Math.round(value * 10) / 10;
 }
 
-// ../packages/dsh-performance-review/src/host.js
+// ../../../../packages/dsh-performance-review/src/host.js
 var WINDOW_SAMPLE_CAP = 512;
 var EVENT_CAP = 32;
 var isPromiseLike = (value) => value !== null && typeof value === "object" && typeof value.then === "function";
@@ -687,7 +687,7 @@ function createGuard({ table, plugin, observe } = {}) {
   return { registerRoutes: registerRoutes3, inventory, lookup };
 }
 
-// ../packages/dsh-interface/src/contracts/webBinding.js
+// ../../../../packages/dsh-interface/src/contracts/webBinding.js
 var BindingError = class extends Error {
   constructor(reason, detail = "") {
     super(detail ? `web-binding: ${reason} \u2014 ${detail}` : `web-binding: ${reason}`);
@@ -775,7 +775,7 @@ function bindingRecord(binding) {
   });
 }
 
-// ../packages/dsh-interface/src/host/emitObserve.js
+// ../../../../packages/dsh-interface/src/host/emitObserve.js
 function observeStamp2(observe) {
   if (typeof observe !== "function") return null;
   return globalThis.performance.now();
@@ -791,7 +791,7 @@ function emitObserve2(observe, event) {
   }
 }
 
-// ../packages/dsh-interface/src/host/createWebRegistrar.js
+// ../../../../packages/dsh-interface/src/host/createWebRegistrar.js
 function createWebRegistrar({ plugin, bindings, observe } = {}) {
   const normalized = normalizeBindings(bindings ?? [], { plugin });
   const effective = [];
@@ -941,7 +941,8 @@ var BINDING_TABLE = Object.freeze([
   { "id": "dnee.ignored", "plugin": "dsh-nano-explorer-extra", "channel": "http", "match": "exact", "path": "/nano-explorer-extra/ignored", "methods": ["POST"], "bodyLimit": 65536, "sensitivity": "L0", "capability": "read:workspace", "sessionBinding": true, "justification": "dsh-nano-explorer-extra/src/host/routes.js:373 \u2014 `git check-ignore` style read over workspace paths; no write, no secret." },
   { "id": "dnee.list", "plugin": "dsh-nano-explorer-extra", "channel": "http", "match": "exact", "path": "/nano-explorer-extra/list", "methods": ["POST"], "bodyLimit": 65536, "sensitivity": "L2", "capability": "read:host", "sessionBinding": true, "justification": "dsh-nano-explorer-extra/src/host/routes.js:384 \u2014 directory listing never fenced to the workspace (finding nxe:routes-read-arbitrary-file, accepted); enumerates arbitrary host dirs = host-level read." },
   { "id": "dnee.perf-review.host", "plugin": "dsh-nano-explorer-extra", "channel": "http", "match": "exact", "path": "/nano-explorer-extra/perf-review/host", "methods": ["GET"], "bodyLimit": 0, "sensitivity": "L2", "capability": "read:host", "sessionBinding": false, "justification": "\u53EA\u8BFB\u5168\u8FDB\u7A0B\u89C6\u56FE\u3002\u4E0D\u6392\u7A7A\uFF0C\u53EA\u63A5\u53D7 since\u3002" },
-  { "id": "dnee.read", "plugin": "dsh-nano-explorer-extra", "channel": "http", "match": "exact", "path": "/nano-explorer-extra/read", "methods": ["POST"], "bodyLimit": 65536, "sensitivity": "L2", "capability": "read:host", "sessionBinding": true, "justification": "dsh-nano-explorer-extra/src/host/routes.js:412 \u2014 returns any UTF-8 host file up to 1 MiB; client may pass allowOutsideWorkspace:true to skip the fence (finding routes-read-arbitrary-file, accepted). Host-level read." }
+  { "id": "dnee.read", "plugin": "dsh-nano-explorer-extra", "channel": "http", "match": "exact", "path": "/nano-explorer-extra/read", "methods": ["POST"], "bodyLimit": 65536, "sensitivity": "L2", "capability": "read:host", "sessionBinding": true, "justification": "dsh-nano-explorer-extra/src/host/routes.js:412 \u2014 returns any UTF-8 host file up to 1 MiB; client may pass allowOutsideWorkspace:true to skip the fence (finding routes-read-arbitrary-file, accepted). Host-level read." },
+  { "id": "dnee.diff", "plugin": "dsh-nano-explorer-extra", "channel": "http", "match": "exact", "path": "/nano-explorer-extra/diff", "methods": ["POST"], "bodyLimit": 65536, "sensitivity": "L2", "capability": "read:host", "sessionBinding": true, "justification": "Read-only unified diff of one workspace path against HEAD. Rejects paths that leave the checkout. No allowOutsideWorkspace." }
 ]);
 
 // src/host/git.js
@@ -1086,6 +1087,48 @@ function checkoutRelative(root, path) {
   const target = path.replace(/\/+$/u, "");
   if (target === base) return "";
   return target.startsWith(`${base}/`) ? target.slice(base.length + 1) : void 0;
+}
+function numstatDestination(path) {
+  const brace = /^(.*)\{(?:[^}]* => )?([^}]*)\}(.*)$/u.exec(path);
+  if (brace !== null) return `${brace[1]}${brace[2]}${brace[3]}`.replace(/\/{2,}/gu, "/");
+  const arrow = path.split(" => ");
+  return arrow.length === 2 ? arrow[1] : path;
+}
+function parseNumstat(stdout) {
+  const rows = /* @__PURE__ */ new Map();
+  for (const line of stdout.split("\n")) {
+    if (line.trim() === "") continue;
+    const tab = line.split("	");
+    if (tab.length < 3) continue;
+    const additions = tab[0] === "-" ? 0 : Number(tab[0]);
+    const deletions = tab[1] === "-" ? 0 : Number(tab[1]);
+    if (!Number.isFinite(additions) || !Number.isFinite(deletions)) continue;
+    rows.set(numstatDestination(tab.slice(2).join("	")), { additions, deletions });
+  }
+  return rows;
+}
+function applyNumstat(files, stdout) {
+  const rows = parseNumstat(stdout);
+  for (const file of files) {
+    const stat = rows.get(file.path);
+    if (stat === void 0) continue;
+    file.additions = stat.additions;
+    file.deletions = stat.deletions;
+  }
+  return files;
+}
+function summarizePatch(patch) {
+  const binary = patch.includes("Binary files ") || patch.includes("GIT binary patch");
+  let additions = 0;
+  let deletions = 0;
+  if (!binary) {
+    for (const line of patch.split("\n")) {
+      if (line.startsWith("+++") || line.startsWith("---")) continue;
+      if (line.startsWith("+")) additions += 1;
+      else if (line.startsWith("-")) deletions += 1;
+    }
+  }
+  return { additions, deletions, binary };
 }
 function parseStatus(stdout) {
   const records = stdout.split("\0");
@@ -1270,6 +1313,14 @@ async function readStatus(ctx, config, request) {
     readRepoConfig(ctx, config, request),
     fetchStamp(ctx, config, request)
   ]);
+  if (!scoped) {
+    const numstat = await runGit(ctx, config, {
+      ...request,
+      args: ["diff", "HEAD", "--numstat"],
+      allowedExitCodes: [0, 128]
+    }).catch(() => void 0);
+    if (numstat !== void 0 && numstat.exitCode === 0) applyNumstat(parsed.files, numstat.stdout);
+  }
   const author = repoConfig === void 0 ? void 0 : authorOf(repoConfig);
   const sshKey = repoConfig === void 0 ? void 0 : sshKeyOf(repoConfig);
   const conflicts = parsed.files.filter((file) => file.status === "U").map((file) => file.path);
@@ -1288,6 +1339,20 @@ async function readStatus(ctx, config, request) {
     ...sshKey === void 0 ? {} : { sshKey },
     ...fetchedAt === void 0 ? {} : { fetchedAt }
   };
+}
+var DIFF_PATCH_CAP = 8e4;
+async function readPathDiff(ctx, config, request) {
+  const rel = request.path;
+  const args = request.untracked === true ? ["diff", "--no-index", "--unified=3", "--", "/dev/null", rel] : ["diff", "HEAD", "--unified=3", "--", rel];
+  const result = await runGit(ctx, config, {
+    ...request,
+    args,
+    allowedExitCodes: [0, 1]
+  });
+  const full = result.stdout;
+  const truncated = full.length > DIFF_PATCH_CAP;
+  const patch = truncated ? full.slice(0, DIFF_PATCH_CAP) : full;
+  return { path: rel, patch, truncated, ...summarizePatch(patch) };
 }
 async function commitAll(ctx, config, request) {
   const { message } = request;
@@ -2206,6 +2271,29 @@ function createRoutes(ctx, config) {
           gitError = messageOf2(error);
         }
         return { root, git, ...gitError === void 0 ? {} : { gitError } };
+      }
+    },
+    /* Read-only unified diff of one workspace path against HEAD. This is what
+       `git add --all` would commit. No allowOutsideWorkspace: a path that
+       leaves the checkout is rejected. */
+    "/diff": {
+      method: "POST",
+      async run(req) {
+        const body = await jsonBody(req);
+        const { root, policy } = await scopeOf(ctx, body.sessionId);
+        const path = typeof body.path === "string" ? body.path : "";
+        if (path === "" || path.startsWith("-") || path.includes("\0") || path.split("/").includes("..")) {
+          throw new Error("a workspace-relative path is required");
+        }
+        const requested = absoluteOf(root, path);
+        if (!isLexicallyInside(root, requested)) throw new Error(`"${path}" is outside the workspace`);
+        return readPathDiff(ctx, config, {
+          cwd: root,
+          policy,
+          signal: void 0,
+          path,
+          untracked: body.untracked === true
+        });
       }
     },
     "/commit": {

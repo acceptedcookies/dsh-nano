@@ -4,7 +4,7 @@ import { watch } from 'node:fs'
 import { ensurePerfReviewHost, handleHostRead } from 'dsh-performance-review/host'
 import { createWebRegistrar } from 'dsh-interface/host'
 import { BINDING_TABLE, PLUGIN } from '../../lib/bindings.js'
-import { checkoutBranch, commitAll, fetchAll, ignoredAmong, ignoredPathsOf, listBranches, listConflicts, listWorktrees, pullUpstream, pushUpstream, readStatus, writeRemote, writeAuthor, writeSshKey } from './git.js'
+import { checkoutBranch, commitAll, fetchAll, ignoredAmong, ignoredPathsOf, listBranches, listConflicts, listWorktrees, pullUpstream, pushUpstream, readPathDiff, readStatus, writeRemote, writeAuthor, writeSshKey } from './git.js'
 import { absoluteOf, isLexicallyInside, listDirectory } from './listing.js'
 import { createFile, createFolder, moveEntry, removeEntry, rename } from './mutate.js'
 import { statisticsOf } from './stats.js'
@@ -362,6 +362,25 @@ export function createRoutes(ctx, config) {
           gitError = messageOf(error)
         }
         return { root, git, ...(gitError === undefined ? {} : { gitError }) }
+      },
+    },
+    /* Read-only unified diff of one workspace path against HEAD. This is what
+       `git add --all` would commit. No allowOutsideWorkspace: a path that
+       leaves the checkout is rejected. */
+    '/diff': {
+      method: 'POST',
+      async run(req) {
+        const body = await jsonBody(req)
+        const { root, policy } = await scopeOf(ctx, body.sessionId)
+        const path = typeof body.path === 'string' ? body.path : ''
+        if (path === '' || path.startsWith('-') || path.includes('\0') || path.split('/').includes('..')) {
+          throw new Error('a workspace-relative path is required')
+        }
+        const requested = absoluteOf(root, path)
+        if (!isLexicallyInside(root, requested)) throw new Error(`"${path}" is outside the workspace`)
+        return readPathDiff(ctx, config, {
+          cwd: root, policy, signal: undefined, path, untracked: body.untracked === true,
+        })
       },
     },
     '/commit': {

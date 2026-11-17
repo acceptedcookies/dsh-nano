@@ -684,6 +684,12 @@ export function ExplorerBody(props) {
     return true
   }, [sessionId, request, tree, refreshGit, refreshStats])
 
+  /** Read-only diff of one changed path. Stable so the drawer does not refetch on every render. */
+  const loadDiff = useCallback(
+    (path, untracked) => request('/diff', { sessionId, path, untracked }),
+    [sessionId, request],
+  )
+
   /** Copy one path. Success is a floating toast; a failure stays as an inline note. */
   const copyPath = useCallback(async (absolute, relative) => {
     try {
@@ -1126,6 +1132,7 @@ export function ExplorerBody(props) {
         onCommit: doDrawerCommit,
         onPull: doPull,
         onOpenConflict: path => { openEntry({ path: absoluteOf(cwd ?? '', path) }); setDrawer(null) },
+        onDiff: loadDiff,
       }),
       React.createElement(RowMenu, { menu, copy, actions: rowActions, onClose: () => setMenu(null) })))
 }

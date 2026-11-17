@@ -75,11 +75,11 @@ SETUP ──▶ P1 策略硬切+烘焙 ──▶ P2 工具+patch ──┐
   - **验证映射**：`ACE1117-T05..T07` · **依赖**：`P1`
   - **执行状态**：`done` · **时间**：`2026-11-17T16:30+08:00` · **证据**：DNMSC 45/45 PASS；T07 结构断言（tools 行在 isolate 外、base 扁平 disabled、四 preset 锚/别名覆盖）；威胁用例（wrong id/empty surface/no session/坏参数）全部 reject
 
-- [ ] `P3` — Phase 3 生命周期与互斥（P3-01..P3-04）
+- [x] `P3` — Phase 3 生命周期与互斥（P3-01..P3-04）
   - **落点**：`host-compaction.js` 头注/idle/超时/互斥/disarm/episode 删除
   - **完成判据**：arm 即 running；idle+ready 经 runMaintenance 提交；四入口 preempted 不计 circuit；timeout 结算；Map 删除；disarm 三种触发
   - **验证映射**：`ACE1117-T08..T11` · **依赖**：`P1`
-  - **执行状态**：`not-started` · **时间**：`-` · **证据**：`-`
+  - **执行状态**：`done` · **时间**：`2026-11-17T17:00+08:00` · **证据**：DNMSC 51/51 PASS；T09 四 lane 各记 `preempted`；T10 假时钟 120s 结算+GC+去抖+no-window；T11 三 disarm 触发皆 `disarmed`/`bracketed:false`
 
 - [ ] `P4` — Phase 4 选择器、prompt、帧（P4-01..P4-04）
   - **落点**：`compact-region.js` 选择器+prompt+帧、四 lane 调用点、async-history select

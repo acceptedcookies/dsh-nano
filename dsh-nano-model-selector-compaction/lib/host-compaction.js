@@ -5,11 +5,15 @@
  * `compact-region.js`; nothing imports `compaction-basic` internals.
  *
  * Behavior contract:
- *  - -18  true async across turns: pre-step qualifies the B line and ARMS an
- *    ephemeral episode; the physical summarizer runs inside runMaintenance at
- *    the next idle boundary; the next turn's first request assembly adopts
- *    (commits the durable replace). One episode at a time per session — the
- *    durable compaction/start lock enforces one-active process-wide.
+ *  - -18/ACE-1117-05  true async, arm-implies-run: crossing the B line in
+ *    pre-step both arms the ephemeral episode AND kicks the summarizer in the
+ *    same step boundary — the summary runs alongside the turn, it is NOT
+ *    deferred to idle. A ready summary commits at the NEXT step boundary
+ *    (before the request assembles); if the turn ends first, the
+ *    agent/status:idle path commits through agent.runMaintenance once the
+ *    attempt resolves. One episode at a time per session — the durable
+ *    compaction/start lock enforces one-active process-wide; an ephemeral
+ *    lane-active marker (-05②) keeps sync lanes from interleaving.
  *  - -13  FULL trigger closed set: trusted safety (fill >= S) / DC-1 structural
  *    unreachability (fullOnly policy) / post-adoption over-health on a later B
  *    crossing / owner-manual /compact. failure/degraded/unknown never create a
@@ -19,7 +23,8 @@
  *  - -18⑤ read failure -> safetyOnly: only the S line at 0.90, no B arming.
  *  - -18② one typed-transient circuit: two consecutive transient failures
  *    suppress auto arming; S-line and manual remain live; adoption/manual
- *    success resets it.
+ *    success resets it. Preemption, disarm, and timeout settle WITHOUT feeding
+ *    the circuit (ACE-1117 CORR-1, -05②③).
  */
 
 import { homedir } from 'node:os'
@@ -64,8 +69,6 @@ const TRANSIENT_CODES = new Set([
 
 /** Episode attempt budget: a hung summarizer must not pin the arm (-18). */
 const EPISODE_TIMEOUT_MS = 120_000
-/** Idle-claim retries before the arm is dropped as starved (-18). */
-const MAX_CLAIM_ATTEMPTS = 3
 
 const ASYNC_COMPACT_PATH = join(
   process.env.DSH_DATA_DIR ?? process.env.DSH_HOME ?? join(homedir(), '.dsh'),
@@ -93,6 +96,27 @@ export default class NanoCompactionEngine extends CompactionEngine {
     super(ctx)
     /** @type {Map<string, EpisodeState>} per-session ephemeral async state (-18① ephemeral) */
     this._episodes = new Map()
+    /**
+     * Session-level lane-active marker (-05②): a synchronous lane
+     * (manual/FULL/model-switch/overflow) is mid-flight, so the async gate
+     * must not arm or interleave. Ephemeral only — no process lock, no
+     * durable state. The durable compaction/start bracket remains the
+     * one-active authority.
+     */
+    this._lanes = new Set()
+    /**
+     * Session ids whose LAST adoption left fill >= H (post-adoption over-health,
+     * -13): session-level, not episode-level — the episode map slot is GC'd on
+     * settle but this flag must survive until the next B crossing consumes it.
+     */
+    this._overHealth = new Set()
+    /**
+     * Session-level same-turn debounce marker (-05③/b): the openTurn that a
+     * non-transient drop produced plus whether the suppression was already
+     * recorded. Lives outside the episode map — the map slot is GC'd on
+     * settle, but the debounce must survive until the turn ends.
+     */
+    this._blockedTurns = new Map()
     this._overflowRetries = new WeakMap()
     this._overflowAgents = new WeakMap()
     this._registerListeners()
@@ -114,12 +138,58 @@ export default class NanoCompactionEngine extends CompactionEngine {
         tx: null,
         prepared: null,
         summarized: null,
-        adoptedAsyncOverHealth: false,
         circuit: { transientFailures: 0, open: false, suppressedLogged: false },
       }
       this._episodes.set(key, episode)
     }
     return episode
+  }
+
+  /**
+   * Whether any compaction lane is active on this session (-05②): an async
+   * episode whose phase is not `none`, or a synchronous lane currently
+   * executing. The gate consults this before arming; entry points consult it
+   * before deciding to preempt.
+   */
+  _laneActive(session) {
+    return this._lanes.has(session.id) || (this._episodes.get(session.id)?.phase ?? 'none') !== 'none'
+  }
+
+  /**
+   * Free the episode map slot once the session is fully settled and the
+   * circuit is closed (-05③/d): nothing left to observe or suppress.
+   * Called from every settle path that knows the session.
+   */
+  _maybeGCEpisode(session, episode) {
+    // The slot is alive while ANY live state remains: an in-flight phase, an
+    // open circuit, or a transient-failure streak that must survive into the
+    // next boundary (dropping it here would reset the breaker to zero).
+    if (episode.phase === 'none' && !episode.circuit.open && episode.circuit.transientFailures === 0) {
+      this._episodes.delete(session.id)
+    }
+  }
+
+  /**
+   * Same-turn debounce (-05③/b): a non-transient drop records the turn that
+   * produced it; the gate suppresses further arms while that same turn is
+   * still open and clears the marker as soon as a different (or no) turn is
+   * observed. Returns 'turn-blocked' on the first suppressed boundary so the
+   * ledger sees the gate once, then nulls (silent) for the rest of the turn.
+   * `openTurn` null means "not inside a turn" — never blocked, marker cleared.
+   */
+  _turnBlocked(session, episode, openTurn) {
+    const blocked = this._blockedTurns.get(session.id)
+    if (blocked === undefined) return null
+    if (openTurn === null || openTurn !== blocked.turn) {
+      // A different (or no) turn: the debounce is spent.
+      this._blockedTurns.delete(session.id)
+      return null
+    }
+    // Same turn: suppressed for the REST of it. The first suppressed boundary
+    // is the only one the ledger sees; the rest pass silently.
+    if (blocked.logged) return 'turn-blocked-silent'
+    blocked.logged = true
+    return 'turn-blocked'
   }
 
   _registerListeners() {
@@ -169,20 +239,25 @@ export default class NanoCompactionEngine extends CompactionEngine {
       return next()
     })
 
-    // At the next idle boundary after an arm, the episode's one physical
-    // summarizer attempt runs inside runMaintenance (-18真 async).
+    // Fallback for a turn that ended before the summary was ready: the turn
+    // is over, so committing at the next step boundary is impossible. The
+    // idle boundary is the last chance — wait for the in-flight attempt, then
+    // commit through runMaintenance (the sanctioned after-turn lane). The
+    // phase is `running` here, never `armed`: the attempt began at arm time.
     ctx.on('agent/status', ({ agent, status }) => {
       if (status === 'idle') this._overflowRetries.delete(agent)
       const episode = this._episodes.get(agent.session.id)
-      if (status !== 'idle' || episode === undefined || episode.phase !== 'armed') return
-      // Fallback for a turn that ended before the summary was ready: wait for
-      // the in-flight attempt, then commit. This is the only path that still
-      // needs the idle boundary, and it never starts a new turn.
+      if (status !== 'idle' || episode === undefined || episode.phase !== 'running') return
       const settle = async () => {
         try {
           await episode.attempt
         } catch { /* already dropped inside the attempt */ }
-        await this._finishEpisode(agent, episode)
+        if (episode.phase !== 'running' || episode.attemptReady !== true) return
+        await agent.runMaintenance(async () => {
+          await this._finishEpisode(agent, episode)
+        }).catch(error => {
+          ctx.logger.warn(`async compaction idle maintenance commit failed: ${messageOf(error)}`)
+        })
       }
       void settle()
     })
@@ -277,7 +352,6 @@ export default class NanoCompactionEngine extends CompactionEngine {
     episode.summarized = null
     episode.retainTokens = effectivePin
     episode.armedAt = Date.now()
-    episode.claimAttempts = 0
     episode.summarizationTarget = policy.model.provider.length > 0 && policy.model.model.length > 0
       ? { provider: policy.model.provider, model: policy.model.model }
       : undefined
@@ -304,21 +378,28 @@ export default class NanoCompactionEngine extends CompactionEngine {
     episode.phase = 'running'
     recordAsyncDecision(agent.session.id, {
       kind: 'claim',
-      attempt: (episode.claimAttempts ?? 0) + 1,
+      attempt: 1,
       retain: episode.retainTokens,
       target: episode.summarizationTarget ?? null,
       promptVersion: episode.promptVersion ?? null,
     })
     const controller = new AbortController()
     episode.attemptAbort = controller
-    // Bound the attempt: a hung summarizer must not pin the episode forever.
-    const timer = setTimeout(() => controller.abort(new Error('async compaction attempt timed out')), EPISODE_TIMEOUT_MS)
+    // Bound the attempt: a hung summarizer must not pin the episode. Timeout is
+    // a SETTLEMENT, not a failure (-05③): drop with reason 'timeout' (never a
+    // circuit input), then abort so a late-resolving summarizer's result is
+    // discarded instead of committing a stale bracket.
+    const timer = setTimeout(() => {
+      if (episode.phase === 'none') return
+      this._dropEpisode(agent.session, episode, 'timeout', new Error('async compaction attempt timed out'))
+      try { controller.abort(new Error('async compaction attempt timed out')) } catch { /* raced */ }
+    }, EPISODE_TIMEOUT_MS)
     episode.attempt = (async () => {
       try {
         await this._summarizeEpisode(agent, episode, controller.signal)
       } catch (error) {
-        // A disarm settles the episode first; recording a second drop here
-        // would report one failure twice.
+        // A settle (disarm/preempt/timeout) closes the episode first; recording
+        // a second drop here would report one outcome twice.
         if (episode.phase !== 'none') this._dropEpisode(agent.session, episode, this._classifyFailure(error), error)
       } finally {
         clearTimeout(timer)
@@ -327,8 +408,10 @@ export default class NanoCompactionEngine extends CompactionEngine {
   }
 
   /**
-   * Cancel an armed or in-flight episode because the policy no longer asks for
-   * it (the owner raised B above the current fill).
+   * Cancel an armed or in-flight episode because the arming condition is gone
+   * (CORR-1: the B line's "should still compact" premise lapsed — raised B,
+   * a bigger window, or a prune that pulled fill back under B; NOT a failure
+   * and never a circuit input, same settlement class as `preempted`).
    *
    * Without this, raising the water line could not stop a compaction already
    * under way: the gate only ever armed, never disarmed. The abort is
@@ -336,24 +419,59 @@ export default class NanoCompactionEngine extends CompactionEngine {
    * `phase === 'none'` and does not record a second, misleading drop.
    */
   _disarmEpisode(agent, episode, reason) {
+    return this._settleInFlight(agent, episode, 'disarmed', reason)
+  }
+
+  /**
+   * Preempt an in-flight episode so a synchronous lane (manual /compact, FULL,
+   * model-switch veto, overflow) can run (-05②, CORR-1 same class): identical
+   * settlement to a disarm — abort, close an opened bracket, drop with
+   * `bracketed:false`, never touch the circuit.
+   */
+  _preemptEpisode(agent, episode, lane) {
+    return this._settleInFlight(agent, episode, 'preempted', `preempted by ${lane}`)
+  }
+
+  /** Shared settle-in-flight body for disarm/preempt: abort + settle + drop. */
+  _settleInFlight(agent, episode, kind, detail) {
     if (episode.phase === 'none') return false
     try {
-      episode.attemptAbort?.abort(new Error(`async compaction disarmed: ${reason}`))
+      episode.attemptAbort?.abort(new Error(`async compaction ${kind}: ${detail}`))
     } catch { /* already aborted */ }
     if (episode.tx?.opened === true) {
       try {
-        episode.tx.fail(new Error(`disarmed: ${reason}`), 'disarmed')
+        episode.tx.fail(new Error(`${kind}: ${detail}`), kind)
       } catch { /* bracket already closed */ }
     }
-    this._settleEpisode(episode)
+    this._settleEpisode(agent.session, episode)
     recordAsyncDecision(agent.session.id, {
       kind: 'drop',
-      reason: 'disarmed',
-      detail: reason,
+      reason: kind,
+      detail,
       bracketed: false,
     })
-    this.ctx.logger.info(`async compaction disarmed: ${reason}`)
+    this.ctx.logger.info(`async compaction ${kind}: ${detail}`)
     return true
+  }
+
+  /**
+   * Run a synchronous lane under the session marker (-05②): preempts any
+   * in-flight episode FIRST, marks the lane, and always unmarks. The durable
+   * bracket keeps being the one-active authority; the marker only protects
+   * the ephemeral gate.
+   */
+  async _runLane(agent, lane, fn) {
+    const session = agent.session
+    const episode = this._episodes.get(session.id)
+    if (episode !== undefined && episode.phase !== 'none') {
+      this._preemptEpisode(agent, episode, lane)
+    }
+    this._lanes.add(session.id)
+    try {
+      return await fn()
+    } finally {
+      this._lanes.delete(session.id)
+    }
   }
 
   /** Prepare + summarize only. Writes no durable event: the bracket is deferred. */
@@ -391,35 +509,28 @@ export default class NanoCompactionEngine extends CompactionEngine {
     if (episode.phase !== 'running' || episode.attemptReady !== true) return false
     const session = agent.session
     try {
-      const outcome = episode.tx.commit(episode.summarized, undefined)
+      const tx = episode.tx
+      const outcome = tx.commit(episode.summarized, undefined)
       if (outcome.failure !== undefined) {
         // commit already closed the bracket with end{error} — detach the tx so
         // the drop path does not append a second end{error}.
         episode.tx = null
         throw outcome.failure.error
       }
+      // The durable write is done the moment commit returns: settle BEFORE the
+      // first await so neither a second boundary nor a sync lane can re-enter
+      // (phase 'none' closes both the _finishEpisode guard and preempt). The
+      // bookkeeping below uses captured locals (tx + outcome), which is safe
+      // after settle; the over-health flag lives session-level so the GC'd
+      // slot cannot swallow it.
+      this._settleEpisode(session, episode)
+      const adoptedOverHealth = await this._adoptedOverHealth(agent)
+      const result = outcome.result
       try {
         await this.ctx.sessions.flush(session)
       } catch (error) {
         this.ctx.logger.warn(`async compaction durability checkpoint failed: ${messageOf(error)}`)
       }
-      episode._lastResult = outcome.result
-      // Over-health adoption primes the -13 FULL closed set on the next B crossing.
-      try {
-        const policy = this._policy()
-        const W = await this._window(agent, policy)
-        if (!policy.safetyOnly && W !== null) {
-          const measurement = this.ctx.tokenMeter.measure(session)
-          episode.adoptedAsyncOverHealth = measurement.totalTokens / W >= policy.policy.healthTargetAsync
-        }
-      } catch {
-        episode.adoptedAsyncOverHealth = false
-      }
-      episode.circuit.transientFailures = 0
-      episode.circuit.open = false
-      episode.circuit.suppressedLogged = false
-      const result = episode._lastResult
-      episode._lastResult = undefined
       // `shadowedRange` comes from the seam and names the first/last SURFACE
       // positions, which are not the min/max event seqs: after a replace the
       // surface head can hold a newer checkpoint, making that pair inverted.
@@ -428,7 +539,7 @@ export default class NanoCompactionEngine extends CompactionEngine {
       const shadowedSeqs = result?.shadowedSeqs ?? []
       recordAsyncDecision(session.id, {
         kind: 'commit',
-        compactionId: episode.tx.compactionId,
+        compactionId: tx.compactionId,
         promptVersion: episode.promptVersion ?? null,
         tokens: result?.shadowedTokenCount ?? null,
         records: shadowedSeqs.length === 0 ? null : shadowedSeqs.length,
@@ -436,7 +547,7 @@ export default class NanoCompactionEngine extends CompactionEngine {
           ? null
           : { first: Math.min(...shadowedSeqs), last: Math.max(...shadowedSeqs) },
       })
-      this._settleEpisode(episode)
+      if (adoptedOverHealth === true) this._overHealth.add(session.id)
       this._logResult(result, 'async maintenance')
       return true
     } catch (error) {
@@ -445,7 +556,24 @@ export default class NanoCompactionEngine extends CompactionEngine {
     }
   }
 
-  _settleEpisode(episode) {
+  /**
+   * Post-commit over-health probe (-13): whether the adoption left fill still
+   * >= H, which primes the FULL closed set at the next B crossing. Session-
+   * level side channel; a probe failure reports false (never primes).
+   */
+  async _adoptedOverHealth(agent) {
+    try {
+      const policy = this._policy()
+      const W = await this._window(agent, policy)
+      if (policy.safetyOnly || W === null) return false
+      const measurement = this.ctx.tokenMeter.measure(agent.session)
+      return measurement.totalTokens / W >= policy.policy.healthTargetAsync
+    } catch {
+      return false
+    }
+  }
+
+  _settleEpisode(session, episode) {
     episode.phase = 'none'
     episode.tx = null
     episode.prepared = null
@@ -453,6 +581,8 @@ export default class NanoCompactionEngine extends CompactionEngine {
     episode.attemptReady = false
     episode.attempt = undefined
     episode.attemptAbort = undefined
+    episode.verbatimRequest = undefined
+    if (session !== undefined) this._maybeGCEpisode(session, episode)
   }
 
   _logResult(result, trigger) {
@@ -506,6 +636,18 @@ export default class NanoCompactionEngine extends CompactionEngine {
       bracketed,
       circuitOpen: episode.circuit.open,
     })
+    // Non-transient drops debounce the gate for the REST of this turn (-05③):
+    // the selector's null-range, a committed-then-failed summarize, or an
+    // unknown error is not transient, so it is almost certainly about to fail
+    // again. The next turn may retry.
+    if (reason !== 'transient') {
+      const openTurn = inspectCompactionEntryState(session).openTurn
+      if (openTurn !== null) {
+        // Session-level marker: survives the GC'd episode slot below.
+        this._blockedTurns.set(session.id, { turn: openTurn, logged: false })
+      }
+    }
+    this._maybeGCEpisode(session, episode)
   }
 
   _classifyFailure(error) {
@@ -532,11 +674,13 @@ export default class NanoCompactionEngine extends CompactionEngine {
       case 'pressure':
         return this._pressureGate(agent, header, signal)
       case 'context-overflow': {
-        this.ctx.get('toolResultPruner')?.pruneSession(agent.session)
-        const measurement = this.ctx.tokenMeter.measure(agent.session)
-        const range = selectCompactableRange(agent.session, measurement, 0)
-        if (range === null) return null
-        return this.compactRegion(range.start, range.end, agent, signal)
+        return this._runLane(agent, 'overflow', async () => {
+          this.ctx.get('toolResultPruner')?.pruneSession(agent.session)
+          const measurement = this.ctx.tokenMeter.measure(agent.session)
+          const range = selectCompactableRange(agent.session, measurement, 0)
+          if (range === null) return null
+          return this.compactRegion(range.start, range.end, agent, signal)
+        })
       }
       default:
         throw new Error(`unknown compaction trigger: ${trigger}`)
@@ -545,6 +689,15 @@ export default class NanoCompactionEngine extends CompactionEngine {
 
   /** Synchronous FULL for the closed trigger set plus model-switch require-below. */
   async _compactPressure(agent, header, signal, requireBelowThreshold) {
+    // A sync lane preempts any in-flight async episode BEFORE the durable
+    // bracket check (-05②): the episode owns nothing yet, so it drops
+    // cleanly instead of this lane reporting a false lock contention.
+    return this._runLane(agent, requireBelowThreshold ? 'model-switch' : 'full', async () => {
+      return this._compactPressureBody(agent, header, signal, requireBelowThreshold)
+    })
+  }
+
+  async _compactPressureBody(agent, header, signal, requireBelowThreshold) {
     const target = header.config
     const { policy, safetyOnly } = this._policy()
     const meter = this.ctx.tokenMeter
@@ -593,10 +746,19 @@ export default class NanoCompactionEngine extends CompactionEngine {
     const target = header.config
     const meter = this.ctx.tokenMeter
     const info = await this.ctx.llm.resolveModelInfo(target.provider, target.model, signal)
-    if (info.context === undefined) return null
+    if (info.context === undefined) {
+      // -05⑥: no window → no fill → no gate at all. Recorded so a session whose
+      // model reports no context budget is not a silent dead lane.
+      recordAsyncDecision(agent.session.id, {
+        kind: 'skip',
+        reason: 'no-window',
+        detail: `${target.provider}/${target.model} reports no context window`,
+      })
+      return null
+    }
     const W = info.context.contextWindow
     let measurement = meter.measure(agent.session, header)
-    const fillRatio = measurement.totalTokens / W
+    let fillRatio = measurement.totalTokens / W
 
     if (safetyOnly) {
       // -18⑤: read failure -> only the S line stays live.
@@ -608,22 +770,54 @@ export default class NanoCompactionEngine extends CompactionEngine {
     const fullOnly = order.ok && order.fullOnly
     const episode = this._episode(agent.session)
 
+    // Free pass before the disarm comparison (P3-04a/-05④): the prune is a
+    // model-free reduction, so the boundary premise check must compare against
+    // post-prune fill — otherwise an in-flight episode survives on stale
+    // pressure the pruner already relieved.
+    const pruner = this.ctx.get('toolResultPruner')
+    if (pruner !== undefined && fillRatio >= policy.bufferSizeAsync) {
+      pruner.pruneSession(agent.session)
+      measurement = meter.measure(agent.session, header)
+      const prunedFill = measurement.totalTokens / W
+      if (prunedFill !== fillRatio) {
+        // Re-derive the trigger on the cheaper surface: disarm, FULL, and arm
+        // all consult the same post-prune fill from here on.
+        fillRatio = prunedFill
+      }
+    }
+
     // A raised B must be able to stop work that is already under way: the gate
     // used to only ever arm, so lowering the line took effect immediately while
-    // raising it could not cancel anything.
+    // raising it could not cancel anything. Post-prune fill is what counts —
+    // a prune that relieved pressure below B disarms too (CORR-1/-05④).
     if (episode.phase !== 'none' && fillRatio < policy.bufferSizeAsync) {
       this._disarmEpisode(agent, episode, `fill ${(fillRatio * 100).toFixed(1)}% fell below B ${(policy.bufferSizeAsync * 100).toFixed(1)}%`)
     }
 
     // FULL closed set (-13): trusted safety / DC-1 / post-adoption over-health.
+    // These are NOT lane-gated: a FULL trigger outranks an in-flight async
+    // episode and preempts it inside _compactPressure's lane (-05②).
     if (fillRatio >= SAFETY_RATIO
       || (fullOnly && fillRatio >= policy.bufferSizeAsync)
-      || (episode.adoptedAsyncOverHealth && fillRatio >= policy.bufferSizeAsync)) {
-      episode.adoptedAsyncOverHealth = false
+      || (this._overHealth.has(agent.session.id) && fillRatio >= policy.bufferSizeAsync)) {
+      this._overHealth.delete(agent.session.id)
       return this._compactPressure(agent, header, signal, false)
     }
 
     if (fillRatio >= policy.bufferSizeAsync && !fullOnly) {
+      // -05②: another lane (in-flight episode or a synchronous lane
+      // mid-flight) owns this session — the gate must not arm. Suppression is
+      // recorded so a busy session is not a silent pass. FULL above already
+      // returned before reaching here.
+      if (this._laneActive(agent.session)) {
+        recordAsyncDecision(agent.session.id, {
+          kind: 'skip',
+          reason: 'lane-active',
+          fill: fillRatio,
+          window: W,
+        })
+        return null
+      }
       // B line: arm the ephemeral async episode; durable one-active gate.
       try {
         assertNoActiveCompaction(agent.session, 'async compaction arming')
@@ -638,14 +832,23 @@ export default class NanoCompactionEngine extends CompactionEngine {
         })
         return null
       }
-      // prune + remeasure before arming (trigger qualified already; the free
-      // pass may still relieve pressure below B without an episode).
-      const prune = this.ctx.get('toolResultPruner')
-      if (prune !== undefined) {
-        prune.pruneSession(agent.session)
-        measurement = meter.measure(agent.session, header)
-        if (measurement.totalTokens / W < policy.bufferSizeAsync) return null
+      // Same-turn debounce (-05③/b): a non-transient drop earlier in this turn
+      // suppressed further arms until the next turn. One ledger record per
+      // turn at most — later boundaries in the same turn pass silently.
+      const blocked = this._turnBlocked(agent.session, episode, inspectCompactionEntryState(agent.session).openTurn)
+      if (blocked !== null) {
+        if (blocked === 'turn-blocked') {
+          recordAsyncDecision(agent.session.id, {
+            kind: 'skip',
+            reason: 'turn-blocked',
+            fill: fillRatio,
+            window: W,
+          })
+        }
+        return null
       }
+      // The prune + remeasure pass already ran above the disarm check (the
+      // premise comparison needs post-prune fill); nothing to repeat here.
       const effectivePin = order.ok ? order.effectivePin : Math.min(policy.pinnedAsyncTokens, Math.floor(0.15 * W))
       if (this._armEpisode(agent, policy, effectivePin)) {
         recordAsyncDecision(agent.session.id, {
@@ -680,9 +883,17 @@ export default class NanoCompactionEngine extends CompactionEngine {
 
   compactNow(agent, signal, sourceCommandId) {
     signal.throwIfAborted()
+    // -05②: the manual lane preempts an in-flight async episode before the
+    // durable one-active check — a held bracket then means a FOREIGN lane,
+    // never our own in-flight attempt.
+    const episode = this._episodes.get(agent.session.id)
+    if (episode !== undefined && episode.phase !== 'none') {
+      this._preemptEpisode(agent, episode, 'manual')
+    }
     try {
       return agent.runMaintenance(async (agentSignal) => {
         const operationSignal = AbortSignal.any([agentSignal, signal])
+        this._lanes.add(agent.session.id)
         try {
           operationSignal.throwIfAborted()
           const entryState = inspectCompactionEntryState(agent.session)
@@ -717,6 +928,8 @@ export default class NanoCompactionEngine extends CompactionEngine {
           }
           operationSignal.throwIfAborted()
           throw error
+        } finally {
+          this._lanes.delete(agent.session.id)
         }
       })
     } catch (error) {

@@ -1110,3 +1110,367 @@ test('inspect_checkpoint: threat model — wrong id, wrong session, no session (
   await assert.rejects(() => runTool(session, { compactionId: 'cp-00000001', limit: 0 }), /limit/)
   await assert.rejects(() => runTool(session, {}), /compactionId|undefined/)
 })
+
+/* ============ 11. ACE-1117 P3: lifecycle, mutex, timeout, disarm ========== */
+
+test('T08 idle maintenance commit: turn ends mid-summarize → exactly one runMaintenance commit, no wake', async (t) => {
+  writePolicy()
+  const ctx = makeCtx()
+  const engine = makeEngine(ctx)
+  const { session } = makeBLineSession('s-p3-idle')
+  const agent = makeAgent(session)
+  session.append('turn/start', { turn: 't-1' })
+
+  ctx.llm.state.resetGate()
+  await ctx.emitPreStep(agent)                 // arm + kick; summarize hangs
+  await ctx.llm.state.streamStarted
+  const episode = engine._episodes.get(session.id)
+  assert.equal(episode.phase, 'running')
+  assert.equal(agent.maintenanceCalls.length, 0, 'no maintenance before idle')
+  assert.equal(agent.followups.length, 0)
+
+  // Turn ends while the summarizer is still running: the idle boundary is the
+  // only commit lane left.
+  ctx.emitStatus(agent, 'idle')
+  ctx.llm.state.hangGate.release()
+  await episode.attempt
+  await new Promise(r => setImmediate(r))      // let the maintenance microtask run
+  assert.equal(agent.maintenanceCalls.length, 1, 'exactly one runMaintenance commit')
+  await agent.maintenanceCalls[0].promise
+
+  const ends = session.eventsOf('compaction/end')
+  assert.equal(ends.length, 1)
+  assert.equal(ends[0].data.error, undefined)
+  assert.equal(agent.followups.length, 0, 'idle commit must not wake the session')
+
+  // A later pre-step must NOT re-commit or double-append the bracket.
+  await ctx.emitPreStep(agent)
+  assert.equal(session.eventsOf('compaction/start').length, 1)
+  assert.equal(session.eventsOf('compaction/end').length, 1)
+})
+
+test('T09 four sync lanes preempt an in-flight episode; circuit untouched (T09)', async () => {
+  const ledgerPath = () => join(DATA_DIR, 'plugins/nano-model-selector/async-history')
+  const readLedger = (id) => readFileSync(join(ledgerPath(), `${id}.jsonl`), 'utf8')
+    .trim().split('\n').map(l => JSON.parse(l))
+
+  // Lane 1: manual compactNow
+  {
+    writePolicy()
+    const ctx = makeCtx()
+    const engine = makeEngine(ctx)
+    const { session } = makeBLineSession('s-p3-manual')
+    const agent = makeAgent(session)
+    ctx.llm.state.resetGate()
+    await ctx.emitPreStep(agent)
+    await ctx.llm.state.streamStarted
+    const episode = engine._episodes.get(session.id)
+    assert.equal(episode.phase, 'running')
+    const attemptRef = episode.attempt
+
+    ctx.llm.state.hangGate.release()
+    const m = engine.compactNow(agent, new AbortController().signal)
+    assert.equal(agent.maintenanceCalls.length, 1)
+    await attemptRef.catch(() => {})
+    await m
+    const drops = readLedger(session.id).filter(r => r.kind === 'drop')
+    assert.equal(drops.at(-1).reason, 'preempted')
+    assert.equal(drops.at(-1).bracketed, false)
+    assert.equal(episode.circuit.transientFailures, 0)
+    // The manual lane committed its OWN bracket — one clean pair, different id.
+    const starts = session.eventsOf('compaction/start')
+    const ends = session.eventsOf('compaction/end')
+    assert.equal(starts.length, 1)
+    assert.equal(ends.length, 1)
+    assert.equal(ends[0].data.error, undefined)
+  }
+
+  // Lane 2: synchronous FULL (fill pushed over S mid-flight)
+  {
+    writePolicy()
+    const ctx = makeCtx()
+    const engine = makeEngine(ctx)
+    const { session } = makeBLineSession('s-p3-full')
+    const agent = makeAgent(session)
+    session.append('turn/start', { turn: 't-1' })
+    ctx.llm.state.resetGate()
+    await ctx.emitPreStep(agent)
+    await ctx.llm.state.streamStarted
+    const episode = engine._episodes.get(session.id)
+    const attemptRef = episode.attempt
+    // push fill over S: 150 + 8×100 = 0.95
+    session.addMessage('user', 'extra1', 100)
+    session.addMessage('user', 'extra2', 100)
+    ctx.llm.state.hangGate.release()
+    await ctx.emitPreStep(agent)
+    await attemptRef.catch(() => {})
+    const drops = readLedger(session.id).filter(r => r.kind === 'drop')
+    assert.equal(drops.at(-1).reason, 'preempted')
+    assert.equal(episode.circuit.transientFailures, 0)
+    assert.equal(session.eventsOf('compaction/end').length, 1)
+    assert.equal(session.eventsOf('compaction/end')[0].data.error, undefined)
+  }
+
+  // Lane 3: model-switch veto lane (agent/request with a different model)
+  {
+    writePolicy()
+    const ctx = makeCtx()
+    const engine = makeEngine(ctx)
+    const { session } = makeBLineSession('s-p3-switch')
+    const agent = makeAgent(session)
+    session.append('turn/start', { turn: 't-1' })
+    ctx.llm.state.resetGate()
+    await ctx.emitPreStep(agent)
+    await ctx.llm.state.streamStarted
+    const episode = engine._episodes.get(session.id)
+    const attemptRef = episode.attempt
+    ctx.llm.state.hangGate.release()
+    // switch to a different model → requireBelowThreshold lane preempts
+    const cfg = { provider: 'prov', model: 'other-model' }
+    await ctx.emitRequest(agent, cfg)
+    await attemptRef.catch(() => {})
+    const drops = readLedger(session.id).filter(r => r.kind === 'drop')
+    assert.equal(drops.at(-1).reason, 'preempted')
+    assert.equal(episode.circuit.transientFailures, 0)
+  }
+
+  // Lane 4: overflow recovery lane (request-error CONTEXT_WINDOW_EXCEEDED)
+  {
+    writePolicy()
+    const ctx = makeCtx()
+    const engine = makeEngine(ctx)
+    const { session } = makeBLineSession('s-p3-overflow')
+    const agent = makeAgent(session)
+    session.append('turn/start', { turn: 't-1' })
+    ctx.llm.state.resetGate()
+    await ctx.emitPreStep(agent)
+    await ctx.llm.state.streamStarted
+    const episode = engine._episodes.get(session.id)
+    const attemptRef = episode.attempt
+    ctx.llm.state.hangGate.release()
+    const err = new Error('context window exceeded')
+    err.code = 'CONTEXT_WINDOW_EXCEEDED'
+    const results = []
+    for (const h of ctx.listeners['agent/request-error']) {
+      results.push(await h({ agent, failure: err, signal: new AbortController().signal }, () => Promise.resolve({ kind: 'next' })))
+    }
+    await attemptRef.catch(() => {})
+    const drops = readLedger(session.id).filter(r => r.kind === 'drop')
+    assert.equal(drops.at(-1).reason, 'preempted')
+    assert.equal(episode.circuit.transientFailures, 0)
+  }
+})
+
+test('T09b gate skips arming while a lane is active (lane-active skip)', async () => {
+  writePolicy()
+  const ctx = makeCtx()
+  const engine = makeEngine(ctx)
+  const { session } = makeBLineSession('s-p3-lane')
+  const agent = makeAgent(session)
+  ctx.llm.state.resetGate()
+  await ctx.emitPreStep(agent)
+  await ctx.llm.state.streamStarted
+  const episode = engine._episodes.get(session.id)
+  assert.equal(episode.phase, 'running')
+  // Second boundary while the attempt is in-flight: no second arm, one skip.
+  const before = session.eventsOf('compaction/start').length
+  await ctx.emitPreStep(agent)
+  assert.equal(session.eventsOf('compaction/start').length, before)
+  const ledger = readFileSync(
+    join(DATA_DIR, 'plugins/nano-model-selector/async-history', `${session.id}.jsonl`), 'utf8',
+  ).trim().split('\n').map(l => JSON.parse(l))
+  assert.ok(ledger.some(r => r.kind === 'skip' && r.reason === 'lane-active'),
+    `expected a lane-active skip; got ${JSON.stringify(ledger.map(r => r.kind + ':' + (r.reason ?? '')))}`)
+  ctx.llm.state.hangGate.release()
+  await episode.attempt.catch(() => {})
+})
+
+test('T10 timeout settles without circuit; late result cannot commit; episode GC\'d', async (t) => {
+  writePolicy()
+  const ctx = makeCtx()
+  const engine = makeEngine(ctx)
+  const { session } = makeBLineSession('s-p3-timeout')
+  const agent = makeAgent(session)
+
+  t.mock.timers.enable({ apis: ['setTimeout'], now: 0 })
+  try {
+    ctx.llm.state.resetGate()          // summarize hangs; abort will reject it
+    await ctx.emitPreStep(agent)
+    await ctx.llm.state.streamStarted
+    const episode = engine._episodes.get(session.id)
+    const attemptRef = episode.attempt
+    assert.equal(episode.phase, 'running')
+
+    t.mock.timers.tick(120_001)        // past EPISODE_TIMEOUT_MS
+    assert.equal(episode.phase, 'none', 'timeout settles the episode immediately')
+    // 'timeout' is a settlement, not a transient failure: circuit untouched.
+    assert.equal(episode.circuit.transientFailures, 0)
+    assert.equal(episode.circuit.open, false)
+    // Nothing durable: deferred bracket never opened.
+    assert.equal(session.eventsOf('compaction/start').length, 0)
+    assert.equal(session.eventsOf('compaction/end').length, 0)
+    // Ledger: one drop{timeout, bracketed:false}.
+    const ledger = readFileSync(
+      join(DATA_DIR, 'plugins/nano-model-selector/async-history', `${session.id}.jsonl`), 'utf8',
+    ).trim().split('\n').map(l => JSON.parse(l))
+    assert.ok(ledger.some(r => r.kind === 'drop' && r.reason === 'timeout' && r.bracketed === false))
+    // GC: circuit closed and phase none → the map slot is freed (-05③/d).
+    assert.equal(engine._episodes.has(session.id), false)
+
+    // The late resolve arrives AFTER settle (the fake summarize ignores the
+    // abort and finishes once the gate opens): it must NOT commit, must NOT
+    // record a second drop, and the GC'd slot must stay gone.
+    ctx.llm.state.hangGate.release()
+    await attemptRef.catch(() => {})
+    await new Promise(r => setImmediate(r))
+    const ledger2 = readFileSync(
+      join(DATA_DIR, 'plugins/nano-model-selector/async-history', `${session.id}.jsonl`), 'utf8',
+    ).trim().split('\n').map(l => JSON.parse(l))
+    assert.equal(ledger2.filter(r => r.kind === 'drop').length, 1)
+    assert.equal(ledger2.filter(r => r.kind === 'commit').length, 0)
+    assert.equal(session.eventsOf('compaction/start').length, 0)
+    assert.equal(session.eventsOf('compaction/end').length, 0)
+    assert.equal(engine._episodes.has(session.id), false)
+  } finally {
+    t.mock.timers.reset()
+  }
+})
+
+test('T10b same-turn no-range debounce + no-window skip + MAX_CLAIM_ATTEMPTS gone', async () => {
+  // no-range debounce: a non-transient drop suppresses every further arm for
+  // the rest of the turn (one ledger record), and clears at the next turn.
+  writePolicy()
+  const ctx = makeCtx()
+  const engine = makeEngine(ctx)
+  const { session } = makeBLineSession('s-p3-norange')
+  const agent = makeAgent(session)
+  session.append('turn/start', { turn: 't-1' })
+  // Drive the summarize phase directly with an unreachable retain so the
+  // selector deterministically returns no-range while the turn is still open.
+  const episode = engine._episode(session)
+  episode.phase = 'running'
+  episode.retainTokens = 1e9
+  episode.attempt = Promise.resolve()
+  await engine._summarizeEpisode(agent, episode, new AbortController().signal)
+  assert.equal(episode.phase, 'none')
+  // The ledger saw the drop AND recorded the blocking turn.
+  const ledgerPath = join(DATA_DIR, 'plugins/nano-model-selector/async-history', `${session.id}.jsonl`)
+  const ledger = () => readFileSync(ledgerPath, 'utf8').trim().split('\n').map(l => JSON.parse(l))
+  assert.ok(ledger().some(r => r.kind === 'drop' && r.reason === 'no-range'))
+
+  // Same turn: further B-line boundaries stay suppressed — no new arm, and
+  // only ONE skip record for the whole turn.
+  await ctx.emitPreStep(agent)
+  assert.equal(engine._episode(session).phase, 'none', 'same-turn debounce: no re-arm')
+  await ctx.emitPreStep(agent)
+  const skips = ledger().filter(r => r.kind === 'skip')
+  assert.equal(skips.filter(r => r.reason === 'turn-blocked').length, 1)
+  assert.equal(skips.length, 1, 'later boundaries in the same turn pass silently')
+
+  // The NEXT turn clears the debounce: arming resumes.
+  session.append('turn/end', { turn: 't-1' })
+  session.append('turn/start', { turn: 't-2' })
+  await ctx.emitPreStep(agent)
+  const ep2 = engine._episode(session)
+  assert.equal(ep2.phase, 'running', 'a new turn may arm again')
+  await ep2.attempt.catch(() => {})
+
+  // no-window: model reports no context budget → recorded skip, no throw.
+  const ctx2 = makeCtx()
+  ctx2.llm.resolveModelInfo = async () => ({})
+  const engine2 = makeEngine(ctx2)
+  const { session: s2 } = makeBLineSession('s-p3-nowin')
+  const a2 = makeAgent(s2)
+  await ctx2.emitPreStep(a2)
+  const ledger2 = readFileSync(
+    join(DATA_DIR, 'plugins/nano-model-selector/async-history', `${s2.id}.jsonl`), 'utf8',
+  ).trim().split('\n').map(l => JSON.parse(l))
+  assert.ok(ledger2.some(r => r.kind === 'skip' && r.reason === 'no-window'))
+  assert.equal(engine2._episodes.get(s2.id)?.phase ?? 'none', 'none')
+
+  // P3-03/e: the retired retry constants must not exist anywhere in the lib.
+  const src = readFileSync(new URL('../lib/host-compaction.js', import.meta.url), 'utf8')
+  assert.equal(src.includes('MAX_CLAIM_ATTEMPTS'), false)
+  assert.equal(src.includes('claimAttempts'), false)
+})
+
+test('T11 disarm is a settlement in all three cases: raised B, bigger W, prune (T11)', async () => {
+  const readDrops = (id) => readFileSync(
+    join(DATA_DIR, 'plugins/nano-model-selector/async-history', `${id}.jsonl`), 'utf8',
+  ).trim().split('\n').map(l => JSON.parse(l)).filter(r => r.kind === 'drop')
+
+  // Case 1: owner raises B above current fill mid-flight → disarmed.
+  {
+    writePolicy()
+    const ctx = makeCtx()
+    const engine = makeEngine(ctx)
+    const { session } = makeBLineSession('s-p3-d1')
+    const agent = makeAgent(session)
+    ctx.llm.state.resetGate()
+    await ctx.emitPreStep(agent)
+    await ctx.llm.state.streamStarted
+    const episode = engine._episodes.get(session.id)
+    assert.equal(episode.phase, 'running')
+    const attemptRef = episode.attempt
+    writePolicy({ bufferSizeAsync: 0.80 })   // fill 0.75 < new B
+    ctx.llm.state.hangGate.release()
+    await ctx.emitPreStep(agent)
+    await attemptRef.catch(() => {})
+    const drops = readDrops(session.id)
+    assert.equal(drops.at(-1).reason, 'disarmed')
+    assert.equal(drops.at(-1).bracketed, false)
+    assert.equal(episode.circuit.transientFailures, 0)
+    assert.equal(session.eventsOf('compaction/start').length, 0)
+  }
+
+  // Case 2: a bigger context window drops fill below B mid-flight → disarmed.
+  {
+    writePolicy()
+    const ctx = makeCtx()
+    const engine = makeEngine(ctx)
+    const { session } = makeBLineSession('s-p3-d2')
+    const agent = makeAgent(session)
+    ctx.llm.state.resetGate()
+    await ctx.emitPreStep(agent)
+    await ctx.llm.state.streamStarted
+    const episode = engine._episodes.get(session.id)
+    const attemptRef = episode.attempt
+    ctx.llm.state.W = 2000                   // 750/2000 = 0.375 < B 0.65
+    ctx.llm.state.hangGate.release()
+    await ctx.emitPreStep(agent)
+    await attemptRef.catch(() => {})
+    const drops = readDrops(session.id)
+    assert.equal(drops.at(-1).reason, 'disarmed')
+    assert.equal(drops.at(-1).bracketed, false)
+    assert.equal(episode.circuit.transientFailures, 0)
+  }
+
+  // Case 3: the free prune pass pulls fill below B → next boundary disarms.
+  {
+    writePolicy()
+    const ctx = makeCtx()
+    const engine = makeEngine(ctx)
+    const { session } = makeBLineSession('s-p3-d3')
+    const agent = makeAgent(session)
+    ctx.llm.state.resetGate()
+    await ctx.emitPreStep(agent)
+    await ctx.llm.state.streamStarted
+    const episode = engine._episodes.get(session.id)
+    // Next boundary: the pruner empties the surface's non-system weights,
+    // dropping measured fill below B; the premise check disarms.
+    const origPrune = ctx.pruner.pruneSession.bind(ctx.pruner)
+    ctx.pruner.pruneSession = (s) => {
+      origPrune(s)
+      for (const seq of s.surface.nodes) s.weights.set(seq, 1)
+    }
+    const attemptRef = episode.attempt
+    ctx.llm.state.hangGate.release()
+    await ctx.emitPreStep(agent)
+    await attemptRef.catch(() => {})
+    const drops = readDrops(session.id)
+    assert.equal(drops.at(-1).reason, 'disarmed')
+    assert.equal(drops.at(-1).bracketed, false)
+    assert.equal(episode.circuit.transientFailures, 0)
+    assert.equal(session.eventsOf('compaction/start').length, 0)
+  }
+})

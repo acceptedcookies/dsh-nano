@@ -1366,3 +1366,30 @@
 - **处置**:`CompactionIcon` 运行时守卫 `IconLayersOutlineRegular ?? IconDataOutlineRegular`（同 outline 家族、rc.1 存在）。未来任何"较新版本才出现的宿主导出"一律需 `?? 兜底` 或列入窗口守卫清单。
 - **live 证据**:dsh-dev rc.1 上点击触发 → 面板打开、rail 10 项含压缩项、console 零错（截图 /tmp/nms-panel-fixed.png)。
 - **裁决请求**：客户端侧是否需要与 `VERSION_GUARDED_ROWS` 平行的机制（构建期 lint：凡 `ui-primitives` 导入名不在窗口最低版导出集内即拒）？还是接受"逐个 `??` 兜底"的人工纪律？
+
+---
+
+## ACE-1117 接替（append-only 指针）
+
+> 来源：[`docs/code-review/26-nov/ACE-1117-qna.md`](../../../code-review/26-nov/ACE-1117-qna.md)（2026-11-17 已冻结）。按 `T-O-ACE1117-01②`，本节只写「旧行 / 项 → 新 truth-id」，不复述新真相，不改本文件任何旧行。未列出的 `T-O-DNMS01-*` 行继续有效。
+
+| DNMS01 旧行 / 项 | → 接替（或读法限定） |
+|------------------|----------------------|
+| `T-O-DNMS01-11`「clamp 进 durable audit」 | `T-O-ACE1117-06①` |
+| `T-O-DNMS01-11`、`-13`「不新增 model-facing tool」 | `T-O-ACE1117-04④`、`-09` |
+| `T-O-DNMS01-15` S=0.80 | `T-O-ACE1117-10①` |
+| `T-O-DNMS01-15` 7 字段 schema | `T-O-ACE1117-07②` |
+| `T-O-DNMS01-15` pinned 两字段「保留量」语义 | `T-O-ACE1117-08①⑥` |
+| `T-O-DNMS01-15`「不新建 durable audit 文件」 | `T-O-ACE1117-06①` |
+| `T-O-DNMS01-16`「按协议重实现」的适用范围 | `T-O-ACE1117-02⑤`（读法限定） |
+| `T-O-DNMS01-18①` | `T-O-ACE1117-05①` |
+| `T-O-DNMS01-18②` | `T-O-ACE1117-05②` |
+| `T-O-DNMS01-19①`「不建 audit」 | `T-O-ACE1117-06①` |
+| `T-O-DNMS01-20` rail 第 4 图标入口 | `T-O-ACE1117-10③` |
+| `T-O-DNMS01-20` 18 个 i18n key、localStorage 缓存键 | `T-O-ACE1117-10④` |
+| `T-O-DNMS01-20` S 只读 0.80 文案 | `T-O-ACE1117-10①` |
+| `T-O-DNMS01-21④` | `T-O-ACE1117-06③④` |
+| R-16.1 | `T-O-ACE1117-10⑤` |
+| R-16.3 | `T-O-ACE1117-05①` |
+| R-16.6 | `T-O-ACE1117-04①`、`-05①` |
+| R-16.2、R-16.5、R-17、R-18 | `T-O-ACE1117-11④`（显式 defer；`T-O-DNMS01-23/-24` 不启用） |

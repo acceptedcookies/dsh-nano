@@ -306,6 +306,9 @@ ON 态「full-compact」是**我方唯一 `CompactionEngine` 子类的内部模�
 | `AMEND-1`（QNA R-7） | `-11` schema | `async-compact.json` 彻底移除 `enabled`，`-11` 行中「`enabled` 是组合层开关的输入」改读为「开关真源见 `-12`，状态文件不含该字段」 | 不回改 |
 | `AMEND-2`（QNA R-8） | `-13` overflow 归属 | `CONTEXT_WINDOW_EXCEEDED`：**ON 态归我方** `agent/request-error`→`compactIfNeeded('context-overflow')`；**OFF 态归原生 recovery**；草案 `:359`/`:519` 与 `:335`/`:502` 的矛盾句全部 supersede | 不回改 |
 | `AMEND-3`（QNA R-10） | `-12` 执行细节 | 唯一合法写者 `set_plugin`→**`set_bundle → selectBundle`**；文件 `cordis.patch.yml`→**`package.json` 的 `dsh.profile.bundles`**；`-12` 的真相结论（唯一 canonical/无第二副本/不投影/不 reconciliation/不留兼容键/不做运行期 hotfix）全部不变 | 不回改 |
+| `AMEND-4`（ACE-1117 接替） | `-11`、`-13`、`-15`、`-16`、`-19①` | 只作指针，内容以 [`ACE-1117-qna.md`](../../../code-review/26-nov/ACE-1117-qna.md) §1.2 为准：`-11`「clamp 进 durable audit」、`-15`「不新建 durable audit 文件」、`-19①`「不建 audit」→ `T-O-ACE1117-06①`；`-11`/`-13`「不新增 model-facing tool」→ `T-O-ACE1117-04④`、`-09`；`-15` S=0.80 → `T-O-ACE1117-10①`；`-15` 7 字段 schema → `T-O-ACE1117-07②`；`-15` pinned 两字段语义 → `T-O-ACE1117-08①⑥`；`-16`「按协议重实现」的适用范围 → `T-O-ACE1117-02⑤`（读法限定）。`-15` 的严格顺序、`-13` 的 DC-1 与 `B≤H` 拒绝不受影响 | 不回改 |
+| `AMEND-5`（ACE-1117 接替） | `-18①②`；问答 R-16.1、R-16.3、R-16.6 | 只作指针：`-18①` → `T-O-ACE1117-05①`；`-18②` → `T-O-ACE1117-05②`；R-16.1 → `T-O-ACE1117-10⑤`；R-16.3 → `T-O-ACE1117-05①`；R-16.6 → `T-O-ACE1117-04①`、`-05①`；R-16.2、R-16.5、R-17、R-18 → `T-O-ACE1117-11④`（显式 defer，`T-O-DNMS01-23/-24` 不启用）。`-18③④⑤⑦⑧⑨` 不受影响 | 不回改 |
+| `AMEND-6`（ACE-1117 接替） | `-20`、`-21④` | 只作指针：`-20` rail 第 4 图标入口 → `T-O-ACE1117-10③`；`-20` 18 个 i18n key 与 localStorage 缓存键 → `T-O-ACE1117-10④`；`-20` S 只读 0.80 文案 → `T-O-ACE1117-10①`；`-21④` 客户端零轮询 → `T-O-ACE1117-06③④`。`-20` 的切换确认与四类结果、`-21①` 不受影响 | 不回改 |
 
 ### 4.6 P6 · 残项、不得重开、授权边界
 
@@ -318,3 +321,4 @@ ON 态「full-compact」是**我方唯一 `CompactionEngine` 子类的内部模�
 | 版本 | 日期 | 变更 |
 |------|------|------|
 | `0.1.0` | 2026-11-14 | 首版：从 `DNMS01-qna.md`（v0.7.0 已冻结）抽取 22 条 `T-O` 投影为统一 truth ledger；启用 P1/P2/P3/P4/P5/P6 |
+| `0.1.1` | 2026-11-17 | §4.5 追加 `AMEND-4`–`AMEND-6`：ACE-1117 接替指针（只写旧行 → `T-O-ACE1117-*`，不复述、不改旧行） |

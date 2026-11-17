@@ -2470,6 +2470,14 @@ ${LAYER_CSS}
           devtoolsClear: "\u6E05\u7A7A",
           devtoolsClose: "\u5173\u95ED",
           devtoolsFailedOnly: "\u4EC5\u5931\u8D25",
+          devtoolsFailedOnlyHint: "\u53EA\u663E\u793A\u5931\u8D25\u6216 HTTP \u72B6\u6001 \u2265 400 \u7684\u8BF7\u6C42",
+          devtoolsSearch: "\u641C\u7D22 URL\u3001\u7C7B\u578B\u3001\u72B6\u6001\u6216\u65B9\u6CD5",
+          devtoolsTypeAll: "\u5168\u90E8\u7C7B\u578B",
+          devtoolsFilterType: "\u6309\u8D44\u6E90\u7C7B\u578B\u7B5B\u9009",
+          devtoolsNoMatch: "\u6CA1\u6709\u5339\u914D\u7684\u8BF7\u6C42",
+          devtoolsDisableCache: "\u7981\u7528\u7F13\u5B58",
+          devtoolsCacheUnsupported: "\u5F15\u64CE\u6682\u4E0D\u652F\u6301\u7981\u7528\u7F13\u5B58\uFF1A\u5F53\u524D Kitesurf \u7684 Network.setCacheDisabled \u662F\u7A7A\u5B9E\u73B0\uFF08no-op\uFF09\uFF0C\u4E0D\u4F1A\u6539\u53D8\u7F13\u5B58\u884C\u4E3A",
+          devtoolsSizeHint: "\u54CD\u5E94\u4F53\u4F20\u8F93\u5927\u5C0F\uFF08encodedDataLength\uFF09",
           devtoolsResize: "\u62D6\u52A8\u8C03\u6574\u9AD8\u5EA6",
           devtoolsCollapse: "\u6298\u53E0",
           devtoolsExpand: "\u5C55\u5F00",
@@ -2582,6 +2590,14 @@ ${LAYER_CSS}
           devtoolsClear: "Clear",
           devtoolsClose: "Close",
           devtoolsFailedOnly: "Failed only",
+          devtoolsFailedOnlyHint: "Show only failed requests or HTTP status \u2265 400",
+          devtoolsSearch: "Filter URL, type, status or method",
+          devtoolsTypeAll: "All types",
+          devtoolsFilterType: "Filter by resource type",
+          devtoolsNoMatch: "No matching requests",
+          devtoolsDisableCache: "Disable cache",
+          devtoolsCacheUnsupported: "Cache disabling is not supported by this engine: the current Kitesurf build implements Network.setCacheDisabled as a no-op.",
+          devtoolsSizeHint: "Response body transfer size (encodedDataLength)",
           devtoolsResize: "Drag to resize",
           devtoolsCollapse: "Collapse",
           devtoolsExpand: "Expand",
@@ -2952,6 +2968,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
 .nks-nav-tab{position:relative;display:flex;align-items:center;gap:7px;width:100%;box-sizing:border-box;min-height:30px;padding:4px 26px 4px 8px;border:0;border-radius:var(--dsw-radius-sm);background:transparent;color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxs-12);text-align:left;cursor:pointer}
 .nks-nav-tab:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .nks-nav-tab[data-current="true"]{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-markdown-tag,var(--dsw-alias-bg-layer-3))}
+.nks-nav-tab[data-current="true"]:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .nks-nav-tab svg{flex:none;width:14px;height:14px;opacity:.8}
 .nks-nav-tab .nks-nav-tab-url{flex:auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .nks-nav-tab .nks-nav-tab-count{flex:none;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11)}
@@ -2972,11 +2989,19 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
 .nks-nav-toggle{width:auto;height:28px;margin-left:4px;padding:0 10px;gap:5px;box-sizing:border-box;background:var(--dsw-alias-markdown-tag,var(--dsw-alias-bg-layer-2));border:0;border-radius:var(--dsw-radius-sm);font:var(--dsw-font-xxs-12);font-size:var(--dsh-content-font-size-secondary,13px);color:var(--dsw-alias-label-primary);white-space:nowrap}
 .nks-tool.nks-nav-toggle:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}
 .nks-tool.nks-nav-toggle[aria-pressed="true"]{background:color-mix(in srgb,var(--dsw-alias-link) 14%,var(--dsw-alias-markdown-tag,var(--dsw-alias-bg-layer-2)))}
+.nks-tool.nks-nav-toggle[data-nks-beat="true"]{background-image:linear-gradient(100deg,transparent 18%,color-mix(in srgb,var(--dsw-alias-link) 30%,transparent) 42%,transparent 66%);background-size:220% 100%;animation:nks-address-sheen 1.7s linear infinite}
 .nks-toolbar-nav{display:flex;flex:none;align-items:center;gap:8px}
 .nks-toolbar-tail{display:flex;flex:none;align-items:center;gap:8px}
 .nks-address-box{flex:auto;min-width:0;position:relative}
 .nks-address{box-sizing:border-box;width:100%;height:28px;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-12);background:var(--dsw-alias-bg-layer-1);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-sm);padding:0 32px 0 9px}
 .nks-address::placeholder{color:var(--dsw-alias-label-tertiary)}
+.nks-address-box[data-loading="true"] .nks-address{padding-right:66px;border-color:color-mix(in srgb,var(--dsw-alias-link) 48%,var(--dsw-alias-border-l2));background-image:linear-gradient(100deg,color-mix(in srgb,var(--dsw-alias-link) 10%,var(--dsw-alias-bg-layer-1)) 18%,color-mix(in srgb,var(--dsw-alias-link) 30%,var(--dsw-alias-bg-layer-1)) 42%,color-mix(in srgb,var(--dsw-alias-link) 10%,var(--dsw-alias-bg-layer-1)) 66%);background-size:220% 100%;animation:nks-address-sheen 1.7s linear infinite}
+.nks-address-box[data-loading="true"]::after{content:"";position:absolute;left:6px;right:6px;bottom:1px;height:2px;border-radius:2px;pointer-events:none;background:linear-gradient(90deg,transparent 10%,var(--dsw-alias-link) 50%,transparent 90%);background-size:200% 100%;animation:nks-address-sheen 1.4s linear infinite}
+.nks-address-beat{position:absolute;right:5px;top:50%;transform:translateY(-50%);display:inline-flex;align-items:center;gap:4px;height:22px;padding:0 3px;color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxxs-11);white-space:nowrap;pointer-events:none}
+.nks-address-beat .nks-spin{width:11px;height:11px;border-width:1.5px}
+.nks-address-box[data-loading="true"] .nks-go{visibility:hidden;opacity:0}
+@keyframes nks-address-sheen{0%{background-position:120% 0}100%{background-position:-120% 0}}
+@media (prefers-reduced-motion:reduce){.nks-address-box[data-loading="true"] .nks-address{animation:none;background-image:none;background:var(--dsw-alias-bg-layer-1)}.nks-address-box[data-loading="true"]::after{animation:none;background:var(--dsw-alias-link)}}
 .nks-go{visibility:hidden;opacity:0;position:absolute;top:0;right:0}
 .nks-address-box:focus-within .nks-go,.nks-address-box[data-dirty="true"] .nks-go{visibility:visible;opacity:1}
 .nks-frame{position:relative;isolation:isolate;order:1;overflow:auto;flex:auto;min-height:0;overflow:hidden;contain:layout paint;background:var(--dsw-alias-bg-layer-1)}
@@ -3024,8 +3049,6 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
 .nks-note input{width:220px;height:28px;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-12);background:var(--dsw-alias-bg-layer-2);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-sm);padding:0 8px}
 .nks-pins{position:relative;flex:none;pointer-events:auto;padding:2px 8px 4px;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11);display:flex;align-items:center;gap:4px;background:color-mix(in srgb,var(--dsw-alias-bg-layer-1) 94%,transparent)}
 /* nano-ui-exempt: host primitives and nano-ui ship no indeterminate spinner. */
-.nks-load{position:absolute;inset:0;z-index:var(--nano-layer-local4);display:flex;align-items:center;justify-content:center;pointer-events:none}
-.nks-load-card{display:flex;align-items:center;gap:8px;height:32px;padding:0 12px;background:var(--dsw-alias-bg-layer-1);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-md);box-shadow:var(--dsw-elevation-soft);font:var(--dsw-font-xxs-12);color:var(--dsw-alias-label-secondary)}
 .nks-spin{width:14px;height:14px;box-sizing:border-box;border-radius:50%;border:2px solid var(--dsw-alias-border-l2);border-top-color:var(--dsw-alias-link,#2f6fed);animation:nks-spin .8s linear infinite;flex:none}
 @keyframes nks-spin{to{transform:rotate(360deg)}}
 .nks-open-error{margin:0;color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxs-12);line-height:1.55;word-break:break-word}
@@ -3048,11 +3071,17 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
 .nks-dt[data-nks-dt-collapsed="true"]{height:auto;min-height:0}
 .nks-dt[data-nks-dt-collapsed="true"] > *:not(.nks-dt-head):not(.nks-dt-grip){display:none}
 .nks-dt-body{flex:auto;min-height:0;overflow:auto;font:11px/1.45 ui-monospace,Menlo,monospace}
-.nks-dt-cols{flex:none;display:flex;gap:8px;padding:2px 8px;color:var(--dsw-alias-label-dimmed);border-bottom:.5px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1);font-size:10px;text-transform:uppercase;letter-spacing:.04em;font:var(--dsw-font-xxxs-11)}
-.nks-dt-row{display:flex;gap:8px;padding:2px 8px;border-bottom:.5px solid color-mix(in srgb,var(--dsw-alias-border-l3) 45%,transparent);align-items:baseline;white-space:nowrap}
+.nks-dt-filterbar{flex:none;display:flex;align-items:center;gap:6px;padding:4px 6px;border-bottom:.5px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1)}
+.nks-dt-search{flex:1 1 120px;min-width:70px;height:24px;padding:0 7px;border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-sm);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit}
+.nks-dt-switch{display:inline-flex;align-items:center;gap:5px;color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxxs-11);white-space:nowrap;cursor:pointer}
+.nks-dt-cache{display:inline-flex;align-items:center;gap:4px;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11);white-space:nowrap;cursor:help}
+.nks-dt-cache b{font-weight:500;color:var(--dsw-alias-label-dimmed);border:.5px solid var(--dsw-alias-border-l2);border-radius:999px;padding:0 5px;font-size:10px}
+.nks-dt-cols{flex:none;display:flex;gap:6px;padding:2px 8px;color:var(--dsw-alias-label-dimmed);border-bottom:.5px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1);font:var(--dsw-font-xxxs-11);font-size:9px;text-transform:uppercase;letter-spacing:.02em}
+.nks-dt-cols span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nks-dt-row{display:flex;gap:6px;padding:2px 8px;border-bottom:.5px solid color-mix(in srgb,var(--dsw-alias-border-l3) 45%,transparent);align-items:baseline;white-space:nowrap}
 .nks-dt-row:nth-child(even){background:color-mix(in srgb,var(--dsw-alias-bg-layer-1) 45%,transparent)}
 .nks-dt-row:hover{background:var(--dsw-alias-interactive-bg-hover)}
-.nks-dt-lv{flex:none;width:56px;color:var(--dsw-alias-label-tertiary);text-transform:uppercase;font:var(--dsw-font-xxxs-11)}
+.nks-dt-lv{flex:none;width:50px;color:var(--dsw-alias-label-tertiary);text-transform:uppercase;font:var(--dsw-font-xxxs-11)}
 .nks-dt-lv[data-lv="error"],.nks-dt-lv[data-lv="exception"]{color:var(--dsw-alias-state-error-primary)}
 .nks-dt-lv[data-lv="warn"]{color:var(--dsw-alias-state-warn-primary)}
 .nks-dt-lv[data-lv="network"]{color:var(--dsw-alias-link,#7aaaff)}
@@ -3060,14 +3089,18 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
 
 .nks-dt-url{flex:1 1 auto;min-width:0;max-width:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary);direction:ltr}
 .nks-dt-grow{flex:1 1 auto;min-width:0}
-.nks-dt-st{flex:none;width:34px;text-align:right}
+.nks-dt-st{flex:none;width:44px;text-align:right}
 .nks-dt-st[data-bad="true"]{color:var(--dsw-alias-state-error-primary)}
-.nks-dt-dur{flex:none;width:56px;text-align:right;color:var(--dsw-alias-label-tertiary)}
+.nks-dt-dur{flex:none;width:50px;text-align:right;color:var(--dsw-alias-label-tertiary)}
 .nks-dt-time{flex:none;width:64px;color:var(--dsw-alias-label-tertiary)}
 .nks-dt-src{flex:none;max-width:32%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-tertiary);text-align:right}
-.nks-dt-type{flex:none;width:72px;color:var(--dsw-alias-label-tertiary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.nks-dt-size{flex:none;width:56px;text-align:right;color:var(--dsw-alias-label-tertiary)}
-.nks-dt-wf{flex:none;width:130px;position:relative;height:10px;align-self:center}
+.nks-dt-type{flex:none;width:46px;color:var(--dsw-alias-label-tertiary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nks-dt-type[data-resource="script"],.nks-dt-type[data-resource="js"]{color:var(--dsw-alias-state-warn-primary)}
+.nks-dt-type[data-resource="doc"]{color:var(--dsw-alias-link,#7aaaff)}
+.nks-dt-type[data-resource="xhr"],.nks-dt-type[data-resource="fetch"]{color:var(--dsw-alias-state-success-primary)}
+.nks-dt-type[data-resource="img"],.nks-dt-type[data-resource="css"],.nks-dt-type[data-resource="font"]{color:var(--dsw-alias-label-secondary)}
+.nks-dt-size{flex:none;width:48px;text-align:right;color:var(--dsw-alias-label-tertiary)}
+.nks-dt-wf{flex:none;width:96px;position:relative;height:10px;align-self:center}
 .nks-dt-wf i{position:absolute;top:0;height:8px;min-width:2px;border-radius:2px;background:color-mix(in srgb,var(--dsw-alias-link,#7aaaff) 70%,transparent)}
 .nks-dt-wf i[data-bad="true"]{background:var(--dsw-alias-state-error-primary)}
 .nks-dt-wf i[data-pending="true"]{background:var(--dsw-alias-label-dimmed);opacity:.6}
@@ -3219,10 +3252,80 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       button.tabIndex = on ? 0 : -1;
     }
   }
+  var RESOURCE_LABELS = {
+    Document: "doc",
+    Stylesheet: "css",
+    Image: "img",
+    Media: "media",
+    Font: "font",
+    Script: "js",
+    TextTrack: "text",
+    XHR: "xhr",
+    Fetch: "fetch",
+    Prefetch: "prefetch",
+    EventSource: "sse",
+    WebSocket: "ws",
+    Manifest: "manifest",
+    SignedExchange: "sxg",
+    Ping: "ping",
+    CSPViolationReport: "csp",
+    Preflight: "preflight",
+    Other: "other"
+  };
+  var RESOURCE_FILTERS = ["Document", "Stylesheet", "Script", "XHR", "Fetch", "Image", "Font", "Media", "WebSocket", "Other"];
+  function resourceTypeLabel(row) {
+    const raw = String(row?.type || "").trim();
+    if (raw) return RESOURCE_LABELS[raw] || raw.toLowerCase().slice(0, 8);
+    const mime = String(row?.mimeType || "");
+    if (mime.includes("javascript")) return "js";
+    if (mime.includes("css")) return "css";
+    if (mime.startsWith("image/")) return "img";
+    if (mime.startsWith("font/")) return "font";
+    if (mime.includes("json")) return "json";
+    if (mime.startsWith("text/html")) return "doc";
+    return mime.split(";")[0].replace(/^application\//, "").slice(0, 8) || "other";
+  }
+  function formatSize(bytes) {
+    const n = Number(bytes);
+    if (!Number.isFinite(n) || n < 0) return "";
+    if (n < 1024) return `${n}b`;
+    if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)}kb`;
+    return `${(n / 1024 / 1024).toFixed(1)}mb`;
+  }
+  function formatDuration(ms) {
+    const n = Number(ms);
+    if (!Number.isFinite(n) || n < 0) return "";
+    return n < 1e3 ? `${Math.round(n)}ms` : `${(n / 1e3).toFixed(2)}s`;
+  }
+  function networkMatches(row, text) {
+    const tokens = String(text || "").toLowerCase().trim().split(/\s+/).filter(Boolean);
+    if (!tokens.length) return true;
+    const haystack = `${row.url || ""} ${row.method || ""} ${row.status ?? ""} ${row.type || ""} ${row.mimeType || ""}`.toLowerCase();
+    return tokens.every((token) => {
+      const at = token.indexOf(":");
+      if (at < 1) return haystack.includes(token);
+      const key = token.slice(0, at);
+      const value = token.slice(at + 1);
+      if (key === "type") return String(row.type || "").toLowerCase().includes(value) || resourceTypeLabel(row).includes(value);
+      if (key === "method") return String(row.method || "").toLowerCase() === value;
+      if (key === "status") {
+        if (/^[1-5]xx$/.test(value)) return Math.floor(Number(row.status) / 100) === Number(value[0]);
+        return String(row.status ?? "") === value;
+      }
+      return haystack.includes(token);
+    });
+  }
+  function consoleMatches(row, text) {
+    const needle = String(text || "").toLowerCase().trim();
+    if (!needle) return true;
+    return `${row.level || ""} ${row.text || ""} ${row.url || ""} ${row.source || ""}`.toLowerCase().includes(needle);
+  }
   function DevTools({ copy, open, onClose }) {
     const [tab, setTab] = React12.useState("console");
     const [rows, setRows] = React12.useState([]);
     const [failedOnly, setFailedOnly] = React12.useState(false);
+    const [query, setQuery] = React12.useState("");
+    const [typeFilter, setTypeFilter] = React12.useState("all");
     const [styles, setStyles] = React12.useState(null);
     const [height, setHeight] = React12.useState(240);
     const [collapsed, setCollapsed] = React12.useState(false);
@@ -3272,7 +3375,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
               if (last?.at) since = last.at;
             }
           } else if (tab === "network") {
-            const url = `${NETWORK}?limit=200${failedOnly ? "&failedOnly=true" : ""}${since ? `&since=${encodeURIComponent(since)}` : ""}`;
+            const url = `${NETWORK}?limit=200${since ? `&since=${encodeURIComponent(since)}` : ""}`;
             const data = await fetch(url).then((r) => r.json());
             if (alive && Array.isArray(data.entries)) {
               merge(data.entries, (r) => `n${r.id}`);
@@ -3304,8 +3407,30 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         clearInterval(timer);
         document.removeEventListener("visibilitychange", onVis);
       };
-    }, [open, tab, failedOnly]);
+    }, [open, tab]);
     if (!open) return null;
+    const visibleRows = rows.filter((row) => {
+      if (tab === "network") {
+        if (failedOnly && !(row.failed || row.status && row.status >= 400)) return false;
+        if (typeFilter !== "all" && String(row.type || "Other") !== typeFilter) return false;
+        return networkMatches(row, query);
+      }
+      if (tab === "console") return consoleMatches(row, query);
+      return true;
+    });
+    const openTypeMenu = (event) => {
+      const rect = event.currentTarget.getBoundingClientRect();
+      openNanoMenu2({
+        anchor: { left: rect.left, top: rect.top, bottom: rect.bottom },
+        container: event.currentTarget.closest("[data-nks-workspace]"),
+        direction: "down",
+        maxHeight: 9 * 28 + 8,
+        items: [
+          { id: "all", label: copy.devtoolsTypeAll, run: () => setTypeFilter("all") },
+          ...RESOURCE_FILTERS.map((type) => ({ id: type, label: type, run: () => setTypeFilter(type) }))
+        ]
+      });
+    };
     const inspectNode = async (row) => {
       const selector = row.id ? `${row.tag}#${row.id}` : row.cls ? `${row.tag}.${String(row.cls).trim().split(/\s+/)[0]}` : row.tag;
       try {
@@ -3341,7 +3466,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       h7(
         "div",
         { className: "nks-dt-head" },
-        // View switch, filter toggle and row actions are host primitives; the
+        // View switch and row actions are host primitives; the
         // pane draws no tab chrome of its own (DESIGN.md §6.1). The strip is
         // scaled to the panel: at full size three options ate the whole header.
         h7(
@@ -3359,11 +3484,6 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
             onChange: (next) => setTab(next)
           })
         ),
-        tab === "network" ? h7(primitives2.Switch, {
-          checked: failedOnly,
-          label: copy.devtoolsFailedOnly,
-          onChange: (next) => setFailedOnly(next)
-        }) : null,
         h7("span", { style: { flex: "auto" } }),
         h7(primitives2.Button, { variant: "ghost", size: "sm", onClick: clear }, copy.devtoolsClear),
         h7(primitives2.Button, {
@@ -3374,6 +3494,52 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           onClick: () => setCollapsed((value) => !value)
         }, collapsed ? copy.devtoolsExpand : copy.devtoolsCollapse),
         h7(primitives2.Button, { variant: "ghost", size: "sm", onClick: onClose }, copy.devtoolsClose)
+      ),
+      tab === "elements" ? null : h7(
+        "div",
+        { className: "nks-dt-filterbar", "data-nks-dt-filterbar": "1" },
+        h7("input", {
+          className: "nks-dt-search",
+          "data-nks-dt-search": "1",
+          type: "search",
+          value: query,
+          placeholder: copy.devtoolsSearch,
+          "aria-label": copy.devtoolsSearch,
+          onChange: (event) => setQuery(event.target.value)
+        }),
+        tab === "network" ? h7(
+          primitives2.Tooltip,
+          { label: copy.devtoolsFilterType },
+          h7(primitives2.Button, {
+            variant: "outline",
+            size: "sm",
+            "data-nks-dt-type": "1",
+            "aria-label": `${copy.devtoolsFilterType}: ${typeFilter === "all" ? copy.devtoolsTypeAll : typeFilter}`,
+            onClick: openTypeMenu
+          }, typeFilter === "all" ? copy.devtoolsTypeAll : typeFilter)
+        ) : null,
+        tab === "network" ? h7(
+          primitives2.Tooltip,
+          { label: copy.devtoolsFailedOnlyHint },
+          h7(
+            "label",
+            { className: "nks-dt-switch", "data-nks-dt-failed": "1" },
+            h7(primitives2.Switch, { checked: failedOnly, onChange: setFailedOnly, label: copy.devtoolsFailedOnly }),
+            h7("span", null, copy.devtoolsFailedOnly)
+          )
+        ) : null,
+        tab === "network" ? h7(
+          primitives2.Tooltip,
+          { label: copy.devtoolsCacheUnsupported },
+          h7(
+            "span",
+            { className: "nks-dt-cache", "data-nks-dt-cache": "1", "aria-disabled": "true" },
+            h7(primitives2.Switch, { checked: false, disabled: true, onChange: () => {
+            }, label: copy.devtoolsDisableCache }),
+            h7("span", null, copy.devtoolsDisableCache),
+            h7("b", null, "\u4E0D\u652F\u6301")
+          )
+        ) : null
       ),
       styles ? h7(
         "div",
@@ -3408,8 +3574,8 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       h7(
         "div",
         { className: "nks-dt-body", "data-nks-dt-body": "1" },
-        rows.length === 0 ? h7("div", { className: "nks-dt-empty" }, copy.devtoolsEmpty) : null,
-        rows.map((row, index) => tab === "elements" ? h7(
+        visibleRows.length === 0 ? h7("div", { className: "nks-dt-empty" }, rows.length && (tab === "network" || tab === "console") ? copy.devtoolsNoMatch : copy.devtoolsEmpty) : null,
+        visibleRows.map((row, index) => tab === "elements" ? h7(
           "div",
           { className: "nks-dt-row", key: `e${row.nodeId || index}`, style: { paddingLeft: `${8 + (row.level || 0) * 12}px`, cursor: "pointer" }, onClick: () => inspectNode(row), "data-nks-el-node": String(row.nodeId) },
           h7("span", { className: "nks-dt-lv" }, row.tag),
@@ -3427,11 +3593,11 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           { className: "nks-dt-row", key: `n${row.id || index}` },
           h7("span", { className: "nks-dt-lv" }, row.method),
           h7("span", { className: "nks-dt-st", "data-bad": row.failed || row.status && row.status >= 400 ? "true" : "false" }, row.failed ? "ERR" : String(row.status || "\u2026")),
-          h7("span", { className: "nks-dt-type" }, String(row.mimeType || row.type || "").split(";")[0].replace("application/", "").replace("text/", "").slice(0, 12)),
+          h7("span", { className: "nks-dt-type", "data-resource": resourceTypeLabel(row), title: `${row.type || "Other"}${row.mimeType ? " \xB7 " + row.mimeType : ""}` }, resourceTypeLabel(row)),
           h7("span", { className: "nks-dt-url nks-dt-grow", "data-bad": row.failed || (row.status || 0) >= 400 ? "true" : "false" }, row.url),
-          h7("span", { className: "nks-dt-size" }, row.size == null ? "" : row.size > 1024 ? `${(row.size / 1024).toFixed(1)}kb` : `${row.size}b`),
-          h7("span", { className: "nks-dt-dur" }, row.durationMs == null ? "" : `${row.durationMs}ms`),
-          h7("span", { className: "nks-dt-wf", "data-nks-dt-wf": "1" }, wfBar(row, rows))
+          h7("span", { className: "nks-dt-size", title: copy.devtoolsSizeHint }, formatSize(row.size)),
+          h7("span", { className: "nks-dt-dur" }, formatDuration(row.durationMs)),
+          h7("span", { className: "nks-dt-wf", "data-nks-dt-wf": "1" }, wfBar(row, visibleRows))
         ))
       )
     );
@@ -4875,6 +5041,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           type: "button",
           className: "nks-tool nks-nav-toggle",
           "data-nks-nav-toggle": "1",
+          "data-nks-beat": beat ? "true" : "false",
           "aria-pressed": navOpen ? "true" : "false",
           "aria-label": navOpen ? copy.navClose : copy.navOpen,
           title: navOpen ? copy.navCloseTitle : copy.navOpenTitle,
@@ -4891,7 +5058,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         ),
         h7(
           "span",
-          { className: "nks-address-box", "data-dirty": draftUrl ? "true" : "false" },
+          { className: "nks-address-box", "data-dirty": draftUrl ? "true" : "false", "data-loading": beat ? "true" : "false", "aria-busy": beat ? "true" : "false" },
           h7("input", {
             className: "nks-address",
             "aria-label": copy.addressAria,
@@ -4908,6 +5075,19 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
               addressFocusedRef.current = false;
             }
           }),
+          beat ? h7(
+            "span",
+            {
+              className: "nks-address-beat",
+              "data-nks-beat": "1",
+              "data-nks-loading": "1",
+              role: "status",
+              "aria-label": copy.opening,
+              title: copy.opening
+            },
+            h7("i", { className: "nks-spin", "aria-hidden": true }),
+            beatSec > 0 ? h7("span", { "data-nks-beat-sec": String(beatSec) }, `${beatSec}s`) : null
+          ) : null,
           h7("button", { type: "submit", className: "nks-tool nks-go", "aria-label": copy.go, disabled: busy }, glyph("go"))
         ),
         // Trailing cluster mirrors the host's three icon buttons (分栏 /
@@ -5128,17 +5308,6 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
             `\u269B ${pick.elements[0].componentStack.slice(-3).join(" \u2192 ")}`
           ) : null
         ) : null,
-        beat ? h7(
-          "div",
-          { className: "nks-load", "data-nks-beat": "1", "data-nks-loading": "1", role: "status" },
-          h7(
-            "div",
-            { className: "nks-load-card" },
-            h7("i", { className: "nks-spin", "aria-hidden": true }),
-            h7("span", null, copy.opening),
-            beatSec > 0 ? h7("span", { "data-nks-beat-sec": String(beatSec) }, `${beatSec}s`) : null
-          )
-        ) : null,
         nativeHtml && domDoc ? h7("iframe", {
           className: "nks-dom",
           title: "Kitesurf page",
@@ -5167,8 +5336,8 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           // painted the opaque Start button straight over the error text
           // ("引启动引擎答"). Everything below is a single vertical stack.
           h7("div", { className: "nks-empty-icon" }, glyph("annotate")),
-          // The centred heartbeat already says "opening"; repeating it here made
-          // the pane look like two stacked loading states.
+          // The address-bar heartbeat already says "opening"; repeating it here
+          // made the pane look like two stacked loading states.
           h7(
             "div",
             { className: "nks-empty-title" },

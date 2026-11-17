@@ -56,7 +56,8 @@ await page.evaluate(() => {
     .find(n => /kitesurf/i.test(n.getAttribute('aria-label') || n.title || ''));
   if (hit) hit.click();
 });
-await page.waitForTimeout(3500);
+await page.waitForSelector('[data-nano-kitesurf="1"]', { timeout: 15000 }).catch(() => {});
+await page.waitForTimeout(800);
 
 await check('1. Kitesurf pane mounts', () => !!document.querySelector('[data-nano-kitesurf="1"]'));
 await check('2. mode label is a known state', () => {
@@ -74,9 +75,10 @@ await check('3. no build-id reconciliation in the pane', () =>
   !document.querySelector('[data-nks-build]'));
 // Close the dialog again (取消) before touching the page routes.
 await page.evaluate(() => {
-  const btn = [...document.querySelectorAll('.nano-dialog-card button')]
-    .find(b => /取消|Cancel/.test(b.textContent || ''));
-  if (btn) btn.click();
+  const dialog = document.querySelector('.nano-overlay [role="dialog"]');
+  const close = dialog?.querySelector('button[aria-label="关闭"]')
+    || [...(dialog?.querySelectorAll('button') || [])].find(b => /取消|Cancel/.test(b.textContent || ''));
+  close?.click();
 });
 await page.waitForTimeout(600);
 
@@ -102,6 +104,45 @@ let dom = {};
 try { dom = await api('/nano-local-sandbox/dom'); } catch { dom = {}; }
 report('6. /dom returns a renderable srcdoc',
   dom.ok === true && typeof dom.srcdoc === 'string' && dom.srcdoc.length > 200);
+
+await check('7. heartbeat lives in the address bar, not the page centre', () => {
+  const box = document.querySelector('.nks-address-box');
+  return !document.querySelector('.nks-load') && !!box && box.hasAttribute('data-loading');
+});
+
+await page.evaluate(() => document.querySelector('[data-nks-devtools-toggle]')?.click());
+await page.waitForTimeout(400);
+await page.evaluate(() => {
+  const hit = [...document.querySelectorAll('.nks-dt button')].find((b) => /Network/.test(b.textContent || ''));
+  if (hit) hit.click();
+});
+await page.waitForTimeout(2200);
+await check('8. Network exposes type/size/time/waterfall and labelled filters', () => {
+  const bar = document.querySelector('[data-nks-dt-filterbar]');
+  const rows = [...document.querySelectorAll('.nks-dt-body .nks-dt-row')];
+  return !!bar && !!bar.querySelector('[data-nks-dt-search]')
+    && bar.textContent.includes('仅失败') && bar.textContent.includes('禁用缓存')
+    && rows.some((row) => row.querySelector('.nks-dt-type')?.textContent.trim())
+    && rows.some((row) => row.querySelector('.nks-dt-size')?.textContent.trim())
+    && rows.some((row) => row.querySelector('.nks-dt-dur')?.textContent.trim())
+    && !!document.querySelector('.nks-dt-body .nks-dt-wf i');
+});
+
+await page.evaluate(() => document.querySelector('[data-nks-devtools-toggle]')?.click());
+await page.waitForTimeout(300);
+await page.evaluate(() => document.querySelector('[data-nks-nav-toggle]')?.click());
+await page.waitForTimeout(900);
+const tabCount = await page.evaluate(() => document.querySelectorAll('.nks-nav-tab').length);
+let tabHover = false;
+if (tabCount > 0) {
+  const before = await page.evaluate(() => getComputedStyle(document.querySelector('.nks-nav-tab')).backgroundColor);
+  try {
+    await page.hover('.nks-nav-tab:nth-child(1)');
+    await page.waitForTimeout(300);
+    tabHover = before !== await page.evaluate(() => getComputedStyle(document.querySelector('.nks-nav-tab')).backgroundColor);
+  } catch { /* reported below */ }
+}
+report('9. first/current tab gets a hover background', tabHover);
 
 console.log(fails.length === 0 ? '\nKITESURF-GUI-SMOKE PASS' : '\nKITESURF-GUI-SMOKE FAIL: ' + fails.join(' | '));
 process.exit(fails.length === 0 ? 0 : 1);

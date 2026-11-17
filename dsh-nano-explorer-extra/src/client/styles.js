@@ -488,8 +488,12 @@ export const STYLE = `${NANO_STYLES}
 }
 /* Settings card: one topic per tab, one row per fact, a hairline between rows.
    Inputs never share a row with an action — the path field used to lose its width to the Bind button. */
-.nxe-repo-settings { display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 220px; }
-.nxe-repo-panel { display: flex; flex-direction: column; gap: 0; min-width: 0; }
+.nxe-repo-settings { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+/* One cell, three panels. Visibility keeps the inactive ones in the size
+   calculation, so the card height is the tallest tab and does not jump. */
+.nxe-repo-stage { display: grid; min-width: 0; }
+.nxe-repo-panel { display: flex; flex-direction: column; gap: 0; min-width: 0; grid-area: 1 / 1; }
+.nxe-repo-panel[data-active="false"] { visibility: hidden; }
 .nxe-set-row {
   display: flex; flex-direction: column; gap: 6px; min-width: 0;
   padding: 10px 0; border-top: 1px solid var(--dsw-alias-border-l2);

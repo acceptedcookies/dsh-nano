@@ -756,7 +756,14 @@ function RepoSettingsDialog({ copy, remotes, author, sshKey, busy, error, onRemo
       ],
       onChange: value => setSettingsTab(value),
     }),
-    settingsTab === 'remote' ? React.createElement('div', { className: 'nxe-repo-panel', role: 'tabpanel' },
+    // All three panels stay mounted in one grid cell. The cell is as tall as the
+    // tallest tab, so switching does not resize the card. `inert` keeps the
+    // hidden tabs out of focus and out of the accessibility tree.
+    React.createElement('div', { className: 'nxe-repo-stage' },
+    React.createElement('div', {
+      className: 'nxe-repo-panel', role: 'tabpanel', 'data-active': String(settingsTab === 'remote'),
+      inert: settingsTab === 'remote' ? undefined : '',
+    },
       (remotes ?? []).length === 0
         ? React.createElement('p', { className: 'nxe-drawer-empty' }, copy.remotesEmpty)
         : React.createElement('ul', { className: 'nxe-drawer-list' }, remotes.map(remote =>
@@ -785,8 +792,11 @@ function RepoSettingsDialog({ copy, remotes, author, sshKey, busy, error, onRemo
             disabled: busy === true,
             onClick: () => { void submitRemote() },
           }, (remotes ?? []).some(row => row.name === remoteName.trim()) ? copy.remoteSave : copy.remoteAdd))),
-      remoteError === undefined ? null : React.createElement('p', { className: 'nxe-dialog-error' }, remoteError))
-      : settingsTab === 'author' ? React.createElement('div', { className: 'nxe-repo-panel', role: 'tabpanel' },
+      remoteError === undefined ? null : React.createElement('p', { className: 'nxe-dialog-error' }, remoteError)),
+    React.createElement('div', {
+      className: 'nxe-repo-panel', role: 'tabpanel', 'data-active': String(settingsTab === 'author'),
+      inert: settingsTab === 'author' ? undefined : '',
+    },
         React.createElement('div', { className: 'nxe-set-row' },
           React.createElement('div', { className: 'nxe-set-text' },
             React.createElement('span', { className: 'nxe-set-name' }, copy.authorHeading),
@@ -812,8 +822,11 @@ function RepoSettingsDialog({ copy, remotes, author, sshKey, busy, error, onRemo
               disabled: busy === true,
               onClick: () => { void submitAuthor() },
             }, copy.authorSave))),
-        authorError === undefined ? null : React.createElement('p', { className: 'nxe-dialog-error' }, authorError))
-        : React.createElement('div', { className: 'nxe-repo-panel', role: 'tabpanel' },
+        authorError === undefined ? null : React.createElement('p', { className: 'nxe-dialog-error' }, authorError)),
+    React.createElement('div', {
+      className: 'nxe-repo-panel', role: 'tabpanel', 'data-active': String(settingsTab === 'ssh'),
+      inert: settingsTab === 'ssh' ? undefined : '',
+    },
           React.createElement('div', { className: 'nxe-set-row' },
             React.createElement('div', { className: 'nxe-set-text' },
               React.createElement('span', { className: 'nxe-set-name' }, copy.sshHeading),
@@ -838,7 +851,7 @@ function RepoSettingsDialog({ copy, remotes, author, sshKey, busy, error, onRemo
                 disabled: busy === true || sshPath.trim() === '' || sshPath.trim() === (sshKey?.keyPath ?? ''),
                 onClick: () => { void submitSsh() },
               }, copy.sshSave))),
-          sshError === undefined ? null : React.createElement('p', { className: 'nxe-dialog-error' }, sshError))))
+          sshError === undefined ? null : React.createElement('p', { className: 'nxe-dialog-error' }, sshError)))))
 }
 
 /**

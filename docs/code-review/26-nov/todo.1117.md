@@ -69,11 +69,11 @@ SETUP ──▶ P1 策略硬切+烘焙 ──▶ P2 工具+patch ──┐
   - **验证映射**：`ACE1117-T01..T04` · **依赖**：`S1-SURVEY`
   - **执行状态**：`done` · **时间**：`2026-11-17T16:10+08:00` · **证据**：DNMSC 16/16 + DNMS 65/67(2skip) `node --test`；0.80→state-read-failed 字节不变；H=B/B=S 均 invalid-range；bake 两次无 diff；协议 hash 5dd74efa3601；AGENTS.md 同步
 
-- [ ] `P2` — Phase 2 工具与 base 覆盖（P2-01..P2-03）
+- [x] `P2` — Phase 2 工具与 base 覆盖（P2-01..P2-03）
   - **落点**：🆕 `inspect-checkpoint.js` + package.json exports、gen-mutex-patch、cordis.patch.yml
   - **完成判据**：工具行在 isolate 外、与 Provider 行同生共灭；base 扁平 disabled；威胁模型用例全部拒绝
   - **验证映射**：`ACE1117-T05..T07` · **依赖**：`P1`
-  - **执行状态**：`not-started` · **时间**：`-` · **证据**：`-`
+  - **执行状态**：`done` · **时间**：`2026-11-17T16:30+08:00` · **证据**：DNMSC 45/45 PASS；T07 结构断言（tools 行在 isolate 外、base 扁平 disabled、四 preset 锚/别名覆盖）；威胁用例（wrong id/empty surface/no session/坏参数）全部 reject
 
 - [ ] `P3` — Phase 3 生命周期与互斥（P3-01..P3-04）
   - **落点**：`host-compaction.js` 头注/idle/超时/互斥/disarm/episode 删除

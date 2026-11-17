@@ -139,3 +139,40 @@ function cordisDirOf(mod) {
   }
   return join(here, '..', 'node_modules')
 }
+
+/* ---------------------- ACE-1117 P2: patch structure (T07) ---------------- */
+
+test('cordis.patch.yml: tools row outside the isolate + base flat row disabled (T07)', async () => {
+  const { readFileSync: read } = await import('node:fs')
+  const text = read(join(here, '..', 'cordis.patch.yml'), 'utf8')
+
+  // The tools row exists once per preset (anchor + aliases), always at preset
+  // TOP level — never inside an `id: compaction` group's `config:` block.
+  const toolsRows = text.match(/id: inspect-checkpoint\n\s+name: dsh-nano-model-selector-compaction\/tools/g)
+  assert.ok(toolsRows !== null && toolsRows.length === 1, 'tools row must appear once (other presets alias it)')
+  const aliases = text.match(/-\s+\*a\d+/g) ?? []
+  assert.ok(aliases.length >= 3, `remaining presets must alias the tools row, found ${aliases.length}`)
+
+  // The row must NOT sit inside the isolate group's config block: every
+  // inspect-checkpoint occurrence must follow the closing of a `config:` array
+  // (i.e. be at `      - ` preset level, not `          - ` isolate level).
+  const isolateLevel = text.match(/^\s{10,}- &a\d+\n\s+id: inspect-checkpoint/m)
+  assert.equal(isolateLevel, null, 'tools row must never mount inside the isolate group')
+  assert.match(text, /^      - &a2\n        id: inspect-checkpoint/m,
+    'the anchored tools row must be at preset top level (6-space indent)')
+
+  // Base flat row: a profile-root `- id: compaction-basic` with disabled:true
+  // covers the un-isolated base mount (-10⑤).
+  assert.match(text, /\n- id: compaction-basic\n  disabled: true\n?/,
+    'the base bundle flat compaction-basic row must be pinned disabled')
+
+  // Every preset's isolate still carries our Provider row + disabled basic.
+  for (const preset of ['preset-standard', 'preset-ptc', 'preset-minimal', 'preset-cordis']) {
+    const start = text.indexOf(`- id: ${preset}`)
+    const end = text.indexOf('\n- id: preset-', start + 1)
+    const block = text.slice(start, end === -1 ? text.length : end)
+    assert.match(block, /id: nano-model-selector-compaction\n\s+name: dsh-nano-model-selector-compaction|^\s+- \*a1$/m, preset)
+    assert.match(block, /- id: compaction-basic\n\s+name: "@deepseek-ai\/dsh-compaction-basic"\n\s+disabled: true/, preset)
+    assert.match(block, /inspect-checkpoint|^\s+- \*a2$/m, `${preset} must carry the tools row (anchor or alias)`)
+  }
+})

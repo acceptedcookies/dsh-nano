@@ -969,3 +969,144 @@ test('the instruction version is stamped where the prompt is read, not at arm ti
   assert.equal(episode.promptVersion, instructionVersion({ override: 'Summarize tersely.' }))
   assert.notEqual(episode.promptVersion, instructionVersion({ override: '' }))
 })
+
+/* ============ 10. inspect_checkpoint tool (ACE-1117 -09) ================= */
+
+const {
+  INSPECT_TOOL_NAME,
+  INSPECT_CHECKPOINT_DEFINITION,
+  sessionHasCheckpoint,
+  apply: applyInspectTool,
+} = await import('../lib/inspect-checkpoint.js')
+
+/** Session carrying one plugin-marked checkpoint whose sourceEventSeqs cite the bracket + two shadowed nodes. */
+function makeCheckpointSession(id) {
+  const session = makeSession(id)
+  session.setHeader('prov', 'mod')
+  const sys = session.addMessage('system', 'sys', 150)
+  const u1 = session.addMessage('user', 'first question text ' + 'x'.repeat(2100), 400)
+  const a1 = session.addMessage('assistant', 'first answer', 300)
+  const u2 = session.addMessage('user', 'second question', 200)
+  // A checkpoint replacing u1..a1, written by the seam (marker + compactionId).
+  const bracket = session.append('compaction/start', { compactionId: 'cp-00000001', turn: 1 })
+  const sum = session.append('compaction/summary', { compactionId: 'cp-00000001', turn: 1, summary: [{ type: 'text', text: 'checkpoint text' }] })
+  const cp = session.append('user/message', {
+    role: 'user',
+    content: [{ type: 'text', text: '<compacted-summary>\nsummary body\n</compacted-summary>' }],
+    source: { kind: 'compact-checkpoint', compactionId: 'cp-00000001' },
+  }, {
+    surfaceOp: { op: 'replace', startSeq: u1.seq, endSeq: a1.seq },
+    sourceEventSeqs: [bracket.seq, sum.seq, u1.seq, a1.seq],
+  })
+  session.append('compaction/end', { compactionId: 'cp-00000001', turn: 1 })
+  return { session, cp, sys, u1, a1, u2 }
+}
+
+function runTool(session, args) {
+  return INSPECT_CHECKPOINT_DEFINITION.execute(args, { agent: { session }, signal: new AbortController().signal })
+}
+
+test('inspect_checkpoint: registration shape + when gate (-09②③④, P2 ④⑥)', async () => {
+  assert.equal(INSPECT_TOOL_NAME, 'inspect_checkpoint')
+  assert.equal('timeoutMs' in INSPECT_CHECKPOINT_DEFINITION, false)
+  assert.equal(INSPECT_CHECKPOINT_DEFINITION.isConcurrencySafe(), true)
+  assert.deepEqual(INSPECT_CHECKPOINT_DEFINITION.parameters.required, ['compactionId'])
+
+  // when gate: false without a marked checkpoint, true once one is on the surface.
+  const plain = makeSession('s-inspect-none')
+  plain.setHeader('prov', 'mod')
+  plain.addMessage('system', 'sys', 150)
+  plain.addMessage('user', 'hi', 50)
+  assert.equal(sessionHasCheckpoint(plain), false)
+
+  const { session } = makeCheckpointSession('s-inspect-gated')
+  assert.equal(sessionHasCheckpoint(session), true)
+
+  // apply() registers exactly once through the real registration seam.
+  const registrations = []
+  applyInspectTool({ tools: { register: (def, opts) => { registrations.push({ def, opts }) } } })
+  assert.equal(registrations.length, 1)
+  assert.equal(registrations[0].def.name, INSPECT_TOOL_NAME)
+  assert.equal(registrations[0].opts.when({ agent: { session: plain } }), false)
+  assert.equal(registrations[0].opts.when({ agent: { session } }), true)
+
+  // An unmarked (pre-seam native) checkpoint never advertises itself (P2 ⑥):
+  // the surface scan only accepts the compact-checkpoint source marker.
+  const legacy = makeSession('s-inspect-legacy')
+  legacy.setHeader('prov', 'mod')
+  legacy.addMessage('system', 'sys', 150)
+  legacy.append('user/message', {
+    role: 'user',
+    content: [{ type: 'text', text: 'old unmarked checkpoint' }],
+    // no source marker at all
+  })
+  assert.equal(sessionHasCheckpoint(legacy), false)
+})
+
+test('inspect_checkpoint: happy path returns shadowed source events, not the bracket (T05)', async () => {
+  const { session, u1, a1, cp } = makeCheckpointSession('s-inspect-ok')
+  const out = await runTool(session, { compactionId: 'cp-00000001' })
+  assert.equal(typeof out, 'string')
+  assert.match(out, /compactionId: cp-00000001/)
+  assert.match(out, /total: 2/)
+  // Only the two shadowed surface nodes are returned — never compaction/start
+  // or compaction/summary, even though they lead sourceEventSeqs.
+  assert.match(out, new RegExp(`seq ${u1.seq}`))
+  assert.match(out, new RegExp(`seq ${a1.seq}`))
+  assert.equal(out.includes(`seq ${session.events[session.surface.nodes.indexOf(cp.seq) - 1]?.seq} [compaction`), false)
+  assert.match(out, /nextOffset: null/)
+  // u1 is 2100+ chars: entry truncation fired with the true length.
+  assert.match(out, /truncated, \d{4,} chars total/)
+  assert.equal(out.includes('x'.repeat(2100)), false)
+})
+
+test('inspect_checkpoint: pagination and total cap (T05, -09⑤)', async () => {
+  const session = makeSession('s-inspect-page')
+  session.setHeader('prov', 'mod')
+  session.addMessage('system', 'sys', 150)
+  const seqs = []
+  for (let i = 0; i < 6; i += 1) seqs.push(session.addMessage('user', `message ${i} ${'y'.repeat(5000)}`, 100).seq)
+  const bracket = session.append('compaction/start', { compactionId: 'cp-00000002', turn: 1 })
+  const sum = session.append('compaction/summary', { compactionId: 'cp-00000002', turn: 1, summary: [{ type: 'text', text: 's' }] })
+  session.append('user/message', {
+    role: 'user', content: [{ type: 'text', text: 'checkpoint' }],
+    source: { kind: 'compact-checkpoint', compactionId: 'cp-00000002' },
+  }, {
+    surfaceOp: { op: 'replace', startSeq: seqs[0], endSeq: seqs[5] },
+    sourceEventSeqs: [bracket.seq, sum.seq, ...seqs],
+  })
+  // limit honoured, nextOffset advances.
+  const page1 = await runTool(session, { compactionId: 'cp-00000002', limit: 2 })
+  assert.match(page1, /entries: 0-2/)
+  assert.match(page1, /nextOffset: 2/)
+  const page2 = await runTool(session, { compactionId: 'cp-00000002', offset: 2, limit: 2 })
+  assert.match(page2, /entries: 2-4/)
+  // limit cap: >50 must be rejected before any read.
+  await assert.rejects(() => runTool(session, { compactionId: 'cp-00000002', limit: 51 }), /limit/)
+  await assert.rejects(() => runTool(session, { compactionId: 'cp-00000002', offset: -1 }), /offset/)
+})
+
+test('inspect_checkpoint: threat model — wrong id, wrong session, no session (T06)', async () => {
+  const { session } = makeCheckpointSession('s-inspect-attack')
+  // Unknown compactionId on this surface → error naming the available ids.
+  await assert.rejects(() => runTool(session, { compactionId: 'cp-99999999' }), /no checkpoint 'cp-99999999'.*Available: cp-00000001/s)
+  // A compactionId from ANOTHER session is invisible here: the tool only
+  // scans this session's surface, so a foreign id fails identically.
+  const other = makeCheckpointSession('s-inspect-other')
+  const foreignId = 'cp-00000001'
+  const emptySurface = makeSession('s-inspect-empty')
+  emptySurface.setHeader('prov', 'mod')
+  emptySurface.addMessage('system', 'sys', 150)
+  emptySurface.addMessage('user', 'hi', 50)
+  await assert.rejects(() => runTool(emptySurface, { compactionId: foreignId }), /no checkpoint.*No checkpoints are available/s)
+  // No agent session → fail.
+  await assert.rejects(
+    () => INSPECT_CHECKPOINT_DEFINITION.execute({ compactionId: foreignId }, { signal: new AbortController().signal }),
+    /no session context/,
+  )
+  // Arguments that bypass the schema (negative offset, over-limit, missing id)
+  // are rejected by the definition itself, not by trusting the model.
+  await assert.rejects(() => runTool(session, { compactionId: 'cp-00000001', offset: '0' }), /offset/)
+  await assert.rejects(() => runTool(session, { compactionId: 'cp-00000001', limit: 0 }), /limit/)
+  await assert.rejects(() => runTool(session, {}), /compactionId|undefined/)
+})

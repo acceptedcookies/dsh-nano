@@ -1401,6 +1401,7 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
     const copyRawDiag = React.useRef(false)
     const [busyLocal, setBusyLocal] = React.useState(false)
     const [note, setNote] = React.useState('')
+    const logsOpenRef = React.useRef(false)
     React.useEffect(() => {
       let alive = true
       let seen = null
@@ -1446,7 +1447,9 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
      *  down" is a verdict with no evidence. */
     async function showLogs() {
       const workspaceEl = workspaceRef.current
-      if (workspaceEl === null || dialogOpenRef.current) return
+      // Its own guard: the log is opened FROM the settings dialog, so sharing
+      // dialogOpenRef would refuse every time.
+      if (workspaceEl === null || logsOpenRef.current) return
       let text = copy.logsLoading
       try {
         const data = await fetch(`${LOGS}?tail=300`).then((r) => r.json())
@@ -1455,9 +1458,9 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
         text = String(cause?.message || cause)
       }
       if (workspaceEl !== workspaceRef.current) return
-      dialogOpenRef.current = true
+      logsOpenRef.current = true
       let dialog = null
-      const close = () => { dialogOpenRef.current = false }
+      const close = () => { logsOpenRef.current = false }
       dialog = openNanoDialog({
         copy: { cancel: copy.close, confirm: copy.close, close: copy.close },
         title: copy.logsTitle,

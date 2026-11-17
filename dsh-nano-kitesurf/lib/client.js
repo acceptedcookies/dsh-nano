@@ -4074,6 +4074,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       const copyRawDiag = React12.useRef(false);
       const [busyLocal, setBusyLocal] = React12.useState(false);
       const [note, setNote] = React12.useState("");
+      const logsOpenRef = React12.useRef(false);
       React12.useEffect(() => {
         let alive = true;
         let seen = null;
@@ -4125,7 +4126,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       }
       async function showLogs() {
         const workspaceEl = workspaceRef.current;
-        if (workspaceEl === null || dialogOpenRef.current) return;
+        if (workspaceEl === null || logsOpenRef.current) return;
         let text = copy.logsLoading;
         try {
           const data = await fetch(`${LOGS}?tail=300`).then((r) => r.json());
@@ -4134,10 +4135,10 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           text = String(cause?.message || cause);
         }
         if (workspaceEl !== workspaceRef.current) return;
-        dialogOpenRef.current = true;
+        logsOpenRef.current = true;
         let dialog = null;
         const close = () => {
-          dialogOpenRef.current = false;
+          logsOpenRef.current = false;
         };
         dialog = openNanoDialog2({
           copy: { cancel: copy.close, confirm: copy.close, close: copy.close },

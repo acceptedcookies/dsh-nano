@@ -1448,6 +1448,27 @@ export function mountNotepad(host, defaults, hostTheme = { theme: undefined, sub
        picker must accept whatever suffix the user wants (including none). */
     const name = file.name
     const opts = { suggestedName: name }
+    /* The browser picker cannot open at an arbitrary directory, and it also
+       drops a leading dot. A note that remembers its source, or a dotfile,
+       goes to the host dialog first. */
+    const origin = typeof file.sourcePath === 'string' ? file.sourcePath : ''
+    const cut = origin.lastIndexOf('/')
+    const dir = cut > 0 ? origin.slice(0, cut) : ''
+    const preferHost = dir !== '' || name.startsWith('.')
+    const hostSave = async () => {
+      try {
+        return await import('./jsonClient.js').then(m => m.post('/nano-notepad/save', { name, content, dir }))
+      } catch (error) {
+        console.warn('[notepad] host save 不可达：', String(error?.message || error).slice(0, 120))
+        return null
+      }
+    }
+    if (preferHost) {
+      const out = await hostSave()
+      if (out?.ok) { setSync('exported', out.path || name); return }
+      if (out?.reason === 'cancelled') return
+      if (out) console.warn('[notepad] host save 失败：', out.message || out.reason)
+    }
     /* pick the host window first — inside a same-origin iframe the picker
        may be blocked there; parent same-origin call still works */
     let lastError = null
@@ -1465,16 +1486,13 @@ export function mountNotepad(host, defaults, hostTheme = { theme: undefined, sub
         if (error?.name === 'AbortError') return
       }
     }
-    /* browser picker refused (iframe/policy) — ask the host for a native macOS
-       dialog via osascript; the dsh daemon shows choose-file-name itself */
-    try {
-      const out = await import('./jsonClient.js').then(m => m.post('/nano-notepad/save', { name, content, dir: current()?.sourcePath?.replace(/\/[^/]*$/, '') }))
+    if (!preferHost) {
+      const out = await hostSave()
       if (out?.ok) { setSync('exported', out.path || name); return }
       if (out?.reason === 'cancelled') return
-      console.warn('[notepad] host save 失败：', out?.message || out?.reason)
-    } catch (error) {
-      console.warn('[notepad] host save 不可达：', String(error?.message || error).slice(0, 120))
+      if (out) console.warn('[notepad] host save 失败：', out.message || out.reason)
     }
+    if (lastError) console.warn('[notepad] browser save 失败：', String(lastError?.message || lastError).slice(0, 120))
     /* last resort: browser download */
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')

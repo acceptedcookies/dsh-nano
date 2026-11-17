@@ -124,27 +124,26 @@ function sendJson(res, status, payload) {
 function messageOf(value) { return value instanceof Error ? value.message : String(value) }
 
 /**
- * The AppleScript program the save dialog runs. The proposed filename is passed
- * as `argv` item 1 — never interpolated into the source — so a hostile name is
- * inert text instead of a string-literal breakout (review-01 R2).
+ * JXA save dialog. The proposed filename is `argv[0]`, never interpolated into
+ * the source, so a hostile name stays inert text (review-01 R2). NSSavePanel's
+ * name field is set whole: `choose file name` splits on the last dot and drops
+ * a leading dot, so `.gitignore` would be offered as `gitignore`.
  */
-const SAVE_SCRIPT = [
-  'on run argv',
-  'try',
-  'set dflt to item 1 of argv',
-  'set loc to ""',
-  'if (count of argv) > 1 then set loc to item 2 of argv',
-  'if loc is not "" then',
-  'set f to choose file name with prompt "存储为" default name dflt default location (POSIX file loc)',
-  'else',
-  'set f to choose file name with prompt "存储为" default name dflt',
-  'end if',
-  'POSIX path of f',
-  'on error',
-  '"__cancelled__"',
-  'end try',
-  'end run',
-].join('\n')
+const SAVE_SCRIPT = `
+function run(argv) {
+  ObjC.import('AppKit')
+  var name = argv[0]
+  var loc = argv.length > 1 ? argv[1] : ''
+  var panel = $.NSSavePanel.savePanel
+  panel.message = '存储为'
+  panel.nameFieldString = name
+  panel.extensionHidden = false
+  panel.canCreateDirectories = true
+  if (loc) panel.directoryURL = $.NSURL.fileURLWithPath(loc)
+  if (panel.runModal === $.NSModalResponseOK) return ObjC.unwrap(panel.URL.path)
+  return '__cancelled__'
+}
+`.trim()
 
 /** The name the dialog proposes: kept verbatim so the chosen extension
  *  survives, empty/oversized refused. */
@@ -156,9 +155,9 @@ function dialogBase(name) {
 }
 
 /**
- * Ask Finder for a target path, then write the note there. `osascript` runs the
- * static {@link SAVE_SCRIPT} with the name on argv, so nothing the caller sends
- * is ever compiled as AppleScript.
+ * Ask Finder for a target path, then write the note there. `osascript -l JavaScript`
+ * runs the static {@link SAVE_SCRIPT} with the name on argv, so nothing the caller
+ * sends is compiled into the program.
  */
 /** Directories the dialog accepts as its start point: absolute, exists, is a dir. */
 async function validStartDir(dir) {
@@ -203,7 +202,7 @@ function nativeSave(ctx, { name, content, dir }) {
       return
     }
     void import('node:child_process').then(({ execFile }) => {
-      execFile('/usr/bin/osascript', ['-e', SAVE_SCRIPT, base, startDir], { timeout: DIALOG_TIMEOUT_MS, maxBuffer: 64 * 1024 },
+      execFile('/usr/bin/osascript', ['-l', 'JavaScript', '-e', SAVE_SCRIPT, base, startDir], { timeout: DIALOG_TIMEOUT_MS, maxBuffer: 64 * 1024 },
         (err, stdout) => { void finish(err, stdout) })
     })
   })
@@ -216,7 +215,7 @@ function nativeSave(ctx, { name, content, dir }) {
 async function runViaSubprocess(subprocess, base, startDir) {
   const program = await subprocess.resolveExecutable('osascript', undefined, undefined)
   const child = subprocess.spawn({
-    argv: [program, '-e', SAVE_SCRIPT, base, startDir],
+    argv: [program, '-l', 'JavaScript', '-e', SAVE_SCRIPT, base, startDir],
     cwd: process.env.HOME ?? '/',
     env: {},
     graceMs: 5000,

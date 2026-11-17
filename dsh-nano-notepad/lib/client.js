@@ -840,7 +840,15 @@ ${bi}
 /* The host thumb splits the track into equal slices. These labels are not equal
    width, so the slice misses the text. Pin the thumb to the selected tab. */
 .np-dlg-tabs [role="tablist"] > span { width: var(--np-seg-w); transform: translateX(var(--np-seg-x)); transition: transform .16s ease, width .16s ease; }
-.np-dlg-body > .np-dlg-panels { margin-top: 0; flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+/* Only the tab panels scroll. The card body must not grow a second bar, or
+   the rows jump sideways when a long tab opens. The gutter stays reserved and
+   the thumb floats inside it, clear of the text. */
+.nano-wdlg-body:has(.np-dlg-panels) { display: flex; flex-direction: column; min-height: 0; overflow-x: hidden; overflow-y: hidden; }
+.np-dlg-body:has(.np-dlg-panels) { flex: 1; min-height: 0; overflow: hidden; }
+.np-dlg-body > .np-dlg-panels { margin-top: 0; flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; padding-inline-end: 10px; scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--dsw-alias-label-tertiary) 55%, transparent) transparent; }
+.np-dlg-body > .np-dlg-panels::-webkit-scrollbar { width: 14px; background: transparent; }
+.np-dlg-body > .np-dlg-panels::-webkit-scrollbar-track { background: transparent; margin-block: 8px; }
+.np-dlg-body > .np-dlg-panels::-webkit-scrollbar-thumb { background-color: color-mix(in srgb, var(--dsw-alias-label-tertiary) 60%, transparent); border: 4px solid transparent; border-radius: 999px; background-clip: padding-box; }
 /* \u2500\u2500 S3 endpoint management + switch wizard \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
 .np-cloud-settings { margin-top: 4px; }
 .np-endpoint-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }

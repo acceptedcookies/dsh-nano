@@ -32,6 +32,7 @@
     "dnms.catalog",
     "dnms.media-engines",
     "dnms.media-engine",
+    "dnms.subagent-default",
     "dnms.async-compact",
     "dnms.async-compact.bundle",
     "dnms.async-compact.switch",

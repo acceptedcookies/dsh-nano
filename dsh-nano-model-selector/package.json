@@ -30,7 +30,8 @@
     "lib/host-media.js",
     "lib/perf-review-host.js",
     "lib/route-guard.js",
-    "lib/bindings.js"
+    "lib/bindings.js",
+    "lib/subagent-default.js"
   ],
   "engines": {
     "dsh": ">=0.2.2-rc.1 <0.3.0"

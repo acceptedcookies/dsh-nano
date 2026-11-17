@@ -14,6 +14,9 @@ import {
   mergePutBody, readState, validateMasterOrder, validatePutBody, writeState,
 } from './lib/compact-policy.js'
 import { promptText } from './lib/compact-prompt.js'
+import {
+  readPolicy, resetPolicy, routeOfAgent, selectionOf, shouldApplyDefault, writePolicy,
+} from './lib/subagent-default.js'
 
 export const name = 'nano-model-selector'
 
@@ -48,6 +51,7 @@ const ASYNC_COMPACT_BUNDLE_ROUTE = '/nano-model-selector/async-compact/bundle'
 /** -20⑦: panel forwards the bundle flip through this one route (browser half cannot reach pluginManager). */
 const ASYNC_COMPACT_SWITCH_ROUTE = '/nano-model-selector/async-compact/switch'
 const PERF_REVIEW_HOST_ROUTE = '/nano-model-selector/perf-review/host'
+const SUBAGENT_DEFAULT_ROUTE = '/nano-model-selector/subagent-default'
 
 /** Plugin-private state file holding the chosen media engine. */
 const STATE_PATH = join(
@@ -71,6 +75,9 @@ const ASYNC_COMPACT_PATH = join(
  * companion, not a private side channel between unrelated plugins.
  */
 const ASYNC_HISTORY_DIR = join(dirname(ASYNC_COMPACT_PATH), 'async-history')
+
+/** Chosen default route for a subagent that does not name its own model. */
+const SUBAGENT_DEFAULT_PATH = join(dirname(ASYNC_COMPACT_PATH), 'subagent-default.json')
 
 /** Ledger read cap: the newest N records are enough for one dialog. */
 const ASYNC_HISTORY_LIMIT = 200
@@ -560,6 +567,135 @@ async function asyncCompactSwitchHandler(ctx, req, res, bundleInventory) {
   }
 }
 
+/** Ids a live model advertises, whether the registry stores strings or `{id}`. */
+function effortIds(info) {
+  const efforts = info?.reasoning?.efforts
+  if (!Array.isArray(efforts)) return []
+  return efforts
+    .map(item => (typeof item === 'string' ? item : item?.id))
+    .filter(id => typeof id === 'string' && id.length > 0)
+}
+
+/**
+ * Reject a route the live registry does not advertise.
+ * An omitted effort is the adapter default; a named effort must be one of the model's.
+ * @param {import('@deepseek-ai/cordis').Context} ctx
+ */
+async function validateSubagentRoute(ctx, provider, model, reasoningEffort) {
+  let info
+  try {
+    info = await ctx.llm.resolveModelInfo(provider, model)
+  } catch (error) {
+    return { ok: false, reason: messageOf(error) }
+  }
+  if (info === undefined || info === null) return { ok: false, reason: 'unknown model' }
+  if (reasoningEffort === undefined) return { ok: true }
+  const ids = effortIds(info)
+  if (!ids.includes(reasoningEffort)) return { ok: false, reason: `unsupported reasoning effort ${reasoningEffort}` }
+  return { ok: true }
+}
+
+/** @param {import('node:http').ServerResponse} res @param {number} status @param {string} code @param {string} reason */
+function sendSubagentError(res, status, code, reason) {
+  sendJson(res, status, { ok: false, error: { code, reason } })
+}
+
+/**
+ * GET/PUT /nano-model-selector/subagent-default.
+ * `enable` stores the combination and turns it on. `disable` keeps the combination
+ * but stops applying it. `reset` deletes the file.
+ */
+function subagentDefaultHandler(ctx) {
+  return async (req, res) => {
+    if (req.method === 'PUT') {
+      try {
+        const body = await readBody(req, 16384)
+        const action = body?.action
+        if (action === 'reset') {
+          const result = resetPolicy(SUBAGENT_DEFAULT_PATH)
+          if (!result.ok) { sendSubagentError(res, 400, 'state-write-failed', result.reason); return }
+          sendJson(res, 200, { ok: true, policy: null })
+          return
+        }
+        if (action === 'disable') {
+          const current = readPolicy(SUBAGENT_DEFAULT_PATH)
+          if (!current.ok) { sendSubagentError(res, 400, 'state-read-failed', current.reason); return }
+          const prior = current.policy
+          const next = {
+            enabled: false,
+            ...(prior?.provider ? { provider: prior.provider, model: prior.model } : {}),
+            ...(prior?.reasoningEffort ? { reasoningEffort: prior.reasoningEffort } : {}),
+          }
+          const written = writePolicy(SUBAGENT_DEFAULT_PATH, next)
+          if (!written.ok) { sendSubagentError(res, 400, 'state-write-failed', written.reason); return }
+          sendJson(res, 200, { ok: true, policy: { schema: 1, ...next } })
+          return
+        }
+        if (action !== 'enable') {
+          sendSubagentError(res, 400, 'invalid-schema', 'action must be enable, disable, or reset')
+          return
+        }
+        const provider = body.provider
+        const model = body.model
+        const reasoningEffort = body.reasoningEffort
+        if (typeof provider !== 'string' || provider.length === 0 || typeof model !== 'string' || model.length === 0) {
+          sendSubagentError(res, 400, 'invalid-model', 'provider and model are required')
+          return
+        }
+        if (reasoningEffort !== undefined && (typeof reasoningEffort !== 'string' || reasoningEffort.length === 0)) {
+          sendSubagentError(res, 400, 'invalid-model', 'reasoningEffort must be a non-empty string')
+          return
+        }
+        const valid = await validateSubagentRoute(ctx, provider, model, reasoningEffort)
+        if (!valid.ok) { sendSubagentError(res, 400, 'invalid-model', valid.reason); return }
+        const policy = {
+          enabled: true,
+          provider,
+          model,
+          ...(typeof reasoningEffort === 'string' ? { reasoningEffort } : {}),
+        }
+        const written = writePolicy(SUBAGENT_DEFAULT_PATH, policy)
+        if (!written.ok) { sendSubagentError(res, 400, 'state-write-failed', written.reason); return }
+        sendJson(res, 200, { ok: true, policy: { schema: 1, ...policy } })
+      } catch (error) {
+        const reason = messageOf(error)
+        const code = reason === 'body too large' ? 'body-too-large' : reason === 'invalid JSON body' ? 'invalid-json-body' : 'state-write-failed'
+        sendSubagentError(res, 400, code, reason)
+      }
+      return
+    }
+    const current = readPolicy(SUBAGENT_DEFAULT_PATH)
+    if (!current.ok) {
+      sendJson(res, 200, { ok: true, policy: null, degraded: 'state-read-failed' })
+      return
+    }
+    sendJson(res, 200, { ok: true, policy: current.policy })
+  }
+}
+
+/**
+ * Stamp the saved route onto a fresh subagent that still carries its parent route.
+ * A throw here fails agent creation, so every failure is swallowed after a warning.
+ * Resume, clear, and compaction do not restamp a child that already has a session.
+ * @param {import('@deepseek-ai/cordis').Context} ctx
+ */
+function installSubagentDefault(ctx) {
+  return ctx.on('agent/created', ({ agent, source }) => {
+    try {
+      if (source !== 'startup') return
+      if (agent.session?.header?.origin !== 'subagent') return
+      const loaded = readPolicy(SUBAGENT_DEFAULT_PATH)
+      if (!loaded.ok || loaded.policy === null) return
+      const parentId = agent.session.header.parentSession
+      const parent = typeof parentId === 'string' ? ctx.get('agents')?.get(parentId) : undefined
+      if (!shouldApplyDefault(loaded.policy, routeOfAgent(agent), routeOfAgent(parent))) return
+      agent.model.select(selectionOf(loaded.policy))
+    } catch (error) {
+      ctx.logger?.warn?.(`subagent default model skipped: ${messageOf(error)}`)
+    }
+  })
+}
+
 /** @param {import('@deepseek-ai/cordis').Context} ctx */
 export function apply(ctx) {
   const imagine = registerImagine(ctx)
@@ -574,6 +710,7 @@ export function apply(ctx) {
   // install/remove/update/enable operation, so the snapshot never outlives a
   // real change — the TTL only guards against a missed event.
   const bundleInventory = createBundleInventory(ctx)
+  ctx.effect(() => installSubagentDefault(ctx), 'nano-model-selector: subagent default')
   ctx.effect(
     () => ctx.on('plugin-manager/changed', () => bundleInventory.invalidate()),
     'nano-model-selector: bundle inventory invalidation',
@@ -586,5 +723,6 @@ export function apply(ctx) {
     { path: ASYNC_COMPACT_BUNDLE_ROUTE, methods: ['GET', 'HEAD'], handler: asyncCompactBundleHandler(bundleInventory) },
     { path: ASYNC_COMPACT_SWITCH_ROUTE, methods: ['POST'], handler: (req, res) => asyncCompactSwitchHandler(ctx, req, res, bundleInventory) },
     { path: PERF_REVIEW_HOST_ROUTE, methods: ['GET'], handler: (req, res) => handleHostRead(req, res, ensurePerfReviewHost()) },
+    { path: SUBAGENT_DEFAULT_ROUTE, methods: ['GET', 'HEAD', 'PUT'], handler: subagentDefaultHandler(ctx) },
   ], { table: BINDING_TABLE, plugin: PLUGIN, observe: event => ensurePerfReviewHost().observe(event) })
 }

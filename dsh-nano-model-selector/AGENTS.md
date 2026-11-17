@@ -29,11 +29,12 @@
 | `lib/perf-review-host.js` | 宿主 perf-review bundle。运行时必需（`index.js` 相对 import） |
 | `lib/route-guard.js` | 路由注册 guard bundle。运行时必需（`index.js` 相对 import） |
 | `lib/bindings.js` | 从仓根 `security/route-sensitivity.json` 按 id 烘焙的绑定表。运行时必需（`index.js` 相对 import） |
+| `lib/subagent-default.js` | 子代理默认模型的读写和「是否仍是父级路由」判断。运行时必需（`index.js` 相对 import） |
 | `lib/client.js` | 浏览器包。运行时必需。安装时不重建 |
 | `icon.svg`、`locale/` | 图标与中英文案 |
 | `src/` | 作者树。已有上面的 `lib/` 时安装不需要它 |
 
-client inject 以 `package.json` 的 `dsh.client.inject` 为准，不在这里抄。`files` 必须含 `lib/host-media.js`、`lib/route-guard.js`、`lib/bindings.js` 和这份 `AGENTS.md`，否则发包后宿主找不到模块。
+client inject 以 `package.json` 的 `dsh.client.inject` 为准，不在这里抄。`files` 必须含 `lib/host-media.js`、`lib/route-guard.js`、`lib/bindings.js`、`lib/subagent-default.js` 和这份 `AGENTS.md`，否则发包后宿主找不到模块。
 
 ## 前置
 
@@ -109,13 +110,14 @@ media-engine.json 里的显式选择
 | GET | `/nano-model-selector/media-engines` | `{ engines: [{key,label,detail,path,available}] }` |
 | GET | `/nano-model-selector/media-engine` | `{ engine, explicit }`。`explicit: false` 表示自动挑选，未持久化 |
 | PUT | `/nano-model-selector/media-engine` | 正文 `{"engine":"<key>"}`。写入状态文件并重注册 `imagine`。正文上限 16384 字节 |
+| GET/PUT | `/nano-model-selector/subagent-default` | 子代理默认模型。GET `{ok,policy}`。PUT `action` 为 `enable`（provider+model，可选 reasoningEffort）、`disable`（保留组合但不再套用）或 `reset`（删除文件）。正文上限 16384 字节 |
 | GET | `/nano-model-selector/perf-review/host` | 只读全进程性能视图。只接受 `since`；`mode` 和其他参数返回 400，不排空 |
 
 ## 配置与状态
 
 无宿主 Config。
 
-状态文件在 `$DSH_DATA_DIR`，否则 `$DSH_HOME`，否则 `~/.dsh`，其下 `plugins/nano-model-selector/media-engine.json`。卸载不删这个文件。整目录重建会丢掉显式选择；`/imagine` 仍在，只是回到自动挑选。
+状态文件在 `$DSH_DATA_DIR`，否则 `$DSH_HOME`，否则 `~/.dsh`，其下 `plugins/nano-model-selector/media-engine.json`。同目录的 `subagent-default.json` 是子代理默认模型的唯一可写副本：开启后，新建且未单独指定模型的子代理在 `agent/created` 时改用这一组合，不再继承父级。卸载不删这些文件。整目录重建会丢掉显式选择；`/imagine` 仍在，只是回到自动挑选，子代理回到继承父级。
 
 浏览器另有 `localStorage` 键 `dsh-nano-model-selector:media-engine.v1`，只是缓存。不要覆盖用户已有的状态文件。
 

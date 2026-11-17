@@ -16,6 +16,7 @@ const REQUIRED = [
   'backend',
   'scope',
   'build.base',
+  'build.image',
   'build.npmPrefix.wrangler',
   'build.npmPrefix.agent-browser',
   'build.checkout.ref',
@@ -69,6 +70,8 @@ export function validateManifest(manifest, { digest, text = '', checkoutRoot = n
   }
   const ref = manifest.build?.checkout?.ref
   if (typeof ref !== 'string' || !REF.test(ref)) errors.push('checkout.ref')
+  const image = manifest.build?.image
+  if (typeof image !== 'string' || !/(?:@sha256:[0-9a-f]{64}|:[A-Za-z0-9_][A-Za-z0-9_.-]*)$/.test(image) || /:latest$/i.test(image)) errors.push('build.image')
   const claimed = manifest.build?.digest
   if (typeof claimed !== 'string' || !SHA.test(claimed) || (digest && claimed !== digest)) errors.push('digest')
   for (const token of BANNED) {
@@ -99,7 +102,7 @@ export async function ensureReady(dir, backend, options = {}) {
   const loaded = loadProfile(dir, options)
   if (!loaded.ready) return { ok: false, status: 400, errors: loaded.errors, loaded }
   if (typeof backend?.ensureImage === 'function') {
-    await backend.ensureImage({ tag: loaded.manifest.build.digest, publicSpec: {} })
+    await backend.ensureImage({ tag: loaded.manifest.build.image, publicSpec: {} })
   }
   return { ok: true, status: 200, loaded }
 }

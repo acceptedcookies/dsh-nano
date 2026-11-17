@@ -27,6 +27,11 @@ test('an idle session adopts a running container inspect', async () => {
   registerRoutes(ctx, routeSpecs({
     session,
     httpProbe: () => false,
+    env: { KITESURF_STATE: '/nonexistent/dnls-test-state' },
+    connect: async () => ({ alive: true, probedAt: Date.now(), async send(method) {
+      if (method === 'Target.getTargets') return { targetInfos: [{ type: 'page', targetId: 'p', sessionId: 's', url: 'about:blank' }] }
+      return {}
+    } }),
     backend: { async inspect() { return { raw: JSON.stringify([{ configuration: { publishedPorts: [{ containerPort: 8787, hostAddress: '127.0.0.1', hostPort: 8798 }] } }]) } } },
   }), { table: BINDING_TABLE, plugin: 'dsh-nano-local-sandbox' })
   const status = routes.find((route) => route.path.endsWith('/status'))

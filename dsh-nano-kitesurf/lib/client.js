@@ -39,18 +39,18 @@ var __kitesurfExport = (() => {
   ));
   var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
-  // ../packages/dsh-nano-ui/src/version.js
+  // ../../../../packages/dsh-nano-ui/src/version.js
   var VERSION;
   var init_version = __esm({
-    "../packages/dsh-nano-ui/src/version.js"() {
+    "../../../../packages/dsh-nano-ui/src/version.js"() {
       VERSION = "0.2.1";
     }
   });
 
-  // ../packages/dsh-nano-ui/src/layers.js
+  // ../../../../packages/dsh-nano-ui/src/layers.js
   var NANO_LAYER, NANO_SPACE, kebab, LAYER_CSS;
   var init_layers = __esm({
-    "../packages/dsh-nano-ui/src/layers.js"() {
+    "../../../../packages/dsh-nano-ui/src/layers.js"() {
       NANO_LAYER = Object.freeze({
         shellSlot: 20,
         hostModal: 1e3,
@@ -76,10 +76,10 @@ ${NANO_SPACE.map((value, index) => `  --nano-space-${index + 1}: ${value}px;`).j
     }
   });
 
-  // ../packages/dsh-nano-ui/src/styles.js
+  // ../../../../packages/dsh-nano-ui/src/styles.js
   var NANO_STYLES;
   var init_styles = __esm({
-    "../packages/dsh-nano-ui/src/styles.js"() {
+    "../../../../packages/dsh-nano-ui/src/styles.js"() {
       init_layers();
       init_version();
       NANO_STYLES = `/* dsh-nano-ui@${VERSION} */
@@ -161,10 +161,10 @@ ${LAYER_CSS}
     }
   });
 
-  // ../packages/dsh-nano-ui/catalog/tokens.json
+  // ../../../../packages/dsh-nano-ui/catalog/tokens.json
   var schemes;
   var init_tokens = __esm({
-    "../packages/dsh-nano-ui/catalog/tokens.json"() {
+    "../../../../packages/dsh-nano-ui/catalog/tokens.json"() {
       schemes = {
         dark: {
           "--dsw-alias-bg-base": "#151517",
@@ -412,7 +412,7 @@ ${LAYER_CSS}
     }
   });
 
-  // ../packages/dsh-nano-ui/src/theme-scheme.js
+  // ../../../../packages/dsh-nano-ui/src/theme-scheme.js
   function hostScheme(theme) {
     try {
       const snapshot = theme?.getTheme?.();
@@ -433,11 +433,11 @@ ${LAYER_CSS}
     return Object.entries(table);
   }
   var init_theme_scheme = __esm({
-    "../packages/dsh-nano-ui/src/theme-scheme.js"() {
+    "../../../../packages/dsh-nano-ui/src/theme-scheme.js"() {
     }
   });
 
-  // ../packages/dsh-nano-ui/src/theme.js
+  // ../../../../packages/dsh-nano-ui/src/theme.js
   function createThemeScope({ theme, element, pin, subscribe }) {
     if (!(element instanceof HTMLElement)) throw new TypeError("dsh-nano-ui: createThemeScope needs an owner element");
     let current = pin;
@@ -477,16 +477,16 @@ ${LAYER_CSS}
     };
   }
   var init_theme = __esm({
-    "../packages/dsh-nano-ui/src/theme.js"() {
+    "../../../../packages/dsh-nano-ui/src/theme.js"() {
       init_tokens();
       init_theme_scheme();
     }
   });
 
-  // ../packages/dsh-nano-ui/catalog/icons.json
+  // ../../../../packages/dsh-nano-ui/catalog/icons.json
   var sprite;
   var init_icons = __esm({
-    "../packages/dsh-nano-ui/catalog/icons.json"() {
+    "../../../../packages/dsh-nano-ui/catalog/icons.json"() {
       sprite = {
         from: "rc.3",
         glyphs: [
@@ -600,7 +600,7 @@ ${LAYER_CSS}
     }
   });
 
-  // ../packages/dsh-nano-ui/src/icon-markup.js
+  // ../../../../packages/dsh-nano-ui/src/icon-markup.js
   function spriteMarkup(glyph, weight = "regular", size = 16) {
     if (typeof glyph !== "string" || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(glyph)) throw new TypeError(`dsh-nano-ui: bad sprite glyph "${glyph}"`);
     if (!SPRITE_WEIGHTS.includes(weight)) throw new TypeError(`dsh-nano-ui: bad sprite weight "${weight}"`);
@@ -612,12 +612,12 @@ ${LAYER_CSS}
   }
   var SPRITE_WEIGHTS;
   var init_icon_markup = __esm({
-    "../packages/dsh-nano-ui/src/icon-markup.js"() {
+    "../../../../packages/dsh-nano-ui/src/icon-markup.js"() {
       SPRITE_WEIGHTS = Object.freeze(["regular", "medium"]);
     }
   });
 
-  // ../packages/dsh-nano-ui/src/icons.js
+  // ../../../../packages/dsh-nano-ui/src/icons.js
   function icon(name) {
     const component = /^Icon[A-Z]/.test(name) ? primitives[name] : void 0;
     if (component === void 0) throw new Error(`dsh-nano-ui: the host exports no icon "${name}"`);
@@ -632,7 +632,7 @@ ${LAYER_CSS}
   }
   var primitives, warned;
   var init_icons2 = __esm({
-    "../packages/dsh-nano-ui/src/icons.js"() {
+    "../../../../packages/dsh-nano-ui/src/icons.js"() {
       primitives = __toESM(__require("@deepseek-ai/dsh-client-ui-primitives"), 1);
       init_icons();
       init_icon_markup();
@@ -640,7 +640,7 @@ ${LAYER_CSS}
     }
   });
 
-  // ../packages/dsh-nano-ui/src/dialog.js
+  // ../../../../packages/dsh-nano-ui/src/dialog.js
   function preset(list, value) {
     if (typeof value !== "number" || !Number.isFinite(value)) return void 0;
     return list.find((step) => step >= value) ?? list[list.length - 1];
@@ -684,7 +684,7 @@ ${LAYER_CSS}
   }
   var import_react, import_dsh_client_ui_primitives, h, DIALOG_WIDTHS, DIALOG_HEIGHTS, DIALOG_CHROME;
   var init_dialog = __esm({
-    "../packages/dsh-nano-ui/src/dialog.js"() {
+    "../../../../packages/dsh-nano-ui/src/dialog.js"() {
       import_react = __toESM(__require("react"), 1);
       import_dsh_client_ui_primitives = __require("@deepseek-ai/dsh-client-ui-primitives");
       h = import_react.default.createElement;
@@ -694,7 +694,7 @@ ${LAYER_CSS}
     }
   });
 
-  // ../packages/dsh-nano-ui/src/overlay.js
+  // ../../../../packages/dsh-nano-ui/src/overlay.js
   function assertContainer(container, who) {
     if (!(container instanceof HTMLElement) || !container.isConnected) {
       throw new Error(`dsh-nano-ui: ${who} needs a container element attached to the document; overlays never fall back to document.body`);
@@ -747,7 +747,7 @@ ${LAYER_CSS}
   }
   var import_react2, import_react_dom, import_dsh_client_ui_primitives2, h2;
   var init_overlay = __esm({
-    "../packages/dsh-nano-ui/src/overlay.js"() {
+    "../../../../packages/dsh-nano-ui/src/overlay.js"() {
       import_react2 = __toESM(__require("react"), 1);
       import_react_dom = __require("react-dom");
       import_dsh_client_ui_primitives2 = __require("@deepseek-ai/dsh-client-ui-primitives");
@@ -756,7 +756,7 @@ ${LAYER_CSS}
     }
   });
 
-  // ../packages/dsh-nano-ui/src/menu-model.js
+  // ../../../../packages/dsh-nano-ui/src/menu-model.js
   function menuHeight(items) {
     let height = 8;
     for (const item of items) height += item?.separator === true ? 9 : 28;
@@ -772,12 +772,12 @@ ${LAYER_CSS}
   }
   var MENU_CAPS;
   var init_menu_model = __esm({
-    "../packages/dsh-nano-ui/src/menu-model.js"() {
+    "../../../../packages/dsh-nano-ui/src/menu-model.js"() {
       MENU_CAPS = Object.freeze([120, 160, 200, 240, 320, 400, 480]);
     }
   });
 
-  // ../packages/dsh-nano-ui/src/menu.js
+  // ../../../../packages/dsh-nano-ui/src/menu.js
   function NanoMenu({ menu, actions, onClose, width = 208, maxHeight, portal = true, direction }) {
     if (menu === null || menu === void 0 || actions.length === 0) return null;
     const onSelect = (id) => {
@@ -807,7 +807,7 @@ ${LAYER_CSS}
   }
   var import_react3, import_dsh_client_ui_primitives3, h3;
   var init_menu = __esm({
-    "../packages/dsh-nano-ui/src/menu.js"() {
+    "../../../../packages/dsh-nano-ui/src/menu.js"() {
       import_react3 = __toESM(__require("react"), 1);
       import_dsh_client_ui_primitives3 = __require("@deepseek-ai/dsh-client-ui-primitives");
       init_menu_model();
@@ -815,14 +815,14 @@ ${LAYER_CSS}
     }
   });
 
-  // ../packages/dsh-nano-ui/src/toast.js
+  // ../../../../packages/dsh-nano-ui/src/toast.js
   function NanoToast({ text, anchor, tone, icon: icon2, actions, holdMs, onDone }) {
     if (text === void 0 || text === null || text === "") return null;
     return import_react4.default.createElement(import_dsh_client_ui_primitives4.Toast, { key: String(text), text, anchor: anchor ?? void 0, tone, icon: icon2, actions, holdMs, onDone: onDone ?? noop });
   }
   var import_react4, import_dsh_client_ui_primitives4, noop;
   var init_toast = __esm({
-    "../packages/dsh-nano-ui/src/toast.js"() {
+    "../../../../packages/dsh-nano-ui/src/toast.js"() {
       import_react4 = __toESM(__require("react"), 1);
       import_dsh_client_ui_primitives4 = __require("@deepseek-ai/dsh-client-ui-primitives");
       noop = () => {
@@ -830,7 +830,7 @@ ${LAYER_CSS}
     }
   });
 
-  // ../packages/dsh-nano-ui/src/mount.js
+  // ../../../../packages/dsh-nano-ui/src/mount.js
   function mountNano(el, Component, props = {}) {
     if (!(el instanceof Element)) throw new TypeError("dsh-nano-ui: mountNano needs an element");
     const root = (0, import_client.createRoot)(el);
@@ -852,13 +852,13 @@ ${LAYER_CSS}
   }
   var import_react5, import_client;
   var init_mount = __esm({
-    "../packages/dsh-nano-ui/src/mount.js"() {
+    "../../../../packages/dsh-nano-ui/src/mount.js"() {
       import_react5 = __toESM(__require("react"), 1);
       import_client = __require("react-dom/client");
     }
   });
 
-  // ../packages/dsh-nano-ui/src/tabs.js
+  // ../../../../packages/dsh-nano-ui/src/tabs.js
   function nanoTabs({ items, value, onChange, label }) {
     const id = `nano-seg-${++seq}`;
     const el = document.createElement("div");
@@ -909,7 +909,7 @@ ${LAYER_CSS}
   }
   var import_react6, import_dsh_client_ui_primitives5, h4, seq;
   var init_tabs = __esm({
-    "../packages/dsh-nano-ui/src/tabs.js"() {
+    "../../../../packages/dsh-nano-ui/src/tabs.js"() {
       import_react6 = __toESM(__require("react"), 1);
       import_dsh_client_ui_primitives5 = __require("@deepseek-ai/dsh-client-ui-primitives");
       init_mount();
@@ -918,7 +918,7 @@ ${LAYER_CSS}
     }
   });
 
-  // ../packages/dsh-nano-ui/src/dom.js
+  // ../../../../packages/dsh-nano-ui/src/dom.js
   function mount(parent) {
     const host = document.createElement("div");
     parent.appendChild(host);
@@ -979,7 +979,7 @@ ${LAYER_CSS}
   }
   var import_react7, import_client2, HOST_MENU_GAP;
   var init_dom = __esm({
-    "../packages/dsh-nano-ui/src/dom.js"() {
+    "../../../../packages/dsh-nano-ui/src/dom.js"() {
       import_react7 = __toESM(__require("react"), 1);
       import_client2 = __require("react-dom/client");
       init_dialog();
@@ -989,7 +989,7 @@ ${LAYER_CSS}
     }
   });
 
-  // ../packages/dsh-nano-ui/src/button.js
+  // ../../../../packages/dsh-nano-ui/src/button.js
   function IconButton({ icon: icon2, variant = "ghost", size = "sm", ...rest }) {
     const label = rest["aria-label"];
     if (typeof label !== "string" || label.trim() === "") throw new TypeError("dsh-nano-ui: IconButton needs an aria-label");
@@ -997,24 +997,24 @@ ${LAYER_CSS}
   }
   var import_react8, import_dsh_client_ui_primitives6;
   var init_button = __esm({
-    "../packages/dsh-nano-ui/src/button.js"() {
+    "../../../../packages/dsh-nano-ui/src/button.js"() {
       import_react8 = __toESM(__require("react"), 1);
       import_dsh_client_ui_primitives6 = __require("@deepseek-ai/dsh-client-ui-primitives");
     }
   });
 
-  // ../packages/dsh-nano-ui/src/toolbar.js
+  // ../../../../packages/dsh-nano-ui/src/toolbar.js
   function Toolbar({ label, className, children }) {
     return import_react9.default.createElement("div", { role: "toolbar", "aria-label": label, className: ["nano-toolbar", className ?? ""].filter(Boolean).join(" ") }, children);
   }
   var import_react9;
   var init_toolbar = __esm({
-    "../packages/dsh-nano-ui/src/toolbar.js"() {
+    "../../../../packages/dsh-nano-ui/src/toolbar.js"() {
       import_react9 = __toESM(__require("react"), 1);
     }
   });
 
-  // ../packages/dsh-nano-ui/src/empty.js
+  // ../../../../packages/dsh-nano-ui/src/empty.js
   function EmptyState({ icon: icon2, title, description, action, className }) {
     return h5(
       "div",
@@ -1027,13 +1027,13 @@ ${LAYER_CSS}
   }
   var import_react10, h5;
   var init_empty = __esm({
-    "../packages/dsh-nano-ui/src/empty.js"() {
+    "../../../../packages/dsh-nano-ui/src/empty.js"() {
       import_react10 = __toESM(__require("react"), 1);
       h5 = import_react10.default.createElement;
     }
   });
 
-  // ../packages/dsh-nano-ui/src/window.js
+  // ../../../../packages/dsh-nano-ui/src/window.js
   function useNanoWindow() {
     return import_react11.default.useContext(WindowContext);
   }
@@ -1073,7 +1073,7 @@ ${LAYER_CSS}
   }
   var import_react11, import_dsh_client_ui_primitives7, h6, WindowContext;
   var init_window = __esm({
-    "../packages/dsh-nano-ui/src/window.js"() {
+    "../../../../packages/dsh-nano-ui/src/window.js"() {
       import_react11 = __toESM(__require("react"), 1);
       import_dsh_client_ui_primitives7 = __require("@deepseek-ai/dsh-client-ui-primitives");
       init_button();
@@ -1084,7 +1084,7 @@ ${LAYER_CSS}
     }
   });
 
-  // ../packages/dsh-nano-ui/index.js
+  // ../../../../packages/dsh-nano-ui/index.js
   var dsh_nano_ui_exports = {};
   __export(dsh_nano_ui_exports, {
     EmptyState: () => EmptyState,
@@ -1112,7 +1112,7 @@ ${LAYER_CSS}
     useNanoWindow: () => useNanoWindow
   });
   var init_dsh_nano_ui = __esm({
-    "../packages/dsh-nano-ui/index.js"() {
+    "../../../../packages/dsh-nano-ui/index.js"() {
       init_version();
       init_layers();
       init_styles();
@@ -1132,7 +1132,7 @@ ${LAYER_CSS}
     }
   });
 
-  // ../packages/dsh-performance-review/src/state.js
+  // ../../../../packages/dsh-performance-review/src/state.js
   function percentile(values, p) {
     if (!Array.isArray(values) || values.length === 0) return null;
     const sorted = [...values].sort((a, b) => a - b);
@@ -1337,7 +1337,7 @@ ${LAYER_CSS}
   }
   var REPORT_VERSION, CLIENT_KEY, HOST_KEY, BUILD_STAMP, NAME_RE, CONTRACT_KEY_RE, MAX_SPAN_KEYS, MAX_USAGE_KEYS, INTERACTION_CAP, RESERVOIR_CAP, EVENT_DURATION_THRESHOLD, WINDOW_PAD_BEFORE_MS, WINDOW_PAD_AFTER_MS, NANO_PKG_PREFIX;
   var init_state = __esm({
-    "../packages/dsh-performance-review/src/state.js"() {
+    "../../../../packages/dsh-performance-review/src/state.js"() {
       REPORT_VERSION = 2;
       CLIENT_KEY = Symbol.for("dsh.perfReview.v2");
       HOST_KEY = Symbol.for("dsh.perfReviewHost.v2");
@@ -1355,7 +1355,7 @@ ${LAYER_CSS}
     }
   });
 
-  // ../packages/dsh-performance-review/src/aggregate.js
+  // ../../../../packages/dsh-performance-review/src/aggregate.js
   function pushInteraction(collector, interaction) {
     collector.interactions.push(interaction);
     while (collector.interactions.length > INTERACTION_CAP) collector.interactions.shift();
@@ -1652,7 +1652,7 @@ ${LAYER_CSS}
   }
   var spanStats, MAX_REPORT_BYTES, EVIDENCE_CAPS, byteLength, usageCell, NOTE_GLOSSARY;
   var init_aggregate = __esm({
-    "../packages/dsh-performance-review/src/aggregate.js"() {
+    "../../../../packages/dsh-performance-review/src/aggregate.js"() {
       init_state();
       spanStats = (row) => ({
         n: row.n,
@@ -1679,10 +1679,10 @@ ${LAYER_CSS}
     }
   });
 
-  // ../packages/dsh-interface/src/contracts/jsonOutcome.js
+  // ../../../../packages/dsh-interface/src/contracts/jsonOutcome.js
   var FAILURE_KIND, FAILURE_KINDS;
   var init_jsonOutcome = __esm({
-    "../packages/dsh-interface/src/contracts/jsonOutcome.js"() {
+    "../../../../packages/dsh-interface/src/contracts/jsonOutcome.js"() {
       FAILURE_KIND = Object.freeze({
         /** signal aborted; issued-before cancellation makes no server-side claim. */
         CANCELLED: "cancelled",
@@ -1699,7 +1699,7 @@ ${LAYER_CSS}
     }
   });
 
-  // ../packages/dsh-interface/src/contracts/observeEvent.js
+  // ../../../../packages/dsh-interface/src/contracts/observeEvent.js
   function fail(message) {
     throw new TypeError(`observe-event: ${message}`);
   }
@@ -1737,7 +1737,7 @@ ${LAYER_CSS}
   }
   var OBSERVE_SURFACES, HTTP_OUTCOMES, UPGRADE_OUTCOMES, JSON_OUTCOMES, MCP_OUTCOMES, OBSERVE_FIELDS, REQUIRED, OPTIONAL, OUTCOMES;
   var init_observeEvent = __esm({
-    "../packages/dsh-interface/src/contracts/observeEvent.js"() {
+    "../../../../packages/dsh-interface/src/contracts/observeEvent.js"() {
       init_jsonOutcome();
       OBSERVE_SURFACES = Object.freeze(["http", "upgrade", "json", "mcp"]);
       HTTP_OUTCOMES = Object.freeze(["ok", "rejected", "method", "failed"]);
@@ -1764,7 +1764,7 @@ ${LAYER_CSS}
     }
   });
 
-  // ../packages/dsh-performance-review/src/client.js
+  // ../../../../packages/dsh-performance-review/src/client.js
   var client_exports = {};
   __export(client_exports, {
     bucketForElement: () => bucketForElement,
@@ -2377,7 +2377,7 @@ ${LAYER_CSS}
   }
   var TRACK_EVENT_CAP, SPAN_EVENT_CAP, PROFILER_SAMPLE_CAP, now, isPromiseLike, HIDDEN_SELECTOR, contains, isHostView, statusClass;
   var init_client = __esm({
-    "../packages/dsh-performance-review/src/client.js"() {
+    "../../../../packages/dsh-performance-review/src/client.js"() {
       init_state();
       init_aggregate();
       init_observeEvent();
@@ -2835,6 +2835,29 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
     }
   });
 
+  // src/shared/navigation.js
+  var navigation_exports = {};
+  __export(navigation_exports, {
+    captureNavigation: () => captureNavigation,
+    requestTimeout: () => requestTimeout
+  });
+  function requestTimeout(path) {
+    if (path.endsWith("/open") || path.endsWith("/shot") || path.endsWith("/history")) return 6e4;
+    return 25e3;
+  }
+  async function captureNavigation(post2, { openPath, shotPath, url, fit }) {
+    await post2(openPath, { url });
+    const frame = await post2(shotPath, { format: "webp", ...fit ? { fit } : {} });
+    if (!frame?.data || !frame.url || frame.url === "about:blank") {
+      throw Object.assign(new Error("Kitesurf did not return a rendered page"), { errorId: "kitesurf.navigate.failed" });
+    }
+    return frame;
+  }
+  var init_navigation = __esm({
+    "src/shared/navigation.js"() {
+    }
+  });
+
   // src/client/index.js
   var index_exports = {};
   __export(index_exports, {
@@ -2849,6 +2872,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
   var { copyFor: copyFor2 } = (init_i18n(), __toCommonJS(i18n_exports));
   var { batchNote: batchNote2, designNote: designNote2, multiNote: multiNote2 } = (init_note(), __toCommonJS(note_exports));
   var { contentFrame: contentFrame2, shotPoint: shotPoint2 } = (init_shot_point(), __toCommonJS(shot_point_exports));
+  var { captureNavigation: captureNavigation2, requestTimeout: requestTimeout2 } = (init_navigation(), __toCommonJS(navigation_exports));
   var h7 = React12.createElement;
   var STATUS = "/nano-local-sandbox/status";
   var OPEN = "/nano-local-sandbox/open";
@@ -3120,10 +3144,10 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
    dead area read as "canvas", and the picture is centred by object-position. */
 .nks-frame{background-image:linear-gradient(45deg,rgba(127,127,127,.05) 25%,transparent 25%,transparent 75%,rgba(127,127,127,.05) 75%),linear-gradient(45deg,rgba(127,127,127,.05) 25%,transparent 25%,transparent 75%,rgba(127,127,127,.05) 75%);background-size:16px 16px;background-position:0 0,8px 8px}
 `;
-  var REQUEST_TIMEOUT_MS = 2e4;
   function post(path, body) {
+    const timeoutMs = requestTimeout2(path);
     const controller = typeof AbortController === "function" ? new AbortController() : null;
-    const timer = controller ? window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS) : 0;
+    const timer = controller ? window.setTimeout(() => controller.abort(), timeoutMs) : 0;
     return fetch(path, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -3131,7 +3155,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       signal: controller?.signal
     }).catch((cause) => {
       if (cause?.name === "AbortError") {
-        const error = new Error(`request timed out after ${REQUEST_TIMEOUT_MS}ms`);
+        const error = new Error(`request timed out after ${timeoutMs}ms`);
         error.errorId = "kitesurf.engine.connect";
         throw error;
       }
@@ -3147,58 +3171,6 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
     }).finally(() => {
       if (timer) window.clearTimeout(timer);
     });
-  }
-  async function engineLogHint() {
-    try {
-      const data = await fetch(`${LOGS}?tail=60`).then((r) => r.json());
-      if (!data?.ok) return "";
-      const lines = String(data.text || "").split("\n").map((line) => line.replace(/\x1b\[[0-9;]*m/g, "").trim()).filter((line) => line && !/GET \/json\/list|\[ks-lag\] alive/.test(line));
-      return lines.slice(-4).join("\n");
-    } catch {
-      return "";
-    }
-  }
-  var NAV_CONFIRM_MS = 8e3;
-  var NAV_POLL_MS = 400;
-  var NAV_SHOT_MS = 4e3;
-  function withDeadline(promise, ms, fallback) {
-    return new Promise((resolve) => {
-      const timer = window.setTimeout(() => resolve(fallback), ms);
-      promise.then(
-        (value) => {
-          window.clearTimeout(timer);
-          resolve(value);
-        },
-        () => {
-          window.clearTimeout(timer);
-          resolve(fallback);
-        }
-      );
-    });
-  }
-  function sameUrl(value) {
-    const text = String(value ?? "").trim();
-    if (!text || text === "about:blank") return "";
-    try {
-      const parsed = new URL(text);
-      return `${parsed.protocol}//${parsed.host}${parsed.pathname.replace(/\/$/, "")}${parsed.search}`;
-    } catch {
-      return text.replace(/\/$/, "");
-    }
-  }
-  function sameSite(requested, landed) {
-    const a = sameUrl(requested);
-    const b = sameUrl(landed);
-    if (!b) return false;
-    if (a === b) return true;
-    try {
-      const want = new URL(requested);
-      const got = new URL(landed);
-      const strip = (host) => host.replace(/^www\./, "");
-      return strip(want.host) === strip(got.host);
-    } catch {
-      return false;
-    }
   }
   function frameOf(image) {
     if (!image || !image.naturalWidth) return null;
@@ -3835,14 +3807,6 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       try {
         await work();
       } catch (cause) {
-        if (opts.retry > 0) {
-          try {
-            await work();
-            return;
-          } catch (again) {
-            cause = again;
-          }
-        }
         if (opts.dialog) showOpenError(cause, opts.url);
         else showError(cause);
       } finally {
@@ -3888,50 +3852,25 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       });
     }
     function openPage(url) {
-      return run(() => navigate(url), { beat: true, dialog: true, url, retry: 1 });
+      return run(() => navigate(url), { beat: true, dialog: true, url });
     }
     function remember(url) {
       setPageUrl(url);
       setHistory((current) => [url, ...current.filter((item) => item !== url)].slice(0, 8));
     }
     async function navigate(url) {
-      await perf.span("navigate", async () => {
-        await post(OPEN, { url });
-      });
-      const fit = frameSize();
-      const started = Date.now();
-      let shotPayload = null;
-      for (; ; ) {
-        const next = await withDeadline(
-          post(SHOT, { format: "webp", ...fit ? { fit } : {} }),
-          NAV_SHOT_MS,
-          null
-        );
-        if (next) shotPayload = next;
-        if (shotPayload && sameSite(url, shotPayload.url)) break;
-        if (Date.now() - started >= NAV_CONFIRM_MS) break;
-        await new Promise((resolve) => {
-          window.setTimeout(resolve, NAV_POLL_MS);
-        });
-      }
-      if (!shotPayload) {
-        const error = new Error(copy.navigateUnconfirmed);
-        error.errorId = "kitesurf.navigate.failed";
-        error.detail = { url, engineLog: await engineLogHint() };
-        throw error;
-      }
+      const shotPayload = await perf.span("navigate", () => captureNavigation2(post, {
+        openPath: OPEN,
+        shotPath: SHOT,
+        url,
+        fit: frameSize()
+      }));
       setShot(shotPayload.data);
       setShotMime(shotPayload.mimeType || "image/webp");
       setShotMeta({ url: shotPayload.url || "", scrollY: shotPayload.scrollY || 0, targetId: shotPayload.targetId || "", viewport: shotPayload.viewport?.width ?? null, at: Date.now() });
-      if (!sameSite(url, shotPayload.url)) {
-        const error = new Error(copy.navigateUnconfirmed);
-        error.errorId = "kitesurf.navigate.failed";
-        error.detail = { url, engineLog: await engineLogHint() };
-        throw error;
-      }
       await loadDom();
       setPick(null);
-      remember(url);
+      remember(shotPayload.url);
     }
     function frameSize() {
       const element = frameRef.current;
@@ -5201,7 +5140,6 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           )
         ) : null,
         nativeHtml && domDoc ? h7("iframe", {
-          ref: domFrameRef,
           className: "nks-dom",
           title: "Kitesurf page",
           // No allow-scripts: the host already strips scripts/handlers/js: URLs,

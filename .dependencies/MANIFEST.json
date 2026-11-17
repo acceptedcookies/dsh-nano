@@ -1,0 +1,74 @@
+{
+  "$schema": "./MANIFEST.schema.json",
+  "version": 1,
+  "policy": {
+    "rule": "构建产物、运行时 checkout、分发 artifact 只能来自 .dependencies/pinned/；.dependencies/eval/ 存放待评估的新 ref，经兼容性评估后走 repin 流程转入 pinned/。context/ 仅作只读接口参考，不得作为执行依赖。",
+    "pinnedMutable": false,
+    "repinRequired": "pinned/ 下任何 ref 变更必须经 [业主] 批准的 repin 流程，并同步本文件。",
+    "evalLifecycle": "eval/<name> 评估完成后：(a) 通过则 repin 进 pinned/；(b) 不通过则保留或删除，理由记录在本文件 notes。",
+    "upstreamSource": "Upstream pins are byte-for-byte official source. Never edit or cherry-pick local changes into a pin; local behavior belongs in DNLS/DNK driver, adapter or overlay. Each repin reviews those adaptations and runs targeted compatibility experiments, not a release gate."
+  },
+  "deps": {
+    "fx": {
+      "description": "Vercel fx (libfx) WASM agent engine；vendored 进 dsh-nano-notepad/lib/fx/",
+      "upstream": "https://github.com/vercel-labs/fx.git",
+      "pinned": {
+        "ref": "9613dbdf4",
+        "resolvedSha": null,
+        "note": "vendored lib/fx/*.js 与该 ref 的 sdk/ 字节级一致（engine.js/wasm-runtime.js/custom-provider.js/durable.js 等全部 MATCH）。fx-core.wasm / sqlite3.wasm / pdf*.mjs / np-sqlite-worker.mjs 为构建产物，来源不在该 ref 工作树中，需单独核验其 provenance。",
+        "path": "pinned/fx/",
+        "consumedBy": "dsh-nano-notepad/lib/fx/ (vendored, git-tracked)",
+        "verification": "对 lib/fx/*.js 逐一与 pinned/fx/sdk/ 对应文件字节比对"
+      },
+      "eval": {
+        "ref": "main",
+        "resolvedSha": "1ed36dddc3dd25ccc94058116834dd34a07baee6",
+        "path": "eval/fx/",
+        "note": "领先 pinned 约数百 commits；评估 sdk/ 接口变更与 fx-core.wasm 兼容性后再 repin"
+      }
+    },
+    "kitesurf": {
+      "description": "Cloudflare Kitesurf（workerd 内嵌浏览器引擎，CDP server）；DNK 面板与 agent-browser 的执行后端",
+      "upstream": "https://github.com/cloudflare/kitesurf.git",
+      "pinned": {
+        "ref": "39feadfb9a3e6c14b40cf170a559ce417d0fce5d",
+        "resolvedSha": "39feadfb9a3e6c14b40cf170a559ce417d0fce5d",
+        "note": "Official upstream commit, unmodified. Replaces locally patched 5770ee1; no engine /history or KITESURF_HISTORY patch is carried. Build outputs live outside this source archive.",
+        "path": "pinned/kitesurf/",
+        "consumedBy": "DNLS profile and artifacts/kitesurf/<sha>/runtime derived build",
+        "verification": "Compare official tracked file hashes with git archive; build in a derived workspace, never edit source archive; review driver adapters on every repin.",
+        "archiveSha256": "363d62a0068cccef39cfeef2bf690ea34fc3f0a446f499b1192a2790bbd14586",
+        "sourceTreeSha256": "573317a75918b445b4af29f1f8164a3d30afbf59c014bc73a1535f6babc0c9f3"
+      },
+      "eval": {
+        "ref": "main",
+        "resolvedSha": "39feadfb9a3e6c14b40cf170a559ce417d0fce5d",
+        "path": "eval/kitesurf/",
+        "note": "Evaluated and approved by owner for repin; candidate remains unmodified upstream."
+      }
+    },
+    "deepseek-harness": {
+      "description": "DeepSeek Harness 宿主本体；插件 engines.dsh 的对照基线与接口真源",
+      "upstream": "https://github.com/deepseek-ai/deepseek-harness.git",
+      "pinned": {
+        "ref": "dsh-v0.2.2-rc.1",
+        "resolvedSha": "66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db",
+        "note": "当前生产运行的安装版本（@deepseek-ai/dsh@0.2.2-rc.1）。本 pinned 树为源码参考，接口真源仍以已安装 npm 包的 lib/types 为准。",
+        "path": "pinned/deepseek-harness/",
+        "consumedBy": "engines.dsh 检查、lib/types 接口核验、发布流程",
+        "verification": "各插件 package.json engines.dsh 与该版本兼容；dsh --version 输出一致"
+      },
+      "eval": {
+        "ref": "dsh-v0.2.2-rc.3",
+        "resolvedSha": "38a6a5c965aa99ab525161efb7cc5cf1fe62fced",
+        "path": "eval/deepseek-harness/",
+        "note": "最新 release tag（rc.2 已跳过，直接评 rc.3）。评估 lib/types 与插件调用面兼容性后 repin；同时需同步 npm 安装版本"
+      }
+    }
+  },
+  "pending": [
+    "fx: 核验 fx-core.wasm / sqlite3.wasm / pdf*.mjs / np-sqlite-worker.mjs 的构建来源与 hash，登记进本文件",
+    "deepseek-harness: 完成 rc.3 兼容性评估后 repin，并同步本机 npm 安装版本",
+    "通用: 落地 repin 校验脚本（verify deps 路径存在、ref 与 MANIFEST 一致、vendored 产物与 pinned 树字节一致）"
+  ]
+}

@@ -1,93 +1,67 @@
 #!/usr/bin/env node
-/**
- * eval-page-ladder.mjs — five levels of page complexity against a live engine.
- *
- * The question this answers is "which pages can this engine actually render",
- * not "is the network up". Each level differs only in what the page asks the
- * renderer to do, so a failure at level N and success at N-1 is a renderer
- * limit, not a site-specific quirk.
- *
- *   L1  static HTML, no script
- *   L2  HTML + CSS + a tiny classic script
- *   L3  server-rendered article with real JS (Wikipedia)
- *   L4  framework SPA with a large bundle (react.dev)
- *   L5  heavy bundle + fonts + canvas (archy.studio)
- *
- * Usage (needs a logged-in dsh page; run inside ego-browser):
- *   ego-browser nodejs < scripts/eval-page-ladder.mjs
- *
- * The script prints one line per level and a summary. It never fails the
- * process: a ladder is a measurement, not a gate.
+/** Five page shapes, not a release gate or a claim of an engine capability
+ * limit. A result needs the requested document, an expected content marker,
+ * and real screenshot bytes. Source HTTP failures and transport failures are
+ * reported separately. Run in an authenticated dsh-dev ego-browser page:
+ *   const { runLadder, formatLadder } = await import('/absolute/path/to/this/script.mjs')
+ *   const task = await taskSpace('dnk-ladder')
+ *   console.log(formatLadder(await runLadder(task.page('p1'))))
  */
-
-/** Wait between levels: a navigation retires the previous page script, and
- *  starting the next one mid-retire kills it. */
-const SETTLE_MS = 3000
-/** How long one level may take before it counts as a failure. */
-const LEVEL_TIMEOUT_MS = 40000
-const POLL_MS = 2000
-
 export const LEVELS = Object.freeze([
-  { level: 1, name: 'static-html', url: 'https://example.com' },
-  { level: 2, name: 'html+css+script', url: 'https://www.iana.org/help/example-domains' },
-  { level: 3, name: 'article+js', url: 'https://en.wikipedia.org/wiki/Kitesurfing' },
-  { level: 4, name: 'spa', url: 'https://react.dev/' },
-  { level: 5, name: 'heavy', url: 'https://archy.studio' },
+  { level: 1, name: 'static-html', url: 'https://example.com', marker: 'Example Domain' },
+  { level: 2, name: 'css-small-js', url: 'https://www.iana.org/help/example-domains', marker: 'Example Domains' },
+  { level: 3, name: 'long-document', url: 'https://www.rfc-editor.org/rfc/rfc2616.html', marker: 'Hypertext Transfer Protocol' },
+  { level: 4, name: 'react-hydration', url: 'https://react.dev/', marker: 'React' },
+  { level: 5, name: 'animation-rich', url: 'https://archy.studio', marker: 'Archy' },
 ])
 
-/**
- * @param {object} page - an ego-browser Page already logged into dsh
- * @param {Array<{level:number,name:string,url:string}>} [levels]
- * @returns {Promise<Array<{level:number,name:string,url:string,ok:boolean,ms:number,bytes:number,error?:string}>>}
- */
-export async function runLadder(page, levels = LEVELS) {
-  const post = async (path, body) => {
-    const response = await page.fetch(path, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(body ?? {}),
+function targetMatches(requested, actual) {
+  try { return new URL(requested).hostname.replace(/^www\./, '') === new URL(actual).hostname.replace(/^www\./, '') } catch { return false }
+}
+
+export async function runLadder(page, levels = LEVELS, onResult = () => {}) {
+  const request = async (path, body) => {
+    const r = await page.fetch(path, body === undefined ? { timeout: 90000 } : {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body), timeout: 90000,
     })
-    return { status: response.status, body: JSON.parse(response.body || '{}') }
+    return { status: r.status, body: JSON.parse(r.body || '{}') }
   }
   const rows = []
   for (const entry of levels) {
-    await page.waitForTimeout(SETTLE_MS)
     const started = Date.now()
-    await post('/nano-local-sandbox/open', { url: entry.url })
-    let landed = null
-    while (Date.now() - started < LEVEL_TIMEOUT_MS) {
-      await page.waitForTimeout(POLL_MS)
-      const dom = JSON.parse((await page.fetch('/nano-local-sandbox/dom')).body || '{}')
-      if (dom.url && dom.url !== 'about:blank') {
-        landed = { url: dom.url, bytes: String(dom.srcdoc || '').length }
-        break
-      }
-    }
-    rows.push({
-      ...entry,
-      ok: Boolean(landed),
-      ms: Date.now() - started,
-      bytes: landed?.bytes ?? 0,
-      error: landed ? undefined : 'blank after timeout',
-    })
+    const row = { ...entry, ok: false }
+    try {
+      await request('/nano-local-sandbox/console', { clear: true })
+      const opened = await request('/nano-local-sandbox/open', { url: entry.url })
+      row.openMs = Date.now() - started
+      row.openStatus = opened.status
+      if (!opened.body.ok) throw new Error(opened.body.error || opened.body.errorId || `HTTP ${opened.status}`)
+      const dom = await request('/nano-local-sandbox/dom')
+      row.landed = dom.body.url
+      row.bytes = String(dom.body.srcdoc || '').length
+      row.markerFound = String(dom.body.srcdoc || '').toLowerCase().includes(entry.marker.toLowerCase())
+      const shot = await request('/nano-local-sandbox/shot', { format: 'png' })
+      row.screenshotBytes = shot.body.data ? Math.floor(shot.body.data.length * 3 / 4) : 0
+      const net = await request('/nano-local-sandbox/network')
+      const document = [...(net.body.entries || [])].reverse().find(r => r.url?.replace(/\/$/, '') === entry.url.replace(/\/$/, '') && r.status != null)
+      row.documentStatus = document?.status ?? null
+      const consoleLog = await request('/nano-local-sandbox/console')
+      row.consoleErrors = (consoleLog.body.entries || []).filter(r => /error|exception/i.test(r.level || '')).slice(-3).map(r => r.text)
+      const status = await request('/nano-local-sandbox/status')
+      row.cdpGeneration = status.body.cdpGeneration
+      row.ok = dom.status === 200 && row.bytes > 200 && row.markerFound
+        && targetMatches(entry.url, row.landed) && row.screenshotBytes > 0
+        && (row.documentStatus === null || row.documentStatus < 400)
+      if (!row.ok) row.error = row.documentStatus >= 400 ? `source HTTP ${row.documentStatus}` : 'document/marker/screenshot check failed'
+    } catch (error) { row.error = String(error.message || error) }
+    row.ms = Date.now() - started
+    rows.push(row)
+    await onResult(row)
   }
   return rows
 }
 
-/** Human-readable report; the summary line is the part worth pasting. */
 export function formatLadder(rows) {
-  const lines = rows.map((row) => `L${row.level} ${row.name.padEnd(16)} ${row.ok ? `OK   ${(row.ms / 1000).toFixed(0)}s ${row.bytes}B` : 'FAIL blank'}`)
-  const passed = rows.filter((row) => row.ok).length
-  const firstFail = rows.find((row) => !row.ok)
-  lines.push('')
-  lines.push(`${passed}/${rows.length} levels rendered${firstFail ? ` — first failure at L${firstFail.level} (${firstFail.name})` : ''}`)
-  return lines.join('\n')
-}
-
-// Run when executed directly (ego-browser nodejs < this file).
-if (typeof taskSpace === 'function') {
-  const task = await taskSpace('dnk-ladder')
-  const pages = await task.pages()
-  const page = pages[pages.length - 1]
-  console.log(formatLadder(await runLadder(page)))
+  return rows.map(row => `L${row.level} ${row.name}: ${row.ok ? 'OK' : 'FAIL'} open=${row.openMs ?? '?'}ms total=${row.ms}ms DOM=${row.bytes ?? 0}B shot=${row.screenshotBytes ?? 0}B HTTP=${row.documentStatus ?? '?'} generation=${row.cdpGeneration ?? '?'} ${row.error || ''}`).join('\n')
 }

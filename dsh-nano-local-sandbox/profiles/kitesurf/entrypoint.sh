@@ -7,6 +7,14 @@ set -eu
 home="${DNLS_HOME:-/opt/kitesurf}"
 port="${DNLS_PORT:-8787}"
 
+# The pinned engine retires workers with gc() when available. This is a driver
+# flag, not a modification to the official pin; preserve all caller flags.
+case " ${MINIFLARE_WORKERD_V8_FLAGS:-} " in
+  *" --expose-gc "*) ;;
+  *) MINIFLARE_WORKERD_V8_FLAGS="${MINIFLARE_WORKERD_V8_FLAGS:+${MINIFLARE_WORKERD_V8_FLAGS} }--expose-gc" ;;
+esac
+export MINIFLARE_WORKERD_V8_FLAGS
+
 # Supervise the MCP bridge: if it crashes, restart rather than leaving the
 # published 8791 port dead while the engine keeps running.
 ( while :; do MCP_BRIDGE_DEBUG="${MCP_BRIDGE_DEBUG:-}" node /mcp-bridge.mjs; echo "mcp-bridge exited — restarting in 2s" >&2; sleep 2; done ) &
@@ -22,7 +30,7 @@ fi
 
 config="$home/packages/engine/wrangler.jsonc"
 if [ ! -f "$config" ]; then
-  echo "kitesurf: $config is missing. Mount a built checkout at $home." >&2
+  echo "kitesurf: $config is missing. Mount the profile pin's derived runtime artifacts at $home." >&2
   exit 1
 fi
 
@@ -31,4 +39,7 @@ cd "$home/packages/engine"
 # to the writable container filesystem instead of .wrangler/ in the mount.
 state="${DNLS_STATE_DIR:-/var/lib/kitesurf-state}"
 mkdir -p "$state"
+# Miniflare's local Request.cf cache must not write inside the read-only
+# derived runtime. This is driver configuration, not an upstream source patch.
+export CLOUDFLARE_CF_FETCH_PATH="${CLOUDFLARE_CF_FETCH_PATH:-$state/request-cf.json}"
 exec wrangler dev --env local -c wrangler.jsonc --port "$port" --ip 0.0.0.0 --persist-to "$state"

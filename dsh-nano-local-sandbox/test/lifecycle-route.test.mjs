@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { registerRoutes } from '../lib/route-guard.js'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { BINDING_TABLE } from '../lib/bindings.js'
 import { routeSpecs } from '../src/host/routes.js'
 
@@ -24,10 +27,22 @@ async function call(route, { method = 'GET', url = route.path, body } = {}) {
   return { status: res.statusCode, body: JSON.parse(raw) }
 }
 
-test('kite suspend and resume follow the running session and history stays off workerd-kv', async () => {
+test('kite suspend and resume follow the running session and history stays off workerd-kv', async (t) => {
+  const state = mkdtempSync(join(tmpdir(), 'dnls-lifecycle-'))
+  t.after(() => rmSync(state, { recursive: true, force: true }))
   const stops = []
   const session = { phase: 'running', history: [], containerName: 'dnls-a' }
-  const routes = routesFor(session, { async stop(name) { stops.push(name) }, async start(name) { stops.push(`start:${name}`) } }, { prepareTimeoutMs: 0 })
+  const routes = routesFor(session, { async stop(name) { stops.push(name) }, async start(name) { stops.push(`start:${name}`) } }, {
+    prepareTimeoutMs: 0,
+    env: { KITESURF_STATE: state },
+    httpProbe: () => false,
+    connect: async () => ({ alive: true, probedAt: Date.now(), async send(method) {
+      if (method === 'Target.getTargets') return { targetInfos: [{ type: 'page', targetId: 'p', sessionId: 's' }] }
+      return {}
+    } }),
+  })
+  // A successful /open now needs an actual engine face, supplied by this fixture.
+  session.httpBase = 'http://engine.invalid'
   const opened = await call(routes['/nano-local-sandbox/open'], { method: 'POST', body: { url: 'https://example.com' } })
   assert.equal(opened.body.ok, true)
   const suspended = await call(routes['/nano-local-sandbox/kite'], { method: 'POST', body: { action: 'suspend' } })

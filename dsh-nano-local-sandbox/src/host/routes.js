@@ -1265,11 +1265,12 @@ export function routeSpecs(deps = {}) {
         return
       }
       if (row.path.endsWith('/har')) {
-        const entries = (session.network || []).slice(-100).map((item) => ({
+        const entries = (session.network || []).filter((item) => !item.gap).slice(-100).map((item) => ({
           startedDateTime: item.at,
-          time: 0,
+          time: item.durationMs ?? -1,
           request: { method: item.method || 'GET', url: item.url || '' },
-          response: { status: item.status || 0, statusText: '' },
+          response: { status: item.failed ? 0 : (item.status || 0), statusText: item.error || '', content: { size: item.size ?? 0, mimeType: item.mimeType || '' } },
+          _dnk: { type: item.type || 'Other', cached: item.cached === true },
         }))
         send(res, 200, { ok: true, log: { version: '1.2', creator: { name: 'dsh-nano-local-sandbox', version: '0' }, entries } })
         return
@@ -1445,7 +1446,19 @@ export function routeSpecs(deps = {}) {
           return
         }
         if (row.path.endsWith('/network')) {
-          send(res, 200, { ok: true, entries: (session.network || []).slice(-100) })
+          if (req.method === 'POST') {
+            if (pageBody.clear === true) session.network = []
+            send(res, 200, { ok: true, cleared: pageBody.clear === true })
+            return
+          }
+          const query = new URL(req.url ?? '/', 'http://localhost').searchParams
+          const limit = Math.max(1, Math.min(Number(query.get('limit')) || 100, 200))
+          const failedOnly = query.get('failedOnly') === 'true'
+          const since = Number(query.get('since')) || 0
+          let entries = (session.network || []).filter((item) => item && !item.gap)
+          if (failedOnly) entries = entries.filter((item) => item.failed || (item.status && item.status >= 400))
+          if (since) entries = entries.filter((item) => Number(item.startedAt) > since)
+          send(res, 200, { ok: true, entries: entries.slice(-limit) })
           return
         }
         if (row.path.endsWith('/targets')) {

@@ -335,6 +335,21 @@ async function engineLogHint() {
  *  until it reports the requested url, then gives up and reports a failure. */
 const NAV_CONFIRM_MS = 8000
 const NAV_POLL_MS = 400
+/** One frame request inside the confirmation loop. When the engine's page
+ *  script has died the socket never answers, and the 20s request deadline
+ *  would turn one failed navigation into a 40s spinner. */
+const NAV_SHOT_MS = 4000
+
+/** Resolve with `fallback` if `promise` has not settled within `ms`. */
+function withDeadline(promise, ms, fallback) {
+  return new Promise((resolve) => {
+    const timer = window.setTimeout(() => resolve(fallback), ms)
+    promise.then(
+      (value) => { window.clearTimeout(timer); resolve(value) },
+      () => { window.clearTimeout(timer); resolve(fallback) },
+    )
+  })
+}
 
 /** Compare two addresses for "did the frame land here", ignoring the empty
  *  forms (`about:blank`, missing) and a trailing slash. */
@@ -1101,10 +1116,21 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
     const started = Date.now()
     let shotPayload = null
     for (;;) {
-      shotPayload = await post(SHOT, { format: 'webp', ...(fit ? { fit } : {}) })
-      if (sameSite(url, shotPayload.url)) break
+      const next = await withDeadline(
+        post(SHOT, { format: 'webp', ...(fit ? { fit } : {}) }),
+        NAV_SHOT_MS,
+        null,
+      )
+      if (next) shotPayload = next
+      if (shotPayload && sameSite(url, shotPayload.url)) break
       if (Date.now() - started >= NAV_CONFIRM_MS) break
       await new Promise((resolve) => { window.setTimeout(resolve, NAV_POLL_MS) })
+    }
+    if (!shotPayload) {
+      const error = new Error(copy.navigateUnconfirmed)
+      error.errorId = 'kitesurf.navigate.failed'
+      error.detail = { url, engineLog: await engineLogHint() }
+      throw error
     }
     setShot(shotPayload.data)
     setShotMime(shotPayload.mimeType || 'image/webp')

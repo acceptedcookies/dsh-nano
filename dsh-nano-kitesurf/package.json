@@ -1,7 +1,7 @@
 {
   "name": "dsh-nano-kitesurf",
   "version": "0.1.0",
-  "description": "Point at a Kitesurf page and hand the element to the session. The engine runs in an Apple container; this plugin speaks CDP.",
+  "description": "Browse pages in the container, pick elements, and inspect them with DevTools. The engine is Kitesurf’s CDP endpoint.",
   "type": "module",
   "icon": "./icon.svg",
   "main": "./index.js",

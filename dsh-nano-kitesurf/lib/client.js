@@ -2438,8 +2438,9 @@ ${LAYER_CSS}
       COPY = {
         zh: {
           typeLabel: "Kitesurf",
-          typeDescription: "\u5728\u5BB9\u5668\u91CC\u6D4F\u89C8\u9875\u9762\uFF0C\u5E76\u5728\u753B\u9762\u4E0A\u70B9\u9009\u5143\u7D20",
+          typeDescription: "\u5728\u5BB9\u5668\u91CC\u6D4F\u89C8\u9875\u9762\uFF0C\u70B9\u9009\u5143\u7D20\uFF0C\u5E76\u7528\u5F00\u53D1\u8005\u5DE5\u5177\u68C0\u67E5",
           addressPlaceholder: "\u8F93\u5165 HTTP(S) \u5730\u5740",
+          addressShort: "\u7F51\u5740",
           addressAria: "\u9875\u9762\u5730\u5740",
           back: "\u540E\u9000",
           forward: "\u524D\u8FDB",
@@ -2447,15 +2448,15 @@ ${LAYER_CSS}
           go: "\u524D\u5F80",
           annotate: "\u6807\u6CE8",
           annotateTitle: "\u6807\u6CE8\u3002\u6309\u4F4F Shift \u62D6\u4E00\u6761\u7BAD\u5934",
-          history: "\u6700\u8FD1\u5730\u5740",
+          history: "\u6D4F\u89C8\u5386\u53F2",
           settings: "\u8BBE\u7F6E",
-          navToggleLabel: "\u6807\u7B7E\u680F",
+          navToggleLabel: "\u6807\u7B7E\u9875",
           navOpen: "\u6807\u7B7E\u9875\u680F",
           navOpenTitle: "\u5C55\u5F00\u6807\u7B7E\u9875\u680F",
           navClose: "\u6536\u8D77\u6807\u7B7E\u9875\u680F",
           navCloseTitle: "\u6536\u8D77\u6807\u7B7E\u9875\u680F\uFF08Esc\uFF09",
           navTabs: "\u6807\u7B7E\u9875",
-          navEmpty: "\u8FD8\u6CA1\u6709\u6D4F\u89C8\u8BB0\u5F55\uFF0C\u8F93\u5165\u5730\u5740\u5F00\u59CB",
+          navEmpty: "\u8FD8\u6CA1\u6709\u6253\u5F00\u7684\u9875\u9762",
           noteAria: "\u5199\u7ED9 composer \u7684\u5907\u6CE8",
           notePlaceholder: "\u8FD9\u4E00\u5904\u8981\u6539\u4EC0\u4E48",
           noteSend: "\u52A0\u5165\u6807\u6CE8",
@@ -2466,12 +2467,13 @@ ${LAYER_CSS}
           devtools: "\u5F00\u53D1\u8005\u5DE5\u5177",
           devtoolsConsole: "Console",
           devtoolsNetwork: "Network",
-          devtoolsEmpty: "\u6682\u65E0\u6570\u636E\uFF0C\u64CD\u4F5C\u9875\u9762\u540E\u5237\u65B0",
+          devtoolsEmpty: "\u8FD8\u6CA1\u6709\u8BB0\u5F55",
           devtoolsClear: "\u6E05\u7A7A",
           devtoolsClose: "\u5173\u95ED",
           devtoolsFailedOnly: "\u4EC5\u5931\u8D25",
           devtoolsFailedOnlyHint: "\u53EA\u663E\u793A\u5931\u8D25\u6216 HTTP \u72B6\u6001 \u2265 400 \u7684\u8BF7\u6C42",
-          devtoolsSearch: "\u641C\u7D22 URL\u3001\u7C7B\u578B\u3001\u72B6\u6001\u6216\u65B9\u6CD5",
+          devtoolsSearch: "\u641C\u7D22\u7F51\u5740\u3001\u7C7B\u578B\u3001\u72B6\u6001\u6216\u65B9\u6CD5",
+          devtoolsSearchConsole: "\u641C\u7D22\u7EA7\u522B\u6216\u6D88\u606F",
           devtoolsSearchElements: "\u641C\u7D22\u6807\u7B7E\u3001ID \u6216 class",
           devtoolsNodes: "\u8282\u70B9",
           devtoolsElements: "\u5143\u7D20",
@@ -2489,15 +2491,15 @@ ${LAYER_CSS}
           devtoolsPayload: "Payload",
           devtoolsResponse: "Response",
           devtoolsGeneral: "\u5E38\u89C4",
-          devtoolsRequestHeaders: "\u8BF7\u6C42 Headers",
-          devtoolsResponseHeaders: "\u54CD\u5E94 Headers",
+          devtoolsRequestHeaders: "\u8BF7\u6C42\u5934",
+          devtoolsResponseHeaders: "\u54CD\u5E94\u5934",
           devtoolsRequestUrl: "\u8BF7\u6C42 URL",
           devtoolsMethod: "\u65B9\u6CD5",
           devtoolsStatus: "\u72B6\u6001",
           devtoolsType: "\u7C7B\u578B",
           devtoolsMimeType: "MIME \u7C7B\u578B",
           devtoolsRemoteAddress: "\u8FDC\u7A0B\u5730\u5740",
-          devtoolsNoHeaders: "\u6CA1\u6709\u8BB0\u5F55\u5230 Headers",
+          devtoolsNoHeaders: "\u6CA1\u6709\u8BB0\u5F55\u5230\u8BF7\u6C42\u5934\u6216\u54CD\u5E94\u5934",
           devtoolsQuery: "\u67E5\u8BE2\u53C2\u6570",
           devtoolsRequestPayload: "\u8BF7\u6C42\u4F53",
           devtoolsNoPayload: "\u65E0\u8BF7\u6C42\u4F53",
@@ -2508,12 +2510,29 @@ ${LAYER_CSS}
           devtoolsDetailError: "\u8BF7\u6C42\u8BE6\u60C5\u52A0\u8F7D\u5931\u8D25",
           devtoolsDetailClose: "\u5173\u95ED\u8BF7\u6C42\u8BE6\u60C5",
           devtoolsProtocol: "\u534F\u8BAE",
+          devtoolsUnsupported: "\u4E0D\u652F\u6301",
+          devtoolsElementsTab: "Elements",
+          devtoolsAnonymous: "(\u533F\u540D)",
           devtoolsDisableCache: "\u7981\u7528\u7F13\u5B58",
           devtoolsCacheUnsupported: "\u5F15\u64CE\u6682\u4E0D\u652F\u6301\u7981\u7528\u7F13\u5B58\uFF1A\u5F53\u524D Kitesurf \u7684 Network.setCacheDisabled \u662F\u7A7A\u5B9E\u73B0\uFF08no-op\uFF09\uFF0C\u4E0D\u4F1A\u6539\u53D8\u7F13\u5B58\u884C\u4E3A",
           devtoolsSizeHint: "\u54CD\u5E94\u4F53\u4F20\u8F93\u5927\u5C0F\uFF08encodedDataLength\uFF09",
           devtoolsResize: "\u62D6\u52A8\u8C03\u6574\u9AD8\u5EA6",
           devtoolsCollapse: "\u6298\u53E0",
           devtoolsExpand: "\u5C55\u5F00",
+          colTag: "\u6807\u7B7E",
+          colElement: "\u5143\u7D20",
+          colChildren: "\u5B50\u8282\u70B9",
+          colTime: "\u65F6\u95F4",
+          colLevel: "\u7EA7\u522B",
+          colMessage: "\u6D88\u606F",
+          colSource: "\u6765\u6E90",
+          colMethod: "\u65B9\u6CD5",
+          colStatus: "\u72B6\u6001",
+          colType: "\u7C7B\u578B",
+          colUrl: "\u5730\u5740",
+          colSize: "\u5927\u5C0F",
+          colDuration: "\u8017\u65F6",
+          colWaterfall: "\u7011\u5E03",
           hitlAgent: "Agent \u6B63\u5728\u63A7\u5236",
           hitlHeld: "\u4EBA\u5DE5\u63A5\u7BA1\u4E2D",
           hitlTakeover: "\u63A5\u7BA1",
@@ -2526,6 +2545,14 @@ ${LAYER_CSS}
           envContainer: "\u5BB9\u5668",
           envPorts: "\u7AEF\u53E3",
           envInstance: "\u5B9E\u4F8B",
+          envUnknown: "\u672A\u77E5",
+          envBad: "\u5F02\u5E38",
+          envOk: "OK",
+          portHeld: "\u672C\u63D2\u4EF6\u5BB9\u5668",
+          portFree: "\u7A7A\u95F2",
+          planePage: "\u9875\u9762",
+          planeDom: "DOM",
+          planeBridge: "\u6865",
           prepareEnv: "\u4E00\u952E\u51C6\u5907\u73AF\u5883",
           preparingEnv: "\u6B63\u5728\u51C6\u5907\u2026",
           prepareDone: "\u73AF\u5883\u5DF2\u5C31\u7EEA",
@@ -2593,18 +2620,41 @@ ${LAYER_CSS}
           viewportPhone: "\u624B\u673A 390",
           saved: "\u8BBE\u7F6E\u5DF2\u4FDD\u5B58",
           emptyTitle: "\u5F00\u59CB\u6D4F\u89C8",
-          emptyBody: "\u70B9\u5DE6\u4E0A\u89D2\u56FE\u6807\u5C55\u5F00\u6807\u7B7E\u9875\u680F\uFF0C\u8F93\u5165\u7F51\u5740\uFF0CKitesurf \u4F1A\u5728\u5BB9\u5668\u91CC\u6253\u5F00\u5B83\uFF1B\u968F\u540E\u70B9\u300C\u6807\u6CE8\u300D\u5728\u753B\u9762\u4E0A\u70B9\u9009\u5143\u7D20\u3002",
+          emptyBody: "\u5C55\u5F00\u6807\u7B7E\u9875\u680F\u5E76\u8F93\u5165\u7F51\u5740\u3002Kitesurf \u4F1A\u5728\u5BB9\u5668\u91CC\u6253\u5F00\u9875\u9762\uFF1B\u518D\u70B9\u300C\u6807\u6CE8\u300D\uFF0C\u5728\u753B\u9762\u4E0A\u70B9\u9009\u5143\u7D20\u3002",
           emptyTry: "\u8BD5\u8BD5 example.com",
           errorTitle: "\u5F15\u64CE\u6CA1\u6709\u5E94\u7B54",
           errorBody: "\u5BB9\u5668\u91CC\u7684 Kitesurf \u6CA1\u6709\u54CD\u5E94\u3002\u5148\u542F\u52A8\u5F15\u64CE\uFF1B\u82E5\u5DF2\u542F\u52A8\uFF0C\u6253\u5F00\u8BBE\u7F6E\u786E\u8BA4\u5F15\u64CE\u5730\u5740\u3002",
           retry: "\u91CD\u8BD5",
           resumeEngine: "\u6062\u590D\u5F15\u64CE",
-          diagnose: "\u8BCA\u65AD\u4FE1\u606F"
+          diagnose: "\u8BCA\u65AD\u4FE1\u606F",
+          injectedChars: "\u5DF2\u6CE8\u5165 {n} \u4E2A\u5B57\u7B26",
+          injectedCharsRef: "\u5DF2\u6CE8\u5165 {n} \u4E2A\u5B57\u7B26\uFF08ref #{id}\uFF09",
+          contractMismatch: "\u89C2\u5BDF\u5408\u540C\u4E0D\u5339\u914D",
+          historyTitle: "\u6D4F\u89C8\u5386\u53F2",
+          historyCount: "{n} \u6761",
+          historySearch: "\u641C\u7D22\u5730\u5740\u2026",
+          historyClear: "\u6E05\u7A7A",
+          historyEmpty: "\u8FD8\u6CA1\u6709\u6D4F\u89C8\u8BB0\u5F55",
+          historyDelete: "\u5220\u9664",
+          historyTimes: " \xB7 {n} \u6B21",
+          navCloseTab: "\u5173\u95ED\u6807\u7B7E\u9875",
+          nativeHtmlTitle: "\u7528\u9875\u9762\u81EA\u5DF1\u7684 HTML \u6E32\u67D3",
+          devtoolsToggleTitle: "\u5F00\u53D1\u8005\u5DE5\u5177\uFF08\u2318E\uFF0C\u7136\u540E\u6309 2\uFF09",
+          viewportTitle: "\u9875\u9762\u89C6\u53E3",
+          viewportFit: "\u81EA\u9002\u5E94",
+          viewportCustom: "\u81EA\u5B9A\u4E49\u2026",
+          viewportWidthPh: "\u5BBD",
+          viewportHeightPh: "\u9AD8",
+          modeHtml: "HTML \u539F\u751F\u6E32\u67D3",
+          modeShot: "\u622A\u56FE\u56DE\u9000",
+          modeEmpty: "\u672A\u6253\u5F00\u9875\u9762",
+          geoInvalid: "\u7ECF\u7EAC\u5EA6\u9700\u8981\u540C\u65F6\u586B\u5199\uFF0C\u4E14\u7EAC\u5EA6 -90..90\u3001\u7ECF\u5EA6 -180..180"
         },
         en: {
           typeLabel: "Kitesurf",
-          typeDescription: "Browse pages in the container and pick elements on the picture",
+          typeDescription: "Browse pages in the container, pick elements, and inspect them with DevTools",
           addressPlaceholder: "Enter an HTTP(S) address",
+          addressShort: "URL",
           addressAria: "Page URL",
           back: "Back",
           forward: "Forward",
@@ -2612,7 +2662,7 @@ ${LAYER_CSS}
           go: "Go",
           annotate: "Annotate",
           annotateTitle: "Annotate. Hold Shift and drag to draw an arrow",
-          history: "Recent addresses",
+          history: "Browsing history",
           settings: "Settings",
           navToggleLabel: "Tabs",
           navOpen: "Tab rail",
@@ -2620,7 +2670,7 @@ ${LAYER_CSS}
           navClose: "Hide tab rail",
           navCloseTitle: "Hide tab rail (Esc)",
           navTabs: "Tabs",
-          navEmpty: "No browsing yet \u2014 enter an address",
+          navEmpty: "No pages open yet",
           noteAria: "Note for the composer",
           notePlaceholder: "What should change here",
           noteSend: "Add note",
@@ -2631,13 +2681,14 @@ ${LAYER_CSS}
           devtools: "DevTools",
           devtoolsConsole: "Console",
           devtoolsNetwork: "Network",
-          devtoolsEmpty: "No entries yet \u2014 interact with the page",
+          devtoolsEmpty: "No entries yet",
           devtoolsClear: "Clear",
           devtoolsClose: "Close",
           devtoolsFailedOnly: "Failed only",
           devtoolsFailedOnlyHint: "Show only failed requests or HTTP status \u2265 400",
-          devtoolsSearch: "Filter URL, type, status or method",
-          devtoolsSearchElements: "Filter tag, ID or class",
+          devtoolsSearch: "Filter URL, type, status, or method",
+          devtoolsSearchConsole: "Filter level or message",
+          devtoolsSearchElements: "Filter tag, ID, or class",
           devtoolsNodes: "nodes",
           devtoolsElements: "elements",
           devtoolsDepth: "depth",
@@ -2673,12 +2724,29 @@ ${LAYER_CSS}
           devtoolsDetailError: "Could not load request details",
           devtoolsDetailClose: "Close request details",
           devtoolsProtocol: "Protocol",
+          devtoolsUnsupported: "Unsupported",
+          devtoolsElementsTab: "Elements",
+          devtoolsAnonymous: "(anonymous)",
           devtoolsDisableCache: "Disable cache",
           devtoolsCacheUnsupported: "Cache disabling is not supported by this engine: the current Kitesurf build implements Network.setCacheDisabled as a no-op.",
           devtoolsSizeHint: "Response body transfer size (encodedDataLength)",
           devtoolsResize: "Drag to resize",
           devtoolsCollapse: "Collapse",
           devtoolsExpand: "Expand",
+          colTag: "Tag",
+          colElement: "Element",
+          colChildren: "Children",
+          colTime: "Time",
+          colLevel: "Level",
+          colMessage: "Message",
+          colSource: "Source",
+          colMethod: "Method",
+          colStatus: "Status",
+          colType: "Type",
+          colUrl: "URL",
+          colSize: "Size",
+          colDuration: "Time",
+          colWaterfall: "Waterfall",
           hitlAgent: "Agent is controlling",
           hitlHeld: "Human override",
           hitlTakeover: "Take over",
@@ -2691,6 +2759,14 @@ ${LAYER_CSS}
           envContainer: "Container",
           envPorts: "Ports",
           envInstance: "Instance",
+          envUnknown: "Unknown",
+          envBad: "Unhealthy",
+          envOk: "OK",
+          portHeld: "This plugin\u2019s container",
+          portFree: "Free",
+          planePage: "Page",
+          planeDom: "DOM",
+          planeBridge: "Bridge",
           prepareEnv: "Prepare environment",
           preparingEnv: "Preparing\u2026",
           prepareDone: "Environment ready",
@@ -2706,7 +2782,7 @@ ${LAYER_CSS}
           logsDesc: "Kitesurf output from inside the container, last 300 lines.",
           logsLoading: "Reading\u2026",
           logsEmpty: "(no output)",
-          legacyHost: "older host",
+          legacyHost: "Older host",
           legacyHostTitle: "The host plugin predates this pane and reports fewer fields; browsing still works",
           noteEmpty: "Insert without typing",
           opening: "Opening page",
@@ -2758,13 +2834,35 @@ ${LAYER_CSS}
           viewportPhone: "Phone 390",
           saved: "Settings saved",
           emptyTitle: "Start browsing",
-          emptyBody: "Open the tab rail (top-left icon), type a URL \u2014 Kitesurf opens it inside the container. Then hit Annotate and pick elements on the page.",
+          emptyBody: "Open the tab rail and enter a URL. Kitesurf opens the page in the container. Then choose Annotate and pick elements on the page.",
           emptyTry: "Try example.com",
           errorTitle: "Engine is not answering",
           errorBody: "Kitesurf inside the container is not responding. Start the engine; if it is already started, open Settings and check the engine address.",
           retry: "Retry",
           resumeEngine: "Resume engine",
-          diagnose: "Diagnostics"
+          diagnose: "Diagnostics",
+          injectedChars: "Injected {n} characters",
+          injectedCharsRef: "Injected {n} characters (ref #{id})",
+          contractMismatch: "Observation contract does not match",
+          historyTitle: "Browsing history",
+          historyCount: "{n}",
+          historySearch: "Search addresses\u2026",
+          historyClear: "Clear",
+          historyEmpty: "No browsing history yet",
+          historyDelete: "Delete",
+          historyTimes: " \xB7 {n}\xD7",
+          navCloseTab: "Close tab",
+          nativeHtmlTitle: "Render the page\u2019s own HTML",
+          devtoolsToggleTitle: "DevTools (\u2318E, then 2)",
+          viewportTitle: "Page viewport",
+          viewportFit: "Fit",
+          viewportCustom: "Custom\u2026",
+          viewportWidthPh: "W",
+          viewportHeightPh: "H",
+          modeHtml: "Native HTML",
+          modeShot: "Screenshot fallback",
+          modeEmpty: "No page open",
+          geoInvalid: "Enter both latitude (\u221290..90) and longitude (\u2212180..180)"
         }
       };
     }
@@ -3002,9 +3100,18 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
   var KIND = "kitesurf";
   var OWN_ID = "nano-kitesurf";
   var MAX_PINS = 8;
-  var PLANE_LABEL = { container: "\u5BB9\u5668", engine: "\u5F15\u64CE", page: "\u9875\u9762", dom: "DOM", bridge: "\u6865" };
   var LAMP_PLANES = ["container", "engine", "page", "dom", "bridge"];
-  function planeRows(snap) {
+  function fill(text, values) {
+    return String(text).replace(/\{(\w+)\}/g, (_, key) => String(values[key] ?? ""));
+  }
+  function planeRows(snap, copy) {
+    const labels = {
+      container: copy?.envContainer,
+      engine: copy?.envEngine,
+      page: copy?.planePage,
+      dom: copy?.planeDom,
+      bridge: copy?.planeBridge
+    };
     const planes = snap?.planes;
     if (!planes || typeof planes !== "object") return [];
     return LAMP_PLANES.filter((id) => planes[id]).map((id) => {
@@ -3012,7 +3119,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       const skipped = row.state === "skipped" || row.skipped === true;
       return {
         plane: id,
-        label: PLANE_LABEL[id] || id,
+        label: labels[id] || id,
         ok: row.ok === true,
         skipped,
         detail: row.detail || row.url || row.state || ""
@@ -3287,7 +3394,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
   .nks-tool{width:26px;height:26px}
   .nks-address{padding:0 4px 0 7px;font-size:11px}
   .nks-address::placeholder{color:transparent}
-  .nks-address-box::after{content:"\u7F51\u5740";position:absolute;left:8px;top:6px;font:var(--dsw-font-xxs-12);color:var(--dsw-alias-label-tertiary);pointer-events:none}
+  .nks-address-box::after{content:attr(data-address-short);position:absolute;left:8px;top:6px;font:var(--dsw-font-xxs-12);color:var(--dsw-alias-label-tertiary);pointer-events:none}
   .nks-address-box:focus-within::after,.nks-address-box[data-dirty="true"]::after{content:none}
   .nks-go{display:none}
   .nks-pins{gap:2px}
@@ -3697,7 +3804,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
             options: [
               { value: "console", label: copy.devtoolsConsole },
               { value: "network", label: copy.devtoolsNetwork },
-              { value: "elements", label: "Elements" }
+              { value: "elements", label: copy.devtoolsElementsTab }
             ],
             onChange: (next) => {
               setTab(next);
@@ -3725,8 +3832,8 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           "data-nks-dt-search": "1",
           type: "search",
           value: query,
-          placeholder: tab === "elements" ? copy.devtoolsSearchElements : copy.devtoolsSearch,
-          "aria-label": tab === "elements" ? copy.devtoolsSearchElements : copy.devtoolsSearch,
+          placeholder: tab === "elements" ? copy.devtoolsSearchElements : tab === "console" ? copy.devtoolsSearchConsole : copy.devtoolsSearch,
+          "aria-label": tab === "elements" ? copy.devtoolsSearchElements : tab === "console" ? copy.devtoolsSearchConsole : copy.devtoolsSearch,
           onChange: (event) => setQuery(event.target.value)
         }),
         tab === "console" ? h7(
@@ -3770,7 +3877,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
             h7(primitives2.Switch, { checked: false, disabled: true, onChange: () => {
             }, label: copy.devtoolsDisableCache }),
             h7("span", null, copy.devtoolsDisableCache),
-            h7("b", null, "\u4E0D\u652F\u6301")
+            h7("b", null, copy.devtoolsUnsupported)
           )
         ) : null,
         tab === "elements" ? h7("span", {
@@ -3798,35 +3905,35 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         styles.matched.slice(0, 6).map((rule, i) => h7(
           "div",
           { className: "nks-dt-rule", key: `r${i}` },
-          h7("b", null, rule.selector || "(anonymous)"),
+          h7("b", null, rule.selector || copy.devtoolsAnonymous),
           h7("span", null, (rule.properties || []).slice(0, 6).join("; "))
         ))
       ) : null,
       tab === "elements" ? h7(
         "div",
         { className: "nks-dt-cols" },
-        h7("span", { className: "nks-dt-lv" }, "Tag"),
-        h7("span", { className: "nks-dt-msg", style: { textAlign: "left" } }, "Element"),
-        h7("span", { className: "nks-dt-dur" }, "Children")
+        h7("span", { className: "nks-dt-lv" }, copy.colTag),
+        h7("span", { className: "nks-dt-msg", style: { textAlign: "left" } }, copy.colElement),
+        h7("span", { className: "nks-dt-dur" }, copy.colChildren)
       ) : null,
       tab === "console" ? h7(
         "div",
         { className: "nks-dt-cols" },
-        h7("span", { className: "nks-dt-time" }, "Time"),
-        h7("span", { className: "nks-dt-lv" }, "Level"),
-        h7("span", { className: "nks-dt-msg", style: { textAlign: "left" } }, "Message"),
-        h7("span", { className: "nks-dt-src" }, "Source")
+        h7("span", { className: "nks-dt-time" }, copy.colTime),
+        h7("span", { className: "nks-dt-lv" }, copy.colLevel),
+        h7("span", { className: "nks-dt-msg", style: { textAlign: "left" } }, copy.colMessage),
+        h7("span", { className: "nks-dt-src" }, copy.colSource)
       ) : null,
       tab === "network" ? h7(
         "div",
         { className: "nks-dt-cols" },
-        h7("span", { className: "nks-dt-lv" }, "Method"),
-        h7("span", { className: "nks-dt-st" }, "Status"),
-        h7("span", { className: "nks-dt-type" }, "Type"),
-        h7("span", { className: "nks-dt-url nks-dt-grow", style: { maxWidth: "none", textAlign: "left" } }, "URL"),
-        h7("span", { className: "nks-dt-size" }, "Size"),
-        h7("span", { className: "nks-dt-dur" }, "Time"),
-        h7("span", { className: "nks-dt-wf", style: { height: "auto" } }, "Waterfall")
+        h7("span", { className: "nks-dt-lv" }, copy.colMethod),
+        h7("span", { className: "nks-dt-st" }, copy.colStatus),
+        h7("span", { className: "nks-dt-type" }, copy.colType),
+        h7("span", { className: "nks-dt-url nks-dt-grow", style: { maxWidth: "none", textAlign: "left" } }, copy.colUrl),
+        h7("span", { className: "nks-dt-size" }, copy.colSize),
+        h7("span", { className: "nks-dt-dur" }, copy.colDuration),
+        h7("span", { className: "nks-dt-wf", style: { height: "auto" } }, copy.colWaterfall)
       ) : null,
       h7(
         "div",
@@ -4600,7 +4707,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         setComment("");
         setComposing(false);
         setPick(null);
-        showToast(refId ? `${note.length} \u5B57\u7B26\u5DF2\u6CE8\u5165\uFF08ref #${refId}\uFF09` : `${note.length} \u5B57\u7B26\u5DF2\u6CE8\u5165`);
+        showToast(refId ? fill(copy.injectedCharsRef, { n: note.length, id: refId }) : fill(copy.injectedChars, { n: note.length }));
       } catch (cause) {
         showError(cause);
       }
@@ -4670,7 +4777,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         try {
           const response = await post(RECOVER, {});
           await refreshStatus();
-          if (response?.v != null && response.v !== 1) showToast("\u89C2\u5BDF\u5408\u540C\u4E0D\u5339\u914D");
+          if (response?.v != null && response.v !== 1) showToast(copy.contractMismatch);
           else if (response?.ready === true) await reloadShot(0, { keepPick: true });
           else showToast(copy.prepareNotReady || copy.prepareFailed);
         } catch (cause) {
@@ -4827,7 +4934,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           const ports = result.ports ? result : await fetch(PORTS).then((r) => r.json()).catch(() => null);
           setSnap(ports);
           if (Array.isArray(result.summary)) setDiag(result);
-          const failed = planeRows(result).filter((row) => !row.ok && !row.skipped);
+          const failed = planeRows(result, copy).filter((row) => !row.ok && !row.skipped);
           if (result.planes && Number.isFinite(result.v) && result.v !== 1) setNote(copy.contractNewer);
           else if (!result.ok) setNote(`${copy.prepareFailed}: ${result.errorId || result.error || `HTTP ${response.status}`}`);
           else if (result.ready !== true) setNote(`${copy.prepareNotReady}: ${failed.map((row) => row.plane || row.label).join(" / ")}`);
@@ -4886,10 +4993,10 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       }
       const engine = snap?.effective?.httpBase || "\u2014";
       const container = snap?.container?.state || "\u2014";
-      const portRow = snap?.ports?.engine ? `${snap.ports.engine.port} \xB7 ${snap.ports.engine.heldBy === "this-container" ? "\u672C\u63D2\u4EF6\u5BB9\u5668" : "\u7A7A\u95F2"}` : "\u2014";
+      const portRow = snap?.ports?.engine ? `${snap.ports.engine.port} \xB7 ${snap.ports.engine.heldBy === "this-container" ? copy.portHeld : copy.portFree}` : "\u2014";
       const contractMismatch = snap != null && Number.isFinite(snap.v) && snap.v !== 1;
       const legacyHost = snap != null && !Number.isFinite(snap.v);
-      const rows = planeRows(snap);
+      const rows = planeRows(snap, copy);
       const healthy = !contractMismatch && snap?.ready === true;
       return h7(
         "div",
@@ -4901,11 +5008,11 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           h7(
             "span",
             { className: healthy ? "nks-env-ok" : "nks-env-bad", title: legacyHost ? copy.legacyHostTitle : void 0 },
-            contractMismatch ? copy.contractNewer : healthy ? "\u25CF OK" : "\u25CF \u5F02\u5E38"
+            contractMismatch ? copy.contractNewer : healthy ? `\u25CF ${copy.envOk}` : `\u25CF ${copy.envBad}`
           ),
           legacyHost ? h7("span", { className: "nks-env-legacy", "data-nks-legacy": "1" }, copy.legacyHost) : null
         ),
-        h7("div", { className: "nks-env-row" }, h7("b", null, copy.envPlugin), h7("span", null, snap?.buildId || "\u672A\u77E5")),
+        h7("div", { className: "nks-env-row" }, h7("b", null, copy.envPlugin), h7("span", null, snap?.buildId || copy.envUnknown)),
         h7("div", { className: "nks-env-row" }, h7("b", null, copy.envEngine), h7("span", null, engine)),
         h7("div", { className: "nks-env-row" }, h7("b", null, copy.envContainer), h7("span", null, container)),
         snap?.containerName ? h7("div", { className: "nks-env-row" }, h7("b", null, copy.envInstance), h7("span", null, snap.containerName)) : null,
@@ -5126,18 +5233,18 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           h7(
             "div",
             { className: "nks-modal-head" },
-            h7("b", null, "\u6D4F\u89C8\u5386\u53F2"),
-            h7("span", { className: "nks-modal-sub" }, `${rows.length} \u6761`),
-            h7("button", { type: "button", className: "nks-modal-x", onClick: onClose, "aria-label": "\u5173\u95ED" }, "\xD7")
+            h7("b", null, copy.historyTitle),
+            h7("span", { className: "nks-modal-sub" }, fill(copy.historyCount, { n: rows.length })),
+            h7("button", { type: "button", className: "nks-modal-x", onClick: onClose, "aria-label": copy.close }, "\xD7")
           ),
           h7(
             "div",
             { className: "nks-modal-bar" },
-            h7("input", { "data-nks-history-q": "1", placeholder: "\u641C\u7D22\u5730\u5740\u2026", value: q, onChange: async (e) => {
+            h7("input", { "data-nks-history-q": "1", placeholder: copy.historySearch, value: q, onChange: async (e) => {
               setQ(e.target.value);
               await load(e.target.value);
             } }),
-            h7("button", { type: "button", "data-nks-history-clear": "1", disabled: busy2 || !rows.length, onClick: clear }, "\u6E05\u7A7A")
+            h7("button", { type: "button", "data-nks-history-clear": "1", disabled: busy2 || !rows.length, onClick: clear }, copy.historyClear)
           ),
           h7(
             "div",
@@ -5153,10 +5260,10 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
                   openPage(row.url);
                 } },
                 h7("span", { className: "nks-hist-url" }, row.url),
-                h7("span", { className: "nks-hist-meta" }, `${String(row.at).slice(0, 16).replace("T", " ")}${row.count > 1 ? " \xB7 " + row.count + " \u6B21" : ""}`)
+                h7("span", { className: "nks-hist-meta" }, `${String(row.at).slice(0, 16).replace("T", " ")}${row.count > 1 ? fill(copy.historyTimes, { n: row.count }) : ""}`)
               ),
-              h7("button", { type: "button", className: "nks-hist-del", "data-nks-history-del": row.id, onClick: () => del(row.id), "aria-label": "\u5220\u9664" }, "\xD7")
-            )) : h7("div", { className: "nks-modal-empty" }, "\u8FD8\u6CA1\u6709\u6D4F\u89C8\u8BB0\u5F55")
+              h7("button", { type: "button", className: "nks-hist-del", "data-nks-history-del": row.id, onClick: () => del(row.id), "aria-label": copy.historyDelete }, "\xD7")
+            )) : h7("div", { className: "nks-modal-empty" }, copy.historyEmpty)
           )
         )
       );
@@ -5315,7 +5422,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
             const latitude = Number(latText);
             const longitude = Number(lngText);
             if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 || !Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
-              throw Object.assign(new Error("\u7ECF\u7EAC\u5EA6\u9700\u8981\u540C\u65F6\u586B\u5199\uFF0C\u4E14\u7EAC\u5EA6 -90..90\u3001\u7ECF\u5EA6 -180..180"), { status: 400, errorId: "kitesurf.body.json" });
+              throw Object.assign(new Error(copy.geoInvalid), { status: 400, errorId: "kitesurf.body.json" });
             }
             nextGeo = { latitude, longitude };
           }
@@ -5402,7 +5509,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         ),
         h7(
           "span",
-          { className: "nks-address-box", "data-dirty": draftUrl ? "true" : "false", "data-loading": beat ? "true" : "false", "aria-busy": beat ? "true" : "false" },
+          { className: "nks-address-box", "data-address-short": copy.addressShort, "data-dirty": draftUrl ? "true" : "false", "data-loading": beat ? "true" : "false", "aria-busy": beat ? "true" : "false" },
           h7("input", {
             className: "nks-address",
             "aria-label": copy.addressAria,
@@ -5499,7 +5606,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
             h7("span", {
               className: "nks-nav-tab-x",
               role: "button",
-              "aria-label": "\u5173\u95ED\u6807\u7B7E\u9875",
+              "aria-label": copy.navCloseTab,
               "data-nks-nav-tab-del": row.url,
               onClick: (event) => {
                 event.stopPropagation();
@@ -5512,17 +5619,17 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       h7(
         "div",
         { className: "nks-status", "data-nks-status": "1" },
-        h7("button", { type: "button", "data-nks-native-toggle": "1", "aria-pressed": nativeHtml ? "true" : "false", title: "\u539F\u751F HTML \u6E32\u67D3", onClick: () => {
+        h7("button", { type: "button", "data-nks-native-toggle": "1", "aria-pressed": nativeHtml ? "true" : "false", title: copy.nativeHtmlTitle, onClick: () => {
           setNativeHtml((v) => !v);
           if (!nativeHtml) loadDom().catch(() => {
           });
         } }, "HTML"),
-        h7("button", { type: "button", "data-nks-devtools-toggle": "1", "aria-pressed": devtoolsOpen ? "true" : "false", title: "\u5F00\u53D1\u8005\u5DE5\u5177\uFF08\u2318E \u7136\u540E\u6309 2\uFF09", onClick: () => setDevtoolsOpen((v) => !v) }, copy.devtools),
+        h7("button", { type: "button", "data-nks-devtools-toggle": "1", "aria-pressed": devtoolsOpen ? "true" : "false", title: copy.devtoolsToggleTitle, onClick: () => setDevtoolsOpen((v) => !v) }, copy.devtools),
         h7("button", {
           type: "button",
           "data-nks-vp": "1",
           className: "nks-chip",
-          title: "\u9875\u9762\u89C6\u53E3\uFF08\u62DF\u771F\uFF09",
+          title: copy.viewportTitle,
           onClick: (event) => {
             const rect = event.currentTarget.getBoundingClientRect();
             const apply2 = async (next) => {
@@ -5541,19 +5648,19 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
               direction: "up",
               maxHeight: 6 * 28 + 8,
               items: [
-                { id: "fit", label: "\u81EA\u9002\u5E94", run: () => apply2(null) },
+                { id: "fit", label: copy.viewportFit, run: () => apply2(null) },
                 { id: "1280", label: "1280\xD7900", run: () => apply2({ width: 1280, height: 900 }) },
                 { id: "768", label: "768\xD7900", run: () => apply2({ width: 768, height: 900 }) },
                 { id: "390", label: "390\xD7844", run: () => apply2({ width: 390, height: 844 }) },
-                { id: "custom", label: "\u81EA\u5B9A\u4E49\u2026", run: () => setVpCustom(true) }
+                { id: "custom", label: copy.viewportCustom, run: () => setVpCustom(true) }
               ]
             });
           }
-        }, vp ? `${vp.width}\xD7${vp.height}` : "\u81EA\u9002\u5E94"),
+        }, vp ? `${vp.width}\xD7${vp.height}` : copy.viewportFit),
         vpCustom ? h7("input", {
           "data-nks-vp-w": "1",
           type: "number",
-          placeholder: "\u5BBD",
+          placeholder: copy.viewportWidthPh,
           className: "nks-vp-input",
           onKeyDown: async (e) => {
             if (e.key !== "Enter") return;
@@ -5572,7 +5679,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         vpCustom ? h7("input", {
           "data-nks-vp-h": "1",
           type: "number",
-          placeholder: "\u9AD8",
+          placeholder: copy.viewportHeightPh,
           className: "nks-vp-input",
           onKeyDown: async (e) => {
             if (e.key !== "Enter") return;
@@ -5593,7 +5700,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         h7("span", {
           "data-nks-mode": nativeHtml && domDoc ? "html" : hasPage ? "img" : "empty",
           style: { color: nativeHtml && domDoc ? "var(--dsw-alias-state-success-primary)" : hasPage ? "var(--dsw-alias-state-warn-primary)" : "var(--dsw-alias-label-tertiary)" }
-        }, nativeHtml && domDoc ? "HTML \u539F\u751F\u6E32\u67D3" : hasPage ? "IMG \u622A\u56FE\u56DE\u9000" : "\u672A\u6253\u5F00\u9875\u9762"),
+        }, nativeHtml && domDoc ? copy.modeHtml : hasPage ? copy.modeShot : copy.modeEmpty),
         h7("span", { style: { flex: "auto" } })
       ),
       h7(HistoryDialog, { open: historyOpen, onClose: () => setHistoryOpen(false) }),

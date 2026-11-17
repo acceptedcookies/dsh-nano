@@ -34,11 +34,21 @@ const KIND = 'kitesurf'
 const OWN_ID = 'nano-kitesurf'
 const CAPTURE_HEIGHT = 800
 const MAX_PINS = 8
-const PLANE_LABEL = { container: '容器', engine: '引擎', page: '页面', dom: 'DOM', bridge: '桥' }
 const LAMP_PLANES = ['container', 'engine', 'page', 'dom', 'bridge']
 
-/** Rows for the lamp. Identity is planes[id], not a second boolean and not the Chinese label. */
-function planeRows(snap) {
+function fill(text, values) {
+  return String(text).replace(/\{(\w+)\}/g, (_, key) => String(values[key] ?? ''))
+}
+
+/** Rows for the lamp. Identity is planes[id], not a second boolean and not a language-specific label. */
+function planeRows(snap, copy) {
+  const labels = {
+    container: copy?.envContainer,
+    engine: copy?.envEngine,
+    page: copy?.planePage,
+    dom: copy?.planeDom,
+    bridge: copy?.planeBridge,
+  }
   const planes = snap?.planes
   if (!planes || typeof planes !== 'object') return []
   return LAMP_PLANES.filter((id) => planes[id]).map((id) => {
@@ -46,7 +56,7 @@ function planeRows(snap) {
     const skipped = row.state === 'skipped' || row.skipped === true
     return {
       plane: id,
-      label: PLANE_LABEL[id] || id,
+      label: labels[id] || id,
       ok: row.ok === true,
       skipped,
       detail: row.detail || row.url || row.state || '',
@@ -322,7 +332,7 @@ const STYLE = `
   .nks-tool{width:26px;height:26px}
   .nks-address{padding:0 4px 0 7px;font-size:11px}
   .nks-address::placeholder{color:transparent}
-  .nks-address-box::after{content:"网址";position:absolute;left:8px;top:6px;font:var(--dsw-font-xxs-12);color:var(--dsw-alias-label-tertiary);pointer-events:none}
+  .nks-address-box::after{content:attr(data-address-short);position:absolute;left:8px;top:6px;font:var(--dsw-font-xxs-12);color:var(--dsw-alias-label-tertiary);pointer-events:none}
   .nks-address-box:focus-within::after,.nks-address-box[data-dirty="true"]::after{content:none}
   .nks-go{display:none}
   .nks-pins{gap:2px}
@@ -722,7 +732,7 @@ function DevTools({ copy, open, onClose }) {
           options: [
             { value: 'console', label: copy.devtoolsConsole },
             { value: 'network', label: copy.devtoolsNetwork },
-            { value: 'elements', label: 'Elements' },
+            { value: 'elements', label: copy.devtoolsElementsTab },
           ],
           onChange: (next) => { setTab(next); if (next !== 'elements') setStyles(null); if (next !== 'network') setNetDetail(null) },
         })),
@@ -742,8 +752,8 @@ function DevTools({ copy, open, onClose }) {
         'data-nks-dt-search': '1',
         type: 'search',
         value: query,
-        placeholder: tab === 'elements' ? copy.devtoolsSearchElements : copy.devtoolsSearch,
-        'aria-label': tab === 'elements' ? copy.devtoolsSearchElements : copy.devtoolsSearch,
+        placeholder: tab === 'elements' ? copy.devtoolsSearchElements : tab === 'console' ? copy.devtoolsSearchConsole : copy.devtoolsSearch,
+        'aria-label': tab === 'elements' ? copy.devtoolsSearchElements : tab === 'console' ? copy.devtoolsSearchConsole : copy.devtoolsSearch,
         onChange: (event) => setQuery(event.target.value),
       }),
       tab === 'console' ? h(primitives.Tooltip, { label: copy.devtoolsFilterLevel },
@@ -766,7 +776,7 @@ function DevTools({ copy, open, onClose }) {
         h('span', { className: 'nks-dt-cache', 'data-nks-dt-cache': '1', 'aria-disabled': 'true' },
           h(primitives.Switch, { checked: false, disabled: true, onChange: () => {}, label: copy.devtoolsDisableCache }),
           h('span', null, copy.devtoolsDisableCache),
-          h('b', null, '不支持'))) : null,
+          h('b', null, copy.devtoolsUnsupported))) : null,
       tab === 'elements' ? h('span', {
         className: 'nks-dt-stats', 'data-nks-dt-stats': '1', title: copy.devtoolsDomStatsHint,
       }, `${copy.devtoolsNodes} ${rows.length} · ${copy.devtoolsElements} ${elementCount} · ${copy.devtoolsDepth} ${maxDepth}`) : null),
@@ -779,25 +789,25 @@ function DevTools({ copy, open, onClose }) {
           onClick: () => setStyles(null),
         }, '×')),
       styles.matched.slice(0, 6).map((rule, i) => h('div', { className: 'nks-dt-rule', key: `r${i}` },
-        h('b', null, rule.selector || '(anonymous)'),
+        h('b', null, rule.selector || copy.devtoolsAnonymous),
         h('span', null, (rule.properties || []).slice(0, 6).join('; '))))) : null,
     tab === 'elements' ? h('div', { className: 'nks-dt-cols' },
-      h('span', { className: 'nks-dt-lv' }, 'Tag'),
-      h('span', { className: 'nks-dt-msg', style: { textAlign: 'left' } }, 'Element'),
-      h('span', { className: 'nks-dt-dur' }, 'Children')) : null,
+      h('span', { className: 'nks-dt-lv' }, copy.colTag),
+      h('span', { className: 'nks-dt-msg', style: { textAlign: 'left' } }, copy.colElement),
+      h('span', { className: 'nks-dt-dur' }, copy.colChildren)) : null,
     tab === 'console' ? h('div', { className: 'nks-dt-cols' },
-      h('span', { className: 'nks-dt-time' }, 'Time'),
-      h('span', { className: 'nks-dt-lv' }, 'Level'),
-      h('span', { className: 'nks-dt-msg', style: { textAlign: 'left' } }, 'Message'),
-      h('span', { className: 'nks-dt-src' }, 'Source')) : null,
+      h('span', { className: 'nks-dt-time' }, copy.colTime),
+      h('span', { className: 'nks-dt-lv' }, copy.colLevel),
+      h('span', { className: 'nks-dt-msg', style: { textAlign: 'left' } }, copy.colMessage),
+      h('span', { className: 'nks-dt-src' }, copy.colSource)) : null,
     tab === 'network' ? h('div', { className: 'nks-dt-cols' },
-      h('span', { className: 'nks-dt-lv' }, 'Method'),
-      h('span', { className: 'nks-dt-st' }, 'Status'),
-      h('span', { className: 'nks-dt-type' }, 'Type'),
-      h('span', { className: 'nks-dt-url nks-dt-grow', style: { maxWidth: 'none', textAlign: 'left' } }, 'URL'),
-      h('span', { className: 'nks-dt-size' }, 'Size'),
-      h('span', { className: 'nks-dt-dur' }, 'Time'),
-      h('span', { className: 'nks-dt-wf', style: { height: 'auto' } }, 'Waterfall')) : null,
+      h('span', { className: 'nks-dt-lv' }, copy.colMethod),
+      h('span', { className: 'nks-dt-st' }, copy.colStatus),
+      h('span', { className: 'nks-dt-type' }, copy.colType),
+      h('span', { className: 'nks-dt-url nks-dt-grow', style: { maxWidth: 'none', textAlign: 'left' } }, copy.colUrl),
+      h('span', { className: 'nks-dt-size' }, copy.colSize),
+      h('span', { className: 'nks-dt-dur' }, copy.colDuration),
+      h('span', { className: 'nks-dt-wf', style: { height: 'auto' } }, copy.colWaterfall)) : null,
     h('div', { className: 'nks-dt-body', 'data-nks-dt-body': '1' },
       visibleRows.length === 0 ? h('div', { className: 'nks-dt-empty' }, rows.length && tab === 'console' ? copy.devtoolsNoMatchConsole : rows.length && tab === 'network' ? copy.devtoolsNoMatch : copy.devtoolsEmpty) : null,
       visibleRows.map((row, index) => tab === 'elements'
@@ -1652,7 +1662,7 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
       setComment('')
       setComposing(false)
       setPick(null)
-      showToast(refId ? `${note.length} 字符已注入（ref #${refId}）` : `${note.length} 字符已注入`)
+      showToast(refId ? fill(copy.injectedCharsRef, { n: note.length, id: refId }) : fill(copy.injectedChars, { n: note.length }))
     } catch (cause) {
       showError(cause)
     }
@@ -1729,7 +1739,7 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
       try {
         const response = await post(RECOVER, {})
         await refreshStatus()
-        if (response?.v != null && response.v !== 1) showToast('观察合同不匹配')
+        if (response?.v != null && response.v !== 1) showToast(copy.contractMismatch)
         else if (response?.ready === true) await reloadShot(0, { keepPick: true })
         else showToast(copy.prepareNotReady || copy.prepareFailed)
       } catch (cause) {
@@ -1904,7 +1914,7 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
         setSnap(ports)
         if (Array.isArray(result.summary)) setDiag(result)
         // Never say "ready" when a plane failed — name the failing plane.
-        const failed = planeRows(result).filter((row) => !row.ok && !row.skipped)
+        const failed = planeRows(result, copy).filter((row) => !row.ok && !row.skipped)
         if (result.planes && Number.isFinite(result.v) && result.v !== 1) setNote(copy.contractNewer)
         else if (!result.ok) setNote(`${copy.prepareFailed}: ${result.errorId || result.error || `HTTP ${response.status}`}`)
         else if (result.ready !== true) setNote(`${copy.prepareNotReady}: ${failed.map((row) => row.plane || row.label).join(' / ')}`)
@@ -1964,7 +1974,7 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
     const engine = snap?.effective?.httpBase || '—'
     const container = snap?.container?.state || '—'
     const portRow = snap?.ports?.engine
-      ? `${snap.ports.engine.port} · ${snap.ports.engine.heldBy === 'this-container' ? '本插件容器' : '空闲'}`
+      ? `${snap.ports.engine.port} · ${snap.ports.engine.heldBy === 'this-container' ? copy.portHeld : copy.portFree}`
       : '—'
     // The badge reads planes and ready. It does not recompute ready from rows.
     // A host older than the observation contract has no `v` at all. That is
@@ -1972,14 +1982,14 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
     // mismatch, and even then the pane keeps working on the fields it has.
     const contractMismatch = snap != null && Number.isFinite(snap.v) && snap.v !== 1
     const legacyHost = snap != null && !Number.isFinite(snap.v)
-    const rows = planeRows(snap)
+    const rows = planeRows(snap, copy)
     const healthy = !contractMismatch && snap?.ready === true
     return h('div', { className: 'nks-env', 'data-nks-env': '1' },
       h('div', { className: 'nks-env-title' }, copy.envTitle,
         h('span', { className: healthy ? 'nks-env-ok' : 'nks-env-bad', title: legacyHost ? copy.legacyHostTitle : undefined },
-          contractMismatch ? copy.contractNewer : healthy ? '● OK' : '● 异常'),
+          contractMismatch ? copy.contractNewer : healthy ? `● ${copy.envOk}` : `● ${copy.envBad}`),
         legacyHost ? h('span', { className: 'nks-env-legacy', 'data-nks-legacy': '1' }, copy.legacyHost) : null),
-      h('div', { className: 'nks-env-row' }, h('b', null, copy.envPlugin), h('span', null, snap?.buildId || '未知')),
+      h('div', { className: 'nks-env-row' }, h('b', null, copy.envPlugin), h('span', null, snap?.buildId || copy.envUnknown)),
       h('div', { className: 'nks-env-row' }, h('b', null, copy.envEngine), h('span', null, engine)),
       h('div', { className: 'nks-env-row' }, h('b', null, copy.envContainer), h('span', null, container)),
       snap?.containerName ? h('div', { className: 'nks-env-row' }, h('b', null, copy.envInstance), h('span', null, snap.containerName)) : null,
@@ -2156,19 +2166,19 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
     return h('div', { className: 'nks-modal-mask', 'data-nks-history': '1', onClick: (e) => { if (e.target === e.currentTarget) onClose() } },
       h('div', { className: 'nks-modal' },
         h('div', { className: 'nks-modal-head' },
-          h('b', null, '浏览历史'),
-          h('span', { className: 'nks-modal-sub' }, `${rows.length} 条`),
-          h('button', { type: 'button', className: 'nks-modal-x', onClick: onClose, 'aria-label': '关闭' }, '×')),
+          h('b', null, copy.historyTitle),
+          h('span', { className: 'nks-modal-sub' }, fill(copy.historyCount, { n: rows.length })),
+          h('button', { type: 'button', className: 'nks-modal-x', onClick: onClose, 'aria-label': copy.close }, '×')),
         h('div', { className: 'nks-modal-bar' },
-          h('input', { 'data-nks-history-q': '1', placeholder: '搜索地址…', value: q, onChange: async (e) => { setQ(e.target.value); await load(e.target.value) } }),
-          h('button', { type: 'button', 'data-nks-history-clear': '1', disabled: busy || !rows.length, onClick: clear }, '清空')),
+          h('input', { 'data-nks-history-q': '1', placeholder: copy.historySearch, value: q, onChange: async (e) => { setQ(e.target.value); await load(e.target.value) } }),
+          h('button', { type: 'button', 'data-nks-history-clear': '1', disabled: busy || !rows.length, onClick: clear }, copy.historyClear)),
         h('div', { className: 'nks-modal-body' },
           rows.length ? rows.map((row) => h('div', { className: 'nks-hist-row', key: row.id, 'data-nks-history-row': row.id },
             h('button', { type: 'button', className: 'nks-hist-open', onClick: () => { setDraftUrl(row.url); setHistoryOpen(false); openPage(row.url) } },
               h('span', { className: 'nks-hist-url' }, row.url),
-              h('span', { className: 'nks-hist-meta' }, `${String(row.at).slice(0, 16).replace('T', ' ')}${row.count > 1 ? ' · ' + row.count + ' 次' : ''}`)),
-            h('button', { type: 'button', className: 'nks-hist-del', 'data-nks-history-del': row.id, onClick: () => del(row.id), 'aria-label': '删除' }, '×')))
-            : h('div', { className: 'nks-modal-empty' }, '还没有浏览记录'))) )
+              h('span', { className: 'nks-hist-meta' }, `${String(row.at).slice(0, 16).replace('T', ' ')}${row.count > 1 ? fill(copy.historyTimes, { n: row.count }) : ''}`)),
+            h('button', { type: 'button', className: 'nks-hist-del', 'data-nks-history-del': row.id, onClick: () => del(row.id), 'aria-label': copy.historyDelete }, '×')))
+            : h('div', { className: 'nks-modal-empty' }, copy.historyEmpty))) )
   }
 
 
@@ -2299,7 +2309,7 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
           const latitude = Number(latText)
           const longitude = Number(lngText)
           if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 || !Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
-            throw Object.assign(new Error('经纬度需要同时填写，且纬度 -90..90、经度 -180..180'), { status: 400, errorId: 'kitesurf.body.json' })
+            throw Object.assign(new Error(copy.geoInvalid), { status: 400, errorId: 'kitesurf.body.json' })
           }
           nextGeo = { latitude, longitude }
         }
@@ -2380,7 +2390,7 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
         h('button', { type: 'button', className: 'nks-tool', 'data-nks-back': '1', 'aria-label': copy.back, title: copy.back, disabled: busy || !hasPage, onClick: () => run(() => historyNav(-1), { beat: true, dialog: true }) }, glyph('back')),
         h('button', { type: 'button', className: 'nks-tool', 'data-nks-forward': '1', 'aria-label': copy.forward, title: copy.forward, disabled: busy || !hasPage, onClick: () => run(() => historyNav(1), { beat: true, dialog: true }) }, glyph('forward')),
         h('button', { type: 'button', className: 'nks-tool', 'data-nks-reload': '1', 'aria-label': copy.refresh, title: copy.refresh, disabled: busy, onClick: onRefresh }, glyph('refresh'))),
-      h('span', { className: 'nks-address-box', 'data-dirty': draftUrl ? 'true' : 'false', 'data-loading': beat ? 'true' : 'false', 'aria-busy': beat ? 'true' : 'false' },
+      h('span', { className: 'nks-address-box', 'data-address-short': copy.addressShort, 'data-dirty': draftUrl ? 'true' : 'false', 'data-loading': beat ? 'true' : 'false', 'aria-busy': beat ? 'true' : 'false' },
         h('input', {
           className: 'nks-address',
           'aria-label': copy.addressAria,
@@ -2447,18 +2457,18 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
           h('span', { className: 'nks-nav-tab-url' }, row.url.replace(/^https?:\/\//, '')),
           row.count > 1 ? h('span', { className: 'nks-nav-tab-count' }, `×${row.count}`) : null,
           h('span', {
-            className: 'nks-nav-tab-x', role: 'button', 'aria-label': '关闭标签页', 'data-nks-nav-tab-del': row.url,
+            className: 'nks-nav-tab-x', role: 'button', 'aria-label': copy.navCloseTab, 'data-nks-nav-tab-del': row.url,
             onClick: (event) => { event.stopPropagation(); delNavTab(row.url) },
           }, '×')))
           : h('div', { className: 'nks-nav-empty' }, copy.navEmpty))),
     h('div', { className: 'nks-status', 'data-nks-status': '1' },
-      h('button', { type: 'button', 'data-nks-native-toggle': '1', 'aria-pressed': nativeHtml ? 'true' : 'false', title: '原生 HTML 渲染', onClick: () => { setNativeHtml((v) => !v); if (!nativeHtml) loadDom().catch(() => {}) } }, 'HTML'),
-      h('button', { type: 'button', 'data-nks-devtools-toggle': '1', 'aria-pressed': devtoolsOpen ? 'true' : 'false', title: '开发者工具（⌘E 然后按 2）', onClick: () => setDevtoolsOpen((v) => !v) }, copy.devtools),
+      h('button', { type: 'button', 'data-nks-native-toggle': '1', 'aria-pressed': nativeHtml ? 'true' : 'false', title: copy.nativeHtmlTitle, onClick: () => { setNativeHtml((v) => !v); if (!nativeHtml) loadDom().catch(() => {}) } }, 'HTML'),
+      h('button', { type: 'button', 'data-nks-devtools-toggle': '1', 'aria-pressed': devtoolsOpen ? 'true' : 'false', title: copy.devtoolsToggleTitle, onClick: () => setDevtoolsOpen((v) => !v) }, copy.devtools),
       h('button', {
         type: 'button',
         'data-nks-vp': '1',
         className: 'nks-chip',
-        title: '页面视口（拟真）',
+        title: copy.viewportTitle,
         onClick: (event) => {
           const rect = event.currentTarget.getBoundingClientRect()
           const apply = async (next) => {
@@ -2473,21 +2483,21 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
             direction: 'up',
             maxHeight: 6 * 28 + 8,
             items: [
-              { id: 'fit', label: '自适应', run: () => apply(null) },
+              { id: 'fit', label: copy.viewportFit, run: () => apply(null) },
               { id: '1280', label: '1280×900', run: () => apply({ width: 1280, height: 900 }) },
               { id: '768', label: '768×900', run: () => apply({ width: 768, height: 900 }) },
               { id: '390', label: '390×844', run: () => apply({ width: 390, height: 844 }) },
-              { id: 'custom', label: '自定义…', run: () => setVpCustom(true) },
+              { id: 'custom', label: copy.viewportCustom, run: () => setVpCustom(true) },
             ],
           })
         },
-      }, vp ? `${vp.width}×${vp.height}` : '自适应'),
+      }, vp ? `${vp.width}×${vp.height}` : copy.viewportFit),
       vpCustom ? h('input', {
-        'data-nks-vp-w': '1', type: 'number', placeholder: '宽', className: 'nks-vp-input',
+        'data-nks-vp-w': '1', type: 'number', placeholder: copy.viewportWidthPh, className: 'nks-vp-input',
         onKeyDown: async (e) => { if (e.key !== 'Enter') return; const w = Number(e.currentTarget.value); if (w >= 240) { const next = { width: w, height: vp?.height || 900 }; setVp(next); setVpCustom(false); try { await post(SETTINGS, { viewport: next }) } catch {} } },
       }) : null,
       vpCustom ? h('input', {
-        'data-nks-vp-h': '1', type: 'number', placeholder: '高', className: 'nks-vp-input',
+        'data-nks-vp-h': '1', type: 'number', placeholder: copy.viewportHeightPh, className: 'nks-vp-input',
         onKeyDown: async (e) => { if (e.key !== 'Enter') return; const h = Number(e.currentTarget.value); if (h >= 240) { const next = { width: vp?.width || 1280, height: h }; setVp(next); setVpCustom(false); try { await post(SETTINGS, { viewport: next }) } catch {} } },
       }) : null,
       // Three states, not two: an empty pane is neither native HTML nor a
@@ -2495,7 +2505,7 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
       h('span', {
         'data-nks-mode': nativeHtml && domDoc ? 'html' : hasPage ? 'img' : 'empty',
         style: { color: nativeHtml && domDoc ? 'var(--dsw-alias-state-success-primary)' : hasPage ? 'var(--dsw-alias-state-warn-primary)' : 'var(--dsw-alias-label-tertiary)' },
-      }, nativeHtml && domDoc ? 'HTML 原生渲染' : hasPage ? 'IMG 截图回退' : '未打开页面'),
+      }, nativeHtml && domDoc ? copy.modeHtml : hasPage ? copy.modeShot : copy.modeEmpty),
       h('span', { style: { flex: 'auto' } })),
 
     h(HistoryDialog, { open: historyOpen, onClose: () => setHistoryOpen(false) }),

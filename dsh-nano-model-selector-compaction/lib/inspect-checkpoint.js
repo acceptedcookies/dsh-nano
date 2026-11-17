@@ -247,4 +247,9 @@ export function apply(ctx) {
 
 export const name = 'inspect-checkpoint'
 export const inject = ['tools']
-export default apply
+// The loader's unwrapExports prefers `default`: a bare `export default apply`
+// would make it read `apply.inject` (undefined) and deny ctx.tools access at
+// startup ("cannot get property \"tools\" without inject"). The default must
+// be an object carrying inject — the same shape cordis-plugin-loader
+// normalizes for `{apply}` plugins.
+export default { apply, inject, name }

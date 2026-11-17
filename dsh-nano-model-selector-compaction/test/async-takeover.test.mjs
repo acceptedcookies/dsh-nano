@@ -1019,6 +1019,17 @@ function runTool(session, args) {
   return INSPECT_CHECKPOINT_DEFINITION.execute(args, { agent: { session }, signal: new AbortController().signal })
 }
 
+test('inspect_checkpoint: default export carries inject (loader unwrapExports contract)', async () => {
+  // A bare `export default apply` makes the loader read apply.inject
+  // (undefined) → "cannot get property \"tools\" without inject" at startup.
+  // The default MUST be an object plugin carrying inject.
+  const mod = await import('../lib/inspect-checkpoint.js')
+  assert.equal(typeof mod.default, 'object', 'default export must be an object plugin, not a bare function')
+  assert.equal(mod.default.apply, mod.apply)
+  assert.deepEqual(mod.default.inject, ['tools'])
+  assert.equal(mod.default.name, 'inspect-checkpoint')
+})
+
 test('inspect_checkpoint: registration shape + when gate (-09②③④, P2 ④⑥)', async () => {
   assert.equal(INSPECT_TOOL_NAME, 'inspect_checkpoint')
   assert.equal('timeoutMs' in INSPECT_CHECKPOINT_DEFINITION, false)

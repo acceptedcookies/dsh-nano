@@ -297,19 +297,27 @@ for (const plugin of plugins) {
 /** Build id baked into a deployed client bundle (version+sha). The host reads
  *  the same value from build.json, so a stale bundle is visible as a mismatch
  *  instead of silently serving an old UI. */
-function clientBuildId(plugin) {
+function bakedBuildId(name) {
   try {
-    const text = readFileSync(join(dshHome, 'plugins', plugin.name, 'lib', 'client.js'), 'utf8')
-    const escaped = plugin.pkg.version.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    const hit = text.match(new RegExp(`${escaped}\\+[0-9a-f]{6,}`))
+    const text = readFileSync(join(dshHome, 'plugins', name, 'lib', 'client.js'), 'utf8')
+    const hit = text.match(/\d+\.\d+\.\d+\+[0-9a-f]{6,}/)
     return hit ? hit[0] : null
   } catch { return null }
 }
 
-// One deploy generation for every plugin in this home: the client bundle is
-// the only artifact carrying a baked id, and the host must report the value
-// the pane will actually compare against.
-const generation = (dryRun ? null : (plugins.map(clientBuildId).find(Boolean))) || `${plugins[0].pkg.version}+${repoGitSha}`
+// ONE generation per home, not one per invocation. Deploying a single plugin
+// (say the sandbox) must keep the id the already-staged client bundle carries;
+// otherwise every partial deploy rewrites build.json to a different value and
+// the pane reports drift that no deploy actually caused. Prefer this deploy's
+// own bundles, then anything already staged in the home.
+const stagedPlugins = (() => {
+  try { return readdirSync(join(dshHome, 'plugins')) } catch { return [] }
+})()
+const generation = dryRun ? null : (
+  plugins.map((plugin) => bakedBuildId(plugin.name)).find(Boolean)
+  || stagedPlugins.map(bakedBuildId).find(Boolean)
+  || `${plugins[0].pkg.version}+${repoGitSha}`
+)
 if (!dryRun) {
   for (const plugin of plugins) {
     writeFileSync(join(dshHome, 'plugins', plugin.name, 'build.json'), JSON.stringify({

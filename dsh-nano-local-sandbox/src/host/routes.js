@@ -1454,13 +1454,38 @@ export function routeSpecs(deps = {}) {
             return
           }
           const query = new URL(req.url ?? '/', 'http://localhost').searchParams
+          const detailId = query.get('id')
+          if (detailId) {
+            const entry = (session.network || []).find((item) => item && item.id === detailId)
+            if (!entry) {
+              send(res, 404, { ok: false, errorId: 'kitesurf.network.missing', error: 'request not found' })
+              return
+            }
+            let body = null
+            try {
+              const client = await page()
+              body = await withPage(client, (sessionId) => client.send('Network.getResponseBody', { requestId: detailId }, sessionId))
+            } catch { /* body retention is best effort; headers/payload still render */ }
+            const text = typeof body?.body === 'string' ? body.body : null
+            send(res, 200, {
+              ok: true,
+              entry,
+              responseBody: text == null ? null : {
+                body: text.slice(0, 200000),
+                base64Encoded: body?.base64Encoded === true,
+                truncated: text.length > 200000,
+              },
+            })
+            return
+          }
           const limit = Math.max(1, Math.min(Number(query.get('limit')) || 100, 200))
           const failedOnly = query.get('failedOnly') === 'true'
           const since = Number(query.get('since')) || 0
           let entries = (session.network || []).filter((item) => item && !item.gap)
           if (failedOnly) entries = entries.filter((item) => item.failed || (item.status && item.status >= 400))
           if (since) entries = entries.filter((item) => Number(item.startedAt) > since)
-          send(res, 200, { ok: true, entries: entries.slice(-limit) })
+          entries = entries.slice(-limit).map(({ requestHeaders, responseHeaders, postData, ...rest }) => rest)
+          send(res, 200, { ok: true, entries })
           return
         }
         if (row.path.endsWith('/targets')) {

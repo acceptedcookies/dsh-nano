@@ -35,3 +35,18 @@ test('the network clear action empties the driver ring', async () => {
   assert.deepEqual((await call(route, { method: 'POST', body: { clear: true } })).body, { ok: true, cleared: true })
   assert.deepEqual(session.network, [])
 })
+
+test('the network list omits detail-only headers and payloads', async () => {
+  const route = networkRoute({ network: [{ ...rows[0], requestHeaders: { Authorization: 'secret' }, responseHeaders: { 'X-A': '1' }, postData: 'a=1' }] })
+  const result = await call(route, { url: `${route.path}?limit=10` })
+  assert.equal(result.body.entries[0].requestHeaders, undefined)
+  assert.equal(result.body.entries[0].responseHeaders, undefined)
+  assert.equal(result.body.entries[0].postData, undefined)
+})
+
+test('the network detail route reports a missing request without touching the engine', async () => {
+  const route = networkRoute({ network: [] })
+  const result = await call(route, { url: `${route.path}?id=missing` })
+  assert.equal(result.status, 404)
+  assert.equal(result.body.errorId, 'kitesurf.network.missing')
+})

@@ -76,3 +76,40 @@ test('failed requests keep the error and duration rather than pretending to fini
   assert.equal(row.durationMs, 120)
   assert.equal(row.size, null)
 })
+
+test('request details retain request/response headers, payload and status metadata', async () => {
+  const fixture = clientWithListener()
+  const session = {}
+  await ensureClient(session, 'http://fixture.invalid', async () => fixture.client)
+  fixture.emit({ method: 'Network.requestWillBeSent', params: {
+    requestId: 'r4', type: 'Fetch', wallTime: 1_700_000_300, timestamp: 400,
+    request: {
+      url: 'https://example.com/api/login', method: 'POST', mimeType: 'application/json',
+      headers: { 'Content-Type': 'application/json', 'X-Trace': 'abc' },
+      postData: '{"user":"demo"}', hasPostData: true,
+    },
+  } })
+  fixture.emit({ method: 'Network.requestWillBeSentExtraInfo', params: {
+    requestId: 'r4', headers: { 'X-Extra': 'request-extra' },
+  } })
+  fixture.emit({ method: 'Network.responseReceived', params: {
+    requestId: 'r4', type: 'Fetch', timestamp: 400.2,
+    response: {
+      status: 201, statusText: 'Created', mimeType: 'application/json',
+      headers: { 'Content-Type': 'application/json', 'X-Resp': 'ok' },
+      protocol: 'h2', remoteIPAddress: '93.184.216.34', remotePort: 443,
+    },
+  } })
+  fixture.emit({ method: 'Network.responseReceivedExtraInfo', params: {
+    requestId: 'r4', statusCode: 201, headers: { 'X-Extra': 'response-extra' },
+  } })
+  const row = session.network.find((item) => item.id === 'r4')
+  assert.equal(row.postData, '{"user":"demo"}')
+  assert.equal(row.hasPostData, true)
+  assert.equal(row.requestMimeType, 'application/json')
+  assert.deepEqual(row.requestHeaders, { 'Content-Type': 'application/json', 'X-Trace': 'abc', 'X-Extra': 'request-extra' })
+  assert.deepEqual(row.responseHeaders, { 'Content-Type': 'application/json', 'X-Resp': 'ok', 'X-Extra': 'response-extra' })
+  assert.equal(row.statusText, 'Created')
+  assert.equal(row.protocol, 'h2')
+  assert.equal(row.remoteAddress, '93.184.216.34:443')
+})

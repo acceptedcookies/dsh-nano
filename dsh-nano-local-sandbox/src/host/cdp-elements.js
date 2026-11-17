@@ -215,6 +215,20 @@ function networkElapsed(row, timestamp) {
  * to draw a truthful type, size, duration and waterfall. `Network.enable` is
  * scoped to the page session; these events already arrive on this socket.
  */
+function networkHeaders(value) {
+  if (!value || typeof value !== 'object') return {}
+  const out = {}
+  for (const [key, entry] of Object.entries(value)) {
+    if (typeof key !== 'string') continue
+    if (typeof entry === 'string' || typeof entry === 'number' || typeof entry === 'boolean') out[key] = String(entry)
+  }
+  return out
+}
+
+function networkPayload(value) {
+  return typeof value === 'string' ? value.slice(0, 20000) : ''
+}
+
 export function recordNetworkEvent(session, message) {
   const params = message?.params || {}
   const id = String(params.requestId || '')
@@ -239,11 +253,19 @@ export function recordNetworkEvent(session, message) {
       existing.at = new Date(startedAt).toISOString()
       existing.timestamp = Number(params.timestamp) || null
       existing.status = null
+      existing.statusText = ''
       existing.mimeType = ''
       existing.size = null
       existing.durationMs = null
       existing.failed = false
       existing.error = ''
+      existing.requestHeaders = networkHeaders(params.request?.headers)
+      existing.postData = networkPayload(params.request?.postData)
+      existing.hasPostData = params.request?.hasPostData === true || Boolean(params.request?.postData)
+      existing.requestMimeType = String(params.request?.mimeType || '').slice(0, 120)
+      existing.responseHeaders = {}
+      existing.protocol = ''
+      existing.remoteAddress = ''
       return
     }
     session.network.push({
@@ -261,16 +283,38 @@ export function recordNetworkEvent(session, message) {
       failed: false,
       error: '',
       cached: false,
+      requestHeaders: networkHeaders(params.request?.headers),
+      postData: networkPayload(params.request?.postData),
+      hasPostData: params.request?.hasPostData === true || Boolean(params.request?.postData),
+      requestMimeType: String(params.request?.mimeType || '').slice(0, 120),
+      responseHeaders: {},
+      statusText: '',
+      protocol: '',
+      remoteAddress: '',
     })
     if (session.network.length > 200) session.network.shift()
     return
   }
   const row = networkRow(session, id)
   if (!row) return
+  if (message.method === 'Network.requestWillBeSentExtraInfo') {
+    row.requestHeaders = { ...row.requestHeaders, ...networkHeaders(params.headers) }
+    return
+  }
+  if (message.method === 'Network.responseReceivedExtraInfo') {
+    row.responseHeaders = { ...row.responseHeaders, ...networkHeaders(params.headers) }
+    if (Number(params.statusCode)) row.status = Number(params.statusCode)
+    return
+  }
   if (message.method === 'Network.responseReceived') {
     row.status = Number(params.response?.status) || 0
+    row.statusText = String(params.response?.statusText || '').slice(0, 120)
     row.mimeType = String(params.response?.mimeType || '').slice(0, 120)
     row.type = String(params.type || row.type || 'Other')
+    row.responseHeaders = { ...row.responseHeaders, ...networkHeaders(params.response?.headers) }
+    row.protocol = String(params.response?.protocol || '').slice(0, 40)
+    const remote = params.response?.remoteIPAddress
+    row.remoteAddress = remote ? `${remote}${params.response.remotePort ? ':' + params.response.remotePort : ''}` : ''
     if (params.response?.fromDiskCache || params.response?.fromServiceWorker) row.cached = true
     return
   }
@@ -317,14 +361,18 @@ async function acquireClient(session, httpBase, connect) {
       const params = message.params || {}
       if (message.method === 'Runtime.consoleAPICalled') {
         const text = (params.args || []).map((arg) => arg.value ?? arg.description ?? '').join(' ').slice(0, 200)
-        session.console.push({ level: params.type || 'log', text, at: new Date().toISOString() })
+        const rawLevel = String(params.type || 'log').toLowerCase()
+        const level = rawLevel === 'warning' ? 'warn' : rawLevel
+        session.console.push({ level, text, at: new Date().toISOString() })
         if (session.console.length > 200) session.console.shift()
       }
       recordNetworkEvent(session, message)
     })
   }
   try {
-    await client.send('Network.enable')
+    // Bodies are not retained at the engine's zero default; ask for a bounded
+    // buffer so the request detail panel can show a real Response tab.
+    await client.send('Network.enable', { maxTotalBufferSize: 8 * 1024 * 1024, maxResourceBufferSize: 2 * 1024 * 1024 })
     await client.send('Runtime.enable')
   } catch { /* page-session events still arrive after a later enable */ }
   return client

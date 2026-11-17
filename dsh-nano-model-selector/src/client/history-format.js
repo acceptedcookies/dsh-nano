@@ -84,6 +84,8 @@ export function recordHeadline(record, copy) {
       return `${copy.historyFill} ${pct(record.fill)} · ${copy.historyRetain} ${dash(record.retain)}`
     case 'claim':
       return `${copy.historyRetain} ${dash(record.retain)}`
+    case 'select':
+      return `${dash(record.lane)} · ${dash(record.boundary)} · ${dash(record.retainedTokens)} tok`
     case 'commit':
       return `${dash(record.records)} 条 · ${dash(record.tokens)} tok`
     case 'drop':
@@ -181,45 +183,45 @@ export function resolveFill(runtimeFill, records) {
   return { value: null, fromDecision: false }
 }
 
-/** How long a settled commit keeps its async attribution on screen. */
-const COMMITTED_TTL_MS = 10 * 60 * 1000
-
 /**
- * Resolve the live phase, preferring the host's projection and falling back to
- * the ledger tail.
+ * Resolve the live phase for the badge.
  *
- * The host derives `phase` itself, but a host that predates the `committed`
- * state (or one whose projection is degraded) reports `idle` right after a
- * successful async compaction — and that is exactly the moment the async
- * attribution matters, because the shell's own 「上下文已压缩」 row cannot say
- * which lane produced it. Deriving `committed` from the ledger keeps the badge
- * honest without waiting for a host upgrade.
+ * P5-01d: `committed` comes ONLY from the session-scoped projection's
+ * `lastCompaction` (the durable fold's `status: 'completed'`) — no 10-minute
+ * ledger window, no host TTL. The projection does not carry the ledger's
+ * metadata, so the newest `commit` record (not necessarily the tail: a
+ * post-commit `select`/`arm` may sit above it) supplies model / promptVersion
+ * / counts. In-flight states (`armed`/`running`/`failed`) still come from the
+ * ledger-derived `history.phase`, which knows `select` via `derivePhase`.
  *
  * @param {{state?: string}|null} hostPhase - `history.phase` from the route.
- * @param {object[]} records - ledger records, oldest first.
- * @param {number} now - epoch millis.
+ * @param {object} data - the full `?sessionId=` payload (policy + history).
  * @returns {object|null}
  */
-export function resolvePhase(hostPhase, records, now) {
+export function resolvePhase(hostPhase, data) {
+  const last = data?.policy?.runtime?.lastCompaction ?? null
+  if (last?.status === 'completed') {
+    const records = Array.isArray(data?.history?.records) ? data.history.records : []
+    let commit = null
+    for (let i = records.length - 1; i >= 0; i -= 1) {
+      if (records[i]?.kind === 'commit') { commit = records[i]; break }
+    }
+    return {
+      state: 'committed',
+      since: typeof last.at === 'string' ? last.at : null,
+      model: commit?.target ?? null,
+      promptVersion: typeof commit?.promptVersion === 'string' ? commit.promptVersion : null,
+      reason: null,
+      detail: null,
+      compactionId: typeof commit?.compactionId === 'string' ? commit.compactionId : null,
+      tokens: typeof commit?.tokens === 'number' ? commit.tokens : null,
+      records: typeof commit?.records === 'number' ? commit.records : null,
+    }
+  }
   if (hostPhase !== null && hostPhase !== undefined && typeof hostPhase.state === 'string' && hostPhase.state !== 'idle') {
     return hostPhase
   }
-  const tail = Array.isArray(records) && records.length > 0 ? records[records.length - 1] : null
-  if (tail === null || typeof tail.at !== 'string') return hostPhase ?? null
-  const at = Date.parse(tail.at)
-  if (!Number.isFinite(at) || now - at > COMMITTED_TTL_MS) return hostPhase ?? null
-  if (tail.kind !== 'commit') return hostPhase ?? null
-  return {
-    state: 'committed',
-    since: tail.at,
-    model: tail.target ?? null,
-    promptVersion: typeof tail.promptVersion === 'string' ? tail.promptVersion : null,
-    reason: null,
-    detail: null,
-    compactionId: typeof tail.compactionId === 'string' ? tail.compactionId : null,
-    tokens: typeof tail.tokens === 'number' ? tail.tokens : null,
-    records: typeof tail.records === 'number' ? tail.records : null,
-  }
+  return hostPhase ?? null
 }
 
 /** Two axis labels closer than this would overlap; the earlier one drops its value. */

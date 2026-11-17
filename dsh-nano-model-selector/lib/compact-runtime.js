@@ -109,20 +109,15 @@ export function compactRuntime(ctx) {
   }
 
   function lastCompactionFor(session) {
+    // P5-01b: a bare sessionId string stays valid for the degraded fold map
+    // (keyed by id) but is never fed to stateOf, which needs the object.
+    if (session === null) return null
     try {
-      if (projectionHandle !== null && session !== null) {
+      if (projectionHandle !== null && typeof session === 'object') {
         return projectionHandle.stateOf(session) ?? null
       }
-      if (session !== null) {
-        const key = session?.id ?? String(session)
-        return perSession.get(key) ?? null
-      }
-      // No session context: latest fold across sessions.
-      let latest = null
-      for (const state of perSession.values()) {
-        if (latest === null || (state.at ?? 0) > (latest.at ?? 0)) latest = state
-      }
-      return latest
+      const key = typeof session === 'string' ? session : (session?.id ?? String(session))
+      return perSession.get(key) ?? null
     } catch (error) {
       ctx.logger.warn(`async-compact: projection read failed: ${error instanceof Error ? error.message : String(error)}`)
       return null
@@ -130,7 +125,8 @@ export function compactRuntime(ctx) {
   }
 
   function fillFor(session, W) {
-    if (session === null) return null
+    // A bare id can name the session but cannot be measured by the token meter.
+    if (session === null || typeof session !== 'object') return null
     try {
       const meter = ctx.tokenMeter ?? ctx.get?.('tokenMeter')
       if (meter === undefined || meter === null) return null
@@ -152,20 +148,21 @@ export function compactRuntime(ctx) {
 
   /**
    * Assemble the read-only `runtime` block for GET.
-   * @param {object|null} session - session to report (null = latest seen)
+   * P5-01b: strictly session-scoped — `session === null` yields nulls; there is
+   * no latestSession fallback for lastCompaction on the read face.
+   * @param {object|string|null} session - session object or id to report
    * @param {number|null} W - context window used to convert tokens → fill ratio
    * @param {string|null} degradedMode - 'state-read-failed' when the state file is unreadable
    */
   function runtime(session, W, degradedMode) {
-    const target = session ?? latestSession
     let lastCompaction = null
     let degraded = degradedMode ?? null
     try {
-      lastCompaction = lastCompactionFor(target)
+      lastCompaction = lastCompactionFor(session)
     } catch (error) {
       ctx.logger.warn(`async-compact: lastCompaction projection failed: ${error instanceof Error ? error.message : String(error)}`)
     }
-    let fill = fillFor(target, W)
+    let fill = fillFor(session, W)
     if (fill === 'meter-unavailable') { degraded = degraded ?? 'meter-unavailable'; fill = null }
     if (degraded === null && lastCompaction?.status === 'failed') degraded = 'last-compaction-failed'
     return { fill, lastCompaction, degraded }

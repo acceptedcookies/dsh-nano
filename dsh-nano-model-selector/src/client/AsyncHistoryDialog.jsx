@@ -27,14 +27,10 @@ import {
   writeClipboard,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { NanoDialog } from 'dsh-nano-ui'
-import { fetchBundleState, fetchCompactHistory } from './compact.js'
+import { asyncCompactStore, fetchBundleState, fetchCompactHistory } from './compact.js'
 import { HISTORY_KINDS, UNKNOWN_KIND, agoText, recordHeadline, resolveFill } from './history-format.js'
 import { HistoryIcon } from './icons.jsx'
 import { WaterLine } from './WaterLine.jsx'
-
-/** Refresh cadence while an episode is armed or running. The ledger is
- *  append-only, so an idle dialog never needs this tick. */
-const LIVE_REFRESH_MS = 3_000
 
 /**
  * One ledger record. Collapsed shows the decision and its headline number;
@@ -85,24 +81,25 @@ export function AsyncHistoryDialog({ copy, sessionId, onClose }) {
     )
   }, [sessionId])
 
-  React.useEffect(() => { load() }, [load])
+  // Refresh comes from the shared store (P5-02e): one fetch on open, plus the
+  // store's own 3000 ms continuation while the session is running and an
+  // episode is open. This component owns no timer of its own.
+  React.useEffect(() => {
+    const unsubscribe = asyncCompactStore.subscribe(sessionId, data => {
+      setState({ status: 'ready', data, error: null })
+    })
+    return unsubscribe
+  }, [sessionId])
   React.useEffect(() => {
     let live = true
     fetchBundleState().then(value => { if (live && value !== null) setBundle(value) }).catch(() => {})
     return () => { live = false }
   }, [])
 
-  // The ledger is append-only, but an episode in flight is exactly when the
-  // view must not be stale: a dialog opened at arm time would otherwise keep
-  // showing "触发 1 / 执行 0" after the commit already happened, which reads as
-  // "stuck". Refresh while armed/running, stop as soon as it settles.
+  // In-flight surface for the water line: the ledger tail's phase — the store
+  // stops fetching once the episode settles, so this flag is read-only.
   const phaseState = state.data?.history?.phase?.state ?? 'idle'
   const live = phaseState === 'armed' || phaseState === 'running'
-  React.useEffect(() => {
-    if (state.status !== 'ready' || !live) return undefined
-    const timer = setTimeout(load, LIVE_REFRESH_MS)
-    return () => clearTimeout(timer)
-  }, [state.status, live, state.data, load])
 
   const history = state.data?.history ?? null
   const policy = state.data?.policy ?? null

@@ -167,7 +167,7 @@ npm run build
 
 状态文件：与 media-engine.json 同目录的 `plugins/nano-model-selector/async-compact.json`（tmp+rename 原子写，0600）。卸载不删。字段 8 项（无 `enabled`）：`model` / `bufferSizeAsync`（B，默认 0.65，必须 `< H` 之上且 `< S`）/ `healthTargetAsync`（H，0.50）/ `bufferSizeSafety`（S，0.90 只读，文件不是 0.90 即 state-read-failed，不抬升）/ `pinnedAsyncTokens`（100000）/ `pinnedFullTokens`（20000）/ `extraRequirements`（追加在内置摘要指令之后，默认空）/ `schema`（1）。`summaryPrompt` 键出现即 `invalid-schema`。`effectivePin = min(pinnedAsyncTokens, floor(0.15·W))`；DC-1 `B < windowMin` → `fullOnly`；fill = `totalTokens/W`。
 
-面板入口：顶栏搜索框与关闭按钮之间的「异步压缩」按钮，仅当 companion bundle 已安装时出现，否则搜索框占满该位。目录刷新按钮在搜索框内。页内四态（未安装/未启用/已启用/degraded），开关走 `POST …/switch`；B/H/pinnedAsyncTokens/model 可编辑 PUT。
+面板入口：顶栏搜索框与关闭按钮之间的「异步压缩」按钮，仅当 companion bundle 已安装时出现，否则搜索框占满该位。目录刷新按钮在搜索框内。页内四态（未安装/未启用/已启用/degraded），开关先经 `NanoDialog` 确认再走 `POST …/switch`；B/H/pinnedAsyncTokens/model 可编辑 PUT（H<B<S 严格序，客户端同规则预检）。
 
 历史视图：会话头部「更多操作」菜单里的「异步压缩历史」（`ctx.contextMenus.register({target:'sessionHeader', order:500})`），打开 nano-ui `NanoDialog`（主窗口级，宿主 `Modal` 承载遮罩、居中与焦点）。卡片顶部是水位尺（当前 fill 对 H/B/S 三条线，越过 B 即为应有 episode 的状态），下面是触发/执行/成功/失败四个计数，再下是「时间线 / 诊断」两个页签：时间线逐条列出决策（可展开看原始 JSON），诊断给出 `bundle/policy/effective/runtime/history` 的完整快照并支持一键复制。全部控件来自官方 primitive（`SegmentedControl`/`Tag`/`Button`/`relativeTime`/`writeClipboard`），配色只读 `--dsw-*` token。面板里的接管开关是宿主 `Switch`，场景页签是宿主 `SegmentedControl`，模型与媒体引擎标签是宿主 `Tag`。
 
@@ -180,11 +180,11 @@ npm run build
 
 **不要放在 `conversation.input.activity`**：那是 composer 自己的活动行，语义是「输入框正忙」；异步压缩是会话级后台任务，放进去会让人以为在等输入。
 
-`已异步压缩` 这一态是必需的：宿主的「上下文已压缩 · 已压缩 N 条历史记录」行由 `CompactionNodeView` 渲染，只传 `node.data`、标题固定回落到 `message.compaction`，**没有异步变体**（上层建筑归 host，插件改不了）。所以异步归属只能由本徽标承担，并在 commit 后保留 10 分钟。
+`已异步压缩` 这一态是必需的：宿主的「上下文已压缩 · 已压缩 N 条历史记录」行由 `CompactionNodeView` 渲染，只传 `node.data`、标题固定回落到 `message.compaction`，**没有异步变体**（上层建筑归 host，插件改不了）。所以异步归属只能由本徽标承担。
 
-该态由客户端从账本末条推导（`resolvePhase`），不依赖宿主是否已升级：宿主 `phase` 非 idle 时优先用宿主，否则若末条是 10 分钟内的 `commit` 就合成 `committed`。轮询空闲 15s、armed/running 3s。
+该态唯一来自按 session 投影的 `runtime.lastCompaction.status === 'completed'`（P5-01d），不再看 10 分钟账本窗口；徽标自身无定时器——拉取走 `src/client/compact.js` 的共享 store：打开时一次，`useSessionStatus.running` 翻转时一次，之后仅当会话仍在运行且账本末条未定（`commit`/`drop`/`skip` 才算落定，`select` 算在途）每 3000ms 续拉一次，落定即停。
 
-`history.phase` 由账本末条推导：`arm`→`armed`（15 分钟内有效）、`claim`→`running`（3 分钟内有效，引擎单次尝试上限 120s）、`drop`→`failed`（10 分钟内有效，带 `reason`/`detail`）、`commit`→`committed`（10 分钟内有效，带 `tokens`/`records`/`compactionId`），`skip` 与过期记录一律 `idle`——宿主重启留下的陈旧 `arm` 不会让界面永久显示「正在压缩」。
+`history.phase` 由账本末条推导：`arm`→`armed`（15 分钟内有效）、`claim`/`select`→`running`（3 分钟内有效，引擎单次尝试上限 120s）、`drop`→`failed`（10 分钟内有效，带 `reason`/`detail`），`commit`/`skip`/未知/过期记录一律 `idle`——committed 不归账本管，宿主重启留下的陈旧 `arm` 也不会让界面永久显示「正在压缩」。
 
 历史时间线**不使用 `StateDot`**：`ongoing` 是空心环，看起来像永远转不完的 spinner；历史记录是既成事实，用静态方块标记 + `Tag` 语义色即可。
 

@@ -79,7 +79,6 @@ const ASYNC_HISTORY_LIMIT = 200
 const ASYNC_ARMED_TTL_MS = 15 * 60 * 1000
 const ASYNC_RUNNING_TTL_MS = 3 * 60 * 1000
 const ASYNC_FAILED_TTL_MS = 10 * 60 * 1000
-const ASYNC_COMMITTED_TTL_MS = 10 * 60 * 1000
 
 /** Session ids only; anything else could escape the ledger directory. */
 const ASYNC_HISTORY_ID = /^(?!\.{1,2}$)[A-Za-z0-9._-]{1,128}$/
@@ -291,13 +290,16 @@ async function policyWindow(ctx, model) {
  * @param {import('node:http').IncomingMessage} req
  * @returns {ReturnType<typeof readAsyncHistory>|undefined}
  */
-function historyQuery(req) {
+function sessionIdQuery(req) {
   try {
     const sessionId = new URL(req.url ?? '/', 'http://localhost').searchParams.get('sessionId')
-    return sessionId === null || sessionId.length === 0 ? undefined : readAsyncHistory(sessionId)
-  } catch {
-    return undefined
-  }
+    return sessionId === null || sessionId.length === 0 ? null : sessionId
+  } catch { return null }
+}
+
+function historyQuery(req) {
+  const sessionId = sessionIdQuery(req)
+  return sessionId === null ? undefined : readAsyncHistory(sessionId)
 }
 
 /**
@@ -371,8 +373,10 @@ export function derivePhase(tail) {
   const model = tail.target ?? null
   const promptVersion = typeof tail.promptVersion === 'string' ? tail.promptVersion : null
   // A claim is bounded by the engine's own 120 s episode timeout plus margin;
-  // an arm waits for the next idle boundary, which can be much later.
-  if (tail.kind === 'claim' && age <= ASYNC_RUNNING_TTL_MS) {
+  // an arm waits for the next idle boundary, which can be much later. A
+  // `select` between claim and commit is still in flight (-08⑤ / P5-02e):
+  // treating it as idle would stop the badge's continuation fetch mid-episode.
+  if ((tail.kind === 'claim' || tail.kind === 'select') && age <= ASYNC_RUNNING_TTL_MS) {
     return { state: 'running', since: tail.at, model, promptVersion, reason: null, detail: null }
   }
   if (tail.kind === 'arm' && age <= ASYNC_ARMED_TTL_MS) {
@@ -388,23 +392,10 @@ export function derivePhase(tail) {
       detail: tail.detail ?? null,
     }
   }
-  // A fresh commit is reported as `committed`, not `idle`: the shell's own
-  // 「上下文已压缩」 row does not say WHICH lane produced it, so the async
-  // attribution has to come from us, and it has to outlive the moment of
-  // commit long enough to be read.
-  if (tail.kind === 'commit' && age <= ASYNC_COMMITTED_TTL_MS) {
-    return {
-      state: 'committed',
-      since: tail.at,
-      model,
-      promptVersion,
-      reason: null,
-      detail: null,
-      compactionId: typeof tail.compactionId === 'string' ? tail.compactionId : null,
-      tokens: typeof tail.tokens === 'number' ? tail.tokens : null,
-      records: typeof tail.records === 'number' ? tail.records : null,
-    }
-  }
+  // P5-01d: `commit` is a SETTLED record — the badge's committed surface is
+  // sourced from the session-scoped projection's lastCompaction, not from a
+  // 10-minute TTL on the ledger tail. A commit (or a stale anything else)
+  // lands on idle here.
   return idle
 }
 
@@ -419,7 +410,15 @@ export function derivePhase(tail) {
  * closed error-code set; nothing is written on failure.
  */
 function asyncCompactHandlers(ctx, runtimeHandle) {
-  const payload = async policy => {
+  // P5-01a: runtime is session-scoped — the sessionId query names the session
+  // whose fold/fill is reported; without it there is no "current session" to
+  // borrow, so lastCompaction/fill are null instead of a cross-session latest.
+  const sessionFor = req => {
+    const sessionId = sessionIdQuery(req)
+    if (sessionId === null) return null
+    try { return ctx.sessions?.get(sessionId) ?? sessionId } catch { return sessionId }
+  }
+  const payload = async (policy, session) => {
     const W = await policyWindow(ctx, policy.model)
     const effective = W === null
       ? { pin: null, windowMin: null, dcs: [] }
@@ -427,7 +426,9 @@ function asyncCompactHandlers(ctx, runtimeHandle) {
         const r = validateMasterOrder(policy, W)
         return r.ok ? { pin: r.effectivePin, windowMin: r.windowMin, dcs: r.dcs } : { pin: null, windowMin: null, dcs: [], invalid: r.reason }
       })()
-    const rt = runtimeHandle?.runtime(null, W, null) ?? { fill: null, lastCompaction: null, degraded: null }
+    const rt = session === null
+      ? { fill: null, lastCompaction: null, degraded: null }
+      : (runtimeHandle?.runtime(session, W, null) ?? { fill: null, lastCompaction: null, degraded: null })
     return {
       ...policy,
       // The fingerprint of the instruction that would be sent with this
@@ -464,7 +465,7 @@ function asyncCompactHandlers(ctx, runtimeHandle) {
         }
         const wrote = writeState(ASYNC_COMPACT_PATH, next)
         if (!wrote.ok) { sendJson(res, 400, { ok: false, error: { code: 'state-write-failed', reason: wrote.reason } }); return }
-        sendJson(res, 200, { ok: true, policy: await payload(next) })
+        sendJson(res, 200, { ok: true, policy: await payload(next, sessionFor(req)) })
       } catch (error) {
         sendJson(res, 400, { ok: false, error: { code: error.message === 'body too large' ? 'body-too-large' : 'invalid-json-body', reason: messageOf(error) } })
       }
@@ -479,12 +480,15 @@ function asyncCompactHandlers(ctx, runtimeHandle) {
       // The ledger matters most in exactly this state: a broken policy is a
       // prime suspect for "async compaction stopped", so serve it too.
       const degradedHistory = historyQuery(req)
+      const degradedSession = sessionFor(req)
       sendJson(res, 200, {
         ok: true,
         policy: null,
         degraded: 'state-read-failed',
         missing: false,
-        runtime: runtimeHandle?.runtime(null, null, 'state-read-failed') ?? { fill: null, lastCompaction: null, degraded: 'state-read-failed' },
+        runtime: degradedSession === null
+          ? { fill: null, lastCompaction: null, degraded: 'state-read-failed' }
+          : (runtimeHandle?.runtime(degradedSession, null, 'state-read-failed') ?? { fill: null, lastCompaction: null, degraded: 'state-read-failed' }),
         ...(degradedHistory === undefined ? {} : { history: degradedHistory }),
       })
       return
@@ -492,7 +496,7 @@ function asyncCompactHandlers(ctx, runtimeHandle) {
     const history = historyQuery(req)
     sendJson(res, 200, {
       ok: true,
-      policy: await payload(state.policy),
+      policy: await payload(state.policy, sessionFor(req)),
       missing: state.missing,
       ...(history === undefined ? {} : { history }),
     })

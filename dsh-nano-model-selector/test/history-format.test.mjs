@@ -159,34 +159,48 @@ test('statusBadgeFor reports the failure reason and never hides it', () => {
   assert.match(statusBadgeFor({ state: 'failed' }, COPY).tooltip, /未知原因/)
 })
 
-test('resolvePhase prefers the host projection whenever it has something to say', () => {
+test('resolvePhase takes in-flight states from the ledger phase, committed from the projection', () => {
   const host = { state: 'running', model: { provider: 'p', model: 'm' } }
-  assert.equal(resolvePhase(host, [], Date.now()), host)
-  // A host that predates `committed` reports idle; the ledger wins.
-  const now = Date.now()
-  const records = [{ at: new Date(now - 60_000).toISOString(), kind: 'commit', tokens: 90010, records: 332 }]
-  assert.equal(resolvePhase({ state: 'idle' }, records, now).state, 'committed')
-  assert.equal(resolvePhase(null, records, now).state, 'committed')
+  const data = { history: { records: [] }, policy: { runtime: { lastCompaction: null } } }
+  assert.equal(resolvePhase(host, data), host)
+  // P5-01d: committed comes ONLY from lastCompaction — never from a commit
+  // tail's freshness window.
+  const committed = {
+    history: { records: [{ kind: 'commit', tokens: 90010, records: 332, at: 'x' }] },
+    policy: { runtime: { lastCompaction: { status: 'completed', at: 'x' } } },
+  }
+  assert.equal(resolvePhase({ state: 'idle' }, committed).state, 'committed')
+  assert.equal(resolvePhase(null, committed).state, 'committed')
+  // The ledger commit record still supplies the attribution facts.
+  const phase = resolvePhase(null, committed)
+  assert.equal(phase.tokens, 90010)
+  assert.equal(phase.records, 332)
 })
 
-test('resolvePhase keeps the commit attribution only while it is fresh', () => {
-  const now = Date.now()
-  const old = [{ at: new Date(now - 60 * 60_000).toISOString(), kind: 'commit', tokens: 1, records: 1 }]
-  assert.equal(resolvePhase({ state: 'idle' }, old, now).state, 'idle')
-  // A non-commit tail is not an attribution.
-  const drop = [{ at: new Date(now - 60_000).toISOString(), kind: 'drop', reason: 'transient' }]
-  assert.equal(resolvePhase({ state: 'idle' }, drop, now).state, 'idle')
-  assert.equal(resolvePhase(null, [], now), null)
-  assert.equal(resolvePhase(null, [{ kind: 'commit' }], now), null)
+test('resolvePhase: no committed projection means no committed badge', () => {
+  const busyFold = {
+    history: { records: [{ kind: 'commit', tokens: 1, records: 1, at: 'x' }] },
+    policy: { runtime: { lastCompaction: { status: 'busy', at: 'x' } } },
+  }
+  assert.equal(resolvePhase({ state: 'idle' }, busyFold).state, 'idle')
+  const failedFold = {
+    history: { records: [{ kind: 'commit', tokens: 1, records: 1, at: 'x' }] },
+    policy: { runtime: { lastCompaction: { status: 'failed' } } },
+  }
+  assert.equal(resolvePhase({ state: 'idle' }, failedFold).state, 'idle')
+  assert.equal(resolvePhase(null, { history: { records: [] }, policy: { runtime: { lastCompaction: null } } }), null)
 })
 
 test('a committed phase renders as the async attribution badge', () => {
-  const now = Date.now()
   const records = [{
-    at: new Date(now - 30_000).toISOString(), kind: 'commit', tokens: 90010, records: 332,
+    kind: 'commit', tokens: 90010, records: 332,
     promptVersion: '3b7aa71f', target: { provider: 'magpie', model: 'auto/deepseek-v4.1-flash-1017' },
   }]
-  const badge = statusBadgeFor(resolvePhase({ state: 'idle' }, records, now), COPY)
+  const data = {
+    history: { records },
+    policy: { runtime: { lastCompaction: { status: 'completed', at: 'x' } } },
+  }
+  const badge = statusBadgeFor(resolvePhase({ state: 'idle' }, data), COPY)
   assert.equal(badge.state, 'committed')
   assert.equal(badge.text, '已异步压缩 · 332 条')
   assert.match(badge.tooltip, /摘要 v3b7aa71f/)

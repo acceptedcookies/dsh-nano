@@ -10,9 +10,6 @@ const { batchNote, designNote, multiNote } = require('../shared/note.js')
 const { contentFrame, shotPoint } = require('../shared/shot-point.js')
 const h = React.createElement
 
-// Baked by scripts/build-client.mjs. Compared with the host buildId so a
-// stale client bundle can never masquerade as a working deploy.
-const CLIENT_BUILD_ID = typeof __NKS_BUILD_ID__ === 'string' ? __NKS_BUILD_ID__ : 'dev'
 const STATUS = '/nano-local-sandbox/status'
 const OPEN = '/nano-local-sandbox/open'
 const SHOT = '/nano-local-sandbox/shot'
@@ -2075,23 +2072,8 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
         'data-nks-mode': nativeHtml && domDoc ? 'html' : hasPage ? 'img' : 'empty',
         style: { color: nativeHtml && domDoc ? 'var(--dsw-alias-state-success-primary)' : hasPage ? 'var(--dsw-alias-state-warn-primary)' : 'var(--dsw-alias-label-tertiary)' },
       }, nativeHtml && domDoc ? 'HTML 原生渲染' : hasPage ? 'IMG 截图回退' : '未打开页面'),
-      h('span', { style: { flex: 'auto' } }),
-      (() => {
-        const hostBuild = typeof status?.buildId === 'string' ? status.buildId : ''
-        // Only deploy-produced ids carry '+<sha>'; a tarball install reports a plain
-        // version and must not be flagged as a mismatch.
-        // The host reports the sandbox plugin's deploy stamp; this bundle
-        // carries its own. They are two different packages, so a difference
-        // only means "these two were deployed at different times". It is a
-        // diagnostic, never a reason to refuse to browse.
-        const drifted = Boolean(hostBuild) && hostBuild !== CLIENT_BUILD_ID
-        const text = drifted ? `宿主 ${hostBuild}` : (hostBuild || '')
-        return text ? h('span', {
-          'data-nks-build': drifted ? 'drift' : 'ok',
-          style: { opacity: .6, color: 'var(--dsw-alias-label-tertiary)' },
-          title: `客户端 ${CLIENT_BUILD_ID} · 宿主 ${hostBuild || '未知'}${drifted ? '（两个包分别部署，不影响使用）' : ''}`,
-        }, text.slice(0, 40)) : null
-      })()),
+      h('span', { style: { flex: 'auto' } })),
+
     h(HistoryDialog, { open: historyOpen, onClose: () => setHistoryOpen(false) }),
     h(DevTools, { open: devtoolsOpen, onClose: () => setDevtoolsOpen(false) }),
     h('div', {

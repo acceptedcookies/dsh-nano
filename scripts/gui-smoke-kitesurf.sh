@@ -11,7 +11,7 @@
 # Checks (each is a regression we actually shipped):
 #   1. pane root [data-nano-kitesurf="1"] mounts
 #   2. mode label is one of empty/html/img (never undefined)
-#   3. the pane does not paint a blocking error badge ([data-nks-build="mismatch"])
+#   3. the pane carries no build-id reconciliation ([data-nks-build])
 #   4. /nano-local-sandbox/ports returns healthy + per-plane checks
 #   5. /nano-local-sandbox/selftest runs 11 checks (only the two page-empty ones may fail)
 #   6. /nano-local-sandbox/open then /dom returns a non-empty srcdoc (HTML mode works)
@@ -67,11 +67,11 @@ await check('2. mode label is a known state', () => {
 // this check is not vacuously true.
 await page.evaluate(() => document.querySelector('[data-nks-settings]')?.click());
 await page.waitForTimeout(1800);
-// Drift between the pane bundle and the sandbox plugin is informational now
-// (`data-nks-build="drift"`); only a blocking marker would be a regression.
-await check('3. no blocking build/contract error', () =>
-  !document.querySelector('[data-nks-build="mismatch"]')
-  && !document.querySelector('.nks-env-bad[data-nks-contract]'));
+// The pane must not compare its build against the host's: they are different
+// packages, so the comparison only ever produced false alarms. Its absence is
+// the regression guard.
+await check('3. no build-id reconciliation in the pane', () =>
+  !document.querySelector('[data-nks-build]'));
 // Close the dialog again (取消) before touching the page routes.
 await page.evaluate(() => {
   const btn = [...document.querySelectorAll('.nano-dialog-card button')]

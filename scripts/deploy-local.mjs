@@ -113,6 +113,40 @@ const noBuild = argv.includes('--no-build')
 const only = argValue('--plugins')?.split(',').map(s => s.trim()).filter(Boolean)
 const dshHome = resolvePath(argValue('--home') ?? process.env.DSH_HOME ?? '~/.dsh')
 
+// ---- one command, every instance ------------------------------------------
+/**
+ * The three local instances this repo is developed against (INTRODUCTION.md
+ * §0). `--all-homes` re-runs this script once per home so a change never lands
+ * in one instance and not the others — the exact drift that made a redeploy
+ * look broken. Desktop has no service: the app is restarted by hand.
+ */
+const HOMES = [
+  { home: '~/.dsh', profile: 'web', service: 'ai.deepseek.dsh.web' },
+  { home: '~/.dsh-dev', profile: 'web', service: 'ai.deepseek.dsh.dev.web' },
+  { home: '~/.dsh-desktop', profile: 'desktop', service: null },
+]
+
+if (argv.includes('--all-homes')) {
+  const restart = argv.includes('--restart')
+  const pass = argv.filter((a, i) => !['--all-homes', '--restart'].includes(a) && argv[i - 1] !== '--home' && argv[i - 1] !== '--profile' && a !== argValue('--home') && a !== argValue('--profile'))
+  let failed = 0
+  for (const entry of HOMES) {
+    const home = resolvePath(entry.home)
+    if (!existsSync(home)) { log(`skip ${home} (not present)`); continue }
+    log(`\n=== ${home} (${entry.profile}) ===`)
+    const r = spawnSync(process.execPath, [fileURLToPath(import.meta.url), ...pass, '--home', home, '--profile', entry.profile], { stdio: 'inherit' })
+    if (r.status !== 0) { failed += 1; continue }
+    if (!restart || !entry.service) continue
+    if (process.platform !== 'darwin') { log(`restart ${entry.service}: skipped (not macOS)`); continue }
+    const kick = spawnSync('launchctl', ['kickstart', '-k', `gui/${process.getuid()}/${entry.service}`], { encoding: 'utf8' })
+    log(kick.status === 0 ? `restart ${entry.service}` : `restart ${entry.service}: ${(kick.stderr || '').trim() || `exit ${kick.status}`}`)
+    if (kick.status !== 0) failed += 1
+  }
+  if (failed > 0) fail(`${failed} home(s) failed`)
+  log('\nall homes deployed')
+  process.exit(0)
+}
+
 // ---- plugin discovery ------------------------------------------------------
 function isPluginDir(dir) {
   return existsSync(join(dir, 'package.json')) && existsSync(join(dir, 'cordis.patch.yml'))
@@ -166,6 +200,25 @@ if (!profile) {
   if (existing.length > 1) log(`multiple profiles found (${existing.join(', ')}); using ${profile} — pass --profile to override`)
 }
 const profileDir = join(profilesRoot, profile)
+
+// ---- partial deploy guard ---------------------------------------------------
+// A deploy that names a subset leaves every other installed plugin at its old
+// code. That is how one instance ended up with a current pane talking to a
+// stale host, which then read as a broken product. Make it explicit.
+if (only && !argv.includes('--partial')) {
+  const installed = (() => {
+    try {
+      const pkg = JSON.parse(readFileSync(join(profileDir, 'package.json'), 'utf8'))
+      return (pkg?.dsh?.profile?.bundles ?? []).filter(name => existsSync(join(dshHome, 'plugins', name)))
+    } catch { return [] }
+  })()
+  const left = installed.filter(name => !only.includes(name))
+  if (left.length > 0) {
+    fail(`--plugins names ${only.length} of ${installed.length} installed plugin(s); `
+      + `these would stay on their old code: ${left.join(', ')}. `
+      + 'Deploy them together, or pass --partial if that is really intended.')
+  }
+}
 
 
 // ---- integrity -----------------------------------------------------------------
@@ -292,41 +345,6 @@ for (const plugin of plugins) {
 
   }
   summary.push(`  ${name} -> ${dst} (${files.length} file entries)`)
-}
-
-/** Build id baked into a deployed client bundle (version+sha). The host reads
- *  the same value from build.json, so a stale bundle is visible as a mismatch
- *  instead of silently serving an old UI. */
-function bakedBuildId(name) {
-  try {
-    const text = readFileSync(join(dshHome, 'plugins', name, 'lib', 'client.js'), 'utf8')
-    const hit = text.match(/\d+\.\d+\.\d+\+[0-9a-f]{6,}/)
-    return hit ? hit[0] : null
-  } catch { return null }
-}
-
-// ONE generation per home, not one per invocation. Deploying a single plugin
-// (say the sandbox) must keep the id the already-staged client bundle carries;
-// otherwise every partial deploy rewrites build.json to a different value and
-// the pane reports drift that no deploy actually caused. Prefer this deploy's
-// own bundles, then anything already staged in the home.
-const stagedPlugins = (() => {
-  try { return readdirSync(join(dshHome, 'plugins')) } catch { return [] }
-})()
-const generation = dryRun ? null : (
-  plugins.map((plugin) => bakedBuildId(plugin.name)).find(Boolean)
-  || stagedPlugins.map(bakedBuildId).find(Boolean)
-  || `${plugins[0].pkg.version}+${repoGitSha}`
-)
-if (!dryRun) {
-  for (const plugin of plugins) {
-    writeFileSync(join(dshHome, 'plugins', plugin.name, 'build.json'), JSON.stringify({
-      version: plugin.pkg.version,
-      gitSha: repoGitSha,
-      buildId: generation,
-      builtAt: new Date().toISOString(),
-    }, null, 2) + '\n')
-  }
 }
 
 // ---- profile wiring -----------------------------------------------------------

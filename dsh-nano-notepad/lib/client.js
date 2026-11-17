@@ -551,8 +551,11 @@ ${bi}
 .np-tool:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 .np-tool svg { width: 18px; height: 18px; }
 .np-tool-sep { width: 1px; height: 18px; margin: 6px 4px; background: var(--dsw-alias-border-l2); flex: none; }
-.np-window button:not([class]):not(.np-tree-tools button):not(.np-node-actions button):not(.np-slash button):not(.np-versions button), .np-footer-actions button.np-danger, .np-dlg-body button:not(.np-transfer-row) { border: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); border-radius: var(--dsw-radius-sm); padding: 4px 10px; cursor: pointer; font: inherit; line-height: 20px; }
-.np-window button:hover, .np-dlg-body button:not(.np-transfer-row):hover { background: var(--dsw-alias-interactive-bg-hover); }
+/* Only notepad's own buttons. A blanket dialog button rule repaints the host
+   SegmentedControl (settings tabs and the on/off control) as separate bordered
+   buttons and covers its thumb, so a click looks like it did nothing. */
+.np-window button:not([class]):not(.np-tree-tools button):not(.np-node-actions button):not(.np-slash button):not(.np-versions button), .np-footer-actions button.np-danger, .np-dlg-body button[data-go], .np-dlg-body button[data-cloud], .np-dlg-body button.np-danger { border: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); border-radius: var(--dsw-radius-sm); padding: 4px 10px; cursor: pointer; font: inherit; line-height: 20px; }
+.np-window button:not([class]):hover, .np-dlg-body button[data-go]:hover, .np-dlg-body button[data-cloud]:hover, .np-dlg-body button.np-danger:hover { background: var(--dsw-alias-interactive-bg-hover); }
 /* keep the row/tab as the only hover surface; inner buttons must not double-fill
    \u2014 scoped to .np-window so we beat the generic .np-window button:hover rule */
 .np-window .np-node-main:hover, .np-window .np-node-actions button:hover, .np-window .np-tab-btn:hover { background: transparent; }
@@ -663,6 +666,9 @@ ${bi}
 .np-dlg-body p, .np-dlg-body pre { margin: 0; color: var(--dsw-alias-label-secondary); line-height: 22px; }
 .np-dlg-body pre { max-height: 240px; overflow: auto; white-space: pre-wrap; font-family: var(--dsw-font-markdown-code-font-family); }
 .np-dlg-body label { display: flex; flex-direction: column; align-items: stretch; gap: 6px; margin: 0; color: var(--dsw-alias-label-secondary); }
+/* Host SegmentedControl may use a label per option. The column rule above would
+   stack its track; leave those labels to the host stylesheet. */
+.np-dlg-body .np-seg label, .np-dlg-body .np-dlg-tabs label, .np-window .np-view-switch label { display: unset; flex-direction: unset; align-items: unset; gap: unset; color: inherit; }
 /* DSH-native settings row: title + description left, control right, hairline row */
 /* uniform rows: same container height for every field, dividers sit centered
    in the equal gap between them */

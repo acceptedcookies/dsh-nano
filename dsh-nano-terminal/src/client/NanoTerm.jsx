@@ -11,6 +11,10 @@ import { loadCore, WasmTerm, MODES } from './wasm.js'
 import { TermCanvas, buildPalette } from './render.js'
 import { encodeKey, encodePaste, encodeMouse, encodeFocus } from './keys.js'
 import { makeLane } from './lanes.js'
+import {
+  unmountAction, freezeGap, shouldRepaintNow, createFitCoalescer, noteFit, flushFit, resizeMode, watchDevicePixelRatio,
+  applyTerminalOutput, outputDuringGap, paintCurrent, queueFrame,
+} from './keep-alive.js'
 
 // Spinner glyphs programs append to OSC titles for animation — strip them so
 // the pane title is stable (herdr terminal_title_stripped convention)
@@ -36,6 +40,10 @@ const FONT_FAMILIES = {
   system: 'ui-monospace, "SF Mono", Menlo, Consolas, monospace',
 }
 const DEFAULT_SETTINGS = { fontSize: 13, font: 'jetbrains', blink: true, scrollback: 2000 }
+// 首帧之前 wasm 与 PTY 共用的几何。必须一致：PTY 按这个尺寸起 shell，wasm
+// 也按这个尺寸解析首批字节，否则窄几何会把程序的首屏输出折错。
+const INITIAL_COLS = 80
+const INITIAL_ROWS = 24
 const SETTINGS_KEY = 'dnt.settings'
 
 function loadSettings() {
@@ -782,14 +790,19 @@ function TermPane({ paneId, laneSpec, sessionId, session, focused, onFocus, onCl
     if (isNew) {
       const palette = buildPalette(box)
       const canvas = new TermCanvas(host, palette, fontFrom(settings), PANE_PAD)
-      const term = new WasmTerm(2, 2, settings.scrollback ?? 2000)
-      const lane = makeLane(laneSpec, { cols: 80, rows: 24, sessionId })
-      rec = { lane, term, canvas, w: 0, h: 0, retrySeq, hooks: {}, lastStatus: { lane: laneSpec.lane, phase: 'opening', scroll: null, title: '' }, closed: false }
+      // 页面 wasm 与 lane 必须用同一初始几何。zsh 启动时会先打一个 `%`，再用
+      // 79 个空格探测光标是否在行首，最后 `\r \r\r ESC[J` 擦掉。2×2 起步会让
+      // 这些空格把 `%` 滚进历史，并把该行标成软折行；随后的 resize reflow 又
+      // 把它拼回提示符前面，屏幕上就多出一个孤立的 `%`。
+      const term = new WasmTerm(INITIAL_COLS, INITIAL_ROWS, settings.scrollback ?? 2000)
+      const lane = makeLane(laneSpec, { cols: INITIAL_COLS, rows: INITIAL_ROWS, sessionId })
+      rec = { lane, term, canvas, w: 0, h: 0, retrySeq, hooks: {}, lastStatus: { lane: laneSpec.lane, phase: 'opening', scroll: null, title: '' }, closed: false, fitState: createFitCoalescer() }
     } else {
       rec.canvas.attach(host)
       setStatus(rec.lastStatus)
     }
     const { canvas, term, lane } = rec
+    rec.fitState = rec.fitState ?? createFitCoalescer()
 
     // status updates flow to whichever mount currently owns the pane AND to
     // the status bar's aggregate map
@@ -841,12 +854,28 @@ function TermPane({ paneId, laneSpec, sessionId, session, focused, onFocus, onCl
     rec.hooks.applyStatus = applyStatus
 
     lane.onOutput = (bytes) => {
-      term.write(bytes)
-      const reply = term.drainReply()
-      // terminal auto-replies bypass the host input gate — they are not human
-      // activity and must never reset the draft/quiet timers (hc rule)
-      if (reply.length) (lane.writeAuto ?? lane.write).call(lane, reply)
-      rec.hooks.schedulePaint?.()
+      outputDuringGap({
+        gapMs: Date.now() - (stateRef.current.beatAt || Date.now()),
+        bytes,
+        requestAlign: () => lane.requestAlign(),
+        write: (data) => {
+          term.write(data)
+          const reply = term.drainReply()
+          // terminal auto-replies bypass the host input gate — they are not human
+          // activity and must never reset the draft/quiet timers (hc rule)
+          if (reply.length) (lane.writeAuto ?? lane.write).call(lane, reply)
+        },
+        after: () => rec.hooks.schedulePaint?.(),
+      })
+    }
+    // 对齐帧整屏替换，不走 onOutput，避免把 dump 当 PTY 字节再解析一遍。
+    lane.onAlign = (snap) => {
+      if (snap.cols >= 2 && snap.rows >= 1) {
+        if (resizeMode(lane.platform) === 'box') term.resizeBox(snap.cols, snap.rows)
+        else term.resize(snap.cols, snap.rows)
+      }
+      term.replaceVisible(snap.text, snap.cursorX, snap.cursorY)
+      paintCurrent({ invalidate: () => term.invalidate(), paint })
     }
     lane.onExit = () => {
       term.dead()
@@ -857,23 +886,35 @@ function TermPane({ paneId, laneSpec, sessionId, session, focused, onFocus, onCl
       saveLayouts() // the pane now has a host addr — persist it for re-attach
     }
 
-    // measure → fit canvas + wasm + pty; a metric-only change (font swap) must
-    // still repaint everything because render() only emits dirty rows
-    const fit = () => {
+    // 一帧里的列数抖动收成一次。和上次提交给 PTY 的尺寸相同就不再 lane.resize。
+    const fitQueue = { handle: 0 }
+    const applyFit = () => {
+      const dprChanged = canvas.syncDpr()
       const rect = host.getBoundingClientRect()
       const dims = paneSessions.current.get(paneId)
       if (dims) { dims.w = rect.width; dims.h = rect.height }
       const cols = Math.max(4, Math.floor((rect.width - canvas.padX * 2) / canvas.charW))
       const rows = Math.max(2, Math.floor((rect.height - canvas.padY) / canvas.charH))
+      noteFit(rec.fitState, cols, rows)
+      const commit = flushFit(rec.fitState)
       const resized = canvas.fit(cols, rows)
-      term.resize(cols, rows)
-      lane.resize(cols, rows)
-      if (resized) {
+      if (commit) {
+        if (resizeMode(lane.platform) === 'box') term.resizeBox(commit.cols, commit.rows)
+        else term.resize(commit.cols, commit.rows)
+        lane.resize(commit.cols, commit.rows)
+        applyStatus((s) => ({ ...s, dims: { cols: commit.cols, rows: commit.rows } }))
+      }
+      if (resized || dprChanged) {
         canvas.clearAll()
         term.invalidate()
-        applyStatus((s) => ({ ...s, dims: { cols, rows } }))
       }
       schedulePaint()
+    }
+    const fit = () => {
+      queueFrame(fitQueue, (run) => requestAnimationFrame(run), () => {
+        if (dead) return
+        applyFit()
+      })
     }
     const ro = new ResizeObserver(fit)
     ro.observe(host)
@@ -1034,7 +1075,28 @@ function TermPane({ paneId, laneSpec, sessionId, session, focused, onFocus, onCl
       const data = encodeMouse(term.modes(), { btn: 32, x, y, release: false, shift: ev.shiftKey, alt: ev.altKey, ctrl: ev.ctrlKey })
       if (data) lane.write(data)
     }
-    const focusin = () => { const d = encodeFocus(term.modes(), true); if (d) lane.write(d) }
+    const focusin = () => {
+      // 重新拿到焦点时把 wasm 里已经当前的网格画出来，不等 500ms。
+      if (shouldRepaintNow({ becameFocused: true })) paintCurrent({ invalidate: () => term.invalidate(), paint })
+      const d = encodeFocus(term.modes(), true)
+      if (d) lane.write(d)
+    }
+    const onVis = () => {
+      if (!shouldRepaintNow({ becameVisible: document.visibilityState === 'visible' })) return
+      paintCurrent({ invalidate: () => term.invalidate(), paint })
+    }
+    // 定时器缺口说明页面被冻过。回来时丢掉积压，对齐宿主镜像，不要快进。
+    stateRef.current.beatAt = Date.now()
+    const beat = setInterval(() => {
+      const now = Date.now()
+      const gap = now - (stateRef.current.beatAt || now)
+      stateRef.current.beatAt = now
+      if (freezeGap(gap)) lane.requestAlign()
+    }, 1000)
+    const onResume = () => lane.requestAlign()
+    document.addEventListener('visibilitychange', onVis)
+    document.addEventListener('resume', onResume)
+    const stopDpr = watchDevicePixelRatio(() => { if (canvas.syncDpr()) fit() })
     const focusout = () => { const d = encodeFocus(term.modes(), false); if (d) lane.write(d) }
     // right-click = menu (herdr right_click=menu default): paste, copy-mode,
     // split, close — rendered by the pane header menu owner, not the program.
@@ -1102,8 +1164,13 @@ function TermPane({ paneId, laneSpec, sessionId, session, focused, onFocus, onCl
     return () => {
       dead = true
       cancelAnimationFrame(raf)
+      cancelAnimationFrame(fitQueue.handle)
       clearInterval(stateRef.current.slowTimer)
+      clearInterval(beat)
       stateRef.current.slowTimer = null
+      document.removeEventListener('visibilitychange', onVis)
+      document.removeEventListener('resume', onResume)
+      stopDpr()
       ro.disconnect()
       box.removeEventListener('keydown', keydown)
       box.removeEventListener('paste', paste)
@@ -1120,8 +1187,12 @@ function TermPane({ paneId, laneSpec, sessionId, session, focused, onFocus, onCl
       // 拖拽中的 window 级监听与选区层随挂载清理；rec.sel 保留在 session
       // 记录上（split remount 恢复高亮是刻意的）
       drag.detach?.()
-      // unmount ≠ close: a split-remount reattaches; closeLeaf decides life.
+      // unmount ≠ close: hidden / 失焦 / 慢绘制都不释放。关窗格和插件卸载才走 closePaneSession。
       canvas.detach()
+      if (unmountAction({
+        hidden: typeof document !== 'undefined' && document.hidden,
+        focused: box.dataset.focused !== 'false',
+      }) === 'release') closePaneSession(rec)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paneId, laneSpec.lane, laneSpec.url, retrySeq])

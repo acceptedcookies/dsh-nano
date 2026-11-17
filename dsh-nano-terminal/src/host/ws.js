@@ -3,6 +3,7 @@
 // No compression, no fragmentation across >64KB (PTY chunks are small).
 
 import { createHash, randomBytes } from 'node:crypto'
+import { encodeAlign, encodeSequenced } from '../shared/align.js'
 
 const GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11'
 
@@ -83,10 +84,10 @@ export function sendPing(socket) {
 //   PING/PONG  4/8
 //   FACTS      5  headless attach reports {cols,rows,fg,bg} JSON
 //   AUTO_INPUT 6  terminal auto-replies (DA/CPR) — bypass the input gate
-//   SNAPSHOT   7  screen catch-up when output outran credit (4MiB rule)
+//   SNAPSHOT   7  当前屏对齐（序号 + dump）。不是清屏转义。
 //   HELD       9  ack: human bytes held behind an agent delivery
-// Client→server credit starts at CREDIT_INIT; when pending outruns
-// SNAP_LIMIT the server degrades to one SNAPSHOT instead of streaming data.
+// Client→server credit starts at CREDIT_INIT. 信用耗尽不再发清屏快照：
+// 多出来的字节留在宿主镜像里，等客户端声明冻结恢复后再对齐一次。
 // ---------------------------------------------------------------------------
 
 export const FR_KIND = {
@@ -115,9 +116,11 @@ export function parseChannel(buf) {
 }
 
 /**
- * Per-socket v2 attach state: credit accounting + snapshot fallback.
- * `pending` = bytes sent since last CREDIT; when it would exceed credit +
- * SNAP_LIMIT we send one SNAPSHOT (escape-cleared screen text) and reset.
+ * Per-socket v2 attach state: credit accounting + current-screen align.
+ * `pending` = bytes sent since last CREDIT. Crossing credit + SNAP_LIMIT
+ * drops the chunk from the wire (the mirror already has it) until `align()`.
+ * alignMode prefixes each DATA payload with a u32 seq; the bytes after it
+ * are the original PTY chunk.
  */
 export class Attach {
   constructor(socket, record) {
@@ -126,36 +129,60 @@ export class Attach {
     this.v = 1
     this.credit = CREDIT_INIT
     this.pending = 0
-    this.snapping = false
+    this.stalled = false
+    this.toldStall = false
+    this.alignMode = false
   }
 
-  /** Send data honoring credit + snapshot fallback. */
-  data(chunk) {
+  /** Send data honoring credit. Over the limit: stall, do not clear the screen. */
+  data(chunk, seq = 0) {
     if (this.v === 1) {
       sendBinary(this.socket, chunk)
       this.pending += chunk.length
       return
     }
-    if (this.snapping || this.pending + chunk.length > this.credit + SNAP_LIMIT) {
-      this.#snapshot()
-      this.pending = 0
-      this.snapping = false
+    if (this.stalled) return
+    const payload = this.alignMode ? Buffer.from(encodeSequenced(seq, chunk)) : chunk
+    if (this.pending + payload.length > this.credit + SNAP_LIMIT) {
+      // 丢掉这段，但告诉客户端来对齐。只靠定时器的话，短冻结加大输出会一直 stalled。
+      this.stalled = true
+      if (!this.toldStall) {
+        this.toldStall = true
+        sendText(this.socket, { type: 'stalled' })
+      }
+      return
     }
-    this.socket.write(encodeFrame(encodeChannel(0, FR_KIND.DATA, chunk), 0x02))
-    this.pending += chunk.length
+    this.socket.write(encodeFrame(encodeChannel(0, FR_KIND.DATA, payload), 0x02))
+    this.pending += payload.length
   }
 
-  /** Consume client credit. */
+  /** Consume client credit. A stall is a hole: align once, do not resume raw bytes. */
   onCredit(n) {
     this.credit += n
     this.pending = Math.max(0, this.pending - n)
+    if (this.stalled) this.align()
   }
 
-  #snapshot() {
-    this.snapping = true
-    const text = this.record?.screenText(200, 'visible') ?? ''
-    const clear = Buffer.from('\x1b[2J\x1b[H', 'utf8')
-    this.socket.write(encodeFrame(encodeChannel(0, FR_KIND.SNAPSHOT, Buffer.concat([clear, Buffer.from(text, 'utf8')])), 0x02))
+  /**
+   * 一次当前屏对齐。载荷是 dump + 序号，不含清屏转义。
+   * 调用后恢复直连：序号之后的 DATA 继续逐块发送。
+   */
+  align() {
+    const view = this.record?.alignView?.() ?? {
+      seq: this.record?.outSeq ?? 0,
+      cols: this.record?.meta?.cols ?? 80,
+      rows: this.record?.meta?.rows ?? 24,
+      cursorX: 0,
+      cursorY: 0,
+      text: this.record?.screenText?.(this.record?.meta?.rows ?? 24, 'visible') ?? this.record?.screenText?.(24, 'visible') ?? '',
+    }
+    const payload = Buffer.from(encodeAlign(view))
+    if (!this.socket.destroyed) {
+      this.socket.write(encodeFrame(encodeChannel(0, FR_KIND.SNAPSHOT, payload), 0x02))
+    }
+    this.pending = 0
+    this.stalled = false
+    this.toldStall = false
   }
 
   channel(channel, kind, payload) {

@@ -88,6 +88,26 @@ export class WasmTerm {
     coreExports().dnt_resize(this.id, cols, rows)
   }
 
+  /** 改网格尺寸但不重排。PTY 会自己重画时用，避免和 reflow 双写。 */
+  resizeBox(cols, rows) {
+    if (cols === this.cols && rows === this.rows) return
+    this.cols = cols
+    this.rows = rows
+    const fn = coreExports().dnt_resize_box
+    if (fn) fn(this.id, cols, rows)
+    else coreExports().dnt_resize(this.id, cols, rows)
+  }
+
+  /** 用对齐帧的纯文本替换可见屏，不把 CSI 送进解析器。 */
+  replaceVisible(text, cursorX = 0, cursorY = 0) {
+    const e = coreExports()
+    const bytes = encoder.encode(text ?? '')
+    const ptr = e.dnt_alloc(Math.max(bytes.length, 1))
+    if (bytes.length) memU8().set(bytes, ptr)
+    e.dnt_replace_visible(this.id, ptr, bytes.length, cursorX, cursorY)
+    e.dnt_dealloc(ptr, Math.max(bytes.length, 1))
+  }
+
   scroll(deltaLines) {
     coreExports().dnt_scroll(this.id, deltaLines)
   }

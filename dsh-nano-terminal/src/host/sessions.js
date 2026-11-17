@@ -19,6 +19,7 @@ import { homedir } from 'node:os'
 import { ScreenMirror, loadMirror } from './mirror.js'
 import { KIND, err } from './errors.js'
 import { Gate } from './gate.js'
+import { resizeMode } from '../shared/align.js'
 
 const decoder = new TextDecoder('utf-8', { fatal: false })
 const encoder = new TextEncoder()
@@ -308,6 +309,8 @@ export class SessionRecord {
     this.replay = []
     this.replayLen = 0
     this.replayCap = replayBytes
+    /** 镜像已吃进的输出块序号。对齐帧带上它，之后的 DATA 必须更大。 */
+    this.outSeq = 0
     this.keepAttempt = 0
     this.keepTimer = null
     this.gate = new Gate()
@@ -365,8 +368,10 @@ export class SessionRecord {
         this.mirror?.write(chunk)
         this.#pollState()
       } catch { /* mirror best-effort */ }
+      this.outSeq = (this.outSeq + 1) >>> 0
+      const seq = this.outSeq
       for (const [s, att] of this.attached) {
-        if (att) att.data(chunk)
+        if (att) att.data(chunk, seq)
         else send(s, chunk)
       }
     })
@@ -544,7 +549,9 @@ export class SessionRecord {
     const prev = `${this.meta.cols}x${this.meta.rows}`
     this.meta = { ...this.meta, cols, rows }
     try {
-      this.mirror?.resize(cols, rows)
+      // ConPTY 会自己重画。镜像先 reflow 再吃那一遍，格子会被写两遍。
+      if (resizeMode(process.platform) === 'box') this.mirror?.resizeBox(cols, rows)
+      else this.mirror?.resize(cols, rows)
     } catch { /* best-effort */ }
     if (`${cols}x${rows}` !== prev) {
       this.registry.bus?.emit('size', this.addr, { id: this.id, cols, rows })
@@ -563,6 +570,28 @@ export class SessionRecord {
       return this.mirror?.screenText(n, source) ?? ''
     } catch {
       return ''
+    }
+  }
+
+  /** 对齐帧要的当前屏：序号、尺寸、光标、可见区 dump。 */
+  alignView() {
+    let cols = this.meta?.cols ?? 80
+    let rows = this.meta?.rows ?? 24
+    let cursorX = 0
+    let cursorY = 0
+    try {
+      cols = this.mirror?.cols?.() || cols
+      rows = this.mirror?.rows?.() || rows
+      cursorX = this.mirror?.cursorX?.() ?? 0
+      cursorY = this.mirror?.cursorY?.() ?? 0
+    } catch { /* mirror best-effort */ }
+    return {
+      seq: this.outSeq >>> 0,
+      cols,
+      rows,
+      cursorX,
+      cursorY,
+      text: this.screenText(rows, 'visible'),
     }
   }
 

@@ -292,7 +292,6 @@ for (const plugin of plugins) {
 
   }
   summary.push(`  ${name} -> ${dst} (${files.length} file entries)`)
-  restoreGenerated(name, plugin)
 }
 
 /** Build id baked into a deployed client bundle (version+sha). The host reads
@@ -389,6 +388,10 @@ for (const { name, dir, files } of dryRun ? [] : plugins) {
     problems.push(`${name}: profile cannot resolve package (${error.message})`)
   }
 }
+// Restore only after content verify. The check compares the source tree to
+// the staged copy; restoring generated bundles first makes a clean tree look
+// like a failed deploy.
+for (const plugin of dryRun ? [] : plugins) restoreGenerated(plugin.name, plugin)
 for (const line of summary) log(line)
 if (problems.length > 0) {
   for (const p of problems) console.error(`[deploy] FAIL ${p}`)

@@ -731,6 +731,9 @@ ${NANO_STYLES}
 /* Settings dialog: fixed card height + two independent flex rows. The tab
    strip never scrolls and is never painted over by panel content. */
 .np-dlg-tabs { flex: none; padding-bottom: 10px; border-bottom: 1px solid var(--dsw-alias-border-l2); }
+/* The host thumb splits the track into equal slices. These labels are not equal
+   width, so the slice misses the text. Pin the thumb to the selected tab. */
+.np-dlg-tabs [role="tablist"] > span { width: var(--np-seg-w); transform: translateX(var(--np-seg-x)); transition: transform .16s ease, width .16s ease; }
 .np-dlg-body > .np-dlg-panels { margin-top: 0; flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 /* ── S3 endpoint management + switch wizard ─────────────────────────────── */
 .np-cloud-settings { margin-top: 4px; }
@@ -3165,6 +3168,7 @@ export function mountNotepad(host, defaults, hostTheme = { theme: undefined, sub
          delegation below keeps working without re-wiring. */
       const TAB_ORDER = ['integrate', 'saving', 'appearance', 'fx', 'storage', 'cloud']
       const TAB_LABEL = { integrate: copy.tabIntegrate, saving: copy.tabSaving, appearance: copy.tabAppearance, fx: copy.tabFx, storage: copy.tabStorage, cloud: copy.tabCloud }
+      let tabResize = null
       const sections = [...el.querySelectorAll('.np-section[data-tab]')]
       if (sections.length > 1) {
         /* Two siblings, not a sticky header inside the scroller: the tab strip
@@ -3189,6 +3193,22 @@ export function mountNotepad(host, defaults, hostTheme = { theme: undefined, sub
         tabsHost.append(tabs.el)
         for (const panel of panels.values()) panelsHost.append(panel)
         el.replaceChildren(tabsHost, panelsHost)
+        /* Equal-slice thumb vs content-sized tabs: measure the selected tab. */
+        const fitTabThumb = () => {
+          const list = tabsHost.querySelector('[role="tablist"]')
+          const selected = list?.querySelector('[role="tab"][aria-selected="true"]')
+          if (!list || !selected) return
+          const listBox = list.getBoundingClientRect()
+          const tabBox = selected.getBoundingClientRect()
+          if (tabBox.width < 1) return
+          const pad = Number.parseFloat(getComputedStyle(list).paddingLeft) || 0
+          list.style.setProperty('--np-seg-x', `${Math.round(tabBox.left - listBox.left - pad)}px`)
+          list.style.setProperty('--np-seg-w', `${Math.round(tabBox.width)}px`)
+        }
+        requestAnimationFrame(fitTabThumb)
+        tabsHost.addEventListener('click', () => requestAnimationFrame(fitTabThumb))
+        tabResize = new ResizeObserver(() => fitTabThumb())
+        tabResize.observe(tabsHost)
       }
       /* segment option tables — values mirror normalizeSettings */
       const SW_OPTIONS = {
@@ -3405,7 +3425,7 @@ export function mountNotepad(host, defaults, hostTheme = { theme: undefined, sub
         if (merged.s3IntervalSec !== previousInterval) sync.start()
         render()
       })
-      return () => { for (const mount of mounts) mount.unmount() }
+      return () => { tabResize?.disconnect(); for (const mount of mounts) mount.unmount() }
       },
     })
   }

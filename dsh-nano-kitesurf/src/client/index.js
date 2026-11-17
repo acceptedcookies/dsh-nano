@@ -146,7 +146,7 @@ const STYLE = `
 /* HITL control bar — ego's bottom "Agent 正在控制 / 接管 / 终止任务" pill,
    reworded honestly: the pane can hold the agent's page writes, it cannot
    kill the run (that is host-side). Positioned bottom-center of the frame. */
-.nks-hitl{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);z-index:var(--nano-layer-local4);display:flex;align-items:center;gap:8px;height:32px;padding:4px 8px 4px 12px;background:var(--dsw-alias-bg-layer-1);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-md,8px);box-shadow:var(--dsw-elevation-soft);font:var(--dsw-font-xxs-12);white-space:nowrap}
+.nks-hitl{position:absolute;right:10px;bottom:10px;z-index:var(--nano-layer-local4);display:flex;align-items:center;gap:8px;height:32px;padding:4px 8px 4px 12px;background:var(--dsw-alias-bg-layer-1);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-md,8px);box-shadow:var(--dsw-elevation-soft);font:var(--dsw-font-xxs-12);white-space:nowrap}
 .nks-hitl-dot{width:8px;height:8px;border-radius:50%;background:var(--dsw-alias-link,#2f6fed);animation:nks-hitl-pulse 1.4s ease-in-out infinite}
 .nks-hitl-dot[data-held="true"]{background:var(--dsw-alias-state-warn-primary);animation:none}
 @keyframes nks-hitl-pulse{0%,100%{opacity:1}50%{opacity:.35}}
@@ -156,30 +156,37 @@ const STYLE = `
 .nks-hitl-btn:hover{background:var(--dsw-alias-bg-layer-3)}
 .nks-hitl-primary{color:var(--dsw-alias-label-primary-inverted);background:var(--dsw-alias-link);border-color:transparent}
 .nks-hitl-primary:hover{background:var(--dsw-alias-link);filter:brightness(1.08)}
-.nks-act{position:absolute;left:50%;bottom:52px;transform:translateX(-50%);z-index:var(--nano-layer-local4);padding:4px 10px;background:var(--dsw-alias-bg-layer-1);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-sm);box-shadow:var(--dsw-elevation-soft);font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-secondary);white-space:nowrap;pointer-events:none;animation:nks-act-in .18s ease-out}
+.nks-act{position:absolute;left:50%;top:34px;transform:translateX(-50%);z-index:var(--nano-layer-local4);padding:4px 10px;background:var(--dsw-alias-bg-layer-1);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-sm);box-shadow:var(--dsw-elevation-soft);font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-secondary);white-space:nowrap;pointer-events:none;animation:nks-act-in .18s ease-out}
 .nks-act[data-ok="false"]{color:var(--dsw-alias-state-error-primary)}
-@keyframes nks-act-in{from{opacity:0;transform:translateX(-50%) translateY(4px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+@keyframes nks-act-in{from{opacity:0;transform:translateX(-50%) translateY(-4px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
 .nks-note-actions{display:flex;gap:2px;align-items:center}
 .nks-note-form{display:flex;gap:4px;align-items:center}
 .nks-note input{width:220px;height:28px;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-12);background:var(--dsw-alias-bg-layer-2);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-sm);padding:0 8px}
 .nks-pins{position:relative;flex:none;pointer-events:auto;padding:2px 8px 4px;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11);display:flex;align-items:center;gap:4px;background:color-mix(in srgb,var(--dsw-alias-bg-layer-1) 94%,transparent)}
-.nks-busy{position:absolute;left:0;right:0;top:0;height:2px;overflow:hidden;z-index:var(--nano-layer-local3)}
-.nks-busy::before{content:"";display:block;width:35%;height:100%;background:var(--dsw-alias-link,#2f6fed);animation:nks-beat 1s ease-in-out infinite}
-@keyframes nks-beat{from{transform:translateX(-120%)}to{transform:translateX(320%)}}
 /* nano-ui-exempt: host primitives and nano-ui ship no indeterminate spinner. */
 .nks-load{position:absolute;inset:0;z-index:var(--nano-layer-local4);display:flex;align-items:center;justify-content:center;pointer-events:none}
 .nks-load-card{display:flex;align-items:center;gap:8px;height:32px;padding:0 12px;background:var(--dsw-alias-bg-layer-1);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-md);box-shadow:var(--dsw-elevation-soft);font:var(--dsw-font-xxs-12);color:var(--dsw-alias-label-secondary)}
 .nks-spin{width:14px;height:14px;box-sizing:border-box;border-radius:50%;border:2px solid var(--dsw-alias-border-l2);border-top-color:var(--dsw-alias-link,#2f6fed);animation:nks-spin .8s linear infinite;flex:none}
 @keyframes nks-spin{to{transform:rotate(360deg)}}
 .nks-open-error{margin:0;color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxs-12);line-height:1.55;word-break:break-word}
+.nks-open-url{color:var(--dsw-alias-label-tertiary);unicode-bidi:plaintext}
+.nks-open-log{margin:6px 0 0;max-height:140px;overflow:auto;padding:6px 8px;border-radius:var(--dsw-radius-sm);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-tertiary);font:11px/1.45 ui-monospace,Menlo,monospace;white-space:pre-wrap;word-break:break-all}
 .nks-settings-body{display:flex;flex-direction:column;gap:8px}
 .nks-status{position:relative;z-index:var(--nano-layer-local3);order:7;flex:none;display:flex;align-items:center;gap:8px;height:26px;padding:0 10px;border-top:.5px solid var(--dsw-alias-border-l3);font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-tertiary)}
 .nks-status button{height:20px;padding:0 8px;border:0;border-radius:var(--dsw-radius-sm);background:transparent;color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxxs-11);cursor:pointer}
 .nks-status button:hover{background:var(--dsw-alias-interactive-bg-hover)}
 .nks-status button[aria-pressed="true"],.nks-status button[data-nks-native-toggle][aria-pressed="true"]{background:color-mix(in srgb,var(--dsw-alias-link,#7aaaff) 22%,transparent);color:var(--dsw-alias-label-primary)}
 .nks-status .nks-count[data-bad="true"]{color:var(--dsw-alias-state-error-primary)}
-.nks-dt{flex:none;height:240px;z-index:var(--nano-layer-local6);order:8;border-radius:0;display:flex;flex-direction:column;background:var(--dsw-alias-bg-base);border-top:.5px solid var(--dsw-alias-border-l2);min-height:0;font:11px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.nks-dt{flex:none;height:240px;min-height:120px;position:relative;z-index:var(--nano-layer-local6);order:8;border-radius:0;display:flex;flex-direction:column;background:var(--dsw-alias-bg-base);border-top:.5px solid var(--dsw-alias-border-l2);min-height:0;font:11px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 .nks-dt-head{flex:none;display:flex;align-items:center;gap:8px;min-height:32px;padding:3px 6px;border-bottom:.5px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1)}
+/* Drag the top edge: the panel is a workspace, not a fixed strip. */
+.nks-dt-grip{position:absolute;left:0;right:0;top:-3px;height:7px;cursor:row-resize;z-index:var(--nano-layer-local2);touch-action:none}
+.nks-dt-grip:hover{background:color-mix(in srgb,var(--dsw-alias-link) 35%,transparent)}
+/* The host strip is sized for a full-width toolbar; three options in a 240px
+   panel need the compact scale. */
+.nks-dt-tabs{flex:none;display:flex;transform:scale(.82);transform-origin:left center}
+.nks-dt[data-nks-dt-collapsed="true"]{height:auto;min-height:0}
+.nks-dt[data-nks-dt-collapsed="true"] > *:not(.nks-dt-head):not(.nks-dt-grip){display:none}
 .nks-dt-body{flex:auto;min-height:0;overflow:auto;font:11px/1.45 ui-monospace,Menlo,monospace}
 .nks-dt-cols{flex:none;display:flex;gap:8px;padding:2px 8px;color:var(--dsw-alias-label-dimmed);border-bottom:.5px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1);font-size:10px;text-transform:uppercase;letter-spacing:.04em;font:var(--dsw-font-xxxs-11)}
 .nks-dt-row{display:flex;gap:8px;padding:2px 8px;border-bottom:.5px solid color-mix(in srgb,var(--dsw-alias-border-l3) 45%,transparent);align-items:baseline;white-space:nowrap}
@@ -278,11 +285,27 @@ const STYLE = `
 .nks-frame{background-image:linear-gradient(45deg,rgba(127,127,127,.05) 25%,transparent 25%,transparent 75%,rgba(127,127,127,.05) 75%),linear-gradient(45deg,rgba(127,127,127,.05) 25%,transparent 25%,transparent 75%,rgba(127,127,127,.05) 75%);background-size:16px 16px;background-position:0 0,8px 8px}
 `
 
+/** No request may hang forever. When the engine's page script dies mid-call
+ *  the socket never answers, and without a deadline `busyRef` stayed true for
+ *  the rest of the session — every later click was silently ignored, which is
+ *  exactly "I typed a URL and nothing happened". */
+const REQUEST_TIMEOUT_MS = 20000
+
 function post(path, body) {
+  const controller = typeof AbortController === 'function' ? new AbortController() : null
+  const timer = controller ? window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS) : 0
   return fetch(path, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body ?? {}),
+    signal: controller?.signal,
+  }).catch((cause) => {
+    if (cause?.name === 'AbortError') {
+      const error = new Error(`request timed out after ${REQUEST_TIMEOUT_MS}ms`)
+      error.errorId = 'kitesurf.engine.connect'
+      throw error
+    }
+    throw cause
   }).then(async (response) => {
     const payload = await response.json().catch(() => ({}))
     if (!response.ok || payload.ok === false) {
@@ -291,7 +314,21 @@ function post(path, body) {
       throw error
     }
     return payload
-  })
+  }).finally(() => { if (timer) window.clearTimeout(timer) })
+}
+
+/** Last few meaningful lines of the engine's own log, for an error dialog.
+ *  Best effort: a missing log must never replace the real error. */
+async function engineLogHint() {
+  try {
+    const data = await fetch(`${LOGS}?tail=60`).then((r) => r.json())
+    if (!data?.ok) return ''
+    const lines = String(data.text || '')
+      .split('\n')
+      .map((line) => line.replace(/\x1b\[[0-9;]*m/g, '').trim())
+      .filter((line) => line && !/GET \/json\/list|\[ks-lag\] alive/.test(line))
+    return lines.slice(-4).join('\n')
+  } catch { return '' }
 }
 
 /** Bounded wait for a navigation to become visible: the pane polls the frame
@@ -308,6 +345,22 @@ function sameUrl(value) {
     const parsed = new URL(text)
     return `${parsed.protocol}//${parsed.host}${parsed.pathname.replace(/\/$/, '')}${parsed.search}`
   } catch { return text.replace(/\/$/, '') }
+}
+
+/** Did the frame land on this site, allowing the usual redirect hops
+ *  (`archy.studio` → `www.archy.studio`, a locale path, a trailing slash)?
+ *  An exact-string match treated every redirect as a failure. */
+function sameSite(requested, landed) {
+  const a = sameUrl(requested)
+  const b = sameUrl(landed)
+  if (!b) return false
+  if (a === b) return true
+  try {
+    const want = new URL(requested)
+    const got = new URL(landed)
+    const strip = (host) => host.replace(/^www\./, '')
+    return strip(want.host) === strip(got.host)
+  } catch { return false }
 }
 
 /** Content-rect of the letterboxed image inside its frame; null before load. */
@@ -368,6 +421,206 @@ function selectRadio(group, value) {
     button.setAttribute('aria-checked', on ? 'true' : 'false')
     button.tabIndex = on ? 0 : -1
   }
+}
+
+function DevTools({ copy, open, onClose }) {
+  const [tab, setTab] = React.useState('console')
+  const [rows, setRows] = React.useState([])
+  const [failedOnly, setFailedOnly] = React.useState(false)
+  const [styles, setStyles] = React.useState(null)
+  // The panel is a workspace, not a fixed strip: the human decides how much
+  // room the page gives up. Height lives here so it survives a re-render.
+  const [height, setHeight] = React.useState(240)
+  const [collapsed, setCollapsed] = React.useState(false)
+  const dragRef = React.useRef(null)
+
+  function startResize(event) {
+    event.preventDefault()
+    event.stopPropagation()
+    const startY = event.clientY
+    const startHeight = height
+    dragRef.current = { startY, startHeight }
+    const target = event.currentTarget
+    target.setPointerCapture?.(event.pointerId)
+    const move = (moveEvent) => {
+      const next = startHeight + (startY - moveEvent.clientY)
+      setHeight(Math.max(120, Math.min(Math.round(window.innerHeight * 0.75), next)))
+    }
+    const stop = () => {
+      dragRef.current = null
+      target.releasePointerCapture?.(event.pointerId)
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', stop)
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', stop)
+  }
+  React.useEffect(() => {
+    if (!open) return undefined
+    let alive = true
+    let since = null
+    setRows([])
+    const merge = (fresh, keyOf) => setRows((prev) => {
+      if (!Array.isArray(fresh) || fresh.length === 0) return prev
+      const seen = new Set(prev.map(keyOf))
+      const extra = fresh.filter((r) => !seen.has(keyOf(r)))
+      if (extra.length === 0) return prev
+      // Rows that changed state (pending → finished) share the key; let the
+      // newer copy win so status/duration/waterfall update in place.
+      const merged = prev.map((r) => fresh.find((f) => keyOf(f) === keyOf(r)) || r).concat(extra)
+      return merged.slice(-400)
+    })
+    const load = async () => {
+      try {
+        if (tab === 'console') {
+          const url = since ? `${CONSOLE}?limit=200&since=${encodeURIComponent(since)}` : `${CONSOLE}?limit=200`
+          const data = await fetch(url).then((r) => r.json())
+          if (alive && Array.isArray(data.entries)) {
+            merge(data.entries, (r) => `c${r.seq}`)
+            const last = data.entries[data.entries.length - 1]
+            if (last?.at) since = last.at
+          }
+        } else if (tab === 'network') {
+          const url = `${NETWORK}?limit=200${failedOnly ? '&failedOnly=true' : ''}${since ? `&since=${encodeURIComponent(since)}` : ''}`
+          const data = await fetch(url).then((r) => r.json())
+          if (alive && Array.isArray(data.entries)) {
+            merge(data.entries, (r) => `n${r.id}`)
+            const lastStart = data.entries.reduce((m, r) => Math.max(m, Number(r.startedAt) || 0), 0)
+            if (lastStart) since = String(lastStart)
+          }
+        } else {
+          const data = await fetch(`${ELEMENTS}?depth=3`).then((r) => r.json())
+          if (alive) setRows(data.nodes || [])
+        }
+      } catch { /* endpoint may be briefly unavailable */ }
+    }
+    load()
+    // Poll fast while the pane is visible; back off hard when the whole tab
+    // is backgrounded — the devtools buffer is ring-shaped on the host so
+    // nothing is lost while we idle.
+    const period = () => (document.visibilityState === 'hidden' ? 15000 : 1500)
+    let timer = 0
+    const arm = () => { clearInterval(timer); timer = window.setInterval(load, period()) }
+    const onVis = () => { arm(); if (document.visibilityState !== 'hidden') load() }
+    document.addEventListener('visibilitychange', onVis)
+    arm()
+    return () => { alive = false; clearInterval(timer); document.removeEventListener('visibilitychange', onVis) }
+  }, [open, tab, failedOnly])
+  if (!open) return null
+  const inspectNode = async (row) => {
+    const selector = row.id ? `${row.tag}#${row.id}` : (row.cls ? `${row.tag}.${String(row.cls).trim().split(/\s+/)[0]}` : row.tag)
+    try {
+      const data = await fetch(`${ELEMENTS}?selector=${encodeURIComponent(selector)}`).then((r) => r.json())
+      setStyles({ selector, matched: data.matched?.matched || [], computed: data.computed || {} })
+    } catch { setStyles({ selector, matched: [], computed: {} }) }
+  }
+  const clear = async () => {
+    const path = tab === 'console' ? CONSOLE : NETWORK
+    await fetch(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"clear":true}' }).catch(() => {})
+    setRows([])
+  }
+  return h('div', {
+    className: 'nks-dt',
+    'data-nks-devtools': '1',
+    'data-nks-dt-collapsed': collapsed ? 'true' : 'false',
+    style: collapsed ? undefined : { height: `${height}px` },
+  },
+    // Drag the top edge to give the panel more or less room.
+    h('div', {
+      className: 'nks-dt-grip',
+      'data-nks-dt-grip': '1',
+      role: 'separator',
+      'aria-orientation': 'horizontal',
+      'aria-label': copy.devtoolsResize,
+      onPointerDown: startResize,
+    }),
+    h('div', { className: 'nks-dt-head' },
+      // View switch, filter toggle and row actions are host primitives; the
+      // pane draws no tab chrome of its own (DESIGN.md §6.1). The strip is
+      // scaled to the panel: at full size three options ate the whole header.
+      h('div', { className: 'nks-dt-tabs' },
+        h(primitives.SegmentedControl, {
+          id: 'nks-dt-view',
+          value: tab,
+          label: copy.devtools,
+          options: [
+            { value: 'console', label: copy.devtoolsConsole },
+            { value: 'network', label: copy.devtoolsNetwork },
+            { value: 'elements', label: 'Elements' },
+          ],
+          onChange: (next) => setTab(next),
+        })),
+      tab === 'network' ? h(primitives.Switch, {
+        checked: failedOnly,
+        label: copy.devtoolsFailedOnly,
+        onChange: (next) => setFailedOnly(next),
+      }) : null,
+      h('span', { style: { flex: 'auto' } }),
+      h(primitives.Button, { variant: 'ghost', size: 'sm', onClick: clear }, copy.devtoolsClear),
+      h(primitives.Button, {
+        variant: 'ghost',
+        size: 'sm',
+        'data-nks-dt-collapse': '1',
+        'aria-expanded': collapsed ? 'false' : 'true',
+        onClick: () => setCollapsed((value) => !value),
+      }, collapsed ? copy.devtoolsExpand : copy.devtoolsCollapse),
+      h(primitives.Button, { variant: 'ghost', size: 'sm', onClick: onClose }, copy.devtoolsClose)),
+    styles ? h('div', { className: 'nks-dt-styles', 'data-nks-dt-styles': '1' },
+      h('div', { className: 'nks-dt-style-head' }, `${styles.selector} · ${styles.matched.length} rules · ${Object.keys(styles.computed).length} computed`),
+      styles.matched.slice(0, 6).map((rule, i) => h('div', { className: 'nks-dt-rule', key: `r${i}` },
+        h('b', null, rule.selector || '(anonymous)'),
+        h('span', null, (rule.properties || []).slice(0, 6).join('; '))))) : null,
+    tab === 'console' ? h('div', { className: 'nks-dt-cols' },
+      h('span', { className: 'nks-dt-time' }, 'Time'),
+      h('span', { className: 'nks-dt-lv' }, 'Level'),
+      h('span', { className: 'nks-dt-msg', style: { textAlign: 'left' } }, 'Message'),
+      h('span', { className: 'nks-dt-src' }, 'Source')) : null,
+    tab === 'network' ? h('div', { className: 'nks-dt-cols' },
+      h('span', { className: 'nks-dt-lv' }, 'Method'),
+      h('span', { className: 'nks-dt-st' }, 'Status'),
+      h('span', { className: 'nks-dt-type' }, 'Type'),
+      h('span', { className: 'nks-dt-url nks-dt-grow', style: { maxWidth: 'none', textAlign: 'left' } }, 'URL'),
+      h('span', { className: 'nks-dt-size' }, 'Size'),
+      h('span', { className: 'nks-dt-dur' }, 'Time'),
+      h('span', { className: 'nks-dt-wf', style: { height: 'auto' } }, 'Waterfall')) : null,
+    h('div', { className: 'nks-dt-body', 'data-nks-dt-body': '1' },
+      rows.length === 0 ? h('div', { className: 'nks-dt-empty' }, copy.devtoolsEmpty) : null,
+      rows.map((row, index) => tab === 'elements'
+        ? h('div', { className: 'nks-dt-row', key: `e${row.nodeId || index}`, style: { paddingLeft: `${8 + (row.level || 0) * 12}px`, cursor: 'pointer' }, onClick: () => inspectNode(row), 'data-nks-el-node': String(row.nodeId) },
+          h('span', { className: 'nks-dt-lv' }, row.tag),
+          h('span', { className: 'nks-dt-msg' }, `${row.id ? '#' + row.id : ''}${row.cls ? '.' + String(row.cls).split(/\s+/).slice(0, 2).join('.') : ''}`),
+          h('span', { className: 'nks-dt-dur' }, row.childNodeCount ? String(row.childNodeCount) : ''))
+        : tab === 'console'
+        ? h('div', { className: 'nks-dt-row', key: `c${row.seq || index}` },
+          h('span', { className: 'nks-dt-time' }, String(row.at || '').slice(11, 19)),
+          h('span', { className: 'nks-dt-lv', 'data-lv': row.level }, row.level),
+          h('span', { className: 'nks-dt-msg' }, row.text),
+          h('span', { className: 'nks-dt-src' }, row.url ? `${row.url}${row.lineNumber != null ? ':' + row.lineNumber : ''}` : row.source || ''))
+        : h('div', { className: 'nks-dt-row', key: `n${row.id || index}` },
+          h('span', { className: 'nks-dt-lv' }, row.method),
+          h('span', { className: 'nks-dt-st', 'data-bad': row.failed || (row.status && row.status >= 400) ? 'true' : 'false' }, row.failed ? 'ERR' : String(row.status || '…')),
+          h('span', { className: 'nks-dt-type' }, String(row.mimeType || row.type || '').split(';')[0].replace('application/', '').replace('text/', '').slice(0, 12)),
+          h('span', { className: 'nks-dt-url nks-dt-grow', 'data-bad': row.failed || (row.status || 0) >= 400 ? 'true' : 'false' }, row.url),
+          h('span', { className: 'nks-dt-size' }, row.size == null ? '' : row.size > 1024 ? `${(row.size / 1024).toFixed(1)}kb` : `${row.size}b`),
+          h('span', { className: 'nks-dt-dur' }, row.durationMs == null ? '' : `${row.durationMs}ms`),
+          h('span', { className: 'nks-dt-wf', 'data-nks-dt-wf': '1' }, wfBar(row, rows))))))
+}
+
+// Waterfall scale is recomputed per render from the row set passed in:
+// earliest startedAt is x=0, the last finished end is the span. Bars show
+// start offset × duration so serial-vs-parallel traffic is visible at a
+// glance; pending rows render a dim sliver at their start point.
+function wfBar(row, rows) {
+  const starts = rows.map((r) => Number(r.startedAt) || 0).filter(Boolean)
+  const ends = rows.map((r) => (Number(r.startedAt) || 0) + (Number(r.durationMs) || 0)).filter(Boolean)
+  const min = starts.length ? Math.min(...starts) : 0
+  const span = Math.max(1, (ends.length ? Math.max(...ends) : min + 1) - min)
+  const start = Number(row.startedAt) || 0
+  const dur = Number(row.durationMs) || 0
+  const left = Math.max(0, Math.min(100, ((start - min) / span) * 100))
+  const width = dur > 0 ? Math.max(1.5, Math.min(100 - left, (dur / span) * 100)) : 1.5
+  const pending = row.durationMs == null && !row.failed
+  return h('i', { style: { left: `${left}%`, width: `${width}%` }, 'data-bad': row.failed || (row.status || 0) >= 400 ? 'true' : 'false', 'data-pending': pending ? 'true' : 'false' })
 }
 
 function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
@@ -808,7 +1061,10 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
       },
       children: h('div', { 'data-nks-open-error': '1' },
         h('p', { className: 'nks-open-error' }, message),
-        url ? h('p', { className: 'nks-open-error' }, url) : null),
+        url ? h('p', { className: 'nks-open-error nks-open-url' }, url) : null,
+        cause?.detail?.engineLog
+          ? h('pre', { className: 'nks-open-log', 'data-nks-open-log': '1' }, cause.detail.engineLog)
+          : null),
     })
   }
 
@@ -833,21 +1089,23 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
       await post(OPEN, { url })
     })
     const fit = frameSize()
-    const want = sameUrl(url)
     const started = Date.now()
     let shotPayload = null
     for (;;) {
       shotPayload = await post(SHOT, { format: 'webp', ...(fit ? { fit } : {}) })
-      if (sameUrl(shotPayload.url) === want) break
+      if (sameSite(url, shotPayload.url)) break
       if (Date.now() - started >= NAV_CONFIRM_MS) break
       await new Promise((resolve) => { window.setTimeout(resolve, NAV_POLL_MS) })
     }
     setShot(shotPayload.data)
     setShotMime(shotPayload.mimeType || 'image/webp')
     setShotMeta({ url: shotPayload.url || '', scrollY: shotPayload.scrollY || 0, targetId: shotPayload.targetId || '', viewport: shotPayload.viewport?.width ?? null, at: Date.now() })
-    if (sameUrl(shotPayload.url) !== want) {
-      const error = new Error(`${copy.navigateUnconfirmed} ${url}`)
+    if (!sameSite(url, shotPayload.url)) {
+      // Say what the engine said. A bare errorId sent the owner to the source
+      // code; the container log names the actual failure.
+      const error = new Error(copy.navigateUnconfirmed)
       error.errorId = 'kitesurf.navigate.failed'
+      error.detail = { url, engineLog: await engineLogHint() }
       throw error
     }
     await loadDom()
@@ -1720,155 +1978,6 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
             : h('div', { className: 'nks-modal-empty' }, '还没有浏览记录'))) )
   }
 
-  function DevTools({ open, onClose }) {
-    const [tab, setTab] = React.useState('console')
-    const [rows, setRows] = React.useState([])
-    const [failedOnly, setFailedOnly] = React.useState(false)
-    const [styles, setStyles] = React.useState(null)
-    React.useEffect(() => {
-      if (!open) return undefined
-      let alive = true
-      let since = null
-      setRows([])
-      const merge = (fresh, keyOf) => setRows((prev) => {
-        if (!Array.isArray(fresh) || fresh.length === 0) return prev
-        const seen = new Set(prev.map(keyOf))
-        const extra = fresh.filter((r) => !seen.has(keyOf(r)))
-        if (extra.length === 0) return prev
-        // Rows that changed state (pending → finished) share the key; let the
-        // newer copy win so status/duration/waterfall update in place.
-        const merged = prev.map((r) => fresh.find((f) => keyOf(f) === keyOf(r)) || r).concat(extra)
-        return merged.slice(-400)
-      })
-      const load = async () => {
-        try {
-          if (tab === 'console') {
-            const url = since ? `${CONSOLE}?limit=200&since=${encodeURIComponent(since)}` : `${CONSOLE}?limit=200`
-            const data = await fetch(url).then((r) => r.json())
-            if (alive && Array.isArray(data.entries)) {
-              merge(data.entries, (r) => `c${r.seq}`)
-              const last = data.entries[data.entries.length - 1]
-              if (last?.at) since = last.at
-            }
-          } else if (tab === 'network') {
-            const url = `${NETWORK}?limit=200${failedOnly ? '&failedOnly=true' : ''}${since ? `&since=${encodeURIComponent(since)}` : ''}`
-            const data = await fetch(url).then((r) => r.json())
-            if (alive && Array.isArray(data.entries)) {
-              merge(data.entries, (r) => `n${r.id}`)
-              const lastStart = data.entries.reduce((m, r) => Math.max(m, Number(r.startedAt) || 0), 0)
-              if (lastStart) since = String(lastStart)
-            }
-          } else {
-            const data = await fetch(`${ELEMENTS}?depth=3`).then((r) => r.json())
-            if (alive) setRows(data.nodes || [])
-          }
-        } catch { /* endpoint may be briefly unavailable */ }
-      }
-      load()
-      // Poll fast while the pane is visible; back off hard when the whole tab
-      // is backgrounded — the devtools buffer is ring-shaped on the host so
-      // nothing is lost while we idle.
-      const period = () => (document.visibilityState === 'hidden' ? 15000 : 1500)
-      let timer = 0
-      const arm = () => { clearInterval(timer); timer = window.setInterval(load, period()) }
-      const onVis = () => { arm(); if (document.visibilityState !== 'hidden') load() }
-      document.addEventListener('visibilitychange', onVis)
-      arm()
-      return () => { alive = false; clearInterval(timer); document.removeEventListener('visibilitychange', onVis) }
-    }, [open, tab, failedOnly])
-    if (!open) return null
-    const inspectNode = async (row) => {
-      const selector = row.id ? `${row.tag}#${row.id}` : (row.cls ? `${row.tag}.${String(row.cls).trim().split(/\s+/)[0]}` : row.tag)
-      try {
-        const data = await fetch(`${ELEMENTS}?selector=${encodeURIComponent(selector)}`).then((r) => r.json())
-        setStyles({ selector, matched: data.matched?.matched || [], computed: data.computed || {} })
-      } catch { setStyles({ selector, matched: [], computed: {} }) }
-    }
-    const clear = async () => {
-      const path = tab === 'console' ? CONSOLE : NETWORK
-      await fetch(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"clear":true}' }).catch(() => {})
-      setRows([])
-    }
-    return h('div', { className: 'nks-dt', 'data-nks-devtools': '1' },
-      h('div', { className: 'nks-dt-head' },
-        // View switch, filter toggle and row actions are host primitives; the
-        // pane draws no tab chrome of its own (DESIGN.md §6.1).
-        h(primitives.SegmentedControl, {
-          id: 'nks-dt-view',
-          value: tab,
-          label: copy.devtools,
-          options: [
-            { value: 'console', label: copy.devtoolsConsole },
-            { value: 'network', label: copy.devtoolsNetwork },
-            { value: 'elements', label: 'Elements' },
-          ],
-          onChange: (next) => setTab(next),
-        }),
-        tab === 'network' ? h(primitives.Switch, {
-          checked: failedOnly,
-          label: copy.devtoolsFailedOnly,
-          onChange: (next) => setFailedOnly(next),
-        }) : null,
-        h('span', { style: { flex: 'auto' } }),
-        h(primitives.Button, { variant: 'ghost', size: 'sm', onClick: clear }, copy.devtoolsClear),
-        h(primitives.Button, { variant: 'ghost', size: 'sm', onClick: onClose }, copy.devtoolsClose)),
-      styles ? h('div', { className: 'nks-dt-styles', 'data-nks-dt-styles': '1' },
-        h('div', { className: 'nks-dt-style-head' }, `${styles.selector} · ${styles.matched.length} rules · ${Object.keys(styles.computed).length} computed`),
-        styles.matched.slice(0, 6).map((rule, i) => h('div', { className: 'nks-dt-rule', key: `r${i}` },
-          h('b', null, rule.selector || '(anonymous)'),
-          h('span', null, (rule.properties || []).slice(0, 6).join('; '))))) : null,
-      tab === 'console' ? h('div', { className: 'nks-dt-cols' },
-        h('span', { className: 'nks-dt-time' }, 'Time'),
-        h('span', { className: 'nks-dt-lv' }, 'Level'),
-        h('span', { className: 'nks-dt-msg', style: { textAlign: 'left' } }, 'Message'),
-        h('span', { className: 'nks-dt-src' }, 'Source')) : null,
-      tab === 'network' ? h('div', { className: 'nks-dt-cols' },
-        h('span', { className: 'nks-dt-lv' }, 'Method'),
-        h('span', { className: 'nks-dt-st' }, 'Status'),
-        h('span', { className: 'nks-dt-type' }, 'Type'),
-        h('span', { className: 'nks-dt-url nks-dt-grow', style: { maxWidth: 'none', textAlign: 'left' } }, 'URL'),
-        h('span', { className: 'nks-dt-size' }, 'Size'),
-        h('span', { className: 'nks-dt-dur' }, 'Time'),
-        h('span', { className: 'nks-dt-wf', style: { height: 'auto' } }, 'Waterfall')) : null,
-      h('div', { className: 'nks-dt-body', 'data-nks-dt-body': '1' },
-        rows.length === 0 ? h('div', { className: 'nks-dt-empty' }, copy.devtoolsEmpty) : null,
-        rows.map((row, index) => tab === 'elements'
-          ? h('div', { className: 'nks-dt-row', key: `e${row.nodeId || index}`, style: { paddingLeft: `${8 + (row.level || 0) * 12}px`, cursor: 'pointer' }, onClick: () => inspectNode(row), 'data-nks-el-node': String(row.nodeId) },
-            h('span', { className: 'nks-dt-lv' }, row.tag),
-            h('span', { className: 'nks-dt-msg' }, `${row.id ? '#' + row.id : ''}${row.cls ? '.' + String(row.cls).split(/\s+/).slice(0, 2).join('.') : ''}`),
-            h('span', { className: 'nks-dt-dur' }, row.childNodeCount ? String(row.childNodeCount) : ''))
-          : tab === 'console'
-          ? h('div', { className: 'nks-dt-row', key: `c${row.seq || index}` },
-            h('span', { className: 'nks-dt-time' }, String(row.at || '').slice(11, 19)),
-            h('span', { className: 'nks-dt-lv', 'data-lv': row.level }, row.level),
-            h('span', { className: 'nks-dt-msg' }, row.text),
-            h('span', { className: 'nks-dt-src' }, row.url ? `${row.url}${row.lineNumber != null ? ':' + row.lineNumber : ''}` : row.source || ''))
-          : h('div', { className: 'nks-dt-row', key: `n${row.id || index}` },
-            h('span', { className: 'nks-dt-lv' }, row.method),
-            h('span', { className: 'nks-dt-st', 'data-bad': row.failed || (row.status && row.status >= 400) ? 'true' : 'false' }, row.failed ? 'ERR' : String(row.status || '…')),
-            h('span', { className: 'nks-dt-type' }, String(row.mimeType || row.type || '').split(';')[0].replace('application/', '').replace('text/', '').slice(0, 12)),
-            h('span', { className: 'nks-dt-url nks-dt-grow', 'data-bad': row.failed || (row.status || 0) >= 400 ? 'true' : 'false' }, row.url),
-            h('span', { className: 'nks-dt-size' }, row.size == null ? '' : row.size > 1024 ? `${(row.size / 1024).toFixed(1)}kb` : `${row.size}b`),
-            h('span', { className: 'nks-dt-dur' }, row.durationMs == null ? '' : `${row.durationMs}ms`),
-            h('span', { className: 'nks-dt-wf', 'data-nks-dt-wf': '1' }, wfBar(row, rows))))))
-  }
-
-  // Waterfall scale is recomputed per render from the row set passed in:
-  // earliest startedAt is x=0, the last finished end is the span. Bars show
-  // start offset × duration so serial-vs-parallel traffic is visible at a
-  // glance; pending rows render a dim sliver at their start point.
-  function wfBar(row, rows) {
-    const starts = rows.map((r) => Number(r.startedAt) || 0).filter(Boolean)
-    const ends = rows.map((r) => (Number(r.startedAt) || 0) + (Number(r.durationMs) || 0)).filter(Boolean)
-    const min = starts.length ? Math.min(...starts) : 0
-    const span = Math.max(1, (ends.length ? Math.max(...ends) : min + 1) - min)
-    const start = Number(row.startedAt) || 0
-    const dur = Number(row.durationMs) || 0
-    const left = Math.max(0, Math.min(100, ((start - min) / span) * 100))
-    const width = dur > 0 ? Math.max(1.5, Math.min(100 - left, (dur / span) * 100)) : 1.5
-    const pending = row.durationMs == null && !row.failed
-    return h('i', { style: { left: `${left}%`, width: `${width}%` }, 'data-bad': row.failed || (row.status || 0) >= 400 ? 'true' : 'false', 'data-pending': pending ? 'true' : 'false' })
-  }
 
   function openSettings() {
     if (dialogOpenRef.current) return
@@ -2111,7 +2220,7 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
       h('span', { style: { flex: 'auto' } })),
 
     h(HistoryDialog, { open: historyOpen, onClose: () => setHistoryOpen(false) }),
-    h(DevTools, { open: devtoolsOpen, onClose: () => setDevtoolsOpen(false) }),
+    h(DevTools, { copy, open: devtoolsOpen, onClose: () => setDevtoolsOpen(false) }),
     h('div', {
       ref: frameRef,
       className: 'nks-frame',
@@ -2150,8 +2259,7 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
         Array.isArray(pick.elements[0].componentStack) && pick.elements[0].componentStack.length
           ? h('span', { 'data-nks-stack': '1', title: pick.elements[0].componentStack.join(' → ') },
               `⚛ ${pick.elements[0].componentStack.slice(-3).join(' → ')}`) : null) : null,
-      busy ? h('div', { className: 'nks-busy', 'data-nks-loading': '1', role: 'progressbar', 'aria-label': copy.opening }) : null,
-      beat ? h('div', { className: 'nks-load', 'data-nks-beat': '1', role: 'status' },
+      beat ? h('div', { className: 'nks-load', 'data-nks-beat': '1', 'data-nks-loading': '1', role: 'status' },
         h('div', { className: 'nks-load-card' },
           h('i', { className: 'nks-spin', 'aria-hidden': true }),
           h('span', null, copy.opening),
@@ -2274,7 +2382,7 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
       // an agent holds the bridge writer lock or the human holds the override.
       // "停止写入" is honest wording — the pane cannot kill the agent's run
       // (that lives in the host), it can only hold its page writes.
-      control?.humanHold?.active || control?.writer ? h('div', {
+      !beat && (control?.humanHold?.active || control?.writer) ? h('div', {
         className: 'nks-hitl',
         'data-nks-hitl': '1',
         role: 'status',

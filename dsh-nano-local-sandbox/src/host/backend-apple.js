@@ -121,7 +121,8 @@ export function createAppleBackend(spec = {}, io = {}) {
      *  own output exists, so diagnosis has to read it from here. */
     async logs(name, { tail = 200 } = {}) {
       calls.logs += 1
-      const stdout = await runFile(bound, ['logs', '--tail', String(tail), name])
+      // Apple's CLI spells the flag `-n`; `--tail` is rejected outright.
+      const stdout = await runFile(bound, ['logs', '-n', String(tail), name])
       return { ok: true, container: name, text: String(stdout ?? '') }
     },
     async publish(ports) {

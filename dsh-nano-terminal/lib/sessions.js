@@ -333,7 +333,496 @@ function resizeMode(platform) {
   return platform === "win32" ? "box" : "reflow";
 }
 
+// ../../../../packages/dsh-interface/src/contracts/jsonOutcome.js
+var FAILURE_KIND = Object.freeze({
+  /** signal aborted; issued-before cancellation makes no server-side claim. */
+  CANCELLED: "cancelled",
+  /** Network/read-body failure; keep real httpStatus only when headers landed. */
+  TRANSPORT: "transport",
+  /** Non-2xx that is not a recognized sanctioned business failure; keep status. */
+  HTTP: "http",
+  /** Pre-request encode/binding failure OR illegal 2xx — never becomes ok:true. */
+  PROTOCOL: "protocol",
+  /** Recognized sanctioned business failure (incl. legal 2xx business failures). */
+  DOMAIN: "domain"
+});
+var FAILURE_KINDS = Object.freeze(Object.values(FAILURE_KIND));
+
+// ../../../../packages/dsh-interface/src/contracts/observeEvent.js
+var OBSERVE_SURFACES = Object.freeze(["http", "upgrade", "json", "mcp"]);
+var HTTP_OUTCOMES = Object.freeze(["ok", "rejected", "method", "failed"]);
+var UPGRADE_OUTCOMES = Object.freeze(["accepted", "rejected", "method"]);
+var JSON_OUTCOMES = Object.freeze(["ok", ...FAILURE_KINDS]);
+var MCP_OUTCOMES = Object.freeze(["ok", "error", "rejected"]);
+var OBSERVE_FIELDS = Object.freeze([
+  "surface",
+  "id",
+  "plugin",
+  "outcome",
+  "ms",
+  "status",
+  "kind"
+]);
+var REQUIRED = ["surface", "id", "plugin", "outcome", "ms"];
+var OPTIONAL = /* @__PURE__ */ new Set(["status", "kind"]);
+var OUTCOMES = {
+  http: new Set(HTTP_OUTCOMES),
+  upgrade: new Set(UPGRADE_OUTCOMES),
+  json: new Set(JSON_OUTCOMES),
+  mcp: new Set(MCP_OUTCOMES)
+};
+function fail(message) {
+  throw new TypeError(`observe-event: ${message}`);
+}
+function assertObserveEvent(event) {
+  if (event == null || typeof event !== "object" || Array.isArray(event)) {
+    fail("event must be an object");
+  }
+  const keys = Object.keys(event);
+  for (const key of keys) {
+    if (!REQUIRED.includes(key) && !OPTIONAL.has(key)) fail(`unknown field ${key}`);
+  }
+  for (const key of REQUIRED) {
+    if (!Object.prototype.hasOwnProperty.call(event, key)) fail(`missing ${key}`);
+  }
+  if (!OUTCOMES[event.surface]) fail(`unknown surface ${String(event.surface)}`);
+  if (event.id !== null && (typeof event.id !== "string" || event.id === "")) {
+    fail("id must be a non-empty string or null");
+  }
+  if (event.plugin !== null && (typeof event.plugin !== "string" || event.plugin === "")) {
+    fail("plugin must be a non-empty string or null");
+  }
+  if (typeof event.outcome !== "string" || !OUTCOMES[event.surface].has(event.outcome)) {
+    fail(`unknown outcome ${String(event.outcome)} for ${event.surface}`);
+  }
+  if (typeof event.ms !== "number" || !Number.isFinite(event.ms)) fail("ms must be a finite number");
+  if (Object.prototype.hasOwnProperty.call(event, "status")) {
+    if (typeof event.status !== "number" || !Number.isFinite(event.status)) fail("status must be a finite number");
+  }
+  if (event.surface === "mcp" && event.outcome === "error") {
+    if (typeof event.kind !== "string" || event.kind === "") fail("mcp error requires kind");
+  } else if (Object.prototype.hasOwnProperty.call(event, "kind")) {
+    if (typeof event.kind !== "string" || event.kind === "") fail("kind must be a non-empty string");
+  }
+  return event;
+}
+
+// ../../../../packages/dsh-performance-review/src/state.js
+var CLIENT_KEY = Symbol.for("dsh.perfReview.v2");
+var HOST_KEY = Symbol.for("dsh.perfReviewHost.v2");
+var BUILD_STAMP = typeof __DNPR_BUILD__ === "string" ? __DNPR_BUILD__ : "dev";
+var NAME_RE = /^[a-z0-9][a-z0-9-]{0,39}$/;
+var CONTRACT_KEY_RE = /^[a-z0-9][a-z0-9.-]{0,63}$/;
+var MAX_USAGE_KEYS = 32;
+var RESERVOIR_CAP = 64;
+function percentile(values, p) {
+  if (!Array.isArray(values) || values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil(p * sorted.length) - 1));
+  return sorted[index];
+}
+function createSpanRow() {
+  return { n: 0, window: [], reservoir: [] };
+}
+function createStructure() {
+  return {
+    rootErrors: 0,
+    badNames: 0,
+    overflowSpans: 0,
+    overflowUsage: 0,
+    observerErrors: 0,
+    // A single observe() can fail silently (e.g. LoAF unsupported) while the
+    // other two succeed. `observerErrors` only fires when ALL fail; this
+    // counter makes a partial observer install visible (A5 / §10.4.6).
+    observersMissing: 0,
+    legacyCopies: 0,
+    badShape: 0,
+    unmappedKey: 0,
+    missingBindingId: 0,
+    oversize: 0,
+    /** Protocol findings such as `{ level, code:'build-stamp', have, saw }`. */
+    audits: []
+  };
+}
+function pushAudit(structure, record) {
+  if (!Array.isArray(structure.audits)) structure.audits = [];
+  const dup = structure.audits.some((item) => item.level === record.level && item.code === record.code && item.have === record.have && item.saw === record.saw);
+  if (!dup) structure.audits.push(record);
+}
+function installSingleton(global, key, legacyKey, stamp, create) {
+  const existing = global[key];
+  if (existing == null) {
+    const created = create();
+    created._build = stamp;
+    global[key] = created;
+    if (legacyKey != null && global[legacyKey] != null) {
+      const structure = created._state?.().structure;
+      if (structure != null) structure.legacyCopies += 1;
+    }
+    return created;
+  }
+  if (existing._build !== stamp) {
+    const structure = existing._state?.().structure;
+    if (structure != null) {
+      pushAudit(structure, {
+        level: "audit",
+        code: "build-stamp",
+        have: existing._build ?? null,
+        saw: stamp
+      });
+    }
+  }
+  return existing;
+}
+var NANO_PKG_PREFIX = ["dsh", "nano"].join("-") + "-";
+function roundMs(value) {
+  return value == null ? null : Math.round(value * 10) / 10;
+}
+
+// ../../../../packages/dsh-performance-review/src/host.js
+var WINDOW_SAMPLE_CAP = 512;
+var EVENT_CAP = 32;
+var isPromiseLike = (value) => value !== null && typeof value === "object" && typeof value.then === "function";
+function spanStats(span) {
+  const reservoir = span.reservoir ?? [];
+  return {
+    n: span.n,
+    p50: roundMs(percentile(reservoir, 0.5)),
+    p95: roundMs(percentile(reservoir, 0.95)),
+    max: roundMs(reservoir.length === 0 ? null : Math.max(...reservoir)),
+    errors: span.errors ?? 0,
+    lastMs: span.lastMs ?? null,
+    lastAt: span.lastAt ?? null,
+    lastErrorAt: span.lastErrorAt ?? null
+  };
+}
+function hostSnapshot(state) {
+  const plugins = {};
+  for (const [pluginId, row] of state.plugins) {
+    const spans = {};
+    for (const [name, span] of row.spans) {
+      spans[name] = {
+        n: span.n,
+        samples: [...span.reservoir],
+        windowN: span.window.length,
+        windowSamples: [...span.window],
+        stats: spanStats(span),
+        events: [...span.events ?? []]
+      };
+    }
+    const counts = {};
+    if (row.counts instanceof Map) {
+      for (const [name, n] of row.counts) counts[name] = n;
+    }
+    plugins[pluginId] = { version: row.version ?? null, spans, counts };
+  }
+  return {
+    version: 2,
+    enabled: state.enabled === true,
+    contributors: state.contributors.map((item) => ({ ...item })),
+    sinceStart: state.sinceStart,
+    epoch: state.epoch,
+    seq: state.seq,
+    cursor: state.cursor,
+    writtenAt: state.sinceStart,
+    plugins,
+    structure: { ...state.structure, audits: [...state.structure.audits ?? []] }
+  };
+}
+function parseCursor(since, epoch) {
+  if (typeof since === "number") {
+    if (!Number.isInteger(since) || since < 0) return { error: true };
+    return { epoch, seq: since };
+  }
+  if (typeof since === "string") {
+    const dot = since.lastIndexOf(".");
+    if (dot <= 0) return { error: true };
+    const ep = since.slice(0, dot);
+    const seq = Number(since.slice(dot + 1));
+    if (ep.length === 0 || !Number.isInteger(seq) || seq < 0) return { error: true };
+    return { epoch: ep, seq };
+  }
+  if (since !== null && typeof since === "object" && !Array.isArray(since)) {
+    const seq = since.seq;
+    if (since.epoch == null || !Number.isInteger(seq) || seq < 0) return { error: true };
+    return { epoch: String(since.epoch), seq };
+  }
+  return { error: true };
+}
+function collectRows(state, predicate) {
+  const rows = [];
+  const truncated = [];
+  for (const [pluginId, row] of state.plugins) {
+    for (const [name, span] of row.spans) {
+      const minKept = span.minKeptSeq;
+      if (predicate && minKept != null) {
+        const floor = predicate.seq;
+        if (floor + 1 < minKept) {
+          truncated.push({ pluginId, name, lost: minKept - floor - 1 });
+        }
+      } else if (!predicate && (span.lost ?? 0) > 0) {
+        truncated.push({ pluginId, name, lost: span.lost });
+      }
+      for (const event of span.log ?? []) {
+        if (predicate && !(event.seq > predicate.seq)) continue;
+        rows.push({
+          seq: event.seq,
+          pluginId,
+          name,
+          ms: event.ms,
+          err: event.err === true,
+          at: event.at
+        });
+      }
+    }
+    for (const [name, bucket] of row.contract ?? []) {
+      for (const event of bucket.log ?? []) {
+        if (predicate && !(event.seq > predicate.seq)) continue;
+        rows.push({
+          seq: event.seq,
+          pluginId,
+          name,
+          kind: "contract",
+          outcome: event.outcome,
+          ms: event.ms
+        });
+      }
+    }
+  }
+  rows.sort((a, b) => a.seq - b.seq);
+  return { rows, truncated };
+}
+function createPerfReviewHost(env = {}) {
+  const processRef = env.process ?? globalThis.process;
+  const epoch = env.epoch != null ? String(env.epoch) : Math.floor(Math.random() * 1e9).toString(36);
+  const state = {
+    enabled: env.forceEnabled !== void 0 ? env.forceEnabled === true : null,
+    plugins: /* @__PURE__ */ new Map(),
+    contributors: [],
+    contributorKeys: /* @__PURE__ */ new Set(),
+    sinceStart: (/* @__PURE__ */ new Date()).toISOString(),
+    epoch,
+    seq: 0,
+    cursor: 0,
+    structure: createStructure(),
+    _build: env.build ?? BUILD_STAMP
+  };
+  const isEnabled = () => {
+    if (state.enabled === null) {
+      state.enabled = env.forceEnabled !== void 0 ? env.forceEnabled === true : processRef?.env?.DSH_PERF_REVIEW === "1";
+    }
+    return state.enabled === true;
+  };
+  const recordSpan = (row, name, t0, t1, err2) => {
+    if (!isEnabled()) return;
+    let span = row.spans.get(name);
+    if (span === void 0) {
+      span = createSpanRow();
+      span.errors = 0;
+      span.events = [];
+      span.log = [];
+      span.lost = 0;
+      span.minKeptSeq = null;
+      row.spans.set(name, span);
+    }
+    span.n += 1;
+    const ms = t1 - t0;
+    const at = (/* @__PURE__ */ new Date()).toISOString();
+    const seq = state.seq + 1;
+    state.seq = seq;
+    span.lastMs = ms;
+    span.lastAt = at;
+    if (err2) {
+      span.errors += 1;
+      span.lastErrorAt = at;
+    }
+    span.window.push(ms);
+    while (span.window.length > WINDOW_SAMPLE_CAP) span.window.shift();
+    if (span.reservoir.length < RESERVOIR_CAP) span.reservoir.push(ms);
+    else {
+      const slot = Math.floor(Math.random() * span.n);
+      if (slot < RESERVOIR_CAP) span.reservoir[slot] = ms;
+    }
+    const rounded = Math.round(ms * 10) / 10;
+    span.events.push({ ms: rounded, at, err: err2 === true, seq });
+    while (span.events.length > EVENT_CAP) span.events.shift();
+    span.log.push({ seq, ms, err: err2 === true, at });
+    while (span.log.length > WINDOW_SAMPLE_CAP) {
+      span.log.shift();
+      span.lost += 1;
+      span.minKeptSeq = span.log[0]?.seq ?? null;
+    }
+  };
+  const hostJoin = (pluginId, impl = {}) => {
+    let row = state.plugins.get(pluginId);
+    if (row === void 0) {
+      row = { version: impl.version ?? null, spans: /* @__PURE__ */ new Map(), counts: /* @__PURE__ */ new Map() };
+      state.plugins.set(pluginId, row);
+    }
+    if (!(row.counts instanceof Map)) row.counts = /* @__PURE__ */ new Map();
+    const build = impl.build ?? BUILD_STAMP;
+    const key = `${pluginId}@${build}`;
+    if (!state.contributorKeys.has(key)) {
+      state.contributorKeys.add(key);
+      state.contributors.push({ pluginId, build });
+    }
+    const clock = env.performance ?? globalThis.performance;
+    const now = () => clock.now();
+    return {
+      /**
+       * hostSpan(name, fn). No trace context is stored (T-O-PRE1116-12).
+       * A name that fails NAME_RE still runs `fn`, increments
+       * `structure.unmappedKey`, and is not recorded.
+       */
+      hostSpan(name, fn) {
+        if (typeof name !== "string" || !NAME_RE.test(name)) {
+          state.structure.unmappedKey += 1;
+          return fn();
+        }
+        const t0 = now();
+        let result;
+        try {
+          result = fn();
+        } catch (error) {
+          recordSpan(row, name, t0, now(), true);
+          throw error;
+        }
+        if (isPromiseLike(result)) {
+          return result.then(
+            (value) => {
+              recordSpan(row, name, t0, now(), false);
+              return value;
+            },
+            (error) => {
+              recordSpan(row, name, t0, now(), true);
+              throw error;
+            }
+          );
+        }
+        recordSpan(row, name, t0, now(), false);
+        return result;
+      },
+      count(name, n = 1) {
+        if (!NAME_RE.test(name) || !isEnabled()) return;
+        if (!(row.counts instanceof Map)) row.counts = /* @__PURE__ */ new Map();
+        if (!row.counts.has(name) && row.counts.size >= MAX_USAGE_KEYS) return;
+        row.counts.set(name, (row.counts.get(name) ?? 0) + n);
+      },
+      snapshot: () => {
+        isEnabled();
+        return hostSnapshot(state);
+      },
+      read: (query) => read(query)
+    };
+  };
+  const read = (query = {}) => {
+    const seq = state.seq;
+    const base = {
+      epoch: state.epoch,
+      seq,
+      cursor: state.cursor,
+      since: null,
+      next: `${state.epoch}.${seq}`
+    };
+    if (query != null && query.mode !== void 0) {
+      return { status: 400, error: "mode", basis: null, rows: [], truncated: [], ...base };
+    }
+    if (query == null || query.since === void 0) {
+      const { rows: rows2, truncated: truncated2 } = collectRows(state, null);
+      return { status: 200, basis: "cumulative", rows: rows2, truncated: truncated2, ...base };
+    }
+    base.since = typeof query.since === "number" ? query.since : String(query.since);
+    const parsed = parseCursor(query.since, state.epoch);
+    if (parsed.error) {
+      return { status: 400, error: "cursor", basis: null, rows: [], truncated: [], ...base };
+    }
+    if (parsed.epoch !== state.epoch) {
+      const { rows: rows2 } = collectRows(state, null);
+      return { status: 200, basis: "cumulative", rows: rows2, truncated: ["epoch"], ...base };
+    }
+    const { rows, truncated } = collectRows(state, { seq: parsed.seq });
+    return { status: 200, basis: "window", rows, truncated, ...base };
+  };
+  const observe = (event) => {
+    if (!isEnabled()) return;
+    if (event == null || typeof event !== "object" || Array.isArray(event)) {
+      state.structure.badShape += 1;
+      return;
+    }
+    let admitted;
+    try {
+      admitted = assertObserveEvent(event);
+    } catch {
+      state.structure.badShape += 1;
+      return;
+    }
+    if (admitted.id == null || admitted.id === "") {
+      state.structure.missingBindingId += 1;
+      return;
+    }
+    if (!CONTRACT_KEY_RE.test(admitted.id) || typeof admitted.plugin !== "string" || admitted.plugin === "") {
+      state.structure.badShape += 1;
+      return;
+    }
+    let row = state.plugins.get(admitted.plugin);
+    if (row === void 0) {
+      row = { version: null, spans: /* @__PURE__ */ new Map(), counts: /* @__PURE__ */ new Map(), contract: /* @__PURE__ */ new Map() };
+      state.plugins.set(admitted.plugin, row);
+    }
+    if (!(row.contract instanceof Map)) row.contract = /* @__PURE__ */ new Map();
+    state.seq += 1;
+    let bucket = row.contract.get(admitted.id);
+    if (bucket === void 0) {
+      bucket = { n: 0, window: 0, outcomes: {}, log: [] };
+      row.contract.set(admitted.id, bucket);
+    }
+    bucket.n += 1;
+    bucket.window += 1;
+    bucket.outcomes[admitted.outcome] = (bucket.outcomes[admitted.outcome] ?? 0) + 1;
+    bucket.log.push({ seq: state.seq, outcome: admitted.outcome, ms: admitted.ms });
+    if (bucket.log.length > WINDOW_SAMPLE_CAP) {
+      bucket.log.shift();
+      bucket.lost = (bucket.lost ?? 0) + 1;
+    }
+  };
+  return {
+    hostJoin,
+    read,
+    observe,
+    snapshot: () => {
+      isEnabled();
+      return hostSnapshot(state);
+    },
+    _state: () => state,
+    _build: state._build
+  };
+}
+function ensurePerfReviewHost(env = {}) {
+  const global = env.global ?? globalThis;
+  const stamp = env.build ?? BUILD_STAMP;
+  return installSingleton(global, HOST_KEY, "__perfReviewHost", stamp, () => createPerfReviewHost(env));
+}
+
 // src/host/sessions.js
+var HOST_PLUGIN = "dsh-nano-terminal";
+var _hostApi = null;
+function hostPerf() {
+  if (_hostApi === null) {
+    const host = ensurePerfReviewHost();
+    _hostApi = typeof host.hostJoin === "function" ? host.hostJoin(HOST_PLUGIN) : null;
+  }
+  return _hostApi;
+}
+var hostSpan = (name, fn) => {
+  const api = hostPerf();
+  return api?.hostSpan ? api.hostSpan(name, fn) : fn();
+};
+var hostCount = (name, n = 1) => {
+  try {
+    hostPerf()?.count?.(name, n);
+  } catch {
+  }
+};
 var decoder3 = new TextDecoder("utf-8", { fatal: false });
 var encoder2 = new TextEncoder();
 var KEEP_BACKOFF = [1500, 3e3, 6e3, 12e3, 3e4, 6e4];
@@ -347,7 +836,12 @@ function agentEnv(rec, apiBase) {
     DNT_TERMINAL_SESSION: rec.id,
     DNT_API: apiBase,
     DNT_ENV: "1",
-    TERM_PROGRAM: "dnt"
+    TERM_PROGRAM: "dnt",
+    // 交互式终端不该继承宿主进程的 NO_COLOR（那是给非交互 CLI 的）。按
+    // no-color.org 的规范，空串等于未设置，TUI 才会正常上色。
+    NO_COLOR: "",
+    // 声明真彩，避免 TUI 退回 16 色或直接关色。
+    COLORTERM: "truecolor"
   };
 }
 var SessionRegistry = class {
@@ -428,12 +922,20 @@ var SessionRegistry = class {
       parent: parentRec?.id,
       keep: !!spec.keep,
       labels: { ...spec.labels ?? {} },
-      meta: { shell, cwd, argv },
+      // cols/rows 必须进 meta：镜像按 meta 建，缺了就固定成 80×24，
+      // 而 PTY 是按 open 消息里的尺寸起的，两边会错开。
+      meta: {
+        shell,
+        cwd,
+        argv,
+        cols: Math.min(Math.max(spec.cols || 80, 2), 512),
+        rows: Math.min(Math.max(spec.rows || 24, 2), 512)
+      },
       replayBytes: this.replayBytes,
       registry: this
     });
     record.env = { ...spec.env ?? {}, ...agentEnv(record, this.apiBase) };
-    const handle = await this.ctx.subprocess.spawnTerminal({
+    const handle = await hostSpan("dnt-spawn", () => this.ctx.subprocess.spawnTerminal({
       argv,
       cwd,
       env: record.env,
@@ -442,7 +944,7 @@ var SessionRegistry = class {
       terminalType: "xterm-256color",
       shellActivity: true,
       graceMs: 1500
-    }).catch((e) => {
+    })).catch((e) => {
       throw err(KIND.SPAWN_FAILED, String(e?.message ?? e));
     });
     record.handle = handle;
@@ -502,7 +1004,7 @@ var SessionRegistry = class {
     const meta = rec.meta ?? {};
     const shell = meta.shell || defaultShell();
     const argv = meta.argv?.length ? meta.argv : [shell, ...process.platform === "win32" ? [] : ["-i"]];
-    const handle = await this.ctx.subprocess.spawnTerminal({
+    const handle = await hostSpan("dnt-spawn", () => this.ctx.subprocess.spawnTerminal({
       argv,
       cwd: meta.cwd ?? homedir(),
       env: rec.env,
@@ -511,7 +1013,7 @@ var SessionRegistry = class {
       terminalType: "xterm-256color",
       shellActivity: true,
       graceMs: 1500
-    }).catch((e) => {
+    })).catch((e) => {
       throw err(KIND.SPAWN_FAILED, String(e?.message ?? e));
     });
     rec.handle = handle;
@@ -639,18 +1141,21 @@ var SessionRecord = class {
   pipe() {
     const send = this.registry.sendBinary;
     this.handle.output.on("data", (chunk) => {
-      this.remember(chunk);
-      try {
-        this.mirror?.write(chunk);
-        this.#pollState();
-      } catch {
-      }
-      this.outSeq = this.outSeq + 1 >>> 0;
-      const seq = this.outSeq;
-      for (const [s, att] of this.attached) {
-        if (att) att.data(chunk, seq);
-        else send(s, chunk);
-      }
+      hostSpan("dnt-pipe-broadcast", () => {
+        this.remember(chunk);
+        try {
+          this.mirror?.write(chunk);
+          this.#pollState();
+        } catch {
+        }
+        this.outSeq = this.outSeq + 1 >>> 0;
+        const seq = this.outSeq;
+        for (const [s, att] of this.attached) {
+          if (att) att.data(chunk, seq);
+          else send(s, chunk);
+        }
+      });
+      hostCount("dnt-out-bytes", chunk.length);
     });
     this.handle.output.on("end", () => {
       this.#onProgramEnd({ at: Date.now() });
@@ -768,17 +1273,21 @@ var SessionRecord = class {
    */
   async writeInput(data, source = "human") {
     if (this.exited) throw err(KIND.FINISHED, "terminal exited");
+    if (!this.handle && this.pending) await this.registry.spawnPending(this);
     if (!this.handle) throw err(KIND.UNAVAILABLE, "terminal not spawned yet (attach to wake)");
     if (source === "automatic") {
       await this.handle.write(typeof data === "string" ? data : decoder3.decode(data));
       return;
     }
     if (source === "agent") {
-      return this.gate.submit(() => this.handle.write(typeof data === "string" ? data : decoder3.decode(data)));
+      return hostSpan("dnt-gate", () => this.gate.submit(() => this.handle.write(typeof data === "string" ? data : decoder3.decode(data))));
     }
-    const ok = this.gate.humanInput(typeof data === "string" ? Buffer.from(data, "utf8") : data);
-    if (ok === null) return { held: true };
-    await this.handle.write(decoder3.decode(ok));
+    return hostSpan("dnt-input", async () => {
+      const ok = this.gate.humanInput(typeof data === "string" ? Buffer.from(data, "utf8") : data);
+      if (ok === null) return { held: true };
+      await this.handle.write(decoder3.decode(ok));
+      return void 0;
+    });
   }
   /**
    * Agent send semantics (term.send): blocked guard → bracketed paste + Enter
@@ -786,13 +1295,14 @@ var SessionRecord = class {
    */
   async agentSend(text, { enter = true, force = false, cond = null, urgent = false } = {}) {
     if (this.exited) throw err(KIND.FINISHED, "terminal exited");
+    if (!this.handle && this.pending) await this.registry.spawnPending(this);
     const st = this.status?.state;
     if (st === "blocked" && !force) throw err(KIND.BLOCKED, `terminal reports blocked${this.status.kind ? ` (${this.status.kind})` : ""}`);
     if (cond && st !== cond) throw err(KIND.STATUS_MISMATCH, `status is '${st ?? "none"}', required '${cond}'`);
     const paste = (this.mirror?.modes() ?? 0) & 1 << 3;
     const body = String(text).replace(/\r?\n/g, "\r");
     const payload = `${paste ? "\x1B[200~" : ""}${body}${paste ? "\x1B[201~" : ""}${enter ? "\r" : ""}`;
-    const r = await this.gate.submit(() => this.handle.write(payload), { urgent });
+    const r = await hostSpan("dnt-agent-send", () => this.gate.submit(() => this.handle.write(payload), { urgent }));
     this.registry.bus?.emit("message", this.addr, { id: this.id });
     return { ...r ?? {}, turn: this.turn };
   }

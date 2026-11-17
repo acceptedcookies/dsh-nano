@@ -6,6 +6,7 @@
 
 import { decodeMcpReply } from 'dsh-interface/host'
 import { handleFrame } from './frames.js'
+import { perf } from './perf.js'
 
 const ROUTE = '/dsh-nano-terminal'
 
@@ -94,6 +95,11 @@ export class LocalLane {
             this.alignMode = this.v === 2 && msg.align === 1
             this.dropping = this.alignMode
             this.alignSeq = null
+            // ready 之前算出的尺寸可能没发出去（socket 还在 CONNECTING）。
+            // 这里补一次，保证 PTY 和客户端提交的尺寸一致。
+            if (this.ws?.readyState === 1) {
+              this.ws.send(JSON.stringify({ type: 'resize', cols: this.cols, rows: this.rows }))
+            }
             this.onReady(msg)
             resolve(msg)
           } else if (msg.type === 'error') {
@@ -110,6 +116,8 @@ export class LocalLane {
         if (this.v === 2) {
           this.#onFrame(buf)
         } else {
+          perf.count('dnt-ws-in-bytes', buf.length)
+          perf.count('dnt-ws-in-msgs')
           this.onOutput(buf)
         }
       }
@@ -154,7 +162,9 @@ export class LocalLane {
   write(bytes) {
     if (this.ws?.readyState !== 1) return
     const payload = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)
-    this.ws.send(this.v === 2 ? encChannel(0, FR_DATA, payload) : payload)
+    const frame = this.v === 2 ? encChannel(0, FR_DATA, payload) : payload
+    perf.count('dnt-ws-out-bytes', frame.length)
+    this.ws.send(frame)
   }
 
   /** Terminal auto-replies (DA/CPR) — bypass the input gate on the host. */
@@ -267,7 +277,10 @@ export class McpLane {
           }
           return
         }
-        this.onOutput(new Uint8Array(ev.data))
+        const buf = new Uint8Array(ev.data)
+        perf.count('dnt-ws-in-bytes', buf.length)
+        perf.count('dnt-ws-in-msgs')
+        this.onOutput(buf)
       }
       ws.onerror = () => { clearTimeout(timer); reject(new Error('websocket error')) }
       ws.onclose = () => {

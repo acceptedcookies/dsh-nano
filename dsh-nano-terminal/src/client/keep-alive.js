@@ -11,7 +11,8 @@ export {
   noteFit,
   flushFit,
   resizeMode,
-  charWidthForDpr,
+  cellWidth,
+  backingSize,
 } from '../shared/align.js'
 
 /**

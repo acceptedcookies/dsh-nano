@@ -15,6 +15,7 @@ import {
   unmountAction, freezeGap, shouldRepaintNow, createFitCoalescer, noteFit, flushFit, resizeMode, watchDevicePixelRatio,
   applyTerminalOutput, outputDuringGap, paintCurrent, queueFrame,
 } from './keep-alive.js'
+import { perf, setTerminalRoot } from './perf.js'
 
 // Spinner glyphs programs append to OSC titles for animation — strip them so
 // the pane title is stable (herdr terminal_title_stripped convention)
@@ -381,7 +382,7 @@ export function NanoTerm({ sessionId, session, zh, openView }) {
   if (!ready) return <div className="dnt-err">{zh ? '正在加载终端核心…' : 'loading terminal core…'}</div>
 
   return (
-    <div ref={rootRef} className="dnt-root" data-nano-terminal>
+    <div ref={rootRef} className="dnt-root" data-nano-terminal data-dnt-root>
       <StatusBar sessionId={sessionId} split={split} openLeaf={openLeaf} focused={focused} zh={zh} tree={tree} paneSessions={paneSessions} statuses={statuses} settings={settings} onSettings={updateSettings} />
       {tree ? (
         <div className="dnt-content">
@@ -812,9 +813,16 @@ function TermPane({ paneId, laneSpec, sessionId, session, focused, onFocus, onCl
       reportStatus?.(paneId, rec.lastStatus)
     }
     let lastScrollKey = ''
+    // P0 spans: one paint = wasm render + canvas blit; first paint after a key
+    // press is the input→visible echo (the 14ms number from the A/B).
     const paint = () => {
       raf = 0
-      const packed = term.render()
+      const t0in = stateRef.current.keySent ?? null
+      const packed = perf.span('dnt-paint', () => term.render())
+      if (t0in !== null) {
+        stateRef.current.keySent = null
+        perf.span('dnt-echo', () => performance.now() - t0in)
+      }
       if (packed) {
         // herdr：synchronized output 期间压住 request_render，半帧（含游标）不落画布。
         const syncHeld = (packed.modes & MODES.SYNC_OUTPUT) && packed.rows.length === 0
@@ -839,21 +847,41 @@ function TermPane({ paneId, laneSpec, sessionId, session, focused, onFocus, onCl
         }
       }
     }
-    // W-P1-4: a non-focused pane downgrades to ~2Hz interval paints — wasm
-    // keeps parsing (mirror/state stay current) but canvas painting halves.
-    // Focus is read live from data-focused (effect doesn't rerun on focus).
+    // W-P1-4 / P2: unfocused panes used to paint at a fixed ~2Hz timer, so
+    // active output (flood/scroll) starved the canvas for ~500ms. Now: an
+    // unfocused pane still paints at rAF while bytes are actually arriving
+    // (`activeUntil`), and only steps down to 500→1000ms back-off when the
+    // stream has been quiet. Focus is read live from data-focused.
     const schedulePaint = () => {
       if (raf) return
-      if (boxRef.current?.dataset?.focused !== 'false') {
+      const focused = boxRef.current?.dataset?.focused !== 'false'
+      const active = performance.now() < (stateRef.current.activeUntil ?? 0)
+      if (focused || active) {
         raf = requestAnimationFrame(paint)
+        if (stateRef.current.slowTimer) {
+          clearTimeout(stateRef.current.slowTimer)
+          stateRef.current.slowTimer = null
+        }
       } else if (!stateRef.current.slowTimer) {
-        stateRef.current.slowTimer = setInterval(() => { if (raf) return; paint() }, 500)
+        // idle pane: back off 500 → 1000ms between checks
+        let delay = 500
+        const tick = () => {
+          if (raf) return
+          paint()
+          delay = Math.min(delay * 2, 1000)
+          stateRef.current.slowTimer = setTimeout(tick, delay)
+        }
+        stateRef.current.slowTimer = setTimeout(tick, delay)
       }
     }
     rec.hooks.schedulePaint = schedulePaint
     rec.hooks.applyStatus = applyStatus
 
     lane.onOutput = (bytes) => {
+      // P2: data flowing = the pane is alive — keep rAF paints while unfocused
+      // instead of dropping straight to the back-off timer (was the ~650ms
+      // flood/scroll latency from the fixed 500ms slowTimer).
+      stateRef.current.activeUntil = performance.now() + 1500
       outputDuringGap({
         gapMs: Date.now() - (stateRef.current.beatAt || Date.now()),
         bytes,
@@ -882,6 +910,7 @@ function TermPane({ paneId, laneSpec, sessionId, session, focused, onFocus, onCl
       rec.hooks.applyStatus?.((s) => ({ ...s, phase: 'exited' }))
     }
     lane.onReady = () => {
+      perf.count('dnt-panes')
       rec.hooks.applyStatus?.((s) => ({ ...s, phase: 'live' }))
       saveLayouts() // the pane now has a host addr — persist it for re-attach
     }
@@ -955,6 +984,7 @@ function TermPane({ paneId, laneSpec, sessionId, session, focused, onFocus, onCl
       }
       const data = encodeKey(ev, term.modes())
       if (data?.length) {
+        stateRef.current.keySent = performance.now()
         lane.write(data)
         term.scrollBottom()
         schedulePaint()
@@ -967,6 +997,7 @@ function TermPane({ paneId, laneSpec, sessionId, session, focused, onFocus, onCl
     const paste = (ev) => {
       const text = ev.clipboardData?.getData('text/plain')
       if (text) {
+        stateRef.current.keySent = performance.now()
         lane.write(encodePaste(text, term.modes()))
         ev.preventDefault()
       }
@@ -1088,6 +1119,9 @@ function TermPane({ paneId, laneSpec, sessionId, session, focused, onFocus, onCl
     // 定时器缺口说明页面被冻过。回来时丢掉积压，对齐宿主镜像，不要快进。
     stateRef.current.beatAt = Date.now()
     const beat = setInterval(() => {
+      // 拖到另一块屏、或只改像素密度不改布局时，ResizeObserver 和 matchMedia
+      // 都可能不响。这里每秒对一次 dpr，保证画布 backing 跟得上，不被浏览器拉伸。
+      if (canvas.syncDpr()) fit()
       const now = Date.now()
       const gap = now - (stateRef.current.beatAt || now)
       stateRef.current.beatAt = now
@@ -1097,6 +1131,9 @@ function TermPane({ paneId, laneSpec, sessionId, session, focused, onFocus, onCl
     document.addEventListener('visibilitychange', onVis)
     document.addEventListener('resume', onResume)
     const stopDpr = watchDevicePixelRatio(() => { if (canvas.syncDpr()) fit() })
+    // 浏览器缩放会改 dpr；matchMedia 在部分浏览器/缩放下不报，resize 一定会报。
+    const onWinResize = () => fit()
+    window.addEventListener('resize', onWinResize)
     const focusout = () => { const d = encodeFocus(term.modes(), false); if (d) lane.write(d) }
     // right-click = menu (herdr right_click=menu default): paste, copy-mode,
     // split, close — rendered by the pane header menu owner, not the program.
@@ -1124,7 +1161,7 @@ function TermPane({ paneId, laneSpec, sessionId, session, focused, onFocus, onCl
         let lastErr = null
         for (let attempt = 0; attempt < OPEN_RETRIES; attempt += 1) {
           try {
-            await lane.open()
+            await perf.span('dnt-attach', () => lane.open())
             return
           } catch (e) {
             lastErr = e
@@ -1165,11 +1202,12 @@ function TermPane({ paneId, laneSpec, sessionId, session, focused, onFocus, onCl
       dead = true
       cancelAnimationFrame(raf)
       cancelAnimationFrame(fitQueue.handle)
-      clearInterval(stateRef.current.slowTimer)
+      clearTimeout(stateRef.current.slowTimer)
       clearInterval(beat)
       stateRef.current.slowTimer = null
       document.removeEventListener('visibilitychange', onVis)
       document.removeEventListener('resume', onResume)
+      window.removeEventListener('resize', onWinResize)
       stopDpr()
       ro.disconnect()
       box.removeEventListener('keydown', keydown)

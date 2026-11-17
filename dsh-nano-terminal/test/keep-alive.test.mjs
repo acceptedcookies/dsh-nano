@@ -8,7 +8,7 @@ import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
-  acceptData, charWidthForDpr, createFitCoalescer, decodeAlign, encodeAlign,
+  acceptData, backingSize, cellWidth, createFitCoalescer, decodeAlign, encodeAlign,
   encodeSequenced, flushFit, freezeGap, noteFit, paneLifetime, recoverAttach,
   resizeMode, routeFrame, shouldRepaintNow, unmountAction,
 } from '../src/shared/align.js'
@@ -246,23 +246,39 @@ test('KA-5 devicePixelRatio change remeasures charW and backing store', async ()
   }
   const { TermCanvas } = await import('../src/client/render.js')
   const canvas = new TermCanvas({ appendChild() {} }, { bg: '#111' }, { family: 'monospace', size: 13 })
-  assert.equal(canvas.charW, charWidthForDpr(measured, 1))
+  // 格子宽度就是字体步进，不取整、也不跟 dpr 走。
+  assert.equal(canvas.charW, measured)
   canvas.fit(10, 4)
   const px1 = canvas.base.width
-  const char1 = canvas.charW
-  window.devicePixelRatio = 2
+  window.devicePixelRatio = 2.2
   assert.equal(canvas.syncDpr(), true)
-  assert.equal(canvas.charW, charWidthForDpr(measured, 2))
-  assert.notEqual(canvas.charW, char1)
+  assert.equal(canvas.charW, measured)
   canvas.fit(10, 4)
   assert.notEqual(canvas.base.width, px1)
-  assert.equal(canvas.base.width, Math.round(10 * canvas.charW * window.devicePixelRatio))
+  // backing 用精确 dpr；CSS 尺寸由 backing 反推，浏览器不再二次缩放。
+  assert.equal(canvas.base.width, backingSize(10 * measured, 2.2))
+  assert.equal(canvas.base.width, Math.round(10 * measured * 2.2))
+  assert.ok(Math.abs(parseFloat(canvas.base.style.width) * 2.2 - canvas.base.width) < 1e-6)
   assert.equal(canvas.syncDpr(), false)
+  assert.equal(canvas.syncDpr(2.2000000000000002), false)
   let watched = 0
   const stop = watchDevicePixelRatio(() => { watched += 1 })
   window.__dprMedia.fn()
   assert.equal(watched, 1)
   stop()
+})
+
+test('KA-6 fractional zoom keeps cells on the font advance', () => {
+  const advance = 7.82666015625
+  // 格子宽度不取整：取整成 8 会让 158 列累计错开 27px。
+  assert.equal(cellWidth(advance), advance)
+  assert.equal((advance - cellWidth(advance)) * 158, 0)
+  assert.equal(cellWidth(0), 1)
+  assert.equal(cellWidth(Number.NaN), 1)
+  // backing 用精确 dpr；旧实现 round(2.2)=2 会把 110% 当成 100%。
+  assert.equal(backingSize(1264, 2.2), 2781)
+  assert.equal(backingSize(1264, 2), 2528)
+  assert.equal(backingSize(0, 2), 1)
 })
 
 test('KA-3 freeze gap is not a short throttle', () => {

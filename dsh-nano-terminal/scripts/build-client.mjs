@@ -6,6 +6,9 @@ import { fileURLToPath } from 'node:url'
 import { dnprDefine } from '../../scripts/dnpr-define.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
+const { version } = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
+/** Compile-time package version; perf.js reads __DNT_VERSION__ (spec §6.1). */
+const versionDefine = { __DNT_VERSION__: JSON.stringify(version) }
 {
   const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
   const baked = spawnSync(process.execPath, [join(root, '..', 'scripts/bake-plugin-bindings.mjs'), '--plugin', pkg.name], { stdio: 'inherit' })
@@ -61,6 +64,7 @@ esbuild.buildSync({
   bundle: true, format: 'iife', globalName: '__dntExport', minify: true,
   platform: 'browser',
   loader: { '.jsx': 'jsx' },
+  define: { ...versionDefine, ...dnprDefine },
   external: ['react', 'react-dom', 'react-dom/client', '@deepseek-ai/dsh-client-ui-primitives'],
   outfile: body,
 })

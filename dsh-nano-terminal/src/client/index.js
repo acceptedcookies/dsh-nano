@@ -5,6 +5,8 @@
 
 import { createElement as h } from 'react'
 import { NanoTerm, anyLiveTerminals, disposeAllTerminals, requestPaneOpen } from './NanoTerm.jsx'
+import { perf, setTerminalRoot } from './perf.js'
+import { installDevProbe } from './dev-probe.js'
 
 try { window.__dntModule = 'evaluated' } catch { /* non-browser */ }
 
@@ -32,18 +34,22 @@ const activateChat = () => clickTab(viewTabs()[0]) // 对话 is always first (fi
 /** @param {import('@deepseek-ai/cordis').Context} ctx */
 export function apply(ctx) {
   mark('apply:start services=' + ['slots', 'commandUi', 'locale', 'sidebarRight', 'sessions'].map((k) => `${k}:${!!ctx[k]}`).join(','))
+  // perf: root = the mounted .dnt-root; dev-probe arms when ?dnt-probe=1 is on.
+  setTerminalRoot(() => document.querySelector('.dnt-root'))
+  installDevProbe()
   // Plugin unload (disable/removal) must release every live lane — view
   // remounts never do.
   ctx.effect(() => () => disposeAllTerminals(), 'dsh-nano-terminal.disposeAll')
   const zh = () => ctx.locale?.getSnapshot?.().active?.startsWith('zh') ?? false
   const t = (en, cn) => (zh() ? cn : en)
 
+  const ProfiledNanoTerm = perf.profiler(NanoTerm)
   const Body = (props) => {
     try {
       window.__dntBodyProps = Object.keys(props)
       window.__dntBodyMounted = (window.__dntBodyMounted ?? 0) + 1
     } catch { /* diag best-effort */ }
-    return h(NanoTerm, { sessionId: props.sessionId, session: props.session, zh: zh(), openView: props.openView })
+    return h(ProfiledNanoTerm, { sessionId: props.sessionId, session: props.session, zh: zh(), openView: props.openView })
   }
 
   // Chat-area view tab: registered under the session scope so the 对话/轨迹

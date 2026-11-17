@@ -1174,6 +1174,48 @@ test('inspect_checkpoint: identification + off-surface journal read + read-only 
   assert.equal(session.events.length, appends, 'append count must not change')
 })
 
+test('inspect_checkpoint: exact 2000-char and 24000-char page boundaries (T06)', async () => {
+  // Entry cap boundary: 2000 chars intact, 2001 chars truncated at 2000.
+  const session = makeSession('s-inspect-edge')
+  session.setHeader('prov', 'mod')
+  const exact = session.addMessage('user', 'e'.repeat(2000), 100)
+  const over = session.addMessage('user', 'f'.repeat(2001), 100)
+  const br = session.append('compaction/start', { compactionId: 'cp-edge', turn: 1 })
+  const su = session.append('compaction/summary', { compactionId: 'cp-edge', turn: 1, summary: [{ type: 'text', text: 's' }] })
+  session.append('user/message', {
+    role: 'user',
+    content: [{ type: 'text', text: 'frame inspect_checkpoint' }],
+    source: { kind: 'compact-checkpoint', compactionId: 'cp-edge' },
+  }, {
+    surfaceOp: { op: 'replace', startSeq: exact.seq, endSeq: over.seq },
+    sourceEventSeqs: [br.seq, su.seq, exact.seq, over.seq],
+  })
+  const edge = await runTool(session, { compactionId: 'cp-edge' })
+  assert.equal(edge.includes('truncated, 2000 chars total'), false, '2000 chars is NOT truncated')
+  assert.match(edge, /truncated, 2001 chars total/, '2001 chars truncates at 2000')
+
+  // Page cap boundary: entries sized so the page stops exactly at 24000.
+  const s2 = makeSession('s-inspect-pagecap')
+  s2.setHeader('prov', 'mod')
+  const big = []
+  for (let i = 0; i < 12; i += 1) big.push(s2.addMessage('user', 'g'.repeat(2000), 100).seq)
+  const b2 = s2.append('compaction/start', { compactionId: 'cp-cap', turn: 1 })
+  const m2 = s2.append('compaction/summary', { compactionId: 'cp-cap', turn: 1, summary: [{ type: 'text', text: 's' }] })
+  s2.append('user/message', {
+    role: 'user',
+    content: [{ type: 'text', text: 'frame inspect_checkpoint' }],
+    source: { kind: 'compact-checkpoint', compactionId: 'cp-cap' },
+  }, {
+    surfaceOp: { op: 'replace', startSeq: big[0], endSeq: big[11] },
+    sourceEventSeqs: [b2.seq, m2.seq, ...big],
+  })
+  const capped = await runTool(s2, { compactionId: 'cp-cap', limit: 12 })
+  const includedBlocks = (capped.match(/--- seq \d+ /g) ?? []).length
+  assert.ok(includedBlocks < 12, `page cap must stop early, got ${includedBlocks} blocks`)
+  assert.match(capped, /nextOffset: \d+/, 'a stopped page reports a next offset')
+  assert.ok(capped.length <= 24000 + 2048, `page stays near the 24000 cap, got ${capped.length}`)
+})
+
 /* ============ 11. ACE-1117 P3: lifecycle, mutex, timeout, disarm ========== */
 
 test('T08 idle maintenance commit: turn ends mid-summarize → exactly one runMaintenance commit, no wake', async (t) => {

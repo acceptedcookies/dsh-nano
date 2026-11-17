@@ -21,42 +21,55 @@ export const CLOUD_CSS = `
 [data-nano-cloud-session-section] { flex: none; min-height: 0; }
 [data-nano-cloud-session-section] > * { flex: none; }
 
-/* Section shell. Width/padding are our own; the native list geometry custom
- * properties are host internals and are not read (DESIGN.md §8). */
-.dncs-section { display: flex; flex-direction: column; flex: none; box-sizing: border-box; width: 100%; padding: 0 var(--nano-space-2); }
-.dncs-section-header { display: flex; align-items: center; gap: var(--nano-space-1); min-height: 32px; padding-left: var(--nano-space-1); }
-.dncs-section-label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--dsw-alias-label-tertiary); font-size: 11px; font-weight: 600; letter-spacing: .02em; }
-.dncs-section-actions { flex: none; display: flex; align-items: center; gap: 2px; }
+/* Section shell. Geometry mirrors the native sidebar's measured values: rows
+ * are x8..272 (264 wide), the leading slot lands at x20, titles at x42, the
+ * section label is 14px/400/tertiary and header icon buttons are 28×28. All
+ * values are authored here; no host custom property or class is read. */
+.dncs-section { display: flex; flex-direction: column; flex: none; box-sizing: border-box; width: 100%; padding: 0 var(--nano-space-2) 0 0; }
+.dncs-section-header { display: flex; align-items: center; gap: var(--nano-space-1); min-height: 36px; padding: 0 1px 0 var(--nano-space-3); }
+.dncs-section-label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--dsw-alias-label-tertiary); font-size: 14px; font-weight: 400; }
+.dncs-section-actions { flex: none; display: flex; align-items: center; gap: var(--nano-space-1); }
+/* Native icon buttons in section headers are a fixed 28×28 secondary square;
+ * the host Button sm icon-only stays 36 wide, so we set our own box. */
+.dncs-icon-btn { width: 28px; height: 28px; min-width: 28px; padding: 0; justify-content: center; color: var(--dsw-alias-label-secondary); }
+.dncs-icon-btn-row { width: 24px; height: 20px; min-width: 24px; }
 .dncs-section-list { display: flex; flex-direction: column; min-height: 0; }
 .dncs-section-body { display: flex; flex-direction: column; animation: dncs-section-in .32s cubic-bezier(.22, 1, .36, 1) both; }
 .dncs-section-count { display: inline-flex; align-items: center; }
+/* Native group rows are 34px with 9/8 padding and a 16×20 leading slot at
+ * x20. DisclosureRow forwards className to its root; we supply the padding and
+ * height and let the component lay its own header out inside. */
+.dncs-disc { box-sizing: border-box; min-height: 34px; padding: 0 8px 0 9px; border-radius: var(--dsw-radius-md); }
+.dncs-disc:hover { background: var(--dsw-alias-interactive-bg-hover); }
 /* Collapsed rail entry: a single centered 36px icon row. No horizontal padding
  * — the rail is 56px wide. */
 .dncs-rail { padding: 0; align-items: center; margin-bottom: var(--nano-space-3); }
 .dncs-rail button { width: 36px; height: 36px; justify-content: center; }
 
-.dncs-session { display: flex; align-items: center; gap: var(--nano-space-1); min-height: 32px; padding: 0 var(--nano-space-1); border-radius: var(--dsw-radius-md); color: var(--dsw-alias-label-primary); }
+.dncs-session { display: flex; align-items: center; gap: 0; min-height: 32px; padding: 0 10px 0 var(--nano-space-3); border-radius: var(--dsw-radius-md); color: var(--dsw-alias-label-primary); }
 .dncs-session:hover { background: var(--dsw-alias-interactive-bg-hover); }
 .dncs-session[data-active="true"] { background: var(--dsw-alias-interactive-bg-active); }
-.dncs-session-main { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: var(--nano-space-1); cursor: pointer; }
+.dncs-session-main { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 0; cursor: pointer; }
 .dncs-session-main:focus-visible { outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color); outline-offset: -2px; border-radius: var(--dsw-radius-sm); }
-.dncs-session-dot { flex: none; display: inline-flex; align-items: center; }
-.dncs-session-title { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
-.dncs-session-time { flex: none; color: var(--dsw-alias-label-tertiary); font-size: 11px; }
+/* Native row slot: a fixed 16×20 box; the StateDot centers inside it and the
+ * title sits 6px to its right. */
+.dncs-session-dot { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 20px; }
+.dncs-session-title { flex: 1 1 auto; min-width: 0; margin-left: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+.dncs-session-time { flex: none; margin-left: var(--nano-space-1); color: var(--dsw-alias-label-tertiary); font-size: 10px; }
 /* Native session-row cadence: resting shows the time, the action slot only
  * appears on hover/focus and takes the time's place. */
 .dncs-session-actions { flex: none; display: none; align-items: center; }
 .dncs-session:hover .dncs-session-actions, .dncs-session:focus-within .dncs-session-actions { display: inline-flex; }
 .dncs-session:hover .dncs-session-time, .dncs-session:focus-within .dncs-session-time { display: none; }
 
-.dncs-empty-row { display: flex; align-items: center; gap: var(--nano-space-1); min-height: 32px; padding: 0 var(--nano-space-1); border-radius: var(--dsw-radius-md); color: var(--dsw-alias-label-tertiary); font-size: 12px; cursor: pointer; }
+.dncs-empty-row { display: flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 10px 0 var(--nano-space-3); border-radius: var(--dsw-radius-md); color: var(--dsw-alias-label-tertiary); font-size: 13px; cursor: pointer; }
 .dncs-empty-row:hover { background: var(--dsw-alias-interactive-bg-hover); }
 .dncs-empty-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dncs-section-muted { cursor: default; opacity: .65; }
-.dncs-error-row { padding: var(--nano-space-1); color: var(--dsw-alias-state-error-primary); font-size: 12px; overflow-wrap: anywhere; }
+.dncs-error-row { padding: var(--nano-space-1) 10px var(--nano-space-1) var(--nano-space-3); color: var(--dsw-alias-state-error-primary); font-size: 12px; overflow-wrap: anywhere; }
 
-.dncs-skeleton-row { display: flex; align-items: center; gap: var(--nano-space-1); min-height: 32px; padding: 0 var(--nano-space-1); pointer-events: none; }
-.dncs-skeleton-dot { display: block; flex: none; width: 16px; height: 16px; border-radius: 4px; background: var(--dsw-alias-bg-skeleton, rgba(255,255,255,.09)); animation: dncs-skeleton 1.4s ease-in-out infinite; }
+.dncs-skeleton-row { display: flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 10px 0 var(--nano-space-3); pointer-events: none; }
+.dncs-skeleton-dot { display: block; flex: none; width: 14px; height: 14px; margin: 3px 1px; border-radius: 4px; background: var(--dsw-alias-bg-skeleton, rgba(255,255,255,.09)); animation: dncs-skeleton 1.4s ease-in-out infinite; }
 .dncs-skeleton-bar { display: block; width: 58%; height: 14px; border-radius: 4px; background: var(--dsw-alias-bg-skeleton, rgba(255,255,255,.09)); animation: dncs-skeleton 1.4s ease-in-out infinite; }
 @keyframes dncs-section-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes dncs-skeleton { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }

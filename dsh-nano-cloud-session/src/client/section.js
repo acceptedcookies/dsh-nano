@@ -148,9 +148,16 @@ const RELATIVE_UNIT = {
 }
 
 const relativeLabel = (value, locale) => {
-  if (!value) return ''
-  const then = Date.parse(value)
-  if (Number.isNaN(then)) return ''
+  if (value == null || value === '') return ''
+  /* Devin v3 returns epoch seconds (e.g. 1794798799); ISO strings and
+   * millisecond epochs are also accepted. */
+  let then = Number(value)
+  if (Number.isFinite(then)) {
+    if (then < 1e12) then *= 1000
+  } else {
+    then = Date.parse(value)
+    if (Number.isNaN(then)) return ''
+  }
   const { unit, n } = relativeTime(then, Date.now())
   const [intlUnit, sign] = RELATIVE_UNIT[unit] ?? ['second', 0]
   try {
@@ -198,6 +205,7 @@ function SessionRow({ session, selected, copy, face, locale }) {
      * hover/focus exactly like the native session row's actions slot. */
     h('span', { className: 'dncs-session-actions' },
       h(IconButton, {
+        className: 'dncs-icon-btn dncs-icon-btn-row',
         icon: h(IconArchiveOutlineRegular, { size: 14 }),
         'aria-label': copy('archive'),
         onClick: event => {
@@ -241,8 +249,12 @@ function sectionBody({ copy, face, state }) {
     ? h('div', { className: 'dncs-error-row', role: 'alert', title: state.error }, state.error)
     : null
 
+  /* Session rows are siblings of the DisclosureRow, not its children: the
+   * host component pads its children container, which would push every row
+   * 8px past the native x8..272 row track. Header-only rendering keeps the
+   * row geometry entirely ours. */
   const sessionRows = !open
-    ? []
+    ? null
     : sessions.length === 0
       ? h('div', { className: 'dncs-empty-row dncs-section-muted' }, copy('noSessions'))
       : sessions.map(session => h(SessionRow, {
@@ -256,6 +268,7 @@ function sectionBody({ copy, face, state }) {
 
   return h('div', { className: 'dncs-section-body' },
     h(DisclosureRow, {
+      className: 'dncs-disc',
       open,
       expandable: true,
       expandOnRowClick: true,
@@ -263,7 +276,8 @@ function sectionBody({ copy, face, state }) {
       icon: h(open ? IconFolderOpenRegular : IconFolderCloseRegular, { size: 16 }),
       title: profile.label || copy('carrierDevin'),
       headerAccessory: h('span', { className: 'dncs-section-count' }, h(Tag, { tone: 'quiet' }, String(sessions.length))),
-    }, sessionRows),
+    }),
+    sessionRows,
     /* A failed list read or a failed open must stay visible even when the
      * profile row is collapsed: the section is the only surface the owner has
      * before a native Chat exists. */
@@ -293,17 +307,20 @@ function CloudSection({ copy, face, state, rail }) {
       h('span', { className: 'dncs-section-label' }, copy('cloudWorkspace')),
       h('div', { className: 'dncs-section-actions' },
         h(IconButton, {
+          className: 'dncs-icon-btn',
           icon: h(IconRefreshOutlineRegular, { size: 14, className: state.refreshing ? 'dncs-spin' : undefined }),
           'aria-label': copy('refresh'),
           disabled: state.refreshing === true,
           onClick: () => { void face.refresh() },
         }),
         h(IconButton, {
+          className: 'dncs-icon-btn',
           icon: h(IconSettingsOutlineRegular, { size: 16 }),
           'aria-label': copy('settingsTitle'),
           onClick: () => face.openSettings(),
         }),
         h(IconButton, {
+          className: 'dncs-icon-btn',
           icon: h(IconProjectAddOutlineRegular, { size: 16 }),
           'aria-label': copy('newSession'),
           onClick: () => face.openNew(),

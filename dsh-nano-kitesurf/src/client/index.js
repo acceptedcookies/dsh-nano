@@ -333,7 +333,7 @@ async function engineLogHint() {
 
 /** Bounded wait for a navigation to become visible: the pane polls the frame
  *  until it reports the requested url, then gives up and reports a failure. */
-const NAV_CONFIRM_MS = 10000
+const NAV_CONFIRM_MS = 8000
 const NAV_POLL_MS = 400
 
 /** Compare two addresses for "did the frame land here", ignoring the empty
@@ -1023,6 +1023,15 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
     try {
       await work()
     } catch (cause) {
+      // A heavy page can kill the engine's page script mid-navigation: the
+      // socket closes, the page falls back to about:blank. The host resets the
+      // dead socket on the next call, so one silent retry usually lands.
+      if (opts.retry > 0) {
+        try {
+          await work()
+          return
+        } catch (again) { cause = again }
+      }
       if (opts.dialog) showOpenError(cause, opts.url)
       else showError(cause)
     } finally {
@@ -1069,7 +1078,7 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
   }
 
   function openPage(url) {
-    return run(() => navigate(url), { beat: true, dialog: true, url })
+    return run(() => navigate(url), { beat: true, dialog: true, url, retry: 1 })
   }
 
   function remember(url) {

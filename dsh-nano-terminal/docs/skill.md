@@ -10,12 +10,19 @@ Terminals are persistent objects with two addressing layers:
 - **addr** = `<lane>/<name|short6>` — e.g. `local/a1b2c3`, `local/review`.
   Resolve by id, name, or addr — all equivalent.
 - **ctx ref** = `[ DNT:{conv8}@{term8} ]` — conversation-scoped handle
-  (notepad-style `[ DNN:{ws8}@{path} ]` convention). The Nano 终端 view's
-  tab menu copies one per pane; any ref-taking tool accepts it verbatim.
-  `term.ctx {ref}` resolves it back to `{id, addr, ctx, labels, …}`;
-  a bare 8-hex `term8` also resolves.
+  (notepad-style `[ DNN:{ws8}@{path} ]` convention). `conv8` = the pane's
+  conversation stamp (`stamp8` of its sessionId), `term8` = the pane uuid's
+  first 8, both recorded as reserved labels `conv`/`t` on the session.
+  The Nano 终端 view's tab menu copies one per pane; any ref-taking tool
+  accepts it verbatim (brackets/space/case tolerant). `term.ctx {ref}`
+  resolves it back to `{id, addr, ctx, labels, …}`; a bare 8-hex `term8`
+  also resolves. "Conversation-scoped" is a *discovery* scope, not an
+  access fence: resolution is a global label match, so a known `term8`
+  addresses any session — `t`/`conv` are grafted by panes at attach and
+  cannot be rewritten via `term.session.label`.
 - Your own addr is `$DNT_TERMINAL_ID`; the control plane is `$DNT_API`
-  (`POST <DNT_API>` speaks MCP JSON-RPC `tools/call`).
+  (a *relative* path — `POST <host origin><DNT_API>` speaks MCP JSON-RPC
+  `tools/call`).
 
 ## Lifecycle
 
@@ -23,18 +30,27 @@ Terminals are persistent objects with two addressing layers:
 spawn → send → wait → report → cleanup
 ```
 
-1. **Spawn** — `term.session.create {name, parent, keep, task|shell, cwd, cols, rows}`.
-   `parent` = your addr: children die with you and may *note* you back.
-   `keep` = respawn a shell when the program is lost — it NEVER reruns the command.
-2. **Send** — `term.send {id, data, enter, force, if, wait}`.
-   - Bracketed-paste + Enter is automatic.
-   - Draft-wait: your text queues behind a human's unfinished draft (≤60s).
+1. **Spawn** — `term.session.create {name, parent, keep, labels, shell, args,
+   cwd, cols, rows, title, sessionId}`. `parent` = your addr: children die
+   with you and may *note* you back. `keep` = respawn a shell when the
+   program is lost — it NEVER reruns the command. `labels` may carry the
+   ctx anchors `{t, conv}` at create time only. `lane` other than `local`
+   → `incompatible` (connect that lane's own MCP endpoint).
+2. **Send** — `term.send {id, data, enter, force, if, wait, timeout}`.
+   - Bracketed-paste + Enter is automatic; multi-line `data` sends as-is
+     with `\n`→`\r` translation.
+   - Draft-wait: your text queues behind a human's unfinished draft
+     (up to 60s after their last keystroke — no absolute cap).
    - A `blocked` terminal refuses send → `{kind:"blocked"}` unless `force`.
-   - `if:"idle"|"working"` = conditional delivery (`status_mismatch` on miss).
-   - `wait:true` rides *this turn* to completion and returns `{reason, turn}`.
-3. **Keys** — `term.keys {id, keys:[enter|esc|ctrl+c|f5|…]}` for TUI keys;
-   `term.interrupt {id}` politely stops the foreground program and reports
-   `stopped|exited|still_working|unknown`.
+   - `if:"idle"|"working"` = conditional delivery (`status_mismatch` on
+     miss). `if:"idle"` only matches programs that actively report
+     `state=idle` via OSC 7501 — a plain shell reports no state and fails
+     the check, so don't gate unconditional sends on it.
+   - `wait:true` rides *this turn* to completion and returns
+     `{reason, turn}`.
+3. **Keys** — `term.keys {id, keys:[enter|esc|ctrl+c|f5|…], force}` for
+   TUI keys; `term.interrupt {id}` politely stops the foreground program
+   and reports `stopped|exited|still_working|unknown`.
 4. **Wait** — `term.wait {id, output?, children?, timeout?}` — event-driven,
    never poll screens in a loop. `output` matches escape-stripped screen text;
    `children:"all"|"any"` waits on child terminals; `timeout` is a check-in.
@@ -73,21 +89,38 @@ spawn → send → wait → report → cleanup
               | screenshot <ref> | clear <ref> | wait <ref> [pattern]
               | keys <ref> <keys…> | interrupt <ref> | close <ref>
               | keep <ref> [on|off] | label <ref> k=v|-k | note <ref> <text>
-              | template [ref tpl k=v…] | stats <ref> | health
-              | events [since] | skill
+              | template [ref tpl k=v…] | stats <ref> | resize <ref> cxr
+              | health | audit [n] | lane | events [since] | skill
 ```
 
 `send input read copy screenshot clear wait keys interrupt close keep label
 note template stats` take `<ref>` = id | name | addr | `[ DNT:{conv8}@{term8} ]`
-| bare 8-hex term stamp.
+| bare 8-hex term stamp. Slash flags: `send … [--force] [--if=idle|working]
+[--wait] [--timeout s]`, `wait <ref> [pattern] [--children all|any]
+[--timeout s]`, `keys <ref> <keys…> [--force]`, `new [name] [--parent ref]
+[--keep] [--cwd dir] [--shell sh] [--cols n] [--rows n]`, `resize <ref> c x r`.
+`attach` returns the *client* ws attach URL — agents do not open it; the
+agentic path is the `term.*` tools.
 
 ## Events
 
 `term.events {since}` returns `{seq, events:[…]}` or `{missed:true, snapshot}`.
 Event types: `created lost finished removed status turn title labels size
-restarted heartbeat missed`. A **turn** ends when status leaves `working`.
+restarted message heartbeat missed`. A **turn** ends when status leaves
+`working`. `message` fires on agentSend/note delivery to a pane.
+`term.wait` resolves with reason `exit | status | message | children |
+output | timeout`.
 
 ## Errors (stable kinds)
 
 `not_found blocked finished live unavailable spawn_failed conflict
 status_mismatch name_taken needs_target incompatible limit invalid`
+
+Recovery: `not_found` → `term.session.list` / `term.ctx` to re-derive refs.
+`blocked` → retry with `force` (or `interrupt` first). `status_mismatch` →
+`term.health`/read then re-check. `finished` → read the tail for exit text,
+then spawn a new session. `unavailable`/`spawn_failed` → restored
+placeholders wake automatically on send/input/keys/interrupt/clear; a
+`spawn_failed` after that is a real spawn error — check `term.health` for
+lane status. `conflict` → a second pane tried to rebind `t`/`conv` — pick
+the session by addr instead.

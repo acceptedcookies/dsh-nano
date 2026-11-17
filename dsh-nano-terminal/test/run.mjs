@@ -527,6 +527,19 @@ e.dnt_free(id)
     && /makeLane\(laneSpec, \{ cols: INITIAL_COLS, rows: INITIAL_ROWS,/.test(jsx))
 }
 
+// 14. lib/ 产物新鲜度 —— src 改了没 build 的话，测试全绿但装出去的包带着
+//     旧 bug。抽查本轮契约特征码（ctx-ref graft + 客户端 ctx 引用）必须在
+//     打包产物里出现。
+{
+  const libSessions = readFileSync(join(root, 'lib/sessions.js'), 'utf8')
+  const libClient = readFileSync(join(root, 'lib/client.js'), 'utf8')
+  const libMcp = readFileSync(join(root, 'lib/mcp.js'), 'utf8')
+  t('lib/sessions.js 含 ctx 锚点 graft', /graftCtxAnchors/.test(libSessions))
+  t('lib/sessions.js 导出 splitSlashArgs', /splitSlashArgs/.test(libSessions))
+  t('lib/mcp.js 含 term.session.stats/health 分发', /term\.session\.stats/.test(libMcp) && /term\.health/.test(libMcp))
+  t('lib/client.js 含 ctx 引用格式化', /DNT:/.test(libClient))
+}
+
 // 13. 合同套件：test/*.test.mjs（node:test）由本入口一起收集，
 //     这样 `npm test` 一条命令同时覆盖 wasm 冒烟与迁移合同。
 //     `--test-reporter=tap` 显式固定：Node ≥ 24 在部分场景改用非 TAP 默认

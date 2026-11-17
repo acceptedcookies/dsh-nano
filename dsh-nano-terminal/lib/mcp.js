@@ -380,7 +380,9 @@ function createMcpHandler({ ctx, registry, bus, auditPath, laneStatus, writeAudi
       });
       await handle.done.catch(() => {
       });
-      const text = handle.collected?.stdout?.readFrom(0)?.text ?? "";
+      const collected = handle.collected?.stdout?.readFrom(0);
+      const text = collected?.text ?? "";
+      const truncated = !!(collected && (collected.truncated || collected.hitLimit || text.length >= 512 * 1024));
       const rows = text.trim().split("\n").map((line) => line.trim()).filter(Boolean).map((line) => {
         const parts = line.split(/\s+/);
         return {
@@ -410,7 +412,7 @@ function createMcpHandler({ ctx, registry, bus, auditPath, laneStatus, writeAudi
         if (rec2) processes.push(rec2);
         for (const child of byParent.get(pid) ?? []) queue.push(child.pid);
       }
-      return { processes };
+      return { processes, truncated };
     } catch {
       return { processes: null };
     }
@@ -477,6 +479,8 @@ function createMcpHandler({ ctx, registry, bus, auditPath, laneStatus, writeAudi
       case "term.keys": {
         const rec = target(args.id);
         if (rec.exited) throw err(KIND.FINISHED, "terminal exited");
+        if (!rec.handle && rec.pending) await registry.spawnPending(rec);
+        if (!rec.handle) throw err(KIND.UNAVAILABLE, "terminal has no live backend");
         if (rec.status?.state === "blocked" && !args.force) throw err(KIND.BLOCKED, "terminal reports blocked");
         const bytes = [];
         for (const k of args.keys ?? []) {
@@ -490,6 +494,8 @@ function createMcpHandler({ ctx, registry, bus, auditPath, laneStatus, writeAudi
       case "term.interrupt": {
         const rec = target(args.id);
         if (rec.exited) throw err(KIND.FINISHED, "terminal exited");
+        if (!rec.handle && rec.pending) await registry.spawnPending(rec);
+        if (!rec.handle) throw err(KIND.UNAVAILABLE, "terminal has no live backend");
         audit({ op: "mcp.interrupt", id: rec.id, addr: rec.addr });
         const key = rec.status ? "\x1B" : "";
         const turnBefore = rec.turn;
@@ -509,26 +515,32 @@ function createMcpHandler({ ctx, registry, bus, auditPath, laneStatus, writeAudi
       }
       case "term.session.read": {
         const rec = target(args.id);
+        if (!rec.handle && rec.pending) await registry.spawnPending(rec);
+        const lines = Number.isFinite(Number(args.lines)) ? Math.min(Math.max(Math.floor(Number(args.lines)), 0), 500) : 50;
         return {
           id: rec.id,
           addr: rec.addr,
-          text: rec.screenText(Math.min(args.lines ?? 50, 500), args.source ?? "visible"),
+          text: rec.screenText(lines, args.source ?? "visible"),
           complete: !(rec.status?.state === "working" || rec.status?.state === "blocked")
         };
       }
       case "term.session.copy": {
         const rec = target(args.id);
-        const text = rec.screenText(Math.min(args.lines ?? 200, 2e3), args.source ?? "visible");
+        if (!rec.handle && rec.pending) await registry.spawnPending(rec);
+        const lines = Number.isFinite(Number(args.lines)) ? Math.min(Math.max(Math.floor(Number(args.lines)), 0), 2e3) : 200;
+        const text = rec.screenText(lines, args.source ?? "visible");
         audit({ op: "mcp.copy", id: rec.id, addr: rec.addr, lines: text.split("\n").length });
         return { id: rec.id, addr: rec.addr, text };
       }
       case "term.session.screenshot": {
         const rec = target(args.id);
+        if (!rec.handle && rec.pending) await registry.spawnPending(rec);
         const view = rec.alignView();
         audit({ op: "mcp.screenshot", id: rec.id, addr: rec.addr });
         return {
           id: rec.id,
           addr: rec.addr,
+          ctx: rec.info().ctx,
           ...view,
           title: rec.title,
           status: rec.status
@@ -537,6 +549,8 @@ function createMcpHandler({ ctx, registry, bus, auditPath, laneStatus, writeAudi
       case "term.session.clear": {
         const rec = target(args.id);
         if (rec.exited) throw err(KIND.FINISHED, "terminal exited");
+        if (!rec.handle && rec.pending) await registry.spawnPending(rec);
+        if (!rec.handle) throw err(KIND.UNAVAILABLE, "terminal has no live backend");
         audit({ op: "mcp.clear", id: rec.id, addr: rec.addr });
         await rec.gate.submit(() => rec.handle.write("\f"));
         return { ok: true };
@@ -554,7 +568,7 @@ function createMcpHandler({ ctx, registry, bus, auditPath, laneStatus, writeAudi
           pid: rec.handle?.pid ?? null,
           ...stats,
           foreground: foreground ?? null,
-          activity: rec.handle ? await rec.handle.inspectActivity?.().catch(() => null) : null,
+          activity: (rec.handle ? await rec.handle.inspectActivity?.().catch(() => null) : null) ?? null,
           status: rec.status,
           phase: rec.phase,
           exited: rec.exited,
@@ -571,7 +585,7 @@ function createMcpHandler({ ctx, registry, bus, auditPath, laneStatus, writeAudi
         const rec = target(args.id);
         rec.keep = args.keep !== false;
         audit({ op: "mcp.keep", id: rec.id, addr: rec.addr, keep: rec.keep });
-        bus.emit("labels", rec.addr, { id: rec.id, keep: rec.keep });
+        bus.emit("labels", rec.addr, { id: rec.id, keep: rec.keep, labels: rec.labels });
         return { ok: true, keep: rec.keep };
       }
       case "term.session.label": {

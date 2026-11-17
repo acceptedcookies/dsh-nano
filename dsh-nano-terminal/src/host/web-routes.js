@@ -114,13 +114,14 @@ export function registerWebRoutes(ctx, deps) {
             record = registry.resolve(attachRef)
             if (!record) throw new Error('no such session')
             // An attach can also graft ctx-ref anchors onto a session that
-            // predates them (or was spawned outside a pane) — set-labels
-            // merges and emits the labels event, so nothing is forged.
+            // predates them (or was spawned outside a pane). Reserved keys —
+            // only graftable into empty/identical slots, never silently
+            // rewritten by a second pane.
             const graft = {
               ...(stampOrKeep8(msg.tid) ? { t: stampOrKeep8(msg.tid) } : {}),
               ...(stampOrKeep8(msg.conv) ? { conv: stampOrKeep8(msg.conv) } : {}),
             }
-            if (Object.keys(graft).length) record.setLabels(graft)
+            if (Object.keys(graft).length) record.graftCtxAnchors(graft)
           } else if (msg.type === 'open') {
             record = await registry.create({
               sessionId: msg.owner,
@@ -164,6 +165,11 @@ export function registerWebRoutes(ctx, deps) {
             title: record.title,
             lane: record.lane,
             exited: record.exited,
+            // The session's authoritative ctx anchors — a re-attaching pane
+            // adopts these so its copied ref matches the host, not its own
+            // (possibly fresh-after-layout-loss) tid.
+            labels: { t: record.labels?.t ?? null, conv: record.labels?.conv ?? null },
+            ctx: record.info().ctx,
             replayBytes: attach.alignMode ? 0 : record.replayLen,
           })
           recoverAttach({

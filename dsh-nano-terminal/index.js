@@ -15,7 +15,7 @@
 import { join, dirname } from 'node:path'
 import { appendFileSync, mkdirSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { SessionRegistry } from './lib/sessions.js'
+import { SessionRegistry, splitSlashArgs } from './lib/sessions.js'
 import { EventBus } from './lib/events.js'
 import { Persist } from './lib/persist.js'
 import { createMcpHandler } from './lib/mcp.js'
@@ -91,20 +91,46 @@ export function apply(ctx) {
   // /term stays for back-compat and forwards to the same handler.
 
   const termHandler = async ({ rawInput }) => {
-      const [sub, ...rest] = String(rawInput ?? '').trim().split(/\s+/)
-      const arg = rest.join(' ')
+      // A pasted `[ DNT:{conv8}@{term8} ]` is ONE ref token — splitSlashArgs
+      // protects it before whitespace splitting (shared, unit-tested).
+      const { sub, rest } = splitSlashArgs(rawInput)
       const rpc = async (name, args) => {
         const reply = await mcp.handleRpc({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } })
         const r = reply?.result
-        if (r?.isError) return { kind: 'error', text: r.structuredContent?.message ?? r.content?.[0]?.text ?? 'error' }
+        if (r?.isError) return { kind: 'error', errorKind: r.structuredContent?.kind, text: `${r.structuredContent?.kind ? `${r.structuredContent.kind}: ` : ''}${r.structuredContent?.message ?? r.content?.[0]?.text ?? 'error'}` }
         return { kind: 'success', text: typeof r?.structuredContent === 'object' ? JSON.stringify(r.structuredContent, null, 2) : String(r?.content?.[0]?.text ?? 'ok') }
+      }
+      // --flag / --k=v shared by the lifecycle subs; `--` ends flag parsing so
+      // literal text starting with '--' (send data, wait patterns) survives.
+      const takeFlags = (rest) => {
+        const flags = {}
+        const pos = []
+        let done = false
+        for (const p of rest) {
+          if (!done && p === '--') { done = true; continue }
+          if (!done && p.startsWith('--')) { const i = p.indexOf('='); i > 0 ? flags[p.slice(2, i)] = p.slice(i + 1) : flags[p.slice(2)] = true }
+          else pos.push(p)
+        }
+        return { flags, pos }
       }
       try {
         switch (sub) {
           case '':
           case 'new': {
-            const rec = await registry.create({ owner: 'slash' })
-            return { kind: 'success', text: `terminal ${rec.addr} created (lane=local)` }
+            // new [name] [--parent ref] [--keep] [--cwd dir] [--shell sh] [--cols n] [--rows n]
+            const { flags, pos } = takeFlags(rest)
+            const rec = await registry.create({
+              owner: 'slash',
+              name: pos[0] ?? undefined,
+              parent: flags.parent ?? undefined,
+              keep: !!flags.keep,
+              cwd: flags.cwd ?? undefined,
+              shell: flags.shell ?? undefined,
+              cols: flags.cols ? Number(flags.cols) : undefined,
+              rows: flags.rows ? Number(flags.rows) : undefined,
+            })
+            const ctx = rec.info?.().ctx
+            return { kind: 'success', text: `terminal ${rec.addr} created (lane=local)${ctx ? ` ctx=[ ${ctx} ]` : ''}` }
           }
           case 'list': {
             const rows = registry.list()
@@ -123,12 +149,20 @@ export function apply(ctx) {
               : { kind: 'error', text: 'no such session' }
           }
           case 'send': {
-            const [id, ...data] = rest
-            return rpc('term.send', { id, data: data.join(' ') })
+            // send <ref> <text> [--force] [--if=idle|working] [--wait] [--timeout s]
+            const { flags, pos } = takeFlags(rest)
+            const [id, ...data] = pos
+            return rpc('term.send', { id, data: data.join(' '), force: !!flags.force, if: flags.if ?? undefined, wait: !!flags.wait, timeout: flags.timeout ? Number(flags.timeout) : undefined })
           }
           case 'input': {
             const [id, ...data] = rest
             return rpc('term.session.input', { id, data: data.join(' ') })
+          }
+          case 'resize': {
+            // resize <ref> <cols>x<rows> | <cols> <rows>
+            const [id, a, b] = rest
+            const [c, r] = a?.includes('x') ? a.split('x').map(Number) : [Number(a), Number(b)]
+            return rpc('term.session.resize', { id, cols: c, rows: r })
           }
           case 'read':
             return rpc('term.session.read', { id: rest[0], lines: Number(rest[1]) || 50 })
@@ -145,11 +179,15 @@ export function apply(ctx) {
             return rpc('term.session.stats', { id: rest[0] })
           case 'health':
             return rpc('term.health', {})
-          case 'wait':
-            return rpc('term.wait', { id: rest[0], output: rest[1] ?? undefined })
+          case 'wait': {
+            // wait <ref> [pattern] [--children all|any] [--timeout s]
+            const { flags, pos } = takeFlags(rest)
+            return rpc('term.wait', { id: pos[0], output: pos[1] ?? undefined, children: flags.children ?? undefined, timeout: flags.timeout ? Number(flags.timeout) : undefined })
+          }
           case 'keys': {
-            const [id, ...keys] = rest
-            return rpc('term.keys', { id, keys })
+            const { flags, pos } = takeFlags(rest)
+            const [id, ...keys] = pos
+            return rpc('term.keys', { id, keys, force: !!flags.force })
           }
           case 'interrupt':
             return rpc('term.interrupt', { id: rest[0] })
@@ -178,6 +216,11 @@ export function apply(ctx) {
           }
           case 'events':
             return rpc('term.events', { since: Number(rest[0]) || 0 })
+          case 'audit':
+            return rpc('term.audit', { lines: Number(rest[0]) || 50 })
+          case 'lane':
+          case 'lanes':
+            return rpc('term.lane.status', {})
           case 'skill':
             return rpc('term.skill', {})
           default:
@@ -190,8 +233,8 @@ export function apply(ctx) {
 
   const unregisterCommand = ctx.commands?.register?.({
     name: 'term',
-    description: 'nano-terminal: /term new|list|close|attach|send|read|wait|keys|interrupt|keep|label|note|template|events|skill',
-    input: { hint: '[new|list|close|attach|send|read|wait|keys|interrupt|keep|label|events|skill] [args]' },
+    description: 'nano-terminal (alias of /nano-terminal): /term new|list|ctx|attach|send|input|read|copy|screenshot|clear|resize|wait|keys|interrupt|close|keep|label|note|template|stats|health|audit|lane|events|skill',
+    input: { hint: '[new|list|ctx|attach|send|input|read|copy|screenshot|clear|resize|wait|keys|interrupt|close|keep|label|note|template|stats|health|audit|lane|events|skill] [args]' },
     handler: termHandler,
   }) ?? (() => {})
 
@@ -199,8 +242,8 @@ export function apply(ctx) {
   // Same handler — the skill documents the full operation surface below.
   const unregisterNanoCommand = ctx.commands?.register?.({
     name: 'nano-terminal',
-    description: 'nano-terminal agentic surface: /nano-terminal new|list|ctx|attach|send|input|read|copy|screenshot|clear|wait|keys|interrupt|close|keep|label|note|template|stats|health|events|skill',
-    input: { hint: '[new|list|ctx|attach|send|input|read|copy|screenshot|clear|wait|keys|interrupt|close|keep|label|note|template|stats|health|events|skill] [args]' },
+    description: 'nano-terminal agentic surface: /nano-terminal new|list|ctx|attach|send|input|read|copy|screenshot|clear|resize|wait|keys|interrupt|close|keep|label|note|template|stats|health|audit|lane|events|skill',
+    input: { hint: '[new|list|ctx|attach|send|input|read|copy|screenshot|clear|resize|wait|keys|interrupt|close|keep|label|note|template|stats|health|audit|lane|events|skill] [args]' },
     handler: termHandler,
   }) ?? (() => {})
 
@@ -215,6 +258,7 @@ export function apply(ctx) {
       whenToUse: 'When the task needs an interactive terminal pane in the current conversation (shell, REPL, long-running program) or a `[ DNT:…@… ]` context reference must be traced back to a live session.',
       source: 'bundled',
       provider: 'dsh-nano-terminal',
+      invocation: { modelInvocable: true, userInvocable: true },
       content: skillText,
     }) ?? (() => {})
   } catch { /* skill registration is best-effort — the tool surface is complete without it */ }

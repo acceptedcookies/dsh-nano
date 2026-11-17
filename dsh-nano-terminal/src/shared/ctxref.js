@@ -27,9 +27,33 @@ export function stamp8(id) {
   return (h >>> 0).toString(16).padStart(8, '0')
 }
 
-/** `[ DNT:{conv8}@{term8} ]` — the clipboard/paste payload. */
+/**
+ * `[ DNT:{conv8}@{term8} ]` — the clipboard/paste payload.
+ * A null conv degrades to `[ DNT:@{term8} ]` — the same conv-less form
+ * `info().ctx` renders for `t`-only sessions — never a fake `00000000`
+ * conv stamp that could never match.
+ */
 export function formatCtxRef(sessionId, termId) {
-  return `[ DNT:${stampOrKeep8(sessionId) ?? '00000000'}@${stampOrKeep8(termId) ?? '00000000'} ]`
+  const conv = stampOrKeep8(sessionId)
+  const term = stampOrKeep8(termId) ?? '00000000'
+  return conv ? `[ DNT:${conv}@${term} ]` : `[ DNT:@${term} ]`
+}
+
+/**
+ * Split slash-command input into { sub, rest } with `[ DNT:…@… ]` refs
+ * protected as single tokens — a pasted clipboard ref must reach every
+ * ref-taking subcommand verbatim, brackets and spaces included.
+ */
+export function splitSlashArgs(rawInput) {
+  const REF = /\[\s*DNT:[0-9a-f]{0,8}@[0-9a-f]{8}\s*\]|DNT:[0-9a-f]{0,8}@[0-9a-f]{8}/gi
+  const protected_ = []
+  const text = String(rawInput ?? '').trim().replace(REF, (m) => (protected_.push(m), `\x00${protected_.length - 1}\x00`))
+  const [sub, ...rest0] = text.split(/\s+/)
+  const rest = rest0.map((t) => {
+    const m = /^\x00(\d+)\x00$/.exec(t)
+    return m ? protected_[Number(m[1])] : t
+  })
+  return { sub, rest }
 }
 
 /**

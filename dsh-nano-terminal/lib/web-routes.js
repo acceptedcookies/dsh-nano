@@ -1063,7 +1063,7 @@ function registerWebRoutes(ctx, deps) {
             ...stampOrKeep8(msg.tid) ? { t: stampOrKeep8(msg.tid) } : {},
             ...stampOrKeep8(msg.conv) ? { conv: stampOrKeep8(msg.conv) } : {}
           };
-          if (Object.keys(graft).length) record.setLabels(graft);
+          if (Object.keys(graft).length) record.graftCtxAnchors(graft);
         } else if (msg.type === "open") {
           record = await registry.create({
             sessionId: msg.owner,
@@ -1107,6 +1107,11 @@ function registerWebRoutes(ctx, deps) {
           title: record.title,
           lane: record.lane,
           exited: record.exited,
+          // The session's authoritative ctx anchors — a re-attaching pane
+          // adopts these so its copied ref matches the host, not its own
+          // (possibly fresh-after-layout-loss) tid.
+          labels: { t: record.labels?.t ?? null, conv: record.labels?.conv ?? null },
+          ctx: record.info().ctx,
           replayBytes: attach.alignMode ? 0 : record.replayLen
         });
         recoverAttach({

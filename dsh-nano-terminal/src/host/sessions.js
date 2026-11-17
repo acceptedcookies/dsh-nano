@@ -21,6 +21,8 @@ import { KIND, err } from './errors.js'
 import { Gate } from './gate.js'
 import { resizeMode } from '../shared/align.js'
 import { parseCtxRef, bareTermStamp } from '../shared/ctxref.js'
+// splitSlashArgs rides this bundle so index.js gets it from lib/sessions.js.
+export { splitSlashArgs } from '../shared/ctxref.js'
 
 /**
  * Host-side perf join. `ensurePerfReviewHost` is bundled into
@@ -121,21 +123,42 @@ export class SessionRegistry {
     const slash = String(ref).indexOf('/')
     if (slash >= 0) ref = String(ref).slice(slash + 1)
     if (this.names.has(ref)) return this.sessions.get(this.names.get(ref))
+    // A bare 8-hex term stamp resolves before the uuid-prefix heuristic —
+    // label match is exact, `id.startsWith` could steal 'deadbeef' from its
+    // `t` owner whenever some uuid happens to share the same first 8 hex.
+    // Exact-label hit AND a different id-prefix hit → ambiguous, say so.
+    const bare = bareTermStamp(ref)
+    if (bare) {
+      const hit = this.#resolveCtx({ conv: null, term: bare })
+      if (hit) {
+        const prefixHit = [...this.sessions.values()].find((r) => r.id.startsWith(ref) && r !== hit)
+        if (prefixHit) throw err(KIND.NEEDS_TARGET, `'${ref}' names both a term stamp and session ids — resolve by addr or full id`)
+        return hit
+      }
+    }
     for (const rec of this.sessions.values()) {
       if (rec.id.startsWith(ref) && ref.length >= 4) return rec
     }
-    const bare = bareTermStamp(ref)
-    if (bare) return this.#resolveCtx({ conv: null, term: bare })
     return undefined
   }
 
-  #resolveCtx({ conv, term }) {
+  /** All records matching a ctx pair — ambiguity must surface, not first-match. */
+  #ctxHits({ conv, term }) {
+    const hits = []
     for (const rec of this.sessions.values()) {
       if (rec.labels?.t !== term) continue
       if (conv && rec.labels?.conv !== conv) continue
-      return rec
+      hits.push(rec)
     }
-    return undefined
+    return hits
+  }
+
+  #resolveCtx({ conv, term }) {
+    const hits = this.#ctxHits({ conv, term })
+    if (hits.length > 1) {
+      throw err(KIND.NEEDS_TARGET, `term stamp '${term}' is ambiguous — ${hits.map((r) => r.addr).join(', ')}; resolve by addr or id`)
+    }
+    return hits[0]
   }
 
   list() {
@@ -163,6 +186,11 @@ export class SessionRegistry {
     }
     if (spec.name) {
       if (this.names.has(spec.name)) throw err(KIND.NAME_TAKEN, `name '${spec.name}' already bound`)
+      // A name that parses as a ctx ref would be swallowed by resolve()'s
+      // ctx branch and unreachable forever — reserved spelling.
+      if (parseCtxRef(spec.name) || bareTermStamp(spec.name)) {
+        throw err(KIND.INVALID, `name '${spec.name}' collides with ctx-ref grammar`)
+      }
     }
     const parentRec = spec.parent ? this.resolve(spec.parent) : undefined
     if (spec.parent && !parentRec) throw err(KIND.NOT_FOUND, `no such parent '${spec.parent}'`)
@@ -391,8 +419,9 @@ export class SessionRecord {
     return {
       id: this.id,
       addr: this.addr,
-      // `[ DNT:{conv8}@{term8} ]` — present once a pane-labelled session exists.
-      ctx: conv && t ? `DNT:${conv}@${t}` : null,
+      // `[ DNT:{conv8}@{term8} ]` — or `DNT:@{term8}` when only `t` is bound;
+      // either form resolves through resolve().
+      ctx: t ? `DNT:${conv ?? ''}@${t}` : null,
       name: this.name,
       lane: this.lane,
       title: this.title,
@@ -606,10 +635,36 @@ export class SessionRecord {
   }
 
   setLabels(set = {}, unset = []) {
+    // `t`/`conv` are the ctx-ref anchors — reserved. They can only be grafted
+    // through graftCtxAnchors (ws open/attach); free-label writes must not
+    // silently drop a forge, so reserved keys are an explicit error.
+    if ('t' in set || 'conv' in set || unset.includes('t') || unset.includes('conv')) {
+      throw err(KIND.INVALID, "'t'/'conv' are reserved ctx anchors — set at create or pane attach only")
+    }
     Object.assign(this.labels, set)
     for (const k of unset) delete this.labels[k]
     this.registry.bus?.emit('labels', this.addr, { id: this.id, labels: this.labels })
     this.registry.persist?.schedule(this.registry)
+    return this.labels
+  }
+
+  /**
+   * Bind ctx-ref anchors on attach. Existing bindings are authoritative —
+   * a second pane never rewrites them; it adopts the session's anchors
+   * (the ready frame echoes them back, so its copied ref resolves to this
+   * session even after its own tid was regenerated on layout loss).
+   */
+  graftCtxAnchors({ t, conv }) {
+    let changed = false
+    for (const [k, v] of Object.entries({ t, conv })) {
+      if (!v || this.labels[k]) continue // never rewrite — the session owns its anchors
+      this.labels[k] = v
+      changed = true
+    }
+    if (changed) {
+      this.registry.bus?.emit('labels', this.addr, { id: this.id, labels: this.labels })
+      this.registry.persist?.schedule(this.registry)
+    }
     return this.labels
   }
 

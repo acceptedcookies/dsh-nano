@@ -15,7 +15,6 @@ import { KIND, err } from './errors.js'
 import { waitFor, NAMED_KEYS } from './wait.js'
 import { sendNote } from './notes.js'
 import { templateList, templateRun } from './templates.js'
-import { parseCtxRef, bareTermStamp } from '../shared/ctxref.js'
 
 const PROTOCOL_VERSION = '2025-06-18'
 const schema = JSON.parse(
@@ -67,7 +66,9 @@ export function createMcpHandler({ ctx, registry, bus, auditPath, laneStatus, wr
         graceMs: 5000,
       })
       await handle.done.catch(() => {})
-      const text = handle.collected?.stdout?.readFrom(0)?.text ?? ''
+      const collected = handle.collected?.stdout?.readFrom(0)
+      const text = collected?.text ?? ''
+      const truncated = !!(collected && (collected.truncated || collected.hitLimit || text.length >= 512 * 1024))
       const rows = text.trim().split('\n').map((line) => line.trim()).filter(Boolean)
         .map((line) => {
           const parts = line.split(/\s+/)
@@ -101,7 +102,7 @@ export function createMcpHandler({ ctx, registry, bus, auditPath, laneStatus, wr
         if (rec2) processes.push(rec2)
         for (const child of byParent.get(pid) ?? []) queue.push(child.pid)
       }
-      return { processes }
+      return { processes, truncated }
     } catch {
       return { processes: null }
     }
@@ -170,6 +171,8 @@ export function createMcpHandler({ ctx, registry, bus, auditPath, laneStatus, wr
       case 'term.keys': {
         const rec = target(args.id)
         if (rec.exited) throw err(KIND.FINISHED, 'terminal exited')
+        if (!rec.handle && rec.pending) await registry.spawnPending(rec) // restored placeholder wakes on first use
+        if (!rec.handle) throw err(KIND.UNAVAILABLE, 'terminal has no live backend')
         if (rec.status?.state === 'blocked' && !args.force) throw err(KIND.BLOCKED, 'terminal reports blocked')
         const bytes = []
         for (const k of args.keys ?? []) {
@@ -183,6 +186,8 @@ export function createMcpHandler({ ctx, registry, bus, auditPath, laneStatus, wr
       case 'term.interrupt': {
         const rec = target(args.id)
         if (rec.exited) throw err(KIND.FINISHED, 'terminal exited')
+        if (!rec.handle && rec.pending) await registry.spawnPending(rec)
+        if (!rec.handle) throw err(KIND.UNAVAILABLE, 'terminal has no live backend')
         audit({ op: 'mcp.interrupt', id: rec.id, addr: rec.addr })
         // status-reporting programs get esc; others get ctrl+c (hc semantics)
         const key = rec.status ? '\x1b' : '\x03'
@@ -206,17 +211,21 @@ export function createMcpHandler({ ctx, registry, bus, auditPath, laneStatus, wr
       }
       case 'term.session.read': {
         const rec = target(args.id)
+        if (!rec.handle && rec.pending) await registry.spawnPending(rec) // wake restored placeholders on read
+        const lines = Number.isFinite(Number(args.lines)) ? Math.min(Math.max(Math.floor(Number(args.lines)), 0), 500) : 50
         return {
           id: rec.id,
           addr: rec.addr,
-          text: rec.screenText(Math.min(args.lines ?? 50, 500), args.source ?? 'visible'),
+          text: rec.screenText(lines, args.source ?? 'visible'),
           complete: !(rec.status?.state === 'working' || rec.status?.state === 'blocked'),
         }
       }
       case 'term.session.copy': {
         // Plain-text copy of the rendered grid — the agent's "clipboard".
         const rec = target(args.id)
-        const text = rec.screenText(Math.min(args.lines ?? 200, 2000), args.source ?? 'visible')
+        if (!rec.handle && rec.pending) await registry.spawnPending(rec)
+        const lines = Number.isFinite(Number(args.lines)) ? Math.min(Math.max(Math.floor(Number(args.lines)), 0), 2000) : 200
+        const text = rec.screenText(lines, args.source ?? 'visible')
         audit({ op: 'mcp.copy', id: rec.id, addr: rec.addr, lines: text.split('\n').length })
         return { id: rec.id, addr: rec.addr, text }
       }
@@ -224,11 +233,13 @@ export function createMcpHandler({ ctx, registry, bus, auditPath, laneStatus, wr
         // Structured screen capture: dims + cursor + the visible grid — the
         // agent-facing equivalent of a pixel screenshot.
         const rec = target(args.id)
+        if (!rec.handle && rec.pending) await registry.spawnPending(rec)
         const view = rec.alignView()
         audit({ op: 'mcp.screenshot', id: rec.id, addr: rec.addr })
         return {
           id: rec.id,
           addr: rec.addr,
+          ctx: rec.info().ctx,
           ...view,
           title: rec.title,
           status: rec.status,
@@ -239,6 +250,8 @@ export function createMcpHandler({ ctx, registry, bus, auditPath, laneStatus, wr
         // repaints; we never forge screen state behind the program's back.
         const rec = target(args.id)
         if (rec.exited) throw err(KIND.FINISHED, 'terminal exited')
+        if (!rec.handle && rec.pending) await registry.spawnPending(rec)
+        if (!rec.handle) throw err(KIND.UNAVAILABLE, 'terminal has no live backend')
         audit({ op: 'mcp.clear', id: rec.id, addr: rec.addr })
         await rec.gate.submit(() => rec.handle.write('\x0c'))
         return { ok: true }
@@ -256,7 +269,7 @@ export function createMcpHandler({ ctx, registry, bus, auditPath, laneStatus, wr
           pid: rec.handle?.pid ?? null,
           ...stats,
           foreground: foreground ?? null,
-          activity: rec.handle ? await rec.handle.inspectActivity?.().catch(() => null) : null,
+          activity: (rec.handle ? await rec.handle.inspectActivity?.().catch(() => null) : null) ?? null,
           status: rec.status,
           phase: rec.phase,
           exited: rec.exited,
@@ -273,7 +286,7 @@ export function createMcpHandler({ ctx, registry, bus, auditPath, laneStatus, wr
         const rec = target(args.id)
         rec.keep = args.keep !== false
         audit({ op: 'mcp.keep', id: rec.id, addr: rec.addr, keep: rec.keep })
-        bus.emit('labels', rec.addr, { id: rec.id, keep: rec.keep })
+        bus.emit('labels', rec.addr, { id: rec.id, keep: rec.keep, labels: rec.labels })
         return { ok: true, keep: rec.keep }
       }
       case 'term.session.label': {

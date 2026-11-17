@@ -334,6 +334,17 @@ function resizeMode(platform) {
 }
 
 // src/shared/ctxref.js
+function splitSlashArgs(rawInput) {
+  const REF = /\[\s*DNT:[0-9a-f]{0,8}@[0-9a-f]{8}\s*\]|DNT:[0-9a-f]{0,8}@[0-9a-f]{8}/gi;
+  const protected_ = [];
+  const text = String(rawInput ?? "").trim().replace(REF, (m) => (protected_.push(m), `\0${protected_.length - 1}\0`));
+  const [sub, ...rest0] = text.split(/\s+/);
+  const rest = rest0.map((t) => {
+    const m = /^\x00(\d+)\x00$/.exec(t);
+    return m ? protected_[Number(m[1])] : t;
+  });
+  return { sub, rest };
+}
 function parseCtxRef(input) {
   if (typeof input !== "string") return null;
   const m = input.trim().match(/^\[?\s*DNT:([0-9a-f]{8})?@([0-9a-f]{8})\s*\]?$/i);
@@ -894,20 +905,36 @@ var SessionRegistry = class {
     const slash = String(ref).indexOf("/");
     if (slash >= 0) ref = String(ref).slice(slash + 1);
     if (this.names.has(ref)) return this.sessions.get(this.names.get(ref));
+    const bare = bareTermStamp(ref);
+    if (bare) {
+      const hit = this.#resolveCtx({ conv: null, term: bare });
+      if (hit) {
+        const prefixHit = [...this.sessions.values()].find((r) => r.id.startsWith(ref) && r !== hit);
+        if (prefixHit) throw err(KIND.NEEDS_TARGET, `'${ref}' names both a term stamp and session ids \u2014 resolve by addr or full id`);
+        return hit;
+      }
+    }
     for (const rec of this.sessions.values()) {
       if (rec.id.startsWith(ref) && ref.length >= 4) return rec;
     }
-    const bare = bareTermStamp(ref);
-    if (bare) return this.#resolveCtx({ conv: null, term: bare });
     return void 0;
   }
-  #resolveCtx({ conv, term }) {
+  /** All records matching a ctx pair — ambiguity must surface, not first-match. */
+  #ctxHits({ conv, term }) {
+    const hits = [];
     for (const rec of this.sessions.values()) {
       if (rec.labels?.t !== term) continue;
       if (conv && rec.labels?.conv !== conv) continue;
-      return rec;
+      hits.push(rec);
     }
-    return void 0;
+    return hits;
+  }
+  #resolveCtx({ conv, term }) {
+    const hits = this.#ctxHits({ conv, term });
+    if (hits.length > 1) {
+      throw err(KIND.NEEDS_TARGET, `term stamp '${term}' is ambiguous \u2014 ${hits.map((r) => r.addr).join(", ")}; resolve by addr or id`);
+    }
+    return hits[0];
   }
   list() {
     return [...this.sessions.values()].map((s) => s.info());
@@ -931,6 +958,9 @@ var SessionRegistry = class {
     }
     if (spec.name) {
       if (this.names.has(spec.name)) throw err(KIND.NAME_TAKEN, `name '${spec.name}' already bound`);
+      if (parseCtxRef(spec.name) || bareTermStamp(spec.name)) {
+        throw err(KIND.INVALID, `name '${spec.name}' collides with ctx-ref grammar`);
+      }
     }
     const parentRec = spec.parent ? this.resolve(spec.parent) : void 0;
     if (spec.parent && !parentRec) throw err(KIND.NOT_FOUND, `no such parent '${spec.parent}'`);
@@ -1141,8 +1171,9 @@ var SessionRecord = class {
     return {
       id: this.id,
       addr: this.addr,
-      // `[ DNT:{conv8}@{term8} ]` — present once a pane-labelled session exists.
-      ctx: conv && t ? `DNT:${conv}@${t}` : null,
+      // `[ DNT:{conv8}@{term8} ]` — or `DNT:@{term8}` when only `t` is bound;
+      // either form resolves through resolve().
+      ctx: t ? `DNT:${conv ?? ""}@${t}` : null,
       name: this.name,
       lane: this.lane,
       title: this.title,
@@ -1336,10 +1367,32 @@ var SessionRecord = class {
     return { ...r ?? {}, turn: this.turn };
   }
   setLabels(set = {}, unset = []) {
+    if ("t" in set || "conv" in set || unset.includes("t") || unset.includes("conv")) {
+      throw err(KIND.INVALID, "'t'/'conv' are reserved ctx anchors \u2014 set at create or pane attach only");
+    }
     Object.assign(this.labels, set);
     for (const k of unset) delete this.labels[k];
     this.registry.bus?.emit("labels", this.addr, { id: this.id, labels: this.labels });
     this.registry.persist?.schedule(this.registry);
+    return this.labels;
+  }
+  /**
+   * Bind ctx-ref anchors on attach. Existing bindings are authoritative —
+   * a second pane never rewrites them; it adopts the session's anchors
+   * (the ready frame echoes them back, so its copied ref resolves to this
+   * session even after its own tid was regenerated on layout loss).
+   */
+  graftCtxAnchors({ t, conv }) {
+    let changed = false;
+    for (const [k, v] of Object.entries({ t, conv })) {
+      if (!v || this.labels[k]) continue;
+      this.labels[k] = v;
+      changed = true;
+    }
+    if (changed) {
+      this.registry.bus?.emit("labels", this.addr, { id: this.id, labels: this.labels });
+      this.registry.persist?.schedule(this.registry);
+    }
     return this.labels;
   }
   async resize(cols, rows) {
@@ -1407,5 +1460,6 @@ var SessionRecord = class {
 };
 export {
   SessionRecord,
-  SessionRegistry
+  SessionRegistry,
+  splitSlashArgs
 };

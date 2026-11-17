@@ -92,6 +92,11 @@ export class LocalLane {
             clearTimeout(timer)
             this.id = msg.session
             this.addr = msg.addr
+            // The session's authoritative ctx anchors — a re-attaching pane
+            // adopts the host's, so a copied ref resolves to THIS session
+            // even after the pane's own tid was regenerated (layout loss).
+            this.boundCtx = msg.ctx ?? null
+            this.boundLabels = msg.labels ?? null
             this.v = msg.v ?? 1
             this.platform = msg.platform ?? null
             // 能对齐的连接在第一帧快照到达前丢掉原始字节，避免把 replay 灌进 wasm。

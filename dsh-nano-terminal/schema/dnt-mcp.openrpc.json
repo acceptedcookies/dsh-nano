@@ -32,7 +32,8 @@
   "size",
   "restarted",
   "heartbeat",
-  "missed"
+  "missed",
+  "message"
  ],
  "x-address": {
   "type": "string",
@@ -133,7 +134,9 @@
     "name_taken",
     "spawn_failed",
     "limit",
-    "invalid"
+    "invalid",
+    "incompatible",
+    "conflict"
    ]
   },
   {
@@ -183,7 +186,9 @@
    },
    "errors": [
     "not_found",
-    "finished"
+    "finished",
+    "spawn_failed",
+    "unavailable"
    ]
   },
   {
@@ -251,7 +256,8 @@
     "blocked",
     "finished",
     "status_mismatch",
-    "unavailable"
+    "unavailable",
+    "spawn_failed"
    ]
   },
   {
@@ -292,7 +298,9 @@
     "not_found",
     "blocked",
     "finished",
-    "invalid"
+    "invalid",
+    "unavailable",
+    "spawn_failed"
    ]
   },
   {
@@ -330,7 +338,9 @@
    },
    "errors": [
     "not_found",
-    "finished"
+    "finished",
+    "unavailable",
+    "spawn_failed"
    ]
   },
   {
@@ -568,7 +578,8 @@
     "type": "object",
     "properties": {
      "id": {
-      "$ref": "#/x-address"
+      "type": "string",
+      "description": "session ref — id | name | addr | `[ DNT:{conv8}@{term8} ]` | bare 8-hex term stamp"
      },
      "body": {
       "type": "string",
@@ -656,7 +667,8 @@
     "type": "object",
     "properties": {
      "id": {
-      "$ref": "#/x-address"
+      "type": "string",
+      "description": "session ref — id | name | addr | `[ DNT:{conv8}@{term8} ]` | bare 8-hex term stamp"
      },
      "template": {
       "type": "string"
@@ -701,7 +713,8 @@
     "not_found",
     "blocked",
     "finished",
-    "invalid"
+    "invalid",
+    "spawn_failed"
    ]
   },
   {
@@ -948,6 +961,12 @@
        "object",
        "null"
       ]
+     },
+     "ctx": {
+      "type": [
+       "string",
+       "null"
+      ]
      }
     }
    },
@@ -980,12 +999,14 @@
    },
    "errors": [
     "not_found",
-    "finished"
+    "finished",
+    "unavailable",
+    "spawn_failed"
    ]
   },
   {
    "name": "term.session.stats",
-   "description": "Resource probe: pid, descendant process list (pid/ppid/cpu/rss/stat/etime/command), foreground group and shell activity. processes=null on win32 or when the probe cannot run.",
+   "description": "Resource probe: pid, descendant process list (pid/ppid/pcpu/rssKb/stat/etime/command), foreground group and shell activity. processes=null on win32 or when the probe cannot run. truncated=true when the process table hit the output cap.",
    "params": {
     "type": "object",
     "properties": {
@@ -1064,6 +1085,9 @@
        "integer",
        "null"
       ]
+     },
+     "truncated": {
+      "type": "boolean"
      }
     }
    },

@@ -511,6 +511,7 @@ function StatusBar({ tree, focused, setFocused, closeLeaf, split, openLeaf, togg
   const [menu, setMenu] = useState(null) // '+' lane menu anchor
   const [tabMenu, setTabMenu] = useState(null) // { x, y, node } — chip context menu
   const [copiedCtx, setCopiedCtx] = useState(null) // paneId whose ctx ref was just copied
+  const [copyFailedCtx, setCopyFailedCtx] = useState(null) // paneId whose clipboard write was denied
   const copy = { cancel: zh ? '取消' : 'Cancel', confirm: zh ? '确定' : 'OK', close: zh ? '关闭' : 'Close' }
 
   useEffect(() => {
@@ -518,6 +519,11 @@ function StatusBar({ tree, focused, setFocused, closeLeaf, split, openLeaf, togg
     const t = setTimeout(() => setCopiedCtx(null), 1600)
     return () => clearTimeout(t)
   }, [copiedCtx])
+  useEffect(() => {
+    if (!copyFailedCtx) return undefined
+    const t = setTimeout(() => setCopyFailedCtx(null), 1600)
+    return () => clearTimeout(t)
+  }, [copyFailedCtx])
 
   // Pinned panes float to the front of the strip (stable, like dockkit pins).
   const panes = useMemo(() => {
@@ -544,14 +550,25 @@ function StatusBar({ tree, focused, setFocused, closeLeaf, split, openLeaf, togg
     { id: 'mcp', label: zh ? '连接 MCP 终端' : 'Connect MCP terminal', icon: glyph('mcp'), run: () => setDialog('mcp') },
   ]
 
-  /** `[ DNT:{conv8}@{term8} ]` — paste target for agents & the MCP ctx tools. */
-  const ctxRefOf = (node) => formatCtxRef(sessionId, node.laneSpec?.tid)
+  /** `[ DNT:{conv8}@{term8} ]` — paste target for agents & the MCP ctx tools.
+   *  The host-bound anchors (ready frame) win; the pane's own spec is the
+   *  fallback before the session reports back. */
+  const ctxRefOf = (node) => {
+    const lane = paneSessions.current.get(node.id)?.lane
+    if (lane?.boundCtx) return `[ ${lane.boundCtx} ]`
+    return formatCtxRef(sessionId, node.laneSpec?.tid)
+  }
   const copyCtxRef = (node) => {
     const ref = ctxRefOf(node)
-    navigator.clipboard?.writeText(ref).then(() => setCopiedCtx(node.id)).catch(() => {})
+    navigator.clipboard?.writeText(ref)
+      .then(() => setCopiedCtx(node.id))
+      .catch(() => setCopyFailedCtx(node.id)) // flash a warn icon — never silent
   }
   const tabActions = (node) => [
-    { id: 'ctx', label: zh ? '复制终端上下文引用' : 'Copy terminal context ref', icon: glyph('copy'), run: () => copyCtxRef(node) },
+    // ctx refs only anchor sessions registered on THIS host — an mcp lane
+    // pane's session lives on its remote endpoint, so a copied ref would
+    // dangle. Disabled until a local-shadow record exists for remote panes.
+    { id: 'ctx', label: zh ? '复制终端上下文引用' : 'Copy terminal context ref', icon: glyph('copy'), disabled: node.laneSpec?.lane === 'mcp', run: () => copyCtxRef(node) },
     {
       id: 'pin',
       label: node.pinned ? (zh ? '取消置顶' : 'Unpin') : (zh ? '置顶' : 'Pin to front'),
@@ -582,7 +599,7 @@ function StatusBar({ tree, focused, setFocused, closeLeaf, split, openLeaf, togg
                 onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setFocused(node.id) } }}
               >
                 <span className="dnt-tab-title">
-                  <span className="dnt-tab-icon" aria-hidden="true">{glyph(copiedCtx === node.id ? 'check' : node.laneSpec?.lane === 'mcp' ? 'mcp' : 'terminal')}</span>
+                  <span className="dnt-tab-icon" aria-hidden="true">{glyph(copiedCtx === node.id ? 'check' : copyFailedCtx === node.id ? 'warn' : node.laneSpec?.lane === 'mcp' ? 'mcp' : 'terminal')}</span>
                   <span>{st?.title || (zh ? '终端' : 'Terminal')}</span>
                 </span>
                 {node.pinned && <span className="dnt-tab-pin" aria-hidden="true">{glyph('pin')}</span>}

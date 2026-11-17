@@ -104,10 +104,10 @@ ${NANO_STYLES}
    radius on the corners it touches (DESIGN.md §8 「窗口内浮层裁剪」). */
 .np-window { --np-menu-gap: 4px; width: min(920px, calc(100vw - 48px)); height: min(640px, calc(100vh - 48px)); min-width: 320px; min-height: 240px; display: flex; flex-direction: column; background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-panel, 28px); box-shadow: var(--dsw-elevation-prominent); container-type: inline-size; container-name: np; }
 .np-resize { position: absolute; z-index: var(--nano-layer-local6); pointer-events: auto; }
-/* nano-ui portals the window dialog into .np-window; its mask already says
-   border-radius: inherit, so the overlay has to carry the panel radius now
-   that the shell no longer clips (DESIGN.md §5, §8). */
-.np-window > .nano-overlay { border-radius: inherit; }
+/* The dialog is mounted through an extra host div, so it is not a direct
+   child and a plain inherit would read that div's square corners. Clip the
+   mask to the same radius as the window; menus stay outside this overlay. */
+.np-window .nano-overlay { border-radius: var(--dsw-radius-panel, 28px); overflow: hidden; }
 .np-resize[data-edge="n"], .np-resize[data-edge="s"] { left: 16px; right: 16px; height: 10px; cursor: ns-resize; }
 .np-resize[data-edge="n"] { top: -5px; }
 .np-resize[data-edge="s"] { bottom: -5px; }
@@ -445,8 +445,11 @@ ${NANO_STYLES}
 .np-tool:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 .np-tool svg { width: 18px; height: 18px; }
 .np-tool-sep { width: 1px; height: 18px; margin: 6px 4px; background: var(--dsw-alias-border-l2); flex: none; }
-.np-window button:not([class]):not(.np-tree-tools button):not(.np-node-actions button):not(.np-slash button):not(.np-versions button), .np-footer-actions button.np-danger, .np-dlg-body button:not(.np-transfer-row) { border: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); border-radius: var(--dsw-radius-sm); padding: 4px 10px; cursor: pointer; font: inherit; line-height: 20px; }
-.np-window button:hover, .np-dlg-body button:not(.np-transfer-row):hover { background: var(--dsw-alias-interactive-bg-hover); }
+/* Only notepad's own buttons. A blanket dialog button rule repaints the host
+   SegmentedControl (settings tabs and the on/off control) as separate bordered
+   buttons and covers its thumb, so a click looks like it did nothing. */
+.np-window button:not([class]):not(.np-tree-tools button):not(.np-node-actions button):not(.np-slash button):not(.np-versions button), .np-footer-actions button.np-danger, .np-dlg-body button[data-go], .np-dlg-body button[data-cloud], .np-dlg-body button.np-danger { border: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); border-radius: var(--dsw-radius-sm); padding: 4px 10px; cursor: pointer; font: inherit; line-height: 20px; }
+.np-window button:not([class]):hover, .np-dlg-body button[data-go]:hover, .np-dlg-body button[data-cloud]:hover, .np-dlg-body button.np-danger:hover { background: var(--dsw-alias-interactive-bg-hover); }
 /* keep the row/tab as the only hover surface; inner buttons must not double-fill
    — scoped to .np-window so we beat the generic .np-window button:hover rule */
 .np-window .np-node-main:hover, .np-window .np-node-actions button:hover, .np-window .np-tab-btn:hover { background: transparent; }
@@ -557,6 +560,9 @@ ${NANO_STYLES}
 .np-dlg-body p, .np-dlg-body pre { margin: 0; color: var(--dsw-alias-label-secondary); line-height: 22px; }
 .np-dlg-body pre { max-height: 240px; overflow: auto; white-space: pre-wrap; font-family: var(--dsw-font-markdown-code-font-family); }
 .np-dlg-body label { display: flex; flex-direction: column; align-items: stretch; gap: 6px; margin: 0; color: var(--dsw-alias-label-secondary); }
+/* Host SegmentedControl may use a label per option. The column rule above would
+   stack its track; leave those labels to the host stylesheet. */
+.np-dlg-body .np-seg label, .np-dlg-body .np-dlg-tabs label, .np-window .np-view-switch label { display: unset; flex-direction: unset; align-items: unset; gap: unset; color: inherit; }
 /* DSH-native settings row: title + description left, control right, hairline row */
 /* uniform rows: same container height for every field, dividers sit centered
    in the equal gap between them */
@@ -725,7 +731,18 @@ ${NANO_STYLES}
 /* Settings dialog: fixed card height + two independent flex rows. The tab
    strip never scrolls and is never painted over by panel content. */
 .np-dlg-tabs { flex: none; padding-bottom: 10px; border-bottom: 1px solid var(--dsw-alias-border-l2); }
-.np-dlg-body > .np-dlg-panels { margin-top: 0; flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+/* The host thumb splits the track into equal slices. These labels are not equal
+   width, so the slice misses the text. Pin the thumb to the selected tab. */
+.np-dlg-tabs [role="tablist"] > span { width: var(--np-seg-w); transform: translateX(var(--np-seg-x)); transition: transform .16s ease, width .16s ease; }
+/* Only the tab panels scroll. The card body must not grow a second bar, or
+   the rows jump sideways when a long tab opens. The gutter stays reserved and
+   the thumb floats inside it, clear of the text. */
+.nano-wdlg-body:has(.np-dlg-panels) { display: flex; flex-direction: column; min-height: 0; overflow-x: hidden; overflow-y: hidden; }
+.np-dlg-body:has(.np-dlg-panels) { flex: 1; min-height: 0; overflow: hidden; }
+.np-dlg-body > .np-dlg-panels { margin-top: 0; flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; padding-inline-end: 10px; scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--dsw-alias-label-tertiary) 55%, transparent) transparent; }
+.np-dlg-body > .np-dlg-panels::-webkit-scrollbar { width: 14px; background: transparent; }
+.np-dlg-body > .np-dlg-panels::-webkit-scrollbar-track { background: transparent; margin-block: 8px; }
+.np-dlg-body > .np-dlg-panels::-webkit-scrollbar-thumb { background-color: color-mix(in srgb, var(--dsw-alias-label-tertiary) 60%, transparent); border: 4px solid transparent; border-radius: 999px; background-clip: padding-box; }
 /* ── S3 endpoint management + switch wizard ─────────────────────────────── */
 .np-cloud-settings { margin-top: 4px; }
 .np-endpoint-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
@@ -3159,6 +3176,7 @@ export function mountNotepad(host, defaults, hostTheme = { theme: undefined, sub
          delegation below keeps working without re-wiring. */
       const TAB_ORDER = ['integrate', 'saving', 'appearance', 'fx', 'storage', 'cloud']
       const TAB_LABEL = { integrate: copy.tabIntegrate, saving: copy.tabSaving, appearance: copy.tabAppearance, fx: copy.tabFx, storage: copy.tabStorage, cloud: copy.tabCloud }
+      let tabResize = null
       const sections = [...el.querySelectorAll('.np-section[data-tab]')]
       if (sections.length > 1) {
         /* Two siblings, not a sticky header inside the scroller: the tab strip
@@ -3183,6 +3201,22 @@ export function mountNotepad(host, defaults, hostTheme = { theme: undefined, sub
         tabsHost.append(tabs.el)
         for (const panel of panels.values()) panelsHost.append(panel)
         el.replaceChildren(tabsHost, panelsHost)
+        /* Equal-slice thumb vs content-sized tabs: measure the selected tab. */
+        const fitTabThumb = () => {
+          const list = tabsHost.querySelector('[role="tablist"]')
+          const selected = list?.querySelector('[role="tab"][aria-selected="true"]')
+          if (!list || !selected) return
+          const listBox = list.getBoundingClientRect()
+          const tabBox = selected.getBoundingClientRect()
+          if (tabBox.width < 1) return
+          const pad = Number.parseFloat(getComputedStyle(list).paddingLeft) || 0
+          list.style.setProperty('--np-seg-x', `${Math.round(tabBox.left - listBox.left - pad)}px`)
+          list.style.setProperty('--np-seg-w', `${Math.round(tabBox.width)}px`)
+        }
+        requestAnimationFrame(fitTabThumb)
+        tabsHost.addEventListener('click', () => requestAnimationFrame(fitTabThumb))
+        tabResize = new ResizeObserver(() => fitTabThumb())
+        tabResize.observe(tabsHost)
       }
       /* segment option tables — values mirror normalizeSettings */
       const SW_OPTIONS = {
@@ -3399,7 +3433,7 @@ export function mountNotepad(host, defaults, hostTheme = { theme: undefined, sub
         if (merged.s3IntervalSec !== previousInterval) sync.start()
         render()
       })
-      return () => { for (const mount of mounts) mount.unmount() }
+      return () => { tabResize?.disconnect(); for (const mount of mounts) mount.unmount() }
       },
     })
   }

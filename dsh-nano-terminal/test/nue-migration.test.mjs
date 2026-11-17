@@ -31,6 +31,7 @@ function walk(dir) {
 
 const sources = walk(srcDir).map(path => ({ path: relative(root, path), text: readFileSync(path, 'utf8') }))
 const nanoTerm = readFileSync(join(srcDir, 'client/NanoTerm.jsx'), 'utf8')
+const indexJs = readFileSync(join(srcDir, 'client/index.js'), 'utf8')
 const design = readFileSync(join(repo, 'docs/specs/dsh-nano-ui/DESIGN.md'), 'utf8')
 
 /** Files that match `re`; the zero-count files are dropped. */
@@ -122,27 +123,32 @@ test('T21: the status bar is nano-ui Toolbar', () => {
   assert.match(nanoTerm, /<Toolbar\s+label=/)
   assert.match(nanoTerm, /className="dnt-bar"/)
   assert.deepEqual(countIn(sources, /role="toolbar"/g), [], 'the host role is owned by nano-ui Toolbar')
-  // The row keeps its own layout classes and every one of them is defined.
-  for (const name of ['dnt-bar', 'dnt-bar-group', 'dnt-bar-btn', 'dnt-bar-icon', 'dnt-bar-label']) {
+  // The bar shell keeps only its layout class until [业主] redo the row.
+  for (const name of ['dnt-bar']) {
     assert.ok(nanoTerm.includes(`.${name}{`), `.${name} is defined`)
     assert.ok(nanoTerm.includes(`"${name}"`), `.${name} is referenced`)
   }
   // [业主]裁决：状态栏不放搜索。手写搜索框整体移除（样式+组件+glyph 引用），
   // 锁死回潮——轨迹栏的搜索框是轨迹自己的 ledger 过滤，不属于终端。
   assert.deepEqual(countIn(sources, /dnt-bar-search|dnt-bar-input|filterQuery|jumpToPane/g), [], 'bar search removed')
+  // [业主]裁决：左侧整簇删除——标识/汇总/新建/帮助不再出现在状态栏，
+  // ⚙ 走 conversation.session.header.utilities（index.js 官方 list slot）。
+  assert.deepEqual(countIn(sources, /dnt-bar-group|dnt-bar-btn|dnt-bar-icon|dnt-bar-label|dnt-help-list/g), [], 'left cluster classes deleted')
+  assert.match(indexJs, /conversation\.session\.header\.utilities/)
+  assert.match(indexJs, /NanoTermHeaderSettings/)
+  assert.match(nanoTerm, /export function NanoTermHeaderSettings/)
 })
 
 test('T21: the status bar icons come from the host icon set', () => {
   assert.deepEqual(countIn(sources, /⊕/g), [], '⊕ text glyph')
   assert.deepEqual(countIn(sources, /⚙/g), [], '⚙ text glyph')
   assert.deepEqual(countIn(sources, /actionIcon|toggleIcon|searchIcon/g), [], 'text-glyph slots')
-  for (const name of ['terminal', 'add', 'help', 'settings']) {
+  for (const name of ['terminal', 'settings']) {
     assert.ok(nanoTerm.includes(`glyph('${name}')`), `glyph('${name}') is used`)
   }
   // Each one resolves to a catalog `Icon*` export, not to a locally drawn svg.
-  const map = nanoTerm.slice(nanoTerm.indexOf('const glyph ='), nanoTerm.indexOf('function firstLeaf('))
-  for (const name of ['terminal: primitives.IconCodeOutlineRegular', 'add: primitives.IconPlusOutlineRegular',
-    'help: primitives.IconQuestionOutlineRegular', 'settings: primitives.IconSettingsOutlineRegular']) {
+  const map = nanoTerm.slice(nanoTerm.indexOf('const glyph ='), nanoTerm.indexOf('if (!Icon) return null'))
+  for (const name of ['terminal: primitives.IconCodeOutlineRegular', 'settings: primitives.IconSettingsOutlineRegular']) {
     assert.ok(map.includes(name), name)
   }
   assert.deepEqual(countIn(sources, /<svg\b/g), [], 'inline <svg> outside the icon facade')

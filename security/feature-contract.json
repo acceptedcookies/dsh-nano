@@ -782,6 +782,17 @@
       "responseShape": "upgrade"
     },
     {
+      "plugin": "dsh-nano-terminal",
+      "path": "/dsh-nano-terminal/perf-review/host",
+      "methods": [
+        "GET"
+      ],
+      "bodyLimit": {
+        "GET": 0
+      },
+      "responseShape": "200 {ok:true,enabled,samples|snapshot} | 400 {error}"
+    },
+    {
       "plugin": "dsh-nano-local-sandbox",
       "path": "/nano-local-sandbox/control",
       "methods": [

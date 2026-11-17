@@ -136,11 +136,12 @@ const STYLE = `
 .nks-box[data-kind="hover"]{border-style:dashed;opacity:.75}
 .nks-pin-dot{position:absolute;width:18px;height:18px;margin-left:-9px;margin-top:-9px;color:#fff;font:var(--dsw-font-xxxs-11);line-height:18px;text-align:center;background:var(--dsw-alias-link,#2f6fed);box-shadow:0 0 0 1.5px rgba(0,0,0,.45),0 1px 4px rgba(0,0,0,.4);border-radius:50%;pointer-events:auto;cursor:pointer;user-select:none}
 .nks-pin-dot:hover{background:var(--dsw-alias-state-error-primary);transform:scale(1.15)}
-.nks-hint{position:relative;z-index:var(--nano-layer-local2);flex:none;padding:3px 8px 4px;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11);display:flex;align-items:center;gap:6px;border-bottom:.5px solid var(--dsw-alias-border-l3)}
+.nks-float-top{position:absolute;z-index:var(--nano-layer-local3);top:0;left:0;right:0;display:flex;flex-direction:column;pointer-events:none}
+.nks-hint{position:relative;flex:none;pointer-events:auto;padding:3px 8px 4px;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11);display:flex;align-items:center;gap:6px;background:color-mix(in srgb,var(--dsw-alias-bg-layer-1) 94%,transparent);border-bottom:.5px solid var(--dsw-alias-border-l3)}
 .nks-hint-text{flex:auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .nks-start-btn{height:30px;padding:0 14px;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-12);background:var(--dsw-alias-bg-layer-1);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-md);cursor:pointer}
 .nks-start-btn:hover{background:var(--dsw-alias-interactive-bg-hover)}
-.nks-inspector{flex:none;padding:3px 8px;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11);display:flex;gap:10px;overflow:hidden;border-top:.5px solid var(--dsw-alias-border-l3);white-space:nowrap}
+.nks-inspector{position:absolute;z-index:var(--nano-layer-local3);left:0;right:0;bottom:0;pointer-events:none;padding:3px 8px;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11);display:flex;gap:10px;overflow:hidden;background:color-mix(in srgb,var(--dsw-alias-bg-layer-1) 94%,transparent);border-top:.5px solid var(--dsw-alias-border-l3);white-space:nowrap}
 .nks-inspector b{font-weight:500;color:var(--dsw-alias-label-secondary)}
 .nks-inspector span{overflow:hidden;text-overflow:ellipsis;max-width:170px}
 .nks-note{position:absolute;z-index:var(--nano-layer-local2);display:flex;gap:4px;align-items:center;padding:4px;background:var(--dsw-alias-bg-layer-1);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-md);box-shadow:var(--dsw-elevation-soft)}
@@ -163,7 +164,7 @@ const STYLE = `
 .nks-note-actions{display:flex;gap:2px;align-items:center}
 .nks-note-form{display:flex;gap:4px;align-items:center}
 .nks-note input{width:220px;height:28px;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-12);background:var(--dsw-alias-bg-layer-2);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-sm);padding:0 8px}
-.nks-pins{flex:none;padding:2px 8px 4px;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11);display:flex;align-items:center;gap:4px}
+.nks-pins{position:relative;flex:none;pointer-events:auto;padding:2px 8px 4px;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11);display:flex;align-items:center;gap:4px;background:color-mix(in srgb,var(--dsw-alias-bg-layer-1) 94%,transparent)}
 .nks-busy{position:absolute;left:0;right:0;top:0;height:2px;overflow:hidden;z-index:var(--nano-layer-local3)}
 .nks-busy::before{content:"";display:block;width:35%;height:100%;background:var(--dsw-alias-link,#2f6fed);animation:nks-beat 1s ease-in-out infinite}
 @keyframes nks-beat{from{transform:translateX(-120%)}to{transform:translateX(320%)}}
@@ -762,17 +763,10 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
     const rect = element.getBoundingClientRect()
     const width = Math.round(rect.width)
     if (width < 320) return null
-    // Chrome (hint bar / pins strip / inspector) steals height from the frame
-    // when it appears. Add it BACK so the capture height is the same whether
-    // or not those bars are visible: full-bleed like a browser, yet stable
-    // enough that the page never re-lays out mid-interaction.
-    const host = element.parentElement
-    let chrome = 0
-    for (const sel of ['[data-nks-hint]', '[data-nks-pins]', '[data-nks-inspector]']) {
-      const node = host?.querySelector(sel)
-      if (node) chrome += node.getBoundingClientRect().height || 0
-    }
-    const height = Math.max(240, Math.min(2160, Math.round(rect.height + chrome)))
+    // Hint, pin strip and the style row are overlays on this box. Counting
+    // their height used to change the engine viewport the moment they appeared,
+    // which reflowed the page. The frame's own box is the only size.
+    const height = Math.max(240, Math.min(2160, Math.round(rect.height)))
     return { width, height }
   }
 
@@ -1974,14 +1968,6 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
       })()),
     h(HistoryDialog, { open: historyOpen, onClose: () => setHistoryOpen(false) }),
     h(DevTools, { open: devtoolsOpen, onClose: () => setDevtoolsOpen(false) }),
-    pins.length ? h('div', { className: 'nks-pins', 'data-nks-pins': String(pins.length), 'aria-live': 'polite' },
-      `${pins.length} ${copy.pinsCount}${pins.length === MAX_PINS ? copy.pinsFull : ''}`,
-      h('button', { type: 'button', className: 'nks-tool', 'data-nks-undo-pin': '1', 'aria-label': copy.undoPin, onClick: () => setPins((current) => current.slice(0, -1)) }, glyph('undo')),
-      h('button', { type: 'button', className: 'nks-tool', 'data-nks-clear-pins': '1', 'aria-label': copy.clearPins, onClick: () => setPins([]) }, glyph('clear')),
-      h('button', { type: 'button', className: 'nks-tool', 'data-nks-send-all': '1', 'aria-label': copy.sendAll, onClick: onSendAll }, glyph('send'))) : null,
-    annotate && hasPage ? h('div', { className: 'nks-hint', 'data-nks-hint': '1' },
-      h('span', { className: 'nks-hint-text' }, copy.hintBar),
-      h('button', { type: 'button', className: 'nks-tool', 'data-nks-exit-annotate': '1', 'aria-label': copy.annotate, onClick: () => setAnnotate(false) }, glyph('exit'))) : null,
     h('div', {
       ref: frameRef,
       className: 'nks-frame',
@@ -1994,6 +1980,32 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
       onWheel,
       style: { cursor: annotate ? 'crosshair' : 'default' },
     },
+      (pins.length || (annotate && hasPage)) ? h('div', {
+        className: 'nks-float-top',
+        'data-nks-float-top': '1',
+        onPointerDown: (event) => event.stopPropagation(),
+        onClick: (event) => event.stopPropagation(),
+      },
+        pins.length ? h('div', { className: 'nks-pins', 'data-nks-pins': String(pins.length), 'aria-live': 'polite' },
+          `${pins.length} ${copy.pinsCount}${pins.length === MAX_PINS ? copy.pinsFull : ''}`,
+          h('button', { type: 'button', className: 'nks-tool', 'data-nks-undo-pin': '1', 'aria-label': copy.undoPin, onClick: () => setPins((current) => current.slice(0, -1)) }, glyph('undo')),
+          h('button', { type: 'button', className: 'nks-tool', 'data-nks-clear-pins': '1', 'aria-label': copy.clearPins, onClick: () => setPins([]) }, glyph('clear')),
+          h('button', { type: 'button', className: 'nks-tool', 'data-nks-send-all': '1', 'aria-label': copy.sendAll, onClick: onSendAll }, glyph('send'))) : null,
+        annotate && hasPage ? h('div', { className: 'nks-hint', 'data-nks-hint': '1' },
+          h('span', { className: 'nks-hint-text' }, copy.hintBar),
+          h('button', { type: 'button', className: 'nks-tool', 'data-nks-exit-annotate': '1', 'aria-label': copy.annotate, onClick: () => setAnnotate(false) }, glyph('exit'))) : null) : null,
+      // Style row floats on the frame. It used to be an in-flow sibling with
+      // order 0, so it landed above the page and pushed it down on every pick.
+      pick?.elements?.[0] && pick.elements[0].style && Object.keys(pick.elements[0].style).length ? h('div', { className: 'nks-inspector', 'data-nks-inspector': '1' },
+        h('span', null, h('b', null, pick.elements[0].selector || pick.elements[0].tag)),
+        pick.elements[0].style.color ? h('span', null, `color ${pick.elements[0].style.color}`) : null,
+        pick.elements[0].style.fontSize ? h('span', null, `font ${pick.elements[0].style.fontSize}`) : null,
+        pick.elements[0].style.fontFamily ? h('span', null, pick.elements[0].style.fontFamily.split(',')[0].replace(/["']/g, '')) : null,
+        pick.elements[0].style.display ? h('span', null, pick.elements[0].style.display) : null,
+        pick.elements[0].box ? h('span', null, `${Math.round(pick.elements[0].box.width)}×${Math.round(pick.elements[0].box.height)}`) : null,
+        Array.isArray(pick.elements[0].componentStack) && pick.elements[0].componentStack.length
+          ? h('span', { 'data-nks-stack': '1', title: pick.elements[0].componentStack.join(' → ') },
+              `⚛ ${pick.elements[0].componentStack.slice(-3).join(' → ')}`) : null) : null,
       busy ? h('div', { className: 'nks-busy', 'data-nks-loading': '1', role: 'progressbar', 'aria-label': copy.opening }) : null,
       nativeHtml && domDoc ? h('iframe', {
         ref: domFrameRef,
@@ -2138,18 +2150,6 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
         role: 'status',
         'data-ok': actionToast.ok === false ? 'false' : 'true',
       }, `${copy.hitlAction} ${actionToast.tool}`) : null,
-    // Inspector strip: the picked element's live computed styles under the
-    // frame — Cursor's design-mode sidebar reduced to one readable row.
-    pick?.elements?.[0] && pick.elements[0].style && Object.keys(pick.elements[0].style).length ? h('div', { className: 'nks-inspector', 'data-nks-inspector': '1' },
-      h('span', null, h('b', null, pick.elements[0].selector || pick.elements[0].tag)),
-      pick.elements[0].style.color ? h('span', null, `color ${pick.elements[0].style.color}`) : null,
-      pick.elements[0].style.fontSize ? h('span', null, `font ${pick.elements[0].style.fontSize}`) : null,
-      pick.elements[0].style.fontFamily ? h('span', null, pick.elements[0].style.fontFamily.split(',')[0].replace(/["']/g, '')) : null,
-      pick.elements[0].style.display ? h('span', null, pick.elements[0].style.display) : null,
-      pick.elements[0].box ? h('span', null, `${Math.round(pick.elements[0].box.width)}×${Math.round(pick.elements[0].box.height)}`) : null,
-      Array.isArray(pick.elements[0].componentStack) && pick.elements[0].componentStack.length
-        ? h('span', { 'data-nks-stack': '1', title: pick.elements[0].componentStack.join(' → ') },
-            `⚛ ${pick.elements[0].componentStack.slice(-3).join(' → ')}`) : null) : null,
     // One carrier for both toasts: the host Toast through nano-ui. A
     // recoverable failure adds its repair action to the same toast instead of
     // re-implementing the chrome.

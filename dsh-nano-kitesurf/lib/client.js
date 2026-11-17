@@ -2506,6 +2506,7 @@ ${LAYER_CSS}
           hintBar: "\u70B9\u9009 \xB7 Shift+\u591A\u9009 \xB7 Alt+\u692D\u5706 \xB7 Shift+\u7BAD\u5934 \xB7 \u2191\u2193 \u7236/\u5B50 \xB7 \u53CC\u51FB\u6539\u6587\u5B57 \xB7 Esc \u5173\u95ED\u9009\u4E2D",
           clearSelection: "\u5173\u95ED\u9009\u4E2D",
           openFailed: "\u9875\u9762\u6CA1\u6709\u6253\u5F00",
+          navigateUnconfirmed: "\u5F15\u64CE\u63A5\u53D7\u4E86\u5730\u5740\uFF0C\u4F46\u6CA1\u6709\u6E32\u67D3\u51FA\u9875\u9762\uFF1A",
           startEngine: "\u542F\u52A8\u5F15\u64CE",
           clearPins: "\u6E05\u7A7A\u5168\u90E8\u6807\u6CE8",
           editAria: "\u628A\u8FD9\u6BB5\u6587\u5B57\u5199\u56DE\u5143\u7D20",
@@ -2609,6 +2610,7 @@ ${LAYER_CSS}
           hintBar: "Click \xB7 Shift+multi \xB7 Alt+ellipse \xB7 Shift+arrow \xB7 \u2191\u2193 parent/child \xB7 double-click edit \xB7 Esc clears the pick",
           clearSelection: "Clear selection",
           openFailed: "Page did not open",
+          navigateUnconfirmed: "The engine accepted the address but never rendered it:",
           startEngine: "Start engine",
           clearPins: "Clear all notes",
           editAria: "Write this text back into the element",
@@ -2832,7 +2834,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
   var { batchNote: batchNote2, designNote: designNote2, multiNote: multiNote2 } = (init_note(), __toCommonJS(note_exports));
   var { contentFrame: contentFrame2, shotPoint: shotPoint2 } = (init_shot_point(), __toCommonJS(shot_point_exports));
   var h7 = React12.createElement;
-  var CLIENT_BUILD_ID = true ? "0.1.0+933bc18" : "dev";
+  var CLIENT_BUILD_ID = true ? "0.1.0+cebacc2" : "dev";
   var STATUS = "/nano-local-sandbox/status";
   var OPEN = "/nano-local-sandbox/open";
   var SHOT = "/nano-local-sandbox/shot";
@@ -3108,6 +3110,18 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       }
       return payload;
     });
+  }
+  var NAV_CONFIRM_MS = 1e4;
+  var NAV_POLL_MS = 400;
+  function sameUrl(value) {
+    const text = String(value ?? "").trim();
+    if (!text || text === "about:blank") return "";
+    try {
+      const parsed = new URL(text);
+      return `${parsed.protocol}//${parsed.host}${parsed.pathname.replace(/\/$/, "")}${parsed.search}`;
+    } catch {
+      return text.replace(/\/$/, "");
+    }
   }
   function frameOf(image) {
     if (!image || !image.naturalWidth) return null;
@@ -3570,10 +3584,25 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         await post(OPEN, { url });
       });
       const fit = frameSize();
-      const shotPayload = await post(SHOT, { format: "webp", ...fit ? { fit } : {} });
+      const want = sameUrl(url);
+      const started = Date.now();
+      let shotPayload = null;
+      for (; ; ) {
+        shotPayload = await post(SHOT, { format: "webp", ...fit ? { fit } : {} });
+        if (sameUrl(shotPayload.url) === want) break;
+        if (Date.now() - started >= NAV_CONFIRM_MS) break;
+        await new Promise((resolve) => {
+          window.setTimeout(resolve, NAV_POLL_MS);
+        });
+      }
       setShot(shotPayload.data);
       setShotMime(shotPayload.mimeType || "image/webp");
       setShotMeta({ url: shotPayload.url || "", scrollY: shotPayload.scrollY || 0, targetId: shotPayload.targetId || "", viewport: shotPayload.viewport?.width ?? null, at: Date.now() });
+      if (sameUrl(shotPayload.url) !== want) {
+        const error = new Error(`${copy.navigateUnconfirmed} ${url}`);
+        error.errorId = "kitesurf.navigate.failed";
+        throw error;
+      }
       await loadDom();
       setPick(null);
       remember(url);

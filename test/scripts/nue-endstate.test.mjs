@@ -35,7 +35,11 @@ export function scanText(rel, text, own) {
     const at = `${rel}:${i + 1}`
     // Same matcher as U5: whitespace, every class attribute operator, any case.
     if (line.match(HOST_CLASS_ATTR_RE) !== null) hits.push({ rule: 'class attribute selector', at, line })
-    if (line.includes(':has(')) hits.push({ rule: ':has(', at, line })
+    // Owner override 2026-11-17: [DNEE] filename tint selects the host row from its
+    // own status mark. Every other :has() is still a hit.
+    const ownerTint = rel.endsWith('dsh-nano-explorer-extra/src/client/styles.js')
+      && line.includes(':has(') && line.includes('data-nxe-status')
+    if (line.includes(':has(') && !ownerTint) hits.push({ rule: ':has(', at, line })
     if (/\bschemeOf\b/.test(line)) hits.push({ rule: 'schemeOf', at, line })
     // DESIGN.md §3: the scheme comes from ThemeScope, never from the host body attribute.
     if (/data-ds-dark-theme|dsDarkTheme/.test(line)) hits.push({ rule: 'host theme attribute', at, line })

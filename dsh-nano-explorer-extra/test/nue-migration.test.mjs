@@ -135,11 +135,15 @@ test('T20 control: the zero-scan patterns do report a fixture that carries them'
   assert.equal(countIn(fixture, /\bschemeOf\b/g).length, 1)
 })
 
-test('T20: no selector reaches into the host file tree rows', () => {
+test('T20: row geometry stays out of the host tree; filename tint is the owner exception', () => {
   const all = [{ path: 'src/client/styles.js', text: styles }]
-  assert.deepEqual(countIn(all, /\[data-files-entry/g), [], 'data-files-entry selectors')
-  assert.deepEqual(countIn(all, /\[data-status/g), [], 'data-status selectors')
-  assert.deepEqual(countIn(all, /:has\(/g), [], ':has() selectors')
+  // Padding, chevron and strikethrough were not restored. The only host-row
+  // selectors left are the filename colour rules the owner put back on 2026-11-17.
+  assert.equal(countIn(all, /padding-left:\s*20px/g).length, 0)
+  assert.equal(countIn(all, /text-decoration:\s*line-through/g).length, 0)
+  assert.deepEqual(countIn(all, /\[data-status/g), [], 'old data-status selectors')
+  const tints = styles.match(/li\[data-files-entry\]:has\(> div > div :is\(\.nxe-acc-letter, \.nxe-acc-dot\)\[data-nxe-status="[MA?DRU]"\]\) > div > button > span/g) ?? []
+  assert.deepEqual(tints.map(rule => rule.match(/"([MA?DRU])"/)[1]).sort(), ['?', 'A', 'D', 'M', 'R', 'U'])
   assert.deepEqual(countIn(sources, HOST_CLASS_ATTR_RE), [], 'class attribute selector probes')
 })
 

@@ -195,8 +195,19 @@ export const STYLE = `${NANO_STYLES}
 .nxe-settings-hint { margin-top: 2px; font-size: 11px; color: var(--dsw-alias-label-tertiary); }
 .nxe-warn { margin: 0; padding: 8px; border: .5px solid var(--dsw-alias-state-warn-primary); border-radius: var(--dsw-radius-sm); font-size: 12px; color: var(--dsw-alias-label-secondary); }
 
-/* A changed row cannot be tinted from here: the shared tree owns its row markup and hands the
-   plugin only the accessory seat, so the marks below carry the status (DESIGN.md §8). */
+/* Filename tint, restored by owner order on 2026-11-17 (NUE-1117 T11 reversed for colour only).
+   The shared tree still does not hand the row name to the accessory, so the tint is selected from
+   the status mark this plugin already draws. The selector leaves the row markup alone and only changes
+   the name's colour. Chevron, padding, and the ghost strikethrough stay gone. */
+[data-nxe] .nxe-tree li[data-files-entry]:has(> div > div :is(.nxe-acc-letter, .nxe-acc-dot)[data-nxe-status="M"]) > div > button > span { color: var(--nxe-git-modified); }
+[data-nxe] .nxe-tree li[data-files-entry]:has(> div > div :is(.nxe-acc-letter, .nxe-acc-dot)[data-nxe-status="A"]) > div > button > span { color: var(--nxe-git-added); }
+[data-nxe] .nxe-tree li[data-files-entry]:has(> div > div :is(.nxe-acc-letter, .nxe-acc-dot)[data-nxe-status="?"]) > div > button > span { color: var(--nxe-git-untracked); }
+[data-nxe] .nxe-tree li[data-files-entry]:has(> div > div :is(.nxe-acc-letter, .nxe-acc-dot)[data-nxe-status="D"]) > div > button > span { color: var(--nxe-git-deleted); }
+[data-nxe] .nxe-tree li[data-files-entry]:has(> div > div :is(.nxe-acc-letter, .nxe-acc-dot)[data-nxe-status="R"]) > div > button > span { color: var(--nxe-git-renamed); }
+[data-nxe] .nxe-tree li[data-files-entry]:has(> div > div :is(.nxe-acc-letter, .nxe-acc-dot)[data-nxe-status="U"]) > div > button > span { color: var(--nxe-git-conflicted); }
+/* A folder's glyph takes the same tint, so the row reads as one unit. The remote arrow
+   carries a status too and must not recolour the name. */
+[data-nxe] .nxe-tree li[data-files-entry="directory"]:has(> div > div .nxe-acc-dot[data-nxe-status]) > div > button > svg { color: inherit; opacity: .85; }
 
 /* A folder's summary dot: present whenever anything below it changed, visible while collapsed. */
 .nxe-acc-dot {

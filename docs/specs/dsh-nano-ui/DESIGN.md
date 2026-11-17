@@ -177,7 +177,7 @@
 | 云会话 composer 按钮 | 宿主不提供「云会话下隐藏权限/附件按钮」的开关 | [DNCS] `styles.js` 里 `html[data-dncs-cloud="1"] [class*="composerSeat"] …` 隐藏段已删除，按钮照常显示（`T06`） |
 | 云会话标识 | 宿主 composer 没有给插件放会话来源标识的挂载点 | [DNCS] composer 嫁接整段与 `.dncs-devin-chip` 已删除，不另找挂载点（`T17`） |
 | 侧栏小节外壳 | `sidebar.workspaces` 是单座 slot，宿主不提供「侧栏分区」外壳组件，也不公开列表几何变量（`--dsh-session-list-*` 属内部实现） | [DNCS] 以宿主 renderer 发出的 `data-slot="sidebar.workspaces"` 锚点定位，`insertBefore` 插入自有小节（`MutationObserver` 加 400ms 轮询兜底），标题行、行高与折叠态用令牌与 `--nano-space-*` 自绘；折叠态取自自有 host 宽度，展开走宿主 layout 服务的 `toggleSidebar`（`ctx.get('layout')` 软读取，未声明 inject）；与原生「工作区」的像素对齐无法保证（`T23`） |
-| 文件树状态钩子 | 宿主文件树行不接受插件着色，也不接受插件改写行几何（chevron 槽位、accessory 列宽） | [DNEE] 行着色、幽灵行删除线、行内边距与 chevron 全部删除，状态只剩 accessory 上的字母与圆点（`T11`） |
+| 文件树状态钩子 | 宿主文件树行不接受插件改写行几何（chevron 槽位、accessory 列宽），也没有文件名着色钩子 | [DNEE] 行内边距、chevron、幽灵行删除线仍删除。[业主] 2026-11-17 推翻 T11 的涂色删除：文件名与文件夹图标按 accessory 上的 `data-nxe-status` 用 `:has()` 上色，字母与圆点保留 |
 | Modal 尺寸参数 | 宿主 `Modal` 卡片宽度写死，不接受尺寸参数 | 主窗口级对话框只有预设尺寸（§7）；[DNCS] 新建会话弹窗由 600×680 取 560×640 预设 |
 | 会话来源字段 | 宿主会话头（`SessionHeader` / `CreateSessionOptions.meta`）没有来源、carrier 或 remote 字段 | [DNMS] 不判定云会话，云会话里照常渲染选择器（`T18`） |
 | 变更文件卡片动作 | 宿主 `ChangedFiles` 卡片没有动作插槽或渲染回调 | [DNN]「到记事本」按钮与对应样式已删除，不另找挂载点（`T19`） |

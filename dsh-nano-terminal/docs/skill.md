@@ -54,6 +54,9 @@ spawn → send → wait → report → cleanup
 4. **Wait** — `term.wait {id, output?, children?, timeout?}` — event-driven,
    never poll screens in a loop. `output` matches escape-stripped screen text;
    `children:"all"|"any"` waits on child terminals; `timeout` is a check-in.
+   For "run a command and confirm its output", prefer one call:
+   `term.send {id, data, wait:true}` rides the turn to completion, then a single
+   `read` — that beats `send` + a read/re-read poll loop every time.
 5. **Read** — `term.session.read {id, lines, source}` —
    `visible` live screen | `recent` incl. scrollback | `detection`
    bottom-buffer snapshot. `complete:false` means the program still works.

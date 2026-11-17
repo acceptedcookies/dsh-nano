@@ -201,7 +201,12 @@ export function registerWebRoutes(ctx, deps) {
         res.end(JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'parse error' } }))
         return
       }
-      mcp.audit({ op: 'mcp.req', method: Array.isArray(parsed) ? 'batch' : parsed?.method })
+      // tools/call alone doesn't say *which* tool ran; the per-op mcp.* lines
+      // only cover a subset (create/send/close…). For everything else (read,
+      // wait, stats, list…) the request frame is the only trace — carry the
+      // tool name so the audit can distinguish them.
+      const tool = Array.isArray(parsed) ? undefined : parsed?.params?.name
+      mcp.audit({ op: 'mcp.req', method: Array.isArray(parsed) ? 'batch' : parsed?.method, ...(tool ? { tool } : {}) })
       const reply = await mcp.handleRpc(parsed)
       res.writeHead(200, { 'content-type': 'application/json' })
       res.end(reply === undefined ? '' : JSON.stringify(reply))

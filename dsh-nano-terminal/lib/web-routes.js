@@ -1141,7 +1141,8 @@ function registerWebRoutes(ctx, deps) {
         res.end(JSON.stringify({ jsonrpc: "2.0", id: null, error: { code: -32700, message: "parse error" } }));
         return;
       }
-      mcp.audit({ op: "mcp.req", method: Array.isArray(parsed) ? "batch" : parsed?.method });
+      const tool = Array.isArray(parsed) ? void 0 : parsed?.params?.name;
+      mcp.audit({ op: "mcp.req", method: Array.isArray(parsed) ? "batch" : parsed?.method, ...tool ? { tool } : {} });
       const reply = await mcp.handleRpc(parsed);
       res.writeHead(200, { "content-type": "application/json" });
       res.end(reply === void 0 ? "" : JSON.stringify(reply));

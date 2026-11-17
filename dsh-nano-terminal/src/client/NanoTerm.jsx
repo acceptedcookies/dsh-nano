@@ -55,11 +55,15 @@ const fontFrom = (s) => ({ family: FONT_FAMILIES[s.font] ?? FONT_FAMILIES.jetbra
 const STYLE = `
 ${NANO_STYLES}
 
-.dnt-root{position:relative;height:100%;min-height:0;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-base);flex-direction:column;display:flex;font:var(--dsw-font-xxs-12)}
+.dnt-root{position:relative;height:100%;min-height:0;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-base);flex-direction:column;display:flex}
+/* 12px 只给终端内容。状态栏要跟轨迹栏同一套界面字号，不能被这里压小。 */
+.dnt-content,.dnt-pane,.dnt-empty{font:var(--dsw-font-xxs-12)}
 /* Status bar row = nano-ui Toolbar (.nano-toolbar) plus the local classes below:
    identity + lane rollup on the left, actions and the pane-title filter right.
-   Every color is a host token; no host toolbar class is borrowed. */
-.dnt-bar{flex:none;height:32px;min-height:32px;flex-wrap:nowrap}
+   Every color is a host token; no host toolbar class is borrowed.
+   高度锁 36px：nano-toolbar 的 min-height 是 36，旧的 32 会把这一行压得比
+   轨迹栏矮。左右 12px，和轨迹栏的内容边距对齐，不再吃 nano-space-2 的 8px。 */
+.dnt-bar{box-sizing:border-box;flex:none;width:100%;height:36px;min-height:36px;max-height:36px;flex-wrap:nowrap;padding:0 12px;gap:8px;font:inherit}
 .dnt-bar-group{display:flex;align-items:center;gap:2px;min-width:0;flex:0 1 auto;overflow:hidden}
 .dnt-bar-btn{display:inline-flex;align-items:center;gap:4px;height:24px;min-width:0;padding:0 6px;border:0;border-radius:var(--dsw-radius-sm);background:transparent;color:var(--dsw-alias-label-tertiary);font:inherit;cursor:pointer}
 .dnt-bar-btn:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}

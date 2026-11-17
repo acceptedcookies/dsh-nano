@@ -184,13 +184,15 @@ test('T21: the only exemption is the pane-header button density, not the toolbar
 })
 
 test('T21: no scrollbar takeover of the host conversation scroller', () => {
-  // Q21 / T-O-NUE1117-21: hiding the host scrollbar, cancelling its gutter and
-  // painting a floating replacement are deleted; the host keeps its scrollbar.
+  // 悬浮滚动条和 body MutationObserver 仍然禁止。右侧空白是宿主
+  // scrollbar-gutter:stable，业主要求这条槽位修正留在 DNT，只允许出现在
+  // index.js 的 scrollport 样式里。
   for (const [re, label] of [
-    [/data-conversation-scroll/g, 'host conversation scroll anchor'],
     [/dnt-floatbar/g, 'floating scrollbar stand-in'],
     [/\.observe\s*\(\s*document\s*\.\s*body/g, 'MutationObserver on document.body'],
   ]) assert.deepEqual(countIn(sources, re), [], label)
+  const scrollport = countIn(sources, /data-conversation-scroll/g)
+  assert.deepEqual(scrollport.map((hit) => hit.path), [join('src', 'client', 'index.js')], 'gutter fix lives only in index.js')
   // Positive control: whitespace variants must still be caught, so a reformatted
   // reintroduction cannot slip past the zero assertions above.
   const fixture = [{

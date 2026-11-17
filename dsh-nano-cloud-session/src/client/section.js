@@ -223,14 +223,6 @@ function sectionBody({ copy, face, state }) {
 
   if (state.loading === true) return skeleton()
 
-  /* The host switched the plugin off: no settings shortcut here either —
-   * every dialog field rides on the same unregistered routes. */
-  if (state.disabled === true) {
-    return h('div', { className: 'dncs-section-body' },
-      h('div', { className: 'dncs-empty-row dncs-section-muted' },
-        h('span', { className: 'dncs-empty-label' }, copy('pluginDisabled'))))
-  }
-
   if (profile == null) {
     return h('div', { className: 'dncs-section-body' }, h('div', {
       role: 'button',
@@ -290,6 +282,11 @@ function sectionBody({ copy, face, state }) {
 }
 
 function CloudSection({ copy, face, state, rail }) {
+  /* The plugin was switched off on the Plugins page: host routes are gone but
+   * the browser bundle still runs, so the only graceful surface is no surface
+   * at all. The silent poll keeps running and re-mounts on re-enable. */
+  if (state.disabled === true) return null
+
   /* Rail mode: one 36×36 icon entry. The host owns the sidebar toggle (the
    * `layout` service, soft-read in index.js), so the entry re-expands the sidebar
    * instead of scanning the document for the host's own button; if the layout

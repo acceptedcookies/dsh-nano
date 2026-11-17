@@ -180,7 +180,6 @@ const ZH = {
   testOk: '连接正常',
   emptyCloud: '尚未配置云端工作区',
   noSessions: '暂无云会话',
-  pluginDisabled: '云端工作区已停用 — 在插件页重新开启',
   noMessages: '暂无消息',
 
 }
@@ -365,7 +364,6 @@ const EN = {
   testOk: 'Connected',
   emptyCloud: 'No cloud workspace configured',
   noSessions: 'No cloud sessions',
-  pluginDisabled: 'Cloud workspace disabled — re-enable it on the Plugins page',
   noMessages: 'No messages',
 
 }

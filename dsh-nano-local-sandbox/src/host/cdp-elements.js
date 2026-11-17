@@ -132,13 +132,27 @@ async function navigateOnce(session, httpBase, url, connect, isCancelled) {
   // Cancelling a queued HTTP request must not navigate later. Once sent,
   // however, a CDP navigation is left to finish on its existing connection.
   assertNavigationActive(isCancelled)
-  const result = await client.send('Page.navigate', { url }, attached.sessionId)
+  // The engine consumes ks_color_scheme before the page sees the URL and
+  // applies it as the document's prefers-color-scheme. It is a driver-level
+  // navigation parameter, not a modification to the pinned engine.
+  let navigateUrl = url
+  if (session.colorScheme === 'light' || session.colorScheme === 'dark') {
+    try {
+      const parsed = new URL(url)
+      parsed.searchParams.set('ks_color_scheme', session.colorScheme)
+      navigateUrl = parsed.toString()
+    } catch { /* an invalid URL is reported by Page.navigate */ }
+  }
+  const result = await client.send('Page.navigate', { url: navigateUrl }, attached.sessionId)
   if (result.errorText) {
     const error = new Error(String(result.errorText).slice(0, 240))
     error.status = 502
     error.errorId = 'kitesurf.navigate.failed'
     throw error
   }
+  // Locale/geolocation/color-scheme JS overrides must run in the committed
+  // document, not in the previous about:blank.
+  try { await applyBrowserSettingsToPage(session, client, attached.sessionId) } catch { /* best effort */ }
   return { ok: true, url }
 }
 

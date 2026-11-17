@@ -6,6 +6,21 @@ import {
 import { statusOf } from '../src/host/error-catalog.js'
 
 const metrics = (width = 1280, height = 720, deviceScaleFactor = 1, mobile = false) => ({ width, height, deviceScaleFactor, mobile })
+
+test('simulation settings are projected without changing the legacy defaults', () => {
+  const session = {
+    locale: 'zh-CN',
+    geolocation: { latitude: 31.2, longitude: 121.4 },
+    colorScheme: 'dark',
+    cookies: 'nks_demo=1',
+  }
+  const values = browserSettings(session)
+  assert.equal(values.locale, 'zh-CN')
+  assert.deepEqual(values.geolocation, { latitude: 31.2, longitude: 121.4 })
+  assert.equal(values.colorScheme, 'dark')
+  assert.equal(values.cookies, 'nks_demo=1')
+  assert.deepEqual(Object.keys(browserSettings({})), ['viewport', 'userAgent', 'media', 'extraHeaders'])
+})
 const settingsError = error => error.status === 400 && error.errorId === 'kitesurf.body.json' && statusOf(error.errorId) === 400
 const fitError = error => error.status === 400 && error.errorId === 'kitesurf.shot.fit'
 const writes = fixture => fixture.calls.filter(row => !row.method.startsWith('Target.'))

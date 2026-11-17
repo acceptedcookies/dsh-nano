@@ -2834,7 +2834,6 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
   var { batchNote: batchNote2, designNote: designNote2, multiNote: multiNote2 } = (init_note(), __toCommonJS(note_exports));
   var { contentFrame: contentFrame2, shotPoint: shotPoint2 } = (init_shot_point(), __toCommonJS(shot_point_exports));
   var h7 = React12.createElement;
-  var CLIENT_BUILD_ID = true ? "0.1.0+cebacc2" : "dev";
   var STATUS = "/nano-local-sandbox/status";
   var OPEN = "/nano-local-sandbox/open";
   var SHOT = "/nano-local-sandbox/shot";
@@ -4950,17 +4949,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           "data-nks-mode": nativeHtml && domDoc ? "html" : hasPage ? "img" : "empty",
           style: { color: nativeHtml && domDoc ? "var(--dsw-alias-state-success-primary)" : hasPage ? "var(--dsw-alias-state-warn-primary)" : "var(--dsw-alias-label-tertiary)" }
         }, nativeHtml && domDoc ? "HTML \u539F\u751F\u6E32\u67D3" : hasPage ? "IMG \u622A\u56FE\u56DE\u9000" : "\u672A\u6253\u5F00\u9875\u9762"),
-        h7("span", { style: { flex: "auto" } }),
-        (() => {
-          const hostBuild = typeof status?.buildId === "string" ? status.buildId : "";
-          const drifted = Boolean(hostBuild) && hostBuild !== CLIENT_BUILD_ID;
-          const text = drifted ? `\u5BBF\u4E3B ${hostBuild}` : hostBuild || "";
-          return text ? h7("span", {
-            "data-nks-build": drifted ? "drift" : "ok",
-            style: { opacity: 0.6, color: "var(--dsw-alias-label-tertiary)" },
-            title: `\u5BA2\u6237\u7AEF ${CLIENT_BUILD_ID} \xB7 \u5BBF\u4E3B ${hostBuild || "\u672A\u77E5"}${drifted ? "\uFF08\u4E24\u4E2A\u5305\u5206\u522B\u90E8\u7F72\uFF0C\u4E0D\u5F71\u54CD\u4F7F\u7528\uFF09" : ""}`
-          }, text.slice(0, 40)) : null;
-        })()
+        h7("span", { style: { flex: "auto" } })
       ),
       h7(HistoryDialog, { open: historyOpen, onClose: () => setHistoryOpen(false) }),
       h7(DevTools, { open: devtoolsOpen, onClose: () => setDevtoolsOpen(false) }),

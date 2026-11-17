@@ -6,8 +6,8 @@
  */
 
 import React from 'react'
-import { Button, FileTypeIcon, IconLoadingOutlineRegular, IconRightUpOutlineRegular, Input, SegmentedControl } from '@deepseek-ai/dsh-client-ui-primitives'
-import { NanoWindowDialog } from 'dsh-nano-ui'
+import { Button, FileTypeIcon, IconCloseOutlineRegular, IconLoadingOutlineRegular, IconRightUpOutlineRegular, Input, SegmentedControl } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconButton, NanoWindowDialog } from 'dsh-nano-ui'
 import { Dialog, useDialogContainer } from './dialogs.js'
 import { ageParts, partitionChanges, shortenPath, splitPath } from './format.js'
 
@@ -251,11 +251,16 @@ function HistoryRail({ copy, history, currentBranch, upstream, remotes }) {
 
   const graphW = Math.max(1, layout.lanesWide) * LANE_W + LANE_X * 2
   const xOf = c => LANE_X + c * LANE_W
-  // The open commit defaults to the tip. Clicking another row swaps the file list
-  // underneath; the list itself is a fixed-height scroller, so a large commit
-  // does not resize the card.
-  const [selected, setSelected] = useState(commits[0]?.full ?? '')
-  const shown = commits.find(commit => commit.full === selected) ?? commits[0]
+  // Nothing is open until a row is clicked. `picked` stays set through the
+  // close animation; `filesOpen` is the slide itself.
+  const [picked, setPicked] = useState(null)
+  const [filesOpen, setFilesOpen] = useState(false)
+  useEffect(() => {
+    if (picked === null) return undefined
+    const frame = requestAnimationFrame(() => setFilesOpen(true))
+    return () => cancelAnimationFrame(frame)
+  }, [picked])
+  const shown = commits.find(commit => commit.full === picked) ?? null
   return React.createElement('section', { className: 'nxe-scm-group', 'data-nxe-history': 'true' },
     React.createElement('h3', { className: 'nxe-drawer-heading' }, copy.historyHeading),
     commits.length === 0
@@ -332,11 +337,11 @@ function HistoryRail({ copy, history, currentBranch, upstream, remotes }) {
           'data-head': String(index === 0),
           'data-pushed': String(pushed),
           'data-ahead': String(ahead),
-          'data-selected': String(shown?.full === commit.full),
+          'data-selected': String(picked === commit.full),
           title: [commit.hash, ageLabel(copy, commit.time), commit.subject].filter(part => part !== '').join(' · '),
-          onClick: () => setSelected(commit.full),
+          onClick: () => setPicked(commit.full),
           onKeyDown: event => {
-            if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSelected(commit.full) }
+            if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setPicked(commit.full) }
           },
           tabIndex: 0,
           role: 'button',
@@ -360,21 +365,32 @@ function HistoryRail({ copy, history, currentBranch, upstream, remotes }) {
             title: ref,
           }, ref))))
       })),
-    shown === undefined ? null : React.createElement('div', {
-      className: 'nxe-commit-files', 'data-nxe-commit-files': shown.hash, role: 'region',
-      'aria-label': shown.subject,
+    shown === null ? null : React.createElement('div', {
+      className: 'nxe-commit-reveal', 'data-open': String(filesOpen),
     },
-    (shown.files ?? []).length === 0
-      ? React.createElement('p', { className: 'nxe-drawer-empty' }, copy.commitFilesEmpty)
-      : React.createElement('ul', { className: 'nxe-drawer-list' },
-        shown.files.map(file => React.createElement('li', { key: file.path, className: 'nxe-commit-file' },
-          React.createElement('span', { className: 'nxe-commit-file-path', title: file.path }, file.path),
-          React.createElement('span', { className: 'nxe-graph-stat' },
-            file.additions > 0 ? React.createElement('span', { 'data-tone': 'add' }, `+${file.additions}`) : null,
-            file.deletions > 0 ? React.createElement('span', { 'data-tone': 'del' }, `−${file.deletions}`) : null)))),
-    shown.filesTruncated === true
-      ? React.createElement('p', { className: 'nxe-commit-more' }, copy.commitFilesMore)
-      : null))
+    React.createElement('div', { className: 'nxe-commit-reveal-clip' },
+      React.createElement('div', {
+        className: 'nxe-commit-files', 'data-nxe-commit-files': shown.hash, role: 'region',
+        'aria-label': copy.commitFilesTitle,
+      },
+      React.createElement('div', { className: 'nxe-commit-files-head' },
+        React.createElement('span', { className: 'nxe-commit-files-title' }, copy.commitFilesTitle),
+        React.createElement(IconButton, {
+          icon: React.createElement(IconCloseOutlineRegular, { size: 14 }),
+          'aria-label': copy.dismiss,
+          onClick: event => { event.stopPropagation(); setFilesOpen(false); setPicked(null) },
+        })),
+      (shown.files ?? []).length === 0
+        ? React.createElement('p', { className: 'nxe-drawer-empty' }, copy.commitFilesEmpty)
+        : React.createElement('ul', { className: 'nxe-drawer-list nxe-commit-files-body' },
+          shown.files.map(file => React.createElement('li', { key: file.path, className: 'nxe-commit-file' },
+            React.createElement('span', { className: 'nxe-commit-file-path', title: file.path }, file.path),
+            React.createElement('span', { className: 'nxe-graph-stat' },
+              file.additions > 0 ? React.createElement('span', { 'data-tone': 'add' }, `+${file.additions}`) : null,
+              file.deletions > 0 ? React.createElement('span', { 'data-tone': 'del' }, `−${file.deletions}`) : null)))),
+      shown.filesTruncated === true
+        ? React.createElement('p', { className: 'nxe-commit-more' }, copy.commitFilesMore)
+        : null))))
 }
 
 /**

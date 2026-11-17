@@ -432,7 +432,7 @@ export const STYLE = `${NANO_STYLES}
 .nxe-change-dir { margin-left: 8px; color: var(--dsw-alias-label-tertiary); font-size: 11px; }
 .nxe-graph { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 .nxe-graph-row {
-  display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto;
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto minmax(0, max-content);
   align-items: center; gap: 6px; min-height: 22px;
   position: relative; z-index: 1;
   border: 0; background: transparent; color: inherit; font: inherit; text-align: left;
@@ -476,7 +476,10 @@ export const STYLE = `${NANO_STYLES}
   font-size: 11px; line-height: 16px; color: var(--dsw-alias-label-tertiary);
   font-variant-numeric: tabular-nums;
 }
-.nxe-graph-pills { display: inline-flex; align-items: center; gap: 4px; min-width: 0; max-width: 46%; overflow: hidden; }
+.nxe-graph-pills {
+  justify-self: end; min-width: 0; max-width: 100%; overflow: hidden;
+  display: inline-flex; align-items: center; justify-content: flex-end; gap: 4px;
+}
 .nxe-pill {
   max-width: 108px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   padding: 0 6px; border-radius: 999px; font-size: 10px; line-height: 16px;
@@ -491,11 +494,23 @@ export const STYLE = `${NANO_STYLES}
 .nxe-graph-stat { display: inline-flex; gap: 4px; flex: none; font-size: 10px; line-height: 16px; font-variant-numeric: tabular-nums; }
 .nxe-graph-stat [data-tone="add"] { color: var(--nxe-git-added, #3fb950); }
 .nxe-graph-stat [data-tone="del"] { color: var(--nxe-git-deleted, #f85149); }
+/* Slide is plugin layout: neither the host nor nano-ui has a disclosure that
+   opens a fixed-height list. The chrome inside is IconButton plus tokens.
+   nano-ui-exempt: the grid-rows transition only. */
+.nxe-commit-reveal { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 180ms ease; }
+.nxe-commit-reveal[data-open="true"] { grid-template-rows: 1fr; }
+.nxe-commit-reveal-clip { overflow: hidden; min-height: 0; }
 .nxe-commit-files {
-  height: 148px; overflow: auto; margin-top: 6px;
+  margin-top: 6px;
   border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm);
   background: var(--dsw-alias-bg-layer-1, transparent);
 }
+.nxe-commit-files-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 2px 2px 2px 8px;
+}
+.nxe-commit-files-title { font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-primary); }
+.nxe-commit-files-body { height: 148px; overflow: auto; margin: 0; }
 .nxe-commit-file {
   display: flex; align-items: center; gap: 8px; min-width: 0;
   padding: 3px 8px; font-size: 12px; line-height: 16px;

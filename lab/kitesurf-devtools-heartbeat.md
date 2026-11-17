@@ -17,11 +17,12 @@
 
 `cdp-elements.js` 的 `recordNetworkEvent` 统一处理：
 
-- `Network.requestWillBeSent`：`type`、`wallTime`（epoch ms `startedAt`）、`timestamp`（monotonic seconds，用于耗时）。
-- `Network.responseReceived`：status、mimeType、fromDiskCache/fromServiceWorker。
+- `Network.requestWillBeSent`：`type`、`wallTime`（epoch ms `startedAt`）、`timestamp`（monotonic seconds，用于耗时）、request headers、`postData`、request MIME。
+- `Network.requestWillBeSentExtraInfo` / `Network.responseReceivedExtraInfo`：合并 extra headers 与最终 status。
+- `Network.responseReceived`：status、statusText、mimeType、response headers、protocol、remote address、fromDiskCache/fromServiceWorker。
 - `Network.loadingFinished`：`encodedDataLength` → size，`timestamp` 差 → `durationMs`。
 - `Network.loadingFailed`：errorText、failed、duration。
-- 重定向保持一行，记录 `redirectCount` 并更新最终 URL。
+- `Network.enable` 显式申请 8MB 总 buffer / 2MB 单响应，保证 `Network.getResponseBody` 有内容可读；重定向保持一行，记录 `redirectCount` 并更新最终 URL。
 - `/network` 支持 `limit`、`failedOnly`、`since`；`POST {clear:true}` 真正清空 ring（旧实现忽略 POST）。
 - `/har` 的 `time/size/mimeType/type` 同步修正。
 
@@ -33,8 +34,10 @@
 - 搜索支持普通关键词与 `type:script`、`status:404`、`status:4xx`、`method:GET` 组合。
 - “仅失败”现在在客户端本地过滤，不再重新请求/清空 rows；切换时 iframe identity 不变。
 - “禁用缓存”经源码核对：官方 pin 的 `Network.setCacheDisabled` 是空实现（no-op），因此 UI 显示为 disabled + `不支持`，并用宿主 `Tooltip` 解释，不伪造功能。
+- 点击请求行打开请求详情（Headers / Payload / Response）：Headers 显示请求/响应 headers 与常规字段；Payload 显示 URL 查询参数与 `postData`；Response 通过 `/network?id=` 调用 `Network.getResponseBody` 展示响应体（超过 200k 截断并标注）。
+- 详情打开时 DevTools 面板自动至少 360px 高，关闭按钮或切 tab 收起。
 
-见 `lab/out/kitesurf-devtools-heartbeat/network.png`。
+见 `lab/out/kitesurf-devtools-heartbeat/network.png` 与 `lab/out/kitesurf-devtools-heartbeat/network-detail.png`。
 
 ## 2.1 三个 tab 的统一控件栏
 
@@ -45,7 +48,16 @@ Console / Network / Elements 现在都渲染固定 36px 的控件栏；每栏都
 
 三个 tab 的 `.nks-dt-cols` 表头高度同为 20.5px、`.nks-dt-body` 顶部同为 733px，控件、表头、行字体均为 11px；切换不再产生高度抖动。搜索框使用宿主 `Input` 的 wrapper 单层边框，inner input 的 border/outline 清零，不再出现双层框。截图：`lab/out/kitesurf-devtools-heartbeat/control-bars.png`。
 
-## 2.2 设置中的模拟 tab
+## 2.2 Console 级别筛选
+
+- Console 控件栏新增宿主 `Button` + `openNanoMenu` 的级别筛选：全部 / ERROR / WARN / INFO / LOG / DEBUG。
+- 日志级别在 driver 侧把 `warning` 归一为 `warn`；行按 `data-level` 渲染。
+- error/exception 使用错误色背景、左侧标记和消息色；warn/warning 使用警告色；与普通 log/info 明确区分。
+- Console 过滤无结果时显示“没有匹配的日志”。
+
+截图：`lab/out/kitesurf-devtools-heartbeat/console-levels.png`。
+
+## 2.3 设置中的模拟 tab
 
 设置弹窗现在固定为「环境 / 模拟」：
 - 环境：环境自检 + 引擎地址/MCP 端口。
@@ -61,7 +73,7 @@ Console / Network / Elements 现在都渲染固定 36px 的控件栏；每栏都
 
 截图：`lab/out/kitesurf-devtools-heartbeat/settings-simulation.png`。
 
-## 2.3 Elements 样式详情可关闭
+## 2.4 Elements 样式详情可关闭
 
 Elements 点击行产生的样式详情增加 `×` 关闭按钮；切换 Console/Network 时自动清掉，不再跨 tab 残留。样式详情只在 `tab === 'elements'` 时渲染。
 
@@ -71,7 +83,7 @@ Elements 点击行产生的样式详情增加 `×` 关闭按钮；切换 Console
 
 ## 4. 验证
 
-- DNLS：`node --test test/*.mjs` **208/208**（新增 network lifecycle + route tests）。
+- DNLS：`node --test test/*.mjs` **212/212**（新增 network lifecycle、network detail route 与 header/payload tests）。
 - DNK：`node --test test/*.mjs` **71/71**。
 - `scripts/gui-smoke-kitesurf.sh`：**9/9 PASS**（新增地址栏心跳、Network 列/筛选、首个 tab hover 三项）。
 - ego 实测：
@@ -83,7 +95,7 @@ Elements 点击行产生的样式详情增加 `×` 关闭按钮；切换 Console
 
 ## 5. 已知边界
 
-- 引擎不提供响应体/完整 headers；Size 是 `encodedDataLength` 传输体大小，非 headers 总计。
+- 响应体仅在引擎 buffer 保留范围内可见（本次启用 8MB/2MB 上限）；超过上限或已淘汰的请求显示“引擎未保留响应体”。Size 仍是 `encodedDataLength` 传输体大小，不是 headers 总计。
 - 瀑布流时间来自引擎 CDP 事件的 monotonic timestamp；同一批并发请求可共享起始时间片。
 - `Network.setCacheDisabled` 在当前 pin 无效果，驱动侧没有用请求头伪造替代。
 - 未改 pin 源码；所有新增逻辑在 DNK client 与 DNLS driver。

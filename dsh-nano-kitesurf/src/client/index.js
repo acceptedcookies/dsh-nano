@@ -215,6 +215,10 @@ const STYLE = `
 .nks-dt-row{display:flex;gap:6px;padding:2px 8px;border-bottom:.5px solid color-mix(in srgb,var(--dsw-alias-border-l3) 45%,transparent);align-items:baseline;white-space:nowrap}
 .nks-dt-row:nth-child(even){background:color-mix(in srgb,var(--dsw-alias-bg-layer-1) 45%,transparent)}
 .nks-dt-row:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.nks-dt-row[data-level="warn"],.nks-dt-row[data-level="warning"]{background:color-mix(in srgb,var(--dsw-alias-state-warn-primary) 9%,transparent);box-shadow:inset 2px 0 0 var(--dsw-alias-state-warn-primary)}
+.nks-dt-row[data-level="error"],.nks-dt-row[data-level="exception"]{background:color-mix(in srgb,var(--dsw-alias-state-error-primary) 10%,transparent);box-shadow:inset 2px 0 0 var(--dsw-alias-state-error-primary)}
+.nks-dt-row[data-level="error"] .nks-dt-msg,.nks-dt-row[data-level="exception"] .nks-dt-msg{color:var(--dsw-alias-state-error-primary)}
+.nks-dt-row[data-level="warn"] .nks-dt-msg,.nks-dt-row[data-level="warning"] .nks-dt-msg{color:var(--dsw-alias-state-warn-primary)}
 .nks-dt-lv{flex:none;width:50px;color:var(--dsw-alias-label-tertiary);text-transform:uppercase;font:var(--dsw-font-xxxs-11)}
 .nks-dt-lv[data-lv="error"],.nks-dt-lv[data-lv="exception"]{color:var(--dsw-alias-state-error-primary)}
 .nks-dt-lv[data-lv="warn"]{color:var(--dsw-alias-state-warn-primary)}
@@ -238,6 +242,20 @@ const STYLE = `
 .nks-dt-wf i{position:absolute;top:0;height:8px;min-width:2px;border-radius:2px;background:color-mix(in srgb,var(--dsw-alias-link,#7aaaff) 70%,transparent)}
 .nks-dt-wf i[data-bad="true"]{background:var(--dsw-alias-state-error-primary)}
 .nks-dt-wf i[data-pending="true"]{background:var(--dsw-alias-label-dimmed);opacity:.6}
+.nks-net-detail{position:absolute;left:0;right:0;top:68px;bottom:0;z-index:var(--nano-layer-local7);display:flex;flex-direction:column;background:var(--dsw-alias-bg-base);border-top:.5px solid var(--dsw-alias-border-l2)}
+.nks-net-detail-head{flex:none;display:flex;align-items:center;gap:8px;padding:5px 8px;border-bottom:.5px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1)}
+.nks-net-detail-title{flex:auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxxs-11)}
+.nks-net-detail-x{flex:none;width:20px;height:20px;padding:0;border:0;border-radius:var(--dsw-radius-sm);background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer;font:inherit;line-height:1}
+.nks-net-detail-x:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.nks-net-detail-tabs{flex:none;display:flex;align-items:center;gap:4px;padding:4px 8px;border-bottom:.5px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1)}
+.nks-net-detail-body{flex:auto;min-height:0;overflow:auto;padding:6px 8px;color:var(--dsw-alias-label-secondary)}
+.nks-net-section{margin-bottom:8px}
+.nks-net-section > b{display:block;margin-bottom:3px;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxxs-11);font-weight:600}
+.nks-net-kv{display:flex;gap:8px;padding:1px 0;font:var(--dsw-font-xxxs-11);line-height:1.55}
+.nks-net-kv b{flex:none;width:132px;color:var(--dsw-alias-label-tertiary);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nks-net-kv span{min-width:0;word-break:break-all;color:var(--dsw-alias-label-secondary)}
+.nks-net-pre{margin:0;white-space:pre-wrap;word-break:break-word;font:var(--dsw-font-xxxs-11);line-height:1.55;color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-bg-layer-1);border:.5px solid var(--dsw-alias-border-l3);border-radius:var(--dsw-radius-sm);padding:5px 6px;max-height:180px;overflow:auto}
+.nks-net-empty{color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11);padding:2px 0}
 .nks-dt-styles{flex:none;max-height:110px;overflow:auto;border-bottom:.5px solid var(--dsw-alias-border-l2);padding:4px 8px;background:var(--dsw-alias-bg-layer-1)}
 .nks-dt-style-head{display:flex;align-items:center;gap:6px;color:var(--dsw-alias-label-secondary);margin-bottom:3px}
 .nks-dt-style-head > span{flex:auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -410,6 +428,7 @@ const RESOURCE_LABELS = {
   Ping: 'ping', CSPViolationReport: 'csp', Preflight: 'preflight', Other: 'other',
 }
 const RESOURCE_FILTERS = ['Document', 'Stylesheet', 'Script', 'XHR', 'Fetch', 'Image', 'Font', 'Media', 'WebSocket', 'Other']
+const CONSOLE_LEVELS = ['error', 'warn', 'info', 'log', 'debug']
 
 function resourceTypeLabel(row) {
   const raw = String(row?.type || '').trim()
@@ -475,7 +494,11 @@ function DevTools({ copy, open, onClose }) {
   const [failedOnly, setFailedOnly] = React.useState(false)
   const [query, setQuery] = React.useState('')
   const [typeFilter, setTypeFilter] = React.useState('all')
+  const [levelFilter, setLevelFilter] = React.useState('all')
+  const [netDetail, setNetDetail] = React.useState(null)
+  const [netDetailTab, setNetDetailTab] = React.useState('headers')
   const [styles, setStyles] = React.useState(null)
+  const detailSeq = React.useRef(0)
   // The panel is a workspace, not a fixed strip: the human decides how much
   // room the page gives up. Height lives here so it survives a re-render.
   const [height, setHeight] = React.useState(240)
@@ -561,7 +584,7 @@ function DevTools({ copy, open, onClose }) {
       if (typeFilter !== 'all' && String(row.type || 'Other') !== typeFilter) return false
       return networkMatches(row, query)
     }
-    if (tab === 'console') return consoleMatches(row, query)
+    if (tab === 'console') return (levelFilter === 'all' || String(row.level) === levelFilter) && consoleMatches(row, query)
     if (tab === 'elements') return elementMatches(row, query)
     return true
   })
@@ -580,6 +603,34 @@ function DevTools({ copy, open, onClose }) {
       ],
     })
   }
+  const openLevelMenu = (event) => {
+    const rect = event.currentTarget.getBoundingClientRect()
+    openNanoMenu({
+      anchor: { left: rect.left, top: rect.top, bottom: rect.bottom },
+      container: event.currentTarget.closest('[data-nks-workspace]'),
+      direction: 'up',
+      maxHeight: 7 * 28 + 8,
+      items: [
+        { id: 'all', label: copy.devtoolsAllLevels, run: () => setLevelFilter('all') },
+        ...CONSOLE_LEVELS.map((level) => ({ id: level, label: level.toUpperCase(), run: () => setLevelFilter(level) })),
+      ],
+    })
+  }
+  const openNetworkDetail = async (row) => {
+    const seq = ++detailSeq.current
+    setNetDetailTab('headers')
+    setHeight((value) => Math.max(value, 360))
+    setNetDetail({ entry: row, responseBody: null, loading: true, error: '' })
+    try {
+      const data = await fetch(`${NETWORK}?id=${encodeURIComponent(row.id)}`).then((response) => response.json())
+      if (seq !== detailSeq.current) return
+      if (!data?.ok || !data.entry) throw new Error(data?.error || copy.devtoolsDetailError)
+      setNetDetail({ entry: data.entry, responseBody: data.responseBody, loading: false, error: '' })
+    } catch (cause) {
+      if (seq !== detailSeq.current) return
+      setNetDetail({ entry: row, responseBody: null, loading: false, error: String(cause?.message || copy.devtoolsDetailError) })
+    }
+  }
   const inspectNode = async (row) => {
     const selector = row.id ? `${row.tag}#${row.id}` : (row.cls ? `${row.tag}.${String(row.cls).trim().split(/\s+/)[0]}` : row.tag)
     try {
@@ -591,6 +642,58 @@ function DevTools({ copy, open, onClose }) {
     const path = tab === 'console' ? CONSOLE : NETWORK
     await fetch(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"clear":true}' }).catch(() => {})
     setRows([])
+    setNetDetail(null)
+  }
+  const kvRow = (label, value) => h('div', { className: 'nks-net-kv', key: label },
+    h('b', null, label), h('span', null, String(value ?? '—')))
+  const headerRows = (headers) => {
+    const entries = Object.entries(headers || {})
+    return entries.length
+      ? entries.map(([key, value]) => h('div', { className: 'nks-net-kv', key }, h('b', null, key), h('span', null, String(value))))
+      : h('div', { className: 'nks-net-empty' }, copy.devtoolsNoHeaders)
+  }
+  const netSection = (title, children) => h('div', { className: 'nks-net-section', key: title },
+    h('b', null, title), children)
+  const renderNetDetail = () => {
+    if (!netDetail) return null
+    if (netDetail.loading) return h('div', { className: 'nks-net-empty' }, copy.devtoolsLoading)
+    if (netDetail.error) return h('div', { className: 'nks-net-empty' }, `${copy.devtoolsDetailError}: ${netDetail.error}`)
+    const entry = netDetail.entry || {}
+    if (netDetailTab === 'headers') {
+      return [
+        netSection(copy.devtoolsGeneral, [
+          kvRow(copy.devtoolsRequestUrl, entry.url),
+          kvRow(copy.devtoolsMethod, entry.method),
+          kvRow(copy.devtoolsStatus, `${entry.status ?? '…'}${entry.statusText ? ' ' + entry.statusText : ''}`),
+          kvRow(copy.devtoolsType, entry.type || 'Other'),
+          kvRow(copy.devtoolsMimeType, entry.mimeType),
+          kvRow(copy.devtoolsProtocol, entry.protocol),
+          kvRow(copy.devtoolsRemoteAddress, entry.remoteAddress),
+        ]),
+        netSection(copy.devtoolsRequestHeaders, headerRows(entry.requestHeaders)),
+        netSection(copy.devtoolsResponseHeaders, headerRows(entry.responseHeaders)),
+      ]
+    }
+    if (netDetailTab === 'payload') {
+      let queryRows = []
+      try {
+        const parsed = new URL(entry.url || '', 'http://local')
+        queryRows = [...parsed.searchParams].map(([key, value], index) => h('div', { className: 'nks-net-kv', key: `${key}${index}` },
+          h('b', null, key), h('span', null, value)))
+      } catch { /* malformed URLs still show the raw body */ }
+      return [
+        queryRows.length ? netSection(copy.devtoolsQuery, queryRows) : null,
+        netSection(copy.devtoolsRequestPayload, entry.postData
+          ? h('pre', { className: 'nks-net-pre' }, entry.postData)
+          : h('div', { className: 'nks-net-empty' }, copy.devtoolsNoPayload)),
+      ]
+    }
+    const body = netDetail.responseBody
+    return netSection(copy.devtoolsResponseBody, body == null
+      ? h('div', { className: 'nks-net-empty' }, copy.devtoolsNoResponseBody)
+      : body.body
+        ? h('pre', { className: 'nks-net-pre' }, `${body.base64Encoded ? '[base64]\n' : ''}${body.body}${body.truncated ? '\n…' : ''}`)
+        : h('div', { className: 'nks-net-empty' }, copy.devtoolsEmptyBody))
   }
   return h('div', {
     className: 'nks-dt',
@@ -621,7 +724,7 @@ function DevTools({ copy, open, onClose }) {
             { value: 'network', label: copy.devtoolsNetwork },
             { value: 'elements', label: 'Elements' },
           ],
-          onChange: (next) => { setTab(next); if (next !== 'elements') setStyles(null) },
+          onChange: (next) => { setTab(next); if (next !== 'elements') setStyles(null); if (next !== 'network') setNetDetail(null) },
         })),
       h('span', { style: { flex: 'auto' } }),
       h(primitives.Button, { variant: 'ghost', size: 'sm', onClick: clear }, copy.devtoolsClear),
@@ -643,6 +746,12 @@ function DevTools({ copy, open, onClose }) {
         'aria-label': tab === 'elements' ? copy.devtoolsSearchElements : copy.devtoolsSearch,
         onChange: (event) => setQuery(event.target.value),
       }),
+      tab === 'console' ? h(primitives.Tooltip, { label: copy.devtoolsFilterLevel },
+        h(primitives.Button, {
+          variant: 'outline', size: 'sm', 'data-nks-dt-level': '1',
+          'aria-label': `${copy.devtoolsFilterLevel}: ${levelFilter === 'all' ? copy.devtoolsAllLevels : levelFilter}`,
+          onClick: openLevelMenu,
+        }, levelFilter === 'all' ? copy.devtoolsAllLevels : levelFilter.toUpperCase())) : null,
       tab === 'network' ? h(primitives.Tooltip, { label: copy.devtoolsFilterType },
         h(primitives.Button, {
           variant: 'outline', size: 'sm', 'data-nks-dt-type': '1',
@@ -690,26 +799,47 @@ function DevTools({ copy, open, onClose }) {
       h('span', { className: 'nks-dt-dur' }, 'Time'),
       h('span', { className: 'nks-dt-wf', style: { height: 'auto' } }, 'Waterfall')) : null,
     h('div', { className: 'nks-dt-body', 'data-nks-dt-body': '1' },
-      visibleRows.length === 0 ? h('div', { className: 'nks-dt-empty' }, rows.length && (tab === 'network' || tab === 'console') ? copy.devtoolsNoMatch : copy.devtoolsEmpty) : null,
+      visibleRows.length === 0 ? h('div', { className: 'nks-dt-empty' }, rows.length && tab === 'console' ? copy.devtoolsNoMatchConsole : rows.length && tab === 'network' ? copy.devtoolsNoMatch : copy.devtoolsEmpty) : null,
       visibleRows.map((row, index) => tab === 'elements'
         ? h('div', { className: 'nks-dt-row', key: `e${row.nodeId || index}`, style: { paddingLeft: `${8 + (row.level || 0) * 12}px`, cursor: 'pointer' }, onClick: () => inspectNode(row), 'data-nks-el-node': String(row.nodeId) },
           h('span', { className: 'nks-dt-lv' }, row.tag),
           h('span', { className: 'nks-dt-msg' }, `${row.id ? '#' + row.id : ''}${row.cls ? '.' + String(row.cls).split(/\s+/).slice(0, 2).join('.') : ''}`),
           h('span', { className: 'nks-dt-dur' }, row.childNodeCount ? String(row.childNodeCount) : ''))
         : tab === 'console'
-        ? h('div', { className: 'nks-dt-row', key: `c${row.seq || index}` },
+        ? h('div', { className: 'nks-dt-row', key: `c${row.seq || index}`, 'data-level': row.level },
           h('span', { className: 'nks-dt-time' }, String(row.at || '').slice(11, 19)),
           h('span', { className: 'nks-dt-lv', 'data-lv': row.level }, row.level),
           h('span', { className: 'nks-dt-msg' }, row.text),
           h('span', { className: 'nks-dt-src' }, row.url ? `${row.url}${row.lineNumber != null ? ':' + row.lineNumber : ''}` : row.source || ''))
-        : h('div', { className: 'nks-dt-row', key: `n${row.id || index}` },
+        : h('div', {
+          className: 'nks-dt-row', key: `n${row.id || index}`,
+          style: { cursor: 'pointer' }, 'data-nks-net-row': String(row.id || ''),
+          'data-selected': netDetail?.entry?.id === row.id ? 'true' : 'false',
+          onClick: () => openNetworkDetail(row),
+        },
           h('span', { className: 'nks-dt-lv' }, row.method),
           h('span', { className: 'nks-dt-st', 'data-bad': row.failed || (row.status && row.status >= 400) ? 'true' : 'false' }, row.failed ? 'ERR' : String(row.status || '…')),
           h('span', { className: 'nks-dt-type', 'data-resource': resourceTypeLabel(row), title: `${row.type || 'Other'}${row.mimeType ? ' · ' + row.mimeType : ''}` }, resourceTypeLabel(row)),
           h('span', { className: 'nks-dt-url nks-dt-grow', 'data-bad': row.failed || (row.status || 0) >= 400 ? 'true' : 'false' }, row.url),
           h('span', { className: 'nks-dt-size', title: copy.devtoolsSizeHint }, formatSize(row.size)),
           h('span', { className: 'nks-dt-dur' }, formatDuration(row.durationMs)),
-          h('span', { className: 'nks-dt-wf', 'data-nks-dt-wf': '1' }, wfBar(row, visibleRows))))))
+          h('span', { className: 'nks-dt-wf', 'data-nks-dt-wf': '1' }, wfBar(row, visibleRows))))),
+    tab === 'network' && netDetail ? h('div', { className: 'nks-net-detail', 'data-nks-net-detail': '1' },
+      h('div', { className: 'nks-net-detail-head' },
+        h('b', { className: 'nks-net-detail-title', title: netDetail.entry?.url || '' },
+          `${netDetail.entry?.method || 'GET'} ${netDetail.entry?.url || ''}`),
+        h('button', {
+          type: 'button', className: 'nks-net-detail-x', 'data-nks-net-detail-close': '1',
+          'aria-label': copy.devtoolsDetailClose, title: copy.devtoolsDetailClose,
+          onClick: () => setNetDetail(null),
+        }, '×')),
+      h('div', { className: 'nks-net-detail-tabs' },
+        [['headers', copy.devtoolsHeaders], ['payload', copy.devtoolsPayload], ['response', copy.devtoolsResponse]]
+          .map(([value, label]) => h(primitives.Button, {
+            key: value, variant: netDetailTab === value ? 'outline' : 'ghost', size: 'sm',
+            'data-nks-net-tab': value, onClick: () => setNetDetailTab(value),
+          }, label))),
+      h('div', { className: 'nks-net-detail-body' }, renderNetDetail())) : null)
 }
 
 // Waterfall scale is recomputed per render from the row set passed in:

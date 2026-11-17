@@ -144,7 +144,7 @@ test('T22: the settings dialog is a window overlay inside the workspace', () => 
 
 test('T22: menus render inside the workspace without a theme parameter', () => {
   const calls = callArgs(sources, 'openNanoMenu')
-  assert.equal(calls.length, 2, 'viewport and devtools resource-type menus')
+  assert.equal(calls.length, 3, 'viewport, devtools resource-type and console-level menus')
   const args = calls.map((call) => call.args)
   assert.ok(args.some((text) => /container:\s*workspaceRef\.current/.test(text)), 'viewport menu is mounted in the workspace (portal:false)')
   assert.ok(args.some((text) => /container:\s*event\.currentTarget\.closest\('\[data-nks-workspace\]'\)/.test(text)), 'devtools menu is mounted in the workspace')

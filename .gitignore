@@ -70,6 +70,7 @@ imagine/.grok/
 *.tgz
 SHA256SUMS.txt
 SHA256SUMS.sigstore.json
+dsh-nano-local-sandbox/package-lock.json
 release/
 .github/
 

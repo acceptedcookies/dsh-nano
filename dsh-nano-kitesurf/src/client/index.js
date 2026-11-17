@@ -196,12 +196,16 @@ const STYLE = `
 .nks-dt[data-nks-dt-collapsed="true"]{height:auto;min-height:0}
 .nks-dt[data-nks-dt-collapsed="true"] > *:not(.nks-dt-head):not(.nks-dt-grip){display:none}
 .nks-dt-body{flex:auto;min-height:0;overflow:auto;font:11px/1.45 ui-monospace,Menlo,monospace}
-.nks-dt-filterbar{flex:none;display:flex;align-items:center;gap:6px;padding:4px 6px;border-bottom:.5px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1)}
-.nks-dt-search{flex:1 1 120px;min-width:70px;height:24px;padding:0 7px;border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-sm);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit}
+.nks-dt-filterbar{flex:none;display:flex;align-items:center;gap:6px;height:36px;min-height:36px;box-sizing:border-box;padding:5px 6px;border-bottom:.5px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1);overflow:hidden}
+.nks-dt-filterbar .nks-dt-search{flex:1 1 130px;min-width:75px;height:24px;box-sizing:border-box;display:flex;align-items:center;padding:0 8px;border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-sm);background:var(--dsw-alias-bg-layer-1)}
+.nks-dt-filterbar .nks-dt-search:focus-within{border-color:var(--dsw-alias-state-business-primary)}
+.nks-dt-filterbar .nks-dt-search input{width:100%;height:24px;padding:0;border:0;outline:none;background:transparent;color:var(--dsw-alias-label-primary);font:inherit}
+.nks-dt button,.nks-dt input{font:inherit}
 .nks-dt-switch{display:inline-flex;align-items:center;gap:5px;color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxxs-11);white-space:nowrap;cursor:pointer}
 .nks-dt-cache{display:inline-flex;align-items:center;gap:4px;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11);white-space:nowrap;cursor:help}
 .nks-dt-cache b{font-weight:500;color:var(--dsw-alias-label-dimmed);border:.5px solid var(--dsw-alias-border-l2);border-radius:999px;padding:0 5px;font-size:10px}
-.nks-dt-cols{flex:none;display:flex;gap:6px;padding:2px 8px;color:var(--dsw-alias-label-dimmed);border-bottom:.5px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1);font:var(--dsw-font-xxxs-11);font-size:9px;text-transform:uppercase;letter-spacing:.02em}
+.nks-dt-stats{flex:none;color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxxs-11);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nks-dt-cols{flex:none;display:flex;gap:6px;padding:3px 8px;color:var(--dsw-alias-label-dimmed);border-bottom:.5px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1);font:var(--dsw-font-xxxs-11);font-size:11px;text-transform:uppercase;letter-spacing:.02em}
 .nks-dt-cols span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .nks-dt-row{display:flex;gap:6px;padding:2px 8px;border-bottom:.5px solid color-mix(in srgb,var(--dsw-alias-border-l3) 45%,transparent);align-items:baseline;white-space:nowrap}
 .nks-dt-row:nth-child(even){background:color-mix(in srgb,var(--dsw-alias-bg-layer-1) 45%,transparent)}
@@ -216,7 +220,7 @@ const STYLE = `
 .nks-dt-grow{flex:1 1 auto;min-width:0}
 .nks-dt-st{flex:none;width:44px;text-align:right}
 .nks-dt-st[data-bad="true"]{color:var(--dsw-alias-state-error-primary)}
-.nks-dt-dur{flex:none;width:50px;text-align:right;color:var(--dsw-alias-label-tertiary)}
+.nks-dt-dur{flex:none;width:64px;text-align:right;color:var(--dsw-alias-label-tertiary)}
 .nks-dt-time{flex:none;width:64px;color:var(--dsw-alias-label-tertiary)}
 .nks-dt-src{flex:none;max-width:32%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-tertiary);text-align:right}
 .nks-dt-type{flex:none;width:46px;color:var(--dsw-alias-label-tertiary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -451,6 +455,12 @@ function consoleMatches(row, text) {
   return `${row.level || ''} ${row.text || ''} ${row.url || ''} ${row.source || ''}`.toLowerCase().includes(needle)
 }
 
+function elementMatches(row, text) {
+  const needle = String(text || '').toLowerCase().trim()
+  if (!needle) return true
+  return `${row.tag || ''} ${row.id || ''} ${row.cls || ''}`.toLowerCase().includes(needle)
+}
+
 function DevTools({ copy, open, onClose }) {
   const [tab, setTab] = React.useState('console')
   const [rows, setRows] = React.useState([])
@@ -544,8 +554,11 @@ function DevTools({ copy, open, onClose }) {
       return networkMatches(row, query)
     }
     if (tab === 'console') return consoleMatches(row, query)
+    if (tab === 'elements') return elementMatches(row, query)
     return true
   })
+  const elementCount = rows.filter((row) => row.tag && !String(row.tag).startsWith('#')).length
+  const maxDepth = rows.reduce((depth, row) => Math.max(depth, Number(row.level) || 0), -1) + 1
   const openTypeMenu = (event) => {
     const rect = event.currentTarget.getBoundingClientRect()
     openNanoMenu({
@@ -612,14 +625,14 @@ function DevTools({ copy, open, onClose }) {
         onClick: () => setCollapsed((value) => !value),
       }, collapsed ? copy.devtoolsExpand : copy.devtoolsCollapse),
       h(primitives.Button, { variant: 'ghost', size: 'sm', onClick: onClose }, copy.devtoolsClose)),
-    tab === 'elements' ? null : h('div', { className: 'nks-dt-filterbar', 'data-nks-dt-filterbar': '1' },
-      h('input', {
+    h('div', { className: 'nks-dt-filterbar', 'data-nks-dt-filterbar': '1' },
+      h(primitives.Input, {
         className: 'nks-dt-search',
         'data-nks-dt-search': '1',
         type: 'search',
         value: query,
-        placeholder: copy.devtoolsSearch,
-        'aria-label': copy.devtoolsSearch,
+        placeholder: tab === 'elements' ? copy.devtoolsSearchElements : copy.devtoolsSearch,
+        'aria-label': tab === 'elements' ? copy.devtoolsSearchElements : copy.devtoolsSearch,
         onChange: (event) => setQuery(event.target.value),
       }),
       tab === 'network' ? h(primitives.Tooltip, { label: copy.devtoolsFilterType },
@@ -636,12 +649,19 @@ function DevTools({ copy, open, onClose }) {
         h('span', { className: 'nks-dt-cache', 'data-nks-dt-cache': '1', 'aria-disabled': 'true' },
           h(primitives.Switch, { checked: false, disabled: true, onChange: () => {}, label: copy.devtoolsDisableCache }),
           h('span', null, copy.devtoolsDisableCache),
-          h('b', null, '不支持'))) : null),
+          h('b', null, '不支持'))) : null,
+      tab === 'elements' ? h('span', {
+        className: 'nks-dt-stats', 'data-nks-dt-stats': '1', title: copy.devtoolsDomStatsHint,
+      }, `${copy.devtoolsNodes} ${rows.length} · ${copy.devtoolsElements} ${elementCount} · ${copy.devtoolsDepth} ${maxDepth}`) : null),
     styles ? h('div', { className: 'nks-dt-styles', 'data-nks-dt-styles': '1' },
       h('div', { className: 'nks-dt-style-head' }, `${styles.selector} · ${styles.matched.length} rules · ${Object.keys(styles.computed).length} computed`),
       styles.matched.slice(0, 6).map((rule, i) => h('div', { className: 'nks-dt-rule', key: `r${i}` },
         h('b', null, rule.selector || '(anonymous)'),
         h('span', null, (rule.properties || []).slice(0, 6).join('; '))))) : null,
+    tab === 'elements' ? h('div', { className: 'nks-dt-cols' },
+      h('span', { className: 'nks-dt-lv' }, 'Tag'),
+      h('span', { className: 'nks-dt-msg', style: { textAlign: 'left' } }, 'Element'),
+      h('span', { className: 'nks-dt-dur' }, 'Children')) : null,
     tab === 'console' ? h('div', { className: 'nks-dt-cols' },
       h('span', { className: 'nks-dt-time' }, 'Time'),
       h('span', { className: 'nks-dt-lv' }, 'Level'),

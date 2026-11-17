@@ -35,6 +35,15 @@
 
 见 `lab/out/kitesurf-devtools-heartbeat/network.png`。
 
+## 2.1 三个 tab 的统一控件栏
+
+Console / Network / Elements 现在都渲染固定 36px 的控件栏；每栏都有宿主 `Input` 搜索框：
+- Console：搜索日志。
+- Network：搜索 + 类型筛选 + 仅失败 + 禁用缓存支持提示。
+- Elements：搜索标签/ID/class + DOM 统计（节点数 / 元素数 / 最大深度）。
+
+三个 tab 的 `.nks-dt-cols` 表头高度同为 20.5px、`.nks-dt-body` 顶部同为 733px，控件、表头、行字体均为 11px；切换不再产生高度抖动。搜索框使用宿主 `Input` 的 wrapper 单层边框，inner input 的 border/outline 清零，不再出现双层框。截图：`lab/out/kitesurf-devtools-heartbeat/control-bars.png`。
+
 ## 3. 标签页第一个 tab 悬停
 
 根因：`.nks-nav-tab[data-current="true"]` 规则排在 `.nks-nav-tab:hover` 之后且同 specificity，当前 tab 的底色覆盖了 hover 底色。新增 `.nks-nav-tab[data-current="true"]:hover` 覆盖规则；实测第一个/当前 tab 和第二个 tab 的 hover 底色均为 `rgba(255,255,255,.08)`（基准分别为 `rgb(44,44,46)` 和透明）。

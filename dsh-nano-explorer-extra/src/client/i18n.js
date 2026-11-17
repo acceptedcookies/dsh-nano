@@ -163,7 +163,7 @@ export const COPY = {
     filterChanges: '按更改类型筛选',
     filterAll: '全部',
     historyEmpty: '这个仓库还没有提交。',
-    commitFilesTitle: '提交内容',
+    commitFilesTitle: '提交的内容',
     commitFilesEmpty: '这次提交没有改动文件。',
     commitFilesMore: '只显示前 80 个文件。',
     aheadOfBase: (ahead, behind, base) => `相对 ${base}：领先 ${ahead}，落后 ${behind}`,

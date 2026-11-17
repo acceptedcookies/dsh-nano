@@ -376,7 +376,8 @@ function HistoryRail({ copy, history, currentBranch, upstream, remotes }) {
       React.createElement('div', { className: 'nxe-commit-files-head' },
         React.createElement('span', { className: 'nxe-commit-files-title' }, copy.commitFilesTitle),
         React.createElement(IconButton, {
-          icon: React.createElement(IconCloseOutlineRegular, { size: 14 }),
+          className: 'nxe-commit-files-close',
+          icon: React.createElement(IconCloseOutlineRegular, { size: 12 }),
           'aria-label': copy.dismiss,
           onClick: event => { event.stopPropagation(); setFilesOpen(false); setPicked(null) },
         })),

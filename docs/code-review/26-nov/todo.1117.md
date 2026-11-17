@@ -93,21 +93,21 @@ SETUP ──▶ P1 策略硬切+烘焙 ──▶ P2 工具+patch ──┐
   - **验证映射**：`ACE1117-T15..T18` · **依赖**：`P3`
   - **执行状态**：`done` · **时间**：`2026-11-17T19:30+08:00` · **证据**：commit a8a48b0（19 文件 +859/−216）；DNMS 77/77 PASS（T15 session 范围+select→running+commit→idle；T16 产物无 15000/30000、mock-timers 泵纪律、预算 3000；T17 确认前置 POST 0→1、严格序、i18n 键集等；T18 ui-rules vs HEAD ⊆）；DNMSC 54/54 不破
 
-- [ ] `P6` — Phase 6 收口（P6-01..P6-02）
+- [x] `P6` — Phase 6 收口（P6-01..P6-02）
   - **落点**：`closure/DNMS01-closure.md:20,74` + 移动 audit-agent27 + 非目标 diff 核对
   - **完成判据**：只碰两处；`fb7264d...HEAD` 非目标面零 diff；无新 check 脚本
   - **验证映射**：`ACE1117-T19` · **依赖**：`P4`+`P5`
-  - **执行状态**：`not-started` · **时间**：`-` · **证据**：`-`
+  - **执行状态**：`done` · **时间**：`2026-11-17T19:40+08:00` · **证据**：commit 231eb0b；T19 PASS（hunk 锚点 :20/:74、非目标零 diff、version 未动、无 check-ace*）；audit-agent27 核实为缺失空档、按核实改写 :74
 
-- [ ] `LOG` — 执行日志按 `code-execution-log.md` 模板回填至 action-plan §11
+- [x] `LOG` — 执行日志按 `code-execution-log.md` 模板回填至 action-plan §11
   - **完成判据**：逐工作项状态 + 偏差 + pre-existing 甩锅 + 测试发现
   - **验证映射**：`-` · **依赖**：`P6`
-  - **执行状态**：`not-started` · **时间**：`-` · **证据**：`-`
+  - **执行状态**：`done` · **时间**：`2026-11-17T19:45+08:00` · **证据**：§11.A 追加于 main checkout 的 `ACE-1117-action-plan.md`（worktree 不含该文件——ACE 冻结面只在 main；合入后统一提交）
 
-- [ ] `CLOS` — closure 按 `closure.md` 模板落盘 `docs/code-review/26-nov/ACE-1117-closure.md`
+- [x] `CLOS` — closure 按 `closure.md` 模板落盘 `docs/code-review/26-nov/ACE-1117-closure.md`
   - **完成判据**：close-type 正确；✅ 全带四元组与 5 态归类；deferred 三分类
   - **验证映射**：`-` · **依赖**：`LOG`
-  - **执行状态**：`not-started` · **时间**：`-` · **证据**：`-`
+  - **执行状态**：`done` · **时间**：`2026-11-17T19:50+08:00` · **证据**：`docs/code-review/26-nov/ACE-1117-closure.md` 117 行，close-type=`implementation-complete-awaiting-live-verification`
 
 - [ ] `REV` — ≥3 路审查子代理（真相层对账 / 完成度 / 防假绿·防侧载），报告落盘 `.anote/reviews/ACE/1117/`
   - **完成判据**：每路专用 PROMPT；报告落盘；发现项逐条处置；修复后重测

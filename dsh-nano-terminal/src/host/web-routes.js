@@ -11,8 +11,21 @@
  */
 
 import { createWebRegistrar } from 'dsh-interface/host'
+import { ensurePerfReviewHost, handleHostRead } from 'dsh-performance-review/host'
 import { BINDING_TABLE } from '../../lib/bindings.js'
 import { recoverAttach } from '../shared/align.js'
+
+const HOST_PLUGIN = 'dsh-nano-terminal'
+let _hostApi = null
+const hostApi = () => {
+  if (_hostApi === null) {
+    const host = ensurePerfReviewHost()
+    _hostApi = typeof host.hostJoin === 'function' ? host.hostJoin(HOST_PLUGIN) : null
+  }
+  return _hostApi
+}
+const hostSpan = (name, fn) => (hostApi()?.hostSpan ? hostApi().hostSpan(name, fn) : fn())
+const hostCount = (name, n = 1) => { try { hostApi()?.count?.(name, n) } catch { /* best-effort */ } }
 
 export function registerWebRoutes(ctx, deps) {
   const { registry, bus, mcp, laneStatus, ws } = deps
@@ -57,11 +70,15 @@ export function registerWebRoutes(ctx, deps) {
             } else if (fr.kind === FR_KIND.DATA) {
               // interactive bytes count as human input — the gate holds them
               // while an agent delivery is in flight (never interleaves)
+              hostCount('dnt-ws-in-bytes', fr.payload.length)
+              hostCount('dnt-ws-in-msgs')
               void record.writeInput(fr.payload, 'human').then((r) => {
                 if (r?.held) attach.channel(1, FR_KIND.HELD)
               }).catch(() => {})
             } else if (fr.kind === FR_KIND.AUTO_INPUT) {
               // terminal auto-replies bypass the gate entirely (hc rule)
+              hostCount('dnt-ws-in-bytes', fr.payload.length)
+              hostCount('dnt-ws-in-msgs')
               void record.writeInput(fr.payload, 'automatic').catch(() => {})
             } else if (fr.kind === FR_KIND.FACTS) {
               // headless attach reports its viewport — adopt its geometry
@@ -110,7 +127,7 @@ export function registerWebRoutes(ctx, deps) {
             throw new Error('expected {type:"open"}')
           }
           // pending placeholder: spawn the fresh shell on first attach
-          if (record.pending) await registry.spawnPending(record)
+          if (record.pending) await hostSpan('dnt-attach', () => registry.spawnPending(record))
           // v2 negotiated via open.v or ?v=2 — framed channels + credit
           const wantV2 = msg.v === 2 || url.searchParams.get('v') === '2'
           attach = new Attach(socket, record)
@@ -203,6 +220,8 @@ export function registerWebRoutes(ctx, deps) {
       res.writeHead(ok ? 200 : 404, { 'content-type': 'application/json' })
       res.end(JSON.stringify({ closed: ok }))
     },
+    // Read-only whole-process perf view; only ?since is accepted (T-O-PRE1116-10).
+    'dnt.perf-review.host': (req, res) => handleHostRead(req, res, ensurePerfReviewHost()),
   }
 
   const registrar = createWebRegistrar({

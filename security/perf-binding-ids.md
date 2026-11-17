@@ -79,6 +79,7 @@
 | `/dsh-nano-terminal/health` | `dnt.health` | `dnt.health` | http | exact |
 | `/dsh-nano-terminal/session` | `dnt.session.close` | `dnt.session.close` | http | prefix |
 | `/dsh-nano-terminal/stream` | `dnt.stream` | `dnt.stream` | upgrade | exact |
+| `/dsh-nano-terminal/perf-review/host` | `dnt.perf-review.host` | `dnt.perf-review.host` | http | exact |
 | `/nano-cloud-session/status` | — | `dncs.status` | http | exact |
 | `/nano-cloud-session/config` | — | `dncs.config` | http | exact |
 | `/nano-cloud-session/sessions` | — | `dncs.sessions` | http | exact |

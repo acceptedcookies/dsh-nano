@@ -21,6 +21,29 @@ import { KIND, err } from './errors.js'
 import { Gate } from './gate.js'
 import { resizeMode } from '../shared/align.js'
 
+/**
+ * Host-side perf join. `ensurePerfReviewHost` is bundled into
+ * lib/perf-review-host.js by build-client.mjs; this module is bundled too,
+ * so import it directly. Disabled path = identity wrappers, no clocks.
+ * `hostPerf()` returns the API (hostSpan/count) or a no-op when disabled.
+ */
+import { ensurePerfReviewHost } from 'dsh-performance-review/host'
+
+const HOST_PLUGIN = 'dsh-nano-terminal'
+let _hostApi = null
+function hostPerf() {
+  if (_hostApi === null) {
+    const host = ensurePerfReviewHost()
+    _hostApi = typeof host.hostJoin === 'function' ? host.hostJoin(HOST_PLUGIN) : null
+  }
+  return _hostApi
+}
+const hostSpan = (name, fn) => {
+  const api = hostPerf()
+  return api?.hostSpan ? api.hostSpan(name, fn) : fn()
+}
+const hostCount = (name, n = 1) => { try { hostPerf()?.count?.(name, n) } catch { /* best-effort */ } }
+
 const decoder = new TextDecoder('utf-8', { fatal: false })
 const encoder = new TextEncoder()
 
@@ -44,6 +67,11 @@ function agentEnv(rec, apiBase) {
     DNT_API: apiBase,
     DNT_ENV: '1',
     TERM_PROGRAM: 'dnt',
+    // 交互式终端不该继承宿主进程的 NO_COLOR（那是给非交互 CLI 的）。按
+    // no-color.org 的规范，空串等于未设置，TUI 才会正常上色。
+    NO_COLOR: '',
+    // 声明真彩，避免 TUI 退回 16 色或直接关色。
+    COLORTERM: 'truecolor',
   }
 }
 
@@ -134,12 +162,20 @@ export class SessionRegistry {
       parent: parentRec?.id,
       keep: !!spec.keep,
       labels: { ...(spec.labels ?? {}) },
-      meta: { shell, cwd, argv },
+      // cols/rows 必须进 meta：镜像按 meta 建，缺了就固定成 80×24，
+      // 而 PTY 是按 open 消息里的尺寸起的，两边会错开。
+      meta: {
+        shell,
+        cwd,
+        argv,
+        cols: Math.min(Math.max(spec.cols || 80, 2), 512),
+        rows: Math.min(Math.max(spec.rows || 24, 2), 512),
+      },
       replayBytes: this.replayBytes,
       registry: this,
     })
     record.env = { ...(spec.env ?? {}), ...agentEnv(record, this.apiBase) }
-    const handle = await this.ctx.subprocess
+    const handle = await hostSpan('dnt-spawn', () => this.ctx.subprocess
       .spawnTerminal({
         argv,
         cwd,
@@ -149,7 +185,7 @@ export class SessionRegistry {
         terminalType: 'xterm-256color',
         shellActivity: true,
         graceMs: 1500,
-      })
+      }))
       .catch((e) => {
         throw err(KIND.SPAWN_FAILED, String(e?.message ?? e))
       })
@@ -210,7 +246,7 @@ export class SessionRegistry {
     const meta = rec.meta ?? {}
     const shell = meta.shell || defaultShell()
     const argv = meta.argv?.length ? meta.argv : [shell, ...(process.platform === 'win32' ? [] : ['-i'])]
-    const handle = await this.ctx.subprocess
+    const handle = await hostSpan('dnt-spawn', () => this.ctx.subprocess
       .spawnTerminal({
         argv,
         cwd: meta.cwd ?? homedir(),
@@ -220,7 +256,7 @@ export class SessionRegistry {
         terminalType: 'xterm-256color',
         shellActivity: true,
         graceMs: 1500,
-      })
+      }))
       .catch((e) => {
         throw err(KIND.SPAWN_FAILED, String(e?.message ?? e))
       })
@@ -363,17 +399,20 @@ export class SessionRecord {
   pipe() {
     const send = this.registry.sendBinary
     this.handle.output.on('data', (chunk) => {
-      this.remember(chunk)
-      try {
-        this.mirror?.write(chunk)
-        this.#pollState()
-      } catch { /* mirror best-effort */ }
-      this.outSeq = (this.outSeq + 1) >>> 0
-      const seq = this.outSeq
-      for (const [s, att] of this.attached) {
-        if (att) att.data(chunk, seq)
-        else send(s, chunk)
-      }
+      hostSpan('dnt-pipe-broadcast', () => {
+        this.remember(chunk)
+        try {
+          this.mirror?.write(chunk)
+          this.#pollState()
+        } catch { /* mirror best-effort */ }
+        this.outSeq = (this.outSeq + 1) >>> 0
+        const seq = this.outSeq
+        for (const [s, att] of this.attached) {
+          if (att) att.data(chunk, seq)
+          else send(s, chunk)
+        }
+      })
+      hostCount('dnt-out-bytes', chunk.length)
     })
     this.handle.output.on('end', () => {
       this.#onProgramEnd({ at: Date.now() })
@@ -505,17 +544,23 @@ export class SessionRecord {
    */
   async writeInput(data, source = 'human') {
     if (this.exited) throw err(KIND.FINISHED, 'terminal exited')
+    // pending placeholder: an input write is a wake — spawn the shell just as
+    // the first attach would, then drop the bytes into the fresh PTY.
+    if (!this.handle && this.pending) await this.registry.spawnPending(this)
     if (!this.handle) throw err(KIND.UNAVAILABLE, 'terminal not spawned yet (attach to wake)')
     if (source === 'automatic') {
       await this.handle.write(typeof data === 'string' ? data : decoder.decode(data))
       return
     }
     if (source === 'agent') {
-      return this.gate.submit(() => this.handle.write(typeof data === 'string' ? data : decoder.decode(data)))
+      return hostSpan('dnt-gate', () => this.gate.submit(() => this.handle.write(typeof data === 'string' ? data : decoder.decode(data))))
     }
-    const ok = this.gate.humanInput(typeof data === 'string' ? Buffer.from(data, 'utf8') : data)
-    if (ok === null) return { held: true }
-    await this.handle.write(decoder.decode(ok))
+    return hostSpan('dnt-input', async () => {
+      const ok = this.gate.humanInput(typeof data === 'string' ? Buffer.from(data, 'utf8') : data)
+      if (ok === null) return { held: true }
+      await this.handle.write(decoder.decode(ok))
+      return undefined
+    })
   }
 
   /**
@@ -524,6 +569,7 @@ export class SessionRecord {
    */
   async agentSend(text, { enter = true, force = false, cond = null, urgent = false } = {}) {
     if (this.exited) throw err(KIND.FINISHED, 'terminal exited')
+    if (!this.handle && this.pending) await this.registry.spawnPending(this)
     const st = this.status?.state
     if (st === 'blocked' && !force) throw err(KIND.BLOCKED, `terminal reports blocked${this.status.kind ? ` (${this.status.kind})` : ''}`)
     if (cond && st !== cond) throw err(KIND.STATUS_MISMATCH, `status is '${st ?? 'none'}', required '${cond}'`)
@@ -532,7 +578,7 @@ export class SessionRecord {
     const paste = (this.mirror?.modes() ?? 0) & (1 << 3)
     const body = String(text).replace(/\r?\n/g, '\r')
     const payload = `${paste ? '\x1b[200~' : ''}${body}${paste ? '\x1b[201~' : ''}${enter ? '\r' : ''}`
-    const r = await this.gate.submit(() => this.handle.write(payload), { urgent })
+    const r = await hostSpan('dnt-agent-send', () => this.gate.submit(() => this.handle.write(payload), { urgent }))
     this.registry.bus?.emit('message', this.addr, { id: this.id })
     return { ...(r ?? {}), turn: this.turn }
   }

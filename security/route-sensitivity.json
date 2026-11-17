@@ -1147,6 +1147,21 @@
       "match": "exact"
     },
     {
+      "plugin": "dsh-nano-terminal",
+      "path": "/dsh-nano-terminal/perf-review/host",
+      "methods": [
+        "GET"
+      ],
+      "sensitivity": "L2",
+      "capability": "read:host",
+      "bodyLimit": 0,
+      "sessionBinding": false,
+      "justification": "只读全进程视图。不排空，只接受 since。",
+      "id": "dnt.perf-review.host",
+      "channel": "http",
+      "match": "exact"
+    },
+    {
       "plugin": "dsh-nano-cloud-session",
       "path": "/nano-cloud-session/status",
       "methods": [

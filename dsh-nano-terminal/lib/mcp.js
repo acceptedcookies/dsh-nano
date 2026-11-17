@@ -3,13 +3,13 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-// ../packages/dsh-interface/src/contracts/webBinding.js
+// ../../../../packages/dsh-interface/src/contracts/webBinding.js
 var CHANNEL = Object.freeze({ HTTP: "http", UPGRADE: "upgrade" });
 var MATCH = Object.freeze({ EXACT: "exact", PREFIX: "prefix" });
 var CHANNELS = new Set(Object.values(CHANNEL));
 var MATCHES = new Set(Object.values(MATCH));
 
-// ../packages/dsh-interface/src/contracts/jsonOutcome.js
+// ../../../../packages/dsh-interface/src/contracts/jsonOutcome.js
 var FAILURE_KIND = Object.freeze({
   /** signal aborted; issued-before cancellation makes no server-side claim. */
   CANCELLED: "cancelled",
@@ -24,7 +24,7 @@ var FAILURE_KIND = Object.freeze({
 });
 var FAILURE_KINDS = Object.freeze(Object.values(FAILURE_KIND));
 
-// ../packages/dsh-interface/src/contracts/observeEvent.js
+// ../../../../packages/dsh-interface/src/contracts/observeEvent.js
 var OBSERVE_SURFACES = Object.freeze(["http", "upgrade", "json", "mcp"]);
 var HTTP_OUTCOMES = Object.freeze(["ok", "rejected", "method", "failed"]);
 var UPGRADE_OUTCOMES = Object.freeze(["accepted", "rejected", "method"]);
@@ -46,7 +46,7 @@ var OUTCOMES = {
   mcp: new Set(MCP_OUTCOMES)
 };
 
-// ../packages/dsh-interface/src/host/emitObserve.js
+// ../../../../packages/dsh-interface/src/host/emitObserve.js
 function observeStamp(observe) {
   if (typeof observe !== "function") return null;
   return globalThis.performance.now();
@@ -62,7 +62,7 @@ function emitObserve(observe, event) {
   }
 }
 
-// ../packages/dsh-interface/src/host/createMcpToolset.js
+// ../../../../packages/dsh-interface/src/host/createMcpToolset.js
 var MCP_NOTIFICATIONS = "notifications/";
 function createMcpToolset({ schema: schema2, dispatch, protocolVersion = "2025-06-18", serverInfo = {}, observe, plugin } = {}) {
   if (schema2 == null || !Array.isArray(schema2.methods)) {

@@ -319,3 +319,88 @@ Windows 启动行 `sessions.js:32-34` 与 `sessions.js:125` 不在这个包里�
 **Windows 多窗格。** 光标乱飘和吞字不再靠「再开一个终端试试」。同一轮布局只提交一次 PTY 尺寸，DPI 变化会重测格子，清屏式快照退出恢复路径。多开仍然共用一个 wasm 实例，但每个窗格仍是自己的 id，这一点保持不变。
 
 **不带来的东西。** 不增加沙箱终端，不增加密码或 token，不把交互字节改道到 HTTP，也不承诺在系统睡眠期间继续跑壳。那些不属于 1117-keep-alive。
+
+---
+
+## 8. 性能观测与渲染优化（A/B 实验 → P0-P2 交付映射）
+
+本章节记录 2026-11-17 在同一会话下由[业主]驱动完成的「埋点梳理 + A/B 实测」及其交付设计。测量全部在 `dsh-dev` 真宿主、真页面（ego-lite Chromium）里进行；harness 为 `dsh-nano-terminal/scripts/ab-render-perf.mjs`。
+
+### 8.1 [业主]心智模型
+
+- [DNT] 作为「高性能 wasm 终端」，性能是它相对内置终端的立身理由；但此前的观测**只有控制面浅计时，没有渲染面与数据面**，性能主张无法自证。
+- 想知道埋点到底对不对：哪些路径计了时、哪些没有、缺的是不是真正的痛点（渲染、数据面、attach 冷启动）。
+- 想要一个可复跑的 A/B：[DNT] vs 内置 zsh xterm，在同一台宿主、同一对话里做相同工作（flood / 翻页 / 键入回显 / TUI 启动），拿「输入 → 可见变化」的端到端数字。
+
+### 8.2 实验设计（测量如何准确）
+
+- **时钟**：页面内 `Date.now() - performance.now()` 求差，把 `performance.now` 换回 epoch ms 与宿主时间戳对齐。
+- **渲染面探针**（页面内 `window.__AB`，跨轮持久）：base canvas `fillRect/fillText/drawImage` 打点（只记时间戳，不读像素）；`.xterm .xterm-rows` textContent 33ms 轮询；rAF 节奏；`PerformanceObserver('longtask')`。
+- **宿主面**：`term.session.read`（mirror）记 `tHostSeen`；`term.send`/`term.session.input`/`term.keys` 作输入。
+- **语义对齐**：两种渲染器（canvas vs DOM）统一按「输入时刻 → 首次/末次可见变化」算端到端，不按渲染器内部语义。
+- **焦点修正**：rAF 受窗口/窗格聚焦影响（失焦 ~2Hz 慢绘），测量前先 `el.focus()`。
+
+### 8.3 实测结论（`ab-render-perf-report.json`）
+
+| 场景 | [DNT] | 内置 xterm | 备注 |
+|---|---|---|---|
+| 键入回显 | **14ms 中位（p95 22）** | ~1016ms | xterm 是 ≤ 值的上界（见下） |
+| 5000 行 flood → mirror 可见 | **72–90ms** | ~860–900ms | 同上 |
+| TUI 首个画面 | ~600–1600ms | ~865ms | devin/claude/droid 近似 |
+| less 翻页 | 聚焦 ~120–170ms | ~870ms | |
+
+两条结构性事实：
+
+1. 内置终端的可见更新呈 **~1s 量化**（`TerminalFollower` 批量节拍），这是 xterm 数字的主因而非渲染慢。
+2. [DNT] **未聚焦 pane 固定走 ~500ms `slowTimer`**（`NanoTerm.jsx:849` 省电设计），有数据流入时也照样节流，flood/scroll 时延被拉到 ~650ms——这是本轮暴露的最大真实问题。
+
+### 8.4 埋点合理性裁决
+
+- 合同面（`createWebRegistrar`）：http-exact / http-prefix / upgrade-exact **全部有** `ms` 计时（早前"upgrade/prefix 无计时"的判断经重读源码修正）。✅
+- 数据面（WS 入站字节、广播、attach、spawn、gate 排队）：**无**。❌
+- 渲染面（paint 帧耗、单元格、input→paint）：`src/perf/declaration.json` 的 `spans/tracks/buckets/scenarios/budgets` **全空**。❌
+- 读取出口：`ensurePerfReviewHost()` 已接，但 `lib/bindings.js` 无 `perf-review/host` 路由。❌
+
+**结论：不合理**——性能主链路（WS 数据流 → wasm ingest → canvas paint）零观测，痛点不可见。
+
+### 8.5 P0 埋点补齐（本升级包直接交付）
+
+| 项 | 落点 | 内容 |
+|---|---|---|
+| `declaration.json` | `src/perf/` | 填入真 `spans/tracks/usage/hostSpans/buckets/scenarios/budgets`（不再全空） |
+| 页面 `perf.js` | `src/client/perf.js`（新增） | `ensurePerfReview().join('nano-terminal', …)`，`root()` 指向 `.dnt-root`，profiler 包 `NanoTerm` |
+| 渲染 spans | `NanoTerm.jsx` | `dnt-paint`（帧耗）、`dnt-cells`（单元格 track）、`dnt-attach`（mount→onReady）、`dnt-echo`（input→首帧 paint） |
+| 数据面 usage | `lanes.js` | `dnt-ws-in-bytes` / `dnt-ws-in-msgs` / `dnt-ws-out-bytes` |
+| 宿主 spans | `sessions.js` / `mcp.js` | `dnt-spawn`、`dnt-attach`、`dnt-pipe-broadcast`、`dnt-gate`（排队）、`dnt-input`、`dnt-agent-send`；计数 `dnt-out-bytes` |
+| 读取路由 | `web-routes.js` + ledger | 新增 `dnt.perf-review.host`（`GET /dsh-nano-terminal/perf-review/host`，exact），`handleHostRead` 挂宿主单例 |
+| 账本 | `security/route-sensitivity.json` + `lib/bindings.js` + `declaration.json` | 新路由需 durable 登记（[业主]已授权本轮交付） |
+
+### 8.6 P1 测量常态化（`dev-probe` 常驻 + harness 固化）
+
+- `src/client/dev-probe.js`（新增）：`?dnt-probe=1` 或 `localStorage['dnt-probe']='1'` 时把 canvas 打点/textWatch/rAF/longtask 装进 `window.__AB`，重启/重载自愈（本轮最大失败源是重载后探针丢绑定）。
+- `scripts/ab-render-perf.mjs`：场景矩阵 = 回显 / flood / less 翻页 / TUI 启动；先自检环境（bench pane ≥300×200、`meta.cols≥80`、live zsh），不稳自动新建 pane；`term.keys` 遇 blocked 自动降级 agent 输入；`resetShell` 用 `Ctrl+L`（`clear` 在 devin 标题劫持下会误触 TUI）；TUI 以 `tFirstVisual` 为主指标、marker 为辅。
+- 阈值断言（budgets，进 declaration）：`dnt-echo p95 < 50ms`、`dnt-paint p95 < 16ms`、`dnt-attach p95 < 3000ms`；harness 末尾按这些门给出 PASS/WARN。
+
+### 8.7 P2 渲染/数据面优化
+
+| 问题 | 改动 | 落点 |
+|---|---|---|
+| 失焦 pane 固定 500ms 节流，数据活跃期也被降速 | **活跃期自适应**：WS 字节到 → `activeUntil = now+1500ms`，期间仍走 rAF；空闲 500ms→1000ms 退避。仅作 fallback 定时器存在。 | `NanoTerm.jsx:845` `schedulePaint` |
+| 占位 session 拒绝输入（`terminal not spawned yet`） | `writeInput`/`agentSend` 在 `pending` 且 `!handle` 时先 `spawnPending(this)`，写入与 attach 一样唤醒 shell。 | `sessions.js:519` / `538` |
+| WS 出站/广播零计时 | `Attach.data` 计数 `dnt-out-bytes`；`pipe()` 广播耗时 `dnt-pipe-broadcast` span；`spawnPending`/`openFlow` attach 记 `dnt-spawn`/`dnt-attach` | `ws.js` / `sessions.js` / `web-routes.js` |
+| CREDIT 协议面 | 不改协议。CREDIT/背压语义属公共合同，本轮只加观测点，是否收紧窗口留给 [业主] 裁决。 | — |
+| wasm 脏区渲染 | 不动 ABI。先靠 `dnt-cells`/`dnt-paint` 量出真实占比，若 wasm 输出 dirty rect 有收益再走协议/ABI 变更。 | — |
+
+### 8.8 不带来的东西
+
+不增加新的渲染器（仍是 canvas + wasm），不把 xterm 换进 [DNT]，不引入第三方可观测后端，不建发布门禁（budgets 只是 `audit`/`hard` 声明，是否强制由 [业主] 决定），不碰 `dnt-ws-v2` 协议语义。
+
+### 8.9 验证记录（dsh-dev 实测，2026-11-17 夜）
+
+- 测试：`node test/run.mjs` 173 passed / 0 failed。
+- 路由：`GET /dsh-nano-terminal/perf-review/host` → 200，合同面同时记录 `dnt.perf-review.host` 的 `ok`/`rejected` 事件。
+- 宿主 span 实采：`dnt-spawn` 154/82ms、`dnt-pipe-broadcast` 0.02–3.3ms、`dnt-gate` 0.49ms；counts `dnt-out-bytes`、`dnt-ws-in-bytes`。
+- 页面 join：`Symbol.for('dsh.perfReview.v2')` 插件表含 `nano-terminal`；实采 `dnt-attach`×3、`dnt-paint`×7、`dnt-echo`×2、`dnt-panes` usage。
+- dev-probe：`localStorage['dnt-probe']='1'` 后 reload，`window.__AB.__probe === 'dnt-dev-probe-v2'` 自动武装，70 条 paint op 落账。
+- lazy-spawn：持久化 session 在宿主重启后归位 pending；未 attach 直接 `term.session.input` → 自动 spawn 且 `ok:true`（不再 `not spawned yet`）。
+- A/B 复跑：flood `tHostSeen` DNT 84ms vs xterm 899ms；echo 10/17ms vs 101/1063ms。`tLastVisual` 为空为 harness 探针失绑 artifact（reload 后旧 `__AB` 失效；dev-probe 常驻化即针对此问题）。tui 两侧皆因页面 fetch/CORS 与视图切换中断，与本包无关。

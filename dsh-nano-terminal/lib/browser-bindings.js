@@ -6,4 +6,5 @@ export const BROWSER_BINDINGS = Object.freeze([
   Object.freeze({ id: "dnt.health", path: "/dsh-nano-terminal/health" }),
   Object.freeze({ id: "dnt.session.close", path: "/dsh-nano-terminal/session" }),
   Object.freeze({ id: "dnt.stream", path: "/dsh-nano-terminal/stream" }),
+  Object.freeze({ id: "dnt.perf-review.host", path: "/dsh-nano-terminal/perf-review/host" }),
 ])

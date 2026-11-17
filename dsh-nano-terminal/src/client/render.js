@@ -3,7 +3,7 @@
 // Dirty-row repaint only; scroll triggers full repaint via wasm dirty-all.
 
 import { MODES } from './wasm.js'
-import { charWidthForDpr } from '../shared/align.js'
+import { cellWidth, backingSize } from '../shared/align.js'
 
 // ---------------------------------------------------------------------------
 // Palette
@@ -102,7 +102,9 @@ export class TermCanvas {
     this.fontFamily = font.family
     this.padX = pad.padX ?? 0
     this.padY = pad.padY ?? 0
-    this.dpr = Math.max(1, Math.round(window.devicePixelRatio || 1))
+    // 保留小数：浏览器缩放到 110% 时 dpr 是 2.2，取整成 2 会让画布按 2x 生成、
+    // 再被浏览器拉成 2.2x，整块画布重采样，TUI 的 1px 框线就断了。
+    this.dpr = Math.max(1, Number(window.devicePixelRatio) || 1)
     this.base = document.createElement('canvas')
     this.sel = document.createElement('canvas') // 选区高亮层：独立于光标 overlay，后者每帧 clearRect 会抹掉选区
     this.overlay = document.createElement('canvas')
@@ -160,22 +162,28 @@ export class TermCanvas {
     const probe = document.createElement('canvas').getContext('2d')
     probe.font = this.font(false, false)
     const w = probe.measureText('W')
-    // 按当前 dpr 取整。拖到另一块屏或系统缩放变化后必须重测，否则光标落在字缝里。
-    this.charW = charWidthForDpr(w.width, this.dpr)
-    const ascent = w.fontBoundingBoxAscent ?? Math.ceil(this.fontSize * 0.85)
-    const descent = w.fontBoundingBoxDescent ?? Math.ceil(this.fontSize * 0.3)
-    this.charH = Math.max(2, ascent + descent + Math.ceil(this.fontSize * 0.15))
-    this.baseline = ascent + Math.ceil(this.fontSize * 0.075)
+    // 格子宽度就是字体真实步进，不取整（见 shared/align.js cellWidth）。
+    this.charW = cellWidth(w.width)
+    const ascent = w.fontBoundingBoxAscent ?? this.fontSize * 0.85
+    const descent = w.fontBoundingBoxDescent ?? this.fontSize * 0.3
+    // 行高按真实字体框算，再留 15% 行距；取整会让行网格和基线落在不同子像素。
+    this.charH = Math.max(2, ascent + descent + this.fontSize * 0.15)
+    this.baseline = ascent + this.fontSize * 0.075
   }
 
-  /** dpr 变了就重测格子。没变返回 false，调用方不必整帧重画。 */
+  /** dpr 变了就重设画布。没变返回 false，调用方不必整帧重画。 */
   syncDpr(next) {
     const raw = next ?? (typeof window !== 'undefined' ? window.devicePixelRatio : 1)
-    const dpr = Math.max(1, Math.round(raw || 1))
-    if (dpr === this.dpr) return false
+    const dpr = Math.max(1, Number(raw) || 1)
+    // 浮点比较留容差：2.2 与 2.2000000000000002 是同一个缩放档。
+    if (Math.abs(dpr - this.dpr) < 1e-3) return false
     this.dpr = dpr
-    this.measure()
     return true
+  }
+
+  /** 把 CSS 坐标吸到设备像素，背景块和光标才不会有半像素毛边。 */
+  snap(v) {
+    return Math.round(v * this.dpr) / this.dpr
   }
 
   /** Resize canvases to fit the container; returns {cols, rows, changed}. */
@@ -183,17 +191,20 @@ export class TermCanvas {
     const dpr = this.dpr
     const w = cols * this.charW
     const h = rows * this.charH
+    const bw = backingSize(w, dpr)
+    const bh = backingSize(h, dpr)
     // re-fit whenever cell metrics or grid dims changed — a font swap can keep
     // cols/rows identical while pixels per cell move
     if (cols !== this.cols || rows !== this.rows
-      || this.base.width !== Math.round(w * dpr) || this.base.height !== Math.round(h * dpr)) {
+      || this.base.width !== bw || this.base.height !== bh) {
       this.cols = cols
       this.rows = rows
       for (const c of [this.base, this.sel, this.overlay]) {
-        c.width = Math.round(w * dpr)
-        c.height = Math.round(h * dpr)
-        c.style.width = `${w}px`
-        c.style.height = `${h}px`
+        c.width = bw
+        c.height = bh
+        // CSS 尺寸由 backing 反推：1 backing px 正好 1 设备 px，浏览器不再二次缩放。
+        c.style.width = `${bw / dpr}px`
+        c.style.height = `${bh / dpr}px`
       }
       this.bctx.setTransform(dpr, 0, 0, dpr, 0, 0)
       this.sctx.setTransform(dpr, 0, 0, dpr, 0, 0)
@@ -252,7 +263,11 @@ export class TermCanvas {
         const run = runs[i]
         const nextCol = i + 1 < runs.length ? runs[i + 1].col : row.cols
         const x0 = this.cellX(run.col)
-        const w = (nextCol - run.col) * this.charW
+        // 背景块按设备像素吸附，避免半像素毛边；文字仍用未吸附的 x0，
+        // 这样字形步进和格子宽度完全一致，长行不会在格子内漂移。
+        const bx0 = this.snap(x0)
+        const bx1 = this.snap(this.cellX(nextCol))
+        const w = bx1 - bx0
 
         const bold = !!(run.attr & A_BOLD)
         const dim = !!(run.attr & A_DIM)
@@ -261,7 +276,7 @@ export class TermCanvas {
         if (run.attr & A_INVERSE) [fg, bg] = [bg, fg]
 
         ctx.fillStyle = bg
-        ctx.fillRect(x0, y, w, this.charH)
+        ctx.fillRect(bx0, y, w, this.charH)
 
         const underline = (run.attr >> A_UNDER_SHIFT) & 0xf
         const invisible = !!(run.attr & A_INVISIBLE)
@@ -280,26 +295,26 @@ export class TermCanvas {
           if (underline === 3) {
             // curly
             const step = Math.max(3, Math.round(this.charW / 2))
-            ctx.moveTo(x0, uy)
-            for (let x = x0; x < x0 + w; x += step) {
+            ctx.moveTo(bx0, uy)
+            for (let x = bx0; x < bx1; x += step) {
               ctx.quadraticCurveTo(x + step / 2, uy + 3, x + step, uy)
             }
           } else if (underline === 4) {
             ctx.setLineDash([2, 3])
-            ctx.moveTo(x0, uy)
-            ctx.lineTo(x0 + w, uy)
+            ctx.moveTo(bx0, uy)
+            ctx.lineTo(bx1, uy)
             ctx.setLineDash([])
           } else if (underline === 5) {
             ctx.setLineDash([6, 4])
-            ctx.moveTo(x0, uy)
-            ctx.lineTo(x0 + w, uy)
+            ctx.moveTo(bx0, uy)
+            ctx.lineTo(bx1, uy)
             ctx.setLineDash([])
           } else {
-            ctx.moveTo(x0, uy)
-            ctx.lineTo(x0 + w, uy)
+            ctx.moveTo(bx0, uy)
+            ctx.lineTo(bx1, uy)
             if (underline === 2) {
-              ctx.moveTo(x0, uy + 2)
-              ctx.lineTo(x0 + w, uy + 2)
+              ctx.moveTo(bx0, uy + 2)
+              ctx.lineTo(bx1, uy + 2)
             }
           }
           ctx.stroke()
@@ -309,8 +324,8 @@ export class TermCanvas {
           ctx.lineWidth = 1
           const sy = y + Math.round(this.charH * 0.55)
           ctx.beginPath()
-          ctx.moveTo(x0, sy)
-          ctx.lineTo(x0 + w, sy)
+          ctx.moveTo(bx0, sy)
+          ctx.lineTo(bx1, sy)
           ctx.stroke()
         }
       }
@@ -327,17 +342,18 @@ export class TermCanvas {
     if (!(modes & MODES.CURSOR_VISIBLE)) return
     if (this.cursorRow < 0 || this.cursorRow >= this.rows) return
     if (!this.cursorOn) return
-    const x = this.cellX(this.cursorX)
-    const y = this.cellY(this.cursorRow)
+    const x = this.snap(this.cellX(this.cursorX))
+    const y = this.snap(this.cellY(this.cursorRow))
+    const cw = this.snap(this.cellX(this.cursorX + 1)) - x
     ctx.save()
     ctx.globalCompositeOperation = 'difference'
     ctx.fillStyle = this.palette.cursor
     if (typeof ctx.roundRect === 'function') {
       ctx.beginPath()
-      ctx.roundRect(x, y, this.charW, this.charH, 3)
+      ctx.roundRect(x, y, cw, this.charH, 3)
       ctx.fill()
     } else {
-      ctx.fillRect(x, y, this.charW, this.charH)
+      ctx.fillRect(x, y, cw, this.charH)
     }
     ctx.restore()
   }
@@ -363,7 +379,9 @@ export class TermCanvas {
       const c1 = Math.min(line === bot.line ? bot.col : this.cols - 1, end - 1)
       if (c1 < c0) continue
       const y = this.cellY(line - viewStart)
-      ctx.fillRect(this.cellX(c0), y, (c1 - c0 + 1) * this.charW, this.charH)
+      const sx0 = this.snap(this.cellX(c0))
+      const sx1 = this.snap(this.cellX(c1 + 1))
+      ctx.fillRect(sx0, y, sx1 - sx0, this.charH)
     }
   }
 

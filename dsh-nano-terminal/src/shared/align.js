@@ -152,10 +152,22 @@ export function flushFit(state) {
   return { cols: next.cols, rows: next.rows }
 }
 
-/** CSS 像素宽度按当前 dpr 取整后再除回去，dpr 变化时格子宽度跟着变。 */
-export function charWidthForDpr(measuredWidth, dpr) {
-  const d = Math.max(1, Math.round(Number(dpr) || 1))
-  const w = Number(measuredWidth)
+/**
+ * 格子宽度 = 字体真实步进，不取整。
+ * 取整（例如 7.8267 → 8）会让每列偏 0.17px，158 列累计 27px；文字按真实步进
+ * 排字、背景按取整后的格子画，长行和相邻彩色分段就会互相错位。浏览器缩放
+ * （110% 等）只改 dpr，不改 CSS 步进，所以这里也不该跟 dpr 走。
+ */
+export function cellWidth(advance) {
+  const w = Number(advance)
   if (!Number.isFinite(w) || w <= 0) return 1
-  return Math.max(1, Math.round(w * d) / d)
+  return w
+}
+
+/** 画布 backing 尺寸：CSS 尺寸 × 精确 dpr（不取整），至少 1 设备像素。 */
+export function backingSize(cssSize, dpr) {
+  const d = Number(dpr)
+  const s = Number(cssSize)
+  if (!Number.isFinite(d) || d <= 0 || !Number.isFinite(s) || s <= 0) return 1
+  return Math.max(1, Math.round(s * d))
 }

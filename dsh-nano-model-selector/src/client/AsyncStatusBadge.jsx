@@ -39,9 +39,15 @@ export function AsyncStatusBadge({ sessionId, copy, useSessionStatus, useProject
   // A hook may only be invoked unconditionally; when the prop is not a
   // function (older host) we take the static path below. The prop is
   // slot-injected, so it cannot change identity mid-mount.
-  const running = typeof useSessionStatus === 'function'
-    ? useSessionStatus(sessionId)?.running
+  //
+  // Signature (framework-provided, ui-session): `useSessionStatus(selector)`
+  // selects over the status MAP indexed by sessionId — the hook is NOT
+  // session-bound and takes no sessionId argument. Passing the id string as
+  // the selector throws `selector is not a function` inside the hook.
+  const status = typeof useSessionStatus === 'function'
+    ? useSessionStatus(snapshot => snapshot?.get?.(sessionId))
     : undefined
+  const running = status?.running
   // useProjection is the zero-copy path for hosts that publish this unit;
   // ours is registered host-only (no wire view), so this stays undefined and
   // the badge falls back to the fetched payload — per P5-01e, no second

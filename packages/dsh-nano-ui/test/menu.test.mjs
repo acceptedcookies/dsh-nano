@@ -29,6 +29,7 @@ test('openNanoMenu: a container means portal:false inside it; direction up maps 
   assert.match(DOM, /portal: container === undefined/)
   assert.match(DOM, /mount\(container \?\? document\.body\)/)
   assert.match(MENU, /side: direction === 'up' \? 'top' : 'bottom'/)
+  assert.match(MENU, /anchorPoint: portal \? \{ x: menu\.x, y: menu\.y \} : undefined/)
 })
 
 test('menuHeight', () => {

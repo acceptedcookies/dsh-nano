@@ -34,6 +34,13 @@ export function NanoMenu({ menu, actions, onClose, width = 208, maxHeight, porta
     onClose,
     side: direction === 'up' ? 'top' : 'bottom',
     portal,
+    /* The running host places a portaled list with CSS anchor positioning on
+     * `anchorPoint` ({x,y} viewport pixels) and does not read `getAnchorRect`.
+     * Without the point, the list anchors to this wrapper's own child, which
+     * sits wherever the caller rendered <NanoMenu> — for the files row menu
+     * that is the bottom of the pane, not the pointer. `getAnchorRect` stays
+     * for a host that positions from a DOMRect instead. */
+    anchorPoint: portal ? { x: menu.x, y: menu.y } : undefined,
     getAnchorRect: portal ? () => new DOMRect(menu.x, menu.y, menu.width ?? 0, menu.height ?? 0) : undefined,
     listClassName: capClass(maxHeight),
   }, h('div', { 'aria-hidden': 'true', style: { width: `${width}px`, height: 0 } }))

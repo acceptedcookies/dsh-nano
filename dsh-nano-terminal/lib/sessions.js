@@ -48,6 +48,24 @@ var ScreenMirror = class {
   resize(cols, rows) {
     this.e.dnt_resize(this.id, cols, rows);
   }
+  /** 不重排。给会自己重画的 PTY（Windows ConPTY）用。 */
+  resizeBox(cols, rows) {
+    const fn = this.e.dnt_resize_box;
+    if (fn) fn(this.id, cols, rows);
+    else this.resize(cols, rows);
+  }
+  cols() {
+    return this.e.dnt_cols?.(this.id) ?? 0;
+  }
+  rows() {
+    return this.e.dnt_rows?.(this.id) ?? 0;
+  }
+  cursorX() {
+    return this.e.dnt_cursor_x?.(this.id) ?? 0;
+  }
+  cursorY() {
+    return this.e.dnt_cursor_y?.(this.id) ?? 0;
+  }
   modes() {
     return this.e.dnt_modes?.(this.id) >>> 0;
   }
@@ -308,9 +326,16 @@ function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-// src/host/sessions.js
-var decoder2 = new TextDecoder("utf-8", { fatal: false });
+// src/shared/align.js
 var encoder = new TextEncoder();
+var decoder2 = new TextDecoder("utf-8", { fatal: false });
+function resizeMode(platform) {
+  return platform === "win32" ? "box" : "reflow";
+}
+
+// src/host/sessions.js
+var decoder3 = new TextDecoder("utf-8", { fatal: false });
+var encoder2 = new TextEncoder();
 var KEEP_BACKOFF = [1500, 3e3, 6e3, 12e3, 3e4, 6e4];
 function defaultShell() {
   if (process.platform === "win32") return process.env.COMSPEC ?? "cmd.exe";
@@ -563,6 +588,7 @@ var SessionRecord = class {
     this.replay = [];
     this.replayLen = 0;
     this.replayCap = replayBytes;
+    this.outSeq = 0;
     this.keepAttempt = 0;
     this.keepTimer = null;
     this.gate = new Gate();
@@ -619,8 +645,10 @@ var SessionRecord = class {
         this.#pollState();
       } catch {
       }
+      this.outSeq = this.outSeq + 1 >>> 0;
+      const seq = this.outSeq;
       for (const [s, att] of this.attached) {
-        if (att) att.data(chunk);
+        if (att) att.data(chunk, seq);
         else send(s, chunk);
       }
     });
@@ -742,15 +770,15 @@ var SessionRecord = class {
     if (this.exited) throw err(KIND.FINISHED, "terminal exited");
     if (!this.handle) throw err(KIND.UNAVAILABLE, "terminal not spawned yet (attach to wake)");
     if (source === "automatic") {
-      await this.handle.write(typeof data === "string" ? data : decoder2.decode(data));
+      await this.handle.write(typeof data === "string" ? data : decoder3.decode(data));
       return;
     }
     if (source === "agent") {
-      return this.gate.submit(() => this.handle.write(typeof data === "string" ? data : decoder2.decode(data)));
+      return this.gate.submit(() => this.handle.write(typeof data === "string" ? data : decoder3.decode(data)));
     }
     const ok = this.gate.humanInput(typeof data === "string" ? Buffer.from(data, "utf8") : data);
     if (ok === null) return { held: true };
-    await this.handle.write(decoder2.decode(ok));
+    await this.handle.write(decoder3.decode(ok));
   }
   /**
    * Agent send semantics (term.send): blocked guard → bracketed paste + Enter
@@ -779,7 +807,8 @@ var SessionRecord = class {
     const prev = `${this.meta.cols}x${this.meta.rows}`;
     this.meta = { ...this.meta, cols, rows };
     try {
-      this.mirror?.resize(cols, rows);
+      if (resizeMode(process.platform) === "box") this.mirror?.resizeBox(cols, rows);
+      else this.mirror?.resize(cols, rows);
     } catch {
     }
     if (`${cols}x${rows}` !== prev) {
@@ -799,6 +828,28 @@ var SessionRecord = class {
     } catch {
       return "";
     }
+  }
+  /** 对齐帧要的当前屏：序号、尺寸、光标、可见区 dump。 */
+  alignView() {
+    let cols = this.meta?.cols ?? 80;
+    let rows = this.meta?.rows ?? 24;
+    let cursorX = 0;
+    let cursorY = 0;
+    try {
+      cols = this.mirror?.cols?.() || cols;
+      rows = this.mirror?.rows?.() || rows;
+      cursorX = this.mirror?.cursorX?.() ?? 0;
+      cursorY = this.mirror?.cursorY?.() ?? 0;
+    } catch {
+    }
+    return {
+      seq: this.outSeq >>> 0,
+      cols,
+      rows,
+      cursorX,
+      cursorY,
+      text: this.screenText(rows, "visible")
+    };
   }
   async shutdown() {
     this.closed = true;

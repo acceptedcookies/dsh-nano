@@ -1,5 +1,33 @@
 // src/host/ws.js
 import { createHash, randomBytes } from "node:crypto";
+
+// src/shared/align.js
+var ALIGN_VERSION = 1;
+var ALIGN_HEADER = 13;
+var encoder = new TextEncoder();
+var decoder = new TextDecoder("utf-8", { fatal: false });
+function encodeAlign({ seq = 0, cols = 80, rows = 24, cursorX = 0, cursorY = 0, text = "" } = {}) {
+  const body = encoder.encode(String(text ?? ""));
+  const out = new Uint8Array(ALIGN_HEADER + body.length);
+  const view = new DataView(out.buffer);
+  view.setUint8(0, ALIGN_VERSION);
+  view.setUint32(1, seq >>> 0);
+  view.setUint16(5, cols & 65535);
+  view.setUint16(7, rows & 65535);
+  view.setUint16(9, cursorX & 65535);
+  view.setUint16(11, cursorY & 65535);
+  out.set(body, ALIGN_HEADER);
+  return out;
+}
+function encodeSequenced(seq, chunk) {
+  const bytes = chunk instanceof Uint8Array ? chunk : Uint8Array.from(chunk);
+  const out = new Uint8Array(4 + bytes.length);
+  new DataView(out.buffer).setUint32(0, seq >>> 0);
+  out.set(bytes, 4);
+  return out;
+}
+
+// src/host/ws.js
 var GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 function acceptKey(key) {
   return createHash("sha1").update(key + GUID).digest("base64");
@@ -94,33 +122,56 @@ var Attach = class {
     this.v = 1;
     this.credit = CREDIT_INIT;
     this.pending = 0;
-    this.snapping = false;
+    this.stalled = false;
+    this.toldStall = false;
+    this.alignMode = false;
   }
-  /** Send data honoring credit + snapshot fallback. */
-  data(chunk) {
+  /** Send data honoring credit. Over the limit: stall, do not clear the screen. */
+  data(chunk, seq = 0) {
     if (this.v === 1) {
       sendBinary(this.socket, chunk);
       this.pending += chunk.length;
       return;
     }
-    if (this.snapping || this.pending + chunk.length > this.credit + SNAP_LIMIT) {
-      this.#snapshot();
-      this.pending = 0;
-      this.snapping = false;
+    if (this.stalled) return;
+    const payload = this.alignMode ? Buffer.from(encodeSequenced(seq, chunk)) : chunk;
+    if (this.pending + payload.length > this.credit + SNAP_LIMIT) {
+      this.stalled = true;
+      if (!this.toldStall) {
+        this.toldStall = true;
+        sendText(this.socket, { type: "stalled" });
+      }
+      return;
     }
-    this.socket.write(encodeFrame(encodeChannel(0, FR_KIND.DATA, chunk), 2));
-    this.pending += chunk.length;
+    this.socket.write(encodeFrame(encodeChannel(0, FR_KIND.DATA, payload), 2));
+    this.pending += payload.length;
   }
-  /** Consume client credit. */
+  /** Consume client credit. A stall is a hole: align once, do not resume raw bytes. */
   onCredit(n) {
     this.credit += n;
     this.pending = Math.max(0, this.pending - n);
+    if (this.stalled) this.align();
   }
-  #snapshot() {
-    this.snapping = true;
-    const text = this.record?.screenText(200, "visible") ?? "";
-    const clear = Buffer.from("\x1B[2J\x1B[H", "utf8");
-    this.socket.write(encodeFrame(encodeChannel(0, FR_KIND.SNAPSHOT, Buffer.concat([clear, Buffer.from(text, "utf8")])), 2));
+  /**
+   * 一次当前屏对齐。载荷是 dump + 序号，不含清屏转义。
+   * 调用后恢复直连：序号之后的 DATA 继续逐块发送。
+   */
+  align() {
+    const view = this.record?.alignView?.() ?? {
+      seq: this.record?.outSeq ?? 0,
+      cols: this.record?.meta?.cols ?? 80,
+      rows: this.record?.meta?.rows ?? 24,
+      cursorX: 0,
+      cursorY: 0,
+      text: this.record?.screenText?.(this.record?.meta?.rows ?? 24, "visible") ?? this.record?.screenText?.(24, "visible") ?? ""
+    };
+    const payload = Buffer.from(encodeAlign(view));
+    if (!this.socket.destroyed) {
+      this.socket.write(encodeFrame(encodeChannel(0, FR_KIND.SNAPSHOT, payload), 2));
+    }
+    this.pending = 0;
+    this.stalled = false;
+    this.toldStall = false;
   }
   channel(channel, kind, payload) {
     if (!this.socket.destroyed) {

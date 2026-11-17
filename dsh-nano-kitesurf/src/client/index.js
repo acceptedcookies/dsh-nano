@@ -241,6 +241,7 @@ const STYLE = `
 .nks-env-row b{font-weight:500;color:var(--dsw-alias-label-secondary);flex:none}
 .nks-env-row span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right;unicode-bidi:plaintext}
 .nks-env-ok{color:var(--dsw-alias-state-success-primary)}
+.nks-env-legacy{color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11);margin-left:6px}
 .nks-env-bad{color:var(--dsw-alias-state-error-primary)}
 .nks-env-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:2px}
 .nks-env-checks{display:flex;flex-direction:column;gap:2px;margin-top:2px;padding-top:4px;border-top:.5px solid var(--dsw-alias-border-l2)}
@@ -1394,7 +1395,7 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
         if (Array.isArray(result.summary)) setDiag(result)
         // Never say "ready" when a plane failed — name the failing plane.
         const failed = planeRows(result).filter((row) => !row.ok && !row.skipped)
-        if (result.planes && result.v !== 1) setNote('观察合同不匹配')
+        if (result.planes && Number.isFinite(result.v) && result.v !== 1) setNote(copy.contractNewer)
         else if (!result.ok) setNote(`${copy.prepareFailed}: ${result.errorId || result.error || `HTTP ${response.status}`}`)
         else if (result.ready !== true) setNote(`${copy.prepareNotReady}: ${failed.map((row) => row.plane || row.label).join(' / ')}`)
         else setNote(result.action === 'noop' ? copy.prepareDone : `${copy.prepareDone} · ${result.action}`)
@@ -1424,12 +1425,18 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
       ? `${snap.ports.engine.port} · ${snap.ports.engine.heldBy === 'this-container' ? '本插件容器' : '空闲'}`
       : '—'
     // The badge reads planes and ready. It does not recompute ready from rows.
-    const contractMismatch = snap != null && snap.v !== 1
+    // A host older than the observation contract has no `v` at all. That is
+    // "less detail", not "wrong": only a version we do not understand is a
+    // mismatch, and even then the pane keeps working on the fields it has.
+    const contractMismatch = snap != null && Number.isFinite(snap.v) && snap.v !== 1
+    const legacyHost = snap != null && !Number.isFinite(snap.v)
     const rows = planeRows(snap)
     const healthy = !contractMismatch && snap?.ready === true
     return h('div', { className: 'nks-env', 'data-nks-env': '1' },
       h('div', { className: 'nks-env-title' }, copy.envTitle,
-        h('span', { className: healthy ? 'nks-env-ok' : 'nks-env-bad' }, contractMismatch ? '观察合同不匹配' : healthy ? '● OK' : '● 异常')),
+        h('span', { className: healthy ? 'nks-env-ok' : 'nks-env-bad', title: legacyHost ? copy.legacyHostTitle : undefined },
+          contractMismatch ? copy.contractNewer : healthy ? '● OK' : '● 异常'),
+        legacyHost ? h('span', { className: 'nks-env-legacy', 'data-nks-legacy': '1' }, copy.legacyHost) : null),
       h('div', { className: 'nks-env-row' }, h('b', null, copy.envPlugin), h('span', null, snap?.buildId || '未知')),
       h('div', { className: 'nks-env-row' }, h('b', null, copy.envEngine), h('span', null, engine)),
       h('div', { className: 'nks-env-row' }, h('b', null, copy.envContainer), h('span', null, container)),
@@ -2037,14 +2044,16 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
         const hostBuild = typeof status?.buildId === 'string' ? status.buildId : ''
         // Only deploy-produced ids carry '+<sha>'; a tarball install reports a plain
         // version and must not be flagged as a mismatch.
-        const mismatch = Boolean(hostBuild) && hostBuild.includes('+') && hostBuild !== CLIENT_BUILD_ID
-        const text = mismatch
-          ? `版本不一致 客户端 ${CLIENT_BUILD_ID} / 宿主 ${hostBuild}`
-          : (hostBuild ? hostBuild : '')
+        // The host reports the sandbox plugin's deploy stamp; this bundle
+        // carries its own. They are two different packages, so a difference
+        // only means "these two were deployed at different times". It is a
+        // diagnostic, never a reason to refuse to browse.
+        const drifted = Boolean(hostBuild) && hostBuild !== CLIENT_BUILD_ID
+        const text = drifted ? `宿主 ${hostBuild}` : (hostBuild || '')
         return text ? h('span', {
-          'data-nks-build': mismatch ? 'mismatch' : 'ok',
-          style: { opacity: mismatch ? 1 : .6, color: mismatch ? 'var(--dsw-alias-state-error-primary)' : undefined },
-          title: `客户端构建 ${CLIENT_BUILD_ID} · 宿主 ${hostBuild || '未知'}`,
+          'data-nks-build': drifted ? 'drift' : 'ok',
+          style: { opacity: .6, color: 'var(--dsw-alias-label-tertiary)' },
+          title: `客户端 ${CLIENT_BUILD_ID} · 宿主 ${hostBuild || '未知'}${drifted ? '（两个包分别部署，不影响使用）' : ''}`,
         }, text.slice(0, 40)) : null
       })()),
     h(HistoryDialog, { open: historyOpen, onClose: () => setHistoryOpen(false) }),

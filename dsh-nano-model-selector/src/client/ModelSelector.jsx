@@ -270,34 +270,31 @@ export function ModelSelector({ locked, available, directory, load, select, lang
     return refreshEngines()
   }, [open, engines, refreshEngines])
 
-  React.useEffect(() => {
-    let live = true
-    const pull = async () => {
-      // Two read surfaces on purpose: the policy face is a cheap status read,
-      // while the bundle inventory is the expensive one (a full
-      // pluginManager.listBundles() on the host). They are fetched together on
-      // the same 15 s tick, but the inventory route is snapshot-cached host-side
-      // so a warm tick costs nothing.
-      const [data, bundle] = await Promise.all([fetchCompactState(), fetchBundleState()])
-      if (!live) return
-      setCompactInstalled(bundle?.installed === true)
-      setCompactEnabled(bundle?.enabled === true)
-      const policy = data?.policy
-      const effective = policy?.effective
-      const pinned = Number.isFinite(effective?.pin) && Number.isFinite(effective?.windowMin) && effective.windowMin > 0
-        ? effective.pin / effective.windowMin
-        : null
-      setCompactLines(policy == null ? null : {
-        health: policy.healthTargetAsync,
-        buffer: policy.bufferSizeAsync,
-        pinned,
-        pinnedTokens: policy.pinnedAsyncTokens,
-      })
-    }
-    pull()
-    const timer = window.setInterval(pull, 15000)
-    return () => { live = false; window.clearInterval(timer) }
+  // Compact takeover reads (P5-02a): the 15 s heartbeat is retired — the
+  // policy face + bundle inventory are re-read when the panel opens and after
+  // the panel's switch reports back (via onSwitchDone), never on a timer.
+  const pullCompact = React.useCallback(async () => {
+    const [data, bundle] = await Promise.all([fetchCompactState(), fetchBundleState()])
+    setCompactInstalled(bundle?.installed === true)
+    setCompactEnabled(bundle?.enabled === true)
+    const policy = data?.policy
+    const effective = policy?.effective
+    const pinned = Number.isFinite(effective?.pin) && Number.isFinite(effective?.windowMin) && effective.windowMin > 0
+      ? effective.pin / effective.windowMin
+      : null
+    setCompactLines(policy == null ? null : {
+      health: policy.healthTargetAsync,
+      buffer: policy.bufferSizeAsync,
+      pinned,
+      pinnedTokens: policy.pinnedAsyncTokens,
+    })
   }, [])
+  React.useEffect(() => {
+    if (!open) return undefined
+    let live = true
+    Promise.resolve(pullCompact()).then(() => { if (!live) return })
+    return () => { live = false }
+  }, [open, pullCompact])
 
   const onCompactError = text => {
     toastSeq.current += 1
@@ -934,7 +931,7 @@ export function ModelSelector({ locked, available, directory, load, select, lang
                 )}
 
                 {filter === 'compact' && (
-                  <CompactPanel copy={copy} models={compactModelPairs} onError={onCompactError} />
+                  <CompactPanel copy={copy} models={compactModelPairs} onError={onCompactError} onSwitchDone={pullCompact} />
                 )}
 
                 {filter !== 'media' && filter !== 'compact' && visibleFavorites.length > 0 && (

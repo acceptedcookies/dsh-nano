@@ -122,16 +122,14 @@ test('derivePhase: a recent drop surfaces its reason, an old one does not', () =
   assert.equal(derivePhase({ at: iso(60 * 60_000), kind: 'drop', reason: 'transient' }).state, 'idle')
 })
 
-test('derivePhase: a fresh commit reports committed, an old one goes idle', () => {
-  // The shell's compaction row does not say which lane produced it, so the
-  // async attribution has to outlive the commit itself.
+test('derivePhase: commit and select follow the settled/in-flight contract', () => {
+  // P5-01d: a commit is SETTLED — the badge's committed surface is sourced
+  // from the session-scoped projection (lastCompaction), not a ledger TTL.
   const fresh = derivePhase({ at: iso(5_000), kind: 'commit', compactionId: 'c', tokens: 90010, records: 332 })
-  assert.equal(fresh.state, 'committed')
-  assert.equal(fresh.tokens, 90010)
-  assert.equal(fresh.records, 332)
-  assert.equal(fresh.compactionId, 'c')
-
+  assert.equal(fresh.state, 'idle')
   assert.equal(derivePhase({ at: iso(60 * 60_000), kind: 'commit', compactionId: 'c' }).state, 'idle')
+  // A select record mid-episode is still in flight.
+  assert.equal(derivePhase({ at: iso(5_000), kind: 'select', lane: 'async' }).state, 'running')
   // A skip is never a state the badge should show.
   assert.equal(derivePhase({ at: iso(5_000), kind: 'skip', reason: 'lock-held' }).state, 'idle')
 })
@@ -152,4 +150,54 @@ test('readAsyncHistory exposes the phase alongside records and summary', () => {
   assert.equal(history.phase.promptVersion, 'deadbeef')
   // An empty ledger is idle, never failed.
   assert.equal(readAsyncHistory('session-none').phase.state, 'idle')
+})
+
+/* ===================== ACE-1117 P5-01/T15 ================================ */
+
+const { compactRuntime } = await import('../lib/compact-runtime.js')
+
+test('T15 runtime is session-scoped: no cross-session lastCompaction, commit is settled', () => {
+  // Degraded fold path (no sessionProjections): two sessions emit folds.
+  const ctx = {
+    get: () => undefined,
+    on: (name, fn) => { ctx._sessionEvent = fn },
+    logger: { warn() {} },
+  }
+  const rt = compactRuntime(ctx)
+  const A = { id: 'sess-A', seq: 10 }
+  const B = { id: 'sess-B', seq: 10 }
+  ctx._sessionEvent(B, { type: 'compaction/start', time: '2026-11-17T00:00:00Z', data: {} })
+  ctx._sessionEvent(B, {
+    type: 'compaction/summary', time: '2026-11-17T00:00:01Z',
+    data: { provider: 'prov', model: 'mod', shadowedTokenCount: 42, shadowedSeqs: [1, 2], shadowedRange: { start: 1, end: 2 } },
+  })
+  ctx._sessionEvent(B, { type: 'compaction/end', time: '2026-11-17T00:00:02Z', data: { compactionId: 'B-id' } })
+
+  // A's read must not see B's fold.
+  const rA = rt.runtime(A, 1000, null)
+  assert.equal(rA.lastCompaction, null, 'session A must not inherit session B\'s fold')
+  const rB = rt.runtime(B, 1000, null)
+  assert.equal(rB.lastCompaction?.status, 'completed')
+
+  // Without a session at all the cross-session fallback is gone.
+  const rNone = rt.runtime(null, 1000, null)
+  assert.equal(rNone.lastCompaction, null, 'no sessionId → lastCompaction must be null')
+  assert.equal(rNone.fill, null)
+
+  // A bare id still reaches the per-session fold (degraded path).
+  const rId = rt.runtime('sess-B', 1000, null)
+  assert.equal(rId.lastCompaction?.status, 'completed', 'id string resolves the fold by key')
+})
+
+test('T15 derivePhase: select is in-flight running; commit and stale records are settled idle', () => {
+  const now = new Date().toISOString()
+  assert.equal(derivePhase({ at: now, kind: 'select' }).state, 'running',
+    'a select tail between claim and commit must not fall to idle')
+  assert.equal(derivePhase({ at: now, kind: 'claim' }).state, 'running')
+  assert.equal(derivePhase({ at: now, kind: 'arm' }).state, 'armed')
+  assert.equal(derivePhase({ at: now, kind: 'drop', reason: 'disarmed' }).state, 'failed')
+  // P5-01d: committed comes from the projection, never the ledger tail.
+  assert.equal(derivePhase({ at: now, kind: 'commit', compactionId: 'c', tokens: 5 }).state, 'idle',
+    'a commit tail is settled — no committed TTL on the ledger')
+  assert.equal(derivePhase({ at: now, kind: 'skip' }).state, 'idle')
 })

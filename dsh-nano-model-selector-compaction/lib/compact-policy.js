@@ -6,14 +6,18 @@
  *
  * Fields: { schema:1, model:{provider,model}, bufferSizeAsync,
  *           healthTargetAsync, bufferSizeSafety, pinnedAsyncTokens,
- *           pinnedFullTokens }.
+ *           pinnedFullTokens, extraRequirements }.
  * Constants: S=0.90 (read-only; PUT carrying it -> 400), B floor 0.25,
  * effectivePin = min(pinned, floor(0.15*W)), fill = totalTokens/W (single
  * formula, nominal window the only denominator).
- * Master order: effectivePin/W < H <= B <= S < 1, B in [0.25,S].
- * Owner 2026-11-15: equality is legal, and the async ceiling is S.
- * DC-1 (effectivePin/W >= H) -> fullOnly marker; DC-2 (H>B) / DC-3 (B>S) ->
- * reject. Every violation: 400 + no write, no silent clamp, no audit file.
+ * Master order: effectivePin/W < H < B < S < 1, B in [0.25,S) — strict
+ * (ACE-1117 -10②): H >= B and B >= S both reject with 400, no write.
+ * The first inequality falling back is DC-1 (fullOnly marker, not a reject).
+ * DC-2 (H>=B) / DC-3 (B>=S) -> reject. Every violation: 400 + no write,
+ * no silent clamp, no audit file.
+ * summaryPrompt is retired (-07②): a file or PUT carrying the key is
+ * invalid-schema; extraRequirements only ever appends to the built-in
+ * instruction, never replaces it.
  */
 
 import { readFileSync, writeFileSync, renameSync, mkdirSync, existsSync } from 'node:fs'
@@ -21,10 +25,10 @@ import { dirname } from 'node:path'
 
 export const POLICY_SCHEMA = 1
 export const SAFETY_RATIO = 0.90
-/** Files written while S was 0.80 still load; the constant wins on read. */
-const LEGACY_SAFETY_RATIO = 0.80
 export const BUFFER_FLOOR = 0.25
 export const PIN_FRACTION = 0.15
+/** Optional addendum appended after the built-in instruction's marker paragraph. */
+export const EXTRA_REQUIREMENTS_MAX = 4000
 
 export const DEFAULT_POLICY = Object.freeze({
   schema: POLICY_SCHEMA,
@@ -34,7 +38,7 @@ export const DEFAULT_POLICY = Object.freeze({
   bufferSizeSafety: SAFETY_RATIO,
   pinnedAsyncTokens: 100000,
   pinnedFullTokens: 20000,
-  summaryPrompt: '',
+  extraRequirements: '',
 })
 
 /** Fields a PUT body may carry; `schema`, `bufferSizeSafety` are read-only. */
@@ -44,7 +48,7 @@ export const PUT_WRITABLE = Object.freeze([
   'healthTargetAsync',
   'pinnedAsyncTokens',
   'pinnedFullTokens',
-  'summaryPrompt',
+  'extraRequirements',
 ])
 
 const ok = extra => ({ ok: true, ...extra })
@@ -78,9 +82,9 @@ export function validateMasterOrder(policy, W) {
     return fail('invalid-range', 'bufferSizeAsync/healthTargetAsync/bufferSizeSafety must be finite numbers')
   }
   if (S !== SAFETY_RATIO) return fail('invalid-range', `bufferSizeSafety is read-only at ${SAFETY_RATIO}`)
-  if (!(B <= S)) return fail('invalid-range', `DC-3: bufferSizeAsync ${B} > bufferSizeSafety ${S}`)
+  if (!(B < S)) return fail('invalid-range', `DC-3: bufferSizeAsync ${B} >= bufferSizeSafety ${S}`)
   if (B < BUFFER_FLOOR) return fail('invalid-range', `bufferSizeAsync ${B} below write floor ${BUFFER_FLOOR}`)
-  if (!(H <= B)) return fail('invalid-range', `DC-2: healthTargetAsync ${H} > bufferSizeAsync ${B}`)
+  if (!(H < B)) return fail('invalid-range', `DC-2: healthTargetAsync ${H} >= bufferSizeAsync ${B}`)
   if (!(H > 0)) return fail('invalid-range', `healthTargetAsync ${H} must be positive`)
   if (!(S < 1)) return fail('invalid-range', `bufferSizeSafety ${S} must be below 1`)
   if (!isNonNegativeInt(policy.pinnedAsyncTokens) || !isNonNegativeInt(policy.pinnedFullTokens)) {
@@ -104,7 +108,7 @@ export function validateMasterOrder(policy, W) {
 export function validatePolicyShape(value) {
   if (value === null || typeof value !== 'object') return fail('invalid-schema', 'policy must be an object')
   if (value.schema !== POLICY_SCHEMA) return fail('invalid-schema', `unknown schema ${JSON.stringify(value.schema)}`)
-  const allowed = new Set(['schema', 'model', 'bufferSizeAsync', 'healthTargetAsync', 'bufferSizeSafety', 'pinnedAsyncTokens', 'pinnedFullTokens', 'summaryPrompt', 'enabled'])
+  const allowed = new Set(['schema', 'model', 'bufferSizeAsync', 'healthTargetAsync', 'bufferSizeSafety', 'pinnedAsyncTokens', 'pinnedFullTokens', 'extraRequirements', 'enabled'])
   for (const key of Object.keys(value)) {
     if (!allowed.has(key)) return fail('invalid-schema', `unknown field ${key}`)
   }
@@ -114,8 +118,8 @@ export function validatePolicyShape(value) {
   if (!isFiniteNumber(value.bufferSizeSafety)) return fail('invalid-schema', 'bufferSizeSafety must be a number')
   if (!isNonNegativeInt(value.pinnedAsyncTokens)) return fail('invalid-schema', 'pinnedAsyncTokens must be a non-negative integer')
   if (!isNonNegativeInt(value.pinnedFullTokens)) return fail('invalid-schema', 'pinnedFullTokens must be a non-negative integer')
-  if ('summaryPrompt' in value && (typeof value.summaryPrompt !== 'string' || value.summaryPrompt.length > 12000)) {
-    return fail('invalid-schema', 'summaryPrompt must be a string of at most 12000 characters')
+  if ('extraRequirements' in value && (typeof value.extraRequirements !== 'string' || value.extraRequirements.length > EXTRA_REQUIREMENTS_MAX)) {
+    return fail('invalid-schema', `extraRequirements must be a string of at most ${EXTRA_REQUIREMENTS_MAX} characters`)
   }
   return ok({
     policy: {
@@ -126,7 +130,7 @@ export function validatePolicyShape(value) {
       bufferSizeSafety: value.bufferSizeSafety,
       pinnedAsyncTokens: value.pinnedAsyncTokens,
       pinnedFullTokens: value.pinnedFullTokens,
-      summaryPrompt: typeof value.summaryPrompt === 'string' ? value.summaryPrompt : '',
+      extraRequirements: typeof value.extraRequirements === 'string' ? value.extraRequirements : '',
     },
   })
 }
@@ -141,7 +145,7 @@ export function serializePolicy(policy) {
     bufferSizeSafety: policy.bufferSizeSafety,
     pinnedAsyncTokens: policy.pinnedAsyncTokens,
     pinnedFullTokens: policy.pinnedFullTokens,
-    ...(policy.summaryPrompt ? { summaryPrompt: policy.summaryPrompt } : {}),
+    ...(policy.extraRequirements ? { extraRequirements: policy.extraRequirements } : {}),
   }, null, 2) + '\n'
 }
 
@@ -190,8 +194,8 @@ export function validatePutBody(body) {
   if ('model' in body && !isModel(body.model)) {
     return fail('invalid-schema', 'model must be {provider:string,model:string}')
   }
-  if ('summaryPrompt' in body && (typeof body.summaryPrompt !== 'string' || body.summaryPrompt.length > 12000)) {
-    return fail('invalid-schema', 'summaryPrompt must be a string of at most 12000 characters')
+  if ('extraRequirements' in body && (typeof body.extraRequirements !== 'string' || body.extraRequirements.length > EXTRA_REQUIREMENTS_MAX)) {
+    return fail('invalid-schema', `extraRequirements must be a string of at most ${EXTRA_REQUIREMENTS_MAX} characters`)
   }
   return ok({})
 }
@@ -206,7 +210,7 @@ export function mergePutBody(base, body) {
     bufferSizeSafety: SAFETY_RATIO,
     pinnedAsyncTokens: 'pinnedAsyncTokens' in body ? body.pinnedAsyncTokens : base.pinnedAsyncTokens,
     pinnedFullTokens: 'pinnedFullTokens' in body ? body.pinnedFullTokens : base.pinnedFullTokens,
-    summaryPrompt: 'summaryPrompt' in body ? body.summaryPrompt : (base.summaryPrompt ?? ''),
+    extraRequirements: 'extraRequirements' in body ? body.extraRequirements : (base.extraRequirements ?? ''),
   }
 }
 
@@ -230,10 +234,12 @@ export function readState(path) {
     return fail('state-read-failed', `${parsed.code}: ${parsed.reason}`)
   }
   const storedSafety = parsed.policy.bufferSizeSafety
-  if (storedSafety !== SAFETY_RATIO && storedSafety !== LEGACY_SAFETY_RATIO) {
+  // -10①: no read-time restamp. A file whose safety line is not exactly 0.90 is
+  // invalid-range and the caller enters visible safety-only degraded mode.
+  if (storedSafety !== SAFETY_RATIO) {
     return fail('state-read-failed', `invalid-range: bufferSizeSafety is read-only at ${SAFETY_RATIO}`)
   }
-  return ok({ policy: { ...parsed.policy, bufferSizeSafety: SAFETY_RATIO }, missing: false })
+  return ok({ policy: parsed.policy, missing: false })
 }
 
 /**

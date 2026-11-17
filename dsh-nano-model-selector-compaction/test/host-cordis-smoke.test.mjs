@@ -139,3 +139,85 @@ function cordisDirOf(mod) {
   }
   return join(here, '..', 'node_modules')
 }
+
+/* ---------------------- ACE-1117 P2: patch structure (T07) ---------------- */
+
+test('cordis.patch.yml: tools row outside the isolate + base flat row disabled (T07)', async () => {
+  const { readFileSync: read } = await import('node:fs')
+  const text = read(join(here, '..', 'cordis.patch.yml'), 'utf8')
+
+  // The tools row exists once per preset (anchor + aliases), always at preset
+  // TOP level — never inside an `id: compaction` group's `config:` block.
+  const toolsRows = text.match(/id: inspect-checkpoint\n\s+name: dsh-nano-model-selector-compaction\/tools/g)
+  assert.ok(toolsRows !== null && toolsRows.length === 1, 'tools row must appear once (other presets alias it)')
+  const aliases = text.match(/-\s+\*a\d+/g) ?? []
+  assert.ok(aliases.length >= 3, `remaining presets must alias the tools row, found ${aliases.length}`)
+
+  // The row must NOT sit inside the isolate group's config block: every
+  // inspect-checkpoint occurrence must follow the closing of a `config:` array
+  // (i.e. be at `      - ` preset level, not `          - ` isolate level).
+  const isolateLevel = text.match(/^\s{10,}- &a\d+\n\s+id: inspect-checkpoint/m)
+  assert.equal(isolateLevel, null, 'tools row must never mount inside the isolate group')
+  assert.match(text, /^      - &a2\n        id: inspect-checkpoint/m,
+    'the anchored tools row must be at preset top level (6-space indent)')
+
+  // Base flat row: a profile-root `- id: compaction-basic` with disabled:true
+  // covers the un-isolated base mount (-10⑤).
+  assert.match(text, /\n- id: compaction-basic\n  disabled: true\n?/,
+    'the base bundle flat compaction-basic row must be pinned disabled')
+
+  // Every preset's isolate still carries our Provider row + disabled basic.
+  for (const preset of ['preset-standard', 'preset-ptc', 'preset-minimal', 'preset-cordis']) {
+    const start = text.indexOf(`- id: ${preset}`)
+    const end = text.indexOf('\n- id: preset-', start + 1)
+    const block = text.slice(start, end === -1 ? text.length : end)
+    assert.match(block, /id: nano-model-selector-compaction\n\s+name: dsh-nano-model-selector-compaction|^\s+- \*a1$/m, preset)
+    assert.match(block, /- id: compaction-basic\n\s+name: "@deepseek-ai\/dsh-compaction-basic"\n\s+disabled: true/, preset)
+    assert.match(block, /inspect-checkpoint|^\s+- \*a2$/m, `${preset} must carry the tools row (anchor or alias)`)
+  }
+})
+
+/* ------------------ ACE-1117 P6: closure & non-target audit (T19) --------- */
+
+test('closure diff touches only :20/:74; non-target paths unchanged vs fb7264d (T19)', () => {
+  const repoRoot = join(here, '..', '..')
+  const base = 'fb7264d'
+  const git = (args) => spawnSync('git', args, { cwd: repoRoot, encoding: 'utf8' }).stdout.trim()
+
+  // (a) The closure file's -U0 hunks anchor only near :20 and :74.
+  const diff = git(['diff', '-U0', `${base}...HEAD`, '--', 'docs/specs/dsh-nano-model-selector/closure/DNMS01-closure.md'])
+  const anchors = [...diff.matchAll(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/gm)].map(m => Number(m[1]))
+  assert.ok(anchors.length >= 1, 'the closure file must carry exactly the two scheduled edits')
+  for (const a of anchors) {
+    assert.ok(a >= 18 && a <= 22 || a >= 72 && a <= 78, `closure hunk anchors at :${a}, only :20/:74 neighbourhoods allowed`)
+  }
+  assert.equal(anchors.every(a => a >= 15 && a <= 80), true)
+
+  // (b) Non-target paths must be untouched.
+  const changed = git(['diff', '--name-only', `${base}...HEAD`]).split('\n').filter(Boolean)
+  for (const forbidden of [
+    'docs/specs/dsh-nano-model-selector/async-compaction.md',
+    'RELEASE.md',
+    'docs/specs/dsh-nano-model-selector/qna/DNMS01-qna.md',
+    'docs/specs/dsh-nano-model-selector/qna/DNMS01-qna-truth.md',
+    'scripts/test-all.mjs',
+  ]) {
+    assert.equal(changed.includes(forbidden), false, `${forbidden} must have zero diff vs ${base}`)
+  }
+  // No package's version field may move.
+  const pkgNames = changed.filter(f => f.endsWith('package.json'))
+  for (const p of pkgNames) {
+    const d = git(['diff', `${base}...HEAD`, '--', p])
+    assert.equal(/^[+-]\s*"version"/m.test(d), false, `${p}: version must not change`)
+  }
+  // No new check-ace scripts, nothing from /tmp evidence.
+  const status = spawnSync('git', ['status', '--porcelain'], { cwd: repoRoot, encoding: 'utf8' }).stdout
+  // Untracked files are never legitimate deliverables; tracked modifications
+  // are development-loop residue caught by the name-only diff above.
+  const untracked = status.split('\n').filter(l => l.startsWith('?? '))
+  assert.deepEqual(untracked, [], `untracked files present: ${untracked.join(', ')}`)
+  assert.equal(/check-ace/i.test(status), false, 'untracked scripts/check-ace* is a failure')
+  assert.equal(status.includes('dnms-evidence'), false)
+  const scriptDiff = git(['diff', `${base}...HEAD`, '--', 'scripts/test-all.mjs'])
+  assert.equal(scriptDiff, '', 'scripts/test-all.mjs must not move')
+})

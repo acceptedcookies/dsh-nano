@@ -43,5 +43,15 @@
       "driver": "lab/drivers/model-open.mjs"
     }
   ],
-  "budgets": []
+  "budgets": [
+    {
+      "id": "async-inflight-poll",
+      "subject": "inflight-poll-ms",
+      "rule": {
+        "op": "eq",
+        "limit": 3000
+      },
+      "gate": "audit"
+    }
+  ]
 }

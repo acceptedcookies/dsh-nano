@@ -41,11 +41,15 @@ invisible. Records carry `at` + `kind`:
 | kind | when | headline fields |
 |---|---|---|
 | `arm` | B line qualified and the episode armed | `fill`, `window`, `retain`, `orderOk` |
-| `claim` | idle maintenance claimed the episode | `retain`, `attempt`, `target` |
+| `claim` | the summarizer attempt kicked at arm time | `retain`, `attempt`, `target` |
+| `select` | the unified selector committed to a cut before summarization | `lane` (`async`/`full`/`manual`/`overflow`), `boundary` (`turn`/`step`/`node`), `retainedTokens`, `targetTokens` |
 | `commit` | the durable bracket committed | `compactionId`, `tokens`, `records` |
 | `drop` | the episode was dropped | `reason`, `detail`, `bracketed` |
 | `skip` | arming was suppressed | `reason` (`circuit-open` / `lock-held`) |
-| `drop` (`reason: 'disarmed'`) | the owner raised B above the current fill while an episode was armed or running | `detail` (the fill/B pair that triggered it) |
+| `drop` (`reason: 'disarmed'`) | the arming premise lapsed mid-flight: raised B, a bigger window, or a prune that pulled fill below B | `detail` (the fill/B pair that triggered it) |
+| `drop` (`reason: 'preempted'`) | a synchronous lane (manual/FULL/model-switch/overflow) preempted the episode | `detail` (the lane name) |
+| `drop` (`reason: 'timeout'`) | the 120 s attempt budget expired; settlement only, abort just discards the late result | `detail` |
+| `skip` (`reason: 'lane-active'` / `'turn-blocked'` / `'no-window'`) | a lane owns the session / a non-transient drop debounced the rest of this turn / the routed model reports no context window | `fill`, `window` |
 
 Policy changes take effect at the next `agent/pre-step`: `_policy()` re-reads
 the state file on every call, so B and H apply to the very next step boundary.
@@ -54,10 +58,15 @@ effective pin (`retainTokens`) and the summarizer target — because they were
 decided when the episode armed. Raising B above the current fill now **disarms**
 an armed or in-flight episode (`drop` with `reason: 'disarmed'`); before that the
 gate could only arm, so raising the line could not stop work already under way.
+A synchronous lane (manual `/compact`, the S-line/FULL set, the model-switch
+veto, or context-overflow recovery) preempts an in-flight episode first
+(`drop` with `reason: 'preempted'`); neither `disarmed` nor `preempted` feeds
+the transient-failure circuit — they are settlements, not failures.
 
 Every record also carries `promptVersion`: the first eight hex characters of
-the sha256 of the instruction actually sent (`policy.summaryPrompt` when set,
-otherwise the built-in `COMPACTION_INSTRUCTION`). It is stamped inside the
+the sha256 of the instruction actually sent (the built-in
+`COMPACTION_INSTRUCTION` plus the fixed `Additional requirements:` paragraph
+when `policy.extraRequirements` is non-empty). It is stamped inside the
 summarize closure, where the prompt is read — not at arm time, which could name
 a contract the request never used. The model name alone cannot
 answer "which summarizer contract produced this summary?" — the same model

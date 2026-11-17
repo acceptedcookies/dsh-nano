@@ -2,6 +2,7 @@
 
 import * as React from 'react'
 import { SegmentedControl, Switch } from '@deepseek-ai/dsh-client-ui-primitives'
+import { NanoDialog } from 'dsh-nano-ui'
 import { CheckIcon, CloseIcon, CompactionIcon, WarningIcon } from './icons.jsx'
 import { fetchBundleState, fetchCompactState, postCompactSwitch, putCompactPolicy } from './compact.js'
 import { DEFAULT_SUMMARY_PROMPT } from '../../lib/compact-prompt.js'
@@ -47,7 +48,7 @@ function windowMark(contextWindow) {
  * @param {{ copy: any, models: Array<{provider:string, model:string}>, onError: (text: string) => void }} props
  * `models` = catalog (provider, model) pairs for the summary-model dropdown.
  */
-export function CompactPanel({ copy, models, onError }) {
+export function CompactPanel({ copy, models, onError, onSwitchDone }) {
   const [state, setState] = React.useState(null) // GET payload (policy face)
   // The inventory is a SEPARATE, one-shot read: it is the only host read that
   // costs a full `pluginManager.listBundles()` (~0.9 s of blocking disk work),
@@ -61,6 +62,9 @@ export function CompactPanel({ copy, models, onError }) {
   // A number edits only after the top-right confirm; blank clicks discard it.
   const [editField, setEditField] = React.useState(null)
   const [pending, setPending] = React.useState(null) // {field, raw}
+  // The takeover switch is a profile-level change (it replays every preset's
+  // plugin set); it must never fire from a bare toggle click — confirm first.
+  const [confirmSwitch, setConfirmSwitch] = React.useState(null) // target boolean | null
 
   // The injected directory's model objects carry no contextWindow; the host's
   // /catalog route does. Fetch it once to decorate the dropdown options.
@@ -96,12 +100,9 @@ export function CompactPanel({ copy, models, onError }) {
       .catch(() => {})
     return () => { live = false }
   }, [])
-  // Heartbeat poll: the meter/last-compaction numbers are host-side state; a
-  // quiet 30s re-read keeps the panel honest without user action.
-  React.useEffect(() => {
-    const timer = window.setInterval(reload, 30000)
-    return () => window.clearInterval(timer)
-  }, [reload])
+  // P5-02c: the 30 s heartbeat is retired. The panel re-reads on open (the
+  // mount reload above) and after a confirmed switch — a quiet panel does not
+  // need to poll host-side state nobody is looking at.
   // Auto-dismiss transient result notes; errors stay until dismissed.
   React.useEffect(() => {
     if (banner === null || banner.kind === 'fail') return
@@ -152,6 +153,13 @@ export function CompactPanel({ copy, models, onError }) {
 
   const doSwitch = next => {
     if (busy) return
+    setConfirmSwitch(next) // confirm first — POST happens only in confirmSwitchYes
+  }
+
+  const confirmSwitchYes = () => {
+    const next = confirmSwitch
+    setConfirmSwitch(null)
+    if (next === null) return
     setBusy(true)
     postCompactSwitch(next)
       .then(result => {
@@ -171,6 +179,7 @@ export function CompactPanel({ copy, models, onError }) {
         // after dropping its snapshot — no second round trip.
         if (result.bundle !== undefined) setBundle(result.bundle)
         reload()
+        onSwitchDone?.()
       })
       .catch(error => noteWithCode('fail', `${copy.compactSwitchFailed}: ${error.message}`, error.code))
       .finally(() => setBusy(false))
@@ -182,17 +191,17 @@ export function CompactPanel({ copy, models, onError }) {
       onError(`${copy.selectionError}: ${field} must be a number`)
       return
     }
-    // Water order: H <= B <= S. Equality is legal; only a line sitting
-    // strictly above the one above it is rejected. S is the read-only ceiling.
+    // Water order is strict: H < B < S. Equality violates the master order
+    // (-10②) exactly like inversion does. S is the read-only ceiling.
     const safety = policy.bufferSizeSafety ?? 0.9
     const next = { bufferSizeAsync: policy.bufferSizeAsync, healthTargetAsync: policy.healthTargetAsync, pinnedAsyncTokens: policy.pinnedAsyncTokens, [field]: value }
     if (field === 'bufferSizeAsync' || field === 'healthTargetAsync') {
-      if (!(next.healthTargetAsync >= 0 && next.healthTargetAsync <= next.bufferSizeAsync)) {
-        noteWithCode('fail', `${copy.compactRejected}: H (${next.healthTargetAsync}) ≤ B (${next.bufferSizeAsync})`, 'water-order')
+      if (!(next.healthTargetAsync >= 0 && next.healthTargetAsync < next.bufferSizeAsync)) {
+        noteWithCode('fail', `${copy.compactRejected}: H (${next.healthTargetAsync}) < B (${next.bufferSizeAsync})`, 'water-order')
         return
       }
-      if (!(next.bufferSizeAsync <= safety)) {
-        noteWithCode('fail', `${copy.compactRejected}: B (${next.bufferSizeAsync}) ≤ S (${safety})`, 'water-order')
+      if (!(next.bufferSizeAsync < safety)) {
+        noteWithCode('fail', `${copy.compactRejected}: B (${next.bufferSizeAsync}) < S (${safety})`, 'water-order')
         return
       }
     }
@@ -329,7 +338,7 @@ export function CompactPanel({ copy, models, onError }) {
       )}
 
       {enabled && state.policy !== null && (
-        <PromptField copy={copy} value={policy.summaryPrompt ?? ''} onSave={saveField} busy={busy} />
+        <PromptField copy={copy} value={policy.extraRequirements ?? ''} version={policy.promptVersion ?? null} onSave={saveField} busy={busy} />
       )}
 
       {/* Compression explainer (-20): scenario tabs over live-config copy. */}
@@ -341,6 +350,20 @@ export function CompactPanel({ copy, models, onError }) {
           policy={policy}
           effective={effective}
           modelLabel={modelValue === '/' ? '—' : modelLabelOf(modelValue, windowMap)}
+        />
+      )}
+
+      {/* Live telemetry: own box below the explainer — meter, last run,
+          effective pins, heartbeat. */}
+      {confirmSwitch !== null && (
+        <NanoDialog
+          copy={copy}
+          title={copy.compactConfirmTitle}
+          description={confirmSwitch ? copy.compactConfirmEnable : copy.compactConfirmDisable}
+          width={420}
+          confirmLabel={copy.compactConfirmYes}
+          onConfirm={confirmSwitchYes}
+          onCancel={() => setConfirmSwitch(null)}
         />
       )}
 
@@ -469,33 +492,39 @@ function NumberField({ label, field, value, unit, display, step, min, max, editi
   )
 }
 
-/** Preview and edit the summary instruction. An empty value means the built-in. */
-function PromptField({ copy, value, onSave, busy }) {
+/**
+ * The built-in instruction is the single source (-07①⑤): shown read-only with
+ * the fingerprint of the instruction actually sent; the only writable part is
+ * `extraRequirements`, appended after the built-in body. Reset = clear extras.
+ */
+function PromptField({ copy, value, version, onSave, busy }) {
   const [open, setOpen] = React.useState(false)
   const areaRef = React.useRef(null)
   // Tolerate a non-string field on the read path — a stale or hand-edited state
   // file must not take the whole selector down at render.
   const text = typeof value === 'string' ? value : ''
   const custom = text.trim().length > 0
-  const seed = custom ? text : DEFAULT_SUMMARY_PROMPT
   return (
     <div className="nms-compact-prompt">
       <div className="nms-compact-field" style={{ height: 'auto', padding: 0 }}>
         <span className="nms-compact-field-label">{copy.compactFieldPrompt}</span>
         <button type="button" className="nms-compact-value" disabled={busy} onClick={() => setOpen(prev => !prev)}>
           {custom ? copy.compactPromptCustom : copy.compactPromptBuiltin}
+          {typeof version === 'string' && version.length > 0 ? ` · ${copy.compactPromptVersion.replace('{v}', version)}` : ''}
         </button>
       </div>
       {open && (
         <>
-          <textarea ref={areaRef} className="nms-compact-prompt-text" defaultValue={seed} disabled={busy} />
+          <textarea className="nms-compact-prompt-text" defaultValue={DEFAULT_SUMMARY_PROMPT} readOnly disabled />
+          <span className="nms-model-meta">{copy.compactPromptExtra}</span>
+          <textarea ref={areaRef} className="nms-compact-prompt-text" style={{ minHeight: '70px' }} defaultValue={text} disabled={busy} />
           <span className="nms-compact-prompt-actions">
             <button type="button" className="nms-effort-button" disabled={busy} onClick={() => {
-              const text = areaRef.current?.value ?? ''
-              onSave('summaryPrompt', text.trim() === DEFAULT_SUMMARY_PROMPT.trim() ? '' : text)
+              const raw = areaRef.current?.value ?? ''
+              onSave('extraRequirements', raw)
               setOpen(false)
             }}>{copy.compactPromptSave}</button>
-            <button type="button" className="nms-effort-button" disabled={busy} onClick={() => { onSave('summaryPrompt', ''); setOpen(false) }}>{copy.compactPromptReset}</button>
+            <button type="button" className="nms-effort-button" disabled={busy} onClick={() => { onSave('extraRequirements', ''); setOpen(false) }}>{copy.compactPromptReset}</button>
             <button type="button" className="nms-effort-button" onClick={() => setOpen(false)}>{copy.compactPromptClose}</button>
           </span>
         </>

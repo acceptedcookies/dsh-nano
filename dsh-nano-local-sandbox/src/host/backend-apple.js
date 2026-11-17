@@ -64,6 +64,7 @@ export function createAppleBackend(spec = {}, io = {}) {
     stateVolume: 0,
     spawn: 0,
     logs: 0,
+    remove: 0,
   }
   const bound = { ...io, calls }
 
@@ -115,6 +116,12 @@ export function createAppleBackend(spec = {}, io = {}) {
     async exec(name, argv) {
       calls.exec += 1
       await run(bound, ['exec', name, ...argv])
+      return { ok: true }
+    },
+    /** Remove a container so it can be recreated at a different size. */
+    async remove(name) {
+      calls.remove += 1
+      await run(bound, ['delete', name])
       return { ok: true }
     },
     /** Engine-side log tail. The container is the only place the renderer's

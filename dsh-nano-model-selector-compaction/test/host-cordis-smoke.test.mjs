@@ -212,6 +212,10 @@ test('closure diff touches only :20/:74; non-target paths unchanged vs fb7264d (
   }
   // No new check-ace scripts, nothing from /tmp evidence.
   const status = spawnSync('git', ['status', '--porcelain'], { cwd: repoRoot, encoding: 'utf8' }).stdout
+  // Untracked files are never legitimate deliverables; tracked modifications
+  // are development-loop residue caught by the name-only diff above.
+  const untracked = status.split('\n').filter(l => l.startsWith('?? '))
+  assert.deepEqual(untracked, [], `untracked files present: ${untracked.join(', ')}`)
   assert.equal(/check-ace/i.test(status), false, 'untracked scripts/check-ace* is a failure')
   assert.equal(status.includes('dnms-evidence'), false)
   const scriptDiff = git(['diff', `${base}...HEAD`, '--', 'scripts/test-all.mjs'])

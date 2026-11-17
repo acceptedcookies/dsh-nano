@@ -663,8 +663,10 @@ export default class NanoCompactionEngine extends CompactionEngine {
     // Non-transient drops debounce the gate for the REST of this turn (-05③):
     // the selector's null-range, a committed-then-failed summarize, or an
     // unknown error is not transient, so it is almost certainly about to fail
-    // again. The next turn may retry.
-    if (reason !== 'transient') {
+    // again. The next turn may retry. Settlement-class drops (disarm,
+    // preempt, timeout) are NOT failures and must not suppress re-arming.
+    const SETTLEMENT = new Set(['disarmed', 'preempted', 'timeout'])
+    if (reason !== 'transient' && !SETTLEMENT.has(reason)) {
       const openTurn = inspectCompactionEntryState(session).openTurn
       if (openTurn !== null) {
         // Session-level marker: survives the GC'd episode slot below.
@@ -701,10 +703,13 @@ export default class NanoCompactionEngine extends CompactionEngine {
         return this._runLane(agent, 'overflow', async () => {
           this.ctx.get('toolResultPruner')?.pruneSession(agent.session)
           const measurement = this.ctx.tokenMeter.measure(agent.session)
+          // -08②: 回落线 = safetyOnly ? S : B; 目标 = safetyOnly ? 0 : pinnedFullTokens.
+          const { policy, safetyOnly } = this._policy()
+          const targetTokens = safetyOnly ? 0 : policy.pinnedFullTokens
           const range = selectCompactableRange(agent.session, measurement, {
-            targetTokens: 0,
-            line: SAFETY_RATIO,
-            window: await this._window(agent, this._policy()) ?? Number.POSITIVE_INFINITY,
+            targetTokens,
+            line: safetyOnly ? SAFETY_RATIO : policy.bufferSizeAsync,
+            window: await this._window(agent, { policy, safetyOnly }) ?? Number.POSITIVE_INFINITY,
           })
           if (range === null) return null
           recordAsyncDecision(agent.session.id, {
@@ -712,7 +717,7 @@ export default class NanoCompactionEngine extends CompactionEngine {
             lane: 'overflow',
             boundary: range.boundary,
             retainedTokens: range.retainedTokens,
-            targetTokens: 0,
+            targetTokens,
           })
           return this._compactRegionRange(agent, range, signal)
         })

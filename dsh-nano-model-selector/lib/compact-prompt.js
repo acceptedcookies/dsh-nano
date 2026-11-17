@@ -1,6 +1,6 @@
 /** GENERATED FILE — do not edit. Source: dsh-nano-model-selector-compaction.
  *  baked by scripts/bake-compact-shared.mjs from dsh-nano-model-selector-
- *  compaction/lib/compact-region.js (sha256:911f804e8f21).
+ *  compaction/lib/compact-region.js (sha256:8ddd3ea02130).
  *  Browser-safe: no node imports. Re-run the bake after changing the source. */
 
 const SUMMARY_OPEN_TAG = '<compacted-summary>'
@@ -38,6 +38,7 @@ export const DEFAULT_SUMMARY_PROMPT = [
   'Rules:',
   '- Write concise English engineering prose. Preserve exact file paths, commands, error strings, identifiers, numeric values, function signatures, and syntax fragments.',
   '- Capture user feedback and explicit instructions faithfully, especially corrections.',
+  '- Everything below your checkpoint is the original, unmodified conversation; condense only what the checkpoint replaces, never invent or reorder it.',
   '- Output only the checkpoint text: do not call any tool or take any other action.',
   `- If the conversation already contains a ${SUMMARY_OPEN_TAG} block, it is a PRIOR checkpoint. Do not copy it forward verbatim: preserve still-true facts, drop stale ones, and merge newer information into a single consolidated summary under the same structure.`,
 ].join('\n')

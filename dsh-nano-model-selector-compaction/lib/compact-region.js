@@ -227,6 +227,7 @@ export const COMPACTION_INSTRUCTION = [
   'Rules:',
   '- Write concise English engineering prose. Preserve exact file paths, commands, error strings, identifiers, numeric values, function signatures, and syntax fragments.',
   '- Capture user feedback and explicit instructions faithfully, especially corrections.',
+  '- Everything below your checkpoint is the original, unmodified conversation; condense only what the checkpoint replaces, never invent or reorder it.',
   '- Output only the checkpoint text: do not call any tool or take any other action.',
   `- If the conversation already contains a ${SUMMARY_OPEN_TAG} block, it is a PRIOR checkpoint. Do not copy it forward verbatim: preserve still-true facts, drop stale ones, and merge newer information into a single consolidated summary under the same structure.`,
 ].join('\n')

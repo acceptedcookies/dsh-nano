@@ -28,7 +28,27 @@ const PAGE_MAX_CHARS = 24000
 const LIMIT_MAX = 50
 const LIMIT_DEFAULT = 20
 
-/** True when the surface node seq points at a checkpoint user/message. */
+/** The text of a user/message event, for the tool-name marker check. */
+function userMessageText(session, event) {
+  const message = (() => {
+    try { return session.deriveEventMessage(event) } catch { return null }
+  })()
+  return (message?.content ?? [])
+    .filter(block => block?.type === 'text')
+    .map(block => block.text ?? '')
+    .join('\n')
+}
+
+/**
+ * -09④/P2-03b identification: an event is OUR checkpoint only when all three
+ * hold —
+ *   1. `user/message` whose source is a compact-checkpoint source;
+ *   2. its text names the literal tool name `inspect_checkpoint` (frames
+ *      written before this marker existed are NOT our checkpoints — same
+ *      "not ours" error path, no journal rewrite);
+ *   3. `sourceEventSeqs` contains a paired `compaction/start` (so the
+ *      shadowed span is journal-verifiable, not just claimed).
+ */
 function checkpointEventAt(session, seq) {
   let event
   try {
@@ -38,14 +58,20 @@ function checkpointEventAt(session, seq) {
   }
   if (event?.type !== 'user/message') return undefined
   const source = event.data?.source
-  return typeof source === 'object' && source !== null && isCompactCheckpointSource(source) ? event : undefined
+  if (typeof source !== 'object' || source === null || !isCompactCheckpointSource(source)) return undefined
+  if (!userMessageText(session, event).includes(INSPECT_TOOL_NAME)) return undefined
+  const seqs = Array.isArray(event.sourceEventSeqs) ? event.sourceEventSeqs : []
+  const hasStart = seqs.some(s => {
+    try { return session.eventAt(s)?.type === 'compaction/start' } catch { return false }
+  })
+  return hasStart ? event : undefined
 }
 
 /**
  * -09③ exposure rule: the tool is declared to the model only while the current
- * surface actually holds a checkpoint carrying the compact-checkpoint marker.
- * Checkpoints written before this seam existed have no marker, so they never
- * advertise themselves (unlisted, never readable through this tool).
+ * surface actually holds a checkpoint passing the identification above.
+ * Checkpoints written before the marker existed have no tool name in their
+ * frame, so they never advertise themselves (unlisted, never readable).
  */
 export function sessionHasCheckpoint(session) {
   try {
@@ -131,6 +157,12 @@ export const INSPECT_CHECKPOINT_DEFINITION = Object.freeze({
     render: (_args, value) => [{ type: 'text', text: value }],
   },
   isConcurrencySafe: () => true,
+  // -09⑥ presentation: the shell shows these while the call runs/completes.
+  presentCall: args => `查看压缩前原文 ${args?.compactionId ?? ''}`.trimEnd(),
+  presentResult: (_args, value) => {
+    const m = typeof value === 'string' ? value.match(/^entries: (\S+)$/m) : null
+    return m !== null ? `查看压缩前原文 ${m[1]}` : '查看压缩前原文'
+  },
   async execute(args, exec) {
     const session = exec.agent?.session
     if (session === undefined) {
@@ -141,23 +173,36 @@ export const INSPECT_CHECKPOINT_DEFINITION = Object.freeze({
       throw fail(`inspect_checkpoint: compactionId is required, got ${JSON.stringify(args.compactionId)}`)
     }
     const offset = args.offset ?? 0
-    const limit = args.limit ?? LIMIT_DEFAULT
     if (typeof offset !== 'number' || !Number.isInteger(offset) || offset < 0) {
       throw fail(`inspect_checkpoint: offset must be an integer >= 0, got ${JSON.stringify(args.offset)}`)
     }
-    if (typeof limit !== 'number' || !Number.isInteger(limit) || limit < 1 || limit > LIMIT_MAX) {
-      throw fail(`inspect_checkpoint: limit must be an integer 1-${LIMIT_MAX}, got ${JSON.stringify(args.limit)}`)
+    const rawLimit = args.limit ?? LIMIT_DEFAULT
+    if (typeof rawLimit !== 'number' || !Number.isInteger(rawLimit) || rawLimit < 1) {
+      throw fail(`inspect_checkpoint: limit must be an integer >= 1, got ${JSON.stringify(args.limit)}`)
     }
-    const checkpoint = session.surface.nodes
-      .map(seq => checkpointEventAt(session, seq))
-      .find(event => event !== undefined && event.data.source.compactionId === compactionId)
+    // -09④: 大于 50 按 50 — clamp, never reject a readable request.
+    const limit = Math.min(rawLimit, LIMIT_MAX)
+    // -09④: journal-wide, not surface-only — a checkpoint shadowed by a newer
+    // compaction must still be readable by id. `session.seq` is the journal's
+    // upper bound; eventAt throws on gaps and we skip them.
+    let checkpoint
+    const top = typeof session.seq === 'number' ? session.seq : 0
+    for (let seq = 0; seq < top; seq += 1) {
+      const event = checkpointEventAt(session, seq)
+      if (event !== undefined && event.data.source.compactionId === compactionId) {
+        checkpoint = event
+        break
+      }
+    }
     if (checkpoint === undefined) {
+      // Error message leaks only the ids visible on the CURRENT surface —
+      // a cross-session or stale id must not learn this session's journal ids.
       const available = surfaceCheckpointIds(session)
       throw fail(
-        `inspect_checkpoint: no checkpoint '${compactionId}' on this session's surface. `
+        `inspect_checkpoint: no checkpoint '${compactionId}' on this session. `
         + (available.length === 0
           ? 'No checkpoints are available here.'
-          : `Available: ${available.join(', ')}`),
+          : `Available on surface: ${available.join(', ')}`),
       )
     }
     const entries = sourceEntries(session, checkpoint)

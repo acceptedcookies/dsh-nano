@@ -722,6 +722,10 @@ test('abort during summarize → episode dropped with no bracket written at all'
   assert.equal(engine._episodes.get(session.id).phase, 'none')
   assert.equal(agent.followups.length, 0)
   assert.ok(ctx.logger.records.warn.some(m => m.includes('episode dropped')))
+  // -05③: timeout/abort is a settlement, not a failure — it must NOT mark the
+  // turn as debounced, or a retry later in the same turn would be suppressed.
+  assert.equal(engine._blockedTurns.get(session.id), undefined,
+    'settlement drops (timeout/abort) never set the turn-block marker')
 })
 
 /* ================= 9. model-switch veto ================================ */
@@ -999,7 +1003,9 @@ function makeCheckpointSession(id) {
   const sum = session.append('compaction/summary', { compactionId: 'cp-00000001', turn: 1, summary: [{ type: 'text', text: 'checkpoint text' }] })
   const cp = session.append('user/message', {
     role: 'user',
-    content: [{ type: 'text', text: '<compacted-summary>\nsummary body\n</compacted-summary>' }],
+    // The frame text MUST name the tool literally — that is the identification
+    // marker (P2-03b): frames without it are not our checkpoints.
+    content: [{ type: 'text', text: '<compacted-summary>\nsummary body\n</compacted-summary>\nTo read the replaced text, call inspect_checkpoint with this compactionId.' }],
     source: { kind: 'compact-checkpoint', compactionId: 'cp-00000001' },
   }, {
     surfaceOp: { op: 'replace', startSeq: u1.seq, endSeq: a1.seq },
@@ -1076,7 +1082,7 @@ test('inspect_checkpoint: pagination and total cap (T05, -09⑤)', async () => {
   const bracket = session.append('compaction/start', { compactionId: 'cp-00000002', turn: 1 })
   const sum = session.append('compaction/summary', { compactionId: 'cp-00000002', turn: 1, summary: [{ type: 'text', text: 's' }] })
   session.append('user/message', {
-    role: 'user', content: [{ type: 'text', text: 'checkpoint' }],
+    role: 'user', content: [{ type: 'text', text: 'checkpoint inspect_checkpoint' }],
     source: { kind: 'compact-checkpoint', compactionId: 'cp-00000002' },
   }, {
     surfaceOp: { op: 'replace', startSeq: seqs[0], endSeq: seqs[5] },
@@ -1088,15 +1094,22 @@ test('inspect_checkpoint: pagination and total cap (T05, -09⑤)', async () => {
   assert.match(page1, /nextOffset: 2/)
   const page2 = await runTool(session, { compactionId: 'cp-00000002', offset: 2, limit: 2 })
   assert.match(page2, /entries: 2-4/)
-  // limit cap: >50 must be rejected before any read.
-  await assert.rejects(() => runTool(session, { compactionId: 'cp-00000002', limit: 51 }), /limit/)
+  // limit boundaries (-09④): 1 and 50 are legal; >50 clamps to 50 (never a
+  // rejection); <1 and non-integers are rejected.
+  const l1 = await runTool(session, { compactionId: 'cp-00000002', limit: 1 })
+  assert.match(l1, /entries: 0-1/)
+  const l50 = await runTool(session, { compactionId: 'cp-00000002', limit: 50 })
+  assert.match(l50, /entries: 0-6/)
+  const clamped = await runTool(session, { compactionId: 'cp-00000002', limit: 51 })
+  assert.match(clamped, /entries: 0-6/, 'limit 51 clamps to 50 and still answers')
+  await assert.rejects(() => runTool(session, { compactionId: 'cp-00000002', limit: 0 }), /limit/)
   await assert.rejects(() => runTool(session, { compactionId: 'cp-00000002', offset: -1 }), /offset/)
 })
 
 test('inspect_checkpoint: threat model — wrong id, wrong session, no session (T06)', async () => {
   const { session } = makeCheckpointSession('s-inspect-attack')
   // Unknown compactionId on this surface → error naming the available ids.
-  await assert.rejects(() => runTool(session, { compactionId: 'cp-99999999' }), /no checkpoint 'cp-99999999'.*Available: cp-00000001/s)
+  await assert.rejects(() => runTool(session, { compactionId: 'cp-99999999' }), /no checkpoint 'cp-99999999'.*Available on surface: cp-00000001/s)
   // A compactionId from ANOTHER session is invisible here: the tool only
   // scans this session's surface, so a foreign id fails identically.
   const other = makeCheckpointSession('s-inspect-other')
@@ -1105,7 +1118,7 @@ test('inspect_checkpoint: threat model — wrong id, wrong session, no session (
   emptySurface.setHeader('prov', 'mod')
   emptySurface.addMessage('system', 'sys', 150)
   emptySurface.addMessage('user', 'hi', 50)
-  await assert.rejects(() => runTool(emptySurface, { compactionId: foreignId }), /no checkpoint.*No checkpoints are available/s)
+  await assert.rejects(() => runTool(emptySurface, { compactionId: foreignId }), /no checkpoint.*No checkpoints are available here/s)
   // No agent session → fail.
   await assert.rejects(
     () => INSPECT_CHECKPOINT_DEFINITION.execute({ compactionId: foreignId }, { signal: new AbortController().signal }),
@@ -1116,6 +1129,49 @@ test('inspect_checkpoint: threat model — wrong id, wrong session, no session (
   await assert.rejects(() => runTool(session, { compactionId: 'cp-00000001', offset: '0' }), /offset/)
   await assert.rejects(() => runTool(session, { compactionId: 'cp-00000001', limit: 0 }), /limit/)
   await assert.rejects(() => runTool(session, {}), /compactionId|undefined/)
+})
+
+test('inspect_checkpoint: identification + off-surface journal read + read-only counts (T06)', async () => {
+  const { session } = makeCheckpointSession('s-inspect-id')
+  // Marker-word substitution: same source marker but a frame that does NOT
+  // name the tool → identical "not ours" error as an unmarked checkpoint.
+  const foreign = makeSession('s-inspect-foreign')
+  foreign.setHeader('prov', 'mod')
+  const fu = foreign.addMessage('user', 'shadow me', 10)
+  const fb = foreign.append('compaction/start', { compactionId: 'cp-ff', turn: 1 })
+  const fs = foreign.append('compaction/summary', { compactionId: 'cp-ff', turn: 1, summary: [] })
+  foreign.append('user/message', {
+    role: 'user',
+    content: [{ type: 'text', text: 'inspect_this_checkpoint with care' }], // decoy, not the literal name
+    source: { kind: 'compact-checkpoint', compactionId: 'cp-ff' },
+  }, {
+    surfaceOp: { op: 'replace', startSeq: fu.seq, endSeq: fu.seq },
+    sourceEventSeqs: [fb.seq, fs.seq, fu.seq],
+  })
+  assert.equal(sessionHasCheckpoint(foreign), false, 'decoy tool-name substring must not identify')
+  await assert.rejects(() => runTool(foreign, { compactionId: 'cp-ff' }), /no checkpoint 'cp-ff'/)
+
+  // Off-surface: shadow cp-00000001 under a second compaction, then read it
+  // by id — the journal scan must reach it even though it left the surface.
+  const u3 = session.addMessage('user', 'after the first checkpoint', 200)
+  const b2 = session.append('compaction/start', { compactionId: 'cp-00000009', turn: 2 })
+  const s2 = session.append('compaction/summary', { compactionId: 'cp-00000009', turn: 2, summary: [{ type: 'text', text: 's2' }] })
+  const cpSeq = session.surface.nodes.find(s => session.eventAt(s)?.data?.source?.compactionId === 'cp-00000001')
+  session.append('user/message', {
+    role: 'user',
+    content: [{ type: 'text', text: 'second frame inspect_checkpoint' }],
+    source: { kind: 'compact-checkpoint', compactionId: 'cp-00000009' },
+  }, {
+    surfaceOp: { op: 'replace', startSeq: cpSeq, endSeq: u3.seq },
+    sourceEventSeqs: [b2.seq, s2.seq, cpSeq, u3.seq],
+  })
+  const out = await runTool(session, { compactionId: 'cp-00000001' })
+  assert.match(out, /total: 2/, 'shadowed checkpoint still inspectable off-surface (-09④)')
+
+  // Read-only budget: no journal append, no ledger read, no fetch, no fs write.
+  const appends = session.events.length
+  await runTool(session, { compactionId: 'cp-00000009' })
+  assert.equal(session.events.length, appends, 'append count must not change')
 })
 
 /* ============ 11. ACE-1117 P3: lifecycle, mutex, timeout, disarm ========== */

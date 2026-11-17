@@ -358,7 +358,10 @@ test('T18 ui-rules warn-only delta: touched files report no NEW alerts vs HEAD',
   for (const rel of touched) {
     let oldText = null
     try {
-      oldText = execFileSync('git', ['show', `HEAD:${rel}`], { cwd: join(root, '..'), encoding: 'utf8' })
+      // Baseline is the PLAN BASE (fb7264d), not HEAD: with a clean worktree
+      // HEAD already contains this phase's edits, so HEAD: would make the
+      // delta vacuous.
+      oldText = execFileSync('git', ['show', `fb7264d:${rel}`], { cwd: join(root, '..'), encoding: 'utf8' })
     } catch { oldText = null }
     if (oldText === null) continue
     const found = scanPlugin(dnms, [{ rel, text: oldText }], { tokens, exemptRows })

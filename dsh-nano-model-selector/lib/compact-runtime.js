@@ -59,7 +59,6 @@ export function compactRuntime(ctx) {
   const perSession = new Map() // sessionId -> folded state (degraded path)
   let projectionHandle = null
   let degradedProjection = false
-  let latestSession = null // most recent session that emitted any event
   const fillMemo = new Map() // `${sessionId}:${lastEventSeq}` -> {at, fill}
 
   // Preferred path (-21①): sessionProjections. Falls back without throwing.
@@ -89,11 +88,10 @@ export function compactRuntime(ctx) {
     ctx.logger.warn('async-compact: sessionProjections unavailable; per-session fold active')
   }
 
-  // Degraded-path fold + latest-session tracking (-21① fallback).
+  // Degraded-path fold (-21① fallback).
   try {
     ctx.on('session/event', (session, event) => {
       try {
-        latestSession = session
         if (projectionHandle === null) {
           const key = session?.id ?? String(session)
           const previous = perSession.get(key) ?? emptyLastCompaction()
@@ -168,5 +166,5 @@ export function compactRuntime(ctx) {
     return { fill, lastCompaction, degraded }
   }
 
-  return { runtime, get degradedProjection() { return degradedProjection }, get latestSession() { return latestSession } }
+  return { runtime, get degradedProjection() { return degradedProjection } }
 }

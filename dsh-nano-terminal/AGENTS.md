@@ -15,7 +15,7 @@
 | 平台 | 仅 web |
 | 宿主入口 | `index.js` |
 | 浏览器入口 | `lib/client.js` |
-| 宿主 inject | `webServer`、`subprocess`、`sessions`、`workingDirectory`、`commands` |
+| 宿主 inject | `webServer`、`connection`、`subprocess`、`sessions`、`workingDirectory`、`commands`、`skills` |
 
 ## 交付物
 
@@ -99,25 +99,43 @@ dsh plugin --profile web add <spec>
 
 对外入口（cordis 服务面，不是 window 全局）：client `ctx.provide('nanoTerminal', { openLocal(sessionId, cwd) })`。其他插件 `ctx.get('nanoTerminal')` 惰性读取——未装本包时返回 undefined，调用方自己走回退；`openLocal` 激活对话区 Nano 终端视图并在 `local` lane 开一个 `cwd` 起跳的窗格，视图未挂载时请求排队、Body 挂载排干。
 
-agent 与脚本可用的宿主侧 slash 命令（均代理到 MCP 工具面）：
+agent 与脚本可用的宿主侧 slash 命令（均代理到 MCP 工具面；`/nano-terminal`
+是 canonical agentic 面，skill 名 = slash 名，`/term` 为同一 handler 的
+back-compat 别名。`<ref>` = id | name | addr | `[ DNT:{conv8}@{term8} ]` |
+裸 8-hex term stamp，括号形粘贴原样可解）：
 
 ```text
-/term new                  新建 terminal session（lane=local），返回 addr
-/term list                 列出全部 session（addr、status、attached、exited、keep）
-/term close <ref>          关闭 session（ref = id|name|addr）
-/term attach <ref>         返回 server 给出的 attach.url，客户端不再硬编流地址
-/term send <ref> <text>    代理 term.send（bracketed paste + Enter，blocked 拒发）
-/term read <ref> [n]       读屏（visible source）
-/term wait <ref> [pattern] 等待 turn 结束或屏幕出现 pattern
-/term keys <ref> <keys>    TUI 键序列（enter/esc/ctrl+c/f5…）
-/term interrupt <ref>      礼貌打断前台程序，报 stopped|exited|still_working
-/term keep <ref> [on|off]  keep 标记：程序丢失时重 spawn shell（绝不重跑命令）
-/term label <ref> k=v|-k   设/删标签
-/term note <ref> <text>    向窗格投递 <dnt from=…> note 信封
-/term template [ref tpl k=v…] 列出 / 运行内置任务模板
-/term events [since]       拉取事件流（snapshot + missed 语义）
-/term skill                打印 agent 自助文档（docs/skill.md）
+/nano-terminal new [name] [--parent ref] [--keep] [--cwd dir] [--shell sh] [--cols n] [--rows n]   新建 terminal session（lane=local）
+/nano-terminal list                列出全部 session（addr、status、attached、exited、keep）
+/nano-terminal ctx <ref>           解析上下文引用/任意 ref → {id, addr, ctx, labels…}
+/nano-terminal attach <ref>        返回 server 给出的 attach.url（客户端数据面，非 agent 入口）
+/nano-terminal send <ref> <text> [--force] [--if=idle|working] [--wait] [--timeout s]   代理 term.send
+/nano-terminal input <ref> <data>  原始字节注入（term.session.input）
+/nano-terminal read <ref> [n]      读屏（visible source）
+/nano-terminal copy <ref> [n]      纯文本网格拷贝（agent 剪贴板）
+/nano-terminal screenshot <ref>    结构化截屏：seq/尺寸/光标/可见网格
+/nano-terminal clear <ref>         发送终端自身 ^L 重绘
+/nano-terminal resize <ref> cxr    调整终端几何（cols x rows）
+/nano-terminal wait <ref> [pattern] [--children all|any] [--timeout s]   等待 turn 结束或屏幕 pattern
+/nano-terminal keys <ref> <keys> [--force]   TUI 键序列（enter/esc/ctrl+c/f5…）
+/nano-terminal interrupt <ref>     礼貌打断前台程序，报 stopped|exited|still_working
+/nano-terminal close <ref>         关闭 session（busy 终端需二次确认：MCP 传 confirm:true，否则 conflict）
+/nano-terminal keep <ref> [on|off] keep 标记：程序丢失时重 spawn shell（绝不重跑命令）
+/nano-terminal label <ref> k=v|-k  设/删标签（t/conv 为保留锚点，只经 attach graft）
+/nano-terminal note <ref> <text>   向窗格投递 <dnt from=…> note 信封
+/nano-terminal template [ref tpl k=v…]  列出 / 运行内置任务模板
+/nano-terminal stats <ref>         资源探针：pid/子孙进程树/前台进程/活动
+/nano-terminal health              全平面健康：lane 状态 + session 汇总
+/nano-terminal audit [n]           控制面审计尾部
+/nano-terminal lane                lane 状态（term.lane.status）
+/nano-terminal events [since]      拉取事件流（snapshot + missed 语义）
+/nano-terminal skill               打印 agent 自助文档（docs/skill.md）
 ```
+
+ctx 引用：每个新窗格携带 pane uuid；其 8-hex stamp 与对话 stamp 在 ws
+open/attach 时写入宿主 session 标签 `t`/`conv`（保留键，`label` 不可改），
+`info().ctx` 输出 `DNT:{conv}@{t}`；tab 右键菜单「复制终端上下文引用」
+拷贝 `[ DNT:{conv8}@{term8} ]` 到剪贴板，`term.ctx` 或任何 ref 参数可解。
 
 宿主路由（已鉴权的 Harness 请求才可达）：
 

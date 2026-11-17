@@ -3,10 +3,11 @@
 
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { copyMode, clampSelection } from './select.js'
+import { formatCtxRef, stamp8 } from '../shared/ctxref.js'
 import * as primitives from '@deepseek-ai/dsh-client-ui-primitives'
 import { NanoDialog, NanoMenu, NANO_STYLES, Toolbar } from 'dsh-nano-ui'
 
-const { Button, Input, Switch, StateDot, Tag, ShortcutKeys } = primitives
+const { Button, Input, Switch, StateDot, Tag } = primitives
 import { loadCore, WasmTerm, MODES } from './wasm.js'
 import { TermCanvas, buildPalette } from './render.js'
 import { encodeKey, encodePaste, encodeMouse, encodeFocus } from './keys.js'
@@ -67,22 +68,49 @@ ${NANO_STYLES}
 .dnt-root{position:relative;height:100%;min-height:0;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-base);flex-direction:column;display:flex}
 /* 12px 只给终端内容。状态栏要跟轨迹栏同一套界面字号，不能被这里压小。 */
 .dnt-content,.dnt-pane,.dnt-empty{font:var(--dsw-font-xxs-12)}
-/* Status bar row = nano-ui Toolbar (.nano-toolbar) plus the local classes below:
-   identity + lane rollup on the left, actions and the pane-title filter right.
-   Every color is a host token; no host toolbar class is borrowed.
-   高度锁 36px：nano-toolbar 的 min-height 是 36，旧的 32 会把这一行压得比
-   轨迹栏矮。左右 12px，和轨迹栏的内容边距对齐，不再吃 nano-space-2 的 8px。 */
-.dnt-bar{box-sizing:border-box;flex:none;width:100%;height:36px;min-height:36px;max-height:36px;flex-wrap:nowrap;padding:0 12px;gap:8px;font:inherit}
-.dnt-bar-group{display:flex;align-items:center;gap:2px;min-width:0;flex:0 1 auto;overflow:hidden}
-.dnt-bar-btn{display:inline-flex;align-items:center;gap:4px;height:24px;min-width:0;padding:0 6px;border:0;border-radius:var(--dsw-radius-sm);background:transparent;color:var(--dsw-alias-label-tertiary);font:inherit;cursor:pointer}
-.dnt-bar-btn:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
-.dnt-bar-btn:focus-visible{outline:2px solid var(--dsw-focus-ring-color);outline-offset:1px}
-.dnt-bar-icon{display:inline-flex;flex:none;color:currentColor}
-.dnt-bar-icon svg{width:14px;height:14px}
-.dnt-bar-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.dnt-bar-search{display:flex;align-items:center;gap:4px;margin-left:auto;flex:0 1 200px;min-width:96px}
-.dnt-bar-input{flex:1 1 auto;min-width:0;height:24px;padding:0 6px;border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-sm);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit}
-.dnt-bar-input:focus-visible{outline:2px solid var(--dsw-focus-ring-color);outline-offset:1px}
+/* Status bar = 宿主 TrajectoryToolbar 规格（宿主组件不可见导出，规格取自其
+   pinned 源）：bg-layer-1 + border-l2 底边、min-height 32、xxs-12 字号、
+   20px 高按钮（gap 4 / padding 0 5-7 / radius-sm）、12px 图标。
+   nano-toolbar 自带 min-height 36 与 border-l1，这里按轨迹规格覆盖。 */
+/* specificity 提到 (0,2,0)：nano-toolbar 的 min-height:36px 有多份拷贝且在
+   部分注入顺序下排在本规则之后，会盖掉 32px——.dnt-root.dnt-bar 锁死。 */
+.dnt-root .dnt-bar{box-sizing:border-box;flex:none;width:100%;min-height:32px;flex-wrap:nowrap;align-items:center;padding:3px 6px;gap:4px;border-bottom:.5px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1);font:var(--dsw-font-xxs-12)}
+/* 终端标签 = 宿主 dockkit tab 规格的栏内移植（组件不可见导出，规格取自其
+   pinned 源 ui-dockkit/dockkit.module.css：chip/分隔缝/悬停关闭/新建 ghost。
+   栏高固定 32px，chip 降到 24px 留呼吸，其余按原生值。 */
+.dnt-strip{display:flex;flex:0 1 auto;align-items:center;min-width:0;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;gap:0}
+/* 空 strip 仍占一份 bar gap：+ 号被推离左缘 4px，与右端齿轮不对称。 */
+.dnt-strip:empty{display:none}
+.dnt-strip::-webkit-scrollbar{display:none}
+.dnt-slot{display:flex;flex:none;align-items:center;justify-content:center;width:10px;height:24px}
+.dnt-slot::before{content:'';width:.5px;height:14px;background:var(--dsw-alias-border-l4)}
+.dnt-tab-active + .dnt-slot::before,.dnt-slot:has(+ .dnt-tab-active)::before{background:transparent}
+.dnt-tab{position:relative;display:flex;flex:0 1 auto;align-items:center;min-width:80px;max-width:170px;height:24px;padding:0 8px;border:0;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;line-height:1;white-space:nowrap;border-radius:var(--dsw-radius-sm);cursor:pointer;user-select:none;touch-action:none}
+.dnt-tab:focus-visible{outline:1px solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}
+.dnt-tab-title{display:flex;flex:1 1 auto;gap:5px;align-items:center;min-width:0;overflow:hidden;line-height:1.4}
+.dnt-tab-title span{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.dnt-tab-icon{display:inline-flex;flex:none;color:currentColor}
+.dnt-tab-icon svg{width:12px;height:12px}
+.dnt-tab-pin{display:inline-flex;flex:none;margin:0 22px 0 2px;color:var(--dsw-alias-label-tertiary)}
+.dnt-tab-busy{display:inline-flex;flex:none;margin-left:2px}
+.dnt-tab-pin svg{width:11px;height:11px}
+.dnt-tab:focus-within .dnt-tab-title,.dnt-tab-active .dnt-tab-title{mask-image:linear-gradient(to right,black calc(100% - 26px),transparent calc(100% - 10px))}
+@media (hover:hover){.dnt-tab:hover .dnt-tab-title{mask-image:linear-gradient(to right,black calc(100% - 26px),transparent calc(100% - 10px))}}
+.dnt-tab-close{position:absolute;top:2px;right:2px;display:flex;align-items:center;justify-content:center;width:20px;height:20px;padding:0;border:0;border-radius:var(--dsw-radius-sm);background:transparent;color:var(--dsw-alias-label-tertiary);line-height:1;cursor:pointer;opacity:0;pointer-events:none}
+.dnt-tab-close svg{width:14px;height:14px}
+.dnt-tab:focus-within .dnt-tab-close,.dnt-tab-active .dnt-tab-close{opacity:1;pointer-events:auto}
+@media (hover:hover){.dnt-tab:hover .dnt-tab-close{opacity:1;pointer-events:auto}}
+.dnt-tab-add{display:flex;flex:none;align-items:center;justify-content:center;width:24px;height:24px;padding:0;border:0;border-radius:var(--dsw-radius-sm);background:transparent;color:var(--dsw-alias-label-secondary);line-height:1;cursor:pointer}
+.dnt-tab-add svg{width:14px;height:14px}
+.dnt-tab-add:focus-visible,.dnt-tab-close:focus-visible{outline:1px solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}
+@media (hover:hover){
+.dnt-tab-add:hover,.dnt-tab-close:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}
+.dnt-tab:hover{background:var(--dsw-alias-interactive-bg-hover)}
+}
+.dnt-tab-active{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-markdown-tag)}
+/* 设置齿轮回到栏内右端：与 + 号同一 ghost 24px 形态（原生 addTab 规格），
+   margin-left:auto 把整行右侧对齐到头部按钮的正下方。 */
+.dnt-gear{margin-left:auto}
 /* content fills the view edge-to-edge — zero outer padding so the pane
    surface meets the view column border, matching how the trajectory body
    and chat composer sit flush against the column. No symmetric margin is
@@ -130,9 +158,9 @@ ${NANO_STYLES}
 .dnt-settings-label{color:var(--dsw-alias-label-primary)}
 .dnt-settings-hint{margin-top:2px;font-size:11px;color:var(--dsw-alias-label-tertiary)}
 .dnt-settings-row .dnt-pick{display:inline-flex;align-items:center;gap:6px;min-width:132px;justify-content:space-between}
-.dnt-help-list{display:flex;flex-direction:column;gap:7px;margin:4px 0 0;color:var(--dsw-alias-label-secondary)}
-.dnt-help-list kbd{font-family:ui-monospace,monospace;background:var(--dsw-alias-bg-layer-1);border:.5px solid var(--dsw-alias-border-l2);border-radius:3px;padding:0 5px;color:var(--dsw-alias-label-secondary)}
-.dnt-empty{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:10px;padding:24px;text-align:center;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxs-12)}
+/* The empty state must stay inside the flex column below the statusbar —
+   inset:0 over the whole root swallows every toolbar click (+ and gear). */
+.dnt-empty{flex:1;min-height:0;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:10px;padding:24px;text-align:center;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxs-12)}
 .dnt-empty-icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-link,#2f6fed);border:.5px solid var(--dsw-alias-border-l2)}
 .dnt-empty-icon svg{width:20px;height:20px}
 .dnt-empty-title{color:var(--dsw-alias-label-primary);font-weight:600}
@@ -145,19 +173,18 @@ const glyph = (name, rotate = false) => {
     splitRight: primitives.IconPanelLeftOutlineRegular,
     splitDown: primitives.IconPanelLeftOutlineRegular,
     mcp: primitives.IconApiOutlineRegular,
-    go: primitives.IconRightUpOutlineRegular,
     close: primitives.IconCloseOutlineRegular,
     retry: primitives.IconRefreshOutlineRegular,
     warn: primitives.IconWarningOutlineRegular,
-    help: primitives.IconQuestionOutlineRegular,
     settings: primitives.IconSettingsOutlineRegular,
     check: primitives.IconCheckOutlineRegular,
     chevron: primitives.IconChevronDownOutlineRegular,
     add: primitives.IconPlusOutlineRegular,
+    pin: primitives.IconPinFillRegular,
+    pinLine: primitives.IconPinOutlineRegular,
     terminal: primitives.IconCodeOutlineRegular,
     copy: primitives.IconCopyOutlineRegular,
     paste: primitives.IconCopyOutlineRegular,
-    search: primitives.IconSearchOutlineRegular,
   }[name]
   if (!Icon) return null
   return (
@@ -170,8 +197,14 @@ const glyph = (name, rotate = false) => {
   )
 }
 
+/** Per-pane terminal uuid — the `term8` half of `[ DNT:{conv8}@{term8} ]`. */
+const newTermId = () => (globalThis.crypto?.randomUUID?.() ?? `t${Date.now().toString(16)}${Math.random().toString(16).slice(2, 10)}`)
+
 function leaf(laneSpec = { lane: 'local' }) {
-  return { type: 'leaf', id: 'p' + paneSeq++, laneSpec }
+  // Every terminal carries a uuid at birth; the host records its 8-hex stamp
+  // as the `t` label when the pane creates its session, so `[ DNT:…@… ]`
+  // resolves back across the MCP plane.
+  return { type: 'leaf', id: 'p' + paneSeq++, laneSpec: { tid: newTermId(), ...laneSpec } }
 }
 
 // —— terminal sessions outlive view mounts ——
@@ -222,7 +255,24 @@ const termStore = (sessionId) => {
   let s = termStores.get(key)
   if (!s) {
     const saved = loadLayouts()[key]
-    s = { tree: saved ?? null, sessions: new Map() }
+    // Layouts saved before ctx refs lack laneSpec.tid — backfill in place so
+    // the saved tree keeps working and each pane gains a copyable identity.
+    const backfill = (node) => {
+      if (node?.type === 'leaf' && node.laneSpec && !node.laneSpec.tid) node.laneSpec.tid = newTermId()
+      if (node?.type === 'split') { backfill(node.a); backfill(node.b) }
+      return node
+    }
+    // Saved ids mint fresh pN/sN on every restored tree walk — re-seed the
+    // counter past the largest suffix so new panes never collide with the
+    // restored ones (paneSessions keys, pin targets, ctx refs all key on id).
+    const reseed = (node) => {
+      if (!node) return
+      const m = /^[ps](\d+)$/.exec(node.id ?? '')
+      if (m) paneSeq = Math.max(paneSeq, Number(m[1]) + 1)
+      if (node.type === 'split') { reseed(node.a); reseed(node.b) }
+    }
+    if (saved) reseed(saved)
+    s = { tree: saved ? backfill(saved) : null, sessions: new Map() }
     termStores.set(key, s)
   }
   return s
@@ -264,6 +314,9 @@ export function disposeAllTerminals() {
   }
   termStores.clear()
 }
+
+// The settings gear lives INSIDE the status bar (right edge), not in the
+// header — [业主] corrected the earlier utilities-slot reading.
 
 export function NanoTerm({ sessionId, session, zh, openView }) {
   const store = useMemo(() => termStore(sessionId), [sessionId])
@@ -336,6 +389,12 @@ export function NanoTerm({ sessionId, session, zh, openView }) {
     setTree((t) => mapTree(t, id, (n) => ({ ...n, ratio })))
   }, [])
 
+  // Pin flag rides the leaf node (persisted in dnt.layout with the tree);
+  // the status bar floats pinned chips to the front on every render.
+  const togglePin = useCallback((id) => {
+    setTree((t) => mapTree(t, id, (n) => ({ ...n, pinned: !n.pinned })))
+  }, [])
+
   const updateSettings = useCallback((patch) => {
     setSettings((s) => {
       const next = { ...s, ...patch }
@@ -383,7 +442,7 @@ export function NanoTerm({ sessionId, session, zh, openView }) {
 
   return (
     <div ref={rootRef} className="dnt-root" data-nano-terminal data-dnt-root>
-      <StatusBar sessionId={sessionId} split={split} openLeaf={openLeaf} focused={focused} zh={zh} tree={tree} paneSessions={paneSessions} statuses={statuses} settings={settings} onSettings={updateSettings} />
+      <StatusBar tree={tree} focused={focused} setFocused={setFocused} closeLeaf={closeLeaf} split={split} openLeaf={openLeaf} togglePin={togglePin} sessionId={sessionId} paneSessions={paneSessions} zh={zh} settings={settings} onSettings={updateSettings} statuses={statuses} />
       {tree ? (
         <div className="dnt-content">
           <div className="dnt-panes">
@@ -443,25 +502,49 @@ function removeLeaf(node, id) {
   return { ...node, a, b }
 }
 
-function firstLeaf(node) {
-  if (!node) return null
-  return node.type === 'leaf' ? node.id : firstLeaf(node.a) ?? firstLeaf(node.b)
-}
-
-function leafIds(node, out = []) {
+/** Tree leaves in display order — one status-bar tab per terminal pane. */
+function leafIdsInOrder(node, out = []) {
   if (!node) return out
-  if (node.type === 'leaf') out.push(node.id)
-  else { leafIds(node.a, out); leafIds(node.b, out) }
+  if (node.type === 'leaf') { out.push(node); return out }
+  leafIdsInOrder(node.a, out)
+  leafIdsInOrder(node.b, out)
   return out
 }
 
-/** Top status bar: 轨迹 toolbar convention — identity + lane status left, controls right. */
-function StatusBar({ sessionId, split, openLeaf, focused, zh, tree, paneSessions, statuses, settings, onSettings }) {
+/**
+ * Status bar (TrajectoryToolbar spec): one 原生 dockkit 形态 chip per pane —
+ * click activates, × closes, + opens the new-pane menu; the settings gear sits
+ * at the bar's right edge, visually aligned under the header's native buttons.
+ * Right-clicking a chip opens its context menu: copy the pane's
+ * `[ DNT:{conv8}@{term8} ]` context reference, pin it to the front, close it.
+ */
+function StatusBar({ tree, focused, setFocused, closeLeaf, split, openLeaf, togglePin, sessionId, paneSessions, zh, settings, onSettings, statuses }) {
   const [mcpUrl, setMcpUrl] = useState('')
-  const [filterQuery, setFilterQuery] = useState('')
-  const [dialog, setDialog] = useState(null) // 'mcp' | 'help' | 'settings'
-  const [menu, setMenu] = useState(null)
-  const target = focused ?? firstLeaf(tree)
+  const [dialog, setDialog] = useState(null) // 'mcp' | 'settings'
+  const [menu, setMenu] = useState(null) // '+' lane menu anchor
+  const [tabMenu, setTabMenu] = useState(null) // { x, y, node } — chip context menu
+  const [copiedCtx, setCopiedCtx] = useState(null) // paneId whose ctx ref was just copied
+  const [copyFailedCtx, setCopyFailedCtx] = useState(null) // paneId whose clipboard write was denied
+  const [closeConfirm, setCloseConfirm] = useState(null) // { node, reason } — two-step close on pinned/busy panes
+  const copy = { cancel: zh ? '取消' : 'Cancel', confirm: zh ? '确定' : 'OK', close: zh ? '关闭' : 'Close' }
+
+  useEffect(() => {
+    if (!copiedCtx) return undefined
+    const t = setTimeout(() => setCopiedCtx(null), 1600)
+    return () => clearTimeout(t)
+  }, [copiedCtx])
+  useEffect(() => {
+    if (!copyFailedCtx) return undefined
+    const t = setTimeout(() => setCopyFailedCtx(null), 1600)
+    return () => clearTimeout(t)
+  }, [copyFailedCtx])
+
+  // Pinned panes float to the front of the strip (stable, like dockkit pins).
+  const panes = useMemo(() => {
+    const inOrder = leafIdsInOrder(tree)
+    return inOrder.filter((n) => n.pinned).concat(inOrder.filter((n) => !n.pinned))
+  }, [tree])
+  const target = focused ?? panes[0]?.id ?? null
   // wide panes split right, tall/narrow panes split down
   const autoDir = () => {
     const dims = target ? paneSessions.current.get(target) : null
@@ -480,82 +563,122 @@ function StatusBar({ sessionId, split, openLeaf, focused, zh, tree, paneSessions
     { id: 'local', label: zh ? '新建本地窗格' : 'New local pane', icon: glyph('terminal'), run: () => open() },
     { id: 'mcp', label: zh ? '连接 MCP 终端' : 'Connect MCP terminal', icon: glyph('mcp'), run: () => setDialog('mcp') },
   ]
-  const copy = { cancel: zh ? '取消' : 'Cancel', confirm: zh ? '确定' : 'OK', close: zh ? '关闭' : 'Close' }
 
-  const count = Object.keys(statuses).length
-  const cur = focused ? statuses[focused] : (target ? statuses[target] : undefined)
-  // rollup (herdr convention): counts of program states bubble to the bar so
-  // the owner sees "2 working · 1 blocked" without opening panes
-  const rollup = Object.values(statuses).reduce((acc, s) => {
-    const e = effState(s)
-    acc[e] = (acc[e] ?? 0) + 1
-    return acc
-  }, {})
-  const phaseDot = { opening: 'ongoing', live: 'done', exited: 'idle', error: 'error', working: 'ongoing', blocked: 'error', done: 'done', idle: 'idle' }
-  const phaseText = { opening: zh ? '连接中' : 'connecting', live: zh ? '运行中' : 'live', exited: zh ? '已退出' : 'exited', error: zh ? '失败' : 'failed', working: zh ? '工作中' : 'working', blocked: zh ? '待处理' : 'blocked', done: zh ? '已完成' : 'done', idle: zh ? '空闲' : 'idle' }
-  const laneText = { local: 'LOCAL', mcp: 'MCP' }
-  // status bar row: identity + lane rollup left, action buttons and the
-  // pane-title filter right, inside nano-ui `Toolbar` (host toolbar is not
-  // exported). Icons come from the host icon set through glyph().
-  const eff = effState(cur)
-  const rollText = [rollup.working && `${rollup.working}${zh ? ' 工作' : 'w'}`, rollup.blocked && `${rollup.blocked}${zh ? ' 待处理' : 'blk'}`].filter(Boolean).join(' · ')
-  const statSummary = cur
-    ? `${laneText[cur.lane] ?? cur.lane} · ${count}${zh ? ' 窗格' : ' panes'}${cur.dims ? ` · ${cur.dims.cols}×${cur.dims.rows}` : ''} · ${phaseText[eff] ?? eff}${rollText ? ` · ${rollText}` : ''}`
-    : null
-  // Enter jumps to the next pane whose title contains the query (wrapping
-  // past the focused one); DOM focus drives the pane's own onFocus so React
-  // focus state and keyboard ownership stay in step.
-  const jumpToPane = (e) => {
-    if (e.key === 'Escape') { setFilterQuery(''); return }
-    if (e.key !== 'Enter') return
-    e.preventDefault()
-    const q = filterQuery.trim().toLowerCase()
-    if (!q) return
-    const ids = leafIds(tree)
-    const start = ids.indexOf(focused) + 1
-    const order = [...ids.slice(start), ...ids.slice(0, start)]
-    const hit = order.find((id) => (statuses[id]?.title ?? '').toLowerCase().includes(q))
-    if (!hit) return
-    const root = e.currentTarget.closest('[data-nano-terminal]')
-    root?.querySelector(`[data-dnt-pane="${hit}"]`)?.focus()
+  /** `[ DNT:{conv8}@{term8} ]` — paste target for agents & the MCP ctx tools.
+   *  The host-bound anchors (ready frame) win; the pane's own spec is the
+   *  fallback before the session reports back. */
+  const ctxRefOf = (node) => {
+    const lane = paneSessions.current.get(node.id)?.lane
+    if (lane?.boundCtx) return `[ ${lane.boundCtx} ]`
+    return formatCtxRef(sessionId, node.laneSpec?.tid)
   }
+
+  /** OSC-reported busy (working/blocked) — no host round-trip needed. */
+  const paneBusy = (node) => {
+    const st = statuses?.[node.id]
+    return st?.prog?.state === 'working' || st?.prog?.state === 'blocked'
+  }
+  /**
+   * Close request: plain panes close directly; pinned or busy panes get a
+   * second confirmation so a pinned anchor or a running foreground program
+   * is never lost to one misclick. The non-OSC busy signal (vim, a build,
+   * a REPL) comes from the host's own foreground probe via /sessions.
+   */
+  const requestClose = async (node) => {
+    if (node.pinned) return setCloseConfirm({ node, reason: 'pinned' })
+    if (paneBusy(node)) return setCloseConfirm({ node, reason: 'busy' })
+    const rec = paneSessions.current.get(node.id)
+    const sid = rec?.lane?.id
+    if (sid) {
+      try {
+        const r = await fetch(`/dsh-nano-terminal/sessions`, { credentials: 'same-origin' })
+        const rows = (await r.json())?.sessions ?? []
+        const host = rows.find((x) => x.id === sid)
+        if (host?.busy) return setCloseConfirm({ node, reason: 'busy' })
+      } catch { /* probe failure must never block a close */ }
+    }
+    closeLeaf(node.id)
+  }
+  const copyCtxRef = (node) => {
+    const ref = ctxRefOf(node)
+    navigator.clipboard?.writeText(ref)
+      .then(() => setCopiedCtx(node.id))
+      .catch(() => setCopyFailedCtx(node.id)) // flash a warn icon — never silent
+  }
+  const tabActions = (node) => [
+    // ctx refs only anchor sessions registered on THIS host — an mcp lane
+    // pane's session lives on its remote endpoint, so a copied ref would
+    // dangle. Disabled until a local-shadow record exists for remote panes.
+    { id: 'ctx', label: zh ? '复制终端上下文引用' : 'Copy terminal context ref', icon: glyph('copy'), disabled: node.laneSpec?.lane === 'mcp', run: () => copyCtxRef(node) },
+    {
+      id: 'pin',
+      label: node.pinned ? (zh ? '取消置顶' : 'Unpin') : (zh ? '置顶' : 'Pin to front'),
+      icon: glyph(node.pinned ? 'pin' : 'pinLine'),
+      run: () => togglePin(node.id),
+    },
+    { separator: true },
+    { id: 'close', label: zh ? '关闭' : 'Close', icon: glyph('close'), run: () => requestClose(node) },
+  ]
+
   return (
     <Toolbar label={zh ? '终端状态栏' : 'terminal status bar'} className="dnt-bar">
-      <div className="dnt-bar-group">
-        <button type="button" className="dnt-bar-btn" aria-label={zh ? '当前终端状态' : 'current terminal status'} title={statSummary ?? (zh ? '尚无窗格' : 'no panes')}>
-          <span className="dnt-bar-icon" aria-hidden="true">{glyph('terminal')}</span>
-          <span className="dnt-bar-label">{zh ? 'Nano 终端' : 'Nano Terminal'}</span>
-        </button>
-        {count > 0 && cur && (
-          <button type="button" className="dnt-bar-btn" aria-label={zh ? '窗格与通道' : 'panes and lane'} title={cur.title ?? statSummary}>
-            <StateDot state={phaseDot[eff] ?? 'idle'} />
-            <span className="dnt-bar-label">{statSummary}</span>
-          </button>
-        )}
-        <button type="button" className="dnt-bar-btn" aria-label={zh ? '新建窗格' : 'new pane'} title={zh ? '新建窗格' : 'new pane'} onClick={openMenu}>
-          <span className="dnt-bar-icon" aria-hidden="true">{glyph('add')}</span>
-          <span className="dnt-bar-label">{zh ? '新建' : 'New'}</span>
-        </button>
-        <button type="button" className="dnt-bar-btn" aria-label={zh ? '快捷键与说明' : 'shortcuts'} title={zh ? '快捷键与说明' : 'shortcuts'} onClick={() => setDialog('help')}>
-          <span className="dnt-bar-icon" aria-hidden="true">{glyph('help')}</span>
-        </button>
-        <button type="button" className="dnt-bar-btn" aria-label={zh ? '终端设置' : 'terminal settings'} title={zh ? '终端设置' : 'terminal settings'} onClick={() => setDialog('settings')}>
-          <span className="dnt-bar-icon" aria-hidden="true">{glyph('settings')}</span>
-        </button>
+      <div className="dnt-strip" role="tablist" aria-label={zh ? '终端窗格' : 'terminal panes'}>
+        {panes.map((node, i) => {
+          const st = paneSessions.current.get(node.id)?.lastStatus
+          const active = focused === node.id
+          return (
+            <React.Fragment key={node.id}>
+              {i > 0 && <span className="dnt-slot" aria-hidden="true" />}
+              <div
+                className={`dnt-tab${active ? ' dnt-tab-active' : ''}`}
+                role="tab"
+                aria-selected={active}
+                tabIndex={0}
+                title={st?.title || undefined}
+                onClick={() => setFocused(node.id)}
+                onContextMenu={(e) => { e.preventDefault(); setTabMenu({ x: e.clientX, y: e.clientY, node, openedAt: Date.now() }) }}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setFocused(node.id) } }}
+              >
+                <span className="dnt-tab-title">
+                  <span className="dnt-tab-icon" aria-hidden="true">{glyph(copiedCtx === node.id ? 'check' : copyFailedCtx === node.id ? 'warn' : node.laneSpec?.lane === 'mcp' ? 'mcp' : 'terminal')}</span>
+                  <span>{st?.title || (zh ? '终端' : 'Terminal')}</span>
+                </span>
+                {paneBusy(node) && <span className="dnt-tab-busy" aria-hidden="true" title={zh ? '有前台程序在运行' : 'foreground program running'}><StateDot state="ongoing" /></span>}
+                {node.pinned && <span className="dnt-tab-pin" aria-hidden="true">{glyph('pin')}</span>}
+                <button
+                  type="button"
+                  className="dnt-tab-close"
+                  aria-label={zh ? `关闭 ${st?.title || '终端'}` : `close ${st?.title || 'terminal'}`}
+                  onClick={(e) => { e.stopPropagation(); requestClose(node) }}
+                >
+                  {glyph('close')}
+                </button>
+              </div>
+            </React.Fragment>
+          )
+        })}
       </div>
-      <div className="dnt-bar-search">
-        <span className="dnt-bar-icon" aria-hidden="true">{glyph('search')}</span>
-        <input
-          type="search"
-          className="dnt-bar-input"
-          aria-label={zh ? '窗格标题' : 'pane title'}
-          placeholder={zh ? '窗格标题…' : 'pane title…'}
-          value={filterQuery}
-          onChange={(e) => setFilterQuery(e.currentTarget.value)}
-          onKeyDown={jumpToPane}
-        />
-      </div>
+      <button
+        type="button"
+        className="dnt-tab-add"
+        aria-label={zh ? '新建终端' : 'new terminal'}
+        title={zh ? '新建窗格…' : 'new pane…'}
+        onClick={openMenu}
+        onContextMenu={(e) => { e.preventDefault(); openMenu(e) }}
+      >
+        {glyph('add')}
+      </button>
+      <button
+        type="button"
+        className="dnt-tab-add dnt-gear"
+        aria-label={zh ? '终端设置' : 'terminal settings'}
+        title={zh ? '终端设置' : 'terminal settings'}
+        onClick={() => setDialog('settings')}
+      >
+        {glyph('settings')}
+      </button>
       <NanoMenu menu={menu} actions={laneActions} onClose={() => setMenu(null)} width={200} />
+      <NanoMenu menu={tabMenu} actions={tabMenu ? tabActions(tabMenu.node) : []} onClose={() => setTabMenu(null)} width={228} />
       {dialog === 'mcp' && (
         <NanoDialog
           copy={copy}
@@ -579,26 +702,21 @@ function StatusBar({ sessionId, split, openLeaf, focused, zh, tree, paneSessions
           />
         </NanoDialog>
       )}
-      {dialog === 'help' && (
-        <NanoDialog
-          copy={copy}
-          title={zh ? '用法与快捷键' : 'Usage & shortcuts'}
-          confirmLabel={zh ? '知道了' : 'Got it'}
-          onConfirm={() => setDialog(null)}
-          onCancel={() => setDialog(null)}
-        >
-          <div className="dnt-help-list">
-            <span>{zh ? '每个窗格是一个独立实例（session）' : 'each pane is an independent instance'}</span>
-            <span><ShortcutKeys keys={[zh ? '滚轮' : 'wheel']} /> {zh ? '翻页滚动 scrollback' : 'scroll scrollback'}</span>
-            <span><ShortcutKeys keys={['⌘', 'V']} /> {zh ? '粘贴到当前窗格' : 'paste into focused pane'}</span>
-            <span><ShortcutKeys keys={['⌘', 'E', '→', 'T']} /> {zh ? '切换到本视图/切回对话' : 'toggle this view / back to chat'}</span>
-            <span><ShortcutKeys keys={[zh ? '拖拽边' : 'drag edge']} /> {zh ? '调整窗格比例' : 'resize panes'}</span>
-            <span><ShortcutKeys keys={[zh ? '点击' : 'click']} /> {zh ? '聚焦窗格（品牌描边）' : 'focus pane (brand border)'}</span>
-          </div>
-        </NanoDialog>
-      )}
       {dialog === 'settings' && (
         <SettingsDialog copy={copy} zh={zh} settings={settings} onSettings={onSettings} onClose={() => setDialog(null)} />
+      )}
+      {closeConfirm && (
+        <NanoDialog
+          copy={copy}
+          title={zh ? '关闭终端' : 'Close terminal'}
+          description={closeConfirm.reason === 'pinned'
+            ? (zh ? '这个终端已置顶。置顶终端通常是有意长期保留的——确认关闭？' : 'This terminal is pinned. Pinned terminals are usually kept intentionally — close it anyway?')
+            : (zh ? '这个终端有前台程序在运行（working/blocked），关闭会终止它——确认关闭？' : 'A foreground program is running in this terminal (working/blocked) — closing will kill it. Close anyway?')}
+          confirmLabel={zh ? '关闭' : 'Close'}
+          danger
+          onConfirm={() => { closeLeaf(closeConfirm.node.id); setCloseConfirm(null) }}
+          onCancel={() => setCloseConfirm(null)}
+        />
       )}
     </Toolbar>
   )

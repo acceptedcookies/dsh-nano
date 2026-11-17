@@ -291,6 +291,7 @@ async function sendNote(registry, fromRef, toRef, body) {
   const to = registry.resolve(toRef);
   if (!to) throw err(KIND.NOT_FOUND, `no such terminal '${toRef}'`);
   if (to.exited) throw err(KIND.FINISHED, "target exited");
+  if (!to.handle && to.pending) await registry.spawnPending(to);
   if (!to.handle) throw err(KIND.UNAVAILABLE, "target not spawned (attach to wake)");
   const from = registry.resolve(fromRef);
   const fromAddr = from?.addr ?? String(fromRef ?? "external");
@@ -359,7 +360,7 @@ var TOOLS = schema.methods.map((m) => ({
   inputSchema: m.params
 }));
 var TOOL_MAP = Object.fromEntries(TOOLS.map((t) => [t.name, t]));
-function createMcpHandler({ registry, bus, auditPath, laneStatus, writeAudit }) {
+function createMcpHandler({ ctx, registry, bus, auditPath, laneStatus, writeAudit }) {
   const audit = (event) => {
     if (typeof writeAudit === "function") writeAudit(event);
   };
@@ -369,6 +370,54 @@ function createMcpHandler({ registry, bus, auditPath, laneStatus, writeAudit }) 
     if (!rec) throw err(KIND.NOT_FOUND, `no such terminal '${ref}'`);
     return rec;
   };
+  async function processStats(rec) {
+    if (process.platform === "win32" || !rec.handle?.pid) return { processes: null };
+    try {
+      const handle = ctx.subprocess.spawn({
+        argv: ["/bin/ps", "-o", "pid=,ppid=,pcpu=,rss=,stat=,etime=,command=", "-ax"],
+        cwd: "/",
+        stdio: { stdin: "ignore", stdout: { maxBytes: 512 * 1024 }, stderr: { maxBytes: 8 * 1024 } },
+        graceMs: 5e3
+      });
+      await handle.done.catch(() => {
+      });
+      const collected = handle.collected?.stdout?.readFrom(0);
+      const text = collected?.text ?? "";
+      const truncated = !!(collected && (collected.truncated || collected.hitLimit || text.length >= 512 * 1024));
+      const rows = text.trim().split("\n").map((line) => line.trim()).filter(Boolean).map((line) => {
+        const parts = line.split(/\s+/);
+        return {
+          pid: Number(parts[0]),
+          ppid: Number(parts[1]),
+          pcpu: Number(parts[2]),
+          rssKb: Number(parts[3]),
+          stat: parts[4] ?? null,
+          etime: parts[5] ?? null,
+          command: parts.slice(6).join(" ") || null
+        };
+      }).filter((p) => Number.isFinite(p.pid));
+      const byParent = /* @__PURE__ */ new Map();
+      for (const p of rows) {
+        const list = byParent.get(p.ppid) ?? [];
+        list.push(p);
+        byParent.set(p.ppid, list);
+      }
+      const processes = [];
+      const queue = [rec.handle.pid];
+      const seen = /* @__PURE__ */ new Set();
+      while (queue.length) {
+        const pid = queue.shift();
+        if (seen.has(pid)) continue;
+        seen.add(pid);
+        const rec2 = rows.find((r) => r.pid === pid);
+        if (rec2) processes.push(rec2);
+        for (const child of byParent.get(pid) ?? []) queue.push(child.pid);
+      }
+      return { processes, truncated };
+    } catch {
+      return { processes: null };
+    }
+  }
   async function callTool(name, args = {}) {
     switch (name) {
       case "term.session.create": {
@@ -380,13 +429,37 @@ function createMcpHandler({ registry, bus, auditPath, laneStatus, writeAudit }) 
         return {
           id: rec.id,
           addr: rec.addr,
+          ctx: rec.info().ctx,
+          // `[ DNT:{conv8}@{term8} ]` when t+conv labels set
           lane: rec.lane,
           title: rec.title,
+          labels: rec.labels,
           attach: { protocol: "dnt-ws-v1", url: `/dsh-nano-terminal/stream?session=${rec.id}` }
         };
       }
-      case "term.session.list":
-        return { sessions: registry.list() };
+      case "term.session.list": {
+        const rows = registry.list();
+        const busy = await Promise.all(rows.map((r) => registry.resolve(r.id)?.isBusy?.() ?? Promise.resolve(false)));
+        return { sessions: rows.map((r, i) => ({ ...r, busy: !!busy[i] })) };
+      }
+      case "term.ctx": {
+        const ref = String(args.ref ?? "");
+        const rec = registry.resolve(ref);
+        if (!rec) throw err(KIND.NOT_FOUND, `no terminal matches '${ref}'`);
+        audit({ op: "mcp.ctx", id: rec.id, addr: rec.addr, ref });
+        return {
+          id: rec.id,
+          addr: rec.addr,
+          ctx: rec.info().ctx,
+          title: rec.title,
+          lane: rec.lane,
+          owner: rec.owner,
+          phase: rec.phase,
+          labels: rec.labels,
+          attached: rec.sockets.size,
+          exited: rec.exited
+        };
+      }
       case "term.session.input": {
         const rec = target(args.id);
         audit({ op: "mcp.input", id: rec.id, addr: rec.addr, bytes: args.data.length });
@@ -410,6 +483,8 @@ function createMcpHandler({ registry, bus, auditPath, laneStatus, writeAudit }) 
       case "term.keys": {
         const rec = target(args.id);
         if (rec.exited) throw err(KIND.FINISHED, "terminal exited");
+        if (!rec.handle && rec.pending) await registry.spawnPending(rec);
+        if (!rec.handle) throw err(KIND.UNAVAILABLE, "terminal has no live backend");
         if (rec.status?.state === "blocked" && !args.force) throw err(KIND.BLOCKED, "terminal reports blocked");
         const bytes = [];
         for (const k of args.keys ?? []) {
@@ -423,6 +498,8 @@ function createMcpHandler({ registry, bus, auditPath, laneStatus, writeAudit }) 
       case "term.interrupt": {
         const rec = target(args.id);
         if (rec.exited) throw err(KIND.FINISHED, "terminal exited");
+        if (!rec.handle && rec.pending) await registry.spawnPending(rec);
+        if (!rec.handle) throw err(KIND.UNAVAILABLE, "terminal has no live backend");
         audit({ op: "mcp.interrupt", id: rec.id, addr: rec.addr });
         const key = rec.status ? "\x1B" : "";
         const turnBefore = rec.turn;
@@ -442,11 +519,68 @@ function createMcpHandler({ registry, bus, auditPath, laneStatus, writeAudit }) 
       }
       case "term.session.read": {
         const rec = target(args.id);
+        if (!rec.handle && rec.pending) await registry.spawnPending(rec);
+        const lines = Number.isFinite(Number(args.lines)) ? Math.min(Math.max(Math.floor(Number(args.lines)), 0), 500) : 50;
         return {
           id: rec.id,
           addr: rec.addr,
-          text: rec.screenText(Math.min(args.lines ?? 50, 500), args.source ?? "visible"),
+          text: rec.screenText(lines, args.source ?? "visible"),
           complete: !(rec.status?.state === "working" || rec.status?.state === "blocked")
+        };
+      }
+      case "term.session.copy": {
+        const rec = target(args.id);
+        if (!rec.handle && rec.pending) await registry.spawnPending(rec);
+        const lines = Number.isFinite(Number(args.lines)) ? Math.min(Math.max(Math.floor(Number(args.lines)), 0), 2e3) : 200;
+        const text = rec.screenText(lines, args.source ?? "visible");
+        audit({ op: "mcp.copy", id: rec.id, addr: rec.addr, lines: text.split("\n").length });
+        return { id: rec.id, addr: rec.addr, text };
+      }
+      case "term.session.screenshot": {
+        const rec = target(args.id);
+        if (!rec.handle && rec.pending) await registry.spawnPending(rec);
+        const view = rec.alignView();
+        audit({ op: "mcp.screenshot", id: rec.id, addr: rec.addr });
+        return {
+          id: rec.id,
+          addr: rec.addr,
+          ctx: rec.info().ctx,
+          ...view,
+          title: rec.title,
+          status: rec.status
+        };
+      }
+      case "term.session.clear": {
+        const rec = target(args.id);
+        if (rec.exited) throw err(KIND.FINISHED, "terminal exited");
+        if (!rec.handle && rec.pending) await registry.spawnPending(rec);
+        if (!rec.handle) throw err(KIND.UNAVAILABLE, "terminal has no live backend");
+        audit({ op: "mcp.clear", id: rec.id, addr: rec.addr });
+        await rec.gate.submit(() => rec.handle.write("\f"));
+        return { ok: true };
+      }
+      case "term.session.stats": {
+        const rec = target(args.id);
+        const [stats, foreground, busy] = await Promise.all([
+          processStats(rec),
+          rec.handle?.inspectForeground?.().catch(() => void 0) ?? Promise.resolve(void 0),
+          rec.isBusy()
+        ]);
+        return {
+          id: rec.id,
+          addr: rec.addr,
+          ctx: rec.info().ctx,
+          pid: rec.handle?.pid ?? null,
+          ...stats,
+          busy,
+          // foreground program running or OSC state working/blocked
+          foreground: foreground ?? null,
+          activity: (rec.handle ? await rec.handle.inspectActivity?.().catch(() => null) : null) ?? null,
+          status: rec.status,
+          phase: rec.phase,
+          exited: rec.exited,
+          cols: rec.meta?.cols ?? null,
+          rows: rec.meta?.rows ?? null
         };
       }
       case "term.session.resize": {
@@ -458,7 +592,7 @@ function createMcpHandler({ registry, bus, auditPath, laneStatus, writeAudit }) 
         const rec = target(args.id);
         rec.keep = args.keep !== false;
         audit({ op: "mcp.keep", id: rec.id, addr: rec.addr, keep: rec.keep });
-        bus.emit("labels", rec.addr, { id: rec.id, keep: rec.keep });
+        bus.emit("labels", rec.addr, { id: rec.id, keep: rec.keep, labels: rec.labels });
         return { ok: true, keep: rec.keep };
       }
       case "term.session.label": {
@@ -481,6 +615,10 @@ function createMcpHandler({ registry, bus, auditPath, laneStatus, writeAudit }) 
       case "term.events":
         return bus.since(args.since ?? 0);
       case "term.session.close": {
+        const rec = registry.resolve(args.id);
+        if (rec && !args.confirm && await rec.isBusy()) {
+          throw err(KIND.CONFLICT, `terminal '${rec.addr}' is busy \u2014 close needs confirm:true`);
+        }
         const ok2 = await registry.close(args.id, args.reason ?? "mcp");
         return { closed: ok2 };
       }
@@ -488,6 +626,22 @@ function createMcpHandler({ registry, bus, auditPath, laneStatus, writeAudit }) 
         return { log: readAuditTail(auditPath, Math.min(args.lines ?? 50, 500)) };
       case "term.lane.status":
         return { lanes: laneStatus() };
+      case "term.health": {
+        const sessions = registry.list();
+        const alive = sessions.filter((s) => !s.exited);
+        return {
+          ok: true,
+          lanes: laneStatus(),
+          sessions: {
+            total: sessions.length,
+            alive: alive.length,
+            exited: sessions.length - alive.length,
+            working: sessions.filter((s) => s.status?.state === "working").length,
+            blocked: sessions.filter((s) => s.status?.state === "blocked").length
+          },
+          list: sessions.map((s) => ({ addr: s.addr, ctx: s.ctx, phase: s.phase, status: s.status?.state ?? null, attached: s.attached, exited: !!s.exited }))
+        };
+      }
       case "term.skill": {
         const skill = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "docs", "skill.md"), "utf8");
         return { skill };

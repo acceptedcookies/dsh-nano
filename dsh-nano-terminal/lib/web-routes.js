@@ -944,6 +944,23 @@ function recoverAttach({ alignMode, align, replay }) {
   return "replay";
 }
 
+// src/shared/ctxref.js
+function stamp8(id) {
+  if (typeof id !== "string" || id.length === 0) return "00000000";
+  const s = id.toLowerCase();
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(s)) return s.slice(0, 8);
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0).toString(16).padStart(8, "0");
+}
+function stampOrKeep8(input) {
+  if (typeof input !== "string" || input.length === 0) return null;
+  return /^[0-9a-f]{8}$/i.test(input) ? input.toLowerCase() : stamp8(input);
+}
+
 // src/host/web-routes.js
 var HOST_PLUGIN = "dsh-nano-terminal";
 var _hostApi = null;
@@ -1042,6 +1059,11 @@ function registerWebRoutes(ctx, deps) {
         if (attachRef) {
           record = registry.resolve(attachRef);
           if (!record) throw new Error("no such session");
+          const graft = {
+            ...stampOrKeep8(msg.tid) ? { t: stampOrKeep8(msg.tid) } : {},
+            ...stampOrKeep8(msg.conv) ? { conv: stampOrKeep8(msg.conv) } : {}
+          };
+          if (Object.keys(graft).length) record.graftCtxAnchors(graft);
         } else if (msg.type === "open") {
           record = await registry.create({
             sessionId: msg.owner,
@@ -1051,7 +1073,15 @@ function registerWebRoutes(ctx, deps) {
             cols: msg.cols,
             rows: msg.rows,
             title: msg.title,
-            owner: msg.owner
+            owner: msg.owner,
+            // ctx-ref anchor labels: `t` = the pane's 8-hex term stamp,
+            // `conv` = its conversation session stamp (ctxref.js format).
+            // Both are normalized to 8-hex here — the client sends `tid` as
+            // a full uuid and `conv` already stamped; stampOrKeep8 covers both.
+            labels: {
+              ...stampOrKeep8(msg.tid) ? { t: stampOrKeep8(msg.tid) } : {},
+              ...stampOrKeep8(msg.conv) ? { conv: stampOrKeep8(msg.conv) } : {}
+            }
           });
         } else {
           throw new Error('expected {type:"open"}');
@@ -1077,6 +1107,11 @@ function registerWebRoutes(ctx, deps) {
           title: record.title,
           lane: record.lane,
           exited: record.exited,
+          // The session's authoritative ctx anchors — a re-attaching pane
+          // adopts these so its copied ref matches the host, not its own
+          // (possibly fresh-after-layout-loss) tid.
+          labels: { t: record.labels?.t ?? null, conv: record.labels?.conv ?? null },
+          ctx: record.info().ctx,
           replayBytes: attach.alignMode ? 0 : record.replayLen
         });
         recoverAttach({
@@ -1085,7 +1120,7 @@ function registerWebRoutes(ctx, deps) {
           replay: () => record.replayInto(socket, (s, chunk) => attach.data(chunk))
         });
       } catch (err) {
-        sendText(socket, { type: "error", message: String(err?.message ?? err) });
+        sendText(socket, { type: "error", kind: err?.kind ?? "invalid", message: String(err?.message ?? err) });
         sendClose(socket, 1008, "open failed");
       }
     }
@@ -1106,14 +1141,17 @@ function registerWebRoutes(ctx, deps) {
         res.end(JSON.stringify({ jsonrpc: "2.0", id: null, error: { code: -32700, message: "parse error" } }));
         return;
       }
-      mcp.audit({ op: "mcp.req", method: Array.isArray(parsed) ? "batch" : parsed?.method });
+      const tool = Array.isArray(parsed) ? void 0 : parsed?.params?.name;
+      mcp.audit({ op: "mcp.req", method: Array.isArray(parsed) ? "batch" : parsed?.method, ...tool ? { tool } : {} });
       const reply = await mcp.handleRpc(parsed);
       res.writeHead(200, { "content-type": "application/json" });
       res.end(reply === void 0 ? "" : JSON.stringify(reply));
     },
     "dnt.sessions": async (req, res) => {
+      const rows = registry.list();
+      const busy = await Promise.all(rows.map((r) => registry.resolve(r.id)?.isBusy?.() ?? Promise.resolve(false)));
       res.writeHead(200, { "content-type": "application/json" });
-      res.end(JSON.stringify({ sessions: registry.list() }));
+      res.end(JSON.stringify({ sessions: rows.map((r, i) => ({ ...r, busy: !!busy[i] })) }));
     },
     // SSE event stream: subscribe → snapshot first frame, then live events.
     // ?since=<seq> resumes from a position; falling behind the ring answers

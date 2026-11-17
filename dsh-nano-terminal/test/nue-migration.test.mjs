@@ -122,25 +122,44 @@ test('T21: the status bar is nano-ui Toolbar', () => {
   assert.match(nanoTerm, /<Toolbar\s+label=/)
   assert.match(nanoTerm, /className="dnt-bar"/)
   assert.deepEqual(countIn(sources, /role="toolbar"/g), [], 'the host role is owned by nano-ui Toolbar')
-  // The row keeps its own layout classes and every one of them is defined.
-  for (const name of ['dnt-bar', 'dnt-bar-group', 'dnt-bar-btn', 'dnt-bar-icon', 'dnt-bar-label', 'dnt-bar-search', 'dnt-bar-input']) {
-    assert.ok(nanoTerm.includes(`.${name}{`), `.${name} is defined`)
-    assert.ok(nanoTerm.includes(`"${name}"`), `.${name} is referenced`)
+  // The bar keeps its own layout classes and every one of them is defined.
+  for (const name of ['dnt-bar', 'dnt-strip', 'dnt-slot', 'dnt-tab', 'dnt-tab-title', 'dnt-tab-icon', 'dnt-tab-close', 'dnt-tab-add', 'dnt-tab-active', 'dnt-tab-pin', 'dnt-gear']) {
+    assert.ok(nanoTerm.includes(`.${name}{`) || nanoTerm.includes(`.${name} `) || nanoTerm.includes(`.${name}:`) || nanoTerm.includes(`.${name},`), `.${name} is defined`)
+    assert.ok(nanoTerm.includes(name), `.${name} is referenced`)
   }
+  // [业主]裁决：状态栏不放搜索。手写搜索框整体移除（样式+组件+glyph 引用），
+  // 锁死回潮——轨迹栏的搜索框是轨迹自己的 ledger 过滤，不属于终端。
+  assert.deepEqual(countIn(sources, /dnt-bar-search|dnt-bar-input|filterQuery|jumpToPane/g), [], 'bar search removed')
+  // [业主]裁决：设置按钮留在 statusbar 内右端，与上方头部按钮视觉对齐——
+  // 不得注册进宿主 header.utilities 槽位，不得用 dnt-header-utility 形态。
+  assert.deepEqual(countIn(sources, /conversation\.session\.header\.utilities|NanoTermHeaderSettings|dnt-header-utility/g), [], 'settings stays inside the bar')
+  assert.match(nanoTerm, /className="dnt-tab-add dnt-gear"/)
+  // 终端标签 = 宿主 dockkit chip 形态的栏内移植：一个窗格一个标签、点击激活、
+  // 关闭 × 与新建 + 齐备。
+  assert.match(nanoTerm, /leafIdsInOrder\(tree\)/)
+  assert.match(nanoTerm, /role="tab"/)
+  assert.match(nanoTerm, /dnt-tab-close/)
+  assert.match(nanoTerm, /dnt-tab-add/)
+  // Chip right-click = ctx-ref copy / pin / close — NanoMenu, never a hand list.
+  assert.match(nanoTerm, /onContextMenu=\{[\s\S]*?setTabMenu/)
+  assert.match(nanoTerm, /formatCtxRef\(sessionId, node\.laneSpec\?\.tid\)/)
+  assert.match(nanoTerm, /navigator\.clipboard\?\.writeText/)
+  assert.match(nanoTerm, /pinned\)\.concat\(inOrder\.filter\(\(n\) => !n\.pinned\)\)/)
+  assert.match(nanoTerm, /togglePin\(node\.id\)/)
 })
 
 test('T21: the status bar icons come from the host icon set', () => {
   assert.deepEqual(countIn(sources, /⊕/g), [], '⊕ text glyph')
   assert.deepEqual(countIn(sources, /⚙/g), [], '⚙ text glyph')
   assert.deepEqual(countIn(sources, /actionIcon|toggleIcon|searchIcon/g), [], 'text-glyph slots')
-  for (const name of ['terminal', 'add', 'help', 'settings', 'search']) {
-    assert.ok(nanoTerm.includes(`glyph('${name}')`), `glyph('${name}') is used`)
+  for (const name of ['terminal', 'mcp', 'add', 'settings', 'close', 'pin', 'pinLine', 'copy', 'check']) {
+    assert.ok(nanoTerm.includes(`glyph('${name}')`) || nanoTerm.includes(`'${name}'`), `glyph('${name}') is used`)
   }
   // Each one resolves to a catalog `Icon*` export, not to a locally drawn svg.
-  const map = nanoTerm.slice(nanoTerm.indexOf('const glyph ='), nanoTerm.indexOf('function leaf('))
-  for (const name of ['terminal: primitives.IconCodeOutlineRegular', 'add: primitives.IconPlusOutlineRegular',
-    'help: primitives.IconQuestionOutlineRegular', 'settings: primitives.IconSettingsOutlineRegular',
-    'search: primitives.IconSearchOutlineRegular']) {
+  const map = nanoTerm.slice(nanoTerm.indexOf('const glyph ='), nanoTerm.indexOf('if (!Icon) return null'))
+  for (const name of ['terminal: primitives.IconCodeOutlineRegular', 'mcp: primitives.IconApiOutlineRegular',
+    'add: primitives.IconPlusOutlineRegular', 'settings: primitives.IconSettingsOutlineRegular',
+    'close: primitives.IconCloseOutlineRegular']) {
     assert.ok(map.includes(name), name)
   }
   assert.deepEqual(countIn(sources, /<svg\b/g), [], 'inline <svg> outside the icon facade')

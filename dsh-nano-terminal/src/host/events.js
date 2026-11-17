@@ -4,8 +4,8 @@
 //   A lagging consumer (since < oldest kept seq) gets {missed:true, snapshot}.
 //   heartbeat every HEARTBEAT_MS carries the current seq.
 // Event types (schema-canonical):
-//   created | finished | removed | status | turn | title | labels | size
-//   | restarted | heartbeat | missed
+//   created | lost | finished | removed | status | turn | title | labels
+//   | size | restarted | message | heartbeat | missed
 
 const HEARTBEAT_MS = 15_000
 const RING_CAP = 2048

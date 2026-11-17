@@ -13,8 +13,9 @@
  */
 
 import { join, dirname } from 'node:path'
-import { appendFileSync, mkdirSync } from 'node:fs'
-import { SessionRegistry } from './lib/sessions.js'
+import { appendFileSync, mkdirSync, readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import { SessionRegistry, splitSlashArgs } from './lib/sessions.js'
 import { EventBus } from './lib/events.js'
 import { Persist } from './lib/persist.js'
 import { createMcpHandler } from './lib/mcp.js'
@@ -24,7 +25,7 @@ import { ensurePerfReviewHost } from './lib/perf-review-host.js'
 
 export const name = 'dsh-nano-terminal'
 
-export const inject = ['webServer', 'connection', 'subprocess', 'sessions', 'workingDirectory', 'commands']
+export const inject = ['webServer', 'connection', 'subprocess', 'sessions', 'workingDirectory', 'commands', 'skills']
 
 const ROUTE = '/dsh-nano-terminal'
 
@@ -68,7 +69,7 @@ export function apply(ctx) {
       appendFileSync(auditPath, JSON.stringify({ t: new Date().toISOString(), ...event }) + '\n')
     } catch { /* audit write failure must not take the control plane down */ }
   }
-  const mcp = createMcpHandler({ registry, bus, auditPath, laneStatus, writeAudit })
+  const mcp = createMcpHandler({ ctx, registry, bus, auditPath, laneStatus, writeAudit })
   registry.audit = mcp.audit
   bus.audit = mcp.audit
 
@@ -83,29 +84,77 @@ export function apply(ctx) {
     ws: { handshake, FrameParser, sendBinary, sendText, sendClose, encodeFrame, parseChannel, Attach, FR_KIND },
   })
 
-  // -- slash command (host side, agent-facing): /term --------------------------
-  // UI-level mapping lives on the client via ctx.commandUi ('/dnt'); this host
-  // command gives agents/scripts the same session operations the MCP tools do.
+  // -- slash commands (host side, agent-facing): /term + /nano-terminal -------
+  // UI-level mapping lives on the client via ctx.commandUi ('/dnt'); these host
+  // commands give agents/scripts the same session operations the MCP tools do.
+  // /nano-terminal is the canonical agentic surface (skill name = slash name);
+  // /term stays for back-compat and forwards to the same handler.
 
-  const unregisterCommand = ctx.commands?.register?.({
-    name: 'term',
-    description: 'nano-terminal: /term new|list|close|attach|send|read|wait|keys|interrupt|keep|label|note|template|events|skill',
-    input: { hint: '[new|list|close|attach|send|read|wait|keys|interrupt|keep|label|events|skill] [args]' },
-    handler: async ({ rawInput }) => {
-      const [sub, ...rest] = String(rawInput ?? '').trim().split(/\s+/)
-      const arg = rest.join(' ')
+  const termHandler = async ({ rawInput }) => {
+      // A pasted `[ DNT:{conv8}@{term8} ]` is ONE ref token — splitSlashArgs
+      // protects it before whitespace splitting (shared, unit-tested).
+      const { sub, rest } = splitSlashArgs(rawInput)
       const rpc = async (name, args) => {
         const reply = await mcp.handleRpc({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } })
         const r = reply?.result
-        if (r?.isError) return { kind: 'error', text: r.structuredContent?.message ?? r.content?.[0]?.text ?? 'error' }
+        if (r?.isError) return { kind: 'error', errorKind: r.structuredContent?.kind, text: `${r.structuredContent?.kind ? `${r.structuredContent.kind}: ` : ''}${r.structuredContent?.message ?? r.content?.[0]?.text ?? 'error'}` }
         return { kind: 'success', text: typeof r?.structuredContent === 'object' ? JSON.stringify(r.structuredContent, null, 2) : String(r?.content?.[0]?.text ?? 'ok') }
+      }
+      // --flag / --k=v shared by the lifecycle subs; `--` ends flag parsing so
+      // literal text starting with '--' (send data, wait patterns) survives.
+      // Value flags consume the next token (--cols 120) — only known names,
+      // so `--amend` inside send data stays data.
+      const VALUE_FLAGS = new Set(['parent', 'cwd', 'shell', 'cols', 'rows', 'if', 'timeout', 'children'])
+      const BOOL_FLAGS = new Set(['force', 'keep', 'wait'])
+      const takeFlags = (rest) => {
+        const flags = {}
+        const pos = []
+        let done = false
+        for (let i = 0; i < rest.length; i++) {
+          const p = rest[i]
+          if (!done && p === '--') { done = true; continue }
+          if (!done && p.startsWith('--')) {
+            const eq = p.indexOf('=')
+            const k = eq > 0 ? p.slice(2, eq) : p.slice(2)
+            const v = eq > 0 ? p.slice(eq + 1) : undefined
+            if (BOOL_FLAGS.has(k)) { flags[k] = v === undefined ? true : v !== 'off' && v !== 'false'; continue }
+            if (VALUE_FLAGS.has(k)) {
+              if (v !== undefined) flags[k] = v
+              else { const nxt = rest[i + 1]; if (nxt !== undefined && !nxt.startsWith('--')) { flags[k] = nxt; i++ } else flags[k] = null }
+              continue
+            }
+            pos.push(p) // unknown --x is data, not a flag
+            continue
+          }
+          pos.push(p)
+        }
+        return { flags, pos }
+      }
+      // null-valued flag → user wrote `--x` with no value.
+      const flagErr = (flags) => {
+        for (const [k, v] of Object.entries(flags)) if (v === null) return { kind: 'error', errorKind: 'invalid', text: `invalid: --${k} needs a value` }
+        return null
       }
       try {
         switch (sub) {
           case '':
           case 'new': {
-            const rec = await registry.create({ owner: 'slash' })
-            return { kind: 'success', text: `terminal ${rec.addr} created (lane=local)` }
+            // new [name] [--parent ref] [--keep] [--cwd dir] [--shell sh] [--cols n] [--rows n]
+            const { flags, pos } = takeFlags(rest)
+            const ferr = flagErr(flags)
+            if (ferr) return ferr
+            const rec = await registry.create({
+              owner: 'slash',
+              name: pos[0] ?? undefined,
+              parent: flags.parent ?? undefined,
+              keep: !!flags.keep,
+              cwd: flags.cwd ?? undefined,
+              shell: flags.shell ?? undefined,
+              cols: flags.cols ? Number(flags.cols) : undefined,
+              rows: flags.rows ? Number(flags.rows) : undefined,
+            })
+            const ctx = rec.info?.().ctx
+            return { kind: 'success', text: `terminal ${rec.addr} created (lane=local)${ctx ? ` ctx=[ ${ctx} ]` : ''}` }
           }
           case 'list': {
             const rows = registry.list()
@@ -124,20 +173,52 @@ export function apply(ctx) {
               : { kind: 'error', text: 'no such session' }
           }
           case 'send': {
-            const [id, ...data] = rest
-            return rpc('term.send', { id, data: data.join(' ') })
+            // send <ref> <text> [--force] [--if=idle|working] [--wait] [--timeout s]
+            const { flags, pos } = takeFlags(rest)
+            const ferr = flagErr(flags)
+            if (ferr) return ferr
+            const [id, ...data] = pos
+            return rpc('term.send', { id, data: data.join(' '), force: !!flags.force, if: flags.if ?? undefined, wait: !!flags.wait, timeout: flags.timeout ? Number(flags.timeout) : undefined })
           }
           case 'input': {
             const [id, ...data] = rest
             return rpc('term.session.input', { id, data: data.join(' ') })
           }
+          case 'resize': {
+            // resize <ref> <cols>x<rows> | <cols> <rows>
+            const [id, a, b] = rest
+            const [c, r] = a?.toLowerCase().includes('x') ? a.split(/x/i).map(Number) : [Number(a), Number(b)]
+            if (!Number.isFinite(c) || !Number.isFinite(r)) return { kind: 'error', errorKind: 'invalid', text: `invalid: resize needs '<ref> <cols>x<rows>' or '<ref> <cols> <rows>', got '${[id, a, b].filter(Boolean).join(' ') || 'nothing'}'` }
+            return rpc('term.session.resize', { id, cols: c, rows: r })
+          }
           case 'read':
             return rpc('term.session.read', { id: rest[0], lines: Number(rest[1]) || 50 })
-          case 'wait':
-            return rpc('term.wait', { id: rest[0], output: rest[1] ?? undefined })
+          case 'ctx':
+            return rpc('term.ctx', { ref: rest[0] })
+          case 'clear':
+            return rpc('term.session.clear', { id: rest[0] })
+          case 'copy':
+            return rpc('term.session.copy', { id: rest[0], lines: Number(rest[1]) || 200 })
+          case 'screenshot':
+            return rpc('term.session.screenshot', { id: rest[0] })
+          case 'stats':
+          case 'resources':
+            return rpc('term.session.stats', { id: rest[0] })
+          case 'health':
+            return rpc('term.health', {})
+          case 'wait': {
+            // wait <ref> [pattern…] [--children all|any] [--timeout s]
+            const { flags, pos } = takeFlags(rest)
+            const ferr = flagErr(flags)
+            if (ferr) return ferr
+            return rpc('term.wait', { id: pos[0], output: pos.length > 1 ? pos.slice(1).join(' ') : undefined, children: flags.children ?? undefined, timeout: flags.timeout ? Number(flags.timeout) : undefined })
+          }
           case 'keys': {
-            const [id, ...keys] = rest
-            return rpc('term.keys', { id, keys })
+            const { flags, pos } = takeFlags(rest)
+            const ferr = flagErr(flags)
+            if (ferr) return ferr
+            const [id, ...keys] = pos
+            return rpc('term.keys', { id, keys, force: !!flags.force })
           }
           case 'interrupt':
             return rpc('term.interrupt', { id: rest[0] })
@@ -166,16 +247,56 @@ export function apply(ctx) {
           }
           case 'events':
             return rpc('term.events', { since: Number(rest[0]) || 0 })
+          case 'audit':
+            return rpc('term.audit', { lines: Number(rest[0]) || 50 })
+          case 'lane':
+          case 'lanes':
+            return rpc('term.lane.status', {})
           case 'skill':
             return rpc('term.skill', {})
           default:
             return { kind: 'error', text: `unknown subcommand '${sub}'` }
         }
       } catch (err) {
-        return { kind: 'error', text: String(err?.message ?? err) }
+        // Direct-registry paths (new/attach) carry stable kinds too — surface
+        // them exactly like the rpc() path so `not_found:`/`needs_target:`
+        // reach the caller instead of a bare message.
+        const kind = err?.kind ?? null
+        return { kind: 'error', errorKind: kind, text: `${kind ? `${kind}: ` : ''}${err?.message ?? err}` }
       }
-    },
+  }
+
+  const unregisterCommand = ctx.commands?.register?.({
+    name: 'term',
+    description: 'nano-terminal (alias of /nano-terminal): /term new|list|ctx|attach|send|input|read|copy|screenshot|clear|resize|wait|keys|interrupt|close|keep|label|note|template|stats|health|audit|lane|events|skill',
+    input: { hint: '[new|list|ctx|attach|send|input|read|copy|screenshot|clear|resize|wait|keys|interrupt|close|keep|label|note|template|stats|health|audit|lane|events|skill] [args]' },
+    handler: termHandler,
   }) ?? (() => {})
+
+  // The canonical agentic surface: skill name == slash command name.
+  // Same handler — the skill documents the full operation surface below.
+  const unregisterNanoCommand = ctx.commands?.register?.({
+    name: 'nano-terminal',
+    description: 'nano-terminal agentic surface: /nano-terminal new|list|ctx|attach|send|input|read|copy|screenshot|clear|resize|wait|keys|interrupt|close|keep|label|note|template|stats|health|audit|lane|events|skill',
+    input: { hint: '[new|list|ctx|attach|send|input|read|copy|screenshot|clear|resize|wait|keys|interrupt|close|keep|label|note|template|stats|health|audit|lane|events|skill] [args]' },
+    handler: termHandler,
+  }) ?? (() => {})
+
+  // Agent-facing self-documentation: the skill body ships in docs/skill.md
+  // and names the slash command it mirrors, so both entry points stay one doc.
+  let unregisterSkill = () => {}
+  try {
+    const skillText = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'docs', 'skill.md'), 'utf8')
+    unregisterSkill = ctx.skills?.register?.({
+      name: 'nano-terminal',
+      description: 'Drive nano-terminal sessions: locate a terminal by `[ DNT:{conv8}@{term8} ]`, read/copy/screenshot its screen, send input/keys/interrupt/clear, manage lifecycle, probe resources and health — all through /nano-terminal or the term.* MCP tools on POST /dsh-nano-terminal/mcp.',
+      whenToUse: 'When the task needs an interactive terminal pane in the current conversation (shell, REPL, long-running program) or a `[ DNT:…@… ]` context reference must be traced back to a live session.',
+      source: 'bundled',
+      provider: 'dsh-nano-terminal',
+      invocation: { modelInvocable: true, userInvocable: true },
+      content: skillText,
+    }) ?? (() => {})
+  } catch { /* skill registration is best-effort — the tool surface is complete without it */ }
 
   // -- idle session sweep ------------------------------------------------------
 
@@ -186,6 +307,8 @@ export function apply(ctx) {
     bus.dispose()
     disposeRoutes()
     unregisterCommand()
+    unregisterNanoCommand()
+    unregisterSkill()
     void registry.dispose()
   }, 'dsh-nano-terminal: dispose')
 }

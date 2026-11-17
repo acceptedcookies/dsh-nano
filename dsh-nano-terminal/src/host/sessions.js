@@ -20,6 +20,9 @@ import { ScreenMirror, loadMirror } from './mirror.js'
 import { KIND, err } from './errors.js'
 import { Gate } from './gate.js'
 import { resizeMode } from '../shared/align.js'
+import { parseCtxRef, bareTermStamp } from '../shared/ctxref.js'
+// splitSlashArgs rides this bundle so index.js gets it from lib/sessions.js.
+export { splitSlashArgs } from '../shared/ctxref.js'
 
 /**
  * Host-side perf join. `ensurePerfReviewHost` is bundled into
@@ -105,18 +108,57 @@ export class SessionRegistry {
   }
 
   /**
-   * Resolve id | name | addr ('<lane>/<name|short6>') | bare short6 to a record.
+   * Resolve id | name | addr ('<lane>/<name|short6>') | bare short6 |
+   * ctx ref ('[ DNT:{conv8}@{term8} ]') | bare 8-hex term stamp to a record.
+   * A ctx ref matches the session whose `t` label is the term stamp; a conv
+   * stamp additionally requires the `conv` label to agree.
    */
   resolve(ref) {
     if (!ref) return undefined
     if (this.sessions.has(ref)) return this.sessions.get(ref)
+    // Context references resolve before the generic prefix fallback so a
+    // uuid-shaped term stamp is never mistaken for a record-id prefix.
+    const ctx = parseCtxRef(ref)
+    if (ctx) return this.#resolveCtx(ctx)
     const slash = String(ref).indexOf('/')
     if (slash >= 0) ref = String(ref).slice(slash + 1)
     if (this.names.has(ref)) return this.sessions.get(this.names.get(ref))
+    // A bare 8-hex term stamp resolves before the uuid-prefix heuristic —
+    // label match is exact, `id.startsWith` could steal 'deadbeef' from its
+    // `t` owner whenever some uuid happens to share the same first 8 hex.
+    // Exact-label hit AND a different id-prefix hit → ambiguous, say so.
+    const bare = bareTermStamp(ref)
+    if (bare) {
+      const hit = this.#resolveCtx({ conv: null, term: bare })
+      if (hit) {
+        const prefixHit = [...this.sessions.values()].find((r) => r.id.startsWith(ref) && r !== hit)
+        if (prefixHit) throw err(KIND.NEEDS_TARGET, `'${ref}' names both a term stamp and session ids — resolve by addr or full id`)
+        return hit
+      }
+    }
     for (const rec of this.sessions.values()) {
       if (rec.id.startsWith(ref) && ref.length >= 4) return rec
     }
     return undefined
+  }
+
+  /** All records matching a ctx pair — ambiguity must surface, not first-match. */
+  #ctxHits({ conv, term }) {
+    const hits = []
+    for (const rec of this.sessions.values()) {
+      if (rec.labels?.t !== term) continue
+      if (conv && rec.labels?.conv !== conv) continue
+      hits.push(rec)
+    }
+    return hits
+  }
+
+  #resolveCtx({ conv, term }) {
+    const hits = this.#ctxHits({ conv, term })
+    if (hits.length > 1) {
+      throw err(KIND.NEEDS_TARGET, `term stamp '${term}' is ambiguous — ${hits.map((r) => r.addr).join(', ')}; resolve by addr or id`)
+    }
+    return hits[0]
   }
 
   list() {
@@ -144,9 +186,26 @@ export class SessionRegistry {
     }
     if (spec.name) {
       if (this.names.has(spec.name)) throw err(KIND.NAME_TAKEN, `name '${spec.name}' already bound`)
+      // A name that parses as a ctx ref would be swallowed by resolve()'s
+      // ctx branch and unreachable forever — reserved spelling.
+      if (parseCtxRef(spec.name) || bareTermStamp(spec.name)) {
+        throw err(KIND.INVALID, `name '${spec.name}' collides with ctx-ref grammar`)
+      }
     }
     const parentRec = spec.parent ? this.resolve(spec.parent) : undefined
     if (spec.parent && !parentRec) throw err(KIND.NOT_FOUND, `no such parent '${spec.parent}'`)
+
+    // Minting an already-bound term stamp would make bare-stamp resolution
+    // ambiguous — refuse up front instead of letting needs_target surface later.
+    const mintT = spec.labels?.t
+    if (mintT) {
+      if (!/^[0-9a-f]{8}$/.test(mintT)) throw err(KIND.INVALID, `label 't' must be a lowercase 8-hex stamp, got '${mintT}'`)
+      const clash = [...this.sessions.values()].find((r) => r.labels?.t === mintT)
+      if (clash) throw err(KIND.CONFLICT, `term stamp '${mintT}' already bound to ${clash.addr}`)
+    }
+    if (spec.labels?.conv && !/^[0-9a-f]{8}$/.test(spec.labels.conv)) {
+      throw err(KIND.INVALID, `label 'conv' must be a lowercase 8-hex stamp, got '${spec.labels.conv}'`)
+    }
 
     const id = randomUUID()
     const cwd = await this.resolveCwd(spec)
@@ -230,7 +289,11 @@ export class SessionRegistry {
         rec.preservedScreen = this.persist.screenFor(t.id)
         rec.gate.restore(t.gate)
         this.sessions.set(t.id, rec)
-        if (t.name) this.names.set(t.name, t.id)
+        // A persisted name obeys the same grammar guard as create — a name
+        // that parses as a ctx ref or shadows a live name stays unbound.
+        if (t.name && !this.names.has(t.name) && !parseCtxRef(t.name) && !bareTermStamp(t.name)) {
+          this.names.set(t.name, t.id)
+        }
         this.bus?.emit('created', rec.addr, { id: rec.id, lane: rec.lane, title: rec.title, restored: true })
       } catch { /* one bad record doesn't block the rest */ }
     }
@@ -238,11 +301,23 @@ export class SessionRegistry {
 
   /**
    * First attach to a placeholder spawns the fresh shell and replays the
-   * preserved screen above it. Idempotent.
+   * preserved screen above it. Idempotent AND race-safe: concurrent wakes
+   * share one spawn promise; a failed spawn re-arms the placeholder so the
+   * next attach retries instead of bricking the session.
    */
   async spawnPending(rec) {
     if (!rec.pending) return
-    rec.pending = false
+    if (rec.pendingSpawn) return rec.pendingSpawn
+    rec.pendingSpawn = this.#spawnPendingOnce(rec)
+    try {
+      return await rec.pendingSpawn
+    } finally {
+      rec.pendingSpawn = null
+    }
+  }
+
+  async #spawnPendingOnce(rec) {
+    rec.pending = false // re-armed on failure below
     const meta = rec.meta ?? {}
     const shell = meta.shell || defaultShell()
     const argv = meta.argv?.length ? meta.argv : [shell, ...(process.platform === 'win32' ? [] : ['-i'])]
@@ -258,6 +333,9 @@ export class SessionRegistry {
         graceMs: 1500,
       }))
       .catch((e) => {
+        // The placeholder stays a placeholder — next wake retries the spawn
+        // instead of permanently reporting 'no live backend'.
+        rec.pending = true
         throw err(KIND.SPAWN_FAILED, String(e?.message ?? e))
       })
     rec.handle = handle
@@ -368,9 +446,13 @@ export class SessionRecord {
   }
 
   info() {
+    const { conv, t } = this.labels ?? {}
     return {
       id: this.id,
       addr: this.addr,
+      // `[ DNT:{conv8}@{term8} ]` — or `DNT:@{term8}` when only `t` is bound;
+      // either form resolves through resolve().
+      ctx: t ? `DNT:${conv ?? ''}@${t}` : null,
       name: this.name,
       lane: this.lane,
       title: this.title,
@@ -386,6 +468,23 @@ export class SessionRecord {
       exited: this.exited,
       meta: { ...this.meta, argv: undefined }, // argv may carry secrets — omit
     }
+  }
+
+  /**
+   * Busy = a foreground program is running or the program reported
+   * working/blocked via OSC 7501. Drives the UI close-confirm and the
+   * `busy` field on list/stats/sessions — honest, never guessed: shell
+   * idleness comes from the backend's own foreground inspection.
+   */
+  async isBusy() {
+    const st = this.status?.state
+    if (st === 'working' || st === 'blocked') return true
+    if (!this.handle) return false
+    const fg = await this.handle.inspectForeground?.().catch(() => undefined)
+    if (!fg || fg.processGroupId == null) return false
+    // A live foreground process group that isn't the shell itself is work
+    // the user would lose on close (vim, a build, a REPL).
+    return fg.processGroupId !== this.handle.pid
   }
 
   /** Adopt a (re)spawned handle — used by keep respawn. */
@@ -570,6 +669,7 @@ export class SessionRecord {
   async agentSend(text, { enter = true, force = false, cond = null, urgent = false } = {}) {
     if (this.exited) throw err(KIND.FINISHED, 'terminal exited')
     if (!this.handle && this.pending) await this.registry.spawnPending(this)
+    if (!this.handle) throw err(KIND.UNAVAILABLE, 'terminal not spawned yet (attach to wake)')
     const st = this.status?.state
     if (st === 'blocked' && !force) throw err(KIND.BLOCKED, `terminal reports blocked${this.status.kind ? ` (${this.status.kind})` : ''}`)
     if (cond && st !== cond) throw err(KIND.STATUS_MISMATCH, `status is '${st ?? 'none'}', required '${cond}'`)
@@ -584,6 +684,12 @@ export class SessionRecord {
   }
 
   setLabels(set = {}, unset = []) {
+    // `t`/`conv` are the ctx-ref anchors — reserved. They can only be grafted
+    // through graftCtxAnchors (ws open/attach); free-label writes must not
+    // silently drop a forge, so reserved keys are an explicit error.
+    if ('t' in set || 'conv' in set || unset.includes('t') || unset.includes('conv')) {
+      throw err(KIND.INVALID, "'t'/'conv' are reserved ctx anchors — set at create or pane attach only")
+    }
     Object.assign(this.labels, set)
     for (const k of unset) delete this.labels[k]
     this.registry.bus?.emit('labels', this.addr, { id: this.id, labels: this.labels })
@@ -591,7 +697,34 @@ export class SessionRecord {
     return this.labels
   }
 
+  /**
+   * Bind ctx-ref anchors on attach. Existing bindings are authoritative —
+   * a second pane never rewrites them; it adopts the session's anchors
+   * (the ready frame echoes them back, so its copied ref resolves to this
+   * session even after its own tid was regenerated on layout loss).
+   */
+  graftCtxAnchors({ t, conv }) {
+    let changed = false
+    for (const [k, v] of Object.entries({ t, conv })) {
+      if (!v || this.labels[k]) continue // never rewrite — the session owns its anchors
+      // Refuse to mint a stamp already bound to a DIFFERENT session —
+      // otherwise bare-stamp resolution becomes ambiguous forever.
+      if (this.registry?.sessions && [...this.registry.sessions.values()].some((r) => r !== this && r.labels?.[k] === v)) continue
+      this.labels[k] = v
+      changed = true
+    }
+    if (changed) {
+      this.registry.bus?.emit('labels', this.addr, { id: this.id, labels: this.labels })
+      this.registry.persist?.schedule(this.registry)
+    }
+    return this.labels
+  }
+
   async resize(cols, rows) {
+    cols = Math.floor(Number(cols)); rows = Math.floor(Number(rows))
+    if (!Number.isFinite(cols) || !Number.isFinite(rows) || cols < 2 || rows < 2 || cols > 512 || rows > 512) {
+      throw err(KIND.INVALID, `resize needs finite cols/rows in [2,512], got ${cols}x${rows}`)
+    }
     const prev = `${this.meta.cols}x${this.meta.rows}`
     this.meta = { ...this.meta, cols, rows }
     try {

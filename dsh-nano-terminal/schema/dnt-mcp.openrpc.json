@@ -1,786 +1,1162 @@
 {
-  "openrpc": "1.3.2",
-  "info": {
-    "title": "dsh-nano-terminal MCP control plane",
-    "version": "0.2.0",
-    "description": "Canonical contract for term.* tools, error kinds and term.* events. The mcp.js tool table is generated from this document; /term slash subcommands and ws-v2 frames implement the same semantics. Contract only grows — never rename or remove a method, kind, or event type."
+ "openrpc": "1.3.2",
+ "info": {
+  "title": "dsh-nano-terminal MCP control plane",
+  "version": "0.2.0",
+  "description": "Canonical contract for term.* tools, error kinds and term.* events. The mcp.js tool table is generated from this document; /term slash subcommands and ws-v2 frames implement the same semantics. Contract only grows — never rename or remove a method, kind, or event type."
+ },
+ "x-errorKinds": [
+  "not_found",
+  "blocked",
+  "finished",
+  "live",
+  "unavailable",
+  "spawn_failed",
+  "conflict",
+  "status_mismatch",
+  "name_taken",
+  "needs_target",
+  "incompatible",
+  "limit",
+  "invalid"
+ ],
+ "x-events": [
+  "created",
+  "lost",
+  "finished",
+  "removed",
+  "status",
+  "turn",
+  "title",
+  "labels",
+  "size",
+  "restarted",
+  "heartbeat",
+  "missed",
+  "message"
+ ],
+ "x-address": {
+  "type": "string",
+  "minLength": 1,
+  "description": "Terminal addressable by id, by name, or by addr '<lane>/<name|short6>'. All three resolve through the same registry."
+ },
+ "methods": [
+  {
+   "name": "term.session.create",
+   "description": "Open a terminal session on a lane (local PTY | mcp remote). Returns id, addr and attach metadata.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "lane": {
+      "type": "string",
+      "enum": [
+       "local"
+      ],
+      "default": "local",
+      "x-advertise-note": "CF1115/P3-02/F20.2 广告精确对账: lane only `local` — this host's MCP create backs a local PTY; `mcp`/`isolate` are no longer advertised (client connect-mode != backend lane enum). Non-local requests are rejected `incompatible` in mcp.js."
+     },
+     "name": {
+      "type": "string",
+      "description": "addressable name; unique per registry"
+     },
+     "parent": {
+      "type": "string",
+      "description": "parent terminal addr — notes fan-in and die_with_parent"
+     },
+     "keep": {
+      "type": "boolean",
+      "description": "respawn a shell when the program is lost; never reruns the command"
+     },
+     "labels": {
+      "type": "object",
+      "additionalProperties": {
+       "type": "string"
+      }
+     },
+     "sessionId": {
+      "type": "string",
+      "description": "owning dsh session (cwd + scoping)"
+     },
+     "shell": {
+      "type": "string"
+     },
+     "args": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     },
+     "cwd": {
+      "type": "string"
+     },
+     "cols": {
+      "type": "integer"
+     },
+     "rows": {
+      "type": "integer"
+     },
+     "title": {
+      "type": "string"
+     }
+    },
+    "additionalProperties": false
+   },
+   "result": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "addr": {
+      "type": "string"
+     },
+     "lane": {
+      "type": "string"
+     },
+     "title": {
+      "type": "string"
+     },
+     "attach": {
+      "type": "object"
+     },
+     "ctx": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "labels": {
+      "type": "object"
+     }
+    }
+   },
+   "errors": [
+    "name_taken",
+    "spawn_failed",
+    "limit",
+    "invalid",
+    "incompatible",
+    "conflict",
+    "not_found",
+    "needs_target"
+   ]
   },
-  "x-errorKinds": [
+  {
+   "name": "term.session.list",
+   "description": "List live terminal records with lane, addr, owner, title, status and exit state. Each row carries `busy` = foreground program or OSC working/blocked.",
+   "params": {
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+   },
+   "result": {
+    "type": "object",
+    "properties": {
+     "sessions": {
+      "type": "array"
+     }
+    }
+   },
+   "errors": []
+  },
+  {
+   "name": "term.session.input",
+   "description": "Write raw input bytes to a session (utf-8 text; \\r for Enter). Low-level: no draft-wait, no blocked guard. Prefer term.send for agent use.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "data": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "data"
+    ],
+    "additionalProperties": false
+   },
+   "result": {
+    "type": "object",
+    "properties": {
+     "ok": {
+      "type": "boolean"
+     }
+    }
+   },
+   "errors": [
+    "not_found",
+    "finished",
+    "spawn_failed",
+    "unavailable",
+    "needs_target",
+    "invalid"
+   ]
+  },
+  {
+   "name": "term.send",
+   "description": "Send text through the input gate: bracketed-paste + Enter, draft-wait respected, blocked targets refuse unless force. wait:true rides this turn to completion.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "data": {
+      "type": "string"
+     },
+     "enter": {
+      "type": "boolean",
+      "default": true
+     },
+     "force": {
+      "type": "boolean",
+      "default": false
+     },
+     "if": {
+      "type": "string",
+      "enum": [
+       "idle",
+       "working"
+      ],
+      "description": "only deliver when status matches"
+     },
+     "wait": {
+      "type": "boolean",
+      "default": false
+     },
+     "timeout": {
+      "type": "integer",
+      "default": 180
+     }
+    },
+    "required": [
+     "id",
+     "data"
+    ],
+    "additionalProperties": false
+   },
+   "result": {
+    "type": "object",
+    "properties": {
+     "ok": {
+      "type": "boolean"
+     },
+     "turn": {
+      "type": "integer"
+     },
+     "held": {
+      "type": "integer"
+     },
+     "wait": {
+      "type": "object"
+     }
+    }
+   },
+   "errors": [
     "not_found",
     "blocked",
     "finished",
-    "live",
+    "status_mismatch",
     "unavailable",
     "spawn_failed",
-    "conflict",
-    "status_mismatch",
-    "name_taken",
     "needs_target",
-    "incompatible",
-    "limit",
     "invalid"
-  ],
-  "x-events": [
-    "created",
-    "lost",
-    "finished",
-    "removed",
-    "status",
-    "turn",
-    "title",
-    "labels",
-    "size",
-    "restarted",
-    "heartbeat",
-    "missed"
-  ],
-  "x-address": {
-    "type": "string",
-    "minLength": 1,
-    "description": "Terminal addressable by id, by name, or by addr '<lane>/<name|short6>'. All three resolve through the same registry."
+   ]
   },
-  "methods": [
-    {
-      "name": "term.session.create",
-      "description": "Open a terminal session on a lane (local PTY | mcp remote). Returns id, addr and attach metadata.",
-      "params": {
-        "type": "object",
-        "properties": {
-          "lane": {
-            "type": "string",
-            "enum": [
-              "local"
-            ],
-            "default": "local",
-            "x-advertise-note": "CF1115/P3-02/F20.2 广告精确对账: lane only `local` — this host's MCP create backs a local PTY; `mcp`/`isolate` are no longer advertised (client connect-mode != backend lane enum). Non-local requests are rejected `incompatible` in mcp.js."
-          },
-          "name": {
-            "type": "string",
-            "description": "addressable name; unique per registry"
-          },
-          "parent": {
-            "type": "string",
-            "description": "parent terminal addr — notes fan-in and die_with_parent"
-          },
-          "keep": {
-            "type": "boolean",
-            "description": "respawn a shell when the program is lost; never reruns the command"
-          },
-          "labels": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            }
-          },
-          "sessionId": {
-            "type": "string",
-            "description": "owning dsh session (cwd + scoping)"
-          },
-          "shell": {
-            "type": "string"
-          },
-          "args": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "cwd": {
-            "type": "string"
-          },
-          "cols": {
-            "type": "integer"
-          },
-          "rows": {
-            "type": "integer"
-          },
-          "title": {
-            "type": "string"
-          }
-        },
-        "additionalProperties": false
-      },
-      "result": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "addr": {
-            "type": "string"
-          },
-          "lane": {
-            "type": "string"
-          },
-          "title": {
-            "type": "string"
-          },
-          "attach": {
-            "type": "object"
-          }
-        }
-      },
-      "errors": [
-        "name_taken",
-        "spawn_failed",
-        "limit",
-        "invalid"
-      ]
+  {
+   "name": "term.keys",
+   "description": "Send named keys: enter esc tab backspace ctrl+c ctrl+d ctrl+z up down left right f1..f12.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "keys": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     },
+     "force": {
+      "type": "boolean",
+      "default": false
+     }
     },
-    {
-      "name": "term.session.list",
-      "description": "List live terminal records with lane, addr, owner, title, status and exit state.",
-      "params": {
-        "type": "object",
-        "properties": {},
-        "additionalProperties": false
-      },
-      "result": {
-        "type": "object",
-        "properties": {
-          "sessions": {
-            "type": "array"
-          }
-        }
-      },
-      "errors": []
-    },
-    {
-      "name": "term.session.input",
-      "description": "Write raw input bytes to a session (utf-8 text; \\r for Enter). Low-level: no draft-wait, no blocked guard. Prefer term.send for agent use.",
-      "params": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "data": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "data"
-        ],
-        "additionalProperties": false
-      },
-      "result": {
-        "type": "object",
-        "properties": {
-          "ok": {
-            "type": "boolean"
-          }
-        }
-      },
-      "errors": [
-        "not_found",
-        "finished"
-      ]
-    },
-    {
-      "name": "term.send",
-      "description": "Send text through the input gate: bracketed-paste + Enter, draft-wait respected, blocked targets refuse unless force. wait:true rides this turn to completion.",
-      "params": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "data": {
-            "type": "string"
-          },
-          "enter": {
-            "type": "boolean",
-            "default": true
-          },
-          "force": {
-            "type": "boolean",
-            "default": false
-          },
-          "if": {
-            "type": "string",
-            "enum": [
-              "idle",
-              "working"
-            ],
-            "description": "only deliver when status matches"
-          },
-          "wait": {
-            "type": "boolean",
-            "default": false
-          },
-          "timeout": {
-            "type": "integer",
-            "default": 180
-          }
-        },
-        "required": [
-          "id",
-          "data"
-        ],
-        "additionalProperties": false
-      },
-      "result": {
-        "type": "object",
-        "properties": {
-          "ok": {
-            "type": "boolean"
-          },
-          "turn": {
-            "type": "integer"
-          },
-          "held": {
-            "type": "integer"
-          },
-          "wait": {
-            "type": "object"
-          }
-        }
-      },
-      "errors": [
-        "not_found",
-        "blocked",
-        "finished",
-        "status_mismatch",
-        "unavailable"
-      ]
-    },
-    {
-      "name": "term.keys",
-      "description": "Send named keys: enter esc tab backspace ctrl+c ctrl+d ctrl+z up down left right f1..f12.",
-      "params": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "keys": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "force": {
-            "type": "boolean",
-            "default": false
-          }
-        },
-        "required": [
-          "id",
-          "keys"
-        ],
-        "additionalProperties": false
-      },
-      "result": {
-        "type": "object",
-        "properties": {
-          "ok": {
-            "type": "boolean"
-          }
-        }
-      },
-      "errors": [
-        "not_found",
-        "blocked",
-        "finished",
-        "invalid"
-      ]
-    },
-    {
-      "name": "term.interrupt",
-      "description": "Stop the foreground program politely and observe the result. Status-reporting programs get esc; others get ctrl+c. Returns stopped|exited|still_working|unknown.",
-      "params": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "timeout": {
-            "type": "integer",
-            "default": 10
-          }
-        },
-        "required": [
-          "id"
-        ],
-        "additionalProperties": false
-      },
-      "result": {
-        "type": "object",
-        "properties": {
-          "result": {
-            "type": "string",
-            "enum": [
-              "stopped",
-              "exited",
-              "still_working",
-              "unknown"
-            ]
-          }
-        }
-      },
-      "errors": [
-        "not_found",
-        "finished"
-      ]
-    },
-    {
-      "name": "term.wait",
-      "description": "Event-driven wait. Waits until the terminal leaves 'working', or output contains `output` (escape sequences stripped), or child terminals per `children`. Timeout is a check-in, not a failure.",
-      "params": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "output": {
-            "type": "string"
-          },
-          "children": {
-            "type": "string",
-            "enum": [
-              "all",
-              "any"
-            ]
-          },
-          "timeout": {
-            "type": "integer",
-            "default": 180
-          }
-        },
-        "required": [
-          "id"
-        ],
-        "additionalProperties": false
-      },
-      "result": {
-        "type": "object",
-        "properties": {
-          "reason": {
-            "type": "string",
-            "enum": [
-              "status",
-              "exit",
-              "output",
-              "children",
-              "message",
-              "timeout"
-            ]
-          },
-          "turn": {
-            "type": "integer"
-          }
-        }
-      },
-      "errors": [
-        "not_found"
-      ]
-    },
-    {
-      "name": "term.session.read",
-      "description": "Read rendered screen text. source=visible (default) last N screen rows; recent includes scrollback; detection is the live bottom-buffer snapshot used for status matching.",
-      "params": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "lines": {
-            "type": "integer",
-            "default": 50
-          },
-          "source": {
-            "type": "string",
-            "enum": [
-              "visible",
-              "recent",
-              "detection"
-            ],
-            "default": "visible"
-          }
-        },
-        "required": [
-          "id"
-        ],
-        "additionalProperties": false
-      },
-      "result": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "text": {
-            "type": "string"
-          },
-          "complete": {
-            "type": "boolean"
-          }
-        }
-      },
-      "errors": [
-        "not_found"
-      ]
-    },
-    {
-      "name": "term.session.resize",
-      "description": "Resize a session terminal.",
-      "params": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "cols": {
-            "type": "integer"
-          },
-          "rows": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "id",
-          "cols",
-          "rows"
-        ],
-        "additionalProperties": false
-      },
-      "result": {
-        "type": "object",
-        "properties": {
-          "ok": {
-            "type": "boolean"
-          }
-        }
-      },
-      "errors": [
-        "not_found"
-      ]
-    },
-    {
-      "name": "term.session.keep",
-      "description": "Mark a terminal keep:true (respawn a shell on program loss, never reruns) or keep:false.",
-      "params": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "keep": {
-            "type": "boolean",
-            "default": true
-          }
-        },
-        "required": [
-          "id"
-        ],
-        "additionalProperties": false
-      },
-      "result": {
-        "type": "object",
-        "properties": {
-          "ok": {
-            "type": "boolean"
-          },
-          "keep": {
-            "type": "boolean"
-          }
-        }
-      },
-      "errors": [
-        "not_found"
-      ]
-    },
-    {
-      "name": "term.session.label",
-      "description": "Set or clear key=value labels on a terminal.",
-      "params": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "set": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            }
-          },
-          "unset": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        },
-        "required": [
-          "id"
-        ],
-        "additionalProperties": false
-      },
-      "result": {
-        "type": "object",
-        "properties": {
-          "ok": {
-            "type": "boolean"
-          },
-          "labels": {
-            "type": "object"
-          }
-        }
-      },
-      "errors": [
-        "not_found"
-      ]
-    },
-    {
-      "name": "term.events",
-      "description": "Read events newer than `since` (a seq). Returns {seq, events} or {missed:true, snapshot} when the consumer fell behind. MCP polling counterpart of GET /events SSE.",
-      "params": {
-        "type": "object",
-        "properties": {
-          "since": {
-            "type": "integer",
-            "default": 0
-          }
-        },
-        "additionalProperties": false
-      },
-      "result": {
-        "type": "object"
-      },
-      "errors": []
-    },
-    {
-      "name": "term.session.note",
-      "summary": "Deliver an agent note envelope to a terminal",
-      "description": "Deliver a <dnt from=…> note envelope into a terminal (usually child → parent). Delivery honors the gate as kind 'note': notes_quiet human silence AND no draft — a note never interrupts typing. The note arrives as a bracketed paste; the receiver's program reads it via 'dnt notes' or paste events.",
-      "params": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "$ref": "#/x-address"
-          },
-          "body": {
-            "type": "string",
-            "maxLength": 32768,
-            "description": "note text"
-          },
-          "from": {
-            "type": "string",
-            "description": "sender addr/id (default: the caller's $DNT_TERMINAL_ID if set)"
-          }
-        },
-        "required": [
-          "id",
-          "body"
-        ],
-        "additionalProperties": false
-      },
-      "result": {
-        "type": "object",
-        "properties": {
-          "ok": {
-            "type": "boolean"
-          },
-          "id": {
-            "type": "string",
-            "description": "note id"
-          }
-        },
-        "required": [
-          "ok",
-          "id"
-        ]
-      },
-      "errors": [
-        "not_found",
-        "finished",
-        "unavailable",
-        "invalid"
-      ]
-    },
-    {
-      "name": "term.template.list",
-      "summary": "List reusable send/wait templates",
-      "description": "List the built-in terminal task templates: pre-canned {send,wait} sequences for common agent jobs (run-a-command, tail-a-log, REPL, test-watch). term.template.run expands one against a terminal.",
-      "params": {
-        "type": "object",
-        "properties": {},
-        "additionalProperties": false
-      },
-      "result": {
-        "type": "object",
-        "properties": {
-          "templates": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "id": {
-                  "type": "string"
-                },
-                "summary": {
-                  "type": "string"
-                },
-                "params": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "required": [
-          "templates"
-        ]
-      },
-      "errors": []
-    },
-    {
-      "name": "term.template.run",
-      "summary": "Run a task template against a terminal",
-      "description": "Expand a template (term.template.list) into a send+wait sequence. Returns {turn, reason, output} — the final wait outcome and the terminal's screen tail.",
-      "params": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "$ref": "#/x-address"
-          },
-          "template": {
-            "type": "string"
-          },
-          "args": {
-            "type": "object",
-            "description": "template params",
-            "additionalProperties": true
-          },
-          "timeout": {
-            "type": "integer",
-            "default": 180
-          }
-        },
-        "required": [
-          "id",
-          "template"
-        ],
-        "additionalProperties": false
-      },
-      "result": {
-        "type": "object",
-        "properties": {
-          "ok": {
-            "type": "boolean"
-          },
-          "turn": {
-            "type": "integer"
-          },
-          "reason": {
-            "type": "string"
-          },
-          "output": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "ok"
-        ]
-      },
-      "errors": [
-        "not_found",
-        "blocked",
-        "finished",
-        "invalid"
-      ]
-    },
-    {
-      "name": "term.session.close",
-      "description": "Terminate a session and its process range.",
-      "params": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "reason": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "id"
-        ],
-        "additionalProperties": false
-      },
-      "result": {
-        "type": "object",
-        "properties": {
-          "closed": {
-            "type": "boolean"
-          }
-        }
-      },
-      "errors": []
-    },
-    {
-      "name": "term.audit",
-      "description": "Read the audit log (newest last).",
-      "params": {
-        "type": "object",
-        "properties": {
-          "lines": {
-            "type": "integer",
-            "default": 50
-          }
-        },
-        "additionalProperties": false
-      },
-      "result": {
-        "type": "object",
-        "properties": {
-          "log": {
-            "type": "array"
-          }
-        }
-      },
-      "errors": []
-    },
-    {
-      "name": "term.lane.status",
-      "description": "Report available lanes and their health.",
-      "params": {
-        "type": "object",
-        "properties": {},
-        "additionalProperties": false
-      },
-      "result": {
-        "type": "object",
-        "properties": {
-          "lanes": {
-            "type": "object"
-          }
-        }
-      },
-      "errors": []
-    },
-    {
-      "name": "term.skill",
-      "description": "Print the agent skill document: how to spawn, send, wait, report back and clean up terminals.",
-      "params": {
-        "type": "object",
-        "properties": {},
-        "additionalProperties": false
-      },
-      "result": {
-        "type": "object",
-        "properties": {
-          "skill": {
-            "type": "string"
-          }
-        }
-      },
-      "errors": []
+    "required": [
+     "id",
+     "keys"
+    ],
+    "additionalProperties": false
+   },
+   "result": {
+    "type": "object",
+    "properties": {
+     "ok": {
+      "type": "boolean"
+     }
     }
-  ]
+   },
+   "errors": [
+    "not_found",
+    "blocked",
+    "finished",
+    "invalid",
+    "unavailable",
+    "spawn_failed",
+    "needs_target"
+   ]
+  },
+  {
+   "name": "term.interrupt",
+   "description": "Stop the foreground program politely and observe the result. Status-reporting programs get esc; others get ctrl+c. Returns stopped|exited|still_working|unknown.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "timeout": {
+      "type": "integer",
+      "default": 10
+     }
+    },
+    "required": [
+     "id"
+    ],
+    "additionalProperties": false
+   },
+   "result": {
+    "type": "object",
+    "properties": {
+     "result": {
+      "type": "string",
+      "enum": [
+       "stopped",
+       "exited",
+       "still_working",
+       "unknown"
+      ]
+     }
+    }
+   },
+   "errors": [
+    "not_found",
+    "finished",
+    "unavailable",
+    "spawn_failed",
+    "needs_target"
+   ]
+  },
+  {
+   "name": "term.wait",
+   "description": "Event-driven wait. Waits until the terminal leaves 'working', or output contains `output` (escape sequences stripped), or child terminals per `children`. Timeout is a check-in, not a failure.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "output": {
+      "type": "string"
+     },
+     "children": {
+      "type": "string",
+      "enum": [
+       "all",
+       "any"
+      ]
+     },
+     "timeout": {
+      "type": "integer",
+      "default": 180
+     }
+    },
+    "required": [
+     "id"
+    ],
+    "additionalProperties": false
+   },
+   "result": {
+    "type": "object",
+    "properties": {
+     "reason": {
+      "type": "string",
+      "enum": [
+       "status",
+       "exit",
+       "output",
+       "children",
+       "message",
+       "timeout"
+      ]
+     },
+     "turn": {
+      "type": "integer"
+     }
+    }
+   },
+   "errors": [
+    "not_found",
+    "needs_target"
+   ]
+  },
+  {
+   "name": "term.session.read",
+   "description": "Read rendered screen text. source=visible (default) last N screen rows; recent includes scrollback; detection is the live bottom-buffer snapshot used for status matching.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "lines": {
+      "type": "integer",
+      "default": 50
+     },
+     "source": {
+      "type": "string",
+      "enum": [
+       "visible",
+       "recent",
+       "detection"
+      ],
+      "default": "visible"
+     }
+    },
+    "required": [
+     "id"
+    ],
+    "additionalProperties": false
+   },
+   "result": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "text": {
+      "type": "string"
+     },
+     "complete": {
+      "type": "boolean"
+     }
+    }
+   },
+   "errors": [
+    "not_found",
+    "needs_target",
+    "spawn_failed"
+   ]
+  },
+  {
+   "name": "term.session.resize",
+   "description": "Resize a session terminal.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "cols": {
+      "type": "integer"
+     },
+     "rows": {
+      "type": "integer"
+     }
+    },
+    "required": [
+     "id",
+     "cols",
+     "rows"
+    ],
+    "additionalProperties": false
+   },
+   "result": {
+    "type": "object",
+    "properties": {
+     "ok": {
+      "type": "boolean"
+     }
+    }
+   },
+   "errors": [
+    "not_found",
+    "needs_target",
+    "invalid"
+   ]
+  },
+  {
+   "name": "term.session.keep",
+   "description": "Mark a terminal keep:true (respawn a shell on program loss, never reruns) or keep:false.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "keep": {
+      "type": "boolean",
+      "default": true
+     }
+    },
+    "required": [
+     "id"
+    ],
+    "additionalProperties": false
+   },
+   "result": {
+    "type": "object",
+    "properties": {
+     "ok": {
+      "type": "boolean"
+     },
+     "keep": {
+      "type": "boolean"
+     }
+    }
+   },
+   "errors": [
+    "not_found",
+    "needs_target"
+   ]
+  },
+  {
+   "name": "term.session.label",
+   "description": "Set or clear key=value labels on a terminal.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "set": {
+      "type": "object",
+      "additionalProperties": {
+       "type": "string"
+      }
+     },
+     "unset": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     }
+    },
+    "required": [
+     "id"
+    ],
+    "additionalProperties": false
+   },
+   "result": {
+    "type": "object",
+    "properties": {
+     "ok": {
+      "type": "boolean"
+     },
+     "labels": {
+      "type": "object"
+     }
+    }
+   },
+   "errors": [
+    "not_found",
+    "needs_target",
+    "invalid"
+   ]
+  },
+  {
+   "name": "term.events",
+   "description": "Read events newer than `since` (a seq). Returns {seq, events} or {missed:true, snapshot} when the consumer fell behind. MCP polling counterpart of GET /events SSE.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "since": {
+      "type": "integer",
+      "default": 0
+     }
+    },
+    "additionalProperties": false
+   },
+   "result": {
+    "type": "object"
+   },
+   "errors": []
+  },
+  {
+   "name": "term.session.note",
+   "summary": "Deliver an agent note envelope to a terminal",
+   "description": "Deliver a <dnt from=…> note envelope into a terminal (usually child → parent). Delivery honors the gate as kind 'note': notes_quiet human silence AND no draft — a note never interrupts typing. The note arrives as a bracketed paste; the receiver's program reads it via 'dnt notes' or paste events.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "string",
+      "description": "session ref — id | name | addr | `[ DNT:{conv8}@{term8} ]` | bare 8-hex term stamp"
+     },
+     "body": {
+      "type": "string",
+      "maxLength": 32768,
+      "description": "note text"
+     },
+     "from": {
+      "type": "string",
+      "description": "sender addr/id (default: the caller's $DNT_TERMINAL_ID if set)"
+     }
+    },
+    "required": [
+     "id",
+     "body"
+    ],
+    "additionalProperties": false
+   },
+   "result": {
+    "type": "object",
+    "properties": {
+     "ok": {
+      "type": "boolean"
+     },
+     "id": {
+      "type": "string",
+      "description": "note id"
+     }
+    },
+    "required": [
+     "ok",
+     "id"
+    ]
+   },
+   "errors": [
+    "not_found",
+    "finished",
+    "unavailable",
+    "invalid",
+    "needs_target"
+   ]
+  },
+  {
+   "name": "term.template.list",
+   "summary": "List reusable send/wait templates",
+   "description": "List the built-in terminal task templates: pre-canned {send,wait} sequences for common agent jobs (run-a-command, tail-a-log, REPL, test-watch). term.template.run expands one against a terminal.",
+   "params": {
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+   },
+   "result": {
+    "type": "object",
+    "properties": {
+     "templates": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "properties": {
+        "id": {
+         "type": "string"
+        },
+        "summary": {
+         "type": "string"
+        },
+        "params": {
+         "type": "array",
+         "items": {
+          "type": "string"
+         }
+        }
+       }
+      }
+     }
+    },
+    "required": [
+     "templates"
+    ]
+   },
+   "errors": []
+  },
+  {
+   "name": "term.template.run",
+   "summary": "Run a task template against a terminal",
+   "description": "Expand a template (term.template.list) into a send+wait sequence. Returns {turn, reason, output} — the final wait outcome and the terminal's screen tail.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "string",
+      "description": "session ref — id | name | addr | `[ DNT:{conv8}@{term8} ]` | bare 8-hex term stamp"
+     },
+     "template": {
+      "type": "string"
+     },
+     "args": {
+      "type": "object",
+      "description": "template params",
+      "additionalProperties": true
+     },
+     "timeout": {
+      "type": "integer",
+      "default": 180
+     }
+    },
+    "required": [
+     "id",
+     "template"
+    ],
+    "additionalProperties": false
+   },
+   "result": {
+    "type": "object",
+    "properties": {
+     "ok": {
+      "type": "boolean"
+     },
+     "turn": {
+      "type": "integer"
+     },
+     "reason": {
+      "type": "string"
+     },
+     "output": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "ok"
+    ]
+   },
+   "errors": [
+    "not_found",
+    "blocked",
+    "finished",
+    "invalid",
+    "spawn_failed",
+    "needs_target"
+   ]
+  },
+  {
+   "name": "term.session.close",
+   "description": "Close a terminal session. Busy terminals (foreground program or OSC working/blocked) refuse close unless confirm:true.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "reason": {
+      "type": "string"
+     },
+     "confirm": {
+      "type": "boolean",
+      "description": "Required to close a busy terminal (foreground program or OSC working/blocked); without it a busy session answers conflict."
+     }
+    },
+    "required": [
+     "id"
+    ],
+    "additionalProperties": false
+   },
+   "result": {
+    "type": "object",
+    "properties": {
+     "closed": {
+      "type": "boolean"
+     }
+    }
+   },
+   "errors": [
+    "needs_target",
+    "conflict"
+   ]
+  },
+  {
+   "name": "term.audit",
+   "description": "Read the audit log (newest last).",
+   "params": {
+    "type": "object",
+    "properties": {
+     "lines": {
+      "type": "integer",
+      "default": 50
+     }
+    },
+    "additionalProperties": false
+   },
+   "result": {
+    "type": "object",
+    "properties": {
+     "log": {
+      "type": "array"
+     }
+    }
+   },
+   "errors": []
+  },
+  {
+   "name": "term.lane.status",
+   "description": "Report available lanes and their health.",
+   "params": {
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+   },
+   "result": {
+    "type": "object",
+    "properties": {
+     "lanes": {
+      "type": "object"
+     }
+    }
+   },
+   "errors": []
+  },
+  {
+   "name": "term.skill",
+   "description": "Print the agent skill document: how to spawn, send, wait, report back and clean up terminals.",
+   "params": {
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+   },
+   "result": {
+    "type": "object",
+    "properties": {
+     "skill": {
+      "type": "string"
+     }
+    }
+   },
+   "errors": []
+  },
+  {
+   "name": "term.ctx",
+   "description": "Resolve a terminal context reference — '[ DNT:{conv8}@{term8} ]' (brackets/spacing/case tolerant), a bare 8-hex term stamp, or any legacy ref (id|name|addr) — to the session it names. Every ref-taking tool accepts the ctx form directly.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "ref": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "ref"
+    ],
+    "additionalProperties": false
+   },
+   "result": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "addr": {
+      "type": "string"
+     },
+     "ctx": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "title": {
+      "type": "string"
+     },
+     "lane": {
+      "type": "string"
+     },
+     "owner": {
+      "type": "string"
+     },
+     "phase": {
+      "type": "string"
+     },
+     "labels": {
+      "type": "object"
+     },
+     "attached": {
+      "type": "integer"
+     },
+     "exited": {
+      "type": [
+       "boolean",
+       "object",
+       "null"
+      ]
+     }
+    }
+   },
+   "errors": [
+    "not_found",
+    "needs_target"
+   ]
+  },
+  {
+   "name": "term.session.copy",
+   "description": "Plain-text copy of the rendered grid (agent clipboard). Same sources as term.session.read; no completeness annotation.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "lines": {
+      "type": "integer",
+      "default": 200
+     },
+     "source": {
+      "type": "string",
+      "enum": [
+       "visible",
+       "recent",
+       "detection"
+      ],
+      "default": "visible"
+     }
+    },
+    "required": [
+     "id"
+    ],
+    "additionalProperties": false
+   },
+   "result": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "addr": {
+      "type": "string"
+     },
+     "text": {
+      "type": "string"
+     }
+    }
+   },
+   "errors": [
+    "not_found",
+    "needs_target",
+    "spawn_failed"
+   ]
+  },
+  {
+   "name": "term.session.screenshot",
+   "description": "Structured screen capture: output seq, dimensions, cursor position and the visible grid — the agent-facing equivalent of a pixel screenshot.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "id"
+    ],
+    "additionalProperties": false
+   },
+   "result": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "addr": {
+      "type": "string"
+     },
+     "seq": {
+      "type": "integer"
+     },
+     "cols": {
+      "type": "integer"
+     },
+     "rows": {
+      "type": "integer"
+     },
+     "cursorX": {
+      "type": "integer"
+     },
+     "cursorY": {
+      "type": "integer"
+     },
+     "text": {
+      "type": "string"
+     },
+     "title": {
+      "type": "string"
+     },
+     "status": {
+      "type": [
+       "object",
+       "null"
+      ]
+     },
+     "ctx": {
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    }
+   },
+   "errors": [
+    "not_found",
+    "needs_target",
+    "spawn_failed"
+   ]
+  },
+  {
+   "name": "term.session.clear",
+   "description": "Send the terminal's own clear sequence (form feed ^L) so the shell repaints; never forges screen state.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "id"
+    ],
+    "additionalProperties": false
+   },
+   "result": {
+    "type": "object",
+    "properties": {
+     "ok": {
+      "type": "boolean"
+     }
+    }
+   },
+   "errors": [
+    "not_found",
+    "finished",
+    "unavailable",
+    "spawn_failed",
+    "needs_target"
+   ]
+  },
+  {
+   "name": "term.session.stats",
+   "description": "Resource probe: pid, descendant process list (pid/ppid/pcpu/rssKb/stat/etime/command), foreground group and shell activity. processes=null on win32 or when the probe cannot run. truncated=true when the process table hit the output cap.",
+   "params": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "id"
+    ],
+    "additionalProperties": false
+   },
+   "result": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "addr": {
+      "type": "string"
+     },
+     "ctx": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "pid": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "processes": {
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "foreground": {
+      "type": [
+       "object",
+       "null"
+      ]
+     },
+     "activity": {
+      "type": [
+       "object",
+       "null"
+      ]
+     },
+     "status": {
+      "type": [
+       "object",
+       "null"
+      ]
+     },
+     "phase": {
+      "type": "string"
+     },
+     "exited": {
+      "type": [
+       "boolean",
+       "object",
+       "null"
+      ]
+     },
+     "cols": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "rows": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "truncated": {
+      "type": "boolean"
+     },
+     "busy": {
+      "type": "boolean",
+      "description": "Foreground program running or OSC working/blocked — drives close-confirm."
+     }
+    }
+   },
+   "errors": [
+    "not_found",
+    "needs_target"
+   ]
+  },
+  {
+   "name": "term.health",
+   "description": "Whole-plane health probe: lane status plus session rollup counts and a compact per-session list.",
+   "params": {
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+   },
+   "result": {
+    "type": "object",
+    "properties": {
+     "ok": {
+      "type": "boolean"
+     },
+     "lanes": {
+      "type": "object"
+     },
+     "sessions": {
+      "type": "object"
+     },
+     "list": {
+      "type": "array"
+     }
+    }
+   },
+   "errors": []
+  }
+ ]
 }

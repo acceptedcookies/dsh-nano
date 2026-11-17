@@ -7,6 +7,7 @@
 import { decodeMcpReply } from 'dsh-interface/host'
 import { handleFrame } from './frames.js'
 import { perf } from './perf.js'
+import { stampOrKeep8 } from '../shared/ctxref.js'
 
 const ROUTE = '/dsh-nano-terminal'
 
@@ -40,10 +41,12 @@ function encChannel(channel, kind, payload) {
 }
 
 export class LocalLane {
-  constructor({ sessionId, cols, rows, shell, cwd, attach = null }) {
+  constructor({ sessionId, cols, rows, shell, cwd, attach = null, tid = null, conv = null }) {
     this.kind = 'local'
     this.sessionId = sessionId
     this.attach = attach // re-attach to a host-side session id | name | addr
+    this.tid = tid // 8-hex term stamp → host label `t` (ctx-ref anchor)
+    this.conv = conv // 8-hex conversation stamp → host label `conv`
     this.cols = cols
     this.rows = rows
     this.shell = shell
@@ -73,11 +76,11 @@ export class LocalLane {
       ws.onopen = () => {
         opened = true
         if (this.attach) {
-          ws.send(JSON.stringify({ type: 'open', v: 2, align: 1, session: this.attach, owner: this.sessionId }))
+          ws.send(JSON.stringify({ type: 'open', v: 2, align: 1, session: this.attach, owner: this.sessionId, tid: this.tid, conv: this.conv }))
         } else {
           ws.send(JSON.stringify({
             type: 'open', v: 2, align: 1, owner: this.sessionId, shell: this.shell,
-            cwd: this.cwd, cols: this.cols, rows: this.rows,
+            cwd: this.cwd, cols: this.cols, rows: this.rows, tid: this.tid, conv: this.conv,
           }))
         }
       }
@@ -89,6 +92,10 @@ export class LocalLane {
             clearTimeout(timer)
             this.id = msg.session
             this.addr = msg.addr
+            // The session's authoritative ctx anchors — a re-attaching pane
+            // adopts the host's, so a copied ref resolves to THIS session
+            // even after the pane's own tid was regenerated (layout loss).
+            this.boundCtx = msg.ctx ?? null
             this.v = msg.v ?? 1
             this.platform = msg.platform ?? null
             // 能对齐的连接在第一帧快照到达前丢掉原始字节，避免把 replay 灌进 wasm。
@@ -332,6 +339,12 @@ export function makeLane(spec, meta) {
     case 'local':
     default:
       if (spec.lane && spec.lane !== 'local') throw new Error(`lane ${spec.lane} is not available`)
-      return new LocalLane({ sessionId: meta.sessionId, cols: meta.cols, rows: meta.rows, shell: spec.shell, cwd: spec.cwd, attach: spec.attach ?? null })
+      return new LocalLane({
+        sessionId: meta.sessionId, cols: meta.cols, rows: meta.rows,
+        shell: spec.shell, cwd: spec.cwd, attach: spec.attach ?? null,
+        // ctx-ref anchor: `tid` is the pane uuid (host label `t`), `conv` the
+        // conversation stamp (host label `conv`) → `[ DNT:{conv8}@{term8} ]`.
+        tid: spec.tid ?? null, conv: stampOrKeep8(meta.sessionId),
+      })
   }
 }

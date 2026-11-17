@@ -333,6 +333,25 @@ function resizeMode(platform) {
   return platform === "win32" ? "box" : "reflow";
 }
 
+// src/shared/ctxref.js
+function splitSlashArgs(rawInput) {
+  const REF = /\[\s*DNT:[0-9a-f]{0,8}@[0-9a-f]{8}\s*\]|DNT:[0-9a-f]{0,8}@[0-9a-f]{8}/gi;
+  const protected_ = [];
+  const text = String(rawInput ?? "").trim().replace(REF, (m) => (protected_.push(m), `\0${protected_.length - 1}\0`));
+  const [sub, ...rest0] = text.split(/\s+/);
+  const unprotect = (t) => t.replace(/\x00(\d+)\x00/g, (_, i) => protected_[Number(i)]);
+  return { sub, rest: rest0.map(unprotect) };
+}
+function parseCtxRef(input) {
+  if (typeof input !== "string") return null;
+  const m = input.trim().match(/^\[?\s*DNT:([0-9a-f]{8})?@([0-9a-f]{8})\s*\]?$/i);
+  if (!m) return null;
+  return { conv: m[1] ? m[1].toLowerCase() : null, term: m[2].toLowerCase() };
+}
+function bareTermStamp(input) {
+  return /^[0-9a-f]{8}$/i.test(input ?? "") ? input.toLowerCase() : null;
+}
+
 // ../../../../packages/dsh-interface/src/contracts/jsonOutcome.js
 var FAILURE_KIND = Object.freeze({
   /** signal aborted; issued-before cancellation makes no server-side claim. */
@@ -870,18 +889,49 @@ var SessionRegistry = class {
     return this.sessions.get(id);
   }
   /**
-   * Resolve id | name | addr ('<lane>/<name|short6>') | bare short6 to a record.
+   * Resolve id | name | addr ('<lane>/<name|short6>') | bare short6 |
+   * ctx ref ('[ DNT:{conv8}@{term8} ]') | bare 8-hex term stamp to a record.
+   * A ctx ref matches the session whose `t` label is the term stamp; a conv
+   * stamp additionally requires the `conv` label to agree.
    */
   resolve(ref) {
     if (!ref) return void 0;
     if (this.sessions.has(ref)) return this.sessions.get(ref);
+    const ctx = parseCtxRef(ref);
+    if (ctx) return this.#resolveCtx(ctx);
     const slash = String(ref).indexOf("/");
     if (slash >= 0) ref = String(ref).slice(slash + 1);
     if (this.names.has(ref)) return this.sessions.get(this.names.get(ref));
+    const bare = bareTermStamp(ref);
+    if (bare) {
+      const hit = this.#resolveCtx({ conv: null, term: bare });
+      if (hit) {
+        const prefixHit = [...this.sessions.values()].find((r) => r.id.startsWith(ref) && r !== hit);
+        if (prefixHit) throw err(KIND.NEEDS_TARGET, `'${ref}' names both a term stamp and session ids \u2014 resolve by addr or full id`);
+        return hit;
+      }
+    }
     for (const rec of this.sessions.values()) {
       if (rec.id.startsWith(ref) && ref.length >= 4) return rec;
     }
     return void 0;
+  }
+  /** All records matching a ctx pair — ambiguity must surface, not first-match. */
+  #ctxHits({ conv, term }) {
+    const hits = [];
+    for (const rec of this.sessions.values()) {
+      if (rec.labels?.t !== term) continue;
+      if (conv && rec.labels?.conv !== conv) continue;
+      hits.push(rec);
+    }
+    return hits;
+  }
+  #resolveCtx({ conv, term }) {
+    const hits = this.#ctxHits({ conv, term });
+    if (hits.length > 1) {
+      throw err(KIND.NEEDS_TARGET, `term stamp '${term}' is ambiguous \u2014 ${hits.map((r) => r.addr).join(", ")}; resolve by addr or id`);
+    }
+    return hits[0];
   }
   list() {
     return [...this.sessions.values()].map((s) => s.info());
@@ -905,9 +955,21 @@ var SessionRegistry = class {
     }
     if (spec.name) {
       if (this.names.has(spec.name)) throw err(KIND.NAME_TAKEN, `name '${spec.name}' already bound`);
+      if (parseCtxRef(spec.name) || bareTermStamp(spec.name)) {
+        throw err(KIND.INVALID, `name '${spec.name}' collides with ctx-ref grammar`);
+      }
     }
     const parentRec = spec.parent ? this.resolve(spec.parent) : void 0;
     if (spec.parent && !parentRec) throw err(KIND.NOT_FOUND, `no such parent '${spec.parent}'`);
+    const mintT = spec.labels?.t;
+    if (mintT) {
+      if (!/^[0-9a-f]{8}$/.test(mintT)) throw err(KIND.INVALID, `label 't' must be a lowercase 8-hex stamp, got '${mintT}'`);
+      const clash = [...this.sessions.values()].find((r) => r.labels?.t === mintT);
+      if (clash) throw err(KIND.CONFLICT, `term stamp '${mintT}' already bound to ${clash.addr}`);
+    }
+    if (spec.labels?.conv && !/^[0-9a-f]{8}$/.test(spec.labels.conv)) {
+      throw err(KIND.INVALID, `label 'conv' must be a lowercase 8-hex stamp, got '${spec.labels.conv}'`);
+    }
     const id = randomUUID();
     const cwd = await this.resolveCwd(spec);
     const shell = spec.shell || defaultShell();
@@ -988,7 +1050,9 @@ var SessionRegistry = class {
         rec.preservedScreen = this.persist.screenFor(t.id);
         rec.gate.restore(t.gate);
         this.sessions.set(t.id, rec);
-        if (t.name) this.names.set(t.name, t.id);
+        if (t.name && !this.names.has(t.name) && !parseCtxRef(t.name) && !bareTermStamp(t.name)) {
+          this.names.set(t.name, t.id);
+        }
         this.bus?.emit("created", rec.addr, { id: rec.id, lane: rec.lane, title: rec.title, restored: true });
       } catch {
       }
@@ -996,10 +1060,21 @@ var SessionRegistry = class {
   }
   /**
    * First attach to a placeholder spawns the fresh shell and replays the
-   * preserved screen above it. Idempotent.
+   * preserved screen above it. Idempotent AND race-safe: concurrent wakes
+   * share one spawn promise; a failed spawn re-arms the placeholder so the
+   * next attach retries instead of bricking the session.
    */
   async spawnPending(rec) {
     if (!rec.pending) return;
+    if (rec.pendingSpawn) return rec.pendingSpawn;
+    rec.pendingSpawn = this.#spawnPendingOnce(rec);
+    try {
+      return await rec.pendingSpawn;
+    } finally {
+      rec.pendingSpawn = null;
+    }
+  }
+  async #spawnPendingOnce(rec) {
     rec.pending = false;
     const meta = rec.meta ?? {};
     const shell = meta.shell || defaultShell();
@@ -1014,6 +1089,7 @@ var SessionRegistry = class {
       shellActivity: true,
       graceMs: 1500
     })).catch((e) => {
+      rec.pending = true;
       throw err(KIND.SPAWN_FAILED, String(e?.message ?? e));
     });
     rec.handle = handle;
@@ -1111,9 +1187,13 @@ var SessionRecord = class {
     return `${this.lane}/${this.name ?? this.id.slice(0, 6)}`;
   }
   info() {
+    const { conv, t } = this.labels ?? {};
     return {
       id: this.id,
       addr: this.addr,
+      // `[ DNT:{conv8}@{term8} ]` — or `DNT:@{term8}` when only `t` is bound;
+      // either form resolves through resolve().
+      ctx: t ? `DNT:${conv ?? ""}@${t}` : null,
       name: this.name,
       lane: this.lane,
       title: this.title,
@@ -1130,6 +1210,20 @@ var SessionRecord = class {
       meta: { ...this.meta, argv: void 0 }
       // argv may carry secrets — omit
     };
+  }
+  /**
+   * Busy = a foreground program is running or the program reported
+   * working/blocked via OSC 7501. Drives the UI close-confirm and the
+   * `busy` field on list/stats/sessions — honest, never guessed: shell
+   * idleness comes from the backend's own foreground inspection.
+   */
+  async isBusy() {
+    const st = this.status?.state;
+    if (st === "working" || st === "blocked") return true;
+    if (!this.handle) return false;
+    const fg = await this.handle.inspectForeground?.().catch(() => void 0);
+    if (!fg || fg.processGroupId == null) return false;
+    return fg.processGroupId !== this.handle.pid;
   }
   /** Adopt a (re)spawned handle — used by keep respawn. */
   adopt(handle) {
@@ -1296,6 +1390,7 @@ var SessionRecord = class {
   async agentSend(text, { enter = true, force = false, cond = null, urgent = false } = {}) {
     if (this.exited) throw err(KIND.FINISHED, "terminal exited");
     if (!this.handle && this.pending) await this.registry.spawnPending(this);
+    if (!this.handle) throw err(KIND.UNAVAILABLE, "terminal not spawned yet (attach to wake)");
     const st = this.status?.state;
     if (st === "blocked" && !force) throw err(KIND.BLOCKED, `terminal reports blocked${this.status.kind ? ` (${this.status.kind})` : ""}`);
     if (cond && st !== cond) throw err(KIND.STATUS_MISMATCH, `status is '${st ?? "none"}', required '${cond}'`);
@@ -1307,13 +1402,41 @@ var SessionRecord = class {
     return { ...r ?? {}, turn: this.turn };
   }
   setLabels(set = {}, unset = []) {
+    if ("t" in set || "conv" in set || unset.includes("t") || unset.includes("conv")) {
+      throw err(KIND.INVALID, "'t'/'conv' are reserved ctx anchors \u2014 set at create or pane attach only");
+    }
     Object.assign(this.labels, set);
     for (const k of unset) delete this.labels[k];
     this.registry.bus?.emit("labels", this.addr, { id: this.id, labels: this.labels });
     this.registry.persist?.schedule(this.registry);
     return this.labels;
   }
+  /**
+   * Bind ctx-ref anchors on attach. Existing bindings are authoritative —
+   * a second pane never rewrites them; it adopts the session's anchors
+   * (the ready frame echoes them back, so its copied ref resolves to this
+   * session even after its own tid was regenerated on layout loss).
+   */
+  graftCtxAnchors({ t, conv }) {
+    let changed = false;
+    for (const [k, v] of Object.entries({ t, conv })) {
+      if (!v || this.labels[k]) continue;
+      if (this.registry?.sessions && [...this.registry.sessions.values()].some((r) => r !== this && r.labels?.[k] === v)) continue;
+      this.labels[k] = v;
+      changed = true;
+    }
+    if (changed) {
+      this.registry.bus?.emit("labels", this.addr, { id: this.id, labels: this.labels });
+      this.registry.persist?.schedule(this.registry);
+    }
+    return this.labels;
+  }
   async resize(cols, rows) {
+    cols = Math.floor(Number(cols));
+    rows = Math.floor(Number(rows));
+    if (!Number.isFinite(cols) || !Number.isFinite(rows) || cols < 2 || rows < 2 || cols > 512 || rows > 512) {
+      throw err(KIND.INVALID, `resize needs finite cols/rows in [2,512], got ${cols}x${rows}`);
+    }
     const prev = `${this.meta.cols}x${this.meta.rows}`;
     this.meta = { ...this.meta, cols, rows };
     try {
@@ -1378,5 +1501,6 @@ var SessionRecord = class {
 };
 export {
   SessionRecord,
-  SessionRegistry
+  SessionRegistry,
+  splitSlashArgs
 };

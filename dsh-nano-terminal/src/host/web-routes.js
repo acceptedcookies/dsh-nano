@@ -14,6 +14,7 @@ import { createWebRegistrar } from 'dsh-interface/host'
 import { ensurePerfReviewHost, handleHostRead } from 'dsh-performance-review/host'
 import { BINDING_TABLE } from '../../lib/bindings.js'
 import { recoverAttach } from '../shared/align.js'
+import { stampOrKeep8 } from '../shared/ctxref.js'
 
 const HOST_PLUGIN = 'dsh-nano-terminal'
 let _hostApi = null
@@ -109,9 +110,18 @@ export function registerWebRoutes(ctx, deps) {
         try {
           const attachRef = attachId ?? msg.session
           if (attachRef) {
-            // ?session= or open.session accepts id | name | addr
+            // ?session= or open.session accepts id | name | addr | ctx ref
             record = registry.resolve(attachRef)
             if (!record) throw new Error('no such session')
+            // An attach can also graft ctx-ref anchors onto a session that
+            // predates them (or was spawned outside a pane). Reserved keys —
+            // only graftable into empty/identical slots, never silently
+            // rewritten by a second pane.
+            const graft = {
+              ...(stampOrKeep8(msg.tid) ? { t: stampOrKeep8(msg.tid) } : {}),
+              ...(stampOrKeep8(msg.conv) ? { conv: stampOrKeep8(msg.conv) } : {}),
+            }
+            if (Object.keys(graft).length) record.graftCtxAnchors(graft)
           } else if (msg.type === 'open') {
             record = await registry.create({
               sessionId: msg.owner,
@@ -122,6 +132,14 @@ export function registerWebRoutes(ctx, deps) {
               rows: msg.rows,
               title: msg.title,
               owner: msg.owner,
+              // ctx-ref anchor labels: `t` = the pane's 8-hex term stamp,
+              // `conv` = its conversation session stamp (ctxref.js format).
+              // Both are normalized to 8-hex here — the client sends `tid` as
+              // a full uuid and `conv` already stamped; stampOrKeep8 covers both.
+              labels: {
+                ...(stampOrKeep8(msg.tid) ? { t: stampOrKeep8(msg.tid) } : {}),
+                ...(stampOrKeep8(msg.conv) ? { conv: stampOrKeep8(msg.conv) } : {}),
+              },
             })
           } else {
             throw new Error('expected {type:"open"}')
@@ -147,6 +165,11 @@ export function registerWebRoutes(ctx, deps) {
             title: record.title,
             lane: record.lane,
             exited: record.exited,
+            // The session's authoritative ctx anchors — a re-attaching pane
+            // adopts these so its copied ref matches the host, not its own
+            // (possibly fresh-after-layout-loss) tid.
+            labels: { t: record.labels?.t ?? null, conv: record.labels?.conv ?? null },
+            ctx: record.info().ctx,
             replayBytes: attach.alignMode ? 0 : record.replayLen,
           })
           recoverAttach({
@@ -155,7 +178,7 @@ export function registerWebRoutes(ctx, deps) {
             replay: () => record.replayInto(socket, (s, chunk) => attach.data(chunk)),
           })
         } catch (err) {
-          sendText(socket, { type: 'error', message: String(err?.message ?? err) })
+          sendText(socket, { type: 'error', kind: err?.kind ?? 'invalid', message: String(err?.message ?? err) })
           sendClose(socket, 1008, 'open failed')
         }
       }
@@ -178,14 +201,21 @@ export function registerWebRoutes(ctx, deps) {
         res.end(JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'parse error' } }))
         return
       }
-      mcp.audit({ op: 'mcp.req', method: Array.isArray(parsed) ? 'batch' : parsed?.method })
+      // tools/call alone doesn't say *which* tool ran; the per-op mcp.* lines
+      // only cover a subset (create/send/close…). For everything else (read,
+      // wait, stats, list…) the request frame is the only trace — carry the
+      // tool name so the audit can distinguish them.
+      const tool = Array.isArray(parsed) ? undefined : parsed?.params?.name
+      mcp.audit({ op: 'mcp.req', method: Array.isArray(parsed) ? 'batch' : parsed?.method, ...(tool ? { tool } : {}) })
       const reply = await mcp.handleRpc(parsed)
       res.writeHead(200, { 'content-type': 'application/json' })
       res.end(reply === undefined ? '' : JSON.stringify(reply))
     },
     'dnt.sessions': async (req, res) => {
+      const rows = registry.list()
+      const busy = await Promise.all(rows.map((r) => registry.resolve(r.id)?.isBusy?.() ?? Promise.resolve(false)))
       res.writeHead(200, { 'content-type': 'application/json' })
-      res.end(JSON.stringify({ sessions: registry.list() }))
+      res.end(JSON.stringify({ sessions: rows.map((r, i) => ({ ...r, busy: !!busy[i] })) }))
     },
     // SSE event stream: subscribe → snapshot first frame, then live events.
     // ?since=<seq> resumes from a position; falling behind the ring answers

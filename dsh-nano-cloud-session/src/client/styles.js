@@ -35,7 +35,7 @@ export const CLOUD_CSS = `
 .dncs-rail { padding: 0; align-items: center; margin-bottom: var(--nano-space-3); }
 .dncs-rail button { width: 36px; height: 36px; justify-content: center; }
 
-.dncs-session { display: flex; align-items: center; gap: var(--nano-space-1); min-height: 30px; padding: 0 var(--nano-space-1); border-radius: var(--dsw-radius-md); color: var(--dsw-alias-label-primary); }
+.dncs-session { display: flex; align-items: center; gap: var(--nano-space-1); min-height: 32px; padding: 0 var(--nano-space-1); border-radius: var(--dsw-radius-md); color: var(--dsw-alias-label-primary); }
 .dncs-session:hover { background: var(--dsw-alias-interactive-bg-hover); }
 .dncs-session[data-active="true"] { background: var(--dsw-alias-interactive-bg-active); }
 .dncs-session-main { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: var(--nano-space-1); cursor: pointer; }
@@ -43,6 +43,11 @@ export const CLOUD_CSS = `
 .dncs-session-dot { flex: none; display: inline-flex; align-items: center; }
 .dncs-session-title { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
 .dncs-session-time { flex: none; color: var(--dsw-alias-label-tertiary); font-size: 11px; }
+/* Native session-row cadence: resting shows the time, the action slot only
+ * appears on hover/focus and takes the time's place. */
+.dncs-session-actions { flex: none; display: none; align-items: center; }
+.dncs-session:hover .dncs-session-actions, .dncs-session:focus-within .dncs-session-actions { display: inline-flex; }
+.dncs-session:hover .dncs-session-time, .dncs-session:focus-within .dncs-session-time { display: none; }
 
 .dncs-empty-row { display: flex; align-items: center; gap: var(--nano-space-1); min-height: 32px; padding: 0 var(--nano-space-1); border-radius: var(--dsw-radius-md); color: var(--dsw-alias-label-tertiary); font-size: 12px; cursor: pointer; }
 .dncs-empty-row:hover { background: var(--dsw-alias-interactive-bg-hover); }

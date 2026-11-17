@@ -194,15 +194,18 @@ function SessionRow({ session, selected, copy, face, locale }) {
         h('span', { className: 'dncs-sr-only' }, session.status ?? '')),
       h('span', { className: 'dncs-session-title' }, title),
       h('span', { className: 'dncs-session-time' }, relativeLabel(session.updated_at ?? session.created_at, locale))),
-    h(IconButton, {
-      icon: h(IconArchiveOutlineRegular, { size: 16 }),
-      'aria-label': copy('archive'),
-      onClick: event => {
-        event.stopPropagation()
-        event.preventDefault()
-        face.askArchive(session.session_id)
-      },
-    }))
+    /* Resting state shows the relative time; the archive action rides in on
+     * hover/focus exactly like the native session row's actions slot. */
+    h('span', { className: 'dncs-session-actions' },
+      h(IconButton, {
+        icon: h(IconArchiveOutlineRegular, { size: 14 }),
+        'aria-label': copy('archive'),
+        onClick: event => {
+          event.stopPropagation()
+          event.preventDefault()
+          face.askArchive(session.session_id)
+        },
+      })))
 }
 
 function sectionBody({ copy, face, state }) {
@@ -212,6 +215,14 @@ function sectionBody({ copy, face, state }) {
   const locale = state.locale
 
   if (state.loading === true) return skeleton()
+
+  /* The host switched the plugin off: no settings shortcut here either —
+   * every dialog field rides on the same unregistered routes. */
+  if (state.disabled === true) {
+    return h('div', { className: 'dncs-section-body' },
+      h('div', { className: 'dncs-empty-row dncs-section-muted' },
+        h('span', { className: 'dncs-empty-label' }, copy('pluginDisabled'))))
+  }
 
   if (profile == null) {
     return h('div', { className: 'dncs-section-body' }, h('div', {

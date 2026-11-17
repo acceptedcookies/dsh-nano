@@ -44,6 +44,7 @@ export function apply(ctx, config = {}) {
     sessions: [],
     expanded: true,
     activeSessionId: null,
+    disabled: false,
     settingsOpen: false,
     newOpen: false,
     archiveTarget: null,
@@ -57,6 +58,7 @@ export function apply(ctx, config = {}) {
       store.set({
         profiles: status.profiles ?? [],
         activeId: status.activeId ?? null,
+        disabled: false,
       })
       if (!status.activeId) {
         store.set({ sessions: [] })
@@ -66,7 +68,15 @@ export function apply(ctx, config = {}) {
       const sessions = (list.items ?? list.sessions ?? []).filter(item => item?.is_archived !== true)
       store.set({ sessions })
     } catch (cause) {
-      store.set({ error: cause?.message ?? String(cause) })
+      /* The plugin was switched off on the Plugins page: its host routes are
+       * unregistered, so the same-origin POST answers 404/405. Show a quiet
+       * disabled row instead of a bare HTTP status; the poll keeps running
+       * and re-enabling recovers without a reload. */
+      if (cause?.status === 404 || cause?.status === 405) {
+        store.set({ disabled: true, sessions: [], error: '' })
+      } else {
+        store.set({ error: cause?.message ?? String(cause) })
+      }
     } finally {
       store.set({ loading: false, refreshing: false })
     }

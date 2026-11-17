@@ -165,7 +165,7 @@ npm run build
 
 账本位置 `plugins/nano-model-selector/async-history/<sessionId>.jsonl`（与 `async-compact.json` 同目录）。**唯一写入方是 companion bundle**，本包只读；它是审计遥测，不是权威——一次压缩的权威仍是 session journal 的 `compaction/start|summary|end` 括号。
 
-状态文件：与 media-engine.json 同目录的 `plugins/nano-model-selector/async-compact.json`（tmp+rename 原子写，0600）。卸载不删。字段 7 项（无 `enabled`）：`model` / `bufferSizeAsync`（B，默认 0.65）/ `healthTargetAsync`（H，0.50）/ `bufferSizeSafety`（S，0.90 只读）/ `pinnedAsyncTokens`（100000）/ `pinnedFullTokens`（20000）/ `schema`（1）。`effectivePin = min(pinnedAsyncTokens, floor(0.15·W))`；DC-1 `B < windowMin` → `fullOnly`；fill = `totalTokens/W`。
+状态文件：与 media-engine.json 同目录的 `plugins/nano-model-selector/async-compact.json`（tmp+rename 原子写，0600）。卸载不删。字段 8 项（无 `enabled`）：`model` / `bufferSizeAsync`（B，默认 0.65，必须 `< H` 之上且 `< S`）/ `healthTargetAsync`（H，0.50）/ `bufferSizeSafety`（S，0.90 只读，文件不是 0.90 即 state-read-failed，不抬升）/ `pinnedAsyncTokens`（100000）/ `pinnedFullTokens`（20000）/ `extraRequirements`（追加在内置摘要指令之后，默认空）/ `schema`（1）。`summaryPrompt` 键出现即 `invalid-schema`。`effectivePin = min(pinnedAsyncTokens, floor(0.15·W))`；DC-1 `B < windowMin` → `fullOnly`；fill = `totalTokens/W`。
 
 面板入口：顶栏搜索框与关闭按钮之间的「异步压缩」按钮，仅当 companion bundle 已安装时出现，否则搜索框占满该位。目录刷新按钮在搜索框内。页内四态（未安装/未启用/已启用/degraded），开关走 `POST …/switch`；B/H/pinnedAsyncTokens/model 可编辑 PUT。
 
@@ -176,7 +176,7 @@ npm run build
 1. **固定高度**：时间线与诊断内容量差很大，内容撑高会让卡片在切页签时跳。`NanoDialog` 传 `fixedHeight: 560`，正文滚动。
 2. **页签用 `SegmentedControl` 而非 `SegmentedTabs`**：后者每个页签渲染一个 `Pill`，看起来像自绘的描边控件；前者是 shell 自己的滑动指示器。
 
-状态徽标：会话头部操作区（`conversation.session.header.utilities`，list slot，**必须带 `id`**，否则注册被拒）显示 `异步压缩已排队` / `正在异步压缩` / `已异步压缩 · N 条` / `异步压缩失败`，悬停给出摘要模型与 `摘要 v<8位指纹>`。指纹是生效摘要 prompt 的 sha256 前 8 位（内置与自定义不同，改 `summaryPrompt` 即变）。
+状态徽标：会话头部操作区（`conversation.session.header.utilities`，list slot，**必须带 `id`**，否则注册被拒）显示 `异步压缩已排队` / `正在异步压缩` / `已异步压缩 · N 条` / `异步压缩失败`，悬停给出摘要模型与 `摘要 v<8位指纹>`。指纹是生效摘要指令的 sha256 前 8 位（内置 + 附加要求整段；改 `extraRequirements` 即变）。
 
 **不要放在 `conversation.input.activity`**：那是 composer 自己的活动行，语义是「输入框正忙」；异步压缩是会话级后台任务，放进去会让人以为在等输入。
 

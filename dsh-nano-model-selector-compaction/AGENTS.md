@@ -56,8 +56,9 @@ an armed or in-flight episode (`drop` with `reason: 'disarmed'`); before that th
 gate could only arm, so raising the line could not stop work already under way.
 
 Every record also carries `promptVersion`: the first eight hex characters of
-the sha256 of the instruction actually sent (`policy.summaryPrompt` when set,
-otherwise the built-in `COMPACTION_INSTRUCTION`). It is stamped inside the
+the sha256 of the instruction actually sent (the built-in
+`COMPACTION_INSTRUCTION` plus the fixed `Additional requirements:` paragraph
+when `policy.extraRequirements` is non-empty). It is stamped inside the
 summarize closure, where the prompt is read — not at arm time, which could name
 a contract the request never used. The model name alone cannot
 answer "which summarizer contract produced this summary?" — the same model

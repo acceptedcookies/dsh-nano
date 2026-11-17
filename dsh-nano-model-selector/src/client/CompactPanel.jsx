@@ -329,7 +329,7 @@ export function CompactPanel({ copy, models, onError }) {
       )}
 
       {enabled && state.policy !== null && (
-        <PromptField copy={copy} value={policy.summaryPrompt ?? ''} onSave={saveField} busy={busy} />
+        <PromptField copy={copy} value={policy.extraRequirements ?? ''} version={policy.promptVersion ?? null} onSave={saveField} busy={busy} />
       )}
 
       {/* Compression explainer (-20): scenario tabs over live-config copy. */}
@@ -469,33 +469,39 @@ function NumberField({ label, field, value, unit, display, step, min, max, editi
   )
 }
 
-/** Preview and edit the summary instruction. An empty value means the built-in. */
-function PromptField({ copy, value, onSave, busy }) {
+/**
+ * The built-in instruction is the single source (-07①⑤): shown read-only with
+ * the fingerprint of the instruction actually sent; the only writable part is
+ * `extraRequirements`, appended after the built-in body. Reset = clear extras.
+ */
+function PromptField({ copy, value, version, onSave, busy }) {
   const [open, setOpen] = React.useState(false)
   const areaRef = React.useRef(null)
   // Tolerate a non-string field on the read path — a stale or hand-edited state
   // file must not take the whole selector down at render.
   const text = typeof value === 'string' ? value : ''
   const custom = text.trim().length > 0
-  const seed = custom ? text : DEFAULT_SUMMARY_PROMPT
   return (
     <div className="nms-compact-prompt">
       <div className="nms-compact-field" style={{ height: 'auto', padding: 0 }}>
         <span className="nms-compact-field-label">{copy.compactFieldPrompt}</span>
         <button type="button" className="nms-compact-value" disabled={busy} onClick={() => setOpen(prev => !prev)}>
           {custom ? copy.compactPromptCustom : copy.compactPromptBuiltin}
+          {typeof version === 'string' && version.length > 0 ? ` · ${copy.compactPromptVersion.replace('{v}', version)}` : ''}
         </button>
       </div>
       {open && (
         <>
-          <textarea ref={areaRef} className="nms-compact-prompt-text" defaultValue={seed} disabled={busy} />
+          <textarea className="nms-compact-prompt-text" defaultValue={DEFAULT_SUMMARY_PROMPT} readOnly disabled />
+          <span className="nms-model-meta">{copy.compactPromptExtra}</span>
+          <textarea ref={areaRef} className="nms-compact-prompt-text" style={{ minHeight: '70px' }} defaultValue={text} disabled={busy} />
           <span className="nms-compact-prompt-actions">
             <button type="button" className="nms-effort-button" disabled={busy} onClick={() => {
-              const text = areaRef.current?.value ?? ''
-              onSave('summaryPrompt', text.trim() === DEFAULT_SUMMARY_PROMPT.trim() ? '' : text)
+              const raw = areaRef.current?.value ?? ''
+              onSave('extraRequirements', raw)
               setOpen(false)
             }}>{copy.compactPromptSave}</button>
-            <button type="button" className="nms-effort-button" disabled={busy} onClick={() => { onSave('summaryPrompt', ''); setOpen(false) }}>{copy.compactPromptReset}</button>
+            <button type="button" className="nms-effort-button" disabled={busy} onClick={() => { onSave('extraRequirements', ''); setOpen(false) }}>{copy.compactPromptReset}</button>
             <button type="button" className="nms-effort-button" onClick={() => setOpen(false)}>{copy.compactPromptClose}</button>
           </span>
         </>

@@ -9,9 +9,11 @@ import { registerRoutes } from './lib/route-guard.js'
 import { compactRuntime } from './lib/compact-runtime.js'
 import { COMPACTION_BUNDLE_NAME, createBundleInventory } from './lib/bundle-inventory.js'
 import { BINDING_TABLE, PLUGIN } from './lib/bindings.js'
+import { createHash } from 'node:crypto'
 import {
   mergePutBody, readState, validateMasterOrder, validatePutBody, writeState,
 } from './lib/compact-policy.js'
+import { promptText } from './lib/compact-prompt.js'
 
 export const name = 'nano-model-selector'
 
@@ -428,6 +430,9 @@ function asyncCompactHandlers(ctx, runtimeHandle) {
     const rt = runtimeHandle?.runtime(null, W, null) ?? { fill: null, lastCompaction: null, degraded: null }
     return {
       ...policy,
+      // The fingerprint of the instruction that would be sent with this
+      // policy's extraRequirements (-07③): sha256 of the FULL text, first 8.
+      promptVersion: createHash('sha256').update(promptText(policy.extraRequirements), 'utf8').digest('hex').slice(0, 8),
       effective,
       runtime: rt,
     }

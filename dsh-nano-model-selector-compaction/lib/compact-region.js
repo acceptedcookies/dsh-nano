@@ -224,9 +224,31 @@ export const COMPACTION_INSTRUCTION = [
   `- If the conversation already contains a ${SUMMARY_OPEN_TAG} block, it is a PRIOR checkpoint. Do not copy it forward verbatim: preserve still-true facts, drop stale ones, and merge newer information into a single consolidated summary under the same structure.`,
 ].join('\n')
 
-/** Empty or whitespace means the built-in checkpoint instruction. */
-function instructionText(override) {
-  return typeof override === 'string' && override.trim().length > 0 ? override : COMPACTION_INSTRUCTION
+/**
+ * The instruction actually sent (-07①②③): always the built-in
+ * COMPACTION_INSTRUCTION, optionally followed by a fixed
+ * `Additional requirements:` paragraph carrying `policy.extraRequirements`
+ * (`override`). A non-empty extra never replaces the built-in body — the
+ * retired `summaryPrompt` wholesale override is gone for good.
+ * `verbatimRequest` appends the step-level compensation section
+ * (-03⑤/-07①): the current turn's opening user request, which the unified
+ * selector preserves in the retained tail, is echoed here verbatim so the
+ * summarizer knows it survives un-summarized.
+ * @param {{override?: string, verbatimRequest?: string}|string|undefined} options
+ *   `override` = `policy.extraRequirements`; a bare string is read as `override`.
+ * @returns {string} the instruction actually sent.
+ */
+export function instructionText(options) {
+  const override = typeof options === 'string' ? options : options?.override
+  const verbatim = typeof options === 'object' && options !== null ? options.verbatimRequest : undefined
+  const parts = [COMPACTION_INSTRUCTION]
+  if (typeof verbatim === 'string' && verbatim.length > 0) {
+    parts.push(`Current-turn opening request, preserved verbatim:\n${verbatim}`)
+  }
+  if (typeof override === 'string' && override.length > 0) {
+    parts.push(`Additional requirements:\n${override}`)
+  }
+  return parts.join('\n\n')
 }
 
 /**
@@ -234,15 +256,15 @@ function instructionText(override) {
  *
  * "Which summarizer contract produced this summary?" is unanswerable from the
  * model name alone — the same model summarises differently under the built-in
- * instruction and under a user override, and an override edited between two
+ * instruction and under an addendum, and an addendum edited between two
  * compactions is a different contract too. Eight hex characters is enough to
  * tell versions apart by eye and to correlate a summary with the policy that
  * produced it, without putting the prompt itself into an event or a log.
- * @param {string|undefined} override - `policy.summaryPrompt`; empty means built-in.
+ * @param {{override?: string, verbatimRequest?: string}|string|undefined} options
  * @returns {string} 8 lowercase hex characters.
  */
-export function instructionVersion(override) {
-  return createHash('sha256').update(instructionText(override), 'utf8').digest('hex').slice(0, 8)
+export function instructionVersion(options) {
+  return createHash('sha256').update(instructionText(options), 'utf8').digest('hex').slice(0, 8)
 }
 
 const CHECKPOINT_PREAMBLE =

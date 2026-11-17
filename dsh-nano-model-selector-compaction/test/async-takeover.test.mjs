@@ -63,7 +63,7 @@ function writePolicy(overrides = {}) {
     model: { provider: '', model: '' },
     bufferSizeAsync: 0.65,   // B
     healthTargetAsync: 0.5,  // H
-    bufferSizeSafety: 0.8,   // legacy stamp; read restamps S to 0.90
+    bufferSizeSafety: 0.9,   // S (read-only at 0.90; no read-time restamp)
     pinnedAsyncTokens: 100,  // < floor(0.15*W)=150 → effectivePin=100, no DC-1
     pinnedFullTokens: 100,
     ...overrides,
@@ -856,7 +856,7 @@ test('ledger: circuit-open suppression records a skip, not a second arm', async 
 })
 
 test('ledger: every decision carries the instruction version actually in force', async () => {
-  writePolicy({ summaryPrompt: '' })
+  writePolicy({ extraRequirements: '' })
   const ctx = makeCtx()
   makeEngine(ctx)
   const { session } = makeBLineSession('s-ledger-version')
@@ -866,14 +866,14 @@ test('ledger: every decision carries the instruction version actually in force',
   await ctx.settle(agent)
 
   const { instructionVersion } = await import('../lib/compact-region.js')
-  const builtin = instructionVersion('')
+  const builtin = instructionVersion({ override: '' })
   const records = ledgerOf('s-ledger-version')
   for (const record of records) {
     assert.equal(record.promptVersion, builtin, `${record.kind} must report the built-in version`)
   }
 
-  // A custom instruction is a different contract and must fingerprint differently.
-  writePolicy({ summaryPrompt: 'Summarize tersely.' })
+  // An extra requirement is a different contract and must fingerprint differently.
+  writePolicy({ extraRequirements: 'Summarize tersely.' })
   const ctx2 = makeCtx()
   makeEngine(ctx2)
   const second = makeBLineSession('s-ledger-version-2')
@@ -881,7 +881,7 @@ test('ledger: every decision carries the instruction version actually in force',
   await ctx2.emitPreStep(agent2)
   await ctx2.settle(agent2)
 
-  const custom = instructionVersion('Summarize tersely.')
+  const custom = instructionVersion({ override: 'Summarize tersely.' })
   assert.notEqual(custom, builtin)
   const customRecords = ledgerOf('s-ledger-version-2')
   assert.equal(customRecords[0].promptVersion, custom)
@@ -911,7 +911,9 @@ test('raising B above the current fill disarms an in-flight episode', async () =
   assert.equal(episode.phase, 'running')
 
   // The owner raises the buffer line above the current fill mid-turn.
-  writePolicy({ bufferSizeAsync: 0.99 })
+  // 0.85 keeps the strict order legal (H 0.5 < B 0.85 < S 0.90) while sitting
+  // above the fixture's 0.75 fill.
+  writePolicy({ bufferSizeAsync: 0.85 })
   await ctx.emitPreStep(agent)
 
   assert.equal(episode.phase, 'none', 'the episode must be settled')
@@ -929,7 +931,7 @@ test('raising B above the current fill disarms an in-flight episode', async () =
 })
 
 test('lowering B below the current fill arms on the very next step boundary', async () => {
-  writePolicy({ bufferSizeAsync: 0.9 })      // above the fixture's 0.75 fill
+  writePolicy({ bufferSizeAsync: 0.85 })     // above the fixture's 0.75 fill, below S
   const ctx = makeCtx()
   const engine = makeEngine(ctx)
   const { session } = makeBLineSession('s-rearm')
@@ -949,7 +951,7 @@ test('the instruction version is stamped where the prompt is read, not at arm ti
   // The prompt is resolved inside the summarize closure, so that is where the
   // version must be computed. Recording the arm-time version made the ledger
   // claim a contract that could differ from the one actually sent.
-  writePolicy({ summaryPrompt: '' })
+  writePolicy({ extraRequirements: '' })
   const ctx = makeCtx()
   const engine = makeEngine(ctx)
   const { session } = makeBLineSession('s-version-live')
@@ -957,13 +959,13 @@ test('the instruction version is stamped where the prompt is read, not at arm ti
   const episode = engine._episode(session)
 
   const { instructionVersion } = await import('../lib/compact-region.js')
-  episode.promptVersion = instructionVersion('')          // what arm would have stamped
+  episode.promptVersion = instructionVersion({ override: '' }) // what arm would have stamped
 
-  writePolicy({ summaryPrompt: 'Summarize tersely.' })    // policy changes before the read
+  writePolicy({ extraRequirements: 'Summarize tersely.' }) // policy changes before the read
   const deps = engine._regionDependencies(undefined, episode)
   // The LLM call itself is irrelevant here; the stamp happens before it.
   await deps.summarize({}, agent, undefined).catch(() => {})
 
-  assert.equal(episode.promptVersion, instructionVersion('Summarize tersely.'))
-  assert.notEqual(episode.promptVersion, instructionVersion(''))
+  assert.equal(episode.promptVersion, instructionVersion({ override: 'Summarize tersely.' }))
+  assert.notEqual(episode.promptVersion, instructionVersion({ override: '' }))
 })

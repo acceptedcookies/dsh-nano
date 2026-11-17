@@ -283,7 +283,7 @@ export default class NanoCompactionEngine extends CompactionEngine {
       : undefined
     // The instruction in force at arm time; the ledger and the activity line
     // report it so a summary can be traced back to the contract that made it.
-    episode.promptVersion = instructionVersion(policy.summaryPrompt)
+    episode.promptVersion = instructionVersion({ override: policy.extraRequirements })
     return true
   }
 
@@ -655,7 +655,7 @@ export default class NanoCompactionEngine extends CompactionEngine {
           bufferSizeAsync: policy.bufferSizeAsync,
           retain: effectivePin,
           target: policy.model.provider.length > 0 ? { provider: policy.model.provider, model: policy.model.model } : null,
-          promptVersion: instructionVersion(policy.summaryPrompt),
+          promptVersion: instructionVersion({ override: policy.extraRequirements }),
           orderOk: order.ok,
         })
         // Kick the summarizer now: it runs alongside the turn instead of after
@@ -749,14 +749,14 @@ export default class NanoCompactionEngine extends CompactionEngine {
       summarize: (input, agent, abort) => {
         const target = summarizationTarget ?? this._policyTarget(agent)
         const { policy, safetyOnly } = this._policy()
-        const instruction = !safetyOnly && typeof policy?.summaryPrompt === 'string' && policy.summaryPrompt.trim().length > 0
-          ? policy.summaryPrompt
-          : undefined
+        const instruction = !safetyOnly && typeof policy?.extraRequirements === 'string' && policy.extraRequirements.trim().length > 0
+          ? { override: policy.extraRequirements, verbatimRequest: episode?.verbatimRequest }
+          : (episode?.verbatimRequest !== undefined ? { verbatimRequest: episode.verbatimRequest } : undefined)
         // The prompt is read HERE, so the version recorded for this episode
         // must be computed HERE too. Recording the arm-time version made the
         // ledger claim a contract that could differ from the one actually sent
         // if the policy changed between arming and summarising.
-        if (episode !== undefined) episode.promptVersion = instructionVersion(instruction)
+        if (episode !== undefined) episode.promptVersion = instructionVersion(instruction ?? {})
         const configured = instruction === undefined ? target : { ...(target ?? {}), instruction }
         return summarizeWithLlm(this.ctx, input, agent, abort, configured)
       },

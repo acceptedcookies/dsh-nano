@@ -16,6 +16,7 @@ export const DOM_ROUTE = '/nano-local-sandbox/dom'
 export const SELFTEST_ROUTE = '/nano-local-sandbox/selftest'
 export const ELEMENTS_ROUTE = '/nano-local-sandbox/elements'
 export const BROWSE_HISTORY_ROUTE = '/nano-local-sandbox/browse-history'
+export const LOGS_ROUTE = '/nano-local-sandbox/logs'
 export const NETWORK_ROUTE = '/nano-local-sandbox/network'
 export const TARGETS_ROUTE = '/nano-local-sandbox/targets'
 export const EVALUATE_ROUTE = '/nano-local-sandbox/evaluate'
@@ -29,7 +30,7 @@ export const REFS_ROUTE = '/nano-local-sandbox/refs'
 export const CONTROL_ROUTE = '/nano-local-sandbox/control'
 
 import { request as httpRequest } from 'node:http'
-import { mkdirSync, readFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { BINDING_TABLE } from '../../lib/bindings.js'
@@ -49,6 +50,11 @@ import { spawnContainerPty } from './backend-apple.js'
 
 const keeper = createCdpKeeper()
 
+// One restore per process. The engine keeps the page, this process keeps the
+// socket that owns it: after a restart the page is about:blank and only the
+// durable last address can bring the human back to where they were.
+let restoreAttempted = false
+
 // The package version shown in EnvPanel's 插件 row — read once at load, the
 // deployed copy's package.json is the source of truth.
 const BUILD_ID = (() => {
@@ -57,6 +63,40 @@ const BUILD_ID = (() => {
   // cross-package comparison that reported drift no deploy had caused.
   try { return JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version || null } catch { return null }
 })()
+
+/**
+ * The page lives in the container, but the CDP socket that created it lives in
+ * this process: when the host restarts the socket closes and the engine drops
+ * the page back to about:blank. Nothing in memory survives that, so the last
+ * address is kept on the instance's own state volume — one file per instance,
+ * next to the engine's own state, which is the only durable copy.
+ */
+function stateDirFor(deps) {
+  const env = deps.env || process.env
+  const tag = envTag(env)
+  const home = deps.home || env.HOME || ''
+  return env.KITESURF_STATE || `${home}/.dsh-kitesurf-state${tag === 'prod' ? '' : `-${tag}`}`
+}
+
+function lastPagePath(deps) {
+  return join(stateDirFor(deps), 'last-page.json')
+}
+
+/** @returns {{url: string, at: string}|null} */
+function readLastPage(deps) {
+  try {
+    const info = JSON.parse(readFileSync(lastPagePath(deps), 'utf8'))
+    return typeof info?.url === 'string' && info.url ? { url: info.url, at: String(info.at || '') } : null
+  } catch { return null }
+}
+
+function writeLastPage(deps, url) {
+  if (typeof url !== 'string' || !url) return
+  try {
+    mkdirSync(stateDirFor(deps), { recursive: true })
+    writeFileSync(lastPagePath(deps), JSON.stringify({ url, at: new Date().toISOString() }, null, 2) + '\n')
+  } catch { /* a read-only home only costs the restore, not the browse */ }
+}
 
 /**
  * #4 multi-env: one host owns ONE kitesurf-family container, but that name +
@@ -624,6 +664,25 @@ function clientFor(session, base, deps) {
   return ensureClient(session, base, deps?.connect)
 }
 
+/**
+ * Re-open the address this instance last browsed, if the engine came back
+ * blank. Called once per host process, from the first /status.
+ * @returns {Promise<boolean>} whether a navigation was issued
+ */
+async function restoreLastPage(session, deps) {
+  const remembered = readLastPage(deps)
+  if (!remembered) return false
+  const base = await ensureBase(session, deps)
+  if (!base) return false
+  const client = await clientFor(session, base, deps)
+  const current = await evaluatePage(client, 'location.href').catch(() => null)
+  const href = typeof current === 'string' ? current : current?.value
+  if (href && href !== 'about:blank') return false
+  await navigate(session, base, remembered.url)
+  session.history.push({ url: remembered.url, at: new Date().toISOString() })
+  return true
+}
+
 async function ensureBase(session, deps) {
   if (session.httpBase) return session.httpBase
   if (!deps.backend?.inspect) return null
@@ -891,8 +950,14 @@ export function routeSpecs(deps = {}) {
       }
       if (row.path.endsWith('/status')) {
         await ensureBase(session, deps)
+        if (!restoreAttempted && session.phase === 'running') {
+          restoreAttempted = true
+          // Fire and forget: the pane polls status, and the next shot picks up
+          // the restored page. Never make status wait on a navigation.
+          restoreLastPage(session, deps).catch(() => {})
+        }
         const snap = await envSnapshot(session, deps)
-        send(res, 200, { ...snap, ok: true, kite: { phase: session.phase } })
+        send(res, 200, { ...snap, ok: true, kite: { phase: session.phase }, lastPage: readLastPage(deps) })
         return
       }
       if (row.path.endsWith('/kite')) {
@@ -924,6 +989,7 @@ export function routeSpecs(deps = {}) {
           if (base) {
             try { await navigate(session, base, body.url) } catch { /* the history entry still stands */ }
           }
+          writeLastPage(deps, body.url)
         }
         send(res, 200, { ok: true, url: body.url ?? null })
         return
@@ -935,6 +1001,24 @@ export function routeSpecs(deps = {}) {
           send(res, 200, result)
         } catch (error) {
           send(res, 502, { ok: false, errorId: error.errorId || 'kitesurf.engine.connect', error: error.message })
+        }
+        return
+      }
+      if (row.path.endsWith('/logs')) {
+        // Engine output exists only inside the container. Without this the
+        // pane can say "engine down" but never why.
+        const url = new URL(req.url, 'http://localhost')
+        const tail = Math.max(20, Math.min(2000, Number(url.searchParams.get('tail')) || 200))
+        const name = containerNameFor(session, deps.env || process.env)
+        try {
+          if (typeof deps.backend?.logs !== 'function') {
+            send(res, 409, { ok: false, errorId: 'kitesurf.kite.state', error: 'backend has no logs()' })
+            return
+          }
+          const out = await deps.backend.logs(name, { tail })
+          send(res, 200, { ok: true, container: name, tail, text: out.text })
+        } catch (error) {
+          send(res, 502, { ok: false, errorId: 'kitesurf.engine.connect', error: error.message })
         }
         return
       }
@@ -1268,7 +1352,7 @@ export function routeSpecs(deps = {}) {
             send(res, error.status || 502, { ok: false, errorId: error.errorId || 'kitesurf.engine.connect', error: error.message })
             return
           }
-          const last = session.history.at(-1)
+          const last = session.history.at(-1) ?? readLastPage(deps)
           if (last && snap.httpBase) {
             try { await navigate(session, snap.httpBase, last.url) } catch { /* replay is best-effort */ }
           }

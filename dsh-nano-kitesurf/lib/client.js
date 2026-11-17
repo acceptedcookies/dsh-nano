@@ -3158,7 +3158,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       return "";
     }
   }
-  var NAV_CONFIRM_MS = 1e4;
+  var NAV_CONFIRM_MS = 8e3;
   var NAV_POLL_MS = 400;
   function sameUrl(value) {
     const text = String(value ?? "").trim();
@@ -3819,6 +3819,14 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       try {
         await work();
       } catch (cause) {
+        if (opts.retry > 0) {
+          try {
+            await work();
+            return;
+          } catch (again) {
+            cause = again;
+          }
+        }
         if (opts.dialog) showOpenError(cause, opts.url);
         else showError(cause);
       } finally {
@@ -3864,7 +3872,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       });
     }
     function openPage(url) {
-      return run(() => navigate(url), { beat: true, dialog: true, url });
+      return run(() => navigate(url), { beat: true, dialog: true, url, retry: 1 });
     }
     function remember(url) {
       setPageUrl(url);

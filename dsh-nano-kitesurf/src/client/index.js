@@ -2323,9 +2323,10 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
         // painted the opaque Start button straight over the error text
         // ("引启动引擎答"). Everything below is a single vertical stack.
         h('div', { className: 'nks-empty-icon' }, glyph('annotate')),
+        // The centred heartbeat already says "opening"; repeating it here made
+        // the pane look like two stacked loading states.
         h('div', { className: 'nks-empty-title' },
-          busy ? copy.opening
-            : status?.engineMismatch === true ? copy.engineMismatch
+          status?.engineMismatch === true ? copy.engineMismatch
             : statusDown ? copy.errorTitle
             : copy.emptyTitle),
         !busy && !statusDown && !status?.engineMismatch ? h('div', { className: 'nks-empty-body' }, copy.emptyBody) : null,

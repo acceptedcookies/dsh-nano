@@ -109,14 +109,15 @@ SETUP ──▶ P1 策略硬切+烘焙 ──▶ P2 工具+patch ──┐
   - **验证映射**：`-` · **依赖**：`LOG`
   - **执行状态**：`done` · **时间**：`2026-11-17T19:50+08:00` · **证据**：`docs/code-review/26-nov/ACE-1117-closure.md` 117 行，close-type=`implementation-complete-awaiting-live-verification`
 
-- [ ] `REV` — ≥3 路审查子代理（真相层对账 / 完成度 / 防假绿·防侧载），报告落盘 `.anote/reviews/ACE/1117/`
+- [x] `REV` — ≥3 路审查子代理（真相层对账 / 完成度 / 防假绿·防侧载），报告落盘 `.anote/reviews/ACE/1117/`
   - **完成判据**：每路专用 PROMPT；报告落盘；发现项逐条处置；修复后重测
   - **验证映射**：审查报告 · **依赖**：`CLOS`
-  - **执行状态**：`not-started` · **时间**：`-` · **证据**：`-`
+  - **执行状态**：`done` · **时间**：`2026-11-17T20:10+08:00` · **证据**：`.anote/reviews/ACE/1117/exec-58caf6a/` 三份 prompt+report+复评；truth/completeness 首轮 FAIL→修复 `c21cc9c`→复评 PASS；antigreen 首轮 PASS（有条件）→残余 `5a59730` 清理
 
-- [ ] `FIX` — 审查发现的修复 + 测试↔修复循环 + closure 更新 + 合入 main + worktree 清理
+- [x] `FIX` — 审查发现的修复 + 测试↔修复循环 + closure 更新 + 合入 main + worktree 清理
   - **完成判据**：T01–T19 仍 PASS；closure 反映最终状态；`git worktree remove`
   - **验证映射**：全部 Test-ID · **依赖**：`REV`
+  - **执行状态**：`done` · **时间**：`2026-11-17T20:15+08:00` · **证据**：FIX 提交 `c21cc9c`+`5a59730`；DNMSC 57/57、DNMS 77/77；closure §0/§2/§6 更新；合入 main 与 worktree 清理随后执行
   - **执行状态**：`not-started` · **时间**：`-` · **证据**：`-`
 
 ## 4. 验收与证据

@@ -9,13 +9,13 @@
 > 关联 design: `N/A`
 > 关联 action-plan: `docs/code-review/26-nov/ACE-1117-action-plan.md`（§11.A 执行日志已回填）
 > 关联 evidence: `inline §2`；测试文件 `dsh-nano-model-selector-compaction/test/`、`dsh-nano-model-selector/test/`
-> 关联 review: `.anote/reviews/ACE/1117/`（REV 路进行中）
+> 关联 review: `.anote/reviews/ACE/1117/exec-58caf6a/`（truth-reconciliation / completeness / antigreen-antisideload 三路，复评全部 PASS——truth/completeness 首轮 FAIL 后修复于 `c21cc9c`+`5a59730` 复评转 PASS；antigreen 首轮 PASS（有条件），残余已清理）
 
 ---
 
 ## 0. 一句话 verdict
 
-> ACE-1117 六个 Phase（策略硬切 / inspect_checkpoint / 生命周期互斥 / 三级选择器+prompt+帧 / session 投影+UI 心跳 / closure 收口）全部落地并测试通过；剩余缺口是 live GUI 实测与合入 main，未授权发布。
+> ACE-1117 六个 Phase（策略硬切 / inspect_checkpoint / 生命周期互斥 / 三级选择器+prompt+帧 / session 投影+UI 心跳 / closure 收口）全部落地并测试通过（DNMSC 57/57、DNMS 77/77）；三路审查复评全部 PASS；剩余缺口是 live GUI 实测与合入 main，未授权发布。
 
 > **本阶段最关键的 known gap（对下游影响）**：
 > 1. `?sessionId=<id>` 对无会话对象（纯 id）时 `runtime.fill` 恒 null——fold 可读、token 计量不可做（如实记录于 §11.A）。
@@ -55,7 +55,7 @@
 
 | 验证项 | 命令 / 证据 | 结果 | 覆盖范围 |
 |--------|-------------|------|----------|
-| DNMSC 全量 | `cd dsh-nano-model-selector-compaction && node --test "test/*.test.mjs" --test-timeout=20000` | 55/55 PASS | T01–T14 + T19 + 协议 hash |
+| DNMSC 全量 | `cd dsh-nano-model-selector-compaction && node --test "test/*.test.mjs" --test-timeout=20000` | 57/57 PASS | T01–T14 + T19 + 协议 hash + T06 边界夹具 |
 | DNMS 全量 | `cd dsh-nano-model-selector && node --test "test/*.test.mjs"` | 77/77 PASS | T15–T18 + 既有 69 项 |
 | 产物构建 | `npm run build`（DNMS） | `lib/client.js`/`bindings.js`/`perf-declaration.js` 再生 | 烘焙完整性 |
 | 产物定时器审计 | `grep -o '15000\|30000\|3e4' lib/client.js` | 零命中；`3e3` 恰 1 处 | 常驻调度退役 |
@@ -107,7 +107,7 @@
 | 入口条件 | 状态 | 备注 |
 |----------|------|------|
 | 合入 `main` + `git worktree remove` | ⏸ | FIX 路执行 |
-| REV 三路审查报告落盘 | ⏸ | `.anote/reviews/ACE/1117/` 进行中 |
+| REV 三路审查报告落盘 | ✅ | `.anote/reviews/ACE/1117/exec-58caf6a/` 三份报告 + 复评全部 PASS |
 | live GUI 实测 | ⏸ | 需 desktop 重启 |
 | 装包授权 | ⏸ | 独立 [业主] 决定 |
 

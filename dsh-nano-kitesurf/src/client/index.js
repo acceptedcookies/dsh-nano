@@ -295,6 +295,22 @@ function post(path, body) {
   })
 }
 
+/** Bounded wait for a navigation to become visible: the pane polls the frame
+ *  until it reports the requested url, then gives up and reports a failure. */
+const NAV_CONFIRM_MS = 10000
+const NAV_POLL_MS = 400
+
+/** Compare two addresses for "did the frame land here", ignoring the empty
+ *  forms (`about:blank`, missing) and a trailing slash. */
+function sameUrl(value) {
+  const text = String(value ?? '').trim()
+  if (!text || text === 'about:blank') return ''
+  try {
+    const parsed = new URL(text)
+    return `${parsed.protocol}//${parsed.host}${parsed.pathname.replace(/\/$/, '')}${parsed.search}`
+  } catch { return text.replace(/\/$/, '') }
+}
+
 /** Content-rect of the letterboxed image inside its frame; null before load. */
 function frameOf(image) {
   if (!image || !image.naturalWidth) return null
@@ -806,15 +822,35 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
     setHistory((current) => [url, ...current.filter((item) => item !== url)].slice(0, 8))
   }
 
+  /**
+   * `/open` answers ok as soon as the engine accepts the address. The renderer
+   * can still fail to produce a document — a refused connection, blocked
+   * egress, a wedged page — and the previous document stays on screen. That is
+   * the "opened for ages and nothing happened" report: no error, no dialog,
+   * just the old page. Confirm the frame actually reports the new url.
+   */
   async function navigate(url) {
     await perf.span('navigate', async () => {
       await post(OPEN, { url })
     })
     const fit = frameSize()
-    const shotPayload = await post(SHOT, { format: 'webp', ...(fit ? { fit } : {}) })
+    const want = sameUrl(url)
+    const started = Date.now()
+    let shotPayload = null
+    for (;;) {
+      shotPayload = await post(SHOT, { format: 'webp', ...(fit ? { fit } : {}) })
+      if (sameUrl(shotPayload.url) === want) break
+      if (Date.now() - started >= NAV_CONFIRM_MS) break
+      await new Promise((resolve) => { window.setTimeout(resolve, NAV_POLL_MS) })
+    }
     setShot(shotPayload.data)
     setShotMime(shotPayload.mimeType || 'image/webp')
     setShotMeta({ url: shotPayload.url || '', scrollY: shotPayload.scrollY || 0, targetId: shotPayload.targetId || '', viewport: shotPayload.viewport?.width ?? null, at: Date.now() })
+    if (sameUrl(shotPayload.url) !== want) {
+      const error = new Error(`${copy.navigateUnconfirmed} ${url}`)
+      error.errorId = 'kitesurf.navigate.failed'
+      throw error
+    }
     await loadDom()
     setPick(null)
     remember(url)

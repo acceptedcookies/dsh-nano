@@ -5,6 +5,7 @@
 //   local and mcp only. There is no isolate lane and no sandbox lane.
 
 import { decodeMcpReply } from 'dsh-interface/host'
+import { handleFrame } from './frames.js'
 
 const ROUTE = '/dsh-nano-terminal'
 
@@ -24,7 +25,7 @@ function streamBase() {
 }
 
 // dnt-ws-v2 framed channel: [channel u32][kind u8][len u32][payload]
-const FR_DATA = 0, FR_CREDIT = 1, FR_AUTO_INPUT = 6, FR_SNAPSHOT = 7
+const FR_DATA = 0, FR_CREDIT = 1, FR_AUTO_INPUT = 6
 const CREDIT_INIT = 256 * 1024
 
 function encChannel(channel, kind, payload) {
@@ -54,6 +55,11 @@ export class LocalLane {
     this.closed = false
     this.v = 1 // negotiated protocol version
     this.credit = 0 // bytes consumed, to be reported
+    this.alignMode = false
+    this.dropping = false
+    this.alignSeq = null
+    this.platform = null
+    this.onAlign = () => {}
   }
 
   open() {
@@ -66,10 +72,10 @@ export class LocalLane {
       ws.onopen = () => {
         opened = true
         if (this.attach) {
-          ws.send(JSON.stringify({ type: 'open', v: 2, session: this.attach, owner: this.sessionId }))
+          ws.send(JSON.stringify({ type: 'open', v: 2, align: 1, session: this.attach, owner: this.sessionId }))
         } else {
           ws.send(JSON.stringify({
-            type: 'open', v: 2, owner: this.sessionId, shell: this.shell,
+            type: 'open', v: 2, align: 1, owner: this.sessionId, shell: this.shell,
             cwd: this.cwd, cols: this.cols, rows: this.rows,
           }))
         }
@@ -83,6 +89,11 @@ export class LocalLane {
             this.id = msg.session
             this.addr = msg.addr
             this.v = msg.v ?? 1
+            this.platform = msg.platform ?? null
+            // 能对齐的连接在第一帧快照到达前丢掉原始字节，避免把 replay 灌进 wasm。
+            this.alignMode = this.v === 2 && msg.align === 1
+            this.dropping = this.alignMode
+            this.alignSeq = null
             this.onReady(msg)
             resolve(msg)
           } else if (msg.type === 'error') {
@@ -90,6 +101,8 @@ export class LocalLane {
             reject(new Error(msg.message))
           } else if (msg.type === 'exit') {
             this.onExit(msg)
+          } else if (msg.type === 'stalled') {
+            this.requestAlign()
           }
           return
         }
@@ -116,20 +129,26 @@ export class LocalLane {
   }
 
   #onFrame(buf) {
-    if (buf.length < 9) return
-    const v = new DataView(buf.buffer, buf.byteOffset)
-    const kind = v.getUint8(4)
-    const len = v.getUint32(5)
-    const payload = buf.subarray(9, 9 + len)
-    if (kind === FR_DATA || kind === FR_SNAPSHOT) {
-      this.onOutput(payload)
-      // credit: report bytes consumed so the host keeps streaming
-      const credit = new Uint8Array(4)
-      new DataView(credit.buffer).setUint32(0, payload.length)
-      this.ws?.send(encChannel(0, FR_CREDIT, credit))
-    }
-    // SNAPSHOT payload already contains its own clear-screen escapes;
-    // HELD/FACTS/etc. have no client action.
+    // 到达即写入。不把快照载荷当普通字节，也不等绘制才回信用。
+    handleFrame(this, buf, {
+      onOutput: (bytes) => this.onOutput(bytes),
+      onAlign: (snap) => this.onAlign(snap),
+      credit: (n) => this.#credit(n),
+    })
+  }
+
+  #credit(n) {
+    const credit = new Uint8Array(4)
+    new DataView(credit.buffer).setUint32(0, n)
+    this.ws?.send(encChannel(0, FR_CREDIT, credit))
+  }
+
+  /** 页面刚从冻结恢复：丢掉积压，等一帧当前屏对齐。 */
+  requestAlign() {
+    if (!this.alignMode || this.ws?.readyState !== 1) return
+    if (this.dropping) return
+    this.dropping = true
+    this.ws.send(JSON.stringify({ type: 'align' }))
   }
 
   write(bytes) {

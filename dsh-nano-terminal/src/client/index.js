@@ -143,6 +143,23 @@ export function apply(ctx) {
     }
   }, 'dsh-nano-terminal.orphanSweep')
 
+  // 宿主 scrollBody 在 [data-conversation-scroll] 上留着 scrollbar-gutter:stable
+  // 和 margin-right:2px。原生滚动条在 macOS 上是覆盖层，不占宽，这条槽却仍
+  // 把整列往左挤。轨迹和终端的状态栏都画在这一列里，所以两条栏的右侧一起出
+  // 现空白。修正只打在这个公开属性上，不跟 CSS Modules 哈希，也不再画悬浮
+  // 滚动条、不改宿主节点的 position。
+  ctx.effect(() => {
+    const style = document.createElement('style')
+    style.dataset.dntScrollport = '1'
+    style.textContent = [
+      '[data-conversation-scroll]{scrollbar-gutter:auto;margin-right:0}',
+      '[data-conversation-scroll]::-webkit-scrollbar{width:0;height:0}',
+      '[data-conversation-scroll]{scrollbar-width:none}',
+    ].join('\n')
+    document.head.appendChild(style)
+    return () => style.remove()
+  }, 'dsh-nano-terminal.scrollport')
+
   // —— intake for sibling plugins ——
   // A file explorer (or anything else) asks for a terminal at a directory
   // through the cordis service map rather than a window global or a bespoke

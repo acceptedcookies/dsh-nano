@@ -54,6 +54,16 @@ export class ScreenMirror {
   resize(cols, rows) {
     this.e.dnt_resize(this.id, cols, rows)
   }
+  /** 不重排。给会自己重画的 PTY（Windows ConPTY）用。 */
+  resizeBox(cols, rows) {
+    const fn = this.e.dnt_resize_box
+    if (fn) fn(this.id, cols, rows)
+    else this.resize(cols, rows)
+  }
+  cols() { return this.e.dnt_cols?.(this.id) ?? 0 }
+  rows() { return this.e.dnt_rows?.(this.id) ?? 0 }
+  cursorX() { return this.e.dnt_cursor_x?.(this.id) ?? 0 }
+  cursorY() { return this.e.dnt_cursor_y?.(this.id) ?? 0 }
   modes() {
     return this.e.dnt_modes?.(this.id) >>> 0
   }

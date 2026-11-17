@@ -277,11 +277,15 @@ e.dnt_free(id)
   att2.credit = 0
   att2.onCredit(2)
   t('credit consumed', att2.pending === 1)
-  // snapshot fallback: pending > credit + SNAP_LIMIT
+  // 信用耗尽不再清屏：块被丢掉，等 align() 发当前屏
   att2.pending = att2.credit + SNAP_LIMIT + 1
   att2.data(Buffer.from('z'))
-  const snapFr = sentChan(sent2[sent2.length - 2]) // snapshot, then the data frame
-  t('snapshot fallback', snapFr.kind === FR_KIND.SNAPSHOT && snapFr.payload.toString().includes('SNAP'))
+  t('credit stall drops chunk', att2.stalled === true && sent2.length === 2 && sent2[1].toString().includes('stalled'))
+  att2.align()
+  const snapFr = sentChan(sent2[sent2.length - 1])
+  t('align snapshot has screen', snapFr.kind === FR_KIND.SNAPSHOT && snapFr.payload.includes(Buffer.from('SNAP')))
+  t('align snapshot is not CSI 2J', !snapFr.payload.includes(Buffer.from('\x1b[2J')))
+  t('stall cleared by align', att2.stalled === false && att2.pending === 0)
 }
 
 // 12. Persist roundtrip + placeholder restore
@@ -451,6 +455,76 @@ e.dnt_free(id)
 
   const jsx = readFileSync(join(root, 'src/client/NanoTerm.jsx'), 'utf8')
   t('字体变更走整帧 invalidate', /reconfigure = \(next\) => \{[\s\S]*?term\.invalidate\(\)/.test(jsx))
+}
+
+// 14. 1117 对齐与不重排
+{
+  id = e.dnt_new(8, 4, 20)
+  write(id, 'OLD-TEXT')
+  const nb = new TextEncoder().encode('NEW')
+  const p = e.dnt_alloc(nb.length)
+  mem().set(nb, p)
+  e.dnt_replace_visible(id, p, nb.length, 1, 0)
+  e.dnt_dealloc(p, nb.length)
+  const replaced = dumpLines(id, 0)
+  t('replace visible drops old text', replaced.startsWith('NEW') && !replaced.includes('OLD'))
+  t('replace visible sets cursor', e.dnt_cursor_x(id) === 1 && e.dnt_cursor_y(id) === 0)
+  write(id, '\x1b[?1049hALT')
+  e.dnt_scroll(id, 3)
+  const nb2 = new TextEncoder().encode('MAIN')
+  const p2 = e.dnt_alloc(nb2.length)
+  mem().set(nb2, p2)
+  e.dnt_replace_visible(id, p2, nb2.length, 0, 0)
+  e.dnt_dealloc(p2, nb2.length)
+  const afterAlt = dumpLines(id, 0)
+  t('replace leaves alt screen', (e.dnt_modes(id) & (1 << 9)) === 0 && afterAlt.startsWith('MAIN') && !afterAlt.includes('ALT'))
+  t('replace pins the viewport', e.dnt_view_start(id) === e.dnt_total_lines(id) - e.dnt_rows(id))
+  e.dnt_free(id)
+
+  id = e.dnt_new(8, 4, 20)
+  write(id, '01234567WRAP')
+  e.dnt_resize(id, 4, 4)
+  const reflowed = dumpLines(id, 0)
+  e.dnt_free(id)
+
+  id = e.dnt_new(8, 4, 20)
+  write(id, '01234567WRAP')
+  e.dnt_resize_box(id, 4, 4)
+  const boxed = dumpLines(id, 0)
+  t('resize box does not reflow', boxed !== reflowed && boxed.split('\n')[0] === '0123')
+  e.dnt_free(id)
+
+  id = e.dnt_new(20, 4, 10)
+  write(id, 'keep')
+  write(id, ' alive')
+  t('wasm id still accepts write', dumpLines(id, 0).includes('keep alive'))
+  e.dnt_free(id)
+}
+
+// 15. zsh 预提示符探针：`%` + 79 空格 + `\r \r\r ESC[J`。
+//     几何正确时它自己擦掉；窄几何起步会把 `%` 滚进历史再被 reflow 拼回来。
+{
+  const probe = Buffer.from(
+    '\x1b[1m\x1b[7m%\x1b[27m\x1b[1m\x1b[0m' + ' '.repeat(79) +
+    '\r \r\r\x1b[0m\x1b[27m\x1b[24m\x1b[Jseanz@m3max host % \x1b[K\x1b[?2004h',
+  )
+  id = e.dnt_new(80, 6, 50)
+  write(id, probe)
+  const wide = dumpLines(id, 0)
+  t('zsh 探针在 80 列不留孤立 %', !/^%/m.test(wide) && wide.startsWith('seanz@m3max host %'))
+  e.dnt_free(id)
+
+  // 回归样例：2×2 起步再拉宽，`%` 被空格滚走并标成软折行，reflow 把它拼回
+  // 提示符行。这正是「终端里多出一个 %」的成因，客户端不能再这样起步。
+  id = e.dnt_new(2, 2, 50)
+  write(id, probe)
+  e.dnt_resize(id, 80, 6)
+  t('窄几何起步会留下孤立 %（成因样例）', /%/.test(dumpLines(id, 0).split('\n')[0]))
+  e.dnt_free(id)
+
+  const jsx = readFileSync(join(root, 'src/client/NanoTerm.jsx'), 'utf8')
+  t('wasm 与 lane 共用初始几何', /new WasmTerm\(INITIAL_COLS, INITIAL_ROWS,/.test(jsx)
+    && /makeLane\(laneSpec, \{ cols: INITIAL_COLS, rows: INITIAL_ROWS,/.test(jsx))
 }
 
 // 13. 合同套件：test/*.test.mjs（node:test）由本入口一起收集，

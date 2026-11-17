@@ -12,6 +12,7 @@
 
 import { createWebRegistrar } from 'dsh-interface/host'
 import { BINDING_TABLE } from '../../lib/bindings.js'
+import { recoverAttach } from '../shared/align.js'
 
 export function registerWebRoutes(ctx, deps) {
   const { registry, bus, mcp, laneStatus, ws } = deps
@@ -78,6 +79,7 @@ export function registerWebRoutes(ctx, deps) {
           try {
             const msg = JSON.parse(payload.toString('utf8'))
             if (msg.type === 'resize' && record) void record.resize(msg.cols, msg.rows)
+            if (msg.type === 'align' && attach) attach.align()
             if (msg.type === 'ping') sendText(socket, { type: 'pong', t: Date.now() })
           } catch { /* ignore malformed control */ }
         }
@@ -113,20 +115,28 @@ export function registerWebRoutes(ctx, deps) {
           const wantV2 = msg.v === 2 || url.searchParams.get('v') === '2'
           attach = new Attach(socket, record)
           attach.v = wantV2 ? 2 : 1
+          // 新客户端声明 align:1 时，重连走当前屏，不再把 512KiB 原始 replay 当恢复主路径。
+          attach.alignMode = wantV2 && msg.align === 1
           record.attached.set(socket, attach)
           socket.once('close', () => { record?.detach(socket); record?.attached.delete(socket) })
           ready = true
           sendText(socket, {
             type: 'ready',
             v: attach.v,
+            align: attach.alignMode ? 1 : 0,
+            platform: process.platform,
             session: record.id,
             addr: record.addr,
             title: record.title,
             lane: record.lane,
             exited: record.exited,
-            replayBytes: record.replayLen,
+            replayBytes: attach.alignMode ? 0 : record.replayLen,
           })
-          record.replayInto(socket, (s, chunk) => attach.data(chunk))
+          recoverAttach({
+            alignMode: attach.alignMode,
+            align: () => attach.align(),
+            replay: () => record.replayInto(socket, (s, chunk) => attach.data(chunk)),
+          })
         } catch (err) {
           sendText(socket, { type: 'error', message: String(err?.message ?? err) })
           sendClose(socket, 1008, 'open failed')

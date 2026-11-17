@@ -246,6 +246,35 @@ impl Grid {
         (abs, col)
     }
 
+    /// 只改网格尺寸，不按软折行重排。Windows ConPTY 会在 SIGWINCH 之后自己
+    /// 用绝对光标重画；先 reflow 再吃这遍重画会把同一格写两遍。
+    fn resize_box(&mut self, cols: usize, rows: usize, fill: Cell) {
+        if cols != self.cols {
+            for line in self.lines.iter_mut() {
+                if line.cells.len() > cols {
+                    line.cells.truncate(cols);
+                    if let Some(last) = line.cells.last_mut() {
+                        if last.flags & WIDE != 0 {
+                            *last = fill;
+                        }
+                    }
+                } else if line.cells.len() < cols {
+                    line.cells.resize(cols, fill);
+                }
+            }
+            self.cols = cols;
+        }
+        while self.lines.len() < rows {
+            self.lines.push_back(blank_line(self.cols, fill));
+        }
+        while self.lines.len() > self.scrollback + rows {
+            self.lines.pop_front();
+        }
+        self.rows = rows;
+        self.dirty = vec![true; rows];
+        self.dirty_all = true;
+    }
+
     /// 把软折行拼成逻辑行，再按 new_cols 切开。硬换行（wrapped=false）保持断开。
     fn reflow_cols(&mut self, new_cols: usize, fill: Cell, cursor_abs: usize, cursor_col: usize) -> (usize, usize) {
         let old = std::mem::take(&mut self.lines);
@@ -1017,6 +1046,87 @@ impl Term {
         self.scroll_off = self.scroll_off.min(self.grid.history_len());
     }
 
+    /// 改尺寸但不重排。与 `resize` 二选一：PTY 会自己重画时走这里。
+    pub fn resize_box(&mut self, cols: usize, rows: usize) {
+        if cols == 0 || rows == 0 || (cols == self.grid.cols && rows == self.grid.rows) {
+            return;
+        }
+        self.grid.resize_box(cols, rows, Cell::BLANK);
+        if let Some(g) = &mut self.saved_grid {
+            g.resize_box(cols, rows, Cell::BLANK);
+        }
+        self.cursor.x = self.cursor.x.min(cols.saturating_sub(1));
+        self.cursor.y = self.cursor.y.min(rows.saturating_sub(1));
+        self.scroll_region = (0, rows);
+        self.pending_wrap = false;
+        self.scroll_off = self.scroll_off.min(self.grid.history_len());
+    }
+
+    /// 用纯文本替换可见网格，不经过 ANSI 解析。对齐帧的载荷是 dump，
+    /// 不能靠 CSI 2J 冒充这次替换。
+    pub fn replace_visible(&mut self, text: &str, cursor_x: usize, cursor_y: usize) {
+        // 对齐写的是镜像当前屏。客户端若还停在备用屏，写进去会在离开备用屏时被旧主屏换掉。
+        self.leave_alt_screen();
+        self.scroll_off = 0;
+        let rows = self.grid.rows;
+        let cols = self.grid.cols;
+        for r in 0..rows {
+            *self.grid.line_mut(r) = blank_line(cols, Cell::BLANK);
+        }
+        for (i, line) in text.split('\n').enumerate() {
+            if i >= rows {
+                break;
+            }
+            let mut x = 0usize;
+            for c in line.chars() {
+                if x >= cols {
+                    break;
+                }
+                if (c as u32) < 0x20 {
+                    continue;
+                }
+                let width = c.width().unwrap_or(1).min(2) as usize;
+                if width == 0 {
+                    continue;
+                }
+                if width == 2 && x + 1 >= cols {
+                    break;
+                }
+                let row = self.grid.line_mut(i);
+                if width == 2 {
+                    row[x] = Cell {
+                        ch: c as u32,
+                        attr: 0,
+                        fg: C_DEFAULT,
+                        bg: C_DEFAULT,
+                        flags: WIDE,
+                    };
+                    row[x + 1] = Cell {
+                        ch: 0,
+                        attr: 0,
+                        fg: C_DEFAULT,
+                        bg: C_DEFAULT,
+                        flags: WIDE_SPACER,
+                    };
+                } else {
+                    row[x] = Cell {
+                        ch: c as u32,
+                        attr: 0,
+                        fg: C_DEFAULT,
+                        bg: C_DEFAULT,
+                        flags: 0,
+                    };
+                }
+                x += width;
+            }
+        }
+        self.cursor.x = cursor_x.min(cols.saturating_sub(1));
+        self.cursor.y = cursor_y.min(rows.saturating_sub(1));
+        self.pending_wrap = false;
+        self.grid.dirty = vec![true; rows];
+        self.grid.dirty_all = true;
+    }
+
     pub fn scroll_lines(&mut self, delta: isize) {
         let hist = self.grid.history_len() as isize;
         let mut off = self.scroll_off as isize + delta;
@@ -1578,6 +1688,35 @@ pub extern "C" fn dnt_write(id: u32, ptr: *const u8, len: u32) {
 #[no_mangle]
 pub extern "C" fn dnt_resize(id: u32, cols: u32, rows: u32) {
     with_term(id, |t| t.resize(cols.max(2) as usize, rows.max(1) as usize));
+}
+
+/// Resize without reflow. Used when the PTY redraws the screen itself.
+#[no_mangle]
+pub extern "C" fn dnt_resize_box(id: u32, cols: u32, rows: u32) {
+    with_term(id, |t| t.resize_box(cols.max(2) as usize, rows.max(1) as usize));
+}
+
+/// Replace the visible grid with plain UTF-8 text. `ptr`/`len` are wasm memory.
+#[no_mangle]
+pub extern "C" fn dnt_replace_visible(id: u32, ptr: *const u8, len: u32, cursor_x: u32, cursor_y: u32) {
+    let data = unsafe { std::slice::from_raw_parts(ptr, len as usize) };
+    let text = String::from_utf8_lossy(data);
+    with_term(id, |t| t.replace_visible(&text, cursor_x as usize, cursor_y as usize));
+}
+
+#[no_mangle]
+pub extern "C" fn dnt_cursor_x(id: u32) -> u32 {
+    with_term(id, |t| t.cursor.x as u32).unwrap_or(0)
+}
+
+#[no_mangle]
+pub extern "C" fn dnt_cursor_y(id: u32) -> u32 {
+    with_term(id, |t| t.cursor.y as u32).unwrap_or(0)
+}
+
+#[no_mangle]
+pub extern "C" fn dnt_cols(id: u32) -> u32 {
+    with_term(id, |t| t.grid.cols as u32).unwrap_or(0)
 }
 
 #[no_mangle]

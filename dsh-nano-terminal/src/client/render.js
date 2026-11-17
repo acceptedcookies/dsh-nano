@@ -3,6 +3,7 @@
 // Dirty-row repaint only; scroll triggers full repaint via wasm dirty-all.
 
 import { MODES } from './wasm.js'
+import { charWidthForDpr } from '../shared/align.js'
 
 // ---------------------------------------------------------------------------
 // Palette
@@ -159,11 +160,22 @@ export class TermCanvas {
     const probe = document.createElement('canvas').getContext('2d')
     probe.font = this.font(false, false)
     const w = probe.measureText('W')
-    this.charW = Math.max(1, Math.round(w.width))
+    // 按当前 dpr 取整。拖到另一块屏或系统缩放变化后必须重测，否则光标落在字缝里。
+    this.charW = charWidthForDpr(w.width, this.dpr)
     const ascent = w.fontBoundingBoxAscent ?? Math.ceil(this.fontSize * 0.85)
     const descent = w.fontBoundingBoxDescent ?? Math.ceil(this.fontSize * 0.3)
     this.charH = Math.max(2, ascent + descent + Math.ceil(this.fontSize * 0.15))
     this.baseline = ascent + Math.ceil(this.fontSize * 0.075)
+  }
+
+  /** dpr 变了就重测格子。没变返回 false，调用方不必整帧重画。 */
+  syncDpr(next) {
+    const raw = next ?? (typeof window !== 'undefined' ? window.devicePixelRatio : 1)
+    const dpr = Math.max(1, Math.round(raw || 1))
+    if (dpr === this.dpr) return false
+    this.dpr = dpr
+    this.measure()
+    return true
   }
 
   /** Resize canvases to fit the container; returns {cols, rows, changed}. */

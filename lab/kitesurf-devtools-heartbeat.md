@@ -56,7 +56,7 @@ Console / Network / Elements 现在都渲染固定 36px 的控件栏；每栏都
 - locale → 页面 `navigator.language/languages`（页面脚本层，属于模拟）。
 - geolocation → `navigator.geolocation.getCurrentPosition/watchPosition`。
 - colorScheme light/dark → 导航时注入 `ks_color_scheme` 参数（引擎消费后从 URL 移除），同时覆盖页面 `matchMedia('(prefers-color-scheme)')` 与 `color-scheme`。
-- cookies → `document.cookie` 全量替换，每次导航后由驱动重新应用。
+- cookies → 通过 CDP `Network.setCookies` 写入引擎 cookie jar（以当前页面 URL 为作用域），导航后页面即可读取。
 - 保存仍走 `/settings` 单次事务；状态通过 `/status` 的 browserSettings 字段回填。
 
 截图：`lab/out/kitesurf-devtools-heartbeat/settings-simulation.png`。

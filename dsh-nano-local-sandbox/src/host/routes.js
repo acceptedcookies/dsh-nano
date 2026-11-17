@@ -734,6 +734,7 @@ async function restoreLastPage(session, deps) {
   const current = await evaluatePage(client, 'location.href').catch(() => null)
   const href = typeof current === 'string' ? current : current?.value
   if (href && href !== 'about:blank') return false
+  session.pageUrl = remembered.url
   await navigate(session, base, remembered.url, deps.connect)
   session.history.push({ url: remembered.url, at: new Date().toISOString() })
   return true
@@ -1044,6 +1045,7 @@ export function routeSpecs(deps = {}) {
           if (!base) throw Object.assign(new Error('Kitesurf engine is unavailable'), { errorId: 'kitesurf.engine.connect' })
           // Page.navigate replies after page-script work, not on receipt. Do
           // not swallow its timeout/error and report a fictitious success.
+          session.pageUrl = url
           await navigate(session, base, url, deps.connect, {
             isCancelled: () => req.aborted === true || res.destroyed === true,
           })

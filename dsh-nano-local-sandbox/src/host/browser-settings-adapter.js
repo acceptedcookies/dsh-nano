@@ -26,9 +26,15 @@ function colorSchemeExpression(scheme) {
   return `(()=>{const dark=${dark};try{document.documentElement.style.colorScheme=dark?'dark':'light'}catch{}try{const key='__nksOrigMatchMedia';if(!window[key])window[key]=window.matchMedia.bind(window);window.matchMedia=(query)=>{const q=String(query||'');if(q.includes('prefers-color-scheme')){return{matches:dark?q.includes('dark'):q.includes('light'),media:q,onchange:null,addListener(){},removeListener(){},addEventListener(){},removeEventListener(){},dispatchEvent(){return false}}}return window[key](query)}}catch{}return true})()`
 }
 
-function cookiesExpression(cookies) {
-  const text = JSON.stringify(cookies || '')
-  return `(()=>{const text=${text};try{for(const part of document.cookie.split('; ')){const name=part.split('=')[0];if(name)document.cookie=name+'=; Max-Age=0; path=/'}for(const line of text.split(/\r?\n/)){const value=line.trim();if(value)document.cookie=value}}catch{}return document.cookie})()`
+function cookieParams(session, cookies) {
+  const base = session.pageUrl || session.history?.at(-1)?.url || ''
+  let origin
+  try { origin = new URL(base).origin + '/' } catch { return [] }
+  return String(cookies || '').split(/\r?\n/).map((line) => line.trim()).filter(Boolean).flatMap((line) => {
+    const at = line.indexOf('=')
+    if (at < 1) return []
+    return [{ name: line.slice(0, at).trim(), value: line.slice(at + 1).trim(), url: origin, path: '/' }]
+  })
 }
 
 function invalid(message, errorId = 'kitesurf.body.json') {
@@ -173,7 +179,7 @@ function command(key, settings, session) {
   if (key === 'locale') return ['Runtime.evaluate', { expression: localeExpression(settings.locale), returnByValue: true }]
   if (key === 'geolocation') return ['Runtime.evaluate', { expression: geolocationExpression(settings.geolocation), returnByValue: true }]
   if (key === 'colorScheme') return ['Runtime.evaluate', { expression: colorSchemeExpression(settings.colorScheme), returnByValue: true }]
-  if (key === 'cookies') return ['Runtime.evaluate', { expression: cookiesExpression(settings.cookies), returnByValue: true }]
+  if (key === 'cookies') return ['Network.setCookies', { cookies: cookieParams(session, settings.cookies) }]
   return ['Network.setExtraHTTPHeaders', { headers: settings.extraHeaders == null ? {} : { ...settings.extraHeaders } }]
 }
 

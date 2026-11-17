@@ -178,6 +178,13 @@ const STYLE = `
 .nks-open-url{color:var(--dsw-alias-label-tertiary);unicode-bidi:plaintext}
 .nks-open-log{margin:6px 0 0;max-height:140px;overflow:auto;padding:6px 8px;border-radius:var(--dsw-radius-sm);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-tertiary);font:11px/1.45 ui-monospace,Menlo,monospace;white-space:pre-wrap;word-break:break-all}
 .nks-settings-body{display:flex;flex-direction:column;gap:8px}
+.nks-simulation-body{min-height:0}
+.nks-settings-stack{display:flex;flex-direction:column;gap:12px;min-height:0;overflow:auto}
+.nks-settings-section{color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-12);margin-top:2px}
+.nks-settings-pair{display:flex;gap:8px}
+.nks-settings-pair .nks-address{flex:1;min-width:0}
+.nks-settings-hint{color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11);line-height:1.5}
+.nks-cookie-text{height:auto;min-height:72px;padding:6px 8px;resize:vertical;font:var(--dsw-font-xxxs-11);line-height:1.5}
 .nks-status{position:relative;z-index:var(--nano-layer-local3);order:7;flex:none;display:flex;align-items:center;gap:8px;height:26px;padding:0 10px;border-top:.5px solid var(--dsw-alias-border-l3);font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-tertiary)}
 .nks-status button{height:20px;padding:0 8px;border:0;border-radius:var(--dsw-radius-sm);background:transparent;color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxxs-11);cursor:pointer}
 .nks-status button:hover{background:var(--dsw-alias-interactive-bg-hover)}
@@ -232,7 +239,10 @@ const STYLE = `
 .nks-dt-wf i[data-bad="true"]{background:var(--dsw-alias-state-error-primary)}
 .nks-dt-wf i[data-pending="true"]{background:var(--dsw-alias-label-dimmed);opacity:.6}
 .nks-dt-styles{flex:none;max-height:110px;overflow:auto;border-bottom:.5px solid var(--dsw-alias-border-l2);padding:4px 8px;background:var(--dsw-alias-bg-layer-1)}
-.nks-dt-style-head{color:var(--dsw-alias-label-secondary);margin-bottom:3px}
+.nks-dt-style-head{display:flex;align-items:center;gap:6px;color:var(--dsw-alias-label-secondary);margin-bottom:3px}
+.nks-dt-style-head > span{flex:auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nks-dt-style-x{flex:none;width:20px;height:20px;padding:0;border:0;border-radius:var(--dsw-radius-sm);background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer;font:inherit;line-height:1}
+.nks-dt-style-x:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .nks-dt-rule{display:flex;gap:8px;padding:1px 0;color:var(--dsw-alias-label-tertiary)}
 .nks-dt-rule b{color:var(--dsw-alias-link,#7aaaff);font-weight:500;max-width:45%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .nks-dt-rule span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -611,7 +621,7 @@ function DevTools({ copy, open, onClose }) {
             { value: 'network', label: copy.devtoolsNetwork },
             { value: 'elements', label: 'Elements' },
           ],
-          onChange: (next) => setTab(next),
+          onChange: (next) => { setTab(next); if (next !== 'elements') setStyles(null) },
         })),
       h('span', { style: { flex: 'auto' } }),
       h(primitives.Button, { variant: 'ghost', size: 'sm', onClick: clear }, copy.devtoolsClear),
@@ -651,8 +661,14 @@ function DevTools({ copy, open, onClose }) {
       tab === 'elements' ? h('span', {
         className: 'nks-dt-stats', 'data-nks-dt-stats': '1', title: copy.devtoolsDomStatsHint,
       }, `${copy.devtoolsNodes} ${rows.length} · ${copy.devtoolsElements} ${elementCount} · ${copy.devtoolsDepth} ${maxDepth}`) : null),
-    styles ? h('div', { className: 'nks-dt-styles', 'data-nks-dt-styles': '1' },
-      h('div', { className: 'nks-dt-style-head' }, `${styles.selector} · ${styles.matched.length} rules · ${Object.keys(styles.computed).length} computed`),
+    tab === 'elements' && styles ? h('div', { className: 'nks-dt-styles', 'data-nks-dt-styles': '1' },
+      h('div', { className: 'nks-dt-style-head' },
+        h('span', null, `${styles.selector} · ${styles.matched.length} rules · ${Object.keys(styles.computed || {}).length} computed`),
+        h('button', {
+          type: 'button', className: 'nks-dt-style-x', 'data-nks-dt-style-close': '1',
+          'aria-label': copy.devtoolsCloseStyles, title: copy.devtoolsCloseStyles,
+          onClick: () => setStyles(null),
+        }, '×')),
       styles.matched.slice(0, 6).map((rule, i) => h('div', { className: 'nks-dt-rule', key: `r${i}` },
         h('b', null, rule.selector || '(anonymous)'),
         h('span', null, (rule.properties || []).slice(0, 6).join('; '))))) : null,
@@ -1986,12 +2002,12 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
   /** Settings shell with tabs: environment/settings vs browse history. */
   // Semantic split, rendered with the shared nano-ui tab primitive (no
   // per-plugin tab chrome): environment health / browsing config / history.
-  function SettingsTabs({ env, browse }) {
+  function SettingsTabs({ env, simulation }) {
     return h(NanoTabs, {
       label: copy.settingsTitle,
       items: [
         { value: 'env', label: copy.tabEnv, content: env },
-        { value: 'browse', label: copy.tabBrowse, content: browse },
+        { value: 'simulation', label: copy.tabBrowse, content: simulation },
         { value: 'history', label: copy.tabHistory, content: h(HistoryTab) },
       ],
     })
@@ -2057,7 +2073,7 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
     if (workspaceEl === null) return
     dialogOpenRef.current = true
     let close = () => {}
-    let current = { userAgent: '', viewportWidth: '', httpBase: '', mcpPort: '' }
+    let current = { userAgent: '', viewportWidth: '', viewportHeight: '', httpBase: '', mcpPort: '', locale: '', geolocation: null, colorScheme: 'light', cookies: '' }
     const dialog = openNanoDialog({
       copy: { cancel: copy.cancel, confirm: copy.save, close: copy.close },
       title: copy.settingsTitle,
@@ -2070,51 +2086,93 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
       // again would double root.unmount()/host.remove() (S3-3).
       onCancel: () => { dialogOpenRef.current = false },
       onConfirm: () => save(),
-      children: h(SettingsTabs, { env: h(EnvPanel, null), browse: h('form', {
-        className: 'nks-settings-body',
-        onSubmit: (event) => { event.preventDefault(); save() },
-      },
-        h('label', { htmlFor: 'nks-ua' }, copy.uaLabel),
-        h('input', { id: 'nks-ua', className: 'nks-address', autoFocus: true, placeholder: copy.uaPlaceholder }),
-        h('label', { htmlFor: 'nks-origin' }, copy.originLabel),
-        h('input', { id: 'nks-origin', className: 'nks-address', placeholder: 'http://127.0.0.1:8787', inputMode: 'url', spellCheck: false, autoComplete: 'off' }),
-        h('label', { htmlFor: 'nks-mcp' }, copy.mcpLabel),
-        h('input', { id: 'nks-mcp', className: 'nks-address', inputMode: 'numeric', placeholder: '8799' }),
-        h('span', { id: 'nks-viewport-label' }, copy.viewportLabel),
-        h('div', {
-          id: 'nks-viewport',
-          className: 'nks-choices',
-          role: 'radiogroup',
-          'aria-labelledby': 'nks-viewport-label',
-          'data-value': 'default',
-          onKeyDown: (event) => {
-            const keys = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End']
-            if (!keys.includes(event.key)) return
-            event.preventDefault()
-            const values = [...event.currentTarget.querySelectorAll('button')].map((b) => b.dataset.choice)
-            const index = Math.max(0, values.indexOf(event.currentTarget.dataset.value))
-            const next = event.key === 'Home' ? values[0]
-              : event.key === 'End' ? values[values.length - 1]
-              : values[(index + (event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1 : 1) + values.length) % values.length]
-            selectRadio(event.currentTarget, next)
-            event.currentTarget.querySelector(`[data-choice="${next}"]`)?.focus()
+      children: h(SettingsTabs, {
+        env: h('div', { className: 'nks-settings-stack' },
+          h(EnvPanel, null),
+          h('form', {
+            className: 'nks-settings-body',
+            onSubmit: (event) => { event.preventDefault(); save() },
           },
-        }, [
-          ['default', copy.viewportDefault],
-          ['1280', copy.viewportDesktop],
-          ['768', copy.viewportTablet],
-          ['390', copy.viewportPhone],
-        ].map(([value, label]) => h('button', {
-          key: value,
-          type: 'button',
-          role: 'radio',
-          'aria-checked': value === 'default' ? 'true' : 'false',
-          tabIndex: value === 'default' ? 0 : -1,
-          'data-choice': value,
-          className: 'nks-choice',
-          onClick: (event) => selectRadio(event.currentTarget.parentElement, value),
-        }, label))),
-        h('button', { type: 'submit', style: { display: 'none' }, 'aria-hidden': 'true', tabIndex: -1 })) }),
+            h('div', { className: 'nks-settings-section' }, copy.engineSection),
+            h('label', { htmlFor: 'nks-origin' }, copy.originLabel),
+            h('input', { id: 'nks-origin', className: 'nks-address', placeholder: 'http://127.0.0.1:8787', inputMode: 'url', spellCheck: false, autoComplete: 'off' }),
+            h('label', { htmlFor: 'nks-mcp' }, copy.mcpLabel),
+            h('input', { id: 'nks-mcp', className: 'nks-address', inputMode: 'numeric', placeholder: '8799' }),
+            h('button', { type: 'submit', style: { display: 'none' }, 'aria-hidden': 'true', tabIndex: -1 }))),
+        simulation: h('form', {
+          className: 'nks-settings-body nks-simulation-body',
+          onSubmit: (event) => { event.preventDefault(); save() },
+        },
+          h('label', { htmlFor: 'nks-ua' }, copy.uaLabel),
+          h('input', { id: 'nks-ua', className: 'nks-address', autoFocus: true, placeholder: copy.uaPlaceholder }),
+          h('span', { id: 'nks-viewport-label' }, copy.viewportLabel),
+          h('div', {
+            id: 'nks-viewport',
+            className: 'nks-choices',
+            role: 'radiogroup',
+            'aria-labelledby': 'nks-viewport-label',
+            'data-value': 'default',
+            onKeyDown: (event) => {
+              const keys = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End']
+              if (!keys.includes(event.key)) return
+              event.preventDefault()
+              const values = [...event.currentTarget.querySelectorAll('button')].map((b) => b.dataset.choice)
+              const index = Math.max(0, values.indexOf(event.currentTarget.dataset.value))
+              const next = event.key === 'Home' ? values[0]
+                : event.key === 'End' ? values[values.length - 1]
+                : values[(index + (event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1 : 1) + values.length) % values.length]
+              selectRadio(event.currentTarget, next)
+              event.currentTarget.querySelector(`[data-choice="${next}"]`)?.focus()
+            },
+          },
+            [['default', copy.viewportDefault], ['1280', copy.viewportDesktop], ['768', copy.viewportTablet], ['390', copy.viewportPhone]]
+              .map(([value, label]) => h('button', {
+                key: value, type: 'button', role: 'radio',
+                'aria-checked': value === 'default' ? 'true' : 'false',
+                tabIndex: value === 'default' ? 0 : -1,
+                'data-choice': value, className: 'nks-choice',
+                onClick: (event) => selectRadio(event.currentTarget.parentElement, value),
+              }, label))),
+          h('label', { htmlFor: 'nks-locale' }, copy.localeLabel),
+          h('input', { id: 'nks-locale', className: 'nks-address', placeholder: copy.localePlaceholder, spellCheck: false, autoComplete: 'off' }),
+          h('label', null, copy.geoLabel),
+          h('div', { className: 'nks-settings-pair' },
+            h('input', { id: 'nks-geo-lat', className: 'nks-address', type: 'number', step: 'any', placeholder: copy.geoLat, 'aria-label': copy.geoLat }),
+            h('input', { id: 'nks-geo-lng', className: 'nks-address', type: 'number', step: 'any', placeholder: copy.geoLng, 'aria-label': copy.geoLng })),
+          h('span', { className: 'nks-settings-hint' }, copy.geoHint),
+          h('span', { id: 'nks-color-label' }, copy.colorSchemeLabel),
+          h('div', {
+            id: 'nks-color',
+            className: 'nks-choices',
+            role: 'radiogroup',
+            'aria-labelledby': 'nks-color-label',
+            'data-value': 'light',
+            onKeyDown: (event) => {
+              const keys = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End']
+              if (!keys.includes(event.key)) return
+              event.preventDefault()
+              const values = [...event.currentTarget.querySelectorAll('button')].map((b) => b.dataset.choice)
+              const index = Math.max(0, values.indexOf(event.currentTarget.dataset.value))
+              const next = event.key === 'Home' ? values[0]
+                : event.key === 'End' ? values[values.length - 1]
+                : values[(index + (event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1 : 1) + values.length) % values.length]
+              selectRadio(event.currentTarget, next)
+              event.currentTarget.querySelector(`[data-choice="${next}"]`)?.focus()
+            },
+          },
+            [['light', copy.colorSchemeLight], ['dark', copy.colorSchemeDark]]
+              .map(([value, label]) => h('button', {
+                key: value, type: 'button', role: 'radio',
+                'aria-checked': value === 'light' ? 'true' : 'false',
+                tabIndex: value === 'light' ? 0 : -1,
+                'data-choice': value, className: 'nks-choice',
+                onClick: (event) => selectRadio(event.currentTarget.parentElement, value),
+              }, label))),
+          h('label', { htmlFor: 'nks-cookies' }, copy.cookiesLabel),
+          h('textarea', { id: 'nks-cookies', className: 'nks-address nks-cookie-text', rows: 4, placeholder: copy.cookiesPlaceholder, spellCheck: false }),
+          h('span', { className: 'nks-settings-hint' }, copy.cookiesHint),
+          h('button', { type: 'submit', style: { display: 'none' }, 'aria-hidden': 'true', tabIndex: -1 })),
+      })
     })
     close = () => { dialogOpenRef.current = false; dialog.close() }
 
@@ -2123,13 +2181,32 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
       const choice = document.getElementById('nks-viewport')?.dataset.value ?? 'default'
       const nextOrigin = (document.getElementById('nks-origin')?.value ?? '').trim()
       const nextPort = (document.getElementById('nks-mcp')?.value ?? '').trim()
+      const nextLocale = (document.getElementById('nks-locale')?.value ?? '').trim()
+      const latText = (document.getElementById('nks-geo-lat')?.value ?? '').trim()
+      const lngText = (document.getElementById('nks-geo-lng')?.value ?? '').trim()
+      const nextColor = document.getElementById('nks-color')?.dataset.value ?? 'light'
+      const nextCookies = document.getElementById('nks-cookies')?.value ?? ''
       run(async () => {
+        let nextGeo = null
+        if (latText || lngText) {
+          const latitude = Number(latText)
+          const longitude = Number(lngText)
+          if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 || !Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
+            throw Object.assign(new Error('经纬度需要同时填写，且纬度 -90..90、经度 -180..180'), { status: 400, errorId: 'kitesurf.body.json' })
+          }
+          nextGeo = { latitude, longitude }
+        }
         const settingsPatch = {}
         if (nextAgent !== current.userAgent) settingsPatch.userAgent = nextAgent
         const nextWidth = choice === 'default' ? '' : choice
+        const viewportHeights = { 1280: 900, 768: 900, 390: 844 }
         if (nextWidth !== current.viewportWidth) {
-          settingsPatch.viewport = choice === 'default' ? null : { width: Number(choice) }
+          settingsPatch.viewport = choice === 'default' ? null : { width: Number(choice), height: viewportHeights[choice] || 900 }
         }
+        if (nextLocale !== current.locale) settingsPatch.locale = nextLocale || null
+        if (JSON.stringify(nextGeo) !== JSON.stringify(current.geolocation)) settingsPatch.geolocation = nextGeo
+        if (nextColor !== current.colorScheme) settingsPatch.colorScheme = nextColor
+        if (nextCookies !== current.cookies) settingsPatch.cookies = nextCookies || null
         if (Object.keys(settingsPatch).length) await post(SETTINGS, settingsPatch)
         const kitePatch = {}
         if (nextOrigin && nextOrigin !== current.httpBase) kitePatch.httpBase = nextOrigin
@@ -2146,8 +2223,13 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
       current = {
         userAgent: fresh?.userAgent ?? '',
         viewportWidth: fresh?.viewport?.width ? String(fresh.viewport.width) : '',
+        viewportHeight: fresh?.viewport?.height ? String(fresh.viewport.height) : '',
         httpBase: fresh?.kite?.httpBase ?? '',
         mcpPort: fresh?.kite?.mcpPort != null ? String(fresh.kite.mcpPort) : '',
+        locale: fresh?.locale ?? '',
+        geolocation: fresh?.geolocation ?? null,
+        colorScheme: fresh?.colorScheme ?? 'light',
+        cookies: fresh?.cookies ?? '',
       }
       const ua = document.getElementById('nks-ua')
       if (ua) ua.value = current.userAgent
@@ -2155,7 +2237,17 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
       if (originInput) originInput.value = current.httpBase
       const mcp = document.getElementById('nks-mcp')
       if (mcp) mcp.value = current.mcpPort
-      selectRadio(document.getElementById('nks-viewport'), current.viewportWidth || 'default')
+      const localeInput = document.getElementById('nks-locale')
+      if (localeInput) localeInput.value = current.locale
+      const lat = document.getElementById('nks-geo-lat')
+      const lng = document.getElementById('nks-geo-lng')
+      if (lat) lat.value = current.geolocation?.latitude ?? ''
+      if (lng) lng.value = current.geolocation?.longitude ?? ''
+      const cookies = document.getElementById('nks-cookies')
+      if (cookies) cookies.value = current.cookies
+      const viewportChoice = ['1280', '768', '390'].includes(current.viewportWidth) ? current.viewportWidth : 'default'
+      selectRadio(document.getElementById('nks-viewport'), viewportChoice)
+      selectRadio(document.getElementById('nks-color'), current.colorScheme)
     })
   }
 

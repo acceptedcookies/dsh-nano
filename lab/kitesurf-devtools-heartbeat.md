@@ -45,6 +45,26 @@ Console / Network / Elements 现在都渲染固定 36px 的控件栏；每栏都
 
 三个 tab 的 `.nks-dt-cols` 表头高度同为 20.5px、`.nks-dt-body` 顶部同为 733px，控件、表头、行字体均为 11px；切换不再产生高度抖动。搜索框使用宿主 `Input` 的 wrapper 单层边框，inner input 的 border/outline 清零，不再出现双层框。截图：`lab/out/kitesurf-devtools-heartbeat/control-bars.png`。
 
+## 2.2 设置中的模拟 tab
+
+设置弹窗现在固定为「环境 / 模拟 / 历史」：
+- 环境：环境自检 + 引擎地址/MCP 端口。
+- 模拟：User-Agent、默认分辨率、默认语言、默认地理位置（GPS）、Light/Dark 色彩方案、Cookie；原「浏览」里的 UA/视口已迁入这里。
+- 历史：浏览历史。
+
+驱动适配：
+- locale → 页面 `navigator.language/languages`（页面脚本层，属于模拟）。
+- geolocation → `navigator.geolocation.getCurrentPosition/watchPosition`。
+- colorScheme light/dark → 导航时注入 `ks_color_scheme` 参数（引擎消费后从 URL 移除），同时覆盖页面 `matchMedia('(prefers-color-scheme)')` 与 `color-scheme`。
+- cookies → `document.cookie` 全量替换，每次导航后由驱动重新应用。
+- 保存仍走 `/settings` 单次事务；状态通过 `/status` 的 browserSettings 字段回填。
+
+截图：`lab/out/kitesurf-devtools-heartbeat/settings-simulation.png`。
+
+## 2.3 Elements 样式详情可关闭
+
+Elements 点击行产生的样式详情增加 `×` 关闭按钮；切换 Console/Network 时自动清掉，不再跨 tab 残留。样式详情只在 `tab === 'elements'` 时渲染。
+
 ## 3. 标签页第一个 tab 悬停
 
 根因：`.nks-nav-tab[data-current="true"]` 规则排在 `.nks-nav-tab:hover` 之后且同 specificity，当前 tab 的底色覆盖了 hover 底色。新增 `.nks-nav-tab[data-current="true"]:hover` 覆盖规则；实测第一个/当前 tab 和第二个 tab 的 hover 底色均为 `rgba(255,255,255,.08)`（基准分别为 `rgb(44,44,46)` 和透明）。

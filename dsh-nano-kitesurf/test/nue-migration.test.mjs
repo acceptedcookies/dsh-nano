@@ -184,7 +184,7 @@ test('T22: the settings tab strip still follows the nano-ui NanoTabs contract', 
   assert.match(index, /h\(NanoTabs, \{/)
   assert.match(SETTINGS_TABS, /label:\s*copy\.settingsTitle/)
   assert.match(SETTINGS_TABS, /value:\s*'env'/)
-  assert.match(SETTINGS_TABS, /value:\s*'browse'/)
+  assert.match(SETTINGS_TABS, /value:\s*'simulation'/)
   assert.match(SETTINGS_TABS, /value:\s*'history'/)
 })
 

@@ -2478,6 +2478,7 @@ ${LAYER_CSS}
           devtoolsDepth: "\u6DF1\u5EA6",
           devtoolsDomStatsHint: "\u5F53\u524D Elements \u6811\u7684\u8282\u70B9\u6570\u3001\u5143\u7D20\u6570\u4E0E\u6700\u5927\u6DF1\u5EA6\uFF08\u6765\u81EA /elements\uFF09",
           devtoolsRefresh: "\u5237\u65B0",
+          devtoolsCloseStyles: "\u5173\u95ED\u6837\u5F0F\u8BE6\u60C5",
           devtoolsTypeAll: "\u5168\u90E8\u7C7B\u578B",
           devtoolsFilterType: "\u6309\u8D44\u6E90\u7C7B\u578B\u7B5B\u9009",
           devtoolsNoMatch: "\u6CA1\u6709\u5339\u914D\u7684\u8BF7\u6C42",
@@ -2537,9 +2538,9 @@ ${LAYER_CSS}
           stalePage: "\u9875\u9762\u5DF2\u53D8\u5316\uFF0C\u753B\u9762\u5DF2\u5237\u65B0\u2014\u2014\u8BF7\u91CD\u65B0\u70B9\u9009",
           settingsTitle: "\u6D4F\u89C8\u8BBE\u7F6E",
           tabEnv: "\u73AF\u5883",
-          tabBrowse: "\u6D4F\u89C8",
+          tabBrowse: "\u6A21\u62DF",
           tabHistory: "\u5386\u53F2",
-          settingsDesc: "\u53EA\u4F5C\u7528\u4E8E\u8FD9\u4E00\u6B21\u5F15\u64CE\u8FDB\u7A0B\u3002\u89C6\u53E3\u7528\u6765\u6309\u624B\u673A\u3001\u5E73\u677F\u3001\u684C\u9762\u770B\u540C\u4E00\u9875\u3002\u5F15\u64CE\u5730\u5740\u6539\u52A8\u5373\u65F6\u751F\u6548\u3002",
+          settingsDesc: "\u73AF\u5883\u5065\u5EB7\u3001\u6D4F\u89C8\u5668\u6A21\u62DF\u4E0E\u672C\u6B21\u5F15\u64CE\u8FDB\u7A0B\u7684\u6D4F\u89C8\u5386\u53F2\u3002\u6A21\u62DF\u8BBE\u7F6E\u5BF9\u65B0\u5BFC\u822A\u751F\u6548\u3002",
           cancel: "\u53D6\u6D88",
           save: "\u4FDD\u5B58",
           close: "\u5173\u95ED",
@@ -2547,7 +2548,20 @@ ${LAYER_CSS}
           uaPlaceholder: "\u7559\u7A7A\u5219\u4F7F\u7528\u5F15\u64CE\u9ED8\u8BA4",
           originLabel: "\u5F15\u64CE\u5730\u5740",
           mcpLabel: "MCP \u7AEF\u53E3",
-          viewportLabel: "\u89C6\u53E3",
+          viewportLabel: "\u9ED8\u8BA4\u5206\u8FA8\u7387",
+          localeLabel: "\u9ED8\u8BA4\u8BED\u8A00",
+          localePlaceholder: "\u5982 zh-CN / en-US",
+          geoLabel: "\u9ED8\u8BA4\u5730\u7406\u4F4D\u7F6E\uFF08GPS\uFF09",
+          geoLat: "\u7EAC\u5EA6",
+          geoLng: "\u7ECF\u5EA6",
+          geoHint: "\u7559\u7A7A\u4E0D\u6A21\u62DF\uFF1B\u7EAC\u5EA6 -90..90\uFF0C\u7ECF\u5EA6 -180..180",
+          colorSchemeLabel: "\u8272\u5F69\u65B9\u6848",
+          colorSchemeLight: "Light",
+          colorSchemeDark: "Dark",
+          cookiesLabel: "Cookie",
+          cookiesPlaceholder: "name=value\uFF0C\u6BCF\u884C\u4E00\u4E2A",
+          cookiesHint: "\u4FDD\u5B58\u65F6\u66FF\u6362\u5F53\u524D\u9875\u9762 Cookie\uFF1B\u8DE8\u5BFC\u822A\u7531\u9A71\u52A8\u91CD\u65B0\u5E94\u7528\u3002",
+          engineSection: "\u5F15\u64CE\u8FDE\u63A5",
           viewportDefault: "\u9ED8\u8BA4",
           viewportDesktop: "\u684C\u9762 1280",
           viewportTablet: "\u5E73\u677F 768",
@@ -2604,6 +2618,7 @@ ${LAYER_CSS}
           devtoolsDepth: "depth",
           devtoolsDomStatsHint: "Node count, element count and maximum depth of the current Elements tree (from /elements)",
           devtoolsRefresh: "Refresh",
+          devtoolsCloseStyles: "Close style details",
           devtoolsTypeAll: "All types",
           devtoolsFilterType: "Filter by resource type",
           devtoolsNoMatch: "No matching requests",
@@ -2663,9 +2678,9 @@ ${LAYER_CSS}
           stalePage: "Page changed \u2014 frame refreshed, pick again",
           settingsTitle: "Browser settings",
           tabEnv: "Environment",
-          tabBrowse: "Browsing",
+          tabBrowse: "Simulation",
           tabHistory: "History",
-          settingsDesc: "Applies to this engine process only. Viewport previews the same page as phone, tablet, or desktop. Engine-address changes take effect immediately.",
+          settingsDesc: "Environment health, browser simulation, and the history of this engine process. Simulation changes apply to new navigations.",
           cancel: "Cancel",
           save: "Save",
           close: "Close",
@@ -2673,7 +2688,20 @@ ${LAYER_CSS}
           uaPlaceholder: "Leave empty for engine default",
           originLabel: "Engine origin",
           mcpLabel: "MCP port",
-          viewportLabel: "Viewport",
+          viewportLabel: "Default resolution",
+          localeLabel: "Default language",
+          localePlaceholder: "e.g. zh-CN / en-US",
+          geoLabel: "Default geolocation (GPS)",
+          geoLat: "Latitude",
+          geoLng: "Longitude",
+          geoHint: "Leave blank to skip; latitude -90..90, longitude -180..180",
+          colorSchemeLabel: "Color scheme",
+          colorSchemeLight: "Light",
+          colorSchemeDark: "Dark",
+          cookiesLabel: "Cookie",
+          cookiesPlaceholder: "name=value, one per line",
+          cookiesHint: "Replaces the current page cookies on save; the driver reapplies them after navigation.",
+          engineSection: "Engine connection",
           viewportDefault: "Default",
           viewportDesktop: "Desktop 1280",
           viewportTablet: "Tablet 768",
@@ -3065,6 +3093,13 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
 .nks-open-url{color:var(--dsw-alias-label-tertiary);unicode-bidi:plaintext}
 .nks-open-log{margin:6px 0 0;max-height:140px;overflow:auto;padding:6px 8px;border-radius:var(--dsw-radius-sm);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-tertiary);font:11px/1.45 ui-monospace,Menlo,monospace;white-space:pre-wrap;word-break:break-all}
 .nks-settings-body{display:flex;flex-direction:column;gap:8px}
+.nks-simulation-body{min-height:0}
+.nks-settings-stack{display:flex;flex-direction:column;gap:12px;min-height:0;overflow:auto}
+.nks-settings-section{color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-12);margin-top:2px}
+.nks-settings-pair{display:flex;gap:8px}
+.nks-settings-pair .nks-address{flex:1;min-width:0}
+.nks-settings-hint{color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11);line-height:1.5}
+.nks-cookie-text{height:auto;min-height:72px;padding:6px 8px;resize:vertical;font:var(--dsw-font-xxxs-11);line-height:1.5}
 .nks-status{position:relative;z-index:var(--nano-layer-local3);order:7;flex:none;display:flex;align-items:center;gap:8px;height:26px;padding:0 10px;border-top:.5px solid var(--dsw-alias-border-l3);font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-tertiary)}
 .nks-status button{height:20px;padding:0 8px;border:0;border-radius:var(--dsw-radius-sm);background:transparent;color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxxs-11);cursor:pointer}
 .nks-status button:hover{background:var(--dsw-alias-interactive-bg-hover)}
@@ -3119,7 +3154,10 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
 .nks-dt-wf i[data-bad="true"]{background:var(--dsw-alias-state-error-primary)}
 .nks-dt-wf i[data-pending="true"]{background:var(--dsw-alias-label-dimmed);opacity:.6}
 .nks-dt-styles{flex:none;max-height:110px;overflow:auto;border-bottom:.5px solid var(--dsw-alias-border-l2);padding:4px 8px;background:var(--dsw-alias-bg-layer-1)}
-.nks-dt-style-head{color:var(--dsw-alias-label-secondary);margin-bottom:3px}
+.nks-dt-style-head{display:flex;align-items:center;gap:6px;color:var(--dsw-alias-label-secondary);margin-bottom:3px}
+.nks-dt-style-head > span{flex:auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nks-dt-style-x{flex:none;width:20px;height:20px;padding:0;border:0;border-radius:var(--dsw-radius-sm);background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer;font:inherit;line-height:1}
+.nks-dt-style-x:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .nks-dt-rule{display:flex;gap:8px;padding:1px 0;color:var(--dsw-alias-label-tertiary)}
 .nks-dt-rule b{color:var(--dsw-alias-link,#7aaaff);font-weight:500;max-width:45%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .nks-dt-rule span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -3503,7 +3541,10 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
               { value: "network", label: copy.devtoolsNetwork },
               { value: "elements", label: "Elements" }
             ],
-            onChange: (next) => setTab(next)
+            onChange: (next) => {
+              setTab(next);
+              if (next !== "elements") setStyles(null);
+            }
           })
         ),
         h7("span", { style: { flex: "auto" } }),
@@ -3568,10 +3609,22 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           title: copy.devtoolsDomStatsHint
         }, `${copy.devtoolsNodes} ${rows.length} \xB7 ${copy.devtoolsElements} ${elementCount} \xB7 ${copy.devtoolsDepth} ${maxDepth}`) : null
       ),
-      styles ? h7(
+      tab === "elements" && styles ? h7(
         "div",
         { className: "nks-dt-styles", "data-nks-dt-styles": "1" },
-        h7("div", { className: "nks-dt-style-head" }, `${styles.selector} \xB7 ${styles.matched.length} rules \xB7 ${Object.keys(styles.computed).length} computed`),
+        h7(
+          "div",
+          { className: "nks-dt-style-head" },
+          h7("span", null, `${styles.selector} \xB7 ${styles.matched.length} rules \xB7 ${Object.keys(styles.computed || {}).length} computed`),
+          h7("button", {
+            type: "button",
+            className: "nks-dt-style-x",
+            "data-nks-dt-style-close": "1",
+            "aria-label": copy.devtoolsCloseStyles,
+            title: copy.devtoolsCloseStyles,
+            onClick: () => setStyles(null)
+          }, "\xD7")
+        ),
         styles.matched.slice(0, 6).map((rule, i) => h7(
           "div",
           { className: "nks-dt-rule", key: `r${i}` },
@@ -4812,12 +4865,12 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         clearPickRef.current();
       }, true);
     }
-    function SettingsTabs({ env, browse }) {
+    function SettingsTabs({ env, simulation }) {
       return h7(NanoTabs2, {
         label: copy.settingsTitle,
         items: [
           { value: "env", label: copy.tabEnv, content: env },
-          { value: "browse", label: copy.tabBrowse, content: browse },
+          { value: "simulation", label: copy.tabBrowse, content: simulation },
           { value: "history", label: copy.tabHistory, content: h7(HistoryTab) }
         ]
       });
@@ -4953,7 +5006,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       dialogOpenRef.current = true;
       let close = () => {
       };
-      let current = { userAgent: "", viewportWidth: "", httpBase: "", mcpPort: "" };
+      let current = { userAgent: "", viewportWidth: "", viewportHeight: "", httpBase: "", mcpPort: "", locale: "", geolocation: null, colorScheme: "light", cookies: "" };
       const dialog = openNanoDialog2({
         copy: { cancel: copy.cancel, confirm: copy.save, close: copy.close },
         title: copy.settingsTitle,
@@ -4968,55 +5021,117 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           dialogOpenRef.current = false;
         },
         onConfirm: () => save(),
-        children: h7(SettingsTabs, { env: h7(EnvPanel, null), browse: h7(
-          "form",
-          {
-            className: "nks-settings-body",
-            onSubmit: (event) => {
-              event.preventDefault();
-              save();
-            }
-          },
-          h7("label", { htmlFor: "nks-ua" }, copy.uaLabel),
-          h7("input", { id: "nks-ua", className: "nks-address", autoFocus: true, placeholder: copy.uaPlaceholder }),
-          h7("label", { htmlFor: "nks-origin" }, copy.originLabel),
-          h7("input", { id: "nks-origin", className: "nks-address", placeholder: "http://127.0.0.1:8787", inputMode: "url", spellCheck: false, autoComplete: "off" }),
-          h7("label", { htmlFor: "nks-mcp" }, copy.mcpLabel),
-          h7("input", { id: "nks-mcp", className: "nks-address", inputMode: "numeric", placeholder: "8799" }),
-          h7("span", { id: "nks-viewport-label" }, copy.viewportLabel),
-          h7("div", {
-            id: "nks-viewport",
-            className: "nks-choices",
-            role: "radiogroup",
-            "aria-labelledby": "nks-viewport-label",
-            "data-value": "default",
-            onKeyDown: (event) => {
-              const keys = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"];
-              if (!keys.includes(event.key)) return;
-              event.preventDefault();
-              const values = [...event.currentTarget.querySelectorAll("button")].map((b) => b.dataset.choice);
-              const index = Math.max(0, values.indexOf(event.currentTarget.dataset.value));
-              const next = event.key === "Home" ? values[0] : event.key === "End" ? values[values.length - 1] : values[(index + (event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 1) + values.length) % values.length];
-              selectRadio(event.currentTarget, next);
-              event.currentTarget.querySelector(`[data-choice="${next}"]`)?.focus();
-            }
-          }, [
-            ["default", copy.viewportDefault],
-            ["1280", copy.viewportDesktop],
-            ["768", copy.viewportTablet],
-            ["390", copy.viewportPhone]
-          ].map(([value, label]) => h7("button", {
-            key: value,
-            type: "button",
-            role: "radio",
-            "aria-checked": value === "default" ? "true" : "false",
-            tabIndex: value === "default" ? 0 : -1,
-            "data-choice": value,
-            className: "nks-choice",
-            onClick: (event) => selectRadio(event.currentTarget.parentElement, value)
-          }, label))),
-          h7("button", { type: "submit", style: { display: "none" }, "aria-hidden": "true", tabIndex: -1 })
-        ) })
+        children: h7(SettingsTabs, {
+          env: h7(
+            "div",
+            { className: "nks-settings-stack" },
+            h7(EnvPanel, null),
+            h7(
+              "form",
+              {
+                className: "nks-settings-body",
+                onSubmit: (event) => {
+                  event.preventDefault();
+                  save();
+                }
+              },
+              h7("div", { className: "nks-settings-section" }, copy.engineSection),
+              h7("label", { htmlFor: "nks-origin" }, copy.originLabel),
+              h7("input", { id: "nks-origin", className: "nks-address", placeholder: "http://127.0.0.1:8787", inputMode: "url", spellCheck: false, autoComplete: "off" }),
+              h7("label", { htmlFor: "nks-mcp" }, copy.mcpLabel),
+              h7("input", { id: "nks-mcp", className: "nks-address", inputMode: "numeric", placeholder: "8799" }),
+              h7("button", { type: "submit", style: { display: "none" }, "aria-hidden": "true", tabIndex: -1 })
+            )
+          ),
+          simulation: h7(
+            "form",
+            {
+              className: "nks-settings-body nks-simulation-body",
+              onSubmit: (event) => {
+                event.preventDefault();
+                save();
+              }
+            },
+            h7("label", { htmlFor: "nks-ua" }, copy.uaLabel),
+            h7("input", { id: "nks-ua", className: "nks-address", autoFocus: true, placeholder: copy.uaPlaceholder }),
+            h7("span", { id: "nks-viewport-label" }, copy.viewportLabel),
+            h7(
+              "div",
+              {
+                id: "nks-viewport",
+                className: "nks-choices",
+                role: "radiogroup",
+                "aria-labelledby": "nks-viewport-label",
+                "data-value": "default",
+                onKeyDown: (event) => {
+                  const keys = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"];
+                  if (!keys.includes(event.key)) return;
+                  event.preventDefault();
+                  const values = [...event.currentTarget.querySelectorAll("button")].map((b) => b.dataset.choice);
+                  const index = Math.max(0, values.indexOf(event.currentTarget.dataset.value));
+                  const next = event.key === "Home" ? values[0] : event.key === "End" ? values[values.length - 1] : values[(index + (event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 1) + values.length) % values.length];
+                  selectRadio(event.currentTarget, next);
+                  event.currentTarget.querySelector(`[data-choice="${next}"]`)?.focus();
+                }
+              },
+              [["default", copy.viewportDefault], ["1280", copy.viewportDesktop], ["768", copy.viewportTablet], ["390", copy.viewportPhone]].map(([value, label]) => h7("button", {
+                key: value,
+                type: "button",
+                role: "radio",
+                "aria-checked": value === "default" ? "true" : "false",
+                tabIndex: value === "default" ? 0 : -1,
+                "data-choice": value,
+                className: "nks-choice",
+                onClick: (event) => selectRadio(event.currentTarget.parentElement, value)
+              }, label))
+            ),
+            h7("label", { htmlFor: "nks-locale" }, copy.localeLabel),
+            h7("input", { id: "nks-locale", className: "nks-address", placeholder: copy.localePlaceholder, spellCheck: false, autoComplete: "off" }),
+            h7("label", null, copy.geoLabel),
+            h7(
+              "div",
+              { className: "nks-settings-pair" },
+              h7("input", { id: "nks-geo-lat", className: "nks-address", type: "number", step: "any", placeholder: copy.geoLat, "aria-label": copy.geoLat }),
+              h7("input", { id: "nks-geo-lng", className: "nks-address", type: "number", step: "any", placeholder: copy.geoLng, "aria-label": copy.geoLng })
+            ),
+            h7("span", { className: "nks-settings-hint" }, copy.geoHint),
+            h7("span", { id: "nks-color-label" }, copy.colorSchemeLabel),
+            h7(
+              "div",
+              {
+                id: "nks-color",
+                className: "nks-choices",
+                role: "radiogroup",
+                "aria-labelledby": "nks-color-label",
+                "data-value": "light",
+                onKeyDown: (event) => {
+                  const keys = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"];
+                  if (!keys.includes(event.key)) return;
+                  event.preventDefault();
+                  const values = [...event.currentTarget.querySelectorAll("button")].map((b) => b.dataset.choice);
+                  const index = Math.max(0, values.indexOf(event.currentTarget.dataset.value));
+                  const next = event.key === "Home" ? values[0] : event.key === "End" ? values[values.length - 1] : values[(index + (event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 1) + values.length) % values.length];
+                  selectRadio(event.currentTarget, next);
+                  event.currentTarget.querySelector(`[data-choice="${next}"]`)?.focus();
+                }
+              },
+              [["light", copy.colorSchemeLight], ["dark", copy.colorSchemeDark]].map(([value, label]) => h7("button", {
+                key: value,
+                type: "button",
+                role: "radio",
+                "aria-checked": value === "light" ? "true" : "false",
+                tabIndex: value === "light" ? 0 : -1,
+                "data-choice": value,
+                className: "nks-choice",
+                onClick: (event) => selectRadio(event.currentTarget.parentElement, value)
+              }, label))
+            ),
+            h7("label", { htmlFor: "nks-cookies" }, copy.cookiesLabel),
+            h7("textarea", { id: "nks-cookies", className: "nks-address nks-cookie-text", rows: 4, placeholder: copy.cookiesPlaceholder, spellCheck: false }),
+            h7("span", { className: "nks-settings-hint" }, copy.cookiesHint),
+            h7("button", { type: "submit", style: { display: "none" }, "aria-hidden": "true", tabIndex: -1 })
+          )
+        })
       });
       close = () => {
         dialogOpenRef.current = false;
@@ -5027,13 +5142,32 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         const choice = document.getElementById("nks-viewport")?.dataset.value ?? "default";
         const nextOrigin = (document.getElementById("nks-origin")?.value ?? "").trim();
         const nextPort = (document.getElementById("nks-mcp")?.value ?? "").trim();
+        const nextLocale = (document.getElementById("nks-locale")?.value ?? "").trim();
+        const latText = (document.getElementById("nks-geo-lat")?.value ?? "").trim();
+        const lngText = (document.getElementById("nks-geo-lng")?.value ?? "").trim();
+        const nextColor = document.getElementById("nks-color")?.dataset.value ?? "light";
+        const nextCookies = document.getElementById("nks-cookies")?.value ?? "";
         run(async () => {
+          let nextGeo = null;
+          if (latText || lngText) {
+            const latitude = Number(latText);
+            const longitude = Number(lngText);
+            if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 || !Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
+              throw Object.assign(new Error("\u7ECF\u7EAC\u5EA6\u9700\u8981\u540C\u65F6\u586B\u5199\uFF0C\u4E14\u7EAC\u5EA6 -90..90\u3001\u7ECF\u5EA6 -180..180"), { status: 400, errorId: "kitesurf.body.json" });
+            }
+            nextGeo = { latitude, longitude };
+          }
           const settingsPatch = {};
           if (nextAgent !== current.userAgent) settingsPatch.userAgent = nextAgent;
           const nextWidth = choice === "default" ? "" : choice;
+          const viewportHeights = { 1280: 900, 768: 900, 390: 844 };
           if (nextWidth !== current.viewportWidth) {
-            settingsPatch.viewport = choice === "default" ? null : { width: Number(choice) };
+            settingsPatch.viewport = choice === "default" ? null : { width: Number(choice), height: viewportHeights[choice] || 900 };
           }
+          if (nextLocale !== current.locale) settingsPatch.locale = nextLocale || null;
+          if (JSON.stringify(nextGeo) !== JSON.stringify(current.geolocation)) settingsPatch.geolocation = nextGeo;
+          if (nextColor !== current.colorScheme) settingsPatch.colorScheme = nextColor;
+          if (nextCookies !== current.cookies) settingsPatch.cookies = nextCookies || null;
           if (Object.keys(settingsPatch).length) await post(SETTINGS, settingsPatch);
           const kitePatch = {};
           if (nextOrigin && nextOrigin !== current.httpBase) kitePatch.httpBase = nextOrigin;
@@ -5048,8 +5182,13 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         current = {
           userAgent: fresh?.userAgent ?? "",
           viewportWidth: fresh?.viewport?.width ? String(fresh.viewport.width) : "",
+          viewportHeight: fresh?.viewport?.height ? String(fresh.viewport.height) : "",
           httpBase: fresh?.kite?.httpBase ?? "",
-          mcpPort: fresh?.kite?.mcpPort != null ? String(fresh.kite.mcpPort) : ""
+          mcpPort: fresh?.kite?.mcpPort != null ? String(fresh.kite.mcpPort) : "",
+          locale: fresh?.locale ?? "",
+          geolocation: fresh?.geolocation ?? null,
+          colorScheme: fresh?.colorScheme ?? "light",
+          cookies: fresh?.cookies ?? ""
         };
         const ua = document.getElementById("nks-ua");
         if (ua) ua.value = current.userAgent;
@@ -5057,7 +5196,17 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         if (originInput) originInput.value = current.httpBase;
         const mcp = document.getElementById("nks-mcp");
         if (mcp) mcp.value = current.mcpPort;
-        selectRadio(document.getElementById("nks-viewport"), current.viewportWidth || "default");
+        const localeInput = document.getElementById("nks-locale");
+        if (localeInput) localeInput.value = current.locale;
+        const lat = document.getElementById("nks-geo-lat");
+        const lng = document.getElementById("nks-geo-lng");
+        if (lat) lat.value = current.geolocation?.latitude ?? "";
+        if (lng) lng.value = current.geolocation?.longitude ?? "";
+        const cookies = document.getElementById("nks-cookies");
+        if (cookies) cookies.value = current.cookies;
+        const viewportChoice = ["1280", "768", "390"].includes(current.viewportWidth) ? current.viewportWidth : "default";
+        selectRadio(document.getElementById("nks-viewport"), viewportChoice);
+        selectRadio(document.getElementById("nks-color"), current.colorScheme);
       });
     }
     return h7(

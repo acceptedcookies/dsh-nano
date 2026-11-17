@@ -150,7 +150,58 @@ function parseInspect(raw, containerPort = 8787) {
     hostPort: Number(row.hostPort),
     hostAddress: row.hostAddress || '127.0.0.1',
   }))
-  return { state, ports, containerPort }
+  const resources = item?.configuration?.resources ?? item?.resources ?? null
+  return {
+    state,
+    ports,
+    containerPort,
+    resources: resources
+      ? {
+        cpus: Number(resources.cpus ?? 0) || null,
+        memoryBytes: Number(resources.memoryInBytes ?? 0) || null,
+      }
+      : null,
+  }
+}
+
+/** Profile-declared container size. `profiles/kitesurf/profile.yaml` is the
+ *  single source (AGENTS.md); the 4c/4G literal was a second one. */
+function resourcesFor(deps) {
+  const env = deps.env || process.env
+  const profilesRoot = env.KITESURF_PROFILES || join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'profiles')
+  try {
+    const manifest = loadProfile(join(profilesRoot, 'kitesurf'))?.manifest
+    const resources = manifest?.runtime?.isolation?.resources
+    if (resources?.cpus || resources?.memory) {
+      return { cpus: Number(resources.cpus) || 4, memory: String(resources.memory || '4G') }
+    }
+  } catch { /* fall through to the documented default */ }
+  return { cpus: 4, memory: '4G' }
+}
+
+/** `4G` -> bytes, so a running container can be compared with the profile. */
+function memoryBytesOf(spec) {
+  const text = String(spec ?? '').trim().toUpperCase()
+  const match = text.match(/^(\d+(?:\.\d+)?)\s*(G|M|GB|MB|GI|MI)?$/)
+  if (!match) return null
+  const value = Number(match[1])
+  const unit = match[2] || 'G'
+  const factor = unit.startsWith('G') ? 1024 ** 3 : 1024 ** 2
+  return Math.round(value * factor)
+}
+
+/** Does the running container match the profile's declared size? */
+function resourceDrift(info, wanted) {
+  if (!info?.resources) return null
+  const problems = []
+  if (info.resources.cpus && wanted.cpus && info.resources.cpus !== wanted.cpus) {
+    problems.push(`cpus ${info.resources.cpus} != ${wanted.cpus}`)
+  }
+  const wantBytes = memoryBytesOf(wanted.memory)
+  if (info.resources.memoryBytes && wantBytes && info.resources.memoryBytes !== wantBytes) {
+    problems.push(`memory ${Math.round(info.resources.memoryBytes / 1024 ** 3 * 100) / 100}G != ${wanted.memory}`)
+  }
+  return problems.length ? problems.join(', ') : null
 }
 
 /** One HTTP GET with no keep-alive pool, so a probe cannot pin the process. */
@@ -221,7 +272,7 @@ function registryFor(deps, profilesRoot) {
     version: 1,
     scope: 'session',
     build: { base: 'kitesurf-engine:latest', digest: 'unknown' },
-    runtime: { isolation: { resources: { cpus: 4, memory: '4G' } } },
+    runtime: { isolation: { resources: resourcesFor(deps) } },
     lifecycle: { idleTimeoutMs: 1800000, maxInstances: 2 },
   }
   const home = deps.home || env.HOME || ''
@@ -519,6 +570,7 @@ async function prepareEnvironment(session, deps) {
     // contract instead of inventing a create it can't fulfil.
     await deps.backend?.start?.(name)
     action = 'started'
+
   } else if (!info) {
     // Recreate the documented kitesurf runtime shape: ro checkout at
     // /opt/kitesurf, tmpfs over wrangler state, a writable per-env state
@@ -532,7 +584,7 @@ async function prepareEnvironment(session, deps) {
     await deps.backend?.create?.({
       containerName: name,
       image,
-      resources: { cpus: 4, memory: '4G' },
+      resources: resourcesFor(deps),
       mounts: [
         { arg: `type=virtiofs,source=${checkout},target=/opt/kitesurf,readonly` },
         { arg: 'type=tmpfs,target=/opt/kitesurf/packages/engine/.wrangler' },
@@ -547,6 +599,30 @@ async function prepareEnvironment(session, deps) {
   } else if (info.state !== 'running') {
     await deps.backend?.start?.(name)
     action = 'started'
+  } else if (info.state === 'running' && resourceDrift(info, resourcesFor(deps))) {
+    // Apple's container cannot resize in place, and nothing else marks the
+    // size stale: edit the profile, press prepare, get a container that
+    // matches it. The page is lost, which is the honest cost of resizing.
+    const drift = resourceDrift(info, resourcesFor(deps))
+    try {
+      await deps.backend?.stop?.(name)
+      await deps.backend?.remove?.(name)
+    } catch { /* a container that will not stop is reported below */ }
+    await deps.backend?.create?.({
+      containerName: name,
+      image,
+      resources: resourcesFor(deps),
+      mounts: [
+        { arg: `type=virtiofs,source=${env.KITESURF_CHECKOUT || `${deps.home || env.HOME || ''}/Documents/dsh-plugins/context/kitesurf`},target=/opt/kitesurf,readonly` },
+        { arg: 'type=tmpfs,target=/opt/kitesurf/packages/engine/.wrangler' },
+        { arg: `type=virtiofs,source=${env.KITESURF_STATE || `${deps.home || env.HOME || ''}/.dsh-kitesurf-state${envTag(env) === 'prod' ? '' : `-${envTag(env)}`}`},target=/var/lib/kitesurf-state` },
+      ],
+      ports: [
+        { publish: `127.0.0.1:${host.engineHostPort}:${host.engineContainerPort}` },
+        { publish: `127.0.0.1:${host.bridgeHostPort}:${host.bridgeContainerPort}` },
+      ],
+    })
+    action = `resized (${drift})`
   }
   // A fresh container needs a beat for wrangler+engine to come up. Poll the
   // engine face briefly so a first-time "prepare" reports real health instead

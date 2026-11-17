@@ -6,7 +6,8 @@
 
 - 删除页面中心的 `.nks-load` 覆盖层；`beat` 状态现在只投影到地址栏。
 - 地址栏 `[data-nks-loading="1"]` 显示动态底色（`nks-address-sheen`）、11px spinner 与 `Ns` 计时；`nks-go` 在加载时隐藏，避免重叠。
-- 标签栏按钮 `[data-nks-beat="true"]` 同步播放同一底色动画，形成“标签底色动态”。
+- 动效只保留在地址栏输入框；标签栏按钮不再播放动画，避免刷新时影响其他按钮。
+- 转圈与秒数放在地址栏右侧前往图标左侧，保留 6px 间距；输入框右侧预留 84px，避免文字、计时和图标重叠。
 - `prefers-reduced-motion` 关闭动画但保留静态加载态。
 - 验证：真实地址栏输入 `rfc2616.html` 后，DOM 出现 `data-nks-loading="1"`、计时 `1s/2s`，中心 `.nks-load` 不存在。见 `lab/out/kitesurf-devtools-heartbeat/heartbeat.png`。
 

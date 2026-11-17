@@ -3001,17 +3001,15 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
 .nks-nav-toggle{width:auto;height:28px;margin-left:4px;padding:0 10px;gap:5px;box-sizing:border-box;background:var(--dsw-alias-markdown-tag,var(--dsw-alias-bg-layer-2));border:0;border-radius:var(--dsw-radius-sm);font:var(--dsw-font-xxs-12);font-size:var(--dsh-content-font-size-secondary,13px);color:var(--dsw-alias-label-primary);white-space:nowrap}
 .nks-tool.nks-nav-toggle:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}
 .nks-tool.nks-nav-toggle[aria-pressed="true"]{background:color-mix(in srgb,var(--dsw-alias-link) 14%,var(--dsw-alias-markdown-tag,var(--dsw-alias-bg-layer-2)))}
-.nks-tool.nks-nav-toggle[data-nks-beat="true"]{background-image:linear-gradient(100deg,transparent 18%,color-mix(in srgb,var(--dsw-alias-link) 30%,transparent) 42%,transparent 66%);background-size:220% 100%;animation:nks-address-sheen 1.7s linear infinite}
 .nks-toolbar-nav{display:flex;flex:none;align-items:center;gap:8px}
 .nks-toolbar-tail{display:flex;flex:none;align-items:center;gap:8px}
 .nks-address-box{flex:auto;min-width:0;position:relative}
 .nks-address{box-sizing:border-box;width:100%;height:28px;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-12);background:var(--dsw-alias-bg-layer-1);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-sm);padding:0 32px 0 9px}
 .nks-address::placeholder{color:var(--dsw-alias-label-tertiary)}
-.nks-address-box[data-loading="true"] .nks-address{padding-right:66px;border-color:color-mix(in srgb,var(--dsw-alias-link) 48%,var(--dsw-alias-border-l2));background-image:linear-gradient(100deg,color-mix(in srgb,var(--dsw-alias-link) 10%,var(--dsw-alias-bg-layer-1)) 18%,color-mix(in srgb,var(--dsw-alias-link) 30%,var(--dsw-alias-bg-layer-1)) 42%,color-mix(in srgb,var(--dsw-alias-link) 10%,var(--dsw-alias-bg-layer-1)) 66%);background-size:220% 100%;animation:nks-address-sheen 1.7s linear infinite}
+.nks-address-box[data-loading="true"] .nks-address{padding-right:84px;border-color:color-mix(in srgb,var(--dsw-alias-link) 48%,var(--dsw-alias-border-l2));background-image:linear-gradient(100deg,color-mix(in srgb,var(--dsw-alias-link) 10%,var(--dsw-alias-bg-layer-1)) 18%,color-mix(in srgb,var(--dsw-alias-link) 30%,var(--dsw-alias-bg-layer-1)) 42%,color-mix(in srgb,var(--dsw-alias-link) 10%,var(--dsw-alias-bg-layer-1)) 66%);background-size:220% 100%;animation:nks-address-sheen 1.7s linear infinite}
 .nks-address-box[data-loading="true"]::after{content:"";position:absolute;left:6px;right:6px;bottom:1px;height:2px;border-radius:2px;pointer-events:none;background:linear-gradient(90deg,transparent 10%,var(--dsw-alias-link) 50%,transparent 90%);background-size:200% 100%;animation:nks-address-sheen 1.4s linear infinite}
-.nks-address-beat{position:absolute;right:5px;top:50%;transform:translateY(-50%);display:inline-flex;align-items:center;gap:4px;height:22px;padding:0 3px;color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxxs-11);white-space:nowrap;pointer-events:none}
+.nks-address-beat{position:absolute;right:34px;top:50%;transform:translateY(-50%);display:inline-flex;align-items:center;gap:4px;height:22px;padding:0 3px;color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxxs-11);white-space:nowrap;pointer-events:none}
 .nks-address-beat .nks-spin{width:11px;height:11px;border-width:1.5px}
-.nks-address-box[data-loading="true"] .nks-go{visibility:hidden;opacity:0}
 @keyframes nks-address-sheen{0%{background-position:120% 0}100%{background-position:-120% 0}}
 @media (prefers-reduced-motion:reduce){.nks-address-box[data-loading="true"] .nks-address{animation:none;background-image:none;background:var(--dsw-alias-bg-layer-1)}.nks-address-box[data-loading="true"]::after{animation:none;background:var(--dsw-alias-link)}}
 .nks-go{visibility:hidden;opacity:0;position:absolute;top:0;right:0}
@@ -5077,7 +5075,6 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           type: "button",
           className: "nks-tool nks-nav-toggle",
           "data-nks-nav-toggle": "1",
-          "data-nks-beat": beat ? "true" : "false",
           "aria-pressed": navOpen ? "true" : "false",
           "aria-label": navOpen ? copy.navClose : copy.navOpen,
           title: navOpen ? copy.navCloseTitle : copy.navOpenTitle,

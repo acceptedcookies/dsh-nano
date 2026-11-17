@@ -3,6 +3,7 @@
 
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { copyMode, clampSelection } from './select.js'
+import { formatCtxRef, stamp8 } from '../shared/ctxref.js'
 import * as primitives from '@deepseek-ai/dsh-client-ui-primitives'
 import { NanoDialog, NanoMenu, NANO_STYLES, Toolbar } from 'dsh-nano-ui'
 
@@ -73,11 +74,13 @@ ${NANO_STYLES}
    nano-toolbar 自带 min-height 36 与 border-l1，这里按轨迹规格覆盖。 */
 /* specificity 提到 (0,2,0)：nano-toolbar 的 min-height:36px 有多份拷贝且在
    部分注入顺序下排在本规则之后，会盖掉 32px——.dnt-root.dnt-bar 锁死。 */
-.dnt-root .dnt-bar{box-sizing:border-box;flex:none;width:100%;min-height:32px;flex-wrap:nowrap;align-items:center;padding:3px 8px;gap:4px;border-bottom:.5px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1);font:var(--dsw-font-xxs-12)}
+.dnt-root .dnt-bar{box-sizing:border-box;flex:none;width:100%;min-height:32px;flex-wrap:nowrap;align-items:center;padding:3px 6px;gap:4px;border-bottom:.5px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1);font:var(--dsw-font-xxs-12)}
 /* 终端标签 = 宿主 dockkit tab 规格的栏内移植（组件不可见导出，规格取自其
    pinned 源 ui-dockkit/dockkit.module.css：chip/分隔缝/悬停关闭/新建 ghost。
    栏高固定 32px，chip 降到 24px 留呼吸，其余按原生值。 */
 .dnt-strip{display:flex;flex:0 1 auto;align-items:center;min-width:0;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;gap:0}
+/* 空 strip 仍占一份 bar gap：+ 号被推离左缘 4px，与右端齿轮不对称。 */
+.dnt-strip:empty{display:none}
 .dnt-strip::-webkit-scrollbar{display:none}
 .dnt-slot{display:flex;flex:none;align-items:center;justify-content:center;width:10px;height:24px}
 .dnt-slot::before{content:'';width:.5px;height:14px;background:var(--dsw-alias-border-l4)}
@@ -88,13 +91,15 @@ ${NANO_STYLES}
 .dnt-tab-title span{min-width:0;overflow:hidden;text-overflow:ellipsis}
 .dnt-tab-icon{display:inline-flex;flex:none;color:currentColor}
 .dnt-tab-icon svg{width:12px;height:12px}
+.dnt-tab-pin{display:inline-flex;flex:none;margin:0 22px 0 2px;color:var(--dsw-alias-label-tertiary)}
+.dnt-tab-pin svg{width:11px;height:11px}
 .dnt-tab:focus-within .dnt-tab-title,.dnt-tab-active .dnt-tab-title{mask-image:linear-gradient(to right,black calc(100% - 26px),transparent calc(100% - 10px))}
 @media (hover:hover){.dnt-tab:hover .dnt-tab-title{mask-image:linear-gradient(to right,black calc(100% - 26px),transparent calc(100% - 10px))}}
 .dnt-tab-close{position:absolute;top:2px;right:2px;display:flex;align-items:center;justify-content:center;width:20px;height:20px;padding:0;border:0;border-radius:var(--dsw-radius-sm);background:transparent;color:var(--dsw-alias-label-tertiary);line-height:1;cursor:pointer;opacity:0;pointer-events:none}
 .dnt-tab-close svg{width:14px;height:14px}
 .dnt-tab:focus-within .dnt-tab-close,.dnt-tab-active .dnt-tab-close{opacity:1;pointer-events:auto}
 @media (hover:hover){.dnt-tab:hover .dnt-tab-close{opacity:1;pointer-events:auto}}
-.dnt-tab-add{display:flex;flex:none;align-items:center;justify-content:center;width:24px;height:24px;padding:0;border:0;border-radius:var(--dsw-radius-sm);background:transparent;color:var(--dsw-alias-label-secondary);line-height:1;cursor:pointer;margin-left:4px}
+.dnt-tab-add{display:flex;flex:none;align-items:center;justify-content:center;width:24px;height:24px;padding:0;border:0;border-radius:var(--dsw-radius-sm);background:transparent;color:var(--dsw-alias-label-secondary);line-height:1;cursor:pointer}
 .dnt-tab-add svg{width:14px;height:14px}
 .dnt-tab-add:focus-visible,.dnt-tab-close:focus-visible{outline:1px solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}
 @media (hover:hover){
@@ -172,6 +177,8 @@ const glyph = (name, rotate = false) => {
     check: primitives.IconCheckOutlineRegular,
     chevron: primitives.IconChevronDownOutlineRegular,
     add: primitives.IconPlusOutlineRegular,
+    pin: primitives.IconPinFillRegular,
+    pinLine: primitives.IconPinOutlineRegular,
     terminal: primitives.IconCodeOutlineRegular,
     copy: primitives.IconCopyOutlineRegular,
     paste: primitives.IconCopyOutlineRegular,
@@ -187,8 +194,14 @@ const glyph = (name, rotate = false) => {
   )
 }
 
+/** Per-pane terminal uuid — the `term8` half of `[ DNT:{conv8}@{term8} ]`. */
+const newTermId = () => (globalThis.crypto?.randomUUID?.() ?? `t${Date.now().toString(16)}${Math.random().toString(16).slice(2, 10)}`)
+
 function leaf(laneSpec = { lane: 'local' }) {
-  return { type: 'leaf', id: 'p' + paneSeq++, laneSpec }
+  // Every terminal carries a uuid at birth; the host records its 8-hex stamp
+  // as the `t` label when the pane creates its session, so `[ DNT:…@… ]`
+  // resolves back across the MCP plane.
+  return { type: 'leaf', id: 'p' + paneSeq++, laneSpec: { tid: newTermId(), ...laneSpec } }
 }
 
 // —— terminal sessions outlive view mounts ——
@@ -239,7 +252,14 @@ const termStore = (sessionId) => {
   let s = termStores.get(key)
   if (!s) {
     const saved = loadLayouts()[key]
-    s = { tree: saved ?? null, sessions: new Map() }
+    // Layouts saved before ctx refs lack laneSpec.tid — backfill in place so
+    // the saved tree keeps working and each pane gains a copyable identity.
+    const backfill = (node) => {
+      if (node?.type === 'leaf' && node.laneSpec && !node.laneSpec.tid) node.laneSpec.tid = newTermId()
+      if (node?.type === 'split') { backfill(node.a); backfill(node.b) }
+      return node
+    }
+    s = { tree: saved ? backfill(saved) : null, sessions: new Map() }
     termStores.set(key, s)
   }
   return s
@@ -356,6 +376,12 @@ export function NanoTerm({ sessionId, session, zh, openView }) {
     setTree((t) => mapTree(t, id, (n) => ({ ...n, ratio })))
   }, [])
 
+  // Pin flag rides the leaf node (persisted in dnt.layout with the tree);
+  // the status bar floats pinned chips to the front on every render.
+  const togglePin = useCallback((id) => {
+    setTree((t) => mapTree(t, id, (n) => ({ ...n, pinned: !n.pinned })))
+  }, [])
+
   const updateSettings = useCallback((patch) => {
     setSettings((s) => {
       const next = { ...s, ...patch }
@@ -403,7 +429,7 @@ export function NanoTerm({ sessionId, session, zh, openView }) {
 
   return (
     <div ref={rootRef} className="dnt-root" data-nano-terminal data-dnt-root>
-      <StatusBar tree={tree} focused={focused} setFocused={setFocused} closeLeaf={closeLeaf} split={split} openLeaf={openLeaf} paneSessions={paneSessions} zh={zh} settings={settings} onSettings={updateSettings} />
+      <StatusBar tree={tree} focused={focused} setFocused={setFocused} closeLeaf={closeLeaf} split={split} openLeaf={openLeaf} togglePin={togglePin} sessionId={sessionId} paneSessions={paneSessions} zh={zh} settings={settings} onSettings={updateSettings} />
       {tree ? (
         <div className="dnt-content">
           <div className="dnt-panes">
@@ -476,14 +502,28 @@ function leafIdsInOrder(node, out = []) {
  * Status bar (TrajectoryToolbar spec): one 原生 dockkit 形态 chip per pane —
  * click activates, × closes, + opens the new-pane menu; the settings gear sits
  * at the bar's right edge, visually aligned under the header's native buttons.
+ * Right-clicking a chip opens its context menu: copy the pane's
+ * `[ DNT:{conv8}@{term8} ]` context reference, pin it to the front, close it.
  */
-function StatusBar({ tree, focused, setFocused, closeLeaf, split, openLeaf, paneSessions, zh, settings, onSettings }) {
+function StatusBar({ tree, focused, setFocused, closeLeaf, split, openLeaf, togglePin, sessionId, paneSessions, zh, settings, onSettings }) {
   const [mcpUrl, setMcpUrl] = useState('')
   const [dialog, setDialog] = useState(null) // 'mcp' | 'settings'
-  const [menu, setMenu] = useState(null)
+  const [menu, setMenu] = useState(null) // '+' lane menu anchor
+  const [tabMenu, setTabMenu] = useState(null) // { x, y, node } — chip context menu
+  const [copiedCtx, setCopiedCtx] = useState(null) // paneId whose ctx ref was just copied
   const copy = { cancel: zh ? '取消' : 'Cancel', confirm: zh ? '确定' : 'OK', close: zh ? '关闭' : 'Close' }
 
-  const panes = useMemo(() => leafIdsInOrder(tree), [tree])
+  useEffect(() => {
+    if (!copiedCtx) return undefined
+    const t = setTimeout(() => setCopiedCtx(null), 1600)
+    return () => clearTimeout(t)
+  }, [copiedCtx])
+
+  // Pinned panes float to the front of the strip (stable, like dockkit pins).
+  const panes = useMemo(() => {
+    const inOrder = leafIdsInOrder(tree)
+    return inOrder.filter((n) => n.pinned).concat(inOrder.filter((n) => !n.pinned))
+  }, [tree])
   const target = focused ?? panes[0]?.id ?? null
   // wide panes split right, tall/narrow panes split down
   const autoDir = () => {
@@ -504,6 +544,24 @@ function StatusBar({ tree, focused, setFocused, closeLeaf, split, openLeaf, pane
     { id: 'mcp', label: zh ? '连接 MCP 终端' : 'Connect MCP terminal', icon: glyph('mcp'), run: () => setDialog('mcp') },
   ]
 
+  /** `[ DNT:{conv8}@{term8} ]` — paste target for agents & the MCP ctx tools. */
+  const ctxRefOf = (node) => formatCtxRef(sessionId, node.laneSpec?.tid)
+  const copyCtxRef = (node) => {
+    const ref = ctxRefOf(node)
+    navigator.clipboard?.writeText(ref).then(() => setCopiedCtx(node.id)).catch(() => {})
+  }
+  const tabActions = (node) => [
+    { id: 'ctx', label: zh ? '复制终端上下文引用' : 'Copy terminal context ref', icon: glyph('copy'), run: () => copyCtxRef(node) },
+    {
+      id: 'pin',
+      label: node.pinned ? (zh ? '取消置顶' : 'Unpin') : (zh ? '置顶' : 'Pin to front'),
+      icon: glyph(node.pinned ? 'pin' : 'pinLine'),
+      run: () => togglePin(node.id),
+    },
+    { separator: true },
+    { id: 'close', label: zh ? '关闭' : 'Close', icon: glyph('close'), run: () => closeLeaf(node.id) },
+  ]
+
   return (
     <Toolbar label={zh ? '终端状态栏' : 'terminal status bar'} className="dnt-bar">
       <div className="dnt-strip" role="tablist" aria-label={zh ? '终端窗格' : 'terminal panes'}>
@@ -520,12 +578,14 @@ function StatusBar({ tree, focused, setFocused, closeLeaf, split, openLeaf, pane
                 tabIndex={0}
                 title={st?.title || undefined}
                 onClick={() => setFocused(node.id)}
+                onContextMenu={(e) => { e.preventDefault(); setTabMenu({ x: e.clientX, y: e.clientY, node, openedAt: Date.now() }) }}
                 onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setFocused(node.id) } }}
               >
                 <span className="dnt-tab-title">
-                  <span className="dnt-tab-icon" aria-hidden="true">{glyph(node.laneSpec?.lane === 'mcp' ? 'mcp' : 'terminal')}</span>
+                  <span className="dnt-tab-icon" aria-hidden="true">{glyph(copiedCtx === node.id ? 'check' : node.laneSpec?.lane === 'mcp' ? 'mcp' : 'terminal')}</span>
                   <span>{st?.title || (zh ? '终端' : 'Terminal')}</span>
                 </span>
+                {node.pinned && <span className="dnt-tab-pin" aria-hidden="true">{glyph('pin')}</span>}
                 <button
                   type="button"
                   className="dnt-tab-close"
@@ -543,8 +603,9 @@ function StatusBar({ tree, focused, setFocused, closeLeaf, split, openLeaf, pane
         type="button"
         className="dnt-tab-add"
         aria-label={zh ? '新建终端' : 'new terminal'}
-        title={zh ? '新建终端' : 'new terminal'}
-        onClick={openMenu}
+        title={zh ? '新建本地窗格（右键更多选项）' : 'new local pane (right-click for more)'}
+        onClick={() => open()}
+        onContextMenu={(e) => { e.preventDefault(); openMenu(e) }}
       >
         {glyph('add')}
       </button>
@@ -558,6 +619,7 @@ function StatusBar({ tree, focused, setFocused, closeLeaf, split, openLeaf, pane
         {glyph('settings')}
       </button>
       <NanoMenu menu={menu} actions={laneActions} onClose={() => setMenu(null)} width={200} />
+      <NanoMenu menu={tabMenu} actions={tabMenu ? tabActions(tabMenu.node) : []} onClose={() => setTabMenu(null)} width={228} />
       {dialog === 'mcp' && (
         <NanoDialog
           copy={copy}

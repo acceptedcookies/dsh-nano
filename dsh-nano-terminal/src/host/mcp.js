@@ -15,6 +15,7 @@ import { KIND, err } from './errors.js'
 import { waitFor, NAMED_KEYS } from './wait.js'
 import { sendNote } from './notes.js'
 import { templateList, templateRun } from './templates.js'
+import { parseCtxRef, bareTermStamp } from '../shared/ctxref.js'
 
 const PROTOCOL_VERSION = '2025-06-18'
 const schema = JSON.parse(
@@ -32,22 +33,78 @@ const TOOL_MAP = Object.fromEntries(TOOLS.map((t) => [t.name, t]))
 
 /**
  * @param {object} deps
+ * @param {import('@deepseek-ai/cordis').Context} deps.ctx — plugin context; `subprocess` powers the stats probe
  * @param {import('./sessions.js').SessionRegistry} deps.registry
  * @param {import('./events.js').EventBus} deps.bus
  * @param {string} deps.auditPath
  * @param {() => Record<string, {status: string, detail?: string}>} deps.laneStatus
  */
-export function createMcpHandler({ registry, bus, auditPath, laneStatus, writeAudit }) {
+export function createMcpHandler({ ctx, registry, bus, auditPath, laneStatus, writeAudit }) {
   const audit = (event) => {
     if (typeof writeAudit === 'function') writeAudit(event)
   }
   void auditPath
 
-  /** Resolve schema-style ref (id | name | addr) → record or throw. */
+  /** Resolve schema-style ref (id | name | addr | ctx ref) → record or throw. */
   const target = (ref) => {
     const rec = registry.resolve(ref)
     if (!rec) throw err(KIND.NOT_FOUND, `no such terminal '${ref}'`)
     return rec
+  }
+
+  /**
+   * Process stats for one live terminal: `ps` under the provider's own spawn
+   * (POSIX only — on win32 or spawn failure the tool still answers with the
+   * registry facts and `processes: null`).
+   */
+  async function processStats(rec) {
+    if (process.platform === 'win32' || !rec.handle?.pid) return { processes: null }
+    try {
+      const handle = ctx.subprocess.spawn({
+        argv: ['/bin/ps', '-o', 'pid=,ppid=,pcpu=,rss=,stat=,etime=,command=', '-ax'],
+        cwd: '/',
+        stdio: { stdin: 'ignore', stdout: { maxBytes: 512 * 1024 }, stderr: { maxBytes: 8 * 1024 } },
+        graceMs: 5000,
+      })
+      await handle.done.catch(() => {})
+      const text = handle.collected?.stdout?.readFrom(0)?.text ?? ''
+      const rows = text.trim().split('\n').map((line) => line.trim()).filter(Boolean)
+        .map((line) => {
+          const parts = line.split(/\s+/)
+          return {
+            pid: Number(parts[0]),
+            ppid: Number(parts[1]),
+            pcpu: Number(parts[2]),
+            rssKb: Number(parts[3]),
+            stat: parts[4] ?? null,
+            etime: parts[5] ?? null,
+            command: parts.slice(6).join(' ') || null,
+          }
+        })
+        .filter((p) => Number.isFinite(p.pid))
+      // descendant tree of the terminal's root shell (job-control children can
+      // live in other process groups — parentage is the only faithful bound)
+      const byParent = new Map()
+      for (const p of rows) {
+        const list = byParent.get(p.ppid) ?? []
+        list.push(p)
+        byParent.set(p.ppid, list)
+      }
+      const processes = []
+      const queue = [rec.handle.pid]
+      const seen = new Set()
+      while (queue.length) {
+        const pid = queue.shift()
+        if (seen.has(pid)) continue
+        seen.add(pid)
+        const rec2 = rows.find((r) => r.pid === pid)
+        if (rec2) processes.push(rec2)
+        for (const child of byParent.get(pid) ?? []) queue.push(child.pid)
+      }
+      return { processes }
+    } catch {
+      return { processes: null }
+    }
   }
 
   async function callTool(name, args = {}) {
@@ -61,13 +118,35 @@ export function createMcpHandler({ registry, bus, auditPath, laneStatus, writeAu
         return {
           id: rec.id,
           addr: rec.addr,
+          ctx: rec.info().ctx, // `[ DNT:{conv8}@{term8} ]` when t+conv labels set
           lane: rec.lane,
           title: rec.title,
+          labels: rec.labels,
           attach: { protocol: 'dnt-ws-v1', url: `/dsh-nano-terminal/stream?session=${rec.id}` },
         }
       }
       case 'term.session.list':
         return { sessions: registry.list() }
+      case 'term.ctx': {
+        // Resolve a context reference — '[ DNT:{conv8}@{term8} ]', a bare
+        // term stamp, or any legacy ref — to the session it names.
+        const ref = String(args.ref ?? '')
+        const rec = registry.resolve(ref)
+        if (!rec) throw err(KIND.NOT_FOUND, `no terminal matches '${ref}'`)
+        audit({ op: 'mcp.ctx', id: rec.id, addr: rec.addr, ref })
+        return {
+          id: rec.id,
+          addr: rec.addr,
+          ctx: rec.info().ctx,
+          title: rec.title,
+          lane: rec.lane,
+          owner: rec.owner,
+          phase: rec.phase,
+          labels: rec.labels,
+          attached: rec.sockets.size,
+          exited: rec.exited,
+        }
+      }
       case 'term.session.input': {
         const rec = target(args.id)
         audit({ op: 'mcp.input', id: rec.id, addr: rec.addr, bytes: args.data.length })
@@ -134,6 +213,57 @@ export function createMcpHandler({ registry, bus, auditPath, laneStatus, writeAu
           complete: !(rec.status?.state === 'working' || rec.status?.state === 'blocked'),
         }
       }
+      case 'term.session.copy': {
+        // Plain-text copy of the rendered grid — the agent's "clipboard".
+        const rec = target(args.id)
+        const text = rec.screenText(Math.min(args.lines ?? 200, 2000), args.source ?? 'visible')
+        audit({ op: 'mcp.copy', id: rec.id, addr: rec.addr, lines: text.split('\n').length })
+        return { id: rec.id, addr: rec.addr, text }
+      }
+      case 'term.session.screenshot': {
+        // Structured screen capture: dims + cursor + the visible grid — the
+        // agent-facing equivalent of a pixel screenshot.
+        const rec = target(args.id)
+        const view = rec.alignView()
+        audit({ op: 'mcp.screenshot', id: rec.id, addr: rec.addr })
+        return {
+          id: rec.id,
+          addr: rec.addr,
+          ...view,
+          title: rec.title,
+          status: rec.status,
+        }
+      }
+      case 'term.session.clear': {
+        // Send the terminal's own clear sequence (form feed, ^L): the shell
+        // repaints; we never forge screen state behind the program's back.
+        const rec = target(args.id)
+        if (rec.exited) throw err(KIND.FINISHED, 'terminal exited')
+        audit({ op: 'mcp.clear', id: rec.id, addr: rec.addr })
+        await rec.gate.submit(() => rec.handle.write('\x0c'))
+        return { ok: true }
+      }
+      case 'term.session.stats': {
+        const rec = target(args.id)
+        const [stats, foreground] = await Promise.all([
+          processStats(rec),
+          rec.handle?.inspectForeground?.().catch(() => undefined) ?? Promise.resolve(undefined),
+        ])
+        return {
+          id: rec.id,
+          addr: rec.addr,
+          ctx: rec.info().ctx,
+          pid: rec.handle?.pid ?? null,
+          ...stats,
+          foreground: foreground ?? null,
+          activity: rec.handle ? await rec.handle.inspectActivity?.().catch(() => null) : null,
+          status: rec.status,
+          phase: rec.phase,
+          exited: rec.exited,
+          cols: rec.meta?.cols ?? null,
+          rows: rec.meta?.rows ?? null,
+        }
+      }
       case 'term.session.resize': {
         const rec = target(args.id)
         await rec.resize(args.cols, args.rows)
@@ -173,6 +303,23 @@ export function createMcpHandler({ registry, bus, auditPath, laneStatus, writeAu
         return { log: readAuditTail(auditPath, Math.min(args.lines ?? 50, 500)) }
       case 'term.lane.status':
         return { lanes: laneStatus() }
+      case 'term.health': {
+        // Whole-plane health probe: lanes + registry + per-session rollup.
+        const sessions = registry.list()
+        const alive = sessions.filter((s) => !s.exited)
+        return {
+          ok: true,
+          lanes: laneStatus(),
+          sessions: {
+            total: sessions.length,
+            alive: alive.length,
+            exited: sessions.length - alive.length,
+            working: sessions.filter((s) => s.status?.state === 'working').length,
+            blocked: sessions.filter((s) => s.status?.state === 'blocked').length,
+          },
+          list: sessions.map((s) => ({ addr: s.addr, ctx: s.ctx, phase: s.phase, status: s.status?.state ?? null, attached: s.attached, exited: !!s.exited })),
+        }
+      }
       case 'term.skill': {
         const skill = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'docs', 'skill.md'), 'utf8')
         return { skill }

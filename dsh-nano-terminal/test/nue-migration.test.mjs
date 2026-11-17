@@ -123,7 +123,7 @@ test('T21: the status bar is nano-ui Toolbar', () => {
   assert.match(nanoTerm, /className="dnt-bar"/)
   assert.deepEqual(countIn(sources, /role="toolbar"/g), [], 'the host role is owned by nano-ui Toolbar')
   // The bar keeps its own layout classes and every one of them is defined.
-  for (const name of ['dnt-bar', 'dnt-strip', 'dnt-slot', 'dnt-tab', 'dnt-tab-title', 'dnt-tab-icon', 'dnt-tab-close', 'dnt-tab-add', 'dnt-tab-active', 'dnt-gear']) {
+  for (const name of ['dnt-bar', 'dnt-strip', 'dnt-slot', 'dnt-tab', 'dnt-tab-title', 'dnt-tab-icon', 'dnt-tab-close', 'dnt-tab-add', 'dnt-tab-active', 'dnt-tab-pin', 'dnt-gear']) {
     assert.ok(nanoTerm.includes(`.${name}{`) || nanoTerm.includes(`.${name} `) || nanoTerm.includes(`.${name}:`) || nanoTerm.includes(`.${name},`), `.${name} is defined`)
     assert.ok(nanoTerm.includes(name), `.${name} is referenced`)
   }
@@ -140,14 +140,20 @@ test('T21: the status bar is nano-ui Toolbar', () => {
   assert.match(nanoTerm, /role="tab"/)
   assert.match(nanoTerm, /dnt-tab-close/)
   assert.match(nanoTerm, /dnt-tab-add/)
+  // Chip right-click = ctx-ref copy / pin / close — NanoMenu, never a hand list.
+  assert.match(nanoTerm, /onContextMenu=\{[\s\S]*?setTabMenu/)
+  assert.match(nanoTerm, /formatCtxRef\(sessionId, node\.laneSpec\?\.tid\)/)
+  assert.match(nanoTerm, /navigator\.clipboard\?\.writeText/)
+  assert.match(nanoTerm, /pinned\)\.concat\(inOrder\.filter\(\(n\) => !n\.pinned\)\)/)
+  assert.match(nanoTerm, /togglePin\(node\.id\)/)
 })
 
 test('T21: the status bar icons come from the host icon set', () => {
   assert.deepEqual(countIn(sources, /⊕/g), [], '⊕ text glyph')
   assert.deepEqual(countIn(sources, /⚙/g), [], '⚙ text glyph')
   assert.deepEqual(countIn(sources, /actionIcon|toggleIcon|searchIcon/g), [], 'text-glyph slots')
-  for (const name of ['terminal', 'mcp', 'add', 'settings', 'close']) {
-    assert.ok(nanoTerm.includes(`glyph('${name}')`), `glyph('${name}') is used`)
+  for (const name of ['terminal', 'mcp', 'add', 'settings', 'close', 'pin', 'pinLine', 'copy', 'check']) {
+    assert.ok(nanoTerm.includes(`glyph('${name}')`) || nanoTerm.includes(`'${name}'`), `glyph('${name}') is used`)
   }
   // Each one resolves to a catalog `Icon*` export, not to a locally drawn svg.
   const map = nanoTerm.slice(nanoTerm.indexOf('const glyph ='), nanoTerm.indexOf('if (!Icon) return null'))

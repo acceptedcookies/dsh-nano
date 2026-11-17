@@ -333,6 +333,17 @@ function resizeMode(platform) {
   return platform === "win32" ? "box" : "reflow";
 }
 
+// src/shared/ctxref.js
+function parseCtxRef(input) {
+  if (typeof input !== "string") return null;
+  const m = input.trim().match(/^\[?\s*DNT:([0-9a-f]{8})?@([0-9a-f]{8})\s*\]?$/i);
+  if (!m) return null;
+  return { conv: m[1] ? m[1].toLowerCase() : null, term: m[2].toLowerCase() };
+}
+function bareTermStamp(input) {
+  return /^[0-9a-f]{8}$/i.test(input ?? "") ? input.toLowerCase() : null;
+}
+
 // ../../../../packages/dsh-interface/src/contracts/jsonOutcome.js
 var FAILURE_KIND = Object.freeze({
   /** signal aborted; issued-before cancellation makes no server-side claim. */
@@ -870,16 +881,31 @@ var SessionRegistry = class {
     return this.sessions.get(id);
   }
   /**
-   * Resolve id | name | addr ('<lane>/<name|short6>') | bare short6 to a record.
+   * Resolve id | name | addr ('<lane>/<name|short6>') | bare short6 |
+   * ctx ref ('[ DNT:{conv8}@{term8} ]') | bare 8-hex term stamp to a record.
+   * A ctx ref matches the session whose `t` label is the term stamp; a conv
+   * stamp additionally requires the `conv` label to agree.
    */
   resolve(ref) {
     if (!ref) return void 0;
     if (this.sessions.has(ref)) return this.sessions.get(ref);
+    const ctx = parseCtxRef(ref);
+    if (ctx) return this.#resolveCtx(ctx);
     const slash = String(ref).indexOf("/");
     if (slash >= 0) ref = String(ref).slice(slash + 1);
     if (this.names.has(ref)) return this.sessions.get(this.names.get(ref));
     for (const rec of this.sessions.values()) {
       if (rec.id.startsWith(ref) && ref.length >= 4) return rec;
+    }
+    const bare = bareTermStamp(ref);
+    if (bare) return this.#resolveCtx({ conv: null, term: bare });
+    return void 0;
+  }
+  #resolveCtx({ conv, term }) {
+    for (const rec of this.sessions.values()) {
+      if (rec.labels?.t !== term) continue;
+      if (conv && rec.labels?.conv !== conv) continue;
+      return rec;
     }
     return void 0;
   }
@@ -1111,9 +1137,12 @@ var SessionRecord = class {
     return `${this.lane}/${this.name ?? this.id.slice(0, 6)}`;
   }
   info() {
+    const { conv, t } = this.labels ?? {};
     return {
       id: this.id,
       addr: this.addr,
+      // `[ DNT:{conv8}@{term8} ]` — present once a pane-labelled session exists.
+      ctx: conv && t ? `DNT:${conv}@${t}` : null,
       name: this.name,
       lane: this.lane,
       title: this.title,

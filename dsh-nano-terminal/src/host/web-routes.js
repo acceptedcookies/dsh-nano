@@ -14,6 +14,7 @@ import { createWebRegistrar } from 'dsh-interface/host'
 import { ensurePerfReviewHost, handleHostRead } from 'dsh-performance-review/host'
 import { BINDING_TABLE } from '../../lib/bindings.js'
 import { recoverAttach } from '../shared/align.js'
+import { stampOrKeep8 } from '../shared/ctxref.js'
 
 const HOST_PLUGIN = 'dsh-nano-terminal'
 let _hostApi = null
@@ -109,9 +110,17 @@ export function registerWebRoutes(ctx, deps) {
         try {
           const attachRef = attachId ?? msg.session
           if (attachRef) {
-            // ?session= or open.session accepts id | name | addr
+            // ?session= or open.session accepts id | name | addr | ctx ref
             record = registry.resolve(attachRef)
             if (!record) throw new Error('no such session')
+            // An attach can also graft ctx-ref anchors onto a session that
+            // predates them (or was spawned outside a pane) — set-labels
+            // merges and emits the labels event, so nothing is forged.
+            const graft = {
+              ...(stampOrKeep8(msg.tid) ? { t: stampOrKeep8(msg.tid) } : {}),
+              ...(stampOrKeep8(msg.conv) ? { conv: stampOrKeep8(msg.conv) } : {}),
+            }
+            if (Object.keys(graft).length) record.setLabels(graft)
           } else if (msg.type === 'open') {
             record = await registry.create({
               sessionId: msg.owner,
@@ -122,6 +131,14 @@ export function registerWebRoutes(ctx, deps) {
               rows: msg.rows,
               title: msg.title,
               owner: msg.owner,
+              // ctx-ref anchor labels: `t` = the pane's 8-hex term stamp,
+              // `conv` = its conversation session stamp (ctxref.js format).
+              // Both are normalized to 8-hex here — the client sends `tid` as
+              // a full uuid and `conv` already stamped; stampOrKeep8 covers both.
+              labels: {
+                ...(stampOrKeep8(msg.tid) ? { t: stampOrKeep8(msg.tid) } : {}),
+                ...(stampOrKeep8(msg.conv) ? { conv: stampOrKeep8(msg.conv) } : {}),
+              },
             })
           } else {
             throw new Error('expected {type:"open"}')

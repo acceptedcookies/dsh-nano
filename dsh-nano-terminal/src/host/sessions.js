@@ -20,6 +20,7 @@ import { ScreenMirror, loadMirror } from './mirror.js'
 import { KIND, err } from './errors.js'
 import { Gate } from './gate.js'
 import { resizeMode } from '../shared/align.js'
+import { parseCtxRef, bareTermStamp } from '../shared/ctxref.js'
 
 /**
  * Host-side perf join. `ensurePerfReviewHost` is bundled into
@@ -105,16 +106,34 @@ export class SessionRegistry {
   }
 
   /**
-   * Resolve id | name | addr ('<lane>/<name|short6>') | bare short6 to a record.
+   * Resolve id | name | addr ('<lane>/<name|short6>') | bare short6 |
+   * ctx ref ('[ DNT:{conv8}@{term8} ]') | bare 8-hex term stamp to a record.
+   * A ctx ref matches the session whose `t` label is the term stamp; a conv
+   * stamp additionally requires the `conv` label to agree.
    */
   resolve(ref) {
     if (!ref) return undefined
     if (this.sessions.has(ref)) return this.sessions.get(ref)
+    // Context references resolve before the generic prefix fallback so a
+    // uuid-shaped term stamp is never mistaken for a record-id prefix.
+    const ctx = parseCtxRef(ref)
+    if (ctx) return this.#resolveCtx(ctx)
     const slash = String(ref).indexOf('/')
     if (slash >= 0) ref = String(ref).slice(slash + 1)
     if (this.names.has(ref)) return this.sessions.get(this.names.get(ref))
     for (const rec of this.sessions.values()) {
       if (rec.id.startsWith(ref) && ref.length >= 4) return rec
+    }
+    const bare = bareTermStamp(ref)
+    if (bare) return this.#resolveCtx({ conv: null, term: bare })
+    return undefined
+  }
+
+  #resolveCtx({ conv, term }) {
+    for (const rec of this.sessions.values()) {
+      if (rec.labels?.t !== term) continue
+      if (conv && rec.labels?.conv !== conv) continue
+      return rec
     }
     return undefined
   }
@@ -368,9 +387,12 @@ export class SessionRecord {
   }
 
   info() {
+    const { conv, t } = this.labels ?? {}
     return {
       id: this.id,
       addr: this.addr,
+      // `[ DNT:{conv8}@{term8} ]` — present once a pane-labelled session exists.
+      ctx: conv && t ? `DNT:${conv}@${t}` : null,
       name: this.name,
       lane: this.lane,
       title: this.title,

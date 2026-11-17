@@ -944,6 +944,23 @@ function recoverAttach({ alignMode, align, replay }) {
   return "replay";
 }
 
+// src/shared/ctxref.js
+function stamp8(id) {
+  if (typeof id !== "string" || id.length === 0) return "00000000";
+  const s = id.toLowerCase();
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(s)) return s.slice(0, 8);
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0).toString(16).padStart(8, "0");
+}
+function stampOrKeep8(input) {
+  if (typeof input !== "string" || input.length === 0) return null;
+  return /^[0-9a-f]{8}$/i.test(input) ? input.toLowerCase() : stamp8(input);
+}
+
 // src/host/web-routes.js
 var HOST_PLUGIN = "dsh-nano-terminal";
 var _hostApi = null;
@@ -1042,6 +1059,11 @@ function registerWebRoutes(ctx, deps) {
         if (attachRef) {
           record = registry.resolve(attachRef);
           if (!record) throw new Error("no such session");
+          const graft = {
+            ...stampOrKeep8(msg.tid) ? { t: stampOrKeep8(msg.tid) } : {},
+            ...stampOrKeep8(msg.conv) ? { conv: stampOrKeep8(msg.conv) } : {}
+          };
+          if (Object.keys(graft).length) record.setLabels(graft);
         } else if (msg.type === "open") {
           record = await registry.create({
             sessionId: msg.owner,
@@ -1051,7 +1073,15 @@ function registerWebRoutes(ctx, deps) {
             cols: msg.cols,
             rows: msg.rows,
             title: msg.title,
-            owner: msg.owner
+            owner: msg.owner,
+            // ctx-ref anchor labels: `t` = the pane's 8-hex term stamp,
+            // `conv` = its conversation session stamp (ctxref.js format).
+            // Both are normalized to 8-hex here — the client sends `tid` as
+            // a full uuid and `conv` already stamped; stampOrKeep8 covers both.
+            labels: {
+              ...stampOrKeep8(msg.tid) ? { t: stampOrKeep8(msg.tid) } : {},
+              ...stampOrKeep8(msg.conv) ? { conv: stampOrKeep8(msg.conv) } : {}
+            }
           });
         } else {
           throw new Error('expected {type:"open"}');

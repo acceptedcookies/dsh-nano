@@ -73,7 +73,24 @@ export function createAppleBackend(spec = {}, io = {}) {
     async ensureImage(image) {
       calls.ensureImage += 1
       assertPublicSpec(image?.publicSpec ?? {})
-      return { ok: true, image: image?.tag ?? spec.image ?? null }
+      const tag = image?.tag ?? spec.image ?? null
+      if (!tag) throw new Error('a pinned image is required')
+      // Inspect only: a missing build must fail before a healthy container is
+      // stopped/deleted, rather than leaving it gone after a failed run.
+      await runFile(bound, ['image', 'inspect', tag])
+      return { ok: true, image: tag }
+    },
+    /** Image creation remains privileged here, after host confinement wraps argv. */
+    async build({ ctx, contextDir, dockerfile, image, base }) {
+      if (typeof ctx?.sandbox?.confine !== 'function') throw new Error('ctx.sandbox.confine is required')
+      const args = ['container', 'build', '--tag', image, '--file', dockerfile, '--build-arg', `KITESURF_BASE_IMAGE=${base}`, contextDir]
+      const confined = await ctx.sandbox.confine(args)
+      if (!Array.isArray(confined?.argv) || confined.argv.length === 0) throw new Error('sandbox did not return a confined build command')
+      return new Promise((resolve, reject) => {
+        const child = (io.spawnProcess || spawn)(confined.argv[0], confined.argv.slice(1), { stdio: 'inherit' })
+        child.on('error', reject)
+        child.on('close', code => code === 0 ? resolve({ ok: true, image }) : reject(new Error(`confined image build exited ${code}`)))
+      })
     },
     async create(instance) {
       calls.create += 1
@@ -117,6 +134,15 @@ export function createAppleBackend(spec = {}, io = {}) {
       calls.exec += 1
       await run(bound, ['exec', name, ...argv])
       return { ok: true }
+    },
+    /** Driver diagnostics retain output without adding another container CLI site. */
+    async execOutput(name, argv) {
+      const text = await runFile(bound, ['exec', name, ...argv])
+      return { ok: true, text: String(text ?? '') }
+    },
+    async stats(name) {
+      const text = await runFile(bound, ['stats', '--no-stream', '--format', 'json', name])
+      return JSON.parse(text)
     },
     /** Remove a container so it can be recreated at a different size. */
     async remove(name) {

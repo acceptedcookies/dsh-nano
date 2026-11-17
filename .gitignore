@@ -1,4 +1,5 @@
 # Dependencies
+node_modules
 node_modules/
 .pnpm-store/
 
@@ -44,6 +45,13 @@ coverage/
 tmp/
 temp/
 *.tmp
+
+# Local upstream sources and derived build trees are not plugin source.
+.dependencies/
+!/.dependencies/
+/.dependencies/*
+!/.dependencies/MANIFEST.json
+!/.dependencies/MANIFEST.schema.json
 
 # All context directories at any depth (reference material).
 # `context` without a slash also covers a symlink of that name; `context/` does not.

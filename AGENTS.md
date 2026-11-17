@@ -38,6 +38,7 @@
 **上层建筑归host** = host侧的内容在制作插件功能的时候需要明确界定, 应该归 host 侧的内容, 不得切入插件内部;
 **不得侧载** = 每个插件相互独立. 不得在本仓插件和插件间建立专有通道, 不得在插件和业主其他拓扑结构之间建立侧载通道, 不得硬编 base-url 或者 秘钥;
 **单一真源** = 任何 canonical 状态全系统只许一份 durable、可写、可被 runtime 当权威读取的副本; 可留的只有 consumption receipt（identity + canonical version/hash + consumed_at, 不带可执行 payload、不作恢复读源）;
+**上游 pin 不可改写** = Kitesurf 的 pin 必须是官方提交的原样源码，不得添加本地提交、修改源码或把本地补丁混入 pin；构建产物写在独立派生目录，不回写 pin。所有本地行为由 [DNLS]/[DNK] 的 overlay、adapter 或 driver 适配；每次 repin 同时复核这些适配及有针对性的兼容实验，不新增 release-gate;
 **不得擅自扩约** = 公共合同变更（error 枚举、idempotency 法则、客户端 retry 义务、新 lane、新凭证面）必须先有 [业主] 决定并 durable 登记; 登记形式不限（[业主] 心智模型中的锁定、QnA 中冻结的真相等）, 但同一决定只许一份登记真源, 不另立仪式文件; AGENT 不得私自决定, 不得在无 durable 留档时改约; 不得由实现反推合同, 不得把「测试要求如此」当合同来源;
 **不得过度仪式** = 不得构建过度的测试循环, 不得发布未经业主允许的 release-gate, 不得阻碍业主进行发布;
 **UI 宿主优先** = 插件浏览器 UI 先用宿主 primitive, 其次 nano-ui, 两者都没有才在插件内实现并标 `nano-ui-exempt`; 同一顺序约束 nano-ui 自身; 不得嫁接宿主内部 DOM (`[class*=…]`, `:has()` 套宿主结构, 哈希类发现, 改写宿主 portal 根节点); 规格唯一真源为 [docs/specs/dsh-nano-ui/DESIGN.md];

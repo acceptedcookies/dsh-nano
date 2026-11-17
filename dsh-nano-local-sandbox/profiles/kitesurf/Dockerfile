@@ -3,11 +3,12 @@
 #   Error relocating workerd: __res_init: symbol not found
 # celld's own published image is Debian 12, not Alpine. This image follows that.
 #
-# The builder VM's npm registry connection stalls, so linux-prefix is produced
-# on the host and is not committed:
-#   npm install --prefix linux-prefix --os=linux --cpu=arm64 wrangler@4.161.0 agent-browser@0.42.0
+# linux-prefix is produced on the host from profile.yaml build.npmPrefix;
+# it is not committed. The build driver also supplies build.base as the ARG,
+# so the profile remains the only recipe authority.
 # Build from a context that contains linux-prefix/, entrypoint.sh, and mcp-bridge.mjs.
-FROM node:22-bookworm-slim
+ARG KITESURF_BASE_IMAGE
+FROM ${KITESURF_BASE_IMAGE}
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates tini \

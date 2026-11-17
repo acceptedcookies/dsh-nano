@@ -26,7 +26,11 @@ test('scope is read from profile.yaml and the recipe stays in this package', () 
   assert.match(yaml, /^scope: session$/m)
   const docker = readFileSync(join(profileDir, 'Dockerfile'), 'utf8')
   assert.match(docker, /__res_init/)
-  assert.match(docker, /node:22-bookworm-slim/)
+  assert.equal(loaded.manifest.build.base, 'node:22-bookworm-slim')
+  assert.equal(loaded.manifest.build.checkout.ref, '39feadfb9a3e6c14b40cf170a559ce417d0fce5d')
+  assert.equal(loaded.manifest.build.image, `kitesurf-engine:${loaded.manifest.build.checkout.ref}-${loaded.digest.slice(7, 19)}`)
+  assert.equal(loaded.manifest.build.npmPrefix.wrangler, '4.131.2')
+  assert.match(docker, /ARG KITESURF_BASE_IMAGE\r?\nFROM \$\{KITESURF_BASE_IMAGE\}/)
   const imports = []
   for (const file of files(root)) {
     const text = readFileSync(file, 'utf8')

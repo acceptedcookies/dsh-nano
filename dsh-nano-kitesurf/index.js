@@ -9,7 +9,7 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 import { fileURLToPath } from 'node:url'
 
 import { createHistory } from './lib/history.js'
-import { browserSocketUrl, captureDom, captureElements, captureShot, captureSnapshot, currentEmulation, engineHistoryAdd, engineHistoryClear, engineHistoryList, engineHistoryRemove, currentUserAgent, currentViewport, engineTargets, evaluateInPage, evaluateChunked, fetchEngine, interactElement, KitesurfError, navigateHistory, openPage, pickElement, pickBySelector, pickPoint, pickSelector, editBody, editElement, pageUrl, releaseEngine, scrollDelta, setBrowserSettings, stateOp, storageOp, waitForCondition } from './lib/engine.js'
+import { browserSocketUrl, captureDom, captureElements, captureShot, captureSnapshot, currentEmulation, currentUserAgent, currentViewport, engineTargets, evaluateInPage, evaluateChunked, fetchEngine, interactElement, KitesurfError, navigateHistory, openPage, pickElement, pickBySelector, pickPoint, pickSelector, editBody, editElement, pageUrl, releaseEngine, scrollDelta, setBrowserSettings, stateOp, storageOp, waitForCondition } from './lib/engine.js'
 import { ERROR_STATUS, clearConsole, clearNetwork, clearOperations, diagnosticsSummary, elementRefSelector, elementRefSummary, getElementRef, getLastSnapshot, getRef, isElementRef, listNetwork, listNetworkHar, listConsole, listOperations, listRefs, putElementRefs, putRef, recordOperation, refChip, setLastSnapshot, summarizeInput } from './lib/diagnostics.js'
 import { buildSrcDoc } from './lib/dom.js'
 import { kitesurfSkill, nanoKiteSkill } from './lib/skill.js'

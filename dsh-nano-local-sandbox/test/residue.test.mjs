@@ -17,7 +17,7 @@ const ALLOW = [
 
 function files(dir, out = []) {
   for (const name of readdirSync(dir)) {
-    if (name === '.git' || name === 'node_modules' || name === 'target' || name === 'context' || name === '.agents') continue
+    if (name === '.git' || name === 'node_modules' || name === 'target' || name === 'context' || name === '.agents' || name === '.dependencies') continue
     const path = join(dir, name)
     let info
     try { info = statSync(path) } catch { continue }

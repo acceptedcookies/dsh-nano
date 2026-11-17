@@ -31,8 +31,10 @@ test('missing field, latest, caret, floating pin, bad digest, bad ref, verify, a
     writeFileSync(join(dir, 'Dockerfile'), `${readFileSync(join(dir, 'Dockerfile'), 'utf8')}\n# latest\n`)
     return yaml
   }))
-  await rejects(fixture((yaml) => yaml.replace('wrangler: 4.161.0', 'wrangler: ^4.161.0')))
-  await rejects(fixture((yaml) => yaml.replace('wrangler: 4.161.0', 'wrangler: 4')))
+  await rejects(fixture((yaml) => yaml.replace(/wrangler: \d+\.\d+\.\d+/, 'wrangler: ^4.131.2')))
+  await rejects(fixture((yaml) => yaml.replace(/wrangler: \d+\.\d+\.\d+/, 'wrangler: 4')))
+  await rejects(fixture((yaml) => yaml.replace(/image: [^\r\n]+/, 'image: kitesurf-engine:latest')))
+  await rejects(fixture((yaml) => yaml.replace(/  image: [^\r\n]+\r?\n/, '')))
   await rejects(fixture((yaml) => yaml.replace(/digest: sha256:[0-9a-f]+/, 'digest: sha256:' + 'ab'.repeat(32))))
   await rejects(fixture((yaml) => yaml.replace(/ref: [0-9a-f]{40}/, 'ref: abc')))
   const missing = fixture((yaml) => yaml)

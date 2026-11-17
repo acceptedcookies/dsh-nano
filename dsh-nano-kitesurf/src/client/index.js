@@ -8,6 +8,7 @@ const { BUCKETS, DECL_HASH } = require('../../lib/perf-declaration.js')
 const { copyFor } = require('./i18n.js')
 const { batchNote, designNote, multiNote } = require('../shared/note.js')
 const { contentFrame, shotPoint } = require('../shared/shot-point.js')
+const { captureNavigation, requestTimeout } = require('../shared/navigation.js')
 const h = React.createElement
 
 const STATUS = '/nano-local-sandbox/status'
@@ -285,15 +286,11 @@ const STYLE = `
 .nks-frame{background-image:linear-gradient(45deg,rgba(127,127,127,.05) 25%,transparent 25%,transparent 75%,rgba(127,127,127,.05) 75%),linear-gradient(45deg,rgba(127,127,127,.05) 25%,transparent 25%,transparent 75%,rgba(127,127,127,.05) 75%);background-size:16px 16px;background-position:0 0,8px 8px}
 `
 
-/** No request may hang forever. When the engine's page script dies mid-call
- *  the socket never answers, and without a deadline `busyRef` stayed true for
- *  the rest of the session — every later click was silently ignored, which is
- *  exactly "I typed a URL and nothing happened". */
-const REQUEST_TIMEOUT_MS = 20000
-
+/** Bound requests without aborting before the host's method-specific budget. */
 function post(path, body) {
+  const timeoutMs = requestTimeout(path)
   const controller = typeof AbortController === 'function' ? new AbortController() : null
-  const timer = controller ? window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS) : 0
+  const timer = controller ? window.setTimeout(() => controller.abort(), timeoutMs) : 0
   return fetch(path, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -301,7 +298,7 @@ function post(path, body) {
     signal: controller?.signal,
   }).catch((cause) => {
     if (cause?.name === 'AbortError') {
-      const error = new Error(`request timed out after ${REQUEST_TIMEOUT_MS}ms`)
+      const error = new Error(`request timed out after ${timeoutMs}ms`)
       error.errorId = 'kitesurf.engine.connect'
       throw error
     }
@@ -315,67 +312,6 @@ function post(path, body) {
     }
     return payload
   }).finally(() => { if (timer) window.clearTimeout(timer) })
-}
-
-/** Last few meaningful lines of the engine's own log, for an error dialog.
- *  Best effort: a missing log must never replace the real error. */
-async function engineLogHint() {
-  try {
-    const data = await fetch(`${LOGS}?tail=60`).then((r) => r.json())
-    if (!data?.ok) return ''
-    const lines = String(data.text || '')
-      .split('\n')
-      .map((line) => line.replace(/\x1b\[[0-9;]*m/g, '').trim())
-      .filter((line) => line && !/GET \/json\/list|\[ks-lag\] alive/.test(line))
-    return lines.slice(-4).join('\n')
-  } catch { return '' }
-}
-
-/** Bounded wait for a navigation to become visible: the pane polls the frame
- *  until it reports the requested url, then gives up and reports a failure. */
-const NAV_CONFIRM_MS = 8000
-const NAV_POLL_MS = 400
-/** One frame request inside the confirmation loop. When the engine's page
- *  script has died the socket never answers, and the 20s request deadline
- *  would turn one failed navigation into a 40s spinner. */
-const NAV_SHOT_MS = 4000
-
-/** Resolve with `fallback` if `promise` has not settled within `ms`. */
-function withDeadline(promise, ms, fallback) {
-  return new Promise((resolve) => {
-    const timer = window.setTimeout(() => resolve(fallback), ms)
-    promise.then(
-      (value) => { window.clearTimeout(timer); resolve(value) },
-      () => { window.clearTimeout(timer); resolve(fallback) },
-    )
-  })
-}
-
-/** Compare two addresses for "did the frame land here", ignoring the empty
- *  forms (`about:blank`, missing) and a trailing slash. */
-function sameUrl(value) {
-  const text = String(value ?? '').trim()
-  if (!text || text === 'about:blank') return ''
-  try {
-    const parsed = new URL(text)
-    return `${parsed.protocol}//${parsed.host}${parsed.pathname.replace(/\/$/, '')}${parsed.search}`
-  } catch { return text.replace(/\/$/, '') }
-}
-
-/** Did the frame land on this site, allowing the usual redirect hops
- *  (`archy.studio` → `www.archy.studio`, a locale path, a trailing slash)?
- *  An exact-string match treated every redirect as a failure. */
-function sameSite(requested, landed) {
-  const a = sameUrl(requested)
-  const b = sameUrl(landed)
-  if (!b) return false
-  if (a === b) return true
-  try {
-    const want = new URL(requested)
-    const got = new URL(landed)
-    const strip = (host) => host.replace(/^www\./, '')
-    return strip(want.host) === strip(got.host)
-  } catch { return false }
 }
 
 /** Content-rect of the letterboxed image inside its frame; null before load. */
@@ -756,8 +692,8 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
       })
   }, [])
 
-  // The vertical tab list mirrors browse history (workerd KV first, plugin
-  // store fallback): one row per visited address, current page marked.
+  // The vertical tab list mirrors the DNLS driver's history projection:
+  // one row per visited address, current page marked. No upstream KV patch.
   // Refreshing on open keeps the list honest after external /open calls.
   React.useEffect(() => {
     if (!navOpen) return
@@ -1038,15 +974,8 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
     try {
       await work()
     } catch (cause) {
-      // A heavy page can kill the engine's page script mid-navigation: the
-      // socket closes, the page falls back to about:blank. The host resets the
-      // dead socket on the next call, so one silent retry usually lands.
-      if (opts.retry > 0) {
-        try {
-          await work()
-          return
-        } catch (again) { cause = again }
-      }
+      // A deadline is not proof that navigation stopped. Only an explicit
+      // user retry may issue another Page.navigate.
       if (opts.dialog) showOpenError(cause, opts.url)
       else showError(cause)
     } finally {
@@ -1093,7 +1022,7 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
   }
 
   function openPage(url) {
-    return run(() => navigate(url), { beat: true, dialog: true, url, retry: 1 })
+    return run(() => navigate(url), { beat: true, dialog: true, url })
   }
 
   function remember(url) {
@@ -1101,51 +1030,18 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
     setHistory((current) => [url, ...current.filter((item) => item !== url)].slice(0, 8))
   }
 
-  /**
-   * `/open` answers ok as soon as the engine accepts the address. The renderer
-   * can still fail to produce a document — a refused connection, blocked
-   * egress, a wedged page — and the previous document stays on screen. That is
-   * the "opened for ages and nothing happened" report: no error, no dialog,
-   * just the old page. Confirm the frame actually reports the new url.
-   */
+  /** The host waits for Page.navigate. Do not impose a second, shorter
+   * "confirmation" timer that leaves captures running and restarts the page. */
   async function navigate(url) {
-    await perf.span('navigate', async () => {
-      await post(OPEN, { url })
-    })
-    const fit = frameSize()
-    const started = Date.now()
-    let shotPayload = null
-    for (;;) {
-      const next = await withDeadline(
-        post(SHOT, { format: 'webp', ...(fit ? { fit } : {}) }),
-        NAV_SHOT_MS,
-        null,
-      )
-      if (next) shotPayload = next
-      if (shotPayload && sameSite(url, shotPayload.url)) break
-      if (Date.now() - started >= NAV_CONFIRM_MS) break
-      await new Promise((resolve) => { window.setTimeout(resolve, NAV_POLL_MS) })
-    }
-    if (!shotPayload) {
-      const error = new Error(copy.navigateUnconfirmed)
-      error.errorId = 'kitesurf.navigate.failed'
-      error.detail = { url, engineLog: await engineLogHint() }
-      throw error
-    }
+    const shotPayload = await perf.span('navigate', () => captureNavigation(post, {
+      openPath: OPEN, shotPath: SHOT, url, fit: frameSize(),
+    }))
     setShot(shotPayload.data)
     setShotMime(shotPayload.mimeType || 'image/webp')
     setShotMeta({ url: shotPayload.url || '', scrollY: shotPayload.scrollY || 0, targetId: shotPayload.targetId || '', viewport: shotPayload.viewport?.width ?? null, at: Date.now() })
-    if (!sameSite(url, shotPayload.url)) {
-      // Say what the engine said. A bare errorId sent the owner to the source
-      // code; the container log names the actual failure.
-      const error = new Error(copy.navigateUnconfirmed)
-      error.errorId = 'kitesurf.navigate.failed'
-      error.detail = { url, engineLog: await engineLogHint() }
-      throw error
-    }
     await loadDom()
     setPick(null)
-    remember(url)
+    remember(shotPayload.url)
   }
 
   /** Pane content size in integer CSS px — the engine viewport we ask for. */
@@ -2300,7 +2196,6 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
           h('span', null, copy.opening),
           beatSec > 0 ? h('span', { 'data-nks-beat-sec': String(beatSec) }, `${beatSec}s`) : null)) : null,
       nativeHtml && domDoc ? h('iframe', {
-        ref: domFrameRef,
         className: 'nks-dom',
         title: 'Kitesurf page',
         // No allow-scripts: the host already strips scripts/handlers/js: URLs,

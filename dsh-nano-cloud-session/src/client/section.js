@@ -16,12 +16,11 @@
 import React from 'react'
 import { createPortal } from 'react-dom'
 import {
-  DisclosureRow,
   StateDot,
   Tag,
   IconArchiveOutlineRegular,
-  IconFolderCloseRegular,
-  IconFolderOpenRegular,
+  IconChevronDownOutlineRegular,
+  IconChevronRightOutlineRegular,
   IconGlobeOutlineRegular,
   IconProjectAddOutlineRegular,
   IconRefreshOutlineRegular,
@@ -266,17 +265,23 @@ function sectionBody({ copy, face, state }) {
         locale,
       }))
 
+  /* The native group header is a self-drawn disclosure row: DisclosureRow's
+   * internal header ignores root padding, so the chevron/icon track cannot be
+   * placed at the native x20/x42 through it. Same host icons, our own layout. */
+  const toggle = () => face.toggleExpanded()
   return h('div', { className: 'dncs-section-body' },
-    h(DisclosureRow, {
+    h('div', {
       className: 'dncs-disc',
-      open,
-      expandable: true,
-      expandOnRowClick: true,
-      onToggle: () => face.toggleExpanded(),
-      icon: h(open ? IconFolderOpenRegular : IconFolderCloseRegular, { size: 16 }),
-      title: profile.label || copy('carrierDevin'),
-      headerAccessory: h('span', { className: 'dncs-section-count' }, h(Tag, { tone: 'quiet' }, String(sessions.length))),
-    }),
+      role: 'button',
+      tabIndex: 0,
+      'aria-expanded': open,
+      onClick: toggle,
+      onKeyDown: onKeyActivate(toggle),
+    },
+      h('span', { className: 'dncs-disc-slot' },
+        h(open ? IconChevronDownOutlineRegular : IconChevronRightOutlineRegular, { size: 16 })),
+      h('span', { className: 'dncs-disc-title' }, profile.label || copy('carrierDevin')),
+      h('span', { className: 'dncs-section-count' }, h(Tag, { tone: 'quiet' }, String(sessions.length)))),
     sessionRows,
     /* A failed list read or a failed open must stay visible even when the
      * profile row is collapsed: the section is the only surface the owner has

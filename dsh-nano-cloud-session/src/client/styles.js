@@ -36,11 +36,14 @@ export const CLOUD_CSS = `
 .dncs-section-list { display: flex; flex-direction: column; min-height: 0; }
 .dncs-section-body { display: flex; flex-direction: column; animation: dncs-section-in .32s cubic-bezier(.22, 1, .36, 1) both; }
 .dncs-section-count { display: inline-flex; align-items: center; }
-/* Native group rows are 34px with 9/8 padding and a 16×20 leading slot at
- * x20. DisclosureRow forwards className to its root; we supply the padding and
- * height and let the component lay its own header out inside. */
-.dncs-disc { box-sizing: border-box; min-height: 34px; padding: 0 8px 0 9px; border-radius: var(--dsw-radius-md); }
+/* Native group rows are 34px tall on the x8..264 track: chevron slot at x20,
+ * icon and title 6px apart, title 14px primary. Self-drawn — DisclosureRow's
+   * internal header ignores root padding (see section.js). */
+.dncs-disc { box-sizing: border-box; display: flex; align-items: center; gap: 6px; min-height: 34px; padding: 0 10px 0 12px; border-radius: var(--dsw-radius-md); color: var(--dsw-alias-label-primary); cursor: pointer; }
 .dncs-disc:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.dncs-disc:focus-visible { outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color); outline-offset: -2px; }
+.dncs-disc-slot { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 20px; color: var(--dsw-alias-label-tertiary); }
+.dncs-disc-title { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
 /* Collapsed rail entry: a single centered 36px icon row. No horizontal padding
  * — the rail is 56px wide. */
 .dncs-rail { padding: 0; align-items: center; margin-bottom: var(--nano-space-3); }

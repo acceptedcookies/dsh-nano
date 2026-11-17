@@ -17,7 +17,7 @@
 | 验收项 | 证据 | 判定 |
 |---|---|---|
 | B-line arm → maintenance commit | seq58–61 `turn:None`；`prepare→summarize→commit` 全在 `runMaintenance` 空闲窗口 | PASS |
-| 异步唤醒 + adoption | seq74 `source.kind:'compaction-adoption-wake'` + `(Context compacted asynchronously; continuing.)` | PASS |
+| 异步唤醒 + adoption | seq74 `source.kind:'compaction-adoption-wake'` + `(Context compacted asynchronously; continuing.)`（-05 后改为同一 pre-step 起摘要、下一 step 边界或 idle `runMaintenance` 提交，不再发送唤醒消息；本条为该行为变更前的历史证据） | PASS |
 | pinned 尾部保留（内容观测） | seq60 `replace{37,45}` 保留 seq53 user + seq55 assistant | PASS |
 | DC-1 fullOnly 拦截 | `pinned=40000,H=0.05` → `dcs:["DC-1"]` → 同步 FULL 不走异步 | PASS |
 | S-line 0.80 FULL | seq65–68 `turn:5` 同步 FULL（over-health 二次压实） | PASS |
@@ -71,4 +71,4 @@
 
 - `dnms01-force` 探针插件已从 headless profile `cordis.patch.yml` + `dependencies` 移除。
 - `/tmp/dnms01-*` 调试日志文件与 `/tmp/dnms01-force/` 源码为临时工件，不影响交付物。
-- `docs/specs/dsh-nano-model-selector/plan/DNMS01-audit-agent27.md` 应归档至 `.anote/reviews/DNMS01/`（待移动）。
+- `docs/specs/dsh-nano-model-selector/plan/DNMS01-audit-agent27.md` 审计稿未随本工作流生成/落盘（仓库与 `.anote/reviews/` 均无此文件）；归档项已核实为空，无需移动。

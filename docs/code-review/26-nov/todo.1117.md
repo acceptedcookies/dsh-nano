@@ -87,11 +87,11 @@ SETUP ──▶ P1 策略硬切+烘焙 ──▶ P2 工具+patch ──┐
   - **验证映射**：`ACE1117-T12..T14` · **依赖**：`P2`+`P3`
   - **执行状态**：`done` · **时间**：`2026-11-17T16:45+08:00` · **证据**：DNMSC 54/54 PASS；T12 三级+距离+同距+null；T13 八节序/:222 删除/帧字段/步骤级 verbatim；T14 四 lane 各记 select + 死账本仍提交；DNMS 67/67（烘焙副本 hash 7e2b99893bea）
 
-- [ ] `P5` — Phase 5 观测与 UI 心跳（P5-01..P5-04）
+- [x] `P5` — Phase 5 观测与 UI 心跳（P5-01..P5-04）
   - **落点**：DNMS `index.js`、`compact-runtime.js`、四个 jsx、locale、DETAIL.zh、AGENTS.md、declaration.json、重建 lib/client.js+perf-declaration
   - **完成判据**：projection 按 session；无 sessionId→null；四条常驻调度全退役；3000ms 仅在 running+在途续拉；顶栏保持；开关确认；中英键相等
   - **验证映射**：`ACE1117-T15..T18` · **依赖**：`P3`
-  - **执行状态**：`not-started` · **时间**：`-` · **证据**：`-`
+  - **执行状态**：`done` · **时间**：`2026-11-17T19:30+08:00` · **证据**：commit a8a48b0（19 文件 +859/−216）；DNMS 77/77 PASS（T15 session 范围+select→running+commit→idle；T16 产物无 15000/30000、mock-timers 泵纪律、预算 3000；T17 确认前置 POST 0→1、严格序、i18n 键集等；T18 ui-rules vs HEAD ⊆）；DNMSC 54/54 不破
 
 - [ ] `P6` — Phase 6 收口（P6-01..P6-02）
   - **落点**：`closure/DNMS01-closure.md:20,74` + 移动 audit-agent27 + 非目标 diff 核对

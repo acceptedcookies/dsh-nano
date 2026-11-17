@@ -2500,7 +2500,9 @@ ${LAYER_CSS}
           pinsFull: "\uFF08\u5DF2\u8FBE\u4E0A\u9650\uFF0C\u65E7\u6807\u6CE8\u5C06\u88AB\u4E22\u5F03\uFF09",
           sendAll: "\u53D1\u9001\u5168\u90E8\u6807\u6CE8",
           undoPin: "\u64A4\u9500\u4E0A\u4E00\u6761\u6807\u6CE8",
-          hintBar: "\u70B9\u9009 \xB7 Shift+\u591A\u9009 \xB7 Alt+\u692D\u5706 \xB7 Shift+\u7BAD\u5934 \xB7 \u2191\u2193 \u7236/\u5B50 \xB7 \u53CC\u51FB\u6539\u6587\u5B57 \xB7 Esc \u9000\u51FA",
+          hintBar: "\u70B9\u9009 \xB7 Shift+\u591A\u9009 \xB7 Alt+\u692D\u5706 \xB7 Shift+\u7BAD\u5934 \xB7 \u2191\u2193 \u7236/\u5B50 \xB7 \u53CC\u51FB\u6539\u6587\u5B57 \xB7 Esc \u5173\u95ED\u9009\u4E2D",
+          clearSelection: "\u5173\u95ED\u9009\u4E2D",
+          openFailed: "\u9875\u9762\u6CA1\u6709\u6253\u5F00",
           startEngine: "\u542F\u52A8\u5F15\u64CE",
           clearPins: "\u6E05\u7A7A\u5168\u90E8\u6807\u6CE8",
           editAria: "\u628A\u8FD9\u6BB5\u6587\u5B57\u5199\u56DE\u5143\u7D20",
@@ -2598,7 +2600,9 @@ ${LAYER_CSS}
           pinsFull: " (at cap \u2014 oldest dropped)",
           sendAll: "Send all notes",
           undoPin: "Undo last note",
-          hintBar: "Click \xB7 Shift+multi \xB7 Alt+ellipse \xB7 Shift+arrow \xB7 \u2191\u2193 parent/child \xB7 double-click edit \xB7 Esc exit",
+          hintBar: "Click \xB7 Shift+multi \xB7 Alt+ellipse \xB7 Shift+arrow \xB7 \u2191\u2193 parent/child \xB7 double-click edit \xB7 Esc clears the pick",
+          clearSelection: "Clear selection",
+          openFailed: "Page did not open",
           startEngine: "Start engine",
           clearPins: "Clear all notes",
           editAria: "Write this text back into the element",
@@ -2822,7 +2826,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
   var { batchNote: batchNote2, designNote: designNote2, multiNote: multiNote2 } = (init_note(), __toCommonJS(note_exports));
   var { contentFrame: contentFrame2, shotPoint: shotPoint2 } = (init_shot_point(), __toCommonJS(shot_point_exports));
   var h7 = React12.createElement;
-  var CLIENT_BUILD_ID = true ? "0.1.0+e5950f2" : "dev";
+  var CLIENT_BUILD_ID = true ? "0.1.0+d2ba38a" : "dev";
   var STATUS = "/nano-local-sandbox/status";
   var OPEN = "/nano-local-sandbox/open";
   var SHOT = "/nano-local-sandbox/shot";
@@ -2974,6 +2978,12 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
 .nks-busy{position:absolute;left:0;right:0;top:0;height:2px;overflow:hidden;z-index:var(--nano-layer-local3)}
 .nks-busy::before{content:"";display:block;width:35%;height:100%;background:var(--dsw-alias-link,#2f6fed);animation:nks-beat 1s ease-in-out infinite}
 @keyframes nks-beat{from{transform:translateX(-120%)}to{transform:translateX(320%)}}
+/* nano-ui-exempt: host primitives and nano-ui ship no indeterminate spinner. */
+.nks-load{position:absolute;inset:0;z-index:var(--nano-layer-local4);display:flex;align-items:center;justify-content:center;pointer-events:none}
+.nks-load-card{display:flex;align-items:center;gap:8px;height:32px;padding:0 12px;background:var(--dsw-alias-bg-layer-1);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-md);box-shadow:var(--dsw-elevation-soft);font:var(--dsw-font-xxs-12);color:var(--dsw-alias-label-secondary)}
+.nks-spin{width:14px;height:14px;box-sizing:border-box;border-radius:50%;border:2px solid var(--dsw-alias-border-l2);border-top-color:var(--dsw-alias-link,#2f6fed);animation:nks-spin .8s linear infinite;flex:none}
+@keyframes nks-spin{to{transform:rotate(360deg)}}
+.nks-open-error{margin:0;color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxs-12);line-height:1.55;word-break:break-word}
 .nks-settings-body{display:flex;flex-direction:column;gap:8px}
 .nks-status{position:relative;z-index:var(--nano-layer-local3);order:7;flex:none;display:flex;align-items:center;gap:8px;height:26px;padding:0 10px;border-top:.5px solid var(--dsw-alias-border-l3);font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-tertiary)}
 .nks-status button{height:20px;padding:0 8px;border:0;border-radius:var(--dsw-radius-sm);background:transparent;color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxxs-11);cursor:pointer}
@@ -3173,6 +3183,8 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
     const lastActionStamp = React12.useRef("");
     const actionToastTimer = React12.useRef(0);
     const [busy, setBusy] = React12.useState(false);
+    const [beat, setBeat] = React12.useState(false);
+    const [beatSec, setBeatSec] = React12.useState(0);
     const [hover, setHover] = React12.useState(null);
     const [frame, setFrame] = React12.useState(null);
     const toastTimer = React12.useRef(0);
@@ -3192,6 +3204,8 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
     const editingRef = React12.useRef(false);
     const shotMetaRef = React12.useRef(null);
     const sendPickRef = React12.useRef(null);
+    const clearPickRef = React12.useRef(() => {
+    });
     annotateRef.current = annotate;
     pickRef.current = pick;
     pinsRef.current = pins;
@@ -3298,13 +3312,13 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           return;
         }
         if (event.key === "Escape") {
+          event.preventDefault();
           if (dragRef.current) {
             endDrag();
             return;
           }
           if (pickRef.current) {
-            setPick(null);
-            setEditing(false);
+            clearPickRef.current();
             return;
           }
           if (annotateRef.current) {
@@ -3317,6 +3331,17 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       window.addEventListener("keydown", onKey);
       return () => window.removeEventListener("keydown", onKey);
     }, []);
+    React12.useEffect(() => {
+      if (!beat) {
+        setBeatSec(0);
+        return void 0;
+      }
+      const started = Date.now();
+      const timer = window.setInterval(() => {
+        setBeatSec(Math.max(1, Math.floor((Date.now() - started) / 1e3)));
+      }, 1e3);
+      return () => window.clearInterval(timer);
+    }, [beat]);
     React12.useEffect(() => {
       if (nativeHtml && shot && !domDoc) loadDom().catch(() => {
       });
@@ -3470,23 +3495,64 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         setToastFix(false);
       }, 2e3);
     }
-    async function run(work) {
-      if (perf?.span) return perf.span("pane-op", () => runInner(work));
-      return runInner(work);
+    async function run(work, opts) {
+      if (perf?.span) return perf.span("pane-op", () => runInner(work, opts));
+      return runInner(work, opts);
     }
-    async function runInner(work) {
+    async function runInner(work, opts = {}) {
       window.__dnkRuns = (window.__dnkRuns || 0) + 1;
       if (busyRef.current) return;
       busyRef.current = true;
       setBusy(true);
+      if (opts.beat) setBeat(true);
       try {
         await work();
       } catch (cause) {
-        showError(cause);
+        if (opts.dialog) showOpenError(cause, opts.url);
+        else showError(cause);
       } finally {
         busyRef.current = false;
         setBusy(false);
+        setBeat(false);
       }
+    }
+    function showOpenError(cause, url) {
+      const errorId = cause?.errorId || "kitesurf.unknown";
+      const message = cause instanceof Error ? cause.message : String(cause);
+      refreshStatus();
+      const workspaceEl = workspaceRef.current;
+      if (dialogOpenRef.current || workspaceEl === null) {
+        showError(cause);
+        return;
+      }
+      dialogOpenRef.current = true;
+      let dialog = null;
+      const finish = () => {
+        dialogOpenRef.current = false;
+      };
+      dialog = openNanoDialog2({
+        copy: { cancel: copy.close, confirm: url ? copy.retry : copy.close, close: copy.close },
+        title: copy.openFailed,
+        description: errorId,
+        width: 420,
+        container: workspaceEl,
+        confirmLabel: url ? copy.retry : copy.close,
+        onCancel: finish,
+        onConfirm: () => {
+          finish();
+          dialog?.close();
+          if (url) openPage(url);
+        },
+        children: h7(
+          "div",
+          { "data-nks-open-error": "1" },
+          h7("p", { className: "nks-open-error" }, message),
+          url ? h7("p", { className: "nks-open-error" }, url) : null
+        )
+      });
+    }
+    function openPage(url) {
+      return run(() => navigate(url), { beat: true, dialog: true, url });
     }
     function remember(url) {
       setPageUrl(url);
@@ -3561,7 +3627,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       event.preventDefault();
       if (!draftUrl.trim()) return;
       event.currentTarget.querySelector("input")?.blur();
-      await run(() => navigate(draftUrl));
+      await openPage(draftUrl);
     }
     function framePoint(event) {
       const image = frameRef.current?.querySelector("img");
@@ -3728,6 +3794,14 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         setComment(picked.text || "");
       });
     }
+    function clearPick() {
+      setPick(null);
+      setEditing(false);
+      setComposing(false);
+      setComment("");
+      setHover(null);
+    }
+    clearPickRef.current = clearPick;
     function sendPick(toComposer, element) {
       const open = element ? { elements: [element], anchor: null } : pickRef.current;
       if (!open?.elements?.length) return;
@@ -3852,7 +3926,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
     }
     async function onRefresh() {
       if (!pageUrl) return;
-      await run(() => navigate(pageUrl));
+      await openPage(pageUrl);
     }
     function openHistory() {
       setHistoryOpen(true);
@@ -4189,6 +4263,13 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         setEditing(false);
       }, true);
       doc.addEventListener("mouseleave", clearHover, true);
+      doc.addEventListener("keydown", (e) => {
+        if (e.key !== "Escape") return;
+        if (!pickRef.current) return;
+        e.preventDefault();
+        e.stopPropagation();
+        clearPickRef.current();
+      }, true);
     }
     function SettingsTabs({ env, browse }) {
       return h7(NanoTabs2, {
@@ -4238,7 +4319,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
             "button",
             { type: "button", className: "nks-hist-open", onClick: () => {
               setDraftUrl(row.url);
-              run(() => navigate(row.url));
+              openPage(row.url);
             } },
             h7("span", { className: "nks-hist-url" }, row.url),
             h7("span", { className: "nks-hist-meta" }, `${String(row.at).slice(0, 16).replace("T", " ")}${row.count > 1 ? " \xB7 " + row.count + " \u6B21" : ""}`)
@@ -4313,7 +4394,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
                 { type: "button", className: "nks-hist-open", onClick: () => {
                   setDraftUrl(row.url);
                   setHistoryOpen(false);
-                  run(() => navigate(row.url));
+                  openPage(row.url);
                 } },
                 h7("span", { className: "nks-hist-url" }, row.url),
                 h7("span", { className: "nks-hist-meta" }, `${String(row.at).slice(0, 16).replace("T", " ")}${row.count > 1 ? " \xB7 " + row.count + " \u6B21" : ""}`)
@@ -4642,8 +4723,8 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         h7(
           "div",
           { className: "nks-toolbar-nav" },
-          h7("button", { type: "button", className: "nks-tool", "data-nks-back": "1", "aria-label": copy.back, title: copy.back, disabled: busy || !hasPage, onClick: () => run(() => historyNav(-1)) }, glyph("back")),
-          h7("button", { type: "button", className: "nks-tool", "data-nks-forward": "1", "aria-label": copy.forward, title: copy.forward, disabled: busy || !hasPage, onClick: () => run(() => historyNav(1)) }, glyph("forward")),
+          h7("button", { type: "button", className: "nks-tool", "data-nks-back": "1", "aria-label": copy.back, title: copy.back, disabled: busy || !hasPage, onClick: () => run(() => historyNav(-1), { beat: true, dialog: true }) }, glyph("back")),
+          h7("button", { type: "button", className: "nks-tool", "data-nks-forward": "1", "aria-label": copy.forward, title: copy.forward, disabled: busy || !hasPage, onClick: () => run(() => historyNav(1), { beat: true, dialog: true }) }, glyph("forward")),
           h7("button", { type: "button", className: "nks-tool", "data-nks-reload": "1", "aria-label": copy.refresh, title: copy.refresh, disabled: busy, onClick: onRefresh }, glyph("refresh"))
         ),
         h7(
@@ -4722,7 +4803,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
               "data-current": row.url === pageUrl ? "true" : "false",
               title: row.url,
               onClick: () => {
-                if (row.url !== pageUrl) run(() => navigate(row.url));
+                if (row.url !== pageUrl) openPage(row.url);
                 setNavOpen(false);
               }
             },
@@ -4896,6 +4977,17 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           ) : null
         ) : null,
         busy ? h7("div", { className: "nks-busy", "data-nks-loading": "1", role: "progressbar", "aria-label": copy.opening }) : null,
+        beat ? h7(
+          "div",
+          { className: "nks-load", "data-nks-beat": "1", role: "status" },
+          h7(
+            "div",
+            { className: "nks-load-card" },
+            h7("i", { className: "nks-spin", "aria-hidden": true }),
+            h7("span", null, copy.opening),
+            beatSec > 0 ? h7("span", { "data-nks-beat-sec": String(beatSec) }, `${beatSec}s`) : null
+          )
+        ) : null,
         nativeHtml && domDoc ? h7("iframe", {
           ref: domFrameRef,
           className: "nks-dom",
@@ -4952,7 +5044,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
             { className: "nks-empty-actions" },
             h7("button", { type: "button", className: "nks-empty-link", "data-nks-try": "1", onClick: () => {
               setDraftUrl("https://example.com");
-              run(() => navigate("https://example.com"));
+              openPage("https://example.com");
             } }, copy.emptyTry)
           ) : null,
           statusDown ? h7("div", { className: "nks-empty-meta" }, `${status?.lastError?.errorId || status?.errorId || (status?.degraded?.length ? status.degraded.join(" / ") : "kitesurf.engine.failed")} \xB7 ${status?.httpBase || ""}`) : null,
@@ -5020,7 +5112,12 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
               autoFocus: true,
               onChange: (event) => setComment(event.target.value)
             }),
-            h7("button", { type: "submit", className: "nks-tool", "data-nks-send": "1", title: copy.injectContext, "aria-label": copy.injectContext }, glyph("send"))
+            h7("button", { type: "submit", className: "nks-tool", "data-nks-send": "1", title: copy.injectContext, "aria-label": copy.injectContext }, glyph("send")),
+            h7("button", { type: "button", className: "nks-tool", "data-nks-clear-pick": "1", title: copy.clearSelection, "aria-label": copy.clearSelection, onClick: (event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              clearPick();
+            } }, glyph("exit"))
           ) : h7(
             "div",
             { className: "nks-note-actions" },
@@ -5036,7 +5133,11 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
               }
             }, glyph("send")),
             h7("button", { type: "button", className: "nks-tool", "data-nks-copy-note": "1", title: copy.copyContext, "aria-label": copy.copyContext, onClick: copyNote }, glyph("copy")),
-            h7("button", { type: "button", className: "nks-tool", "data-nks-compose": "1", title: copy.inputContext, "aria-label": copy.inputContext, onClick: () => setComposing(true) }, glyph("annotate"))
+            h7("button", { type: "button", className: "nks-tool", "data-nks-compose": "1", title: copy.inputContext, "aria-label": copy.inputContext, onClick: () => setComposing(true) }, glyph("annotate")),
+            h7("button", { type: "button", className: "nks-tool", "data-nks-clear-pick": "1", title: copy.clearSelection, "aria-label": copy.clearSelection, onClick: (event) => {
+              event.stopPropagation();
+              clearPick();
+            } }, glyph("exit"))
           ) : null
         ) : null
       ),

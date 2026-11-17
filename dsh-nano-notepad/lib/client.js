@@ -210,10 +210,10 @@ ${bi}
    radius on the corners it touches (DESIGN.md \xA78 \u300C\u7A97\u53E3\u5185\u6D6E\u5C42\u88C1\u526A\u300D). */
 .np-window { --np-menu-gap: 4px; width: min(920px, calc(100vw - 48px)); height: min(640px, calc(100vh - 48px)); min-width: 320px; min-height: 240px; display: flex; flex-direction: column; background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-panel, 28px); box-shadow: var(--dsw-elevation-prominent); container-type: inline-size; container-name: np; }
 .np-resize { position: absolute; z-index: var(--nano-layer-local6); pointer-events: auto; }
-/* nano-ui portals the window dialog into .np-window; its mask already says
-   border-radius: inherit, so the overlay has to carry the panel radius now
-   that the shell no longer clips (DESIGN.md \xA75, \xA78). */
-.np-window > .nano-overlay { border-radius: inherit; }
+/* The dialog is mounted through an extra host div, so it is not a direct
+   child and a plain inherit would read that div's square corners. Clip the
+   mask to the same radius as the window; menus stay outside this overlay. */
+.np-window .nano-overlay { border-radius: var(--dsw-radius-panel, 28px); overflow: hidden; }
 .np-resize[data-edge="n"], .np-resize[data-edge="s"] { left: 16px; right: 16px; height: 10px; cursor: ns-resize; }
 .np-resize[data-edge="n"] { top: -5px; }
 .np-resize[data-edge="s"] { bottom: -5px; }

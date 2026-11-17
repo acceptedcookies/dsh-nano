@@ -1,6 +1,6 @@
 import { withPage } from './cdp-elements.js'
 
-const SETTINGS_KEYS = new Set(['viewport', 'userAgent', 'media', 'extraHeaders'])
+const SETTINGS_KEYS = new Set(['viewport', 'userAgent', 'media', 'extraHeaders', 'locale', 'geolocation', 'colorScheme', 'cookies'])
 const VIEWPORT_KEYS = new Set(['width', 'height', 'deviceScaleFactor', 'mobile'])
 const FORBIDDEN_HEADERS = new Set([
   'cookie', 'authorization', 'proxy-authorization', 'host', 'content-length',
@@ -10,6 +10,32 @@ const flights = new WeakMap()
 const owns = (value, key) => Object.prototype.hasOwnProperty.call(value, key)
 const object = (value) => value !== null && typeof value === 'object' && !Array.isArray(value)
 const boundedInteger = (value, min, max) => Number.isInteger(value) && value >= min && value <= max
+
+function localeExpression(locale) {
+  const lang = JSON.stringify(locale || 'en-US')
+  return `(()=>{try{const langs=[${lang}];Object.defineProperty(navigator,'language',{get:()=>${lang},configurable:true});Object.defineProperty(navigator,'languages',{get:()=>langs,configurable:true})}catch{}return navigator.language})()`
+}
+
+function geolocationExpression(geo) {
+  const value = geo ? JSON.stringify(geo) : 'null'
+  return `(()=>{const g=${value};if(!g)return false;try{Object.defineProperty(navigator,'geolocation',{configurable:true,value:{getCurrentPosition(ok){return ok({coords:{latitude:g.latitude,longitude:g.longitude,accuracy:g.accuracy??20,altitude:null,altitudeAccuracy:null,heading:null,speed:null},timestamp:Date.now()})},watchPosition(ok){ok({coords:{latitude:g.latitude,longitude:g.longitude,accuracy:g.accuracy??20,altitude:null,altitudeAccuracy:null,heading:null,speed:null},timestamp:Date.now()});return 1},clearWatch(){}}})}catch{}return true})()`
+}
+
+function colorSchemeExpression(scheme) {
+  const dark = scheme === 'dark'
+  return `(()=>{const dark=${dark};try{document.documentElement.style.colorScheme=dark?'dark':'light'}catch{}try{const key='__nksOrigMatchMedia';if(!window[key])window[key]=window.matchMedia.bind(window);window.matchMedia=(query)=>{const q=String(query||'');if(q.includes('prefers-color-scheme')){return{matches:dark?q.includes('dark'):q.includes('light'),media:q,onchange:null,addListener(){},removeListener(){},addEventListener(){},removeEventListener(){},dispatchEvent(){return false}}}return window[key](query)}}catch{}return true})()`
+}
+
+function cookieParams(session, cookies) {
+  const base = session.pageUrl || session.history?.at(-1)?.url || ''
+  let origin
+  try { origin = new URL(base).origin + '/' } catch { return [] }
+  return String(cookies || '').split(/\r?\n/).map((line) => line.trim()).filter(Boolean).flatMap((line) => {
+    const at = line.indexOf('=')
+    if (at < 1) return []
+    return [{ name: line.slice(0, at).trim(), value: line.slice(at + 1).trim(), url: origin, path: '/' }]
+  })
+}
 
 function invalid(message, errorId = 'kitesurf.body.json') {
   // The existing catalogue has no settings.* row. Do not invent an HTTP error id.
@@ -75,6 +101,30 @@ function validatePatch(patch) {
     next.media = patch.media
   }
   if (owns(patch, 'extraHeaders')) next.extraHeaders = validateHeaders(patch.extraHeaders)
+  if (owns(patch, 'locale')) {
+    const locale = patch.locale
+    if (locale !== null && (typeof locale !== 'string' || locale.length > 35 || !/^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/.test(locale))) throw invalid('locale must be a language tag such as zh-CN, or null')
+    next.locale = locale === null ? 'en-US' : locale
+  }
+  if (owns(patch, 'geolocation')) {
+    const geo = patch.geolocation
+    if (geo !== null) {
+      keysOnly(geo, new Set(['latitude', 'longitude', 'accuracy']), 'geolocation')
+      if (!Number.isFinite(geo.latitude) || geo.latitude < -90 || geo.latitude > 90) throw invalid('geolocation.latitude must be -90..90')
+      if (!Number.isFinite(geo.longitude) || geo.longitude < -180 || geo.longitude > 180) throw invalid('geolocation.longitude must be -180..180')
+      if (owns(geo, 'accuracy') && (!Number.isFinite(geo.accuracy) || geo.accuracy < 0 || geo.accuracy > 100000)) throw invalid('geolocation.accuracy must be 0..100000')
+    }
+    next.geolocation = geo
+  }
+  if (owns(patch, 'colorScheme')) {
+    if (patch.colorScheme !== 'light' && patch.colorScheme !== 'dark') throw invalid('colorScheme must be light or dark')
+    next.colorScheme = patch.colorScheme
+  }
+  if (owns(patch, 'cookies')) {
+    const cookies = patch.cookies
+    if (cookies !== null && (typeof cookies !== 'string' || cookies.length > 20000 || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(cookies))) throw invalid('cookies must be text of at most 20000 characters')
+    next.cookies = cookies === null ? '' : cookies
+  }
   return next
 }
 
@@ -94,6 +144,10 @@ export function browserSettings(session) {
     userAgent: session.userAgent ?? '',
     media: session.media ?? null,
     extraHeaders: session.extraHeaders == null ? null : { ...session.extraHeaders },
+    ...(session.locale !== undefined ? { locale: session.locale } : {}),
+    ...(session.geolocation !== undefined ? { geolocation: session.geolocation } : {}),
+    ...(session.colorScheme !== undefined ? { colorScheme: session.colorScheme } : {}),
+    ...(session.cookies !== undefined ? { cookies: session.cookies } : {}),
   }
 }
 
@@ -122,6 +176,10 @@ function command(key, settings, session) {
   }
   if (key === 'userAgent') return ['Network.setUserAgentOverride', { userAgent: settings.userAgent ?? '' }]
   if (key === 'media') return ['Emulation.setEmulatedMedia', { media: settings.media ?? '' }]
+  if (key === 'locale') return ['Runtime.evaluate', { expression: localeExpression(settings.locale), returnByValue: true }]
+  if (key === 'geolocation') return ['Runtime.evaluate', { expression: geolocationExpression(settings.geolocation), returnByValue: true }]
+  if (key === 'colorScheme') return ['Runtime.evaluate', { expression: colorSchemeExpression(settings.colorScheme), returnByValue: true }]
+  if (key === 'cookies') return ['Network.setCookies', { cookies: cookieParams(session, settings.cookies) }]
   return ['Network.setExtraHTTPHeaders', { headers: settings.extraHeaders == null ? {} : { ...settings.extraHeaders } }]
 }
 
@@ -167,8 +225,9 @@ export async function applyBrowserSettings(session, client, patch) {
 export function applyBrowserSettingsToPage(session, client, sessionId) {
   return serial(session, async () => {
     const settings = browserSettings(session)
+    const keys = [...SETTINGS_KEYS].filter((key) => ['viewport', 'userAgent', 'media', 'extraHeaders'].includes(key) || session[key] !== undefined)
     const apply = async (id) => {
-      for (const key of SETTINGS_KEYS) await client.send(...command(key, settings, session), id)
+      for (const key of keys) await client.send(...command(key, settings, session), id)
       return browserSettings(session)
     }
     return sessionId === undefined ? withPage(client, apply) : apply(sessionId)

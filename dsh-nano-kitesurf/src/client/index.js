@@ -34,11 +34,21 @@ const KIND = 'kitesurf'
 const OWN_ID = 'nano-kitesurf'
 const CAPTURE_HEIGHT = 800
 const MAX_PINS = 8
-const PLANE_LABEL = { container: '容器', engine: '引擎', page: '页面', dom: 'DOM', bridge: '桥' }
 const LAMP_PLANES = ['container', 'engine', 'page', 'dom', 'bridge']
 
-/** Rows for the lamp. Identity is planes[id], not a second boolean and not the Chinese label. */
-function planeRows(snap) {
+function fill(text, values) {
+  return String(text).replace(/\{(\w+)\}/g, (_, key) => String(values[key] ?? ''))
+}
+
+/** Rows for the lamp. Identity is planes[id], not a second boolean and not a language-specific label. */
+function planeRows(snap, copy) {
+  const labels = {
+    container: copy?.envContainer,
+    engine: copy?.envEngine,
+    page: copy?.planePage,
+    dom: copy?.planeDom,
+    bridge: copy?.planeBridge,
+  }
   const planes = snap?.planes
   if (!planes || typeof planes !== 'object') return []
   return LAMP_PLANES.filter((id) => planes[id]).map((id) => {
@@ -46,7 +56,7 @@ function planeRows(snap) {
     const skipped = row.state === 'skipped' || row.skipped === true
     return {
       plane: id,
-      label: PLANE_LABEL[id] || id,
+      label: labels[id] || id,
       ok: row.ok === true,
       skipped,
       detail: row.detail || row.url || row.state || '',
@@ -93,6 +103,7 @@ const STYLE = `
 .nks-nav-tab{position:relative;display:flex;align-items:center;gap:7px;width:100%;box-sizing:border-box;min-height:30px;padding:4px 26px 4px 8px;border:0;border-radius:var(--dsw-radius-sm);background:transparent;color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxs-12);text-align:left;cursor:pointer}
 .nks-nav-tab:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .nks-nav-tab[data-current="true"]{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-markdown-tag,var(--dsw-alias-bg-layer-3))}
+.nks-nav-tab[data-current="true"]:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .nks-nav-tab svg{flex:none;width:14px;height:14px;opacity:.8}
 .nks-nav-tab .nks-nav-tab-url{flex:auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .nks-nav-tab .nks-nav-tab-count{flex:none;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11)}
@@ -118,6 +129,12 @@ const STYLE = `
 .nks-address-box{flex:auto;min-width:0;position:relative}
 .nks-address{box-sizing:border-box;width:100%;height:28px;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-12);background:var(--dsw-alias-bg-layer-1);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-sm);padding:0 32px 0 9px}
 .nks-address::placeholder{color:var(--dsw-alias-label-tertiary)}
+.nks-address-box[data-loading="true"] .nks-address{padding-right:84px;border-color:color-mix(in srgb,var(--dsw-alias-link) 48%,var(--dsw-alias-border-l2));background-image:linear-gradient(100deg,color-mix(in srgb,var(--dsw-alias-link) 10%,var(--dsw-alias-bg-layer-1)) 18%,color-mix(in srgb,var(--dsw-alias-link) 30%,var(--dsw-alias-bg-layer-1)) 42%,color-mix(in srgb,var(--dsw-alias-link) 10%,var(--dsw-alias-bg-layer-1)) 66%);background-size:220% 100%;animation:nks-address-sheen 1.7s linear infinite}
+.nks-address-box[data-loading="true"]::after{content:"";position:absolute;left:6px;right:6px;bottom:1px;height:2px;border-radius:2px;pointer-events:none;background:linear-gradient(90deg,transparent 10%,var(--dsw-alias-link) 50%,transparent 90%);background-size:200% 100%;animation:nks-address-sheen 1.4s linear infinite}
+.nks-address-beat{position:absolute;right:34px;top:50%;transform:translateY(-50%);display:inline-flex;align-items:center;gap:4px;height:22px;padding:0 3px;color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxxs-11);white-space:nowrap;pointer-events:none}
+.nks-address-beat .nks-spin{width:11px;height:11px;border-width:1.5px}
+@keyframes nks-address-sheen{0%{background-position:120% 0}100%{background-position:-120% 0}}
+@media (prefers-reduced-motion:reduce){.nks-address-box[data-loading="true"] .nks-address{animation:none;background-image:none;background:var(--dsw-alias-bg-layer-1)}.nks-address-box[data-loading="true"]::after{animation:none;background:var(--dsw-alias-link)}}
 .nks-go{visibility:hidden;opacity:0;position:absolute;top:0;right:0}
 .nks-address-box:focus-within .nks-go,.nks-address-box[data-dirty="true"] .nks-go{visibility:visible;opacity:1}
 .nks-frame{position:relative;isolation:isolate;order:1;overflow:auto;flex:auto;min-height:0;overflow:hidden;contain:layout paint;background:var(--dsw-alias-bg-layer-1)}
@@ -165,14 +182,19 @@ const STYLE = `
 .nks-note input{width:220px;height:28px;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-12);background:var(--dsw-alias-bg-layer-2);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-sm);padding:0 8px}
 .nks-pins{position:relative;flex:none;pointer-events:auto;padding:2px 8px 4px;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11);display:flex;align-items:center;gap:4px;background:color-mix(in srgb,var(--dsw-alias-bg-layer-1) 94%,transparent)}
 /* nano-ui-exempt: host primitives and nano-ui ship no indeterminate spinner. */
-.nks-load{position:absolute;inset:0;z-index:var(--nano-layer-local4);display:flex;align-items:center;justify-content:center;pointer-events:none}
-.nks-load-card{display:flex;align-items:center;gap:8px;height:32px;padding:0 12px;background:var(--dsw-alias-bg-layer-1);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-md);box-shadow:var(--dsw-elevation-soft);font:var(--dsw-font-xxs-12);color:var(--dsw-alias-label-secondary)}
 .nks-spin{width:14px;height:14px;box-sizing:border-box;border-radius:50%;border:2px solid var(--dsw-alias-border-l2);border-top-color:var(--dsw-alias-link,#2f6fed);animation:nks-spin .8s linear infinite;flex:none}
 @keyframes nks-spin{to{transform:rotate(360deg)}}
 .nks-open-error{margin:0;color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxs-12);line-height:1.55;word-break:break-word}
 .nks-open-url{color:var(--dsw-alias-label-tertiary);unicode-bidi:plaintext}
 .nks-open-log{margin:6px 0 0;max-height:140px;overflow:auto;padding:6px 8px;border-radius:var(--dsw-radius-sm);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-tertiary);font:11px/1.45 ui-monospace,Menlo,monospace;white-space:pre-wrap;word-break:break-all}
 .nks-settings-body{display:flex;flex-direction:column;gap:8px}
+.nks-simulation-body{min-height:0}
+.nks-settings-stack{display:flex;flex-direction:column;gap:12px;min-height:0;overflow:auto}
+.nks-settings-section{color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-12);margin-top:2px}
+.nks-settings-pair{display:flex;gap:8px}
+.nks-settings-pair .nks-address{flex:1;min-width:0}
+.nks-settings-hint{color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11);line-height:1.5}
+.nks-cookie-text{height:auto;min-height:72px;padding:6px 8px;resize:vertical;font:var(--dsw-font-xxxs-11);line-height:1.5}
 .nks-status{position:relative;z-index:var(--nano-layer-local3);order:7;flex:none;display:flex;align-items:center;gap:8px;height:26px;padding:0 10px;border-top:.5px solid var(--dsw-alias-border-l3);font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-tertiary)}
 .nks-status button{height:20px;padding:0 8px;border:0;border-radius:var(--dsw-radius-sm);background:transparent;color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxxs-11);cursor:pointer}
 .nks-status button:hover{background:var(--dsw-alias-interactive-bg-hover)}
@@ -189,11 +211,25 @@ const STYLE = `
 .nks-dt[data-nks-dt-collapsed="true"]{height:auto;min-height:0}
 .nks-dt[data-nks-dt-collapsed="true"] > *:not(.nks-dt-head):not(.nks-dt-grip){display:none}
 .nks-dt-body{flex:auto;min-height:0;overflow:auto;font:11px/1.45 ui-monospace,Menlo,monospace}
-.nks-dt-cols{flex:none;display:flex;gap:8px;padding:2px 8px;color:var(--dsw-alias-label-dimmed);border-bottom:.5px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1);font-size:10px;text-transform:uppercase;letter-spacing:.04em;font:var(--dsw-font-xxxs-11)}
-.nks-dt-row{display:flex;gap:8px;padding:2px 8px;border-bottom:.5px solid color-mix(in srgb,var(--dsw-alias-border-l3) 45%,transparent);align-items:baseline;white-space:nowrap}
+.nks-dt-filterbar{flex:none;display:flex;align-items:center;gap:6px;height:36px;min-height:36px;box-sizing:border-box;padding:5px 6px;border-bottom:.5px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1);overflow:hidden}
+.nks-dt-filterbar .nks-dt-search{flex:1 1 130px;min-width:75px;height:24px;box-sizing:border-box;display:flex;align-items:center;padding:0 8px;border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-sm);background:var(--dsw-alias-bg-layer-1)}
+.nks-dt-filterbar .nks-dt-search:focus-within{border-color:var(--dsw-alias-state-business-primary)}
+.nks-dt-filterbar .nks-dt-search input{width:100%;height:24px;padding:0;border:0;outline:none;background:transparent;color:var(--dsw-alias-label-primary);font:inherit}
+.nks-dt button,.nks-dt input{font:inherit}
+.nks-dt-switch{display:inline-flex;align-items:center;gap:5px;color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxxs-11);white-space:nowrap;cursor:pointer}
+.nks-dt-cache{display:inline-flex;align-items:center;gap:4px;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11);white-space:nowrap;cursor:help}
+.nks-dt-cache b{font-weight:500;color:var(--dsw-alias-label-dimmed);border:.5px solid var(--dsw-alias-border-l2);border-radius:999px;padding:0 5px;font-size:10px}
+.nks-dt-stats{flex:none;color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxxs-11);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nks-dt-cols{flex:none;display:flex;gap:6px;padding:3px 8px;color:var(--dsw-alias-label-dimmed);border-bottom:.5px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1);font:var(--dsw-font-xxxs-11);font-size:11px;text-transform:uppercase;letter-spacing:.02em}
+.nks-dt-cols span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nks-dt-row{display:flex;gap:6px;padding:2px 8px;border-bottom:.5px solid color-mix(in srgb,var(--dsw-alias-border-l3) 45%,transparent);align-items:baseline;white-space:nowrap}
 .nks-dt-row:nth-child(even){background:color-mix(in srgb,var(--dsw-alias-bg-layer-1) 45%,transparent)}
 .nks-dt-row:hover{background:var(--dsw-alias-interactive-bg-hover)}
-.nks-dt-lv{flex:none;width:56px;color:var(--dsw-alias-label-tertiary);text-transform:uppercase;font:var(--dsw-font-xxxs-11)}
+.nks-dt-row[data-level="warn"],.nks-dt-row[data-level="warning"]{background:color-mix(in srgb,var(--dsw-alias-state-warn-primary) 9%,transparent);box-shadow:inset 2px 0 0 var(--dsw-alias-state-warn-primary)}
+.nks-dt-row[data-level="error"],.nks-dt-row[data-level="exception"]{background:color-mix(in srgb,var(--dsw-alias-state-error-primary) 10%,transparent);box-shadow:inset 2px 0 0 var(--dsw-alias-state-error-primary)}
+.nks-dt-row[data-level="error"] .nks-dt-msg,.nks-dt-row[data-level="exception"] .nks-dt-msg{color:var(--dsw-alias-state-error-primary)}
+.nks-dt-row[data-level="warn"] .nks-dt-msg,.nks-dt-row[data-level="warning"] .nks-dt-msg{color:var(--dsw-alias-state-warn-primary)}
+.nks-dt-lv{flex:none;width:50px;color:var(--dsw-alias-label-tertiary);text-transform:uppercase;font:var(--dsw-font-xxxs-11)}
 .nks-dt-lv[data-lv="error"],.nks-dt-lv[data-lv="exception"]{color:var(--dsw-alias-state-error-primary)}
 .nks-dt-lv[data-lv="warn"]{color:var(--dsw-alias-state-warn-primary)}
 .nks-dt-lv[data-lv="network"]{color:var(--dsw-alias-link,#7aaaff)}
@@ -201,19 +237,40 @@ const STYLE = `
 
 .nks-dt-url{flex:1 1 auto;min-width:0;max-width:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary);direction:ltr}
 .nks-dt-grow{flex:1 1 auto;min-width:0}
-.nks-dt-st{flex:none;width:34px;text-align:right}
+.nks-dt-st{flex:none;width:44px;text-align:right}
 .nks-dt-st[data-bad="true"]{color:var(--dsw-alias-state-error-primary)}
-.nks-dt-dur{flex:none;width:56px;text-align:right;color:var(--dsw-alias-label-tertiary)}
+.nks-dt-dur{flex:none;width:64px;text-align:right;color:var(--dsw-alias-label-tertiary)}
 .nks-dt-time{flex:none;width:64px;color:var(--dsw-alias-label-tertiary)}
 .nks-dt-src{flex:none;max-width:32%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-tertiary);text-align:right}
-.nks-dt-type{flex:none;width:72px;color:var(--dsw-alias-label-tertiary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.nks-dt-size{flex:none;width:56px;text-align:right;color:var(--dsw-alias-label-tertiary)}
-.nks-dt-wf{flex:none;width:130px;position:relative;height:10px;align-self:center}
+.nks-dt-type{flex:none;width:46px;color:var(--dsw-alias-label-tertiary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nks-dt-type[data-resource="script"],.nks-dt-type[data-resource="js"]{color:var(--dsw-alias-state-warn-primary)}
+.nks-dt-type[data-resource="doc"]{color:var(--dsw-alias-link,#7aaaff)}
+.nks-dt-type[data-resource="xhr"],.nks-dt-type[data-resource="fetch"]{color:var(--dsw-alias-state-success-primary)}
+.nks-dt-type[data-resource="img"],.nks-dt-type[data-resource="css"],.nks-dt-type[data-resource="font"]{color:var(--dsw-alias-label-secondary)}
+.nks-dt-size{flex:none;width:48px;text-align:right;color:var(--dsw-alias-label-tertiary)}
+.nks-dt-wf{flex:none;width:96px;position:relative;height:10px;align-self:center}
 .nks-dt-wf i{position:absolute;top:0;height:8px;min-width:2px;border-radius:2px;background:color-mix(in srgb,var(--dsw-alias-link,#7aaaff) 70%,transparent)}
 .nks-dt-wf i[data-bad="true"]{background:var(--dsw-alias-state-error-primary)}
 .nks-dt-wf i[data-pending="true"]{background:var(--dsw-alias-label-dimmed);opacity:.6}
+.nks-net-detail{position:absolute;left:0;right:0;top:68px;bottom:0;z-index:var(--nano-layer-local7);display:flex;flex-direction:column;background:var(--dsw-alias-bg-base);border-top:.5px solid var(--dsw-alias-border-l2)}
+.nks-net-detail-head{flex:none;display:flex;align-items:center;gap:8px;padding:5px 8px;border-bottom:.5px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1)}
+.nks-net-detail-title{flex:auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxxs-11)}
+.nks-net-detail-x{flex:none;width:20px;height:20px;padding:0;border:0;border-radius:var(--dsw-radius-sm);background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer;font:inherit;line-height:1}
+.nks-net-detail-x:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.nks-net-detail-tabs{flex:none;display:flex;align-items:center;gap:4px;padding:4px 8px;border-bottom:.5px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1)}
+.nks-net-detail-body{flex:auto;min-height:0;overflow:auto;padding:6px 8px;color:var(--dsw-alias-label-secondary)}
+.nks-net-section{margin-bottom:8px}
+.nks-net-section > b{display:block;margin-bottom:3px;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxxs-11);font-weight:600}
+.nks-net-kv{display:flex;gap:8px;padding:1px 0;font:var(--dsw-font-xxxs-11);line-height:1.55}
+.nks-net-kv b{flex:none;width:132px;color:var(--dsw-alias-label-tertiary);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nks-net-kv span{min-width:0;word-break:break-all;color:var(--dsw-alias-label-secondary)}
+.nks-net-pre{margin:0;white-space:pre-wrap;word-break:break-word;font:var(--dsw-font-xxxs-11);line-height:1.55;color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-bg-layer-1);border:.5px solid var(--dsw-alias-border-l3);border-radius:var(--dsw-radius-sm);padding:5px 6px;max-height:180px;overflow:auto}
+.nks-net-empty{color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11);padding:2px 0}
 .nks-dt-styles{flex:none;max-height:110px;overflow:auto;border-bottom:.5px solid var(--dsw-alias-border-l2);padding:4px 8px;background:var(--dsw-alias-bg-layer-1)}
-.nks-dt-style-head{color:var(--dsw-alias-label-secondary);margin-bottom:3px}
+.nks-dt-style-head{display:flex;align-items:center;gap:6px;color:var(--dsw-alias-label-secondary);margin-bottom:3px}
+.nks-dt-style-head > span{flex:auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nks-dt-style-x{flex:none;width:20px;height:20px;padding:0;border:0;border-radius:var(--dsw-radius-sm);background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer;font:inherit;line-height:1}
+.nks-dt-style-x:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .nks-dt-rule{display:flex;gap:8px;padding:1px 0;color:var(--dsw-alias-label-tertiary)}
 .nks-dt-rule b{color:var(--dsw-alias-link,#7aaaff);font-weight:500;max-width:45%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .nks-dt-rule span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -275,7 +332,7 @@ const STYLE = `
   .nks-tool{width:26px;height:26px}
   .nks-address{padding:0 4px 0 7px;font-size:11px}
   .nks-address::placeholder{color:transparent}
-  .nks-address-box::after{content:"网址";position:absolute;left:8px;top:6px;font:var(--dsw-font-xxs-12);color:var(--dsw-alias-label-tertiary);pointer-events:none}
+  .nks-address-box::after{content:attr(data-address-short);position:absolute;left:8px;top:6px;font:var(--dsw-font-xxs-12);color:var(--dsw-alias-label-tertiary);pointer-events:none}
   .nks-address-box:focus-within::after,.nks-address-box[data-dirty="true"]::after{content:none}
   .nks-go{display:none}
   .nks-pins{gap:2px}
@@ -374,11 +431,84 @@ function selectRadio(group, value) {
   }
 }
 
+const RESOURCE_LABELS = {
+  Document: 'doc', Stylesheet: 'css', Image: 'img', Media: 'media', Font: 'font',
+  Script: 'js', TextTrack: 'text', XHR: 'xhr', Fetch: 'fetch', Prefetch: 'prefetch',
+  EventSource: 'sse', WebSocket: 'ws', Manifest: 'manifest', SignedExchange: 'sxg',
+  Ping: 'ping', CSPViolationReport: 'csp', Preflight: 'preflight', Other: 'other',
+}
+const RESOURCE_FILTERS = ['Document', 'Stylesheet', 'Script', 'XHR', 'Fetch', 'Image', 'Font', 'Media', 'WebSocket', 'Other']
+const CONSOLE_LEVELS = ['error', 'warn', 'info', 'log', 'debug']
+
+function resourceTypeLabel(row) {
+  const raw = String(row?.type || '').trim()
+  if (raw) return RESOURCE_LABELS[raw] || raw.toLowerCase().slice(0, 8)
+  const mime = String(row?.mimeType || '')
+  if (mime.includes('javascript')) return 'js'
+  if (mime.includes('css')) return 'css'
+  if (mime.startsWith('image/')) return 'img'
+  if (mime.startsWith('font/')) return 'font'
+  if (mime.includes('json')) return 'json'
+  if (mime.startsWith('text/html')) return 'doc'
+  return mime.split(';')[0].replace(/^application\//, '').slice(0, 8) || 'other'
+}
+
+function formatSize(bytes) {
+  const n = Number(bytes)
+  if (!Number.isFinite(n) || n < 0) return ''
+  if (n < 1024) return `${n}b`
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)}kb`
+  return `${(n / 1024 / 1024).toFixed(1)}mb`
+}
+
+function formatDuration(ms) {
+  const n = Number(ms)
+  if (!Number.isFinite(n) || n < 0) return ''
+  return n < 1000 ? `${Math.round(n)}ms` : `${(n / 1000).toFixed(2)}s`
+}
+
+function networkMatches(row, text) {
+  const tokens = String(text || '').toLowerCase().trim().split(/\s+/).filter(Boolean)
+  if (!tokens.length) return true
+  const haystack = `${row.url || ''} ${row.method || ''} ${row.status ?? ''} ${row.type || ''} ${row.mimeType || ''}`.toLowerCase()
+  return tokens.every((token) => {
+    const at = token.indexOf(':')
+    if (at < 1) return haystack.includes(token)
+    const key = token.slice(0, at)
+    const value = token.slice(at + 1)
+    if (key === 'type') return String(row.type || '').toLowerCase().includes(value) || resourceTypeLabel(row).includes(value)
+    if (key === 'method') return String(row.method || '').toLowerCase() === value
+    if (key === 'status') {
+      if (/^[1-5]xx$/.test(value)) return Math.floor(Number(row.status) / 100) === Number(value[0])
+      return String(row.status ?? '') === value
+    }
+    return haystack.includes(token)
+  })
+}
+
+function consoleMatches(row, text) {
+  const needle = String(text || '').toLowerCase().trim()
+  if (!needle) return true
+  return `${row.level || ''} ${row.text || ''} ${row.url || ''} ${row.source || ''}`.toLowerCase().includes(needle)
+}
+
+function elementMatches(row, text) {
+  const needle = String(text || '').toLowerCase().trim()
+  if (!needle) return true
+  return `${row.tag || ''} ${row.id || ''} ${row.cls || ''}`.toLowerCase().includes(needle)
+}
+
 function DevTools({ copy, open, onClose }) {
   const [tab, setTab] = React.useState('console')
   const [rows, setRows] = React.useState([])
   const [failedOnly, setFailedOnly] = React.useState(false)
+  const [query, setQuery] = React.useState('')
+  const [typeFilter, setTypeFilter] = React.useState('all')
+  const [levelFilter, setLevelFilter] = React.useState('all')
+  const [netDetail, setNetDetail] = React.useState(null)
+  const [netDetailTab, setNetDetailTab] = React.useState('headers')
   const [styles, setStyles] = React.useState(null)
+  const detailSeq = React.useRef(0)
   // The panel is a workspace, not a fixed strip: the human decides how much
   // room the page gives up. Height lives here so it survives a re-render.
   const [height, setHeight] = React.useState(240)
@@ -432,7 +562,7 @@ function DevTools({ copy, open, onClose }) {
             if (last?.at) since = last.at
           }
         } else if (tab === 'network') {
-          const url = `${NETWORK}?limit=200${failedOnly ? '&failedOnly=true' : ''}${since ? `&since=${encodeURIComponent(since)}` : ''}`
+          const url = `${NETWORK}?limit=200${since ? `&since=${encodeURIComponent(since)}` : ''}`
           const data = await fetch(url).then((r) => r.json())
           if (alive && Array.isArray(data.entries)) {
             merge(data.entries, (r) => `n${r.id}`)
@@ -456,8 +586,61 @@ function DevTools({ copy, open, onClose }) {
     document.addEventListener('visibilitychange', onVis)
     arm()
     return () => { alive = false; clearInterval(timer); document.removeEventListener('visibilitychange', onVis) }
-  }, [open, tab, failedOnly])
+  }, [open, tab])
   if (!open) return null
+  const visibleRows = rows.filter((row) => {
+    if (tab === 'network') {
+      if (failedOnly && !(row.failed || (row.status && row.status >= 400))) return false
+      if (typeFilter !== 'all' && String(row.type || 'Other') !== typeFilter) return false
+      return networkMatches(row, query)
+    }
+    if (tab === 'console') return (levelFilter === 'all' || String(row.level) === levelFilter) && consoleMatches(row, query)
+    if (tab === 'elements') return elementMatches(row, query)
+    return true
+  })
+  const elementCount = rows.filter((row) => row.tag && !String(row.tag).startsWith('#')).length
+  const maxDepth = rows.reduce((depth, row) => Math.max(depth, Number(row.level) || 0), -1) + 1
+  const openTypeMenu = (event) => {
+    const rect = event.currentTarget.getBoundingClientRect()
+    openNanoMenu({
+      anchor: { left: rect.left, top: rect.top, bottom: rect.bottom },
+      container: event.currentTarget.closest('[data-nks-workspace]'),
+      direction: 'down',
+      maxHeight: 9 * 28 + 8,
+      items: [
+        { id: 'all', label: copy.devtoolsTypeAll, run: () => setTypeFilter('all') },
+        ...RESOURCE_FILTERS.map((type) => ({ id: type, label: type, run: () => setTypeFilter(type) })),
+      ],
+    })
+  }
+  const openLevelMenu = (event) => {
+    const rect = event.currentTarget.getBoundingClientRect()
+    openNanoMenu({
+      anchor: { left: rect.left, top: rect.top, bottom: rect.bottom },
+      container: event.currentTarget.closest('[data-nks-workspace]'),
+      direction: 'up',
+      maxHeight: 7 * 28 + 8,
+      items: [
+        { id: 'all', label: copy.devtoolsAllLevels, run: () => setLevelFilter('all') },
+        ...CONSOLE_LEVELS.map((level) => ({ id: level, label: level.toUpperCase(), run: () => setLevelFilter(level) })),
+      ],
+    })
+  }
+  const openNetworkDetail = async (row) => {
+    const seq = ++detailSeq.current
+    setNetDetailTab('headers')
+    setHeight((value) => Math.max(value, 360))
+    setNetDetail({ entry: row, responseBody: null, loading: true, error: '' })
+    try {
+      const data = await fetch(`${NETWORK}?id=${encodeURIComponent(row.id)}`).then((response) => response.json())
+      if (seq !== detailSeq.current) return
+      if (!data?.ok || !data.entry) throw new Error(data?.error || copy.devtoolsDetailError)
+      setNetDetail({ entry: data.entry, responseBody: data.responseBody, loading: false, error: '' })
+    } catch (cause) {
+      if (seq !== detailSeq.current) return
+      setNetDetail({ entry: row, responseBody: null, loading: false, error: String(cause?.message || copy.devtoolsDetailError) })
+    }
+  }
   const inspectNode = async (row) => {
     const selector = row.id ? `${row.tag}#${row.id}` : (row.cls ? `${row.tag}.${String(row.cls).trim().split(/\s+/)[0]}` : row.tag)
     try {
@@ -469,6 +652,58 @@ function DevTools({ copy, open, onClose }) {
     const path = tab === 'console' ? CONSOLE : NETWORK
     await fetch(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"clear":true}' }).catch(() => {})
     setRows([])
+    setNetDetail(null)
+  }
+  const kvRow = (label, value) => h('div', { className: 'nks-net-kv', key: label },
+    h('b', null, label), h('span', null, String(value ?? '—')))
+  const headerRows = (headers) => {
+    const entries = Object.entries(headers || {})
+    return entries.length
+      ? entries.map(([key, value]) => h('div', { className: 'nks-net-kv', key }, h('b', null, key), h('span', null, String(value))))
+      : h('div', { className: 'nks-net-empty' }, copy.devtoolsNoHeaders)
+  }
+  const netSection = (title, children) => h('div', { className: 'nks-net-section', key: title },
+    h('b', null, title), children)
+  const renderNetDetail = () => {
+    if (!netDetail) return null
+    if (netDetail.loading) return h('div', { className: 'nks-net-empty' }, copy.devtoolsLoading)
+    if (netDetail.error) return h('div', { className: 'nks-net-empty' }, `${copy.devtoolsDetailError}: ${netDetail.error}`)
+    const entry = netDetail.entry || {}
+    if (netDetailTab === 'headers') {
+      return [
+        netSection(copy.devtoolsGeneral, [
+          kvRow(copy.devtoolsRequestUrl, entry.url),
+          kvRow(copy.devtoolsMethod, entry.method),
+          kvRow(copy.devtoolsStatus, `${entry.status ?? '…'}${entry.statusText ? ' ' + entry.statusText : ''}`),
+          kvRow(copy.devtoolsType, entry.type || 'Other'),
+          kvRow(copy.devtoolsMimeType, entry.mimeType),
+          kvRow(copy.devtoolsProtocol, entry.protocol),
+          kvRow(copy.devtoolsRemoteAddress, entry.remoteAddress),
+        ]),
+        netSection(copy.devtoolsRequestHeaders, headerRows(entry.requestHeaders)),
+        netSection(copy.devtoolsResponseHeaders, headerRows(entry.responseHeaders)),
+      ]
+    }
+    if (netDetailTab === 'payload') {
+      let queryRows = []
+      try {
+        const parsed = new URL(entry.url || '', 'http://local')
+        queryRows = [...parsed.searchParams].map(([key, value], index) => h('div', { className: 'nks-net-kv', key: `${key}${index}` },
+          h('b', null, key), h('span', null, value)))
+      } catch { /* malformed URLs still show the raw body */ }
+      return [
+        queryRows.length ? netSection(copy.devtoolsQuery, queryRows) : null,
+        netSection(copy.devtoolsRequestPayload, entry.postData
+          ? h('pre', { className: 'nks-net-pre' }, entry.postData)
+          : h('div', { className: 'nks-net-empty' }, copy.devtoolsNoPayload)),
+      ]
+    }
+    const body = netDetail.responseBody
+    return netSection(copy.devtoolsResponseBody, body == null
+      ? h('div', { className: 'nks-net-empty' }, copy.devtoolsNoResponseBody)
+      : body.body
+        ? h('pre', { className: 'nks-net-pre' }, `${body.base64Encoded ? '[base64]\n' : ''}${body.body}${body.truncated ? '\n…' : ''}`)
+        : h('div', { className: 'nks-net-empty' }, copy.devtoolsEmptyBody))
   }
   return h('div', {
     className: 'nks-dt',
@@ -486,7 +721,7 @@ function DevTools({ copy, open, onClose }) {
       onPointerDown: startResize,
     }),
     h('div', { className: 'nks-dt-head' },
-      // View switch, filter toggle and row actions are host primitives; the
+      // View switch and row actions are host primitives; the
       // pane draws no tab chrome of its own (DESIGN.md §6.1). The strip is
       // scaled to the panel: at full size three options ate the whole header.
       h('div', { className: 'nks-dt-tabs' },
@@ -497,15 +732,10 @@ function DevTools({ copy, open, onClose }) {
           options: [
             { value: 'console', label: copy.devtoolsConsole },
             { value: 'network', label: copy.devtoolsNetwork },
-            { value: 'elements', label: 'Elements' },
+            { value: 'elements', label: copy.devtoolsElementsTab },
           ],
-          onChange: (next) => setTab(next),
+          onChange: (next) => { setTab(next); if (next !== 'elements') setStyles(null); if (next !== 'network') setNetDetail(null) },
         })),
-      tab === 'network' ? h(primitives.Switch, {
-        checked: failedOnly,
-        label: copy.devtoolsFailedOnly,
-        onChange: (next) => setFailedOnly(next),
-      }) : null,
       h('span', { style: { flex: 'auto' } }),
       h(primitives.Button, { variant: 'ghost', size: 'sm', onClick: clear }, copy.devtoolsClear),
       h(primitives.Button, {
@@ -516,45 +746,110 @@ function DevTools({ copy, open, onClose }) {
         onClick: () => setCollapsed((value) => !value),
       }, collapsed ? copy.devtoolsExpand : copy.devtoolsCollapse),
       h(primitives.Button, { variant: 'ghost', size: 'sm', onClick: onClose }, copy.devtoolsClose)),
-    styles ? h('div', { className: 'nks-dt-styles', 'data-nks-dt-styles': '1' },
-      h('div', { className: 'nks-dt-style-head' }, `${styles.selector} · ${styles.matched.length} rules · ${Object.keys(styles.computed).length} computed`),
+    h('div', { className: 'nks-dt-filterbar', 'data-nks-dt-filterbar': '1' },
+      h(primitives.Input, {
+        className: 'nks-dt-search',
+        'data-nks-dt-search': '1',
+        type: 'search',
+        value: query,
+        placeholder: tab === 'elements' ? copy.devtoolsSearchElements : tab === 'console' ? copy.devtoolsSearchConsole : copy.devtoolsSearch,
+        'aria-label': tab === 'elements' ? copy.devtoolsSearchElements : tab === 'console' ? copy.devtoolsSearchConsole : copy.devtoolsSearch,
+        onChange: (event) => setQuery(event.target.value),
+      }),
+      tab === 'console' ? h(primitives.Tooltip, { label: copy.devtoolsFilterLevel },
+        h(primitives.Button, {
+          variant: 'outline', size: 'sm', 'data-nks-dt-level': '1',
+          'aria-label': `${copy.devtoolsFilterLevel}: ${levelFilter === 'all' ? copy.devtoolsAllLevels : levelFilter}`,
+          onClick: openLevelMenu,
+        }, levelFilter === 'all' ? copy.devtoolsAllLevels : levelFilter.toUpperCase())) : null,
+      tab === 'network' ? h(primitives.Tooltip, { label: copy.devtoolsFilterType },
+        h(primitives.Button, {
+          variant: 'outline', size: 'sm', 'data-nks-dt-type': '1',
+          'aria-label': `${copy.devtoolsFilterType}: ${typeFilter === 'all' ? copy.devtoolsTypeAll : typeFilter}`,
+          onClick: openTypeMenu,
+        }, typeFilter === 'all' ? copy.devtoolsTypeAll : typeFilter)) : null,
+      tab === 'network' ? h(primitives.Tooltip, { label: copy.devtoolsFailedOnlyHint },
+        h('label', { className: 'nks-dt-switch', 'data-nks-dt-failed': '1' },
+          h(primitives.Switch, { checked: failedOnly, onChange: setFailedOnly, label: copy.devtoolsFailedOnly }),
+          h('span', null, copy.devtoolsFailedOnly))) : null,
+      tab === 'network' ? h(primitives.Tooltip, { label: copy.devtoolsCacheUnsupported },
+        h('span', { className: 'nks-dt-cache', 'data-nks-dt-cache': '1', 'aria-disabled': 'true' },
+          h(primitives.Switch, { checked: false, disabled: true, onChange: () => {}, label: copy.devtoolsDisableCache }),
+          h('span', null, copy.devtoolsDisableCache),
+          h('b', null, copy.devtoolsUnsupported))) : null,
+      tab === 'elements' ? h('span', {
+        className: 'nks-dt-stats', 'data-nks-dt-stats': '1', title: copy.devtoolsDomStatsHint,
+      }, `${copy.devtoolsNodes} ${rows.length} · ${copy.devtoolsElements} ${elementCount} · ${copy.devtoolsDepth} ${maxDepth}`) : null),
+    tab === 'elements' && styles ? h('div', { className: 'nks-dt-styles', 'data-nks-dt-styles': '1' },
+      h('div', { className: 'nks-dt-style-head' },
+        h('span', null, `${styles.selector} · ${styles.matched.length} rules · ${Object.keys(styles.computed || {}).length} computed`),
+        h('button', {
+          type: 'button', className: 'nks-dt-style-x', 'data-nks-dt-style-close': '1',
+          'aria-label': copy.devtoolsCloseStyles, title: copy.devtoolsCloseStyles,
+          onClick: () => setStyles(null),
+        }, '×')),
       styles.matched.slice(0, 6).map((rule, i) => h('div', { className: 'nks-dt-rule', key: `r${i}` },
-        h('b', null, rule.selector || '(anonymous)'),
+        h('b', null, rule.selector || copy.devtoolsAnonymous),
         h('span', null, (rule.properties || []).slice(0, 6).join('; '))))) : null,
+    tab === 'elements' ? h('div', { className: 'nks-dt-cols' },
+      h('span', { className: 'nks-dt-lv' }, copy.colTag),
+      h('span', { className: 'nks-dt-msg', style: { textAlign: 'left' } }, copy.colElement),
+      h('span', { className: 'nks-dt-dur' }, copy.colChildren)) : null,
     tab === 'console' ? h('div', { className: 'nks-dt-cols' },
-      h('span', { className: 'nks-dt-time' }, 'Time'),
-      h('span', { className: 'nks-dt-lv' }, 'Level'),
-      h('span', { className: 'nks-dt-msg', style: { textAlign: 'left' } }, 'Message'),
-      h('span', { className: 'nks-dt-src' }, 'Source')) : null,
+      h('span', { className: 'nks-dt-time' }, copy.colTime),
+      h('span', { className: 'nks-dt-lv' }, copy.colLevel),
+      h('span', { className: 'nks-dt-msg', style: { textAlign: 'left' } }, copy.colMessage),
+      h('span', { className: 'nks-dt-src' }, copy.colSource)) : null,
     tab === 'network' ? h('div', { className: 'nks-dt-cols' },
-      h('span', { className: 'nks-dt-lv' }, 'Method'),
-      h('span', { className: 'nks-dt-st' }, 'Status'),
-      h('span', { className: 'nks-dt-type' }, 'Type'),
-      h('span', { className: 'nks-dt-url nks-dt-grow', style: { maxWidth: 'none', textAlign: 'left' } }, 'URL'),
-      h('span', { className: 'nks-dt-size' }, 'Size'),
-      h('span', { className: 'nks-dt-dur' }, 'Time'),
-      h('span', { className: 'nks-dt-wf', style: { height: 'auto' } }, 'Waterfall')) : null,
+      h('span', { className: 'nks-dt-lv' }, copy.colMethod),
+      h('span', { className: 'nks-dt-st' }, copy.colStatus),
+      h('span', { className: 'nks-dt-type' }, copy.colType),
+      h('span', { className: 'nks-dt-url nks-dt-grow', style: { maxWidth: 'none', textAlign: 'left' } }, copy.colUrl),
+      h('span', { className: 'nks-dt-size' }, copy.colSize),
+      h('span', { className: 'nks-dt-dur' }, copy.colDuration),
+      h('span', { className: 'nks-dt-wf', style: { height: 'auto' } }, copy.colWaterfall)) : null,
     h('div', { className: 'nks-dt-body', 'data-nks-dt-body': '1' },
-      rows.length === 0 ? h('div', { className: 'nks-dt-empty' }, copy.devtoolsEmpty) : null,
-      rows.map((row, index) => tab === 'elements'
+      visibleRows.length === 0 ? h('div', { className: 'nks-dt-empty' }, rows.length && tab === 'console' ? copy.devtoolsNoMatchConsole : rows.length && tab === 'network' ? copy.devtoolsNoMatch : copy.devtoolsEmpty) : null,
+      visibleRows.map((row, index) => tab === 'elements'
         ? h('div', { className: 'nks-dt-row', key: `e${row.nodeId || index}`, style: { paddingLeft: `${8 + (row.level || 0) * 12}px`, cursor: 'pointer' }, onClick: () => inspectNode(row), 'data-nks-el-node': String(row.nodeId) },
           h('span', { className: 'nks-dt-lv' }, row.tag),
           h('span', { className: 'nks-dt-msg' }, `${row.id ? '#' + row.id : ''}${row.cls ? '.' + String(row.cls).split(/\s+/).slice(0, 2).join('.') : ''}`),
           h('span', { className: 'nks-dt-dur' }, row.childNodeCount ? String(row.childNodeCount) : ''))
         : tab === 'console'
-        ? h('div', { className: 'nks-dt-row', key: `c${row.seq || index}` },
+        ? h('div', { className: 'nks-dt-row', key: `c${row.seq || index}`, 'data-level': row.level },
           h('span', { className: 'nks-dt-time' }, String(row.at || '').slice(11, 19)),
           h('span', { className: 'nks-dt-lv', 'data-lv': row.level }, row.level),
           h('span', { className: 'nks-dt-msg' }, row.text),
           h('span', { className: 'nks-dt-src' }, row.url ? `${row.url}${row.lineNumber != null ? ':' + row.lineNumber : ''}` : row.source || ''))
-        : h('div', { className: 'nks-dt-row', key: `n${row.id || index}` },
+        : h('div', {
+          className: 'nks-dt-row', key: `n${row.id || index}`,
+          style: { cursor: 'pointer' }, 'data-nks-net-row': String(row.id || ''),
+          'data-selected': netDetail?.entry?.id === row.id ? 'true' : 'false',
+          onClick: () => openNetworkDetail(row),
+        },
           h('span', { className: 'nks-dt-lv' }, row.method),
           h('span', { className: 'nks-dt-st', 'data-bad': row.failed || (row.status && row.status >= 400) ? 'true' : 'false' }, row.failed ? 'ERR' : String(row.status || '…')),
-          h('span', { className: 'nks-dt-type' }, String(row.mimeType || row.type || '').split(';')[0].replace('application/', '').replace('text/', '').slice(0, 12)),
+          h('span', { className: 'nks-dt-type', 'data-resource': resourceTypeLabel(row), title: `${row.type || 'Other'}${row.mimeType ? ' · ' + row.mimeType : ''}` }, resourceTypeLabel(row)),
           h('span', { className: 'nks-dt-url nks-dt-grow', 'data-bad': row.failed || (row.status || 0) >= 400 ? 'true' : 'false' }, row.url),
-          h('span', { className: 'nks-dt-size' }, row.size == null ? '' : row.size > 1024 ? `${(row.size / 1024).toFixed(1)}kb` : `${row.size}b`),
-          h('span', { className: 'nks-dt-dur' }, row.durationMs == null ? '' : `${row.durationMs}ms`),
-          h('span', { className: 'nks-dt-wf', 'data-nks-dt-wf': '1' }, wfBar(row, rows))))))
+          h('span', { className: 'nks-dt-size', title: copy.devtoolsSizeHint }, formatSize(row.size)),
+          h('span', { className: 'nks-dt-dur' }, formatDuration(row.durationMs)),
+          h('span', { className: 'nks-dt-wf', 'data-nks-dt-wf': '1' }, wfBar(row, visibleRows))))),
+    tab === 'network' && netDetail ? h('div', { className: 'nks-net-detail', 'data-nks-net-detail': '1' },
+      h('div', { className: 'nks-net-detail-head' },
+        h('b', { className: 'nks-net-detail-title', title: netDetail.entry?.url || '' },
+          `${netDetail.entry?.method || 'GET'} ${netDetail.entry?.url || ''}`),
+        h('button', {
+          type: 'button', className: 'nks-net-detail-x', 'data-nks-net-detail-close': '1',
+          'aria-label': copy.devtoolsDetailClose, title: copy.devtoolsDetailClose,
+          onClick: () => setNetDetail(null),
+        }, '×')),
+      h('div', { className: 'nks-net-detail-tabs' },
+        [['headers', copy.devtoolsHeaders], ['payload', copy.devtoolsPayload], ['response', copy.devtoolsResponse]]
+          .map(([value, label]) => h(primitives.Button, {
+            key: value, variant: netDetailTab === value ? 'outline' : 'ghost', size: 'sm',
+            'data-nks-net-tab': value, onClick: () => setNetDetailTab(value),
+          }, label))),
+      h('div', { className: 'nks-net-detail-body' }, renderNetDetail())) : null)
 }
 
 // Waterfall scale is recomputed per render from the row set passed in:
@@ -1367,7 +1662,7 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
       setComment('')
       setComposing(false)
       setPick(null)
-      showToast(refId ? `${note.length} 字符已注入（ref #${refId}）` : `${note.length} 字符已注入`)
+      showToast(refId ? fill(copy.injectedCharsRef, { n: note.length, id: refId }) : fill(copy.injectedChars, { n: note.length }))
     } catch (cause) {
       showError(cause)
     }
@@ -1444,7 +1739,7 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
       try {
         const response = await post(RECOVER, {})
         await refreshStatus()
-        if (response?.v != null && response.v !== 1) showToast('观察合同不匹配')
+        if (response?.v != null && response.v !== 1) showToast(copy.contractMismatch)
         else if (response?.ready === true) await reloadShot(0, { keepPick: true })
         else showToast(copy.prepareNotReady || copy.prepareFailed)
       } catch (cause) {
@@ -1619,7 +1914,7 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
         setSnap(ports)
         if (Array.isArray(result.summary)) setDiag(result)
         // Never say "ready" when a plane failed — name the failing plane.
-        const failed = planeRows(result).filter((row) => !row.ok && !row.skipped)
+        const failed = planeRows(result, copy).filter((row) => !row.ok && !row.skipped)
         if (result.planes && Number.isFinite(result.v) && result.v !== 1) setNote(copy.contractNewer)
         else if (!result.ok) setNote(`${copy.prepareFailed}: ${result.errorId || result.error || `HTTP ${response.status}`}`)
         else if (result.ready !== true) setNote(`${copy.prepareNotReady}: ${failed.map((row) => row.plane || row.label).join(' / ')}`)
@@ -1679,7 +1974,7 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
     const engine = snap?.effective?.httpBase || '—'
     const container = snap?.container?.state || '—'
     const portRow = snap?.ports?.engine
-      ? `${snap.ports.engine.port} · ${snap.ports.engine.heldBy === 'this-container' ? '本插件容器' : '空闲'}`
+      ? `${snap.ports.engine.port} · ${snap.ports.engine.heldBy === 'this-container' ? copy.portHeld : copy.portFree}`
       : '—'
     // The badge reads planes and ready. It does not recompute ready from rows.
     // A host older than the observation contract has no `v` at all. That is
@@ -1687,14 +1982,14 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
     // mismatch, and even then the pane keeps working on the fields it has.
     const contractMismatch = snap != null && Number.isFinite(snap.v) && snap.v !== 1
     const legacyHost = snap != null && !Number.isFinite(snap.v)
-    const rows = planeRows(snap)
+    const rows = planeRows(snap, copy)
     const healthy = !contractMismatch && snap?.ready === true
     return h('div', { className: 'nks-env', 'data-nks-env': '1' },
       h('div', { className: 'nks-env-title' }, copy.envTitle,
         h('span', { className: healthy ? 'nks-env-ok' : 'nks-env-bad', title: legacyHost ? copy.legacyHostTitle : undefined },
-          contractMismatch ? copy.contractNewer : healthy ? '● OK' : '● 异常'),
+          contractMismatch ? copy.contractNewer : healthy ? `● ${copy.envOk}` : `● ${copy.envBad}`),
         legacyHost ? h('span', { className: 'nks-env-legacy', 'data-nks-legacy': '1' }, copy.legacyHost) : null),
-      h('div', { className: 'nks-env-row' }, h('b', null, copy.envPlugin), h('span', null, snap?.buildId || '未知')),
+      h('div', { className: 'nks-env-row' }, h('b', null, copy.envPlugin), h('span', null, snap?.buildId || copy.envUnknown)),
       h('div', { className: 'nks-env-row' }, h('b', null, copy.envEngine), h('span', null, engine)),
       h('div', { className: 'nks-env-row' }, h('b', null, copy.envContainer), h('span', null, container)),
       snap?.containerName ? h('div', { className: 'nks-env-row' }, h('b', null, copy.envInstance), h('span', null, snap.containerName)) : null,
@@ -1844,39 +2139,16 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
     }, true)
   }
 
-  /** Settings shell with tabs: environment/settings vs browse history. */
-  // Semantic split, rendered with the shared nano-ui tab primitive (no
-  // per-plugin tab chrome): environment health / browsing config / history.
-  function SettingsTabs({ env, browse }) {
+  /** Settings shell: environment health and browser simulation. Browsing
+   *  history lives in the toolbar entry, not behind a settings tab. */
+  function SettingsTabs({ env, simulation }) {
     return h(NanoTabs, {
       label: copy.settingsTitle,
       items: [
         { value: 'env', label: copy.tabEnv, content: env },
-        { value: 'browse', label: copy.tabBrowse, content: browse },
-        { value: 'history', label: copy.tabHistory, content: h(HistoryTab) },
+        { value: 'simulation', label: copy.tabBrowse, content: simulation },
       ],
     })
-  }
-
-  function HistoryTab() {
-    const [rows, setRows] = React.useState([])
-    const [q, setQ] = React.useState('')
-    const load = React.useCallback(async (needle) => {
-      const data = await fetch(`${BROWSE_HISTORY}?limit=100${needle ? '&q=' + encodeURIComponent(needle) : ''}`).then((r) => r.json())
-      setRows(data.entries || [])
-    }, [])
-    React.useEffect(() => { load('').catch(() => {}) }, [load])
-    const del = async (id) => { await fetch(`${BROWSE_HISTORY}?id=${encodeURIComponent(id)}`, { method: 'DELETE' }); await load(q) }
-    const clear = async () => { await fetch(BROWSE_HISTORY, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ clear: true }) }); await load(q) }
-    return h('div', { className: 'nks-hist-panel', 'data-nks-hist-panel': '1' },
-      h('div', { className: 'nks-modal-bar', style: { padding: '4px 0' } },
-        h('input', { 'data-nks-history-q': '1', placeholder: '搜索地址…', value: q, onChange: async (e) => { setQ(e.target.value); await load(e.target.value) } }),
-        h('button', { type: 'button', 'data-nks-history-clear': '1', disabled: !rows.length, onClick: clear }, '清空')),
-      h('div', { className: 'nks-hist-list' }, rows.length ? rows.map((row) => h('div', { className: 'nks-hist-row', key: row.id, 'data-nks-history-row': row.id },
-        h('button', { type: 'button', className: 'nks-hist-open', onClick: () => { setDraftUrl(row.url); openPage(row.url) } },
-          h('span', { className: 'nks-hist-url' }, row.url),
-          h('span', { className: 'nks-hist-meta' }, `${String(row.at).slice(0, 16).replace('T', ' ')}${row.count > 1 ? ' · ' + row.count + ' 次' : ''}`)),
-        h('button', { type: 'button', className: 'nks-hist-del', onClick: () => del(row.id), 'aria-label': '删除' }, '×'))) : h('div', { className: 'nks-modal-empty' }, '还没有浏览记录')))
   }
 
   function HistoryDialog({ open, onClose }) {
@@ -1894,19 +2166,19 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
     return h('div', { className: 'nks-modal-mask', 'data-nks-history': '1', onClick: (e) => { if (e.target === e.currentTarget) onClose() } },
       h('div', { className: 'nks-modal' },
         h('div', { className: 'nks-modal-head' },
-          h('b', null, '浏览历史'),
-          h('span', { className: 'nks-modal-sub' }, `${rows.length} 条`),
-          h('button', { type: 'button', className: 'nks-modal-x', onClick: onClose, 'aria-label': '关闭' }, '×')),
+          h('b', null, copy.historyTitle),
+          h('span', { className: 'nks-modal-sub' }, fill(copy.historyCount, { n: rows.length })),
+          h('button', { type: 'button', className: 'nks-modal-x', onClick: onClose, 'aria-label': copy.close }, '×')),
         h('div', { className: 'nks-modal-bar' },
-          h('input', { 'data-nks-history-q': '1', placeholder: '搜索地址…', value: q, onChange: async (e) => { setQ(e.target.value); await load(e.target.value) } }),
-          h('button', { type: 'button', 'data-nks-history-clear': '1', disabled: busy || !rows.length, onClick: clear }, '清空')),
+          h('input', { 'data-nks-history-q': '1', placeholder: copy.historySearch, value: q, onChange: async (e) => { setQ(e.target.value); await load(e.target.value) } }),
+          h('button', { type: 'button', 'data-nks-history-clear': '1', disabled: busy || !rows.length, onClick: clear }, copy.historyClear)),
         h('div', { className: 'nks-modal-body' },
           rows.length ? rows.map((row) => h('div', { className: 'nks-hist-row', key: row.id, 'data-nks-history-row': row.id },
             h('button', { type: 'button', className: 'nks-hist-open', onClick: () => { setDraftUrl(row.url); setHistoryOpen(false); openPage(row.url) } },
               h('span', { className: 'nks-hist-url' }, row.url),
-              h('span', { className: 'nks-hist-meta' }, `${String(row.at).slice(0, 16).replace('T', ' ')}${row.count > 1 ? ' · ' + row.count + ' 次' : ''}`)),
-            h('button', { type: 'button', className: 'nks-hist-del', 'data-nks-history-del': row.id, onClick: () => del(row.id), 'aria-label': '删除' }, '×')))
-            : h('div', { className: 'nks-modal-empty' }, '还没有浏览记录'))) )
+              h('span', { className: 'nks-hist-meta' }, `${String(row.at).slice(0, 16).replace('T', ' ')}${row.count > 1 ? fill(copy.historyTimes, { n: row.count }) : ''}`)),
+            h('button', { type: 'button', className: 'nks-hist-del', 'data-nks-history-del': row.id, onClick: () => del(row.id), 'aria-label': copy.historyDelete }, '×')))
+            : h('div', { className: 'nks-modal-empty' }, copy.historyEmpty))) )
   }
 
 
@@ -1918,7 +2190,7 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
     if (workspaceEl === null) return
     dialogOpenRef.current = true
     let close = () => {}
-    let current = { userAgent: '', viewportWidth: '', httpBase: '', mcpPort: '' }
+    let current = { userAgent: '', viewportWidth: '', viewportHeight: '', httpBase: '', mcpPort: '', locale: '', geolocation: null, colorScheme: 'light', cookies: '' }
     const dialog = openNanoDialog({
       copy: { cancel: copy.cancel, confirm: copy.save, close: copy.close },
       title: copy.settingsTitle,
@@ -1931,51 +2203,93 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
       // again would double root.unmount()/host.remove() (S3-3).
       onCancel: () => { dialogOpenRef.current = false },
       onConfirm: () => save(),
-      children: h(SettingsTabs, { env: h(EnvPanel, null), browse: h('form', {
-        className: 'nks-settings-body',
-        onSubmit: (event) => { event.preventDefault(); save() },
-      },
-        h('label', { htmlFor: 'nks-ua' }, copy.uaLabel),
-        h('input', { id: 'nks-ua', className: 'nks-address', autoFocus: true, placeholder: copy.uaPlaceholder }),
-        h('label', { htmlFor: 'nks-origin' }, copy.originLabel),
-        h('input', { id: 'nks-origin', className: 'nks-address', placeholder: 'http://127.0.0.1:8787', inputMode: 'url', spellCheck: false, autoComplete: 'off' }),
-        h('label', { htmlFor: 'nks-mcp' }, copy.mcpLabel),
-        h('input', { id: 'nks-mcp', className: 'nks-address', inputMode: 'numeric', placeholder: '8799' }),
-        h('span', { id: 'nks-viewport-label' }, copy.viewportLabel),
-        h('div', {
-          id: 'nks-viewport',
-          className: 'nks-choices',
-          role: 'radiogroup',
-          'aria-labelledby': 'nks-viewport-label',
-          'data-value': 'default',
-          onKeyDown: (event) => {
-            const keys = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End']
-            if (!keys.includes(event.key)) return
-            event.preventDefault()
-            const values = [...event.currentTarget.querySelectorAll('button')].map((b) => b.dataset.choice)
-            const index = Math.max(0, values.indexOf(event.currentTarget.dataset.value))
-            const next = event.key === 'Home' ? values[0]
-              : event.key === 'End' ? values[values.length - 1]
-              : values[(index + (event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1 : 1) + values.length) % values.length]
-            selectRadio(event.currentTarget, next)
-            event.currentTarget.querySelector(`[data-choice="${next}"]`)?.focus()
+      children: h(SettingsTabs, {
+        env: h('div', { className: 'nks-settings-stack' },
+          h(EnvPanel, null),
+          h('form', {
+            className: 'nks-settings-body',
+            onSubmit: (event) => { event.preventDefault(); save() },
           },
-        }, [
-          ['default', copy.viewportDefault],
-          ['1280', copy.viewportDesktop],
-          ['768', copy.viewportTablet],
-          ['390', copy.viewportPhone],
-        ].map(([value, label]) => h('button', {
-          key: value,
-          type: 'button',
-          role: 'radio',
-          'aria-checked': value === 'default' ? 'true' : 'false',
-          tabIndex: value === 'default' ? 0 : -1,
-          'data-choice': value,
-          className: 'nks-choice',
-          onClick: (event) => selectRadio(event.currentTarget.parentElement, value),
-        }, label))),
-        h('button', { type: 'submit', style: { display: 'none' }, 'aria-hidden': 'true', tabIndex: -1 })) }),
+            h('div', { className: 'nks-settings-section' }, copy.engineSection),
+            h('label', { htmlFor: 'nks-origin' }, copy.originLabel),
+            h('input', { id: 'nks-origin', className: 'nks-address', placeholder: 'http://127.0.0.1:8787', inputMode: 'url', spellCheck: false, autoComplete: 'off' }),
+            h('label', { htmlFor: 'nks-mcp' }, copy.mcpLabel),
+            h('input', { id: 'nks-mcp', className: 'nks-address', inputMode: 'numeric', placeholder: '8799' }),
+            h('button', { type: 'submit', style: { display: 'none' }, 'aria-hidden': 'true', tabIndex: -1 }))),
+        simulation: h('form', {
+          className: 'nks-settings-body nks-simulation-body',
+          onSubmit: (event) => { event.preventDefault(); save() },
+        },
+          h('label', { htmlFor: 'nks-ua' }, copy.uaLabel),
+          h('input', { id: 'nks-ua', className: 'nks-address', autoFocus: true, placeholder: copy.uaPlaceholder }),
+          h('span', { id: 'nks-viewport-label' }, copy.viewportLabel),
+          h('div', {
+            id: 'nks-viewport',
+            className: 'nks-choices',
+            role: 'radiogroup',
+            'aria-labelledby': 'nks-viewport-label',
+            'data-value': 'default',
+            onKeyDown: (event) => {
+              const keys = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End']
+              if (!keys.includes(event.key)) return
+              event.preventDefault()
+              const values = [...event.currentTarget.querySelectorAll('button')].map((b) => b.dataset.choice)
+              const index = Math.max(0, values.indexOf(event.currentTarget.dataset.value))
+              const next = event.key === 'Home' ? values[0]
+                : event.key === 'End' ? values[values.length - 1]
+                : values[(index + (event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1 : 1) + values.length) % values.length]
+              selectRadio(event.currentTarget, next)
+              event.currentTarget.querySelector(`[data-choice="${next}"]`)?.focus()
+            },
+          },
+            [['default', copy.viewportDefault], ['1280', copy.viewportDesktop], ['768', copy.viewportTablet], ['390', copy.viewportPhone]]
+              .map(([value, label]) => h('button', {
+                key: value, type: 'button', role: 'radio',
+                'aria-checked': value === 'default' ? 'true' : 'false',
+                tabIndex: value === 'default' ? 0 : -1,
+                'data-choice': value, className: 'nks-choice',
+                onClick: (event) => selectRadio(event.currentTarget.parentElement, value),
+              }, label))),
+          h('label', { htmlFor: 'nks-locale' }, copy.localeLabel),
+          h('input', { id: 'nks-locale', className: 'nks-address', placeholder: copy.localePlaceholder, spellCheck: false, autoComplete: 'off' }),
+          h('label', null, copy.geoLabel),
+          h('div', { className: 'nks-settings-pair' },
+            h('input', { id: 'nks-geo-lat', className: 'nks-address', type: 'number', step: 'any', placeholder: copy.geoLat, 'aria-label': copy.geoLat }),
+            h('input', { id: 'nks-geo-lng', className: 'nks-address', type: 'number', step: 'any', placeholder: copy.geoLng, 'aria-label': copy.geoLng })),
+          h('span', { className: 'nks-settings-hint' }, copy.geoHint),
+          h('span', { id: 'nks-color-label' }, copy.colorSchemeLabel),
+          h('div', {
+            id: 'nks-color',
+            className: 'nks-choices',
+            role: 'radiogroup',
+            'aria-labelledby': 'nks-color-label',
+            'data-value': 'light',
+            onKeyDown: (event) => {
+              const keys = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End']
+              if (!keys.includes(event.key)) return
+              event.preventDefault()
+              const values = [...event.currentTarget.querySelectorAll('button')].map((b) => b.dataset.choice)
+              const index = Math.max(0, values.indexOf(event.currentTarget.dataset.value))
+              const next = event.key === 'Home' ? values[0]
+                : event.key === 'End' ? values[values.length - 1]
+                : values[(index + (event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1 : 1) + values.length) % values.length]
+              selectRadio(event.currentTarget, next)
+              event.currentTarget.querySelector(`[data-choice="${next}"]`)?.focus()
+            },
+          },
+            [['light', copy.colorSchemeLight], ['dark', copy.colorSchemeDark]]
+              .map(([value, label]) => h('button', {
+                key: value, type: 'button', role: 'radio',
+                'aria-checked': value === 'light' ? 'true' : 'false',
+                tabIndex: value === 'light' ? 0 : -1,
+                'data-choice': value, className: 'nks-choice',
+                onClick: (event) => selectRadio(event.currentTarget.parentElement, value),
+              }, label))),
+          h('label', { htmlFor: 'nks-cookies' }, copy.cookiesLabel),
+          h('textarea', { id: 'nks-cookies', className: 'nks-address nks-cookie-text', rows: 4, placeholder: copy.cookiesPlaceholder, spellCheck: false }),
+          h('span', { className: 'nks-settings-hint' }, copy.cookiesHint),
+          h('button', { type: 'submit', style: { display: 'none' }, 'aria-hidden': 'true', tabIndex: -1 })),
+      })
     })
     close = () => { dialogOpenRef.current = false; dialog.close() }
 
@@ -1984,13 +2298,32 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
       const choice = document.getElementById('nks-viewport')?.dataset.value ?? 'default'
       const nextOrigin = (document.getElementById('nks-origin')?.value ?? '').trim()
       const nextPort = (document.getElementById('nks-mcp')?.value ?? '').trim()
+      const nextLocale = (document.getElementById('nks-locale')?.value ?? '').trim()
+      const latText = (document.getElementById('nks-geo-lat')?.value ?? '').trim()
+      const lngText = (document.getElementById('nks-geo-lng')?.value ?? '').trim()
+      const nextColor = document.getElementById('nks-color')?.dataset.value ?? 'light'
+      const nextCookies = document.getElementById('nks-cookies')?.value ?? ''
       run(async () => {
+        let nextGeo = null
+        if (latText || lngText) {
+          const latitude = Number(latText)
+          const longitude = Number(lngText)
+          if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 || !Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
+            throw Object.assign(new Error(copy.geoInvalid), { status: 400, errorId: 'kitesurf.body.json' })
+          }
+          nextGeo = { latitude, longitude }
+        }
         const settingsPatch = {}
         if (nextAgent !== current.userAgent) settingsPatch.userAgent = nextAgent
         const nextWidth = choice === 'default' ? '' : choice
+        const viewportHeights = { 1280: 900, 768: 900, 390: 844 }
         if (nextWidth !== current.viewportWidth) {
-          settingsPatch.viewport = choice === 'default' ? null : { width: Number(choice) }
+          settingsPatch.viewport = choice === 'default' ? null : { width: Number(choice), height: viewportHeights[choice] || 900 }
         }
+        if (nextLocale !== current.locale) settingsPatch.locale = nextLocale || null
+        if (JSON.stringify(nextGeo) !== JSON.stringify(current.geolocation)) settingsPatch.geolocation = nextGeo
+        if (nextColor !== current.colorScheme) settingsPatch.colorScheme = nextColor
+        if (nextCookies !== current.cookies) settingsPatch.cookies = nextCookies || null
         if (Object.keys(settingsPatch).length) await post(SETTINGS, settingsPatch)
         const kitePatch = {}
         if (nextOrigin && nextOrigin !== current.httpBase) kitePatch.httpBase = nextOrigin
@@ -2007,8 +2340,13 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
       current = {
         userAgent: fresh?.userAgent ?? '',
         viewportWidth: fresh?.viewport?.width ? String(fresh.viewport.width) : '',
+        viewportHeight: fresh?.viewport?.height ? String(fresh.viewport.height) : '',
         httpBase: fresh?.kite?.httpBase ?? '',
         mcpPort: fresh?.kite?.mcpPort != null ? String(fresh.kite.mcpPort) : '',
+        locale: fresh?.locale ?? '',
+        geolocation: fresh?.geolocation ?? null,
+        colorScheme: fresh?.colorScheme ?? 'light',
+        cookies: fresh?.cookies ?? '',
       }
       const ua = document.getElementById('nks-ua')
       if (ua) ua.value = current.userAgent
@@ -2016,7 +2354,17 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
       if (originInput) originInput.value = current.httpBase
       const mcp = document.getElementById('nks-mcp')
       if (mcp) mcp.value = current.mcpPort
-      selectRadio(document.getElementById('nks-viewport'), current.viewportWidth || 'default')
+      const localeInput = document.getElementById('nks-locale')
+      if (localeInput) localeInput.value = current.locale
+      const lat = document.getElementById('nks-geo-lat')
+      const lng = document.getElementById('nks-geo-lng')
+      if (lat) lat.value = current.geolocation?.latitude ?? ''
+      if (lng) lng.value = current.geolocation?.longitude ?? ''
+      const cookies = document.getElementById('nks-cookies')
+      if (cookies) cookies.value = current.cookies
+      const viewportChoice = ['1280', '768', '390'].includes(current.viewportWidth) ? current.viewportWidth : 'default'
+      selectRadio(document.getElementById('nks-viewport'), viewportChoice)
+      selectRadio(document.getElementById('nks-color'), current.colorScheme)
     })
   }
 
@@ -2042,7 +2390,7 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
         h('button', { type: 'button', className: 'nks-tool', 'data-nks-back': '1', 'aria-label': copy.back, title: copy.back, disabled: busy || !hasPage, onClick: () => run(() => historyNav(-1), { beat: true, dialog: true }) }, glyph('back')),
         h('button', { type: 'button', className: 'nks-tool', 'data-nks-forward': '1', 'aria-label': copy.forward, title: copy.forward, disabled: busy || !hasPage, onClick: () => run(() => historyNav(1), { beat: true, dialog: true }) }, glyph('forward')),
         h('button', { type: 'button', className: 'nks-tool', 'data-nks-reload': '1', 'aria-label': copy.refresh, title: copy.refresh, disabled: busy, onClick: onRefresh }, glyph('refresh'))),
-      h('span', { className: 'nks-address-box', 'data-dirty': draftUrl ? 'true' : 'false' },
+      h('span', { className: 'nks-address-box', 'data-address-short': copy.addressShort, 'data-dirty': draftUrl ? 'true' : 'false', 'data-loading': beat ? 'true' : 'false', 'aria-busy': beat ? 'true' : 'false' },
         h('input', {
           className: 'nks-address',
           'aria-label': copy.addressAria,
@@ -2055,6 +2403,16 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
           onFocus: () => { addressFocusedRef.current = true },
           onBlur: () => { addressFocusedRef.current = false },
         }),
+        beat ? h('span', {
+          className: 'nks-address-beat',
+          'data-nks-beat': '1',
+          'data-nks-loading': '1',
+          role: 'status',
+          'aria-label': copy.opening,
+          title: copy.opening,
+        },
+          h('i', { className: 'nks-spin', 'aria-hidden': true }),
+          beatSec > 0 ? h('span', { 'data-nks-beat-sec': String(beatSec) }, `${beatSec}s`) : null) : null,
         h('button', { type: 'submit', className: 'nks-tool nks-go', 'aria-label': copy.go, disabled: busy }, glyph('go'))),
       // Trailing cluster mirrors the host's three icon buttons (分栏 /
       // 全屏 / 侧栏): same 28×28 seats at an 8px pitch, so each of ours
@@ -2099,18 +2457,18 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
           h('span', { className: 'nks-nav-tab-url' }, row.url.replace(/^https?:\/\//, '')),
           row.count > 1 ? h('span', { className: 'nks-nav-tab-count' }, `×${row.count}`) : null,
           h('span', {
-            className: 'nks-nav-tab-x', role: 'button', 'aria-label': '关闭标签页', 'data-nks-nav-tab-del': row.url,
+            className: 'nks-nav-tab-x', role: 'button', 'aria-label': copy.navCloseTab, 'data-nks-nav-tab-del': row.url,
             onClick: (event) => { event.stopPropagation(); delNavTab(row.url) },
           }, '×')))
           : h('div', { className: 'nks-nav-empty' }, copy.navEmpty))),
     h('div', { className: 'nks-status', 'data-nks-status': '1' },
-      h('button', { type: 'button', 'data-nks-native-toggle': '1', 'aria-pressed': nativeHtml ? 'true' : 'false', title: '原生 HTML 渲染', onClick: () => { setNativeHtml((v) => !v); if (!nativeHtml) loadDom().catch(() => {}) } }, 'HTML'),
-      h('button', { type: 'button', 'data-nks-devtools-toggle': '1', 'aria-pressed': devtoolsOpen ? 'true' : 'false', title: '开发者工具（⌘E 然后按 2）', onClick: () => setDevtoolsOpen((v) => !v) }, copy.devtools),
+      h('button', { type: 'button', 'data-nks-native-toggle': '1', 'aria-pressed': nativeHtml ? 'true' : 'false', title: copy.nativeHtmlTitle, onClick: () => { setNativeHtml((v) => !v); if (!nativeHtml) loadDom().catch(() => {}) } }, 'HTML'),
+      h('button', { type: 'button', 'data-nks-devtools-toggle': '1', 'aria-pressed': devtoolsOpen ? 'true' : 'false', title: copy.devtoolsToggleTitle, onClick: () => setDevtoolsOpen((v) => !v) }, copy.devtools),
       h('button', {
         type: 'button',
         'data-nks-vp': '1',
         className: 'nks-chip',
-        title: '页面视口（拟真）',
+        title: copy.viewportTitle,
         onClick: (event) => {
           const rect = event.currentTarget.getBoundingClientRect()
           const apply = async (next) => {
@@ -2125,21 +2483,21 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
             direction: 'up',
             maxHeight: 6 * 28 + 8,
             items: [
-              { id: 'fit', label: '自适应', run: () => apply(null) },
+              { id: 'fit', label: copy.viewportFit, run: () => apply(null) },
               { id: '1280', label: '1280×900', run: () => apply({ width: 1280, height: 900 }) },
               { id: '768', label: '768×900', run: () => apply({ width: 768, height: 900 }) },
               { id: '390', label: '390×844', run: () => apply({ width: 390, height: 844 }) },
-              { id: 'custom', label: '自定义…', run: () => setVpCustom(true) },
+              { id: 'custom', label: copy.viewportCustom, run: () => setVpCustom(true) },
             ],
           })
         },
-      }, vp ? `${vp.width}×${vp.height}` : '自适应'),
+      }, vp ? `${vp.width}×${vp.height}` : copy.viewportFit),
       vpCustom ? h('input', {
-        'data-nks-vp-w': '1', type: 'number', placeholder: '宽', className: 'nks-vp-input',
+        'data-nks-vp-w': '1', type: 'number', placeholder: copy.viewportWidthPh, className: 'nks-vp-input',
         onKeyDown: async (e) => { if (e.key !== 'Enter') return; const w = Number(e.currentTarget.value); if (w >= 240) { const next = { width: w, height: vp?.height || 900 }; setVp(next); setVpCustom(false); try { await post(SETTINGS, { viewport: next }) } catch {} } },
       }) : null,
       vpCustom ? h('input', {
-        'data-nks-vp-h': '1', type: 'number', placeholder: '高', className: 'nks-vp-input',
+        'data-nks-vp-h': '1', type: 'number', placeholder: copy.viewportHeightPh, className: 'nks-vp-input',
         onKeyDown: async (e) => { if (e.key !== 'Enter') return; const h = Number(e.currentTarget.value); if (h >= 240) { const next = { width: vp?.width || 1280, height: h }; setVp(next); setVpCustom(false); try { await post(SETTINGS, { viewport: next }) } catch {} } },
       }) : null,
       // Three states, not two: an empty pane is neither native HTML nor a
@@ -2147,7 +2505,7 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
       h('span', {
         'data-nks-mode': nativeHtml && domDoc ? 'html' : hasPage ? 'img' : 'empty',
         style: { color: nativeHtml && domDoc ? 'var(--dsw-alias-state-success-primary)' : hasPage ? 'var(--dsw-alias-state-warn-primary)' : 'var(--dsw-alias-label-tertiary)' },
-      }, nativeHtml && domDoc ? 'HTML 原生渲染' : hasPage ? 'IMG 截图回退' : '未打开页面'),
+      }, nativeHtml && domDoc ? copy.modeHtml : hasPage ? copy.modeShot : copy.modeEmpty),
       h('span', { style: { flex: 'auto' } })),
 
     h(HistoryDialog, { open: historyOpen, onClose: () => setHistoryOpen(false) }),
@@ -2190,11 +2548,6 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
         Array.isArray(pick.elements[0].componentStack) && pick.elements[0].componentStack.length
           ? h('span', { 'data-nks-stack': '1', title: pick.elements[0].componentStack.join(' → ') },
               `⚛ ${pick.elements[0].componentStack.slice(-3).join(' → ')}`) : null) : null,
-      beat ? h('div', { className: 'nks-load', 'data-nks-beat': '1', 'data-nks-loading': '1', role: 'status' },
-        h('div', { className: 'nks-load-card' },
-          h('i', { className: 'nks-spin', 'aria-hidden': true }),
-          h('span', null, copy.opening),
-          beatSec > 0 ? h('span', { 'data-nks-beat-sec': String(beatSec) }, `${beatSec}s`) : null)) : null,
       nativeHtml && domDoc ? h('iframe', {
         className: 'nks-dom',
         title: 'Kitesurf page',
@@ -2218,8 +2571,8 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
         // painted the opaque Start button straight over the error text
         // ("引启动引擎答"). Everything below is a single vertical stack.
         h('div', { className: 'nks-empty-icon' }, glyph('annotate')),
-        // The centred heartbeat already says "opening"; repeating it here made
-        // the pane look like two stacked loading states.
+        // The address-bar heartbeat already says "opening"; repeating it here
+        // made the pane look like two stacked loading states.
         h('div', { className: 'nks-empty-title' },
           status?.engineMismatch === true ? copy.engineMismatch
             : statusDown ? copy.errorTitle

@@ -132,13 +132,27 @@ async function navigateOnce(session, httpBase, url, connect, isCancelled) {
   // Cancelling a queued HTTP request must not navigate later. Once sent,
   // however, a CDP navigation is left to finish on its existing connection.
   assertNavigationActive(isCancelled)
-  const result = await client.send('Page.navigate', { url }, attached.sessionId)
+  // The engine consumes ks_color_scheme before the page sees the URL and
+  // applies it as the document's prefers-color-scheme. It is a driver-level
+  // navigation parameter, not a modification to the pinned engine.
+  let navigateUrl = url
+  if (session.colorScheme === 'light' || session.colorScheme === 'dark') {
+    try {
+      const parsed = new URL(url)
+      parsed.searchParams.set('ks_color_scheme', session.colorScheme)
+      navigateUrl = parsed.toString()
+    } catch { /* an invalid URL is reported by Page.navigate */ }
+  }
+  const result = await client.send('Page.navigate', { url: navigateUrl }, attached.sessionId)
   if (result.errorText) {
     const error = new Error(String(result.errorText).slice(0, 240))
     error.status = 502
     error.errorId = 'kitesurf.navigate.failed'
     throw error
   }
+  // Locale/geolocation/color-scheme JS overrides must run in the committed
+  // document, not in the previous about:blank.
+  try { await applyBrowserSettingsToPage(session, client, attached.sessionId) } catch { /* best effort */ }
   return { ok: true, url }
 }
 
@@ -178,6 +192,149 @@ async function clientUsable(client) {
   return client.alive !== false
 }
 
+function networkStartedAt(params) {
+  const wall = Number(params.wallTime)
+  return Number.isFinite(wall) && wall > 0 ? Math.round(wall * 1000) : Date.now()
+}
+
+function networkRow(session, requestId) {
+  return [...(session.network || [])].reverse().find((item) => item && item.id === requestId)
+}
+
+function networkElapsed(row, timestamp) {
+  const end = Number(timestamp)
+  if (Number.isFinite(end) && Number.isFinite(row.timestamp)) {
+    return Math.max(0, Math.round((end - row.timestamp) * 1000))
+  }
+  return Math.max(0, Date.now() - row.startedAt)
+}
+
+/**
+ * Normalize the CDP network lifecycle into the driver's ring. The engine
+ * reports type/wallTime/encodedDataLength/timestamp; the pane needs all four
+ * to draw a truthful type, size, duration and waterfall. `Network.enable` is
+ * scoped to the page session; these events already arrive on this socket.
+ */
+function networkHeaders(value) {
+  if (!value || typeof value !== 'object') return {}
+  const out = {}
+  for (const [key, entry] of Object.entries(value)) {
+    if (typeof key !== 'string') continue
+    if (typeof entry === 'string' || typeof entry === 'number' || typeof entry === 'boolean') out[key] = String(entry)
+  }
+  return out
+}
+
+function networkPayload(value) {
+  return typeof value === 'string' ? value.slice(0, 20000) : ''
+}
+
+export function recordNetworkEvent(session, message) {
+  const params = message?.params || {}
+  const id = String(params.requestId || '')
+  if (!id) return
+  session.network = session.network || []
+  if (message.method === 'Network.requestWillBeSent') {
+    const startedAt = networkStartedAt(params)
+    const existing = networkRow(session, id)
+    if (existing && params.redirectResponse) {
+      // A redirect reuses the requestId. Keep one visible row, but reflect the
+      // redirect status and restart the timing at the final request.
+      existing.status = Number(params.redirectResponse.status) || existing.status
+      existing.mimeType = String(params.redirectResponse.mimeType || existing.mimeType || '')
+      existing.redirectCount = (existing.redirectCount || 0) + 1
+    }
+    if (existing && !params.redirectResponse) return
+    if (existing) {
+      existing.url = String(params.request?.url || existing.url || '')
+      existing.method = String(params.request?.method || existing.method || 'GET')
+      existing.type = String(params.type || existing.type || 'Other')
+      existing.startedAt = startedAt
+      existing.at = new Date(startedAt).toISOString()
+      existing.timestamp = Number(params.timestamp) || null
+      existing.status = null
+      existing.statusText = ''
+      existing.mimeType = ''
+      existing.size = null
+      existing.durationMs = null
+      existing.failed = false
+      existing.error = ''
+      existing.requestHeaders = networkHeaders(params.request?.headers)
+      existing.postData = networkPayload(params.request?.postData)
+      existing.hasPostData = params.request?.hasPostData === true || Boolean(params.request?.postData)
+      existing.requestMimeType = String(params.request?.mimeType || '').slice(0, 120)
+      existing.responseHeaders = {}
+      existing.protocol = ''
+      existing.remoteAddress = ''
+      return
+    }
+    session.network.push({
+      id,
+      url: String(params.request?.url || '').slice(0, 1200),
+      method: String(params.request?.method || 'GET').slice(0, 16),
+      type: String(params.type || 'Other').slice(0, 32),
+      at: new Date(startedAt).toISOString(),
+      startedAt,
+      timestamp: Number(params.timestamp) || null,
+      status: null,
+      mimeType: '',
+      size: null,
+      durationMs: null,
+      failed: false,
+      error: '',
+      cached: false,
+      requestHeaders: networkHeaders(params.request?.headers),
+      postData: networkPayload(params.request?.postData),
+      hasPostData: params.request?.hasPostData === true || Boolean(params.request?.postData),
+      requestMimeType: String(params.request?.mimeType || '').slice(0, 120),
+      responseHeaders: {},
+      statusText: '',
+      protocol: '',
+      remoteAddress: '',
+    })
+    if (session.network.length > 200) session.network.shift()
+    return
+  }
+  const row = networkRow(session, id)
+  if (!row) return
+  if (message.method === 'Network.requestWillBeSentExtraInfo') {
+    row.requestHeaders = { ...row.requestHeaders, ...networkHeaders(params.headers) }
+    return
+  }
+  if (message.method === 'Network.responseReceivedExtraInfo') {
+    row.responseHeaders = { ...row.responseHeaders, ...networkHeaders(params.headers) }
+    if (Number(params.statusCode)) row.status = Number(params.statusCode)
+    return
+  }
+  if (message.method === 'Network.responseReceived') {
+    row.status = Number(params.response?.status) || 0
+    row.statusText = String(params.response?.statusText || '').slice(0, 120)
+    row.mimeType = String(params.response?.mimeType || '').slice(0, 120)
+    row.type = String(params.type || row.type || 'Other')
+    row.responseHeaders = { ...row.responseHeaders, ...networkHeaders(params.response?.headers) }
+    row.protocol = String(params.response?.protocol || '').slice(0, 40)
+    const remote = params.response?.remoteIPAddress
+    row.remoteAddress = remote ? `${remote}${params.response.remotePort ? ':' + params.response.remotePort : ''}` : ''
+    if (params.response?.fromDiskCache || params.response?.fromServiceWorker) row.cached = true
+    return
+  }
+  if (message.method === 'Network.requestServedFromCache') {
+    row.cached = true
+    return
+  }
+  if (message.method === 'Network.loadingFinished') {
+    const size = Number(params.encodedDataLength)
+    if (Number.isFinite(size) && size >= 0) row.size = size
+    row.durationMs = networkElapsed(row, params.timestamp)
+    return
+  }
+  if (message.method === 'Network.loadingFailed') {
+    row.failed = true
+    row.error = String(params.errorText || 'failed').slice(0, 200)
+    row.durationMs = networkElapsed(row, params.timestamp)
+  }
+}
+
 export function ensureClient(session, httpBase, connect = connectCdp) {
   const active = clientFlights.get(session)
   if (active) return active
@@ -204,26 +361,18 @@ async function acquireClient(session, httpBase, connect) {
       const params = message.params || {}
       if (message.method === 'Runtime.consoleAPICalled') {
         const text = (params.args || []).map((arg) => arg.value ?? arg.description ?? '').join(' ').slice(0, 200)
-        session.console.push({ level: params.type || 'log', text, at: new Date().toISOString() })
+        const rawLevel = String(params.type || 'log').toLowerCase()
+        const level = rawLevel === 'warning' ? 'warn' : rawLevel
+        session.console.push({ level, text, at: new Date().toISOString() })
         if (session.console.length > 200) session.console.shift()
       }
-      if (message.method === 'Network.requestWillBeSent') {
-        session.network.push({
-          id: params.requestId,
-          url: params.request?.url || '',
-          method: params.request?.method || 'GET',
-          at: new Date().toISOString(),
-        })
-        if (session.network.length > 200) session.network.shift()
-      }
-      if (message.method === 'Network.responseReceived') {
-        const row = [...session.network].reverse().find((item) => item.id === params.requestId)
-        if (row) row.status = params.response?.status
-      }
+      recordNetworkEvent(session, message)
     })
   }
   try {
-    await client.send('Network.enable')
+    // Bodies are not retained at the engine's zero default; ask for a bounded
+    // buffer so the request detail panel can show a real Response tab.
+    await client.send('Network.enable', { maxTotalBufferSize: 8 * 1024 * 1024, maxResourceBufferSize: 2 * 1024 * 1024 })
     await client.send('Runtime.enable')
   } catch { /* page-session events still arrive after a later enable */ }
   return client

@@ -142,11 +142,13 @@ test('T22: the settings dialog is a window overlay inside the workspace', () => 
   assert.equal(settingsHead.includes('getBoundingClientRect'), false, 'openSettings no longer measures a viewport rectangle')
 })
 
-test('T22: the viewport menu renders inside the workspace without a theme parameter', () => {
+test('T22: menus render inside the workspace without a theme parameter', () => {
   const calls = callArgs(sources, 'openNanoMenu')
-  assert.equal(calls.length, 1, 'one menu call site')
-  assert.match(calls[0].args, /container:\s*workspaceRef\.current/, 'menu is mounted in the workspace (portal:false)')
-  assert.equal(hasParam(calls[0].args, 'theme'), false, 'no theme parameter')
+  assert.equal(calls.length, 3, 'viewport, devtools resource-type and console-level menus')
+  const args = calls.map((call) => call.args)
+  assert.ok(args.some((text) => /container:\s*workspaceRef\.current/.test(text)), 'viewport menu is mounted in the workspace (portal:false)')
+  assert.ok(args.some((text) => /container:\s*event\.currentTarget\.closest\('\[data-nks-workspace\]'\)/.test(text)), 'devtools menu is mounted in the workspace')
+  for (const text of args) assert.equal(hasParam(text, 'theme'), false, 'no theme parameter')
 })
 
 test('T22: the interactive toast is NanoToast with actions and an anchor', () => {
@@ -182,8 +184,8 @@ test('T22: the settings tab strip still follows the nano-ui NanoTabs contract', 
   assert.match(index, /h\(NanoTabs, \{/)
   assert.match(SETTINGS_TABS, /label:\s*copy\.settingsTitle/)
   assert.match(SETTINGS_TABS, /value:\s*'env'/)
-  assert.match(SETTINGS_TABS, /value:\s*'browse'/)
-  assert.match(SETTINGS_TABS, /value:\s*'history'/)
+  assert.match(SETTINGS_TABS, /value:\s*'simulation'/)
+  assert.doesNotMatch(SETTINGS_TABS, /value:\s*'history'/)
 })
 
 // ---- NUE-1117 review fix: layers (U6) and tokens (U1) ----

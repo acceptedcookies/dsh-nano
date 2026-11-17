@@ -734,6 +734,7 @@ async function restoreLastPage(session, deps) {
   const current = await evaluatePage(client, 'location.href').catch(() => null)
   const href = typeof current === 'string' ? current : current?.value
   if (href && href !== 'about:blank') return false
+  session.pageUrl = remembered.url
   await navigate(session, base, remembered.url, deps.connect)
   session.history.push({ url: remembered.url, at: new Date().toISOString() })
   return true
@@ -1044,6 +1045,7 @@ export function routeSpecs(deps = {}) {
           if (!base) throw Object.assign(new Error('Kitesurf engine is unavailable'), { errorId: 'kitesurf.engine.connect' })
           // Page.navigate replies after page-script work, not on receipt. Do
           // not swallow its timeout/error and report a fictitious success.
+          session.pageUrl = url
           await navigate(session, base, url, deps.connect, {
             isCancelled: () => req.aborted === true || res.destroyed === true,
           })
@@ -1265,11 +1267,12 @@ export function routeSpecs(deps = {}) {
         return
       }
       if (row.path.endsWith('/har')) {
-        const entries = (session.network || []).slice(-100).map((item) => ({
+        const entries = (session.network || []).filter((item) => !item.gap).slice(-100).map((item) => ({
           startedDateTime: item.at,
-          time: 0,
+          time: item.durationMs ?? -1,
           request: { method: item.method || 'GET', url: item.url || '' },
-          response: { status: item.status || 0, statusText: '' },
+          response: { status: item.failed ? 0 : (item.status || 0), statusText: item.error || '', content: { size: item.size ?? 0, mimeType: item.mimeType || '' } },
+          _dnk: { type: item.type || 'Other', cached: item.cached === true },
         }))
         send(res, 200, { ok: true, log: { version: '1.2', creator: { name: 'dsh-nano-local-sandbox', version: '0' }, entries } })
         return
@@ -1445,7 +1448,44 @@ export function routeSpecs(deps = {}) {
           return
         }
         if (row.path.endsWith('/network')) {
-          send(res, 200, { ok: true, entries: (session.network || []).slice(-100) })
+          if (req.method === 'POST') {
+            if (pageBody.clear === true) session.network = []
+            send(res, 200, { ok: true, cleared: pageBody.clear === true })
+            return
+          }
+          const query = new URL(req.url ?? '/', 'http://localhost').searchParams
+          const detailId = query.get('id')
+          if (detailId) {
+            const entry = (session.network || []).find((item) => item && item.id === detailId)
+            if (!entry) {
+              send(res, 404, { ok: false, errorId: 'kitesurf.network.missing', error: 'request not found' })
+              return
+            }
+            let body = null
+            try {
+              const client = await page()
+              body = await withPage(client, (sessionId) => client.send('Network.getResponseBody', { requestId: detailId }, sessionId))
+            } catch { /* body retention is best effort; headers/payload still render */ }
+            const text = typeof body?.body === 'string' ? body.body : null
+            send(res, 200, {
+              ok: true,
+              entry,
+              responseBody: text == null ? null : {
+                body: text.slice(0, 200000),
+                base64Encoded: body?.base64Encoded === true,
+                truncated: text.length > 200000,
+              },
+            })
+            return
+          }
+          const limit = Math.max(1, Math.min(Number(query.get('limit')) || 100, 200))
+          const failedOnly = query.get('failedOnly') === 'true'
+          const since = Number(query.get('since')) || 0
+          let entries = (session.network || []).filter((item) => item && !item.gap)
+          if (failedOnly) entries = entries.filter((item) => item.failed || (item.status && item.status >= 400))
+          if (since) entries = entries.filter((item) => Number(item.startedAt) > since)
+          entries = entries.slice(-limit).map(({ requestHeaders, responseHeaders, postData, ...rest }) => rest)
+          send(res, 200, { ok: true, entries })
           return
         }
         if (row.path.endsWith('/targets')) {

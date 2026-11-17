@@ -633,3 +633,67 @@ T01–T19 任一未跑、被 skip、或只满足 §8.5 左列的假绿形态，�
 ## 11. 执行日志回填
 
 文档状态为 `draft`。本节不填执行摘要。获得 ImplementationGrant 并完成合入之后，再按 `respond-execution-log` 追加。残留不回填到本文件的规则句里。
+
+---
+
+## 11.A 执行日志（worktree `ace-1117-async-compact`，回填于合入前）
+
+> 执行者：`lead`（DeepSeek Harness agent，devin/swe-2）
+> 执行时间：`2026-11-17`（S1→P6 同日完成）
+> 文档状态：`executing`（合入 main 后升 `executed`）
+> 代码改动统计：`37 文件修改（vs fb7264d）/ +3239 −757 / 无 schema bump`
+
+- **实际执行摘要**：六个 Phase 全部落地，按 P1→P6 顺序各自独立提交（`7067602` / `f8a9acf` / `6064627` / `c770f3d` / `a8a48b0` / `231eb0b`）。T01–T19 全部断言通过：DNMSC `node --test` 55/55（54→55，新增 T19），DNMS 77/77。
+- **Phase 偏差（计划 vs 实际）**：
+  - `P4-01`（substrate-fit）：选择器严格按 `-08②` 上限公式实现（`floor(line·W)−head−8192`），小窗口测试夹具整体重标 `W=100_000`（×100 权重），未放宽公式。
+  - `P6-01`（计划偏差）：`plan/DNMS01-audit-agent27.md` 在仓库与 `.anote/reviews/` 均不存在，无物可移；`:74` 按核实结果改写为「归档项为空」，偏离原句「待移动」。
+  - `P5-04`（substrate-fit）：declaration.json 增加 budgets 数组元素；`lib/perf-declaration.js` 运行时切片依旧不含 budgets；`declaration.js` `TOP_KEYS` 未动。
+  - `P5-02`（substrate-fit）：`AsyncCompactStore` 增加可注入 `fetcher` 构造参数作为测试缝（T16 mock-timers 泵纪律），不影响线上 singleton。
+- **阻塞与处理**：
+  - `npm run build` 初次缺 `dsh-host-route-guard` → `packages/dsh-interface && npm install`（workspace 内，未改依赖声明）。
+  - `npm install` 顺带改写 `dsh-nano-model-selector/package-lock.json` → `git checkout HEAD --` 还原（单一真源）。
+  - `node --test` 长调用静默挂 → 可疑用例以 `--test-name-pattern` 隔离跑。
+- **测试发现**：
+  - DNMSC：55/55 PASS（`--test-timeout=20000`）；`host-cordis-smoke` 的 cordis-dependent 用例环境可用时实跑。
+  - DNMS：77/77 PASS（一次 65/2 的先前跑后复跑全绿，按 flake 记录）。
+  - `t.mock.timers` 在 T16/T10 验证泵纪律与超时结算。
+  - T17 确认前置：点击 Switch 后 `postCompactSwitch` 调用数为 0，确认后恰为 1。
+- **后续 handoff**：合入 `main` 后 `git worktree remove`；同步目标 `~/.dsh-dev/plugins/`、`~/.dsh-desktop/plugins/`、pnpm store 三处由装包决定（另需 [业主] 决定）；UI 实测由 [业主] 在 live GUI 验证（client 改刷新生效，host 改需 desktop 重启）。
+
+### 11.A.1 逐工作项状态
+
+| 工作项 | 状态 | Commit | 实际落点 | 备注 |
+|--------|------|--------|----------|------|
+| P1-01 | ✅ done | `7067602` | `DNMSC/lib/compact-policy.js` | S≠0.90 即 state-read-failed；`!(H<B)`/`!(B<S)` 400 |
+| P1-02 | ✅ done | `7067602` | `compact-policy.js`、`compact-region.js`、`CompactPanel.jsx` | `extraRequirements`≤4000；`summaryPrompt`→invalid-schema |
+| P1-03 | ✅ done | `7067602` | 🆕 `DNMS/scripts/bake-compact-shared.mjs` | hash `3e0b2ccc8c09`/`7e2b99893bea` |
+| P1-04 | ✅ done | `7067602` | `compact-region.js:44-68,80-151` | 只锁两符号，banner `5dd74efa3601` |
+| P2-01 | ✅ done | `f8a9acf` | 🆕 `DNMSC/lib/inspect-checkpoint.js`、`package.json` `./tools` | `when` 只在本会话有 checkpoint 时真 |
+| P2-02 | ✅ done | `f8a9acf` | `gen-mutex-patch.mjs`、再生成 `cordis.patch.yml` | 工具行 preset 顶层 `&a2`；base 扁平 `compaction-basic` disabled |
+| P2-03 | ✅ done | `f8a9acf`/`c770f3d` | 帧字段 + journal 源读 | 无新 `compaction/start` 字段 |
+| P3-01 | ✅ done | `6064627` | `host-compaction.js` | `-05`：同一 pre-step 起摘要、边界/idle 提交、无唤醒消息 |
+| P3-02 | ✅ done | `6064627` | `host-compaction.js` | 四 lane 互斥 + durable 括号仅提交时 |
+| P3-03 | ✅ done | `6064627` | `host-compaction.js` | 超时即结算不计 circuit；`no-window` skip；GC 条件三重 |
+| P3-04 | ✅ done | `6064627` | `host-compaction.js` | CORR-1 disarm＝中飞消失→`drop/disarmed` |
+| P4-01 | ✅ done | `c770f3d` | `compact-region.js` `selectCompactableRange` | 三级 turn→step→node；最近距离，同距留多 |
+| P4-02 | ✅ done | `c770f3d` | `compact-region.js:190-230` | `:222` 行删除；step 级 verbatim 开场请求 |
+| P4-03 | ✅ done | `c770f3d` | `checkpointPreamble`/`frameSummary` | `-08⑤` 帧字段闭合 |
+| P4-04 | ✅ done | `c770f3d` | 各 lane + `select` 账本记录 | lane/boundary/retained/target 四字段 |
+| P5-01 | ✅ done | `a8a48b0` | `index.js`、`compact-runtime.js` | `?sessionId=` 作用域；`latestSession` 兜底删除 |
+| P5-02 | ✅ done | `a8a48b0` | 四 jsx + 🆕 store 段 `compact.js` | 产物无 `15000`/`30000`；仅 `3e3` 续拉 |
+| P5-03 | ✅ done | `a8a48b0` | `ModelSelector.jsx`、`CompactPanel.jsx`、`DETAIL.*` | NanoDialog 确认前置；顶栏未动；rail 无入口 |
+| P5-04 | ✅ done | `a8a48b0` | `src/perf/declaration.json`、`lib/perf-declaration.js` | `async-inflight-poll` eq 3000 audit |
+| P6-01 | ✅ done | `231eb0b` | `DNMS01-closure.md:20,74` | `:74` 记录审计稿缺失核实 |
+| P6-02 | ✅ done | `231eb0b` | 仓库 diff 核对 | 非目标零 diff；无 check-ace*；version 未动 |
+
+### 11.A.5 pre-existing 失败甩锅
+
+| 失败项 | 证据 | 判断 |
+|--------|------|------|
+| `scripts/check-clean-lib.mjs` `dsh-nano-notepad/index.js:134 AppKit` | 基线 `fb7264d` 同样报错，diff 未碰该文件 | pre-existing, non-blocking |
+| `dsh-s3-client`、`dsh-nano-terminal/register-routes.smoke`、`dsh-nano-local-sandbox` 间歇失败 | 与 DNMS/DNMSC diff 无交集 | pre-existing, non-blocking |
+
+### 11.A.6 文档状态
+
+`draft → executing（2026-11-17）`；合入 `main` 并复核后升 `executed`。
+residual：`plan/DNMS01-audit-agent27.md` 缺失（已核实为空档）；`?sessionId` 无会话对象的 fill 恒 null（id 字符串可解 fold、不可计量）——如实记录。

@@ -2470,6 +2470,9 @@ ${LAYER_CSS}
           devtoolsClear: "\u6E05\u7A7A",
           devtoolsClose: "\u5173\u95ED",
           devtoolsFailedOnly: "\u4EC5\u5931\u8D25",
+          devtoolsResize: "\u62D6\u52A8\u8C03\u6574\u9AD8\u5EA6",
+          devtoolsCollapse: "\u6298\u53E0",
+          devtoolsExpand: "\u5C55\u5F00",
           hitlAgent: "Agent \u6B63\u5728\u63A7\u5236",
           hitlHeld: "\u4EBA\u5DE5\u63A5\u7BA1\u4E2D",
           hitlTakeover: "\u63A5\u7BA1",
@@ -2511,7 +2514,7 @@ ${LAYER_CSS}
           hintBar: "\u70B9\u9009 \xB7 Shift+\u591A\u9009 \xB7 Alt+\u692D\u5706 \xB7 Shift+\u7BAD\u5934 \xB7 \u2191\u2193 \u7236/\u5B50 \xB7 \u53CC\u51FB\u6539\u6587\u5B57 \xB7 Esc \u5173\u95ED\u9009\u4E2D",
           clearSelection: "\u5173\u95ED\u9009\u4E2D",
           openFailed: "\u9875\u9762\u6CA1\u6709\u6253\u5F00",
-          navigateUnconfirmed: "\u5F15\u64CE\u63A5\u53D7\u4E86\u5730\u5740\uFF0C\u4F46\u6CA1\u6709\u6E32\u67D3\u51FA\u9875\u9762\uFF1A",
+          navigateUnconfirmed: "\u5F15\u64CE\u63A5\u53D7\u4E86\u5730\u5740\uFF0C\u4F46\u6CA1\u6709\u6E32\u67D3\u51FA\u9875\u9762\u3002\u4E0B\u9762\u662F\u5F15\u64CE\u81EA\u5DF1\u7684\u65E5\u5FD7\u3002",
           startEngine: "\u542F\u52A8\u5F15\u64CE",
           clearPins: "\u6E05\u7A7A\u5168\u90E8\u6807\u6CE8",
           editAria: "\u628A\u8FD9\u6BB5\u6587\u5B57\u5199\u56DE\u5143\u7D20",
@@ -2579,6 +2582,9 @@ ${LAYER_CSS}
           devtoolsClear: "Clear",
           devtoolsClose: "Close",
           devtoolsFailedOnly: "Failed only",
+          devtoolsResize: "Drag to resize",
+          devtoolsCollapse: "Collapse",
+          devtoolsExpand: "Expand",
           hitlAgent: "Agent is controlling",
           hitlHeld: "Human override",
           hitlTakeover: "Take over",
@@ -2620,7 +2626,7 @@ ${LAYER_CSS}
           hintBar: "Click \xB7 Shift+multi \xB7 Alt+ellipse \xB7 Shift+arrow \xB7 \u2191\u2193 parent/child \xB7 double-click edit \xB7 Esc clears the pick",
           clearSelection: "Clear selection",
           openFailed: "Page did not open",
-          navigateUnconfirmed: "The engine accepted the address but never rendered it:",
+          navigateUnconfirmed: "The engine accepted the address but never rendered it. Its own log is below.",
           startEngine: "Start engine",
           clearPins: "Clear all notes",
           editAria: "Write this text back into the element",
@@ -2976,7 +2982,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
 /* HITL control bar \u2014 ego's bottom "Agent \u6B63\u5728\u63A7\u5236 / \u63A5\u7BA1 / \u7EC8\u6B62\u4EFB\u52A1" pill,
    reworded honestly: the pane can hold the agent's page writes, it cannot
    kill the run (that is host-side). Positioned bottom-center of the frame. */
-.nks-hitl{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);z-index:var(--nano-layer-local4);display:flex;align-items:center;gap:8px;height:32px;padding:4px 8px 4px 12px;background:var(--dsw-alias-bg-layer-1);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-md,8px);box-shadow:var(--dsw-elevation-soft);font:var(--dsw-font-xxs-12);white-space:nowrap}
+.nks-hitl{position:absolute;right:10px;bottom:10px;z-index:var(--nano-layer-local4);display:flex;align-items:center;gap:8px;height:32px;padding:4px 8px 4px 12px;background:var(--dsw-alias-bg-layer-1);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-md,8px);box-shadow:var(--dsw-elevation-soft);font:var(--dsw-font-xxs-12);white-space:nowrap}
 .nks-hitl-dot{width:8px;height:8px;border-radius:50%;background:var(--dsw-alias-link,#2f6fed);animation:nks-hitl-pulse 1.4s ease-in-out infinite}
 .nks-hitl-dot[data-held="true"]{background:var(--dsw-alias-state-warn-primary);animation:none}
 @keyframes nks-hitl-pulse{0%,100%{opacity:1}50%{opacity:.35}}
@@ -2986,30 +2992,37 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
 .nks-hitl-btn:hover{background:var(--dsw-alias-bg-layer-3)}
 .nks-hitl-primary{color:var(--dsw-alias-label-primary-inverted);background:var(--dsw-alias-link);border-color:transparent}
 .nks-hitl-primary:hover{background:var(--dsw-alias-link);filter:brightness(1.08)}
-.nks-act{position:absolute;left:50%;bottom:52px;transform:translateX(-50%);z-index:var(--nano-layer-local4);padding:4px 10px;background:var(--dsw-alias-bg-layer-1);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-sm);box-shadow:var(--dsw-elevation-soft);font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-secondary);white-space:nowrap;pointer-events:none;animation:nks-act-in .18s ease-out}
+.nks-act{position:absolute;left:50%;top:34px;transform:translateX(-50%);z-index:var(--nano-layer-local4);padding:4px 10px;background:var(--dsw-alias-bg-layer-1);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-sm);box-shadow:var(--dsw-elevation-soft);font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-secondary);white-space:nowrap;pointer-events:none;animation:nks-act-in .18s ease-out}
 .nks-act[data-ok="false"]{color:var(--dsw-alias-state-error-primary)}
-@keyframes nks-act-in{from{opacity:0;transform:translateX(-50%) translateY(4px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+@keyframes nks-act-in{from{opacity:0;transform:translateX(-50%) translateY(-4px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
 .nks-note-actions{display:flex;gap:2px;align-items:center}
 .nks-note-form{display:flex;gap:4px;align-items:center}
 .nks-note input{width:220px;height:28px;color:var(--dsw-alias-label-primary);font:var(--dsw-font-xxs-12);background:var(--dsw-alias-bg-layer-2);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-sm);padding:0 8px}
 .nks-pins{position:relative;flex:none;pointer-events:auto;padding:2px 8px 4px;color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11);display:flex;align-items:center;gap:4px;background:color-mix(in srgb,var(--dsw-alias-bg-layer-1) 94%,transparent)}
-.nks-busy{position:absolute;left:0;right:0;top:0;height:2px;overflow:hidden;z-index:var(--nano-layer-local3)}
-.nks-busy::before{content:"";display:block;width:35%;height:100%;background:var(--dsw-alias-link,#2f6fed);animation:nks-beat 1s ease-in-out infinite}
-@keyframes nks-beat{from{transform:translateX(-120%)}to{transform:translateX(320%)}}
 /* nano-ui-exempt: host primitives and nano-ui ship no indeterminate spinner. */
 .nks-load{position:absolute;inset:0;z-index:var(--nano-layer-local4);display:flex;align-items:center;justify-content:center;pointer-events:none}
 .nks-load-card{display:flex;align-items:center;gap:8px;height:32px;padding:0 12px;background:var(--dsw-alias-bg-layer-1);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-md);box-shadow:var(--dsw-elevation-soft);font:var(--dsw-font-xxs-12);color:var(--dsw-alias-label-secondary)}
 .nks-spin{width:14px;height:14px;box-sizing:border-box;border-radius:50%;border:2px solid var(--dsw-alias-border-l2);border-top-color:var(--dsw-alias-link,#2f6fed);animation:nks-spin .8s linear infinite;flex:none}
 @keyframes nks-spin{to{transform:rotate(360deg)}}
 .nks-open-error{margin:0;color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxs-12);line-height:1.55;word-break:break-word}
+.nks-open-url{color:var(--dsw-alias-label-tertiary);unicode-bidi:plaintext}
+.nks-open-log{margin:6px 0 0;max-height:140px;overflow:auto;padding:6px 8px;border-radius:var(--dsw-radius-sm);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-tertiary);font:11px/1.45 ui-monospace,Menlo,monospace;white-space:pre-wrap;word-break:break-all}
 .nks-settings-body{display:flex;flex-direction:column;gap:8px}
 .nks-status{position:relative;z-index:var(--nano-layer-local3);order:7;flex:none;display:flex;align-items:center;gap:8px;height:26px;padding:0 10px;border-top:.5px solid var(--dsw-alias-border-l3);font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-tertiary)}
 .nks-status button{height:20px;padding:0 8px;border:0;border-radius:var(--dsw-radius-sm);background:transparent;color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxxs-11);cursor:pointer}
 .nks-status button:hover{background:var(--dsw-alias-interactive-bg-hover)}
 .nks-status button[aria-pressed="true"],.nks-status button[data-nks-native-toggle][aria-pressed="true"]{background:color-mix(in srgb,var(--dsw-alias-link,#7aaaff) 22%,transparent);color:var(--dsw-alias-label-primary)}
 .nks-status .nks-count[data-bad="true"]{color:var(--dsw-alias-state-error-primary)}
-.nks-dt{flex:none;height:240px;z-index:var(--nano-layer-local6);order:8;border-radius:0;display:flex;flex-direction:column;background:var(--dsw-alias-bg-base);border-top:.5px solid var(--dsw-alias-border-l2);min-height:0;font:11px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.nks-dt{flex:none;height:240px;min-height:120px;position:relative;z-index:var(--nano-layer-local6);order:8;border-radius:0;display:flex;flex-direction:column;background:var(--dsw-alias-bg-base);border-top:.5px solid var(--dsw-alias-border-l2);min-height:0;font:11px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 .nks-dt-head{flex:none;display:flex;align-items:center;gap:8px;min-height:32px;padding:3px 6px;border-bottom:.5px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1)}
+/* Drag the top edge: the panel is a workspace, not a fixed strip. */
+.nks-dt-grip{position:absolute;left:0;right:0;top:-3px;height:7px;cursor:row-resize;z-index:var(--nano-layer-local2);touch-action:none}
+.nks-dt-grip:hover{background:color-mix(in srgb,var(--dsw-alias-link) 35%,transparent)}
+/* The host strip is sized for a full-width toolbar; three options in a 240px
+   panel need the compact scale. */
+.nks-dt-tabs{flex:none;display:flex;transform:scale(.82);transform-origin:left center}
+.nks-dt[data-nks-dt-collapsed="true"]{height:auto;min-height:0}
+.nks-dt[data-nks-dt-collapsed="true"] > *:not(.nks-dt-head):not(.nks-dt-grip){display:none}
 .nks-dt-body{flex:auto;min-height:0;overflow:auto;font:11px/1.45 ui-monospace,Menlo,monospace}
 .nks-dt-cols{flex:none;display:flex;gap:8px;padding:2px 8px;color:var(--dsw-alias-label-dimmed);border-bottom:.5px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1);font-size:10px;text-transform:uppercase;letter-spacing:.04em;font:var(--dsw-font-xxxs-11)}
 .nks-dt-row{display:flex;gap:8px;padding:2px 8px;border-bottom:.5px solid color-mix(in srgb,var(--dsw-alias-border-l3) 45%,transparent);align-items:baseline;white-space:nowrap}
@@ -3107,11 +3120,22 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
    dead area read as "canvas", and the picture is centred by object-position. */
 .nks-frame{background-image:linear-gradient(45deg,rgba(127,127,127,.05) 25%,transparent 25%,transparent 75%,rgba(127,127,127,.05) 75%),linear-gradient(45deg,rgba(127,127,127,.05) 25%,transparent 25%,transparent 75%,rgba(127,127,127,.05) 75%);background-size:16px 16px;background-position:0 0,8px 8px}
 `;
+  var REQUEST_TIMEOUT_MS = 2e4;
   function post(path, body) {
+    const controller = typeof AbortController === "function" ? new AbortController() : null;
+    const timer = controller ? window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS) : 0;
     return fetch(path, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify(body ?? {})
+      body: JSON.stringify(body ?? {}),
+      signal: controller?.signal
+    }).catch((cause) => {
+      if (cause?.name === "AbortError") {
+        const error = new Error(`request timed out after ${REQUEST_TIMEOUT_MS}ms`);
+        error.errorId = "kitesurf.engine.connect";
+        throw error;
+      }
+      throw cause;
     }).then(async (response) => {
       const payload = await response.json().catch(() => ({}));
       if (!response.ok || payload.ok === false) {
@@ -3120,7 +3144,19 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         throw error;
       }
       return payload;
+    }).finally(() => {
+      if (timer) window.clearTimeout(timer);
     });
+  }
+  async function engineLogHint() {
+    try {
+      const data = await fetch(`${LOGS}?tail=60`).then((r) => r.json());
+      if (!data?.ok) return "";
+      const lines = String(data.text || "").split("\n").map((line) => line.replace(/\x1b\[[0-9;]*m/g, "").trim()).filter((line) => line && !/GET \/json\/list|\[ks-lag\] alive/.test(line));
+      return lines.slice(-4).join("\n");
+    } catch {
+      return "";
+    }
   }
   var NAV_CONFIRM_MS = 1e4;
   var NAV_POLL_MS = 400;
@@ -3132,6 +3168,20 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       return `${parsed.protocol}//${parsed.host}${parsed.pathname.replace(/\/$/, "")}${parsed.search}`;
     } catch {
       return text.replace(/\/$/, "");
+    }
+  }
+  function sameSite(requested, landed) {
+    const a = sameUrl(requested);
+    const b = sameUrl(landed);
+    if (!b) return false;
+    if (a === b) return true;
+    try {
+      const want = new URL(requested);
+      const got = new URL(landed);
+      const strip = (host) => host.replace(/^www\./, "");
+      return strip(want.host) === strip(got.host);
+    } catch {
+      return false;
     }
   }
   function frameOf(image) {
@@ -3180,6 +3230,235 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       button.setAttribute("aria-checked", on ? "true" : "false");
       button.tabIndex = on ? 0 : -1;
     }
+  }
+  function DevTools({ copy, open, onClose }) {
+    const [tab, setTab] = React12.useState("console");
+    const [rows, setRows] = React12.useState([]);
+    const [failedOnly, setFailedOnly] = React12.useState(false);
+    const [styles, setStyles] = React12.useState(null);
+    const [height, setHeight] = React12.useState(240);
+    const [collapsed, setCollapsed] = React12.useState(false);
+    const dragRef = React12.useRef(null);
+    function startResize(event) {
+      event.preventDefault();
+      event.stopPropagation();
+      const startY = event.clientY;
+      const startHeight = height;
+      dragRef.current = { startY, startHeight };
+      const target = event.currentTarget;
+      target.setPointerCapture?.(event.pointerId);
+      const move = (moveEvent) => {
+        const next = startHeight + (startY - moveEvent.clientY);
+        setHeight(Math.max(120, Math.min(Math.round(window.innerHeight * 0.75), next)));
+      };
+      const stop = () => {
+        dragRef.current = null;
+        target.releasePointerCapture?.(event.pointerId);
+        window.removeEventListener("pointermove", move);
+        window.removeEventListener("pointerup", stop);
+      };
+      window.addEventListener("pointermove", move);
+      window.addEventListener("pointerup", stop);
+    }
+    React12.useEffect(() => {
+      if (!open) return void 0;
+      let alive = true;
+      let since = null;
+      setRows([]);
+      const merge = (fresh, keyOf) => setRows((prev) => {
+        if (!Array.isArray(fresh) || fresh.length === 0) return prev;
+        const seen = new Set(prev.map(keyOf));
+        const extra = fresh.filter((r) => !seen.has(keyOf(r)));
+        if (extra.length === 0) return prev;
+        const merged = prev.map((r) => fresh.find((f) => keyOf(f) === keyOf(r)) || r).concat(extra);
+        return merged.slice(-400);
+      });
+      const load = async () => {
+        try {
+          if (tab === "console") {
+            const url = since ? `${CONSOLE}?limit=200&since=${encodeURIComponent(since)}` : `${CONSOLE}?limit=200`;
+            const data = await fetch(url).then((r) => r.json());
+            if (alive && Array.isArray(data.entries)) {
+              merge(data.entries, (r) => `c${r.seq}`);
+              const last = data.entries[data.entries.length - 1];
+              if (last?.at) since = last.at;
+            }
+          } else if (tab === "network") {
+            const url = `${NETWORK}?limit=200${failedOnly ? "&failedOnly=true" : ""}${since ? `&since=${encodeURIComponent(since)}` : ""}`;
+            const data = await fetch(url).then((r) => r.json());
+            if (alive && Array.isArray(data.entries)) {
+              merge(data.entries, (r) => `n${r.id}`);
+              const lastStart = data.entries.reduce((m, r) => Math.max(m, Number(r.startedAt) || 0), 0);
+              if (lastStart) since = String(lastStart);
+            }
+          } else {
+            const data = await fetch(`${ELEMENTS}?depth=3`).then((r) => r.json());
+            if (alive) setRows(data.nodes || []);
+          }
+        } catch {
+        }
+      };
+      load();
+      const period = () => document.visibilityState === "hidden" ? 15e3 : 1500;
+      let timer = 0;
+      const arm = () => {
+        clearInterval(timer);
+        timer = window.setInterval(load, period());
+      };
+      const onVis = () => {
+        arm();
+        if (document.visibilityState !== "hidden") load();
+      };
+      document.addEventListener("visibilitychange", onVis);
+      arm();
+      return () => {
+        alive = false;
+        clearInterval(timer);
+        document.removeEventListener("visibilitychange", onVis);
+      };
+    }, [open, tab, failedOnly]);
+    if (!open) return null;
+    const inspectNode = async (row) => {
+      const selector = row.id ? `${row.tag}#${row.id}` : row.cls ? `${row.tag}.${String(row.cls).trim().split(/\s+/)[0]}` : row.tag;
+      try {
+        const data = await fetch(`${ELEMENTS}?selector=${encodeURIComponent(selector)}`).then((r) => r.json());
+        setStyles({ selector, matched: data.matched?.matched || [], computed: data.computed || {} });
+      } catch {
+        setStyles({ selector, matched: [], computed: {} });
+      }
+    };
+    const clear = async () => {
+      const path = tab === "console" ? CONSOLE : NETWORK;
+      await fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: '{"clear":true}' }).catch(() => {
+      });
+      setRows([]);
+    };
+    return h7(
+      "div",
+      {
+        className: "nks-dt",
+        "data-nks-devtools": "1",
+        "data-nks-dt-collapsed": collapsed ? "true" : "false",
+        style: collapsed ? void 0 : { height: `${height}px` }
+      },
+      // Drag the top edge to give the panel more or less room.
+      h7("div", {
+        className: "nks-dt-grip",
+        "data-nks-dt-grip": "1",
+        role: "separator",
+        "aria-orientation": "horizontal",
+        "aria-label": copy.devtoolsResize,
+        onPointerDown: startResize
+      }),
+      h7(
+        "div",
+        { className: "nks-dt-head" },
+        // View switch, filter toggle and row actions are host primitives; the
+        // pane draws no tab chrome of its own (DESIGN.md §6.1). The strip is
+        // scaled to the panel: at full size three options ate the whole header.
+        h7(
+          "div",
+          { className: "nks-dt-tabs" },
+          h7(primitives2.SegmentedControl, {
+            id: "nks-dt-view",
+            value: tab,
+            label: copy.devtools,
+            options: [
+              { value: "console", label: copy.devtoolsConsole },
+              { value: "network", label: copy.devtoolsNetwork },
+              { value: "elements", label: "Elements" }
+            ],
+            onChange: (next) => setTab(next)
+          })
+        ),
+        tab === "network" ? h7(primitives2.Switch, {
+          checked: failedOnly,
+          label: copy.devtoolsFailedOnly,
+          onChange: (next) => setFailedOnly(next)
+        }) : null,
+        h7("span", { style: { flex: "auto" } }),
+        h7(primitives2.Button, { variant: "ghost", size: "sm", onClick: clear }, copy.devtoolsClear),
+        h7(primitives2.Button, {
+          variant: "ghost",
+          size: "sm",
+          "data-nks-dt-collapse": "1",
+          "aria-expanded": collapsed ? "false" : "true",
+          onClick: () => setCollapsed((value) => !value)
+        }, collapsed ? copy.devtoolsExpand : copy.devtoolsCollapse),
+        h7(primitives2.Button, { variant: "ghost", size: "sm", onClick: onClose }, copy.devtoolsClose)
+      ),
+      styles ? h7(
+        "div",
+        { className: "nks-dt-styles", "data-nks-dt-styles": "1" },
+        h7("div", { className: "nks-dt-style-head" }, `${styles.selector} \xB7 ${styles.matched.length} rules \xB7 ${Object.keys(styles.computed).length} computed`),
+        styles.matched.slice(0, 6).map((rule, i) => h7(
+          "div",
+          { className: "nks-dt-rule", key: `r${i}` },
+          h7("b", null, rule.selector || "(anonymous)"),
+          h7("span", null, (rule.properties || []).slice(0, 6).join("; "))
+        ))
+      ) : null,
+      tab === "console" ? h7(
+        "div",
+        { className: "nks-dt-cols" },
+        h7("span", { className: "nks-dt-time" }, "Time"),
+        h7("span", { className: "nks-dt-lv" }, "Level"),
+        h7("span", { className: "nks-dt-msg", style: { textAlign: "left" } }, "Message"),
+        h7("span", { className: "nks-dt-src" }, "Source")
+      ) : null,
+      tab === "network" ? h7(
+        "div",
+        { className: "nks-dt-cols" },
+        h7("span", { className: "nks-dt-lv" }, "Method"),
+        h7("span", { className: "nks-dt-st" }, "Status"),
+        h7("span", { className: "nks-dt-type" }, "Type"),
+        h7("span", { className: "nks-dt-url nks-dt-grow", style: { maxWidth: "none", textAlign: "left" } }, "URL"),
+        h7("span", { className: "nks-dt-size" }, "Size"),
+        h7("span", { className: "nks-dt-dur" }, "Time"),
+        h7("span", { className: "nks-dt-wf", style: { height: "auto" } }, "Waterfall")
+      ) : null,
+      h7(
+        "div",
+        { className: "nks-dt-body", "data-nks-dt-body": "1" },
+        rows.length === 0 ? h7("div", { className: "nks-dt-empty" }, copy.devtoolsEmpty) : null,
+        rows.map((row, index) => tab === "elements" ? h7(
+          "div",
+          { className: "nks-dt-row", key: `e${row.nodeId || index}`, style: { paddingLeft: `${8 + (row.level || 0) * 12}px`, cursor: "pointer" }, onClick: () => inspectNode(row), "data-nks-el-node": String(row.nodeId) },
+          h7("span", { className: "nks-dt-lv" }, row.tag),
+          h7("span", { className: "nks-dt-msg" }, `${row.id ? "#" + row.id : ""}${row.cls ? "." + String(row.cls).split(/\s+/).slice(0, 2).join(".") : ""}`),
+          h7("span", { className: "nks-dt-dur" }, row.childNodeCount ? String(row.childNodeCount) : "")
+        ) : tab === "console" ? h7(
+          "div",
+          { className: "nks-dt-row", key: `c${row.seq || index}` },
+          h7("span", { className: "nks-dt-time" }, String(row.at || "").slice(11, 19)),
+          h7("span", { className: "nks-dt-lv", "data-lv": row.level }, row.level),
+          h7("span", { className: "nks-dt-msg" }, row.text),
+          h7("span", { className: "nks-dt-src" }, row.url ? `${row.url}${row.lineNumber != null ? ":" + row.lineNumber : ""}` : row.source || "")
+        ) : h7(
+          "div",
+          { className: "nks-dt-row", key: `n${row.id || index}` },
+          h7("span", { className: "nks-dt-lv" }, row.method),
+          h7("span", { className: "nks-dt-st", "data-bad": row.failed || row.status && row.status >= 400 ? "true" : "false" }, row.failed ? "ERR" : String(row.status || "\u2026")),
+          h7("span", { className: "nks-dt-type" }, String(row.mimeType || row.type || "").split(";")[0].replace("application/", "").replace("text/", "").slice(0, 12)),
+          h7("span", { className: "nks-dt-url nks-dt-grow", "data-bad": row.failed || (row.status || 0) >= 400 ? "true" : "false" }, row.url),
+          h7("span", { className: "nks-dt-size" }, row.size == null ? "" : row.size > 1024 ? `${(row.size / 1024).toFixed(1)}kb` : `${row.size}b`),
+          h7("span", { className: "nks-dt-dur" }, row.durationMs == null ? "" : `${row.durationMs}ms`),
+          h7("span", { className: "nks-dt-wf", "data-nks-dt-wf": "1" }, wfBar(row, rows))
+        ))
+      )
+    );
+  }
+  function wfBar(row, rows) {
+    const starts = rows.map((r) => Number(r.startedAt) || 0).filter(Boolean);
+    const ends = rows.map((r) => (Number(r.startedAt) || 0) + (Number(r.durationMs) || 0)).filter(Boolean);
+    const min = starts.length ? Math.min(...starts) : 0;
+    const span = Math.max(1, (ends.length ? Math.max(...ends) : min + 1) - min);
+    const start = Number(row.startedAt) || 0;
+    const dur = Number(row.durationMs) || 0;
+    const left = Math.max(0, Math.min(100, (start - min) / span * 100));
+    const width = dur > 0 ? Math.max(1.5, Math.min(100 - left, dur / span * 100)) : 1.5;
+    const pending = row.durationMs == null && !row.failed;
+    return h7("i", { style: { left: `${left}%`, width: `${width}%` }, "data-bad": row.failed || (row.status || 0) >= 400 ? "true" : "false", "data-pending": pending ? "true" : "false" });
   }
   function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
     const [status, setStatus] = React12.useState(null);
@@ -3579,7 +3858,8 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           "div",
           { "data-nks-open-error": "1" },
           h7("p", { className: "nks-open-error" }, message),
-          url ? h7("p", { className: "nks-open-error" }, url) : null
+          url ? h7("p", { className: "nks-open-error nks-open-url" }, url) : null,
+          cause?.detail?.engineLog ? h7("pre", { className: "nks-open-log", "data-nks-open-log": "1" }, cause.detail.engineLog) : null
         )
       });
     }
@@ -3595,12 +3875,11 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         await post(OPEN, { url });
       });
       const fit = frameSize();
-      const want = sameUrl(url);
       const started = Date.now();
       let shotPayload = null;
       for (; ; ) {
         shotPayload = await post(SHOT, { format: "webp", ...fit ? { fit } : {} });
-        if (sameUrl(shotPayload.url) === want) break;
+        if (sameSite(url, shotPayload.url)) break;
         if (Date.now() - started >= NAV_CONFIRM_MS) break;
         await new Promise((resolve) => {
           window.setTimeout(resolve, NAV_POLL_MS);
@@ -3609,9 +3888,10 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       setShot(shotPayload.data);
       setShotMime(shotPayload.mimeType || "image/webp");
       setShotMeta({ url: shotPayload.url || "", scrollY: shotPayload.scrollY || 0, targetId: shotPayload.targetId || "", viewport: shotPayload.viewport?.width ?? null, at: Date.now() });
-      if (sameUrl(shotPayload.url) !== want) {
-        const error = new Error(`${copy.navigateUnconfirmed} ${url}`);
+      if (!sameSite(url, shotPayload.url)) {
+        const error = new Error(copy.navigateUnconfirmed);
         error.errorId = "kitesurf.navigate.failed";
+        error.detail = { url, engineLog: await engineLogHint() };
         throw error;
       }
       await loadDom();
@@ -4492,185 +4772,6 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         )
       );
     }
-    function DevTools({ open, onClose }) {
-      const [tab, setTab] = React12.useState("console");
-      const [rows, setRows] = React12.useState([]);
-      const [failedOnly, setFailedOnly] = React12.useState(false);
-      const [styles, setStyles] = React12.useState(null);
-      React12.useEffect(() => {
-        if (!open) return void 0;
-        let alive = true;
-        let since = null;
-        setRows([]);
-        const merge = (fresh, keyOf) => setRows((prev) => {
-          if (!Array.isArray(fresh) || fresh.length === 0) return prev;
-          const seen = new Set(prev.map(keyOf));
-          const extra = fresh.filter((r) => !seen.has(keyOf(r)));
-          if (extra.length === 0) return prev;
-          const merged = prev.map((r) => fresh.find((f) => keyOf(f) === keyOf(r)) || r).concat(extra);
-          return merged.slice(-400);
-        });
-        const load = async () => {
-          try {
-            if (tab === "console") {
-              const url = since ? `${CONSOLE}?limit=200&since=${encodeURIComponent(since)}` : `${CONSOLE}?limit=200`;
-              const data = await fetch(url).then((r) => r.json());
-              if (alive && Array.isArray(data.entries)) {
-                merge(data.entries, (r) => `c${r.seq}`);
-                const last = data.entries[data.entries.length - 1];
-                if (last?.at) since = last.at;
-              }
-            } else if (tab === "network") {
-              const url = `${NETWORK}?limit=200${failedOnly ? "&failedOnly=true" : ""}${since ? `&since=${encodeURIComponent(since)}` : ""}`;
-              const data = await fetch(url).then((r) => r.json());
-              if (alive && Array.isArray(data.entries)) {
-                merge(data.entries, (r) => `n${r.id}`);
-                const lastStart = data.entries.reduce((m, r) => Math.max(m, Number(r.startedAt) || 0), 0);
-                if (lastStart) since = String(lastStart);
-              }
-            } else {
-              const data = await fetch(`${ELEMENTS}?depth=3`).then((r) => r.json());
-              if (alive) setRows(data.nodes || []);
-            }
-          } catch {
-          }
-        };
-        load();
-        const period = () => document.visibilityState === "hidden" ? 15e3 : 1500;
-        let timer = 0;
-        const arm = () => {
-          clearInterval(timer);
-          timer = window.setInterval(load, period());
-        };
-        const onVis = () => {
-          arm();
-          if (document.visibilityState !== "hidden") load();
-        };
-        document.addEventListener("visibilitychange", onVis);
-        arm();
-        return () => {
-          alive = false;
-          clearInterval(timer);
-          document.removeEventListener("visibilitychange", onVis);
-        };
-      }, [open, tab, failedOnly]);
-      if (!open) return null;
-      const inspectNode = async (row) => {
-        const selector = row.id ? `${row.tag}#${row.id}` : row.cls ? `${row.tag}.${String(row.cls).trim().split(/\s+/)[0]}` : row.tag;
-        try {
-          const data = await fetch(`${ELEMENTS}?selector=${encodeURIComponent(selector)}`).then((r) => r.json());
-          setStyles({ selector, matched: data.matched?.matched || [], computed: data.computed || {} });
-        } catch {
-          setStyles({ selector, matched: [], computed: {} });
-        }
-      };
-      const clear = async () => {
-        const path = tab === "console" ? CONSOLE : NETWORK;
-        await fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: '{"clear":true}' }).catch(() => {
-        });
-        setRows([]);
-      };
-      return h7(
-        "div",
-        { className: "nks-dt", "data-nks-devtools": "1" },
-        h7(
-          "div",
-          { className: "nks-dt-head" },
-          // View switch, filter toggle and row actions are host primitives; the
-          // pane draws no tab chrome of its own (DESIGN.md §6.1).
-          h7(primitives2.SegmentedControl, {
-            id: "nks-dt-view",
-            value: tab,
-            label: copy.devtools,
-            options: [
-              { value: "console", label: copy.devtoolsConsole },
-              { value: "network", label: copy.devtoolsNetwork },
-              { value: "elements", label: "Elements" }
-            ],
-            onChange: (next) => setTab(next)
-          }),
-          tab === "network" ? h7(primitives2.Switch, {
-            checked: failedOnly,
-            label: copy.devtoolsFailedOnly,
-            onChange: (next) => setFailedOnly(next)
-          }) : null,
-          h7("span", { style: { flex: "auto" } }),
-          h7(primitives2.Button, { variant: "ghost", size: "sm", onClick: clear }, copy.devtoolsClear),
-          h7(primitives2.Button, { variant: "ghost", size: "sm", onClick: onClose }, copy.devtoolsClose)
-        ),
-        styles ? h7(
-          "div",
-          { className: "nks-dt-styles", "data-nks-dt-styles": "1" },
-          h7("div", { className: "nks-dt-style-head" }, `${styles.selector} \xB7 ${styles.matched.length} rules \xB7 ${Object.keys(styles.computed).length} computed`),
-          styles.matched.slice(0, 6).map((rule, i) => h7(
-            "div",
-            { className: "nks-dt-rule", key: `r${i}` },
-            h7("b", null, rule.selector || "(anonymous)"),
-            h7("span", null, (rule.properties || []).slice(0, 6).join("; "))
-          ))
-        ) : null,
-        tab === "console" ? h7(
-          "div",
-          { className: "nks-dt-cols" },
-          h7("span", { className: "nks-dt-time" }, "Time"),
-          h7("span", { className: "nks-dt-lv" }, "Level"),
-          h7("span", { className: "nks-dt-msg", style: { textAlign: "left" } }, "Message"),
-          h7("span", { className: "nks-dt-src" }, "Source")
-        ) : null,
-        tab === "network" ? h7(
-          "div",
-          { className: "nks-dt-cols" },
-          h7("span", { className: "nks-dt-lv" }, "Method"),
-          h7("span", { className: "nks-dt-st" }, "Status"),
-          h7("span", { className: "nks-dt-type" }, "Type"),
-          h7("span", { className: "nks-dt-url nks-dt-grow", style: { maxWidth: "none", textAlign: "left" } }, "URL"),
-          h7("span", { className: "nks-dt-size" }, "Size"),
-          h7("span", { className: "nks-dt-dur" }, "Time"),
-          h7("span", { className: "nks-dt-wf", style: { height: "auto" } }, "Waterfall")
-        ) : null,
-        h7(
-          "div",
-          { className: "nks-dt-body", "data-nks-dt-body": "1" },
-          rows.length === 0 ? h7("div", { className: "nks-dt-empty" }, copy.devtoolsEmpty) : null,
-          rows.map((row, index) => tab === "elements" ? h7(
-            "div",
-            { className: "nks-dt-row", key: `e${row.nodeId || index}`, style: { paddingLeft: `${8 + (row.level || 0) * 12}px`, cursor: "pointer" }, onClick: () => inspectNode(row), "data-nks-el-node": String(row.nodeId) },
-            h7("span", { className: "nks-dt-lv" }, row.tag),
-            h7("span", { className: "nks-dt-msg" }, `${row.id ? "#" + row.id : ""}${row.cls ? "." + String(row.cls).split(/\s+/).slice(0, 2).join(".") : ""}`),
-            h7("span", { className: "nks-dt-dur" }, row.childNodeCount ? String(row.childNodeCount) : "")
-          ) : tab === "console" ? h7(
-            "div",
-            { className: "nks-dt-row", key: `c${row.seq || index}` },
-            h7("span", { className: "nks-dt-time" }, String(row.at || "").slice(11, 19)),
-            h7("span", { className: "nks-dt-lv", "data-lv": row.level }, row.level),
-            h7("span", { className: "nks-dt-msg" }, row.text),
-            h7("span", { className: "nks-dt-src" }, row.url ? `${row.url}${row.lineNumber != null ? ":" + row.lineNumber : ""}` : row.source || "")
-          ) : h7(
-            "div",
-            { className: "nks-dt-row", key: `n${row.id || index}` },
-            h7("span", { className: "nks-dt-lv" }, row.method),
-            h7("span", { className: "nks-dt-st", "data-bad": row.failed || row.status && row.status >= 400 ? "true" : "false" }, row.failed ? "ERR" : String(row.status || "\u2026")),
-            h7("span", { className: "nks-dt-type" }, String(row.mimeType || row.type || "").split(";")[0].replace("application/", "").replace("text/", "").slice(0, 12)),
-            h7("span", { className: "nks-dt-url nks-dt-grow", "data-bad": row.failed || (row.status || 0) >= 400 ? "true" : "false" }, row.url),
-            h7("span", { className: "nks-dt-size" }, row.size == null ? "" : row.size > 1024 ? `${(row.size / 1024).toFixed(1)}kb` : `${row.size}b`),
-            h7("span", { className: "nks-dt-dur" }, row.durationMs == null ? "" : `${row.durationMs}ms`),
-            h7("span", { className: "nks-dt-wf", "data-nks-dt-wf": "1" }, wfBar(row, rows))
-          ))
-        )
-      );
-    }
-    function wfBar(row, rows) {
-      const starts = rows.map((r) => Number(r.startedAt) || 0).filter(Boolean);
-      const ends = rows.map((r) => (Number(r.startedAt) || 0) + (Number(r.durationMs) || 0)).filter(Boolean);
-      const min = starts.length ? Math.min(...starts) : 0;
-      const span = Math.max(1, (ends.length ? Math.max(...ends) : min + 1) - min);
-      const start = Number(row.startedAt) || 0;
-      const dur = Number(row.durationMs) || 0;
-      const left = Math.max(0, Math.min(100, (start - min) / span * 100));
-      const width = dur > 0 ? Math.max(1.5, Math.min(100 - left, dur / span * 100)) : 1.5;
-      const pending = row.durationMs == null && !row.failed;
-      return h7("i", { style: { left: `${left}%`, width: `${width}%` }, "data-bad": row.failed || (row.status || 0) >= 400 ? "true" : "false", "data-pending": pending ? "true" : "false" });
-    }
     function openSettings() {
       if (dialogOpenRef.current) return;
       const workspaceEl = workspaceRef.current;
@@ -4998,7 +5099,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         h7("span", { style: { flex: "auto" } })
       ),
       h7(HistoryDialog, { open: historyOpen, onClose: () => setHistoryOpen(false) }),
-      h7(DevTools, { open: devtoolsOpen, onClose: () => setDevtoolsOpen(false) }),
+      h7(DevTools, { copy, open: devtoolsOpen, onClose: () => setDevtoolsOpen(false) }),
       h7(
         "div",
         {
@@ -5053,10 +5154,9 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
             `\u269B ${pick.elements[0].componentStack.slice(-3).join(" \u2192 ")}`
           ) : null
         ) : null,
-        busy ? h7("div", { className: "nks-busy", "data-nks-loading": "1", role: "progressbar", "aria-label": copy.opening }) : null,
         beat ? h7(
           "div",
-          { className: "nks-load", "data-nks-beat": "1", role: "status" },
+          { className: "nks-load", "data-nks-beat": "1", "data-nks-loading": "1", role: "status" },
           h7(
             "div",
             { className: "nks-load-card" },
@@ -5222,7 +5322,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       // an agent holds the bridge writer lock or the human holds the override.
       // "停止写入" is honest wording — the pane cannot kill the agent's run
       // (that lives in the host), it can only hold its page writes.
-      control?.humanHold?.active || control?.writer ? h7(
+      !beat && (control?.humanHold?.active || control?.writer) ? h7(
         "div",
         {
           className: "nks-hitl",

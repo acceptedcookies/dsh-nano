@@ -2539,8 +2539,7 @@ ${LAYER_CSS}
           settingsTitle: "\u6D4F\u89C8\u8BBE\u7F6E",
           tabEnv: "\u73AF\u5883",
           tabBrowse: "\u6A21\u62DF",
-          tabHistory: "\u5386\u53F2",
-          settingsDesc: "\u73AF\u5883\u5065\u5EB7\u3001\u6D4F\u89C8\u5668\u6A21\u62DF\u4E0E\u672C\u6B21\u5F15\u64CE\u8FDB\u7A0B\u7684\u6D4F\u89C8\u5386\u53F2\u3002\u6A21\u62DF\u8BBE\u7F6E\u5BF9\u65B0\u5BFC\u822A\u751F\u6548\u3002",
+          settingsDesc: "\u73AF\u5883\u5065\u5EB7\u4E0E\u6D4F\u89C8\u5668\u6A21\u62DF\u3002\u6A21\u62DF\u8BBE\u7F6E\u5BF9\u65B0\u5BFC\u822A\u751F\u6548\uFF1B\u6D4F\u89C8\u5386\u53F2\u5728\u5DE5\u5177\u680F\u7684\u5386\u53F2\u5165\u53E3\u3002",
           cancel: "\u53D6\u6D88",
           save: "\u4FDD\u5B58",
           close: "\u5173\u95ED",
@@ -2679,8 +2678,7 @@ ${LAYER_CSS}
           settingsTitle: "Browser settings",
           tabEnv: "Environment",
           tabBrowse: "Simulation",
-          tabHistory: "History",
-          settingsDesc: "Environment health, browser simulation, and the history of this engine process. Simulation changes apply to new navigations.",
+          settingsDesc: "Environment health and browser simulation. Simulation changes apply to new navigations; browsing history lives in the toolbar.",
           cancel: "Cancel",
           save: "Save",
           close: "Close",
@@ -4870,57 +4868,9 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         label: copy.settingsTitle,
         items: [
           { value: "env", label: copy.tabEnv, content: env },
-          { value: "simulation", label: copy.tabBrowse, content: simulation },
-          { value: "history", label: copy.tabHistory, content: h7(HistoryTab) }
+          { value: "simulation", label: copy.tabBrowse, content: simulation }
         ]
       });
-    }
-    function HistoryTab() {
-      const [rows, setRows] = React12.useState([]);
-      const [q, setQ] = React12.useState("");
-      const load = React12.useCallback(async (needle) => {
-        const data = await fetch(`${BROWSE_HISTORY}?limit=100${needle ? "&q=" + encodeURIComponent(needle) : ""}`).then((r) => r.json());
-        setRows(data.entries || []);
-      }, []);
-      React12.useEffect(() => {
-        load("").catch(() => {
-        });
-      }, [load]);
-      const del = async (id) => {
-        await fetch(`${BROWSE_HISTORY}?id=${encodeURIComponent(id)}`, { method: "DELETE" });
-        await load(q);
-      };
-      const clear = async () => {
-        await fetch(BROWSE_HISTORY, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ clear: true }) });
-        await load(q);
-      };
-      return h7(
-        "div",
-        { className: "nks-hist-panel", "data-nks-hist-panel": "1" },
-        h7(
-          "div",
-          { className: "nks-modal-bar", style: { padding: "4px 0" } },
-          h7("input", { "data-nks-history-q": "1", placeholder: "\u641C\u7D22\u5730\u5740\u2026", value: q, onChange: async (e) => {
-            setQ(e.target.value);
-            await load(e.target.value);
-          } }),
-          h7("button", { type: "button", "data-nks-history-clear": "1", disabled: !rows.length, onClick: clear }, "\u6E05\u7A7A")
-        ),
-        h7("div", { className: "nks-hist-list" }, rows.length ? rows.map((row) => h7(
-          "div",
-          { className: "nks-hist-row", key: row.id, "data-nks-history-row": row.id },
-          h7(
-            "button",
-            { type: "button", className: "nks-hist-open", onClick: () => {
-              setDraftUrl(row.url);
-              openPage(row.url);
-            } },
-            h7("span", { className: "nks-hist-url" }, row.url),
-            h7("span", { className: "nks-hist-meta" }, `${String(row.at).slice(0, 16).replace("T", " ")}${row.count > 1 ? " \xB7 " + row.count + " \u6B21" : ""}`)
-          ),
-          h7("button", { type: "button", className: "nks-hist-del", onClick: () => del(row.id), "aria-label": "\u5220\u9664" }, "\xD7")
-        )) : h7("div", { className: "nks-modal-empty" }, "\u8FD8\u6CA1\u6709\u6D4F\u89C8\u8BB0\u5F55"))
-      );
     }
     function HistoryDialog({ open, onClose }) {
       const [rows, setRows] = React12.useState([]);

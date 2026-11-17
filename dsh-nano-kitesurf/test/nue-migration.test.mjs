@@ -185,7 +185,7 @@ test('T22: the settings tab strip still follows the nano-ui NanoTabs contract', 
   assert.match(SETTINGS_TABS, /label:\s*copy\.settingsTitle/)
   assert.match(SETTINGS_TABS, /value:\s*'env'/)
   assert.match(SETTINGS_TABS, /value:\s*'simulation'/)
-  assert.match(SETTINGS_TABS, /value:\s*'history'/)
+  assert.doesNotMatch(SETTINGS_TABS, /value:\s*'history'/)
 })
 
 // ---- NUE-1117 review fix: layers (U6) and tokens (U1) ----

@@ -1999,39 +1999,16 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
     }, true)
   }
 
-  /** Settings shell with tabs: environment/settings vs browse history. */
-  // Semantic split, rendered with the shared nano-ui tab primitive (no
-  // per-plugin tab chrome): environment health / browsing config / history.
+  /** Settings shell: environment health and browser simulation. Browsing
+   *  history lives in the toolbar entry, not behind a settings tab. */
   function SettingsTabs({ env, simulation }) {
     return h(NanoTabs, {
       label: copy.settingsTitle,
       items: [
         { value: 'env', label: copy.tabEnv, content: env },
         { value: 'simulation', label: copy.tabBrowse, content: simulation },
-        { value: 'history', label: copy.tabHistory, content: h(HistoryTab) },
       ],
     })
-  }
-
-  function HistoryTab() {
-    const [rows, setRows] = React.useState([])
-    const [q, setQ] = React.useState('')
-    const load = React.useCallback(async (needle) => {
-      const data = await fetch(`${BROWSE_HISTORY}?limit=100${needle ? '&q=' + encodeURIComponent(needle) : ''}`).then((r) => r.json())
-      setRows(data.entries || [])
-    }, [])
-    React.useEffect(() => { load('').catch(() => {}) }, [load])
-    const del = async (id) => { await fetch(`${BROWSE_HISTORY}?id=${encodeURIComponent(id)}`, { method: 'DELETE' }); await load(q) }
-    const clear = async () => { await fetch(BROWSE_HISTORY, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ clear: true }) }); await load(q) }
-    return h('div', { className: 'nks-hist-panel', 'data-nks-hist-panel': '1' },
-      h('div', { className: 'nks-modal-bar', style: { padding: '4px 0' } },
-        h('input', { 'data-nks-history-q': '1', placeholder: '搜索地址…', value: q, onChange: async (e) => { setQ(e.target.value); await load(e.target.value) } }),
-        h('button', { type: 'button', 'data-nks-history-clear': '1', disabled: !rows.length, onClick: clear }, '清空')),
-      h('div', { className: 'nks-hist-list' }, rows.length ? rows.map((row) => h('div', { className: 'nks-hist-row', key: row.id, 'data-nks-history-row': row.id },
-        h('button', { type: 'button', className: 'nks-hist-open', onClick: () => { setDraftUrl(row.url); openPage(row.url) } },
-          h('span', { className: 'nks-hist-url' }, row.url),
-          h('span', { className: 'nks-hist-meta' }, `${String(row.at).slice(0, 16).replace('T', ' ')}${row.count > 1 ? ' · ' + row.count + ' 次' : ''}`)),
-        h('button', { type: 'button', className: 'nks-hist-del', onClick: () => del(row.id), 'aria-label': '删除' }, '×'))) : h('div', { className: 'nks-modal-empty' }, '还没有浏览记录')))
   }
 
   function HistoryDialog({ open, onClose }) {

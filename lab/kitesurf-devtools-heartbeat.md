@@ -47,10 +47,10 @@ Console / Network / Elements 现在都渲染固定 36px 的控件栏；每栏都
 
 ## 2.2 设置中的模拟 tab
 
-设置弹窗现在固定为「环境 / 模拟 / 历史」：
+设置弹窗现在固定为「环境 / 模拟」：
 - 环境：环境自检 + 引擎地址/MCP 端口。
 - 模拟：User-Agent、默认分辨率、默认语言、默认地理位置（GPS）、Light/Dark 色彩方案、Cookie；原「浏览」里的 UA/视口已迁入这里。
-- 历史：浏览历史。
+- 浏览历史不占设置 tab，使用工具栏独立的历史入口。
 
 驱动适配：
 - locale → 页面 `navigator.language/languages`（页面脚本层，属于模拟）。

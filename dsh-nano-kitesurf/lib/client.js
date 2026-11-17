@@ -2491,6 +2491,9 @@ ${LAYER_CSS}
           copyDiagHint: "\u590D\u5236\u53EF\u8BFB\u8BCA\u65AD\u6458\u8981\uFF1B\u6309\u4F4F Shift \u590D\u5236\u5B8C\u6574 JSON",
           diagCopied: "\u8BCA\u65AD\u4FE1\u606F\u5DF2\u590D\u5236",
           envHint: "\u4F9D\u6B21\u68C0\u67E5\u5BB9\u5668\u3001\u7AEF\u53E3\u3001\u5F15\u64CE\u5065\u5EB7\u5E76\u81EA\u52A8\u4FEE\u590D",
+          contractNewer: "\u5BBF\u4E3B\u89C2\u5BDF\u5408\u540C\u7248\u672C\u8F83\u65B0",
+          legacyHost: "\u65E7\u5BBF\u4E3B",
+          legacyHostTitle: "\u5BBF\u4E3B\u63D2\u4EF6\u6BD4\u9762\u677F\u65E7\uFF0C\u5C11\u62A5\u51E0\u9879\u660E\u7EC6\uFF0C\u4E0D\u5F71\u54CD\u6D4F\u89C8",
           noteEmpty: "\u53EF\u76F4\u63A5\u6CE8\u5165\uFF0C\u65E0\u9700\u586B\u5199",
           opening: "\u6B63\u5728\u6253\u5F00\u9875\u9762",
           engineDown: "\u5F15\u64CE\u6CA1\u6709\u5E94\u7B54",
@@ -2591,6 +2594,9 @@ ${LAYER_CSS}
           copyDiagHint: "Copies the readable summary; hold Shift for full JSON",
           diagCopied: "Diagnostics copied",
           envHint: "Checks container, ports and engine health, then repairs automatically",
+          contractNewer: "Host reports a newer observation contract",
+          legacyHost: "older host",
+          legacyHostTitle: "The host plugin predates this pane and reports fewer fields; browsing still works",
           noteEmpty: "Insert without typing",
           opening: "Opening page",
           engineDown: "Engine is not answering",
@@ -2826,7 +2832,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
   var { batchNote: batchNote2, designNote: designNote2, multiNote: multiNote2 } = (init_note(), __toCommonJS(note_exports));
   var { contentFrame: contentFrame2, shotPoint: shotPoint2 } = (init_shot_point(), __toCommonJS(shot_point_exports));
   var h7 = React12.createElement;
-  var CLIENT_BUILD_ID = true ? "0.1.0+d2ba38a" : "dev";
+  var CLIENT_BUILD_ID = true ? "0.1.0+933bc18" : "dev";
   var STATUS = "/nano-local-sandbox/status";
   var OPEN = "/nano-local-sandbox/open";
   var SHOT = "/nano-local-sandbox/shot";
@@ -3051,6 +3057,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
 .nks-env-row b{font-weight:500;color:var(--dsw-alias-label-secondary);flex:none}
 .nks-env-row span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right;unicode-bidi:plaintext}
 .nks-env-ok{color:var(--dsw-alias-state-success-primary)}
+.nks-env-legacy{color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11);margin-left:6px}
 .nks-env-bad{color:var(--dsw-alias-state-error-primary)}
 .nks-env-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:2px}
 .nks-env-checks{display:flex;flex-direction:column;gap:2px;margin-top:2px;padding-top:4px;border-top:.5px solid var(--dsw-alias-border-l2)}
@@ -4063,7 +4070,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           setSnap(ports);
           if (Array.isArray(result.summary)) setDiag(result);
           const failed = planeRows(result).filter((row) => !row.ok && !row.skipped);
-          if (result.planes && result.v !== 1) setNote("\u89C2\u5BDF\u5408\u540C\u4E0D\u5339\u914D");
+          if (result.planes && Number.isFinite(result.v) && result.v !== 1) setNote(copy.contractNewer);
           else if (!result.ok) setNote(`${copy.prepareFailed}: ${result.errorId || result.error || `HTTP ${response.status}`}`);
           else if (result.ready !== true) setNote(`${copy.prepareNotReady}: ${failed.map((row) => row.plane || row.label).join(" / ")}`);
           else setNote(result.action === "noop" ? copy.prepareDone : `${copy.prepareDone} \xB7 ${result.action}`);
@@ -4090,7 +4097,8 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       const engine = snap?.effective?.httpBase || "\u2014";
       const container = snap?.container?.state || "\u2014";
       const portRow = snap?.ports?.engine ? `${snap.ports.engine.port} \xB7 ${snap.ports.engine.heldBy === "this-container" ? "\u672C\u63D2\u4EF6\u5BB9\u5668" : "\u7A7A\u95F2"}` : "\u2014";
-      const contractMismatch = snap != null && snap.v !== 1;
+      const contractMismatch = snap != null && Number.isFinite(snap.v) && snap.v !== 1;
+      const legacyHost = snap != null && !Number.isFinite(snap.v);
       const rows = planeRows(snap);
       const healthy = !contractMismatch && snap?.ready === true;
       return h7(
@@ -4100,7 +4108,12 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           "div",
           { className: "nks-env-title" },
           copy.envTitle,
-          h7("span", { className: healthy ? "nks-env-ok" : "nks-env-bad" }, contractMismatch ? "\u89C2\u5BDF\u5408\u540C\u4E0D\u5339\u914D" : healthy ? "\u25CF OK" : "\u25CF \u5F02\u5E38")
+          h7(
+            "span",
+            { className: healthy ? "nks-env-ok" : "nks-env-bad", title: legacyHost ? copy.legacyHostTitle : void 0 },
+            contractMismatch ? copy.contractNewer : healthy ? "\u25CF OK" : "\u25CF \u5F02\u5E38"
+          ),
+          legacyHost ? h7("span", { className: "nks-env-legacy", "data-nks-legacy": "1" }, copy.legacyHost) : null
         ),
         h7("div", { className: "nks-env-row" }, h7("b", null, copy.envPlugin), h7("span", null, snap?.buildId || "\u672A\u77E5")),
         h7("div", { className: "nks-env-row" }, h7("b", null, copy.envEngine), h7("span", null, engine)),
@@ -4911,12 +4924,12 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         h7("span", { style: { flex: "auto" } }),
         (() => {
           const hostBuild = typeof status?.buildId === "string" ? status.buildId : "";
-          const mismatch = Boolean(hostBuild) && hostBuild.includes("+") && hostBuild !== CLIENT_BUILD_ID;
-          const text = mismatch ? `\u7248\u672C\u4E0D\u4E00\u81F4 \u5BA2\u6237\u7AEF ${CLIENT_BUILD_ID} / \u5BBF\u4E3B ${hostBuild}` : hostBuild ? hostBuild : "";
+          const drifted = Boolean(hostBuild) && hostBuild !== CLIENT_BUILD_ID;
+          const text = drifted ? `\u5BBF\u4E3B ${hostBuild}` : hostBuild || "";
           return text ? h7("span", {
-            "data-nks-build": mismatch ? "mismatch" : "ok",
-            style: { opacity: mismatch ? 1 : 0.6, color: mismatch ? "var(--dsw-alias-state-error-primary)" : void 0 },
-            title: `\u5BA2\u6237\u7AEF\u6784\u5EFA ${CLIENT_BUILD_ID} \xB7 \u5BBF\u4E3B ${hostBuild || "\u672A\u77E5"}`
+            "data-nks-build": drifted ? "drift" : "ok",
+            style: { opacity: 0.6, color: "var(--dsw-alias-label-tertiary)" },
+            title: `\u5BA2\u6237\u7AEF ${CLIENT_BUILD_ID} \xB7 \u5BBF\u4E3B ${hostBuild || "\u672A\u77E5"}${drifted ? "\uFF08\u4E24\u4E2A\u5305\u5206\u522B\u90E8\u7F72\uFF0C\u4E0D\u5F71\u54CD\u4F7F\u7528\uFF09" : ""}`
           }, text.slice(0, 40)) : null;
         })()
       ),

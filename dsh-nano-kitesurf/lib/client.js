@@ -3160,6 +3160,22 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
   }
   var NAV_CONFIRM_MS = 8e3;
   var NAV_POLL_MS = 400;
+  var NAV_SHOT_MS = 4e3;
+  function withDeadline(promise, ms, fallback) {
+    return new Promise((resolve) => {
+      const timer = window.setTimeout(() => resolve(fallback), ms);
+      promise.then(
+        (value) => {
+          window.clearTimeout(timer);
+          resolve(value);
+        },
+        () => {
+          window.clearTimeout(timer);
+          resolve(fallback);
+        }
+      );
+    });
+  }
   function sameUrl(value) {
     const text = String(value ?? "").trim();
     if (!text || text === "about:blank") return "";
@@ -3886,12 +3902,23 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       const started = Date.now();
       let shotPayload = null;
       for (; ; ) {
-        shotPayload = await post(SHOT, { format: "webp", ...fit ? { fit } : {} });
-        if (sameSite(url, shotPayload.url)) break;
+        const next = await withDeadline(
+          post(SHOT, { format: "webp", ...fit ? { fit } : {} }),
+          NAV_SHOT_MS,
+          null
+        );
+        if (next) shotPayload = next;
+        if (shotPayload && sameSite(url, shotPayload.url)) break;
         if (Date.now() - started >= NAV_CONFIRM_MS) break;
         await new Promise((resolve) => {
           window.setTimeout(resolve, NAV_POLL_MS);
         });
+      }
+      if (!shotPayload) {
+        const error = new Error(copy.navigateUnconfirmed);
+        error.errorId = "kitesurf.navigate.failed";
+        error.detail = { url, engineLog: await engineLogHint() };
+        throw error;
       }
       setShot(shotPayload.data);
       setShotMime(shotPayload.mimeType || "image/webp");

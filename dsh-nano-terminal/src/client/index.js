@@ -3,8 +3,8 @@
 // tab (对话 / 轨迹 / Nano 终端). The [dsh工作台] (right sidebar) surface is
 // intentionally not registered — the native terminal kind stays untouched.
 
-import { createElement as h, Component } from 'react'
-import { NanoTerm, NanoTermHeaderSettings, anyLiveTerminals, disposeAllTerminals, requestPaneOpen } from './NanoTerm.jsx'
+import { createElement as h } from 'react'
+import { NanoTerm, anyLiveTerminals, disposeAllTerminals, requestPaneOpen } from './NanoTerm.jsx'
 import { perf, setTerminalRoot } from './perf.js'
 import { installDevProbe } from './dev-probe.js'
 
@@ -21,15 +21,6 @@ const mark = (stage) => {
 }
 
 const VIEW_LABELS = ['终端', 'Terminal', 'Nano 终端', 'Nano terminal']
-
-// A header slot render must never take the host utility row down: catch and
-// swallow, leaving only a console trail (same convention DNMS uses).
-class SlotBoundary extends Component {
-  constructor(props) { super(props); this.state = { error: null } }
-  static getDerivedStateFromError(error) { return { error } }
-  componentDidCatch(error) { console.error('[dnt] header slot render failed:', error) }
-  render() { return this.state.error === null ? this.props.children : null }
-}
 
 // The host exposes view selection only through the session-bound tab strip,
 // so activation clicks the official [data-conversation-tabs] anchor — the
@@ -80,25 +71,6 @@ export function apply(ctx) {
   } catch (err) {
     mark('registerView FAIL ' + String(err?.message ?? err))
     console.warn('[dnt] conversation.view registration failed:', err)
-  }
-
-  // The settings gear moved out of the status bar into the session header's
-  // native utility row (right-aligned with the host buttons). List slot: `id`
-  // is required or the host rejects the registration (DNMS's contract).
-  try {
-    ctx.slots.inject('conversation.session.header.utilities', () => ctx.slots.register(
-      {
-        name: 'conversation.session.header.utilities',
-        id: 'nano-terminal.settings',
-        registrant: 'nano-terminal',
-        inject: (sessionId) => ({ sessionId }),
-      },
-      (props) => h(SlotBoundary, null, h(NanoTermHeaderSettings, { sessionId: props.sessionId, zh: zh() })),
-    ))
-    mark('registerHeaderUtility OK')
-  } catch (err) {
-    mark('registerHeaderUtility FAIL ' + String(err?.message ?? err))
-    console.warn('[dnt] header.utilities registration failed:', err)
   }
 
   // ⌘+E then T toggles between this view and 对话 — registered as a FIXED

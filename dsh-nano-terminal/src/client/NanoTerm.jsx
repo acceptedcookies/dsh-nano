@@ -1,12 +1,12 @@
 // NanoTerm: the terminal tab body — a binary split tree of independent panes.
 // Each pane = wasm emulator + canvas renderer + one lane (local/mcp).
 
-import React, { useEffect, useMemo, useRef, useState, useCallback, useSyncExternalStore } from 'react'
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { copyMode, clampSelection } from './select.js'
 import * as primitives from '@deepseek-ai/dsh-client-ui-primitives'
 import { NanoDialog, NanoMenu, NANO_STYLES, Toolbar } from 'dsh-nano-ui'
 
-const { Button, Switch, StateDot, Tag } = primitives
+const { Button, Input, Switch, StateDot, Tag } = primitives
 import { loadCore, WasmTerm, MODES } from './wasm.js'
 import { TermCanvas, buildPalette } from './render.js'
 import { encodeKey, encodePaste, encodeMouse, encodeFocus } from './keys.js'
@@ -73,11 +73,38 @@ ${NANO_STYLES}
    nano-toolbar 自带 min-height 36 与 border-l1，这里按轨迹规格覆盖。 */
 /* specificity 提到 (0,2,0)：nano-toolbar 的 min-height:36px 有多份拷贝且在
    部分注入顺序下排在本规则之后，会盖掉 32px——.dnt-root.dnt-bar 锁死。 */
-.dnt-root .dnt-bar{box-sizing:border-box;flex:none;width:100%;min-height:32px;flex-wrap:wrap;padding:4px 6px;gap:4px 8px;border-bottom:.5px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1);font:var(--dsw-font-xxs-12)}
-/* header-utility gear: same footprint as the host's native utilities
-   (session-log-export moreButton — sm Button pinned 28px, 15px icon). */
-.dnt-header-utility{flex:none;width:28px;padding:0;color:var(--dsw-alias-label-secondary)}
-.dnt-header-utility svg{width:15px;height:15px}
+.dnt-root .dnt-bar{box-sizing:border-box;flex:none;width:100%;min-height:32px;flex-wrap:nowrap;align-items:center;padding:3px 8px;gap:4px;border-bottom:.5px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1);font:var(--dsw-font-xxs-12)}
+/* 终端标签 = 宿主 dockkit tab 规格的栏内移植（组件不可见导出，规格取自其
+   pinned 源 ui-dockkit/dockkit.module.css：chip/分隔缝/悬停关闭/新建 ghost。
+   栏高固定 32px，chip 降到 24px 留呼吸，其余按原生值。 */
+.dnt-strip{display:flex;flex:0 1 auto;align-items:center;min-width:0;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;gap:0}
+.dnt-strip::-webkit-scrollbar{display:none}
+.dnt-slot{display:flex;flex:none;align-items:center;justify-content:center;width:10px;height:24px}
+.dnt-slot::before{content:'';width:.5px;height:14px;background:var(--dsw-alias-border-l4)}
+.dnt-tab-active + .dnt-slot::before,.dnt-slot:has(+ .dnt-tab-active)::before{background:transparent}
+.dnt-tab{position:relative;display:flex;flex:0 1 auto;align-items:center;min-width:80px;max-width:170px;height:24px;padding:0 8px;border:0;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;line-height:1;white-space:nowrap;border-radius:var(--dsw-radius-sm);cursor:pointer;user-select:none;touch-action:none}
+.dnt-tab:focus-visible{outline:1px solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}
+.dnt-tab-title{display:flex;flex:1 1 auto;gap:5px;align-items:center;min-width:0;overflow:hidden;line-height:1.4}
+.dnt-tab-title span{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.dnt-tab-icon{display:inline-flex;flex:none;color:currentColor}
+.dnt-tab-icon svg{width:12px;height:12px}
+.dnt-tab:focus-within .dnt-tab-title,.dnt-tab-active .dnt-tab-title{mask-image:linear-gradient(to right,black calc(100% - 26px),transparent calc(100% - 10px))}
+@media (hover:hover){.dnt-tab:hover .dnt-tab-title{mask-image:linear-gradient(to right,black calc(100% - 26px),transparent calc(100% - 10px))}}
+.dnt-tab-close{position:absolute;top:2px;right:2px;display:flex;align-items:center;justify-content:center;width:20px;height:20px;padding:0;border:0;border-radius:var(--dsw-radius-sm);background:transparent;color:var(--dsw-alias-label-tertiary);line-height:1;cursor:pointer;opacity:0;pointer-events:none}
+.dnt-tab-close svg{width:14px;height:14px}
+.dnt-tab:focus-within .dnt-tab-close,.dnt-tab-active .dnt-tab-close{opacity:1;pointer-events:auto}
+@media (hover:hover){.dnt-tab:hover .dnt-tab-close{opacity:1;pointer-events:auto}}
+.dnt-tab-add{display:flex;flex:none;align-items:center;justify-content:center;width:24px;height:24px;padding:0;border:0;border-radius:var(--dsw-radius-sm);background:transparent;color:var(--dsw-alias-label-secondary);line-height:1;cursor:pointer;margin-left:4px}
+.dnt-tab-add svg{width:14px;height:14px}
+.dnt-tab-add:focus-visible,.dnt-tab-close:focus-visible{outline:1px solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}
+@media (hover:hover){
+.dnt-tab-add:hover,.dnt-tab-close:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}
+.dnt-tab:hover{background:var(--dsw-alias-interactive-bg-hover)}
+}
+.dnt-tab-active{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-markdown-tag)}
+/* 设置齿轮回到栏内右端：与 + 号同一 ghost 24px 形态（原生 addTab 规格），
+   margin-left:auto 把整行右侧对齐到头部按钮的正下方。 */
+.dnt-gear{margin-left:auto}
 /* content fills the view edge-to-edge — zero outer padding so the pane
    surface meets the view column border, matching how the trajectory body
    and chat composer sit flush against the column. No symmetric margin is
@@ -137,12 +164,14 @@ const glyph = (name, rotate = false) => {
   const Icon = {
     splitRight: primitives.IconPanelLeftOutlineRegular,
     splitDown: primitives.IconPanelLeftOutlineRegular,
+    mcp: primitives.IconApiOutlineRegular,
     close: primitives.IconCloseOutlineRegular,
     retry: primitives.IconRefreshOutlineRegular,
     warn: primitives.IconWarningOutlineRegular,
     settings: primitives.IconSettingsOutlineRegular,
     check: primitives.IconCheckOutlineRegular,
     chevron: primitives.IconChevronDownOutlineRegular,
+    add: primitives.IconPlusOutlineRegular,
     terminal: primitives.IconCodeOutlineRegular,
     copy: primitives.IconCopyOutlineRegular,
     paste: primitives.IconCopyOutlineRegular,
@@ -253,51 +282,8 @@ export function disposeAllTerminals() {
   termStores.clear()
 }
 
-// Settings entry moved to the conversation header utility slot (same lane as
-// the host ⛓/⋯ buttons). The header button lives outside the view tree, so a
-// mounted StatusBar registers an opener here; the button hides itself while
-// no nano-term view is open.
-const settingsOpeners = new Map() // sessionId → () => void
-const settingsListeners = new Set()
-
-function registerSettingsOpener(sessionId, open) {
-  const key = sessionId ?? '_default'
-  settingsOpeners.set(key, open)
-  for (const l of settingsListeners) l()
-  return () => {
-    if (settingsOpeners.get(key) !== open) return
-    settingsOpeners.delete(key)
-    for (const l of settingsListeners) l()
-  }
-}
-
-function subscribeSettings(listener) {
-  settingsListeners.add(listener)
-  return () => settingsListeners.delete(listener)
-}
-
-/**
- * Gear button injected into `conversation.session.header.utilities` — sits in
- * the host's native utility row (right-aligned with ⛓/⋯) and opens the same
- * settings dialog the status-bar button used to. Same shape the host's own
- * utilities take: a sm `Button` pinned to 28px wide with a 15px icon (the
- * session-log-export `moreButton` convention).
- */
-export function NanoTermHeaderSettings({ sessionId, zh }) {
-  const open = useSyncExternalStore(subscribeSettings, () => settingsOpeners.get(sessionId ?? '_default'))
-  if (!open) return null
-  return (
-    <Button
-      size="sm"
-      className="dnt-header-utility"
-      aria-label={zh ? '终端设置' : 'terminal settings'}
-      title={zh ? '终端设置' : 'terminal settings'}
-      onClick={open}
-    >
-      {glyph('settings')}
-    </Button>
-  )
-}
+// The settings gear lives INSIDE the status bar (right edge), not in the
+// header — [业主] corrected the earlier utilities-slot reading.
 
 export function NanoTerm({ sessionId, session, zh, openView }) {
   const store = useMemo(() => termStore(sessionId), [sessionId])
@@ -417,7 +403,7 @@ export function NanoTerm({ sessionId, session, zh, openView }) {
 
   return (
     <div ref={rootRef} className="dnt-root" data-nano-terminal data-dnt-root>
-      <StatusBar sessionId={sessionId} zh={zh} settings={settings} onSettings={updateSettings} />
+      <StatusBar tree={tree} focused={focused} setFocused={setFocused} closeLeaf={closeLeaf} split={split} openLeaf={openLeaf} paneSessions={paneSessions} zh={zh} settings={settings} onSettings={updateSettings} />
       {tree ? (
         <div className="dnt-content">
           <div className="dnt-panes">
@@ -477,20 +463,124 @@ function removeLeaf(node, id) {
   return { ...node, a, b }
 }
 
+/** Tree leaves in display order — one status-bar tab per terminal pane. */
+function leafIdsInOrder(node, out = []) {
+  if (!node) return out
+  if (node.type === 'leaf') { out.push(node); return out }
+  leafIdsInOrder(node.a, out)
+  leafIdsInOrder(node.b, out)
+  return out
+}
+
 /**
- * Status bar shell (TrajectoryToolbar spec): the left cluster was deleted —
- * identity/rollup/new/help moved out, 设置 lives in the conversation header
- * utility slot. The bar keeps only the dialogs it owns until [业主] redo the
- * row contents.
+ * Status bar (TrajectoryToolbar spec): one 原生 dockkit 形态 chip per pane —
+ * click activates, × closes, + opens the new-pane menu; the settings gear sits
+ * at the bar's right edge, visually aligned under the header's native buttons.
  */
-function StatusBar({ sessionId, zh, settings, onSettings }) {
-  const [dialog, setDialog] = useState(null) // 'settings' — sole remaining dialog
+function StatusBar({ tree, focused, setFocused, closeLeaf, split, openLeaf, paneSessions, zh, settings, onSettings }) {
+  const [mcpUrl, setMcpUrl] = useState('')
+  const [dialog, setDialog] = useState(null) // 'mcp' | 'settings'
+  const [menu, setMenu] = useState(null)
   const copy = { cancel: zh ? '取消' : 'Cancel', confirm: zh ? '确定' : 'OK', close: zh ? '关闭' : 'Close' }
 
-  // the header-utility settings button opens this dialog from outside the view
-  useEffect(() => registerSettingsOpener(sessionId, () => setDialog('settings')), [sessionId])
+  const panes = useMemo(() => leafIdsInOrder(tree), [tree])
+  const target = focused ?? panes[0]?.id ?? null
+  // wide panes split right, tall/narrow panes split down
+  const autoDir = () => {
+    const dims = target ? paneSessions.current.get(target) : null
+    return dims && dims.h > dims.w ? 'v' : 'h'
+  }
+  // create-or-split: splitting needs a target pane; with none we seed the tree
+  const open = (spec) => {
+    if (!target) openLeaf(spec ?? { lane: 'local' })
+    else split(target, autoDir(), spec)
+  }
+  const openMenu = (e) => {
+    const r = e.currentTarget.getBoundingClientRect()
+    setMenu({ x: r.left, y: r.bottom + 6, openedAt: Date.now() })
+  }
+  const laneActions = [
+    { id: 'local', label: zh ? '新建本地窗格' : 'New local pane', icon: glyph('terminal'), run: () => open() },
+    { id: 'mcp', label: zh ? '连接 MCP 终端' : 'Connect MCP terminal', icon: glyph('mcp'), run: () => setDialog('mcp') },
+  ]
+
   return (
     <Toolbar label={zh ? '终端状态栏' : 'terminal status bar'} className="dnt-bar">
+      <div className="dnt-strip" role="tablist" aria-label={zh ? '终端窗格' : 'terminal panes'}>
+        {panes.map((node, i) => {
+          const st = paneSessions.current.get(node.id)?.lastStatus
+          const active = focused === node.id
+          return (
+            <React.Fragment key={node.id}>
+              {i > 0 && <span className="dnt-slot" aria-hidden="true" />}
+              <div
+                className={`dnt-tab${active ? ' dnt-tab-active' : ''}`}
+                role="tab"
+                aria-selected={active}
+                tabIndex={0}
+                title={st?.title || undefined}
+                onClick={() => setFocused(node.id)}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setFocused(node.id) } }}
+              >
+                <span className="dnt-tab-title">
+                  <span className="dnt-tab-icon" aria-hidden="true">{glyph(node.laneSpec?.lane === 'mcp' ? 'mcp' : 'terminal')}</span>
+                  <span>{st?.title || (zh ? '终端' : 'Terminal')}</span>
+                </span>
+                <button
+                  type="button"
+                  className="dnt-tab-close"
+                  aria-label={zh ? `关闭 ${st?.title || '终端'}` : `close ${st?.title || 'terminal'}`}
+                  onClick={(e) => { e.stopPropagation(); closeLeaf(node.id) }}
+                >
+                  {glyph('close')}
+                </button>
+              </div>
+            </React.Fragment>
+          )
+        })}
+      </div>
+      <button
+        type="button"
+        className="dnt-tab-add"
+        aria-label={zh ? '新建终端' : 'new terminal'}
+        title={zh ? '新建终端' : 'new terminal'}
+        onClick={openMenu}
+      >
+        {glyph('add')}
+      </button>
+      <button
+        type="button"
+        className="dnt-tab-add dnt-gear"
+        aria-label={zh ? '终端设置' : 'terminal settings'}
+        title={zh ? '终端设置' : 'terminal settings'}
+        onClick={() => setDialog('settings')}
+      >
+        {glyph('settings')}
+      </button>
+      <NanoMenu menu={menu} actions={laneActions} onClose={() => setMenu(null)} width={200} />
+      {dialog === 'mcp' && (
+        <NanoDialog
+          copy={copy}
+          title={zh ? '连接 MCP 终端' : 'Connect MCP terminal'}
+          description={zh ? '目标须实现 MCP terminal server（JSON-RPC over HTTP）' : 'target must be an MCP terminal server (JSON-RPC over HTTP)'}
+          confirmLabel={zh ? '连接' : 'Connect'}
+          confirmDisabled={!mcpUrl}
+          onConfirm={() => {
+            if (mcpUrl) { open({ lane: 'mcp', url: mcpUrl }); setMcpUrl(''); setDialog(null) }
+          }}
+          onCancel={() => setDialog(null)}
+        >
+          <Input
+            value={mcpUrl}
+            placeholder=""
+            data-modal-autofocus
+            spellCheck={false}
+            autoComplete="off"
+            onChange={(e) => setMcpUrl(e.currentTarget.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter' && mcpUrl) { e.preventDefault(); open({ lane: 'mcp', url: mcpUrl }); setMcpUrl(''); setDialog(null) } }}
+          />
+        </NanoDialog>
+      )}
       {dialog === 'settings' && (
         <SettingsDialog copy={copy} zh={zh} settings={settings} onSettings={onSettings} onClose={() => setDialog(null)} />
       )}

@@ -24,6 +24,7 @@ const CONSOLE = '/nano-local-sandbox/console'
 const NETWORK = '/nano-local-sandbox/network'
 const ELEMENTS = '/nano-local-sandbox/elements'
 const BROWSE_HISTORY = '/nano-local-sandbox/browse-history'
+const LOGS = '/nano-local-sandbox/logs'
 const DOM = '/nano-local-sandbox/dom'
 const CONTROL = '/nano-local-sandbox/control'
 const localNotes = []
@@ -239,6 +240,7 @@ const STYLE = `
 .nks-env-row span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right;unicode-bidi:plaintext}
 .nks-env-ok{color:var(--dsw-alias-state-success-primary)}
 .nks-env-legacy{color:var(--dsw-alias-label-tertiary);font:var(--dsw-font-xxxs-11);margin-left:6px}
+.nks-logs{margin:0;max-height:380px;overflow:auto;white-space:pre-wrap;word-break:break-all;font:11px/1.45 ui-monospace,Menlo,monospace;color:var(--dsw-alias-label-secondary)}
 .nks-env-bad{color:var(--dsw-alias-state-error-primary)}
 .nks-env-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:2px}
 .nks-env-checks{display:flex;flex-direction:column;gap:2px;margin-top:2px;padding-top:4px;border-top:.5px solid var(--dsw-alias-border-l2)}
@@ -1440,6 +1442,36 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
         setBusyLocal(false)
       }
     }
+    /** Engine output lives only inside the container. Without it "engine
+     *  down" is a verdict with no evidence. */
+    async function showLogs() {
+      const workspaceEl = workspaceRef.current
+      if (workspaceEl === null || dialogOpenRef.current) return
+      let text = copy.logsLoading
+      try {
+        const data = await fetch(`${LOGS}?tail=300`).then((r) => r.json())
+        text = data.ok ? (data.text || copy.logsEmpty) : `${data.errorId || 'kitesurf.engine.connect'} ${data.error || ''}`
+      } catch (cause) {
+        text = String(cause?.message || cause)
+      }
+      if (workspaceEl !== workspaceRef.current) return
+      dialogOpenRef.current = true
+      let dialog = null
+      const close = () => { dialogOpenRef.current = false }
+      dialog = openNanoDialog({
+        copy: { cancel: copy.close, confirm: copy.close, close: copy.close },
+        title: copy.logsTitle,
+        description: copy.logsDesc,
+        width: 720,
+        maxHeight: 560,
+        container: workspaceEl,
+        confirmLabel: copy.close,
+        onCancel: close,
+        onConfirm: () => { close(); dialog?.close() },
+        children: h('pre', { className: 'nks-logs', 'data-nks-logs': '1' }, text),
+      })
+    }
+
     async function copyDiagnostics() {
       try {
         const data = await fetch(DIAGNOSTICS).then((r) => r.json())
@@ -1490,7 +1522,8 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
           'data-nks-copy-diag': '1',
           title: copy.copyDiagHint,
           onClick: (event) => { copyRawDiag.current = event.shiftKey === true; copyDiagnostics() },
-        }, copy.copyDiag)),
+        }, copy.copyDiag),
+        h('button', { type: 'button', className: 'nks-start-btn', 'data-nks-logs-open': '1', onClick: showLogs }, copy.logsButton)),
       h('div', { className: 'nks-env-note' }, note || copy.envHint))
   }
 

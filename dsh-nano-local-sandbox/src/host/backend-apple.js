@@ -63,6 +63,7 @@ export function createAppleBackend(spec = {}, io = {}) {
     identity: 0,
     stateVolume: 0,
     spawn: 0,
+    logs: 0,
   }
   const bound = { ...io, calls }
 
@@ -115,6 +116,13 @@ export function createAppleBackend(spec = {}, io = {}) {
       calls.exec += 1
       await run(bound, ['exec', name, ...argv])
       return { ok: true }
+    },
+    /** Engine-side log tail. The container is the only place the renderer's
+     *  own output exists, so diagnosis has to read it from here. */
+    async logs(name, { tail = 200 } = {}) {
+      calls.logs += 1
+      const stdout = await runFile(bound, ['logs', '--tail', String(tail), name])
+      return { ok: true, container: name, text: String(stdout ?? '') }
     },
     async publish(ports) {
       calls.publish += 1

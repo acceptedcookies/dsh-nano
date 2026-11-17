@@ -131,7 +131,7 @@ test('T22: the pane scheme comes from ThemeScope, not a local schemeOf', () => {
 
 test('T22: the settings dialog is a window overlay inside the workspace', () => {
   const calls = callArgs(sources, 'openNanoDialog')
-  assert.equal(calls.length, 2, 'settings and the page-open error dialog')
+  assert.equal(calls.length, 3, 'settings, the page-open error dialog and the engine log')
   for (const call of calls) {
     assert.match(call.args, /container:\s*workspaceEl/, 'container carries the workspace element')
     assert.equal(hasParam(call.args, 'region'), false, 'no region rectangle')

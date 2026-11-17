@@ -4,226 +4,136 @@
   "generatedBy": "scripts/gen-route-sensitivity.mjs (route paths/methods) — bodyLimit/responseShape hand-verified from code — NSW rows removed on deprecation, 2026-11-12",
   "routes": [
     {
-      "plugin": "dsh-nano-notepad",
-      "path": "/nano-notepad/save",
+      "plugin": "dsh-nano-cloud-session",
+      "path": "/nano-cloud-session/archive",
       "methods": [
         "POST"
       ],
       "bodyLimit": {
-        "POST": 8388608
+        "POST": 16384
       },
-      "responseShape": "200 {ok:true,path} | 4xx/5xx {error}"
+      "responseShape": "200 upstream session json | 4xx/5xx {ok:false,reason,status}"
     },
     {
-      "plugin": "dsh-nano-notepad",
-      "path": "/nano-notepad/read",
+      "plugin": "dsh-nano-cloud-session",
+      "path": "/nano-cloud-session/catalog",
       "methods": [
         "POST"
       ],
       "bodyLimit": {
-        "POST": 8388608
+        "POST": 16384
       },
-      "responseShape": "200 {ok:true,path,name,content,mtimeMs?} | 4xx {error}"
+      "responseShape": "200 {ok:true,items[],has_next_page,end_cursor?} | 4xx/5xx {ok:false,reason}"
     },
     {
-      "plugin": "dsh-nano-notepad",
-      "path": "/nano-notepad/fetch-mp",
+      "plugin": "dsh-nano-cloud-session",
+      "path": "/nano-cloud-session/config",
       "methods": [
         "POST"
       ],
       "bodyLimit": {
-        "POST": 8388608
+        "POST": 16384
       },
-      "responseShape": "200 {ok:true,url,name,content} | 422 {error}"
+      "responseShape": "200 {ok:true,…(list/save/remove/activate/test+orgMatch/security/ssh-key actions)} | 4xx/5xx {ok:false,reason}"
     },
     {
-      "plugin": "dsh-nano-notepad",
-      "path": "/nano-notepad/s3/status",
+      "plugin": "dsh-nano-cloud-session",
+      "path": "/nano-cloud-session/create",
       "methods": [
         "POST"
       ],
       "bodyLimit": {
-        "POST": 33554432
+        "POST": 262144
       },
-      "responseShape": "200 {ok:true,profiles,activeId,ledger?}"
+      "responseShape": "200 upstream {session_id,url,...} | 4xx/5xx {ok:false,reason,status}"
     },
     {
-      "plugin": "dsh-nano-notepad",
-      "path": "/nano-notepad/s3/test",
-      "methods": [
-        "POST"
-      ],
-      "bodyLimit": {
-        "POST": 33554432
-      },
-      "responseShape": "200 {ok:true,latencyMs?} | {ok:false,error}"
-    },
-    {
-      "plugin": "dsh-nano-notepad",
-      "path": "/nano-notepad/s3/object",
-      "methods": [
-        "POST"
-      ],
-      "bodyLimit": {
-        "POST": 33554432
-      },
-      "responseShape": "200 {ok:true,bodyB64?,etag?,notFound?} | {ok:false,error}"
-    },
-    {
-      "plugin": "dsh-nano-notepad",
-      "path": "/nano-notepad/s3/config",
-      "methods": [
-        "POST"
-      ],
-      "bodyLimit": {
-        "POST": 33554432
-      },
-      "responseShape": "200 {ok:true,profiles?,activeId?,pending?} | {ok:false,error}"
-    },
-    {
-      "plugin": "dsh-nano-notepad",
-      "path": "/nano-notepad/fx-core.wasm",
-      "methods": [
-        "GET",
-        "HEAD"
-      ],
-      "bodyLimit": {
-        "GET": 0,
-        "HEAD": 0
-      },
-      "responseShape": "200 application/wasm (vendored lib/fx-core.wasm static asset)"
-    },
-    {
-      "plugin": "dsh-nano-notepad",
-      "path": "/nano-notepad/fx/models",
-      "methods": [
-        "GET"
-      ],
-      "bodyLimit": {
-        "GET": 0
-      },
-      "responseShape": "200 {ok:true,models[{key,provider,model,contextWindow}]} | 500 {ok:false,reason:'models',detail}"
-    },
-    {
-      "plugin": "dsh-nano-notepad",
-      "path": "/nano-notepad/fx/chat/completions",
-      "methods": [
-        "POST"
-      ],
-      "bodyLimit": {
-        "POST": 33554432
-      },
-      "responseShape": "400 {ok:false,reason:'model-key-format'} | 502 {ok:false,reason:'prepareCall'} | 200 text/event-stream (OpenAI chat.completion.chunk SSE + [DONE])"
-    },
-    {
-      "plugin": "dsh-nano-notepad",
-      "path": "/nano-notepad/pipeline/s3",
-      "methods": [
-        "POST"
-      ],
-      "bodyLimit": {
-        "POST": 33554432
-      },
-      "responseShape": "200 {ok:true,...result(op: putJson|putBytes|getJson|getBytes|del|list)} | 500 {ok:false,reason:'failed'}"
-    },
-    {
-      "plugin": "dsh-nano-notepad",
-      "path": "/nano-notepad/pipeline/claim",
-      "methods": [
-        "POST"
-      ],
-      "bodyLimit": {
-        "POST": 4096
-      },
-      "responseShape": "200 {ok:true,result(op: acquire|renew|read|release)} | 500 {ok:false,reason:'failed'}"
-    },
-    {
-      "plugin": "dsh-nano-notepad",
-      "path": "/nano-notepad/rpc",
-      "methods": [
-        "POST"
-      ],
-      "bodyLimit": {
-        "POST": 4096
-      },
-      "responseShape": "200 {ok:true,result} | 200 {ok:false,reason:'unknown-method'} | 500 {ok:false,reason:'failed'} — read-only whitelist (manifest.get/corpus.list/corpus.read/claim.read)"
-    },
-    {
-      "plugin": "dsh-nano-explorer-extra",
-      "path": "/nano-explorer-extra/status",
-      "methods": [
-        "GET"
-      ],
-      "bodyLimit": {
-        "GET": 0
-      },
-      "responseShape": "200 {ok:true,...gitStatus|stats} | 400 {error}"
-    },
-    {
-      "plugin": "dsh-nano-explorer-extra",
-      "path": "/nano-explorer-extra/commit",
+      "plugin": "dsh-nano-cloud-session",
+      "path": "/nano-cloud-session/message",
       "methods": [
         "POST"
       ],
       "bodyLimit": {
         "POST": 65536
       },
-      "responseShape": "200 {ok:true,...commitResult} | 400 {error}"
+      "responseShape": "200 upstream message ack | 4xx/5xx {ok:false,reason,status}"
     },
     {
-      "plugin": "dsh-nano-explorer-extra",
-      "path": "/nano-explorer-extra/pull",
+      "plugin": "dsh-nano-cloud-session",
+      "path": "/nano-cloud-session/session",
       "methods": [
         "POST"
       ],
       "bodyLimit": {
         "POST": 65536
       },
-      "responseShape": "200 {ok:true,output?} | 400 {error}"
+      "responseShape": "200 upstream op json | 4xx/5xx {ok:false,reason,status}"
     },
     {
-      "plugin": "dsh-nano-explorer-extra",
-      "path": "/nano-explorer-extra/fetch",
+      "plugin": "dsh-nano-cloud-session",
+      "path": "/nano-cloud-session/sessions",
       "methods": [
         "POST"
       ],
       "bodyLimit": {
         "POST": 65536
       },
-      "responseShape": "200 {ok:true,summary} | 400 {error}"
+      "responseShape": "200 upstream list json | 4xx/5xx {ok:false,reason,status}"
     },
     {
-      "plugin": "dsh-nano-explorer-extra",
-      "path": "/nano-explorer-extra/push",
+      "plugin": "dsh-nano-cloud-session",
+      "path": "/nano-cloud-session/ssh",
       "methods": [
         "POST"
       ],
       "bodyLimit": {
-        "POST": 65536
+        "POST": 16384
       },
-      "responseShape": "200 {ok:true,summary} | 400 {error}"
+      "responseShape": "200 {ok:true,session_id,shell,forward,publicKey,enrollHint} | 422 {ok:false,reason}"
     },
     {
-      "plugin": "dsh-nano-explorer-extra",
-      "path": "/nano-explorer-extra/remote",
+      "plugin": "dsh-nano-cloud-session",
+      "path": "/nano-cloud-session/status",
       "methods": [
         "POST"
       ],
       "bodyLimit": {
-        "POST": 65536
+        "POST": 16384
       },
-      "responseShape": "200 {ok:true,remotes} | 400 {error}"
+      "responseShape": "200 {ok:true,profiles[],activeId,seededFromEnv} | 5xx {ok:false,reason}"
     },
     {
-      "plugin": "dsh-nano-explorer-extra",
-      "path": "/nano-explorer-extra/ssh-key",
+      "plugin": "dsh-nano-cloud-session",
+      "path": "/nano-cloud-session/terminate",
       "methods": [
         "POST"
       ],
       "bodyLimit": {
-        "POST": 65536
+        "POST": 16384
       },
-      "responseShape": "200 {ok:true,sshKey} | 400 {error}"
+      "responseShape": "200 upstream ack | 4xx/5xx {ok:false,reason,status}"
+    },
+    {
+      "plugin": "dsh-nano-cloud-session",
+      "path": "/nano-cloud-session/unarchive",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 16384
+      },
+      "responseShape": "200 upstream session json | 4xx/5xx {ok:false,reason,status}"
+    },
+    {
+      "plugin": "dsh-nano-cloud-session",
+      "path": "/nano-cloud-session/upload",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 33554432
+      },
+      "responseShape": "200 {ok:true,attachment:{attachment_id,name,url}} | 413/422 {ok:false,reason}"
     },
     {
       "plugin": "dsh-nano-explorer-extra",
@@ -249,6 +159,17 @@
     },
     {
       "plugin": "dsh-nano-explorer-extra",
+      "path": "/nano-explorer-extra/commit",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 65536
+      },
+      "responseShape": "200 {ok:true,...commitResult} | 400 {error}"
+    },
+    {
+      "plugin": "dsh-nano-explorer-extra",
       "path": "/nano-explorer-extra/create-file",
       "methods": [
         "POST"
@@ -271,28 +192,6 @@
     },
     {
       "plugin": "dsh-nano-explorer-extra",
-      "path": "/nano-explorer-extra/rename",
-      "methods": [
-        "POST"
-      ],
-      "bodyLimit": {
-        "POST": 65536
-      },
-      "responseShape": "200 {ok:true,entry} | 400 {error}"
-    },
-    {
-      "plugin": "dsh-nano-explorer-extra",
-      "path": "/nano-explorer-extra/move",
-      "methods": [
-        "POST"
-      ],
-      "bodyLimit": {
-        "POST": 65536
-      },
-      "responseShape": "200 {ok:true,entry} | 400 {error}"
-    },
-    {
-      "plugin": "dsh-nano-explorer-extra",
       "path": "/nano-explorer-extra/delete",
       "methods": [
         "POST"
@@ -301,6 +200,17 @@
         "POST": 65536
       },
       "responseShape": "200 {ok:true} | 400 {error}"
+    },
+    {
+      "plugin": "dsh-nano-explorer-extra",
+      "path": "/nano-explorer-extra/fetch",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 65536
+      },
+      "responseShape": "200 {ok:true,summary} | 400 {error}"
     },
     {
       "plugin": "dsh-nano-explorer-extra",
@@ -326,6 +236,17 @@
     },
     {
       "plugin": "dsh-nano-explorer-extra",
+      "path": "/nano-explorer-extra/move",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 65536
+      },
+      "responseShape": "200 {ok:true,entry} | 400 {error}"
+    },
+    {
+      "plugin": "dsh-nano-explorer-extra",
       "path": "/nano-explorer-extra/perf-review/host",
       "methods": [
         "GET"
@@ -334,6 +255,28 @@
         "GET": 0
       },
       "responseShape": "200 {ok:true,enabled,samples|snapshot} | 400 {error}"
+    },
+    {
+      "plugin": "dsh-nano-explorer-extra",
+      "path": "/nano-explorer-extra/pull",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 65536
+      },
+      "responseShape": "200 {ok:true,output?} | 400 {error}"
+    },
+    {
+      "plugin": "dsh-nano-explorer-extra",
+      "path": "/nano-explorer-extra/push",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 65536
+      },
+      "responseShape": "200 {ok:true,summary} | 400 {error}"
     },
     {
       "plugin": "dsh-nano-explorer-extra",
@@ -347,45 +290,428 @@
       "responseShape": "200 {ok:true,content,resolvedPath} | 400 {error}"
     },
     {
-      "plugin": "dsh-nano-model-selector",
-      "path": "/nano-model-selector/catalog",
+      "plugin": "dsh-nano-explorer-extra",
+      "path": "/nano-explorer-extra/remote",
       "methods": [
-        "GET",
-        "HEAD"
+        "POST"
       ],
       "bodyLimit": {
-        "GET": 0,
-        "HEAD": 0
+        "POST": 65536
       },
-      "responseShape": "200 {ok:true,providers:[{id,name,models:[...]}]} | {error}"
+      "responseShape": "200 {ok:true,remotes} | 400 {error}"
     },
     {
-      "plugin": "dsh-nano-model-selector",
-      "path": "/nano-model-selector/media-engines",
+      "plugin": "dsh-nano-explorer-extra",
+      "path": "/nano-explorer-extra/rename",
       "methods": [
-        "GET",
-        "HEAD"
+        "POST"
       ],
       "bodyLimit": {
-        "GET": 0,
-        "HEAD": 0
+        "POST": 65536
       },
-      "responseShape": "200 {ok:true,engines:[{key,label,detail,path,available}]} | {error}"
+      "responseShape": "200 {ok:true,entry} | 400 {error}"
     },
     {
-      "plugin": "dsh-nano-model-selector",
-      "path": "/nano-model-selector/media-engine",
+      "plugin": "dsh-nano-explorer-extra",
+      "path": "/nano-explorer-extra/ssh-key",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 65536
+      },
+      "responseShape": "200 {ok:true,sshKey} | 400 {error}"
+    },
+    {
+      "plugin": "dsh-nano-explorer-extra",
+      "path": "/nano-explorer-extra/status",
+      "methods": [
+        "GET"
+      ],
+      "bodyLimit": {
+        "GET": 0
+      },
+      "responseShape": "200 {ok:true,...gitStatus|stats} | 400 {error}"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/browse-history",
       "methods": [
         "GET",
         "HEAD",
-        "PUT"
+        "POST",
+        "DELETE"
       ],
       "bodyLimit": {
         "GET": 0,
         "HEAD": 0,
-        "PUT": 16384
+        "POST": 4096,
+        "DELETE": 4096
       },
-      "responseShape": "GET/HEAD 200 {ok:true,engine,explicit} ; PUT 200 {ok:true,engine} | {ok:false,error}"
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/console",
+      "methods": [
+        "GET",
+        "HEAD",
+        "POST"
+      ],
+      "bodyLimit": {
+        "GET": 0,
+        "HEAD": 0,
+        "POST": 4096
+      },
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/control",
+      "methods": [
+        "GET",
+        "HEAD",
+        "POST"
+      ],
+      "bodyLimit": {
+        "GET": 0,
+        "HEAD": 0,
+        "POST": 4096
+      },
+      "responseShape": "CONTROL_ROUTE (HITL) — proxies the container MCP bridge loopback /control: GET returns {ok,control:{writer,owner,humanHold,lastAction}}, POST {action:takeover|release} toggles the sticky human override that refuses agent MCP writes (kitesurf.control.held)."
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/diagnostics",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "bodyLimit": {
+        "GET": 0,
+        "HEAD": 0
+      },
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/dom",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "bodyLimit": {
+        "GET": 0,
+        "HEAD": 0
+      },
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/edit",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 8192
+      },
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/elements",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "bodyLimit": {
+        "GET": 0,
+        "HEAD": 0
+      },
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/evaluate",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 4096
+      },
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/har",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "bodyLimit": {
+        "GET": 0,
+        "HEAD": 0
+      },
+      "responseShape": "HAR_ROUTE (P1-3) — exports the in-memory network ring as HAR 1.2 for external DevTools/audit. Reads host memory only; response bodies marked body:null reason:'engine' (engine doesn't buffer them)."
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/history",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 4096
+      },
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/interact",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 4096
+      },
+      "responseShape": "INTERACT_ROUTE (P1-1) — synthetic DOM events (click/fill/type/press/hover/select/check) via Runtime.evaluate + native-setter for controlled inputs. Page-state write on shared engine, same class as /edit. Occlusion/visibility probed before dispatch."
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/kite",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 4096
+      },
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/logs",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "bodyLimit": {
+        "GET": 0,
+        "HEAD": 0
+      },
+      "responseShape": "200 {ok:true,container,tail,text} | 4xx/5xx {errorId,error}"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/mcp",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 4096
+      },
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/network",
+      "methods": [
+        "GET",
+        "HEAD",
+        "POST"
+      ],
+      "bodyLimit": {
+        "GET": 0,
+        "HEAD": 0,
+        "POST": 4096
+      },
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/open",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 4096
+      },
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/operations",
+      "methods": [
+        "GET",
+        "HEAD",
+        "POST"
+      ],
+      "bodyLimit": {
+        "GET": 0,
+        "HEAD": 0,
+        "POST": 4096
+      },
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/pick",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 4096
+      },
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/ports",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "bodyLimit": {
+        "GET": 0,
+        "HEAD": 0
+      },
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/recover",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 4096
+      },
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/refs",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "bodyLimit": {
+        "GET": 0,
+        "HEAD": 0
+      },
+      "responseShape": "REFS_ROUTE — resolves @N element refs to selectors from the host's stored ref table. No engine call; a host-memory read of the last /snapshot, same read-class as /context list."
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/selftest",
+      "methods": [
+        "GET",
+        "HEAD",
+        "POST"
+      ],
+      "bodyLimit": {
+        "GET": 0,
+        "HEAD": 0,
+        "POST": 0
+      },
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/settings",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 4096
+      },
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/shot",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 4096
+      },
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/snapshot",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "bodyLimit": {
+        "GET": 0,
+        "HEAD": 0
+      },
+      "responseShape": "SNAPSHOT_ROUTE — injected a11y-lite walker returns the semantic tree + @N element-ref table of the rendered page. A bounded read (one Runtime.evaluate round-trip), same read-class as /elements and /dom. Refs written to host memory for later @N resolution."
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/state",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 65536
+      },
+      "responseShape": "STATE_ROUTE (P1-2) — {action:save} exports {localStorage,sessionStorage,cookie} and appends to $DSH_HOME/nano-kitesurf-state.jsonl; {action:load,state|name} restores it into the page. Host write (state file) + page write, L2."
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/status",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "bodyLimit": {
+        "GET": 0,
+        "HEAD": 0
+      },
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/storage",
+      "methods": [
+        "GET",
+        "HEAD",
+        "POST"
+      ],
+      "bodyLimit": {
+        "GET": 0,
+        "HEAD": 0,
+        "POST": 8192
+      },
+      "responseShape": "STORAGE_ROUTE (P1-2) — reads/writes localStorage/sessionStorage/document.cookie inside the engine page via Runtime.evaluate. Page-state write on the shared engine, same class as /evaluate. HttpOnly cookies annotated unreachable."
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/targets",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "bodyLimit": {
+        "GET": 0,
+        "HEAD": 0
+      },
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-local-sandbox",
+      "path": "/nano-local-sandbox/wait",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 4096
+      },
+      "responseShape": "JSON"
     },
     {
       "plugin": "dsh-nano-model-selector",
@@ -427,8 +753,8 @@
       "responseShape": "POST 200 {ok:true, application:'applied'|'restart-required'|'overridden', restartReason?, bundle:{installed,enabled,known}} | POST 500 {ok:false, application:'failed', error:{code:'switch-failed',reason}, restartReason?, bundle} | {ok:false,error:{code,reason}} where code ∈ {invalid-json-body,invalid-schema,body-too-large,manager-unavailable,switch-failed}"
     },
     {
-      "plugin": "dsh-nano-local-sandbox",
-      "path": "/nano-local-sandbox/status",
+      "plugin": "dsh-nano-model-selector",
+      "path": "/nano-model-selector/catalog",
       "methods": [
         "GET",
         "HEAD"
@@ -437,118 +763,26 @@
         "GET": 0,
         "HEAD": 0
       },
-      "responseShape": "JSON"
+      "responseShape": "200 {ok:true,providers:[{id,name,models:[...]}]} | {error}"
     },
     {
-      "plugin": "dsh-nano-local-sandbox",
-      "path": "/nano-local-sandbox/open",
-      "methods": [
-        "POST"
-      ],
-      "bodyLimit": {
-        "POST": 4096
-      },
-      "responseShape": "JSON"
-    },
-    {
-      "plugin": "dsh-nano-local-sandbox",
-      "path": "/nano-local-sandbox/shot",
-      "methods": [
-        "POST"
-      ],
-      "bodyLimit": {
-        "POST": 4096
-      },
-      "responseShape": "JSON"
-    },
-    {
-      "plugin": "dsh-nano-local-sandbox",
-      "path": "/nano-local-sandbox/history",
-      "methods": [
-        "POST"
-      ],
-      "bodyLimit": {
-        "POST": 4096
-      },
-      "responseShape": "JSON"
-    },
-    {
-      "plugin": "dsh-nano-local-sandbox",
-      "path": "/nano-local-sandbox/pick",
-      "methods": [
-        "POST"
-      ],
-      "bodyLimit": {
-        "POST": 4096
-      },
-      "responseShape": "JSON"
-    },
-    {
-      "plugin": "dsh-nano-local-sandbox",
-      "path": "/nano-local-sandbox/edit",
-      "methods": [
-        "POST"
-      ],
-      "bodyLimit": {
-        "POST": 8192
-      },
-      "responseShape": "JSON"
-    },
-    {
-      "plugin": "dsh-nano-local-sandbox",
-      "path": "/nano-local-sandbox/settings",
-      "methods": [
-        "POST"
-      ],
-      "bodyLimit": {
-        "POST": 4096
-      },
-      "responseShape": "JSON"
-    },
-    {
-      "plugin": "dsh-nano-local-sandbox",
-      "path": "/nano-local-sandbox/kite",
-      "methods": [
-        "POST"
-      ],
-      "bodyLimit": {
-        "POST": 4096
-      },
-      "responseShape": "JSON"
-    },
-    {
-      "plugin": "dsh-nano-local-sandbox",
-      "path": "/nano-local-sandbox/console",
+      "plugin": "dsh-nano-model-selector",
+      "path": "/nano-model-selector/media-engine",
       "methods": [
         "GET",
         "HEAD",
-        "POST"
+        "PUT"
       ],
       "bodyLimit": {
         "GET": 0,
         "HEAD": 0,
-        "POST": 4096
+        "PUT": 16384
       },
-      "responseShape": "JSON"
+      "responseShape": "GET/HEAD 200 {ok:true,engine,explicit} ; PUT 200 {ok:true,engine} | {ok:false,error}"
     },
     {
-      "plugin": "dsh-nano-local-sandbox",
-      "path": "/nano-local-sandbox/operations",
-      "methods": [
-        "GET",
-        "HEAD",
-        "POST"
-      ],
-      "bodyLimit": {
-        "GET": 0,
-        "HEAD": 0,
-        "POST": 4096
-      },
-      "responseShape": "JSON"
-    },
-    {
-      "plugin": "dsh-nano-local-sandbox",
-      "path": "/nano-local-sandbox/diagnostics",
+      "plugin": "dsh-nano-model-selector",
+      "path": "/nano-model-selector/media-engines",
       "methods": [
         "GET",
         "HEAD"
@@ -557,165 +791,11 @@
         "GET": 0,
         "HEAD": 0
       },
-      "responseShape": "JSON"
+      "responseShape": "200 {ok:true,engines:[{key,label,detail,path,available}]} | {error}"
     },
     {
-      "plugin": "dsh-nano-local-sandbox",
-      "path": "/nano-local-sandbox/mcp",
-      "methods": [
-        "POST"
-      ],
-      "bodyLimit": {
-        "POST": 4096
-      },
-      "responseShape": "JSON"
-    },
-    {
-      "plugin": "dsh-nano-local-sandbox",
-      "path": "/nano-local-sandbox/ports",
-      "methods": [
-        "GET",
-        "HEAD"
-      ],
-      "bodyLimit": {
-        "GET": 0,
-        "HEAD": 0
-      },
-      "responseShape": "JSON"
-    },
-    {
-      "plugin": "dsh-nano-local-sandbox",
-      "path": "/nano-local-sandbox/recover",
-      "methods": [
-        "POST"
-      ],
-      "bodyLimit": {
-        "POST": 4096
-      },
-      "responseShape": "JSON"
-    },
-    {
-      "plugin": "dsh-nano-local-sandbox",
-      "path": "/nano-local-sandbox/dom",
-      "methods": [
-        "GET",
-        "HEAD"
-      ],
-      "bodyLimit": {
-        "GET": 0,
-        "HEAD": 0
-      },
-      "responseShape": "JSON"
-    },
-    {
-      "plugin": "dsh-nano-local-sandbox",
-      "path": "/nano-local-sandbox/selftest",
-      "methods": [
-        "GET",
-        "HEAD",
-        "POST"
-      ],
-      "bodyLimit": {
-        "GET": 0,
-        "HEAD": 0,
-        "POST": 0
-      },
-      "responseShape": "JSON"
-    },
-    {
-      "plugin": "dsh-nano-local-sandbox",
-      "path": "/nano-local-sandbox/elements",
-      "methods": [
-        "GET",
-        "HEAD"
-      ],
-      "bodyLimit": {
-        "GET": 0,
-        "HEAD": 0
-      },
-      "responseShape": "JSON"
-    },
-    {
-      "plugin": "dsh-nano-local-sandbox",
-      "path": "/nano-local-sandbox/browse-history",
-      "methods": [
-        "GET",
-        "HEAD",
-        "POST",
-        "DELETE"
-      ],
-      "bodyLimit": {
-        "GET": 0,
-        "HEAD": 0,
-        "POST": 4096,
-        "DELETE": 4096
-      },
-      "responseShape": "JSON"
-    },
-    {
-      "plugin": "dsh-nano-local-sandbox",
-      "path": "/nano-local-sandbox/network",
-      "methods": [
-        "GET",
-        "HEAD",
-        "POST"
-      ],
-      "bodyLimit": {
-        "GET": 0,
-        "HEAD": 0,
-        "POST": 4096
-      },
-      "responseShape": "JSON"
-    },
-    {
-      "plugin": "dsh-nano-local-sandbox",
-      "path": "/nano-local-sandbox/targets",
-      "methods": [
-        "GET",
-        "HEAD"
-      ],
-      "bodyLimit": {
-        "GET": 0,
-        "HEAD": 0
-      },
-      "responseShape": "JSON"
-    },
-    {
-      "plugin": "dsh-nano-local-sandbox",
-      "path": "/nano-local-sandbox/evaluate",
-      "methods": [
-        "POST"
-      ],
-      "bodyLimit": {
-        "POST": 4096
-      },
-      "responseShape": "JSON"
-    },
-    {
-      "plugin": "dsh-nano-local-sandbox",
-      "path": "/nano-local-sandbox/wait",
-      "methods": [
-        "POST"
-      ],
-      "bodyLimit": {
-        "POST": 4096
-      },
-      "responseShape": "JSON"
-    },
-    {
-      "plugin": "dsh-nano-terminal",
-      "path": "/dsh-nano-terminal/mcp",
-      "methods": [
-        "POST"
-      ],
-      "bodyLimit": {
-        "POST": 524288
-      },
-      "responseShape": "JSON"
-    },
-    {
-      "plugin": "dsh-nano-terminal",
-      "path": "/dsh-nano-terminal/sessions",
+      "plugin": "dsh-nano-model-selector",
+      "path": "/nano-model-selector/perf-review/host",
       "methods": [
         "GET"
       ],
@@ -723,6 +803,173 @@
         "GET": 0
       },
       "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-notepad",
+      "path": "/nano-notepad/fetch-mp",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 8388608
+      },
+      "responseShape": "200 {ok:true,url,name,content} | 422 {error}"
+    },
+    {
+      "plugin": "dsh-nano-notepad",
+      "path": "/nano-notepad/fx-core.wasm",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "bodyLimit": {
+        "GET": 0,
+        "HEAD": 0
+      },
+      "responseShape": "200 application/wasm (vendored lib/fx-core.wasm static asset)"
+    },
+    {
+      "plugin": "dsh-nano-notepad",
+      "path": "/nano-notepad/fx/chat/completions",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 33554432
+      },
+      "responseShape": "400 {ok:false,reason:'model-key-format'} | 502 {ok:false,reason:'prepareCall'} | 200 text/event-stream (OpenAI chat.completion.chunk SSE + [DONE])"
+    },
+    {
+      "plugin": "dsh-nano-notepad",
+      "path": "/nano-notepad/fx/models",
+      "methods": [
+        "GET"
+      ],
+      "bodyLimit": {
+        "GET": 0
+      },
+      "responseShape": "200 {ok:true,models[{key,provider,model,contextWindow}]} | 500 {ok:false,reason:'models',detail}"
+    },
+    {
+      "plugin": "dsh-nano-notepad",
+      "path": "/nano-notepad/fx/sdk",
+      "methods": [
+        "GET"
+      ],
+      "bodyLimit": {
+        "GET": 0
+      },
+      "responseShape": "binary"
+    },
+    {
+      "plugin": "dsh-nano-notepad",
+      "path": "/nano-notepad/perf-review/host",
+      "methods": [
+        "GET"
+      ],
+      "bodyLimit": {
+        "GET": 0
+      },
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-notepad",
+      "path": "/nano-notepad/pipeline/claim",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 4096
+      },
+      "responseShape": "200 {ok:true,result(op: acquire|renew|read|release)} | 500 {ok:false,reason:'failed'}"
+    },
+    {
+      "plugin": "dsh-nano-notepad",
+      "path": "/nano-notepad/pipeline/s3",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 33554432
+      },
+      "responseShape": "200 {ok:true,...result(op: putJson|putBytes|getJson|getBytes|del|list)} | 500 {ok:false,reason:'failed'}"
+    },
+    {
+      "plugin": "dsh-nano-notepad",
+      "path": "/nano-notepad/read",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 8388608
+      },
+      "responseShape": "200 {ok:true,path,name,content,mtimeMs?} | 4xx {error}"
+    },
+    {
+      "plugin": "dsh-nano-notepad",
+      "path": "/nano-notepad/rpc",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 4096
+      },
+      "responseShape": "200 {ok:true,result} | 200 {ok:false,reason:'unknown-method'} | 500 {ok:false,reason:'failed'} — read-only whitelist (manifest.get/corpus.list/corpus.read/claim.read)"
+    },
+    {
+      "plugin": "dsh-nano-notepad",
+      "path": "/nano-notepad/s3/config",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 33554432
+      },
+      "responseShape": "200 {ok:true,profiles?,activeId?,pending?} | {ok:false,error}"
+    },
+    {
+      "plugin": "dsh-nano-notepad",
+      "path": "/nano-notepad/s3/object",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 33554432
+      },
+      "responseShape": "200 {ok:true,bodyB64?,etag?,notFound?} | {ok:false,error}"
+    },
+    {
+      "plugin": "dsh-nano-notepad",
+      "path": "/nano-notepad/s3/status",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 33554432
+      },
+      "responseShape": "200 {ok:true,profiles,activeId,ledger?}"
+    },
+    {
+      "plugin": "dsh-nano-notepad",
+      "path": "/nano-notepad/s3/test",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 33554432
+      },
+      "responseShape": "200 {ok:true,latencyMs?} | {ok:false,error}"
+    },
+    {
+      "plugin": "dsh-nano-notepad",
+      "path": "/nano-notepad/save",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 8388608
+      },
+      "responseShape": "200 {ok:true,path} | 4xx/5xx {error}"
     },
     {
       "plugin": "dsh-nano-terminal",
@@ -748,12 +995,34 @@
     },
     {
       "plugin": "dsh-nano-terminal",
+      "path": "/dsh-nano-terminal/mcp",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 524288
+      },
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-terminal",
       "path": "/dsh-nano-terminal/session",
       "methods": [
         "POST"
       ],
       "bodyLimit": {
         "POST": 0
+      },
+      "responseShape": "JSON"
+    },
+    {
+      "plugin": "dsh-nano-terminal",
+      "path": "/dsh-nano-terminal/sessions",
+      "methods": [
+        "GET"
+      ],
+      "bodyLimit": {
+        "GET": 0
       },
       "responseShape": "JSON"
     },
@@ -767,262 +1036,6 @@
         "GET": 0
       },
       "responseShape": "upgrade"
-    },
-    {
-      "plugin": "dsh-nano-local-sandbox",
-      "path": "/nano-local-sandbox/control",
-      "methods": [
-        "GET",
-        "HEAD",
-        "POST"
-      ],
-      "bodyLimit": {
-        "GET": 0,
-        "HEAD": 0,
-        "POST": 4096
-      },
-      "responseShape": "CONTROL_ROUTE (HITL) — proxies the container MCP bridge loopback /control: GET returns {ok,control:{writer,owner,humanHold,lastAction}}, POST {action:takeover|release} toggles the sticky human override that refuses agent MCP writes (kitesurf.control.held)."
-    },
-    {
-      "plugin": "dsh-nano-local-sandbox",
-      "path": "/nano-local-sandbox/storage",
-      "methods": [
-        "GET",
-        "HEAD",
-        "POST"
-      ],
-      "bodyLimit": {
-        "GET": 0,
-        "HEAD": 0,
-        "POST": 8192
-      },
-      "responseShape": "STORAGE_ROUTE (P1-2) — reads/writes localStorage/sessionStorage/document.cookie inside the engine page via Runtime.evaluate. Page-state write on the shared engine, same class as /evaluate. HttpOnly cookies annotated unreachable."
-    },
-    {
-      "plugin": "dsh-nano-local-sandbox",
-      "path": "/nano-local-sandbox/interact",
-      "methods": [
-        "POST"
-      ],
-      "bodyLimit": {
-        "POST": 4096
-      },
-      "responseShape": "INTERACT_ROUTE (P1-1) — synthetic DOM events (click/fill/type/press/hover/select/check) via Runtime.evaluate + native-setter for controlled inputs. Page-state write on shared engine, same class as /edit. Occlusion/visibility probed before dispatch."
-    },
-    {
-      "plugin": "dsh-nano-local-sandbox",
-      "path": "/nano-local-sandbox/state",
-      "methods": [
-        "POST"
-      ],
-      "bodyLimit": {
-        "POST": 65536
-      },
-      "responseShape": "STATE_ROUTE (P1-2) — {action:save} exports {localStorage,sessionStorage,cookie} and appends to $DSH_HOME/nano-kitesurf-state.jsonl; {action:load,state|name} restores it into the page. Host write (state file) + page write, L2."
-    },
-    {
-      "plugin": "dsh-nano-local-sandbox",
-      "path": "/nano-local-sandbox/har",
-      "methods": [
-        "GET",
-        "HEAD"
-      ],
-      "bodyLimit": {
-        "GET": 0,
-        "HEAD": 0
-      },
-      "responseShape": "HAR_ROUTE (P1-3) — exports the in-memory network ring as HAR 1.2 for external DevTools/audit. Reads host memory only; response bodies marked body:null reason:'engine' (engine doesn't buffer them)."
-    },
-    {
-      "plugin": "dsh-nano-local-sandbox",
-      "path": "/nano-local-sandbox/snapshot",
-      "methods": [
-        "GET",
-        "HEAD"
-      ],
-      "bodyLimit": {
-        "GET": 0,
-        "HEAD": 0
-      },
-      "responseShape": "SNAPSHOT_ROUTE — injected a11y-lite walker returns the semantic tree + @N element-ref table of the rendered page. A bounded read (one Runtime.evaluate round-trip), same read-class as /elements and /dom. Refs written to host memory for later @N resolution."
-    },
-    {
-      "plugin": "dsh-nano-local-sandbox",
-      "path": "/nano-local-sandbox/refs",
-      "methods": [
-        "GET",
-        "HEAD"
-      ],
-      "bodyLimit": {
-        "GET": 0,
-        "HEAD": 0
-      },
-      "responseShape": "REFS_ROUTE — resolves @N element refs to selectors from the host's stored ref table. No engine call; a host-memory read of the last /snapshot, same read-class as /context list."
-    },
-    {
-      "plugin": "dsh-nano-cloud-session",
-      "path": "/nano-cloud-session/status",
-      "methods": [
-        "POST"
-      ],
-      "bodyLimit": {
-        "POST": 16384
-      },
-      "responseShape": "200 {ok:true,profiles[],activeId,seededFromEnv} | 5xx {ok:false,reason}"
-    },
-    {
-      "plugin": "dsh-nano-cloud-session",
-      "path": "/nano-cloud-session/config",
-      "methods": [
-        "POST"
-      ],
-      "bodyLimit": {
-        "POST": 16384
-      },
-      "responseShape": "200 {ok:true,…(list/save/remove/activate/test+orgMatch/security/ssh-key actions)} | 4xx/5xx {ok:false,reason}"
-    },
-    {
-      "plugin": "dsh-nano-cloud-session",
-      "path": "/nano-cloud-session/sessions",
-      "methods": [
-        "POST"
-      ],
-      "bodyLimit": {
-        "POST": 65536
-      },
-      "responseShape": "200 upstream list json | 4xx/5xx {ok:false,reason,status}"
-    },
-    {
-      "plugin": "dsh-nano-cloud-session",
-      "path": "/nano-cloud-session/session",
-      "methods": [
-        "POST"
-      ],
-      "bodyLimit": {
-        "POST": 65536
-      },
-      "responseShape": "200 upstream op json | 4xx/5xx {ok:false,reason,status}"
-    },
-    {
-      "plugin": "dsh-nano-cloud-session",
-      "path": "/nano-cloud-session/create",
-      "methods": [
-        "POST"
-      ],
-      "bodyLimit": {
-        "POST": 262144
-      },
-      "responseShape": "200 upstream {session_id,url,...} | 4xx/5xx {ok:false,reason,status}"
-    },
-    {
-      "plugin": "dsh-nano-cloud-session",
-      "path": "/nano-cloud-session/message",
-      "methods": [
-        "POST"
-      ],
-      "bodyLimit": {
-        "POST": 65536
-      },
-      "responseShape": "200 upstream message ack | 4xx/5xx {ok:false,reason,status}"
-    },
-    {
-      "plugin": "dsh-nano-cloud-session",
-      "path": "/nano-cloud-session/archive",
-      "methods": [
-        "POST"
-      ],
-      "bodyLimit": {
-        "POST": 16384
-      },
-      "responseShape": "200 upstream session json | 4xx/5xx {ok:false,reason,status}"
-    },
-    {
-      "plugin": "dsh-nano-cloud-session",
-      "path": "/nano-cloud-session/unarchive",
-      "methods": [
-        "POST"
-      ],
-      "bodyLimit": {
-        "POST": 16384
-      },
-      "responseShape": "200 upstream session json | 4xx/5xx {ok:false,reason,status}"
-    },
-    {
-      "plugin": "dsh-nano-cloud-session",
-      "path": "/nano-cloud-session/terminate",
-      "methods": [
-        "POST"
-      ],
-      "bodyLimit": {
-        "POST": 16384
-      },
-      "responseShape": "200 upstream ack | 4xx/5xx {ok:false,reason,status}"
-    },
-    {
-      "plugin": "dsh-nano-cloud-session",
-      "path": "/nano-cloud-session/ssh",
-      "methods": [
-        "POST"
-      ],
-      "bodyLimit": {
-        "POST": 16384
-      },
-      "responseShape": "200 {ok:true,session_id,shell,forward,publicKey,enrollHint} | 422 {ok:false,reason}"
-    },
-    {
-      "plugin": "dsh-nano-cloud-session",
-      "path": "/nano-cloud-session/catalog",
-      "methods": [
-        "POST"
-      ],
-      "bodyLimit": {
-        "POST": 16384
-      },
-      "responseShape": "200 {ok:true,items[],has_next_page,end_cursor?} | 4xx/5xx {ok:false,reason}"
-    },
-    {
-      "plugin": "dsh-nano-cloud-session",
-      "path": "/nano-cloud-session/upload",
-      "methods": [
-        "POST"
-      ],
-      "bodyLimit": {
-        "POST": 33554432
-      },
-      "responseShape": "200 {ok:true,attachment:{attachment_id,name,url}} | 413/422 {ok:false,reason}"
-    },
-    {
-      "plugin": "dsh-nano-notepad",
-      "path": "/nano-notepad/fx/sdk",
-      "methods": [
-        "GET"
-      ],
-      "bodyLimit": {
-        "GET": 0
-      },
-      "responseShape": "binary"
-    },
-    {
-      "plugin": "dsh-nano-notepad",
-      "path": "/nano-notepad/perf-review/host",
-      "methods": [
-        "GET"
-      ],
-      "bodyLimit": {
-        "GET": 0
-      },
-      "responseShape": "JSON"
-    },
-    {
-      "plugin": "dsh-nano-model-selector",
-      "path": "/nano-model-selector/perf-review/host",
-      "methods": [
-        "GET"
-      ],
-      "bodyLimit": {
-        "GET": 0
-      },
-      "responseShape": "JSON"
     }
   ],
   "ui": {

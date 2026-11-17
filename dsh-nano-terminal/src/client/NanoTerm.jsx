@@ -630,8 +630,8 @@ function StatusBar({ tree, focused, setFocused, closeLeaf, split, openLeaf, togg
         type="button"
         className="dnt-tab-add"
         aria-label={zh ? '新建终端' : 'new terminal'}
-        title={zh ? '新建本地窗格（右键更多选项）' : 'new local pane (right-click for more)'}
-        onClick={() => open()}
+        title={zh ? '新建窗格…' : 'new pane…'}
+        onClick={openMenu}
         onContextMenu={(e) => { e.preventDefault(); openMenu(e) }}
       >
         {glyph('add')}

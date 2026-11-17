@@ -5229,10 +5229,12 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           // painted the opaque Start button straight over the error text
           // ("引启动引擎答"). Everything below is a single vertical stack.
           h7("div", { className: "nks-empty-icon" }, glyph("annotate")),
+          // The centred heartbeat already says "opening"; repeating it here made
+          // the pane look like two stacked loading states.
           h7(
             "div",
             { className: "nks-empty-title" },
-            busy ? copy.opening : status?.engineMismatch === true ? copy.engineMismatch : statusDown ? copy.errorTitle : copy.emptyTitle
+            status?.engineMismatch === true ? copy.engineMismatch : statusDown ? copy.errorTitle : copy.emptyTitle
           ),
           !busy && !statusDown && !status?.engineMismatch ? h7("div", { className: "nks-empty-body" }, copy.emptyBody) : null,
           !busy && statusDown && !status?.engineMismatch ? h7("div", { className: "nks-empty-body" }, copy.errorBody) : null,

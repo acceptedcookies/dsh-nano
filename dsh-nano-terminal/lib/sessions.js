@@ -339,11 +339,8 @@ function splitSlashArgs(rawInput) {
   const protected_ = [];
   const text = String(rawInput ?? "").trim().replace(REF, (m) => (protected_.push(m), `\0${protected_.length - 1}\0`));
   const [sub, ...rest0] = text.split(/\s+/);
-  const rest = rest0.map((t) => {
-    const m = /^\x00(\d+)\x00$/.exec(t);
-    return m ? protected_[Number(m[1])] : t;
-  });
-  return { sub, rest };
+  const unprotect = (t) => t.replace(/\x00(\d+)\x00/g, (_, i) => protected_[Number(i)]);
+  return { sub, rest: rest0.map(unprotect) };
 }
 function parseCtxRef(input) {
   if (typeof input !== "string") return null;
@@ -964,6 +961,15 @@ var SessionRegistry = class {
     }
     const parentRec = spec.parent ? this.resolve(spec.parent) : void 0;
     if (spec.parent && !parentRec) throw err(KIND.NOT_FOUND, `no such parent '${spec.parent}'`);
+    const mintT = spec.labels?.t;
+    if (mintT) {
+      if (!/^[0-9a-f]{8}$/.test(mintT)) throw err(KIND.INVALID, `label 't' must be a lowercase 8-hex stamp, got '${mintT}'`);
+      const clash = [...this.sessions.values()].find((r) => r.labels?.t === mintT);
+      if (clash) throw err(KIND.CONFLICT, `term stamp '${mintT}' already bound to ${clash.addr}`);
+    }
+    if (spec.labels?.conv && !/^[0-9a-f]{8}$/.test(spec.labels.conv)) {
+      throw err(KIND.INVALID, `label 'conv' must be a lowercase 8-hex stamp, got '${spec.labels.conv}'`);
+    }
     const id = randomUUID();
     const cwd = await this.resolveCwd(spec);
     const shell = spec.shell || defaultShell();
@@ -1044,7 +1050,9 @@ var SessionRegistry = class {
         rec.preservedScreen = this.persist.screenFor(t.id);
         rec.gate.restore(t.gate);
         this.sessions.set(t.id, rec);
-        if (t.name) this.names.set(t.name, t.id);
+        if (t.name && !this.names.has(t.name) && !parseCtxRef(t.name) && !bareTermStamp(t.name)) {
+          this.names.set(t.name, t.id);
+        }
         this.bus?.emit("created", rec.addr, { id: rec.id, lane: rec.lane, title: rec.title, restored: true });
       } catch {
       }
@@ -1052,10 +1060,21 @@ var SessionRegistry = class {
   }
   /**
    * First attach to a placeholder spawns the fresh shell and replays the
-   * preserved screen above it. Idempotent.
+   * preserved screen above it. Idempotent AND race-safe: concurrent wakes
+   * share one spawn promise; a failed spawn re-arms the placeholder so the
+   * next attach retries instead of bricking the session.
    */
   async spawnPending(rec) {
     if (!rec.pending) return;
+    if (rec.pendingSpawn) return rec.pendingSpawn;
+    rec.pendingSpawn = this.#spawnPendingOnce(rec);
+    try {
+      return await rec.pendingSpawn;
+    } finally {
+      rec.pendingSpawn = null;
+    }
+  }
+  async #spawnPendingOnce(rec) {
     rec.pending = false;
     const meta = rec.meta ?? {};
     const shell = meta.shell || defaultShell();
@@ -1070,6 +1089,7 @@ var SessionRegistry = class {
       shellActivity: true,
       graceMs: 1500
     })).catch((e) => {
+      rec.pending = true;
       throw err(KIND.SPAWN_FAILED, String(e?.message ?? e));
     });
     rec.handle = handle;
@@ -1356,6 +1376,7 @@ var SessionRecord = class {
   async agentSend(text, { enter = true, force = false, cond = null, urgent = false } = {}) {
     if (this.exited) throw err(KIND.FINISHED, "terminal exited");
     if (!this.handle && this.pending) await this.registry.spawnPending(this);
+    if (!this.handle) throw err(KIND.UNAVAILABLE, "terminal not spawned yet (attach to wake)");
     const st = this.status?.state;
     if (st === "blocked" && !force) throw err(KIND.BLOCKED, `terminal reports blocked${this.status.kind ? ` (${this.status.kind})` : ""}`);
     if (cond && st !== cond) throw err(KIND.STATUS_MISMATCH, `status is '${st ?? "none"}', required '${cond}'`);
@@ -1386,6 +1407,7 @@ var SessionRecord = class {
     let changed = false;
     for (const [k, v] of Object.entries({ t, conv })) {
       if (!v || this.labels[k]) continue;
+      if (this.registry?.sessions && [...this.registry.sessions.values()].some((r) => r !== this && r.labels?.[k] === v)) continue;
       this.labels[k] = v;
       changed = true;
     }
@@ -1396,6 +1418,11 @@ var SessionRecord = class {
     return this.labels;
   }
   async resize(cols, rows) {
+    cols = Math.floor(Number(cols));
+    rows = Math.floor(Number(rows));
+    if (!Number.isFinite(cols) || !Number.isFinite(rows) || cols < 2 || rows < 2 || cols > 512 || rows > 512) {
+      throw err(KIND.INVALID, `resize needs finite cols/rows in [2,512], got ${cols}x${rows}`);
+    }
     const prev = `${this.meta.cols}x${this.meta.rows}`;
     this.meta = { ...this.meta, cols, rows };
     try {

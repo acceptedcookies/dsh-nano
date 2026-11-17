@@ -102,16 +102,38 @@ export function apply(ctx) {
       }
       // --flag / --k=v shared by the lifecycle subs; `--` ends flag parsing so
       // literal text starting with '--' (send data, wait patterns) survives.
+      // Value flags consume the next token (--cols 120) — only known names,
+      // so `--amend` inside send data stays data.
+      const VALUE_FLAGS = new Set(['parent', 'cwd', 'shell', 'cols', 'rows', 'if', 'timeout', 'children'])
+      const BOOL_FLAGS = new Set(['force', 'keep', 'wait'])
       const takeFlags = (rest) => {
         const flags = {}
         const pos = []
         let done = false
-        for (const p of rest) {
+        for (let i = 0; i < rest.length; i++) {
+          const p = rest[i]
           if (!done && p === '--') { done = true; continue }
-          if (!done && p.startsWith('--')) { const i = p.indexOf('='); i > 0 ? flags[p.slice(2, i)] = p.slice(i + 1) : flags[p.slice(2)] = true }
-          else pos.push(p)
+          if (!done && p.startsWith('--')) {
+            const eq = p.indexOf('=')
+            const k = eq > 0 ? p.slice(2, eq) : p.slice(2)
+            const v = eq > 0 ? p.slice(eq + 1) : undefined
+            if (BOOL_FLAGS.has(k)) { flags[k] = v === undefined ? true : v !== 'off' && v !== 'false'; continue }
+            if (VALUE_FLAGS.has(k)) {
+              if (v !== undefined) flags[k] = v
+              else { const nxt = rest[i + 1]; if (nxt !== undefined && !nxt.startsWith('--')) { flags[k] = nxt; i++ } else flags[k] = null }
+              continue
+            }
+            pos.push(p) // unknown --x is data, not a flag
+            continue
+          }
+          pos.push(p)
         }
         return { flags, pos }
+      }
+      // null-valued flag → user wrote `--x` with no value.
+      const flagErr = (flags) => {
+        for (const [k, v] of Object.entries(flags)) if (v === null) return { kind: 'error', errorKind: 'invalid', text: `invalid: --${k} needs a value` }
+        return null
       }
       try {
         switch (sub) {
@@ -119,6 +141,8 @@ export function apply(ctx) {
           case 'new': {
             // new [name] [--parent ref] [--keep] [--cwd dir] [--shell sh] [--cols n] [--rows n]
             const { flags, pos } = takeFlags(rest)
+            const ferr = flagErr(flags)
+            if (ferr) return ferr
             const rec = await registry.create({
               owner: 'slash',
               name: pos[0] ?? undefined,
@@ -151,6 +175,8 @@ export function apply(ctx) {
           case 'send': {
             // send <ref> <text> [--force] [--if=idle|working] [--wait] [--timeout s]
             const { flags, pos } = takeFlags(rest)
+            const ferr = flagErr(flags)
+            if (ferr) return ferr
             const [id, ...data] = pos
             return rpc('term.send', { id, data: data.join(' '), force: !!flags.force, if: flags.if ?? undefined, wait: !!flags.wait, timeout: flags.timeout ? Number(flags.timeout) : undefined })
           }
@@ -161,7 +187,8 @@ export function apply(ctx) {
           case 'resize': {
             // resize <ref> <cols>x<rows> | <cols> <rows>
             const [id, a, b] = rest
-            const [c, r] = a?.includes('x') ? a.split('x').map(Number) : [Number(a), Number(b)]
+            const [c, r] = a?.toLowerCase().includes('x') ? a.split(/x/i).map(Number) : [Number(a), Number(b)]
+            if (!Number.isFinite(c) || !Number.isFinite(r)) return { kind: 'error', errorKind: 'invalid', text: `invalid: resize needs '<ref> <cols>x<rows>' or '<ref> <cols> <rows>', got '${[id, a, b].filter(Boolean).join(' ') || 'nothing'}'` }
             return rpc('term.session.resize', { id, cols: c, rows: r })
           }
           case 'read':
@@ -180,12 +207,16 @@ export function apply(ctx) {
           case 'health':
             return rpc('term.health', {})
           case 'wait': {
-            // wait <ref> [pattern] [--children all|any] [--timeout s]
+            // wait <ref> [pattern…] [--children all|any] [--timeout s]
             const { flags, pos } = takeFlags(rest)
-            return rpc('term.wait', { id: pos[0], output: pos[1] ?? undefined, children: flags.children ?? undefined, timeout: flags.timeout ? Number(flags.timeout) : undefined })
+            const ferr = flagErr(flags)
+            if (ferr) return ferr
+            return rpc('term.wait', { id: pos[0], output: pos.length > 1 ? pos.slice(1).join(' ') : undefined, children: flags.children ?? undefined, timeout: flags.timeout ? Number(flags.timeout) : undefined })
           }
           case 'keys': {
             const { flags, pos } = takeFlags(rest)
+            const ferr = flagErr(flags)
+            if (ferr) return ferr
             const [id, ...keys] = pos
             return rpc('term.keys', { id, keys, force: !!flags.force })
           }
@@ -227,7 +258,11 @@ export function apply(ctx) {
             return { kind: 'error', text: `unknown subcommand '${sub}'` }
         }
       } catch (err) {
-        return { kind: 'error', text: String(err?.message ?? err) }
+        // Direct-registry paths (new/attach) carry stable kinds too — surface
+        // them exactly like the rpc() path so `not_found:`/`needs_target:`
+        // reach the caller instead of a bare message.
+        const kind = err?.kind ?? null
+        return { kind: 'error', errorKind: kind, text: `${kind ? `${kind}: ` : ''}${err?.message ?? err}` }
       }
   }
 

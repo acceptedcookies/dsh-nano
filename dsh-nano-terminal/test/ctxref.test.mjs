@@ -138,6 +138,16 @@ test('graftCtxAnchors fills empty slots but never rewrites existing anchors', ()
   assert.deepEqual(rec.labels, { t: 'deadbeef', conv: 'c0ffee01' })
 })
 
+test('graftCtxAnchors refuses to mint a stamp bound to another session', () => {
+  const first = stubRecord({ id: 'g9a', labels: { t: 'deadbeef' } })
+  const second = stubRecord({ id: 'g9b', labels: {} })
+  const reg = registryWith([first, second])
+  second.registry = reg
+  second.graftCtxAnchors({ t: 'deadbeef' }) // clash → refused, not clobbered
+  assert.equal(second.labels.t, undefined)
+  assert.equal(reg.resolve('deadbeef'), first, 'the original owner keeps its stamp')
+})
+
 test('setLabels rejects writes to reserved ctx anchors', () => {
   const rec = stubRecord({ id: 'g2', labels: { t: 'deadbeef' } })
   assert.throws(() => rec.setLabels({ t: 'f00df00d' }), /reserved ctx anchors/)

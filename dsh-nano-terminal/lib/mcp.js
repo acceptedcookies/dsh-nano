@@ -291,6 +291,7 @@ async function sendNote(registry, fromRef, toRef, body) {
   const to = registry.resolve(toRef);
   if (!to) throw err(KIND.NOT_FOUND, `no such terminal '${toRef}'`);
   if (to.exited) throw err(KIND.FINISHED, "target exited");
+  if (!to.handle && to.pending) await registry.spawnPending(to);
   if (!to.handle) throw err(KIND.UNAVAILABLE, "target not spawned (attach to wake)");
   const from = registry.resolve(fromRef);
   const fromAddr = from?.addr ?? String(fromRef ?? "external");

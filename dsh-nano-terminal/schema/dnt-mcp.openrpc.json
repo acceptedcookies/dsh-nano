@@ -136,7 +136,9 @@
     "limit",
     "invalid",
     "incompatible",
-    "conflict"
+    "conflict",
+    "not_found",
+    "needs_target"
    ]
   },
   {
@@ -188,7 +190,9 @@
     "not_found",
     "finished",
     "spawn_failed",
-    "unavailable"
+    "unavailable",
+    "needs_target",
+    "invalid"
    ]
   },
   {
@@ -257,7 +261,9 @@
     "finished",
     "status_mismatch",
     "unavailable",
-    "spawn_failed"
+    "spawn_failed",
+    "needs_target",
+    "invalid"
    ]
   },
   {
@@ -300,7 +306,8 @@
     "finished",
     "invalid",
     "unavailable",
-    "spawn_failed"
+    "spawn_failed",
+    "needs_target"
    ]
   },
   {
@@ -340,7 +347,8 @@
     "not_found",
     "finished",
     "unavailable",
-    "spawn_failed"
+    "spawn_failed",
+    "needs_target"
    ]
   },
   {
@@ -392,7 +400,8 @@
     }
    },
    "errors": [
-    "not_found"
+    "not_found",
+    "needs_target"
    ]
   },
   {
@@ -438,7 +447,9 @@
     }
    },
    "errors": [
-    "not_found"
+    "not_found",
+    "needs_target",
+    "spawn_failed"
    ]
   },
   {
@@ -473,7 +484,9 @@
     }
    },
    "errors": [
-    "not_found"
+    "not_found",
+    "needs_target",
+    "invalid"
    ]
   },
   {
@@ -507,7 +520,8 @@
     }
    },
    "errors": [
-    "not_found"
+    "not_found",
+    "needs_target"
    ]
   },
   {
@@ -549,7 +563,9 @@
     }
    },
    "errors": [
-    "not_found"
+    "not_found",
+    "needs_target",
+    "invalid"
    ]
   },
   {
@@ -617,7 +633,8 @@
     "not_found",
     "finished",
     "unavailable",
-    "invalid"
+    "invalid",
+    "needs_target"
    ]
   },
   {
@@ -714,7 +731,8 @@
     "blocked",
     "finished",
     "invalid",
-    "spawn_failed"
+    "spawn_failed",
+    "needs_target"
    ]
   },
   {
@@ -743,7 +761,9 @@
      }
     }
    },
-   "errors": []
+   "errors": [
+    "needs_target"
+   ]
   },
   {
    "name": "term.audit",
@@ -862,7 +882,8 @@
     }
    },
    "errors": [
-    "not_found"
+    "not_found",
+    "needs_target"
    ]
   },
   {
@@ -908,7 +929,9 @@
     }
    },
    "errors": [
-    "not_found"
+    "not_found",
+    "needs_target",
+    "spawn_failed"
    ]
   },
   {
@@ -971,7 +994,9 @@
     }
    },
    "errors": [
-    "not_found"
+    "not_found",
+    "needs_target",
+    "spawn_failed"
    ]
   },
   {
@@ -1001,7 +1026,8 @@
     "not_found",
     "finished",
     "unavailable",
-    "spawn_failed"
+    "spawn_failed",
+    "needs_target"
    ]
   },
   {
@@ -1092,7 +1118,8 @@
     }
    },
    "errors": [
-    "not_found"
+    "not_found",
+    "needs_target"
    ]
   },
   {

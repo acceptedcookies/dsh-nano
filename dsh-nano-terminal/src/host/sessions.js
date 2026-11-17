@@ -195,6 +195,18 @@ export class SessionRegistry {
     const parentRec = spec.parent ? this.resolve(spec.parent) : undefined
     if (spec.parent && !parentRec) throw err(KIND.NOT_FOUND, `no such parent '${spec.parent}'`)
 
+    // Minting an already-bound term stamp would make bare-stamp resolution
+    // ambiguous — refuse up front instead of letting needs_target surface later.
+    const mintT = spec.labels?.t
+    if (mintT) {
+      if (!/^[0-9a-f]{8}$/.test(mintT)) throw err(KIND.INVALID, `label 't' must be a lowercase 8-hex stamp, got '${mintT}'`)
+      const clash = [...this.sessions.values()].find((r) => r.labels?.t === mintT)
+      if (clash) throw err(KIND.CONFLICT, `term stamp '${mintT}' already bound to ${clash.addr}`)
+    }
+    if (spec.labels?.conv && !/^[0-9a-f]{8}$/.test(spec.labels.conv)) {
+      throw err(KIND.INVALID, `label 'conv' must be a lowercase 8-hex stamp, got '${spec.labels.conv}'`)
+    }
+
     const id = randomUUID()
     const cwd = await this.resolveCwd(spec)
     const shell = spec.shell || defaultShell()
@@ -277,7 +289,11 @@ export class SessionRegistry {
         rec.preservedScreen = this.persist.screenFor(t.id)
         rec.gate.restore(t.gate)
         this.sessions.set(t.id, rec)
-        if (t.name) this.names.set(t.name, t.id)
+        // A persisted name obeys the same grammar guard as create — a name
+        // that parses as a ctx ref or shadows a live name stays unbound.
+        if (t.name && !this.names.has(t.name) && !parseCtxRef(t.name) && !bareTermStamp(t.name)) {
+          this.names.set(t.name, t.id)
+        }
         this.bus?.emit('created', rec.addr, { id: rec.id, lane: rec.lane, title: rec.title, restored: true })
       } catch { /* one bad record doesn't block the rest */ }
     }
@@ -285,11 +301,23 @@ export class SessionRegistry {
 
   /**
    * First attach to a placeholder spawns the fresh shell and replays the
-   * preserved screen above it. Idempotent.
+   * preserved screen above it. Idempotent AND race-safe: concurrent wakes
+   * share one spawn promise; a failed spawn re-arms the placeholder so the
+   * next attach retries instead of bricking the session.
    */
   async spawnPending(rec) {
     if (!rec.pending) return
-    rec.pending = false
+    if (rec.pendingSpawn) return rec.pendingSpawn
+    rec.pendingSpawn = this.#spawnPendingOnce(rec)
+    try {
+      return await rec.pendingSpawn
+    } finally {
+      rec.pendingSpawn = null
+    }
+  }
+
+  async #spawnPendingOnce(rec) {
+    rec.pending = false // re-armed on failure below
     const meta = rec.meta ?? {}
     const shell = meta.shell || defaultShell()
     const argv = meta.argv?.length ? meta.argv : [shell, ...(process.platform === 'win32' ? [] : ['-i'])]
@@ -305,6 +333,9 @@ export class SessionRegistry {
         graceMs: 1500,
       }))
       .catch((e) => {
+        // The placeholder stays a placeholder — next wake retries the spawn
+        // instead of permanently reporting 'no live backend'.
+        rec.pending = true
         throw err(KIND.SPAWN_FAILED, String(e?.message ?? e))
       })
     rec.handle = handle
@@ -621,6 +652,7 @@ export class SessionRecord {
   async agentSend(text, { enter = true, force = false, cond = null, urgent = false } = {}) {
     if (this.exited) throw err(KIND.FINISHED, 'terminal exited')
     if (!this.handle && this.pending) await this.registry.spawnPending(this)
+    if (!this.handle) throw err(KIND.UNAVAILABLE, 'terminal not spawned yet (attach to wake)')
     const st = this.status?.state
     if (st === 'blocked' && !force) throw err(KIND.BLOCKED, `terminal reports blocked${this.status.kind ? ` (${this.status.kind})` : ''}`)
     if (cond && st !== cond) throw err(KIND.STATUS_MISMATCH, `status is '${st ?? 'none'}', required '${cond}'`)
@@ -658,6 +690,9 @@ export class SessionRecord {
     let changed = false
     for (const [k, v] of Object.entries({ t, conv })) {
       if (!v || this.labels[k]) continue // never rewrite — the session owns its anchors
+      // Refuse to mint a stamp already bound to a DIFFERENT session —
+      // otherwise bare-stamp resolution becomes ambiguous forever.
+      if (this.registry?.sessions && [...this.registry.sessions.values()].some((r) => r !== this && r.labels?.[k] === v)) continue
       this.labels[k] = v
       changed = true
     }
@@ -669,6 +704,10 @@ export class SessionRecord {
   }
 
   async resize(cols, rows) {
+    cols = Math.floor(Number(cols)); rows = Math.floor(Number(rows))
+    if (!Number.isFinite(cols) || !Number.isFinite(rows) || cols < 2 || rows < 2 || cols > 512 || rows > 512) {
+      throw err(KIND.INVALID, `resize needs finite cols/rows in [2,512], got ${cols}x${rows}`)
+    }
     const prev = `${this.meta.cols}x${this.meta.rows}`
     this.meta = { ...this.meta, cols, rows }
     try {

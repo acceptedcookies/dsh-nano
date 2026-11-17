@@ -534,8 +534,9 @@ e.dnt_free(id)
   const libSessions = readFileSync(join(root, 'lib/sessions.js'), 'utf8')
   const libClient = readFileSync(join(root, 'lib/client.js'), 'utf8')
   const libMcp = readFileSync(join(root, 'lib/mcp.js'), 'utf8')
-  t('lib/sessions.js 含 ctx 锚点 graft', /graftCtxAnchors/.test(libSessions))
-  t('lib/sessions.js 导出 splitSlashArgs', /splitSlashArgs/.test(libSessions))
+  // 抽查的是会被打包保留下来的字符串/符号 —— 旧逻辑同名残留不能糊弄。
+  t('lib/sessions.js 含 ctx 锚点 graft + 保留键报错串', /graftCtxAnchors/.test(libSessions) && /reserved ctx anchors/.test(libSessions))
+  t('lib/sessions.js 导出 splitSlashArgs + pendingSpawn 防重入', /splitSlashArgs/.test(libSessions) && /pendingSpawn/.test(libSessions))
   t('lib/mcp.js 含 term.session.stats/health 分发', /term\.session\.stats/.test(libMcp) && /term\.health/.test(libMcp))
   t('lib/client.js 含 ctx 引用格式化', /DNT:/.test(libClient))
 }

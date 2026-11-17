@@ -1120,7 +1120,7 @@ function registerWebRoutes(ctx, deps) {
           replay: () => record.replayInto(socket, (s, chunk) => attach.data(chunk))
         });
       } catch (err) {
-        sendText(socket, { type: "error", message: String(err?.message ?? err) });
+        sendText(socket, { type: "error", kind: err?.kind ?? "invalid", message: String(err?.message ?? err) });
         sendClose(socket, 1008, "open failed");
       }
     }

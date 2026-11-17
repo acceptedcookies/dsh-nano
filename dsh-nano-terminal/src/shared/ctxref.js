@@ -49,11 +49,10 @@ export function splitSlashArgs(rawInput) {
   const protected_ = []
   const text = String(rawInput ?? '').trim().replace(REF, (m) => (protected_.push(m), `\x00${protected_.length - 1}\x00`))
   const [sub, ...rest0] = text.split(/\s+/)
-  const rest = rest0.map((t) => {
-    const m = /^\x00(\d+)\x00$/.exec(t)
-    return m ? protected_[Number(m[1])] : t
-  })
-  return { sub, rest }
+  // Restore refs inside tokens too — `file[DNT:..@..].txt` must not carry
+  // literal NUL bytes into the pty.
+  const unprotect = (t) => t.replace(/\x00(\d+)\x00/g, (_, i) => protected_[Number(i)])
+  return { sub, rest: rest0.map(unprotect) }
 }
 
 /**

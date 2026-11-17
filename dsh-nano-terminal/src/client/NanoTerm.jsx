@@ -259,6 +259,16 @@ const termStore = (sessionId) => {
       if (node?.type === 'split') { backfill(node.a); backfill(node.b) }
       return node
     }
+    // Saved ids mint fresh pN/sN on every restored tree walk — re-seed the
+    // counter past the largest suffix so new panes never collide with the
+    // restored ones (paneSessions keys, pin targets, ctx refs all key on id).
+    const reseed = (node) => {
+      if (!node) return
+      const m = /^[ps](\d+)$/.exec(node.id ?? '')
+      if (m) paneSeq = Math.max(paneSeq, Number(m[1]) + 1)
+      if (node.type === 'split') { reseed(node.a); reseed(node.b) }
+    }
+    if (saved) reseed(saved)
     s = { tree: saved ? backfill(saved) : null, sessions: new Map() }
     termStores.set(key, s)
   }

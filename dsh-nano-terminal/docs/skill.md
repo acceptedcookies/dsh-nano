@@ -95,12 +95,25 @@ spawn → send → wait → report → cleanup
 
 `send input read copy screenshot clear wait keys interrupt close keep label
 note template stats` take `<ref>` = id | name | addr | `[ DNT:{conv8}@{term8} ]`
-| bare 8-hex term stamp. Slash flags: `send … [--force] [--if=idle|working]
-[--wait] [--timeout s]`, `wait <ref> [pattern] [--children all|any]
-[--timeout s]`, `keys <ref> <keys…> [--force]`, `new [name] [--parent ref]
-[--keep] [--cwd dir] [--shell sh] [--cols n] [--rows n]`, `resize <ref> c x r`.
+| `[ DNT:@{term8} ]` (conv-less — pane never bound a conversation stamp, or
+the host only echoes `t`) | bare 8-hex term stamp.
+
+Slash flags: `send <ref> <text> [--force] [--if=idle|working] [--wait]
+[--timeout s]`, `wait <ref> [pattern…] [--children all|any] [--timeout s]`,
+`keys <ref> <keys…> [--force]`, `new [name] [--parent ref] [--keep] [--cwd
+dir] [--shell sh] [--cols n] [--rows n]`, `resize <ref> 80x24 | 80 24`.
+Flag values go either as `--k=v` or `--k v` (value flags only); `--` ends
+flag parsing, so `send <ref> -- git push --force` delivers the command
+literally. Only the listed flags parse — `--amend` inside data stays data —
+but a bare `--` token is still consumed; quote it by prefixing with `--`.
+Flag values cannot contain spaces (no quoting convention — prefer `--k=v`
+with an unspaced value or absolute paths without spaces).
+
 `attach` returns the *client* ws attach URL — agents do not open it; the
-agentic path is the `term.*` tools.
+agentic path is the `term.*` tools. `list` shows addr/status/attached/
+exited/keep; full ctx/labels come from `term.session.list` or `term.ctx`.
+Slash-created sessions carry no ctx ref until a pane attaches and grafts
+anchors — mint refs at create via `term.session.create {labels:{t,conv}}`.
 
 ## Events
 
@@ -122,5 +135,7 @@ Recovery: `not_found` → `term.session.list` / `term.ctx` to re-derive refs.
 then spawn a new session. `unavailable`/`spawn_failed` → restored
 placeholders wake automatically on send/input/keys/interrupt/clear; a
 `spawn_failed` after that is a real spawn error — check `term.health` for
-lane status. `conflict` → a second pane tried to rebind `t`/`conv` — pick
-the session by addr instead.
+lane status. `conflict` → the term stamp is already bound elsewhere — pick
+a different `t`. `needs_target` → a bare stamp is ambiguous (shared `t`
+across sessions, or stamp vs id-prefix collision) — re-resolve by addr or
+full id.

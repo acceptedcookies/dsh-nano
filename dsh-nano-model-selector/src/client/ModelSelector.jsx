@@ -9,6 +9,7 @@ import { BrandMark } from './BrandMark.jsx'
 import { readFavorites, writeFavorites } from './favorites.js'
 import { fetchEngine, fetchEngines, readEngineCache, selectEngine, writeEngineCache } from './media.js'
 import { CompactPanel } from './CompactPanel.jsx'
+import { SubagentDefault } from './SubagentDefault.jsx'
 import { fetchBundleState, fetchCompactState } from './compact.js'
 import { jsonOp, call } from './jsonClient.js'
 import {
@@ -927,6 +928,7 @@ export function ModelSelector({ locked, available, directory, load, select, lang
                           </div>
                         )
                       })}
+                    <SubagentDefault copy={copy} models={allModels} query={query} />
                   </div>
                 )}
 

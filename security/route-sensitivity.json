@@ -535,6 +535,23 @@
     },
     {
       "plugin": "dsh-nano-model-selector",
+      "path": "/nano-model-selector/subagent-default",
+      "methods": [
+        "GET",
+        "HEAD",
+        "PUT"
+      ],
+      "sensitivity": "L2",
+      "capability": "write:host",
+      "bodyLimit": 16384,
+      "sessionBinding": false,
+      "justification": "dsh-nano-model-selector/index.js — GET reads plugins/nano-model-selector/subagent-default.json; PUT enable/disable/reset writes that file (16384-byte cap). The host applies it on agent/created for a new subagent that did not name its own model. No secret.",
+      "id": "dnms.subagent-default",
+      "channel": "http",
+      "match": "exact"
+    },
+    {
+      "plugin": "dsh-nano-model-selector",
       "path": "/nano-model-selector/async-compact",
       "methods": [
         "GET",

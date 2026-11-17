@@ -389,6 +389,21 @@
     },
     {
       "plugin": "dsh-nano-model-selector",
+      "path": "/nano-model-selector/subagent-default",
+      "methods": [
+        "GET",
+        "HEAD",
+        "PUT"
+      ],
+      "bodyLimit": {
+        "GET": 0,
+        "HEAD": 0,
+        "PUT": 16384
+      },
+      "responseShape": "GET/HEAD 200 {ok:true, policy:{schema,enabled,provider?,model?,reasoningEffort?}|null, degraded?:'state-read-failed'} ; PUT 200 {ok:true, policy} | {ok:false, error:{code,reason}} where code ∈ {invalid-schema,invalid-model,body-too-large,invalid-json-body,state-read-failed,state-write-failed}"
+    },
+    {
+      "plugin": "dsh-nano-model-selector",
       "path": "/nano-model-selector/async-compact",
       "methods": [
         "GET",
@@ -1102,6 +1117,7 @@
     },
     "dsh-nano-model-selector": {
       "engineState": "${DSH_DATA_DIR||DSH_HOME||~/.dsh}/plugins/nano-model-selector/media-engine.json",
+      "subagentDefault": "${DSH_DATA_DIR||DSH_HOME||~/.dsh}/plugins/nano-model-selector/subagent-default.json",
       "asyncCompactState": "${DSH_DATA_DIR||DSH_HOME||~/.dsh}/plugins/nano-model-selector/async-compact.json",
       "clientCache": "localStorage 'dsh-nano-model-selector:media-engine.v1' + favorites key"
     },

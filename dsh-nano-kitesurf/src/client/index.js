@@ -168,6 +168,12 @@ const STYLE = `
 .nks-busy{position:absolute;left:0;right:0;top:0;height:2px;overflow:hidden;z-index:var(--nano-layer-local3)}
 .nks-busy::before{content:"";display:block;width:35%;height:100%;background:var(--dsw-alias-link,#2f6fed);animation:nks-beat 1s ease-in-out infinite}
 @keyframes nks-beat{from{transform:translateX(-120%)}to{transform:translateX(320%)}}
+/* nano-ui-exempt: host primitives and nano-ui ship no indeterminate spinner. */
+.nks-load{position:absolute;inset:0;z-index:var(--nano-layer-local4);display:flex;align-items:center;justify-content:center;pointer-events:none}
+.nks-load-card{display:flex;align-items:center;gap:8px;height:32px;padding:0 12px;background:var(--dsw-alias-bg-layer-1);border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-md);box-shadow:var(--dsw-elevation-soft);font:var(--dsw-font-xxs-12);color:var(--dsw-alias-label-secondary)}
+.nks-spin{width:14px;height:14px;box-sizing:border-box;border-radius:50%;border:2px solid var(--dsw-alias-border-l2);border-top-color:var(--dsw-alias-link,#2f6fed);animation:nks-spin .8s linear infinite;flex:none}
+@keyframes nks-spin{to{transform:rotate(360deg)}}
+.nks-open-error{margin:0;color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxs-12);line-height:1.55;word-break:break-word}
 .nks-settings-body{display:flex;flex-direction:column;gap:8px}
 .nks-status{position:relative;z-index:var(--nano-layer-local3);order:7;flex:none;display:flex;align-items:center;gap:8px;height:26px;padding:0 10px;border-top:.5px solid var(--dsw-alias-border-l3);font:var(--dsw-font-xxxs-11);color:var(--dsw-alias-label-tertiary)}
 .nks-status button{height:20px;padding:0 8px;border:0;border-radius:var(--dsw-radius-sm);background:transparent;color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xxxs-11);cursor:pointer}
@@ -395,6 +401,10 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
   const lastActionStamp = React.useRef('')
   const actionToastTimer = React.useRef(0)
   const [busy, setBusy] = React.useState(false)
+  // Page-open heartbeat. `busy` is every action; `beat` is only a navigation,
+  // so a settings save does not cover the page with a spinner.
+  const [beat, setBeat] = React.useState(false)
+  const [beatSec, setBeatSec] = React.useState(0)
   /** Preview box under the cursor before a click (throttled pick preview). */
   const [hover, setHover] = React.useState(null)
   /** Content-rect of the letterboxed image — state, never read during render. */
@@ -425,6 +435,7 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
   // mount-time sendPick, which closes over an empty pageUrl — the note that
   // reached composer lost its `url:` line. Keep the latest function here.
   const sendPickRef = React.useRef(null)
+  const clearPickRef = React.useRef(() => {})
   annotateRef.current = annotate
   pickRef.current = pick
   pinsRef.current = pins
@@ -557,8 +568,11 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
         return
       }
       if (event.key === 'Escape') {
+        event.preventDefault()
         if (dragRef.current) { endDrag(); return }
-        if (pickRef.current) { setPick(null); setEditing(false); return }
+        // First Esc drops the CSS selection. Design mode itself stays on,
+        // so the next click can pick again. A second Esc leaves annotate.
+        if (pickRef.current) { clearPickRef.current(); return }
         if (annotateRef.current) { setAnnotate(false); return }
         setNavOpen(false)
       }
@@ -566,6 +580,15 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [])
+
+  React.useEffect(() => {
+    if (!beat) { setBeatSec(0); return undefined }
+    const started = Date.now()
+    const timer = window.setInterval(() => {
+      setBeatSec(Math.max(1, Math.floor((Date.now() - started) / 1000)))
+    }, 1000)
+    return () => window.clearInterval(timer)
+  }, [beat])
 
   // An agent can /open a page behind the pane. Re-shoot on focus so the
   // human is never staring at a stale frame with a disabled refresh button.
@@ -711,14 +734,14 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
     toastTimer.current = window.setTimeout(() => { setToast(null); setToastFix(false) }, 2000)
   }
 
-  async function run(work) {
+  async function run(work, opts) {
     // Every pane action becomes a perf span so /perf-review/host can show what
     // the pane actually spends time on.
-    if (perf?.span) return perf.span('pane-op', () => runInner(work))
-    return runInner(work)
+    if (perf?.span) return perf.span('pane-op', () => runInner(work, opts))
+    return runInner(work, opts)
   }
 
-  async function runInner(work) {
+  async function runInner(work, opts = {}) {
     // Diagnostic counter: proves whether an action reached the pane at all.
     window.__dnkRuns = (window.__dnkRuns || 0) + 1
     // One entry guard for EVERY action (address Enter, refresh, start engine,
@@ -727,14 +750,54 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
     if (busyRef.current) return
     busyRef.current = true
     setBusy(true)
+    if (opts.beat) setBeat(true)
     try {
       await work()
     } catch (cause) {
-      showError(cause)
+      if (opts.dialog) showOpenError(cause, opts.url)
+      else showError(cause)
     } finally {
       busyRef.current = false
       setBusy(false)
+      setBeat(false)
     }
+  }
+
+  /** Navigation failure is a dialog, not a toast that vanishes while the
+   *  page is still blank. Retry replays the same url. */
+  function showOpenError(cause, url) {
+    const errorId = cause?.errorId || 'kitesurf.unknown'
+    const message = cause instanceof Error ? cause.message : String(cause)
+    refreshStatus()
+    const workspaceEl = workspaceRef.current
+    if (dialogOpenRef.current || workspaceEl === null) {
+      showError(cause)
+      return
+    }
+    dialogOpenRef.current = true
+    let dialog = null
+    const finish = () => { dialogOpenRef.current = false }
+    dialog = openNanoDialog({
+      copy: { cancel: copy.close, confirm: url ? copy.retry : copy.close, close: copy.close },
+      title: copy.openFailed,
+      description: errorId,
+      width: 420,
+      container: workspaceEl,
+      confirmLabel: url ? copy.retry : copy.close,
+      onCancel: finish,
+      onConfirm: () => {
+        finish()
+        dialog?.close()
+        if (url) openPage(url)
+      },
+      children: h('div', { 'data-nks-open-error': '1' },
+        h('p', { className: 'nks-open-error' }, message),
+        url ? h('p', { className: 'nks-open-error' }, url) : null),
+    })
+  }
+
+  function openPage(url) {
+    return run(() => navigate(url), { beat: true, dialog: true, url })
   }
 
   function remember(url) {
@@ -819,7 +882,7 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
     event.preventDefault()
     if (!draftUrl.trim()) return
     event.currentTarget.querySelector('input')?.blur()
-    await run(() => navigate(draftUrl))
+    await openPage(draftUrl)
   }
 
   function framePoint(event) {
@@ -1020,6 +1083,15 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
   /** Turn the open pick into a note: pinned (default) or straight into the composer. */
   /** `element` overrides pickRef for Alt+click — the pick hasn't committed to
       * state yet when the click handler already wants it in the composer. */
+  function clearPick() {
+    setPick(null)
+    setEditing(false)
+    setComposing(false)
+    setComment('')
+    setHover(null)
+  }
+  clearPickRef.current = clearPick
+
   function sendPick(toComposer, element) {
     const open = element ? { elements: [element], anchor: null } : pickRef.current
     if (!open?.elements?.length) return
@@ -1170,7 +1242,7 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
 
   async function onRefresh() {
     if (!pageUrl) return
-    await run(() => navigate(pageUrl))
+    await openPage(pageUrl)
   }
 
   function openHistory() { setHistoryOpen(true) }
@@ -1496,6 +1568,15 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
       setEditing(false)
     }, true)
     doc.addEventListener('mouseleave', clearHover, true)
+    // Focus stays in the iframe after a pick, so the parent window never
+    // hears Escape. Close the selection from in here.
+    doc.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return
+      if (!pickRef.current) return
+      e.preventDefault()
+      e.stopPropagation()
+      clearPickRef.current()
+    }, true)
   }
 
   /** Settings shell with tabs: environment/settings vs browse history. */
@@ -1527,7 +1608,7 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
         h('input', { 'data-nks-history-q': '1', placeholder: '搜索地址…', value: q, onChange: async (e) => { setQ(e.target.value); await load(e.target.value) } }),
         h('button', { type: 'button', 'data-nks-history-clear': '1', disabled: !rows.length, onClick: clear }, '清空')),
       h('div', { className: 'nks-hist-list' }, rows.length ? rows.map((row) => h('div', { className: 'nks-hist-row', key: row.id, 'data-nks-history-row': row.id },
-        h('button', { type: 'button', className: 'nks-hist-open', onClick: () => { setDraftUrl(row.url); run(() => navigate(row.url)) } },
+        h('button', { type: 'button', className: 'nks-hist-open', onClick: () => { setDraftUrl(row.url); openPage(row.url) } },
           h('span', { className: 'nks-hist-url' }, row.url),
           h('span', { className: 'nks-hist-meta' }, `${String(row.at).slice(0, 16).replace('T', ' ')}${row.count > 1 ? ' · ' + row.count + ' 次' : ''}`)),
         h('button', { type: 'button', className: 'nks-hist-del', onClick: () => del(row.id), 'aria-label': '删除' }, '×'))) : h('div', { className: 'nks-modal-empty' }, '还没有浏览记录')))
@@ -1556,7 +1637,7 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
           h('button', { type: 'button', 'data-nks-history-clear': '1', disabled: busy || !rows.length, onClick: clear }, '清空')),
         h('div', { className: 'nks-modal-body' },
           rows.length ? rows.map((row) => h('div', { className: 'nks-hist-row', key: row.id, 'data-nks-history-row': row.id },
-            h('button', { type: 'button', className: 'nks-hist-open', onClick: () => { setDraftUrl(row.url); setHistoryOpen(false); run(() => navigate(row.url)) } },
+            h('button', { type: 'button', className: 'nks-hist-open', onClick: () => { setDraftUrl(row.url); setHistoryOpen(false); openPage(row.url) } },
               h('span', { className: 'nks-hist-url' }, row.url),
               h('span', { className: 'nks-hist-meta' }, `${String(row.at).slice(0, 16).replace('T', ' ')}${row.count > 1 ? ' · ' + row.count + ' 次' : ''}`)),
             h('button', { type: 'button', className: 'nks-hist-del', 'data-nks-history-del': row.id, onClick: () => del(row.id), 'aria-label': '删除' }, '×')))
@@ -1842,8 +1923,8 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
       // Navigation trio shares the host strip's 8px pitch with the
       // trailing cluster — one rhythm across the whole toolbar.
       h('div', { className: 'nks-toolbar-nav' },
-        h('button', { type: 'button', className: 'nks-tool', 'data-nks-back': '1', 'aria-label': copy.back, title: copy.back, disabled: busy || !hasPage, onClick: () => run(() => historyNav(-1)) }, glyph('back')),
-        h('button', { type: 'button', className: 'nks-tool', 'data-nks-forward': '1', 'aria-label': copy.forward, title: copy.forward, disabled: busy || !hasPage, onClick: () => run(() => historyNav(1)) }, glyph('forward')),
+        h('button', { type: 'button', className: 'nks-tool', 'data-nks-back': '1', 'aria-label': copy.back, title: copy.back, disabled: busy || !hasPage, onClick: () => run(() => historyNav(-1), { beat: true, dialog: true }) }, glyph('back')),
+        h('button', { type: 'button', className: 'nks-tool', 'data-nks-forward': '1', 'aria-label': copy.forward, title: copy.forward, disabled: busy || !hasPage, onClick: () => run(() => historyNav(1), { beat: true, dialog: true }) }, glyph('forward')),
         h('button', { type: 'button', className: 'nks-tool', 'data-nks-reload': '1', 'aria-label': copy.refresh, title: copy.refresh, disabled: busy, onClick: onRefresh }, glyph('refresh'))),
       h('span', { className: 'nks-address-box', 'data-dirty': draftUrl ? 'true' : 'false' },
         h('input', {
@@ -1896,7 +1977,7 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
           'data-nks-nav-tab': row.url,
           'data-current': row.url === pageUrl ? 'true' : 'false',
           title: row.url,
-          onClick: () => { if (row.url !== pageUrl) run(() => navigate(row.url)); setNavOpen(false) },
+          onClick: () => { if (row.url !== pageUrl) openPage(row.url); setNavOpen(false) },
         },
           glyph('globe'),
           h('span', { className: 'nks-nav-tab-url' }, row.url.replace(/^https?:\/\//, '')),
@@ -2007,6 +2088,11 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
           ? h('span', { 'data-nks-stack': '1', title: pick.elements[0].componentStack.join(' → ') },
               `⚛ ${pick.elements[0].componentStack.slice(-3).join(' → ')}`) : null) : null,
       busy ? h('div', { className: 'nks-busy', 'data-nks-loading': '1', role: 'progressbar', 'aria-label': copy.opening }) : null,
+      beat ? h('div', { className: 'nks-load', 'data-nks-beat': '1', role: 'status' },
+        h('div', { className: 'nks-load-card' },
+          h('i', { className: 'nks-spin', 'aria-hidden': true }),
+          h('span', null, copy.opening),
+          beatSec > 0 ? h('span', { 'data-nks-beat-sec': String(beatSec) }, `${beatSec}s`) : null)) : null,
       nativeHtml && domDoc ? h('iframe', {
         ref: domFrameRef,
         className: 'nks-dom',
@@ -2051,7 +2137,7 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
           h('button', { type: 'button', className: 'nks-start-btn', 'data-nks-diagnose': '1', onClick: () => run(() => refreshStatus()) }, copy.retry),
           h('button', { type: 'button', className: 'nks-start-btn', 'data-nks-open-settings': '1', onClick: openSettings }, copy.settings)) : null,
         !busy && !statusDown && !status?.engineMismatch ? h('div', { className: 'nks-empty-actions' },
-          h('button', { type: 'button', className: 'nks-empty-link', 'data-nks-try': '1', onClick: () => { setDraftUrl('https://example.com'); run(() => navigate('https://example.com')) } }, copy.emptyTry)) : null,
+          h('button', { type: 'button', className: 'nks-empty-link', 'data-nks-try': '1', onClick: () => { setDraftUrl('https://example.com'); openPage('https://example.com') } }, copy.emptyTry)) : null,
         statusDown ? h('div', { className: 'nks-empty-meta' }, `${status?.lastError?.errorId || status?.errorId || (status?.degraded?.length ? status.degraded.join(' / ') : 'kitesurf.engine.failed')} · ${status?.httpBase || ''}`) : null,
         statusDown ? h('div', { className: 'nks-empty-meta' }, status?.lastError?.error || status?.error || '') : null),
       overlays.map((box, index) => h('div', {
@@ -2108,7 +2194,8 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
             autoFocus: true,
             onChange: (event) => setComment(event.target.value),
           }),
-          h('button', { type: 'submit', className: 'nks-tool', 'data-nks-send': '1', title: copy.injectContext, 'aria-label': copy.injectContext }, glyph('send'))) : h('div', { className: 'nks-note-actions' },
+          h('button', { type: 'submit', className: 'nks-tool', 'data-nks-send': '1', title: copy.injectContext, 'aria-label': copy.injectContext }, glyph('send')),
+          h('button', { type: 'button', className: 'nks-tool', 'data-nks-clear-pick': '1', title: copy.clearSelection, 'aria-label': copy.clearSelection, onClick: (event) => { event.preventDefault(); event.stopPropagation(); clearPick() } }, glyph('exit'))) : h('div', { className: 'nks-note-actions' },
           h('button', {
             type: 'button',
             className: 'nks-tool',
@@ -2118,7 +2205,8 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
             onClick: (event) => { if (event.shiftKey) pinNote(); else injectNote() },
           }, glyph('send')),
           h('button', { type: 'button', className: 'nks-tool', 'data-nks-copy-note': '1', title: copy.copyContext, 'aria-label': copy.copyContext, onClick: copyNote }, glyph('copy')),
-          h('button', { type: 'button', className: 'nks-tool', 'data-nks-compose': '1', title: copy.inputContext, 'aria-label': copy.inputContext, onClick: () => setComposing(true) }, glyph('annotate')))) : null) : null),
+          h('button', { type: 'button', className: 'nks-tool', 'data-nks-compose': '1', title: copy.inputContext, 'aria-label': copy.inputContext, onClick: () => setComposing(true) }, glyph('annotate')),
+          h('button', { type: 'button', className: 'nks-tool', 'data-nks-clear-pick': '1', title: copy.clearSelection, 'aria-label': copy.clearSelection, onClick: (event) => { event.stopPropagation(); clearPick() } }, glyph('exit')))) : null) : null),
       // HITL control bar (ego parity): floats at the bottom of the frame when
       // an agent holds the bridge writer lock or the human holds the override.
       // "停止写入" is honest wording — the pane cannot kill the agent's run

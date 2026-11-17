@@ -407,9 +407,17 @@ export const STYLE = `${NANO_STYLES}
 .nxe-change-dir { margin-left: 8px; color: var(--dsw-alias-label-tertiary); font-size: 11px; }
 .nxe-graph { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 .nxe-graph-row {
-  display: grid; grid-template-columns: auto minmax(0, 1fr) auto;
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center; gap: 6px; min-height: 22px;
+  position: relative; z-index: 1;
+  border: 0; background: transparent; color: inherit; font: inherit; text-align: left;
+  width: 100%; cursor: pointer; padding: 0;
 }
+/* The HEAD row paints above every later row. A tag that overflows its row
+   therefore slides under the HEAD subject and the HEAD pill, never over them. */
+.nxe-graph-row[data-head="true"] { z-index: 3; }
+.nxe-graph-row[data-selected="true"] { background: var(--dsw-alias-interactive-bg-hover); border-radius: var(--dsw-radius-sm); }
+.nxe-graph-row:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary, var(--dsw-alias-link)); outline-offset: -2px; }
 .nxe-graph-rail { display: block; flex: none; }
 /* Lane palette: the VS Code git-graph hues. Eight colours so concurrent lanes never share ink
    unless the history is wider than eight branches; the class cycles with the lane's colour index. */
@@ -443,16 +451,32 @@ export const STYLE = `${NANO_STYLES}
   font-size: 11px; line-height: 16px; color: var(--dsw-alias-label-tertiary);
   font-variant-numeric: tabular-nums;
 }
-.nxe-graph-pills { display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
+.nxe-graph-pills { display: inline-flex; align-items: center; gap: 4px; min-width: 0; max-width: 46%; overflow: hidden; }
 .nxe-pill {
   max-width: 108px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   padding: 0 6px; border-radius: 999px; font-size: 10px; line-height: 16px;
   color: var(--dsw-alias-label-secondary); background: var(--dsw-alias-interactive-bg-hover);
+  flex: 0 1 auto;
 }
 .nxe-pill[data-tone="current"] {
+  position: relative; z-index: 2; flex: none;
   color: var(--dsw-alias-label-primary);
   background: color-mix(in oklab, var(--dsw-alias-brand-primary, var(--dsw-alias-link)) 22%, transparent);
 }
+.nxe-graph-stat { display: inline-flex; gap: 4px; flex: none; font-size: 10px; line-height: 16px; font-variant-numeric: tabular-nums; }
+.nxe-graph-stat [data-tone="add"] { color: var(--nxe-git-added, #3fb950); }
+.nxe-graph-stat [data-tone="del"] { color: var(--nxe-git-deleted, #f85149); }
+.nxe-commit-files {
+  height: 148px; overflow: auto; margin-top: 6px;
+  border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-1, transparent);
+}
+.nxe-commit-file {
+  display: flex; align-items: center; gap: 8px; min-width: 0;
+  padding: 3px 8px; font-size: 12px; line-height: 16px;
+}
+.nxe-commit-file-path { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.nxe-commit-more { margin: 0; padding: 4px 8px; font-size: 11px; color: var(--dsw-alias-label-tertiary); }
 /* The footer's dismissal parks at the left edge; the margin pushes the working actions right. */
 .nxe-scm-card .nxe-drawer-close { margin-right: auto; }
 .nxe-worktree {

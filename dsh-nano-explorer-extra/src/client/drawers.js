@@ -238,6 +238,11 @@ function HistoryRail({ copy, history, currentBranch, upstream, remotes }) {
 
   const graphW = Math.max(1, layout.lanesWide) * LANE_W + LANE_X * 2
   const xOf = c => LANE_X + c * LANE_W
+  // The open commit defaults to the tip. Clicking another row swaps the file list
+  // underneath; the list itself is a fixed-height scroller, so a large commit
+  // does not resize the card.
+  const [selected, setSelected] = useState(commits[0]?.full ?? '')
+  const shown = commits.find(commit => commit.full === selected) ?? commits[0]
   return React.createElement('section', { className: 'nxe-scm-group', 'data-nxe-history': 'true' },
     React.createElement('h3', { className: 'nxe-drawer-heading' }, copy.historyHeading),
     commits.length === 0
@@ -303,13 +308,25 @@ function HistoryRail({ copy, history, currentBranch, upstream, remotes }) {
           className: `nxe-lane nxe-c${row.color % LANE_COLORS}`,
           'data-dim': String(pushed), 'data-dot': 'true',
         }))
+        const refs = [...commit.refs].sort((a, b) => {
+          if (a === currentBranch) return -1
+          if (b === currentBranch) return 1
+          return 0
+        })
         return React.createElement('li', {
           key: `${commit.hash}:${index}`,
           className: 'nxe-graph-row',
           'data-head': String(index === 0),
           'data-pushed': String(pushed),
           'data-ahead': String(ahead),
+          'data-selected': String(shown?.full === commit.full),
           title: [commit.hash, ageLabel(copy, commit.time), commit.subject].filter(part => part !== '').join(' · '),
+          onClick: () => setSelected(commit.full),
+          onKeyDown: event => {
+            if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSelected(commit.full) }
+          },
+          tabIndex: 0,
+          role: 'button',
         },
         React.createElement('svg', {
           className: 'nxe-graph-rail', 'aria-hidden': 'true',
@@ -319,14 +336,32 @@ function HistoryRail({ copy, history, currentBranch, upstream, remotes }) {
           React.createElement('span', { className: 'nxe-graph-hash' }, commit.hash),
           ' ',
           commit.subject),
-        React.createElement('span', { className: 'nxe-graph-pills' }, commit.refs.slice(0, 2).map(ref =>
+        React.createElement('span', { className: 'nxe-graph-stat', 'aria-hidden': commit.additions === 0 && commit.deletions === 0 },
+          commit.additions > 0 ? React.createElement('span', { 'data-tone': 'add' }, `+${commit.additions}`) : null,
+          commit.deletions > 0 ? React.createElement('span', { 'data-tone': 'del' }, `−${commit.deletions}`) : null),
+        React.createElement('span', { className: 'nxe-graph-pills' }, refs.slice(0, 3).map(ref =>
           React.createElement('span', {
             key: ref,
             className: 'nxe-pill',
             'data-tone': ref === currentBranch ? 'current' : ref === upstream ? 'upstream' : 'default',
             title: ref,
           }, ref))))
-      })))
+      })),
+    shown === undefined ? null : React.createElement('div', {
+      className: 'nxe-commit-files', 'data-nxe-commit-files': shown.hash, role: 'region',
+      'aria-label': shown.subject,
+    },
+    (shown.files ?? []).length === 0
+      ? React.createElement('p', { className: 'nxe-drawer-empty' }, copy.commitFilesEmpty)
+      : React.createElement('ul', { className: 'nxe-drawer-list' },
+        shown.files.map(file => React.createElement('li', { key: file.path, className: 'nxe-commit-file' },
+          React.createElement('span', { className: 'nxe-commit-file-path', title: file.path }, file.path),
+          React.createElement('span', { className: 'nxe-graph-stat' },
+            file.additions > 0 ? React.createElement('span', { 'data-tone': 'add' }, `+${file.additions}`) : null,
+            file.deletions > 0 ? React.createElement('span', { 'data-tone': 'del' }, `−${file.deletions}`) : null)))),
+    shown.filesTruncated === true
+      ? React.createElement('p', { className: 'nxe-commit-more' }, copy.commitFilesMore)
+      : null))
 }
 
 /**
@@ -562,6 +597,16 @@ export function BranchDrawer({ copy, open, git, onClose, onPull, onPush, onRefre
                 'data-nxe-remote-checkout': row.name,
               }, row.name),
               row.commit === '' ? null : React.createElement('span', { className: 'nxe-graph-hash' }, row.commit),
+              row.base !== '' && row.name === row.base
+                ? React.createElement('span', { className: 'nxe-drawer-row-badge', 'data-tone': 'current' }, copy.defaultBranch)
+                : (row.ahead > 0 || row.behind > 0)
+                  ? React.createElement('span', {
+                    className: 'nxe-graph-stat',
+                    title: copy.aheadOfBase(row.ahead, row.behind, row.base),
+                  },
+                  row.ahead > 0 ? React.createElement('span', { 'data-tone': 'add' }, `+${row.ahead}`) : null,
+                  row.behind > 0 ? React.createElement('span', { 'data-tone': 'del' }, `−${row.behind}`) : null)
+                  : null,
               tracked
                 ? React.createElement('span', { className: 'nxe-drawer-row-badge', 'data-tone': 'current' }, copy.branchTrackedShort)
                 : null)

@@ -499,7 +499,7 @@ function ensurePerfReviewHost(env = {}) {
   return installSingleton(global, HOST_KEY, "__perfReviewHost", stamp, () => createPerfReviewHost(env));
 }
 
-// ../packages/dsh-host-route-guard/src/route-guard.js
+// ../../../../packages/dsh-host-route-guard/src/route-guard.js
 var RouteGuardError = class extends Error {
   constructor(reason, detail = "") {
     super(detail ? `route-guard: ${reason} \u2014 ${detail}` : `route-guard: ${reason}`);
@@ -1162,14 +1162,65 @@ function parseLog(stdout) {
   }
   return commits;
 }
+function parseHistoryRecord(record) {
+  const lines = record.replace(/^\n+/u, "").split("\n");
+  const pretty = lines[0] ?? "";
+  const commit = parseLog(pretty)[0];
+  if (commit === void 0) return void 0;
+  let additions = 0;
+  let deletions = 0;
+  let filesTruncated = false;
+  const files = [];
+  for (const line of lines.slice(1)) {
+    if (line.trim() === "") continue;
+    const tab = line.split("	");
+    if (tab.length < 3) continue;
+    const added = tab[0] === "-" ? 0 : Number(tab[0]);
+    const deleted = tab[1] === "-" ? 0 : Number(tab[1]);
+    if (!Number.isFinite(added) || !Number.isFinite(deleted)) continue;
+    additions += added;
+    deletions += deleted;
+    if (files.length < 80) files.push({ path: tab.slice(2).join("	"), additions: added, deletions: deleted });
+    else filesTruncated = true;
+  }
+  return { ...commit, additions, deletions, files, filesTruncated };
+}
+function parseHistory(stdout) {
+  const commits = [];
+  for (const record of stdout.split("")) {
+    const commit = parseHistoryRecord(record);
+    if (commit !== void 0) commits.push(commit);
+  }
+  return commits;
+}
+function parseRemoteRefs(stdout, base) {
+  const rows = [];
+  for (const line of stdout.split("\n")) {
+    if (line.trim() === "") continue;
+    const [name2, commit, symref, counts] = line.split("	");
+    if (name2 === void 0 || name2 === "") continue;
+    if (symref !== void 0 && symref !== "") continue;
+    const [aheadRaw, behindRaw] = (counts ?? "").trim().split(/\s+/u);
+    const ahead = Number(aheadRaw);
+    const behind = Number(behindRaw);
+    rows.push({
+      name: name2,
+      commit: commit ?? "",
+      ahead: Number.isFinite(ahead) ? ahead : 0,
+      behind: Number.isFinite(behind) ? behind : 0,
+      base: base ?? ""
+    });
+  }
+  return rows;
+}
 async function readHistory(ctx, config, request) {
   const result = await runGit(ctx, config, {
     ...request,
-    args: ["log", "--all", "-n", "48", "--pretty=format:%H%x1f%h%x1f%P%x1f%ct%x1f%s%x1f%D"],
+    args: ["log", "--all", "-n", "48", "--pretty=format:%x1e%H%x1f%h%x1f%P%x1f%ct%x1f%s%x1f%D", "--numstat"],
     allowedExitCodes: [0, 128]
   }).catch(() => void 0);
   if (result === void 0 || result.exitCode !== 0) return [];
-  return parseLog(result.stdout);
+  return parseHistory(result.stdout);
 }
 async function readStatus(ctx, config, request) {
   const probe = await runGit(ctx, config, { ...request, args: ["rev-parse", "--show-toplevel"], allowedExitCodes: [0, 128] });
@@ -1412,21 +1463,20 @@ async function checkoutBranch(ctx, config, request) {
   return { branch: name2 };
 }
 async function listRemoteBranches(ctx, config, request) {
+  const head = await runGit(ctx, config, {
+    ...request,
+    args: ["symbolic-ref", "--short", "refs/remotes/origin/HEAD"],
+    allowedExitCodes: [0, 1, 128]
+  }).catch(() => void 0);
+  const base = head !== void 0 && head.exitCode === 0 ? head.stdout.trim() : "";
+  const format = base === "" ? "%(refname:short)%09%(objectname:short)%09%(symref:short)" : `%(refname:short)%09%(objectname:short)%09%(symref:short)%09%(ahead-behind:${base})`;
   const result = await runGit(ctx, config, {
     ...request,
-    args: ["for-each-ref", "--format=%(refname:short)%09%(objectname:short)%09%(symref:short)", "refs/remotes"],
+    args: ["for-each-ref", `--format=${format}`, "refs/remotes"],
     allowedExitCodes: [0, 128]
   }).catch(() => void 0);
   if (result === void 0 || result.exitCode !== 0) return [];
-  const rows = [];
-  for (const line of result.stdout.split("\n")) {
-    if (line.trim() === "") continue;
-    const [name2, commit, symref] = line.split("	");
-    if (name2 === void 0 || name2 === "") continue;
-    if (symref !== void 0 && symref !== "") continue;
-    rows.push({ name: name2, commit: commit ?? "" });
-  }
-  return rows;
+  return parseRemoteRefs(result.stdout, base);
 }
 async function fetchAll(ctx, config, request) {
   const result = await runGit(ctx, config, {

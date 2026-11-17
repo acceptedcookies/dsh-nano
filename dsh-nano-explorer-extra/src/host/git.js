@@ -306,6 +306,86 @@ export function parseLog(stdout) {
 }
 
 /**
+ * Parse one `git log --numstat` record into additions, deletions, and a capped file list.
+ *
+ * A record is the pretty line parseLog already understands, then numstat rows
+ * (`added<TAB>deleted<TAB>path`). Binary files report `-` and count as zero lines.
+ * Renames stay as the path Git prints (`old => new`). At most 80 files are kept;
+ * the totals still include every row.
+ * @param record - one commit, without the leading record separator.
+ * @returns the commit, or undefined when the pretty line is not a commit.
+ */
+export function parseHistoryRecord(record) {
+  const lines = record.replace(/^\n+/u, '').split('\n')
+  const pretty = lines[0] ?? ''
+  const commit = parseLog(pretty)[0]
+  if (commit === undefined) return undefined
+  let additions = 0
+  let deletions = 0
+  let filesTruncated = false
+  const files = []
+  for (const line of lines.slice(1)) {
+    if (line.trim() === '') continue
+    const tab = line.split('\t')
+    if (tab.length < 3) continue
+    const added = tab[0] === '-' ? 0 : Number(tab[0])
+    const deleted = tab[1] === '-' ? 0 : Number(tab[1])
+    if (!Number.isFinite(added) || !Number.isFinite(deleted)) continue
+    additions += added
+    deletions += deleted
+    if (files.length < 80) files.push({ path: tab.slice(2).join('\t'), additions: added, deletions: deleted })
+    else filesTruncated = true
+  }
+  return { ...commit, additions, deletions, files, filesTruncated }
+}
+
+/**
+ * Parse `git log --pretty=format:%x1e… --numstat`.
+ * Records are separated by `\x1e`. Newest first, same as parseLog.
+ * @param stdout - the log.
+ * @returns commits with line stats and file lists.
+ */
+export function parseHistory(stdout) {
+  const commits = []
+  for (const record of stdout.split('\x1e')) {
+    const commit = parseHistoryRecord(record)
+    if (commit !== undefined) commits.push(commit)
+  }
+  return commits
+}
+
+/**
+ * Parse `for-each-ref` rows that carry `%(ahead-behind:<base>)`.
+ *
+ * Columns: short name, short commit, symref target, `ahead behind`. Symrefs
+ * (`origin/HEAD`) are aliases and are dropped. `ahead` is commits on this ref
+ * that the base does not have; `behind` is the other way — GitHub's reading.
+ * @param stdout - one ref per line.
+ * @param base - the default remote ref the counts were measured against.
+ * @returns `{ name, commit, ahead, behind, base }`.
+ */
+export function parseRemoteRefs(stdout, base) {
+  const rows = []
+  for (const line of stdout.split('\n')) {
+    if (line.trim() === '') continue
+    const [name, commit, symref, counts] = line.split('\t')
+    if (name === undefined || name === '') continue
+    if (symref !== undefined && symref !== '') continue
+    const [aheadRaw, behindRaw] = (counts ?? '').trim().split(/\s+/u)
+    const ahead = Number(aheadRaw)
+    const behind = Number(behindRaw)
+    rows.push({
+      name,
+      commit: commit ?? '',
+      ahead: Number.isFinite(ahead) ? ahead : 0,
+      behind: Number.isFinite(behind) ? behind : 0,
+      base: base ?? '',
+    })
+  }
+  return rows
+}
+
+/**
  * Read the newest commits across every local and remote-tracking ref.
  *
  * `--all` — not just HEAD — is what lets the graph draw the remote side as its own lane: the
@@ -319,11 +399,11 @@ export function parseLog(stdout) {
 async function readHistory(ctx, config, request) {
   const result = await runGit(ctx, config, {
     ...request,
-    args: ['log', '--all', '-n', '48', '--pretty=format:%H%x1f%h%x1f%P%x1f%ct%x1f%s%x1f%D'],
+    args: ['log', '--all', '-n', '48', '--pretty=format:%x1e%H%x1f%h%x1f%P%x1f%ct%x1f%s%x1f%D', '--numstat'],
     allowedExitCodes: [0, 128],
   }).catch(() => undefined)
   if (result === undefined || result.exitCode !== 0) return []
-  return parseLog(result.stdout)
+  return parseHistory(result.stdout)
 }
 
 /**
@@ -723,22 +803,24 @@ export async function checkoutBranch(ctx, config, request) {
  * @returns one row per remote-tracking ref: `{ name, commit }`.
  */
 export async function listRemoteBranches(ctx, config, request) {
+  // The default branch is whatever `origin/HEAD` points at (`origin/main`).
+  // Counts are measured against that ref, the same baseline GitHub uses.
+  const head = await runGit(ctx, config, {
+    ...request,
+    args: ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'],
+    allowedExitCodes: [0, 1, 128],
+  }).catch(() => undefined)
+  const base = head !== undefined && head.exitCode === 0 ? head.stdout.trim() : ''
+  const format = base === ''
+    ? '%(refname:short)%09%(objectname:short)%09%(symref:short)'
+    : `%(refname:short)%09%(objectname:short)%09%(symref:short)%09%(ahead-behind:${base})`
   const result = await runGit(ctx, config, {
     ...request,
-    args: ['for-each-ref', '--format=%(refname:short)%09%(objectname:short)%09%(symref:short)', 'refs/remotes'],
+    args: ['for-each-ref', `--format=${format}`, 'refs/remotes'],
     allowedExitCodes: [0, 128],
   }).catch(() => undefined)
   if (result === undefined || result.exitCode !== 0) return []
-  const rows = []
-  for (const line of result.stdout.split('\n')) {
-    if (line.trim() === '') continue
-    const [name, commit, symref] = line.split('\t')
-    if (name === undefined || name === '') continue
-    // `origin/HEAD`-style symrefs point at another remote ref; they are aliases, not branches.
-    if (symref !== undefined && symref !== '') continue
-    rows.push({ name, commit: commit ?? '' })
-  }
-  return rows
+  return parseRemoteRefs(result.stdout, base)
 }
 
 /**

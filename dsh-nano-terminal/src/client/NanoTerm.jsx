@@ -92,6 +92,7 @@ ${NANO_STYLES}
 .dnt-tab-icon{display:inline-flex;flex:none;color:currentColor}
 .dnt-tab-icon svg{width:12px;height:12px}
 .dnt-tab-pin{display:inline-flex;flex:none;margin:0 22px 0 2px;color:var(--dsw-alias-label-tertiary)}
+.dnt-tab-busy{display:inline-flex;flex:none;margin-left:2px}
 .dnt-tab-pin svg{width:11px;height:11px}
 .dnt-tab:focus-within .dnt-tab-title,.dnt-tab-active .dnt-tab-title{mask-image:linear-gradient(to right,black calc(100% - 26px),transparent calc(100% - 10px))}
 @media (hover:hover){.dnt-tab:hover .dnt-tab-title{mask-image:linear-gradient(to right,black calc(100% - 26px),transparent calc(100% - 10px))}}
@@ -441,7 +442,7 @@ export function NanoTerm({ sessionId, session, zh, openView }) {
 
   return (
     <div ref={rootRef} className="dnt-root" data-nano-terminal data-dnt-root>
-      <StatusBar tree={tree} focused={focused} setFocused={setFocused} closeLeaf={closeLeaf} split={split} openLeaf={openLeaf} togglePin={togglePin} sessionId={sessionId} paneSessions={paneSessions} zh={zh} settings={settings} onSettings={updateSettings} />
+      <StatusBar tree={tree} focused={focused} setFocused={setFocused} closeLeaf={closeLeaf} split={split} openLeaf={openLeaf} togglePin={togglePin} sessionId={sessionId} paneSessions={paneSessions} zh={zh} settings={settings} onSettings={updateSettings} statuses={statuses} />
       {tree ? (
         <div className="dnt-content">
           <div className="dnt-panes">
@@ -517,13 +518,14 @@ function leafIdsInOrder(node, out = []) {
  * Right-clicking a chip opens its context menu: copy the pane's
  * `[ DNT:{conv8}@{term8} ]` context reference, pin it to the front, close it.
  */
-function StatusBar({ tree, focused, setFocused, closeLeaf, split, openLeaf, togglePin, sessionId, paneSessions, zh, settings, onSettings }) {
+function StatusBar({ tree, focused, setFocused, closeLeaf, split, openLeaf, togglePin, sessionId, paneSessions, zh, settings, onSettings, statuses }) {
   const [mcpUrl, setMcpUrl] = useState('')
   const [dialog, setDialog] = useState(null) // 'mcp' | 'settings'
   const [menu, setMenu] = useState(null) // '+' lane menu anchor
   const [tabMenu, setTabMenu] = useState(null) // { x, y, node } — chip context menu
   const [copiedCtx, setCopiedCtx] = useState(null) // paneId whose ctx ref was just copied
   const [copyFailedCtx, setCopyFailedCtx] = useState(null) // paneId whose clipboard write was denied
+  const [closeConfirm, setCloseConfirm] = useState(null) // { node, reason } — two-step close on pinned/busy panes
   const copy = { cancel: zh ? '取消' : 'Cancel', confirm: zh ? '确定' : 'OK', close: zh ? '关闭' : 'Close' }
 
   useEffect(() => {
@@ -570,6 +572,33 @@ function StatusBar({ tree, focused, setFocused, closeLeaf, split, openLeaf, togg
     if (lane?.boundCtx) return `[ ${lane.boundCtx} ]`
     return formatCtxRef(sessionId, node.laneSpec?.tid)
   }
+
+  /** OSC-reported busy (working/blocked) — no host round-trip needed. */
+  const paneBusy = (node) => {
+    const st = statuses?.[node.id]
+    return st?.prog?.state === 'working' || st?.prog?.state === 'blocked'
+  }
+  /**
+   * Close request: plain panes close directly; pinned or busy panes get a
+   * second confirmation so a pinned anchor or a running foreground program
+   * is never lost to one misclick. The non-OSC busy signal (vim, a build,
+   * a REPL) comes from the host's own foreground probe via /sessions.
+   */
+  const requestClose = async (node) => {
+    if (node.pinned) return setCloseConfirm({ node, reason: 'pinned' })
+    if (paneBusy(node)) return setCloseConfirm({ node, reason: 'busy' })
+    const rec = paneSessions.current.get(node.id)
+    const sid = rec?.lane?.id
+    if (sid) {
+      try {
+        const r = await fetch(`/dsh-nano-terminal/sessions`, { credentials: 'same-origin' })
+        const rows = (await r.json())?.sessions ?? []
+        const host = rows.find((x) => x.id === sid)
+        if (host?.busy) return setCloseConfirm({ node, reason: 'busy' })
+      } catch { /* probe failure must never block a close */ }
+    }
+    closeLeaf(node.id)
+  }
   const copyCtxRef = (node) => {
     const ref = ctxRefOf(node)
     navigator.clipboard?.writeText(ref)
@@ -588,7 +617,7 @@ function StatusBar({ tree, focused, setFocused, closeLeaf, split, openLeaf, togg
       run: () => togglePin(node.id),
     },
     { separator: true },
-    { id: 'close', label: zh ? '关闭' : 'Close', icon: glyph('close'), run: () => closeLeaf(node.id) },
+    { id: 'close', label: zh ? '关闭' : 'Close', icon: glyph('close'), run: () => requestClose(node) },
   ]
 
   return (
@@ -614,12 +643,13 @@ function StatusBar({ tree, focused, setFocused, closeLeaf, split, openLeaf, togg
                   <span className="dnt-tab-icon" aria-hidden="true">{glyph(copiedCtx === node.id ? 'check' : copyFailedCtx === node.id ? 'warn' : node.laneSpec?.lane === 'mcp' ? 'mcp' : 'terminal')}</span>
                   <span>{st?.title || (zh ? '终端' : 'Terminal')}</span>
                 </span>
+                {paneBusy(node) && <span className="dnt-tab-busy" aria-hidden="true" title={zh ? '有前台程序在运行' : 'foreground program running'}><StateDot state="ongoing" /></span>}
                 {node.pinned && <span className="dnt-tab-pin" aria-hidden="true">{glyph('pin')}</span>}
                 <button
                   type="button"
                   className="dnt-tab-close"
                   aria-label={zh ? `关闭 ${st?.title || '终端'}` : `close ${st?.title || 'terminal'}`}
-                  onClick={(e) => { e.stopPropagation(); closeLeaf(node.id) }}
+                  onClick={(e) => { e.stopPropagation(); requestClose(node) }}
                 >
                   {glyph('close')}
                 </button>
@@ -674,6 +704,19 @@ function StatusBar({ tree, focused, setFocused, closeLeaf, split, openLeaf, togg
       )}
       {dialog === 'settings' && (
         <SettingsDialog copy={copy} zh={zh} settings={settings} onSettings={onSettings} onClose={() => setDialog(null)} />
+      )}
+      {closeConfirm && (
+        <NanoDialog
+          copy={copy}
+          title={zh ? '关闭终端' : 'Close terminal'}
+          description={closeConfirm.reason === 'pinned'
+            ? (zh ? '这个终端已置顶。置顶终端通常是有意长期保留的——确认关闭？' : 'This terminal is pinned. Pinned terminals are usually kept intentionally — close it anyway?')
+            : (zh ? '这个终端有前台程序在运行（working/blocked），关闭会终止它——确认关闭？' : 'A foreground program is running in this terminal (working/blocked) — closing will kill it. Close anyway?')}
+          confirmLabel={zh ? '关闭' : 'Close'}
+          danger
+          onConfirm={() => { closeLeaf(closeConfirm.node.id); setCloseConfirm(null) }}
+          onCancel={() => setCloseConfirm(null)}
+        />
       )}
     </Toolbar>
   )

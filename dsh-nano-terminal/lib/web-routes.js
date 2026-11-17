@@ -1147,8 +1147,10 @@ function registerWebRoutes(ctx, deps) {
       res.end(reply === void 0 ? "" : JSON.stringify(reply));
     },
     "dnt.sessions": async (req, res) => {
+      const rows = registry.list();
+      const busy = await Promise.all(rows.map((r) => registry.resolve(r.id)?.isBusy?.() ?? Promise.resolve(false)));
       res.writeHead(200, { "content-type": "application/json" });
-      res.end(JSON.stringify({ sessions: registry.list() }));
+      res.end(JSON.stringify({ sessions: rows.map((r, i) => ({ ...r, busy: !!busy[i] })) }));
     },
     // SSE event stream: subscribe → snapshot first frame, then live events.
     // ?since=<seq> resumes from a position; falling behind the ring answers

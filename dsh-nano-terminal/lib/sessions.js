@@ -1211,6 +1211,20 @@ var SessionRecord = class {
       // argv may carry secrets — omit
     };
   }
+  /**
+   * Busy = a foreground program is running or the program reported
+   * working/blocked via OSC 7501. Drives the UI close-confirm and the
+   * `busy` field on list/stats/sessions — honest, never guessed: shell
+   * idleness comes from the backend's own foreground inspection.
+   */
+  async isBusy() {
+    const st = this.status?.state;
+    if (st === "working" || st === "blocked") return true;
+    if (!this.handle) return false;
+    const fg = await this.handle.inspectForeground?.().catch(() => void 0);
+    if (!fg || fg.processGroupId == null) return false;
+    return fg.processGroupId !== this.handle.pid;
+  }
   /** Adopt a (re)spawned handle — used by keep respawn. */
   adopt(handle) {
     this.handle = handle;

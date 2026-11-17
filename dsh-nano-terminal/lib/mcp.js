@@ -437,8 +437,11 @@ function createMcpHandler({ ctx, registry, bus, auditPath, laneStatus, writeAudi
           attach: { protocol: "dnt-ws-v1", url: `/dsh-nano-terminal/stream?session=${rec.id}` }
         };
       }
-      case "term.session.list":
-        return { sessions: registry.list() };
+      case "term.session.list": {
+        const rows = registry.list();
+        const busy = await Promise.all(rows.map((r) => registry.resolve(r.id)?.isBusy?.() ?? Promise.resolve(false)));
+        return { sessions: rows.map((r, i) => ({ ...r, busy: !!busy[i] })) };
+      }
       case "term.ctx": {
         const ref = String(args.ref ?? "");
         const rec = registry.resolve(ref);
@@ -558,9 +561,10 @@ function createMcpHandler({ ctx, registry, bus, auditPath, laneStatus, writeAudi
       }
       case "term.session.stats": {
         const rec = target(args.id);
-        const [stats, foreground] = await Promise.all([
+        const [stats, foreground, busy] = await Promise.all([
           processStats(rec),
-          rec.handle?.inspectForeground?.().catch(() => void 0) ?? Promise.resolve(void 0)
+          rec.handle?.inspectForeground?.().catch(() => void 0) ?? Promise.resolve(void 0),
+          rec.isBusy()
         ]);
         return {
           id: rec.id,
@@ -568,6 +572,8 @@ function createMcpHandler({ ctx, registry, bus, auditPath, laneStatus, writeAudi
           ctx: rec.info().ctx,
           pid: rec.handle?.pid ?? null,
           ...stats,
+          busy,
+          // foreground program running or OSC state working/blocked
           foreground: foreground ?? null,
           activity: (rec.handle ? await rec.handle.inspectActivity?.().catch(() => null) : null) ?? null,
           status: rec.status,
@@ -609,6 +615,10 @@ function createMcpHandler({ ctx, registry, bus, auditPath, laneStatus, writeAudi
       case "term.events":
         return bus.since(args.since ?? 0);
       case "term.session.close": {
+        const rec = registry.resolve(args.id);
+        if (rec && !args.confirm && await rec.isBusy()) {
+          throw err(KIND.CONFLICT, `terminal '${rec.addr}' is busy \u2014 close needs confirm:true`);
+        }
         const ok2 = await registry.close(args.id, args.reason ?? "mcp");
         return { closed: ok2 };
       }

@@ -119,7 +119,7 @@ back-compat 别名。`<ref>` = id | name | addr | `[ DNT:{conv8}@{term8} ]` |
 /nano-terminal wait <ref> [pattern] [--children all|any] [--timeout s]   等待 turn 结束或屏幕 pattern
 /nano-terminal keys <ref> <keys> [--force]   TUI 键序列（enter/esc/ctrl+c/f5…）
 /nano-terminal interrupt <ref>     礼貌打断前台程序，报 stopped|exited|still_working
-/nano-terminal close <ref>         关闭 session
+/nano-terminal close <ref>         关闭 session（busy 终端需二次确认：MCP 传 confirm:true，否则 conflict）
 /nano-terminal keep <ref> [on|off] keep 标记：程序丢失时重 spawn shell（绝不重跑命令）
 /nano-terminal label <ref> k=v|-k  设/删标签（t/conv 为保留锚点，只经 attach graft）
 /nano-terminal note <ref> <text>   向窗格投递 <dnt from=…> note 信封

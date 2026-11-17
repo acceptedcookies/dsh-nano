@@ -126,8 +126,13 @@ export function createMcpHandler({ ctx, registry, bus, auditPath, laneStatus, wr
           attach: { protocol: 'dnt-ws-v1', url: `/dsh-nano-terminal/stream?session=${rec.id}` },
         }
       }
-      case 'term.session.list':
-        return { sessions: registry.list() }
+      case 'term.session.list': {
+        // busy is a live probe (foreground inspection) — cheap enough to run
+        // for the whole registry in parallel.
+        const rows = registry.list()
+        const busy = await Promise.all(rows.map((r) => registry.resolve(r.id)?.isBusy?.() ?? Promise.resolve(false)))
+        return { sessions: rows.map((r, i) => ({ ...r, busy: !!busy[i] })) }
+      }
       case 'term.ctx': {
         // Resolve a context reference — '[ DNT:{conv8}@{term8} ]', a bare
         // term stamp, or any legacy ref — to the session it names.
@@ -258,9 +263,10 @@ export function createMcpHandler({ ctx, registry, bus, auditPath, laneStatus, wr
       }
       case 'term.session.stats': {
         const rec = target(args.id)
-        const [stats, foreground] = await Promise.all([
+        const [stats, foreground, busy] = await Promise.all([
           processStats(rec),
           rec.handle?.inspectForeground?.().catch(() => undefined) ?? Promise.resolve(undefined),
+          rec.isBusy(),
         ])
         return {
           id: rec.id,
@@ -268,6 +274,7 @@ export function createMcpHandler({ ctx, registry, bus, auditPath, laneStatus, wr
           ctx: rec.info().ctx,
           pid: rec.handle?.pid ?? null,
           ...stats,
+          busy, // foreground program running or OSC state working/blocked
           foreground: foreground ?? null,
           activity: (rec.handle ? await rec.handle.inspectActivity?.().catch(() => null) : null) ?? null,
           status: rec.status,
@@ -309,6 +316,13 @@ export function createMcpHandler({ ctx, registry, bus, auditPath, laneStatus, wr
       case 'term.events':
         return bus.since(args.since ?? 0)
       case 'term.session.close': {
+        // A busy terminal (foreground program or OSC working/blocked) can't
+        // be closed blindly — the agent must pass confirm:true, mirroring the
+        // UI's two-step close on pinned/busy tabs.
+        const rec = registry.resolve(args.id)
+        if (rec && !args.confirm && await rec.isBusy()) {
+          throw err(KIND.CONFLICT, `terminal '${rec.addr}' is busy — close needs confirm:true`)
+        }
         const ok = await registry.close(args.id, args.reason ?? 'mcp')
         return { closed: ok }
       }

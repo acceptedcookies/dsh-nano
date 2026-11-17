@@ -98,6 +98,11 @@ note template stats` take `<ref>` = id | name | addr | `[ DNT:{conv8}@{term8} ]`
 | `[ DNT:@{term8} ]` (conv-less — pane never bound a conversation stamp, or
 the host only echoes `t`) | bare 8-hex term stamp.
 
+**Busy**: `term.session.list`/`stats`/`GET /sessions` carry `busy` — true when
+a foreground program owns the pty or OSC 7501 reports working/blocked. A busy
+terminal refuses `term.session.close` with `conflict`; pass `confirm:true`
+(the same second-confirm the UI shows on pinned/busy tabs).
+
 Slash flags: `send <ref> <text> [--force] [--if=idle|working] [--wait]
 [--timeout s]`, `wait <ref> [pattern…] [--children all|any] [--timeout s]`,
 `keys <ref> <keys…> [--force]`, `new [name] [--parent ref] [--keep] [--cwd

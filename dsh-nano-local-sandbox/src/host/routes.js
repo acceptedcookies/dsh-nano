@@ -204,6 +204,24 @@ function resourceDrift(info, wanted) {
   return problems.length ? problems.join(', ') : null
 }
 
+/** Headers a page must not be able to set: they carry credentials or would
+ *  let a caller forge the request's identity. */
+const FORBIDDEN_HEADERS = new Set([
+  'cookie', 'authorization', 'proxy-authorization', 'host', 'content-length',
+  'connection', 'upgrade', 'te', 'trailer', 'transfer-encoding',
+])
+
+/** @returns {Record<string,string>|null} null when the caller sent nothing usable. */
+function sanitizeExtraHeaders(raw) {
+  if (raw === null) return {}
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
+  const entries = Object.entries(raw)
+    .filter(([name, value]) => typeof name === 'string' && typeof value === 'string')
+    .filter(([name]) => !FORBIDDEN_HEADERS.has(name.toLowerCase()))
+    .slice(0, 20)
+  return Object.fromEntries(entries)
+}
+
 /** One HTTP GET with no keep-alive pool, so a probe cannot pin the process. */
 function probeHttp(url, timeoutMs) {
   return new Promise((resolve) => {
@@ -745,6 +763,16 @@ function clientFor(session, base, deps) {
  * blank. Called once per host process, from the first /status.
  * @returns {Promise<boolean>} whether a navigation was issued
  */
+/** Re-apply the emulation overrides a session carries. A reconnect creates a
+ *  new page session, and CDP overrides do not survive it. */
+async function applySessionOverrides(session, client, sessionId) {
+  try {
+    if (session.userAgent) await client.send('Network.setUserAgentOverride', { userAgent: session.userAgent }, sessionId)
+    if (session.media !== undefined) await client.send('Emulation.setEmulatedMedia', { media: session.media ?? '' }, sessionId)
+    if (session.extraHeaders) await client.send('Network.setExtraHTTPHeaders', { headers: session.extraHeaders }, sessionId)
+  } catch { /* an override that fails must not break the navigation */ }
+}
+
 async function restoreLastPage(session, deps) {
   const remembered = readLastPage(deps)
   if (!remembered) return false
@@ -1326,6 +1354,12 @@ export function routeSpecs(deps = {}) {
         if (row.path.endsWith('/settings')) {
           const client = await page()
           const viewport = pageBody.viewport
+          // The contract lists userAgent / media / extraHeaders. Only viewport
+          // was implemented, so the pane's UA field silently did nothing and a
+          // site that gates on the UA could never be reached.
+          const userAgent = typeof pageBody.userAgent === 'string' ? pageBody.userAgent.trim() : null
+          const media = pageBody.media === 'screen' || pageBody.media === 'print' || pageBody.media === null ? pageBody.media : undefined
+          const extraHeaders = sanitizeExtraHeaders(pageBody.extraHeaders)
           if (viewport && viewport.width && viewport.height) {
             await withPage(client, (sessionId) => client.send('Emulation.setDeviceMetricsOverride', {
               width: Number(viewport.width),
@@ -1334,7 +1368,25 @@ export function routeSpecs(deps = {}) {
               mobile: viewport.mobile === true,
             }, sessionId))
           }
-          send(res, 200, { ok: true, viewport: viewport || null })
+          if (userAgent !== null) {
+            await withPage(client, (sessionId) => client.send('Network.setUserAgentOverride', { userAgent }, sessionId))
+            session.userAgent = userAgent
+          }
+          if (media !== undefined) {
+            await withPage(client, (sessionId) => client.send('Emulation.setEmulatedMedia', { media: media ?? '' }, sessionId))
+            session.media = media
+          }
+          if (extraHeaders !== null) {
+            await withPage(client, (sessionId) => client.send('Network.setExtraHTTPHeaders', { headers: extraHeaders }, sessionId))
+            session.extraHeaders = extraHeaders
+          }
+          send(res, 200, {
+            ok: true,
+            viewport: viewport || null,
+            userAgent: session.userAgent ?? null,
+            media: session.media ?? null,
+            extraHeaders: session.extraHeaders ?? null,
+          })
           return
         }
         if (row.path.endsWith('/console')) {

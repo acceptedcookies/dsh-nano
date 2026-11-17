@@ -94,6 +94,13 @@ export async function navigate(session, httpBase, url, connect = connectCdp) {
     ? { sessionId: page.sessionId }
     : await client.send('Target.attachToTarget', { targetId: page.targetId, flatten: true })
   await client.send('Page.enable', {}, attached.sessionId)
+  // Emulation overrides live on the page session; a reconnect or a fresh
+  // attach loses them, so re-apply before every navigation.
+  try {
+    if (session.userAgent) await client.send('Network.setUserAgentOverride', { userAgent: session.userAgent }, attached.sessionId)
+    if (session.media !== undefined) await client.send('Emulation.setEmulatedMedia', { media: session.media ?? '' }, attached.sessionId)
+    if (session.extraHeaders) await client.send('Network.setExtraHTTPHeaders', { headers: session.extraHeaders }, attached.sessionId)
+  } catch { /* an override that fails must not block the navigation */ }
   await client.send('Page.navigate', { url }, attached.sessionId)
   return { ok: true, url }
 }

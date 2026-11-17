@@ -123,24 +123,26 @@ test('T21: the status bar is nano-ui Toolbar', () => {
   assert.match(nanoTerm, /className="dnt-bar"/)
   assert.deepEqual(countIn(sources, /role="toolbar"/g), [], 'the host role is owned by nano-ui Toolbar')
   // The row keeps its own layout classes and every one of them is defined.
-  for (const name of ['dnt-bar', 'dnt-bar-group', 'dnt-bar-btn', 'dnt-bar-icon', 'dnt-bar-label', 'dnt-bar-search', 'dnt-bar-input']) {
+  for (const name of ['dnt-bar', 'dnt-bar-group', 'dnt-bar-btn', 'dnt-bar-icon', 'dnt-bar-label']) {
     assert.ok(nanoTerm.includes(`.${name}{`), `.${name} is defined`)
     assert.ok(nanoTerm.includes(`"${name}"`), `.${name} is referenced`)
   }
+  // [业主]裁决：状态栏不放搜索。手写搜索框整体移除（样式+组件+glyph 引用），
+  // 锁死回潮——轨迹栏的搜索框是轨迹自己的 ledger 过滤，不属于终端。
+  assert.deepEqual(countIn(sources, /dnt-bar-search|dnt-bar-input|filterQuery|jumpToPane/g), [], 'bar search removed')
 })
 
 test('T21: the status bar icons come from the host icon set', () => {
   assert.deepEqual(countIn(sources, /⊕/g), [], '⊕ text glyph')
   assert.deepEqual(countIn(sources, /⚙/g), [], '⚙ text glyph')
   assert.deepEqual(countIn(sources, /actionIcon|toggleIcon|searchIcon/g), [], 'text-glyph slots')
-  for (const name of ['terminal', 'add', 'help', 'settings', 'search']) {
+  for (const name of ['terminal', 'add', 'help', 'settings']) {
     assert.ok(nanoTerm.includes(`glyph('${name}')`), `glyph('${name}') is used`)
   }
   // Each one resolves to a catalog `Icon*` export, not to a locally drawn svg.
-  const map = nanoTerm.slice(nanoTerm.indexOf('const glyph ='), nanoTerm.indexOf('function leaf('))
+  const map = nanoTerm.slice(nanoTerm.indexOf('const glyph ='), nanoTerm.indexOf('function firstLeaf('))
   for (const name of ['terminal: primitives.IconCodeOutlineRegular', 'add: primitives.IconPlusOutlineRegular',
-    'help: primitives.IconQuestionOutlineRegular', 'settings: primitives.IconSettingsOutlineRegular',
-    'search: primitives.IconSearchOutlineRegular']) {
+    'help: primitives.IconQuestionOutlineRegular', 'settings: primitives.IconSettingsOutlineRegular']) {
     assert.ok(map.includes(name), name)
   }
   assert.deepEqual(countIn(sources, /<svg\b/g), [], 'inline <svg> outside the icon facade')

@@ -67,22 +67,21 @@ ${NANO_STYLES}
 .dnt-root{position:relative;height:100%;min-height:0;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-base);flex-direction:column;display:flex}
 /* 12px 只给终端内容。状态栏要跟轨迹栏同一套界面字号，不能被这里压小。 */
 .dnt-content,.dnt-pane,.dnt-empty{font:var(--dsw-font-xxs-12)}
-/* Status bar row = nano-ui Toolbar (.nano-toolbar) plus the local classes below:
-   identity + lane rollup on the left, actions and the pane-title filter right.
-   Every color is a host token; no host toolbar class is borrowed.
-   高度锁 36px：nano-toolbar 的 min-height 是 36，旧的 32 会把这一行压得比
-   轨迹栏矮。左右 12px，和轨迹栏的内容边距对齐，不再吃 nano-space-2 的 8px。 */
-.dnt-bar{box-sizing:border-box;flex:none;width:100%;height:36px;min-height:36px;max-height:36px;flex-wrap:nowrap;padding:0 12px;gap:8px;font:inherit}
-.dnt-bar-group{display:flex;align-items:center;gap:2px;min-width:0;flex:0 1 auto;overflow:hidden}
-.dnt-bar-btn{display:inline-flex;align-items:center;gap:4px;height:24px;min-width:0;padding:0 6px;border:0;border-radius:var(--dsw-radius-sm);background:transparent;color:var(--dsw-alias-label-tertiary);font:inherit;cursor:pointer}
-.dnt-bar-btn:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
-.dnt-bar-btn:focus-visible{outline:2px solid var(--dsw-focus-ring-color);outline-offset:1px}
+/* Status bar = 宿主 TrajectoryToolbar 规格（宿主组件不可见导出，规格取自其
+   pinned 源）：bg-layer-1 + border-l2 底边、min-height 32、xxs-12 字号、
+   20px 高按钮（gap 4 / padding 0 5-7 / radius-sm）、12px 图标。
+   nano-toolbar 自带 min-height 36 与 border-l1，这里按轨迹规格覆盖。 */
+/* specificity 提到 (0,2,0)：nano-toolbar 的 min-height:36px 有多份拷贝且在
+   部分注入顺序下排在本规则之后，会盖掉 32px——.dnt-root.dnt-bar 锁死。 */
+.dnt-root .dnt-bar{box-sizing:border-box;flex:none;width:100%;min-height:32px;flex-wrap:wrap;padding:4px 6px;gap:4px 8px;border-bottom:.5px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1);font:var(--dsw-font-xxs-12)}
+.dnt-bar-group{display:flex;align-items:center;flex:0 1 auto;flex-wrap:wrap;min-width:0;gap:2px}
+.dnt-bar-btn{display:inline-flex;flex:none;align-items:center;gap:4px;height:20px;min-width:0;padding:0 6px;border:0;border-radius:var(--dsw-radius-sm);background:transparent;color:var(--dsw-alias-label-tertiary);font:inherit;cursor:pointer}
+@media (hover:hover){.dnt-bar-btn:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}}
+.dnt-bar-btn:focus-visible{outline:1px solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:1px}
+.dnt-bar-btn[aria-pressed="true"]{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}
 .dnt-bar-icon{display:inline-flex;flex:none;color:currentColor}
-.dnt-bar-icon svg{width:14px;height:14px}
+.dnt-bar-icon svg{width:12px;height:12px}
 .dnt-bar-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.dnt-bar-search{display:flex;align-items:center;gap:4px;margin-left:auto;flex:0 1 200px;min-width:96px}
-.dnt-bar-input{flex:1 1 auto;min-width:0;height:24px;padding:0 6px;border:.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-sm);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit}
-.dnt-bar-input:focus-visible{outline:2px solid var(--dsw-focus-ring-color);outline-offset:1px}
 /* content fills the view edge-to-edge — zero outer padding so the pane
    surface meets the view column border, matching how the trajectory body
    and chat composer sit flush against the column. No symmetric margin is
@@ -157,7 +156,6 @@ const glyph = (name, rotate = false) => {
     terminal: primitives.IconCodeOutlineRegular,
     copy: primitives.IconCopyOutlineRegular,
     paste: primitives.IconCopyOutlineRegular,
-    search: primitives.IconSearchOutlineRegular,
   }[name]
   if (!Icon) return null
   return (
@@ -448,17 +446,9 @@ function firstLeaf(node) {
   return node.type === 'leaf' ? node.id : firstLeaf(node.a) ?? firstLeaf(node.b)
 }
 
-function leafIds(node, out = []) {
-  if (!node) return out
-  if (node.type === 'leaf') out.push(node.id)
-  else { leafIds(node.a, out); leafIds(node.b, out) }
-  return out
-}
-
 /** Top status bar: 轨迹 toolbar convention — identity + lane status left, controls right. */
 function StatusBar({ sessionId, split, openLeaf, focused, zh, tree, paneSessions, statuses, settings, onSettings }) {
   const [mcpUrl, setMcpUrl] = useState('')
-  const [filterQuery, setFilterQuery] = useState('')
   const [dialog, setDialog] = useState(null) // 'mcp' | 'help' | 'settings'
   const [menu, setMenu] = useState(null)
   const target = focused ?? firstLeaf(tree)
@@ -494,31 +484,14 @@ function StatusBar({ sessionId, split, openLeaf, focused, zh, tree, paneSessions
   const phaseDot = { opening: 'ongoing', live: 'done', exited: 'idle', error: 'error', working: 'ongoing', blocked: 'error', done: 'done', idle: 'idle' }
   const phaseText = { opening: zh ? '连接中' : 'connecting', live: zh ? '运行中' : 'live', exited: zh ? '已退出' : 'exited', error: zh ? '失败' : 'failed', working: zh ? '工作中' : 'working', blocked: zh ? '待处理' : 'blocked', done: zh ? '已完成' : 'done', idle: zh ? '空闲' : 'idle' }
   const laneText = { local: 'LOCAL', mcp: 'MCP' }
-  // status bar row: identity + lane rollup left, action buttons and the
-  // pane-title filter right, inside nano-ui `Toolbar` (host toolbar is not
-  // exported). Icons come from the host icon set through glyph().
+  // status bar row: identity + lane rollup + action buttons, inside nano-ui
+  // `Toolbar` (host toolbar is not exported) styled to the TrajectoryToolbar
+  // spec. Icons come from the host icon set through glyph().
   const eff = effState(cur)
   const rollText = [rollup.working && `${rollup.working}${zh ? ' 工作' : 'w'}`, rollup.blocked && `${rollup.blocked}${zh ? ' 待处理' : 'blk'}`].filter(Boolean).join(' · ')
   const statSummary = cur
     ? `${laneText[cur.lane] ?? cur.lane} · ${count}${zh ? ' 窗格' : ' panes'}${cur.dims ? ` · ${cur.dims.cols}×${cur.dims.rows}` : ''} · ${phaseText[eff] ?? eff}${rollText ? ` · ${rollText}` : ''}`
     : null
-  // Enter jumps to the next pane whose title contains the query (wrapping
-  // past the focused one); DOM focus drives the pane's own onFocus so React
-  // focus state and keyboard ownership stay in step.
-  const jumpToPane = (e) => {
-    if (e.key === 'Escape') { setFilterQuery(''); return }
-    if (e.key !== 'Enter') return
-    e.preventDefault()
-    const q = filterQuery.trim().toLowerCase()
-    if (!q) return
-    const ids = leafIds(tree)
-    const start = ids.indexOf(focused) + 1
-    const order = [...ids.slice(start), ...ids.slice(0, start)]
-    const hit = order.find((id) => (statuses[id]?.title ?? '').toLowerCase().includes(q))
-    if (!hit) return
-    const root = e.currentTarget.closest('[data-nano-terminal]')
-    root?.querySelector(`[data-dnt-pane="${hit}"]`)?.focus()
-  }
   return (
     <Toolbar label={zh ? '终端状态栏' : 'terminal status bar'} className="dnt-bar">
       <div className="dnt-bar-group">
@@ -542,18 +515,6 @@ function StatusBar({ sessionId, split, openLeaf, focused, zh, tree, paneSessions
         <button type="button" className="dnt-bar-btn" aria-label={zh ? '终端设置' : 'terminal settings'} title={zh ? '终端设置' : 'terminal settings'} onClick={() => setDialog('settings')}>
           <span className="dnt-bar-icon" aria-hidden="true">{glyph('settings')}</span>
         </button>
-      </div>
-      <div className="dnt-bar-search">
-        <span className="dnt-bar-icon" aria-hidden="true">{glyph('search')}</span>
-        <input
-          type="search"
-          className="dnt-bar-input"
-          aria-label={zh ? '窗格标题' : 'pane title'}
-          placeholder={zh ? '窗格标题…' : 'pane title…'}
-          value={filterQuery}
-          onChange={(e) => setFilterQuery(e.currentTarget.value)}
-          onKeyDown={jumpToPane}
-        />
       </div>
       <NanoMenu menu={menu} actions={laneActions} onClose={() => setMenu(null)} width={200} />
       {dialog === 'mcp' && (

@@ -14,7 +14,7 @@
  */
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, renameSync as fsRenameSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 
@@ -52,7 +52,7 @@ const { compactRuntime } = await import('../../dsh-nano-model-selector/lib/compa
 
 test.after(() => rmSync(DATA_DIR, { recursive: true, force: true }))
 
-const W = 1000 // fake nominal context window
+const W = 100_000 // fake nominal context window
 
 /* ------------------------------- policy file ---------------------------- */
 
@@ -248,9 +248,9 @@ function makeSession(id) {
 function makeBLineSession(id) {
   const session = makeSession(id)
   session.setHeader('prov', 'mod')
-  session.addMessage('system', 'sys', 150)
+  session.addMessage('system', 'sys', 15000)
   const msgs = []
-  for (let i = 0; i < 6; i += 1) msgs.push(session.addMessage('user', `msg${i}`, 100))
+  for (let i = 0; i < 6; i += 1) msgs.push(session.addMessage('user', `msg${i}`, 10000))
   return { session, msgs }
 }
 
@@ -258,9 +258,9 @@ function makeBLineSession(id) {
 function makeSLineSession(id) {
   const session = makeSession(id)
   session.setHeader('prov', 'mod')
-  session.addMessage('system', 'sys', 150)
+  session.addMessage('system', 'sys', 15000)
   const msgs = []
-  for (let i = 0; i < 8; i += 1) msgs.push(session.addMessage('user', `msg${i}`, 100))
+  for (let i = 0; i < 8; i += 1) msgs.push(session.addMessage('user', `msg${i}`, 10000))
   return { session, msgs }
 }
 
@@ -357,7 +357,7 @@ test('checkpoint user/message carries surfaceOp.replace covering the shadowed ra
   const shadowed = msgs.slice(0, 5).map(m => m.seq)
   assert.deepEqual(summary.data.shadowedSeqs, shadowed)
   assert.deepEqual(summary.data.shadowedRange, { start: shadowed[0], end: shadowed.at(-1) })
-  assert.equal(summary.data.shadowedTokenCount, 500)
+  assert.equal(summary.data.shadowedTokenCount, 50000)
   assert.equal(summary.data.provider, 'prov')
   assert.equal(summary.data.model, 'mod')
   assert.ok(summary.data.llmStreamCall === true)
@@ -374,7 +374,9 @@ test('checkpoint user/message carries surfaceOp.replace covering the shadowed ra
 
   // framed checkpoint content: preamble + <compacted-summary>…</compacted-summary>
   const [first, mid, last] = ckpt.data.content
-  assert.match(first.text, /automatically generated checkpoint/)
+  assert.match(first.text, /This is a compaction checkpoint/)
+  assert.match(first.text, /compactionId: /)
+  assert.match(first.text, /inspect_checkpoint/)
   assert.match(first.text, /<compacted-summary>$/)
   assert.equal(mid.text, '## Primary Request and Intent\n- keep working')
   assert.equal(last.text, '</compacted-summary>')
@@ -578,8 +580,8 @@ test('circuit: two consecutive transient failures open it; next arm suppressed; 
   assert.equal(ctx.logger.records.warn.filter(m => m.includes('auto arming suppressed')).length, 1)
 
   // S-line FULL remains live under an open circuit and resets it on success.
-  session.addMessage('user', 'extra1', 100)
-  session.addMessage('user', 'extra2', 100) // 950/1000 = 0.95 ≥ S
+  session.addMessage('user', 'extra1', 10000)
+  session.addMessage('user', 'extra2', 10000) // 950/1000 = 0.95 ≥ S
   session.append('turn/start', { turn: 'turn-s' })
   await ctx.emitPreStep(agent)
   assert.equal(session.eventsOf('compaction/start').length, 1)
@@ -639,7 +641,7 @@ test('compact-runtime: fold start→busy, summary→busy+meta, end→completed/f
 
   const session = makeSession('s-rt')
   session.setHeader('prov', 'mod')
-  session.addMessage('user', 'x', 500)
+  session.addMessage('user', 'x', 50000)
 
   const start = session.append('compaction/start', { compactionId: 'c1', turn: null })
   ctx.emitSessionEvent(session, start)
@@ -663,11 +665,11 @@ test('compact-runtime: fold start→busy, summary→busy+meta, end→completed/f
   assert.equal(r.lastCompaction.status, 'completed')
   assert.equal(r.lastCompaction.at, end.time)
   assert.equal(r.degraded, null)
-  assert.equal(r.fill, 500 / W)
+  assert.equal(r.fill, 50000 / W)
 
   // failed end → status failed + degraded closed-set entry.
   const session2 = makeSession('s-rt2')
-  session2.addMessage('user', 'y', 100)
+  session2.addMessage('user', 'y', 10000)
   ctx.emitSessionEvent(session2, session2.append('compaction/start', { compactionId: 'c2', turn: null }))
   ctx.emitSessionEvent(session2, session2.append('compaction/end', { compactionId: 'c2', turn: null, error: 'kaboom' }))
   const r2 = rt.runtime(session2, W, null)
@@ -786,12 +788,16 @@ test('ledger: a committed episode records arm → claim → commit in order', as
 
   const records = ledgerOf('s-ledger-commit')
   assert.ok(records !== null, 'ledger file was not written')
-  assert.deepEqual(records.map(r => r.kind), ['arm', 'claim', 'commit'])
+  assert.deepEqual(records.map(r => r.kind), ['arm', 'claim', 'select', 'commit'])
 
-  const [arm, claim, commit] = records
+  const [arm, claim, select, commit] = records
+  assert.equal(select.lane, 'async')
+  assert.ok(['turn', 'step', 'node'].includes(select.boundary))
+  assert.equal(typeof select.retainedTokens, 'number')
+  assert.equal(select.targetTokens, 100)
   // arm carries the numbers that justified the decision
   assert.ok(arm.fill >= 0.65, `arm.fill ${arm.fill} should be at or above B`)
-  assert.equal(arm.window, 1000)
+  assert.equal(arm.window, 100000)
   assert.equal(arm.retain, 100)
   assert.equal(arm.orderOk, true)
   assert.equal(typeof arm.at, 'string')
@@ -869,6 +875,7 @@ test('ledger: every decision carries the instruction version actually in force',
   const builtin = instructionVersion({ override: '' })
   const records = ledgerOf('s-ledger-version')
   for (const record of records) {
+    if (record.kind === 'select') continue // select names the cut, not the contract
     assert.equal(record.promptVersion, builtin, `${record.kind} must report the built-in version`)
   }
 
@@ -983,7 +990,7 @@ const {
 function makeCheckpointSession(id) {
   const session = makeSession(id)
   session.setHeader('prov', 'mod')
-  const sys = session.addMessage('system', 'sys', 150)
+  const sys = session.addMessage('system', 'sys', 15000)
   const u1 = session.addMessage('user', 'first question text ' + 'x'.repeat(2100), 400)
   const a1 = session.addMessage('assistant', 'first answer', 300)
   const u2 = session.addMessage('user', 'second question', 200)
@@ -1063,9 +1070,9 @@ test('inspect_checkpoint: happy path returns shadowed source events, not the bra
 test('inspect_checkpoint: pagination and total cap (T05, -09⑤)', async () => {
   const session = makeSession('s-inspect-page')
   session.setHeader('prov', 'mod')
-  session.addMessage('system', 'sys', 150)
+  session.addMessage('system', 'sys', 15000)
   const seqs = []
-  for (let i = 0; i < 6; i += 1) seqs.push(session.addMessage('user', `message ${i} ${'y'.repeat(5000)}`, 100).seq)
+  for (let i = 0; i < 6; i += 1) seqs.push(session.addMessage('user', `message ${i} ${'y'.repeat(5000)}`, 10000).seq)
   const bracket = session.append('compaction/start', { compactionId: 'cp-00000002', turn: 1 })
   const sum = session.append('compaction/summary', { compactionId: 'cp-00000002', turn: 1, summary: [{ type: 'text', text: 's' }] })
   session.append('user/message', {
@@ -1199,8 +1206,8 @@ test('T09 four sync lanes preempt an in-flight episode; circuit untouched (T09)'
     const episode = engine._episodes.get(session.id)
     const attemptRef = episode.attempt
     // push fill over S: 150 + 8×100 = 0.95
-    session.addMessage('user', 'extra1', 100)
-    session.addMessage('user', 'extra2', 100)
+    session.addMessage('user', 'extra1', 10000)
+    session.addMessage('user', 'extra2', 10000)
     ctx.llm.state.hangGate.release()
     await ctx.emitPreStep(agent)
     await attemptRef.catch(() => {})
@@ -1435,7 +1442,7 @@ test('T11 disarm is a settlement in all three cases: raised B, bigger W, prune (
     await ctx.llm.state.streamStarted
     const episode = engine._episodes.get(session.id)
     const attemptRef = episode.attempt
-    ctx.llm.state.W = 2000                   // 750/2000 = 0.375 < B 0.65
+    ctx.llm.state.W = 500_000                // 75000/500000 = 0.15 < B 0.65
     ctx.llm.state.hangGate.release()
     await ctx.emitPreStep(agent)
     await attemptRef.catch(() => {})
@@ -1472,5 +1479,279 @@ test('T11 disarm is a settlement in all three cases: raised B, bigger W, prune (
     assert.equal(drops.at(-1).bracketed, false)
     assert.equal(episode.circuit.transientFailures, 0)
     assert.equal(session.eventsOf('compaction/start').length, 0)
+  }
+})
+
+/* ============ 12. ACE-1117 P4: selector, prompt/frame, select ledger ===== */
+
+const {
+  selectCompactableRange,
+  CHECKPOINT_RESERVE,
+  currentTurnOpeningRequest,
+  COMPACTION_INSTRUCTION,
+} = await import('../lib/compact-region.js')
+
+/** Session with a two-turn two-step journal over a 7-node surface (sys+6). */
+function makeLevelSession(id) {
+  const session = makeSession(id)
+  session.setHeader('prov', 'mod')
+  const sys = session.addMessage('system', 'sys', 15000)
+  session.append('turn/start', { turn: 't-1' })
+  const u1 = session.addMessage('user', 'turn-one opening request text', 10000)
+  session.append('step/start', { turn: 't-1', step: 1 })
+  const m1 = session.addMessage('assistant', 'a1', 10000)
+  session.append('step/start', { turn: 't-1', step: 2 })
+  const m2 = session.addMessage('assistant', 'a2', 10000)
+  session.append('turn/end', { turn: 't-1' })
+  session.append('turn/start', { turn: 't-2' })
+  const u2 = session.addMessage('user', 'turn-two opening request text', 6000)
+  const m3 = session.addMessage('assistant', 'a3', 5000)
+  const m4 = session.addMessage('assistant', 'a4', 5000)
+  return { session, sys, u1, m1, m2, u2, m3, m4 }
+}
+
+test('T12 unified selector: turn > step > node level order, distance and tie rules', async () => {
+  {
+    // Turn cut (before u2) retains 16000; step cut (before m2) retains 26000 —
+    // both in bounds, step is CLOSER to target 22000. Level wins anyway.
+    const { session, u1, u2, m2 } = makeLevelSession('s-sel-turn')
+    const r = selectCompactableRange(session, sessionMeter(session),
+      { targetTokens: 22000, line: 0.5, window: W })
+    assert.equal(r.boundary, 'turn')
+    assert.equal(r.retainedTokens, 16000)
+    assert.equal(r.end, m2.seq)            // shadowed span ends just before u2
+    assert.ok(r.end < u2.seq)
+    assert.equal(r.start, u1.seq)
+  }
+  {
+    // Step picked when the step cut is the only LEVEL candidate in bounds:
+    // cap retained below the step cut's 20000 but ≥ 10000 → node only.
+    const session = makeSession('s-sel-step2')
+    session.setHeader('prov', 'mod')
+    session.addMessage('system', 'sys', 15000)
+    session.append('turn/start', { turn: 't-1' })
+    const a = session.addMessage('user', 'a', 10000)
+    session.append('step/start', { turn: 't-1', step: 2 })
+    const b = session.addMessage('assistant', 'b', 10000)
+    const c = session.addMessage('assistant', 'c', 10000)
+    // cuts: before b (step, retain 20000), before c (node, 10000). The first
+    // turn's opening node is the shadow head — no turn cut exists for it.
+    const r = selectCompactableRange(session, sessionMeter(session),
+      { targetTokens: 20000, line: 0.5, window: W })
+    assert.equal(r.boundary, 'step')
+    assert.equal(r.retainedTokens, 20000)
+    const r2 = selectCompactableRange(session, sessionMeter(session),
+      { targetTokens: 10000, line: 0.35, window: W }) // cap 11808
+    assert.equal(r2.boundary, 'node')
+    assert.equal(r2.retainedTokens, 10000)
+    void a; void b; void c
+  }
+  {
+    // Same distance: the larger retained wins.
+    const session = makeSession('s-sel-tie')
+    session.setHeader('prov', 'mod')
+    session.addMessage('system', 'sys', 15000)
+    const msgs = []
+    for (let i = 0; i < 6; i += 1) msgs.push(session.addMessage('user', `m${i}`, 10000))
+    const r = selectCompactableRange(session, sessionMeter(session),
+      { targetTokens: 15000, line: 0.5, window: W })
+    // cap 26808 leaves 10000 & 20000; both sit 5000 from target 15000.
+    assert.equal(r.boundary, 'node')
+    assert.equal(r.retainedTokens, 20000, 'equal distance keeps the larger retained tail')
+  }
+  {
+    // A single node over the cap yields null — never a half-kept node.
+    const session = makeSession('s-sel-null')
+    session.setHeader('prov', 'mod')
+    session.addMessage('system', 'sys', 15000)
+    session.addMessage('user', 'big', 80000)
+    session.addMessage('user', 'big2', 80000)
+    const r = selectCompactableRange(session, sessionMeter(session),
+      { targetTokens: 0, line: 0.9, window: W }) // max = 90000-15000-8192=66808 < min 80000
+    assert.equal(r, null)
+    // window too small for the reserve at all → also null, not a clamped cap.
+    const r2 = selectCompactableRange(session, sessionMeter(session),
+      { targetTokens: 0, line: 0.1, window: W })
+    assert.equal(r2, null)
+  }
+  {
+    // The spec's constant and the old tail-accumulate loop are both locked.
+    assert.equal(CHECKPOINT_RESERVE, 8192)
+    const src = readFileSync(new URL('../lib/compact-region.js', import.meta.url), 'utf8')
+    const selector = src.slice(src.indexOf('export function selectCompactableRange'))
+    assert.equal(selector.includes('accumulated >='), false)
+  }
+})
+
+function sessionMeter(session) {
+  return makeMeter().measure(session)
+}
+
+test('T13 prompt + frame: 8 sections intact, :222 gone, step echo in instruction not frame', async () => {
+  // Eight sections still first, in order, ahead of extras and verbatim echo.
+  const sections = [
+    '## Primary Request and Intent', '## Key Technical Concepts', '## Files and Code',
+    '## Errors and Fixes', '## Pending Jobs', '## Current Work', '## Next Step',
+    '## Critical Context',
+  ]
+  let idx = 0
+  for (const h of sections) {
+    const at = COMPACTION_INSTRUCTION.indexOf(h)
+    assert.ok(at > idx, `${h} missing or out of order`)
+    idx = at
+  }
+  assert.equal(COMPACTION_INSTRUCTION.includes('Do NOT mention'), false,
+    ':222 self-reference ban must be gone')
+  assert.match(COMPACTION_INSTRUCTION, /PRIOR checkpoint/)
+
+  const { instructionText } = await import('../lib/compact-region.js')
+  const text = instructionText({ override: 'EXTRA', verbatimRequest: 'opening ask verbatim' })
+  assert.ok(text.indexOf('opening ask verbatim') < text.indexOf('EXTRA'),
+    'verbatim echo sits between built-in and extras')
+
+  // Step-level cut: the opening request rides inside the instruction sent to
+  // the summarizer (never inside the frame / a second model message).
+  writePolicy()
+  const ctx = makeCtx()
+  makeEngine(ctx)
+  const session = makeSession('s-frame')
+  session.setHeader('prov', 'mod')
+  session.addMessage('system', 'sys', 15000)
+  session.append('turn/start', { turn: 't-1' })
+  session.addMessage('user', 'UNIQUE_OPENING_REQUEST_ABC', 10000)
+  for (let i = 0; i < 4; i += 1) session.addMessage('assistant', `work ${i}`, 10000)
+  session.append('step/start', { turn: 't-1', step: 2 })
+  session.addMessage('assistant', 'late work', 10000)
+  session.addMessage('assistant', 'later work', 10000)
+  const agent = makeAgent(session)
+
+  const instructionSent = []
+  const origStream = ctx.llm.stream.bind(ctx.llm)
+  ctx.llm.stream = async function* (opts) {
+    const instr = opts.messages.at(-1)?.content?.[0]?.text ?? ''
+    instructionSent.push(instr)
+    yield* origStream(opts)
+  }
+
+  await ctx.emitPreStep(agent)
+  await ctx.settle(agent)
+
+  const episode = engine_episode(ctx, session)
+  void episode
+  const ckpt = session.events.find(e => e.type === 'user/message' && e.surfaceOp)
+  assert.ok(ckpt !== undefined)
+  const frameText = ckpt.data.content[0].text
+  // Frame: closed field set — tool name + id present, no ISO timestamp,
+  // no model name, no prompt version.
+  assert.match(frameText, /inspect_checkpoint/)
+  assert.match(frameText, /compactionId: /)
+  assert.equal(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(frameText), false)
+  assert.equal(frameText.includes('prov/mod'), false)
+  assert.equal(frameText.includes('promptVersion'), false)
+  assert.equal(frameText.includes('UNIQUE_OPENING_REQUEST_ABC'), false,
+    'the opening request is never inside the frame')
+  // boundary level renders 'message' for node / 'step' for step; this cut is
+  // whichever the selector picked — the frame name is always a level word.
+  assert.match(frameText, /retained tail starts at: (turn|step|message) level/)
+
+  // If the selector chose a step cut, the instruction carried the verbatim
+  // opening request; the frame did not.
+  const boundary = ledgerBoundaryOf(session.id)
+  if (boundary === 'step' && instructionSent.length > 0) {
+    assert.ok(instructionSent.some(t => t.includes('UNIQUE_OPENING_REQUEST_ABC')),
+      'step-level instruction must echo the opening request verbatim')
+  }
+  assert.equal(currentTurnOpeningRequest(session), 'UNIQUE_OPENING_REQUEST_ABC')
+})
+
+function engine_episode(ctx, session) { return ctx.engine._episodes.get(session.id) }
+function ledgerBoundaryOf(sessionId) {
+  const p = join(DATA_DIR, 'plugins/nano-model-selector/async-history', `${sessionId}.jsonl`)
+  if (!existsSync(p)) return null
+  return readFileSync(p, 'utf8').trim().split('\n').map(l => JSON.parse(l))
+    .find(r => r.kind === 'select')?.boundary ?? null
+}
+
+test('T14 four lanes each write one select record; ledger failure never blocks commit', async () => {
+  // async lane
+  {
+    writePolicy()
+    const ctx = makeCtx()
+    makeEngine(ctx)
+    const { session } = makeBLineSession('s-lane-async')
+    const agent = makeAgent(session)
+    await ctx.emitPreStep(agent)
+    await ctx.settle(agent)
+    const selects = ledgerOf(session.id).filter(r => r.kind === 'select')
+    assert.equal(selects.length, 1)
+    assert.equal(selects[0].lane, 'async')
+    assert.ok(['turn', 'step', 'node'].includes(selects[0].boundary))
+    assert.equal(typeof selects[0].retainedTokens, 'number')
+    assert.equal(selects[0].targetTokens, 100)
+    assert.equal(Object.keys(selects[0]).includes('message'), false,
+      'ledger boundary vocabulary never says message')
+  }
+  // full lane (S line)
+  {
+    writePolicy()
+    const ctx = makeCtx()
+    makeEngine(ctx)
+    const { session } = makeSLineSession('s-lane-full')
+    session.append('turn/start', { turn: 't-1' })
+    const agent = makeAgent(session)
+    await ctx.emitPreStep(agent)
+    const selects = ledgerOf(session.id).filter(r => r.kind === 'select')
+    assert.ok(selects.length >= 1)
+    assert.equal(selects[0].lane, 'full')
+  }
+  // manual lane
+  {
+    writePolicy()
+    const ctx = makeCtx()
+    const engine = makeEngine(ctx)
+    const { session } = makeBLineSession('s-lane-manual')
+    const agent = makeAgent(session)
+    await engine.compactNow(agent, new AbortController().signal)
+    const selects = ledgerOf(session.id).filter(r => r.kind === 'select')
+    assert.equal(selects.length, 1)
+    assert.equal(selects[0].lane, 'manual')
+  }
+  // overflow lane (via the request-error listener)
+  {
+    writePolicy()
+    const ctx = makeCtx()
+    const engine = makeEngine(ctx)
+    const { session } = makeBLineSession('s-lane-overflow')
+    session.append('turn/start', { turn: 't-1' })
+    const agent = makeAgent(session)
+    const err = new Error('context window exceeded')
+    err.code = 'CONTEXT_WINDOW_EXCEEDED'
+    for (const h of ctx.listeners['agent/request-error']) {
+      await h({ agent, failure: err, signal: new AbortController().signal }, () => Promise.resolve({ kind: 'next' }))
+    }
+    const selects = ledgerOf(session.id).filter(r => r.kind === 'select')
+    assert.equal(selects.length, 1)
+    assert.equal(selects[0].lane, 'overflow')
+  }
+  // Ledger writes swallowed: make the history dir unwritable by pre-creating
+  // it as a FILE, then a whole episode still commits.
+  {
+    writePolicy()
+    const ctx = makeCtx()
+    makeEngine(ctx)
+    const { session } = makeBLineSession('s-ledger-dead')
+    const agent = makeAgent(session)
+    const dir = join(DATA_DIR, 'plugins/nano-model-selector/async-history')
+    const backup = `${dir}.bak`
+    if (existsSync(dir)) fsRenameSync(dir, backup)
+    writeFileSync(dir, 'not a dir')
+    try {
+      await ctx.emitPreStep(agent)
+      await ctx.settle(agent)
+      assert.equal(session.eventsOf('compaction/end').length, 1, 'commit must survive a dead ledger')
+    } finally {
+      rmSync(dir, { force: true })
+      if (existsSync(backup)) fsRenameSync(backup, dir)
+    }
   }
 })

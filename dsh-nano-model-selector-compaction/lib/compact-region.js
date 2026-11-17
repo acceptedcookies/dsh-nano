@@ -187,6 +187,14 @@ function newLlmError(message, code, options) {
 const SUMMARY_OPEN_TAG = '<compacted-summary>'
 const SUMMARY_CLOSE_TAG = '</compacted-summary>'
 
+function safeEventAt(session, seq) {
+  try {
+    return session.eventAt(seq)
+  } catch {
+    return undefined
+  }
+}
+
 export const COMPACTION_INSTRUCTION = [
   'You are now acting as a compaction engine for this AI coding assistant. Condense the conversation ABOVE into a structured checkpoint that lets another model resume the work with no loss of essential context.',
   '',
@@ -219,7 +227,6 @@ export const COMPACTION_INSTRUCTION = [
   'Rules:',
   '- Write concise English engineering prose. Preserve exact file paths, commands, error strings, identifiers, numeric values, function signatures, and syntax fragments.',
   '- Capture user feedback and explicit instructions faithfully, especially corrections.',
-  '- Do NOT mention this summarization request or that the context was compacted.',
   '- Output only the checkpoint text: do not call any tool or take any other action.',
   `- If the conversation already contains a ${SUMMARY_OPEN_TAG} block, it is a PRIOR checkpoint. Do not copy it forward verbatim: preserve still-true facts, drop stale ones, and merge newer information into a single consolidated summary under the same structure.`,
 ].join('\n')
@@ -267,13 +274,31 @@ export function instructionVersion(options) {
   return createHash('sha256').update(instructionText(options), 'utf8').digest('hex').slice(0, 8)
 }
 
-const CHECKPOINT_PREAMBLE =
-  'This is an automatically generated checkpoint condensing an earlier span of the conversation to free up context. Treat the captured context as established background and build on it without restating it. Continue the task directly from the messages that follow, without acknowledging this checkpoint.'
-
-/** Port of summarizer.ts frameSummary. */
-export function frameSummary(summary) {
+/**
+ * The checkpoint frame (-08⑤): a closed field set in English — the replaced
+ * entry count, the shadowed span's estimated tokens, the retained tail's
+ * starting level, the compactionId, and the inspection tool name. The level
+ * renders `node` as `message` to the model (AF-7); the ledger keeps `node`.
+ * No timestamp, model name, prompt version, or uncommitted phase.
+ * @param {{replacedEntries:number, replacedTokens:number, boundary:string, compactionId:string}} frame
+ */
+function checkpointPreamble(frame) {
+  const level = frame.boundary === 'node' ? 'message' : frame.boundary
   return [
-    { type: 'text', text: `${CHECKPOINT_PREAMBLE}\n\n${SUMMARY_OPEN_TAG}` },
+    `This is a compaction checkpoint: the earlier conversation above this message was replaced by the structured summary below. Everything after this checkpoint is the original, unchanged conversation.`,
+    `replaced: ${frame.replacedEntries} entries (~${frame.replacedTokens} tokens)`,
+    `retained tail starts at: ${level} level`,
+    `compactionId: ${frame.compactionId}`,
+    `To read the replaced text, call inspect_checkpoint with this compactionId.`,
+  ].join('\n')
+}
+
+/** Wrap the summary blocks in frame + tags (-08⑤). */
+export function frameSummary(summary, frame) {
+  const boundary = frame?.boundary ?? 'node'
+  const compactionId = frame?.compactionId ?? 'unknown'
+  return [
+    { type: 'text', text: `${checkpointPreamble({ ...frame, boundary, compactionId })}\n\n${SUMMARY_OPEN_TAG}` },
     ...summary,
     { type: 'text', text: SUMMARY_CLOSE_TAG },
   ]
@@ -375,8 +400,41 @@ function systemHead(session, headSeq) {
   return head.type === 'system/message' ? head : undefined
 }
 
-/** Port of region.ts selectCompactableRange. */
-export function selectCompactableRange(session, measurement, retainTokens) {
+/**
+ * Tokens reserved for the checkpoint itself when bounding the retained tail
+ * (-08②/AF-3): selector-local constant, deliberately NOT a policy field — a
+ * JSON-carried clamp would be an unregistered contract extension.
+ */
+export const CHECKPOINT_RESERVE = 8192
+
+/**
+ * Unified three-level selector (ACE-1117 -08, replaces the tail-accumulate
+ * loop). A cut sits BEFORE the surface node that starts the retained tail.
+ * Boundary candidates come from the journal (`turn/start` / `step/start`),
+ * falling back to every tool-pairing-balanced surface node:
+ *
+ *   level order: turn → step → node (a farther turn beats a closer step)
+ *   within a level: closest |retained − targetTokens|, ties keep more
+ *
+ * Bounds on retained-tail tokens:
+ *   lower — at least one COMPLETE balanced node stays (`toolPairingBalancedBefore`)
+ *   upper — floor(回落线 × W) − system-head tokens − CHECKPOINT_RESERVE
+ *
+ * @param session  session whose surface is selected on
+ * @param measurement  tokenMeter.measure(session) result (nodes + totalTokens)
+ * @param options  `{ targetTokens, line, window }`
+ *   targetTokens — the pin the retained tail should land near (0 for safety)
+ *   line         — the 回落线 fraction (H for async; S or B for sync lanes)
+ *   window       — context window in tokens (W)
+ * @returns `{ start, end, boundary: 'turn'|'step'|'node', retainedTokens } | null`
+ *   start/end are surface seqs of the shadowed span; null when no candidate
+ *   fits the bounds (async → no-range; require-below → existing error path).
+ */
+export function selectCompactableRange(session, measurement, options) {
+  const { targetTokens = 0, line, window } = options ?? {}
+  if (typeof line !== 'number' || typeof window !== 'number' || !(window > 0)) {
+    throw new Error('selectCompactableRange: line and a positive window are required')
+  }
   const pricedNodes = measurement.nodes
   if (pricedNodes.length === 0) return null
 
@@ -385,26 +443,113 @@ export function selectCompactableRange(session, measurement, retainTokens) {
     || surfaceNodes.some((seq, index) => seq !== pricedNodes[index]?.seq)) {
     throw new Error('compaction: token-meter surface does not match the current session surface')
   }
-  const firstIdx = systemHead(session, surfaceNodes[0]) === undefined ? 0 : 1
+  const head = systemHead(session, surfaceNodes[0])
+  const firstIdx = head === undefined ? 0 : 1
+  const headTokens = head === undefined ? 0 : (pricedNodes[0]?.tokens ?? 0)
 
-  let accumulated = 0
-  let keepFromIdx = pricedNodes.length
-  for (let index = pricedNodes.length - 1; index >= 0; index -= 1) {
-    accumulated += pricedNodes[index].tokens
-    keepFromIdx = index
-    if (accumulated >= retainTokens) break
+  // retainedAt[i] = tokens of the tail starting at surface index i.
+  const retainedAt = new Array(pricedNodes.length + 1).fill(0)
+  for (let i = pricedNodes.length - 1; i >= 0; i -= 1) {
+    retainedAt[i] = retainedAt[i + 1] + pricedNodes[i].tokens
   }
-  if (keepFromIdx <= firstIdx) return null
 
-  while (keepFromIdx > firstIdx) {
-    if (toolPairingBalancedBefore(session, surfaceNodes[keepFromIdx])) break
-    keepFromIdx -= 1
+  // minRetained = the smallest complete balanced tail (the largest balanced
+  // interior cut). The upper bound is the spec formula verbatim — a window
+  // too small to hold the checkpoint reserve simply has no candidates (-08④:
+  // 上限 < 下限 → null), it is not an error to clamp away.
+  let minRetained = null
+  const balanced = []
+  for (let i = surfaceNodes.length - 1; i > firstIdx; i -= 1) {
+    if (!toolPairingBalancedBefore(session, surfaceNodes[i])) continue
+    balanced.push(i)
+    if (minRetained === null) minRetained = retainedAt[i]
   }
-  if (keepFromIdx <= firstIdx) return null
+  if (minRetained === null) return null
+  const maxRetained = Math.floor(line * window) - headTokens - CHECKPOINT_RESERVE
+  if (maxRetained < minRetained) return null
 
-  const first = surfaceNodes[firstIdx]
-  const cutoff = surfaceNodes[keepFromIdx - 1]
-  return { start: first, end: cutoff }
+  // Boundary events → cut index. A turn/start or step/start sitting strictly
+  // between surfaceNodes[i-1] and surfaceNodes[i] makes cut i that level
+  // (the first surface node of the turn/step). Turn wins over step.
+  const levelByCut = new Map()
+  for (let seq = 0; seq < session.seq; seq += 1) {
+    let event
+    try {
+      event = session.eventAt(seq)
+    } catch {
+      continue
+    }
+    if (event === undefined) continue
+    if (event.type !== 'turn/start' && event.type !== 'step/start') continue
+    // first surface index whose node is after this boundary event
+    let i = firstIdx
+    while (i < surfaceNodes.length && surfaceNodes[i] < seq) i += 1
+    if (i <= firstIdx || i >= surfaceNodes.length) continue
+    const level = event.type === 'turn/start' ? 'turn' : 'step'
+    if (!levelByCut.has(i) || level === 'turn') levelByCut.set(i, level)
+  }
+
+  const candidates = { turn: [], step: [], node: [] }
+  for (const i of balanced) {
+    const retained = retainedAt[i]
+    if (retained < minRetained || retained > maxRetained) continue
+    candidates[levelByCut.get(i) ?? 'node'].push({ idx: i, retained })
+  }
+
+  const pick = (list) => {
+    if (list.length === 0) return null
+    let best = null
+    for (const c of list) {
+      const distance = Math.abs(c.retained - targetTokens)
+      if (best === null || distance < best.distance
+        || (distance === best.distance && c.retained > best.retained)) {
+        best = { ...c, distance }
+      }
+    }
+    return best
+  }
+
+  for (const level of ['turn', 'step', 'node']) {
+    const chosen = pick(candidates[level])
+    if (chosen === null) continue
+    return {
+      start: surfaceNodes[firstIdx],
+      end: surfaceNodes[chosen.idx - 1],
+      boundary: level,
+      retainedTokens: chosen.retained,
+    }
+  }
+  return null
+}
+
+/**
+ * The current turn's opening user request, verbatim (-03⑤/P4-02c): the first
+ * `user/message` after the latest `turn/start`. Echoed into the instruction
+ * only when the selector lands on a step boundary — the summarizer needs to
+ * know that text is shadowed from the model but preserved in the retained
+ * tail, and it must never fabricate it.
+ * @returns {string|undefined} the message text, or undefined when absent.
+ */
+export function currentTurnOpeningRequest(session) {
+  let turnSeq = -1
+  for (let seq = session.seq - 1; seq >= 0; seq -= 1) {
+    const event = safeEventAt(session, seq)
+    if (event.type === 'turn/start') { turnSeq = seq; break }
+    if (event.type === 'turn/end') return undefined
+  }
+  if (turnSeq < 0) return undefined
+  for (let seq = turnSeq + 1; seq < session.seq; seq += 1) {
+    const event = safeEventAt(session, seq)
+    if (event.type === 'turn/end') return undefined
+    if (event.type !== 'user/message') continue
+    const message = session.deriveEventMessage(event) ?? event.data
+    const text = (message?.content ?? [])
+      .filter(block => block.type === 'text')
+      .map(block => block.text)
+      .join('\n')
+    return text.length > 0 ? text : undefined
+  }
+  return undefined
 }
 
 function validateSurfaceRegion(session, start, end) {
@@ -462,7 +607,12 @@ async function summarizeCompaction(
     }
   }
   const checkpointMessage = createUserMessage({
-    content: frameSummary(summaryResult.summary),
+    content: frameSummary(summaryResult.summary, {
+      replacedEntries: prepared.shadowedSeqs.length,
+      replacedTokens: prepared.shadowedRouteTokenCount,
+      boundary: prepared.boundary ?? 'node',
+      compactionId,
+    }),
     source: compactCheckpointSource(compactionId, sourceCommandId),
   })
   const framedSummaryTokenCount = dependencies.meter.estimateMessage(checkpointMessage)
@@ -676,7 +826,10 @@ export function prepareCompactionTransaction(
     /** Whether the durable bracket has actually been written yet. */
     get opened() { return startEvent !== undefined },
     assertStable,
-    prepared: () => prepareCompaction(dependencies, session, selection),
+    // `options.boundary` names the selector level that produced this range so
+    // the checkpoint frame and the select ledger can report it; host-driven
+    // compactRegion calls that pass no boundary render as 'node'.
+    prepared: () => ({ boundary: options.boundary ?? 'node', ...prepareCompaction(dependencies, session, selection) }),
     summarize: async (prepared, signal) =>
       summarizeCompaction(dependencies, prepared, agent, compactionId, options.sourceCommandId, assertStable, signal),
     commit: (summarized, signal) => {

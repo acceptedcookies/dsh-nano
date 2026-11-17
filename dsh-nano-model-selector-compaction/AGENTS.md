@@ -42,6 +42,7 @@ invisible. Records carry `at` + `kind`:
 |---|---|---|
 | `arm` | B line qualified and the episode armed | `fill`, `window`, `retain`, `orderOk` |
 | `claim` | the summarizer attempt kicked at arm time | `retain`, `attempt`, `target` |
+| `select` | the unified selector committed to a cut before summarization | `lane` (`async`/`full`/`manual`/`overflow`), `boundary` (`turn`/`step`/`node`), `retainedTokens`, `targetTokens` |
 | `commit` | the durable bracket committed | `compactionId`, `tokens`, `records` |
 | `drop` | the episode was dropped | `reason`, `detail`, `bracketed` |
 | `skip` | arming was suppressed | `reason` (`circuit-open` / `lock-held`) |

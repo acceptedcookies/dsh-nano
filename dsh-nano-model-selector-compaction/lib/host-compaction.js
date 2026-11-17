@@ -49,6 +49,7 @@ import {
   inspectCompactionEntryState,
   prepareCompactionTransaction,
   instructionVersion,
+  currentTurnOpeningRequest,
   selectCompactableRange,
   summarizeWithLlm,
   SurfaceChangedError,
@@ -331,7 +332,7 @@ export default class NanoCompactionEngine extends CompactionEngine {
   /* ---------------- async episode lifecycle ---------------- */
 
   /** Arm an async episode and schedule its physical attempt at next idle. */
-  _armEpisode(agent, policy, effectivePin) {
+  _armEpisode(agent, policy, effectivePin, selectSpec) {
     const episode = this._episode(agent.session)
     if (episode.phase !== 'none') return false
     if (episode.circuit.open) {
@@ -351,6 +352,10 @@ export default class NanoCompactionEngine extends CompactionEngine {
     episode.prepared = null
     episode.summarized = null
     episode.retainTokens = effectivePin
+    // -08②: the selector contract freezes at arm (same class as retainTokens /
+    // summarizationTarget): the target the tail should land near, the 回落线,
+    // and the window it was computed against.
+    episode.selectSpec = selectSpec ?? null
     episode.armedAt = Date.now()
     episode.summarizationTarget = policy.model.provider.length > 0 && policy.model.model.length > 0
       ? { provider: policy.model.provider, model: policy.model.model }
@@ -483,15 +488,33 @@ export default class NanoCompactionEngine extends CompactionEngine {
       return
     }
     const measurement = this.ctx.tokenMeter.measure(session)
-    const range = selectCompactableRange(session, measurement, episode.retainTokens)
+    const spec = episode.selectSpec
+      ?? { targetTokens: episode.retainTokens, line: policy.healthTargetAsync ?? 0.5, window: 0 }
+    const range = spec.window > 0
+      ? selectCompactableRange(session, measurement, spec)
+      : null
     if (range === null) {
       this._dropEpisode(session, episode, 'no-range', new Error('no compactable range for async episode'))
       return
     }
+    // -08⑤: the select record is written BEFORE the summarize starts — the
+    // async lane can sit between claim and commit for a long time.
+    recordAsyncDecision(session.id, {
+      kind: 'select',
+      lane: 'async',
+      boundary: range.boundary,
+      retainedTokens: range.retainedTokens,
+      targetTokens: spec.targetTokens,
+    })
+    // A step-level cut preserves the current turn's opening request in the
+    // retained tail; the instruction must echo it verbatim (-03⑤/P4-02c).
+    if (range.boundary === 'step') {
+      episode.verbatimRequest = currentTurnOpeningRequest(session)
+    }
     const tx = prepareCompactionTransaction(
       this._regionDependencies(episode.summarizationTarget, episode),
       session, range.start, range.end,
-      { owner: null, stability: 'selected-span', deferStart: true },
+      { owner: null, stability: 'selected-span', deferStart: true, boundary: range.boundary },
       agent,
     )
     episode.tx = tx
@@ -582,6 +605,7 @@ export default class NanoCompactionEngine extends CompactionEngine {
     episode.attempt = undefined
     episode.attemptAbort = undefined
     episode.verbatimRequest = undefined
+    episode.selectSpec = null
     if (session !== undefined) this._maybeGCEpisode(session, episode)
   }
 
@@ -677,9 +701,20 @@ export default class NanoCompactionEngine extends CompactionEngine {
         return this._runLane(agent, 'overflow', async () => {
           this.ctx.get('toolResultPruner')?.pruneSession(agent.session)
           const measurement = this.ctx.tokenMeter.measure(agent.session)
-          const range = selectCompactableRange(agent.session, measurement, 0)
+          const range = selectCompactableRange(agent.session, measurement, {
+            targetTokens: 0,
+            line: SAFETY_RATIO,
+            window: await this._window(agent, this._policy()) ?? Number.POSITIVE_INFINITY,
+          })
           if (range === null) return null
-          return this.compactRegion(range.start, range.end, agent, signal)
+          recordAsyncDecision(agent.session.id, {
+            kind: 'select',
+            lane: 'overflow',
+            boundary: range.boundary,
+            retainedTokens: range.retainedTokens,
+            targetTokens: 0,
+          })
+          return this._compactRegionRange(agent, range, signal)
         })
       }
       default:
@@ -720,9 +755,19 @@ export default class NanoCompactionEngine extends CompactionEngine {
     if (measurement.totalTokens / W < threshold) return null
 
     const retain = safetyOnly ? 0 : policy.pinnedFullTokens
+    // -08②: the same selector contract as the async lane — target
+    // pinnedFullTokens (0 under safety), 回落线 = S under safety else B.
+    const selectSpec = {
+      targetTokens: retain,
+      line: safetyOnly ? SAFETY_RATIO : policy.bufferSizeAsync,
+      window: W,
+    }
+    // lane enum is fixed (-06①): model-switch is the require-below variant of
+    // the synchronous FULL lane, not a fifth lane.
+    const lane = 'full'
     let result = null
     for (let attempt = 0; attempt <= COMPACTION_RETRIES; attempt += 1) {
-      const range = selectCompactableRange(agent.session, measurement, retain)
+      const range = selectCompactableRange(agent.session, measurement, selectSpec)
       if (range === null) {
         if (result === null && !requireBelowThreshold) return null
         throw new Error(
@@ -730,7 +775,14 @@ export default class NanoCompactionEngine extends CompactionEngine {
           + `(${measurement.totalTokens} estimated tokens >= ${Math.floor(threshold * W)})`,
         )
       }
-      result = await this.compactRegion(range.start, range.end, agent, signal)
+      recordAsyncDecision(agent.session.id, {
+        kind: 'select',
+        lane,
+        boundary: range.boundary,
+        retainedTokens: range.retainedTokens,
+        targetTokens: retain,
+      })
+      result = await this._compactRegionRange(agent, range, signal)
       measurement = meter.measure(agent.session, header)
       if (measurement.totalTokens / W < threshold) return result
     }
@@ -850,7 +902,12 @@ export default class NanoCompactionEngine extends CompactionEngine {
       // The prune + remeasure pass already ran above the disarm check (the
       // premise comparison needs post-prune fill); nothing to repeat here.
       const effectivePin = order.ok ? order.effectivePin : Math.min(policy.pinnedAsyncTokens, Math.floor(0.15 * W))
-      if (this._armEpisode(agent, policy, effectivePin)) {
+      const selectSpec = {
+        targetTokens: effectivePin,          // -08②: async aims at the frozen pin
+        line: policy.healthTargetAsync,  // 回落线 = H
+        window: W,
+      }
+      if (this._armEpisode(agent, policy, effectivePin, selectSpec)) {
         recordAsyncDecision(agent.session.id, {
           kind: 'arm',
           fill: fillRatio,
@@ -881,6 +938,27 @@ export default class NanoCompactionEngine extends CompactionEngine {
     )
   }
 
+  /**
+   * Internal lane path: compact a selector-produced range, threading the
+   * boundary level into the tx (frame + ledger) and, for step-level cuts, the
+   * current turn's opening request into the instruction (-03⑤).
+   */
+  async _compactRegionRange(agent, range, signal) {
+    return compactSurfaceRegion(
+      this._regionDependencies(undefined, undefined, {
+        verbatimRequest: range.boundary === 'step'
+          ? currentTurnOpeningRequest(agent.session)
+          : undefined,
+      }),
+      agent.session,
+      range.start,
+      range.end,
+      agent,
+      { owner: 'current-turn', stability: 'whole-surface', boundary: range.boundary },
+      signal,
+    )
+  }
+
   compactNow(agent, signal, sourceCommandId) {
     signal.throwIfAborted()
     // -05②: the manual lane preempts an in-flight async episode before the
@@ -900,14 +978,32 @@ export default class NanoCompactionEngine extends CompactionEngine {
           if (entryState.unmatchedCompactionStart !== undefined) {
             throw new ManualCompactionError('busy', 'manual compaction: an async episode already holds the compaction lock')
           }
+          const { policy, safetyOnly } = this._policy()
+          const measurement = this.ctx.tokenMeter.measure(agent.session)
+          const targetTokens = safetyOnly ? 0 : policy.pinnedFullTokens
           const range = selectCompactableRange(
             agent.session,
-            this.ctx.tokenMeter.measure(agent.session),
-            0,
+            measurement,
+            {
+              targetTokens,
+              line: safetyOnly ? SAFETY_RATIO : policy.bufferSizeAsync,
+              window: await this._window(agent, { policy, safetyOnly }) ?? Number.POSITIVE_INFINITY,
+            },
           )
           if (range === null) return null
+          recordAsyncDecision(agent.session.id, {
+            kind: 'select',
+            lane: 'manual',
+            boundary: range.boundary,
+            retainedTokens: range.retainedTokens,
+            targetTokens,
+          })
           return await compactSurfaceRegion(
-            this._regionDependencies(),
+            this._regionDependencies(undefined, undefined, {
+              verbatimRequest: range.boundary === 'step'
+                ? currentTurnOpeningRequest(agent.session)
+                : undefined,
+            }),
             agent.session,
             range.start,
             range.end,
@@ -915,6 +1011,7 @@ export default class NanoCompactionEngine extends CompactionEngine {
             {
               owner: null,
               stability: 'selected-span',
+              boundary: range.boundary,
               ...(sourceCommandId === undefined ? {} : { sourceCommandId }),
               flush: async () => {
                 await this.ctx.sessions.flush(agent.session)
@@ -956,15 +1053,16 @@ export default class NanoCompactionEngine extends CompactionEngine {
     }
   }
 
-  _regionDependencies(summarizationTarget, episode) {
+  _regionDependencies(summarizationTarget, episode, laneOpts) {
+    const verbatimRequest = episode?.verbatimRequest ?? laneOpts?.verbatimRequest
     return {
       meter: this.ctx.tokenMeter,
       summarize: (input, agent, abort) => {
         const target = summarizationTarget ?? this._policyTarget(agent)
         const { policy, safetyOnly } = this._policy()
         const instruction = !safetyOnly && typeof policy?.extraRequirements === 'string' && policy.extraRequirements.trim().length > 0
-          ? { override: policy.extraRequirements, verbatimRequest: episode?.verbatimRequest }
-          : (episode?.verbatimRequest !== undefined ? { verbatimRequest: episode.verbatimRequest } : undefined)
+          ? { override: policy.extraRequirements, verbatimRequest }
+          : (verbatimRequest !== undefined ? { verbatimRequest } : undefined)
         // The prompt is read HERE, so the version recorded for this episode
         // must be computed HERE too. Recording the arm-time version made the
         // ledger claim a contract that could differ from the one actually sent

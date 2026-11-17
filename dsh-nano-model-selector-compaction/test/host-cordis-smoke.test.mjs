@@ -179,13 +179,25 @@ test('cordis.patch.yml: tools row outside the isolate + base flat row disabled (
 
 /* ------------------ ACE-1117 P6: closure & non-target audit (T19) --------- */
 
-test('closure diff touches only :20/:74; non-target paths unchanged vs fb7264d (T19)', () => {
+test('closure diff touches only :20/:74; non-target paths unchanged by ACE-1117 commits (T19)', () => {
   const repoRoot = join(here, '..', '..')
   const base = 'fb7264d'
   const git = (args) => spawnSync('git', args, { cwd: repoRoot, encoding: 'utf8' }).stdout.trim()
 
+  // The audit scope is the ACE-1117 branch's OWN commits, not everything
+  // between fb7264d and HEAD: main legitimately advanced on unrelated lanes
+  // (kitesurf, notepad) while the worktree was open — those diffs are not ours.
+  const ours = git(['rev-list', '--no-merges', `${base}..HEAD`, '--',
+    'dsh-nano-model-selector', 'dsh-nano-model-selector-compaction',
+    'docs/code-review/26-nov/ACE-1117-closure.md', 'docs/code-review/26-nov/todo.1117.md',
+    'docs/specs/dsh-nano-model-selector/closure/DNMS01-closure.md',
+  ]).split('\n').filter(Boolean)
+  assert.ok(ours.length > 0, 'ACE-1117 commits must exist')
+
   // (a) The closure file's -U0 hunks anchor only near :20 and :74.
-  const diff = git(['diff', '-U0', `${base}...HEAD`, '--', 'docs/specs/dsh-nano-model-selector/closure/DNMS01-closure.md'])
+  const closureSha = ours.find(sha => git(['diff-tree', '--no-commit-id', '-r', sha, '--', 'docs/specs/dsh-nano-model-selector/closure/DNMS01-closure.md']) !== '')
+  assert.ok(closureSha !== undefined, 'one ACE commit must carry the closure edit')
+  const diff = git(['diff', '-U0', `${closureSha}^`, closureSha, '--', 'docs/specs/dsh-nano-model-selector/closure/DNMS01-closure.md'])
   const anchors = [...diff.matchAll(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/gm)].map(m => Number(m[1]))
   assert.ok(anchors.length >= 1, 'the closure file must carry exactly the two scheduled edits')
   for (const a of anchors) {
@@ -193,8 +205,15 @@ test('closure diff touches only :20/:74; non-target paths unchanged vs fb7264d (
   }
   assert.equal(anchors.every(a => a >= 15 && a <= 80), true)
 
-  // (b) Non-target paths must be untouched.
-  const changed = git(['diff', '--name-only', `${base}...HEAD`]).split('\n').filter(Boolean)
+  // (b) Non-target paths must be untouched BY ANY of our commits.
+  const changed = git(['diff', '--name-only', `${base}..HEAD`, '--', ...ours.length ? ['--no-renames'] : []])
+    .split('\n').filter(Boolean)
+  const ourChanges = new Set()
+  for (const sha of ours) {
+    for (const f of git(['diff-tree', '--no-commit-id', '--name-only', '-r', sha]).split('\n').filter(Boolean)) {
+      ourChanges.add(f)
+    }
+  }
   for (const forbidden of [
     'docs/specs/dsh-nano-model-selector/async-compaction.md',
     'RELEASE.md',
@@ -202,13 +221,15 @@ test('closure diff touches only :20/:74; non-target paths unchanged vs fb7264d (
     'docs/specs/dsh-nano-model-selector/qna/DNMS01-qna-truth.md',
     'scripts/test-all.mjs',
   ]) {
-    assert.equal(changed.includes(forbidden), false, `${forbidden} must have zero diff vs ${base}`)
+    assert.equal(ourChanges.has(forbidden), false, `${forbidden} must not be touched by ACE commits`)
   }
-  // No package's version field may move.
-  const pkgNames = changed.filter(f => f.endsWith('package.json'))
-  for (const p of pkgNames) {
-    const d = git(['diff', `${base}...HEAD`, '--', p])
-    assert.equal(/^[+-]\s*"version"/m.test(d), false, `${p}: version must not change`)
+  // No package's version field may move in our commits.
+  for (const f of ourChanges) {
+    if (!f.endsWith('package.json')) continue
+    for (const sha of ours) {
+      const d = git(['diff', `${sha}^`, sha, '--', f])
+      assert.equal(/^[+-]\s*"version"/m.test(d), false, `${f}: version must not change`)
+    }
   }
   // No new check-ace scripts, nothing from /tmp evidence.
   const status = spawnSync('git', ['status', '--porcelain'], { cwd: repoRoot, encoding: 'utf8' }).stdout
@@ -218,6 +239,5 @@ test('closure diff touches only :20/:74; non-target paths unchanged vs fb7264d (
   assert.deepEqual(untracked, [], `untracked files present: ${untracked.join(', ')}`)
   assert.equal(/check-ace/i.test(status), false, 'untracked scripts/check-ace* is a failure')
   assert.equal(status.includes('dnms-evidence'), false)
-  const scriptDiff = git(['diff', `${base}...HEAD`, '--', 'scripts/test-all.mjs'])
-  assert.equal(scriptDiff, '', 'scripts/test-all.mjs must not move')
+  assert.equal(ourChanges.has('scripts/test-all.mjs'), false, 'scripts/test-all.mjs must not move')
 })

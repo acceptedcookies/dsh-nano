@@ -23,9 +23,16 @@ const ID = 'dsh-nano-cloud-session.workbench'
 const KIND = 'devin-workbench'
 
 const remoteByLocal = new Map()
+const bindingListeners = new Set()
+let currentBinding = null
+const storageKey = (localId) => `dncs.wb.${localId}`
 /** Remember the remote Devin id for a local projection session. */
 export const rememberWorkbenchSession = (localId, remoteId, extra = {}) => {
-  remoteByLocal.set(localId, { remoteId, profileId: extra.profileId ?? null })
+  const bound = { remoteId, profileId: extra.profileId ?? null }
+  currentBinding = bound
+  if (localId) remoteByLocal.set(localId, bound)
+  try { sessionStorage.setItem(storageKey(localId || 'current'), JSON.stringify(bound)) } catch { /* private mode */ }
+  for (const listener of bindingListeners) listener()
 }
 
 const safeOpen = url => {
@@ -45,8 +52,19 @@ const textOf = value => {
 function WorkbenchBody(props) {
   const { useTabInfo, sessionId, t, openTerminal } = props
   const { tab } = useTabInfo()
-  const bound = remoteByLocal.get(sessionId)
-  const remoteId = bound?.remoteId ?? bound ?? tab?.navigation?.params?.remoteId
+  const [, bump] = useState(0)
+  useEffect(() => {
+    const listener = () => bump(n => n + 1)
+    bindingListeners.add(listener)
+    return () => bindingListeners.delete(listener)
+  }, [])
+  const stored = (() => {
+    try {
+      return JSON.parse(sessionStorage.getItem(storageKey(sessionId)) || sessionStorage.getItem(storageKey('current')) || 'null')
+    } catch { return null }
+  })()
+  const bound = remoteByLocal.get(sessionId) ?? currentBinding ?? stored
+  const remoteId = bound?.remoteId ?? (typeof bound === 'string' ? bound : null) ?? tab?.navigation?.params?.remoteId
   const profileId = bound?.profileId
   const [health, setHealth] = useState(emptyHealth)
   const [pendingFingerprint, setPendingFingerprint] = useState(null)

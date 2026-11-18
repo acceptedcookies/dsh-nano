@@ -117,17 +117,20 @@ export function apply(ctx, config = {}) {
         try {
           const bridge = await api.nativeOpen(sessionId, bound)
           localId = bridge.local_session_id
-          void ctx.sessions?.refresh?.()
-          ctx.uiWorkspace.openSession(localId)
         } catch (cause) {
           if (cause?.reason !== 'NATIVE_UNAVAILABLE') throw cause
           const shell = await api.workspaceShell(sessionId, bound)
           localId = shell.local_session_id
-          void ctx.sessions?.refresh?.()
         }
+        if (!localId) throw new Error('no host session for cloud workbench')
         rememberWorkbenchSession(localId, sessionId, bound)
+        const visible = ctx.uiWorkspace?.activeSessionId ?? ctx.sessions?.current?.id ?? null
+        if (visible && visible !== localId) rememberWorkbenchSession(visible, sessionId, bound)
+        void ctx.sessions?.refresh?.()
+        try { ctx.uiWorkspace.openSession(localId) } catch { /* host may keep the current conversation */ }
         window.setTimeout(() => {
-          try { ctx.sidebarRight.openTabIn(localId, workbenchKind) }
+          const host = ctx.uiWorkspace?.activeSessionId ?? visible ?? localId
+          try { ctx.sidebarRight.openTabIn(host, workbenchKind) }
           catch (openError) { console.warn('[nano-cloud-session] workbench open failed', openError) }
         }, 400)
       } catch (cause) {

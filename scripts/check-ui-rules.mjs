@@ -25,6 +25,7 @@ export const PLUGINS = [
   { abbr: 'DNCS', dir: 'dsh-nano-cloud-session', src: 'src/client', prefixes: ['dncs-'] },
   { abbr: 'DNN', dir: 'dsh-nano-notepad', src: 'src/client', prefixes: ['np-', 'nj-', 'nm-'] },
   { abbr: 'nano-ui', dir: 'packages/dsh-nano-ui', src: 'src', prefixes: ['nano-'] },
+  { abbr: 'NPR', dir: 'dsh-nano-progress-report', src: 'src/client', prefixes: ['npr-'] },
 ]
 
 export const RULES = {

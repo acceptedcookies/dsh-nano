@@ -23,6 +23,7 @@ export const DECLARATION_PLUGINS = [
   'dsh-nano-terminal',
   'dsh-nano-local-sandbox',
   'dsh-nano-kitesurf',
+  'dsh-nano-progress-report',
 ]
 
 function sourceFor(value) {

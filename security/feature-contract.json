@@ -161,6 +161,17 @@
     },
     {
       "plugin": "dsh-nano-explorer-extra",
+      "path": "/nano-explorer-extra/diff",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 65536
+      },
+      "responseShape": "200 {ok:true,...diffResult} | 400 {error}"
+    },
+    {
+      "plugin": "dsh-nano-explorer-extra",
       "path": "/nano-explorer-extra/commit",
       "methods": [
         "POST"
@@ -1103,7 +1114,13 @@
       "firstRun": "no active profile -> section shows guide row; settings opens on 接入 with carrier preset Devin Cloud and 3-step guide; connect test shows principal_type/orgMatch",
       "settings": "NanoDialog + nanoTabs: 接入/会话/安全/SSH; 接入 folder holds Devin preset, token/org/baseURL, connection test, permission checklist and doc deep links; 会话 holds new-session defaults; 安全 is read-only store policy; SSH is keygen/enroll"
     },
-    "dsh-nano-model-selector-compaction": "host-only companion: mounts ctx.compaction inside preset id:compaction isolate; no web routes, no UI; ON/OFF via dsh.profile.bundles or POST /nano-model-selector/async-compact/switch (route owned by dsh-nano-model-selector)"
+    "dsh-nano-model-selector-compaction": "host-only companion: mounts ctx.compaction inside preset id:compaction isolate; no web routes, no UI; ON/OFF via dsh.profile.bundles or POST /nano-model-selector/async-compact/switch (route owned by dsh-nano-model-selector)",
+    "dsh-nano-progress-report": {
+      "tab": "sidebar-right tab kind \"progress\" (id dsh-nano-progress-report.workbench, priority extension, keepMounted): execution event timeline rows (type/status icon, summary, duration), filter input with type:/status:/negation tokens + chips, expandable row detail (args/result/duration), Tasks panel",
+      "menuItem": "sidebar-right tab context menu entry \"Open Progress\"/\"打开 Progress\" (slot sidebar.right.tab.menu.item, opens Progress tab in that session)",
+      "guide": "sidebar-right add-tab guide lists \"Progress\" entry",
+      "hostData": "none — renders only the host uiConversation progress projection (no side-channel fetches)"
+    }
   },
   "dataLocations": {
     "dsh-nano-notepad": {
@@ -1141,6 +1158,10 @@
     },
     "dsh-nano-model-selector-compaction": {
       "asyncCompactState": "${DSH_DATA_DIR||DSH_HOME||~/.dsh}/plugins/nano-model-selector/async-compact.json (written via the sibling DNMS switch route; takeover mutex layer)"
+    },
+    "dsh-nano-progress-report": {
+      "filter": "localStorage 'dsh-nano-progress-report:filter:<sessionId>' — per browser origin, last filter text per session",
+      "hostData": "none — no host routes, no host files; all state lives in the host session/conversation runtime"
     }
   }
 }

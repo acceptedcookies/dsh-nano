@@ -34,10 +34,11 @@ export const PLUGINS = [
   'dsh-nano-local-sandbox',
   'dsh-nano-terminal',
   'dsh-nano-cloud-session',   // P5-02: DNCS was unscanned (coverage gap)
+  'dsh-nano-progress-report',
 ]
 
 /** Plugins whose host entry is the unbundled index.js (also a runtime file). */
-export const UNBUNDLED_INDEX = ['dsh-nano-notepad', 'dsh-nano-model-selector', 'dsh-nano-model-selector-compaction', 'dsh-nano-kitesurf', 'dsh-nano-local-sandbox', 'dsh-nano-terminal', 'dsh-nano-cloud-session']
+export const UNBUNDLED_INDEX = ['dsh-nano-notepad', 'dsh-nano-model-selector', 'dsh-nano-model-selector-compaction', 'dsh-nano-kitesurf', 'dsh-nano-local-sandbox', 'dsh-nano-terminal', 'dsh-nano-cloud-session', 'dsh-nano-progress-report']
 
 /**
  * Packages whose shipped lib/ legally carries bare `@deepseek-ai/*` specifiers
@@ -81,9 +82,9 @@ function specifiers(text) {
   const out = []
   const patterns = [
     /(?:import|export)\s+[^'";]*?\bfrom\s*['"]([^'"]+)['"]/g, // import ... from / export ... from
-    /\bimport\s*['"]([^'"]+)['"]/g,                           // side-effect import
-    /\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/g,                 // dynamic import('...')
-    /\brequire\s*\(\s*['"]([^'"]+)['"]\s*\)/g,                // require('...')
+    /(?<![\w$.])import\s*['"]([^'"]+)['"]/g,                  // side-effect import
+    /(?<![\w$.])import\s*\(\s*['"]([^'"]+)['"]\s*\)/g,        // dynamic import('...'); x.import('..') is a member call (e.g. ObjC.import in JXA)
+    /(?<![\w$.])require\s*\(\s*['"]([^'"]+)['"]\s*\)/g,       // require('...'); x.require('..') is a member call
   ]
   for (const re of patterns) {
     for (const match of clean.matchAll(re)) {

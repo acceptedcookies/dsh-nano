@@ -15,6 +15,8 @@ async function post(path, body) {
     error.httpStatus = res.status
     error.providerStatus = json?.providerStatus ?? json?.status
     error.status = res.status
+    if (json?.fingerprint) error.fingerprint = json.fingerprint
+    if (json?.keyKind) error.keyKind = json.keyKind
     throw error
   }
   return json

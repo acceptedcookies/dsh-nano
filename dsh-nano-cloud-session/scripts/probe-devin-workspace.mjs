@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /** Read-only Devin SSH probe. No bootstrap. Opt-in via env.
  *  DNCS_PROBE_SESSION  remote session id (devin-…)
- *  DNCS_SSH_IDENTITY   identity file (default: m3max id_ed25519 then dedicated key)
- *  DNCS_ACCEPT_HOSTKEY=1  allow accept-new into the dedicated known_hosts file
+ *  DNCS_SSH_IDENTITY   identity file (default: dedicated key then ~/.ssh/id_ed25519)
+ *  DNCS_EXPECTED_FINGERPRINT  required only when known_hosts has no gateway pin
  */
 import { probeWorkspace, ensureKnownHostsFile } from '../src/providers/devin/bootstrap.js'
 import { resolveIdentityFile, knownHostsPath } from '../src/providers/devin/ssh.js'
@@ -20,7 +20,7 @@ const facts = await probeWorkspace({
   sessionId,
   identityFile,
   knownHostsFile: knownHostsPath(home),
-  acceptHostKey: process.env.DNCS_ACCEPT_HOSTKEY === '1',
+  expectedFingerprint: process.env.DNCS_EXPECTED_FINGERPRINT,
 })
 const redacted = {
   gatewayUser: facts.gatewayUser,

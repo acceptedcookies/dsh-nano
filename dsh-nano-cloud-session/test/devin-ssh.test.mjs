@@ -25,6 +25,7 @@ test('T05 ssh argv never contains -A -R -N or StrictHostKeyChecking=no', () => {
   assert.ok(!argv.includes('-N'))
   assert.ok(argv.includes('StrictHostKeyChecking=yes') || argv.some(x => x.includes('StrictHostKeyChecking=yes')))
   assert.throws(() => buildSshArgv({ ...base, strictHostKeyChecking: 'no' }), /forbidden|StrictHostKeyChecking/)
+  assert.throws(() => buildSshArgv({ ...base, strictHostKeyChecking: 'accept-new' }), /pin the fingerprint|StrictHostKeyChecking/)
   assert.throws(() => buildSshArgv({ ...base, extraOptions: ['ForwardAgent=yes'] }))
   assert.throws(() => buildSshArgv({ ...base, remoteArgv: ['rm', ';reboot'] }))
   assert.ok(argv.includes('ssh.devin.ai'))

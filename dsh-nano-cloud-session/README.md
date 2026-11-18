@@ -40,3 +40,7 @@ npm test                       # node --test：store / api dialect / route wirin
 ```
 
 真实上游冒烟：`npm run e2e`（默认 `~/.dsh-dev`，可用 `E2E_DSH_HOME` 覆盖；读 active profile，跑 self/upload/create+attachment/messages/attachments/tags/sleep/archive 闭环，不打印 token）。旧 `scripts/live-smoke.mjs` 仍可独立使用。
+
+配对工作区（SSH + MCP，opt-in，不进 `npm test`）：`DNCS_LIVE_WORKSPACE=1 DNCS_PROBE_SESSION=devin-… node scripts/e2e-devin-workspace.mjs`。未知 host key 必须提供 `DNCS_EXPECTED_FINGERPRINT`，不再使用 `accept-new`。
+
+历史范围：本包早期只覆盖 Devin API 会话面。design-1119 把 SSH 资源面（专用 known_hosts、fingerprint 确认、哈希 artifact、MCP fs/process）收进同一配对；PTY/端口转发在宿主缺少 H-EXEC 时显式 `NATIVE_UNAVAILABLE`，不回退本机 cwd/文件/终端。

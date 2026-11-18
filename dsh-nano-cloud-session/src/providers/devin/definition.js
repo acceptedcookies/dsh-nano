@@ -3,14 +3,8 @@
 
 import { SESSION_FAMILY } from '../../contracts/session-family.js'
 import { WORKSPACE_FAMILY, RESOURCE_OPERATION_IDS } from '../../contracts/workspace-family.js'
-
-export const PROVIDER_KEY = 'devin'
-export const PLUGIN = 'dsh-nano-cloud-session'
-export const DISPLAY = Object.freeze({
-  id: 'devin',
-  label: { zh: 'Devin Cloud', en: 'Devin Cloud' },
-  defaultBaseUrl: 'https://api.devin.ai',
-})
+export { PROVIDER_KEY, PLUGIN, DISPLAY } from './display.js'
+import { PROVIDER_KEY, PLUGIN, DISPLAY } from './display.js'
 
 const sessionOps = Object.keys(SESSION_FAMILY.operations)
 const workspaceOps = Object.keys(WORKSPACE_FAMILY.operations)

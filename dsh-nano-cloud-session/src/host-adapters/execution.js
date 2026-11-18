@@ -31,10 +31,18 @@ export function localWorld(ctx) {
   }
 }
 
+export const HOST_ADAPTER_UNAVAILABLE = Object.freeze({
+  pty: Object.freeze({ supported: false, reason: 'NATIVE_UNAVAILABLE' }),
+  forward: Object.freeze({ supported: false, reason: 'NATIVE_UNAVAILABLE' }),
+})
+
 export function worldFor(ctx, sessionId) {
   const remote = resolveExecutionBinding(ctx, sessionId)
   if (remote.available) {
     return { kind: 'remote', ...remote.binding }
   }
-  return localWorld(ctx)
+  const error = new Error(remote.message)
+  error.reason = 'workspace-unavailable'
+  error.httpStatus = 503
+  throw error
 }

@@ -49,6 +49,17 @@ test('validation: label/orgId/https baseUrl/token required', () => {
   assert.throws(() => s.saveProfile({ label: 'x', orgId: 'org-a', secret: 'cog_short' }), /cog_/)
 })
 
+test('save/remove bump epoch with that profileId; activate does not', () => {
+  const hits = []
+  const s = createProfileStore({ onEpoch: (epoch, profileId) => hits.push({ epoch, profileId }) })
+  const a = s.saveProfile(good)
+  assert.equal(hits.at(-1).profileId, a.id)
+  s.activate(a.id)
+  assert.equal(hits.filter(h => h.profileId === a.id).length, 1)
+  s.removeProfile(a.id)
+  assert.equal(hits.at(-1).profileId, a.id)
+})
+
 test('save with empty secret keeps existing; remove/activate', () => {
   const s = createProfileStore()
   const a = s.saveProfile(good)

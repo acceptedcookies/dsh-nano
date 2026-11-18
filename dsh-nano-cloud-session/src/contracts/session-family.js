@@ -15,6 +15,8 @@ export const SESSION_FAMILY = defineFamily({
   contractId: 'dncs.session.v1',
   authorityRefs: {
     'docs/specs/dsh-nano-cloud-session/design-1119.md#R1': { approved: true },
+    'docs/specs/dsh-nano-cloud-session/design-1119.md#R4': { approved: true },
+    'docs/specs/dsh-nano-cloud-session/design-1119.md#R5': { approved: true },
   },
   operations: {
     'config.list': op('config/list'),

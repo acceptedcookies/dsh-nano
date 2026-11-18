@@ -18,6 +18,14 @@ function rpcResult(id, result) {
   return { jsonrpc: '2.0', id, result }
 }
 
+function toolResult(structured, isError = false) {
+  return {
+    ...(isError ? { isError: true } : {}),
+    content: [{ type: 'text', text: JSON.stringify(structured) }],
+    structuredContent: structured,
+  }
+}
+
 export function createMcpServer({ fs, processes, inspectFacts, stdin = process.stdin, stdout = process.stdout, stderr = process.stderr }) {
   let initialized = false
   let generation = 0
@@ -29,27 +37,32 @@ export function createMcpServer({ fs, processes, inspectFacts, stdin = process.s
 
   async function callTool(name, args, id) {
     if (!tools.has(name)) {
-      return { isError: true, structuredContent: resourceFail('invalid-request', `unknown tool ${name}`) }
+      return toolResult(resourceFail('invalid-request', `unknown tool ${name}`), true)
     }
     const codec = RESOURCE_CODECS[name]
     const decoded = codec.decode(args ?? {})
     if (cancelled.has(id)) {
-      return { isError: true, structuredContent: resourceFail('workspace-failed', 'cancelled') }
+      return toolResult(resourceFail('workspace-failed', 'cancelled'), true)
     }
     if (name === 'workspace.inspect') {
-      return { structuredContent: resourceOk({ ...inspectFacts(), generation }) }
+      return toolResult(resourceOk({
+        ...inspectFacts(),
+        generation,
+        pty: { supported: false, reason: 'NATIVE_UNAVAILABLE' },
+        forward: { supported: false, reason: 'NATIVE_UNAVAILABLE' },
+      }))
     }
     if (name.startsWith('fs.')) {
       const method = name.slice(3)
       const data = await fs[method](decoded)
-      return { structuredContent: resourceOk(data) }
+      return toolResult(resourceOk(data))
     }
     if (name.startsWith('process.')) {
       const method = name.slice(8)
       const data = await processes[method](decoded)
-      return { structuredContent: resourceOk(data) }
+      return toolResult(resourceOk(data))
     }
-    return { isError: true, structuredContent: resourceFail('invalid-request', `unhandled ${name}`) }
+    return toolResult(resourceFail('invalid-request', `unhandled ${name}`), true)
   }
 
   async function handle(message) {
@@ -91,7 +104,7 @@ export function createMcpServer({ fs, processes, inspectFacts, stdin = process.s
     }
     if (method === 'tools/call') {
       if (inFlight.size >= CONSTRAINTS.maxInFlight) {
-        send(stdout, rpcResult(id, { isError: true, structuredContent: resourceFail('workspace-limit', 'too many in-flight requests') }))
+        send(stdout, rpcResult(id, toolResult(resourceFail('workspace-limit', 'too many in-flight requests'), true)))
         return
       }
       const name = params?.name
@@ -102,7 +115,7 @@ export function createMcpServer({ fs, processes, inspectFacts, stdin = process.s
           send(stdout, rpcResult(id, result))
         } catch (error) {
           const reason = error?.reason ?? 'workspace-failed'
-          send(stdout, rpcResult(id, { isError: true, structuredContent: resourceFail(reason, error?.message ?? reason) }))
+          send(stdout, rpcResult(id, toolResult(resourceFail(reason, error?.message ?? reason), true)))
         } finally {
           inFlight.delete(id)
         }

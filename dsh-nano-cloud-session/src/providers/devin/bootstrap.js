@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawn } from 'node:child_process'
 import { WorkspaceError } from '../../host/errors.js'
-import { buildSshArgv, execSsh, spawnSsh, resolveIdentityFile, knownHostsPath } from './ssh.js'
+import { buildSshArgv, execSsh, resolveIdentityFile, knownHostsPath, ensurePinnedGateway } from './ssh.js'
 import { parseRemoteSessionId } from './session-id.js'
 
 const FIXED_PROBE = Object.freeze([
@@ -16,28 +16,37 @@ const FIXED_PROBE = Object.freeze([
 ])
 
 export function artifactPath() {
-  return fileURLToPath(new URL('../../../lib/remote/devin-workspace.mjs', import.meta.url))
+  const candidates = [
+    fileURLToPath(new URL('./remote/devin-workspace.mjs', import.meta.url)),
+    fileURLToPath(new URL('../remote/devin-workspace.mjs', import.meta.url)),
+    fileURLToPath(new URL('../../../lib/remote/devin-workspace.mjs', import.meta.url)),
+  ]
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) return candidate
+  }
+  return candidates[0]
 }
 
 export function hashFile(path) {
   return createHash('sha256').update(readFileSync(path)).digest('hex')
 }
 
-function sshOpts(sessionId, { identityFile, knownHostsFile, acceptHostKey }) {
+function sshOpts(sessionId, { identityFile, knownHostsFile }) {
   return {
     identityFile,
     knownHostsFile,
     sessionId,
-    strictHostKeyChecking: acceptHostKey ? 'accept-new' : 'yes',
+    strictHostKeyChecking: 'yes',
   }
 }
 
-export async function probeWorkspace({ sessionId, identityFile, knownHostsFile, spawnImpl, acceptHostKey = false }) {
+export async function probeWorkspace({ sessionId, identityFile, knownHostsFile, spawnImpl, expectedFingerprint }) {
+  await ensurePinnedGateway({ knownHostsFile, expectedFingerprint, spawnImpl })
   const id = parseRemoteSessionId(sessionId)
   const facts = { gatewayUser: id.gatewayUser, gatewayHost: id.gatewayHost }
   const runs = []
   for (const remoteArgv of FIXED_PROBE) {
-    const argv = buildSshArgv({ ...sshOpts(sessionId, { identityFile, knownHostsFile, acceptHostKey }), remoteArgv })
+    const argv = buildSshArgv({ ...sshOpts(sessionId, { identityFile, knownHostsFile }), remoteArgv })
     const result = await execSsh(argv, { spawnImpl, timeoutMs: 20000 })
     runs.push({ argv: remoteArgv, code: result.code, stdout: result.stdout.trim().slice(0, 200) })
     if (result.code !== 0) {
@@ -51,7 +60,7 @@ export async function probeWorkspace({ sessionId, identityFile, knownHostsFile, 
   let node = ''
   for (const remoteArgv of nodeCandidates) {
     try {
-      const argv = buildSshArgv({ ...sshOpts(sessionId, { identityFile, knownHostsFile, acceptHostKey }), remoteArgv })
+      const argv = buildSshArgv({ ...sshOpts(sessionId, { identityFile, knownHostsFile }), remoteArgv })
       const result = await execSsh(argv, { spawnImpl, timeoutMs: 20000 })
       if (result.code === 0 && result.stdout.includes('v')) {
         node = `${remoteArgv[0]} ${result.stdout.trim()}`.slice(0, 200)
@@ -71,7 +80,7 @@ export async function probeWorkspace({ sessionId, identityFile, knownHostsFile, 
   return facts
 }
 
-function scpArgv({ identityFile, knownHostsFile, sessionId, local, remote, acceptHostKey }) {
+function scpArgv({ identityFile, knownHostsFile, sessionId, local, remote }) {
   const id = parseRemoteSessionId(sessionId)
   if (remote.startsWith('-') || /[\n\r;|&`$]/.test(remote)) {
     throw new WorkspaceError('invalid-request', 'unsafe remote path', { httpStatus: 422 })
@@ -84,28 +93,35 @@ function scpArgv({ identityFile, knownHostsFile, sessionId, local, remote, accep
     '-o', 'ForwardAgent=no',
     '-o', `UserKnownHostsFile=${knownHostsFile}`,
     '-o', 'GlobalKnownHostsFile=/dev/null',
-    '-o', `StrictHostKeyChecking=${acceptHostKey ? 'accept-new' : 'yes'}`,
+    '-o', 'StrictHostKeyChecking=yes',
     '-P', '22',
     local,
     `${id.gatewayUser}@${id.gatewayHost}:${remote}`,
   ]
 }
 
-export async function publishArtifact({ sessionId, identityFile, knownHostsFile, spawnImpl = spawn, acceptHostKey = false, artifact = artifactPath() }) {
+export async function publishArtifact({ sessionId, identityFile, knownHostsFile, spawnImpl = spawn, expectedFingerprint, artifact = artifactPath() }) {
+  await ensurePinnedGateway({ knownHostsFile, expectedFingerprint, spawnImpl })
   if (!existsSync(artifact)) {
     throw new WorkspaceError('workspace-unavailable', 'remote bridge artifact is missing', { httpStatus: 503 })
   }
   const hash = hashFile(artifact)
   const remoteDir = `.dncs-bridge/${hash}`
   const remoteFile = `${remoteDir}/devin-workspace.mjs`
+  const remoteTmp = `${remoteFile}.tmp`
   const mkdirArgv = buildSshArgv({
     identityFile, knownHostsFile, sessionId,
-    strictHostKeyChecking: acceptHostKey ? 'accept-new' : 'yes',
     remoteArgv: ['mkdir', '-p', remoteDir],
   })
   const made = await execSsh(mkdirArgv, { spawnImpl })
   if (made.code !== 0) throw new WorkspaceError('workspace-failed', 'could not create artifact dir', { httpStatus: 502 })
-  const argv = scpArgv({ identityFile, knownHostsFile, sessionId, local: artifact, remote: remoteFile, acceptHostKey })
+  const chmodArgv = buildSshArgv({
+    identityFile, knownHostsFile, sessionId,
+    remoteArgv: ['chmod', '700', remoteDir],
+  })
+  const mode = await execSsh(chmodArgv, { spawnImpl })
+  if (mode.code !== 0) throw new WorkspaceError('workspace-failed', 'could not lock artifact dir mode 0700', { httpStatus: 502 })
+  const argv = scpArgv({ identityFile, knownHostsFile, sessionId, local: artifact, remote: remoteTmp })
   const result = await new Promise((resolve, reject) => {
     const child = spawnImpl(argv[0], argv.slice(1), { stdio: ['ignore', 'pipe', 'pipe'], env: { PATH: process.env.PATH } })
     const stderr = []
@@ -116,9 +132,13 @@ export async function publishArtifact({ sessionId, identityFile, knownHostsFile,
   if (result.code !== 0) {
     throw new WorkspaceError('workspace-failed', 'artifact upload failed', { httpStatus: 502 })
   }
+  const moved = await execSsh(buildSshArgv({
+    identityFile, knownHostsFile, sessionId,
+    remoteArgv: ['mv', '-f', remoteTmp, remoteFile],
+  }), { spawnImpl })
+  if (moved.code !== 0) throw new WorkspaceError('workspace-failed', 'artifact publish rename failed', { httpStatus: 502 })
   const check = await execSsh(buildSshArgv({
     identityFile, knownHostsFile, sessionId,
-    strictHostKeyChecking: acceptHostKey ? 'accept-new' : 'yes',
     remoteArgv: ['sha256sum', remoteFile],
   }), { spawnImpl })
   if (!check.stdout.includes(hash)) {

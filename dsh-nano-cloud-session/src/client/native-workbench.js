@@ -49,6 +49,7 @@ function WorkbenchBody(props) {
   const remoteId = bound?.remoteId ?? bound ?? tab?.navigation?.params?.remoteId
   const profileId = bound?.profileId
   const [health, setHealth] = useState(emptyHealth)
+  const [pendingFingerprint, setPendingFingerprint] = useState(null)
   const [messages, setMessages] = useState([])
   const [draft, setDraft] = useState('')
   const [detail, setDetail] = useState(null)
@@ -133,7 +134,7 @@ function WorkbenchBody(props) {
     catch (cause) { setError(cause?.message ?? String(cause)) }
     finally { setBusy(false) }
   }
-  const connectResources = async () => {
+  const connectResources = async (expectedFingerprint) => {
     setBusy(true); setError(''); setNotice('')
     setHealth(applyHealth(health, { resources: 'connecting' }))
     try {
@@ -141,7 +142,9 @@ function WorkbenchBody(props) {
         session_id: remoteId,
         profileId,
         authorize: ['fs.write'],
+        ...(expectedFingerprint ? { expectedFingerprint } : {}),
       })
+      setPendingFingerprint(null)
       setHealth(applyHealth(health, {
         resources: result.resources ?? 'ready',
         api: result.api ?? 'ready',
@@ -151,7 +154,12 @@ function WorkbenchBody(props) {
       setNotice(result.root ? String(result.root) : t('sshLane'))
     } catch (cause) {
       setHealth(applyHealth(health, { resources: 'unavailable' }))
-      setError(cause?.message ?? String(cause))
+      if (cause?.reason === 'workspace-denied' && cause.fingerprint) {
+        setPendingFingerprint(cause.fingerprint)
+        setError(`${t('hostKeyConfirm')}: ${cause.fingerprint}`)
+      } else {
+        setError(cause?.message ?? String(cause))
+      }
     } finally { setBusy(false) }
   }
 
@@ -165,7 +173,7 @@ function WorkbenchBody(props) {
         h('div', { className: 'dncs-working-meta', 'data-dncs-health': 'true' }, `api:${health.api} resources:${health.resources} native:${health.nativeView}`)),
       h('div', { className: 'dncs-profile-actions' },
         h(Button, { variant: 'ghost', size: 'sm', icon: h(IconRefreshOutlineRegular, { size: 16 }), onClick: load, 'aria-label': t('refresh') }),
-        h(Button, { variant: 'ghost', size: 'sm', disabled: busy, onClick: connectResources, 'aria-label': t('sshLane') }, t('sshLane')),
+        h(Button, { variant: 'ghost', size: 'sm', disabled: busy, onClick: () => connectResources(), 'aria-label': t('sshLane') }, t('sshLane')),
         h(Button, { variant: 'ghost', size: 'sm', onClick: () => { try { openTerminal?.(sessionId) } catch (cause) { setError(cause?.message ?? String(cause)); setHealth(applyHealth(health, { resources: 'unavailable' })) } }, 'aria-label': t('terminal') }, t('terminal')),
         h(Button, { variant: 'ghost', size: 'sm', icon: h(IconAlarmClockOutlineRegular, { size: 16 }), onClick: () => action(() => api.session('sleep', { session_id: remoteId, profileId })), 'aria-label': t('sleep') }),
         h(Button, { variant: 'ghost', size: 'sm', icon: h(detail?.is_archived ? IconUnarchiveOutlineRegular : IconArchiveOutlineRegular, { size: 16 }), onClick: () => action(() => detail?.is_archived ? api.unarchive(remoteId, { profileId }) : api.archive(remoteId, { profileId })), 'aria-label': detail?.is_archived ? t('unarchive') : t('archive') }),
@@ -184,6 +192,8 @@ function WorkbenchBody(props) {
         }) }, t('send')))),
     error === '' ? null : h('div', { className: 'dncs-note', 'data-kind': 'error' }, error),
     notice === '' ? null : h('div', { className: 'dncs-note' }, notice),
+    pendingFingerprint ? h('div', { className: 'dncs-profile-actions' },
+      h(Button, { variant: 'primary', size: 'sm', disabled: busy, onClick: () => connectResources(pendingFingerprint) }, t('hostKeyAccept'))) : null,
     h('div', { className: 'dncs-working-section' },
       h('div', { className: 'dncs-working-section-title' },
         h(IconPaperclipOutlineRegular, { size: 15 }),

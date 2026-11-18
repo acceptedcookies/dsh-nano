@@ -1,5 +1,5 @@
 // src/host/assemble.js
-import { mkdirSync as mkdirSync3, statSync as statSync2 } from "node:fs";
+import { mkdirSync as mkdirSync4, statSync as statSync2 } from "node:fs";
 import { join as join5 } from "node:path";
 
 // ../packages/dsh-interface/src/contracts/FamilyDefinition.js
@@ -974,9 +974,9 @@ function save(data) {
 function createProfileStore({ onEpoch } = {}) {
   let data = load();
   let seeded = false;
-  const bump = () => {
+  const bump = (profileId) => {
     data.configEpoch = (data.configEpoch ?? 0) + 1;
-    onEpoch?.(data.configEpoch);
+    onEpoch?.(data.configEpoch, profileId);
   };
   if (data.profiles.length === 0) {
     const seed = seedFromEnv();
@@ -1020,7 +1020,7 @@ function createProfileStore({ onEpoch } = {}) {
         data.profiles = [...data.profiles, frozen];
       }
       if (data.profiles.length === 1) data.activeId = frozen.id;
-      bump();
+      bump(frozen.id);
       save(data);
       return publicProfile(frozen, data.activeId);
     },
@@ -1029,7 +1029,7 @@ function createProfileStore({ onEpoch } = {}) {
       data.profiles = data.profiles.filter((p) => p.id !== id);
       if (data.profiles.length === before) throw new Error("profile not found");
       if (data.activeId === id) data.activeId = data.profiles[0]?.id ?? null;
-      bump();
+      bump(id);
       save(data);
     },
     activate(id) {
@@ -1313,7 +1313,9 @@ var nativeFailures = ["NATIVE_UNAVAILABLE", "NATIVE_UNSUPPORTED", "NATIVE_PROJEC
 var SESSION_FAMILY = defineFamily({
   contractId: "dncs.session.v1",
   authorityRefs: {
-    "docs/specs/dsh-nano-cloud-session/design-1119.md#R1": { approved: true }
+    "docs/specs/dsh-nano-cloud-session/design-1119.md#R1": { approved: true },
+    "docs/specs/dsh-nano-cloud-session/design-1119.md#R4": { approved: true },
+    "docs/specs/dsh-nano-cloud-session/design-1119.md#R5": { approved: true }
   },
   operations: {
     "config.list": op("config/list"),
@@ -1655,7 +1657,10 @@ var WORKSPACE_FAMILY = defineFamily({
   contractId: "dncs.workspace.v1",
   authorityRefs: {
     "docs/specs/dsh-nano-cloud-session/design-1119.md#R1": { approved: true },
-    "docs/specs/dsh-nano-cloud-session/design-1119.md#R2": { approved: true }
+    "docs/specs/dsh-nano-cloud-session/design-1119.md#R2": { approved: true },
+    "docs/specs/dsh-nano-cloud-session/design-1119.md#R3": { approved: true },
+    "docs/specs/dsh-nano-cloud-session/design-1119.md#R4": { approved: true },
+    "docs/specs/dsh-nano-cloud-session/design-1119.md#R5": { approved: true }
   },
   operations: {
     "workspace.connect": op2("workspace/connect"),
@@ -1965,11 +1970,15 @@ function createWorkspaceScopes({ configEpochOf } = {}) {
   };
 }
 
+// src/host/resource-service.js
+import { existsSync as existsSync5 } from "node:fs";
+
 // src/providers/devin/ssh.js
 import { spawn } from "node:child_process";
-import { existsSync as existsSync3 } from "node:fs";
+import { appendFileSync, chmodSync as chmodSync2, existsSync as existsSync3, mkdirSync as mkdirSync2, readFileSync as readFileSync3 } from "node:fs";
+import { createHash } from "node:crypto";
 import { homedir } from "node:os";
-import { join as join3 } from "node:path";
+import { dirname as dirname2, join as join3 } from "node:path";
 var FORBIDDEN_OPT = /StrictHostKeyChecking=no|^-A$|^-R$|^-N$/;
 function dedicatedKeyPath(home3 = process.env.DSH_HOME || homedir()) {
   return join3(home3, "nano-cloud-session-ssh");
@@ -2004,8 +2013,8 @@ function buildSshArgv({
   strictHostKeyChecking = "yes"
 } = {}) {
   const id = parseRemoteSessionId(sessionId);
-  if (strictHostKeyChecking === "no") {
-    throw new WorkspaceError("invalid-request", "StrictHostKeyChecking=no is forbidden", { httpStatus: 422 });
+  if (strictHostKeyChecking !== "yes") {
+    throw new WorkspaceError("invalid-request", "StrictHostKeyChecking must be yes; pin the fingerprint first", { httpStatus: 422 });
   }
   for (const opt of extraOptions) {
     const text = String(opt);
@@ -2087,6 +2096,75 @@ function spawnSsh(argv, { spawnImpl = spawn, env, stdio = "pipe" } = {}) {
   }
   return spawnImpl(argv[0], argv.slice(1), { env: childEnv, stdio });
 }
+function fingerprintEd25519(b64) {
+  const raw = Buffer.from(String(b64), "base64");
+  return `SHA256:${createHash("sha256").update(raw).digest("base64").replace(/=+$/, "")}`;
+}
+function parseKeyscanLine(line) {
+  const parts = String(line).trim().split(/\s+/).filter(Boolean);
+  let i = 0;
+  if (parts[0] && !parts[0].startsWith("ssh-") && !parts[0].startsWith("ecdsa-")) i = 1;
+  const kind = parts[i];
+  const b64 = parts[i + 1];
+  if (!kind || !b64) throw new WorkspaceError("workspace-unavailable", "invalid host key line", { httpStatus: 503 });
+  return { kind, b64, fingerprint: fingerprintEd25519(b64) };
+}
+function knownHostPinned(knownHostsFile, host = DEVIN_SSH_GATEWAY) {
+  if (!existsSync3(knownHostsFile)) return false;
+  return readFileSync3(knownHostsFile, "utf8").split("\n").some((line) => line.includes(host) && /ssh-ed25519|ecdsa-sha2/.test(line));
+}
+async function scanGatewayKey({ spawnImpl = spawn } = {}) {
+  return new Promise((resolve, reject) => {
+    const child = spawnImpl("ssh-keyscan", ["-t", "ed25519", "-T", "10", DEVIN_SSH_GATEWAY], {
+      stdio: ["ignore", "pipe", "pipe"],
+      env: { PATH: process.env.PATH }
+    });
+    const out = [];
+    child.stdout?.on("data", (chunk) => out.push(chunk));
+    child.stderr?.on("data", () => {
+    });
+    child.on("error", (error) => reject(new WorkspaceError("workspace-failed", error.message, { httpStatus: 502 })));
+    child.on("close", () => {
+      try {
+        const text = Buffer.concat(out).toString("utf8");
+        const line = text.split("\n").find((row) => row.includes("ssh-ed25519"));
+        if (!line) {
+          reject(new WorkspaceError("workspace-unavailable", "could not scan gateway host key", { httpStatus: 503 }));
+          return;
+        }
+        resolve(parseKeyscanLine(line));
+      } catch (error) {
+        reject(error);
+      }
+    });
+  });
+}
+function pinGatewayKey(knownHostsFile, scanned, expectedFingerprint) {
+  if (!expectedFingerprint || scanned.fingerprint !== expectedFingerprint) {
+    const error = new WorkspaceError("workspace-denied", "host key fingerprint confirmation required", { httpStatus: 403 });
+    error.fingerprint = scanned.fingerprint;
+    error.keyKind = scanned.kind;
+    throw error;
+  }
+  mkdirSync2(dirname2(knownHostsFile), { recursive: true });
+  const entry = `${DEVIN_SSH_GATEWAY} ${scanned.kind} ${scanned.b64}
+`;
+  const prev = existsSync3(knownHostsFile) ? readFileSync3(knownHostsFile, "utf8") : "";
+  if (!prev.includes(scanned.b64)) appendFileSync(knownHostsFile, entry, { mode: 384 });
+  chmodSync2(knownHostsFile, 384);
+}
+async function ensurePinnedGateway({ knownHostsFile, expectedFingerprint, spawnImpl }) {
+  if (knownHostPinned(knownHostsFile)) return { pinned: true };
+  const scanned = await scanGatewayKey({ spawnImpl });
+  if (!expectedFingerprint) {
+    const error = new WorkspaceError("workspace-denied", "host key fingerprint confirmation required", { httpStatus: 403 });
+    error.fingerprint = scanned.fingerprint;
+    error.keyKind = scanned.kind;
+    throw error;
+  }
+  pinGatewayKey(knownHostsFile, scanned, expectedFingerprint);
+  return { pinned: true, fingerprint: scanned.fingerprint };
+}
 function execSsh(argv, { spawnImpl = spawn, timeoutMs = 2e4, input } = {}) {
   return new Promise((resolve, reject) => {
     const child = spawnSsh(argv, { spawnImpl });
@@ -2130,9 +2208,9 @@ function execSsh(argv, { spawnImpl = spawn, timeoutMs = 2e4, input } = {}) {
 }
 
 // src/providers/devin/bootstrap.js
-import { createHash } from "node:crypto";
-import { chmodSync as chmodSync2, existsSync as existsSync4, mkdirSync as mkdirSync2, readFileSync as readFileSync3, writeFileSync as writeFileSync2 } from "node:fs";
-import { dirname as dirname2, join as join4 } from "node:path";
+import { createHash as createHash2 } from "node:crypto";
+import { chmodSync as chmodSync3, existsSync as existsSync4, mkdirSync as mkdirSync3, readFileSync as readFileSync4, writeFileSync as writeFileSync2 } from "node:fs";
+import { dirname as dirname3, join as join4 } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn as spawn2 } from "node:child_process";
 var FIXED_PROBE = Object.freeze([
@@ -2141,25 +2219,34 @@ var FIXED_PROBE = Object.freeze([
   ["id", "-un"]
 ]);
 function artifactPath() {
-  return fileURLToPath(new URL("../../../lib/remote/devin-workspace.mjs", import.meta.url));
+  const candidates = [
+    fileURLToPath(new URL("./remote/devin-workspace.mjs", import.meta.url)),
+    fileURLToPath(new URL("../remote/devin-workspace.mjs", import.meta.url)),
+    fileURLToPath(new URL("../../../lib/remote/devin-workspace.mjs", import.meta.url))
+  ];
+  for (const candidate of candidates) {
+    if (existsSync4(candidate)) return candidate;
+  }
+  return candidates[0];
 }
 function hashFile(path) {
-  return createHash("sha256").update(readFileSync3(path)).digest("hex");
+  return createHash2("sha256").update(readFileSync4(path)).digest("hex");
 }
-function sshOpts(sessionId, { identityFile, knownHostsFile, acceptHostKey }) {
+function sshOpts(sessionId, { identityFile, knownHostsFile }) {
   return {
     identityFile,
     knownHostsFile,
     sessionId,
-    strictHostKeyChecking: acceptHostKey ? "accept-new" : "yes"
+    strictHostKeyChecking: "yes"
   };
 }
-async function probeWorkspace({ sessionId, identityFile, knownHostsFile, spawnImpl, acceptHostKey = false }) {
+async function probeWorkspace({ sessionId, identityFile, knownHostsFile, spawnImpl, expectedFingerprint }) {
+  await ensurePinnedGateway({ knownHostsFile, expectedFingerprint, spawnImpl });
   const id = parseRemoteSessionId(sessionId);
   const facts = { gatewayUser: id.gatewayUser, gatewayHost: id.gatewayHost };
   const runs = [];
   for (const remoteArgv of FIXED_PROBE) {
-    const argv = buildSshArgv({ ...sshOpts(sessionId, { identityFile, knownHostsFile, acceptHostKey }), remoteArgv });
+    const argv = buildSshArgv({ ...sshOpts(sessionId, { identityFile, knownHostsFile }), remoteArgv });
     const result = await execSsh(argv, { spawnImpl, timeoutMs: 2e4 });
     runs.push({ argv: remoteArgv, code: result.code, stdout: result.stdout.trim().slice(0, 200) });
     if (result.code !== 0) {
@@ -2173,7 +2260,7 @@ async function probeWorkspace({ sessionId, identityFile, knownHostsFile, spawnIm
   let node = "";
   for (const remoteArgv of nodeCandidates) {
     try {
-      const argv = buildSshArgv({ ...sshOpts(sessionId, { identityFile, knownHostsFile, acceptHostKey }), remoteArgv });
+      const argv = buildSshArgv({ ...sshOpts(sessionId, { identityFile, knownHostsFile }), remoteArgv });
       const result = await execSsh(argv, { spawnImpl, timeoutMs: 2e4 });
       if (result.code === 0 && result.stdout.includes("v")) {
         node = `${remoteArgv[0]} ${result.stdout.trim()}`.slice(0, 200);
@@ -2193,7 +2280,7 @@ async function probeWorkspace({ sessionId, identityFile, knownHostsFile, spawnIm
   }
   return facts;
 }
-function scpArgv({ identityFile, knownHostsFile, sessionId, local, remote, acceptHostKey }) {
+function scpArgv({ identityFile, knownHostsFile, sessionId, local, remote }) {
   const id = parseRemoteSessionId(sessionId);
   if (remote.startsWith("-") || /[\n\r;|&`$]/.test(remote)) {
     throw new WorkspaceError("invalid-request", "unsafe remote path", { httpStatus: 422 });
@@ -2213,30 +2300,39 @@ function scpArgv({ identityFile, knownHostsFile, sessionId, local, remote, accep
     "-o",
     "GlobalKnownHostsFile=/dev/null",
     "-o",
-    `StrictHostKeyChecking=${acceptHostKey ? "accept-new" : "yes"}`,
+    "StrictHostKeyChecking=yes",
     "-P",
     "22",
     local,
     `${id.gatewayUser}@${id.gatewayHost}:${remote}`
   ];
 }
-async function publishArtifact({ sessionId, identityFile, knownHostsFile, spawnImpl = spawn2, acceptHostKey = false, artifact = artifactPath() }) {
+async function publishArtifact({ sessionId, identityFile, knownHostsFile, spawnImpl = spawn2, expectedFingerprint, artifact = artifactPath() }) {
+  await ensurePinnedGateway({ knownHostsFile, expectedFingerprint, spawnImpl });
   if (!existsSync4(artifact)) {
     throw new WorkspaceError("workspace-unavailable", "remote bridge artifact is missing", { httpStatus: 503 });
   }
   const hash = hashFile(artifact);
   const remoteDir = `.dncs-bridge/${hash}`;
   const remoteFile = `${remoteDir}/devin-workspace.mjs`;
+  const remoteTmp = `${remoteFile}.tmp`;
   const mkdirArgv = buildSshArgv({
     identityFile,
     knownHostsFile,
     sessionId,
-    strictHostKeyChecking: acceptHostKey ? "accept-new" : "yes",
     remoteArgv: ["mkdir", "-p", remoteDir]
   });
   const made = await execSsh(mkdirArgv, { spawnImpl });
   if (made.code !== 0) throw new WorkspaceError("workspace-failed", "could not create artifact dir", { httpStatus: 502 });
-  const argv = scpArgv({ identityFile, knownHostsFile, sessionId, local: artifact, remote: remoteFile, acceptHostKey });
+  const chmodArgv = buildSshArgv({
+    identityFile,
+    knownHostsFile,
+    sessionId,
+    remoteArgv: ["chmod", "700", remoteDir]
+  });
+  const mode = await execSsh(chmodArgv, { spawnImpl });
+  if (mode.code !== 0) throw new WorkspaceError("workspace-failed", "could not lock artifact dir mode 0700", { httpStatus: 502 });
+  const argv = scpArgv({ identityFile, knownHostsFile, sessionId, local: artifact, remote: remoteTmp });
   const result = await new Promise((resolve, reject) => {
     const child = spawnImpl(argv[0], argv.slice(1), { stdio: ["ignore", "pipe", "pipe"], env: { PATH: process.env.PATH } });
     const stderr = [];
@@ -2247,11 +2343,17 @@ async function publishArtifact({ sessionId, identityFile, knownHostsFile, spawnI
   if (result.code !== 0) {
     throw new WorkspaceError("workspace-failed", "artifact upload failed", { httpStatus: 502 });
   }
+  const moved = await execSsh(buildSshArgv({
+    identityFile,
+    knownHostsFile,
+    sessionId,
+    remoteArgv: ["mv", "-f", remoteTmp, remoteFile]
+  }), { spawnImpl });
+  if (moved.code !== 0) throw new WorkspaceError("workspace-failed", "artifact publish rename failed", { httpStatus: 502 });
   const check = await execSsh(buildSshArgv({
     identityFile,
     knownHostsFile,
     sessionId,
-    strictHostKeyChecking: acceptHostKey ? "accept-new" : "yes",
     remoteArgv: ["sha256sum", remoteFile]
   }), { spawnImpl });
   if (!check.stdout.includes(hash)) {
@@ -2261,10 +2363,10 @@ async function publishArtifact({ sessionId, identityFile, knownHostsFile, spawnI
 }
 function ensureKnownHostsFile(home3, { seed } = {}) {
   const path = knownHostsPath(home3);
-  mkdirSync2(dirname2(path), { recursive: true });
+  mkdirSync3(dirname3(path), { recursive: true });
   if (!existsSync4(path) && seed) writeFileSync2(path, `${seed}
 `, { mode: 384 });
-  if (existsSync4(path)) chmodSync2(path, 384);
+  if (existsSync4(path)) chmodSync3(path, 384);
   return path;
 }
 
@@ -2328,6 +2430,9 @@ function createMcpClient(child, { timeoutMs = CONSTRAINTS.readTimeoutMs } = {}) 
         capabilities: {},
         clientInfo: { name: "dncs-host", version: "0.1.0" }
       });
+      if (result?.protocolVersion !== CONSTRAINTS.mcpProtocol) {
+        fail3("workspace-failed", `mcp protocol ${result?.protocolVersion ?? "missing"}`);
+      }
       notify("notifications/initialized", {});
       return result;
     },
@@ -2376,6 +2481,12 @@ function resolveNativeChat(ctx) {
   };
 }
 
+// src/host-adapters/execution.js
+var HOST_ADAPTER_UNAVAILABLE = Object.freeze({
+  pty: Object.freeze({ supported: false, reason: "NATIVE_UNAVAILABLE" }),
+  forward: Object.freeze({ supported: false, reason: "NATIVE_UNAVAILABLE" })
+});
+
 // src/host/resource-service.js
 function fail4(reason, message) {
   throw new WorkspaceError(reason, message, { httpStatus: HTTP_STATUS_FOR_REASON[reason] ?? 502 });
@@ -2397,17 +2508,29 @@ function createResourceService({ scopes, api, home: home3, spawnImpl, artifactPa
       scope.api = "unavailable";
       fail4("workspace-unavailable", error?.message ?? "API identity check failed");
     }
-    const identityFile = resolveIdentityFile({ home: home3, identityFile: body.identityFile });
+    let identityFile = resolveIdentityFile({ home: home3, identityFile: body.identityFile });
     const knownHostsFile = ensureKnownHostsFile(home3);
-    const acceptHostKey = body.acceptHostKey === true;
+    const expectedFingerprint = typeof body.expectedFingerprint === "string" ? body.expectedFingerprint : void 0;
     scope.resources = "verifying";
-    const inspect = await probeWorkspace({
+    const probeWith = (file) => probeWorkspace({
       sessionId: scope.remoteSessionId,
-      identityFile,
+      identityFile: file,
       knownHostsFile,
       spawnImpl,
-      acceptHostKey
+      expectedFingerprint
     });
+    let inspect;
+    try {
+      inspect = await probeWith(identityFile);
+    } catch (error) {
+      const system = systemIdentityPath();
+      if (!body.identityFile && identityFile !== system && existsSync5(system) && error?.reason === "workspace-unavailable") {
+        identityFile = system;
+        inspect = await probeWith(identityFile);
+      } else {
+        throw error;
+      }
+    }
     const root = String(body.root ?? inspect.probe.find((p) => p.argv[0] === "pwd")?.stdout ?? "").trim();
     if (!root || !root.startsWith("/")) fail4("invalid-request", "workspace root must be an absolute path");
     if (!/^[A-Za-z0-9._/=+-]+$/.test(root)) fail4("invalid-request", "workspace root contains unsafe characters");
@@ -2416,7 +2539,7 @@ function createResourceService({ scopes, api, home: home3, spawnImpl, artifactPa
       identityFile,
       knownHostsFile,
       spawnImpl,
-      acceptHostKey,
+      expectedFingerprint,
       artifact: artifactPath2
     });
     const nodeBin = inspect.node.startsWith("/") ? inspect.node.split(" ")[0] : "node";
@@ -2424,7 +2547,6 @@ function createResourceService({ scopes, api, home: home3, spawnImpl, artifactPa
       identityFile,
       knownHostsFile,
       sessionId: scope.remoteSessionId,
-      strictHostKeyChecking: acceptHostKey ? "accept-new" : "yes",
       remoteArgv: [nodeBin, published.remoteFile, "--root", root]
     });
     const child = spawnSsh(argv, { spawnImpl });
@@ -2443,20 +2565,24 @@ function createResourceService({ scopes, api, home: home3, spawnImpl, artifactPa
       if (!names.has(tool.name)) fail4("workspace-failed", `remote tool surface mismatch: missing ${tool.name}`);
     }
     const remoteInspect = await client.call("workspace.inspect", {});
-    if (remoteInspect.root !== root && !String(remoteInspect.root).startsWith(root)) {
-      if (!String(remoteInspect.root).includes(root.split("/").pop())) {
-        fail4("workspace-failed", "remote root does not match the confirmed path");
-      }
+    const confirmed = root.replace(/\/+$/, "");
+    const remoteRoot = String(remoteInspect.root ?? "").replace(/\/+$/, "");
+    if (remoteRoot !== confirmed && !remoteRoot.startsWith(`${confirmed}/`) && !confirmed.startsWith(`${remoteRoot}/`)) {
+      fail4("workspace-failed", "remote root does not match the confirmed path");
     }
     scope.mcp = client;
     scope.child = child;
     return {
       root: remoteInspect.root ?? root,
-      inspect: { ...inspect, remote: remoteInspect },
+      inspect: {
+        ...inspect,
+        remote: { ...remoteInspect, ...HOST_ADAPTER_UNAVAILABLE }
+      },
       api: "ready",
       resources: "ready",
       nativeView: "unavailable",
-      remoteSessionStatus: session?.status ?? null
+      remoteSessionStatus: session?.status ?? null,
+      ...HOST_ADAPTER_UNAVAILABLE
     };
   };
   return {
@@ -2564,7 +2690,12 @@ var messageOf = (error) => error instanceof Error ? error.message : String(error
 function apply(ctx, config = {}) {
   const api = createDevinApi({ timeoutMs: config.requestTimeoutMs ?? 2e4 });
   const scopes = createWorkspaceScopes({ configEpochOf: () => store.configEpoch() });
-  const store = createProfileStore({ onEpoch: () => scopes.invalidateAll() });
+  const store = createProfileStore({
+    onEpoch: (_epoch, profileId) => {
+      if (profileId) scopes.invalidateProfile(profileId);
+      else void scopes.invalidateAll();
+    }
+  });
   const resources = createResourceService({
     scopes,
     api,
@@ -2598,7 +2729,8 @@ function apply(ctx, config = {}) {
           reason: error.reason,
           message: error.message.slice(0, 300),
           httpStatus: error.httpStatus,
-          providerStatus: error.providerStatus ?? 0
+          providerStatus: error.providerStatus ?? 0,
+          ...error.fingerprint ? { fingerprint: error.fingerprint, keyKind: error.keyKind } : {}
         });
         return;
       }
@@ -2693,7 +2825,7 @@ function apply(ctx, config = {}) {
     }
     const remote = needSessionId(body);
     const voidRoot = join5(process.env.DSH_HOME || process.env.HOME || ".", "nano-cloud-session-unbound");
-    mkdirSync3(voidRoot, { recursive: true });
+    mkdirSync4(voidRoot, { recursive: true });
     const session = ctx.sessions.prepare(void 0, { meta: { cwd: voidRoot, executionWorld: "unbound-remote" } });
     const detach = ctx.sessions.enter(session);
     try {
@@ -2770,7 +2902,11 @@ function apply(ctx, config = {}) {
     if (op3 === "workspace.inspect") {
       const scope = scopes.requireReady(body.scopeId);
       const data = await scope.mcp.call("workspace.inspect", {});
-      return { ok: true, data, nativeChat: resolveNativeChat(ctx) };
+      return {
+        ok: true,
+        data: { ...data, pty: { supported: false, reason: "NATIVE_UNAVAILABLE" }, forward: { supported: false, reason: "NATIVE_UNAVAILABLE" } },
+        nativeChat: resolveNativeChat(ctx)
+      };
     }
     throw new CarrierError("invalid-request", `unknown workspace op`, { status: 422 });
   };

@@ -62,9 +62,9 @@ function save(data) {
 export function createProfileStore({ onEpoch } = {}) {
   let data = load()
   let seeded = false
-  const bump = () => {
+  const bump = (profileId) => {
     data.configEpoch = (data.configEpoch ?? 0) + 1
-    onEpoch?.(data.configEpoch)
+    onEpoch?.(data.configEpoch, profileId)
   }
 
   if (data.profiles.length === 0) {
@@ -103,7 +103,7 @@ export function createProfileStore({ onEpoch } = {}) {
         data.profiles = [...data.profiles, frozen]
       }
       if (data.profiles.length === 1) data.activeId = frozen.id
-      bump()
+      bump(frozen.id)
       save(data)
       return publicOf(frozen, data.activeId)
     },
@@ -112,7 +112,7 @@ export function createProfileStore({ onEpoch } = {}) {
       data.profiles = data.profiles.filter(p => p.id !== id)
       if (data.profiles.length === before) throw new Error('profile not found')
       if (data.activeId === id) data.activeId = data.profiles[0]?.id ?? null
-      bump()
+      bump(id)
       save(data)
     },
     activate(id) {

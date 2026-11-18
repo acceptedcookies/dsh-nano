@@ -181,6 +181,8 @@ const ZH = {
   emptyCloud: '尚未配置云端工作区',
   noSessions: '暂无云会话',
   noMessages: '暂无消息',
+  hostKeyConfirm: '网关 host key 指纹需要确认后才能钉住',
+  hostKeyAccept: '确认并钉住该指纹',
 
 }
 
@@ -365,6 +367,8 @@ const EN = {
   emptyCloud: 'No cloud workspace configured',
   noSessions: 'No cloud sessions',
   noMessages: 'No messages',
+  hostKeyConfirm: 'Gateway host-key fingerprint must be confirmed before pinning',
+  hostKeyAccept: 'Confirm and pin this fingerprint',
 
 }
 

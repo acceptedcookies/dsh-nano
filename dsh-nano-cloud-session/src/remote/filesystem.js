@@ -29,7 +29,7 @@ export function createFilesystem(rootInput, { maxPage = 64 * 1024 } = {}) {
 
   return {
     inspect,
-    list({ path, limit = 200 }) {
+    list({ path, limit = 200, cursor }) {
       const resolved = resolveUnderRoot(rootReal, path)
       if (!resolved.exists) {
         const error = new Error('not found')
@@ -42,8 +42,18 @@ export function createFilesystem(rootInput, { maxPage = 64 * 1024 } = {}) {
         error.reason = 'workspace-denied'
         throw error
       }
-      const names = readdirSync(resolved.real)
-      const slice = names.slice(0, limit)
+      const names = readdirSync(resolved.real).sort()
+      let start = 0
+      if (cursor) {
+        const idx = names.indexOf(cursor)
+        if (idx === -1) {
+          const error = new Error('unknown list cursor')
+          error.reason = 'invalid-request'
+          throw error
+        }
+        start = idx + 1
+      }
+      const slice = names.slice(start, start + limit)
       const entries = slice.map(name => {
         const child = join(resolved.real, name)
         try {
@@ -53,7 +63,12 @@ export function createFilesystem(rootInput, { maxPage = 64 * 1024 } = {}) {
           return { name, kind: 'other' }
         }
       })
-      return { entries, truncated: names.length > slice.length }
+      const truncated = start + slice.length < names.length
+      return {
+        entries,
+        truncated,
+        nextCursor: truncated ? slice.at(-1) : undefined,
+      }
     },
     stat({ path }) {
       const resolved = resolveUnderRoot(rootReal, path)

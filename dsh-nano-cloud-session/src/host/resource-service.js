@@ -2,10 +2,12 @@
 
 import { RESOURCE_CODECS, RESOURCE_OPERATION_IDS, HTTP_STATUS_FOR_REASON } from '../contracts/workspace-family.js'
 import { WorkspaceError } from './errors.js'
-import { resolveIdentityFile, knownHostsPath, buildSshArgv, spawnSsh } from '../providers/devin/ssh.js'
+import { existsSync } from 'node:fs'
+import { resolveIdentityFile, knownHostsPath, buildSshArgv, spawnSsh, systemIdentityPath } from '../providers/devin/ssh.js'
 import { probeWorkspace, publishArtifact, ensureKnownHostsFile } from '../providers/devin/bootstrap.js'
 import { createMcpClient } from '../providers/devin/mcp-client.js'
 import { resolveNativeChat } from '../host-adapters/native-chat.js'
+import { HOST_ADAPTER_UNAVAILABLE } from '../host-adapters/execution.js'
 import { mcpToolsList } from '../contracts/workspace-family.js'
 
 function fail(reason, message) {
@@ -30,17 +32,29 @@ export function createResourceService({ scopes, api, home, spawnImpl, artifactPa
       scope.api = 'unavailable'
       fail('workspace-unavailable', error?.message ?? 'API identity check failed')
     }
-    const identityFile = resolveIdentityFile({ home, identityFile: body.identityFile })
+    let identityFile = resolveIdentityFile({ home, identityFile: body.identityFile })
     const knownHostsFile = ensureKnownHostsFile(home)
-    const acceptHostKey = body.acceptHostKey === true
+    const expectedFingerprint = typeof body.expectedFingerprint === 'string' ? body.expectedFingerprint : undefined
     scope.resources = 'verifying'
-    const inspect = await probeWorkspace({
+    const probeWith = (file) => probeWorkspace({
       sessionId: scope.remoteSessionId,
-      identityFile,
+      identityFile: file,
       knownHostsFile,
       spawnImpl,
-      acceptHostKey,
+      expectedFingerprint,
     })
+    let inspect
+    try {
+      inspect = await probeWith(identityFile)
+    } catch (error) {
+      const system = systemIdentityPath()
+      if (!body.identityFile && identityFile !== system && existsSync(system) && error?.reason === 'workspace-unavailable') {
+        identityFile = system
+        inspect = await probeWith(identityFile)
+      } else {
+        throw error
+      }
+    }
     const root = String(body.root ?? inspect.probe.find(p => p.argv[0] === 'pwd')?.stdout ?? '').trim()
     if (!root || !root.startsWith('/')) fail('invalid-request', 'workspace root must be an absolute path')
     if (!/^[A-Za-z0-9._/=+-]+$/.test(root)) fail('invalid-request', 'workspace root contains unsafe characters')
@@ -49,7 +63,7 @@ export function createResourceService({ scopes, api, home, spawnImpl, artifactPa
       identityFile,
       knownHostsFile,
       spawnImpl,
-      acceptHostKey,
+      expectedFingerprint,
       artifact: artifactPath,
     })
     const nodeBin = inspect.node.startsWith('/') ? inspect.node.split(' ')[0] : 'node'
@@ -57,7 +71,6 @@ export function createResourceService({ scopes, api, home, spawnImpl, artifactPa
       identityFile,
       knownHostsFile,
       sessionId: scope.remoteSessionId,
-      strictHostKeyChecking: acceptHostKey ? 'accept-new' : 'yes',
       remoteArgv: [nodeBin, published.remoteFile, '--root', root],
     })
     const child = spawnSsh(argv, { spawnImpl })
@@ -76,21 +89,24 @@ export function createResourceService({ scopes, api, home, spawnImpl, artifactPa
       if (!names.has(tool.name)) fail('workspace-failed', `remote tool surface mismatch: missing ${tool.name}`)
     }
     const remoteInspect = await client.call('workspace.inspect', {})
-    if (remoteInspect.root !== root && !String(remoteInspect.root).startsWith(root)) {
-      /* realpath may resolve the root; require it still names the confirmed tree */
-      if (!String(remoteInspect.root).includes(root.split('/').pop())) {
-        fail('workspace-failed', 'remote root does not match the confirmed path')
-      }
+    const confirmed = root.replace(/\/+$/, '')
+    const remoteRoot = String(remoteInspect.root ?? '').replace(/\/+$/, '')
+    if (remoteRoot !== confirmed && !remoteRoot.startsWith(`${confirmed}/`) && !confirmed.startsWith(`${remoteRoot}/`)) {
+      fail('workspace-failed', 'remote root does not match the confirmed path')
     }
     scope.mcp = client
     scope.child = child
     return {
       root: remoteInspect.root ?? root,
-      inspect: { ...inspect, remote: remoteInspect },
+      inspect: {
+        ...inspect,
+        remote: { ...remoteInspect, ...HOST_ADAPTER_UNAVAILABLE },
+      },
       api: 'ready',
       resources: 'ready',
       nativeView: 'unavailable',
       remoteSessionStatus: session?.status ?? null,
+      ...HOST_ADAPTER_UNAVAILABLE,
     }
   }
 

@@ -40,9 +40,14 @@ export function createProcessTable(rootInput, { maxProcesses = 4, maxPage = 64 *
       const stderr = []
       let stdoutBytes = 0
       let stderrBytes = 0
+      const env = { PATH: process.env.PATH, HOME: process.env.HOME, LANG: process.env.LANG }
+      for (const [key, value] of Object.entries(envPatch ?? {})) {
+        if (key === 'SSH_AUTH_SOCK' || key.startsWith('DSH_') || /TOKEN|SECRET|KEY/.test(key)) continue
+        if (typeof value === 'string') env[key] = value
+      }
       const child = spawn(argv[0], argv.slice(1), {
         cwd: cwdReal,
-        env: { PATH: process.env.PATH, HOME: process.env.HOME, LANG: process.env.LANG, ...(envPatch ?? {}) },
+        env,
         shell: false,
         stdio: ['ignore', 'pipe', 'pipe'],
       })

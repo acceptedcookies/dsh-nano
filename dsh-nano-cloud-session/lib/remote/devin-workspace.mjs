@@ -4,6 +4,7 @@
 
 // src/remote/entry.mjs
 import { realpathSync as realpathSync4, statSync as statSync2 } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 // src/remote/filesystem.js
 import { mkdirSync, readdirSync, openSync, readSync, closeSync, renameSync, rmdirSync, realpathSync as realpathSync2, statSync, unlinkSync, writeFileSync, existsSync as existsSync2 } from "node:fs";
@@ -13,8 +14,8 @@ import { randomBytes } from "node:crypto";
 // src/remote/path-policy.js
 import { realpathSync, lstatSync, existsSync } from "node:fs";
 import { dirname, join, posix } from "node:path";
-function assertInside(rootReal2, candidateReal) {
-  const root = rootReal2.endsWith("/") ? rootReal2.slice(0, -1) : rootReal2;
+function assertInside(rootReal, candidateReal) {
+  const root = rootReal.endsWith("/") ? rootReal.slice(0, -1) : rootReal;
   const path = candidateReal.endsWith("/") && candidateReal !== "/" ? candidateReal.slice(0, -1) : candidateReal;
   if (path === root) return;
   if (!path.startsWith(`${root}/`)) {
@@ -23,23 +24,23 @@ function assertInside(rootReal2, candidateReal) {
     throw error;
   }
 }
-function resolveUnderRoot(rootReal2, rel) {
+function resolveUnderRoot(rootReal, rel) {
   const relative = String(rel ?? "");
   if (relative.includes("\0")) {
     const error = new Error("path must not contain NUL");
     error.reason = "invalid-request";
     throw error;
   }
-  const joined = posix.isAbsolute(relative) ? join(rootReal2, relative.replace(/^\//, "")) : join(rootReal2, relative);
+  const joined = posix.isAbsolute(relative) ? join(rootReal, relative.replace(/^\//, "")) : join(rootReal, relative);
   if (existsSync(joined)) {
     const lst = lstatSync(joined);
     if (lst.isSymbolicLink()) {
       const target = realpathSync(joined);
-      assertInside(rootReal2, target);
+      assertInside(rootReal, target);
       return { joined, exists: true, lstat: lst, real: target };
     }
     const real = realpathSync(joined);
-    assertInside(rootReal2, real);
+    assertInside(rootReal, real);
     return { joined, exists: true, lstat: lst, real };
   }
   const parent = dirname(joined);
@@ -49,7 +50,7 @@ function resolveUnderRoot(rootReal2, rel) {
     throw error;
   }
   const parentReal = realpathSync(parent);
-  assertInside(rootReal2, parentReal);
+  assertInside(rootReal, parentReal);
   return { joined, parentReal, exists: false, lstat: null };
 }
 
@@ -64,19 +65,19 @@ function kindOf(stat) {
   return "other";
 }
 function createFilesystem(rootInput, { maxPage = 64 * 1024 } = {}) {
-  const rootReal2 = realpathSync2(rootInput);
+  const rootReal = realpathSync2(rootInput);
   const inspect = () => {
-    const st = statSync(rootReal2);
+    const st = statSync(rootReal);
     return {
-      root: rootReal2,
+      root: rootReal,
       kind: "directory",
       version: versionOf(st)
     };
   };
   return {
     inspect,
-    list({ path, limit = 200 }) {
-      const resolved = resolveUnderRoot(rootReal2, path);
+    list({ path, limit = 200, cursor }) {
+      const resolved = resolveUnderRoot(rootReal, path);
       if (!resolved.exists) {
         const error = new Error("not found");
         error.reason = "workspace-not-found";
@@ -88,8 +89,18 @@ function createFilesystem(rootInput, { maxPage = 64 * 1024 } = {}) {
         error.reason = "workspace-denied";
         throw error;
       }
-      const names = readdirSync(resolved.real);
-      const slice = names.slice(0, limit);
+      const names = readdirSync(resolved.real).sort();
+      let start2 = 0;
+      if (cursor) {
+        const idx = names.indexOf(cursor);
+        if (idx === -1) {
+          const error = new Error("unknown list cursor");
+          error.reason = "invalid-request";
+          throw error;
+        }
+        start2 = idx + 1;
+      }
+      const slice = names.slice(start2, start2 + limit);
       const entries = slice.map((name) => {
         const child = join2(resolved.real, name);
         try {
@@ -99,10 +110,15 @@ function createFilesystem(rootInput, { maxPage = 64 * 1024 } = {}) {
           return { name, kind: "other" };
         }
       });
-      return { entries, truncated: names.length > slice.length };
+      const truncated = start2 + slice.length < names.length;
+      return {
+        entries,
+        truncated,
+        nextCursor: truncated ? slice.at(-1) : void 0
+      };
     },
     stat({ path }) {
-      const resolved = resolveUnderRoot(rootReal2, path);
+      const resolved = resolveUnderRoot(rootReal, path);
       if (!resolved.exists) {
         const error = new Error("not found");
         error.reason = "workspace-not-found";
@@ -118,7 +134,7 @@ function createFilesystem(rootInput, { maxPage = 64 * 1024 } = {}) {
       };
     },
     read({ path, offset = 0, length = maxPage }) {
-      const resolved = resolveUnderRoot(rootReal2, path);
+      const resolved = resolveUnderRoot(rootReal, path);
       if (!resolved.exists) {
         const error = new Error("not found");
         error.reason = "workspace-not-found";
@@ -145,7 +161,7 @@ function createFilesystem(rootInput, { maxPage = 64 * 1024 } = {}) {
       }
     },
     write({ path, bytes, expectedVersion, createOnly }) {
-      const resolved = resolveUnderRoot(rootReal2, path);
+      const resolved = resolveUnderRoot(rootReal, path);
       const payload = Buffer.from(bytes, "base64");
       if (payload.length > maxPage) {
         const error = new Error("write exceeds page");
@@ -177,7 +193,7 @@ function createFilesystem(rootInput, { maxPage = 64 * 1024 } = {}) {
       return { version: versionOf(info), bytes: payload.length };
     },
     mkdir({ path }) {
-      const resolved = resolveUnderRoot(rootReal2, path);
+      const resolved = resolveUnderRoot(rootReal, path);
       if (resolved.exists) {
         const error = new Error("already exists");
         error.reason = "workspace-conflict";
@@ -187,13 +203,13 @@ function createFilesystem(rootInput, { maxPage = 64 * 1024 } = {}) {
       return { created: true };
     },
     rename({ from, to }) {
-      const src = resolveUnderRoot(rootReal2, from);
+      const src = resolveUnderRoot(rootReal, from);
       if (!src.exists) {
         const error = new Error("not found");
         error.reason = "workspace-not-found";
         throw error;
       }
-      const dst = resolveUnderRoot(rootReal2, to);
+      const dst = resolveUnderRoot(rootReal, to);
       if (dst.exists) {
         const error = new Error("destination exists");
         error.reason = "workspace-conflict";
@@ -204,7 +220,7 @@ function createFilesystem(rootInput, { maxPage = 64 * 1024 } = {}) {
       return { destinationVersion: versionOf(info) };
     },
     remove({ path, expectedVersion }) {
-      const resolved = resolveUnderRoot(rootReal2, path);
+      const resolved = resolveUnderRoot(rootReal, path);
       if (!resolved.exists) {
         const error = new Error("not found");
         error.reason = "workspace-not-found";
@@ -240,7 +256,7 @@ import { randomBytes as randomBytes2 } from "node:crypto";
 import { realpathSync as realpathSync3 } from "node:fs";
 import { join as join3 } from "node:path";
 function createProcessTable(rootInput, { maxProcesses = 4, maxPage = 64 * 1024 } = {}) {
-  const rootReal2 = realpathSync3(rootInput);
+  const rootReal = realpathSync3(rootInput);
   const table = /* @__PURE__ */ new Map();
   const get = (handle) => {
     const rec = table.get(handle);
@@ -267,16 +283,21 @@ function createProcessTable(rootInput, { maxProcesses = 4, maxPage = 64 * 1024 }
         error.reason = "workspace-limit";
         throw error;
       }
-      const resolved = resolveUnderRoot(rootReal2, cwd ?? ".");
+      const resolved = resolveUnderRoot(rootReal, cwd ?? ".");
       const cwdReal = resolved.real ?? resolved.joined;
       const handle = `p-${randomBytes2(12).toString("hex")}`;
       const stdout = [];
       const stderr = [];
       let stdoutBytes = 0;
       let stderrBytes = 0;
+      const env = { PATH: process.env.PATH, HOME: process.env.HOME, LANG: process.env.LANG };
+      for (const [key, value] of Object.entries(envPatch ?? {})) {
+        if (key === "SSH_AUTH_SOCK" || key.startsWith("DSH_") || /TOKEN|SECRET|KEY/.test(key)) continue;
+        if (typeof value === "string") env[key] = value;
+      }
       const child = spawn(argv[0], argv.slice(1), {
         cwd: cwdReal,
-        env: { PATH: process.env.PATH, HOME: process.env.HOME, LANG: process.env.LANG, ...envPatch ?? {} },
+        env,
         shell: false,
         stdio: ["ignore", "pipe", "pipe"]
       });
@@ -350,7 +371,7 @@ function createProcessTable(rootInput, { maxProcesses = 4, maxPage = 64 * 1024 }
       }
     },
     join(path) {
-      return join3(rootReal2, path);
+      return join3(rootReal, path);
     }
   };
 }
@@ -709,7 +730,10 @@ var WORKSPACE_FAMILY = defineFamily({
   contractId: "dncs.workspace.v1",
   authorityRefs: {
     "docs/specs/dsh-nano-cloud-session/design-1119.md#R1": { approved: true },
-    "docs/specs/dsh-nano-cloud-session/design-1119.md#R2": { approved: true }
+    "docs/specs/dsh-nano-cloud-session/design-1119.md#R2": { approved: true },
+    "docs/specs/dsh-nano-cloud-session/design-1119.md#R3": { approved: true },
+    "docs/specs/dsh-nano-cloud-session/design-1119.md#R4": { approved: true },
+    "docs/specs/dsh-nano-cloud-session/design-1119.md#R5": { approved: true }
   },
   operations: {
     "workspace.connect": op("workspace/connect"),
@@ -790,7 +814,14 @@ function rpcError(id, code, message) {
 function rpcResult(id, result) {
   return { jsonrpc: "2.0", id, result };
 }
-function createMcpServer({ fs: fs2, processes: processes2, inspectFacts, stdin = process.stdin, stdout = process.stdout, stderr = process.stderr }) {
+function toolResult(structured, isError = false) {
+  return {
+    ...isError ? { isError: true } : {},
+    content: [{ type: "text", text: JSON.stringify(structured) }],
+    structuredContent: structured
+  };
+}
+function createMcpServer({ fs, processes, inspectFacts, stdin = process.stdin, stdout = process.stdout, stderr = process.stderr }) {
   let initialized = false;
   let generation = 0;
   const cancelled = /* @__PURE__ */ new Set();
@@ -799,27 +830,32 @@ function createMcpServer({ fs: fs2, processes: processes2, inspectFacts, stdin =
   const tools = new Set(RESOURCE_OPERATION_IDS);
   async function callTool(name, args, id) {
     if (!tools.has(name)) {
-      return { isError: true, structuredContent: resourceFail("invalid-request", `unknown tool ${name}`) };
+      return toolResult(resourceFail("invalid-request", `unknown tool ${name}`), true);
     }
     const codec = RESOURCE_CODECS[name];
     const decoded = codec.decode(args ?? {});
     if (cancelled.has(id)) {
-      return { isError: true, structuredContent: resourceFail("workspace-failed", "cancelled") };
+      return toolResult(resourceFail("workspace-failed", "cancelled"), true);
     }
     if (name === "workspace.inspect") {
-      return { structuredContent: resourceOk({ ...inspectFacts(), generation }) };
+      return toolResult(resourceOk({
+        ...inspectFacts(),
+        generation,
+        pty: { supported: false, reason: "NATIVE_UNAVAILABLE" },
+        forward: { supported: false, reason: "NATIVE_UNAVAILABLE" }
+      }));
     }
     if (name.startsWith("fs.")) {
       const method = name.slice(3);
-      const data = await fs2[method](decoded);
-      return { structuredContent: resourceOk(data) };
+      const data = await fs[method](decoded);
+      return toolResult(resourceOk(data));
     }
     if (name.startsWith("process.")) {
       const method = name.slice(8);
-      const data = await processes2[method](decoded);
-      return { structuredContent: resourceOk(data) };
+      const data = await processes[method](decoded);
+      return toolResult(resourceOk(data));
     }
-    return { isError: true, structuredContent: resourceFail("invalid-request", `unhandled ${name}`) };
+    return toolResult(resourceFail("invalid-request", `unhandled ${name}`), true);
   }
   async function handle(message) {
     if (message === null || typeof message !== "object" || message.jsonrpc !== "2.0") {
@@ -841,7 +877,7 @@ function createMcpServer({ fs: fs2, processes: processes2, inspectFacts, stdin =
     }
     if (method === "initialize") {
       generation += 1;
-      processes2.reset?.();
+      processes.reset?.();
       initialized = true;
       send(stdout, rpcResult(id, {
         protocolVersion: PROTOCOL,
@@ -860,7 +896,7 @@ function createMcpServer({ fs: fs2, processes: processes2, inspectFacts, stdin =
     }
     if (method === "tools/call") {
       if (inFlight.size >= CONSTRAINTS.maxInFlight) {
-        send(stdout, rpcResult(id, { isError: true, structuredContent: resourceFail("workspace-limit", "too many in-flight requests") }));
+        send(stdout, rpcResult(id, toolResult(resourceFail("workspace-limit", "too many in-flight requests"), true)));
         return;
       }
       const name = params?.name;
@@ -871,7 +907,7 @@ function createMcpServer({ fs: fs2, processes: processes2, inspectFacts, stdin =
           send(stdout, rpcResult(id, result));
         } catch (error) {
           const reason = error?.reason ?? "workspace-failed";
-          send(stdout, rpcResult(id, { isError: true, structuredContent: resourceFail(reason, error?.message ?? reason) }));
+          send(stdout, rpcResult(id, toolResult(resourceFail(reason, error?.message ?? reason), true)));
         } finally {
           inFlight.delete(id);
         }
@@ -917,38 +953,54 @@ function createMcpServer({ fs: fs2, processes: processes2, inspectFacts, stdin =
 
 // src/remote/entry.mjs
 import os from "node:os";
+function runningAsCli() {
+  try {
+    const self = realpathSync4(fileURLToPath(import.meta.url));
+    const invoked = process.argv[1] ? realpathSync4(process.argv[1]) : "";
+    return self === invoked;
+  } catch {
+    return false;
+  }
+}
 function arg(name) {
   const idx = process.argv.indexOf(name);
   if (idx === -1) return null;
   return process.argv[idx + 1] ?? null;
 }
-var rootArg = arg("--root");
-if (!rootArg) {
-  process.stderr.write("missing --root\n");
-  process.exit(2);
-}
-var rootReal;
-try {
-  rootReal = realpathSync4(rootArg);
-  if (!statSync2(rootReal).isDirectory()) throw new Error("not a directory");
-} catch (error) {
-  process.stderr.write(`invalid root: ${error.message}
+function start(rootArg) {
+  if (!rootArg) {
+    process.stderr.write("missing --root\n");
+    process.exit(2);
+  }
+  let rootReal;
+  try {
+    rootReal = realpathSync4(rootArg);
+    if (!statSync2(rootReal).isDirectory()) throw new Error("not a directory");
+  } catch (error) {
+    process.stderr.write(`invalid root: ${error.message}
 `);
-  process.exit(2);
+    process.exit(2);
+  }
+  const fs = createFilesystem(rootReal);
+  const processes = createProcessTable(rootReal);
+  createMcpServer({
+    fs,
+    processes,
+    inspectFacts: () => ({
+      root: rootReal,
+      os: `${os.platform()}-${os.arch()}`,
+      runtime: { node: process.versions.node, execPath: process.execPath },
+      user: os.userInfo().username,
+      home: os.homedir(),
+      cwd: process.cwd(),
+      pty: { supported: false, reason: "NATIVE_UNAVAILABLE" },
+      forward: { supported: false, reason: "NATIVE_UNAVAILABLE" }
+    })
+  });
 }
-var fs = createFilesystem(rootReal);
-var processes = createProcessTable(rootReal);
-var nodePath = process.execPath;
-var nodeVersion = process.versions.node;
-createMcpServer({
-  fs,
-  processes,
-  inspectFacts: () => ({
-    root: rootReal,
-    os: `${os.platform()}-${os.arch()}`,
-    runtime: { node: nodeVersion, execPath: nodePath },
-    user: os.userInfo().username,
-    home: os.homedir(),
-    cwd: process.cwd()
-  })
-});
+if (runningAsCli()) start(arg("--root"));
+export {
+  createFilesystem,
+  createMcpServer,
+  createProcessTable
+};

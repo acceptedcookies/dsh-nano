@@ -1,9 +1,10 @@
 /** Devin-only SSH connector. Argv-only, no shell interpolation, no -A/-R/-N-only. */
 
 import { spawn } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { appendFileSync, chmodSync, existsSync, mkdirSync, readFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { DEVIN_SSH_GATEWAY, DEVIN_SSH_PORT, parseRemoteSessionId } from './session-id.js'
 import { WorkspaceError } from '../../host/errors.js'
 
@@ -48,8 +49,8 @@ export function buildSshArgv({
   strictHostKeyChecking = 'yes',
 } = {}) {
   const id = parseRemoteSessionId(sessionId)
-  if (strictHostKeyChecking === 'no') {
-    throw new WorkspaceError('invalid-request', 'StrictHostKeyChecking=no is forbidden', { httpStatus: 422 })
+  if (strictHostKeyChecking !== 'yes') {
+    throw new WorkspaceError('invalid-request', 'StrictHostKeyChecking must be yes; pin the fingerprint first', { httpStatus: 422 })
   }
   for (const opt of extraOptions) {
     const text = String(opt)
@@ -118,6 +119,76 @@ export function spawnSsh(argv, { spawnImpl = spawn, env, stdio = 'pipe' } = {}) 
     if (key === 'HOME' || key === 'USER' || key === 'LANG' || key === 'LC_ALL') childEnv[key] = env[key]
   }
   return spawnImpl(argv[0], argv.slice(1), { env: childEnv, stdio })
+}
+
+export function fingerprintEd25519(b64) {
+  const raw = Buffer.from(String(b64), 'base64')
+  return `SHA256:${createHash('sha256').update(raw).digest('base64').replace(/=+$/, '')}`
+}
+
+export function parseKeyscanLine(line) {
+  const parts = String(line).trim().split(/\s+/).filter(Boolean)
+  let i = 0
+  if (parts[0] && !parts[0].startsWith('ssh-') && !parts[0].startsWith('ecdsa-')) i = 1
+  const kind = parts[i]
+  const b64 = parts[i + 1]
+  if (!kind || !b64) throw new WorkspaceError('workspace-unavailable', 'invalid host key line', { httpStatus: 503 })
+  return { kind, b64, fingerprint: fingerprintEd25519(b64) }
+}
+
+export function knownHostPinned(knownHostsFile, host = DEVIN_SSH_GATEWAY) {
+  if (!existsSync(knownHostsFile)) return false
+  return readFileSync(knownHostsFile, 'utf8').split('\n').some(line => line.includes(host) && /ssh-ed25519|ecdsa-sha2/.test(line))
+}
+
+export async function scanGatewayKey({ spawnImpl = spawn } = {}) {
+  return new Promise((resolve, reject) => {
+    const child = spawnImpl('ssh-keyscan', ['-t', 'ed25519', '-T', '10', DEVIN_SSH_GATEWAY], {
+      stdio: ['ignore', 'pipe', 'pipe'], env: { PATH: process.env.PATH },
+    })
+    const out = []
+    child.stdout?.on('data', chunk => out.push(chunk))
+    child.stderr?.on('data', () => {})
+    child.on('error', error => reject(new WorkspaceError('workspace-failed', error.message, { httpStatus: 502 })))
+    child.on('close', () => {
+      try {
+        const text = Buffer.concat(out).toString('utf8')
+        const line = text.split('\n').find(row => row.includes('ssh-ed25519'))
+        if (!line) {
+          reject(new WorkspaceError('workspace-unavailable', 'could not scan gateway host key', { httpStatus: 503 }))
+          return
+        }
+        resolve(parseKeyscanLine(line))
+      } catch (error) { reject(error) }
+    })
+  })
+}
+
+export function pinGatewayKey(knownHostsFile, scanned, expectedFingerprint) {
+  if (!expectedFingerprint || scanned.fingerprint !== expectedFingerprint) {
+    const error = new WorkspaceError('workspace-denied', 'host key fingerprint confirmation required', { httpStatus: 403 })
+    error.fingerprint = scanned.fingerprint
+    error.keyKind = scanned.kind
+    throw error
+  }
+  mkdirSync(dirname(knownHostsFile), { recursive: true })
+  const entry = `${DEVIN_SSH_GATEWAY} ${scanned.kind} ${scanned.b64}\n`
+  const prev = existsSync(knownHostsFile) ? readFileSync(knownHostsFile, 'utf8') : ''
+  if (!prev.includes(scanned.b64)) appendFileSync(knownHostsFile, entry, { mode: 0o600 })
+  chmodSync(knownHostsFile, 0o600)
+}
+
+export async function ensurePinnedGateway({ knownHostsFile, expectedFingerprint, spawnImpl }) {
+  if (knownHostPinned(knownHostsFile)) return { pinned: true }
+  const scanned = await scanGatewayKey({ spawnImpl })
+  if (!expectedFingerprint) {
+    const error = new WorkspaceError('workspace-denied', 'host key fingerprint confirmation required', { httpStatus: 403 })
+    error.fingerprint = scanned.fingerprint
+    error.keyKind = scanned.kind
+    throw error
+  }
+  pinGatewayKey(knownHostsFile, scanned, expectedFingerprint)
+  return { pinned: true, fingerprint: scanned.fingerprint }
 }
 
 export function execSsh(argv, { spawnImpl = spawn, timeoutMs = 20000, input } = {}) {

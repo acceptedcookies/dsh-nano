@@ -57,7 +57,12 @@ const messageOf = error => (error instanceof Error ? error.message : String(erro
 export function apply(ctx, config = {}) {
   const api = createDevinApi({ timeoutMs: config.requestTimeoutMs ?? 20000 })
   const scopes = createWorkspaceScopes({ configEpochOf: () => store.configEpoch() })
-  const store = createProfileStore({ onEpoch: () => scopes.invalidateAll() })
+  const store = createProfileStore({
+    onEpoch: (_epoch, profileId) => {
+      if (profileId) scopes.invalidateProfile(profileId)
+      else void scopes.invalidateAll()
+    },
+  })
   const resources = createResourceService({
     scopes, api, home: process.env.DSH_HOME || process.env.HOME,
     artifactPath: artifactPath(),
@@ -89,6 +94,7 @@ export function apply(ctx, config = {}) {
         sendJson(res, error.httpStatus ?? 502, {
           ok: false, reason: error.reason, message: error.message.slice(0, 300),
           httpStatus: error.httpStatus, providerStatus: error.providerStatus ?? 0,
+          ...(error.fingerprint ? { fingerprint: error.fingerprint, keyKind: error.keyKind } : {}),
         })
         return
       }
@@ -246,7 +252,11 @@ export function apply(ctx, config = {}) {
     if (op === 'workspace.inspect') {
       const scope = scopes.requireReady(body.scopeId)
       const data = await scope.mcp.call('workspace.inspect', {})
-      return { ok: true, data, nativeChat: resolveNativeChat(ctx) }
+      return {
+        ok: true,
+        data: { ...data, pty: { supported: false, reason: 'NATIVE_UNAVAILABLE' }, forward: { supported: false, reason: 'NATIVE_UNAVAILABLE' } },
+        nativeChat: resolveNativeChat(ctx),
+      }
     }
     throw new CarrierError('invalid-request', `unknown workspace op`, { status: 422 })
   }

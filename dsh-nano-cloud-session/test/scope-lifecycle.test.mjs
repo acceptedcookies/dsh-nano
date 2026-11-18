@@ -12,4 +12,5 @@ test('T11 profile epoch invalidates existing scopes', async () => {
   epoch = 2
   const next = await scopes.connect(profile, { session_id: 'devin-abc' }, async () => ({ root: '/tmp', resources: 'ready', api: 'ready' }))
   assert.notEqual(next.scopeId, snap.scopeId)
+  assert.throws(() => scopes.requireReady(snap.scopeId, { write: true }), /expired|not valid|not found/)
 })

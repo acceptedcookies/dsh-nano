@@ -61,6 +61,9 @@ export function createMcpClient(child, { timeoutMs = CONSTRAINTS.readTimeoutMs }
         capabilities: {},
         clientInfo: { name: 'dncs-host', version: '0.1.0' },
       })
+      if (result?.protocolVersion !== CONSTRAINTS.mcpProtocol) {
+        fail('workspace-failed', `mcp protocol ${result?.protocolVersion ?? 'missing'}`)
+      }
       notify('notifications/initialized', {})
       return result
     },

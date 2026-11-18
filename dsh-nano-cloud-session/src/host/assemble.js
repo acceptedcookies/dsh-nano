@@ -205,15 +205,15 @@ export function apply(ctx, config = {}) {
   const sessionOps = {
     native_open: (profile, body) => nativeOpen(profile, body),
     workspace_shell: (profile, body) => workspaceShell(profile, body),
-    get: (profile, body) => api.getSession(profile, String(body.session_id)),
-    messages: (profile, body) => api.getMessages(profile, String(body.session_id), { first: body.first, after: body.after }),
-    attachments: (profile, body) => api.getAttachments(profile, String(body.session_id)),
-    insights: (profile, body) => api.getInsights(profile, String(body.session_id)),
-    generate_insights: (profile, body) => api.generateInsights(profile, String(body.session_id)),
-    tags: (profile, body) => api.getTags(profile, String(body.session_id)),
-    set_tags: (profile, body) => api.setTags(profile, String(body.session_id), body.tags),
-    append_tags: (profile, body) => api.appendTags(profile, String(body.session_id), body.tags),
-    sleep: (profile, body) => api.sleep(profile, String(body.session_id)),
+    get: (profile, body) => api.getSession(profile, parseRemoteSessionId(body.session_id).bare),
+    messages: (profile, body) => api.getMessages(profile, parseRemoteSessionId(body.session_id).bare, { first: body.first, after: body.after }),
+    attachments: (profile, body) => api.getAttachments(profile, parseRemoteSessionId(body.session_id).bare),
+    insights: (profile, body) => api.getInsights(profile, parseRemoteSessionId(body.session_id).bare),
+    generate_insights: (profile, body) => api.generateInsights(profile, parseRemoteSessionId(body.session_id).bare),
+    tags: (profile, body) => api.getTags(profile, parseRemoteSessionId(body.session_id).bare),
+    set_tags: (profile, body) => api.setTags(profile, parseRemoteSessionId(body.session_id).bare, body.tags),
+    append_tags: (profile, body) => api.appendTags(profile, parseRemoteSessionId(body.session_id).bare, body.tags),
+    sleep: (profile, body) => api.sleep(profile, parseRemoteSessionId(body.session_id).bare),
   }
 
   const catalog = async (body) => {
@@ -328,12 +328,12 @@ export function apply(ctx, config = {}) {
         if (!body.session_id || typeof body.message !== 'string' || !body.message.trim()) {
           throw new CarrierError('invalid-request', 'session_id and message are required', { status: 422 })
         }
-        return api.postMessage(pick(body.profileId), needSessionId(body), body.message)
+        return api.postMessage(pick(body.profileId), parseRemoteSessionId(body.session_id).bare, body.message)
       }),
     },
-    { path: '/nano-cloud-session/archive', methods: ['POST'], bodyLimit: 16384, handler: work(body => api.archive(pick(body.profileId), needSessionId(body))) },
-    { path: '/nano-cloud-session/unarchive', methods: ['POST'], bodyLimit: 16384, handler: work(body => api.unarchive(pick(body.profileId), needSessionId(body))) },
-    { path: '/nano-cloud-session/terminate', methods: ['POST'], bodyLimit: 16384, handler: work(body => api.terminate(pick(body.profileId), needSessionId(body))) },
+    { path: '/nano-cloud-session/archive', methods: ['POST'], bodyLimit: 16384, handler: work(body => api.archive(pick(body.profileId), parseRemoteSessionId(body.session_id).bare)) },
+    { path: '/nano-cloud-session/unarchive', methods: ['POST'], bodyLimit: 16384, handler: work(body => api.unarchive(pick(body.profileId), parseRemoteSessionId(body.session_id).bare)) },
+    { path: '/nano-cloud-session/terminate', methods: ['POST'], bodyLimit: 16384, handler: work(body => api.terminate(pick(body.profileId), parseRemoteSessionId(body.session_id).bare)) },
     { path: '/nano-cloud-session/catalog', methods: ['POST'], bodyLimit: 16384, handler: work(body => catalog(body)) },
     { path: '/nano-cloud-session/upload', methods: ['POST'], bodyLimit: 33554432, handler: work(body => upload(body)) },
     {

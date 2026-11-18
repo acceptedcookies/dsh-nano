@@ -109,6 +109,7 @@ try {
       await client.call('process.wait', { processHandle: git.processHandle, timeoutMs: 8000 })
       const gitOut = await client.call('process.read', { processHandle: git.processHandle, stdoutOffset: 0, limit: 2048 })
       record(3, 'pass', {
+        covered: 'git-status-only',
         git: Buffer.from(gitOut.stdout, 'base64').toString().slice(0, 200),
         pty: 'not-run: H-EXEC SubprocessTerminalHandle missing',
       })
@@ -124,7 +125,10 @@ try {
       evidence.notRun.push({ step: 5, item: 'native-chat-sentinel-cross-check', reason: 'H-CHAT missing; ACU spend not authorized' })
       record(5, 'not-run', { reason: 'NATIVE_UNAVAILABLE' })
       const messages = await api.getMessages(profile, String(sessionId).replace(/^devin-/, ''), { first: 20 })
-      record(6, 'pass', { messageCount: messages?.items?.length ?? messages?.messages?.length ?? 0 })
+      record(6, 'pass', {
+        covered: 'messages-page-only',
+        messageCount: messages?.items?.length ?? messages?.messages?.length ?? 0,
+      })
     } else {
       record(5, 'not-run', { reason: 'no-active-profile' })
       record(6, 'not-run', { reason: 'no-active-profile' })
@@ -132,7 +136,10 @@ try {
 
     client.close()
     const inspect2 = await probeWorkspace({ sessionId, identityFile, knownHostsFile, expectedFingerprint })
-    record(7, 'pass', { reconnectPwd: inspect2.probe.find(row => row.argv[0] === 'pwd')?.stdout })
+    record(7, 'pass', {
+      covered: 'reconnect-pwd-only',
+      reconnectPwd: inspect2.probe.find(row => row.argv[0] === 'pwd')?.stdout,
+    })
 
     const child2 = spawnSsh(buildSshArgv({
       identityFile, knownHostsFile, sessionId,

@@ -2,7 +2,7 @@
 
 import { defineFamily } from '../../../packages/dsh-interface/src/contracts/FamilyDefinition.js'
 
-const op = (semanticsRef, failures = ['invalid-request', 'unauthorized', 'forbidden-or-invisible', 'not-found', 'upstream-error']) => ({
+const op = (semanticsRef, failures = ['invalid-request', 'unauthorized', 'forbidden-or-invisible', 'not-found', 'conflict', 'rate-limited', 'timeout', 'unreachable', 'no-active-profile', 'profile-not-found', 'upstream-error']) => ({
   input: { type: 'object' },
   output: { type: 'object' },
   failures,

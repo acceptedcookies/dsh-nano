@@ -59,7 +59,11 @@ export function createMcpServer({ fs, processes, inspectFacts, stdin = process.s
     }
     if (name.startsWith('process.')) {
       const method = name.slice(8)
-      const data = await processes[method](decoded)
+      const data = await processes[method]({
+        ...decoded,
+        ...(method === 'wait' ? { isCancelled: () => cancelled.has(id) } : {}),
+      })
+      if (cancelled.has(id)) return toolResult(resourceFail('workspace-failed', 'cancelled'), true)
       return toolResult(resourceOk(data))
     }
     return toolResult(resourceFail('invalid-request', `unhandled ${name}`), true)

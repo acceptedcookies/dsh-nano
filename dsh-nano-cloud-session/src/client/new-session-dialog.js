@@ -6,10 +6,10 @@ import { NanoDialog } from 'dsh-nano-ui'
 import { Button, Input, IconGlobeOutlineRegular, IconPlusOutlineRegular, IconRefreshOutlineRegular, IconPaperclipOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import { api } from './api.js'
 import { readPrefs } from './prefs.js'
+import { formToCreateInput } from '../providers/devin/profile-codec.js'
 
 const { createElement: h, useEffect, useRef, useState } = React
 
-const split = value => String(value ?? '').split(',').map(item => item.trim()).filter(Boolean)
 const lines = value => String(value ?? '').split('\n').map(item => item.trim()).filter(Boolean)
 
 function field(label, control, hint) {
@@ -129,37 +129,7 @@ export function NewSessionDialog({ face, onClose, onCreated }) {
     if (form.prompt.trim() === '' || busy) return
     setBusy(true); setError('')
     try {
-      let sessionSecrets
-      if (form.sessionSecrets.trim() !== '') {
-        try { sessionSecrets = JSON.parse(form.sessionSecrets) } catch { throw new Error(t('invalidSessionSecrets')) }
-      }
-      let structuredOutputSchema
-      if (form.structuredOutputSchema.trim() !== '') {
-        try { structuredOutputSchema = JSON.parse(form.structuredOutputSchema) } catch { throw new Error(t('invalidStructuredOutput')) }
-      }
-      const result = await api.create({
-        prompt: form.prompt,
-        title: form.title || undefined,
-        repos: lines(form.repos),
-        tags: split(form.tags),
-        devin_mode: form.devinMode || undefined,
-        max_acu_limit: form.maxAcuLimit ? Number(form.maxAcuLimit) : undefined,
-        resumable: form.resumable !== 'false',
-        playbook_id: form.playbookId || undefined,
-        knowledge_ids: form.knowledgeIds.length ? form.knowledgeIds : undefined,
-        secret_ids: form.secretIds.length ? form.secretIds : undefined,
-        attachment_urls: form.attachmentUrls.length ? form.attachmentUrls : undefined,
-        create_as_user_id: form.createAsUserId || undefined,
-        child_playbook_id: form.childPlaybookId || undefined,
-        platform: form.platform || undefined,
-        bypass_approval: form.bypassApproval === '' ? undefined : form.bypassApproval === 'true',
-        memory_enabled: form.memoryEnabled === '' ? undefined : form.memoryEnabled === 'true',
-        session_links: split(form.sessionLinks),
-        security_profile: form.securityProfileId ? { profile_id: form.securityProfileId } : undefined,
-        structured_output_schema: structuredOutputSchema,
-        structured_output_required: form.structuredOutputRequired === '' ? undefined : form.structuredOutputRequired === 'true',
-        session_secrets: sessionSecrets,
-      })
+      const result = await api.create(formToCreateInput(form))
       const id = result.session_id ?? result.id
       face.refresh()
       if (id != null) onCreated?.(id)

@@ -89,6 +89,47 @@ export function publicProfile(profile, activeId) {
   })
 }
 
+const splitCsv = value => String(value ?? '').split(',').map(item => item.trim()).filter(Boolean)
+const splitLines = value => String(value ?? '').split('\n').map(item => item.trim()).filter(Boolean)
+
+/** Browser form → create input. Pure; does not mutate `form`. */
+export function formToCreateInput(form = {}) {
+  let sessionSecrets
+  if (String(form.sessionSecrets ?? '').trim() !== '') {
+    try { sessionSecrets = JSON.parse(form.sessionSecrets) }
+    catch { throw new ProfileCodecError('session_secrets must be JSON') }
+  }
+  let structuredOutputSchema
+  if (String(form.structuredOutputSchema ?? '').trim() !== '') {
+    try { structuredOutputSchema = JSON.parse(form.structuredOutputSchema) }
+    catch { throw new ProfileCodecError('structured_output_schema must be JSON') }
+  }
+  const boolish = (value) => value === '' || value == null ? undefined : value === true || value === 'true'
+  return {
+    prompt: form.prompt,
+    title: form.title || undefined,
+    repos: typeof form.repos === 'string' ? splitLines(form.repos) : form.repos,
+    tags: typeof form.tags === 'string' ? splitCsv(form.tags) : form.tags,
+    devin_mode: form.devinMode || form.devin_mode || undefined,
+    max_acu_limit: form.maxAcuLimit === '' || form.maxAcuLimit == null ? undefined : Number(form.maxAcuLimit),
+    resumable: form.resumable === 'false' || form.resumable === false ? false : form.resumable === undefined ? undefined : true,
+    playbook_id: form.playbookId || form.playbook_id || undefined,
+    knowledge_ids: form.knowledgeIds?.length ? form.knowledgeIds : undefined,
+    secret_ids: form.secretIds?.length ? form.secretIds : undefined,
+    attachment_urls: form.attachmentUrls?.length ? form.attachmentUrls : undefined,
+    create_as_user_id: form.createAsUserId || undefined,
+    child_playbook_id: form.childPlaybookId || undefined,
+    platform: form.platform || undefined,
+    bypass_approval: boolish(form.bypassApproval),
+    memory_enabled: boolish(form.memoryEnabled),
+    session_links: typeof form.sessionLinks === 'string' ? splitCsv(form.sessionLinks) : form.sessionLinks,
+    security_profile: form.securityProfileId ? { profile_id: form.securityProfileId } : form.securityProfile,
+    structured_output_schema: structuredOutputSchema,
+    structured_output_required: boolish(form.structuredOutputRequired),
+    session_secrets: sessionSecrets,
+  }
+}
+
 /** Create-session body: keep explicit false/0/'', drop only undefined. */
 export function encodeCreateSession(input) {
   if (!input || typeof input !== 'object') throw new ProfileCodecError('create body must be an object')

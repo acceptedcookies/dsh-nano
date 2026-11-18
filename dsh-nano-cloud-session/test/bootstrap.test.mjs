@@ -72,6 +72,22 @@ test('T06 unknown host key requires matching fingerprint; never accept-new', asy
   } finally { rmSync(dir, { recursive: true, force: true }) }
 })
 
+test('T06 changed gateway key requires a new matching fingerprint', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'dncs-chg-'))
+  const known = join(dir, 'known')
+  writeFileSync(known, PINNED)
+  const other = 'ssh.devin.ai ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\n'
+  const spawnImpl = fakeSpawn((cmd) => {
+    if (cmd === 'ssh-keyscan') return { code: 0, stdout: other }
+    return { code: 0, stdout: 'Linux x86_64\n' }
+  })
+  try {
+    await assert.rejects(() => probeWorkspace({
+      sessionId: 'devin-abc', identityFile: '/tmp/id', knownHostsFile: known, spawnImpl,
+    }), (error) => error.reason === 'workspace-denied' && /changed|fingerprint/i.test(error.message))
+  } finally { rmSync(dir, { recursive: true, force: true }) }
+})
+
 test('T06 artifact dir is chmod 700 and published via tmp+rename', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'dncs-art-'))
   const known = join(dir, 'known')

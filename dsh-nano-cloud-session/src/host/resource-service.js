@@ -31,7 +31,8 @@ export function createResourceService({ scopes, api, home, spawnImpl, artifactPa
       scope.api = 'unavailable'
       fail('workspace-unavailable', error?.message ?? 'API identity check failed')
     }
-    let identityFile = resolveIdentityFile({ home, identityFile: body.identityFile })
+    if (body.identityFile) fail('invalid-request', 'identityFile cannot be supplied by the client')
+    let identityFile = resolveIdentityFile({ home })
     const knownHostsFile = ensureKnownHostsFile(home)
     const expectedFingerprint = typeof body.expectedFingerprint === 'string' ? body.expectedFingerprint : undefined
     scope.resources = 'verifying'
@@ -46,7 +47,7 @@ export function createResourceService({ scopes, api, home, spawnImpl, artifactPa
     try {
       inspect = await probeWith(identityFile)
     } catch (error) {
-      const fallback = fallbackIdentityFile(identityFile, { identityFile: body.identityFile })
+      const fallback = fallbackIdentityFile(identityFile)
       if (fallback && error?.reason === 'workspace-unavailable') {
         identityFile = fallback
         inspect = await probeWith(identityFile)

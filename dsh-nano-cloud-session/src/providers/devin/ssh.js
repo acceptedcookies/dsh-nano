@@ -1,7 +1,7 @@
 /** Devin-only SSH connector. Argv-only, no shell interpolation, no -A/-R/-N-only. */
 
 import { spawn } from 'node:child_process'
-import { appendFileSync, chmodSync, existsSync, mkdirSync, readFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -144,8 +144,14 @@ export function parseKeyscanLine(line) {
 }
 
 export function knownHostPinned(knownHostsFile, host = DEVIN_SSH_GATEWAY) {
-  if (!existsSync(knownHostsFile)) return false
-  return readFileSync(knownHostsFile, 'utf8').split('\n').some(line => line.includes(host) && /ssh-ed25519|ecdsa-sha2/.test(line))
+  return pinnedGatewayKey(knownHostsFile, host) != null
+}
+
+export function pinnedGatewayKey(knownHostsFile, host = DEVIN_SSH_GATEWAY) {
+  if (!existsSync(knownHostsFile)) return null
+  const line = readFileSync(knownHostsFile, 'utf8').split('\n').find(row => row.includes(host) && /ssh-ed25519|ecdsa-sha2/.test(row))
+  if (!line) return null
+  return parseKeyscanLine(line)
 }
 
 export async function scanGatewayKey({ spawnImpl = spawn } = {}) {
@@ -181,13 +187,30 @@ export function pinGatewayKey(knownHostsFile, scanned, expectedFingerprint) {
   mkdirSync(dirname(knownHostsFile), { recursive: true })
   const entry = `${DEVIN_SSH_GATEWAY} ${scanned.kind} ${scanned.b64}\n`
   const prev = existsSync(knownHostsFile) ? readFileSync(knownHostsFile, 'utf8') : ''
-  if (!prev.includes(scanned.b64)) appendFileSync(knownHostsFile, entry, { mode: 0o600 })
+  const kept = prev.split('\n').filter(line => line.trim() && !line.includes(DEVIN_SSH_GATEWAY))
+  writeFileSync(knownHostsFile, `${kept.join('\n')}${kept.length ? '\n' : ''}${entry}`, { mode: 0o600 })
   chmodSync(knownHostsFile, 0o600)
 }
 
 export async function ensurePinnedGateway({ knownHostsFile, expectedFingerprint, spawnImpl }) {
-  if (knownHostPinned(knownHostsFile)) return { pinned: true }
-  const scanned = await scanGatewayKey({ spawnImpl })
+  const pinned = pinnedGatewayKey(knownHostsFile)
+  const scanned = await scanGatewayKey({ spawnImpl }).catch(error => {
+    if (pinned) return null
+    throw error
+  })
+  if (pinned && (!scanned || scanned.b64 === pinned.b64)) return { pinned: true, fingerprint: pinned.fingerprint }
+  if (scanned && pinned && scanned.b64 !== pinned.b64) {
+    if (!expectedFingerprint) {
+      const error = new WorkspaceError('workspace-denied', 'gateway host key changed; confirmation required', { httpStatus: 403 })
+      error.fingerprint = scanned.fingerprint
+      error.keyKind = scanned.kind
+      throw error
+    }
+  }
+  if (!scanned) {
+    const error = new WorkspaceError('workspace-denied', 'host key fingerprint confirmation required', { httpStatus: 403 })
+    throw error
+  }
   if (!expectedFingerprint) {
     const error = new WorkspaceError('workspace-denied', 'host key fingerprint confirmation required', { httpStatus: 403 })
     error.fingerprint = scanned.fingerprint

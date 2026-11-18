@@ -6,7 +6,7 @@ import { realpathSync } from 'node:fs'
 import { join } from 'node:path'
 import { resolveUnderRoot } from './path-policy.js'
 
-export function createProcessTable(rootInput, { maxProcesses = 4, maxPage = 64 * 1024 } = {}) {
+export function createProcessTable(rootInput, { maxProcesses = 4, maxPage = 64 * 1024, maxCapture = 256 * 1024 } = {}) {
   const rootReal = realpathSync(rootInput)
   const table = new Map()
 
@@ -54,16 +54,21 @@ export function createProcessTable(rootInput, { maxProcesses = 4, maxPage = 64 *
       const rec = {
         handle, child, argv, cwd: cwdReal,
         stdout, stderr, stdoutBytes, stderrBytes,
-        exit: null, unknown: false,
+        exit: null, unknown: false, captureTruncated: false,
       }
-      child.stdout.on('data', chunk => {
-        stdout.push(Buffer.from(chunk))
-        rec.stdoutBytes += chunk.length
-      })
-      child.stderr.on('data', chunk => {
-        stderr.push(Buffer.from(chunk))
-        rec.stderrBytes += chunk.length
-      })
+      const capture = (chunks, rec, field, chunk) => {
+        if (rec[field] >= maxCapture) {
+          rec.captureTruncated = true
+          return
+        }
+        const room = maxCapture - rec[field]
+        const take = chunk.length > room ? chunk.subarray(0, room) : chunk
+        chunks.push(Buffer.from(take))
+        rec[field] += take.length
+        if (take.length < chunk.length) rec.captureTruncated = true
+      }
+      child.stdout.on('data', chunk => capture(stdout, rec, 'stdoutBytes', chunk))
+      child.stderr.on('data', chunk => capture(stderr, rec, 'stderrBytes', chunk))
       child.on('close', (code, signal) => {
         rec.exit = { code, signal: signal ?? null }
       })
@@ -83,21 +88,41 @@ export function createProcessTable(rootInput, { maxProcesses = 4, maxPage = 64 *
         stderr: stderrChunk.toString('base64'),
         stdoutNext: stdoutOffset + stdoutChunk.length,
         stderrNext: stderrOffset + stderrChunk.length,
-        truncated: stdoutTruncated || rec.stderrBytes > stderrOffset + stderrChunk.length,
+        truncated: rec.captureTruncated || stdoutTruncated || rec.stderrBytes > stderrOffset + stderrChunk.length,
         exit: rec.exit,
         unknown: rec.unknown,
       }
     },
-    wait({ processHandle, timeoutMs = 0 }) {
+    wait({ processHandle, timeoutMs = 0, isCancelled } = {}) {
       const rec = get(processHandle)
+      if (isCancelled?.()) {
+        const error = new Error('cancelled')
+        error.reason = 'workspace-failed'
+        throw error
+      }
       if (rec.exit) return { running: false, exit: rec.exit }
       if (!timeoutMs) return { running: true }
-      return new Promise(resolve => {
-        const timer = setTimeout(() => resolve({ running: true }), timeoutMs)
-        rec.child.once('close', (code, signal) => {
+      return new Promise((resolve, reject) => {
+        const finish = (fn) => {
           clearTimeout(timer)
-          rec.exit = { code, signal: signal ?? null }
-          resolve({ running: false, exit: rec.exit })
+          clearInterval(poll)
+          fn()
+        }
+        const timer = setTimeout(() => finish(() => resolve({ running: true })), timeoutMs)
+        const poll = setInterval(() => {
+          if (isCancelled?.()) {
+            finish(() => {
+              const error = new Error('cancelled')
+              error.reason = 'workspace-failed'
+              reject(error)
+            })
+          }
+        }, 25)
+        rec.child.once('close', (code, signal) => {
+          finish(() => {
+            rec.exit = { code, signal: signal ?? null }
+            resolve({ running: false, exit: rec.exit })
+          })
         })
       })
     },

@@ -1307,7 +1307,7 @@ var BINDING_TABLE = Object.freeze([
 ]);
 
 // src/contracts/session-family.js
-var op = (semanticsRef, failures = ["invalid-request", "unauthorized", "forbidden-or-invisible", "not-found", "upstream-error"]) => ({
+var op = (semanticsRef, failures = ["invalid-request", "unauthorized", "forbidden-or-invisible", "not-found", "conflict", "rate-limited", "timeout", "unreachable", "no-active-profile", "profile-not-found", "upstream-error"]) => ({
   input: { type: "object" },
   output: { type: "object" },
   failures,
@@ -2005,7 +2005,7 @@ function createWorkspaceScopes({ configEpochOf } = {}) {
 
 // src/providers/devin/ssh.js
 import { spawn } from "node:child_process";
-import { appendFileSync, chmodSync as chmodSync2, existsSync as existsSync3, mkdirSync as mkdirSync2, readFileSync as readFileSync3 } from "node:fs";
+import { chmodSync as chmodSync2, existsSync as existsSync3, mkdirSync as mkdirSync2, readFileSync as readFileSync3, writeFileSync as writeFileSync2 } from "node:fs";
 import { createHash } from "node:crypto";
 import { homedir } from "node:os";
 import { dirname as dirname2, join as join3 } from "node:path";
@@ -2145,9 +2145,11 @@ function parseKeyscanLine(line) {
   if (!kind || !b64) throw new WorkspaceError("workspace-unavailable", "invalid host key line", { httpStatus: 503 });
   return { kind, b64, fingerprint: fingerprintEd25519(b64) };
 }
-function knownHostPinned(knownHostsFile, host = DEVIN_SSH_GATEWAY) {
-  if (!existsSync3(knownHostsFile)) return false;
-  return readFileSync3(knownHostsFile, "utf8").split("\n").some((line) => line.includes(host) && /ssh-ed25519|ecdsa-sha2/.test(line));
+function pinnedGatewayKey(knownHostsFile, host = DEVIN_SSH_GATEWAY) {
+  if (!existsSync3(knownHostsFile)) return null;
+  const line = readFileSync3(knownHostsFile, "utf8").split("\n").find((row) => row.includes(host) && /ssh-ed25519|ecdsa-sha2/.test(row));
+  if (!line) return null;
+  return parseKeyscanLine(line);
 }
 async function scanGatewayKey({ spawnImpl = spawn } = {}) {
   return new Promise((resolve, reject) => {
@@ -2186,12 +2188,29 @@ function pinGatewayKey(knownHostsFile, scanned, expectedFingerprint) {
   const entry = `${DEVIN_SSH_GATEWAY} ${scanned.kind} ${scanned.b64}
 `;
   const prev = existsSync3(knownHostsFile) ? readFileSync3(knownHostsFile, "utf8") : "";
-  if (!prev.includes(scanned.b64)) appendFileSync(knownHostsFile, entry, { mode: 384 });
+  const kept = prev.split("\n").filter((line) => line.trim() && !line.includes(DEVIN_SSH_GATEWAY));
+  writeFileSync2(knownHostsFile, `${kept.join("\n")}${kept.length ? "\n" : ""}${entry}`, { mode: 384 });
   chmodSync2(knownHostsFile, 384);
 }
 async function ensurePinnedGateway({ knownHostsFile, expectedFingerprint, spawnImpl }) {
-  if (knownHostPinned(knownHostsFile)) return { pinned: true };
-  const scanned = await scanGatewayKey({ spawnImpl });
+  const pinned = pinnedGatewayKey(knownHostsFile);
+  const scanned = await scanGatewayKey({ spawnImpl }).catch((error) => {
+    if (pinned) return null;
+    throw error;
+  });
+  if (pinned && (!scanned || scanned.b64 === pinned.b64)) return { pinned: true, fingerprint: pinned.fingerprint };
+  if (scanned && pinned && scanned.b64 !== pinned.b64) {
+    if (!expectedFingerprint) {
+      const error = new WorkspaceError("workspace-denied", "gateway host key changed; confirmation required", { httpStatus: 403 });
+      error.fingerprint = scanned.fingerprint;
+      error.keyKind = scanned.kind;
+      throw error;
+    }
+  }
+  if (!scanned) {
+    const error = new WorkspaceError("workspace-denied", "host key fingerprint confirmation required", { httpStatus: 403 });
+    throw error;
+  }
   if (!expectedFingerprint) {
     const error = new WorkspaceError("workspace-denied", "host key fingerprint confirmation required", { httpStatus: 403 });
     error.fingerprint = scanned.fingerprint;
@@ -2245,7 +2264,7 @@ function execSsh(argv, { spawnImpl = spawn, timeoutMs = 2e4, input } = {}) {
 
 // src/providers/devin/bootstrap.js
 import { createHash as createHash2 } from "node:crypto";
-import { chmodSync as chmodSync3, existsSync as existsSync4, mkdirSync as mkdirSync3, readFileSync as readFileSync4, writeFileSync as writeFileSync2 } from "node:fs";
+import { chmodSync as chmodSync3, existsSync as existsSync4, mkdirSync as mkdirSync3, readFileSync as readFileSync4, writeFileSync as writeFileSync3 } from "node:fs";
 import { dirname as dirname3, join as join4 } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn as spawn2 } from "node:child_process";
@@ -2400,7 +2419,7 @@ async function publishArtifact({ sessionId, identityFile, knownHostsFile, spawnI
 function ensureKnownHostsFile(home3, { seed } = {}) {
   const path = knownHostsPath(home3);
   mkdirSync3(dirname3(path), { recursive: true });
-  if (!existsSync4(path) && seed) writeFileSync2(path, `${seed}
+  if (!existsSync4(path) && seed) writeFileSync3(path, `${seed}
 `, { mode: 384 });
   if (existsSync4(path)) chmodSync3(path, 384);
   return path;
@@ -2544,7 +2563,8 @@ function createResourceService({ scopes, api, home: home3, spawnImpl, artifactPa
       scope.api = "unavailable";
       fail4("workspace-unavailable", error?.message ?? "API identity check failed");
     }
-    let identityFile = resolveIdentityFile({ home: home3, identityFile: body.identityFile });
+    if (body.identityFile) fail4("invalid-request", "identityFile cannot be supplied by the client");
+    let identityFile = resolveIdentityFile({ home: home3 });
     const knownHostsFile = ensureKnownHostsFile(home3);
     const expectedFingerprint = typeof body.expectedFingerprint === "string" ? body.expectedFingerprint : void 0;
     scope.resources = "verifying";
@@ -2559,7 +2579,7 @@ function createResourceService({ scopes, api, home: home3, spawnImpl, artifactPa
     try {
       inspect = await probeWith(identityFile);
     } catch (error) {
-      const fallback = fallbackIdentityFile(identityFile, { identityFile: body.identityFile });
+      const fallback = fallbackIdentityFile(identityFile);
       if (fallback && error?.reason === "workspace-unavailable") {
         identityFile = fallback;
         inspect = await probeWith(identityFile);
@@ -2890,15 +2910,15 @@ function apply(ctx, config = {}) {
   const sessionOps = {
     native_open: (profile, body) => nativeOpen(profile, body),
     workspace_shell: (profile, body) => workspaceShell(profile, body),
-    get: (profile, body) => api.getSession(profile, String(body.session_id)),
-    messages: (profile, body) => api.getMessages(profile, String(body.session_id), { first: body.first, after: body.after }),
-    attachments: (profile, body) => api.getAttachments(profile, String(body.session_id)),
-    insights: (profile, body) => api.getInsights(profile, String(body.session_id)),
-    generate_insights: (profile, body) => api.generateInsights(profile, String(body.session_id)),
-    tags: (profile, body) => api.getTags(profile, String(body.session_id)),
-    set_tags: (profile, body) => api.setTags(profile, String(body.session_id), body.tags),
-    append_tags: (profile, body) => api.appendTags(profile, String(body.session_id), body.tags),
-    sleep: (profile, body) => api.sleep(profile, String(body.session_id))
+    get: (profile, body) => api.getSession(profile, parseRemoteSessionId(body.session_id).bare),
+    messages: (profile, body) => api.getMessages(profile, parseRemoteSessionId(body.session_id).bare, { first: body.first, after: body.after }),
+    attachments: (profile, body) => api.getAttachments(profile, parseRemoteSessionId(body.session_id).bare),
+    insights: (profile, body) => api.getInsights(profile, parseRemoteSessionId(body.session_id).bare),
+    generate_insights: (profile, body) => api.generateInsights(profile, parseRemoteSessionId(body.session_id).bare),
+    tags: (profile, body) => api.getTags(profile, parseRemoteSessionId(body.session_id).bare),
+    set_tags: (profile, body) => api.setTags(profile, parseRemoteSessionId(body.session_id).bare, body.tags),
+    append_tags: (profile, body) => api.appendTags(profile, parseRemoteSessionId(body.session_id).bare, body.tags),
+    sleep: (profile, body) => api.sleep(profile, parseRemoteSessionId(body.session_id).bare)
   };
   const catalog = async (body) => {
     const profile = pick(body.profileId);
@@ -3034,12 +3054,12 @@ function apply(ctx, config = {}) {
         if (!body.session_id || typeof body.message !== "string" || !body.message.trim()) {
           throw new CarrierError("invalid-request", "session_id and message are required", { status: 422 });
         }
-        return api.postMessage(pick(body.profileId), needSessionId(body), body.message);
+        return api.postMessage(pick(body.profileId), parseRemoteSessionId(body.session_id).bare, body.message);
       })
     },
-    { path: "/nano-cloud-session/archive", methods: ["POST"], bodyLimit: 16384, handler: work((body) => api.archive(pick(body.profileId), needSessionId(body))) },
-    { path: "/nano-cloud-session/unarchive", methods: ["POST"], bodyLimit: 16384, handler: work((body) => api.unarchive(pick(body.profileId), needSessionId(body))) },
-    { path: "/nano-cloud-session/terminate", methods: ["POST"], bodyLimit: 16384, handler: work((body) => api.terminate(pick(body.profileId), needSessionId(body))) },
+    { path: "/nano-cloud-session/archive", methods: ["POST"], bodyLimit: 16384, handler: work((body) => api.archive(pick(body.profileId), parseRemoteSessionId(body.session_id).bare)) },
+    { path: "/nano-cloud-session/unarchive", methods: ["POST"], bodyLimit: 16384, handler: work((body) => api.unarchive(pick(body.profileId), parseRemoteSessionId(body.session_id).bare)) },
+    { path: "/nano-cloud-session/terminate", methods: ["POST"], bodyLimit: 16384, handler: work((body) => api.terminate(pick(body.profileId), parseRemoteSessionId(body.session_id).bare)) },
     { path: "/nano-cloud-session/catalog", methods: ["POST"], bodyLimit: 16384, handler: work((body) => catalog(body)) },
     { path: "/nano-cloud-session/upload", methods: ["POST"], bodyLimit: 33554432, handler: work((body) => upload(body)) },
     {

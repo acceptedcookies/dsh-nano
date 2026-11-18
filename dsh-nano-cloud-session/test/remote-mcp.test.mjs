@@ -95,6 +95,12 @@ test('T09 process argv is not a shell; unknown handle rejected', async () => {
     const timed = await processes.wait({ processHandle: slow.processHandle, timeoutMs: 50 })
     assert.equal(timed.running, true)
     processes.terminate({ processHandle: slow.processHandle })
+    const hanging = processes.start({ argv: [process.execPath, '-e', 'setTimeout(()=>{}, 30000)'], cwd: '.' })
+    await assert.rejects(
+      async () => processes.wait({ processHandle: hanging.processHandle, timeoutMs: 2000, isCancelled: () => true }),
+      /cancelled/,
+    )
+    processes.terminate({ processHandle: hanging.processHandle })
   } finally { rmSync(dir, { recursive: true, force: true }) }
 })
 

@@ -12,7 +12,9 @@ async function post(path, body) {
   if (!res.ok || !json || json.ok === false) {
     const error = new Error(json?.message ?? `HTTP ${res.status}`)
     error.reason = json?.reason ?? 'failed'
-    error.status = json?.status ?? res.status
+    error.httpStatus = res.status
+    error.providerStatus = json?.providerStatus ?? json?.status
+    error.status = res.status
     throw error
   }
   return json
@@ -21,10 +23,11 @@ async function post(path, body) {
 export const api = {
   status: () => post('/nano-cloud-session/status'),
   config: (action, extra = {}) => post('/nano-cloud-session/config', { action, ...extra }),
-  sessions: (params = {}) => post('/nano-cloud-session/sessions', { op: 'list', ...params }),
+  sessions: (params = {}) => post('/nano-cloud-session/sessions', { op: 'list', is_archived: params.is_archived ?? params.isArchived, ...params }),
   sessionsInsights: (params = {}) => post('/nano-cloud-session/sessions', { op: 'insights', ...params }),
   session: (op, params = {}) => post('/nano-cloud-session/session', { op, ...params }),
   nativeOpen: (session_id) => post('/nano-cloud-session/session', { op: 'native_open', session_id }),
+  workspaceShell: (session_id) => post('/nano-cloud-session/session', { op: 'workspace_shell', session_id }),
   catalog: (resource, params = {}) => post('/nano-cloud-session/catalog', { resource, ...params }),
   upload: (name, contentType, dataBase64) => post('/nano-cloud-session/upload', { name, content_type: contentType, data_base64: dataBase64 }),
   create: (input) => post('/nano-cloud-session/create', input),
@@ -33,4 +36,11 @@ export const api = {
   unarchive: (session_id) => post('/nano-cloud-session/unarchive', { session_id }),
   terminate: (session_id) => post('/nano-cloud-session/terminate', { session_id }),
   ssh: (session_id) => post('/nano-cloud-session/ssh', { session_id }),
+  workspace: (op, params = {}) => post('/nano-cloud-session/workspace', { op, ...params }),
+  resources: (op, params = {}) => post('/nano-cloud-session/resources', { op, ...params }),
+}
+
+export function pluginRouteGone(error) {
+  const http = error?.httpStatus ?? error?.status
+  return (http === 404 || http === 405) && (error?.reason == null || error.reason === 'failed')
 }

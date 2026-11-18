@@ -1,32 +1,21 @@
-/** Carrier credential store.
- *
- *  Profiles live in ${DSH_HOME}/nano-cloud-session.json (mode 0600). Secrets
- *  (the carrier API token) are write-only: every read path returns
- *  `hasSecret`, never the material. First boot seeds from process.env
- *  (`DEVIN_API_TOKEN` / `DEVIN_ORG_ID` / `DEVIN_API_BASE`) or
- *  `${DSH_HOME}/nano-cloud-session.env` — same shape as notepad's S3 store.
- *
- *  A profile = one carrier account: { id, label, carrier, orgId, baseUrl,
- *  secret }. `carrier` is 'devin' today; the shape leaves room for future
- *  carriers without a schema bump.
- */
+/** Carrier credential store. Snapshots are immutable; configEpoch advances
+ *  on save/remove/activate so old WorkspaceScopes cannot keep using stale secrets. */
 
 import { readFileSync, writeFileSync, renameSync, mkdirSync, existsSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { randomBytes } from 'node:crypto'
+import {
+  decodeProfileSave, publicProfile as publicOf, DEFAULT_BASE_URL, ProfileCodecError,
+} from '../providers/devin/profile-codec.js'
 
 const STORE_VERSION = 1
 const STORE_FILE = 'nano-cloud-session.json'
 const ENV_FILE = 'nano-cloud-session.env'
 
-const DEFAULT_BASE_URL = 'https://api.devin.ai'
-
 function home() { return process.env.DSH_HOME || process.env.HOME || '.' }
 function storePath() { return join(home(), STORE_FILE) }
 function envPath() { return join(home(), ENV_FILE) }
-export { storePath, envPath }
-
-/* ---- env seed ---- */
+export { storePath, envPath, DEFAULT_BASE_URL }
 
 function readEnvFile(path) {
   const out = {}
@@ -49,59 +38,9 @@ function seedFromEnv() {
   return { complete: true, token, orgId, baseUrl }
 }
 
-/* ---- validation ---- */
-
-function normalizeBaseUrl(value) {
-  const raw = String(value ?? '').trim() || DEFAULT_BASE_URL
-  let url
-  try { url = new URL(raw) } catch { throw new Error('baseUrl must be a valid URL') }
-  if (url.protocol !== 'https:') throw new Error('baseUrl must be https')
-  url.pathname = url.pathname.replace(/\/+$/, '')
-  url.search = ''
-  url.hash = ''
-  return (url.origin + url.pathname).replace(/\/+$/, '')
-}
-
-function normalizeProfile(input, { existing } = {}) {
-  if (!input || typeof input !== 'object') throw new Error('profile must be an object')
-  const label = String(input.label ?? '').trim()
-  if (!label || label.length > 80) throw new Error('label is required (max 80 chars)')
-  const orgId = String(input.orgId ?? '').trim()
-  if (!/^org-[A-Za-z0-9-]*$/.test(orgId)) throw new Error('orgId must look like org-…')
-  const profile = {
-    id: existing?.id ?? (String(input.id ?? '').trim() || `dncs-${randomBytes(4).toString('hex')}`),
-    label,
-    carrier: 'devin',
-    orgId,
-    baseUrl: normalizeBaseUrl(input.baseUrl),
-    secret: existing?.secret ?? '',
-    createdAt: existing?.createdAt ?? Date.now(),
-    updatedAt: Date.now(),
-  }
-  const secret = input.secret !== undefined ? String(input.secret) : null
-  if (secret !== null && secret !== '') {
-    if (!/^cog_[A-Za-z0-9_-]{8,}$/.test(secret)) {
-      throw new Error('token must look like cog_… (Devin PAT or service user key)')
-    }
-    profile.secret = secret
-  }
-  if (!profile.secret) throw new Error('token is required')
-  return profile
-}
-
-function publicProfile(p, activeId) {
-  return {
-    id: p.id, label: p.label, carrier: p.carrier, orgId: p.orgId,
-    baseUrl: p.baseUrl, hasSecret: Boolean(p.secret),
-    active: p.id === activeId, createdAt: p.createdAt, updatedAt: p.updatedAt,
-  }
-}
-
-/* ---- store ---- */
-
 function load() {
   if (!existsSync(storePath())) {
-    return { version: STORE_VERSION, activeId: null, profiles: [] }
+    return { version: STORE_VERSION, activeId: null, profiles: [], configEpoch: 0 }
   }
   let data
   try { data = JSON.parse(readFileSync(storePath(), 'utf8')) }
@@ -109,6 +48,7 @@ function load() {
   if (!data || data.version !== STORE_VERSION || !Array.isArray(data.profiles)) {
     throw new Error(`${STORE_FILE} version/shape mismatch`)
   }
+  if (!Number.isInteger(data.configEpoch)) data.configEpoch = 0
   return data
 }
 
@@ -119,14 +59,20 @@ function save(data) {
   renameSync(tmp, storePath())
 }
 
-export function createProfileStore() {
+export function createProfileStore({ onEpoch } = {}) {
   let data = load()
   let seeded = false
+  const bump = () => {
+    data.configEpoch = (data.configEpoch ?? 0) + 1
+    onEpoch?.(data.configEpoch)
+  }
+
   if (data.profiles.length === 0) {
     const seed = seedFromEnv()
     if (seed.complete) {
-      const profile = normalizeProfile({ label: 'default (env)', orgId: seed.orgId, baseUrl: seed.baseUrl, secret: seed.token })
-      data.profiles.push(profile)
+      const profile = decodeProfileSave({ label: 'default (env)', orgId: seed.orgId, baseUrl: seed.baseUrl, secret: seed.token })
+      profile.id = `dncs-${randomBytes(4).toString('hex')}`
+      data.profiles.push(Object.freeze({ ...profile }))
       data.activeId = profile.id
       save(data)
       seeded = true
@@ -135,30 +81,44 @@ export function createProfileStore() {
 
   return {
     seededFromEnv: seeded,
-    list() { return data.profiles.map(p => publicProfile(p, data.activeId)) },
+    configEpoch: () => data.configEpoch ?? 0,
+    list() { return data.profiles.map(p => publicOf(p, data.activeId)) },
     active() { return data.profiles.find(p => p.id === data.activeId) ?? null },
     get(id) { return data.profiles.find(p => p.id === id) ?? null },
     saveProfile(input) {
       const existing = input?.id ? data.profiles.find(p => p.id === input.id) : null
-      const profile = normalizeProfile(input, { existing })
+      let profile
+      try { profile = decodeProfileSave(input, { existing }) }
+      catch (error) {
+        if (error instanceof ProfileCodecError) throw error
+        throw error
+      }
+      if (!profile.id) profile.id = `dncs-${randomBytes(4).toString('hex')}`
       const duplicate = data.profiles.find(p => p.id === profile.id && p !== existing)
       if (duplicate) throw new Error('profile id already exists')
-      if (existing) Object.assign(existing, profile)
-      else data.profiles.push(profile)
-      if (data.profiles.length === 1) data.activeId = profile.id
+      const frozen = Object.freeze({ ...profile })
+      if (existing) {
+        data.profiles = data.profiles.map(p => p === existing ? frozen : p)
+      } else {
+        data.profiles = [...data.profiles, frozen]
+      }
+      if (data.profiles.length === 1) data.activeId = frozen.id
+      bump()
       save(data)
-      return publicProfile(profile, data.activeId)
+      return publicOf(frozen, data.activeId)
     },
     removeProfile(id) {
       const before = data.profiles.length
       data.profiles = data.profiles.filter(p => p.id !== id)
       if (data.profiles.length === before) throw new Error('profile not found')
       if (data.activeId === id) data.activeId = data.profiles[0]?.id ?? null
+      bump()
       save(data)
     },
     activate(id) {
       if (!data.profiles.find(p => p.id === id)) throw new Error('profile not found')
       data.activeId = id
+      bump()
       save(data)
     },
   }

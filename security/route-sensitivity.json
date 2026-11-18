@@ -1374,6 +1374,36 @@
       "match": "exact"
     },
     {
+      "plugin": "dsh-nano-cloud-session",
+      "path": "/nano-cloud-session/workspace",
+      "methods": [
+        "POST"
+      ],
+      "sensitivity": "L2",
+      "capability": "net:fetch+spawn:remote",
+      "bodyLimit": 65536,
+      "sessionBinding": false,
+      "justification": "dsh-nano-cloud-session/src/host/assemble.js — WorkspaceScope connect/status/disconnect/inspect；SSH bootstrap 与 MCP 握手，不销毁远端 session。",
+      "id": "dncs.workspace",
+      "channel": "http",
+      "match": "exact"
+    },
+    {
+      "plugin": "dsh-nano-cloud-session",
+      "path": "/nano-cloud-session/resources",
+      "methods": [
+        "POST"
+      ],
+      "sensitivity": "L2",
+      "capability": "net:fetch+write:remote",
+      "bodyLimit": 131072,
+      "sessionBinding": false,
+      "justification": "dsh-nano-cloud-session/src/host/assemble.js — 投影 workspace family 资源操作（fs/process）到已验证 scope；不开放 /mcp。",
+      "id": "dncs.resources",
+      "channel": "http",
+      "match": "exact"
+    },
+    {
       "plugin": "dsh-nano-notepad",
       "path": "/nano-notepad/perf-review/host",
       "methods": [

@@ -1,4 +1,52 @@
-// src/host/devin-api.js
+// src/contracts/codec-util.js
+function omitUndefined(object) {
+  const out = {};
+  for (const [key, value] of Object.entries(object)) {
+    if (value !== void 0) out[key] = value;
+  }
+  return out;
+}
+
+// src/providers/devin/profile-codec.js
+var ProfileCodecError = class extends Error {
+  constructor(message, reason = "invalid-request") {
+    super(message);
+    this.name = "ProfileCodecError";
+    this.reason = reason;
+    this.status = 422;
+  }
+};
+function encodeCreateSession(input) {
+  if (!input || typeof input !== "object") throw new ProfileCodecError("create body must be an object");
+  if (typeof input.prompt !== "string" || !input.prompt.trim()) {
+    throw new ProfileCodecError("prompt is required");
+  }
+  return omitUndefined({
+    prompt: input.prompt,
+    title: input.title,
+    tags: input.tags,
+    repos: input.repos,
+    devin_mode: input.devinMode ?? input.devin_mode,
+    max_acu_limit: input.maxAcuLimit ?? input.max_acu_limit,
+    resumable: input.resumable,
+    playbook_id: input.playbookId ?? input.playbook_id,
+    knowledge_ids: input.knowledgeIds ?? input.knowledge_ids,
+    attachment_urls: input.attachmentUrls ?? input.attachment_urls,
+    structured_output_schema: input.structuredOutputSchema ?? input.structured_output_schema,
+    structured_output_required: input.structuredOutputRequired ?? input.structured_output_required,
+    platform: input.platform,
+    bypass_approval: input.bypassApproval ?? input.bypass_approval,
+    child_playbook_id: input.childPlaybookId ?? input.child_playbook_id,
+    create_as_user_id: input.createAsUserId ?? input.create_as_user_id,
+    memory_enabled: input.memoryEnabled ?? input.memory_enabled,
+    secret_ids: input.secretIds ?? input.secret_ids,
+    session_secrets: input.sessionSecrets ?? input.session_secrets,
+    session_links: input.sessionLinks ?? input.session_links,
+    security_profile: input.securityProfile ?? input.security_profile
+  });
+}
+
+// src/providers/devin/api.js
 var DEFAULT_TIMEOUT_MS = 2e4;
 var CarrierError = class extends Error {
   constructor(reason, message, { status = 0, upstream } = {}) {
@@ -6,6 +54,7 @@ var CarrierError = class extends Error {
     this.name = "CarrierError";
     this.reason = reason;
     this.status = status;
+    this.providerStatus = status;
     this.upstream = upstream;
   }
 };
@@ -39,9 +88,13 @@ async function request(profile, { method = "GET", path, query, body, timeoutMs =
         ...body !== void 0 && !isForm ? { "content-type": "application/json" } : {}
       },
       body: isForm ? body : body !== void 0 ? JSON.stringify(body) : void 0,
-      signal: AbortSignal.timeout(timeoutMs)
+      signal: AbortSignal.timeout(timeoutMs),
+      redirect: "error"
     });
   } catch (error) {
+    if (String(error?.message ?? "").toLowerCase().includes("redirect")) {
+      throw new CarrierError("forbidden-or-invisible", "refusing to follow a cross-origin redirect with a bearer token", { status: 0 });
+    }
     const reason = error?.name === "TimeoutError" || error?.name === "AbortError" ? "timeout" : "unreachable";
     throw new CarrierError(reason, `devin upstream: ${reason}`, { status: 0 });
   }
@@ -105,7 +158,6 @@ function sessionQuery({
 function createDevinApi({ timeoutMs = DEFAULT_TIMEOUT_MS, fetchImpl } = {}) {
   const call = (profile, spec) => request(profile, { timeoutMs, fetchImpl, ...spec });
   return {
-    /** Connection test: who am I, which org does this PAT resolve to. */
     self: (profile) => call(profile, { path: "/v3/self" }),
     listSessions: (profile, params = {}) => call(profile, {
       path: orgPath(profile, "/sessions"),
@@ -130,53 +182,17 @@ function createDevinApi({ timeoutMs = DEFAULT_TIMEOUT_MS, fetchImpl } = {}) {
       form.append("file", new Blob([bytes], { type: contentType || "application/octet-stream" }), name);
       return call(profile, { method: "POST", path: orgPath(profile, "/attachments"), body: form });
     },
-    createSession: (profile, input) => call(profile, {
-      method: "POST",
-      path: orgPath(profile, "/sessions"),
-      body: {
-        prompt: input.prompt,
-        title: input.title,
-        tags: input.tags,
-        repos: input.repos,
-        devin_mode: input.devinMode ?? input.devin_mode,
-        max_acu_limit: input.maxAcuLimit ?? input.max_acu_limit,
-        resumable: input.resumable,
-        playbook_id: input.playbookId ?? input.playbook_id,
-        knowledge_ids: input.knowledgeIds ?? input.knowledge_ids,
-        attachment_urls: input.attachmentUrls ?? input.attachment_urls,
-        structured_output_schema: input.structuredOutputSchema ?? input.structured_output_schema,
-        structured_output_required: input.structuredOutputRequired ?? input.structured_output_required,
-        platform: input.platform,
-        bypass_approval: input.bypassApproval ?? input.bypass_approval,
-        child_playbook_id: input.childPlaybookId ?? input.child_playbook_id,
-        create_as_user_id: input.createAsUserId ?? input.create_as_user_id,
-        memory_enabled: input.memoryEnabled ?? input.memory_enabled,
-        secret_ids: input.secretIds ?? input.secret_ids,
-        session_secrets: input.sessionSecrets ?? input.session_secrets,
-        session_links: input.sessionLinks ?? input.session_links,
-        security_profile: input.securityProfile ?? input.security_profile
-      }
-    }),
+    createSession: (profile, input) => call(profile, { method: "POST", path: orgPath(profile, "/sessions"), body: encodeCreateSession(input) }),
     postMessage: (profile, id, message) => call(profile, {
       method: "POST",
       path: orgPath(profile, `/sessions/${encodeURIComponent(id)}/messages`),
       body: { message }
     }),
-    setTags: (profile, id, tags) => call(profile, {
-      method: "PUT",
-      path: orgPath(profile, `/sessions/${encodeURIComponent(id)}/tags`),
-      body: { tags }
-    }),
-    appendTags: (profile, id, tags) => call(profile, {
-      method: "POST",
-      path: orgPath(profile, `/sessions/${encodeURIComponent(id)}/tags`),
-      body: { tags }
-    }),
+    setTags: (profile, id, tags) => call(profile, { method: "PUT", path: orgPath(profile, `/sessions/${encodeURIComponent(id)}/tags`), body: { tags } }),
+    appendTags: (profile, id, tags) => call(profile, { method: "POST", path: orgPath(profile, `/sessions/${encodeURIComponent(id)}/tags`), body: { tags } }),
     sleep: (profile, id) => call(profile, { method: "POST", path: orgPath(profile, `/sessions/${encodeURIComponent(id)}/sleep`) }),
     archive: (profile, id) => call(profile, { method: "POST", path: orgPath(profile, `/sessions/${encodeURIComponent(id)}/archive`) }),
     unarchive: (profile, id) => call(profile, { method: "POST", path: orgPath(profile, `/sessions/${encodeURIComponent(id)}/unarchive`) }),
-    /** Terminate/suspend only. NOT a hard delete and NOT an archive: the
-     *  record stays readable; call archive separately to close it out. */
     terminate: (profile, id) => call(profile, { method: "DELETE", path: orgPath(profile, `/sessions/${encodeURIComponent(id)}`) })
   };
 }

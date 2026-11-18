@@ -16,6 +16,7 @@ import {
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { api } from './api.js'
 import { runTerminate } from './confirm.js'
+import { applyHealth, emptyHealth } from './workspace.js'
 
 const { createElement: h, useEffect, useState } = React
 const ID = 'dsh-nano-cloud-session.workbench'
@@ -23,7 +24,17 @@ const KIND = 'devin-workbench'
 
 const remoteByLocal = new Map()
 /** Remember the remote Devin id for a local projection session. */
-export const rememberWorkbenchSession = (localId, remoteId) => { remoteByLocal.set(localId, remoteId) }
+export const rememberWorkbenchSession = (localId, remoteId, extra = {}) => {
+  remoteByLocal.set(localId, { remoteId, profileId: extra.profileId ?? null })
+}
+
+const safeOpen = url => {
+  try {
+    const parsed = new URL(String(url ?? ''))
+    if (parsed.protocol !== 'https:') return
+    window.open(parsed.href, '_blank', 'noreferrer')
+  } catch { /* refuse non-https */ }
+}
 
 const textOf = value => {
   if (value == null) return ''
@@ -34,7 +45,12 @@ const textOf = value => {
 function WorkbenchBody(props) {
   const { useTabInfo, sessionId, t, openTerminal } = props
   const { tab } = useTabInfo()
-  const remoteId = remoteByLocal.get(sessionId) ?? tab?.navigation?.params?.remoteId
+  const bound = remoteByLocal.get(sessionId)
+  const remoteId = bound?.remoteId ?? bound ?? tab?.navigation?.params?.remoteId
+  const profileId = bound?.profileId
+  const [health, setHealth] = useState(emptyHealth)
+  const [messages, setMessages] = useState([])
+  const [draft, setDraft] = useState('')
   const [detail, setDetail] = useState(null)
   const [attachments, setAttachments] = useState([])
   const [tags, setTags] = useState([])
@@ -49,19 +65,25 @@ function WorkbenchBody(props) {
   const load = async ({ quiet = false } = {}) => {
     if (!remoteId) return
     try {
-      const [info, files, currentTags, currentInsights] = await Promise.all([
-        api.session('get', { session_id: remoteId }),
-        api.session('attachments', { session_id: remoteId }).catch(() => []),
-        api.session('tags', { session_id: remoteId }).catch(() => ({ tags: [] })),
-        api.session('insights', { session_id: remoteId }).catch(() => null),
+      const [info, files, currentTags, currentInsights, history] = await Promise.all([
+        api.session('get', { session_id: remoteId, profileId }),
+        api.session('attachments', { session_id: remoteId, profileId }).catch(() => []),
+        api.session('tags', { session_id: remoteId, profileId }).catch(() => ({ tags: [] })),
+        api.session('insights', { session_id: remoteId, profileId }).catch(() => null),
+        api.session('messages', { session_id: remoteId, profileId, first: 50 }).catch(() => ({ items: [] })),
       ])
       setDetail(info)
       setAttachments(Array.isArray(files) ? files : (files?.items ?? []))
       setTags(currentTags?.tags ?? [])
       setTagText((currentTags?.tags ?? []).join(', '))
       setInsights(currentInsights)
+      setMessages(Array.isArray(history?.items) ? history.items : (history?.messages ?? []))
+      setHealth(applyHealth(health, { api: 'ready', remoteSessionStatus: info?.status ?? null }))
       if (!quiet) setError('')
-    } catch (cause) { if (!quiet) setError(cause?.message ?? String(cause)) }
+    } catch (cause) {
+      setHealth(applyHealth(health, { api: 'unavailable', error: cause?.message ?? String(cause) }))
+      if (!quiet) setError(cause?.message ?? String(cause))
+    }
   }
 
   useEffect(() => {
@@ -118,14 +140,26 @@ function WorkbenchBody(props) {
     h('div', { className: 'dncs-working-head' },
       h('div', null,
         h('div', { className: 'dncs-working-title' }, detail?.title || t('carrierDevin')),
-        h('div', { className: 'dncs-working-meta' }, detail ? `${detail.status ?? ''}${detail.status_detail ? ` · ${detail.status_detail}` : ''} · ACU ${detail.acus_consumed ?? 0} · ${detail.devin_mode ?? ''}` : t('loading'))),
+        h('div', { className: 'dncs-working-meta' }, detail ? `${detail.status ?? ''}${detail.status_detail ? ` · ${detail.status_detail}` : ''} · ACU ${detail.acus_consumed ?? 0} · ${detail.devin_mode ?? ''}` : t('loading')),
+        h('div', { className: 'dncs-working-meta', 'data-dncs-health': 'true' }, `api:${health.api} resources:${health.resources} native:${health.nativeView}`)),
       h('div', { className: 'dncs-profile-actions' },
         h(Button, { variant: 'ghost', size: 'sm', icon: h(IconRefreshOutlineRegular, { size: 16 }), onClick: load, 'aria-label': t('refresh') }),
-        h(Button, { variant: 'ghost', size: 'sm', onClick: () => openTerminal?.(sessionId), 'aria-label': t('terminal') }, t('terminal')),
+        h(Button, { variant: 'ghost', size: 'sm', onClick: () => { try { openTerminal?.(sessionId) } catch (cause) { setError(cause?.message ?? String(cause)); setHealth(applyHealth(health, { resources: 'unavailable' })) } }, 'aria-label': t('terminal') }, t('terminal')),
         h(Button, { variant: 'ghost', size: 'sm', icon: h(IconAlarmClockOutlineRegular, { size: 16 }), onClick: () => action(() => api.session('sleep', { session_id: remoteId })), 'aria-label': t('sleep') }),
         h(Button, { variant: 'ghost', size: 'sm', icon: h(detail?.is_archived ? IconUnarchiveOutlineRegular : IconArchiveOutlineRegular, { size: 16 }), onClick: () => action(() => detail?.is_archived ? api.unarchive(remoteId) : api.archive(remoteId)), 'aria-label': detail?.is_archived ? t('unarchive') : t('archive') }),
         h(Button, { variant: 'ghost', size: 'sm', onClick: () => { setAcknowledged(false); setConfirmTerminate(true) }, 'aria-label': t('terminate') }, t('terminate')),
       )),
+    h('div', { className: 'dncs-working-section' },
+      h('div', { className: 'dncs-working-section-title' }, t('messages')),
+      (messages ?? []).slice(-20).map(item => h('div', { key: item.event_id || item.id, className: 'dncs-working-row' },
+        h('span', { className: 'dncs-working-kind' }, item.source || ''),
+        h('span', { className: 'dncs-working-name' }, String(item.message ?? item.content ?? '').slice(0, 240)))),
+      h('div', { className: 'dncs-profile-actions' },
+        h(Input, { value: draft, placeholder: t('messagePlaceholder'), onChange: event => setDraft(event.currentTarget.value) }),
+        h(Button, { variant: 'primary', size: 'sm', disabled: busy || !draft.trim(), onClick: () => action(async () => {
+          const text = draft.trim(); setDraft('')
+          await api.message(remoteId, text)
+        }) }, t('send')))),
     error === '' ? null : h('div', { className: 'dncs-note', 'data-kind': 'error' }, error),
     notice === '' ? null : h('div', { className: 'dncs-note' }, notice),
     h('div', { className: 'dncs-working-section' },
@@ -145,7 +179,7 @@ function WorkbenchBody(props) {
         h(IconPaperclipOutlineRegular, { size: 15 }),
         h('span', { className: 'dncs-working-name' }, item.name || item.attachment_id),
         h('span', { className: 'dncs-working-kind' }, item.content_type || item.source || ''),
-        h(Button, { variant: 'ghost', size: 'sm', icon: h(IconLinkOutlineRegular, { size: 14 }), onClick: () => item.url && window.open(item.url, '_blank', 'noreferrer'), 'aria-label': t('open') }))))),
+        h(Button, { variant: 'ghost', size: 'sm', icon: h(IconLinkOutlineRegular, { size: 14 }), onClick: () => item.url && safeOpen(item.url), 'aria-label': t('open') }))))),
     h('div', { className: 'dncs-working-section' },
       h('div', { className: 'dncs-working-section-title' }, h(IconChecklistOutlineRegular, { size: 15 }), t('tagsTitle')),
       h(Input, { value: tagText, placeholder: 'tag-a, tag-b', onChange: event => setTagText(event.currentTarget.value) }),
@@ -158,7 +192,7 @@ function WorkbenchBody(props) {
       h(Button, { variant: 'outline', size: 'sm', icon: h(IconRefreshOutlineRegular, { size: 14 }), onClick: generate, disabled: busy }, t('generateInsights')),
       insights == null ? h('div', { className: 'dncs-note' }, t('insightsEmpty')) : h('div', { className: 'dncs-note' }, t('insightsReady'))),
     detail?.url ? h('div', { className: 'dncs-working-section' },
-      h(Button, { variant: 'outline', size: 'sm', icon: h(IconLinkOutlineRegular, { size: 14 }), onClick: () => window.open(detail.url, '_blank', 'noreferrer') }, t('openInWebapp'))) : null),
+      h(Button, { variant: 'outline', size: 'sm', icon: h(IconLinkOutlineRegular, { size: 14 }), onClick: () => safeOpen(detail.url) }, t('openInWebapp'))) : null),
     confirmTerminate ? h(RiskConfirmation, {
       open: true,
       title: t('terminate'),
@@ -184,11 +218,10 @@ function WorkbenchBody(props) {
 
 /** Register the real workbench tab type and its body. */
 export function registerNativeWorkbench(ctx, t) {
-  const openTerminal = sessionId => {
-    const cwd = ctx.sessions?.list?.getSnapshot?.().byId?.[sessionId]?.cwd
+  const openTerminal = () => {
     const dnt = ctx.get?.('nanoTerminal')
-    if (dnt?.openLocal) { dnt.openLocal(sessionId, cwd); return }
-    ctx.sidebarRight.openTabIn(sessionId, 'terminal')
+    if (typeof dnt?.openRemote === 'function') { dnt.openRemote(); return }
+    throw new Error('remote terminal requires H-EXEC; local fallback is forbidden')
   }
   ctx.effect(() => ctx.sidebarRightTabs.register({
     id: ID,

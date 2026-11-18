@@ -347,6 +347,17 @@
       "responseShape": "200 {ok:true,content,resolvedPath} | 400 {error}"
     },
     {
+      "plugin": "dsh-nano-explorer-extra",
+      "path": "/nano-explorer-extra/diff",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 65536
+      },
+      "responseShape": "200 {ok:true,diff,path} | 400 {error}"
+    },
+    {
       "plugin": "dsh-nano-model-selector",
       "path": "/nano-model-selector/catalog",
       "methods": [
@@ -1010,6 +1021,28 @@
     },
     {
       "plugin": "dsh-nano-cloud-session",
+      "path": "/nano-cloud-session/workspace",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 65536
+      },
+      "responseShape": "200 {ok:true,scopeId,api,resources,nativeView,…} | 4xx/5xx {ok:false,reason,httpStatus}"
+    },
+    {
+      "plugin": "dsh-nano-cloud-session",
+      "path": "/nano-cloud-session/resources",
+      "methods": [
+        "POST"
+      ],
+      "bodyLimit": {
+        "POST": 131072
+      },
+      "responseShape": "200 {ok:true,data} | 4xx/5xx {ok:false,reason,httpStatus}"
+    },
+    {
+      "plugin": "dsh-nano-cloud-session",
       "path": "/nano-cloud-session/catalog",
       "methods": [
         "POST"
@@ -1098,8 +1131,8 @@
     },
     "dsh-nano-cloud-session": {
       "launcher": "sidebar '云端工作区' section above 工作区; no floating entry / no circular launcher",
-      "panel": "native dsh conversation (Chat) opened through a transient projection Session; carrier details/attachments/tags/insights/lifecycle live in a native right-workbench tab",
-      "ssh": "detail card copies `ssh devin-<id>@ssh.devin.ai`; public-key enroll is a manual step in Devin account settings (info-only route, no spawn)",
+      "panel": "native Chat only when H-CHAT exists; otherwise workbench tab hosts API chat + three health faces (api/resources/nativeView). No fake Agent.",
+      "ssh": "SSH tab still copies enroll commands; workspace connect bootstraps a Devin-only MCP resource bridge over SSH exec. Dedicated known_hosts file. No /mcp browser entry.",
       "firstRun": "no active profile -> section shows guide row; settings opens on 接入 with carrier preset Devin Cloud and 3-step guide; connect test shows principal_type/orgMatch",
       "settings": "NanoDialog + nanoTabs: 接入/会话/安全/SSH; 接入 folder holds Devin preset, token/org/baseURL, connection test, permission checklist and doc deep links; 会话 holds new-session defaults; 安全 is read-only store policy; SSH is keygen/enroll"
     },
@@ -1137,7 +1170,10 @@
       "config": "host Config defaults only (requestTimeoutMs 20000, defaultFirst 50, pollIntervalMs 5000); no client-side credential persistence",
       "sshKey": "${DSH_HOME}/nano-cloud-session-ssh{,.pub} (0600, generated via ssh-keygen on demand; private key never leaves host)",
       "prefs": "localStorage 'dsh-nano-cloud-session:defaults.v1' (browser-local new-session defaults; no credentials)",
-      "nativeProjection": "in-memory dsh Session per open Devin session (not persisted; Devin remains canonical)"
+      "nativeProjection": "in-memory dsh Session per open Devin session (not persisted; Devin remains canonical)",
+      "knownHosts": "${DSH_HOME}/nano-cloud-session-known-hosts (0600)",
+      "scopes": "in-memory WorkspaceScope only; restart invalidates",
+      "remoteBridge": "lib/remote/devin-workspace.mjs hashed into ~/.dncs-bridge/<sha256>/ on the VM; no PAT"
     },
     "dsh-nano-model-selector-compaction": {
       "asyncCompactState": "${DSH_DATA_DIR||DSH_HOME||~/.dsh}/plugins/nano-model-selector/async-compact.json (written via the sibling DNMS switch route; takeover mutex layer)"

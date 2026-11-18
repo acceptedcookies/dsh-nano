@@ -54,9 +54,9 @@ function fakeRes() {
 }
 const call = (h, body) => new Promise(async (resolve) => { const res = fakeRes(); await h(fakeReq(body), res, { bodyLimit: 65536 }); resolve({ status: res.statusCode, json: JSON.parse(res.body || '{}') }) })
 
-test('all 12 routes register through guard (fail-closed table)', async () => {
+test('all 14 routes register through guard (fail-closed table)', async () => {
   const routes = await makeHandlers()
-  const expected = ['status', 'config', 'sessions', 'session', 'create', 'message', 'archive', 'unarchive', 'terminate', 'ssh', 'catalog', 'upload']
+  const expected = ['status', 'config', 'sessions', 'session', 'create', 'message', 'archive', 'unarchive', 'terminate', 'ssh', 'catalog', 'upload', 'workspace', 'resources']
   for (const name of expected) assert.ok(routes.get(`/nano-cloud-session/${name}`), name)
 })
 
@@ -143,9 +143,7 @@ test('P4-02 httpStatusForError: NativeError passthrough vs CarrierError 5xx→50
   assert.equal(httpStatusForError(new CarrierError('unreachable', 'x', { status: 0 })), 502)
 })
 
-test('P4-02 native_open: no carrier profile → NATIVE_UNSUPPORTED (pick remapped)', async () => {
-  // Full sessions/agents inject, but NO profile configured → pick() throws
-  // no-active-profile, remapped to NATIVE_UNSUPPORTED 422 (previously dead code).
+test('P4-02 native_open: sessions+agents without H-CHAT is still NATIVE_UNAVAILABLE', async () => {
   const { apply } = await import(`../index.js`)
   const routes2 = new Map()
   const ctx2 = {
@@ -157,33 +155,47 @@ test('P4-02 native_open: no carrier profile → NATIVE_UNSUPPORTED (pick remappe
   }
   apply(ctx2, { requestTimeoutMs: 5000 })
   const r = await call(routes2.get('/nano-cloud-session/session'), { op: 'native_open', session_id: 'devin-abc' })
+  assert.equal(r.status, 503)
+  assert.equal(r.json.reason, 'NATIVE_UNAVAILABLE')
+})
+
+test('P4-02 native_open: H-CHAT present, no profile → NATIVE_UNSUPPORTED', async () => {
+  const { apply } = await import(`../index.js`)
+  const routes2 = new Map()
+  const ctx2 = {
+    get: n => n === 'connection' ? { requestRejection: () => undefined }
+      : n === 'webServer' ? ctx2.webServer
+      : n === 'externalChat' ? { open: async () => ({ localId: 'x' }), capabilities: { externalProjection: true } }
+      : undefined,
+    webServer: { register: s => { routes2.set(s.path, s.handler); return () => {} } },
+    effect: f => f(),
+    externalChat: { open: async () => ({ localId: 'x' }), capabilities: { externalProjection: true } },
+  }
+  apply(ctx2, { requestTimeoutMs: 5000 })
+  const r = await call(routes2.get('/nano-cloud-session/session'), { op: 'native_open', session_id: 'devin-abc' })
   assert.equal(r.status, 422)
   assert.equal(r.json.reason, 'NATIVE_UNSUPPORTED')
 })
 
-test('P4-02 native_open: carrier read fail → NATIVE_OUTCOME_UNKNOWN + orphan torn down', async () => {
-  const routes = await makeHandlers()
-  // ctx WITH sessions+agents inject but a profile pointing at unreachable https.
+test('workspace_shell mints a tab host without a fake Agent', async () => {
   const { apply } = await import(`../index.js`)
   const routes2 = new Map()
-  let closed = null
   const ctx2 = {
     get: n => n === 'connection' ? { requestRejection: () => undefined } : n === 'webServer' ? ctx2.webServer : undefined,
     webServer: { register: s => { routes2.set(s.path, s.handler); return () => {} } },
     effect: f => f(),
-    sessions: { create: () => ({ id: 'loc-1', append() {} }), get: id => id === 'loc-1', close: id => { closed = id } },
-    agents: { enter: () => () => {} },
+    sessions: {
+      prepare: () => ({ id: 'loc-shell', append() {} }),
+      enter: () => () => {},
+      announce: () => {},
+      create: () => ({ id: 'loc-shell', append() {} }),
+      get: () => true,
+    },
   }
   apply(ctx2, { requestTimeoutMs: 5000 })
-  const port = upstream.address().port
-  // https baseUrl unreachable (stub is http) → carrier read fails post-mint
-  await call(routes2.get('/nano-cloud-session/config'), { action: 'save', profile: { label: 't', orgId: 'org-t', baseUrl: `https://127.0.0.1:${port}`, secret: 'cog_xtok45678' } })
-  const r = await call(routes2.get('/nano-cloud-session/session'), { op: 'native_open', session_id: 'devin-abc' })
-  assert.equal(r.status, 502)
-  assert.equal(r.json.reason, 'NATIVE_OUTCOME_UNKNOWN')
-  assert.equal(closed, 'loc-1') // orphan session torn down, not left ok
-  // NATIVE_PROJECTION_FAILED (agents.enter refuse) needs a reachable-https
-  // carrier + failing enter simultaneously — the profile layer forces https
-  // and the test stub is http, so that branch is exercised only under a live
-  // host. The two covered branches prove the no-silent-ok contract.
+  await call(routes2.get('/nano-cloud-session/config'), { action: 'save', profile: { label: 't', orgId: 'org-t', baseUrl: 'https://api.devin.ai', secret: 'cog_xtok45678' } })
+  const r = await call(routes2.get('/nano-cloud-session/session'), { op: 'workspace_shell', session_id: 'devin-abc' })
+  assert.equal(r.json.ok, true)
+  assert.equal(r.json.local_session_id, 'loc-shell')
+  assert.equal(r.json.nativeView, 'unavailable')
 })

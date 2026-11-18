@@ -23,11 +23,13 @@
 |---|---|
 | `package.json` | 包名、`engines.dsh`、`files`、bundle patch、`dsh.client.inject` |
 | `cordis.patch.yml` | 插入插件 id。`name` 是包名 |
-| `index.js` | 宿主。运行时必需 |
+| `index.js` | 宿主入口，再导出 `lib/host.js`。运行时必需 |
+| `lib/host.js` | 宿主装配（family / scope / SSH / routes）。运行时必需 |
 | `lib/client.js` | 浏览器包。运行时必需。安装时不重建 |
-| `lib/devin-api.js` | devin carrier REST v3 客户端 bundle。运行时必需（`index.js` 相对 import） |
-| `lib/profiles-store.js` | 凭证 profile 存储 bundle。运行时必需（`index.js` 相对 import） |
-| `lib/route-guard.js` | 路由注册 guard bundle。运行时必需（`index.js` 相对 import） |
+| `lib/remote/devin-workspace.mjs` | 上传到 Devin VM 的资源 MCP bridge。无 PAT、无 Chat |
+| `lib/devin-api.js` | devin REST v3 客户端 bundle（测试与兼容） |
+| `lib/profiles-store.js` | 凭证 profile 存储 bundle |
+| `lib/route-guard.js` | 路由注册 guard bundle |
 | `lib/bindings.js` | 从仓根账本按 id 烘焙的绑定表。运行时必需（`index.js` 相对 import） |
 | `lib/perf-review-host.js` | 宿主 perf-review bundle。运行时必需（`index.js` 相对 import） |
 | `icon.svg`、`locale/` | 图标与中英文案 |
@@ -38,7 +40,7 @@
 1. `dsh --version` 落在 `package.json` 的 `engines.dsh` 内。不够或过高就停。不要自行放宽，除非操作者明确接受命令输出里的那一对版本。
 2. `pnpm` 在 PATH 上。`dsh plugin` 只是把参数转给 profile 里的 pnpm。
 3. 目标是已经能打开的 Web profile，默认名 `web`。不要装进 headless、sdk 或 acp。
-4. 无。宿主不需要外部命令；出站只打 profile 的 `baseUrl`（默认 `https://api.devin.ai`）。
+4. 出站打 profile 的 `baseUrl`（默认 `https://api.devin.ai`）。SSH 资源面需要本机 `ssh`/`scp` 与已 enroll 的密钥；目标固定 `ssh.devin.ai`。
 5. 本包构建期依赖 `dsh-nano-ui`、`dsh-host-route-guard` 与 `dsh-performance-review`，声明为 `devDependencies` 的 `file:../packages/...`，构建时打进 `lib/`。运行中的页面不单独加载它们。不要改这条依赖。
 
 未被告知 `DSH_HOME` 或 profile 名时，只动默认的 `web`。不要猜第二套实例。
@@ -87,14 +89,14 @@ dsh plugin --profile web add <spec>
 |---|---|
 | 侧栏「云端工作区」→ 设置（齿轮） | 打开「接入 / 会话 / 安全 / SSH」原生设置弹窗；Devin 的 token/Org/Base URL/连接测试/权限清单都在「接入」tab。删除某个 profile 是不可逆的（token 只写不读），须在宿主 `RiskConfirmation` 里勾选确认才能点删除 |
 | 侧栏「云端工作区」→ 新建（文件夹+） | 打开新建云会话弹窗（上传附件 → 创建后会在右侧原生工作台的附件 tab 可见） |
-| 云端工作区 → 展开 → 点会话行 | 打开原生 dsh Session（native Chat）；右侧原生工作台 tab 提供附件、tags、insights 与生命周期操作 |
+| 云端工作区 → 展开 → 点会话行 | 有 H-CHAT 时打开原生 Chat；否则 mint 一个无 Agent 的 workbench 宿主会话。工作台展示 API 对话、三面健康度、附件/tags/insights。禁止本地终端回退 |
 | 新建 | prompt（必填）+ 全量 create 字段：title/tags/repos/devin_mode/max_acu_limit/resumable/playbook/knowledge/secrets/attachments/platform/structured output/security profile 等 → `POST /v3/organizations/{org}/sessions` |
 | 休眠 | `POST /v3/organizations/{org}/sessions/{id}/sleep`，保留 VM 快照 |
 | 归档 / 取消归档 | 对应 upstream archive / unarchive；归档前弹 `NanoDialog` 危险确认，取消不发请求 |
 | 中止 | `DELETE` upstream——存活 session → suspended；**不是硬删除、不自动归档**，收尾需再点归档。中止前必须在 `RiskConfirmation` 里勾选确认，未勾选时确认键禁用、Enter 不触发 |
 | SSH 命令 | 设置弹窗「SSH」tab 生成/显示专用密钥对（`${DSH_HOME}/nano-cloud-session-ssh`，0600），复制 `ssh -i <key> devin-<id>@ssh.devin.ai`；公钥粘到 Devin 后台 SSH keys 一次性 enroll（账号级） |
 
-宿主路由（全部 POST、全部走 route-guard）：`/nano-cloud-session/{status,config,sessions,session,create,message,archive,unarchive,terminate,ssh,catalog,upload}`。`session` op 含 native_open/get/messages/attachments/insights/generate_insights/tags/set_tags/append_tags/sleep；`native_open` 的 NATIVE_* 错误面：宿主未 inject sessions/agents→`NATIVE_UNAVAILABLE` 503、无 carrier profile→`NATIVE_UNSUPPORTED` 422、minted 后 carrier 读失败→`NATIVE_OUTCOME_UNKNOWN` 502、agents.enter 拒→`NATIVE_PROJECTION_FAILED` 500（显式失败不伪成功，orphan session 拆掉）；`sessions` op 含 list/insights；`catalog` 读 playbooks/secrets/knowledge/repositories；`upload` 走宿主 multipart。`/config` action：list/save/remove/activate/test（返 orgMatch 校验）/security/ssh-key。错误面统一 `{ok:false,reason}`；403 表示「无权或不可见」（上游 fail-closed，不能当 404）。无 profile 时小节显示引导行，点右侧齿轮打开原生设置弹窗。
+宿主路由（全部 POST、全部走 route-guard）：`/nano-cloud-session/{status,config,sessions,session,create,message,archive,unarchive,terminate,ssh,catalog,upload,workspace,resources}`。`session` op 含 native_open/workspace_shell/get/messages/attachments/insights/generate_insights/tags/set_tags/append_tags/sleep。`native_open` 仅在正式 H-CHAT（`ctx.externalChat` 且 `externalProjection`）存在时投影；否则 503 `NATIVE_UNAVAILABLE`，不造 fake Agent。无 profile 且 H-CHAT 存在→`NATIVE_UNSUPPORTED` 422。`workspace_shell` 只 mint 工作台宿主会话。`/workspace` op：connect/status/disconnect/inspect。`/resources` 投影 workspace family 的 fs/process 操作。`/ssh` 仍是信息路由。错误面区分 `httpStatus` 与 `providerStatus`；403 表示「无权或不可见」。
 
 ## 配置与状态
 
@@ -125,7 +127,9 @@ npm run build
 
 ## 不要
 
-- 不要把 token 写进 `src/`、`lib/`、浏览器存储或任何会进 tarball/页面的位置——token 只在 `${DSH_HOME}/nano-cloud-session.json`（0600）和请求头里。
+- 不要把 token 写进 `src/`、`lib/`、浏览器存储、远端 bridge 或任何会进 tarball/页面的位置——token 只在 `${DSH_HOME}/nano-cloud-session.json`（0600）和请求头里。
+- 不要把云工作区终端/文件回退到本机 cwd；H-EXEC/H-CHAT 缺失时显式 unavailable。
+- 不要开放浏览器 `/mcp` 入口，不要 `StrictHostKeyChecking=no`。
 - 不要把「中止」当成删除记录或归档；upstream DELETE 只中止，session 仍可读。
 - 不要把 403 渲染成「会话不存在」。
 - 不要装进非 web profile 后期待出现云端工作区。

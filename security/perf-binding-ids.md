@@ -5,20 +5,20 @@
 
 | path | existing id | proposed id | channel | match |
 |---|---|---|---|---|
-| `/nano-notepad/save` | `dnn.save` | `dnn.save` | http | exact |
-| `/nano-notepad/read` | `dnn.read` | `dnn.read` | http | exact |
-| `/nano-notepad/fetch-mp` | `dnn.fetch-mp` | `dnn.fetch-mp` | http | exact |
-| `/nano-notepad/s3/status` | `dnn.s3.status` | `dnn.s3.status` | http | exact |
-| `/nano-notepad/s3/test` | `dnn.s3.test` | `dnn.s3.test` | http | exact |
-| `/nano-notepad/s3/object` | `dnn.s3.object` | `dnn.s3.object` | http | exact |
-| `/nano-notepad/s3/config` | `dnn.s3.config` | `dnn.s3.config` | http | exact |
-| `/nano-notepad/fx-core.wasm` | `dnn.fx-core.wasm` | `dnn.fx-core.wasm` | http | exact |
-| `/nano-notepad/fx/models` | `dnn.fx.models` | `dnn.fx.models` | http | exact |
-| `/nano-notepad/fx/chat/completions` | `dnn.fx.chat` | `dnn.fx.chat` | http | exact |
-| `/nano-notepad/pipeline/s3` | `dnn.pipeline.s3` | `dnn.pipeline.s3` | http | exact |
-| `/nano-notepad/pipeline/claim` | `dnn.pipeline.claim` | `dnn.pipeline.claim` | http | exact |
-| `/nano-notepad/rpc` | `dnn.rpc` | `dnn.rpc` | http | exact |
-| `/nano-notepad/fx/sdk` | `dnn.fx.sdk` | `dnn.fx.sdk` | http | prefix |
+| `/nano-notepad/save` | — | `dnn.save` | http | exact |
+| `/nano-notepad/read` | — | `dnn.read` | http | exact |
+| `/nano-notepad/fetch-mp` | — | `dnn.fetch-mp` | http | exact |
+| `/nano-notepad/s3/status` | — | `dnn.s3.status` | http | exact |
+| `/nano-notepad/s3/test` | — | `dnn.s3.test` | http | exact |
+| `/nano-notepad/s3/object` | — | `dnn.s3.object` | http | exact |
+| `/nano-notepad/s3/config` | — | `dnn.s3.config` | http | exact |
+| `/nano-notepad/fx-core.wasm` | — | `dnn.fx-core.wasm` | http | exact |
+| `/nano-notepad/fx/models` | — | `dnn.fx.models` | http | exact |
+| `/nano-notepad/fx/chat/completions` | — | `dnn.fx.chat` | http | exact |
+| `/nano-notepad/pipeline/s3` | — | `dnn.pipeline.s3` | http | exact |
+| `/nano-notepad/pipeline/claim` | — | `dnn.pipeline.claim` | http | exact |
+| `/nano-notepad/rpc` | — | `dnn.rpc` | http | exact |
+| `/nano-notepad/fx/sdk` | — | `dnn.fx.sdk` | http | prefix |
 | `/nano-explorer-extra/status` | — | `dnee.status` | http | exact |
 | `/nano-explorer-extra/commit` | — | `dnee.commit` | http | exact |
 | `/nano-explorer-extra/pull` | — | `dnee.pull` | http | exact |
@@ -75,13 +75,13 @@
 | `/nano-local-sandbox/snapshot` | — | `dnls.snapshot` | http | exact |
 | `/nano-local-sandbox/refs` | — | `dnls.refs` | http | exact |
 | `/nano-local-sandbox/control` | — | `dnls.control` | http | exact |
-| `/dsh-nano-terminal/mcp` | `dnt.mcp` | `dnt.mcp` | http | exact |
-| `/dsh-nano-terminal/sessions` | `dnt.sessions` | `dnt.sessions` | http | exact |
-| `/dsh-nano-terminal/events` | `dnt.events` | `dnt.events` | http | exact |
-| `/dsh-nano-terminal/health` | `dnt.health` | `dnt.health` | http | exact |
-| `/dsh-nano-terminal/session` | `dnt.session.close` | `dnt.session.close` | http | prefix |
-| `/dsh-nano-terminal/stream` | `dnt.stream` | `dnt.stream` | upgrade | exact |
-| `/dsh-nano-terminal/perf-review/host` | `dnt.perf-review.host` | `dnt.perf-review.host` | http | exact |
+| `/dsh-nano-terminal/mcp` | — | `dnt.mcp` | http | exact |
+| `/dsh-nano-terminal/sessions` | — | `dnt.sessions` | http | exact |
+| `/dsh-nano-terminal/events` | — | `dnt.events` | http | exact |
+| `/dsh-nano-terminal/health` | — | `dnt.health` | http | exact |
+| `/dsh-nano-terminal/session` | — | `dnt.session.close` | http | prefix |
+| `/dsh-nano-terminal/stream` | — | `dnt.stream` | upgrade | exact |
+| `/dsh-nano-terminal/perf-review/host` | — | `dnt.perf-review.host` | http | exact |
 | `/nano-cloud-session/status` | — | `dncs.status` | http | exact |
 | `/nano-cloud-session/config` | — | `dncs.config` | http | exact |
 | `/nano-cloud-session/sessions` | — | `dncs.sessions` | http | exact |
@@ -94,5 +94,7 @@
 | `/nano-cloud-session/catalog` | — | `dncs.catalog` | http | exact |
 | `/nano-cloud-session/upload` | — | `dncs.upload` | http | exact |
 | `/nano-cloud-session/ssh` | — | `dncs.ssh` | http | exact |
+| `/nano-cloud-session/workspace` | — | `dncs.workspace` | http | exact |
+| `/nano-cloud-session/resources` | — | `dncs.resources` | http | exact |
 | `/nano-notepad/perf-review/host` | — | `dnn.perf-review.host` | http | exact |
 | `/nano-model-selector/perf-review/host` | — | `dnms.perf-review.host` | http | exact |

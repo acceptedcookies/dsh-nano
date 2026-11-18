@@ -8,7 +8,7 @@ import { NewSessionDialog } from './new-session-dialog.js'
 import { registerNativeWorkbench, rememberWorkbenchSession } from './native-workbench.js'
 import { CLOUD_CSS } from './styles.js'
 import { makeI18n } from './i18n.js'
-import { api } from './api.js'
+import { api, pluginRouteGone } from './api.js'
 import { expandSidebar } from './sidebar.js'
 
 export const inject = ['slots', 'locale', 'uiWorkspace', 'sessions', 'sidebarRight', 'sidebarRightTabs']
@@ -64,7 +64,7 @@ export function apply(ctx, config = {}) {
         store.set({ sessions: [] })
         return
       }
-      const list = await api.sessions({ first: 50, isArchived: false })
+      const list = await api.sessions({ first: 50, is_archived: false, isArchived: false })
       const sessions = (list.items ?? list.sessions ?? []).filter(item => item?.is_archived !== true)
       store.set({ sessions })
     } catch (cause) {
@@ -72,7 +72,7 @@ export function apply(ctx, config = {}) {
        * unregistered, so the same-origin POST answers 404/405. Show a quiet
        * disabled row instead of a bare HTTP status; the poll keeps running
        * and re-enabling recovers without a reload. */
-      if (cause?.status === 404 || cause?.status === 405) {
+      if (pluginRouteGone(cause)) {
         store.set({ disabled: true, sessions: [], error: '' })
       } else {
         store.set({ error: cause?.message ?? String(cause) })
@@ -112,17 +112,28 @@ export function apply(ctx, config = {}) {
     openSession: async sessionId => {
       store.set({ opening: true, activeSessionId: sessionId, error: '' })
       try {
-        const bridge = await api.nativeOpen(sessionId)
-        void ctx.sessions?.refresh?.()
-        rememberWorkbenchSession(bridge.local_session_id, sessionId)
-        ctx.uiWorkspace.openSession(bridge.local_session_id)
+        let localId
+        try {
+          const bridge = await api.nativeOpen(sessionId)
+          localId = bridge.local_session_id
+          void ctx.sessions?.refresh?.()
+          ctx.uiWorkspace.openSession(localId)
+        } catch (cause) {
+          if (cause?.reason !== 'NATIVE_UNAVAILABLE') throw cause
+          const snap = ctx.sessions?.list?.getSnapshot?.()
+          localId = ctx.uiWorkspace?.activeSessionId
+            ?? ctx.sessions?.current?.id
+            ?? snap?.current
+            ?? snap?.activeId
+            ?? Object.keys(snap?.byId ?? {})[0]
+          if (!localId) throw cause
+        }
+        rememberWorkbenchSession(localId, sessionId, { profileId: store.current.activeId })
         window.setTimeout(() => {
-          try { ctx.sidebarRight.openTabIn(bridge.local_session_id, workbenchKind) }
-          catch (cause) { console.warn('[nano-cloud-session] workbench open failed', cause) }
-        }, 500)
+          try { ctx.sidebarRight.openTabIn(localId, workbenchKind) }
+          catch (openError) { console.warn('[nano-cloud-session] workbench open failed', openError) }
+        }, 400)
       } catch (cause) {
-        /* Opening failed (carrier 401/403/5xx, or a host that cannot project).
-         * The section renders `error`, so the row never fails silently. */
         store.set({ activeSessionId: null, opening: false, error: cause?.message ?? String(cause) })
       }
     },

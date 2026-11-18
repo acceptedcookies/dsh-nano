@@ -21,6 +21,7 @@ import { KIND, err } from './errors.js'
 import { Gate } from './gate.js'
 import { resizeMode } from '../shared/align.js'
 import { parseCtxRef, bareTermStamp } from '../shared/ctxref.js'
+import { resolveExecutionWorld, remoteChildEnv } from './execution-world.js'
 // splitSlashArgs rides this bundle so index.js gets it from lib/sessions.js.
 export { splitSlashArgs } from '../shared/ctxref.js'
 
@@ -233,11 +234,17 @@ export class SessionRegistry {
       replayBytes: this.replayBytes,
       registry: this,
     })
-    record.env = { ...(spec.env ?? {}), ...agentEnv(record, this.apiBase) }
-    const handle = await hostSpan('dnt-spawn', () => this.ctx.subprocess
+    const world = resolveExecutionWorld(this.ctx, spec.sessionId)
+    record.generation = world.generation
+    record.worldKind = world.kind
+    if (world.kind === 'remote') record.keep = false
+    const envBase = { ...(spec.env ?? {}), ...agentEnv(record, this.apiBase) }
+    record.env = world.kind === 'remote' ? remoteChildEnv(envBase) : envBase
+    const subprocess = world.subprocess ?? this.ctx.subprocess
+    const handle = await hostSpan('dnt-spawn', () => subprocess
       .spawnTerminal({
         argv,
-        cwd,
+        cwd: world.root ?? cwd,
         env: record.env,
         rows: Math.min(Math.max(spec.rows || 24, 2), 512),
         cols: Math.min(Math.max(spec.cols || 80, 2), 512),
@@ -557,6 +564,10 @@ export class SessionRecord {
     if (this.closed) return
     const { shell, cwd } = this.meta
     try {
+      if (this.worldKind === 'remote') {
+        this.phase = 'exited'
+        throw err(KIND.SPAWN_FAILED, 'keep-respawn is forbidden for a remote execution world')
+      }
       const handle = await this.registry.ctx.subprocess.spawnTerminal({
         argv: [shell, '-i'], // fresh shell — never reruns the lost command
         cwd,

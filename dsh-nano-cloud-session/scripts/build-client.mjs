@@ -75,6 +75,21 @@ build({
   outfile: join(root, 'lib/ssh-keys.js'),
 })
 
+build({
+  entryPoints: ['src/host/assemble.js'],
+  bundle: true, format: 'esm', platform: 'node',
+  define: { ...versionDefine, ...dnprDefine },
+  outfile: join(root, 'lib/host.js'),
+})
+
+mkdirSync(join(root, 'lib/remote'), { recursive: true })
+build({
+  entryPoints: ['src/remote/entry.mjs'],
+  bundle: true, format: 'esm', platform: 'node',
+  outfile: join(root, 'lib/remote/devin-workspace.mjs'),
+  banner: { js: '// dncs remote resource bridge — no secrets, no Chat\n' },
+})
+
 // Browser half: IIFE wrapped in the client module-loader factory format.
 build({
   entryPoints: ['src/client/index.js'], bundle: true, format: 'iife',

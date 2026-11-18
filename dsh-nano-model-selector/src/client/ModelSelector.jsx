@@ -136,6 +136,17 @@ function brandOf(group, model) {
 }
 
 /**
+ * Last compact face observed by any mounted seat: installed/enabled plus the
+ * water lines the ring paints. The composer badge gates on it and the seat
+ * remounts on every session switch, so the face lives outside the component —
+ * without it the ring stayed blank until the next panel-open pull (the
+ * "click the selector before the compaction icon appears" defect). It is
+ * strictly a render hint: every mount re-pulls and overwrites it.
+ * @type {{ installed: boolean, enabled: boolean, lines: object|null }|null}
+ */
+let lastCompactFace = null
+
+/**
  * Render the composer model seat.
  * @param {object} props
  * @param {boolean} props.locked
@@ -180,11 +191,13 @@ export function ModelSelector({ locked, available, directory, load, select, lang
   const [railMore, setRailMore] = React.useState(false)
   // Header compaction button exists only while the companion bundle is
   // installed; otherwise the search field (flex:1) swallows that slot. The
-  // composer badge appears only while takeover is actually enabled.
-  const [compactInstalled, setCompactInstalled] = React.useState(false)
-  const [compactEnabled, setCompactEnabled] = React.useState(false)
+  // composer badge appears only while takeover is actually enabled. Both seed
+  // from the warm module face so a remount paints instantly; the mount pull
+  // corrects any drift right after.
+  const [compactInstalled, setCompactInstalled] = React.useState(() => lastCompactFace?.installed === true)
+  const [compactEnabled, setCompactEnabled] = React.useState(() => lastCompactFace?.enabled === true)
   // Live water lines for the composer ring: H, B, and pinned-async / window.
-  const [compactLines, setCompactLines] = React.useState(null)
+  const [compactLines, setCompactLines] = React.useState(() => lastCompactFace?.lines ?? null)
   const updateRailOverflow = React.useCallback(() => {
     const el = railBrandsRef.current
     if (el === null) return
@@ -272,29 +285,38 @@ export function ModelSelector({ locked, available, directory, load, select, lang
   }, [open, engines, refreshEngines])
 
   // Compact takeover reads (P5-02a): the 15 s heartbeat is retired — the
-  // policy face + bundle inventory are re-read when the panel opens and after
-  // the panel's switch reports back (via onSwitchDone), never on a timer.
+  // policy face + bundle inventory are re-read on mount (the composer badge
+  // must render before the panel ever opens), on every panel open, and after
+  // the panel's switch reports back (via onSwitchDone); never on a timer.
+  // Bundle/enabled answers land on the host's 30-minute inventory snapshot,
+  // so a per-mount read costs one warm fetch while staying fresh across
+  // session switches; the fetched face is shared for the next remount.
   const pullCompact = React.useCallback(async () => {
     const [data, bundle] = await Promise.all([fetchCompactState(), fetchBundleState()])
-    setCompactInstalled(bundle?.installed === true)
-    setCompactEnabled(bundle?.enabled === true)
+    const installed = bundle?.installed === true
+    const enabled = bundle?.enabled === true
+    setCompactInstalled(installed)
+    setCompactEnabled(enabled)
     const policy = data?.policy
     const effective = policy?.effective
     const pinned = Number.isFinite(effective?.pin) && Number.isFinite(effective?.windowMin) && effective.windowMin > 0
       ? effective.pin / effective.windowMin
       : null
-    setCompactLines(policy == null ? null : {
+    const lines = policy == null ? null : {
       health: policy.healthTargetAsync,
       buffer: policy.bufferSizeAsync,
       pinned,
       pinnedTokens: policy.pinnedAsyncTokens,
-    })
+    }
+    lastCompactFace = { installed, enabled, lines }
+    setCompactLines(lines)
   }, [])
   React.useEffect(() => {
-    if (!open) return undefined
-    let live = true
-    Promise.resolve(pullCompact()).then(() => { if (!live) return })
-    return () => { live = false }
+    pullCompact()
+  }, [pullCompact])
+  React.useEffect(() => {
+    if (!open) return
+    pullCompact()
   }, [open, pullCompact])
 
   const onCompactError = text => {

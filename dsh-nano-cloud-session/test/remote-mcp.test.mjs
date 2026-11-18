@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { PassThrough } from 'node:stream'
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createFilesystem } from '../src/remote/filesystem.js'
@@ -41,10 +41,12 @@ test('T07 NDJSON framing, unknown method, initialize, tools/list', async () => {
       inspectFacts: () => ({ root: dir }),
       stdin, stdout, stderr,
     })
-    const bad = await rpc(stdin, stdout, { jsonrpc: '2.0', id: 1, method: 'nope' })
-    assert.equal(bad.error.code, -32002)
-    const init = await rpc(stdin, stdout, { jsonrpc: '2.0', id: 2, method: 'initialize', params: {} })
+    const uninit = await rpc(stdin, stdout, { jsonrpc: '2.0', id: 1, method: 'nope' })
+    assert.equal(uninit.error.code, -32002)
+    const init = await rpc(stdin, stdout, { jsonrpc: '2.0', id: 2, method: 'initialize', params: { protocolVersion: '2025-06-18' } })
     assert.equal(init.result.protocolVersion, '2025-06-18')
+    const bad = await rpc(stdin, stdout, { jsonrpc: '2.0', id: 4, method: 'nope' })
+    assert.equal(bad.error.code, -32601)
     stdin.write('not-json\n')
     const listed = await rpc(stdin, stdout, { jsonrpc: '2.0', id: 3, method: 'tools/list' })
     assert.ok(listed.result, JSON.stringify(listed))
@@ -64,6 +66,7 @@ test('T08 fs list/read/write stay inside the remote root', async () => {
     const got = fs.read({ path: 'sentinel.txt', offset: 0, length: 20 })
     assert.equal(Buffer.from(got.bytes, 'base64').toString(), 'REMOTE')
     fs.write({ path: 'new.txt', bytes: Buffer.from('hi').toString('base64'), createOnly: true })
+    assert.equal(readFileSync(join(local, 'sentinel.txt'), 'utf8'), 'LOCAL')
     assert.throws(() => fs.read({ path: '../sentinel.txt' }))
   } finally {
     rmSync(remote, { recursive: true, force: true })

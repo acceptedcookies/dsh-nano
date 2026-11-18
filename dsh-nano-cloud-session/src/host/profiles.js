@@ -118,7 +118,6 @@ export function createProfileStore({ onEpoch } = {}) {
     activate(id) {
       if (!data.profiles.find(p => p.id === id)) throw new Error('profile not found')
       data.activeId = id
-      bump()
       save(data)
     },
   }

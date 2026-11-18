@@ -1,5 +1,6 @@
 // src/host/assemble.js
-import { statSync as statSync2 } from "node:fs";
+import { mkdirSync as mkdirSync3, statSync as statSync2 } from "node:fs";
+import { join as join5 } from "node:path";
 
 // ../packages/dsh-interface/src/contracts/FamilyDefinition.js
 var FamilyError = class extends Error {
@@ -1034,7 +1035,6 @@ function createProfileStore({ onEpoch } = {}) {
     activate(id) {
       if (!data.profiles.find((p) => p.id === id)) throw new Error("profile not found");
       data.activeId = id;
-      bump();
       save(data);
     }
   };
@@ -1777,7 +1777,7 @@ var NativeError = class extends Error {
     this.nativeCode = code;
     this.status = status;
     this.httpStatus = status;
-    this.providerStatus = status;
+    this.providerStatus = 0;
   }
 };
 function httpStatusForError(error) {
@@ -2463,12 +2463,20 @@ function createResourceService({ scopes, api, home: home3, spawnImpl, artifactPa
     connectFactory: (scope, ctx) => connectScope(scope, ctx),
     async call(scopeId, op3, input) {
       if (!RESOURCE_OPERATION_IDS.includes(op3)) fail4("invalid-request", `unknown resource op ${op3}`);
-      const decoded = RESOURCE_CODECS[op3].decode(input ?? {});
+      const body = input ?? {};
+      const {
+        op: _op,
+        scopeId: _scopeId,
+        profileId: _profileId,
+        generation,
+        ...fields
+      } = body;
+      const decoded = RESOURCE_CODECS[op3].decode(fields);
       const scope = scopes.requireReady(scopeId, {
         write: WRITE_OPS.has(op3),
         process: PROCESS_OPS.has(op3)
       });
-      if (scope.generation !== (input?.generation ?? scope.generation)) {
+      if (generation !== void 0 && generation !== scope.generation) {
         fail4("workspace-scope-expired", "generation mismatch");
       }
       if (!scope.mcp) fail4("workspace-unavailable", "MCP client is not attached");
@@ -2684,7 +2692,9 @@ function apply(ctx, config = {}) {
       throw new NativeError("NATIVE_UNAVAILABLE", "host cannot prepare a workbench session without sessions.prepare/enter/announce", 503);
     }
     const remote = needSessionId(body);
-    const session = ctx.sessions.prepare(void 0, { meta: { cwd: process.cwd() } });
+    const voidRoot = join5(process.env.DSH_HOME || process.env.HOME || ".", "nano-cloud-session-unbound");
+    mkdirSync3(voidRoot, { recursive: true });
+    const session = ctx.sessions.prepare(void 0, { meta: { cwd: voidRoot, executionWorld: "unbound-remote" } });
     const detach = ctx.sessions.enter(session);
     try {
       ctx.sessions.announce(session);

@@ -98,12 +98,17 @@ export function createResourceService({ scopes, api, home, spawnImpl, artifactPa
     connectFactory: (scope, ctx) => connectScope(scope, ctx),
     async call(scopeId, op, input) {
       if (!RESOURCE_OPERATION_IDS.includes(op)) fail('invalid-request', `unknown resource op ${op}`)
-      const decoded = RESOURCE_CODECS[op].decode(input ?? {})
+      const body = input ?? {}
+      const {
+        op: _op, scopeId: _scopeId, profileId: _profileId, generation,
+        ...fields
+      } = body
+      const decoded = RESOURCE_CODECS[op].decode(fields)
       const scope = scopes.requireReady(scopeId, {
         write: WRITE_OPS.has(op),
         process: PROCESS_OPS.has(op),
       })
-      if (scope.generation !== (input?.generation ?? scope.generation)) {
+      if (generation !== undefined && generation !== scope.generation) {
         fail('workspace-scope-expired', 'generation mismatch')
       }
       if (!scope.mcp) fail('workspace-unavailable', 'MCP client is not attached')

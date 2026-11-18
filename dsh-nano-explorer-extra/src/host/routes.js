@@ -8,7 +8,7 @@ import { checkoutBranch, commitAll, fetchAll, ignoredAmong, ignoredPathsOf, list
 import { absoluteOf, isLexicallyInside, listDirectory } from './listing.js'
 import { createFile, createFolder, moveEntry, removeEntry, rename } from './mutate.js'
 import { statisticsOf } from './stats.js'
-import { resolveExecutionWorld, worldCacheKey } from './execution-world.js'
+import { resolveExecutionWorld, worldCacheKey, assertBoundWorld } from './execution-world.js'
 
 /** Route prefix owned by this plugin. */
 export const PREFIX = '/nano-explorer-extra'
@@ -69,7 +69,9 @@ async function scopeOf(ctx, sessionId) {
   // resolves cold sessions instead of reading `undefined` (review-01 R5).
   const header = live?.header ?? (await ctx.get('sessionPersistence')?.stat(sessionId))?.header
   if (header === undefined || header === null) throw new Error(`unknown session "${sessionId}"`)
-  const root = header.cwd ?? ctx.get('sandboxPolicy')?.workspaceRoot
+  const world = resolveExecutionWorld(ctx, sessionId, header.cwd)
+  assertBoundWorld(header, world)
+  const root = world.kind === 'remote' ? (world.root ?? header.cwd) : (header.cwd ?? ctx.get('sandboxPolicy')?.workspaceRoot)
   // A cold Session has no live header to resolve from, so the policy is rebuilt around the root the
   // stored header names; without it `resolve({})` would fall back to the launch directory and every
   // write would be fenced away from the workspace the user is actually browsing.

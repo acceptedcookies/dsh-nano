@@ -27,3 +27,10 @@ export function resolveExecutionWorld(ctx, sessionId, root) {
 export function worldCacheKey(world, suffix = '') {
   return `${world.kind}:${world.identity}:${world.generation}:${world.root ?? ''}:${suffix}`
 }
+
+/** Remote-marked sessions must not fall back to the host cwd. */
+export function assertBoundWorld(header, world) {
+  if (header?.executionWorld === 'unbound-remote' && world.kind !== 'remote') {
+    throw new Error('this session has no working directory')
+  }
+}

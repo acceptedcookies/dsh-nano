@@ -1,6 +1,7 @@
 /** Host assembly: families, provider adapters, scopes, routes. */
 
-import { statSync } from 'node:fs'
+import { mkdirSync, statSync } from 'node:fs'
+import { join } from 'node:path'
 import { selectOperation } from '../../../packages/dsh-interface/src/contracts/FamilyDefinition.js'
 import { ensurePerfReviewHost } from 'dsh-performance-review/host'
 import { createDevinApi, CarrierError } from '../providers/devin/api.js'
@@ -175,7 +176,9 @@ export function apply(ctx, config = {}) {
       throw new NativeError('NATIVE_UNAVAILABLE', 'host cannot prepare a workbench session without sessions.prepare/enter/announce', 503)
     }
     const remote = needSessionId(body)
-    const session = ctx.sessions.prepare(undefined, { meta: { cwd: process.cwd() } })
+    const voidRoot = join(process.env.DSH_HOME || process.env.HOME || '.', 'nano-cloud-session-unbound')
+    mkdirSync(voidRoot, { recursive: true })
+    const session = ctx.sessions.prepare(undefined, { meta: { cwd: voidRoot, executionWorld: 'unbound-remote' } })
     const detach = ctx.sessions.enter(session)
     try { ctx.sessions.announce(session) } catch (error) {
       try { detach() } catch { /* ignore */ }

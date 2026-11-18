@@ -102,7 +102,7 @@ function WorkbenchBody(props) {
     setBusy(true); setError(''); setNotice('')
     try {
       await api.session(replace ? 'set_tags' : 'append_tags', {
-        session_id: remoteId,
+        session_id: remoteId, profileId,
         tags: tagText.split(',').map(item => item.trim()).filter(Boolean),
       })
       await load(); setNotice(replace ? t('tagsReplaced') : t('tagsAppended'))
@@ -121,7 +121,7 @@ function WorkbenchBody(props) {
       const uploaded = await api.upload(file.name, file.type || 'application/octet-stream', btoa(binary))
       const url = uploaded?.attachment?.url
       if (!url) throw new Error(t('attachmentsEmpty'))
-      await api.message(remoteId, `ATTACHMENT:"${url}"\n${file.name}`)
+      await api.message(remoteId, `ATTACHMENT:"${url}"\n${file.name}`, { profileId })
       await load()
       setNotice(t('uploadSent'))
     } catch (cause) { setError(cause?.message ?? String(cause)) }
@@ -129,9 +129,30 @@ function WorkbenchBody(props) {
   }
   const generate = async () => {
     setBusy(true); setError(''); setNotice('')
-    try { await api.session('generate_insights', { session_id: remoteId }); await load(); setNotice(t('insightsQueued')) }
+    try { await api.session('generate_insights', { session_id: remoteId, profileId }); await load(); setNotice(t('insightsQueued')) }
     catch (cause) { setError(cause?.message ?? String(cause)) }
     finally { setBusy(false) }
+  }
+  const connectResources = async () => {
+    setBusy(true); setError(''); setNotice('')
+    setHealth(applyHealth(health, { resources: 'connecting' }))
+    try {
+      const result = await api.workspace('connect', {
+        session_id: remoteId,
+        profileId,
+        authorize: ['fs.write'],
+      })
+      setHealth(applyHealth(health, {
+        resources: result.resources ?? 'ready',
+        api: result.api ?? 'ready',
+        nativeView: result.nativeView ?? 'unavailable',
+        scopeId: result.scopeId ?? null,
+      }))
+      setNotice(result.root ? String(result.root) : t('sshLane'))
+    } catch (cause) {
+      setHealth(applyHealth(health, { resources: 'unavailable' }))
+      setError(cause?.message ?? String(cause))
+    } finally { setBusy(false) }
   }
 
   if (!remoteId) return h('div', { className: 'dncs-note' }, t('accessIntro'))
@@ -144,9 +165,10 @@ function WorkbenchBody(props) {
         h('div', { className: 'dncs-working-meta', 'data-dncs-health': 'true' }, `api:${health.api} resources:${health.resources} native:${health.nativeView}`)),
       h('div', { className: 'dncs-profile-actions' },
         h(Button, { variant: 'ghost', size: 'sm', icon: h(IconRefreshOutlineRegular, { size: 16 }), onClick: load, 'aria-label': t('refresh') }),
+        h(Button, { variant: 'ghost', size: 'sm', disabled: busy, onClick: connectResources, 'aria-label': t('sshLane') }, t('sshLane')),
         h(Button, { variant: 'ghost', size: 'sm', onClick: () => { try { openTerminal?.(sessionId) } catch (cause) { setError(cause?.message ?? String(cause)); setHealth(applyHealth(health, { resources: 'unavailable' })) } }, 'aria-label': t('terminal') }, t('terminal')),
-        h(Button, { variant: 'ghost', size: 'sm', icon: h(IconAlarmClockOutlineRegular, { size: 16 }), onClick: () => action(() => api.session('sleep', { session_id: remoteId })), 'aria-label': t('sleep') }),
-        h(Button, { variant: 'ghost', size: 'sm', icon: h(detail?.is_archived ? IconUnarchiveOutlineRegular : IconArchiveOutlineRegular, { size: 16 }), onClick: () => action(() => detail?.is_archived ? api.unarchive(remoteId) : api.archive(remoteId)), 'aria-label': detail?.is_archived ? t('unarchive') : t('archive') }),
+        h(Button, { variant: 'ghost', size: 'sm', icon: h(IconAlarmClockOutlineRegular, { size: 16 }), onClick: () => action(() => api.session('sleep', { session_id: remoteId, profileId })), 'aria-label': t('sleep') }),
+        h(Button, { variant: 'ghost', size: 'sm', icon: h(detail?.is_archived ? IconUnarchiveOutlineRegular : IconArchiveOutlineRegular, { size: 16 }), onClick: () => action(() => detail?.is_archived ? api.unarchive(remoteId, { profileId }) : api.archive(remoteId, { profileId })), 'aria-label': detail?.is_archived ? t('unarchive') : t('archive') }),
         h(Button, { variant: 'ghost', size: 'sm', onClick: () => { setAcknowledged(false); setConfirmTerminate(true) }, 'aria-label': t('terminate') }, t('terminate')),
       )),
     h('div', { className: 'dncs-working-section' },
@@ -158,7 +180,7 @@ function WorkbenchBody(props) {
         h(Input, { value: draft, placeholder: t('messagePlaceholder'), onChange: event => setDraft(event.currentTarget.value) }),
         h(Button, { variant: 'primary', size: 'sm', disabled: busy || !draft.trim(), onClick: () => action(async () => {
           const text = draft.trim(); setDraft('')
-          await api.message(remoteId, text)
+          await api.message(remoteId, text, { profileId })
         }) }, t('send')))),
     error === '' ? null : h('div', { className: 'dncs-note', 'data-kind': 'error' }, error),
     notice === '' ? null : h('div', { className: 'dncs-note' }, notice),
@@ -210,7 +232,7 @@ function WorkbenchBody(props) {
         setConfirmTerminate(false)
         void runTerminate({
           acknowledged,
-          terminate: () => action(() => api.terminate(remoteId)),
+          terminate: () => action(() => api.terminate(remoteId, typeof profileId === 'undefined' ? {} : { profileId })),
         })
       },
     }) : null)

@@ -19,7 +19,7 @@ export class NativeError extends Error {
     this.nativeCode = code
     this.status = status
     this.httpStatus = status
-    this.providerStatus = status
+    this.providerStatus = 0
   }
 }
 

@@ -1,6 +1,6 @@
 /** Bounded remote filesystem operations. Node-only; no Chat, no secrets. */
 
-import { mkdirSync, readdirSync, readFileSync, renameSync, rmdirSync, realpathSync, statSync, unlinkSync, writeFileSync, existsSync } from 'node:fs'
+import { mkdirSync, readdirSync, openSync, readSync, closeSync, renameSync, rmdirSync, realpathSync, statSync, unlinkSync, writeFileSync, existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { randomBytes } from 'node:crypto'
 import { resolveUnderRoot } from './path-policy.js'
@@ -84,14 +84,17 @@ export function createFilesystem(rootInput, { maxPage = 64 * 1024 } = {}) {
         error.reason = 'workspace-denied'
         throw error
       }
-      const buf = readFileSync(resolved.real)
-      const slice = buf.subarray(offset, offset + length)
-      return {
-        bytes: slice.toString('base64'),
-        offset,
-        eof: offset + slice.length >= buf.length,
-        version: versionOf(info),
-      }
+      const fd = openSync(resolved.real, 'r')
+      try {
+        const slice = Buffer.alloc(Math.min(length, maxPage))
+        const n = readSync(fd, slice, 0, slice.length, offset)
+        return {
+          bytes: slice.subarray(0, n).toString('base64'),
+          offset,
+          eof: offset + n >= info.size,
+          version: versionOf(info),
+        }
+      } finally { closeSync(fd) }
     },
     write({ path, bytes, expectedVersion, createOnly }) {
       const resolved = resolveUnderRoot(rootReal, path)
@@ -165,7 +168,9 @@ export function createFilesystem(rootInput, { maxPage = 64 * 1024 } = {}) {
         error.reason = 'workspace-conflict'
         throw error
       }
-      if (info.isDirectory()) {
+      if (info.isSymbolicLink()) {
+        unlinkSync(resolved.joined)
+      } else if (info.isDirectory()) {
         const names = readdirSync(resolved.real)
         if (names.length > 0) {
           const error = new Error('directory is not empty')
@@ -174,7 +179,7 @@ export function createFilesystem(rootInput, { maxPage = 64 * 1024 } = {}) {
         }
         rmdirSync(resolved.real)
       } else {
-        unlinkSync(resolved.real ?? resolved.joined)
+        unlinkSync(resolved.joined)
       }
       return { removed: true }
     },

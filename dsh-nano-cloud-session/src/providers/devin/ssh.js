@@ -36,6 +36,13 @@ export function resolveIdentityFile({ home, identityFile } = {}) {
   throw new WorkspaceError('workspace-unavailable', 'no SSH identity file', { httpStatus: 503 })
 }
 
+export function fallbackIdentityFile(current, { identityFile } = {}) {
+  if (identityFile) return null
+  const system = systemIdentityPath()
+  if (current && current !== system && existsSync(system)) return system
+  return null
+}
+
 /** Build ssh argv. `remoteArgv` is sent as a single remote command string only
  *  after each token is verified to contain no shell metacharacters. */
 export function buildSshArgv({

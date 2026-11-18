@@ -37,5 +37,8 @@ test('T21 npm pack unpacks and host/remote load without starting the bridge', as
     const remote = await import(pathToFileURL(join(packed, 'lib/remote/devin-workspace.mjs')).href)
     assert.equal(typeof remote.createFilesystem, 'function')
     assert.equal(typeof remote.createMcpServer, 'function')
+    const bundled = readFileSync(join(packed, 'lib/host.js'), 'utf8')
+    assert.match(bundled, /\.\/remote\/devin-workspace\.mjs/)
+    assert.ok(existsSync(join(packed, 'lib/remote/devin-workspace.mjs')))
   } finally { rmSync(dir, { recursive: true, force: true }) }
 })

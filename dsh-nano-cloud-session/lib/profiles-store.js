@@ -128,7 +128,7 @@ function seedFromEnv() {
 }
 function load() {
   if (!existsSync(storePath())) {
-    return { version: STORE_VERSION, activeId: null, profiles: [], configEpoch: 0 };
+    return { version: STORE_VERSION, activeId: null, profiles: [], configEpoch: 0, profileEpochs: {} };
   }
   let data;
   try {
@@ -140,6 +140,7 @@ function load() {
     throw new Error(`${STORE_FILE} version/shape mismatch`);
   }
   if (!Number.isInteger(data.configEpoch)) data.configEpoch = 0;
+  if (!data.profileEpochs || typeof data.profileEpochs !== "object") data.profileEpochs = {};
   return data;
 }
 function save(data) {
@@ -151,8 +152,10 @@ function save(data) {
 function createProfileStore({ onEpoch } = {}) {
   let data = load();
   let seeded = false;
+  data.profileEpochs = data.profileEpochs ?? {};
   const bump = (profileId) => {
     data.configEpoch = (data.configEpoch ?? 0) + 1;
+    if (profileId) data.profileEpochs[profileId] = data.configEpoch;
     onEpoch?.(data.configEpoch, profileId);
   };
   if (data.profiles.length === 0) {
@@ -169,6 +172,7 @@ function createProfileStore({ onEpoch } = {}) {
   return {
     seededFromEnv: seeded,
     configEpoch: () => data.configEpoch ?? 0,
+    profileEpoch: (id) => data.profileEpochs?.[id] ?? 0,
     list() {
       return data.profiles.map((p) => publicProfile(p, data.activeId));
     },

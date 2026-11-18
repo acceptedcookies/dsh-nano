@@ -113,22 +113,19 @@ export function apply(ctx, config = {}) {
       store.set({ opening: true, activeSessionId: sessionId, error: '' })
       try {
         let localId
+        const bound = { profileId: store.current.activeId }
         try {
-          const bridge = await api.nativeOpen(sessionId)
+          const bridge = await api.nativeOpen(sessionId, bound)
           localId = bridge.local_session_id
           void ctx.sessions?.refresh?.()
           ctx.uiWorkspace.openSession(localId)
         } catch (cause) {
           if (cause?.reason !== 'NATIVE_UNAVAILABLE') throw cause
-          const snap = ctx.sessions?.list?.getSnapshot?.()
-          localId = ctx.uiWorkspace?.activeSessionId
-            ?? ctx.sessions?.current?.id
-            ?? snap?.current
-            ?? snap?.activeId
-            ?? Object.keys(snap?.byId ?? {})[0]
-          if (!localId) throw cause
+          const shell = await api.workspaceShell(sessionId, bound)
+          localId = shell.local_session_id
+          void ctx.sessions?.refresh?.()
         }
-        rememberWorkbenchSession(localId, sessionId, { profileId: store.current.activeId })
+        rememberWorkbenchSession(localId, sessionId, bound)
         window.setTimeout(() => {
           try { ctx.sidebarRight.openTabIn(localId, workbenchKind) }
           catch (openError) { console.warn('[nano-cloud-session] workbench open failed', openError) }

@@ -153,11 +153,16 @@ export function createFilesystem(rootInput, { maxPage = 64 * 1024 } = {}) {
       mkdirSync(resolved.joined)
       return { created: true }
     },
-    rename({ from, to }) {
+    rename({ from, to, expectedVersion }) {
       const src = resolveUnderRoot(rootReal, from)
       if (!src.exists) {
         const error = new Error('not found')
         error.reason = 'workspace-not-found'
+        throw error
+      }
+      if (expectedVersion && versionOf(src.lstat ?? statSync(src.real)) !== expectedVersion) {
+        const error = new Error('version conflict')
+        error.reason = 'workspace-conflict'
         throw error
       }
       const dst = resolveUnderRoot(rootReal, to)

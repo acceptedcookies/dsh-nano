@@ -71,7 +71,7 @@ export function createWorkspaceScopes({ configEpochOf } = {}) {
     async connect(profile, body, factory) {
       const remote = parseRemoteSessionId(body.session_id ?? body.remoteSessionId)
       const key = logicalKey(PROVIDER_KEY, profile.id, remote.prefixed)
-      const epoch = configEpochOf ? configEpochOf() : 0
+      const epoch = configEpochOf ? configEpochOf(profile.id) : 0
       const existing = byLogical.get(key)
       if (existing && !existing.invalid && existing.configEpoch === epoch && existing.resources === 'ready') {
         return snapshot(existing)
@@ -95,8 +95,8 @@ export function createWorkspaceScopes({ configEpochOf } = {}) {
           remoteSessionStatus: null,
           permissions: Object.freeze({
             fsWrite: body.authorize?.includes?.('fs.write') === true,
-            process: body.authorize?.includes?.('process.start') === true,
-            forward: body.authorize?.includes?.('forward') === true,
+            process: false,
+            forward: false,
           }),
           inspect: null,
           handles: new Map(),
@@ -152,16 +152,25 @@ export function createWorkspaceScopes({ configEpochOf } = {}) {
       return { ok: true }
     },
 
-    invalidateProfile(profileId) {
+    async invalidateProfile(profileId) {
+      const jobs = []
       for (const scope of [...byId.values()]) {
-        if (scope.profileId === profileId && !scope.invalid) invalidate(scope, 'workspace-scope-expired')
+        if (scope.profileId === profileId && !scope.invalid) {
+          invalidate(scope, 'workspace-scope-expired')
+          jobs.push(Promise.resolve().then(() => scope.cleanup?.()).catch(() => {}))
+        }
       }
+      await Promise.all(jobs)
     },
 
-    invalidateAll() {
-      for (const scope of [...byId.values()]) invalidate(scope, 'workspace-scope-expired')
+    async invalidateAll() {
+      const jobs = [...byId.values()].map(scope => {
+        invalidate(scope, 'workspace-scope-expired')
+        return Promise.resolve().then(() => scope.cleanup?.()).catch(() => {})
+      })
       byId.clear()
       byLogical.clear()
+      await Promise.all(jobs)
     },
 
     track(scope, promise) {

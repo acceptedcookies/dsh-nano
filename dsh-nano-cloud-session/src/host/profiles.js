@@ -1,5 +1,5 @@
 /** Carrier credential store. Snapshots are immutable; configEpoch advances
- *  on save/remove/activate so old WorkspaceScopes cannot keep using stale secrets. */
+ *  on save/remove (not activate) so that profile's WorkspaceScopes cannot keep using stale secrets. */
 
 import { readFileSync, writeFileSync, renameSync, mkdirSync, existsSync } from 'node:fs'
 import { join, dirname } from 'node:path'
@@ -40,7 +40,7 @@ function seedFromEnv() {
 
 function load() {
   if (!existsSync(storePath())) {
-    return { version: STORE_VERSION, activeId: null, profiles: [], configEpoch: 0 }
+    return { version: STORE_VERSION, activeId: null, profiles: [], configEpoch: 0, profileEpochs: {} }
   }
   let data
   try { data = JSON.parse(readFileSync(storePath(), 'utf8')) }
@@ -49,6 +49,7 @@ function load() {
     throw new Error(`${STORE_FILE} version/shape mismatch`)
   }
   if (!Number.isInteger(data.configEpoch)) data.configEpoch = 0
+  if (!data.profileEpochs || typeof data.profileEpochs !== 'object') data.profileEpochs = {}
   return data
 }
 
@@ -62,8 +63,10 @@ function save(data) {
 export function createProfileStore({ onEpoch } = {}) {
   let data = load()
   let seeded = false
+  data.profileEpochs = data.profileEpochs ?? {}
   const bump = (profileId) => {
     data.configEpoch = (data.configEpoch ?? 0) + 1
+    if (profileId) data.profileEpochs[profileId] = data.configEpoch
     onEpoch?.(data.configEpoch, profileId)
   }
 
@@ -82,6 +85,7 @@ export function createProfileStore({ onEpoch } = {}) {
   return {
     seededFromEnv: seeded,
     configEpoch: () => data.configEpoch ?? 0,
+    profileEpoch: (id) => data.profileEpochs?.[id] ?? 0,
     list() { return data.profiles.map(p => publicOf(p, data.activeId)) },
     active() { return data.profiles.find(p => p.id === data.activeId) ?? null },
     get(id) { return data.profiles.find(p => p.id === id) ?? null },

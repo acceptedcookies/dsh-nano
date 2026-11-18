@@ -56,10 +56,10 @@ const messageOf = error => (error instanceof Error ? error.message : String(erro
 
 export function apply(ctx, config = {}) {
   const api = createDevinApi({ timeoutMs: config.requestTimeoutMs ?? 20000 })
-  const scopes = createWorkspaceScopes({ configEpochOf: () => store.configEpoch() })
+  const scopes = createWorkspaceScopes({ configEpochOf: (profileId) => store.profileEpoch(profileId) })
   const store = createProfileStore({
     onEpoch: (_epoch, profileId) => {
-      if (profileId) scopes.invalidateProfile(profileId)
+      if (profileId) void scopes.invalidateProfile(profileId)
       else void scopes.invalidateAll()
     },
   })
@@ -137,10 +137,18 @@ export function apply(ctx, config = {}) {
         return { ok: true, profile, profiles: store.list(), activeId: store.active()?.id ?? null }
       }
       case 'config.remove':
-        store.removeProfile(String(body.profileId ?? ''))
+        try { store.removeProfile(String(body.profileId ?? '')) }
+        catch (error) {
+          if (String(error?.message) === 'profile not found') throw new CarrierError('profile-not-found', error.message, { status: 404 })
+          throw error
+        }
         return { ok: true, profiles: store.list(), activeId: store.active()?.id ?? null }
       case 'config.activate':
-        store.activate(String(body.profileId ?? ''))
+        try { store.activate(String(body.profileId ?? '')) }
+        catch (error) {
+          if (String(error?.message) === 'profile not found') throw new CarrierError('profile-not-found', error.message, { status: 404 })
+          throw error
+        }
         return { ok: true, profiles: store.list(), activeId: store.active()?.id ?? null }
       case 'config.test': {
         const profile = pick(body.profileId)

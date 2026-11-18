@@ -951,7 +951,7 @@ function seedFromEnv() {
 }
 function load() {
   if (!existsSync(storePath())) {
-    return { version: STORE_VERSION, activeId: null, profiles: [], configEpoch: 0 };
+    return { version: STORE_VERSION, activeId: null, profiles: [], configEpoch: 0, profileEpochs: {} };
   }
   let data;
   try {
@@ -963,6 +963,7 @@ function load() {
     throw new Error(`${STORE_FILE} version/shape mismatch`);
   }
   if (!Number.isInteger(data.configEpoch)) data.configEpoch = 0;
+  if (!data.profileEpochs || typeof data.profileEpochs !== "object") data.profileEpochs = {};
   return data;
 }
 function save(data) {
@@ -974,8 +975,10 @@ function save(data) {
 function createProfileStore({ onEpoch } = {}) {
   let data = load();
   let seeded = false;
+  data.profileEpochs = data.profileEpochs ?? {};
   const bump = (profileId) => {
     data.configEpoch = (data.configEpoch ?? 0) + 1;
+    if (profileId) data.profileEpochs[profileId] = data.configEpoch;
     onEpoch?.(data.configEpoch, profileId);
   };
   if (data.profiles.length === 0) {
@@ -992,6 +995,7 @@ function createProfileStore({ onEpoch } = {}) {
   return {
     seededFromEnv: seeded,
     configEpoch: () => data.configEpoch ?? 0,
+    profileEpoch: (id) => data.profileEpochs?.[id] ?? 0,
     list() {
       return data.profiles.map((p) => publicProfile(p, data.activeId));
     },
@@ -1720,11 +1724,29 @@ var WORKSPACE_FAMILY = defineFamily({
     }
   }
 });
+var TOOL_FIELDS = Object.freeze({
+  "workspace.inspect": [],
+  "fs.list": ["path", "cursor", "limit"],
+  "fs.stat": ["path"],
+  "fs.read": ["path", "offset", "length"],
+  "fs.write": ["path", "bytes", "expectedVersion", "createOnly"],
+  "fs.mkdir": ["path"],
+  "fs.rename": ["from", "to", "expectedVersion", "overwrite"],
+  "fs.remove": ["path", "expectedVersion", "recursive"],
+  "process.start": ["argv", "cwd", "envPatch"],
+  "process.read": ["processHandle", "stdoutOffset", "stderrOffset", "limit"],
+  "process.wait": ["processHandle", "timeoutMs"],
+  "process.terminate": ["processHandle"]
+});
 function mcpToolsList() {
   return RESOURCE_OPERATION_IDS.map((name2) => ({
     name: name2,
     description: name2,
-    inputSchema: { type: "object", additionalProperties: false }
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: Object.fromEntries((TOOL_FIELDS[name2] ?? []).map((field) => [field, {}]))
+    }
   }));
 }
 
@@ -1859,7 +1881,7 @@ function createWorkspaceScopes({ configEpochOf } = {}) {
     async connect(profile, body, factory) {
       const remote = parseRemoteSessionId(body.session_id ?? body.remoteSessionId);
       const key = logicalKey(PROVIDER_KEY, profile.id, remote.prefixed);
-      const epoch = configEpochOf ? configEpochOf() : 0;
+      const epoch = configEpochOf ? configEpochOf(profile.id) : 0;
       const existing = byLogical.get(key);
       if (existing && !existing.invalid && existing.configEpoch === epoch && existing.resources === "ready") {
         return snapshot(existing);
@@ -1883,8 +1905,8 @@ function createWorkspaceScopes({ configEpochOf } = {}) {
           remoteSessionStatus: null,
           permissions: Object.freeze({
             fsWrite: body.authorize?.includes?.("fs.write") === true,
-            process: body.authorize?.includes?.("process.start") === true,
-            forward: body.authorize?.includes?.("forward") === true
+            process: false,
+            forward: false
           }),
           inspect: null,
           handles: /* @__PURE__ */ new Map(),
@@ -1941,15 +1963,26 @@ function createWorkspaceScopes({ configEpochOf } = {}) {
       });
       return { ok: true };
     },
-    invalidateProfile(profileId) {
+    async invalidateProfile(profileId) {
+      const jobs = [];
       for (const scope of [...byId.values()]) {
-        if (scope.profileId === profileId && !scope.invalid) invalidate(scope, "workspace-scope-expired");
+        if (scope.profileId === profileId && !scope.invalid) {
+          invalidate(scope, "workspace-scope-expired");
+          jobs.push(Promise.resolve().then(() => scope.cleanup?.()).catch(() => {
+          }));
+        }
       }
+      await Promise.all(jobs);
     },
-    invalidateAll() {
-      for (const scope of [...byId.values()]) invalidate(scope, "workspace-scope-expired");
+    async invalidateAll() {
+      const jobs = [...byId.values()].map((scope) => {
+        invalidate(scope, "workspace-scope-expired");
+        return Promise.resolve().then(() => scope.cleanup?.()).catch(() => {
+        });
+      });
       byId.clear();
       byLogical.clear();
+      await Promise.all(jobs);
     },
     track(scope, promise) {
       waiters.add(promise);
@@ -1969,9 +2002,6 @@ function createWorkspaceScopes({ configEpochOf } = {}) {
     }
   };
 }
-
-// src/host/resource-service.js
-import { existsSync as existsSync5 } from "node:fs";
 
 // src/providers/devin/ssh.js
 import { spawn } from "node:child_process";
@@ -2001,6 +2031,12 @@ function resolveIdentityFile({ home: home3, identityFile } = {}) {
   const system = systemIdentityPath();
   if (existsSync3(system)) return system;
   throw new WorkspaceError("workspace-unavailable", "no SSH identity file", { httpStatus: 503 });
+}
+function fallbackIdentityFile(current, { identityFile } = {}) {
+  if (identityFile) return null;
+  const system = systemIdentityPath();
+  if (current && current !== system && existsSync3(system)) return system;
+  return null;
 }
 function buildSshArgv({
   identityFile,
@@ -2523,9 +2559,9 @@ function createResourceService({ scopes, api, home: home3, spawnImpl, artifactPa
     try {
       inspect = await probeWith(identityFile);
     } catch (error) {
-      const system = systemIdentityPath();
-      if (!body.identityFile && identityFile !== system && existsSync5(system) && error?.reason === "workspace-unavailable") {
-        identityFile = system;
+      const fallback = fallbackIdentityFile(identityFile, { identityFile: body.identityFile });
+      if (fallback && error?.reason === "workspace-unavailable") {
+        identityFile = fallback;
         inspect = await probeWith(identityFile);
       } else {
         throw error;
@@ -2606,7 +2642,8 @@ function createResourceService({ scopes, api, home: home3, spawnImpl, artifactPa
         fail4("workspace-scope-expired", "generation mismatch");
       }
       if (!scope.mcp) fail4("workspace-unavailable", "MCP client is not attached");
-      return scope.mcp.call(op3, decoded);
+      const work = scope.mcp.call(op3, decoded);
+      return scopes.track(scope, work);
     },
     nativeChatStatus(ctx) {
       return resolveNativeChat(ctx);
@@ -2689,10 +2726,10 @@ var Config = {
 var messageOf = (error) => error instanceof Error ? error.message : String(error);
 function apply(ctx, config = {}) {
   const api = createDevinApi({ timeoutMs: config.requestTimeoutMs ?? 2e4 });
-  const scopes = createWorkspaceScopes({ configEpochOf: () => store.configEpoch() });
+  const scopes = createWorkspaceScopes({ configEpochOf: (profileId) => store.profileEpoch(profileId) });
   const store = createProfileStore({
     onEpoch: (_epoch, profileId) => {
-      if (profileId) scopes.invalidateProfile(profileId);
+      if (profileId) void scopes.invalidateProfile(profileId);
       else void scopes.invalidateAll();
     }
   });
@@ -2782,10 +2819,20 @@ function apply(ctx, config = {}) {
         return { ok: true, profile, profiles: store.list(), activeId: store.active()?.id ?? null };
       }
       case "config.remove":
-        store.removeProfile(String(body.profileId ?? ""));
+        try {
+          store.removeProfile(String(body.profileId ?? ""));
+        } catch (error) {
+          if (String(error?.message) === "profile not found") throw new CarrierError("profile-not-found", error.message, { status: 404 });
+          throw error;
+        }
         return { ok: true, profiles: store.list(), activeId: store.active()?.id ?? null };
       case "config.activate":
-        store.activate(String(body.profileId ?? ""));
+        try {
+          store.activate(String(body.profileId ?? ""));
+        } catch (error) {
+          if (String(error?.message) === "profile not found") throw new CarrierError("profile-not-found", error.message, { status: 404 });
+          throw error;
+        }
         return { ok: true, profiles: store.list(), activeId: store.active()?.id ?? null };
       case "config.test": {
         const profile = pick(body.profileId);

@@ -2,8 +2,7 @@
 
 import { RESOURCE_CODECS, RESOURCE_OPERATION_IDS, HTTP_STATUS_FOR_REASON } from '../contracts/workspace-family.js'
 import { WorkspaceError } from './errors.js'
-import { existsSync } from 'node:fs'
-import { resolveIdentityFile, knownHostsPath, buildSshArgv, spawnSsh, systemIdentityPath } from '../providers/devin/ssh.js'
+import { resolveIdentityFile, knownHostsPath, buildSshArgv, spawnSsh, fallbackIdentityFile } from '../providers/devin/ssh.js'
 import { probeWorkspace, publishArtifact, ensureKnownHostsFile } from '../providers/devin/bootstrap.js'
 import { createMcpClient } from '../providers/devin/mcp-client.js'
 import { resolveNativeChat } from '../host-adapters/native-chat.js'
@@ -47,9 +46,9 @@ export function createResourceService({ scopes, api, home, spawnImpl, artifactPa
     try {
       inspect = await probeWith(identityFile)
     } catch (error) {
-      const system = systemIdentityPath()
-      if (!body.identityFile && identityFile !== system && existsSync(system) && error?.reason === 'workspace-unavailable') {
-        identityFile = system
+      const fallback = fallbackIdentityFile(identityFile, { identityFile: body.identityFile })
+      if (fallback && error?.reason === 'workspace-unavailable') {
+        identityFile = fallback
         inspect = await probeWith(identityFile)
       } else {
         throw error
@@ -128,7 +127,8 @@ export function createResourceService({ scopes, api, home, spawnImpl, artifactPa
         fail('workspace-scope-expired', 'generation mismatch')
       }
       if (!scope.mcp) fail('workspace-unavailable', 'MCP client is not attached')
-      return scope.mcp.call(op, decoded)
+      const work = scope.mcp.call(op, decoded)
+      return scopes.track(scope, work)
     },
     nativeChatStatus(ctx) {
       return resolveNativeChat(ctx)

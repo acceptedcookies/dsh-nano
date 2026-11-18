@@ -202,11 +202,16 @@ function createFilesystem(rootInput, { maxPage = 64 * 1024 } = {}) {
       mkdirSync(resolved.joined);
       return { created: true };
     },
-    rename({ from, to }) {
+    rename({ from, to, expectedVersion }) {
       const src = resolveUnderRoot(rootReal, from);
       if (!src.exists) {
         const error = new Error("not found");
         error.reason = "workspace-not-found";
+        throw error;
+      }
+      if (expectedVersion && versionOf(src.lstat ?? statSync(src.real)) !== expectedVersion) {
+        const error = new Error("version conflict");
+        error.reason = "workspace-conflict";
         throw error;
       }
       const dst = resolveUnderRoot(rootReal, to);
@@ -793,11 +798,29 @@ var WORKSPACE_FAMILY = defineFamily({
     }
   }
 });
+var TOOL_FIELDS = Object.freeze({
+  "workspace.inspect": [],
+  "fs.list": ["path", "cursor", "limit"],
+  "fs.stat": ["path"],
+  "fs.read": ["path", "offset", "length"],
+  "fs.write": ["path", "bytes", "expectedVersion", "createOnly"],
+  "fs.mkdir": ["path"],
+  "fs.rename": ["from", "to", "expectedVersion", "overwrite"],
+  "fs.remove": ["path", "expectedVersion", "recursive"],
+  "process.start": ["argv", "cwd", "envPatch"],
+  "process.read": ["processHandle", "stdoutOffset", "stderrOffset", "limit"],
+  "process.wait": ["processHandle", "timeoutMs"],
+  "process.terminate": ["processHandle"]
+});
 function mcpToolsList() {
   return RESOURCE_OPERATION_IDS.map((name) => ({
     name,
     description: name,
-    inputSchema: { type: "object", additionalProperties: false }
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: Object.fromEntries((TOOL_FIELDS[name] ?? []).map((field) => [field, {}]))
+    }
   }));
 }
 

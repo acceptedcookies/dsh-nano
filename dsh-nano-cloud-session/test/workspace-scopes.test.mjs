@@ -37,3 +37,30 @@ test('T04 different keys do not share; failure publishes no scope', async () => 
   assert.ok(ok.scopeId)
   assert.equal(scopes.list().length, 1)
 })
+
+test('T03 same remote id under two profiles stays isolated', async () => {
+  const scopes = createWorkspaceScopes({ configEpochOf: (id) => ({ 'p-a': 1, 'p-b': 1 }[id] ?? 0) })
+  const factory = async (scope) => {
+    scope.resources = 'ready'
+    return { root: '/tmp', resources: 'ready', api: 'ready' }
+  }
+  const a = await scopes.connect(profile, { session_id: 'devin-same' }, factory)
+  const b = await scopes.connect({ ...profile, id: 'p-b' }, { session_id: 'devin-same' }, factory)
+  assert.notEqual(a.scopeId, b.scopeId)
+  assert.equal(a.profileId, 'p-a')
+  assert.equal(b.profileId, 'p-b')
+})
+
+test('T10 browser cannot self-grant process or forward', async () => {
+  const scopes = createWorkspaceScopes({ configEpochOf: () => 1 })
+  const snap = await scopes.connect(profile, {
+    session_id: 'devin-abc123',
+    authorize: ['fs.write', 'process.start', 'forward'],
+  }, async (scope) => {
+    scope.resources = 'ready'
+    return { root: '/tmp', resources: 'ready', api: 'ready' }
+  })
+  assert.doesNotThrow(() => scopes.requireReady(snap.scopeId, { write: true }))
+  assert.throws(() => scopes.requireReady(snap.scopeId, { process: true }), /not authorized/)
+  assert.throws(() => scopes.requireReady(snap.scopeId, { forward: true }), /not authorized/)
+})

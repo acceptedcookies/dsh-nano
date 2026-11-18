@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { parseRemoteSessionId } from '../src/providers/devin/session-id.js'
-import { buildSshArgv } from '../src/providers/devin/ssh.js'
+import { buildSshArgv, fallbackIdentityFile, systemIdentityPath } from '../src/providers/devin/ssh.js'
 
 const base = {
   identityFile: '/tmp/id',
@@ -37,4 +37,12 @@ test('T05 user-supplied host is ignored; gateway is fixed', () => {
   assert.equal(argv.filter(x => x === 'ssh.devin.ai').length, 1)
   assert.ok(argv.includes('-l'))
   assert.ok(argv.includes('devin-zzzz'))
+})
+
+test('T06 dedicated-key failure falls back to system identity, never another host', () => {
+  const system = systemIdentityPath()
+  assert.equal(fallbackIdentityFile('/tmp/nano-cloud-session-ssh', { identityFile: '/forced' }), null)
+  const next = fallbackIdentityFile('/tmp/nano-cloud-session-ssh', {})
+  if (next) assert.equal(next, system)
+  assert.equal(fallbackIdentityFile(system, {}), null)
 })

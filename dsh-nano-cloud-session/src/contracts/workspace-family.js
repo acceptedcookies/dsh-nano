@@ -275,10 +275,29 @@ export const WORKSPACE_FAMILY = defineFamily({
   },
 })
 
+const TOOL_FIELDS = Object.freeze({
+  'workspace.inspect': [],
+  'fs.list': ['path', 'cursor', 'limit'],
+  'fs.stat': ['path'],
+  'fs.read': ['path', 'offset', 'length'],
+  'fs.write': ['path', 'bytes', 'expectedVersion', 'createOnly'],
+  'fs.mkdir': ['path'],
+  'fs.rename': ['from', 'to', 'expectedVersion', 'overwrite'],
+  'fs.remove': ['path', 'expectedVersion', 'recursive'],
+  'process.start': ['argv', 'cwd', 'envPatch'],
+  'process.read': ['processHandle', 'stdoutOffset', 'stderrOffset', 'limit'],
+  'process.wait': ['processHandle', 'timeoutMs'],
+  'process.terminate': ['processHandle'],
+})
+
 export function mcpToolsList() {
   return RESOURCE_OPERATION_IDS.map(name => ({
     name,
     description: name,
-    inputSchema: { type: 'object', additionalProperties: false },
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      properties: Object.fromEntries((TOOL_FIELDS[name] ?? []).map(field => [field, {}])),
+    },
   }))
 }

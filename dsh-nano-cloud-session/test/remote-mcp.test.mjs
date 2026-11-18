@@ -55,6 +55,9 @@ test('T07 NDJSON framing, unknown method, initialize, tools/list', async () => {
     assert.equal(inspected.result.structuredContent.ok, true)
     assert.equal(inspected.result.structuredContent.data.pty.supported, false)
     assert.equal(inspected.result.content[0].type, 'text')
+    const listedTool = listed.result.tools.find(t => t.name === 'fs.list')
+    assert.ok(listedTool.inputSchema.properties.path)
+    assert.equal(listedTool.inputSchema.additionalProperties, false)
   } finally { rmSync(dir, { recursive: true, force: true }) }
 })
 

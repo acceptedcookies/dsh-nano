@@ -13,6 +13,20 @@ function fail(reason, message) {
   throw new WorkspaceError(reason, message, { httpStatus: HTTP_STATUS_FOR_REASON[reason] ?? 502 })
 }
 
+export function freezeWorkspaceRoot(probed, requested) {
+  const base = String(probed ?? '').replace(/\/+$/, '').trim()
+  const want = requested == null || requested === '' ? base : String(requested).replace(/\/+$/, '').trim()
+  if (!base.startsWith('/')) fail('workspace-unavailable', 'probe pwd did not return an absolute root')
+  if (!want.startsWith('/')) fail('invalid-request', 'workspace root must be an absolute path')
+  if (!/^[A-Za-z0-9._/=+-]+$/.test(want) || /(^|\/)\.\.(\/|$)/.test(want)) {
+    fail('invalid-request', 'workspace root contains unsafe characters')
+  }
+  if (want !== base && !want.startsWith(`${base}/`)) {
+    fail('workspace-denied', 'workspace root must be the probed cwd or a subdirectory')
+  }
+  return want
+}
+
 const WRITE_OPS = new Set(['fs.write', 'fs.mkdir', 'fs.rename', 'fs.remove'])
 const PROCESS_OPS = new Set(['process.start', 'process.terminate'])
 
@@ -21,7 +35,7 @@ export function createResourceService({ scopes, api, home, spawnImpl, artifactPa
     const profile = scope.profileSnapshot
     let session
     try {
-      session = await api.getSession(profile, scope.remoteSessionId)
+      session = await api.getSession(profile, scope.remote.bare)
       scope.api = 'ready'
       scope.remoteSessionStatus = session?.status ?? null
     } catch (error) {
@@ -55,9 +69,8 @@ export function createResourceService({ scopes, api, home, spawnImpl, artifactPa
         throw error
       }
     }
-    const root = String(body.root ?? inspect.probe.find(p => p.argv[0] === 'pwd')?.stdout ?? '').trim()
-    if (!root || !root.startsWith('/')) fail('invalid-request', 'workspace root must be an absolute path')
-    if (!/^[A-Za-z0-9._/=+-]+$/.test(root)) fail('invalid-request', 'workspace root contains unsafe characters')
+    const probed = String(inspect.probe.find(p => p.argv[0] === 'pwd')?.stdout ?? '').trim()
+    const root = freezeWorkspaceRoot(probed, body.root)
     const published = await publishArtifact({
       sessionId: scope.remoteSessionId,
       identityFile,

@@ -2546,6 +2546,19 @@ var HOST_ADAPTER_UNAVAILABLE = Object.freeze({
 function fail4(reason, message) {
   throw new WorkspaceError(reason, message, { httpStatus: HTTP_STATUS_FOR_REASON[reason] ?? 502 });
 }
+function freezeWorkspaceRoot(probed, requested) {
+  const base = String(probed ?? "").replace(/\/+$/, "").trim();
+  const want = requested == null || requested === "" ? base : String(requested).replace(/\/+$/, "").trim();
+  if (!base.startsWith("/")) fail4("workspace-unavailable", "probe pwd did not return an absolute root");
+  if (!want.startsWith("/")) fail4("invalid-request", "workspace root must be an absolute path");
+  if (!/^[A-Za-z0-9._/=+-]+$/.test(want) || /(^|\/)\.\.(\/|$)/.test(want)) {
+    fail4("invalid-request", "workspace root contains unsafe characters");
+  }
+  if (want !== base && !want.startsWith(`${base}/`)) {
+    fail4("workspace-denied", "workspace root must be the probed cwd or a subdirectory");
+  }
+  return want;
+}
 var WRITE_OPS = /* @__PURE__ */ new Set(["fs.write", "fs.mkdir", "fs.rename", "fs.remove"]);
 var PROCESS_OPS = /* @__PURE__ */ new Set(["process.start", "process.terminate"]);
 function createResourceService({ scopes, api, home: home3, spawnImpl, artifactPath: artifactPath2 }) {
@@ -2553,7 +2566,7 @@ function createResourceService({ scopes, api, home: home3, spawnImpl, artifactPa
     const profile = scope.profileSnapshot;
     let session;
     try {
-      session = await api.getSession(profile, scope.remoteSessionId);
+      session = await api.getSession(profile, scope.remote.bare);
       scope.api = "ready";
       scope.remoteSessionStatus = session?.status ?? null;
     } catch (error) {
@@ -2587,9 +2600,8 @@ function createResourceService({ scopes, api, home: home3, spawnImpl, artifactPa
         throw error;
       }
     }
-    const root = String(body.root ?? inspect.probe.find((p) => p.argv[0] === "pwd")?.stdout ?? "").trim();
-    if (!root || !root.startsWith("/")) fail4("invalid-request", "workspace root must be an absolute path");
-    if (!/^[A-Za-z0-9._/=+-]+$/.test(root)) fail4("invalid-request", "workspace root contains unsafe characters");
+    const probed = String(inspect.probe.find((p) => p.argv[0] === "pwd")?.stdout ?? "").trim();
+    const root = freezeWorkspaceRoot(probed, body.root);
     const published = await publishArtifact({
       sessionId: scope.remoteSessionId,
       identityFile,

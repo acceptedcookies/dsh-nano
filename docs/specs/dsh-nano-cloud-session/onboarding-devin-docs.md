@@ -1,6 +1,6 @@
 # DNCS × Devin Cloud 接入：文档追溯、目标模式与 Onboarding 规格
 
-> 文档路径：`docs/specs/dncs-devin-cloud-session-full/onboarding-devin-docs.md`
+> 文档路径：`docs/specs/dsh-nano-cloud-session/onboarding-devin-docs.md`
 > 所属包：`dsh-nano-cloud-session`（[DNCS]）
 > 对应 worktree：`.agents/worktrees/dncs-devin-cloud-session-full`，分支 `dncs-devin-cloud-session-full`
 > 文档日期：2026-11-15（Asia/Shanghai）

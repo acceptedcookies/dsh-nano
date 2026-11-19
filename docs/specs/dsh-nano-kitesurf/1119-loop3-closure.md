@@ -137,3 +137,56 @@ D 闸口（G01/G19 dsf/G24 session scope 决定/G29 HAR/G31）与 G20 冷交付�
 
 - 每个 D 项决定后：改 `routes.js`/`mcp-bridge.mjs`/`diagnostics.js`/`AGENTS.md` 对应面 → 补 `catalog-parity`/`delivery-guard` 断言 → 对应 T 项（T01/T19/T24/T29/T31）跑 A 级。
 - 决定形式不限（[业主] 心智锁定/QnA 冻结），但同一决定只留一份 durable 登记，不另立仪式文件。
+
+## 6. DNLS02 后续收口（2026-11-19，分支 `kitesurf-delivery-review`）
+
+> 决定的唯一登记是 [DNLS02-qna.md](../dsh-nano-local-sandbox/qna/DNLS02-qna.md)（`T-O-19`–`T-O-32`）。本节只记实施与验证，不重写决定。
+
+### 6.1 实施落位（按提交）
+
+| 提交 | 包 | 内容 | Truth-ID |
+|---|---|---|---|
+| `3ae7171` | — | 工作树基线快照（回滚点，不直接合入 main） | `T-O-22` |
+| `da86728` | docs | DNLS02 QnA 登记 | `T-O-19`–`T-O-32` |
+| `550621a` | DNLS | kernel / driver 硬切：`src/host` 零业务词（`no-business-core` 静态扫描）；kitesurf 业务迁入 `profiles/kitesurf/driver/`；`/kite` → `/lifecycle`；环境变量改 `DNLS_ENV`/`DNLS_PROFILES`/`DNLS_STATE_ROOT`；错误前缀由 profile 声明（线上 errorId 不变）；`settings.unsupported` 一行；HAR 子集、超时语义、ensure 共享声明写入工具描述与目录 `next` | `T-O-19`–`T-O-24`、`T-O-26`–`T-O-30` |
+| `efba586` | DNK | 消费者硬切：删除 `engine.js`/`container-engine.js`/`nano-kite.js`/`diagnostics.js` 及测试、configure UI、`/last` 读取；skill 只教通用面 | `T-O-32` |
+| `cd90681` | DNLS | 唯一构建入口 `scripts/build-profile.mjs`（`--check` 退出码 0 就绪 / 3 缺产物）；`deploy-local` 部署后报告就绪状态 | `T-O-31` |
+| `383758d` | DNLS | 状态卷位置纳入配方漂移；重建只用 kernel 分配的 `stateVolume` | `T-O-23` ⑤ |
+| `c08da9d` | DNLS | selftest 修复切割遗留的三项回归（driver 探针循环条件写反、history-consistent 归 driver、engine-version 比对 product+revision） | — |
+| `34ac32e` | DNK + DNLS | G27：删除 DNLS 侧 `e2e-ego.mjs` 与 `e2e-fork` 测试，DNK 持有唯一 pane e2e；`openPane()` 按工作区入口打开，不用坐标；断言跟上现行合同 | — |
+| `83318cf` | DNLS | `sandbox.control` 描述改「one MCP writer」并加描述断言；镜像 digest 随 bridge 变化更新 | `T-O-25` |
+
+D 闸口五项落地对照：
+
+| 项 | 落地 | 证据 |
+|---|---|---|
+| G01 | 锁仅约束 MCP 写者；REST 写不加拦截；描述与 SKILL 统一「one MCP writer」 | `test/control-wording.test.mjs`、DNK `skill.test.mjs` |
+| G19 | `deviceScaleFactor≠1`、`mobile≠false` → `kitesurf.settings.unsupported`（400），不写入 | `driver/settings.js`、`error-catalog.js` |
+| G24 | ensure 描述写明实例记录按 session、页面/CDP/history 在 env 容器内共享 | `mcp-sandbox.js` ensure 描述、`instances-ensure` 测试 |
+| G29 | `/har` 保持 `har-lite`，描述/SKILL/routes.md 写明 headers 恒空 | `mcp-sandbox.js`、DNK skill |
+| G31 | 目录 `next` 与 SKILL 写明「超时不是取消，先读 `navigation.outcome`」；不加 `*.cancelled` | `error-catalog.js`、DNK `observability.md` |
+
+### 6.2 测试与 dsh-dev 验收
+
+- 离线：DNLS `npm test` 279/279；DNK 41/41。HEAD 上与本轮无关的既有失败未处理：`check-clean-lib`（notepad）、仓根 T29/T30、`dsh-interface` observe-event/registrar。
+- 部署：`~/.dsh-dev`（宿主 3083，`kitesurf-dev` 8800/8801）。镜像经 `build-profile.mjs` 构建（`--check` 3 → 构建 → 0），tag `kitesurf-engine:39feadf…-dfe7b4388fdc`；`/recover` 结果 `recreated`，容器挂载 39feadf runtime 与新状态卷 `~/.dsh-dev/nano-local-sandbox/state/kitesurf/kitesurf-dev`。
+- `/selftest`：0/11 失败。
+- API 验收（REST + MCP，19 项）：19/19。
+- DNK pane e2e（ego-browser 驱动真实工作区）：28/29。截图人工核对：原生 HTML 投射、pick 框与便签、composer `<kitesurf ref>`、DevTools Network 均正常。
+- 唯一失败 `eval-chunk`：见 6.4 待裁决。
+- `kitesurf-desktop`（8802/8803）与 `~/.dsh-desktop` 全程未触碰。
+
+### 6.3 G20 / G25 结论
+
+- **G20**：首装链由 `build-profile.mjs` + 部署就绪报告覆盖；在 dsh-dev 上实测「缺镜像 → `--check` 报 3 → 构建 → 0 → ensure 成功」。空 home 全矩阵仍未跑（NOT RUN）。
+- **G25 repin：不 repin，pin 保持 `39feadf`**。候选 `b9b904e`、`f236927` 在派生目录构建镜像并做兼容实验，Axtra 页面仍报 React #299。根因有两层：
+  1. 网络：真实站点入口 JS 首字节 7–12 s、下载 60–105 s，超过引擎 `FETCH_TIMEOUT_MS=10_000`。
+  2. **上游引擎缺陷**：`packages/engine/src/eval/html-tag-spans.ts` 的 `htmlTagSpans` 不跳过 HTML 注释。`page.ts` 文档扫描剥离 `<noscript>` span 时，注释里的字面 `<noscript>` 被当成开标签，配对到后面真正的 `</noscript>`，把注释结尾吞掉，导致 head 截断、body 为空，`createRoot` 找不到 `#root`。7 行最小复现可稳定触发；三个提交都有该缺陷。按「pin 不可改写」不在 pin 内修补；可向上游报告。
+- 实验容器与临时镜像服务已清理。
+
+### 6.4 未闭合与风险
+
+- **待 [业主] 裁决：`/evaluate` 分段合同**。早前授权引入的分段读取（`{token,offset}` / `?page=N`）在迁入 DNLS 时丢失，错误目录也没有对应的 miss 行；DNK `routes.md` 仍承诺分段。恢复它等于改公共合同，按「不得擅自扩约」未实施。两种处理：恢复分段（需登记）或从 DNK skill 删除这条承诺。
+- **history 未迁移**：旧 `~/.dsh-kitesurf-state-dev` 按 `T-O-23` ⑤ 退役，未迁入新状态卷，dev 环境历史从空开始。
+- **并发部署风险**：本轮另一会话两次把 `~/.dsh-dev/plugins` 覆盖为 main 代码并重启宿主，并触发漂移重建。验收前须对比部署树与本分支一致；合入 main 前 dev 环境的结果不稳定。
+- G24 双 session live 隔离、G30 i18n 行为测试、desktop 独立验收：NOT RUN。

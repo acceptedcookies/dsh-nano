@@ -206,6 +206,21 @@ export function makeCdpRelay({ upstreamUrl = CDP_UPSTREAM, debug = process.env.M
 
   const log = (...args) => { if (debug) try { process.stderr.write(`[cdp-relay] ${args.join(' ')}\n`) } catch {} }
 
+  // Per-Cdp-command timing ring (cap 64): the relay was the only unobserved hop
+  // on the pane→engine path. Keyed by the namespaced upstream id so a reply
+  // lands the method+ms of its own command; surfaced via stats().cdp.
+  const cdpPending = new Map() // namespacedId -> {method, startedMs}
+  const cdpTimings = []
+  const recordCdp = (method, startedMs, outcome) => {
+    cdpTimings.push({ method: String(method || '?').slice(0, 60), ms: Math.max(0, Math.round(performance.now() - startedMs)), outcome, at: new Date().toISOString() })
+    if (cdpTimings.length > 64) cdpTimings.shift()
+  }
+  const cdpSummary = () => {
+    const ms = cdpTimings.map((r) => r.ms).sort((a, b) => a - b)
+    const at = (p) => (ms.length ? ms[Math.min(ms.length - 1, Math.floor((p / 100) * ms.length))] : 0)
+    return { count: cdpTimings.length, p50: at(50), p95: at(95), last: cdpTimings.slice(-8), pending: cdpPending.size }
+  }
+
   const broadcast = (text, except = null) => {
     for (const [socket] of clients) {
       if (socket === except) continue
@@ -259,6 +274,8 @@ export function makeCdpRelay({ upstreamUrl = CDP_UPSTREAM, debug = process.env.M
           // Namespaced response: un-prefix, deliver to its owner only.
           const slot = message.id >> SLOT_SHIFT
           const clientId = message.id & ((1 << SLOT_SHIFT) - 1)
+          const pending = cdpPending.get(message.id)
+          if (pending) { cdpPending.delete(message.id); recordCdp(pending.method, pending.startedMs, message.error ? 'error' : 'ok') }
           for (const [socket, row] of clients) {
             if (row.slot === slot) {
               try { sendText(socket, JSON.stringify({ ...message, id: clientId })) } catch { /* gone */ }
@@ -273,6 +290,8 @@ export function makeCdpRelay({ upstreamUrl = CDP_UPSTREAM, debug = process.env.M
           const sep = message.id.indexOf(':', 3)
           const slot = Number(message.id.slice(3, sep))
           const clientId = message.id.slice(sep + 1)
+          const pending = cdpPending.get(message.id)
+          if (pending) { cdpPending.delete(message.id); recordCdp(pending.method, pending.startedMs, message.error ? 'error' : 'ok') }
           for (const [socket, row] of clients) {
             if (row.slot === slot) {
               try { sendText(socket, JSON.stringify({ ...message, id: clientId })) } catch { /* gone */ }
@@ -290,6 +309,8 @@ export function makeCdpRelay({ upstreamUrl = CDP_UPSTREAM, debug = process.env.M
         shared.pageTargetId = null
         for (const [, settle] of relayInternal) settle.reject(new Error('cdp upstream lost'))
         relayInternal.clear()
+        for (const [, pending] of cdpPending) recordCdp(pending.method, pending.startedMs, 'upstream-lost')
+        cdpPending.clear()
         // The shared page just died; every client socket is now useless.
         for (const [socket] of [...clients]) dropClient(socket)
       }
@@ -349,12 +370,14 @@ export function makeCdpRelay({ upstreamUrl = CDP_UPSTREAM, debug = process.env.M
             return
           }
           message.id = (slot << SLOT_SHIFT) | (message.id & ((1 << SLOT_SHIFT) - 1))
+          cdpPending.set(message.id, { method: message.method, startedMs: performance.now() })
           text = JSON.stringify(message)
         } else if (message && typeof message === 'object' && typeof message.id === 'string' && message.method) {
           // String ids must be namespaced too: an unprefixed string reply is
           // indistinguishable from an event and would broadcast to every
           // client, cross-wiring whoever happens to poll first.
           message.id = `ks:${slot}:${message.id}`
+          cdpPending.set(message.id, { method: message.method, startedMs: performance.now() })
           text = JSON.stringify(message)
         }
         try { link.send(text) } catch (e) { log('send failed', e?.message); dropClient(socket, 'send-fail') }
@@ -370,7 +393,7 @@ export function makeCdpRelay({ upstreamUrl = CDP_UPSTREAM, debug = process.env.M
     socket.setTimeout(IDLE_MS, () => dropClient(socket, 'idle'))
   }
 
-  return { handle, clients, shared, stats: () => ({ clients: clients.size, upstreamAlive: upstream?.alive === true, pageTargetId: shared.pageTargetId }) }
+  return { handle, clients, shared, stats: () => ({ clients: clients.size, upstreamAlive: upstream?.alive === true, pageTargetId: shared.pageTargetId, cdpCalls: cdpSummary() }) }
 }
 
 /**
@@ -779,6 +802,16 @@ function attach(socket, env = process.env, bridgeState = { getDiagnostics: () =>
   // in-flight write-class call ids, so a dropped socket frees the gate even
   // if the child never answers.
   const pendingWrites = new Set()
+  // Per-call timing: the bridge was the chain's only unobserved hop. Every
+  // tools/call (native or forwarded) lands in bridgeState.callRing with its
+  // round-trip ms, so /health and sandbox.bridge_health can say which tool
+  // class is slow instead of only "the route was slow".
+  const callStarted = new Map() // message.id -> {tool, startedMs}
+  const recordCall = (tool, startedMs, outcome) => {
+    bridgeState.callRing = bridgeState.callRing || []
+    bridgeState.callRing.push({ tool: String(tool || 'unknown').slice(0, 80), ms: Math.max(0, Math.round(performance.now() - startedMs)), outcome, at: new Date().toISOString() })
+    if (bridgeState.callRing.length > 64) bridgeState.callRing.shift()
+  }
 
   let stdout = ''
   // tools/list requests we forwarded to the child: when its reply comes back,
@@ -801,6 +834,13 @@ function attach(socket, env = process.env, bridgeState = { getDiagnostics: () =>
         // stamp the pane-visible action record with the outcome.
         if (message.id != null && pendingWrites.has(message.id)) {
           pendingWrites.delete(message.id)
+          const started = callStarted.get(message.id)
+          if (started) {
+            callStarted.delete(message.id)
+            const toolErr = message.error ? true
+              : (typeof message.result?.content?.[0]?.text === 'string' && (message.result?.isError === true || /"ok"\s*:\s*false/.test(message.result.content[0].text)))
+            recordCall(started.tool, started.startedMs, toolErr ? 'error' : 'ok')
+          }
           // MCP tools/call reports failures as {result:{isError:true}} as well
           // as JSON-RPC {error} — the toast should mark both as not-ok.
           if (control.lastAction) {
@@ -851,8 +891,10 @@ function attach(socket, env = process.env, bridgeState = { getDiagnostics: () =>
           if (message.method === 'tools/call' && typeof message.params?.name === 'string') {
             const toolName = message.params.name
             control.lastCallAt = new Date().toISOString()
+            const startedMs = performance.now()
             if (toolName.startsWith('sandbox.')) {
               const data = answerNativeTool(toolName, message.params.arguments || {}, bridgeState, { connId, clientName })
+              recordCall(toolName, startedMs, data?.ok === false ? 'error' : 'ok')
               sendText(socket, JSON.stringify(message.id == null
                 ? toolError(null, -32600, 'tools/call requires an id')
                 : toolResult(message.id, data)))
@@ -864,6 +906,7 @@ function attach(socket, env = process.env, bridgeState = { getDiagnostics: () =>
               // annotating is never torn by a background agent's navigation.
               // A second writer is refused, not queued.
               if (control.humanHold?.active && clientName !== control.humanHold.owner) {
+                recordCall(toolName, startedMs, 'refused')
                 sendText(socket, JSON.stringify(message.id == null
                   ? toolError(null, -32600, 'tools/call requires an id')
                   : toolResult(message.id, {
@@ -874,6 +917,7 @@ function attach(socket, env = process.env, bridgeState = { getDiagnostics: () =>
                   })))
                 handledLocally = true
               } else if (control.writer !== null && control.writer !== connId) {
+                recordCall(toolName, startedMs, 'refused')
                 sendText(socket, JSON.stringify(message.id == null
                   ? toolError(null, -32600, 'tools/call requires an id')
                   : toolResult(message.id, {
@@ -889,7 +933,7 @@ function attach(socket, env = process.env, bridgeState = { getDiagnostics: () =>
                 control.ownerSince = control.ownerSince || new Date().toISOString()
                 control.lastWriteAt = new Date().toISOString()
                 control.lastAction = { tool: toolName.slice(0, 80), owner: clientName, at: control.lastWriteAt }
-                if (message.id != null) pendingWrites.add(message.id)
+                if (message.id != null) { pendingWrites.add(message.id); callStarted.set(message.id, { tool: toolName, startedMs }) }
               }
             }
           }
@@ -916,6 +960,22 @@ function attach(socket, env = process.env, bridgeState = { getDiagnostics: () =>
   socket.setTimeout(IDLE_MS, () => { releaseAll(); teardown(1001) })
 }
 
+/** p50/p95 + per-tool summary of the callRing — /health and bridge_health surface it. */
+function callSummary(ring) {
+  const rows = Array.isArray(ring) ? ring : []
+  const ms = rows.map((r) => r.ms).sort((a, b) => a - b)
+  const at = (p) => (ms.length ? ms[Math.min(ms.length - 1, Math.floor((p / 100) * ms.length))] : 0)
+  const byTool = {}
+  for (const r of rows) {
+    const t = byTool[r.tool] || (byTool[r.tool] = { n: 0, totalMs: 0, errors: 0 })
+    t.n += 1
+    t.totalMs += r.ms
+    if (r.outcome !== 'ok') t.errors += 1
+  }
+  for (const t of Object.values(byTool)) t.avgMs = Math.round(t.totalMs / t.n)
+  return { count: rows.length, p50: at(50), p95: at(95), last: rows.slice(-10), byTool }
+}
+
 export function createBridge(port = PORT, env = process.env) {
   let conns = 0
   let accepted = 0
@@ -929,6 +989,7 @@ export function createBridge(port = PORT, env = process.env) {
     conns, accepted, rejected, uptimeMs: Date.now() - startedAt,
     control: controlSnapshot(control),
     cdp: cdpRelay.stats(),
+    calls: callSummary(bridgeState.callRing),
   })
   const bridgeState = {
     getDiagnostics: () => lastDiagnostics,
@@ -1099,9 +1160,9 @@ export function createBridge(port = PORT, env = process.env) {
     }
   })
 
-  // 0.0.0.0 INSIDE the container is required: Apple container publishes a
-  // host port onto the container's network IP (192.168.64.x), not its
-  // loopback. Binding to 127.0.0.1 here would make 127.0.0.1:8799 unreachable.
+  // 0.0.0.0 INSIDE the container is required: the container runtime publishes a
+  // host port onto the container's allocated network address, not its
+  // loopback. Binding to 127.0.0.1 here would make the published port unreachable.
   // The real boundary is the host-side loopback publish (createArgs), the
   // Origin allowlist on /mcp, and the no-Origin requirement on /diagnostics.
   server.listen(port, '0.0.0.0', () => {

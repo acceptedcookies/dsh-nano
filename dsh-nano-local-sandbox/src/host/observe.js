@@ -26,6 +26,10 @@ const LABELS = {
  * @param {string} input.buildId
  * @param {object} input.effective
  * @param {object} input.ports
+ * @param {object|null} input.networking backend-reported container networking:
+ *   { hostGateway: the address inside the container that reaches the host —
+ *     a RUNTIME value the backend discovers per its own topology (never a
+ *     literal), containerAddress: this container's own address }
  */
 export function projectSnapshot(input) {
   const engineState = input.cdpUp ? 'cdp' : input.httpUp ? 'http-only' : 'down'
@@ -84,6 +88,7 @@ export function projectSnapshot(input) {
     summary,
     buildId: input.buildId,
     cdpGeneration: input.cdpGeneration || 0,
+    networking: input.networking && typeof input.networking === 'object' ? { ...input.networking } : null,
   }
 }
 

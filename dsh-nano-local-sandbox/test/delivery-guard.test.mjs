@@ -578,3 +578,18 @@ test('/storage rejects a typo\'d op instead of falling through to clear()', asyn
   // The clear() expression must never be issued for an unknown op.
   assert.ok(!client.evaluations.some((expr) => expr.includes('.clear()')))
 })
+
+// interact click must run real activation: dispatchEvent(new MouseEvent) never
+// fires an anchor/button's activation behavior, so it would report ok while
+// never navigating. The expression closes the sequence with el.click().
+test('interact click expression ends with el.click() for real activation', async () => {
+  let captured = ''
+  const client = fakeClient({
+    evaluate: (expr) => { captured = expr; return { result: { value: { ok: true, action: 'click' } } } },
+  })
+  const deps = depsWith({ connect: async () => client })
+  deps.session.pageUrl = PAGE_URL
+  const routes = routesFor(deps)
+  await call(routes['/nano-local-sandbox/interact'], { method: 'POST', body: { action: 'click', selector: 'a' } })
+  assert.equal(captured.includes('el.click()'), true, 'activation path missing — synthetic events alone never navigate')
+})

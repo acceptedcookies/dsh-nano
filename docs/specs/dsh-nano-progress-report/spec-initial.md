@@ -14,7 +14,7 @@
 | 类型 | [dsh] overlay：浏览器进度视图 + 宿主只读摘要；无宿主路由 |
 | 平台 | web（desktop 同页面体系自动跟随，不单独声明） |
 | dsh 引擎 | `>=0.2.2-rc.5 <0.3.0`（以 `package.json` 为准） |
-| 挂载面 | `conversation.view` 主入口、会话头部动作和 `sidebar.right.pane.tab`（kind=`progress`） |
+| 挂载面 | `sidebar.right.pane.tab`（kind=`progress`，唯一渲染面）、会话头部动作（打开工作台 tab）与 `sidebar.right.tab.menu.item`。**不注册 `conversation.view`**（chat interface 已有轨迹） |
 | 数据面 | `uiConversation.events/views` 注册自建 view target `'progress'`；`session.projections.faceOf('todos')`；`ctx.jobs` |
 | 视图前缀 | CSS/类名前缀 `npr-`；根标记 `data-nano-progress-report="1"` |
 
@@ -197,7 +197,7 @@ export const inject = [
    ├─ .npr-flow  flex:1，滚动
    │   ├─ .npr-older（hasMore：host Button ghost sm「Load older」，11px tertiary）
    │   └─ host AnimatedRows(.npr-rows) → .npr-row*（data-row-key）
-   │        └─ host DisclosureRow（leading glyph / title / headerAccessory=11px 相对时间 + 失败告警）
+   │        └─ host DisclosureRow（leading glyph / title / headerAccessory=56px 右对齐时间列 + 失败告警）
 │   ├─ .npr-turn  人类 prompt 在左缘（level 0）
 │   └─ .npr-turn-body  该轮全部步骤右移 18px，左边一条 0.5px 引线（level 1）
    │             └─ 展开：.npr-detail（11px mono，左 0.5px 引线；args/result/error/reasoning/耗时/子调用）
@@ -225,6 +225,7 @@ export const inject = [
 | `job` | `IconQueueOutlineRegular` | `label-tertiary` | |
 | `lifecycle` | `IconInfoOutlineRegular` | `label-dimmed` | 边界事件 |
 
+- 相对时间是独立右列：`.npr-row-tail` 用 `margin-left:auto` 推到右缘，`.npr-row-time` 固定 `min-width:56px` + `text-align:right` + `tabular-nums`，所有行共享同一右缘；失败告警 glyph 在时间左侧，不改变列的右缘。
 - 所有 glyph 默认 `label-tertiary`；只有失败行把 glyph 和标题换成 `state-error`。行没有底色、没有左侧状态条、没有 600 字重——这是「低干扰」的验收线。
 - 长文本：`.npr-row-content > span` 上做单行省略号（宿主 `TextShimmer` 把字串放在两层 span 内，`title` 本身不会收缩）。
 - 动效：只用宿主 `AnimatedRows` 的新增/位移与 `DisclosureRow` 的 running shimmer；本地只保留 meter 的 `width` 过渡，`prefers-reduced-motion` 下关闭。
@@ -323,8 +324,8 @@ node test/live/tab.live.mjs
 
 - 探 `https://dsh-dev.local/` → `302` → 剥 `?token=`（任一前置不满足 exit 0 skip）；
 - `findEgo()` 定位 ego-browser → `spawnSync(ego,['nodejs'],{input:script})` → `taskSpace('dnpr-progress')` → `page('p1')`；
-- `page.evaluate` 断言：会话视图与右栏各有一个可见根；`[data-npr="search"]` 是 `input[type=search]`，包裹层 26px、保留宿主字段边框；`[data-npr="tasks-panel"]` 的 drag/collapse 生效；
-- 用真实会话事件断言：`.npr-row` 全部 28px、背景透明、标题 400 字重；`[data-npr="turn"]` 的 opener 在左缘、body 右移 ≥12px 且有左引线；glyph 统一三级色（失败行除外）；`prompt` 标题色 ≠ `shell` 标题色且无底色；失败行 `[data-npr="fail"]` 且无红底/内阴影；
+- `page.evaluate` 断言：chat interface 的视图 tab 条没有 Progress；工作台只有这一个可见根；`[data-npr="search"]` 是 `input[type=search]`，包裹层 26px、保留宿主字段边框；`[data-npr="tasks-panel"]` 的 drag/collapse 生效；
+- 用真实会话事件断言：`.npr-row` 全部 28px、背景透明、标题 400 字重；`[data-npr="turn"]` 的 opener 在左缘、body 右移 ≥12px 且有左引线；所有行的 `[data-npr="time"]` 右缘一致且宽度 ≥50px；glyph 统一三级色（失败行除外）；`prompt` 标题色 ≠ `shell` 标题色且无底色；失败行 `[data-npr="fail"]` 且无红底/内阴影；
 - `getBoundingClientRect`/`computedStyle` 断言 toolbar=34px、Tasks 头部=30px、任务行=26px、完成任务带 `HH:MM`、meter 宽度比 = done/total、Tasks 高度随拖拽变化且 clamp 在 `88 … 0.6vh`；
 - `page.screenshot('/tmp/dnpr-progress-*.png')` 留证；测完还原（关闭 tab、清 localStorage）。
 

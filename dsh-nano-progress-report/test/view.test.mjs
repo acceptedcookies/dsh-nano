@@ -185,3 +185,22 @@ describe('low-key visual contract', () => {
     assert.match(css, /\.npr-task\s*\{[^}]*min-height:\s*26px/s)
   })
 })
+
+describe('workbench-only placement', () => {
+  it('Progress never registers a conversation.view tab', () => {
+    const index = read('src/client/index.js')
+    assert.ok(!index.includes("'conversation.view'"), 'chat interface must not get a second Progress tab')
+    assert.ok(index.includes("'sidebar.right.pane.tab'"), 'workbench pane seat still required')
+    const body = read('src/client/view/ProgressBody.jsx')
+    assert.ok(!body.includes('data-variant'), 'no view-variant branch in the body')
+    assert.ok(!body.includes('props.variant'), 'the body takes no variant prop')
+  })
+
+  it('the time is a fixed right-hand column, not a title suffix', () => {
+    const css = read('src/client/styles.js')
+    assert.match(css, /\.npr-row-time\s*\{[^}]*min-width:\s*56px/s)
+    assert.match(css, /\.npr-row-time\s*\{[^}]*text-align:\s*right/s)
+    assert.match(css, /\.npr-row-tail\s*\{[^}]*margin-left:\s*auto/s)
+    assert.match(css, /\[data-has-accessory\] \[data-disclosure-row\]\s*\{[^}]*flex:\s*1 1 auto/s)
+  })
+})

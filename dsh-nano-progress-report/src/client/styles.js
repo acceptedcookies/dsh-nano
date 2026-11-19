@@ -18,19 +18,6 @@ export const PROGRESS_CSS = `
   container-type: inline-size;
 }
 
-/* The conversation view variant lives inside the host's scrolling
- * conversation body: natural height, full width, sticky search line. */
-[data-nano-progress-report][data-variant="view"] {
-  height: auto; min-height: 0;
-  width: 100%;
-  background: transparent;
-}
-[data-nano-progress-report][data-variant="view"] .npr-toolbar {
-  position: sticky; top: 0; z-index: var(--nano-layer-local1);
-  background: var(--dsw-alias-bg-base);
-}
-[data-nano-progress-report][data-variant="view"] .npr-flow { overflow: visible; padding-bottom: 16px; }
-
 /* ── search line: borderless field on the panel background ───────────── */
 .npr-toolbar {
   flex: none; display: flex; align-items: center; gap: 6px;
@@ -116,10 +103,21 @@ export const PROGRESS_CSS = `
 .npr-t-lifecycle { color: var(--dsw-alias-label-dimmed); }
 .npr-row[data-status="failed"] .npr-row-title { color: var(--dsw-alias-state-error-primary); }
 
-.npr-row-tail { flex: none; display: flex; align-items: center; gap: 5px; padding-left: 6px; }
+/* The time is its own right-hand column, not a suffix on the title: the host
+   row grows to the accessory, the tail stays flush right, and the time has a
+   fixed width so every row lines up like a timeline gutter. */
+[data-nano-progress-report] [data-npr="row"] [data-disclosure-header][data-has-accessory] [data-disclosure-row] {
+  flex: 1 1 auto; min-width: 0;
+}
+.npr-row-tail {
+  flex: none; display: flex; align-items: center; justify-content: flex-end;
+  gap: 5px; margin-left: auto; padding-left: 12px;
+}
 .npr-row-time {
-  flex: none; color: var(--dsw-alias-label-tertiary);
-  font: var(--dsw-font-xxxs-11); white-space: nowrap;
+  flex: none; min-width: 56px; text-align: right;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxxs-11); font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 .npr-row-fail { display: inline-flex; color: var(--dsw-alias-state-error-primary); }
 

@@ -1,22 +1,14 @@
 /**
  * Live end-to-end check for dsh-nano-progress-report on the dsh-dev instance.
  *
- * Run with:
- *
  *   ego-browser nodejs < test/live/tab.live.mjs
  *
- * Every check asserts on real DOM state and leaves screenshots under
- * /tmp/dnpr-e2e-*.png. Exit code is non-zero when any check fails.
- * Requires: dsh-dev web running with the plugin deployed
- * (`node scripts/deploy-local.mjs --home ~/.dsh-dev --profile web
- *  --plugins dsh-nano-progress-report --partial` + restart the web host).
- *
- * The contract under test is the low-key Devin-shaped surface: one flat
- * execution list (no goal band, no turn groups, no status strip) and a quiet
- * Tasks footer whose top edge drags and whose header collapses.
+ * Progress lives ONLY in the right workbench. The chat interface already has
+ * the trajectory view, so the first checks assert no Progress tab exists there.
+ * Every check reads real DOM state; screenshots land under /tmp/dnpr-e2e-*.png.
+ * Requires dsh-dev web running with the plugin deployed.
  */
 
-const SPACE = process.env.DNPR_EGO_SPACE || 'dnpr-e2e'
 const GUI = process.env.DNPR_GUI_URL || 'https://dsh-dev.local/'
 const results = []
 let shot = 0
@@ -26,16 +18,8 @@ function record(name, ok, detail) {
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? ' — ' + String(detail).slice(0, 120) : ''}`)
 }
 
-/**
- * keepMounted panes of OTHER sessions stay hidden in the DOM —
- * every query must select the *visible* root or it asserts on a stale pane.
- * Passed to page.evaluate as the `src` arg, evaluated in page context.
- */
-const ROOT_SRC = `[...document.querySelectorAll('[data-nano-progress-report]')].find(el => el.offsetWidth > 0 && getComputedStyle(el).visibility === 'visible') ?? null`
-const VIEW_SRC = `[...document.querySelectorAll('[data-nano-progress-report][data-variant="view"]')].find(el => el.offsetWidth > 0 && getComputedStyle(el).visibility === 'visible') ?? null`
-const PANE_SRC = `[...document.querySelectorAll('[data-nano-progress-report][data-variant="pane"]')].find(el => el.offsetWidth > 0 && getComputedStyle(el).visibility === 'visible') ?? null`
+const PANE_SRC = `[...document.querySelectorAll('[data-nano-progress-report]')].find(el => el.offsetWidth > 0 && getComputedStyle(el).visibility === 'visible') ?? null`
 
-/** Predicate wait — replaces bare sleeps so slow machines fail, not flake. */
 async function waitFor(page, fn, arg, ms = 8000) {
   const deadline = Date.now() + ms
   let lastError = null
@@ -53,16 +37,13 @@ async function snap(page, name) {
   await page.screenshot({ path: `/tmp/dnpr-e2e-${String(shot++).padStart(2, '0')}-${name}.png` })
 }
 
-/** Navigate to the dev GUI. The token redirect mints a single-use token, so a
- *  consumed/expired URL surfaces as an HTTP error status; fall back to the bare
- *  origin (which mints a fresh one) before giving up. */
+/** Navigate to the dev GUI (token redirects are single-use; retry with grace). */
 async function gotoApp(page, url) {
   const attempts = [url, 'https://dsh-dev.local/', url, 'https://dsh-dev.local/']
   let lastError = null
   for (let i = 0; i < attempts.length; i += 1) {
-    const target = attempts[i]
     try {
-      await page.goto(target, { timeout: 60000 })
+      await page.goto(attempts[i], { timeout: 60000 })
       await page.waitForLoadState()
       const failed = await page.evaluate(() => {
         const text = document.body?.innerText ?? ''
@@ -70,41 +51,33 @@ async function gotoApp(page, url) {
       }).catch(() => true)
       if (!failed) return true
     } catch (error) { lastError = error }
-    // A freshly restarted web host needs a moment before the token broker
-    // serves the new launch line; give each retry a longer grace period.
     await new Promise(resolve => setTimeout(resolve, 2000 + i * 2000))
   }
   if (lastError) throw lastError
   return false
 }
 
-/** Activate the conversation-view Progress tab (the primary entry). */
-async function ensureView(page) {
-  if (await page.evaluate(src => eval(src) !== null, VIEW_SRC)) return true
-  // The conversation view strip mounts with the session; give it a moment.
-  const found = await waitFor(page, () =>
-    [...document.querySelectorAll('button[role="tab"]')]
-      .some(b => (b.textContent ?? '').trim() === 'Progress' && b.getBoundingClientRect().y < 90), undefined, 15000)
-  if (!found) return false
-  await page.evaluate(() => {
-    const t = [...document.querySelectorAll('button[role="tab"]')]
-      .find(b => (b.textContent ?? '').trim() === 'Progress' && b.getBoundingClientRect().y < 90)
-    t?.click()
-  })
-  return waitFor(page, src => eval(src) !== null, VIEW_SRC, 15000)
+async function mounted(page) {
+  return page.evaluate(src => eval(src) !== null, PANE_SRC)
 }
 
-/** Open the workbench Progress pane: sidebar -> guide (+) -> Progress card. */
+/** Open the workbench Progress pane: existing root -> pane tab chip -> guide. */
 async function ensurePane(page) {
-  if (await page.evaluate(src => eval(src) !== null, PANE_SRC)) return true
+  if (await mounted(page)) return true
+  await page.evaluate(() => {
+    const chip = [...document.querySelectorAll('[role="tab"]')]
+      .find(e => (e.textContent ?? '').trim() === 'Progress' && e.getBoundingClientRect().x > 700)
+    chip?.click()
+  })
+  await new Promise(r => setTimeout(r, 1200))
+  if (await mounted(page)) return true
   await page.evaluate(() => {
     const open = [...document.querySelectorAll('button[aria-label]')]
       .find(b => /打开右侧边栏/.test(b.getAttribute('aria-label') || ''))
     open?.click()
   })
-  await new Promise(r => setTimeout(r, 1200))
-  if (await page.evaluate(src => eval(src) !== null, PANE_SRC)) return true
-  // "+" turns the right pane into the guide; its Progress card opens the tab.
+  await new Promise(r => setTimeout(r, 1500))
+  if (await mounted(page)) return true
   const plus = await page.evaluate(() => {
     const b = [...document.querySelectorAll('button[aria-label="新标签页"]')]
       .find(e => e.getBoundingClientRect().x > 700 && e.getBoundingClientRect().width > 0)
@@ -124,7 +97,7 @@ async function ensurePane(page) {
 }
 
 async function main() {
-  const task = await taskSpace(SPACE)
+  const task = await taskSpace('dnpr-e2e')
   const managed = await task.pages()
   const page = managed[0] || task.page('p1')
 
@@ -138,29 +111,44 @@ async function main() {
     JSON.stringify(window.__DSH_BOOT__?.entries ?? []).includes('dsh-nano-progress-report'))
   record('client module loaded in page', bundleLoaded, '')
 
-  // ── view: the flat low-key list ───────────────────────────────────────
-  const view = await ensureView(page)
-  record('conversation-view Progress tab opens', view, '')
-  await snap(page, 'view')
-
-  const viewRows = view
-    ? await waitFor(page, src => (eval(src)?.querySelectorAll('[data-npr="row"]').length ?? 0) > 0, VIEW_SRC, 25000)
-    : false
-  // A filter persisted by an earlier run would flatten the grouped view before
-  // the structure checks (and make the later filter assert a no-op); clear it.
-  if (view) {
-    await page.evaluate(src => {
-      const input = eval(src)?.querySelector('[data-npr="search"]')
-      if (!input || input.value === '') return
-      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set
-      setter.call(input, '')
-      input.dispatchEvent(new Event('input', { bubbles: true }))
-    }, VIEW_SRC)
-    await waitFor(page, src => eval(src)?.querySelector('[data-npr="stats"]') === null, VIEW_SRC, 3000)
+  // Placement: the chat interface must not carry a Progress tab (it already
+  // has the trajectory view); Progress is a workbench tab only.
+  const chat = await page.evaluate(() => {
+    const lists = [...document.querySelectorAll('[role="tablist"]')]
+      .filter(l => l.getBoundingClientRect().x < 700 && l.getBoundingClientRect().width > 0)
+    return {
+      lists: lists.length,
+      tabs: lists.flatMap(l => [...l.querySelectorAll('[role="tab"]')]).map(e => (e.textContent ?? '').trim()),
+    }
+  })
+  if (chat.lists === 0) {
+    record('no Progress tab in chat — skipped', true,
+      'the chat view strip is not mounted in this layout (source guard still asserts no conversation.view registration)')
+  } else {
+    record('no Progress tab in the chat interface',
+      !chat.tabs.includes('Progress'), `chat tabs: ${chat.tabs.join(' | ').slice(0, 100)}`)
   }
-  record('timeline assembles', viewRows, view ? 'rows arrived' : 'no view root')
-  record('exactly one visible view', await page.evaluate(() =>
-    [...document.querySelectorAll('[data-nano-progress-report][data-variant="view"]')].filter(el => el.offsetWidth > 0).length) === 1, '')
+
+  const pane = await ensurePane(page)
+  record('workbench Progress pane opens', pane, '')
+  await snap(page, 'pane')
+
+  const rowsArrived = pane
+    ? await waitFor(page, src => (eval(src)?.querySelectorAll('[data-npr="row"]').length ?? 0) > 0, PANE_SRC, 25000)
+    : false
+  record('timeline assembles', rowsArrived, '')
+  record('exactly one progress root', await page.evaluate(() =>
+    [...document.querySelectorAll('[data-nano-progress-report]')].filter(el => el.offsetWidth > 0).length) === 1, '')
+
+  // Start from the unfiltered (turn-grouped) view regardless of persisted filters.
+  await page.evaluate(src => {
+    const input = eval(src)?.querySelector('[data-npr="search"]')
+    if (!input || input.value === '') return
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set
+    setter.call(input, '')
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  }, PANE_SRC)
+  await waitFor(page, src => eval(src)?.querySelector('[data-npr="stats"]') === null, PANE_SRC, 3000)
 
   const chrome = await page.evaluate(src => {
     const el = eval(src)
@@ -181,7 +169,7 @@ async function main() {
       drawer: el.querySelector('[data-npr="drawer"]') !== null,
       rowH: [...el.querySelectorAll('[data-npr="row"]')].map(r => Math.round(r.getBoundingClientRect().height)),
     }
-  }, VIEW_SRC)
+  }, PANE_SRC)
   record('search line keeps the host field on a 34px row',
     Boolean(chrome) && chrome.barH === 34 && chrome.searchH >= 26 && chrome.searchH <= 28
       && chrome.inputType === 'search'
@@ -206,10 +194,22 @@ async function main() {
       indent: Math.round(step.getBoundingClientRect().x - opener.getBoundingClientRect().x),
       guide: getComputedStyle(body).borderLeftWidth,
     }
-  }, VIEW_SRC)
+  }, PANE_SRC)
   record('turns nest their steps behind a hairline',
     Boolean(turnShape) && turnShape.turns > 0 && turnShape.indent >= 12 && turnShape.guide !== '0px',
     turnShape ? JSON.stringify(turnShape) : 'no turn')
+
+  // The time is a gutter at the right edge: one right coordinate for every
+  // row, and a width that cannot shrink below the fixed column.
+  const timeCol = await page.evaluate(src => {
+    const times = [...eval(src).querySelectorAll('[data-npr="row"] [data-npr="time"]')]
+    const rights = times.map(t => Math.round(t.getBoundingClientRect().right))
+    const widths = times.map(t => Math.round(t.getBoundingClientRect().width))
+    return { n: times.length, distinctRights: [...new Set(rights)], minWidth: Math.min(...widths) }
+  }, PANE_SRC)
+  record('relative time is a fixed right-hand column',
+    timeCol.n > 0 && timeCol.distinctRights.length === 1 && timeCol.minWidth >= 50,
+    JSON.stringify(timeCol))
 
   const tone = await page.evaluate(src => {
     const el = eval(src)
@@ -218,36 +218,29 @@ async function main() {
     const pick = type => {
       const row = rows.find(r => r.dataset.type === type)
       if (!row) return null
-      const title = row.querySelector('.npr-row-title')
-      const icon = row.querySelector('.npr-icon')
       return {
-        title: getComputedStyle(title).color,
-        weight: getComputedStyle(title).fontWeight,
-        icon: icon ? getComputedStyle(icon).color : null,
+        title: getComputedStyle(row.querySelector('.npr-row-title')).color,
+        weight: getComputedStyle(row.querySelector('.npr-row-title')).fontWeight,
         bg: getComputedStyle(row).backgroundColor,
       }
     }
     const failed = rows.find(r => r.dataset.status === 'failed')
     return {
       prompt: pick('prompt'), message: pick('message'), shell: pick('shell'),
-      turn: pick('turn'), lifecycle: pick('lifecycle'),
       failed: failed ? {
         bg: getComputedStyle(failed).backgroundColor,
         shadow: getComputedStyle(failed).boxShadow,
         title: getComputedStyle(failed.querySelector('.npr-row-title')).color,
         mark: failed.querySelector('[data-npr="fail"]') !== null,
       } : null,
-      opaqueRows: rows.filter(r => {
-        const bg = getComputedStyle(r).backgroundColor
-        return bg !== 'rgba(0, 0, 0, 0)'
-      }).length,
+      opaqueRows: rows.filter(r => getComputedStyle(r).backgroundColor !== 'rgba(0, 0, 0, 0)').length,
       weights: [...new Set(rows.map(r => getComputedStyle(r.querySelector('.npr-row-title')).fontWeight))],
     }
-  }, VIEW_SRC)
-  record('rows are transparent — no tinted bands',
-    tone?.opaqueRows === 0, tone ? `${tone.opaqueRows} opaque rows` : 'no view')
+  }, PANE_SRC)
+  record('rows are transparent — no tinted bands', tone?.opaqueRows === 0,
+    tone ? `${tone.opaqueRows} opaque rows` : 'no pane')
   record('every title is regular weight (no hero rows)',
-    tone?.weights.length === 1 && tone.weights[0] === '400', tone ? tone.weights.join(',') : 'no view')
+    tone?.weights.length === 1 && tone.weights[0] === '400', tone ? tone.weights.join(',') : 'no pane')
   if (tone?.prompt && tone?.shell) {
     record('human input is brighter than machine steps',
       tone.prompt.title !== tone.shell.title && tone.prompt.bg === tone.shell.bg,
@@ -259,7 +252,7 @@ async function main() {
     const el = eval(src)
     return [...new Set([...el.querySelectorAll('[data-npr="row"]:not([data-status="failed"]) .npr-icon')]
       .map(i => getComputedStyle(i).color))]
-  }, VIEW_SRC)
+  }, PANE_SRC)
   record('glyphs share one tertiary tone', iconColours.length === 1, iconColours.join(' | '))
   if (tone?.failed) {
     record('failure is text + mark only, no red band',
@@ -270,218 +263,201 @@ async function main() {
     record('failure treatment — skipped', true, 'session has no failed row')
   }
 
-  // Expand a row that carries a payload.
   await page.evaluate(src => {
     const root = eval(src)
     const rows = [...root.querySelectorAll('.npr-row')]
     const target = rows.find(r => r.dataset.type === 'shell' && r.querySelector('[data-disclosure-row][data-expandable]'))
       ?? rows.find(r => r.querySelector('[data-disclosure-row][data-expandable]'))
     target?.querySelector('[data-disclosure-row]')?.click()
-  }, VIEW_SRC)
-  const detailOpen = await waitFor(page, src => eval(src)?.querySelector('[data-npr="detail"]') !== null, VIEW_SRC, 3000)
+  }, PANE_SRC)
+  const detailOpen = await waitFor(page, src => eval(src)?.querySelector('[data-npr="detail"]') !== null, PANE_SRC, 3000)
   const detail = await page.evaluate(src => {
     const d = eval(src)?.querySelector('[data-npr="detail"]')
     if (!d) return null
     const cs = getComputedStyle(d)
     return { mono: /mono|Menlo|Consolas|SF Mono/i.test(cs.fontFamily), size: cs.fontSize, bg: cs.backgroundColor, borderLeft: cs.borderLeftWidth }
-  }, VIEW_SRC)
+  }, PANE_SRC)
   record('row expands into a plain mono payload',
     detailOpen && detail?.mono === true && detail.size === '11px' && detail.bg === 'rgba(0, 0, 0, 0)',
     detail ? JSON.stringify(detail) : '')
   await snap(page, 'expanded')
 
-  // Filter on the type this session actually contains.
   const probe = await page.evaluate(src => {
     const root = eval(src)
     const counts = {}
     for (const row of root.querySelectorAll('[data-npr="row"]')) counts[row.dataset.type] = (counts[row.dataset.type] ?? 0) + 1
     const type = Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0]
     return { type, n: counts[type] ?? 0 }
-  }, VIEW_SRC)
+  }, PANE_SRC)
   await page.evaluate(([src, type]) => {
     const input = eval(src)?.querySelector('[data-npr="search"]')
     window.__dnprProbeType = type
     const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set
     setter.call(input, `type:${type}`)
     input.dispatchEvent(new Event('input', { bubbles: true }))
-  }, [VIEW_SRC, probe.type])
+  }, [PANE_SRC, probe.type])
   const narrowed = await waitFor(page, src => {
     const el = eval(src)
     const rows = el ? [...el.querySelectorAll('.npr-row')] : []
     return rows.length > 0 && rows.every(r => r.dataset.type === window.__dnprProbeType)
       && el.querySelector('[data-npr="stats"]') !== null
-  }, VIEW_SRC, 5000)
+  }, PANE_SRC, 5000)
   const filtered = await page.evaluate(src => {
     const el = eval(src)
     const rows = [...el.querySelectorAll('.npr-row')]
     return { n: rows.length, types: [...new Set(rows.map(r => r.dataset.type))], stats: el.querySelector('[data-npr="stats"]')?.textContent }
-  }, VIEW_SRC)
+  }, PANE_SRC)
   record(`type:${probe.type} filter`, narrowed && filtered.n === probe.n && filtered.types.length === 1,
     `${filtered.n}/${probe.n} rows, stats=${filtered.stats}`)
-  await page.evaluate(src => eval(src)?.querySelector('[data-npr="filter-clear"]')?.click(), VIEW_SRC)
-  await waitFor(page, src => eval(src)?.querySelector('[data-npr="stats"]') === null, VIEW_SRC, 3000)
   await snap(page, 'filtered')
+  await page.evaluate(src => eval(src)?.querySelector('[data-npr="filter-clear"]')?.click(), PANE_SRC)
+  await waitFor(page, src => eval(src)?.querySelector('[data-npr="stats"]') === null, PANE_SRC, 3000)
 
-  // ── pane: the same list plus the Tasks footer ─────────────────────────
-  const pane = await ensurePane(page)
-  record('workbench Progress pane opens', pane, '')
-  await snap(page, 'pane')
-
-  if (pane) {
-    const panel = await page.evaluate(src => {
-      const el = eval(src)
-      const bar = el.querySelector('[data-npr="tasks-panel"]')
-      if (!bar) return null
-      const head = bar.querySelector('[data-disclosure-header]')
-      const cs = getComputedStyle(bar)
-      const meta = bar.querySelector('[data-npr="tasks-count"]')?.textContent ?? null
-      const tasks = [...bar.querySelectorAll('[data-npr="task"]')]
-      const progress = bar.querySelector('[data-npr="progress"]')
-      return {
-        h: Math.round(bar.getBoundingClientRect().height),
-        bg: cs.backgroundColor,
-        borderTop: cs.borderTopWidth,
-        headH: Math.round(head?.getBoundingClientRect().height ?? 0),
-        rowH: tasks.map(t => Math.round(t.getBoundingClientRect().height)),
-        glyphs: tasks.filter(t => t.querySelector('.npr-task-glyph > *') !== null).length,
-        meta,
-        done: Number(progress?.getAttribute('aria-valuenow') ?? -1),
-        total: Number(progress?.getAttribute('aria-valuemax') ?? -1),
-        collapsed: bar.dataset.collapsed,
-        jobsSwitch: bar.querySelector('[data-npr="tasks-view"]') !== null,
-        innerTabs: bar.querySelectorAll('[role="tablist"], [role="tab"]').length,
-      }
-    }, PANE_SRC)
-    record('task footer: 30px header over layer-1', Boolean(panel)
-      && panel.headH === 30 && panel.bg === 'rgb(35, 35, 36)' && panel.borderTop === '0.5px',
-      panel ? JSON.stringify({ h: panel.h, bg: panel.bg, border: panel.borderTop }).slice(0, 120) : '')
-    record('task footer has no nested tab control', panel?.innerTabs === 0, '')
-    if (panel && panel.meta !== null) {
-      const m = /^(\d+)\/(\d+)\s*done$/i.exec(panel.meta)
-      record('tasks count matches the projection',
-        m !== null && Number(m[1]) === panel.done && Number(m[2]) === panel.total,
-        `count="${panel.meta}" bar=${panel.done}/${panel.total}`)
-      record('task rows are 26px with host glyphs',
-        panel.rowH.length === panel.total && panel.rowH.every(h => h === 26) && panel.glyphs === panel.total,
-        `rows=${panel.rowH.length} glyphs=${panel.glyphs}`)
-      const withTimes = await page.evaluate(src => {
-        const bar = eval(src)?.querySelector('[data-npr="tasks-panel"]')
-        const items = [...(bar?.querySelectorAll('[data-npr="task"][data-status="completed"]') ?? [])]
-        return {
-          completed: items.length,
-          stamped: items.filter(t => /\d{1,2}:\d{2}/.test(t.querySelector('.npr-task-meta')?.textContent ?? '')).length,
-        }
-      }, PANE_SRC)
-      record('completed tasks carry the event-stream time',
-        withTimes.completed === 0 || withTimes.stamped === withTimes.completed,
-        JSON.stringify(withTimes))
-    } else {
-      record('tasks count — skipped', true, 'this session has no tasks')
+  // ── Tasks footer ─────────────────────────────────────────────────────
+  const panel = await page.evaluate(src => {
+    const el = eval(src)
+    const bar = el.querySelector('[data-npr="tasks-panel"]')
+    if (!bar) return null
+    const head = bar.querySelector('[data-disclosure-header]')
+    const cs = getComputedStyle(bar)
+    const meta = bar.querySelector('[data-npr="tasks-count"]')?.textContent ?? null
+    const tasks = [...bar.querySelectorAll('[data-npr="task"]')]
+    const progress = bar.querySelector('[data-npr="progress"]')
+    return {
+      h: Math.round(bar.getBoundingClientRect().height),
+      bg: cs.backgroundColor,
+      borderTop: cs.borderTopWidth,
+      headH: Math.round(head?.getBoundingClientRect().height ?? 0),
+      rowH: tasks.map(t => Math.round(t.getBoundingClientRect().height)),
+      glyphs: tasks.filter(t => t.querySelector('.npr-task-glyph > *') !== null).length,
+      meta,
+      done: Number(progress?.getAttribute('aria-valuenow') ?? -1),
+      total: Number(progress?.getAttribute('aria-valuemax') ?? -1),
+      jobsSwitch: bar.querySelector('[data-npr="tasks-view"]') !== null,
+      innerTabs: bar.querySelectorAll('[role="tablist"], [role="tab"]').length,
     }
-    record('jobs switch only when jobs exist', panel?.jobsSwitch === false, 'session has no jobs')
-
-    // A previous run may have left the footer collapsed; the drag sequence
-    // below assumes an expanded body.
-    await page.evaluate(src => {
+  }, PANE_SRC)
+  record('task footer: 30px header over layer-1', Boolean(panel)
+    && panel.headH === 30 && panel.bg === 'rgb(35, 35, 36)' && panel.borderTop === '0.5px',
+    panel ? JSON.stringify({ h: panel.h, bg: panel.bg, border: panel.borderTop }).slice(0, 120) : '')
+  record('task footer has no nested tab control', panel?.innerTabs === 0, '')
+  if (panel && panel.meta !== null) {
+    const m = /^(\d+)\/(\d+)\s*done$/i.exec(panel.meta)
+    record('tasks count matches the projection',
+      m !== null && Number(m[1]) === panel.done && Number(m[2]) === panel.total,
+      `count="${panel.meta}" bar=${panel.done}/${panel.total}`)
+    record('task rows are 26px with host glyphs',
+      panel.rowH.length === panel.total && panel.rowH.every(h => h === 26) && panel.glyphs === panel.total,
+      `rows=${panel.rowH.length} glyphs=${panel.glyphs}`)
+    const withTimes = await page.evaluate(src => {
       const bar = eval(src)?.querySelector('[data-npr="tasks-panel"]')
-      if (bar?.dataset.collapsed === 'true') bar.querySelector('[data-npr="tasks-head"]')?.click()
+      const items = [...(bar?.querySelectorAll('[data-npr="task"][data-status="completed"]') ?? [])]
+      return {
+        completed: items.length,
+        stamped: items.filter(t => /\d{1,2}:\d{2}/.test(t.querySelector('.npr-task-meta')?.textContent ?? '')).length,
+      }
     }, PANE_SRC)
+    record('completed tasks carry the event-stream time',
+      withTimes.completed === 0 || withTimes.stamped === withTimes.completed, JSON.stringify(withTimes))
+  } else {
+    record('tasks count — skipped', true, 'this session has no tasks')
+  }
+  record('jobs switch only when jobs exist', panel?.jobsSwitch === false, 'session has no jobs')
+
+  await page.evaluate(src => {
+    const bar = eval(src)?.querySelector('[data-npr="tasks-panel"]')
+    if (bar?.dataset.collapsed === 'true') bar.querySelector('[data-npr="tasks-head"]')?.click()
+  }, PANE_SRC)
+  await new Promise(res => setTimeout(res, 300))
+
+  const drag = await page.evaluate(async src => {
+    const root = eval(src)
+    const bar = root.querySelector('[data-npr="tasks-panel"]')
+    const grip = bar?.querySelector('[data-npr="grip"]')
+    if (!bar || !grip) return null
+    const fire = (type, y) => {
+      const r = grip.getBoundingClientRect()
+      const target = type === 'pointerdown' ? grip : window
+      target.dispatchEvent(new PointerEvent(type, {
+        bubbles: true, cancelable: true, clientX: r.x + 24, clientY: y, pointerId: 1,
+      }))
+    }
+    const seat = () => new Promise(res => setTimeout(res, 160))
+    const height = () => Math.round(bar.getBoundingClientRect().height)
+    const dragBy = async dy => {
+      const start = grip.getBoundingClientRect().y + 2
+      fire('pointerdown', start)
+      fire('pointermove', start - dy)
+      fire('pointerup', start - dy)
+      await seat()
+      return height()
+    }
+    const floored = await dragBy(-2000)
+    const settled = await dragBy(200 - floored)
+    const grown = await dragBy(70)
+    const clamped = await dragBy(2000)
+    const ceiling = Math.round(window.innerHeight * 0.6)
+    await dragBy(200 - clamped)
+    return { floored, settled, grown, clamped, ceiling }
+  }, PANE_SRC)
+  record('task footer floors at 88px', drag?.floored === 88, drag ? `${drag.floored}px` : 'no grip')
+  record('task footer restores a 200px working height', drag?.settled === 200, drag ? `${drag.settled}px` : '')
+  record('drag raises the footer by 70px', drag?.grown === 270, drag ? `${drag.settled} → ${drag.grown}` : '')
+  record('footer clamps at 60% of the viewport',
+    Boolean(drag) && drag.clamped <= drag.ceiling && drag.clamped >= drag.ceiling - 2,
+    drag ? `${drag.clamped} vs ${drag.ceiling}` : '')
+
+  const collapse = await page.evaluate(async src => {
+    const bar = eval(src)?.querySelector('[data-npr="tasks-panel"]')
+    if (!bar) return null
+    const openH = Math.round(bar.getBoundingClientRect().height)
+    bar.querySelector('.npr-taskbar-title')?.click()
+    await new Promise(res => setTimeout(res, 260))
+    const collapsedH = Math.round(bar.getBoundingClientRect().height)
+    const bodyGone = bar.querySelector('[data-npr="tasks-body"]') === null
+    bar.querySelector('.npr-taskbar-title')?.click()
+    await new Promise(res => setTimeout(res, 260))
+    return { openH, collapsedH, reopenedH: Math.round(bar.getBoundingClientRect().height), bodyGone }
+  }, PANE_SRC)
+  record('header collapses the footer to its head',
+    Boolean(collapse) && collapse.bodyGone && collapse.collapsedH === 31,
+    collapse ? JSON.stringify(collapse) : '')
+  record('re-open restores the previous height',
+    Boolean(collapse) && collapse.reopenedH === 200, collapse ? `${collapse.collapsedH} -> ${collapse.reopenedH}` : '')
+
+  // Whole-strip hit target: click the far-right end (over the count/meter).
+  const stripPoint = await page.evaluate(src => {
+    const head = eval(src)?.querySelector('[data-npr="tasks-head"]')
+    if (!head) return null
+    const r = head.getBoundingClientRect()
+    return { x: Math.round(r.right - 28), y: Math.round(r.top + r.height / 2) }
+  }, PANE_SRC)
+  if (stripPoint) {
+    await page.mouse.click(stripPoint.x, stripPoint.y)
     await new Promise(res => setTimeout(res, 300))
-
-    // Drag the top edge: floor -> 200 -> +70 -> ceiling -> back.
-    const drag = await page.evaluate(async src => {
-      const root = eval(src)
-      const bar = root.querySelector('[data-npr="tasks-panel"]')
-      const grip = bar?.querySelector('[data-npr="grip"]')
-      if (!bar || !grip) return null
-      const fire = (type, y) => {
-        const r = grip.getBoundingClientRect()
-        const target = type === 'pointerdown' ? grip : window
-        target.dispatchEvent(new PointerEvent(type, {
-          bubbles: true, cancelable: true, clientX: r.x + 24, clientY: y, pointerId: 1,
-        }))
-      }
-      const seat = () => new Promise(res => setTimeout(res, 160))
-      const height = () => Math.round(bar.getBoundingClientRect().height)
-      const dragBy = async dy => {
-        const start = grip.getBoundingClientRect().y + 2
-        fire('pointerdown', start)
-        fire('pointermove', start - dy)
-        fire('pointerup', start - dy)
-        await seat()
-        return height()
-      }
-      const floored = await dragBy(-2000)
-      const settled = await dragBy(200 - floored)
-      const grown = await dragBy(70)
-      const clamped = await dragBy(2000)
-      const ceiling = Math.round(window.innerHeight * 0.6)
-      const back = await dragBy(200 - clamped)
-      return { floored, settled, grown, clamped, ceiling, back }
+    const stripClosed = await page.evaluate(src => {
+      const bar = eval(src)?.querySelector('[data-npr="tasks-panel"]')
+      return { collapsed: bar?.dataset.collapsed, h: Math.round(bar?.getBoundingClientRect().height ?? 0) }
     }, PANE_SRC)
-    record('task footer floors at 88px', drag?.floored === 88, drag ? `${drag.floored}px` : 'no grip')
-    record('task footer restores a 200px working height', drag?.settled === 200, drag ? `${drag.settled}px` : '')
-    record('drag raises the footer by 70px', drag?.grown === 270, drag ? `${drag.settled} → ${drag.grown}` : '')
-    record('footer clamps at 60% of the viewport',
-      Boolean(drag) && drag.clamped <= drag.ceiling && drag.clamped >= drag.ceiling - 2,
-      drag ? `${drag.clamped} vs ${drag.ceiling}` : '')
-
-    const collapse = await page.evaluate(async src => {
-      const root = eval(src)
-      const bar = root.querySelector('[data-npr="tasks-panel"]')
-      if (!bar) return null
-      const openH = Math.round(bar.getBoundingClientRect().height)
-      bar.querySelector('.npr-taskbar-title')?.click()
-      await new Promise(res => setTimeout(res, 260))
-      const collapsedH = Math.round(bar.getBoundingClientRect().height)
-      const bodyGone = bar.querySelector('[data-npr="tasks-body"]') === null
-      bar.querySelector('.npr-taskbar-title')?.click()
-      await new Promise(res => setTimeout(res, 260))
-      return { openH, collapsedH, reopenedH: Math.round(bar.getBoundingClientRect().height), bodyGone }
-    }, PANE_SRC)
-    record('header collapses the footer to its head',
-      Boolean(collapse) && collapse.bodyGone && collapse.collapsedH === 31,
-      collapse ? JSON.stringify(collapse) : '')
-    record('re-open restores the previous height',
-      Boolean(collapse) && collapse.reopenedH === 200, collapse ? `${collapse.collapsedH} -> ${collapse.reopenedH}` : '')
-
-    // The hit target is the whole 30px strip, not just the title text: click
-    // the far-right end (over the count/progress accessory) with a real pointer.
-    const stripPoint = await page.evaluate(src => {
+    const reopenPoint = await page.evaluate(src => {
       const head = eval(src)?.querySelector('[data-npr="tasks-head"]')
       if (!head) return null
       const r = head.getBoundingClientRect()
       return { x: Math.round(r.right - 28), y: Math.round(r.top + r.height / 2) }
     }, PANE_SRC)
-    if (stripPoint) {
-      await page.mouse.click(stripPoint.x, stripPoint.y)
-      await new Promise(res => setTimeout(res, 300))
-      const stripClosed = await page.evaluate(src => {
-        const bar = eval(src)?.querySelector('[data-npr="tasks-panel"]')
-        return { collapsed: bar?.dataset.collapsed, h: Math.round(bar?.getBoundingClientRect().height ?? 0) }
-      }, PANE_SRC)
-      // The footer shrank, so the header moved: measure it again before the
-      // second click or the pointer lands in the timeline.
-      const reopenPoint = await page.evaluate(src => {
-        const head = eval(src)?.querySelector('[data-npr="tasks-head"]')
-        if (!head) return null
-        const r = head.getBoundingClientRect()
-        return { x: Math.round(r.right - 28), y: Math.round(r.top + r.height / 2) }
-      }, PANE_SRC)
-      if (reopenPoint) await page.mouse.click(reopenPoint.x, reopenPoint.y)
-      await new Promise(res => setTimeout(res, 300))
-      const stripOpen = await page.evaluate(src => {
-        const bar = eval(src)?.querySelector('[data-npr="tasks-panel"]')
-        return { collapsed: bar?.dataset.collapsed, h: Math.round(bar?.getBoundingClientRect().height ?? 0) }
-      }, PANE_SRC)
-      record('clicking the empty end of the strip toggles the footer',
-        stripClosed.collapsed === 'true' && stripOpen.collapsed === 'false' && stripOpen.h === 200,
-        JSON.stringify({ closed: stripClosed, open: stripOpen }))
-    } else {
-      record('whole-strip click — skipped', true, 'no task header wrapper')
-    }
-    await snap(page, 'footer')
+    if (reopenPoint) await page.mouse.click(reopenPoint.x, reopenPoint.y)
+    await new Promise(res => setTimeout(res, 300))
+    const stripOpen = await page.evaluate(src => {
+      const bar = eval(src)?.querySelector('[data-npr="tasks-panel"]')
+      return { collapsed: bar?.dataset.collapsed, h: Math.round(bar?.getBoundingClientRect().height ?? 0) }
+    }, PANE_SRC)
+    record('clicking the empty end of the strip toggles the footer',
+      stripClosed.collapsed === 'true' && stripOpen.collapsed === 'false' && stripOpen.h === 200,
+      JSON.stringify({ closed: stripClosed, open: stripOpen }))
+  } else {
+    record('whole-strip click — skipped', true, 'no task header wrapper')
   }
+  await snap(page, 'footer')
 
   const fails = results.filter(r => !r.ok)
   console.log(`\n${results.length} checks: ${results.length - fails.length} pass, ${fails.length} fail`)

@@ -1,13 +1,10 @@
-/** ProgressBody — the Progress surface, mounted twice:
- *  - `variant: 'pane'` — the 'progress' workbench tab in the right sidebar;
- *  - `variant: 'view'` — the 'nano-progress' conversation view tab, which
- *    scrolls inside the host conversation body (sticky toolbar, no task bar).
- *  Props arrive from the seat + this plugin's inject: { sessionId, ctx, t, variant }.
+/** ProgressBody — the Progress workbench pane. It lives ONLY in the right
+ *  workbench tab (`sidebar.right.pane.tab`); the chat interface already owns
+ *  the trajectory view and must not get a second Progress tab.
+ *  Props arrive from the seat + this plugin's inject: { sessionId, ctx, t }.
  *
- *  Deliberately one flat list, the way the Devin Progress reference reads:
- *  a quiet search line, the execution rows, and the Tasks footer. No goal
- *  banner, no turn grouping, no status band — the rows carry their own
- *  hierarchy through type and text weight. */
+ *  Arrangement follows the Devin Progress reference: a quiet search line,
+ *  turns whose steps are indented behind a hairline, and the Tasks footer. */
 import React from 'react'
 import {
   AnimatedRows, Button, IconCloseOutlineRegular, IconSearchOutlineRegular, Input,
@@ -56,7 +53,6 @@ function useExternal(source, deps) {
 
 export default function ProgressBody(props) {
   const { sessionId, ctx, t } = props
-  const variant = props.variant === 'view' ? 'view' : 'pane'
   const storageKey = `dsh-nano-progress-report:filter:${sessionId ?? 'all'}`
   const [query, setQuery] = useState(() => {
     try { return window.localStorage.getItem(storageKey) ?? '' } catch { return '' }
@@ -124,7 +120,7 @@ export default function ProgressBody(props) {
   const setTasksField = (patch) => setTasks(current => ({ ...current, ...patch }))
 
   if (bindingError) {
-    return h('div', { className: 'npr-empty', 'data-nano-progress-report': '1', 'data-npr': 'root', 'data-variant': variant },
+    return h('div', { className: 'npr-empty', 'data-nano-progress-report': '1', 'data-npr': 'root' },
       t('session.unavailable'))
   }
 
@@ -137,7 +133,7 @@ export default function ProgressBody(props) {
     ? ''
     : t('toolbar.matched').replace('{n}', String(filtered.length)).replace('{total}', String(rows.length))
 
-  return h('div', { 'data-nano-progress-report': '1', 'data-npr': 'root', 'data-variant': variant },
+  return h('div', { 'data-nano-progress-report': '1', 'data-npr': 'root' },
     h('div', { className: 'npr-toolbar', 'data-npr': 'toolbar' },
       h('span', { className: 'npr-toolbar-icon', 'aria-hidden': 'true' },
         h(IconSearchOutlineRegular, { size: 14 })),
@@ -201,7 +197,7 @@ export default function ProgressBody(props) {
             onToggle: () => toggleRow(row.key),
           }))))),
 
-    variant === 'view' ? null : h(TasksSection, {
+    h(TasksSection, {
       t,
       view: tasks.view,
       onView: value => setTasksField({ view: value }),

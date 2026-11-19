@@ -17,6 +17,12 @@ for (const candidate of [join(root, '../.env.devin.api'), join(root, '../../.env
   }
 }
 
+/* Fail closed: this script performs paid carrier operations (create, message,
+ * terminate). It refuses to run unless the operator explicitly opts in. */
+if (process.env.DNCS_LIVE_API !== '1') {
+  console.error('refusing to run paid carrier operations without DNCS_LIVE_API=1')
+  process.exit(2)
+}
 const token = process.env.DEVIN_API_TOKEN
 const orgId = process.env.DEVIN_ORG_ID
 if (!token || !orgId) { console.error('need DEVIN_API_TOKEN + DEVIN_ORG_ID'); process.exit(1) }

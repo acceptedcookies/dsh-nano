@@ -1,52 +1,58 @@
 #!/usr/bin/env node
-/** One-shot authorized bootstrap against the owner-named Devin VM. */
+/** One-shot authorized bootstrap against an explicitly selected Devin VM.
+ *  Required: DNCS_LIVE_WORKSPACE=1 DNCS_PROBE_SESSION=devin-… DNCS_PROBE_PROFILE=<profile-id>
+ *  Optional: DNCS_SSH_IDENTITY, DSH_HOME,
+ *            DNCS_EXPECTED_FINGERPRINT.
+ *  The remote root is an exclusive `mktemp -d` under the probed cwd — never a
+ *  business path. All writes are create-only; nothing is deleted. */
 import { spawn } from 'node:child_process'
-import { publishArtifact, probeWorkspace, ensureKnownHostsFile, artifactPath } from '../src/providers/devin/bootstrap.js'
-import { resolveIdentityFile, knownHostsPath, buildSshArgv, spawnSsh } from '../src/providers/devin/ssh.js'
+import { publishArtifact, probeWorkspace, artifactPath } from '../src/providers/devin/bootstrap.js'
+import { buildSshArgv, spawnSsh } from '../src/providers/devin/ssh.js'
 import { createMcpClient } from '../src/providers/devin/mcp-client.js'
+import { probeTarget, assertProbeIdentity, claimPrivateRoot } from './lib/probe-target.mjs'
+import { createDevinApi } from '../src/providers/devin/api.js'
 
-const sessionId = process.env.DNCS_PROBE_SESSION
-if (!sessionId || process.env.DNCS_LIVE_WORKSPACE !== '1') {
-  console.error('need DNCS_LIVE_WORKSPACE=1 and DNCS_PROBE_SESSION')
+if (process.env.DNCS_LIVE_WORKSPACE !== '1' || !process.env.DNCS_PROBE_SESSION || !process.env.DNCS_PROBE_PROFILE) {
+  console.error('need DNCS_LIVE_WORKSPACE=1, DNCS_PROBE_SESSION and DNCS_PROBE_PROFILE')
   process.exit(2)
 }
-const home = process.env.DSH_HOME || process.env.HOME
-const identityFile = process.env.DNCS_SSH_IDENTITY || resolveIdentityFile({ home })
-const knownHostsFile = ensureKnownHostsFile(home)
-const expectedFingerprint = process.env.DNCS_EXPECTED_FINGERPRINT
+
+const { sessionId, profile, identityFile, knownHostsFile, expectedFingerprint } = probeTarget()
+/* Verify the named session/org resolves under the named profile before SSH. */
+await assertProbeIdentity({ api: createDevinApi(), profile, sessionId })
 const inspect = await probeWorkspace({ sessionId, identityFile, knownHostsFile, expectedFingerprint })
+const root = await claimPrivateRoot({
+  sessionId, identityFile, knownHostsFile, expectedFingerprint, probe: inspect,
+})
 const published = await publishArtifact({
   sessionId, identityFile, knownHostsFile, expectedFingerprint, artifact: artifactPath(), spawnImpl: spawn,
 })
 const nodeBin = inspect.node.startsWith('/') ? inspect.node.split(' ')[0] : 'node'
-const root = '/home/ubuntu/repos/dsh-nano'
 const argv = buildSshArgv({
   identityFile, knownHostsFile, sessionId,
   remoteArgv: [nodeBin, published.remoteFile, '--root', root],
 })
 const child = spawnSsh(argv, { spawnImpl: spawn })
 const client = createMcpClient(child)
+const facts = { ok: false }
 try {
   await client.initialize()
   const tools = await client.listTools()
-  const facts = await client.call('workspace.inspect', {})
-  const dir = `dncs-1119-probe`
-  try { await client.call('fs.mkdir', { path: dir }) } catch { /* exists */ }
+  const remote = await client.call('workspace.inspect', {})
+  await client.call('fs.mkdir', { path: 'probe' })
   const payload = Buffer.from(`dncs-1119 ${new Date().toISOString()}`).toString('base64')
-  const written = await client.call('fs.write', { path: `${dir}/sentinel.txt`, bytes: payload, createOnly: false })
-  const read = await client.call('fs.read', { path: `${dir}/sentinel.txt`, offset: 0, length: 256 })
-  console.log(JSON.stringify({
+  await client.call('fs.write', { path: 'probe/sentinel.txt', bytes: payload, createOnly: true })
+  const read = await client.call('fs.read', { path: 'probe/sentinel.txt', offset: 0, length: 256 })
+  Object.assign(facts, {
+    ok: tools.length > 0 && remote.root === root && read.bytes === payload,
     tools: tools.length,
-    root: facts.root,
-    os: facts.os,
-    runtime: facts.runtime,
-    pty: facts.pty,
-    forward: facts.forward,
-    wrote: written,
-    read: Buffer.from(read.bytes, 'base64').toString(),
-    hash: published.hash,
-  }, null, 2))
+    rootMatches: remote.root === root,
+    bytesEqual: read.bytes === payload,
+    hashMatches: published.hash.length === 64,
+    reused: published.reused === true,
+  })
 } finally {
-  client.close()
+  await client.close()
 }
-void knownHostsPath
+console.log(JSON.stringify(facts, null, 2))
+process.exit(facts.ok ? 0 : 1)

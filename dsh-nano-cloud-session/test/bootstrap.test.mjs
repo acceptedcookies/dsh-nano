@@ -88,7 +88,7 @@ test('T06 changed gateway key requires a new matching fingerprint', async () => 
   } finally { rmSync(dir, { recursive: true, force: true }) }
 })
 
-test('T06 artifact dir is chmod 700 and published via tmp+rename', async () => {
+test('T06 fresh publish uses exclusive mktemp + ln, never mv -f', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'dncs-art-'))
   const known = join(dir, 'known')
   writeFileSync(known, PINNED)
@@ -96,10 +96,16 @@ test('T06 artifact dir is chmod 700 and published via tmp+rename', async () => {
   writeFileSync(artifact, 'export default 1\n')
   const hash = hashFile(artifact)
   const seen = []
+  let probeCalls = 0
   const spawnImpl = fakeSpawn((cmd, args, remote) => {
     seen.push({ cmd, remote: String(remote), args: args.map(String) })
     if (cmd === 'scp') return { code: 0, stdout: '' }
-    if (String(remote).includes('sha256sum')) return { code: 0, stdout: `${hash}  file\n` }
+    if (String(remote).includes('mktemp')) return { code: 0, stdout: `.dncs-bridge/${hash}/.upload.AAAAAAAA\n` }
+    if (String(remote).includes('sha256sum')) {
+      probeCalls += 1
+      /* First probe = publish check → absent; the verify at the end = match */
+      return probeCalls === 1 ? { code: 1, stdout: '' } : { code: 0, stdout: `${hash}  file\n` }
+    }
     return { code: 0, stdout: '' }
   })
   try {
@@ -107,8 +113,51 @@ test('T06 artifact dir is chmod 700 and published via tmp+rename', async () => {
       sessionId: 'devin-abc', identityFile: '/tmp/id', knownHostsFile: known, spawnImpl, artifact,
     })
     assert.equal(published.hash, hash)
-    assert.ok(seen.some(row => row.cmd === 'scp' && row.args.some(a => a.endsWith('.tmp'))))
+    assert.ok(seen.some(row => row.cmd === 'scp' && row.args.some(a => a.includes('.upload.'))))
     assert.ok(seen.some(row => /\bchmod 700\b/.test(row.remote)))
-    assert.ok(seen.some(row => /\bmv -f\b/.test(row.remote)))
+    assert.ok(seen.some(row => /\bln\b/.test(row.remote)))
+    assert.ok(!seen.some(row => /\bmv\b/.test(row.remote)), 'publish never force-renames')
+  } finally { rmSync(dir, { recursive: true, force: true }) }
+})
+
+test('T06 an identical remote artifact is reused without an upload', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'dncs-reuse-'))
+  const known = join(dir, 'known')
+  writeFileSync(known, PINNED)
+  const artifact = join(dir, 'bridge.mjs')
+  writeFileSync(artifact, 'export default 1\n')
+  const hash = hashFile(artifact)
+  let scpCalls = 0
+  const spawnImpl = fakeSpawn((cmd, _args, remote) => {
+    if (cmd === 'scp') scpCalls += 1
+    if (String(remote).includes('sha256sum')) return { code: 0, stdout: `${hash}  file\n` }
+    return { code: 0, stdout: '' }
+  })
+  try {
+    const published = await publishArtifact({
+      sessionId: 'devin-abc', identityFile: '/tmp/id', knownHostsFile: known, spawnImpl, artifact,
+    })
+    assert.equal(published.reused, true)
+    assert.equal(scpCalls, 0)
+  } finally { rmSync(dir, { recursive: true, force: true }) }
+})
+
+test('T06 a conflicting remote artifact is refused, never overwritten', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'dncs-conflict-'))
+  const known = join(dir, 'known')
+  writeFileSync(known, PINNED)
+  const artifact = join(dir, 'bridge.mjs')
+  writeFileSync(artifact, 'export default 1\n')
+  let scpCalls = 0
+  const spawnImpl = fakeSpawn((cmd, _args, remote) => {
+    if (cmd === 'scp') scpCalls += 1
+    if (String(remote).includes('sha256sum')) return { code: 0, stdout: `${'0'.repeat(64)}  file\n` }
+    return { code: 0, stdout: '' }
+  })
+  try {
+    await assert.rejects(() => publishArtifact({
+      sessionId: 'devin-abc', identityFile: '/tmp/id', knownHostsFile: known, spawnImpl, artifact,
+    }), /conflict|overwrite/)
+    assert.equal(scpCalls, 0)
   } finally { rmSync(dir, { recursive: true, force: true }) }
 })

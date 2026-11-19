@@ -9,6 +9,16 @@ import { PROVIDER_KEY, PLUGIN, DISPLAY } from './display.js'
 const sessionOps = Object.keys(SESSION_FAMILY.operations)
 const workspaceOps = Object.keys(WORKSPACE_FAMILY.operations)
 
+/* Honest facets: which ops are host-local bookkeeping, which need the native
+ * chat surface, which ride the SSH lane, and which hit the carrier REST API.
+ * The lists partition the family — every op is in exactly one lane. */
+const localOps = Object.freeze([
+  'config.list', 'config.save', 'config.remove', 'config.activate', 'config.security',
+  'session.workspace_shell',
+])
+const nativeOps = Object.freeze(['session.native_open'])
+const sshOps = Object.freeze(['config.ssh-key', 'ssh.info', ...workspaceOps])
+
 export const DEVIN_DEFINITION = Object.freeze({
   providerKey: PROVIDER_KEY,
   plugin: PLUGIN,
@@ -18,8 +28,10 @@ export const DEVIN_DEFINITION = Object.freeze({
     workspace: WORKSPACE_FAMILY.contractId,
   }),
   handlers: Object.freeze({
-    api: sessionOps.filter(id => id !== 'config.ssh-key'),
-    ssh: ['config.ssh-key', ...workspaceOps],
+    local: localOps,
+    native: nativeOps,
+    ssh: sshOps,
+    api: Object.freeze(sessionOps.filter(id => !localOps.includes(id) && !nativeOps.includes(id) && !sshOps.includes(id))),
   }),
   resourceOperations: RESOURCE_OPERATION_IDS,
   constraints: Object.freeze({

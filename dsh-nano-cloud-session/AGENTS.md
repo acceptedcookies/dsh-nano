@@ -15,7 +15,7 @@
 | 平台 | 仅 web |
 | 宿主入口 | `index.js` |
 | 浏览器入口 | `lib/client.js` |
-| 宿主 inject | `webServer`、`connection`、`sessions`、`agents`（native Chat projection） |
+| 宿主 inject | `webServer`、`connection` |
 
 ## 交付物
 
@@ -89,14 +89,14 @@ dsh plugin --profile web add <spec>
 |---|---|
 | 侧栏「云端工作区」→ 设置（齿轮） | 打开「接入 / 会话 / 安全 / SSH」原生设置弹窗；Devin 的 token/Org/Base URL/连接测试/权限清单都在「接入」tab。删除某个 profile 是不可逆的（token 只写不读），须在宿主 `RiskConfirmation` 里勾选确认才能点删除 |
 | 侧栏「云端工作区」→ 新建（文件夹+） | 打开新建云会话弹窗（上传附件 → 创建后会在右侧原生工作台的附件 tab 可见） |
-| 云端工作区 → 展开 → 点会话行 | 有 H-CHAT 时打开原生 Chat；否则 mint 一个无 Agent 的 workbench 宿主会话。工作台展示 API 对话、三面健康度、附件/tags/insights。禁止本地终端回退 |
+| 云端工作区 → 展开 → 点会话行 | 只发 `native_open`：[业主] 裁决中央 Chat 只能原生映射 Devin。宿主外部会话视图声明 `sessionController.externalSessions.nativeViewVersion === 1` 时打开原生 Chat（原生 user/assistant 渲染、独立云文件/附件/终端 tab 按 capability 过滤）；否则 503 `NATIVE_UNAVAILABLE`，先于 profile 解析拒绝，不读消息、不建/不切会话、不造 fake Agent |
 | 新建 | prompt（必填）+ 全量 create 字段：title/tags/repos/devin_mode/max_acu_limit/resumable/playbook/knowledge/secrets/attachments/platform/structured output/security profile 等 → `POST /v3/organizations/{org}/sessions` |
 | 休眠 | `POST /v3/organizations/{org}/sessions/{id}/sleep`，保留 VM 快照 |
 | 归档 / 取消归档 | 对应 upstream archive / unarchive；归档前弹 `NanoDialog` 危险确认，取消不发请求 |
 | 中止 | `DELETE` upstream——存活 session → suspended；**不是硬删除、不自动归档**，收尾需再点归档。中止前必须在 `RiskConfirmation` 里勾选确认，未勾选时确认键禁用、Enter 不触发 |
 | SSH 命令 | 设置弹窗「SSH」tab 生成/显示专用密钥对（`${DSH_HOME}/nano-cloud-session-ssh`，0600），复制 `ssh -i <key> devin-<id>@ssh.devin.ai`；公钥粘到 Devin 后台 SSH keys 一次性 enroll（账号级） |
 
-宿主路由（全部 POST、全部走 route-guard）：`/nano-cloud-session/{status,config,sessions,session,create,message,archive,unarchive,terminate,ssh,catalog,upload,workspace,resources}`。`session` op 含 native_open/workspace_shell/get/messages/attachments/insights/generate_insights/tags/set_tags/append_tags/sleep。`native_open` 仅在正式 H-CHAT（`ctx.externalChat` 且 `externalProjection`）存在时投影；否则 503 `NATIVE_UNAVAILABLE`，不造 fake Agent。无 profile 且 H-CHAT 存在→`NATIVE_UNSUPPORTED` 422。`workspace_shell` 只 mint 工作台宿主会话。`/workspace` op：connect/status/disconnect/inspect。`/resources` 投影 workspace family 的 fs/process 操作。`/ssh` 仍是信息路由。错误面区分 `httpStatus` 与 `providerStatus`；403 表示「无权或不可见」。
+宿主路由（全部 POST、全部走 route-guard）：`/nano-cloud-session/{status,config,sessions,session,create,message,archive,unarchive,terminate,ssh,catalog,upload,workspace,resources}`。`session` op 含 native_open/workspace_shell/get/messages/attachments/insights/generate_insights/tags/set_tags/append_tags/sleep。`native_open` 仅在 `sessionController.externalSessions.nativeViewVersion === 1` 时投影，且要求显式 `profileId`；其余一律 503 `NATIVE_UNAVAILABLE`（或缺 profileId 时 422），先于 profile 解析拒绝，不造 fake Agent、不 mint 工作台宿主会话。`workspace_shell` 恒 503 `NATIVE_UNAVAILABLE`。`/workspace` op：connect/status/disconnect/inspect；在宿主存在正式远端执行授权 owner 之前，`workspace.connect` 在执行任何远端操作前一律 `503 workspace-unavailable`，浏览器自报的 `authorize` 字段不算授权。`/resources` 投影 workspace family 的 fs/process 操作。`/ssh` 仍是信息路由。错误面区分 `httpStatus` 与 `providerStatus`；403 表示「无权或不可见」。
 
 ## 配置与状态
 

@@ -5,7 +5,7 @@ import { readFileSync, writeFileSync, renameSync, mkdirSync, existsSync } from '
 import { join, dirname } from 'node:path'
 import { randomBytes } from 'node:crypto'
 import {
-  decodeProfileSave, publicProfile as publicOf, DEFAULT_BASE_URL, ProfileCodecError,
+  decodeProfileSave, publicProfile as publicOf, DEFAULT_BASE_URL, ProfileCodecError, providerKeyOf,
 } from '../providers/devin/profile-codec.js'
 
 const STORE_VERSION = 1
@@ -50,6 +50,9 @@ function load() {
   }
   if (!Number.isInteger(data.configEpoch)) data.configEpoch = 0
   if (!data.profileEpochs || typeof data.profileEpochs !== 'object') data.profileEpochs = {}
+  /* A stored profile of an unknown carrier is corrupt data, not a Devin
+   * profile: refuse at load rather than route it to the wrong provider. */
+  for (const profile of data.profiles) providerKeyOf(profile)
   return data
 }
 

@@ -52,6 +52,11 @@ export class Persist {
       keep: r.keep,
       labels: r.labels,
       meta: { cwd: r.meta.cwd, cols: r.meta.cols, rows: r.meta.rows, shell: r.meta.shell },
+      /* Remote identity is persisted as classification only (kind, identity,
+       * generation) — never tokens or binding handles. */
+      worldKind: r.worldKind ?? 'local',
+      remoteIdentity: r.remoteIdentity ?? null,
+      generation: r.generation ?? 'local',
       gate: r.gate?.snapshot?.(),
       exited: !!r.exited,
     }))

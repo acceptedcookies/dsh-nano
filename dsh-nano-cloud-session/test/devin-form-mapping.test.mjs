@@ -53,7 +53,8 @@ test('T20 form → codec → API keeps false/0 and maps every create field', asy
   assert.deepEqual(body.security_profile, { profile_id: 'sec-1' })
   assert.deepEqual(body.structured_output_schema, { type: 'object' })
   assert.equal(body.structured_output_required, true)
-  assert.deepEqual(body.session_secrets, [{ name: 'n', value: 'v' }])
+  /* legacy `name` entries normalize to the contract's {key,value} shape */
+  assert.deepEqual(body.session_secrets, [{ key: 'n', value: 'v' }])
   const cap = {}
   const api = createDevinApi({
     fetchImpl: async (url, init) => {
@@ -73,4 +74,33 @@ test('T20 invalid JSON leaves the form object untouched', () => {
   assert.throws(() => formToCreateInput(form), ProfileCodecError)
   assert.equal(form.sessionSecrets, '{')
   assert.equal(form.prompt, 'p')
+})
+
+test('session_secrets uses {key,value,sensitive}; sensitive:false survives; bad sensitive rejected', () => {
+  const input = formToCreateInput({ prompt: 'p', sessionSecrets: '[{"key":"A","value":"1","sensitive":false},{"name":"B","value":"2"}]' })
+  assert.deepEqual(input.session_secrets, [{ key: 'A', value: '1', sensitive: false }, { key: 'B', value: '2' }])
+  const body = encodeCreateSession(input)
+  assert.deepEqual(body.session_secrets, [{ key: 'A', value: '1', sensitive: false }, { key: 'B', value: '2' }])
+  assert.throws(() => formToCreateInput({ prompt: 'p', sessionSecrets: '[{"value":"v"}]' }), ProfileCodecError)
+  assert.throws(() => formToCreateInput({ prompt: 'p', sessionSecrets: '{"key":"k"}' }), ProfileCodecError)
+  assert.throws(() => formToCreateInput({ prompt: 'p', sessionSecrets: '[{"key":"k","value":"v","sensitive":"true"}]' }), ProfileCodecError)
+})
+
+test('security profile tri-state: inherit omits, none is unconditional null, custom requires id', () => {
+  const inherit = formToCreateInput({ prompt: 'p', securityProfileMode: 'inherit' })
+  assert.equal(inherit.security_profile, undefined)
+  assert.equal(encodeCreateSession(inherit).security_profile, undefined)
+  const none = formToCreateInput({ prompt: 'p', securityProfileMode: 'none' })
+  assert.deepEqual(none.security_profile, { profile_id: null })
+  assert.deepEqual(encodeCreateSession(none).security_profile, { profile_id: null })
+  const custom = formToCreateInput({ prompt: 'p', securityProfileMode: 'custom', securityProfileId: 'sec-9' })
+  assert.deepEqual(custom.security_profile, { profile_id: 'sec-9' })
+  assert.throws(() => formToCreateInput({ prompt: 'p', securityProfileMode: 'custom' }), ProfileCodecError)
+  assert.throws(() => formToCreateInput({ prompt: 'p', securityProfileMode: 'custom', securityProfileId: '  ' }), ProfileCodecError)
+  /* 'none' is unconditional: a leftover typed id cannot resurrect a profile */
+  const mixed = formToCreateInput({ prompt: 'p', securityProfileMode: 'none', securityProfileId: 'sec-9' })
+  assert.deepEqual(mixed.security_profile, { profile_id: null })
+  /* 'inherit' is unconditional too */
+  const inheritWithId = formToCreateInput({ prompt: 'p', securityProfileMode: 'inherit', securityProfileId: 'sec-9' })
+  assert.equal(inheritWithId.security_profile, undefined)
 })

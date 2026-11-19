@@ -221,7 +221,7 @@ export async function ensurePinnedGateway({ knownHostsFile, expectedFingerprint,
   return { pinned: true, fingerprint: scanned.fingerprint }
 }
 
-export function execSsh(argv, { spawnImpl = spawn, timeoutMs = 20000, input } = {}) {
+export function execSsh(argv, { spawnImpl = spawn, timeoutMs = 20000, input, signal } = {}) {
   return new Promise((resolve, reject) => {
     const child = spawnSsh(argv, { spawnImpl })
     const stdout = []
@@ -234,22 +234,31 @@ export function execSsh(argv, { spawnImpl = spawn, timeoutMs = 20000, input } = 
         reject(new WorkspaceError('workspace-unavailable', 'ssh exec timed out', { httpStatus: 503 }))
       }
     }, timeoutMs)
+    const onAbort = () => {
+      try { child.kill('SIGKILL') } catch { /* already gone */ }
+      if (!settled) {
+        settled = true
+        clearTimeout(timer)
+        reject(new WorkspaceError('workspace-scope-expired', 'ssh exec aborted', { httpStatus: 409 }))
+      }
+    }
+    if (signal?.aborted) { onAbort(); return }
+    signal?.addEventListener?.('abort', onAbort, { once: true })
+    const finish = fn => value => {
+      signal?.removeEventListener?.('abort', onAbort)
+      if (!settled) { settled = true; fn(value) }
+    }
     child.stdout?.on('data', chunk => stdout.push(chunk))
     child.stderr?.on('data', chunk => stderr.push(chunk))
     child.on('error', error => {
       clearTimeout(timer)
-      if (!settled) {
-        settled = true
-        reject(new WorkspaceError('workspace-failed', error.message, { httpStatus: 502 }))
-      }
+      finish(reject)(new WorkspaceError('workspace-failed', error.message, { httpStatus: 502 }))
     })
-    child.on('close', (code, signal) => {
+    child.on('close', (code, sig) => {
       clearTimeout(timer)
-      if (settled) return
-      settled = true
-      resolve({
+      finish(resolve)({
         code: code ?? 1,
-        signal: signal ?? null,
+        signal: sig ?? null,
         stdout: Buffer.concat(stdout).toString('utf8'),
         stderr: Buffer.concat(stderr).toString('utf8').slice(0, 4000),
       })

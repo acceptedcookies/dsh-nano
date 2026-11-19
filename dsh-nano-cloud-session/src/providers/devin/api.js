@@ -26,7 +26,7 @@ function classify(status) {
   return 'unexpected-status'
 }
 
-async function request(profile, { method = 'GET', path, query, body, timeoutMs = DEFAULT_TIMEOUT_MS, fetchImpl }) {
+async function request(profile, { method = 'GET', path, query, body, timeoutMs = DEFAULT_TIMEOUT_MS, fetchImpl, signal }) {
   const base = String(profile.baseUrl).replace(/\/+$/, '')
   const url = new URL(base + path)
   if (query) {
@@ -46,10 +46,12 @@ async function request(profile, { method = 'GET', path, query, body, timeoutMs =
         ...(body !== undefined && !isForm ? { 'content-type': 'application/json' } : {}),
       },
       body: isForm ? body : body !== undefined ? JSON.stringify(body) : undefined,
-      signal: AbortSignal.timeout(timeoutMs),
+      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]) : AbortSignal.timeout(timeoutMs),
       redirect: 'error',
     })
   } catch (error) {
+    /* A caller-side cancel is not an upstream fault — surface it as abort. */
+    if (signal?.aborted) signal.throwIfAborted()
     if (String(error?.message ?? '').toLowerCase().includes('redirect')) {
       throw new CarrierError('forbidden-or-invisible', 'refusing to follow a cross-origin redirect with a bearer token', { status: 0 })
     }
@@ -100,9 +102,9 @@ export function createDevinApi({ timeoutMs = DEFAULT_TIMEOUT_MS, fetchImpl } = {
       path: orgPath(profile, '/sessions/insights'),
       query: sessionQuery(params),
     }),
-    getSession: (profile, id) => call(profile, { path: orgPath(profile, `/sessions/${encodeURIComponent(id)}`) }),
-    getMessages: (profile, id, { first = 100, after } = {}) =>
-      call(profile, { path: orgPath(profile, `/sessions/${encodeURIComponent(id)}/messages`), query: { first, after } }),
+    getSession: (profile, id, { signal } = {}) => call(profile, { path: orgPath(profile, `/sessions/${encodeURIComponent(id)}`), signal }),
+    getMessages: (profile, id, { first = 100, after, signal } = {}) =>
+      call(profile, { path: orgPath(profile, `/sessions/${encodeURIComponent(id)}/messages`), query: { first, after }, signal }),
     getAttachments: (profile, id) => call(profile, { path: orgPath(profile, `/sessions/${encodeURIComponent(id)}/attachments`) }),
     getInsights: (profile, id) => call(profile, { path: orgPath(profile, `/sessions/${encodeURIComponent(id)}/insights`) }),
     generateInsights: (profile, id) => call(profile, { method: 'POST', path: orgPath(profile, `/sessions/${encodeURIComponent(id)}/insights/generate`) }),
@@ -122,10 +124,10 @@ export function createDevinApi({ timeoutMs = DEFAULT_TIMEOUT_MS, fetchImpl } = {
     },
     createSession: (profile, input) =>
       call(profile, { method: 'POST', path: orgPath(profile, '/sessions'), body: encodeCreateSession(input) }),
-    postMessage: (profile, id, message) =>
+    postMessage: (profile, id, message, { signal } = {}) =>
       call(profile, {
         method: 'POST', path: orgPath(profile, `/sessions/${encodeURIComponent(id)}/messages`),
-        body: { message },
+        body: { message }, signal,
       }),
     setTags: (profile, id, tags) =>
       call(profile, { method: 'PUT', path: orgPath(profile, `/sessions/${encodeURIComponent(id)}/tags`), body: { tags } }),

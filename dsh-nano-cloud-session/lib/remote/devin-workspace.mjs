@@ -7,7 +7,7 @@ import { realpathSync as realpathSync4, statSync as statSync2 } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 // src/remote/filesystem.js
-import { mkdirSync, readdirSync, openSync, readSync, closeSync, renameSync, rmdirSync, realpathSync as realpathSync2, statSync, unlinkSync, writeFileSync, existsSync as existsSync2 } from "node:fs";
+import { mkdirSync, readdirSync, openSync, readSync, closeSync, renameSync, rmdirSync, realpathSync as realpathSync2, statSync, lstatSync as lstatSync2, unlinkSync, writeFileSync, existsSync as existsSync2 } from "node:fs";
 import { dirname as dirname2, join as join2 } from "node:path";
 import { randomBytes } from "node:crypto";
 
@@ -220,8 +220,8 @@ function createFilesystem(rootInput, { maxPage = 64 * 1024 } = {}) {
         error.reason = "workspace-conflict";
         throw error;
       }
-      renameSync(src.real ?? src.joined, dst.joined);
-      const info = statSync(dst.joined);
+      renameSync(src.joined, dst.joined);
+      const info = lstatSync2(dst.joined);
       return { destinationVersion: versionOf(info) };
     },
     remove({ path, expectedVersion }) {

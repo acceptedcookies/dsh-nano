@@ -1,6 +1,5 @@
 // src/host/assemble.js
-import { mkdirSync as mkdirSync4, statSync as statSync2 } from "node:fs";
-import { join as join5 } from "node:path";
+import { statSync as statSync2 } from "node:fs";
 
 // ../packages/dsh-interface/src/contracts/FamilyDefinition.js
 var FamilyError = class extends Error {
@@ -639,6 +638,11 @@ var ProfileCodecError = class extends Error {
     this.status = 422;
   }
 };
+function providerKeyOf(profile) {
+  const carrier = profile?.carrier ?? profile?.providerKey;
+  if (carrier == null || carrier === "" || carrier === "devin") return PROVIDER_KEY;
+  throw new ProfileCodecError(`unsupported provider ${carrier}`, "invalid-request");
+}
 function originOf(baseUrl) {
   let url;
   try {
@@ -668,6 +672,11 @@ function decodeProfileSave(input, { existing } = {}) {
   if (!label || label.length > 80) throw new ProfileCodecError("label is required (max 80 chars)");
   const orgId = String(input.orgId ?? "").trim();
   if (!/^org-[A-Za-z0-9-]*$/.test(orgId)) throw new ProfileCodecError("orgId must look like org-\u2026");
+  for (const carrier of [input.carrier, input.providerKey]) {
+    if (carrier !== void 0 && carrier !== null && String(carrier) !== "" && String(carrier) !== "devin") {
+      throw new ProfileCodecError(`unsupported provider ${carrier}`, "invalid-request");
+    }
+  }
   const baseUrl = normalizeBaseUrl(input.baseUrl ?? existing?.baseUrl);
   const next = {
     id: existing?.id ?? (String(input.id ?? "").trim() || null),
@@ -784,7 +793,7 @@ function classify(status) {
   if (status >= 500) return "upstream-error";
   return "unexpected-status";
 }
-async function request(profile, { method = "GET", path, query, body, timeoutMs = DEFAULT_TIMEOUT_MS, fetchImpl }) {
+async function request(profile, { method = "GET", path, query, body, timeoutMs = DEFAULT_TIMEOUT_MS, fetchImpl, signal }) {
   const base = String(profile.baseUrl).replace(/\/+$/, "");
   const url = new URL(base + path);
   if (query) {
@@ -804,10 +813,11 @@ async function request(profile, { method = "GET", path, query, body, timeoutMs =
         ...body !== void 0 && !isForm ? { "content-type": "application/json" } : {}
       },
       body: isForm ? body : body !== void 0 ? JSON.stringify(body) : void 0,
-      signal: AbortSignal.timeout(timeoutMs),
+      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]) : AbortSignal.timeout(timeoutMs),
       redirect: "error"
     });
   } catch (error) {
+    if (signal?.aborted) signal.throwIfAborted();
     if (String(error?.message ?? "").toLowerCase().includes("redirect")) {
       throw new CarrierError("forbidden-or-invisible", "refusing to follow a cross-origin redirect with a bearer token", { status: 0 });
     }
@@ -883,8 +893,8 @@ function createDevinApi({ timeoutMs = DEFAULT_TIMEOUT_MS, fetchImpl } = {}) {
       path: orgPath(profile, "/sessions/insights"),
       query: sessionQuery(params)
     }),
-    getSession: (profile, id) => call(profile, { path: orgPath(profile, `/sessions/${encodeURIComponent(id)}`) }),
-    getMessages: (profile, id, { first = 100, after } = {}) => call(profile, { path: orgPath(profile, `/sessions/${encodeURIComponent(id)}/messages`), query: { first, after } }),
+    getSession: (profile, id, { signal } = {}) => call(profile, { path: orgPath(profile, `/sessions/${encodeURIComponent(id)}`), signal }),
+    getMessages: (profile, id, { first = 100, after, signal } = {}) => call(profile, { path: orgPath(profile, `/sessions/${encodeURIComponent(id)}/messages`), query: { first, after }, signal }),
     getAttachments: (profile, id) => call(profile, { path: orgPath(profile, `/sessions/${encodeURIComponent(id)}/attachments`) }),
     getInsights: (profile, id) => call(profile, { path: orgPath(profile, `/sessions/${encodeURIComponent(id)}/insights`) }),
     generateInsights: (profile, id) => call(profile, { method: "POST", path: orgPath(profile, `/sessions/${encodeURIComponent(id)}/insights/generate`) }),
@@ -899,10 +909,11 @@ function createDevinApi({ timeoutMs = DEFAULT_TIMEOUT_MS, fetchImpl } = {}) {
       return call(profile, { method: "POST", path: orgPath(profile, "/attachments"), body: form });
     },
     createSession: (profile, input) => call(profile, { method: "POST", path: orgPath(profile, "/sessions"), body: encodeCreateSession(input) }),
-    postMessage: (profile, id, message) => call(profile, {
+    postMessage: (profile, id, message, { signal } = {}) => call(profile, {
       method: "POST",
       path: orgPath(profile, `/sessions/${encodeURIComponent(id)}/messages`),
-      body: { message }
+      body: { message },
+      signal
     }),
     setTags: (profile, id, tags) => call(profile, { method: "PUT", path: orgPath(profile, `/sessions/${encodeURIComponent(id)}/tags`), body: { tags } }),
     appendTags: (profile, id, tags) => call(profile, { method: "POST", path: orgPath(profile, `/sessions/${encodeURIComponent(id)}/tags`), body: { tags } }),
@@ -964,6 +975,7 @@ function load() {
   }
   if (!Number.isInteger(data.configEpoch)) data.configEpoch = 0;
   if (!data.profileEpochs || typeof data.profileEpochs !== "object") data.profileEpochs = {};
+  for (const profile of data.profiles) providerKeyOf(profile);
   return data;
 }
 function save(data) {
@@ -1336,6 +1348,7 @@ var SESSION_FAMILY = defineFamily({
     "session.get": op("session/get"),
     "session.messages": op("session/messages"),
     "session.attachments": op("session/attachments"),
+    "session.external_attachments": op("session/external_attachments"),
     "session.insights": op("session/insights"),
     "session.generate_insights": op("session/generate_insights"),
     "session.tags": op("session/tags"),
@@ -1395,7 +1408,8 @@ var SESSION_FAMILY = defineFamily({
         "session.tags",
         "session.set_tags",
         "session.append_tags",
-        "session.sleep"
+        "session.sleep",
+        "session.external_attachments"
       ],
       transport: "http",
       path: "/nano-cloud-session/session",
@@ -1412,7 +1426,8 @@ var SESSION_FAMILY = defineFamily({
         tags: "session.tags",
         set_tags: "session.set_tags",
         append_tags: "session.append_tags",
-        sleep: "session.sleep"
+        sleep: "session.sleep",
+        external_attachments: "session.external_attachments"
       } }
     },
     "http.create": { operationIds: ["session.create"], transport: "http", path: "/nano-cloud-session/create", methods: ["POST"], bodyLimit: 262144 },
@@ -1815,8 +1830,17 @@ function httpStatusForError(error) {
 }
 
 // src/host/workspace-scopes.js
-function logicalKey(providerKey, profileId, remoteSessionId) {
-  return `${providerKey}\0${profileId}\0${remoteSessionId}`;
+function scopeTuple(providerKey, profileId, remoteSessionId, epoch, root, permissions) {
+  return JSON.stringify([
+    providerKey,
+    profileId,
+    remoteSessionId,
+    epoch,
+    root ?? null,
+    permissions.fsWrite === true,
+    permissions.process === true,
+    permissions.forward === true
+  ]);
 }
 function newId() {
   return randomBytes2(18).toString("base64url");
@@ -1850,9 +1874,13 @@ function createWorkspaceScopes({ configEpochOf } = {}) {
     return scope;
   };
   const invalidate = (scope, reason = "workspace-scope-expired") => {
+    if (scope.invalid) return;
     scope.invalid = true;
     scope.generation = `${scope.generation}:dead`;
     scope.resources = "closing";
+    if (byId.get(scope.id) === scope) byId.delete(scope.id);
+    if (scope.key && byLogical.get(scope.key) === scope) byLogical.delete(scope.key);
+    if (scope.key && inflight.get(scope.key) === scope.inflight) inflight.delete(scope.key);
     try {
       scope.abort.abort({ reason });
     } catch {
@@ -1874,24 +1902,27 @@ function createWorkspaceScopes({ configEpochOf } = {}) {
     list() {
       return [...byId.values()].filter((s) => !s.invalid).map(snapshot);
     },
-    logicalKey(profile, remote) {
-      const id = parseRemoteSessionId(remote);
-      return logicalKey(PROVIDER_KEY, profile.id, id.prefixed);
-    },
-    async connect(profile, body, factory) {
+    async connect(profile, body, factory, { grants } = {}) {
       const remote = parseRemoteSessionId(body.session_id ?? body.remoteSessionId);
-      const key = logicalKey(PROVIDER_KEY, profile.id, remote.prefixed);
       const epoch = configEpochOf ? configEpochOf(profile.id) : 0;
+      const permissions = {
+        fsWrite: grants?.fsWrite === true,
+        process: grants?.process === true,
+        forward: grants?.forward === true
+      };
+      const key = scopeTuple(PROVIDER_KEY, profile.id, remote.prefixed, epoch, body.root, permissions);
       const existing = byLogical.get(key);
-      if (existing && !existing.invalid && existing.configEpoch === epoch && existing.resources === "ready") {
+      if (existing && !existing.invalid && existing.resources === "ready") {
         return snapshot(existing);
       }
       const running = inflight.get(key);
       if (running) return running;
+      let pendingScope = null;
       const work = (async () => {
         const abort = new AbortController();
         const scope = {
           id: newId(),
+          key,
           providerKey: PROVIDER_KEY,
           profileId: profile.id,
           remoteSessionId: remote.prefixed,
@@ -1903,11 +1934,9 @@ function createWorkspaceScopes({ configEpochOf } = {}) {
           resources: "connecting",
           nativeView: "unavailable",
           remoteSessionStatus: null,
-          permissions: Object.freeze({
-            fsWrite: body.authorize?.includes?.("fs.write") === true,
-            process: false,
-            forward: false
-          }),
+          /* Grants come only from the trusted in-process caller, never the
+           * request body; everything defaults to denied. */
+          permissions: Object.freeze(permissions),
           inspect: null,
           handles: /* @__PURE__ */ new Map(),
           tunnels: /* @__PURE__ */ new Map(),
@@ -1923,6 +1952,7 @@ function createWorkspaceScopes({ configEpochOf } = {}) {
         };
         byId.set(scope.id, scope);
         byLogical.set(key, scope);
+        pendingScope = scope;
         try {
           const result = await factory(scope, { signal: abort.signal, body });
           if (scope.invalid) fail2("workspace-scope-expired", "workspace scope expired during connect");
@@ -1935,16 +1965,15 @@ function createWorkspaceScopes({ configEpochOf } = {}) {
           return snapshot(scope);
         } catch (error) {
           invalidate(scope, error?.reason ?? "workspace-failed");
-          byId.delete(scope.id);
-          if (byLogical.get(key) === scope) byLogical.delete(key);
           await scope.cleanup?.().catch(() => {
           });
           throw error;
         } finally {
-          inflight.delete(key);
+          if (inflight.get(key) === work) inflight.delete(key);
         }
       })();
       inflight.set(key, work);
+      if (pendingScope) pendingScope.inflight = work;
       const tracked = work.catch((error) => error);
       waiters.add(tracked);
       tracked.finally(() => waiters.delete(tracked));
@@ -1957,8 +1986,7 @@ function createWorkspaceScopes({ configEpochOf } = {}) {
       const scope = get(scopeId);
       invalidate(scope, "disconnect");
       byId.delete(scope.id);
-      const key = logicalKey(scope.providerKey, scope.profileId, scope.remoteSessionId);
-      if (byLogical.get(key) === scope) byLogical.delete(key);
+      if (byLogical.get(scope.key) === scope) byLogical.delete(scope.key);
       await scope.cleanup?.().catch(() => {
       });
       return { ok: true };
@@ -1967,6 +1995,17 @@ function createWorkspaceScopes({ configEpochOf } = {}) {
       const jobs = [];
       for (const scope of [...byId.values()]) {
         if (scope.profileId === profileId && !scope.invalid) {
+          invalidate(scope, "workspace-scope-expired");
+          jobs.push(Promise.resolve().then(() => scope.cleanup?.()).catch(() => {
+          }));
+        }
+      }
+      await Promise.all(jobs);
+    },
+    async invalidateRemote(profileId, remoteSessionId) {
+      const jobs = [];
+      for (const scope of [...byId.values()]) {
+        if (scope.profileId === profileId && scope.remoteSessionId === remoteSessionId && !scope.invalid) {
           invalidate(scope, "workspace-scope-expired");
           jobs.push(Promise.resolve().then(() => scope.cleanup?.()).catch(() => {
           }));
@@ -1984,10 +2023,24 @@ function createWorkspaceScopes({ configEpochOf } = {}) {
       byLogical.clear();
       await Promise.all(jobs);
     },
-    track(scope, promise) {
-      waiters.add(promise);
-      promise.finally(() => waiters.delete(promise));
-      return promise;
+    /* Wrap the caller's promise so a result produced after invalidation is
+     * never delivered: stale reads reject as expired, mutating calls as
+     * outcome-unknown. No unhandled `.finally` chain is created. */
+    track(scope, promise, { mutating = false } = {}) {
+      const gen = scope.generation;
+      const reason = mutating ? "workspace-outcome-unknown" : "workspace-scope-expired";
+      const result = Promise.resolve(promise).then((value) => {
+        if (scope.invalid || scope.generation !== gen) {
+          throw new WorkspaceError(reason, "scope ended before the call settled", { httpStatus: HTTP_STATUS_FOR_REASON[reason] ?? 502 });
+        }
+        return value;
+      });
+      waiters.add(result);
+      const drop = () => {
+        waiters.delete(result);
+      };
+      void result.then(drop, drop);
+      return result;
     },
     async drain() {
       await Promise.allSettled([...waiters]);
@@ -2220,7 +2273,7 @@ async function ensurePinnedGateway({ knownHostsFile, expectedFingerprint, spawnI
   pinGatewayKey(knownHostsFile, scanned, expectedFingerprint);
   return { pinned: true, fingerprint: scanned.fingerprint };
 }
-function execSsh(argv, { spawnImpl = spawn, timeoutMs = 2e4, input } = {}) {
+function execSsh(argv, { spawnImpl = spawn, timeoutMs = 2e4, input, signal } = {}) {
   return new Promise((resolve, reject) => {
     const child = spawnSsh(argv, { spawnImpl });
     const stdout = [];
@@ -2233,22 +2286,40 @@ function execSsh(argv, { spawnImpl = spawn, timeoutMs = 2e4, input } = {}) {
         reject(new WorkspaceError("workspace-unavailable", "ssh exec timed out", { httpStatus: 503 }));
       }
     }, timeoutMs);
+    const onAbort = () => {
+      try {
+        child.kill("SIGKILL");
+      } catch {
+      }
+      if (!settled) {
+        settled = true;
+        clearTimeout(timer);
+        reject(new WorkspaceError("workspace-scope-expired", "ssh exec aborted", { httpStatus: 409 }));
+      }
+    };
+    if (signal?.aborted) {
+      onAbort();
+      return;
+    }
+    signal?.addEventListener?.("abort", onAbort, { once: true });
+    const finish = (fn) => (value) => {
+      signal?.removeEventListener?.("abort", onAbort);
+      if (!settled) {
+        settled = true;
+        fn(value);
+      }
+    };
     child.stdout?.on("data", (chunk) => stdout.push(chunk));
     child.stderr?.on("data", (chunk) => stderr.push(chunk));
     child.on("error", (error) => {
       clearTimeout(timer);
-      if (!settled) {
-        settled = true;
-        reject(new WorkspaceError("workspace-failed", error.message, { httpStatus: 502 }));
-      }
+      finish(reject)(new WorkspaceError("workspace-failed", error.message, { httpStatus: 502 }));
     });
-    child.on("close", (code, signal) => {
+    child.on("close", (code, sig) => {
       clearTimeout(timer);
-      if (settled) return;
-      settled = true;
-      resolve({
+      finish(resolve)({
         code: code ?? 1,
-        signal: signal ?? null,
+        signal: sig ?? null,
         stdout: Buffer.concat(stdout).toString("utf8"),
         stderr: Buffer.concat(stderr).toString("utf8").slice(0, 4e3)
       });
@@ -2295,14 +2366,14 @@ function sshOpts(sessionId, { identityFile, knownHostsFile }) {
     strictHostKeyChecking: "yes"
   };
 }
-async function probeWorkspace({ sessionId, identityFile, knownHostsFile, spawnImpl, expectedFingerprint }) {
+async function probeWorkspace({ sessionId, identityFile, knownHostsFile, spawnImpl, expectedFingerprint, signal }) {
   await ensurePinnedGateway({ knownHostsFile, expectedFingerprint, spawnImpl });
   const id = parseRemoteSessionId(sessionId);
   const facts = { gatewayUser: id.gatewayUser, gatewayHost: id.gatewayHost };
   const runs = [];
   for (const remoteArgv of FIXED_PROBE) {
     const argv = buildSshArgv({ ...sshOpts(sessionId, { identityFile, knownHostsFile }), remoteArgv });
-    const result = await execSsh(argv, { spawnImpl, timeoutMs: 2e4 });
+    const result = await execSsh(argv, { spawnImpl, timeoutMs: 2e4, signal });
     runs.push({ argv: remoteArgv, code: result.code, stdout: result.stdout.trim().slice(0, 200) });
     if (result.code !== 0) {
       throw new WorkspaceError("workspace-unavailable", `probe ${remoteArgv[0]} failed`, { httpStatus: 503 });
@@ -2316,7 +2387,7 @@ async function probeWorkspace({ sessionId, identityFile, knownHostsFile, spawnIm
   for (const remoteArgv of nodeCandidates) {
     try {
       const argv = buildSshArgv({ ...sshOpts(sessionId, { identityFile, knownHostsFile }), remoteArgv });
-      const result = await execSsh(argv, { spawnImpl, timeoutMs: 2e4 });
+      const result = await execSsh(argv, { spawnImpl, timeoutMs: 2e4, signal });
       if (result.code === 0 && result.stdout.includes("v")) {
         node = `${remoteArgv[0]} ${result.stdout.trim()}`.slice(0, 200);
         break;
@@ -2362,7 +2433,7 @@ function scpArgv({ identityFile, knownHostsFile, sessionId, local, remote }) {
     `${id.gatewayUser}@${id.gatewayHost}:${remote}`
   ];
 }
-async function publishArtifact({ sessionId, identityFile, knownHostsFile, spawnImpl = spawn2, expectedFingerprint, artifact = artifactPath() }) {
+async function publishArtifact({ sessionId, identityFile, knownHostsFile, spawnImpl = spawn2, expectedFingerprint, artifact = artifactPath(), signal }) {
   await ensurePinnedGateway({ knownHostsFile, expectedFingerprint, spawnImpl });
   if (!existsSync4(artifact)) {
     throw new WorkspaceError("workspace-unavailable", "remote bridge artifact is missing", { httpStatus: 503 });
@@ -2370,50 +2441,77 @@ async function publishArtifact({ sessionId, identityFile, knownHostsFile, spawnI
   const hash = hashFile(artifact);
   const remoteDir = `.dncs-bridge/${hash}`;
   const remoteFile = `${remoteDir}/devin-workspace.mjs`;
-  const remoteTmp = `${remoteFile}.tmp`;
-  const mkdirArgv = buildSshArgv({
+  const ssh = (remoteArgv) => execSsh(buildSshArgv({
     identityFile,
     knownHostsFile,
     sessionId,
-    remoteArgv: ["mkdir", "-p", remoteDir]
-  });
-  const made = await execSsh(mkdirArgv, { spawnImpl });
+    remoteArgv
+  }), { spawnImpl, signal });
+  const existing = await ssh(["sha256sum", remoteFile]);
+  if (existing.code === 0) {
+    const remoteHash = existing.stdout.trim().split(/\s+/)[0];
+    if (remoteHash === hash) return { hash, remoteFile, remoteDir, reused: true };
+    throw new WorkspaceError("workspace-failed", "remote artifact hash conflict; refusing to overwrite", { httpStatus: 502 });
+  }
+  const made = await ssh(["mkdir", "-p", remoteDir]);
   if (made.code !== 0) throw new WorkspaceError("workspace-failed", "could not create artifact dir", { httpStatus: 502 });
-  const chmodArgv = buildSshArgv({
-    identityFile,
-    knownHostsFile,
-    sessionId,
-    remoteArgv: ["chmod", "700", remoteDir]
-  });
-  const mode = await execSsh(chmodArgv, { spawnImpl });
+  const mode = await ssh(["chmod", "700", remoteDir]);
   if (mode.code !== 0) throw new WorkspaceError("workspace-failed", "could not lock artifact dir mode 0700", { httpStatus: 502 });
+  const mk = await ssh(["mktemp", `${remoteDir}/.upload.XXXXXXXX`]);
+  const remoteTmp = mk.stdout.trim();
+  const escaped = remoteDir.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  if (mk.code !== 0 || !new RegExp(`^${escaped}/\\.upload\\.[A-Za-z0-9]{8}$`).test(remoteTmp)) {
+    throw new WorkspaceError("workspace-failed", "could not allocate an exclusive upload temp", { httpStatus: 502 });
+  }
+  const staged = (message) => new WorkspaceError("workspace-failed", `${message} (staging left at ${remoteTmp})`, { httpStatus: 502 });
+  const dropStaging = () => ssh(["rm", "-f", remoteTmp]);
   const argv = scpArgv({ identityFile, knownHostsFile, sessionId, local: artifact, remote: remoteTmp });
   const result = await new Promise((resolve, reject) => {
     const child = spawnImpl(argv[0], argv.slice(1), { stdio: ["ignore", "pipe", "pipe"], env: { PATH: process.env.PATH } });
     const stderr = [];
     child.stderr.on("data", (c) => stderr.push(c));
-    child.on("close", (code) => resolve({ code, stderr: Buffer.concat(stderr).toString("utf8") }));
-    child.on("error", reject);
+    const onAbort = () => {
+      try {
+        child.kill("SIGKILL");
+      } catch {
+      }
+      reject(new WorkspaceError("workspace-scope-expired", "artifact upload aborted", { httpStatus: 409 }));
+    };
+    if (signal?.aborted) onAbort();
+    else signal?.addEventListener?.("abort", onAbort, { once: true });
+    child.on("close", (code) => {
+      signal?.removeEventListener?.("abort", onAbort);
+      resolve({ code, stderr: Buffer.concat(stderr).toString("utf8") });
+    });
+    child.on("error", (error) => {
+      signal?.removeEventListener?.("abort", onAbort);
+      reject(error);
+    });
   });
   if (result.code !== 0) {
-    throw new WorkspaceError("workspace-failed", "artifact upload failed", { httpStatus: 502 });
+    throw staged("artifact upload failed");
   }
-  const moved = await execSsh(buildSshArgv({
-    identityFile,
-    knownHostsFile,
-    sessionId,
-    remoteArgv: ["mv", "-f", remoteTmp, remoteFile]
-  }), { spawnImpl });
-  if (moved.code !== 0) throw new WorkspaceError("workspace-failed", "artifact publish rename failed", { httpStatus: 502 });
-  const check = await execSsh(buildSshArgv({
-    identityFile,
-    knownHostsFile,
-    sessionId,
-    remoteArgv: ["sha256sum", remoteFile]
-  }), { spawnImpl });
-  if (!check.stdout.includes(hash)) {
-    throw new WorkspaceError("workspace-failed", "artifact hash mismatch", { httpStatus: 502 });
+  const tmpMode = await ssh(["chmod", "600", remoteTmp]);
+  if (tmpMode.code !== 0) throw staged("could not restrict uploaded artifact mode 0600");
+  const stagedHash = await ssh(["sha256sum", remoteTmp]);
+  if (stagedHash.code !== 0 || stagedHash.stdout.trim().split(/\s+/)[0] !== hash) {
+    throw staged("uploaded artifact hash mismatch");
   }
+  const linked = await ssh(["ln", remoteTmp, remoteFile]);
+  if (linked.code !== 0) {
+    const raced = await ssh(["sha256sum", remoteFile]);
+    const racedHash = raced.code === 0 ? raced.stdout.trim().split(/\s+/)[0] : null;
+    if (racedHash === hash) {
+      await dropStaging();
+      return { hash, remoteFile, remoteDir, reused: true };
+    }
+    throw staged("remote artifact hash conflict; refusing to overwrite");
+  }
+  const check = await ssh(["sha256sum", remoteFile]);
+  if (check.stdout.trim().split(/\s+/)[0] !== hash) {
+    throw staged("artifact hash mismatch");
+  }
+  await dropStaging();
   return { hash, remoteFile, remoteDir };
 }
 function ensureKnownHostsFile(home3, { seed } = {}) {
@@ -2429,13 +2527,30 @@ function ensureKnownHostsFile(home3, { seed } = {}) {
 function fail3(reason, message) {
   throw new WorkspaceError(reason, message, { httpStatus: HTTP_STATUS_FOR_REASON[reason] ?? 502 });
 }
+var MUTATING_TOOLS = /* @__PURE__ */ new Set(["fs.write", "fs.mkdir", "fs.rename", "fs.remove", "process.start", "process.terminate"]);
 function createMcpClient(child, { timeoutMs = CONSTRAINTS.readTimeoutMs } = {}) {
   let nextId = 1;
   let buffer = "";
+  let closed = false;
+  let closedPromise = null;
   const pending = /* @__PURE__ */ new Map();
-  child.stdout.setEncoding("utf8");
-  child.stdout.on("data", (chunk) => {
+  const settleAll = (reason, message) => {
+    for (const [id, waiter] of pending) {
+      pending.delete(id);
+      waiter(new WorkspaceError(reason, message, { httpStatus: HTTP_STATUS_FOR_REASON[reason] ?? 502 }));
+    }
+  };
+  const onData = (chunk) => {
     buffer += chunk;
+    if (buffer.length > CONSTRAINTS.maxFrameBytes) {
+      buffer = "";
+      try {
+        child.kill?.("SIGKILL");
+      } catch {
+      }
+      settleAll("workspace-unavailable", "mcp frame exceeds the size cap");
+      return;
+    }
     let idx;
     while ((idx = buffer.indexOf("\n")) >= 0) {
       const line = buffer.slice(0, idx);
@@ -2450,33 +2565,84 @@ function createMcpClient(child, { timeoutMs = CONSTRAINTS.readTimeoutMs } = {}) 
       const waiter = pending.get(message.id);
       if (waiter) {
         pending.delete(message.id);
-        waiter(message);
+        waiter(null, message);
       }
     }
-  });
-  child.on("exit", () => {
+  };
+  const onExit = () => {
+    if (pending.size === 0) return;
     for (const [id, waiter] of pending) {
       pending.delete(id);
-      waiter({ error: { message: "mcp child exited" } });
+      waiter(new WorkspaceError(
+        waiter.mutating ? "workspace-outcome-unknown" : "workspace-unavailable",
+        "mcp transport ended before the call settled",
+        { httpStatus: 502 }
+      ));
     }
+  };
+  const onStdinError = () => settleAll("workspace-unavailable", "mcp stdin write failed");
+  child.stdout.setEncoding("utf8");
+  child.stdout.on("data", onData);
+  child.stderr?.resume?.();
+  child.stderr?.on?.("data", () => {
   });
-  const request2 = (method, params) => new Promise((resolve, reject) => {
+  child.on("exit", onExit);
+  child.on("error", onExit);
+  child.stdin?.on?.("error", onStdinError);
+  const request2 = (method, params, { mutating = false } = {}) => new Promise((resolve, reject) => {
+    if (closed || child.exitCode != null || child.killed === true) {
+      reject(new WorkspaceError("workspace-unavailable", "mcp transport is closed", { httpStatus: 503 }));
+      return;
+    }
+    if (pending.size >= CONSTRAINTS.maxInFlight) {
+      reject(new WorkspaceError("workspace-limit", "too many pending mcp calls", { httpStatus: 413 }));
+      return;
+    }
     const id = nextId++;
     const timer = setTimeout(() => {
+      const waiter = pending.get(id);
+      if (!waiter) return;
       pending.delete(id);
-      reject(new WorkspaceError("workspace-unavailable", `${method} timed out`, { httpStatus: 503 }));
+      reject(new WorkspaceError(
+        waiter.mutating ? "workspace-outcome-unknown" : "workspace-unavailable",
+        `${method} timed out`,
+        { httpStatus: waiter.mutating ? 502 : 503 }
+      ));
     }, timeoutMs);
-    pending.set(id, (message) => {
+    pending.set(id, (error, message) => {
       clearTimeout(timer);
+      if (error) {
+        reject(error);
+        return;
+      }
       if (message.error) reject(new WorkspaceError("workspace-failed", message.error.message, { httpStatus: 502 }));
       else resolve(message.result);
     });
-    child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id, method, params })}
-`);
+    pending.get(id).mutating = mutating;
+    try {
+      child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id, method, params })}
+`, (error) => {
+        if (error) {
+          const waiter = pending.get(id);
+          if (waiter) {
+            pending.delete(id);
+            clearTimeout(timer);
+            reject(new WorkspaceError("workspace-unavailable", "mcp stdin write failed", { httpStatus: 503 }));
+          }
+        }
+      });
+    } catch {
+      pending.delete(id);
+      clearTimeout(timer);
+      reject(new WorkspaceError("workspace-unavailable", "mcp stdin write failed", { httpStatus: 503 }));
+    }
   });
   const notify = (method, params) => {
-    child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", method, params })}
+    try {
+      child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", method, params })}
 `);
+    } catch {
+    }
   };
   return {
     async initialize() {
@@ -2496,7 +2662,7 @@ function createMcpClient(child, { timeoutMs = CONSTRAINTS.readTimeoutMs } = {}) 
       return result.tools ?? [];
     },
     async call(name2, args) {
-      const result = await request2("tools/call", { name: name2, arguments: args });
+      const result = await request2("tools/call", { name: name2, arguments: args }, { mutating: MUTATING_TOOLS.has(name2) });
       const inner = result?.structuredContent;
       if (!inner || inner.ok !== true) {
         fail3(inner?.reason ?? "workspace-failed", inner?.message ?? "tool failed");
@@ -2506,15 +2672,46 @@ function createMcpClient(child, { timeoutMs = CONSTRAINTS.readTimeoutMs } = {}) 
     cancel(id) {
       notify("notifications/cancelled", { requestId: id });
     },
+    /* Resolves only after the child has actually exited (bounded): callers
+     * that drain a scope can rely on the remote process being gone, and the
+     * exit/error listeners stay armed until that observation lands. */
     close() {
-      try {
-        child.stdin.end();
-      } catch {
-      }
-      try {
-        child.kill("SIGTERM");
-      } catch {
-      }
+      if (closed) return closedPromise ?? Promise.resolve();
+      closed = true;
+      settleAll("workspace-unavailable", "mcp transport closed");
+      child.stdout?.off?.("data", onData);
+      closedPromise = new Promise((resolve) => {
+        let done = false;
+        const finish = () => {
+          if (done) return;
+          done = true;
+          clearTimeout(timer);
+          child.off?.("exit", onExit);
+          child.off?.("error", onExit);
+          child.stdin?.off?.("error", onStdinError);
+          resolve();
+        };
+        const timer = setTimeout(() => {
+          try {
+            child.kill("SIGKILL");
+          } catch {
+          }
+          finish();
+        }, 3e3);
+        child.once?.("close", finish);
+        child.once?.("exit", finish);
+        child.on?.("error", finish);
+        try {
+          child.stdin.end();
+        } catch {
+        }
+        try {
+          child.kill("SIGTERM");
+        } catch {
+        }
+        if (child.exitCode != null) finish();
+      });
+      return closedPromise;
     }
   };
 }
@@ -2548,14 +2745,15 @@ function fail4(reason, message) {
 }
 function freezeWorkspaceRoot(probed, requested) {
   const base = String(probed ?? "").replace(/\/+$/, "").trim();
-  const want = requested == null || requested === "" ? base : String(requested).replace(/\/+$/, "").trim();
+  const want = requested == null ? "" : String(requested).replace(/\/+$/, "").trim();
   if (!base.startsWith("/")) fail4("workspace-unavailable", "probe pwd did not return an absolute root");
+  if (want === "") fail4("invalid-request", "workspace root must be explicit");
   if (!want.startsWith("/")) fail4("invalid-request", "workspace root must be an absolute path");
   if (!/^[A-Za-z0-9._/=+-]+$/.test(want) || /(^|\/)\.\.(\/|$)/.test(want)) {
     fail4("invalid-request", "workspace root contains unsafe characters");
   }
-  if (want !== base && !want.startsWith(`${base}/`)) {
-    fail4("workspace-denied", "workspace root must be the probed cwd or a subdirectory");
+  if (!want.startsWith(`${base}/`)) {
+    fail4("workspace-denied", "workspace root must be a strict subdirectory of the probed cwd");
   }
   return want;
 }
@@ -2586,7 +2784,8 @@ function createResourceService({ scopes, api, home: home3, spawnImpl, artifactPa
       identityFile: file,
       knownHostsFile,
       spawnImpl,
-      expectedFingerprint
+      expectedFingerprint,
+      signal
     });
     let inspect;
     try {
@@ -2602,13 +2801,15 @@ function createResourceService({ scopes, api, home: home3, spawnImpl, artifactPa
     }
     const probed = String(inspect.probe.find((p) => p.argv[0] === "pwd")?.stdout ?? "").trim();
     const root = freezeWorkspaceRoot(probed, body.root);
+    if (signal?.aborted) fail4("workspace-scope-expired", "connect aborted");
     const published = await publishArtifact({
       sessionId: scope.remoteSessionId,
       identityFile,
       knownHostsFile,
       spawnImpl,
       expectedFingerprint,
-      artifact: artifactPath2
+      artifact: artifactPath2,
+      signal
     });
     const nodeBin = inspect.node.startsWith("/") ? inspect.node.split(" ")[0] : "node";
     const argv = buildSshArgv({
@@ -2617,13 +2818,22 @@ function createResourceService({ scopes, api, home: home3, spawnImpl, artifactPa
       sessionId: scope.remoteSessionId,
       remoteArgv: [nodeBin, published.remoteFile, "--root", root]
     });
+    if (signal?.aborted) fail4("workspace-scope-expired", "connect aborted");
     const child = spawnSsh(argv, { spawnImpl });
+    const onAbort = () => {
+      try {
+        child.kill("SIGKILL");
+      } catch {
+      }
+    };
+    signal?.addEventListener?.("abort", onAbort, { once: true });
     const client = createMcpClient(child);
     scope.cleanup = async () => {
-      client.close();
+      signal?.removeEventListener?.("abort", onAbort);
+      await client.close();
     };
     if (signal?.aborted) {
-      client.close();
+      await client.close();
       fail4("workspace-scope-expired", "connect aborted");
     }
     await client.initialize();
@@ -2635,8 +2845,8 @@ function createResourceService({ scopes, api, home: home3, spawnImpl, artifactPa
     const remoteInspect = await client.call("workspace.inspect", {});
     const confirmed = root.replace(/\/+$/, "");
     const remoteRoot = String(remoteInspect.root ?? "").replace(/\/+$/, "");
-    if (remoteRoot !== confirmed && !remoteRoot.startsWith(`${confirmed}/`) && !confirmed.startsWith(`${remoteRoot}/`)) {
-      fail4("workspace-failed", "remote root does not match the confirmed path");
+    if (remoteRoot !== confirmed) {
+      fail4("workspace-failed", "remote root does not equal the confirmed path");
     }
     scope.mcp = client;
     scope.child = child;
@@ -2675,7 +2885,7 @@ function createResourceService({ scopes, api, home: home3, spawnImpl, artifactPa
       }
       if (!scope.mcp) fail4("workspace-unavailable", "MCP client is not attached");
       const work = scope.mcp.call(op3, decoded);
-      return scopes.track(scope, work);
+      return scopes.track(scope, work, { mutating: WRITE_OPS.has(op3) || PROCESS_OPS.has(op3) });
     },
     nativeChatStatus(ctx) {
       return resolveNativeChat(ctx);
@@ -2683,26 +2893,83 @@ function createResourceService({ scopes, api, home: home3, spawnImpl, artifactPa
   };
 }
 
+// src/providers/devin/display.js
+var PROVIDER_KEY2 = "devin";
+var PLUGIN2 = "dsh-nano-cloud-session";
+var DISPLAY = Object.freeze({
+  id: "devin",
+  label: { zh: "Devin Cloud", en: "Devin Cloud" },
+  defaultBaseUrl: "https://api.devin.ai"
+});
+
+// src/providers/devin/definition.js
+var sessionOps = Object.keys(SESSION_FAMILY.operations);
+var workspaceOps = Object.keys(WORKSPACE_FAMILY.operations);
+var localOps = Object.freeze([
+  "config.list",
+  "config.save",
+  "config.remove",
+  "config.activate",
+  "config.security",
+  "session.workspace_shell"
+]);
+var nativeOps = Object.freeze(["session.native_open"]);
+var sshOps = Object.freeze(["config.ssh-key", "ssh.info", ...workspaceOps]);
+var DEVIN_DEFINITION = Object.freeze({
+  providerKey: PROVIDER_KEY2,
+  plugin: PLUGIN2,
+  display: DISPLAY,
+  families: Object.freeze({
+    session: SESSION_FAMILY.contractId,
+    workspace: WORKSPACE_FAMILY.contractId
+  }),
+  handlers: Object.freeze({
+    local: localOps,
+    native: nativeOps,
+    ssh: sshOps,
+    api: Object.freeze(sessionOps.filter((id) => !localOps.includes(id) && !nativeOps.includes(id) && !sshOps.includes(id)))
+  }),
+  resourceOperations: RESOURCE_OPERATION_IDS,
+  constraints: Object.freeze({
+    localPlatform: "darwin",
+    remoteOs: "linux",
+    remoteNode: ">=20",
+    gateway: "ssh.devin.ai"
+  })
+});
+
+// src/providers/devin/native-view.js
+import { setTimeout as wait } from "node:timers/promises";
+
 // src/providers/devin/chat.js
-async function readMessagePages(api, profile, sessionId, { first = 50, pages = 8 } = {}) {
+async function readMessagePages(api, profile, sessionId, { first = 50, pages = 8, after: initialAfter, signal } = {}) {
   const items = [];
   const seen = /* @__PURE__ */ new Set();
-  let after;
+  const visited = /* @__PURE__ */ new Set();
+  let after = initialAfter;
   let pageCount = 0;
   let cursorStuck = false;
+  let reachedEnd = false;
+  let nextCursor;
   const errors = [];
   while (pageCount < pages) {
+    signal?.throwIfAborted?.();
+    if (after != null && visited.has(after)) {
+      cursorStuck = true;
+      break;
+    }
+    if (after != null) visited.add(after);
     pageCount += 1;
     let page;
     try {
-      page = await api.getMessages(profile, sessionId, { first, after });
+      page = await api.getMessages(profile, sessionId, { first, after, signal });
     } catch (error) {
+      signal?.throwIfAborted?.();
       errors.push({ page: pageCount, message: error?.message ?? String(error), reason: error?.reason });
       break;
     }
+    signal?.throwIfAborted?.();
     const batch = page.items ?? page.messages ?? [];
-    if (batch.length === 0) break;
-    const startSize = items.length;
     for (const message of batch) {
       const id = message.event_id;
       if (id == null || id === "") {
@@ -2713,22 +2980,224 @@ async function readMessagePages(api, profile, sessionId, { first = 50, pages = 8
       seen.add(id);
       items.push(message);
     }
+    if (page.has_next_page === false) {
+      reachedEnd = true;
+      break;
+    }
     const next = page.end_cursor ?? page.cursor ?? page.next;
-    if (page.has_next_page === false) break;
-    if (!next || next === after) {
+    if (!next || visited.has(next)) {
+      nextCursor = void 0;
       cursorStuck = true;
       break;
     }
-    if (items.length === startSize && batch.length > 0) {
-    }
     after = next;
   }
-  return { items, pages: pageCount, cursorStuck, errors, complete: errors.length === 0 && !cursorStuck };
+  if (!reachedEnd && !cursorStuck && errors.length === 0) nextCursor = after;
+  signal?.throwIfAborted?.();
+  return { items, pages: pageCount, cursorStuck, reachedEnd, errors, nextCursor, complete: reachedEnd && errors.length === 0 && !cursorStuck };
+}
+
+// src/providers/devin/native-view.js
+var HISTORY_PAGE_CAP = 200;
+var FIRST = 100;
+var toWireTime = (value, fallback = 0) => {
+  const seconds = Number(value);
+  if (!Number.isFinite(seconds)) return fallback;
+  return seconds * 1e3;
+};
+var incomplete = (detail) => new CarrierError("history-incomplete", `native view cannot project this history (${detail})`);
+var classifyOf = (message) => {
+  const content = message?.content ?? message?.message;
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    const texts = content.filter((b) => b?.type === "text" && typeof b.text === "string").map((b) => b.text);
+    if (content.length !== texts.length) return null;
+    return texts.join("\n");
+  }
+  return null;
+};
+var roleOf = (message) => {
+  const role = message?.role ?? message?.type ?? message?.source;
+  if (role === "user") return "user";
+  if (role === "devin") return "devin";
+  return null;
+};
+function normalize(items) {
+  const entries = [];
+  for (const message of items) {
+    const role = roleOf(message);
+    const eventId = message?.event_id;
+    if (role == null || eventId == null || eventId === "") {
+      throw incomplete("row has no user|devin role or no event_id");
+    }
+    const text = classifyOf(message);
+    if (text == null || text.trim() === "") throw incomplete(`row ${eventId} has no projectable text`);
+    entries.push({ id: String(eventId), role, text, time: toWireTime(message.created_at) });
+  }
+  const records = entries.map((entry, seq) => {
+    const { id, role, text, time } = entry;
+    const event = role === "user" ? {
+      type: "user/message",
+      seq,
+      time,
+      surfaceOp: "append",
+      data: { id, role: "user", content: [{ type: "text", text }], source: { kind: "user" } }
+    } : {
+      type: "external/assistant-message",
+      seq,
+      time,
+      ignorable: true,
+      data: { id, text }
+    };
+    return { type: "event", event };
+  });
+  return { entries, records };
+}
+var sameEntry = (a, b) => a.id === b.id && a.role === b.role && a.text === b.text && a.time === b.time;
+function phaseOf(detail = {}) {
+  const status = detail.status;
+  const detailStatus = detail.status_detail;
+  if (status === "new" || status === "claimed" || status === "resuming") return "pending";
+  if (status === "running") {
+    if (detailStatus === "working") return "working";
+    if (detailStatus === "finished") return "completed";
+    if (typeof detailStatus === "string" && detailStatus.startsWith("waiting_")) return "awaiting-input";
+    return "unknown";
+  }
+  if (status === "suspended") return "suspended";
+  if (status === "error") return "failed";
+  if (status === "exit") return "stopped";
+  return "unknown";
+}
+function createDevinView({ api, profile, remoteId, id, detail = {}, pollIntervalMs = 5e3 }) {
+  if (!remoteId || !id) throw new CarrierError("invalid-request", "native view requires a remote and external session id");
+  const load2 = async (signal) => {
+    const page = await readMessagePages(api, profile, remoteId, { first: FIRST, pages: HISTORY_PAGE_CAP, signal });
+    if (!page.complete) {
+      const cause = page.cursorStuck ? "cursor cycle" : page.errors[0]?.message ?? "page cap reached";
+      throw incomplete(cause);
+    }
+    return normalize(page.items);
+  };
+  const live = {
+    status: detail.status,
+    statusDetail: detail.status_detail,
+    get phase() {
+      return phaseOf({ status: this.status, status_detail: this.statusDetail });
+    },
+    updatedAt: toWireTime(detail.updated_at, Date.now()),
+    title: typeof detail.title === "string" && detail.title !== "" ? detail.title : remoteId
+  };
+  const summary = {
+    get updatedAt() {
+      return live.updatedAt;
+    },
+    /* Only a working phase counts as running: waiting/finished states never
+     * surface a Stop affordance. */
+    get running() {
+      return live.phase === "working";
+    },
+    blank: false,
+    externalTabProviders: ["nano-cloud-session.attachments"],
+    /* Sequenced title hint: asOfSeq -1 sits below every event cut so any
+     * later projection (follow frame or rename) wins; the value itself is
+     * the remote detail title, never the namespaced id. */
+    get projections() {
+      return { kind: "sequenced", asOfSeq: -1, values: { title: live.title } };
+    }
+  };
+  return {
+    summary,
+    async *follow(signal) {
+      let state = await load2(signal);
+      const header = {
+        version: 4,
+        id,
+        createdAt: toWireTime(detail.created_at, Date.now()),
+        isSeeded: false
+      };
+      const cursor = state.records.length - 1;
+      yield {
+        type: "snapshot",
+        header,
+        cursor,
+        records: state.records,
+        hasMore: false,
+        projections: { asOfSeq: cursor, values: { title: live.title } },
+        assistantStream: { revision: 0 }
+      };
+      yield { type: "external-status", phase: live.phase };
+      let reported = live.phase;
+      while (true) {
+        await wait(pollIntervalMs, void 0, { signal });
+        const detailNow = await api.getSession(profile, remoteId, { signal }).catch(() => null);
+        if (detailNow) {
+          live.status = detailNow.status;
+          live.statusDetail = detailNow.status_detail;
+          live.updatedAt = toWireTime(detailNow.updated_at, live.updatedAt);
+          if (typeof detailNow.title === "string" && detailNow.title !== "") live.title = detailNow.title;
+        } else {
+          live.status = void 0;
+          live.statusDetail = void 0;
+        }
+        if (live.phase !== reported) {
+          reported = live.phase;
+          yield { type: "external-status", phase: reported };
+        }
+        const fresh = await load2(signal);
+        const prefixOk = state.entries.every((entry, i) => sameEntry(entry, fresh.entries[i]));
+        if (!prefixOk) {
+          throw new CarrierError("history-changed", "upstream history changed; reopen the native view");
+        }
+        for (const record of fresh.records.slice(state.records.length)) yield record;
+        state = fresh;
+      }
+    },
+    async events(request2 = {}, signal) {
+      const { records } = await load2(signal);
+      const through = request2.throughSeq ?? records.length - 1;
+      const before = request2.beforeSeq ?? records.length;
+      const window = records.filter((r) => r.event.seq <= through && r.event.seq < before);
+      const max = request2.maxMessages;
+      const slice = Number.isInteger(max) && max > 0 && window.length > max ? window.slice(-max) : window;
+      return {
+        records: slice,
+        hasMore: slice.length < window.length,
+        cursor: slice.length ? slice[slice.length - 1].event.seq : before - 1
+      };
+    },
+    async prompt(request2 = {}, signal) {
+      const parts = request2.content ?? [];
+      if (parts.some((part) => part?.type !== "text")) {
+        throw new CarrierError("unsupported-content", "external sessions accept text only");
+      }
+      const text = parts.map((part) => part.text ?? "").join("");
+      if (text.trim() === "") throw new CarrierError("invalid-request", "prompt text is required", { status: 422 });
+      signal?.throwIfAborted();
+      let reply;
+      try {
+        reply = await api.postMessage(profile, remoteId, text, { signal });
+      } catch (cause) {
+        if (cause instanceof CarrierError && cause.status >= 400 && cause.status < 500) throw cause;
+        throw new CarrierError("upstream-unknown", "prompt outcome unknown, check session history before resending");
+      }
+      let matched = false;
+      try {
+        const returned = reply?.session_id ?? reply?.id;
+        matched = returned != null && parseRemoteSessionId(returned).bare === remoteId;
+      } catch {
+      }
+      if (!matched) {
+        throw new CarrierError("upstream-unknown", "prompt outcome unknown, check session history before resending");
+      }
+      return { accepted: true };
+    }
+  };
 }
 
 // src/host/assemble.js
 var name = "nano-cloud-session";
-var inject = ["webServer", "connection", "sessions", "agents"];
+var inject = ["webServer", "connection", "sessionController"];
 var version = true ? "0.1.0" : "0.0.0";
 var review = ensurePerfReviewHost().hostJoin("nano-cloud-session", { version });
 var Config = {
@@ -2758,9 +3227,21 @@ var Config = {
 var messageOf = (error) => error instanceof Error ? error.message : String(error);
 function apply(ctx, config = {}) {
   const api = createDevinApi({ timeoutMs: config.requestTimeoutMs ?? 2e4 });
+  const externalSessions = ctx.sessionController?.externalSessions;
+  const nativeViewAvailable = externalSessions?.nativeViewVersion === 1;
+  const nativeRegistrations = /* @__PURE__ */ new Map();
+  const revokeNative = (profileId) => {
+    for (const [sessionId, entry] of nativeRegistrations) {
+      if (profileId == null || entry.profileId === profileId) {
+        entry.dispose();
+        nativeRegistrations.delete(sessionId);
+      }
+    }
+  };
   const scopes = createWorkspaceScopes({ configEpochOf: (profileId) => store.profileEpoch(profileId) });
   const store = createProfileStore({
     onEpoch: (_epoch, profileId) => {
+      revokeNative(profileId ?? null);
       if (profileId) void scopes.invalidateProfile(profileId);
       else void scopes.invalidateAll();
     }
@@ -2773,14 +3254,13 @@ function apply(ctx, config = {}) {
   });
   const defaultFirst = config.defaultFirst ?? 50;
   const pick = (profileId) => {
-    if (profileId) {
-      const found = store.get(profileId);
-      if (!found) throw new CarrierError("profile-not-found", `no profile ${profileId}`);
-      return found;
+    const found = profileId ? store.get(profileId) : store.active();
+    if (!found) {
+      if (profileId) throw new CarrierError("profile-not-found", `no profile ${profileId}`);
+      throw new CarrierError("no-active-profile", "no carrier profile configured");
     }
-    const active = store.active();
-    if (!active) throw new CarrierError("no-active-profile", "no carrier profile configured");
-    return active;
+    providerKeyOf(found);
+    return found;
   };
   const work = (fn) => async (req2, res, route) => {
     try {
@@ -2815,6 +3295,10 @@ function apply(ctx, config = {}) {
         });
         return;
       }
+      if (error?.reason === "invalid-request") {
+        sendJson(res, 422, { ok: false, reason: "invalid-request", message: messageOf(error).slice(0, 300) });
+        return;
+      }
       sendJson(res, 500, { ok: false, reason: "failed", message: messageOf(error).slice(0, 300) });
     }
   };
@@ -2845,7 +3329,13 @@ function apply(ctx, config = {}) {
     const op3 = dispatchConfig(body);
     switch (op3) {
       case "config.list":
-        return { ok: true, profiles: store.list(), activeId: store.active()?.id ?? null, seededFromEnv: store.seededFromEnv };
+        return {
+          ok: true,
+          profiles: store.list(),
+          activeId: store.active()?.id ?? null,
+          seededFromEnv: store.seededFromEnv,
+          nativeChat: nativeViewAvailable ? { available: true } : { available: false, reason: "NATIVE_UNAVAILABLE" }
+        };
       case "config.save": {
         const profile = store.saveProfile(body.profile);
         return { ok: true, profile, profiles: store.list(), activeId: store.active()?.id ?? null };
@@ -2883,55 +3373,93 @@ function apply(ctx, config = {}) {
     }
   };
   const needSessionId = (body) => parseRemoteSessionId(body.session_id).prefixed;
-  const nativeOpen = async (profile, body) => {
-    const chat = resolveNativeChat(ctx);
-    if (!chat.available) {
-      throw new NativeError("NATIVE_UNAVAILABLE", chat.message, 503);
-    }
-    const remote = needSessionId(body);
-    const opened = await chat.owner.open({
-      providerKey: "devin",
-      profileId: profile.id,
-      remoteSessionId: remote,
-      pages: await readMessagePages(api, profile, remote)
-    });
-    return { ok: true, local_session_id: opened.localId, remote_session_id: remote };
-  };
-  const shells = /* @__PURE__ */ new Map();
-  const workspaceShell = async (profile, body) => {
-    if (typeof ctx.sessions?.prepare !== "function" || typeof ctx.sessions?.enter !== "function" || typeof ctx.sessions?.announce !== "function") {
-      throw new NativeError("NATIVE_UNAVAILABLE", "host cannot prepare a workbench session without sessions.prepare/enter/announce", 503);
-    }
-    const remote = needSessionId(body);
-    const voidRoot = join5(process.env.DSH_HOME || process.env.HOME || ".", "nano-cloud-session-unbound");
-    mkdirSync4(voidRoot, { recursive: true });
-    const session = ctx.sessions.prepare(void 0, { meta: { cwd: voidRoot, executionWorld: "unbound-remote" } });
-    const detach = ctx.sessions.enter(session);
-    try {
-      ctx.sessions.announce(session);
-    } catch (error) {
-      try {
-        detach();
-      } catch {
+  const sessionOps2 = {
+    /* Opens only through the host's external Session registry: the profile is
+     * resolved explicitly, the upstream id is verified by a readonly get, and
+     * the registered view is namespaced under profile id + epoch so a profile
+     * change revokes it. Never mints a local session or Agent. */
+    native_open: async (profile, body) => {
+      if (body.profileId == null || body.profileId === "") {
+        throw new CarrierError("invalid-request", "native_open requires an explicit profileId", { status: 422 });
       }
-      throw new NativeError("NATIVE_UNAVAILABLE", `session announce failed: ${error?.message ?? error}`, 503);
-    }
-    shells.set(session.id, { detach, remote, profileId: profile.id });
-    return { ok: true, local_session_id: session.id, remote_session_id: remote, nativeView: "unavailable" };
-  };
-  const sessionOps = {
-    native_open: (profile, body) => nativeOpen(profile, body),
-    workspace_shell: (profile, body) => workspaceShell(profile, body),
+      const remote = parseRemoteSessionId(body.session_id);
+      const bare = remote.bare;
+      if (!bare) throw new CarrierError("invalid-request", "native_open requires an upstream session id", { status: 422 });
+      const epochBefore = store.profileEpoch(profile.id);
+      const detail = await api.getSession(profile, bare);
+      const returned = detail?.session_id ?? detail?.id;
+      if (returned == null || parseRemoteSessionId(returned).bare !== bare) {
+        throw new CarrierError("upstream-mismatch", `upstream identity ${returned ?? "unknown"} does not match ${bare}`);
+      }
+      const epoch = store.profileEpoch(profile.id);
+      if (epoch !== epochBefore) {
+        throw new CarrierError("profile-changed", "profile changed while opening the native view", { status: 409 });
+      }
+      const sessionId = `external:devin:${Buffer.from(profile.id).toString("base64url")}:${bare}:${epoch}`;
+      if (nativeRegistrations.has(sessionId)) return { ok: true, external_session_id: sessionId };
+      const view = createDevinView({
+        api,
+        profile,
+        remoteId: bare,
+        id: sessionId,
+        detail,
+        pollIntervalMs: config.pollIntervalMs ?? 5e3
+      });
+      const dispose = externalSessions.register(sessionId, view);
+      nativeRegistrations.set(sessionId, { dispose, profileId: profile.id, remoteId: bare });
+      return { ok: true, external_session_id: sessionId };
+    },
+    workspace_shell: () => {
+      throw new NativeError("NATIVE_UNAVAILABLE", "Native cloud session view and per-session plugin filtering are unavailable", 503);
+    },
     get: (profile, body) => api.getSession(profile, parseRemoteSessionId(body.session_id).bare),
     messages: (profile, body) => api.getMessages(profile, parseRemoteSessionId(body.session_id).bare, { first: body.first, after: body.after }),
     attachments: (profile, body) => api.getAttachments(profile, parseRemoteSessionId(body.session_id).bare),
+    /* Verified-registration-only read: the browser supplies the namespaced
+     * external id; profileId and remoteId are recovered from the live
+     * registration, never from request fields. */
+    external_attachments: (_profile, body) => {
+      const sessionId = String(body.session_id ?? "");
+      const entry = nativeRegistrations.get(sessionId);
+      if (!entry) {
+        throw new CarrierError("not-registered", "no verified external registration for this session id", { status: 404 });
+      }
+      const bound = store.get(entry.profileId);
+      if (!bound) throw new CarrierError("profile-not-found", `no profile ${entry.profileId}`, { status: 404 });
+      return api.getAttachments(bound, entry.remoteId).then((items) => ({ ok: true, items }));
+    },
     insights: (profile, body) => api.getInsights(profile, parseRemoteSessionId(body.session_id).bare),
     generate_insights: (profile, body) => api.generateInsights(profile, parseRemoteSessionId(body.session_id).bare),
     tags: (profile, body) => api.getTags(profile, parseRemoteSessionId(body.session_id).bare),
     set_tags: (profile, body) => api.setTags(profile, parseRemoteSessionId(body.session_id).bare, body.tags),
     append_tags: (profile, body) => api.appendTags(profile, parseRemoteSessionId(body.session_id).bare, body.tags),
-    sleep: (profile, body) => api.sleep(profile, parseRemoteSessionId(body.session_id).bare)
+    sleep: async (profile, body) => {
+      const remote = parseRemoteSessionId(body.session_id);
+      const result = await api.sleep(profile, remote.bare);
+      await scopes.invalidateRemote(profile.id, remote.prefixed);
+      return result;
+    }
   };
+  {
+    const facets = DEVIN_DEFINITION.handlers;
+    const lanes = Object.entries(facets);
+    const seen = /* @__PURE__ */ new Set();
+    for (const [lane, ids] of lanes) {
+      for (const id of ids) {
+        if (seen.has(id)) throw new Error(`Devin provider declares ${id} in both its ${lane} facet and another lane`);
+        seen.add(id);
+      }
+    }
+    for (const opName of Object.keys(sessionOps2)) {
+      if (!seen.has(`session.${opName}`)) {
+        throw new Error(`session.${opName} is not part of the Devin provider's declared handler surface`);
+      }
+    }
+    const expectedSsh = ["config.ssh-key", "ssh.info", ...Object.keys(WORKSPACE_FAMILY.operations)];
+    if (JSON.stringify([...facets.ssh].sort()) !== JSON.stringify([...expectedSsh].sort())) {
+      throw new Error("Devin provider ssh facet does not match ssh-key + ssh.info + workspace family");
+    }
+  }
   const catalog = async (body) => {
     const profile = pick(body.profileId);
     const resource = String(body.resource ?? "");
@@ -2973,8 +3501,7 @@ function apply(ctx, config = {}) {
       throw new CarrierError("invalid-request", `unknown workspace op ${body.op}`, { status: 422 });
     }
     if (op3 === "workspace.connect") {
-      const profile = pick(body.profileId);
-      return { ok: true, ...await scopes.connect(profile, body, resources.connectFactory) };
+      throw new WorkspaceError("workspace-unavailable", "workspace connect is unavailable", { httpStatus: 503 });
     }
     if (op3 === "workspace.status") return { ok: true, ...scopes.status(body.scopeId) };
     if (op3 === "workspace.disconnect") return scopes.disconnect(body.scopeId);
@@ -2984,7 +3511,7 @@ function apply(ctx, config = {}) {
       return {
         ok: true,
         data: { ...data, pty: { supported: false, reason: "NATIVE_UNAVAILABLE" }, forward: { supported: false, reason: "NATIVE_UNAVAILABLE" } },
-        nativeChat: resolveNativeChat(ctx)
+        nativeChat: { available: false, reason: "NATIVE_UNAVAILABLE" }
       };
     }
     throw new CarrierError("invalid-request", `unknown workspace op`, { status: 422 });
@@ -3030,26 +3557,16 @@ function apply(ctx, config = {}) {
         } catch {
           throw new CarrierError("invalid-request", `unknown session op ${body.op}`, { status: 422 });
         }
-        const sessionId = needSessionId(body);
         const opName = operationId.split(".")[1];
-        const op3 = sessionOps[opName];
-        if (body.op === "native_open") {
-          const chat = resolveNativeChat(ctx);
-          if (!chat.available) {
-            throw new NativeError("NATIVE_UNAVAILABLE", chat.message, 503);
-          }
-          let profile;
-          try {
-            profile = pick(body.profileId);
-          } catch (error) {
-            if (error?.reason === "no-active-profile" || error?.reason === "profile-not-found") {
-              throw new NativeError("NATIVE_UNSUPPORTED", `no carrier profile to project from: ${error.message}`, 422);
-            }
-            throw error;
-          }
-          return op3(profile, { ...body, session_id: sessionId });
+        if (opName === "workspace_shell") {
+          throw new NativeError("NATIVE_UNAVAILABLE", "Native cloud session view and per-session plugin filtering are unavailable", 503);
         }
-        return op3(pick(body.profileId), { ...body, session_id: sessionId });
+        if (opName === "native_open" && !nativeViewAvailable) {
+          throw new NativeError("NATIVE_UNAVAILABLE", "Native cloud session view is unavailable on this host", 503);
+        }
+        const sessionId = opName === "external_attachments" ? String(body.session_id ?? "") : needSessionId(body);
+        const op3 = sessionOps2[opName];
+        return opName === "external_attachments" ? op3(null, { ...body, session_id: sessionId }) : op3(pick(body.profileId), { ...body, session_id: sessionId });
       })
     },
     {
@@ -3071,7 +3588,18 @@ function apply(ctx, config = {}) {
     },
     { path: "/nano-cloud-session/archive", methods: ["POST"], bodyLimit: 16384, handler: work((body) => api.archive(pick(body.profileId), parseRemoteSessionId(body.session_id).bare)) },
     { path: "/nano-cloud-session/unarchive", methods: ["POST"], bodyLimit: 16384, handler: work((body) => api.unarchive(pick(body.profileId), parseRemoteSessionId(body.session_id).bare)) },
-    { path: "/nano-cloud-session/terminate", methods: ["POST"], bodyLimit: 16384, handler: work((body) => api.terminate(pick(body.profileId), parseRemoteSessionId(body.session_id).bare)) },
+    {
+      path: "/nano-cloud-session/terminate",
+      methods: ["POST"],
+      bodyLimit: 16384,
+      handler: work(async (body) => {
+        const profile = pick(body.profileId);
+        const remote = parseRemoteSessionId(body.session_id);
+        const result = await api.terminate(profile, remote.bare);
+        await scopes.invalidateRemote(profile.id, remote.prefixed);
+        return result;
+      })
+    },
     { path: "/nano-cloud-session/catalog", methods: ["POST"], bodyLimit: 16384, handler: work((body) => catalog(body)) },
     { path: "/nano-cloud-session/upload", methods: ["POST"], bodyLimit: 33554432, handler: work((body) => upload(body)) },
     {
@@ -3094,13 +3622,7 @@ function apply(ctx, config = {}) {
     { path: "/nano-cloud-session/resources", methods: ["POST"], bodyLimit: 131072, handler: work((body) => resourceOp(body)) }
   ];
   ctx.effect(() => () => {
-    for (const shell of shells.values()) {
-      try {
-        shell.detach();
-      } catch {
-      }
-    }
-    shells.clear();
+    revokeNative(null);
     void scopes.invalidateAll();
     void scopes.drain();
   }, "nano-cloud-session: workspace scopes");

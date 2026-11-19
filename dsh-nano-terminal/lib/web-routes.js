@@ -1,4 +1,4 @@
-// ../../../../packages/dsh-host-route-guard/src/route-guard.js
+// ../packages/dsh-host-route-guard/src/route-guard.js
 var RouteGuardError = class extends Error {
   constructor(reason, detail = "") {
     super(detail ? `route-guard: ${reason} \u2014 ${detail}` : `route-guard: ${reason}`);
@@ -186,7 +186,7 @@ function createGuard({ table, plugin, observe } = {}) {
   return { registerRoutes: registerRoutes2, inventory, lookup };
 }
 
-// ../../../../packages/dsh-interface/src/contracts/webBinding.js
+// ../packages/dsh-interface/src/contracts/webBinding.js
 var BindingError = class extends Error {
   constructor(reason, detail = "") {
     super(detail ? `web-binding: ${reason} \u2014 ${detail}` : `web-binding: ${reason}`);
@@ -274,7 +274,7 @@ function bindingRecord(binding) {
   });
 }
 
-// ../../../../packages/dsh-interface/src/contracts/jsonOutcome.js
+// ../packages/dsh-interface/src/contracts/jsonOutcome.js
 var FAILURE_KIND = Object.freeze({
   /** signal aborted; issued-before cancellation makes no server-side claim. */
   CANCELLED: "cancelled",
@@ -289,7 +289,7 @@ var FAILURE_KIND = Object.freeze({
 });
 var FAILURE_KINDS = Object.freeze(Object.values(FAILURE_KIND));
 
-// ../../../../packages/dsh-interface/src/contracts/observeEvent.js
+// ../packages/dsh-interface/src/contracts/observeEvent.js
 var OBSERVE_SURFACES = Object.freeze(["http", "upgrade", "json", "mcp"]);
 var HTTP_OUTCOMES = Object.freeze(["ok", "rejected", "method", "failed"]);
 var UPGRADE_OUTCOMES = Object.freeze(["accepted", "rejected", "method"]);
@@ -348,7 +348,7 @@ function assertObserveEvent(event) {
   return event;
 }
 
-// ../../../../packages/dsh-interface/src/host/emitObserve.js
+// ../packages/dsh-interface/src/host/emitObserve.js
 function observeStamp2(observe) {
   if (typeof observe !== "function") return null;
   return globalThis.performance.now();
@@ -364,7 +364,7 @@ function emitObserve2(observe, event) {
   }
 }
 
-// ../../../../packages/dsh-interface/src/host/createWebRegistrar.js
+// ../packages/dsh-interface/src/host/createWebRegistrar.js
 function createWebRegistrar({ plugin, bindings, observe } = {}) {
   const normalized = normalizeBindings(bindings ?? [], { plugin });
   const effective = [];
@@ -494,7 +494,7 @@ function createWebRegistrar({ plugin, bindings, observe } = {}) {
   return { registerAll, inventory, lookup };
 }
 
-// ../../../../packages/dsh-performance-review/src/state.js
+// ../packages/dsh-performance-review/src/state.js
 var CLIENT_KEY = Symbol.for("dsh.perfReview.v2");
 var HOST_KEY = Symbol.for("dsh.perfReviewHost.v2");
 var BUILD_STAMP = typeof __DNPR_BUILD__ === "string" ? __DNPR_BUILD__ : "dev";
@@ -566,7 +566,7 @@ function roundMs(value) {
   return value == null ? null : Math.round(value * 10) / 10;
 }
 
-// ../../../../packages/dsh-performance-review/src/host.js
+// ../packages/dsh-performance-review/src/host.js
 var WINDOW_SAMPLE_CAP = 512;
 var EVENT_CAP = 32;
 var isPromiseLike = (value) => value !== null && typeof value === "object" && typeof value.then === "function";

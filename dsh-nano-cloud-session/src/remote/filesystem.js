@@ -1,6 +1,6 @@
 /** Bounded remote filesystem operations. Node-only; no Chat, no secrets. */
 
-import { mkdirSync, readdirSync, openSync, readSync, closeSync, renameSync, rmdirSync, realpathSync, statSync, unlinkSync, writeFileSync, existsSync } from 'node:fs'
+import { mkdirSync, readdirSync, openSync, readSync, closeSync, renameSync, rmdirSync, realpathSync, statSync, lstatSync, unlinkSync, writeFileSync, existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { randomBytes } from 'node:crypto'
 import { resolveUnderRoot } from './path-policy.js'
@@ -171,8 +171,10 @@ export function createFilesystem(rootInput, { maxPage = 64 * 1024 } = {}) {
         error.reason = 'workspace-conflict'
         throw error
       }
-      renameSync(src.real ?? src.joined, dst.joined)
-      const info = statSync(dst.joined)
+      /* joined never follows a caller-supplied symlink: the entry itself is
+       * renamed, and the returned version describes the destination entry. */
+      renameSync(src.joined, dst.joined)
+      const info = lstatSync(dst.joined)
       return { destinationVersion: versionOf(info) }
     },
     remove({ path, expectedVersion }) {

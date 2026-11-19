@@ -71,6 +71,18 @@ async function scopeOf(ctx, sessionId) {
   if (header === undefined || header === null) throw new Error(`unknown session "${sessionId}"`)
   const world = resolveExecutionWorld(ctx, sessionId, header.cwd)
   assertBoundWorld(header, world)
+  /* Consumer-side fail-closed: a remote-bound session is refused outright
+   * before any local watch/cache/Git touches the path — mixing a remote fs
+   * with host-local git and fs.watch would silently operate on the wrong
+   * machine. Refusing a formally bound remote without its complete
+   * fs/git/watch combo is the only honest answer until the explorer can
+   * consume remote surfaces end to end. */
+  if (world.kind === 'remote') {
+    const missing = ['fs', 'subprocess', 'watch'].filter(name => world[name] == null)
+    throw new Error(missing.length
+      ? `remote workspace binding is incomplete (missing ${missing.join('/')}); refusing to mix local fs/git/watch`
+      : 'remote workspace fs/git/watch consumption is not implemented; refusing to mix local surfaces')
+  }
   const root = world.kind === 'remote' ? (world.root ?? header.cwd) : (header.cwd ?? ctx.get('sandboxPolicy')?.workspaceRoot)
   // A cold Session has no live header to resolve from, so the policy is rebuilt around the root the
   // stored header names; without it `resolve({})` would fall back to the launch directory and every

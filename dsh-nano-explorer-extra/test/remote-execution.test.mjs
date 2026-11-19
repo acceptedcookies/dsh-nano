@@ -26,3 +26,40 @@ test('T12 unbound-remote without H-EXEC does not fall back to local cwd', () => 
   assert.throws(() => assertBoundWorld({ executionWorld: 'unbound-remote', cwd: '/tmp/host-project' }, world), /no working directory/)
   assert.doesNotThrow(() => assertBoundWorld({ cwd: '/tmp/host-project' }, world))
 })
+
+test('scopeOf refuses a remote-bound session before any local fs/git/watch side effect', async () => {
+  const { createRoutes } = await import('../src/host/routes.js')
+  const bomb = () => { throw new Error('local surface must not be touched') }
+  const binding = { fs: {}, subprocess: {}, generation: 'g1', identity: 'devin-1', root: '/remote' }
+  const ctx = {
+    get: (name) => ({
+      sessions: { get: () => ({ header: { cwd: '/remote', executionWorld: 'unbound-remote' } }) },
+      workspaceExecution: { get: () => binding },
+      sessionPersistence: { stat: async () => null },
+    })[name],
+    fs: { get read() { bomb() } },
+    subprocess: { get spawn() { bomb() } },
+  }
+  const routes = createRoutes(ctx, { gitTimeoutMs: 1000, gitCommand: 'git' })
+  await assert.rejects(
+    () => routes['/status'].run({ url: '/nano-explorer-extra/status?sessionId=s1' }),
+    /remote workspace binding is incomplete|not implemented/)
+})
+
+test('scopeOf refuses even a complete remote binding: consumption is not implemented', async () => {
+  const { createRoutes } = await import('../src/host/routes.js')
+  const binding = { fs: {}, subprocess: {}, watch: {}, generation: 'g1', identity: 'devin-1', root: '/remote' }
+  const ctx = {
+    get: (name) => ({
+      sessions: { get: () => ({ header: { cwd: '/remote' } }) },
+      workspaceExecution: { get: () => binding },
+      sessionPersistence: { stat: async () => null },
+    })[name],
+    fs: {},
+    subprocess: {},
+  }
+  const routes = createRoutes(ctx, { gitTimeoutMs: 1000, gitCommand: 'git' })
+  await assert.rejects(
+    () => routes['/status'].run({ url: '/nano-explorer-extra/status?sessionId=s1' }),
+    /not implemented/)
+})

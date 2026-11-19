@@ -6,8 +6,13 @@ import { PROVIDER_KEY } from '../providers/devin/profile-codec.js'
 import { WorkspaceError } from './errors.js'
 import { HTTP_STATUS_FOR_REASON } from '../contracts/workspace-family.js'
 
-function logicalKey(providerKey, profileId, remoteSessionId) {
-  return `${providerKey}\0${profileId}\0${remoteSessionId}`
+/** Ready lookup and single-flight share one identity: a different epoch,
+ *  requested root, or permission grant is a different scope entirely. */
+function scopeTuple(providerKey, profileId, remoteSessionId, epoch, root, permissions) {
+  return JSON.stringify([
+    providerKey, profileId, remoteSessionId, epoch, root ?? null,
+    permissions.fsWrite === true, permissions.process === true, permissions.forward === true,
+  ])
 }
 
 function newId() {
@@ -47,9 +52,15 @@ export function createWorkspaceScopes({ configEpochOf } = {}) {
   }
 
   const invalidate = (scope, reason = 'workspace-scope-expired') => {
+    if (scope.invalid) return
     scope.invalid = true
     scope.generation = `${scope.generation}:dead`
     scope.resources = 'closing'
+    /* Indexes drop synchronously: a dead scope must be unjoinable and a new
+     * connect for the same key must not attach to the retiring in-flight. */
+    if (byId.get(scope.id) === scope) byId.delete(scope.id)
+    if (scope.key && byLogical.get(scope.key) === scope) byLogical.delete(scope.key)
+    if (scope.key && inflight.get(scope.key) === scope.inflight) inflight.delete(scope.key)
     try { scope.abort.abort({ reason }) } catch { /* already aborted */ }
     for (const waiter of [...scope.barriers]) {
       try { waiter(reason) } catch { /* ignore */ }
@@ -63,25 +74,27 @@ export function createWorkspaceScopes({ configEpochOf } = {}) {
     getIf(scopeId) { return byId.get(String(scopeId ?? '')) ?? null },
     list() { return [...byId.values()].filter(s => !s.invalid).map(snapshot) },
 
-    logicalKey(profile, remote) {
-      const id = parseRemoteSessionId(remote)
-      return logicalKey(PROVIDER_KEY, profile.id, id.prefixed)
-    },
-
-    async connect(profile, body, factory) {
+    async connect(profile, body, factory, { grants } = {}) {
       const remote = parseRemoteSessionId(body.session_id ?? body.remoteSessionId)
-      const key = logicalKey(PROVIDER_KEY, profile.id, remote.prefixed)
       const epoch = configEpochOf ? configEpochOf(profile.id) : 0
+      const permissions = {
+        fsWrite: grants?.fsWrite === true,
+        process: grants?.process === true,
+        forward: grants?.forward === true,
+      }
+      const key = scopeTuple(PROVIDER_KEY, profile.id, remote.prefixed, epoch, body.root, permissions)
       const existing = byLogical.get(key)
-      if (existing && !existing.invalid && existing.configEpoch === epoch && existing.resources === 'ready') {
+      if (existing && !existing.invalid && existing.resources === 'ready') {
         return snapshot(existing)
       }
       const running = inflight.get(key)
       if (running) return running
+      let pendingScope = null
       const work = (async () => {
         const abort = new AbortController()
         const scope = {
           id: newId(),
+          key,
           providerKey: PROVIDER_KEY,
           profileId: profile.id,
           remoteSessionId: remote.prefixed,
@@ -93,11 +106,9 @@ export function createWorkspaceScopes({ configEpochOf } = {}) {
           resources: 'connecting',
           nativeView: 'unavailable',
           remoteSessionStatus: null,
-          permissions: Object.freeze({
-            fsWrite: body.authorize?.includes?.('fs.write') === true,
-            process: false,
-            forward: false,
-          }),
+          /* Grants come only from the trusted in-process caller, never the
+           * request body; everything defaults to denied. */
+          permissions: Object.freeze(permissions),
           inspect: null,
           handles: new Map(),
           tunnels: new Map(),
@@ -113,6 +124,7 @@ export function createWorkspaceScopes({ configEpochOf } = {}) {
         }
         byId.set(scope.id, scope)
         byLogical.set(key, scope)
+        pendingScope = scope
         try {
           const result = await factory(scope, { signal: abort.signal, body })
           if (scope.invalid) fail('workspace-scope-expired', 'workspace scope expired during connect')
@@ -125,15 +137,14 @@ export function createWorkspaceScopes({ configEpochOf } = {}) {
           return snapshot(scope)
         } catch (error) {
           invalidate(scope, error?.reason ?? 'workspace-failed')
-          byId.delete(scope.id)
-          if (byLogical.get(key) === scope) byLogical.delete(key)
           await scope.cleanup?.().catch(() => {})
           throw error
         } finally {
-          inflight.delete(key)
+          if (inflight.get(key) === work) inflight.delete(key)
         }
       })()
       inflight.set(key, work)
+      if (pendingScope) pendingScope.inflight = work
       const tracked = work.catch(error => error)
       waiters.add(tracked)
       tracked.finally(() => waiters.delete(tracked))
@@ -146,8 +157,7 @@ export function createWorkspaceScopes({ configEpochOf } = {}) {
       const scope = get(scopeId)
       invalidate(scope, 'disconnect')
       byId.delete(scope.id)
-      const key = logicalKey(scope.providerKey, scope.profileId, scope.remoteSessionId)
-      if (byLogical.get(key) === scope) byLogical.delete(key)
+      if (byLogical.get(scope.key) === scope) byLogical.delete(scope.key)
       await scope.cleanup?.().catch(() => {})
       return { ok: true }
     },
@@ -156,6 +166,17 @@ export function createWorkspaceScopes({ configEpochOf } = {}) {
       const jobs = []
       for (const scope of [...byId.values()]) {
         if (scope.profileId === profileId && !scope.invalid) {
+          invalidate(scope, 'workspace-scope-expired')
+          jobs.push(Promise.resolve().then(() => scope.cleanup?.()).catch(() => {}))
+        }
+      }
+      await Promise.all(jobs)
+    },
+
+    async invalidateRemote(profileId, remoteSessionId) {
+      const jobs = []
+      for (const scope of [...byId.values()]) {
+        if (scope.profileId === profileId && scope.remoteSessionId === remoteSessionId && !scope.invalid) {
           invalidate(scope, 'workspace-scope-expired')
           jobs.push(Promise.resolve().then(() => scope.cleanup?.()).catch(() => {}))
         }
@@ -173,10 +194,22 @@ export function createWorkspaceScopes({ configEpochOf } = {}) {
       await Promise.all(jobs)
     },
 
-    track(scope, promise) {
-      waiters.add(promise)
-      promise.finally(() => waiters.delete(promise))
-      return promise
+    /* Wrap the caller's promise so a result produced after invalidation is
+     * never delivered: stale reads reject as expired, mutating calls as
+     * outcome-unknown. No unhandled `.finally` chain is created. */
+    track(scope, promise, { mutating = false } = {}) {
+      const gen = scope.generation
+      const reason = mutating ? 'workspace-outcome-unknown' : 'workspace-scope-expired'
+      const result = Promise.resolve(promise).then(value => {
+        if (scope.invalid || scope.generation !== gen) {
+          throw new WorkspaceError(reason, 'scope ended before the call settled', { httpStatus: HTTP_STATUS_FOR_REASON[reason] ?? 502 })
+        }
+        return value
+      })
+      waiters.add(result)
+      const drop = () => { waiters.delete(result) }
+      void result.then(drop, drop)
+      return result
     },
 
     async drain() {

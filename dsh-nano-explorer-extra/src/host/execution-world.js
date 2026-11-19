@@ -4,7 +4,9 @@
 export function resolveExecutionWorld(ctx, sessionId, root) {
   const owner = typeof ctx.get === 'function' ? ctx.get('workspaceExecution') : ctx.workspaceExecution
   const binding = sessionId && owner && typeof owner.get === 'function' ? owner.get(sessionId) : null
-  if (binding?.fs && binding?.generation) {
+  /* Any binding record means the session is remote-owned — a partial record
+   * missing fs/generation must not fall through to the host-local world. */
+  if (binding != null) {
     return {
       kind: 'remote',
       identity: binding.identity ?? String(sessionId),
@@ -12,6 +14,7 @@ export function resolveExecutionWorld(ctx, sessionId, root) {
       root: binding.root ?? root,
       fs: binding.fs,
       subprocess: binding.subprocess,
+      watch: binding.watch,
     }
   }
   return {

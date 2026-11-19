@@ -1,7 +1,6 @@
 /** Host assembly: families, provider adapters, scopes, routes. */
 
-import { mkdirSync, statSync } from 'node:fs'
-import { join } from 'node:path'
+import { statSync } from 'node:fs'
 import { selectOperation } from '../../../packages/dsh-interface/src/contracts/FamilyDefinition.js'
 import { ensurePerfReviewHost } from 'dsh-performance-review/host'
 import { createDevinApi, CarrierError } from '../providers/devin/api.js'
@@ -12,16 +11,16 @@ import { BINDING_TABLE, PLUGIN } from '../../lib/bindings.js'
 import { SESSION_FAMILY } from '../contracts/session-family.js'
 import { WORKSPACE_FAMILY, HTTP_STATUS_FOR_REASON } from '../contracts/workspace-family.js'
 import { parseRemoteSessionId, SessionIdError } from '../providers/devin/session-id.js'
-import { decodeListFilter, ProfileCodecError } from '../providers/devin/profile-codec.js'
+import { decodeListFilter, ProfileCodecError, providerKeyOf } from '../providers/devin/profile-codec.js'
 import { createWorkspaceScopes } from './workspace-scopes.js'
 import { createResourceService } from './resource-service.js'
 import { NativeError, WorkspaceError, httpStatusForError } from './errors.js'
-import { resolveNativeChat } from '../host-adapters/native-chat.js'
-import { readMessagePages } from '../providers/devin/chat.js'
 import { artifactPath } from '../providers/devin/bootstrap.js'
+import { DEVIN_DEFINITION } from '../providers/devin/definition.js'
+import { createDevinView } from '../providers/devin/native-view.js'
 
 export const name = 'nano-cloud-session'
-export const inject = ['webServer', 'connection', 'sessions', 'agents']
+export const inject = ['webServer', 'connection', 'sessionController']
 export { httpStatusForError, NativeError, CarrierError, WorkspaceError }
 
 const version = typeof __DNCS_VERSION__ !== 'undefined' ? __DNCS_VERSION__ : '0.0.0'
@@ -56,9 +55,26 @@ const messageOf = error => (error instanceof Error ? error.message : String(erro
 
 export function apply(ctx, config = {}) {
   const api = createDevinApi({ timeoutMs: config.requestTimeoutMs ?? 20000 })
+  /* The host feature marker gates every native path: a host whose external
+   * Session registry predates the contract reports no version and DNCS must
+   * not register views into it. */
+  const externalSessions = ctx.sessionController?.externalSessions
+  const nativeViewAvailable = externalSessions?.nativeViewVersion === 1
+  const nativeRegistrations = new Map()
+  const revokeNative = (profileId) => {
+    for (const [sessionId, entry] of nativeRegistrations) {
+      if (profileId == null || entry.profileId === profileId) {
+        entry.dispose()
+        nativeRegistrations.delete(sessionId)
+      }
+    }
+  }
   const scopes = createWorkspaceScopes({ configEpochOf: (profileId) => store.profileEpoch(profileId) })
   const store = createProfileStore({
     onEpoch: (_epoch, profileId) => {
+      /* A profile change invalidates every external id minted under its old
+       * epoch — the epoch is part of the namespaced id. */
+      revokeNative(profileId ?? null)
       if (profileId) void scopes.invalidateProfile(profileId)
       else void scopes.invalidateAll()
     },
@@ -70,14 +86,15 @@ export function apply(ctx, config = {}) {
   const defaultFirst = config.defaultFirst ?? 50
 
   const pick = profileId => {
-    if (profileId) {
-      const found = store.get(profileId)
-      if (!found) throw new CarrierError('profile-not-found', `no profile ${profileId}`)
-      return found
+    const found = profileId ? store.get(profileId) : store.active()
+    if (!found) {
+      if (profileId) throw new CarrierError('profile-not-found', `no profile ${profileId}`)
+      throw new CarrierError('no-active-profile', 'no carrier profile configured')
     }
-    const active = store.active()
-    if (!active) throw new CarrierError('no-active-profile', 'no carrier profile configured')
-    return active
+    /* A stored profile may only ever drive the provider it was written for;
+     * an unknown carrier must never be silently treated as Devin. */
+    providerKeyOf(found)
+    return found
   }
 
   const work = (fn) => async (req, res, route) => {
@@ -106,6 +123,10 @@ export function apply(ctx, config = {}) {
         })
         return
       }
+      if (error?.reason === 'invalid-request') {
+        sendJson(res, 422, { ok: false, reason: 'invalid-request', message: messageOf(error).slice(0, 300) })
+        return
+      }
       sendJson(res, 500, { ok: false, reason: 'failed', message: messageOf(error).slice(0, 300) })
     }
   }
@@ -131,7 +152,12 @@ export function apply(ctx, config = {}) {
     const op = dispatchConfig(body)
     switch (op) {
       case 'config.list':
-        return { ok: true, profiles: store.list(), activeId: store.active()?.id ?? null, seededFromEnv: store.seededFromEnv }
+        return {
+          ok: true, profiles: store.list(), activeId: store.active()?.id ?? null, seededFromEnv: store.seededFromEnv,
+          nativeChat: nativeViewAvailable
+            ? { available: true }
+            : { available: false, reason: 'NATIVE_UNAVAILABLE' },
+        }
       case 'config.save': {
         const profile = store.saveProfile(body.profile)
         return { ok: true, profile, profiles: store.list(), activeId: store.active()?.id ?? null }
@@ -169,51 +195,94 @@ export function apply(ctx, config = {}) {
 
   const needSessionId = body => parseRemoteSessionId(body.session_id).prefixed
 
-  const nativeOpen = async (profile, body) => {
-    const chat = resolveNativeChat(ctx)
-    if (!chat.available) {
-      throw new NativeError('NATIVE_UNAVAILABLE', chat.message, 503)
-    }
-    const remote = needSessionId(body)
-    const opened = await chat.owner.open({
-      providerKey: 'devin',
-      profileId: profile.id,
-      remoteSessionId: remote,
-      pages: await readMessagePages(api, profile, remote),
-    })
-    return { ok: true, local_session_id: opened.localId, remote_session_id: remote }
-  }
-
-  const shells = new Map()
-  const workspaceShell = async (profile, body) => {
-    if (typeof ctx.sessions?.prepare !== 'function' || typeof ctx.sessions?.enter !== 'function' || typeof ctx.sessions?.announce !== 'function') {
-      throw new NativeError('NATIVE_UNAVAILABLE', 'host cannot prepare a workbench session without sessions.prepare/enter/announce', 503)
-    }
-    const remote = needSessionId(body)
-    const voidRoot = join(process.env.DSH_HOME || process.env.HOME || '.', 'nano-cloud-session-unbound')
-    mkdirSync(voidRoot, { recursive: true })
-    const session = ctx.sessions.prepare(undefined, { meta: { cwd: voidRoot, executionWorld: 'unbound-remote' } })
-    const detach = ctx.sessions.enter(session)
-    try { ctx.sessions.announce(session) } catch (error) {
-      try { detach() } catch { /* ignore */ }
-      throw new NativeError('NATIVE_UNAVAILABLE', `session announce failed: ${error?.message ?? error}`, 503)
-    }
-    shells.set(session.id, { detach, remote, profileId: profile.id })
-    return { ok: true, local_session_id: session.id, remote_session_id: remote, nativeView: 'unavailable' }
-  }
-
   const sessionOps = {
-    native_open: (profile, body) => nativeOpen(profile, body),
-    workspace_shell: (profile, body) => workspaceShell(profile, body),
+    /* Opens only through the host's external Session registry: the profile is
+     * resolved explicitly, the upstream id is verified by a readonly get, and
+     * the registered view is namespaced under profile id + epoch so a profile
+     * change revokes it. Never mints a local session or Agent. */
+    native_open: async (profile, body) => {
+      /* Opening binds a frozen identity: no implicit active-profile fallback. */
+      if (body.profileId == null || body.profileId === '') {
+        throw new CarrierError('invalid-request', 'native_open requires an explicit profileId', { status: 422 })
+      }
+      const remote = parseRemoteSessionId(body.session_id)
+      const bare = remote.bare
+      if (!bare) throw new CarrierError('invalid-request', 'native_open requires an upstream session id', { status: 422 })
+      const epochBefore = store.profileEpoch(profile.id)
+      const detail = await api.getSession(profile, bare)
+      const returned = detail?.session_id ?? detail?.id
+      if (returned == null || parseRemoteSessionId(returned).bare !== bare) {
+        throw new CarrierError('upstream-mismatch', `upstream identity ${returned ?? 'unknown'} does not match ${bare}`)
+      }
+      /* The epoch is part of the namespaced id: if the profile changed while
+       * the readonly read was in flight, the minted id would already be stale. */
+      const epoch = store.profileEpoch(profile.id)
+      if (epoch !== epochBefore) {
+        throw new CarrierError('profile-changed', 'profile changed while opening the native view', { status: 409 })
+      }
+      const sessionId = `external:devin:${Buffer.from(profile.id).toString('base64url')}:${bare}:${epoch}`
+      if (nativeRegistrations.has(sessionId)) return { ok: true, external_session_id: sessionId }
+      const view = createDevinView({
+        api, profile, remoteId: bare, id: sessionId, detail,
+        pollIntervalMs: config.pollIntervalMs ?? 5000,
+      })
+      const dispose = externalSessions.register(sessionId, view)
+      nativeRegistrations.set(sessionId, { dispose, profileId: profile.id, remoteId: bare })
+      return { ok: true, external_session_id: sessionId }
+    },
+    workspace_shell: () => { throw new NativeError('NATIVE_UNAVAILABLE', 'Native cloud session view and per-session plugin filtering are unavailable', 503) },
     get: (profile, body) => api.getSession(profile, parseRemoteSessionId(body.session_id).bare),
     messages: (profile, body) => api.getMessages(profile, parseRemoteSessionId(body.session_id).bare, { first: body.first, after: body.after }),
     attachments: (profile, body) => api.getAttachments(profile, parseRemoteSessionId(body.session_id).bare),
+    /* Verified-registration-only read: the browser supplies the namespaced
+     * external id; profileId and remoteId are recovered from the live
+     * registration, never from request fields. */
+    external_attachments: (_profile, body) => {
+      const sessionId = String(body.session_id ?? '')
+      const entry = nativeRegistrations.get(sessionId)
+      if (!entry) {
+        throw new CarrierError('not-registered', 'no verified external registration for this session id', { status: 404 })
+      }
+      const bound = store.get(entry.profileId)
+      if (!bound) throw new CarrierError('profile-not-found', `no profile ${entry.profileId}`, { status: 404 })
+      return api.getAttachments(bound, entry.remoteId).then(items => ({ ok: true, items }))
+    },
     insights: (profile, body) => api.getInsights(profile, parseRemoteSessionId(body.session_id).bare),
     generate_insights: (profile, body) => api.generateInsights(profile, parseRemoteSessionId(body.session_id).bare),
     tags: (profile, body) => api.getTags(profile, parseRemoteSessionId(body.session_id).bare),
     set_tags: (profile, body) => api.setTags(profile, parseRemoteSessionId(body.session_id).bare, body.tags),
     append_tags: (profile, body) => api.appendTags(profile, parseRemoteSessionId(body.session_id).bare, body.tags),
-    sleep: (profile, body) => api.sleep(profile, parseRemoteSessionId(body.session_id).bare),
+    sleep: async (profile, body) => {
+      const remote = parseRemoteSessionId(body.session_id)
+      const result = await api.sleep(profile, remote.bare)
+      await scopes.invalidateRemote(profile.id, remote.prefixed)
+      return result
+    },
+  }
+
+  /* The provider descriptor declares each operation's lane (local / native /
+   * ssh / api); the mapping is a routing description, never an authorization
+   * grant — dispatch still goes through selectOperation per family. Every
+   * implemented session op must be declared in exactly one facet. */
+  {
+    const facets = DEVIN_DEFINITION.handlers
+    const lanes = Object.entries(facets)
+    const seen = new Set()
+    for (const [lane, ids] of lanes) {
+      for (const id of ids) {
+        if (seen.has(id)) throw new Error(`Devin provider declares ${id} in both its ${lane} facet and another lane`)
+        seen.add(id)
+      }
+    }
+    for (const opName of Object.keys(sessionOps)) {
+      if (!seen.has(`session.${opName}`)) {
+        throw new Error(`session.${opName} is not part of the Devin provider's declared handler surface`)
+      }
+    }
+    const expectedSsh = ['config.ssh-key', 'ssh.info', ...Object.keys(WORKSPACE_FAMILY.operations)]
+    if (JSON.stringify([...facets.ssh].sort()) !== JSON.stringify([...expectedSsh].sort())) {
+      throw new Error('Devin provider ssh facet does not match ssh-key + ssh.info + workspace family')
+    }
   }
 
   const catalog = async (body) => {
@@ -252,8 +321,10 @@ export function apply(ctx, config = {}) {
     try { op = selectOperation(WORKSPACE_FAMILY, 'http.workspace', body.op ?? 'status') }
     catch { throw new CarrierError('invalid-request', `unknown workspace op ${body.op}`, { status: 422 }) }
     if (op === 'workspace.connect') {
-      const profile = pick(body.profileId)
-      return { ok: true, ...(await scopes.connect(profile, body, resources.connectFactory)) }
+      /* Remote workspace connect is unavailable until the host permission
+       * layer exists: refuse before any identity probe or remote operation,
+       * regardless of client-supplied authorize flags. */
+      throw new WorkspaceError('workspace-unavailable', 'workspace connect is unavailable', { httpStatus: 503 })
     }
     if (op === 'workspace.status') return { ok: true, ...scopes.status(body.scopeId) }
     if (op === 'workspace.disconnect') return scopes.disconnect(body.scopeId)
@@ -263,7 +334,7 @@ export function apply(ctx, config = {}) {
       return {
         ok: true,
         data: { ...data, pty: { supported: false, reason: 'NATIVE_UNAVAILABLE' }, forward: { supported: false, reason: 'NATIVE_UNAVAILABLE' } },
-        nativeChat: resolveNativeChat(ctx),
+        nativeChat: { available: false, reason: 'NATIVE_UNAVAILABLE' },
       }
     }
     throw new CarrierError('invalid-request', `unknown workspace op`, { status: 422 })
@@ -298,24 +369,27 @@ export function apply(ctx, config = {}) {
         let operationId
         try { operationId = selectOperation(SESSION_FAMILY, 'http.session', body.op ?? 'get') }
         catch { throw new CarrierError('invalid-request', `unknown session op ${body.op}`, { status: 422 }) }
-        const sessionId = needSessionId(body)
         const opName = operationId.split('.')[1]
-        const op = sessionOps[opName]
-        if (body.op === 'native_open') {
-          const chat = resolveNativeChat(ctx)
-          if (!chat.available) {
-            throw new NativeError('NATIVE_UNAVAILABLE', chat.message, 503)
-          }
-          let profile
-          try { profile = pick(body.profileId) } catch (error) {
-            if (error?.reason === 'no-active-profile' || error?.reason === 'profile-not-found') {
-              throw new NativeError('NATIVE_UNSUPPORTED', `no carrier profile to project from: ${error.message}`, 422)
-            }
-            throw error
-          }
-          return op(profile, { ...body, session_id: sessionId })
+        /* Both opening paths refuse before profile lookup, message reads, or
+         * any session mint/switch when the host cannot host a native view:
+         * workspace_shell always (the local shell is retired), native_open
+         * whenever the external Session registry lacks the version marker. */
+        if (opName === 'workspace_shell') {
+          throw new NativeError('NATIVE_UNAVAILABLE', 'Native cloud session view and per-session plugin filtering are unavailable', 503)
         }
-        return op(pick(body.profileId), { ...body, session_id: sessionId })
+        if (opName === 'native_open' && !nativeViewAvailable) {
+          throw new NativeError('NATIVE_UNAVAILABLE', 'Native cloud session view is unavailable on this host', 503)
+        }
+        /* external_attachments takes the opaque namespaced id verbatim —
+         * the Devin session-id grammar would reject `external:` prefixes. */
+        const sessionId = opName === 'external_attachments' ? String(body.session_id ?? '') : needSessionId(body)
+        const op = sessionOps[opName]
+        /* external_attachments must not resolve identity from request fields:
+         * skip pick() entirely; the op binds profile+remote id from the
+         * verified registration map. */
+        return opName === 'external_attachments'
+          ? op(null, { ...body, session_id: sessionId })
+          : op(pick(body.profileId), { ...body, session_id: sessionId })
       }),
     },
     {
@@ -333,7 +407,16 @@ export function apply(ctx, config = {}) {
     },
     { path: '/nano-cloud-session/archive', methods: ['POST'], bodyLimit: 16384, handler: work(body => api.archive(pick(body.profileId), parseRemoteSessionId(body.session_id).bare)) },
     { path: '/nano-cloud-session/unarchive', methods: ['POST'], bodyLimit: 16384, handler: work(body => api.unarchive(pick(body.profileId), parseRemoteSessionId(body.session_id).bare)) },
-    { path: '/nano-cloud-session/terminate', methods: ['POST'], bodyLimit: 16384, handler: work(body => api.terminate(pick(body.profileId), parseRemoteSessionId(body.session_id).bare)) },
+    {
+      path: '/nano-cloud-session/terminate', methods: ['POST'], bodyLimit: 16384,
+      handler: work(async body => {
+        const profile = pick(body.profileId)
+        const remote = parseRemoteSessionId(body.session_id)
+        const result = await api.terminate(profile, remote.bare)
+        await scopes.invalidateRemote(profile.id, remote.prefixed)
+        return result
+      }),
+    },
     { path: '/nano-cloud-session/catalog', methods: ['POST'], bodyLimit: 16384, handler: work(body => catalog(body)) },
     { path: '/nano-cloud-session/upload', methods: ['POST'], bodyLimit: 33554432, handler: work(body => upload(body)) },
     {
@@ -350,10 +433,7 @@ export function apply(ctx, config = {}) {
   ]
 
   ctx.effect(() => () => {
-    for (const shell of shells.values()) {
-      try { shell.detach() } catch { /* ignore */ }
-    }
-    shells.clear()
+    revokeNative(null)
     void scopes.invalidateAll()
     void scopes.drain()
   }, 'nano-cloud-session: workspace scopes')

@@ -51,7 +51,7 @@ test('T03 same remote id under two profiles stays isolated', async () => {
   assert.equal(b.profileId, 'p-b')
 })
 
-test('T10 browser cannot self-grant process or forward', async () => {
+test('T10 browser cannot self-grant write, process or forward', async () => {
   const scopes = createWorkspaceScopes({ configEpochOf: () => 1 })
   const snap = await scopes.connect(profile, {
     session_id: 'devin-abc123',
@@ -60,7 +60,9 @@ test('T10 browser cannot self-grant process or forward', async () => {
     scope.resources = 'ready'
     return { root: '/tmp', resources: 'ready', api: 'ready' }
   })
-  assert.doesNotThrow(() => scopes.requireReady(snap.scopeId, { write: true }))
+  /* No trusted grant was passed: every capability stays denied regardless of
+   * the body-supplied authorize list. */
+  assert.throws(() => scopes.requireReady(snap.scopeId, { write: true }), /not authorized/)
   assert.throws(() => scopes.requireReady(snap.scopeId, { process: true }), /not authorized/)
   assert.throws(() => scopes.requireReady(snap.scopeId, { forward: true }), /not authorized/)
 })

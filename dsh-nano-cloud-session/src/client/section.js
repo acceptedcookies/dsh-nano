@@ -16,10 +16,11 @@
 import React from 'react'
 import { createPortal } from 'react-dom'
 import {
+  Button,
   StateDot,
   Tag,
-  IconArchiveOutlineRegular,
   IconChevronDownOutlineRegular,
+  IconEllipsisOutlineRegular,
   IconChevronRightOutlineRegular,
   IconGlobeOutlineRegular,
   IconProjectAddOutlineRegular,
@@ -178,8 +179,11 @@ function skeleton() {
     h('span', { className: 'dncs-skeleton-bar' }))
 }
 
-function SessionRow({ session, selected, copy, face, locale }) {
-  const open = () => face.openSession(session.session_id)
+function SessionRow({ session, selected, copy, face, locale, sessionsProfileId }) {
+  /* The row belongs to the profile that listed it: freeze that profile id
+   * at click time so a mid-flight profile switch cannot open the wrong
+   * org's session. */
+  const open = () => face.openSession(session.session_id, { profileId: sessionsProfileId })
   const title = session.title || session.session_id
   return h('div', {
     key: session.session_id,
@@ -200,17 +204,18 @@ function SessionRow({ session, selected, copy, face, locale }) {
         h('span', { className: 'dncs-sr-only' }, session.status ?? '')),
       h('span', { className: 'dncs-session-title' }, title),
       h('span', { className: 'dncs-session-time' }, relativeLabel(session.updated_at ?? session.created_at, locale))),
-    /* Resting state shows the relative time; the archive action rides in on
+    /* Resting state shows the relative time; the manage seat rides in on
      * hover/focus exactly like the native session row's actions slot. */
     h('span', { className: 'dncs-session-actions' },
       h(IconButton, {
         className: 'dncs-icon-btn dncs-icon-btn-row',
-        icon: h(IconArchiveOutlineRegular, { size: 14 }),
-        'aria-label': copy('archive'),
+        icon: h(IconEllipsisOutlineRegular, { size: 14 }),
+        'aria-label': copy('manage'),
+        title: copy('manage'),
         onClick: event => {
           event.stopPropagation()
           event.preventDefault()
-          face.askArchive(session.session_id)
+          face.askManage(session)
         },
       })))
 }
@@ -255,6 +260,7 @@ function sectionBody({ copy, face, state }) {
         copy,
         face,
         locale,
+        sessionsProfileId: state.sessionsProfileId,
       }))
 
   /* The native group header is a self-drawn disclosure row: DisclosureRow's
@@ -274,7 +280,29 @@ function sectionBody({ copy, face, state }) {
         h(open ? IconChevronDownOutlineRegular : IconChevronRightOutlineRegular, { size: 16 })),
       h('span', { className: 'dncs-disc-title' }, profile.label || copy('carrierDevin')),
       h('span', { className: 'dncs-section-count' }, h(Tag, { tone: 'quiet' }, String(sessions.length)))),
+    open === true ? h('div', { className: 'dncs-filter-row' },
+      h(Button, {
+        variant: 'ghost',
+        size: 'sm',
+        'data-active': state.sessionsFilter !== 'archived' ? 'true' : undefined,
+        onClick: () => face.setSessionsFilter('active'),
+      }, copy('listActive')),
+      h(Button, {
+        variant: 'ghost',
+        size: 'sm',
+        'data-active': state.sessionsFilter === 'archived' ? 'true' : undefined,
+        onClick: () => face.setSessionsFilter('archived'),
+      }, copy('listArchived'))) : null,
     sessionRows,
+    state.sessionsHasMore === true
+      ? h('div', { className: 'dncs-empty-row' },
+        h(Button, {
+          variant: 'ghost',
+          size: 'sm',
+          disabled: state.refreshing === true,
+          onClick: () => { void face.loadMore() },
+        }, copy('loadMore')))
+      : null,
     /* A failed list read or a failed open must stay visible even when the
      * profile row is collapsed: the section is the only surface the owner has
      * before a native Chat exists. */

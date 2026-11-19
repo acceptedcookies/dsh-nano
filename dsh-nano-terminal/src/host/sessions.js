@@ -235,8 +235,14 @@ export class SessionRegistry {
       registry: this,
     })
     const world = resolveExecutionWorld(this.ctx, spec.sessionId)
+    /* A remote-marked session without a live binding must not quietly borrow
+     * the host subprocess — that would run a "cloud" terminal on this host. */
+    if (world.kind === 'remote' && (!world.subprocess || !world.generation || world.unbound || !world.root || world.signal?.aborted)) {
+      throw err(KIND.SPAWN_FAILED, 'remote execution binding is unavailable; refusing local spawn')
+    }
     record.generation = world.generation
     record.worldKind = world.kind
+    record.remoteIdentity = world.kind === 'remote' ? world.identity : null
     if (world.kind === 'remote') record.keep = false
     const envBase = { ...(spec.env ?? {}), ...agentEnv(record, this.apiBase) }
     record.env = world.kind === 'remote' ? remoteChildEnv(envBase) : envBase
@@ -246,6 +252,9 @@ export class SessionRegistry {
         argv,
         cwd: world.root ?? cwd,
         env: record.env,
+        /* The binding's own abort signal retires this handle: a revoked or
+         * expired remote scope terminates its own terminal, nothing else. */
+        signal: world.signal,
         rows: Math.min(Math.max(spec.rows || 24, 2), 512),
         cols: Math.min(Math.max(spec.cols || 80, 2), 512),
         terminalType: 'xterm-256color',
@@ -290,10 +299,31 @@ export class SessionRegistry {
           registry: this,
         })
         rec.parent = t.parent ? (this.resolve(t.parent)?.id ?? null) : null
-        rec.pending = true
-        rec.phase = 'live'
-        rec.env = agentEnv(rec, this.apiBase)
+        /* Records written before this field existed carry no worldKind and
+         * can only be treated as local — remote provenance cannot be
+         * retroactively proven, so unmarked stays the backward-compatible
+         * local placeholder path. */
+        rec.worldKind = t.worldKind ?? 'local'
+        rec.remoteIdentity = t.remoteIdentity ?? null
+        rec.generation = t.generation ?? 'local'
         rec.preservedScreen = this.persist.screenFor(t.id)
+        if (rec.worldKind === 'remote') {
+          /* A remote terminal's binding cannot outlive a host restart: keep
+           * only the saved screen as a tombstone, never spawn anything
+           * (locally or remotely) on attach. */
+          rec.pending = false
+          rec.phase = 'exited'
+          rec.exited = { code: null, reason: 'remote-binding-ended' }
+          rec.keep = false
+          if (rec.preservedScreen?.length) {
+            rec.push(rec.preservedScreen)
+            rec.mirror?.write(rec.preservedScreen)
+          }
+        } else {
+          rec.pending = true
+          rec.phase = 'live'
+        }
+        rec.env = agentEnv(rec, this.apiBase)
         rec.gate.restore(t.gate)
         this.sessions.set(t.id, rec)
         // A persisted name obeys the same grammar guard as create — a name
@@ -313,7 +343,7 @@ export class SessionRegistry {
    * next attach retries instead of bricking the session.
    */
   async spawnPending(rec) {
-    if (!rec.pending) return
+    if (!rec.pending || rec.worldKind === 'remote') return
     if (rec.pendingSpawn) return rec.pendingSpawn
     rec.pendingSpawn = this.#spawnPendingOnce(rec)
     try {

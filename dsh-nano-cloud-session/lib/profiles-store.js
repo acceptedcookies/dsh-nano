@@ -23,6 +23,11 @@ var ProfileCodecError = class extends Error {
     this.status = 422;
   }
 };
+function providerKeyOf(profile) {
+  const carrier = profile?.carrier ?? profile?.providerKey;
+  if (carrier == null || carrier === "" || carrier === "devin") return PROVIDER_KEY;
+  throw new ProfileCodecError(`unsupported provider ${carrier}`, "invalid-request");
+}
 function originOf(baseUrl) {
   let url;
   try {
@@ -52,6 +57,11 @@ function decodeProfileSave(input, { existing } = {}) {
   if (!label || label.length > 80) throw new ProfileCodecError("label is required (max 80 chars)");
   const orgId = String(input.orgId ?? "").trim();
   if (!/^org-[A-Za-z0-9-]*$/.test(orgId)) throw new ProfileCodecError("orgId must look like org-\u2026");
+  for (const carrier of [input.carrier, input.providerKey]) {
+    if (carrier !== void 0 && carrier !== null && String(carrier) !== "" && String(carrier) !== "devin") {
+      throw new ProfileCodecError(`unsupported provider ${carrier}`, "invalid-request");
+    }
+  }
   const baseUrl = normalizeBaseUrl(input.baseUrl ?? existing?.baseUrl);
   const next = {
     id: existing?.id ?? (String(input.id ?? "").trim() || null),
@@ -141,6 +151,7 @@ function load() {
   }
   if (!Number.isInteger(data.configEpoch)) data.configEpoch = 0;
   if (!data.profileEpochs || typeof data.profileEpochs !== "object") data.profileEpochs = {};
+  for (const profile of data.profiles) providerKeyOf(profile);
   return data;
 }
 function save(data) {

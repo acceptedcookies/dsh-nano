@@ -5,8 +5,9 @@
  * must not terminate a live Devin session or drop a credential profile whose
  * token can never be read back.
  *
- *   - terminate (`native-workbench.js`, upstream DELETE → session suspended)
- *     and profile removal (`settings-dialog.js`) go through the host
+ *   - terminate lived in the workbench, which the 2026-11-19 owner ruling
+ *     retired — there is no terminate UI left; profile removal
+ *     (`settings-dialog.js`) still goes through the host
  *     `RiskConfirmation` acknowledgement; the shared gate is the react-free
  *     `mayTerminate({ acknowledged })` / `runTerminate(...)` in confirm.js.
  *   - archive is reversible upstream (unarchive exists) and therefore a
@@ -113,57 +114,31 @@ test('T24 attack vector: no native confirm in any form, in any client source', (
   assert.equal(stripComments('// if (!acknowledged) return').includes('acknowledged'), false)
 })
 
-/** Source body of an `onConfirm: () => { … }` handler, braces balanced. */
-function callbackBody(text, needle) {
-  const at = text.indexOf(needle)
-  assert.ok(at >= 0, `missing ${needle}`)
-  const open = text.indexOf('{', at + needle.length - 1)
-  let depth = 0
-  for (let i = open; i < text.length; i++) {
-    if (text[i] === '{') depth += 1
-    else if (text[i] === '}') {
-      depth -= 1
-      if (depth === 0) return text.slice(open + 1, i)
-    }
-  }
-  throw new Error(`unbalanced ${needle}`)
-}
-
-test('T24 attack vector: the real workbench onConfirm refuses an unchecked box', async () => {
-  const body = callbackBody(workbenchCode, 'onConfirm: () =>')
-  const handler = new Function('acknowledged', 'setConfirmTerminate', 'runTerminate', 'action', 'api', 'remoteId', body)
-  let closes = 0
-  let gateCalls = 0
-  let terminates = 0
-  let nativeConfirms = 0
-  const nativeConfirm = globalThis.confirm
-  globalThis.confirm = () => { nativeConfirms += 1; return true }
-  try {
-    handler(false, () => { closes += 1 }, () => { gateCalls += 1; return Promise.resolve(true) }, fn => fn(), { terminate: () => { terminates += 1 } }, 'remote-1')
-    assert.equal(closes, 0, 'an unchecked box leaves the dialog open')
-    assert.equal(gateCalls, 0, 'an unchecked box never reaches the gated runner')
-    assert.equal(terminates, 0, 'an unchecked box terminates nothing')
-    assert.equal(nativeConfirms, 0, 'no native confirm dialog is opened')
-
-    handler(true, () => { closes += 1 }, runTerminate, fn => fn(), { terminate: () => { terminates += 1 } }, 'remote-1')
-    await new Promise(resolve => setTimeout(resolve, 0))
-    assert.equal(closes, 1, 'the acknowledged path closes the dialog')
-    assert.equal(terminates, 1, 'the acknowledged path runs the termination once')
-  } finally {
-    if (nativeConfirm === undefined) delete globalThis.confirm
-    else globalThis.confirm = nativeConfirm
-  }
+test('T24 attack vector: the retired workbench exposes no terminate UI at all', () => {
+  /* The workbench carried the only terminate dialog; it is now a tombstone.
+   * The regression guard flips: the file must stay implementation-free — no
+   * confirm handler, no terminate call site, no exports. */
+  assert.equal(workbenchCode.includes('onConfirm'), false, 'tombstone must not regain a confirm handler')
+  assert.equal(workbenchCode.includes('api.terminate'), false, 'tombstone must not regain a terminate call site')
+  assert.equal(workbenchCode.includes('RiskConfirmation'), false, 'tombstone must not regain the dialog')
+  assert.match(workbenchCode, /export\s*\{\s*\}/, 'the file stays an empty export tombstone')
 })
 
-test('T24: terminate goes through RiskConfirmation and the gate', () => {
-  assert.match(workbench, /RiskConfirmation/, 'the workbench renders the host acknowledgement dialog')
-  assert.match(workbench, /runTerminate\(\{/, 'the confirm handler runs through the gate')
-  assert.match(workbench, /acknowledged,/, 'the checkbox state is passed in')
-  assert.match(workbench, /disabled: busy/, 'the confirm stays disabled while a request is in flight')
-  assert.match(workbench, /const \[acknowledged, setAcknowledged\] = useState\(false\)/, 'the box starts unchecked')
-  assert.match(workbenchCode, /if \(!acknowledged\) return/, 'the handler itself refuses an unchecked box (comment bodies excluded)')
-  assert.equal((workbench.match(/api\.terminate\(/g) ?? []).length, 1, 'one terminate call site')
-  assert.ok(workbench.indexOf('runTerminate({') < workbench.indexOf('api.terminate('), 'the call sits inside the gated runner')
+test('T24: terminate reaches the wire only through the acknowledged gate', () => {
+  /* Interaction boundary: the manage dialog's terminate step is a
+   * RiskConfirmation whose confirm runs runTerminate({ acknowledged, … });
+   * api.terminate has exactly one call site, inside runManage behind the
+   * manageBusy single-fire guard, and no component may invoke it directly. */
+  assert.equal((indexCode.match(/api\.terminate\(/g) ?? []).length, 1, 'one terminate call site')
+  const runManage = indexCode.slice(indexCode.indexOf('runManage: async'), indexCode.indexOf('copy: () => t'))
+  assert.match(runManage, /kind === 'terminate'\) await api\.terminate\(target\.sessionId, \{ profileId: pid \}\)/,
+    'terminate carries the frozen profileId')
+  assert.match(indexCode, /runTerminate\(\{ acknowledged, terminate: \(\) => face\.runManage\('terminate'\) \}\)/,
+    'the confirm goes through the acknowledged gate')
+  assert.match(indexCode, /mayTerminate|RiskConfirmation/, 'the acknowledgement component is rendered')
+  const direct = clientSources.filter(({ name, text }) =>
+    name !== 'api.js' && name !== 'index.js' && stripComments(text).includes('api.terminate('))
+  assert.deepEqual(direct, [], 'no other client component may call api.terminate')
 })
 
 test('T24: profile removal goes through RiskConfirmation and the gate', () => {
@@ -176,14 +151,16 @@ test('T24: profile removal goes through RiskConfirmation and the gate', () => {
 })
 
 test('T24: archive is a reversible NanoDialog danger and cancel sends nothing', () => {
-  const start = index.indexOf('function ArchiveDialog')
+  const start = index.indexOf('function ManageDialog')
   const end = index.indexOf('function CloudSessionRoot')
-  assert.ok(start > 0 && end > start, 'ArchiveDialog is a discrete component')
+  assert.ok(start > 0 && end > start, 'ManageDialog is a discrete component')
   const dialog = index.slice(start, end)
   assert.match(dialog, /NanoDialog/)
-  assert.match(dialog, /danger: true/, 'destructive styling for the archive confirm')
-  assert.match(dialog, /onConfirm: \(\) => \{ void face\.archiveSession\(sessionId\) \}/, 'the request only fires on confirm')
-  assert.match(dialog, /onCancel: onClose/, 'cancel closes without a request')
-  assert.match(indexCode, /onClose: face\.closeArchive/, 'the close handler is the state-only closeArchive')
-  assert.match(indexCode, /closeArchive: \(\) => store\.set\(\{ archiveTarget: null \}\)/, 'closing sends no request')
+  assert.match(dialog, /confirmStep\('archive', \{ danger: true \}\)/, 'archive is the destructive-styled step')
+  assert.match(dialog, /onCancel: \(\) => setStep\('menu'\)/, 'cancel steps back without a request')
+  /* runManage is the only writer: it reads the frozen target once, the busy
+   * flag refuses a second attempt, and failure stays visible in the dialog. */
+  const runManage = indexCode.slice(indexCode.indexOf('runManage: async'), indexCode.indexOf('copy: () => t'))
+  assert.match(runManage, /if \(!target \|\| manageBusy \|\| !target\.profileId \|\| !target\.sessionId\) return/, 'frozen target + busy guard')
+  assert.match(indexCode, /closeManage: \(\) => store\.set\(\{ manageTarget: null, manageError: '' \}\)/, 'closing sends no request')
 })

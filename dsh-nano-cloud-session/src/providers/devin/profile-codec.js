@@ -47,6 +47,12 @@ export function decodeProfileSave(input, { existing } = {}) {
   if (!label || label.length > 80) throw new ProfileCodecError('label is required (max 80 chars)')
   const orgId = String(input.orgId ?? '').trim()
   if (!/^org-[A-Za-z0-9-]*$/.test(orgId)) throw new ProfileCodecError('orgId must look like org-…')
+  /* An unknown carrier/providerKey is rejected, never re-stamped as Devin. */
+  for (const carrier of [input.carrier, input.providerKey]) {
+    if (carrier !== undefined && carrier !== null && String(carrier) !== '' && String(carrier) !== 'devin') {
+      throw new ProfileCodecError(`unsupported provider ${carrier}`, 'invalid-request')
+    }
+  }
   const baseUrl = normalizeBaseUrl(input.baseUrl ?? existing?.baseUrl)
   const next = {
     id: existing?.id ?? (String(input.id ?? '').trim() || null),
@@ -98,6 +104,19 @@ export function formToCreateInput(form = {}) {
   if (String(form.sessionSecrets ?? '').trim() !== '') {
     try { sessionSecrets = JSON.parse(form.sessionSecrets) }
     catch { throw new ProfileCodecError('session_secrets must be JSON') }
+    /* The contract shape is {key, value, sensitive}: normalize entries, keep
+     * explicit sensitive:false, and accept the legacy `name` spelling. */
+    if (!Array.isArray(sessionSecrets)) throw new ProfileCodecError('session_secrets must be a JSON array')
+    sessionSecrets = sessionSecrets.map(entry => {
+      if (!entry || typeof entry !== 'object') throw new ProfileCodecError('session_secrets entries must be objects')
+      const key = entry.key ?? entry.name
+      if (typeof key !== 'string' || key === '') throw new ProfileCodecError('session_secrets entries require a key')
+      if (typeof entry.value !== 'string') throw new ProfileCodecError('session_secrets entries require a string value')
+      if (entry.sensitive !== undefined && typeof entry.sensitive !== 'boolean') {
+        throw new ProfileCodecError('session_secrets sensitive must be a boolean')
+      }
+      return entry.sensitive === undefined ? { key, value: entry.value } : { key, value: entry.value, sensitive: entry.sensitive }
+    })
   }
   let structuredOutputSchema
   if (String(form.structuredOutputSchema ?? '').trim() !== '') {
@@ -123,7 +142,20 @@ export function formToCreateInput(form = {}) {
     bypass_approval: boolish(form.bypassApproval),
     memory_enabled: boolish(form.memoryEnabled),
     session_links: typeof form.sessionLinks === 'string' ? splitCsv(form.sessionLinks) : form.sessionLinks,
-    security_profile: form.securityProfileId ? { profile_id: form.securityProfileId } : form.securityProfile,
+    /* Security profile tri-state: 'inherit' always omits, 'none' always emits
+     * an explicit null opt-out, 'custom' requires a non-empty id. */
+    security_profile: (() => {
+      const mode = form.securityProfileMode
+      if (mode === 'inherit') return undefined
+      if (mode === 'none') return { profile_id: null }
+      if (mode === 'custom') {
+        if (typeof form.securityProfileId !== 'string' || form.securityProfileId.trim() === '') {
+          throw new ProfileCodecError('security_profile requires a profile id')
+        }
+        return { profile_id: form.securityProfileId }
+      }
+      return form.securityProfileId ? { profile_id: form.securityProfileId } : form.securityProfile
+    })(),
     structured_output_schema: structuredOutputSchema,
     structured_output_required: boolish(form.structuredOutputRequired),
     session_secrets: sessionSecrets,

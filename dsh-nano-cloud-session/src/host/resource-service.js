@@ -15,14 +15,17 @@ function fail(reason, message) {
 
 export function freezeWorkspaceRoot(probed, requested) {
   const base = String(probed ?? '').replace(/\/+$/, '').trim()
-  const want = requested == null || requested === '' ? base : String(requested).replace(/\/+$/, '').trim()
+  const want = requested == null ? '' : String(requested).replace(/\/+$/, '').trim()
   if (!base.startsWith('/')) fail('workspace-unavailable', 'probe pwd did not return an absolute root')
+  if (want === '') fail('invalid-request', 'workspace root must be explicit')
   if (!want.startsWith('/')) fail('invalid-request', 'workspace root must be an absolute path')
   if (!/^[A-Za-z0-9._/=+-]+$/.test(want) || /(^|\/)\.\.(\/|$)/.test(want)) {
     fail('invalid-request', 'workspace root contains unsafe characters')
   }
-  if (want !== base && !want.startsWith(`${base}/`)) {
-    fail('workspace-denied', 'workspace root must be the probed cwd or a subdirectory')
+  /* The root must be a strict subdirectory of the probed cwd: the cwd itself,
+   * its ancestors, and the remote home default are all refused. */
+  if (!want.startsWith(`${base}/`)) {
+    fail('workspace-denied', 'workspace root must be a strict subdirectory of the probed cwd')
   }
   return want
 }
@@ -56,6 +59,7 @@ export function createResourceService({ scopes, api, home, spawnImpl, artifactPa
       knownHostsFile,
       spawnImpl,
       expectedFingerprint,
+      signal,
     })
     let inspect
     try {
@@ -71,6 +75,7 @@ export function createResourceService({ scopes, api, home, spawnImpl, artifactPa
     }
     const probed = String(inspect.probe.find(p => p.argv[0] === 'pwd')?.stdout ?? '').trim()
     const root = freezeWorkspaceRoot(probed, body.root)
+    if (signal?.aborted) fail('workspace-scope-expired', 'connect aborted')
     const published = await publishArtifact({
       sessionId: scope.remoteSessionId,
       identityFile,
@@ -78,6 +83,7 @@ export function createResourceService({ scopes, api, home, spawnImpl, artifactPa
       spawnImpl,
       expectedFingerprint,
       artifact: artifactPath,
+      signal,
     })
     const nodeBin = inspect.node.startsWith('/') ? inspect.node.split(' ')[0] : 'node'
     const argv = buildSshArgv({
@@ -86,13 +92,18 @@ export function createResourceService({ scopes, api, home, spawnImpl, artifactPa
       sessionId: scope.remoteSessionId,
       remoteArgv: [nodeBin, published.remoteFile, '--root', root],
     })
+    if (signal?.aborted) fail('workspace-scope-expired', 'connect aborted')
     const child = spawnSsh(argv, { spawnImpl })
+    const onAbort = () => { try { child.kill('SIGKILL') } catch { /* gone */ } }
+    signal?.addEventListener?.('abort', onAbort, { once: true })
     const client = createMcpClient(child)
+    /* Drain is not done until this scope's own child is observed exited. */
     scope.cleanup = async () => {
-      client.close()
+      signal?.removeEventListener?.('abort', onAbort)
+      await client.close()
     }
     if (signal?.aborted) {
-      client.close()
+      await client.close()
       fail('workspace-scope-expired', 'connect aborted')
     }
     await client.initialize()
@@ -104,8 +115,8 @@ export function createResourceService({ scopes, api, home, spawnImpl, artifactPa
     const remoteInspect = await client.call('workspace.inspect', {})
     const confirmed = root.replace(/\/+$/, '')
     const remoteRoot = String(remoteInspect.root ?? '').replace(/\/+$/, '')
-    if (remoteRoot !== confirmed && !remoteRoot.startsWith(`${confirmed}/`) && !confirmed.startsWith(`${remoteRoot}/`)) {
-      fail('workspace-failed', 'remote root does not match the confirmed path')
+    if (remoteRoot !== confirmed) {
+      fail('workspace-failed', 'remote root does not equal the confirmed path')
     }
     scope.mcp = client
     scope.child = child
@@ -142,7 +153,7 @@ export function createResourceService({ scopes, api, home, spawnImpl, artifactPa
       }
       if (!scope.mcp) fail('workspace-unavailable', 'MCP client is not attached')
       const work = scope.mcp.call(op, decoded)
-      return scopes.track(scope, work)
+      return scopes.track(scope, work, { mutating: WRITE_OPS.has(op) || PROCESS_OPS.has(op) })
     },
     nativeChatStatus(ctx) {
       return resolveNativeChat(ctx)

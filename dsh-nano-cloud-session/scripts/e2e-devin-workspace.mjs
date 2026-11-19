@@ -1,8 +1,12 @@
 #!/usr/bin/env node
 /** Live pairing E2E for design-1119 §11.4. Explicit opt-in only. Never `npm test`.
- *  Required: DNCS_LIVE_WORKSPACE=1 DNCS_PROBE_SESSION=devin-…
- *  Optional: DNCS_SSH_IDENTITY, DSH_HOME (default ~/.dsh-dev for API profile),
+ *  Required: DNCS_LIVE_WORKSPACE=1 DNCS_PROBE_SESSION=devin-… DNCS_PROBE_PROFILE=<profile-id>
+ *  Optional: DNCS_SSH_IDENTITY, DSH_HOME (default ~/.dsh-dev),
  *            DNCS_EXPECTED_FINGERPRINT when known_hosts is empty.
+ *
+ *  Bounds: the remote root is an exclusive `mktemp -d` under the probed cwd —
+ *  never a business path. Writes are create-only, nothing pre-existing is
+ *  deleted, and the output is boolean facts only (no paths, tokens or bytes).
  */
 if (process.env.DNCS_LIVE_WORKSPACE !== '1') {
   console.error('not-run: set DNCS_LIVE_WORKSPACE=1 to execute this script')
@@ -11,163 +15,99 @@ if (process.env.DNCS_LIVE_WORKSPACE !== '1') {
 
 import { spawn } from 'node:child_process'
 import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
-import { tmpdir, homedir } from 'node:os'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { publishArtifact, probeWorkspace, ensureKnownHostsFile, artifactPath } from '../src/providers/devin/bootstrap.js'
-import { resolveIdentityFile, knownHostsPath, buildSshArgv, spawnSsh } from '../src/providers/devin/ssh.js'
+import { publishArtifact, probeWorkspace, artifactPath } from '../src/providers/devin/bootstrap.js'
+import { buildSshArgv, spawnSsh } from '../src/providers/devin/ssh.js'
 import { createMcpClient } from '../src/providers/devin/mcp-client.js'
-import { createProfileStore } from '../src/host/profiles.js'
 import { createDevinApi } from '../src/providers/devin/api.js'
+import { probeTarget, assertProbeIdentity, claimPrivateRoot } from './lib/probe-target.mjs'
 
-const sessionId = process.env.DNCS_PROBE_SESSION
-if (!sessionId) {
-  console.error('DNCS_PROBE_SESSION is required; refusing to guess a target')
-  process.exit(2)
-}
+const evidence = { steps: [], notRun: [] }
+const record = (step, ok, extra = {}) => evidence.steps.push({ step, ok, ...extra })
 
-const home = process.env.DSH_HOME || join(homedir(), '.dsh-dev')
-process.env.DSH_HOME = home
-const identityFile = process.env.DNCS_SSH_IDENTITY || resolveIdentityFile({ home })
-const knownHostsFile = ensureKnownHostsFile(home)
-const expectedFingerprint = process.env.DNCS_EXPECTED_FINGERPRINT
-const evidence = {
-  sessionIdPrefix: String(sessionId).slice(0, 18),
-  steps: [],
-  notRun: [],
-}
-
-function record(step, status, extra = {}) {
-  evidence.steps.push({ step, status, ...extra })
-}
-
-const localDir = mkdtempSync(join(tmpdir(), 'dncs-t22-local-'))
+const localDir = mkdtempSync(join(tmpdir(), 'dncs-e2e-local-'))
 writeFileSync(join(localDir, 'sentinel.txt'), 'LOCAL-UNCHANGED')
+const localUnchanged = () => readFileSync(join(localDir, 'sentinel.txt'), 'utf8') === 'LOCAL-UNCHANGED'
 
 try {
-  const store = createProfileStore()
-  const profile = store.active()
+  const { sessionId, profile, identityFile, knownHostsFile, expectedFingerprint } = probeTarget()
   const api = createDevinApi()
-  if (!profile) {
-    record(1, 'not-run', { reason: 'no-active-profile' })
-  } else {
-    const self = await api.self(profile)
-    const remote = String(sessionId).replace(/^devin-/, '')
-    const session = await api.getSession(profile, remote)
-    record(1, 'pass', {
-      principal: self.principal_type,
-      orgMatch: self.devin_sessions_org_id === profile.orgId,
-      sessionStatus: session?.status ?? null,
-      api: 'ready',
-    })
-  }
 
-  const inspect = await probeWorkspace({
-    sessionId, identityFile, knownHostsFile, expectedFingerprint,
+  /* Identity must resolve under the named profile before any SSH: same
+   * session id and same org, both checked by parseRemoteSessionId. */
+  const { remote } = await assertProbeIdentity({ api, profile, sessionId })
+  record('api-identity', true)
+
+  const inspect = await probeWorkspace({ sessionId, identityFile, knownHostsFile, expectedFingerprint })
+  const nodeBin = inspect.node.startsWith('/') ? inspect.node.split(' ')[0] : 'node'
+  record('ssh-probe', inspect.probe.every(row => row.code === 0) && inspect.node.length > 0)
+
+  const root = await claimPrivateRoot({
+    sessionId, identityFile, knownHostsFile, expectedFingerprint, probe: inspect,
   })
-  record(1, 'pass', {
-    sshUser: inspect.probe.find(row => row.argv[0] === 'id')?.stdout,
-    sshRoot: inspect.probe.find(row => row.argv[0] === 'pwd')?.stdout,
-    node: inspect.node.replace(/cog_[A-Za-z0-9_-]+/g, 'cog_***'),
-  })
+  record('exclusive-root', typeof root === 'string' && root.length > 0)
 
   const published = await publishArtifact({
     sessionId, identityFile, knownHostsFile, expectedFingerprint,
     artifact: artifactPath(), spawnImpl: spawn,
   })
-  const nodeBin = inspect.node.startsWith('/') ? inspect.node.split(' ')[0] : 'node'
-  const root = '/home/ubuntu/repos/dsh-nano'
-  const argv = buildSshArgv({
+  record('publish', typeof published.hash === 'string' && published.hash.length === 64)
+
+  const spawnBridge = () => createMcpClient(spawnSsh(buildSshArgv({
     identityFile, knownHostsFile, sessionId,
     remoteArgv: [nodeBin, published.remoteFile, '--root', root],
-  })
-  const child = spawnSsh(argv, { spawnImpl: spawn })
-  const client = createMcpClient(child)
+  }), { spawnImpl: spawn }))
+
+  const client = spawnBridge()
   try {
     await client.initialize()
     const tools = await client.listTools()
     const facts = await client.call('workspace.inspect', {})
-    const dir = `dncs-1119-t22`
-    try { await client.call('fs.mkdir', { path: dir }) } catch { /* exists */ }
-    const payload = Buffer.from(`dncs-1119-t22 ${new Date().toISOString()}`).toString('base64')
-    await client.call('fs.write', { path: `${dir}/sentinel.txt`, bytes: payload, createOnly: false })
-    const read = await client.call('fs.read', { path: `${dir}/sentinel.txt`, offset: 0, length: 256 })
-    const listed = await client.call('fs.list', { path: dir, limit: 20 })
-    assertLocalUnchanged()
-    record(2, 'pass', {
-      tools: tools.length,
-      root: facts.root,
-      os: facts.os,
-      wrote: Buffer.from(read.bytes, 'base64').toString().slice(0, 40),
-      entries: listed.entries?.length ?? 0,
-      hash: published.hash,
-      pty: facts.pty,
-      forward: facts.forward,
-    })
+    record('mcp-handshake', tools.length > 0 && facts.root === root)
 
-    try {
-      const git = await client.call('process.start', { argv: ['git', 'status', '--porcelain'], cwd: '.' })
-      await client.call('process.wait', { processHandle: git.processHandle, timeoutMs: 8000 })
-      const gitOut = await client.call('process.read', { processHandle: git.processHandle, stdoutOffset: 0, limit: 2048 })
-      record(3, 'pass', {
-        covered: 'git-status-only',
-        git: Buffer.from(gitOut.stdout, 'base64').toString().slice(0, 200),
-        pty: 'not-run: H-EXEC SubprocessTerminalHandle missing',
-      })
-      evidence.notRun.push({ step: 3, item: 'pty-resize-exit', reason: 'NATIVE_UNAVAILABLE' })
-    } catch (error) {
-      record(3, 'fail', { reason: error.message.slice(0, 200) })
-    }
+    const payload = Buffer.from(`dncs-e2e ${new Date().toISOString()}`).toString('base64')
+    await client.call('fs.write', { path: 'sentinel.txt', bytes: payload, createOnly: true })
+    const read = await client.call('fs.read', { path: 'sentinel.txt', offset: 0, length: 256 })
+    record('fs-write-read', Buffer.from(read.bytes, 'base64').toString('base64') === payload)
 
-    evidence.notRun.push({ step: 4, item: 'loopback-http-ws-preview', reason: 'no official port-access owner on 0.2.2-rc.1' })
-    record(4, 'not-run', { reason: 'NATIVE_UNAVAILABLE' })
+    /* Harmless exec proof: pwd, never a claimed business verification. */
+    const proc = await client.call('process.start', { argv: ['pwd'], cwd: '.' })
+    await client.call('process.wait', { processHandle: proc.processHandle, timeoutMs: 8000 })
+    const out = await client.call('process.read', { processHandle: proc.processHandle, stdoutOffset: 0, limit: 2048 })
+    record('exec-pwd', Buffer.from(out.stdout, 'base64').toString().trim() === root)
 
-    if (profile) {
-      evidence.notRun.push({ step: 5, item: 'native-chat-sentinel-cross-check', reason: 'H-CHAT missing; ACU spend not authorized' })
-      record(5, 'not-run', { reason: 'NATIVE_UNAVAILABLE' })
-      const messages = await api.getMessages(profile, String(sessionId).replace(/^devin-/, ''), { first: 20 })
-      record(6, 'pass', {
-        covered: 'messages-page-only',
-        messageCount: messages?.items?.length ?? messages?.messages?.length ?? 0,
-      })
-    } else {
-      record(5, 'not-run', { reason: 'no-active-profile' })
-      record(6, 'not-run', { reason: 'no-active-profile' })
-    }
+    record('local-unchanged', localUnchanged())
 
-    client.close()
-    const inspect2 = await probeWorkspace({ sessionId, identityFile, knownHostsFile, expectedFingerprint })
-    record(7, 'pass', {
-      covered: 'reconnect-pwd-only',
-      reconnectPwd: inspect2.probe.find(row => row.argv[0] === 'pwd')?.stdout,
-    })
+    evidence.notRun.push({ step: 'pty', reason: 'NATIVE_UNAVAILABLE' })
+    evidence.notRun.push({ step: 'loopback-preview', reason: 'NATIVE_UNAVAILABLE' })
+    evidence.notRun.push({ step: 'native-chat', reason: 'NATIVE_UNAVAILABLE' })
 
-    const child2 = spawnSsh(buildSshArgv({
-      identityFile, knownHostsFile, sessionId,
-      remoteArgv: [nodeBin, published.remoteFile, '--root', root],
-    }), { spawnImpl: spawn })
-    const client2 = createMcpClient(child2)
-    try {
-      await client2.initialize()
-      await client2.call('fs.remove', { path: `${dir}/sentinel.txt` })
-      record(8, 'pass', { cleaned: `${dir}/sentinel.txt` })
-    } finally {
-      client2.close()
-    }
+    const messages = await api.getMessages(profile, remote.bare, { first: 20 })
+    record('rest-messages', Array.isArray(messages?.items ?? messages?.messages ?? messages))
   } finally {
-    try { client.close() } catch { /* ignore */ }
+    await client.close()
+  }
+
+  /* A second, fresh bridge re-reads the same state: the first session's
+   * writes persist on the remote fs, nothing local was touched. */
+  const client2 = spawnBridge()
+  try {
+    await client2.initialize()
+    const again = await client2.call('fs.read', { path: 'sentinel.txt', offset: 0, length: 256 })
+    record('second-session-read', Buffer.from(again.bytes, 'base64').toString().startsWith('dncs-e2e '))
+    record('local-unchanged-2', localUnchanged())
+  } finally {
+    await client2.close()
   }
 } catch (error) {
-  record('aborted', 'fail', { reason: String(error.message ?? error).slice(0, 300), fingerprint: error.fingerprint })
+  record('aborted', false, { reason: String(error?.reason ?? error?.message ?? error).slice(0, 200) })
   console.log(JSON.stringify(evidence, null, 2))
   process.exit(1)
 } finally {
   rmSync(localDir, { recursive: true, force: true })
 }
 
-function assertLocalUnchanged() {
-  const text = readFileSync(join(localDir, 'sentinel.txt'), 'utf8')
-  if (text !== 'LOCAL-UNCHANGED') throw new Error('local sentinel changed')
-}
-
 console.log(JSON.stringify(evidence, null, 2))
-void knownHostsPath
+const failed = evidence.steps.filter(s => s.ok !== true)
+process.exit(failed.length ? 1 : 0)

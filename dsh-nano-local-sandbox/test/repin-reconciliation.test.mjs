@@ -31,8 +31,8 @@ async function fixture({ built = true } = {}) {
   const { driver, manifest: profileManifest } = loaded
   const recipe = { profile: profileManifest, resources: resourcesOf(profileManifest) }
   const runtime = driver.runtimeRoot(profileManifest, deps)
-  const state = join(root, 'adopted-state')
-  mkdirSync(state)
+  const state = join(root, '.dsh-dev', 'nano-local-sandbox', 'state', 'kitesurf', 'kitesurf-dev')
+  mkdirSync(state, { recursive: true })
   writeFileSync(join(state, 'durable-marker'), 'keep me\n')
   if (built) {
     mkdirSync(dirname(runtime), { recursive: true })
@@ -116,7 +116,8 @@ test('inspect retains Apple image reference/digest, actual mounts and GC/recipe 
   assert.deepEqual(info.mounts[0], { source: f.runtime, target: '/opt/kitesurf', type: { virtiofs: {} }, options: ['ro'] })
   assert.deepEqual(info.environment, ['DNLS_HOME=/opt/kitesurf'])
   assert.deepEqual(info.labels, { 'fixture.recipe': 'visible' })
-  assert.equal(recipeDrift(info, { image: f.image, runtimeRoot: f.runtime }), null)
+  assert.equal(recipeDrift(info, { image: f.image, runtimeRoot: f.runtime, stateDir: f.state }), null)
+  assert.match(recipeDrift(info, { image: f.image, runtimeRoot: f.runtime, stateDir: '/elsewhere' }), /^state /)
 })
 
 test('image aliases compare equally and absent fixture fields or GC env do not invent drift', () => {
@@ -161,6 +162,21 @@ test('image-only and runtime-only drift each recreate a running container with t
     assert.equal(session.cdpGeneration, 1)
     assertPreserved(f, backend.calls[3][1])
   })
+})
+
+test('a container on a retired state location is recreated onto the kernel state volume; the old directory is untouched', async () => {
+  const f = await fixture()
+  const legacy = join(f.root, '.dsh-kitesurf-state-dev')
+  mkdirSync(legacy)
+  writeFileSync(join(legacy, 'browser-state.json'), '{"legacy":true}\n')
+  const mounts = JSON.parse(inspected(f).raw)[0].configuration.mounts
+    .map((mount) => mount.destination === '/var/lib/kitesurf-state' ? { ...mount, source: legacy } : mount)
+  const backend = backendFor(inspected(f, { mounts }))
+  const result = await prepare(f, backend, cachedSession(backend.calls))
+  assert.equal(result.status, 200)
+  assert.equal(result.body.action, 'recreated')
+  assertPreserved(f, backend.calls.find(([action]) => action === 'create')[1])
+  assert.equal(readFileSync(join(legacy, 'browser-state.json'), 'utf8'), '{"legacy":true}\n')
 })
 
 test('stopped containers reconcile recipe/resource drift before any start', async (t) => {

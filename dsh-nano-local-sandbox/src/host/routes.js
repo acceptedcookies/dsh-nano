@@ -659,13 +659,15 @@ async function prepareEnvironment(session, deps, ctx = null) {
     })
     action = 'created'
   } else {
-    const changedRecipe = driver.drift(info, { image, runtimeRoot: driver.runtimeRoot(profile, deps) })
+    const changedRecipe = driver.drift(info, { image, runtimeRoot: driver.runtimeRoot(profile, deps), stateDir: session.stateDir })
     const changedResources = resourceDrift(info, resources)
     if (changedRecipe || changedResources) {
       // Validate the complete derivative + receipt before touching an old
-      // container, even when it is stopped. Preserve its durable state and
-      // publications while using the current recipe's image/resources/mounts.
-      const mounts = driver.mounts(profile, deps, info.stateSource || session.stateDir)
+      // container, even when it is stopped. Keep its publications; the state
+      // volume is always the kernel-assigned one, so a container still on a
+      // retired state location moves to it here and the old directory is left
+      // on disk untouched and unread.
+      const mounts = driver.mounts(profile, deps, session.stateDir)
       await deps.backend?.ensureImage?.({ tag: image, publicSpec: {} })
       if (info.state !== 'stopped') await deps.backend.stop(name)
       // Stop succeeded (or inspect already proved stopped): only now may we

@@ -1,11 +1,9 @@
-import { createHash } from 'node:crypto'
+import { bashFingerprint, digest, isDigest, successfulBash } from '../shared/fingerprint.js'
 
 const MAX_PENDING = 64
 const MAX_FACTS = 8
 const MAX_PATH_BYTES = 192
 const FILE_TOOLS = new Set(['write', 'edit', 'apply_patch'])
-const digest = value => createHash('sha256').update(value).digest('hex')
-const isDigest = value => typeof value === 'string' && /^[0-9a-f]{64}$/.test(value)
 const isId = value => typeof value === 'string' && value.length > 0 && value.length <= 256
 const isPath = value => typeof value === 'string' && value.length > 0 && Buffer.byteLength(value) <= MAX_PATH_BYTES
 const isCount = value => Number.isSafeInteger(value) && value >= 0
@@ -29,18 +27,7 @@ function parseState(value) {
 
 const insertRecent = (list, item, limit) => [item, ...list.filter(value => value !== item)].slice(0, limit)
 
-function bashKey(raw, cwd) {
-  if (typeof raw !== 'string') return null
-  try {
-    const args = JSON.parse(raw)
-    if (typeof args?.command === 'string' && args.command.length > 0 && args.run_in_background !== true) {
-      return digest(JSON.stringify([cwd, args.workdir ?? null, args.command]))
-    }
-  } catch (error) {
-    if (!(error instanceof SyntaxError)) throw error
-  }
-  return null
-}
+const bashKey = bashFingerprint
 
 function apply(state, event) {
   // This is the host-supplied prefix cut, not the firstLiveSeq on reopen.
@@ -91,15 +78,6 @@ function apply(state, event) {
     default:
       return state
   }
-}
-
-function successfulBash({ message, meta }) {
-  // rc.5 emits a text result and cwd for Bash, including promoted calls.
-  // Use known terminal markers only to withhold recovery, never to infer a failure.
-  const block = message?.content?.at(-1)
-  if (typeof meta?.cwd !== 'string' || block?.type !== 'text' || typeof block.text !== 'string') return false
-  const tail = block.text.slice(-1024).trimEnd()
-  return !/^(?:started background job |\[(?:still running after |timed out after |stopped: |killed by signal: |exit code: |sandbox: ))/m.test(tail)
 }
 
 export const progressProjection = {

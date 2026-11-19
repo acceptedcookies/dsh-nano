@@ -123,20 +123,19 @@ const src = ctx.uiConversation.binding(sessionId).target('progress')
   ```ts
   { rows: ProgressRow[],            // 已排序的时间序视图行（含嵌套 subCalls）
     timeline: { turnOrder:number[], turns:Map<number,TurnLocation> },
-    counts: { total, failed, running, byType:Record<string,number> },
-    todos: { items:TodoItem[], counts:{pending,inProgress,completed} } | null,
-    partial: boolean,               // hasMore / historyWasPartial 标记
+    counts: { total, failed, running, awaiting, byType:Record<string,number> },
     revision: number }
   ```
+  说明：`todos` 与 `hasMore`（原 `partial`）不走 builder 快照——Tasks 面板直接读 `session.projections.faceOf('todos')`（快照值为 `TodoItem[] | null`），`hasMore`/`loadingOlder` 读 `session.getSnapshot()`。builder 快照刻意保持窄。
 - **窗口语义**：事件流分页（`events.prepend` 每页 ≥50 消息 + ≥2 turn、上限 500；`session.loadOlder()`/`loadThrough(seq)`）。`hasMore` 标记窗口外还有更老历史；**「加载更早」按钮**调 `session.loadOlder()`，与 trajectory 同构。
 - **Builder 语义**：`replace`（窗口重建/首次激活）与 `apply`（增量 upserts）按 `ConversationViewBuilder` 契约实现；`apply` 只接收变化节点，Builder 内部维护 seq→row 索引做 O(1) 更新。
 
 ### 3.4 Tasks 与 Jobs 面板数据缝
 
-- **Tasks**：`session.projections.faceOf('todos')`（`dsh-tool-todo/src/index.ts:125-135` 官方投影：`{todos,counts}`，`turn/start` 清零、last-write-wins）。**不重建、不 diff**——进度条读 `counts.completed / todos.length`。
+- **Tasks**：`session.projections.faceOf('todos')`（`dsh-tool-todo/src/types.ts` 官方投影，快照值就是 `TodoItem[] | null`，`turn/start` 清零、last-write-wins）。**不重建、不 diff**；抽屉头部显示 `done/total`，逐项状态走 `StateDot`。
 - **Jobs**：inject `jobs`（`dsh-api-job-controller`，服务名 `jobs`）：`ctx.jobs.watchRows(sessionId)` + `ctx.jobs.state` → `rows[sessionId]: JobView[]`（`{id,kind,label,status:'running|stopping|completed|killed|failed',startedAt,finishedAt,detail,output}`）。
 - **过滤映射**：`status:` 值域统一 `{ok,failed,running,awaiting}`：
-  - 行型：`ok` 无 error 已完结；`failed` = `isError`/`error`/`turn/end` 非正常 reason/`job failed|killed`；`running` = call 已发未见 result/`job running`；`awaiting` = `wait_agent`/`send_message` 等待态 + `approval/asked` 未决。
+  - 行型：`ok` 无 error 已完结；`failed` = `isError`/`error`/`turn/end` reason ∈ `{error,aborted,max-tokens,interrupted}`/`job failed|killed`/`approval outcome rejected|unavailable`；`running` = call 已发未见 result/`job running`；`awaiting` = `wait_agent`/`send_message` 等待态 + `approval/asked` 未决 + `turn/end` reason `blocked`（turn 暂停待业主输入）；`forked`/`completed` 为中性 `ok`。
 
 ### 3.5 挂载：workbench tab 两段式（与 DNCS 同构）
 
@@ -183,27 +182,57 @@ export const inject = [
 
 ## 4. 视图层设计（ProgressBody 解剖）
 
+三份参照：**宿主 primitive catalog**（结构与控件）、**[DNK] 的工作台密度**（工具条/状态行/抽屉）、**devin Progress 的行语义**（谁是人类输入）。插件自绘的只剩布局胶水。
+
 ```
-ProgressBody (sessionId 由 tab seat 注入)
-├─ npr-head           标题行：会话名 + 打开会话按钮（openTabIn→chat? 或 focusTab）
-├─ npr-filter         过滤栏：search input + 已解析 token chips + 清空
-├─ npr-flow           事件流（可滚动，时间正序）
-│   ├─ npr-row        行：icon | summary | time
-│   │   └─ npr-row-detail  展开区（toolview/原始参数+结果）
-│   └─ npr-load-older 顶部「加载更早 N 条」（hasMore 时）
-├─ npr-tasks          Tasks 面板：N/M done 进度条 + 逐项（pending/in_progress/completed）
-└─ npr-jobs           Jobs 面板（有运行中/历史 job 时）：label + status + 时长
+[dsh工作台] tab（标题由宿主 tab 条渲染；插件不再自绘 head）
+└─ [data-nano-progress-report][data-npr=root]        bg-base，flex column（根无自有类）
+   ├─ .npr-toolbar  38px，border-bottom l3
+   │   ├─ host Input[type=search]  .npr-search（包裹层：border l2 / radius-sm / bg-layer-1；focus→business）
+   │   ├─ 清除 Button（ghost sm，仅有过滤文本时）
+   │   └─ .npr-stats（仅有过滤文本时：`n/total`）
+   ├─ .npr-flow  flex:1，滚动
+   │   ├─ .npr-older（hasMore：host Button outline sm「Load older」）
+   │   └─ host AnimatedRows(.npr-rows) → .npr-row*（data-row-key）
+   │        └─ host DisclosureRow（leading glyph / title / headerAccessory=相对时间 + 失败告警）
+   │             └─ 展开：.npr-detail（mono，args/result/error/reasoning/耗时/子调用）
+   ├─ .npr-status  26px，border-top l3，label-tertiary：`n 个事件` · `m 个失败` …… 会话状态
+   └─ .npr-drawer  顶边可拖拽；head = bg-layer-1
+        ├─ .npr-grip  7px，role=separator，cursor row-resize，96px … 70%vh
+        ├─ .npr-drawer-head：host SegmentedControl[Tasks | Jobs(无 job 时禁用)] + 计数 + 折叠 Button
+        └─ .npr-drawer-body：TasksView（StateDot + 13px 文本 + 状态字）/ JobsView
 ```
 
-**行渲染规则**：
+### 4.1 行型 → 视觉语义
 
-- icon 按 `type:` 分类取 nano-ui/host 图标集（`$`、`⊞`、`📄`、`🌐`、`▸`、`✓/✗`）；禁用 emoji 图标用宿主 `Icon*` 组件。
-- summary 单行截断：shell → command；file → `verb + path`；web → `verb + url/host`；prompt → 首行；tool → `name + 关键参数`。
-- time 相对格式（`5h`/`12m`/`刚刚`），hover 出绝对时间。
-- 嵌套：`subCalls`（PTC/subagent）以缩进子行呈现，可折叠。
-- 虚拟化：行数 > 500 时滚动窗口化（v1 可只读尾部 500 + `loadOlder` 分页，不做窗口化渲染——先判读实测帧率）。
+| 行型 | glyph（宿主 catalog） | 标题色 | 备注 |
+|---|---|---|---|
+| `prompt` | `IconUserOutlineRegular`（唯一实心 chip：brand 22% + 0.5px 描边） | `label-primary`，600 | 人类输入是**唯一带底色**的行（brand 8%） |
+| `message` | `IconSparkleRegular` | `label-primary` | agent 文本（reasoning 已并入） |
+| `shell` | `IconCodeOutlineRegular` | `label-secondary` + `--dsh-font-family-code(-default)` | 命令按代码字体渲染 |
+| `file` | `IconDeliverDocRegular` | `label-secondary` | |
+| `web` | `IconGlobeOutlineRegular` | `label-secondary` | |
+| `tool` | `IconSlidersTwoOutlineRegular` | `label-secondary` | |
+| `todo` | `IconChecklistOutlineRegular` | `label-secondary` | |
+| `subagent` | `IconUsersOutlineRegular` | `label-secondary` | |
+| `wait` | `IconClockOutlineRegular` | `state-warn-primary` | 审批 / inbox |
+| `turn` | `IconPlayOutlineRegular` | `label-tertiary` | |
+| `job` | `IconQueueOutlineRegular` | `label-tertiary` | |
+| `lifecycle` | `IconInfoOutlineRegular` | `label-dimmed` | 边界事件 |
 
-**过滤语法**（v1 域）：
+- 失败行：`state-error` 10% 底色 + `inset 2px 0` 左条 + 标题红 + 尾随告警 glyph；`running` 用 `business` 左条 + `DisclosureRow` 的 running shimmer；`awaiting` 用 `warn` 左条。
+- 长文本：`.npr-row-content > span` 上做单行省略号（宿主 `TextShimmer` 把字串放在两层 span 内，`title` 本身不会收缩）。
+- 动效：行入场 `npr-row-in`、抽屉 body `npr-body-in`、`AnimatedRows` 的新增/位移、任务行 hover 换色；`prefers-reduced-motion` 下全关。
+
+### 4.2 抽屉行为
+
+- 高度 `96px … round(innerHeight × 0.7)`，`box-sizing: border-box`（含上边框），拖拽走 pointer capture；双击不改状态。
+- 折叠只留 head（body 从 DOM 移除），再展开回到折叠前高度。
+- 状态 `{height, collapsed, view}` 落 `localStorage['dsh-nano-progress-report:drawer']`——纯视图态，不进宿主。
+- **Tasks**：读 `session.projections.faceOf('todos')`（`TodoItem[] | null`）。宿主 `TodoPanel` 未从包入口导出，故按其度量自绘：13px 文本、gap 8、`StateDot`、逐项状态字、头部 `done/total`。投影在 `turn/start` 被宿主清零——历史仍留在时间线的 `Task list` 行，这是宿主语义，不是丢数据。
+- **Jobs**：读 `ctx.jobs`（先 `watchRows`）；无 job 时该视图选项 `disabled`，不留一个永远空的面板。
+
+### 4.3 过滤
 
 ```
 <type>          自由文本（大小写不敏感，匹配 summary/参数原文）
@@ -215,7 +244,7 @@ tool:<name>     精确工具名（bash|read|write|…）
 token 组合为 AND；无 token 时纯文本检索。
 ```
 
-解析器是纯函数 `parseFilter(query) → {text, include:{type,status,tool}, exclude:{…}}`，单测覆盖。
+解析器是纯函数 `parseFilter(query) → {text, types, statuses, tool, …}`，单测覆盖。过滤不再有 chips：工具条只显示 `n/total`，清空走右侧 × 按钮。
 
 ## 5. 包结构
 
@@ -288,9 +317,9 @@ node test/live/tab.live.mjs
 
 - 探 `https://dsh-dev.local/` → `302` → 剥 `?token=`（任一前置不满足 exit 0 skip）；
 - `findEgo()` 定位 ego-browser → `spawnSync(ego,['nodejs'],{input:script})` → `taskSpace('dnpr-progress')` → `page('p1')`；
-- `page.evaluate` 断言：`document.querySelector('[data-nano-progress-report]')` 存在；`ctx.sidebarRight.openTabIn(sid,'progress')` 后 tab chip 文本出现；
-- 触发一次真实 bash 工具调用（驱动会话或注入假事件）→ 断言 `.npr-row` 出现且 `.npr-row[data-type=shell]` ≥1；
-- `getBoundingClientRect`/`computedStyle` 断言过滤栏在顶部、Tasks 面板在底部、`--npr-*` 令牌值；
+- `page.evaluate` 断言：`document.querySelector('[data-nano-progress-report]')` 存在且只有一个可见 pane；`[data-npr="search"]` 是 `input[type=search]`；`[data-npr="drawer"]` 的 drag/collapse 生效；
+- 用真实会话事件断言：`.npr-row` 出现、按 `data-type` 取到的 glyph 颜色互不相同、`prompt` 行底色不同于 `shell` 行、失败行有 `[data-npr="fail"]`；
+- `getBoundingClientRect`/`computedStyle` 断言 toolbar=38px、status=26/27px、抽屉高度随拖拽变化且 clamp 在 `96 … 0.7vh`；
 - `page.screenshot('/tmp/dnpr-progress-*.png')` 留证；测完还原（关闭 tab、清 localStorage）。
 
 ### 7.3 Spike 取证（宪章 `test/spike/progress-report-tab/`）

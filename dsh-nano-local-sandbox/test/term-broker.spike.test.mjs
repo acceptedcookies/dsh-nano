@@ -5,7 +5,8 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import test from 'node:test'
-import { callWorker } from '../profiles/terminal/pty-entry.mjs'
+import { execFileSync } from 'node:child_process'
+import { callWorker, createWorker } from '../profiles/terminal/pty-entry.mjs'
 
 const HOST = join(dirname(fileURLToPath(import.meta.url)), 'support', 'host-client.mjs')
 
@@ -106,4 +107,58 @@ test('broker: rpc never creates — a missing worker is unavailable, not spawned
   const reply = await callWorker(ptyRoot, { terminalId: 'term-none', verb: 'status' })
   assert.equal(reply.ok, false)
   assert.equal(existsSync(join(ptyRoot, 'term-none.sock')), false)
+})
+
+/** Locate a pyte site-packages dir the isolated worker can be pointed at. */
+function pytePath() {
+  try {
+    return execFileSync('/usr/bin/python3', ['-c', 'import pyte, os; print(os.path.dirname(os.path.dirname(pyte.__file__)))'], { encoding: 'utf8' }).trim()
+  } catch {
+    return null
+  }
+}
+
+test('broker: snapshot is the real pyte screen — overwritten cells and cursor, not raw replay', async (t) => {
+  const site = pytePath()
+  if (!site) return t.skip('pyte unavailable on this workstation')
+  const ptyRoot = mkdtempSync(join(tmpdir(), 'p-'))
+  t.after(async () => {
+    await callWorker(ptyRoot, { terminalId: 'term-snap', verb: 'close' }).catch(() => {})
+    rmSync(ptyRoot, { recursive: true, force: true })
+  })
+  const worker = join(dirname(fileURLToPath(import.meta.url)), '../profiles/terminal/pty-worker.py')
+  const created = await createWorker(
+    { root: ptyRoot, python: '/usr/bin/python3', workerPath: worker, pytePath: site },
+    { terminalId: 'term-snap', cols: 20, rows: 4, cwd: '/' },
+  )
+  assert.equal(created.ok, true)
+  // Overwrite cells: printf writes 'AAAA', CR returns, 'BB' repaints the row;
+  // then cursor moves home and a second line lands. The raw ring holds the
+  // escape bytes; the snapshot must hold the FINAL cells.
+  const put = await callWorker(ptyRoot, {
+    terminalId: 'term-snap', verb: 'input',
+    data: "printf 'AAAA\\rBB\\nlast\\033[H\\n'\n",
+  })
+  assert.equal(put.ok, true)
+  let snap = null
+  const until = Date.now() + 10000
+  while (Date.now() < until) {
+    snap = await callWorker(ptyRoot, { terminalId: 'term-snap', verb: 'snapshot' })
+    if (snap?.ok && snap.text.includes('last')) break
+    await new Promise((r) => setImmediate(r))
+  }
+  assert.equal(snap.ok, true)
+  const lines = snap.text.split('\n')
+  assert.equal(lines.some((line) => /^BBAA/.test(line)), true, 'overwritten cells win, not the raw AAA stream')
+  assert.equal(lines.some((line) => /^last/.test(line)), true, 'second line is the printed text')
+  assert.equal(snap.cols, 20)
+  assert.equal(snap.rows, 4)
+  assert.equal(Number.isInteger(snap.cursorX), true)
+  assert.equal(Number.isInteger(snap.cursorY), true)
+  // The snapshot's seq is a ring offset — a read at it must not replay
+  // already-rendered bytes.
+  const past = await callWorker(ptyRoot, { terminalId: 'term-snap', verb: 'read', from: snap.seq })
+  assert.equal(past.ok, true)
+  assert.equal(past.seq >= snap.seq, true)
+  assert.equal(Buffer.from(past.bytes_b64 ?? '', 'base64').length <= 64, true)
 })

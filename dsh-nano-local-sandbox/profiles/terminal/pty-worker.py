@@ -5,16 +5,23 @@
 # shell access for clients — JSON lines only.
 #
 #   pty-worker.py --socket PATH --ready-fd FD --root DIR --user NAME \
-#                 --cwd DIR --cols N --rows N
+#                 --cwd DIR --cols N --rows N [--pyte-path DIR]
 #
 # Requests (one JSON object per line):
 #   {"verb":"status"}            -> {"ok":true,"state":"active|ended","pid":N}
 #   {"verb":"input","data":str}  -> {"ok":true} (or accepted byte count)
+#   {"verb":"input","data_b64":str} -> raw bytes, split UTF-8 safe
 #   {"verb":"read","from":seq}   -> {"ok":true,"seq":N,"from":seq,"bytes_b64":str,"ended":bool}
+#   {"verb":"snapshot"}          -> {"ok":true,"seq":N,"cols":N,"rows":N,
+#                                  "cursorX":N,"cursorY":N,"text":str}
 #   {"verb":"resize","cols":N,"rows":N} -> {"ok":true}
 #   {"verb":"drain","from":seq}  -> read-shaped lines until ended
 #   {"verb":"close"}             -> {"ok":true,"ended":true} after the child is
 #                                 reaped, then the worker exits
+#
+# Every original master chunk is fed to a pyte screen in this same loop, so a
+# snapshot is the real current screen aligned to the ring seq — never raw
+# replay. When pyte is absent the verb refuses; the stream stays P4-honest.
 #
 # The socket binds BEFORE the fork so a bootstrap failure can never orphan a
 # shell. The child is reaped only by this loop — never getpgid/kill on a pid
@@ -53,7 +60,8 @@ def fail(message):
 
 def parse_args(argv):
     opts = {'--socket': None, '--ready-fd': '-1', '--root': '/run/dnls-pty',
-            '--user': 'node', '--cwd': '/', '--cols': '80', '--rows': '24'}
+            '--user': 'node', '--cwd': '/', '--cols': '80', '--rows': '24',
+            '--pyte-path': None}
     it = iter(range(0, len(argv), 2))
     for i in it:
         if argv[i] in opts and i + 1 < len(argv):
@@ -75,6 +83,12 @@ def main():
     opts = parse_args(sys.argv[1:])
     root = opts['--root']
     check_root(root)
+    if opts['--pyte-path']:
+        sys.path.insert(0, opts['--pyte-path'])
+    try:
+        import pyte
+    except ImportError:
+        pyte = None
     sock_path = opts['--socket']
     if os.path.dirname(sock_path) != root:
         fail('socket must live directly under the private root')
@@ -143,6 +157,11 @@ def main():
     ring = []          # [(seq, bytes)] — ephemeral tail, not a restore source
     head = 0           # absolute byte offset of ring[0]
     next_seq = 0       # absolute byte offset after the last byte
+    screen = None      # pyte screen: the real current cells, not replay
+    screen_stream = None
+    if pyte is not None:
+        screen = pyte.Screen(int(opts['--cols']), int(opts['--rows']))
+        screen_stream = pyte.ByteStream(screen)
     reaped = False     # waitpid reaped OUR child; `pid` is dead to us
     pty_dead = False   # master EOF/EIO seen
     exit_status = None
@@ -258,6 +277,10 @@ def main():
             return
         ring.append((next_seq, chunk))
         next_seq += len(chunk)
+        # Same loop turn: the screen tracks the ring exactly, so a snapshot's
+        # seq names the byte offset its cells were drawn from.
+        if screen_stream is not None:
+            screen_stream.feed(chunk)
         while next_seq - head > RING_MAX and len(ring) > 1:
             first_seq, first = ring.pop(0)
             head = first_seq + len(first)
@@ -296,12 +319,23 @@ def main():
             return answer(conn, {'ok': True, 'state': 'ended' if child_gone() else 'active',
                                  'pid': pid, 'exit': exit_status})
         if verb == 'input':
-            data = req.get('data')
-            if not isinstance(data, str) or len(data.encode('utf8', 'ignore')) > MAX_INPUT:
+            # data_b64 carries arbitrary terminal bytes (split UTF-8 safe);
+            # data is the UTF-8 text form. Never decode bytes to reencode.
+            data_b64 = req.get('data_b64')
+            if isinstance(data_b64, str):
+                try:
+                    payload = base64.b64decode(data_b64, validate=True)
+                except ValueError:
+                    return answer(conn, {'ok': False, 'error': 'input out of bounds'})
+            else:
+                data = req.get('data')
+                if not isinstance(data, str):
+                    return answer(conn, {'ok': False, 'error': 'input out of bounds'})
+                payload = data.encode('utf8', 'ignore')
+            if len(payload) > MAX_INPUT:
                 return answer(conn, {'ok': False, 'error': 'input out of bounds'})
             if child_gone():
                 return answer(conn, {'ok': False, 'error': 'ended'})
-            payload = data.encode('utf8', 'ignore')
             accepted = 0
             while accepted < len(payload):
                 try:
@@ -316,6 +350,16 @@ def main():
             return answer(conn, {'ok': True})
         if verb == 'read':
             return answer(conn, read_reply(req.get('from')))
+        if verb == 'snapshot':
+            # The real screen, aligned to this loop turn's ring end. No pyte,
+            # no fabricated blank — the caller streams unaligned or refuses.
+            if screen is None:
+                return answer(conn, {'ok': False, 'error': 'unaligned'})
+            text = '\n'.join(line.rstrip() for line in screen.display).rstrip('\n')
+            return answer(conn, {'ok': True, 'seq': next_seq,
+                                 'cols': screen.columns, 'rows': screen.lines,
+                                 'cursorX': screen.cursor.x, 'cursorY': screen.cursor.y,
+                                 'text': text, 'ended': child_gone()})
         if verb == 'drain':
             reply = read_reply(req.get('from'))
             if not answer(conn, reply):
@@ -333,6 +377,8 @@ def main():
                 return answer(conn, {'ok': False, 'error': 'resize out of bounds'})
             if not pty_dead:
                 fcntl.ioctl(master, termios.TIOCSWINSZ, struct.pack('HHHH', rows, cols, 0, 0))
+            if screen is not None:
+                screen.resize(rows, cols)
             return answer(conn, {'ok': True})
         if verb == 'close':
             # Reap before any positive receipt: a lost child is unknown, not ok.

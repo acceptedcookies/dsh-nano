@@ -38,15 +38,21 @@ test('DNLS03-T22 exact refusal statuses across the denial ladder', () => {
 })
 
 test('DNLS03-T22 the production shape trusts only kind=owner with a live signal', () => {
+  const liveSignal = () => new AbortController().signal
+  const dead = new AbortController()
+  dead.abort()
   assert.deepEqual(
-    resolveOwnerPrincipal({ peer: { principal: { kind: 'owner' }, signal: { aborted: false } } }),
+    resolveOwnerPrincipal({ peer: { principal: { kind: 'owner' }, signal: liveSignal() } }),
     { key: 'owner', operator: true, canSee: true, canUse: true },
   )
-  assert.equal(resolveOwnerPrincipal({ peer: { principal: { kind: 'member' }, signal: { aborted: false } } }), null)
-  assert.equal(resolveOwnerPrincipal({ peer: { principal: { kind: 'owner' }, signal: { aborted: true } } }), null)
-  assert.equal(resolveOwnerPrincipal({ peer: { principal: 'owner', signal: { aborted: false } } }), null)
+  assert.equal(resolveOwnerPrincipal({ peer: { principal: { kind: 'member' }, signal: liveSignal() } }), null)
+  assert.equal(resolveOwnerPrincipal({ peer: { principal: { kind: 'owner' }, signal: dead.signal } }), null)
+  assert.equal(resolveOwnerPrincipal({ peer: { principal: 'owner', signal: liveSignal() } }), null)
   // peer.id is never a principal key.
-  assert.equal(resolveOwnerPrincipal({ peer: { id: 'key-a', signal: { aborted: false } } }), null)
+  assert.equal(resolveOwnerPrincipal({ peer: { id: 'key-a', signal: liveSignal() } }), null)
+  // A missing or merely signal-shaped object never counts as a live signal.
+  assert.equal(resolveOwnerPrincipal({ peer: { principal: { kind: 'owner' } } }), null)
+  assert.equal(resolveOwnerPrincipal({ peer: { principal: { kind: 'owner' }, signal: { aborted: false } } }), null)
 })
 
 test('DNLS03-T22 terminal actions need an independently owned terminal, not operator power', () => {

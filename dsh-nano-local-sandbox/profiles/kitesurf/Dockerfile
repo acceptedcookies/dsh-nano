@@ -11,7 +11,7 @@ ARG KITESURF_BASE_IMAGE
 FROM ${KITESURF_BASE_IMAGE}
 
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends ca-certificates tini python3 \
+  && apt-get install -y --no-install-recommends ca-certificates tini python3 python3-pyte \
   && rm -rf /var/lib/apt/lists/*
 
 COPY linux-prefix /opt/npm-global

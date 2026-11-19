@@ -84,6 +84,7 @@ export async function createWorker(config, req) {
     '--cwd', cwd,
     '--cols', String(cols),
     '--rows', String(rows),
+    ...(config.pytePath ? ['--pyte-path', config.pytePath] : []),
   ], { detached: true, stdio: ['ignore', 'ignore', 'ignore', 'pipe'] })
   const readyPipe = child.stdio[3]
   const ready = await new Promise((resolve) => {

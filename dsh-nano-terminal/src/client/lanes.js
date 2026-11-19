@@ -27,8 +27,10 @@ function streamBase() {
 }
 
 // dnt-ws-v2 framed channel: [channel u32][kind u8][len u32][payload]
-const FR_DATA = 0, FR_CREDIT = 1, FR_AUTO_INPUT = 6
+const FR_DATA = 0, FR_CREDIT = 1, FR_RESIZE = 2, FR_CLOSE = 3, FR_AUTO_INPUT = 6
 const CREDIT_INIT = 256 * 1024
+const DNLS_CONTRACT = 'dnls.control/1'
+const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9-]{0,63}$/
 
 function encChannel(channel, kind, payload) {
   const out = new Uint8Array(9 + payload.length)
@@ -197,21 +199,42 @@ export class LocalLane {
 }
 
 export class McpLane {
-  constructor({ url, cols, rows, sessionId }) {
+  constructor({ url, cols, rows, sessionId, sandbox = null }) {
     this.kind = 'mcp'
     this.url = url
     this.cols = cols
     this.rows = rows
     this.sessionId = sessionId
+    // sandbox: managed dnls.control/1 object target — never the legacy
+    // term.session.create/sessionId wire of a third-party MCP endpoint.
+    this.sandbox = sandbox
     this.onOutput = () => {}
     this.onExit = () => {}
     this.onReady = () => {}
+    this.onAlign = () => {}
     this.ws = null
     this.id = null
     this.closed = false
+    this.dropping = false
+    this.alignSeq = null
+  }
+
+  /**
+   * The control endpoint must be a same-origin http(s) URL — the managed
+   * contract is selected by the caller's announced contractVersion
+   * (T-O-45), never by plugin name or URL features.
+   */
+  #sameOriginEndpoint() {
+    try {
+      const u = new URL(this.url)
+      if ((u.protocol !== 'http:' && u.protocol !== 'https:') || u.search || u.hash || u.username || u.password) return false
+      if (typeof location !== 'undefined' && u.origin !== location.origin) return false
+      return true
+    } catch { return false }
   }
 
   async open() {
+    if (this.sandbox) return this.#openSandbox()
     const rpc = await fetch(this.url, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -246,6 +269,108 @@ export class McpLane {
     return new URL(raw)
   }
 
+  /** One managed tools/call carrying the dnls.control/1 envelope proof. */
+  async #call(name, args) {
+    const rpc = await fetch(this.url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0', id: Date.now(), method: 'tools/call',
+        params: { name, arguments: args, _meta: { 'dnls/contract': DNLS_CONTRACT } },
+      }),
+    })
+    const decoded = decodeMcpReply(await rpc.json())
+    if (!decoded.ok) throw new Error(decoded.message ?? `${name} failed`)
+    // Every managed object result carries the contract envelope — a body
+    // without it is not dnls.control/1 and must not be trusted.
+    if (name !== 'sandbox.contract' && decoded.data?.contractVersion !== DNLS_CONTRACT) {
+      throw new Error(`${name} result contract mismatch`)
+    }
+    return decoded.data
+  }
+
+  /** A managed attach target: exact ids, dnt-ws-v2, credential-free same-origin ws URL. */
+  #sandboxUrl(sandboxId, terminalId, result) {
+    if (result?.sandboxId !== sandboxId || result?.terminalId !== terminalId || result?.attach?.protocol !== 'dnt-ws-v2') {
+      throw new Error('attach target mismatch')
+    }
+    const url = new URL(String(result.attach.url))
+    const base = new URL(this.url)
+    // http(s) MCP base converted to ws(s): cross-origin, query, hash and
+    // userinfo are all refused — the serial carries no credential.
+    const wsScheme = base.protocol === 'https:' ? 'wss:' : 'ws:'
+    if (url.protocol !== wsScheme || url.host !== base.host ||
+        url.search || url.hash || url.username || url.password) {
+      throw new Error('attach.url is not a credential-free same-origin ws URL')
+    }
+    return url
+  }
+
+  async #openSandbox() {
+    const target = this.sandbox
+    // An announced contract we do not speak fails — never a legacy fallback.
+    if (target.contractVersion !== DNLS_CONTRACT) throw new Error('unrecognized managed contract version')
+    if (!this.#sameOriginEndpoint()) throw new Error('managed sandbox requires a same-origin http endpoint')
+    const idOk = (v) => typeof v === 'string' && SAFE_ID.test(v)
+    if (!idOk(target.sandboxId)) throw new Error('explicit sandbox target required')
+    if (target.terminalId != null) {
+      // Salvage names only the terminal — openId/paneId are create-only.
+      if (!idOk(target.terminalId)) throw new Error('explicit terminal target required')
+    } else if (!idOk(target.paneId) || !idOk(target.openId)) {
+      throw new Error('explicit create target required')
+    }
+    // Read-only discovery first: exact contract version, then capabilities.
+    const contract = await this.#call('sandbox.contract', {})
+    if (contract?.contractVersion !== DNLS_CONTRACT) throw new Error('sandbox contract version mismatch')
+    const caps = new Set(contract?.capabilities ?? [])
+    if (!caps.has('term.session.attach') || !caps.has('term.session.create')) throw new Error('sandbox contract lacks terminal capabilities')
+    if (target.terminalId) {
+      // Salvage an existing terminal only by attach — never recreated.
+      this.sandboxRef = { sandboxId: target.sandboxId, terminalId: target.terminalId }
+    } else {
+      // One user gesture, one create; the returned refs are the stable identity.
+      const created = await this.#call('term.session.create', {
+        sandboxId: target.sandboxId, paneId: target.paneId, openId: target.openId,
+        cols: this.cols, rows: this.rows, ...(target.service !== undefined ? { service: target.service } : {}),
+      })
+      if (created?.sandboxId !== target.sandboxId || !SAFE_ID.test(created?.terminalId ?? '')) {
+        throw new Error('create target mismatch')
+      }
+      this.sandboxRef = { sandboxId: created.sandboxId, terminalId: created.terminalId }
+    }
+    this.id = this.sandboxRef.terminalId
+    this.wsUrl = await this.#freshAttach()
+    await this.#connect(true)
+    return { session: this.id }
+  }
+
+  /** One fresh attach under the same contract — transport-loss only. */
+  async #freshAttach() {
+    const { sandboxId, terminalId } = this.sandboxRef
+    const attached = await this.#call('term.session.attach', { sandboxId, terminalId })
+    return this.#sandboxUrl(sandboxId, terminalId, attached)
+  }
+
+  /** Frame traffic through the shared v2 path (align + credit) for sandbox. */
+  #onFrame(buf) {
+    handleFrame(this, buf, {
+      onOutput: (bytes) => this.onOutput(bytes),
+      onAlign: (snap) => {
+        // The first valid snapshot is the input gate: streamReady unlocks
+        // write()/writeAuto(); onAlign still reports every re-alignment.
+        this.streamReady = true
+        this.onAlign(snap)
+      },
+      credit: (n) => this.#credit(n),
+    })
+  }
+
+  #credit(n) {
+    const payload = new Uint8Array(4)
+    new DataView(payload.buffer).setUint32(0, n)
+    this.ws?.send(encChannel(0, FR_CREDIT, payload))
+  }
+
   /** Attach once. A dropped socket may be retried a single time, without replaying writes. */
   #connect(first) {
     clearTimeout(this.reconnectTimer)
@@ -264,14 +389,32 @@ export class McpLane {
       ws.binaryType = 'arraybuffer'
       this.ws = ws
       const timer = setTimeout(() => reject(new Error('attach timeout')), 10_000)
-      ws.onopen = () => ws.send(JSON.stringify({ type: 'open', session: this.id }))
+      ws.onopen = () => ws.send(JSON.stringify(
+        this.sandbox ? { type: 'open', v: 2, align: 1, session: this.id } : { type: 'open', session: this.id },
+      ))
       ws.onmessage = (ev) => {
         if (typeof ev.data === 'string') {
           let msg
           try { msg = JSON.parse(ev.data) } catch { return }
           if (msg.type === 'ready') {
+            if (this.sandbox && (msg.v !== 2 || msg.align !== 1 || msg.session !== this.id)) {
+              clearTimeout(timer)
+              this.exited = true
+              try { ws.close() } catch { /* gone */ }
+              reject(new Error('ready mismatch'))
+              return
+            }
             clearTimeout(timer)
             this.attempt = 0
+            if (this.sandbox) {
+              // Aligned mode: frames carry a u32 seq that routeFrame strips
+              // only in alignMode; bytes arrive only after a snapshot, and
+              // the first credit unlocks the host's stream.
+              this.alignMode = true
+              this.dropping = true
+              this.alignSeq = null
+              this.#credit(CREDIT_INIT)
+            }
             this.onReady(msg)
             resolve(msg)
           } else if (msg.type === 'error') {
@@ -281,24 +424,43 @@ export class McpLane {
             this.exited = true
             clearTimeout(this.reconnectTimer)
             this.onExit(msg)
+          } else if (msg.type === 'stalled' && this.sandbox) {
+            this.dropping = true
+            this.ws?.send(JSON.stringify({ type: 'align' }))
           }
           return
         }
         const buf = new Uint8Array(ev.data)
         perf.count('dnt-ws-in-bytes', buf.length)
         perf.count('dnt-ws-in-msgs')
-        this.onOutput(buf)
+        if (this.sandbox) this.#onFrame(buf)
+        else this.onOutput(buf)
       }
       ws.onerror = () => { clearTimeout(timer); reject(new Error('websocket error')) }
-      ws.onclose = () => {
+      ws.onclose = (ev) => {
+        // 1002/1008 are policy and protocol denials — the only legitimate
+        // reconnect cause is transport loss on an otherwise-valid session.
+        if (ev?.code === 1002 || ev?.code === 1008) this.exited = true
         if (this.closed || this.exited || this.ws !== ws) return
         if (this.retried) {
           this.onExit({ reason: 'reconnect-failed' })
           return
         }
         clearTimeout(this.reconnectTimer)
-        this.reconnectTimer = setTimeout(() => {
+        this.reconnectTimer = setTimeout(async () => {
           if (this.closed || this.exited) return
+          if (this.sandbox) {
+            // Transport loss only: one fresh attach under the same contract —
+            // never a create, never an old URL or input replay.
+            try {
+              this.wsUrl = await this.#freshAttach()
+            } catch {
+              this.onExit({ reason: 'reconnect-failed' })
+              return
+            }
+            // A close while the fresh attach was in flight wins — no new socket.
+            if (this.closed || this.exited) return
+          }
           this.#connect(false).catch(() => { this.onExit({ reason: 'reconnect-failed' }) })
         }, 2000)
       }
@@ -306,18 +468,51 @@ export class McpLane {
   }
 
   write(bytes) {
-    if (this.ws?.readyState === 1) this.ws.send(bytes)
+    if (this.ws?.readyState !== 1) return
+    if (!this.sandbox) {
+      this.ws.send(bytes) // third-party wire: exactly what the caller handed us
+      return
+    }
+    // No input before strict ready AND the first aligned snapshot.
+    if (!this.streamReady) return
+    const payload = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)
+    this.ws.send(encChannel(0, FR_DATA, payload))
+  }
+
+  /** Terminal auto-replies (DA/CPR) — sandbox goes through the AUTO channel. */
+  writeAuto(bytes) {
+    if (!this.sandbox) return this.write(bytes)
+    if (this.ws?.readyState !== 1 || !this.streamReady) return
+    const payload = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)
+    this.ws.send(encChannel(0, FR_AUTO_INPUT, payload))
   }
 
   resize(cols, rows) {
     this.cols = cols
     this.rows = rows
-    if (this.ws?.readyState === 1) this.ws.send(JSON.stringify({ type: 'resize', cols, rows }))
+    if (this.ws?.readyState !== 1) return
+    if (this.sandbox) {
+      const payload = new Uint8Array(4)
+      const view = new DataView(payload.buffer)
+      view.setUint16(0, cols)
+      view.setUint16(2, rows)
+      this.ws.send(encChannel(0, FR_RESIZE, payload))
+    } else {
+      this.ws.send(JSON.stringify({ type: 'resize', cols, rows }))
+    }
   }
 
   close() {
     this.closed = true
     clearTimeout(this.reconnectTimer)
+    if (this.sandbox) {
+      // A sandbox pane only detaches — the terminal outlives the socket.
+      try {
+        this.ws?.send(encChannel(0, FR_CLOSE, new Uint8Array(0)))
+        this.ws?.close()
+      } catch { /* gone */ }
+      return
+    }
     try { this.ws?.close() } catch { /* gone */ }
     if (this.id) {
       fetch(this.url, {
@@ -335,7 +530,19 @@ export class McpLane {
 export function makeLane(spec, meta) {
   switch (spec.lane) {
     case 'mcp':
-      return new McpLane({ url: spec.url, cols: meta.cols, rows: meta.rows, sessionId: meta.sessionId })
+      return new McpLane({
+        url: spec.url, cols: meta.cols, rows: meta.rows, sessionId: meta.sessionId,
+        // Managed selection is by the announced contractVersion (T-O-45);
+        // target fields are validated at open, never against URL features.
+        sandbox: spec.contractVersion !== undefined || spec.sandboxId !== undefined ? {
+          contractVersion: spec.contractVersion,
+          sandboxId: spec.sandboxId,
+          paneId: spec.paneId,
+          openId: spec.openId,
+          terminalId: spec.terminalId ?? null,
+          service: spec.service,
+        } : null,
+      })
     case 'local':
     default:
       if (spec.lane && spec.lane !== 'local') throw new Error(`lane ${spec.lane} is not available`)

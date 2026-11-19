@@ -7,7 +7,7 @@ scope: session
 driver: ./driver/index.js
 build:
   base: node:22-bookworm-slim
-  image: kitesurf-engine:39feadfb9a3e6c14b40cf170a559ce417d0fce5d-216aa53e4c48
+  image: kitesurf-engine:39feadfb9a3e6c14b40cf170a559ce417d0fce5d-bb51c9c07fc5
   recipe:
     - Dockerfile
     - entrypoint.sh
@@ -20,7 +20,7 @@ build:
   checkout:
     ref: 39feadfb9a3e6c14b40cf170a559ce417d0fce5d
     verify: packages/engine/wrangler.jsonc
-  digest: sha256:216aa53e4c4899b5755fa65c347abc2e6b3f1359128b2b469f428d1f0918ee4c
+  digest: sha256:bb51c9c07fc5dd598c0a86a373016e0af75f36d075a8bca0b6ee8c6c150a932f
 runtime:
   user: node
   entrypoint: /entrypoint.sh

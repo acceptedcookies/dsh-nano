@@ -47,7 +47,12 @@ function normalizePrincipal(candidate) {
  * derived from caller input.
  */
 export function resolveOwnerPrincipal({ peer } = {}) {
-  if (peer?.principal?.kind === 'owner' && peer.signal?.aborted !== true) {
+  const signal = peer?.signal
+  // A real live AbortSignal: anything merely shaped like one is untrusted.
+  const live = signal !== null && typeof signal === 'object' &&
+    typeof signal.aborted === 'boolean' && signal.aborted === false &&
+    typeof signal.addEventListener === 'function'
+  if (peer?.principal?.kind === 'owner' && live) {
     return { key: 'owner', operator: true, canSee: true, canUse: true }
   }
   return null

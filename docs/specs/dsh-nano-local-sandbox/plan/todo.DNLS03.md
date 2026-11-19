@@ -37,9 +37,9 @@ P0 → P1 → P2 → P3；P3 → P4 → P5；P3 → P6；(P1, P6) → P7；(P5, 
 - [x] **P4-03**（staged 层 PASS；公开激活待原子同切） 创建键 — `term-bridge.js` + `control-registry.js` `reserveTerminal`；同参返原引用；已结束不复活；attach 失联不 spawn；create 应答须 `{ok:true}` 且 terminalId 一致（`DNLS03-T32`）
 
 ### Phase 5
-- [ ] **P5-01** wire 硬切 — `term-ws.js`；`term-bridge.js:50` 附近 ready；open 必须 `v:2,align:1,session:<terminalId>`；沿用既有帧集与逐连接流控；无 v1 降级（`DNLS03-T40`）
-- [ ] **P5-02** 两次核权 — upgrade 路径；`src/host/object-authz.js`（新）；删除 `term-bridge.js:44` 的 token query；locator 无 bearer；直连 broker 不是授权；撤权 detach 且 PTY 仍在（`DNLS03-T41`）
-- [ ] **P5-03** [DNT] 沙箱消费同切 — `dsh-nano-terminal` 里只接 sandbox attach 的 McpLane 调用点；local lane 协议字节不变（`DNLS03-T42`）
+- [x] **P5-01** 已验证 v2 open/ready、对齐、逐连接流控；宿主公开激活待同切（`DNLS03-T40`）。
+- [x] **P5-02** 已验证 locator 发放、upgrade、传输期间核权及撤权 detach；未进行生产部署（`DNLS03-T41`）。
+- [x] **P5-03** [DNT] `McpLane` 按公告合同消费，local 与第三方仍使用原协议；已重建 client（`DNLS03-T42`）。
 
 ### Phase 6
 - [ ] **P6-01** 服务预留 — `routes.js:1114-1127`；`profile-drivers.js:138-149`；`profile.yaml:25-56`；地址只来自同一对象的 inspect；邻号被占不影响（`DNLS03-T50`）
@@ -75,8 +75,12 @@ P0 → P1 → P2 → P3；P3 → P4 → P5；P3 → P6；(P1, P6) → P7；(P5, 
 - Phase 3 staged 生命周期与对象授权（公开激活待原子同切；登记时生命周期/授权文件未入库，提交引用待下一阶段回填）：2026-11-19T16:59:33Z，`node --test dsh-nano-local-sandbox/test/{lifecycle-operation,object-authz,control-registry,delivery-guard}.test.mjs`，75 pass / 0 fail。最近聚焦复跑 2026-11-19T17:02:44Z，`node --test dsh-nano-local-sandbox/test/lifecycle-operation.test.mjs`，21 pass / 0 fail；T20 意图单次落盘先于特权调用、同键同参返原、断连事件不取消在途操作、代次不符/中途替换/删除不确定一律 indeterminate 不置墓碑、墓碑内同提交者可读已完成操作、真实 `backend-apple.js` 仅对精确缺失诊断返回 null；T21 断连记 `disconnected`；T22 可见/可用分级、终端非通配、审计白名单无 URL。
 - Phase 4 staged 终端 broker（公开激活待原子同切；文件未入库，基于 Phase 3 提交 `ac025df` 的工作树）：2026-11-19T17:38:00Z，`node --test dsh-nano-local-sandbox/test/{term-bridge,terminal-contract,term-broker.spike,profile-load}.test.mjs`，15 pass / 0 fail。T30 create/list 无 URL、attach 仅冻结 `dnt-ws-v2` 形状且拒绝 token/userinfo/socket 定位符；T31 真实两宿主进程：宿主 A（`openControlRegistry` + `createTerminalOwner` + 夹具 `createWorker`）建立 shell 导出 `DNLS_PROOF` 并打印 nonce-PID，SIGKILL A 后宿主 B 重开同一台账，attach 原 terminalId 并输入新 nonce，实测两端 shell PID 同为 91805、`proof-ev9401` 环境变量存活、无 respawn、close 后 socket 消失；T32 `(principal,openId)` 去重同参返原引用、已结束不复活、失联 attach 503 不 spawn、create 应答校验 `{ok:true}` + terminalId 一致。worker 绑 socket 先于 fork、单事件循环 waitpid、HUP→KILL 有界、PTY EOF 注销主 fd 不空转、AF_UNIX 有界出站缓冲增量写、`bytes_b64` 二进制安全 read、无效 cwd 拒绝、回收后不再对可能复用 PID 发信号；生产 CLI 仅固定常量，测试经 `createWorker`/`callWorker` 导入夹具；配方 digest/tag 按 `recipeDigest` 重算 `216aa53e4c48`（pin 不变）。
 
+- Phase 5 staged 托管数据面（公开激活待原子同切；文件未入库，基于 Phase 4 提交 `6f84933` 的工作树）：2026-11-19T17:46:28Z，`node --test dsh-nano-local-sandbox/test/{term-wire-v2,term-attach-authz,term-broker.spike,threat.spike}.test.mjs`，22 pass / 0 fail；DNT `node --test test/{lanes-sandbox,keep-alive}.test.mjs` 26 pass / 0 fail，`npm run build` 重建 `lib/client.js`。复审修复后聚焦复跑 2026-11-19T18:06:32Z，`node --test dsh-nano-local-sandbox/test/{term-wire-v2,term-attach-authz,object-authz}.test.mjs` 16 pass / 0 fail；`node --test dsh-nano-terminal/test/lanes-sandbox.test.mjs` 13 pass / 0 fail。T40 一次性 locator 仅 exact-path registerUpgrade（无监听/令牌/串），严格 open/ready、SNAPSHOT 先于 DATA、逐连接 CREDIT、序列化 socket 任务、严格环位 `from===seq ∧ seq===from+len` 缺口 realign 不回放、空闲轮询 ≥1s、几何/序号先验再 u32 序列化、bufferedAmount 上限；T41 issue/upgrade/每批 RPC 双侧 admit 同一 IncomingMessage + 活观察，`ref.principal` 易主即废、撤权/世代漂移 1008 detach 不杀 PTY、协议错 1002、pending 恰一次消费、dispose 有界静默；worker `pyte` 快照与环同窗一致。T42 [DNT] McpLane 仅 sandbox 分支：选择以 `contractVersion` 宣告（T-O-45，不按 URL/插件名）、同源 http 端点 + 同源 ws 校验、`sandbox.contract` 精确版本 + 非发现结果必须带合同信封、显式 terminalId 仅 attach 救回、无 terminalId 须显式 paneId/openId create 一次、传输断开最多一次新 attach 不重建不回放、`alignMode`/`streamReady` 门控、1008 不重连、close 仅 detach；第三方与 local 线原样。`resolveOwnerPrincipal` 仅认真实 live AbortSignal。
+
+校时：17:46:28Z 首轮为 21/21 与 20/20；上列 22/22 与 26/26 是 18:02:46Z 复审后的结果。
+
 ## 5. 交接
-Phase 4 staged 终端 broker 已完成（公开激活待原子同切）；当前节点 Phase 5。审查存放 `.anote/reviews/dsh-nano-local-sandbox/DNLS03/`；closure 存放 `../closure/DNLS03-closure.md`。未到阶段不签收。
+Phase 5 staged 托管数据面已完成（公开激活待原子同切）；当前节点 Phase 6。审查存放 `.anote/reviews/dsh-nano-local-sandbox/DNLS03/`；closure 存放 `../closure/DNLS03-closure.md`。未到阶段不签收。
 
 ## 附件：原始发车指令
 登记 ID：`DNLS03-managed-sandbox-control/directive-1`。以下为本次授权原文，引用此处，不另建授权副本。

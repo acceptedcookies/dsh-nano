@@ -40,6 +40,7 @@ const ZH = {
   'drawer.resize': '调整面板高度',
 
   'tasks.done': 'done',
+  'tasks.completed': '完成',
   'tasks.empty': '暂无任务',
   'jobs.empty': '暂无后台任务',
 
@@ -84,6 +85,7 @@ const EN = {
   'drawer.resize': 'Resize panel',
 
   'tasks.done': 'done',
+  'tasks.completed': 'completed',
   'tasks.empty': 'No tasks',
   'jobs.empty': 'No background jobs',
 

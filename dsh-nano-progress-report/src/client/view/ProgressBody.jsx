@@ -13,9 +13,11 @@ import {
   AnimatedRows, Button, IconCloseOutlineRegular, IconSearchOutlineRegular, Input,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { applyFilter, isEmptyFilter, parseFilter } from '../filter.js'
+import { taskCompletionTimes } from '../task-times.js'
 import { perf } from '../perf.js'
 import { Row } from './Row.jsx'
 import { TasksSection } from './TasksSection.jsx'
+import { Turn } from './Turn.jsx'
 
 const { createElement: h, useEffect, useMemo, useState } = React
 
@@ -106,10 +108,14 @@ export default function ProgressBody(props) {
 
   const filter = useMemo(() => parseFilter(query), [query])
   const rows = progress?.rows ?? []
+  const groups = progress?.groups ?? []
+  const grouped = isEmptyFilter(filter)
   const filtered = useMemo(
     () => (isEmptyFilter(filter) ? rows : applyFilter(rows, filter)),
     [rows, filter],
   )
+  // Devi's Tasks rows carry a completion time; derive it from the event stream.
+  const taskTimes = useMemo(() => taskCompletionTimes(rows), [rows])
 
   const hasMore = sessionSnap?.hasMore === true
   const loadingOlder = sessionSnap?.loadingOlder === true
@@ -146,7 +152,7 @@ export default function ProgressBody(props) {
       }),
       query !== ''
         ? h(Button, {
-          variant: 'ghost', size: 'sm', className: 'npr-clear', 'data-npr': 'filter-clear',
+          variant: 'ghost', size: 'sm', 'data-npr': 'filter-clear',
           icon: h(IconCloseOutlineRegular, { size: 12 }),
           'aria-label': t('filter.clear'),
           onClick: () => onQuery(''),
@@ -169,21 +175,31 @@ export default function ProgressBody(props) {
       filtered.length === 0
         ? h('div', { className: 'npr-empty', 'data-npr': 'empty' },
           isEmptyFilter(filter) ? t('flow.empty') : t('flow.emptyFiltered'))
-        : h(AnimatedRows, {
-          className: 'npr-rows',
-          role: 'list',
-          label: t('flow.list'),
-          ready,
-          resetKey: query,
-          rowKeys: filtered.map(row => row.key),
-        }, filtered.map(row => perf.span('row-render', () => h(Row, {
-          key: row.key,
-          row,
-          now,
-          t,
-          open: openKey === row.key,
-          onToggle: () => toggleRow(row.key),
-        }))))),
+        : grouped
+          ? h('div', { className: 'npr-turns', role: 'list', 'aria-label': t('flow.list'), 'data-npr': 'turns' },
+            groups.map(group => h(Turn, {
+              key: group.key,
+              group,
+              now,
+              t,
+              openKey,
+              onRowToggle: toggleRow,
+            })))
+          : h(AnimatedRows, {
+            className: 'npr-rows',
+            role: 'list',
+            label: t('flow.list'),
+            ready,
+            resetKey: query,
+            rowKeys: filtered.map(row => row.key),
+          }, filtered.map(row => perf.span('row-render', () => h(Row, {
+            key: row.key,
+            row,
+            now,
+            t,
+            open: openKey === row.key,
+            onToggle: () => toggleRow(row.key),
+          }))))),
 
     variant === 'view' ? null : h(TasksSection, {
       t,
@@ -194,6 +210,7 @@ export default function ProgressBody(props) {
       height: tasks.height,
       onResize: value => setTasksField({ height: value }),
       todos: todoItems,
+      taskTimes,
       jobs,
     }))
 }

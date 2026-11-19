@@ -38,26 +38,10 @@ export const PROGRESS_CSS = `
   border-bottom: .5px solid var(--dsw-alias-border-l3);
 }
 .npr-toolbar-icon { flex: none; display: inline-flex; color: var(--dsw-alias-label-tertiary); }
-/* The host Input renders this class on its wrapper; the field itself is a
-   plain one-line input, the way the Devin reference reads. */
+/* Keep the host field as the host draws it (border, fill, focus ring); this
+   sheet only lets it take the toolbar's free width. */
 [data-nano-progress-report] .npr-search {
-  flex: 1 1 auto; min-width: 0; display: flex; align-items: center;
-  height: 22px; padding: 0;
-  border: 0; border-radius: 0; background: transparent;
-  box-shadow: none;
-}
-[data-nano-progress-report] .npr-search:focus-within {
-  box-shadow: inset 0 -1px 0 var(--dsw-alias-state-business-primary);
-}
-[data-nano-progress-report] .npr-search input {
-  flex: 1 1 auto; width: 100%; min-width: 0; height: 22px; padding: 0;
-  border: 0; outline: none; background: transparent; box-shadow: none;
-  color: var(--dsw-alias-label-primary); font: var(--dsw-font-xxs-12);
-}
-[data-nano-progress-report] .npr-search input::placeholder { color: var(--dsw-alias-label-tertiary); }
-[data-nano-progress-report] .npr-search input::-webkit-search-cancel-button { display: none; }
-[data-nano-progress-report] .npr-clear {
-  flex: none; width: 22px; min-width: 22px; height: 22px; padding: 0;
+  flex: 1 1 auto; min-width: 0; height: 26px; min-height: 26px;
 }
 .npr-stats {
   flex: none; color: var(--dsw-alias-label-tertiary);
@@ -72,6 +56,15 @@ export const PROGRESS_CSS = `
   font: var(--dsw-font-xxxs-11);
 }
 .npr-rows { position: relative; display: flex; flex-direction: column; }
+.npr-turns { position: relative; display: flex; flex-direction: column; }
+.npr-turn { display: flex; flex-direction: column; }
+.npr-turn + .npr-turn { margin-top: 2px; }
+/* The turn boundary is an indent plus a hairline, the way Devin draws it:
+   prompt at the left edge, every step one level in. */
+.npr-turn-body {
+  margin-left: 18px;
+  border-left: .5px solid var(--dsw-alias-border-l3);
+}
 .npr-empty {
   padding: 24px 12px; text-align: center;
   color: var(--dsw-alias-label-tertiary); font: var(--dsw-font-xxxs-11);
@@ -81,7 +74,7 @@ export const PROGRESS_CSS = `
   margin: 0 6px; padding: 0 4px; border-radius: var(--dsw-radius-sm);
 }
 .npr-row:hover { background: var(--dsw-alias-interactive-bg-hover); }
-.npr-row [data-disclosure-row] { min-height: 26px; }
+.npr-row [data-disclosure-row] { min-height: 28px; }
 .npr-row-inner { flex: 1 1 auto; min-width: 0; }
 /* The shimmer root is an inline-grid; make it a flex box so the text slot can
    shrink instead of sizing to max-content (that is what enables the ellipsis). */
@@ -199,7 +192,7 @@ export const PROGRESS_CSS = `
 /* ── tasks / jobs rows ───────────────────────────────────────────────── */
 .npr-task-list { display: flex; flex-direction: column; }
 .npr-task {
-  display: flex; align-items: center; gap: 6px; min-width: 0; min-height: 24px;
+  display: flex; align-items: center; gap: 6px; min-width: 0; min-height: 26px;
   color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xxs-12);
 }
@@ -212,6 +205,10 @@ export const PROGRESS_CSS = `
 .npr-task-state {
   flex: none; margin-left: auto; padding-left: 8px;
   color: var(--dsw-alias-label-tertiary); font: var(--dsw-font-xxxs-11);
+}
+.npr-task-meta {
+  flex: none; margin-left: auto; padding-left: 8px;
+  color: var(--dsw-alias-label-tertiary); font: var(--dsw-font-xxxs-11); white-space: nowrap;
 }
 .npr-job[data-status="failed"] .npr-task-text,
 .npr-job[data-status="killed"] .npr-task-text { color: var(--dsw-alias-state-error-primary); }

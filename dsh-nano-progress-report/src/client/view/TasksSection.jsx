@@ -22,9 +22,9 @@ export const tasksMax = () => Math.max(TASKS_MIN, Math.round(window.innerHeight 
  * @param {{ t: Function, view: string, onView: (v: string) => void,
  *   collapsed: boolean, onCollapsed: (v: boolean) => void,
  *   height: number, onResize: (px: number) => void,
- *   todos: object[], jobs: object[] }} props
+ *   todos: object[], taskTimes?: Map<string, number>, jobs: object[] }} props
  */
-export function TasksSection({ t, view, onView, collapsed, onCollapsed, height, onResize, todos, jobs }) {
+export function TasksSection({ t, view, onView, collapsed, onCollapsed, height, onResize, todos, taskTimes, jobs }) {
   const active = view === 'jobs' && jobs.length > 0 ? 'jobs' : 'tasks'
   const total = todos.length
   const done = todos.filter(item => item?.status === 'completed').length
@@ -113,5 +113,5 @@ export function TasksSection({ t, view, onView, collapsed, onCollapsed, height, 
   }, collapsed
     ? null
     : h('div', { className: 'npr-taskbar-body', 'data-npr': 'tasks-body' },
-      active === 'jobs' ? h(JobsView, { jobs, t }) : h(TasksView, { todos, t }))))
+      active === 'jobs' ? h(JobsView, { jobs, t }) : h(TasksView, { todos, taskTimes, t }))))
 }

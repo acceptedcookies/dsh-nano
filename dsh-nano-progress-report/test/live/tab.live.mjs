@@ -146,6 +146,18 @@ async function main() {
   const viewRows = view
     ? await waitFor(page, src => (eval(src)?.querySelectorAll('[data-npr="row"]').length ?? 0) > 0, VIEW_SRC, 25000)
     : false
+  // A filter persisted by an earlier run would flatten the grouped view before
+  // the structure checks (and make the later filter assert a no-op); clear it.
+  if (view) {
+    await page.evaluate(src => {
+      const input = eval(src)?.querySelector('[data-npr="search"]')
+      if (!input || input.value === '') return
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set
+      setter.call(input, '')
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    }, VIEW_SRC)
+    await waitFor(page, src => eval(src)?.querySelector('[data-npr="stats"]') === null, VIEW_SRC, 3000)
+  }
   record('timeline assembles', viewRows, view ? 'rows arrived' : 'no view root')
   record('exactly one visible view', await page.evaluate(() =>
     [...document.querySelectorAll('[data-nano-progress-report][data-variant="view"]')].filter(el => el.offsetWidth > 0).length) === 1, '')
@@ -170,16 +182,34 @@ async function main() {
       rowH: [...el.querySelectorAll('[data-npr="row"]')].map(r => Math.round(r.getBoundingClientRect().height)),
     }
   }, VIEW_SRC)
-  record('search line is a quiet 34px row',
-    Boolean(chrome) && chrome.barH === 34 && chrome.searchH === 22 && chrome.inputType === 'search'
-      && chrome.searchBorder === '0px none' && chrome.searchBg === 'rgba(0, 0, 0, 0)',
+  record('search line keeps the host field on a 34px row',
+    Boolean(chrome) && chrome.barH === 34 && chrome.searchH >= 26 && chrome.searchH <= 28
+      && chrome.inputType === 'search'
+      && chrome.searchBorder !== '0px none' && chrome.searchBg !== 'rgba(0, 0, 0, 0)',
     JSON.stringify(chrome).slice(0, 150))
   record('no goal band, group heads or status strip',
     Boolean(chrome) && !chrome.goal && !chrome.groups && !chrome.status && !chrome.drawer,
     chrome ? `goal=${chrome.goal} groups=${chrome.groups} status=${chrome.status}` : '')
-  record('every row is a flat 26px line',
-    Boolean(chrome) && chrome.rowH.length > 0 && chrome.rowH.every(h => h === 26),
+  record('every row is a 28px line',
+    Boolean(chrome) && chrome.rowH.length > 0 && chrome.rowH.every(h => h === 28),
     chrome ? [...new Set(chrome.rowH)].join(',') : '')
+
+  const turnShape = await page.evaluate(src => {
+    const el = eval(src)
+    const turn = el?.querySelector('[data-npr="turn"]')
+    const opener = turn?.querySelector('[data-npr="row"][data-level="0"]')
+    const step = turn?.querySelector('[data-npr="turn-body"] [data-npr="row"][data-level="1"]')
+    const body = turn?.querySelector('[data-npr="turn-body"]')
+    if (!turn || !opener || !step || !body) return null
+    return {
+      turns: el.querySelectorAll('[data-npr="turn"]').length,
+      indent: Math.round(step.getBoundingClientRect().x - opener.getBoundingClientRect().x),
+      guide: getComputedStyle(body).borderLeftWidth,
+    }
+  }, VIEW_SRC)
+  record('turns nest their steps behind a hairline',
+    Boolean(turnShape) && turnShape.turns > 0 && turnShape.indent >= 12 && turnShape.guide !== '0px',
+    turnShape ? JSON.stringify(turnShape) : 'no turn')
 
   const tone = await page.evaluate(src => {
     const el = eval(src)
@@ -331,9 +361,20 @@ async function main() {
       record('tasks count matches the projection',
         m !== null && Number(m[1]) === panel.done && Number(m[2]) === panel.total,
         `count="${panel.meta}" bar=${panel.done}/${panel.total}`)
-      record('task rows are 24px with host glyphs',
-        panel.rowH.length === panel.total && panel.rowH.every(h => h === 24) && panel.glyphs === panel.total,
+      record('task rows are 26px with host glyphs',
+        panel.rowH.length === panel.total && panel.rowH.every(h => h === 26) && panel.glyphs === panel.total,
         `rows=${panel.rowH.length} glyphs=${panel.glyphs}`)
+      const withTimes = await page.evaluate(src => {
+        const bar = eval(src)?.querySelector('[data-npr="tasks-panel"]')
+        const items = [...(bar?.querySelectorAll('[data-npr="task"][data-status="completed"]') ?? [])]
+        return {
+          completed: items.length,
+          stamped: items.filter(t => /\d{1,2}:\d{2}/.test(t.querySelector('.npr-task-meta')?.textContent ?? '')).length,
+        }
+      }, PANE_SRC)
+      record('completed tasks carry the event-stream time',
+        withTimes.completed === 0 || withTimes.stamped === withTimes.completed,
+        JSON.stringify(withTimes))
     } else {
       record('tasks count — skipped', true, 'this session has no tasks')
     }

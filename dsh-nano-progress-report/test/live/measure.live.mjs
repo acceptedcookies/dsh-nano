@@ -90,6 +90,17 @@ await gotoApp()
 await new Promise(r => setTimeout(r, 3500))
 
 const view = await ensureView()
+// Start from the unfiltered (turn-grouped) view regardless of persisted filters.
+if (view) {
+  await page.evaluate(src => {
+    const input = eval(src)?.querySelector('[data-npr="search"]')
+    if (!input || input.value === '') return
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set
+    setter.call(input, '')
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  }, VIEW_SRC)
+  await new Promise(r => setTimeout(r, 600))
+}
 const pane = await ensurePane()
 await new Promise(r => setTimeout(r, 1200))
 
@@ -113,6 +124,13 @@ const data = await page.evaluate(([vsrc, psrc]) => {
     rows: [...viewRoot.querySelectorAll('[data-npr="row"]')].length,
     rowHeights: [...new Set([...viewRoot.querySelectorAll('[data-npr="row"]')].map(r => Math.round(r.getBoundingClientRect().height)))],
     types: [...new Set([...viewRoot.querySelectorAll('[data-npr="row"]')].map(r => r.dataset.type))],
+    turns: viewRoot.querySelectorAll('[data-npr="turn"]').length,
+    turnIndent: (() => {
+      const t = viewRoot.querySelector('[data-npr="turn"]')
+      const o = t?.querySelector('[data-npr="row"][data-level="0"]')
+      const s = t?.querySelector('[data-npr="turn-body"] [data-npr="row"]')
+      return o && s ? Math.round(s.getBoundingClientRect().x - o.getBoundingClientRect().x) : null
+    })(),
     sample: [...viewRoot.querySelectorAll('[data-npr="row"]')].slice(0, 8).map(r => ({
       type: r.dataset.type,
       title: r.querySelector('.npr-row-title')?.textContent?.slice(0, 34),
@@ -150,6 +168,7 @@ const data = await page.evaluate(([vsrc, psrc]) => {
           num: t.querySelector('.npr-task-num')?.textContent,
           text: t.querySelector('.npr-task-text')?.textContent?.slice(0, 30),
           glyph: t.querySelector('.npr-task-glyph')?.firstElementChild?.tagName,
+          meta: t.querySelector('.npr-task-meta')?.textContent ?? null,
         })),
       },
     }

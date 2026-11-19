@@ -191,13 +191,15 @@ export const inject = [
 └─ [data-nano-progress-report][data-npr=root]        bg-base，flex column（根无自有类）
    ├─ .npr-toolbar  34px，border-bottom l3
    │   ├─ IconSearchOutlineRegular 14px（label-tertiary）
-   │   ├─ host Input[type=search]  .npr-search（22px，无边框、透明底；focus 仅 1px business 下划线）
+   │   ├─ host Input[type=search]  .npr-search（26px；边框/底色/焦点由宿主字段原生绘制）
    │   ├─ 清除 Button（ghost，仅有过滤文本时）
    │   └─ .npr-stats（仅有过滤文本时：`n/total`）
    ├─ .npr-flow  flex:1，滚动
    │   ├─ .npr-older（hasMore：host Button ghost sm「Load older」，11px tertiary）
    │   └─ host AnimatedRows(.npr-rows) → .npr-row*（data-row-key）
    │        └─ host DisclosureRow（leading glyph / title / headerAccessory=11px 相对时间 + 失败告警）
+│   ├─ .npr-turn  人类 prompt 在左缘（level 0）
+│   └─ .npr-turn-body  该轮全部步骤右移 18px，左边一条 0.5px 引线（level 1）
    │             └─ 展开：.npr-detail（11px mono，左 0.5px 引线；args/result/error/reasoning/耗时/子调用）
    └─ .npr-taskbar  顶边可拖拽；bg-layer-1 + 上边框
         ├─ .npr-grip  6px，role=separator，cursor row-resize，88px … 60%vh
@@ -232,7 +234,7 @@ export const inject = [
 - 高度 `88px … round(innerHeight × 0.6)`，`box-sizing: border-box`（含上边框），拖拽走 pointer capture。
 - 点击头部（host `DisclosureRow`）折叠到 30px 头，body 从 DOM 移除；再点回到折叠前高度。
 - 状态 `{height, collapsed, view}` 落 `localStorage['dsh-nano-progress-report:tasks']`——纯视图态，不进宿主。
-- **Tasks**：读 `session.projections.faceOf('todos')`（`TodoItem[] | null`）。行 = 状态 glyph（完成 `IconCheckCircleFillRegular` 绿、进行中 `StateDot` spinner、待办 `IconCheckCircleOutlineRegular` 三级色）+ `#n` + 12px 文本；头部 `N/M done` + 3px meter。`TodoItem` 只有 `content`/`status`，**不伪造完成时间或 id**。投影在 `turn/start` 被宿主清零——历史仍留在时间线的 `Task list` 行，这是宿主语义，不是丢数据。
+- **Tasks**：读 `session.projections.faceOf('todos')`（`TodoItem[] | null`）。行 = 状态 glyph（完成 `IconCheckCircleFillRegular` 绿、进行中 `StateDot` spinner、待办 `IconCheckCircleOutlineRegular` 三级色）+ `#n` + 12px 文本 + 右侧完成时间；头部 `N/M done` + 3px meter。完成时间不是投影字段，而是从事件流里该任务首次以 `completed` 出现在 `todo/write` 快照的事件时间得出（窗口内没有则只写 `完成`，不编造）。`TodoItem` 只有 `content`/`status`，**不伪造完成时间或 id**。投影在 `turn/start` 被宿主清零——历史仍留在时间线的 `Task list` 行，这是宿主语义，不是丢数据。
 - **Jobs**：读 `ctx.jobs`（先 `watchRows`）；只有存在 job 时头部才出现 11px 文本开关，无 job 时不渲染该开关。
 
 ### 4.3 过滤
@@ -321,9 +323,9 @@ node test/live/tab.live.mjs
 
 - 探 `https://dsh-dev.local/` → `302` → 剥 `?token=`（任一前置不满足 exit 0 skip）；
 - `findEgo()` 定位 ego-browser → `spawnSync(ego,['nodejs'],{input:script})` → `taskSpace('dnpr-progress')` → `page('p1')`；
-- `page.evaluate` 断言：会话视图与右栏各有一个可见根；`[data-npr="search"]` 是 `input[type=search]`，包裹层 22px、无边框、透明底；`[data-npr="tasks-panel"]` 的 drag/collapse 生效；
-- 用真实会话事件断言：`.npr-row` 全部 26px、背景透明、标题 400 字重；glyph 统一三级色（失败行除外）；`prompt` 标题色 ≠ `shell` 标题色且无底色；失败行 `[data-npr="fail"]` 且无红底/内阴影；
-- `getBoundingClientRect`/`computedStyle` 断言 toolbar=34px、Tasks 头部=30px、meter 宽度比 = done/total、Tasks 高度随拖拽变化且 clamp 在 `88 … 0.6vh`；
+- `page.evaluate` 断言：会话视图与右栏各有一个可见根；`[data-npr="search"]` 是 `input[type=search]`，包裹层 26px、保留宿主字段边框；`[data-npr="tasks-panel"]` 的 drag/collapse 生效；
+- 用真实会话事件断言：`.npr-row` 全部 28px、背景透明、标题 400 字重；`[data-npr="turn"]` 的 opener 在左缘、body 右移 ≥12px 且有左引线；glyph 统一三级色（失败行除外）；`prompt` 标题色 ≠ `shell` 标题色且无底色；失败行 `[data-npr="fail"]` 且无红底/内阴影；
+- `getBoundingClientRect`/`computedStyle` 断言 toolbar=34px、Tasks 头部=30px、任务行=26px、完成任务带 `HH:MM`、meter 宽度比 = done/total、Tasks 高度随拖拽变化且 clamp 在 `88 … 0.6vh`；
 - `page.screenshot('/tmp/dnpr-progress-*.png')` 留证；测完还原（关闭 tab、清 localStorage）。
 
 ### 7.3 Spike 取证（宪章 `test/spike/progress-report-tab/`）

@@ -139,12 +139,12 @@ describe('official primitives drive the chrome', () => {
 describe('low-key visual contract', () => {
   const css = read('src/client/styles.js')
 
-  it('the search line is a quiet 34px row, not a boxed field', () => {
+  it('the search keeps the host field on a quiet 34px line', () => {
     assert.match(css, /\.npr-toolbar\s*\{[^}]*height:\s*34px/s)
     const searchRule = /\[data-nano-progress-report\] \.npr-search\s*\{([^}]*)\}/s.exec(css)
-    assert.ok(searchRule, 'no scoped .npr-search rule')
-    assert.match(searchRule[1], /border:\s*0/)
-    assert.match(searchRule[1], /background:\s*transparent/)
+    assert.ok(searchRule, 'no scoped .npr-search sizing rule')
+    assert.doesNotMatch(searchRule[1], /border(-\w+)?:/, 'do not redraw the host field chrome')
+    assert.doesNotMatch(searchRule[1], /background:/, 'do not redraw the host field chrome')
   })
 
   it('rows carry no tinted band, no left bar and no bold weight', () => {
@@ -170,9 +170,18 @@ describe('low-key visual contract', () => {
     assert.match(css, /\.npr-t-lifecycle\s*\{[^}]*label-dimmed/s)
   })
 
+  it('a turn is a prompt at the edge and steps behind a hairline', () => {
+    const turn = read('src/client/view/Turn.jsx')
+    assert.match(turn, /npr-turn-body/, 'Turn must render the indented body')
+    assert.match(turn, /level/, 'Turn must hand rows their level')
+    assert.match(css, /\.npr-turn-body\s*\{[^}]*margin-left:/s)
+    assert.match(css, /\.npr-turn-body\s*\{[^}]*border-left:/s)
+    assert.match(read('src/client/view/Row.jsx'), /'data-level': level/)
+  })
+
   it('the task footer is one quiet 30px header over layer-1', () => {
     assert.match(css, /\.npr-taskbar\s*\{[^}]*background:\s*var\(--dsw-alias-bg-layer-1\)/s)
     assert.match(css, /\.npr-taskbar-head \[data-disclosure-row\]\s*\{[^}]*min-height:\s*30px/s)
-    assert.match(css, /\.npr-task\s*\{[^}]*min-height:\s*24px/s)
+    assert.match(css, /\.npr-task\s*\{[^}]*min-height:\s*26px/s)
   })
 })

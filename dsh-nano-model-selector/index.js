@@ -292,6 +292,19 @@ async function policyWindow(ctx, model) {
 }
 
 /**
+ * Context window of the model a session routes to (its request header), the
+ * same denominator the engine uses for fill. Null for a bare id or no route.
+ * @param {object|string|null} session
+ */
+async function sessionWindow(ctx, session) {
+  if (session === null || typeof session !== 'object' || typeof session.requestHeader !== 'function') return null
+  let config
+  try { config = session.requestHeader()?.config } catch { return null }
+  if (typeof config?.provider !== 'string' || typeof config?.model !== 'string') return null
+  return policyWindow(ctx, config)
+}
+
+/**
  * `?sessionId=` opts into the audit ledger; without it the response keeps its
  * original shape so existing callers see no change.
  * @param {import('node:http').IncomingMessage} req
@@ -423,10 +436,16 @@ function asyncCompactHandlers(ctx, runtimeHandle) {
   const sessionFor = req => {
     const sessionId = sessionIdQuery(req)
     if (sessionId === null) return null
-    try { return ctx.sessions?.get(sessionId) ?? sessionId } catch { return sessionId }
+    // `sessions` is not in this plugin's static inject list: the `ctx.sessions`
+    // accessor throws "cannot get property without inject", so resolve the
+    // service lazily, like pluginManager/agents.
+    try { return ctx.get('sessions')?.get(sessionId) ?? sessionId } catch { return sessionId }
   }
   const payload = async (policy, session) => {
-    const W = await policyWindow(ctx, policy.model)
+    // fill and the effective pin are per session in the engine: both divide by
+    // the window of the model the session routes to. The summary model's
+    // window is only the fallback when the session names no routed model.
+    const W = (await sessionWindow(ctx, session)) ?? (await policyWindow(ctx, policy.model))
     const effective = W === null
       ? { pin: null, windowMin: null, dcs: [] }
       : (() => {
@@ -435,7 +454,7 @@ function asyncCompactHandlers(ctx, runtimeHandle) {
       })()
     const rt = session === null
       ? { fill: null, lastCompaction: null, degraded: null }
-      : (runtimeHandle?.runtime(session, W, null) ?? { fill: null, lastCompaction: null, degraded: null })
+      : { ...(runtimeHandle?.runtime(session, W, null) ?? { fill: null, lastCompaction: null, degraded: null }), window: W }
     return {
       ...policy,
       // The fingerprint of the instruction that would be sent with this

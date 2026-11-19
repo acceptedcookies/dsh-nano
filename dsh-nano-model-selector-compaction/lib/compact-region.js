@@ -239,19 +239,44 @@ export const COMPACTION_INSTRUCTION = [
  * (`override`). A non-empty extra never replaces the built-in body — the
  * retired `summaryPrompt` wholesale override is gone for good.
  * `verbatimRequest` appends the step-level compensation section
- * (-03⑤/-07①): the current turn's opening user request, which the unified
- * selector preserves in the retained tail, is echoed here verbatim so the
- * summarizer knows it survives un-summarized.
+ * (-03⑤/-07①): a step-level cut always starts the shadowed span at the
+ * surface head, so the current turn's opening user request is REPLACED by the
+ * checkpoint, not retained. The section tells the summarizer to carry it
+ * verbatim; `ensureVerbatimRequest` then guarantees it deterministically.
  * @param {{override?: string, verbatimRequest?: string}|string|undefined} options
  *   `override` = `policy.extraRequirements`; a bare string is read as `override`.
  * @returns {string} the instruction actually sent.
  */
+const VERBATIM_REQUEST_HEADER = 'Current-turn opening request. This user message is inside the span your checkpoint replaces: the model will no longer see the original. Copy it verbatim and in full under "## Primary Request and Intent" (no truncation, no ellipsis, no paraphrase):'
+
+/** Heading of the deterministic fallback section (see ensureVerbatimRequest). */
+export const VERBATIM_REQUEST_SECTION = '## Current-Turn Opening Request (verbatim)'
+
+const collapseWhitespace = value => value.replace(/\s+/g, ' ').trim()
+
+/**
+ * Deterministic step-level compensation (-03⑤/-07①): the opening request must
+ * not survive only as a paraphrase. When the summarizer's text already holds
+ * it verbatim (whitespace-insensitive) the summary is returned unchanged;
+ * otherwise the original text is appended as a final section, still inside
+ * the same summary blocks — never a second model-visible message (-04①).
+ * @param {Array<{type:string,text?:string}>} summary - summary text blocks.
+ * @param {string|undefined} verbatim - the current turn's opening request.
+ * @returns {Array<{type:string,text?:string}>}
+ */
+export function ensureVerbatimRequest(summary, verbatim) {
+  if (typeof verbatim !== 'string' || verbatim.trim().length === 0) return summary
+  const joined = collapseWhitespace(summary.map(block => block.text ?? '').join('\n'))
+  if (joined.includes(collapseWhitespace(verbatim))) return summary
+  return [...summary, { type: 'text', text: `\n\n${VERBATIM_REQUEST_SECTION}\n${verbatim}` }]
+}
+
 export function instructionText(options) {
   const override = typeof options === 'string' ? options : options?.override
   const verbatim = typeof options === 'object' && options !== null ? options.verbatimRequest : undefined
   const parts = [COMPACTION_INSTRUCTION]
   if (typeof verbatim === 'string' && verbatim.length > 0) {
-    parts.push(`Current-turn opening request, preserved verbatim:\n${verbatim}`)
+    parts.push(`${VERBATIM_REQUEST_HEADER}\n${verbatim}`)
   }
   if (typeof override === 'string' && override.length > 0) {
     parts.push(`Additional requirements:\n${override}`)
@@ -420,6 +445,10 @@ export const CHECKPOINT_RESERVE = 8192
  * Bounds on retained-tail tokens:
  *   lower — at least one COMPLETE balanced node stays (`toolPairingBalancedBefore`)
  *   upper — floor(回落线 × W) − system-head tokens − CHECKPOINT_RESERVE
+ *           − request overhead outside the surface (totalTokens −
+ *           surfaceTokens, i.e. tool schemas, output and the provider-vs-
+ *           heuristic gap), so the post-commit fill lands below the 回落线
+ *           that the over-health probe later checks against totalTokens
  *
  * @param session  session whose surface is selected on
  * @param measurement  tokenMeter.measure(session) result (nodes + totalTokens)
@@ -466,7 +495,10 @@ export function selectCompactableRange(session, measurement, options) {
     if (minRetained === null) minRetained = retainedAt[i]
   }
   if (minRetained === null) return null
-  const maxRetained = Math.floor(line * window) - headTokens - CHECKPOINT_RESERVE
+  const overhead = Number.isFinite(measurement.totalTokens) && Number.isFinite(measurement.surfaceTokens)
+    ? Math.max(0, measurement.totalTokens - measurement.surfaceTokens)
+    : 0
+  const maxRetained = Math.floor(line * window) - headTokens - CHECKPOINT_RESERVE - overhead
   if (maxRetained < minRetained) return null
 
   // Boundary events → cut index. A turn/start or step/start sitting strictly
@@ -523,9 +555,14 @@ export function selectCompactableRange(session, measurement, options) {
   return null
 }
 
+/** Sources that carry what the user actually asked for in a turn. */
+const USER_INTENT_SOURCES = new Set(['user', 'goal'])
+
 /**
  * The current turn's opening user request, verbatim (-03⑤/P4-02c): the first
- * `user/message` after the latest `turn/start`. Echoed into the instruction
+ * `user/message` after the latest `turn/start` that the user authored (no
+ * `source`, or source kind `user` / `goal`). Host-injected notices such as
+ * working-directory changes, runtime context, or skill catalogs are skipped. Echoed into the instruction
  * only when the selector lands on a step boundary — the summarizer needs to
  * know that text is shadowed from the model but preserved in the retained
  * tail, and it must never fabricate it.
@@ -535,14 +572,18 @@ export function currentTurnOpeningRequest(session) {
   let turnSeq = -1
   for (let seq = session.seq - 1; seq >= 0; seq -= 1) {
     const event = safeEventAt(session, seq)
+    if (event === undefined) continue
     if (event.type === 'turn/start') { turnSeq = seq; break }
     if (event.type === 'turn/end') return undefined
   }
   if (turnSeq < 0) return undefined
   for (let seq = turnSeq + 1; seq < session.seq; seq += 1) {
     const event = safeEventAt(session, seq)
+    if (event === undefined) continue
     if (event.type === 'turn/end') return undefined
     if (event.type !== 'user/message') continue
+    const sourceKind = event.data?.source?.kind
+    if (sourceKind !== undefined && !USER_INTENT_SOURCES.has(sourceKind)) continue
     const message = session.deriveEventMessage(event) ?? event.data
     const text = (message?.content ?? [])
       .filter(block => block.type === 'text')

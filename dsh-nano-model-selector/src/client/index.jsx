@@ -53,6 +53,7 @@ export function apply(ctx) {
       const directory = ctx.modelDirectories.directoryFor(sessionId)
       const available = ctx.sessions.subagentAddress(sessionId) === undefined
       return {
+        sessionId,
         available,
         directory,
         load: () => {
@@ -72,8 +73,8 @@ export function apply(ctx) {
     </SlotBoundary>
   )))
 
-  // Async-compaction history: one entry in the session header's overflow menu
-  // opens the diagnostic dialog. The glyph registers through the shell's own
+  // Async-compaction history: one entry in the session's context menu opens
+  // the diagnostic dialog. The glyph registers through the shell's own
   // icon slot so the menu row renders exactly like the shipped entries.
   // The dialog lives in the shell overlay slot, not inside the menu: the menu
   // unmounts on selection, the dialog must outlive it.
@@ -102,19 +103,26 @@ export function apply(ctx) {
   // registry. The package also declares @deepseek-ai/dsh-client-ui-context-menu
   // in dsh.client.inject so the loader composes this plugin into the same
   // client scope as the shell's own menu contributors.
+  //
+  // Two targets: `sessionHeader` existed on older shells; current shells
+  // hard-code the header's overflow menu (session-log-export) and only expose
+  // the sidebar row's right-click menu as `session`. Registering on a target
+  // the shell never resolves is inert, so both stay registered.
   const menus = ctx.get('contextMenus') ?? ctx.contextMenus
-  ctx.effect(() => menus.register({
-    id: 'nano-model-selector.async-history',
-    target: 'sessionHeader',
-    order: 500,
-    observe: () => [ctx.locale],
-    resolve: ({ sessionId }) => [{
-      id: 'async-history',
-      label: copyFor(ctx.locale.getSnapshot().active).historyMenu,
-      icon: { key: 'nano-model-selector.async-history' },
-      run: () => openHistory(sessionId),
-    }],
-  }), 'nano-model-selector: async compaction history')
+  for (const target of ['session', 'sessionHeader']) {
+    ctx.effect(() => menus.register({
+      id: `nano-model-selector.async-history.${target}`,
+      target,
+      order: 500,
+      observe: () => [ctx.locale],
+      resolve: ({ sessionId }) => typeof sessionId === 'string' && sessionId !== '' ? [{
+        id: 'async-history',
+        label: copyFor(ctx.locale.getSnapshot().active).historyMenu,
+        icon: { key: 'nano-model-selector.async-history' },
+        run: () => openHistory(sessionId),
+      }] : [],
+    }), `nano-model-selector: async compaction history (${target})`)
+  }
 
   // Async-compaction status, in the SESSION header — not the composer. The
   // composer's activity row means "the input bar is busy"; a background

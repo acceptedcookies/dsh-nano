@@ -42,9 +42,10 @@ invisible. Records carry `at` + `kind`:
 |---|---|---|
 | `arm` | B line qualified and the episode armed | `fill`, `window`, `retain`, `orderOk` |
 | `claim` | the summarizer attempt kicked at arm time | `retain`, `attempt`, `target` |
-| `select` | the unified selector committed to a cut before summarization | `lane` (`async`/`full`/`manual`/`overflow`), `boundary` (`turn`/`step`/`node`), `retainedTokens`, `targetTokens` |
+| `select` | the unified selector committed to a cut before summarization | `lane` (`async`/`full`/`manual`/`overflow`), `trigger` (`b-line`/`overflow`/`manual`/`safety`/`dc-1`/`over-health`/`model-switch`), `fill` (lane fill at entry), `boundary` (`turn`/`step`/`node`), `retainedTokens`, `targetTokens` |
 | `commit` | the durable bracket committed | `compactionId`, `tokens`, `records` |
 | `drop` | the episode was dropped | `reason`, `detail`, `bracketed` |
+| `health` | the first assistant message after an async commit reported provider usage: the adopted fill is judged against H | `compactionId`, `fill`, `window`, `tokens`, `healthTargetAsync`, `overHealth` |
 | `skip` | arming was suppressed | `reason` (`circuit-open` / `lock-held`) |
 | `drop` (`reason: 'disarmed'`) | the arming premise lapsed mid-flight: raised B, a bigger window, or a prune that pulled fill below B | `detail` (the fill/B pair that triggered it) |
 | `drop` (`reason: 'preempted'`) | a synchronous lane (manual/FULL/model-switch/overflow) preempted the episode | `detail` (the lane name) |
@@ -62,6 +63,13 @@ A synchronous lane (manual `/compact`, the S-line/FULL set, the model-switch
 veto, or context-overflow recovery) preempts an in-flight episode first
 (`drop` with `reason: 'preempted'`); neither `disarmed` nor `preempted` feeds
 the transient-failure circuit — they are settlements, not failures.
+
+Over-health after an async adoption is judged once, from the provider usage of
+the first post-commit assistant message (`health` record), not from the meter
+right after commit: that meter is the old provider anchor minus a heuristic
+delta and overstates the adopted fill. `overHealth: true` routes the next B
+crossing to the FULL closed set; a sync or manual compaction clears a pending
+verdict.
 
 Every record also carries `promptVersion`: the first eight hex characters of
 the sha256 of the instruction actually sent (the built-in

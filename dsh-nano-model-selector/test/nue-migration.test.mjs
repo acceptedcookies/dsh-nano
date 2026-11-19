@@ -49,7 +49,7 @@ test('T18: no :has() graft and no numeric z-index in the stylesheet', () => {
 
 test('T18: history dialog keeps a fixed height through NanoDialog', () => {
   const dialog = read('src/client/AsyncHistoryDialog.jsx')
-  assert.match(dialog, /fixedHeight: 560/)
+  assert.match(dialog, /fixedHeight: 640/)
   assert.equal(/\bTooltip\b/.test(dialog.split('} from \'@deepseek-ai/dsh-client-ui-primitives\'')[0]), false, 'unused Tooltip import removed')
   const index = read('src/client/index.jsx')
   assert.equal(index.includes('querySelector'), false)
@@ -63,7 +63,7 @@ test('T18: hand-drawn tag / switch / tabs replaced by host primitives', () => {
   assert.match(selector, /import \{[^}]*\bTag\b[^}]*\} from '@deepseek-ai\/dsh-client-ui-primitives'/)
   assert.ok((selector.match(/<Tag tone=/g) ?? []).length >= 3, 'engine, badge and context tags use host Tag')
   const panel = read('src/client/CompactPanel.jsx')
-  assert.match(panel, /import \{ SegmentedControl, Switch \} from '@deepseek-ai\/dsh-client-ui-primitives'/)
+  assert.match(panel, /import \{ SegmentedControl, Switch(?:, Tag)? \} from '@deepseek-ai\/dsh-client-ui-primitives'/)
   assert.match(panel, /<Switch\b[\s\S]*?checked=\{enabled\}[\s\S]*?onChange=\{doSwitch\}/)
   assert.match(panel, /<SegmentedControl\b[\s\S]*?id="nms-compact-explain"/)
 })

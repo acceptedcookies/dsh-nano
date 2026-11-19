@@ -50,6 +50,7 @@ import {
   prepareCompactionTransaction,
   instructionVersion,
   currentTurnOpeningRequest,
+  ensureVerbatimRequest,
   selectCompactableRange,
   summarizeWithLlm,
   SurfaceChangedError,
@@ -111,6 +112,13 @@ export default class NanoCompactionEngine extends CompactionEngine {
      * settle but this flag must survive until the next B crossing consumes it.
      */
     this._overHealth = new Set()
+    /**
+     * Session id -> the adoption whose over-health is still unjudged. The
+     * meter right after commit is the OLD provider anchor minus a heuristic
+     * delta (which underprices CJK/JSON), so it overstates the adopted fill.
+     * The judgment waits for the first post-commit provider usage.
+     */
+    this._overHealthPending = new Map()
     /**
      * Session-level same-turn debounce marker (-05③/b): the openTurn that a
      * non-transient drop produced plus whether the suppression was already
@@ -272,7 +280,7 @@ export default class NanoCompactionEngine extends CompactionEngine {
         || (previous.config.provider === config.provider && previous.config.model === config.model)) return config
       try {
         const header = { ...previous, config }
-        const result = await this._compactPressure(agent, header, signal, true)
+        const result = await this._compactPressure(agent, header, signal, true, 'model-switch')
         if (result !== null) logResult(result, 'model switch')
       } catch (error) {
         signal.throwIfAborted()
@@ -290,6 +298,7 @@ export default class NanoCompactionEngine extends CompactionEngine {
 
     ctx.on('session/event', (session, event) => {
       if (event.type !== 'assistant/message') return
+      this._judgeOverHealth(session, event)
       const agent = this._overflowAgents.get(session)
       if (agent !== undefined) this._overflowRetries.delete(agent)
     })
@@ -502,6 +511,7 @@ export default class NanoCompactionEngine extends CompactionEngine {
     recordAsyncDecision(session.id, {
       kind: 'select',
       lane: 'async',
+      trigger: 'b-line',
       boundary: range.boundary,
       retainedTokens: range.retainedTokens,
       targetTokens: spec.targetTokens,
@@ -547,7 +557,7 @@ export default class NanoCompactionEngine extends CompactionEngine {
       // after settle; the over-health flag lives session-level so the GC'd
       // slot cannot swallow it.
       this._settleEpisode(session, episode)
-      const adoptedOverHealth = await this._adoptedOverHealth(agent)
+      const fromSeq = session.seq
       const result = outcome.result
       try {
         await this.ctx.sessions.flush(session)
@@ -570,7 +580,13 @@ export default class NanoCompactionEngine extends CompactionEngine {
           ? null
           : { first: Math.min(...shadowedSeqs), last: Math.max(...shadowedSeqs) },
       })
-      if (adoptedOverHealth === true) this._overHealth.add(session.id)
+      // A fresh adoption supersedes any earlier verdict; the new one is
+      // judged once the first post-commit request reports provider usage.
+      this._overHealth.delete(session.id)
+      const window = await this._window(agent, this._policy())
+      if (window !== null) {
+        this._overHealthPending.set(session.id, { compactionId: tx.compactionId, window, fromSeq })
+      }
       this._logResult(result, 'async maintenance')
       return true
     } catch (error) {
@@ -580,20 +596,47 @@ export default class NanoCompactionEngine extends CompactionEngine {
   }
 
   /**
-   * Post-commit over-health probe (-13): whether the adoption left fill still
-   * >= H, which primes the FULL closed set at the next B crossing. Session-
-   * level side channel; a probe failure reports false (never primes).
+   * Post-adoption over-health verdict (DNMS01 -13 "exact over-health"):
+   * judged from the provider usage of the first assistant message after the
+   * commit — that request was assembled from the compacted surface, so its
+   * reported size is the real adopted fill, unlike the post-commit meter
+   * estimate. fill >= H primes the FULL closed set for the next B crossing.
+   * Messages without usage keep the verdict pending; a later compaction
+   * replaces or clears it. Never throws (runs inside the event listener).
    */
-  async _adoptedOverHealth(agent) {
+  _judgeOverHealth(session, event) {
+    const pending = this._overHealthPending.get(session.id)
+    if (pending === undefined) return
+    if (typeof event.seq === 'number' && event.seq < pending.fromSeq) return
+    const usage = event.data?.usage
+    if (usage === undefined || typeof usage.inputTokens !== 'number') return
+    this._overHealthPending.delete(session.id)
     try {
-      const policy = this._policy()
-      const W = await this._window(agent, policy)
-      if (policy.safetyOnly || W === null) return false
-      const measurement = this.ctx.tokenMeter.measure(agent.session)
-      return measurement.totalTokens / W >= policy.policy.healthTargetAsync
-    } catch {
-      return false
+      const { policy, safetyOnly } = this._policy()
+      if (safetyOnly) return
+      const tokens = usage.inputTokens + (usage.cacheReadTokens ?? 0)
+        + (usage.cacheWriteTokens ?? 0) + (usage.outputTokens ?? 0)
+      const fill = tokens / pending.window
+      const overHealth = fill >= policy.healthTargetAsync
+      if (overHealth) this._overHealth.add(session.id)
+      recordAsyncDecision(session.id, {
+        kind: 'health',
+        compactionId: pending.compactionId,
+        fill,
+        window: pending.window,
+        tokens,
+        healthTargetAsync: policy.healthTargetAsync,
+        overHealth,
+      })
+    } catch (error) {
+      this.ctx.logger.warn(`async compaction over-health probe failed: ${messageOf(error)}`)
     }
+  }
+
+  /** A synchronous compaction makes any pending adoption verdict stale. */
+  _clearAdoptionVerdict(session) {
+    this._overHealthPending.delete(session.id)
+    this._overHealth.delete(session.id)
   }
 
   _settleEpisode(session, episode) {
@@ -715,6 +758,7 @@ export default class NanoCompactionEngine extends CompactionEngine {
           recordAsyncDecision(agent.session.id, {
             kind: 'select',
             lane: 'overflow',
+            trigger: 'overflow',
             boundary: range.boundary,
             retainedTokens: range.retainedTokens,
             targetTokens,
@@ -728,16 +772,22 @@ export default class NanoCompactionEngine extends CompactionEngine {
   }
 
   /** Synchronous FULL for the closed trigger set plus model-switch require-below. */
-  async _compactPressure(agent, header, signal, requireBelowThreshold) {
+  async _compactPressure(agent, header, signal, requireBelowThreshold, trigger) {
     // A sync lane preempts any in-flight async episode BEFORE the durable
     // bracket check (-05②): the episode owns nothing yet, so it drops
     // cleanly instead of this lane reporting a false lock contention.
     return this._runLane(agent, requireBelowThreshold ? 'model-switch' : 'full', async () => {
-      return this._compactPressureBody(agent, header, signal, requireBelowThreshold)
+      return this._compactPressureBody(agent, header, signal, requireBelowThreshold, trigger)
     })
   }
 
-  async _compactPressureBody(agent, header, signal, requireBelowThreshold) {
+  /**
+   * `trigger` names which member of the FULL closed set fired (`safety` /
+   * `dc-1` / `over-health` / `model-switch`); the ledger needs it because
+   * all of them share `lane: 'full'` and a blocking compaction is otherwise
+   * impossible to attribute after the fact.
+   */
+  async _compactPressureBody(agent, header, signal, requireBelowThreshold, trigger) {
     const target = header.config
     const { policy, safetyOnly } = this._policy()
     const meter = this.ctx.tokenMeter
@@ -783,6 +833,8 @@ export default class NanoCompactionEngine extends CompactionEngine {
       recordAsyncDecision(agent.session.id, {
         kind: 'select',
         lane,
+        trigger: trigger ?? (requireBelowThreshold ? 'model-switch' : 'safety'),
+        fill: measurement.totalTokens / W,
         boundary: range.boundary,
         retainedTokens: range.retainedTokens,
         targetTokens: retain,
@@ -819,7 +871,7 @@ export default class NanoCompactionEngine extends CompactionEngine {
 
     if (safetyOnly) {
       // -18⑤: read failure -> only the S line stays live.
-      if (fillRatio >= SAFETY_RATIO) return this._compactPressure(agent, header, signal, false)
+      if (fillRatio >= SAFETY_RATIO) return this._compactPressure(agent, header, signal, false, 'safety')
       return null
     }
 
@@ -854,11 +906,16 @@ export default class NanoCompactionEngine extends CompactionEngine {
     // FULL closed set (-13): trusted safety / DC-1 / post-adoption over-health.
     // These are NOT lane-gated: a FULL trigger outranks an in-flight async
     // episode and preempts it inside _compactPressure's lane (-05②).
-    if (fillRatio >= SAFETY_RATIO
-      || (fullOnly && fillRatio >= policy.bufferSizeAsync)
-      || (this._overHealth.has(agent.session.id) && fillRatio >= policy.bufferSizeAsync)) {
+    const fullTrigger = fillRatio >= SAFETY_RATIO
+      ? 'safety'
+      : fillRatio < policy.bufferSizeAsync
+        ? null
+        : fullOnly
+          ? 'dc-1'
+          : this._overHealth.has(agent.session.id) ? 'over-health' : null
+    if (fullTrigger !== null) {
       this._overHealth.delete(agent.session.id)
-      return this._compactPressure(agent, header, signal, false)
+      return this._compactPressure(agent, header, signal, false, fullTrigger)
     }
 
     if (fillRatio >= policy.bufferSizeAsync && !fullOnly) {
@@ -949,7 +1006,7 @@ export default class NanoCompactionEngine extends CompactionEngine {
    * current turn's opening request into the instruction (-03⑤).
    */
   async _compactRegionRange(agent, range, signal) {
-    return compactSurfaceRegion(
+    const result = await compactSurfaceRegion(
       this._regionDependencies(undefined, undefined, {
         verbatimRequest: range.boundary === 'step'
           ? currentTurnOpeningRequest(agent.session)
@@ -962,6 +1019,8 @@ export default class NanoCompactionEngine extends CompactionEngine {
       { owner: 'current-turn', stability: 'whole-surface', boundary: range.boundary },
       signal,
     )
+    if (result !== null && result !== undefined) this._clearAdoptionVerdict(agent.session)
+    return result
   }
 
   compactNow(agent, signal, sourceCommandId) {
@@ -999,11 +1058,12 @@ export default class NanoCompactionEngine extends CompactionEngine {
           recordAsyncDecision(agent.session.id, {
             kind: 'select',
             lane: 'manual',
+            trigger: 'manual',
             boundary: range.boundary,
             retainedTokens: range.retainedTokens,
             targetTokens,
           })
-          return await compactSurfaceRegion(
+          const manualResult = await compactSurfaceRegion(
             this._regionDependencies(undefined, undefined, {
               verbatimRequest: range.boundary === 'step'
                 ? currentTurnOpeningRequest(agent.session)
@@ -1024,6 +1084,8 @@ export default class NanoCompactionEngine extends CompactionEngine {
             },
             operationSignal,
           )
+          if (manualResult !== null && manualResult !== undefined) this._clearAdoptionVerdict(agent.session)
+          return manualResult
         } catch (error) {
           if (agentSignal.aborted && operationSignal.reason === agentSignal.reason) {
             throw new ManualCompactionError('cancelled', 'manual compaction was cancelled', { cause: error })
@@ -1074,7 +1136,11 @@ export default class NanoCompactionEngine extends CompactionEngine {
         // if the policy changed between arming and summarising.
         if (episode !== undefined) episode.promptVersion = instructionVersion(instruction ?? {})
         const configured = instruction === undefined ? target : { ...(target ?? {}), instruction }
-        return summarizeWithLlm(this.ctx, input, agent, abort, configured)
+        return this._assertSummarizerFits(target, input, abort)
+          .then(() => summarizeWithLlm(this.ctx, input, agent, abort, configured))
+          .then(result => verbatimRequest === undefined
+            ? result
+            : { ...result, summary: ensureVerbatimRequest(result.summary, verbatimRequest) })
       },
       recover: (error, agent, sourceEventSeqs, signal) => this.ctx.waterfall('compaction/summary-error', {
         session: agent.session,
@@ -1082,6 +1148,32 @@ export default class NanoCompactionEngine extends CompactionEngine {
         error,
         ...(signal === undefined ? {} : { signal }),
       }, () => false),
+    }
+  }
+
+  /**
+   * Fail fast when the shadowed span cannot fit the summary model's own
+   * window (the summary model can be smaller than the main routed model).
+   * Heuristic estimate, so it only rejects clear overruns; an unknown window
+   * or a lookup failure never blocks.
+   */
+  async _assertSummarizerFits(target, input, signal) {
+    if (target === undefined) return
+    let window
+    try {
+      window = (await this.ctx.llm.resolveModelInfo(target.provider, target.model, signal))?.context?.contextWindow
+    } catch {
+      return
+    }
+    if (typeof window !== 'number' || !(window > 0)) return
+    let estimate = 0
+    for (const message of input.messages ?? []) estimate += this.ctx.tokenMeter.estimateMessage(message)
+    if (estimate > window) {
+      const error = new Error(
+        `summary model ${target.provider}/${target.model} window (${window} tokens) is smaller than the span to summarize (~${estimate} tokens); pick a summary model with a larger window`,
+      )
+      error.code = 'SUMMARIZER_WINDOW'
+      throw error
     }
   }
 

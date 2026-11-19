@@ -508,7 +508,7 @@ export const STYLE = `${NANO_STYLES}
 .nxe-commit-files-head {
   position: relative; z-index: 1;
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  padding: 2px 2px 2px 8px;
+  padding: 4px 4px 4px 12px;
 }
 .nxe-commit-files-lead { display: flex; align-items: baseline; gap: 6px; min-width: 0; overflow: hidden; }
 .nxe-commit-files-actions {
@@ -526,12 +526,13 @@ export const STYLE = `${NANO_STYLES}
 .nxe-commit-files-rule { border-top: var(--dsh-hairline-width, 0.5px) solid var(--dsw-alias-border-l2); }
 .nxe-commit-files-head .nxe-commit-files-close { width: 20px; height: 20px; min-width: 20px; padding: 0; }
 .nxe-commit-files-body { height: 148px; overflow: auto; margin: 0; }
+.nxe-commit-files .nxe-drawer-empty { padding: 8px 12px; }
 .nxe-commit-file {
   display: flex; align-items: center; gap: 8px; min-width: 0;
-  padding: 3px 8px; font-size: 12px; line-height: 16px;
+  padding: 3px 12px; font-size: 12px; line-height: 16px;
 }
 .nxe-commit-file-path { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
-.nxe-commit-more { margin: 0; padding: 4px 8px; font-size: 11px; color: var(--dsw-alias-label-tertiary); }
+.nxe-commit-more { margin: 0; padding: 8px 12px; font-size: 11px; color: var(--dsw-alias-label-tertiary); }
 /* The footer's dismissal parks at the left edge; the margin pushes the working actions right. */
 .nxe-scm-card .nxe-drawer-close { margin-right: auto; }
 .nxe-worktree {

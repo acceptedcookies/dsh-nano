@@ -99,7 +99,7 @@ export function TasksSection({ t, view, onView, collapsed, onCollapsed, height, 
       key: option.id,
       variant: 'ghost',
       size: 'sm',
-      className: 'npr-taskbar-switch',
+      className: 'npr-taskbar-view',
       'data-npr': `switch-${option.id}`,
       'aria-pressed': active === option.id,
       onClick: (event) => {

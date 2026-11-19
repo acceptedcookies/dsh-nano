@@ -1,0 +1,19 @@
+{
+  "jobs": [
+    {
+      "id": "bash-6b30b27efcd54eaa",
+      "purpose": "dev container loopback fixture",
+      "result": "terminated by deliberate dev container stop",
+      "containerExecExitCode": 137,
+      "hostCommandExitCode": 1,
+      "classification": "cleanup, not product crash"
+    },
+    {
+      "id": "bash-7d45e60c6bf24ea9",
+      "purpose": "dev emulation fixture",
+      "result": "/stop then timer completion",
+      "hostCommandExitCode": 0,
+      "classification": "normal cleanup"
+    }
+  ]
+}

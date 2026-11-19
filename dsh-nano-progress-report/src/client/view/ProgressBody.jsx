@@ -7,9 +7,12 @@
  *  turns whose steps are indented behind a hairline, and the Tasks footer. */
 import React from 'react'
 import {
-  AnimatedRows, Button, IconCloseOutlineRegular, IconSearchOutlineRegular, Input,
+  AnimatedRows, Button, IconCloseOutlineRegular, IconSearchOutlineRegular,
+  IconSlidersTwoOutlineRegular, Input, Menu,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { applyFilter, isEmptyFilter, parseFilter } from '../filter.js'
+import { activeMenuTokens, filterCounts, toggleMenuToken } from '../filter-menu.js'
+import { STATUSES, TYPES } from '../constants.js'
 import { taskCompletionTimes } from '../task-times.js'
 import { perf } from '../perf.js'
 import { Row } from './Row.jsx'
@@ -65,6 +68,7 @@ export default function ProgressBody(props) {
   const [now, setNow] = useState(() => Date.now())
   const [bindingError, setBindingError] = useState(false)
   const [openKey, setOpenKey] = useState(null)
+  const [filterOpen, setFilterOpen] = useState(false)
   const [ready, setReady] = useState(false)
   const [tasks, setTasks] = useState(readTasks)
 
@@ -113,6 +117,26 @@ export default function ProgressBody(props) {
   // Devi's Tasks rows carry a completion time; derive it from the event stream.
   const taskTimes = useMemo(() => taskCompletionTimes(rows), [rows])
 
+  const counts = useMemo(() => filterCounts(rows), [rows])
+  const selectedTokens = useMemo(() => activeMenuTokens(query), [query])
+  const menuItems = useMemo(() => [
+    { type: 'label', id: 'label-status', text: t('filter.status') },
+    ...STATUSES.map(value => ({
+      id: `status:${value}`,
+      // The host menu's `shortcut` slot renders key caps (array), not a count;
+      // fold the number into the label instead of abusing it.
+      label: `${t(`filter.status.${value}`)} (${String(counts.statuses[value] ?? 0)})`,
+    })),
+    { type: 'separator', id: 'sep-1' },
+    { type: 'label', id: 'label-type', text: t('filter.type') },
+    ...TYPES.map(value => ({
+      id: `type:${value}`,
+      label: `${t(`filter.type.${value}`)} (${String(counts.types[value] ?? 0)})`,
+    })),
+    { type: 'separator', id: 'sep-2' },
+    { id: 'clear', label: t('filter.clearAll'), disabled: query === '' },
+  ], [counts, query, t])
+
   const hasMore = sessionSnap?.hasMore === true
   const loadingOlder = sessionSnap?.loadingOlder === true
   const jobs = jobsSnap?.rows?.[sessionId] ?? []
@@ -135,17 +159,18 @@ export default function ProgressBody(props) {
 
   return h('div', { 'data-nano-progress-report': '1', 'data-npr': 'root' },
     h('div', { className: 'npr-toolbar', 'data-npr': 'toolbar' },
-      h('span', { className: 'npr-toolbar-icon', 'aria-hidden': 'true' },
-        h(IconSearchOutlineRegular, { size: 14 })),
-      h(Input, {
-        className: 'npr-search',
-        'data-npr': 'search',
-        type: 'search',
-        value: query,
-        placeholder: t('filter.placeholder'),
-        'aria-label': t('filter.placeholder'),
-        onChange: event => onQuery(event.currentTarget.value),
-      }),
+      h('div', { className: 'npr-search-wrap' },
+        h('span', { className: 'npr-toolbar-icon', 'aria-hidden': 'true' },
+          h(IconSearchOutlineRegular, { size: 14 })),
+        h(Input, {
+          className: 'npr-search',
+          'data-npr': 'search',
+          type: 'search',
+          value: query,
+          placeholder: t('filter.placeholder'),
+          'aria-label': t('filter.placeholder'),
+          onChange: event => onQuery(event.currentTarget.value),
+        })),
       query !== ''
         ? h(Button, {
           variant: 'ghost', size: 'sm', 'data-npr': 'filter-clear',
@@ -154,7 +179,30 @@ export default function ProgressBody(props) {
           onClick: () => onQuery(''),
         })
         : null,
-      stats !== '' ? h('span', { className: 'npr-stats', 'data-npr': 'stats' }, stats) : null),
+      stats !== '' ? h('span', { className: 'npr-stats', 'data-npr': 'stats' }, stats) : null,
+      h(Menu, {
+        open: filterOpen,
+        anchor: h(Button, {
+          variant: 'ghost',
+          size: 'sm',
+          className: 'npr-filter',
+          'data-npr': 'filter-toggle',
+          'aria-label': t('filter.button'),
+          'aria-expanded': filterOpen ? 'true' : 'false',
+          icon: h(IconSlidersTwoOutlineRegular, { size: 14 }),
+          onClick: () => setFilterOpen(open => !open),
+        }),
+        items: menuItems,
+        selectedIds: selectedTokens,
+        selection: 'check',
+        align: 'end',
+        side: 'bottom',
+        onSelect: (id) => {
+          if (id === 'clear') { onQuery(''); return }
+          onQuery(toggleMenuToken(query, id))
+        },
+        onClose: () => setFilterOpen(false),
+      })),
 
     h('div', { className: 'npr-flow', 'data-npr': 'flow' },
       hasMore

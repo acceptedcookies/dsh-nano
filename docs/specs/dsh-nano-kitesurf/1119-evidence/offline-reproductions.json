@@ -1,0 +1,58 @@
+[
+  {
+    "name": "console-sequence-and-uncaught",
+    "entries": [
+      {
+        "level": "log",
+        "text": "first",
+        "at": "2026-11-18T13:00:45.162Z"
+      },
+      {
+        "level": "error",
+        "text": "second",
+        "at": "2026-11-18T13:00:45.163Z"
+      }
+    ],
+    "keys": [
+      "cundefined",
+      "cundefined"
+    ],
+    "uncaughtRecorded": false
+  },
+  {
+    "name": "network-existing-id-after-start-cursor",
+    "status": 200,
+    "body": {
+      "ok": true,
+      "entries": []
+    }
+  },
+  {
+    "name": "evaluate-caller-body",
+    "status": 400,
+    "body": {
+      "ok": false,
+      "errorId": "kitesurf.evaluate.toolong",
+      "dom": null
+    }
+  },
+  {
+    "name": "empty-app",
+    "level": 1,
+    "url": "https://fixture.invalid/",
+    "marker": "Fixture app",
+    "ok": true,
+    "openMs": 0,
+    "openStatus": 200,
+    "landed": "https://fixture.invalid/",
+    "bytes": 374,
+    "markerFound": true,
+    "screenshotBytes": 3,
+    "documentStatus": null,
+    "consoleErrors": [
+      "app.js failed"
+    ],
+    "cdpGeneration": 1,
+    "ms": 0
+  }
+]

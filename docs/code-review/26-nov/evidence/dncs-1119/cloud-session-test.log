@@ -1,0 +1,566 @@
+
+> dsh-nano-cloud-session@0.1.0 test
+> node --test
+
+TAP version 13
+# Subtest: T06 probe fails closed when node is missing; does not guess another host
+ok 1 - T06 probe fails closed when node is missing; does not guess another host
+  ---
+  duration_ms: 2.456708
+  type: 'test'
+  ...
+# Subtest: T06 unknown host key requires matching fingerprint; never accept-new
+ok 2 - T06 unknown host key requires matching fingerprint; never accept-new
+  ---
+  duration_ms: 2.169292
+  type: 'test'
+  ...
+# Subtest: T06 changed gateway key requires a new matching fingerprint
+ok 3 - T06 changed gateway key requires a new matching fingerprint
+  ---
+  duration_ms: 0.884
+  type: 'test'
+  ...
+# Subtest: T06 artifact dir is chmod 700 and published via tmp+rename
+ok 4 - T06 artifact dir is chmod 700 and published via tmp+rename
+  ---
+  duration_ms: 1.300333
+  type: 'test'
+  ...
+# Subtest: T24: mayTerminate is false unless the acknowledgement box is checked
+ok 5 - T24: mayTerminate is false unless the acknowledgement box is checked
+  ---
+  duration_ms: 0.463958
+  type: 'test'
+  ...
+# Subtest: T24 attack vector: an unacknowledged confirm runs zero terminations
+ok 6 - T24 attack vector: an unacknowledged confirm runs zero terminations
+  ---
+  duration_ms: 0.131417
+  type: 'test'
+  ...
+# Subtest: T24 attack vector: the Enter path cannot step through either
+ok 7 - T24 attack vector: the Enter path cannot step through either
+  ---
+  duration_ms: 0.260042
+  type: 'test'
+  ...
+# Subtest: T24 attack vector: no native confirm in any form, in any client source
+ok 8 - T24 attack vector: no native confirm in any form, in any client source
+  ---
+  duration_ms: 0.917
+  type: 'test'
+  ...
+# Subtest: T24 attack vector: the real workbench onConfirm refuses an unchecked box
+ok 9 - T24 attack vector: the real workbench onConfirm refuses an unchecked box
+  ---
+  duration_ms: 2.150416
+  type: 'test'
+  ...
+# Subtest: T24: terminate goes through RiskConfirmation and the gate
+ok 10 - T24: terminate goes through RiskConfirmation and the gate
+  ---
+  duration_ms: 0.165791
+  type: 'test'
+  ...
+# Subtest: T24: profile removal goes through RiskConfirmation and the gate
+ok 11 - T24: profile removal goes through RiskConfirmation and the gate
+  ---
+  duration_ms: 0.12
+  type: 'test'
+  ...
+# Subtest: T24: archive is a reversible NanoDialog danger and cancel sends nothing
+ok 12 - T24: archive is a reversible NanoDialog danger and cancel sends nothing
+  ---
+  duration_ms: 0.065125
+  type: 'test'
+  ...
+# Subtest: self: bearer + path
+ok 13 - self: bearer + path
+  ---
+  duration_ms: 11.635625
+  type: 'test'
+  ...
+# Subtest: listSessions: org path + flat query params (spike-proven shape)
+ok 14 - listSessions: org path + flat query params (spike-proven shape)
+  ---
+  duration_ms: 0.314041
+  type: 'test'
+  ...
+# Subtest: create: field mapping camelCase → upstream snake_case
+ok 15 - create: field mapping camelCase → upstream snake_case
+  ---
+  duration_ms: 0.481333
+  type: 'test'
+  ...
+# Subtest: error dialect: 403 → forbidden-or-invisible (spike fact, not 404)
+ok 16 - error dialect: 403 → forbidden-or-invisible (spike fact, not 404)
+  ---
+  duration_ms: 0.367417
+  type: 'test'
+  ...
+# Subtest: error dialect: 422 → invalid-request; 5xx → upstream-error
+ok 17 - error dialect: 422 → invalid-request; 5xx → upstream-error
+  ---
+  duration_ms: 0.173166
+  type: 'test'
+  ...
+# Subtest: network failure → unreachable
+ok 18 - network failure → unreachable
+  ---
+  duration_ms: 0.111459
+  type: 'test'
+  ...
+# Subtest: terminate uses DELETE on session path
+ok 19 - terminate uses DELETE on session path
+  ---
+  duration_ms: 0.180792
+  type: 'test'
+  ...
+# Subtest: full create mapping: advanced fields and snake/camel aliases
+ok 20 - full create mapping: advanced fields and snake/camel aliases
+  ---
+  duration_ms: 0.322791
+  type: 'test'
+  ...
+# Subtest: listSessions forwards all documented filters
+ok 21 - listSessions forwards all documented filters
+  ---
+  duration_ms: 0.447083
+  type: 'test'
+  ...
+# Subtest: session ops: tags append, sleep, insights generate, catalog paths
+ok 22 - session ops: tags append, sleep, insights generate, catalog paths
+  ---
+  duration_ms: 0.55225
+  type: 'test'
+  ...
+# Subtest: uploadAttachment posts multipart FormData with bearer
+ok 23 - uploadAttachment posts multipart FormData with bearer
+  ---
+  duration_ms: 0.3855
+  type: 'test'
+  ...
+# Subtest: T16 251 messages across 3 pages; duplicates skipped; errors visible
+ok 24 - T16 251 messages across 3 pages; duplicates skipped; errors visible
+  ---
+  duration_ms: 0.677625
+  type: 'test'
+  ...
+# Subtest: T20 form → codec → API keeps false/0 and maps every create field
+ok 25 - T20 form → codec → API keeps false/0 and maps every create field
+  ---
+  duration_ms: 14.070334
+  type: 'test'
+  ...
+# Subtest: T20 invalid JSON leaves the form object untouched
+ok 26 - T20 invalid JSON leaves the form object untouched
+  ---
+  duration_ms: 0.211375
+  type: 'test'
+  ...
+# Subtest: T05 session id rejects host/option/shell injection
+ok 27 - T05 session id rejects host/option/shell injection
+  ---
+  duration_ms: 1.443084
+  type: 'test'
+  ...
+# Subtest: T05 ssh argv never contains -A -R -N or StrictHostKeyChecking=no
+ok 28 - T05 ssh argv never contains -A -R -N or StrictHostKeyChecking=no
+  ---
+  duration_ms: 0.882583
+  type: 'test'
+  ...
+# Subtest: T05 user-supplied host is ignored; gateway is fixed
+ok 29 - T05 user-supplied host is ignored; gateway is fixed
+  ---
+  duration_ms: 0.081333
+  type: 'test'
+  ...
+# Subtest: T06 dedicated-key failure falls back to system identity, never another host
+ok 30 - T06 dedicated-key failure falls back to system identity, never another host
+  ---
+  duration_ms: 0.143583
+  type: 'test'
+  ...
+# Subtest: T17 0.2.2-rc.1 has no H-CHAT; agents.enter is not sufficient
+ok 31 - T17 0.2.2-rc.1 has no H-CHAT; agents.enter is not sufficient
+  ---
+  duration_ms: 0.40575
+  type: 'test'
+  ...
+# Subtest: A03 H-EXEC missing on this host version
+ok 32 - A03 H-EXEC missing on this host version
+  ---
+  duration_ms: 0.077792
+  type: 'test'
+  ...
+# Subtest: T23: the source walk reached the DNCS author tree
+ok 33 - T23: the source walk reached the DNCS author tree
+  ---
+  duration_ms: 0.525333
+  type: 'test'
+  ...
+# Subtest: T23 control: every zero pattern still fires on a fixture that carries it
+ok 34 - T23 control: every zero pattern still fires on a fixture that carries it
+  ---
+  duration_ms: 0.692375
+  type: 'test'
+  ...
+# Subtest: T23: no host-DOM graft, no legacy confirm, no Devin chip left (asserted per file)
+ok 35 - T23: no host-DOM graft, no legacy confirm, no Devin chip left (asserted per file)
+  ---
+  duration_ms: 1.364833
+  type: 'test'
+  ...
+# Subtest: T23: the section only queries attribute selectors, never host classes
+ok 36 - T23: the section only queries attribute selectors, never host classes
+  ---
+  duration_ms: 0.312708
+  type: 'test'
+  ...
+# Subtest: T23: styles carry no hidden composer rules and no nano-ui card overrides
+ok 37 - T23: styles carry no hidden composer rules and no nano-ui card overrides
+  ---
+  duration_ms: 0.079958
+  type: 'test'
+  ...
+# Subtest: T23: the settings tabs are the React NanoTabs contract
+ok 38 - T23: the settings tabs are the React NanoTabs contract
+  ---
+  duration_ms: 0.10375
+  type: 'test'
+  ...
+# Subtest: T23: dialog cards take their size from NanoDialog props
+ok 39 - T23: dialog cards take their size from NanoDialog props
+  ---
+  duration_ms: 0.108083
+  type: 'test'
+  ...
+# Subtest: T23: the section body is rendered from primitives and tokens
+ok 40 - T23: the section body is rendered from primitives and tokens
+  ---
+  duration_ms: 0.053417
+  type: 'test'
+  ...
+# Subtest: T23: the rail expand soft-reads the layout service instead of the inject proxy
+ok 41 - T23: the rail expand soft-reads the layout service instead of the inject proxy
+  ---
+  duration_ms: 1.678875
+  type: 'test'
+  ...
+# npm notice
+# npm notice 📦  dsh-nano-cloud-session@0.1.0
+# npm notice Tarball Contents
+# npm notice 10.1kB AGENTS.md
+# npm notice 4.4kB README.md
+# npm notice 234B cordis.patch.yml
+# npm notice 301B icon.svg
+# npm notice 141B index.js
+# npm notice 5.8kB lib/bindings.js
+# npm notice 79.3kB lib/client.js
+# npm notice 9.2kB lib/devin-api.js
+# npm notice 126.5kB lib/host.js
+# npm notice 17.7kB lib/perf-review-host.js
+# npm notice 7.8kB lib/profiles-store.js
+# npm notice 36.6kB lib/remote/devin-workspace.mjs
+# npm notice 7.9kB lib/route-guard.js
+# npm notice 1.2kB lib/ssh-keys.js
+# npm notice 184B locale/en.json
+# npm notice 201B locale/zh.json
+# npm notice 1.7kB package.json
+# npm notice Tarball Details
+# npm notice name: dsh-nano-cloud-session
+# npm notice version: 0.1.0
+# npm notice filename: dsh-nano-cloud-session-0.1.0.tgz
+# npm notice package size: 84.1 kB
+# npm notice unpacked size: 309.1 kB
+# npm notice shasum: 9cc6cc71ec15f80065754ea3e3739a344ad4c33b
+# npm notice integrity: sha512-meJtvAULCDl1v[...]JNEdD68HFlo3g==
+# npm notice total files: 17
+# npm notice
+# Subtest: T21 host/client/remote artifacts exist; remote has no secret importer
+ok 42 - T21 host/client/remote artifacts exist; remote has no secret importer
+  ---
+  duration_ms: 4.448792
+  type: 'test'
+  ...
+# Subtest: T21 npm pack unpacks and host/remote load without starting the bridge
+ok 43 - T21 npm pack unpacks and host/remote load without starting the bridge
+  ---
+  duration_ms: 228.224708
+  type: 'test'
+  ...
+# Subtest: T15 changing origin without a new secret is rejected
+ok 44 - T15 changing origin without a new secret is rejected
+  ---
+  duration_ms: 2.937625
+  type: 'test'
+  ...
+# Subtest: T20 create codec keeps explicit false/0 and drops only undefined
+ok 45 - T20 create codec keeps explicit false/0 and drops only undefined
+  ---
+  duration_ms: 0.409334
+  type: 'test'
+  ...
+# Subtest: create + list returns public shape (secret never leaves)
+ok 46 - create + list returns public shape (secret never leaves)
+  ---
+  duration_ms: 1.89625
+  type: 'test'
+  ...
+# Subtest: persists to disk with 0600 and reloads
+ok 47 - persists to disk with 0600 and reloads
+  ---
+  duration_ms: 1.212791
+  type: 'test'
+  ...
+# Subtest: env seed on empty store
+ok 48 - env seed on empty store
+  ---
+  duration_ms: 2.943541
+  type: 'test'
+  ...
+# Subtest: validation: label/orgId/https baseUrl/token required
+ok 49 - validation: label/orgId/https baseUrl/token required
+  ---
+  duration_ms: 1.021875
+  type: 'test'
+  ...
+# Subtest: save/remove bump epoch with that profileId; activate does not
+ok 50 - save/remove bump epoch with that profileId; activate does not
+  ---
+  duration_ms: 1.42175
+  type: 'test'
+  ...
+# Subtest: save with empty secret keeps existing; remove/activate
+ok 51 - save with empty secret keeps existing; remove/activate
+  ---
+  duration_ms: 2.768042
+  type: 'test'
+  ...
+# Subtest: T01 only Devin is a real provider; unknown provider/op rejected
+ok 52 - T01 only Devin is a real provider; unknown provider/op rejected
+  ---
+  duration_ms: 0.886625
+  type: 'test'
+  ...
+# Subtest: T01 unapproved authority cannot define a family
+ok 53 - T01 unapproved authority cannot define a family
+  ---
+  duration_ms: 0.096708
+  type: 'test'
+  ...
+# Subtest: T02 original 12 HTTP paths remain bindings
+ok 54 - T02 original 12 HTTP paths remain bindings
+  ---
+  duration_ms: 0.07125
+  type: 'test'
+  ...
+# Subtest: T07 NDJSON framing, unknown method, initialize, tools/list
+ok 55 - T07 NDJSON framing, unknown method, initialize, tools/list
+  ---
+  duration_ms: 5.266458
+  type: 'test'
+  ...
+# Subtest: T08 fs list/read/write stay inside the remote root
+ok 56 - T08 fs list/read/write stay inside the remote root
+  ---
+  duration_ms: 1.942125
+  type: 'test'
+  ...
+# Subtest: T09 process argv is not a shell; unknown handle rejected
+ok 57 - T09 process argv is not a shell; unknown handle rejected
+  ---
+  duration_ms: 83.016083
+  type: 'test'
+  ...
+# Subtest: T10 process table enforces spawn limit and strips secret env
+ok 58 - T10 process table enforces spawn limit and strips secret env
+  ---
+  duration_ms: 29.888292
+  type: 'test'
+  ...
+# Subtest: T12 remote read miss does not fall back to a local sentinel
+ok 59 - T12 remote read miss does not fall back to a local sentinel
+  ---
+  duration_ms: 0.960666
+  type: 'test'
+  ...
+# Subtest: T16 empty page + cursor paging
+ok 60 - T16 empty page + cursor paging
+  ---
+  duration_ms: 0.747083
+  type: 'test'
+  ...
+# Subtest: T10 unknown fields and recursive delete are rejected before any SSH
+ok 61 - T10 unknown fields and recursive delete are rejected before any SSH
+  ---
+  duration_ms: 0.671292
+  type: 'test'
+  ...
+# Subtest: T10 workspace root cannot escape the probed cwd
+ok 62 - T10 workspace root cannot escape the probed cwd
+  ---
+  duration_ms: 0.264958
+  type: 'test'
+  ...
+# Subtest: T10 write without authorization is denied
+ok 63 - T10 write without authorization is denied
+  ---
+  duration_ms: 0.574834
+  type: 'test'
+  ...
+# Subtest: T10 /resources rejects unknown op and missing scope without SSH
+ok 64 - T10 /resources rejects unknown op and missing scope without SSH
+  ---
+  duration_ms: 11.265333
+  type: 'test'
+  ...
+# Subtest: all 14 routes register through guard (fail-closed table)
+ok 65 - all 14 routes register through guard (fail-closed table)
+  ---
+  duration_ms: 10.221458
+  type: 'test'
+  ...
+# Subtest: config save+list+test round-trip; secret never returned
+ok 66 - config save+list+test round-trip; secret never returned
+  ---
+  duration_ms: 11.901625
+  type: 'test'
+  ...
+# Subtest: sessions proxies upstream; ssh returns command
+ok 67 - sessions proxies upstream; ssh returns command
+  ---
+  duration_ms: 13.881666
+  type: 'test'
+  ...
+# Subtest: session id accepts bare v3 ids and prefixes devin- for the upstream
+ok 68 - session id accepts bare v3 ids and prefixes devin- for the upstream
+  ---
+  duration_ms: 9.135042
+  type: 'test'
+  ...
+# Subtest: P4-02 native_open fails explicitly (NATIVE_*) — never a silent ok
+ok 69 - P4-02 native_open fails explicitly (NATIVE_*) — never a silent ok
+  ---
+  duration_ms: 0.969875
+  type: 'test'
+  ...
+# Subtest: P4-02 httpStatusForError: NativeError passthrough vs CarrierError 5xx→502 clamp
+ok 70 - P4-02 httpStatusForError: NativeError passthrough vs CarrierError 5xx→502 clamp
+  ---
+  duration_ms: 0.863541
+  type: 'test'
+  ...
+# Subtest: P4-02 native_open: sessions+agents without H-CHAT is still NATIVE_UNAVAILABLE
+ok 71 - P4-02 native_open: sessions+agents without H-CHAT is still NATIVE_UNAVAILABLE
+  ---
+  duration_ms: 0.851791
+  type: 'test'
+  ...
+# Subtest: P4-02 native_open: H-CHAT present, no profile → NATIVE_UNSUPPORTED
+ok 72 - P4-02 native_open: H-CHAT present, no profile → NATIVE_UNSUPPORTED
+  ---
+  duration_ms: 0.654666
+  type: 'test'
+  ...
+# Subtest: workspace_shell mints a tab host without a fake Agent
+ok 73 - workspace_shell mints a tab host without a fake Agent
+  ---
+  duration_ms: 2.219375
+  type: 'test'
+  ...
+# Subtest: T11 profile epoch invalidates existing scopes
+ok 74 - T11 profile epoch invalidates existing scopes
+  ---
+  duration_ms: 1.1555
+  type: 'test'
+  ...
+# Subtest: T18 plugin-disabled is HTTP 404/405 without a carrier reason, not provider 404
+ok 75 - T18 plugin-disabled is HTTP 404/405 without a carrier reason, not provider 404
+  ---
+  duration_ms: 0.384292
+  type: 'test'
+  ...
+# Subtest: T18 three health faces stay independent
+ok 76 - T18 three health faces stay independent
+  ---
+  duration_ms: 0.078875
+  type: 'test'
+  ...
+# Subtest: T14 port-forward operations are not advertised (no fake success)
+ok 77 - T14 port-forward operations are not advertised (no fake success)
+  ---
+  duration_ms: 0.40925
+  type: 'test'
+  ...
+# Subtest: T14 inspect overlay is explicit NATIVE_UNAVAILABLE for pty/forward
+ok 78 - T14 inspect overlay is explicit NATIVE_UNAVAILABLE for pty/forward
+  ---
+  duration_ms: 0.607625
+  type: 'test'
+  ...
+# Subtest: T22 live workspace e2e is opt-in and is not npm test
+ok 79 - T22 live workspace e2e is opt-in and is not npm test
+  ---
+  duration_ms: 0.527542
+  type: 'test'
+  ...
+# Subtest: T19 catalog 403 is forbidden-or-invisible, not an empty list
+ok 80 - T19 catalog 403 is forbidden-or-invisible, not an empty list
+  ---
+  duration_ms: 10.521125
+  type: 'test'
+  ...
+# Subtest: T19 insights 404 stays not-found; tags 409 stays conflict
+ok 81 - T19 insights 404 stays not-found; tags 409 stays conflict
+  ---
+  duration_ms: 0.223292
+  type: 'test'
+  ...
+# Subtest: T19 send-unknown is not-found; sleep and archive are distinct paths
+ok 82 - T19 send-unknown is not-found; sleep and archive are distinct paths
+  ---
+  duration_ms: 0.264291
+  type: 'test'
+  ...
+# Subtest: T19 plugin-disabled 404 is not a carrier not-found
+ok 83 - T19 plugin-disabled 404 is not a carrier not-found
+  ---
+  duration_ms: 0.055834
+  type: 'test'
+  ...
+# Subtest: T04 same logical key shares one in-flight connect
+ok 84 - T04 same logical key shares one in-flight connect
+  ---
+  duration_ms: 31.643583
+  type: 'test'
+  ...
+# Subtest: T04 different keys do not share; failure publishes no scope
+ok 85 - T04 different keys do not share; failure publishes no scope
+  ---
+  duration_ms: 0.546959
+  type: 'test'
+  ...
+# Subtest: T03 same remote id under two profiles stays isolated
+ok 86 - T03 same remote id under two profiles stays isolated
+  ---
+  duration_ms: 0.164667
+  type: 'test'
+  ...
+# Subtest: T10 browser cannot self-grant process or forward
+ok 87 - T10 browser cannot self-grant process or forward
+  ---
+  duration_ms: 0.211167
+  type: 'test'
+  ...
+1..87
+# tests 87
+# suites 0
+# pass 87
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 290.413833

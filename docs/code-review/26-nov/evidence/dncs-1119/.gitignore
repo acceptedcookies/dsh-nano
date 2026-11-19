@@ -1,0 +1,7 @@
+# Keep this review's frozen evidence visible despite the repository log ignore.
+!cloud-session-build.log
+!cloud-session-test.log
+!cross-package-tests.log
+!route-sensitivity.log
+!feature-contract.log
+!repros-output.log

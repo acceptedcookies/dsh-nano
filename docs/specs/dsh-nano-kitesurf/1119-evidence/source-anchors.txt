@@ -1,0 +1,40 @@
+dsh-nano-kitesurf/src/client/index.js:544: const merge = (fresh, keyOf) => setRows((prev) => {
+dsh-nano-kitesurf/src/client/index.js:548: if (extra.length === 0) return prev
+dsh-nano-kitesurf/src/client/index.js:1119: if (nativeHtml && shot && !domDoc) loadDom().catch(() => {})
+dsh-nano-kitesurf/src/client/index.js:1268: if (opts.beat) setBeat(true)
+dsh-nano-kitesurf/src/client/index.js:1366: async function loadDom(options = {}) {
+dsh-nano-kitesurf/src/client/index.js:1369: if (data?.ok && data.srcdoc) {
+dsh-nano-kitesurf/src/client/index.js:1370: setDomDoc({ srcdoc: data.srcdoc, url: data.url, at: Date.now() })
+dsh-nano-kitesurf/src/client/index.js:1379: async function reloadShotInner(scroll, options = {}) {
+dsh-nano-kitesurf/src/client/index.js:1882: function EnvPanel() {
+dsh-nano-kitesurf/src/client/index.js:1986: const healthy = !contractMismatch && snap?.ready === true
+dsh-nano-kitesurf/src/client/index.js:2081: if (!frame || !domDoc?.srcdoc) return
+dsh-nano-kitesurf/src/client/index.js:2087: doc.write(domDoc.srcdoc)
+dsh-nano-kitesurf/src/client/index.js:2344: httpBase: fresh?.kite?.httpBase ?? '',
+dsh-nano-local-sandbox/src/host/routes.js:313: async function probeCdp(session, httpBase, httpUp, deps) {
+dsh-nano-local-sandbox/src/host/routes.js:345: async function observeOnce(session, deps) {
+dsh-nano-local-sandbox/src/host/routes.js:419: async function probeDom(session, httpBase, deps) {
+dsh-nano-local-sandbox/src/host/routes.js:496: const cap = await withPage(client, (sessionId) => client.send('Page.captureScreenshot', { format: 'png' }, sessionId))
+dsh-nano-local-sandbox/src/host/routes.js:530: async function prepareEnvironment(session, deps) {
+dsh-nano-local-sandbox/src/host/routes.js:690: function snapshotExpression() {
+dsh-nano-local-sandbox/src/host/routes.js:709: async function readJson(req) {
+dsh-nano-local-sandbox/src/host/routes.js:802: function buildOwners(session, deps) {
+dsh-nano-local-sandbox/src/host/routes.js:947: session.operations.push({ path: row.path, method: req.method, at: new Date().toISOString() })
+dsh-nano-local-sandbox/src/host/routes.js:974: const cap = await client.send('Page.captureScreenshot', params, sessionId)
+dsh-nano-local-sandbox/src/host/routes.js:1179: if (row.path.endsWith('/mcp')) {
+dsh-nano-local-sandbox/src/host/routes.js:1280: if (row.path.endsWith('/evaluate')) {
+dsh-nano-local-sandbox/src/host/routes.js:1486: if (since) entries = entries.filter((item) => Number(item.startedAt) > since)
+dsh-nano-local-sandbox/profiles/kitesurf/mcp-bridge.mjs:19: const CDP = process.env.AGENT_BROWSER_CDP || ''
+dsh-nano-local-sandbox/profiles/kitesurf/mcp-bridge.mjs:291: function answerNativeTool(name, args, bridgeState, self = {}) {
+dsh-nano-local-sandbox/profiles/kitesurf/mcp-bridge.mjs:473: const child = spawn('agent-browser', ['mcp'], {
+dsh-nano-local-sandbox/profiles/kitesurf/mcp-bridge.mjs:524: const control = bridgeState.control || makeControl()
+dsh-nano-local-sandbox/profiles/kitesurf/mcp-bridge.mjs:555: if (toolName.startsWith('sandbox.')) {
+dsh-nano-local-sandbox/profiles/kitesurf/mcp-bridge.mjs:627: const control = makeControl()
+dsh-nano-kitesurf/index.js:400: mcpPort: config?.mcpPort ?? 8799,
+dsh-nano-kitesurf/index.js:609: async function pushDiagnostics(force = false) {
+dsh-nano-kitesurf/index.js:650: // This package registers skills only. Page routes live in dsh-nano-local-sandbox.
+dsh-nano-local-sandbox/src/host/browser-settings-adapter.js:14: function localeExpression(locale) {
+dsh-nano-local-sandbox/src/host/browser-settings-adapter.js:19: function geolocationExpression(geo) {
+dsh-nano-local-sandbox/src/host/browser-settings-adapter.js:29: function cookieParams(session, cookies) {
+dsh-nano-local-sandbox/src/host/browser-settings-adapter.js:182: if (key === 'cookies') return ['Network.setCookies', { cookies: cookieParams(session, settings.cookies) }]
+dsh-nano-local-sandbox/src/host/browser-settings-adapter.js:186: async function transaction(client, sessionId, operations) {

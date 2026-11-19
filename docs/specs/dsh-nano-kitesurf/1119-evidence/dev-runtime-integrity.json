@@ -1,0 +1,71 @@
+{
+  "manifest": {
+    "ref": "39feadfb9a3e6c14b40cf170a559ce417d0fce5d",
+    "resolvedSha": "39feadfb9a3e6c14b40cf170a559ce417d0fce5d",
+    "note": "Official upstream commit, unmodified. Replaces locally patched 5770ee1; no engine /history or KITESURF_HISTORY patch is carried. Build outputs live outside this source archive.",
+    "path": "pinned/kitesurf/",
+    "consumedBy": "DNLS profile and artifacts/kitesurf/<sha>/runtime derived build",
+    "verification": "Compare official tracked file hashes with git archive; build in a derived workspace, never edit source archive; review driver adapters on every repin.",
+    "archiveSha256": "363d62a0068cccef39cfeef2bf690ea34fc3f0a446f499b1192a2790bbd14586",
+    "sourceTreeSha256": "573317a75918b445b4af29f1f8164a3d30afbf59c014bc73a1535f6babc0c9f3"
+  },
+  "receiptRef": "39feadfb9a3e6c14b40cf170a559ce417d0fce5d",
+  "receiptSourceTree": "573317a75918b445b4af29f1f8164a3d30afbf59c014bc73a1535f6babc0c9f3",
+  "sourceArchiveOwnsGit": false,
+  "outputs": [
+    {
+      "path": "packages/core/pkg/kitesurf_core_bg.wasm",
+      "expected": "c7d8380d9a83f5495dc819b99609646d71687af2046472b7732d40feae690d9f",
+      "actual": "c7d8380d9a83f5495dc819b99609646d71687af2046472b7732d40feae690d9f",
+      "ok": true
+    },
+    {
+      "path": "packages/core/pkg/kitesurf_core.glue.js",
+      "expected": "1a03cdcf98faed67eeca7b7d174d82741b6a685a90f112b225d6f068d3fe212d",
+      "actual": "1a03cdcf98faed67eeca7b7d174d82741b6a685a90f112b225d6f068d3fe212d",
+      "ok": true
+    },
+    {
+      "path": "packages/renderer-core/pkg/renderer_core_bg.wasm",
+      "expected": "d3995d4797d3a7a9513eea48f43455598587e82a1dacb08e43e540915f5345d8",
+      "actual": "d3995d4797d3a7a9513eea48f43455598587e82a1dacb08e43e540915f5345d8",
+      "ok": true
+    },
+    {
+      "path": "packages/renderer-core/pkg/renderer_core.glue.js",
+      "expected": "8886178648c2a720a44fd5d32a521d49548cfa464da21517c7879a35b355f7c5",
+      "actual": "8886178648c2a720a44fd5d32a521d49548cfa464da21517c7879a35b355f7c5",
+      "ok": true
+    },
+    {
+      "path": "packages/dom-shim/dist/index.js",
+      "expected": "240a2eb3a52b1f21d580c34029fe4b4c806bfb81e0b89434ec2fa7f53c7aa6ca",
+      "actual": "240a2eb3a52b1f21d580c34029fe4b4c806bfb81e0b89434ec2fa7f53c7aa6ca",
+      "ok": true
+    },
+    {
+      "path": "packages/page-script/dist/index.js",
+      "expected": "c6de8b6acc28b2cb5a25a51608898c1ca60a0576ce3a5c5668f3601673b66acb",
+      "actual": "c6de8b6acc28b2cb5a25a51608898c1ca60a0576ce3a5c5668f3601673b66acb",
+      "ok": true
+    },
+    {
+      "path": "packages/page-renderer/dist/index.js",
+      "expected": "4285a7daff53f62f55794ab71d88d1891745bd573b3deffba7aa0cca9efbe1fc",
+      "actual": "4285a7daff53f62f55794ab71d88d1891745bd573b3deffba7aa0cca9efbe1fc",
+      "ok": true
+    },
+    {
+      "path": "packages/worker-script/dist/index.js",
+      "expected": "c1de3d46ab8e0da4cdda3c2254753dc0b35f81ea88e4d466f4ef1a77f0e9a43e",
+      "actual": "c1de3d46ab8e0da4cdda3c2254753dc0b35f81ea88e4d466f4ef1a77f0e9a43e",
+      "ok": true
+    },
+    {
+      "path": "packages/engine/public/rbi/scene_host.wasm",
+      "expected": "b94ad778a60340cd4c11c421a7d0ecaf9909d5813bfe4eb3b7aeef810e652c3e",
+      "actual": "b94ad778a60340cd4c11c421a7d0ecaf9909d5813bfe4eb3b7aeef810e652c3e",
+      "ok": true
+    }
+  ]
+}

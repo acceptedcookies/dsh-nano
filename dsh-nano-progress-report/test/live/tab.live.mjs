@@ -156,8 +156,16 @@ async function main() {
     const bar = el.querySelector('[data-npr="toolbar"]')
     const wrap = el.querySelector('.npr-search')
     const input = el.querySelector('[data-npr="search"]')
+    const filter = el.querySelector('[data-npr="filter-toggle"]')
+    const tablist = [...document.querySelectorAll('[role="tablist"]')].find(l => l.getBoundingClientRect().x > 700)
+    const root = el.getBoundingClientRect()
     const cs = wrap ? getComputedStyle(wrap) : null
     return {
+      root: { x: Math.round(root.x), y: Math.round(root.y), right: Math.round(root.right), bottom: Math.round(root.bottom) },
+      tabBottom: tablist ? Math.round(tablist.getBoundingClientRect().bottom) : null,
+      searchLeft: Math.round(wrap?.getBoundingClientRect().left ?? 0),
+      filterRight: Math.round(filter?.getBoundingClientRect().right ?? 0),
+      viewportH: window.innerHeight,
       barH: Math.round(bar?.getBoundingClientRect().height ?? 0),
       searchH: Math.round(wrap?.getBoundingClientRect().height ?? 0),
       inputType: input?.getAttribute('type') ?? null,
@@ -170,11 +178,16 @@ async function main() {
       rowH: [...el.querySelectorAll('[data-npr="row"]')].map(r => Math.round(r.getBoundingClientRect().height)),
     }
   }, PANE_SRC)
-  record('search line keeps the host field on a 34px row',
-    Boolean(chrome) && chrome.barH === 34 && chrome.searchH >= 26 && chrome.searchH <= 28
+  record('search line keeps the host field on a 38px row',
+    Boolean(chrome) && chrome.barH === 38 && chrome.searchH >= 26 && chrome.searchH <= 28
       && chrome.inputType === 'search'
       && chrome.searchBorder !== '0px none' && chrome.searchBg !== 'rgba(0, 0, 0, 0)',
     JSON.stringify(chrome).slice(0, 150))
+  record('toolbar/search/filter obey the tab-bar insets',
+    Boolean(chrome) && chrome.barH === 38 && chrome.searchLeft === chrome.root.x + 10
+      && chrome.filterRight === chrome.root.right - 6 && chrome.root.y === chrome.tabBottom
+      && chrome.root.bottom === chrome.viewportH,
+    chrome ? JSON.stringify({ barH: chrome.barH, searchLeft: chrome.searchLeft, filterRight: chrome.filterRight, rootY: chrome.root.y, tabBottom: chrome.tabBottom, bottom: chrome.root.bottom, vh: chrome.viewportH }) : '')
   record('no goal band, group heads or status strip',
     Boolean(chrome) && !chrome.goal && !chrome.groups && !chrome.status && !chrome.drawer,
     chrome ? `goal=${chrome.goal} groups=${chrome.groups} status=${chrome.status}` : '')
@@ -312,6 +325,67 @@ async function main() {
   await snap(page, 'filtered')
   await page.evaluate(src => eval(src)?.querySelector('[data-npr="filter-clear"]')?.click(), PANE_SRC)
   await waitFor(page, src => eval(src)?.querySelector('[data-npr="stats"]') === null, PANE_SRC, 3000)
+
+  // ── Native filter menu ───────────────────────────────────────────────
+  const menuOpen = await page.evaluate(src => {
+    const el = eval(src)
+    el?.querySelector('[data-npr="filter-toggle"]')?.click()
+    return true
+  }, PANE_SRC)
+  const menuPanel = await waitFor(page, () =>
+    [...document.querySelectorAll('[role="menu"]')].some(m => m.offsetWidth > 0), undefined, 3000)
+  const menuShape = await page.evaluate(src => {
+    const root = eval(src)
+    const panel = [...document.querySelectorAll('[role="menu"]')].find(m => m.offsetWidth > 0)
+    if (!panel) return null
+    const r = panel.getBoundingClientRect()
+    const rr = root.getBoundingClientRect()
+    const items = [...panel.querySelectorAll('[role="menuitem"]')].filter(e => e.offsetWidth > 0)
+    return {
+      open: root.querySelector('[data-npr="filter-toggle"]')?.getAttribute('aria-expanded') === 'true',
+      items: items.length,
+      inside: r.left >= rr.left - 1 && r.right <= rr.right + 1,
+      labelled: /状态|Status/.test(panel.innerText) && /类型|Type/.test(panel.innerText),
+    }
+  }, PANE_SRC)
+  record('filter button opens the native menu',
+    menuOpen && menuPanel && menuShape?.open === true && menuShape.items >= 15 && menuShape.inside && menuShape.labelled,
+    menuShape ? JSON.stringify(menuShape) : 'no panel')
+  const picked = await page.evaluate(() => {
+    const panel = [...document.querySelectorAll('[role="menu"]')].find(m => m.offsetWidth > 0)
+    const item = panel ? [...panel.querySelectorAll('[role="menuitem"]')].find(e => !e.disabled) : null
+    if (!item) return null
+    const text = (item.textContent ?? '').trim()
+    item.click()
+    return text
+  })
+  await new Promise(res => setTimeout(res, 700))
+  const afterPick = await page.evaluate(src => {
+    const root = eval(src)
+    const rows = [...root.querySelectorAll('[data-npr="row"]')]
+    return {
+      query: root.querySelector('[data-npr="search"]')?.value ?? '',
+      statuses: [...new Set(rows.map(r => r.dataset.status))],
+    }
+  }, PANE_SRC)
+  record('menu selection writes a native filter token',
+    Boolean(picked) && afterPick.query === 'status:ok'
+      && afterPick.statuses.length <= 1 && (afterPick.statuses[0] === 'ok' || afterPick.statuses.length === 0),
+    JSON.stringify({ picked, ...afterPick }))
+  const clearedByMenu = await page.evaluate(() => {
+    const panel = [...document.querySelectorAll('[role="menu"]')].find(m => m.offsetWidth > 0)
+    const item = panel ? [...panel.querySelectorAll('[role="menuitem"]')]
+      .find(e => /清除过滤|Clear filters/.test(e.textContent ?? '')) : null
+    if (!item) return false
+    item.click(); return true
+  })
+  await new Promise(res => setTimeout(res, 700))
+  const afterClear = await page.evaluate(src => eval(src)?.querySelector('[data-npr="search"]')?.value ?? null, PANE_SRC)
+  record('menu clear resets the query', clearedByMenu && afterClear === '', `query="${afterClear}"`)
+  await page.keyboard.press('Escape')
+  await new Promise(res => setTimeout(res, 400))
+  record('menu closes on Escape',
+    await page.evaluate(() => ![...document.querySelectorAll('[role="menu"]')].some(m => m.offsetWidth > 0)), '')
 
   // ── Tasks footer ─────────────────────────────────────────────────────
   const panel = await page.evaluate(src => {

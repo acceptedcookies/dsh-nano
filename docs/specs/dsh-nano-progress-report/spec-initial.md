@@ -191,8 +191,9 @@ export const inject = [
 └─ [data-nano-progress-report][data-npr=root]        bg-base，flex column（根无自有类）
    ├─ .npr-toolbar  34px，border-bottom l3
    │   ├─ IconSearchOutlineRegular 14px（label-tertiary）
-   │   ├─ host Input[type=search]  .npr-search（26px；边框/底色/焦点由宿主字段原生绘制）
+   │   ├─ host Input[type=search]  .npr-search（26px；边框/底色/焦点由宿主字段原生绘制；放大镜在字段内，左/右 inset 10/6px 对齐 tab 条）
    │   ├─ 清除 Button（ghost，仅有过滤文本时）
+│   ├─ 过滤 Button + host Menu（状态/类型多选，选中打勾，计数在右侧）
    │   └─ .npr-stats（仅有过滤文本时：`n/total`）
    ├─ .npr-flow  flex:1，滚动
    │   ├─ .npr-older（hasMore：host Button ghost sm「Load older」，11px tertiary）
@@ -251,6 +252,8 @@ token 组合为 AND；无 token 时纯文本检索。
 ```
 
 解析器是纯函数 `parseFilter(query) → {text, types, statuses, tool, …}`，单测覆盖。过滤不再有 chips：工具条只显示 `n/total`，清空走右侧 × 按钮。
+
+过滤按钮打开**宿主 `Menu`**（不是自绘弹层）：`状态` 与 `类型` 两个分组，选项后缀当前计数（`命令 (3)`），`selectedIds` 控制打勾；选中项把 `status:`/`type:` token 写回 query（与手输 token 完全等价），`清除过滤` 重置 query。`Menu` 的 `shortcut` 是键帽数组槽，计数折进 label，不占该槽。
 
 ## 5. 包结构
 
@@ -326,7 +329,7 @@ node test/live/tab.live.mjs
 - `findEgo()` 定位 ego-browser → `spawnSync(ego,['nodejs'],{input:script})` → `taskSpace('dnpr-progress')` → `page('p1')`；
 - `page.evaluate` 断言：chat interface 的视图 tab 条没有 Progress；工作台只有这一个可见根；`[data-npr="search"]` 是 `input[type=search]`，包裹层 26px、保留宿主字段边框；`[data-npr="tasks-panel"]` 的 drag/collapse 生效；
 - 用真实会话事件断言：`.npr-row` 全部 28px、背景透明、标题 400 字重；`[data-npr="turn"]` 的 opener 在左缘、body 右移 ≥12px 且有左引线；所有行的 `[data-npr="time"]` 右缘一致且宽度 ≥50px；glyph 统一三级色（失败行除外）；`prompt` 标题色 ≠ `shell` 标题色且无底色；失败行 `[data-npr="fail"]` 且无红底/内阴影；
-- `getBoundingClientRect`/`computedStyle` 断言 toolbar=34px、Tasks 头部=30px、任务行=26px、完成任务带 `HH:MM`、meter 宽度比 = done/total、Tasks 高度随拖拽变化且 clamp 在 `88 … 0.6vh`；
+- `getBoundingClientRect`/`computedStyle` 断言 toolbar=38px、Tasks 头部=30px、任务行=26px、完成任务带 `HH:MM`、meter 宽度比 = done/total、Tasks 高度随拖拽变化且 clamp 在 `88 … 0.6vh`；
 - `page.screenshot('/tmp/dnpr-progress-*.png')` 留证；测完还原（关闭 tab、清 localStorage）。
 
 ### 7.3 Spike 取证（宪章 `test/spike/progress-report-tab/`）

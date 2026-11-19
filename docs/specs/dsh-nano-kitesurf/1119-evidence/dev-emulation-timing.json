@@ -1,0 +1,120 @@
+[
+  {
+    "name": "reset-prior-overrides",
+    "status": 200,
+    "body": {
+      "ok": true,
+      "viewport": null,
+      "userAgent": "",
+      "media": null,
+      "extraHeaders": null,
+      "locale": "en-US",
+      "geolocation": null,
+      "colorScheme": "light",
+      "cookies": ""
+    }
+  },
+  {
+    "name": "apply-test-values",
+    "status": 200,
+    "body": {
+      "ok": true,
+      "viewport": {
+        "width": 390,
+        "height": 844,
+        "deviceScaleFactor": 2,
+        "mobile": true
+      },
+      "userAgent": "",
+      "media": null,
+      "extraHeaders": null,
+      "locale": "fr-FR",
+      "geolocation": {
+        "latitude": 1.25,
+        "longitude": 2.5
+      },
+      "colorScheme": "light",
+      "cookies": ""
+    }
+  },
+  {
+    "name": "open",
+    "status": 200,
+    "body": {
+      "ok": true,
+      "url": "http://127.0.0.1:9919/"
+    }
+  },
+  {
+    "name": "dom-observed",
+    "status": 200,
+    "body": {
+      "ok": true,
+      "url": "http://127.0.0.1:9919/",
+      "srcdoc": "<html style=\"color-scheme: light;\"><head><base href=\"http://127.0.0.1:9919/\"><title>Emulation audit</title></head><body><pre id=\"initial\">{\"language\":\"en-US\",\"languages\":[\"en-US\",\"en\"],\"ua\":\"Kitesurf/0.0.1\",\"dark\":false,\"dpr\":1,\"cookie\":\"\"}</pre><pre id=\"late\">{\"language\":\"fr-FR\",\"languages\":[\"fr-FR\"],\"ua\":\"Kitesurf/0.0.1\",\"dark\":false,\"dpr\":1,\"cookie\":\"\"}</pre></body></html>",
+      "bytes": 378,
+      "stripped": {
+        "scripts": 1,
+        "base": 0,
+        "metaRefresh": 0,
+        "handlers": 0,
+        "jsUrls": 0
+      }
+    }
+  },
+  {
+    "name": "clear-geolocation",
+    "status": 200,
+    "body": {
+      "ok": true,
+      "viewport": {
+        "width": 390,
+        "height": 844,
+        "deviceScaleFactor": 2,
+        "mobile": true
+      },
+      "userAgent": "",
+      "media": null,
+      "extraHeaders": null,
+      "locale": "fr-FR",
+      "geolocation": null,
+      "colorScheme": "light",
+      "cookies": ""
+    }
+  },
+  {
+    "name": "screenshot-dsf",
+    "status": 200,
+    "body": {
+      "ok": true,
+      "mimeType": "image/png",
+      "format": "png",
+      "url": "http://127.0.0.1:9919/",
+      "scrollX": 0,
+      "scrollY": 0,
+      "targetId": "4187369e6d8a4d91931b2ecc0a744c82",
+      "viewport": {
+        "width": 390,
+        "height": 844,
+        "deviceScaleFactor": 2,
+        "mobile": true
+      },
+      "image": "emulation-dsf.png"
+    }
+  },
+  {
+    "name": "restore-core-and-default-overrides",
+    "status": 200,
+    "body": {
+      "ok": true,
+      "viewport": null,
+      "userAgent": "",
+      "media": null,
+      "extraHeaders": null,
+      "locale": "en-US",
+      "geolocation": null,
+      "colorScheme": "light",
+      "cookies": ""
+    }
+  }
+]

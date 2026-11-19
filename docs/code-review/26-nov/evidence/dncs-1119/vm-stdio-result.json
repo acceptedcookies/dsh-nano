@@ -1,0 +1,68 @@
+{
+ "steps": {
+  "initialize": {
+   "protocolVersion": "2025-06-18",
+   "capabilities": {
+    "tools": {}
+   },
+   "serverInfo": {
+    "name": "dncs-devin-workspace",
+    "version": "0.1.0"
+   }
+  },
+  "listTools": {
+   "count": 12,
+   "names": [
+    "workspace.inspect",
+    "fs.list",
+    "fs.stat",
+    "fs.read",
+    "fs.write",
+    "fs.mkdir",
+    "fs.rename",
+    "fs.remove",
+    "process.start",
+    "process.read",
+    "process.wait",
+    "process.terminate"
+   ]
+  },
+  "inspect": {
+   "root": "/tmp/dncs-1119.KulnvWLW/work",
+   "os": "linux-x64",
+   "runtime": {
+    "node": "24.22.2",
+    "execPath": "/home/ubuntu/.nvm/versions/node/v24.22.2/bin/node"
+   },
+   "user": "ubuntu",
+   "home": "/home/ubuntu",
+   "cwd": "/home/ubuntu",
+   "pty": {
+    "supported": false,
+    "reason": "NATIVE_UNAVAILABLE"
+   },
+   "forward": {
+    "supported": false,
+    "reason": "NATIVE_UNAVAILABLE"
+   },
+   "generation": 1
+  },
+  "receiptRoundtrip": {
+   "equal": true
+  },
+  "process": {
+   "wait": {
+    "running": false,
+    "exit": {
+     "code": 0,
+     "signal": null
+    }
+   },
+   "stdout": "L3RtcC9kbmNzLTExMTkuS3VsbnZXTFcvd29yawo="
+  },
+  "closedFirst": true,
+  "secondBridgeReceipt": {
+   "equal": true
+  }
+ }
+}

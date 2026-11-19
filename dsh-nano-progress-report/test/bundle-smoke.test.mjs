@@ -102,7 +102,7 @@ test('lib/client.js keeps host externals external (spec §7.1)', () => {
   assert.match(code, /__nprExport/)
   // The official chrome must survive into the artifact: these property names
   // are not mangled, so their absence means the row/task chrome was replaced.
-  for (const primitive of ['DisclosureRow', 'AnimatedRows', 'StateDot', 'IconSearchOutlineRegular', 'IconCheckCircleFillRegular', 'relativeTime']) {
+  for (const primitive of ['DisclosureRow', 'AnimatedRows', 'StateDot', 'Menu', 'IconSearchOutlineRegular', 'IconCheckCircleFillRegular', 'relativeTime']) {
     assert.ok(code.includes(primitive), `bundle does not use host primitive ${primitive}`)
   }
 })

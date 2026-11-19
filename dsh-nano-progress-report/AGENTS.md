@@ -80,6 +80,7 @@ dsh plugin --profile web add <spec>
 
 | 动作 | 结果 |
 |---|---|
+| 点击过滤按钮 | 打开宿主 `Menu`：状态/类型多选，选项后缀为当前计数，选中打勾；`清除过滤` 重置 query |
 | 在过滤条输入 `type:shell` | 只剩 shell 行 |
 | `-status:failed` | 排除失败行；`status:failed` 只看失败 |
 | `tool:bash` | 只看 bash 的 tool/call 行（wire 名精确匹配；bash 的 approval 行也归 bash）；`-tool:bash` 排除 bash |
@@ -105,7 +106,7 @@ dsh plugin --profile web add <spec>
 
 宿主优先，不自造风格。三份参照：
 
-1. **宿主 primitive**：行用 `DisclosureRow`（28px 行、hover 换色、running shimmer、折叠 chevron），搜索用 `Input`（34px 工具条里 26px 宿主字段，边框/底色/焦点不重画），清空/加载更早/Jobs 切换用 `Button`（ghost），回合结构用 `Turn`（prompt level 0 + 18px 缩进的 level 1 步骤，左引线），Tasks 状态用 `StateDot` + catalog 的 `IconCheckCircleFillRegular` / `IconCheckCircleOutlineRegular`，动态列表用 `AnimatedRows`，相对时间用 `relativeTime`，全部图标取 `Icon*` catalog。
+1. **宿主 primitive**：行用 `DisclosureRow`（28px 行、hover 换色、running shimmer、折叠 chevron），搜索用 `Input`（38px 工具条里 26px 宿主字段，放大镜在字段内，边框/底色/焦点不重画；左侧 10px、右侧 6px 与上方 tab 条一致），清空/加载更早/Jobs 切换用 `Button`（ghost），过滤按钮打开宿主 `Menu`（状态/类型多选，选中项打勾），回合结构用 `Turn`（prompt level 0 + 18px 缩进的 level 1 步骤，左引线），Tasks 状态用 `StateDot` + catalog 的 `IconCheckCircleFillRegular` / `IconCheckCircleOutlineRegular`，动态列表用 `AnimatedRows`，相对时间用 `relativeTime`，全部图标取 `Icon*` catalog。
 2. **devin Progress 的阅读顺序**：搜索行 → 回合（人类 prompt 在左缘，该轮步骤右移 18px 并带一条 0.5px 引线）→ Tasks 区（整条 30px 头部都是折叠命中区）。回合之间没有卡片/色块/计数头；没有 goal banner、状态带或抽屉分段控件。
 3. **右侧时间 gutter**：相对时间不是标题后缀——每行尾部预留 56px 固定列，右对齐、`tabular-nums`、`margin-left:auto` 推到面板右缘，形成一条时间轴；失败告警 glyph 放在时间左侧，不影响列的右缘。
 4. **安静的文字层级**：12px 常规字重，人类输入/agent 文本 `label-primary`，机器步骤 `label-secondary`，边界（turn/job/wait）`label-tertiary`，lifecycle `label-dimmed`；失败行只把标题和 glyph 换成 `state-error`，不加底色、不加左条。shell 命令与展开的 payload 用 `--dsh-font-family-code`，detail 11px、左侧 0.5px 引线，无卡片底色。
@@ -113,6 +114,8 @@ dsh plugin --profile web add <spec>
 Tasks 区是 devin 的 footer：`bg-layer-1` + 上边框，30px 头部（`DisclosureRow`：checklist 图标 + `Tasks` + 右侧 56×3px 进度条 + `N/M done`），任务行 26px（完成绿勾 / 进行中宿主 spinner / 待办空心圈 + `#n` + 12px 文本 + 右侧完成时间）。完成时间取自事件流中该任务首次以 `completed` 出现在 `todo/write` 快照的时间；窗口内没有就只写 `完成`，不伪造。进度条是唯一本地 primitive，已在 [DESIGN §10](../../docs/specs/dsh-nano-ui/DESIGN.md) 登记 `nano-ui-exempt`。
 
 颜色只用 `--dsw-alias-*`，间距/层级用 `--nano-space-*`/`NANO_LAYER`（本包只用到 z-index 1）。禁止十六进制色值、`rgb()` 字面量和 unicode 图标；`.npr-row-content > span` 只做截断（宿主 `TextShimmer` 把字串放在两层 span 里），不改宿主结构。
+
+过滤下拉用宿主 `Menu`（`selection:'check'` + `selectedIds`），不做自绘弹层；option 的计数折进 label，不占用宿主 `shortcut`（那是键帽数组槽）。
 
 构建与静态检查：`node ../../scripts/check-ui-rules.mjs` 的 `NPR` 行应保持 0 警告；`test/view.test.mjs` 会在源码层拦下手绘 SVG／色值／手写状态栏。
 

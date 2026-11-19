@@ -1,0 +1,4 @@
+{
+  "ok": true,
+  "text": "agent-browser 0.42.0\nwrangler 4.131.2\ncdpEnv ws://127.0.0.1:8787/devtools/browser\nchromeProcesses [\n  \"node\\x00-e\\x00const fs=require('node:fs');for(const name of ['agent-browser','wrangler']){const p='/opt/npm-global/node_modules/'+name+'/package.json';console.log(name,JSON.parse(fs.readFileSync(p)).version)};console.log('cdpEnv',process.env.AGENT_BROWSER_\"\n]\n"
+}

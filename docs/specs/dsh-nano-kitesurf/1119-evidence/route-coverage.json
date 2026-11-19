@@ -1,0 +1,237 @@
+[
+  {
+    "path": "/nano-local-sandbox/status",
+    "methods": [
+      "GET",
+      "HEAD"
+    ],
+    "coverage": "LIVE 初始/准备后/重启前后/HEAD/401"
+  },
+  {
+    "path": "/nano-local-sandbox/open",
+    "methods": [
+      "POST"
+    ],
+    "coverage": "LIVE 六站+四类夹具+invalid URL"
+  },
+  {
+    "path": "/nano-local-sandbox/shot",
+    "methods": [
+      "POST"
+    ],
+    "coverage": "LIVE png/webp,viewport与真实图片"
+  },
+  {
+    "path": "/nano-local-sandbox/history",
+    "methods": [
+      "POST"
+    ],
+    "coverage": "LIVE back/forward"
+  },
+  {
+    "path": "/nano-local-sandbox/pick",
+    "methods": [
+      "POST"
+    ],
+    "coverage": "LIVE selector基本命中；坐标/漂移更多组合NOT RUN"
+  },
+  {
+    "path": "/nano-local-sandbox/edit",
+    "methods": [
+      "POST"
+    ],
+    "coverage": "LIVE selector写回"
+  },
+  {
+    "path": "/nano-local-sandbox/settings",
+    "methods": [
+      "POST"
+    ],
+    "coverage": "LIVE核心字段+locale/DPR/cookie/null/GET405/bad JSON/5KB"
+  },
+  {
+    "path": "/nano-local-sandbox/kite",
+    "methods": [
+      "POST"
+    ],
+    "coverage": "LIVE configure409,suspend/resume；init未实施SOURCE"
+  },
+  {
+    "path": "/nano-local-sandbox/console",
+    "methods": [
+      "GET",
+      "HEAD",
+      "POST"
+    ],
+    "coverage": "LIVE REST持续标记/组合level/UI不更新"
+  },
+  {
+    "path": "/nano-local-sandbox/operations",
+    "methods": [
+      "GET",
+      "HEAD",
+      "POST"
+    ],
+    "coverage": "LIVE errorsOnly被忽略/缺结果字段"
+  },
+  {
+    "path": "/nano-local-sandbox/diagnostics",
+    "methods": [
+      "GET",
+      "HEAD"
+    ],
+    "coverage": "LIVE slow/empty shell/real-site/rest-vs-mcp"
+  },
+  {
+    "path": "/nano-local-sandbox/mcp",
+    "methods": [
+      "POST"
+    ],
+    "coverage": "LIVE handshake/list/read-tools/invalid input；真实terminal/lifecycle sessionId NOT RUN"
+  },
+  {
+    "path": "/nano-local-sandbox/ports",
+    "methods": [
+      "GET",
+      "HEAD"
+    ],
+    "coverage": "LIVE导航中请求/prepare后"
+  },
+  {
+    "path": "/nano-local-sandbox/recover",
+    "methods": [
+      "POST"
+    ],
+    "coverage": "LIVE stopped/start与noop；cold emptyhome NOT RUN"
+  },
+  {
+    "path": "/nano-local-sandbox/dom",
+    "methods": [
+      "GET",
+      "HEAD"
+    ],
+    "coverage": "LIVE static,SPA late,blank shell"
+  },
+  {
+    "path": "/nano-local-sandbox/selftest",
+    "methods": [
+      "GET",
+      "HEAD",
+      "POST"
+    ],
+    "coverage": "LIVE正例11pass；false health边界见样例"
+  },
+  {
+    "path": "/nano-local-sandbox/elements",
+    "methods": [
+      "GET",
+      "HEAD"
+    ],
+    "coverage": "LIVE depth=2/selector body styles；动态树细节SOURCE"
+  },
+  {
+    "path": "/nano-local-sandbox/browse-history",
+    "methods": [
+      "GET",
+      "HEAD",
+      "POST",
+      "DELETE"
+    ],
+    "coverage": "LIVE search/count/pre-post-host-restart；delete/clear production不执行"
+  },
+  {
+    "path": "/nano-local-sandbox/logs",
+    "methods": [
+      "GET",
+      "HEAD"
+    ],
+    "coverage": "LIVE tail20"
+  },
+  {
+    "path": "/nano-local-sandbox/network",
+    "methods": [
+      "GET",
+      "HEAD",
+      "POST"
+    ],
+    "coverage": "LIVE pending-failed、detail POST body/response、missing404"
+  },
+  {
+    "path": "/nano-local-sandbox/targets",
+    "methods": [
+      "GET",
+      "HEAD"
+    ],
+    "coverage": "LIVE REST实target vs MCP伪base"
+  },
+  {
+    "path": "/nano-local-sandbox/evaluate",
+    "methods": [
+      "POST"
+    ],
+    "coverage": "LIVE合法1+1误400；所有正例BLOCKED"
+  },
+  {
+    "path": "/nano-local-sandbox/wait",
+    "methods": [
+      "POST"
+    ],
+    "coverage": "LIVE present/missing23ms忽略2s"
+  },
+  {
+    "path": "/nano-local-sandbox/storage",
+    "methods": [
+      "GET",
+      "HEAD",
+      "POST"
+    ],
+    "coverage": "LIVE local set/read/delete,cookie read/delete；session scope组合NOT RUN"
+  },
+  {
+    "path": "/nano-local-sandbox/interact",
+    "methods": [
+      "POST"
+    ],
+    "coverage": "LIVE button click；其他动作SOURCE"
+  },
+  {
+    "path": "/nano-local-sandbox/state",
+    "methods": [
+      "POST"
+    ],
+    "coverage": "LIVE save/load nonexistent假成功；复杂恢复NOT RUN"
+  },
+  {
+    "path": "/nano-local-sandbox/har",
+    "methods": [
+      "GET",
+      "HEAD"
+    ],
+    "coverage": "LIVE响应；完整HAR schema NOT RUN"
+  },
+  {
+    "path": "/nano-local-sandbox/snapshot",
+    "methods": [
+      "GET",
+      "HEAD"
+    ],
+    "coverage": "LIVE文本/refs空"
+  },
+  {
+    "path": "/nano-local-sandbox/refs",
+    "methods": [
+      "GET",
+      "HEAD"
+    ],
+    "coverage": "LIVE空表；可用@N BLOCKED"
+  },
+  {
+    "path": "/nano-local-sandbox/control",
+    "methods": [
+      "GET",
+      "HEAD",
+      "POST"
+    ],
+    "coverage": "LIVE takeover/read/release；多writer争用NOT RUN"
+  }
+]

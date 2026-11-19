@@ -4,7 +4,7 @@
  *   ego-browser nodejs < test/live/measure.live.mjs
  *
  * Prints the numbers the design review compares against the Devin reference:
- * search height, row pitch, turn indent, time-gutter alignment, task footer
+ * search line height, row pitch, turn indent, time-gutter alignment, task footer
  * metrics, drag range and collapse height. Screenshots:
  *   /tmp/dnpr-measure-panel.png   right workbench pane
  *   /tmp/dnpr-measure-full.png    whole window

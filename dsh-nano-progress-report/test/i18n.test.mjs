@@ -23,6 +23,11 @@ function* walk(dir) {
  *  renamed variant cannot silently fall back to its own key. */
 const DYNAMIC = [
   'time.now', 'time.minutes', 'time.hours', 'time.days', 'time.months', 'time.years',
+  'filter.status.ok', 'filter.status.failed', 'filter.status.running', 'filter.status.awaiting',
+  'filter.type.prompt', 'filter.type.goal', 'filter.type.message', 'filter.type.shell',
+  'filter.type.file', 'filter.type.web', 'filter.type.tool', 'filter.type.todo',
+  'filter.type.subagent', 'filter.type.wait', 'filter.type.turn', 'filter.type.job',
+  'filter.type.lifecycle',
 ]
 
 describe('makeI18n', () => {

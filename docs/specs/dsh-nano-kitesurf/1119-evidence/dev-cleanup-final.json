@@ -1,0 +1,16 @@
+{
+  "status": 200,
+  "container": {
+    "state": "running",
+    "name": "kitesurf-dev"
+  },
+  "ready": true,
+  "live": true,
+  "url": "https://example.com/",
+  "settings": {
+    "viewport": null,
+    "userAgent": "",
+    "extraHeaders": null
+  },
+  "recordedAt": "2026-11-18T13:30:14.463Z"
+}

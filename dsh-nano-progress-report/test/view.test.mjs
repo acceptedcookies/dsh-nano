@@ -139,8 +139,8 @@ describe('official primitives drive the chrome', () => {
 describe('low-key visual contract', () => {
   const css = read('src/client/styles.js')
 
-  it('the search keeps the host field on a quiet 34px line', () => {
-    assert.match(css, /\.npr-toolbar\s*\{[^}]*height:\s*34px/s)
+  it('the search keeps the host field on a quiet 38px line', () => {
+    assert.match(css, /\.npr-toolbar\s*\{[^}]*height:\s*38px/s)
     const searchRule = /\[data-nano-progress-report\] \.npr-search\s*\{([^}]*)\}/s.exec(css)
     assert.ok(searchRule, 'no scoped .npr-search sizing rule')
     assert.doesNotMatch(searchRule[1], /border(-\w+)?:/, 'do not redraw the host field chrome')
@@ -194,6 +194,16 @@ describe('workbench-only placement', () => {
     const body = read('src/client/view/ProgressBody.jsx')
     assert.ok(!body.includes('data-variant'), 'no view-variant branch in the body')
     assert.ok(!body.includes('props.variant'), 'the body takes no variant prop')
+  })
+
+  it('the filter dropdown is the host Menu, not a hand-drawn list', () => {
+    const body = read('src/client/view/ProgressBody.jsx')
+    assert.match(body, /Menu/)
+    assert.match(body, /filter-toggle/)
+    assert.match(body, /selection: 'check'/)
+    assert.ok(!body.includes('npr-menu'), 'no bespoke dropdown class')
+    const css = read('src/client/styles.js')
+    assert.ok(!css.includes('.npr-menu'), 'no bespoke dropdown styles')
   })
 
   it('the time is a fixed right-hand column, not a title suffix', () => {

@@ -1,0 +1,12 @@
+{
+  "before": {
+    "origin": "",
+    "port": "",
+    "originPlaceholder": "http://127.0.0.1:8787",
+    "portPlaceholder": "8799"
+  },
+  "after": {
+    "dialogRemains": false,
+    "toast": "尚未改动\n"
+  }
+}

@@ -1,0 +1,391 @@
+{
+  "samples": [
+    {
+      "at": 1795006879087,
+      "beat": null,
+      "rows": [
+        {
+          "id": "1657d69a83d4413aba9e7e3fa1256dc6",
+          "text": "GET\n200\ndoc\nhttps://example.com/\n577b\n842ms"
+        },
+        {
+          "id": "cs-tTQpp8P3-1",
+          "text": "GET\n200\njs\nhttps://example.com/s.js\n1.9kb\n234ms"
+        },
+        {
+          "id": "91207cfe17b7472d86029980e1c1b7bb",
+          "text": "GET\n200\ndoc\nhttps://example.com/\n577b\n950ms"
+        },
+        {
+          "id": "cs-tTQpp8P3-2",
+          "text": "GET\n200\njs\nhttps://example.com/s.js\n1.9kb\n600ms"
+        },
+        {
+          "id": "f15cbbf46b6249578c1d815b5dcb1f8c",
+          "text": "GET\n200\ndoc\nhttp://127.0.0.1:9919/basic\n529b\n18ms"
+        },
+        {
+          "id": "fc0581f9646349cabeec6bdf5c5f9c3f",
+          "text": "GET\n200\ndoc\nhttp://127.0.0.1:9919/spa\n168b\n17ms"
+        },
+        {
+          "id": "cs-tTQpp8P3-3",
+          "text": "GET\n200\njs\nhttp://127.0.0.1:9919/app.js\n475b\n9ms"
+        },
+        {
+          "id": "cs-tTQpp8P3-4",
+          "text": "POST\n200\nfetch\nhttp://127.0.0.1:9919/api\n227b\n6ms"
+        },
+        {
+          "id": "4967c66ab297449d8c650e6ea918358e",
+          "text": "GET\n200\ndoc\nhttp://127.0.0.1:9919/broken\n174b\n15ms"
+        },
+        {
+          "id": "cs-tTQpp8P3-5",
+          "text": "GET\n404\njs\nhttp://127.0.0.1:9919/broken.js\n19b\n26ms"
+        }
+      ],
+      "frame": ""
+    },
+    {
+      "settingsDuringLoad": "环境自检\n● 异常\n插件\n未知\n引擎\n—\n容器\n—\n端口\n—\n一键准备环境\n复制诊断信息\n引擎日志\n依次检查容器、端口、引擎健康并自动修复"
+    },
+    {
+      "at": 1795006881846,
+      "beat": "2s",
+      "rows": [
+        {
+          "id": "1657d69a83d4413aba9e7e3fa1256dc6",
+          "text": "GET\n200\ndoc\nhttps://example.com/\n577b\n842ms"
+        },
+        {
+          "id": "cs-tTQpp8P3-1",
+          "text": "GET\n200\njs\nhttps://example.com/s.js\n1.9kb\n234ms"
+        },
+        {
+          "id": "91207cfe17b7472d86029980e1c1b7bb",
+          "text": "GET\n200\ndoc\nhttps://example.com/\n577b\n950ms"
+        },
+        {
+          "id": "cs-tTQpp8P3-2",
+          "text": "GET\n200\njs\nhttps://example.com/s.js\n1.9kb\n600ms"
+        },
+        {
+          "id": "f15cbbf46b6249578c1d815b5dcb1f8c",
+          "text": "GET\n200\ndoc\nhttp://127.0.0.1:9919/basic\n529b\n18ms"
+        },
+        {
+          "id": "fc0581f9646349cabeec6bdf5c5f9c3f",
+          "text": "GET\n200\ndoc\nhttp://127.0.0.1:9919/spa\n168b\n17ms"
+        },
+        {
+          "id": "cs-tTQpp8P3-3",
+          "text": "GET\n200\njs\nhttp://127.0.0.1:9919/app.js\n475b\n9ms"
+        },
+        {
+          "id": "cs-tTQpp8P3-4",
+          "text": "POST\n200\nfetch\nhttp://127.0.0.1:9919/api\n227b\n6ms"
+        },
+        {
+          "id": "4967c66ab297449d8c650e6ea918358e",
+          "text": "GET\n200\ndoc\nhttp://127.0.0.1:9919/broken\n174b\n15ms"
+        },
+        {
+          "id": "cs-tTQpp8P3-5",
+          "text": "GET\n404\njs\nhttp://127.0.0.1:9919/broken.js\n19b\n26ms"
+        },
+        {
+          "id": "c8814edb583742f8b9d946dfe98fc3e6",
+          "text": "GET\n200\ndoc\nhttp://127.0.0.1:9919/slow\n170b\n13ms"
+        },
+        {
+          "id": "cs-tTQpp8P3-6",
+          "text": "GET\n…\njs\nhttp://127.0.0.1:9919/slow.js\n0b\n0ms"
+        }
+      ],
+      "frame": ""
+    },
+    {
+      "at": 1795006883389,
+      "beat": "4s",
+      "rows": [
+        {
+          "id": "1657d69a83d4413aba9e7e3fa1256dc6",
+          "text": "GET\n200\ndoc\nhttps://example.com/\n577b\n842ms"
+        },
+        {
+          "id": "cs-tTQpp8P3-1",
+          "text": "GET\n200\njs\nhttps://example.com/s.js\n1.9kb\n234ms"
+        },
+        {
+          "id": "91207cfe17b7472d86029980e1c1b7bb",
+          "text": "GET\n200\ndoc\nhttps://example.com/\n577b\n950ms"
+        },
+        {
+          "id": "cs-tTQpp8P3-2",
+          "text": "GET\n200\njs\nhttps://example.com/s.js\n1.9kb\n600ms"
+        },
+        {
+          "id": "f15cbbf46b6249578c1d815b5dcb1f8c",
+          "text": "GET\n200\ndoc\nhttp://127.0.0.1:9919/basic\n529b\n18ms"
+        },
+        {
+          "id": "fc0581f9646349cabeec6bdf5c5f9c3f",
+          "text": "GET\n200\ndoc\nhttp://127.0.0.1:9919/spa\n168b\n17ms"
+        },
+        {
+          "id": "cs-tTQpp8P3-3",
+          "text": "GET\n200\njs\nhttp://127.0.0.1:9919/app.js\n475b\n9ms"
+        },
+        {
+          "id": "cs-tTQpp8P3-4",
+          "text": "POST\n200\nfetch\nhttp://127.0.0.1:9919/api\n227b\n6ms"
+        },
+        {
+          "id": "4967c66ab297449d8c650e6ea918358e",
+          "text": "GET\n200\ndoc\nhttp://127.0.0.1:9919/broken\n174b\n15ms"
+        },
+        {
+          "id": "cs-tTQpp8P3-5",
+          "text": "GET\n404\njs\nhttp://127.0.0.1:9919/broken.js\n19b\n26ms"
+        },
+        {
+          "id": "c8814edb583742f8b9d946dfe98fc3e6",
+          "text": "GET\n200\ndoc\nhttp://127.0.0.1:9919/slow\n170b\n13ms"
+        },
+        {
+          "id": "cs-tTQpp8P3-6",
+          "text": "GET\n…\njs\nhttp://127.0.0.1:9919/slow.js\n0b\n0ms"
+        }
+      ],
+      "frame": ""
+    },
+    {
+      "at": 1795006884936,
+      "beat": "5s",
+      "rows": [
+        {
+          "id": "1657d69a83d4413aba9e7e3fa1256dc6",
+          "text": "GET\n200\ndoc\nhttps://example.com/\n577b\n842ms"
+        },
+        {
+          "id": "cs-tTQpp8P3-1",
+          "text": "GET\n200\njs\nhttps://example.com/s.js\n1.9kb\n234ms"
+        },
+        {
+          "id": "91207cfe17b7472d86029980e1c1b7bb",
+          "text": "GET\n200\ndoc\nhttps://example.com/\n577b\n950ms"
+        },
+        {
+          "id": "cs-tTQpp8P3-2",
+          "text": "GET\n200\njs\nhttps://example.com/s.js\n1.9kb\n600ms"
+        },
+        {
+          "id": "f15cbbf46b6249578c1d815b5dcb1f8c",
+          "text": "GET\n200\ndoc\nhttp://127.0.0.1:9919/basic\n529b\n18ms"
+        },
+        {
+          "id": "fc0581f9646349cabeec6bdf5c5f9c3f",
+          "text": "GET\n200\ndoc\nhttp://127.0.0.1:9919/spa\n168b\n17ms"
+        },
+        {
+          "id": "cs-tTQpp8P3-3",
+          "text": "GET\n200\njs\nhttp://127.0.0.1:9919/app.js\n475b\n9ms"
+        },
+        {
+          "id": "cs-tTQpp8P3-4",
+          "text": "POST\n200\nfetch\nhttp://127.0.0.1:9919/api\n227b\n6ms"
+        },
+        {
+          "id": "4967c66ab297449d8c650e6ea918358e",
+          "text": "GET\n200\ndoc\nhttp://127.0.0.1:9919/broken\n174b\n15ms"
+        },
+        {
+          "id": "cs-tTQpp8P3-5",
+          "text": "GET\n404\njs\nhttp://127.0.0.1:9919/broken.js\n19b\n26ms"
+        },
+        {
+          "id": "c8814edb583742f8b9d946dfe98fc3e6",
+          "text": "GET\n200\ndoc\nhttp://127.0.0.1:9919/slow\n170b\n13ms"
+        },
+        {
+          "id": "cs-tTQpp8P3-6",
+          "text": "GET\n…\njs\nhttp://127.0.0.1:9919/slow.js\n0b\n0ms"
+        }
+      ],
+      "frame": ""
+    }
+  ],
+  "initial": [
+    {
+      "id": "c8814edb583742f8b9d946dfe98fc3e6",
+      "url": "http://127.0.0.1:9919/slow",
+      "method": "GET",
+      "type": "Document",
+      "at": "2026-11-18T13:01:19.018Z",
+      "startedAt": 1795006879018,
+      "timestamp": 308.52,
+      "status": 200,
+      "mimeType": "text/html",
+      "size": 170,
+      "durationMs": 13,
+      "failed": false,
+      "error": "",
+      "cached": false,
+      "hasPostData": false,
+      "requestMimeType": "",
+      "statusText": "OK",
+      "protocol": "http/1.1",
+      "remoteAddress": ""
+    }
+  ],
+  "final": [
+    {
+      "id": "c8814edb583742f8b9d946dfe98fc3e6",
+      "url": "http://127.0.0.1:9919/slow",
+      "method": "GET",
+      "type": "Document",
+      "at": "2026-11-18T13:01:19.018Z",
+      "startedAt": 1795006879018,
+      "timestamp": 308.52,
+      "status": 200,
+      "mimeType": "text/html",
+      "size": 170,
+      "durationMs": 13,
+      "failed": false,
+      "error": "",
+      "cached": false,
+      "hasPostData": false,
+      "requestMimeType": "",
+      "statusText": "OK",
+      "protocol": "http/1.1",
+      "remoteAddress": ""
+    },
+    {
+      "id": "cs-tTQpp8P3-6",
+      "url": "http://127.0.0.1:9919/slow.js",
+      "method": "GET",
+      "type": "Script",
+      "at": "2026-11-18T13:01:19.043Z",
+      "startedAt": 1795006879043,
+      "timestamp": 308.545,
+      "status": null,
+      "mimeType": "",
+      "size": null,
+      "durationMs": 10003,
+      "failed": true,
+      "error": "The operation was aborted",
+      "cached": false,
+      "hasPostData": false,
+      "requestMimeType": "",
+      "statusText": "",
+      "protocol": "",
+      "remoteAddress": ""
+    },
+    {
+      "id": "cs-tTQpp8P3-7",
+      "url": "http://127.0.0.1:9919/slow.js",
+      "method": "GET",
+      "type": "Script",
+      "at": "2026-11-18T13:01:29.270Z",
+      "startedAt": 1795006889270,
+      "timestamp": 318.772,
+      "status": null,
+      "mimeType": "",
+      "size": null,
+      "durationMs": 10001,
+      "failed": true,
+      "error": "The operation was aborted",
+      "cached": false,
+      "hasPostData": false,
+      "requestMimeType": "",
+      "statusText": "",
+      "protocol": "",
+      "remoteAddress": ""
+    },
+    {
+      "id": "cs-tTQpp8P3-8",
+      "url": "http://127.0.0.1:9919/slow.js",
+      "method": "GET",
+      "type": "Script",
+      "at": "2026-11-18T13:01:39.692Z",
+      "startedAt": 1795006899692,
+      "timestamp": 329.194,
+      "status": null,
+      "mimeType": "",
+      "size": null,
+      "durationMs": 10008,
+      "failed": true,
+      "error": "The operation was aborted",
+      "cached": false,
+      "hasPostData": false,
+      "requestMimeType": "",
+      "statusText": "",
+      "protocol": "",
+      "remoteAddress": ""
+    }
+  ],
+  "ui": {
+    "rows": [
+      {
+        "id": "1657d69a83d4413aba9e7e3fa1256dc6",
+        "text": "GET\n200\ndoc\nhttps://example.com/\n577b\n842ms"
+      },
+      {
+        "id": "cs-tTQpp8P3-1",
+        "text": "GET\n200\njs\nhttps://example.com/s.js\n1.9kb\n234ms"
+      },
+      {
+        "id": "91207cfe17b7472d86029980e1c1b7bb",
+        "text": "GET\n200\ndoc\nhttps://example.com/\n577b\n950ms"
+      },
+      {
+        "id": "cs-tTQpp8P3-2",
+        "text": "GET\n200\njs\nhttps://example.com/s.js\n1.9kb\n600ms"
+      },
+      {
+        "id": "f15cbbf46b6249578c1d815b5dcb1f8c",
+        "text": "GET\n200\ndoc\nhttp://127.0.0.1:9919/basic\n529b\n18ms"
+      },
+      {
+        "id": "fc0581f9646349cabeec6bdf5c5f9c3f",
+        "text": "GET\n200\ndoc\nhttp://127.0.0.1:9919/spa\n168b\n17ms"
+      },
+      {
+        "id": "cs-tTQpp8P3-3",
+        "text": "GET\n200\njs\nhttp://127.0.0.1:9919/app.js\n475b\n9ms"
+      },
+      {
+        "id": "cs-tTQpp8P3-4",
+        "text": "POST\n200\nfetch\nhttp://127.0.0.1:9919/api\n227b\n6ms"
+      },
+      {
+        "id": "4967c66ab297449d8c650e6ea918358e",
+        "text": "GET\n200\ndoc\nhttp://127.0.0.1:9919/broken\n174b\n15ms"
+      },
+      {
+        "id": "cs-tTQpp8P3-5",
+        "text": "GET\n404\njs\nhttp://127.0.0.1:9919/broken.js\n19b\n26ms"
+      },
+      {
+        "id": "c8814edb583742f8b9d946dfe98fc3e6",
+        "text": "GET\n200\ndoc\nhttp://127.0.0.1:9919/slow\n170b\n13ms"
+      },
+      {
+        "id": "cs-tTQpp8P3-6",
+        "text": "GET\n…\njs\nhttp://127.0.0.1:9919/slow.js\n0b\n0ms"
+      },
+      {
+        "id": "cs-tTQpp8P3-7",
+        "text": "GET\n…\njs\nhttp://127.0.0.1:9919/slow.js\n0b\n0ms"
+      },
+      {
+        "id": "cs-tTQpp8P3-8",
+        "text": "GET\n…\njs\nhttp://127.0.0.1:9919/slow.js\n0b\n0ms"
+      }
+    ],
+    "mode": "HTML 原生渲染",
+    "error": "",
+    "frame": ""
+  }
+}

@@ -11,7 +11,8 @@
 export const PROGRESS_CSS = `
 
 [data-nano-progress-report] {
-  height: 100%; min-height: 0; display: flex; flex-direction: column;
+  height: 100%; min-height: 0; box-sizing: border-box; overflow: hidden;
+  display: flex; flex-direction: column;
   color: var(--dsw-alias-label-primary);
   background: var(--dsw-alias-bg-base);
   font: var(--dsw-font-xxs-12);
@@ -21,14 +22,25 @@ export const PROGRESS_CSS = `
 /* ── search line: borderless field on the panel background ───────────── */
 .npr-toolbar {
   flex: none; display: flex; align-items: center; gap: 6px;
-  box-sizing: border-box; height: 34px; padding: 0 10px;
+  box-sizing: border-box; height: 38px; padding: 0 6px 0 10px;
   border-bottom: .5px solid var(--dsw-alias-border-l3);
 }
-.npr-toolbar-icon { flex: none; display: inline-flex; color: var(--dsw-alias-label-tertiary); }
+.npr-search-wrap { position: relative; flex: 1 1 auto; min-width: 0; display: flex; }
+.npr-toolbar-icon {
+  position: absolute; left: 8px; top: 50%; transform: translateY(-50%);
+  display: inline-flex; color: var(--dsw-alias-label-tertiary);
+  pointer-events: none; z-index: 1;
+}
 /* Keep the host field as the host draws it (border, fill, focus ring); this
    sheet only lets it take the toolbar's free width. */
 [data-nano-progress-report] .npr-search {
   flex: 1 1 auto; min-width: 0; height: 26px; min-height: 26px;
+}
+/* The leading glyph sits inside the host field, so the field's left edge stays
+   on the same 10px inset as the tab chip above it. */
+[data-nano-progress-report] .npr-search input { padding-left: 22px; }
+.npr-filter {
+  flex: none; width: 26px; min-width: 26px; height: 26px; padding: 0;
 }
 .npr-stats {
   flex: none; color: var(--dsw-alias-label-tertiary);
@@ -156,8 +168,8 @@ export const PROGRESS_CSS = `
     transparent 2px);
 }
 .npr-taskbar-head-wrap { flex: none; cursor: pointer; }
-.npr-taskbar-head [data-disclosure-row] { flex: 1 1 auto; min-height: 30px; padding: 0 10px; }
-.npr-taskbar-head [data-disclosure-header] { padding-right: 10px; }
+.npr-taskbar-head [data-disclosure-row] { flex: 1 1 auto; min-height: 30px; padding: 0 0 0 10px; }
+.npr-taskbar-head [data-disclosure-header] { padding-right: 6px; }
 .npr-taskbar-icon { color: var(--dsw-alias-label-tertiary); }
 .npr-taskbar-title { color: var(--dsw-alias-label-secondary); font-weight: 400; }
 .npr-taskbar-chev { color: var(--dsw-alias-label-tertiary); }

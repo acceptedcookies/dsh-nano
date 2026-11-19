@@ -1,0 +1,1540 @@
+[
+  {
+    "name": "bridge-health",
+    "body": {
+      "ok": true,
+      "mcp": "/mcp",
+      "conns": 0,
+      "accepted": 0,
+      "rejected": 0,
+      "uptimeMs": 443373,
+      "control": {
+        "writer": false,
+        "owner": null,
+        "ownerSince": null,
+        "lastWriteAt": null,
+        "humanHold": {
+          "active": false,
+          "owner": null,
+          "since": null,
+          "note": null
+        },
+        "lastAction": null,
+        "lastCallAt": null
+      },
+      "diagnosticsPushedAt": null
+    }
+  },
+  {
+    "method": "initialize",
+    "id": 1,
+    "ms": 51,
+    "response": {
+      "id": 1,
+      "jsonrpc": "2.0",
+      "result": {
+        "capabilities": {
+          "tools": {}
+        },
+        "instructions": "Use the typed agent_browser_* tools to control a browser. Active MCP tools profile(s): core. Prefer agent_browser_snapshot after navigation to obtain stable element refs before clicking or typing. When a navigation result lists saved flows that match the task, call agent_browser_flow_run instead of driving the page. Use agent_browser_tools_profiles to see available startup profiles. Every tool accepts these optional arguments even when its schema does not list them: session (isolated browser session name), restore (true or a key; restores and auto-saves browser state when the call launches the browser), allowedDomains (domain patterns that restrict browser and read traffic when the call launches the browser; also disables RTCPeerConnection in Chromium sessions, and is rejected when the server environment or config already sets allowed domains), capture (set to flow to record the session so flow steps and flow save can turn it into a reusable flow, when the call launches the browser), extraArgs (extra CLI arguments such as --engine; global flags that change network, file, policy, or host access, such as --allowed-domains, --executable-path, --args, and --config, are rejected, so set those in the MCP server environment or config), timeoutMs (positive integer, maximum milliseconds to wait for the tool call), namespace (isolates daemon sockets and restore-state directories), restoreSave (auto, always, or never), restoreCheckUrl, restoreCheckText, and restoreCheckFn (conditions restored state must satisfy), caCert (path to a CA certificate or PEM bundle for the CLI's HTTPS requests and locally launched Chromium on Linux), useSystemCa (boolean, use the OS trust store for the CLI's HTTPS requests), clearCaCert (boolean, clear CA trust retained by the session; cannot be combined with caCert), idleTimeout (such as 30s, 5m, 1h, or milliseconds; defaults to 1h, 0 disables idle shutdown), and relaunch (boolean, relaunch the session's browser even when no setting changed).",
+        "protocolVersion": "2025-03-26",
+        "serverInfo": {
+          "name": "agent-browser",
+          "title": "agent-browser",
+          "version": "0.42.0"
+        }
+      }
+    }
+  },
+  {
+    "method": "tools/list",
+    "id": 2,
+    "ms": 3,
+    "response": {
+      "id": 2,
+      "jsonrpc": "2.0",
+      "result": {
+        "tools": [
+          {
+            "annotations": {
+              "openWorldHint": true,
+              "readOnlyHint": false
+            },
+            "description": "List MCP startup tool profiles and how to enable them.",
+            "inputSchema": {
+              "properties": {
+                "session": {
+                  "description": "Isolated browser session name: Unicode letters, numbers, hyphens, and underscores.",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "name": "agent_browser_tools_profiles",
+            "title": "MCP tool profiles"
+          },
+          {
+            "annotations": {
+              "openWorldHint": true,
+              "readOnlyHint": false
+            },
+            "description": "Launch the browser and optionally navigate to a URL. On macOS, installed browsers are searched in /Applications, then ~/Applications. Set the proxy in the server environment or config; percent-encoded proxy URL credentials are decoded before authentication. On Windows, owned headless Chrome uses a private desktop and its process tree closes with the daemon, including forced termination. Headed browsers use the interactive desktop. Successful navigation responses include WebMCP availability metadata when the page exposes allowed tools. Browser-provider and launch-mutation errors omit response error text and unsupported protocol values.",
+            "inputSchema": {
+              "properties": {
+                "allowedDomains": {
+                  "description": "Restrict browser and read traffic to these domain patterns.",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "capture": {
+                  "description": "Record the session so flow steps and flow save can turn it into a reusable flow. On a running session without capture it relaunches the browser with capture on.",
+                  "items": {
+                    "enum": [
+                      "flow"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "extraArgs": {
+                  "description": "Extra CLI arguments for this command, such as --engine. Flags that change network, file, policy, or host access are rejected.",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "headed": {
+                  "description": "Show the browser window. Explicit true/false overrides AGENT_BROWSER_HEADED and config; omit to use those defaults.",
+                  "type": "boolean"
+                },
+                "relaunch": {
+                  "description": "Relaunch the session's browser even when no setting changed (--relaunch).",
+                  "type": "boolean"
+                },
+                "restore": {
+                  "description": "Restore and auto-save browser state. true keys it by session; a string is an explicit key.",
+                  "oneOf": [
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "string"
+                    }
+                  ]
+                },
+                "session": {
+                  "description": "Isolated browser session name: Unicode letters, numbers, hyphens, and underscores.",
+                  "type": "string"
+                },
+                "timeoutMs": {
+                  "default": 120000,
+                  "description": "Maximum time to wait for this tool call.",
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "url": {
+                  "description": "URL to open. Omit to launch about:blank.",
+                  "type": "string"
+                },
+                "webgpu": {
+                  "description": "Enable WebGPU (SwiftShader software Vulkan on Linux; no GPU required). Explicit true/false overrides AGENT_BROWSER_WEBGPU and config; omit to use those defaults.",
+                  "type": "boolean"
+                },
+                "webmcp": {
+                  "description": "Enable experimental WebMCP support. Defaults to true for locally launched Chrome; set false to pass --no-webmcp.",
+                  "type": "boolean"
+                }
+              },
+              "type": "object"
+            },
+            "name": "agent_browser_open",
+            "title": "Open page"
+          },
+          {
+            "annotations": {
+              "openWorldHint": true,
+              "readOnlyHint": true
+            },
+            "description": "Experimental. List tasks saved with flow save, with their params and whether their last run verified.",
+            "inputSchema": {
+              "properties": {
+                "origin": {
+                  "description": "Only flows for this host's site.",
+                  "type": "string"
+                },
+                "session": {
+                  "description": "Isolated browser session name: Unicode letters, numbers, hyphens, and underscores.",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "name": "agent_browser_flow_list",
+            "title": "List saved flows"
+          },
+          {
+            "annotations": {
+              "openWorldHint": true,
+              "readOnlyHint": false
+            },
+            "description": "Experimental. Run a saved task by sending its requests directly, falling back to the page, then to a replay of the recorded commands. Prefer this over snapshot and click when a saved flow covers the task. Fails and marks the flow unverified when the site changed; continue with the UI then.",
+            "inputSchema": {
+              "properties": {
+                "allowWrite": {
+                  "description": "Writes the run may send without asking: `all`, or comma-separated write ids from flow save. Any other write needs confirmation.",
+                  "type": "string"
+                },
+                "fields": {
+                  "description": "Comma-separated fields to return per item, dotted paths allowed.",
+                  "type": "string"
+                },
+                "limit": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "origin": {
+                  "type": "string"
+                },
+                "params": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object"
+                },
+                "session": {
+                  "description": "Isolated browser session name: Unicode letters, numbers, hyphens, and underscores.",
+                  "type": "string"
+                },
+                "timeout": {
+                  "description": "Milliseconds the whole run may take, across every tier.",
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "where": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "description": "Keep list items whose field contains the value, case-insensitive.",
+                  "type": "object"
+                }
+              },
+              "required": [
+                "name"
+              ],
+              "type": "object"
+            },
+            "name": "agent_browser_flow_run",
+            "title": "Run saved flow"
+          },
+          {
+            "annotations": {
+              "openWorldHint": true,
+              "readOnlyHint": true
+            },
+            "description": "Experimental. List the steps a session opened with capture flow has recorded: number, command, URL, tagged request count, and whether it succeeded. Use the numbers with flow save from and to.",
+            "inputSchema": {
+              "properties": {
+                "session": {
+                  "description": "Isolated browser session name: Unicode letters, numbers, hyphens, and underscores.",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "name": "agent_browser_flow_steps",
+            "title": "List captured steps"
+          },
+          {
+            "annotations": {
+              "openWorldHint": true,
+              "readOnlyHint": false
+            },
+            "description": "Experimental. Save recorded steps as a flow so later runs can skip the browser. The session must be opened with capture flow. By default the flow starts at the last navigation after the previous save. params maps a param name to the value you typed, so later runs can change it.",
+            "inputSchema": {
+              "properties": {
+                "description": {
+                  "description": "One line saying what the flow does.",
+                  "type": "string"
+                },
+                "from": {
+                  "description": "First step number; defaults to the last navigation after the previous save.",
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "output": {
+                  "description": "Request id whose response the flow returns.",
+                  "type": "string"
+                },
+                "params": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object"
+                },
+                "session": {
+                  "description": "Isolated browser session name: Unicode letters, numbers, hyphens, and underscores.",
+                  "type": "string"
+                },
+                "timeout": {
+                  "description": "Milliseconds to wait for requests the last step started that have no response yet.",
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "to": {
+                  "description": "Last step; defaults to the latest.",
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "name"
+              ],
+              "type": "object"
+            },
+            "name": "agent_browser_flow_save",
+            "title": "Save flow"
+          },
+          {
+            "annotations": {
+              "openWorldHint": true,
+              "readOnlyHint": true
+            },
+            "description": "Fetch a URL as agent-readable text, preferring text/markdown. Omit url to read the active tab.",
+            "inputSchema": {
+              "properties": {
+                "allowedDomains": {
+                  "description": "Restrict browser and read traffic to these domain patterns.",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "extraArgs": {
+                  "description": "Extra CLI arguments for this command, such as --engine. Flags that change network, file, policy, or host access are rejected.",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "filter": {
+                  "description": "Filter page sections, --llms links/sections, or --outline headings.",
+                  "type": "string"
+                },
+                "llms": {
+                  "description": "Return nearest-ancestor llms data: index for compact llms.txt links, full for llms-full.txt.",
+                  "enum": [
+                    "index",
+                    "full"
+                  ],
+                  "type": "string"
+                },
+                "outline": {
+                  "description": "Return a heading outline for the selected page instead of the full page text.",
+                  "type": "boolean"
+                },
+                "raw": {
+                  "description": "Return the response body without HTML extraction.",
+                  "type": "boolean"
+                },
+                "readTimeoutMs": {
+                  "description": "Request timeout in milliseconds.",
+                  "type": "integer"
+                },
+                "requireMd": {
+                  "description": "Fail unless the response is Content-Type: text/markdown.",
+                  "type": "boolean"
+                },
+                "session": {
+                  "description": "Isolated browser session name: Unicode letters, numbers, hyphens, and underscores.",
+                  "type": "string"
+                },
+                "timeoutMs": {
+                  "default": 120000,
+                  "description": "Maximum time to wait for this tool call.",
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "url": {
+                  "description": "URL to read. Bare hosts are normalized to https. Omit to read the active tab.",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "name": "agent_browser_read",
+            "title": "Read URL"
+          },
+          {
+            "annotations": {
+              "openWorldHint": true,
+              "readOnlyHint": true
+            },
+            "description": "Return an accessibility-tree snapshot with reusable element refs. Presentational iframes use the Iframe role for snapshots and stale-ref recovery. If an action reports that a stale ref cannot be recovered, take a new snapshot and use a fresh ref.",
+            "inputSchema": {
+              "properties": {
+                "compact": {
+                  "default": false,
+                  "description": "Remove empty structural elements, retaining only matching content and its direct ancestors. With interactive:false, retain visible text.",
+                  "type": "boolean"
+                },
+                "delta": {
+                  "default": false,
+                  "description": "Return full state once, then unchanged or bounded structural deltas. Apply changes to refs and treeChange (zero-based startLine, deleteCount, lines) to the previous tree.",
+                  "type": "boolean"
+                },
+                "depth": {
+                  "description": "Limit tree depth.",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "full": {
+                  "default": false,
+                  "description": "Force full state while updating the delta baseline.",
+                  "type": "boolean"
+                },
+                "includeUrls": {
+                  "default": false,
+                  "description": "Include href URLs on links.",
+                  "type": "boolean"
+                },
+                "interactive": {
+                  "default": true,
+                  "description": "Only include interactive elements.",
+                  "type": "boolean"
+                },
+                "selector": {
+                  "description": "Scope the snapshot to a CSS selector.",
+                  "type": "string"
+                },
+                "session": {
+                  "description": "Isolated browser session name: Unicode letters, numbers, hyphens, and underscores.",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "name": "agent_browser_snapshot",
+            "title": "Snapshot page"
+          },
+          {
+            "annotations": {
+              "openWorldHint": true,
+              "readOnlyHint": false
+            },
+            "description": "Click an element by @ref or CSS selector.",
+            "inputSchema": {
+              "properties": {
+                "human": {
+                  "default": false,
+                  "description": "Approach the target with seeded, curved mouse movement.",
+                  "type": "boolean"
+                },
+                "newTab": {
+                  "default": false,
+                  "description": "Open link targets in a new tab after applying session setup.",
+                  "type": "boolean"
+                },
+                "selector": {
+                  "description": "Element @ref from snapshot, or a CSS selector.",
+                  "type": "string"
+                },
+                "session": {
+                  "description": "Isolated browser session name: Unicode letters, numbers, hyphens, and underscores.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "selector"
+              ],
+              "type": "object"
+            },
+            "name": "agent_browser_click",
+            "title": "Click element"
+          },
+          {
+            "annotations": {
+              "openWorldHint": true,
+              "readOnlyHint": false
+            },
+            "description": "Clear and fill an input by @ref or CSS selector.",
+            "inputSchema": {
+              "properties": {
+                "selector": {
+                  "description": "Element @ref from snapshot, or a CSS selector.",
+                  "type": "string"
+                },
+                "session": {
+                  "description": "Isolated browser session name: Unicode letters, numbers, hyphens, and underscores.",
+                  "type": "string"
+                },
+                "text": {
+                  "description": "Text to fill.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "selector",
+                "text"
+              ],
+              "type": "object"
+            },
+            "name": "agent_browser_fill",
+            "title": "Fill input"
+          },
+          {
+            "annotations": {
+              "openWorldHint": true,
+              "readOnlyHint": false
+            },
+            "description": "Type text into an element by @ref or CSS selector.",
+            "inputSchema": {
+              "properties": {
+                "clear": {
+                  "default": false,
+                  "description": "Clear the field before typing.",
+                  "type": "boolean"
+                },
+                "delayMs": {
+                  "description": "Delay between keystrokes.",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "selector": {
+                  "description": "Element @ref from snapshot, or a CSS selector.",
+                  "type": "string"
+                },
+                "session": {
+                  "description": "Isolated browser session name: Unicode letters, numbers, hyphens, and underscores.",
+                  "type": "string"
+                },
+                "text": {
+                  "description": "Text to type.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "selector",
+                "text"
+              ],
+              "type": "object"
+            },
+            "name": "agent_browser_type",
+            "title": "Type text"
+          },
+          {
+            "annotations": {
+              "openWorldHint": true,
+              "readOnlyHint": false
+            },
+            "description": "Press a key at the current focus.",
+            "inputSchema": {
+              "properties": {
+                "key": {
+                  "description": "Key name such as Enter, Tab, or Control+a.",
+                  "type": "string"
+                },
+                "session": {
+                  "description": "Isolated browser session name: Unicode letters, numbers, hyphens, and underscores.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key"
+              ],
+              "type": "object"
+            },
+            "name": "agent_browser_press",
+            "title": "Press key"
+          },
+          {
+            "annotations": {
+              "openWorldHint": true,
+              "readOnlyHint": false
+            },
+            "description": "Check a checkbox or switch.",
+            "inputSchema": {
+              "properties": {
+                "selector": {
+                  "description": "Element @ref from snapshot, or a CSS selector.",
+                  "type": "string"
+                },
+                "session": {
+                  "description": "Isolated browser session name: Unicode letters, numbers, hyphens, and underscores.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "selector"
+              ],
+              "type": "object"
+            },
+            "name": "agent_browser_check",
+            "title": "Check element"
+          },
+          {
+            "annotations": {
+              "openWorldHint": true,
+              "readOnlyHint": false
+            },
+            "description": "Uncheck a checkbox or switch.",
+            "inputSchema": {
+              "properties": {
+                "selector": {
+                  "description": "Element @ref from snapshot, or a CSS selector.",
+                  "type": "string"
+                },
+                "session": {
+                  "description": "Isolated browser session name: Unicode letters, numbers, hyphens, and underscores.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "selector"
+              ],
+              "type": "object"
+            },
+            "name": "agent_browser_uncheck",
+            "title": "Uncheck element"
+          },
+          {
+            "annotations": {
+              "openWorldHint": true,
+              "readOnlyHint": false
+            },
+            "description": "Select one or more options in a select element.",
+            "inputSchema": {
+              "properties": {
+                "selector": {
+                  "description": "Element @ref from snapshot, or a CSS selector.",
+                  "type": "string"
+                },
+                "session": {
+                  "description": "Isolated browser session name: Unicode letters, numbers, hyphens, and underscores.",
+                  "type": "string"
+                },
+                "values": {
+                  "description": "Option values or labels to select.",
+                  "items": {
+                    "type": "string"
+                  },
+                  "minItems": 1,
+                  "type": "array"
+                }
+              },
+              "required": [
+                "selector",
+                "values"
+              ],
+              "type": "object"
+            },
+            "name": "agent_browser_select",
+            "title": "Select options"
+          },
+          {
+            "annotations": {
+              "openWorldHint": true,
+              "readOnlyHint": false
+            },
+            "description": "Scroll the page or an element.",
+            "inputSchema": {
+              "properties": {
+                "amount": {
+                  "default": 300,
+                  "description": "Pixels to scroll.",
+                  "type": "integer"
+                },
+                "direction": {
+                  "default": "down",
+                  "enum": [
+                    "up",
+                    "down",
+                    "left",
+                    "right"
+                  ],
+                  "type": "string"
+                },
+                "selector": {
+                  "description": "Optional element selector to scroll.",
+                  "type": "string"
+                },
+                "session": {
+                  "description": "Isolated browser session name: Unicode letters, numbers, hyphens, and underscores.",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "name": "agent_browser_scroll",
+            "title": "Scroll page"
+          },
+          {
+            "annotations": {
+              "openWorldHint": true,
+              "readOnlyHint": true
+            },
+            "description": "Wait for a fixed time.",
+            "inputSchema": {
+              "properties": {
+                "ms": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "session": {
+                  "description": "Isolated browser session name: Unicode letters, numbers, hyphens, and underscores.",
+                  "type": "string"
+                },
+                "timeoutMs": {
+                  "default": 120000,
+                  "description": "Maximum time to wait for this tool call.",
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "ms"
+              ],
+              "type": "object"
+            },
+            "name": "agent_browser_wait_ms",
+            "title": "Wait milliseconds"
+          },
+          {
+            "annotations": {
+              "openWorldHint": true,
+              "readOnlyHint": true
+            },
+            "description": "Wait for an element with a CSS selector or @ref to reach a state. Bare integer selectors are rejected; use CSS selector syntax for numeric IDs or agent_browser_wait_ms for a delay.",
+            "inputSchema": {
+              "properties": {
+                "selector": {
+                  "description": "Element @ref from snapshot, or a CSS selector.",
+                  "type": "string"
+                },
+                "session": {
+                  "description": "Isolated browser session name: Unicode letters, numbers, hyphens, and underscores.",
+                  "type": "string"
+                },
+                "state": {
+                  "description": "Element state to wait for.",
+                  "enum": [
+                    "visible",
+                    "hidden",
+                    "attached",
+                    "detached"
+                  ],
+                  "type": "string"
+                },
+                "timeoutMs": {
+                  "default": 120000,
+                  "description": "Maximum time to wait for this tool call.",
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "waitTimeoutMs": {
+                  "description": "Maximum time for the browser wait condition.",
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "selector"
+              ],
+              "type": "object"
+            },
+            "name": "agent_browser_wait_for_selector",
+            "title": "Wait for selector"
+          },
+          {
+            "annotations": {
+              "openWorldHint": true,
+              "readOnlyHint": true
+            },
+            "description": "Wait for text to appear.",
+            "inputSchema": {
+              "properties": {
+                "session": {
+                  "description": "Isolated browser session name: Unicode letters, numbers, hyphens, and underscores.",
+                  "type": "string"
+                },
+                "text": {
+                  "type": "string"
+                },
+                "timeoutMs": {
+                  "default": 120000,
+                  "description": "Maximum time to wait for this tool call.",
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "waitTimeoutMs": {
+                  "description": "Maximum time for the browser wait condition.",
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "text"
+              ],
+              "type": "object"
+            },
+            "name": "agent_browser_wait_for_text",
+            "title": "Wait for text"
+          },
+          {
+            "annotations": {
+              "openWorldHint": true,
+              "readOnlyHint": true
+            },
+            "description": "Wait for a page load state. Uses the full wait timeout and returns an error when it expires.",
+            "inputSchema": {
+              "properties": {
+                "session": {
+                  "description": "Isolated browser session name: Unicode letters, numbers, hyphens, and underscores.",
+                  "type": "string"
+                },
+                "state": {
+                  "enum": [
+                    "load",
+                    "domcontentloaded",
+                    "networkidle"
+                  ],
+                  "type": "string"
+                },
+                "timeoutMs": {
+                  "default": 120000,
+                  "description": "Maximum time to wait for this tool call.",
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "waitTimeoutMs": {
+                  "description": "Maximum time for the browser wait condition.",
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "state"
+              ],
+              "type": "object"
+            },
+            "name": "agent_browser_wait_for_load",
+            "title": "Wait for load state"
+          },
+          {
+            "annotations": {
+              "openWorldHint": true,
+              "readOnlyHint": false
+            },
+            "description": "Capture a screenshot and return the saved path. Small PNG/JPEG screenshots are also returned as image content.",
+            "inputSchema": {
+              "properties": {
+                "annotate": {
+                  "default": false,
+                  "description": "Number visible elements in the screenshot.",
+                  "type": "boolean"
+                },
+                "format": {
+                  "description": "Screenshot format.",
+                  "enum": [
+                    "png",
+                    "jpeg"
+                  ],
+                  "type": "string"
+                },
+                "fullPage": {
+                  "default": false,
+                  "type": "boolean"
+                },
+                "ifChanged": {
+                  "default": false,
+                  "description": "Recommended for repeated captures to save tokens: return image content only when pixels changed.",
+                  "type": "boolean"
+                },
+                "path": {
+                  "description": "Optional output path.",
+                  "type": "string"
+                },
+                "quality": {
+                  "description": "JPEG quality.",
+                  "maximum": 100,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "screenshotDir": {
+                  "description": "Default output directory when path is omitted.",
+                  "type": "string"
+                },
+                "selector": {
+                  "description": "Optional @ref or CSS selector to capture.",
+                  "type": "string"
+                },
+                "session": {
+                  "description": "Isolated browser session name: Unicode letters, numbers, hyphens, and underscores.",
+                  "type": "string"
+                },
+                "threshold": {
+                  "description": "Maximum changed-pixel ratio to treat as unchanged. Implies ifChanged.",
+                  "maximum": 1,
+                  "minimum": 0,
+                  "type": "number"
+                }
+              },
+              "type": "object"
+            },
+            "name": "agent_browser_screenshot",
+            "title": "Take screenshot"
+          },
+          {
+            "annotations": {
+              "openWorldHint": true,
+              "readOnlyHint": true
+            },
+            "description": "Get visible text from an element.",
+            "inputSchema": {
+              "properties": {
+                "selector": {
+                  "description": "Element @ref from snapshot, or a CSS selector.",
+                  "type": "string"
+                },
+                "session": {
+                  "description": "Isolated browser session name: Unicode letters, numbers, hyphens, and underscores.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "selector"
+              ],
+              "type": "object"
+            },
+            "name": "agent_browser_get_text",
+            "title": "Get text"
+          },
+          {
+            "annotations": {
+              "openWorldHint": true,
+              "readOnlyHint": true
+            },
+            "description": "Get the current page URL.",
+            "inputSchema": {
+              "properties": {
+                "session": {
+                  "description": "Isolated browser session name: Unicode letters, numbers, hyphens, and underscores.",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "name": "agent_browser_get_url",
+            "title": "Get URL"
+          },
+          {
+            "annotations": {
+              "openWorldHint": true,
+              "readOnlyHint": true
+            },
+            "description": "Get the current page title.",
+            "inputSchema": {
+              "properties": {
+                "session": {
+                  "description": "Isolated browser session name: Unicode letters, numbers, hyphens, and underscores.",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "name": "agent_browser_get_title",
+            "title": "Get title"
+          },
+          {
+            "annotations": {
+              "openWorldHint": true,
+              "readOnlyHint": false
+            },
+            "description": "Run JavaScript in the page using stdin to avoid shell escaping. When the top-level result is a value JSON cannot represent, the structured response includes `response.data.unserializable` and the text content prints the JavaScript token.",
+            "inputSchema": {
+              "properties": {
+                "script": {
+                  "description": "JavaScript expression or script to evaluate.",
+                  "type": "string"
+                },
+                "session": {
+                  "description": "Isolated browser session name: Unicode letters, numbers, hyphens, and underscores.",
+                  "type": "string"
+                },
+                "timeoutMs": {
+                  "default": 120000,
+                  "description": "Maximum time to wait for this tool call.",
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "script"
+              ],
+              "type": "object"
+            },
+            "name": "agent_browser_eval",
+            "title": "Evaluate JavaScript"
+          },
+          {
+            "annotations": {
+              "openWorldHint": true,
+              "readOnlyHint": false
+            },
+            "description": "Close the current browser session.",
+            "inputSchema": {
+              "properties": {
+                "all": {
+                  "default": false,
+                  "description": "Close all active sessions.",
+                  "type": "boolean"
+                },
+                "session": {
+                  "description": "Isolated browser session name: Unicode letters, numbers, hyphens, and underscores.",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "name": "agent_browser_close",
+            "title": "Close browser"
+          },
+          {
+            "annotations": {
+              "openWorldHint": true,
+              "readOnlyHint": false
+            },
+            "description": "Navigate back.",
+            "inputSchema": {
+              "properties": {
+                "session": {
+                  "description": "Isolated browser session name: Unicode letters, numbers, hyphens, and underscores.",
+                  "type": "string"
+                },
+                "timeoutMs": {
+                  "default": 120000,
+                  "description": "Maximum time to wait for this tool call.",
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              },
+              "type": "object"
+            },
+            "name": "agent_browser_back",
+            "title": "Back"
+          },
+          {
+            "annotations": {
+              "openWorldHint": true,
+              "readOnlyHint": false
+            },
+            "description": "Navigate forward.",
+            "inputSchema": {
+              "properties": {
+                "session": {
+                  "description": "Isolated browser session name: Unicode letters, numbers, hyphens, and underscores.",
+                  "type": "string"
+                },
+                "timeoutMs": {
+                  "default": 120000,
+                  "description": "Maximum time to wait for this tool call.",
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              },
+              "type": "object"
+            },
+            "name": "agent_browser_forward",
+            "title": "Forward"
+          },
+          {
+            "annotations": {
+              "openWorldHint": true,
+              "readOnlyHint": false
+            },
+            "description": "Reload the page.",
+            "inputSchema": {
+              "properties": {
+                "session": {
+                  "description": "Isolated browser session name: Unicode letters, numbers, hyphens, and underscores.",
+                  "type": "string"
+                },
+                "timeoutMs": {
+                  "default": 120000,
+                  "description": "Maximum time to wait for this tool call.",
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              },
+              "type": "object"
+            },
+            "name": "agent_browser_reload",
+            "title": "Reload"
+          },
+          {
+            "annotations": {
+              "openWorldHint": true,
+              "readOnlyHint": false
+            },
+            "description": "Open a new tab after applying session setup before its first navigation. Rejected labels preserve the current tab's refs and selected frame.",
+            "inputSchema": {
+              "properties": {
+                "allowedDomains": {
+                  "description": "Restrict browser and read traffic to these domain patterns.",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "capture": {
+                  "description": "Record the session so flow steps and flow save can turn it into a reusable flow. On a running session without capture it relaunches the browser with capture on.",
+                  "items": {
+                    "enum": [
+                      "flow"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "extraArgs": {
+                  "description": "Extra CLI arguments for this command, such as --engine. Flags that change network, file, policy, or host access are rejected.",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "label": {
+                  "description": "Starts with an ASCII letter, then ASCII letters, digits, `-`, or `_`; `t<N>` and `T<N>` forms are reserved for tab IDs.",
+                  "pattern": "^[A-Za-z][A-Za-z0-9_-]*$",
+                  "type": "string"
+                },
+                "relaunch": {
+                  "description": "Relaunch the session's browser even when no setting changed (--relaunch).",
+                  "type": "boolean"
+                },
+                "restore": {
+                  "description": "Restore and auto-save browser state. true keys it by session; a string is an explicit key.",
+                  "oneOf": [
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "string"
+                    }
+                  ]
+                },
+                "session": {
+                  "description": "Isolated browser session name: Unicode letters, numbers, hyphens, and underscores.",
+                  "type": "string"
+                },
+                "timeoutMs": {
+                  "default": 120000,
+                  "description": "Maximum time to wait for this tool call.",
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "url": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "name": "agent_browser_tab_new",
+            "title": "Tab new"
+          },
+          {
+            "annotations": {
+              "openWorldHint": true,
+              "readOnlyHint": true
+            },
+            "description": "List tabs.",
+            "inputSchema": {
+              "properties": {
+                "session": {
+                  "description": "Isolated browser session name: Unicode letters, numbers, hyphens, and underscores.",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "name": "agent_browser_tab_list",
+            "title": "Tab list"
+          },
+          {
+            "annotations": {
+              "openWorldHint": true,
+              "readOnlyHint": false
+            },
+            "description": "Switch to a tab by id (t1), label, or CDP target id. Switching also binds the session to that tab.",
+            "inputSchema": {
+              "properties": {
+                "session": {
+                  "description": "Isolated browser session name: Unicode letters, numbers, hyphens, and underscores.",
+                  "type": "string"
+                },
+                "tab": {
+                  "description": "Tab id (t1), label, or CDP target id.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "tab"
+              ],
+              "type": "object"
+            },
+            "name": "agent_browser_tab_switch",
+            "title": "Tab switch"
+          },
+          {
+            "annotations": {
+              "openWorldHint": true,
+              "readOnlyHint": false
+            },
+            "description": "Close a tab by id (t1), label, or CDP target id. Omit to close the current tab.",
+            "inputSchema": {
+              "properties": {
+                "session": {
+                  "description": "Isolated browser session name: Unicode letters, numbers, hyphens, and underscores.",
+                  "type": "string"
+                },
+                "tab": {
+                  "description": "Tab id (t1), label, or CDP target id.",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "name": "agent_browser_tab_close",
+            "title": "Tab close"
+          },
+          {
+            "name": "sandbox.diagnostics",
+            "description": "One-shot Kitesurf plugin diagnostics: engine status, phase, targets, settings, console tail, operation trace, errorId catalogue and generated next-step hints. Call this FIRST when anything fails.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {},
+              "additionalProperties": false
+            }
+          },
+          {
+            "name": "sandbox.console",
+            "description": "Recent page console/error/exception/network/navigation events captured over the plugin CDP socket.Levels: log,info,warn,error,exception,network,navigation.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "level": {
+                  "type": "string",
+                  "description": "Comma-separated levels, e.g. \"error,exception\""
+                },
+                "limit": {
+                  "type": "number",
+                  "description": "1..250, default 50"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          {
+            "name": "sandbox.operations",
+            "description": "Recent /nano-local-sandbox/* route calls with status, errorId, incidentId, durationMs and a whitelisted input summary. Use errorsOnly=true to see only failures.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "errorsOnly": {
+                  "type": "boolean"
+                },
+                "limit": {
+                  "type": "number",
+                  "description": "1..200, default 50"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          {
+            "name": "sandbox.error_catalog",
+            "description": "The single source of truth: errorId → HTTP status → cause → next command. Use it to interpret any kitesurf.* errorId instead of guessing.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "errorId": {
+                  "type": "string",
+                  "description": "Optional: return only matching ids"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          {
+            "name": "sandbox.targets",
+            "description": "Engine CDP Target.getTargets result: page target ids/urls and which page the plugin socket is attached to. Use when the pane and the API disagree.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {},
+              "additionalProperties": false
+            }
+          },
+          {
+            "name": "sandbox.history",
+            "description": "Browse history for the Kitesurf pane: the newest 30 visits with url, ISO time and visit count, plus the total stored. Backed by the plugin durable store (the Kitesurf workerd exposes no D1/KV binding). Mutations go through the host: DELETE /nano-local-sandbox/browse-history?id=… or POST {clear:true}.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {},
+              "additionalProperties": false
+            }
+          },
+          {
+            "name": "sandbox.dom",
+            "description": "Last captured document: url, byte size and the first 4000 characters of documentElement.outerHTML. Use to confirm what the engine is actually rendering when the pane looks wrong.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {},
+              "additionalProperties": false
+            }
+          },
+          {
+            "name": "sandbox.elements",
+            "description": "Elements panel data from the Kitesurf DOM/CSS domains: the last DOM tree (up to 40 nodes with tag/id/class/child count), the selector queried, and how many computed properties were returned. Call GET /nano-local-sandbox/elements?selector=… on the host for styles of a specific node.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {},
+              "additionalProperties": false
+            }
+          },
+          {
+            "name": "sandbox.snapshot",
+            "description": "a11y-lite snapshot: the last semantic tree + @N element-ref table the host pushed. Refs (@1..@N) resolve via GET /nano-local-sandbox/refs?ref=@N or are accepted directly in wait/pick/evaluate/edit selector fields on the host. This is the shared language between a human pick and an agent action. For a live re-walk call GET /nano-local-sandbox/snapshot on the authenticated host.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {},
+              "additionalProperties": false
+            }
+          },
+          {
+            "name": "sandbox.control",
+            "description": "Page control/ownership state: which writer holds the page (owner client name, since when, last write). One page is shared by a human and agents; a second writer is refused kitesurf.control.busy rather than tearing navigation. action: status|claim|release — claim to take the page, release to free it.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "enum": [
+                    "status",
+                    "claim",
+                    "release",
+                    "takeover"
+                  ]
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          {
+            "name": "sandbox.selftest",
+            "description": "One verdict over every layer: plugin build, engine identity, container state, published port loopback, MCP bridge counters, CDP targets, DOM availability, route table and phase consistency. Use after any restart or container change.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {},
+              "additionalProperties": false
+            }
+          },
+          {
+            "name": "sandbox.network",
+            "description": "Network waterfall from the Kitesurf CDP session: method, url, status, mimeType, bytes and duration for every request. failedOnly=true shows 4xx/5xx and transport failures only.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "failedOnly": {
+                  "type": "boolean"
+                },
+                "limit": {
+                  "type": "number",
+                  "description": "1..200, default 100"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          {
+            "name": "sandbox.ports",
+            "description": "Port truth: what the profile configured, what the engine actually uses, what the container published, and whether each host port is free (e.g. 8787 held by Cursor while the engine runs on 8798). Read this FIRST for any container/bootstrap failure.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {},
+              "additionalProperties": false
+            }
+          },
+          {
+            "name": "sandbox.recovery_plan",
+            "description": "Ordered recovery steps with the exact HTTP call for each, derived from the live snapshot (port conflict, engine down, phase mismatch, container missing). Returns commands to run through the authenticated host session.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {},
+              "additionalProperties": false
+            }
+          },
+          {
+            "name": "sandbox.bridge_health",
+            "description": "MCP bridge liveness: conns, accepted, rejected, uptimeMs and when the last host diagnostics snapshot was pushed.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {},
+              "additionalProperties": false
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "method": "tools/call",
+    "id": 3,
+    "ms": 2,
+    "response": {
+      "jsonrpc": "2.0",
+      "id": 3,
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\"ok\":false,\"errorId\":\"kitesurf.diag.stale\",\"error\":\"host has not pushed a diagnostics snapshot yet; retry in a few seconds\",\"hint\":\"GET /nano-local-sandbox/diagnostics on the authenticated host, or wait for the 30s push\"}"
+          }
+        ],
+        "structuredContent": {
+          "ok": false,
+          "errorId": "kitesurf.diag.stale",
+          "error": "host has not pushed a diagnostics snapshot yet; retry in a few seconds",
+          "hint": "GET /nano-local-sandbox/diagnostics on the authenticated host, or wait for the 30s push"
+        },
+        "isError": true
+      }
+    }
+  },
+  {
+    "method": "tools/call",
+    "id": 4,
+    "ms": 0,
+    "response": {
+      "jsonrpc": "2.0",
+      "id": 4,
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\"ok\":false,\"errorId\":\"kitesurf.diag.stale\",\"error\":\"host has not pushed a diagnostics snapshot yet; retry in a few seconds\",\"hint\":\"GET /nano-local-sandbox/diagnostics on the authenticated host, or wait for the 30s push\"}"
+          }
+        ],
+        "structuredContent": {
+          "ok": false,
+          "errorId": "kitesurf.diag.stale",
+          "error": "host has not pushed a diagnostics snapshot yet; retry in a few seconds",
+          "hint": "GET /nano-local-sandbox/diagnostics on the authenticated host, or wait for the 30s push"
+        },
+        "isError": true
+      }
+    }
+  },
+  {
+    "method": "tools/call",
+    "id": 5,
+    "ms": 1,
+    "response": {
+      "jsonrpc": "2.0",
+      "id": 5,
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\"ok\":false,\"errorId\":\"kitesurf.diag.stale\",\"error\":\"host has not pushed a diagnostics snapshot yet; retry in a few seconds\",\"hint\":\"GET /nano-local-sandbox/diagnostics on the authenticated host, or wait for the 30s push\"}"
+          }
+        ],
+        "structuredContent": {
+          "ok": false,
+          "errorId": "kitesurf.diag.stale",
+          "error": "host has not pushed a diagnostics snapshot yet; retry in a few seconds",
+          "hint": "GET /nano-local-sandbox/diagnostics on the authenticated host, or wait for the 30s push"
+        },
+        "isError": true
+      }
+    }
+  },
+  {
+    "method": "tools/call",
+    "id": 6,
+    "ms": 1,
+    "response": {
+      "jsonrpc": "2.0",
+      "id": 6,
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\"ok\":false,\"errorId\":\"kitesurf.diag.stale\",\"error\":\"host has not pushed a diagnostics snapshot yet; retry in a few seconds\",\"hint\":\"GET /nano-local-sandbox/diagnostics on the authenticated host, or wait for the 30s push\"}"
+          }
+        ],
+        "structuredContent": {
+          "ok": false,
+          "errorId": "kitesurf.diag.stale",
+          "error": "host has not pushed a diagnostics snapshot yet; retry in a few seconds",
+          "hint": "GET /nano-local-sandbox/diagnostics on the authenticated host, or wait for the 30s push"
+        },
+        "isError": true
+      }
+    }
+  },
+  {
+    "method": "tools/call",
+    "id": 7,
+    "ms": 0,
+    "response": {
+      "jsonrpc": "2.0",
+      "id": 7,
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\"ok\":false,\"errorId\":\"kitesurf.diag.stale\",\"error\":\"host has not pushed a diagnostics snapshot yet; retry in a few seconds\",\"hint\":\"GET /nano-local-sandbox/diagnostics on the authenticated host, or wait for the 30s push\"}"
+          }
+        ],
+        "structuredContent": {
+          "ok": false,
+          "errorId": "kitesurf.diag.stale",
+          "error": "host has not pushed a diagnostics snapshot yet; retry in a few seconds",
+          "hint": "GET /nano-local-sandbox/diagnostics on the authenticated host, or wait for the 30s push"
+        },
+        "isError": true
+      }
+    }
+  },
+  {
+    "method": "tools/call",
+    "id": 8,
+    "ms": 1,
+    "response": {
+      "jsonrpc": "2.0",
+      "id": 8,
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\"ok\":false,\"errorId\":\"kitesurf.diag.stale\",\"error\":\"host has not pushed a diagnostics snapshot yet; retry in a few seconds\",\"hint\":\"GET /nano-local-sandbox/diagnostics on the authenticated host, or wait for the 30s push\"}"
+          }
+        ],
+        "structuredContent": {
+          "ok": false,
+          "errorId": "kitesurf.diag.stale",
+          "error": "host has not pushed a diagnostics snapshot yet; retry in a few seconds",
+          "hint": "GET /nano-local-sandbox/diagnostics on the authenticated host, or wait for the 30s push"
+        },
+        "isError": true
+      }
+    }
+  }
+]

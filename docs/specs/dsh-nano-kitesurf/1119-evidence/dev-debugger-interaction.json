@@ -1,0 +1,2386 @@
+[
+  {
+    "name": "slow-final-health",
+    "status": 200,
+    "body": {
+      "v": 1,
+      "epoch": 6,
+      "observedAt": "2026-11-18T13:02:37.293Z",
+      "subject": {
+        "containerName": "kitesurf-dev"
+      },
+      "planes": {
+        "container": {
+          "plane": "container",
+          "state": "running",
+          "ok": true
+        },
+        "engine": {
+          "plane": "engine",
+          "state": "cdp",
+          "ok": true,
+          "httpBase": "http://127.0.0.1:8800",
+          "cdpGeneration": 0
+        },
+        "page": {
+          "plane": "page",
+          "state": "open",
+          "ok": true,
+          "url": "http://127.0.0.1:9919/slow",
+          "detail": "http://127.0.0.1:9919/slow"
+        },
+        "dom": {
+          "plane": "dom",
+          "state": "ready",
+          "ok": true,
+          "detail": "http://127.0.0.1:9919/slow · 155B",
+          "skipped": false
+        },
+        "bridge": {
+          "plane": "bridge",
+          "state": "up",
+          "ok": true,
+          "detail": "conns 0 · accepted 0 · rejected 0"
+        },
+        "terminal": {
+          "plane": "terminal",
+          "state": "absent"
+        }
+      },
+      "ready": true,
+      "live": true,
+      "degraded": [],
+      "healthy": true,
+      "containerName": "kitesurf-dev",
+      "container": {
+        "state": "running",
+        "name": "kitesurf-dev"
+      },
+      "effective": {
+        "httpBase": "http://127.0.0.1:8800",
+        "enginePort": 8800,
+        "bridgePort": 8801
+      },
+      "ports": {
+        "engine": {
+          "port": 8800,
+          "containerPort": 8787,
+          "heldBy": "this-container"
+        },
+        "bridge": {
+          "port": 8801,
+          "containerPort": 8791,
+          "heldBy": "this-container"
+        }
+      },
+      "engineAlive": true,
+      "checks": {
+        "container": {
+          "ok": true,
+          "detail": "running"
+        },
+        "engine": {
+          "ok": true,
+          "state": "cdp",
+          "detail": "http://127.0.0.1:8800"
+        },
+        "page": {
+          "ok": true,
+          "detail": "http://127.0.0.1:9919/slow"
+        },
+        "dom": {
+          "ok": true,
+          "detail": "http://127.0.0.1:9919/slow · 155B",
+          "skipped": false
+        },
+        "bridge": {
+          "ok": true,
+          "detail": "conns 0 · accepted 0 · rejected 0"
+        }
+      },
+      "summary": [
+        {
+          "plane": "container",
+          "label": "容器",
+          "ok": true,
+          "detail": "running"
+        },
+        {
+          "plane": "engine",
+          "label": "引擎",
+          "ok": true,
+          "state": "cdp",
+          "detail": "http://127.0.0.1:8800"
+        },
+        {
+          "plane": "page",
+          "label": "页面",
+          "ok": true,
+          "detail": "http://127.0.0.1:9919/slow"
+        },
+        {
+          "plane": "dom",
+          "label": "DOM",
+          "ok": true,
+          "detail": "http://127.0.0.1:9919/slow · 155B",
+          "skipped": false
+        },
+        {
+          "plane": "bridge",
+          "label": "桥",
+          "ok": true,
+          "detail": "conns 0 · accepted 0 · rejected 0"
+        }
+      ],
+      "buildId": "0.1.0",
+      "cdpGeneration": 0,
+      "phase": "running",
+      "httpBase": "http://127.0.0.1:8800",
+      "ok": true,
+      "kite": {
+        "phase": "running"
+      },
+      "text": "Kitesurf 环境诊断 · 正常\n实例 kitesurf-dev · 容器 running\n引擎 http://127.0.0.1:8800 · 桥 8801\n✓ 容器：running\n✓ 引擎：http://127.0.0.1:8800\n✓ 页面：http://127.0.0.1:9919/slow\n✓ DOM：http://127.0.0.1:9919/slow · 155B\n✓ 桥：conns 0 · accepted 0 · rejected 0",
+      "targets": [
+        {
+          "targetId": "browser",
+          "type": "browser",
+          "url": "",
+          "title": ""
+        },
+        {
+          "targetId": "897102ca6d1442dea922a69e2e4c8120",
+          "type": "page",
+          "url": "http://127.0.0.1:9919/slow",
+          "title": "Delivery /slow"
+        }
+      ],
+      "console": [
+        {
+          "level": "error",
+          "text": "[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted",
+          "at": "2026-11-18T13:01:49.933Z"
+        },
+        {
+          "level": "error",
+          "text": "[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted",
+          "at": "2026-11-18T13:01:49.933Z"
+        },
+        {
+          "level": "error",
+          "text": "[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted",
+          "at": "2026-11-18T13:01:49.933Z"
+        },
+        {
+          "level": "error",
+          "text": "[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted",
+          "at": "2026-11-18T13:01:49.934Z"
+        },
+        {
+          "level": "error",
+          "text": "[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted",
+          "at": "2026-11-18T13:01:49.934Z"
+        },
+        {
+          "level": "error",
+          "text": "[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted",
+          "at": "2026-11-18T13:01:49.934Z"
+        },
+        {
+          "level": "error",
+          "text": "[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted",
+          "at": "2026-11-18T13:01:49.934Z"
+        },
+        {
+          "level": "error",
+          "text": "[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted",
+          "at": "2026-11-18T13:01:49.934Z"
+        },
+        {
+          "level": "error",
+          "text": "[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted",
+          "at": "2026-11-18T13:01:49.934Z"
+        },
+        {
+          "level": "error",
+          "text": "[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted",
+          "at": "2026-11-18T13:01:49.935Z"
+        }
+      ],
+      "network": [
+        {
+          "id": "f15cbbf46b6249578c1d815b5dcb1f8c",
+          "url": "http://127.0.0.1:9919/basic",
+          "method": "GET",
+          "type": "Document",
+          "at": "2026-11-18T13:00:23.085Z",
+          "startedAt": 1795006823085,
+          "timestamp": 252.587,
+          "status": 200,
+          "mimeType": "text/html",
+          "size": 529,
+          "durationMs": 18,
+          "failed": false,
+          "error": "",
+          "cached": false,
+          "requestHeaders": {
+            "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
+            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+          },
+          "postData": "",
+          "hasPostData": false,
+          "requestMimeType": "",
+          "responseHeaders": {
+            "cache-control": "no-store",
+            "connection": "keep-alive",
+            "content-length": "529",
+            "content-type": "text/html",
+            "date": "Wed, 18 Nov 2026 13:00:23 GMT",
+            "keep-alive": "timeout=5",
+            "x-delivery-fixture": "1119"
+          },
+          "statusText": "OK",
+          "protocol": "http/1.1",
+          "remoteAddress": ""
+        },
+        {
+          "id": "fc0581f9646349cabeec6bdf5c5f9c3f",
+          "url": "http://127.0.0.1:9919/spa",
+          "method": "GET",
+          "type": "Document",
+          "at": "2026-11-18T13:00:23.889Z",
+          "startedAt": 1795006823889,
+          "timestamp": 253.391,
+          "status": 200,
+          "mimeType": "text/html",
+          "size": 168,
+          "durationMs": 17,
+          "failed": false,
+          "error": "",
+          "cached": false,
+          "requestHeaders": {
+            "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
+            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+          },
+          "postData": "",
+          "hasPostData": false,
+          "requestMimeType": "",
+          "responseHeaders": {
+            "cache-control": "no-store",
+            "connection": "keep-alive",
+            "content-length": "168",
+            "content-type": "text/html",
+            "date": "Wed, 18 Nov 2026 13:00:23 GMT",
+            "keep-alive": "timeout=5",
+            "x-delivery-fixture": "1119"
+          },
+          "statusText": "OK",
+          "protocol": "http/1.1",
+          "remoteAddress": ""
+        },
+        {
+          "id": "cs-tTQpp8P3-3",
+          "url": "http://127.0.0.1:9919/app.js",
+          "method": "GET",
+          "type": "Script",
+          "at": "2026-11-18T13:00:23.921Z",
+          "startedAt": 1795006823921,
+          "timestamp": 253.423,
+          "status": 200,
+          "mimeType": "application/javascript",
+          "size": 475,
+          "durationMs": 9,
+          "failed": false,
+          "error": "",
+          "cached": false,
+          "requestHeaders": {
+            "accept": "*/*",
+            "accept-encoding": "gzip, br",
+            "accept-language": "en-US,en;q=0.9",
+            "origin": "http://127.0.0.1:9919",
+            "referer": "http://127.0.0.1:9919/",
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
+          },
+          "postData": "",
+          "hasPostData": false,
+          "requestMimeType": "",
+          "responseHeaders": {
+            "cache-control": "no-store",
+            "connection": "keep-alive",
+            "content-length": "475",
+            "content-type": "application/javascript",
+            "date": "Wed, 18 Nov 2026 13:00:23 GMT",
+            "keep-alive": "timeout=5",
+            "x-delivery-fixture": "1119"
+          },
+          "statusText": "OK",
+          "protocol": "http/1.1",
+          "remoteAddress": ""
+        },
+        {
+          "id": "cs-tTQpp8P3-4",
+          "url": "http://127.0.0.1:9919/api",
+          "method": "POST",
+          "type": "Fetch",
+          "at": "2026-11-18T13:00:24.097Z",
+          "startedAt": 1795006824097,
+          "timestamp": 253.599,
+          "status": 200,
+          "mimeType": "application/json",
+          "size": 227,
+          "durationMs": 6,
+          "failed": false,
+          "error": "",
+          "cached": false,
+          "requestHeaders": {
+            "accept": "*/*",
+            "accept-encoding": "gzip, br",
+            "accept-language": "en-US,en;q=0.9",
+            "content-type": "application/json",
+            "origin": "http://127.0.0.1:9919",
+            "referer": "http://127.0.0.1:9919/spa",
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
+          },
+          "postData": "",
+          "hasPostData": false,
+          "requestMimeType": "",
+          "responseHeaders": {
+            "cache-control": "no-store",
+            "connection": "keep-alive",
+            "content-length": "227",
+            "content-type": "application/json",
+            "date": "Wed, 18 Nov 2026 13:00:24 GMT",
+            "keep-alive": "timeout=5",
+            "x-delivery-fixture": "1119"
+          },
+          "statusText": "OK",
+          "protocol": "http/1.1",
+          "remoteAddress": ""
+        },
+        {
+          "id": "4967c66ab297449d8c650e6ea918358e",
+          "url": "http://127.0.0.1:9919/broken",
+          "method": "GET",
+          "type": "Document",
+          "at": "2026-11-18T13:00:30.440Z",
+          "startedAt": 1795006830440,
+          "timestamp": 259.942,
+          "status": 200,
+          "mimeType": "text/html",
+          "size": 174,
+          "durationMs": 15,
+          "failed": false,
+          "error": "",
+          "cached": false,
+          "requestHeaders": {
+            "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
+            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+          },
+          "postData": "",
+          "hasPostData": false,
+          "requestMimeType": "",
+          "responseHeaders": {
+            "cache-control": "no-store",
+            "connection": "keep-alive",
+            "content-length": "174",
+            "content-type": "text/html",
+            "date": "Wed, 18 Nov 2026 13:00:30 GMT",
+            "keep-alive": "timeout=5",
+            "x-delivery-fixture": "1119"
+          },
+          "statusText": "OK",
+          "protocol": "http/1.1",
+          "remoteAddress": ""
+        },
+        {
+          "id": "cs-tTQpp8P3-5",
+          "url": "http://127.0.0.1:9919/broken.js",
+          "method": "GET",
+          "type": "Script",
+          "at": "2026-11-18T13:00:30.465Z",
+          "startedAt": 1795006830465,
+          "timestamp": 259.967,
+          "status": 404,
+          "mimeType": "application/javascript",
+          "size": 19,
+          "durationMs": 26,
+          "failed": false,
+          "error": "",
+          "cached": false,
+          "requestHeaders": {
+            "accept": "*/*",
+            "accept-encoding": "gzip, br",
+            "accept-language": "en-US,en;q=0.9",
+            "origin": "http://127.0.0.1:9919",
+            "referer": "http://127.0.0.1:9919/",
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
+          },
+          "postData": "",
+          "hasPostData": false,
+          "requestMimeType": "",
+          "responseHeaders": {
+            "cache-control": "no-store",
+            "connection": "keep-alive",
+            "content-length": "19",
+            "content-type": "application/javascript",
+            "date": "Wed, 18 Nov 2026 13:00:30 GMT",
+            "keep-alive": "timeout=5",
+            "x-delivery-fixture": "1119"
+          },
+          "statusText": "Not Found",
+          "protocol": "http/1.1",
+          "remoteAddress": ""
+        },
+        {
+          "id": "c8814edb583742f8b9d946dfe98fc3e6",
+          "url": "http://127.0.0.1:9919/slow",
+          "method": "GET",
+          "type": "Document",
+          "at": "2026-11-18T13:01:19.018Z",
+          "startedAt": 1795006879018,
+          "timestamp": 308.52,
+          "status": 200,
+          "mimeType": "text/html",
+          "size": 170,
+          "durationMs": 13,
+          "failed": false,
+          "error": "",
+          "cached": false,
+          "requestHeaders": {
+            "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
+            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+          },
+          "postData": "",
+          "hasPostData": false,
+          "requestMimeType": "",
+          "responseHeaders": {
+            "cache-control": "no-store",
+            "connection": "keep-alive",
+            "content-length": "170",
+            "content-type": "text/html",
+            "date": "Wed, 18 Nov 2026 13:01:19 GMT",
+            "keep-alive": "timeout=5",
+            "x-delivery-fixture": "1119"
+          },
+          "statusText": "OK",
+          "protocol": "http/1.1",
+          "remoteAddress": ""
+        },
+        {
+          "id": "cs-tTQpp8P3-6",
+          "url": "http://127.0.0.1:9919/slow.js",
+          "method": "GET",
+          "type": "Script",
+          "at": "2026-11-18T13:01:19.043Z",
+          "startedAt": 1795006879043,
+          "timestamp": 308.545,
+          "status": null,
+          "mimeType": "",
+          "size": null,
+          "durationMs": 10003,
+          "failed": true,
+          "error": "The operation was aborted",
+          "cached": false,
+          "requestHeaders": {
+            "accept": "*/*",
+            "accept-encoding": "gzip, br",
+            "accept-language": "en-US,en;q=0.9",
+            "origin": "http://127.0.0.1:9919",
+            "referer": "http://127.0.0.1:9919/",
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
+          },
+          "postData": "",
+          "hasPostData": false,
+          "requestMimeType": "",
+          "responseHeaders": {},
+          "statusText": "",
+          "protocol": "",
+          "remoteAddress": ""
+        },
+        {
+          "id": "cs-tTQpp8P3-7",
+          "url": "http://127.0.0.1:9919/slow.js",
+          "method": "GET",
+          "type": "Script",
+          "at": "2026-11-18T13:01:29.270Z",
+          "startedAt": 1795006889270,
+          "timestamp": 318.772,
+          "status": null,
+          "mimeType": "",
+          "size": null,
+          "durationMs": 10001,
+          "failed": true,
+          "error": "The operation was aborted",
+          "cached": false,
+          "requestHeaders": {
+            "accept": "*/*",
+            "accept-encoding": "gzip, br",
+            "accept-language": "en-US,en;q=0.9",
+            "origin": "http://127.0.0.1:9919",
+            "referer": "http://127.0.0.1:9919/",
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
+          },
+          "postData": "",
+          "hasPostData": false,
+          "requestMimeType": "",
+          "responseHeaders": {},
+          "statusText": "",
+          "protocol": "",
+          "remoteAddress": ""
+        },
+        {
+          "id": "cs-tTQpp8P3-8",
+          "url": "http://127.0.0.1:9919/slow.js",
+          "method": "GET",
+          "type": "Script",
+          "at": "2026-11-18T13:01:39.692Z",
+          "startedAt": 1795006899692,
+          "timestamp": 329.194,
+          "status": null,
+          "mimeType": "",
+          "size": null,
+          "durationMs": 10008,
+          "failed": true,
+          "error": "The operation was aborted",
+          "cached": false,
+          "requestHeaders": {
+            "accept": "*/*",
+            "accept-encoding": "gzip, br",
+            "accept-language": "en-US,en;q=0.9",
+            "origin": "http://127.0.0.1:9919",
+            "referer": "http://127.0.0.1:9919/",
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
+          },
+          "postData": "",
+          "hasPostData": false,
+          "requestMimeType": "",
+          "responseHeaders": {},
+          "statusText": "",
+          "protocol": "",
+          "remoteAddress": ""
+        }
+      ],
+      "operations": [
+        {
+          "path": "/nano-local-sandbox/network",
+          "method": "GET",
+          "at": "2026-11-18T13:02:23.496Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:02:23.920Z"
+        },
+        {
+          "path": "/nano-local-sandbox/network",
+          "method": "GET",
+          "at": "2026-11-18T13:02:24.995Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:02:25.418Z"
+        },
+        {
+          "path": "/nano-local-sandbox/network",
+          "method": "GET",
+          "at": "2026-11-18T13:02:26.492Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:02:26.927Z"
+        },
+        {
+          "path": "/nano-local-sandbox/network",
+          "method": "GET",
+          "at": "2026-11-18T13:02:27.991Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:02:28.421Z"
+        },
+        {
+          "path": "/nano-local-sandbox/network",
+          "method": "GET",
+          "at": "2026-11-18T13:02:29.496Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:02:29.925Z"
+        },
+        {
+          "path": "/nano-local-sandbox/network",
+          "method": "GET",
+          "at": "2026-11-18T13:02:30.992Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:02:31.419Z"
+        },
+        {
+          "path": "/nano-local-sandbox/network",
+          "method": "GET",
+          "at": "2026-11-18T13:02:32.494Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:02:32.919Z"
+        },
+        {
+          "path": "/nano-local-sandbox/network",
+          "method": "GET",
+          "at": "2026-11-18T13:02:34.004Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:02:34.420Z"
+        },
+        {
+          "path": "/nano-local-sandbox/network",
+          "method": "GET",
+          "at": "2026-11-18T13:02:35.491Z"
+        },
+        {
+          "path": "/nano-local-sandbox/control",
+          "method": "GET",
+          "at": "2026-11-18T13:02:35.920Z"
+        },
+        {
+          "path": "/nano-local-sandbox/network",
+          "method": "GET",
+          "at": "2026-11-18T13:02:36.991Z"
+        },
+        {
+          "path": "/nano-local-sandbox/diagnostics",
+          "method": "GET",
+          "at": "2026-11-18T13:02:37.154Z"
+        }
+      ],
+      "history": [
+        {
+          "id": "url-4a525edfc610bc6d33564bb7",
+          "url": "http://127.0.0.1:9919/basic",
+          "at": "2026-11-18T13:00:23.356Z",
+          "count": 1
+        },
+        {
+          "id": "url-b2facdcff8c610a2a7b244d5",
+          "url": "http://127.0.0.1:9919/spa",
+          "at": "2026-11-18T13:00:24.153Z",
+          "count": 1
+        },
+        {
+          "id": "url-5e9d65cb535f051db1ca6cc9",
+          "url": "http://127.0.0.1:9919/broken",
+          "at": "2026-11-18T13:00:30.702Z",
+          "count": 1
+        },
+        {
+          "id": "url-de52cc7d8581c98764e46d9f",
+          "url": "http://127.0.0.1:9919/slow",
+          "at": "2026-11-18T13:01:49.952Z",
+          "count": 1
+        }
+      ],
+      "hints": []
+    }
+  },
+  {
+    "name": "console-after-new-navigation",
+    "before": [
+      {
+        "level": "warn",
+        "text": "13:00:27\nWARN\n[kitesurf init-shim] deferred timer threw: [object Object]"
+      },
+      {
+        "level": "warn",
+        "text": "13:00:27\nWARN\n[kitesurf init-shim] deferred timer threw: [object Object]"
+      },
+      {
+        "level": "warn",
+        "text": "13:00:27\nWARN\n[kitesurf init-shim] deferred timer threw: [object Object]"
+      },
+      {
+        "level": "warn",
+        "text": "13:00:27\nWARN\n[kitesurf init-shim] deferred timer threw: [object Object]"
+      },
+      {
+        "level": "warn",
+        "text": "13:00:27\nWARN\n[kitesurf init-shim] deferred timer threw: [object Object]"
+      },
+      {
+        "level": "warn",
+        "text": "13:00:27\nWARN\n[kitesurf init-shim] deferred timer threw: [object Object]"
+      },
+      {
+        "level": "warn",
+        "text": "13:00:27\nWARN\n[kitesurf init-shim] deferred timer threw: [object Object]"
+      },
+      {
+        "level": "warn",
+        "text": "13:00:27\nWARN\n[kitesurf init-shim] deferred timer threw: [object Object]"
+      },
+      {
+        "level": "warn",
+        "text": "13:00:27\nWARN\n[kitesurf init-shim] deferred timer threw: [object Object]"
+      },
+      {
+        "level": "warn",
+        "text": "13:00:27\nWARN\n[kitesurf init-shim] deferred timer threw: [object Object]"
+      },
+      {
+        "level": "warn",
+        "text": "13:00:27\nWARN\n[kitesurf init-shim] deferred timer threw: [object Object]"
+      },
+      {
+        "level": "warn",
+        "text": "13:00:27\nWARN\n[kitesurf init-shim] deferred timer threw: [object Object]"
+      },
+      {
+        "level": "warn",
+        "text": "13:00:27\nWARN\n[kitesurf init-shim] deferred timer threw: [object Object]"
+      },
+      {
+        "level": "warn",
+        "text": "13:00:27\nWARN\n[kitesurf init-shim] deferred timer threw: [object Object]"
+      },
+      {
+        "level": "warn",
+        "text": "13:00:27\nWARN\n[kitesurf init-shim] deferred timer threw: [object Object]"
+      },
+      {
+        "level": "warn",
+        "text": "13:00:27\nWARN\n[kitesurf init-shim] deferred timer threw: [object Object]"
+      },
+      {
+        "level": "warn",
+        "text": "13:00:27\nWARN\n[kitesurf init-shim] deferred timer threw: [object Object]"
+      },
+      {
+        "level": "warn",
+        "text": "13:00:27\nWARN\n[kitesurf init-shim] deferred timer threw: [object Object]"
+      },
+      {
+        "level": "warn",
+        "text": "13:00:27\nWARN\n[kitesurf init-shim] deferred timer threw: [object Object]"
+      },
+      {
+        "level": "warn",
+        "text": "13:00:27\nWARN\n[kitesurf init-shim] deferred timer threw: [object Object]"
+      },
+      {
+        "level": "warn",
+        "text": "13:00:27\nWARN\n[kitesurf init-shim] deferred timer threw: [object Object]"
+      },
+      {
+        "level": "warn",
+        "text": "13:00:27\nWARN\n[kitesurf init-shim] deferred timer threw: [object Object]"
+      },
+      {
+        "level": "warn",
+        "text": "13:00:27\nWARN\n[kitesurf init-shim] deferred timer threw: [object Object]"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      }
+    ],
+    "api": {
+      "status": 200,
+      "body": {
+        "ok": true,
+        "entries": [
+          {
+            "level": "error",
+            "text": "DELIVERY_ERROR",
+            "at": "2026-11-18T13:02:37.857Z"
+          },
+          {
+            "level": "error",
+            "text": "DELIVERY_ERROR",
+            "at": "2026-11-18T13:02:37.857Z"
+          },
+          {
+            "level": "error",
+            "text": "DELIVERY_ERROR",
+            "at": "2026-11-18T13:02:37.857Z"
+          },
+          {
+            "level": "error",
+            "text": "DELIVERY_ERROR",
+            "at": "2026-11-18T13:02:37.857Z"
+          },
+          {
+            "level": "error",
+            "text": "DELIVERY_ERROR",
+            "at": "2026-11-18T13:02:37.857Z"
+          },
+          {
+            "level": "error",
+            "text": "DELIVERY_ERROR",
+            "at": "2026-11-18T13:02:37.857Z"
+          },
+          {
+            "level": "error",
+            "text": "DELIVERY_ERROR",
+            "at": "2026-11-18T13:02:37.857Z"
+          },
+          {
+            "level": "error",
+            "text": "DELIVERY_ERROR",
+            "at": "2026-11-18T13:02:37.857Z"
+          },
+          {
+            "level": "log",
+            "text": "DELIVERY_LATE_LOG",
+            "at": "2026-11-18T13:02:40.295Z"
+          },
+          {
+            "level": "log",
+            "text": "DELIVERY_LATE_LOG",
+            "at": "2026-11-18T13:02:40.295Z"
+          },
+          {
+            "level": "log",
+            "text": "DELIVERY_LATE_LOG",
+            "at": "2026-11-18T13:02:40.295Z"
+          },
+          {
+            "level": "log",
+            "text": "DELIVERY_LATE_LOG",
+            "at": "2026-11-18T13:02:40.295Z"
+          },
+          {
+            "level": "log",
+            "text": "DELIVERY_LATE_LOG",
+            "at": "2026-11-18T13:02:40.295Z"
+          },
+          {
+            "level": "log",
+            "text": "DELIVERY_LATE_LOG",
+            "at": "2026-11-18T13:02:40.295Z"
+          },
+          {
+            "level": "log",
+            "text": "DELIVERY_LATE_LOG",
+            "at": "2026-11-18T13:02:40.295Z"
+          },
+          {
+            "level": "log",
+            "text": "DELIVERY_LATE_LOG",
+            "at": "2026-11-18T13:02:40.296Z"
+          },
+          {
+            "level": "log",
+            "text": "DELIVERY_LATE_LOG",
+            "at": "2026-11-18T13:02:40.296Z"
+          },
+          {
+            "level": "log",
+            "text": "DELIVERY_LATE_LOG",
+            "at": "2026-11-18T13:02:40.296Z"
+          },
+          {
+            "level": "log",
+            "text": "DELIVERY_LATE_LOG",
+            "at": "2026-11-18T13:02:40.296Z"
+          },
+          {
+            "level": "log",
+            "text": "DELIVERY_LATE_LOG",
+            "at": "2026-11-18T13:02:40.296Z"
+          },
+          {
+            "level": "log",
+            "text": "DELIVERY_LATE_LOG",
+            "at": "2026-11-18T13:02:40.296Z"
+          },
+          {
+            "level": "log",
+            "text": "DELIVERY_LATE_LOG",
+            "at": "2026-11-18T13:02:40.296Z"
+          },
+          {
+            "level": "log",
+            "text": "DELIVERY_LATE_LOG",
+            "at": "2026-11-18T13:02:40.296Z"
+          },
+          {
+            "level": "log",
+            "text": "DELIVERY_LATE_LOG",
+            "at": "2026-11-18T13:02:40.296Z"
+          },
+          {
+            "level": "log",
+            "text": "DELIVERY_LATE_LOG",
+            "at": "2026-11-18T13:02:40.296Z"
+          },
+          {
+            "level": "log",
+            "text": "DELIVERY_LATE_LOG",
+            "at": "2026-11-18T13:02:40.296Z"
+          },
+          {
+            "level": "log",
+            "text": "DELIVERY_LATE_LOG",
+            "at": "2026-11-18T13:02:40.296Z"
+          },
+          {
+            "level": "log",
+            "text": "DELIVERY_LATE_LOG",
+            "at": "2026-11-18T13:02:40.297Z"
+          },
+          {
+            "level": "log",
+            "text": "DELIVERY_LATE_LOG",
+            "at": "2026-11-18T13:02:40.297Z"
+          },
+          {
+            "level": "log",
+            "text": "DELIVERY_LATE_LOG",
+            "at": "2026-11-18T13:02:40.297Z"
+          },
+          {
+            "level": "log",
+            "text": "DELIVERY_LATE_LOG",
+            "at": "2026-11-18T13:02:40.297Z"
+          },
+          {
+            "level": "log",
+            "text": "DELIVERY_LATE_LOG",
+            "at": "2026-11-18T13:02:40.297Z"
+          },
+          {
+            "level": "log",
+            "text": "DELIVERY_LATE_LOG",
+            "at": "2026-11-18T13:02:40.297Z"
+          },
+          {
+            "level": "log",
+            "text": "DELIVERY_LATE_LOG",
+            "at": "2026-11-18T13:02:40.297Z"
+          },
+          {
+            "level": "log",
+            "text": "DELIVERY_LATE_LOG",
+            "at": "2026-11-18T13:02:40.297Z"
+          },
+          {
+            "level": "log",
+            "text": "DELIVERY_LATE_LOG",
+            "at": "2026-11-18T13:02:40.297Z"
+          },
+          {
+            "level": "log",
+            "text": "DELIVERY_LATE_LOG",
+            "at": "2026-11-18T13:02:40.297Z"
+          },
+          {
+            "level": "log",
+            "text": "DELIVERY_LATE_LOG",
+            "at": "2026-11-18T13:02:40.297Z"
+          },
+          {
+            "level": "log",
+            "text": "DELIVERY_LATE_LOG",
+            "at": "2026-11-18T13:02:40.297Z"
+          },
+          {
+            "level": "log",
+            "text": "DELIVERY_LATE_LOG",
+            "at": "2026-11-18T13:02:40.298Z"
+          },
+          {
+            "level": "log",
+            "text": "DELIVERY_LATE_LOG",
+            "at": "2026-11-18T13:02:40.298Z"
+          },
+          {
+            "level": "log",
+            "text": "DELIVERY_LATE_LOG",
+            "at": "2026-11-18T13:02:40.298Z"
+          },
+          {
+            "level": "log",
+            "text": "DELIVERY_LATE_LOG",
+            "at": "2026-11-18T13:02:40.298Z"
+          },
+          {
+            "level": "log",
+            "text": "DELIVERY_LATE_LOG",
+            "at": "2026-11-18T13:02:40.298Z"
+          },
+          {
+            "level": "log",
+            "text": "DELIVERY_LATE_LOG",
+            "at": "2026-11-18T13:02:40.298Z"
+          },
+          {
+            "level": "log",
+            "text": "DELIVERY_LATE_LOG",
+            "at": "2026-11-18T13:02:40.298Z"
+          },
+          {
+            "level": "log",
+            "text": "DELIVERY_LATE_LOG",
+            "at": "2026-11-18T13:02:40.298Z"
+          },
+          {
+            "level": "log",
+            "text": "DELIVERY_LATE_LOG",
+            "at": "2026-11-18T13:02:40.298Z"
+          },
+          {
+            "level": "log",
+            "text": "DELIVERY_LATE_LOG",
+            "at": "2026-11-18T13:02:40.298Z"
+          },
+          {
+            "level": "log",
+            "text": "DELIVERY_LATE_LOG",
+            "at": "2026-11-18T13:02:40.299Z"
+          },
+          {
+            "level": "log",
+            "text": "DELIVERY_LATE_LOG",
+            "at": "2026-11-18T13:02:40.299Z"
+          },
+          {
+            "level": "log",
+            "text": "DELIVERY_LATE_LOG",
+            "at": "2026-11-18T13:02:40.299Z"
+          },
+          {
+            "level": "log",
+            "text": "DELIVERY_LATE_LOG",
+            "at": "2026-11-18T13:02:40.299Z"
+          },
+          {
+            "level": "log",
+            "text": "DELIVERY_LATE_LOG",
+            "at": "2026-11-18T13:02:40.299Z"
+          },
+          {
+            "level": "warn",
+            "text": "[kitesurf init-shim] deferred timer threw: [object Object]",
+            "at": "2026-11-18T13:02:40.911Z"
+          },
+          {
+            "level": "warn",
+            "text": "[kitesurf init-shim] deferred timer threw: [object Object]",
+            "at": "2026-11-18T13:02:40.911Z"
+          },
+          {
+            "level": "warn",
+            "text": "[kitesurf init-shim] deferred timer threw: [object Object]",
+            "at": "2026-11-18T13:02:40.911Z"
+          },
+          {
+            "level": "warn",
+            "text": "[kitesurf init-shim] deferred timer threw: [object Object]",
+            "at": "2026-11-18T13:02:40.911Z"
+          },
+          {
+            "level": "warn",
+            "text": "[kitesurf init-shim] deferred timer threw: [object Object]",
+            "at": "2026-11-18T13:02:40.912Z"
+          },
+          {
+            "level": "warn",
+            "text": "[kitesurf init-shim] deferred timer threw: [object Object]",
+            "at": "2026-11-18T13:02:40.912Z"
+          },
+          {
+            "level": "warn",
+            "text": "[kitesurf init-shim] deferred timer threw: [object Object]",
+            "at": "2026-11-18T13:02:40.912Z"
+          },
+          {
+            "level": "warn",
+            "text": "[kitesurf init-shim] deferred timer threw: [object Object]",
+            "at": "2026-11-18T13:02:40.912Z"
+          },
+          {
+            "level": "warn",
+            "text": "[kitesurf init-shim] deferred timer threw: [object Object]",
+            "at": "2026-11-18T13:02:40.912Z"
+          },
+          {
+            "level": "warn",
+            "text": "[kitesurf init-shim] deferred timer threw: [object Object]",
+            "at": "2026-11-18T13:02:40.912Z"
+          },
+          {
+            "level": "warn",
+            "text": "[kitesurf init-shim] deferred timer threw: [object Object]",
+            "at": "2026-11-18T13:02:40.912Z"
+          },
+          {
+            "level": "warn",
+            "text": "[kitesurf init-shim] deferred timer threw: [object Object]",
+            "at": "2026-11-18T13:02:40.913Z"
+          },
+          {
+            "level": "warn",
+            "text": "[kitesurf init-shim] deferred timer threw: [object Object]",
+            "at": "2026-11-18T13:02:40.913Z"
+          },
+          {
+            "level": "warn",
+            "text": "[kitesurf init-shim] deferred timer threw: [object Object]",
+            "at": "2026-11-18T13:02:40.913Z"
+          },
+          {
+            "level": "warn",
+            "text": "[kitesurf init-shim] deferred timer threw: [object Object]",
+            "at": "2026-11-18T13:02:40.913Z"
+          },
+          {
+            "level": "warn",
+            "text": "[kitesurf init-shim] deferred timer threw: [object Object]",
+            "at": "2026-11-18T13:02:40.913Z"
+          },
+          {
+            "level": "warn",
+            "text": "[kitesurf init-shim] deferred timer threw: [object Object]",
+            "at": "2026-11-18T13:02:40.913Z"
+          },
+          {
+            "level": "warn",
+            "text": "[kitesurf init-shim] deferred timer threw: [object Object]",
+            "at": "2026-11-18T13:02:40.914Z"
+          },
+          {
+            "level": "warn",
+            "text": "[kitesurf init-shim] deferred timer threw: [object Object]",
+            "at": "2026-11-18T13:02:40.914Z"
+          },
+          {
+            "level": "warn",
+            "text": "[kitesurf init-shim] deferred timer threw: [object Object]",
+            "at": "2026-11-18T13:02:40.914Z"
+          },
+          {
+            "level": "warn",
+            "text": "[kitesurf init-shim] deferred timer threw: [object Object]",
+            "at": "2026-11-18T13:02:40.914Z"
+          },
+          {
+            "level": "warn",
+            "text": "[kitesurf init-shim] deferred timer threw: [object Object]",
+            "at": "2026-11-18T13:02:40.914Z"
+          },
+          {
+            "level": "warn",
+            "text": "[kitesurf init-shim] deferred timer threw: [object Object]",
+            "at": "2026-11-18T13:02:40.915Z"
+          },
+          {
+            "level": "warn",
+            "text": "[kitesurf init-shim] deferred timer threw: [object Object]",
+            "at": "2026-11-18T13:02:40.915Z"
+          },
+          {
+            "level": "warn",
+            "text": "[kitesurf init-shim] deferred timer threw: [object Object]",
+            "at": "2026-11-18T13:02:40.915Z"
+          },
+          {
+            "level": "warn",
+            "text": "[kitesurf init-shim] deferred timer threw: [object Object]",
+            "at": "2026-11-18T13:02:40.915Z"
+          },
+          {
+            "level": "warn",
+            "text": "[kitesurf init-shim] deferred timer threw: [object Object]",
+            "at": "2026-11-18T13:02:40.915Z"
+          },
+          {
+            "level": "warn",
+            "text": "[kitesurf init-shim] deferred timer threw: [object Object]",
+            "at": "2026-11-18T13:02:40.916Z"
+          },
+          {
+            "level": "warn",
+            "text": "[kitesurf init-shim] deferred timer threw: [object Object]",
+            "at": "2026-11-18T13:02:40.916Z"
+          },
+          {
+            "level": "warn",
+            "text": "[kitesurf init-shim] deferred timer threw: [object Object]",
+            "at": "2026-11-18T13:02:40.916Z"
+          },
+          {
+            "level": "warn",
+            "text": "[kitesurf init-shim] deferred timer threw: [object Object]",
+            "at": "2026-11-18T13:02:40.916Z"
+          },
+          {
+            "level": "warn",
+            "text": "[kitesurf init-shim] deferred timer threw: [object Object]",
+            "at": "2026-11-18T13:02:40.916Z"
+          },
+          {
+            "level": "warn",
+            "text": "[kitesurf init-shim] deferred timer threw: [object Object]",
+            "at": "2026-11-18T13:02:40.916Z"
+          },
+          {
+            "level": "warn",
+            "text": "[kitesurf init-shim] deferred timer threw: [object Object]",
+            "at": "2026-11-18T13:02:40.916Z"
+          },
+          {
+            "level": "warn",
+            "text": "[kitesurf init-shim] deferred timer threw: [object Object]",
+            "at": "2026-11-18T13:02:40.916Z"
+          },
+          {
+            "level": "warn",
+            "text": "[kitesurf init-shim] deferred timer threw: [object Object]",
+            "at": "2026-11-18T13:02:40.916Z"
+          },
+          {
+            "level": "warn",
+            "text": "[kitesurf init-shim] deferred timer threw: [object Object]",
+            "at": "2026-11-18T13:02:40.916Z"
+          },
+          {
+            "level": "warn",
+            "text": "[kitesurf init-shim] deferred timer threw: [object Object]",
+            "at": "2026-11-18T13:02:40.916Z"
+          },
+          {
+            "level": "warn",
+            "text": "[kitesurf init-shim] deferred timer threw: [object Object]",
+            "at": "2026-11-18T13:02:40.916Z"
+          },
+          {
+            "level": "warn",
+            "text": "[kitesurf init-shim] deferred timer threw: [object Object]",
+            "at": "2026-11-18T13:02:40.916Z"
+          },
+          {
+            "level": "warn",
+            "text": "[kitesurf init-shim] deferred timer threw: [object Object]",
+            "at": "2026-11-18T13:02:40.917Z"
+          },
+          {
+            "level": "warn",
+            "text": "[kitesurf init-shim] deferred timer threw: [object Object]",
+            "at": "2026-11-18T13:02:40.917Z"
+          },
+          {
+            "level": "warn",
+            "text": "[kitesurf init-shim] deferred timer threw: [object Object]",
+            "at": "2026-11-18T13:02:40.917Z"
+          },
+          {
+            "level": "warn",
+            "text": "[kitesurf init-shim] deferred timer threw: [object Object]",
+            "at": "2026-11-18T13:02:40.917Z"
+          },
+          {
+            "level": "warn",
+            "text": "[kitesurf init-shim] deferred timer threw: [object Object]",
+            "at": "2026-11-18T13:02:40.917Z"
+          },
+          {
+            "level": "warn",
+            "text": "[kitesurf init-shim] deferred timer threw: [object Object]",
+            "at": "2026-11-18T13:02:40.917Z"
+          }
+        ]
+      }
+    },
+    "after": [
+      {
+        "level": "warn",
+        "text": "13:00:27\nWARN\n[kitesurf init-shim] deferred timer threw: [object Object]"
+      },
+      {
+        "level": "warn",
+        "text": "13:00:27\nWARN\n[kitesurf init-shim] deferred timer threw: [object Object]"
+      },
+      {
+        "level": "warn",
+        "text": "13:00:27\nWARN\n[kitesurf init-shim] deferred timer threw: [object Object]"
+      },
+      {
+        "level": "warn",
+        "text": "13:00:27\nWARN\n[kitesurf init-shim] deferred timer threw: [object Object]"
+      },
+      {
+        "level": "warn",
+        "text": "13:00:27\nWARN\n[kitesurf init-shim] deferred timer threw: [object Object]"
+      },
+      {
+        "level": "warn",
+        "text": "13:00:27\nWARN\n[kitesurf init-shim] deferred timer threw: [object Object]"
+      },
+      {
+        "level": "warn",
+        "text": "13:00:27\nWARN\n[kitesurf init-shim] deferred timer threw: [object Object]"
+      },
+      {
+        "level": "warn",
+        "text": "13:00:27\nWARN\n[kitesurf init-shim] deferred timer threw: [object Object]"
+      },
+      {
+        "level": "warn",
+        "text": "13:00:27\nWARN\n[kitesurf init-shim] deferred timer threw: [object Object]"
+      },
+      {
+        "level": "warn",
+        "text": "13:00:27\nWARN\n[kitesurf init-shim] deferred timer threw: [object Object]"
+      },
+      {
+        "level": "warn",
+        "text": "13:00:27\nWARN\n[kitesurf init-shim] deferred timer threw: [object Object]"
+      },
+      {
+        "level": "warn",
+        "text": "13:00:27\nWARN\n[kitesurf init-shim] deferred timer threw: [object Object]"
+      },
+      {
+        "level": "warn",
+        "text": "13:00:27\nWARN\n[kitesurf init-shim] deferred timer threw: [object Object]"
+      },
+      {
+        "level": "warn",
+        "text": "13:00:27\nWARN\n[kitesurf init-shim] deferred timer threw: [object Object]"
+      },
+      {
+        "level": "warn",
+        "text": "13:00:27\nWARN\n[kitesurf init-shim] deferred timer threw: [object Object]"
+      },
+      {
+        "level": "warn",
+        "text": "13:00:27\nWARN\n[kitesurf init-shim] deferred timer threw: [object Object]"
+      },
+      {
+        "level": "warn",
+        "text": "13:00:27\nWARN\n[kitesurf init-shim] deferred timer threw: [object Object]"
+      },
+      {
+        "level": "warn",
+        "text": "13:00:27\nWARN\n[kitesurf init-shim] deferred timer threw: [object Object]"
+      },
+      {
+        "level": "warn",
+        "text": "13:00:27\nWARN\n[kitesurf init-shim] deferred timer threw: [object Object]"
+      },
+      {
+        "level": "warn",
+        "text": "13:00:27\nWARN\n[kitesurf init-shim] deferred timer threw: [object Object]"
+      },
+      {
+        "level": "warn",
+        "text": "13:00:27\nWARN\n[kitesurf init-shim] deferred timer threw: [object Object]"
+      },
+      {
+        "level": "warn",
+        "text": "13:00:27\nWARN\n[kitesurf init-shim] deferred timer threw: [object Object]"
+      },
+      {
+        "level": "warn",
+        "text": "13:00:27\nWARN\n[kitesurf init-shim] deferred timer threw: [object Object]"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:00:30\nERROR\n[/broken.js] module prefetch failed: module fetch returned HTTP 404 for http://127.0.0.1:9919/broken.js"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      },
+      {
+        "level": "error",
+        "text": "13:01:49\nERROR\n[/slow.js] module prefetch failed: module fetch threw for http://127.0.0.1:9919/slow.js: The operation was aborted"
+      }
+    ],
+    "apiMarkers": [
+      {
+        "level": "error",
+        "text": "DELIVERY_ERROR",
+        "at": "2026-11-18T13:02:37.857Z"
+      },
+      {
+        "level": "error",
+        "text": "DELIVERY_ERROR",
+        "at": "2026-11-18T13:02:37.857Z"
+      },
+      {
+        "level": "error",
+        "text": "DELIVERY_ERROR",
+        "at": "2026-11-18T13:02:37.857Z"
+      },
+      {
+        "level": "error",
+        "text": "DELIVERY_ERROR",
+        "at": "2026-11-18T13:02:37.857Z"
+      },
+      {
+        "level": "error",
+        "text": "DELIVERY_ERROR",
+        "at": "2026-11-18T13:02:37.857Z"
+      },
+      {
+        "level": "error",
+        "text": "DELIVERY_ERROR",
+        "at": "2026-11-18T13:02:37.857Z"
+      },
+      {
+        "level": "error",
+        "text": "DELIVERY_ERROR",
+        "at": "2026-11-18T13:02:37.857Z"
+      },
+      {
+        "level": "error",
+        "text": "DELIVERY_ERROR",
+        "at": "2026-11-18T13:02:37.857Z"
+      },
+      {
+        "level": "log",
+        "text": "DELIVERY_LATE_LOG",
+        "at": "2026-11-18T13:02:40.295Z"
+      },
+      {
+        "level": "log",
+        "text": "DELIVERY_LATE_LOG",
+        "at": "2026-11-18T13:02:40.295Z"
+      },
+      {
+        "level": "log",
+        "text": "DELIVERY_LATE_LOG",
+        "at": "2026-11-18T13:02:40.295Z"
+      },
+      {
+        "level": "log",
+        "text": "DELIVERY_LATE_LOG",
+        "at": "2026-11-18T13:02:40.295Z"
+      },
+      {
+        "level": "log",
+        "text": "DELIVERY_LATE_LOG",
+        "at": "2026-11-18T13:02:40.295Z"
+      },
+      {
+        "level": "log",
+        "text": "DELIVERY_LATE_LOG",
+        "at": "2026-11-18T13:02:40.295Z"
+      },
+      {
+        "level": "log",
+        "text": "DELIVERY_LATE_LOG",
+        "at": "2026-11-18T13:02:40.295Z"
+      },
+      {
+        "level": "log",
+        "text": "DELIVERY_LATE_LOG",
+        "at": "2026-11-18T13:02:40.296Z"
+      },
+      {
+        "level": "log",
+        "text": "DELIVERY_LATE_LOG",
+        "at": "2026-11-18T13:02:40.296Z"
+      },
+      {
+        "level": "log",
+        "text": "DELIVERY_LATE_LOG",
+        "at": "2026-11-18T13:02:40.296Z"
+      },
+      {
+        "level": "log",
+        "text": "DELIVERY_LATE_LOG",
+        "at": "2026-11-18T13:02:40.296Z"
+      },
+      {
+        "level": "log",
+        "text": "DELIVERY_LATE_LOG",
+        "at": "2026-11-18T13:02:40.296Z"
+      },
+      {
+        "level": "log",
+        "text": "DELIVERY_LATE_LOG",
+        "at": "2026-11-18T13:02:40.296Z"
+      },
+      {
+        "level": "log",
+        "text": "DELIVERY_LATE_LOG",
+        "at": "2026-11-18T13:02:40.296Z"
+      },
+      {
+        "level": "log",
+        "text": "DELIVERY_LATE_LOG",
+        "at": "2026-11-18T13:02:40.296Z"
+      },
+      {
+        "level": "log",
+        "text": "DELIVERY_LATE_LOG",
+        "at": "2026-11-18T13:02:40.296Z"
+      },
+      {
+        "level": "log",
+        "text": "DELIVERY_LATE_LOG",
+        "at": "2026-11-18T13:02:40.296Z"
+      },
+      {
+        "level": "log",
+        "text": "DELIVERY_LATE_LOG",
+        "at": "2026-11-18T13:02:40.296Z"
+      },
+      {
+        "level": "log",
+        "text": "DELIVERY_LATE_LOG",
+        "at": "2026-11-18T13:02:40.296Z"
+      },
+      {
+        "level": "log",
+        "text": "DELIVERY_LATE_LOG",
+        "at": "2026-11-18T13:02:40.297Z"
+      },
+      {
+        "level": "log",
+        "text": "DELIVERY_LATE_LOG",
+        "at": "2026-11-18T13:02:40.297Z"
+      },
+      {
+        "level": "log",
+        "text": "DELIVERY_LATE_LOG",
+        "at": "2026-11-18T13:02:40.297Z"
+      },
+      {
+        "level": "log",
+        "text": "DELIVERY_LATE_LOG",
+        "at": "2026-11-18T13:02:40.297Z"
+      },
+      {
+        "level": "log",
+        "text": "DELIVERY_LATE_LOG",
+        "at": "2026-11-18T13:02:40.297Z"
+      },
+      {
+        "level": "log",
+        "text": "DELIVERY_LATE_LOG",
+        "at": "2026-11-18T13:02:40.297Z"
+      },
+      {
+        "level": "log",
+        "text": "DELIVERY_LATE_LOG",
+        "at": "2026-11-18T13:02:40.297Z"
+      },
+      {
+        "level": "log",
+        "text": "DELIVERY_LATE_LOG",
+        "at": "2026-11-18T13:02:40.297Z"
+      },
+      {
+        "level": "log",
+        "text": "DELIVERY_LATE_LOG",
+        "at": "2026-11-18T13:02:40.297Z"
+      },
+      {
+        "level": "log",
+        "text": "DELIVERY_LATE_LOG",
+        "at": "2026-11-18T13:02:40.297Z"
+      },
+      {
+        "level": "log",
+        "text": "DELIVERY_LATE_LOG",
+        "at": "2026-11-18T13:02:40.297Z"
+      },
+      {
+        "level": "log",
+        "text": "DELIVERY_LATE_LOG",
+        "at": "2026-11-18T13:02:40.297Z"
+      },
+      {
+        "level": "log",
+        "text": "DELIVERY_LATE_LOG",
+        "at": "2026-11-18T13:02:40.298Z"
+      },
+      {
+        "level": "log",
+        "text": "DELIVERY_LATE_LOG",
+        "at": "2026-11-18T13:02:40.298Z"
+      },
+      {
+        "level": "log",
+        "text": "DELIVERY_LATE_LOG",
+        "at": "2026-11-18T13:02:40.298Z"
+      },
+      {
+        "level": "log",
+        "text": "DELIVERY_LATE_LOG",
+        "at": "2026-11-18T13:02:40.298Z"
+      },
+      {
+        "level": "log",
+        "text": "DELIVERY_LATE_LOG",
+        "at": "2026-11-18T13:02:40.298Z"
+      },
+      {
+        "level": "log",
+        "text": "DELIVERY_LATE_LOG",
+        "at": "2026-11-18T13:02:40.298Z"
+      },
+      {
+        "level": "log",
+        "text": "DELIVERY_LATE_LOG",
+        "at": "2026-11-18T13:02:40.298Z"
+      },
+      {
+        "level": "log",
+        "text": "DELIVERY_LATE_LOG",
+        "at": "2026-11-18T13:02:40.298Z"
+      },
+      {
+        "level": "log",
+        "text": "DELIVERY_LATE_LOG",
+        "at": "2026-11-18T13:02:40.298Z"
+      },
+      {
+        "level": "log",
+        "text": "DELIVERY_LATE_LOG",
+        "at": "2026-11-18T13:02:40.298Z"
+      },
+      {
+        "level": "log",
+        "text": "DELIVERY_LATE_LOG",
+        "at": "2026-11-18T13:02:40.299Z"
+      },
+      {
+        "level": "log",
+        "text": "DELIVERY_LATE_LOG",
+        "at": "2026-11-18T13:02:40.299Z"
+      },
+      {
+        "level": "log",
+        "text": "DELIVERY_LATE_LOG",
+        "at": "2026-11-18T13:02:40.299Z"
+      },
+      {
+        "level": "log",
+        "text": "DELIVERY_LATE_LOG",
+        "at": "2026-11-18T13:02:40.299Z"
+      },
+      {
+        "level": "log",
+        "text": "DELIVERY_LATE_LOG",
+        "at": "2026-11-18T13:02:40.299Z"
+      }
+    ],
+    "uiMarkers": []
+  },
+  {
+    "name": "post-payload-response",
+    "status": 200,
+    "body": {
+      "ok": true,
+      "entry": {
+        "id": "cs-tTQpp8P3-4",
+        "url": "http://127.0.0.1:9919/api",
+        "method": "POST",
+        "type": "Fetch",
+        "at": "2026-11-18T13:00:24.097Z",
+        "startedAt": 1795006824097,
+        "timestamp": 253.599,
+        "status": 200,
+        "mimeType": "application/json",
+        "size": 227,
+        "durationMs": 6,
+        "failed": false,
+        "error": "",
+        "cached": false,
+        "requestHeaders": {
+          "accept": "*/*",
+          "accept-encoding": "gzip, br",
+          "accept-language": "en-US,en;q=0.9",
+          "content-type": "application/json",
+          "origin": "http://127.0.0.1:9919",
+          "referer": "http://127.0.0.1:9919/spa",
+          "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
+        },
+        "postData": "",
+        "hasPostData": false,
+        "requestMimeType": "",
+        "responseHeaders": {
+          "cache-control": "no-store",
+          "connection": "keep-alive",
+          "content-length": "227",
+          "content-type": "application/json",
+          "date": "Wed, 18 Nov 2026 13:00:24 GMT",
+          "keep-alive": "timeout=5",
+          "x-delivery-fixture": "1119"
+        },
+        "statusText": "OK",
+        "protocol": "http/1.1",
+        "remoteAddress": ""
+      },
+      "responseBody": {
+        "body": "",
+        "base64Encoded": false,
+        "truncated": false
+      }
+    }
+  },
+  {
+    "name": "preview-vs-live-click",
+    "previewClicked": "Click test",
+    "nativeClick": {
+      "status": 200,
+      "body": {
+        "ok": true,
+        "action": "click",
+        "selector": "#action",
+        "tag": "button"
+      }
+    },
+    "liveContainsClicked": true,
+    "previewAfter": "Click test"
+  },
+  {
+    "name": "snapshot-pick-edit",
+    "snapshot": {
+      "status": 200,
+      "body": {
+        "ok": true,
+        "url": "http://127.0.0.1:9919/basic",
+        "title": "Delivery Basic 1119",
+        "count": 11,
+        "tree": "BASIC_READY_1119\nSPA nextCLICKED_1119\n\nSTATIC_CONTENT",
+        "refs": {},
+        "truncated": false
+      }
+    },
+    "pick": {
+      "status": 200,
+      "body": {
+        "ok": true,
+        "tag": "h1",
+        "text": "BASIC_READY_1119",
+        "box": {
+          "x": 28,
+          "y": 52,
+          "width": 516,
+          "height": 49
+        }
+      }
+    },
+    "edit": {
+      "status": 200,
+      "body": {
+        "ok": true,
+        "tag": "h1"
+      }
+    },
+    "domContainsEdited": true
+  }
+]

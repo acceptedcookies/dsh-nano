@@ -88,7 +88,7 @@ dsh plugin --profile web add <spec>
 | ← → ⟳ | 真实浏览器后退/前进/刷新（走引擎 navigationHistory） |
 | 滚轮 / ↑ ↓ 键 | 滚动容器里的页面并重新投射 |
 | Annotate | 打开后，点画面上的元素。选框跟着元素；悬停时有虚线预览。Shift+点把元素并进当前备注（多选）；Alt+点在无备注时直送 composer；普通拖画选区，Alt+拖画椭圆，Shift+拖画箭头。↑↓ 选父/最大子元素；双击元素让备注输入变成就地改字（回车写回页面）。Esc 依次关拖/备注/标注；⌘⇧D 开关标注；⌘Z 撤最后一条 pin；⌘L 把当前备注直送 composer。备注回车 pin 进队列 |
-| `/kitesurf-cdp`、`/nano-kite` | 告诉 agent 用 `agent-browser --cdp` 接这个引擎，不要启动 Chrome；`/nano-kite` 只做 start/resume/suspend/restart |
+| `/kitesurf-cdp`、`/nano-kite` | 告诉 agent 用 `agent-browser --cdp` 接这个引擎，不要启动 Chrome；`/nano-kite` 只做 start/stop/restart（dnls.control/1；旧 suspend/resume 动词已退役） |
 
 页面路由全部由 DNLS 注册并受其 `connection.requestRejection` 保护。本包不复制 handler，也不绕面板去改引擎配置。
 
@@ -96,8 +96,8 @@ dsh plugin --profile web add <spec>
 
 - `GET /nano-local-sandbox/status` → `lifecycle.{phase,httpBase,mcpPort}` + 顶层 `cdp`；引擎 down 也 200，读 `ok`。
 - `GET /ports`、`/diagnostics`、`/console`、`/operations`、`/targets`、`/har` 只读。
-- `POST /open`、`/shot`、`/pick`、`/edit`、`/evaluate`、`/interact`、`/settings`、`/history`、`/wait`、`/recover`。
-- `POST /nano-local-sandbox/lifecycle` → `{action: start|resume|suspend|restart}`。端点由实例 registry 返回，pane 只读。
+- `POST /open`、`/shot`、`/pick`、`/edit`、`/evaluate`、`/interact`、`/settings`、`/history`、`/wait`。显式重启只有 `POST /nano-local-sandbox/lifecycle {"action":"restart","requestId":"<uuid>"}` + `GET /operations?operationId=<op>` 轮询；本包无隐式修复请求。
+- `POST /nano-local-sandbox/lifecycle` → `{action: start|stop|restart|recreate, requestId}`（dnls.control/1）。端点由实例 registry 返回，pane 只读。面板打开前必须先在 picker 里显式选一个托管沙箱——没有默认目标，所有对象请求都带 `?sandboxId=` 与 `X-DNLS-Contract: dnls.control/1`。
 - 错误 `{ok:false,errorId,error,incidentId?}` 的状态码、cause、next 只在 DNLS；面板直接展示响应里的 `error`，完整目录用 `GET /diagnostics?catalog=1`。
 - 本包不保存点选状态，不写锁文件，不持有 CDP/容器句柄。
 
@@ -113,7 +113,7 @@ Agent
   └─ skill 指导下 agent-browser --cdp ws://<host>:<lifecycle.mcpPort>/cdp ──▶ 同一引擎页
 ```
 
-本包没有容器、CDP socket 或 MCP 桥。引擎 down 的恢复入口是 DNLS 的 `POST /nano-local-sandbox/recover`。
+本包没有容器、CDP socket 或 MCP 桥。引擎 down 的恢复入口是 DNLS 的受管 lifecycle（`action:restart`，用户确认所选沙箱后）；所有对象请求带 `?sandboxId=` 与 `X-DNLS-Contract` 头。
 
 ## 配置与状态
 
@@ -136,7 +136,7 @@ npm run build
 
 | 现象 | 原因 | 处理 |
 |---|---|---|
-| 面板写 engine down | DNLS 未起或引擎未启动 | 起 DNLS / 用 `POST /recover`。不要改去连 Chrome |
+| 面板写 engine down | DNLS 未起或引擎未启动 | 起 DNLS / 确认所选沙箱后 `lifecycle restart`。不要改去连 Chrome |
 | status 返回 302 或被拒 | 没带已登录页面的会话 | 正常 |
 | 点了截图但 pick 失败 | 引擎没有 page target，或坐标超出 | 先 Open。看响应里的 `errorId`/`error` |
 | `dsh plugin add` 报引擎不符 | `engines.dsh` 与正在跑的 dsh 不一致 | 换符合范围的 dsh，或在操作者明确接受风险后执行命令输出里的 `allow-version`。不要改本包的 `engines` |

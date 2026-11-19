@@ -9,6 +9,7 @@ const { copyFor } = require('./i18n.js')
 const { batchNote, designNote, multiNote } = require('../shared/note.js')
 const { contentFrame, shotPoint } = require('../shared/shot-point.js')
 const { captureNavigation, requestTimeout } = require('../shared/navigation.js')
+const { createManagedDesignClient, listSandboxRows } = require('../shared/managed-client.js')
 const h = React.createElement
 
 const STATUS = '/nano-local-sandbox/status'
@@ -19,7 +20,6 @@ const EDIT = '/nano-local-sandbox/edit'
 const SETTINGS = '/nano-local-sandbox/settings'
 const HISTORY = '/nano-local-sandbox/history'
 const PORTS = '/nano-local-sandbox/ports'
-const RECOVER = '/nano-local-sandbox/recover'
 const DIAGNOSTICS = '/nano-local-sandbox/diagnostics'
 const CONSOLE = '/nano-local-sandbox/console'
 const NETWORK = '/nano-local-sandbox/network'
@@ -28,7 +28,6 @@ const BROWSE_HISTORY = '/nano-local-sandbox/browse-history'
 const LOGS = '/nano-local-sandbox/logs'
 const DOM = '/nano-local-sandbox/dom'
 const CONTROL = '/nano-local-sandbox/control'
-const localNotes = []
 const LIFECYCLE = '/nano-local-sandbox/lifecycle'
 const KIND = 'kitesurf'
 const OWN_ID = 'nano-kitesurf'
@@ -157,6 +156,8 @@ const STYLE = `
 .nks-empty-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:2px}
 .nks-empty-link{color:var(--dsw-alias-link,#2f6fed);cursor:pointer;background:none;border:0;font:inherit;padding:0;text-decoration:underline;text-underline-offset:2px}
 .nks-empty-meta{font:var(--dsw-font-xxxs-11);opacity:.75;word-break:break-all;max-width:340px}
+.nks-sandbox-bar{display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:.5px solid var(--dsw-alias-border-l2);font:var(--dsw-font-xxs-12)}
+.nks-sandbox-bar select{flex:1;min-width:0;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);border:.5px solid var(--dsw-alias-border-l2);border-radius:6px;padding:4px 8px;font:inherit}
 .nks-box{position:absolute;border:1.5px solid var(--dsw-alias-link,#2f6fed);box-shadow:0 0 0 1px rgba(0,0,0,.5),inset 0 0 0 1px rgba(255,255,255,.55);pointer-events:none}
 .nks-box[data-kind="ellipse"]{border-radius:50%}
 .nks-box[data-kind="hover"]{border-style:dashed;opacity:.75}
@@ -359,7 +360,7 @@ const STYLE = `
 `
 
 /** Bound requests without aborting before the host's method-specific budget. */
-function post(path, body) {
+function postRequest(fetch, path, body) {
   const timeoutMs = requestTimeout(path)
   const controller = typeof AbortController === 'function' ? new AbortController() : null
   const timer = controller ? window.setTimeout(() => controller.abort(), timeoutMs) : 0
@@ -517,7 +518,7 @@ function elementMatches(row, text) {
   return `${row.tag || ''} ${row.id || ''} ${row.cls || ''}`.toLowerCase().includes(needle)
 }
 
-function DevTools({ copy, open, onClose }) {
+function DevTools({ copy, open, onClose, fetch }) {
   const [tab, setTab] = React.useState('console')
   const [rows, setRows] = React.useState([])
   const [failedOnly, setFailedOnly] = React.useState(false)
@@ -892,7 +893,10 @@ function wfBar(row, rows) {
   return h('i', { style: { left: `${left}%`, width: `${width}%` }, 'data-bad': row.failed || (row.status || 0) >= 400 ? 'true' : 'false', 'data-pending': pending ? 'true' : 'false' })
 }
 
-function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
+function BrowserPane({ copy, languageOf, theme, onThemeChange, fetch, sandboxId }) {
+  const post = (path, body) => postRequest(fetch, path, body)
+  // Per-object scratch notes live and die with the selected sandbox's mount.
+  const localNotes = React.useRef([]).current
   const [status, setStatus] = React.useState(null)
   const engine = engineEndpoint(status)
   const statusDown = status != null && (status.ok === false || status.ready === false)
@@ -1279,19 +1283,44 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
   // opened url, then a fresh shot replaces the failed frame.
   const RECOVERABLE = /^kitesurf\.(shot|engine|elements|dom|navigate|pick|wait|ref)\.|^sandbox\.cdp\./
 
-  async function repairNow() {
+  /**
+   * Every disruptive lifecycle action goes through this gate: the dialog
+   * names the selected sandbox and only its confirm runs the restart — no
+   * blank repair POST, no implicit restart.
+   */
+  function confirmRestart(work) {
+    const workspaceEl = workspaceRef.current
+    if (dialogOpenRef.current || workspaceEl === null) { showToast(copy.prepareNotReady); return }
+    dialogOpenRef.current = true
+    const finish = () => { dialogOpenRef.current = false }
+    const name = sandboxId ?? ''
+    let dialog = null
+    dialog = openNanoDialog({
+      copy: { cancel: copy.cancel, confirm: copy.restartSandbox, close: copy.close },
+      title: copy.restartSandboxTitle,
+      width: 420,
+      container: workspaceEl,
+      confirmLabel: copy.restartSandbox,
+      onCancel: finish,
+      onConfirm: () => {
+        finish()
+        dialog?.close()
+        work()
+      },
+      children: h('p', { 'data-nks-restart-confirm': '1' }, fill(copy.restartSandboxBody, { name })),
+    })
+  }
+
+  function repairNow() {
     setToastFix(false)
-    setToast(copy.preparingEnv)
-    try {
-      await fetch(RECOVER, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
+    confirmRestart(() => run(async () => {
+      await runLifecycle('restart')
       await refreshStatus()
       await reloadShot(0, { keepPick: true }).catch(() => {})
       setToast(copy.prepareDone)
-    } catch (cause) {
-      setToast(`${copy.prepareFailed}: ${cause?.message || cause}`)
-    }
-    window.clearTimeout(toastTimer.current)
-    toastTimer.current = window.setTimeout(() => { setToast(null); setToastFix(false) }, 3000)
+      window.clearTimeout(toastTimer.current)
+      toastTimer.current = window.setTimeout(() => { setToast(null); setToastFix(false) }, 3000)
+    }))
   }
 
   function showError(cause) {
@@ -1819,19 +1848,50 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
     }
   }
 
-  /** One-click environment prep from the error state: repair, then re-shoot. */
-  async function oneClickPrepare() {
-    await run(async () => {
+  /** The error-state button is an explicit confirmed restart, never a silent repair. */
+  function oneClickPrepare() {
+    confirmRestart(() => run(async () => {
       try {
-        const response = await post(RECOVER, {})
+        await runLifecycle('restart')
         await refreshStatus()
-        if (response?.v != null && response.v !== 1) showToast(copy.contractMismatch)
-        else if (response?.ready === true) await reloadShot(0, { keepPick: true })
-        else showToast(copy.prepareNotReady || copy.prepareFailed)
+        await reloadShot(0, { keepPick: true })
       } catch (cause) {
         showError(cause)
       }
-    })
+    }))
+  }
+
+  /**
+   * dnls.control/1 lifecycle vocabulary is start/stop/restart/recreate —
+   * the pane maps the engine's suspend/resume wording onto it and never
+   * issues prepare/init/recover here. A 200 only means the operation was
+   * accepted; the exact operationId decides the outcome.
+   */
+  async function runLifecycle(action) {
+    const managed = action === 'suspend' ? 'stop' : action === 'resume' ? 'start' : action
+    const data = await post(LIFECYCLE, { action: managed, requestId: crypto.randomUUID() })
+    const operationId = data?.operationId
+    // A lifecycle answer without an operation receipt is a failure, not success.
+    if (!operationId) throw new Error('missing operation receipt')
+    return awaitOperation(operationId)
+  }
+
+  async function awaitOperation(operationId) {
+    const deadline = Date.now() + 30000
+    while (Date.now() < deadline) {
+      const res = await fetch(`/nano-local-sandbox/operations?operationId=${encodeURIComponent(operationId)}`)
+      if (!res.ok) throw new Error(`operation read failed (${res.status})`)
+      const last = await res.json().catch(() => null)
+      if (!last || last.operationId !== operationId) throw new Error('operation read mismatch')
+      const state = last.state
+      if (state && state !== 'accepted' && state !== 'running') {
+        // Only a confirmed succeeded may re-shoot; everything else is honest failure.
+        if (state !== 'succeeded') throw new Error(`operation ${operationId} ${state}`)
+        return last
+      }
+      await new Promise((resolve) => window.setTimeout(resolve, 500))
+    }
+    throw new Error(`operation ${operationId} did not settle`)
   }
 
   function onStartEngine() {
@@ -1840,8 +1900,8 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
       const fresh = await refreshStatus()
       const phase = engineEndpoint(fresh).phase
       if (phase === 'running') return
-      const action = phase === 'suspended' ? 'resume' : 'start'
-      await post(LIFECYCLE, { action })
+      // dnls.control/1: resume maps to start, suspend would map to stop.
+      await runLifecycle(phase === 'suspended' ? 'resume' : 'start')
       await reloadShot()
     })
   }
@@ -1991,29 +2051,26 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
       document.addEventListener('visibilitychange', onVis)
       return () => { alive = false; clearInterval(timer); document.removeEventListener('visibilitychange', onVis) }
     }, [])
-    async function prepare() {
-      setBusyLocal(true); setNote(copy.preparingEnv)
-      try {
-        const response = await fetch(RECOVER, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
-        const result = await response.json().catch(() => ({}))
-        // /recover now returns the env snapshot it produced — refresh the panel
-        // from it directly instead of a second /ports round-trip.
-        const ports = result.ports ? result : (await fetch(PORTS).then((r) => r.json()).catch(() => null))
-        setSnap(ports)
-        if (Array.isArray(result.summary)) setDiag(result)
-        // Never say "ready" when a plane failed — name the failing plane.
-        const failed = planeRows(result, copy).filter((row) => !row.ok && !row.skipped)
-        if (result.planes && Number.isFinite(result.v) && result.v !== 1) setNote(copy.contractNewer)
-        else if (!result.ok) setNote(`${copy.prepareFailed}: ${result.errorId || result.error || `HTTP ${response.status}`}`)
-        else if (result.ready !== true) setNote(`${copy.prepareNotReady}: ${failed.map((row) => row.plane || row.label).join(' / ')}`)
-        else setNote(result.action === 'noop' ? copy.prepareDone : `${copy.prepareDone} · ${result.action}`)
-        await refreshStatus()
-        await reloadShot(0, { keepPick: true }).catch(() => {})
-      } catch (cause) {
-        setNote(`${copy.prepareFailed}: ${cause?.message || cause}`)
-      } finally {
-        setBusyLocal(false)
-      }
+    function prepare() {
+      // The one-click env button is a confirmed restart of the selected
+      // sandbox — the old implicit POST /recover repair is gone.
+      confirmRestart(() => {
+        setBusyLocal(true); setNote(copy.preparingEnv)
+        ;(async () => {
+          try {
+            await runLifecycle('restart')
+            const ports = await fetch(PORTS).then((r) => r.json()).catch(() => null)
+            setSnap(ports)
+            setNote(copy.prepareDone)
+            await refreshStatus()
+            await reloadShot(0, { keepPick: true }).catch(() => {})
+          } catch (cause) {
+            setNote(`${copy.prepareFailed}: ${cause?.message || cause}`)
+          } finally {
+            setBusyLocal(false)
+          }
+        })()
+      })
     }
     /** Engine output lives only inside the container. Without it "engine
      *  down" is a verdict with no evidence. */
@@ -2096,7 +2153,7 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
           h('b', null, row.label),
           h('span', { className: 'nks-env-check-detail' }, row.detail || '—')))) : null,
       h('div', { className: 'nks-env-actions' },
-        h('button', { type: 'button', className: 'nks-start-btn', 'data-nks-prepare': '1', disabled: busyLocal, onClick: prepare }, busyLocal ? copy.preparingEnv : copy.prepareEnv),
+        h('button', { type: 'button', className: 'nks-start-btn', 'data-nks-prepare': '1', disabled: busyLocal, onClick: prepare }, busyLocal ? copy.preparingEnv : copy.restartSandbox),
         h('button', {
           type: 'button',
           className: 'nks-start-btn',
@@ -2595,7 +2652,7 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
       h('span', { style: { flex: 'auto' } })),
 
     h(HistoryDialog, { open: historyOpen, onClose: () => setHistoryOpen(false) }),
-    h(DevTools, { copy, open: devtoolsOpen, onClose: () => setDevtoolsOpen(false) }),
+    h(DevTools, { copy, fetch, open: devtoolsOpen, onClose: () => setDevtoolsOpen(false) }),
     h('div', {
       ref: frameRef,
       className: 'nks-frame',
@@ -2697,7 +2754,7 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
             'data-nks-start-engine': '1',
             'data-nks-prepare': '1',
             onClick: oneClickPrepare,
-          }, engine.phase === 'running' ? copy.resumeEngine : copy.prepareEnv),
+          }, copy.restartSandbox),
           h('button', { type: 'button', className: 'nks-start-btn', 'data-nks-diagnose': '1', onClick: () => run(() => refreshStatus()) }, copy.retry),
           h('button', { type: 'button', className: 'nks-start-btn', 'data-nks-open-settings': '1', onClick: openSettings }, copy.settings)) : null,
         !busy && !statusDown && !status?.engineMismatch ? h('div', { className: 'nks-empty-actions' },
@@ -2808,7 +2865,7 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
     toast ? h(NanoToast, {
       text: toast,
       anchor: workspaceRef.current,
-      actions: toastFix ? [{ label: copy.prepareEnv, onClick: repairNow }] : undefined,
+      actions: toastFix ? [{ label: copy.restartSandbox, onClick: repairNow }] : undefined,
     }) : null,
     pick?.elements?.length ? h('pre', {
       'data-nks-pick': '1',
@@ -2816,6 +2873,87 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
     }, pick.elements.length > 1
       ? multiNote(pick.elements, { url: pageUrl, comment })
       : designNote(pick.elements[0], { url: pageUrl, comment })) : null)
+}
+
+/**
+ * Managed-sandbox gate: discovery is the only request before the user picks
+ * exactly one sandbox; every pane request then travels on that selection's
+ * bound fetch. Switching remounts BrowserPane under `key={sandboxId}`, so
+ * per-object state (notes, endpoints, URLs) cannot leak between sandboxes.
+ * There is no default and no auto-pick of the first row.
+ */
+function SandboxPicker({ copy, languageOf, theme, onThemeChange }) {
+  const [client, setClient] = React.useState(null)
+  const [rows, setRows] = React.useState(null)
+  const [error, setError] = React.useState(null)
+  const [selection, setSelection] = React.useState(null)
+  const [retrySeq, setRetrySeq] = React.useState(0)
+  const selAbortRef = React.useRef(null)
+
+  React.useEffect(() => {
+    const abort = new AbortController()
+    let alive = true
+    const impl = (url, init = {}) => fetch(url, { ...init, signal: init.signal ?? abort.signal })
+    const managed = createManagedDesignClient({ fetch: impl, origin: location.origin })
+    ;(async () => {
+      try {
+        await managed.discover()
+        const res = await managed.list()
+        const body = await res.json().catch(() => null)
+        if (!alive) return
+        if (!res.ok) {
+          setError(new Error(`sandbox.list HTTP ${res.status}`))
+          return
+        }
+        setClient(managed)
+        setRows(listSandboxRows(body))
+        setError(null)
+      } catch (cause) {
+        if (alive) setError(cause)
+      }
+    })()
+    return () => { alive = false; abort.abort(); selAbortRef.current?.abort() }
+  }, [retrySeq])
+
+  function choose(sandboxId) {
+    if (!client || !sandboxId) return
+    selAbortRef.current?.abort()
+    const abort = new AbortController()
+    selAbortRef.current = abort
+    const bound = client.bind(sandboxId)
+    const boundFetch = (path, init = {}) => {
+      const signals = [init?.signal, abort.signal].filter(Boolean)
+      const signal = signals.length > 1 && typeof AbortSignal.any === 'function'
+        ? AbortSignal.any(signals) : signals[0]
+      return bound(path, { ...init, signal })
+    }
+    // A withdrawn or changed authorization never selects a replacement.
+    setSelection({ sandboxId, fetch: boundFetch })
+  }
+
+  const picker = h('div', { className: 'nks-sandbox-bar', 'data-nks-sandbox-bar': '1' },
+    h('select', {
+      'data-nks-sandbox-select': '1',
+      'aria-label': copy.sandboxPick,
+      value: selection?.sandboxId ?? '',
+      onChange: (event) => { if (event.target.value) choose(event.target.value) },
+    },
+      h('option', { value: '', disabled: true }, copy.sandboxPick),
+      (rows ?? []).map((row) => h('option', { key: row.sandboxId, value: row.sandboxId },
+        `${row.name || row.sandboxId.slice(0, 8)} · ${row.envId ?? ''} · ${row.observedState ?? 'unknown'}`))))
+
+  if (error) {
+    return h('div', { className: 'nks-empty', 'data-nks-sandbox-error': '1' },
+      h('div', { className: 'nks-empty-title' }, copy.sandboxFailed),
+      h('div', { className: 'nks-empty-body' }, String(error?.message || error)),
+      h('div', { className: 'nks-empty-actions' },
+        h(primitives.Button, { variant: 'ghost', size: 'sm', onClick: () => setRetrySeq((n) => n + 1) }, copy.refresh)))
+  }
+  if (rows === null) return h('div', { className: 'nks-empty', 'data-nks-sandbox-loading': '1' }, copy.sandboxLoading)
+  if (rows.length === 0) return h('div', { className: 'nks-empty', 'data-nks-sandbox-empty': '1' }, copy.sandboxEmpty)
+  if (!selection) return h('div', { className: 'nks-empty', 'data-nks-sandbox-pick': '1' }, picker)
+  return h(React.Fragment, null, picker,
+    h(BrowserPane, { key: selection.sandboxId, copy, languageOf, theme, onThemeChange, fetch: selection.fetch, sandboxId: selection.sandboxId }))
 }
 
 export const inject = ['slots', 'sidebarRightTabs', 'locale', 'theme']
@@ -2831,7 +2969,7 @@ export function apply(ctx) {
   const copy = () => copyFor(languageOf())
   // The host theme service and its change event; the pane hands both to
   // nano-ui's ThemeScope instead of resolving a local scheme.
-  const Pane = () => h(BrowserPane, {
+  const Pane = () => h(SandboxPicker, {
     copy: copy(),
     languageOf,
     theme: ctx.theme,

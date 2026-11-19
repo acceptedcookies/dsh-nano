@@ -146,6 +146,8 @@ open/attach 时写入宿主 session 标签 `t`/`conv`（保留键，`label` 不�
 
 两条 lane：`local`（宿主 `subprocess.spawnTerminal`，即 node-pty）、`mcp`（连接远端 MCP terminal 端点，用返回的 `attach.url`）。没有 isolate，也没有 sandbox lane。`/term` 创建的 session 默认走 `local`。
 
+受管沙箱终端资源 `dsh-resource://sandbox-terminal/<envId>/<sandboxId>/<terminalId>`（dnls.control/1）经 `sidebarRightTabs` 认领为右栏标签：先验证同源 contract 与 targeted inspect（envId/sandboxId 必须一致），再经既有 `mcp` lane attach 已存在的终端——不 create、不回落 local、关闭只 detach，端点不写入 layout 持久化。不新增 lane。
+
 ## 配置与状态
 
 宿主无配置文件。所有 durable 状态在 `${DSH_HOME}/dsh-nano-terminal.state/`（`plugins/<pkg>/` 是安装树，每次宿主重启被源树覆盖，不能存状态）：

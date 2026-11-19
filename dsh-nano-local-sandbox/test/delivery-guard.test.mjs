@@ -344,7 +344,7 @@ test('/shot propagates an in-band engine capture error as 502', async () => {
 // ── error catalog covers every emitted id ──
 
 test('every errorId emitted anywhere in the plugin resolves through the composed catalogue', async () => {
-  const { errorCatalog, errorNamespace } = await import('../src/host/error-catalog.js')
+  const { createErrorCatalog, errorCatalog, errorNamespace } = await import('../src/host/error-catalog.js')
   const { readFileSync, readdirSync } = await import('node:fs')
   const { join } = await import('node:path')
   const namespace = errorNamespace()
@@ -365,7 +365,7 @@ test('every errorId emitted anywhere in the plugin resolves through the composed
   // src/host but answers the same contract, so it is scanned too.
   scan(readFileSync(new URL('../profiles/kitesurf/mcp-bridge.mjs', import.meta.url).pathname, 'utf8'))
   scan(readFileSync(new URL('../index.js', import.meta.url).pathname, 'utf8'))
-  const catalog = errorCatalog()
+  const catalog = [...errorCatalog(), ...createErrorCatalog().errorCatalog()]
   const missing = [...emitted]
     .filter((id) => /^[a-z]/.test(id)) // skip non-id captures
     .filter((id) => !catalog.some((row) => new RegExp(row.match).test(id)))

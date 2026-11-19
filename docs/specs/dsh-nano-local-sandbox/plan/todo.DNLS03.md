@@ -51,12 +51,12 @@ P0 → P1 → P2 → P3；P3 → P4 → P5；P3 → P6；(P1, P6) → P7；(P5, 
 - [x] **P7-02** 同一台账原子判额；连续空闲窗只 stop，保留行、端口和卷（`DNLS03-T61`）。实际 kitesurf driver 没有持续空闲证明，不自动回收。
 
 ### Phase 8
-- [ ] **P8-01** 管理出口 — `package.json:12-30`；`src/client/`（新，仅在有宿主槽位时）；无槽位则显式宿主依赖，不覆盖宿主命令（`DNLS03-T70`）
-- [ ] **P8-02** 资源交接 — 新 `src/host/terminal-resource.js`：向宿主公开资源导航注册 `sandbox-terminal`，不新 lane、不私有 import [DNT]；地址无 token；恢复只 attach（`DNLS03-T71`）
-- [ ] **P8-03** 文档同切 — `dsh-nano-local-sandbox/AGENTS.md` 身份表与「使用」表；人读说明与目标态一致；版本号仍读 package.json，不写死 1.3（`DNLS03-T72`）
+- [ ] **P8-01** 管理出口（宿主依赖）：rc.5 的 `sidebarRight` 只能打开已挂载 session 的 [dsh工作台] 页签。未注册 `/sandbox`，未提供同包页签，未用全局中央面板替代。T70 无槽位分支 PASS；有槽位分支未观察。
+- [x] **P8-02** 已有终端的公开资源交接：[DNLS] 的获准 list 给地址，[DNT] 正式注册资源处理器；T71 验证同一手势重试不重复 create。无来源页时只支持手动交接，不声称已点击打开。
+- [x] **P8-03** `AGENTS.md`、[DNK]/[DNT] 消费说明及升级说明同切。T72 检查版本、engines 和包规。
 
 ### 收口测试与工作方法收尾
-- [ ] **DNLS03-T80** mega — `test/dnls03-journey.mega.test.mjs`：公开面同切，从发现到 attach 的夹具旅程，中间无 v1、无 session 主键（Phase 8 出口）
+- [x] **DNLS03-T80** mega — 2026-11-19T19:05:14Z，`node --test dsh-nano-local-sandbox/test/dnls03-journey.mega.test.mjs`，1/1 PASS。调用实际包 `apply`、回环 HTTP、真实台账和 profile；Apple backend、`ctx.effect` 与可信具名主体是夹具。共享 owner 被拒且 broker 计数不变。
 - [x] **DNLS03-T81** N=20 受控屏障：第二写者被拒、过期复核时新使用或新 PTY 登记成功，未发 stop。此项不替代 WS upgrade 测试。
 - [ ] **STEP.5** — 以 `工作日志模板` 创建 [工作日志] 并回填至执行计划文档底部
 - [ ] **STEP.6** — 以 `closure模板` 输出 closure 至 `../closure/DNLS03-closure.md`
@@ -95,7 +95,7 @@ Phase 6 提交 `3f87460`。Phase 7 内核测试（基线 `3f87460`，提交以�
 - T61/T81：2026-11-19T18:44:54Z，`node --test dsh-nano-local-sandbox/test/{quota-idle,lifecycle.spike,registry-race.soak}.test.mjs`，23 pass / 0 fail / 0 skip（含 20 个竞态子例）。
 - T50 补证：2026-11-19T18:41:19Z，`node --test dsh-nano-local-sandbox/test/{cdp-transport,loop3-gaps,dom-health-routes,page-routes}.test.mjs`，32 pass / 0 fail。Phase 6 只证实 `/control`，复查另发现 CDP transport 有相邻端口推断；已移除该推断及 relay 失败后的直连。
 
-当前节点 Phase 8；审查存放 `.anote/reviews/dsh-nano-local-sandbox/DNLS03/`，closure 存放 `../closure/DNLS03-closure.md`。入口未同切前，内核 PASS 不等于公开面 PASS。
+Phase 7 提交 `b33a2a8`。Phase 8 的真实入口只注册 managed 分派器。独立静态审查发现 inspect/processes 未配 HTTP、列表层级用错、WS 数据面关停太晚以及共享 owner 不足以证明终端归属；在当前切割提交修复。完整回归：2026-11-19T19:05:58Z [DNLS] `npm test` 433/433，19:07:17Z [DNK] `npm test` 51/51；19:07:37Z [DNT] T42 定向 33/33，19:07:46Z 沙箱 wire + local 威胁回归 20/20。四次均 0 fail、0 skip。无真实容器和部署。审查在 `.anote/reviews/dsh-nano-local-sandbox/DNLS03/`，最终裁定在 `../closure/DNLS03-closure.md`。
 
 ## 附件：原始发车指令
 登记 ID：`DNLS03-managed-sandbox-control/directive-1`。以下为本次授权原文，引用此处，不另建授权副本。

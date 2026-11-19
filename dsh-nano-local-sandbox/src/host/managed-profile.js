@@ -175,6 +175,7 @@ export function createManagedProfileSource(deps = {}) {
     const bounds = resourceBounds(manifest)
     const profile = {
       profileId: id,
+      context: { id, dir: profileDir, profile: manifest, driver: result.driver, digest: result.digest, resources: bounds.defaults },
       recipeRef: `${manifest.build.image}@${result.digest}`,
       services,
       portPool: [...pool],

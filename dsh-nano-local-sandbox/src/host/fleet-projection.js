@@ -35,6 +35,7 @@ const PROCESSES_MAX_LIMIT = 200
 const schema = (properties, required) => ({ type: 'object', properties, required, additionalProperties: false })
 const int = { type: 'integer' }
 const objectTool = (name, description, properties = {}, required = []) => [name, {
+  http: { path: `/nano-local-sandbox/${name.slice('sandbox.'.length)}`, methods: ['GET', 'HEAD'] },
   target: 'object',
   tool: { name, description, inputSchema: schema({ sandboxId: { type: 'string' }, ...properties }, ['sandboxId', ...required]) },
 }]
@@ -165,7 +166,11 @@ export function createFleetProjection({ envId, sources, resolvePrincipal } = {})
 
   /** Rows that still authorize the same principal — the counted set. */
   function stillAuthorized(peer, { source, principal }, row) {
-    const verdict = authorize({ peer, envId: source.envId, row, action: 'read', resolvePrincipal })
+    if (!stillVisible(source, principal)) return null
+    const current = source.registry.get(row.sandboxId)
+    if (!current || current.binding?.locator !== row.binding?.locator ||
+        current.binding?.generation !== row.binding?.generation || current.stateVolume !== row.stateVolume) return null
+    const verdict = authorize({ peer, envId: source.envId, row: current, action: 'read', resolvePrincipal })
     return !verdict.status && verdict.principal?.key === principal?.key ? verdict : null
   }
 
@@ -291,6 +296,7 @@ export function createFleetProjection({ envId, sources, resolvePrincipal } = {})
   }
 
   async function execute({ capability, sandboxId, peer, req, args }) {
+    livePeer(peer)
     if (capability === 'sandbox.fleet') {
       const envs = []
       for (const entry of visibleSources(peer)) {
@@ -313,7 +319,16 @@ export function createFleetProjection({ envId, sources, resolvePrincipal } = {})
         }
       }
       livePeer(peer)
-      return { envs }
+      const visible = visibleSources(peer)
+      return { envs: envs.flatMap(env => {
+        const entry = visible.find(item => item.source.envId === env.envId)
+        if (!entry) return []
+        const rows = env.rows.filter(item => {
+          const row = entry.source.registry.get(item.sandboxId)
+          return row && stillAuthorized(peer, entry, row) && (!item.generation || item.generation === row.binding?.generation)
+        })
+        return [{ ...env, rows, complete: env.complete && rows.length === env.rows.length }]
+      }) }
     }
 
     if (capability === 'sandbox.list') {
@@ -352,7 +367,11 @@ export function createFleetProjection({ envId, sources, resolvePrincipal } = {})
         else complete = false
       }
       livePeer(peer)
-      return { envs, rows: pageRows, total: authorized.length, offset, limit, complete }
+      const visible = new Set(visibleSources(peer).map(entry => entry.source.envId))
+      const remaining = authorized.filter(({ entry, row }) => visible.has(entry.source.envId) && stillAuthorized(peer, entry, row))
+      const ids = new Set(remaining.map(({ entry, row }) => `${entry.source.envId}/${row.sandboxId}`))
+      return { envs: envs.filter(env => visible.has(env.envId)), rows: pageRows.filter(r => ids.has(`${r.envId}/${r.sandboxId}`)),
+        total: remaining.length, offset, limit, complete: complete && remaining.length === authorized.length }
     }
 
     if (capability === 'sandbox.inspect' || capability === 'sandbox.processes') {
@@ -414,12 +433,18 @@ export function createFleetProjection({ envId, sources, resolvePrincipal } = {})
         throw Object.assign(new Error('process table unavailable'), { status: 503 })
       }
       const entries = await entry.source.backend.processes(row.binding.locator)
+      const afterGuest = entry.source.registry.get(sandboxId)
+      if (!afterGuest || !stillVisible(entry.source, entry.principal)) throw notFound()
+      const afterGrant = authorize({ peer, envId: entry.source.envId, row: afterGuest, action: 'processes', resolvePrincipal })
+      if (afterGrant.status || !afterGrant.principal.operator || afterGrant.principal.key !== verdict.principal.key) throw denied()
+      if (afterGuest.binding?.locator !== row.binding?.locator || afterGuest.binding?.generation !== row.binding?.generation ||
+          afterGuest.stateVolume !== row.stateVolume) throw Object.assign(new Error('sandbox changed under dispatch'), { status: 409 })
       // The guest table was read under one binding; the post receipt must
       // name the SAME locator+generation+volume as the pre-observation.
       const post = await entry.source.observe(row)
       const latest = entry.source.registry.get(row.sandboxId)
       const recheck = latest && authorize({ peer, envId: entry.source.envId, row: latest, action: 'processes', resolvePrincipal })
-      if (!latest || recheck.status || recheck.principal?.key !== verdict.principal?.key ||
+      if (!latest || !stillVisible(entry.source, entry.principal) || recheck.status || !recheck.principal.operator || recheck.principal?.key !== verdict.principal?.key ||
           !proven(latest, post) || post.state !== 'running' ||
           post.generation !== pre.generation || post.locator !== pre.locator || post.stateVolume !== pre.stateVolume) {
         throw Object.assign(new Error('sandbox changed under dispatch'), { status: 409 })

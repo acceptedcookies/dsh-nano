@@ -7,7 +7,11 @@ import { registerRoutes } from './lib/route-guard.js'
 import { BINDING_TABLE } from './lib/bindings.js'
 import { ensurePerfReviewHost } from './lib/perf-review-host.js'
 import { createAppleBackend } from './src/host/backend-apple.js'
-import { routeSpecs, startDiagnosticsPush } from './src/host/routes.js'
+import { openEnvironmentOwner } from './src/host/environment-owner.js'
+import { createManagedRoutes } from './src/host/managed-routes.js'
+import { stateRootFor } from './src/host/profile-drivers.js'
+import { appendFileSync } from 'node:fs'
+import { join } from 'node:path'
 
 export const name = 'nano-local-sandbox'
 
@@ -15,17 +19,22 @@ export const name = 'nano-local-sandbox'
 export const inject = ['webServer', 'connection', 'sandboxPolicy', 'sandbox', 'sessions']
 
 export function apply(ctx, deps = {}) {
-  if (!deps.session) deps.session = { phase: 'idle', history: [], containerName: '' } // '' → containerNameFor() derives per-env
-  if (!deps.backend) deps.backend = createAppleBackend()
-  // deps.ctx is the live host context: routes resolve sandboxPolicy from it so
-  // a terminal cannot attach across a policy remount.
-  const finalDeps = { ...deps, ctx }
-  // The bridge's sandbox.* tools read this pushed document; without the loop
-  // every one of them reports the profile's diag.stale code.
-  startDiagnosticsPush(deps.session, finalDeps)
-  return registerRoutes(ctx, routeSpecs(finalDeps), {
-    table: BINDING_TABLE,
-    plugin: 'dsh-nano-local-sandbox',
-    observe: event => ensurePerfReviewHost().observe(event),
+  const connection = ctx.get('connection'), webServer = ctx.get('webServer')
+  if (typeof connection?.admit !== 'function' || typeof webServer?.registerUpgrade !== 'function') throw new Error('managed sandbox requires host admission and upgrades')
+  const backend = deps.backend ?? createAppleBackend({}, { confine(argv) {
+    const policy = ctx.get('sandboxPolicy')?.resolve({})
+    if (!policy || !['workspace-write', 'read-only'].includes(policy.mode)) throw new Error('enforceable host sandbox policy required')
+    return ctx.get('sandbox').confine(argv, policy)
+  } })
+  const auditPath = join(stateRootFor(deps), 'control.audit.jsonl')
+  const owner = openEnvironmentOwner({ ...deps, backend, webServer, connection,
+    originFor: () => webServer.getOrigin().replace(/^http/, 'ws'),
+    audit: deps.audit ?? (record => appendFileSync(auditPath, JSON.stringify(record) + '\n', { mode: 0o600 })) })
+  return ctx.effect(function* () {
+    yield ctx.effect(() => () => owner.close())
+    const specs = createManagedRoutes({ table: BINDING_TABLE, connection, capabilities: owner.capabilities, execute: owner.execute })
+    for (const dispose of registerRoutes(ctx, specs, {
+      table: BINDING_TABLE, plugin: 'dsh-nano-local-sandbox', observe: event => ensurePerfReviewHost().observe(event),
+    })) yield dispose
   })
 }

@@ -49,11 +49,12 @@ function normalizePrincipal(candidate) {
 export function resolveOwnerPrincipal({ peer } = {}) {
   const signal = peer?.signal
   // A real live AbortSignal: anything merely shaped like one is untrusted.
-  const live = signal !== null && typeof signal === 'object' &&
-    typeof signal.aborted === 'boolean' && signal.aborted === false &&
-    typeof signal.addEventListener === 'function'
+  let live = false
+  try { live = Object.getOwnPropertyDescriptor(AbortSignal.prototype, 'aborted').get.call(signal) === false } catch { /* no host signal */ }
   if (peer?.principal?.kind === 'owner' && live) {
-    return { key: 'owner', operator: true, canSee: true, canUse: true }
+    // The signed browser owner is shared. It can manage its sandboxes but
+    // it cannot prove which end user owns a terminal.
+    return { key: 'owner', operator: true, canSee: true, canUse: (_row, action) => !action?.startsWith('terminal.') }
   }
   return null
 }

@@ -207,7 +207,7 @@ test('backend publishHealth rides stdin on a fixed env -i argv; create serialize
     execFile: async () => '[]',
     calls: {},
   }
-  const backend = createAppleBackend({}, io)
+  const backend = createAppleBackend({}, { ...io, confine: argv => ({ argv: ['confined', ...argv] }) })
   const sent = doc()
   await backend.publishHealth('dnls-loc', sent)
   const { args, input } = seen.at(-1)

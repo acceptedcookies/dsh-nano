@@ -770,6 +770,7 @@ export function openControlRegistry({ root, envId } = {}) {
     const obs = checkedObservation(observation, ['locator', 'generation', 'stateVolume'], 'adoption observation')
     const existing = rows.find((row) => row.binding.locator === obs.locator)
     if (existing) {
+      if (existing.removed) throw conflict('locator belongs to a removed sandbox')
       if (existing.binding.generation !== obs.generation) {
         throw conflict('locator is already bound to another generation')
       }

@@ -41,10 +41,11 @@ test('DNLS03-T22 the production shape trusts only kind=owner with a live signal'
   const liveSignal = () => new AbortController().signal
   const dead = new AbortController()
   dead.abort()
-  assert.deepEqual(
-    resolveOwnerPrincipal({ peer: { principal: { kind: 'owner' }, signal: liveSignal() } }),
-    { key: 'owner', operator: true, canSee: true, canUse: true },
-  )
+  const owner = resolveOwnerPrincipal({ peer: { principal: { kind: 'owner' }, signal: liveSignal() } })
+  assert.equal(owner.key, 'owner')
+  assert.equal(owner.operator, true)
+  assert.equal(owner.canUse(row, 'read'), true)
+  assert.equal(owner.canUse(row, 'terminal.attach'), false)
   assert.equal(resolveOwnerPrincipal({ peer: { principal: { kind: 'member' }, signal: liveSignal() } }), null)
   assert.equal(resolveOwnerPrincipal({ peer: { principal: { kind: 'owner' }, signal: dead.signal } }), null)
   assert.equal(resolveOwnerPrincipal({ peer: { principal: 'owner', signal: liveSignal() } }), null)

@@ -3,11 +3,11 @@
 ## 决策树
 
 1. `GET /nano-local-sandbox/diagnostics` → 读 `hints`。
-2. `lifecycle.phase` 不是 `running` 或引擎不应答 → `POST /nano-local-sandbox/recover {}`；仍不行再 `POST /nano-local-sandbox/lifecycle {"action":"start"}`（休眠中则 `resume`）。引擎由沙箱宿主带起，本包不启动容器。
+2. `lifecycle.phase` 不是 `running` 或引擎不应答 → `POST /nano-local-sandbox/lifecycle {"action":"restart","requestId":"<fresh uuid>"}`（用户确认后），并轮询 `GET /operations?operationId=<op>` 到终态；stopped/suspended 则 `action:"start"`。引擎由沙箱宿主带起，本包不启动容器。
 3. `engineMismatch=true` → 不要 attach；`GET /nano-local-sandbox/ports` 看 `effective.httpBase` 并报给维护者。端点由实例 registry 返回，pane 不改址。
-4. 有失败调用 → `GET /operations?errorsOnly=true` 取 errorId → 对照 `GET /diagnostics` 的 `errorCatalog`（或 MCP `sandbox.error_catalog`）。
+4. 有失败调用 → `GET /diagnostics` 的 hints 与 `errorCatalog` 取 errorId（或 MCP `sandbox.error_catalog`）。
 5. 页面 JS 报错 → `GET /console?level=error,exception`；网络失败 `level=network`；导航漂移 `level=navigation`。
-6. **导航成功但画面白/交互死**（SSR 到了、应用 JS 没跑）→ 这是应用层问题不是引擎问题：`GET /console?level=exception,error` 取首个报错、`GET /network?failedOnly=true` 找被拦的 JS chunk/子资源（`x-kitesurf-blocked` 头标原因）；`GET /diagnostics` 的 hints 会把「页面加载但应用异常」直接列出。别 `/recover`——引擎是好的。
+6. **导航成功但画面白/交互死**（SSR 到了、应用 JS 没跑）→ 这是应用层问题不是引擎问题：`GET /console?level=exception,error` 取首个报错、`GET /network?failedOnly=true` 找被拦的 JS chunk/子资源（`x-kitesurf-blocked` 头标原因）；`GET /diagnostics` 的 hints 会把「页面加载但应用异常」直接列出。别重启沙箱——引擎是好的。
 7. 画面与 API 对不上 → `GET /targets` 确认附着页，重 `POST /shot`。
 8. 引擎起不来 → 生命周期归 dsh-nano-local-sandbox，不在本包。
 9. 要复现 → `POST /evaluate` 注入 `console.log`/改 DOM，再 `/shot` 看效果。
@@ -21,7 +21,7 @@
 
 ## 端口韧性
 
-端口由实例 registry 分配，pane 只读 `/nano-local-sandbox/ports` 的 `effective`/`ports`/`container`。自愈入口是 `POST /nano-local-sandbox/recover {}`；只读诊断 `GET /ports`；MCP 对应 `sandbox.ports`/`sandbox.recovery_plan`。
+端口由实例 registry 分配，pane 只读 `/nano-local-sandbox/ports` 的 `effective`/`ports`/`container`。显式重启走 `POST /nano-local-sandbox/lifecycle {"action":"restart","requestId":"<uuid>"}` + `GET /operations?operationId=<op>` 轮询；只读诊断 `GET /ports`；MCP 对应 `sandbox.ports`/`sandbox.recovery_plan`。
 
 **关键**：本包不删、不重建容器。端口占用修复由沙箱宿主完成。
 

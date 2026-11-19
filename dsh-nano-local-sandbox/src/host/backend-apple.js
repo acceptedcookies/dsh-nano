@@ -122,21 +122,23 @@ function runSession(io, args, { input = '', timeoutMs = CLI_TIMEOUT_MS } = {}) {
 /** Terminal broker verbs the managed owner may invoke through entry. */
 const TERM_ENTRY_VERBS = new Set(['create', 'rpc'])
 
-function run(io, args, { timeoutMs = CLI_TIMEOUT_MS } = {}) {
+function run(io, args, { timeoutMs = CLI_TIMEOUT_MS, command = 'container' } = {}) {
   io.calls.spawn += 1
-  if (io.spawn) return io.spawn('container', args)
+  if (io.spawn) return io.spawn(command, args)
   return new Promise((resolve, reject) => {
-    const child = spawn('container', args, { stdio: 'pipe' })
+    const child = spawn(command, args, { stdio: ['ignore', 'ignore', 'pipe'] })
     let stderr = ''
+    let timedOut = false
     const timer = setTimeout(() => {
+      timedOut = true
       try { child.kill('SIGKILL') } catch { /* gone */ }
-      reject(cliError(args, { timedOut: true }))
     }, timeoutMs)
-    child.stderr?.on('data', (chunk) => { stderr += chunk })
+    child.stderr?.on('data', (chunk) => { stderr = (stderr + chunk).slice(-8192) })
     child.on('error', (cause) => { clearTimeout(timer); reject(cliError(args, { cause })) })
     child.on('close', (code) => {
       clearTimeout(timer)
-      if (code === 0) resolve({ code })
+      if (timedOut) reject(cliError(args, { timedOut: true }))
+      else if (code === 0) resolve({ code })
       else reject(cliError(args, { code, stderr }))
     })
   })
@@ -246,7 +248,12 @@ export function createAppleBackend(spec = {}, io = {}) {
         args.push('--env', `DNLS_ENV_ID=${envId}`, '--env', `DNLS_SANDBOX_ID=${sandboxId}`)
       }
       args.push(instance.image)
-      await run(bound, args)
+      if (typeof io.confine !== 'function') throw Object.assign(new Error('host confinement unavailable'), { status: 503 })
+      const confined = await io.confine(['container', ...args])
+      if (!Array.isArray(confined?.argv) || !confined.argv.length || confined.argv[0] === 'container') {
+        throw Object.assign(new Error('host did not confine container creation'), { status: 503 })
+      }
+      await run(bound, confined.argv.slice(1), { command: confined.argv[0] })
       return { id: instance.containerName, started: true }
     },
     async start(name) {

@@ -20,6 +20,7 @@
  */
 import { createHash } from 'node:crypto'
 import { authorize } from './object-authz.js'
+import { terminalAddress } from './terminal-resource.js'
 import { TERM_TOOLS } from './terminal-driver.js'
 
 const boundedText = (value, max = 256) => typeof value === 'string' && value.length > 0 && value.length <= max && !value.includes('\0')
@@ -83,7 +84,8 @@ export function createTerminalOwner({ registry, envId, observe, resolvePrincipal
     // The world moved while we observed: re-read the ledger and refuse if
     // the binding or the ref changed underneath the awaited call.
     const fresh = freshRow(row.sandboxId, row)
-    if (!fresh || (ref && fresh.terminals.find((entry) => entry.terminalId === ref.terminalId)?.generation !== ref.generation)) {
+    const current = ref && fresh?.terminals.find(entry => entry.terminalId === ref.terminalId)
+    if (!fresh || (ref && (current?.generation !== ref.generation || current?.principal !== ref.principal))) {
       throw fail(503, 'unavailable')
     }
     const recheck = authorize({ peer, envId, row: fresh, action, terminal: authTerminal, resolvePrincipal })
@@ -142,6 +144,7 @@ export function createTerminalOwner({ registry, envId, observe, resolvePrincipal
       throw fail(503, 'unavailable')
     }
     mark(row.sandboxId, ref, 'active')
+    await guarded(peer, 'terminal.create', row)
     return { sandboxId: row.sandboxId, terminalId: ref.terminalId }
   }
 
@@ -150,8 +153,10 @@ export function createTerminalOwner({ registry, envId, observe, resolvePrincipal
     return {
       sandboxId: row.sandboxId,
       terminals: row.terminals
-        .filter((entry) => entry.principal === principal.key)
-        .map((entry) => ({ terminalId: entry.terminalId, state: entry.state })),
+        .filter((entry) => entry.principal === principal.key && entry.generation === row.binding.generation)
+        .map(({ terminalId, state }) => ({ terminalId, state, ...(state === 'active' && {
+          address: terminalAddress({ envId, sandboxId: row.sandboxId, terminalId }),
+        }) })),
     }
   }
 
@@ -176,6 +181,7 @@ export function createTerminalOwner({ registry, envId, observe, resolvePrincipal
       throw fail(503, 'unavailable')
     }
     const url = await issueLocator(ref, fresh, { req, peer })
+    await guarded(peer, 'terminal.attach', row, ref.terminalId)
     // Only an opaque ws attach URL is a valid issue: no socket paths, no
     // embedded credentials or tokens returned by a faulty issuer.
     let parsed
@@ -188,17 +194,18 @@ export function createTerminalOwner({ registry, envId, observe, resolvePrincipal
 
   async function control({ peer, row, args, verb, request }) {
     const { ref } = await guarded(peer, `terminal.${verb}`, row, args.terminalId)
+    let reply
     try {
-      const reply = await rpc(row, { terminalId: ref.terminalId, verb, ...request })
-      // The wire is binary-safe; the tool surface decodes to visible UTF-8.
-      if (verb === 'read' && typeof reply?.bytes_b64 === 'string') {
-        return { seq: reply.seq, from: reply.from, bytes: Buffer.from(reply.bytes_b64, 'base64').toString('utf8'), ended: reply.ended }
-      }
-      return reply
+      reply = await rpc(row, { terminalId: ref.terminalId, verb, ...request })
     } catch {
       mark(row.sandboxId, ref, 'unknown')
       throw fail(503, 'unavailable')
     }
+    await guarded(peer, `terminal.${verb}`, row, ref.terminalId)
+    if (verb === 'read' && typeof reply?.bytes_b64 === 'string') {
+      return { seq: reply.seq, from: reply.from, bytes: Buffer.from(reply.bytes_b64, 'base64').toString('utf8'), ended: reply.ended }
+    }
+    return reply
   }
 
   async function execute({ capability, sandboxId, peer, req, args }) {

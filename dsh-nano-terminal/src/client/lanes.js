@@ -529,9 +529,14 @@ export class McpLane {
 
 export function makeLane(spec, meta) {
   switch (spec.lane) {
-    case 'mcp':
+    case 'mcp': {
+      // A recovered managed spec persists only stable refs — the endpoint is
+      // rebuilt from the same-origin public contract, and McpLane re-verifies
+      // dnls.control/1 before any attach.
+      const managed = spec.contractVersion !== undefined || spec.sandboxId !== undefined
+      const url = spec.url ?? (managed ? new URL('/nano-local-sandbox/mcp', globalThis.location?.origin).href : undefined)
       return new McpLane({
-        url: spec.url, cols: meta.cols, rows: meta.rows, sessionId: meta.sessionId,
+        url, cols: meta.cols, rows: meta.rows, sessionId: meta.sessionId,
         // Managed selection is by the announced contractVersion (T-O-45);
         // target fields are validated at open, never against URL features.
         sandbox: spec.contractVersion !== undefined || spec.sandboxId !== undefined ? {
@@ -543,6 +548,7 @@ export function makeLane(spec, meta) {
           service: spec.service,
         } : null,
       })
+    }
     case 'local':
     default:
       if (spec.lane && spec.lane !== 'local') throw new Error(`lane ${spec.lane} is not available`)

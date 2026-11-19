@@ -15,7 +15,7 @@ rules that MUST NOT be violated inline. Load topic references on demand from
 this skill's directory — `references/<topic>.md`.
 
 ## 0. 排障第一步：一次探针，不要猜
-`GET /nano-local-sandbox/diagnostics`（page.fetch 带会话；裸 curl 需 dsh-auth cookie，否则 401/302）。一次返回 status/lifecycle/targets/console/操作trace/errorCatalog/perf/hints。`hints` 是权威线索，先读它再决定动作。失败调用看 `GET /operations?errorsOnly=true`。
+`GET /nano-local-sandbox/diagnostics`（page.fetch 带会话；裸 curl 需 dsh-auth cookie，否则 401/302）。一次返回 status/lifecycle/targets/console/操作trace/errorCatalog/perf/hints。`hints` 是权威线索，先读它再决定动作。失败调用看 `/diagnostics` 的 hints 与 `errorCatalog`。
 
 ## 1. Get the socket — never guess it
 `GET /nano-local-sandbox/status`：`lifecycle.phase`=`idle`/`running`/`suspended`，仅 running 时 attach；`lifecycle.httpBase` 是引擎 origin；`lifecycle.mcpPort` 是容器内 MCP 桥端口；顶层 `cdp` 是 agent-browser `--cdp` 的 relay socket（`/diagnostics` 的 `lifecycle.cdp` 同值）。宿主重启后自动 re-adopt 引擎。`engineMismatch:true`=该 origin 应 `/health` 但不是 Kitesurf——不要 attach，报它。
@@ -33,7 +33,7 @@ agent-browser --cdp "$(curl -s .../nano-local-sandbox/status | jq -r .cdp)" snap
 - Kitesurf 每个 env 容器一页。驱动前 `get url`/`snapshot` 确认在预期页。
 - **绝不** `agent-browser close`（或让 daemon idle out 持 socket）：关 socket 把页打回 `about:blank`、抹掉人在看的内容。用完就停，别动 socket。
 - 不用 `--pin-tab`/session/多 target 旗标：只有一页。
-- `suspend`/`resume`/引擎重启也打回 `about:blank`；resume 后先 `get url`。
+- `stop`/引擎重启也打回 `about:blank`；重新 `start` 后先 `get url`。
 - 坐标/box/截图假定 deviceScaleFactor 1，viewport 只支持 `deviceScaleFactor:1` 与 `mobile:false`；其他值被拒（400）。viewport 仿真改过就从 note 的 box 重导。
 - `<img>` 是 object-fit:contain：letterbox 带内点击合法地打空，先 `/console?level=navigation` 或重 `/shot` 再怪引擎。
 - **one MCP writer**：`sandbox.control` 的 `writer`/`humanHold` 锁只约束 MCP/桥写者；pane（人）的 REST 写不受写锁约束。`humanHold.active:true` 时 agent 写被拒 `kitesurf.control.held`——看到 held **立刻停写**，别 retry 别 `claim`；把控制权交还人，等 `humanHold.active:false` 再写。
@@ -56,7 +56,7 @@ agent-browser --cdp "$(curl -s .../nano-local-sandbox/status | jq -r .cdp)" snap
 | `templates/feedback-report.md` | 结构化反馈模板 |
 
 ## 6. 排障顺序
-`GET /diagnostics`→hints → `/operations?errorsOnly=true`→errorId → `/diagnostics` 的 `errorCatalog`（或 MCP `sandbox.error_catalog`）→ 按 `recovery-playbook.md` 决策树。
+`GET /diagnostics`→hints → `/diagnostics` 的 `errorCatalog`（或 MCP `sandbox.error_catalog`）→ 按 `recovery-playbook.md` 决策树。/operations 只按 `sandboxId`+`operationId` 读单个 lifecycle operation 文档；它不是调用 trace。
 
 ## 7. Do not
 - 引擎 down 不回落本地 Chrome/Playwright/Puppeteer——报 Kitesurf 不答。

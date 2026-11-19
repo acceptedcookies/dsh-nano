@@ -7,120 +7,29 @@
  * ManagedContainer JSON.
  */
 import assert from 'node:assert/strict'
-import { cpSync, existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdtempSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import test from 'node:test'
 import { openEnvironmentOwner } from '../src/host/environment-owner.js'
+import { resolveOwnerPrincipal } from '../src/host/object-authz.js'
 import { createManagedRoutes } from '../src/host/managed-routes.js'
 import { loadProfileDriver } from '../src/host/profile-drivers.js'
 import { BINDING_TABLE } from '../lib/bindings.js'
-import { KITESURF_RUNTIME_FILES, runtimeRoot } from '../profiles/kitesurf/driver/runtime.js'
+import { runtimeRoot } from '../profiles/kitesurf/driver/runtime.js'
+import { DIGEST, makeBackend, materializeRuntime } from './support/managed-apple.mjs'
 
 const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)))
 const MCP_PATH = '/nano-local-sandbox/mcp'
 const CONTRACT = 'dnls.control/1'
-const DIGEST = `sha256:${'ab'.repeat(32)}`
 const OTHER_DIGEST = `sha256:${'cd'.repeat(32)}`
 
 function ownerPeer(controller = new AbortController()) {
   return { principal: { kind: 'owner' }, signal: controller.signal }
 }
 
-/** A fake-built kitesurf runtime tree: receipt + required files + node_modules. */
-function materializeRuntime(root, manifest) {
-  mkdirSync(dirname(root), { recursive: true })
-  writeFileSync(join(dirname(root), 'artifact.json'), JSON.stringify({ ref: manifest.build.checkout.ref }))
-  for (const file of [manifest.build.checkout.verify, ...KITESURF_RUNTIME_FILES]) {
-    const path = join(root, file)
-    mkdirSync(dirname(path), { recursive: true })
-    writeFileSync(path, 'fixture build output\n')
-  }
-  mkdirSync(join(root, 'node_modules'), { recursive: true })
-}
-
-/**
- * The container CLI seam, recorded. `create` stores the exact spec it was
- * handed; `inspect` reports it back as one Apple ManagedContainer, so every
- * verification path reads the same evidence the runtime would return.
- */
-function makeBackend() {
-  const calls = []
-  const containers = new Map()
-  let serial = 0
-  const managedContainer = (locator, c) => ({
-    raw: JSON.stringify([{
-      configuration: {
-        id: locator,
-        creationDate: c.creationDate,
-        mounts: (c.mounts ?? c.spec.mounts).map((m) => ({
-          source: m.source ?? null,
-          destination: m.target,
-          type: { [m.type]: {} },
-          options: m.readOnly ? ['ro'] : [],
-        })),
-        publishedPorts: (c.ports ?? c.spec.ports).map((p) => ({
-          containerPort: p.containerPort,
-          hostPort: p.hostPort,
-          hostAddress: p.hostAddress,
-          proto: p.protocol ?? p.proto,
-          count: p.count ?? 1,
-        })),
-        resources: c.resources ?? { cpus: c.spec.resources.cpus, memoryInBytes: c.spec.resources.memoryBytes },
-        image: { reference: c.spec.image, descriptor: { digest: c.digest ?? DIGEST } },
-      },
-      status: { state: c.state },
-    }]),
-  })
-  return {
-    calls,
-    containers,
-    onCreate: null,
-    count: (verb) => calls.filter((entry) => entry[0] === verb).length,
-    async create(spec) {
-      calls.push(['create', structuredClone(spec)])
-      serial += 1
-      const entry = { spec: structuredClone(spec), state: 'running', creationDate: 1_700_000_000 + serial * 61 }
-      containers.set(spec.containerName, entry)
-      this.onCreate?.(spec, entry)
-    },
-    async stop(locator) {
-      calls.push(['stop', locator])
-      const c = containers.get(locator)
-      if (c) c.state = 'stopped'
-    },
-    async remove(locator) {
-      calls.push(['remove', locator])
-      containers.delete(locator)
-    },
-    async start(locator) {
-      calls.push(['start', locator])
-      const c = containers.get(locator)
-      if (c) c.state = 'running'
-    },
-    async inspect(locator) {
-      calls.push(['inspect', locator])
-      const c = containers.get(locator)
-      return c ? managedContainer(locator, c) : null
-    },
-    async stats(locator) {
-      calls.push(['stats', locator])
-      return [{ id: locator, memoryUsageBytes: 0, cpuUsageUsec: 0 }]
-    },
-    async imageEvidence(tag) {
-      calls.push(['imageEvidence', tag])
-      return { tag, digest: DIGEST }
-    },
-    async terminalRpc(locator, verb, request) {
-      calls.push(['terminalRpc', verb, locator, request])
-      if (verb === 'create') return { ok: true, terminalId: request.terminalId }
-      return { ok: true }
-    },
-  }
-}
-
-async function setup(t) {
+async function setup(t, scoped = false) {
   const home = realpathSync(mkdtempSync(join(tmpdir(), 'dnls-env-owner-')))
   const profilesRoot = join(home, 'profiles')
   cpSync(join(packageRoot, 'profiles', 'kitesurf'), join(profilesRoot, 'kitesurf'), { recursive: true })
@@ -146,6 +55,9 @@ async function setup(t) {
     webServer: { registerUpgrade: () => () => {} },
     originFor: async () => 'ws://127.0.0.1',
     audit: (event) => audits.push(event),
+    ...(scoped && { resolvePrincipal: input => resolveOwnerPrincipal(input) && {
+      key: 'fixture-user', operator: true, canUse: true, canSee: true,
+    } }),
     // Frozen clock: the usage sampler's first tick lands a full minute out
     // (unref'd) so backend call counts stay exact for the whole test.
     clock: () => 0,
@@ -295,7 +207,7 @@ test('environment-owner services: actual loopback tuples, unknown health, denied
 })
 
 test('environment-owner recreate: verified replace keeps volume+ports, ends terminals, advances receipt', async (t) => {
-  const { owner, backend, call, create } = await setup(t)
+  const { owner, backend, call, create } = await setup(t, true)
   const row = await create('four')
   const old = { generation: row.binding.generation, volume: row.stateVolume, ports: row.ports }
 
@@ -414,7 +326,7 @@ test('environment-owner recreate: unverifiable replacement is indeterminate and 
 })
 
 test('environment-owner resolveCwd: declared service cwd only, never host paths', async (t) => {
-  const { call, create, backend } = await setup(t)
+  const { call, create, backend } = await setup(t, true)
   const row = await create('seven')
   const ok = await call('term.session.create', {
     sandboxId: row.sandboxId, openId: 'o-2', paneId: 'p-2', service: 'engine',

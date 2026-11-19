@@ -12,7 +12,7 @@
 | GET | `/nano-local-sandbox/targets` | 引擎 `Target.getTargets`（page target id/url、附着页） |
 | GET | `/nano-local-sandbox/console?level=…&limit=1..400&sinceSeq=&since=` | console/exception/network/navigation 环形缓冲 |
 | GET | `/nano-local-sandbox/network?limit=1..200&failedOnly=true` | 网络生命周期 |
-| GET | `/nano-local-sandbox/operations?errorsOnly=true&limit=1..200` | 每次路由调用 trace |
+| GET | `/nano-local-sandbox/operations?sandboxId=<id>&operationId=<op>` | 只读单个 lifecycle operation；非 trace 面 |
 | GET | `/nano-local-sandbox/browse-history` | 持久浏览历史（DELETE `?id=`/POST `{clear:true}` 改） |
 | GET | `/nano-local-sandbox/elements?selector=…&depth=N` | 引擎 DOM.getDocument 元素列表（depth NaN→400） |
 | GET | `/nano-local-sandbox/dom` | 页面 DOM 文本 |
@@ -38,8 +38,8 @@
 | POST | `/nano-local-sandbox/wait` | `{selector|text|url|fn}+load+timeoutMs` 阻塞条件等待；超时不是取消 |
 | POST | `/nano-local-sandbox/history` | `{delta:-1|+1}` 真浏览器进退 |
 | POST | `/nano-local-sandbox/settings` | 8 键事务：`{userAgent?,viewport?,media?,extraHeaders?,locale?,geolocation?,colorScheme?,cookies?}`；viewport `deviceScaleFactor` 只接 1、`mobile` 只接 false；`cookies` 是 `name=value` 换行文本（非数组），按当前页 origin 种入 |
-| POST | `/nano-local-sandbox/lifecycle` | `{action:start|resume|suspend|restart}` 生命周期；端点由实例 registry 返回，pane 只读 |
-| POST | `/nano-local-sandbox/recover` | `{}` 一键自愈（suspend→resume→健康→端口） |
+| POST | `/nano-local-sandbox/lifecycle` | `{action:start|stop|restart|recreate}` 生命周期（dnls.control/1；旧 suspend/resume 动词已退役）；端点由实例 registry 返回，pane 只读 |
+| GET | `/nano-local-sandbox/operations` | `?sandboxId=<id>&operationId=<op>` 读单个 operation 文档；lifecycle 只回 accepted/running，终态以该轮询为准，不得重发未结算的操作 |
 | POST | `/nano-local-sandbox/control` | `{action:takeover|release,owner?}` HITL 人接管写锁（只约束 MCP 写者） |
 | POST | `/nano-local-sandbox/mcp` | JSON-RPC 2.0 宿主 MCP（tools/list、tools/call `sandbox.*`/`term.*`） |
 | POST | `/nano-local-sandbox/console`/`operations`/`network` | `{clear:true}` 清环形缓冲 |

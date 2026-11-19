@@ -35,8 +35,8 @@ export const INSPECT_ROUTE = '/nano-local-sandbox/inspect'
 export const PROCESSES_ROUTE = '/nano-local-sandbox/processes'
 
 import { request as httpRequest } from 'node:http'
-import { createHash } from 'node:crypto'
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { createHash, randomUUID } from 'node:crypto'
+import { closeSync, constants, fstatSync, mkdirSync, openSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { basename, dirname, join } from 'node:path'
 import { BINDING_TABLE } from '../../lib/bindings.js'
@@ -90,6 +90,24 @@ async function bindProfile(session, deps) {
   return ctx
 }
 
+function readGuestFile(path) {
+  const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK)
+  try {
+    const info = fstatSync(fd)
+    if (!info.isFile() || info.size > 16 * 1024 * 1024 || info.nlink !== 1) throw new Error('unsafe object state file')
+    return readFileSync(fd, 'utf8')
+  } finally { closeSync(fd) }
+}
+
+function writeGuestFile(path, doc) {
+  const tmp = `${path}.${randomUUID()}.tmp`
+  const fd = openSync(tmp, 'wx', 0o600)
+  try {
+    try { writeFileSync(fd, JSON.stringify(doc) + '\n') } finally { closeSync(fd) }
+    renameSync(tmp, path)
+  } finally { try { unlinkSync(tmp) } catch (e) { if (e.code !== 'ENOENT') throw e } }
+}
+
 function lastPagePath(session) {
   return join(session.stateDir, 'last-page.json')
 }
@@ -97,7 +115,7 @@ function lastPagePath(session) {
 /** @returns {{url: string, at: string}|null} */
 function readLastPage(session) {
   try {
-    const info = JSON.parse(readFileSync(lastPagePath(session), 'utf8'))
+    const info = JSON.parse(readGuestFile(lastPagePath(session)))
     return typeof info?.url === 'string' && info.url ? { url: info.url, at: String(info.at || '') } : null
   } catch { return null }
 }
@@ -106,7 +124,7 @@ function writeLastPage(session, url) {
   if (typeof url !== 'string' || !url) return
   try {
     mkdirSync(session.stateDir, { recursive: true })
-    writeFileSync(lastPagePath(session), JSON.stringify({ url, at: new Date().toISOString() }, null, 2) + '\n')
+    writeGuestFile(lastPagePath(session), { url, at: new Date().toISOString() })
   } catch { /* a read-only home only costs the restore, not the browse */ }
 }
 
@@ -144,9 +162,7 @@ function persistBrowserState(session) {
       },
       stateSnapshots: session.stateSnapshots || {},
     }
-    const tmp = `${browserStatePath(session)}.tmp`
-    writeFileSync(tmp, JSON.stringify(doc, null, 2) + '\n')
-    renameSync(tmp, browserStatePath(session))
+    writeGuestFile(browserStatePath(session), doc)
     session.__browserStateDirty = false
   } catch { /* persistence is best-effort; the session copy stays correct */ }
 }
@@ -156,7 +172,7 @@ function restoreBrowserState(session) {
   if (session.__browserStateLoaded === true) return
   session.__browserStateLoaded = true
   try {
-    const doc = JSON.parse(readFileSync(browserStatePath(session), 'utf8'))
+    const doc = JSON.parse(readGuestFile(browserStatePath(session)))
     if (doc?.v !== 1) return
     if (Array.isArray(doc.history) && (!Array.isArray(session.history) || session.history.length === 0)) session.history = doc.history
     const s = doc.settings || {}
@@ -195,14 +211,13 @@ export function containerNameFor(session, env = process.env) {
 }
 
 /** Host ports to publish for this environment's container. */
-export function envHostPorts(env = process.env) {
-  const profile = activeProfile
+export function envHostPorts(env = process.env, profile = activeProfile) {
   if (!profile) throw new Error('profile not loaded: cannot derive host ports')
   return portsForProfile(profile, env)
 }
 
 /** Normalize inspect state, publications, resources and visible recipe evidence. */
-function parseInspect(raw, containerPort = 8787) {
+function parseInspect(raw, containerPort = 8787, driver = activeDriver) {
   const text = String(raw ?? '')
   const start = text.indexOf('[')
   const objectStart = text.indexOf('{')
@@ -232,7 +247,7 @@ function parseInspect(raw, containerPort = 8787) {
     ports,
     containerPort,
     networking,
-    ...activeDriver.inspectedRecipe(item?.configuration ?? item),
+    ...driver.inspectedRecipe(item?.configuration ?? item),
     resources: resources
       ? {
         cpus: Number(resources.cpus ?? 0) || null,
@@ -416,12 +431,12 @@ function envSnapshot(session, deps) {
 
 async function observeOnce(session, deps) {
   const name = containerNameFor(session, deps.env || process.env)
-  const host = envHostPorts(deps.env || process.env)
+  const host = envHostPorts(deps.env || process.env, session.__profile?.profile)
   let info = null
   let inspectFailed = null
   try {
     const inspected = await deps.backend?.inspect?.(name)
-    info = parseInspect(inspected?.raw ?? inspected, host.engineContainerPort)
+    info = parseInspect(inspected?.raw ?? inspected, host.engineContainerPort, session.__profile?.driver)
   } catch (error) {
     info = null
     // A daemon-level inspect failure is NOT "container missing" — that used
@@ -1021,9 +1036,10 @@ async function ensureBase(session, deps) {
   if (!deps.backend?.inspect) return null
   try {
     const inspected = await deps.backend.inspect(containerNameFor(session, deps.env || process.env))
-    const info = parseInspect(inspected?.raw ?? inspected, envHostPorts(deps.env || process.env).engineContainerPort)
-    trackBridge(session, bridgeControlBase(publicationFor(info, envHostPorts(deps.env || process.env).bridgeContainerPort)))
-    const base = bridgeControlBase(publicationFor(info, envHostPorts(deps.env || process.env).engineContainerPort))
+    const host = envHostPorts(deps.env || process.env, session.__profile?.profile)
+    const info = parseInspect(inspected?.raw ?? inspected, host.engineContainerPort, session.__profile?.driver)
+    trackBridge(session, bridgeControlBase(publicationFor(info, host.bridgeContainerPort)))
+    const base = bridgeControlBase(publicationFor(info, host.engineContainerPort))
     if (!base) return null
     if (session.phase === 'idle') session.phase = 'running'
     return base
@@ -1137,12 +1153,12 @@ const unavailable = (message) => Object.assign(new Error(message), { errorId: er
 async function bridgeFetch(session, deps, pathname, { method = 'GET', body = null, timeoutMs = 2500 } = {}) {
   // Every dispatch re-inspects: the bridge URL is the CURRENT verified
   // publication of this exact container, never a remembered or derived one.
-  const host = envHostPorts(deps.env || process.env)
+  const host = envHostPorts(deps.env || process.env, session.__profile?.profile)
   const name = containerNameFor(session, deps.env || process.env)
   let info = null
   try {
     const inspected = await deps.backend?.inspect?.(name)
-    info = parseInspect(inspected?.raw ?? inspected, host.engineContainerPort)
+    info = parseInspect(inspected?.raw ?? inspected, host.engineContainerPort, session.__profile?.driver)
   } catch {
     throw unavailable('bridge mapping could not be verified')
   }
@@ -1563,7 +1579,7 @@ export function routeSpecs(deps = {}) {
       }
       if (row.path.endsWith('/status')) {
         await ensureBase(session, deps)
-        if (!restoreAttempted && session.phase === 'running') {
+        if (!deps.managed && !restoreAttempted && session.phase === 'running') {
           restoreAttempted = true
           // Fire and forget: the pane polls status, and the next shot picks up
           // the restored page. Never make status wait on a navigation.

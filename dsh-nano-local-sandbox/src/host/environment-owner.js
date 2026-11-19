@@ -5,8 +5,10 @@ import { createIdlePolicy } from './idle-policy.js'
 import { createUseBindings } from './instance-registry.js'
 import { createLifecycleOwner, createObservationSource } from './lifecycle-operations.js'
 import { createManagedProfileSource, serviceMappings } from './managed-profile.js'
-import { authorize, resolveOwnerPrincipal } from './object-authz.js'
-import { envTag, stateRootFor } from './profile-drivers.js'
+import { authorize, resolveOwnerPrincipal, resolveTrusted } from './object-authz.js'
+import { createObjectPages } from './object-pages.js'
+import { envTag, profilesRootFor, stateRootFor } from './profile-drivers.js'
+import { listProfiles } from './profile-registry.js'
 import { createTerminalOwner } from './term-bridge.js'
 import { createTerminalStream } from './term-ws.js'
 import { openUsageMinutes } from './usage-minutes.js'
@@ -31,6 +33,7 @@ export function openEnvironmentOwner(deps) {
     usage = openUsageMinutes({ root, envId, registry, observe, backend, clock: deps.clock, onError: deps.onError })
     const common = { envId, registry, resolvePrincipal, backend, profileFor }
     const lifecycle = createLifecycleOwner({ ...common, observe: source, audit: deps.audit })
+    const pages = createObjectPages({ ...common, deps, lifecycle, connection })
     const uses = createUseBindings(registry, sandboxId => idle.touch(sandboxId))
     const idle = createIdlePolicy({ ...common, observe, uses, stop: lifecycle.stopIfIdle })
     // Host-owned bridge health publication (dnls.control/1) — only over the
@@ -60,7 +63,9 @@ export function openEnvironmentOwner(deps) {
         backend,
       }],
     })
-    const capabilities = new Map([...lifecycle.capabilities, ...terminal.capabilities, ...fleet.capabilities,
+    const capabilities = new Map([...lifecycle.capabilities, ...terminal.capabilities, ...fleet.capabilities, ...pages.capabilities,
+      ['sandbox.profile.list', { target: 'none', tool: { name: 'sandbox.profile.list', description: 'List available local sandbox profiles.', inputSchema: schema({}, []) } }],
+      ['sandbox.profile.describe', { target: 'none', tool: { name: 'sandbox.profile.describe', description: 'Describe one local profile by its advertised id.', inputSchema: schema({ id }, ['id']) } }],
       objectTool('sandbox.services', 'List declared services and their observed loopback publications.'),
       objectTool('sandbox.idle.configure', 'Set the idle timeout without stopping the sandbox. Zero disables automatic stop.', { idleTimeoutMs: { type: 'integer', minimum: 0 } }, ['idleTimeoutMs']),
       objectTool('sandbox.revision.save', 'Save resource overrides without applying them.', {
@@ -72,7 +77,21 @@ export function openEnvironmentOwner(deps) {
     let closing = null
     const inflight = new Set()
     async function dispatch(call) {
+      if (call.capability === 'sandbox.profile.list' || call.capability === 'sandbox.profile.describe') {
+        const caller = resolveTrusted({ peer: call.peer, envId, resolvePrincipal })
+        if (!caller.principal?.operator || (deps.visibleTo && deps.visibleTo(caller.principal) !== true)) {
+          throw Object.assign(new Error('denied'), { status: caller.status || 403 })
+        }
+        const profiles = listProfiles(profilesRootFor(deps)).map(p => ({
+          id: p.id, version: p.manifest?.version, ready: p.ready, digest: p.digest,
+        }))
+        if (call.capability === 'sandbox.profile.list') return { profiles }
+        const profile = profiles.find(p => p.id === call.args.id)
+        if (!profile) throw Object.assign(new Error('unknown profile'), { errorId: 'sandbox.profile.unknown' })
+        return profile
+      }
       if (terminal.capabilities.has(call.capability)) return terminal.execute(call)
+      if (pages.capabilities.has(call.capability)) return pages.execute(call)
       if (lifecycle.capabilities.has(call.capability)) return lifecycle.execute(call)
       if (fleet.capabilities.has(call.capability)) return fleet.execute(call)
       const row = registry.get(call.sandboxId)
@@ -121,12 +140,12 @@ export function openEnvironmentOwner(deps) {
         try {
           // One rejecting background task must not strand the others —
           // settle every close before the drain, then surface the failure.
-          const results = await Promise.allSettled([idle.close(), publisher?.close(), ...inflight])
+          const results = await Promise.allSettled([stream.dispose(), idle.close(), publisher?.close(), ...inflight])
           await lifecycle.drain()
           const failed = results.find((r) => r.status === 'rejected')
           if (failed) throw failed.reason
         } finally {
-          try { await stream.dispose() } finally {
+          try { pages.close() } finally {
             try { await usage.close() } finally { registry.close() }
           }
         }

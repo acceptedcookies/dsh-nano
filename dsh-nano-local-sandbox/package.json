@@ -1,7 +1,7 @@
 {
   "name": "dsh-nano-local-sandbox",
   "version": "0.1.0",
-  "description": "Local sandbox host for session-scoped containers. macOS Apple container is the only backend that runs; consumers do not build or start containers.",
+  "description": "Environment-owned local sandboxes and terminals with explicit object selection on macOS.",
   "type": "module",
   "icon": "./icon.svg",
   "main": "./index.js",

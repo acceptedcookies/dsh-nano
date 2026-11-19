@@ -2594,6 +2594,9 @@ ${LAYER_CSS}
           tabBrowse: "\u6A21\u62DF",
           settingsDesc: "\u73AF\u5883\u5065\u5EB7\u4E0E\u6D4F\u89C8\u5668\u6A21\u62DF\u3002\u6A21\u62DF\u8BBE\u7F6E\u5BF9\u65B0\u5BFC\u822A\u751F\u6548\uFF1B\u6D4F\u89C8\u5386\u53F2\u5728\u5DE5\u5177\u680F\u7684\u5386\u53F2\u5165\u53E3\u3002",
           cancel: "\u53D6\u6D88",
+          restartSandbox: "\u91CD\u542F\u6C99\u7BB1",
+          restartSandboxTitle: "\u91CD\u542F\u6240\u9009\u6C99\u7BB1",
+          restartSandboxBody: "\u5C06\u91CD\u542F\u5F53\u524D\u9009\u4E2D\u7684\u6C99\u7BB1 {name}\u3002\u6253\u5F00\u4E2D\u7684\u9875\u9762\u4F1A\u4E22\u5931\u3002",
           save: "\u4FDD\u5B58",
           close: "\u5173\u95ED",
           uaLabel: "User-Agent",
@@ -2653,7 +2656,11 @@ ${LAYER_CSS}
           modeHtml: "HTML \u539F\u751F\u6E32\u67D3",
           modeShot: "\u622A\u56FE\u56DE\u9000",
           modeEmpty: "\u672A\u6253\u5F00\u9875\u9762",
-          geoInvalid: "\u7ECF\u7EAC\u5EA6\u9700\u8981\u540C\u65F6\u586B\u5199\uFF0C\u4E14\u7EAC\u5EA6 -90..90\u3001\u7ECF\u5EA6 -180..180"
+          geoInvalid: "\u7ECF\u7EAC\u5EA6\u9700\u8981\u540C\u65F6\u586B\u5199\uFF0C\u4E14\u7EAC\u5EA6 -90..90\u3001\u7ECF\u5EA6 -180..180",
+          sandboxPick: "\u9009\u62E9\u4E00\u4E2A\u6258\u7BA1\u6C99\u7BB1",
+          sandboxEmpty: "\u6CA1\u6709\u53EF\u89C1\u7684\u6258\u7BA1\u6C99\u7BB1",
+          sandboxLoading: "\u6B63\u5728\u53D1\u73B0\u6258\u7BA1\u6C99\u7BB1\u2026",
+          sandboxFailed: "\u6C99\u7BB1\u53D1\u73B0\u5931\u8D25"
         },
         en: {
           typeLabel: "Kitesurf",
@@ -2813,6 +2820,9 @@ ${LAYER_CSS}
           tabBrowse: "Simulation",
           settingsDesc: "Environment health and browser simulation. Simulation changes apply to new navigations; browsing history lives in the toolbar.",
           cancel: "Cancel",
+          restartSandbox: "Restart sandbox",
+          restartSandboxTitle: "Restart the selected sandbox",
+          restartSandboxBody: "This restarts the currently selected sandbox {name}. The open page is lost.",
           save: "Save",
           close: "Close",
           uaLabel: "User-Agent",
@@ -2872,7 +2882,11 @@ ${LAYER_CSS}
           modeHtml: "Native HTML",
           modeShot: "Screenshot fallback",
           modeEmpty: "No page open",
-          geoInvalid: "Enter both latitude (\u221290..90) and longitude (\u2212180..180)"
+          geoInvalid: "Enter both latitude (\u221290..90) and longitude (\u2212180..180)",
+          sandboxPick: "Choose a managed sandbox",
+          sandboxEmpty: "No managed sandboxes are visible",
+          sandboxLoading: "Discovering managed sandboxes\u2026",
+          sandboxFailed: "Sandbox discovery failed"
         }
       };
     }
@@ -3059,9 +3073,9 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
     if (path.endsWith("/open") || path.endsWith("/shot") || path.endsWith("/history")) return 6e4;
     return 25e3;
   }
-  async function captureNavigation(post2, { openPath, shotPath, url, fit }) {
-    await post2(openPath, { url });
-    const frame = await post2(shotPath, { format: "webp", ...fit ? { fit } : {} });
+  async function captureNavigation(post, { openPath, shotPath, url, fit }) {
+    await post(openPath, { url });
+    const frame = await post(shotPath, { format: "webp", ...fit ? { fit } : {} });
     if (!frame?.data || !frame.url || frame.url === "about:blank") {
       throw Object.assign(new Error("Kitesurf did not return a rendered page"), { errorId: "kitesurf.navigate.failed" });
     }
@@ -3069,6 +3083,151 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
   }
   var init_navigation = __esm({
     "src/shared/navigation.js"() {
+    }
+  });
+
+  // src/shared/managed-client.js
+  var managed_client_exports = {};
+  __export(managed_client_exports, {
+    createManagedDesignClient: () => createManagedDesignClient,
+    listSandboxRows: () => listSandboxRows
+  });
+  function refuse(code, message) {
+    const error = new Error(message);
+    error.errorId = `kitesurf.managed.${code}`;
+    error.restricted = true;
+    throw error;
+  }
+  function capabilityFor(path) {
+    const managed = MANAGED_PATH_CAPS.get(path);
+    if (managed) return managed;
+    const suffix = path.slice(PREFIX.length);
+    if (!suffix || suffix.includes("/")) return null;
+    return `dnls.${suffix}`;
+  }
+  function hasSelector(value) {
+    if (Array.isArray(value)) return value.some(hasSelector);
+    if (!value || typeof value !== "object") return false;
+    return Object.entries(value).some(([key, entry]) => SELECTOR_KEYS.has(key) || hasSelector(entry));
+  }
+  function headerEntries(headers) {
+    if (!headers) return [];
+    if (typeof Headers === "function" && headers instanceof Headers) return [...headers.entries()];
+    if (Array.isArray(headers)) return headers;
+    return Object.entries(headers);
+  }
+  function createManagedDesignClient({ fetch: impl, origin } = {}) {
+    const doFetch = impl ?? globalThis.fetch?.bind(globalThis);
+    if (typeof doFetch !== "function") throw new Error("managed design client requires fetch");
+    const base = new URL(origin ?? globalThis.location?.origin);
+    if (!base.origin || base.origin === "null") throw new Error("managed design client requires an origin");
+    let contract = null;
+    async function discover() {
+      contract = null;
+      const res = await doFetch(new URL(CONTRACT_PATH, base).href, {
+        method: "GET",
+        credentials: "same-origin"
+      });
+      if (!res.ok) refuse("discovery", `contract discovery failed (${res.status})`);
+      if (res.headers.get(CONTRACT_HEADER) !== CONTRACT_VERSION) refuse("contract", "unknown control contract");
+      const body = await res.json().catch(() => null);
+      if (body?.contractVersion !== CONTRACT_VERSION || !Array.isArray(body.capabilities)) {
+        refuse("contract", "unknown control contract");
+      }
+      contract = { capabilities: new Set(body.capabilities) };
+      return body;
+    }
+    function requireContract() {
+      if (!contract) refuse("undiscovered", "control contract has not been discovered");
+      return contract;
+    }
+    async function checked(res, sandboxId) {
+      if (!res.ok) return res;
+      if (res.headers.get(CONTRACT_HEADER) !== CONTRACT_VERSION) refuse("contract", "response missing control contract");
+      const clone = res.clone();
+      const body = await clone.json().catch(() => null);
+      if (!body || typeof body !== "object") refuse("contract", "malformed control response");
+      if (body.contractVersion !== CONTRACT_VERSION) refuse("contract", "response body contract mismatch");
+      if (sandboxId && body.sandboxId !== sandboxId) refuse("object", "response names a different sandbox");
+      return res;
+    }
+    async function list() {
+      const { capabilities } = requireContract();
+      if (!capabilities.has("sandbox.list")) refuse("capability", "sandbox.list is not announced");
+      const res = await doFetch(new URL(LIST_PATH, base).href, {
+        method: "GET",
+        credentials: "same-origin",
+        headers: { [CONTRACT_HEADER]: CONTRACT_VERSION }
+      });
+      return checked(res, null);
+    }
+    function bind(sandboxId) {
+      if (typeof sandboxId !== "string" || sandboxId.length === 0) refuse("target", "missing sandbox id");
+      if (!SANDBOX_ID.test(sandboxId)) refuse("target", "invalid sandbox id");
+      const { capabilities } = requireContract();
+      return async function fetchBound(path, init = {}) {
+        if (typeof path !== "string") refuse("path", "request path must be a string");
+        const url = new URL(path, base);
+        if (url.origin !== base.origin) refuse("origin", "request crosses origin");
+        if (!url.pathname.startsWith(PREFIX)) refuse("path", `unannounced path ${url.pathname}`);
+        const capability = capabilityFor(url.pathname);
+        if (capability === null || !capabilities.has(capability)) {
+          refuse("capability", `capability for ${url.pathname} is not announced`);
+        }
+        for (const key of url.searchParams.keys()) {
+          if (SELECTOR_KEYS.has(key)) refuse("selector", "caller may not supply an object selector");
+        }
+        const entries = headerEntries(init.headers);
+        for (const [name] of entries) {
+          if (SELECTOR_HEADERS.has(String(name).toLowerCase())) refuse("selector", "caller may not supply a selector header");
+        }
+        if (init.credentials !== void 0 && init.credentials !== "same-origin") {
+          refuse("credentials", "request may not choose credentials");
+        }
+        const body = init.body;
+        if (body !== void 0) {
+          if (typeof body !== "string") refuse("body", "request body must be a serialized string");
+          let parsed;
+          try {
+            parsed = JSON.parse(body);
+          } catch {
+            refuse("body", "request body must be valid JSON");
+          }
+          if (hasSelector(parsed)) refuse("selector", "caller may not supply a body selector");
+        }
+        url.searchParams.set("sandboxId", sandboxId);
+        const headers = [
+          ...entries.filter(([name]) => !SELECTOR_HEADERS.has(String(name).toLowerCase())),
+          [CONTRACT_HEADER, CONTRACT_VERSION]
+        ];
+        return doFetch(url.href, { ...init, headers, credentials: "same-origin" }).then((res) => checked(res, sandboxId));
+      };
+    }
+    return { discover, list, bind };
+  }
+  function listSandboxRows(body) {
+    if (!Array.isArray(body?.rows)) throw new Error("invalid sandbox list");
+    return body.rows;
+  }
+  var CONTRACT_VERSION, CONTRACT_HEADER, CONTRACT_PATH, LIST_PATH, PREFIX, SANDBOX_ID, SELECTOR_KEYS, SELECTOR_HEADERS, MANAGED_PATH_CAPS;
+  var init_managed_client = __esm({
+    "src/shared/managed-client.js"() {
+      CONTRACT_VERSION = "dnls.control/1";
+      CONTRACT_HEADER = "x-dnls-contract";
+      CONTRACT_PATH = "/nano-local-sandbox/contract";
+      LIST_PATH = "/nano-local-sandbox/sandboxes";
+      PREFIX = "/nano-local-sandbox/";
+      SANDBOX_ID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+      SELECTOR_KEYS = /* @__PURE__ */ new Set(["sandboxId", "sessionId", "sandbox"]);
+      SELECTOR_HEADERS = /* @__PURE__ */ new Set(["x-sandbox-id", "x-dnls-sandbox", "x-session-id", "x-dnls-contract"]);
+      MANAGED_PATH_CAPS = /* @__PURE__ */ new Map([
+        ["/nano-local-sandbox/sandboxes", "sandbox.list"],
+        ["/nano-local-sandbox/fleet", "sandbox.fleet"],
+        ["/nano-local-sandbox/inspect", "sandbox.inspect"],
+        ["/nano-local-sandbox/processes", "sandbox.processes"],
+        ["/nano-local-sandbox/lifecycle", "sandbox.lifecycle"],
+        ["/nano-local-sandbox/operations", "sandbox.operations"]
+      ]);
     }
   });
 
@@ -3087,6 +3246,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
   var { batchNote: batchNote2, designNote: designNote2, multiNote: multiNote2 } = (init_note(), __toCommonJS(note_exports));
   var { contentFrame: contentFrame2, shotPoint: shotPoint2 } = (init_shot_point(), __toCommonJS(shot_point_exports));
   var { captureNavigation: captureNavigation2, requestTimeout: requestTimeout2 } = (init_navigation(), __toCommonJS(navigation_exports));
+  var { createManagedDesignClient: createManagedDesignClient2, listSandboxRows: listSandboxRows2 } = (init_managed_client(), __toCommonJS(managed_client_exports));
   var h7 = React12.createElement;
   var STATUS = "/nano-local-sandbox/status";
   var OPEN = "/nano-local-sandbox/open";
@@ -3096,7 +3256,6 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
   var SETTINGS = "/nano-local-sandbox/settings";
   var HISTORY = "/nano-local-sandbox/history";
   var PORTS = "/nano-local-sandbox/ports";
-  var RECOVER = "/nano-local-sandbox/recover";
   var DIAGNOSTICS = "/nano-local-sandbox/diagnostics";
   var CONSOLE = "/nano-local-sandbox/console";
   var NETWORK = "/nano-local-sandbox/network";
@@ -3105,7 +3264,6 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
   var LOGS = "/nano-local-sandbox/logs";
   var DOM = "/nano-local-sandbox/dom";
   var CONTROL = "/nano-local-sandbox/control";
-  var localNotes = [];
   var LIFECYCLE = "/nano-local-sandbox/lifecycle";
   var KIND = "kitesurf";
   var OWN_ID = "nano-kitesurf";
@@ -3227,6 +3385,8 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
 .nks-empty-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:2px}
 .nks-empty-link{color:var(--dsw-alias-link,#2f6fed);cursor:pointer;background:none;border:0;font:inherit;padding:0;text-decoration:underline;text-underline-offset:2px}
 .nks-empty-meta{font:var(--dsw-font-xxxs-11);opacity:.75;word-break:break-all;max-width:340px}
+.nks-sandbox-bar{display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:.5px solid var(--dsw-alias-border-l2);font:var(--dsw-font-xxs-12)}
+.nks-sandbox-bar select{flex:1;min-width:0;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);border:.5px solid var(--dsw-alias-border-l2);border-radius:6px;padding:4px 8px;font:inherit}
 .nks-box{position:absolute;border:1.5px solid var(--dsw-alias-link,#2f6fed);box-shadow:0 0 0 1px rgba(0,0,0,.5),inset 0 0 0 1px rgba(255,255,255,.55);pointer-events:none}
 .nks-box[data-kind="ellipse"]{border-radius:50%}
 .nks-box[data-kind="hover"]{border-style:dashed;opacity:.75}
@@ -3427,11 +3587,11 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
    dead area read as "canvas", and the picture is centred by object-position. */
 .nks-frame{background-image:linear-gradient(45deg,rgba(127,127,127,.05) 25%,transparent 25%,transparent 75%,rgba(127,127,127,.05) 75%),linear-gradient(45deg,rgba(127,127,127,.05) 25%,transparent 25%,transparent 75%,rgba(127,127,127,.05) 75%);background-size:16px 16px;background-position:0 0,8px 8px}
 `;
-  function post(path, body) {
+  function postRequest(fetch2, path, body) {
     const timeoutMs = requestTimeout2(path);
     const controller = typeof AbortController === "function" ? new AbortController() : null;
     const timer = controller ? window.setTimeout(() => controller.abort(), timeoutMs) : 0;
-    return fetch(path, {
+    return fetch2(path, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body ?? {}),
@@ -3578,7 +3738,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
     if (!needle) return true;
     return `${row.tag || ""} ${row.id || ""} ${row.cls || ""}`.toLowerCase().includes(needle);
   }
-  function DevTools({ copy, open, onClose }) {
+  function DevTools({ copy, open, onClose, fetch: fetch2 }) {
     const [tab, setTab] = React12.useState("console");
     const [rows, setRows] = React12.useState([]);
     const [failedOnly, setFailedOnly] = React12.useState(false);
@@ -3630,7 +3790,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         try {
           if (tab === "console") {
             const url = sinceSeq != null ? `${CONSOLE}?limit=200&sinceSeq=${encodeURIComponent(sinceSeq)}` : `${CONSOLE}?limit=200`;
-            const data = await fetch(url).then((r) => r.json());
+            const data = await fetch2(url).then((r) => r.json());
             if (alive && Array.isArray(data.entries)) {
               merge(data.entries, (r) => `c${r.seq ?? r.at}`);
               const lastSeq = data.entries.reduce((m, r) => Math.max(m, Number(r.seq) || 0), 0);
@@ -3638,14 +3798,14 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
             }
           } else if (tab === "network") {
             const url = `${NETWORK}?limit=200${since ? `&since=${encodeURIComponent(since)}` : ""}`;
-            const data = await fetch(url).then((r) => r.json());
+            const data = await fetch2(url).then((r) => r.json());
             if (alive && Array.isArray(data.entries)) {
               merge(data.entries, (r) => `n${r.id}`);
               const lastStart = data.entries.reduce((m, r) => Math.max(m, Number(r.updatedAt || r.startedAt) || 0), 0);
               if (lastStart) since = String(lastStart);
             }
           } else {
-            const data = await fetch(`${ELEMENTS}?depth=3`).then((r) => r.json());
+            const data = await fetch2(`${ELEMENTS}?depth=3`).then((r) => r.json());
             if (alive) setRows(data.nodes || []);
           }
         } catch {
@@ -3715,7 +3875,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       setHeight((value) => Math.max(value, 360));
       setNetDetail({ entry: row, responseBody: null, loading: true, error: "" });
       try {
-        const data = await fetch(`${NETWORK}?id=${encodeURIComponent(row.id)}`).then((response) => response.json());
+        const data = await fetch2(`${NETWORK}?id=${encodeURIComponent(row.id)}`).then((response) => response.json());
         if (seq2 !== detailSeq.current) return;
         if (!data?.ok || !data.entry) throw new Error(data?.error || copy.devtoolsDetailError);
         setNetDetail({ entry: data.entry, responseBody: data.responseBody, loading: false, error: "" });
@@ -3727,7 +3887,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
     const inspectNode = async (row) => {
       const selector = row.id ? `${row.tag}#${row.id}` : row.cls ? `${row.tag}.${String(row.cls).trim().split(/\s+/)[0]}` : row.tag;
       try {
-        const data = await fetch(`${ELEMENTS}?selector=${encodeURIComponent(selector)}`).then((r) => r.json());
+        const data = await fetch2(`${ELEMENTS}?selector=${encodeURIComponent(selector)}`).then((r) => r.json());
         setStyles({ selector, matched: data.matched?.matched || [], computed: data.computed || {} });
       } catch {
         setStyles({ selector, matched: [], computed: {} });
@@ -3735,7 +3895,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
     };
     const clear = async () => {
       const path = tab === "console" ? CONSOLE : NETWORK;
-      await fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: '{"clear":true}' }).catch(() => {
+      await fetch2(path, { method: "POST", headers: { "content-type": "application/json" }, body: '{"clear":true}' }).catch(() => {
       });
       setRows([]);
       setNetDetail(null);
@@ -4043,7 +4203,9 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
     const pending = row.durationMs == null && !row.failed;
     return h7("i", { style: { left: `${left}%`, width: `${width}%` }, "data-bad": row.failed || (row.status || 0) >= 400 ? "true" : "false", "data-pending": pending ? "true" : "false" });
   }
-  function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
+  function BrowserPane({ copy, languageOf, theme, onThemeChange, fetch: fetch2, sandboxId }) {
+    const post = (path, body) => postRequest(fetch2, path, body);
+    const localNotes = React12.useRef([]).current;
     const [status, setStatus] = React12.useState(null);
     const engine = engineEndpoint(status);
     const statusDown = status != null && (status.ok === false || status.ready === false);
@@ -4121,7 +4283,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       if (pageUrl && !addressFocusedRef.current) setDraftUrl(pageUrl);
     }, [pageUrl]);
     const refreshStatus = React12.useCallback(() => {
-      return fetch(STATUS).then((response) => response.json()).then((payload) => {
+      return fetch2(STATUS).then((response) => response.json()).then((payload) => {
         setStatus(payload);
         return payload;
       }).catch((cause) => {
@@ -4133,7 +4295,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
     React12.useEffect(() => {
       if (!navOpen) return;
       let alive = true;
-      fetch(`${BROWSE_HISTORY}?limit=120`).then((r) => r.json()).then((data) => {
+      fetch2(`${BROWSE_HISTORY}?limit=120`).then((r) => r.json()).then((data) => {
         if (!alive) return;
         const byUrl = /* @__PURE__ */ new Map();
         for (const row of Array.isArray(data?.entries) ? data.entries : []) {
@@ -4151,7 +4313,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       };
     }, [navOpen]);
     const delNavTab = (url) => {
-      fetch(`${BROWSE_HISTORY}?url=${encodeURIComponent(url)}`, { method: "DELETE" }).catch(() => {
+      fetch2(`${BROWSE_HISTORY}?url=${encodeURIComponent(url)}`, { method: "DELETE" }).catch(() => {
       });
       setNavTabs((current) => current.filter((row) => row.url !== url));
     };
@@ -4385,23 +4547,47 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       };
     }, [shot]);
     const RECOVERABLE = /^kitesurf\.(shot|engine|elements|dom|navigate|pick|wait|ref)\.|^sandbox\.cdp\./;
-    async function repairNow() {
+    function confirmRestart(work) {
+      const workspaceEl = workspaceRef.current;
+      if (dialogOpenRef.current || workspaceEl === null) {
+        showToast(copy.prepareNotReady);
+        return;
+      }
+      dialogOpenRef.current = true;
+      const finish = () => {
+        dialogOpenRef.current = false;
+      };
+      const name = sandboxId ?? "";
+      let dialog = null;
+      dialog = openNanoDialog2({
+        copy: { cancel: copy.cancel, confirm: copy.restartSandbox, close: copy.close },
+        title: copy.restartSandboxTitle,
+        width: 420,
+        container: workspaceEl,
+        confirmLabel: copy.restartSandbox,
+        onCancel: finish,
+        onConfirm: () => {
+          finish();
+          dialog?.close();
+          work();
+        },
+        children: h7("p", { "data-nks-restart-confirm": "1" }, fill(copy.restartSandboxBody, { name }))
+      });
+    }
+    function repairNow() {
       setToastFix(false);
-      setToast(copy.preparingEnv);
-      try {
-        await fetch(RECOVER, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+      confirmRestart(() => run(async () => {
+        await runLifecycle("restart");
         await refreshStatus();
         await reloadShot(0, { keepPick: true }).catch(() => {
         });
         setToast(copy.prepareDone);
-      } catch (cause) {
-        setToast(`${copy.prepareFailed}: ${cause?.message || cause}`);
-      }
-      window.clearTimeout(toastTimer.current);
-      toastTimer.current = window.setTimeout(() => {
-        setToast(null);
-        setToastFix(false);
-      }, 3e3);
+        window.clearTimeout(toastTimer.current);
+        toastTimer.current = window.setTimeout(() => {
+          setToast(null);
+          setToastFix(false);
+        }, 3e3);
+      }));
     }
     function showError(cause) {
       const errorId = cause?.errorId || "kitesurf.unknown";
@@ -4524,7 +4710,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
     }
     async function loadDom(options = {}) {
       try {
-        const data = await fetch(DOM).then((r) => r.json());
+        const data = await fetch2(DOM).then((r) => r.json());
         if (data?.ok && data.srcdoc) {
           const sig = (data.domSeq ?? data.capturedAt ?? data.generation) != null ? `v:${data.domSeq ?? ""}:${data.capturedAt ?? ""}:${data.generation ?? ""}:${data.url ?? ""}` : `s:${data.srcdoc}:${data.url ?? ""}`;
           if (sig && sig === domVersionRef.current) return true;
@@ -4848,26 +5034,46 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         showError(cause);
       }
     }
-    async function oneClickPrepare() {
-      await run(async () => {
+    function oneClickPrepare() {
+      confirmRestart(() => run(async () => {
         try {
-          const response = await post(RECOVER, {});
+          await runLifecycle("restart");
           await refreshStatus();
-          if (response?.v != null && response.v !== 1) showToast(copy.contractMismatch);
-          else if (response?.ready === true) await reloadShot(0, { keepPick: true });
-          else showToast(copy.prepareNotReady || copy.prepareFailed);
+          await reloadShot(0, { keepPick: true });
         } catch (cause) {
           showError(cause);
         }
-      });
+      }));
+    }
+    async function runLifecycle(action) {
+      const managed = action === "suspend" ? "stop" : action === "resume" ? "start" : action;
+      const data = await post(LIFECYCLE, { action: managed, requestId: crypto.randomUUID() });
+      const operationId = data?.operationId;
+      if (!operationId) throw new Error("missing operation receipt");
+      return awaitOperation(operationId);
+    }
+    async function awaitOperation(operationId) {
+      const deadline = Date.now() + 3e4;
+      while (Date.now() < deadline) {
+        const res = await fetch2(`/nano-local-sandbox/operations?operationId=${encodeURIComponent(operationId)}`);
+        if (!res.ok) throw new Error(`operation read failed (${res.status})`);
+        const last = await res.json().catch(() => null);
+        if (!last || last.operationId !== operationId) throw new Error("operation read mismatch");
+        const state = last.state;
+        if (state && state !== "accepted" && state !== "running") {
+          if (state !== "succeeded") throw new Error(`operation ${operationId} ${state}`);
+          return last;
+        }
+        await new Promise((resolve) => window.setTimeout(resolve, 500));
+      }
+      throw new Error(`operation ${operationId} did not settle`);
     }
     function onStartEngine() {
       run(async () => {
         const fresh = await refreshStatus();
         const phase = engineEndpoint(fresh).phase;
         if (phase === "running") return;
-        const action = phase === "suspended" ? "resume" : "start";
-        await post(LIFECYCLE, { action });
+        await runLifecycle(phase === "suspended" ? "resume" : "start");
         await reloadShot();
       });
     }
@@ -4904,7 +5110,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       let alive = true;
       const load = async () => {
         try {
-          const data = await fetch(CONTROL).then((r) => r.json());
+          const data = await fetch2(CONTROL).then((r) => r.json());
           if (!alive) return;
           const c = data?.control ?? null;
           setControl(c);
@@ -4935,7 +5141,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
     }, [engineHasPage]);
     const controlOp = React12.useCallback(async (action) => {
       try {
-        const data = await fetch(CONTROL, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action, owner: "kitesurf-pane" }) }).then((r) => r.json());
+        const data = await fetch2(CONTROL, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action, owner: "kitesurf-pane" }) }).then((r) => r.json());
         if (data?.control) setControl(data.control);
         else setControl(null);
       } catch {
@@ -4979,7 +5185,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       React12.useEffect(() => {
         let alive = true;
         let seen = null;
-        const load = () => fetch(PORTS).then((r) => r.json()).then((data) => {
+        const load = () => fetch2(PORTS).then((r) => r.json()).then((data) => {
           if (!alive || !data) return;
           setProbeMisses(0);
           const sig = `${data.v ?? ""}:${data.epoch ?? ""}:${data.ready ?? ""}`;
@@ -5004,35 +5210,33 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           document.removeEventListener("visibilitychange", onVis);
         };
       }, []);
-      async function prepare() {
-        setBusyLocal(true);
-        setNote(copy.preparingEnv);
-        try {
-          const response = await fetch(RECOVER, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
-          const result = await response.json().catch(() => ({}));
-          const ports = result.ports ? result : await fetch(PORTS).then((r) => r.json()).catch(() => null);
-          setSnap(ports);
-          if (Array.isArray(result.summary)) setDiag(result);
-          const failed = planeRows(result, copy).filter((row) => !row.ok && !row.skipped);
-          if (result.planes && Number.isFinite(result.v) && result.v !== 1) setNote(copy.contractNewer);
-          else if (!result.ok) setNote(`${copy.prepareFailed}: ${result.errorId || result.error || `HTTP ${response.status}`}`);
-          else if (result.ready !== true) setNote(`${copy.prepareNotReady}: ${failed.map((row) => row.plane || row.label).join(" / ")}`);
-          else setNote(result.action === "noop" ? copy.prepareDone : `${copy.prepareDone} \xB7 ${result.action}`);
-          await refreshStatus();
-          await reloadShot(0, { keepPick: true }).catch(() => {
-          });
-        } catch (cause) {
-          setNote(`${copy.prepareFailed}: ${cause?.message || cause}`);
-        } finally {
-          setBusyLocal(false);
-        }
+      function prepare() {
+        confirmRestart(() => {
+          setBusyLocal(true);
+          setNote(copy.preparingEnv);
+          (async () => {
+            try {
+              await runLifecycle("restart");
+              const ports = await fetch2(PORTS).then((r) => r.json()).catch(() => null);
+              setSnap(ports);
+              setNote(copy.prepareDone);
+              await refreshStatus();
+              await reloadShot(0, { keepPick: true }).catch(() => {
+              });
+            } catch (cause) {
+              setNote(`${copy.prepareFailed}: ${cause?.message || cause}`);
+            } finally {
+              setBusyLocal(false);
+            }
+          })();
+        });
       }
       async function showLogs() {
         const workspaceEl = workspaceRef.current;
         if (workspaceEl === null || logsOpenRef.current) return;
         let text = copy.logsLoading;
         try {
-          const data = await fetch(`${LOGS}?tail=300`).then((r) => r.json());
+          const data = await fetch2(`${LOGS}?tail=300`).then((r) => r.json());
           text = data.ok ? data.text || copy.logsEmpty : `${data.errorId || "kitesurf.engine.connect"} ${data.error || ""}`;
         } catch (cause) {
           text = String(cause?.message || cause);
@@ -5061,7 +5265,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       }
       async function copyDiagnostics() {
         try {
-          const data = await fetch(DIAGNOSTICS).then((r) => r.json());
+          const data = await fetch2(DIAGNOSTICS).then((r) => r.json());
           setDiag(data);
           const text = copyRawDiag.current ? JSON.stringify(data, null, 2) : data.text || JSON.stringify(data, null, 2);
           await navigator.clipboard.writeText(text);
@@ -5113,7 +5317,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         h7(
           "div",
           { className: "nks-env-actions" },
-          h7("button", { type: "button", className: "nks-start-btn", "data-nks-prepare": "1", disabled: busyLocal, onClick: prepare }, busyLocal ? copy.preparingEnv : copy.prepareEnv),
+          h7("button", { type: "button", className: "nks-start-btn", "data-nks-prepare": "1", disabled: busyLocal, onClick: prepare }, busyLocal ? copy.preparingEnv : copy.restartSandbox),
           h7("button", {
             type: "button",
             className: "nks-start-btn",
@@ -5276,7 +5480,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       const [q, setQ] = React12.useState("");
       const [busy2, setBusy2] = React12.useState(false);
       const load = React12.useCallback(async (needle) => {
-        const data = await fetch(`${BROWSE_HISTORY}?limit=100${needle ? "&q=" + encodeURIComponent(needle) : ""}`).then((r) => r.json());
+        const data = await fetch2(`${BROWSE_HISTORY}?limit=100${needle ? "&q=" + encodeURIComponent(needle) : ""}`).then((r) => r.json());
         setRows(data.entries || []);
       }, []);
       React12.useEffect(() => {
@@ -5287,7 +5491,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       const del = async (id) => {
         setBusy2(true);
         try {
-          await fetch(`${BROWSE_HISTORY}?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+          await fetch2(`${BROWSE_HISTORY}?id=${encodeURIComponent(id)}`, { method: "DELETE" });
           await load(q);
         } finally {
           setBusy2(false);
@@ -5296,7 +5500,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       const clear = async () => {
         setBusy2(true);
         try {
-          await fetch(BROWSE_HISTORY, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ clear: true }) });
+          await fetch2(BROWSE_HISTORY, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ clear: true }) });
           await load(q);
         } finally {
           setBusy2(false);
@@ -5760,7 +5964,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         h7("span", { style: { flex: "auto" } })
       ),
       h7(HistoryDialog, { open: historyOpen, onClose: () => setHistoryOpen(false) }),
-      h7(DevTools, { copy, open: devtoolsOpen, onClose: () => setDevtoolsOpen(false) }),
+      h7(DevTools, { copy, fetch: fetch2, open: devtoolsOpen, onClose: () => setDevtoolsOpen(false) }),
       h7(
         "div",
         {
@@ -5886,7 +6090,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
               "data-nks-start-engine": "1",
               "data-nks-prepare": "1",
               onClick: oneClickPrepare
-            }, engine.phase === "running" ? copy.resumeEngine : copy.prepareEnv),
+            }, copy.restartSandbox),
             h7("button", { type: "button", className: "nks-start-btn", "data-nks-diagnose": "1", onClick: () => run(() => refreshStatus()) }, copy.retry),
             h7("button", { type: "button", className: "nks-start-btn", "data-nks-open-settings": "1", onClick: openSettings }, copy.settings)
           ) : null,
@@ -6027,12 +6231,104 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       toast ? h7(NanoToast2, {
         text: toast,
         anchor: workspaceRef.current,
-        actions: toastFix ? [{ label: copy.prepareEnv, onClick: repairNow }] : void 0
+        actions: toastFix ? [{ label: copy.restartSandbox, onClick: repairNow }] : void 0
       }) : null,
       pick?.elements?.length ? h7("pre", {
         "data-nks-pick": "1",
         style: { display: "none" }
       }, pick.elements.length > 1 ? multiNote2(pick.elements, { url: pageUrl, comment }) : designNote2(pick.elements[0], { url: pageUrl, comment })) : null
+    );
+  }
+  function SandboxPicker({ copy, languageOf, theme, onThemeChange }) {
+    const [client, setClient] = React12.useState(null);
+    const [rows, setRows] = React12.useState(null);
+    const [error, setError] = React12.useState(null);
+    const [selection, setSelection] = React12.useState(null);
+    const [retrySeq, setRetrySeq] = React12.useState(0);
+    const selAbortRef = React12.useRef(null);
+    React12.useEffect(() => {
+      const abort = new AbortController();
+      let alive = true;
+      const impl = (url, init = {}) => fetch(url, { ...init, signal: init.signal ?? abort.signal });
+      const managed = createManagedDesignClient2({ fetch: impl, origin: location.origin });
+      (async () => {
+        try {
+          await managed.discover();
+          const res = await managed.list();
+          const body = await res.json().catch(() => null);
+          if (!alive) return;
+          if (!res.ok) {
+            setError(new Error(`sandbox.list HTTP ${res.status}`));
+            return;
+          }
+          setClient(managed);
+          setRows(listSandboxRows2(body));
+          setError(null);
+        } catch (cause) {
+          if (alive) setError(cause);
+        }
+      })();
+      return () => {
+        alive = false;
+        abort.abort();
+        selAbortRef.current?.abort();
+      };
+    }, [retrySeq]);
+    function choose(sandboxId) {
+      if (!client || !sandboxId) return;
+      selAbortRef.current?.abort();
+      const abort = new AbortController();
+      selAbortRef.current = abort;
+      const bound = client.bind(sandboxId);
+      const boundFetch = (path, init = {}) => {
+        const signals = [init?.signal, abort.signal].filter(Boolean);
+        const signal = signals.length > 1 && typeof AbortSignal.any === "function" ? AbortSignal.any(signals) : signals[0];
+        return bound(path, { ...init, signal });
+      };
+      setSelection({ sandboxId, fetch: boundFetch });
+    }
+    const picker = h7(
+      "div",
+      { className: "nks-sandbox-bar", "data-nks-sandbox-bar": "1" },
+      h7(
+        "select",
+        {
+          "data-nks-sandbox-select": "1",
+          "aria-label": copy.sandboxPick,
+          value: selection?.sandboxId ?? "",
+          onChange: (event) => {
+            if (event.target.value) choose(event.target.value);
+          }
+        },
+        h7("option", { value: "", disabled: true }, copy.sandboxPick),
+        (rows ?? []).map((row) => h7(
+          "option",
+          { key: row.sandboxId, value: row.sandboxId },
+          `${row.name || row.sandboxId.slice(0, 8)} \xB7 ${row.envId ?? ""} \xB7 ${row.observedState ?? "unknown"}`
+        ))
+      )
+    );
+    if (error) {
+      return h7(
+        "div",
+        { className: "nks-empty", "data-nks-sandbox-error": "1" },
+        h7("div", { className: "nks-empty-title" }, copy.sandboxFailed),
+        h7("div", { className: "nks-empty-body" }, String(error?.message || error)),
+        h7(
+          "div",
+          { className: "nks-empty-actions" },
+          h7(primitives2.Button, { variant: "ghost", size: "sm", onClick: () => setRetrySeq((n) => n + 1) }, copy.refresh)
+        )
+      );
+    }
+    if (rows === null) return h7("div", { className: "nks-empty", "data-nks-sandbox-loading": "1" }, copy.sandboxLoading);
+    if (rows.length === 0) return h7("div", { className: "nks-empty", "data-nks-sandbox-empty": "1" }, copy.sandboxEmpty);
+    if (!selection) return h7("div", { className: "nks-empty", "data-nks-sandbox-pick": "1" }, picker);
+    return h7(
+      React12.Fragment,
+      null,
+      picker,
+      h7(BrowserPane, { key: selection.sandboxId, copy, languageOf, theme, onThemeChange, fetch: selection.fetch, sandboxId: selection.sandboxId })
     );
   }
   var inject = ["slots", "sidebarRightTabs", "locale", "theme"];
@@ -6044,7 +6340,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
     ctx.effect(() => () => style.remove());
     const languageOf = () => ctx.locale?.getSnapshot?.().active ?? "zh";
     const copy = () => copyFor2(languageOf());
-    const Pane = () => h7(BrowserPane, {
+    const Pane = () => h7(SandboxPicker, {
       copy: copy(),
       languageOf,
       theme: ctx.theme,

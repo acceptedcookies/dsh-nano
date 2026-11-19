@@ -28,17 +28,18 @@ function registry() {
 
 test('a loopback start builds a detached container command', async () => {
   const seen = []
-  const backend = apple({}, { spawn(file, args) { seen.push([file, args]); return Promise.resolve({ code: 0 }) } })
+  const backend = apple({}, { confine: argv => ({ argv: ['confined', ...argv] }), spawn(file, args) { seen.push([file, args]); return Promise.resolve({ code: 0 }) } })
   await backend.create({ containerName: 'dnls-a', image: 'node:22-bookworm-slim', resources: { cpus: 4, memory: '4G' }, mounts: [], ports: [] })
-  assert.equal(seen[0][0], 'container')
-  assert.equal(seen[0][1][0], 'run')
-  assert.equal(seen[0][1][1], '-d')
+  assert.equal(seen[0][0], 'confined')
+  assert.deepEqual(seen[0][1].slice(0, 3), ['container', 'run', '-d'])
   assert.equal(seen[0][1].includes('--name'), true)
   assert.equal(seen[0][1].includes('-c'), true)
   assert.equal(seen[0][1].includes('4'), true)
   assert.equal(seen.length, 1)
   assert.equal(backend.calls.create, 1)
   assert.notEqual(seen[0][1].includes('latest'), true)
+  const denied = apple({}, { spawn() { assert.fail('unconfined creation') } })
+  await assert.rejects(denied.create({ containerName: 'denied', image: 'fixture' }), /confinement/)
 })
 
 test('a remote origin is not started on this machine', () => {

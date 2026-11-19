@@ -120,7 +120,7 @@ export function createTerminalStream({ connection, webServer, registry, envId, r
   function heldRow(pend) {
     let row
     try { row = registry.get(pend.sandboxId) } catch { return null }
-    if (!row || row.binding.locator !== pend.locator || row.binding.generation !== pend.generation) return null
+    if (!row || row.binding.locator !== pend.locator || row.binding.generation !== pend.generation || row.stateVolume !== pend.volume) return null
     const ref = row.terminals.find((entry) => entry.terminalId === pend.terminalId)
     if (!ref || ref.generation !== pend.generation || ref.state === 'ended' || ref.principal !== pend.principalKey) return null
     return { row, ref }
@@ -177,6 +177,7 @@ export function createTerminalStream({ connection, webServer, registry, envId, r
       terminalId: ref.terminalId,
       locator: row.binding.locator,
       generation: row.binding.generation,
+      volume: row.stateVolume,
       principalKey: ref.principal,
     }
     // admitPeer re-reads the registry: the fields recorded above are proven

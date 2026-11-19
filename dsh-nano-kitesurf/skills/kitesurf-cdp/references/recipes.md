@@ -28,7 +28,7 @@ GET  /nano-local-sandbox/console?level=log&limit=10                      # 取�
 sandbox.control  {action:"claim"}                         # 请求 MCP 写锁（只约束 MCP 写者）
 sandbox.bridge_health                                      # 桥/引擎/conns
 sandbox.diagnostics                                        # 一击诊断（hints/console/ops/catalog）
-sandbox.operations {errorsOnly:true}                       # 失败 trace + errorId + incidentId
+sandbox.error_catalog                                     # errorId 目录对照
 sandbox.control  {action:"release"}
 ```
 
@@ -52,7 +52,7 @@ GET /nano-local-sandbox/diagnostics        # hints 已把「页面加载但应�
 - **地址写法**：`localhost:3000` 不带 scheme 时 `navigationUrl` 会补 `https://` 变 `https://localhost:3000`——容器内既错主机又错协议。**永远写全 `http://<hostGateway>:<port>`**。
 
 ### 6. 写反馈报告（结构化回执）
-排障完成后按 `templates/feedback-report.md` 填：元信息（buildId/phase）→ 路由调用序列（/operations 摘，错误行带 `incidentId` 可与响应体回执互查）→ 观察到的现象 → 诊断摘录（hints/console/errorsOnly）→ 元素上下文（`/pick` 应答 + `/refs?ref=@N` 反查）→ errorId 对照 `/diagnostics` 的 `errorCatalog` → 下一步命令。结构化报告是可归档数据，不是散文。
+排障完成后按 `templates/feedback-report.md` 填：元信息（buildId/phase）→ 诊断摘要（/diagnostics hints 与 errorCatalog；`/operations` 只按 sandboxId+operationId 读 lifecycle 记录）→ 观察到的现象 → 诊断摘录（hints/console/errorCatalog）→ 元素上下文（`/pick` 应答 + `/refs?ref=@N` 反查）→ errorId 对照 `/diagnostics` 的 `errorCatalog` → 下一步命令。结构化报告是可归档数据，不是散文。
 
 ## 正例
 
@@ -92,10 +92,10 @@ GET  /nano-local-sandbox/har                     # _format:'har-lite'，headers 
 | `POST /settings {"viewport":{"mobile":true}}` | 400 `settings.unsupported` | 只支持 mobile false |
 | `POST /settings {"extraHeaders":{"cookie":"a=b"}}` | 400 输入类 | 凭证类 header 名被禁 |
 | `GET /nano-local-sandbox/ports` | `{effective,ports,container}` | 端口由实例 registry 返回；本包不接管容器 |
-| `POST /nano-local-sandbox/recover {}` | 自动 suspend→resume 并回报 | 一键自愈 |
+| `POST /lifecycle {"action":"restart","requestId":"<uuid>"}` | 显式重启所选沙箱，轮询 `GET /operations?operationId=<op>` 到 succeeded | 无隐式修复 |
 | `POST /history {"delta":2}` | 400 输入类 | 只能 -1/+1 |
 | `POST /lifecycle {"action":"start"}` 当 running | 409 | 阶段错，不是引擎故障 |
-| `suspend` 中 `/pick` | 502 引擎连接失败 | 引擎已停 |
+| `stopped`/`suspended` 中 `/pick` | 502 引擎连接失败 | 引擎已停 |
 | 黑洞地址 `/open` | 504 `navigate.egress` | 出站超时；先读 `/status` 的 `navigation.outcome`，仍是 `in-flight` 就不要重发 |
 | `POST /open {"url":"http://localhost:3000"}`（容器内） | 502 `navigate.failed` `ERR_CONNECTION_REFUSED` | 容器内 localhost 是容器自己；宿主 dev 站用 `networking.hostGateway` 地址（见配方 5） |
 | `POST /open {"url":"localhost:3000"}` | 400→502 链错 | 无 scheme 补成 `https://localhost:3000`——容器内双重错；写全 `http://<hostGateway>:<port>` |

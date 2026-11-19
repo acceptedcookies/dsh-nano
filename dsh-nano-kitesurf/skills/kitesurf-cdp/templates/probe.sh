@@ -31,8 +31,8 @@ echo
 echo "=== /diagnostics?limit=10 (hints) ==="
 req '/nano-local-sandbox/diagnostics?limit=10'
 echo
-echo "=== /operations?errorsOnly=true ==="
-req '/nano-local-sandbox/operations?errorsOnly=true'
+echo "=== /diagnostics errorCatalog ==="
+req '/nano-local-sandbox/diagnostics?catalog=1'
 echo
 echo "=== /ports ==="
 req /nano-local-sandbox/ports

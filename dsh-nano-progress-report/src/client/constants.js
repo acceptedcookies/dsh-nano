@@ -2,6 +2,8 @@
 
 export const TARGET = 'progress'
 export const TAB_KIND = 'progress'
+/** Ledger projection key — the footer's only data source. */
+export const LEDGER_FACE_KEY = 'nano-progress-report:ledger'
 export const TAB_ID = 'dsh-nano-progress-report.workbench'
 /** Conversation view tab id and session-header action id. */
 export const VIEW_ID = 'nano-progress'

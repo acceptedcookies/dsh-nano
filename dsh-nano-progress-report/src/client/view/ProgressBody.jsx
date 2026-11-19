@@ -12,14 +12,13 @@ import {
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { applyFilter, isEmptyFilter, parseFilter } from '../filter.js'
 import { activeMenuTokens, filterCounts, toggleMenuToken, visibleMenuOptions } from '../filter-menu.js'
-import { STATUSES, TYPES } from '../constants.js'
-import { taskCompletionTimes } from '../task-times.js'
+import { LEDGER_FACE_KEY, STATUSES, TYPES } from '../constants.js'
 import { perf } from '../perf.js'
 import { Row } from './Row.jsx'
 import { TasksSection } from './TasksSection.jsx'
 import { Turn } from './Turn.jsx'
 
-const { createElement: h, useEffect, useMemo, useState } = React
+const { createElement: h, useEffect, useMemo, useRef, useState } = React
 
 /** Task-bar preference (height + collapsed + list) — pure view state. */
 const TASKS_KEY = 'dsh-nano-progress-report:tasks'
@@ -71,6 +70,7 @@ export default function ProgressBody(props) {
   const [filterOpen, setFilterOpen] = useState(false)
   const [ready, setReady] = useState(false)
   const [tasks, setTasks] = useState(readTasks)
+  const flowRef = useRef(null)
 
   const target = useMemo(() => {
     try { return perf.span('progress-subscribe', () => ctx.uiConversation.binding(sessionId).target('progress')) }
@@ -84,10 +84,12 @@ export default function ProgressBody(props) {
   }, [ctx, sessionId])
   const sessionSnap = useExternal(sessionFace, [sessionFace])
 
-  const todosSource = useMemo(() => {
-    try { return sessionFace?.projections?.faceOf?.('todos') ?? null } catch { return null }
+  // The footer reads the same ledger view the model's read_progress serves:
+  // the newest full-tier work item carries tasks/files/failures/jobs.
+  const ledgerSource = useMemo(() => {
+    try { return sessionFace?.projections?.faceOf?.(LEDGER_FACE_KEY) ?? null } catch { return null }
   }, [sessionFace])
-  const todos = useExternal(todosSource, [todosSource])
+  const ledgerView = useExternal(ledgerSource, [ledgerSource])
 
   const jobsSource = useMemo(() => ctx.jobs?.state ?? null, [ctx])
   const jobsSnap = useExternal(jobsSource, [jobsSource])
@@ -114,8 +116,10 @@ export default function ProgressBody(props) {
     () => (isEmptyFilter(filter) ? rows : applyFilter(rows, filter)),
     [rows, filter],
   )
-  // Devi's Tasks rows carry a completion time; derive it from the event stream.
-  const taskTimes = useMemo(() => taskCompletionTimes(rows), [rows])
+  const currentItem = useMemo(
+    () => ledgerView?.items?.find(item => item?.tier === 'full') ?? null,
+    [ledgerView],
+  )
 
   const counts = useMemo(() => filterCounts(rows), [rows])
   const selectedTokens = useMemo(() => activeMenuTokens(query), [query])
@@ -141,7 +145,6 @@ export default function ProgressBody(props) {
   const hasMore = sessionSnap?.hasMore === true
   const loadingOlder = sessionSnap?.loadingOlder === true
   const jobs = jobsSnap?.rows?.[sessionId] ?? []
-  const todoItems = Array.isArray(todos) ? todos : []
   const setTasksField = (patch) => setTasks(current => ({ ...current, ...patch }))
 
   if (bindingError) {
@@ -205,7 +208,7 @@ export default function ProgressBody(props) {
         : null,
       stats !== '' ? h('span', { className: 'npr-stats', 'data-npr': 'stats' }, stats) : null),
 
-    h('div', { className: 'npr-flow', 'data-npr': 'flow' },
+    h('div', { className: 'npr-flow', 'data-npr': 'flow', ref: flowRef },
       hasMore
         ? h('div', { className: 'npr-older' },
           h(Button, {
@@ -255,8 +258,14 @@ export default function ProgressBody(props) {
       onCollapsed: value => setTasksField({ collapsed: value }),
       height: tasks.height,
       onResize: value => setTasksField({ height: value }),
-      todos: todoItems,
-      taskTimes,
+      item: currentItem,
       jobs,
+      onFailureJump: (callId) => {
+        const row = rows.find(entry => entry.detail?.callId === callId)
+        if (row === undefined) return
+        setOpenKey(row.key)
+        flowRef.current?.querySelector(`[data-row-key="${row.key}"]`)
+          ?.scrollIntoView?.({ block: 'center' })
+      },
     }))
 }

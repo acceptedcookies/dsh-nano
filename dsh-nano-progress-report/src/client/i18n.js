@@ -59,6 +59,11 @@ const ZH = {
 
   'drawer.tasks': 'Tasks',
   'drawer.jobs': 'Jobs',
+  'drawer.files': 'Files',
+  'drawer.failures': 'Failures',
+  'files.empty': '没有改动文件',
+  'failures.empty': '没有未恢复失败',
+  'panel.truncated': '另有 {n} 条未保留',
   'drawer.resize': '调整面板高度',
 
   'tasks.done': 'done',
@@ -126,6 +131,11 @@ const EN = {
 
   'drawer.tasks': 'Tasks',
   'drawer.jobs': 'Jobs',
+  'drawer.files': 'Files',
+  'drawer.failures': 'Failures',
+  'files.empty': 'No changed files',
+  'failures.empty': 'No unresolved failures',
+  'panel.truncated': '{n} more not retained',
   'drawer.resize': 'Resize panel',
 
   'tasks.done': 'done',

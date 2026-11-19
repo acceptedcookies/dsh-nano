@@ -83,7 +83,7 @@ test('PRE1116-T08 route inventory is a faithful projection of the ledger', () =>
   const ledger = JSON.parse(readFileSync(join(ROOT, 'security/route-sensitivity.json'), 'utf8'))
   const onDisk = readFileSync(join(ROOT, 'security/route-inventory.md'), 'utf8')
   assert.equal(onDisk, renderInventory(ledger))
-  assert.ok(onDisk.includes('87 active host routes'))
+  assert.ok(onDisk.includes('91 active host routes'))
   for (const row of ledger.routes) assert.ok(onDisk.includes(`\`${row.id}\``), row.path)
 })
 

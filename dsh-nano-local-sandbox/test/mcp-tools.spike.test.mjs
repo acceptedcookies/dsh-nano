@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { SANDBOX_TOOL_NAMES, answerNativeTool, toolsList } from '../src/host/mcp-sandbox.js'
+import './support/kernel.mjs'
 
 const FROZEN = [
   'sandbox.profile.list', 'sandbox.profile.describe', 'sandbox.instance.ensure',

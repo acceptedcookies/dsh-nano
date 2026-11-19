@@ -17,7 +17,9 @@ test('the phase-6 pack archive already exists and matches a fresh dry run', () =
   // Windows batch shims (npm.cmd) need a shell; POSIX resolves npm directly.
   const isWin = process.platform === 'win32'
   const cacheDir = join(tmpdir(), 'dnls-npm-cache')
-  const names = ['dsh-nano-local-sandbox', 'dsh-nano-kitesurf', 'dsh-nano-terminal']
+  // This package owns its own archive. The sibling packages' archives are
+  // listed in the same manifest but are their own release surface.
+  const names = ['dsh-nano-local-sandbox']
   for (const name of names) {
     const raw = execFileSync('npm', ['pack', '--dry-run', '--json', '--cache', isWin ? `"${cacheDir}"` : cacheDir], {
       cwd: join(root, name),

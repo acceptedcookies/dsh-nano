@@ -14,7 +14,7 @@
  * `{ok:false, errorId}` — never a fabricated success.
  */
 
-import { ERROR_CATALOG, statusOf } from './error-catalog.js'
+import { errorCatalog, errorCode, statusOf } from './error-catalog.js'
 
 /** Per-tool real input schema (object, no extra fields). */
 const obj = (properties = {}, required = []) => ({
@@ -36,23 +36,23 @@ const clampLimit = (value, fallback, cap) => {
 const DESCRIPTIONS = {
   'sandbox.profile.list': 'List registered sandbox profiles (id, version, scope, digest, ready).',
   'sandbox.profile.describe': 'Describe one profile by id.',
-  'sandbox.instance.ensure': 'Ensure the Kitesurf instance exists and is usable: adopt a running container, start a stopped one, or prepare a missing one. With sessionId, registers the caller against the env container.',
+  'sandbox.instance.ensure': 'Ensure the instance for a session exists and is usable: adopt a running container, start a stopped one, or prepare a missing one. The instance RECORD (instanceId, policyFingerprint) is per session; the physical container is the environment container, shared by every session and reported with an attached count. Page, CDP socket and history are shared inside that environment container.',
   'sandbox.instance.start': 'Start the environment container.',
   'sandbox.instance.stop': 'Stop the environment container (suspends the engine; page is lost).',
   'sandbox.instance.restart': 'Stop then start the environment container.',
   'sandbox.instance.status': 'Full environment snapshot: container/engine/page/DOM/bridge planes, ports, ready flag.',
-  'sandbox.diagnostics': 'Same diagnostics document as GET /nano-local-sandbox/diagnostics: planes, targets, console/network tails, operations, hints.',
+  'sandbox.diagnostics': 'Same diagnostics document as GET /nano-local-sandbox/diagnostics: planes, lifecycle phase, targets, console/network tails, operations, hints.',
   'sandbox.console': 'Page console entries captured over the pane CDP socket (log/warn/error/exception/log-domain). {limit:1..400}',
   'sandbox.operations': 'Route-call trace with status, errorId and duration. {limit:1..100, errorsOnly:boolean}',
   'sandbox.error_catalog': 'errorId → HTTP status → cause → next-step catalog. Reference data, not state.',
   'sandbox.targets': 'Live CDP Target.getTargets on the pane socket — the real page target list.',
-  'sandbox.history': 'Browse history (durable on the instance state volume): grouped by url with visit counts.',
+  'sandbox.history': 'Browse history (durable on the instance state volume): grouped by url with visit counts. HAR-shaped exports (/har) are a HAR subset: _format is har-lite, headers are always empty, there are no timings/pages sections because the engine emits no such events.',
   'sandbox.dom': 'The rendered page document: url + serializable DOM size, from the live engine.',
   'sandbox.elements': 'Elements tree read via DOM.getDocument (tag/id/class/children) up to {limit} nodes.',
-  'sandbox.selftest': 'Run the 11-check environment self-test and return per-check results.',
+  'sandbox.selftest': 'Run the profile-declared environment self-test and return per-check results.',
   'sandbox.network': 'Network ring entries from the pane CDP session (pending and finished). {limit:1..200}',
   'sandbox.ports': 'Published port truth: which host ports the env container owns and what the effective bases are.',
-  'sandbox.recovery_plan': 'Ordered recovery steps for the CURRENT snapshot (container missing/stopped, engine down, bridge down).',
+  'sandbox.recovery_plan': 'Ordered recovery steps for the CURRENT snapshot (container missing/stopped, engine down, bridge down). Timeouts are not cancellations: a timed-out navigate keeps running engine-side, so read /status navigation.outcome before resending.',
   'sandbox.bridge_health': 'MCP bridge /health: conns, writer/humanHold control state, diagnostics freshness.',
 }
 
@@ -102,7 +102,7 @@ const TOOL_DEFS = {
     schema: obj(),
     // The real owner is diagnostics.read; state.diagnostics remains the
     // fixture/test seam, never a fabricated success.
-    run: (o) => o.diagnostics?.read?.() ?? o.state?.diagnostics ?? { ok: false, errorId: 'kitesurf.diag.stale', error: 'diagnostics owner unavailable' },
+    run: (o) => o.diagnostics?.read?.() ?? o.state?.diagnostics ?? { ok: false, errorId: errorCode('diag.stale'), error: 'diagnostics owner unavailable' },
   },
   'sandbox.console': {
     schema: obj({ limit: int, level: str }),
@@ -125,7 +125,7 @@ const TOOL_DEFS = {
   },
   'sandbox.error_catalog': {
     schema: obj(),
-    run: () => ERROR_CATALOG.map((row) => ({ id: row.example, status: row.status, cause: row.cause, next: row.next })),
+    run: () => errorCatalog().map((row) => ({ id: row.example, status: row.status, cause: row.cause, next: row.next })),
   },
   'sandbox.targets': {
     schema: obj(),
@@ -152,11 +152,11 @@ const TOOL_DEFS = {
   },
   'sandbox.dom': {
     schema: obj(),
-    run: (o) => o.page?.dom?.() ?? { ok: false, errorId: 'kitesurf.dom.empty', error: 'no serializable document' },
+    run: (o) => o.page?.dom?.() ?? { ok: false, errorId: errorCode('dom.empty'), error: 'no serializable document' },
   },
   'sandbox.elements': {
     schema: obj({ limit: int, selector: str }),
-    run: (o, p) => o.page?.elements?.({ limit: clampLimit(p.limit, 40, 220), selector: p.selector }) ?? { ok: false, errorId: 'kitesurf.elements.empty', error: 'no document root' },
+    run: (o, p) => o.page?.elements?.({ limit: clampLimit(p.limit, 40, 220), selector: p.selector }) ?? { ok: false, errorId: errorCode('elements.empty'), error: 'no document root' },
   },
   'sandbox.selftest': {
     schema: obj(),
@@ -180,7 +180,7 @@ const TOOL_DEFS = {
   },
   'sandbox.bridge_health': {
     schema: obj(),
-    run: (o) => o.bridge?.health?.() ?? { ok: false, errorId: 'kitesurf.control.bridge', error: 'bridge unreachable' },
+    run: (o) => o.bridge?.health?.() ?? { ok: false, errorId: errorCode('control.bridge'), error: 'bridge unreachable' },
   },
 }
 
@@ -235,7 +235,7 @@ function validateParams(def, params) {
  */
 export async function answerNativeTool(name, owners = {}, state = {}, params = {}) {
   const def = TOOL_DEFS[name]
-  if (!def) return { ok: false, errorId: 'kitesurf.tool.unknown', error: `no sandbox tool '${name}'` }
+  if (!def) return { ok: false, errorId: errorCode('tool.unknown'), error: `no sandbox tool '${name}'` }
   const check = validateParams(def, params)
   if (!check.ok) return check
   try {

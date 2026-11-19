@@ -2,8 +2,11 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   applyBrowserSettings, applyBrowserSettingsToPage, applyViewport, browserSettings, effectiveViewport,
-} from '../src/host/browser-settings-adapter.js'
-import { statusOf } from '../src/host/error-catalog.js'
+} from '../profiles/kitesurf/driver/settings.js'
+import { registerDriverErrors, statusOf } from '../src/host/error-catalog.js'
+import { driver } from './support/kernel.mjs'
+
+registerDriverErrors(driver.errors)
 
 const metrics = (width = 1280, height = 720, deviceScaleFactor = 1, mobile = false) => ({ width, height, deviceScaleFactor, mobile })
 
@@ -81,17 +84,29 @@ test('width-only retains the current fixed height, without coercing input values
   }
 })
 
-test('viewport boundaries, all scale factors, and mobile booleans are accepted', async () => {
+test('viewport boundaries are accepted, and only deviceScaleFactor 1 / mobile false are supported', async () => {
   for (const [width, height] of [[320, 240], [3840, 2160]]) {
-    for (const deviceScaleFactor of [1, 2, 3]) {
-      for (const mobile of [false, true]) {
-        const session = {}
-        const fixture = cdpFixture()
-        const viewport = { width, height, deviceScaleFactor, mobile }
-        await applyBrowserSettings(session, fixture.client, { viewport })
-        assert.deepEqual(fixture.engine.viewport, viewport)
-      }
-    }
+    const session = {}
+    const fixture = cdpFixture()
+    const viewport = { width, height, deviceScaleFactor: 1, mobile: false }
+    await applyBrowserSettings(session, fixture.client, { viewport })
+    assert.deepEqual(fixture.engine.viewport, viewport)
+  }
+  // The pin cannot change devicePixelRatio or the mobile input profile: a value
+  // it cannot honour is refused as settings.unsupported and nothing is applied.
+  for (const viewport of [
+    { width: 390, height: 900, deviceScaleFactor: 2 },
+    { width: 390, height: 900, deviceScaleFactor: 3 },
+    { width: 390, height: 900, mobile: true },
+  ]) {
+    const session = {}
+    const fixture = cdpFixture()
+    await assert.rejects(
+      () => applyBrowserSettings(session, fixture.client, { viewport }),
+      (error) => settingsError(error) && error.errorId === 'kitesurf.settings.unsupported' && error.status === 400,
+    )
+    assert.deepEqual(fixture.calls, [])
+    assert.deepEqual(session, {})
   }
 })
 
@@ -111,7 +126,8 @@ test('effectiveViewport is a pure fixed-before-fit selector returning detached v
   const session = { viewport: metrics(390, 900, 3, true), lastFit: { width: 1000, height: 700 } }
   const before = structuredClone(session)
   const result = effectiveViewport(session, { width: 1600, height: 1000 })
-  assert.deepEqual(result, session.viewport)
+  // A stored legacy scale/mobile is projected to what the pin actually applies.
+  assert.deepEqual(result, metrics(390, 900))
   result.width = 2000
   assert.deepEqual(session, before)
   assert.deepEqual(effectiveViewport({ lastFit: { width: 1000, height: 700 } }), metrics(1000, 700))
@@ -123,8 +139,8 @@ test('shot fit cannot overwrite fixed viewport, but is remembered for returning 
   const session = { viewport: metrics(390, 900, 2, true) }
   const fixture = cdpFixture()
   const fit = { width: 1600, height: 1000 }
-  assert.deepEqual(await applyViewport(session, fixture.client, fit, 'owner'), session.viewport)
-  assert.deepEqual(fixture.engine.viewport, session.viewport)
+  assert.deepEqual(await applyViewport(session, fixture.client, fit, 'owner'), metrics(390, 900))
+  assert.deepEqual(fixture.engine.viewport, metrics(390, 900))
   assert.deepEqual(session.lastFit, fit)
   assert.deepEqual(session.viewport, metrics(390, 900, 2, true))
   await applyBrowserSettings(session, fixture.client, { viewport: null })

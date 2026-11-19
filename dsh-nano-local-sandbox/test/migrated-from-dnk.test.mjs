@@ -163,7 +163,7 @@ test('a failed start does not leave the engine running', async () => {
 })
 
 test('a remote engine needs allowRemote, and credentials are never allowed', () => {
-  assert.throws(() => apple({ identity: { user: 'kitesurf' } }))
+  assert.throws(() => apple({ identity: { user: 'vmnet' } }))
   assert.throws(() => apple({ network: { mode: 'virtiofs' } }))
   assert.throws(() => apple({ container: true }))
   assert.equal(apple({}).calls.create, 0)

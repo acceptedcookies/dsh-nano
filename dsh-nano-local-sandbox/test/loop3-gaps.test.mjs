@@ -42,7 +42,7 @@ function depsWith(overrides = {}) {
       },
       async logs(name, { tail } = {}) { return { text: `tail=${tail}` } },
     },
-    env: { DSH_HOME: '/tmp/.dsh-dev-guard', HOME: '/tmp/nonexistent-home', KITESURF_STATE: '/tmp/dnls-loop3-gaps' },
+    env: { DSH_HOME: '/tmp/.dsh-dev-guard', HOME: '/tmp/nonexistent-home', DNLS_STATE_ROOT: '/tmp/dnls-loop3-gaps' },
     connect: async () => ({ pageSessionId: 's1', pageTargetId: 't1', alive: true, listen() {}, async send() { return {} } }),
     prepareTimeoutMs: 0,
     httpProbe: () => false,
@@ -59,7 +59,8 @@ test('bridgeControlBase keeps IPv6 literal singly-bracketed', () => {
     'URL.hostname already brackets IPv6; wrapping again produced http://[[::1]]:8801'
   )
   assert.equal(bridgeControlBase({ httpBase: 'http://127.0.0.1:8800' }), 'http://127.0.0.1:8801')
-  assert.equal(bridgeControlBase({ httpBase: 'http://[::1]:8800', kiteMcpPort: 9901 }), 'http://[::1]:9901')
+  // The bridge port is derived from the engine's; a stored override is retired.
+  assert.equal(bridgeControlBase({ httpBase: 'http://[::1]:8800', kiteMcpPort: 9901 }), 'http://[::1]:8801')
   assert.equal(bridgeControlBase({ httpBase: 'not-a-url' }), null)
   assert.equal(bridgeControlBase({ httpBase: 'http://127.0.0.1' }), null, 'no explicit port → refuse, never guess')
 })

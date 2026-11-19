@@ -4,13 +4,14 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import test from 'node:test'
-import { inspectedRecipe, recipeDrift } from '../src/host/kitesurf-reconciliation.js'
-import { KITESURF_RUNTIME_FILES, kitesurfImage, kitesurfRecipe, kitesurfRuntimeRoot } from '../src/host/kitesurf-runtime.js'
+import { inspectedRecipe, recipeDrift } from '../profiles/kitesurf/driver/reconciliation.js'
+import { KITESURF_RUNTIME_FILES } from '../profiles/kitesurf/driver/runtime.js'
+import { loadProfileDriver, resourcesOf } from '../src/host/profile-drivers.js'
 import { routeSpecs } from '../src/host/routes.js'
 
 const profileDir = fileURLToPath(new URL('../profiles/kitesurf/', import.meta.url))
 
-function fixture({ built = true } = {}) {
+async function fixture({ built = true } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'dnls-reconcile-'))
   const profilesRoot = join(root, 'profiles')
   const profile = join(profilesRoot, 'kitesurf')
@@ -18,14 +19,18 @@ function fixture({ built = true } = {}) {
   for (const file of ['profile.yaml', 'Dockerfile', 'entrypoint.sh', 'mcp-bridge.mjs']) {
     cpSync(join(profileDir, file), join(profile, file))
   }
+  cpSync(join(profileDir, 'driver'), join(profile, 'driver'), { recursive: true })
   const yaml = join(profile, 'profile.yaml')
   const ref = 'be'.repeat(20)
   writeFileSync(yaml, readFileSync(yaml, 'utf8')
     .replace(/ref: [0-9a-f]{40}/, `ref: ${ref}`)
     .replace(/image: [^\r\n]+/, `image: fixture-engine:${ref}`))
   const deps = { profilesRoot, env: { HOME: root, DSH_HOME: join(root, '.dsh-dev') } }
-  const recipe = kitesurfRecipe(deps)
-  const runtime = kitesurfRuntimeRoot(recipe, deps)
+  const loaded = await loadProfileDriver(profile)
+  if (!loaded.ready) throw new Error(`fixture profile invalid: ${loaded.errors.join(', ')}`)
+  const { driver, manifest: profileManifest } = loaded
+  const recipe = { profile: profileManifest, resources: resourcesOf(profileManifest) }
+  const runtime = driver.runtimeRoot(profileManifest, deps)
   const state = join(root, 'adopted-state')
   mkdirSync(state)
   writeFileSync(join(state, 'durable-marker'), 'keep me\n')
@@ -39,7 +44,7 @@ function fixture({ built = true } = {}) {
     }
     mkdirSync(join(runtime, 'node_modules'))
   }
-  return { root, deps, recipe, runtime, state, image: kitesurfImage(recipe, deps.env) }
+  return { root, deps, recipe, runtime, state, image: driver.image(profileManifest), driver }
 }
 
 function inspected(f, overrides = {}, state = 'running') {
@@ -100,8 +105,8 @@ function assertPreserved(f, spec) {
   assert.equal(readFileSync(join(f.state, 'durable-marker'), 'utf8'), 'keep me\n')
 }
 
-test('inspect retains Apple image reference/digest, actual mounts and GC/recipe evidence', () => {
-  const f = fixture({ built: false })
+test('inspect retains Apple image reference/digest, actual mounts and GC/recipe evidence', async () => {
+  const f = await fixture({ built: false })
   const configuration = JSON.parse(inspected(f).raw)[0].configuration
   const info = inspectedRecipe(configuration)
   assert.equal(info.imageRef, `docker.io/library/${f.image}`)
@@ -128,7 +133,7 @@ test('image aliases compare equally and absent fixture fields or GC env do not i
 
 test('a missing new image preserves the old running or stopped container and socket', async (t) => {
   for (const state of ['running', 'stopped']) await t.test(state, async () => {
-    const f = fixture()
+    const f = await fixture()
     const backend = backendFor(inspected(f, { image: 'fixture-engine:old' }, state))
     backend.ensureImage = async () => { backend.calls.push(['ensureImage']); throw new Error('image missing') }
     const session = cachedSession(backend.calls)
@@ -142,7 +147,7 @@ test('a missing new image preserves the old running or stopped container and soc
 
 test('image-only and runtime-only drift each recreate a running container with the current recipe', async (t) => {
   for (const field of ['image', 'mounts']) await t.test(field, async () => {
-    const f = fixture()
+    const f = await fixture()
     const overrides = field === 'image'
       ? { image: { reference: 'docker.io/library/fixture-engine:old' } }
       : { mounts: JSON.parse(inspected(f).raw)[0].configuration.mounts.map((mount) => mount.destination === '/opt/kitesurf' ? { ...mount, source: '/old/derived/runtime' } : mount) }
@@ -160,7 +165,7 @@ test('image-only and runtime-only drift each recreate a running container with t
 
 test('stopped containers reconcile recipe/resource drift before any start', async (t) => {
   for (const drift of ['image', 'mounts', 'resources']) await t.test(drift, async () => {
-    const f = fixture()
+    const f = await fixture()
     const overrides = drift === 'image' ? { image: 'fixture-engine:old' }
       : drift === 'mounts' ? { mounts: JSON.parse(inspected(f).raw)[0].configuration.mounts.map((mount) => mount.destination === '/opt/kitesurf' ? { ...mount, source: '/old/runtime' } : mount) }
         : { resources: { cpus: 2, memoryInBytes: 2 * 1024 ** 3 } }
@@ -176,7 +181,7 @@ test('stopped containers reconcile recipe/resource drift before any start', asyn
 })
 
 test('combined recipe/resource drift recreates once and a second prepare is noop', async () => {
-  const f = fixture()
+  const f = await fixture()
   const old = inspected(f, { image: 'fixture-engine:old', resources: { cpus: 2, memoryInBytes: 2 * 1024 ** 3 } })
   const backend = backendFor(old)
   let current = old
@@ -194,7 +199,7 @@ test('combined recipe/resource drift recreates once and a second prepare is noop
 
 test('missing, incomplete or wrong-receipt new runtime never stops/removes/starts the old container', async (t) => {
   for (const state of ['running', 'stopped']) for (const fault of ['missing', 'incomplete', 'receipt']) await t.test(`${state}/${fault}`, async () => {
-    const f = fixture({ built: fault !== 'missing' })
+    const f = await fixture({ built: fault !== 'missing' })
     if (fault === 'incomplete') writeFileSync(join(f.runtime, KITESURF_RUNTIME_FILES[0]), '')
     if (fault === 'receipt') writeFileSync(join(dirname(f.runtime), 'artifact.json'), JSON.stringify({ ref: 'cd'.repeat(20) }))
     const backend = backendFor(inspected(f, { image: 'fixture-engine:old' }, state))
@@ -213,7 +218,7 @@ test('missing, incomplete or wrong-receipt new runtime never stops/removes/start
 
 test('stop/remove errors propagate and never create; CDP resets only once stopped', async (t) => {
   for (const failed of ['stop', 'remove']) await t.test(failed, async () => {
-    const f = fixture()
+    const f = await fixture()
     const backend = backendFor(inspected(f, { image: 'fixture-engine:old' }), failed)
     const session = cachedSession(backend.calls)
     const original = session.cdp
@@ -228,7 +233,7 @@ test('stop/remove errors propagate and never create; CDP resets only once stoppe
 })
 
 test('http-only recovery also resets CDP only after its stop succeeds', async () => {
-  const f = fixture({ built: false })
+  const f = await fixture({ built: false })
   for (const failAt of [undefined, 'stop']) {
     const backend = backendFor(inspected(f), failAt)
     const session = cachedSession(backend.calls)
@@ -248,7 +253,7 @@ test('http-only recovery also resets CDP only after its stop succeeds', async ()
 })
 
 test('matching production inspect is noop/resume with no runtime build and retains the live CDP socket', async () => {
-  const f = fixture({ built: false })
+  const f = await fixture({ built: false })
   for (const state of ['running', 'stopped']) {
     const backend = backendFor(inspected(f, {}, state))
     const session = cachedSession(backend.calls)

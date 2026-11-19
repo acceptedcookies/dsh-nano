@@ -348,7 +348,7 @@ async function main() {
   // restart plus the DOM poll, because the browser bridge caps an evaluation
   // at 15s.
   const postKite = (action) => page.evaluate(async (name) => {
-    const response = await fetch('/nano-local-sandbox/kite', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: name }) })
+    const response = await fetch('/nano-local-sandbox/lifecycle', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: name }) })
     const text = await response.text()
     try { return JSON.parse(text) } catch { return { ok: false, error: text.slice(0, 120), status: response.status } }
   }, action)

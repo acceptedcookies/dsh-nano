@@ -1,4 +1,3 @@
-import { withPage } from './cdp-elements.js'
 
 const SETTINGS_KEYS = new Set(['viewport', 'userAgent', 'media', 'extraHeaders', 'locale', 'geolocation', 'colorScheme', 'cookies'])
 const VIEWPORT_KEYS = new Set(['width', 'height', 'deviceScaleFactor', 'mobile'])
@@ -52,6 +51,14 @@ function cookieParams(session, cookies) {
   })
 }
 
+/** Kernel services, injected by the loader: the driver never imports src/host. */
+let api = null
+export function configure(services) {
+  api = services
+  return api
+}
+function withPage(...args) { return api.cdp.withPage(...args) }
+
 function invalid(message, errorId = 'kitesurf.settings.body') {
   // The kitesurf.settings.* family IS the documented id space (diagnostics
   // catalog + recipes negative examples); a bare body.json left agents unable
@@ -68,8 +75,15 @@ function viewportPatch(value) {
   keysOnly(value, VIEWPORT_KEYS, 'viewport')
   if (!boundedInteger(value.width, 320, 3840)) throw invalid('viewport.width must be an integer in 320..3840', 'kitesurf.settings.viewport')
   if (owns(value, 'height') && !boundedInteger(value.height, 240, 2160)) throw invalid('viewport.height must be an integer in 240..2160', 'kitesurf.settings.viewport')
-  if (owns(value, 'deviceScaleFactor') && ![1, 2, 3].includes(value.deviceScaleFactor)) throw invalid('deviceScaleFactor must be 1, 2 or 3', 'kitesurf.settings.viewport')
+  // The pin cannot change devicePixelRatio or the mobile input profile, so a
+  // value it cannot honour is refused instead of stored and echoed back.
+  if (owns(value, 'deviceScaleFactor') && value.deviceScaleFactor !== 1) {
+    throw invalid('deviceScaleFactor must be 1: this engine pin cannot change devicePixelRatio', 'kitesurf.settings.unsupported')
+  }
   if (owns(value, 'mobile') && typeof value.mobile !== 'boolean') throw invalid('viewport.mobile must be a boolean', 'kitesurf.settings.viewport')
+  if (owns(value, 'mobile') && value.mobile !== false) {
+    throw invalid('mobile must be false: this engine pin has no mobile/touch emulation', 'kitesurf.settings.unsupported')
+  }
   return { ...value }
 }
 
@@ -157,7 +171,7 @@ function validateFit(fit) {
 /** Detached projection only; the session remains the sole writable settings source. */
 export function browserSettings(session) {
   return {
-    viewport: session.viewport == null ? null : { ...session.viewport },
+    viewport: session.viewport == null ? null : fixedViewport(session.viewport),
     userAgent: session.userAgent ?? '',
     media: session.media ?? null,
     extraHeaders: session.extraHeaders == null ? null : { ...session.extraHeaders },
@@ -168,10 +182,17 @@ export function browserSettings(session) {
   }
 }
 
+/** Stored state may predate the pin's fixed scale/mobile; project what it applies. */
+function fixedViewport(value) {
+  const width = boundedInteger(value?.width, 320, 3840) ? value.width : 1280
+  const height = boundedInteger(value?.height, 240, 2160) ? value.height : 720
+  return { width, height, deviceScaleFactor: 1, mobile: false }
+}
+
 /** Pure selection. A pane fit never replaces an explicitly fixed viewport. */
 export function effectiveViewport(session, fit) {
   const requested = validateFit(fit)
-  if (session.viewport != null) return completeViewport(viewportPatch(session.viewport))
+  if (session.viewport != null) return fixedViewport(session.viewport)
   const auto = requested || validateFit(session.lastFit) || { width: 1280, height: 720 }
   return { ...auto, deviceScaleFactor: 1, mobile: false }
 }
@@ -347,14 +368,15 @@ export async function applyBrowserSettings(session, client, patch) {
 
 /**
  * Capability note the pane surfaces: this pin's setDeviceMetricsOverride only
- * applies width/height (dispatch.ts reads nothing else), so DSF and mobile
- * are reported as not-applied instead of echoing a value that never took.
+ * applies width/height (dispatch.ts reads nothing else), so DSF is fixed at 1
+ * and mobile at false; any other value is refused rather than echoed.
  */
 export function capabilityNotes(session) {
   const notes = []
-  const v = session.viewport
-  if (v && v.deviceScaleFactor && v.deviceScaleFactor !== 1) notes.push('deviceScaleFactor is accepted but ignored by this engine pin; devicePixelRatio stays 1')
-  if (v && v.mobile === true) notes.push('mobile is accepted but ignored by this engine pin; no touch/mobile emulation')
+  notes.push('deviceScaleFactor is fixed at 1 by this engine pin; any other value is refused')
+  notes.push('mobile is fixed at false by this engine pin; no touch/mobile emulation')
+  if (session.viewport && session.viewport.deviceScaleFactor !== 1) notes.push('stored deviceScaleFactor differs from 1 and is not applied')
+  if (session.viewport && session.viewport.mobile !== false) notes.push('stored mobile flag is not applied')
   // Shim keys are JS-level simulation, not engine emulation: they cover the
   // APIs scripts read, not the network layer (Accept-Language) or a real IP.
   if (session.locale) notes.push('locale is simulated via JS shim: navigator.language/languages are patched, Accept-Language headers are not')

@@ -4,16 +4,21 @@ platform:
   - darwin/arm64
 backend: apple-container
 scope: session
+driver: ./driver/index.js
 build:
   base: node:22-bookworm-slim
-  image: kitesurf-engine:39feadfb9a3e6c14b40cf170a559ce417d0fce5d-472144145d78
+  image: kitesurf-engine:39feadfb9a3e6c14b40cf170a559ce417d0fce5d-7876c89a6e3e
+  recipe:
+    - Dockerfile
+    - entrypoint.sh
+    - mcp-bridge.mjs
   npmPrefix:
     wrangler: 4.131.2
     agent-browser: 0.42.0
   checkout:
     ref: 39feadfb9a3e6c14b40cf170a559ce417d0fce5d
     verify: packages/engine/wrangler.jsonc
-  digest: sha256:472144145d78032f0ef3a00d29b6fc36eb38335f62e1b94fe28ec0005223d9c1
+  digest: sha256:7876c89a6e3e2d18ff9af169200bf48a0b2475a9886177d2ee9a7892e6d2ec30
 runtime:
   user: node
   entrypoint: /entrypoint.sh
@@ -31,6 +36,21 @@ runtime:
     resources:
       cpus: 4
       memory: 4G
+instance:
+  name: kitesurf
+  ports:
+    engine: 8787
+    bridge: 8791
+  hostPorts:
+    prod:
+      engine: 8798
+      bridge: 8799
+    dev:
+      engine: 8800
+      bridge: 8801
+    desktop:
+      engine: 8802
+      bridge: 8803
 lifecycle:
   idleTimeoutMs: 1800000
   maxInstances: 2

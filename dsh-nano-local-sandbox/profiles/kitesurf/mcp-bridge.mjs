@@ -522,7 +522,7 @@ const KITESURF_TOOLS = [
   },
   {
     name: 'sandbox.control',
-    description: 'Page control/ownership state: which writer holds the page (owner client name, since when, last write). One page is shared by a human and agents; a second writer is refused kitesurf.control.busy rather than tearing navigation. action: status|claim|release — claim to take the page, release to free it.',
+    description: 'Page control/ownership state: which MCP writer holds the page (owner client name, since when, last write). One page is shared by a human and agents; a second MCP writer is refused kitesurf.control.busy rather than tearing navigation. The host pane writes over REST without this lock, so a human action is never blocked. action: status|claim|release — claim to take the page, release to free it.',
     inputSchema: { type: 'object', properties: { action: { type: 'string', enum: ['status', 'claim', 'release', 'takeover'] } }, additionalProperties: false },
   },
   {
@@ -648,22 +648,22 @@ function answerNativeTool(name, args, bridgeState, self = {}) {
     const ports = snap.ports || null
     const hint = []
     if (ports?.ports?.engine && ports.ports.engine.free === false && ports.effective?.httpBase) {
-      hint.push(`配置端口 ${ports.configured?.httpBase} 被占用或不可用；实际引擎在 ${ports.effective.httpBase}`)
+      hint.push(`发布端口 ${ports.effective?.httpBase} 被占用或不可用；检查容器端口映射`)
     }
     if (ports?.lastRepair) hint.push(`最近一次端口修复：${ports.lastRepair.reason}（${JSON.stringify(ports.lastRepair.from)} → ${JSON.stringify(ports.lastRepair.to)}）`)
-    if (ports?.container?.state && ports.container.state !== 'running') hint.push(`容器状态 ${ports.container.state}，需要 POST /nano-local-sandbox/recover 或 /kite resume`)
+    if (ports?.container?.state && ports.container.state !== 'running') hint.push(`容器状态 ${ports.container.state}，需要 POST /nano-local-sandbox/recover 或 /lifecycle resume`)
     return { ok: true, ...(ports || { error: 'no port snapshot yet' }), hints: hint }
   }
   if (name === 'sandbox.recovery_plan') {
-    const phase = snap.plugin?.phase || snap.engine?.kite?.phase || 'unknown'
+    const phase = snap.plugin?.phase || snap.engine?.lifecycle?.phase || 'unknown'
     const alive = snap.engine?.engineAlive === true
     const steps = []
-    if (!alive) steps.push({ order: 1, action: 'suspend (only if phase=running)', call: 'POST /nano-local-sandbox/kite {"action":"suspend"}' })
-    if (!alive) steps.push({ order: 2, action: 'resume / start engine (auto-repairs a busy port)', call: 'POST /nano-local-sandbox/kite {"action":"resume"}' })
+    if (!alive) steps.push({ order: 1, action: 'suspend (only if phase=running)', call: 'POST /nano-local-sandbox/lifecycle {"action":"suspend"}' })
+    if (!alive) steps.push({ order: 2, action: 'resume / start engine (auto-repairs a busy port)', call: 'POST /nano-local-sandbox/lifecycle {"action":"resume"}' })
     if (!alive) steps.push({ order: 3, action: 'one-shot self-heal + port report', call: 'POST /nano-local-sandbox/recover {}' })
     steps.push({ order: steps.length + 1, action: 'verify', call: 'GET /nano-local-sandbox/ports' })
-    steps.push({ order: steps.length + 1, action: 'if a port is busy, repoint config', call: 'profile cordis.patch.yml → - id: nano-kitesurf / config.httpBase: http://127.0.0.1:8798, then restart the host' })
-    return { ok: true, phase, engineAlive: alive, steps, notes: 'kitesurf.kite.portbusy (409) means the requested port is held by another process; the existing container is preserved.' }
+    steps.push({ order: steps.length + 1, action: 'if a port is busy, free it or change the profile instance hostPorts, then restart the host', call: 'profile instance.hostPorts in profiles/kitesurf/profile.yaml' })
+    return { ok: true, phase, engineAlive: alive, steps, notes: 'lifecycle.state (409) means the requested action does not match the current phase; a busy host port means another process holds it and the existing container is preserved.' }
   }
   if (name === 'sandbox.control') {
     const c = bridgeState.control || {}
@@ -673,7 +673,7 @@ function answerNativeTool(name, args, bridgeState, self = {}) {
       ok: true,
       ...controlSnapshot(c),
       mine: me != null && c.writer === me,
-      hint: 'one writer moves the page at a time; a second writer gets kitesurf.control.busy. release only frees a lock you hold. humanHold.active means a human takeover refuses all MCP writes.',
+      hint: 'one MCP writer moves the page at a time; a second MCP writer gets kitesurf.control.busy. release only frees a lock you hold. humanHold.active means a human takeover refuses all MCP writes. The host pane is exempt: its REST writes are human actions.',
     })
     if (action === 'status') return state()
     if (action === 'claim') {

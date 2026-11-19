@@ -1,5 +1,6 @@
 import { spawn, execFile } from 'node:child_process'
 import { assertPublicSpec, capabilityReport } from './backend.js'
+import { errorCode } from './error-catalog.js'
 
 /**
  * Container-CLI errors need shape, not just a stderr blob. Classify into
@@ -23,7 +24,7 @@ function cliError(args, { code, stderr = '', cause = null, timedOut = false } = 
   const error = new Error(`container ${verb} ${name}: ${timedOut ? 'timed out' : (text || `exit ${code}`)}`)
   error.code = code
   error.cliKind = kind
-  error.errorId = timedOut ? 'kitesurf.backend.timeout' : 'kitesurf.backend.cli'
+  error.errorId = timedOut ? errorCode('backend.timeout') : errorCode('backend.cli')
   if (cause) error.cause = cause
   return error
 }
@@ -117,10 +118,16 @@ export function createAppleBackend(spec = {}, io = {}) {
       await runFile(bound, ['image', 'inspect', tag])
       return { ok: true, image: tag }
     },
-    /** Image creation remains privileged here, after host confinement wraps argv. */
-    async build({ ctx, contextDir, dockerfile, image, base }) {
+    /**
+     * Image creation remains privileged here, after host confinement wraps argv.
+     * `buildArgs` are the profile Dockerfile's own ARG names/values; the kernel
+     * only passes them through.
+     */
+    async build({ ctx, contextDir, dockerfile, image, buildArgs = [] }) {
       if (typeof ctx?.sandbox?.confine !== 'function') throw new Error('ctx.sandbox.confine is required')
-      const args = ['container', 'build', '--tag', image, '--file', dockerfile, '--build-arg', `KITESURF_BASE_IMAGE=${base}`, contextDir]
+      const args = ['container', 'build', '--tag', image, '--file', dockerfile]
+      for (const arg of buildArgs) args.push('--build-arg', String(arg))
+      args.push(contextDir)
       const confined = await ctx.sandbox.confine(args)
       if (!Array.isArray(confined?.argv) || confined.argv.length === 0) throw new Error('sandbox did not return a confined build command')
       return new Promise((resolve, reject) => {

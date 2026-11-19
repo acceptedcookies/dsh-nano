@@ -1,5 +1,5 @@
 /** Per-session CDP reader. The socket hangs off the session object, not a module global. */
-import { applyBrowserSettingsToPage } from './browser-settings-adapter.js'
+import { errorCode } from './error-catalog.js'
 
 /**
  * The page-level session is cached on the client: this pin's TargetInfo rows
@@ -17,7 +17,7 @@ export async function withPage(client, fn) {
     if (!page) {
       const error = new Error('no document')
       error.status = 502
-      error.errorId = 'kitesurf.elements.empty'
+      error.errorId = errorCode('elements.empty')
       throw error
     }
     const attached = page.sessionId
@@ -46,7 +46,7 @@ export async function evaluatePage(client, expression) {
       const detail = result.exceptionDetails
       const error = new Error(String(detail.exception?.description || detail.text || 'evaluate failed').slice(0, 240))
       error.status = 400
-      error.errorId = 'kitesurf.evaluate.exception'
+      error.errorId = errorCode('evaluate.exception')
       throw error
     }
     return result.result?.value
@@ -59,7 +59,7 @@ export async function readElements(client, options = {}) {
   if (!page) {
     const error = new Error('no document')
     error.status = 502
-    error.errorId = 'kitesurf.elements.empty'
+    error.errorId = errorCode('elements.empty')
     throw error
   }
   const attached = page.sessionId
@@ -74,7 +74,7 @@ export async function readElements(client, options = {}) {
   if (!root) {
     const error = new Error('no document')
     error.status = 502
-    error.errorId = 'kitesurf.elements.empty'
+    error.errorId = errorCode('elements.empty')
     throw error
   }
   const nodes = []
@@ -138,14 +138,14 @@ export function navigate(session, httpBase, url, connect = connectCdp, options =
     timedOut: false,
     generation: (session.navigation?.generation || 0) + 1,
   }
-  return queueNavigation(session, () => navigateOnce(session, httpBase, url, connect, options.isCancelled || (() => false)), options)
+  return queueNavigation(session, () => navigateOnce(session, httpBase, url, connect, options.isCancelled || (() => false), options.hooks || {}), options)
     .then((value) => {
       if (session.navigation?.intent === url) session.navigation = { ...session.navigation, outcome: 'committed', url: value?.url ?? url, settledAt: new Date().toISOString() }
       return value
     })
     .catch((error) => {
       if (session.navigation?.intent === url) {
-        session.navigation = { ...session.navigation, outcome: /timed out/i.test(error?.message || '') ? 'in-flight' : 'failed', timedOut: /timed out/i.test(error?.message || ''), errorId: error?.errorId || 'kitesurf.navigate.failed', settledAt: new Date().toISOString() }
+        session.navigation = { ...session.navigation, outcome: /timed out/i.test(error?.message || '') ? 'in-flight' : 'failed', timedOut: /timed out/i.test(error?.message || ''), errorId: error?.errorId || errorCode('navigate.failed'), settledAt: new Date().toISOString() }
       }
       throw error
     })
@@ -166,17 +166,17 @@ export function queueNavigation(session, work, { isCancelled = () => false } = {
 }
 
 function assertNavigationActive(isCancelled) {
-  if (isCancelled()) throw Object.assign(new Error('Navigation request was cancelled'), { errorId: 'kitesurf.navigate.failed', status: 502 })
+  if (isCancelled()) throw Object.assign(new Error('Navigation request was cancelled'), { errorId: errorCode('navigate.failed'), status: 502 })
 }
 
-async function navigateOnce(session, httpBase, url, connect, isCancelled) {
+async function navigateOnce(session, httpBase, url, connect, isCancelled, hooks = {}) {
   const client = await ensureClient(session, httpBase, connect)
   const targets = await client.send('Target.getTargets')
   const page = (targets.targetInfos || []).find((row) => row.type === 'page')
   if (!page) {
     const error = new Error('no document')
     error.status = 502
-    error.errorId = 'kitesurf.elements.empty'
+    error.errorId = errorCode('elements.empty')
     throw error
   }
   // Reuse the page session across navigations: the pinned engine lists no
@@ -196,28 +196,20 @@ async function navigateOnce(session, httpBase, url, connect, isCancelled) {
   // or silently claim an override succeeded when its CDP call failed. The
   // pre-navigation script (locale/geo/media shims) is refreshed HERE so the
   // page's first script already sees the override.
-  await applyBrowserSettingsToPage(session, client, sessionId)
+  if (typeof hooks.applySettings === 'function') await hooks.applySettings(session, client, sessionId)
   // Cancelling a queued HTTP request must not navigate later. Once sent,
   // however, a CDP navigation is left to finish on its existing connection.
   assertNavigationActive(isCancelled)
-  // The engine consumes ks_color_scheme before the page sees the URL and
-  // applies it as the document's prefers-color-scheme. It is a driver-level
-  // navigation parameter, not a modification to the pinned engine.
-  let navigateUrl = url
-  if (session.colorScheme === 'light' || session.colorScheme === 'dark') {
-    try {
-      const parsed = new URL(url)
-      parsed.searchParams.set('ks_color_scheme', session.colorScheme)
-      navigateUrl = parsed.toString()
-    } catch { /* an invalid URL is reported by Page.navigate */ }
-  }
+  // Driver-level navigation parameters are applied by the profile driver; the
+  // kernel only knows that a URL may be decorated before it is sent.
+  const navigateUrl = typeof hooks.decorateUrl === 'function' ? hooks.decorateUrl(url, session) : url
   const result = await client.send('Page.navigate', { url: navigateUrl }, sessionId)
   if (result.errorText) {
     const error = new Error(String(result.errorText).slice(0, 240))
     error.status = /egress.*timeout|timed out/i.test(String(result.errorText)) ? 504 : 502
     // The engine reports site-side egress failure in-band; give it the
     // documented navigate.egress id instead of flattening to failed.
-    error.errorId = /egress/i.test(String(result.errorText)) ? 'kitesurf.navigate.egress' : 'kitesurf.navigate.failed'
+    error.errorId = /egress/i.test(String(result.errorText)) ? errorCode('navigate.egress') : errorCode('navigate.failed')
     throw error
   }
   // Page.navigate replying is not arrival: a dead JS entry can leave a
@@ -231,7 +223,9 @@ async function navigateOnce(session, httpBase, url, connect, isCancelled) {
   if (landed) session.lastArrival = landed
   // JS overrides also run in the committed document for the CURRENT page;
   // the pre-nav script already covered the first scripts of the new document.
-  try { await applyBrowserSettingsToPage(session, client, sessionId) } catch { /* best effort on the live doc */ }
+  if (typeof hooks.applySettings === 'function') {
+    try { await hooks.applySettings(session, client, sessionId) } catch { /* best effort on the live doc */ }
+  }
   return { ok: true, url: landed?.url || url }
 }
 
@@ -257,7 +251,7 @@ export function resetClient(session) {
 }
 
 /**
- * Probe only idle sockets. Kitesurf can queue Browser.getVersion behind a
+ * Probe only idle sockets. A busy engine can queue Browser.getVersion behind a
  * navigation, so a missed deadline is not evidence that its socket died.
  * Only the transport's close/error handlers invalidate an existing client.
  */
@@ -442,13 +436,7 @@ async function acquireClient(session, httpBase, connect) {
   if (session.cdp) resetClient(session)
   session.console = session.console || []
   session.network = session.network || []
-  // A configured mcpPort names the relay port too — connectCdp's engine+1
-  // default only holds for the standard layout, and dialing the wrong port
-  // falls back to the direct socket with its private page (same-page lost).
-  const connectOptions = Number.isInteger(session.kiteMcpPort)
-    ? { relayUrl: `${String(httpBase).replace(/^http/, 'ws').replace(/:(\d+)(\/|$)/, `:${session.kiteMcpPort}$2`)}/cdp` }
-    : {}
-  const client = connect.length >= 2 ? await connect(httpBase, connectOptions) : await connect(httpBase)
+  const client = connect.length >= 2 ? await connect(httpBase, {}) : await connect(httpBase)
   session.cdp = client
   client.probedAt = Date.now()
   if (typeof client.listen === 'function') {
@@ -501,9 +489,6 @@ async function acquireClient(session, httpBase, connect) {
         session.pageGen = (session.pageGen || 0) + 1
         session.refs = {}
         session.lastSnapshot = null
-        // A committed document invalidates the point result too — /last used
-        // to keep answering the PREVIOUS page's pick after navigation.
-        session.lastPick = null
         if (params.frame?.url && params.frame.url !== 'about:blank') session.pageUrl = params.frame.url
       }
       recordNetworkEvent(session, message)
@@ -528,7 +513,7 @@ async function acquireClient(session, httpBase, connect) {
     session.navigation = {
       ...nav,
       outcome: failed ? 'failed' : 'committed',
-      errorId: failed ? (message?.error?.errorId || 'kitesurf.navigate.failed') : nav.errorId,
+      errorId: failed ? (message?.error?.errorId || errorCode('navigate.failed')) : nav.errorId,
       error: message?.result?.errorText || message?.error?.message || nav.error,
       settledAt: new Date().toISOString(),
     }
@@ -548,12 +533,12 @@ async function acquireClient(session, httpBase, connect) {
 /** Optional transport and budgets are a local test seam, not an HTTP setting. */
 export function connectCdp(httpBase, { WebSocket: Socket = globalThis.WebSocket, timeouts = {}, relayUrl } = {}) {
   const budgets = { ...CDP_TIMEOUTS, ...timeouts }
-  // The bridge's /cdp relay multiplexes every client onto ONE upstream engine
-  // socket — the only way agent-browser and this socket share the same page
-  // (the pin makes every engine connection own a private page). Connect to the
-  // relay first; an image without the relay falls back to the direct socket.
-  // The relay lives on the engine port + 1 — the same convention entrypoint
-  // uses for the bridge (8798→8799, 8800→8801, …).
+  // The service's /cdp relay multiplexes every downstream client onto ONE
+  // upstream socket — the only way another client and this socket share the
+  // same page (the engine makes every connection own a private page). Connect
+  // to the relay first; a service without the relay falls back to the direct
+  // socket. The relay lives on the bridge port, declared as the engine port + 1
+  // by every profile that ships one.
   const direct = `${String(httpBase).replace(/^http/, 'ws')}/devtools/browser`
   const relay = relayUrl ?? `${String(httpBase).replace(/^http/, 'ws').replace(/:(\d+)(\/|$)/, (m, port, tail) => `:${Number(port) + 1}${tail}`)}/cdp`
   const urls = relay ? [relay, direct] : [direct]

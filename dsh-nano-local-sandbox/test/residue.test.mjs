@@ -9,6 +9,9 @@ const ALLOW = [
   'docs/specs/dsh-nano-local-sandbox/qna/DNLS01-qna.md',
   'docs/specs/dsh-nano-local-sandbox/dsh-nano-local-sandbox-v0.9.md',
   'docs/specs/dsh-nano-local-sandbox/dsh-nano-local-sandbox-v1.1.md',
+  // v1.2 froze the kernel/driver split and quotes the retired literals it retires.
+  'docs/specs/dsh-nano-local-sandbox/dsh-nano-local-sandbox-v1.2.md',
+  'docs/specs/dsh-nano-local-sandbox/qna/DNLS02-qna.md',
   'docs/specs/dsh-nano-local-sandbox/plan/DNLS01-macos-platform-cutover.md',
   'docs/specs/dsh-nano-local-sandbox/closure/DNLS01-full-close.md',
   'docs/specs/dsh-nano-model-selector/qna/DNMS01-qna.md',
@@ -34,7 +37,7 @@ function files(dir, out = []) {
 }
 
 test('retired literals stay in the historical documents, and the container CLI stays in backend-apple.js', () => {
-  assert.equal(ALLOW.length, 9)
+  assert.equal(ALLOW.length, 11)
   const allowed = new Set(ALLOW.map((path) => resolve(root, path)))
   const apple = resolve(root, 'dsh-nano-local-sandbox/src/host/backend-apple.js')
   const oldPrefix = '/nano-' + 'kitesurf/'

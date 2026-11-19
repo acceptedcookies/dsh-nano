@@ -6,7 +6,7 @@
   "icon": "./icon.svg",
   "main": "./index.js",
   "scripts": {
-    "test": "node --test test/*.mjs",
+    "test": "node --test test/*.mjs test/contracts/*.mjs",
     "build": "node scripts/build-client.mjs"
   },
   "exports": {
@@ -22,10 +22,7 @@
     "icon.svg",
     "locale",
     "src/host",
-    "profiles/kitesurf/profile.yaml",
-    "profiles/kitesurf/Dockerfile",
-    "profiles/kitesurf/entrypoint.sh",
-    "profiles/kitesurf/mcp-bridge.mjs",
+    "profiles/kitesurf",
     "profiles/terminal",
     "lib/route-guard.js",
     "lib/bindings.js",

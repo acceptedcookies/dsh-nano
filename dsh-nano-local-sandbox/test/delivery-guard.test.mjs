@@ -6,6 +6,9 @@ import { join } from 'node:path'
 import { registerRoutes } from '../lib/route-guard.js'
 import { BINDING_TABLE } from '../lib/bindings.js'
 import { routeSpecs } from '../src/host/routes.js'
+import './support/kernel.mjs'
+
+const stateDirFor = (deps) => join(deps.env.DNLS_STATE_ROOT, 'kitesurf', deps.session.containerName || 'kitesurf')
 
 /** Minimal ctx that satisfies the route guard's DI contract. */
 function ctxFor(routes) {
@@ -101,9 +104,9 @@ function depsWith(overrides = {}) {
         ] } }]) }
       },
     },
-    // KITESURF_STATE isolates the durable doc per test — without it the guard
-    // writes into the real ~/.dsh-kitesurf-state-dev (or a root-relative path).
-    env: { DSH_HOME: '/tmp/.dsh-dev-guard', HOME: '/tmp/nonexistent-home', KITESURF_STATE: stateDir },
+    // DNLS_STATE_ROOT isolates the durable doc per test — without it the guard
+    // writes into the real ~/.dsh state root (or a root-relative path).
+    env: { DSH_HOME: '/tmp/.dsh-dev-guard', HOME: '/tmp/nonexistent-home', DNLS_STATE_ROOT: stateDir },
     connect: async () => fakeClient(),
     prepareTimeoutMs: 0,
     httpProbe: () => false, // never let tests dial the real engine port
@@ -266,15 +269,19 @@ test('/shot propagates an in-band engine capture error as 502', async () => {
 
 // ── error catalog covers every emitted id ──
 
-test('every errorId emitted anywhere in the plugin resolves through ERROR_CATALOG', async () => {
-  const { ERROR_CATALOG } = await import('../src/host/error-catalog.js')
+test('every errorId emitted anywhere in the plugin resolves through the composed catalogue', async () => {
+  const { errorCatalog, errorNamespace } = await import('../src/host/error-catalog.js')
   const { readFileSync, readdirSync } = await import('node:fs')
   const { join } = await import('node:path')
+  const namespace = errorNamespace()
   const emitted = new Set()
   const scan = (text) => {
-    // Both `errorId: 'x'` and `errorId = 'x'`/`errorId:'x'` forms count.
+    // Kernel code names a code suffix; the namespace is composed at emit time.
+    for (const m of text.matchAll(/errorCode\(\s*'([^']+)'/g)) emitted.add(`${namespace}.${m[1]}`)
     for (const m of text.matchAll(/errorId\s*[=:]\s*'([^']+)'/g)) emitted.add(m[1])
     for (const m of text.matchAll(/errorId\s*[=:]\s*"([^"]+)"/g)) emitted.add(m[1])
+    // In-page snippets interpolate the namespace at build time.
+    for (const m of text.matchAll(/errorId:'\$\{errorCode\('([^']+)'\)\}'/g)) emitted.add(`${namespace}.${m[1]}`)
   }
   const hostDir = new URL('../src/host/', import.meta.url).pathname
   for (const file of readdirSync(hostDir).filter((f) => f.endsWith('.js'))) {
@@ -284,9 +291,10 @@ test('every errorId emitted anywhere in the plugin resolves through ERROR_CATALO
   // src/host but answers the same contract, so it is scanned too.
   scan(readFileSync(new URL('../profiles/kitesurf/mcp-bridge.mjs', import.meta.url).pathname, 'utf8'))
   scan(readFileSync(new URL('../index.js', import.meta.url).pathname, 'utf8'))
+  const catalog = errorCatalog()
   const missing = [...emitted]
     .filter((id) => /^[a-z]/.test(id)) // skip non-id captures
-    .filter((id) => !ERROR_CATALOG.some((row) => new RegExp(row.match).test(id)))
+    .filter((id) => !catalog.some((row) => new RegExp(row.match).test(id)))
   assert.deepEqual(missing, [], `unregistered errorIds: ${missing.join(', ')}`)
 })
 
@@ -350,28 +358,11 @@ test('a settings patch persists browser-state.json with cookiesApplied', async (
   const routes = routesFor(deps)
   const patch = await call(routes['/nano-local-sandbox/settings'], { method: 'POST', body: { userAgent: 'GuardUA/9.9', cookies: 'g=1' } })
   assert.equal(patch.status, 200)
-  const path = join(deps.env.KITESURF_STATE, 'browser-state.json')
+  const path = join(stateDirFor(deps), 'browser-state.json')
   assert.ok(existsSync(path), 'browser-state.json must exist on the instance state volume')
   const doc = JSON.parse(readFileSync(path, 'utf8'))
   assert.equal(doc.settings.userAgent, 'GuardUA/9.9')
   assert.deepEqual(doc.settings.cookiesApplied, ['g'])
-})
-
-test('a fresh session restores kite.httpBase as kiteHttpBase from the durable doc', async () => {
-  const deps = depsWith()
-  const path = join(deps.env.KITESURF_STATE, 'browser-state.json')
-  const { writeFileSync } = await import('node:fs')
-  writeFileSync(path, JSON.stringify({ v: 1, settings: {}, stateSnapshots: {}, kite: { httpBase: 'http://127.0.0.1:8800', mcpPort: 8801 }, history: [{ url: 'https://h/' }] }))
-  const fresh = depsWith()
-  fresh.env = deps.env // same state volume
-  fresh.httpProbe = () => true // the repoint probe must pass for a live origin
-  fresh.session = { phase: 'running', history: [], containerName: 'kitesurf-dev', httpBase: 'http://127.0.0.1:8800' }
-  // The first handler call runs restoreBrowserState on the session.
-  const routes = routesFor(fresh)
-  await call(routes['/nano-local-sandbox/status'])
-  assert.equal(fresh.session.kiteHttpBase, 'http://127.0.0.1:8800')
-  assert.equal(fresh.session.kiteMcpPort, 8801)
-  assert.equal(fresh.session.history.length, 1)
 })
 
 // ── G31 late-navigation settlement on the transport ──

@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { createBrowserHistoryAdapter, navigateHistory } from '../src/host/browser-history-adapter.js'
+import { createBrowserHistoryAdapter, navigateHistory } from '../profiles/kitesurf/driver/history.js'
+// Loading the profile driver configures the CDP helpers the adapter borrows.
+import './support/kernel.mjs'
 
 const A = 'https://a.example/'
 const B = 'https://b.example/'

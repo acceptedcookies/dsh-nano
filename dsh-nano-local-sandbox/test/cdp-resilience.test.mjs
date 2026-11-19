@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { ensureClient, navigate, resetClient } from '../src/host/cdp-elements.js'
+import './support/kernel.mjs'
 
 function quietClient(overrides = {}) {
   return {

@@ -50,7 +50,7 @@ test('apple nouns in the public spec throw at construction', () => {
   assert.throws(() => createAppleBackend({ ...fixture, container: true }))
   assert.throws(() => createNvxBackend({ image: 'virtiofs' }))
   assert.throws(() => createAppleBackend({ mounts: [{ type: 'vmnet' }] }))
-  assert.throws(() => createNvxBackend({ identity: { user: 'kitesurf' } }))
+  assert.throws(() => createNvxBackend({ identity: { user: 'vmnet' } }))
 })
 
 test('the NVX internal code is not an ERROR_CATALOG id', () => {

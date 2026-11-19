@@ -21,7 +21,7 @@ export function apply(ctx, deps = {}) {
   // a terminal cannot attach across a policy remount.
   const finalDeps = { ...deps, ctx }
   // The bridge's sandbox.* tools read this pushed document; without the loop
-  // every one of them reports kitesurf.diag.stale.
+  // every one of them reports the profile's diag.stale code.
   startDiagnosticsPush(deps.session, finalDeps)
   return registerRoutes(ctx, routeSpecs(finalDeps), {
     table: BINDING_TABLE,

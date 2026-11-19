@@ -27,14 +27,14 @@ async function call(route, { method = 'GET', url = route.path, body } = {}) {
   return { status: res.statusCode, body: JSON.parse(raw) }
 }
 
-test('kite suspend and resume follow the running session and history stays off workerd-kv', async (t) => {
+test('lifecycle suspend and resume follow the running session and history stays off workerd-kv', async (t) => {
   const state = mkdtempSync(join(tmpdir(), 'dnls-lifecycle-'))
   t.after(() => rmSync(state, { recursive: true, force: true }))
   const stops = []
   const session = { phase: 'running', history: [], containerName: 'dnls-a' }
   const routes = routesFor(session, { async stop(name) { stops.push(name) }, async start(name) { stops.push(`start:${name}`) } }, {
     prepareTimeoutMs: 0,
-    env: { KITESURF_STATE: state },
+    env: { DNLS_STATE_ROOT: state },
     httpProbe: () => false,
     connect: async () => ({ alive: true, probedAt: Date.now(), async send(method) {
       if (method === 'Target.getTargets') return { targetInfos: [{ type: 'page', targetId: 'p', sessionId: 's' }] }
@@ -45,16 +45,16 @@ test('kite suspend and resume follow the running session and history stays off w
   session.httpBase = 'http://engine.invalid'
   const opened = await call(routes['/nano-local-sandbox/open'], { method: 'POST', body: { url: 'https://example.com' } })
   assert.equal(opened.body.ok, true)
-  const suspended = await call(routes['/nano-local-sandbox/kite'], { method: 'POST', body: { action: 'suspend' } })
+  const suspended = await call(routes['/nano-local-sandbox/lifecycle'], { method: 'POST', body: { action: 'suspend' } })
   const mid = await call(routes['/nano-local-sandbox/status'])
-  const resumed = await call(routes['/nano-local-sandbox/kite'], { method: 'POST', body: { action: 'resume' } })
+  const resumed = await call(routes['/nano-local-sandbox/lifecycle'], { method: 'POST', body: { action: 'resume' } })
   const after = await call(routes['/nano-local-sandbox/status'])
   const history = await call(routes['/nano-local-sandbox/browse-history'], { url: '/nano-local-sandbox/browse-history?limit=5' })
   const selftest = await call(routes['/nano-local-sandbox/selftest'])
   assert.equal(suspended.body.ok, true)
-  assert.equal(mid.body.kite.phase, 'suspended')
+  assert.equal(mid.body.lifecycle.phase, 'suspended')
   assert.equal(resumed.body.ok, true)
-  assert.equal(after.body.kite.phase, 'running')
+  assert.equal(after.body.lifecycle.phase, 'running')
   assert.equal(after.body.ok, true)
   assert.deepEqual(stops, ['dnls-a', 'start:dnls-a'])
   assert.equal(history.body.source, 'instance-state')

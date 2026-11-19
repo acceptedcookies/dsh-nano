@@ -1,10 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { dirname, isAbsolute, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
-import { loadProfile } from './profile-registry.js'
-
-const DEFAULT_PROFILES_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'profiles')
+import { dirname, isAbsolute, join, resolve } from 'node:path'
 
 // Driver-side compatibility checks, reviewed for each repin. These are the
 // upstream stage-dev-build outputs/imports, not locally patched upstream code.
@@ -20,62 +16,63 @@ export const KITESURF_RUNTIME_FILES = [
   'packages/engine/public/rbi/scene_host.wasm',
 ]
 
+const EXACT_VERSION = /^\d+\.\d+\.\d+$/
+
 function configError(message) {
   // Keep the existing route error contract; no new public error namespace.
   return Object.assign(new Error(`kitesurf: ${message}`), { status: 400 })
 }
 
-export function profilesRootFor(deps = {}) {
-  return deps.profilesRoot ?? (deps.env || process.env).KITESURF_PROFILES ?? DEFAULT_PROFILES_ROOT
-}
-
-/** One recipe source for registry, prepare, resource reconciliation and image. */
-export function kitesurfRecipe(deps = {}) {
-  const dir = join(profilesRootFor(deps), 'kitesurf')
-  let loaded
-  try { loaded = loadProfile(dir) } catch (error) {
-    throw configError(`cannot read profile at ${dir}: ${error.message}`)
+/** Profile-specific required fields the neutral kernel does not know about. */
+export function validateManifest(manifest) {
+  const errors = []
+  const prefix = manifest?.build?.npmPrefix
+  if (!prefix || typeof prefix !== 'object' || Array.isArray(prefix) || Object.keys(prefix).length === 0) errors.push('missing:build.npmPrefix')
+  for (const [name, version] of Object.entries(prefix || {})) {
+    if (typeof version !== 'string' || version.includes('^') || version.includes('~') || !EXACT_VERSION.test(version)) errors.push(`version:${name}`)
   }
-  if (!loaded.ready) throw configError(`invalid profile at ${dir}: ${loaded.errors.join(', ')}`)
-  const profile = loaded.manifest
-  const resources = profile.runtime?.isolation?.resources
-  const cpus = Number(resources?.cpus)
-  if (!(cpus > 0) || !resources?.memory) throw configError('profile runtime.isolation.resources is missing or invalid')
-  return { profile, resources: { cpus, memory: String(resources.memory) } }
+  const verify = manifest?.build?.checkout?.verify
+  if (typeof verify !== 'string' || isAbsolute(verify) || verify.split(/[\\/]/).includes('..')) errors.push('checkout.verify')
+  return errors
 }
 
-export function kitesurfImage(recipe, env = process.env) {
-  const image = String(env.KITESURF_IMAGE || recipe.profile.build.image || '').trim()
-  if (!/(?:@sha256:[0-9a-f]{64}|:[A-Za-z0-9_][A-Za-z0-9_.-]*)$/.test(image) || /:latest$/i.test(image)) {
-    throw configError('set a pinned build.image in the profile (or an explicit pinned KITESURF_IMAGE)')
+/** Build args are a property of this profile's Dockerfile, not of the kernel. */
+export function buildArgs(manifest) {
+  return [`KITESURF_BASE_IMAGE=${manifest.build.base}`]
+}
+
+export function image(manifest) {
+  const tag = String(manifest?.build?.image || '').trim()
+  if (!/(?:@sha256:[0-9a-f]{64}|:[A-Za-z0-9_][A-Za-z0-9_.-]*)$/.test(tag) || /:latest$/i.test(tag)) {
+    throw configError('set a pinned build.image in the profile')
   }
-  return image
+  return tag
 }
 
-export function kitesurfRuntimeRoot(recipe, deps = {}) {
+export function runtimeRoot(manifest, deps = {}) {
+  if (deps.runtimeRoot) return resolve(deps.runtimeRoot)
   const env = deps.env || process.env
-  const override = String(env.KITESURF_CHECKOUT || '').trim()
   const dshHome = env.DSH_HOME || join(deps.home || env.HOME || homedir(), '.dsh')
-  const root = override || join(dshHome, 'artifacts', 'kitesurf', recipe.profile.build.checkout.ref, 'runtime')
+  const root = join(dshHome, 'artifacts', 'kitesurf', manifest.build.checkout.ref, 'runtime')
   if (!isAbsolute(root) || /[,\r\n]/.test(root)) throw configError('runtime path must be absolute and contain no mount separators')
   return root
 }
 
 /** Fail before creating mounts or removing a working container. Never builds. */
-export function assertKitesurfRuntime(recipe, deps = {}) {
-  const root = kitesurfRuntimeRoot(recipe, deps)
+export function assertRuntime(manifest, deps = {}) {
+  const root = runtimeRoot(manifest, deps)
   if (existsSync(join(root, '.git'))) throw configError(`runtime must be derived build artifacts, not a source checkout: ${root}`)
   // A consumption receipt proves which official ref was built; it is never
-  // another executable recipe. An override must carry the same sibling receipt.
+  // another executable recipe.
   const receiptPath = join(dirname(root), 'artifact.json')
   let receipt
   try { receipt = JSON.parse(readFileSync(receiptPath, 'utf8')) } catch {
     throw configError(`built runtime receipt is missing or invalid at ${receiptPath}; build the profile pin before prepare`)
   }
-  if (receipt?.ref !== recipe.profile.build.checkout.ref) {
-    throw configError(`built runtime receipt ref does not match profile pin at ${receiptPath}; expected ${recipe.profile.build.checkout.ref}`)
+  if (receipt?.ref !== manifest.build.checkout.ref) {
+    throw configError(`built runtime receipt ref does not match profile pin at ${receiptPath}; expected ${manifest.build.checkout.ref}`)
   }
-  const verify = recipe.profile.build.checkout.verify
+  const verify = manifest.build.checkout.verify
   if (typeof verify !== 'string' || isAbsolute(verify) || verify.split(/[\\/]/).includes('..')) {
     throw configError('profile build.checkout.verify must be a relative runtime file')
   }
@@ -84,13 +81,13 @@ export function assertKitesurfRuntime(recipe, deps = {}) {
   })
   try { if (!statSync(join(root, 'node_modules')).isDirectory()) missing.push('node_modules/') } catch { missing.push('node_modules/') }
   if (missing.length) {
-    throw configError(`built runtime is missing or incomplete at ${root}; missing: ${missing.join(', ')}. Build the profile pin before prepare, or set KITESURF_CHECKOUT to derived build artifacts.`)
+    throw configError(`built runtime is missing or incomplete at ${root}; missing: ${missing.join(', ')}. Build the profile pin before prepare`)
   }
   return root
 }
 
-export function kitesurfMounts(recipe, deps, stateDir) {
-  const runtime = assertKitesurfRuntime(recipe, deps)
+export function mounts(manifest, deps, stateDir) {
+  const runtime = assertRuntime(manifest, deps)
   mkdirSync(stateDir, { recursive: true })
   return [
     { arg: `type=virtiofs,source=${runtime},target=/opt/kitesurf,readonly` },

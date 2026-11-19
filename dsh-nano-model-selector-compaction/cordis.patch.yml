@@ -9,7 +9,7 @@
 # flat compaction-basic so ON never leaves two providers. OFF = remove this
 # bundle from dsh.profile.bundles and the native composition returns.
 #
-# Source presets: /Users/seanz/Documents/dsh-plugins/context/deepseek-harness/packages/bundle/web-app/presets/${standard,ptc,minimal,cordis}.patch.yml
+# Source presets: /Users/seanz/Documents/dsh-plugins/.dependencies/eval/deepseek-harness/packages/bundle/web-app/presets/${standard,ptc,minimal,cordis}.patch.yml
 #
 - id: preset-standard
   config:

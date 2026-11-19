@@ -725,6 +725,21 @@ async function prepareEnvironment(session, deps, ctx = null) {
 
 export const STORAGE_OPS = Object.freeze(['read', 'set', 'delete', 'clear'])
 
+// /evaluate results longer than EVAL_SLICE spill into a page-global ring keyed
+// by token ({token,offset} or ?token=&page=N pulls slices). The ring lives in
+// the document, so a navigation or reload drops every token.
+const EVAL_SLICE = 4000
+const EVAL_RING = '__dnlsEval'
+const EVAL_RING_SIZE = 20
+
+function evalStashExpression(text) {
+  return `(()=>{const r=globalThis.${EVAL_RING}||(globalThis.${EVAL_RING}={});const t=String(globalThis.${EVAL_RING}Seq=(globalThis.${EVAL_RING}Seq||0)+1);r[t]=${JSON.stringify(text)};const ks=Object.keys(r);for(const k of ks.slice(0,Math.max(0,ks.length-${EVAL_RING_SIZE})))delete r[k];return t})()`
+}
+
+function evalSliceExpression(token, offset) {
+  return `(()=>{const c=globalThis.${EVAL_RING}&&globalThis.${EVAL_RING}[${JSON.stringify(token)}];return typeof c==='string'?{total:c.length,value:c.slice(${offset},${offset + EVAL_SLICE})}:null})()`
+}
+
 function storageExpression(opts) {
   const scope = opts.scope === 'session' ? 'sessionStorage' : opts.scope === 'cookie' ? 'cookie' : 'localStorage'
   const op = opts.op || 'read'
@@ -2262,6 +2277,24 @@ export function routeSpecs(deps = {}) {
           // Real expression evaluation against the live page. The old handler
           // read deps.expression (always '') and returned a 400 — the audit's
           // most-cited dead route.
+          const rawToken = pageBody.token ?? (pageBody.expression == null ? pageUrl.searchParams.get('token') : null)
+          if (rawToken != null && rawToken !== '') {
+            const token = String(rawToken)
+            const miss = () => send(res, 404, { ok: false, errorId: errorCode('evaluate.miss'), error: `eval token ${token.slice(0, 32)} not found or expired` })
+            if (!/^\d+$/.test(token)) { miss(); return }
+            const offset = pageBody.offset !== undefined && Number.isFinite(Number(pageBody.offset))
+              ? Math.max(0, Math.floor(Number(pageBody.offset)))
+              : Math.max(0, Math.floor(Number(pageUrl.searchParams.get('page')) || 0)) * EVAL_SLICE
+            const client = await page()
+            const slice = await withPage(client, async (sessionId) => {
+              const out = await client.send('Runtime.evaluate', { expression: evalSliceExpression(token, offset), returnByValue: true }, sessionId)
+              return out?.exceptionDetails ? null : (out?.result?.value ?? null)
+            })
+            if (!slice) { miss(); return }
+            const total = Number(slice.total)
+            send(res, 200, { ok: true, token, offset, value: String(slice.value ?? ''), total, truncated: offset + EVAL_SLICE < total })
+            return
+          }
           const expression = String(pageBody.expression || '')
           if (!expression) {
             send(res, 400, { ok: false, errorId: errorCode('evaluate.empty'), error: 'expression is required' })
@@ -2282,11 +2315,16 @@ export function routeSpecs(deps = {}) {
               return { ok: false, errorId: errorCode('evaluate.threw'), error: out.exceptionDetails.text || 'expression threw', exception: out.exceptionDetails.exception?.description?.slice(0, 4000) || null }
             }
             const r = out?.result || {}
-            // Contract caps results at 4000 chars — a string value returned
-            // raw used to sail past it untouched.
             const raw = r.value !== undefined ? r.value : (r.description ?? null)
-            const value = typeof raw === 'string' && raw.length > 4000 ? `${raw.slice(0, 4000)}…` : raw
-            return { ok: true, type: r.type, subtype: r.subtype, value, objectId: r.objectId || null }
+            let text = null
+            if (typeof raw === 'string') text = raw
+            else if (raw !== null && typeof raw === 'object') { try { text = JSON.stringify(raw) } catch { text = null } }
+            if (text == null || text.length <= EVAL_SLICE) return { ok: true, type: r.type, subtype: r.subtype, value: raw, objectId: r.objectId || null }
+            // Over the 4000-char cap: return the head and park the full text in
+            // the page ring so later slices come from the same evaluation.
+            const stashed = await client.send('Runtime.evaluate', { expression: evalStashExpression(text), returnByValue: true }, sessionId).catch(() => null)
+            const token = stashed && !stashed.exceptionDetails && stashed.result?.value != null ? String(stashed.result.value) : null
+            return { ok: true, type: r.type, subtype: r.subtype, value: text.slice(0, EVAL_SLICE), objectId: null, token, offset: 0, total: text.length, truncated: true }
           })
           send(res, result?.ok === false ? 400 : 200, result || { ok: false, errorId: errorCode('evaluate.threw'), error: 'no result' })
           return

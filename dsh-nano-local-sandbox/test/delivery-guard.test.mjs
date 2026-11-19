@@ -3,6 +3,7 @@ import test from 'node:test'
 import { mkdtempSync, rmSync, existsSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import vm from 'node:vm'
 import { registerRoutes } from '../lib/route-guard.js'
 import { BINDING_TABLE } from '../lib/bindings.js'
 import { routeSpecs } from '../src/host/routes.js'
@@ -137,6 +138,79 @@ test('/evaluate without an expression is 400 kitesurf.evaluate.empty', async () 
   const result = await call(routes['/nano-local-sandbox/evaluate'], { method: 'POST', body: {} })
   assert.equal(result.status, 400)
   assert.equal(result.body.errorId, 'kitesurf.evaluate.empty')
+})
+
+/** Page stand-in whose Runtime.evaluate really runs the expression, so the
+ * token ring lives in a document global like it does in the engine. */
+function pageClient() {
+  let doc = vm.createContext({})
+  const client = fakeClient({
+    evaluate: (expression) => {
+      const value = vm.runInContext(expression, doc)
+      return { result: { type: typeof value, value } }
+    },
+  })
+  client.navigate = () => { doc = vm.createContext({}) }
+  return client
+}
+
+test('/evaluate keeps small results raw and adds no token', async () => {
+  const client = pageClient()
+  const routes = routesFor(depsWith({ connect: async () => client }))
+  const result = await call(routes['/nano-local-sandbox/evaluate'], { method: 'POST', body: { expression: '({a:1,b:"x"})' } })
+  assert.equal(result.status, 200)
+  assert.deepEqual(result.body.value, { a: 1, b: 'x' })
+  assert.equal(result.body.token, undefined)
+  assert.equal(result.body.truncated, undefined)
+})
+
+test('/evaluate over 4000 chars returns the head and pages the rest by token', async () => {
+  const client = pageClient()
+  const routes = routesFor(depsWith({ connect: async () => client }))
+  const route = routes['/nano-local-sandbox/evaluate']
+  const big = await call(route, { method: 'POST', body: { expression: '"x".repeat(9000)+"END"' } })
+  assert.equal(big.status, 200)
+  assert.equal(big.body.value.length, 4000)
+  assert.equal(big.body.total, 9003)
+  assert.equal(big.body.truncated, true)
+  assert.match(big.body.token, /^\d+$/)
+  const p2 = await call(route, { method: 'POST', body: { token: big.body.token, offset: 4000 } })
+  assert.equal(p2.status, 200)
+  assert.equal(p2.body.value.length, 4000)
+  assert.equal(p2.body.truncated, true)
+  const p3 = await call(route, { method: 'POST', url: `/nano-local-sandbox/evaluate?token=${big.body.token}&page=2`, body: {} })
+  assert.equal(p3.status, 200)
+  assert.equal(p3.body.offset, 8000)
+  assert.equal(p3.body.value, `${'x'.repeat(1000)}END`)
+  assert.equal(p3.body.truncated, false)
+  // Large objects page as their JSON text.
+  const obj = await call(route, { method: 'POST', body: { expression: '({s:"y".repeat(5000)})' } })
+  assert.equal(obj.body.value, JSON.stringify({ s: 'y'.repeat(5000) }).slice(0, 4000))
+  assert.equal(obj.body.total, JSON.stringify({ s: 'y'.repeat(5000) }).length)
+})
+
+test('/evaluate token is dropped by navigation and unknown tokens are 404 kitesurf.evaluate.miss', async () => {
+  const client = pageClient()
+  const routes = routesFor(depsWith({ connect: async () => client }))
+  const route = routes['/nano-local-sandbox/evaluate']
+  const big = await call(route, { method: 'POST', body: { expression: '"z".repeat(4500)' } })
+  client.navigate()
+  const gone = await call(route, { method: 'POST', body: { token: big.body.token, offset: 4000 } })
+  assert.equal(gone.status, 404)
+  assert.equal(gone.body.errorId, 'kitesurf.evaluate.miss')
+  const bogus = await call(route, { method: 'POST', body: { token: 'abc' } })
+  assert.equal(bogus.status, 404)
+  assert.equal(bogus.body.errorId, 'kitesurf.evaluate.miss')
+})
+
+test('/evaluate token ring keeps only the newest 20 results', async () => {
+  const client = pageClient()
+  const routes = routesFor(depsWith({ connect: async () => client }))
+  const route = routes['/nano-local-sandbox/evaluate']
+  const tokens = []
+  for (let i = 0; i < 21; i += 1) tokens.push((await call(route, { method: 'POST', body: { expression: `"${i % 10}".repeat(4100)` } })).body.token)
+  assert.equal((await call(route, { method: 'POST', body: { token: tokens[0] } })).status, 404)
+  assert.equal((await call(route, { method: 'POST', body: { token: tokens[20] } })).status, 200)
 })
 
 test('/console rejects a non-numeric limit with 400 kitesurf.query.limit', async () => {

@@ -108,3 +108,11 @@
 
 - 冻结后任何变更按 append-only 追加「修订注记」，不改已冻结行；与 DNLS01 冲突时，以本表中**明确写出「补充 / 承接」**的条目为补充说明，DNLS01 原行仍有效。
 - 实施状态不写在本表；实施与验证记录见 [`1119-loop3-closure.md`](../../dsh-nano-kitesurf/1119-loop3-closure.md) 的后续收口段。
+
+---
+
+## 4. 修订注记（append-only）
+
+| 编号 | 日期 | 关联 | 注记 |
+|---|---|---|---|
+| `R-1` | 2026-11-19 | `T-O-30` ③、`T-O-20` | **恢复 `/evaluate` 分段（不是新合同）**。分段读取由 [业主] 授权的 `9b2db68`（P1-2 授权解冻）引入并登记：结果超过 4000 字符时返回首段与 `token`，`{token,offset}` 或 `?token=&page=N`（offset = N×4000）拉后续分段；token 存在页内环（最近 20 条），导航即失效；未命中返回 `<ns>.evaluate.miss`（404）。DNLS 接管页面路由后该行为丢失（main 上 DNLS `/evaluate` 不分段，DNK 侧实现已成死码），DNK skill 仍承诺分段。按 [业主] 2026-11-19「保证已交付价值不 regress」的指令，在 DNLS kernel `/evaluate` 恢复原合同，`ERROR_CATALOG` 行集据此增加 `evaluate.miss` 一行。4000 字符以内的结果形状不变（原始 `value`，无 token）。 |

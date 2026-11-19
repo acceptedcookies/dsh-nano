@@ -47,6 +47,7 @@ const KERNEL_CODES = [
   { code: 'ref.miss', status: 404, cause: '@N 引用不在当前快照表里', next: 'GET /snapshot 重建引用表' },
   { code: 'interact.', wildcard: true, status: 400, cause: 'interact 目标/动作非法', next: '传 selector、@N 或坐标' },
   { code: 'evaluate.threw', status: 400, cause: '表达式在页内抛异常', next: '修正表达式后重试' },
+  { code: 'evaluate.miss', status: 404, cause: 'evaluate 的 token 不在页内缓存（已过期或页面已导航）', next: '重新 POST /evaluate {expression} 取新 token；导航即失效' },
   { code: 'evaluate.', wildcard: true, status: 400, cause: 'evaluatePage 内的表达式异常（settings/state 等内部路径）', next: '检查表达式合法性' },
   { code: 'wait.query', status: 400, cause: 'wait 需要 selector|text|url|fn 恰一，load 属合法枚举', next: 'POST /wait {selector:"@1"} 或 {text}/{url}/{fn}；load: commit|domcontentloaded|load|networkidle' },
   { code: 'wait.timeout', status: 504, cause: '条件在期限内未成立', next: '换条件或加大 timeoutMs；超时不是取消，重发前先读 /status 的 navigation.outcome' },

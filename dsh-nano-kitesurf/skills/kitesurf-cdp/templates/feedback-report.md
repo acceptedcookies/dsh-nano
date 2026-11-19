@@ -5,8 +5,7 @@
 ## 元信息
 - 时间：
 - 插件 `buildId`（`/status`）：
-- `storePath`（确认在跟哪份代码说话）：
-- 引擎 `phase` / `engineAlive`：
+- 引擎 `lifecycle.phase` / `engineAlive`：
 
 ## 做了什么
 - 路由调用序列（route → status → errorId → 耗时）：从 `/operations` 摘
@@ -21,9 +20,8 @@
 - `/operations?errorsOnly=true`：
 
 ## 元素上下文（若涉及点选）
-- `GET /last` 元素包摘要（selector / ref / box / stack）：
-- `GET /context?id=` 若引用了 composer ref：
+- `/pick` 应答元素包摘要（selector / ref / box / stack）：
 
 ## 结论 / 下一步
-- errorId 对照 `references/error-catalog.md`：
-- 建议动作（recover / settings / evaluate / 请人介入）：
+- errorId 对照 `GET /nano-local-sandbox/diagnostics?catalog=1`（DNLS 目录）：
+- 建议动作（recover / lifecycle / settings / evaluate / 请人介入）：

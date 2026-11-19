@@ -1,9 +1,14 @@
 // Protocol-stability + MCP-surface evaluation. Run on the host:
 //   node scripts/eval-proto-mcp.mjs <mcpPort> <authCookieOrHostFetch>
-// For DNK we need host routes too, so pass the authed cookie header:
+// The port comes from GET /nano-local-sandbox/status → lifecycle.mcpPort.
+// Use the authed cookie header for host routes:
 //   node scripts/eval-proto-mcp.mjs 8799 'dsh-auth-...=...'
 // Or run inside ego (page.fetch) — see eval-ego-vs-dnk for the authed half.
-import { WebSocket } from '/Users/seanz/Documents/dsh-plugins/dsh-nano-kitesurf/runtime/linux-prefix/node_modules/ws/wrapper.mjs'
+const { WebSocket } = globalThis
+if (typeof WebSocket !== 'function') {
+  console.error('global WebSocket is missing; run with Node ≥22')
+  process.exit(2)
+}
 
 const PORT = process.argv[2] || '8799'
 const rows = []
@@ -25,19 +30,19 @@ const init = await call('initialize', { protocolVersion: '2024-11-05', capabilit
 mark('mcp initialize', init.result?.serverInfo || init.result, JSON.stringify(init.result || init.error).slice(0, 80))
 ws.send(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }))
 
-// 2. tools/list enumerates the kitesurf_* surface
+// 2. tools/list enumerates the sandbox.* surface
 const list = await call('tools/list', {})
 const tools = (list.result?.tools || []).map((t) => t.name)
 const kt = tools.filter((t) => t.startsWith('sandbox.'))
-mark('tools/list enumerates kitesurf_*', kt.length >= 15, `${kt.length}/15: ${kt.join(',')}`)
+mark('tools/list enumerates sandbox.*', kt.length >= 15, `${kt.length}/15: ${kt.join(',')}`)
 
 // 3. malformed JSON-RPC → -32700, deterministically
 const bad = await call('tools/call', { name: 'sandbox.diagnostics' }) // missing arguments is fine
 mark('sandbox.diagnostics callable', bad.result || bad.error, JSON.stringify(bad.result || bad.error).slice(0, 70))
 
-// 4. error determinism: unknown tool → structured kitesurf.* business errorId
-//    (DNK keeps EVERY failure in one errorId contract, even a bad tool name —
-//    that's a strength over a bare -32601 protocol throw).
+// 4. error determinism: unknown tool → structured business errorId
+//    (one errorId contract even for a bad tool name, rather than a bare
+//    -32601 protocol throw).
 const unknown = await call('tools/call', { name: 'sandbox.nonexistent_tool', arguments: {} })
 const uerr = JSON.stringify(unknown.error || unknown.result || '')
 mark('unknown tool → structured kitesurf.* errorId', /"errorId"\s*:\s*"kitesurf\./.test(uerr), uerr.slice(0, 80))

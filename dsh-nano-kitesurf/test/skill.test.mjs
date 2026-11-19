@@ -4,7 +4,6 @@ import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { SKILL_BODIES, kitesurfSkill, nanoKiteSkill } from '../lib/skill.js'
-import { ERROR_CATALOG } from '../lib/diagnostics.js'
 import { BINDING_TABLE } from '../lib/bindings.js'
 
 const root = join(fileURLToPath(new URL('.', import.meta.url)), '..')
@@ -12,26 +11,21 @@ const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
 
 const FRONTMATTER = {
   'kitesurf-cdp': 'Collaborate on a frontend through the Kitesurf CDP endpoint. Use when the user points at a page, or asks to inspect or change what Kitesurf is rendering. Do not launch Chrome.',
-  'nano-kite': 'Initialize, start, suspend, or resume Kitesurf, and point MCP at a local or remote engine. Use when the user types /nano-kite.',
+  'nano-kite': 'Start, resume, suspend, or restart the Kitesurf engine through the sandbox host. Use when the user types /nano-kite.',
 }
 
 const canonical = (text) => text.replace(/\r\n/g, '\n')
 
+function skillTree(name) {
+  const dir = join(root, 'skills', name)
+  let text = readFileSync(join(dir, 'SKILL.md'), 'utf8')
+  let refs = []
+  try { refs = readdirSync(join(dir, 'references')) } catch {}
+  for (const f of refs) text += readFileSync(join(dir, 'references', f), 'utf8')
+  return text
+}
+
 test('generated SKILL.md files exactly match the single source of truth', () => {
-  for (const [name, body] of Object.entries(SKILL_BODIES)) {
-    const actual = canonical(readFileSync(join(root, 'skills', name, 'SKILL.md'), 'utf8'))
-    assert.equal(actual.endsWith(`${body}\n`), true, `${name}/SKILL.md body drifted`)
-  }
-})
-
-test('skill bodies are generated from ERROR_CATALOG (no hand-copied table)', () => {
-  const catalog = readFileSync(join(root, 'skills', 'kitesurf-cdp', 'references', 'error-catalog.md'), 'utf8')
-  for (const row of ERROR_CATALOG) {
-    assert.ok(catalog.includes(row.example), `missing catalogue row: ${row.example}`)
-  }
-})
-
-test('generated SKILL.md files exactly match the single source of truth (+ version/date frontmatter)', () => {
   for (const [name, body] of Object.entries(SKILL_BODIES)) {
     const actual = canonical(readFileSync(join(root, 'skills', name, 'SKILL.md'), 'utf8'))
     // version/date are build-stamped; compare everything but those two lines.
@@ -56,32 +50,31 @@ test('kitesurf-cdp is a directory skill: entry ≤90 lines + resourceBase direct
   for (const f of refs) assert.ok(entry.includes(`references/${f}`), `entry doesn't index references/${f}`)
 })
 
-test('coverage reconciliation: every BINDING_TABLE path and kitesurf_* tool is documented in the tree', () => {
-  // P3-04: the bridge's sole carrier is DNLS `profiles/kitesurf/mcp-bridge.mjs`
-  // (the DNK `runtime/` copy is retired). Read it from there.
-  const bridge = readFileSync(join(root, '..', 'dsh-nano-local-sandbox', 'profiles', 'kitesurf', 'mcp-bridge.mjs'), 'utf8')
-  const tools = [...bridge.matchAll(/name:\s*['"](sandbox\.[a-z_]+)['"]/g)].map((m) => m[1])
-  const dir = join(root, 'skills', 'kitesurf-cdp')
-  let text = readFileSync(join(dir, 'SKILL.md'), 'utf8')
-  for (const f of readdirSync(join(dir, 'references'))) text += readFileSync(join(dir, 'references', f), 'utf8')
+test('coverage reconciliation: every BINDING_TABLE path is documented in the tree', () => {
+  const text = skillTree('kitesurf-cdp')
   for (const r of BINDING_TABLE) assert.ok(text.includes(r.path), `route not documented: ${r.path}`)
-  for (const t of tools) assert.ok(text.includes(t), `MCP tool not documented: ${t}`)
 })
 
-test('error catalogue reference is generated from ERROR_CATALOG (no hand-copied table)', () => {
-  const cat = readFileSync(join(root, 'skills', 'kitesurf-cdp', 'references', 'error-catalog.md'), 'utf8')
-  for (const row of ERROR_CATALOG) {
-    assert.ok(cat.includes(`| \`${row.example}\` | ${row.status} |`), `missing catalogue row: ${row.example}`)
+test('skill tree teaches only the generic DNLS surface — no private paths, retired routes or env vars', () => {
+  const text = skillTree('kitesurf-cdp') + skillTree('nano-kite')
+  for (const needle of [
+    'dsh-nano-local-sandbox/',
+    '/Users/',
+    'KITESURF_',
+    'nano-kitesurf' + '.lock',
+    '/nano-local-sandbox/' + 'kite',
+    '/nano-local-sandbox/' + 'last',
+    'config' + 'ure',
+  ]) {
+    assert.equal(text.includes(needle), false, `skill tree still teaches ${needle}`)
   }
 })
 
 test('skill bodies carry the hard agentic constraints', () => {
-  const dir = join(root, 'skills', 'kitesurf-cdp')
-  let all = SKILL_BODIES['kitesurf-cdp']
-  for (const f of readdirSync(join(dir, 'references'))) all += readFileSync(join(dir, 'references', f), 'utf8')
-  for (const phrase of ['同一个宿主进程状态', 'componentStack=null', 'kite-container', 'route-not-listed', 'sandbox.diagnostics', '事务性', 'buildId', 'about:blank']) {
+  const all = skillTree('kitesurf-cdp')
+  for (const phrase of ['同一个宿主进程状态', 'componentStack=null', 'sandbox.diagnostics', '事务性', 'buildId', 'about:blank', 'one MCP writer', 'policyFingerprint', 'har-lite', 'navigation.outcome']) {
     assert.ok(all.includes(phrase), `missing constraint: ${phrase}`)
   }
   assert.ok(nanoKiteSkill().content.includes('each text frame'))
-  assert.ok(all.includes('sandbox.diagnostics'))
+  assert.equal(kitesurfSkill().resourceBase?.kind, 'directory')
 })

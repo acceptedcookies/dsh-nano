@@ -15,7 +15,8 @@
 | 平台 | 仅 web |
 | 宿主入口 | `index.js` |
 | 浏览器入口 | `lib/client.js` |
-| 宿主 inject | `skills`（不注册页面路由、不拿 connection/webServer——页面面在 DNLS 宿主路由上） |
+| 宿主 inject | `skills`（只登记技能；不拿 connection/webServer，不注册页面路由） |
+| 引擎/容器 | 不在本包。生命周期、CDP keeper、MCP 桥、页面路由归 `dsh-nano-local-sandbox`（DNLS） |
 
 ## 交付物
 
@@ -23,15 +24,14 @@
 |---|---|
 | `package.json` | 包名、`engines.dsh`、`files`、bundle patch、`dsh.client.inject` |
 | `cordis.patch.yml` | 插入插件 id。`name` 是包名 |
-| `index.js` | 宿主。运行时必需。只登记技能，不注册页面路由，不启动容器 |
-| `lib/engine.js` | CDP 客户端。运行时必需。不持有模块级页面 socket |
+| `index.js` | 宿主。运行时必需。只登记 skills，不注册路由，不启动容器 |
 | `lib/skill.js` | 两份技能正文的单一真源。运行时必需 |
-| `lib/route-guard.js` | 路由注册 guard bundle。运行时必需 |
-| `lib/bindings.js` | 空绑定表。页面路由不在本包，从账本按 id 烘焙 |
-| `lib/perf-host.js` | perf-review host bundle。运行时必需 |
-| `lib/client.js` | 浏览器包。运行时必需。安装时不重建。页面请求打到本地沙箱宿主 |
+| `lib/client.js` | 浏览器包。运行时必需。安装时不重建。所有页面请求打到 DNLS 的 `/nano-local-sandbox/*` |
+| `lib/perf-host.js` | perf-review host bundle 构建产物（DNPR 合同要求存在） |
+| `lib/bindings.js` | 空绑定表。本包没有自有页面路由 |
+| `lib/route-guard.js` | 路由 guard bundle 构建产物；本包无自有路由，不注册 |
 | `icon.svg`、`locale/` | 图标与中英文案 |
-| `skills/kitesurf-cdp/SKILL.md`、`skills/nano-kite/SKILL.md` | `npm run build` 从 `lib/skill.js` 生成。不要手改 |
+| `skills/kitesurf-cdp/SKILL.md`、`skills/nano-kite/SKILL.md` | `npm run build` 从 `lib/skill.js` + `src/skill/` 生成。不要手改 |
 | `src/` | 作者树。已有上面的 `lib/` 时安装不需要它 |
 
 client inject 以 `package.json` 的 `dsh.client.inject` 为准，不在这里抄。
@@ -41,7 +41,7 @@ client inject 以 `package.json` 的 `dsh.client.inject` 为准，不在这里�
 1. `dsh --version` 落在 `package.json` 的 `engines.dsh` 内。不够或过高就停。不要自行放宽，除非操作者明确接受命令输出里的那一对版本。
 2. `pnpm` 在 PATH 上。`dsh plugin` 只是把参数转给 profile 里的 pnpm。
 3. 目标是已经能打开的 Web profile，默认名 `web`。不要装进 headless、sdk 或 acp。
-4. 引擎不在本包里。容器的构建和启动不由本包执行。没有引擎时插件仍能装上，面板可以显示 engine down。
+4. DNLS 负责容器构建、引擎启动与端口分配。没有 DNLS（或引擎未起）时本包仍能装上，面板显示 engine down。
 5. 本包构建期依赖 `dsh-host-route-guard`，声明为 `devDependencies` 的 `file:../packages/dsh-host-route-guard`。`npm install`/`npm run build` 时解析这个相对路径；构建时它被打进 `lib/route-guard.js`。不要改这条依赖。
 6. 本包构建期依赖 `dsh-performance-review`，声明为 `devDependencies` 的 `file:../packages/dsh-performance-review`。它被打进 `lib/client.js` 与 `lib/perf-host.js`；页面侧手动 join，宿主侧采集。不要改这条依赖。
 
@@ -63,7 +63,7 @@ dsh plugin --profile web add <spec>
 
 没有 HMR 时，重启正在服务该 profile 的宿主进程，再强制刷新页面。只刷新页面不会换宿主路由。
 
-卸载用 `dsh plugin --profile web remove`，参数是「身份」里的包名。没有 HMR 时同样要重启宿主。卸载不删除「配置与状态」里的浏览器数据或宿主状态文件。
+卸载用 `dsh plugin --profile web remove`，参数是「身份」里的包名。没有 HMR 时同样要重启宿主。卸载不删除「配置与状态」里的浏览器数据。
 
 ## 验收
 
@@ -72,65 +72,52 @@ dsh plugin --profile web add <spec>
 1. profile 的 `package.json` 里，`dependencies` 和 `dsh.profile.bundles` 都有本包名。
 2. 重启并刷新后，页面里能找到本包的 client 模块（包名）。找不到说明 client 没进页面。
 3. 右侧工作区能打开 Kitesurf，画面根上有 `data-nano-kitesurf="1"`。composer 下方不再挂这块面板。
-4. 已登录页面里 `GET 见 QNA status` 返回 200 JSON。裸 curl 被拒是鉴权，不是没装上。composer 输入 `/kitesurf-cdp` 能看到技能。
+4. 已登录页面里 `GET /nano-local-sandbox/status` 返回 200 JSON（DNLS 提供）。裸 curl 被拒是鉴权，不是没装上。composer 输入 `/kitesurf-cdp` 能看到技能。
 
 ## 初次运行
 
-无数据库。宿主用默认 `httpBase`。技能在插件激活时注册。引擎没起来时面板写 engine down，这不是安装失败。
+无数据库，无宿主配置。技能在插件激活时注册。DNLS 未起或引擎未起来时面板写 engine down，这不是安装失败。
 
 ## 使用
 
 | 动作 | 结果 |
 |---|---|
 | 工作区入口 | 和文件页并列。打开后占满右侧工作区 |
-| 地址栏 Go | 在容器里打开这个 http(s) 地址并投射当前画面 |
-| 最近地址（时钟图标） | 记住最近 8 个地址。切换时让容器打开那一个 |
+| 地址栏 Go | 经 DNLS 在容器里打开这个 http(s) 地址并投射当前画面 |
+| 最近地址（时钟图标） | 记住最近 8 个地址（pane 内存态）。切换时让容器打开那一个 |
 | ← → ⟳ | 真实浏览器后退/前进/刷新（走引擎 navigationHistory） |
 | 滚轮 / ↑ ↓ 键 | 滚动容器里的页面并重新投射 |
 | Annotate | 打开后，点画面上的元素。选框跟着元素；悬停时有虚线预览。Shift+点把元素并进当前备注（多选）；Alt+点在无备注时直送 composer；普通拖画选区，Alt+拖画椭圆，Shift+拖画箭头。↑↓ 选父/最大子元素；双击元素让备注输入变成就地改字（回车写回页面）。Esc 依次关拖/备注/标注；⌘⇧D 开关标注；⌘Z 撤最后一条 pin；⌘L 把当前备注直送 composer。备注回车 pin 进队列 |
-| `/kitesurf-cdp`、`/nano-kite` | 告诉 agent 用 `agent-browser --cdp` 接这个引擎，不要启动 Chrome |
+| `/kitesurf-cdp`、`/nano-kite` | 告诉 agent 用 `agent-browser --cdp` 接这个引擎，不要启动 Chrome；`/nano-kite` 只做 start/resume/suspend/restart |
 
-路由都有 `connection.requestRejection`。不要绕过面板去改引擎配置。
+页面路由全部由 DNLS 注册并受其 `connection.requestRejection` 保护。本包不复制 handler，也不绕面板去改引擎配置。
 
-| 方法 | 路径 | 作用 |
-|---|---|---|
-| GET | `见 QNA status` | `{ ok, engineMismatch?, httpBase, cdp, kite: { phase, httpBase, mcpPort, cdp }, lastError? }` |
-| GET | `见 QNA last` | 最近一次点选，没有则 `pick: null` |
-| POST | `见 QNA open` | `{ url }`。只接受 http(s)，不接受带凭证的地址 |
-| POST | `见 QNA shot` | 当前页截图 base64 + `{url, scrollX, scrollY, targetId, viewport, mimeType, format}`；`{scroll: ±px}` 先滚后截，`{format:"webp"\|"png"\|"jpeg", quality:1..100}` 选编码（默认 webp q82，比 PNG 小约 3.7×），`{fit:{width,height}}` 让引擎视口等于面板尺寸（默认由 pane 侧传入，图片与面板 1:1、无 letterbox） |
-| POST | `见 QNA history` | `{delta:-1\|+1}`：真实浏览器前进/后退（走引擎 `Page.getNavigationHistory`/`navigateToHistoryEntry`），返回 `{moved,url?,currentIndex,entries}` |
-| POST | `见 QNA pick` | `{ x, y }` 或 `{selector}`（↑↓ 父/子重选）。`preview:true` 只做悬停预览、不写 lastPick。元素包带 `componentStack`（React fiber 自省出的组件名，无框架/生产压缩名时为 null 或短名）；`elements` 是单元素列表；`parentSel`/`childSel` 是父/最大子元素选择器；响应带 `{url, scrollY, targetId}` 供画面比对（漂移时 pane 自动重截并提示） |
-| POST | `见 QNA edit` | `{selector, text}`：把文本写回该元素（双击就地改字），≤4000 字符 |
-| POST | `见 QNA settings` | `{ userAgent?, viewport?, media?, extraHeaders? }`：viewport `{width:320..3840, height:240..2160, mobile?, deviceScaleFactor?:1\|2\|3}` 或 `null`；media `screen\|print\|null`；extraHeaders ≤20 项（禁 cookie/authorization 等）；全部事务性，失败回滚 |
-| POST | `见 QNA kite` | `{action: init\|start\|suspend\|resume\|configure, httpBase?, mcpPort?}` |
-| — | 本包不拥有 `/perf-review/host` | 只读视图在资源管理器、记事本和模型选择器上 |
-| GET/POST | `见 QNA console` | 页面 console/exception/network/navigation 环形缓冲；`?level=error,exception&limit=50`；`POST {"clear":true}` 清空 |
-| GET/POST | `见 QNA operations` | 每次路由调用的执行埋点（route/status/errorId/耗时/输入摘要）；`?errorsOnly=true`；`POST {"clear":true}` 清空 |
-| GET | `见 QNA diagnostics` | 一击全量诊断：status + target 列表 + console + 操作 trace + errorCatalog + 自动 hints |
-| GET | `见 QNA targets` | 引擎 `Target.getTargets`（page target id/url、当前附着页） |
-| POST | `见 QNA evaluate` | `{expression}` 在引擎页面执行有界 JS（≤2000 字符，returnByValue，结果 ≤4000 字符） |
+## 消费的 DNLS 面（不复制真源）
 
-错误一律 `{ok:false,errorId,error,incidentId?}` 并按 `lib/diagnostics.js` 的 `ERROR_CATALOG` 映射真实状态码。**发射侧真源在 DNLS `src/host/error-catalog.js`**（host 发射什么码），本目录是 agent 面镜像，两边 id/status 必须一致（DNLS delivery-guard 对账）：输入类 400、未命中 404、阶段错 409、body 超限 413、引擎故障 502、`navigate.egress`/`wait.timeout` 504。`/diagnostics` 会把「errorId → status → 原因 → 下一步命令」整表交给 agent；完整 id 表也在 `/kitesurf-cdp` 技能 §5。
+- `GET /nano-local-sandbox/status` → `lifecycle.{phase,httpBase,mcpPort}` + 顶层 `cdp`；引擎 down 也 200，读 `ok`。
+- `GET /ports`、`/diagnostics`、`/console`、`/operations`、`/targets`、`/har` 只读。
+- `POST /open`、`/shot`、`/pick`、`/edit`、`/evaluate`、`/interact`、`/settings`、`/history`、`/wait`、`/recover`。
+- `POST /nano-local-sandbox/lifecycle` → `{action: start|resume|suspend|restart}`。端点由实例 registry 返回，pane 只读。
+- 错误 `{ok:false,errorId,error,incidentId?}` 的状态码、cause、next 只在 DNLS；面板直接展示响应里的 `error`，完整目录用 `GET /diagnostics?catalog=1`。
+- 本包不保存点选状态，不写锁文件，不持有 CDP/容器句柄。
 
-## 拓扑（workerd 内的浏览器代理）
+完整路由表在 `skills/kitesurf-cdp/references/routes.md`。
 
-浏览器代理不在宿主里，而在容器内的 workerd：Kitesurf 引擎自己就是那个代理，它把渲染器包成 CDP server 并从容器端口暴露出来。
+## 拓扑
 
 ```
-DSH 宿主 (DNLS src/host/routes.js)
-  └─ in-process CDP socket ──▶  ws://127.0.0.1:8798/devtools/browser
-                                   └─ 容器内 workerd + Kitesurf 渲染器
-MCP 客户端
-  └─ ws://127.0.0.1:8799/mcp ──▶ mcp-bridge.mjs ──▶ CDP relay (/cdp) ──▶ 同一 CDP（共享页）
+浏览器 pane（lib/client.js）
+  └─ fetch /nano-local-sandbox/* ──▶ DNLS host routes
+                                        └─ 实例 registry ──▶ 容器内 Kitesurf 引擎
+Agent
+  └─ skill 指导下 agent-browser --cdp ws://<host>:<lifecycle.mcpPort>/cdp ──▶ 同一引擎页
 ```
 
-因此「浏览器代理」= `browserSocketUrl(httpBase)` 指向的 CDP 端点；宿主只做协议转发与诊断，不启动任何浏览器进程。`GET /selftest` 里的 `engine` / `engine-identity` / `targets` 三项就是这条链路的健康证据。
+本包没有容器、CDP socket 或 MCP 桥。引擎 down 的恢复入口是 DNLS 的 `POST /nano-local-sandbox/recover`。
 
 ## 配置与状态
 
-宿主配置可省略。要写就写在 profile 的 patch 里。
-
-本包不读取 checkout 环境变量，也不启动容器。采集开关不在本包配置里。点选结果只在宿主进程内存里，重启即丢。卸载不需要清浏览器存储，因为没有。
+无宿主 `Config`，无 `httpBase`/`checkout`/`mcpPort` 字段，无锁文件。不读取 checkout 环境变量，也不启动容器。采集开关不在本包配置里。端点与端口一律从 `/status` 的 `lifecycle` 读取。点选结果只在 pane 内存里，重启即丢。卸载不需要清浏览器存储，因为没有。
 
 ## 构建
 
@@ -149,14 +136,16 @@ npm run build
 
 | 现象 | 原因 | 处理 |
 |---|---|---|
-| 面板写 engine down | 8787 上没有 Kitesurf | 先把引擎跑起来。不要改去连 Chrome |
+| 面板写 engine down | DNLS 未起或引擎未启动 | 起 DNLS / 用 `POST /recover`。不要改去连 Chrome |
 | status 返回 302 或被拒 | 没带已登录页面的会话 | 正常 |
-| 点了截图但 pick 失败 | 引擎没有 page target，或坐标超出 | 先 Open。看响应里的 `error` |
+| 点了截图但 pick 失败 | 引擎没有 page target，或坐标超出 | 先 Open。看响应里的 `errorId`/`error` |
 | `dsh plugin add` 报引擎不符 | `engines.dsh` 与正在跑的 dsh 不一致 | 换符合范围的 dsh，或在操作者明确接受风险后执行命令输出里的 `allow-version`。不要改本包的 `engines` |
 
 ## 不要
 
 - 不要在这个包里编译 Kitesurf，也不要内置 workerd。
+- 不要 import `../dsh-nano-local-sandbox` 的任何文件；只用它的 HTTP/MCP 合同。
+- 不要在 DNK 复制 DNLS 的 error 目录、路由 handler 或容器生命周期。
 - 不要把 `httpBase` 写成带用户名密码的 URL。
 - 不要在用户没要求时对引擎执行 `Page.navigate`。
 - 不要把 `context/` 或本机手册当成安装步骤。它们不在这个包里。

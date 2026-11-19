@@ -2418,9 +2418,9 @@ ${LAYER_CSS}
   var KEYS, BUCKETS, DECL_HASH;
   var init_perf_declaration = __esm({
     "lib/perf-declaration.js"() {
-      KEYS = Object.freeze({ "spans": ["pane-op", "navigate"], "tracks": [], "usage": [], "hostSpans": ["kite-warmup"] });
+      KEYS = Object.freeze({ "spans": ["pane-op", "navigate"], "tracks": [], "usage": [], "hostSpans": [] });
       BUCKETS = Object.freeze([]);
-      DECL_HASH = "462f22bc6836";
+      DECL_HASH = "4a17c8771d1e";
     }
   });
 
@@ -2598,9 +2598,8 @@ ${LAYER_CSS}
           close: "\u5173\u95ED",
           uaLabel: "User-Agent",
           uaPlaceholder: "\u7559\u7A7A\u5219\u4F7F\u7528\u5F15\u64CE\u9ED8\u8BA4",
-          originLabel: "\u5F15\u64CE\u5730\u5740",
-          mcpLabel: "MCP \u7AEF\u53E3",
           viewportLabel: "\u9ED8\u8BA4\u5206\u8FA8\u7387",
+          viewportSupport: "deviceScaleFactor \u53EA\u652F\u6301 1\uFF0Cmobile \u53EA\u652F\u6301 false\uFF1B\u5176\u4ED6\u503C\u4F1A\u88AB\u5F15\u64CE\u62D2\u7EDD",
           localeLabel: "\u9ED8\u8BA4\u8BED\u8A00",
           localePlaceholder: "\u5982 zh-CN / en-US",
           geoLabel: "\u9ED8\u8BA4\u5730\u7406\u4F4D\u7F6E\uFF08GPS\uFF09",
@@ -2613,7 +2612,6 @@ ${LAYER_CSS}
           cookiesLabel: "Cookie",
           cookiesPlaceholder: "name=value\uFF0C\u6BCF\u884C\u4E00\u4E2A",
           cookiesHint: "\u4FDD\u5B58\u65F6\u66FF\u6362\u5F53\u524D\u9875\u9762 Cookie\uFF1B\u8DE8\u5BFC\u822A\u7531\u9A71\u52A8\u91CD\u65B0\u5E94\u7528\u3002",
-          engineSection: "\u5F15\u64CE\u8FDE\u63A5",
           viewportDefault: "\u9ED8\u8BA4",
           viewportDesktop: "\u684C\u9762 1280",
           viewportTablet: "\u5E73\u677F 768",
@@ -2630,7 +2628,7 @@ ${LAYER_CSS}
           emptyBody: "\u5C55\u5F00\u6807\u7B7E\u9875\u680F\u5E76\u8F93\u5165\u7F51\u5740\u3002Kitesurf \u4F1A\u5728\u5BB9\u5668\u91CC\u6253\u5F00\u9875\u9762\uFF1B\u518D\u70B9\u300C\u6807\u6CE8\u300D\uFF0C\u5728\u753B\u9762\u4E0A\u70B9\u9009\u5143\u7D20\u3002",
           emptyTry: "\u8BD5\u8BD5 example.com",
           errorTitle: "\u5F15\u64CE\u6CA1\u6709\u5E94\u7B54",
-          errorBody: "\u5BB9\u5668\u91CC\u7684 Kitesurf \u6CA1\u6709\u54CD\u5E94\u3002\u5148\u542F\u52A8\u5F15\u64CE\uFF1B\u82E5\u5DF2\u542F\u52A8\uFF0C\u6253\u5F00\u8BBE\u7F6E\u786E\u8BA4\u5F15\u64CE\u5730\u5740\u3002",
+          errorBody: "\u5BB9\u5668\u91CC\u7684 Kitesurf \u6CA1\u6709\u54CD\u5E94\u3002\u5148\u542F\u52A8\u5F15\u64CE\uFF1B\u82E5\u5DF2\u542F\u52A8\uFF0C\u590D\u5236\u8BCA\u65AD\u4FE1\u606F\u6392\u67E5\u6C99\u7BB1\u5BBF\u4E3B\u3002",
           retry: "\u91CD\u8BD5",
           resumeEngine: "\u6062\u590D\u5F15\u64CE",
           diagnose: "\u8BCA\u65AD\u4FE1\u606F",
@@ -2819,9 +2817,8 @@ ${LAYER_CSS}
           close: "Close",
           uaLabel: "User-Agent",
           uaPlaceholder: "Leave empty for engine default",
-          originLabel: "Engine origin",
-          mcpLabel: "MCP port",
           viewportLabel: "Default resolution",
+          viewportSupport: "Only deviceScaleFactor 1 and mobile false are supported; other values are rejected by the engine",
           localeLabel: "Default language",
           localePlaceholder: "e.g. zh-CN / en-US",
           geoLabel: "Default geolocation (GPS)",
@@ -2834,7 +2831,6 @@ ${LAYER_CSS}
           cookiesLabel: "Cookie",
           cookiesPlaceholder: "name=value, one per line",
           cookiesHint: "Replaces the current page cookies on save; the driver reapplies them after navigation.",
-          engineSection: "Engine connection",
           viewportDefault: "Default",
           viewportDesktop: "Desktop 1280",
           viewportTablet: "Tablet 768",
@@ -2851,7 +2847,7 @@ ${LAYER_CSS}
           emptyBody: "Open the tab rail and enter a URL. Kitesurf opens the page in the container. Then choose Annotate and pick elements on the page.",
           emptyTry: "Try example.com",
           errorTitle: "Engine is not answering",
-          errorBody: "Kitesurf inside the container is not responding. Start the engine; if it is already started, open Settings and check the engine address.",
+          errorBody: "Kitesurf inside the container is not responding. Start the engine; if it is already started, copy diagnostics and inspect the sandbox host.",
           retry: "Retry",
           resumeEngine: "Resume engine",
           diagnose: "Diagnostics",
@@ -3110,7 +3106,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
   var DOM = "/nano-local-sandbox/dom";
   var CONTROL = "/nano-local-sandbox/control";
   var localNotes = [];
-  var KITE = "/nano-local-sandbox/kite";
+  var LIFECYCLE = "/nano-local-sandbox/lifecycle";
   var KIND = "kitesurf";
   var OWN_ID = "nano-kitesurf";
   var MAX_PINS = 8;
@@ -3139,6 +3135,14 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         detail: row.detail || row.url || row.state || ""
       };
     });
+  }
+  function engineEndpoint(payload) {
+    const lifecycle = payload?.lifecycle;
+    return {
+      phase: lifecycle?.phase ?? null,
+      httpBase: lifecycle?.httpBase ?? null,
+      mcpPort: lifecycle?.mcpPort ?? null
+    };
   }
   var pagePerf = ensurePerfReview2();
   var perf = {
@@ -4041,8 +4045,9 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
   }
   function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
     const [status, setStatus] = React12.useState(null);
+    const engine = engineEndpoint(status);
     const statusDown = status != null && (status.ok === false || status.ready === false);
-    const engineNavigating = status?.navigating === true;
+    const engineNavigating = status?.navigation?.outcome === "in-flight";
     const [pageUrl, setPageUrl] = React12.useState("");
     const [draftUrl, setDraftUrl] = React12.useState("");
     const [history, setHistory] = React12.useState([]);
@@ -4316,14 +4321,14 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       return () => window.removeEventListener("message", onMessage);
     }, []);
     React12.useEffect(() => {
-      const phase = status?.kite?.phase;
+      const phase = engine.phase;
       if (phase && phase !== "running" && shot) {
         setShot(null);
         setPick(null);
         setPins([]);
         setShotMeta(null);
       }
-    }, [status?.kite?.phase]);
+    }, [engine.phase]);
     React12.useEffect(() => {
       const element = frameRef.current;
       if (!element || typeof ResizeObserver === "undefined") return void 0;
@@ -4379,7 +4384,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         image?.removeEventListener("load", measure);
       };
     }, [shot]);
-    const RECOVERABLE = /^kitesurf\.(shot|engine|elements|dom|kite|navigate|pick|wait|ref)\.|^sandbox\.cdp\./;
+    const RECOVERABLE = /^kitesurf\.(shot|engine|elements|dom|navigate|pick|wait|ref)\.|^sandbox\.cdp\./;
     async function repairNow() {
       setToastFix(false);
       setToast(copy.preparingEnv);
@@ -4859,10 +4864,10 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
     function onStartEngine() {
       run(async () => {
         const fresh = await refreshStatus();
-        const phase = fresh?.kite?.phase;
+        const phase = engineEndpoint(fresh).phase;
         if (phase === "running") return;
         const action = phase === "suspended" ? "resume" : "start";
-        await post(KITE, { action });
+        await post(LIFECYCLE, { action });
         await reloadShot();
       });
     }
@@ -4890,7 +4895,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       height: Math.max(box.height * activeFrame.scale, 2)
     })) : [];
     const hasPage = !!shot && !!shotMeta?.url && shotMeta.url !== "about:blank";
-    const engineHasPage = hasPage || status?.phase === "running" || !!status?.httpBase;
+    const engineHasPage = hasPage || engine.phase === "running" || !!engine.httpBase;
     React12.useEffect(() => {
       if (!engineHasPage) {
         setControl(null);
@@ -5065,7 +5070,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           showError(cause);
         }
       }
-      const engine = snap?.effective?.httpBase || "\u2014";
+      const engineBase = snap?.effective?.httpBase || "\u2014";
       const container = snap?.container?.state || "\u2014";
       const portRow = snap?.ports?.engine ? `${snap.ports.engine.port} \xB7 ${snap.ports.engine.heldBy === "this-container" ? copy.portHeld : copy.portFree}` : "\u2014";
       const contractMismatch = snap != null && Number.isFinite(snap.v) && snap.v !== 1;
@@ -5088,7 +5093,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           legacyHost ? h7("span", { className: "nks-env-legacy", "data-nks-legacy": "1" }, copy.legacyHost) : null
         ),
         h7("div", { className: "nks-env-row" }, h7("b", null, copy.envPlugin), h7("span", null, snap?.buildId || copy.envUnknown)),
-        h7("div", { className: "nks-env-row" }, h7("b", null, copy.envEngine), h7("span", null, engine)),
+        h7("div", { className: "nks-env-row" }, h7("b", null, copy.envEngine), h7("span", null, engineBase)),
         h7("div", { className: "nks-env-row" }, h7("b", null, copy.envContainer), h7("span", null, container)),
         snap?.containerName ? h7("div", { className: "nks-env-row" }, h7("b", null, copy.envInstance), h7("span", null, snap.containerName)) : null,
         h7("div", { className: "nks-env-row" }, h7("b", null, copy.envPorts), h7("span", null, portRow)),
@@ -5350,7 +5355,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       dialogOpenRef.current = true;
       let close = () => {
       };
-      let current = { userAgent: "", viewportWidth: "", viewportHeight: "", httpBase: "", mcpPort: "", locale: "", geolocation: null, colorScheme: "light", cookies: "" };
+      let current = { userAgent: "", viewportWidth: "", viewportHeight: "", locale: "", geolocation: null, colorScheme: "light", cookies: "" };
       const dialog = openNanoDialog2({
         copy: { cancel: copy.cancel, confirm: copy.save, close: copy.close },
         title: copy.settingsTitle,
@@ -5366,27 +5371,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         },
         onConfirm: () => save(),
         children: h7(SettingsTabs, {
-          env: h7(
-            "div",
-            { className: "nks-settings-stack" },
-            h7(EnvPanel, null),
-            h7(
-              "form",
-              {
-                className: "nks-settings-body",
-                onSubmit: (event) => {
-                  event.preventDefault();
-                  save();
-                }
-              },
-              h7("div", { className: "nks-settings-section" }, copy.engineSection),
-              h7("label", { htmlFor: "nks-origin" }, copy.originLabel),
-              h7("input", { id: "nks-origin", className: "nks-address", placeholder: "http://127.0.0.1:8787", inputMode: "url", spellCheck: false, autoComplete: "off" }),
-              h7("label", { htmlFor: "nks-mcp" }, copy.mcpLabel),
-              h7("input", { id: "nks-mcp", className: "nks-address", inputMode: "numeric", placeholder: "8799" }),
-              h7("button", { type: "submit", style: { display: "none" }, "aria-hidden": "true", tabIndex: -1 })
-            )
-          ),
+          env: h7("div", { className: "nks-settings-stack" }, h7(EnvPanel, null)),
           simulation: h7(
             "form",
             {
@@ -5429,6 +5414,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
                 onClick: (event) => selectRadio(event.currentTarget.parentElement, value)
               }, label))
             ),
+            h7("span", { className: "nks-settings-hint", "data-nks-vp-unsupported": "1" }, copy.viewportSupport),
             h7("label", { htmlFor: "nks-locale" }, copy.localeLabel),
             h7("input", { id: "nks-locale", className: "nks-address", placeholder: copy.localePlaceholder, spellCheck: false, autoComplete: "off" }),
             h7("label", null, copy.geoLabel),
@@ -5484,8 +5470,6 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
       function save() {
         const nextAgent = document.getElementById("nks-ua")?.value ?? "";
         const choice = document.getElementById("nks-viewport")?.dataset.value ?? "default";
-        const nextOrigin = (document.getElementById("nks-origin")?.value ?? "").trim();
-        const nextPort = (document.getElementById("nks-mcp")?.value ?? "").trim();
         const nextLocale = (document.getElementById("nks-locale")?.value ?? "").trim();
         const latText = (document.getElementById("nks-geo-lat")?.value ?? "").trim();
         const lngText = (document.getElementById("nks-geo-lng")?.value ?? "").trim();
@@ -5513,21 +5497,13 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           if (nextColor !== current.colorScheme) settingsPatch.colorScheme = nextColor;
           if (nextCookies !== current.cookies) settingsPatch.cookies = nextCookies || null;
           if (Object.keys(settingsPatch).length) await post(SETTINGS, settingsPatch);
-          const kitePatch = {};
-          if (nextOrigin && nextOrigin !== current.httpBase) kitePatch.httpBase = nextOrigin;
-          if (nextPort && nextPort !== String(current.mcpPort)) kitePatch.mcpPort = nextPort;
-          if (Object.keys(kitePatch).length) await post(KITE, { action: "configure", ...kitePatch });
           close();
           const fresh = await refreshStatus().catch(() => null);
-          const bs = fresh && typeof fresh === "object" && fresh.browserSettings && typeof fresh.browserSettings === "object" ? fresh.browserSettings : fresh;
           const unconfirmed = [];
           for (const [key, want] of Object.entries(settingsPatch)) {
-            const got = bs?.[key];
+            const got = fresh?.[key];
             const same = key === "viewport" ? want == null === (got == null) && (want == null || got?.width === want.width && got?.height === want.height) : key === "geolocation" ? want == null === (got == null) && (want == null || got?.latitude === want.latitude && got?.longitude === want.longitude) : String(want ?? "") === String(got ?? "");
             if (!same) unconfirmed.push(key);
-          }
-          for (const [key, want] of Object.entries(kitePatch)) {
-            if (String(fresh?.kite?.[key] ?? "") !== String(want)) unconfirmed.push(`kite.${key}`);
           }
           showToast(unconfirmed.length ? `${copy.savedUnconfirmed} (${unconfirmed.join(", ")})` : copy.saved);
         });
@@ -5537,8 +5513,6 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
           userAgent: fresh?.userAgent ?? "",
           viewportWidth: fresh?.viewport?.width ? String(fresh.viewport.width) : "",
           viewportHeight: fresh?.viewport?.height ? String(fresh.viewport.height) : "",
-          httpBase: fresh?.kite?.httpBase ?? "",
-          mcpPort: fresh?.kite?.mcpPort != null ? String(fresh.kite.mcpPort) : "",
           locale: fresh?.locale ?? "",
           geolocation: fresh?.geolocation ?? null,
           colorScheme: fresh?.colorScheme ?? "light",
@@ -5546,10 +5520,6 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
         };
         const ua = document.getElementById("nks-ua");
         if (ua) ua.value = current.userAgent;
-        const originInput = document.getElementById("nks-origin");
-        if (originInput) originInput.value = current.httpBase;
-        const mcp = document.getElementById("nks-mcp");
-        if (mcp) mcp.value = current.mcpPort;
         const localeInput = document.getElementById("nks-locale");
         if (localeInput) localeInput.value = current.locale;
         const lat = document.getElementById("nks-geo-lat");
@@ -5619,8 +5589,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
               "data-nks-loading": "1",
               role: "status",
               "aria-label": engineNavigating ? copy.navigating : copy.opening,
-              // N 秒是本地计时，「导航中」是引擎上报的真阶段；旧宿主没有
-              // navigating 字段时维持只报计时。
+              // N 秒是本地计时，「导航中」是引擎上报的 navigation.outcome。
               title: engineNavigating ? `${copy.navigating} \xB7 ${copy.opening} ${beatSec}s` : `${copy.opening} ${beatSec}s`
             },
             h7("i", { className: "nks-spin", "aria-hidden": true }),
@@ -5917,7 +5886,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
               "data-nks-start-engine": "1",
               "data-nks-prepare": "1",
               onClick: oneClickPrepare
-            }, status?.kite?.phase === "running" ? copy.resumeEngine : copy.prepareEnv),
+            }, engine.phase === "running" ? copy.resumeEngine : copy.prepareEnv),
             h7("button", { type: "button", className: "nks-start-btn", "data-nks-diagnose": "1", onClick: () => run(() => refreshStatus()) }, copy.retry),
             h7("button", { type: "button", className: "nks-start-btn", "data-nks-open-settings": "1", onClick: openSettings }, copy.settings)
           ) : null,
@@ -5929,7 +5898,7 @@ ${item}`).join("\n") + "\n</kitesurf-batch>";
               openPage("https://example.com");
             } }, copy.emptyTry)
           ) : null,
-          statusDown ? h7("div", { className: "nks-empty-meta" }, `${status?.lastError?.errorId || status?.errorId || (status?.degraded?.length ? status.degraded.join(" / ") : "kitesurf.engine.failed")} \xB7 ${status?.httpBase || ""}`) : null,
+          statusDown ? h7("div", { className: "nks-empty-meta" }, `${status?.lastError?.errorId || status?.errorId || (status?.degraded?.length ? status.degraded.join(" / ") : "kitesurf.engine.failed")} \xB7 ${engine.httpBase || ""}`) : null,
           statusDown ? h7("div", { className: "nks-empty-meta" }, status?.lastError?.error || status?.error || "") : null
         ),
         overlays.map((box, index) => h7("div", {

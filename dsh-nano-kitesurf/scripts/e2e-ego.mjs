@@ -371,15 +371,15 @@ async function main() {
   // 9. lifecycle: suspend -> resume -> page comes back
   const lifecycle = await page.evaluate(async (targetUrl) => {
     const readJson = async (r) => { const t = await r.text(); try { return JSON.parse(t) } catch { return { ok: false, error: t.slice(0, 120), status: r.status } } }
-    const post = (body) => fetch('/nano-local-sandbox/kite', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then(readJson)
+    const post = (body) => fetch('/nano-local-sandbox/lifecycle', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then(readJson)
     const st = () => fetch('/nano-local-sandbox/status').then(readJson)
     try {
     const before = await st()
     const suspended = await post({ action: 'suspend' })
     const mid = await st()
     const resumed = await post({ action: 'resume' })
-    // resume rebuilds the container: the page is gone, so re-open before any
-    // later check that needs a document.
+    // resume restores the engine without the page: re-open before any later
+    // check that needs a document.
     await fetch('/nano-local-sandbox/open', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ url: targetUrl }) })
     for (let i = 0; i < 12; i += 1) {
       const dom = await fetch('/nano-local-sandbox/dom').then(readJson)
@@ -388,11 +388,11 @@ async function main() {
     }
     const after = await st()
     return {
-      beforePhase: before.kite?.phase,
+      beforePhase: before.lifecycle?.phase,
       suspendOk: suspended.ok === true,
-      midPhase: mid.kite?.phase,
+      midPhase: mid.lifecycle?.phase,
       resumeOk: resumed.ok === true,
-      afterPhase: after.kite?.phase,
+      afterPhase: after.lifecycle?.phase,
       alive: after.ok === true,
     }
     } catch (error) { return { error: String((error && error.message) || error) } }
@@ -432,46 +432,45 @@ async function main() {
   const hostRows = Array.isArray(perf.host?.rows)
     ? perf.host.rows.filter((row) => row.pluginId === 'nano-kitesurf' && row.kind !== 'contract')
     : []
-  const shotSamples = hostRows.filter((row) => row.name === 'shot').map((row) => row.ms).filter((ms) => typeof ms === 'number').sort((a, b) => a - b)
+  const shotSamples = hostRows.filter((row) => row.name === 'navigate').map((row) => row.ms).filter((ms) => typeof ms === 'number').sort((a, b) => a - b)
   const percentile = (p) => shotSamples.length === 0 ? null : shotSamples[Math.min(shotSamples.length - 1, Math.max(0, Math.ceil(p * shotSamples.length) - 1))]
   const shotStats = shotSamples.length === 0 ? null : {
     n: shotSamples.length, p50: percentile(0.5), p95: percentile(0.95),
-    max: shotSamples.at(-1), errors: hostRows.filter((row) => row.name === 'shot' && row.err === true).length,
+    max: shotSamples.at(-1), errors: hostRows.filter((row) => row.name === 'navigate' && row.err === true).length,
   }
   if (shotStats) {
     record('perf-stats-shape', typeof shotStats.p95 === 'number' && typeof shotStats.p50 === 'number',
-      `shot p50=${shotStats.p50} p95=${shotStats.p95} max=${shotStats.max} errors=${shotStats.errors}`)
-    record('perf-budget-shot-p95', shotStats.p95 != null && shotStats.p95 < 3000, `shot p95=${shotStats.p95}ms < 3000ms`)
+      `navigate p50=${shotStats.p50} p95=${shotStats.p95} max=${shotStats.max} errors=${shotStats.errors}`)
+    record('perf-budget-navigate-p95', shotStats.p95 != null && shotStats.p95 < 3000, `navigate p95=${shotStats.p95}ms < 3000ms`)
   } else {
-    record('perf-stats-shape', false, 'shot rows missing from the v2 host read view')
-    record('perf-budget-shot-p95', false, 'no shot rows')
+    record('perf-stats-shape', false, 'navigate rows missing from the v2 host read view')
+    record('perf-budget-navigate-p95', false, 'no navigate rows')
   }
   // Each host row carries {ms,seq,err,at}; the event ring is optional.
-  const shotRows = hostRows.filter((row) => row.name === 'shot')
+  const shotRows = hostRows.filter((row) => row.name === 'navigate')
   const hasTriple = shotRows.length === 0 || shotRows.every((row) => typeof row.ms === 'number' && typeof row.at === 'string' && 'err' in row)
   record('perf-event-triples', hasTriple, `${shotRows.length} rows, row shape ok=${hasTriple}`)
 
   // 14. P1-6 feedback-report: every field the template asks for must be
   // fetchable from a real route — buildId/phase (status), route sequence
-  // (operations), hints+console+errors (diagnostics), element packet (/last),
-  // context chip (/context). If any source vanishes the recipe breaks.
+  // (operations), hints+console+errors (diagnostics), element packet (/pick).
   const report = await page.evaluate(async () => {
-    const [status, ops, diag, last] = await Promise.all([
+    const [status, ops, diag, pick] = await Promise.all([
       fetch('/nano-local-sandbox/status').then((r) => r.json()).catch(() => ({})),
       fetch('/nano-local-sandbox/operations?limit=5').then((r) => r.json()).catch(() => ({})),
       fetch('/nano-local-sandbox/diagnostics?limit=5').then((r) => r.json()).catch(() => ({})),
-      fetch('/nano-local-sandbox/last').then((r) => r.json()).catch(() => ({})),
+      fetch('/nano-local-sandbox/pick', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ selector: 'h1' }) }).then((r) => r.json()).catch(() => ({})),
     ])
     return {
       buildId: status.buildId || status.plugin?.buildId || null,
-      phase: status.kite?.phase || status.plugin?.phase || null,
+      phase: status.lifecycle?.phase || status.plugin?.phase || null,
       opsCount: (ops.entries || []).length,
       hasHints: Array.isArray(diag.hints),
       hasErrorCatalog: Array.isArray(diag.observability?.errorCatalog) && diag.observability.errorCatalog.length > 10,
-      lastPick: last.pick === null || typeof last.pick === 'object',
+      pickPacket: Boolean(pick.element && pick.element.selector),
     }
   })
-  const reportOk = report.buildId && report.phase && report.hasHints && report.hasErrorCatalog
+  const reportOk = report.buildId && report.phase && report.hasHints && report.hasErrorCatalog && report.pickPacket
   record('feedback-report-fields', !!reportOk, JSON.stringify(report).slice(0, 160))
 
   // 15. P1-2 chunked evaluate: an expression returning >4KB must page through

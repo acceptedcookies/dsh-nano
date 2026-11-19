@@ -29,7 +29,7 @@ const LOGS = '/nano-local-sandbox/logs'
 const DOM = '/nano-local-sandbox/dom'
 const CONTROL = '/nano-local-sandbox/control'
 const localNotes = []
-const KITE = '/nano-local-sandbox/kite'
+const LIFECYCLE = '/nano-local-sandbox/lifecycle'
 const KIND = 'kitesurf'
 const OWN_ID = 'nano-kitesurf'
 const CAPTURE_HEIGHT = 800
@@ -62,6 +62,16 @@ function planeRows(snap, copy) {
       detail: row.detail || row.url || row.state || '',
     }
   })
+}
+
+/** DNLS owns the engine endpoint truth; the pane reads only its lifecycle block. */
+function engineEndpoint(payload) {
+  const lifecycle = payload?.lifecycle
+  return {
+    phase: lifecycle?.phase ?? null,
+    httpBase: lifecycle?.httpBase ?? null,
+    mcpPort: lifecycle?.mcpPort ?? null,
+  }
 }
 
 const pagePerf = ensurePerfReview()
@@ -884,10 +894,11 @@ function wfBar(row, rows) {
 
 function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
   const [status, setStatus] = React.useState(null)
+  const engine = engineEndpoint(status)
   const statusDown = status != null && (status.ok === false || status.ready === false)
-  // 引擎真源：超时返回的 /open 不等于导航被取消。读不到该字段的旧宿主
-  // 自然落到 false，一切照旧。
-  const engineNavigating = status?.navigating === true
+  // 超时返回的 /open 不等于导航被取消：引擎只在 navigation.outcome 里
+  // 承认「还在飞」。
+  const engineNavigating = status?.navigation?.outcome === 'in-flight'
   const [pageUrl, setPageUrl] = React.useState('')
   const [draftUrl, setDraftUrl] = React.useState('')
   const [history, setHistory] = React.useState([])
@@ -1125,15 +1136,15 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
     const timer = window.setInterval(() => {
       ticks += 1
       setBeatSec(Math.max(1, Math.floor((Date.now() - started) / 1000)))
-      // 等 /open 回复的窗口里顺便盯引擎的 navigating 标志：心跳只能报
+      // 等 /open 回复的窗口里顺便盯 navigation.outcome：心跳只能报
       // 「本地等了 N 秒」，是否还在导航是引擎才答得出的问题。
       if (ticks % 2 === 0) refreshStatus().catch(() => {})
     }, 1000)
     return () => window.clearInterval(timer)
   }, [beat])
 
-  // 引擎自己说还在导航（/open 已超时返回，但引擎没有停）：保持低频轮询，
-  // 让「引擎仍在执行」标记能如实消失。
+  // 引擎自己说还在导航（/open 已超时返回，但 navigation.outcome 仍是
+  // in-flight）：保持低频轮询，让「引擎仍在执行」标记能如实消失。
   React.useEffect(() => {
     if (!engineNavigating) return undefined
     const timer = window.setInterval(() => { refreshStatus().catch(() => {}) }, 3000)
@@ -1208,9 +1219,9 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
   }, [])
 
   React.useEffect(() => {
-    const phase = status?.kite?.phase
+    const phase = engine.phase
     if (phase && phase !== 'running' && shot) { setShot(null); setPick(null); setPins([]); setShotMeta(null) }
-  }, [status?.kite?.phase])
+  }, [engine.phase])
 
   // Fit-to-pane: when the split pane is resized, the engine viewport must
   // follow it — otherwise a 16:9 shot inside a 4:5 pane reintroduces the
@@ -1266,7 +1277,7 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
   // Engine/recoverable errors earn a repair shortcut on the toast; input and
   // ref misses are user-error and stay plain. POST /recover replays the last
   // opened url, then a fresh shot replaces the failed frame.
-  const RECOVERABLE = /^kitesurf\.(shot|engine|elements|dom|kite|navigate|pick|wait|ref)\.|^sandbox\.cdp\./
+  const RECOVERABLE = /^kitesurf\.(shot|engine|elements|dom|navigate|pick|wait|ref)\.|^sandbox\.cdp\./
 
   async function repairNow() {
     setToastFix(false)
@@ -1517,7 +1528,7 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
       return
     }
     // Hover preview: dashed element box under the cursor before the click.
-    // Throttled to one in-flight pick; previews never touch lastPick.
+    // Throttled to one in-flight pick; previews never replace the current pick.
     if (!annotate || !shot || busyRef.current || pickRef.current) return
     if (hoverTimerRef.current) return
     hoverTimerRef.current = window.setTimeout(() => { hoverTimerRef.current = 0 }, 90)
@@ -1827,10 +1838,10 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
     // The status call decides start vs resume; the pane should not guess phase.
     run(async () => {
       const fresh = await refreshStatus()
-      const phase = fresh?.kite?.phase
+      const phase = engineEndpoint(fresh).phase
       if (phase === 'running') return
       const action = phase === 'suspended' ? 'resume' : 'start'
-      await post(KITE, { action })
+      await post(LIFECYCLE, { action })
       await reloadShot()
     })
   }
@@ -1876,7 +1887,7 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
   // element". Gate on "engine reported a page" not on "pane already shot":
   // an agent can hold the writer before the human ever sees a frame, and the
   // bar must appear then too.
-  const engineHasPage = hasPage || status?.phase === 'running' || !!status?.httpBase
+  const engineHasPage = hasPage || engine.phase === 'running' || !!engine.httpBase
   React.useEffect(() => {
     if (!engineHasPage) { setControl(null); return undefined }
     let alive = true
@@ -2048,7 +2059,7 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
         showToast(copy.diagCopied)
       } catch (cause) { showError(cause) }
     }
-    const engine = snap?.effective?.httpBase || '—'
+    const engineBase = snap?.effective?.httpBase || '—'
     const container = snap?.container?.state || '—'
     const portRow = snap?.ports?.engine
       ? `${snap.ports.engine.port} · ${snap.ports.engine.heldBy === 'this-container' ? copy.portHeld : copy.portFree}`
@@ -2073,7 +2084,7 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
           probing ? `○ ${copy.envProbing}` : contractMismatch ? copy.contractNewer : healthy ? `● ${copy.envOk}` : `● ${copy.envBad}`),
         legacyHost ? h('span', { className: 'nks-env-legacy', 'data-nks-legacy': '1' }, copy.legacyHost) : null),
       h('div', { className: 'nks-env-row' }, h('b', null, copy.envPlugin), h('span', null, snap?.buildId || copy.envUnknown)),
-      h('div', { className: 'nks-env-row' }, h('b', null, copy.envEngine), h('span', null, engine)),
+      h('div', { className: 'nks-env-row' }, h('b', null, copy.envEngine), h('span', null, engineBase)),
       h('div', { className: 'nks-env-row' }, h('b', null, copy.envContainer), h('span', null, container)),
       snap?.containerName ? h('div', { className: 'nks-env-row' }, h('b', null, copy.envInstance), h('span', null, snap.containerName)) : null,
       h('div', { className: 'nks-env-row' }, h('b', null, copy.envPorts), h('span', null, portRow)),
@@ -2273,7 +2284,7 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
     if (workspaceEl === null) return
     dialogOpenRef.current = true
     let close = () => {}
-    let current = { userAgent: '', viewportWidth: '', viewportHeight: '', httpBase: '', mcpPort: '', locale: '', geolocation: null, colorScheme: 'light', cookies: '' }
+    let current = { userAgent: '', viewportWidth: '', viewportHeight: '', locale: '', geolocation: null, colorScheme: 'light', cookies: '' }
     const dialog = openNanoDialog({
       copy: { cancel: copy.cancel, confirm: copy.save, close: copy.close },
       title: copy.settingsTitle,
@@ -2287,18 +2298,7 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
       onCancel: () => { dialogOpenRef.current = false },
       onConfirm: () => save(),
       children: h(SettingsTabs, {
-        env: h('div', { className: 'nks-settings-stack' },
-          h(EnvPanel, null),
-          h('form', {
-            className: 'nks-settings-body',
-            onSubmit: (event) => { event.preventDefault(); save() },
-          },
-            h('div', { className: 'nks-settings-section' }, copy.engineSection),
-            h('label', { htmlFor: 'nks-origin' }, copy.originLabel),
-            h('input', { id: 'nks-origin', className: 'nks-address', placeholder: 'http://127.0.0.1:8787', inputMode: 'url', spellCheck: false, autoComplete: 'off' }),
-            h('label', { htmlFor: 'nks-mcp' }, copy.mcpLabel),
-            h('input', { id: 'nks-mcp', className: 'nks-address', inputMode: 'numeric', placeholder: '8799' }),
-            h('button', { type: 'submit', style: { display: 'none' }, 'aria-hidden': 'true', tabIndex: -1 }))),
+        env: h('div', { className: 'nks-settings-stack' }, h(EnvPanel, null)),
         simulation: h('form', {
           className: 'nks-settings-body nks-simulation-body',
           onSubmit: (event) => { event.preventDefault(); save() },
@@ -2333,6 +2333,7 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
                 'data-choice': value, className: 'nks-choice',
                 onClick: (event) => selectRadio(event.currentTarget.parentElement, value),
               }, label))),
+          h('span', { className: 'nks-settings-hint', 'data-nks-vp-unsupported': '1' }, copy.viewportSupport),
           h('label', { htmlFor: 'nks-locale' }, copy.localeLabel),
           h('input', { id: 'nks-locale', className: 'nks-address', placeholder: copy.localePlaceholder, spellCheck: false, autoComplete: 'off' }),
           h('label', null, copy.geoLabel),
@@ -2379,8 +2380,6 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
     function save() {
       const nextAgent = document.getElementById('nks-ua')?.value ?? ''
       const choice = document.getElementById('nks-viewport')?.dataset.value ?? 'default'
-      const nextOrigin = (document.getElementById('nks-origin')?.value ?? '').trim()
-      const nextPort = (document.getElementById('nks-mcp')?.value ?? '').trim()
       const nextLocale = (document.getElementById('nks-locale')?.value ?? '').trim()
       const latText = (document.getElementById('nks-geo-lat')?.value ?? '').trim()
       const lngText = (document.getElementById('nks-geo-lng')?.value ?? '').trim()
@@ -2408,29 +2407,20 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
         if (nextColor !== current.colorScheme) settingsPatch.colorScheme = nextColor
         if (nextCookies !== current.cookies) settingsPatch.cookies = nextCookies || null
         if (Object.keys(settingsPatch).length) await post(SETTINGS, settingsPatch)
-        const kitePatch = {}
-        if (nextOrigin && nextOrigin !== current.httpBase) kitePatch.httpBase = nextOrigin
-        if (nextPort && nextPort !== String(current.mcpPort)) kitePatch.mcpPort = nextPort
-        if (Object.keys(kitePatch).length) await post(KITE, { action: 'configure', ...kitePatch })
         close()
         // 「已保存」必须以引擎 status 回读为准：POST 200 只说明请求被收下，
         // 不代表字段真的落了库。逐项核对刚提交的 patch——只报「没生效的」，
         // 全对上了才说已保存。
         const fresh = await refreshStatus().catch(() => null)
-        const bs = (fresh && typeof fresh === 'object' && fresh.browserSettings && typeof fresh.browserSettings === 'object')
-          ? fresh.browserSettings : fresh
         const unconfirmed = []
         for (const [key, want] of Object.entries(settingsPatch)) {
-          const got = bs?.[key]
+          const got = fresh?.[key]
           const same = key === 'viewport'
             ? ((want == null) === (got == null) && (want == null || (got?.width === want.width && got?.height === want.height)))
             : key === 'geolocation'
               ? ((want == null) === (got == null) && (want == null || (got?.latitude === want.latitude && got?.longitude === want.longitude)))
               : String(want ?? '') === String(got ?? '')
           if (!same) unconfirmed.push(key)
-        }
-        for (const [key, want] of Object.entries(kitePatch)) {
-          if (String(fresh?.kite?.[key] ?? '') !== String(want)) unconfirmed.push(`kite.${key}`)
         }
         showToast(unconfirmed.length ? `${copy.savedUnconfirmed} (${unconfirmed.join(', ')})` : copy.saved)
       })
@@ -2442,8 +2432,6 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
         userAgent: fresh?.userAgent ?? '',
         viewportWidth: fresh?.viewport?.width ? String(fresh.viewport.width) : '',
         viewportHeight: fresh?.viewport?.height ? String(fresh.viewport.height) : '',
-        httpBase: fresh?.kite?.httpBase ?? '',
-        mcpPort: fresh?.kite?.mcpPort != null ? String(fresh.kite.mcpPort) : '',
         locale: fresh?.locale ?? '',
         geolocation: fresh?.geolocation ?? null,
         colorScheme: fresh?.colorScheme ?? 'light',
@@ -2451,10 +2439,6 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
       }
       const ua = document.getElementById('nks-ua')
       if (ua) ua.value = current.userAgent
-      const originInput = document.getElementById('nks-origin')
-      if (originInput) originInput.value = current.httpBase
-      const mcp = document.getElementById('nks-mcp')
-      if (mcp) mcp.value = current.mcpPort
       const localeInput = document.getElementById('nks-locale')
       if (localeInput) localeInput.value = current.locale
       const lat = document.getElementById('nks-geo-lat')
@@ -2510,8 +2494,7 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
           'data-nks-loading': '1',
           role: 'status',
           'aria-label': engineNavigating ? copy.navigating : copy.opening,
-          // N 秒是本地计时，「导航中」是引擎上报的真阶段；旧宿主没有
-          // navigating 字段时维持只报计时。
+          // N 秒是本地计时，「导航中」是引擎上报的 navigation.outcome。
           title: engineNavigating ? `${copy.navigating} · ${copy.opening} ${beatSec}s` : `${copy.opening} ${beatSec}s`,
         },
           h('i', { className: 'nks-spin', 'aria-hidden': true }),
@@ -2714,12 +2697,12 @@ function BrowserPane({ copy, languageOf, theme, onThemeChange }) {
             'data-nks-start-engine': '1',
             'data-nks-prepare': '1',
             onClick: oneClickPrepare,
-          }, status?.kite?.phase === 'running' ? copy.resumeEngine : copy.prepareEnv),
+          }, engine.phase === 'running' ? copy.resumeEngine : copy.prepareEnv),
           h('button', { type: 'button', className: 'nks-start-btn', 'data-nks-diagnose': '1', onClick: () => run(() => refreshStatus()) }, copy.retry),
           h('button', { type: 'button', className: 'nks-start-btn', 'data-nks-open-settings': '1', onClick: openSettings }, copy.settings)) : null,
         !busy && !statusDown && !status?.engineMismatch ? h('div', { className: 'nks-empty-actions' },
           h('button', { type: 'button', className: 'nks-empty-link', 'data-nks-try': '1', onClick: () => { setDraftUrl('https://example.com'); openPage('https://example.com') } }, copy.emptyTry)) : null,
-        statusDown ? h('div', { className: 'nks-empty-meta' }, `${status?.lastError?.errorId || status?.errorId || (status?.degraded?.length ? status.degraded.join(' / ') : 'kitesurf.engine.failed')} · ${status?.httpBase || ''}`) : null,
+        statusDown ? h('div', { className: 'nks-empty-meta' }, `${status?.lastError?.errorId || status?.errorId || (status?.degraded?.length ? status.degraded.join(' / ') : 'kitesurf.engine.failed')} · ${engine.httpBase || ''}`) : null,
         statusDown ? h('div', { className: 'nks-empty-meta' }, status?.lastError?.error || status?.error || '') : null),
       overlays.map((box, index) => h('div', {
         key: index,

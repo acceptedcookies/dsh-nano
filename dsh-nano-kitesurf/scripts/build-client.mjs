@@ -72,11 +72,10 @@ rmSync(body)
 // P0-6: kitesurf-cdp is a DIRECTORY skill — the entry is a ≤90-line index and
 // the topic bodies come from src/skill/kitesurf-cdp/{references,templates}.
 const { SKILL_BODIES } = await import(join(root, 'lib', 'skill.js'))
-const { ERROR_CATALOG } = await import(join(root, 'lib', 'diagnostics.js'))
 const pkgMeta = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
 const FRONTMATTER = {
   'kitesurf-cdp': 'Collaborate on a frontend through the Kitesurf CDP endpoint. Use when the user points at a page, or asks to inspect or change what Kitesurf is rendering. Do not launch Chrome.',
-  'nano-kite': 'Initialize, start, suspend, or resume Kitesurf, and point MCP at a local or remote engine. Use when the user types /nano-kite.',
+  'nano-kite': 'Start, resume, suspend, or restart the Kitesurf engine through the sandbox host. Use when the user types /nano-kite.',
 }
 const buildDate = new Date().toISOString().slice(0, 10)
 for (const [name, text] of Object.entries(SKILL_BODIES)) {
@@ -86,42 +85,27 @@ for (const [name, text] of Object.entries(SKILL_BODIES)) {
     `---\nname: ${name}\ndescription: ${FRONTMATTER[name]}\nversion: ${pkgMeta.version}\ndate: ${buildDate}\nuser-invocable: true\n---\n\n${text}\n`)
 }
 
-// ── Directory skill: copy authored references/templates + generate the
-// error catalogue reference + reconcile ROUTE_TABLE × KITESURF_TOOLS coverage.
+// ── Directory skill: copy authored references/templates + reconcile the
+// routes this plugin owns. The error catalogue is DNLS's; the skill points at
+// the runtime document instead of shipping a copy.
 const skillSrc = join(root, 'src', 'skill', 'kitesurf-cdp')
 const skillDst = join(root, 'skills', 'kitesurf-cdp')
 import { cpSync, readdirSync } from 'node:fs'
 cpSync(join(skillSrc, 'references'), join(skillDst, 'references'), { recursive: true })
 cpSync(join(skillSrc, 'templates'), join(skillDst, 'templates'), { recursive: true })
 
-// error-catalog.md is GENERATED from ERROR_CATALOG (same truth as /diagnostics).
-const catRows = ERROR_CATALOG.map(({ example, status, cause, next }) => `| \`${example}\` | ${status} | ${cause} | ${next} |`).join('\n')
-const catDoc = `# error-catalog — errorId → status → 原因 → 下一步（GENERATED from ERROR_CATALOG）
-
-A failed call returns \`{ok:false,errorId,error}\` with a real HTTP status. The same pair is the toast; \`/status\` repeats it as \`lastError\`; \`/operations\` keeps history; \`/diagnostics\` ships this whole table as \`observability.errorCatalog\`. **Do not paraphrase the id.** Unlisted ids are 502 (upstream/engine).
-
-| errorId | HTTP | 原因 | 下一步 |
-|---|---|---|---|
-${catRows}
-`
-writeFileSync(join(skillDst, 'references', 'error-catalog.md'), catDoc)
-
-// Coverage reconciliation (P0-6): every registered ROUTE_TABLE path and every
-// kitesurf_* MCP tool name must appear in the generated skill tree, or the
-// interface drifted from what the skill documents. Scan all generated .md.
+// Coverage reconciliation: every route this plugin owns must appear in the
+// generated skill tree, or the interface drifted from what the skill documents.
+// DNK owns no routes today; the check stays so a re-added route cannot ship
+// undocumented.
 const { BINDING_TABLE } = await import(join(root, 'lib', 'bindings.js'))
-// P3-04: the bridge's sole carrier is DNLS `profiles/kitesurf/mcp-bridge.mjs`
-// (the DNK `runtime/` copy is retired). Read tool names from there.
-const bridgeSrc = readFileSync(join(root, '..', 'dsh-nano-local-sandbox', 'profiles', 'kitesurf', 'mcp-bridge.mjs'), 'utf8')
-const toolNames = [...bridgeSrc.matchAll(/sandbox\.[a-z_]+/g)]
 const allMd = readdirSync(join(skillDst, 'references')).filter((f) => f.endsWith('.md'))
   .map((f) => readFileSync(join(skillDst, 'references', f), 'utf8'))
 allMd.push(readFileSync(join(skillDst, 'SKILL.md'), 'utf8'))
 const treeText = allMd.join('\n')
 const missingRoutes = BINDING_TABLE.filter((r) => !treeText.includes(r.path)).map((r) => r.path)
-const missingTools = toolNames.filter((t) => !treeText.includes(t))
-if (missingRoutes.length || missingTools.length) {
-  console.error(`skill coverage drift: missing routes ${JSON.stringify(missingRoutes)} tools ${JSON.stringify(missingTools)}`)
+if (missingRoutes.length) {
+  console.error(`skill coverage drift: missing routes ${JSON.stringify(missingRoutes)}`)
   process.exit(1)
 }
 
@@ -139,4 +123,4 @@ if (missing.length) {
   console.error(`files check: index.js imports missing from package.json "files": ${missing.join(', ')}`)
   process.exit(1)
 }
-console.log(`build ok: lib/bindings.js lib/route-guard.js lib/perf-host.js lib/client.js skills/*/SKILL.md + ${allMd.length - 1} references (coverage ${BINDING_TABLE.length} routes/${toolNames.length} tools); files check passed`)
+console.log(`build ok: lib/bindings.js lib/route-guard.js lib/perf-host.js lib/client.js skills/*/SKILL.md + ${allMd.length - 1} references (coverage ${BINDING_TABLE.length} routes); files check passed`)
